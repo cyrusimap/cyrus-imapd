@@ -54,7 +54,7 @@
 #include <unistd.h>
 #endif
 
-#include "imapd.h"
+#include "index.h"
 #include "global.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
@@ -64,13 +64,13 @@
 
 typedef struct {
   unsigned char* vector;
-  struct mailbox* mailbox;
+  struct index_state *state;
   char const* part_types;
   int found_validity;
 } SquatSearchResult;
 
-static int vector_len() {
-  return (imapd_exists >> 3) + 1;
+static int vector_len(struct index_state *state) {
+  return (state->exists >> 3) + 1;
 }
 
 /* The document name is of the form
@@ -91,7 +91,7 @@ static int parse_doc_name(SquatSearchResult* r, char const* doc_name) {
   int doc_UID, index;
 
   if (ch == 'v' && strncmp(doc_name, "validity.", 9) == 0) {
-      if ((unsigned) atoi(doc_name + 9) == r->mailbox->uidvalidity) {
+      if ((unsigned) atoi(doc_name + 9) == r->state->mailbox->i.uidvalidity) {
       r->found_validity = 1;
     }
     return -1;
@@ -114,47 +114,43 @@ static int parse_doc_name(SquatSearchResult* r, char const* doc_name) {
     return -1;
   }
   
-  /* now we need to convert the UID to the message sequence number */
-  index = index_finduid(doc_UID);
-  if (index < 1 || index > imapd_exists || doc_UID != (int) index_getuid(index)) {
-    return -1;
-  }
+  index = index_finduid(r->state, doc_UID);
 
   return index;
 }
 
 static int drop_indexed_docs(void* closure, SquatListDoc const* doc) {
   SquatSearchResult* r = (SquatSearchResult*)closure;
-  int doc_ID = parse_doc_name(r, doc->doc_name);
+  int doc_uid = parse_doc_name(r, doc->doc_name);
 
-  if (doc_ID >= 0) {
+  if (doc_uid >= 0) {
     unsigned char* vect = r->vector;
-    vect[doc_ID >> 3] &= ~(1 << (doc_ID & 0x7));
+    vect[doc_uid >> 3] &= ~(1 << (doc_uid & 0x7));
   }
   return SQUAT_CALLBACK_CONTINUE;
 }
 
 static int fill_with_hits(void* closure, char const* doc) {
   SquatSearchResult* r = (SquatSearchResult*)closure;
-  int doc_ID = parse_doc_name(r, doc);
+  int doc_uid = parse_doc_name(r, doc);
 
-  if (doc_ID >= 0) {
+  if (doc_uid >= 0) {
     unsigned char* vect = r->vector;
-    vect[doc_ID >> 3] |= 1 << (doc_ID & 0x7);
+    vect[doc_uid >> 3] |= 1 << (doc_uid & 0x7);
   }
   return SQUAT_CALLBACK_CONTINUE;
 }
 
-static int search_strlist(SquatSearchIndex* index, struct mailbox* mailbox,
+static int search_strlist(SquatSearchIndex* index, struct index_state *state,
   unsigned char* output, unsigned char* tmp, struct strlist* strs,
   char const* part_types) {
   SquatSearchResult r;
   int i;
-  int len = vector_len();
+  int len = vector_len(state);
 
   r.part_types = part_types;
   r.vector = tmp;
-  r.mailbox = mailbox;
+  r.state = state;
   while (strs != NULL) {
     char const* s = strs->s;
 
@@ -177,25 +173,25 @@ static int search_strlist(SquatSearchIndex* index, struct mailbox* mailbox,
 }
 
 static unsigned char* search_squat_do_query(SquatSearchIndex* index,
-  struct mailbox* mailbox, struct searchargs* args) {
-  int vlen = vector_len();
+  struct index_state *state, struct searchargs* args) {
+  int vlen = vector_len(state);
   unsigned char* vect = xmalloc(vlen);
   unsigned char* t_vect = xmalloc(vlen);
-  unsigned char* result = vect;
   struct searchsub* sub;
+  int found_something = 1;
     
   memset(vect, 255, vlen);
   
-  if (!(search_strlist(index, mailbox, vect, t_vect, args->to, "t")
-      && search_strlist(index, mailbox, vect, t_vect, args->from, "f")
-      && search_strlist(index, mailbox, vect, t_vect, args->cc, "c")
-      && search_strlist(index, mailbox, vect, t_vect, args->bcc, "b")
-      && search_strlist(index, mailbox, vect, t_vect, args->subject, "s")
-      && search_strlist(index, mailbox, vect, t_vect, args->header_name, "h")
-      && search_strlist(index, mailbox, vect, t_vect, args->header, "h")
-      && search_strlist(index, mailbox, vect, t_vect, args->body, "m")
-      && search_strlist(index, mailbox, vect, t_vect, args->text, "mh"))) {
-    result = NULL;
+  if (!(search_strlist(index, state, vect, t_vect, args->to, "t")
+      && search_strlist(index, state, vect, t_vect, args->from, "f")
+      && search_strlist(index, state, vect, t_vect, args->cc, "c")
+      && search_strlist(index, state, vect, t_vect, args->bcc, "b")
+      && search_strlist(index, state, vect, t_vect, args->subject, "s")
+      && search_strlist(index, state, vect, t_vect, args->header_name, "h")
+      && search_strlist(index, state, vect, t_vect, args->header, "h")
+      && search_strlist(index, state, vect, t_vect, args->body, "m")
+      && search_strlist(index, state, vect, t_vect, args->text, "mh"))) {
+    found_something = 0;
     goto cleanup;
   }
 
@@ -209,19 +205,19 @@ static unsigned char* search_squat_do_query(SquatSearchIndex* index,
          false positives. */
     } else {
       unsigned char* sub1_vect =
-        search_squat_do_query(index, mailbox, args->sublist->sub1);
+        search_squat_do_query(index, state, args->sublist->sub1);
       unsigned char* sub2_vect;
       int i;
 
       if (sub1_vect == NULL) {
-        result = NULL;
+        found_something = 0;
         goto cleanup;
       }
 
-      sub2_vect = search_squat_do_query(index, mailbox, args->sublist->sub2);
+      sub2_vect = search_squat_do_query(index, state, args->sublist->sub2);
 
       if (sub2_vect == NULL) {
-        result = NULL;
+        found_something = 0;
         free(sub1_vect);
         goto cleanup;
       }
@@ -239,27 +235,24 @@ static unsigned char* search_squat_do_query(SquatSearchIndex* index,
 
 cleanup:
   free(t_vect);
-  if (result != vect) {
+  if (!found_something) {
     free(vect);
+    return NULL;
   }
   
-  return result;
+  return vect;
 }
 
-static int search_squat(unsigned* msg_list, struct mailbox *mailbox,
+static int search_squat(unsigned* msg_list, struct index_state *state,
                         struct searchargs *searchargs) {
-  char index_file_name[MAX_MAILBOX_PATH+1], *path;
+  char *fname;
   int fd;
   SquatSearchIndex* index;
   unsigned char* msg_vector;
   int result;
 
-  path = mailbox->mpath &&
-      (config_metapartition_files & IMAP_ENUM_METAPARTITION_FILES_SQUAT) ?
-      mailbox->mpath : mailbox->path;
-  strlcpy(index_file_name, path, sizeof(index_file_name));
-  strlcat(index_file_name, FNAME_SQUAT_INDEX, sizeof(index_file_name));
-  if ((fd = open(index_file_name, O_RDONLY)) < 0) {
+  fname = mailbox_meta_fname(state->mailbox, META_SQUAT);
+  if ((fd = open(fname, O_RDONLY)) < 0) {
     syslog(LOG_DEBUG, "SQUAT failed to open index file");
     return -1;   /* probably not found. Just bail */
   }
@@ -268,18 +261,18 @@ static int search_squat(unsigned* msg_list, struct mailbox *mailbox,
     close(fd);
     return -1;
   }
-  if ((msg_vector = search_squat_do_query(index, mailbox, searchargs))
+  if ((msg_vector = search_squat_do_query(index, state, searchargs))
       == NULL) {
     result = -1;
   } else {
     int i;
-    int vlen = vector_len();
+    int vlen = vector_len(state);
     unsigned char* unindexed_vector = xmalloc(vlen);
     SquatSearchResult r;
     
     memset(unindexed_vector, 255, vlen);
     r.vector = unindexed_vector;
-    r.mailbox = mailbox;
+    r.state = state;
     r.part_types = "tfcbsmh";
     r.found_validity = 0;
     if (squat_search_list_docs(index, drop_indexed_docs, &r) != SQUAT_OK) {
@@ -295,7 +288,7 @@ static int search_squat(unsigned* msg_list, struct mailbox *mailbox,
       }
 
       result = 0;
-      for (i = 1; i <= imapd_exists; i++) {
+      for (i = 1; i <= state->exists; i++) {
         if ((msg_vector[i >> 3] & (1 << (i & 7))) != 0) {
           msg_list[result] = i;
           result++;
@@ -310,25 +303,29 @@ static int search_squat(unsigned* msg_list, struct mailbox *mailbox,
   return result;
 }
 
-int search_prefilter_messages(unsigned* msg_list, struct mailbox *mailbox,
-                              struct searchargs *searchargs) {
-  int i, count;
+int search_prefilter_messages(unsigned *msgno_list, struct index_state *state,
+                              struct searchargs *searchargs) 
+{
+    int i;
+    int count;
 
-  if (SQUAT_ENGINE) {
-    count = search_squat(msg_list, mailbox, searchargs);
-    if (count >= 0) {
-      syslog(LOG_DEBUG, "SQUAT returned %d messages", count);
-      return count;
-    } else {
-	/* otherwise, we failed for some reason, so do the default */
-	syslog(LOG_DEBUG, "SQUAT failed");
+    if (SQUAT_ENGINE) {
+	count = search_squat(msgno_list, state, searchargs);
+	if (count >= 0) {
+	    syslog(LOG_DEBUG, "SQUAT returned %d messages", count);
+	    return count;
+	} else {
+	    /* otherwise, we failed for some reason, so do the default */
+	    syslog(LOG_DEBUG, "SQUAT failed");
+	}
     }
-  }
   
-  /* Just put in all possible messages. This falls back to Cyrus' default
-     search. */
-  for (i = 0; i < imapd_exists; i++) {
-    msg_list[i] = i + 1;
-  }
-  return imapd_exists;
+    /* Just put in all possible messages. This falls back to Cyrus' default
+     * search. */
+    
+    for (i = 0; i < state->exists; i++) {
+	msgno_list[i] = i + 1;
+    }
+
+    return state->exists;
 }

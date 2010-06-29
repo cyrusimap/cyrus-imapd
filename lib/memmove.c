@@ -43,10 +43,13 @@
  * $Id: memmove.c,v 1.10 2010/01/06 17:01:46 murch Exp $
  */
 
+/* for size_t */
+#include <sys/types.h>
+
 void *memmove(s, ct, n)
 void *s;
 const void *ct;
-unsigned int n;
+size_t n;
 {
     char *c_s = s;
     const char *c_ct = ct;

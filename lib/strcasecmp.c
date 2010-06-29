@@ -45,12 +45,15 @@
  * Start Date: 4/6/93
  */
 
+/* for size_t */
+#include <sys/types.h>
 #include "util.h"
 
 /* case insensitive string compare
  */
 int strcasecmp(str1, str2)
-    char *str1, *str2;
+const char *str1;
+const char *str2;
 {
     while (*str1 && TOLOWER(*str1) == TOLOWER(*str2)) ++str1, ++str2;
 
@@ -60,8 +63,9 @@ int strcasecmp(str1, str2)
 /* case insensitive string compare with count
  */
 int strncasecmp(str1, str2, n)
-    char *str1, *str2;
-    int n;
+const char *str1;
+const char *str2;
+size_t n;
 {
     while (n && *str1 && TOLOWER(*str1) == TOLOWER(*str2)) ++str1, ++str2, --n;
 

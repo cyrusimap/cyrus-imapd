@@ -132,8 +132,8 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 #define getnstring(pin, pout, buf) getxstring((pin), (pout), (buf), IMAP_NSTRING)
 #define getqstring(pin, pout, buf) getxstring((pin), (pout), (buf), IMAP_QSTRING)
 #define getstring(pin, pout, buf) getxstring((pin), (pout), (buf), IMAP_STRING)
-int getnum(struct protstream *pin, int *num);
-int getunum(struct protstream *pin, unsigned int *num);
+int getint32(struct protstream *pin, int *num);
+int getuint32(struct protstream *pin, unsigned int *num);
 
 void eatline(struct protstream *pin, int c);
 

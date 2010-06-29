@@ -115,6 +115,10 @@ static char *ask_capability(struct protstream *pout, struct protstream *pin,
 		*capa = *capa | c->flag;
 
 		if (c->flag == CAPA_AUTH) {
+		    if (ret) {
+			free(ret);
+			ret = NULL;
+		    }
 		    if (prot->capa_cmd.parse_mechlist)
 			ret = prot->capa_cmd.parse_mechlist(str, prot);
 		    else
@@ -187,9 +191,8 @@ static int do_starttls(struct backend *s, struct tls_cmd_t *tls_cmd)
     if (r == -1) return -1;
 
     r = sasl_setprop(s->saslconn, SASL_SSF_EXTERNAL, &ssf);
-    if (r != SASL_OK) return -1;
-
-    r = sasl_setprop(s->saslconn, SASL_AUTH_EXTERNAL, auth_id);
+    if (r == SASL_OK)
+	r = sasl_setprop(s->saslconn, SASL_AUTH_EXTERNAL, auth_id);
     if (auth_id) free(auth_id);
     if (r != SASL_OK) return -1;
 
@@ -273,6 +276,19 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
     char buf[2048], optstr[128], *p;
     const char *mech_conf, *pass;
 
+    /* set the IP addresses */
+    addrsize=sizeof(struct sockaddr_storage);
+    if (getpeername(s->sock, (struct sockaddr *)&saddr_r, &addrsize) != 0)
+	return SASL_FAIL;
+    if(iptostring((struct sockaddr *)&saddr_r, addrsize, remoteip, 60) != 0)
+	return SASL_FAIL;
+  
+    addrsize=sizeof(struct sockaddr_storage);
+    if (getsockname(s->sock, (struct sockaddr *)&saddr_l, &addrsize)!=0)
+	return SASL_FAIL;
+    if(iptostring((struct sockaddr *)&saddr_l, addrsize, localip, 60) != 0)
+	return SASL_FAIL;
+
     if (!cb) {
 	local_cb = 1;
 	strlcpy(optstr, s->hostname, sizeof(optstr));
@@ -287,30 +303,19 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
 			      pass);
     }
 
-    /* set the IP addresses */
-    addrsize=sizeof(struct sockaddr_storage);
-    if (getpeername(s->sock, (struct sockaddr *)&saddr_r, &addrsize) != 0)
-	return SASL_FAIL;
-    if(iptostring((struct sockaddr *)&saddr_r, addrsize, remoteip, 60) != 0)
-	return SASL_FAIL;
-  
-    addrsize=sizeof(struct sockaddr_storage);
-    if (getsockname(s->sock, (struct sockaddr *)&saddr_l, &addrsize)!=0)
-	return SASL_FAIL;
-    if(iptostring((struct sockaddr *)&saddr_l, addrsize, localip, 60) != 0)
-	return SASL_FAIL;
-
     /* Require proxying if we have an "interesting" userid (authzid) */
     r = sasl_client_new(prot->sasl_service, s->hostname, localip, remoteip, cb,
 			(userid  && *userid ? SASL_NEED_PROXY : 0) |
 			(prot->sasl_cmd.parse_success ? SASL_SUCCESS_DATA : 0),
 			&s->saslconn);
     if (r != SASL_OK) {
+	if (local_cb) free_callbacks(cb);
 	return r;
     }
 
     r = sasl_setprop(s->saslconn, SASL_SEC_PROPS, &secprops);
     if (r != SASL_OK) {
+	if (local_cb) free_callbacks(cb);
 	return r;
     }
 
@@ -329,13 +334,15 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
     do {
 	/* If we have a mech_conf, use it */
 	if (mech_conf && *mechlist) {
-	    char *newmechlist = intersect_mechlists( mech_conf, *mechlist );
+	    char *conf = xstrdup(mech_conf);
+	    char *newmechlist = intersect_mechlists( conf, *mechlist );
 
 	    if ( newmechlist == NULL ) {
 		syslog( LOG_INFO, "%s did not offer %s", s->hostname,
 			mech_conf );
 	    }
 
+	    free(conf);
 	    free(*mechlist);
 	    *mechlist = newmechlist;
 	}
@@ -441,6 +448,7 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
     timedout = 0;
     action.sa_flags = 0;
     action.sa_handler = timed_out;
+    sigemptyset(&action.sa_mask);
     if(sigaction(SIGALRM, &action, NULL) < 0) 
     {
 	syslog(LOG_ERR, "Setting timeout in backend_connect failed: sigaction: %m");
@@ -574,7 +582,7 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
     if (mechlist) free(mechlist);
 
     /* start compression if requested and both client/server support it */
-    if (config_getswitch(IMAPOPT_PROXY_COMPRESS) &&
+    if (config_getswitch(IMAPOPT_PROXY_COMPRESS) && ret &&
 	CAPA(ret, CAPA_COMPRESS) &&
 	prot->compress_cmd.cmd &&
 	do_compress(ret, &prot->compress_cmd)) {

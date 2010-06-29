@@ -81,6 +81,9 @@
 #include "seen.h"
 #include "quota.h"
 #include "xmalloc.h"
+#include "sync_log.h"
+
+#define FNAME_SUBSSUFFIX ".sub"
 
 #if 0
 static int user_deleteacl(char *name, int matchlen, int maycreate, void* rock)
@@ -185,7 +188,7 @@ int user_deletedata(char *user, char *userid __attribute__((unused)),
     }
 
     /* delete subscriptions */
-    fname = mboxlist_hash_usersubs(user);
+    fname = user_hash_subs(user);
     (void) unlink(fname);
     free(fname);
 
@@ -205,6 +208,8 @@ int user_deletedata(char *user, char *userid __attribute__((unused)),
 
     /* delete sieve scripts */
     user_deletesieve(user);
+
+    sync_log_user(user);
     
     return 0;
 }
@@ -243,9 +248,7 @@ static int user_renamesub(char *name, int matchlen __attribute__((unused)),
 	return 0;
     }
 
-    mboxlist_changesub(name, rrock->newuser, NULL, 1, 1);
-
-    return 0;
+    return mboxlist_changesub(name, rrock->newuser, NULL, 1, 1);
 }
 
 static int user_renamesieve(char *olduser, char *newuser)
@@ -377,12 +380,13 @@ int user_renameacl(char *name, char *olduser, char *newuser)
     int r = 0;
     char *acl;
     char *rights, *nextid;
-    char *origacl, *aclalloc;
+    struct mboxlist_entry mbentry;
+    char *aclalloc;
 
-    r = mboxlist_lookup(name, &origacl, NULL);
+    r = mboxlist_lookup(name, &mbentry, NULL);
 
     /* setacl re-calls mboxlist_lookup and will stomp on us */
-    aclalloc = acl = xstrdup(origacl);
+    aclalloc = acl = xstrdup(mbentry.acl);
 
     while (!r && acl) {
 	rights = strchr(acl, '\t');
@@ -412,12 +416,11 @@ int user_renameacl(char *name, char *olduser, char *newuser)
 int user_copyquotaroot(char *oldname, char *newname)
 {
     int r = 0;
-    struct quota quota;
+    struct quota q;
 
-    quota.root = oldname;
-
-    r = quota_read(&quota, NULL, 0);
-    if (!r) mboxlist_setquota(newname, quota.limit, 0);
+    q.root = oldname;
+    r = quota_read(&q, NULL, 0);
+    if (!r) mboxlist_setquota(newname, q.limit, 0);
 
     return r;
 }
@@ -443,13 +446,13 @@ static int find_cb(void *rockp,
 		  const char *data __attribute__((unused)),
 		   int datalen __attribute__((unused)))
 {
-    struct quota quota_root;
-    struct txn **tid = ((struct find_rock *) rockp)->tid;
+    char *root;
     int r;
 
-    quota_root.root = (char *) xstrndup(key, keylen);
-    r = quota_delete(&quota_root, tid);
-    free(quota_root.root); 
+    root = xstrndup(key, keylen);
+    r = quota_deleteroot(root);
+    free(root); 
+
     return r;
 }
 
@@ -481,3 +484,30 @@ int user_deletequotaroots(const char *user)
 
     return r;
 }
+
+/* hash the userid to a file containing the subscriptions for that user */
+char *user_hash_subs(const char *userid)
+{
+    char *fname = xmalloc(strlen(config_dir) + sizeof(FNAME_DOMAINDIR) +
+			  sizeof(FNAME_USERDIR) + strlen(userid) +
+			  sizeof(FNAME_SUBSSUFFIX) + 10);
+    char c, *domain;
+
+    if (config_virtdomains && (domain = strchr(userid, '@'))) {
+	char d = (char) dir_hash_c(domain+1, config_fulldirhash);
+	*domain = '\0';  /* split user@domain */
+	c = (char) dir_hash_c(userid, config_fulldirhash);
+	sprintf(fname, "%s%s%c/%s%s%c/%s%s", config_dir, FNAME_DOMAINDIR, d,
+		domain+1, FNAME_USERDIR, c, userid, FNAME_SUBSSUFFIX);
+	*domain = '@';  /* replace '@' */
+    }
+    else {
+	c = (char) dir_hash_c(userid, config_fulldirhash);
+	sprintf(fname, "%s%s%c/%s%s", config_dir, FNAME_USERDIR, c, userid,
+		FNAME_SUBSSUFFIX);
+    }
+
+    return fname;
+}
+
+

@@ -140,7 +140,7 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 	/* Literal */
 	isnowait = 0;
 	buf_reset(buf);
-	c = getnum(pin, &len);
+	c = getint32(pin, &len);
 	if (c == '+') {
 	    isnowait++;
 	    c = prot_getc(pin);
@@ -226,45 +226,47 @@ int getxstring(struct protstream *pin, struct protstream *pout,
     return EOF;
 }
 
-int getnum(struct protstream *pin, int *num)
+int getint32(struct protstream *pin, int32_t *num)
 {
-    int n = 0;
+    int32_t result = 0;
     char c;
     int gotchar = 0;
 
+    /* INT_MAX == 2147483647 */
     while ((c = prot_getc(pin)) != EOF && cyrus_isdigit(c)) {
-	if (n > (INT_MAX/10 - 10))
+	if (result > 214748364 || (result == 214748364 && (c > '7')))
 	    fatal("num too big", EC_IOERR);
-	n = n * 10 + c - '0';
-	gotchar = 1;
-    }
-
-    if (gotchar)
-	*num = n;
-    else
-	*num = -1;
-
-    return c;
-}
-
-/* can't flag with -1 if there is no number here, so return EOF */
-int getunum(struct protstream *pin, unsigned int *num)
-{
-    int n = 0;
-    char c;
-    int gotchar = 0;
-
-    while ((c = prot_getc(pin)) != EOF && cyrus_isdigit(c)) {
-	if (n > (UINT_MAX/10 - 10))
-	    fatal("num too big", EC_IOERR);
-	n = n * 10 + c - '0';
+	result = result * 10 + c - '0';
 	gotchar = 1;
     }
 
     if (!gotchar)
 	return EOF;
 
-    *num = n;
+    *num = result;
+
+    return c;
+}
+
+/* can't flag with -1 if there is no number here, so return EOF */
+int getuint32(struct protstream *pin, uint32_t *num)
+{
+    uint32_t result = 0;
+    char c;
+    int gotchar = 0;
+
+    /* UINT_MAX == 4294967295U */
+    while ((c = prot_getc(pin)) != EOF && cyrus_isdigit(c)) {
+	if (result > 429496729 || (result == 429496729 && (c > '5')))
+	    fatal("num too big", EC_IOERR);
+	result = result * 10 + c - '0';
+	gotchar = 1;
+    }
+
+    if (!gotchar)
+	return EOF;
+
+    *num = result;
 
     return c;
 }
@@ -277,7 +279,7 @@ void eatline(struct protstream *pin, int c)
 {
     int state = 0;
     char *statediagram = " {+}\r";
-    int size = -1;
+    uint32_t size = 0;
 
     for (;;) {
 	if (c == '\n') return;
@@ -294,8 +296,8 @@ void eatline(struct protstream *pin, int c)
 	    }
 	}
 	else if (state == 1 && cyrus_isdigit(c)) {
-	    if (size > (INT_MAX/10 - 10))
-		fatal("literal too big", EC_IOERR);
+	    if (size > 429496729 || (size == 429496729 && (c > '5')))
+		fatal("num too big", EC_IOERR);
 	    size = size * 10 + c - '0';
 	}
 	else state = 0;

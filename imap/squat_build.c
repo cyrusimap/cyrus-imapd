@@ -98,6 +98,7 @@
 #include <sys/mman.h>
 
 #include "squat_internal.h"
+#include "message.h"
 
 #include "assert.h"
 #include "index.h"
@@ -609,7 +610,7 @@ static void delete_doc_word_table(SquatWordTable* t, int depth) {
     for (i = 0; i < VECTOR_SIZE(t->entries); i++) {
       SquatWordTableEntry* e = &(t->entries[i]);
       
-      if (e->leaf_presence != NULL && ((int)e->leaf_presence & 1) == 0) {
+      if (e->leaf_presence != NULL && ((unsigned long)e->leaf_presence & 1) == 0) {
         free(e->leaf_presence);
       }
     }
@@ -698,7 +699,7 @@ static int add_to_table(SquatIndex* index, char const* data, int data_len,
 
   if (word_entry == NULL) {
     /* We are in "per document" mode. */
-    if (((int)e->leaf_presence & 1) != 0) {
+    if (((unsigned long)e->leaf_presence & 1) != 0) {
       /* We currently have a singleton here. */
       int oldch = e->leaf_presence_singleton >> 1;
 
@@ -917,7 +918,7 @@ static int write_words(SquatIndex* index, SquatWriteBuffer* b,
 
       word[0] = (char)i;
 
-      if (((int)e->leaf_presence & 1) != 0) {
+      if (((unsigned long)e->leaf_presence & 1) != 0) {
 	/* Got a singleton at this branch point. Just output the single word. */
         word[1] = (char)(e->leaf_presence_singleton >> 1);
         e->leaf_presence = NULL; /* clear the leaf out */

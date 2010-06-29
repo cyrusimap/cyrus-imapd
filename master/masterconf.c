@@ -200,7 +200,7 @@ static void process_section(FILE *f, int *lnptr,
 	if (*p == '}') break;
 
 	for (q = p; Uisalnum(*q); q++) ;
-	if (q) { *q = '\0'; q++; }
+	if (*q) { *q = '\0'; q++; }
 	
 	if (q - p > 0) {
 	    /* there's a value on this line */

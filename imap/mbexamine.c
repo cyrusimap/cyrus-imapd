@@ -129,8 +129,8 @@ int main(int argc, char **argv)
     }
 
     /* Ensure we're up-to-date on the index file format */
-    assert(INDEX_HEADER_SIZE == (OFFSET_SPARE4+4));
-    assert(INDEX_RECORD_SIZE == (OFFSET_MODSEQ+4));
+    assert(INDEX_HEADER_SIZE == (OFFSET_HEADER_CRC+4));
+    assert(INDEX_RECORD_SIZE == (OFFSET_RECORD_CRC+4));
 
     while ((opt = getopt(argc, argv, "C:u:s:q")) != EOF) {
 	switch (opt) {
@@ -162,7 +162,7 @@ int main(int argc, char **argv)
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&recon_namespace, 1)) != 0) {
-	syslog(LOG_ERR, error_message(r));
+	syslog(LOG_ERR, "%s", error_message(r));
 	fatal(error_message(r), EC_CONFIG);
     }
 
@@ -201,7 +201,12 @@ void usage(void)
 	    "       mbexamine [-C <alt_config>] [-u uid] mailbox...\n"
 	    "       mbexamine [-C <alt_config>] -q mailbox...\n");
     exit(EC_USAGE);
-}    
+}
+
+void print_rec(char *name, struct buf *citem)
+{
+    printf(" %s>{%d}%.*s\n", name, citem->len, citem->len, citem->s); 
+}
 
 /*
  * mboxlist_findall() callback function to examine a mailbox
@@ -211,13 +216,12 @@ int do_examine(char *name,
 	       int maycreate __attribute__((unused)),
 	       void *rock __attribute__((unused)))
 {
-    unsigned i;
+    unsigned i, msgno, recno;
     int r = 0;
     int flag = 0;
     char ext_name_buf[MAX_MAILBOX_PATH+1];
-    struct mailbox mailbox;
+    struct mailbox *mailbox;
     struct index_record record;
-    cacherecord crec;
     int j;
     
     signals_poll();
@@ -228,166 +232,125 @@ int do_examine(char *name,
     printf("Examining %s...\n", ext_name_buf);
 
     /* Open/lock header */
-    r = mailbox_open_header(name, 0, &mailbox);
-    if (r) {
-	return r;
-    }
-    if (mailbox.header_fd != -1) {
-	(void) mailbox_lock_header(&mailbox);
-    }
-    mailbox.header_lock_count = 1;
+    r = mailbox_open_irl(name, &mailbox);
+    if (r) return r;
 
-    if (chdir(mailbox.path) == -1) {
+    if (chdir(mailbox_datapath(mailbox)) == -1) {
 	r = IMAP_IOERROR;
 	goto done;
     }
 
-    /* Attempt to open/lock index */
-    r = mailbox_open_index(&mailbox);
-    if (r) {
-	goto done;
-    } else {
-	(void) mailbox_lock_index(&mailbox);
-    }
-    mailbox.index_lock_count = 1;
-
     printf(" Mailbox Header Info:\n");
-    printf("  Path to mailbox: %s\n", mailbox.path);
-    printf("  Mailbox ACL: %s\n", mailbox.acl); /* xxx parse */
-    printf("  Unique ID: %s\n", mailbox.uniqueid);
+    printf("  Path to mailbox: %s\n", mailbox_datapath(mailbox));
+    printf("  Mailbox ACL: %s\n", mailbox->acl); /* xxx parse */
+    printf("  Unique ID: %s\n", mailbox->uniqueid);
     printf("  User Flags: ");
 
-    for(i=0;i<MAX_USER_FLAGS;i++) {
-	if(!mailbox.flagname[i]) break;
-	printf("%s ", mailbox.flagname[i]);
+    for (i = 0; i < MAX_USER_FLAGS; i++) {
+	if (!mailbox->flagname[i]) break;
+	printf("%s ", mailbox->flagname[i]);
     }
 
-    if(i==0) printf("[none]");
+    if (!i) printf("[none]");
 
     printf("\n");
 
     printf("\n Index Header Info:\n");
-    printf("  Generation Number: %d\n", mailbox.generation_no);
-    printf("  Format: ");
-    switch(mailbox.format) {
-	case MAILBOX_FORMAT_NORMAL:
-	    printf("NORMAL");
-	    break;
-        case MAILBOX_FORMAT_NETNEWS:
-	    printf("NET NEWS");
-	    break;
-        default:
-	    printf("UNKNOWN");
+    printf("  Generation Number: %d\n", mailbox->i.generation_no);
+    printf("  Minor Version: %d\n", mailbox->i.minor_version);
+    printf("  Header Size: %ld bytes  Record Size: %ld bytes\n",
+	   mailbox->i.start_offset, mailbox->i.record_size);
+    printf("  Number of Messages: %lu  Mailbox Size: " UQUOTA_T_FMT " bytes\n",
+	   mailbox->i.exists, mailbox->i.quota_mailbox_used);
+    printf("  Last Append Date: (%lu) %s",
+	   mailbox->i.last_appenddate, ctime(&mailbox->i.last_appenddate));
+    printf("  UIDValidity: %lu  Last UID: %lu\n",
+	   mailbox->i.uidvalidity, mailbox->i.last_uid);
+    printf("  Deleted: %lu  Answered: %lu  Flagged: %lu\n",
+	   mailbox->i.deleted, mailbox->i.answered, mailbox->i.flagged);
+    printf("  Mailbox Options:");
+    if (!mailbox->i.options) {
+	printf(" NONE");
+    } else {
+	if (mailbox->i.options & OPT_POP3_NEW_UIDL) {
+	    printf(" POP3_NEW_UIDL");
+	}
+	if (mailbox->i.options & OPT_IMAP_SHAREDSEEN) {
+	    printf(" IMAP_SHAREDSEEN");
+	}
+	if (mailbox->i.options & OPT_IMAP_DUPDELIVER) {
+	    printf(" IMAP_DUPDELIVER");
+	}
     }
     printf("\n");
-    printf("  Minor Version: %d\n", mailbox.minor_version);
-    printf("  Header Size: %ld bytes  Record Size: %ld bytes\n",
-	   mailbox.start_offset, mailbox.record_size);
-    printf("  Number of Messages: %lu  Mailbox Size: " UQUOTA_T_FMT " bytes\n",
-	   mailbox.exists, mailbox.quota_mailbox_used);
-    printf("  Last Append Date: (%ld) %s", mailbox.last_appenddate,
-	   ctime(&mailbox.last_appenddate));
-    printf("  UIDValidity: %ld  Last UID: %ld\n", mailbox.uidvalidity,
-	   mailbox.last_uid);
-    printf("  Deleted: %ld  Answered: %ld  Flagged: %ld\n",
-	   mailbox.deleted, mailbox.answered, mailbox.flagged);
-    if (mailbox.minor_version >= 4) {
-	printf("  Mailbox Options:");
-	if (!mailbox.options) {
-	    printf(" NONE");
-	} else {
-	    if (mailbox.options & OPT_POP3_NEW_UIDL) {
-		printf(" POP3_NEW_UIDL");
-	    }
-	    if (mailbox.options & OPT_IMAP_SHAREDSEEN) {
-		printf(" IMAP_SHAREDSEEN");
-	    }
-	    if (mailbox.options & OPT_IMAP_DUPDELIVER) {
-		printf(" IMAP_DUPDELIVER");
-	    }
-	}
-	printf("\n");
-    }
-    printf("  Last POP3 Login: (%ld) %s", mailbox.pop3_last_login,
-	   ctime((const long *) &mailbox.pop3_last_login));
-    if (mailbox.minor_version >= 8) {
-	printf("  Highest Mod Sequence: " MODSEQ_FMT "\n",
-	       mailbox.highestmodseq);
-    }
+    printf("  Last POP3 Login: (%ld) %s", mailbox->i.pop3_last_login,
+	   ctime((const long *) &mailbox->i.pop3_last_login));
+    printf("  Highest Mod Sequence: " MODSEQ_FMT "\n",
+	   mailbox->i.highestmodseq);
 
     printf("\n Message Info:\n");
 
-    for(i=1; i<=mailbox.exists; i++) {
-	mailbox_read_index_record(&mailbox, i, &record);
+    msgno = 1;
+    for (recno = 1; recno <= mailbox->i.num_records; recno++) {
+	if (mailbox_read_index_record(mailbox, recno, &record))
+	    continue;
 
-	if(wantvalue) {
-	    if(!wantuid) {
-		if(i != wantvalue) continue;
+	if (record.system_flags & FLAG_EXPUNGED)
+	    continue;
+
+	if (wantvalue) {
+	    if (wantuid) {
+		if (record.uid != wantvalue) continue;
 	    } else {
-		if(record.uid != wantvalue) continue;
+		if (msgno != wantvalue) continue;
 	    }
 	    flag = 1;
 	}
 
 	printf("%06d> UID:%08ld   INT_DATE:%ld SENTDATE:%ld SIZE:%-6ld\n",
-	       i, record.uid, record.internaldate,
+	       msgno, record.uid, record.internaldate,
 	       record.sentdate, record.size);
 	printf("      > HDRSIZE:%-6ld LASTUPD :%ld SYSFLAGS:%08X",
 	       record.header_size, record.last_updated,
 	       record.system_flags);
-	if (mailbox.minor_version >= 5)
+	if (mailbox->i.minor_version >= 5)
 	    printf("   LINES:%-6ld\n", record.content_lines);
 
-	if (mailbox.minor_version >= 6)
+	if (mailbox->i.minor_version >= 6)
 	    printf("      > CACHEVER:%-2ld", record.cache_version);
 
-	if (mailbox.minor_version >= 7) {
+	if (mailbox->i.minor_version >= 7) {
 	    printf(" GUID:%s", message_guid_encode(&record.guid));
 	}
 
-	if (mailbox.minor_version >= 8) {
+	if (mailbox->i.minor_version >= 8) {
 	    printf(" MODSEQ:" MODSEQ_FMT, record.modseq);
 	}
 
 	printf("\n");
 
 	printf("      > USERFLAGS:");
-	for(j=(MAX_USER_FLAGS/32)-1; j>=0; j--) {
+	for (j=(MAX_USER_FLAGS/32)-1; j>=0; j--) {
 	    printf(" %08X", record.user_flags[j]);
 	}
 	printf("\n");
 
-	if (mailbox_cacherecord_offset(&mailbox, record.cache_offset, &crec)) {
-	    printf(" Envel>{%d}%.*s\n", crec[CACHE_ENVELOPE].l, 
-		crec[CACHE_ENVELOPE].l, crec[CACHE_ENVELOPE].s);
-	    printf("BdyStr>{%d}%.*s\n", crec[CACHE_BODYSTRUCTURE].l,
-		crec[CACHE_BODYSTRUCTURE].l, crec[CACHE_BODYSTRUCTURE].s);
-	    printf("  Body>{%d}%.*s\n", crec[CACHE_BODY].l,
-		crec[CACHE_BODY].l, crec[CACHE_BODY].s);
-
-#if 0
-	    /* xxx print out machine-readable bodystructure? */
-	    printf(" Sects>\n");
-#endif
-
-	    printf("CacHdr>{%d}%.*s\n", crec[CACHE_HEADERS].l,
-		crec[CACHE_HEADERS].l, crec[CACHE_HEADERS].s);
-	    printf("  From>{%d}%.*s\n", crec[CACHE_FROM].l,
-		crec[CACHE_FROM].l, crec[CACHE_FROM].s);
-	    printf("    To>{%d}%.*s\n", crec[CACHE_TO].l,
-		crec[CACHE_TO].l, crec[CACHE_TO].s);
-	    printf("    Cc>{%d}%.*s\n", crec[CACHE_CC].l,
-		crec[CACHE_CC].l, crec[CACHE_CC].s);
-	    printf("   Bcc>{%d}%.*s\n", crec[CACHE_BCC].l,
-		crec[CACHE_BCC].l, crec[CACHE_BCC].s);
-	    printf("Subjct>{%d}%.*s\n", crec[CACHE_SUBJECT].l,
-		crec[CACHE_SUBJECT].l, crec[CACHE_SUBJECT].s);
+	if (!mailbox_cacherecord(mailbox, &record)) {
+	    print_rec("Envel", cacheitem_buf(&record, CACHE_ENVELOPE));
+	    print_rec("BdyStr", cacheitem_buf(&record, CACHE_BODYSTRUCTURE));
+	    print_rec("Body", cacheitem_buf(&record, CACHE_BODY));
+	    print_rec("CacHdr", cacheitem_buf(&record, CACHE_HEADERS));
+	    print_rec("From", cacheitem_buf(&record, CACHE_FROM));
+	    print_rec("To", cacheitem_buf(&record, CACHE_TO));
+	    print_rec("Cc", cacheitem_buf(&record, CACHE_CC));
+	    print_rec("Bcc", cacheitem_buf(&record, CACHE_BCC));
+	    print_rec("Subjct", cacheitem_buf(&record, CACHE_SUBJECT));
 	}
 
-	if(flag) break;
+	if (flag) break;
     }
 
-    if(wantvalue && !flag) {
+    if (wantvalue && !flag) {
 	printf("Desired message not found\n");
     }
 
@@ -405,13 +368,13 @@ int do_quota(char *name,
 	       int maycreate __attribute__((unused)),
 	       void *rock __attribute__((unused)))
 {
-    unsigned i;
+    unsigned recno;
     int r = 0;
     char ext_name_buf[MAX_MAILBOX_PATH+1];
-    struct mailbox mailbox;
+    struct mailbox *mailbox;
     struct index_record record;
     uquota_t total = 0;
-    char fnamebuf[MAILBOX_FNAME_LEN];
+    char *fname;
     struct stat sbuf;
     
     signals_poll();
@@ -422,41 +385,26 @@ int do_quota(char *name,
     printf("Examining %s...", ext_name_buf);
 
     /* Open/lock header */
-    r = mailbox_open_header(name, 0, &mailbox);
-    if (r) {
-	return r;
-    }
-    if (mailbox.header_fd != -1) {
-	(void) mailbox_lock_header(&mailbox);
-    }
-    mailbox.header_lock_count = 1;
+    r = mailbox_open_irl(name, &mailbox);
+    if (r) return r;
 
-    if (chdir(mailbox.path) == -1) {
+    if (chdir(mailbox_datapath(mailbox)) == -1) {
 	r = IMAP_IOERROR;
 	goto done;
     }
 
-    /* Attempt to open/lock index */
-    r = mailbox_open_index(&mailbox);
-    if (r) {
-	goto done;
-    } else {
-	(void) mailbox_lock_index(&mailbox);
-    }
-    mailbox.index_lock_count = 1;
+    for(recno = 1; recno <= mailbox->i.num_records; recno++) {
+	if (mailbox_read_index_record(mailbox, recno, &record))
+	    continue;
 
-    for(i=1; i<=mailbox.exists; i++) {
-	mailbox_read_index_record(&mailbox, i, &record);
+	if (record.system_flags & FLAG_EXPUNGED)
+	    continue;
 
-	strlcpy(fnamebuf, mailbox.path, sizeof(fnamebuf));
-	strlcat(fnamebuf, "/", sizeof(fnamebuf));
-	mailbox_message_get_fname(&mailbox, record.uid,
-				  fnamebuf + strlen(fnamebuf),
-				  sizeof(fnamebuf) - strlen(fnamebuf));
+	fname = mailbox_message_fname(mailbox, record.uid);
 
-	if (stat(fnamebuf, &sbuf) != 0) {
+	if (stat(fname, &sbuf) != 0) {
 	    syslog(LOG_WARNING,
-		   "Can not open message file %s -- skipping\n", fnamebuf);
+		   "Can not open message file %s -- skipping\n", fname);
 	    continue;
 	}
 
@@ -469,7 +417,7 @@ int do_quota(char *name,
 	total += sbuf.st_size;
     }
 
-    if (mailbox.quota_mailbox_used != total) {
+    if (mailbox->i.quota_mailbox_used != total) {
 	printf("  Mailbox has INCORRECT total quota usage\n");
     }
     else {

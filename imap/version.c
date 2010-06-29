@@ -78,7 +78,7 @@ static char id_resp_arguments[MAXIDVALUELEN] = "";
  */
 void id_getcmdline(int argc, char **argv)
 {
-    snprintf(id_resp_command, MAXIDVALUELEN, *argv);
+    snprintf(id_resp_command, MAXIDVALUELEN, "%s", *argv);
     while (--argc > 0) {
 	snprintf(id_resp_arguments + strlen(id_resp_arguments),
 		 MAXIDVALUELEN - strlen(id_resp_arguments),

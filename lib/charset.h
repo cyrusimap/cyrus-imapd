@@ -67,7 +67,7 @@ extern void charset_freepat(comp_pat *pat);
 extern int charset_searchstring(const char *substr, comp_pat *pat,
     const char *s, size_t len);
 extern int charset_searchfile(const char *substr, comp_pat *pat,
-                              const char *msg_base, int mapnl, size_t len, 
+                              const char *msg_base, size_t len, 
                               charset_index charset, int encoding);
 extern char *charset_decode_mimebody(const char *msg_base, size_t len,
 				     int encoding, char **retval, size_t alloced,
@@ -122,7 +122,7 @@ typedef void index_search_text_receiver_t(int UID, int part, int cmds,
    by index_getsearchtextmsg to extract the MIME body parts. */ 
 extern int charset_extractfile(index_search_text_receiver_t receiver,
                                void* rock, int uid, const char *msg_base, 
-                               int mapnl, size_t len, charset_index charset,
+                               size_t len, charset_index charset,
                                int encoding);
 
 #endif /* INCLUDED_CHARSET_H */

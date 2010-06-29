@@ -1,4 +1,4 @@
-/* index.c -- Routines for dealing with the index file in the imapd
+/* index.h -- Routines for dealing with the index file in the imapd
  *
  * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
  *
@@ -61,37 +61,64 @@
 #include <ctype.h>
 
 #include "annotate.h" /* for strlist functionality */
-#include "mailbox.h" /* for bit32 */
 #include "message_guid.h"
-
-/* Access macros for the memory-mapped index file data */
-#define INDEC_OFFSET(msgno) (index_base+start_offset+(((msgno)-1)*record_size))
-#define UID(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_UID)))
-#define INTERNALDATE(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_INTERNALDATE)))
-#define SENTDATE(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_SENTDATE)))
-#define SIZE(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_SIZE)))
-#define HEADER_SIZE(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_HEADER_SIZE)))
-#define CONTENT_OFFSET(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_CONTENT_OFFSET)))
-#define CACHE_OFFSET(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_CACHE_OFFSET)))
-#define LAST_UPDATED(msgno) ((time_t)ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_LAST_UPDATED))))
-#define SYSTEM_FLAGS(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_SYSTEM_FLAGS)))
-#define USER_FLAGS(msgno,i) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_USER_FLAGS+((i)*4))))
-#define CONTENT_LINES(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_CONTENT_LINES)))
-#define CACHE_VERSION(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_CACHE_VERSION)))
-#ifdef HAVE_LONG_LONG_INT
-#define MODSEQ(msgno) ntohll(*((bit64 *)(INDEC_OFFSET(msgno)+OFFSET_MODSEQ_64)))
-#else
-#define MODSEQ(msgno) ntohl(*((bit32 *)(INDEC_OFFSET(msgno)+OFFSET_MODSEQ)))
-#endif
-#define GUID(msgno) message_guid_import(NULL, (unsigned char *)(INDEC_OFFSET(msgno)+OFFSET_MESSAGE_GUID))
-
-/* Calculate the number of entries in a vector */
-#define VECTOR_SIZE(vector) (sizeof(vector)/sizeof(vector[0]))
+#include "sequence.h"
 
 /* Special "sort criteria" to load message-id and references/in-reply-to
  * into msgdata array for threaders that need them.
  */
 #define LOAD_IDS	256
+
+struct vanished_params {
+    unsigned long uidvalidity;
+    modseq_t modseq;
+    const char *match_seq;
+    const char *match_uid;
+    const char *sequence;
+};
+
+struct index_init {
+    const char *userid;
+    struct auth_state *authstate;
+    struct protstream *out;
+    int examine_mode;
+    int qresync;
+    int select;
+    struct vanished_params vanished;
+};
+
+struct index_map {
+    struct index_record record;
+    modseq_t told_modseq;
+    int isseen:1;
+    int isrecent:1;
+};
+
+struct index_state {
+    struct mailbox *mailbox;
+    unsigned num_records;
+    unsigned exists;
+    unsigned long last_uid;
+    modseq_t highestmodseq;
+    modseq_t delayed_modseq;
+    struct index_map *map;
+    unsigned mapsize;
+    int internalseen;
+    int skipped_expunge;
+    int seen_dirty;
+    int keepingseen;
+    int examining;
+    int myrights;
+    unsigned numrecent;
+    unsigned numunseen;
+    unsigned firstnotseen;
+    int havenewrecords;
+    char *flagname[MAX_USER_FLAGS];
+    char *userid;
+    struct protstream *out;
+    int qresync;
+    struct auth_state *authstate;
+};
 
 struct copyargs {
     struct copymsg *copymsg;
@@ -105,12 +132,16 @@ struct mapfile {
 };
 
 typedef struct msgdata {
+    bit32 uid;                  /* UID for output purposes */
     unsigned msgno;		/* message number */
     char *msgid;		/* message ID */
     char **ref;			/* array of references */
     int nref;			/* number of references */
     time_t date;		/* sent date & time of message
 				   from Date: header (adjusted by time zone) */
+    time_t internaldate;        /* internaldate */
+    size_t size;                /* message size */
+    modseq_t modseq;            /* modseq of record*/
     char *cc;			/* local-part of first "cc" address */
     char *from;			/* local-part of first "from" address */
     char *to;			/* local-part of first "to" address */
@@ -137,7 +168,7 @@ struct rootset {
 
 struct thread_algorithm {
     char *alg_name;
-    void (*threader)(unsigned *msgno_list, int nmsg, int usinguid);
+    void (*threader)(struct index_state *state, unsigned *msgno_list, int nmsg, int usinguid);
 };
 
 struct nntp_overview {
@@ -151,40 +182,72 @@ struct nntp_overview {
     unsigned long lines;
 };
 
-struct seq_range {
-    unsigned low;
-    unsigned high;
-};
+extern int index_fetch(struct index_state *state,
+		       const char* sequence,
+		       int usinguid,
+		       struct fetchargs* fetchargs,
+		       int* fetchedsomething);
+extern int index_store(struct index_state *state,
+		       char *sequence,
+		       int usinguid,
+		       struct storeargs *storeargs,
+		       char **flag, int nflags);
+extern int index_sort(struct index_state *state, struct sortcrit *sortcrit,
+		      struct searchargs *searchargs, int usinguid);
+extern int index_thread(struct index_state *state, int algorithm,
+			struct searchargs *searchargs, int usinguid);
+extern int index_search(struct index_state *state,
+			struct searchargs *searchargs,
+			int usinguid);
+extern int index_scan(struct index_state *state,
+		      const char *contents);
+extern int index_copy(struct index_state *state,
+		      char *sequence, 
+		      int usinguid,
+		      char *name, 
+		      char **copyuidp,
+		      int nolink);
+extern int find_thread_algorithm(char *arg);
 
-struct seq_set {
-    struct seq_range *set;
-    unsigned len;
-    unsigned alloc;
-    unsigned mark;
-    struct seq_set *next;
-};
-
-extern void index_operatemailbox(struct mailbox *mailbox);
-extern unsigned index_finduid(unsigned uid);
-extern unsigned index_getuid(unsigned msgno);
-extern int index_urlfetch(struct mailbox *mailbox, unsigned msgno,
+extern int index_open(const char *name, struct index_init *init,
+		      struct index_state **stateptr);
+extern int index_status(struct index_state *state, struct statusdata *sdata);
+extern int index_close(struct index_state **stateptr);
+extern unsigned index_finduid(struct index_state *state, unsigned uid);
+extern unsigned index_getuid(struct index_state *state, unsigned msgno);
+extern modseq_t index_highestmodseq(struct index_state *state);
+extern int index_check(struct index_state *state, int usinguid, int printuid);
+extern int index_urlfetch(struct index_state *state, unsigned msgno,
 			  unsigned params, const char *section,
 			  unsigned long start_octet, unsigned long octet_count,
 			  struct protstream *pout, unsigned long *size);
-extern char *index_get_msgid(struct mailbox *mailbox, unsigned msgno);
-extern struct nntp_overview *index_overview(struct mailbox *mailbox,
+extern char *index_get_msgid(struct index_state *state, unsigned msgno);
+extern struct nntp_overview *index_overview(struct index_state *state,
 					    unsigned msgno);
-extern char *index_getheader(struct mailbox *mailbox, unsigned msgno,
+extern char *index_getheader(struct index_state *state, unsigned msgno,
 			     char *hdr);
-extern unsigned long index_getsize(struct mailbox *mailbox, unsigned msgno);
-extern unsigned long index_getlines(struct mailbox *mailbox, unsigned msgno);
-extern int index_copy_remote(struct mailbox *mailbox, char *sequence, 
+extern unsigned long index_getsize(struct index_state *state, unsigned msgno);
+extern unsigned long index_getlines(struct index_state *state, unsigned msgno);
+extern int index_copy_remote(struct index_state *state, char *sequence, 
 			     int usinguid, struct protstream *pout);
 
-void appendsequencelist(struct seq_set **l, char *sequence, int usinguid);
-void freesequencelist(struct seq_set *l);
+void appendsequencelist(struct index_state *state, struct seqset **l,
+			char *sequence, int usinguid);
+void freesequencelist(struct seqset *l);
+extern int index_expunge(struct index_state *state, int usinguid,
+			 char *uidsequence, int isclose);
 
-extern struct seq_set *index_parse_sequence(const char *sequence, int usinguid,
-					    struct seq_set *set);
+/* See lib/charset.h for the definition of receiver. */
+extern void index_getsearchtext_single(struct index_state *state, unsigned msgno,
+                                       index_search_text_receiver_t receiver,
+                                       void* rock);
+
+extern void index_getsearchtext(struct index_state *state,
+                                index_search_text_receiver_t receiver,
+                                void* rock);
+
+extern int index_getuidsequence(struct index_state *state,
+				struct searchargs *searchargs,
+				unsigned **uid_list);
 
 #endif /* INDEX_H */

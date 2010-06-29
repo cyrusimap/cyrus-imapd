@@ -108,7 +108,7 @@ int config_getint(enum imapopt opt)
 #if (SIZEOF_LONG != 4)
     if ((imapopts[opt].val.i > 0x7fffffff)||
 	(imapopts[opt].val.i < -0x7fffffff)) {
-	syslog(LOG_ERR, "config_getint: %s: %lld too large for type",
+	syslog(LOG_ERR, "config_getint: %s: %ld too large for type",
 	       imapopts[opt].optname, imapopts[opt].val.i);
     }
 #endif    
@@ -122,7 +122,7 @@ int config_getswitch(enum imapopt opt)
 #if (SIZEOF_LONG != 4)
     if ((imapopts[opt].val.b > 0x7fffffff)||
 	(imapopts[opt].val.b < -0x7fffffff)) {
-	syslog(LOG_ERR, "config_getswitch: %s: %lld too large for type", 
+	syslog(LOG_ERR, "config_getswitch: %s: %ld too large for type", 
 	       imapopts[opt].optname, imapopts[opt].val.b);
     }
 #endif    

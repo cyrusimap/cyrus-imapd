@@ -444,6 +444,7 @@ static int new_session_cb(SSL *ssl __attribute__((unused)),
     unsigned char *data = NULL;
     time_t expire;
     int ret = -1;
+    unsigned char *asn;
 
     assert(sess);
 
@@ -459,17 +460,15 @@ static int new_session_cb(SSL *ssl __attribute__((unused)),
     data = (unsigned char *) xmalloc(sizeof(time_t)+len*sizeof(unsigned char));
 
     /* transform the session into its ASN1 representation */
-    if (data) {
-	unsigned char *asn = data + sizeof(time_t);
-	len = i2d_SSL_SESSION(sess, &asn);
-	if (!len) syslog(LOG_ERR, "i2d_SSL_SESSION failed");
-    }
+    asn = data + sizeof(time_t);
+    len = i2d_SSL_SESSION(sess, &asn);
+    if (!len) syslog(LOG_ERR, "i2d_SSL_SESSION failed");
 
     /* set the expire time for the external cache, and prepend it to data */
     expire = SSL_SESSION_get_time(sess) + SSL_SESSION_get_timeout(sess);
     memcpy(data, &expire, sizeof(time_t));
 
-    if (data && len) {
+    if (len) {
 	/* store the session in our database */
 	do {
 	    ret = DB->store(sessdb, (const char *) sess->session_id,
@@ -478,7 +477,7 @@ static int new_session_cb(SSL *ssl __attribute__((unused)),
 	} while (ret == CYRUSDB_AGAIN);
     }
 
-    if (data) free(data);
+    free(data);
 
     /* log this transaction */
     if (var_imapd_tls_loglevel > 0) {
@@ -775,15 +774,15 @@ static long bio_dump_cb(BIO * bio, int cmd, const char *argp, int argi,
 	return (ret);
 
     if (cmd == (BIO_CB_READ | BIO_CB_RETURN)) {
-	printf("read from %08X [%08lX] (%d bytes => %ld (0x%X))",
-	       (unsigned int) bio, (long unsigned int) argp,
-	       argi, ret, (unsigned int) ret);
+	printf("read from %08lX [%08lX] (%d bytes => %ld (0x%lX))",
+	       (unsigned long)bio, (unsigned long)argp,
+	       argi, ret, ret);
 	tls_dump(argp, (int) ret);
 	return (ret);
     } else if (cmd == (BIO_CB_WRITE | BIO_CB_RETURN)) {
-	printf("write to %08X [%08lX] (%d bytes => %ld (0x%X))",
-	       (unsigned int) bio, (long unsigned int)argp,
-	       argi, ret, (unsigned int) ret);
+	printf("write to %08lX [%08lX] (%d bytes => %ld (0x%lX))",
+	       (unsigned long) bio, (unsigned long)argp,
+	       argi, ret, ret);
 	tls_dump(argp, (int) ret);
     }
     return (ret);

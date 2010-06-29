@@ -58,13 +58,10 @@
  * (note that this assumes server LITERAL+ support, but we don't care since
  * this is a Cyrus-only extention)
  */
-extern int dump_mailbox(const char *tag, const char *mbname,
-			const char *mbpath, const char *metapath,
-			const char *mbacl, int uid_start,
+extern int dump_mailbox(const char *tag, const char *mbname, int uid_start,
 			struct protstream *pin, struct protstream *pout,
 			struct auth_state *auth_state);
-extern int undump_mailbox(const char *mbname, const char *mbpath,
-			  const char *metapath, const char *mbacl,
+extern int undump_mailbox(const char *mbname,
 			  struct protstream *pin, struct protstream *pout,
 			  struct auth_state *auth_state);
 

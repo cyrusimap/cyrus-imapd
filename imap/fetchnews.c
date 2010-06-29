@@ -293,7 +293,7 @@ int main(int argc, char *argv[])
 	    break;
 
 	case 'f': /* timestamp file */
-	    snprintf(sfile, sizeof(sfile), optarg);
+	    snprintf(sfile, sizeof(sfile), "%s", optarg);
 	    break;
 
 	case 'a': /* authname */

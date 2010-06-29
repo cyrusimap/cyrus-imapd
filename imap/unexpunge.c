@@ -83,6 +83,7 @@ const int config_need_data = 0;
 static struct namespace unex_namespace;
 
 int verbose = 0;
+int unsetdeleted = 0;
 
 void usage(void)
 {
@@ -94,6 +95,11 @@ void usage(void)
     exit(-1);
 }
 
+int compare_uid(const void *a, const void *b)
+{
+    return *((unsigned long *) a) - *((unsigned long *) b);
+}
+
 enum {
     MODE_UNKNOWN = -1,
     MODE_LIST,
@@ -102,315 +108,133 @@ enum {
     MODE_UID
 };
 
-struct msg {
-    unsigned recno;
-    unsigned long uid;
-    int restore;
-};
-
-int compare_uid(const void *a, const void *b)
+void list_expunged(struct mailbox *mailbox)
 {
-    return *((unsigned long *) a) - *((unsigned long *) b);
-}
+    struct index_record record;
+    int recno;
 
-int compare_msg(const void *a, const void *b)
-{
-    return ((struct msg *) a)->uid - ((struct msg *) b)->uid;
-}
+    for (recno = 1; recno <= mailbox->i.num_records; recno++) {
+	if (mailbox_read_index_record(mailbox, recno, &record))
+	    continue;
 
-void list_expunged(struct mailbox *mailbox,
-		   struct msg *msgs, unsigned long exists,
-		   const char *expunge_index_base)
-{
-    const char *rec;
-    unsigned msgno;
-    unsigned long uid, size, cache_offset;
-    time_t internaldate, sentdate, last_updated;
-    cacherecord crec;
+	/* still active */
+	if (!(record.system_flags & FLAG_EXPUNGED))
+	    continue;
+	/* no file, unrescuable */
+	if (record.system_flags & FLAG_UNLINKED)
+	    continue;
 
-    for (msgno = 0; msgno < exists; msgno++) {
-	/* Jump to index record for this message */
-	rec = expunge_index_base + mailbox->start_offset +
-	    msgs[msgno].recno * mailbox->record_size;
+	printf("UID: %lu\n", record.uid);
+	printf("\tSize: %lu\n", record.size);
+	printf("\tSent: %s", ctime(&record.sentdate));
+	printf("\tRecv: %s", ctime(&record.internaldate));
+	printf("\tExpg: %s", ctime(&record.last_updated));
 
-	uid = ntohl(*((bit32 *)(rec+OFFSET_UID)));
-	internaldate = ntohl(*((bit32 *)(rec+OFFSET_INTERNALDATE)));
-	sentdate = ntohl(*((bit32 *)(rec+OFFSET_SENTDATE)));
-	size = ntohl(*((bit32 *)(rec+OFFSET_SIZE)));
-	cache_offset = ntohl(*((bit32 *)(rec+OFFSET_CACHE_OFFSET)));
-	last_updated = ntohl(*((bit32 *)(rec+OFFSET_LAST_UPDATED)));
-
-	printf("UID: %lu\n", uid);
-	printf("\tSize: %lu\n", size);
-	printf("\tSent: %s", ctime(&sentdate));
-	printf("\tRecv: %s", ctime(&internaldate));
-	printf("\tExpg: %s", ctime(&last_updated));
-
-	if (!mailbox_cacherecord_offset(mailbox, cache_offset, &crec)) {
-	    printf("\tERROR: cache record missing or corrupt, not printing cache details\n\n");
+	if (mailbox_cacherecord(mailbox, &record)) {
+	    printf("\tERROR: cache record missing or corrupt, "
+		   "not printing cache details\n\n");
 	    continue;
 	}
 
-	printf("\tFrom: %.*s\n", crec[CACHE_FROM].l, crec[CACHE_FROM].s);
-	printf("\tTo  : %.*s\n", crec[CACHE_TO].l, crec[CACHE_TO].s);
-	printf("\tCc  : %.*s\n", crec[CACHE_CC].l, crec[CACHE_CC].s);
-	printf("\tBcc : %.*s\n", crec[CACHE_BCC].l, crec[CACHE_BCC].s);
-	printf("\tSubj: %.*s\n\n", crec[CACHE_SUBJECT].l, crec[CACHE_SUBJECT].s);
+	printf("\tFrom: %.*s\n", cacheitem_size(&record, CACHE_FROM),
+		cacheitem_base(&record, CACHE_FROM));
+	printf("\tTo  : %.*s\n", cacheitem_size(&record, CACHE_TO),
+		cacheitem_base(&record, CACHE_TO));
+	printf("\tCc  : %.*s\n", cacheitem_size(&record, CACHE_CC),
+		cacheitem_base(&record, CACHE_CC));
+	printf("\tBcc : %.*s\n", cacheitem_size(&record, CACHE_BCC),
+		cacheitem_base(&record, CACHE_BCC));
+	printf("\tSubj: %.*s\n\n", cacheitem_size(&record, CACHE_SUBJECT),
+		cacheitem_base(&record, CACHE_SUBJECT));
     }
 }
 
-int restore_expunged(struct mailbox *mailbox,
-		     struct msg *msgs, unsigned long eexists,
-		     const char *expunge_index_base,
-		     unsigned *numrestored, int unsetdeleted)
+int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *uids, 
+		     unsigned nuids, time_t time_since, unsigned *numrestored)
 {
+    unsigned recno;
+    struct index_record record;
+    unsigned uidnum = 0;
+    char oldfname[MAX_MAILBOX_PATH];
+    char *fname;
+    unsigned long *deleteduids;
     int r = 0;
-    const char *irec;
-    indexbuffer_t ibuf;
-    unsigned char *buf = ibuf.buf;
-    char *path, fnamebuf[MAX_MAILBOX_PATH+1], fnamebufnew[MAX_MAILBOX_PATH+1];
-    FILE *newindex = NULL, *newexpungeindex = NULL;
-    unsigned emsgno, imsgno;
-    unsigned long iexists, euid, iuid;
-    uquota_t quotarestored = 0, newquotaused;
-    unsigned numansweredflag = 0, numdeletedflag = 0, numflaggedflag = 0;
-    unsigned newexists, newexpunged, newdeleted, newanswered, newflagged;
-    time_t now = time(NULL);
-    struct txn *tid = NULL;
 
-    /* Open new index/expunge files */
-    path = (mailbox->mpath &&
-	    (config_metapartition_files & IMAP_ENUM_METAPARTITION_FILES_INDEX)) ?
-	mailbox->mpath : mailbox->path;
+    deleteduids = (unsigned long *)
+		  xmalloc(mailbox->i.num_records * sizeof(unsigned long));
+    *numrestored = 0;
 
-    strlcpy(fnamebufnew, path, sizeof(fnamebufnew));
-    strlcat(fnamebufnew, FNAME_INDEX, sizeof(fnamebufnew));
-    strlcat(fnamebufnew, ".NEW", sizeof(fnamebufnew));
+    for (recno = 1; recno <= mailbox->i.num_records; recno++) {
+	r = mailbox_read_index_record(mailbox, recno, &record);
+	if (r) goto done;
 
-    newindex = fopen(fnamebufnew, "w+");
-    if (!newindex) {
-	syslog(LOG_ERR, "IOERROR: creating %s: %m", fnamebufnew);
-	return IMAP_IOERROR;
-    }
+	/* still active */
+	if (!(record.system_flags & FLAG_EXPUNGED))
+	    continue;
+	/* no file, unrescuable */
+	if (record.system_flags & FLAG_UNLINKED)
+	    continue;
 
-    path = (mailbox->mpath &&
-	    (config_metapartition_files & IMAP_ENUM_METAPARTITION_FILES_EXPUNGE)) ?
-	mailbox->mpath : mailbox->path;
-
-    strlcpy(fnamebufnew, path, sizeof(fnamebufnew));
-    strlcat(fnamebufnew, FNAME_EXPUNGE_INDEX, sizeof(fnamebufnew));
-    strlcat(fnamebufnew, ".NEW", sizeof(fnamebufnew));
-
-    newexpungeindex = fopen(fnamebufnew, "w+");
-    if (!newindex) {
-	syslog(LOG_ERR, "IOERROR: creating %s: %m", fnamebufnew);
-	fclose(newindex);
-	return IMAP_IOERROR;
-    }
-
-    /* Copy over index/expunge headers
-     *
-     * XXX do we want/need to bump the generation number?
-     */
-    fwrite(mailbox->index_base, 1, mailbox->start_offset, newindex);
-    fwrite(expunge_index_base, 1, mailbox->start_offset, newexpungeindex);
-
-    iexists = ntohl(*((bit32 *)(mailbox->index_base+OFFSET_EXISTS)));
-
-    for (imsgno = 0, emsgno = 0; emsgno < eexists; emsgno++) {
-	/* Copy expunge index record for this message */
-	memcpy(buf,
-	       expunge_index_base + mailbox->start_offset +
-	       msgs[emsgno].recno * mailbox->record_size,
-	       mailbox->record_size);
-
-	euid = ntohl(*((bit32 *)(buf+OFFSET_UID)));
-
-	/* Write all cyrus.index records w/ iuid < euid to cyrus.index */
-	for (; imsgno < iexists; imsgno++) {
-	    /* Jump to index record for this message */
-	    irec = mailbox->index_base + mailbox->start_offset +
-		imsgno * mailbox->record_size;
-
-	    iuid = ntohl(*((bit32 *)(irec+OFFSET_UID)));
-
-	    if (iuid > euid) break;
-
-	    fwrite(irec, 1, mailbox->record_size, newindex);
+	if (mode == MODE_UID) {
+	    while (uidnum < nuids && record.uid > uids[uidnum])
+		uidnum++;
+	    if (uidnum >= nuids)
+		continue;
+	    if (record.uid != uids[uidnum])
+		continue;
+	    /* otherwise we want this one */
+	}
+	else if (mode == MODE_TIME) {
+	    if (record.last_updated < time_since)
+		continue;
+	    /* otherwise we want this one */
 	}
 
-	if (msgs[emsgno].restore) {
-	    bit32 sysflags = ntohl(*((bit32 *)(buf+OFFSET_SYSTEM_FLAGS)));
+	/* mark the old one unlinked so we don't see it again */
+	deleteduids[*numrestored] = record.uid;
+	fname = mailbox_message_fname(mailbox, record.uid);
+	record.system_flags |= FLAG_UNLINKED;
+	r = mailbox_rewrite_index_record(mailbox, &record);
+	if (r) goto done;
 
-	    if (verbose) {
-		printf("\trestoring UID %ld\n", msgs[emsgno].uid);
-		syslog(LOG_INFO, "restoring UID %ld in mailbox '%s'",
-		       msgs[emsgno].uid, mailbox->name);
-	    }
+	/* duplicate the old filename */
+	strncpy(oldfname, fname, MAX_MAILBOX_PATH);
 
-	    /* Update counts */
-	    (*numrestored)++;
-	    quotarestored += ntohl(*((bit32 *)(buf+OFFSET_SIZE)));
-	    if (sysflags & FLAG_ANSWERED) numansweredflag++;
-	    if (sysflags & FLAG_FLAGGED) numflaggedflag++;
-	    if (unsetdeleted) {
-		sysflags &= ~FLAG_DELETED;
-		*((bit32 *)(buf+OFFSET_SYSTEM_FLAGS)) = htonl(sysflags);
-	    }
-	    else if (sysflags & FLAG_DELETED) numdeletedflag++;
+	/* bump the UID, strip the flags */
+	record.uid = mailbox->i.last_uid + 1;
+	record.system_flags &= ~(FLAG_UNLINKED|FLAG_EXPUNGED);
+	if (unsetdeleted)
+	    record.system_flags &= ~FLAG_DELETED;
 
-	    /* Write record to cyrus.index */
-	    *((bit32 *)(buf+OFFSET_LAST_UPDATED)) = htonl(now);
-	    fwrite(buf, 1, mailbox->record_size, newindex);
-	}
-	else {
-	    /* Write record to cyrus.expunge */
-	    fwrite(buf, 1, mailbox->record_size, newexpungeindex);
+	/* copy the message file */
+	fname = mailbox_message_fname(mailbox, record.uid);
+	r = mailbox_copyfile(oldfname, fname, 0);
+	if (r) goto done;
+
+	/* and append the new record */
+	mailbox_append_index_record(mailbox, &record);
+
+	if (verbose)
+	    printf("Unexpunged %s: %lu => %lu\n", mailbox->name, 
+		   deleteduids[*numrestored], record.uid);
+
+	(*numrestored)++;
+    }
+
+    if (*numrestored) {
+	int i;
+	/* commit first */
+	mailbox_commit(mailbox);
+
+	/* then complete the unlinks once safe to do so */
+	for (i = 0; i < *numrestored; i++) {
+	    fname = mailbox_message_fname(mailbox, deleteduids[i]);
+	    unlink(fname);
 	}
     }
 
-    /* Write all remaining cyrus.index records to cyrus.index */
-    if (imsgno < iexists) {
-	/* Jump to index record for next message */
-	irec = mailbox->index_base + mailbox->start_offset +
-	    imsgno * mailbox->record_size;
-
-	fwrite(irec, 1, (iexists - imsgno) * mailbox->record_size, newindex);
-    }
-
-    /* Fix up information in index header */
-    memcpy(buf, mailbox->index_base, mailbox->start_offset);
-
-    /* Update uidvalidity */
-    *((bit32 *)(buf+OFFSET_UIDVALIDITY)) = htonl(now);
-
-    /* Fix up exists */
-    newexists = ntohl(*((bit32 *)(buf+OFFSET_EXISTS))) + *numrestored;
-    *((bit32 *)(buf+OFFSET_EXISTS)) = htonl(newexists);
-
-    /* Fix up expunged count */
-    newexpunged = ntohl(*((bit32 *)(buf+OFFSET_LEAKED_CACHE))) - *numrestored;
-    *((bit32 *)(buf+OFFSET_LEAKED_CACHE)) = htonl(newexpunged);
-	    
-    /* Fix up other counts */
-    newanswered = ntohl(*((bit32 *)(buf+OFFSET_ANSWERED))) + numansweredflag;
-    *((bit32 *)(buf+OFFSET_ANSWERED)) = htonl(newanswered);
-    newdeleted = ntohl(*((bit32 *)(buf+OFFSET_DELETED))) + numdeletedflag;
-    *((bit32 *)(buf+OFFSET_DELETED)) = htonl(newdeleted);
-    newflagged = ntohl(*((bit32 *)(buf+OFFSET_FLAGGED))) + numflaggedflag;
-    *((bit32 *)(buf+OFFSET_FLAGGED)) = htonl(newflagged);
-
-    /* Fix up quota_mailbox_used */
-#ifdef HAVE_LONG_LONG_INT
-    newquotaused =
-	ntohll(*((bit64 *)(buf+OFFSET_QUOTA_MAILBOX_USED64))) + quotarestored;
-    *((bit64 *)(buf+OFFSET_QUOTA_MAILBOX_USED64)) = htonll(newquotaused);
-#else
-    /* Zero the unused 32bits */
-    *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED64)) = htonl(0);
-    newquotaused =
-	ntohl(*((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED))) + quotarestored;
-    *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)) = htonl(newquotaused);
-#endif
-
-    /* Write out new index header */
-    rewind(newindex);
-    fwrite(buf, 1, mailbox->start_offset, newindex);
-
-    /* Ensure everything made it to disk */
-    fflush(newindex);
-    fclose(newindex);
-
-    /* Fix up information in expunge index header */
-    memcpy(buf, expunge_index_base, mailbox->start_offset);
-
-    /* Update uidvalidity */
-    *((bit32 *)(buf+OFFSET_UIDVALIDITY)) = htonl(now);
-
-    /* Fix up exists */
-    newexists = ntohl(*((bit32 *)(buf+OFFSET_EXISTS))) - *numrestored;
-    *((bit32 *)(buf+OFFSET_EXISTS)) = htonl(newexists);
-
-    /* Fix up other counts */
-    newanswered = ntohl(*((bit32 *)(buf+OFFSET_ANSWERED))) - numansweredflag;
-    *((bit32 *)(buf+OFFSET_ANSWERED)) = htonl(newanswered);
-    /* XXX we use the numrestored count here because we may have unset
-     * the \Deleted flag when we copied the record to cyrus.index,
-     * but we know that any message that has to be restored had the
-     * \Deleted set in cyrus.expunge in the first place
-     */
-    newdeleted = ntohl(*((bit32 *)(buf+OFFSET_DELETED))) - *numrestored;
-    *((bit32 *)(buf+OFFSET_DELETED)) = htonl(newdeleted);
-    newflagged = ntohl(*((bit32 *)(buf+OFFSET_FLAGGED))) - numflaggedflag;
-    *((bit32 *)(buf+OFFSET_FLAGGED)) = htonl(newflagged);
-
-    /* Fix up quota_mailbox_used */
-#ifdef HAVE_LONG_LONG_INT
-    newquotaused =
-	ntohll(*((bit64 *)(buf+OFFSET_QUOTA_MAILBOX_USED64))) - quotarestored;
-    *((bit64 *)(buf+OFFSET_QUOTA_MAILBOX_USED64)) = htonll(newquotaused);
-#else
-    /* Zero the unused 32bits */
-    *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED64)) = htonl(0);
-    newquotaused =
-	ntohl(*((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED))) - quotarestored;
-    *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)) = htonl(newquotaused);
-#endif
-
-    /* Write out new expunge index header */
-    rewind(newexpungeindex);
-    fwrite(buf, 1, mailbox->start_offset, newexpungeindex);
-
-    /* Ensure everything made it to disk */
-    fflush(newexpungeindex);
-    fclose(newexpungeindex);
-
-    /* Rename our files */
-    path = (mailbox->mpath &&
-	    (config_metapartition_files & IMAP_ENUM_METAPARTITION_FILES_INDEX)) ?
-	mailbox->mpath : mailbox->path;
-
-    strlcpy(fnamebuf, path, sizeof(fnamebuf));
-    strlcat(fnamebuf, FNAME_INDEX, sizeof(fnamebuf));
-
-    strlcpy(fnamebufnew, fnamebuf, sizeof(fnamebufnew));
-    strlcat(fnamebufnew, ".NEW", sizeof(fnamebufnew));
-
-    if (rename(fnamebufnew, fnamebuf)) {
-	syslog(LOG_ERR, "IOERROR: renaming index file for %s: %m",
-	       mailbox->name);
-	return IMAP_IOERROR;
-    }
-
-    path = (mailbox->mpath &&
-	    (config_metapartition_files & IMAP_ENUM_METAPARTITION_FILES_EXPUNGE)) ?
-	mailbox->mpath : mailbox->path;
-
-    strlcpy(fnamebuf, path, sizeof(fnamebuf));
-    strlcat(fnamebuf, FNAME_EXPUNGE_INDEX, sizeof(fnamebuf));
-
-    strlcpy(fnamebufnew, fnamebuf, sizeof(fnamebufnew));
-    strlcat(fnamebufnew, ".NEW", sizeof(fnamebufnew));
-
-    if (rename(fnamebufnew, fnamebuf)) {
-	syslog(LOG_ERR, "IOERROR: renaming expunge index file for %s: %m",
-	       mailbox->name);
-	return IMAP_IOERROR;
-    }
-
-    /* Record quota restore */
-    r = quota_read(&mailbox->quota, &tid, 1);
-    if (!r) {
-	mailbox->quota.used += quotarestored;
-	r = quota_write(&mailbox->quota, &tid);
-	if (!r) quota_commit(&tid);
-	else {
-	    syslog(LOG_ERR,
-		   "LOSTQUOTA: unable to record restore of " UQUOTA_T_FMT " bytes in quota %s",
-		   quotarestored, mailbox->quota.root);
-	}
-    }
-    else if (r == IMAP_QUOTAROOT_NONEXISTENT) r = 0;
+done:
+    free(deleteduids);
 
     return r;
 }
@@ -421,16 +245,13 @@ int main(int argc, char *argv[])
     int opt, r = 0;
     char *alt_config = NULL;
     char buf[MAX_MAILBOX_PATH+1];
-    struct mailbox mailbox;
-    int doclose = 0, mode = MODE_UNKNOWN, unsetdeleted = 0;
-    char expunge_fname[MAX_MAILBOX_PATH+1];
-    int expunge_fd = -1;
-    struct stat sbuf;
-    const char *lockfailaction;
-    struct msg *msgs;
+    struct mailbox *mailbox;
+    int mode = MODE_UNKNOWN;
     unsigned numrestored = 0;
-    time_t last_update, time_since = time(NULL);
+    time_t time_since = time(NULL);
     int len, secs = 0;
+    unsigned long *uids;
+    unsigned nuids = 0;
 
     if ((geteuid()) == 0 && (become_cyrus() != 0)) {
 	fatal("must run as the Cyrus user", EC_USAGE);
@@ -486,7 +307,7 @@ int main(int argc, char *argv[])
 	case 'd':
 	    unsetdeleted = 1;
 	    break;
-	
+
 	case 'v':
 	    verbose = 1;
 	    break;
@@ -513,7 +334,7 @@ int main(int argc, char *argv[])
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&unex_namespace, 1)) != 0) {
-	syslog(LOG_ERR, error_message(r));
+	syslog(LOG_ERR, "%s", error_message(r));
 	fatal(error_message(r), EC_CONFIG);
     }
 
@@ -522,140 +343,45 @@ int main(int argc, char *argv[])
 					  NULL, buf);
 
     /* Open/lock header */
-    r = mailbox_open_header(buf, 0, &mailbox);
-    if (!r && mailbox.header_fd != -1) {
-	doclose = 1;
-	(void) mailbox_lock_header(&mailbox);
-	mailbox.header_lock_count = 1;
+    r = mailbox_open_iwl(buf, &mailbox);
+    if (r) {
+	printf("Failed to open mailbox '%s'\n", buf);
+	goto done;
     }
 
-    /* Attempt to open/lock index */
-    if (!r) r = mailbox_open_index(&mailbox);
-    if (!r) {
-	(void) mailbox_lock_index(&mailbox);
-	mailbox.index_lock_count = 1;
-    }
-    if (!r) r = mailbox_lock_pop(&mailbox);
+    if (mode == MODE_UID) {
+	unsigned i;
 
-    /* Open expunge index */
-    if (!r) {
-	char *path =
-	    (mailbox.mpath &&
-	     (config_metapartition_files & IMAP_ENUM_METAPARTITION_FILES_EXPUNGE)) ?
-	    mailbox.mpath : mailbox.path;
+	nuids = argc - ++optind;
+	uids = (unsigned long *) xmalloc(nuids * sizeof(unsigned long));
 
-	strlcpy(expunge_fname, path, sizeof(expunge_fname));
-	strlcat(expunge_fname, FNAME_EXPUNGE_INDEX, sizeof(expunge_fname));
+	for (i = 0; i < nuids; i++)
+	    uids[i] = strtoul(argv[optind+i], NULL, 10);
 
-	expunge_fd = open(expunge_fname, O_RDWR, 0666);
+	/* Sort the UIDs so we can binary search */
+	qsort(uids, nuids, sizeof(unsigned long), compare_uid);
     }
 
-    if (r || expunge_fd == -1) {
-	/* mailbox corrupt/nonexistent -- skip it */
-	syslog(LOG_WARNING, "unable to open/lock mailbox %s", argv[optind]);
-	if (doclose) mailbox_close(&mailbox);
-	return 0;
-    }
+    if (mode == MODE_LIST)
+	list_expunged(mailbox);
+    else {
+	printf("restoring %sexpunged messages in mailbox '%s'\n",
+		mode == MODE_ALL ? "all " : "", mailbox->name);
 
-    if ((r = lock_reopen(expunge_fd, expunge_fname, &sbuf, &lockfailaction))) {
-	syslog(LOG_ERR, "IOERROR: %s expunge index for %s: %m",
-	       lockfailaction, mailbox.name);
-    }
-    if (!r) {
-	const char *expunge_index_base = NULL;
-	unsigned long expunge_index_len = 0;	/* mapped size */
-	unsigned long exists, uid;
-	const char *rec;
-	unsigned msgno;
-	unsigned long *uids = NULL;
-	unsigned nuids = 0;
+	r = restore_expunged(mailbox, mode, uids, nuids, time_since, &numrestored);
 
-	map_refresh(expunge_fd, 1, &expunge_index_base,
-		    &expunge_index_len, sbuf.st_size, "expunge",
-		    mailbox.name);
-
-	exists = ntohl(*((bit32 *)(expunge_index_base+OFFSET_EXISTS)));
-
-	msgs = (struct msg *) xmalloc(exists * sizeof(struct msg));
-
-	/* Get UIDs of messages to restore */
-	if (mode == MODE_UID) {
-	    unsigned i;
-
-	    nuids = argc - ++optind;
-	    uids = (unsigned long *) xmalloc(nuids * sizeof(unsigned long));
-
-	    for (i = 0; i < nuids; i++)
-		uids[i] = strtoul(argv[optind+i], NULL, 10);
-
-	    /* Sort the UIDs so we can binary search */
-	    qsort(uids, nuids, sizeof(unsigned long), compare_uid);
+	if (!r) {
+	    printf("restored %u expunged messages\n",
+		    numrestored);
+	    syslog(LOG_NOTICE,
+		   "restored %u expunged messages in mailbox '%s'",
+		   numrestored, mailbox->name);
 	}
-
-	/* Get UIDs of expunged messages */
-	for (msgno = 0; msgno < exists; msgno++) {
-	    /* Jump to index record for this message */
-	    rec = expunge_index_base + mailbox.start_offset +
-		msgno * mailbox.record_size;
-
-	    uid = ntohl(*((bit32 *)(rec+OFFSET_UID)));
-
-	    msgs[msgno].recno = msgno;
-	    msgs[msgno].uid = uid;
-	    switch (mode) {
-	    case MODE_LIST: msgs[msgno].restore = 0; break;
-	    case MODE_ALL: msgs[msgno].restore = 1; break;
-            case MODE_TIME:
-                last_update = ntohl(*((bit32 *)(rec+OFFSET_LAST_UPDATED)));
-                msgs[msgno].restore = (last_update > time_since);
-                break;
-	    case MODE_UID:
-		/* see if this UID is in our list */
-		msgs[msgno].restore = bsearch(&uid, uids, nuids,
-					      sizeof(unsigned long),
-					      compare_uid) != NULL;
-		break;
-	    }
-	}
-	if (uids) free(uids);
-
-	/* Sort msgs by UID */
-	qsort(msgs, exists, sizeof(struct msg), compare_msg);
-
-	if (mode == MODE_LIST)
-	    list_expunged(&mailbox, msgs, exists, expunge_index_base);
-	else {
-	    printf("restoring %sexpunged messages in mailbox '%s'\n",
-		    mode == MODE_ALL ? "all " : "", mailbox.name);
-
-	    r = restore_expunged(&mailbox, msgs, exists, expunge_index_base,
-				 &numrestored, unsetdeleted);
-	    if (!r) {
-		printf("restored %u out of %lu expunged messages\n",
-			numrestored, exists);
-		syslog(LOG_NOTICE,
-		       "restored %u out of %lu expunged messages in mailbox '%s'",
-		       numrestored, exists, mailbox.name);
-	    }
-	}
-
-	map_free(&expunge_index_base, &expunge_index_len);
-	free(msgs);
-
-	if (lock_unlock(expunge_fd))
-	    syslog(LOG_ERR,
-		   "IOERROR: unlocking expunge index of %s: %m", 
-		   mailbox.name);
     }
-    close(expunge_fd);
 
-    mailbox_unlock_pop(&mailbox);
-    mailbox_unlock_index(&mailbox);
-    mailbox_unlock_header(&mailbox);
-
-    if (!r) sync_log_mailbox(mailbox.name);
     mailbox_close(&mailbox);
 
+done:
     sync_log_done();
 
     quotadb_close();

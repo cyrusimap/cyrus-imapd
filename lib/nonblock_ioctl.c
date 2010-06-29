@@ -47,6 +47,10 @@
 
 #include "nonblock.h"
 
+/* for fatal */
+#include "xmalloc.h"
+#include "exitcodes.h"
+
 const char *nonblock_method_desc = "ioctl";
 
 /*
@@ -62,6 +66,6 @@ int mode;
     mode = mode ? 1 : 0;
 
     if (ioctl(fd, FIONBIO, (char *)&mode) < 0) {
-	fatal("Internal error: ioctl FIONBIO failed");
+	fatal("Internal error: ioctl FIONBIO failed", EC_SOFTWARE);
     }
 }

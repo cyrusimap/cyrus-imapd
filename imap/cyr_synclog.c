@@ -114,8 +114,6 @@ int main(int argc, char *argv[])
 	fprintf(stderr, "  -u   USER\n");
 	fprintf(stderr, "  -v   SIEVE\n");
 	fprintf(stderr, "  -m   MAILBOX\n");
-	fprintf(stderr, "  -a   APPEND\n");
-	fprintf(stderr, "  -c   ACL\n");
 	fprintf(stderr, "  -q   QUOTA\n");
 	fprintf(stderr, "  -n   ANNOTATION\n");
 	fprintf(stderr, "  -s   SEEN\n");
@@ -138,12 +136,6 @@ int main(int argc, char *argv[])
 	    break;
 	case 'm': /* Mailbox */
 	    sync_log_mailbox(argv[optind]);
-	    break;
-	case 'a': /* Append */
-	    sync_log_append(argv[optind]);
-	    break;
-	case 'c': /* aCl */
-	    sync_log_acl(argv[optind]);
 	    break;
 	case 'q': /* Quota */
 	    sync_log_quota(argv[optind]);

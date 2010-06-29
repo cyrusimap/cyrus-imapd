@@ -1051,14 +1051,13 @@ int charset_searchstring(const char *substr, comp_pat *pat,
 
 /*
  * Search for the string 'substr' in the next 'len' bytes of 
- * 'msg_base'.  If 'mapnl' is nonzero, then LF characters in the file
- * map to CR LF and count as 2 bytes w.r.t. the value of 'len'.
+ * 'msg_base'.  
  * 'charset' and 'encoding' specify the character set and 
  * content transfer encoding of the data, respectively.
  * Returns nonzero iff the string was found.
  */
 int charset_searchfile(const char *substr, comp_pat *pat,
-    const char *msg_base, int mapnl, size_t len, int charset, 
+    const char *msg_base, size_t len, int charset, 
     int encoding)
 {
     struct convert_rock *input, *tosearch;
@@ -1102,10 +1101,6 @@ int charset_searchfile(const char *substr, comp_pat *pat,
 
     /* implement the loop here so we can check on the search each time */
     for (i = 0; i < len; i++) {
-	if (mapnl && msg_base[i] == '\n') {
-	    convert_putc(input, '\r');
-	    len--;
-	}
 	convert_putc(input, msg_base[i]);
 	if (search_havematch(tosearch)) break;
     }
@@ -1119,7 +1114,7 @@ int charset_searchfile(const char *substr, comp_pat *pat,
 
 /* This is based on charset_searchfile above. */
 int charset_extractfile(index_search_text_receiver_t receiver,
-    void* rock, int uid, const char *msg_base, int mapnl, size_t len, 
+    void* rock, int uid, const char *msg_base, size_t len, 
     int charset, int encoding)
 {
     struct convert_rock *input, *tobuffer;
@@ -1161,10 +1156,6 @@ int charset_extractfile(index_search_text_receiver_t receiver,
     out = (struct buf *)tobuffer->state;
 
     for (i = 0; i < len; i++) {
-	if (mapnl && msg_base[i] == '\n') {
-	    convert_putc(input, '\r');
-	    len--;
-	}
 	convert_putc(input, msg_base[i]);
 
 	/* process a block of output every so often */

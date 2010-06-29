@@ -311,8 +311,6 @@ int installafile(int version,struct protstream *pout, struct protstream *pin,
 
   if(!destname) destname = filename;
 
-  sievename=getsievename(destname);
-
   result=stat(filename,&filestats);
 
   if (result!=0) {
@@ -336,6 +334,8 @@ int installafile(int version,struct protstream *pout, struct protstream *pin,
       return -1;
   }
 
+  sievename=getsievename(destname);
+
   prot_printf(pout, "PUTSCRIPT \"%s\" ",sievename);
 
   prot_printf(pout, "{%d+}\r\n",size);
@@ -346,19 +346,30 @@ int installafile(int version,struct protstream *pout, struct protstream *pin,
   {
     char buf[BLOCKSIZE];
     int amount=BLOCKSIZE;
+    int n;
 
     if (size-cnt < BLOCKSIZE)
       amount=size-cnt;
 
-    fread(buf, 1, BLOCKSIZE, stream);
-    
-    prot_write(pout, buf, amount);
+    n = fread(buf, 1, BLOCKSIZE, stream);
+    if (!n) {
+      *errstrp = malloc(128);
+      snprintf(*errstrp, 127, "put script: failed to finish reading");
+      fclose(stream);
+      free(sievename);
+      return -1;
+    }
+
+    prot_write(pout, buf, n);
 
     cnt+=amount;
   }
 
   prot_printf(pout,"\r\n");
   prot_flush(pout);
+
+  fclose(stream);
+  free(sievename);
 
   /* now let's see what the server said */
   res=yylex(&state,pin);
@@ -541,6 +552,8 @@ static int writefile(mystring_t *data, char *name, char **errstrp)
   strcat(scrname, ".script");
 
   stream=fopen(scrname,"w");
+
+  free(scrname);
 
   if (stream==NULL) {
       *errstrp = malloc(128);

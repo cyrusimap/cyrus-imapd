@@ -145,13 +145,6 @@ static struct {
 } saslprops = {NULL,NULL,0,NULL};
 
 
-void printstring(const char *s __attribute__((unused)))
-{
-    /* needed to link against annotate.o */
-    fatal("printstring() executed, but its not used for LMTP!",
-	  EC_SOFTWARE);
-}
-
 #ifdef USING_SNMPGEN
 /* round to nearest 1024 bytes and return number of Kbytes.
  used for SNMP updates. */
@@ -269,7 +262,7 @@ static void send_lmtp_error(struct protstream *pout, int r)
     case MUPDATE_BADPARAM:
     default:
 	/* Some error we're not expecting. */
-	prot_printf(pout, "554 5.0.0 Unexpected internal error\r\n");
+	prot_printf(pout, "451 4.3.0 Unexpected internal error\r\n");
 	break;
     }
 }
@@ -741,7 +734,7 @@ static int savemsg(struct clientdata *cd,
     }
 
     /* get date */
-    if (!(body = spool_getheader(m->hdrcache, "date"))) {
+    if (!spool_getheader(m->hdrcache, "date")) {
 	/* no date, create one */
 	addbody = xstrdup(datestr);
 	fprintf(f, "Date: %s\r\n", addbody);
@@ -1107,8 +1100,10 @@ void lmtpmode(struct lmtp_func *func,
 						   the AUTH command */
 	ssf = 2;
 	auth_id = "postman";
-	sasl_setprop(cd.conn, SASL_SSF_EXTERNAL, &ssf);
-	sasl_setprop(cd.conn, SASL_AUTH_EXTERNAL, auth_id);
+	if (sasl_setprop(cd.conn, SASL_SSF_EXTERNAL, &ssf) != SASL_OK)
+	    fatal("Failed to set SASL property", EC_TEMPFAIL);
+	if (sasl_setprop(cd.conn, SASL_AUTH_EXTERNAL, auth_id) != SASL_OK)
+	    fatal("Failed to set SASL property", EC_TEMPFAIL);
 
 	deliver_logfd = telemetry_log(auth_id, pin, pout, 0);
     } else {
@@ -1780,7 +1775,7 @@ static void pushmsg(struct protstream *in, struct protstream *out,
     while (prot_fgets(buf, sizeof(buf)-2, in)) {
 	/* dot stuff */
 	if (!isdotstuffed && (lastline_hadendline == 1) && (buf[0]=='.')) {
-	    prot_putc('.', out);
+	    (void)prot_putc('.', out);
 	}
 	p = buf + strlen(buf) - 1;
 	if (*p == '\n') {

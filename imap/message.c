@@ -57,11 +57,13 @@
 #include <netinet/in.h>
 #include <stdlib.h>
 
+#include "crc32.h"
 #include "exitcodes.h"
 #include "imap_err.h"
 #include "prot.h"
 #include "map.h"
 #include "mailbox.h"
+#include "mkgmtime.h"
 #include "message.h"
 #include "message_guid.h"
 #include "parseaddr.h"
@@ -132,6 +134,7 @@ struct body {
     struct address *bcc;
     char *in_reply_to;
     char *message_id;
+    char *received_date;
 
     /*
      * Cached headers.  Only filled in at top-level
@@ -167,15 +170,13 @@ struct boundary {
 /* Default MIME Content-type */
 #define DEFAULT_CONTENT_TYPE "TEXT/PLAIN; CHARSET=us-ascii"
 
-static int message_parse_mapped P((const char *msg_base, unsigned long msg_len,
-				   struct body *body));
 static int message_parse_body P((struct msg *msg,
-				 int format, struct body *body,
+				 struct body *body,
 				 char *defaultContentType,
 				 struct boundary *boundaries));
 
 static int message_parse_headers P((struct msg *msg,
-				    int format, struct body *body,
+				    struct body *body,
 				    char *defaultContentType,
 				    struct boundary *boundaries));
 static void message_parse_address P((char *hdr, struct address **addrp));
@@ -189,19 +190,18 @@ static void message_parse_params P((char *hdr, struct param **paramp));
 static void message_fold_params P((struct param **paramp));
 static void message_parse_language P((char *hdr, struct param **paramp));
 static void message_parse_rfc822space P((char **s));
+static void message_parse_received_date P((char *hdr, char **hdrp));
 
 static void message_parse_multipart P((struct msg *msg,
-				       int format, struct body *body,
+				       struct body *body,
 				       struct boundary *boundaries));
 static void message_parse_content P((struct msg *msg,
-				     int format, struct body *body,
+				     struct body *body,
 				     struct boundary *boundaries));
 
 static char *message_getline P((char *s, unsigned n, struct msg *msg));
 static int message_pendingboundary P((const char *s, char **boundaries,
 				      int *boundaryct));
-
-static int message_write_cache P((int outfd, struct body *body));
 
 static void message_write_envelope P((struct ibuf *ibuf, struct body *body));
 static void message_write_body P((struct ibuf *ibuf, struct body *body,
@@ -219,8 +219,9 @@ static void message_write_searchaddr P((struct ibuf *ibuf,
 					struct address *addrlist));
 
 static void message_ibuf_init P((struct ibuf *ibuf));
+static void message_ibuf_copy P((struct ibuf *desc, struct ibuf *src));
 static int message_ibuf_ensure P((struct ibuf *ibuf, unsigned len));
-static void message_ibuf_iov P((struct iovec *iov, struct ibuf *ibuf));
+static void message_ibuf_pad P((struct ibuf *ibuf));
 static void message_ibuf_free P((struct ibuf *ibuf));
 
 /*
@@ -336,6 +337,26 @@ int allow_null;
     }
 }
 
+int message_parse(const char *fname, struct index_record *record)
+{
+    struct body *body = NULL;
+    FILE *f;
+    int r;
+
+    f = fopen(fname, "r");
+    if (!f) return IMAP_IOERROR;
+
+    r = message_parse_file(f, NULL, NULL, &body);
+    if (!r) {
+        r = message_create_record(record, body);
+        message_free_body(body);
+    }
+
+    if (f) fclose(f);
+
+    return r;
+}
+
 /*
  * Parse the message 'infile'.
  *
@@ -359,7 +380,7 @@ int message_parse_file(FILE *infile,
 	msg_base = &tmp_base;
 	msg_len = &tmp_len;
     }
-    *msg_base = 0;
+    *msg_base = NULL;
     *msg_len = 0;
 
     if (fstat(fd, &sbuf) == -1) {
@@ -368,6 +389,9 @@ int message_parse_file(FILE *infile,
     }
     map_refresh(fd, 1, msg_base, msg_len, sbuf.st_size,
 		"new message", 0);
+
+    if (!*msg_base || !*msg_len)
+	return IMAP_IOERROR; /* zero length file? */
 
     if (!*body) *body = (struct body *) xmalloc(sizeof(struct body));
     r = message_parse_mapped(*msg_base, *msg_len, *body);
@@ -415,7 +439,7 @@ int message_parse_binary_file(FILE *infile, struct body **body)
     }
 
     if (!*body) *body = (struct body *) xmalloc(sizeof(struct body));
-    message_parse_body(&msg, MAILBOX_FORMAT_NORMAL, *body,
+    message_parse_body(&msg, *body,
 		       DEFAULT_CONTENT_TYPE, (struct boundary *)0);
 
     lseek(fd, 0L, SEEK_SET);
@@ -445,7 +469,7 @@ int message_parse_mapped(const char *msg_base, unsigned long msg_len,
     msg.offset = 0;
     msg.encode = 0;
 
-    message_parse_body(&msg, MAILBOX_FORMAT_NORMAL, body,
+    message_parse_body(&msg, body,
 		       DEFAULT_CONTENT_TYPE, (struct boundary *)0);
 
     message_guid_generate(&body->guid, msg_base, msg_len);
@@ -533,41 +557,49 @@ void message_fetch_part(struct message_content *msg,
 /*
  * Appends the message's cache information to the cache file
  * and fills in appropriate information in the index record pointed to
- * by 'message_index'.
+ * by 'record'.
  */
 int
-message_create_record(cache_name, cache_fd, message_index, body)
-const char *cache_name;
-int cache_fd;
-struct index_record *message_index;
+message_create_record(record, body)
+struct index_record *record;
 struct body *body;
 {
-    int n;
-    enum enum_value config_guidmode = config_getenum(IMAPOPT_GUID_MODE);
-
-    message_index->sentdate = message_parse_date(body->date, 0);
-    message_index->size = body->header_size + body->content_size;
-    message_index->header_size = body->header_size;
-    message_index->content_offset = body->content_offset;
-    message_index->content_lines = body->content_lines;
-
-    message_index->cache_offset = lseek(cache_fd, 0, SEEK_CUR);
-
-    message_index->cache_version = MAILBOX_CACHE_MINOR_VERSION;
-
-    n = message_write_cache(cache_fd, body);
-
-    if (n == -1) {
-	syslog(LOG_ERR, "IOERROR: appending cache for %s: %m", cache_name);
-	return IMAP_IOERROR;
+    if (config_getenum(IMAPOPT_INTERNALDATE_HEURISTIC) 
+	    == IMAP_ENUM_INTERNALDATE_HEURISTIC_RECEIVEDHEADER) {
+	time_t newdate = 0;
+	if (body->received_date)
+	    newdate = message_parse_date(body->received_date,
+		PARSE_DATE|PARSE_TIME|PARSE_ZONE|PARSE_NOCREATE|PARSE_GMT);
+	if (newdate)
+	    record->internaldate = newdate;
     }
 
-    /* Copy in GUID unless GUID already assigned to the message
-     * (allows parent to decide which source of GUIDs to use)
-     */
-    if (config_guidmode && message_guid_isnull(&message_index->guid)) {
-	message_guid_copy(&message_index->guid, &body->guid);
+    if (!record->internaldate)
+	record->internaldate = time(NULL);
+
+    /* used for sent time searching, truncated to day with no TZ */
+    record->sentdate = message_parse_date(body->date, PARSE_NOCREATE);
+    if (!record->sentdate) {
+	struct tm *tm = localtime(&record->internaldate);
+	/* truncate to the day */
+	tm->tm_sec = 0;
+	tm->tm_min = 0;
+	tm->tm_hour = 0;
+	record->sentdate = mktime(tm);
     }
+
+    /* used for sent time sorting, full gmtime of Date: header */
+    record->gmtime =
+	message_parse_date(body->date, PARSE_DATE|PARSE_TIME|PARSE_ZONE|PARSE_NOCREATE|PARSE_GMT);
+    if (!record->gmtime)
+	record->gmtime = record->internaldate;
+
+    record->size = body->header_size + body->content_size;
+    record->header_size = body->header_size;
+    record->content_lines = body->content_lines;
+    message_guid_copy(&record->guid, &body->guid);
+
+    message_write_cache(record, body);
 
     return 0;
 }
@@ -576,9 +608,8 @@ struct body *body;
  * Parse a body-part
  */
 static int
-message_parse_body(msg, format, body, defaultContentType, boundaries)
+message_parse_body(msg, body, defaultContentType, boundaries)
 struct msg *msg;
-int format;
 struct body *body;
 char *defaultContentType;
 struct boundary *boundaries;
@@ -597,13 +628,13 @@ struct boundary *boundaries;
 	message_ibuf_init(&body->cacheheaders);
     }
 
-    sawboundary = message_parse_headers(msg, format, body, defaultContentType,
+    sawboundary = message_parse_headers(msg, body, defaultContentType,
 					boundaries);
 
     /* Recurse according to type */
     if (strcmp(body->type, "MULTIPART") == 0) {
 	if (!sawboundary) {
-	    message_parse_multipart(msg, format, body, boundaries);
+	    message_parse_multipart(msg, body, boundaries);
 	}
     }
     else if (strcmp(body->type, "MESSAGE") == 0 &&
@@ -615,7 +646,7 @@ struct boundary *boundaries;
 	    message_parse_type(DEFAULT_CONTENT_TYPE, body->subpart);
 	}
 	else {
-	    message_parse_body(msg, format, body->subpart,
+	    message_parse_body(msg, body->subpart,
 			       DEFAULT_CONTENT_TYPE, boundaries);
 
 	    /* Calculate our size/lines information */
@@ -631,7 +662,7 @@ struct boundary *boundaries;
     }
     else {
 	if (!sawboundary) {
-	    message_parse_content(msg, format, body, boundaries);
+	    message_parse_content(msg, body, boundaries);
 	}
     }
 
@@ -646,10 +677,9 @@ struct boundary *boundaries;
  */
 #define HEADGROWSIZE 1000
 static int
-message_parse_headers(msg, format, body, defaultContentType,
+message_parse_headers(msg, body, defaultContentType,
 		      boundaries)
 struct msg *msg;
-int format __attribute__((unused));
 struct body *body;
 char *defaultContentType;
 struct boundary *boundaries;
@@ -841,6 +871,9 @@ struct boundary *boundaries;
 		if (!strncasecmp(next+2, "eply-to:", 8)) {
 		    message_parse_address(next+10, &body->reply_to);
 		}
+		if (!strncasecmp(next+2, "eceived:", 8)) {
+		    message_parse_received_date(next+10, &body->received_date);
+		}
 
 		break;
 
@@ -859,6 +892,18 @@ struct boundary *boundaries;
 		if (!strncasecmp(next+2, "o:", 2)) {
 		    message_parse_address(next+4, &body->to);
 		}
+		break;
+
+	    case 'x':
+	    case 'X':
+		if (!strncasecmp(next+2, "-deliveredinternaldate:", 23)) {
+        /* Explicit x-deliveredinternaldate overrides received: headers */
+        if (body->received_date) {
+          free(body->received_date);
+          body->received_date = 0;
+        }
+		    message_parse_string(next+25, &body->received_date);
+   }
 		break;
 	    } /* switch(next[1]) */
 	} /* if (*next == '\n') */
@@ -1698,7 +1743,10 @@ unsigned flags;
 
     tm.tm_isdst = -1;
 
-    t = mktime(&tm);
+    if (flags & PARSE_GMT)
+	t = mkgmtime(&tm);
+    else
+	t = mktime(&tm);
     /* Don't return -1; it's never right.  Return the current time instead.
      * That's much closer than 1969.
      */
@@ -1769,9 +1817,8 @@ char **s;
  * Parse the content of a MIME multipart body-part
  */
 static void
-message_parse_multipart(msg, format, body, boundaries)
+message_parse_multipart(msg, body, boundaries)
 struct msg *msg;
-int format;
 struct body *body;
 struct boundary *boundaries;
 {
@@ -1794,7 +1841,7 @@ struct boundary *boundaries;
     
     if (!boundary) {
 	/* Invalid MIME--treat as zero-part multipart */
-	message_parse_content(msg, format, body, boundaries);
+	message_parse_content(msg, body, boundaries);
 	return;
     }
 
@@ -1810,13 +1857,13 @@ struct boundary *boundaries;
     depth = boundaries->count;
 
     /* Parse preamble */
-    message_parse_content(msg, format, &preamble, boundaries);
+    message_parse_content(msg, &preamble, boundaries);
 
     /* Parse the component body-parts */
     while (boundaries->count == depth) {
 	body->subpart = (struct body *)xrealloc((char *)body->subpart,
 				 (body->numparts+1)*sizeof(struct body));
-	message_parse_body(msg, format, &body->subpart[body->numparts++],
+	message_parse_body(msg, &body->subpart[body->numparts++],
 			   defaultContentType, boundaries);
 	if (msg->offset == msg->len &&
 	    body->subpart[body->numparts-1].boundary_size == 0) {
@@ -1828,7 +1875,7 @@ struct boundary *boundaries;
 
     if (boundaries->count == depth-1) {
 	/* Parse epilogue */
-	message_parse_content(msg, format, &epilogue, boundaries);
+	message_parse_content(msg, &epilogue, boundaries);
     }
     else if (body->numparts) {
 	/*
@@ -1880,9 +1927,8 @@ struct boundary *boundaries;
  * Parse the content of a generic body-part
  */
 static void
-message_parse_content(msg, format, body, boundaries)
+message_parse_content(msg, body, boundaries)
 struct msg *msg;
-int format __attribute__((unused));
 struct body *body;
 struct boundary *boundaries;
 {
@@ -1933,7 +1979,8 @@ struct boundary *boundaries;
     }
 
     if (encode) {
-	int b64_size, b64_lines, delta;
+	size_t b64_size;
+	int b64_lines, delta;
 
 	/* Determine encoded size */
 	charset_encode_mimebody(NULL, body->content_size, NULL,
@@ -1963,6 +2010,41 @@ struct boundary *boundaries;
 	body->content_size = b64_size;
 	body->content_lines += b64_lines;
     }
+}
+
+static void
+message_parse_received_date(hdr, hdrp)
+char *hdr;
+char **hdrp;
+{
+  char *curp, *hdrbuf = 0;
+
+  /* Ignore if we already saw one of these headers */
+  if (*hdrp) return;
+
+  /* Copy header to temp buffer */
+  message_parse_string(hdr, &hdrbuf);
+
+  /* From rfc2822, 3.6.7
+   *   received = "Received:" name-val-list ";" date-time CRLF
+   * So scan backwards for ; and assume everything after is a date.
+   * Failed parsing will return 0, and we'll use time() elsewhere
+   * instead anyway
+   */
+  curp = hdrbuf + strlen(hdrbuf) - 1;
+  while (curp > hdrbuf && *curp != ';')
+    curp--;
+
+  /* Didn't find ; - fill in hdrp so we don't look at next received header */
+  if (curp == hdrbuf) {
+    *hdrp = hdrbuf;
+    return;
+  }
+
+  /* Found it, copy out date string part */
+  curp++;
+  message_parse_string(curp, hdrp);
+  free(hdrbuf);
 }
 
 
@@ -2030,75 +2112,64 @@ int *boundaryct;
  * Write the cache information for the message parsed to 'body'
  * to 'outfile'.
  */
-static int
-message_write_cache(outfd, body)
-int outfd;
+int
+message_write_cache(record, body)
+struct index_record *record;
 struct body *body;
 {
-    struct ibuf section, envelope, bodystructure, oldbody;
-    struct ibuf from, to, cc, bcc, subject;
+    static struct buf cacheitem_buffer;
+    struct ibuf ib[10];
     struct body toplevel;
-    int n;
-    struct iovec iov[15];
-    char* t;
+    char *subject;
+    int len;
+    int i;
+
+    /* initialise data structures */
+    buf_reset(&cacheitem_buffer);
+    for (i = 0; i < 10; i++)
+	message_ibuf_init(&ib[i]);
 
     toplevel.type = "MESSAGE";
     toplevel.subtype = "RFC822";
     toplevel.subpart = body;
 
-    message_ibuf_init(&envelope);
-    message_write_envelope(&envelope, body);
+    subject = charset_decode_mimeheader(body->subject, NULL, 0);
 
-    message_ibuf_init(&bodystructure);
-    message_write_body(&bodystructure, body, 1);
+    /* copy into ibufs */
+    message_write_envelope(&ib[CACHE_ENVELOPE], body);
+    message_write_body(&ib[CACHE_BODYSTRUCTURE], body, 1);
+    message_ibuf_copy(&ib[CACHE_HEADERS], &body->cacheheaders); 
+    message_write_body(&ib[CACHE_BODY], body, 0);
+    message_write_section(&ib[CACHE_SECTION], &toplevel);
+    message_write_searchaddr(&ib[CACHE_FROM], body->from);
+    message_write_searchaddr(&ib[CACHE_TO], body->to);
+    message_write_searchaddr(&ib[CACHE_CC], body->cc);
+    message_write_searchaddr(&ib[CACHE_BCC], body->bcc);
+    message_write_nstring(&ib[CACHE_SUBJECT], subject);
 
-    message_ibuf_init(&oldbody);
-    message_write_body(&oldbody, body, 0);
+    free(subject);
 
-    message_ibuf_init(&section);
-    message_write_section(&section, &toplevel);
+    /* append the records to the buffer */
+    for (i = 0; i < 10; i++) {
+	message_ibuf_pad(&ib[i]);
+	record->crec.item[i].len = ib[i].end - ib[i].start;
+	buf_appendbit32(&cacheitem_buffer, record->crec.item[i].len);
+	record->crec.item[i].offset = buf_len(&cacheitem_buffer);
+	buf_appendmap(&cacheitem_buffer, ib[i].start, (record->crec.item[i].len + 3) & ~3);
+	message_ibuf_free(&ib[i]);
+    }
 
-    message_ibuf_init(&from);
-    message_write_searchaddr(&from, body->from);
+    len = buf_len(&cacheitem_buffer);
 
-    message_ibuf_init(&to);
-    message_write_searchaddr(&to, body->to);
+    /* copy the fields into the message */
+    record->cache_offset = 0; /* calculate on write! */
+    record->cache_version = MAILBOX_CACHE_MINOR_VERSION;
+    record->cache_crc = crc32_map(cacheitem_buffer.s, len); /* XXX - hacky */
+    record->crec.base = &cacheitem_buffer;
+    record->crec.offset = 0; /* we're at the start of the buffer */
+    record->crec.len = len;
 
-    message_ibuf_init(&cc);
-    message_write_searchaddr(&cc, body->cc);
-
-    message_ibuf_init(&bcc);
-    message_write_searchaddr(&bcc, body->bcc);
-
-    message_ibuf_init(&subject);
-    t = charset_decode_mimeheader(body->subject, NULL, 0);
-    message_write_nstring(&subject, t);
-    free(t);
-
-    message_ibuf_iov(&iov[0], &envelope);
-    message_ibuf_iov(&iov[1], &bodystructure);
-    message_ibuf_iov(&iov[2], &oldbody);
-    message_ibuf_iov(&iov[3], &section);
-    message_ibuf_iov(&iov[4], &body->cacheheaders);
-    message_ibuf_iov(&iov[5], &from);
-    message_ibuf_iov(&iov[6], &to);
-    message_ibuf_iov(&iov[7], &cc);
-    message_ibuf_iov(&iov[8], &bcc);
-    message_ibuf_iov(&iov[9], &subject);
-
-    n = retry_writev(outfd, iov, 10);
-
-    message_ibuf_free(&envelope);
-    message_ibuf_free(&bodystructure);
-    message_ibuf_free(&oldbody);
-    message_ibuf_free(&section);
-    message_ibuf_free(&from);
-    message_ibuf_free(&to);
-    message_ibuf_free(&cc);
-    message_ibuf_free(&bcc);
-    message_ibuf_free(&subject);
-
-    return n;
+    return 0;
 }
 
 /* Append character 'c' to 'ibuf' */
@@ -2654,6 +2725,17 @@ struct ibuf *ibuf;
     ibuf->last = ibuf->start + IBUFGROWSIZE - sizeof(bit32);
 }
 
+static void
+message_ibuf_copy(dest, src)
+struct ibuf *dest;
+struct ibuf *src;
+{
+    unsigned len = src->end - src->start;
+    message_ibuf_ensure(dest, len);
+    strncpy(dest->end, src->start, len);
+    dest->end += len;
+}
+
 /*
  * Ensure 'ibuf' has enough free space to append 'len' bytes.
  */
@@ -2679,28 +2761,17 @@ message_ibuf_ensure(struct ibuf *ibuf,
 }
 
 /*
- * Set up 'iov' to write the data for 'ibuf'.
+ * Copy the value in to the cache iov
  */
 static void
-message_ibuf_iov(iov, ibuf)
-struct iovec *iov;
+message_ibuf_pad(ibuf)
 struct ibuf *ibuf;
 {
-    char *s;
-    int len;
-
-    /* Drop padding on end */
+    /* make sure we can write these things out, ho hum */
     message_ibuf_ensure(ibuf, 3);
     ibuf->end[0] = '\0';
     ibuf->end[1] = '\0';
     ibuf->end[2] = '\0';
-
-    len = (ibuf->end - ibuf->start);
-    s = ibuf->start - sizeof(bit32);
-    *((bit32 *)s) = htonl(len);
-
-    iov->iov_base = s;
-    iov->iov_len = (len+sizeof(bit32)+3) & ~3;
 }
 
 /*
@@ -2762,6 +2833,7 @@ struct body *body;
     if (body->bcc) parseaddr_free(body->bcc);
     if (body->in_reply_to) free(body->in_reply_to);
     if (body->message_id) free(body->message_id);
+    if (body->received_date) free(body->received_date);
 
     if (body->subpart) {
 	if (body->numparts) {
@@ -2780,4 +2852,83 @@ struct body *body;
     }
 
     if (body->decoded_body) free(body->decoded_body);
+}
+
+/*
+ * Parse a cached envelope into individual tokens
+ *
+ * When inside a list (ncom > 0), we parse the individual tokens but don't
+ * isolate them -- we return the entire list as a single token.
+ */
+void parse_cached_envelope(char *env, char *tokens[], int tokens_size)
+{
+    char *c;
+    int i = 0, ncom = 0, len;
+
+    c = env;
+    while (*c != '\0') {
+	switch (*c) {
+	case ' ':			/* end of token */
+	    if (!ncom) *c = '\0';	/* mark end of token */
+	    c++;
+	    break;
+	case 'N':			/* "NIL" */
+	case 'n':
+	    if (!ncom) {
+		if(i>=tokens_size) break;
+		tokens[i++] = NULL;	/* empty token */
+	    }
+	    c += 3;			/* skip "NIL" */
+	    break;
+	case '"':			/* quoted string */
+	    c++;			/* skip open quote */
+	    if (!ncom) {
+		if(i>=tokens_size) break;
+		tokens[i++] = c;	/* start of string */
+	    }
+	    while (*c && *c != '"') {		/* find close quote */
+		if (*c == '\\') c++;	/* skip quoted-specials */
+		if (*c) c++;
+	    }
+	    if (*c) {
+		if (!ncom) *c = '\0';	/* end of string */
+		c++;			/* skip close quote */
+	    }
+	    break;
+	case '{':			/* literal */
+	    c++;			/* skip open brace */
+	    len = 0;			/* determine length of literal */
+	    while (cyrus_isdigit((int) *c)) {
+		len = len*10 + *c - '0';
+		c++;
+	    }
+	    c += 3;			/* skip close brace & CRLF */
+	    if (!ncom){
+		if(i>=tokens_size) break;
+		tokens[i++] = c;	/* start of literal */
+	    }
+	    c += len;			/* skip literal */
+	    break;
+	case '(':			/* start of address */
+	    c++;			/* skip open paren */
+	    if (!ncom) {
+		if(i>=tokens_size) break;
+		tokens[i++] = c;	/* start of address list */
+	    }
+	    ncom++;			/* new open - inc counter */
+	    break;
+	case ')':			/* end of address */
+	    c++;			/* skip close paren */
+	    if (ncom) {			/* paranoia */
+		ncom--;			/* close - dec counter */
+		if (!ncom)		/* all open paren are closed */
+		    *(c-1) = '\0';	/* end of list - trim close paren */
+	    }
+	    break;
+	default:
+	    /* yikes! unparsed junk, just skip it */
+	    c++;
+	    break;
+	}
+    }
 }

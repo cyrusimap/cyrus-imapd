@@ -279,7 +279,7 @@ int main(int argc, char **argv)
 
 void just_exit(const char *msg)
 {
-    com_err(msg, 0, error_message(errno));
+    com_err(msg, 0, "%s", error_message(errno));
 
     fatal(msg, EC_CONFIG);
 }
@@ -357,7 +357,6 @@ static int deliver_msg(char *return_path, char *authuser, int ignorequota,
 	    if (mailbox) {
 		size_t ulen;
 
-		/* we let it leak ! */
 		txn->rcpt[j].addr = 
 		    (char *) xmalloc(strlen(users[j]) + ml + 2);
 
@@ -370,7 +369,7 @@ static int deliver_msg(char *return_path, char *authuser, int ignorequota,
 		if (ulen < strlen(users[j]))
 		    strcat(txn->rcpt[j].addr, users[j]+ulen);
 	    } else {
-		txn->rcpt[j].addr = users[j];
+		txn->rcpt[j].addr = xstrdup(users[j]);
 	    }
 	    txn->rcpt[j].ignorequota = ignorequota;
 	}
@@ -404,7 +403,10 @@ static int deliver_msg(char *return_path, char *authuser, int ignorequota,
 	    }
 	    break;
 	}
+	free(txn->rcpt[j].addr);
     }
+
+    free(txn);
 
     /* return appropriately */
     return r;

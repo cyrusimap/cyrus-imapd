@@ -73,12 +73,6 @@
 /* config.c stuff */
 const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
-/* need to use these names so the macros are happy */
-static const char *index_base;
-static unsigned long index_len;
-static unsigned long start_offset;
-static unsigned long record_size;
-
 void usage(void)
 {
     fprintf(stderr, "chk_cyrus [-C <altconfig>] partition\n");
@@ -93,101 +87,24 @@ static int chkmbox(char *name,
 		   void *rock __attribute__((unused))) 
 {
     int r;
-    char *part, *path, *mpath;
-    char fnamebuf[MAX_MAILBOX_PATH+1];
-    unsigned long real_len;
-    int fd=-1;
-    int i,exists;
-    struct stat sbuf;
+    struct mboxlist_entry mbentry;
 
-    index_base = NULL;
-
-    /* Do an mboxlist_detail on the mailbox */
-    r = mboxlist_detail(name, NULL, &path, &mpath, &part, NULL, NULL);
+    r = mboxlist_lookup(name, &mbentry, NULL);
 
     /* xxx reserved mailboxes? */
 
-    if(r) {
+    if (r) {
 	fprintf(stderr, "bad mailbox %s in chkmbox\n", name);
 	fatal("fatal error",EC_TEMPFAIL);
     }
 
     /* are we on the partition we are checking? */
-    if(check_part && strcmp(part,check_part)) goto done;
+    if (check_part && strcmp(mbentry.partition, check_part))
+	return 0;
 
-    fprintf(stderr, "checking: %s (%s)\n", name, path);
+    fprintf(stderr, "checking: %s\n", name);
 
-    if(chdir(path) == -1) {
-	fprintf(stderr, "can't chdir to %s\n", path);
-	/* whole mailbox! */
-	printf("%s\n",path);
-	goto done;
-    }
-
-    if (mpath &&
-	(config_metapartition_files & IMAP_ENUM_METAPARTITION_FILES_INDEX))
-	strlcpy(fnamebuf, mpath, sizeof(fnamebuf));
-    else
-	strlcpy(fnamebuf, path, sizeof(fnamebuf));
-    strlcat(fnamebuf, FNAME_INDEX, sizeof(fnamebuf));
-    fd = open(fnamebuf, O_RDONLY, 0666);
-    if(fd == -1) {
-	fprintf(stderr, "can't open cyrus.index\n");
-	/* whole mailbox! */
-	printf("%s\n", fnamebuf);
-	goto done;
-    }
-
-    if(fstat(fd, &sbuf) == -1) {
-	fprintf(stderr, "can't stat cyrus.index\n");
-	/* whole mailbox! */
-	printf("%s\n", fnamebuf);
-	goto done;
-    }
-
-    index_len = sbuf.st_size;
-    real_len = 0;
-    map_refresh(fd, 1, &index_base, &real_len, index_len,
-		"cyrus.index", name);
-
-    if(!index_base) {
-	fprintf(stderr, "mmap failed\n");
-	exit(3);
-    }
-
-    /* xxx index file versions */
-
-    exists = ntohl(*((bit32 *)(index_base + OFFSET_EXISTS)));
-    start_offset =
-	ntohl(*((bit32 *)(index_base+OFFSET_START_OFFSET)));
-    record_size =
-	ntohl(*((bit32 *)(index_base+OFFSET_RECORD_SIZE)));
-
-    fprintf(stderr, " -> %d records\n", exists);
-
-    if(real_len < (exists * record_size + start_offset)) {
-	fprintf(stderr, " -> Oversized Exists Value %d\n", exists);
-	printf("%s\n",path);
-	fflush(stdout);
-    } else {
-	for(i=1;i<=exists;i++) {
-	    char filebuf[1024];
-	    
-	    /* xxx check for monotonic increasing UIDs in the index file */
-	    /* xxx check for nonnegative UIDs in the index file */
-	    
-	    snprintf(filebuf, sizeof(filebuf), "%s/%d.", path, UID(i));
-	    if(stat(filebuf, &sbuf) == -1) {
-		fprintf(stderr, " -> %s missing\n", filebuf);
-		printf("%s\n",filebuf);
-		fflush(stdout);
-	    }
-	}
-    }
-
- done:
-    if(index_base) map_free(&index_base, &real_len);
-    if(fd != -1) close(fd);
+    mailbox_reconstruct(name, 0); /* no changes allowed */
 
     return 0;
 }

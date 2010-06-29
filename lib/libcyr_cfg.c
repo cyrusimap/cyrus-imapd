@@ -173,9 +173,9 @@ int libcyrus_config_getint(enum cyrus_opt opt)
     assert(cyrus_options[opt].t == CYRUS_OPT_INT);
 #if (SIZEOF_LONG != 4)
     if ((cyrus_options[opt].val.i > 0x7fffffff)||(cyrus_options[opt].val.i < -0x7fffffff)) {
-	syslog(LOG_ERR, "libcyrus_config_getint: option %d: %lld too large for type", cyrus_options[opt].opt, cyrus_options[opt].val.i);
+	syslog(LOG_ERR, "libcyrus_config_getint: option %d: %ld too large for type", cyrus_options[opt].opt, cyrus_options[opt].val.i);
     }
-#endif    
+#endif
     return cyrus_options[opt].val.i;
 }
 
@@ -186,9 +186,9 @@ int libcyrus_config_getswitch(enum cyrus_opt opt)
     assert(cyrus_options[opt].t == CYRUS_OPT_SWITCH);
 #if (SIZEOF_LONG != 4)
     if ((cyrus_options[opt].val.b > 0x7fffffff)||(cyrus_options[opt].val.b < -0x7fffffff)) {
-	syslog(LOG_ERR, "libcyrus_config_getswitch: option %d: %lld too large for type", cyrus_options[opt].opt, cyrus_options[opt].val.b);
+	syslog(LOG_ERR, "libcyrus_config_getswitch: option %d: %ld too large for type", cyrus_options[opt].opt, cyrus_options[opt].val.b);
     }
-#endif    
+#endif
     return cyrus_options[opt].val.b;
 }
 

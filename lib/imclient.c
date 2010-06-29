@@ -43,6 +43,7 @@
  */
 
 #include <config.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <ctype.h>
@@ -667,9 +668,9 @@ static void imclient_input(struct imclient *imclient, char *buf, int len)
     unsigned long replytag;
     struct imclient_reply reply;
     char *endreply;
-    char *p;
+    const char *p;
     size_t parsed;
-    size_t literallen;
+    uint32_t literallen;
     size_t keywordlen;
     int keywordindex;
     struct imclient_cmdcallback **cmdcb, *cmdcbtemp;
@@ -765,7 +766,7 @@ static void imclient_input(struct imclient *imclient, char *buf, int len)
 	    /* Ready response */
 	    if (imclient->readytag) {
 		imclient->readytag = 0;
-		imclient->readytxt = p+2;
+		imclient->readytxt = (char *)p+2;
 		*(endreply-1) = '\0';
 	    }
 	    else {
@@ -810,10 +811,10 @@ static void imclient_input(struct imclient *imclient, char *buf, int len)
 	}
 	
 	/* parse keyword */
-	reply.keyword = p;
+	reply.keyword = (char *)p;
 	while (*p && *p != ' ' && *p != '\n') p++;
 	keywordlen = p - reply.keyword;
-	reply.text = p + 1;
+	reply.text = (char *)p + 1;
 	if (*p == '\n') {
 	    if (keywordlen && p[-1] == '\r') {
 	        keywordlen--;
@@ -831,7 +832,6 @@ static void imclient_input(struct imclient *imclient, char *buf, int len)
 		     ((reply.keyword[0] == 'O' && reply.keyword[1] == 'K') ||
 		      (reply.keyword[0] == 'N' && reply.keyword[1] == 'O'))));
 
-
 	    /* Scan back and see if the end of the line introduces a literal */
 	    if (!iscompletion && endreply > imclient->replystart+2 &&
 		endreply[-1] == '\r' && endreply[-2] == '}' &&
@@ -845,11 +845,8 @@ static void imclient_input(struct imclient *imclient, char *buf, int len)
 		    charclass[(unsigned char)p[-1]] != 2) {
 
 		    /* Parse the size of the literal */
-		    literallen = 0;
-		    p++;
-		    while (Uisdigit(*p)) {
-		        literallen = literallen*10 + *p++ -'0';
-		    }
+		    if (parseuint32(p+1, &p, &literallen))
+			literallen = 0;
 
 		    /* Do a continue to read literal & following line */
 		    imclient->replyliteralleft = literallen;
@@ -876,7 +873,7 @@ static void imclient_input(struct imclient *imclient, char *buf, int len)
 		    cmdcbtemp->next = cmdcallback_freelist;
 		    cmdcallback_freelist = cmdcbtemp;
 		}
-		
+
 		/* Do the callback */
 		endreply[-1] = '\0';
 		reply.keyword[keywordlen] = '\0';
@@ -919,11 +916,8 @@ static void imclient_input(struct imclient *imclient, char *buf, int len)
 		    charclass[(unsigned char)p[-1]] != 2) {
 
 		    /* Parse the size of the literal */
-		    literallen = 0;
-		    p++;
-		    while (Uisdigit(*p)) {
-		        literallen = literallen*10 + *p++ -'0';
-		    }
+		    if (parseuint32(p+1, &p, &literallen))
+			literallen = 0;
 
 		    /* Do a continue to read literal & following line */
 		    imclient->replyliteralleft = literallen;
@@ -1187,7 +1181,7 @@ void interaction (struct imclient *context, sasl_interact_t *t, char *user)
 	  char *ptr = getpass("");
 	  strlcpy(result, ptr, sizeof(result));
       } else {
-	  fgets(result, sizeof(result)-1, stdin);
+	  if (!fgets(result, sizeof(result)-1, stdin)) return;
 	  result[strlen(result) - 1] = '\0';
       }
 
@@ -1400,7 +1394,7 @@ int imclient_authenticate(struct imclient *imclient,
 	    tmp = strstr(mlist,mtr);
 	    if(!tmp) {
 		free(mtr);
-		free(mlist);
+		free(newlist);
 		break;
 	    }
 	    *tmp = '\0';
@@ -1891,8 +1885,6 @@ int tls_start_clienttls(struct imclient *imclient,
     SSL_SESSION *session;
     SSL_CIPHER *cipher;
     X509   *peer;
-    const char *tls_protocol = NULL;
-    const char *tls_cipher_name = NULL;
     int tls_cipher_usebits = 0;
     int tls_cipher_algbits = 0;
     char *tls_peer_CN = "";
@@ -1960,9 +1952,7 @@ int tls_start_clienttls(struct imclient *imclient,
 	tls_issuer_CN = issuer_CN;
 
     }
-    tls_protocol = SSL_get_version(imclient->tls_conn);
     cipher = SSL_get_current_cipher(imclient->tls_conn);
-    tls_cipher_name = SSL_CIPHER_get_name(cipher);
     tls_cipher_usebits = SSL_CIPHER_get_bits(cipher,
 						 &tls_cipher_algbits);
 

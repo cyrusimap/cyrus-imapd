@@ -83,5 +83,5 @@ int mode;
     else {
 	flags &= ~NON_BLOCKING_MODE;
     }
-    fcntl(fd, F_SETFL, flags);
+    (void)fcntl(fd, F_SETFL, flags);
 }

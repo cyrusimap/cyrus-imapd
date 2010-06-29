@@ -55,7 +55,7 @@
 #include "assert.h"
 #include "exitcodes.h"
 #include "global.h"
-#include "imapd.h"
+#include "index.h"
 #include "imap_err.h"
 #include "imapurl.h"
 #include "mailbox.h"
@@ -77,19 +77,8 @@ static void print_seq(const char *tag, const char *attrib,
 		      unsigned *seq, int n);
 int usage(const char *name);
 
-/* available from elsewhere */
-int index_getuidsequence(struct mailbox *mailbox, 
-                        struct searchargs *searchargs,
-                        unsigned **uid_list);
-
 /* current namespace */
 static struct namespace dump_namespace;
-
-int imapd_exists;
-struct protstream *imapd_out = NULL;
-struct auth_state *imapd_authstate = NULL;
-char *imapd_userid = NULL;
-unsigned imapd_client_capa = 0;
 
 struct incremental_record {
     unsigned incruid;
@@ -133,7 +122,7 @@ int main(int argc, char *argv[])
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&dump_namespace, 1)) != 0) {
-	syslog(LOG_ERR, error_message(r));
+	syslog(LOG_ERR, "%s", error_message(r));
 	fatal(error_message(r), EC_CONFIG);
     }
 
@@ -175,37 +164,23 @@ static int dump_me(char *name, int matchlen __attribute__((unused)),
 		   int maycreate __attribute__((unused)), void *rock)
 {
     int r;
-    struct mailbox m;
     char boundary[128];
     struct imapurl url;
     char imapurl[MAX_MAILBOX_PATH+1];
     struct incremental_record *irec = (struct incremental_record *) rock;
     struct searchargs searchargs;
+    struct index_state *state;
     unsigned *uids;
     unsigned *uidseq;
     int i, n, numuids;
 
-    memset(&m, 0, sizeof(struct mailbox));
-    r = mailbox_open_header(name, 0, &m);
+    r = index_open(name, NULL, &state);
     if (r) {
 	if (verbose) {
 	    printf("error opening %s: %s\n", name, error_message(r));
 	}
 	return 0;
     }
-    
-    r = mailbox_open_index(&m);
-    if (!r) r = mailbox_lock_pop(&m);
-    if (r) {
-	if (verbose) {
-	    printf("error locking index %s: %s\n", name, error_message(r));
-	}
-	mailbox_close(&m);
-	return 0;
-    }
-    
-    mailbox_read_index_header(&m);
-    index_operatemailbox(&m);
 
     generate_boundary(boundary, sizeof(boundary));
 
@@ -216,40 +191,40 @@ static int dump_me(char *name, int matchlen __attribute__((unused)),
     printf("IMAP-Dump-Version: 0\n");
     printf("\n");
 
-    printf("<imapdump uniqueid=\"%s\">\n", m.uniqueid);
+    printf("<imapdump uniqueid=\"%s\">\n", state->mailbox->uniqueid);
     memset(&url, 0, sizeof(struct imapurl));
     url.server = config_servername;
-    url.mailbox = m.name;
+    url.mailbox = name;
     imapurl_toURL(imapurl, &url);
     printf("  <mailbox-url>%s</mailbox-url>\n", imapurl);
     printf("  <incremental-uid>%d</incremental-uid>\n", irec->incruid);
-    printf("  <nextuid>%ld</nextuid>\n", m.last_uid + 1);
+    printf("  <nextuid>%ld</nextuid>\n", state->mailbox->i.last_uid + 1);
     printf("\n");
 
     memset(&searchargs, 0, sizeof(struct searchargs));
-    numuids = index_getuidsequence(&m, &searchargs, &uids);
+    numuids = index_getuidsequence(state, &searchargs, &uids);
     print_seq("uidlist", NULL, uids, numuids);
     printf("\n");
 
     printf("  <flags>\n");
 
     searchargs.system_flags_set = FLAG_ANSWERED;
-    n = index_getuidsequence(&m, &searchargs, &uidseq);
+    n = index_getuidsequence(state, &searchargs, &uidseq);
     print_seq("flag", "name=\"\\Answered\" user=\"*\"", uidseq, n);
     if (uidseq) free(uidseq);
 
     searchargs.system_flags_set = FLAG_DELETED;
-    n = index_getuidsequence(&m, &searchargs, &uidseq);
+    n = index_getuidsequence(state, &searchargs, &uidseq);
     print_seq("flag", "name=\"\\Deleted\" user=\"*\"", uidseq, n);
     if (uidseq) free(uidseq);
 
     searchargs.system_flags_set = FLAG_DRAFT;
-    n = index_getuidsequence(&m, &searchargs, &uidseq);
+    n = index_getuidsequence(state, &searchargs, &uidseq);
     print_seq("flag", "name=\"\\Draft\" user=\"*\"", uidseq, n);
     if (uidseq) free(uidseq);
 
     searchargs.system_flags_set = FLAG_FLAGGED;
-    n = index_getuidsequence(&m, &searchargs, &uidseq);
+    n = index_getuidsequence(state, &searchargs, &uidseq);
     print_seq("flag", "name=\"\\Flagged\" user=\"*\"", uidseq, n);
     if (uidseq) free(uidseq);
 
@@ -272,7 +247,7 @@ static int dump_me(char *name, int matchlen __attribute__((unused)),
 	printf("Content-Type: message/rfc822\n");
 	printf("Content-ID: %d\n", uids[i]);
 	printf("\n");
-	r = mailbox_map_message(&m, uids[i], &base, &len);
+	r = mailbox_map_message(state->mailbox, uids[i], &base, &len);
 	if (r) {
 	    if (verbose) {
 		printf("error mapping message %d: %s\n", uids[i], 
@@ -281,13 +256,12 @@ static int dump_me(char *name, int matchlen __attribute__((unused)),
 	    break;
 	}
 	fwrite(base, 1, len, stdout);
-	mailbox_unmap_message(&m, uids[i], &base, &len);
+	mailbox_unmap_message(state->mailbox, uids[i], &base, &len);
     }
 
     printf("\n--%s--\n", boundary);
 
-    index_closemailbox(&m);
-    mailbox_close(&m);
+    index_close(&state);
 
     return 0;
 }
@@ -302,60 +276,4 @@ static void print_seq(const char *tag, const char *attrib,
 	printf("%u ", seq[i]);
     }
     printf("</%s>\n", tag);
-}
-
-
-#if 0
-    char *p, *str;
-    int str_sz;
-    int run_start = 0;
-    int first_time = 1;
-
-    p = str = (char *) xmalloc(sizeof(char) * 1024);
-    str_sz = 1024;
-    run_start = msgno_list[0];
-    for (i = 1; i < n; i++) {
-	if (msgno_list[i] == msgno_list[i-1] + 1) {
-	    /* on a run */
-	    continue;
-	}
-	if (first_time) {
-	    first_time = 0;
-	} else {
-	    *p++ = ',';
-	}
-	if (run_start != msgno_list[i-1]) {
-	    /* non-trivial run */
-	    p += sprintf(p, "%d:%d", run_start, msgno_list[i-1]);
-	} else {
-	    /* singleton */
-	    p += sprintf(p, "%d", msgno_list[i-1]);
-	}
-	if (p > (str + str_sz - 20)) {
-	    /* running out of room */
-	    int x;
-
-	    x = p - str;
-	    str = (char *) xrealloc(str, str_sz *= 2);
-	    p = str + x;
-	}
-	run_start = msgno_list[i];
-    }
-    /* now handle the last entry */
-    if (!first_time) {
-	*p++ = ',';
-    }
-    if (run_start != msgno_list[i-1]) {
-	sprintf(p, "%d:%d", run_start, msgno_list[i-1]);
-    } else {
-	sprintf(p, "%d", msgno_list[i-1]);
-    }
-
-    return str;
-
-#endif
-
-void printastring(const char *s __attribute__((unused)))
-{
-    fatal("printastring not implemented in cyrdump", EC_SOFTWARE);
 }

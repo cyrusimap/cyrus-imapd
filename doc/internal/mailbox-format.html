@@ -224,7 +224,7 @@ of the message.</p>
 <dd>INTERNALDATE of the message</dd>
 
 <dt>SENTDATE (4 bytes)</dt>
-<dd>  Contents of the Date: header normalized to a Unix time_t.</dd>
+<dd>  Contents of the Date: header chomped to day resolution with timezone stripped.</dd>
 
 <dt>SIZE (4 bytes)</dt>
 <dd>  Size of the whole message (in octets)</dd>
@@ -232,8 +232,8 @@ of the message.</p>
 <dt>HEADER SIZE (4 bytes)</dt>
 <dd>  Size of the message header (in octets)</dd>
 
-<dt>CONTENT_OFFSET (4 bytes)</dt>
-<dd>Offset into the message file where the message content begins.</dd>
+<dt>GMTIME (4 bytes)</dt>
+<dd>  Contents of the Date: header at 1 second resolution and converted to GMT</dd>
 
 <dt>CACHE_OFFSET (4 bytes)</dt>
 <dd>Offset into the cache file for the beginning of this message's

@@ -183,7 +183,7 @@ static int dump_cb(void *rockp,
 		   const char *data, int datalen)
 {
     struct dumprock *d = (struct dumprock *) rockp;
-    int r;
+    int r = 0;
     char *p;
     char *name, *part, *acl;
     int mbtype;
@@ -368,11 +368,12 @@ static int dump_cb(void *rockp,
 	
 	if(r == MUPDATE_NOCONN) {
 	    fprintf(stderr, "permanant failure storing '%s'\n", name);
-	    return IMAP_IOERROR;
+	    r = IMAP_IOERROR;
 	} else if (r == MUPDATE_FAIL) {
 	    fprintf(stderr,
 		    "temporary failure storing '%s' (update continuing)",
 		    name);
+	    r = 0;
 	}
 	    
 	break;
@@ -387,7 +388,7 @@ static int dump_cb(void *rockp,
     free(part);
     free(acl);
 
-    return 0;
+    return r;
 }
 
 /*
@@ -486,14 +487,13 @@ void do_dump(enum mboxop op, const char *part, int purge)
     if(op == M_POPULATE) {
 	/* Remove MBTYPE_MOVING flags (unflag_head) */
 	while(unflag_head) {
+	    struct mboxlist_entry mbentry;
 	    struct mb_node *me = unflag_head;
-	    int type;
-	    char *part, *acl, *newpart;
+	    char *newpart;
 	    
 	    unflag_head = unflag_head->next;
 	    
-	    ret = mboxlist_detail(me->mailbox, &type, NULL, NULL,
-				  &part, &acl, NULL);
+	    ret = mboxlist_lookup(me->mailbox, &mbentry, NULL);
 	    if(ret) {
 		fprintf(stderr,
 			"couldn't perform lookup to un-remote-flag %s\n",
@@ -502,12 +502,13 @@ void do_dump(enum mboxop op, const char *part, int purge)
 	    }
 
 	    /* Reset the partition! */
-	    newpart = strchr(part, '!');
-	    if(!newpart) newpart = part;
+	    newpart = strchr(mbentry.partition, '!');
+	    if(!newpart) newpart = mbentry.partition;
 	    else newpart++;
 
-	    ret = mboxlist_update(me->mailbox, type & ~MBTYPE_MOVING,
-				  newpart, acl, 1);
+	    /* XXX - FIXME, pull uniqueid from detail */
+	    ret = mboxlist_update(me->mailbox, mbentry.mbtype & ~MBTYPE_MOVING, NULL,
+				  newpart, mbentry.acl, 1);
 	    if(ret) {
 		fprintf(stderr,
 			"couldn't perform update to un-remote-flag %s\n",
@@ -516,8 +517,8 @@ void do_dump(enum mboxop op, const char *part, int purge)
 	    } 
 	    
 	    /* force a push to mupdate */
-	    snprintf(buf, sizeof(buf), "%s!%s", config_servername, part);
-	    ret = mupdate_activate(d.h, me->mailbox, buf, acl);
+	    snprintf(buf, sizeof(buf), "%s!%s", config_servername, newpart);
+	    ret = mupdate_activate(d.h, me->mailbox, buf, mbentry.acl);
 	    if(ret) {
 		fprintf(stderr,
 			"couldn't perform mupdatepush to un-remote-flag %s\n",
@@ -550,8 +551,7 @@ void do_dump(enum mboxop op, const char *part, int purge)
 	    wipe_head = wipe_head->next;
 	    
 	    ret = mboxlist_deletemailbox(me->mailbox, 1, "", NULL, 0, 1, 1);
-	    if(!ret) sync_log_mailbox(me->mailbox);
-	    if(ret) {
+	    if (ret) {
 		fprintf(stderr, "couldn't delete defunct mailbox %s\n",
 			me->mailbox);
 		exit(1);
@@ -623,7 +623,8 @@ void do_undump(void)
 	}
 
 	key = name; keylen = strlen(key);
-	data = mboxlist_makeentry(mbtype, partition, acl); datalen = strlen(data);
+	data = mboxlist_makeentry(mbtype, partition, acl);
+	datalen = strlen(data);
 	
 	tries = 0;
     retry:
@@ -883,15 +884,9 @@ void do_verify(void)
 
 	if (!(dirp = opendir(found.data[i].path))) continue;
 	while ((dirent = readdir(dirp))) {
-	    struct mailbox mailbox;
-
 	    if (dirent->d_name[0] == '.') continue;
-	    else if (!strcmp(dirent->d_name, FNAME_HEADER+1) &&
-		     !mailbox_open_header_path(found.data[i].mboxname,
-					       found.data[i].path,
-					       found.data[i].path,
-					       "", NULL, &mailbox, 1)) {
-		mailbox_close(&mailbox);
+	    else if (!strcmp(dirent->d_name, FNAME_HEADER+1)) {
+		/* XXX - check that it can be opened */
 		found.data[i].type |= MBOX;
 	    }
 	    else if (!strchr(dirent->d_name, '.') ||

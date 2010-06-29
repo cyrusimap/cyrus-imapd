@@ -203,7 +203,7 @@ int main(int argc,char **argv)
     
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&arb_namespace, 1)) != 0) {
-	syslog(LOG_ERR, error_message(r));
+	syslog(LOG_ERR, "%s", error_message(r));
 	fatal(error_message(r), EC_CONFIG);
     }
 
@@ -265,25 +265,23 @@ int do_mailbox(const char *name, int matchlen __attribute__((unused)),
 	       void *rock __attribute__((unused)))
 {
     int r;
-    struct mailbox mbox;
+    struct mailbox *mailbox;
 
-    r = mailbox_open_header(name, NULL, &mbox);
-    if(!r) {
-	struct arb_mailbox_data *d = mpool_malloc(arb_pool,
-						  sizeof(struct arb_mailbox_data));
+    r = mailbox_open_irl(name, &mailbox);
+    if (r) return 0;
+
+    struct arb_mailbox_data *d = mpool_malloc(arb_pool,
+					      sizeof(struct arb_mailbox_data));
     
-	d->nreaders = 0;
-	d->nsubscribers = 0;
-	d->readers = NULL;
-	d->subscribers = NULL;
+    d->nreaders = 0;
+    d->nsubscribers = 0;
+    d->readers = NULL;
+    d->subscribers = NULL;
 
-/*	printf("inserting %s (key %s)\n", name, mbox.uniqueid); */
+    hash_insert(mailbox->uniqueid, d, &mailbox_table);
+    hash_insert(name, d, &mboxname_table);
 
-	hash_insert(mbox.uniqueid, d, &mailbox_table);
-	hash_insert(name, d, &mboxname_table);
-
-	mailbox_close(&mbox);
-    }
+    mailbox_close(&mailbox);
 
     return 0;
 }

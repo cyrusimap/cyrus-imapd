@@ -390,14 +390,14 @@ void service_create(struct service *s)
 	listen = xstrdup(s->listen);
 
         if ((port = parse_listen(listen)) == NULL) {
-            /* listen IS the port */
+	    /* listen IS the port */
 	    port = listen;
 	    listen_addr = NULL;
         } else {
-            /* s->listen is now just the address */
+	    /* listen is now just the address */
 	    listen_addr = parse_host(listen);
 	    if (*listen_addr == '\0')
-		listen_addr = NULL;	    
+		listen_addr = NULL;
         }
 
 	error = getaddrinfo(listen_addr, port, &hints, &res0);
@@ -856,10 +856,10 @@ void reap_child(void)
 	    default:
 		syslog(LOG_CRIT, 
 		       "service %s pid %d in ILLEGAL STATE: exited. Serious software bug or memory corruption detected!",
-		       SERVICENAME(s->name), pid);
+		       s ? SERVICENAME(s->name) : "unknown", pid);
 		syslog(LOG_DEBUG,
 		       "service %s pid %d in ILLEGAL state: forced to valid UNKNOWN state",
-		       SERVICENAME(s->name), pid);
+		       s ? SERVICENAME(s->name) : "unknown", pid);
 		c->service_state = SERVICE_STATE_UNKNOWN;
 	    }
 	    if (s) {
@@ -1352,7 +1352,7 @@ void add_start(const char *name, struct entry *e,
 
 void add_service(const char *name, struct entry *e, void *rock)
 {
-    int ignore_err = (int) rock;
+    int ignore_err = rock ? 1 : 0;
     char *cmd = xstrdup(masterconf_getstring(e, "cmd", ""));
     int prefork = masterconf_getint(e, "prefork", 0);
     int babysit = masterconf_getswitch(e, "babysit", 0);
@@ -1374,7 +1374,7 @@ void add_service(const char *name, struct entry *e, void *rock)
 
 	if (ignore_err) {
 	    syslog(LOG_WARNING, "WARNING: %s -- ignored", buf);
-	    return;
+	    goto done;
 	}
 
 	fatal(buf, EX_CONFIG);
@@ -1399,7 +1399,7 @@ void add_service(const char *name, struct entry *e, void *rock)
 
 	if (ignore_err) {
 	    syslog(LOG_WARNING, "WARNING: %s -- ignored", buf);
-	    return;
+	    goto done;
 	}
 
 	fatal(buf, EX_CONFIG);
@@ -1424,10 +1424,13 @@ void add_service(const char *name, struct entry *e, void *rock)
     if (!Services[i].name) Services[i].name = xstrdup(name);
     if (Services[i].listen) free(Services[i].listen);
     Services[i].listen = listen;
+    listen = NULL; /* avoid freeing it */
     if (Services[i].proto) free(Services[i].proto);
     Services[i].proto = proto;
+    proto = NULL; /* avoid freeing it */
 
     Services[i].exec = tokenize(cmd);
+    cmd = NULL; /* avoid freeing it */
     if (!Services[i].exec) fatal("out of memory", EX_UNAVAILABLE);
 
     /* is this service actually there? */
@@ -1435,7 +1438,6 @@ void add_service(const char *name, struct entry *e, void *rock)
 	char buf[1024];
 	snprintf(buf, sizeof(buf),
 		 "cannot find executable for service '%s'", name);
-	
 	/* if it is not, we're misconfigured, die. */
 	fatal(buf, EX_CONFIG);
     }
@@ -1458,7 +1460,6 @@ void add_service(const char *name, struct entry *e, void *rock)
 	Services[i].desired_workers = prefork;
 	Services[i].max_workers = 1;
     }
-    free(max);
  
     if (reconfig) {
 	/* reconfiguring an existing service, update any other instances */
@@ -1482,11 +1483,18 @@ void add_service(const char *name, struct entry *e, void *rock)
 	       Services[i].desired_workers,
 	       Services[i].max_workers,
 	       (int) Services[i].maxfds);
+
+done:
+    free(cmd);
+    free(listen);
+    free(proto);
+    free(max);
+    return;
 }
 
 void add_event(const char *name, struct entry *e, void *rock)
 {
-    int ignore_err = (int) rock;
+    int ignore_err = rock ? 1 : 0;
     char *cmd = xstrdup(masterconf_getstring(e, "cmd", ""));
     int period = 60 * masterconf_getint(e, "period", 0);
     int at = masterconf_getint(e, "at", -1), hour, min;
@@ -1841,10 +1849,11 @@ int main(int argc, char **argv)
 	 * and obtain a new process group.
 	 */
 	if (setsid() == -1) {
+	    int r;
 	    int exit_result = EX_OSERR;
 	    
 	    /* Tell our parent that we failed. */
-	    write(startup_pipe[1], &exit_result, sizeof(exit_result));
+	    r = write(startup_pipe[1], &exit_result, sizeof(exit_result));
 	
 	    fatal("setsid failure", EX_OSERR);
 	}
@@ -1856,9 +1865,10 @@ int main(int argc, char **argv)
     pidfd = open(pidfile, O_CREAT|O_RDWR, 0644);
     if(pidfd == -1) {
 	int exit_result = EX_OSERR;
+	int r;
 
 	/* Tell our parent that we failed. */
-	write(startup_pipe[1], &exit_result, sizeof(exit_result));
+	r = write(startup_pipe[1], &exit_result, sizeof(exit_result));
 
 	syslog(LOG_ERR, "can't open pidfile: %m");
 	exit(EX_OSERR);
@@ -1867,9 +1877,10 @@ int main(int argc, char **argv)
 
 	if(lock_nonblocking(pidfd)) {
 	    int exit_result = EX_OSERR;
+	    int r;
 
 	    /* Tell our parent that we failed. */
-	    write(startup_pipe[1], &exit_result, sizeof(exit_result));
+	    r = write(startup_pipe[1], &exit_result, sizeof(exit_result));
 	    
 	    fatal("cannot get exclusive lock on pidfile (is another master still running?)", EX_OSERR);
 	} else {
@@ -1879,9 +1890,10 @@ int main(int argc, char **argv)
 				    pidfd_flags | FD_CLOEXEC);
 	    if (pidfd_flags == -1) {
 		int exit_result = EX_OSERR;
+		int r;
 		
 		/* Tell our parent that we failed. */
-		write(startup_pipe[1], &exit_result, sizeof(exit_result));
+		r = write(startup_pipe[1], &exit_result, sizeof(exit_result));
 
 		fatal("unable to set close-on-exec for pidfile: %m", EX_OSERR);
 	    }
@@ -1892,13 +1904,15 @@ int main(int argc, char **argv)
 	       ftruncate(pidfd, 0) == -1 ||
 	       write(pidfd, buf, strlen(buf)) == -1) {
 		int exit_result = EX_OSERR;
+		int r;
 
 		/* Tell our parent that we failed. */
-		write(startup_pipe[1], &exit_result, sizeof(exit_result));
+		r = write(startup_pipe[1], &exit_result, sizeof(exit_result));
 
 		fatal("unable to write to pidfile: %m", EX_OSERR);
 	    }
-	    fsync(pidfd);
+	    if (fsync(pidfd))
+		fatal("unable to sync pidfile: %m", EX_OSERR);
 	}
     }
 

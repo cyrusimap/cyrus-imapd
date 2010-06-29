@@ -441,23 +441,50 @@ void cmdtime_netend() {
   nettime += timesub(&nettime_start, &nettime_end);
 }
 
-int parsenum(const char *p, const char **ptr)
+int parseint32(const char *p, const char **ptr, int32_t *res)
 {
-    int result = 0;
-    int gotone = 0;
+    int32_t result = 0;
+    int gotchar = 0;
 
     if (!p) return -1;
 
+    /* INT_MAX == 2147483647 */
     while (cyrus_isdigit(*p)) {
-	gotone = 1;
-	if (result > (INT_MAX/10 - 10))
+	if (result > 214748364 || (result == 214748364 && (*p > '7')))
 	    fatal("num too big", EC_IOERR);
 	result = result * 10 + *p++ - '0';
+	gotchar = 1;
     }
 
-    if (ptr) *ptr = p;
+    if (!gotchar) return -1;
 
-    return gotone ? result : -1;
+    if (ptr) *ptr = p;
+    if (res) *res = result;
+
+    return 0;
+}
+
+int parseuint32(const char *p, const char **ptr, uint32_t *res)
+{
+    uint32_t result = 0;
+    int gotchar = 0;
+
+    if (!p) return -1;
+
+    /* UINT_MAX == 4294967295U */
+    while (cyrus_isdigit(*p)) {
+	if (result > 429496729 || (result == 429496729 && (*p > '5')))
+	    fatal("num too big", EC_IOERR);
+	result = result * 10 + *p++ - '0';
+	gotchar = 1;
+    }
+
+    if (!gotchar) return -1;
+
+    if (ptr) *ptr = p;
+    if (res) *res = result;
+
+    return 0;
 }
 
 /* buffer handling functions */

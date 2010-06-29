@@ -82,7 +82,7 @@ int size = -1;
 int exact = -1;
 int pattern = -1;
 int skipflagged = 0;
-int datemode = OFFSET_SENTDATE;
+int use_sentdate = 1;
 int invertmatch = 0;
 
 /* for statistical purposes */
@@ -102,7 +102,9 @@ int verbose = 1;
 int forceall = 0;
 
 int purge_me(char *, int, int);
-unsigned purge_check(struct mailbox *, void *, unsigned char *, int);
+unsigned purge_check(struct mailbox *mailbox,
+		     struct index_record *record,
+		     void *rock);
 int usage(char *name);
 void print_stats(mbox_stats_t *stats);
 
@@ -155,7 +157,7 @@ int main (int argc, char *argv[]) {
       skipflagged = 1;
     } break;
     case 'X' : {
-      datemode = OFFSET_INTERNALDATE;
+      use_sentdate = 0;
     } break;
     case 'i' : {
       invertmatch = 1;
@@ -173,7 +175,7 @@ int main (int argc, char *argv[]) {
 
   /* Set namespace -- force standard (internal) */
   if ((r = mboxname_init_namespace(&purge_namespace, 1)) != 0) {
-      syslog(LOG_ERR, error_message(r));
+      syslog(LOG_ERR, "%s", error_message(r));
       fatal(error_message(r), EC_CONFIG);
   }
 
@@ -231,11 +233,11 @@ usage(char *name) {
 /* we don't check what comes in on matchlen and maycreate, should we? */
 int purge_me(char *name, int matchlen __attribute__((unused)),
 	     int maycreate __attribute__((unused))) {
-  struct mailbox the_box;
-  int            error;
-  mbox_stats_t   stats;
+  struct mailbox *mailbox;
+  int r;
+  mbox_stats_t stats;
 
-  if( ! forceall ) {
+  if (!forceall) {
       /* DON'T purge INBOX* and user.* */
       if (!strncasecmp(name,"INBOX",5) || mboxname_isusermailbox(name, 0))
 	  return 0;
@@ -252,29 +254,15 @@ int purge_me(char *name, int matchlen __attribute__((unused)),
       printf("Working on %s...\n", mboxname);
   }
 
-  error = mailbox_open_header(name, 0, &the_box);
-  if (error != 0) { /* did we find it? */
+  r = mailbox_open_iwl(name, &mailbox);
+  if (r) { /* did we find it? */
     syslog(LOG_ERR, "Couldn't find %s, check spelling", name);
-    return error;
+    return r;
   }
-  if (the_box.header_fd != -1) {
-    (void) mailbox_lock_header(&the_box);
-  }
-  the_box.header_lock_count = 1;
 
-  error = mailbox_open_index(&the_box);
-  if (error != 0) {
-    mailbox_close(&the_box);
-    syslog(LOG_ERR, "Couldn't open mailbox index for %s", name);
-    return error;
-  }
-  (void) mailbox_lock_index(&the_box);
-  the_box.index_lock_count = 1;
+  mailbox_expunge(mailbox, purge_check, &stats, NULL);
 
-  mailbox_expunge(&the_box, purge_check, &stats, 0, NULL);
-
-  sync_log_mailbox(the_box.name);
-  mailbox_close(&the_box);
+  mailbox_close(&mailbox);
 
   print_stats(&stats);
 
@@ -290,74 +278,68 @@ void deleteit(bit32 msgsize, mbox_stats_t *stats)
 /* thumbs up routine, checks date & size and returns yes or no for deletion */
 /* 0 = no, 1 = yes */
 unsigned purge_check(struct mailbox *mailbox __attribute__((unused)),
-		     void *deciderock,
-		     unsigned char *buf,
-		     int expunge_flags __attribute__((unused)))
+		     struct index_record *record,
+		     void *deciderock)
 {
   time_t my_time;
+  time_t senttime;
   mbox_stats_t *stats = (mbox_stats_t *) deciderock;
-  bit32 senttime;
-  bit32 msgsize;
-  bit32 flagged;
 
-  senttime = ntohl(*((bit32 *)(buf + datemode)));
-  msgsize = ntohl(*((bit32 *)(buf + OFFSET_SIZE)));
-  flagged = ntohl(*((bit32 *)(buf + OFFSET_SYSTEM_FLAGS))) & FLAG_FLAGGED;
+  my_time = time(0);
+  senttime = use_sentdate ? record->sentdate : record->internaldate;
 
   stats->total++;
-  stats->total_bytes += msgsize;
+  stats->total_bytes += record->size;
 
-  if (skipflagged && flagged)
+  if (skipflagged && record->system_flags & FLAG_FLAGGED)
     return 0;
 
   if (exact == 1) {
     if (days >= 0) {
-      my_time = time(0);
       /*    printf("comparing %ld :: %ld\n", my_time, the_record->sentdate); */
       if (((my_time - (time_t) senttime)/86400) == (days/86400)) {
 	  if (invertmatch) return 0;
-	  deleteit(msgsize, stats);
+	  deleteit(record->size, stats);
 	  return 1;
       } else {
 	  if (!invertmatch) return 0;
-	  deleteit(msgsize, stats);
+	  deleteit(record->size, stats);
 	  return 1;
       }
     }
     if (size >= 0) {
       /* check size */
-	if ((int) msgsize == size) {
+	if (record->size == size) {
 	  if (invertmatch) return 0;
-	  deleteit(msgsize, stats);
+	  deleteit(record->size, stats);
 	  return 1;
       } else {
 	  if (!invertmatch) return 0;
-	  deleteit(msgsize, stats);
+	  deleteit(record->size, stats);
 	  return 1;
       }
     }
     return 0;
   } else {
     if (days >= 0) {
-      my_time = time(0);
       /*    printf("comparing %ld :: %ld\n", my_time, the_record->sentdate); */
       if (!invertmatch && ((my_time - (time_t) senttime) > days)) {
-	  deleteit(msgsize, stats);
+	  deleteit(record->size, stats);
 	  return 1;
       }
       if (invertmatch && ((my_time - (time_t) senttime) < days)) {
-	  deleteit(msgsize, stats);
+	  deleteit(record->size, stats);
 	  return 1;
       }
     }
     if (size >= 0) {
       /* check size */
-	if (!invertmatch && ((int) msgsize > size)) {
-	  deleteit(msgsize, stats);
+	if (!invertmatch && ((int) record->size > size)) {
+	  deleteit(record->size, stats);
 	  return 1;
       }
-	if (invertmatch && ((int) msgsize < size)) {
-	  deleteit(msgsize, stats);
+	if (invertmatch && ((int) record->size < size)) {
+	  deleteit(record->size, stats);
 	  return 1;
       }
     }

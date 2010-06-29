@@ -180,7 +180,10 @@ void cmdloop()
 {
     int ret = FALSE;
     
-    chdir("/tmp/");
+    if (chdir("/tmp/")) {
+	syslog(LOG_ERR, "Failed to chdir to /tmp/");
+	ret = TRUE; /* exit immediately */
+    }
 
     capabilities(sieved_out, sieved_saslconn, 0, 0, 0);
 

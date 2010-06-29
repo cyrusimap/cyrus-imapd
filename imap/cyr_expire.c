@@ -85,7 +85,6 @@ void usage(void)
 
 struct expire_rock {
     struct hash_table *table;
-    enum enum_value expunge_mode;
     time_t expire_mark;
     time_t expunge_mark;
     unsigned long mailboxes;
@@ -112,28 +111,18 @@ struct delete_rock {
 /*
  * mailbox_expunge() callback to expunge expired articles.
  */
-static unsigned expire_cb(struct mailbox *mailbox __attribute__((unused)),
-			  void *rock, unsigned char *index, int expunge_flags)
+static unsigned expire_cb(struct mailbox *mailbox, 
+			  struct index_record *record, 
+			  void *rock)
 {
     struct expire_rock *erock = (struct expire_rock *) rock;
-    bit32 tstamp;
 
     erock->messages++;
 
-    /* if we're cleaning up expunge, delete by expunge time */
-    if (expunge_flags & EXPUNGE_CLEANUP) {
-	tstamp = ntohl(*((bit32 *)(index+OFFSET_LAST_UPDATED)));
-	if ((time_t) tstamp < erock->expunge_mark) {
-	    erock->deleted++;
-	    return 1;
-	}
-    } else {
-	/* otherwise, we're expiring messages by sent date */
-	tstamp = ntohl(*((bit32 *)(index+OFFSET_SENTDATE)));
-	if ((time_t) tstamp < erock->expire_mark) {
-	    erock->deleted++;
-	    return 1;
-	}
+    /* otherwise, we're expiring messages by sent date */
+    if (record->gmtime < erock->expire_mark) {
+	erock->deleted++;
+	return 1;
     }
 
     return 0;
@@ -149,26 +138,26 @@ static unsigned expire_cb(struct mailbox *mailbox __attribute__((unused)),
 int expire(char *name, int matchlen, int maycreate __attribute__((unused)),
 	   void *rock)
 {
+    struct mboxlist_entry mbentry;
     struct expire_rock *erock = (struct expire_rock *) rock;
     char buf[MAX_MAILBOX_BUFFER] = "", *p;
     struct annotation_data attrib;
     int r, domainlen = 0;
-
-    int mbtype;
-    char *path, *mpath;
+    struct mailbox *mailbox;
+    unsigned numdeleted = 0;
 
     if (sigquit) {
 	return 1;
     }
     /* Skip remote mailboxes */
-    r = mboxlist_detail(name, &mbtype, &path, &mpath, NULL, NULL, NULL);
+    r = mboxlist_lookup(name, &mbentry, NULL);
     if (r) {
 	if (erock->verbose) {
 	    printf("error looking up %s: %s\n", name, error_message(r));
 	}
 	return 1;
     }
-    if (mbtype & MBTYPE_REMOTE) return 0;
+    if (mbentry.mbtype & MBTYPE_REMOTE) return 0;
 
     if (config_virtdomains && (p = strchr(name, '!')))
 	domainlen = p - name + 1;
@@ -208,57 +197,15 @@ int expire(char *name, int matchlen, int maycreate __attribute__((unused)),
         }
     }
 
-    if (!r && (attrib.value ||
-	       erock->expunge_mode != IMAP_ENUM_EXPUNGE_MODE_IMMEDIATE)) {
-	struct mailbox mailbox;
-	int doclose = 0;
-	int expunge_flags = 0;
+    r = mailbox_open_iwl(name, &mailbox);
+    if (r) {
+	/* mailbox corrupt/nonexistent -- skip it */
+	syslog(LOG_WARNING, "unable to open mailbox %s", name);
+	return 0;
+    }
 
-	if (!attrib.value &&
-	    erock->expunge_mode != IMAP_ENUM_EXPUNGE_MODE_IMMEDIATE) {
-	    /* ONLY cleanup mailbox of expunged messages.
-
-	       Try to short circuit additional I/O by checking
-	       for presence of cyrus.expunge.
-	    */
-	    char fnamebuf[MAX_MAILBOX_PATH+1];
-	    struct stat sbuf;
-
-	    if (mpath &&
-		(config_metapartition_files &
-		 IMAP_ENUM_METAPARTITION_FILES_EXPUNGE)) {
-		strlcpy(fnamebuf, mpath, sizeof(fnamebuf));
-	    } else {
-		strlcpy(fnamebuf, path, sizeof(fnamebuf));
-	    }
-	    strlcat(fnamebuf, FNAME_EXPUNGE_INDEX, sizeof(fnamebuf));
-	    if (stat(fnamebuf, &sbuf)) return 0;
-
-	    expunge_flags |= EXPUNGE_CLEANUP;
-	}
-
-	/* Open/lock header */
-	r = mailbox_open_header(name, 0, &mailbox);
-	if (!r && mailbox.header_fd != -1) {
-	    doclose = 1;
-	    (void) mailbox_lock_header(&mailbox);
-	    mailbox.header_lock_count = 1;
-	}
-
-	/* Attempt to open/lock index */
-	if (!r) r = mailbox_open_index(&mailbox);
-	if (!r) {
-	    (void) mailbox_lock_index(&mailbox);
-	    mailbox.index_lock_count = 1;
-	}
-
-	if (r) {
-	    /* mailbox corrupt/nonexistent -- skip it */
-	    syslog(LOG_WARNING, "unable to open/lock mailbox %s", name);
-	    if (doclose) mailbox_close(&mailbox);
-	    return 0;
-	}
-
+    if (attrib.value) {
+	/* XXX - stats are bound to be bogus... */
 	erock->mailboxes++;
 	erock->expire_mark = 0;
 
@@ -280,9 +227,21 @@ int expire(char *name, int matchlen, int maycreate __attribute__((unused)),
 	    erock->expire_mark = *expire_mark;
 	}
 
-	r = mailbox_expunge(&mailbox, expire_cb, erock, expunge_flags, NULL);
-	mailbox_close(&mailbox);
+	r = mailbox_expunge(mailbox, expire_cb, erock, NULL);
+	if (r) {
+	    syslog(LOG_ERR, "failed to expire old messages: %s", mailbox->name);
+	    mailbox_close(&mailbox);
+	    return 0;
+	}
     }
+
+    r = mailbox_expunge_cleanup(mailbox, erock->expunge_mark, &numdeleted);
+
+    erock->deleted += numdeleted;
+    erock->mailboxes++;
+    erock->messages += mailbox->i.num_records;
+
+    mailbox_close(&mailbox);
 
     if (r) {
 	syslog(LOG_WARNING, "failure expiring %s: %s", name, error_message(r));
@@ -297,12 +256,11 @@ int delete(char *name,
 	   int maycreate __attribute__((unused)),
 	   void *rock)
 {
+    struct mboxlist_entry mbentry;
     struct delete_rock *drock = (struct delete_rock *) rock;
     char *p;
     int i, r, domainlen = 0;
     struct delete_node *node;
-    int mbtype;
-    char *path, *mpath;
     time_t timestamp;
 
     if (sigquit) {
@@ -316,14 +274,14 @@ int delete(char *name,
 	return 0;
 
     /* Skip remote mailboxes */
-    r = mboxlist_detail(name, &mbtype, &path, &mpath, NULL, NULL, NULL);
+    r = mboxlist_lookup(name, &mbentry, NULL);
     if (r) {
 	if (drock->verbose) {
 	    printf("error looking up %s: %s\n", name, error_message(r));
 	}
 	return 1;
     }
-    if (mbtype & MBTYPE_REMOTE) return 0;
+    if (mbentry.mbtype & MBTYPE_REMOTE) return 0;
 
     /* Sanity check for 8 hex digits only at the end */
     p = strrchr(name, '.');
@@ -461,14 +419,12 @@ int main(int argc, char *argv[])
 	 * and perform a cleanup of expunged messages
 	 */
 	erock.table = &expire_table;
-	erock.expunge_mode = config_getenum(IMAPOPT_EXPUNGE_MODE);
 	if (expunge_days == -1) {
 	    erock.expunge_mark = 0;
 	} else {
 	    erock.expunge_mark = time(0) - (expunge_days * 60 * 60 * 24);
 
-	    if (erock.verbose && 
-		erock.expunge_mode != IMAP_ENUM_EXPUNGE_MODE_IMMEDIATE) {
+	    if (erock.verbose) {
 		fprintf(stderr,
 			"Expunging deleted messages in mailboxes older than %d days\n",
 			expunge_days);

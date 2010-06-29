@@ -48,28 +48,40 @@
 struct seen;
 
 #define SEEN_CREATE 0x01
+#define SEEN_SILENT 0x02
 
-/* get a database handle corresponding to (mailbox, user) pair */
-int seen_open(struct mailbox *mailbox, 
-	      const char *user,
+struct seendata {
+    time_t lastread;
+    unsigned long lastuid;
+    time_t lastchange;
+    char *seenuids;
+};
+
+typedef int seenproc_t(const char *uniqueid, struct seendata *sd,
+		       void *rock);
+
+void seen_freedata(struct seendata *data);
+
+/* get a database handle corresponding to user pair */
+int seen_open(const char *user, 
 	      int flags,
 	      struct seen **seendbptr);
 
+int seen_foreach(struct seen *db, seenproc_t *func, void *rock);
+
 /* read an entry from 'seendb' */
-int seen_read(struct seen *seendb, 
-	      time_t *lastreadptr, unsigned int *lastuidptr, 
-	      time_t *lastchangeptr, char **seenuidsptr);
+int seen_read(struct seen *seendb, const char *uniqueid,
+	      struct seendata *data);
 
 /* read an entry from 'seendb' and leave that record (or some superset
    of it) locked for update */
-int seen_lockread(struct seen *seendb, 
-		  time_t *lastreadptr, unsigned int *lastuidptr, 
-		  time_t *lastchangeptr, char **seenuidsptr);
+int seen_lockread(struct seen *seendb, const char *uniqueid,
+		  struct seendata *data);
 
 /* write an entry to 'seendb'; should have been already locked by
    seen_lockread() */
-int seen_write(struct seen *seendb, time_t lastread, unsigned int lastuid, 
-	       time_t lastchange, char *seenuids);
+int seen_write(struct seen *seendb, const char *uniqueid,
+	       struct seendata *data);
 
 /* close this handle */
 int seen_close(struct seen *seendb);
@@ -80,28 +92,19 @@ int seen_unlock(struct seen *seendb);
 /* called on mailbox operations */
 int seen_create_mailbox(struct mailbox *mailbox);
 int seen_delete_mailbox(struct mailbox *mailbox);
-int seen_copy(struct mailbox *oldmailbox, struct mailbox *newmailbox,
-	      char *userid);
+int seen_copy(const char *userid, struct mailbox *oldmailbox, struct mailbox *newmailbox);
 
 /* called on user operations */
 int seen_create_user(const char *user);
 int seen_delete_user(const char *user);
 int seen_rename_user(const char *olduser, const char *newuser);
 
-int seen_reconstruct(struct mailbox *mailbox,
-		     time_t report_time,
-		     time_t prune_time,
-		     int (*report_proc)(),
-		     void *report_rock);
-
 /* done with all seen operations for this process */
 int seen_done(void);
 
-/* Return a path to the seen database for the given user (or NULL if we are
- * using bigdb) */
-char *seen_getpath(const char *userid);
+/* compare seendata = returns 1 if match */
+int seen_compare(struct seendata *a, struct seendata *b);
 
-/* Merge tmpfile into tgtfile */
-int seen_merge(const char *tmpfile, const char *tgtfile);
+char *seen_getpath(const char *userid);
 
 #endif /* SEEN_LOCAL_H */

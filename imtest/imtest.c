@@ -639,15 +639,15 @@ static long bio_dump_cb(BIO * bio, int cmd, const char *argp, int argi,
 	return (ret);
     
     if (cmd == (BIO_CB_READ | BIO_CB_RETURN)) {
-	printf("read from %08X [%08lX] (%d bytes => %ld (0x%X))\n",
-	       (unsigned int) bio, (long unsigned int) argp,
-	       argi, ret, (unsigned int) ret);
+	printf("read from %08lX [%08lX] (%d bytes => %ld (0x%lX))\n",
+	       (unsigned long) bio, (unsigned long) argp,
+	       argi, ret, ret);
 	tls_dump(argp, (int) ret);
 	return (ret);
     } else if (cmd == (BIO_CB_WRITE | BIO_CB_RETURN)) {
-	printf("write to %08X [%08lX] (%d bytes => %ld (0x%X))\n",
-	       (unsigned int) bio, (long unsigned int) argp,
-	       argi, ret, (unsigned int) ret);
+	printf("write to %08lX [%08lX] (%d bytes => %ld (0x%lX))\n",
+	       (unsigned long) bio, (unsigned long) argp,
+	       argi, ret, ret);
 	tls_dump(argp, (int) ret);
     }
     return (ret);
@@ -1447,7 +1447,7 @@ static void interactive(struct protocol_t *protocol, char *filename)
 	struct stat sbuf;
 	
 	close(fd);
-	close(listen_sock);
+	if (listen_sock != -1) close(listen_sock);
 
 	if(stat(output_socket, &sbuf) != -1
 	   && sbuf.st_ino == output_socket_ino) {
@@ -1493,6 +1493,10 @@ static char *ask_capability(struct protocol_t *prot,
     }
 
     do { /* look for the end of the capabilities */
+	if (ret) {
+	    free(ret);
+	    ret = NULL;
+	}
 	if (prot_fgets(str, sizeof(str), pin) == NULL) {
 	    if (!*str) imtest_fatal("prot layer failure");
 	    else break;
@@ -1651,6 +1655,8 @@ static int auth_imap(void)
     char *pass;
     unsigned int passlen;
     char *tag = "L01 ";
+
+    str[0] = '\0';
     
     interaction(SASL_CB_AUTHNAME, NULL, "Authname", &username, &userlen);
     interaction(SASL_CB_PASS, NULL, "Please enter your password",
@@ -2190,7 +2196,7 @@ static char *sieve_parse_success(char *str)
 	(tmp = strstr(str+4, "SASL \"")) != NULL) {
 	success = tmp+6; /* skip SASL " */
 	tmp = strstr(success, "\"");
-	*tmp = '\0'; /* clip " */
+	if (tmp) *tmp = '\0'; /* clip " */
     }
 
     return success;

@@ -103,13 +103,14 @@ int do_notify()
     char buf[NOTIFY_MAXSIZE+1], *cp, *tail;
     int r, i;
     char *method, *class, *priority, *user, *mailbox, *message;
-    char **options = NULL;
+    char **options;
     long nopt;
     char *reply;
     notifymethod_t *nmethod;
 
     while (1) {
 	method = class = priority = user = mailbox = message = reply = NULL;
+	options = NULL;
 	nopt = 0;
 
 	if (signals_poll() == SIGHUP) {
@@ -142,9 +143,10 @@ int do_notify()
 	if (cp) nopt = strtol(cp, NULL, 10);
 	if (nopt < 0 || errno == ERANGE) cp = NULL;
 
-	if (cp && nopt &&
-	    !(options = (char**) xrealloc(options, nopt * sizeof(char*)))) {
-	    fatal("xmalloc(): can't allocate options", EC_OSERR);
+	if (cp && nopt) {
+	    options = (char**) xrealloc(options, nopt * sizeof(char*));
+	    if (!options)
+		fatal("xmalloc(): can't allocate options", EC_OSERR);
 	}
 
 	for (i = 0; cp && i < nopt; i++) {
@@ -155,6 +157,7 @@ int do_notify()
 
 	if (!message) {
 	    syslog(LOG_ERR, "malformed notify request");
+	    free(options);
 	    return 0;
 	}
 
@@ -184,7 +187,8 @@ int do_notify()
 	}
 #endif
 
-	if (reply) free(reply);
+	free(reply);
+	free(options);
     }
 
     /* never reached */

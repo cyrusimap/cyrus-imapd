@@ -78,11 +78,6 @@
 
 #define DB config_annotation_db
 
-extern void printstring(const char *s);
-extern void appendattvalue(struct attvaluelist **l, char *attrib,
-			   const char *value);
-extern void freeattvalues(struct attvaluelist *l);
-
 struct db *anndb;
 static int annotate_dbopen = 0;
 int (*proxy_fetch_func)(const char *server, const char *mbox_pat,
@@ -162,7 +157,7 @@ void freestrlist(struct strlist *l)
 /*
  * Append the 'attrib'/'value' pair to the attvaluelist 'l'.
  */
-void appendattvalue(struct attvaluelist **l, char *attrib, const char *value)
+void appendattvalue(struct attvaluelist **l, const char *attrib, const char *value)
 {
     struct attvaluelist **tail = l;
 
@@ -192,7 +187,7 @@ void freeattvalues(struct attvaluelist *l)
 /*
  * Append the 'entry'/'attvalues' pair to the entryattlist 'l'.
  */
-void appendentryatt(struct entryattlist **l, char *entry,
+void appendentryatt(struct entryattlist **l, const char *entry,
 		    struct attvaluelist *attvalues)
 {
     struct entryattlist **tail = l;
@@ -441,7 +436,7 @@ const struct annotate_info_t annotate_mailbox_flags[] =
 static void cleanup_mbrock(struct mailbox_annotation_rock *mbrock __attribute__((unused))) 
 {
     /* Don't free server and partition, since they're straight from the
-     * output of mboxlist_detail() */
+     * output of mboxlist_lookup() */
     return;
 }
 
@@ -449,15 +444,15 @@ static void get_mb_data(const char *mboxname,
 			struct mailbox_annotation_rock *mbrock) 
 {
     if(!mbrock->server && !mbrock->partition) {
-	int r = mboxlist_detail(mboxname, NULL,
-				&(mbrock->path), &(mbrock->mpath),
-				&(mbrock->server), &(mbrock->acl), NULL);
+	struct mboxlist_entry mbentry;
+	int r = mboxlist_lookup(mboxname, &mbentry, NULL);
 	if (r) return;
+	mbrock->server = mbentry.partition;
+	mbrock->acl = mbentry.acl;
 
 	mbrock->partition = strchr(mbrock->server, '!');
 	if (mbrock->partition) {
 	    *(mbrock->partition)++ = '\0';
-	    mbrock->path = mbrock->mpath = NULL;
 	} else {
 	    mbrock->partition = mbrock->server;
 	    mbrock->server = NULL;
@@ -496,12 +491,12 @@ static void output_attlist(struct protstream *pout, struct attvaluelist *l)
     prot_putc('(',pout);
     
     while(l) {
-	if(flag) prot_putc(' ',pout);
+	if (flag) prot_putc(' ', pout);
 	else flag = 1;
-	
-	printstring(l->attrib);
-	prot_putc(' ',pout);
-	printstring(l->value);
+
+	prot_printstring(pout, l->attrib);
+	prot_putc(' ', pout);
+	prot_printstring(pout, l->value);
 
 	l = l->next;
     }
@@ -749,21 +744,11 @@ static void annotation_get_size(const char *int_mboxname,
 				struct mailbox_annotation_rock *mbrock,
 				void *rock __attribute__((unused))) 
 {
-    struct mailbox mailbox;
-    struct index_record record;
-    int r = 0;
-    unsigned msg;
-#ifdef HAVE_LONG_LONG_INT
-    unsigned long long totsize = 0;
-# define SIZE_FMT "%llu"
-#else
-    unsigned long totsize = 0;
-# define SIZE_FMT "%lu"
-#endif
+    struct mailbox *mailbox;
     char value[21];
     struct annotation_data attrib;
 
-    if(!int_mboxname || !ext_mboxname || !fdata || !mbrock)
+    if (!int_mboxname || !ext_mboxname || !fdata || !mbrock)
 	fatal("annotation_get_size called with bad parameters",
 	      EC_TEMPFAIL);
     
@@ -779,23 +764,13 @@ static void annotation_get_size(const char *int_mboxname,
         !(cyrus_acl_myrights(fdata->auth_state, mbrock->acl) & ACL_READ)))
 	return;
 
-    if (mailbox_open_header(int_mboxname, 0, &mailbox) != 0)
+    if (mailbox_open_irl(int_mboxname, &mailbox))
 	return;
 
-    if (!r) r = mailbox_open_index(&mailbox);
-
-    if (!r) {
-	for (msg = 1; msg <= mailbox.exists; msg++) {
-	    if ((r = mailbox_read_index_record(&mailbox, msg, &record))!=0)
-		break;
-	    totsize += record.size;
-	}
-    }
+    if (snprintf(value, sizeof(value), QUOTA_T_FMT, mailbox->i.quota_mailbox_used) == -1)
+	return;
 
     mailbox_close(&mailbox);
-
-    if (r || snprintf(value, sizeof(value), SIZE_FMT, totsize) == -1)
-	return;
 
     memset(&attrib, 0, sizeof(attrib));
 
@@ -813,10 +788,10 @@ static void annotation_get_lastupdate(const char *int_mboxname,
 				      struct mailbox_annotation_rock *mbrock,
 				      void *rock __attribute__((unused))) 
 {
-    time_t modtime = 0;
-    struct stat header, index;
+    struct stat sbuf;
     char valuebuf[128];
     struct annotation_data attrib;
+    char *fname;
 
     if(!int_mboxname || !ext_mboxname || !fdata || !mbrock)
 	fatal("annotation_get_lastupdate called with bad parameters",
@@ -834,13 +809,11 @@ static void annotation_get_lastupdate(const char *int_mboxname,
         !(cyrus_acl_myrights(fdata->auth_state, mbrock->acl) & ACL_READ)))
 	return;
 
-    if (!mbrock->path) return;
-    if (mailbox_stat(mbrock->path, mbrock->mpath, &header, &index, NULL)) return;
-
-    modtime = (header.st_mtime > index.st_mtime) ?
-	header.st_mtime : index.st_mtime;
-
-    cyrus_ctime(modtime, valuebuf);
+    fname = mboxname_metapath(mbrock->partition, int_mboxname, META_INDEX, 0);
+    if (!fname) return;
+    if (stat(fname, &sbuf) == -1) return;
+    
+    cyrus_ctime(sbuf.st_mtime, valuebuf);
     
     memset(&attrib, 0, sizeof(attrib));
 
@@ -858,8 +831,7 @@ static void annotation_get_lastpop(const char *int_mboxname,
                                  struct mailbox_annotation_rock *mbrock,
                                  void *rock __attribute__((unused)))
 { 
-    struct mailbox mailbox;
-    int r = 0;
+    struct mailbox *mailbox;
     char value[40];
     struct annotation_data attrib;
   
@@ -880,25 +852,16 @@ static void annotation_get_lastpop(const char *int_mboxname,
       return;
 
 
-    if (mailbox_open_header(int_mboxname, 0, &mailbox) != 0)
+    if (mailbox_open_irl(int_mboxname, &mailbox) != 0)
       return;
 
-    if (!r) {
-      r = mailbox_open_index(&mailbox);
-    }
-
-    if (!r) {
-      if (mailbox.pop3_last_login == 0) {
-          strcpy (value, " ");
-      } else {
-          cyrus_ctime(mailbox.pop3_last_login, value);
-      }
+    if (mailbox->i.pop3_last_login == 0) {
+	strcpy (value, " ");
+    } else {
+	cyrus_ctime(mailbox->i.pop3_last_login, value);
     }
 
     mailbox_close(&mailbox);
-
-    if ( r)
-      return;
 
     memset(&attrib, 0, sizeof(attrib));
 
@@ -916,8 +879,8 @@ static void annotation_get_mailboxopt(const char *int_mboxname,
 				      struct mailbox_annotation_rock *mbrock,
 				      void *rock __attribute__((unused)))
 { 
-    struct mailbox mailbox;
-    int flag = 0, r = 0, i;
+    struct mailbox *mailbox;
+    int flag = 0, i;
     char value[40];
     struct annotation_data attrib;
   
@@ -947,24 +910,16 @@ static void annotation_get_mailboxopt(const char *int_mboxname,
       return;
 
 
-    if (mailbox_open_header(int_mboxname, 0, &mailbox) != 0)
+    if (mailbox_open_irl(int_mboxname, &mailbox) != 0)
       return;
 
-    if (!r) {
-      r = mailbox_open_index(&mailbox);
-    }
-
-    if (!r) {
-      if (mailbox.options & flag) {
-          strcpy(value, "true");
-      } else {
-          strcpy(value, "false");
-      }
+    if (mailbox->i.options & flag) {
+	strcpy(value, "true");
+    } else {
+	strcpy(value, "false");
     }
 
     mailbox_close(&mailbox);
-
-    if (r) return;
 
     memset(&attrib, 0, sizeof(attrib));
 
@@ -1450,6 +1405,7 @@ static int write_entry(const char *mboxname, const char *entry,
 	do {
 	    r = DB->store(anndb, key, keylen, data, datalen, tid);
 	} while (r == CYRUSDB_AGAIN);
+	sync_log_annotation(mboxname);
     }
 
     return r;
@@ -1473,7 +1429,7 @@ int annotatemore_write_entry(const char *mboxname, const char *entry,
 
 struct storedata {
     struct namespace *namespace;
-    char *userid;
+    const char *userid;
     int isadmin;
     struct auth_state *auth_state;
     struct annotate_st_entry_list *entry_list;
@@ -1520,6 +1476,7 @@ struct annotate_st_entry_list
 static const char *annotate_canon_value(const char *value, int type)
 {
     char *p = NULL;
+    unsigned long n;
 
     /* check for "NIL" */
     if (!strcasecmp(value, "NIL")) return "NIL";
@@ -1543,7 +1500,7 @@ static const char *annotate_canon_value(const char *value, int type)
     case ATTRIB_TYPE_UINT:
 	/* make sure its a valid ulong ( >= 0 ) */
 	errno = 0;
-	strtoul(value, &p, 10);
+	n = strtoul(value, &p, 10);
 	if ((p == value)		/* no value */
 	    || (*p != '\0')		/* illegal char */
 	    || errno			/* overflow */
@@ -1555,7 +1512,7 @@ static const char *annotate_canon_value(const char *value, int type)
     case ATTRIB_TYPE_INT:
 	/* make sure its a valid long */
 	errno = 0;
-	strtol(value, &p, 10);
+	n = strtol(value, &p, 10);
 	if ((p == value)		/* no value */
 	    || (*p != '\0')		/* illegal char */
 	    || errno) {			/* underflow/overflow */
@@ -1572,7 +1529,7 @@ static const char *annotate_canon_value(const char *value, int type)
     return value;
 }
 
-static int store_cb(char *name, int matchlen,
+static int store_cb(const char *name, int matchlen,
 		    int maycreate __attribute__((unused)), void *rock)
 {
     struct storedata *sdata = (struct storedata *) rock;
@@ -1644,7 +1601,7 @@ static int store_cb(char *name, int matchlen,
 }
 
 struct proxy_rock {
-    char *mbox_pat;
+    const char *mbox_pat;
     struct entryattlist *entryatts;
 };
 
@@ -1758,8 +1715,9 @@ static int annotation_set_mailboxopt(const char *int_mboxname,
 				     struct mailbox_annotation_rock *mbrock,
 				     void *rock __attribute__((unused)))
 {
-    struct mailbox mailbox;
+    struct mailbox *mailbox;
     int flag = 0, r = 0, i;
+    unsigned long oldopts;
 
     /* Check entry */
     for (i = 0; annotate_mailbox_flags[i].name; i++) {
@@ -1778,26 +1736,25 @@ static int annotation_set_mailboxopt(const char *int_mboxname,
 	return IMAP_PERMISSION_DENIED;
     }
 
-    r = mailbox_open_header(int_mboxname, 0, &mailbox);
-    if (!r) r = mailbox_open_index(&mailbox);
-    if (!r) r = mailbox_lock_index(&mailbox);
+    r = mailbox_open_iwl(int_mboxname, &mailbox);
+    if (r) return r;
 
-    if (!r) {
-	if (!strcmp(entry->shared.value, "true")) {
-	    mailbox.options |= flag;
-	} else {
-	    mailbox.options &= ~flag;
-	}
+    oldopts = mailbox->i.options;
 
-	r = mailbox_write_index_header(&mailbox);
+    if (!strcmp(entry->shared.value, "true")) {
+	mailbox->i.options |= flag;
+    } else {
+	mailbox->i.options &= ~flag;
+    }
+
+    if (oldopts != mailbox->i.options) {
+	mailbox_index_dirty(mailbox);
+	r = mailbox_commit(mailbox);
     }
 
     mailbox_close(&mailbox);
 
-    if (!r) sync_log_mailbox(int_mboxname);
-
     return r;
-
 }
 
 const struct annotate_st_entry server_entries[] =
@@ -1873,11 +1830,11 @@ const struct annotate_st_entry mailbox_rw_entries[] =
 struct annotate_st_entry_list *server_entries_list = NULL;
 struct annotate_st_entry_list *mailbox_rw_entries_list = NULL;
 
-int annotatemore_store(char *mailbox,
+int annotatemore_store(const char *mboxname,
 		       struct entryattlist *l,
 		       struct namespace *namespace,
 		       int isadmin,
-		       char *userid,
+		       const char *userid,
 		       struct auth_state *auth_state)
 {
     int r = 0;
@@ -1893,7 +1850,7 @@ int annotatemore_store(char *mailbox,
     sdata.isadmin = isadmin;
     sdata.auth_state = auth_state;
 
-    if (!mailbox[0]) {
+    if (!mboxname[0]) {
 	/* server annotations */
 	entries = server_entries_list;
     }
@@ -2000,7 +1957,7 @@ int annotatemore_store(char *mailbox,
 	e = e->next;
     }
 
-    if (!mailbox[0]) {
+    if (!mboxname[0]) {
 	/* server annotations */
 
 	if (sdata.entry_list) {
@@ -2034,7 +1991,7 @@ int annotatemore_store(char *mailbox,
 	}
 
 	/* copy the pattern so we can change hiersep */
-	strlcpy(mboxpat, mailbox, sizeof(mboxpat));
+	strlcpy(mboxpat, mboxname, sizeof(mboxpat));
 	mboxname_hiersep_tointernal(namespace, mboxpat,
 				    config_virtdomains ?
 				    strcspn(mboxpat, "@") : 0);
@@ -2050,7 +2007,7 @@ int annotatemore_store(char *mailbox,
 	    if (!r) {
 		/* proxy command to backends */
 		struct proxy_rock prock = { NULL, NULL };
-		prock.mbox_pat = mailbox;
+		prock.mbox_pat = mboxname;
 		prock.entryatts = l;
 		hash_enumerate(&sdata.server_table, store_proxy, &prock);
 	    }

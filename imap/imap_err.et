@@ -73,6 +73,9 @@ ec IMAP_NAMESPACE_BADPREFIX,
 ec IMAP_MAILBOX_BADFORMAT,
    "Mailbox has an invalid format"
 
+ec IMAP_MAILBOX_CRC,
+   "Mailbox format corruption detected"
+
 ec IMAP_MAILBOX_NOTSUPPORTED,
    "Operation is not supported on mailbox"
 
@@ -91,8 +94,8 @@ ec IMAP_MAILBOX_MOVED,
 ec IMAP_MAILBOX_RESERVED,
    "Mailbox is currently reserved"
 
-ec IMAP_MAILBOX_POPLOCKED,
-   "Mailbox is locked by POP server"
+ec IMAP_MAILBOX_LOCKED,
+   "Mailbox is locked"
 
 ec IMAP_PARTITION_UNKNOWN,
    "Unknown/invalid partition"

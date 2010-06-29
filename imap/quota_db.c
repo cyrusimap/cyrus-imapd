@@ -91,9 +91,8 @@ int quota_read(struct quota *quota, struct txn **tid, int wrlock)
 
     switch (r) {
     case CYRUSDB_OK:
-	if (!data ||
-	    sscanf(data, UQUOTA_T_FMT " %d",
-		   &quota->used, &quota->limit) != 2) {
+	if (!*data || sscanf(data, UQUOTA_T_FMT " %d", 
+			     &quota->used, &quota->limit) != 2) {
             char *buf = xstrndup(data, datalen);
             syslog(LOG_ERR, "DBERROR: parsed bogus quota data <%s> for %s",
                buf, quota->root);
@@ -185,18 +184,14 @@ int quota_write(struct quota *quota, struct txn **tid)
 /*
  * Remove the quota root 'quota'
  */
-int quota_delete(struct quota *quota, struct txn **tid)
+int quota_deleteroot(const char *quotaroot)
 {
-    int qrlen, r;
+    int qrlen;
 
-    if (!quota->root) return 0;
-
-    qrlen = strlen(quota->root);
+    qrlen = strlen(quotaroot);
     if (!qrlen) return IMAP_QUOTAROOT_NONEXISTENT;
 
-    r = QDB->delete(qdb, quota->root, qrlen, tid, 0);
-
-    return r;
+    return QDB->delete(qdb, quotaroot, qrlen, NULL, 0);
 }
 
 /*

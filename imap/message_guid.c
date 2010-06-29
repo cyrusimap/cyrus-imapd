@@ -88,21 +88,13 @@
 void message_guid_generate(struct message_guid *guid,
 			   const char *msg_base, unsigned long msg_len)
 {
-    enum enum_value config_guidmode = config_getenum(IMAPOPT_GUID_MODE);
-
     guid->status = GUID_NULL;
     memset(guid->value, 0, MESSAGE_GUID_SIZE);
 
-    switch (config_guidmode) {
-    case IMAP_ENUM_GUID_MODE_SHA1:
 #ifdef HAVE_SSL
-	guid->status = GUID_NONNULL;
-	SHA1((const unsigned char *) msg_base, msg_len, guid->value);
+    guid->status = GUID_NONNULL;
+    SHA1((const unsigned char *) msg_base, msg_len, guid->value);
 #endif /* HAVE_SSL */
-	break;
-    default:
-	break;
-    }
 }
 
 /* message_guid_copy() ***************************************************
@@ -176,16 +168,14 @@ unsigned long message_guid_hash(struct message_guid *guid, int hash_size)
 
     if (hash_size > 1024) {
         /* Pair up chars to get 16 bit values */
-        for (i = 0; i < MESSAGE_GUID_SIZE; i+=2) {
-            if ((i+1) < MESSAGE_GUID_SIZE)
-                result += (s[i] << 8) + s[i+1];
-            else
-                result += s[i] << 8;   /* Should never happen */  
-        }
-    } else for (i = 0; i < MESSAGE_GUID_SIZE; i++)
-        result += s[i];
+        for (i = 0; i < MESSAGE_GUID_SIZE; i += 2) 
+	    result += (s[i] << 8) + s[i+1];
+    } 
+    else 
+	for (i = 0; i < MESSAGE_GUID_SIZE; i++)
+	    result += s[i];
 
-    return(result % hash_size);
+    return (result % hash_size);
 }
 
 /* message_guid_set_null() ***********************************************

@@ -48,6 +48,7 @@
 #ifndef INCLUDED_UTIL_H
 #define INCLUDED_UTIL_H
 
+#include <config.h>
 #include <sys/types.h>
 #include <limits.h>
 
@@ -152,7 +153,8 @@ extern int become_cyrus(void);
  */
 
 #define cyrus_isdigit(x) ((x) >= '0' && (x) <= '9')
-extern int parsenum(const char *p, const char **ptr);
+extern int parseint32(const char *p, const char **ptr, int32_t *res);
+extern int parseuint32(const char *p, const char **ptr, uint32_t *res);
 
 /* Timing related funcs/vars */
 extern void cmdtime_settimer(int enable);

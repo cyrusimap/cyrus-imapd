@@ -111,7 +111,7 @@ static char *sieve_parsesuccess(char *str, const char **status)
 	(tmp = strstr(str+4, "SASL \"")) != NULL) {
 	success = tmp+6; /* skip SASL " */
 	tmp = strstr(success, "\"");
-	*tmp = '\0'; /* clip " */
+	if (tmp) *tmp = '\0'; /* clip " */
     }
 
     if (status) *status = NULL;
@@ -529,7 +529,6 @@ static int cmd_authenticate(struct protstream *sieved_out,
 
   const char *serverout=NULL;
   unsigned int serveroutlen;
-  const char *errstr=NULL;
   const void *canon_user, *val;
   char *username;
   int ret = TRUE;
@@ -651,14 +650,8 @@ static int cmd_authenticate(struct protstream *sieved_out,
       if(sasl_result == SASL_NOUSER)
 	  sasl_result = SASL_BADAUTH;
       *errmsg = (const char *) sasl_errstring(sasl_result,NULL,NULL);
-      if (errstr!=NULL) {
-	  syslog(LOG_NOTICE, "badlogin: %s %s %d %s",
-		 sieved_clienthost, mech, sasl_result, errstr);
-      } else { 
-	  syslog(LOG_NOTICE, "badlogin: %s %s %s",
-		 sieved_clienthost, mech, 
-		 sasl_errstring(sasl_result, NULL, NULL));
-      }
+      syslog(LOG_NOTICE, "badlogin: %s %s %s",
+	     sieved_clienthost, mech, *errmsg);
 
       if(reset_saslconn(&sieved_saslconn, ssf, authid) != SASL_OK)
 	  fatal("could not reset the sasl_conn_t after failure",
@@ -689,12 +682,12 @@ static int cmd_authenticate(struct protstream *sieved_out,
       /* Check for a remote mailbox (should we setup a redirect?) */
       struct namespace sieved_namespace;
       char inboxname[MAX_MAILBOX_BUFFER];
-      char *server;
-      int type = 0, r;
+      struct mboxlist_entry mbentry;
+      int r;
       
       /* Set namespace */
       if ((r = mboxname_init_namespace(&sieved_namespace, 0)) != 0) {
-	  syslog(LOG_ERR, error_message(r));
+	  syslog(LOG_ERR, "%s", error_message(r));
 	  fatal(error_message(r), EC_CONFIG);
       }
 
@@ -706,11 +699,11 @@ static int cmd_authenticate(struct protstream *sieved_out,
       (*sieved_namespace.mboxname_tointernal)(&sieved_namespace, "INBOX",
 					     username, inboxname);
 
-      r = mboxlist_detail(inboxname, &type, &server, NULL, NULL, NULL, NULL);
+      r = mboxlist_lookup(inboxname, &mbentry, NULL);
       
       if(r && !sieved_userisadmin) {
-	  /* mboxlist_detail error */
-	  syslog(LOG_ERR, error_message(r));
+	  /* lookup error */
+	  syslog(LOG_ERR, "%s", error_message(r));
 
 	  if(reset_saslconn(&sieved_saslconn, ssf, authid) != SASL_OK)
 	      fatal("could not reset the sasl_conn_t after failure",
@@ -720,7 +713,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
 	  goto cleanup;
       }
 
-      if(type & MBTYPE_REMOTE) {
+      if(mbentry.mbtype & MBTYPE_REMOTE) {
 	  /* It's a remote mailbox */
 	  if (config_getswitch(IMAPOPT_SIEVE_ALLOWREFERRALS)) {
 	      /* We want to set up a referral */
@@ -753,27 +746,25 @@ static int cmd_authenticate(struct protstream *sieved_out,
 
 		  referral_host =
 		      (char*) xmalloc(strlen(authname)+1+strlen(username)+1+
-				      strlen(server)+1);
+				      strlen(mbentry.partition)+1);
 		  sprintf((char*) referral_host, "%s;%s@%s",
-			  authname, username, server);
+			  authname, username, mbentry.partition);
 
 		  free(authname);
 	      }
 	      else
-		  referral_host = xstrdup(server);
+		  referral_host = xstrdup(mbentry.partition);
 	  }
 	  else {
 	      /* We want to set up a connection to the backend for proxying */
 	      const char *statusline = NULL;
+	      char *c;
 
 	      /* xxx hide the fact that we are storing partitions */
-	      if (server) {
-		  char *c;
-		  c = strchr(server, '!');
-		  if(c) *c = '\0';
-	      }
+	      c = strchr(mbentry.partition, '!');
+	      if(c) *c = '\0';
 
-	      backend = backend_connect(NULL, server, &sieve_protocol,
+	      backend = backend_connect(NULL, mbentry.partition, &sieve_protocol,
 					username, NULL, &statusline);
 
 	      if (!backend) {

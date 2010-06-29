@@ -130,14 +130,13 @@ static int fixmbox(char *name,
 		   int maycreate __attribute__((unused)),
 		   void *rock __attribute__((unused)))
 {
-    int mbtype;
+    struct mboxlist_entry mbentry;
     int r;
 
-    /* Do an mboxlist_detail on the mailbox */
-    r = mboxlist_detail(name, &mbtype, NULL, NULL, NULL, NULL, NULL);
+    r = mboxlist_lookup(name, &mbentry, NULL);
 
-    /* if it is MBTYPE_RESERVED, unset it & call mboxlist_delete */
-    if(!r && (mbtype & MBTYPE_RESERVE)) {
+    /* if MBTYPE_RESERVED, unset it & call mboxlist_delete */
+    if(!r && (mbentry.mbtype & MBTYPE_RESERVE)) {
 	if(!r) {
 	    r = mboxlist_deletemailbox(name, 1, NULL, NULL, 0, 0, 1);
 	    if(r) {

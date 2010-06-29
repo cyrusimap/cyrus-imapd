@@ -299,7 +299,7 @@ int timlex(mystring_t **outstr, unsigned long *outnum,  struct protstream *strea
 	unsigned long lup;
 
 	for (lup=0;lup<count;lup++)
-	  prot_getc(stream);
+	  (void)prot_getc(stream);
       }
       lexer_state=LEXER_STATE_NORMAL;
       return STRING;

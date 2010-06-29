@@ -57,9 +57,6 @@ extern char *imapd_userid;
 /* Authorization state for logged in userid */
 extern struct auth_state *imapd_authstate;
 
-/* Number of messages in currently open mailbox */
-extern int imapd_exists;
-
 /* Client capabilities (via ENABLE) */
 extern unsigned imapd_client_capa;
 
@@ -85,7 +82,8 @@ struct fetchargs {
     int octet_count;              /* octet_count for partial fetch, or 0 */
     modseq_t changedsince;        /* changed since modseq, or 0 */
     int vanished;                 /* report expunges since changedsince */
-    char *match_seq, *match_uid;  /* sequence match data for VANISHED */
+    const char *match_seq;
+    const char *match_uid;        /* sequence match data for VANISHED */
 
     bit32 cache_atleast;          /* to do headers we need atleast this
 				   * cache version */
@@ -181,8 +179,8 @@ struct searchargs {
     bit32 system_flags_unset;
     bit32 user_flags_set[MAX_USER_FLAGS/32];
     bit32 user_flags_unset[MAX_USER_FLAGS/32];
-    struct seq_set *sequence;
-    struct seq_set *uidsequence;
+    struct seqset *sequence;
+    struct seqset *uidsequence;
     struct strlist *from;
     struct strlist *to;
     struct strlist *cc;
@@ -304,52 +302,5 @@ enum {
 };
 
 extern struct protstream *imapd_out, *imapd_in;
-
-extern void index_closemailbox(struct mailbox *mailbox);
-extern void index_newmailbox(struct mailbox *mailbox, int examine_mode);
-extern void index_operatemailbox(struct mailbox *mailbox);
-extern void index_check(struct mailbox *mailbox, int usinguid,
-			   int checkseen);
-extern void index_check_existing(struct mailbox *mailbox,
-                                 int usinguid, int checkseen);
-extern void index_checkseen(struct mailbox *mailbox, int quiet,
-			       int usinguid, int oldexists);
-
-extern int index_fetch(struct mailbox *mailbox, const char *sequence,
-		       int usinguid, struct fetchargs *fetchargs,
-		       int* fetchedsomething);
-extern int index_store(struct mailbox *mailbox, char *sequence,
-			  int usinguid, struct storeargs *storeargs,
-			  char **flag, int nflags);
-extern int index_search(struct mailbox *mailbox,
-			struct searchargs *searchargs, int usinguid);
-extern int find_thread_algorithm(char *arg);
-extern int index_scan(struct mailbox *mailbox, const char *contents);
-extern int index_sort(struct mailbox *mailbox, struct sortcrit *sortcrit,
-		      struct searchargs *searchargs, int usinguid);
-extern int index_thread(struct mailbox *mailbox, int algorithm,
-			struct searchargs *searchargs, int usinguid);
-extern int index_copy(struct mailbox *mailbox, char *sequence,
-		      int usinguid, char *name, char **copyuidp, int nolink);
-extern int index_status(char *mboxname, char *name, unsigned statusitems);
-
-extern int index_getuids(struct mailbox *mailbox, unsigned lowuid);
-extern int index_getstate(struct mailbox *mailbox);
-extern int index_checkstate(struct mailbox *mailbox, unsigned indexdate,
-			       unsigned seendate);
-
-extern unsigned index_finduid(unsigned uid);
-extern unsigned index_getuid(unsigned msgno);
-
-extern mailbox_decideproc_t index_expungeuidlist;
-
-/* See lib/charset.h for the definition of receiver. */
-extern void index_getsearchtext_single(struct mailbox* mailbox, unsigned msgno,
-                                       index_search_text_receiver_t receiver,
-                                       void* rock);
-
-extern void index_getsearchtext(struct mailbox* mailbox,
-                                index_search_text_receiver_t receiver,
-                                void* rock);
 
 #endif /* INCLUDED_IMAPD_H */

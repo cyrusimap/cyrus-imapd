@@ -313,6 +313,12 @@ Blank lines and lines beginning with ``#'' are ignored.
    result in greater responsiveness for the client, especially when
    expunging a large number of messages. */
 
+{ "expunge_days", 7, INT }
+/* Number of days to retain expunged messages before cleaning up their
+   index records.  The default is 7.  This is necessary for QRESYNC
+   to work correctly.  If combined with delayed expunge (above) you
+   will also be able to unexpunge messages during this time. */
+
 { "flushseenstate", 0, SWITCH }
 /* If enabled, changes to the seen state will be flushed to disk
    immediately, otherwise changes will be cached and flushed when the
@@ -340,11 +346,6 @@ Blank lines and lines beginning with ``#'' are ignored.
    Note that this option CANNOT be changed on a live system.  The
    server must be quiesced and then the directories moved with the
    \fBrehash\fR utility. */
-
-{ "guid_mode", "off", ENUM("off", "sha1")}
-/* The method used to calculate Globally Unique IDentifiers of
-   messages (used by the replication engine).  The "sha1" method
-   calculates a SHA1 hash of the entire message */
 
 { "hashimapspool", 0, SWITCH }
 /* If enabled, the partitions will also be hashed, in addition to the
@@ -406,6 +407,12 @@ Blank lines and lines beginning with ``#'' are ignored.
    Note that this option SHOULD NOT be changed on a live system.
    The mailboxes database should be dumped before the option is changed,
    removed, and then undumped after changing the option. */
+
+{ "internaldate_heuristic", "standard", ENUM("standard", "receivedheader") }
+/* Mechanism to determine email internaldates on delivery/reconstruct.
+   "standard" uses time() when delivering a message, mtime on reconstruct.
+   "receivedheader" looks at the top most Received header
+   or time/mtime otherwise */
 
 { "ldap_authz", NULL, STRING }
 /* SASL authorization ID for the LDAP server */
@@ -622,7 +629,10 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "mboxlist_db", "skiplist", STRINGLIST("flat", "berkeley", "berkeley-hash", "skiplist")}
 /* The cyrusdb backend to use for the mailbox list. */
 
-{ "metapartition_files", "", BITFIELD("header", "index", "cache", "expunge", "squat") }
+{ "mboxname_lockpath", NULL, STRING }
+/* Path to mailbox name lock files (default $conf/lock) */
+
+{ "metapartition_files", "", BITFIELD("header", "index", "cache", "expunge", "squat", "lock") }
 /* Space-separated list of metadata files to be stored on a
    \fImetapartition\fR rather than in the mailbox directory on a spool
    partition. */

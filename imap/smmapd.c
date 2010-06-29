@@ -160,6 +160,7 @@ void fatal(const char* s, int code)
     }
     recurse_code = code;
     syslog(LOG_ERR, "Fatal error: %s", s);
+    abort();
 
     shut_down(code);
 }
@@ -192,7 +193,7 @@ int service_init(int argc, char **argv, char **envp)
 
     /* Set namespace */
     if ((r = mboxname_init_namespace(&map_namespace, 1)) != 0) {
-	syslog(LOG_ERR, error_message(r));
+	syslog(LOG_ERR, "%s", error_message(r));
 	fatal(error_message(r), EC_CONFIG);
     }
 
@@ -283,9 +284,7 @@ int verify_user(const char *key, long quotacheck,
 
     if (!r) {
 	long aclcheck = !user ? ACL_POST : 0;
-	int type;
-	char *acl;
-        char *path;
+        struct mboxlist_entry mbentry;
         char *c;
         struct hostent *hp;
         char *host;
@@ -301,18 +300,18 @@ int verify_user(const char *key, long quotacheck,
 	 * - don't care about ACL on INBOX (always allow post)
 	 * - don't care about message size (1 msg over quota allowed)
 	 */
-	r = mboxlist_detail(namebuf, &type, &path, NULL, NULL, &acl, NULL);
+	r = mboxlist_lookup(namebuf, &mbentry, NULL);
 	if (r == IMAP_MAILBOX_NONEXISTENT && config_mupdate_server) {
 	    kick_mupdate();
-	    r = mboxlist_detail(namebuf, &type, &path, NULL, NULL, &acl, NULL);
+	    r = mboxlist_lookup(namebuf, &mbentry, NULL);
 	}
 
-	if (!r && (type & MBTYPE_REMOTE)) {
+	if (!r && (mbentry.mbtype & MBTYPE_REMOTE)) {
 	    /* XXX  Perhaps we should support the VRFY command in lmtpd
 	     * and then we could do a VRFY to the correct backend which
 	     * would also do a quotacheck.
 	     */
-	    int access = cyrus_acl_myrights(authstate, acl);
+	    int access = cyrus_acl_myrights(authstate, mbentry.acl);
 
 	    if ((access & aclcheck) != aclcheck) {
 		r = (access & ACL_LOOKUP) ?
@@ -327,7 +326,7 @@ int verify_user(const char *key, long quotacheck,
              * (asuume under quota)
              */
 
-            host = strdup(path);
+            host = xstrdup(mbentry.partition);
             c = strchr(host, '!');
             if (c) *c = 0;
 
@@ -342,6 +341,12 @@ int verify_user(const char *key, long quotacheck,
             }
 
             soc = socket(PF_INET, SOCK_STREAM, 0);
+	    if (soc < 0) {
+                syslog(LOG_ERR, "verify_user(%s) failed: can't connect to %s", 
+                       namebuf, host);
+		free(host);
+		return r;
+	    }
             memcpy(&sin.sin_addr.s_addr,hp->h_addr,hp->h_length);
             sin.sin_family = AF_INET;
 
@@ -351,7 +356,8 @@ int verify_user(const char *key, long quotacheck,
             if (connect(soc,(struct sockaddr *) &sin, sizeof(sin)) < 0) { 
                 syslog(LOG_ERR, "verify_user(%s) failed: can't connect to %s", 
                        namebuf, host);
-               return r;
+		free(host);
+                return r;
             }
 
             sprintf(buf,SIZE_T_FMT ":cyrus %s,%c",strlen(key)+6,key,4);
@@ -360,14 +366,17 @@ int verify_user(const char *key, long quotacheck,
             x = sizeof(sfrom);
             rc = recvfrom(soc,buf,512,0,(struct sockaddr *)&sfrom,&x);
  
-            buf[rc] = '\0';
             close(soc);
 
-	    prot_printf(map_out, "%s", buf);
+            if (rc >= 0) {
+		buf[rc] = '\0';
+		prot_printf(map_out, "%s", buf);
+	    }
+	    free(host);
             return -1;   /* tell calling function we already replied */
 
 	} else if (!r) {
-	    r = append_check(namebuf, MAILBOX_FORMAT_NORMAL, authstate,
+	    r = append_check(namebuf, authstate,
 			     aclcheck, (quotacheck < 0 )
 			     || config_getswitch(IMAPOPT_LMTP_STRICT_QUOTA) ?
 			     quotacheck : 0);
@@ -391,7 +400,7 @@ int begin_handling(void)
     int c;
 
     while ((c = prot_getc(map_in)) != EOF) {
-	int r = 0, sawdigit = 0, len = 0, size = 0;
+	int r = 0, len = 0, size = 0;
 	struct auth_state *authstate = NULL;
 	char request[MAXREQUEST+1];
 	char *mapname = NULL, *key = NULL;
@@ -402,20 +411,13 @@ int begin_handling(void)
 	    return 1;
 	}
 
-	while (isdigit(c)) {
-	    sawdigit = 1;
-	    len = len*10 + c - '0';
-            if (len > MAXREQUEST || len < 0) {
-                /* we overflowed */
-                fatal("string too big", EC_IOERR);
-            }
-	    c = prot_getc(map_in);
-	}
+	prot_ungetc(c, map_in);
+	c = getint32(map_in, &len);
 	if (c == EOF) {
 	    errstring = prot_error(map_in);
 	    r = IMAP_IOERROR;
 	}
-	if (!sawdigit || c != ':') {
+	if (len == -1 || c != ':') {
 	    errstring = "missing length";
 	    r = IMAP_PROTOCOL_ERROR;
 	}

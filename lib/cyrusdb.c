@@ -109,8 +109,8 @@ int cyrusdb_copyfile(const char *srcname, const char *dstname)
 {
     int srcfd, dstfd;
     struct stat sbuf;
-    char *buf;
-    int bufsize, n;
+    char buf[4096];
+    int n;
 
     if ((srcfd = open(srcname, O_RDONLY)) < 0) {
 	syslog(LOG_DEBUG, "error opening %s for reading", srcname);
@@ -130,22 +130,14 @@ int cyrusdb_copyfile(const char *srcname, const char *dstname)
 	return -1;
     }
 
-    bufsize = sbuf.st_blksize;
-    if ((buf = (char*) xmalloc(bufsize)) == NULL) {
-	syslog(LOG_DEBUG, "error allocing buf (%d)", bufsize);
-	close(srcfd);
-	close(dstfd);
-	return -1;
-    }
-
     for (;;) {
-	n = read(srcfd, buf, bufsize);
+	n = read(srcfd, buf, 4096);
 
 	if (n < 0) {
 	    if (errno == EINTR)
 		continue;
 
-	    syslog(LOG_DEBUG, "error reading buf (%d)", bufsize);
+	    syslog(LOG_DEBUG, "error reading buf");
 	    close(srcfd);
 	    close(dstfd);
 	    unlink(dstname);
@@ -223,7 +215,7 @@ void cyrusdb_convert(const char *fromfname, const char *tofname,
 const char *cyrusdb_detect(const char *fname)
 {
     FILE *f;
-    unsigned char buf[16];
+    char buf[16];
     int n;
     uint32_t bdb_magic;
 

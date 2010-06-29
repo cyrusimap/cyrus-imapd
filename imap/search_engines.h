@@ -45,14 +45,14 @@
 #ifndef INCLUDED_SEARCH_ENGINES_H
 #define INCLUDED_SEARCH_ENGINES_H
 
-#include "imapd.h"
+#include "index.h"
 
 /* Fill the msg_list with a list of message IDs which could match the
  * searchargs.
  * Return the number of message IDs inserted.
  */
 extern int search_prefilter_messages(unsigned* msg_list,
-				     struct mailbox *mailbox,
+				     struct index_state *state,
 				     struct searchargs *searchargs);
 
 #endif

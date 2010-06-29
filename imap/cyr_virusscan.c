@@ -71,18 +71,6 @@
 /* config.c stuff */
 const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
-/* Stuff to make index.c link */
-int imapd_exists;
-struct protstream *imapd_out = NULL;
-struct auth_state *imapd_authstate = NULL;
-char *imapd_userid = NULL;
-int imapd_condstore_client = 0;
-void printastring(const char *s __attribute__((unused)))
-{
-    fatal("not implemented", EC_SOFTWARE);
-}
-/* end stuff to make index.c link */
-
 struct infected_msg {
     char *mboxname;
     char *virname;
@@ -96,7 +84,7 @@ struct infected_msg {
 
 struct infected_mbox {
     char *owner;
-    unsigned msgno; /* running count of which message we're scanning */
+    unsigned recno; /* running count of which message we're scanning */
     struct infected_msg *msgs;
     struct infected_mbox *next;
 };
@@ -232,7 +220,9 @@ struct scan_engine engine = { NULL, NULL, NULL, NULL, NULL };
 /* forward declarations */
 int usage(char *name);
 int scan_me(char *, int, int, void *);
-unsigned virus_check(struct mailbox *, void *, unsigned char *, int);
+unsigned virus_check(struct mailbox *mailbox,
+		     struct index_record *record,
+		     void *rock);
 void append_notifications();
 
 
@@ -277,7 +267,7 @@ int main (int argc, char *argv[]) {
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&scan_namespace, 1)) != 0) {
-	syslog(LOG_ERR, error_message(r));
+	syslog(LOG_ERR, "%s", error_message(r));
 	fatal(error_message(r), EC_CONFIG);
     }
 
@@ -339,8 +329,8 @@ int scan_me(char *name,
 	    int maycreate __attribute__((unused)),
 	    void *rock __attribute__((unused)))
 {
-    struct mailbox the_box;
-    int            error;
+    struct mailbox *mailbox;
+    int r;
     struct infected_mbox *i_mbox = NULL;
 
     if (verbose) {
@@ -352,24 +342,11 @@ int scan_me(char *name,
 	printf("Working on %s...\n", mboxname);
     }
 
-    error = mailbox_open_header(name, 0, &the_box);
-    if (error != 0) { /* did we find it? */
+    r = mailbox_open_iwl(name, 0, &mailbox);
+    if (r) { /* did we find it? */
 	syslog(LOG_ERR, "Couldn't find %s, check spelling", name);
 	return 0;
     }
-    if (the_box.header_fd != -1) {
-	(void) mailbox_lock_header(&the_box);
-    }
-    the_box.header_lock_count = 1;
-
-    error = mailbox_open_index(&the_box);
-    if (error != 0) {
-	mailbox_close(&the_box);
-	syslog(LOG_ERR, "Couldn't open mailbox index for %s", name);
-	return 0;
-    }
-    (void) mailbox_lock_index(&the_box);
-    the_box.index_lock_count = 1;
 
     if (notify) {
 	/* XXX  Need to handle virtdomains */
@@ -400,19 +377,18 @@ int scan_me(char *name,
 	}
 #endif
 
-	if (i_mbox) i_mbox->msgno = 1;
+	if (i_mbox) i_mbox->recno = 1;
     }
 
-    mailbox_expunge(&the_box, virus_check, i_mbox, 0);
-
-    sync_log_mailbox(the_box.name);
-    mailbox_close(&the_box);
+    mailbox_expunge(mailbox, virus_check, i_mbox, 0, NULL);
+    mailbox_commit(mailbox, 0);
+    mailbox_close(&mailbox);
 
     return 0;
 }
 
 void create_digest(struct infected_mbox *i_mbox, struct mailbox *mbox,
-		   unsigned msgno, unsigned long uid, const char *virname)
+		   unsigned recno, unsigned long uid, const char *virname)
 {
     struct infected_msg *i_msg = xmalloc(sizeof(struct infected_msg));
     struct nntp_overview *over;
@@ -422,7 +398,7 @@ void create_digest(struct infected_mbox *i_mbox, struct mailbox *mbox,
     i_msg->uid= uid;
 
     index_operatemailbox(mbox);
-    over = index_overview(mbox, msgno);
+    over = index_overview(mbox, recno);
     i_msg->msgid = strdup(over->msgid);
     i_msg->date = strdup(over->date);
     i_msg->from = strdup(over->from);
@@ -435,32 +411,28 @@ void create_digest(struct infected_mbox *i_mbox, struct mailbox *mbox,
 /* thumbs up routine, checks for virus and returns yes or no for deletion */
 /* 0 = no, 1 = yes */
 unsigned virus_check(struct mailbox *mailbox,
-		     void *deciderock,
-		     unsigned char *buf,
-		     int expunge_flags __attribute__((unused)))
+		     struct index_record *record,
+		     void *deciderock)
 {
     struct infected_mbox *i_mbox = (struct infected_mbox *) deciderock;
-    unsigned long uid;
-    char fname[4096];
+    char *fname;
     const char *virname;
     int r = 0;
 
-    uid = ntohl(*((bit32 *)(buf+OFFSET_UID)));
-
-    snprintf(fname, sizeof(fname), "%s/%lu.", mailbox->path, uid);
+    fname = mailbox_message_fname(mailbox, record->uid);
 
     if ((r = engine.scanfile(engine.state, fname, &virname))) {
 	if (verbose) {
-	    printf("Virus detected in message %lu: %s\n", uid, virname);
+	    printf("Virus detected in message %lu: %s\n", record->uid, virname);
 	}
 	if (disinfect) {
 	    if (notify && i_mbox) {
-		create_digest(i_mbox, mailbox, i_mbox->msgno, uid, virname);
+		create_digest(i_mbox, mailbox, i_mbox->recno, record->uid, virname);
 	    }
 	}
     }
 
-    if (i_mbox) i_mbox->msgno++;
+    if (i_mbox) i_mbox->recno++;
 
     return r;
 }
@@ -527,8 +499,7 @@ void append_notifications()
 	    fflush(f);
 	    msgsize = ftell(f);
 
-	    append_setup(&as, i_mbox->owner, MAILBOX_FORMAT_NORMAL,
-			 NULL, NULL, 0, -1);
+	    append_setup(&as, i_mbox->owner, NULL, NULL, 0, -1);
 	    pout = prot_new(fd, 0);
 	    prot_rewind(pout);
 	    append_fromstream(&as, &body, pout, msgsize, t, NULL, 0);
