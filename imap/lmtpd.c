@@ -87,6 +87,7 @@
 #include "notify.h"
 #include "prot.h"
 #include "proxy.h"
+#include "telemetry.h"
 #include "tls.h"
 #include "util.h"
 #include "version.h"
@@ -830,7 +831,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 	    }
 	}
 
-       telemetry_rusage( user );
+	telemetry_rusage( user );
 	msg_setrcpt_status(msgdata, n, r);
     }
 
