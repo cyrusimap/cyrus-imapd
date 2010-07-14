@@ -106,6 +106,8 @@ int write;
 	newstream->cnt = PROT_BUFSIZE;
 
     newstream->can_unget = 0;
+    newstream->bytes_in = 0;
+    newstream->bytes_out = 0;
 
     return newstream;
 }
@@ -522,6 +524,7 @@ int prot_rewind(struct protstream *s)
     s->error = 0;
     s->eof = 0;
     s->can_unget = 0;
+    s->bytes_in = 0;
     return 0;
 }
 
@@ -732,6 +735,7 @@ int prot_fill(struct protstream *s)
 
     s->cnt--;		/* we return the first char */
     s->can_unget = 1;
+    s->bytes_in++;
     return *s->ptr++;
 }
 
@@ -1130,6 +1134,7 @@ int prot_write(struct protstream *s, const char *buf, unsigned len)
     memcpy(s->ptr, buf, len);
     s->ptr += len;
     s->cnt -= len;
+    s->bytes_out += len;
     if (s->error || s->eof) return EOF;
 
     assert(s->cnt > 0);
@@ -1315,6 +1320,7 @@ int prot_read(struct protstream *s, char *buf, unsigned size)
     s->ptr += size;
     s->cnt -= size;
     s->can_unget += size;
+    s->bytes_in += size;  /* prot_fill added the 1 already */
     return size;
 }
 
@@ -1496,6 +1502,7 @@ char *prot_fgets(char *buf, unsigned size, struct protstream *s)
     while (size && (c = prot_getc(s)) != EOF) {
 	size--;
 	*p++ = c;
+        s->bytes_in++;
 	if (c == '\n') break;
     }
     if (p == buf) return 0;
@@ -1611,6 +1618,7 @@ int prot_getc(struct protstream *s)
     if (s->cnt > 0) {
 	--s->cnt;
 	s->can_unget++;
+	s->bytes_in++;
 	return *(s->ptr)++;
     }
 
@@ -1626,6 +1634,7 @@ int prot_ungetc(int c, struct protstream *s)
 
     s->cnt++;
     s->can_unget--;
+    s->bytes_in--;
     *--(s->ptr) = c;
 
     return c;
@@ -1638,6 +1647,7 @@ int prot_putc(int c, struct protstream *s)
 
     *s->ptr++ = c;
 
+    s->bytes_out++;
     if (--s->cnt == 0)
 	return prot_flush_internal(s,0);
 

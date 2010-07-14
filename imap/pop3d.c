@@ -129,6 +129,9 @@ struct protstream *popd_in = NULL;
 static int popd_logfd = -1;
 unsigned popd_exists = 0;
 unsigned popd_login_time;
+int count_retr = 0;
+int count_top = 0;
+int count_dele = 0;
 struct msg {
     unsigned uid;
     unsigned recno;
@@ -325,7 +328,16 @@ static struct sasl_callback mysasl_cb[] = {
 
 static void popd_reset(void)
 {
+    int bytes_in = 0;
+    int bytes_out = 0;
+
     proc_cleanup();
+
+    syslog(LOG_NOTICE, "counts: retr=<%d> top=<%d> dele=<%d>",
+                       count_retr, count_top, count_dele);
+    count_retr = 0;
+    count_top = 0;
+    count_dele = 0;
 
     /* close local mailbox */
     if (popd_mailbox)
@@ -341,14 +353,19 @@ static void popd_reset(void)
     if (popd_in) {
 	prot_NONBLOCK(popd_in);
 	prot_fill(popd_in);
-	
+	bytes_in = prot_bytes_in(popd_in);
 	prot_free(popd_in);
     }
 
     if (popd_out) {
 	prot_flush(popd_out);
+	bytes_out = prot_bytes_out(popd_out);
 	prot_free(popd_out);
     }
+
+    if (config_auditlog)
+	syslog(LOG_NOTICE, "auditlog: traffic sessionid=<%s> bytes_in=<%d> bytes_out=<%d>", 
+			   session_id(), bytes_in, bytes_out);
     
     popd_in = popd_out = NULL;
 
@@ -497,6 +514,10 @@ int service_main(int argc __attribute__((unused)),
     popd_in = prot_new(0, 0);
     popd_out = prot_new(1, 1);
 
+    count_retr = 0;
+    count_top = 0;
+    count_dele = 0;
+
     /* Find out name of client host */
     salen = sizeof(popd_remoteaddr);
     if (getpeername(0, (struct sockaddr *)&popd_remoteaddr, &salen) == 0 &&
@@ -613,6 +634,9 @@ void usage(void)
  */
 void shut_down(int code)
 {
+    int bytes_in = 0;
+    int bytes_out = 0;
+
     proc_cleanup();
 
     /* close local mailbox */
@@ -628,6 +652,9 @@ void shut_down(int code)
 	backend_disconnect(backend);
 	free(backend);
     }
+
+    syslog(LOG_NOTICE, "counts: retr=<%d> top=<%d> dele=<%d>",
+                       count_retr, count_top, count_dele);
 
     sync_log_done();
 
@@ -648,13 +675,19 @@ void shut_down(int code)
     if (popd_in) {
 	prot_NONBLOCK(popd_in);
 	prot_fill(popd_in);
+	bytes_in = prot_bytes_in(popd_in);
 	prot_free(popd_in);
     }
 
     if (popd_out) {
 	prot_flush(popd_out);
+	bytes_out = prot_bytes_out(popd_out);
 	prot_free(popd_out);
     }
+
+    if (config_auditlog)
+	syslog(LOG_NOTICE, "auditlog: traffic sessionid=<%s> bytes_in=<%d> bytes_out=<%d>", 
+			   session_id(), bytes_in, bytes_out);
 
 #ifdef HAVE_SSL
     tls_shutdown_serverengine();
@@ -995,6 +1028,7 @@ done:
 		if (msgno) {
 		    blat(msgno, -1);
 		    popd_msg[msgno].seen = 1;
+		    count_retr++;
 		}
 	    }
 	}
@@ -1009,6 +1043,7 @@ done:
 		if (msgno) {
 		    popd_msg[msgno].deleted = 1;
 		    prot_printf(popd_out, "+OK message deleted\r\n");
+		    count_dele++;
 		}
 	    }
 	}
@@ -1061,6 +1096,7 @@ done:
 			prot_printf(popd_out, "-ERR Invalid number of lines\r\n");
 		    else
 			blat(msgno, lines);
+		    count_top++;
 		}
 	    }
 	}

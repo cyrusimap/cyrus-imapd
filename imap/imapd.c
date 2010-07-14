@@ -589,6 +589,8 @@ int mlookup(const char *tag, const char *ext_name,
 static void imapd_reset(void)
 {
     int i;
+    int bytes_in = 0;
+    int bytes_out = 0;
     
     proc_cleanup();
 
@@ -615,16 +617,20 @@ static void imapd_reset(void)
 	/* Flush the incoming buffer */
 	prot_NONBLOCK(imapd_in);
 	prot_fill(imapd_in);
-
+	bytes_in = prot_bytes_in(imapd_in);
 	prot_free(imapd_in);
     }
 
     if (imapd_out) {
 	/* Flush the outgoing buffer */
 	prot_flush(imapd_out);
-
+	bytes_out = prot_bytes_out(imapd_out);
 	prot_free(imapd_out);
     }
+
+    if (config_auditlog)
+	syslog(LOG_NOTICE, "auditlog: traffic sessionid=<%s> bytes_in=<%d> bytes_out=<%d>", 
+			   session_id(), bytes_in, bytes_out);
     
     imapd_in = imapd_out = NULL;
 
@@ -925,6 +931,8 @@ void shut_down(int code) __attribute__((noreturn));
 void shut_down(int code)
 {
     int i;
+    int bytes_in = 0;
+    int bytes_out = 0;
 
     proc_cleanup();
 
@@ -968,18 +976,23 @@ void shut_down(int code)
 	/* Flush the incoming buffer */
 	prot_NONBLOCK(imapd_in);
 	prot_fill(imapd_in);
-	
+	bytes_in = prot_bytes_in(imapd_in);
 	prot_free(imapd_in);
     }
     
     if (imapd_out) {
 	/* Flush the outgoing buffer */
 	prot_flush(imapd_out);
+	bytes_out = prot_bytes_out(imapd_out);
 	prot_free(imapd_out);
 	
 	/* one less active connection */
 	snmp_increment(ACTIVE_CONNECTIONS, -1);
     }
+
+    if (config_auditlog)
+	syslog(LOG_NOTICE, "auditlog: traffic sessionid=<%s> bytes_in=<%d> bytes_out=<%d>", 
+			   session_id(), bytes_in, bytes_out);
 
     if (protin) protgroup_free(protin);
 

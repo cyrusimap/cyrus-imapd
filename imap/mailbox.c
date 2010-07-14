@@ -975,6 +975,10 @@ void mailbox_close(struct mailbox **mailboxptr)
 	    fname = mailbox_message_fname(mailbox, uid);
 	    /* XXX - log error if unlink fails */
 	    unlink(fname);
+	    if (config_auditlog)
+		syslog(LOG_NOTICE, "auditlog: unlink sessionid=<%s> "
+		       "mailbox=<%s> uniqueid=<%s> uid=<%lu>",
+			session_id(), mailbox->name, mailbox->uniqueid, uid);
 	}
 	mailbox->unlink.num = 0;
     }
@@ -1992,6 +1996,12 @@ int mailbox_rewrite_index_record(struct mailbox *mailbox,
 	if (!mailbox->i.first_expunged ||
 	    mailbox->i.first_expunged > record->last_updated)
 	    mailbox->i.first_expunged = record->last_updated;
+
+	if (config_auditlog)
+	    syslog(LOG_NOTICE, "auditlog: expunge sessionid=<%s> "
+		   "mailbox=<%s> uniqueid=<%s> uid=<%lu> guid=<%s>",
+		session_id(), mailbox->name, mailbox->uniqueid,
+		record->uid, message_guid_encode(&record->guid));
     }
     
     /* unlink handling */
@@ -2002,8 +2012,8 @@ int mailbox_rewrite_index_record(struct mailbox *mailbox,
 	if (config_auditlog)
 	    syslog(LOG_NOTICE, "auditlog: unlink sessionid=<%s> "
 		   "mailbox=<%s> uniqueid=<%s> uid=<%lu> guid=<%s>",
-		session_id(), mailbox->name, mailbox->uniqueid, record->uid,
-		message_guid_encode(&record->guid));
+		session_id(), mailbox->name, mailbox->uniqueid,
+		record->uid, message_guid_encode(&record->guid));
     }
 
     return 0;
@@ -2080,6 +2090,11 @@ int mailbox_append_index_record(struct mailbox *mailbox,
 		    &mailbox->index_len, mailbox->index_size,
 		    "index", mailbox->name);
     }
+
+    if (config_auditlog)
+	syslog(LOG_NOTICE, "auditlog: append sessionid=<%s> mailbox=<%s> uniqueid=<%s> uid=<%lu> guid=<%s>",
+	    session_id(), mailbox->name, mailbox->uniqueid, record->uid,
+	    message_guid_encode(&record->guid));
 
     return 0;
 }

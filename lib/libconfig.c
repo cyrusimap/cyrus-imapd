@@ -80,6 +80,7 @@ const char *config_ident = NULL;         /* the service name */
 int config_hashimapspool;	  /* f */
 enum enum_value config_virtdomains;	          /* f */
 enum enum_value config_mupdate_config;	/* IMAP_ENUM_MUPDATE_CONFIG_STANDARD */
+int config_auditlog;
 int config_maxword;
 int config_maxquoted;
 int config_qosmarking;
@@ -321,6 +322,9 @@ void config_read(const char *alt_config)
     /* are we supporting virtual domains?  */
     config_virtdomains = config_getenum(IMAPOPT_VIRTDOMAINS);
     config_defdomain = config_getstring(IMAPOPT_DEFAULTDOMAIN);
+
+    /* are we auditlogging */
+    config_auditlog = config_getswitch(IMAPOPT_AUDITLOG);
 
     /* look up the hostname and info we should present to the user */
     config_servername = config_getstring(IMAPOPT_SERVERNAME);

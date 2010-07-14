@@ -211,6 +211,11 @@ server
 Blank lines and lines beginning with ``#'' are ignored.
 */
 
+{ "auditlog", 0, SWITCH }
+/* Should cyrus output log entries for every action taken on a message
+   file or mailboxes list entry?  It's noisy so disabled by default, but
+   can be very useful for tracking down what happened if things look strange */
+
 { "auth_mech", "unix", STRINGLIST("unix", "pts", "krb", "krb5")}
 /* The authorization mechanism to use. */
 
