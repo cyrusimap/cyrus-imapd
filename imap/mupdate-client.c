@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mupdate-client.c,v 1.62 2010/01/06 17:01:37 murch Exp $
+ * $Id: mupdate-client.c,v 1.63 2010/07/23 19:25:39 wescraig Exp $
  */
 
 #include <config.h>
@@ -137,7 +137,7 @@ int mupdate_connect(const char *server,
     if (local_cbs) free_callbacks(cbs);
 
     if (!h->conn) {
-        syslog(LOG_ERR, "mupdate_connect failed: %s", status ? status : "unknown error");
+        syslog(LOG_ERR, "mupdate_connect failed: %s", status ? status : "no auth status");
 	return MUPDATE_NOCONN;
     }
     
