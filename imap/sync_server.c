@@ -511,6 +511,7 @@ EXPORTED void fatal(const char* s, int code)
 	prot_flush(sync_out);
     }
     syslog(LOG_ERR, "Fatal error: %s", s);
+    abort();
     shut_down(code);
 }
 
