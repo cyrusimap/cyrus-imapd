@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mboxlist.c,v 1.274 2010/05/20 20:18:13 wescraig Exp $
+ * $Id: mboxlist.c,v 1.275 2010/07/23 19:19:03 wescraig Exp $
  */
 
 #include <config.h>
@@ -1761,7 +1761,7 @@ int mboxlist_setacl(const char *name, const char *identifier,
 	r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
 	if(r) {
 	    syslog(LOG_ERR,
-		   "cannot connect to mupdate server for reservation on '%s'",
+		   "cannot connect to mupdate server for setacl on '%s'",
 		   name);
 	} else {
 	    r = mupdate_activate(mupdate_h, name, buf, newacl);
@@ -1896,7 +1896,7 @@ mboxlist_sync_setacls(char *name, char *newacl)
 	r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
 	if(r) {
 	    syslog(LOG_ERR,
-		   "cannot connect to mupdate server for reservation on '%s'",
+		   "cannot connect to mupdate server for syncacl on '%s'",
 		   name);
 	} else {
 	    r = mupdate_activate(mupdate_h, name, buf, newacl);
