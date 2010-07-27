@@ -2009,6 +2009,19 @@ void cmdloop()
 			 (havepartition ? arg3.s : NULL));
 	    /*	snmp_increment(XFER_COUNT, 1);*/
 	    }
+	    else if (!strcmp(cmd.s, "Xlist")) {
+		struct listargs listargs;
+
+		if (c != ' ') goto missingargs;
+
+		memset(&listargs, 0, sizeof(struct listargs));
+		listargs.cmd = LIST_CMD_XLIST;
+		listargs.ret = LIST_RET_CHILDREN;
+		getlistargs(tag.s, &listargs);
+		if (listargs.pat) cmd_list(tag.s, &listargs);
+
+		snmp_increment(LIST_COUNT, 1);
+	    }
 	    else goto badcmd;
 	    break;
 
@@ -9433,6 +9446,60 @@ static int set_haschildren(char *name, int matchlen,
     return 0;
 }
 
+
+struct xlist_rock {
+    const char *mboxname;
+    const char *sep;
+};
+
+static void xlist_check(const char *key, const char *val, void *rock)
+{
+    struct xlist_rock *r = (struct xlist_rock *)rock;
+    char *flag;
+
+    if (strncmp(key, "xlist-", 6))
+	return;
+
+    if (strcmp(val, r->mboxname))
+	return;
+
+    flag = xstrdup(key + 6);
+    lcase(flag);
+    flag[0] = toupper((unsigned char)flag[0]);
+    prot_printf(imapd_out, "%s\\%s", r->sep, flag);
+    free(flag);
+
+    r->sep = " ";
+}
+
+static void xlist_flags(const char *mboxname, char *sep)
+{
+    char inboxname[MAX_MAILBOX_PATH+1];
+    int inboxlen;
+
+    (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, "INBOX",
+					   imapd_userid, inboxname);
+    inboxlen = strlen(inboxname);
+
+    /* doesn't match inbox, not xlistable */
+    if (strncmp(mboxname, inboxname, inboxlen))
+	return;
+
+    /* inbox */
+    if (mboxname[inboxlen] == '\0') {
+	prot_printf(imapd_out, "%s\\Inbox", sep);
+    }
+    /* subdir */
+    else if (mboxname[inboxlen] == '.') {
+	struct xlist_rock rock;
+	rock.sep = sep;
+	rock.mboxname = mboxname + inboxlen + 1;
+	config_foreachoverflowstring(xlist_check, &rock);
+    }
+    /* otherwise it's actually another user who matches for
+     * the substr.  Ok to just print nothing */
+}
+
 /* Print LIST or LSUB untagged response */
 static void list_response(char *name, int attributes,
 			  struct listargs *listargs)
@@ -9442,6 +9509,7 @@ static void list_response(char *name, int attributes,
     int r;
     char mboxname[MAX_MAILBOX_PATH+1];
     char *server, *sep;
+    const char *cmd;
     struct mboxlist_entry mbentry;
 
     if (!name) return;
@@ -9568,21 +9636,34 @@ static void list_response(char *name, int attributes,
 	    attributes &= ~MBOX_ATTRIBUTE_NOSELECT;
     }
 
-    prot_printf(imapd_out, "* %s (",
-		(listargs->cmd & LIST_CMD_LSUB) ? "LSUB" : "LIST");
+    switch (listargs->cmd) {
+    case LIST_CMD_LSUB:
+	cmd = "LSUB";
+	break;
+    case LIST_CMD_XLIST:
+	cmd = "XLIST";
+	break;
+    default:
+	cmd = "LIST";
+	break;
+    }
+    prot_printf(imapd_out, "* %s (", cmd);
     for (sep = "", attr = mbox_name_attributes; attr->id; attr++) {
 	if (attributes & attr->flag) {
 	    prot_printf(imapd_out, "%s%s", sep, attr->id);
 	    sep = " ";
 	}
     }
+
+    (*imapd_namespace.mboxname_toexternal)(&imapd_namespace, name,
+            imapd_userid, mboxname);
+
+    if (listargs->cmd == LIST_CMD_XLIST)
+	xlist_flags(internal_name, sep);
     prot_printf(imapd_out, ") ");
 
     prot_printf(imapd_out, "\"%c\" ", imapd_namespace.hier_sep);
  
-    (*imapd_namespace.mboxname_toexternal)(&imapd_namespace, name,
-            imapd_userid, mboxname);
-
     prot_printastring(imapd_out, mboxname);
 
     if (listargs->cmd & LIST_CMD_EXTENDED &&

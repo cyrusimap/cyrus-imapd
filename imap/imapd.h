@@ -256,6 +256,7 @@ enum {
     LIST_CMD_LIST = 0,
     LIST_CMD_LSUB,
     LIST_CMD_EXTENDED,
+    LIST_CMD_XLIST,
 };
 
 /* Bitmask for List selection options */
