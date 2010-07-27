@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mupdate.c,v 1.113 2010/01/06 17:01:38 murch Exp $
+ * $Id: mupdate.c,v 1.114 2010/07/27 19:54:06 wescraig Exp $
  */
 
 #include <config.h>
@@ -737,11 +737,6 @@ mupdate_docmd_result_t docmd(struct conn *c)
     ch = getword(c->pin, &(c->tag));
     if (ch == EOF) goto lost_conn;
     
-    /* send out any updates we have pending */
-    if (c->streaming) {
-	sendupdates(c, 0); /* don't flush pout though */
-    }
-    
     if (ch != ' ') {
 	prot_printf(c->pout, "* BAD \"Need command\"\r\n");
 	eatline(c->pin, ch);
@@ -1175,7 +1170,7 @@ static void *thread_main(void *rock __attribute__((unused)))
     pthread_mutex_unlock(&worker_count_mutex); /* UNLOCK */
     
     /* This is a big infinite loop */
-    while(1) {
+    while (1) {
 	send_a_banner = do_a_command = 0;
 	
 	pthread_mutex_lock(&idle_worker_mutex);
@@ -1194,7 +1189,7 @@ static void *thread_main(void *rock __attribute__((unused)))
 	 * kill off this thread.  Ideally this is a FILO queue */
 	pthread_mutex_lock(&listener_mutex); /* LOCK */
 	ret = 0;
-	while(listener_lock && ret != ETIMEDOUT) {
+	while (listener_lock && ret != ETIMEDOUT) {
 	    gettimeofday(&now, NULL);
 	    timeout.tv_sec = now.tv_sec + 60;
 	    timeout.tv_nsec = now.tv_usec * 1000;
@@ -1202,15 +1197,15 @@ static void *thread_main(void *rock __attribute__((unused)))
 					 &listener_mutex,
 					 &timeout);
 	}
-	if(!ret) {
+	if (!ret) {
 	    /* Set listener lock until we decide what to do */
 	    listener_lock = 1;
 	}
 	pthread_mutex_unlock(&listener_mutex); /* UNLOCK */
 
-	if(ret == ETIMEDOUT) {
+	if (ret == ETIMEDOUT) {
 	    pthread_mutex_lock(&idle_worker_mutex); /* LOCK */
-	    if(idle_worker_count <= config_getint(IMAPOPT_MUPDATE_WORKERS_MINSPARE)) {
+	    if (idle_worker_count <= config_getint(IMAPOPT_MUPDATE_WORKERS_MINSPARE)) {
 		pthread_mutex_unlock(&idle_worker_mutex); /* UNLOCK */
 		/* below number of spare workers, try to get the lock again */
 		goto retry_lock;
@@ -1230,7 +1225,7 @@ static void *thread_main(void *rock __attribute__((unused)))
 	/* Check if we are ready for connections, if not, wait */
 	pthread_mutex_lock(&ready_for_connections_mutex); /* LOCK */
 	/* are we ready to take connections? */
-	while(!ready_for_connections) {
+	while (!ready_for_connections) {
 	    pthread_cond_wait(&ready_for_connections_cond,
 			      &ready_for_connections_mutex);
 	}
@@ -1247,7 +1242,7 @@ static void *thread_main(void *rock __attribute__((unused)))
 	
 	/* Build list of idle protstreams */
 	pthread_mutex_lock(&idle_connlist_mutex); /* LOCK */
-	for(C=idle_connlist; C; C=C->next_idle) {
+	for (C=idle_connlist; C; C=C->next_idle) {
 	    assert(C->idle);
 
 	    protgroup_insert(protin, C->pin);
@@ -1255,54 +1250,28 @@ static void *thread_main(void *rock __attribute__((unused)))
 	pthread_mutex_unlock(&idle_connlist_mutex); /* UNLOCK */
 	
 	/* Select on Idle Conns + conn_pipe */
-	if(prot_select(protin, conn_pipe[0],
+	if (prot_select(protin, conn_pipe[0],
 		       &protout, &connflag, NULL) == -1) {
 	    syslog(LOG_ERR, "prot_select() failed in thread_main: %m");
 	    fatal("prot_select() failed in thread_main", EC_TEMPFAIL);
 	}
 
-	/* Decrement Idle Worker Count */
-	pthread_mutex_lock(&worker_count_mutex); /* LOCK */
+	/* we've got work to do */
 	pthread_mutex_lock(&idle_worker_mutex); /* LOCK */
 	idle_worker_count--;
-
-	need_workers = config_getint(IMAPOPT_MUPDATE_WORKERS_MINSPARE)
-	                - idle_worker_count;
-
-	if(need_workers > 0) {
-	    too_many = (need_workers + worker_count) - 
-		config_getint(IMAPOPT_MUPDATE_WORKERS_MAX);
-	    if (too_many > 0) need_workers -= too_many;
-	}
-	
-	/* Do we need a new worker (or two, or three...)?
-	 * (are we allowed to create one?) */
-	while(need_workers > 0) {
-	    pthread_t t;
-	    int r = pthread_create(&t, NULL, &thread_main, NULL);
-	    if(r == 0) {
-		pthread_detach(t);
-	    } else {
-		syslog(LOG_ERR,
-		       "could not start a new worker thread (not fatal)");
-	    }
-	    /* Even if we fail to create the new thread, keep going */
-	    need_workers--;
-	}
 	pthread_mutex_unlock(&idle_worker_mutex); /* UNLOCK */
-	pthread_mutex_unlock(&worker_count_mutex); /* UNLOCK */
 	 
 	/* If we've been signaled to be unready, drop all current connections
 	 * in the idle list */
 	pthread_mutex_lock(&ready_for_connections_mutex); /* LOCK */
-	if(!ready_for_connections) {
+	if (!ready_for_connections) {
 	    pthread_mutex_unlock(&ready_for_connections_mutex); /* UNLOCK */
 	    /* Free all connections on idle_connlist.  Note that
 	     * any connection not currently on the idle_connlist will
 	     * instead be freed when they drop out of their docmd() below */
 
 	    pthread_mutex_lock(&idle_connlist_mutex); /* LOCK */
-	    for(C=idle_connlist; C; C = ni) {
+	    for (C=idle_connlist; C; C = ni) {
 		ni = C->next_idle;
 
 		prot_printf(C->pout,
@@ -1318,9 +1287,9 @@ static void *thread_main(void *rock __attribute__((unused)))
 	}
 	pthread_mutex_unlock(&ready_for_connections_mutex); /* UNLOCK */
 	
-	if(connflag) {
+	if (connflag) {
 	    /* read the fd from the pipe, if needed */
-	    if(read(conn_pipe[0], &new_fd, sizeof(new_fd)) == -1) {
+	    if (read(conn_pipe[0], &new_fd, sizeof(new_fd)) == -1) {
 		syslog(LOG_CRIT,
 		       "read from conn_pipe for new connection failed: %m");
 		fatal("conn_pipe read failed", EC_TEMPFAIL);
@@ -1329,29 +1298,30 @@ static void *thread_main(void *rock __attribute__((unused)))
 	    new_fd = NO_NEW_CONNECTION;
 	}
 	
-	if(new_fd != NO_NEW_CONNECTION) {
+	if (new_fd != NO_NEW_CONNECTION) {
 	    /* new_fd indicates a new connection */
 	    currConn = conn_new(new_fd);
-	    if(currConn)
+	    if (currConn)
 		send_a_banner = 1;
-	} else if(protout) {
+	} else if (protout) {
 	    /* Handle existing connection, we'll need to pull it off
 	     * the idle_connlist */
 	    struct protstream *ptmp;
 	    struct conn **prev;
 
 	    pthread_mutex_lock(&idle_connlist_mutex); /* LOCK */
-	    prev = &(idle_connlist);
 
 	    /* Grab the first connection out of the ready set, and use it */
 	    ptmp = protgroup_getelement(protout, 0);
 	    assert(ptmp);
 	    currConn = ptmp->userdata;
 	    assert(currConn);
+	    assert(currConn->idle);
 
 	    currConn->idle = 0;
-	    for(C=idle_connlist; C; prev = &(C->next_idle), C=C->next_idle) {
-		if(C == currConn) {
+	    for (C=idle_connlist, prev = &(idle_connlist); C;
+		    prev = &(C->next_idle), C=C->next_idle) {
+		if (C == currConn) {
 		    *prev = C->next_idle;
 		    C->next_idle = NULL;
 		    break;
@@ -1360,6 +1330,40 @@ static void *thread_main(void *rock __attribute__((unused)))
 	    pthread_mutex_unlock(&idle_connlist_mutex); /* UNLOCK */
 
 	    do_a_command = 1;	    
+	}
+
+	/*
+	 * If this worker will do any real work, we'll want to make sure
+	 * there are sufficient additional workers while we're busy.
+	 */
+	if (send_a_banner || do_a_command) {
+	    pthread_mutex_lock(&idle_worker_mutex); /* LOCK */
+	    need_workers = config_getint(IMAPOPT_MUPDATE_WORKERS_MINSPARE)
+			    - idle_worker_count;
+	    pthread_mutex_unlock(&idle_worker_mutex); /* UNLOCK */
+
+	    pthread_mutex_lock(&worker_count_mutex); /* LOCK */
+	    if (need_workers > 0) {
+		too_many = (need_workers + worker_count) - 
+		    config_getint(IMAPOPT_MUPDATE_WORKERS_MAX);
+		if (too_many > 0) need_workers -= too_many;
+	    }
+	    pthread_mutex_unlock(&worker_count_mutex); /* UNLOCK */
+	    
+	    /* Do we need a new worker (or two, or three...)?
+	     * (are we allowed to create one?) */
+	    while (need_workers > 0) {
+		pthread_t t;
+		int r = pthread_create(&t, NULL, &thread_main, NULL);
+		if (r == 0) {
+		    pthread_detach(t);
+		} else {
+		    syslog(LOG_ERR,
+			   "could not start a new worker thread (not fatal)");
+		}
+		/* Even if we fail to create the new thread, keep going */
+		need_workers--;
+	    }
 	}
 
     nextlistener:
@@ -1371,12 +1375,12 @@ static void *thread_main(void *rock __attribute__((unused)))
 	pthread_mutex_unlock(&listener_mutex);
 
 	/* Do work in this thread, if needed */
-	if(send_a_banner) {
+	if (send_a_banner) {
 	    dobanner(currConn);
-	} else if(do_a_command) {
+	} else if (do_a_command) {
 	    assert(currConn);
 	    
-	    if(docmd(currConn) == DOCMD_CONN_FINISHED) {
+	    if (docmd(currConn) == DOCMD_CONN_FINISHED) {
 		conn_free(currConn);
 		/* continue to top of loop here since we won't be adding
 		 * this back to the idle list */
@@ -1385,7 +1389,7 @@ static void *thread_main(void *rock __attribute__((unused)))
 
 	    /* Are we allowed to continue serving data? */
 	    pthread_mutex_lock(&ready_for_connections_mutex); /* LOCK */
-	    if(!ready_for_connections) {
+	    if (!ready_for_connections) {
 		pthread_mutex_unlock(&ready_for_connections_mutex); /* UNLOCK */
 		prot_printf(C->pout,
 			    "* BYE \"no longer ready for connections\"\r\n");
@@ -1397,7 +1401,7 @@ static void *thread_main(void *rock __attribute__((unused)))
 	    pthread_mutex_unlock(&ready_for_connections_mutex); /* UNLOCK */
 	} /* done handling command */
 
-	if(send_a_banner || do_a_command) {
+	if (send_a_banner || do_a_command) {
 	    /* We did work in this thread, so we need to [re-]add the
 	     * connection to the idle list and signal the current listener */
 
@@ -1409,7 +1413,7 @@ static void *thread_main(void *rock __attribute__((unused)))
 
 	    /* Signal to our caller that we should add something
 	     * to select() on, since this connection is ready again */
-	    if(write(conn_pipe[1], &NO_NEW_CONNECTION,
+	    if (write(conn_pipe[1], &NO_NEW_CONNECTION,
 		     sizeof(NO_NEW_CONNECTION)) == -1) {
 		fatal("write to conn_pipe to signal docmd done failed",
 		      EC_TEMPFAIL);
