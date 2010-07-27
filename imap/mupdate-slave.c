@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mupdate-slave.c,v 1.32 2010/01/06 17:01:37 murch Exp $
+ * $Id: mupdate-slave.c,v 1.33 2010/07/27 19:22:54 wescraig Exp $
  */
 
 #include <config.h>
@@ -123,7 +123,8 @@ static int open_kick_socket()
  * the array fd_list (atleast max_fds big), and the number of connections
  * into num_fds */
 static int get_kick_fds(int kicksock,
-			int *fd_list, int *num_fds, int max_fds) {
+			int *fd_list, int *num_fds, int max_fds)
+{
     fd_set read_set;
     int highest_fd = kicksock + 1;
     struct timeval tv;
@@ -136,14 +137,14 @@ static int get_kick_fds(int kicksock,
 
     *num_fds = 0;
 
-    for(*num_fds = 0; *num_fds<max_fds; (*num_fds)++) {
+    for (*num_fds = 0; *num_fds < max_fds; (*num_fds)++) {
         int gotdata;
 	fd_set rset;
 
 	rset = read_set;
 	gotdata = select(highest_fd, &rset, NULL, NULL, &tv);
 
-	if(gotdata == -1) {
+	if (gotdata == -1) {
 	  /* Select Error! */
 	  syslog(LOG_ERR, "kicksock select failed");
 	  return -1;
@@ -151,8 +152,8 @@ static int get_kick_fds(int kicksock,
 	  struct sockaddr_un clientaddr;
 	  int len = sizeof(clientaddr);
 
-	  fd_list[*num_fds] =
-	      accept(kicksock, (struct sockaddr *)&clientaddr, (socklen_t *)&len);
+	  fd_list[*num_fds] = accept(kicksock,
+		(struct sockaddr *)&clientaddr, (socklen_t *)&len);
 	  if (fd_list[*num_fds] == -1) {
 	    syslog(LOG_WARNING, "kicksock accept() failed: %m %d", kicksock);
 	    return -1;
@@ -179,6 +180,7 @@ static void mupdate_listen(mupdate_handle *handle, int pingtimeout)
     struct mbent_queue remote_boxes;
     struct mpool *pool;
     int r;
+    enum mupdate_cmd_response response;
     
     if (!handle || !handle->saslcompleted) return;
 
@@ -213,7 +215,7 @@ static void mupdate_listen(mupdate_handle *handle, int pingtimeout)
     FD_SET(kicksock, &read_set);
 
     /* Now just listen to the rest of the updates */
-    while(1) {
+    while (1) {
 	struct timeval tv;
 
 	tv.tv_sec = pingtimeout;
@@ -225,50 +227,62 @@ static void mupdate_listen(mupdate_handle *handle, int pingtimeout)
 
 	gotdata = select(highest_fd, &rset, NULL, NULL, &tv);
 
-	if(gotdata == -1) {
+	if (gotdata == -1) {
 	    /* Oops? */
 	    syslog(LOG_ERR, "select failed");
 	    break;
-	} else if(gotdata != 0) {
+	} else if (gotdata != 0) {
 	    if (FD_ISSET(handle->conn->sock, &rset)) {
 		/* If there is a fatal error, die, other errors ignore */
-		if (mupdate_scarf(handle, cmd_change, NULL, 
-				  waiting_for_noop, NULL) != 0) {
+		response = MUPDATE_NONE;
+		if ((r = mupdate_scarf(handle, cmd_change, NULL, 
+				  waiting_for_noop, &response)) != 0) {
+		    syslog(LOG_ERR, "mupdate_scarf: %d", r);
 		    break;
 		}
 	    } 
 	    
 	    /* If we were waiting on a noop, we no longer are.
 	     * If we have been kicked, tell them we're done now */
-	    if(waiting_for_noop) {
+	    if (waiting_for_noop) {
+		if (response != MUPDATE_OK) {
+		    syslog(LOG_ERR, "update/noop sync error %d", response);
+		    break;
+		}
 		waiting_for_noop = 0;
 
-		for(;num_kick_fds;num_kick_fds--) {
+		for (; num_kick_fds; num_kick_fds--) {
 		    if (write(kick_fds[num_kick_fds-1], "ok", 2) < 0) {
 			syslog(LOG_WARNING,
 			       "can't write to IPC socket (ignoring)");
 		    }
-		    close(kick_fds[num_kick_fds-1]);
+		    (void)close(kick_fds[num_kick_fds-1]);
 		}
 	    }
 	    
-	    if (FD_ISSET(kicksock, &rset)) {
+	    if (waiting_for_noop == 0 && FD_ISSET(kicksock, &rset)) {
 	        /* We were kicked--collect outstanding kicks! */
-	        if(get_kick_fds(kicksock,
+	        if (get_kick_fds(kicksock,
 				kick_fds, &num_kick_fds, KICK_FDS_LEN)) {
 		    /* Nonzero return code -- Error */
 		    break;
 		}
 
 		prot_printf(handle->conn->out, "N%u NOOP\r\n", handle->tagn++);
-		prot_flush(handle->conn->out);
+		if (prot_flush(handle->conn->out) == EOF) {
+		    syslog(LOG_ERR, "connection to master failed.");
+		    break;
+		}
 		waiting_for_noop = 1;
 	    }
 	} else /* (gotdata == 0) */ {
 	    /* Timeout, send a NOOP */
-	    if(!waiting_for_noop) {
+	    if (!waiting_for_noop) {
 		prot_printf(handle->conn->out, "N%u NOOP\r\n", handle->tagn++);
-		prot_flush(handle->conn->out);
+		if (prot_flush(handle->conn->out) == EOF) {
+		    syslog(LOG_ERR, "connection to master failed.");
+		    break;
+		}
 		waiting_for_noop = 1;
 	    } else {
 		/* We were already waiting on a noop! */
@@ -279,10 +293,11 @@ static void mupdate_listen(mupdate_handle *handle, int pingtimeout)
     } /* Loop */
 
     /* Don't leak the descriptors! */
-    for(;num_kick_fds;num_kick_fds--) {
-      close(kick_fds[num_kick_fds-1]);
+    for (; num_kick_fds; num_kick_fds--) {
+	(void)close(kick_fds[num_kick_fds-1]);
     }
-    close(kicksock);
+    (void)close(kicksock);
+    return;
 }
 
 void *mupdate_client_start(void *rock __attribute__((unused)))

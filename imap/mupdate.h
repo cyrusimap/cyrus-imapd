@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: mupdate.h,v 1.21 2010/01/06 17:01:38 murch Exp $
+ * $Id: mupdate.h,v 1.22 2010/07/27 19:22:54 wescraig Exp $
  */
 
 #ifndef INCLUDED_MUPDATE_H
@@ -125,6 +125,7 @@ void mupdate_signal_db_synced(void);
 /* these are used by the slave thread and by the client API */
 
 enum mupdate_cmd_response {
+    MUPDATE_NONE = 1,
     MUPDATE_OK = 0,
     MUPDATE_NO = -1,
     MUPDATE_BAD = -2,
