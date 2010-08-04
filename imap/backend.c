@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: backend.c,v 1.62 2010/05/11 15:21:00 wescraig Exp $
+ * $Id: backend.c,v 1.63 2010/08/04 18:57:36 wescraig Exp $
  */
 
 #include <config.h>
@@ -595,7 +595,7 @@ int backend_ping(struct backend *s)
     char buf[1024];
 
     if (!s || !s->prot->ping_cmd.cmd) return 0;
-    if (!s->sock == -1) return -1; /* Disconnected Socket */
+    if (s->sock == -1) return -1; /* Disconnected Socket */
     
     prot_printf(s->out, "%s\r\n", s->prot->ping_cmd.cmd);
     prot_flush(s->out);
