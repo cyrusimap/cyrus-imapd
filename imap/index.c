@@ -2969,7 +2969,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
     }
 
     /* Open the message file if we're going to need it */
-    if ((fetchitems & (FETCH_HEADER|FETCH_TEXT|FETCH_RFC822)) ||
+    if ((fetchitems & (FETCH_HEADER|FETCH_TEXT|FETCH_SHA1|FETCH_RFC822)) ||
 	fetchargs->cache_atleast > record.cache_version ||
 	fetchargs->binsections || fetchargs->sizesections ||
 	fetchargs->bodysections) {
@@ -2996,6 +2996,12 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
 	prot_printf(state->out, "%cUID %u", sepchar, record.uid);
 	sepchar = ' ';
     }
+    if (fetchitems & FETCH_GUID) {
+	prot_printf(state->out, "%cDIGEST.SHA1 %s", sepchar,
+		    message_guid_encode(&record.guid));
+	sepchar = ' ';
+    }
+
     if (fetchitems & FETCH_INTERNALDATE) {
 	time_t msgdate = record.internaldate;
 	char datebuf[RFC3501_DATETIME_MAX+1];
@@ -3021,6 +3027,26 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
 	r = index_fetchannotations(state, msgno, fetchargs);
 	r = 0;
 	prot_printf(state->out, ")");
+	sepchar = ' ';
+    }
+    if (fetchitems & FETCH_FILESIZE) {
+	if (!msg_base) {
+	    char *fname = mailbox_message_fname(mailbox, im->uid);
+	    struct stat sbuf;
+	    /* Find the size of the message file */
+	    if (stat(fname, &sbuf) == -1)
+		syslog(LOG_ERR, "IOERROR: stat on %s: %m", fname);
+	    else
+		msg_size = sbuf.st_size;
+	}
+	prot_printf(state->out, "%cRFC822.FILESIZE %lu", sepchar,
+		    (long unsigned)msg_size);
+	sepchar = ' ';
+    }
+    if (fetchitems & FETCH_SHA1) {
+	struct message_guid tmpguid;
+	message_guid_generate(&tmpguid, msg_base, msg_size);
+	prot_printf(state->out, "%cRFC822.SHA1 %s", sepchar, message_guid_encode(&tmpguid));
 	sepchar = ' ';
     }
     if (fetchitems & FETCH_ENVELOPE) {
