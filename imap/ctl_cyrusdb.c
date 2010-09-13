@@ -93,7 +93,7 @@ const int config_need_data = 0;
 
 struct cyrusdb {
     const char *name;
-    struct cyrusdb_backend **env;
+    struct cyrusdb_backend **backendptr;
     int archive;
 } dblist[] = {
     { FNAME_MBOXLIST,		&config_mboxlist_db,	1 },
@@ -110,8 +110,11 @@ static int compdb(const void *v1, const void *v2)
 {
     struct cyrusdb *db1 = (struct cyrusdb *) v1;
     struct cyrusdb *db2 = (struct cyrusdb *) v2;
+    struct cyrusdb_backend *b1 = *db1->backendptr;
+    struct cyrusdb_backend *b2 = *db2->backendptr;
 
-    return (db1->env - db2->env);
+    /* compare archive pointers for sort */
+    return (b1->archive - b2->archive);
 }
 
 void usage(void)
@@ -181,6 +184,44 @@ void recover_reserved()
     mboxlist_done();
 }
 
+static const char *dbfname(struct cyrusdb *db)
+{
+    static char buf[MAX_MAILBOX_PATH];
+    snprintf(buf, MAX_MAILBOX_PATH, "%s%s", config_dir, db->name);
+    return buf;
+}
+
+static void check_convert(struct cyrusdb *db, const char *fname)
+{
+    struct cyrusdb_backend *backend = *db->backendptr;
+    struct cyrusdb_backend *oldbe;
+    const char *detectname = cyrusdb_detect(fname);
+    char newfname[MAX_MAILBOX_PATH];
+    char backendbuf[100];
+    char *p;
+
+    /* unable to detect current type, assume all is good */
+    if (!detectname) return;
+
+    /* strip the -nosync from the name if present */
+    strncpy(backendbuf, backend->name, 100);
+    p = strstr(backendbuf, "-nosync");
+    if (p) *p = '\0';
+
+    /* ignore files that are already the right type */
+    if (!strcmp(backendbuf, detectname)) return;
+
+    /* otherwise we need to upgrade! */
+    syslog(LOG_NOTICE, "converting %s from %s to %s",
+	   fname, detectname, backend->name);
+
+    oldbe = cyrusdb_fromname(detectname);
+
+    snprintf(newfname, MAX_MAILBOX_PATH, "%s.NEW", fname);
+    cyrusdb_convert(fname, newfname, oldbe, backend);
+    if (rename(newfname, fname) == -1)
+	syslog(LOG_ERR, "failed to rename upgraded file %s", fname);
+}
 
 int main(int argc, char *argv[])
 {
@@ -253,17 +294,19 @@ int main(int argc, char *argv[])
 
     memset(archive_files, 0, N(dblist) * sizeof(char*));
     for (i = 0, j = 0; dblist[i].name != NULL; i++) {
+	const char *fname = dbfname(&dblist[i]);
+	struct cyrusdb_backend *backend = *dblist[i].backendptr;
+
+	check_convert(&dblist[i], fname);
 
 	/* if we need to archive this db, add it to the list */
 	if (dblist[i].archive) {
-	    archive_files[j] = (char*) xmalloc(strlen(config_dir) +
-					       strlen(dblist[i].name) + 1);
-	    strcpy(archive_files[j], config_dir);
-	    strcat(archive_files[j++], dblist[i].name);
+	    archive_files[j++] = xstrdup(fname);
 	}
 
 	/* deal with each dbenv once */
-	if (dblist[i].env == dblist[i+1].env) continue;
+	if (dblist[i+1].backendptr &&
+	   (*(dblist[i+1].backendptr))->archive == backend->archive) continue;
 
 	r = r2 = 0;
 	switch (op) {
@@ -271,7 +314,7 @@ int main(int argc, char *argv[])
 	    break;
 	    
 	case CHECKPOINT:
-	    r2 = (*(dblist[i].env))->sync();
+	    r2 = backend->sync();
 	    if (r2) {
 		syslog(LOG_ERR, "DBERROR: sync %s: %s", dirname,
 		       cyrusdb_strerror(r2));
@@ -320,8 +363,7 @@ int main(int argc, char *argv[])
 
 	    /* do the archive */
 	    if (r2 == 0)
-		r2 = (*(dblist[i].env))->archive((const char**) archive_files,
-						 backup1);
+		r2 = backend->archive((const char**) archive_files, backup1);
 
 	    if (r2) {
 		syslog(LOG_ERR, "DBERROR: archive %s: %s", dirname,

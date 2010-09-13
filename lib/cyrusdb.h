@@ -194,6 +194,12 @@ extern struct cyrusdb_backend cyrusdb_sql;
 
 extern int cyrusdb_copyfile(const char *srcname, const char *dstname);
 
+extern void cyrusdb_convert(const char *fromfname, const char *tofname,
+			    struct cyrusdb_backend *frombackend,
+			    struct cyrusdb_backend *tobackend);
+
+extern const char *cyrusdb_detect(const char *fname);
+
 /* Start/Stop the backends */
 void cyrusdb_init();
 void cyrusdb_done();
