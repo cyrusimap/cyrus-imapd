@@ -1,8 +1,7 @@
 $Id: README,v 1.5 2003/10/22 18:50:29 rjs3 Exp $
 
 This directory contains support programs for various protection database
-authorization modules (ptloader for AFS PTS groups, and hopefully an ldaploader
-soon).
+authorization modules (ptloader for AFS PTS groups, and LDAP).
 
 This code links against the rest of the cyrus libraries.
 
