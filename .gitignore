@@ -41,12 +41,11 @@ imap/ipurge
 imap/lmtpd
 imap/lmtpstats.c
 imap/lmtpstats.h
-imap/make_md5
-imap/make_sha1
 imap/mbexamine
 imap/mbpath
 imap/mupdate_err.c
 imap/mupdate_err.h
+imap/mupdate
 imap/nntp_err.c
 imap/nntp_err.h
 imap/nntpd
