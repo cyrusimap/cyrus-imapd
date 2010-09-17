@@ -13,7 +13,7 @@ has known security vulnerabilities, and is not supported.
 If you continue to install this software PLEASE be sure to read the
 documentation (located in the doc/ subdirectory).  Many common questions
 can be answered just by carefully following the documentation.
-Please also refer to http://bugzilla.andrew.cmu.edu for any outstanding bugs.
+Please also refer to http://bugzilla.cyrusimap.org for any outstanding bugs.
 
 Note that CMU only provides a source distribution. If you run into
 problems with any binary distribution, please contact the source of
