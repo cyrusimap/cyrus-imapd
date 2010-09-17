@@ -48,7 +48,6 @@ use warnings;
 
 use IO::File;
 use Getopt::Long;
-use Digest::SHA1;
 
 my @maps;
 my %codemap;
@@ -523,9 +522,14 @@ EOF
 sub getsha1 {
     my $file = shift;
     my $fh = IO::File->new($file, 'r') || return "<none>";
-    my $digest = Digest::SHA1->new();
-    $digest->addfile($fh);
-    return $digest->hexdigest();
+    if (eval { require "Digest/SHA1.pm" }) {
+	my $digest = Digest::SHA1->new();
+	$digest->addfile($fh);
+	return $digest->hexdigest();
+    }
+    else {
+	return "(install Digest::SHA1 for checksums)";
+    }
 }
 
 __END__
