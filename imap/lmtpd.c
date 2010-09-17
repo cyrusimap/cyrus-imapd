@@ -458,6 +458,7 @@ static int mlookup(const char *name, char **server, char **aclp, void *tid)
 	    kick_mupdate();
 	    r = mboxlist_lookup(name, &mbentry, tid);
 	}
+	if (r) return r;
 
 	if (aclp) *aclp = mbentry.acl;
 	if (server) {
