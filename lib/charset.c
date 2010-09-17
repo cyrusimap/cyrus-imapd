@@ -94,7 +94,7 @@ struct comp_pat_s {
 };
 
 struct search_state {
-    size_t *starts;
+    ssize_t *starts;
     int max_start;
     int havematch;
     unsigned char *substr;
@@ -1061,7 +1061,8 @@ int charset_searchfile(const char *substr, comp_pat *pat,
     int encoding)
 {
     struct convert_rock *input, *tosearch;
-    int i, res;
+    size_t i;
+    int res;
 
     /* Initialize character set mapping */
     if (charset < 0 || charset >= chartables_num_charsets) 
@@ -1119,7 +1120,7 @@ int charset_extractfile(index_search_text_receiver_t receiver,
 {
     struct convert_rock *input, *tobuffer;
     struct buf *out;
-    int i;
+    size_t i;
 
     /* Initialize character set mapping */
     if (charset < 0 || charset >= chartables_num_charsets) 

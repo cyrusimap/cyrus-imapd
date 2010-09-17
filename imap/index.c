@@ -94,8 +94,7 @@ int index_writeseen(struct index_state *state);
 void index_fetchmsg(struct index_state *state,
 		    const char *msg_base, unsigned long msg_size,
 		    unsigned offset, unsigned size,
-		    unsigned start_octet, unsigned octet_count,
-		    struct protstream *pout);
+		    unsigned start_octet, unsigned octet_count);
 static int index_fetchsection(struct index_state *state, const char *resp,
 			      const char *msg_base, unsigned long msg_size,
 			      char *section,
@@ -119,28 +118,28 @@ static void index_fetchcacheheader(struct index_state *state, struct index_recor
 				   struct strlist *headers, unsigned start_octet, 
 				   unsigned octet_count);
 static void index_listflags(struct index_state *state);
-static void index_fetchflags(struct index_state *state, unsigned msgno);
+static void index_fetchflags(struct index_state *state, uint32_t msgno);
 static int index_search_evaluate(struct index_state *state,
 				 struct searchargs *searchargs,
-				 unsigned msgno, struct mapfile *msgfile);
+				 uint32_t msgno, struct mapfile *msgfile);
 static int index_searchmsg(char *substr, comp_pat *pat,
 			   struct mapfile *msgfile,
 			   int skipheader, const char *cachestr);
 static int index_searchheader(char *name, char *substr, comp_pat *pat,
 			      struct mapfile *msgfile,
 			      int size);
-static int index_searchcacheheader(struct index_state *state, unsigned msgno, char *name, char *substr,
+static int index_searchcacheheader(struct index_state *state, uint32_t msgno, char *name, char *substr,
 				   comp_pat *pat);
 static int _index_search(unsigned **msgno_list, struct index_state *state,
 			 struct searchargs *searchargs,
 			 modseq_t *highestmodseq);
 
-static int index_copysetup(struct index_state *state, unsigned msgno, struct copyargs *copyargs);
-static int index_storeflag(struct index_state *state, unsigned msgno,
+static int index_copysetup(struct index_state *state, uint32_t msgno, struct copyargs *copyargs);
+static int index_storeflag(struct index_state *state, uint32_t msgno,
 			   struct storeargs *storeargs);
-static int index_fetchreply(struct index_state *state, unsigned msgno,
+static int index_fetchreply(struct index_state *state, uint32_t msgno,
 			    struct fetchargs *fetchargs);
-static void index_printflags(struct index_state *state, int msgno, int usinguid);
+static void index_printflags(struct index_state *state, uint32_t msgno, int usinguid);
 static void index_checkflags(struct index_state *state, int dirty);
 static void index_tellchanges(struct index_state *state, int canexpunge, int printuid);
 static char *find_msgid(char *str, char **rem);
@@ -171,7 +170,7 @@ static void index_thread_print(struct index_state *state,
 static void index_thread_ref(struct index_state *state,
 			     unsigned *msgno_list, int nmsg, int usinguid);
 
-static void index_select(struct index_state *state, struct index_init *init);
+static void index_select(struct index_state *state);
 static struct seqset *_index_vanished(struct index_state *state,
 				      struct vanished_params *params);
 static struct seqset *_parse_sequence(struct index_state *state,
@@ -246,12 +245,12 @@ int index_open(const char *name, struct index_init *init,
     index_unlock(state);
 
     if (init && init->select && state->myrights & ACL_READ) {
-	index_select(state, init);
+	index_select(state);
 
 	if (init->vanished.uidvalidity == state->mailbox->i.uidvalidity) {
 	    const char *sequence = init->vanished.sequence;
 	    struct index_map *im;
-	    unsigned msgno;
+	    uint32_t msgno;
 	    struct seqset *seq = _parse_sequence(state, sequence, 1);
 
 	    /* QRESYNC response:
@@ -293,7 +292,7 @@ int index_expunge(struct index_state *state, int usinguid, char *sequence,
 		  int isclose)
 {
     int r;
-    unsigned msgno;
+    uint32_t msgno;
     struct index_map *im;
     struct seqset *seq = NULL;
 
@@ -339,7 +338,7 @@ int index_expunge(struct index_state *state, int usinguid, char *sequence,
 char *index_buildseen(struct index_state *state, const char *oldseenuids)
 {
     struct seqset *outlist;
-    unsigned msgno;
+    uint32_t msgno;
     unsigned oldmax;
     struct index_map *im;
     char *out;
@@ -356,7 +355,7 @@ char *index_buildseen(struct index_state *state, const char *oldseenuids)
     oldmax = seq_lastnum(oldseenuids, NULL);
     if (oldmax > state->last_uid) {
 	struct seqset *seq = seqset_parse(oldseenuids, NULL, oldmax);
-	int uid;
+	uint32_t uid;
 
 	/* for each future UID, copy the state in the old seenuids */
 	for (uid = state->last_uid + 1; uid <= oldmax; uid++)
@@ -483,16 +482,16 @@ static struct seqset *_readseen(struct index_state *state, unsigned *recentuid)
 void index_refresh(struct index_state *state)
 {
     struct mailbox *mailbox = state->mailbox;
-    unsigned recno;
-    unsigned msgno = 1;
-    unsigned firstnotseen = 0;
-    unsigned numrecent = 0;
-    unsigned numunseen = 0;
-    unsigned recentuid;
+    uint32_t recno;
+    uint32_t msgno = 1;
+    uint32_t firstnotseen = 0;
+    uint32_t numrecent = 0;
+    uint32_t numunseen = 0;
+    uint32_t recentuid;
     int havenewrecords = 0;
     struct index_map *im;
     modseq_t delayed_modseq = 0;
-    int need_records;
+    uint32_t need_records;
     struct seqset *seenlist;
 
     if (state->num_records) {
@@ -559,7 +558,7 @@ void index_refresh(struct index_state *state)
 	/* make sure we don't overflow the memory we mapped */
 	if (msgno >= state->mapsize) {
 	    char buf[2048];
-	    sprintf(buf, "Exists wrong %u %u %lu %lu", msgno,
+	    sprintf(buf, "Exists wrong %u %u %u %u", msgno,
 		    state->mapsize, mailbox->i.exists, mailbox->i.num_records);
 	    fatal(buf, EC_IOERR);
 	}
@@ -611,7 +610,7 @@ modseq_t index_highestmodseq(struct index_state *state)
     return state->highestmodseq;
 }
 
-static void index_select(struct index_state *state, struct index_init *init)
+static void index_select(struct index_state *state)
 {
     index_tellexists(state);
 
@@ -621,7 +620,7 @@ static void index_select(struct index_state *state, struct index_init *init)
     if (state->firstnotseen)
 	prot_printf(state->out, "* OK [UNSEEN %u] Ok\r\n", 
 		    state->firstnotseen);
-    prot_printf(state->out, "* OK [UIDVALIDITY %lu] Ok\r\n",
+    prot_printf(state->out, "* OK [UIDVALIDITY %u] Ok\r\n",
 		state->mailbox->i.uidvalidity);
     prot_printf(state->out, "* OK [UIDNEXT %lu] Ok\r\n",
 		state->last_uid + 1);
@@ -697,7 +696,7 @@ static struct seqset *_index_vanished(struct index_state *state,
     struct index_record record;
     struct seqset *outlist;
     struct seqset *seq;
-    unsigned long recno;
+    uint32_t recno;
 
     /* No recently expunged messages */
     if (params->modseq >= state->highestmodseq) return NULL;
@@ -725,7 +724,7 @@ static struct seqset *_index_vanished(struct index_state *state,
 	unsigned prevuid = 0;
 	struct seqset *msgnolist;
 	struct seqset *uidlist;
-	unsigned msgno;
+	uint32_t msgno;
 	unsigned uid;
 
 	recno = 1;
@@ -782,7 +781,7 @@ static struct seqset *_index_vanished(struct index_state *state,
     return outlist;
 }
 
-static int _fetch_setseen(struct index_state *state, int msgno)
+static int _fetch_setseen(struct index_state *state, uint32_t msgno)
 {
     struct index_map *im = &state->map[msgno-1];
     int r;
@@ -832,7 +831,7 @@ int index_fetch(struct index_state *state,
 {
     struct seqset *seq;
     struct seqset *vanishedlist = NULL;
-    unsigned msgno;
+    uint32_t msgno;
     unsigned checkval;
     int r;
     struct index_map *im;
@@ -904,7 +903,7 @@ int index_store(struct index_state *state, char *sequence, int usinguid,
 {
     struct mailbox *mailbox = state->mailbox;
     int i, r = 0;
-    unsigned msgno;
+    uint32_t msgno;
     unsigned checkval;
     int userflag;
     struct seqset *seq;
@@ -969,7 +968,7 @@ static int index_scan_work(const char *s, unsigned long len,
 int index_scan(struct index_state *state, const char *contents)
 {
     unsigned *msgno_list;
-    unsigned msgno;
+    uint32_t msgno;
     struct mapfile msgfile;
     int n = 0;
     int listindex;
@@ -1036,7 +1035,7 @@ static int _index_search(unsigned **msgno_list, struct index_state *state,
 			 struct searchargs *searchargs,
 			 modseq_t *highestmodseq)
 {
-    unsigned msgno;
+    uint32_t msgno;
     struct mapfile msgfile;
     int n = 0;
     int listindex, min;
@@ -1130,7 +1129,7 @@ static int _index_search(unsigned **msgno_list, struct index_state *state,
     return n;
 }
 
-unsigned index_getuid(struct index_state *state, unsigned msgno) {
+unsigned index_getuid(struct index_state *state, uint32_t msgno) {
   return state->map[msgno-1].record.uid;
 }
 
@@ -1436,7 +1435,7 @@ index_copy(struct index_state *state,
     uquota_t totalsize = 0;
     int r;
     struct appendstate appendstate;
-    unsigned msgno, checkval;
+    uint32_t msgno, checkval;
     unsigned long uidvalidity;
     unsigned long startuid, num;
     unsigned baseuid;
@@ -1519,7 +1518,7 @@ index_copy(struct index_state *state,
 /*
  * Helper function to multiappend a message to remote mailbox
  */
-static int index_appendremote(struct index_state *state, unsigned msgno, 
+static int index_appendremote(struct index_state *state, uint32_t msgno, 
 			      struct protstream *pout)
 {
     struct mailbox *mailbox = state->mailbox;
@@ -1575,7 +1574,7 @@ static int index_appendremote(struct index_state *state, unsigned msgno,
     prot_printf(pout, ") \"%s\" ", datebuf);
 
     /* message literal */
-    index_fetchmsg(state, msg_base, msg_size, 0, im->record.size, 0, 0, pout);
+    index_fetchmsg(state, msg_base, msg_size, 0, im->record.size, 0, 0);
 
     /* close the message file */
     if (msg_base) 
@@ -1590,7 +1589,7 @@ static int index_appendremote(struct index_state *state, unsigned msgno,
 int index_copy_remote(struct index_state *state, char *sequence, 
 		      int usinguid, struct protstream *pout)
 {
-    unsigned msgno, checkval;
+    uint32_t msgno, checkval;
     struct seqset *seq;
     struct index_map *im;
     int r;
@@ -1666,7 +1665,7 @@ static int data_domain(const char *p, size_t n)
  */
 void
 index_fetchmsg(state, msg_base, msg_size, offset, size,
-	       start_octet, octet_count, pout)
+	       start_octet, octet_count)
 struct index_state *state;
 const char *msg_base;
 unsigned long msg_size;
@@ -1675,13 +1674,12 @@ unsigned size;     /* this is the correct size for a news message after
 		      having LF translated to CRLF */
 unsigned start_octet;
 unsigned octet_count;
-struct protstream *pout;
 {
   unsigned n, domain;
 
     /* If no data, output NIL */
     if (!msg_base) {
-	prot_printf(pout, "NIL");
+	prot_printf(state->out, "NIL");
 	return;
     }
 
@@ -1698,7 +1696,7 @@ struct protstream *pout;
 
     /* If zero-length data, output empty quoted string */
     if (size == 0) {
-	prot_printf(pout, "\"\"");
+	prot_printf(state->out, "\"\"");
 	return;
     }
 
@@ -1714,27 +1712,27 @@ struct protstream *pout;
 
     if (domain == DOMAIN_BINARY) {
 	/* Write size of literal8 */
-	prot_printf(pout, "~{%u}\r\n", size);
+	prot_printf(state->out, "~{%u}\r\n", size);
     } else {
 	/* Write size of literal */
-	prot_printf(pout, "{%u}\r\n", size);
+	prot_printf(state->out, "{%u}\r\n", size);
     }
 
     /* Non-text literal -- tell the protstream about it */
-    if (domain != DOMAIN_7BIT) prot_data_boundary(pout);
+    if (domain != DOMAIN_7BIT) prot_data_boundary(state->out);
 
-    prot_write(pout, msg_base + offset, n);
+    prot_write(state->out, msg_base + offset, n);
     while (n++ < size) {
 	/* File too short, resynch client.
 	 *
 	 * This can only happen if the reported size of the part
 	 * is incorrect and would push us past EOF.
 	 */
-	(void)prot_putc(' ', pout);
+	(void)prot_putc(' ', state->out);
     }
 
     /* End of non-text literal -- tell the protstream about it */
-    if (domain != DOMAIN_7BIT) prot_data_boundary(pout);
+    if (domain != DOMAIN_7BIT) prot_data_boundary(state->out);
 }
 
 /*
@@ -1760,7 +1758,7 @@ static int index_fetchsection(struct index_state *state, const char *resp,
 	} else {
 	    prot_printf(state->out, "%s", resp);
 	    index_fetchmsg(state, msg_base, msg_size, 0, size,
-			   start_octet, octet_count, state->out);
+			   start_octet, octet_count);
 	}
 	return 0;
     }
@@ -1862,7 +1860,7 @@ static int index_fetchsection(struct index_state *state, const char *resp,
     /* Output body part */
     prot_printf(state->out, "%s", resp);
     index_fetchmsg(state, msg_base, msg_size, offset, size,
-		   start_octet, octet_count, state->out);
+		   start_octet, octet_count);
 
     if (decbuf) free(decbuf);
     return 0;
@@ -2256,7 +2254,7 @@ static void index_checkflags(struct index_state *state, int dirty)
 static void index_tellexpunge(struct index_state *state)
 {
     unsigned oldmsgno;
-    unsigned msgno = 1;
+    uint32_t msgno = 1;
     struct seqset *vanishedlist;
     struct index_map *im;
 
@@ -2305,7 +2303,7 @@ static void index_tellexists(struct index_state *state)
 static void index_tellchanges(struct index_state *state, int canexpunge,
 			      int printuid)
 {
-    unsigned msgno;
+    uint32_t msgno;
     struct index_map *im;
 
     if (canexpunge) index_tellexpunge(state);
@@ -2333,7 +2331,7 @@ static void index_tellchanges(struct index_state *state, int canexpunge,
  * Also sends preceeding * FLAGS if necessary.
  */
 static void index_fetchflags(struct index_state *state,
-			     unsigned msgno)
+			     uint32_t msgno)
 {
     int sepchar = '(';
     unsigned flag;
@@ -2381,7 +2379,7 @@ static void index_fetchflags(struct index_state *state,
 }
 
 static void index_printflags(struct index_state *state,
-			     int msgno, int usinguid)
+			     uint32_t msgno, int usinguid)
 {
     struct index_map *im = &state->map[msgno-1];
 
@@ -2390,7 +2388,7 @@ static void index_printflags(struct index_state *state,
      * Errata ID: 1807 - MUST send UID and MODSEQ to all
      * untagged FETCH unsolicited responses */
     if (usinguid || state->qresync)
-	prot_printf(state->out, " UID %lu", im->record.uid);
+	prot_printf(state->out, " UID %u", im->record.uid);
     if (state->qresync)
 	prot_printf(state->out, " MODSEQ (" MODSEQ_FMT ")", im->record.modseq);
     prot_printf(state->out, ")\r\n");
@@ -2399,7 +2397,7 @@ static void index_printflags(struct index_state *state,
 /*
  * Helper function to send requested * FETCH data for a message
  */
-static int index_fetchreply(struct index_state *state, unsigned msgno,
+static int index_fetchreply(struct index_state *state, uint32_t msgno,
 			    struct fetchargs *fetchargs)
 {
     struct mailbox *mailbox = state->mailbox;
@@ -2446,7 +2444,7 @@ static int index_fetchreply(struct index_state *state, unsigned msgno,
 	started = 1;
     }
     if (fetchitems & FETCH_UID) {
-	prot_printf(state->out, "%cUID %lu", sepchar, im->record.uid);
+	prot_printf(state->out, "%cUID %u", sepchar, im->record.uid);
 	sepchar = ' ';
     }
     if (fetchitems & FETCH_INTERNALDATE) {
@@ -2465,7 +2463,7 @@ static int index_fetchreply(struct index_state *state, unsigned msgno,
 	sepchar = ' ';
     }
     if (fetchitems & FETCH_SIZE) {
-	prot_printf(state->out, "%cRFC822.SIZE %lu", 
+	prot_printf(state->out, "%cRFC822.SIZE %u", 
 		    sepchar, im->record.size);
 	sepchar = ' ';
     }
@@ -2499,8 +2497,7 @@ static int index_fetchreply(struct index_state *state, unsigned msgno,
 		       (fetchitems & FETCH_IS_PARTIAL) ?
 		         fetchargs->start_octet : 0,
 		       (fetchitems & FETCH_IS_PARTIAL) ?
-		         fetchargs->octet_count : 0,
-		       state->out);
+		         fetchargs->octet_count : 0);
     }
     else if (fetchargs->headers || fetchargs->headers_not) {
 	prot_printf(state->out, "%cRFC822.HEADER ", sepchar);
@@ -2522,8 +2519,7 @@ static int index_fetchreply(struct index_state *state, unsigned msgno,
 		       (fetchitems & FETCH_IS_PARTIAL) ?
 		         fetchargs->start_octet : 0,
 		       (fetchitems & FETCH_IS_PARTIAL) ?
-		         fetchargs->octet_count : 0,
-		       state->out);
+		         fetchargs->octet_count : 0);
     }
     if (fetchitems & FETCH_RFC822) {
 	prot_printf(state->out, "%cRFC822 ", sepchar);
@@ -2532,8 +2528,7 @@ static int index_fetchreply(struct index_state *state, unsigned msgno,
 		       (fetchitems & FETCH_IS_PARTIAL) ?
 		         fetchargs->start_octet : 0,
 		       (fetchitems & FETCH_IS_PARTIAL) ?
-		         fetchargs->octet_count : 0,
-		       state->out);
+		         fetchargs->octet_count : 0);
     }
     for (fsection = fetchargs->fsections; fsection; fsection = fsection->next) {
 	prot_printf(state->out, "%cBODY[%s ", sepchar, fsection->section);
@@ -2654,7 +2649,7 @@ static int index_fetchreply(struct index_state *state, unsigned msgno,
  * This is an amalgamation of index_fetchreply(), index_fetchsection()
  * and index_fetchmsg().
  */
-int index_urlfetch(struct index_state *state, unsigned msgno,
+int index_urlfetch(struct index_state *state, uint32_t msgno,
 		   unsigned params, const char *section,
 		   unsigned long start_octet, unsigned long octet_count,
 		   struct protstream *pout, unsigned long *outsize)
@@ -2829,7 +2824,7 @@ int index_urlfetch(struct index_state *state, unsigned msgno,
 /*
  * Helper function to perform a generalized STORE command
  */
-static int index_storeflag(struct index_state *state, unsigned msgno,
+static int index_storeflag(struct index_state *state, uint32_t msgno,
 			   struct storeargs *storeargs)
 {
     bit32 old, new;
@@ -2971,7 +2966,7 @@ int _search_searchbuf(char *s, comp_pat *p, struct buf *b)
  */
 static int index_search_evaluate(struct index_state *state,
 				 struct searchargs *searchargs,
-				 unsigned msgno,
+				 uint32_t msgno,
 				 struct mapfile *msgfile)
 {
     unsigned i;
@@ -3240,7 +3235,7 @@ static int index_searchheader(char *name,
 /*
  * Search named cached header of a message for a substring
  */
-static int index_searchcacheheader(struct index_state *state, unsigned msgno,
+static int index_searchcacheheader(struct index_state *state, uint32_t msgno,
 				   char *name, char *substr, comp_pat *pat)
 {
     char *q;
@@ -3353,7 +3348,7 @@ static void index_getsearchtextmsg(struct index_state *state,
   mailbox_unmap_message(mailbox, uid, &msgfile.base, &msgfile.size);
 }
 
-void index_getsearchtext_single(struct index_state *state, unsigned msgno,
+void index_getsearchtext_single(struct index_state *state, uint32_t msgno,
 				index_search_text_receiver_t receiver,
 				void *rock) {
     struct mailbox *mailbox = state->mailbox;
@@ -3385,7 +3380,7 @@ void index_getsearchtext(struct index_state *state,
 			 index_search_text_receiver_t receiver,
 			 void *rock)
 {
-    int msgno;
+    uint32_t msgno;
 
     /* Send the converted text of every message out to the receiver. */
     for (msgno = 1; msgno <= state->exists; msgno++)
@@ -3396,7 +3391,7 @@ void index_getsearchtext(struct index_state *state,
  * Helper function to set up arguments to append_copy()
  */
 #define COPYARGSGROW 30
-static int index_copysetup(struct index_state *state, unsigned msgno,
+static int index_copysetup(struct index_state *state, uint32_t msgno,
 			   struct copyargs *copyargs)
 {
     int flag = 0;
@@ -4857,7 +4852,7 @@ static void index_thread_ref(struct index_state *state, unsigned *msgno_list, in
  * NNTP specific stuff.
  */
 char *index_get_msgid(struct index_state *state,
-		      unsigned msgno)
+		      uint32_t msgno)
 {
     char *env;
     char *envtokens[NUMENVTOKENS];
@@ -4953,7 +4948,7 @@ static void parse_env_address(char *str, struct address *addr)
 }
 
 extern struct nntp_overview *index_overview(struct index_state *state,
-					    unsigned msgno)
+					    uint32_t msgno)
 {
     static struct nntp_overview over;
     static char *env = NULL, *from = NULL, *hdr = NULL;
@@ -5034,7 +5029,7 @@ extern struct nntp_overview *index_overview(struct index_state *state,
     return &over;
 }
 
-extern char *index_getheader(struct index_state *state, unsigned msgno,
+extern char *index_getheader(struct index_state *state, uint32_t msgno,
 			     char *hdr)
 {
     static const char *msg_base = 0;
@@ -5089,13 +5084,13 @@ extern char *index_getheader(struct index_state *state, unsigned msgno,
 }
 
 extern unsigned long index_getsize(struct index_state *state,
-				   unsigned msgno)
+				   uint32_t msgno)
 {
     struct index_map *im = &state->map[msgno-1];
     return im->record.size;
 }
 
-extern unsigned long index_getlines(struct index_state *state, unsigned msgno)
+extern unsigned long index_getlines(struct index_state *state, uint32_t msgno)
 {
     struct index_map *im = &state->map[msgno-1];
     return im->record.content_lines;

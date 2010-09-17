@@ -135,7 +135,7 @@ int sync_parse_options(const char *options)
 #define BUFGROWSIZE 100
 int sync_getline(struct protstream *in, struct buf *buf)
 {
-    int len = 0;
+    unsigned len = 0;
     int c;
 
     if (buf->alloc == 0) {
@@ -147,11 +147,11 @@ int sync_getline(struct protstream *in, struct buf *buf)
 	c = prot_getc(in);
 
 	if (c == EOF || (c == '\r') || (c == '\n')) {
-            /* Munch optional LF after CR */
-            if (c == '\r' && ((c = prot_getc(in)) != EOF && c != '\n')) {
-                prot_ungetc(c, in);
-                c = '\r';
-            }
+	    /* Munch optional LF after CR */
+	    if (c == '\r' && ((c = prot_getc(in)) != EOF && c != '\n')) {
+		prot_ungetc(c, in);
+		c = '\r';
+	    }
 	    buf->s[len] = '\0';
 	    buf->len = len;
 	    return c;
@@ -159,9 +159,9 @@ int sync_getline(struct protstream *in, struct buf *buf)
 	if (len == buf->alloc) {
 	    buf->alloc += BUFGROWSIZE;
 	    buf->s = xrealloc(buf->s, buf->alloc+1);
-            if (len > config_maxword) {
-                fatal("word too long", EC_IOERR);
-            }
+	    if (len > config_maxword) {
+		fatal("word too long", EC_IOERR);
+	    }
 	}
 	buf->s[len++] = c;
     }
@@ -478,12 +478,12 @@ struct sync_folder_list *sync_folder_list_create(void)
 struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
 					 const char *uniqueid, const char *name,
 					 const char *part, const char *acl, 
-					 unsigned long options,
-					 unsigned long uidvalidity, 
-					 unsigned long last_uid,
+					 uint32_t options,
+					 uint32_t uidvalidity, 
+					 uint32_t last_uid,
 					 modseq_t highestmodseq,
-					 unsigned long crc,
-					 unsigned long recentuid,
+					 uint32_t crc,
+					 uint32_t recentuid,
 					 time_t recenttime,
 					 time_t pop3_last_login)
 {
@@ -855,14 +855,14 @@ struct sync_sieve_list *sync_sieve_list_generate(const char *userid)
     return list;
 }
 
-char *sync_sieve_read(const char *userid, const char *name, unsigned long *sizep)
+char *sync_sieve_read(const char *userid, const char *name, uint32_t *sizep)
 {
     char sieve_path[2048];
     char filename[2048];
     FILE *file;
     struct stat sbuf;
     char *result, *s;
-    unsigned long count;
+    uint32_t count;
     int c;
 
     if (sizep)
@@ -1397,7 +1397,7 @@ int sync_mailbox(struct mailbox *mailbox,
 	struct stat sbuf;
 	const char *fname;
 	struct sync_msgid *msgid;
-	unsigned recno;
+	uint32_t recno;
 	for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	    /* we can't send bogus records, just skip them! */
 	    if (mailbox_read_index_record(mailbox, recno, &record))
@@ -1436,7 +1436,7 @@ int sync_mailbox(struct mailbox *mailbox,
 		    return IMAP_IOERROR;
 		}
 		if (sbuf.st_size != record.size) {
-		    syslog(LOG_ERR, "IOERROR: size mismatch %s %lu (%lu != %lu)",
+		    syslog(LOG_ERR, "IOERROR: size mismatch %s %u (%lu != %u)",
 			   mailbox->name, record.uid, sbuf.st_size, record.size);
 		    return IMAP_IOERROR;
 		}

@@ -176,7 +176,7 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 	    buf_putc(buf, c);
 	}
 	buf_cstring(buf);
-	if (type != IMAP_BIN_ASTRING && strlen(buf_cstring(buf)) != buf_len(buf))
+	if (type != IMAP_BIN_ASTRING && strlen(buf_cstring(buf)) != (unsigned)buf_len(buf))
 	    return EOF; /* Disallow imbedded NUL for non IMAP_BIN_ASTRING */
 	return prot_getc(pin);
 

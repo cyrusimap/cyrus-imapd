@@ -265,8 +265,8 @@ static int search_squat(unsigned* msg_list, struct index_state *state,
       == NULL) {
     result = -1;
   } else {
-    int i;
-    int vlen = vector_len(state);
+    unsigned i;
+    unsigned vlen = vector_len(state);
     unsigned char* unindexed_vector = xmalloc(vlen);
     SquatSearchResult r;
     
@@ -306,7 +306,7 @@ static int search_squat(unsigned* msg_list, struct index_state *state,
 int search_prefilter_messages(unsigned *msgno_list, struct index_state *state,
                               struct searchargs *searchargs) 
 {
-    int i;
+    unsigned i;
     int count;
 
     if (SQUAT_ENGINE) {

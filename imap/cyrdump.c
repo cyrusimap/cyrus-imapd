@@ -198,7 +198,7 @@ static int dump_me(char *name, int matchlen __attribute__((unused)),
     imapurl_toURL(imapurl, &url);
     printf("  <mailbox-url>%s</mailbox-url>\n", imapurl);
     printf("  <incremental-uid>%d</incremental-uid>\n", irec->incruid);
-    printf("  <nextuid>%ld</nextuid>\n", state->mailbox->i.last_uid + 1);
+    printf("  <nextuid>%u</nextuid>\n", state->mailbox->i.last_uid + 1);
     printf("\n");
 
     memset(&searchargs, 0, sizeof(struct searchargs));

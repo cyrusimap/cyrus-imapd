@@ -224,9 +224,9 @@ static struct data_file data_files[] = {
 enum { SEEN_DB = 0, SUBS_DB = 1, MBOXKEY_DB = 2 };
 static int NUM_USER_DATA_FILES = 3;
 
-int dump_mailbox(const char *tag, const char *mbname, int uid_start,
+int dump_mailbox(const char *tag, const char *mbname, uint32_t uid_start,
 		 struct protstream *pin, struct protstream *pout,
-		 struct auth_state *auth_state)
+		 struct auth_state *auth_state __attribute((unused)))
 {
     DIR *mbdir = NULL;
     int r = 0;
@@ -306,7 +306,7 @@ int dump_mailbox(const char *tag, const char *mbname, int uid_start,
     while ((next = readdir(mbdir)) != NULL) {
 	char *name = next->d_name;  /* Alias */
 	char *p = name;
-	unsigned long uid;
+	uint32_t uid;
 
 	/* special case for '.' (well, it gets '..' too) */
 	if (name[0] == '.') continue;
@@ -451,7 +451,7 @@ int dump_mailbox(const char *tag, const char *mbname, int uid_start,
 
 int undump_mailbox(const char *mbname, 
 		   struct protstream *pin, struct protstream *pout,
-		   struct auth_state *auth_state)
+		   struct auth_state *auth_state __attribute((unused)))
 {
     struct buf file, data;
     char c;

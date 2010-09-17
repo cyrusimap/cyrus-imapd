@@ -527,7 +527,7 @@ void buf_getmap(struct buf *buf, const char **base, int *len)
     *len = buf->len;
 }
 
-int buf_len(struct buf *buf)
+unsigned buf_len(struct buf *buf)
 {
     return buf->len;
 }

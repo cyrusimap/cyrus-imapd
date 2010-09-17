@@ -279,8 +279,8 @@ int seqset_ismember(struct seqset *seq, unsigned num)
 
 unsigned seqset_getnext(struct seqset *seq)
 {
-    unsigned long num;
-    int i;
+    unsigned num;
+    unsigned i;
 
     /* no sequence, there's no next value */
     if (!seq) return 0;
@@ -320,10 +320,10 @@ void seqset_append(struct seqset **l, char *sequence, unsigned maxval)
 
 char *seqset_cstring(struct seqset *seq) 
 {
-    int alloc = 0;
-    int offset = 0;
+    unsigned alloc = 0;
+    unsigned offset = 0;
     char *base = NULL;
-    int i;
+    unsigned i;
 
     if (!seq) return NULL;
 

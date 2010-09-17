@@ -386,7 +386,7 @@ static int squat_single(struct index_state *state, int incremental)
     struct uid_item *uid_item;
     struct stat index_file_info;
     unsigned long lastuid;
-    unsigned msgno;
+    uint32_t msgno;
     int new_index_fd = -1;
     int old_index_fd = -1;
     int r = 0;               /* Using IMAP_* not SQUAT_* return codes here */
@@ -453,7 +453,7 @@ static int squat_single(struct index_state *state, int incremental)
       /* write an empty document at the beginning to record the validity
          nonce */
       snprintf(uid_validity_buf, sizeof(uid_validity_buf), 
-               "validity.%ld", mailbox->i.uidvalidity);
+               "validity.%u", mailbox->i.uidvalidity);
       if (squat_index_open_document(data.index, uid_validity_buf) != SQUAT_OK
           || squat_index_close_document(data.index) != SQUAT_OK) {
         fatal_squat_error("Writing index");

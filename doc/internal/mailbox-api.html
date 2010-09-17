@@ -192,7 +192,7 @@ read and written using <tt>struct index_record</tt> values.</p>
 
 <pre>
 int mailbox_read_index_record(struct mailbox *mailbox,
-                              unsigned long recno,
+                              uint32_t recno,
                               struct index_record *record);
 int mailbox_rewrite_index_record(struct mailbox *mailbox,
                                  struct index_record *record);
@@ -204,7 +204,7 @@ int mailbox_commit(mailbox);
 <p>An example of iterating through a mailbox</p>
 
 <pre>
-unsigned long recno;
+uint32_t recno;
 struct index_record record;
 int make_changes;
 

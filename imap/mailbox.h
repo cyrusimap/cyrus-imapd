@@ -120,25 +120,25 @@ struct statusdata {
 };
 
 struct index_record {
-    unsigned long uid;
+    uint32_t uid;
     time_t internaldate;
     time_t sentdate;
-    unsigned long size;
-    unsigned long header_size;
+    uint32_t size;
+    uint32_t header_size;
     time_t gmtime;
-    unsigned long cache_offset;
+    uint32_t cache_offset;
     time_t last_updated;
     bit32 system_flags;
     bit32 user_flags[MAX_USER_FLAGS/32];
-    unsigned long content_lines;
-    unsigned long cache_version;
+    uint32_t content_lines;
+    uint32_t cache_version;
     struct message_guid guid;
     modseq_t modseq;
     bit32 cache_crc;
     bit32 record_crc;
 
     /* metadata */
-    unsigned long recno;
+    uint32_t recno;
     int silent;
     struct cacherecord crec;
 };
@@ -151,34 +151,34 @@ struct index_header {
     bit32 generation_no;
     int format;
     int minor_version;
-    unsigned long start_offset;
-    unsigned long record_size;
-    unsigned long num_records;
+    uint32_t start_offset;
+    uint32_t record_size;
+    uint32_t num_records;
     time_t last_appenddate;
-    unsigned long last_uid;
+    uint32_t last_uid;
     uquota_t quota_mailbox_used;
-    unsigned long pop3_last_login;
-    unsigned long uidvalidity;
+    uint32_t pop3_last_login;
+    uint32_t uidvalidity;
 
-    unsigned long deleted;
-    unsigned long answered;
-    unsigned long flagged;
+    uint32_t deleted;
+    uint32_t answered;
+    uint32_t flagged;
 
-    unsigned long options;
-    unsigned long leaked_cache_records;
+    uint32_t options;
+    uint32_t leaked_cache_records;
     modseq_t highestmodseq;
     modseq_t deletedmodseq;
-    unsigned long exists;
+    uint32_t exists;
     time_t first_expunged;
     time_t last_repack_time;
 
     bit32 header_file_crc;
     bit32 sync_crc;
 
-    unsigned long recentuid;
-    unsigned long recenttime;
+    uint32_t recentuid;
+    time_t recenttime;
 
-    unsigned long header_crc;
+    uint32_t header_crc;
 };
 
 struct mailbox_unlink {
@@ -205,7 +205,7 @@ struct mailbox {
 
     time_t index_mtime;
     ino_t index_ino;
-    off_t index_size;
+    size_t index_size;
     int need_cache_refresh;
 
     /* Information in mailbox list */
@@ -414,8 +414,6 @@ extern int mailbox_meta_rename(struct mailbox *mailbox, int metafile);
 extern char *mailbox_message_fname(struct mailbox *mailbox, 
 				   unsigned long uid);
 extern char *mailbox_datapath(struct mailbox *mailbox);
-extern int mailbox_getpath(const char *part, const char *name, 
-			   char **pathp, char **mpathp);
 
 /* map individual messages in */
 extern int mailbox_map_message(struct mailbox *mailbox, unsigned long uid,
@@ -456,7 +454,7 @@ extern int mailbox_write_header(struct mailbox *mailbox, int force);
 extern void mailbox_index_dirty(struct mailbox *mailbox);
 extern void mailbox_modseq_dirty(struct mailbox *mailbox);
 extern int mailbox_read_index_record(struct mailbox *mailbox,
-				     unsigned long recno,
+				     uint32_t recno,
 				     struct index_record *record);
 extern int mailbox_rewrite_index_record(struct mailbox *mailbox,
 				        struct index_record *record);

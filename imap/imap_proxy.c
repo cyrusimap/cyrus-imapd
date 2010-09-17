@@ -167,7 +167,7 @@ static int pipe_response(struct backend *s, const char *tag, int include_last,
 {
     char buf[2048];
     char eol[128];
-    int sl;
+    unsigned sl;
     int cont = 0, last = !tag, r = PROXY_OK;
     size_t taglen = 0;
 

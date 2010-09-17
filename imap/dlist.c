@@ -528,11 +528,11 @@ int dlist_getbuf(struct dlist *dl, const char *name, const char **val, size_t *l
     return 1;
 }
 
-int dlist_getnum(struct dlist *dl, const char *name, unsigned long *val)
+int dlist_getnum(struct dlist *dl, const char *name, uint32_t *val)
 {
     struct dlist *i = dlist_getchild(dl, name);
     if (!i) return 0;
-    *val = (unsigned long)i->nval;
+    *val = (uint32_t)i->nval;
     return 1;
 }
 

@@ -94,7 +94,6 @@ int main(int argc, char *argv[])
     int flags = SEQ_MERGE;
     struct seqset *seq = NULL;
     int opt;
-    int i;
     unsigned num;
     char *res;
 
@@ -117,6 +116,7 @@ int main(int argc, char *argv[])
 
     /* special case */
     if (!strcmp(argv[optind], "create")) {
+	int i;
 	seq = seqset_init(maxval, flags);
 	for (i = optind + 1; i < argc; i++) {
 	    char *ptr = argv[i];
@@ -135,8 +135,9 @@ int main(int argc, char *argv[])
 	free(res);
     }
     else if (!strcmp(argv[optind], "parsed")) {
+	unsigned i;
 	seq = seqset_parse(argv[optind+1], NULL, maxval);
-	printf("Sections: %d\n", seq->len);
+	printf("Sections: %lu\n", seq->len);
 	for (i = 0; i < seq->len; i++) {
 	    if (seq->set[i].high == UINT_MAX)
 		printf(" [%u, *]\n", seq->set[i].low);
@@ -157,6 +158,7 @@ int main(int argc, char *argv[])
 	}
     }
     else if (!strcmp(argv[optind], "ismember")) {
+	int i;
 	seq = seqset_parse(argv[optind+1], NULL, maxval);
 	for (i = optind + 2; i < argc; i++) {
 	    if (parseuint32(argv[i], NULL, &num))

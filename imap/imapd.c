@@ -534,7 +534,7 @@ static void imapd_refer(const char *tag,
 /* ext_name is the external name of the mailbox */
 /* you can avoid referring the client by setting tag or ext_name to NULL. */
 int mlookup(const char *tag, const char *ext_name,
-	    const char *name, int *flags, char **pathp, char **mpathp,
+	    const char *name, int *flags,
 	    char **partp, char **aclp, struct txn **tid) 
 {
     int r;
@@ -2874,7 +2874,7 @@ static int getliteralsize(const char *p, int c,
 	c = ' ';		/* Force a syntax error */
     }
 
-    if (num == -1 || *p != '}' || p[1] || c != '\n') {
+    if (*p != '}' || p[1] || c != '\n') {
 	*parseerr = "Invalid literal in Append command";
 	return IMAP_PROTOCOL_ERROR;
     }
@@ -2940,7 +2940,7 @@ static int catenate_url(const char *s, const char *cur_name, FILE *f,
     struct imapurl url;
     char mailboxname[MAX_MAILBOX_BUFFER];
     struct index_state *state;
-    unsigned msgno;
+    uint32_t msgno;
     int r = 0, doclose = 0;
     unsigned long size = 0;
 
@@ -2969,7 +2969,7 @@ static int catenate_url(const char *s, const char *cur_name, FILE *f,
 	    char *newserver;
 
 	    /* lookup the location of the mailbox */
-	    r = mlookup(NULL, NULL, mailboxname, &mbtype, NULL, NULL,
+	    r = mlookup(NULL, NULL, mailboxname, &mbtype,
 			&newserver, NULL, NULL);
 
 	    if (!r && (mbtype & MBTYPE_REMOTE)) {
@@ -3135,7 +3135,7 @@ void cmd_append(char *tag, char *name, const char *cur_name)
     r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
 					       imapd_userid, mailboxname);
     if (!r) {
-	r = mlookup(tag, name, mailboxname, &mbtype, NULL, NULL,
+	r = mlookup(tag, name, mailboxname, &mbtype,
 		    &newserver, NULL, NULL);
     }
 
@@ -3531,7 +3531,7 @@ void cmd_select(char *tag, char *cmd, char *name)
 					       imapd_userid, mailboxname);
 
     if (!r) {
-	r = mlookup(tag, name, mailboxname, &mbtype, NULL, NULL,
+	r = mlookup(tag, name, mailboxname, &mbtype,
 		    &newserver, NULL, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
@@ -4703,7 +4703,7 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 					       imapd_userid, mailboxname);
 
     if (!r) {
-	r = mlookup(NULL, NULL, mailboxname, &mbtype, NULL, NULL,
+	r = mlookup(NULL, NULL, mailboxname, &mbtype,
 		    &server, &acl, NULL);
     }
 
@@ -5097,7 +5097,7 @@ void cmd_delete(char *tag, char *name, int localonly, int force)
 					       imapd_userid, mailboxname);
 
     if (!r) {
-	r = mlookup(NULL, NULL, mailboxname, &mbtype, NULL, NULL,
+	r = mlookup(NULL, NULL, mailboxname, &mbtype,
 		    &server, NULL, NULL);
     }
 
@@ -5167,7 +5167,7 @@ void cmd_delete(char *tag, char *name, int localonly, int force)
     /* was it a top-level user mailbox? */
     /* localonly deletes are only per-mailbox */
     if (!r && !localonly && mboxname_isusermailbox(mailboxname, 1)) {
-	int mailboxname_len = strlen(mailboxname);
+	size_t mailboxname_len = strlen(mailboxname);
 	char *user = mboxname_to_userid(mailboxname);
 
 	/* If we aren't too close to MAX_MAILBOX_BUFFER, append .* */
@@ -5333,7 +5333,7 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
     strcpy(newmailboxname2, newmailboxname);
 
     if (!r) {
-	r = mlookup(NULL, NULL, oldmailboxname, &mbtype, NULL, NULL,
+	r = mlookup(NULL, NULL, oldmailboxname, &mbtype,
 		    &server, NULL, NULL);
     }
 
@@ -5661,7 +5661,7 @@ void cmd_reconstruct(const char *tag, const char *name, int recursive)
 	r = IMAP_MAILBOX_LOCKED;
     
     if (!r) {
-	r = mlookup(tag, name, mailboxname, &mbtype, NULL, NULL,
+	r = mlookup(tag, name, mailboxname, &mbtype,
 		    &server, NULL, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
@@ -5951,7 +5951,7 @@ void cmd_changesub(char *tag, char *namespace, char *name, int add)
 						       name, imapd_userid,
 						       mailboxname);
 	    if (!r) r = mlookup(NULL, NULL, mailboxname,
-				NULL, NULL, NULL, NULL, NULL, NULL);
+				NULL, NULL, NULL, NULL);
 
 	    /* Doesn't exist on murder */
 	}
@@ -6033,7 +6033,7 @@ void cmd_getacl(const char *tag, const char *name)
 					       imapd_userid, mailboxname);
 
     if (!r) {
-	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL, NULL, &acl, NULL);
+	r = mlookup(tag, name, mailboxname, NULL, NULL, &acl, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
 
@@ -6095,7 +6095,7 @@ char *identifier;
 					       imapd_userid, mailboxname);
 
     if (!r) {
-	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL, NULL, &acl, NULL);
+	r = mlookup(tag, name, mailboxname, NULL, NULL, &acl, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
 
@@ -6191,7 +6191,7 @@ void cmd_myrights(const char *tag, const char *name)
 					       imapd_userid, mailboxname);
 
     if (!r) {
-	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL, NULL, &acl, NULL);
+	r = mlookup(tag, name, mailboxname, NULL, NULL, &acl, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
 
@@ -6242,7 +6242,7 @@ void cmd_setacl(char *tag, const char *name,
 
     /* is it remote? */
     if (!r) {
-	r = mlookup(tag, name, mailboxname, &mbtype, NULL, NULL,
+	r = mlookup(tag, name, mailboxname, &mbtype,
 		    &server, NULL, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
@@ -6332,7 +6332,7 @@ static int quota_cb(char *name, int matchlen __attribute__((unused)),
     char *this_server;
     const char *servername = (const char *)rock;
     
-    r = mlookup(NULL, NULL, name, NULL, NULL, NULL, &this_server, NULL, NULL);
+    r = mlookup(NULL, NULL, name, NULL, &this_server, NULL, NULL);
     if(r) return r;
 
     if(strcmp(servername, this_server)) {
@@ -6364,7 +6364,7 @@ void cmd_getquota(const char *tag, const char *name)
     }
 
     if (!r) {
-    	r = mlookup(NULL, NULL, mailboxname, &mbtype, NULL, NULL,
+    	r = mlookup(NULL, NULL, mailboxname, &mbtype,
 		    &server_rock_tmp, NULL, NULL);
     }
 
@@ -6445,7 +6445,7 @@ void cmd_getquotaroot(const char *tag, const char *name)
 					       imapd_userid, mailboxname);
 
     if (!r) {
-	r = mlookup(tag, name, mailboxname, &mbtype, NULL, NULL,
+	r = mlookup(tag, name, mailboxname, &mbtype,
 		    &server, NULL, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
@@ -6598,7 +6598,7 @@ void cmd_setquota(const char *tag, const char *quotaroot)
     }
 
     if (!r) {
-    	r = mlookup(NULL, NULL, mailboxname, &mbtype, NULL, NULL,
+	r = mlookup(NULL, NULL, mailboxname, &mbtype,
 		    &server_rock_tmp, NULL, NULL);
     }
 
@@ -6790,7 +6790,7 @@ void cmd_status(char *tag, char *name)
 					       imapd_userid, mailboxname);
 
     if (!r) {
-	r = mlookup(tag, name, mailboxname, &mbtype, NULL, NULL,
+	r = mlookup(tag, name, mailboxname, &mbtype,
 		    &server, &acl, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) {
@@ -7965,7 +7965,7 @@ void cmd_dump(char *tag, char *name, int uid_start)
 {
     int r = 0;
     char mailboxname[MAX_MAILBOX_BUFFER];
-    char *path, *mpath, *acl;
+    char *acl;
 
     /* administrators only please */
     if (!imapd_userisadmin) {
@@ -7978,7 +7978,7 @@ void cmd_dump(char *tag, char *name, int uid_start)
     }
     
     if (!r) {
-	r = mlookup(tag, name, mailboxname, NULL, &path, &mpath,
+	r = mlookup(tag, name, mailboxname, NULL,
 		    NULL, &acl, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
@@ -8000,7 +8000,7 @@ void cmd_undump(char *tag, char *name)
 {
     int r = 0;
     char mailboxname[MAX_MAILBOX_BUFFER];
-    char *path, *mpath, *acl;
+    char *acl;
 
     /* administrators only please */
     if (!imapd_userisadmin) {
@@ -8013,7 +8013,7 @@ void cmd_undump(char *tag, char *name)
     }
     
     if (!r) {
-	r = mlookup(tag, name, mailboxname, NULL, &path, &mpath,
+	r = mlookup(tag, name, mailboxname, NULL,
 		    NULL, &acl, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
@@ -8345,7 +8345,7 @@ static int do_xfer_single(char *toserver, char *topart,
     /* Step 2.5: Set mailbox as REMOTE on local server */
     if(!r) {
 	snprintf(buf, sizeof(buf), "%s!%s", toserver, mbentry.partition);
-	r = mboxlist_update(mailboxname, mbentry.mbtype|MBTYPE_MOVING, buf, NULL, mbentry.acl, 1);
+	r = mboxlist_update(mailboxname, mbentry.mbtype|MBTYPE_MOVING, buf, mbentry.acl, 1);
 	if(r) syslog(LOG_ERR, "Could not move mailbox: %s, " \
 		     "mboxlist_update failed", mailboxname);
     }
@@ -8522,7 +8522,7 @@ done:
 	rerr = 0;
 
 	rerr = mboxlist_update(mailboxname, mbentry.mbtype, 
-			       mbentry.partition, NULL, mbentry.acl, 1);
+			       mbentry.partition, mbentry.acl, 1);
 	if(rerr) syslog(LOG_ERR, "Could not unset remote flag on mailbox: %s",
 			mailboxname);
     }
@@ -8592,8 +8592,8 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
     int moving_user = 0;
     int backout_mupdate = 0;
     mupdate_handle *mupdate_h = NULL;
-    char *inpath, *inmpath, *inpart, *inacl;
-    char *path = NULL, *mpath = NULL, *part = NULL, *acl = NULL;
+    char *inpart, *inacl;
+    char *part = NULL, *acl = NULL;
     char *p, *mbox = mailboxname;
     
     /* administrators only please */
@@ -8635,14 +8635,11 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
     }
     
     if (!r) {
-	r = mlookup(tag, name, mailboxname, &mbflags,
-		    &inpath, &inmpath, &inpart, &inacl, NULL);
+	r = mlookup(tag, name, mailboxname, &mbflags, &inpart, &inacl, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
     
     if (!r) {
-	path = xstrdup(inpath);
-	if (inmpath) mpath = xstrdup(inmpath);
 	part = xstrdup(inpart);
 	acl = xstrdup(inacl);
     }
@@ -8776,8 +8773,6 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 
  done:
     if(part) free(part);
-    if(path) free(path);
-    if(mpath) free(mpath);
     if(acl) free(acl);
 
     imapd_check(NULL, 0);
@@ -10130,7 +10125,7 @@ void cmd_mupdatepush(char *tag, char *name)
     }
 
     if (!r) {
-	r = mlookup(tag, name, mailboxname, NULL, NULL, NULL,
+	r = mlookup(tag, name, mailboxname, NULL,
 		    &part, &acl, NULL);
     }
     if (r == IMAP_MAILBOX_MOVED) return;
@@ -10192,7 +10187,7 @@ void cmd_urlfetch(char *tag)
     struct imapurl url;
     char mailboxname[MAX_MAILBOX_BUFFER];
     struct index_state *state;
-    unsigned msgno;
+    uint32_t msgno;
     unsigned int token_len;
     int mbtype;
     char *newserver;
@@ -10284,7 +10279,7 @@ void cmd_urlfetch(char *tag)
 						       url.user, mailboxname);
 	}
 	if (!r) {
-	    r = mlookup(NULL, NULL, mailboxname, &mbtype, NULL, NULL,
+	    r = mlookup(NULL, NULL, mailboxname, &mbtype,
 			&newserver, NULL, NULL);
 	}
 
@@ -10496,7 +10491,7 @@ void cmd_genurlauth(char *tag)
 						       imapd_userid, mailboxname);
 	}
 	if (!r) {
-	    r = mlookup(NULL, NULL, mailboxname, &mbtype, NULL, NULL,
+	    r = mlookup(NULL, NULL, mailboxname, &mbtype,
 			&newserver, NULL, NULL);
 	}
 	if (r) {
@@ -10592,7 +10587,7 @@ void cmd_resetkey(char *tag, char *mailbox,
 						   mailbox,
 						   imapd_userid, mailboxname);
 	if (!r) {
-	    r = mlookup(NULL, NULL, mailboxname, &mbtype, NULL, NULL,
+	    r = mlookup(NULL, NULL, mailboxname, &mbtype,
 			&newserver, NULL, NULL);
 	}
 	if (r) {

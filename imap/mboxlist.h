@@ -80,7 +80,6 @@ struct mboxlist_entry {
     int mbtype;
     char *partition;
 				/* holds remote machine for REMOTE mailboxes */
-    char *uniqueid;
     char *acl;
 };
 
@@ -94,7 +93,7 @@ int mboxlist_deleteremote(const char *name, struct txn **in_tid);
 
 /* Update a mailbox's entry */
 int mboxlist_update(const char *name, int mbtype, 
-		    const char *part, const char *uniqueid,
+		    const char *part, 
 		    const char *acl, int localonly);
 
 /* check user's ability to create mailbox */

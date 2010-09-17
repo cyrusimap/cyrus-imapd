@@ -164,12 +164,12 @@ struct sync_folder_list *sync_folder_list_create(void);
 struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
 					 const char *uniqueid, const char *name,
 					 const char *part, const char *acl, 
-					 unsigned long options,
-					 unsigned long uidvalidity, 
-					 unsigned long last_uid,
+					 uint32_t options,
+					 uint32_t uidvalidity, 
+					 uint32_t last_uid,
 					 modseq_t highestmodseq,
-					 unsigned long crc,
-					 unsigned long recentuid,
+					 uint32_t crc,
+					 uint32_t recentuid,
 					 time_t recenttime,
 					 time_t pop3_last_login);
 
@@ -319,7 +319,7 @@ void sync_sieve_list_free(struct sync_sieve_list **lp);
 
 struct sync_sieve_list *sync_sieve_list_generate(const char *userid);
 
-char *sync_sieve_read(const char *userid, const char *name, unsigned long *sizep);
+char *sync_sieve_read(const char *userid, const char *name, uint32_t *sizep);
 
 int sync_sieve_upload(const char *userid, const char *name,
 		      time_t last_update, const char *content, size_t len);

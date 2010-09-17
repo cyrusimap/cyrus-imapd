@@ -168,14 +168,14 @@ extern void cmdtime_netend();
 
 struct buf {
     char *s;
-    int len;
-    int alloc;
+    unsigned len;
+    unsigned alloc;
     int flags;
 };
 
 const char *buf_cstring(struct buf *buf);
 void buf_getmap(struct buf *buf, const char **base, int *len);
-int buf_len(struct buf *buf);
+unsigned buf_len(struct buf *buf);
 void buf_reset(struct buf *buf);
 void buf_setcstr(struct buf *buf, char *str);
 void buf_setmap(struct buf *buf, char *base, int len);

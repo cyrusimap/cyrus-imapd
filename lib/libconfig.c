@@ -81,8 +81,8 @@ int config_hashimapspool;	  /* f */
 enum enum_value config_virtdomains;	          /* f */
 enum enum_value config_mupdate_config;	/* IMAP_ENUM_MUPDATE_CONFIG_STANDARD */
 int config_auditlog;
-int config_maxword;
-int config_maxquoted;
+unsigned config_maxword;
+unsigned config_maxquoted;
 int config_qosmarking;
 
 /* declared in each binary that uses libconfig */

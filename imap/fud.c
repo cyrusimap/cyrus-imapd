@@ -443,7 +443,7 @@ int handle_request(const char *who, const char *name,
     lastarrived = mailbox->i.last_appenddate;
     {
 	struct index_record record;
-	int recno;
+	uint32_t recno;
 	for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	    if (mailbox_read_index_record(mailbox, recno, &record))
 		continue;

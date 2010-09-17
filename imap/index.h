@@ -133,7 +133,7 @@ struct mapfile {
 
 typedef struct msgdata {
     bit32 uid;                  /* UID for output purposes */
-    unsigned msgno;		/* message number */
+    uint32_t msgno;		/* message number */
     char *msgid;		/* message ID */
     char **ref;			/* array of references */
     int nref;			/* number of references */
@@ -214,20 +214,20 @@ extern int index_open(const char *name, struct index_init *init,
 extern int index_status(struct index_state *state, struct statusdata *sdata);
 extern int index_close(struct index_state **stateptr);
 extern unsigned index_finduid(struct index_state *state, unsigned uid);
-extern unsigned index_getuid(struct index_state *state, unsigned msgno);
+extern unsigned index_getuid(struct index_state *state, uint32_t msgno);
 extern modseq_t index_highestmodseq(struct index_state *state);
 extern int index_check(struct index_state *state, int usinguid, int printuid);
-extern int index_urlfetch(struct index_state *state, unsigned msgno,
+extern int index_urlfetch(struct index_state *state, uint32_t msgno,
 			  unsigned params, const char *section,
 			  unsigned long start_octet, unsigned long octet_count,
 			  struct protstream *pout, unsigned long *size);
-extern char *index_get_msgid(struct index_state *state, unsigned msgno);
+extern char *index_get_msgid(struct index_state *state, uint32_t msgno);
 extern struct nntp_overview *index_overview(struct index_state *state,
-					    unsigned msgno);
-extern char *index_getheader(struct index_state *state, unsigned msgno,
+					    uint32_t msgno);
+extern char *index_getheader(struct index_state *state, uint32_t msgno,
 			     char *hdr);
-extern unsigned long index_getsize(struct index_state *state, unsigned msgno);
-extern unsigned long index_getlines(struct index_state *state, unsigned msgno);
+extern unsigned long index_getsize(struct index_state *state, uint32_t msgno);
+extern unsigned long index_getlines(struct index_state *state, uint32_t msgno);
 extern int index_copy_remote(struct index_state *state, char *sequence, 
 			     int usinguid, struct protstream *pout);
 
@@ -238,7 +238,7 @@ extern int index_expunge(struct index_state *state, int usinguid,
 			 char *uidsequence, int isclose);
 
 /* See lib/charset.h for the definition of receiver. */
-extern void index_getsearchtext_single(struct index_state *state, unsigned msgno,
+extern void index_getsearchtext_single(struct index_state *state, uint32_t msgno,
                                        index_search_text_receiver_t receiver,
                                        void* rock);
 

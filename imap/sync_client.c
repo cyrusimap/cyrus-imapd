@@ -171,7 +171,7 @@ static int find_reserve_messages(struct mailbox *mailbox,
 				 struct sync_msgid_list *part_list)
 {
     struct index_record record;
-    unsigned long recno;
+    uint32_t recno;
     int r;
 
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
@@ -179,7 +179,7 @@ static int find_reserve_messages(struct mailbox *mailbox,
 
 	if (r) {
 	    syslog(LOG_ERR,
-		   "IOERROR: reading index entry for recno %lu of %s: %m",
+		   "IOERROR: reading index entry for recno %u of %s: %m",
 		   recno, mailbox->name);
 	    return IMAP_IOERROR;
 	}
@@ -378,7 +378,7 @@ static int response_parse(const char *cmd,
 	if (!strcmp(kl->name, "SIEVE")) {
 	    const char *filename = NULL;
 	    time_t modtime = 0;
-	    unsigned long active = 0;
+	    uint32_t active = 0;
 	    if (!sieve_list) goto parse_err;
 	    if (!dlist_getatom(kl, "FILENAME", &filename)) goto parse_err;
 	    if (!dlist_getdate(kl, "LAST_UPDATE", &modtime)) goto parse_err;
@@ -388,7 +388,7 @@ static int response_parse(const char *cmd,
 
 	else if (!strcmp(kl->name, "QUOTA")) {
 	    const char *root = NULL;
-	    unsigned long limit = 0;
+	    uint32_t limit = 0;
 	    if (!quota_list) goto parse_err;
 	    if (!dlist_getatom(kl, "ROOT", &root)) goto parse_err;
 	    if (!dlist_getnum(kl, "LIMIT", &limit)) goto parse_err;
@@ -406,7 +406,7 @@ static int response_parse(const char *cmd,
 	else if (!strcmp(kl->name, "SEEN")) {
 	    const char *uniqueid = NULL;
 	    time_t lastread = 0;
-	    unsigned long lastuid = 0;
+	    uint32_t lastuid = 0;
 	    time_t lastchange = 0;
 	    const char *seenuids = NULL;
 	    if (!seen_list) goto parse_err;
@@ -426,10 +426,10 @@ static int response_parse(const char *cmd,
 	    const char *acl = NULL;
 	    const char *options = NULL;
 	    modseq_t highestmodseq = 0;
-	    unsigned long uidvalidity = 0;
-	    unsigned long last_uid = 0;
-	    unsigned long sync_crc = 0;
-	    unsigned long recentuid = 0;
+	    uint32_t uidvalidity = 0;
+	    uint32_t last_uid = 0;
+	    uint32_t sync_crc = 0;
+	    uint32_t recentuid = 0;
 	    time_t recenttime = 0;
 	    time_t pop3_last_login = 0;
 	    if (!folder_list) goto parse_err;
@@ -567,7 +567,7 @@ static int sieve_upload(const char *userid, const char *filename,
     const char *cmd = "SIEVE";
     struct dlist *kl;
     char *sieve;
-    unsigned long size;
+    uint32_t size;
 
     sieve = sync_sieve_read(userid, filename, &size);
     if (!sieve) return IMAP_IOERROR;
@@ -688,7 +688,7 @@ static int user_sub(const char *userid, const char *mboxname)
 
 static int copy_local(struct mailbox *mailbox, unsigned long uid)
 {
-    int recno;
+    uint32_t recno;
     struct index_record record;
     char *oldfname, *newfname;
     int r;
@@ -825,8 +825,7 @@ static int copyback_one_record(struct mailbox *mailbox,
     return 0;
 }
 
-static int renumber_one_record(struct mailbox *mailbox,
-			       struct index_record *mp,
+static int renumber_one_record(struct index_record *mp,
 			       struct dlist *kaction)
 {
     /* don't want to renumber expunged records */
@@ -885,7 +884,7 @@ static const char *make_flags(struct mailbox *mailbox, struct index_record *reco
 static void log_record(const char *name, struct mailbox *mailbox,
 		       struct index_record *record)
 {
-    syslog(LOG_ERR, "uid:%lu modseq:" MODSEQ_FMT " last_updated:%lu internaldate:%lu flags:(%s)",
+    syslog(LOG_ERR, "%s uid:%u modseq:" MODSEQ_FMT " last_updated:%lu internaldate:%lu flags:(%s)", name,
 	   record->uid, record->modseq, record->last_updated, record->internaldate, make_flags(mailbox, record));
 }
 
@@ -899,7 +898,6 @@ static void log_mismatch(const char *reason, struct mailbox *mailbox,
 }
 
 static int compare_one_record(struct mailbox *mailbox,
-			      unsigned long recno,
 			      struct index_record *mp,
 			      struct index_record *rp,
 			      struct dlist *kaction)
@@ -952,13 +950,13 @@ static int compare_one_record(struct mailbox *mailbox,
 	    /* is the replica "newer"? */
 	    if (rp->modseq > mp->modseq ||
 		rp->last_updated > mp->last_updated) {
-		syslog(LOG_ERR, "recent expunged on replica %s:%lu, expunging locally",
+		syslog(LOG_ERR, "recent expunged on replica %s:%u, expunging locally",
 		       mailbox->name, mp->uid);
 		mp->system_flags |= FLAG_EXPUNGED;
 	    }
 	    else {
 		/* will have to move the local record */
-		return renumber_one_record(mailbox, mp, kaction);
+		return renumber_one_record(mp, kaction);
 	    }
 	}
 
@@ -987,12 +985,10 @@ static int compare_one_record(struct mailbox *mailbox,
     return 0;
 }
 
-static int mailbox_full_update(struct sync_folder *local,
-			       struct sync_folder *remote,
-			       struct sync_reserve_list *reserve_guids)
+static int mailbox_full_update(const char *mboxname)
 {
     const char *cmd = "FULLMAILBOX";
-    unsigned long recno;
+    uint32_t recno;
     unsigned old_num_records;
     struct index_record mrecord, rrecord;
     struct mailbox *mailbox;
@@ -1006,10 +1002,10 @@ static int mailbox_full_update(struct sync_folder *local,
     struct dlist *kaction = NULL;
     struct dlist *kexpunge = NULL;
     modseq_t highestmodseq;
-    unsigned long last_uid;
+    uint32_t last_uid;
     int mboxopen = 0;
 
-    kl = dlist_atom(NULL, cmd, local->name);
+    kl = dlist_atom(NULL, cmd, mboxname);
     sync_send_lookup(kl, sync_out);
     dlist_free(&kl);
 
@@ -1024,7 +1020,7 @@ static int mailbox_full_update(struct sync_folder *local,
     }
 
     /* we'll probably be updating it! */
-    r = mailbox_open_iwl(local->name, &mailbox);
+    r = mailbox_open_iwl(mboxname, &mailbox);
     if (r) goto done;
     mboxopen = 1;
 
@@ -1076,7 +1072,7 @@ static int mailbox_full_update(struct sync_folder *local,
 	    if (rrecord.uid == mrecord.uid) {
 		/* hasn't been changed already, check it */
 		if (mrecord.modseq <= highestmodseq) {
-		    r = compare_one_record(mailbox, recno,
+		    r = compare_one_record(mailbox,
 					   &mrecord, &rrecord,
 					   kaction);
 		    if (r) goto done;
@@ -1087,7 +1083,7 @@ static int mailbox_full_update(struct sync_folder *local,
 	    }
 	    else if (rrecord.uid > mrecord.uid) {
 		/* record only exists on the master */
-		r = renumber_one_record(mailbox, &mrecord, kaction);
+		r = renumber_one_record(&mrecord, kaction);
 		if (r) goto done;
 		/* only increment master */
 		recno++;
@@ -1108,7 +1104,7 @@ static int mailbox_full_update(struct sync_folder *local,
 	    /* if the replica has seen this UID, we need to renumber.
 	     * Otherwise it will replicate fine as-is */
 	    if (mrecord.uid <= last_uid) {
-		r = renumber_one_record(mailbox, &mrecord, kaction);
+		r = renumber_one_record(&mrecord, kaction);
 		if (r) goto done;
 	    }
 	    recno++;
@@ -1254,7 +1250,7 @@ static int update_mailbox(struct sync_folder *local,
     r = sync_parse_response("MAILBOX", sync_in, NULL);
     if (r == IMAP_MAILBOX_CRC) {
 	syslog(LOG_ERR, "CRC failure on sync update for %s", local->name);
-	r = mailbox_full_update(local, remote, reserve_guids);
+	r = mailbox_full_update(local->name);
 	if (!r) r = update_mailbox(local, remote, reserve_guids);
     }
     return r;
@@ -1613,7 +1609,7 @@ static int do_mailbox_info(char *name,
     return 0;
 }
 
-static int do_user_quota(char *user, struct sync_name_list *master_quotaroots,
+static int do_user_quota(struct sync_name_list *master_quotaroots,
 			 struct sync_quota_list *replica_quota)
 {
     int r;
@@ -1669,7 +1665,7 @@ int do_user_main(char *user, struct sync_folder_list *replica_folders,
     }
 
     r = do_folders(mboxname_list, replica_folders);
-    if (!r) r = do_user_quota(user, master_quotaroots, replica_quota);
+    if (!r) r = do_user_quota(master_quotaroots, replica_quota);
 
     sync_name_list_free(&mboxname_list);
     sync_name_list_free(&master_quotaroots);

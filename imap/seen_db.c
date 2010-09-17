@@ -326,9 +326,9 @@ int seen_write(struct seen *seendb, const char *uniqueid, struct seendata *sd)
 	       seendb->user, uniqueid);
     }
 
-    snprintf(data, sz, "%d %u %lu %u %s", SEEN_VERSION, 
-	    (unsigned)sd->lastread, sd->lastuid, 
-	    (unsigned)sd->lastchange, sd->seenuids);
+    snprintf(data, sz, "%d %lu %u %lu %s", SEEN_VERSION, 
+	    sd->lastread, sd->lastuid, 
+	    sd->lastchange, sd->seenuids);
     datalen = strlen(data);
 
     r = DB->store(seendb->db, uniqueid, strlen(uniqueid),

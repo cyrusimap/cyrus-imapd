@@ -105,7 +105,7 @@ void dlist_stitch(struct dlist *dl, struct dlist *child);
 int dlist_getatom(struct dlist *dl, const char *name, const char **val);
 int dlist_getbuf(struct dlist *dl,
 		 const char *name, const char **val, size_t *len);
-int dlist_getnum(struct dlist *dl, const char *name, unsigned long *val);
+int dlist_getnum(struct dlist *dl, const char *name, uint32_t *val);
 int dlist_getdate(struct dlist *dl, const char *name, time_t *val);
 int dlist_getmodseq(struct dlist *dl, const char *name, modseq_t *val);
 int dlist_getlist(struct dlist *dl, const char *name, struct dlist **val);

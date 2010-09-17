@@ -84,7 +84,7 @@ struct infected_msg {
 
 struct infected_mbox {
     char *owner;
-    unsigned recno; /* running count of which message we're scanning */
+    uint32_t recno; /* running count of which message we're scanning */
     struct infected_msg *msgs;
     struct infected_mbox *next;
 };
@@ -388,7 +388,7 @@ int scan_me(char *name,
 }
 
 void create_digest(struct infected_mbox *i_mbox, struct mailbox *mbox,
-		   unsigned recno, unsigned long uid, const char *virname)
+		   uint32_t recno, unsigned long uid, const char *virname)
 {
     struct infected_msg *i_msg = xmalloc(sizeof(struct infected_msg));
     struct nntp_overview *over;

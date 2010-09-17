@@ -736,10 +736,10 @@ static int append_addseen(struct mailbox *mailbox,
     int r;
     struct seen *seendb;
     struct seendata sd;
-    unsigned int last_seen;
+    uint32_t last_seen;
     char *tail;
     int newlen;
-    int start;
+    unsigned start;
 
     /* what's the first uid in our new list? */
     start = atoi(msgrange);

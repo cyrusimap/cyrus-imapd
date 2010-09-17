@@ -74,7 +74,7 @@ struct imapurl {
  *  coded URLs; server should be as large as src.
  */
 int imapurl_fromURL(struct imapurl *url, const char *src);
-int URLtoMailbox(char *dst, char *src);
+int URLtoMailbox(char *dst, const char *src);
 #define UTF8_to_mUTF7(dst, src) URLtoMailbox(dst, src)
 
 /* Convert an IMAP mailbox to a URL path

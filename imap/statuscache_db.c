@@ -207,7 +207,7 @@ int status_lookup(const char *mboxname, const char *userid,
     else if (statusitems & (STATUS_RECENT | STATUS_UNSEEN)) {
 	/* Read \Seen state */
 	struct seqset *seq;
-	unsigned recno;
+	uint32_t recno;
 	struct index_record record;
 	int internalseen = mailbox_internal_seen(mailbox, userid);
 	unsigned recentuid;

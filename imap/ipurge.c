@@ -309,7 +309,7 @@ unsigned purge_check(struct mailbox *mailbox __attribute__((unused)),
     }
     if (size >= 0) {
       /* check size */
-	if (record->size == size) {
+	if (record->size == (unsigned)size) {
 	  if (invertmatch) return 0;
 	  deleteit(record->size, stats);
 	  return 1;

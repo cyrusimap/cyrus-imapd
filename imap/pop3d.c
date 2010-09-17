@@ -134,7 +134,7 @@ int count_top = 0;
 int count_dele = 0;
 struct msg {
     unsigned uid;
-    unsigned recno;
+    uint32_t recno;
     unsigned size;
     int deleted;
     int seen;
@@ -192,8 +192,8 @@ static int openinbox(void);
 static void cmdloop(void);
 static void kpop(void);
 static unsigned parse_msgno(char **ptr);
-static void uidl_msg(unsigned msgno);
-static int msg_exists_or_err(unsigned msgno);
+static void uidl_msg(uint32_t msgno);
+static int msg_exists_or_err(uint32_t msgno);
 static int update_seen(void);
 void usage(void);
 void shut_down(int code) __attribute__ ((noreturn));
@@ -824,7 +824,7 @@ static void cmdloop(void)
     char inputbuf[8192];
     char *p;
     char *arg;
-    unsigned msgno = 0;
+    uint32_t msgno = 0;
 
     for (;;) {
 	signals_poll();
@@ -1092,10 +1092,7 @@ done:
 		    prot_printf(popd_out, "-ERR Unexpected extra argument\r\n");
 		}
 		else if (msg_exists_or_err(msgno)) {
-		    if (lines < 0)
-			prot_printf(popd_out, "-ERR Invalid number of lines\r\n");
-		    else
-			blat(msgno, lines);
+		    blat(msgno, lines);
 		    count_top++;
 		}
 	    }
@@ -1148,7 +1145,7 @@ unsigned parse_msgno(char **ptr)
     return 0;
 }
 
-int msg_exists_or_err(unsigned msgno)
+int msg_exists_or_err(uint32_t msgno)
 {
     if (msgno < 1 || msgno > popd_exists ||
 	     popd_msg[msgno].deleted) {
@@ -1158,10 +1155,10 @@ int msg_exists_or_err(unsigned msgno)
     return 1;
 }
 
-void uidl_msg(unsigned msgno)
+void uidl_msg(uint32_t msgno)
 {
     if (popd_mailbox->i.options & OPT_POP3_NEW_UIDL) {
-	prot_printf(popd_out, "%u %lu.%u\r\n", msgno, 
+	prot_printf(popd_out, "%u %u.%u\r\n", msgno, 
 		    popd_mailbox->i.uidvalidity,
 		    popd_msg[msgno].uid);
     } else {
@@ -1757,7 +1754,7 @@ int openinbox(void)
     }
     else {
 	/* local mailbox */
-	unsigned recno, msgno;
+	uint32_t recno, msgno;
 	struct index_record record;
 	int minpoll;
 
@@ -1916,7 +1913,7 @@ static unsigned expungedeleted(struct mailbox *mailbox __attribute__((unused)),
 			       struct index_record *record,
 			       void *rock __attribute__((unused)))
 {
-    unsigned msgno;
+    uint32_t msgno;
 
     /* XXX - could make this more efficient with binary search */
     for (msgno = 1; msgno <= popd_exists; msgno++) {
@@ -2014,7 +2011,7 @@ static void bitpipe(void)
 /* Merge our read messages with the existing \Seen database */
 static int update_seen(void)
 {
-    int i;
+    unsigned i;
     struct index_record record;
     int r = 0;
 

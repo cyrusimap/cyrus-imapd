@@ -507,7 +507,7 @@ void do_dump(enum mboxop op, const char *part, int purge)
 	    else newpart++;
 
 	    /* XXX - FIXME, pull uniqueid from detail */
-	    ret = mboxlist_update(me->mailbox, mbentry.mbtype & ~MBTYPE_MOVING, NULL,
+	    ret = mboxlist_update(me->mailbox, mbentry.mbtype & ~MBTYPE_MOVING,
 				  newpart, mbentry.acl, 1);
 	    if(ret) {
 		fprintf(stderr,

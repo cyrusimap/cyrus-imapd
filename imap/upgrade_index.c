@@ -189,7 +189,7 @@ static int upgrade_index_record(struct mailbox *mailbox,
  */
 int upgrade_index(struct mailbox *mailbox)
 {
-    unsigned recno, erecno;
+    uint32_t recno, erecno;
     unsigned long oldmapnum;
     unsigned long oldnum_records;
     unsigned long expunge_num = 0;

@@ -441,7 +441,7 @@ static int find_p(void *rockp,
 	    (keylen == (int) strlen(inboxname) || key[strlen(inboxname)] == '.'));
 }
 
-static int find_cb(void *rockp,
+static int find_cb(void *rockp __attribute__((unused)),
 		  const char *key, int keylen,
 		  const char *data __attribute__((unused)),
 		   int datalen __attribute__((unused)))

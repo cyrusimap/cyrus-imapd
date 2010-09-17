@@ -111,7 +111,7 @@ enum {
 void list_expunged(struct mailbox *mailbox)
 {
     struct index_record record;
-    int recno;
+    uint32_t recno;
 
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	if (mailbox_read_index_record(mailbox, recno, &record))
@@ -124,8 +124,8 @@ void list_expunged(struct mailbox *mailbox)
 	if (record.system_flags & FLAG_UNLINKED)
 	    continue;
 
-	printf("UID: %lu\n", record.uid);
-	printf("\tSize: %lu\n", record.size);
+	printf("UID: %u\n", record.uid);
+	printf("\tSize: %u\n", record.size);
 	printf("\tSent: %s", ctime(&record.sentdate));
 	printf("\tRecv: %s", ctime(&record.internaldate));
 	printf("\tExpg: %s", ctime(&record.last_updated));
@@ -152,16 +152,16 @@ void list_expunged(struct mailbox *mailbox)
 int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *uids, 
 		     unsigned nuids, time_t time_since, unsigned *numrestored)
 {
-    unsigned recno;
+    uint32_t recno;
     struct index_record record;
     unsigned uidnum = 0;
     char oldfname[MAX_MAILBOX_PATH];
     char *fname;
-    unsigned long *deleteduids;
+    uint32_t *deleteduids;
     int r = 0;
 
-    deleteduids = (unsigned long *)
-		  xmalloc(mailbox->i.num_records * sizeof(unsigned long));
+    deleteduids = (uint32_t *)
+		  xmalloc(mailbox->i.num_records * sizeof(uint32_t));
     *numrestored = 0;
 
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
@@ -215,14 +215,14 @@ int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *uids,
 	mailbox_append_index_record(mailbox, &record);
 
 	if (verbose)
-	    printf("Unexpunged %s: %lu => %lu\n", mailbox->name, 
+	    printf("Unexpunged %s: %u => %u\n", mailbox->name, 
 		   deleteduids[*numrestored], record.uid);
 
 	(*numrestored)++;
     }
 
     if (*numrestored) {
-	int i;
+	unsigned i;
 	/* commit first */
 	mailbox_commit(mailbox);
 

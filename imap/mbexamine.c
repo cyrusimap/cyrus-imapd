@@ -258,15 +258,15 @@ int do_examine(char *name,
     printf("\n Index Header Info:\n");
     printf("  Generation Number: %d\n", mailbox->i.generation_no);
     printf("  Minor Version: %d\n", mailbox->i.minor_version);
-    printf("  Header Size: %ld bytes  Record Size: %ld bytes\n",
+    printf("  Header Size: %u bytes  Record Size: %u bytes\n",
 	   mailbox->i.start_offset, mailbox->i.record_size);
-    printf("  Number of Messages: %lu  Mailbox Size: " UQUOTA_T_FMT " bytes\n",
+    printf("  Number of Messages: %u  Mailbox Size: " UQUOTA_T_FMT " bytes\n",
 	   mailbox->i.exists, mailbox->i.quota_mailbox_used);
     printf("  Last Append Date: (%lu) %s",
 	   mailbox->i.last_appenddate, ctime(&mailbox->i.last_appenddate));
-    printf("  UIDValidity: %lu  Last UID: %lu\n",
+    printf("  UIDValidity: %u  Last UID: %u\n",
 	   mailbox->i.uidvalidity, mailbox->i.last_uid);
-    printf("  Deleted: %lu  Answered: %lu  Flagged: %lu\n",
+    printf("  Deleted: %u  Answered: %u  Flagged: %u\n",
 	   mailbox->i.deleted, mailbox->i.answered, mailbox->i.flagged);
     printf("  Mailbox Options:");
     if (!mailbox->i.options) {
@@ -283,7 +283,7 @@ int do_examine(char *name,
 	}
     }
     printf("\n");
-    printf("  Last POP3 Login: (%ld) %s", mailbox->i.pop3_last_login,
+    printf("  Last POP3 Login: (%u) %s", mailbox->i.pop3_last_login,
 	   ctime((const long *) &mailbox->i.pop3_last_login));
     printf("  Highest Mod Sequence: " MODSEQ_FMT "\n",
 	   mailbox->i.highestmodseq);
@@ -307,17 +307,17 @@ int do_examine(char *name,
 	    flag = 1;
 	}
 
-	printf("%06d> UID:%08ld   INT_DATE:%ld SENTDATE:%ld SIZE:%-6ld\n",
+	printf("%06u> UID:%08u   INT_DATE:%lu SENTDATE:%lu SIZE:%-6u\n",
 	       msgno, record.uid, record.internaldate,
 	       record.sentdate, record.size);
-	printf("      > HDRSIZE:%-6ld LASTUPD :%ld SYSFLAGS:%08X",
+	printf("      > HDRSIZE:%-6u LASTUPD :%lu SYSFLAGS:%08X",
 	       record.header_size, record.last_updated,
 	       record.system_flags);
 	if (mailbox->i.minor_version >= 5)
-	    printf("   LINES:%-6ld\n", record.content_lines);
+	    printf("   LINES:%-6u\n", record.content_lines);
 
 	if (mailbox->i.minor_version >= 6)
-	    printf("      > CACHEVER:%-2ld", record.cache_version);
+	    printf("      > CACHEVER:%-2u", record.cache_version);
 
 	if (mailbox->i.minor_version >= 7) {
 	    printf(" GUID:%s", message_guid_encode(&record.guid));
@@ -368,7 +368,7 @@ int do_quota(char *name,
 	       int maycreate __attribute__((unused)),
 	       void *rock __attribute__((unused)))
 {
-    unsigned recno;
+    uint32_t recno;
     int r = 0;
     char ext_name_buf[MAX_MAILBOX_PATH+1];
     struct mailbox *mailbox;
@@ -409,7 +409,7 @@ int do_quota(char *name,
 	}
 
 	if (record.size != (unsigned) sbuf.st_size) {
-	    printf("  Message %lu has INCORRECT size in index record\n", record.uid);
+	    printf("  Message %u has INCORRECT size in index record\n", record.uid);
 	    r = 0;
 	    goto done;
 	}

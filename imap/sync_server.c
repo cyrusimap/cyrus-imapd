@@ -144,8 +144,7 @@ static void cmd_restart(struct sync_reserve_list **reserve_listp,
 static void cmd_compress(char *alg);
 
 /* generic commands - in dlist format */
-static void cmd_get(struct dlist *kl,
-		    struct sync_reserve_list *reserve_list);
+static void cmd_get(struct dlist *kl);
 static void cmd_apply(struct dlist *kl,
 		      struct sync_reserve_list *reserve_list);
 
@@ -660,7 +659,7 @@ static void cmdloop(void)
 	    if (!strcmp(cmd.s, "Get")) {
 		kl = sync_parseline(sync_in);
 		if (kl) {
-		    cmd_get(kl, reserve_list);
+		    cmd_get(kl);
 		    dlist_free(&kl);
 		}
 		else
@@ -999,7 +998,7 @@ void reserve_folder(const char *part, const char *mboxname,
     int r;
     struct sync_msgid *item;
     const char *mailbox_msg_path, *stage_msg_path;
-    unsigned recno;
+    uint32_t recno;
 
     /* Open and lock mailbox */
     r = mailbox_open_irl(mboxname, &mailbox);
@@ -1121,7 +1120,7 @@ static int do_unquota(struct dlist *kin)
 static int do_quota(struct dlist *kin)
 {
     const char *root;
-    unsigned long limit;
+    uint32_t limit;
 
     if (!dlist_getatom(kin, "ROOT", &root))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
@@ -1140,28 +1139,28 @@ static int do_mailbox(struct dlist *kin,
     const char *uniqueid;
     const char *partition;
     const char *mboxname;
-    unsigned long last_uid;
+    uint32_t last_uid;
     modseq_t highestmodseq;
-    unsigned long recentuid;
+    uint32_t recentuid;
     time_t recenttime;
     time_t last_appenddate;
     time_t pop3_last_login;
-    unsigned long uidvalidity;
+    uint32_t uidvalidity;
     const char *acl;
     const char *options_str;
-    unsigned long sync_crc;
+    uint32_t sync_crc;
 
-    unsigned long options;
+    uint32_t options;
 
     struct mailbox *mailbox;
     struct index_record mrecord, rrecord;
     struct sync_msgid_list *part_list;
     unsigned old_num_records;
-    unsigned long newcrc;
+    uint32_t newcrc;
     struct dlist *kr;
     struct dlist *ki;
     int found;
-    int recno;
+    uint32_t recno;
     int r;
 
     /* probably should be moved */
@@ -1436,7 +1435,8 @@ static int do_getmailboxes(struct dlist *kin)
 
 /* ====================================================================== */
 
-static int print_seen(const char *uniqueid, struct seendata *sd, void *rock)
+static int print_seen(const char *uniqueid, struct seendata *sd,
+		      void *rock __attribute__((unused)))
 {
     struct dlist *kl;
 
@@ -1841,7 +1841,7 @@ static int do_fetchsieve(struct dlist *kin)
     struct dlist *kl;
     const char *userid;
     const char *filename;
-    unsigned long size;
+    uint32_t size;
     char *sieve;
 
     if (!dlist_getatom(kin, "USERID", &userid))
@@ -1870,7 +1870,7 @@ static int do_fetch(struct dlist *kin)
     const char *mboxname;
     const char *partition;
     const char *guid;
-    unsigned long uid;
+    uint32_t uid;
     const char *fname;
     struct dlist *kl;
     struct message_guid tmp_guid;
@@ -1906,7 +1906,7 @@ static int do_expunge(struct dlist *kin)
     struct dlist *ui;
     struct mailbox *mailbox;
     struct index_record record;
-    unsigned long recno;
+    uint32_t recno;
     int r;
 
     if (!dlist_getatom(kin, "MBOXNAME", &mboxname))
@@ -2049,7 +2049,7 @@ static void cmd_apply(struct dlist *kin, struct sync_reserve_list *reserve_list)
     print_response(r);
 }
 
-static void cmd_get(struct dlist *kin, struct sync_reserve_list *reserve_list)
+static void cmd_get(struct dlist *kin)
 {
     int r;
 

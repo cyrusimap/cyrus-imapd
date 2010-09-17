@@ -220,21 +220,6 @@ char *mailbox_datapath(struct mailbox *mailbox)
     return localbuf;
 }
 
-int mailbox_getpath(const char *part, const char *name, 
-                    char **pathp, char **mpathp)
-{
-    assert(part && pathp);
-
-    *pathp = mboxname_datapath(part, NULL, 0);
-
-    if (mpathp) {
-	*mpathp = mboxname_metapath(part, NULL, 0, 0);
-    }
-
-    return 0;
-}
-
-
 void mailbox_register_unlink(struct mailbox *mailbox, unsigned long uid)
 {
     if (mailbox->unlink.alloc <= mailbox->unlink.num) {
@@ -552,14 +537,14 @@ int mailbox_append_cache(struct mailbox *mailbox,
     /* ensure we have a cache fd */
     r = mailbox_open_cache(mailbox);
     if (r) {
-	syslog(LOG_ERR, "Failed to open cache to %s for %lu",
+	syslog(LOG_ERR, "Failed to open cache to %s for %u",
 		mailbox->name, record->uid);
 	return r; /* unable to append */
     }
 
     r = cache_append_record(mailbox->cache_fd, record);
     if (r) {
-	syslog(LOG_ERR, "Failed to append cache to %s for %lu",
+	syslog(LOG_ERR, "Failed to append cache to %s for %u",
 	       mailbox->name, record->uid);
 	return r;
     }
@@ -595,7 +580,7 @@ int mailbox_cacherecord(struct mailbox *mailbox,
     }
 
     if (r) 
-	syslog(LOG_ERR, "IOERROR: invalid cache record for %s uid %lu (%s)",
+	syslog(LOG_ERR, "IOERROR: invalid cache record for %s uid %u (%s)",
 	       mailbox->name, record->uid, error_message(r));
 
     return r;
@@ -620,8 +605,8 @@ int cache_append_record(int fd, struct index_record *record)
 
     offset = lseek(fd, 0L, SEEK_END);
     n = retry_write(fd, cache_base(record), size);
-    if (n != size) {
-	syslog(LOG_ERR, "wrote %d bytes, should be %u", n, size);
+    if (n < 0) {
+	syslog(LOG_ERR, "failed to append %u bytes to cache", size);
 	return IMAP_IOERROR;
     }
 
@@ -675,7 +660,7 @@ mailbox_notifyproc_t *mailbox_get_updatenotifier(void)
 
 void mailbox_make_uniqueid(struct mailbox *mailbox)
 {
-    unsigned long hash = 0;
+    unsigned hash = 0;
     const char *name = mailbox->name;
 
     while (*name) {
@@ -687,7 +672,7 @@ void mailbox_make_uniqueid(struct mailbox *mailbox)
     free(mailbox->uniqueid);
     mailbox->uniqueid = xmalloc(32);
 
-    snprintf(mailbox->uniqueid, 32, "%08lx%08lx",
+    snprintf(mailbox->uniqueid, 32, "%08x%08x",
 	     hash, mailbox->i.uidvalidity);
 
     mailbox->header_dirty = 1;
@@ -967,9 +952,9 @@ void mailbox_close(struct mailbox **mailboxptr)
 
     /* handle unlinks */
     if (mailbox->unlink.num) {
-	int i;
+	unsigned i;
 	const char *fname;
-	unsigned long uid;
+	uint32_t uid;
 	for (i = 0; i < mailbox->unlink.num; i++) {
 	    uid = mailbox->unlink.uid[i];
 	    fname = mailbox_message_fname(mailbox, uid);
@@ -977,7 +962,7 @@ void mailbox_close(struct mailbox **mailboxptr)
 	    unlink(fname);
 	    if (config_auditlog)
 		syslog(LOG_NOTICE, "auditlog: unlink sessionid=<%s> "
-		       "mailbox=<%s> uniqueid=<%s> uid=<%lu>",
+		       "mailbox=<%s> uniqueid=<%s> uid=<%u>",
 			session_id(), mailbox->name, mailbox->uniqueid, uid);
 	}
 	mailbox->unlink.num = 0;
@@ -1049,6 +1034,7 @@ int mailbox_read_header(struct mailbox *mailbox, char **aclptr)
     struct stat sbuf;
     const char *base = NULL;
     unsigned long len = 0;
+    unsigned magic_size = sizeof(MAILBOX_HEADER_MAGIC) - 1;
 
     /* can't be dirty if we're reading it */
     if (mailbox->header_dirty)
@@ -1078,9 +1064,8 @@ int mailbox_read_header(struct mailbox *mailbox, char **aclptr)
     mailbox->header_file_crc = crc32_map(base, sbuf.st_size);
 
     /* Check magic number */
-    if (sbuf.st_size < sizeof(MAILBOX_HEADER_MAGIC)-1 ||
-	strncmp(base, MAILBOX_HEADER_MAGIC,
-		sizeof(MAILBOX_HEADER_MAGIC)-1)) {
+    if (sbuf.st_size < magic_size ||
+	strncmp(base, MAILBOX_HEADER_MAGIC, magic_size)) {
 	r = IMAP_MAILBOX_BADFORMAT;
 	goto done;
     }
@@ -1311,7 +1296,7 @@ static int mailbox_read_index_header(struct mailbox *mailbox)
 	if (fstat(mailbox->index_fd, &sbuf) == -1)
 	    return IMAP_IOERROR;
 
-	if (sbuf.st_size < need_size)
+	if (sbuf.st_size < (int)need_size)
 	    return IMAP_MAILBOX_BADFORMAT;
 
 	mailbox->index_size = sbuf.st_size;
@@ -1376,7 +1361,7 @@ int mailbox_buf_to_index_record(const char *buf,
  * Read an index record from a mailbox
  */
 int mailbox_read_index_record(struct mailbox *mailbox,
-			      unsigned long recno,
+			      uint32_t recno,
 			      struct index_record *record)
 {
     const char *buf;
@@ -1387,7 +1372,7 @@ int mailbox_read_index_record(struct mailbox *mailbox,
 
     if (offset + mailbox->i.record_size > mailbox->index_size) {
 	syslog(LOG_ERR,
-	       "IOERROR: index record %lu for %s past end of file",
+	       "IOERROR: index record %u for %s past end of file",
 	       recno, mailbox->name);
 	return IMAP_IOERROR;
     }
@@ -1825,7 +1810,7 @@ bit32 make_sync_crc(struct mailbox *mailbox, struct index_record *record)
     /* NOTE: this format is idential to an UPDATE COPY command except
      * that the string format of the flags has been replaced with a
      * checksum over the flags */
-    snprintf(buf, 4096, "%lu " MODSEQ_FMT " %lu (%u) %lu %s",
+    snprintf(buf, 4096, "%u " MODSEQ_FMT " %lu (%u) %lu %s",
 	    record->uid, record->modseq, record->last_updated,
 	    flagcrc,
 	    record->internaldate,
@@ -1888,7 +1873,7 @@ int mailbox_index_recalc(struct mailbox *mailbox)
 {
     struct index_record record;
     int r = 0;
-    unsigned long recno;
+    uint32_t recno;
 
     assert(mailbox_index_islocked(mailbox, 1));
 
@@ -1978,14 +1963,14 @@ int mailbox_rewrite_index_record(struct mailbox *mailbox,
 
     n = lseek(mailbox->index_fd, offset, SEEK_SET);
     if (n == -1) {
-	syslog(LOG_ERR, "IOERROR: seeking index record %lu for %s: %m",
+	syslog(LOG_ERR, "IOERROR: seeking index record %u for %s: %m",
 	       record->recno, mailbox->name);
 	return IMAP_IOERROR;
     }
 
     n = retry_write(mailbox->index_fd, buf, INDEX_RECORD_SIZE);
     if (n != INDEX_RECORD_SIZE) {
-	syslog(LOG_ERR, "IOERROR: writing index record %lu for %s: %m",
+	syslog(LOG_ERR, "IOERROR: writing index record %u for %s: %m",
 	       record->recno, mailbox->name);
 	return IMAP_IOERROR;
     }
@@ -1999,7 +1984,7 @@ int mailbox_rewrite_index_record(struct mailbox *mailbox,
 
 	if (config_auditlog)
 	    syslog(LOG_NOTICE, "auditlog: expunge sessionid=<%s> "
-		   "mailbox=<%s> uniqueid=<%s> uid=<%lu> guid=<%s>",
+		   "mailbox=<%s> uniqueid=<%s> uid=<%u> guid=<%s>",
 		session_id(), mailbox->name, mailbox->uniqueid,
 		record->uid, message_guid_encode(&record->guid));
     }
@@ -2011,7 +1996,7 @@ int mailbox_rewrite_index_record(struct mailbox *mailbox,
 
 	if (config_auditlog)
 	    syslog(LOG_NOTICE, "auditlog: unlink sessionid=<%s> "
-		   "mailbox=<%s> uniqueid=<%s> uid=<%lu> guid=<%s>",
+		   "mailbox=<%s> uniqueid=<%s> uid=<%u> guid=<%s>",
 		session_id(), mailbox->name, mailbox->uniqueid,
 		record->uid, message_guid_encode(&record->guid));
     }
@@ -2092,7 +2077,7 @@ int mailbox_append_index_record(struct mailbox *mailbox,
     }
 
     if (config_auditlog)
-	syslog(LOG_NOTICE, "auditlog: append sessionid=<%s> mailbox=<%s> uniqueid=<%s> uid=<%lu> guid=<%s>",
+	syslog(LOG_NOTICE, "auditlog: append sessionid=<%s> mailbox=<%s> uniqueid=<%s> uid=<%u> guid=<%s>",
 	    session_id(), mailbox->name, mailbox->uniqueid, record->uid,
 	    message_guid_encode(&record->guid));
 
@@ -2106,7 +2091,7 @@ int mailbox_index_repack(struct mailbox *mailbox)
     int newrecno = 1;
     indexbuffer_t ibuf;
     unsigned char *buf = ibuf.buf;
-    unsigned recno;
+    uint32_t recno;
     int newindex_fd = -1, newcache_fd = -1;
     struct index_record record;
     size_t offset;
@@ -2242,7 +2227,7 @@ int mailbox_expunge(struct mailbox *mailbox,
 {
     int r = 0;
     int numexpunged = 0;
-    int recno;
+    uint32_t recno;
     struct index_record record;
 
     assert(mailbox_index_islocked(mailbox, 1));
@@ -2287,7 +2272,7 @@ int mailbox_expunge(struct mailbox *mailbox,
 int mailbox_expunge_cleanup(struct mailbox *mailbox, time_t expunge_mark,
 			    unsigned *ndeleted)
 {
-    unsigned recno;
+    uint32_t recno;
     int dirty = 0;
     unsigned numdeleted = 0;
     struct index_record record;
@@ -2711,7 +2696,7 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
     char *path, *mpath;
     struct mailbox *newmailbox = NULL;
     unsigned uidvalidity;
-    int recno;
+    uint32_t recno;
     struct index_record record;
 
     assert(mailbox_index_islocked(oldmailbox, 1));
@@ -3105,8 +3090,8 @@ static int mailbox_reconstruct_acl(struct mailbox *mailbox, int flags)
 	printf("%s: update acl from header %s => %s\n", mailbox->name,
 	       mailbox->acl, acl);
 	if (make_changes) {
-	    r = mboxlist_update(mailbox->name, mailbox->mbtype, mailbox->part,
-				mailbox->uniqueid, acl, 0);
+	    r = mboxlist_update(mailbox->name, mailbox->mbtype,
+				mailbox->part, acl, 0);
 	}
     }
 
@@ -3212,8 +3197,8 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
 	if (record->system_flags & FLAG_UNLINKED)
 	    return 0;
 
-	printf("%s uid %lu not found\n", mailbox->name, record->uid);
-	syslog(LOG_ERR, "%s uid %lu not found", mailbox->name, record->uid);
+	printf("%s uid %u not found\n", mailbox->name, record->uid);
+	syslog(LOG_ERR, "%s uid %u not found", mailbox->name, record->uid);
 
 	if (!make_changes) return 0;
 
@@ -3243,9 +3228,9 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
 
 	/* it's not the same message! */
 	if (!message_guid_compare(&record->guid, &copy.guid)) {
-	    printf("%s uid %lu guid mismatch\n",
+	    printf("%s uid %u guid mismatch\n",
 		   mailbox->name, record->uid);
-	    syslog(LOG_ERR, "%s uid %lu guid mismatch",
+	    syslog(LOG_ERR, "%s uid %u guid mismatch",
 		   mailbox->name, record->uid);
 
 	    if (!make_changes) return 0;
@@ -3276,9 +3261,9 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
     }
 
     if (did_stat && sbuf.st_mtime != record->internaldate) {
-	printf("%s timestamp mismatch %lu\n",
+	printf("%s timestamp mismatch %u\n",
 	       mailbox->name, record->uid);
-	syslog(LOG_ERR, "%s timestamp mismatch %lu",
+	syslog(LOG_ERR, "%s timestamp mismatch %u",
 	       mailbox->name, record->uid);
 	if (make_changes) {
 	    /* make the file timestamp correct */
@@ -3291,18 +3276,18 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
 
     /* XXX - conditions under which modseq or uid or internaldate could be bogus? */
     if (record->modseq > mailbox->i.highestmodseq) {
-	printf("%s uid %lu future modseq " MODSEQ_FMT " found\n",
+	printf("%s uid %u future modseq " MODSEQ_FMT " found\n",
 		   mailbox->name, record->uid, record->modseq);
-	syslog(LOG_ERR, "%s uid %lu future modseq " MODSEQ_FMT " found",
+	syslog(LOG_ERR, "%s uid %u future modseq " MODSEQ_FMT " found",
 		   mailbox->name, record->uid, record->modseq);
 	mailbox_index_dirty(mailbox);
 	mailbox->i.highestmodseq = record->modseq;
     }
 
     if (record->uid > mailbox->i.last_uid) {
-	printf("%s future uid %lu found\n",
+	printf("%s future uid %u found\n",
 	       mailbox->name, record->uid);
-	syslog(LOG_ERR, "%s future uid %lu found",
+	syslog(LOG_ERR, "%s future uid %u found",
 	       mailbox->name, record->uid);
 	mailbox_index_dirty(mailbox);
 	mailbox->i.last_uid = record->uid;
@@ -3318,9 +3303,9 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
     if (records_match(&copy, record))
 	return 0;
 
-    printf("%s uid %lu record mismatch, rewriting\n",
+    printf("%s uid %u record mismatch, rewriting\n",
 	   mailbox->name, record->uid);
-    syslog(LOG_ERR, "%s uid %lu record mismatch, rewriting",
+    syslog(LOG_ERR, "%s uid %u record mismatch, rewriting",
 	   mailbox->name, record->uid);
 
     /* XXX - inform of changes */
@@ -3338,7 +3323,7 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
     return mailbox_rewrite_index_record(mailbox, record);
 }
 
-static int mailbox_reconstruct_append(struct mailbox *mailbox, unsigned long uid,
+static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid,
 				      int make_changes)
 {
     char *fname = mailbox_message_fname(mailbox, uid);
@@ -3351,8 +3336,8 @@ static int mailbox_reconstruct_append(struct mailbox *mailbox, unsigned long uid
 
     /* no file, nothing to do! */
     if (r) {
-	syslog(LOG_ERR, "%s uid %lu not found", mailbox->name, uid);
-	printf("%s uid %lu not found", mailbox->name, uid);
+	syslog(LOG_ERR, "%s uid %u not found", mailbox->name, uid);
+	printf("%s uid %u not found", mailbox->name, uid);
 	if (!make_changes) return 0;
 	unlink(fname);
 	return 0;
@@ -3365,16 +3350,16 @@ static int mailbox_reconstruct_append(struct mailbox *mailbox, unsigned long uid
     if (r) return r;
 
     if (uid > mailbox->i.last_uid) {
-	printf("%s uid %lu found - adding\n", mailbox->name, uid);
-	syslog(LOG_ERR, "%s uid %lu found - adding", mailbox->name, uid);
+	printf("%s uid %u found - adding\n", mailbox->name, uid);
+	syslog(LOG_ERR, "%s uid %u found - adding", mailbox->name, uid);
 	record.uid = uid;
     }
     else {
 	char *oldfname;
 	char *newfname;
 
-	printf("%s uid %lu rediscovered - appending\n", mailbox->name, uid);
-	syslog(LOG_ERR, "%s uid %lu rediscovered - appending", mailbox->name, uid);
+	printf("%s uid %u rediscovered - appending\n", mailbox->name, uid);
+	syslog(LOG_ERR, "%s uid %u rediscovered - appending", mailbox->name, uid);
 	/* XXX - check firstexpunged? */
 	record.uid = mailbox->i.last_uid + 1;
 
@@ -3410,30 +3395,30 @@ static void reconstruct_compare_headers(struct mailbox *mailbox,
     }
 
     if (old->answered != new->answered) {
-	syslog(LOG_ERR, "%s: updating answered %lu => %lu",
+	syslog(LOG_ERR, "%s: updating answered %u => %u",
 	       mailbox->name, old->answered, new->answered);
-	printf("%s: updating answered %lu => %lu\n",
+	printf("%s: updating answered %u => %u\n",
 	       mailbox->name, old->answered, new->answered);
     }
 
     if (old->flagged != new->flagged) {
-	syslog(LOG_ERR, "%s: updating flagged %lu => %lu",
+	syslog(LOG_ERR, "%s: updating flagged %u => %u",
 	       mailbox->name, old->flagged, new->flagged);
-	printf("%s: updating flagged %lu => %lu\n",
+	printf("%s: updating flagged %u => %u\n",
 	       mailbox->name, old->flagged, new->flagged);
     }
 
     if (old->deleted != new->deleted) {
-	syslog(LOG_ERR, "%s: updating deleted %lu => %lu",
+	syslog(LOG_ERR, "%s: updating deleted %u => %u",
 	       mailbox->name, old->deleted, new->deleted);
-	printf("%s: updating deleted %lu => %lu\n",
+	printf("%s: updating deleted %u => %u\n",
 	       mailbox->name, old->deleted, new->deleted);
     }
 
     if (old->exists != new->exists) {
-	syslog(LOG_ERR, "%s: updating exists %lu => %lu",
+	syslog(LOG_ERR, "%s: updating exists %u => %u",
 	       mailbox->name, old->exists, new->exists);
-	printf("%s: updating exists %lu => %lu\n",
+	printf("%s: updating exists %u => %u\n",
 	       mailbox->name, old->exists, new->exists);
     }
 
@@ -3454,7 +3439,7 @@ int mailbox_reconstruct(const char *name, int flags)
     int make_changes = (flags & RECONSTRUCT_MAKE_CHANGES);
 
     int r = 0;
-    int msg;
+    uint32_t msg;
     int i, flag;
     struct index_record record;
     struct mailbox *mailbox;
@@ -3462,7 +3447,7 @@ int mailbox_reconstruct(const char *name, int flags)
     struct found_files discovered;
     struct index_header old_header;
     int have_file;
-    unsigned long recno;
+    uint32_t recno;
     bit32 valid_user_flags[MAX_USER_FLAGS/32];
 
     if (make_changes && !(flags & RECONSTRUCT_QUIET)) {
@@ -3533,7 +3518,7 @@ int mailbox_reconstruct(const char *name, int flags)
 
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	if (mailbox_read_index_record(mailbox, recno, &record)) {
-	    printf("%s: record corrupted %lu (maybe uid %lu)\n",
+	    printf("%s: record corrupted %u (maybe uid %u)\n",
 		   mailbox->name, recno, record.uid);
 	    continue;
 	}

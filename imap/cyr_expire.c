@@ -111,7 +111,7 @@ struct delete_rock {
 /*
  * mailbox_expunge() callback to expunge expired articles.
  */
-static unsigned expire_cb(struct mailbox *mailbox, 
+static unsigned expire_cb(struct mailbox *mailbox __attribute__((unused)), 
 			  struct index_record *record, 
 			  void *rock)
 {
@@ -310,7 +310,7 @@ int delete(char *name,
     }
     return(0);
 }
-static void sighandler (int sig)
+static void sighandler (int sig __attribute((unused)))
 {
     sigquit = 1;
     return;

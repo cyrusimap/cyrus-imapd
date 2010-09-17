@@ -1040,7 +1040,7 @@ static void cmdloop(void)
 		    nntp_exists = group_state->exists;
 		    nntp_current = nntp_exists > 0;
 
-		    prot_printf(nntp_out, "211 %u %lu %lu %s\r\n",
+		    prot_printf(nntp_out, "211 %u %u %u %s\r\n",
 				nntp_exists,
 				nntp_exists ? index_getuid(group_state, 1) :
 				group_state->mailbox->i.last_uid+1,
@@ -2504,7 +2504,7 @@ int do_active(char *name, void *rock)
 	}
     }
     else {
-	prot_printf(nntp_out, "%s %lu %lu %c\r\n", name+strlen(newsprefix),
+	prot_printf(nntp_out, "%s %u %u %c\r\n", name+strlen(newsprefix),
 		    group_state->exists ? index_getuid(group_state, group_state->exists) :
 		    group_state->mailbox->i.last_uid,
 		    group_state->exists ? index_getuid(group_state, 1) :
@@ -2821,7 +2821,7 @@ static void cmd_newnews(char *wild, time_t tstamp)
 
 static void cmd_over(char *msgid, unsigned long uid, unsigned long last)
 {
-    unsigned msgno, last_msgno;
+    uint32_t msgno, last_msgno;
     struct nntp_overview *over;
     int found = 0;
 

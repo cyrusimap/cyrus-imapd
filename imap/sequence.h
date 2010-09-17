@@ -55,9 +55,9 @@ struct seq_range {
 
 struct seqset {
     struct seq_range *set;
-    int len;
-    int alloc;
-    int current;
+    size_t len;
+    size_t alloc;
+    unsigned current;
     unsigned prev;
     unsigned maxval;
     int flags;

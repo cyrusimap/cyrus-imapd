@@ -249,7 +249,7 @@ int mboxlist_findstage(const char *name, char *stagedir, size_t sd_len)
 }
 
 int mboxlist_update(const char *name, int mbtype, 
-		    const char *part, const char *uniqueid,
+		    const char *part,
 		    const char *acl, int localonly)
 {
     int r = 0, r2 = 0;

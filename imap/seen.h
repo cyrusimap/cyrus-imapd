@@ -52,7 +52,7 @@ struct seen;
 
 struct seendata {
     time_t lastread;
-    unsigned long lastuid;
+    uint32_t lastuid;
     time_t lastchange;
     char *seenuids;
 };
