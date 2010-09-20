@@ -160,6 +160,10 @@ static void seqset_simplify(struct seqset *set)
     int out = 0;
     unsigned i;
 
+    /* nothing to simplify */
+    if (!set->len) 
+	return;
+
     /* Sort the ranges using our special comparator */
     qsort(set->set, set->len, sizeof(struct seq_range), comp_coalesce);
 
