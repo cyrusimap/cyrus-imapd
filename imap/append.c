@@ -91,7 +91,7 @@ struct stagemsg {
 };
 
 static int append_addseen(struct mailbox *mailbox, const char *userid,
-			  const char *msgrange);
+			  struct seqset *newseen);
 static void append_setseen(struct appendstate *as, struct index_record *record);
 
 #define zero_index(i) { memset(&i, 0, sizeof(struct index_record)); }
@@ -237,11 +237,8 @@ int append_commit(struct appendstate *as,
     as->mailbox->cache_dirty = 1;
 
     /* set seen state */
-    if (as->seen_seq->len && as->userid[0]) {
-	char *seen = seqset_cstring(as->seen_seq);
-	append_addseen(as->mailbox, as->userid, seen);
-	free(seen);
-    }
+    if (as->userid[0])
+	append_addseen(as->mailbox, as->userid, as->seen_seq);
     seqset_free(as->seen_seq);
     
     /* Write out index header & synchronize to disk. */
@@ -731,50 +728,37 @@ void append_setseen(struct appendstate *as, struct index_record *record)
  */
 static int append_addseen(struct mailbox *mailbox,
 			  const char *userid,
-			  const char *msgrange)
+			  struct seqset *newseen)
 {
     int r;
     struct seen *seendb;
     struct seendata sd;
-    uint32_t last_seen;
-    char *tail;
-    int newlen;
-    unsigned start;
+    struct seqset *oldseen;
 
-    /* what's the first uid in our new list? */
-    start = atoi(msgrange);
+    if (!newseen->len)
+	return 0;
 
     r = seen_open(userid, SEEN_CREATE, &seendb);
     if (r) return r;
 
     r = seen_lockread(seendb, mailbox->uniqueid, &sd);
-    if (r) {
-	seen_close(seendb);
-	return r;
-    }
+    if (r) goto done;
 
-    newlen = strlen(sd.seenuids) + strlen(msgrange) + 10;
-    sd.seenuids = xrealloc(sd.seenuids, newlen);
+    /* parse the old sequence */
+    oldseen = seqset_parse(sd.seenuids, NULL, mailbox->i.last_uid);
+    free(sd.seenuids);
 
-    /* find the final number in the old sequence */
-    last_seen = seq_lastnum(sd.seenuids, (const char **)&tail);
+    /* add the extra items */
+    seqset_join(oldseen, newseen);
+    sd.seenuids = seqset_cstring(oldseen);
+    seqset_free(oldseen);
 
-    /* if anything left in sequence, add a separator */
-    if (tail > sd.seenuids) {
-	if (last_seen && last_seen >= start-1) {
-	    /* otherwise it's already a ':' range separator, keep it */
-	    if (tail[-1] != ':')
-		*tail++ = ':';
-	}
-	else {
-	    *tail++ = ',';
-	}
-    }
-
-    strlcpy(tail, msgrange, newlen - (tail - sd.seenuids));
-
+    /* and write it out */
     sd.lastchange = time(NULL);
     r = seen_write(seendb, mailbox->uniqueid, &sd);
+    free(sd.seenuids);
+
+ done:
     seen_close(seendb);
     return r;
 }

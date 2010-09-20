@@ -96,14 +96,18 @@ int main(int argc, char *argv[])
     int opt;
     unsigned num;
     char *res;
+    const char *origlist = NULL;
 
-    while ((opt = getopt(argc, argv, "C:m:s")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:m:o:s")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
 	    break;
 	case 'm': /* maxval */
 	    parseuint32(optarg, NULL, &maxval);
+	    break;
+	case 'o':
+	    origlist = optarg;
 	    break;
 	case 's':
 	    flags = SEQ_SPARSE;
@@ -129,6 +133,16 @@ int main(int argc, char *argv[])
 		printf("%s NAN\n", argv[i]);
 	    else
 		seqset_add(seq, num, isadd);
+	}
+	if (origlist) {
+	    unsigned oldmax = seq_lastnum(origlist, NULL);
+	    if (oldmax > maxval) {
+		struct seqset *origseq = seqset_parse(origlist, NULL, oldmax);
+		unsigned val;
+		for (val = maxval + 1; val <= oldmax; val++)
+		    seqset_add(seq, val, seqset_ismember(origseq, val));
+		seqset_free(origseq);
+	    }
 	}
 	res = seqset_cstring(seq);
 	printf("%s\n", res);
@@ -156,6 +170,15 @@ int main(int argc, char *argv[])
 	while ((num = seqset_getnext(seq))) {
 	    printf("%u\n", num);
 	}
+    }
+    else if (!strcmp(argv[optind], "join")) {
+	struct seqset *seq2;
+	seq = seqset_parse(argv[optind+1], NULL, maxval);
+	seq2 = seqset_parse(argv[optind+2], NULL, maxval);
+	seqset_join(seq, seq2);
+	res = seqset_cstring(seq);
+	printf("%s\n", res);
+	free(res);
     }
     else if (!strcmp(argv[optind], "ismember")) {
 	int i;

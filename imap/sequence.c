@@ -155,6 +155,29 @@ static int comp_coalesce(const void *v1, const void *v2)
     return r1->low - r2->low;;
 }
 
+static void seqset_simplify(struct seqset *set)
+{
+    int out = 0;
+    unsigned i;
+
+    /* Sort the ranges using our special comparator */
+    qsort(set->set, set->len, sizeof(struct seq_range), comp_coalesce);
+
+    /* Merge intersecting/adjacent ranges */
+    for (i = 1; i < set->len; i++) {
+	if ((int)(set->set[i].low - set->set[out].high) <= 1) {
+	    set->set[out].high = set->set[i].high;
+	} else {
+	    out++;
+	    set->set[out].low = set->set[i].low;
+	    set->set[out].high = set->set[i].high;
+	}
+    }
+
+    /* final length */
+    set->len = out+1;
+}
+
 /*
  * Parse a sequence into an array of sorted & merged ranges.
  */
@@ -162,7 +185,7 @@ struct seqset *seqset_parse(const char *sequence,
 			    struct seqset *set,
 			    unsigned maxval)
 {
-    unsigned i, j, start, end, *num;
+    unsigned i, start, end, *num;
 
     /* short circuit no sequence */
     if (!sequence) return NULL;
@@ -206,20 +229,7 @@ struct seqset *seqset_parse(const char *sequence,
 	sequence++;
     }
 
-    /* Sort the ranges using our special comparator */
-    qsort(set->set, set->len, sizeof(struct seq_range), comp_coalesce);
-
-    /* Merge intersecting/adjacent ranges */
-    for (i = 0, j = 1; j < set->len; j++) {
-	if ((int)(set->set[j].low - set->set[i].high) <= 1) {
-	    set->set[i].high = set->set[j].high;
-	} else {
-	    i++;
-	    set->set[i].low = set->set[j].low;
-	    set->set[i].high = set->set[j].high;
-	}
-    }
-    set->len = i+1;
+    seqset_simplify(set);
 
     return set;
 }
@@ -262,7 +272,8 @@ int seqset_ismember(struct seqset *seq, unsigned num)
     }
 
     /* maybe we're in this range */
-    if (num >= seq->set[seq->current].low && num <= seq->set[seq->current].high)
+    if (num >= seq->set[seq->current].low &&
+        num <= seq->set[seq->current].high)
 	return 1;
 
     /* Fall back to full search */
@@ -302,6 +313,22 @@ unsigned seqset_getnext(struct seqset *seq)
 
     seq->prev = UINT_MAX;
     return 0;
+}
+
+/* NOTE - not sort safe! */
+void seqset_join(struct seqset *a, struct seqset *b)
+{
+    if (a->len + b->len > a->alloc) {
+	a->alloc = a->len + b->len;
+	a->set =
+	    xrealloc(a->set, a->alloc * sizeof(struct seq_range));
+    }
+    /* call them char * so the maths works out right */
+    memcpy((char *)a->set + a->len * sizeof(struct seq_range),
+	   (char *)b->set, b->len * sizeof(struct seq_range));
+    a->len += b->len;
+
+    seqset_simplify(a);
 }
 
 void seqset_append(struct seqset **l, char *sequence, unsigned maxval)
