@@ -2468,7 +2468,7 @@ int mailbox_create(const char *name,
 	goto done;
     }
 
-    r = seen_create_mailbox(mailbox);
+    r = seen_create_mailbox(NULL, mailbox);
     if (r) goto done;
     r = mailbox_commit(mailbox);
     if (r) goto done;
@@ -2565,7 +2565,7 @@ int mailbox_delete(struct mailbox **mailboxptr)
     if (r) return r;
 
     /* remove any seen */
-    seen_delete_mailbox(mailbox);
+    seen_delete_mailbox(NULL, mailbox);
 
     /* can't unlink any files yet, because our promise to other
      * users of the mailbox applies! Can only unlink with an

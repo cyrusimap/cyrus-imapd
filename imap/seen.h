@@ -90,8 +90,8 @@ int seen_close(struct seen *seendb);
 int seen_unlock(struct seen *seendb);
 
 /* called on mailbox operations */
-int seen_create_mailbox(struct mailbox *mailbox);
-int seen_delete_mailbox(struct mailbox *mailbox);
+int seen_create_mailbox(const char *userid, struct mailbox *mailbox);
+int seen_delete_mailbox(const char *userid, struct mailbox *mailbox);
 int seen_copy(const char *userid, struct mailbox *oldmailbox, struct mailbox *newmailbox);
 
 /* called on user operations */

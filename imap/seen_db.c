@@ -392,26 +392,39 @@ int seen_close(struct seen *seendb)
     return 0;
 }
 
-int seen_create_mailbox(struct mailbox *mailbox)
+int seen_create_mailbox(const char *userid, struct mailbox *mailbox)
 {
     if (SEEN_DEBUG) {
-	syslog(LOG_DEBUG, "seen_db: seen_create_mailbox(%s)", 
-	       mailbox->uniqueid);
+	syslog(LOG_DEBUG, "seen_db: seen_create_mailbox(%s, %s)", 
+	       userid, mailbox->uniqueid);
     }
 
     /* noop */
     return 0;
 }
 
-int seen_delete_mailbox(struct mailbox *mailbox)
+int seen_delete_mailbox(const char *userid, struct mailbox *mailbox)
 {
+    int r;
+    struct seen *seendb;
+    const char *uniqueid = mailbox->uniqueid;
+
     if (SEEN_DEBUG) {
-	syslog(LOG_DEBUG, "seen_db: seen_delete_mailbox(%s)", 
-	       mailbox->uniqueid);
+	syslog(LOG_DEBUG, "seen_db: seen_delete_mailbox(%s, %s)", 
+	       userid, uniqueid);
     }
 
     /* noop */
-    return 0;
+    if (!userid)
+	return 0;
+
+    r = seen_open(userid, SEEN_SILENT, &seendb);
+    if (!r) {
+	r = DB->delete(seendb->db, uniqueid, strlen(uniqueid),
+		       &seendb->tid, 1);
+	seen_close(seendb);
+    }
+    return r;
 }
 
 int seen_create_user(const char *user)
