@@ -72,6 +72,7 @@
 #include "statuscache.h"
 #include "seen.h"
 #include "sync_log.h"
+#include "imparse.h"
 
 #define FNAME_SEENSUFFIX ".seen" /* per user seen state extension */
 #define FNAME_SEEN "/cyrus.seen" /* for legacy seen state */
@@ -288,6 +289,12 @@ static int seen_readit(struct seen *seendb, const char *uniqueid,
     }
 
     parse_data(data, datalen, sd);
+    if (sd->seenuids[0] && !imparse_issequence(sd->seenuids)) {
+	syslog(LOG_ERR, "DBERROR: invalid sequence <%s> for %s %s - nuking",
+	       sd->seenuids, seendb->user, uniqueid);
+	free(sd->seenuids);
+	sd->seenuids = xstrdup("");
+    }
 
     return 0;
 }
