@@ -178,6 +178,30 @@ static void seqset_simplify(struct seqset *set)
     set->len = out+1;
 }
 
+static int read_num(const char **input, unsigned maxval, unsigned *res)
+{
+    const char *ptr = *input;
+
+    if (*ptr == '*') {
+	*res = maxval ? maxval : UINT_MAX;
+	ptr++;
+	*input = ptr;
+	return 0;
+    }
+    else if (cyrus_isdigit((int) *ptr)) {
+	*res = 0;
+	while (cyrus_isdigit((int) *ptr)) {
+	    *res = (*res)*10 + *ptr - '0';
+	    ptr++;
+	}
+	*input = ptr;
+	return 0;
+    }
+
+    /* not expected */
+    return -1;
+}
+
 /*
  * Parse a sequence into an array of sorted & merged ranges.
  */
@@ -185,52 +209,44 @@ struct seqset *seqset_parse(const char *sequence,
 			    struct seqset *set,
 			    unsigned maxval)
 {
-    unsigned i, start, end, *num;
+    unsigned start, end;
 
     /* short circuit no sequence */
     if (!sequence) return NULL;
 
     if (!set) set = seqset_init(maxval, SEQ_SPARSE);
 
-    start = end = 0;
-    num = &start;
-    for (;;) {
-	if (cyrus_isdigit((int) *sequence)) {
-	    *num = (*num)*10 + *sequence - '0';
+    while (*sequence) {
+	if (read_num(&sequence, maxval, &start))
+	    fatal("invalid sequence", EC_SOFTWARE);
+	if (*sequence == ':') {
+	    sequence++;
+	    if (read_num(&sequence, maxval, &end))
+		fatal("invalid sequence", EC_SOFTWARE);
 	}
-	else if (*sequence == '*') {
-	    *num = maxval ? maxval : UINT_MAX;
+	else 
+	    end = start;
+	if (start > end) {
+	    unsigned i = end;
+	    end = start;
+	    start = i;
 	}
-	else if (*sequence == ':') {
-	    num = &end;
-	}
-	else {
-	    if (!end) end = start;
-	    else if (start > end) {
-		i = end;
-		end = start;
-		start = i;
-	    }
 
-	    if (set->len == set->alloc) {
-		set->alloc += SETGROWSIZE;
-		set->set =
-		    xrealloc(set->set, set->alloc * sizeof(struct seq_range));
-	    }
-	    set->set[set->len].low = start;
-	    set->set[set->len].high = end;
-	    set->len++;
-
-	    start = end = 0;
-	    num = &start;
-
-	    if (!*sequence) break;
+	if (set->len == set->alloc) {
+	    set->alloc += SETGROWSIZE;
+	    set->set = xrealloc(set->set, set->alloc * sizeof(struct seq_range));
 	}
-	sequence++;
+	set->set[set->len].low = start;
+	set->set[set->len].high = end;
+	set->len++;
+
+	if (*sequence == ',')
+	    sequence++;
+	/* could test for invalid chars here, but the number parser next
+	 * time through will grab them, so no need */
     }
 
     seqset_simplify(set);
-
     return set;
 }
 
