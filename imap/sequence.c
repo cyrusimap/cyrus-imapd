@@ -275,6 +275,7 @@ int seqset_ismember(struct seqset *seq, unsigned num)
 
     /* Short circuit no list! */
     if (!seq) return 0;
+    if (!seq->len) return 0;
 
     /* Short circuit if we're outside all ranges */
     if ((num < seq->set[0].low) || (num > seq->set[seq->len-1].high)) {
