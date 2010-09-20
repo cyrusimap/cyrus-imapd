@@ -394,9 +394,13 @@ static int delete_cb(void *rockp,
 int statuscache_invalidate(const char *mboxname, struct statusdata *sdata)
 {
     int keylen, r;
-    char *key = statuscache_buildkey(mboxname, "", &keylen);
+    char *key;
     int doclose = 0;
     struct statuscache_deleterock drock;
+
+    /* if it's disabled then skip */
+    if (!config_getswitch(IMAPOPT_STATUSCACHE))
+	return 0;
 
     /* Open DB if it hasn't been opened */
     if (!statuscache_dbopen) {
@@ -406,6 +410,8 @@ int statuscache_invalidate(const char *mboxname, struct statusdata *sdata)
 
     drock.db = statuscachedb;
     drock.tid = NULL;
+
+    key = statuscache_buildkey(mboxname, "", &keylen);
 
     /* strip off the second NULL that buildkey added, so we match 
      * the entires for all users */
