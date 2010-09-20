@@ -73,7 +73,7 @@ extern char *imapd_userid, *proxy_userid;
 extern struct namespace imapd_namespace;
 
 extern int mlookup(const char *tag, const char *ext_name,
-		   const char *name, int *flags, char **pathp, char **mpathp,
+		   const char *name, int *flags,
 		   char **partp, char **aclp, struct txn **tid) ;
 
 static char *imap_parsemechlist(const char *str, struct protocol_t *prot)
@@ -139,7 +139,7 @@ struct backend *proxy_findinboxserver(const char *userid)
 					       userid, inbox);
 
     if(!r) {
-	r = mlookup(NULL, NULL, inbox, &mbtype, NULL, NULL, &server, NULL, NULL);
+	r = mlookup(NULL, NULL, inbox, &mbtype, &server, NULL, NULL);
 	if (!r && (mbtype & MBTYPE_REMOTE)) {
 	    s = proxy_findserver(server, &imap_protocol,
 				 proxy_userid, &backend_cached,
