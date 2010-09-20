@@ -119,7 +119,7 @@ PROGS = imapd lmtpd pop3d \
 	fud smmapd reconstruct quota mbpath ipurge cyr_dbtool cyr_synclog \
 	cyrdump chk_cyrus cvt_cyrusdb deliver ctl_mboxlist \
 	ctl_deliver ctl_cyrusdb squatter mbexamine cyr_expire arbitron \
-	unexpunge cyr_df cyr_sequence @IMAP_PROGS@
+	unexpunge cyr_df cyr_sequence cyr_userseen @IMAP_PROGS@
 
 BUILTSOURCES = imap_err.c imap_err.h pushstats.c pushstats.h \
 	lmtpstats.c lmtpstats.h xversion.h mupdate_err.c mupdate_err.h \
@@ -257,6 +257,10 @@ sync_server: sync_server.o sync_support.o \
 ### Command Line Utilities
 arbitron: arbitron.o $(CLIOBJS) libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o arbitron arbitron.o $(CLIOBJS) \
+	libimap.a $(DEPLIBS) $(LIBS)
+
+cyr_userseen: cyr_userseen.o mutex_fake.o libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o cyr_userseen cyr_userseen.o $(CLIOBJS) \
 	libimap.a $(DEPLIBS) $(LIBS)
 
 cyr_sequence: cyr_sequence.o mutex_fake.o libimap.a $(DEPLIBS)
