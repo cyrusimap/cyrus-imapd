@@ -233,6 +233,8 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
 	    goto bail;
 	}
 
+	/* mailbox is open from here, no exiting without closing it! */
+
 	part_list = sync_reserve_partlist(reserve_guids, mailbox->part);
 
 	sync_folder_list_add(master_folders, mailbox->uniqueid, mailbox->name, 
@@ -991,19 +993,18 @@ static int mailbox_full_update(const char *mboxname)
     uint32_t recno;
     unsigned old_num_records;
     struct index_record mrecord, rrecord;
-    struct mailbox *mailbox;
+    struct mailbox *mailbox = NULL;
     int r;
-    struct dlist *kin;
-    struct dlist *ki;
-    struct dlist *kr;
-    struct dlist *ka;
-    struct dlist *kuids;
+    struct dlist *kin = NULL;
+    struct dlist *ki = NULL;
+    struct dlist *kr = NULL;
+    struct dlist *ka = NULL;
+    struct dlist *kuids = NULL;
     struct dlist *kl = NULL;
     struct dlist *kaction = NULL;
     struct dlist *kexpunge = NULL;
     modseq_t highestmodseq;
     uint32_t last_uid;
-    int mboxopen = 0;
 
     kl = dlist_atom(NULL, cmd, mboxname);
     sync_send_lookup(kl, sync_out);
@@ -1015,20 +1016,9 @@ static int mailbox_full_update(const char *mboxname)
     kl = kin->head;
 
     if (!kl) {
-	dlist_free(&kin);
-	return IMAP_MAILBOX_NONEXISTENT;
+	r = IMAP_MAILBOX_NONEXISTENT;
+	goto done;
     }
-
-    /* we'll probably be updating it! */
-    r = mailbox_open_iwl(mboxname, &mailbox);
-    if (r) goto done;
-    mboxopen = 1;
-
-    /* re-calculate our local CRC just in case it's out of sync */
-    r = mailbox_index_recalc(mailbox);
-    if (r) goto done;
-
-    old_num_records = mailbox->i.num_records;
 
     /* XXX - handle the header.  I want to do some ordering on timestamps
      * in particular here - if there's more recent data on the replica then
@@ -1038,14 +1028,30 @@ static int mailbox_full_update(const char *mboxname)
      * doesn't really matter too much, because we'll blat the replica's
      * values anyway! */
 
-    if (!dlist_getmodseq(kl, "HIGHESTMODSEQ", &highestmodseq))
-	return IMAP_PROTOCOL_BAD_PARAMETERS;
+    if (!dlist_getmodseq(kl, "HIGHESTMODSEQ", &highestmodseq)) {
+	r = IMAP_PROTOCOL_BAD_PARAMETERS;
+	goto done;
+    }
 
-    if (!dlist_getnum(kl, "LAST_UID", &last_uid))
-	return IMAP_PROTOCOL_BAD_PARAMETERS;
+    if (!dlist_getnum(kl, "LAST_UID", &last_uid)) {
+	r = IMAP_PROTOCOL_BAD_PARAMETERS;
+	goto done;
+    }
 
-    if (!dlist_getlist(kl, "RECORD", &kr))
-	return IMAP_PROTOCOL_BAD_PARAMETERS;
+    if (!dlist_getlist(kl, "RECORD", &kr)) {
+	r = IMAP_PROTOCOL_BAD_PARAMETERS;
+	goto done;
+    }
+
+    /* we'll be updating it! */
+    r = mailbox_open_iwl(mboxname, &mailbox);
+    if (r) goto done;
+
+    /* re-calculate our local CRC just in case it's out of sync */
+    r = mailbox_index_recalc(mailbox);
+    if (r) goto done;
+
+    old_num_records = mailbox->i.num_records;
 
     if (mailbox->i.highestmodseq < highestmodseq) {
 	/* highestmodseq on replica is dirty - we must go to at least one higher! */
@@ -1148,11 +1154,11 @@ static int mailbox_full_update(const char *mboxname)
 	}
     }
 
-    /* close the mailbox before sending any expunges to avoid deadlocks */
+    /* commit and close the mailbox before sending any expunges
+     * to avoid deadlocks */
     r = mailbox_commit(mailbox);
-    mailbox_close(&mailbox);
-    mboxopen = 0;
     if (r) goto done;
+    mailbox_close(&mailbox);
 
     /* only send expunge if we have some UIDs to expunge */
     if (kuids->head) {
@@ -1161,7 +1167,8 @@ static int mailbox_full_update(const char *mboxname)
     }
 
 done:
-    if (mboxopen) mailbox_close(&mailbox);
+    if (mailbox) mailbox_close(&mailbox);
+    dlist_free(&kin);
     dlist_free(&kaction);
     dlist_free(&kexpunge);
     return r;
@@ -1256,9 +1263,9 @@ static int update_mailbox(struct sync_folder *local,
     return r;
 
 done:
+    if (mailbox) mailbox_close(&mailbox);
     dlist_free(&kupload);
     dlist_free(&kl);
-    mailbox_close(&mailbox);
     return r;
 }
 

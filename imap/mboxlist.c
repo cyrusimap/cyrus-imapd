@@ -1204,8 +1204,7 @@ int mboxlist_setacl(const char *name, const char *identifier,
     int myrights;
     int mode = ACL_MODE_SET;
     int isusermbox = 0, anyoneuseracl = 1;
-    struct mailbox *mailbox;
-    int mailbox_open = 0;
+    struct mailbox *mailbox = NULL;
     char *newacl = NULL;
     char *mboxent = NULL;
     struct txn *tid = NULL;
@@ -1282,7 +1281,6 @@ int mboxlist_setacl(const char *name, const char *identifier,
         r = mailbox_open_iwl(name, &mailbox);
 
 	if (!r) {
-	    mailbox_open = 1;
 	    do {
 		/* lookup the mailbox to make sure it exists and get its acl */
 		r = mboxlist_mylookup(name, &mbentry, &tid, 1);
@@ -1406,7 +1404,7 @@ int mboxlist_setacl(const char *name, const char *identifier,
 		   cyrusdb_strerror(r2));
 	}
     }
-    if (mailbox_open) mailbox_close(&mailbox);
+    if (mailbox) mailbox_close(&mailbox);
     if (mboxent) free(mboxent);
     if (newacl) free(newacl);
 
@@ -2300,38 +2298,33 @@ static int mboxlist_rmquota(const char *name,
 			    int maycreate __attribute__((unused)),
 			    void *rock)
 {
-    int r;
-    struct mailbox *mailbox;
+    int r = 0;
+    struct mailbox *mailbox = NULL;
     const char *oldroot = (const char *) rock;
 
-    assert(rock != NULL);
+    assert(oldroot != NULL);
 
     r = mailbox_open_iwl(name, &mailbox);
-    if (r) goto error_noclose;
+    if (r) goto done;
 
     if (mailbox->quotaroot) {
-	if (strlen(mailbox->quotaroot) != strlen(oldroot)
-	    || strcmp(mailbox->quotaroot, oldroot)) {
+	if (strcmp(mailbox->quotaroot, oldroot)) {
 	    /* Part of a different quota root */
-	    mailbox_close(&mailbox);
-	    return 0;
+	    goto done;
 	}
 
 	mailbox_set_quotaroot(mailbox, NULL);
-
 	r = mailbox_commit(mailbox);
-	if (r) goto error;
     }
 
-    mailbox_close(&mailbox);
-    return 0;
+ done:
+    if (mailbox) mailbox_close(&mailbox);
+    if (r) {
+	syslog(LOG_ERR, "LOSTQUOTA: unable to remove quota root %s for %s: %s",
+	       oldroot, name, error_message(r));
+    }
 
- error:
-    mailbox_close(&mailbox);
- error_noclose:
-    syslog(LOG_ERR, "LOSTQUOTA: unable to remove quota root %s for %s: %s",
-	   oldroot, name, error_message(r));
-    
+    /* not a huge tragedy if we failed, so always return success */
     return 0;
 }
 
@@ -2347,26 +2340,27 @@ static int mboxlist_changequota(const char *name,
     int r;
     struct mailbox *mailbox;
     struct change_rock *crock = (struct change_rock *) rock;
-    struct quota *newquota = crock->quota;
+    struct quota *newquota;
     struct quota q;
     struct txn **tid = crock->tid;
 
-    assert(rock != NULL);
+    assert(crock);
+    newquota = crock->quota;
+    assert(newquota);
 
     r = mailbox_open_iwl(name, &mailbox);
-    if (r) goto error_noclose;
+    if (r) goto done;
 
     if (mailbox->quotaroot) {
 	if (strlen(mailbox->quotaroot) >= strlen(newquota->root)) {
 	    /* Part of a child quota root - skip */
-	    mailbox_close(&mailbox);
-	    return 0;
+	    goto done;
 	}
 
 	/* remove usage from the old quotaroot */
 	q.root = mailbox->quotaroot;
 	r = quota_read(&q, tid, 1);
-	if (r) goto error;
+	if (r) goto done;
 	if (q.used >= mailbox->i.quota_mailbox_used) {
 	    q.used -= mailbox->i.quota_mailbox_used;
 	}
@@ -2385,18 +2379,18 @@ static int mboxlist_changequota(const char *name,
     /* update (or set) the quotaroot */
     mailbox_set_quotaroot(mailbox, newquota->root);
     r = mailbox_commit(mailbox);
-    if (r) goto error;
+    if (r) goto done;
 
     /* track this mailbox's usage */
     newquota->used += mailbox->i.quota_mailbox_used;
 
- error:
-    mailbox_close(&mailbox);
+ done:
+    if (mailbox) mailbox_close(&mailbox);
 
- error_noclose:
-    if (r)
+    if (r) {
 	syslog(LOG_ERR, "LOSTQUOTA: unable to change quota root for %s to %s: %s",
 	       name, newquota->root, error_message(r));
+    }
 
     /* Note, we're a callback, and it's not a huge tragedy if we
      * fail, so we don't ever return a failure */
