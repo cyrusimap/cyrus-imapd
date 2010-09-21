@@ -174,7 +174,7 @@ int append_setup(struct appendstate *as, const char *name,
     }
 
     q.root = as->mailbox->quotaroot;
-    r = quota_read(&q, NULL, 1);
+    r = quota_read(&q, NULL, 0);
     if (!r) {
 	if (q.limit >= 0 && quotacheck >= 0 &&
 	    q.used + quotacheck > ((uquota_t) q.limit * QUOTA_UNITS)) {
