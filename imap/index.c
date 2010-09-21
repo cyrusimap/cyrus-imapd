@@ -316,6 +316,9 @@ int index_expunge(struct index_state *state, char *sequence)
 	if (!im->isseen)
 	    state->numunseen--;
 
+	if (im->recent)
+	    state->numrecent--;
+
 	im->record.system_flags |= FLAG_EXPUNGED;
 
 	r = mailbox_rewrite_index_record(state->mailbox, &im->record);
