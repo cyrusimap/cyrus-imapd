@@ -245,7 +245,7 @@ int main(int argc, char *argv[])
     int opt, r = 0;
     char *alt_config = NULL;
     char buf[MAX_MAILBOX_PATH+1];
-    struct mailbox *mailbox;
+    struct mailbox *mailbox = NULL;
     int mode = MODE_UNKNOWN;
     unsigned numrestored = 0;
     time_t time_since = time(NULL);

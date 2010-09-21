@@ -351,7 +351,7 @@ int handle_request(const char *who, const char *name,
 		   struct sockaddr_storage sfrom, socklen_t sfromsiz)
 {
     int r;
-    struct mailbox *mailbox;
+    struct mailbox *mailbox = NULL;
     time_t lastread;
     time_t lastarrived;
     unsigned recentuid;

@@ -405,7 +405,7 @@ do_reconstruct(char *name,
     int r;
     char buf[MAX_MAILBOX_NAME];
     static char lastname[MAX_MAILBOX_NAME] = "";
-    struct mailbox *mailbox;
+    struct mailbox *mailbox = NULL;
     char outpath[MAX_MAILBOX_PATH];
 
     signals_poll();

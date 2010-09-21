@@ -164,7 +164,7 @@ static char *statuscache_buildkey(const char *mailboxname, const char *userid,
 int status_lookup(const char *mboxname, const char *userid,
 		  unsigned statusitems, struct statusdata *sdata)
 {
-    struct mailbox *mailbox;
+    struct mailbox *mailbox = NULL;
     unsigned numrecent = 0;
     unsigned numunseen = 0;
     unsigned c_statusitems;

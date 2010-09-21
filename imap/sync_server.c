@@ -995,7 +995,7 @@ static void cmd_restart(struct sync_reserve_list **reserve_listp, int re_alloc)
 void reserve_folder(const char *part, const char *mboxname,
 		    struct sync_msgid_list *part_list)
 {
-    struct mailbox *mailbox;
+    struct mailbox *mailbox = NULL;
     struct index_record record;
     int r;
     struct sync_msgid *item;
@@ -1154,7 +1154,7 @@ static int do_mailbox(struct dlist *kin,
 
     uint32_t options;
 
-    struct mailbox *mailbox;
+    struct mailbox *mailbox = NULL;
     struct index_record mrecord, rrecord;
     struct sync_msgid_list *part_list;
     unsigned old_num_records;
@@ -1386,7 +1386,7 @@ static int mailbox_cb(char *name,
 		      void *rock)
 {
     struct sync_name_list *qrl = (struct sync_name_list *)rock;
-    struct mailbox *mailbox;
+    struct mailbox *mailbox = NULL;
     struct dlist *kl = dlist_kvlist(NULL, "MAILBOX");
     int r;
 
@@ -1410,7 +1410,7 @@ static int mailbox_cb(char *name,
 
 static int do_getfullmailbox(struct dlist *kin)
 {
-    struct mailbox *mailbox;
+    struct mailbox *mailbox = NULL;
     struct dlist *kl = dlist_kvlist(NULL, "MAILBOX");
     int r;
 
@@ -1906,7 +1906,7 @@ static int do_expunge(struct dlist *kin)
     const char *uniqueid;
     struct dlist *ul;
     struct dlist *ui;
-    struct mailbox *mailbox;
+    struct mailbox *mailbox = NULL;
     struct index_record record;
     uint32_t recno;
     int r;

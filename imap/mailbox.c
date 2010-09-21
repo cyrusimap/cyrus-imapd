@@ -754,8 +754,10 @@ int mailbox_open_advanced(const char *name,
 {
     struct mboxlist_entry mbentry;
     struct mailboxlist *listitem;
-    struct mailbox *mailbox;
+    struct mailbox *mailbox = NULL;
     int r = 0;
+
+    assert(*mailboxptr == NULL);
 
     listitem = find_listitem(name);
 
@@ -2357,7 +2359,7 @@ int mailbox_create(const char *name,
     char quotaroot[MAX_MAILBOX_BUFFER];
     int hasquota;
     char *fname;
-    struct mailbox *mailbox;
+    struct mailbox *mailbox = NULL;
     int n;
     char generation_buf[4];
     int createfnames[] = { META_INDEX, META_CACHE, META_HEADER, 0 };
@@ -3007,7 +3009,7 @@ static int find_files(struct mailbox *mailbox, struct found_files *files,
  * what we can from the filesystem! */
 static int mailbox_reconstruct_create(const char *name, struct mailbox **mbptr)
 {
-    struct mailbox *mailbox;
+    struct mailbox *mailbox = NULL;
     int options = config_getint(IMAPOPT_MAILBOX_DEFAULT_OPTIONS)
 		| OPT_POP3_NEW_UIDL;
     struct mboxlist_entry mbentry;
@@ -3443,7 +3445,7 @@ int mailbox_reconstruct(const char *name, int flags)
     uint32_t msg;
     int i, flag;
     struct index_record record;
-    struct mailbox *mailbox;
+    struct mailbox *mailbox = NULL;
     struct found_files files;
     struct found_files discovered;
     struct index_header old_header;

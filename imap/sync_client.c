@@ -207,7 +207,7 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
     struct sync_name *mbox;
     struct sync_folder *rfolder;
     struct sync_msgid_list *part_list;
-    struct mailbox *mailbox;
+    struct mailbox *mailbox = NULL;
     int r;
 
     /* Find messages we want to upload that are available on server */
@@ -1198,7 +1198,7 @@ static int update_mailbox(struct sync_folder *local,
 			  struct sync_reserve_list *reserve_guids)
 {
     struct sync_msgid_list *part_list;
-    struct mailbox *mailbox;
+    struct mailbox *mailbox = NULL;
     int r = 0;
     struct dlist *kl = dlist_new("MAILBOX");
     struct dlist *kupload = dlist_list(NULL, "MESSAGE");
@@ -1597,7 +1597,7 @@ static int do_mailbox_info(char *name,
 			   void *rock)
 {
     int r;
-    struct mailbox *mailbox;
+    struct mailbox *mailbox = NULL;
     struct mboxinfo *info = (struct mboxinfo *)rock;
 
     r = mailbox_open_irl(name, &mailbox);
@@ -1843,7 +1843,7 @@ int do_user(char *userid)
     struct sync_seen_list *replica_seen = sync_seen_list_create();
     struct sync_quota_list *replica_quota = sync_quota_list_create();
     struct dlist *kl = NULL;
-    struct mailbox *mailbox;
+    struct mailbox *mailbox = NULL;
 
     if (verbose) 
         printf("USER %s\n", userid);

@@ -110,7 +110,7 @@ int append_check(const char *name,
 		 struct auth_state *auth_state,
 		 long aclcheck, quota_t quotacheck)
 {
-    struct mailbox *mailbox;
+    struct mailbox *mailbox = NULL;
     int myrights;
     int r;
     struct quota q;
@@ -161,6 +161,7 @@ int append_setup(struct appendstate *as, const char *name,
     int r;
     struct quota q;
 
+    as->mailbox = NULL;
     r = mailbox_open_iwl(name, &as->mailbox);
     if (r) return r;
 

@@ -233,7 +233,7 @@ usage(char *name) {
 /* we don't check what comes in on matchlen and maycreate, should we? */
 int purge_me(char *name, int matchlen __attribute__((unused)),
 	     int maycreate __attribute__((unused))) {
-  struct mailbox *mailbox;
+  struct mailbox *mailbox = NULL;
   int r;
   mbox_stats_t stats;
 

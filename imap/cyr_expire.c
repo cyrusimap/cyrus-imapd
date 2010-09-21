@@ -143,7 +143,7 @@ int expire(char *name, int matchlen, int maycreate __attribute__((unused)),
     char buf[MAX_MAILBOX_BUFFER] = "", *p;
     struct annotation_data attrib;
     int r, domainlen = 0;
-    struct mailbox *mailbox;
+    struct mailbox *mailbox = NULL;
     unsigned numdeleted = 0;
 
     if (sigquit) {

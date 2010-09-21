@@ -2330,7 +2330,7 @@ static int mboxlist_changequota(const char *name,
 				void *rock)
 {
     int r = 0;
-    struct mailbox *mailbox;
+    struct mailbox *mailbox = NULL;
     const char *root = (const char *) rock;
     struct quota q;
     struct txn *tid = NULL;

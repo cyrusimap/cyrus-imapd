@@ -5651,7 +5651,7 @@ void cmd_reconstruct(const char *tag, const char *name, int recursive)
     char quotaroot[MAX_MAILBOX_BUFFER];
     int mbtype;
     char *server;
-    struct mailbox *mailbox;
+    struct mailbox *mailbox = NULL;
 
     /* administrators only please */
     if (!imapd_userisadmin)
@@ -6441,7 +6441,7 @@ void cmd_getquotaroot(const char *tag, const char *name)
     char mailboxname[MAX_MAILBOX_BUFFER];
     char *server;
     int mbtype;
-    struct mailbox *mailbox;
+    struct mailbox *mailbox = NULL;
     int myrights;
     int r, doclose = 0;
 
@@ -8467,7 +8467,7 @@ static int do_xfer_single(char *toserver, char *topart,
 			 mailboxname);
 	} else {
 	    /* Can't trust local mailboxes database with unified config */
-	    struct mailbox *mailbox;
+	    struct mailbox *mailbox = NULL;
 
 	    r = mailbox_open_iwl(mailboxname, &mailbox);
 	    if(r) syslog(LOG_ERR,

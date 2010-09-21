@@ -744,7 +744,7 @@ static void annotation_get_size(const char *int_mboxname,
 				struct mailbox_annotation_rock *mbrock,
 				void *rock __attribute__((unused))) 
 {
-    struct mailbox *mailbox;
+    struct mailbox *mailbox = NULL;
     char value[21];
     struct annotation_data attrib;
 
@@ -831,7 +831,7 @@ static void annotation_get_lastpop(const char *int_mboxname,
                                  struct mailbox_annotation_rock *mbrock,
                                  void *rock __attribute__((unused)))
 { 
-    struct mailbox *mailbox;
+    struct mailbox *mailbox = NULL;
     char value[40];
     struct annotation_data attrib;
   
@@ -879,7 +879,7 @@ static void annotation_get_mailboxopt(const char *int_mboxname,
 				      struct mailbox_annotation_rock *mbrock,
 				      void *rock __attribute__((unused)))
 { 
-    struct mailbox *mailbox;
+    struct mailbox *mailbox = NULL;
     int flag = 0, i;
     char value[40];
     struct annotation_data attrib;
@@ -1715,7 +1715,7 @@ static int annotation_set_mailboxopt(const char *int_mboxname,
 				     struct mailbox_annotation_rock *mbrock,
 				     void *rock __attribute__((unused)))
 {
-    struct mailbox *mailbox;
+    struct mailbox *mailbox = NULL;
     int flag = 0, r = 0, i;
     unsigned long oldopts;
 

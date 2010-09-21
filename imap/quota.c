@@ -342,7 +342,7 @@ int fixquota_mailbox(char *name,
 		     void *rock)
 {
     int r;
-    struct mailbox *mailbox;
+    struct mailbox *mailbox = NULL;
     int i, len, thisquota, thisquotalen;
     struct fix_rock *frock = (struct fix_rock *) rock;
     char *p, *domain = frock->domain;

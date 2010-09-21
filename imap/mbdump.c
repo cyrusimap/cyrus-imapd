@@ -234,7 +234,7 @@ int dump_mailbox(const char *tag, const char *mbname, uint32_t uid_start,
     char filename[MAX_MAILBOX_PATH + 1024];
     char *fname;
     int first = 1;
-    struct mailbox *mailbox;
+    struct mailbox *mailbox = NULL;
     int i;
     struct data_file *df;
 
@@ -457,7 +457,7 @@ int undump_mailbox(const char *mbname,
     char c;
     int r = 0;
     int curfile = -1;
-    struct mailbox *mailbox;
+    struct mailbox *mailbox = NULL;
     char sieve_path[2048];
     int sieve_usehomedir = config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR);
     int domainlen = 0;

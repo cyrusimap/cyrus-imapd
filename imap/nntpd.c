@@ -3464,25 +3464,22 @@ static int cancel_cb(const char *msgid __attribute__((unused)),
 		     unsigned long uid,
 		     void *rock)
 {
-    struct mailbox *mailbox;
+    struct mailbox *mailbox = NULL;
 
     /* make sure its a message in a mailbox that we're serving via NNTP */
     if (*name && !strncmp(name, newsprefix, strlen(newsprefix)) &&
 	strncmp(name, "user.", 5)) {
-	int r, doclose = 0;
+	int r;
 
 	r = mailbox_open_iwl(name, &mailbox);
-	if (!r) doclose = 1;
 
 	if (!r &&
 	    !(cyrus_acl_myrights(newsmaster_authstate, mailbox->acl) & ACL_DELETEMSG))
 	    r = IMAP_PERMISSION_DENIED;
 
-	if (!r) {
-	    mailbox_expunge(mailbox, expunge_cancelled, &uid, NULL);
-	}
-
-	if (doclose) mailbox_close(&mailbox);
+	if (!r) r = mailbox_expunge(mailbox, expunge_cancelled, &uid, NULL);
+	if (!r) r = mailbox_commit(mailbox);
+	if (mailbox) mailbox_close(&mailbox);
 
 	/* if we failed, pass the return code back in the rock */
 	if (r) *((int *) rock) = r;

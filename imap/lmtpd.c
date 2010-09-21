@@ -530,7 +530,7 @@ int deliver_mailbox(FILE *f,
 	if (r) {
 	    append_abort(&as);
 	} else {
-	    struct mailbox *mailbox;
+	    struct mailbox *mailbox = NULL;
 	    r = append_commit(&as, quotaoverride ? -1 : 0, NULL, &uid,
 			      NULL, &mailbox);
 	    if (!r) {

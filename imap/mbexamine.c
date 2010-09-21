@@ -220,7 +220,7 @@ int do_examine(char *name,
     int r = 0;
     int flag = 0;
     char ext_name_buf[MAX_MAILBOX_PATH+1];
-    struct mailbox *mailbox;
+    struct mailbox *mailbox = NULL;
     struct index_record record;
     int j;
     
@@ -371,7 +371,7 @@ int do_quota(char *name,
     uint32_t recno;
     int r = 0;
     char ext_name_buf[MAX_MAILBOX_PATH+1];
-    struct mailbox *mailbox;
+    struct mailbox *mailbox = NULL;
     struct index_record record;
     uquota_t total = 0;
     char *fname;

@@ -265,7 +265,7 @@ int do_mailbox(const char *name, int matchlen __attribute__((unused)),
 	       void *rock __attribute__((unused)))
 {
     int r;
-    struct mailbox *mailbox;
+    struct mailbox *mailbox = NULL;
 
     r = mailbox_open_irl(name, &mailbox);
     if (r) return 0;
