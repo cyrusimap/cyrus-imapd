@@ -316,7 +316,7 @@ int index_expunge(struct index_state *state, char *sequence)
 	if (!im->isseen)
 	    state->numunseen--;
 
-	if (im->recent)
+	if (im->isrecent)
 	    state->numrecent--;
 
 	im->record.system_flags |= FLAG_EXPUNGED;
@@ -1070,6 +1070,10 @@ static int _index_search(unsigned **msgno_list, struct index_state *state,
 	msgfile.base = 0;
 	msgfile.size = 0;
 
+	/* expunged messages never match */
+	if (im->record.system_flags & FLAG_EXPUNGED)
+	    continue;
+
 	if (index_search_evaluate(state, searchargs, msgno, &msgfile)) {
 	    (*msgno_list)[n++] = msgno;
 	    if (highestmodseq && im->record.modseq > *highestmodseq) {
@@ -1103,6 +1107,10 @@ static int _index_search(unsigned **msgno_list, struct index_state *state,
 	im = &state->map[msgno-1];
 	msgfile.base = 0;
 	msgfile.size = 0;
+
+	/* expunged messages never match */
+	if (im->record.system_flags & FLAG_EXPUNGED)
+	    continue;
 
 	if (index_search_evaluate(state, searchargs, msgno, &msgfile)) {
 	    (*msgno_list)[n++] = msgno;
