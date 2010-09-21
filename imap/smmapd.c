@@ -139,6 +139,8 @@ void smmapd_reset(void)
 void shut_down(int code) __attribute__((noreturn));
 void shut_down(int code)
 {
+    in_shutdown = 1;
+
     smmapd_reset();
 
     mboxlist_close();

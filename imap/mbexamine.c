@@ -436,6 +436,8 @@ int do_quota(char *name,
 void shut_down(int code) __attribute__((noreturn));
 void shut_down(int code)
 {
+    in_shutdown = 1;
+
     mboxlist_close();
     mboxlist_done();
     exit(code);

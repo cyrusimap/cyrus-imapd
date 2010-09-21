@@ -469,6 +469,8 @@ void usage(void)
  */
 void shut_down(int code)
 {
+    in_shutdown = 1;
+
     proc_cleanup();
 
     if (config_getswitch(IMAPOPT_STATUSCACHE)) {

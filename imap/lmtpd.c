@@ -922,6 +922,9 @@ void shut_down(int code)
 {
     int i;
 
+    /* set flag */
+    in_shutdown = 1;
+
     /* close backend connections */
     i = 0;
     while (backend_cached && backend_cached[i]) {

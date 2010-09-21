@@ -86,6 +86,8 @@ static enum {
 
 static int cyrus_init_nodb = 0;
 
+int in_shutdown = 0;
+
 int config_fulldirhash;				/* 0 */
 int config_implicitrights;			/* "lkxa" */
 unsigned long config_metapartition_files;	/* 0 */

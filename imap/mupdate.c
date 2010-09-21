@@ -2093,6 +2093,8 @@ void cmd_compress(struct conn *C, const char *tag, const char *alg)
 void shut_down(int code) __attribute__((noreturn));
 void shut_down(int code)
 {
+    in_shutdown = 1;
+
     cyrus_done();
     
     exit(code);

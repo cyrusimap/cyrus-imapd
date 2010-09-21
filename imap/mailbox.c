@@ -968,9 +968,10 @@ void mailbox_close(struct mailbox **mailboxptr)
 	mailbox->unlink.num = 0;
     }
 
-    /* do we need to try and clean up? */
-    if (mailbox->i.options &
-	(OPT_MAILBOX_DELETED | OPT_MAILBOX_NEEDS_REPACK)) {
+    /* do we need to try and clean up? (not if doing a shutdown,
+     * speed is probably more important!) */
+    if (!in_shutdown && (mailbox->i.options &
+	(OPT_MAILBOX_DELETED | OPT_MAILBOX_NEEDS_REPACK))) {
 	int r = mailbox_mboxlock_upgrade(listitem, LOCK_NONBLOCKING);
 	if (!r) r = mailbox_lock_index(mailbox, LOCK_EXCLUSIVE);
 	if (!r) {

@@ -101,6 +101,8 @@ static int verbose = 0;
 static void shut_down(int code) __attribute__((noreturn));
 static void shut_down(int code)
 {
+    in_shutdown = 1;
+
     if (sync_userid)    free(sync_userid);
     if (sync_authstate) auth_freestate(sync_authstate);
 

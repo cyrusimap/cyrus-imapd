@@ -133,6 +133,8 @@ static int do_meta(char *user);
 static void shut_down(int code) __attribute__((noreturn));
 static void shut_down(int code)
 {
+    in_shutdown = 1;
+
     seen_done();
     annotatemore_close();
     annotatemore_done();

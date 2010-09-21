@@ -143,6 +143,7 @@ extern int shutdown_file(char *buf, int size);
 extern char *find_free_partition(unsigned long *tavail);
 
 /* Misc globals */
+extern int in_shutdown;
 extern int config_fulldirhash;
 extern int config_implicitrights;
 extern unsigned long config_metapartition_files;

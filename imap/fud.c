@@ -158,6 +158,8 @@ int begin_handling(void)
 void shut_down(int code) __attribute__((noreturn));
 void shut_down(int code)
 {
+    in_shutdown = 1;
+
     seen_done();
     mboxlist_close();
     mboxlist_done();

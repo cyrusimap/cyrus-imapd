@@ -80,6 +80,8 @@ static notifymethod_t *default_method;	/* default method daemon is using */
 void shut_down(int code) __attribute__ ((noreturn));
 void shut_down(int code)
 {
+    in_shutdown = 1;
+
     cyrus_done();
 
     /* done */

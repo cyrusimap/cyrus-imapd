@@ -637,6 +637,8 @@ void shut_down(int code)
     int bytes_in = 0;
     int bytes_out = 0;
 
+    in_shutdown = 1;
+
     proc_cleanup();
 
     /* close local mailbox */
