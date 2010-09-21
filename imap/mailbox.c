@@ -483,7 +483,7 @@ int mailbox_open_cache(struct mailbox *mailbox)
 	fname = mailbox_meta_fname(mailbox, META_CACHE);
 	mailbox->cache_fd = open(fname, O_RDWR, 0);
 	if (mailbox->cache_fd == -1)
-	    return IMAP_IOERROR;
+	    goto fail;
     }
 
     /* get the size and inode */
@@ -521,9 +521,53 @@ int mailbox_open_cache(struct mailbox *mailbox)
     return 0;
 
 fail:
-    close(mailbox->cache_fd);
-    mailbox->cache_fd = -1;
-    return IMAP_IOERROR;
+    /* rebuild the cache from scratch! */
+    syslog(LOG_ERR, "IOERROR: %s failed to open cache - rebuilding",
+	   mailbox->name);
+
+    {
+	struct index_record record;
+	const char *fname;
+	uint32_t recno;
+	uint32_t offset;
+	char buf[4];
+
+	/* make sure we have a file */
+	if (mailbox->cache_fd == -1) {
+	    fname = mailbox_meta_fname(mailbox, META_CACHE);
+	    mailbox->cache_fd = open(fname, O_RDWR|O_TRUNC|O_CREAT, 0666);
+	}
+
+	/* update the generation number */
+	*((bit32 *)(buf)) = htonl(mailbox->i.generation_no);
+	retry_write(mailbox->cache_fd, buf, 4);
+
+	for (recno = 1; recno <= mailbox->i.num_records; recno++) {
+	    if (mailbox_read_index_record(mailbox, recno, &record))
+		continue;
+	    if (record.system_flags & FLAG_UNLINKED)
+		continue;
+	    fname = mailbox_message_fname(mailbox, record.uid);
+	    offset = record.cache_offset; /* gets overwritten by parse */
+	    if (message_parse(fname, &record))
+		continue;
+	    lseek(mailbox->cache_fd, offset, SEEK_SET);
+	    retry_write(mailbox->cache_fd, cache_base(&record),
+			cache_size(&record));
+	}
+	(void)fsync(mailbox->cache_fd);
+
+	/* get the size and inode */
+	fstat(mailbox->cache_fd, &sbuf);
+	mailbox->cache_buf.len = sbuf.st_size;
+
+	map_refresh(mailbox->cache_fd, 0, (const char **)&mailbox->cache_buf.s,
+		    &mailbox->cache_len, mailbox->cache_buf.len, "cache",
+		    mailbox->name);
+    }
+
+    mailbox->need_cache_refresh = 0;
+    return 0;
 }
 
 int mailbox_index_islocked(struct mailbox *mailbox, int write)
