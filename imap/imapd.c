@@ -3728,7 +3728,7 @@ void cmd_close(char *tag, char *cmd)
 
     /* local mailbox */
     if ((cmd[0] == 'C') && (imapd_index->myrights & ACL_EXPUNGE)) {
-	index_expunge(imapd_index, 0, NULL, 1);
+	index_expunge(imapd_index, NULL);
     }
 
     index_close(&imapd_index);
@@ -4866,7 +4866,9 @@ void cmd_expunge(char *tag, char *sequence)
 	r = IMAP_PERMISSION_DENIED;
     }
 
-    if (!r) r = index_expunge(imapd_index, sequence ? 1 : 0, sequence, 0);
+    if (!r) r = index_expunge(imapd_index, sequence);
+    /* tell expunges */
+    if (!r) index_tellchanges(imapd_index, 1, sequence ? 1 : 0);
     
     if (r) {
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));

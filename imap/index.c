@@ -141,7 +141,6 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
 			    struct fetchargs *fetchargs);
 static void index_printflags(struct index_state *state, uint32_t msgno, int usinguid);
 static void index_checkflags(struct index_state *state, int dirty);
-static void index_tellchanges(struct index_state *state, int canexpunge, int printuid);
 static char *find_msgid(char *str, char **rem);
 static char *get_localpart_addr(const char *header);
 static char *index_extract_subject(const char *subj, size_t len, int *is_refwd);
@@ -288,8 +287,7 @@ fail:
     return r;
 }
 
-int index_expunge(struct index_state *state, int usinguid, char *sequence,
-		  int isclose)
+int index_expunge(struct index_state *state, char *sequence)
 {
     int r;
     uint32_t msgno;
@@ -300,7 +298,7 @@ int index_expunge(struct index_state *state, int usinguid, char *sequence,
     if (r) return r;
 
     /* XXX - earlier list if the sequence names UIDs that don't exist? */
-    seq = _parse_sequence(state, sequence, usinguid);
+    seq = _parse_sequence(state, sequence, 1);
 
     for (msgno = 1; msgno <= state->exists; msgno++) {
 	im = &state->map[msgno-1];
@@ -328,9 +326,6 @@ int index_expunge(struct index_state *state, int usinguid, char *sequence,
 
     /* unlock before responding */
     index_unlock(state);
-
-    /* print expunges in the response */
-    if (!isclose) index_tellchanges(state, 1, usinguid);
 
     return r;
 }
@@ -2300,8 +2295,8 @@ static void index_tellexists(struct index_state *state)
     state->havenewrecords = 0;
 }
 
-static void index_tellchanges(struct index_state *state, int canexpunge,
-			      int printuid)
+void index_tellchanges(struct index_state *state, int canexpunge,
+		       int printuid)
 {
     uint32_t msgno;
     struct index_map *im;

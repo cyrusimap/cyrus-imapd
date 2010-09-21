@@ -214,6 +214,8 @@ extern int index_open(const char *name, struct index_init *init,
 extern int index_status(struct index_state *state, struct statusdata *sdata);
 extern int index_close(struct index_state **stateptr);
 extern unsigned index_finduid(struct index_state *state, unsigned uid);
+extern void index_tellchanges(struct index_state *state, int canexpunge,
+			      int printuid);
 extern unsigned index_getuid(struct index_state *state, uint32_t msgno);
 extern modseq_t index_highestmodseq(struct index_state *state);
 extern int index_check(struct index_state *state, int usinguid, int printuid);
@@ -234,8 +236,7 @@ extern int index_copy_remote(struct index_state *state, char *sequence,
 void appendsequencelist(struct index_state *state, struct seqset **l,
 			char *sequence, int usinguid);
 void freesequencelist(struct seqset *l);
-extern int index_expunge(struct index_state *state, int usinguid,
-			 char *uidsequence, int isclose);
+extern int index_expunge(struct index_state *state, char *uidsequence);
 
 /* See lib/charset.h for the definition of receiver. */
 extern void index_getsearchtext_single(struct index_state *state, uint32_t msgno,
