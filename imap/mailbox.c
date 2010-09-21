@@ -465,11 +465,13 @@ int mailbox_open_cache(struct mailbox *mailbox)
 {
     struct stat sbuf;
     unsigned generation;
+    int retry = 0;
 
     /* already got everything? great */
     if (mailbox->cache_fd != -1 && !mailbox->need_cache_refresh)
 	return 0;
 
+ retry:
     /* open the file */
     if (mailbox->cache_fd == -1) {
 	char *fname;
@@ -498,6 +500,17 @@ int mailbox_open_cache(struct mailbox *mailbox)
 		mailbox->name);
 
     generation = ntohl(*((bit32 *)(mailbox->cache_buf.s)));
+    if (generation < mailbox->i.generation_no && !retry) {
+	/* try a rename - maybe we got killed between renames in repack */
+	map_free((const char **)&mailbox->cache_buf.s, &mailbox->cache_len);
+	close(mailbox->cache_fd);
+	mailbox->cache_fd = -1;
+	syslog(LOG_NOTICE, "WARNING: trying to rename cache file %s (%d < %d)",
+	       mailbox->name, generation, mailbox->i.generation_no);
+	mailbox_meta_rename(mailbox, META_CACHE);
+	retry = 1;
+	goto retry;
+    }
     if (generation != mailbox->i.generation_no) {
 	map_free((const char **)&mailbox->cache_buf.s, &mailbox->cache_len);
 	goto fail;
@@ -2183,8 +2196,8 @@ int mailbox_index_repack(struct mailbox *mailbox)
     close(newcache_fd);
     close(newindex_fd);
 
-    r = mailbox_meta_rename(mailbox, META_CACHE);
-    if (!r) r = mailbox_meta_rename(mailbox, META_INDEX);
+    r = mailbox_meta_rename(mailbox, META_INDEX);
+    if (!r) r = mailbox_meta_rename(mailbox, META_CACHE);
 
     return r;
 
