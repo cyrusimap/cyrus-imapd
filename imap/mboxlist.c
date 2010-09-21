@@ -101,11 +101,6 @@ static int mboxlist_rmquota(const char *name, int matchlen, int maycreate,
 static int mboxlist_changequota(const char *name, int matchlen, int maycreate,
 				void *rock);
 
-struct change_rock {
-    struct quota *quota;
-    struct txn **tid;
-};
-
 char *mboxlist_makeentry(int mbtype, const char *part, const char *acl)
 {
     char *mboxent = (char *) xmalloc(sizeof(char) * 
@@ -2144,7 +2139,6 @@ int mboxlist_setquota(const char *root, int newquota, int force)
     int have_mailbox = 1;
     int r;
     struct txn *tid = NULL;
-    struct change_rock crock;
     struct mboxlist_entry mbentry;
 
     if (!root[0] || root[0] == '.' || strchr(root, '/')
@@ -2156,19 +2150,20 @@ int mboxlist_setquota(const char *root, int newquota, int force)
     r = quota_read(&q, &tid, 1);
 
     if (!r) {
-	/* unchanged */
-	if (q.limit == newquota)
-	    return 0;
-
-	/* Just change it */
-	q.limit = newquota;
-	r = quota_write(&q, &tid);
+	/* has it changed? */
+	if (q.limit != newquota) {
+	    q.limit = newquota;
+	    r = quota_write(&q, &tid);
+	}
 	if (!r) quota_commit(&tid);
 	else quota_abort(&tid);
 	goto done;
     }
 
-    if (r != IMAP_QUOTAROOT_NONEXISTENT) goto done;
+    if (r != IMAP_QUOTAROOT_NONEXISTENT) {
+	if (tid) quota_abort(&tid);
+	goto done;
+    }
 
     /*
      * Have to create a new quota root
@@ -2193,7 +2188,7 @@ int mboxlist_setquota(const char *root, int newquota, int force)
 	    }
 
 	    /* are we going to force the create anyway? */
-	    if (!force) return r;
+	    if (!force) goto done;
 	    else {
 		have_mailbox = 0;
 		mbentry.mbtype = 0;
@@ -2210,23 +2205,20 @@ int mboxlist_setquota(const char *root, int newquota, int force)
     /* initialise the quota */
     q.used = 0;
     q.limit = newquota;
-
-    /* recurse through mailboxes, setting the quota and finding
-     * out the usage */
-    crock.quota = &q;
-    crock.tid = &tid;
-
-    /* top level mailbox */
-    if (have_mailbox)
-	mboxlist_changequota(q.root, 0, 0, &crock);
-
-    /* submailboxes - we're using internal names here */
-    mboxlist_findall(NULL, pattern, 1, 0, 0, mboxlist_changequota, &crock);
-
-    /* write our final value! */
     r = quota_write(&q, &tid);
     if (!r) quota_commit(&tid);
     else quota_abort(&tid);
+
+    /* recurse through mailboxes, setting the quota and finding
+     * out the usage */
+    if (!r) {
+	/* top level mailbox */
+	if (have_mailbox)
+	    mboxlist_changequota(root, 0, 0, (void *)root);
+
+	/* submailboxes - we're using internal names here */
+	mboxlist_findall(NULL, pattern, 1, 0, 0, mboxlist_changequota, (void *)root);
+    }
 
 done:
     if (!r) sync_log_quota(root);
@@ -2337,39 +2329,41 @@ static int mboxlist_changequota(const char *name,
 				int maycreate __attribute__((unused)),
 				void *rock)
 {
-    int r;
+    int r = 0;
     struct mailbox *mailbox;
-    struct change_rock *crock = (struct change_rock *) rock;
-    struct quota *newquota;
+    const char *root = (const char *) rock;
     struct quota q;
-    struct txn **tid = crock->tid;
+    struct txn *tid = NULL;
 
-    assert(crock);
-    newquota = crock->quota;
-    assert(newquota);
+    assert(root);
 
     r = mailbox_open_iwl(name, &mailbox);
     if (r) goto done;
 
     if (mailbox->quotaroot) {
-	if (strlen(mailbox->quotaroot) >= strlen(newquota->root)) {
+	struct txn *oldtid = NULL;
+	struct quota oldq;
+
+	if (strlen(mailbox->quotaroot) >= strlen(root)) {
 	    /* Part of a child quota root - skip */
 	    goto done;
 	}
 
 	/* remove usage from the old quotaroot */
-	q.root = mailbox->quotaroot;
-	r = quota_read(&q, tid, 1);
-	if (r) goto done;
-	if (q.used >= mailbox->i.quota_mailbox_used) {
-	    q.used -= mailbox->i.quota_mailbox_used;
+	oldq.root = mailbox->quotaroot;
+	r = quota_read(&oldq, &oldtid, 1);
+	if (!r) {
+	    if (oldq.used >= mailbox->i.quota_mailbox_used) {
+		oldq.used -= mailbox->i.quota_mailbox_used;
+	    }
+	    else {
+		oldq.used = 0;
+	    }
+	    r = quota_write(&oldq, &oldtid);
 	}
+	if (!r) quota_commit(&oldtid);
 	else {
-	    q.used = 0;
-	}
-
-	r = quota_write(&q, tid);
-	if (r) {
+	    quota_abort(&oldtid);
 	    syslog(LOG_ERR,
 		   "LOSTQUOTA: unable to record free of " UQUOTA_T_FMT " bytes in quota %s",
 		   mailbox->i.quota_mailbox_used, mailbox->quotaroot);
@@ -2377,19 +2371,31 @@ static int mboxlist_changequota(const char *name,
     }
 
     /* update (or set) the quotaroot */
-    mailbox_set_quotaroot(mailbox, newquota->root);
+    mailbox_set_quotaroot(mailbox, root);
     r = mailbox_commit(mailbox);
     if (r) goto done;
 
-    /* track this mailbox's usage */
-    newquota->used += mailbox->i.quota_mailbox_used;
+    /* read the new quota root */
+    tid = NULL;
+    q.root = root;
+    r = quota_read(&q, &tid, 1);
+
+    if (!r) {
+	/* track this mailbox's usage */
+	q.used += mailbox->i.quota_mailbox_used;
+	r = quota_write(&q, &tid);
+    }
+
+    /* and commit the new quota */
+    if (!r) quota_commit( &tid);
+    else quota_abort(&tid);
 
  done:
     if (mailbox) mailbox_close(&mailbox);
 
     if (r) {
 	syslog(LOG_ERR, "LOSTQUOTA: unable to change quota root for %s to %s: %s",
-	       name, newquota->root, error_message(r));
+	       name, root, error_message(r));
     }
 
     /* Note, we're a callback, and it's not a huge tragedy if we
