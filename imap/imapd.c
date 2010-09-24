@@ -6457,12 +6457,6 @@ void cmd_getquotaroot(const char *tag, const char *name)
     if (!r && (mbtype & MBTYPE_REMOTE)) {
 	/* remote mailbox */
 
-	if (imapd_userisadmin) {
-	    /* If they are an admin, they won't retain that privledge if we
-	     * proxy for them, so we need to refer them -- even if they haven't
-	     * told us they're able to handle it. */
-	    imapd_refer(tag, server, name);
-	} else {
 	    struct backend *s;
 
 	    s = proxy_findserver(server, &imap_protocol,
@@ -6479,7 +6473,6 @@ void cmd_getquotaroot(const char *tag, const char *name)
 	    } else {
 		prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
 	    }
-	}
 
 	return;
     }
