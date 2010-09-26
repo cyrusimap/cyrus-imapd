@@ -1398,19 +1398,55 @@ int sync_mailbox(struct mailbox *mailbox,
 	const char *fname;
 	struct sync_msgid *msgid;
 	uint32_t recno;
+	int send_file;
+
 	for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	    /* we can't send bogus records, just skip them! */
 	    if (mailbox_read_index_record(mailbox, recno, &record))
 		continue;
 
-	    if (remote && record.uid <= remote->last_uid) {
-		if (record.modseq <= remote->highestmodseq)
-		    continue;
-	    }
-	    else {
-		/* we can't send unlinked records, just skip them */
-		if (record.system_flags & FLAG_UNLINKED)
-		    continue;
+	    /* start off thinking we're sending the file too */
+	    send_file = 1;
+
+	    /* seen it already! SKIP */
+	    if (remote && record.modseq <= remote->highestmodseq)
+		continue;
+
+	    /* skip expunged if we're not updating something */
+	    if (!remote && (record.system_flags & FLAG_EXPUNGED))
+		continue;
+
+	    /* does it exist at the other end?  Don't send it */
+	    if (remote && record.uid <= remote->last_uid)
+		send_file = 0;
+
+	    /* if we're not uploading messages... don't send file */
+	    if (!part_list || !kupload)
+		send_file = 0;
+
+	    /* if we don't HAVE the file we can't send it */
+	    if (record.system_flags & FLAG_UNLINKED)
+		send_file = 0;
+
+	    if (send_file) {
+		/* is it already reserved? */
+		msgid = sync_msgid_lookup(part_list, &record.guid);
+		if (!msgid || !msgid->mark) {
+		    /* have to make sure the file exists */
+		    fname = mailbox_message_fname(mailbox, record.uid);
+		    if (!fname) return IMAP_MAILBOX_BADNAME;
+		    if (stat(fname, &sbuf) < 0) {
+			syslog(LOG_ERR, "IOERROR: failed to stat file %s", fname);
+			return IMAP_IOERROR;
+		    }
+		    if (sbuf.st_size != record.size) {
+			syslog(LOG_ERR, "IOERROR: size mismatch %s %u (%lu != %u)",
+			       mailbox->name, record.uid, sbuf.st_size, record.size);
+			return IMAP_IOERROR;
+		    }
+		    dlist_file(kupload, "MESSAGE", mailbox->part, &record.guid,
+			       record.size, fname);
+		}
 	    }
 
 	    il = dlist_kvlist(rl, "RECORD");
@@ -1421,28 +1457,6 @@ int sync_mailbox(struct mailbox *mailbox,
 	    dlist_date(il, "INTERNALDATE", record.internaldate);
 	    dlist_num(il, "SIZE", record.size);
 	    dlist_atom(il, "GUID", message_guid_encode(&record.guid));
-
-	    /* if we're not uploading messages, skip the upload check */
-	    if (!part_list || !kupload) continue;
-
-	    /* is it already reserved? */
-	    msgid = sync_msgid_lookup(part_list, &record.guid);
-	    if (!msgid || !msgid->mark) {
-		/* have to make sure the file exists */
-		fname = mailbox_message_fname(mailbox, record.uid);
-		if (!fname) return IMAP_MAILBOX_BADNAME;
-		if (stat(fname, &sbuf) < 0) {
-		    syslog(LOG_ERR, "IOERROR: failed to stat file %s", fname);
-		    return IMAP_IOERROR;
-		}
-		if (sbuf.st_size != record.size) {
-		    syslog(LOG_ERR, "IOERROR: size mismatch %s %u (%lu != %u)",
-			   mailbox->name, record.uid, sbuf.st_size, record.size);
-		    return IMAP_IOERROR;
-		}
-		dlist_file(kupload, "MESSAGE", mailbox->part, &record.guid,
-			   record.size, fname);
-	    }
 	}
     }
 
@@ -1532,6 +1546,11 @@ int sync_append_copyfile(struct mailbox *mailbox,
 
     r = message_parse(fname, record);
     if (r) {
+	/* deal with unlinked master records */
+	if (record->system_flags & FLAG_EXPUNGED) {
+	    record->system_flags |= FLAG_UNLINKED;
+	    goto just_write;
+	}
 	syslog(LOG_ERR, "IOERROR: failed to parse %s", fname);
 	return r;
     }
@@ -1554,6 +1573,7 @@ int sync_append_copyfile(struct mailbox *mailbox,
     if (!record->internaldate)
 	record->internaldate = internaldate;
 
+ just_write:
     record->silent = 1;
     return mailbox_append_index_record(mailbox, record);
 }

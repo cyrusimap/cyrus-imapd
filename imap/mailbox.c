@@ -110,6 +110,7 @@ static struct mailboxlist *open_mailboxes = NULL;
                          (m).lock_fd = -1; }
 
 static int mailbox_delete_cleanup(struct mailbox *mailbox);
+static int mailbox_index_unlink(struct mailbox *mailbox);
 static int mailbox_index_repack(struct mailbox *mailbox);
 
 static struct mailboxlist *create_listitem(const char *name)
@@ -218,17 +219,6 @@ char *mailbox_datapath(struct mailbox *mailbox)
 
     strncpy(localbuf, src, MAX_MAILBOX_PATH);
     return localbuf;
-}
-
-void mailbox_register_unlink(struct mailbox *mailbox, unsigned long uid)
-{
-    if (mailbox->unlink.alloc <= mailbox->unlink.num) {
-	int bytes;
-	mailbox->unlink.alloc += 100;
-	bytes = mailbox->unlink.alloc * sizeof(unsigned long);
-	mailbox->unlink.uid = xrealloc(mailbox->unlink.uid, bytes);
-    }
-    mailbox->unlink.uid[mailbox->unlink.num++] = uid;
 }
 
 /*
@@ -1005,32 +995,13 @@ void mailbox_close(struct mailbox **mailboxptr)
 	}
     }
 
-    /* drop the lock here so we don't delay other tasks while
-     * unlinking.  Also, it causes the sync log if necessary */
+    /* drop the index lock here because we'll lose our right to it
+     * when try to upgrade the mboxlock anyway. */
     mailbox_unlock_index(mailbox, NULL);
-
-    /* handle unlinks */
-    if (mailbox->unlink.num) {
-	unsigned i;
-	const char *fname;
-	uint32_t uid;
-	for (i = 0; i < mailbox->unlink.num; i++) {
-	    uid = mailbox->unlink.uid[i];
-	    fname = mailbox_message_fname(mailbox, uid);
-	    /* XXX - log error if unlink fails */
-	    unlink(fname);
-	    if (config_auditlog)
-		syslog(LOG_NOTICE, "auditlog: unlink sessionid=<%s> "
-		       "mailbox=<%s> uniqueid=<%s> uid=<%u>",
-			session_id(), mailbox->name, mailbox->uniqueid, uid);
-	}
-	mailbox->unlink.num = 0;
-    }
 
     /* do we need to try and clean up? (not if doing a shutdown,
      * speed is probably more important!) */
-    if (!in_shutdown && (mailbox->i.options &
-	(OPT_MAILBOX_DELETED | OPT_MAILBOX_NEEDS_REPACK))) {
+    if (!in_shutdown && (mailbox->i.options & MAILBOX_CLEANUP_MASK)) {
 	int r = mailbox_mboxlock_upgrade(listitem, LOCK_NONBLOCKING);
 	if (!r) r = mailbox_lock_index(mailbox, LOCK_EXCLUSIVE);
 	if (!r) {
@@ -1039,6 +1010,8 @@ void mailbox_close(struct mailbox **mailboxptr)
 		mailbox_delete_cleanup(mailbox);
 	    else if (mailbox->i.options & OPT_MAILBOX_NEEDS_REPACK)
 		mailbox_index_repack(mailbox);
+	    else if (mailbox->i.options & OPT_MAILBOX_NEEDS_UNLINK)
+		mailbox_index_unlink(mailbox);
 	    /* or we missed out - someone else beat us to it */
 	}
 	/* otherwise someone else has the mailbox locked 
@@ -1068,9 +1041,6 @@ void mailbox_close(struct mailbox **mailboxptr)
     free(mailbox->acl);
     free(mailbox->uniqueid);
     free(mailbox->quotaroot);
-
-    if (mailbox->unlink.alloc)
-	free(mailbox->unlink.uid);
 
     for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
 	free(mailbox->flagname[flag]);
@@ -1970,8 +1940,9 @@ int mailbox_rewrite_index_record(struct mailbox *mailbox,
     indexbuffer_t ibuf;
     unsigned char *buf = ibuf.buf;
     size_t offset;
-    int immediate = (config_getenum(IMAPOPT_EXPUNGE_MODE) 
-		     == IMAP_ENUM_EXPUNGE_MODE_IMMEDIATE);
+    int expunge_mode = config_getenum(IMAPOPT_EXPUNGE_MODE);
+    int immediate = (expunge_mode == IMAP_ENUM_EXPUNGE_MODE_IMMEDIATE ||
+		     expunge_mode == IMAP_ENUM_EXPUNGE_MODE_DEFAULT);
 
     assert(mailbox_index_islocked(mailbox, 1));
     assert(record->recno > 0 &&
@@ -1997,6 +1968,12 @@ int mailbox_rewrite_index_record(struct mailbox *mailbox,
     /* handle immediate expunges here... */
     if (immediate && (record->system_flags & FLAG_EXPUNGED))
 	record->system_flags |= FLAG_UNLINKED;
+
+    if (record->system_flags & FLAG_UNLINKED) {
+	if (expunge_mode == IMAP_ENUM_EXPUNGE_MODE_IMMEDIATE)
+	    mailbox->i.options |= OPT_MAILBOX_NEEDS_REPACK;
+	mailbox->i.options |= OPT_MAILBOX_NEEDS_UNLINK;
+    }
 
     /* make sure highestmodseq gets updated unless we're
      * being silent about it (i.e. marking an already EXPUNGED
@@ -2049,18 +2026,6 @@ int mailbox_rewrite_index_record(struct mailbox *mailbox,
 		record->uid, message_guid_encode(&record->guid));
     }
     
-    /* unlink handling */
-    if ((record->system_flags & FLAG_UNLINKED) && 
-	!(oldrecord.system_flags & FLAG_UNLINKED)) {
-	mailbox_register_unlink(mailbox, record->uid);
-
-	if (config_auditlog)
-	    syslog(LOG_NOTICE, "auditlog: unlink sessionid=<%s> "
-		   "mailbox=<%s> uniqueid=<%s> uid=<%u> guid=<%s>",
-		session_id(), mailbox->name, mailbox->uniqueid,
-		record->uid, message_guid_encode(&record->guid));
-    }
-
     return 0;
 }
 
@@ -2083,15 +2048,17 @@ int mailbox_append_index_record(struct mailbox *mailbox,
     if (record->uid <= mailbox->i.last_uid)
 	return IMAP_IOERROR; /* XXX - better code */
 
-    /* make the file timestamp correct */
-    settime.actime = settime.modtime = record->internaldate;
-    if (utime(mailbox_message_fname(mailbox, record->uid), &settime) == -1)
-	return IMAP_IOERROR;
+    if (!(record->system_flags & FLAG_UNLINKED)) {
+	/* make the file timestamp correct */
+	settime.actime = settime.modtime = record->internaldate;
+	if (utime(mailbox_message_fname(mailbox, record->uid), &settime) == -1)
+	    return IMAP_IOERROR;
 
-    /* write the cache record before buffering the message, it
-     * will set the cache_offset field. */
-    r = mailbox_append_cache(mailbox, record);
-    if (r) return r;
+	/* write the cache record before buffering the message, it
+	 * will set the cache_offset field. */
+	r = mailbox_append_cache(mailbox, record);
+	if (r) return r;
+    }
 
     /* update the highestmodseq if needed */
     if (record->silent) {
@@ -2141,14 +2108,77 @@ int mailbox_append_index_record(struct mailbox *mailbox,
 	    session_id(), mailbox->name, mailbox->uniqueid, record->uid,
 	    message_guid_encode(&record->guid));
 
+    /* expunged tracking */
+    if (record->system_flags & FLAG_EXPUNGED) {
+	if (!mailbox->i.first_expunged ||
+	    mailbox->i.first_expunged > record->last_updated)
+	    mailbox->i.first_expunged = record->last_updated;
+
+	if (config_auditlog)
+	    syslog(LOG_NOTICE, "auditlog: expunge sessionid=<%s> "
+		   "mailbox=<%s> uniqueid=<%s> uid=<%u> guid=<%s>",
+		   session_id(), mailbox->name, mailbox->uniqueid,
+		   record->uid, message_guid_encode(&record->guid));
+    }
+
+    /* yep, it could even be pre-unlinked in 'default' expunge mode, joy */
+    if (record->system_flags & FLAG_UNLINKED) {
+	if (config_auditlog)
+	    syslog(LOG_NOTICE, "auditlog: unlink sessionid=<%s> "
+		   "mailbox=<%s> uniqueid=<%s> uid=<%u>",
+		   session_id(), mailbox->name, mailbox->uniqueid,
+		   record->uid);
+    }
+    
+    return 0;
+}
+
+static void mailbox_message_unlink(struct mailbox *mailbox, uint32_t uid)
+{
+    const char *fname = mailbox_message_fname(mailbox, uid);
+
+    /* no error, we removed a file */
+    if (unlink(fname) == 0) {
+	if (config_auditlog)
+	    syslog(LOG_NOTICE, "auditlog: unlink sessionid=<%s> "
+		   "mailbox=<%s> uniqueid=<%s> uid=<%u>",
+		   session_id(), mailbox->name, mailbox->uniqueid, uid);
+    }
+}
+
+/* need a mailbox exclusive lock, we're removing files */
+static int mailbox_index_unlink(struct mailbox *mailbox)
+{
+    struct index_record record;
+    uint32_t recno;
+    int r;
+
+    syslog(LOG_INFO, "Unlinking files in mailbox %s", mailbox->name);
+
+    /* note: this may try to unlink the same files more than once,
+     * but them's the breaks - the alternative is yet another
+     * system flag which gets updated once done! */
+    for (recno = 1; recno <= mailbox->i.num_records; recno++) {
+	r = mailbox_read_index_record(mailbox, recno, &record);
+	if (r) return r;
+
+	if (record.system_flags & FLAG_UNLINKED)
+	    mailbox_message_unlink(mailbox, record.uid);
+    }
+
+    /* need to clear the flag, even if nothing needed unlinking! */
+    mailbox_index_dirty(mailbox);
+    mailbox->i.options &= ~OPT_MAILBOX_NEEDS_UNLINK;
+    mailbox_commit(mailbox);
+
     return 0;
 }
 
 /* need a mailbox exclusive lock, we're rewriting files */
-int mailbox_index_repack(struct mailbox *mailbox)
+static int mailbox_index_repack(struct mailbox *mailbox)
 {
     char *fname;
-    int newrecno = 1;
+    uint32_t newrecno = 1;
     indexbuffer_t ibuf;
     unsigned char *buf = ibuf.buf;
     uint32_t recno;
@@ -2183,7 +2213,7 @@ int mailbox_index_repack(struct mailbox *mailbox)
 	if (record.system_flags & FLAG_UNLINKED) {
 	    /* just in case it was left lying around */
 	    /* XXX - log error if unlink fails */
-	    unlink(mailbox_message_fname(mailbox, record.uid));
+	    mailbox_message_unlink(mailbox, record.uid);
 	    if (record.modseq > mailbox->i.deletedmodseq)
 		mailbox->i.deletedmodseq = record.modseq;
 	    continue;
@@ -2226,7 +2256,8 @@ int mailbox_index_repack(struct mailbox *mailbox)
     mailbox->i.last_repack_time = time(0);
     mailbox->i.num_records = newrecno - 1;
     mailbox->i.leaked_cache_records = 0;
-    mailbox->i.options &= ~OPT_MAILBOX_NEEDS_REPACK;
+    /* we unlinked any "needs unlink" in the process */
+    mailbox->i.options &= ~(OPT_MAILBOX_NEEDS_REPACK|OPT_MAILBOX_NEEDS_UNLINK);
 
     mailbox_index_header_to_buf(&mailbox->i, buf);
     n = lseek(newindex_fd, 0, SEEK_SET);
@@ -2339,16 +2370,23 @@ int mailbox_expunge_cleanup(struct mailbox *mailbox, time_t expunge_mark,
     time_t first_expunged = 0;
     int r = 0;
 
-    /* run the actual unlink phase */
+    /* run the actual expunge phase */
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	if (mailbox_read_index_record(mailbox, recno, &record))
 	    continue;
 
-	/* not actually expunged */
+	/* already unlinked, skip it (but dirty so we mark a repack is needed) */
+	if (record.system_flags & FLAG_UNLINKED) {
+	    dirty = 1;
+	    continue;
+	}
+
+	/* not actually expunged, skip it */
 	if (!(record.system_flags & FLAG_EXPUNGED))
 	    continue;
 
-	/* not stale enough yet */
+	/* not stale enough yet, skip it - but track the updated time
+	 * so we know when to run again */
 	if (record.last_updated > expunge_mark) {
 	    if (!first_expunged || (first_expunged > record.last_updated))
 		first_expunged = record.last_updated;
@@ -2356,13 +2394,6 @@ int mailbox_expunge_cleanup(struct mailbox *mailbox, time_t expunge_mark,
 	}
 
 	dirty = 1;
-
-	/* unlink again just to be sure! */
-	if (record.system_flags & FLAG_UNLINKED) {
-	    /* XXX - log error if unlink fails */
-	    unlink(mailbox_message_fname(mailbox, record.uid));
-	    continue;
-	}
 
 	numdeleted++;
 

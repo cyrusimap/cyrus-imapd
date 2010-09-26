@@ -1229,12 +1229,11 @@ static int update_mailbox(struct sync_folder *local,
 
     /* upload any messages required */
     if (kupload->head) {
-	/* keep the mailbox locked for shorter time! Unlock the index now */
-	/* but don't close it until after the apply, because we need to
-	 * guarantee that message files don't get deleted first */
+	/* keep the mailbox locked for shorter time! Unlock the index now
+	 * but don't close it, because we need to guarantee that message 
+	 * files don't get deleted until we're finished with them... */
 	mailbox_unlock_index(mailbox, NULL);
 	sync_send_apply(kupload, sync_out);
-	mailbox_close(&mailbox);
 	r = sync_parse_response("MESSAGE", sync_in, NULL);
 	if (!r) {
 	    /* update our list of reserved messages on the replica */
@@ -1249,10 +1248,9 @@ static int update_mailbox(struct sync_folder *local,
 	    }
 	}
     }
-    else {
-	/* just close the mailbox now, we have all the data */
-	mailbox_close(&mailbox);
-    }
+
+    /* close before sending the apply - all data is already read */
+    mailbox_close(&mailbox);
 
     /* update the mailbox */
     sync_send_apply(kl, sync_out);
@@ -1262,7 +1260,6 @@ static int update_mailbox(struct sync_folder *local,
 	r = mailbox_full_update(local->name);
 	if (!r) r = update_mailbox(local, remote, reserve_guids);
     }
-    return r;
 
 done:
     if (mailbox) mailbox_close(&mailbox);

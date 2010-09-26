@@ -181,12 +181,6 @@ struct index_header {
     uint32_t header_crc;
 };
 
-struct mailbox_unlink {
-    unsigned num;
-    unsigned alloc;
-    unsigned long *uid;
-};
-
 struct mailbox {
     int index_fd;
     int cache_fd;
@@ -229,9 +223,6 @@ struct mailbox {
     int has_changed;
     time_t last_updated; /* for appends*/
     quota_t quota_previously_used; /* for quota change */
-
-    /* unlinked file tracking */
-    struct mailbox_unlink unlink;
 };
 
 /* Offsets of index/expunge header fields
@@ -316,11 +307,15 @@ struct mailbox {
  * struct annotate_mailbox_flags */
 #define OPT_IMAP_SHAREDSEEN (1<<2)	/* added for shared \Seen flag */
 #define OPT_IMAP_DUPDELIVER (1<<3)	/* added to allow duplicate delivery */
-#define OPT_MAILBOX_NEEDS_REPACK (1<<30)
-#define OPT_MAILBOX_DELETED (1<<31)
+#define OPT_MAILBOX_NEEDS_UNLINK (1<<29)	/* files to be unlinked */
+#define OPT_MAILBOX_NEEDS_REPACK (1<<30)	/* repacking to do */
+#define OPT_MAILBOX_DELETED (1<<31)	/* mailbox is deleted an awaiting cleanup */
+#define MAILBOX_CLEANUP_MASK (OPT_MAILBOX_NEEDS_UNLINK | \
+			      OPT_MAILBOX_NEEDS_REPACK | \
+			      OPT_MAILBOX_DELETED)
 
 #define OPT_VALID (OPT_POP3_NEW_UIDL | OPT_IMAP_SHAREDSEEN | \
-		   OPT_IMAP_DUPDELIVER | \
+		   OPT_IMAP_DUPDELIVER | OPT_MAILBOX_NEEDS_UNLINK | \
 		   OPT_MAILBOX_NEEDS_REPACK | OPT_MAILBOX_DELETED)
 
 /* reconstruct flags */

@@ -278,7 +278,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    appended. */
 
 { "delete_mode", "immediate", ENUM("immediate", "delayed") }
-/*  The manner in which mailboxes are deleted. "Immediate" mode is the
+/*  The manner in which mailboxes are deleted. "immediate" mode is the
     default behavior in which mailboxes are removed immediately.  In
     "delayed" mode, mailboxes are renamed to a special hiearchy defined
     by the "deletedprefix" option to be removed later by cyr_expire.
@@ -306,17 +306,21 @@ Blank lines and lines beginning with ``#'' are ignored.
    as having already been delivered to the mailbox.  Records the mailbox
    and message-id/resent-message-id of all successful deliveries. */
 
-{ "expunge_mode", "immediate", ENUM("immediate", "delayed") }
+{ "expunge_mode", "default", ENUM("default", "immediate", "delayed") }
 /* The mode in which messages (and their corresponding cache entries)
-   are expunged.  "Immediate" mode is the default behavior in which the
-   message files and cache entries are purged at the time of the
-   EXPUNGE.  In "delayed" mode, the messages are removed from the
-   mailbox index at the time of the EXPUNGE (hiding them from the
-   client), but the message files and cache entries are left behind,
-   to be purged at a later time by "cyr_expire".  This reduces the
-   amount of I/O that takes place at the time of EXPUNGE and should
-   result in greater responsiveness for the client, especially when
-   expunging a large number of messages. */
+   are expunged.  "default" mode is the default behavior in which the
+   message files are purged at the time of the EXPUNGE, but index
+   and cache records are retained to facilitate QRESYNC.  In "delayed"
+   mode, the message files are also retained, allowing unexpunge to
+   rescue them.  In "immediate" mode, both the message files and the
+   index records are removed as soon as possible.  In all cases,
+   nothing will be finally purged until all other processes have
+   closed the mailbox to ensure they never see data disappear under
+   them.  In "default" or "delayed" mode, a later run of "cyr_expire"
+   will clean out the retained records (and possibly message files).
+   This reduces the amount of I/O that takes place at the time of
+   EXPUNGE and should result in greater responsiveness for the client,
+   especially when expunging a large number of messages. */
 
 { "expunge_days", 7, INT }
 /* Number of days to retain expunged messages before cleaning up their
