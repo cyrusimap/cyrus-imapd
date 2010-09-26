@@ -142,7 +142,7 @@ struct sync_folder {
     char *part;
     char *acl;
     unsigned last_uid;
-    unsigned highestmodseq;
+    modseq_t highestmodseq;
     unsigned options;
     unsigned long uidvalidity;
     bit32 sync_crc;
