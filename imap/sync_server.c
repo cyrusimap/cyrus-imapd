@@ -1937,6 +1937,8 @@ static int do_expunge(struct dlist *kin)
 	if (!ui) break; /* no point continuing */
 	if (record.uid == ui->nval) {
 	    record.system_flags |= FLAG_EXPUNGED;
+	    /* don't get the modseqs out of sync too! */
+	    record.silent = 1;
 	    r = mailbox_rewrite_index_record(mailbox, &record);
 	    if (r) goto done;
 	}
