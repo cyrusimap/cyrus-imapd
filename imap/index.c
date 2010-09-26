@@ -725,6 +725,11 @@ static struct seqset *_index_vanished(struct index_state *state,
 	uint32_t msgno;
 	unsigned uid;
 
+	syslog(LOG_NOTICE, "inefficient qresync ("
+	       MODSEQ_FMT " > " MODSEQ_FMT ") %s",
+	       mailbox->i.deletedmodseq, params->modseq,
+	       mailbox->name);
+
 	recno = 1;
 
 	/* use the sequence to uid mapping provided by the client to

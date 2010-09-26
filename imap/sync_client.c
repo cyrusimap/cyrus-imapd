@@ -1223,6 +1223,21 @@ static int update_mailbox(struct sync_folder *local,
     if (is_unchanged(mailbox, remote))
 	goto done;
 
+    /* check that replication stands a chance of succeeding */
+    if (remote && (mailbox->i.deletedmodseq > remote->highestmodseq)) {
+	syslog(LOG_NOTICE, "inefficient replication ("
+	       MODSEQ_FMT " > " MODSEQ_FMT ") %s", 
+	       mailbox->i.deletedmodseq, remote->highestmodseq,
+	       local->name);
+	/* close the mailbox here before sending */
+	mailbox_close(&mailbox);
+	r = mailbox_full_update(local->name);
+	if (r) goto done;
+	/* and open it again afterwards */
+	r = mailbox_open_irl(local->name, &mailbox);
+	if (r) goto done;
+    }
+
     part_list = sync_reserve_partlist(reserve_guids, mailbox->part);
     r = sync_mailbox(mailbox, remote, part_list, kl, kupload, 1);
     if (r) goto done;
