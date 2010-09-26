@@ -296,7 +296,8 @@ int main(int argc, char *argv[])
 	const char *fname = dbfname(&dblist[i]);
 	struct cyrusdb_backend *backend = *dblist[i].backendptr;
 
-	check_convert(&dblist[i], fname);
+	if (op == RECOVER)
+	    check_convert(&dblist[i], fname);
 
 	/* if we need to archive this db, add it to the list */
 	if (dblist[i].archive) {
