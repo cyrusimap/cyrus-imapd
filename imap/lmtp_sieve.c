@@ -76,6 +76,7 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
+#include "me.h"
 
 static int sieve_usehomedir = 0;
 static const char *sieve_dir = NULL;
@@ -288,7 +289,7 @@ static int send_rejection(const char *origid,
 	    config_servername, cyrus_version(), SIEVE_VERSION);
     if (origreceip)
 	fprintf(sm, "Original-Recipient: rfc822; %s\r\n", origreceip);
-    fprintf(sm, "Final-Recipient: rfc822; %s\r\n", mailreceip);
+    fprintf(sm, "Final-Recipient: rfc822; %s\r\n", me_create_sasl_enc(mailreceip));
     if (origid)
 	fprintf(sm, "Original-Message-ID: %s\r\n", origid);
     fprintf(sm, "Disposition: "
@@ -460,7 +461,7 @@ static int sieve_reject(void *ac,
 	return SIEVE_OK;
     }
 
-    body = msg_getheader(md, "original-recipient");
+    body = msg_getheader(md, "x-delivered-to");
     origreceip = body ? body[0] : NULL;
     if ((res = send_rejection(md->id, md->return_path, 
 			      origreceip, sd->username,

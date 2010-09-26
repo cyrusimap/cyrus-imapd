@@ -1052,6 +1052,9 @@ Blank lines and lines beginning with ``#'' are ignored.
    \fImetapartition\fR rather than in the mailbox directory on a spool
    partition. */
 
+{ "me_secret", NULL, STRING }
+/* messagingengine.com x-sasl-enc secret key */
+
 # Commented out - there's no such thing as "metapartition-name",
 # but we need this for the man page
 # { "metapartition-name", NULL, STRING }
