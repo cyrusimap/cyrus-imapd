@@ -1644,7 +1644,7 @@ static int parserange(char *str, uint32_t *uid, uint32_t *last,
 		*last = 0;
 	}
 	else
-	    *last = index_getuid(group_state, nntp_exists);
+	    *last = (uint32_t) -1;  /* open range -> use highest possible UID */
     }
 
     if (last && !*last) *last = *uid;
