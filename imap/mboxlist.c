@@ -227,17 +227,11 @@ int mboxlist_findstage(const char *name, char *stagedir, size_t sd_len)
 
     /* Find mailbox */
     r = mboxlist_lookup(name, &mbentry, NULL);
-    switch (r) {
-    case 0:
-	break;
-    default:
-	return r;
-	break;
-    }
-	    
+    if (r) return r;
+
     root = config_partitiondir(mbentry.partition);
     if (!root) return IMAP_PARTITION_UNKNOWN;
-	
+
     snprintf(stagedir, sd_len, "%s/stage./", root);
     
     return 0;
@@ -974,14 +968,14 @@ int mboxlist_deletemailbox(const char *name, int isadmin,
 
 /*
  * Rename/move a single mailbox (recursive renames are handled at a
- * higher level)
+ * higher level).  This only supports local mailboxes.  Remote
+ * mailboxes are handled up in imapd.c
  */
 int mboxlist_renamemailbox(const char *oldname, const char *newname, 
 			   const char *partition, int isadmin, 
 			   const char *userid, struct auth_state *auth_state,
 			   int forceuser, int ignorequota)
 {
-    struct mboxlist_entry mbentry;
     int r;
     long myrights;
     int isusermbox = 0; /* Are we renaming someone's inbox */
@@ -994,9 +988,9 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
     char *newpartition = NULL;
     char *mboxent = NULL;
     char *p;
-
     mupdate_handle *mupdate_h = NULL;
 
+    /* 1. open mailbox */
     r = mailbox_open_iwl(oldname, &oldmailbox);
     if (r) return r;
 
@@ -1010,9 +1004,6 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
 	/* Attempt to move mailbox across partition */
 	if (!isadmin) {
 	    r = IMAP_PERMISSION_DENIED;
-	    goto done;
-	} else if (!mbentry.partition) {
-	    r = IMAP_PARTITION_UNKNOWN;
 	    goto done;
 	}
 
@@ -1043,18 +1034,18 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
 		   mboxname_isdeletedmailbox(newname)) {
 	    /* Special case of renaming a user */
 	    if (!(myrights & ACL_DELETEMBOX) && !isadmin) {
-		r = (isadmin || (myrights & ACL_LOOKUP)) ?
+		r = (myrights & ACL_LOOKUP) ?
 		    IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
 		goto done;
 	    }
 	} else {
-	    /* Only admins can rename users (INBOX to INBOX) */
+	    /* Even admins can only rename an INBOX to another INBOX */
 	    r = IMAP_MAILBOX_NOTSUPPORTED;
 	    goto done;
 	}
     } else {
 	if (!(myrights & ACL_DELETEMBOX) && !isadmin) {
-	    r = (isadmin || (myrights & ACL_LOOKUP)) ?
+	    r = (myrights & ACL_LOOKUP) ?
 		IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
 	    goto done;
 	}
@@ -1165,7 +1156,7 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
     }
     
     /* free memory */
-    if (newacl) free(newacl);	/* we're done with the new ACL */
+    if (newacl) free(newacl); /* we're done with the new ACL */
     if (newpartition) free(newpartition);
     if (mboxent) free(mboxent);
 
