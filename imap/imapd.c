@@ -6457,22 +6457,22 @@ void cmd_getquotaroot(const char *tag, const char *name)
     if (!r && (mbtype & MBTYPE_REMOTE)) {
 	/* remote mailbox */
 
-	    struct backend *s;
+	struct backend *s;
 
-	    s = proxy_findserver(server, &imap_protocol,
-				 proxy_userid, &backend_cached,
-				 &backend_current, &backend_inbox, imapd_in);
-	    if (!s) r = IMAP_SERVER_UNAVAILABLE;
+	s = proxy_findserver(server, &imap_protocol,
+			     proxy_userid, &backend_cached,
+			     &backend_current, &backend_inbox, imapd_in);
+	if (!s) r = IMAP_SERVER_UNAVAILABLE;
 
-	    imapd_check(s, 0);
+	imapd_check(s, 0);
 
-	    if (!r) {
-		prot_printf(s->out, "%s Getquotaroot {" SIZE_T_FMT "+}\r\n%s\r\n",
-			    tag, strlen(name), name);
-		pipe_including_tag(s, tag, 0);
-	    } else {
-		prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
-	    }
+	if (!r) {
+	    prot_printf(s->out, "%s Getquotaroot {" SIZE_T_FMT "+}\r\n%s\r\n",
+			tag, strlen(name), name);
+	    pipe_including_tag(s, tag, 0);
+	} else {
+	    prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+	}
 
 	return;
     }
