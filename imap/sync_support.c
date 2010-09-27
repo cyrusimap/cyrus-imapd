@@ -1439,7 +1439,7 @@ int sync_mailbox(struct mailbox *mailbox,
 			syslog(LOG_ERR, "IOERROR: failed to stat file %s", fname);
 			return IMAP_IOERROR;
 		    }
-		    if (sbuf.st_size != record.size) {
+		    if ((unsigned) sbuf.st_size != record.size) {
 			syslog(LOG_ERR, "IOERROR: size mismatch %s %u (%lu != %u)",
 			       mailbox->name, record.uid, sbuf.st_size, record.size);
 			return IMAP_IOERROR;
