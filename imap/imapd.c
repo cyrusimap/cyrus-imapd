@@ -3170,8 +3170,7 @@ void cmd_append(char *tag, char *name, const char *cur_name)
 			    imapd_index->mailbox->name);
 	    } else {
 		prot_printf(s->out, "%s Localappend {" SIZE_T_FMT "+}\r\n%s"
-			    " {" SIZE_T_FMT "+}\r\n%s ",
-			    tag, strlen(name), name, 0, "");
+			    " \"\" ", tag, strlen(name), name);
 	    }
 	    if (!(r = pipe_command(s, 16384))) {
 		pipe_including_tag(s, tag, 0);
