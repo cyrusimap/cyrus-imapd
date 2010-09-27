@@ -248,7 +248,7 @@ void idle_alert(char *key __attribute__((unused)),
     }
 }
 
-static void sighandler (int sig) 
+static void sighandler (int sig __attribute__((unused))) 
 {
     sigquit = 1;
     return;

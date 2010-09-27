@@ -128,7 +128,7 @@ struct protstream *popd_out = NULL;
 struct protstream *popd_in = NULL;
 static int popd_logfd = -1;
 unsigned popd_exists = 0;
-unsigned popd_login_time;
+time_t popd_login_time;
 int count_retr = 0;
 int count_top = 0;
 int count_dele = 0;
@@ -919,7 +919,7 @@ static void cmdloop(void)
 		 * at least the last login */
 		mailbox_index_dirty(popd_mailbox);
 		if ((minpollsec > 0) && (pollpadding > 1)) { 
-		    unsigned mintime = popd_login_time - (minpollsec*(pollpadding));
+		    time_t mintime = popd_login_time - (minpollsec*(pollpadding));
 		    if (popd_mailbox->i.pop3_last_login < mintime) {
 			popd_mailbox->i.pop3_last_login = mintime + minpollsec; 
 		    } else {

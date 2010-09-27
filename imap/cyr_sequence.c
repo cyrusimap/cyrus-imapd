@@ -151,7 +151,7 @@ int main(int argc, char *argv[])
     else if (!strcmp(argv[optind], "parsed")) {
 	unsigned i;
 	seq = seqset_parse(argv[optind+1], NULL, maxval);
-	printf("Sections: %lu\n", seq->len);
+	printf("Sections: " SIZE_T_FMT "\n", seq->len);
 	for (i = 0; i < seq->len; i++) {
 	    if (seq->set[i].high == UINT_MAX)
 		printf(" [%u, *]\n", seq->set[i].low);

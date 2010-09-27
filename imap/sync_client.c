@@ -208,7 +208,7 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
     struct sync_folder *rfolder;
     struct sync_msgid_list *part_list;
     struct mailbox *mailbox = NULL;
-    int r;
+    int r = 0;
 
     /* Find messages we want to upload that are available on server */
     for (mbox = mboxname_list->head; mbox; mbox = mbox->next) {

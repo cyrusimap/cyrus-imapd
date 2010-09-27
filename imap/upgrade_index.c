@@ -193,11 +193,11 @@ int upgrade_index(struct mailbox *mailbox)
     unsigned long oldmapnum;
     unsigned long oldnum_records;
     unsigned long expunge_num = 0;
-    unsigned uid;
+    unsigned uid = 0;
     bit32 oldminor_version, oldstart_offset, oldrecord_size;
     indexbuffer_t headerbuf;
     indexbuffer_t recordbuf;
-    const char *bufp;
+    const char *bufp = NULL;
     char *hbuf = (char *)headerbuf.buf;
     char *rbuf = (char *)recordbuf.buf;
     int newindex_fd = -1;

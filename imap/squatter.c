@@ -288,7 +288,7 @@ static void search_text_receiver(int uid, int part, int cmd,
 
   if ((cmd & SEARCHINDEX_CMD_BEGINPART) != 0) {
     char buf[100];
-    char part_char;
+    char part_char = 0;
     
     /* Figure out what the name of the source document is going to be. */
     switch (part) {

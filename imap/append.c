@@ -644,7 +644,7 @@ int append_copy(struct mailbox *mailbox,
     int msg;
     struct index_record record;
     char *srcfname, *destfname;
-    int r;
+    int r = 0;
     int flag, userflag;
     
     if (!nummsg) {

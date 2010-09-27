@@ -1078,7 +1078,7 @@ void cmdloop()
     char *p, shut[MAX_MAILBOX_PATH+1], cmdname[100];
     const char *err;
     const char * commandmintimer;
-    double commandmintimerd;
+    double commandmintimerd = 0.0;
 
     prot_printf(imapd_out, "* OK [CAPABILITY ");
     capa_response(CAPA_PREAUTH);
@@ -3171,7 +3171,7 @@ void cmd_append(char *tag, char *name, const char *cur_name)
 	    } else {
 		prot_printf(s->out, "%s Localappend {" SIZE_T_FMT "+}\r\n%s"
 			    " {" SIZE_T_FMT "+}\r\n%s ",
-			    tag, strlen(name), name, 0L, "");
+			    tag, strlen(name), name, 0, "");
 	    }
 	    if (!(r = pipe_command(s, 16384))) {
 		pipe_including_tag(s, tag, 0);
@@ -6457,28 +6457,21 @@ void cmd_getquotaroot(const char *tag, const char *name)
     if (!r && (mbtype & MBTYPE_REMOTE)) {
 	/* remote mailbox */
 
-	if (imapd_userisadmin) {
-	    /* If they are an admin, they won't retain that privledge if we
-	     * proxy for them, so we need to refer them -- even if they haven't
-	     * told us they're able to handle it. */
-	    imapd_refer(tag, server, name);
+	struct backend *s;
+
+	s = proxy_findserver(server, &imap_protocol,
+			     proxy_userid, &backend_cached,
+			     &backend_current, &backend_inbox, imapd_in);
+	if (!s) r = IMAP_SERVER_UNAVAILABLE;
+
+	imapd_check(s, 0);
+
+	if (!r) {
+	    prot_printf(s->out, "%s Getquotaroot {" SIZE_T_FMT "+}\r\n%s\r\n",
+			tag, strlen(name), name);
+	    pipe_including_tag(s, tag, 0);
 	} else {
-	    struct backend *s;
-
-	    s = proxy_findserver(server, &imap_protocol,
-				 proxy_userid, &backend_cached,
-				 &backend_current, &backend_inbox, imapd_in);
-	    if (!s) r = IMAP_SERVER_UNAVAILABLE;
-
-	    imapd_check(s, 0);
-
-	    if (!r) {
-		prot_printf(s->out, "%s Getquotaroot {" SIZE_T_FMT "+}\r\n%s\r\n",
-			    tag, strlen(name), name);
-		pipe_including_tag(s, tag, 0);
-	    } else {
-		prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
-	    }
+	    prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
 	}
 
 	return;

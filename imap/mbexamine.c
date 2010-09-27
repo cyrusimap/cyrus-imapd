@@ -283,7 +283,7 @@ int do_examine(char *name,
 	}
     }
     printf("\n");
-    printf("  Last POP3 Login: (%u) %s", mailbox->i.pop3_last_login,
+    printf("  Last POP3 Login: (%ld) %s", mailbox->i.pop3_last_login,
 	   ctime((const long *) &mailbox->i.pop3_last_login));
     printf("  Highest Mod Sequence: " MODSEQ_FMT "\n",
 	   mailbox->i.highestmodseq);
