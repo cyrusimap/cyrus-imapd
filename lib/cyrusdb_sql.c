@@ -236,12 +236,13 @@ static void *_pgsql_open(char *host, char *port, int usessl,
 }
 
 static char *_pgsql_escape(void *conn __attribute__((unused)),
-			   char **to, const char *from, size_t fromlen)
+			   char **to __attribute__((unused)),
+			   const char *from, size_t fromlen)
 {
     size_t tolen;
 
     /* returned buffer MUST be freed by caller */
-    return PQescapeBytea((char *) from, fromlen, &tolen);
+    return (char *) PQescapeBytea((unsigned char *) from, fromlen, &tolen);
 }
 
 static int _pgsql_exec(void *conn, const char *cmd, exec_cb *cb, void *rock)
@@ -274,8 +275,12 @@ static int _pgsql_exec(void *conn, const char *cmd, exec_cb *cb, void *rock)
 	char *key, *data;
 	size_t keylen, datalen;
 
-	key = PQunescapeBytea(PQgetvalue(result, i, 0), &keylen);
-	data = PQunescapeBytea(PQgetvalue(result, i, 1), &datalen);
+	key = (char *)
+	    PQunescapeBytea((unsigned char *) PQgetvalue(result, i, 0),
+			    &keylen);
+	data = (char *)
+	    PQunescapeBytea((unsigned char *) PQgetvalue(result, i, 1),
+			    &datalen);
 	r = cb(rock, key, keylen, data, datalen);
 	free(key); free(data);
     }

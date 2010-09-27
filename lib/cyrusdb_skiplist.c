@@ -1864,7 +1864,7 @@ static int dump(struct db *db, int detail __attribute__((unused)))
     ptr = db->map_base + DUMMY_OFFSET(db);
     end = db->map_base + db->map_size;
     while (ptr < end) {
-	printf("%04lX: ", ptr - db->map_base);
+	printf("%04lX: ", (unsigned long) (ptr - db->map_base));
 	switch (TYPE(ptr)) {
 	case DUMMY:
 	    printf("DUMMY ");
