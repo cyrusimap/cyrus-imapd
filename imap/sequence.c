@@ -213,7 +213,7 @@ struct seqset *seqset_parse(const char *sequence,
 			    struct seqset *set,
 			    unsigned maxval)
 {
-    unsigned start, end;
+    unsigned start = 0, end = 0;
 
     /* short circuit no sequence */
     if (!sequence) return NULL;

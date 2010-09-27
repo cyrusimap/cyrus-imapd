@@ -1078,7 +1078,7 @@ void cmdloop()
     char *p, shut[MAX_MAILBOX_PATH+1], cmdname[100];
     const char *err;
     const char * commandmintimer;
-    double commandmintimerd;
+    double commandmintimerd = 0.0;
 
     prot_printf(imapd_out, "* OK [CAPABILITY ");
     capa_response(CAPA_PREAUTH);
@@ -3171,7 +3171,7 @@ void cmd_append(char *tag, char *name, const char *cur_name)
 	    } else {
 		prot_printf(s->out, "%s Localappend {" SIZE_T_FMT "+}\r\n%s"
 			    " {" SIZE_T_FMT "+}\r\n%s ",
-			    tag, strlen(name), name, 0L, "");
+			    tag, strlen(name), name, 0, "");
 	    }
 	    if (!(r = pipe_command(s, 16384))) {
 		pipe_including_tag(s, tag, 0);

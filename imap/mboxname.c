@@ -48,6 +48,9 @@
 #include <string.h>
 #include <errno.h>
 #include <syslog.h>
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
 
 #include "assert.h"
 #include "exitcodes.h"

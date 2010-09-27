@@ -463,7 +463,7 @@ int undump_mailbox(const char *mbname,
     int domainlen = 0;
     char *p = NULL, userbuf[81];
     char *userid, *annotation, *contenttype, *content;
-    char *seen_file, *mboxkey_file;
+    char *seen_file = NULL, *mboxkey_file = NULL;
 
     memset(&file, 0, sizeof(file));
     memset(&data, 0, sizeof(data));

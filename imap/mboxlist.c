@@ -321,7 +321,7 @@ mboxlist_mycreatemailboxcheck(const char *mboxname,
     unsigned long parentpartitionlen = 0;
     unsigned long parentacllen = 0;
     int user_folder_limit;
-    char *ourpartition;
+    char *ourpartition = NULL;
     char *ouracl;
     
     /* Check for invalid name/partition */

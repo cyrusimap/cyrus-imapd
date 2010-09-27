@@ -250,7 +250,7 @@ int main(int argc, char *argv[])
     unsigned numrestored = 0;
     time_t time_since = time(NULL);
     int len, secs = 0;
-    unsigned long *uids;
+    unsigned long *uids = NULL;
     unsigned nuids = 0;
 
     if ((geteuid()) == 0 && (become_cyrus() != 0)) {

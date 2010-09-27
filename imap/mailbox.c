@@ -1124,7 +1124,7 @@ int mailbox_read_header(struct mailbox *mailbox, char **aclptr)
     mailbox->header_file_crc = crc32_map(base, sbuf.st_size);
 
     /* Check magic number */
-    if (sbuf.st_size < magic_size ||
+    if ((unsigned) sbuf.st_size < magic_size ||
 	strncmp(base, MAILBOX_HEADER_MAGIC, magic_size)) {
 	r = IMAP_MAILBOX_BADFORMAT;
 	goto done;
@@ -3246,7 +3246,7 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
     	if (stat(fname, &sbuf) == -1 || (sbuf.st_size == 0)) {
 	    have_file = 0;
 	}
-	else if (record->size != sbuf.st_size) {
+	else if (record->size != (unsigned) sbuf.st_size) {
 	    re_parse = 1;
 	}
 	did_stat = 1;
