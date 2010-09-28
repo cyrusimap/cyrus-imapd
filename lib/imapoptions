@@ -296,7 +296,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    session.  Otherwise, the missing mailbox is treated as empty while
    in use by the client.*/
 
-{ "duplicate_db", "berkeley-nosync", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist", "sql")}
+{ "duplicate_db", "skiplist", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist", "sql")}
 /* The cyrusdb backend to use for the duplicate delivery suppression
    and sieve. */
 
@@ -912,7 +912,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Unix domain socket that ptloader listens on.
    (defaults to configdir/ptclient/ptsock) */
 
-{ "ptscache_db", "berkeley", STRINGLIST("berkeley", "berkeley-hash", "skiplist")}
+{ "ptscache_db", "skiplist", STRINGLIST("berkeley", "berkeley-hash", "skiplist")}
 /* The cyrusdb backend to use for the pts cache. */
 
 { "ptscache_timeout", 10800, INT }
@@ -1125,7 +1125,7 @@ product version in the capabilities */
 { "statuscache", 0, SWITCH }
 /* Enable/disable the imap status cache. */
 
-{ "statuscache_db", "berkeley-nosync", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist") }
+{ "statuscache_db", "skiplist", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist") }
 /* The cyrusdb backend to use for the imap status cache. */
 
 { "sync_authname", NULL, STRING }
@@ -1210,7 +1210,7 @@ product version in the capabilities */
    have filenames with the hashed value of the certificates (see
    openssl(XXX)). */
 
-{ "tlscache_db", "berkeley-nosync", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist", "sql")}
+{ "tlscache_db", "skiplist", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist", "sql")}
 /* The cyrusdb backend to use for the TLS cache. */
 
 { "tls_cert_file", NULL, STRING }
