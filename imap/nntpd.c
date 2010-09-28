@@ -799,6 +799,7 @@ static void cmdloop(void)
     const char *err;
     uint32_t uid, last;
     struct backend *be;
+    char curgroup[MAX_MAILBOX_BUFFER] = "";
 
     allowanonymous = config_getswitch(IMAPOPT_ALLOWANONYMOUSLOGIN);
 
@@ -872,6 +873,10 @@ static void cmdloop(void)
 	if (!nntp_userid && !allowanonymous &&
 	    !strchr("ACHILMQST", cmd.s[0])) goto nologin;
 
+	/* In case a [LIST]GROUP fails or
+	   a retrieval by msgid makes us switch groups */
+	strcpy(curgroup, group_state ? group_state->mailbox->name : "");
+
 	switch (cmd.s[0]) {
 	case 'A':
 	    if (!strcmp(cmd.s, "Authinfo")) {
@@ -912,7 +917,7 @@ static void cmdloop(void)
 	    else if (!(nntp_capa & MODE_READ)) goto noperm;
 	    else if (!nntp_userid && !allowanonymous) goto nologin;
 	    else if (!strcmp(cmd.s, "Article")) {
-		char curgroup[MAX_MAILBOX_BUFFER], *msgid;
+		char *msgid;
 
 		mode = ARTICLE_ALL;
 
@@ -925,9 +930,6 @@ static void cmdloop(void)
 		}
 		if (c == '\r') c = prot_getc(nntp_in);
 		if (c != '\n') goto extraargs;
-
-		/* in case a msgid makes us switch groups */
-		strcpy(curgroup, group_state ? group_state->mailbox->name : "");
 
 		if (parserange(arg1.s, &uid, NULL, &msgid, &be) != -1) {
 		    if (be) {
@@ -951,11 +953,7 @@ static void cmdloop(void)
 			cmd_article(mode, msgid, uid);
 		}
 
-		/* return to previously selected group */
-		if (*curgroup && group_state &&
-		    strcmp(curgroup, group_state->mailbox->name)) {
-		       open_group(curgroup, 1, NULL, NULL);
-		}
+		if (msgid) goto prevgroup;
 	    }
 	    else goto badcmd;
 	    break;
@@ -1068,7 +1066,7 @@ static void cmdloop(void)
 	    else if (!(nntp_capa & MODE_READ)) goto noperm;
 	    else if (!nntp_userid && !allowanonymous) goto nologin;
 	    else if (!strcmp(cmd.s, "Hdr")) {
-		char curgroup[MAX_MAILBOX_BUFFER], *msgid;
+		char *msgid;
 
 	      hdr:
 		if (arg2.s) *arg2.s = 0;
@@ -1082,9 +1080,6 @@ static void cmdloop(void)
 		}
 		if (c == '\r') c = prot_getc(nntp_in);
 		if (c != '\n') goto extraargs;
-
-		/* in case a msgid makes us switch groups */
-		strcpy(curgroup, group_state ? group_state->mailbox->name : "");
 
 		if (parserange(arg2.s, &uid, &last, &msgid, &be) != -1) {
 		    if (be) {
@@ -1108,11 +1103,7 @@ static void cmdloop(void)
 			cmd_hdr(cmd.s, arg1.s, NULL, msgid, uid, last);
 		}
 
-		/* return to previously selected group */
-		if (*curgroup && group_state &&
-		    strcmp(curgroup, group_state->mailbox->name)) {
-		       open_group(curgroup, 1, NULL, NULL);
-		}
+		if (msgid) goto prevgroup;
 	    }
 	    else goto badcmd;
 	    break;
@@ -1148,6 +1139,8 @@ static void cmdloop(void)
 		if (c != '\n') goto extraargs;
 
 		cmd_list(arg1.len ? arg1.s : NULL, arg2.len ? arg2.s : NULL);
+
+		goto prevgroup;  /* In case we did LIST [ACTIVE] */
 	    }
 	    else if (!(nntp_capa & MODE_READ)) goto noperm;
 	    else if (!nntp_userid && !allowanonymous) goto nologin;
@@ -1344,7 +1337,7 @@ static void cmdloop(void)
 
 	case 'O':
 	    if (!strcmp(cmd.s, "Over")) {
-		char curgroup[MAX_MAILBOX_BUFFER], *msgid;
+		char *msgid;
 
 	      over:
 		if (arg1.s) *arg1.s = 0;
@@ -1355,9 +1348,6 @@ static void cmdloop(void)
 		}
 		if (c == '\r') c = prot_getc(nntp_in);
 		if (c != '\n') goto extraargs;
-
-		/* in case a msgid makes us switch groups */
-		strcpy(curgroup, group_state ? group_state->mailbox->name : "");
 
 		msgid = NULL;
 		if (parserange(arg1.s, &uid, &last,
@@ -1383,11 +1373,7 @@ static void cmdloop(void)
 			cmd_over(msgid, uid, last);
 		}
 
-		/* return to previously selected group */
-		if (*curgroup && group_state &&
-		    strcmp(curgroup, group_state->mailbox->name)) {
-		       open_group(curgroup, 1, NULL, NULL);
-		}
+		if (msgid) goto prevgroup;
 	    }
 	    else goto badcmd;
 	    break;
@@ -1450,7 +1436,7 @@ static void cmdloop(void)
 		goto over;
 	    }
 	    else if (!strcmp(cmd.s, "Xpat")) {
-		char curgroup[MAX_MAILBOX_BUFFER], *msgid;
+		char *msgid;
 
 		if (c != ' ') goto missingargs;
 		c = getword(nntp_in, &arg1); /* header */
@@ -1469,9 +1455,6 @@ static void cmdloop(void)
 
 		if (c == '\r') c = prot_getc(nntp_in);
 		if (c != '\n') goto extraargs;
-
-		/* in case a msgid makes us switch groups */
-		strcpy(curgroup, group_state ? group_state->mailbox->name : "");
 
 		if (parserange(arg2.s, &uid, &last, &msgid, &be) != -1) {
 		    if (be) {
@@ -1492,11 +1475,7 @@ static void cmdloop(void)
 			cmd_hdr(cmd.s, arg1.s, arg3.s, msgid, uid, last);
 		}
 
-		/* return to previously selected group */
-		if (*curgroup && group_state &&
-		    strcmp(curgroup, group_state->mailbox->name)) {
-		       open_group(curgroup, 1, NULL, NULL);
-		}
+		if (msgid) goto prevgroup;
 	    }
 	    else goto badcmd;
 	    break;
@@ -1541,6 +1520,14 @@ static void cmdloop(void)
       nogroup:
 	prot_printf(nntp_out, "411 No such newsgroup (%s)\r\n",
 		    error_message(r));
+
+      prevgroup:
+	/* Return to previously selected group */
+	if (*curgroup &&
+	    (!group_state || strcmp(curgroup, group_state->mailbox->name))) {
+	    open_group(curgroup, 1, NULL, NULL);
+	}
+
 	continue;
 
       noopengroup:
@@ -1626,11 +1613,13 @@ static int parserange(char *str, uint32_t *uid, uint32_t *last,
 	/* message-id, find server and/or mailbox */
 	if (!msgid) goto badrange;
 	if (!find_msgid(str, &mboxname, uid)) goto nomsgid;
+
+	*msgid = str;
+
+	/* open group if its different from our current one */
 	if (!group_state || strcmp(mboxname, group_state->mailbox->name)) {
 	    if ((r = open_group(mboxname, 1, ret, NULL))) goto nomsgid;
-	    *msgid = str;
 	}
-	/* else, within the current group, so treat as by uid */
     }
     else if (backend_current)
 	*ret = backend_current;
@@ -1915,9 +1904,10 @@ static void cmd_article(int part, char *msgid, unsigned long uid)
 	return;
     }
 
-    nntp_current = msgno;
-
-    if (!by_msgid) msgid = index_get_msgid(group_state, msgno);
+    if (!by_msgid) {
+	nntp_current = msgno;
+	msgid = index_get_msgid(group_state, msgno);
+    }
 
     prot_printf(nntp_out, "%u %lu %s\r\n",
 		220 + part, by_msgid ? 0 : uid, msgid ? msgid : "<0>");
