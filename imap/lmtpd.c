@@ -428,6 +428,7 @@ int fuzzy_match(char *mboxname)
 static int mlookup(const char *name, char **server, char **aclp, void *tid)
 {
     int r;
+    char *c;
 
     if (server) *server = NULL;
 
@@ -449,6 +450,8 @@ static int mlookup(const char *name, char **server, char **aclp, void *tid)
 
 	if (aclp) *aclp = (char *) mailboxdata->acl;
 	if (server) *server = (char *) mailboxdata->server;
+	c = strchr(*server, '!');
+	if (c) *c = '\0';
     }
     else {
 	struct mboxlist_entry mbentry;
@@ -463,7 +466,6 @@ static int mlookup(const char *name, char **server, char **aclp, void *tid)
 	if (aclp) *aclp = mbentry.acl;
 	if (server) {
 	    if (mbentry.mbtype & MBTYPE_REMOTE) {
-		char *c;
 		/* xxx hide the fact that we are storing partitions */
 		*server = mbentry.partition;
 		c = strchr(*server, '!');

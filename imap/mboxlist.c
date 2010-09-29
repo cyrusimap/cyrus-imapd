@@ -175,10 +175,6 @@ static int mboxlist_mylookup(const char *name, struct mboxlist_entry *entry,
     /* copy out interesting parts */
     mbtype = strtol(data, &p, 10);
 
-    /* here we go, ignore them! */
-    if (mbtype & MBTYPE_RESERVE)
-	return IMAP_MAILBOX_RESERVED;
-
     if (*p == ' ') p++;
     q = partition;
     while (*p != ' ') { /* copy out partition name */
@@ -201,6 +197,10 @@ static int mboxlist_mylookup(const char *name, struct mboxlist_entry *entry,
 	entry->mbtype = mbtype;
 	entry->acl = aclresult;
     }
+
+    /* here we go, ignore them! */
+    if (mbtype & MBTYPE_RESERVE)
+	return IMAP_MAILBOX_RESERVED;
 
     return 0;
 }
