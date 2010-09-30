@@ -126,7 +126,8 @@ static struct protocol_t sieve_protocol =
       { "\"STARTTLS\"", CAPA_STARTTLS },
       { NULL, 0 } } },
   { "STARTTLS", "OK", "NO", 1 },
-  { "AUTHENTICATE", INT_MAX, 1, "OK", "NO", NULL, "*", &sieve_parsesuccess, 1 },
+  { "AUTHENTICATE", INT_MAX, 1, "OK", "NO", NULL, "*",
+    &sieve_parsesuccess, AUTO_CAPA_SSF },
   { NULL, NULL, NULL },
   { NULL, NULL, NULL },
   { "LOGOUT", NULL, "OK" }

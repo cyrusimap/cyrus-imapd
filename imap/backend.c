@@ -77,21 +77,43 @@
 #include "util.h"
 
 enum {
-    AUTO_BANNER = -1,
-    AUTO_NO = 0,
-    AUTO_YES = 1
+    AUTO_CAPA_BANNER = -1,
+    AUTO_CAPA_NO = 0,
 };
+
+static char *parse_capability(const char str[],
+			      struct protocol_t *prot, unsigned long *capa)
+{
+    char *ret = NULL, *tmp;
+    struct capa_t *c;
+
+    /* look for capabilities in the string */
+    for (c = prot->capa_cmd.capa; c->str; c++) {
+	if ((tmp = strstr(str, c->str)) != NULL) {
+	    *capa = *capa | c->flag;
+
+	    if (c->flag == CAPA_AUTH) {
+		if (prot->capa_cmd.parse_mechlist)
+		    ret = prot->capa_cmd.parse_mechlist(str, prot);
+		else
+		    ret = xstrdup(tmp+strlen(c->str));
+	    }
+	}
+    }
+
+    return ret;
+}
 
 static char *ask_capability(struct protstream *pout, struct protstream *pin,
 			    struct protocol_t *prot, unsigned long *capa,
 			    int automatic)
 {
     char str[4096];
-    char *ret = NULL, *tmp;
-    struct capa_t *c;
+    char *mechlist = NULL, *ret;
     const char *resp;
 
-    resp = (automatic == AUTO_BANNER) ? prot->banner.resp : prot->capa_cmd.resp;
+    resp = (automatic == AUTO_CAPA_BANNER) ?
+	prot->banner.resp : prot->capa_cmd.resp;
 
     if (!automatic) {
 	/* no capability command */
@@ -109,23 +131,11 @@ static char *ask_capability(struct protstream *pout, struct protstream *pin,
     do {
 	if (prot_fgets(str, sizeof(str), pin) == NULL) break;
 
-	/* look for capabilities in the string */
-	for (c = prot->capa_cmd.capa; c->str; c++) {
-	    if ((tmp = strstr(str, c->str)) != NULL) {
-		*capa = *capa | c->flag;
-
-		if (c->flag == CAPA_AUTH) {
-		    if (ret) {
-			free(ret);
-			ret = NULL;
-		    }
-		    if (prot->capa_cmd.parse_mechlist)
-			ret = prot->capa_cmd.parse_mechlist(str, prot);
-		    else
-			ret = xstrdup(tmp+strlen(c->str));
-		}
-	    }
+	if ((ret = parse_capability(str, prot, capa))) {
+	    if (mechlist) free(mechlist);
+	    mechlist = ret;
 	}
+
 	if (!resp) {
 	    /* multiline response with no distinct end (IMAP banner) */
 	    prot_NONBLOCK(pin);
@@ -135,7 +145,7 @@ static char *ask_capability(struct protstream *pout, struct protstream *pin,
     } while (!resp || strncasecmp(str, resp, strlen(resp)));
     
     prot_BLOCK(pin);
-    return ret;
+    return mechlist;
 }
 
 static int do_compress(struct backend *s, struct simple_cmd_t *compress_cmd)
@@ -489,10 +499,10 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
     prot_setflushonread(ret->in, ret->out);
     ret->prot = prot;
     
-    if (prot->banner.is_capa) {
+    if (prot->banner.auto_capa) {
 	/* try to get the capabilities from the banner */
 	mechlist = ask_capability(ret->out, ret->in, prot,
-				  &ret->capability, AUTO_BANNER);
+				  &ret->capability, AUTO_CAPA_BANNER);
 	if (mechlist || ret->capability) {
 	    /* found capabilities in banner -> don't ask */
 	    ask = 0;
@@ -515,7 +525,7 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
     if (ask) {
 	/* get the capabilities */
 	mechlist = ask_capability(ret->out, ret->in, prot,
-				  &ret->capability, AUTO_NO);
+				  &ret->capability, AUTO_CAPA_NO);
     }
 
     /* now need to authenticate to backend server,
@@ -524,9 +534,10 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
 	(strcmp(prot->sasl_service, "lmtp") &&
 	 strcmp(prot->sasl_service, "csync"))) {
 	char *mlist = xstrdup(mechlist); /* backend_auth is destructive */
+	const char *my_status;
 
 	if ((r = backend_authenticate(ret, prot, &mlist, userid,
-				      cb, auth_status))) {
+				      cb, &my_status))) {
 	    syslog(LOG_ERR, "couldn't authenticate to backend server: %s",
 		   sasl_errstring(r, NULL, NULL));
 	    if (!ret_backend) free(ret);
@@ -539,9 +550,9 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
 	    sasl_getprop(ret->saslconn, SASL_SSF, &ssf);
 	    if (*((sasl_ssf_t *) ssf)) {
 		/* if we have a SASL security layer, compare SASL mech lists
-		   to check for a MITM attack */
+		   before/after AUTH to check for a MITM attack */
 		char *new_mechlist;
-		int auto_capa = prot->sasl_cmd.auto_capa;
+		int auto_capa = (prot->sasl_cmd.auto_capa == AUTO_CAPA_AUTH_SSF);
 
 		if (!strcmp(prot->service, "sieve")) {
 		    /* XXX  Hack to handle ManageSieve servers.
@@ -557,7 +568,7 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
 		    if ((ch = prot_getc(ret->in)) != EOF) {
 			prot_ungetc(ch, ret->in);
 		    } else {
-			auto_capa = AUTO_NO;
+			auto_capa = AUTO_CAPA_AUTH_NO;
 		    }
 		    prot_BLOCK(ret->in);
 		}
@@ -572,11 +583,19 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
 		    ret = NULL;
 		}
 
-		free(new_mechlist);
+		if (new_mechlist) free(new_mechlist);
+	    }
+	    else if (prot->sasl_cmd.auto_capa == AUTO_CAPA_AUTH_OK) {
+		/* try to get the capabilities from the AUTH success response */
+		ret->capability = 0;
+		if (mechlist) free(mechlist);
+		mechlist = parse_capability(my_status, prot,
+						&ret->capability);
 	    }
 	}
 
 	if (mlist) free(mlist);
+	if (auth_status) *auth_status = my_status;
     }
 
     if (mechlist) free(mechlist);
