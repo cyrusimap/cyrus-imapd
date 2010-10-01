@@ -241,6 +241,10 @@ mailboxes).
 
 Indicates that the mailbox should have a squat index created for it.
 
+=item C</explicit/annotation>
+
+Sets the annotation I</explicit/annotation> on I<mailbox> to I<value>.
+
 =back 
 
 =item C<renamemailbox> [C<--partition> I<partition>] I<oldname> I<newname>
