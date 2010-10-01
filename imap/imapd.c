@@ -2806,7 +2806,7 @@ void cmd_capability(char *tag)
 
     prot_printf(imapd_out, "* CAPABILITY ");
 
-    capa_response(CAPA_PREAUTH | (imapd_authstate ? CAPA_POSTAUTH : 0));
+    capa_response(CAPA_PREAUTH|CAPA_POSTAUTH);
 
     prot_printf(imapd_out, "\r\n%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));

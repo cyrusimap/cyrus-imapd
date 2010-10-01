@@ -117,7 +117,8 @@ struct protocol_t imap_protocol =
       { " LIST-EXTENDED", CAPA_LISTEXTENDED },
       { NULL, 0 } } },
   { "S01 STARTTLS", "S01 OK", "S01 NO", 0 },
-  { "A01 AUTHENTICATE", 0, 0, "A01 OK", "A01 NO", "+ ", "*", NULL, 0 },
+  { "A01 AUTHENTICATE", 0, 0, "A01 OK", "A01 NO", "+ ", "*",
+    NULL, AUTO_CAPA_AUTH_OK },
   { "Z01 COMPRESS DEFLATE", "* ", "Z01 OK" },
   { "N01 NOOP", "* ", "N01 OK" },
   { "Q01 LOGOUT", "* ", "Q01 " }
