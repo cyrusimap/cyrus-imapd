@@ -612,20 +612,23 @@ int mailbox_cacherecord(struct mailbox *mailbox,
     if (record->crec.len)
 	return 0;
 
+    if (!record->cache_offset)
+	r = IMAP_IOERROR;
+    if (r) goto done;
+
     r = mailbox_open_cache(mailbox);
+    if (r) goto done;
 
     /* try to parse the cache record */
-    if (!r && record->cache_offset) {
-	r = cache_parserecord(&mailbox->cache_buf,
-			      record->cache_offset, &record->crec);
+    r = cache_parserecord(&mailbox->cache_buf,
+			  record->cache_offset, &record->crec);
 
-	if (!r) {
-	    crc = crc32_buf(cache_buf(record));
-	    if (crc != record->cache_crc)
-		r = IMAP_MAILBOX_CRC;
-	}
-    }
+    if (r) goto done;
+    crc = crc32_buf(cache_buf(record));
+    if (crc != record->cache_crc)
+	r = IMAP_MAILBOX_CRC;
 
+done:
     if (r) 
 	syslog(LOG_ERR, "IOERROR: invalid cache record for %s uid %u (%s)",
 	       mailbox->name, record->uid, error_message(r));
