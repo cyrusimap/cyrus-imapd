@@ -785,6 +785,24 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "notifysocket", "{configdirectory}/socket/notify", STRING }
 /* Unix domain socket that the mail notification daemon listens on. */
 
+{ "notify_external", NULL, STRING }
+/* Path to the external program that notifyd(8) will call to send mail
+   notifications.
+.PP
+The external program will be called with the following
+command line options:
+.TP
+.BI \-c " class"
+.TP
+.BI \-p " priority"
+.TP
+.BI \-u " user"
+.TP
+.BI \-m " mailbox"
+.PP
+And the notification message will be available on \fIstdin\fR.
+*/
+
 # Commented out - there's no such thing as "partition-name", but we need
 # this for the man page
 # { "partition-name", NULL, STRING }

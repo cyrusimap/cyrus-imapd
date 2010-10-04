@@ -1,6 +1,6 @@
-/* notifyd.h -- notification method definitions
+/* notify_external.h -- external notification method
  *
- * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2010 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -39,34 +39,17 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: notifyd.h,v 1.4 2010/01/06 17:01:54 murch Exp $
+ * $Id$
  */
+
+#ifndef _NOTIFY_EXTERNAL_H
+#define _NOTIFY_EXTERNAL_H
 
 #include <config.h>
 
-#include "notify_null.h"
-#include "notify_log.h"
-#include "notify_mailto.h"
-#include "notify_zephyr.h"
-#include "notify_external.h"
+char* notify_external(const char *class, const char *priority,
+		      const char *user, const char *mailbox,
+		      int nopt, char **options, const char *message);
 
-/* Notify method dispatch table definition */
-typedef struct {
-    const char *name;				/* name of the method */
-    char *(*notify)(const char *class, const char *priority,
-		    const char *user, const char *mailbox,
-		    int nopt, char **options,
-		    const char *message);	/* notification function */
-} notifymethod_t;
+#endif /* _NOTIFY_EXTERNAL_H */
 
-/* array of supported notification methods */
-notifymethod_t methods[] = {
-    { "null",	notify_null },		/* do nothing */
-    { "log",	notify_log },		/* use syslog (for testing) */
-    { "mailto",	notify_mailto },	/* send an email */
-#ifdef HAVE_ZEPHYR
-    { "zephyr",	notify_zephyr },	/* send a zephyrgram */
-#endif
-    { "external", notify_external },	/* send via external program */
-    { NULL,	NULL }
-};
