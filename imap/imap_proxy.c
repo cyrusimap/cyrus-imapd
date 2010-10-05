@@ -84,7 +84,7 @@ static char *imap_parsemechlist(const char *str, struct protocol_t *prot)
     
     if (strstr(str, " SASL-IR")) {
 	/* server supports initial response in AUTHENTICATE command */
-	prot->sasl_cmd.maxlen = INT_MAX;
+	prot->sasl_cmd.maxlen = USHRT_MAX;
     }
     
     while ((tmp = strstr(str, " AUTH="))) {

@@ -122,7 +122,7 @@ static struct protocol_t csync_protocol =
       { "* STARTTLS", CAPA_STARTTLS },
       { NULL, 0 } } },
   { "STARTTLS", "OK", "NO", 0 },
-  { "AUTHENTICATE", INT_MAX, 0, "OK", "NO", "+ ", "*", NULL, 0 },
+  { "AUTHENTICATE", USHRT_MAX, 0, "OK", "NO", "+ ", "*", NULL, 0 },
   { NULL, NULL, NULL },
   { "NOOP", NULL, "OK" },
   { "EXIT", NULL, "OK" }

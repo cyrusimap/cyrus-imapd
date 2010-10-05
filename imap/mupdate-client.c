@@ -93,7 +93,7 @@ static struct protocol_t mupdate_protocol =
       { "* COMPRESS \"DEFLATE\"", CAPA_COMPRESS },
       { NULL, 0 } } },
   { "S01 STARTTLS", "S01 OK", "S01 NO", 0 },
-  { "A01 AUTHENTICATE", INT_MAX, 1, "A01 OK", "A01 NO", "", "*", NULL, 0 },
+  { "A01 AUTHENTICATE", USHRT_MAX, 1, "A01 OK", "A01 NO", "", "*", NULL, 0 },
   { "Z01 COMPRESS \"DEFLATE\"", NULL, "Z01 OK" },
   { "N01 NOOP", NULL, "N01 OK" },
   { "Q01 LOGOUT", NULL, "Q01 " }

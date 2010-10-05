@@ -175,7 +175,7 @@ static sasl_callback_t callbacks[] = {
 struct protocol_t;
 
 struct banner_t {
-    int is_capa;	/* banner is capability response */
+    u_char is_capa;	/* banner is capability response */
     char *resp;		/* end of banner response */
     void *(*parse_banner)(char *str);
 			/* [OPTIONAL] parse banner, returns 'rock' */
@@ -196,14 +196,14 @@ struct tls_cmd_t {
     char *cmd;		/* tls command string */
     char *ok;		/* start tls prompt */
     char *fail;		/* failure response */
-    int auto_capa;      /* capability response sent automatically after TLS */
+    u_char auto_capa;      /* capability response sent automatically after TLS */
 };
 
 struct sasl_cmd_t {
     char *cmd;		/* auth command string */
-    int maxlen;		/* maximum command line length,
+    u_short maxlen;	/* maximum command line length,
 			   (0 = initial response unsupported by protocol) */
-    int quote;		/* quote arguments (literal for base64 data) */
+    u_char quote;	/* quote arguments (literal for base64 data) */
     char *ok;		/* success response string */
     char *fail;		/* failure response string */
     char *cont;		/* continue response string
@@ -211,7 +211,7 @@ struct sasl_cmd_t {
     char *cancel;	/* cancel auth string */
     char *(*parse_success)(char *str);
 			/* [OPTIONAL] parse response for success data */
-    int auto_capa;      /* capability response sent automatically
+    u_char auto_capa;	/* capability response sent automatically
 			   after AUTH with SASL security layer */
 };
 
@@ -1627,7 +1627,7 @@ static char *imap_parse_mechlist(const char *str, struct protocol_t *prot)
     
     if (strstr(str, "SASL-IR")) {
 	/* server supports initial response in AUTHENTICATE command */
-	prot->sasl_cmd.maxlen = INT_MAX;
+	prot->sasl_cmd.maxlen = USHRT_MAX;
     }
     
     while ((tmp = strstr(str, " AUTH="))) {
@@ -2275,7 +2275,8 @@ static struct protocol_t protocols[] = {
       { 0, "20", NULL },
       { "CAPABILITIES", ".", "STARTTLS", "SASL ", NULL, NULL },
       { "STARTTLS", "382", "580", 0 },
-      { "AUTHINFO SASL", 512, 0, "28", "48", "383 ", "*", &nntp_parse_success, 0 },
+      { "AUTHINFO SASL", 512, 0, "28", "48", "383 ", "*",
+	&nntp_parse_success, 0 },
       { NULL, NULL, NULL, },
       &nntp_do_auth, { "QUIT", "205" }, NULL, NULL, NULL
     },
@@ -2301,7 +2302,7 @@ static struct protocol_t protocols[] = {
       { 1, "* OK", NULL },
       { NULL , "* OK", "* STARTTLS", "* AUTH ", "* COMPRESS \"DEFLATE\"", NULL },
       { "S01 STARTTLS", "S01 OK", "S01 NO", 1 },
-      { "A01 AUTHENTICATE", INT_MAX, 1, "A01 OK", "A01 NO", "", "*", NULL, 0 },
+      { "A01 AUTHENTICATE", USHRT_MAX, 1, "A01 OK", "A01 NO", "", "*", NULL, 0 },
       { "Z01 COMPRESS \"DEFLATE\"", "Z01 OK", "Z01 NO" },
       NULL, { "Q01 LOGOUT", "Q01 " }, NULL, NULL, NULL
     },
@@ -2309,7 +2310,8 @@ static struct protocol_t protocols[] = {
       { 1, "OK", NULL },
       { "CAPABILITY", "OK", "\"STARTTLS\"", "\"SASL\" ", NULL, NULL },
       { "STARTTLS", "OK", "NO", 1 },
-      { "AUTHENTICATE", INT_MAX, 1, "OK", "NO", NULL, "*", &sieve_parse_success, 1 },
+      { "AUTHENTICATE", USHRT_MAX, 1, "OK", "NO", NULL, "*",
+	&sieve_parse_success, 1 },
       { NULL, NULL, NULL, },
       NULL, { "LOGOUT", "OK" }, NULL, NULL, NULL
     },
@@ -2317,7 +2319,7 @@ static struct protocol_t protocols[] = {
       { 1, "* OK", NULL },
       { NULL , "* OK", "* STARTTLS", "* SASL ", "* COMPRESS DEFLATE", NULL },
       { "STARTTLS", "OK", "NO", 1 },
-      { "AUTHENTICATE", INT_MAX, 0, "OK", "NO", "+ ", "*", NULL, 0 },
+      { "AUTHENTICATE", USHRT_MAX, 0, "OK", "NO", "+ ", "*", NULL, 0 },
       { "COMPRESS DEFLATE", "OK", "NO" },
       NULL, { "EXIT", "OK" }, NULL, NULL, NULL
     },

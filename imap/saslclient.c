@@ -227,7 +227,7 @@ int saslclient(sasl_conn_t *conn, struct sasl_cmd_t *sasl_cmd,
 	clientout = NULL;
     }
     else if (!sendliteral &&
-	     ((int) (strlen(cmdbuf) + clientoutlen + 3) > sasl_cmd->maxlen)) {
+	     ((strlen(cmdbuf) + clientoutlen + 3) > sasl_cmd->maxlen)) {
 	/* initial response is too long for auth command,
 	   so wait for a server challenge before sending it */
 	goto noinitresp;
