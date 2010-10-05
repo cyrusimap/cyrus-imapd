@@ -1474,6 +1474,10 @@ restart:
 	    struct mailboxlist *listitem = find_listitem(mailbox->name);
 	    r = mailbox_mboxlock_upgrade(listitem, LOCK_EXCLUSIVE);
 	    if (r) return r;
+	    /* lie about our index lock status - the exclusive namelock
+	     * provides equivalent properties - and we know it won't
+	     * leak because the 'restart' above will cover up our sins */
+	    mailbox->index_locktype = LOCK_EXCLUSIVE;
 	    r = upgrade_index(mailbox);
 	    if (r) return r;
 	    goto restart;
