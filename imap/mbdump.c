@@ -422,11 +422,12 @@ int undump_mailbox(const char *mbname,
     int r = 0;
     int curfile = -1;
     struct mailbox *mailbox = NULL;
-    char sieve_path[2048];
+    const char *sieve_path = NULL;
     int sieve_usehomedir = config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR);
     int domainlen = 0;
-    char *p = NULL, userbuf[81];
-    char *userid, *annotation, *contenttype, *content;
+    char *p = NULL;
+    const char *userid = NULL;
+    char *annotation, *contenttype, *content;
     char *seen_file = NULL, *mboxkey_file = NULL;
 
     memset(&file, 0, sizeof(file));
@@ -437,28 +438,10 @@ int undump_mailbox(const char *mbname,
     if (config_virtdomains && (p = strchr(mbname, '!')))
 	domainlen = p - mbname + 1; /* include separator */
 
-    if (!strncmp(mbname+domainlen, "user.", 5) &&
-       !strchr(mbname+domainlen+5, '.')) {
-	strcpy(userbuf, mbname+domainlen+5);
-	if (domainlen)
-	    sprintf(userbuf+strlen(userbuf), "@%.*s", domainlen-1, mbname);
-	userid = userbuf;
-
+    if (mboxname_isusermailbox(mbname, 1)) {
+	userid = mboxname_to_userid(mbname);
 	if(!sieve_usehomedir) {
-	    if (domainlen) {
-		*p = '\0'; /* separate domain!mboxname */
-		snprintf(sieve_path, sizeof(sieve_path), "%s%s%c/%s/%c/%s",
-			 config_getstring(IMAPOPT_SIEVEDIR),
-			 FNAME_DOMAINDIR,
-			 (char) dir_hash_c(mbname, config_fulldirhash), mbname, 
-			 (char) dir_hash_c(p+6, config_fulldirhash), p+6); /* unqualified userid */
-		*p = '!'; /* reassemble domain!mboxname */
-	    }
-	    else {
-		snprintf(sieve_path, sizeof(sieve_path), "%s/%c/%s",
-			 config_getstring(IMAPOPT_SIEVEDIR),
-			 (char) dir_hash_c(userid, config_fulldirhash), userid);
-	    }
+	    sieve_path = user_sieve_path(userid);
 	}
     }
 
