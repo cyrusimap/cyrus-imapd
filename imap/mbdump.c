@@ -163,6 +163,8 @@ static int dump_file(int first, int sync,
     syslog(LOG_DEBUG, "wanting to dump %s", filename);
     filefd = open(filename, O_RDONLY, 0666);
     if (filefd == -1) {
+	/* If an optional file doesn't exist, skip it */
+	if (errno == ENOENT) return 0;
 	syslog(LOG_ERR, "IOERROR: open on %s: %m", filename);
 	return IMAP_SYS_ERROR;
     }
@@ -345,15 +347,7 @@ int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid_start,
 
 	    r = dump_file(0, !tag, pin, pout, fname, ftag);
 	    free(fname);
-	    if (r) {
-		/* If an optional file doesn't exist, skip it */
-		if (errno == ENOENT) {
-		    r = 0;
-		    continue;
-		}
-
-		goto done;
-	    }
+	    if (r) goto done;
 	}
 
 	/* Dump sieve files
@@ -365,8 +359,9 @@ int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid_start,
 	    mbdir = opendir(sieve_path);
 
 	    if (!mbdir) {
-		syslog(LOG_ERR,
-		       "could not dump sieve scripts in %s: %m)", sieve_path);
+		if (errno != ENOENT)
+		    syslog(LOG_ERR,
+			   "could not dump sieve scripts in %s: %m)", sieve_path);
 	    } else {
 		char tag_fname[2048];
 	    
@@ -405,6 +400,7 @@ int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid_start,
     } /* end if user INBOX */
 
     prot_printf(pout,")\r\n");
+
  done:
     prot_flush(pout);
 
@@ -670,17 +666,26 @@ int undump_mailbox(const char *mbname,
 	    }
 	} else {
 	    struct data_file *df;
-	    const char *path;
+	    const char *path = NULL;
 
 	    /* see if its one of our datafiles */
 	    for (df = data_files; df->fname && strcmp(df->fname, file.s); df++);
-	    path = mailbox_meta_fname(mailbox, df->metaname);
-	    if (df->metaname && path) {
-		strncpy(fnamebuf, path, MAX_MAILBOX_PATH);
+	    if (df->metaname) {
+		path = mailbox_meta_fname(mailbox, df->metaname);
 	    } else {
+		uint32_t uid;
+		const char *ptr = NULL;
+		if (!parseuint32(file.s, &ptr, &uid)) {
+		    /* is it really a data file? */
+		    if (ptr && ptr[0] == '.' && ptr[1] == '\0')
+			path = mailbox_message_fname(mailbox, uid);
+		}
+	    }
+	    if (!path) {
 		r = IMAP_PROTOCOL_ERROR;
 		goto done;
 	    }
+	    strncpy(fnamebuf, path, MAX_MAILBOX_PATH);
 	}
 
 	/* if we haven't opened it, do so */

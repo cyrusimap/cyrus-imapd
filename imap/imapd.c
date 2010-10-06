@@ -8361,8 +8361,8 @@ static int do_xfer_single(char *toserver, char *topart,
 
     if (!r) {
 	r = getresult(be->in, "D01");
-	if (r) syslog(LOG_ERR, "Could not move mailbox: %s, UNDUMP failed",
-		      mailboxname);
+	if (r) syslog(LOG_ERR, "Could not move mailbox: %s, UNDUMP failed %s",
+		      mailboxname, error_message(r));
     }
     
     /* Step 5: Set ACL on remote */
