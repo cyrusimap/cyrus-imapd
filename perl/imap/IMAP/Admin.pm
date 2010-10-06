@@ -797,11 +797,11 @@ sub mboxconfig {
     return undef;
   }
 
-  if(!exists($values{$entry})) {
-    $self->{error} = "Unknown parameter $entry";
+  if(exists($values{$entry})) {
+    $entry = $values{$entry};
+  } else {
+    $self->{error} = "Unknown parameter $entry" unless substr($entry,0,1) eq "/";
   }
-
-  $entry = $values{$entry};
 
   my ($rc, $msg);
 
