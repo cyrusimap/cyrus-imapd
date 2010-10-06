@@ -1149,7 +1149,7 @@ int prot_putbuf(struct protstream *s, struct buf *buf)
 /*
  * Stripped-down version of printf() that works on protection streams
  * Only understands '%lld', '%llu', '%ld', '%lu', '%d', %u', '%s',
- * '%c', and '%%' in the format string.
+ * '%tu', '%td', '%c', and '%%' in the format string.
  */
 int prot_printf(struct protstream *s, const char *fmt, ...)
 {
@@ -1226,6 +1226,24 @@ int prot_printf(struct protstream *s, const char *fmt, ...)
 	    snprintf(buf, sizeof(buf), "%u", u);
 	    prot_write(s, buf, strlen(buf));
 	    break;
+
+	case 't': {
+	    size_t tu;
+	    ssize_t td;
+	    switch (*++percent) {
+	    case 'u':
+		tu = va_arg(pvar, size_t);
+		snprintf(buf, sizeof(buf), "%tu", tu);
+		prot_write(s, buf, strlen(buf));
+	    case 'd':
+		td = va_arg(pvar, ssize_t);
+		snprintf(buf, sizeof(buf), "%td", td);
+		prot_write(s, buf, strlen(buf));
+	    default:
+		abort();
+	    }
+	    break;
+	}
 
 	case 's':
 	    p = va_arg(pvar, char *);
