@@ -1,5 +1,6 @@
 */*.o
 */*.a
+*/*~
 */Makefile
 */Makefile.old
 Makefile
@@ -33,6 +34,7 @@ imap/cyr_df
 imap/cyr_expire
 imap/cyr_sequence
 imap/cyr_synclog
+imap/cyr_userseen
 imap/cyrdump
 imap/deliver
 imap/fetchnews
