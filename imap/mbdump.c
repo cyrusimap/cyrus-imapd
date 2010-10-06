@@ -67,12 +67,10 @@
 #include "global.h"
 #include "imap_err.h"
 #include "imparse.h"
-#include "mailbox.h"
 #include "map.h"
 #include "mbdump.h"
 #include "mboxkey.h"
 #include "mboxlist.h"
-#include "prot.h"
 #include "quota.h"
 #include "seen.h"
 #include "xmalloc.h"
@@ -83,7 +81,7 @@
 #include "index.h"
 
 /* is this the active script? */
-static int sieve_isactive(char *sievepath, char *name)
+static int sieve_isactive(const char *sievepath, const char *name)
 {
     char filename[1024];
     char linkname[1024];
@@ -224,7 +222,7 @@ static struct data_file data_files[] = {
 enum { SEEN_DB = 0, SUBS_DB = 1, MBOXKEY_DB = 2 };
 static int NUM_USER_DATA_FILES = 3;
 
-int dump_mailbox(const char *tag, const char *mbname, uint32_t uid_start,
+int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid_start,
 		 struct protstream *pin, struct protstream *pout,
 		 struct auth_state *auth_state __attribute((unused)))
 {
@@ -234,28 +232,8 @@ int dump_mailbox(const char *tag, const char *mbname, uint32_t uid_start,
     char filename[MAX_MAILBOX_PATH + 1024];
     char *fname;
     int first = 1;
-    struct mailbox *mailbox = NULL;
     int i;
     struct data_file *df;
-
-    /* non-null userid means we are moving the user */
-    const char *userid = NULL;
-    int domainlen = 0;
-    char *p = NULL, userbuf[81];
-    
-    if (config_virtdomains && (p = strchr(mbname, '!')))
-	domainlen = p - mbname + 1; /* include separator */
-
-    if (!strncmp(mbname+domainlen, "user.", 5) &&
-	!strchr(mbname+domainlen+5, '.')) {
-	strcpy(userbuf, mbname+domainlen+5);
-	if (domainlen)
-	    sprintf(userbuf+strlen(userbuf), "@%.*s", domainlen-1, mbname);
-	userid = userbuf;
-    }
-
-    r = mailbox_open_irl(mbname, &mailbox);
-    if (r) return r;
 
     mbdir = opendir(mailbox_datapath(mailbox));
     if (!mbdir && errno == EACCES) {
@@ -281,7 +259,7 @@ int dump_mailbox(const char *tag, const char *mbname, uint32_t uid_start,
     {
 	struct quota q;
 
-	q.root = mbname;
+	q.root = mailbox->name;
 	r = quota_read(&q, NULL, 0);
 
 	if (!r) {
@@ -334,13 +312,13 @@ int dump_mailbox(const char *tag, const char *mbname, uint32_t uid_start,
 	struct dump_annotation_rock actx;
 	actx.tag = tag;
 	actx.pout = pout;
-	annotatemore_findall(mbname, "*", dump_annotations,
+	annotatemore_findall(mailbox->name, "*", dump_annotations,
 			     (void *) &actx, NULL);
     }
 
-    /* Dump user files */
-    if (userid) {
-	char sieve_path[MAX_MAILBOX_PATH];
+    /* Dump user files if this is an inbox */
+    if (mboxname_isusermailbox(mailbox->name, 1)) {
+	const char *userid = mboxname_to_userid(mailbox->name);
 	int sieve_usehomedir = config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR);
 	char *fname = NULL, *ftag = NULL;
 
@@ -383,20 +361,7 @@ int dump_mailbox(const char *tag, const char *mbname, uint32_t uid_start,
 	 * xxx can't use home directories currently
 	 * (it makes almost no sense in the conext of a murder) */
 	if (!sieve_usehomedir) {
-	    if (domainlen) {
-		*p = '\0'; /* separate domain!mboxname */
-		snprintf(sieve_path, sizeof(sieve_path), "%s%s%c/%s/%c/%s",
-			 config_getstring(IMAPOPT_SIEVEDIR),
-			 FNAME_DOMAINDIR,
-			 (char) dir_hash_c(mbname, config_fulldirhash), mbname, 
-			 (char) dir_hash_c(p+6, config_fulldirhash), p+6); /* unqualified userid */
-		*p = '!'; /* reassemble domain!mboxname */
-	    }
-	    else {
-		snprintf(sieve_path, sizeof(sieve_path), "%s/%c/%s",
-			 config_getstring(IMAPOPT_SIEVEDIR),
-			 (char) dir_hash_c(userid, config_fulldirhash), userid);
-	    }
+	    const char *sieve_path = user_sieve_path(userid);
 	    mbdir = opendir(sieve_path);
 
 	    if (!mbdir) {
@@ -437,13 +402,12 @@ int dump_mailbox(const char *tag, const char *mbname, uint32_t uid_start,
 	    }
 	} /* end if !sieve_userhomedir */
 	    
-    } /* end if userid */
+    } /* end if user INBOX */
 
     prot_printf(pout,")\r\n");
  done:
     prot_flush(pout);
 
-    mailbox_close(&mailbox);
     if (mbdir) closedir(mbdir);
 
     return r;

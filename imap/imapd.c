@@ -7961,28 +7961,19 @@ void cmd_dump(char *tag, char *name, int uid_start)
 {
     int r = 0;
     char mailboxname[MAX_MAILBOX_BUFFER];
-    char *acl;
+    struct mailbox *mailbox = NULL;
 
     /* administrators only please */
-    if (!imapd_userisadmin) {
+    if (!imapd_userisadmin)
 	r = IMAP_PERMISSION_DENIED;
-    }
 
-    if (!r) {
-	r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
-						   imapd_userid, mailboxname);
-    }
+    if (!r) r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
+						       imapd_userid, mailboxname);
     
-    if (!r) {
-	r = mlookup(tag, name, mailboxname, NULL,
-		    NULL, &acl, NULL);
-    }
-    if (r == IMAP_MAILBOX_MOVED) return;
+    if (!r) r = mailbox_open_irl(mailboxname, &mailbox);
 
-    if(!r) {
-	r = dump_mailbox(tag, mailboxname, uid_start,
-			 imapd_in, imapd_out, imapd_authstate);
-    }
+    if (!r) r = dump_mailbox(tag, mailbox, uid_start,
+			     imapd_in, imapd_out, imapd_authstate);
 
     if (r) {
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
@@ -7990,6 +7981,8 @@ void cmd_dump(char *tag, char *name, int uid_start)
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
     }
+
+    if (mailbox) mailbox_close(&mailbox);
 }
 
 void cmd_undump(char *tag, char *name) 
@@ -8014,7 +8007,8 @@ void cmd_undump(char *tag, char *name)
     }
     if (r == IMAP_MAILBOX_MOVED) return;
 
-    if(!r) {
+    if (!r) {
+	/* XXX - interface change to match dump? */
 	r = undump_mailbox(mailboxname, imapd_in, imapd_out, imapd_authstate);
     }
 
@@ -8259,7 +8253,7 @@ static int do_xfer_single(char *toserver, char *topart,
     int backout_mupdate = 0;
     int backout_remotebox = 0;
     int backout_remoteflag = 0;
-    struct mboxlist_entry mbentry;
+    struct mailbox *mailbox = NULL;
 
     /* Make sure we're given a sane value */
     if(topart && !imparse_isatom(topart))
@@ -8268,17 +8262,17 @@ static int do_xfer_single(char *toserver, char *topart,
     if(!strcmp(toserver, config_servername)) 
 	return IMAP_BAD_SERVER;
 
-    if (mboxlist_lookup(mailboxname, &mbentry, 0))
-	return IMAP_MAILBOX_NONEXISTENT;
-
     if (imapd_index && !strcmp(mailboxname, imapd_index->mailbox->name))
 	return IMAP_MAILBOX_LOCKED;
+
+    /* Grab an exclusive lock on the mailbox, we'll be deleting it later
+     * if all goes well. */
+    r = mailbox_open_iwl(mailboxname, &mailbox);
     
     /* Okay, we have the mailbox, now the order of steps is:
      *
      * 1) Connect to remote server.
      * 2) LOCALCREATE on remote server
-     * 2.5) Set mailbox as REMOTE on local server
      * 3) mupdate.DEACTIVATE(mailbox, remoteserver) xxx what partition?
      * 4) undump mailbox from local to remote
      * 5) Sync remote acl
@@ -8288,17 +8282,16 @@ static int do_xfer_single(char *toserver, char *topart,
      *      that the state of the world is correct (required if we do not
      *      know the remote partition, but worst case it will be caught
      *      when they next sync)
-     * 7) local delete of mailbox
-     * 8) remove local remote mailbox entry??????
+     * 7) local delete of mailbobox
      */
 
     /* Step 1: Connect to remote server */
-    if(!be_in) {
+    if (!be_in) {
 	/* Just authorize as the IMAP server, so pass "" as our authzid */
 	be = backend_connect(NULL, toserver, &imap_protocol,
 			     "", NULL, NULL);
-	if(!be) r = IMAP_SERVER_UNAVAILABLE;
-	if(r) {
+	if (!be) r = IMAP_SERVER_UNAVAILABLE;
+	if (r) {
 	    syslog(LOG_ERR,
 		   "Could not move mailbox: %s, Backend connect failed",
 		   mailboxname);
@@ -8310,11 +8303,11 @@ static int do_xfer_single(char *toserver, char *topart,
     }
 
     /* Step 1a: Connect to mupdate (as needed) */
-    if(h_in && *h_in) {
+    if (h_in && *h_in) {
 	mupdate_h = *h_in;
     } else if (config_mupdate_server) {
 	r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
-	if(r) {
+	if (r) {
 	    syslog(LOG_ERR,
 		   "Could not move mailbox: %s, MUPDATE connect failed",
 		   mailboxname);
@@ -8323,8 +8316,8 @@ static int do_xfer_single(char *toserver, char *topart,
     }
 
     /* Step 2: LOCALCREATE on remote server */
-    if(!r) {
-	if(topart) {
+    if (!r) {
+	if (topart) {
 	    /* need to send partition as an atom */
 	    prot_printf(be->out, "LC1 LOCALCREATE {" SIZE_T_FMT "+}\r\n%s %s\r\n",
 			strlen(name), name, topart);
@@ -8333,69 +8326,60 @@ static int do_xfer_single(char *toserver, char *topart,
 			strlen(name), name);
 	}
 	r = getresult(be->in, "LC1");
-	if(r) syslog(LOG_ERR, "Could not move mailbox: %s, LOCALCREATE failed",
-		     mailboxname);
+	if (r) syslog(LOG_ERR, "Could not move mailbox: %s, LOCALCREATE failed",
+		      mailboxname);
 	else backout_remotebox = 1;
-    }
-
-    /* Step 2.5: Set mailbox as REMOTE on local server */
-    if(!r) {
-	snprintf(buf, sizeof(buf), "%s!%s", toserver, mbentry.partition);
-	r = mboxlist_update(mailboxname, mbentry.mbtype|MBTYPE_MOVING, buf, mbentry.acl, 1);
-	if(r) syslog(LOG_ERR, "Could not move mailbox: %s, " \
-		     "mboxlist_update failed", mailboxname);
     }
 
     /* Step 3: mupdate.DEACTIVATE(mailbox, newserver) */
     /* (only if mailbox has not been already deactivated by our caller) */
-    if(!r && mupdate_h && !prereserved) {
+    if (!r && mupdate_h && !prereserved) {
 	backout_remoteflag = 1;
 
 	/* Note we are making the reservation on OUR host so that recovery
 	 * make sense */
-	snprintf(buf, sizeof(buf), "%s!%s", config_servername, mbentry.partition);
+	snprintf(buf, sizeof(buf), "%s!%s", config_servername, mailbox->part);
 	r = mupdate_deactivate(mupdate_h, mailboxname, buf);
-	if(r) syslog(LOG_ERR,
-		     "Could not move mailbox: %s, MUPDATE DEACTIVATE failed",
-		     mailboxname);
+	if (r) syslog(LOG_ERR,
+		      "Could not move mailbox: %s, MUPDATE DEACTIVATE failed",
+		      mailboxname);
     }
 
     /* Step 4: Dump local -> remote */
-    if(!r) {
+    if (!r) {
 	backout_mupdate = 1;
 
 	prot_printf(be->out, "D01 UNDUMP {" SIZE_T_FMT "+}\r\n%s ",
 		    strlen(name), name);
 
-	r = dump_mailbox(NULL, mailboxname, 0, be->in, be->out, imapd_authstate);
+	r = dump_mailbox(NULL, mailbox, 0, be->in, be->out, imapd_authstate);
 
-	if(r)
-	    syslog(LOG_ERR,
-		   "Could not move mailbox: %s, dump_mailbox() failed",
-		   mailboxname);
+	if (r) syslog(LOG_ERR,
+		      "Could not move mailbox: %s, dump_mailbox() failed",
+		      mailboxname);
     }
 
-    if(!r) {
+    if (!r) {
 	r = getresult(be->in, "D01");
-	if(r) syslog(LOG_ERR, "Could not move mailbox: %s, UNDUMP failed",
-		     mailboxname);
+	if (r) syslog(LOG_ERR, "Could not move mailbox: %s, UNDUMP failed",
+		      mailboxname);
     }
     
     /* Step 5: Set ACL on remote */
-    if(!r) {
+    if (!r) {
 	r = trashacl(be->in, be->out, name);
-	if(r) syslog(LOG_ERR, "Could not clear remote acl on %s",
-		     mailboxname);
+	if (r) syslog(LOG_ERR, "Could not clear remote acl on %s",
+		      mailboxname);
     }
-    if(!r) {
-	r = dumpacl(be->in, be->out, name, mbentry.acl);
-	if(r) syslog(LOG_ERR, "Could not set remote acl on %s",
-		     mailboxname);
+    if (!r) {
+	r = dumpacl(be->in, be->out, name, mailbox->acl);
+	if (r) syslog(LOG_ERR, "Could not set remote acl on %s",
+		      mailboxname);
     }
 
     /* Step 6: mupdate.activate(mailbox, remote) */
     /* We do this from the local server first so that recovery is easier */
-    if(!r && mupdate_h) {
+    if (!r && mupdate_h) {
 	/*
 	 * If we don't have a partition on the target server, we use
 	 * the string "MOVED" instead.  When we issue MUPDATEPUSH to the
@@ -8409,13 +8393,13 @@ static int do_xfer_single(char *toserver, char *topart,
 	} else {
 	    snprintf(buf, sizeof(buf), "%s!MOVED", toserver);
 	}
-	r = mupdate_activate(mupdate_h, mailboxname, buf, mbentry.acl);
+	r = mupdate_activate(mupdate_h, mailboxname, buf, mailbox->acl);
 	if (r) {
 	    syslog( LOG_INFO, "MUPDATE: lost connection, retrying" );
 	    mupdate_disconnect(&mupdate_h);
 	    r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
 	    if (!r) {
-		r = mupdate_activate(mupdate_h, mailboxname, buf, mbentry.acl);
+		r = mupdate_activate(mupdate_h, mailboxname, buf, mailbox->acl);
 	    }
 	}
 	if (r) {
@@ -8425,7 +8409,7 @@ static int do_xfer_single(char *toserver, char *topart,
     }
 
     /* MAILBOX NOW LIVES ON REMOTE */
-    if(!r) {
+    if (!r) {
 	backout_remotebox = 0;
 	backout_mupdate = 0;
 	backout_remoteflag = 0;
@@ -8436,7 +8420,7 @@ static int do_xfer_single(char *toserver, char *topart,
 	    prot_printf(be->out, "MP1 MUPDATEPUSH {" SIZE_T_FMT "+}\r\n%s\r\n",
 			strlen(name), name);
 	    rerr = getresult(be->in, "MP1");
-	    if(rerr) {
+	    if (rerr) {
 		syslog(LOG_ERR,
 		       "Could not trigger remote push to mupdate server" \
 		       "during move of %s",
@@ -8447,32 +8431,25 @@ static int do_xfer_single(char *toserver, char *topart,
 
     /* 7) local delete of mailbox
      * & remove local "remote" mailboxlist entry */
-    if(!r) {
+    if (!r) {
 	if (config_mupdate_config != IMAP_ENUM_MUPDATE_CONFIG_UNIFIED) {
+	    /* have to close it because the mboxlist interface re-opens it */
+	    mailbox_close(&mailbox);
 	    /* Note that we do not check the ACL, and we don't update MUPDATE */
 	    /* note also that we need to remember to let proxyadmins do this */
 	    r = mboxlist_deletemailbox(mailboxname,
 				       imapd_userisadmin || imapd_userisproxyadmin,
 				       imapd_userid, imapd_authstate, 0, 1, 0);
-	    if(r) syslog(LOG_ERR,
+	    if (r) syslog(LOG_ERR,
+			  "Could not delete local mailbox during move of %s",
+			  mailboxname);
+	} else {
+	    /* Delete mailbox and quota root */
+	    /* note: delete closes mailbox */
+	    r = mailbox_delete(&mailbox);
+	    if (r) syslog(LOG_ERR,
 			 "Could not delete local mailbox during move of %s",
 			 mailboxname);
-	} else {
-	    /* Can't trust local mailboxes database with unified config */
-	    struct mailbox *mailbox = NULL;
-
-	    r = mailbox_open_iwl(mailboxname, &mailbox);
-	    if(r) syslog(LOG_ERR,
-			 "Could not open local mailbox during move of %s",
-			 mailboxname);
-	    if(!r) {
-		/* Delete mailbox and quota root */
-		/* note: delete closes mailbox */
-		r = mailbox_delete(&mailbox);
-		if (r) syslog(LOG_ERR,
-			     "Could not delete local mailbox during move of %s",
-			     mailboxname);
-	    }
 	}
 
 	if (!r) {
@@ -8482,11 +8459,12 @@ static int do_xfer_single(char *toserver, char *topart,
      }
 
 done:
-    if(r && mupdate_h && backout_mupdate) {
+    if (r && mupdate_h && backout_mupdate) {
 	rerr = 0;
+	/* mailbox must still be open if we have backup_mupdate */
 	snprintf(buf, sizeof(buf), "%s!%s",
-		 config_servername, mbentry.partition);
-	rerr = mupdate_activate(mupdate_h, mailboxname, buf, mbentry.acl);
+		 config_servername, mailbox->part);
+	rerr = mupdate_activate(mupdate_h, mailboxname, buf, mailbox->acl);
 	if (rerr) {
 	    syslog( LOG_INFO, "MUPDATE: lost connection, retrying" );
 	    mupdate_disconnect(&mupdate_h);
@@ -8494,16 +8472,16 @@ done:
 				   &mupdate_h, NULL);
 	    if (!rerr) {
 		rerr = mupdate_activate(mupdate_h, mailboxname,
-					buf, mbentry.acl);
+					buf, mailbox->acl);
 	    }
 	}
-	if(rerr) {
+	if (rerr) {
 	    syslog(LOG_ERR,
 		   "Could not back out mupdate during move of %s (%s)",
 		   mailboxname, error_message(rerr));
 	}
     }
-    if(r && backout_remotebox) {
+    if (r && backout_remotebox) {
 	rerr = 0;
 	prot_printf(be->out, "LD1 LOCALDELETE {" SIZE_T_FMT "+}\r\n%s\r\n",
 		    strlen(name), name);
@@ -8514,17 +8492,17 @@ done:
 		   name, error_message(rerr));
 	}   
     }
-    if(r && backout_remoteflag) {
+    if (r && backout_remoteflag) {
 	rerr = 0;
 
-	rerr = mboxlist_update(mailboxname, mbentry.mbtype, 
-			       mbentry.partition, mbentry.acl, 1);
+	rerr = mboxlist_update(mailboxname, mailbox->mbtype,
+			       mailbox->part, mailbox->acl, 1);
 	if(rerr) syslog(LOG_ERR, "Could not unset remote flag on mailbox: %s",
 			mailboxname);
     }
 
     /* release the handles we got locally if necessary */
-    if(mupdate_h) {
+    if (mupdate_h) {
 	if (h_in && *h_in) {
 	    if (*h_in != mupdate_h) {
 		*h_in = mupdate_h;
@@ -8533,8 +8511,10 @@ done:
 	    mupdate_disconnect(&mupdate_h);
 	}
     }
-    if(be && !be_in)
+    if (be && !be_in)
 	backend_disconnect(be);
+
+    if (mailbox) mailbox_close(&mailbox);
 
     return r;
 }
