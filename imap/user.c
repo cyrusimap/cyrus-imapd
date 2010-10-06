@@ -125,17 +125,11 @@ static int user_deleteacl(char *name, int matchlen, int maycreate, void* rock)
 }
 #endif
 
-static int user_deletesieve(char *user) 
+const char *user_sieve_path(const char *user)
 {
+    static char sieve_path[2048];
     char hash, *domain;
-    char sieve_path[2048];
-    char filename[2048];
-    DIR *mbdir;
-    struct dirent *next = NULL;
-    
-    /* oh well */
-    if(config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR)) return 0;
-    
+
     if (config_virtdomains && (domain = strchr(user, '@'))) {
 	char d = (char) dir_hash_c(domain+1, config_fulldirhash);
 	*domain = '\0';  /* split user@domain */
@@ -152,12 +146,27 @@ static int user_deletesieve(char *user)
 		 config_getstring(IMAPOPT_SIEVEDIR), hash, user);
     }
 
-    mbdir=opendir(sieve_path);
+    return sieve_path;
+}
 
-    if(mbdir) {
+static int user_deletesieve(const char *user) 
+{
+    const char *sieve_path;
+    char filename[2048];
+    DIR *mbdir;
+    struct dirent *next = NULL;
+    
+    /* oh well */
+    if(config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR)) return 0;
+
+    sieve_path = user_sieve_path(user);
+
+    mbdir = opendir(sieve_path);
+
+    if (mbdir) {
 	while((next = readdir(mbdir)) != NULL) {
-	    if(!strcmp(next->d_name, ".")
-	       || !strcmp(next->d_name, "..")) continue;
+	    if (!strcmp(next->d_name, ".")
+	        || !strcmp(next->d_name, "..")) continue;
 
 	    snprintf(filename, sizeof(filename), "%s/%s",
 		     sieve_path, next->d_name);
