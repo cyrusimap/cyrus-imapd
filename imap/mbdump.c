@@ -424,8 +424,6 @@ int undump_mailbox(const char *mbname,
     struct mailbox *mailbox = NULL;
     const char *sieve_path = NULL;
     int sieve_usehomedir = config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR);
-    int domainlen = 0;
-    char *p = NULL;
     const char *userid = NULL;
     char *annotation, *contenttype, *content;
     char *seen_file = NULL, *mboxkey_file = NULL;
@@ -433,17 +431,14 @@ int undump_mailbox(const char *mbname,
     memset(&file, 0, sizeof(file));
     memset(&data, 0, sizeof(data));
 
-    c = getword(pin, &data);
-
-    if (config_virtdomains && (p = strchr(mbname, '!')))
-	domainlen = p - mbname + 1; /* include separator */
-
     if (mboxname_isusermailbox(mbname, 1)) {
 	userid = mboxname_to_userid(mbname);
 	if(!sieve_usehomedir) {
 	    sieve_path = user_sieve_path(userid);
 	}
     }
+
+    c = getword(pin, &data);
 
     /* we better be in a list now */
     if (c != '(' || data.s[0]) {
@@ -475,7 +470,13 @@ int undump_mailbox(const char *mbname,
 	goto done;
     }
     
-    r = mailbox_open_iwl(mbname, &mailbox);
+    r = mailbox_open_exclusive(mbname, &mailbox);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+	struct mboxlist_entry mbentry;
+	r = mboxlist_lookup(mbname, &mbentry, NULL);
+	if (!r) r = mailbox_create(mbname, mbentry.partition, mbentry.acl,
+				   NULL, 0, 0, &mailbox);
+    }
     if(r) goto done;
 
     while(1) {
@@ -748,7 +749,8 @@ int undump_mailbox(const char *mbname,
     buf_free(&data);
 
     if (curfile >= 0) close(curfile);
-    mailbox_close(&mailbox);
+    /* we fiddled the files under the hood, so we can't do anything BUT close it */
+    if (mailbox) mailbox_close(&mailbox);
     
     free(annotation);
     free(content);
@@ -756,7 +758,5 @@ int undump_mailbox(const char *mbname,
     free(seen_file);
     free(mboxkey_file);
 
-    mailbox_close(&mailbox);
-    
     return r;
 }
