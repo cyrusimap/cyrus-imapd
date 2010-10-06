@@ -730,6 +730,14 @@ Blank lines and lines beginning with ``#'' are ignored.
    Netscape asks the server where the mail administration HTTP server
    is.  Administrators should set this to a local resource. */
 
+{ "newsgroups", "*", STRING }
+/* A wildmat pattern specifying which mailbox hierarchies should be
+   treated as newsgroups.  Only mailboxes matching the wildmat will
+   accept and/or serve articles via NNTP.  If not set, a default
+   wildmat of "*" (ALL shared mailboxes) will be used.  If the
+   \fInewsprefix\fR option is also set, the default wildmat will be
+   translated to "<newsprefix>.*" */
+
 { "newsmaster", "news", STRING }
 /* Userid that is used for checking access controls when executing
    Usenet control messages.  For instance, to allow articles to be
