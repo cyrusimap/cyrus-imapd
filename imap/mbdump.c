@@ -67,12 +67,10 @@
 #include "global.h"
 #include "imap_err.h"
 #include "imparse.h"
-#include "mailbox.h"
 #include "map.h"
 #include "mbdump.h"
 #include "mboxkey.h"
 #include "mboxlist.h"
-#include "prot.h"
 #include "quota.h"
 #include "seen.h"
 #include "xmalloc.h"
@@ -83,7 +81,7 @@
 #include "index.h"
 
 /* is this the active script? */
-static int sieve_isactive(char *sievepath, char *name)
+static int sieve_isactive(const char *sievepath, const char *name)
 {
     char filename[1024];
     char linkname[1024];
@@ -165,6 +163,8 @@ static int dump_file(int first, int sync,
     syslog(LOG_DEBUG, "wanting to dump %s", filename);
     filefd = open(filename, O_RDONLY, 0666);
     if (filefd == -1) {
+	/* If an optional file doesn't exist, skip it */
+	if (errno == ENOENT) return 0;
 	syslog(LOG_ERR, "IOERROR: open on %s: %m", filename);
 	return IMAP_SYS_ERROR;
     }
@@ -224,7 +224,7 @@ static struct data_file data_files[] = {
 enum { SEEN_DB = 0, SUBS_DB = 1, MBOXKEY_DB = 2 };
 static int NUM_USER_DATA_FILES = 3;
 
-int dump_mailbox(const char *tag, const char *mbname, uint32_t uid_start,
+int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid_start,
 		 struct protstream *pin, struct protstream *pout,
 		 struct auth_state *auth_state __attribute((unused)))
 {
@@ -234,28 +234,8 @@ int dump_mailbox(const char *tag, const char *mbname, uint32_t uid_start,
     char filename[MAX_MAILBOX_PATH + 1024];
     char *fname;
     int first = 1;
-    struct mailbox *mailbox = NULL;
     int i;
     struct data_file *df;
-
-    /* non-null userid means we are moving the user */
-    const char *userid = NULL;
-    int domainlen = 0;
-    char *p = NULL, userbuf[81];
-    
-    if (config_virtdomains && (p = strchr(mbname, '!')))
-	domainlen = p - mbname + 1; /* include separator */
-
-    if (!strncmp(mbname+domainlen, "user.", 5) &&
-	!strchr(mbname+domainlen+5, '.')) {
-	strcpy(userbuf, mbname+domainlen+5);
-	if (domainlen)
-	    sprintf(userbuf+strlen(userbuf), "@%.*s", domainlen-1, mbname);
-	userid = userbuf;
-    }
-
-    r = mailbox_open_irl(mbname, &mailbox);
-    if (r) return r;
 
     mbdir = opendir(mailbox_datapath(mailbox));
     if (!mbdir && errno == EACCES) {
@@ -281,7 +261,7 @@ int dump_mailbox(const char *tag, const char *mbname, uint32_t uid_start,
     {
 	struct quota q;
 
-	q.root = mbname;
+	q.root = mailbox->name;
 	r = quota_read(&q, NULL, 0);
 
 	if (!r) {
@@ -334,13 +314,13 @@ int dump_mailbox(const char *tag, const char *mbname, uint32_t uid_start,
 	struct dump_annotation_rock actx;
 	actx.tag = tag;
 	actx.pout = pout;
-	annotatemore_findall(mbname, "*", dump_annotations,
+	annotatemore_findall(mailbox->name, "*", dump_annotations,
 			     (void *) &actx, NULL);
     }
 
-    /* Dump user files */
-    if (userid) {
-	char sieve_path[MAX_MAILBOX_PATH];
+    /* Dump user files if this is an inbox */
+    if (mboxname_isusermailbox(mailbox->name, 1)) {
+	const char *userid = mboxname_to_userid(mailbox->name);
 	int sieve_usehomedir = config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR);
 	char *fname = NULL, *ftag = NULL;
 
@@ -367,15 +347,7 @@ int dump_mailbox(const char *tag, const char *mbname, uint32_t uid_start,
 
 	    r = dump_file(0, !tag, pin, pout, fname, ftag);
 	    free(fname);
-	    if (r) {
-		/* If an optional file doesn't exist, skip it */
-		if (errno == ENOENT) {
-		    r = 0;
-		    continue;
-		}
-
-		goto done;
-	    }
+	    if (r) goto done;
 	}
 
 	/* Dump sieve files
@@ -383,25 +355,13 @@ int dump_mailbox(const char *tag, const char *mbname, uint32_t uid_start,
 	 * xxx can't use home directories currently
 	 * (it makes almost no sense in the conext of a murder) */
 	if (!sieve_usehomedir) {
-	    if (domainlen) {
-		*p = '\0'; /* separate domain!mboxname */
-		snprintf(sieve_path, sizeof(sieve_path), "%s%s%c/%s/%c/%s",
-			 config_getstring(IMAPOPT_SIEVEDIR),
-			 FNAME_DOMAINDIR,
-			 (char) dir_hash_c(mbname, config_fulldirhash), mbname, 
-			 (char) dir_hash_c(p+6, config_fulldirhash), p+6); /* unqualified userid */
-		*p = '!'; /* reassemble domain!mboxname */
-	    }
-	    else {
-		snprintf(sieve_path, sizeof(sieve_path), "%s/%c/%s",
-			 config_getstring(IMAPOPT_SIEVEDIR),
-			 (char) dir_hash_c(userid, config_fulldirhash), userid);
-	    }
+	    const char *sieve_path = user_sieve_path(userid);
 	    mbdir = opendir(sieve_path);
 
 	    if (!mbdir) {
-		syslog(LOG_ERR,
-		       "could not dump sieve scripts in %s: %m)", sieve_path);
+		if (errno != ENOENT)
+		    syslog(LOG_ERR,
+			   "could not dump sieve scripts in %s: %m)", sieve_path);
 	    } else {
 		char tag_fname[2048];
 	    
@@ -437,13 +397,13 @@ int dump_mailbox(const char *tag, const char *mbname, uint32_t uid_start,
 	    }
 	} /* end if !sieve_userhomedir */
 	    
-    } /* end if userid */
+    } /* end if user INBOX */
 
     prot_printf(pout,")\r\n");
+
  done:
     prot_flush(pout);
 
-    mailbox_close(&mailbox);
     if (mbdir) closedir(mbdir);
 
     return r;
@@ -458,45 +418,23 @@ int undump_mailbox(const char *mbname,
     int r = 0;
     int curfile = -1;
     struct mailbox *mailbox = NULL;
-    char sieve_path[2048];
+    const char *sieve_path = NULL;
     int sieve_usehomedir = config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR);
-    int domainlen = 0;
-    char *p = NULL, userbuf[81];
-    char *userid, *annotation, *contenttype, *content;
+    const char *userid = NULL;
+    char *annotation, *contenttype, *content;
     char *seen_file = NULL, *mboxkey_file = NULL;
 
     memset(&file, 0, sizeof(file));
     memset(&data, 0, sizeof(data));
 
-    c = getword(pin, &data);
-
-    if (config_virtdomains && (p = strchr(mbname, '!')))
-	domainlen = p - mbname + 1; /* include separator */
-
-    if (!strncmp(mbname+domainlen, "user.", 5) &&
-       !strchr(mbname+domainlen+5, '.')) {
-	strcpy(userbuf, mbname+domainlen+5);
-	if (domainlen)
-	    sprintf(userbuf+strlen(userbuf), "@%.*s", domainlen-1, mbname);
-	userid = userbuf;
-
+    if (mboxname_isusermailbox(mbname, 1)) {
+	userid = mboxname_to_userid(mbname);
 	if(!sieve_usehomedir) {
-	    if (domainlen) {
-		*p = '\0'; /* separate domain!mboxname */
-		snprintf(sieve_path, sizeof(sieve_path), "%s%s%c/%s/%c/%s",
-			 config_getstring(IMAPOPT_SIEVEDIR),
-			 FNAME_DOMAINDIR,
-			 (char) dir_hash_c(mbname, config_fulldirhash), mbname, 
-			 (char) dir_hash_c(p+6, config_fulldirhash), p+6); /* unqualified userid */
-		*p = '!'; /* reassemble domain!mboxname */
-	    }
-	    else {
-		snprintf(sieve_path, sizeof(sieve_path), "%s/%c/%s",
-			 config_getstring(IMAPOPT_SIEVEDIR),
-			 (char) dir_hash_c(userid, config_fulldirhash), userid);
-	    }
+	    sieve_path = user_sieve_path(userid);
 	}
     }
+
+    c = getword(pin, &data);
 
     /* we better be in a list now */
     if (c != '(' || data.s[0]) {
@@ -528,7 +466,13 @@ int undump_mailbox(const char *mbname,
 	goto done;
     }
     
-    r = mailbox_open_iwl(mbname, &mailbox);
+    r = mailbox_open_exclusive(mbname, &mailbox);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+	struct mboxlist_entry mbentry;
+	r = mboxlist_lookup(mbname, &mbentry, NULL);
+	if (!r) r = mailbox_create(mbname, mbentry.partition, mbentry.acl,
+				   NULL, 0, 0, &mailbox);
+    }
     if(r) goto done;
 
     while(1) {
@@ -722,17 +666,26 @@ int undump_mailbox(const char *mbname,
 	    }
 	} else {
 	    struct data_file *df;
-	    const char *path;
+	    const char *path = NULL;
 
 	    /* see if its one of our datafiles */
 	    for (df = data_files; df->fname && strcmp(df->fname, file.s); df++);
-	    path = mailbox_meta_fname(mailbox, df->metaname);
-	    if (df->metaname && path) {
-		strncpy(fnamebuf, path, MAX_MAILBOX_PATH);
+	    if (df->metaname) {
+		path = mailbox_meta_fname(mailbox, df->metaname);
 	    } else {
+		uint32_t uid;
+		const char *ptr = NULL;
+		if (!parseuint32(file.s, &ptr, &uid)) {
+		    /* is it really a data file? */
+		    if (ptr && ptr[0] == '.' && ptr[1] == '\0')
+			path = mailbox_message_fname(mailbox, uid);
+		}
+	    }
+	    if (!path) {
 		r = IMAP_PROTOCOL_ERROR;
 		goto done;
 	    }
+	    strncpy(fnamebuf, path, MAX_MAILBOX_PATH);
 	}
 
 	/* if we haven't opened it, do so */
@@ -801,7 +754,8 @@ int undump_mailbox(const char *mbname,
     buf_free(&data);
 
     if (curfile >= 0) close(curfile);
-    mailbox_close(&mailbox);
+    /* we fiddled the files under the hood, so we can't do anything BUT close it */
+    if (mailbox) mailbox_close(&mailbox);
     
     free(annotation);
     free(content);
@@ -809,7 +763,5 @@ int undump_mailbox(const char *mbname,
     free(seen_file);
     free(mboxkey_file);
 
-    mailbox_close(&mailbox);
-    
     return r;
 }

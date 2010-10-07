@@ -46,6 +46,7 @@
 #define INCLUDED_MBDUMP_H
 
 #include "prot.h"
+#include "mailbox.h"
 
 /* if tag is non-null, we assume that we are a server sending to the
  * client, and:
@@ -58,7 +59,7 @@
  * (note that this assumes server LITERAL+ support, but we don't care since
  * this is a Cyrus-only extention)
  */
-extern int dump_mailbox(const char *tag, const char *mbname, uint32_t uid_start,
+extern int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid_start,
 			struct protstream *pin, struct protstream *pout,
 			struct auth_state *auth_state);
 extern int undump_mailbox(const char *mbname,

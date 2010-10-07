@@ -79,6 +79,7 @@
 #include "imparse.h"
 #include "message.h"
 #include "util.h"
+#include "user.h"
 #include "retry.h"
 #include "lock.h"
 #include "prot.h"
@@ -714,29 +715,6 @@ void sync_quota_list_free(struct sync_quota_list **lp)
 
 /* ====================================================================== */
 
-char *sync_sieve_get_path(const char *userid, char *sieve_path, size_t psize)
-{
-    char *domain;
-
-    if (config_getenum(IMAPOPT_VIRTDOMAINS) && (domain = strchr(userid, '@'))) {
-	char d = (char) dir_hash_c(domain+1, config_fulldirhash);
-	*domain = '\0';  /* split user@domain */
-	snprintf(sieve_path, psize, "%s%s%c/%s/%c/%s",
-		 config_getstring(IMAPOPT_SIEVEDIR),
-		 FNAME_DOMAINDIR, d, domain+1,
-		 dir_hash_c(userid, config_fulldirhash), userid);
-	*domain = '@';  /* reassemble user@domain */
-    }
-    else {
-	snprintf(sieve_path, psize, "%s/%c/%s",
-		 config_getstring(IMAPOPT_SIEVEDIR),
-		 dir_hash_c(userid, config_fulldirhash), userid);
-    }
-
-    return sieve_path;
-}
-
-
 struct sync_sieve_list *sync_sieve_list_create()
 {
     struct sync_sieve_list *l = xzmalloc(sizeof (struct sync_sieve_list));
@@ -809,7 +787,7 @@ void sync_sieve_list_free(struct sync_sieve_list **lp)
 struct sync_sieve_list *sync_sieve_list_generate(const char *userid)
 {
     struct sync_sieve_list *list = sync_sieve_list_create();
-    char sieve_path[2048];   /* Follows existing code... */
+    const char *sieve_path = user_sieve_path(userid);
     char filename[2048];
     char active[2048];
     DIR *mbdir;
@@ -817,7 +795,6 @@ struct sync_sieve_list *sync_sieve_list_generate(const char *userid)
     struct stat sbuf;
     int count;
 
-    sync_sieve_get_path(userid, sieve_path, sizeof(sieve_path));
 
     if (!(mbdir = opendir(sieve_path)))
         return(list);
@@ -857,7 +834,7 @@ struct sync_sieve_list *sync_sieve_list_generate(const char *userid)
 
 char *sync_sieve_read(const char *userid, const char *name, uint32_t *sizep)
 {
-    char sieve_path[2048];
+    const char *sieve_path = user_sieve_path(userid);
     char filename[2048];
     FILE *file;
     struct stat sbuf;
@@ -868,8 +845,6 @@ char *sync_sieve_read(const char *userid, const char *name, uint32_t *sizep)
     if (sizep)
         *sizep = 0;
 
-    sync_sieve_get_path(userid, sieve_path, sizeof(sieve_path));
-    
     snprintf(filename, sizeof(filename), "%s/%s", sieve_path, name);
 
     file = fopen(filename, "r");
@@ -902,15 +877,13 @@ int sync_sieve_upload(const char *userid, const char *name,
 		      time_t last_update, const char *content,
 		      size_t len)
 {
-    char sieve_path[2048];
+    const char *sieve_path = user_sieve_path(userid);
     char tmpname[2048];
     char newname[2048];
     FILE *file;
     int   r = 0;
     struct stat sbuf;
     struct utimbuf utimbuf;
-
-    sync_sieve_get_path(userid, sieve_path, sizeof(sieve_path));
 
     if (stat(sieve_path, &sbuf) == -1 && errno == ENOENT) {
 	if (cyrus_mkdir(sieve_path, 0755) == -1) return IMAP_IOERROR;
@@ -952,11 +925,9 @@ int sync_sieve_upload(const char *userid, const char *name,
 
 int sync_sieve_activate(const char *userid, const char *name)
 {
-    char sieve_path[2048];
+    const char *sieve_path = user_sieve_path(userid);
     char target[2048];
     char active[2048];
-
-    sync_sieve_get_path(userid, sieve_path, sizeof(sieve_path));
 
     snprintf(target, sizeof(target), "%s", name);
     snprintf(active, sizeof(active), "%s/%s", sieve_path, "defaultbc");
@@ -972,10 +943,8 @@ int sync_sieve_activate(const char *userid, const char *name)
 
 int sync_sieve_deactivate(const char *userid)
 {
-    char sieve_path[2048];
+    const char *sieve_path = user_sieve_path(userid);
     char active[2048];
-
-    sync_sieve_get_path(userid, sieve_path, sizeof(sieve_path));
 
     snprintf(active, sizeof(active), "%s/%s", sieve_path, "defaultbc");
     unlink(active);
@@ -987,7 +956,7 @@ int sync_sieve_deactivate(const char *userid)
 
 int sync_sieve_delete(const char *userid, const char *name)
 {
-    char sieve_path[2048];
+    const char *sieve_path = user_sieve_path(userid);
     char filename[2048];
     char active[2048];
     DIR *mbdir;
@@ -995,8 +964,6 @@ int sync_sieve_delete(const char *userid, const char *name)
     struct stat sbuf;
     int is_default = 0;
     int count;
-
-    sync_sieve_get_path(userid, sieve_path, sizeof(sieve_path));
 
     if (!(mbdir = opendir(sieve_path)))
         return(IMAP_IOERROR);
