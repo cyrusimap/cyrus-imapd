@@ -8355,8 +8355,8 @@ static int do_xfer_single(char *toserver, char *topart,
 	r = dump_mailbox(NULL, mailbox, 0, be->in, be->out, imapd_authstate);
 
 	if (r) syslog(LOG_ERR,
-		      "Could not move mailbox: %s, dump_mailbox() failed",
-		      mailboxname);
+		      "Could not move mailbox: %s, dump_mailbox() failed %s",
+		      mailboxname, error_message(r));
     }
 
     if (!r) {
