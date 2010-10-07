@@ -84,7 +84,8 @@ all: notifyd
 install:
 	$(INSTALL) -m 755 notifyd $(DESTDIR)$(service_path)
 
-OBJS= notifyd.o notify_null.o notify_log.o notify_mailto.o notify_zephyr.o
+OBJS= notifyd.o notify_null.o notify_log.o notify_mailto.o notify_zephyr.o \
+	notify_external.o
 
 notifytest: notifytest.o
 	$(CC) $(LDFLAGS) -o notifytest \

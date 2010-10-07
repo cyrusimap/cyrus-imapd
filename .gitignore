@@ -1,5 +1,6 @@
 */*.o
 */*.a
+*/*~
 */Makefile
 */Makefile.old
 Makefile
@@ -15,7 +16,12 @@ config.status
 config.status.lineno
 configure
 sieve/
+com_err/et/com_err.o
 com_err/et/compile_et
+com_err/et/error_message.o
+com_err/et/et_name.o
+com_err/et/init_et.o
+com_err/et/libcom_err.a
 imap/arbitron
 imap/chk_cyrus
 imap/ctl_cyrusdb
@@ -28,6 +34,7 @@ imap/cyr_df
 imap/cyr_expire
 imap/cyr_sequence
 imap/cyr_synclog
+imap/cyr_userseen
 imap/cyrdump
 imap/deliver
 imap/fetchnews

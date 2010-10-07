@@ -114,6 +114,11 @@ specified as an \fI:option\fR.
 .B zephyr
 Send the notification as a zephyrgram.  If used in a Sieve 'notify'
 action, additional recipients can be specified as \fI:options\fR.
+.TP
+.B external
+Send the notification via an external program.  The path to the
+program is specified using the \fInotify_external\fR option in the
+configuration file.
 .SH FILES
 .TP
 .B /etc/imapd.conf

@@ -64,7 +64,7 @@ enum {
 struct protocol_t;
 
 struct banner_t {
-    unsigned auto_capa;		/* capability response sent automatically
+    u_char auto_capa;		/* capability response sent automatically
 				   in banner? */
     char *resp;			/* end of banner response */
 };
@@ -89,7 +89,7 @@ struct tls_cmd_t {
     const char *cmd;		/* TLS command string */
     const char *ok;		/* start TLS prompt */
     const char *fail;		/* failure response */
-    unsigned auto_capa;		/* capability response sent automatically
+    u_char auto_capa;		/* capability response sent automatically
 				   after TLS? */
 };
 

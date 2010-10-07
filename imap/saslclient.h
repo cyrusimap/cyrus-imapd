@@ -51,9 +51,9 @@
 
 struct sasl_cmd_t {
     const char *cmd;	/* auth command string */
-    unsigned maxlen;	/* maximum command line length
+    u_short maxlen;	/* maximum command line length
 			   (0 = initial response unsupported by protocol) */
-    unsigned quote;	/* quote arguments? (literal for base64 data) */
+    u_char quote;	/* quote arguments? (literal for base64 data) */
     const char *ok;	/* success response string */
     const char *fail;	/* failure response string */
     const char *cont;	/* continue response string
@@ -61,13 +61,13 @@ struct sasl_cmd_t {
     const char *cancel;	/* cancel auth string */
     char *(*parse_success)(char *str, const char **status);
 			/* [OPTIONAL] parse response for success data */
-    unsigned auto_capa;	/* capability response sent automatically after AUTH? */
+    u_char auto_capa;	/* capability response sent automatically after AUTH? */
 };
 
 /* values for auto capability after AUTH */
 enum {
-    AUTO_CAPA_AUTH_NO = 0,
-    AUTO_CAPA_AUTH_OK = 1,	/* capabilities sent in AUTH success response */
+    AUTO_CAPA_AUTH_NO  = 0,
+    AUTO_CAPA_AUTH_OK  = 1,	/* capabilities sent in AUTH success response */
     AUTO_CAPA_AUTH_SSF = 2	/* capabilities sent after AUTH success resp,
 				   iff a SASL security layer was negotiated */
 };

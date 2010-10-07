@@ -730,6 +730,14 @@ Blank lines and lines beginning with ``#'' are ignored.
    Netscape asks the server where the mail administration HTTP server
    is.  Administrators should set this to a local resource. */
 
+{ "newsgroups", "*", STRING }
+/* A wildmat pattern specifying which mailbox hierarchies should be
+   treated as newsgroups.  Only mailboxes matching the wildmat will
+   accept and/or serve articles via NNTP.  If not set, a default
+   wildmat of "*" (ALL shared mailboxes) will be used.  If the
+   \fInewsprefix\fR option is also set, the default wildmat will be
+   translated to "<newsprefix>.*" */
+
 { "newsmaster", "news", STRING }
 /* Userid that is used for checking access controls when executing
    Usenet control messages.  For instance, to allow articles to be
@@ -784,6 +792,24 @@ Blank lines and lines beginning with ``#'' are ignored.
 
 { "notifysocket", "{configdirectory}/socket/notify", STRING }
 /* Unix domain socket that the mail notification daemon listens on. */
+
+{ "notify_external", NULL, STRING }
+/* Path to the external program that notifyd(8) will call to send mail
+   notifications.
+.PP
+The external program will be called with the following
+command line options:
+.TP
+.BI \-c " class"
+.TP
+.BI \-p " priority"
+.TP
+.BI \-u " user"
+.TP
+.BI \-m " mailbox"
+.PP
+And the notification message will be available on \fIstdin\fR.
+*/
 
 # Commented out - there's no such thing as "partition-name", but we need
 # this for the man page

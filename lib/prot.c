@@ -1230,15 +1230,20 @@ int prot_printf(struct protstream *s, const char *fmt, ...)
 	case 't': {
 	    size_t tu;
 	    ssize_t td;
+
 	    switch (*++percent) {
 	    case 'u':
 		tu = va_arg(pvar, size_t);
 		snprintf(buf, sizeof(buf), "%tu", tu);
 		prot_write(s, buf, strlen(buf));
+		break;
+
 	    case 'd':
 		td = va_arg(pvar, ssize_t);
 		snprintf(buf, sizeof(buf), "%td", td);
 		prot_write(s, buf, strlen(buf));
+		break;
+
 	    default:
 		abort();
 	    }
