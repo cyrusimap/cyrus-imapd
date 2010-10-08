@@ -8682,9 +8682,16 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 	    else if (r == IMAP_QUOTAROOT_NONEXISTENT) r = 0;
 	}
 
+	/* move this mailbox */
+	/* ...and seen file, and subs file, and sieve scripts... */
+	if (!r) {
+	    r = do_xfer_single(toserver, topart, name,
+			       mailboxname, 1, &mupdate_h, be);
+	}
 
 	/* recursively move all sub-mailboxes, using internal names */
-	if(!r) {
+	/* xxx how do you back out if one of the moves fails? */
+	if (!r) {
 	    struct xfer_user_rock rock;
 
 	    rock.toserver = toserver;
@@ -8697,22 +8704,14 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 				 imapd_authstate, xfer_user_cb,
 				 &rock);
 
-	    if ( !r && mboxlist_delayed_delete_isenabled()) {
+	    /* also move DELETED maiboxes for this user */
+	    if (!r && mboxlist_delayed_delete_isenabled()) {
 		snprintf(buf, sizeof(buf), "%s.%s.*",
 			config_getstring(IMAPOPT_DELETEDPREFIX), mailboxname);
 		r = mboxlist_findall(NULL, buf, 1, imapd_userid,
 				     imapd_authstate, xfer_user_cb,
 				     &rock);
 	    }
-	}
-
-	/* xxx how do you back out if one of the above moves fails? */
-	    
-	/* move this mailbox */
-	/* ...and seen file, and subs file, and sieve scripts... */
-	if (!r) {
-	    r = do_xfer_single(toserver, topart, name,
-			       mailboxname, 1, &mupdate_h, be);
 	}
 
 	if (be) {
