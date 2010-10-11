@@ -11,7 +11,7 @@ Installation
 
 1.  Apply this patch in the toplevel directory using the following command:
 
-	# patch -p0 < contrib/drac_auth.patch
+	# patch -p1 < contrib/drac_auth.patch
 
 2.  Cleanup any previous builds:
 
@@ -64,14 +64,11 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
 
 
 
-Index: configure.in
-===================================================================
-RCS file: /afs/andrew/system/cvs/src/cyrus/configure.in,v
-retrieving revision 1.312
-diff -u -r1.312 configure.in
---- configure.in	3 Dec 2009 20:48:13 -0000	1.312
-+++ configure.in	21 Dec 2009 11:37:49 -0000
-@@ -1172,6 +1172,19 @@
+diff --git a/configure.in b/configure.in
+index e0e8cf4..7d237c0 100644
+--- a/configure.in
++++ b/configure.in
+@@ -1171,6 +1171,19 @@ dnl (agentx was depricated, but SNMP_SUBDIRS is conveinent as a placeholder)
  SNMP_SUBDIRS=""
  AC_SUBST(SNMP_SUBDIRS)
  
@@ -91,14 +88,11 @@ diff -u -r1.312 configure.in
  CMU_LIBWRAP
  CMU_UCDSNMP
  
-Index: imap/Makefile.in
-===================================================================
-RCS file: /afs/andrew/system/cvs/src/cyrus/imap/Makefile.in,v
-retrieving revision 1.198
-diff -u -r1.198 Makefile.in
---- imap/Makefile.in	30 Mar 2009 16:04:56 -0000	1.198
-+++ imap/Makefile.in	21 Dec 2009 11:37:49 -0000
-@@ -66,6 +66,7 @@
+diff --git a/imap/Makefile.in b/imap/Makefile.in
+index b5e139b..1f887f3 100644
+--- a/imap/Makefile.in
++++ b/imap/Makefile.in
+@@ -66,6 +66,7 @@ SIEVE_OBJS = @SIEVE_OBJS@
  SIEVE_LIBS = @SIEVE_LIBS@
  IMAP_COM_ERR_LIBS = @IMAP_COM_ERR_LIBS@
  LIB_WRAP = @LIB_WRAP@
@@ -106,7 +100,7 @@ diff -u -r1.198 Makefile.in
  LIBS = $(IMAP_LIBS) $(IMAP_COM_ERR_LIBS)
  DEPLIBS = ../lib/libcyrus.a ../lib/libcyrus_min.a @DEPLIBS@
  
-@@ -202,17 +203,17 @@
+@@ -203,17 +204,17 @@ lmtpd.pure: lmtpd.o proxy.o $(LMTPOBJS) $(SIEVE_OBJS) \
  imapd: $(IMAPDOBJS) mutex_fake.o libimap.a $(DEPLIBS) $(SERVICE)
  	$(CC) $(LDFLAGS) -o imapd \
  	 $(SERVICE) $(IMAPDOBJS) mutex_fake.o \
@@ -127,7 +121,7 @@ diff -u -r1.198 Makefile.in
  
  mupdate: mupdate.o mupdate-slave.o mupdate-client.o mutex_pthread.o tls.o \
  	libimap.a $(DEPLIBS)
-@@ -230,7 +231,7 @@
+@@ -231,7 +232,7 @@ mupdate.pure: mupdate.o mupdate-slave.o mupdate-client.o mutex_pthread.o \
  pop3d: pop3d.o proxy.o backend.o tls.o mutex_fake.o libimap.a \
  	$(DEPLIBS) $(SERVICE)
  	$(CC) $(LDFLAGS) -o pop3d pop3d.o proxy.o backend.o tls.o $(SERVICE) \
@@ -136,14 +130,11 @@ diff -u -r1.198 Makefile.in
  
  nntpd: nntpd.o proxy.o backend.o index.o smtpclient.o spool.o tls.o \
  	 mutex_fake.o nntp_err.o libimap.a $(DEPLIBS) $(SERVICE)
-Index: imap/imapd.c
-===================================================================
-RCS file: /afs/andrew/system/cvs/src/cyrus/imap/imapd.c,v
-retrieving revision 1.575
-diff -u -r1.575 imapd.c
---- imap/imapd.c	16 Dec 2009 02:51:39 -0000	1.575
-+++ imap/imapd.c	21 Dec 2009 11:37:50 -0000
-@@ -190,6 +190,18 @@
+diff --git a/imap/imapd.c b/imap/imapd.c
+index d979f3b..e9f51d1 100644
+--- a/imap/imapd.c
++++ b/imap/imapd.c
+@@ -193,6 +193,18 @@ static struct proxy_context imapd_proxyctx = {
      1, 1, &imapd_authstate, &imapd_userisadmin, &imapd_userisproxyadmin
  };
  
@@ -160,9 +151,9 @@ diff -u -r1.575 imapd.c
 +#endif /* DRAC_AUTH */
 +
  /* current sub-user state */
- static struct mailbox mboxstruct;
- static struct mailbox *imapd_mailbox;
-@@ -669,6 +681,23 @@
+ struct index_state *imapd_index;
+ 
+@@ -738,6 +750,23 @@ int service_init(int argc, char **argv, char **envp)
      /* setup for sending IMAP IDLE notifications */
      idle_enabled();
  
@@ -186,7 +177,7 @@ diff -u -r1.575 imapd.c
      /* create connection to the SNMP listener, if available. */
      snmp_connect(); /* ignore return code */
      snmp_set_str(SERVER_NAME_VERSION,CYRUS_VERSION);
-@@ -777,6 +806,15 @@
+@@ -848,6 +877,15 @@ int service_main(int argc __attribute__((unused)),
  		imapd_haveaddr = 1;
  	    }
  	}
@@ -202,7 +193,7 @@ diff -u -r1.575 imapd.c
      }
  
      /* create the SASL connection */
-@@ -819,6 +857,11 @@
+@@ -892,6 +930,11 @@ int service_main(int argc __attribute__((unused)),
      prot_flush(imapd_out);
      snmp_increment(ACTIVE_CONNECTIONS, -1);
  
@@ -214,7 +205,7 @@ diff -u -r1.575 imapd.c
      /* cleanup */
      imapd_reset();
  
-@@ -921,6 +964,10 @@
+@@ -1004,6 +1047,10 @@ void shut_down(int code)
  
      cyrus_done();
  
@@ -225,7 +216,7 @@ diff -u -r1.575 imapd.c
      exit(code);
  }
  
-@@ -981,6 +1028,36 @@
+@@ -1064,6 +1111,36 @@ static void imapd_check(struct backend *be, int usinguid)
      }
  }
  
@@ -262,7 +253,7 @@ diff -u -r1.575 imapd.c
  /*
   * Top-level command loop parsing
   */
-@@ -2168,6 +2245,11 @@
+@@ -2239,6 +2316,11 @@ void cmd_login(char *tag, char *user)
      capa_response(CAPA_PREAUTH|CAPA_POSTAUTH);
      prot_printf(imapd_out, "] %s\r\n", reply);
  
@@ -274,26 +265,23 @@ diff -u -r1.575 imapd.c
      /* Create telemetry log */
      imapd_logfd = telemetry_log(imapd_userid, imapd_in, imapd_out, 0);
  
-@@ -2325,6 +2407,11 @@
- 
+@@ -2397,6 +2479,11 @@ cmd_authenticate(char *tag, char *authtype, char *resp)
      prot_setsasl(imapd_in,  imapd_saslconn);
      prot_setsasl(imapd_out, imapd_saslconn);
-+
+ 
 +#ifdef DRAC_AUTH
 +    if (!imapd_userisproxyadmin && drac.interval && drac.clientaddr)
 +	drac.event = prot_addwaitevent(imapd_in, 0 /* now */, drac_ping, NULL);
 +#endif /* DRAC_AUTH */
- 
++
      /* Create telemetry log */
      imapd_logfd = telemetry_log(imapd_userid, imapd_in, imapd_out, 0);
-Index: imap/pop3d.c
-===================================================================
-RCS file: /afs/andrew/system/cvs/src/cyrus/imap/pop3d.c,v
-retrieving revision 1.199
-diff -u -r1.199 pop3d.c
---- imap/pop3d.c	17 Dec 2009 15:32:32 -0000	1.199
-+++ imap/pop3d.c	21 Dec 2009 11:37:50 -0000
-@@ -108,6 +108,10 @@
+ 
+diff --git a/imap/pop3d.c b/imap/pop3d.c
+index 1a11599..ae5722f 100644
+--- a/imap/pop3d.c
++++ b/imap/pop3d.c
+@@ -109,6 +109,10 @@ extern char *optarg;
  extern int opterr;
  
  
@@ -304,15 +292,15 @@ diff -u -r1.199 pop3d.c
  
  #ifdef HAVE_SSL
  static SSL *tls_conn;
-@@ -119,6 +123,7 @@
+@@ -120,6 +124,7 @@ int popd_timeout;
  char *popd_userid = 0, *popd_subfolder = 0;
- struct mailbox *popd_mailbox = 0;
+ struct mailbox *popd_mailbox = NULL;
  struct auth_state *popd_authstate = 0;
 +static int popd_userisproxyadmin = 0;
  int config_popuseacl, config_popuseimapflags;
  struct sockaddr_storage popd_localaddr, popd_remoteaddr;
  int popd_haveaddr = 0;
-@@ -145,7 +150,7 @@
+@@ -150,7 +155,7 @@ static mailbox_decideproc_t expungedeleted;
  
  /* the sasl proxy policy context */
  static struct proxy_context popd_proxyctx = {
@@ -321,7 +309,7 @@ diff -u -r1.199 pop3d.c
  };
  
  /* signal to config.c */
-@@ -374,6 +379,7 @@
+@@ -395,6 +400,7 @@ static void popd_reset(void)
  	auth_freestate(popd_authstate);
  	popd_authstate = NULL;
      }
@@ -329,7 +317,7 @@ diff -u -r1.199 pop3d.c
      if (popd_saslconn) {
  	sasl_dispose(&popd_saslconn);
  	popd_saslconn = NULL;
-@@ -547,6 +553,10 @@
+@@ -580,6 +586,10 @@ int service_main(int argc __attribute__((unused)),
      prot_settimeout(popd_in, popd_timeout);
      prot_setflushonread(popd_in, popd_out);
  
@@ -340,11 +328,10 @@ diff -u -r1.199 pop3d.c
      if (kflag) kpop();
  
      /* we were connected on pop3s port so we should do 
-@@ -1642,6 +1652,21 @@
- 		    error_message(r));
+@@ -1712,6 +1722,21 @@ int openinbox(void)
  	goto fail;
      }
-+
+ 
 +#ifdef DRAC_AUTH
 +    if (!popd_userisproxyadmin && drac_enabled &&
 +	((struct sockaddr *)&popd_remoteaddr)->sa_family == AF_INET) {
@@ -359,17 +346,15 @@ diff -u -r1.199 pop3d.c
 +	}
 +    }
 +#endif /* DRAC_AUTH */
- 
-     if (type & MBTYPE_REMOTE) {
++
+     if (mbentry.mbtype & MBTYPE_REMOTE) {
  	/* remote mailbox */
-Index: imap/version.c
-===================================================================
-RCS file: /afs/andrew/system/cvs/src/cyrus/imap/version.c,v
-retrieving revision 1.23
-diff -u -r1.23 version.c
---- imap/version.c	23 Apr 2009 17:10:07 -0000	1.23
-+++ imap/version.c	21 Dec 2009 11:37:50 -0000
-@@ -159,6 +159,10 @@
+ 	char *server = mbentry.partition;
+diff --git a/imap/version.c b/imap/version.c
+index 8438108..7e46016 100644
+--- a/imap/version.c
++++ b/imap/version.c
+@@ -159,6 +159,10 @@ void id_response(struct protstream *pout)
      snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
  	     "; %s", SIEVE_VERSION);
  #endif
@@ -380,14 +365,11 @@ diff -u -r1.23 version.c
  #ifdef HAVE_LIBWRAP
      snprintf(env_buf + strlen(env_buf), MAXIDVALUELEN - strlen(env_buf),
  	     "; TCP Wrappers");
-Index: lib/imapoptions
-===================================================================
-RCS file: /afs/andrew/system/cvs/src/cyrus/lib/imapoptions,v
-retrieving revision 1.73
-diff -u -r1.73 imapoptions
---- lib/imapoptions	21 Dec 2009 11:25:22 -0000	1.73
-+++ lib/imapoptions	21 Dec 2009 11:37:50 -0000
-@@ -287,6 +287,14 @@
+diff --git a/lib/imapoptions b/lib/imapoptions
+index 3018761..70cd561 100644
+--- a/lib/imapoptions
++++ b/lib/imapoptions
+@@ -296,6 +296,14 @@ Blank lines and lines beginning with ``#'' are ignored.
     session.  Otherwise, the missing mailbox is treated as empty while
     in use by the client.*/
  
@@ -399,6 +381,6 @@ diff -u -r1.73 imapoptions
 +{ "drachost", "localhost", STRING }
 +/* Hostname of the RPC dracd server. */
 +
- { "duplicate_db", "berkeley-nosync", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist", "sql")}
+ { "duplicate_db", "skiplist", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist", "sql")}
  /* The cyrusdb backend to use for the duplicate delivery suppression
     and sieve. */
