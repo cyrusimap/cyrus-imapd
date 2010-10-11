@@ -10,13 +10,17 @@
 
 <h1>Changes to the Cyrus IMAP Server since 2.3.x</h1>
 <ul>
+<li>All databases are now default skiplist, and ctl_cyrusdb
+  will automatically convert database type on startup.</li>
+<li>make_sha1 and make_md5 are removed (replaced by GUID and
+  reconstruct changes)</li>
+<li>Charset subsystem rewritten - Unicode 5.2 rather than
+ Unicode 2, and UTF-8 support in sieve.</li>
 <li>Core mailbox handling code largely rewritten with new APIs, CRC
   checksums, new locking mechanisms, merging of cyrus.index and
-  cyrus.expunge, inclusion of user \Seen flag, and much more.
-  (courtesy of Bron Gondwana <brong@fastmail.fm>) </li>
-<li>Sync code largely rewritten to provide better performance,
-  consistency checking, and recovery from "split-brain" scenarios.
-  (courtesy of Bron Gondwana <brong@fastmail.fm>) </li>
+  cyrus.expunge, inclusion of user \Seen flag, and much more.</li>
+<li>Replication code largely rewritten to provide better performance,
+  consistency checking, and recovery from "split-brain" scenarios.</li>
 <li>Added support for LIST-EXTENDED IMAP extension.  Removed
 support for deprecated (compile-time) LISTEXT IMAP extension.
 <i>Based on work by Martin Konold &lt;martin.konold@erfrakon.de&gt;</i></li> 
@@ -31,6 +35,8 @@ support for deprecated (compile-time) LISTEXT IMAP extension.
   Prindeville <philipp@redfish-solutions.com>)</li>
 <li>Modified <tt>user_deny.db</tt> code to open database once at
   service startup time.</li>
+<li>... and hundreds of tiny things too numerous to mention in
+  a short change log ...</li>
 </ul>
 
 <h1>Changes to the Cyrus IMAP Server since 2.3.15</h1>
