@@ -81,6 +81,10 @@ Read configuration options from \fIconfig-file\fR.
 Recover the databases after an application or system failure.  Also performs
 database cleanup like removing mailbox reservations (and any associated
 mailbox files).
+
+All mailbox files are also checked to make sure the file format matches
+the configured database type in imapd.conf.  If not, the file is
+automatically converted using the same logic as cvt_cyrusdb.
 .TP
 .B \-x
 Used with -r to recover the database only.  (Prevents database cleanup).
