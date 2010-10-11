@@ -74,18 +74,29 @@ all::
 			$(MAKE) $(MFLAGS) DESTDIR=$(DESTDIR) all) || exit 1; \
 	done
 
-dist::
-	@echo "Creating archive from HEAD"
-	@git archive --format=tar --prefix=$(PACKAGE)-$(VERSION)/ HEAD | \
-		gzip -c -9 > $(PACKAGE)-$(VERSION).tar.gz
-	@echo "Archive is at $(PACKAGE)-$(VERSION).tar.gz"
+dist:: distgit
+	@echo "creating configure"
+	@cd dist/cyrus-imapd-$(VERSION) ; sh SMakefile
+	@for d in $(SUBDIRS) $(DISTSUBDIRS); \
+	do \
+	(cd dist/cyrus-imapd-$(VERSION)/$$d; \
+	if [ -f Makefile.dist ]; then \
+	echo "### Making" dist "in" `pwd`; \
+	$(MAKE) $(MFLAGS) YACC='$(YACC)' LEX='$(LEX)' \
+	COMPILE_ET='$(COMPILE_ET)' -f Makefile.dist dist ; \
+	fi) || exit 1; \
+	done
+	@echo "creating tarfile"
+	@cd dist ; tar cf - cyrus-imapd-$(VERSION) | \
+	gzip -9 > ../cyrus-imapd-$(VERSION).tar.gz
+	rm -f distgit
+	rm -rf dist
 
-distcvs:
+distgit:
 	if [ \! -d dist ]; then mkdir dist ; fi
 	@echo "checking out the distribution"
-	@cd dist ; cvs -Q -d :pserver:anoncvs@cvs.andrew.cmu.edu:/cvs \
-		co -P -d cyrus-imapd-$(VERSION) cyrus
-	touch distcvs
+	git archive --format=tar --prefix=$(PACKAGE)-$(VERSION)/ HEAD | tar -C dist -x -f -
+	touch distgit
 
 install::
 	$(srcdir)/install-sh -d ${DESTDIR}$(exec_prefix)/bin
