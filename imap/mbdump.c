@@ -58,8 +58,9 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <ctype.h>
-#include <unistd.h>
 #include <dirent.h>
+#include <unistd.h>
+#include <utime.h>
 
 #include "assert.h"
 #include "annotate.h"
@@ -754,7 +755,37 @@ int undump_mailbox(const char *mbname,
     buf_free(&data);
 
     if (curfile >= 0) close(curfile);
-    /* we fiddled the files under the hood, so we can't do anything BUT close it */
+    /* we fiddled the files under the hood, so we can't do anything
+     * BUT close it */
+    if (mailbox) mailbox_close(&mailbox);
+
+    /* let's make sure the modification times are right */
+    if (!r) {
+	struct index_record record;
+	struct utimbuf settime;
+	const char *fname;
+	unsigned recno;
+
+	/* cheeky - we're not actually changing anything real */
+	r = mailbox_open_irl(mbname, &mailbox);
+	if (r) goto done2;
+
+	for (recno = 1; recno <= mailbox->i.num_records; recno++) {
+	    r = mailbox_read_index_record(mailbox, recno, &record);
+	    if (r) goto done2;
+	    if (record.system_flags & FLAG_UNLINKED)
+		continue; /* no file! */
+	    fname = mailbox_message_fname(mailbox, record.uid);
+	    settime.actime = settime.modtime = record.internaldate;
+	    if (utime(fname, &settime) == -1) {
+		r = IMAP_IOERROR;
+		goto done2;
+	    }
+	}
+    }
+
+ done2:
+    /* just in case we failed during the modifications, close again */
     if (mailbox) mailbox_close(&mailbox);
     
     free(annotation);
