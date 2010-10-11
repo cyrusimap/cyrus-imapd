@@ -10,6 +10,13 @@
 
 <h1>Changes to the Cyrus IMAP Server since 2.3.x</h1>
 <ul>
+<li>Core mailbox handling code largely rewritten with new APIs, CRC
+  checksums, new locking mechanisms, merging of cyrus.index and
+  cyrus.expunge, inclusion of user \Seen flag, and much more.
+  (courtesy of Bron Gondwana <brong@fastmail.fm>) </li>
+<li>Sync code largely rewritten to provide better performance,
+  consistency checking, and recovery from "split-brain" scenarios.
+  (courtesy of Bron Gondwana <brong@fastmail.fm>) </li>
 <li>Added support for LIST-EXTENDED IMAP extension.  Removed
 support for deprecated (compile-time) LISTEXT IMAP extension.
 <i>Based on work by Martin Konold &lt;martin.konold@erfrakon.de&gt;</i></li> 
