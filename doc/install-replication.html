@@ -119,18 +119,6 @@ authentication.
 
 </ol>
 
-<h4>Globally Unique IDentifiers (GUIDs)</h4>
-
-An optional, but recommended step is to enable GUIDs for messages.
-Use of GUIDs improves efficiency by eliminating the synchronization
-of messages which the "replica" has already received from the
-"master".  Note that GUIDs can be safely enabled and disabled at any
-time.
-
-<ol>
-<p><li>Set the <tt>guid_mode</tt> option in imapd.conf to <tt>sha1</tt>.
-</ol>
-
 <h4>Compression</h4>
 
 If you are running replication over a remote link, then the tradeoff between
@@ -175,6 +163,9 @@ To manually synchonize any part of the mailstore, simply run
 <tt>sync_client(8)</tt> with the appropriate command line options.
 Note that you CAN manually synchonize even if "rolling" replication
 has been configured.
+
+<p>You can also run <tt>cyr_synclog(8)</tt> instead, which will insert
+the record into the rolling replication log.
 
 <h3>Failover</h3>
 

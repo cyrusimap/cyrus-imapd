@@ -8,6 +8,78 @@
 
 <h1>Upgrading From Previous Versions</h1>
 
+<h2>Upgrading from 2.3.16</h2>
+<ul>
+<li>There is a new index format, so downgrades are not possible without
+    a reconstruct.  We recommend that you take a full backup before
+    upgrading, and perform an upgrade with a small test server if
+    possible to make sure everything will work for your site.</li>
+<li>MURDER does work, but you can't rename a mailbox back to a previous
+    version backend because the index was upgraded.</li>
+<li>There is a new replication protocol, so you can't replicate between
+    2.4.0 and previous versions in either direction.  You need to
+    upgrade both before you can restart repliation.</li>
+<li>The default value for <tt>delayed_expunge</tt> has changed to
+    provide better QRESYNC and replication support.  The default
+    is still pretty efficient, but you may want to change it
+    to '<tt>immediate</tt>', the previous default</li>
+<li>The default type for all databases is now <tt>skiplist</tt> which
+    is very reliable now, all the bugs are ironed out!  Because
+    ctl_cyrusdb -r automatically converts databases between known
+    types, you shouldn't need to do anything, but if you want to
+    keep the old defaults, you'll need to make them explicit in
+    your imapd.conf as follows:
+<pre>
+duplicate_db: berkeley-nosync
+ptscache_db: berkeley
+statuscache_db: berkeley-nosync
+tlscache_db: berkeley-nosync
+</pre>
+</li>
+<li>There is a new lock folder which defaults to configdir/lock/
+    and contains one zerobyte file per mailbox.  These can get
+    pretty hot, and don't need to persist over reboots (they
+    will be auto-created when needed) - so you may want to
+    define <tt>mboxname_lockpath</tt> to be on tmpfs or ramfs
+    or similar.  It certainly makes sense to clean it out on
+    restart, because names will persist in there forever
+    otherwise.  Even on mailbox delete these files aren't
+    removed (to avoid potential race conditions)
+<li>The make_md5 and make_sha1 utilities no longer exist.  If you
+    want to check message file integrity, the best way is
+    reconstruct -r -n -G.  This will parse every message file,
+    check the sha1 against the value stored in the cyrus.index,
+    and tell you about mismatches without fixing them.</li>
+<li>Speaking of reconstruct, the switches have changed, as has
+    the implementation.  It fixes the mailbox "in place" a lot
+    more rather than creating a new mailbox, meaning that IMAP
+    semantics won't be broken.  It's more likely to abort
+    rather than complete if your filesystem permissions are
+    wrong - fix them first!
+
+<table border="1">
+<tr><th>flag</th><th>change</th></tr>
+<tr><td>-k</td><td>Removed, expunge data is always kept</td></tr>
+<tr><td>-g</td><td>Removed, GUIDs are always stored</td></tr>
+<tr><td>-G</td><td>Changed, now means "re-parse the message".
+		   If not specified, reconstruct only checks
+		   the message size and assumes the rest of
+		   the stuff in the index record is OK (pretty
+		   safe because we do CRC32 checks on index
+		   records now)</td></tr>
+<tr><td>-s</td><td>Added, skip the <tt>stat</tt> call, so
+		   reconstruct doesn't even check the message
+		   file size - just that a file with the
+		   correct name exists at all</td></tr>
+<tr><td>-n</td><td>Added, don't make any changes, just report
+		   what would have been done if -n wasn't
+		   specified</td></tr>
+</table>
+
+If you try to use -k or -g, you will get a warning but the
+reconstruct will still run.</li>
+</ul>
+
 <h2>Upgrading from 2.3.15</h2>
 <ul>
 <li>The SQL detection code in configure has been reworked.  Separate
