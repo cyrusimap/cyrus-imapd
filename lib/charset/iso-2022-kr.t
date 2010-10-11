@@ -67,7 +67,7 @@
 18 0018 CANCEL (CAN)
 19 0019 END OF MEDIUM (EM)
 1A 001a SUBSTITUTE (SUB)
-1B >ESC
+# 1B >ESC
 1C 001c FILE SEPARATOR (IS4)
 1D 001d GROUP SEPARATOR (IS3)
 1E 001e RECORD SEPARATOR (IS2)
@@ -169,14 +169,8 @@
 7E 007e TILDE
 7F 007f DELETE (DEL)
 
-:ESC <
-24 :ESC-$
-
-:ESC-$ <
-29 :ESC-$-)
-
-:ESC-$-) <
-43 :US-ASCII
+# ESCAPE CODE (pretty pointless, but need to return nothing if we follow this path)
+1B242943 :US-ASCII ESC-$-)-C
 
 :KSC-5601
 0f :US-ASCII

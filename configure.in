@@ -976,10 +976,7 @@ AC_ARG_ENABLE(replication,
         [  --enable-replication    enable replication support (experimental)],
 	ENABLE_REPLICATION=$enableval
         if test "$ENABLE_REPLICATION" != no; then
-	  IMAP_PROGS="$IMAP_PROGS sync_client sync_server sync_reset make_md5"
-	  if test "$with_openssl" != "no"; then
-	     IMAP_PROGS="$IMAP_PROGS make_sha1"
-	  fi
+	  IMAP_PROGS="$IMAP_PROGS sync_client sync_server sync_reset"
         fi) 
 
 AC_SUBST(IMAP_PROGS)

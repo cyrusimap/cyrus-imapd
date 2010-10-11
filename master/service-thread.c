@@ -70,6 +70,7 @@
 #include "service.h"
 #include "libconfig.h"
 #include "xmalloc.h"
+#include "signals.h"
 
 extern int optind;
 extern char *optarg;
@@ -265,6 +266,8 @@ int main(int argc, char **argv, char **envp)
 	    fd = accept(LISTEN_FD, NULL, NULL);
 	    if (fd < 0) {
 		switch (errno) {
+		case EINTR:
+        signals_poll();
 		case ENETDOWN:
 #ifdef EPROTO
 		case EPROTO:
@@ -278,7 +281,6 @@ int main(int argc, char **argv, char **envp)
 		case EOPNOTSUPP:
 		case ENETUNREACH:
 		case EAGAIN:
-		case EINTR:
 		case ECONNABORTED:
 		    break;
 		default:

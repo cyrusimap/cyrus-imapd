@@ -51,6 +51,7 @@
 #define SYNC_LOG_RETRIES (64)
 
 void sync_log_init(void);
+void sync_log_suppress(void);
 void sync_log_done(void);
 
 void sync_log(char *fmt, ...);
@@ -66,12 +67,6 @@ void sync_log(char *fmt, ...);
 
 #define sync_log_mailbox_double(name1, name2) \
     sync_log("MAILBOX %s\nMAILBOX %s\n", name1, name2)
-
-#define sync_log_append(name) \
-    sync_log("APPEND %s\n", name)
-
-#define sync_log_acl(name) \
-    sync_log("ACL %s\n", name)
 
 #define sync_log_quota(name) \
     sync_log("QUOTA %s\n", name)

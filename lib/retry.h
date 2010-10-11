@@ -54,6 +54,7 @@
 #endif
 
 #include <sys/uio.h>
+#include "xmalloc.h"
 
 extern int retry_read P((int fd, void *buf, size_t nbyte));
 extern int retry_write P((int fd, const void *buf, size_t nbyte));

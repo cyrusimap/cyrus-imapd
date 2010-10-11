@@ -341,8 +341,10 @@ static void dump2(bytecode_input_t *d, int bc_len)
     int version;
     const char *data;
     int len;
+
+    if (!d) return;
     
-    if(memcmp(d, BYTECODE_MAGIC, BYTECODE_MAGIC_LEN)) {
+    if (memcmp(d, BYTECODE_MAGIC, BYTECODE_MAGIC_LEN)) {
 	printf("not a bytecode file [magic number test failed]\n");
 	return;
     }
@@ -351,7 +353,6 @@ static void dump2(bytecode_input_t *d, int bc_len)
 
     version = ntohl(d[i].op);
     printf("Sievecode version %d\n", version);
-    if(!d) return;
     
     for(i++; i<bc_len;) 
     {
@@ -380,6 +381,7 @@ static void dump2(bytecode_input_t *d, int bc_len)
 
 	case B_FILEINTO: /*19*/
 	    copy = ntohl(d[i++].value);
+	    /* fall through */
 	case B_FILEINTO_ORIG: /*4*/
 	    i = unwrap_string(d, i, &data, &len);
 	    printf("FILEINTO COPY(%d) FOLDER({%d}%s)\n",copy,len,data);
@@ -387,6 +389,7 @@ static void dump2(bytecode_input_t *d, int bc_len)
 
 	case B_REDIRECT: /*20*/
 	    copy = ntohl(d[i++].value);
+	    /* fall through */
 	case B_REDIRECT_ORIG: /*5*/
 	    i = unwrap_string(d, i, &data, &len);
 	    printf("REDIRECT COPY(%d) ADDRESS({%d}%s)\n",copy,len,data);
@@ -489,7 +492,7 @@ static void dump2(bytecode_input_t *d, int bc_len)
 	case B_JUMP:/*16*/
 	    printf("JUMP %d\n", ntohl(d[i].jump));
 	    i+=1;
-	    break;		  
+	    break;
 
 	case B_INCLUDE:/*17*/
 	    printf("INCLUDE ");

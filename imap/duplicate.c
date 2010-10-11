@@ -166,6 +166,9 @@ void duplicate_log(char *msgid, const char *name, char *action)
 {
     syslog(LOG_INFO, "dupelim: eliminated duplicate message to %s id %s (%s)",
 	   name, msgid, action);
+    if (config_auditlog)
+	syslog(LOG_NOTICE, "auditlog: duplicate sessionid=<%s> action=<%s> message-id=%s user=<%s>",
+	       session_id(), action, msgid, name); 
 }
 
 void duplicate_mark(char *id, int idlen, const char *to, int tolen, time_t mark,

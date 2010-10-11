@@ -60,6 +60,8 @@
 #include <zlib.h>
 #endif /* HAVE_ZLIB */
 
+#include "util.h"
+
 #define PROT_BUFSIZE 4096
 /* #define PROT_BUFSIZE 8192 */
 
@@ -121,6 +123,10 @@ struct protstream {
     time_t timeout_mark;
     struct protstream *flushonread;
 
+    int can_unget;
+    int bytes_in;
+    int bytes_out;
+
     /* Events */
     prot_readcallback_t *readcallback_proc;
     void *readcallback_rock;
@@ -152,10 +158,6 @@ extern int prot_getc(struct protstream *s);
 extern int prot_ungetc(int c, struct protstream *s);
 extern int prot_putc(int c, struct protstream *s);
 
-#define prot_getc(s) ((s)->cnt > 0 ? (--(s)->cnt, (int)*(s)->ptr++) : prot_fill(s))
-#define prot_ungetc(c, s) ((s)->cnt++, (*--(s)->ptr = (c)))
-#define prot_putc(c, s) ((*(s)->ptr++ = (c)), --(s)->cnt == 0 ? prot_flush_internal(s,0) : 0)
-
 /* The following two macros control the blocking nature of
  * the protstream.
  *
@@ -183,6 +185,12 @@ extern int prot_free(struct protstream *s);
 
 /* Set the telemetry logfile for a given protstream */
 extern int prot_setlog(struct protstream *s, int fd);
+
+/* Get traffic counts */
+extern int prot_bytes_in(struct protstream *s);
+extern int prot_bytes_out(struct protstream *s);
+#define prot_bytes_in(s) ((s)->bytes_in)
+#define prot_bytes_out(s) ((s)->bytes_out)
 
 /* Set the SASL options for a protstream (requires authentication to
  * be complete for the given sasl_conn_t */
@@ -234,12 +242,17 @@ extern int prot_flush(struct protstream *s);
 
 /* These are protlayer versions of the specified functions */
 extern int prot_write(struct protstream *s, const char *buf, unsigned len);
+extern int prot_putbuf(struct protstream *s, struct buf *buf);
 extern int prot_printf(struct protstream *, const char *, ...)
 #ifdef __GNUC__
     __attribute__ ((format (printf, 2, 3)));
 #else
     ;
 #endif
+extern int prot_printliteral(struct protstream *out, const char *s,
+			     size_t size);
+extern int prot_printstring(struct protstream *out, const char *s);
+extern int prot_printastring(struct protstream *out, const char *s);
 extern int prot_read(struct protstream *s, char *buf, unsigned size);
 extern char *prot_fgets(char *buf, unsigned size, struct protstream *s);
 

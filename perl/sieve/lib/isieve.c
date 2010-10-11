@@ -275,8 +275,8 @@ char * read_capability(isieve_t *obj)
 
       if (strcasecmp(attr,"SASL")==0)
       {
-	if (cap) free(cap);
-	cap = xstrdup(val);
+	free(cap);
+	cap = val ? xstrdup(val) : NULL;
       } else if (strcasecmp(attr,"SIEVE")==0) {
 
       } else if (strcasecmp(attr,"IMPLEMENTATION")==0) {
@@ -284,16 +284,18 @@ char * read_capability(isieve_t *obj)
       } else if (strcasecmp(attr,"STARTTLS")==0) {
 	  /* TODO */
       } else if (val && strncmp(val,"SASL=",5)==0) {
+	  int len = strlen(val);
 	  obj->version = OLD_VERSION;
-	  cap = (char *) xmalloc(strlen(val));
-	  memset(cap, '\0', strlen(val));
-	  memcpy(cap, val+5, strlen(val)-6);
-
+	  free(cap);
+	  cap = (char *) xmalloc(len+1);
+	  memset(cap, '\0', len);
+	  memcpy(cap, val+5, len-6);
+	  free(val);
 	  return cap;
       } else {
 	  /* unknown capability */
       }
-      if (val) { free(val); val = NULL; }
+      free(val);
   }
 
   if (yylex(&state,obj->pin)!=EOL)
@@ -546,7 +548,7 @@ int do_referral(isieve_t *obj, char *refer_to)
     isieve_t *obj_new;
     char *mechlist;
     int port;
-    char *errstr;
+    char *errstr = NULL;
     const char *mtried;
     const char *scheme = "sieve://";
     char *host, *p;
@@ -635,6 +637,10 @@ int do_referral(isieve_t *obj, char *refer_to)
     do {
 	mtried = NULL;
 	ret = auth_sasl(mechlist, obj_new, &mtried, &ssf, &errstr);
+	if (errstr) {
+	    free(errstr);
+	    errstr = NULL;
+	}
 	if(ret) init_sasl(obj_new, 128, callbacks);
 
 	if(mtried) {
@@ -644,13 +650,13 @@ int do_referral(isieve_t *obj, char *refer_to)
 	    
 	    ucase(mtr);
 	    tmp = strstr(mechlist,mtr);
-	    *tmp ='\0';
-	    strcpy(newlist, mechlist);
-	    tmp++;
-	    
-	    tmp = strchr(tmp,' ');
 	    if (tmp) {
-		strcat(newlist,tmp);
+		strcpy(newlist, mechlist);
+		tmp++;
+		tmp = strchr(tmp, ' ');
+		if (tmp) {
+		    strcat(newlist,tmp);
+		}
 	    }
 	    
 	    free(mtr);

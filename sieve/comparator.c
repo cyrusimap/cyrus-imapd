@@ -244,6 +244,7 @@ static int octet_matches_(const char *text, size_t tlen,
 		if (octet_matches_(t, tlen, p, casemap)) return 1;
 		t++; tlen--;
 	    }
+	    break;
 	case '\\':
 	    c = *p++;
 	    /* falls through */

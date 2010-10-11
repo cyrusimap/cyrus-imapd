@@ -86,6 +86,8 @@ static enum {
 
 static int cyrus_init_nodb = 0;
 
+int in_shutdown = 0;
+
 int config_fulldirhash;				/* 0 */
 int config_implicitrights;			/* "lkxa" */
 unsigned long config_metapartition_files;	/* 0 */
@@ -100,6 +102,11 @@ struct cyrusdb_backend *config_tlscache_db;
 struct cyrusdb_backend *config_ptscache_db;
 struct cyrusdb_backend *config_statuscache_db;
 struct cyrusdb_backend *config_userdeny_db;
+
+#define MAX_SESSIONID_SIZE 256
+char session_id_buf[MAX_SESSIONID_SIZE];
+int session_id_time = 0;
+int session_id_count = 0;
 
 /* Called before a cyrus application starts (but after command line parameters
  * are read) */
@@ -500,13 +507,13 @@ int is_userid_anonymous(const char *user)
 static int acl_ok(const char *user, struct auth_state *authstate)
 {
     struct namespace namespace;
-    char *acl;
+    struct mboxlist_entry mbentry;
     char bufuser[MAX_MAILBOX_BUFFER], inboxname[MAX_MAILBOX_BUFFER];
     int r;
 
     /* Set namespace */
     if ((r = mboxname_init_namespace(&namespace, 0)) != 0) {
-	syslog(LOG_ERR, error_message(r));
+	syslog(LOG_ERR, "%s", error_message(r));
 	fatal(error_message(r), EC_CONFIG);
     }
     
@@ -522,11 +529,11 @@ static int acl_ok(const char *user, struct auth_state *authstate)
 					     bufuser, inboxname);
 
     if (r || !authstate ||
-	mboxlist_lookup(inboxname, &acl, NULL)) {
+	mboxlist_lookup(inboxname, &mbentry, NULL)) {
 	r = 0;  /* Failed so assume no proxy access */
     }
     else {
-	r = (cyrus_acl_myrights(authstate, acl) & ACL_ADMIN) != 0;
+	r = (cyrus_acl_myrights(authstate, mbentry.acl) & ACL_ADMIN) != 0;
     }
     return r;
 }
@@ -686,13 +693,23 @@ int shutdown_file(char *buf, int size)
     if (!shutdownfilename[0])
 	snprintf(shutdownfilename, sizeof(shutdownfilename), 
 		 "%s/msg/shutdown", config_dir);
-    if ((f = fopen(shutdownfilename, "r")) == NULL) return 0;
 
-    fgets(buf, size, f);
-    if ((p = strchr(buf, '\r')) != NULL) *p = 0;
-    if ((p = strchr(buf, '\n')) != NULL) *p = 0;
+    f = fopen(shutdownfilename, "r");
+    if (!f) return 0;
 
-    syslog(LOG_DEBUG, "Shutdown file: %s, closing connection", buf);
+    if (!fgets(buf, size, f)) {
+	*buf = '\0';
+
+	syslog(LOG_DEBUG, "Shutdown file exists with no contents");
+    }
+    else {
+	if ((p = strchr(buf, '\r')) != NULL) *p = 0;
+	if ((p = strchr(buf, '\n')) != NULL) *p = 0;
+
+	syslog(LOG_DEBUG, "Shutdown file: %s, closing connection", buf);
+    }
+
+    fclose(f);
 
     return 1;
 }
@@ -756,4 +773,28 @@ char *find_free_partition(unsigned long *tavail)
 
     if (tavail) *tavail = stats.tavail;
     return stats.name;
+}
+
+/* Set up the Session ID Buffer */
+void session_new_id()
+{
+    const char *base;
+    int now = time(NULL);    
+    if (now != session_id_time) {
+        session_id_time = now;
+        session_id_count = 0;
+    }
+    ++session_id_count;
+    base = config_getstring(IMAPOPT_SYSLOG_PREFIX);
+    if (!base) base = config_getstring(IMAPOPT_SERVERNAME);
+    snprintf(session_id_buf, MAX_SESSIONID_SIZE, "%.128s-%d-%d-%d",
+             base, getpid(), session_id_time, session_id_count);
+}
+
+/* Return the session id */
+const char *session_id()
+{
+    if (!session_id_count) 
+        session_new_id();
+    return (const char *)session_id_buf;
 }

@@ -108,8 +108,8 @@ timeout_select (int sock, int op, int sec) {
   tv.tv_sec = sec;
   tv.tv_usec = 0;
 
-  syslog(LOG_DEBUG, "timeout_select: sock = %d, rp = 0x%x, wp = 0x%x, sec = %d", 
-         sock, (unsigned) rp, (unsigned) wp, sec);
+  syslog(LOG_DEBUG, "timeout_select: sock = %d, rp = 0x%lx, wp = 0x%lx, sec = %d", 
+         sock, (unsigned long)rp, (unsigned long)wp, sec);
 
   if ((r = select(sock+1, rp, wp, NULL, &tv)) == 0) {
     /* r == 0 then timed out. we change this into an error */

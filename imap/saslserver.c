@@ -64,8 +64,8 @@ int saslserver(sasl_conn_t *conn, const char *mech,
     char base64[BASE64_BUF_SIZE+1];
     char *clientin = NULL;
     unsigned int clientinlen = 0;
-    const char *serverout;
-    unsigned int serveroutlen;
+    const char *serverout = NULL;
+    unsigned int serveroutlen = 0;
     int r = SASL_OK;
 
     if (success_data) *success_data = NULL;

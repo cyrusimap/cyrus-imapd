@@ -70,14 +70,24 @@ struct namespace {
     int (*mboxname_toexternal)(struct namespace *namespace, const char *name,
 			       const char *userid, char *result);
     int (*mboxlist_findall)(struct namespace *namespace,
-			    const char *pattern, int isadmin, char *userid, 
+			    const char *pattern, int isadmin, const char *userid, 
 			    struct auth_state *auth_state, int (*proc)(),
 			    void *rock);
     int (*mboxlist_findsub)(struct namespace *namespace,
-			    const char *pattern, int isadmin, char *userid, 
+			    const char *pattern, int isadmin, const char *userid, 
 			    struct auth_state *auth_state, int (*proc)(),
 			    void *rock, int force);
 };
+
+struct mboxlock {
+    char *name;
+    int lock_fd;
+    int locktype;
+};
+
+int mboxname_lock(const char *mboxname, struct mboxlock **mboxlockptr,
+		  int locktype);
+void mboxname_release(struct mboxlock **mboxlockptr);
 
 /* Create namespace based on config options. */
 int mboxname_init_namespace(struct namespace *namespace, int isadmin);
@@ -118,14 +128,34 @@ int mboxname_isdeletedmailbox(const char *name);
 /*
  * Translate (internal) inboxname into corresponding userid.
  */
-char *mboxname_inbox_touserid(const char *inboxname);
+char *mboxname_to_userid(const char *mboxname);
+
+/*
+ * Access files (or directories by leaving last parameter
+ * zero) for a particular mailbox on partition.
+ */
+void mboxname_hash(char *buf, size_t buf_len,
+		   const char *root,
+		   const char *name);
+
+char *mboxname_datapath(const char *partition, 
+			const char *mboxname,
+			unsigned long uid);
+
+char *mboxname_metapath(const char *partition,
+			const char *mboxname,
+			int metafile, int isnew);
+
+char *mboxname_lockpath(const char *mboxname);
 
 /*
  * Return nonzero if (internal) mailbox 'name' consists of legal characters.
  * If using the unixhierarchysep '/', DOTCHAR ('.' placeholder) is allowed.
  */
-int mboxname_policycheck(char *name);
+int mboxname_policycheck(const char *name);
 
-int mboxname_netnewscheck(char *name);
+int mboxname_netnewscheck(const char *name);
+
+void mboxname_todeleted(const char *name, char *result, int withtime);
 
 #endif

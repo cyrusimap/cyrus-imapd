@@ -200,7 +200,7 @@ static void MailboxToURL(char *dst, const char *src)
  *  dst should be about twice the length of src to deal with non-hex
  *  coded URLs
  */
-int URLtoMailbox(char *dst, char *src)
+int URLtoMailbox(char *dst, const char *src)
 {
     unsigned int utf8pos = 0, utf8total, i, c, utf7mode, bitstogo, utf16flag;
     unsigned long ucs4 = 0, bitbuf = 0;
@@ -529,7 +529,7 @@ int imapurl_fromURL(struct imapurl *url, const char *s)
 
 	if (mbox && *mbox) {
 	    url->mailbox = url->freeme + strlen(s) + 1;
-	    return URLtoMailbox((char *) url->mailbox, mbox);
+	    return URLtoMailbox((char *)url->mailbox, mbox);
 	}
     }
     return 0;
@@ -569,3 +569,4 @@ void imapurl_toURL(char *dst, struct imapurl *url)
 	}
     }
 }
+

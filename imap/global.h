@@ -48,8 +48,10 @@
 #include <sasl/sasl.h>
 #include "libconfig.h"
 #include "auth.h"
+#include "prot.h"
 #include "mboxname.h"
 #include "signals.h"
+#include "util.h"
 
 /* Flags for cyrus_init() */
 enum {
@@ -103,11 +105,6 @@ extern int global_authisa(struct auth_state *authstate,
 
 /* useful types */
 struct protstream;
-struct buf {
-    char *s;
-    int len;
-    int alloc;
-};
 
 struct proxy_context {
     int use_acl;
@@ -135,7 +132,8 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 #define getnstring(pin, pout, buf) getxstring((pin), (pout), (buf), IMAP_NSTRING)
 #define getqstring(pin, pout, buf) getxstring((pin), (pout), (buf), IMAP_QSTRING)
 #define getstring(pin, pout, buf) getxstring((pin), (pout), (buf), IMAP_STRING)
-void freebuf(struct buf *buf);
+int getint32(struct protstream *pin, int *num);
+int getuint32(struct protstream *pin, unsigned int *num);
 
 void eatline(struct protstream *pin, int c);
 
@@ -145,6 +143,7 @@ extern int shutdown_file(char *buf, int size);
 extern char *find_free_partition(unsigned long *tavail);
 
 /* Misc globals */
+extern int in_shutdown;
 extern int config_fulldirhash;
 extern int config_implicitrights;
 extern unsigned long config_metapartition_files;
@@ -159,5 +158,9 @@ extern struct cyrusdb_backend *config_tlscache_db;
 extern struct cyrusdb_backend *config_ptscache_db;
 extern struct cyrusdb_backend *config_statuscache_db;
 extern struct cyrusdb_backend *config_userdeny_db;
+
+/* Session ID */
+extern void session_new_id();
+extern const char *session_id();
 
 #endif /* INCLUDED_GLOBAL_H */

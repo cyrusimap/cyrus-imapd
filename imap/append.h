@@ -48,17 +48,19 @@
 #include "mailbox.h"
 #include "message.h"
 #include "prot.h"
+#include "sequence.h"
 
 struct copymsg {
     unsigned long uid;
     time_t internaldate;
     time_t sentdate;
+    time_t gmtime;
     unsigned long size;
     unsigned long header_size;
     unsigned long content_lines;
     unsigned long cache_version;
-    const char *cache_begin;
-    int cache_len;		/* 0 if need to copy & parse message */
+    unsigned long cache_crc;
+    struct cacherecord crec;
     int seen;
     struct message_guid guid;
     bit32 system_flags;
@@ -69,56 +71,42 @@ struct copymsg {
    clients to stack-allocate it */
 struct appendstate {
     /* mailbox we're appending to */
-    struct mailbox m;
+    struct mailbox *mailbox;
+    int myrights;
     char userid[MAX_MAILBOX_BUFFER];
 
     enum { APPEND_READY, APPEND_DONE } s;
 				/* current state of append */
 
-    /* if we abort, where should we truncate the cache file? */
-    unsigned long orig_cache_size;
-
-    int writeheader;		/* did we change the mailbox header? */
-
     int nummsg;    /* number of messages appended pending commit.
-		      from m.last_uid + 1 ... m.last_uid + nummsg */
-
-    /* summary information to change on commit */
-    int numanswered, numdeleted, numflagged;
+		      from as->baseuid ... m.baseuid + nummsg - 1 */
+    unsigned baseuid; 
 
     /* set seen on these message on commit */
-    char *seen_msgrange;
-    int seen_alloced;
-
-    /* the amount of quota we've used so far in this append */
-    uquota_t quota_used;
-
-    /* txn for updating quota */
-    struct txn *tid;
+    int internalseen;
+    struct seqset *seen_seq;
 };
 
 /* add helper function to determine uid range appended? */
 
 struct stagemsg;
 
-extern int append_check(const char *name, int format, 
+extern int append_check(const char *name,
 			struct auth_state *auth_state,
 			long aclcheck, quota_t quotacheck);
 
 /* appendstate must be allocated by client */
-extern int append_setup(struct appendstate *mailbox, const char *name,
-			int format, 
+extern int append_setup(struct appendstate *as, const char *name,
 			const char *userid, struct auth_state *auth_state,
 			long aclcheck, quota_t quotacheck);
 
-extern int append_commit(struct appendstate *mailbox,
+extern int append_commit(struct appendstate *as,
 			 quota_t quotacheck,
 			 unsigned long *uidvalidity, 
 			 unsigned long *startuid, 
-			 unsigned long *num);
-extern int append_abort(struct appendstate *mailbox);
-
-int append_stageparts(struct stagemsg *stagep);
+			 unsigned long *num,
+			 struct mailbox **mailboxptr);
+extern int append_abort(struct appendstate *as);
 
 /* creates a new stage and returns stage file corresponding to mailboxname */
 extern FILE *append_newstage(const char *mailboxname, time_t internaldate,

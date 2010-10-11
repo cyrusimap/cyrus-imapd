@@ -80,11 +80,11 @@ void appendstrlist_withdata(struct strlist **l, char *s, void *d, size_t size);
 void freestrlist(struct strlist *l);
 
 /* Attribute Management (also used by ID) */
-void appendattvalue(struct attvaluelist **l, char *attrib, const char *value);
+void appendattvalue(struct attvaluelist **l, const char *attrib, const char *value);
 void freeattvalues(struct attvaluelist *l);
 
 /* Entry Management */
-void appendentryatt(struct entryattlist **l, char *entry,
+void appendentryatt(struct entryattlist **l, const char *entry,
 		    struct attvaluelist *attvalues);
 void freeentryatts(struct entryattlist *l);
 
@@ -132,9 +132,9 @@ int annotatemore_lookup(const char *mboxname, const char *entry,
 			const char *userid, struct annotation_data *attrib);
 
 /* store annotations */
-int annotatemore_store(char *mailbox,
+int annotatemore_store(const char *mboxname,
 		       struct entryattlist *l, struct namespace *namespace,
-		       int isadmin, char *userid,
+		       int isadmin, const char *userid,
 		       struct auth_state *auth_state);
 
 /* low-level interface for use by mbdump routines */

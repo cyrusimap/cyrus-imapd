@@ -64,7 +64,10 @@ pid_t open_sendmail(const char *argv[], FILE **sm)
     FILE *ret;
     pid_t p;
 
-    pipe(fds);
+    if (pipe(fds)) {
+	printf("451 lmtpd: didn't start pipe()?!?\r\n");
+	fatal("couldn't start pipe()", EC_OSERR);
+    }
     if ((p = fork()) == 0) {
 	/* i'm the child! run sendmail! */
 	close(fds[1]);

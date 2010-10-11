@@ -390,6 +390,9 @@ static int sieve_redirect(void *ac,
 	snmp_increment(SIEVE_REDIRECT, 1);
 	syslog(LOG_INFO, "sieve redirected: %s to: %s",
 	       m->id ? m->id : "<nomsgid>", rc->addr);
+	if (config_auditlog)
+	    syslog(LOG_NOTICE, "auditlog: redirect sessionid=<%s> message-id=%s target=<%s>",
+	           session_id(), m->id ? m->id : "<nomsgid>", rc->addr);
 	return SIEVE_OK;
     } else {
 	if (res == -1) {
@@ -414,6 +417,9 @@ static int sieve_discard(void *ac __attribute__((unused)),
     /* ok, we won't file it, but log it */
     syslog(LOG_INFO, "sieve discarded: %s",
 	   md->id ? md->id : "<nomsgid>");
+    if (config_auditlog)
+	syslog(LOG_NOTICE, "auditlog: discard sessionid=<%s> message-id=%s",
+	       session_id(), md->id ? md->id : "<nomsgid>");
 
     return SIEVE_OK;
 }
@@ -438,7 +444,10 @@ static int sieve_reject(void *ac,
     if (strlen(md->return_path) == 0) {
 	syslog(LOG_INFO, "sieve: discarded reject to <> for %s id %s",
 	       sd->username, md->id ? md->id : "<nomsgid>");
-        return SIEVE_OK;
+	if (config_auditlog)
+	    syslog(LOG_NOTICE, "auditlog: discard-reject sessionid=<%s> message-id=%s",
+	           session_id(), md->id ? md->id : "<nomsgid>");
+	return SIEVE_OK;
     }
 
     body = msg_getheader(md, "original-recipient");
@@ -449,6 +458,9 @@ static int sieve_reject(void *ac,
 	snmp_increment(SIEVE_REJECT, 1);
 	syslog(LOG_INFO, "sieve rejected: %s to: %s",
 	       md->id ? md->id : "<nomsgid>", md->return_path);
+	if (config_auditlog)
+	    syslog(LOG_NOTICE, "auditlog: reject sessionid=<%s> message-id=%s target=<%s>",
+	           session_id(), md->id ? md->id : "<nomsgid>", md->return_path);
 	return SIEVE_OK;
     } else {
 	if (res == -1) {

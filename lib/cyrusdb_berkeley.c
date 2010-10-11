@@ -129,13 +129,12 @@ static int init(const char *dbdir, int myflags)
     int r, do_retry = 1;
     int flags = 0;
     int maj, min, patch;
-    char *vstr;
     static char errpfx[10]; /* needs to be static; bdb doesn't copy */
     int opt;
 
     if (dbinit++) return 0;
 
-    vstr = db_version(&maj, &min, &patch);
+    db_version(&maj, &min, &patch);
     if (maj != DB_VERSION_MAJOR || min != DB_VERSION_MINOR ||
 	DB_VERSION_PATCH > patch) {
 	syslog(LOG_CRIT, "incorrect version of Berkeley db: "

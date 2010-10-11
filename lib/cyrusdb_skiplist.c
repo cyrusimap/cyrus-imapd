@@ -516,7 +516,7 @@ static int read_header(struct db *db)
 
     db->maxlevel = ntohl(*((uint32_t *)(db->map_base + OFFSET_MAXLEVEL)));
 
-    if(db->maxlevel > SKIPLIST_MAXLEVEL) {
+    if (db->maxlevel > SKIPLIST_MAXLEVEL) {
 	syslog(LOG_ERR,
 	       "skiplist %s: MAXLEVEL %d in database beyond maximum %d\n",
 	       db->fname, db->maxlevel, SKIPLIST_MAXLEVEL);
@@ -525,7 +525,7 @@ static int read_header(struct db *db)
 
     db->curlevel = ntohl(*((uint32_t *)(db->map_base + OFFSET_CURLEVEL)));
 
-    if(db->curlevel > db->maxlevel) {
+    if (db->curlevel > db->maxlevel) {
 	syslog(LOG_ERR,
 	       "skiplist %s: CURLEVEL %d in database beyond maximum %d\n",
 	       db->fname, db->curlevel, db->maxlevel);
@@ -654,7 +654,7 @@ static int read_lock(struct db *db)
 	    lock_unlock(db->fd);
 	    return CYRUSDB_IOERROR;
 	}
-	
+
 	if (stat(db->fname, &sbuffile) == -1) {
 	    syslog(LOG_ERR, "IOERROR: stat %s: %m", db->fname);
 	    lock_unlock(db->fd);
@@ -788,16 +788,21 @@ static int myopen(const char *fname, int flags, struct db **ret)
     db->compar = (flags & CYRUSDB_MBOXSORT) ? bsearch_ncompare : compare;
 
     db->fd = open(fname, O_RDWR, 0644);
-    if (db->fd == -1 && errno == ENOENT && (flags & CYRUSDB_CREATE)) {
-	if (cyrus_mkdir(fname, 0755) == -1) return CYRUSDB_IOERROR;
-
+    if (db->fd == -1 && errno == ENOENT) {
+	if (!(flags & CYRUSDB_CREATE)) {
+	    dispose_db(db);
+	    return CYRUSDB_NOTFOUND;
+	}
+	if (cyrus_mkdir(fname, 0755) == -1) {
+	    dispose_db(db);
+	    return CYRUSDB_IOERROR;
+	}
 	db->fd = open(fname, O_RDWR | O_CREAT, 0644);
 	new = 1;
     }
 
     if (db->fd == -1) {
-	int level = (flags & CYRUSDB_CREATE) ? LOG_ERR : LOG_DEBUG;
-	syslog(level, "IOERROR: opening %s: %m", fname);
+	syslog(LOG_ERR, "IOERROR: opening %s: %m", fname);
 	dispose_db(db);
 	return CYRUSDB_IOERROR;
     }
@@ -1106,7 +1111,7 @@ int myforeach(struct db *db,
 	    }
 
 	    /* save KEY, KEYLEN */
-	    if (KEYLEN(ptr) > savebuflen) {
+	    if (!savebuf || KEYLEN(ptr) > savebuflen) {
 		savebuflen = KEYLEN(ptr) + 1024;
 		savebuf = xrealloc(savebuf, savebuflen);
 	    }
@@ -1120,6 +1125,7 @@ int myforeach(struct db *db,
 	    if (!tidptr) {
 		/* grab a r lock */
 		if ((r = read_lock(db)) < 0) {
+		    free(savebuf);
 		    return r;
 		}
 		need_unlock = 1;
@@ -1153,15 +1159,13 @@ int myforeach(struct db *db,
 	}
     }
 
+    free(savebuf);
+
     if (need_unlock) {
 	/* release read lock */
 	if ((r = unlock(db)) < 0) {
 	    return r;
 	}
-    }
-
-    if (savebuf) {
-	free(savebuf);
     }
 
     return r ? r : cb_r;
@@ -1196,8 +1200,8 @@ int mystore(struct db *db,
     struct txn *localtid = NULL;
     uint32_t endpadding = htonl(-1);
     uint32_t zeropadding[4] = { 0, 0, 0, 0 };
-    unsigned updateoffsets[SKIPLIST_MAXLEVEL];
-    unsigned newoffsets[SKIPLIST_MAXLEVEL];
+    unsigned updateoffsets[SKIPLIST_MAXLEVEL+1];
+    unsigned newoffsets[SKIPLIST_MAXLEVEL+1];
     uint32_t addrectype = htonl(ADD);
     uint32_t delrectype = htonl(DELETE);
     uint32_t todelete;
@@ -1353,7 +1357,7 @@ int mydelete(struct db *db,
 {
     const char *ptr;
     uint32_t delrectype = htonl(DELETE);
-    unsigned updateoffsets[SKIPLIST_MAXLEVEL];
+    unsigned updateoffsets[SKIPLIST_MAXLEVEL+1];
     uint32_t offset;
     uint32_t writebuf[2];
     struct txn *tid, *localtid = NULL;
@@ -1513,7 +1517,7 @@ int mycommit(struct db *db, struct txn *tid)
 int myabort(struct db *db, struct txn *tid)
 {
     const char *ptr;
-    unsigned updateoffsets[SKIPLIST_MAXLEVEL];
+    unsigned updateoffsets[SKIPLIST_MAXLEVEL+1];
     unsigned offset;
     unsigned i;
     int r = 0;
@@ -1621,7 +1625,7 @@ static int mycheckpoint(struct db *db, int locked)
     int oldfd;
     struct iovec iov[50];
     unsigned num_iov;
-    unsigned updateoffsets[SKIPLIST_MAXLEVEL];
+    unsigned updateoffsets[SKIPLIST_MAXLEVEL+1];
     const char *ptr;
     unsigned offset;
     int r = 0;
@@ -1860,7 +1864,7 @@ static int dump(struct db *db, int detail __attribute__((unused)))
     ptr = db->map_base + DUMMY_OFFSET(db);
     end = db->map_base + db->map_size;
     while (ptr < end) {
-	printf("%04X: ", ptr - db->map_base);
+	printf("%04lX: ", (unsigned long) (ptr - db->map_base));
 	switch (TYPE(ptr)) {
 	case DUMMY:
 	    printf("DUMMY ");
@@ -1974,7 +1978,7 @@ static int myconsistent(struct db *db, struct txn *tid, int locked)
 static int recovery(struct db *db, int flags)
 {
     const char *ptr, *keyptr;
-    unsigned updateoffsets[SKIPLIST_MAXLEVEL];
+    unsigned updateoffsets[SKIPLIST_MAXLEVEL+1];
     uint32_t offset, offsetnet, myoff = 0;
     int r = 0, need_checkpoint = 0;
     time_t start = time(NULL);
@@ -2246,7 +2250,7 @@ static int recovery(struct db *db, int flags)
 	/* otherwise insert it */
 	} else if (TYPE(ptr) == ADD) {
 	    unsigned int lvl;
-	    uint32_t newoffsets[SKIPLIST_MAXLEVEL];
+	    uint32_t newoffsets[SKIPLIST_MAXLEVEL+1];
 
 	    if (keyptr) {
 		syslog(LOG_ERR, 
@@ -2259,7 +2263,7 @@ static int recovery(struct db *db, int flags)
 	    offsetnet = htonl(offset);
 
 	    lvl = LEVEL(ptr);
-	    if(lvl > SKIPLIST_MAXLEVEL) {
+	    if (lvl > SKIPLIST_MAXLEVEL) {
 		syslog(LOG_ERR,
 		       "DBERROR: skiplist recovery %s: node claims level %d (greater than max %d)",
 		       db->fname, lvl, SKIPLIST_MAXLEVEL);

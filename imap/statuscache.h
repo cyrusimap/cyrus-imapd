@@ -49,46 +49,38 @@
 
 /* name of the statuscache database */
 #define FNAME_STATUSCACHEDB "/statuscache.db"
-#define STATUSCACHE_VERSION 3
+#define STATUSCACHE_VERSION 4
 
 /* open the statuscache db */
-void statuscache_open(char *name);
-
-struct statuscache_data {
-    unsigned statusitems;
-
-    time_t index_mtime;
-    ino_t index_ino;
-    off_t index_size;
-
-    unsigned long messages;
-    unsigned recent;
-    unsigned long uidnext;
-    unsigned long uidvalidity;
-    unsigned unseen;
-    modseq_t highestmodseq;
-};
+extern void statuscache_open(char *name);
 
 /* fill a statuscache entry */
-void statuscache_fill(struct statuscache_data *scdata, struct mailbox *mailbox,
-		      int statusitems, int num_recent, int num_unseen);
+extern void statuscache_fill(struct statusdata *sdata, const char *userid,
+			     struct mailbox *mailbox, unsigned statusitems,
+			     unsigned numrecent, unsigned numunseen);
 
-/* lookup a single statuscache entry and return result */
-int statuscache_lookup(const char *mboxname, const char *userid,
-		       unsigned statusitems,
-		       struct statuscache_data *scdata);
+/* lookup a single statuscache entry or open the mailbox and caluclate it */
+extern int status_lookup(const char *mboxname, const char *userid,
+			 unsigned statusitems, struct statusdata *sdata);
+
+/* lookup a single statuscache entry and return result, or error if it
+   doesn't exist or doesn't have the fields we need */
+extern int statuscache_lookup(const char *mboxname, const char *userid,
+			      unsigned statusitems, struct statusdata *sdata);
 
 /* update a statuscache entry */
-int statuscache_update(const char *mboxname, const char *userid,
-		      struct statuscache_data *scdata);
+extern int statuscache_update(const char *mboxname,
+			      struct statusdata *sdata);
 
-/* invalidate (delete) a statuscache entry */
-int statuscache_invalidate(const char *mboxname, const char *userid);
+/* invalidate (delete) statuscache entry for the mailbox,
+   optionally writing the data for one user in the same transaction */
+extern int statuscache_invalidate(const char *mboxname,
+				  struct statusdata *sdata);
 
 /* close the database */
-void statuscache_close(void);
+extern void statuscache_close(void);
 
 /* done with database stuff */
-void statuscache_done(void);
+extern void statuscache_done(void);
 
 #endif /* STATUSCACHE_H */

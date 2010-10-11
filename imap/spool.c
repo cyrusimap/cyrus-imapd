@@ -350,13 +350,14 @@ int spool_fill_hdrcache(struct protstream *fin, FILE *fout, hdrcache_t cache,
 
     /* let's fill that header cache */
     for (;;) {
-	char *name, *body;
+	char *name = NULL, *body = NULL;
 
 	if ((r = parseheader(fin, fout, &name, &body, skipheaders)) < 0) {
 	    break;
 	}
 	if (!name) {
 	    /* reached the end of headers */
+	    free(body);
 	    break;
 	}
 

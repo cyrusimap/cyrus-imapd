@@ -56,6 +56,8 @@
 #include "script.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
+
+#define ADDRERR_SIZE 500
     
 int yyerror(char *msg);
 extern int yylex(void);
@@ -109,6 +111,6 @@ int yyerror(char *s)
 {
     extern char addrerr[ADDRERR_SIZE];
     
-    strlcpy(addrerr, s, sizeof(addrerr));
+    strlcpy(addrerr, s, ADDRERR_SIZE);
     return 0;
 }

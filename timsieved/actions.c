@@ -270,6 +270,8 @@ int getscript(struct protstream *conn, mystring_t *name)
   
   prot_printf(conn, "OK\r\n");
 
+  fclose(stream);
+
   return TIMSIEVE_OK;
 }
 

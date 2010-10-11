@@ -109,7 +109,7 @@ SquatSearchIndex* squat_search_open(int fd) {
     goto cleanup_index;
   }
   data_len = buf.st_size - SQUAT_SAFETY_ZONE;
-  if (data_len < sizeof(SquatDiskHeader)) {
+  if ((size_t)data_len < sizeof(SquatDiskHeader)) {
     squat_set_last_error(SQUAT_ERR_INVALID_INDEX_FILE);
     goto cleanup_index;    
   }

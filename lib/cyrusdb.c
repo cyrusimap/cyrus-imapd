@@ -109,8 +109,8 @@ int cyrusdb_copyfile(const char *srcname, const char *dstname)
 {
     int srcfd, dstfd;
     struct stat sbuf;
-    char *buf;
-    int bufsize, n;
+    char buf[4096];
+    int n;
 
     if ((srcfd = open(srcname, O_RDONLY)) < 0) {
 	syslog(LOG_DEBUG, "error opening %s for reading", srcname);
@@ -130,22 +130,14 @@ int cyrusdb_copyfile(const char *srcname, const char *dstname)
 	return -1;
     }
 
-    bufsize = sbuf.st_blksize;
-    if ((buf = (char*) xmalloc(bufsize)) == NULL) {
-	syslog(LOG_DEBUG, "error allocing buf (%d)", bufsize);
-	close(srcfd);
-	close(dstfd);
-	return -1;
-    }
-
     for (;;) {
-	n = read(srcfd, buf, bufsize);
+	n = read(srcfd, buf, 4096);
 
 	if (n < 0) {
 	    if (errno == EINTR)
 		continue;
 
-	    syslog(LOG_DEBUG, "error reading buf (%d)", bufsize);
+	    syslog(LOG_DEBUG, "error reading buf");
 	    close(srcfd);
 	    close(dstfd);
 	    unlink(dstname);
@@ -167,6 +159,89 @@ int cyrusdb_copyfile(const char *srcname, const char *dstname)
     close(srcfd);
     close(dstfd);
     return 0;
+}
+
+struct convert_rock {
+    struct cyrusdb_backend *backend;
+    struct db *db;
+    struct txn *tid;
+};
+
+static int converter_cb(void *rock,
+			const char *key, int keylen,
+			const char *data, int datalen) 
+{
+    struct convert_rock *cr = (struct convert_rock *)rock;
+    return (cr->backend->store)(cr->db, key, keylen, data, datalen, &cr->tid);
+}
+
+/* convert (just copy every record) from one database to another in possibly
+   a different format.  It's up to the surrounding code to copy the
+   new database over the original if it wants to */
+void cyrusdb_convert(const char *fromfname, const char *tofname,
+		     struct cyrusdb_backend *frombackend,
+		     struct cyrusdb_backend *tobackend)
+{
+    struct db *fromdb, *todb;
+    struct convert_rock cr;
+    struct txn *fromtid = NULL;
+    int r;
+
+    /* open both databases (create todb) */
+    r = (frombackend->open)(fromfname, 0, &fromdb);
+    if (r != CYRUSDB_OK)
+	fatal("can't open old database", EC_TEMPFAIL);
+    r = (tobackend->open)(tofname, CYRUSDB_CREATE, &todb);
+    if (r != CYRUSDB_OK)
+	fatal("can't open new database", EC_TEMPFAIL);
+
+    /* set up the copy rock */
+    cr.backend = tobackend;
+    cr.db = todb;
+    cr.tid = NULL;
+
+    /* copy each record to the destination DB (transactional for speed) */
+    (frombackend->foreach)(fromdb, "", 0, NULL, converter_cb, &cr, &fromtid);
+
+    /* commit both transactions */
+    if (fromtid) (frombackend->commit)(fromdb, fromtid);
+    if (cr.tid) (tobackend->commit)(todb, cr.tid);
+
+    /* and close the DBs */
+    (frombackend->close)(fromdb);
+    (tobackend->close)(todb);
+}
+
+const char *cyrusdb_detect(const char *fname)
+{
+    FILE *f;
+    char buf[16];
+    int n;
+    uint32_t bdb_magic;
+
+    f = fopen(fname, "r");
+    if (!f) return NULL;
+
+    /* empty file? */
+    n = fread(buf, 16, 1, f);
+    fclose(f);
+
+    if (n != 1) return NULL;
+
+    /* only compare first 16 bytes, that's OK */
+    if (!strncmp(buf, "\241\002\213\015skiplist file\0\0\0", 16))
+	return "skiplist";
+
+    bdb_magic = *(uint32_t *)(buf+12);
+
+    if (bdb_magic == 0x053162) /* BDB BTREE MAGIC */
+	return "berkeley";
+
+    if (bdb_magic == 0x061561) /* BDB HASH MAGIC */
+	return "berkeley-hash";
+
+    /* unable to detect SQLite databases or flat files explicitly here */
+    return NULL;
 }
 
 struct cyrusdb_backend *cyrusdb_fromname(const char *name)

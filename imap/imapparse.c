@@ -47,24 +47,11 @@
 #include <string.h>
 #include <limits.h>
 
-#include "prot.h"
-#include "xmalloc.h"
-#include "global.h"
 #include "exitcodes.h"
-
-enum {
-    MAXLITERAL = INT_MAX / 20
-};
-
-void freebuf(struct buf *buf)
-{
-    if (buf->s) {
-	free(buf->s);
-	buf->s = NULL;
-    }
-    buf->len = 0;
-    buf->alloc = 0;
-}
+#include "global.h"
+#include "prot.h"
+#include "util.h"
+#include "xmalloc.h"
 
 /*
  * Parse a word
@@ -74,29 +61,18 @@ void freebuf(struct buf *buf)
 int getword(struct protstream *in, struct buf *buf)
 {
     int c;
-    int len = 0;
 
-    if (buf->alloc == 0) {
-	buf->alloc = BUFGROWSIZE;
-	buf->s = xmalloc(buf->alloc+1);
-    }
-	
+    buf_reset(buf);
     for (;;) {
 	c = prot_getc(in);
 	if (c == EOF || isspace(c) || c == '(' || c == ')' || c == '\"') {
-	    buf->s[len] = '\0';
-	    buf->len = len;
+	    buf_cstring(buf); /* appends a '\0' */
 	    return c;
 	}
-	if (len == buf->alloc) {
-            /* xxx limit len */
-	    buf->alloc += BUFGROWSIZE;
-	    buf->s = xrealloc(buf->s, buf->alloc+1);
-            if (len > config_maxword) {
-                fatal("word too long", EC_IOERR);
-            }
+	buf_putc(buf, c);
+	if (config_maxword && buf_len(buf) > config_maxword) {
+	    fatal("word too long", EC_IOERR);
 	}
-	buf->s[len++] = c;
     }
 }
 
@@ -109,15 +85,11 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 {
     int c;
     int i;
-    int len = 0;
-    int sawdigit = 0;
     int isnowait;
+    int len;
 
-    if (buf->alloc == 0) {
-	buf->alloc = BUFGROWSIZE;
-	buf->s = xmalloc(buf->alloc+1);
-    }
-	
+    buf_reset(buf);
+
     c = prot_getc(pin);
     switch (c) {
     case EOF:
@@ -127,8 +99,8 @@ int getxstring(struct protstream *pin, struct protstream *pout,
     case '\r':
     case '\n':
 	/* Invalid starting character */
-	buf->s[0] = '\0';
-	buf->len = 0;
+	buf_reset(buf);
+	buf_cstring(buf);
 	if (c != EOF) prot_ungetc(c, pin);
 	return EOF;
 
@@ -143,71 +115,54 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 		c = prot_getc(pin);
 	    }
 	    else if (c == '\"') {
-		buf->s[len] = '\0';
-		buf->len = len;
+		buf_cstring(buf);
 		return prot_getc(pin);
 	    }
 	    else if (c == EOF || c == '\r' || c == '\n') {
-		buf->s[len] = '\0';
-		buf->len = len;
+		buf_cstring(buf);
 		if (c != EOF) prot_ungetc(c, pin);
 		return EOF;
 	    }
-	    if (len == buf->alloc) {
-		buf->alloc += BUFGROWSIZE;
-		buf->s = xrealloc(buf->s, buf->alloc+1);
-
-                if (len > config_maxquoted) {
-                    fatal("word too long", EC_IOERR);
-                }
+	    buf_putc(buf, c);
+	    if (config_maxquoted && buf_len(buf) > config_maxquoted) {
+		fatal("quoted value too long", EC_IOERR);
 	    }
-	    buf->s[len++] = c;
 	}
 
     case '{':
 	if (type == IMAP_QSTRING) {
 	    /* Invalid starting character */
-	    buf->s[0] = '\0';
-	    buf->len = 0;
+	    buf_cstring(buf);
 	    if (c != EOF) prot_ungetc(c, pin);
 	    return EOF;
 	}
 
 	/* Literal */
 	isnowait = 0;
-	buf->s[0] = '\0';
-	while ((c = prot_getc(pin)) != EOF && isdigit(c)) {
-	    sawdigit = 1;
-	    len = len*10 + c - '0';
-            if (len > MAXLITERAL || len < 0) {
-                /* we overflowed */
-                fatal("literal too big", EC_IOERR);
-            }
-	}
+	buf_reset(buf);
+	c = getint32(pin, &len);
 	if (c == '+') {
 	    isnowait++;
 	    c = prot_getc(pin);
 	}
-	if (!sawdigit || c != '}') {
+	if (len == -1 || c != '}') {
+	    buf_cstring(buf);
 	    if (c != EOF) prot_ungetc(c, pin);
 	    return EOF;
 	}
 	c = prot_getc(pin);
 	if (c != '\r') {
+	    buf_cstring(buf);
 	    if (c != EOF) prot_ungetc(c, pin);
 	    return EOF;
 	}
 	c = prot_getc(pin);
 	if (c != '\n') {
+	    buf_cstring(buf);
 	    if (c != EOF) prot_ungetc(c, pin);
 	    return EOF;
 	}
-        /* xxx limit len */
 
-	if (len >= buf->alloc) {
-	    buf->alloc = len+1;
-	    buf->s = xrealloc(buf->s, buf->alloc+1);
-	}
 	if (!isnowait) {
 	    prot_printf(pout, "+ go ahead\r\n");
 	    prot_flush(pout);
@@ -215,15 +170,13 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 	for (i = 0; i < len; i++) {
 	    c = prot_getc(pin);
 	    if (c == EOF) {
-		buf->s[len] = '\0';
-		buf->len = len;
+		buf_cstring(buf);
 		return EOF;
 	    }
-	    buf->s[i] = c;
+	    buf_putc(buf, c);
 	}
-	buf->s[len] = '\0';
-	buf->len = len;
-	if (type != IMAP_BIN_ASTRING && (int) strlen(buf->s) != len)
+	buf_cstring(buf);
+	if (type != IMAP_BIN_ASTRING && strlen(buf_cstring(buf)) != (unsigned)buf_len(buf))
 	    return EOF; /* Disallow imbedded NUL for non IMAP_BIN_ASTRING */
 	return prot_getc(pin);
 
@@ -238,19 +191,13 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 	    for (;;) {
 		if (c == EOF || isspace(c) || c == '(' || 
 		          c == ')' || c == '\"') {
-		    buf->s[len] = '\0';
-		    buf->len = len;
+		    buf_cstring(buf);
 		    return c;
 		}
-		if (len == buf->alloc) {
-		    buf->alloc += BUFGROWSIZE;
-		    buf->s = xrealloc(buf->s, buf->alloc+1);
-                    /* xxx limit size of atoms */
-		}
-		buf->s[len++] = c;
+		buf_putc(buf, c);
 		c = prot_getc(pin);
 	    }
-            /* never gets here */
+	    /* never gets here */
 	    break;
 
 	case IMAP_NSTRING:	 /* "NIL", quoted-string or literal */
@@ -260,7 +207,7 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 	    if (c == 'N') {
 		prot_ungetc(c, pin);
 		c = getword(pin, buf);
-		if (!strcmp(buf->s, "NIL"))
+		if (!strcmp(buf_cstring(buf), "NIL"))
 		    return c;
 	    }
 	    if (c != EOF) prot_ungetc(c, pin);
@@ -269,14 +216,59 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 
 	case IMAP_QSTRING:	 /* quoted-string */
 	case IMAP_STRING:	 /* quoted-string or literal */
-            /* atoms aren't acceptable */
-            if (c != EOF) prot_ungetc(c, pin);
-            return EOF;
+	    /* atoms aren't acceptable */
+	    if (c != EOF) prot_ungetc(c, pin);
+	    return EOF;
 	    break;
 	}
     }
 
     return EOF;
+}
+
+int getint32(struct protstream *pin, int32_t *num)
+{
+    int32_t result = 0;
+    char c;
+    int gotchar = 0;
+
+    /* INT_MAX == 2147483647 */
+    while ((c = prot_getc(pin)) != EOF && cyrus_isdigit(c)) {
+	if (result > 214748364 || (result == 214748364 && (c > '7')))
+	    fatal("num too big", EC_IOERR);
+	result = result * 10 + c - '0';
+	gotchar = 1;
+    }
+
+    if (!gotchar)
+	return EOF;
+
+    *num = result;
+
+    return c;
+}
+
+/* can't flag with -1 if there is no number here, so return EOF */
+int getuint32(struct protstream *pin, uint32_t *num)
+{
+    uint32_t result = 0;
+    char c;
+    int gotchar = 0;
+
+    /* UINT_MAX == 4294967295U */
+    while ((c = prot_getc(pin)) != EOF && cyrus_isdigit(c)) {
+	if (result > 429496729 || (result == 429496729 && (c > '5')))
+	    fatal("num too big", EC_IOERR);
+	result = result * 10 + c - '0';
+	gotchar = 1;
+    }
+
+    if (!gotchar)
+	return EOF;
+
+    *num = result;
+
+    return c;
 }
 
 /*
@@ -287,7 +279,7 @@ void eatline(struct protstream *pin, int c)
 {
     int state = 0;
     char *statediagram = " {+}\r";
-    int size = -1;
+    uint32_t size = 0;
 
     for (;;) {
 	if (c == '\n') return;
@@ -303,7 +295,9 @@ void eatline(struct protstream *pin, int c)
 		state = 0;	/* Go back to scanning for eol */
 	    }
 	}
-	else if (state == 1 && isdigit(c)) {
+	else if (state == 1 && cyrus_isdigit(c)) {
+	    if (size > 429496729 || (size == 429496729 && (c > '5')))
+		fatal("num too big", EC_IOERR);
 	    size = size * 10 + c - '0';
 	}
 	else state = 0;

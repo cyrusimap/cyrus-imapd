@@ -61,10 +61,13 @@
 extern int message_copy_strict P((struct protstream *from, FILE *to,
 				  unsigned size, int allow_null));
 
+extern int message_parse(const char *fname, struct index_record *record);
+
 /* Flags for parsing message date/time - to be bitwise OR'd */
 #define PARSE_DATE	(1<<0)  /* Default (always parsed) */
 #define PARSE_TIME	(1<<1)
 #define PARSE_ZONE	(1<<2)
+#define PARSE_GMT	(1<<3) /* Output time in GMT rather than local timezone */
 #define PARSE_NOCREATE	(1<<15) /* Don't create one if its missing/invalid */
 
 extern time_t message_parse_date P((char *hdr, unsigned flags));
@@ -81,11 +84,16 @@ struct message_content {
 /* MUST keep this struct sync'd with sieve_bodypart in sieve_interface.h */
 struct bodypart {
     char section[128];
-    const char *content;
-    const char *encoding;
-    unsigned long size;
+    const char *decoded_body;
 };
 
+/* Calculate the number of entries in a vector */
+#define VECTOR_SIZE(vector) (sizeof(vector)/sizeof(vector[0]))
+
+extern void parse_cached_envelope P((char *env, char *tokens[], int tokens_size));
+
+extern int message_parse_mapped P((const char *msg_base, unsigned long msg_len,
+				   struct body *body));
 extern int message_parse_binary_file P((FILE *infile, struct body **body));
 extern int message_parse_file P((FILE *infile,
 				 const char **msg_base, unsigned long *msg_len,
@@ -93,9 +101,9 @@ extern int message_parse_file P((FILE *infile,
 extern void message_fetch_part P((struct message_content *msg,
 				  const char **content_types,
 				  struct bodypart ***parts));
-extern int message_create_record P((const char *cache_name,
-				    int cache_fd,
-				    struct index_record *message_index,
+extern int message_write_cache P((struct index_record *record, struct body *body));
+
+extern int message_create_record P((struct index_record *message_index,
 				    struct body *body));
 extern void message_free_body P((struct body *body));
 

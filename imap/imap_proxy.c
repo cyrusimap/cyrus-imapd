@@ -72,10 +72,8 @@ extern struct backend *backend_inbox, *backend_current, **backend_cached;
 extern char *imapd_userid, *proxy_userid;
 extern struct namespace imapd_namespace;
 
-extern void printstring(const char *s);
-extern void printastring(const char *s);
 extern int mlookup(const char *tag, const char *ext_name,
-		   const char *name, int *flags, char **pathp, char **mpathp,
+		   const char *name, int *flags,
 		   char **partp, char **aclp, struct txn **tid) ;
 
 static char *imap_parsemechlist(const char *str, struct protocol_t *prot)
@@ -84,13 +82,13 @@ static char *imap_parsemechlist(const char *str, struct protocol_t *prot)
     char *tmp;
     int num = 0;
     
-    if (strstr(str, "SASL-IR")) {
+    if (strstr(str, " SASL-IR")) {
 	/* server supports initial response in AUTHENTICATE command */
-	prot->sasl_cmd.maxlen = INT_MAX;
+	prot->sasl_cmd.maxlen = USHRT_MAX;
     }
     
-    while ((tmp = strstr(str, "AUTH="))) {
-	char *end = (tmp += 5);
+    while ((tmp = strstr(str, " AUTH="))) {
+	char *end = (tmp += 6);
 	
 	while((*end != ' ') && (*end != '\0')) end++;
 	
@@ -99,7 +97,7 @@ static char *imap_parsemechlist(const char *str, struct protocol_t *prot)
 	strlcat(ret, tmp, strlen(ret) + (end - tmp) + 1);
 	
 	/* reset the string */
-	str = end + 1;
+	str = end;
     }
     
     return ret;
@@ -119,7 +117,8 @@ struct protocol_t imap_protocol =
       { " LIST-EXTENDED", CAPA_LISTEXTENDED },
       { NULL, 0 } } },
   { "S01 STARTTLS", "S01 OK", "S01 NO", 0 },
-  { "A01 AUTHENTICATE", 0, 0, "A01 OK", "A01 NO", "+ ", "*", NULL, 0 },
+  { "A01 AUTHENTICATE", 0, 0, "A01 OK", "A01 NO", "+ ", "*",
+    NULL, AUTO_CAPA_AUTH_OK },
   { "Z01 COMPRESS DEFLATE", "* ", "Z01 OK" },
   { "N01 NOOP", "* ", "N01 OK" },
   { "Q01 LOGOUT", "* ", "Q01 " }
@@ -130,7 +129,7 @@ void proxy_gentag(char *tag, size_t len)
     snprintf(tag, len, "PROXY%d", proxy_cmdcnt++);
 }
 
-struct backend *proxy_findinboxserver(void)
+struct backend *proxy_findinboxserver(const char *userid)
 {
     char inbox[MAX_MAILBOX_BUFFER];
     int r, mbtype;
@@ -138,17 +137,17 @@ struct backend *proxy_findinboxserver(void)
     struct backend *s = NULL;
 
     r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, "INBOX",
-					       imapd_userid, inbox);
+					       userid, inbox);
 
     if(!r) {
-	r = mlookup(NULL, NULL, inbox, &mbtype, NULL, NULL, &server, NULL, NULL);
+	r = mlookup(NULL, NULL, inbox, &mbtype, &server, NULL, NULL);
 	if (!r && (mbtype & MBTYPE_REMOTE)) {
 	    s = proxy_findserver(server, &imap_protocol,
 				 proxy_userid, &backend_cached,
 				 &backend_current, &backend_inbox, imapd_in);
 	}
     }
-    
+
     return s;
 }
 
@@ -169,7 +168,7 @@ static int pipe_response(struct backend *s, const char *tag, int include_last,
 {
     char buf[2048];
     char eol[128];
-    int sl;
+    unsigned sl;
     int cont = 0, last = !tag, r = PROXY_OK;
     size_t taglen = 0;
 
@@ -177,7 +176,7 @@ static int pipe_response(struct backend *s, const char *tag, int include_last,
 
     if (tag) {
 	taglen = strlen(tag);
-	if(taglen >= sizeof(buf)) {
+	if(taglen >= sizeof(buf) + 1) {
 	    fatal("tag too large",EC_TEMPFAIL);
 	}
     }
@@ -464,7 +463,7 @@ int pipe_command(struct backend *s, int optimistic_literal)
  * it to return nonexistant mailboxes (RFC1176), but we need to really dumb
  * down the response when this is the case.
  */
-int pipe_lsub(struct backend *s, const char *tag,
+int pipe_lsub(struct backend *s, const char *userid, const char *tag,
 	      int force_notfatal, const char *resp) 
 {
     int taglen = strlen(tag);
@@ -640,13 +639,12 @@ int pipe_lsub(struct backend *s, const char *tag,
 	    exist_r = 1;
 	    r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace,
 							name.s,
-							imapd_userid,
+							userid,
 							mailboxname);
 	    if (!r) {
-		int mbtype;
-		exist_r = mboxlist_detail(mailboxname, &mbtype,
-					  NULL, NULL, NULL, NULL, NULL);
-		if(!exist_r && (mbtype & MBTYPE_RESERVE))
+		struct mboxlist_entry mbentry;
+		exist_r = mboxlist_lookup(mailboxname, &mbentry, NULL);
+		if(!exist_r && (mbentry.mbtype & MBTYPE_RESERVE))
 		    exist_r = IMAP_MAILBOX_RESERVED;
 	    } else {
 		/* skip this one */
@@ -666,13 +664,13 @@ int pipe_lsub(struct backend *s, const char *tag,
 				resp, sep.s);
 		}
 
-		printstring(name.s);
+		prot_printstring(imapd_out, name.s);
 		prot_printf(imapd_out, "\r\n");
 
 	    } else if(resp[0] == 'M' && !exist_r) {
 		/* Note that it has to exist for a find response */
 		prot_printf(imapd_out, "* %s ", resp);
-		printastring(name.s);
+		prot_printastring(imapd_out, name.s);
 		prot_printf(imapd_out, "\r\n");
 	    }
 	}
@@ -797,11 +795,8 @@ void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
 	}
 
 	/* read seqno */
-	seqno = 0;
-	do {
-	    seqno *= 10;
-	    seqno += c - '0';
-	} while (isdigit(c = prot_getc(backend_current->in)));
+	prot_ungetc(c, backend_current->in);
+	c = getuint32(backend_current->in, &seqno);
 	if (seqno == 0 || c != ' ') {
 	    /* we suck and won't handle this case */
 	    c = EOF; break;
@@ -857,13 +852,7 @@ void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
 	    case 'u': case 'U': /* uid */
 		c = chomp(backend_current->in, "id");
 		if (c != ' ') { c = EOF; }
-		else {
-		    uidno = 0;
-		    while (isdigit(c = prot_getc(backend_current->in))) {
-			uidno *= 10;
-			uidno += c - '0';
-		    }
-		}
+		else c = getuint32(backend_current->in, &uidno);
 		break;
 	    default: /* hmm, don't like the smell of it */
 		c = EOF;
@@ -878,7 +867,12 @@ void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
 	   we can't handle, and we should die. */
 	if (c == ')') c = prot_getc(backend_current->in);
 	if (c == '\r') c = prot_getc(backend_current->in);
-	if (c != '\n') { c = EOF; break; }
+	if (c != '\n') { 
+	    c = EOF;
+	    free(flags);
+	    free(idate);
+	    break;
+	}
 
 	/* if we're missing something, we should echo */
 	if (!flags || !idate) {
@@ -897,6 +891,8 @@ void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
 		sep = ' ';
 	    }
 	    prot_printf(imapd_out, ")\r\n");
+	    if (flags) free(flags);
+	    if (idate) free(idate);
 	    continue;
 	}
 
@@ -942,11 +938,8 @@ void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
 	}
 
 	/* read seqno */
-	seqno = 0;
-	do {
-	    seqno *= 10;
-	    seqno += c - '0';
-	} while (isdigit(c = prot_getc(backend_current->in)));
+	prot_ungetc(c, backend_current->in);
+	c = getuint32(backend_current->in, &seqno);
 	if (seqno == 0 || c != ' ') {
 	    /* we suck and won't handle this case */
 	    c = EOF; break;
@@ -991,13 +984,7 @@ void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
 	    case 'u': case 'U':
 		c = chomp(backend_current->in, "id");
 		if (c != ' ') { c = EOF; }
-		else {
-		    uidno = 0;
-		    while (isdigit(c = prot_getc(backend_current->in))) {
-			uidno *= 10;
-			uidno += c - '0';
-		    }
-		}
+		else c = getuint32(backend_current->in, &uidno);
 		break;
 
 	    case 'r': case 'R':
@@ -1008,14 +995,7 @@ void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
 		    eatline(backend_current->in, c);
 		    c = EOF;
 		}
-		else {
-		    sz = 0;
-		    while (isdigit(c = prot_getc(backend_current->in))) {
-			sz *= 10;
-			sz += c - '0';
-			/* xxx overflow */
-		    }
-		}
+		else c = getint32(backend_current->in, &sz);
 		if (c == '}') c = prot_getc(backend_current->in);
 		if (c == '\r') c = prot_getc(backend_current->in);
 		if (c != '\n') c = EOF;
@@ -1082,12 +1062,17 @@ void proxy_copy(const char *tag, char *sequence, char *name, int myrights,
 	    if (myrights & ACL_READ) {
 		appenduid = strchr(s->last_result.s, '[');
 		/* skip over APPENDUID */
-		appenduid += strlen("[appenduid ");
-		b = strchr(appenduid, ']');
-		*b = '\0';
-		prot_printf(imapd_out, "%s OK [COPYUID %s] %s\r\n", tag,
-			    appenduid, error_message(IMAP_OK_COMPLETED));
-	    } else {
+		if (appenduid) {
+		    appenduid += strlen("[appenduid ");
+		    b = strchr(appenduid, ']');
+		    if (b) *b = '\0';
+		    prot_printf(imapd_out, "%s OK [COPYUID %s] %s\r\n", tag,
+				appenduid, error_message(IMAP_OK_COMPLETED));
+		}
+		else
+		    prot_printf(imapd_out, "%s OK %s\r\n", tag, s->last_result.s);
+	    }
+	    else {
 		prot_printf(imapd_out, "%s OK %s\r\n", tag,
 			    error_message(IMAP_OK_COMPLETED));
 	    }
@@ -1120,7 +1105,7 @@ int proxy_catenate_url(struct backend *s, struct imapurl *url, FILE *f,
 {
     char mytag[128];
     int c, r = 0, found = 0;
-    unsigned long uidvalidity = 0;
+    unsigned int uidvalidity = 0;
 
     *size = 0;
     *parseerr = NULL;
@@ -1144,10 +1129,7 @@ int proxy_catenate_url(struct backend *s, struct imapurl *url, FILE *f,
 	}
 
 	/* read uidvalidity */
-	while (isdigit(c = prot_getc(s->in))) {
-	    uidvalidity *= 10;
-	    uidvalidity += c - '0';
-	}
+	c = getuint32(s->in, &uidvalidity);
 	if (c != ']') { c = EOF; break; }
 	eatline(s->in, c); /* we don't care about the rest of the line */
     }
@@ -1173,7 +1155,7 @@ int proxy_catenate_url(struct backend *s, struct imapurl *url, FILE *f,
     prot_printf(s->out, "%s Uid Fetch %lu Body.Peek[%s]\r\n",
 		mytag, url->uid, url->section ? url->section : "");
     for (/* each fetch response */;;) {
-	unsigned long seqno;
+	unsigned int seqno;
 
       next_resp:
 	/* read a line */
@@ -1183,11 +1165,7 @@ int proxy_catenate_url(struct backend *s, struct imapurl *url, FILE *f,
 	if (c != ' ') { /* protocol error */ c = EOF; break; }
 	    
 	/* read seqno */
-	seqno = 0;
-	while (isdigit(c = prot_getc(s->in))) {
-	    seqno *= 10;
-	    seqno += c - '0';
-	}
+	c = getuint32(s->in, &seqno);
 	if (seqno == 0 || c != ' ') {
 	    /* we suck and won't handle this case */
 	    c = EOF; break;
@@ -1199,19 +1177,14 @@ int proxy_catenate_url(struct backend *s, struct imapurl *url, FILE *f,
 	}
 
 	for (/* each fetch item */;;) {
-	    unsigned long uid, sz = 0;
+	    unsigned uid, sz = 0;
 
 	    switch (c) {
 	    case 'u': case 'U':
 		c = chomp(s->in, "id");
 		if (c != ' ') { c = EOF; }
 		else {
-		    uid = 0;
-		    while (isdigit(c = prot_getc(s->in))) {
-			uid *= 10;
-			uid += c - '0';
-		    }
-
+		    c = getuint32(s->in, &uid);
 		    if (uid != url->uid) {
 			/* not our response */
 			eatline(s->in, c);
@@ -1226,12 +1199,7 @@ int proxy_catenate_url(struct backend *s, struct imapurl *url, FILE *f,
 		if (c == ']') c = prot_getc(s->in);
 		if (c == ' ') c = prot_getc(s->in);
 		if (c == '{') {
-		    sz = 0;
-		    while (isdigit(c = prot_getc(s->in))) {
-			sz *= 10;
-			sz += c - '0';
-			/* xxx overflow */
-		    }
+		    c = getuint32(s->in, &sz);
 		    if (c == '}') c = prot_getc(s->in);
 		    if (c == '\r') c = prot_getc(s->in);
 		    if (c != '\n') c = EOF;
@@ -1429,7 +1397,7 @@ char *find_free_server()
 				  proxy_userid, &backend_cached,
 				  &backend_current, &backend_inbox, imapd_in);
 	    if (be) {
-		unsigned long avail = 0;
+		unsigned avail = 0;
 		int c;
 
 		/* fetch annotation from remote */
@@ -1458,10 +1426,7 @@ char *find_free_server()
 		    }
 
 		    /* read uidvalidity */
-		    while (isdigit(c = prot_getc(be->in))) {
-			avail *= 10;
-			avail += c - '0';
-		    }
+		    c = getuint32(be->in, &avail);
 		    if (c != '\"') { c = EOF; break; }
 		    eatline(be->in, c); /* we don't care about the rest of the line */
 		}

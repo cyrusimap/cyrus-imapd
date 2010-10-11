@@ -48,6 +48,7 @@
 #include "notify_log.h"
 #include "notify_mailto.h"
 #include "notify_zephyr.h"
+#include "notify_external.h"
 
 /* Notify method dispatch table definition */
 typedef struct {
@@ -66,5 +67,6 @@ notifymethod_t methods[] = {
 #ifdef HAVE_ZEPHYR
     { "zephyr",	notify_zephyr },	/* send a zephyrgram */
 #endif
+    { "external", notify_external },	/* send via external program */
     { NULL,	NULL }
 };

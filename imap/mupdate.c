@@ -422,11 +422,11 @@ static void conn_free(struct conn *C)
     if (C->saslprops.authid) free(C->saslprops.authid);
 
     /* free struct bufs */
-    freebuf(&(C->tag));
-    freebuf(&(C->cmd));
-    freebuf(&(C->arg1));
-    freebuf(&(C->arg2));
-    freebuf(&(C->arg3));
+    buf_free(&(C->tag));
+    buf_free(&(C->cmd));
+    buf_free(&(C->arg1));
+    buf_free(&(C->arg2));
+    buf_free(&(C->arg3));
 
     if(C->streaming_hosts) stringlist_free(&(C->streaming_hosts));
 
@@ -1482,29 +1482,36 @@ void database_log(const struct mbent *mb, struct txn **mytid)
  * a non-null pool implies we should use the mpool functionality */
 struct mbent *database_lookup(const char *name, struct mpool *pool) 
 {
-    char *part, *acl;
-    int type;
+    struct mboxlist_entry mbentry;
     struct mbent *out;
+    int r;
     
-    if(!name) return NULL;
+    if (!name) return NULL;
     
-    if(mboxlist_detail(name, &type, NULL, NULL, &part, &acl, NULL))
-	return NULL;
+    r = mboxlist_lookup(name, &mbentry, NULL);
 
-    if(type & MBTYPE_RESERVE) {
+    switch (r) {
+    case IMAP_MAILBOX_RESERVED:
 	if(!pool) out = xmalloc(sizeof(struct mbent) + 1);
 	else out = mpool_malloc(pool, sizeof(struct mbent) + 1);
 	out->t = SET_RESERVE;
 	out->acl[0] = '\0';
-    } else {
-	if(!pool) out = xmalloc(sizeof(struct mbent) + strlen(acl));
-	else out = mpool_malloc(pool, sizeof(struct mbent) + strlen(acl));
+	break;
+
+    case 0:
+	if(!pool) out = xmalloc(sizeof(struct mbent) + strlen(mbentry.acl));
+	else out = mpool_malloc(pool, sizeof(struct mbent) + strlen(mbentry.acl));
 	out->t = SET_ACTIVE;
-	strcpy(out->acl, acl);
+	strcpy(out->acl, mbentry.acl);
+	break;
+
+    default:
+	return NULL;
     }
 
     out->mailbox = (pool) ? mpool_strdup(pool, name) : xstrdup(name);
-    out->server = (pool) ? mpool_strdup(pool, part) : xstrdup(part);
+    out->server = (pool) ? mpool_strdup(pool, mbentry.partition) 
+			 : xstrdup(mbentry.partition);
 
     return out;
 }
@@ -2086,6 +2093,8 @@ void cmd_compress(struct conn *C, const char *tag, const char *alg)
 void shut_down(int code) __attribute__((noreturn));
 void shut_down(int code)
 {
+    in_shutdown = 1;
+
     cyrus_done();
     
     exit(code);
@@ -2540,11 +2549,4 @@ void free_mbent(struct mbent *p)
     free(p->server);
     free(p->mailbox);
     free(p);
-}
-
-void printstring(const char *s __attribute__((unused)))
-{
-    /* needed to link against annotate.o */
-    fatal("printstring() executed, but its not used for MUPDATE!",
-	  EC_SOFTWARE);
 }

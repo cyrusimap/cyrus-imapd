@@ -48,51 +48,39 @@
 #ifndef SEQUENCE_H
 #define SEQUENCE_H
 
-/* old-style seq stuff */
-
 struct seq_range {
     unsigned low;
     unsigned high;
 };
 
-struct seq_set {
+struct seqset {
     struct seq_range *set;
-    unsigned len;
-    unsigned alloc;
-    unsigned mark;
-    struct seq_set *next;
-};
-
-/* new seq stuff */
-
-enum seq_enum { seq_empty, seq_noseq, seq_seen1, seq_inseq, seq_done };
-
-#define SEQ_SPARSE (1<<0)
-
-struct seq_listbuilder {
-    char *base;
-    unsigned long prev;
-    int alloc;
-    int offset;
+    size_t len;
+    size_t alloc;
+    unsigned current;
+    unsigned prev;
+    unsigned maxval;
     int flags;
-    enum seq_enum state;
+    struct seqset *nextseq;
 };
 
-struct seq_listreader {
-    const char *base;
-    const char *ptr;
-    unsigned long next;
-    unsigned long prev;
-    enum seq_enum state;
-};
+#define SEQ_SPARSE 1
+#define SEQ_MERGE 2
 
-extern void seq_readinit(struct seq_listreader *seq, const char *list);
-extern int seq_ismember(struct seq_listreader *seq, unsigned long num);
-extern void seq_listinit(struct seq_listbuilder *seq, int flags);
-extern void seq_listadd(struct seq_listbuilder *seq, 
-			unsigned long num, int inseq);
-extern int seq_isempty(struct seq_listbuilder *seq);
-extern char *seq_listdone(struct seq_listbuilder *seq);
-int seq_lastnum(const char *list, const char **numstart);
+extern unsigned int seq_lastnum(const char *list, const char **numstart);
+
+/* for writing */
+extern struct seqset *seqset_init(unsigned maxval, int flags);
+void seqset_add(struct seqset *seq, unsigned num, int ismember);
+
+extern struct seqset *seqset_parse(const char *sequence,
+				   struct seqset *set,
+				   unsigned maxval);
+extern void seqset_join(struct seqset *a, struct seqset *b);
+extern void seqset_append(struct seqset **l, char *sequence, unsigned maxval);
+extern int seqset_ismember(struct seqset *set, unsigned num);
+extern unsigned seqset_getnext(struct seqset *set);
+extern char *seqset_cstring(struct seqset *set);
+extern void seqset_free(struct seqset *l);
 
 #endif /* SEQUENCE_H */

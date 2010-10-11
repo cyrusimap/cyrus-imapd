@@ -39,7 +39,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: bc_eval.c,v 1.20 2010/01/06 17:01:58 murch Exp $
+ * $Id: bc_eval.c,v 1.19.2.2 2010/02/12 03:41:11 brong Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -62,6 +62,9 @@
 
 #include <string.h>
 #include <ctype.h>
+
+#define SCOUNT_SIZE 20
+char scount[SCOUNT_SIZE];
 
 /**************************************************************************/
 /**************************************************************************/
@@ -126,7 +129,11 @@ static regex_t * bc_compile_regex(const char *s, int ctag,
 {
     int ret;
     regex_t *reg = (regex_t *) xmalloc(sizeof(regex_t));
-    
+
+#ifdef HAVE_PCREPOSIX_H
+    /* support UTF8 comparisons */
+    ctag |= REG_UTF8;
+#endif
     if ( (ret=regcomp(reg, s, ctag)) != 0)
     {
 	(void) regerror(ret, reg, errmsg, errsiz);
@@ -234,8 +241,8 @@ static int shouldRespond(void * m, sieve_interp_t *interp,
     void *data = NULL, *marker = NULL;
     char *tmp;
     int curra, x;
-    char *found=NULL;
-    char *reply_to=NULL;
+    char *found = NULL;
+    char *reply_to = NULL;
   
     /* Implementations SHOULD NOT respond to any message that contains a
        "List-Id" [RFC2919], "List-Help", "List-Subscribe", "List-
@@ -305,7 +312,7 @@ static int shouldRespond(void * m, sieve_interp_t *interp,
 	}
     
 	/* first, is it from me? */
-	if (l == SIEVE_OK && !strcmp(myaddr, reply_to)) {
+	if (l == SIEVE_OK && myaddr && !strcmp(myaddr, reply_to)) {
 	    l = SIEVE_DONE;
 	}
    
@@ -320,7 +327,7 @@ static int shouldRespond(void * m, sieve_interp_t *interp,
 		curra = unwrap_string(bc, curra, &address, NULL);
 		
 		if (!strcmp(address, reply_to))
-		    l=SIEVE_DONE;
+		    l = SIEVE_DONE;
 	    }
 	}
    
@@ -356,14 +363,13 @@ static int shouldRespond(void * m, sieve_interp_t *interp,
     }
     /* ok, ok, if we got here maybe we should reply */
     if (myaddr) free(myaddr);
-    *from=found;
-    *to=reply_to;
+    *from = found;
+    *to = reply_to;
     return l;
 }
 
 /* Evaluate a bytecode test */
-static int eval_bc_test(sieve_interp_t *interp,
-			struct hash_table *body_cache, void* m,
+static int eval_bc_test(sieve_interp_t *interp, void* m,
 			bytecode_input_t * bc, int * ip)
 {
     int res=0; 
@@ -386,7 +392,7 @@ static int eval_bc_test(sieve_interp_t *interp,
 
     case BC_NOT:/*2*/
 	i+=1;
-	res = eval_bc_test(interp, body_cache, m, bc, &i);
+	res = eval_bc_test(interp, m, bc, &i);
 	if(res >= 0) res = !res; /* Only invert in non-error case */
 	break;
 
@@ -445,7 +451,7 @@ static int eval_bc_test(sieve_interp_t *interp,
 	 * in the right place */
 	for (x=0; x<list_len && !res; x++) { 
 	    int tmp;
-	    tmp = eval_bc_test(interp,body_cache,m,bc,&i);
+	    tmp = eval_bc_test(interp, m, bc, &i);
 	    if(tmp < 0) {
 		res = tmp;
 		break;
@@ -465,7 +471,7 @@ static int eval_bc_test(sieve_interp_t *interp,
 	/* return 1 unless you find one that isn't true, then return 0 */
 	for (x=0; x<list_len && res; x++) {
 	    int tmp;
-	    tmp = eval_bc_test(interp,body_cache,m,bc,&i);
+	    tmp = eval_bc_test(interp, m, bc, &i);
 	    if(tmp < 0) {
 		res = tmp;
 		break;
@@ -500,7 +506,6 @@ static int eval_bc_test(sieve_interp_t *interp,
 	int comparator=ntohl(bc[i+3].value);
 	int apart=ntohl(bc[i+4].value);
 	int count=0;
-	char scount[21];
 	int isReg = (match==B_REGEX);
 	int ctag = 0;
 	regex_t *reg;
@@ -635,7 +640,7 @@ static int eval_bc_test(sieve_interp_t *interp,
      
 	if  (match == B_COUNT)
 	{
-	    sprintf(scount, "%u", count);
+	    snprintf(scount, SCOUNT_SIZE, "%u", count);
 	    /* search through all the data */ 
 	    currd=datai+2;
 	    for (z=0; z<numdata && !res; z++)
@@ -669,11 +674,11 @@ static int eval_bc_test(sieve_interp_t *interp,
 	int relation=ntohl(bc[i+2].value);
 	int comparator=ntohl(bc[i+3].value);
 	int count=0;	
-	char scount[21];
 	int isReg = (match==B_REGEX);
 	int ctag = 0;
 	regex_t *reg;
 	char errbuf[100]; /* Basically unused, regexps tested at compile */ 
+	char *decoded_header;
 
 	/* set up variables needed for compiling regex */
 	if (isReg)
@@ -714,19 +719,20 @@ static int eval_bc_test(sieve_interp_t *interp,
 	    
 	    /* search through all the headers that match */
 	    
-	    for (y=0; val[y]!=NULL && !res; y++)
+	    for (y = 0; val[y] && !res; y++)
 	    {
 		if  (match == B_COUNT) {
 		    count++;
 		} else {
+		    decoded_header = charset_parse_mimeheader(val[y]);
 		    /*search through all the data*/ 
 		    currd=datai+2;
 		    for (z=0; z<numdata && !res; z++)
 		    {
 			const char *data_val;
-			
+
 			currd = unwrap_string(bc, currd, &data_val, NULL);
-			
+
 			if (isReg) {
 			    reg= bc_compile_regex(data_val, ctag, errbuf,
 						  sizeof(errbuf));
@@ -737,21 +743,22 @@ static int eval_bc_test(sieve_interp_t *interp,
 				goto alldone;
 			    }
 			    
-			    res |= comp(val[y], strlen(val[y]),
+			    res |= comp(decoded_header, strlen(decoded_header),
 					(const char *)reg, comprock);
 			    free(reg);
 			} else {
-			    res |= comp(val[y], strlen(val[y]),
+			    res |= comp(decoded_header, strlen(decoded_header),
 					data_val, comprock);
 			}
 		    }
+		    free(decoded_header);
 		}
 	    }
 	}
 	
 	if  (match == B_COUNT )
 	{
-	    sprintf(scount, "%u", count);
+	    snprintf(scount, SCOUNT_SIZE, "%u", count);
 	    /*search through all the data*/ 
 	    currd=datai+2;
 	    for (z=0; z<numdata && !res; z++)
@@ -790,7 +797,6 @@ static int eval_bc_test(sieve_interp_t *interp,
 	int transform=ntohl(bc[i+4].value);
 	/* ntohl(bc[i+5].value) is the now unused 'offset' */
 	int count=0;
-	char scount[21];
 	int isReg = (match==B_REGEX);
 	int ctag = 0;
 	regex_t *reg;
@@ -817,6 +823,15 @@ static int eval_bc_test(sieve_interp_t *interp,
 	    break;
 	}
 	
+	if (transform == B_RAW) {
+	    /* XXX - we never handled this properly, it has to search the
+ 	     * RAW message body, totally un-decoded, as a single string
+ 	     *
+	     * ignore - or just search in the UTF-8.  I think the UTF-8 makes more sense 
+             */
+             /* break; */
+	}
+
 	/*find the part(s) of the body that we want*/
 	content_types = bc_makeArray(bc, &typesi);
 	if(interp->getbody(m, content_types, &val) != SIEVE_OK) {
@@ -827,47 +842,12 @@ static int eval_bc_test(sieve_interp_t *interp,
 	
 	/* bodypart(s) exist, now to test them */
 	    
-	for (y=0; val && val[y]!=NULL && !res; y++) {
+	for (y = 0; val && val[y] && !res; y++) {
 
 	    if (match == B_COUNT) {
 		count++;
-	    } else {
-		const char *content = val[y]->content;
-		int size = val[y]->size;
-
-		if (transform != B_RAW) {
-		    int encoding;
-
-		    /* XXX currently unknown encodings are processed as raw */
-		    if (!val[y]->encoding)
-			encoding = ENCODING_NONE;
-		    else if (!strcmp(val[y]->encoding, "BASE64"))
-			encoding = ENCODING_BASE64;
-		    else if (!strcmp(val[y]->encoding, "QUOTED-PRINTABLE"))
-			encoding = ENCODING_QP;
-		    else
-			encoding = ENCODING_NONE;
-
-		    if (encoding != ENCODING_NONE) {
-			content = hash_lookup(val[y]->section, body_cache);
-			if (content) {
-			    /* already decoded this part */
-			    size = strlen(content);
-			}
-			else {
-			    /* decode this part and add it to the cache */
-			    char *decbuf = NULL;
-			    content = charset_decode_mimebody(val[y]->content,
-							      val[y]->size,
-							      encoding, &decbuf,
-							      0, &size);
-			    hash_insert(val[y]->section, (void *) content,
-					body_cache);
-			}
-		    }
-
-		    /* XXX convert charset */
-		}
+	    } else if (val[y]->decoded_body) {
+		const char *content = val[y]->decoded_body;
 
 		/* search through all the data */ 
 		currd=datai+2;
@@ -886,10 +866,10 @@ static int eval_bc_test(sieve_interp_t *interp,
 			    goto alldone;
 			}
 
-			res |= comp(content, size, (const char *)reg, comprock);
+			res |= comp(content, strlen(content), (const char *)reg, comprock);
 			free(reg);
 		    } else {
-			res |= comp(content, size, data_val, comprock);
+			res |= comp(content, strlen(content), data_val, comprock);
 		    }
 		} /* For each data */
 	    }
@@ -904,7 +884,7 @@ static int eval_bc_test(sieve_interp_t *interp,
 
 	if  (match == B_COUNT)
 	{
-	    sprintf(scount, "%u", count);
+	    snprintf(scount, SCOUNT_SIZE, "%u", count);
 	    /* search through all the data */ 
 	    currd=datai+2;
 	    for (z=0; z<numdata && !res; z++)
@@ -939,7 +919,7 @@ static int eval_bc_test(sieve_interp_t *interp,
 
 /* The entrypoint for bytecode evaluation */
 int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
-		  struct hash_table *body_cache, void *sc, void *m,
+		  void *sc, void *m,
 		  sieve_imapflags_t * imapflags, action_list_t *actions,
 		  notify_list_t *notify_list, const char **errmsg) 
 {
@@ -1035,6 +1015,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	    copy = ntohl(bc[ip+1].value);
 	    ip+=1;
 
+	    /* fall through */
 	case B_FILEINTO_ORIG:/*4*/
 	{
 	    ip = unwrap_string(bc, ip+1, &data, NULL);
@@ -1051,6 +1032,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	    copy = ntohl(bc[ip+1].value);
 	    ip+=1;
 
+	    /* fall through */
 	case B_REDIRECT_ORIG:/*5*/
 	{
 	    ip = unwrap_string(bc, ip+1, &data, NULL);
@@ -1069,7 +1051,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	    int result;
 	   
 	    ip+=2;
-	    result=eval_bc_test(i, body_cache, m, bc, &ip);
+	    result=eval_bc_test(i, m, bc, &ip);
 	    
 	    if (result<0) {
 		*errmsg = "Invalid test";
@@ -1298,19 +1280,19 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	    char buf[128];
 	    char subject[1024];
 	    int x;
-	    
+
 	    ip++;
 
-	    x=ntohl( bc[ip].len);
+	    x = ntohl(bc[ip].len);
 	    
-	    respond=shouldRespond(m, i, x, bc, ip+2,
-				  &fromaddr, &toaddr);
+	    respond = shouldRespond(m, i, x, bc, ip+2,
+				    &fromaddr, &toaddr);
 	    
-	    ip=(ntohl(bc[ip+1].value)/4);	
+	    ip = ntohl(bc[ip+1].value) / 4;
 	    if (respond==SIEVE_OK)
-	    {	 
+	    {
 		ip = unwrap_string(bc, ip, &data, NULL);
-		
+
 		if (!data) 
 		{
 		    /* we have to generate a subject */
@@ -1322,20 +1304,19 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 		    } else {
 			/* s[0] contains the original subject */
 			const char *origsubj = s[0];
-
 			snprintf(subject, sizeof(subject), "Auto: %s", origsubj);
 		    }
 		} else {
 		    /* user specified subject */
 		    strlcpy(subject, data, sizeof(subject));
 		}
-		
+
 		ip = unwrap_string(bc, ip, &message, NULL);
 
 		days = ntohl(bc[ip].value);
 		mime = ntohl(bc[ip+1].value);
 
-		ip+=2;	
+		ip+=2;
 
 		if (version >= 0x05) {
 		    ip = unwrap_string(bc, ip, &data, NULL);
@@ -1404,7 +1385,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	    }
 
 	    if (!res)
-		res = sieve_eval_bc(exe, 1, i, body_cache,
+		res = sieve_eval_bc(exe, 1, i,
 				    sc, m, imapflags, actions,
 				    notify_list, errmsg);
 

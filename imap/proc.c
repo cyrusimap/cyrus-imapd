@@ -71,6 +71,7 @@ const char *userid;
 const char *mailbox;
 {
     unsigned pid;
+    int pos;
 
     if (!procfname) {
 	pid = getpid();
@@ -95,7 +96,12 @@ const char *mailbox;
     }
     putc('\n', procfile);
     fflush(procfile);
-    ftruncate(fileno(procfile), ftell(procfile));
+    pos = ftell(procfile);
+    if (pos < 0 || ftruncate(fileno(procfile), pos)) {
+	syslog(LOG_ERR, "IOERROR: creating %s: %m", procfname);
+	fatal("can't write proc file", EC_IOERR);
+    }
+	
 
     setproctitle("%s: %s %s %s", progname, clienthost, 
 		 userid ? userid : "",

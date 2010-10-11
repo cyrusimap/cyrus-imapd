@@ -211,6 +211,11 @@ server
 Blank lines and lines beginning with ``#'' are ignored.
 */
 
+{ "auditlog", 0, SWITCH }
+/* Should cyrus output log entries for every action taken on a message
+   file or mailboxes list entry?  It's noisy so disabled by default, but
+   can be very useful for tracking down what happened if things look strange */
+
 { "auth_mech", "unix", STRINGLIST("unix", "pts", "krb", "krb5")}
 /* The authorization mechanism to use. */
 
@@ -273,7 +278,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    appended. */
 
 { "delete_mode", "immediate", ENUM("immediate", "delayed") }
-/*  The manner in which mailboxes are deleted. "Immediate" mode is the
+/*  The manner in which mailboxes are deleted. "immediate" mode is the
     default behavior in which mailboxes are removed immediately.  In
     "delayed" mode, mailboxes are renamed to a special hiearchy defined
     by the "deletedprefix" option to be removed later by cyr_expire.
@@ -291,7 +296,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    session.  Otherwise, the missing mailbox is treated as empty while
    in use by the client.*/
 
-{ "duplicate_db", "berkeley-nosync", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist", "sql")}
+{ "duplicate_db", "skiplist", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist", "sql")}
 /* The cyrusdb backend to use for the duplicate delivery suppression
    and sieve. */
 
@@ -301,17 +306,27 @@ Blank lines and lines beginning with ``#'' are ignored.
    as having already been delivered to the mailbox.  Records the mailbox
    and message-id/resent-message-id of all successful deliveries. */
 
-{ "expunge_mode", "immediate", ENUM("immediate", "delayed") }
+{ "expunge_mode", "default", ENUM("default", "immediate", "delayed") }
 /* The mode in which messages (and their corresponding cache entries)
-   are expunged.  "Immediate" mode is the default behavior in which the
-   message files and cache entries are purged at the time of the
-   EXPUNGE.  In "delayed" mode, the messages are removed from the
-   mailbox index at the time of the EXPUNGE (hiding them from the
-   client), but the message files and cache entries are left behind,
-   to be purged at a later time by "cyr_expire".  This reduces the
-   amount of I/O that takes place at the time of EXPUNGE and should
-   result in greater responsiveness for the client, especially when
-   expunging a large number of messages. */
+   are expunged.  "default" mode is the default behavior in which the
+   message files are purged at the time of the EXPUNGE, but index
+   and cache records are retained to facilitate QRESYNC.  In "delayed"
+   mode, the message files are also retained, allowing unexpunge to
+   rescue them.  In "immediate" mode, both the message files and the
+   index records are removed as soon as possible.  In all cases,
+   nothing will be finally purged until all other processes have
+   closed the mailbox to ensure they never see data disappear under
+   them.  In "default" or "delayed" mode, a later run of "cyr_expire"
+   will clean out the retained records (and possibly message files).
+   This reduces the amount of I/O that takes place at the time of
+   EXPUNGE and should result in greater responsiveness for the client,
+   especially when expunging a large number of messages. */
+
+{ "expunge_days", 7, INT }
+/* Number of days to retain expunged messages before cleaning up their
+   index records.  The default is 7.  This is necessary for QRESYNC
+   to work correctly.  If combined with delayed expunge (above) you
+   will also be able to unexpunge messages during this time. */
 
 { "flushseenstate", 0, SWITCH }
 /* If enabled, changes to the seen state will be flushed to disk
@@ -340,11 +355,6 @@ Blank lines and lines beginning with ``#'' are ignored.
    Note that this option CANNOT be changed on a live system.  The
    server must be quiesced and then the directories moved with the
    \fBrehash\fR utility. */
-
-{ "guid_mode", "off", ENUM("off", "sha1")}
-/* The method used to calculate Globally Unique IDentifiers of
-   messages (used by the replication engine).  The "sha1" method
-   calculates a SHA1 hash of the entire message */
 
 { "hashimapspool", 0, SWITCH }
 /* If enabled, the partitions will also be hashed, in addition to the
@@ -406,6 +416,12 @@ Blank lines and lines beginning with ``#'' are ignored.
    Note that this option SHOULD NOT be changed on a live system.
    The mailboxes database should be dumped before the option is changed,
    removed, and then undumped after changing the option. */
+
+{ "internaldate_heuristic", "standard", ENUM("standard", "receivedheader") }
+/* Mechanism to determine email internaldates on delivery/reconstruct.
+   "standard" uses time() when delivering a message, mtime on reconstruct.
+   "receivedheader" looks at the top most Received header
+   or time/mtime otherwise */
 
 { "ldap_authz", NULL, STRING }
 /* SASL authorization ID for the LDAP server */
@@ -622,7 +638,10 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "mboxlist_db", "skiplist", STRINGLIST("flat", "berkeley", "berkeley-hash", "skiplist")}
 /* The cyrusdb backend to use for the mailbox list. */
 
-{ "metapartition_files", "", BITFIELD("header", "index", "cache", "expunge", "squat") }
+{ "mboxname_lockpath", NULL, STRING }
+/* Path to mailbox name lock files (default $conf/lock) */
+
+{ "metapartition_files", "", BITFIELD("header", "index", "cache", "expunge", "squat", "lock") }
 /* Space-separated list of metadata files to be stored on a
    \fImetapartition\fR rather than in the mailbox directory on a spool
    partition. */
@@ -711,6 +730,14 @@ Blank lines and lines beginning with ``#'' are ignored.
    Netscape asks the server where the mail administration HTTP server
    is.  Administrators should set this to a local resource. */
 
+{ "newsgroups", "*", STRING }
+/* A wildmat pattern specifying which mailbox hierarchies should be
+   treated as newsgroups.  Only mailboxes matching the wildmat will
+   accept and/or serve articles via NNTP.  If not set, a default
+   wildmat of "*" (ALL shared mailboxes) will be used.  If the
+   \fInewsprefix\fR option is also set, the default wildmat will be
+   translated to "<newsprefix>.*" */
+
 { "newsmaster", "news", STRING }
 /* Userid that is used for checking access controls when executing
    Usenet control messages.  For instance, to allow articles to be
@@ -765,6 +792,24 @@ Blank lines and lines beginning with ``#'' are ignored.
 
 { "notifysocket", "{configdirectory}/socket/notify", STRING }
 /* Unix domain socket that the mail notification daemon listens on. */
+
+{ "notify_external", NULL, STRING }
+/* Path to the external program that notifyd(8) will call to send mail
+   notifications.
+.PP
+The external program will be called with the following
+command line options:
+.TP
+.BI \-c " class"
+.TP
+.BI \-p " priority"
+.TP
+.BI \-u " user"
+.TP
+.BI \-m " mailbox"
+.PP
+And the notification message will be available on \fIstdin\fR.
+*/
 
 # Commented out - there's no such thing as "partition-name", but we need
 # this for the man page
@@ -893,7 +938,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Unix domain socket that ptloader listens on.
    (defaults to configdir/ptclient/ptsock) */
 
-{ "ptscache_db", "berkeley", STRINGLIST("berkeley", "berkeley-hash", "skiplist")}
+{ "ptscache_db", "skiplist", STRINGLIST("berkeley", "berkeley-hash", "skiplist")}
 /* The cyrusdb backend to use for the pts cache. */
 
 { "ptscache_timeout", 10800, INT }
@@ -1106,7 +1151,7 @@ product version in the capabilities */
 { "statuscache", 0, SWITCH }
 /* Enable/disable the imap status cache. */
 
-{ "statuscache_db", "berkeley-nosync", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist") }
+{ "statuscache_db", "skiplist", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist") }
 /* The cyrusdb backend to use for the imap status cache. */
 
 { "sync_authname", NULL, STRING }
@@ -1129,8 +1174,23 @@ product version in the capabilities */
    and nntpd(8).  The log {configdirectory}/sync/log is used by
    sync_client(8) for "rolling" replication. */
 
+{ "sync_log_chain", 0, SWITCH }
+/* Enable replication action logging by sync_server as well, allowing
+   chaining of replicas.  Use this on 'B' for A => B => C replication layout */
+
+{ "sync_log_names", NULL, STRING }
+/* If specified, log all events to multiple log files in directories
+   specified by "name".  To run these log files, you need to pass the
+   -N option to sync_client with the same name.  Use this for a mesh
+   style replication layout */
+
 { "sync_password", NULL, STRING }
 /* The default password to use when authenticating to a sync server. */
+
+{ "sync_port", "csync", STRING }
+/* Name of the service (or port number) of the replication service on
+   replica host.  The default is "csync" which is usally port 2005, but
+   any service name or numeric port can be specified. */
 
 { "sync_realm", NULL, STRING }
 /* The authentication realm to use when authenticating to a sync server. */
@@ -1176,7 +1236,7 @@ product version in the capabilities */
    have filenames with the hashed value of the certificates (see
    openssl(XXX)). */
 
-{ "tlscache_db", "berkeley-nosync", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist", "sql")}
+{ "tlscache_db", "skiplist", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist", "sql")}
 /* The cyrusdb backend to use for the TLS cache. */
 
 { "tls_cert_file", NULL, STRING }

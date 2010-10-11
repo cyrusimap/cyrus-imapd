@@ -92,8 +92,8 @@ const char **failaction;
 	    return -1;
 	}
 
-	fstat(fd, sbuf);
-	r = stat(filename, &sbuffile);
+	r = fstat(fd, sbuf);
+	if (!r) r = stat(filename, &sbuffile);
 	if (r == -1) {
 	    if (failaction) *failaction = "stating";
 	    fl.l_type= F_UNLCK;

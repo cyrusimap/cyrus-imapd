@@ -90,7 +90,9 @@ char* notify_mailto(const char *class,
     smbuf[5] = options[0];
     smbuf[6] = NULL;
 
-    pipe(fds);
+    if (pipe(fds))
+	return strdup("NO mailto could not open pipe");
+
     if ((sm_pid = fork()) == 0) {
 	/* i'm the child! run sendmail! */
 	close(fds[1]);

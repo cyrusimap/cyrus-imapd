@@ -76,22 +76,11 @@
 /* config.c stuff */
 const int config_need_data = 0;
 
-struct cyrusdb_backend *DB_OLD = NULL, *DB_NEW = NULL;
-
-struct db *odb = NULL, *ndb = NULL;
-struct txn *tid = NULL;
-
-int converter_cb(void *rock __attribute__((unused)),
-		 const char *key, int keylen,
-		 const char *data, int datalen) 
-{
-    return DB_NEW->store(ndb, key, keylen, data, datalen, &tid);
-}
-
 int main(int argc, char *argv[])
 {
+    struct cyrusdb_backend *DB_OLD = NULL, *DB_NEW = NULL;
     const char *old_db, *new_db;
-    int i,r;
+    int i;
     int opt;
     char *alt_config = NULL;
 
@@ -161,25 +150,8 @@ int main(int argc, char *argv[])
     printf("Converting from %s (%s) to %s (%s)\n", old_db, DB_OLD->name,
 	   new_db, DB_NEW->name);
 
-    r = (DB_OLD->open)(old_db, 0, &odb);
-    if(r != CYRUSDB_OK)
-	fatal("can't open old database", EC_TEMPFAIL);
-    r = (DB_NEW->open)(new_db, CYRUSDB_CREATE, &ndb);
-    if(r != CYRUSDB_OK)
-	fatal("can't open new database", EC_TEMPFAIL);
+    cyrusdb_convert(old_db, new_db, DB_OLD, DB_NEW);
 
-    DB_OLD->foreach(odb, "", 0, NULL, converter_cb, NULL, NULL);
-
-    /* we want to have done atleast one entry at this point */
-    if(tid)
-	DB_NEW->commit(ndb, tid);
-    else
-	fprintf(stderr, "Warning: apparently empty database converted.\n");
-    
-
-    (DB_OLD->close)(odb);
-    (DB_NEW->close)(ndb);
-    
     cyrus_done();
 
     return 0;

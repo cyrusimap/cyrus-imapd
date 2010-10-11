@@ -328,7 +328,7 @@ static int myopen(const char *fname, int flags, struct db **ret)
 
     if (r == -1) {
 	int level = (flags & CYRUSDB_CREATE) ? LOG_ERR : LOG_DEBUG;
-	syslog(level, "IOERROR: stating %s: %m", db->path);
+	syslog(level, "IOERROR: stating quota %s: %m", db->path);
 	free_db(db);
 	return CYRUSDB_IOERROR;
     }
@@ -360,7 +360,7 @@ static int myfetch(struct db *db, char *quota_path,
     if (data) *data = NULL;
     if (datalen) *datalen = 0;
 
-    if (!data) {
+    if (!data || !datalen) {
 	/* just check if the key exists */
 	struct stat sbuf;
 
@@ -484,7 +484,7 @@ static const char *path_to_qr(const char *path, char *buf)
     return qr;
 }
 
-static int compar_qr(const void *v1, const void *v2)
+static int compar_qr(__const void *v1, __const void *v2)
 {
     const char *qr1, *qr2;
     char qrbuf1[MAX_QUOTA_PATH+1], qrbuf2[MAX_QUOTA_PATH+1];
@@ -667,14 +667,11 @@ static int mystore(struct db *db,
     int r = 0;
 
     /* if we need to truncate the key, do so */
-    if (key[keylen] != '\0') {
-	tmpkey = xmalloc(keylen + 1);
-	memcpy(tmpkey, key, keylen);
-	tmpkey[keylen] = '\0';
-	key = tmpkey;
-    }
+    tmpkey = xmalloc(keylen + 1);
+    memcpy(tmpkey, key, keylen);
+    tmpkey[keylen] = '\0';
 
-    hash_quota(quota_path, sizeof(quota_path), key, db->path);
+    hash_quota(quota_path, sizeof(quota_path), tmpkey, db->path);
     if (tmpkey) free(tmpkey);
 
     if (tid) {

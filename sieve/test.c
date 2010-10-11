@@ -194,12 +194,17 @@ int parseheader(FILE *f, char **headname, char **contents) {
 		    ungetc(c, f);
 		    goto got_header;
 		}
-		/* ignore this whitespace, but we'll copy all the rest in */
-		break;
-	    } else {
-		/* just an ordinary character */
-		body[off++] = c;
+                /* http://www.faqs.org/rfcs/rfc2822.html
+		 *
+		 * > Unfolding is accomplished by simply removing any CRLF
+		 * > that is immediately followed by WSP
+		 *
+		 * So keep the actual WSP character
+		 */
 	    }
+	    /* just an ordinary character */
+	    body[off++] = c;
+	    break;
 	}
     }
 

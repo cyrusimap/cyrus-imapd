@@ -1,4 +1,4 @@
-/* sync_commit.h -- Cyrus synchonization mailbox functions
+/* upgrade_index.h -- Upgrade from previous versions
  *
  * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
  *
@@ -39,39 +39,12 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sync_commit.h,v 1.6 2010/01/06 17:01:41 murch Exp $
- *
- * Original version written by David Carter <dpc22@cam.ac.uk>
- * Rewritten and integrated into Cyrus by Ken Murchison <ken@oceana.com>
+ * $Id: mailbox.h,v 1.96 2010/01/06 17:01:36 murch Exp $
  */
 
-#ifndef INCLUDED_SYNC_COMMIT_H
-#define INCLUDED_SYNC_COMMIT_H
+#ifndef INCLUDED_UPGRADE_INDEX_H
+#define INCLUDED_UPGRADE_INDEX_H
 
-int sync_upload_commit(struct mailbox *mailbox, time_t last_appenddate,
-		       struct sync_upload_list  *upload_list,
-		       struct sync_message_list *message_list);
+extern int upgrade_index(struct mailbox *mailbox);
 
-int sync_uidlast_commit(struct mailbox *mailbox, unsigned long last_uid,
-			time_t last_appenddate);
-
-int
-sync_uidvalidity_commit(struct mailbox *mailbox,
-                        unsigned long uidvalidity);
-
-int sync_setflags_commit(struct mailbox *mailbox,
-			 struct sync_flag_list *flag_list);
-
-int sync_highestmodseq_commit(struct mailbox *mailbox,
-                              modseq_t newhighestmodseq);
-
-
-int sync_modseq_commit(struct mailbox *mailbox,
-                       struct sync_modseq_list *modseq_list);
-
-
-int sync_create_commit(char *name, char *partition, char *uniqueid, char *acl,
-		       int mbtype, unsigned long options, unsigned long uidvalidity,
-		       int isadmin, char *userid, struct auth_state *auth_state);
-
-#endif /* INCLUDED_SYNC_COMMIT_H */
+#endif

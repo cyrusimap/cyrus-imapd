@@ -41,7 +41,7 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: sieve.y,v 1.46 2010/01/06 17:01:59 murch Exp $
+ * $Id: sieve.y,v 1.45.2.1 2010/02/12 03:41:11 brong Exp $
  */
 
 #ifdef HAVE_CONFIG_H
@@ -62,6 +62,10 @@
 #include "../lib/util.h"
 #include "../lib/imparse.h"
 #include "../lib/libconfig.h"
+
+#define ERR_BUF_SIZE 1024
+
+char errbuf[ERR_BUF_SIZE];
 
     /* definitions */
     extern int addrparse(void);
@@ -746,7 +750,7 @@ static char *check_reqs(stringlist_t *sl)
 	    sep = ',';
 	}
 
-	if (s->s) free(s->s);
+	free(s->s);
 	free(s);
     }
     return err;
@@ -1079,12 +1083,11 @@ char addrerr[500];	/* buffer for address parser error messages */
 
 static int verify_address(char *s)
 {
-    char errbuf[500];
-
     addrptr = s;
     addrerr[0] = '\0';	/* paranoia */
     if (addrparse()) {
-	snprintf(errbuf, sizeof(errbuf), "address '%s': %s", s, addrerr);
+	snprintf(errbuf, ERR_BUF_SIZE, 
+		 "address '%s': %s", s, addrerr);
 	yyerror(errbuf);
 	return 0;
     }
@@ -1102,7 +1105,6 @@ static int verify_mailbox(char *s)
 static int verify_header(char *hdr)
 {
     char *h = hdr;
-    char errbuf[100];
 
     while (*h) {
 	/* field-name      =       1*ftext
@@ -1111,7 +1113,7 @@ static int verify_header(char *hdr)
 	   ;  controls, SP, and
 	   ;  ":". */
 	if (!((*h >= 33 && *h <= 57) || (*h >= 59 && *h <= 126))) {
-	    snprintf(errbuf, sizeof(errbuf),
+	    snprintf(errbuf, ERR_BUF_SIZE,
 		     "header '%s': not a valid header", hdr);
 	    yyerror(errbuf);
 	    return 0;
@@ -1134,7 +1136,6 @@ static int verify_addrheader(char *hdr)
 	"approved",			/* RFC1036 moderator/control fields */
 	NULL
     };
-    char errbuf[100];
 
     if (!config_getswitch(IMAPOPT_RFC3028_STRICT))
 	return verify_header(hdr);
@@ -1143,7 +1144,7 @@ static int verify_addrheader(char *hdr)
 	if (!strcmp(*h, hdr)) return 1;
     }
 
-    snprintf(errbuf, sizeof(errbuf),
+    snprintf(errbuf, ERR_BUF_SIZE,
 	     "header '%s': not a valid header for an address test", hdr);
     yyerror(errbuf);
     return 0;
@@ -1151,15 +1152,13 @@ static int verify_addrheader(char *hdr)
  
 static int verify_envelope(char *env)
 {
-    char errbuf[100];
-
     lcase(env);
     if (!config_getswitch(IMAPOPT_RFC3028_STRICT) ||
 	!strcmp(env, "from") || !strcmp(env, "to") || !strcmp(env, "auth")) {
 	return 1;
     }
 
-    snprintf(errbuf, sizeof(errbuf),
+    snprintf(errbuf, ERR_BUF_SIZE,
 	     "env-part '%s': not a valid part for an envelope test", env);
     yyerror(errbuf);
     return 0;
@@ -1167,7 +1166,6 @@ static int verify_envelope(char *env)
  
 static int verify_relat(char *r)
 {/* this really should have been a token to begin with.*/
-    char errbuf[100];
 	lcase(r);
 	if (!strcmp(r, "gt")) {return GT;}
 	else if (!strcmp(r, "ge")) {return GE;}
@@ -1176,7 +1174,8 @@ static int verify_relat(char *r)
 	else if (!strcmp(r, "ne")) {return NE;}
 	else if (!strcmp(r, "eq")) {return EQ;}
 	else{
-	  snprintf(errbuf, sizeof(errbuf), "flag '%s': not a valid relational operation", r);
+	  snprintf(errbuf, ERR_BUF_SIZE,
+		   "flag '%s': not a valid relational operation", r);
 	  yyerror(errbuf);
 	  return -1;
 	}
@@ -1188,14 +1187,12 @@ static int verify_relat(char *r)
 
 static int verify_flag(char *f)
 {
-    char errbuf[100];
- 
     if (f[0] == '\\') {
 	lcase(f);
 	if (strcmp(f, "\\seen") && strcmp(f, "\\answered") &&
 	    strcmp(f, "\\flagged") && strcmp(f, "\\draft") &&
 	    strcmp(f, "\\deleted")) {
-	    snprintf(errbuf, sizeof(errbuf),
+	    snprintf(errbuf, ERR_BUF_SIZE,
 		     "flag '%s': not a system flag", f);
 	    yyerror(errbuf);
 	    return 0;
@@ -1203,7 +1200,8 @@ static int verify_flag(char *f)
 	return 1;
     }
     if (!imparse_isatom(f)) {
-	snprintf(errbuf, sizeof(errbuf), "flag '%s': not a valid keyword", f);
+	snprintf(errbuf, ERR_BUF_SIZE,
+		 "flag '%s': not a valid keyword", f);
 	yyerror(errbuf);
 	return 0;
     }
@@ -1214,15 +1212,19 @@ static int verify_flag(char *f)
 static int verify_regex(char *s, int cflags)
 {
     int ret;
-    char errbuf[100];
     regex_t *reg = (regex_t *) xmalloc(sizeof(regex_t));
 
-     if ((ret = regcomp(reg, s, cflags)) != 0) {
-	(void) regerror(ret, reg, errbuf, sizeof(errbuf));
+#ifdef HAVE_PCREPOSIX_H
+    /* support UTF8 comparisons */
+    cflags |= REG_UTF8;
+#endif
+
+    if ((ret = regcomp(reg, s, cflags)) != 0) {
+	(void) regerror(ret, reg, errbuf, ERR_BUF_SIZE);
 	yyerror(errbuf);
 	free(reg);
 	return 0;
-	}
+    }
     free(reg);
     return 1;
 }
@@ -1332,9 +1334,7 @@ static int verify_utf8(char *s)
     }
 
     if ((buf != endbuf) || trailing) {
-	char errbuf[100];
-
-	snprintf(errbuf, sizeof(errbuf),
+	snprintf(errbuf, ERR_BUF_SIZE,
 		 "string '%s': not valid utf8", s);
 	yyerror(errbuf);
 	return 0;

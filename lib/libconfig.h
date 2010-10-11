@@ -78,8 +78,9 @@ extern int config_hashimapspool;
 extern int config_implicitrights;
 extern enum enum_value config_virtdomains;
 extern enum enum_value config_mupdate_config;
-extern int config_maxquoted;
-extern int config_maxword;
+extern int config_auditlog;
+extern unsigned config_maxquoted;
+extern unsigned config_maxword;
 extern int config_qosmarking;
 
 /* config requirement flags */
