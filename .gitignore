@@ -1,10 +1,9 @@
-*/*.o
-*/*.a
-*/*~
-*/Makefile
-*/Makefile.old
+*.o
+*.a
+*~
 Makefile
 Makefile.bak
+Makefile.old
 makedepend.log
 aclocal.m4
 autom4te.cache/
