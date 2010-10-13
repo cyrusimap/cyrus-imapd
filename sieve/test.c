@@ -80,7 +80,7 @@ void message_guid_generate(struct message_guid *guid __attribute__((unused)),
 			   unsigned long msg_len __attribute__((unused)))
 { return; }
 void message_guid_copy(struct message_guid *dst __attribute__((unused)),
-		       struct message_guid *src __attribute__((unused)))
+		       const struct message_guid *src __attribute__((unused)))
 { return; }
 int message_guid_isnull(struct message_guid *guid __attribute__((unused)))
 { return 0; }

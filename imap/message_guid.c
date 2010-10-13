@@ -158,11 +158,11 @@ int message_guid_compare_allow_null(struct message_guid *guid1,
  *
  ************************************************************************/
 
-unsigned long message_guid_hash(struct message_guid *guid, int hash_size)
+unsigned long message_guid_hash(const struct message_guid *guid, int hash_size)
 {
     int i;
     unsigned long result = 0;
-    unsigned char *s = &guid->value[0];
+    const unsigned char *s = &guid->value[0];
 
     assert(hash_size > 1);
 
@@ -216,7 +216,7 @@ int message_guid_isnull(struct message_guid *guid)
  *
  ************************************************************************/
 
-void message_guid_export(struct message_guid *guid, unsigned char *buf)
+void message_guid_export(const struct message_guid *guid, unsigned char *buf)
 {
     memcpy(buf, guid->value, MESSAGE_GUID_SIZE);
 }
@@ -251,12 +251,12 @@ struct message_guid *message_guid_import(struct message_guid *guid,
  *
  ************************************************************************/
 
-static char XDIGIT[] = "0123456789abcdef";
+static const char XDIGIT[] = "0123456789abcdef";
 
-char *message_guid_encode(struct message_guid *guid)
+char *message_guid_encode(const struct message_guid *guid)
 {
     static char text[2*MESSAGE_GUID_SIZE+1];
-    unsigned char *v = guid->value;
+    const unsigned char *v = guid->value;
     char *p = text;
     int i;
 

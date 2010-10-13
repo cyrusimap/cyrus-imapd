@@ -78,7 +78,7 @@ int message_guid_compare_allow_null(struct message_guid *guid1,
 /* Convert GUID into hash value for hash table lookup
  * Returns: positive int in range [0, hash_size-1]
  */
-unsigned long message_guid_hash(struct message_guid *guid, int hash_size);
+unsigned long message_guid_hash(const struct message_guid *guid, int hash_size);
 
   /* Create a NULL GUID */
 void message_guid_set_null(struct message_guid *guid);
@@ -89,7 +89,7 @@ int message_guid_isnull(struct message_guid *guid);
 /* Export Message GUID as byte sequence (MESSAGE_GUID_SIZE)
  * (Wrapper for memcpy() with current implementation)
  */
-void message_guid_export(struct message_guid *guid, unsigned char *buf);
+void message_guid_export(const struct message_guid *guid, unsigned char *buf);
 
 /* Import Message GUID from packed sequence (MESSAGE_GUID_SIZE)
  * (Wrapper for memcpy() with current implementation)
@@ -103,7 +103,7 @@ struct message_guid *message_guid_import(struct message_guid *guid,
 /* Returns ptr to '\0' terminated static char * which can be strdup()ed
  * NULL => error. Should be impossible as entire range covered
  */
-char *message_guid_encode(struct message_guid *guid);
+char *message_guid_encode(const struct message_guid *guid);
 
 /* Sets Message GUID from text form. Returns 1 if valid
  * Returns: Cyrus error code, 0 on sucess
