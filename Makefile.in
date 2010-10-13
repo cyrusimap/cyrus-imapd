@@ -177,6 +177,11 @@ config.status: configure
 configure: configure.in
 	cd $(srcdir); rm -f config.cache; autoconf
 
+tags cscope:
+	find $(SUBDIRS) -type f -name '*.[ch]' > cs.files
+	cscope -b -k -i cs.files
+	$(RM) cs.files
+
 checkdepend::
 
 depend::
