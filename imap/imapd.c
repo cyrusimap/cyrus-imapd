@@ -901,8 +901,7 @@ void service_abort(int error)
 /*
  * found a motd file; spit out message and return
  */
-void motd_file(fd)
-int fd;
+void motd_file(int fd)
 {
     struct protstream *motd_in;
     char buf[MAX_MAILBOX_PATH+1];
@@ -1061,7 +1060,7 @@ static void imapd_check(struct backend *be, int usinguid)
 /*
  * Top-level command loop parsing
  */
-void cmdloop()
+void cmdloop(void)
 {
     int fd;
     char motdfilename[MAX_MAILBOX_PATH+1];
@@ -6079,11 +6078,7 @@ void cmd_getacl(const char *tag, const char *name)
 /*
  * Perform a LISTRIGHTS command
  */
-void
-cmd_listrights(tag, name, identifier)
-char *tag;
-char *name;
-char *identifier;
+void cmd_listrights(char *tag, char *name, char *identifier)
 {
     char mailboxname[MAX_MAILBOX_BUFFER];
     int r, rights;
@@ -6999,8 +6994,7 @@ static int namespacedata(char *name,
  * Print out a response to the NAMESPACE command defined by
  * RFC 2342.
  */
-void cmd_namespace(tag)
-    char* tag;
+void cmd_namespace(char* tag)
 {
     int sawone[3] = {0, 0, 0};
     char* pattern;
@@ -7462,11 +7456,8 @@ int getsearchreturnopts(char *tag, struct searchargs *searchargs)
 /*
  * Parse a search program
  */
-int getsearchprogram(tag, searchargs, charset, parsecharset)
-char *tag;
-struct searchargs *searchargs;
-int *charset;
-int parsecharset;
+int getsearchprogram(char *tag, struct searchargs *searchargs,
+		     int *charset, int parsecharset)
 {
     int c;
 
@@ -7480,11 +7471,8 @@ int parsecharset;
 /*
  * Parse a search criteria
  */
-int getsearchcriteria(tag, searchargs, charset, parsecharset)
-char *tag;
-struct searchargs *searchargs;
-int *charset;
-int parsecharset;
+int getsearchcriteria(char *tag, struct searchargs *searchargs,
+		      int *charset, int parsecharset)
 {
     static struct buf criteria, arg;
     struct searchargs *sub1, *sub2;
@@ -8901,8 +8889,7 @@ done:
  * The time_t's pointed to by 'start' and 'end' are set to the
  * times of the start and end of the parsed date.
  */
-int getsearchdate(start, end)
-time_t *start, *end;
+int getsearchdate(time_t *start, time_t *end)
 {
     int c;
     struct tm tm;
@@ -9233,8 +9220,7 @@ int getlistretopts(char *tag, unsigned *opts) {
  * Returns: the next character read from imapd_in, or
  *	    or EOF on error.
  */
-int getdatetime(date)
-time_t *date;
+int getdatetime(time_t *date)
 {
     int c;
     int r;
@@ -9266,10 +9252,9 @@ time_t *date;
 /*
  * Append 'section', 'fields', 'trail' to the fieldlist 'l'.
  */
-void
-appendfieldlist(struct fieldlist **l, char *section,
-		struct strlist *fields, char *trail,
-		void *d, size_t size)
+void appendfieldlist(struct fieldlist **l, char *section,
+		     struct strlist *fields, char *trail,
+		     void *d, size_t size)
 {
     struct fieldlist **tail = l;
 
@@ -9310,9 +9295,9 @@ void freefieldlist(struct fieldlist *l)
 /*
  * Append the searchargs 's1' and 's2' to the sublist of 's'
  */
-void
-appendsearchargs(s, s1, s2)
-struct searchargs *s, *s1, *s2;
+void appendsearchargs(struct searchargs *s,
+		      struct searchargs *s1,
+		      struct searchargs *s2)
 {
     struct searchsub **tail = &s->sublist;
 
@@ -9328,9 +9313,7 @@ struct searchargs *s, *s1, *s2;
 /*
  * Free the searchargs 's'
  */
-void
-freesearchargs(s)
-struct searchargs *s;
+void freesearchargs(struct searchargs *s)
 {
     struct searchsub *sub, *n;
 
