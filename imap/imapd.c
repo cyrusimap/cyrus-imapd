@@ -4846,7 +4846,7 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
  */
 void cmd_expunge(char *tag, char *sequence)
 {
-    modseq_t old = index_highestmodseq(imapd_index);
+    modseq_t old;
     modseq_t new;
     int r = 0;
 
@@ -4866,6 +4866,8 @@ void cmd_expunge(char *tag, char *sequence)
     if (!(imapd_index->myrights & ACL_EXPUNGE)) {
 	r = IMAP_PERMISSION_DENIED;
     }
+
+    old = index_highestmodseq(imapd_index);
 
     if (!r) r = index_expunge(imapd_index, sequence);
     /* tell expunges */
