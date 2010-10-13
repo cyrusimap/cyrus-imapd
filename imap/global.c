@@ -658,9 +658,8 @@ void cyrus_ctime(time_t date, char *datebuf)
     long gmtoff = gmtoff_of(tm, date);
     int gmtnegative = 0;
 
-    if (date == 0 || tm->tm_year < 69) {
-	abort();
-    }
+    assert(date > 0);
+    assert(tm->tm_year >= 70);
 
     if (gmtoff < 0) {
 	gmtoff = -gmtoff;
