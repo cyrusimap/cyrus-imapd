@@ -172,25 +172,26 @@ struct boundary {
 
 static int message_parse_body(struct msg *msg,
 				 struct body *body,
-				 char *defaultContentType,
+				 const char *defaultContentType,
 				 struct boundary *boundaries);
 
 static int message_parse_headers(struct msg *msg,
 				    struct body *body,
-				    char *defaultContentType,
+				    const char *defaultContentType,
 				    struct boundary *boundaries);
-static void message_parse_address(char *hdr, struct address **addrp);
-static void message_parse_encoding(char *hdr, char **hdrp);
-static void message_parse_charset(struct body *body, int *encoding, int *charset);
-static void message_parse_string(char *hdr, char **hdrp);
-static void message_parse_header(char *hdr, struct ibuf *ibuf);
-static void message_parse_type(char *hdr, struct body *body);
-/* static */ void message_parse_disposition(char *hdr, struct body *body);
-static void message_parse_params(char *hdr, struct param **paramp);
+static void message_parse_address(const char *hdr, struct address **addrp);
+static void message_parse_encoding(const char *hdr, char **hdrp);
+static void message_parse_charset(const struct body *body,
+				  int *encoding, int *charset);
+static void message_parse_string(const char *hdr, char **hdrp);
+static void message_parse_header(const char *hdr, struct ibuf *ibuf);
+static void message_parse_type(const char *hdr, struct body *body);
+/* static */ void message_parse_disposition(const char *hdr, struct body *body);
+static void message_parse_params(const char *hdr, struct param **paramp);
 static void message_fold_params(struct param **paramp);
-static void message_parse_language(char *hdr, struct param **paramp);
-static void message_parse_rfc822space(char **s);
-static void message_parse_received_date(char *hdr, char **hdrp);
+static void message_parse_language(const char *hdr, struct param **paramp);
+static void message_parse_rfc822space(const char **s);
+static void message_parse_received_date(const char *hdr, char **hdrp);
 
 static void message_parse_multipart(struct msg *msg,
 				       struct body *body,
@@ -203,23 +204,23 @@ static char *message_getline(char *s, unsigned n, struct msg *msg);
 static int message_pendingboundary(const char *s, char **boundaries,
 				      int *boundaryct);
 
-static void message_write_envelope(struct ibuf *ibuf, struct body *body);
-static void message_write_body(struct ibuf *ibuf, struct body *body,
+static void message_write_envelope(struct ibuf *ibuf, const struct body *body);
+static void message_write_body(struct ibuf *ibuf, const struct body *body,
 				  int newformat);
 static void message_write_address(struct ibuf *ibuf,
-				     struct address *addrlist);
-static void message_write_nstring(struct ibuf *ibuf, char *s);
-static void message_write_text(struct ibuf *ibuf, char *s);
-static void message_write_text_lcase(struct ibuf *ibuf, char *s);
+				  const struct address *addrlist);
+static void message_write_nstring(struct ibuf *ibuf, const char *s);
+static void message_write_text(struct ibuf *ibuf, const char *s);
+static void message_write_text_lcase(struct ibuf *ibuf, const char *s);
 static void message_write_number(struct ibuf *ibuf, unsigned n);
-static void message_write_section(struct ibuf *ibuf, struct body *body);
-static void message_write_charset(struct ibuf *ibuf, struct body *body);
+static void message_write_section(struct ibuf *ibuf, const struct body *body);
+static void message_write_charset(struct ibuf *ibuf, const struct body *body);
 static void message_write_bit32(struct ibuf *ibuf, bit32 val);
 static void message_write_searchaddr(struct ibuf *ibuf,
-					struct address *addrlist);
+				     const struct address *addrlist);
 
 static void message_ibuf_init(struct ibuf *ibuf);
-static void message_ibuf_copy(struct ibuf *desc, struct ibuf *src);
+static void message_ibuf_copy(struct ibuf *desc, const struct ibuf *src);
 static int message_ibuf_ensure(struct ibuf *ibuf, unsigned len);
 static void message_ibuf_pad(struct ibuf *ibuf);
 static void message_ibuf_free(struct ibuf *ibuf);
@@ -556,7 +557,7 @@ void message_fetch_part(struct message_content *msg,
  * by 'record'.
  */
 int message_create_record(struct index_record *record,
-			  struct body *body)
+			  const struct body *body)
 {
     if (config_getenum(IMAPOPT_INTERNALDATE_HEURISTIC) 
 	    == IMAP_ENUM_INTERNALDATE_HEURISTIC_RECEIVEDHEADER) {
@@ -602,7 +603,7 @@ int message_create_record(struct index_record *record,
  * Parse a body-part
  */
 static int message_parse_body(struct msg *msg, struct body *body,
-			      char *defaultContentType,
+			      const char *defaultContentType,
 			      struct boundary *boundaries)
 {
     struct boundary newboundaries;
@@ -668,7 +669,7 @@ static int message_parse_body(struct msg *msg, struct body *body,
  */
 #define HEADGROWSIZE 1000
 static int message_parse_headers(struct msg *msg, struct body *body,
-				 char *defaultContentType,
+				 const char *defaultContentType,
 				 struct boundary *boundaries)
 {
     static int alloced = 0;
@@ -907,17 +908,18 @@ static int message_parse_headers(struct msg *msg, struct body *body,
  * Parse a list of RFC-822 addresses from a header, appending them
  * to the address list pointed to by 'addrp'.
  */
-static void message_parse_address(char *hdr, struct address **addrp)
+static void message_parse_address(const char *hdr, struct address **addrp)
 {
     char *hdrend, hdrendchar = '\0';
 
     /* Find end of header */
-    hdrend = hdr;
+    hdrend = (char *)hdr;
     do {
 	hdrend = strchr(hdrend+1, '\n');
     } while (hdrend && (hdrend[1] == ' ' || hdrend[1] == '\t'));
 
     /* Put a NUL character at the end of header */
+    /* gnb:TODO this is evil and should be stopped */
     if (hdrend) {
 	if (hdrend > hdr && hdrend[-1] == '\r') hdrend--;
 	hdrendchar = *hdrend;
@@ -933,10 +935,11 @@ static void message_parse_address(char *hdr, struct address **addrp)
 /*
  * Parse a Content-Transfer-Encoding from a header.
  */
-static void message_parse_encoding(char *hdr, char **hdrp)
+static void message_parse_encoding(const char *hdr, char **hdrp)
 {
     int len;
-    char *p;
+    const char *p;
+    char *q;
 
     /* Ignore if we already saw one of these headers */
     if (*hdrp) return;
@@ -958,15 +961,16 @@ static void message_parse_encoding(char *hdr, char **hdrp)
     /* Save encoding token */
     *hdrp = xmalloc(len + 1);
     strlcpy(*hdrp, hdr, len + 1);
-    for (p = *hdrp; *p; p++) {
-	if (Uislower(*p)) *p = toupper((int) *p);
+    for (q = *hdrp; *q; q++) {
+	if (Uislower(*q)) *q = toupper((int) *q);
     }
 }
 
 /* 
  * parse a charset and encoding out of a body structure
  */
-static void message_parse_charset(struct body *body, int *e_ptr, int *c_ptr)
+static void message_parse_charset(const struct body *body,
+				  int *e_ptr, int *c_ptr)
 {
     int encoding = ENCODING_NONE;
     int charset = 0;
@@ -1026,10 +1030,11 @@ static void message_parse_charset(struct body *body, int *e_ptr, int *c_ptr)
 /*
  * Parse an uninterpreted header
  */
-static void message_parse_string(char *hdr, char **hdrp)
+static void message_parse_string(const char *hdr, char **hdrp)
 {
     int len;
-    char *hdrend;
+    const char *hdrend;
+    char *he;
 
     /* Ignore if we already saw one of these headers */
     if (*hdrp) return;
@@ -1055,14 +1060,14 @@ static void message_parse_string(char *hdr, char **hdrp)
     strlcpy(*hdrp, hdr, len + 1);
 
     /* Un-fold header (overlapping buffers, use memmove) */
-    hdrend = *hdrp;
-    while ((hdrend = strchr(hdrend, '\n'))!=NULL) {
-	if (hdrend > *hdrp && hdrend[-1] == '\r') {
-	    hdrend--;
-	    memmove(hdrend, hdrend+2, strlen(hdrend+2)+1);
+    he = *hdrp;
+    while ((he = strchr(he, '\n'))!=NULL) {
+	if (he > *hdrp && he[-1] == '\r') {
+	    he--;
+	    memmove(he, he+2, strlen(he+2)+1);
 	}
 	else {
-	    memmove(hdrend, hdrend+1, strlen(hdrend+1)+1);
+	    memmove(he, he+1, strlen(he+1)+1);
 	}
     }
 }
@@ -1071,10 +1076,10 @@ static void message_parse_string(char *hdr, char **hdrp)
  * Cache a header
  */
 static void
-message_parse_header(char *hdr, struct ibuf *ibuf)
+message_parse_header(const char *hdr, struct ibuf *ibuf)
 {
     int len;
-    char *hdrend;
+    const char *hdrend;
 
     /* Find end of header */
     hdrend = hdr;
@@ -1100,11 +1105,11 @@ message_parse_header(char *hdr, struct ibuf *ibuf)
 /*
  * Parse a Content-Type from a header.
  */
-static void message_parse_type(char *hdr, struct body *body)
+static void message_parse_type(const char *hdr, struct body *body)
 {
-    char *type;
+    const char *type;
     int typelen;
-    char *subtype;
+    const char *subtype;
     int subtypelen;
     char *p;
 
@@ -1168,9 +1173,9 @@ static void message_parse_type(char *hdr, struct body *body)
 /*
  * Parse a Content-Disposition from a header.
  */
-/* static */ void message_parse_disposition(char *hdr, struct body *body)
+/* static */ void message_parse_disposition(const char *hdr, struct body *body)
 {
-    char *disposition;
+    const char *disposition;
     int dispositionlen;
     char *p;
 
@@ -1212,12 +1217,12 @@ static void message_parse_type(char *hdr, struct body *body)
 /*
  * Parse a parameter list from a header
  */
-static void message_parse_params(char *hdr, struct param **paramp)
+static void message_parse_params(const char *hdr, struct param **paramp)
 {
     struct param *param;
-    char *attribute;
+    const char *attribute;
     int attributelen;
-    char *value;
+    const char *value;
     int valuelen;
     char *p;
 
@@ -1304,7 +1309,7 @@ static void message_parse_params(char *hdr, struct param **paramp)
 }
 
 /* Alphabet for hex encoding */
-static char basis_hex[] = "0123456789ABCDEF";
+static const char basis_hex[] = "0123456789ABCDEF";
 
 /*
  * Decode RFC-2231 parameter continuations
@@ -1475,10 +1480,10 @@ static void message_fold_params(struct param **params)
 /*
  * Parse a language list from a header
  */
-static void message_parse_language(char *hdr, struct param **paramp)
+static void message_parse_language(const char *hdr, struct param **paramp)
 {
     struct param *param;
-    char *value;
+    const char *value;
     int valuelen;
     char *p;
 
@@ -1523,7 +1528,7 @@ static void message_parse_language(char *hdr, struct param **paramp)
  * Parse a RFC-822 date from a header.
  * Only parses to day granularity--ignores the time of day.
  */
-time_t message_parse_date(char *hdr, unsigned flags)
+time_t message_parse_date(const char *hdr, unsigned flags)
 {
     struct tm tm;
     time_t t;
@@ -1718,9 +1723,9 @@ time_t message_parse_date(char *hdr, unsigned flags)
 /*
  * Skip over RFC-822 whitespace and comments
  */
-static void message_parse_rfc822space(char **s)
+static void message_parse_rfc822space(const char **s)
 {
-    char *p = *s;
+    const char *p = *s;
     int commentlevel = 0;
 
     if (!p) return;
@@ -1778,7 +1783,7 @@ static void message_parse_multipart(struct msg *msg, struct body *body,
 {
     struct body preamble, epilogue;
     struct param *boundary;
-    char *defaultContentType = DEFAULT_CONTENT_TYPE;
+    const char *defaultContentType = DEFAULT_CONTENT_TYPE;
     int i, depth;
 
     memset(&preamble, 0, sizeof(struct body));
@@ -1963,7 +1968,7 @@ static void message_parse_content(struct msg *msg, struct body *body,
     }
 }
 
-static void message_parse_received_date(char *hdr, char **hdrp)
+static void message_parse_received_date(const char *hdr, char **hdrp)
 {
   char *curp, *hdrbuf = 0;
 
@@ -2054,7 +2059,7 @@ static int message_pendingboundary(const char *s,
  * Write the cache information for the message parsed to 'body'
  * to 'outfile'.
  */
-int message_write_cache(struct index_record *record, struct body *body)
+int message_write_cache(struct index_record *record, const struct body *body)
 {
     static struct buf cacheitem_buffer;
     struct ibuf ib[10];
@@ -2070,7 +2075,9 @@ int message_write_cache(struct index_record *record, struct body *body)
 
     toplevel.type = "MESSAGE";
     toplevel.subtype = "RFC822";
-    toplevel.subpart = body;
+    /* we cast away const because we know that we're only using
+     * toplevel.subpart as const in message_write_section(). */
+    toplevel.subpart = (struct body *)body;
 
     subject = charset_decode_mimeheader(body->subject, NULL, 0);
 
@@ -2117,7 +2124,7 @@ int message_write_cache(struct index_record *record, struct body *body)
 /*
  * Write the IMAP envelope for 'body' to 'ibuf'
  */
-static void message_write_envelope(struct ibuf *ibuf, struct body *body)
+static void message_write_envelope(struct ibuf *ibuf, const struct body *body)
 {
     PUTIBUF(ibuf, '(');
     message_write_nstring(ibuf, body->date);
@@ -2146,7 +2153,7 @@ static void message_write_envelope(struct ibuf *ibuf, struct body *body)
  * Write the BODY (if 'newformat' is zero) or BODYSTRUCTURE
  * (if 'newformat' is nonzero) for 'body' to 'ibuf'.
  */
-static void message_write_body(struct ibuf *ibuf, struct body *body,
+static void message_write_body(struct ibuf *ibuf, const struct body *body,
 			       int newformat)
 {
     struct param *param;
@@ -2325,7 +2332,8 @@ static void message_write_body(struct ibuf *ibuf, struct body *body,
 /*
  * Write the address list 'addrlist' to 'ibuf'
  */
-static void message_write_address(struct ibuf *ibuf, struct address *addrlist)
+static void message_write_address(struct ibuf *ibuf,
+				  const struct address *addrlist)
 {
     /* If no addresses, write out NIL */
     if (!addrlist) {
@@ -2354,9 +2362,9 @@ static void message_write_address(struct ibuf *ibuf, struct address *addrlist)
 /*
  * Write the nil-or-string 's' to 'ibuf'
  */
-static void message_write_nstring(struct ibuf *ibuf, char *s)
+static void message_write_nstring(struct ibuf *ibuf, const char *s)
 {
-    char *p;
+    const char *p;
     int len = 0;
 
     /* Write null pointer as NIL */
@@ -2395,9 +2403,9 @@ static void message_write_nstring(struct ibuf *ibuf, char *s)
 /*
  * Write the text 's' to 'ibuf'
  */
-static void message_write_text(struct ibuf *ibuf, char *s)
+static void message_write_text(struct ibuf *ibuf, const char *s)
 {
-    char *p;
+    const char *p;
 
     message_ibuf_ensure(ibuf, strlen(s));
     for (p = s; *p; p++) *(ibuf->end)++ = *p;
@@ -2406,9 +2414,9 @@ static void message_write_text(struct ibuf *ibuf, char *s)
 /*
  * Write the text 's' to 'ibuf', converting to lower case as we go.
  */
-static void message_write_text_lcase(struct ibuf *ibuf, char *s)
+static void message_write_text_lcase(struct ibuf *ibuf, const char *s)
 {
-    char *p;
+    const char *p;
 
     message_ibuf_ensure(ibuf, strlen(s));
     for (p = s; *p; p++) *(ibuf->end)++ = TOLOWER(*p);
@@ -2430,7 +2438,7 @@ static void message_write_number(struct ibuf *ibuf, unsigned n)
 /*
  * Write out the FETCH BODY[section] location/size information to 'ibuf'.
  */
-static void message_write_section(struct ibuf *ibuf, struct body *body)
+static void message_write_section(struct ibuf *ibuf, const struct body *body)
 {
     int part;
 
@@ -2534,7 +2542,7 @@ static void message_write_section(struct ibuf *ibuf, struct body *body)
 /*
  * Write the 32-bit charset/encoding value for section 'body' to 'ibuf'
  */
-static void message_write_charset(struct ibuf *ibuf, struct body *body)
+static void message_write_charset(struct ibuf *ibuf, const struct body *body)
 {
     int encoding, charset;
 
@@ -2564,7 +2572,7 @@ static void message_write_bit32(struct ibuf *ibuf, bit32 val)
  * Unparse the address list 'addrlist' to 'ibuf'
  */
 static void message_write_searchaddr(struct ibuf *ibuf,
-				     struct address *addrlist)
+				     const struct address *addrlist)
 {
     int prevaddr = 0;
     char* tmp;
@@ -2630,7 +2638,7 @@ static void message_ibuf_init(struct ibuf *ibuf)
     ibuf->last = ibuf->start + IBUFGROWSIZE - sizeof(bit32);
 }
 
-static void message_ibuf_copy(struct ibuf *dest, struct ibuf *src)
+static void message_ibuf_copy(struct ibuf *dest, const struct ibuf *src)
 {
     unsigned len = src->end - src->start;
     message_ibuf_ensure(dest, len);

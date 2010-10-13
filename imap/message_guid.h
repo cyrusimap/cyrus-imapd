@@ -65,7 +65,7 @@ void message_guid_generate(struct message_guid *guid,
 			   const char *msg_base, unsigned long msg_len);
 
 /* Copy a GUID */
-void message_guid_copy(struct message_guid *dst, struct message_guid *src);
+void message_guid_copy(struct message_guid *dst, const struct message_guid *src);
 
 /* Compare a pair of GUIDs: Returns 1 => match.  NULL GUIDs do not match. */
 int message_guid_compare(struct message_guid *guid1,

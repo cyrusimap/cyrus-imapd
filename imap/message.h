@@ -70,7 +70,7 @@ extern int message_parse(const char *fname, struct index_record *record);
 #define PARSE_GMT	(1<<3) /* Output time in GMT rather than local timezone */
 #define PARSE_NOCREATE	(1<<15) /* Don't create one if its missing/invalid */
 
-extern time_t message_parse_date P((char *hdr, unsigned flags));
+extern time_t message_parse_date P((const char *hdr, unsigned flags));
 
 /* declare this here so it can be used externally, but remain opaque */
 struct body;
@@ -101,10 +101,10 @@ extern int message_parse_file P((FILE *infile,
 extern void message_fetch_part P((struct message_content *msg,
 				  const char **content_types,
 				  struct bodypart ***parts));
-extern int message_write_cache P((struct index_record *record, struct body *body));
+extern int message_write_cache P((struct index_record *record, const struct body *body));
 
 extern int message_create_record P((struct index_record *message_index,
-				    struct body *body));
+				    const struct body *body));
 extern void message_free_body P((struct body *body));
 
 #endif /* INCLUDED_MESSAGE_H */

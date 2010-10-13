@@ -103,7 +103,7 @@ void message_guid_generate(struct message_guid *guid,
  *
  ************************************************************************/
 
-void message_guid_copy(struct message_guid *dst, struct message_guid *src)
+void message_guid_copy(struct message_guid *dst, const struct message_guid *src)
 {
     memcpy(dst, src, sizeof(struct message_guid));
 }
