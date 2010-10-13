@@ -52,6 +52,7 @@
 
 extern void *xmalloc (unsigned size);
 extern void *xzmalloc (unsigned size);
+extern void *xcalloc (unsigned nmemb, unsigned size);
 extern void *xrealloc (void *ptr, unsigned size);
 extern char *xstrdup (const char *str);
 extern char *xstrndup (const char *str, unsigned len);

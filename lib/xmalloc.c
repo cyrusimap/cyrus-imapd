@@ -75,6 +75,11 @@ void* xzmalloc(unsigned size)
     return 0; /*NOTREACHED*/
 }
 
+void *xcalloc(unsigned nmemb, unsigned size)
+{
+    return xzmalloc(nmemb * size);
+}
+
 void *xrealloc (void* ptr, unsigned size)
 {
     void *ret;

@@ -268,9 +268,9 @@ void global_sasl_init(int client, int server, const sasl_callback_t *callbacks)
     called_already = 1;
 
     /* set the SASL allocation functions */
-    sasl_set_alloc((sasl_malloc_t *) &xmalloc, 
-		   (sasl_calloc_t *) &calloc, 
-		   (sasl_realloc_t *) &xrealloc, 
+    sasl_set_alloc((sasl_malloc_t *) &xmalloc,
+		   (sasl_calloc_t *) &xcalloc,
+		   (sasl_realloc_t *) &xrealloc,
 		   (sasl_free_t *) &free);
 
     /* set the SASL mutex functions */
