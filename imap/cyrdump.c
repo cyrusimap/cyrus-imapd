@@ -96,7 +96,7 @@ int main(int argc, char *argv[])
 	fatal("must run as the Cyrus user", EC_USAGE);
     }
 
-    while ((option = getopt(argc, argv, "v")) != EOF) {
+    while ((option = getopt(argc, argv, "vC:")) != EOF) {
 	switch (option) {
 	case 'v':
 	    verbose++;
