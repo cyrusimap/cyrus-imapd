@@ -1,6 +1,10 @@
 *.o
 *.a
 *~
+*.patch
+*.orig
+*.rej
+*.tar.gz
 Makefile
 Makefile.bak
 Makefile.old
