@@ -9498,18 +9498,20 @@ static void list_response(char *name, int attributes,
 
     /* get info and set flags */
     r = mboxlist_lookup(internal_name, &mbentry, NULL);
-    if (r) return;
 
-    if (r == IMAP_MAILBOX_NONEXISTENT)
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+	/* if mupdate isn't configured we can drop out now, otherwise
+	 * we might be a backend and need to report folders that don't
+	 * exist on this backend - this is awful and complex and brittle
+	 * and should be changed, but we're stuck with it for now */
+	if (!config_mupdate_server) return;
 	attributes |= (listargs->cmd & LIST_CMD_EXTENDED ?
 		       MBOX_ATTRIBUTE_NONEXISTENT : MBOX_ATTRIBUTE_NOSELECT);
-    if (!r && (mbentry.mbtype & MBTYPE_RESERVE))
-	attributes |= MBOX_ATTRIBUTE_NOSELECT;
+    }
+    else if (r) return;
 
     else if (listargs->scan) {
 	/* SCAN mailbox for content */
-
-	if (r) return;
 
 	if ((mbentry.mbtype & MBTYPE_REMOTE) &&
 	    !hash_lookup(mbentry.partition, &listargs->server_table)) {
@@ -9603,7 +9605,7 @@ static void list_response(char *name, int attributes,
 	/* \NoInferiors implies \HasNoChildren */
 	if (attributes & MBOX_ATTRIBUTE_NOINFERIORS)
 	    attributes &= ~MBOX_ATTRIBUTE_HASNOCHILDREN;
-	/* \NonExistent implies \NoSelect */
+	/* \NonExistent implies \Noselect */
 	if (attributes & MBOX_ATTRIBUTE_NONEXISTENT)
 	    attributes &= ~MBOX_ATTRIBUTE_NOSELECT;
     }
