@@ -3080,9 +3080,15 @@ static int find_files(struct mailbox *mailbox, struct found_files *files,
 	    if (stat(buf, &sbuf) == -1) continue; /* ignore emepheral */
 	    if (!S_ISDIR(sbuf.st_mode)) {
 		if (!(flags & RECONSTRUCT_IGNORE_ODDFILES)) {
+		    printf("%s odd file %s\n", mailbox->name, buf);
 		    syslog(LOG_ERR, "%s odd file %s", mailbox->name, buf);
 		    if (flags & RECONSTRUCT_REMOVE_ODDFILES)
 			unlink(buf);
+		    else {
+			printf("run reconstruct with -O to remove odd files\n");
+			syslog(LOG_ERR, "run reconstruct with -O to "
+					"remove odd files");
+		    }
 		}
 	    }
 	}
@@ -3326,6 +3332,8 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
 
 	/* it's not the same message! */
 	if (!message_guid_compare(&record->guid, &copy.guid)) {
+	    int do_unlink = 0;
+
 	    printf("%s uid %u guid mismatch\n",
 		   mailbox->name, record->uid);
 	    syslog(LOG_ERR, "%s uid %u guid mismatch",
@@ -3333,19 +3341,41 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
 
 	    if (!make_changes) return 0;
 
-	    if (flags & RECONSTRUCT_GUID_REWRITE) {
+	    if (record->system_flags & FLAG_EXPUNGED) {
+		/* already expunged, just unlink it */
+		printf("%s uid %u already expunged, unlinking\n",
+		       mailbox->name, record->uid);
+		syslog(LOG_ERR, "%s uid %u already expunged, unlinking",
+		       mailbox->name, record->uid);
+		do_unlink = 1;
+	    }
+	    else if (flags & RECONSTRUCT_GUID_REWRITE) {
 		/* treat this file as discovered */
 		add_files(discovered, record->uid);
+		printf("%s uid %u marking for uid upgrade\n",
+		       mailbox->name, record->uid);
+		syslog(LOG_ERR, "%s uid %u marking for uid upgrade",
+		       mailbox->name, record->uid);
+		do_unlink = 1;
+	    }
+	    else if (flags & RECONSTRUCT_GUID_UNLINK) {
+		printf("%s uid %u unlinking as requested with -U\n",
+		       mailbox->name, record->uid);
+		syslog(LOG_ERR, "%s uid %u unlinking as requested with -U",
+		       mailbox->name, record->uid);
+		do_unlink = 1;
+	    }
 
-		/* and we need to mark unlinked the old one (but not
-		 * actually unlink it, it will be renamed later!) */
+	    if (do_unlink) {
 		record->system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
-		mailbox->i.options |= OPT_MAILBOX_NEEDS_REPACK;
+		mailbox->i.options |= OPT_MAILBOX_NEEDS_UNLINK;
 		return mailbox_rewrite_index_record(mailbox, record);
 	    }
 
 	    /* otherwise we just report it and move on - hopefully the
 	     * correct file can be restored from backup or something */
+	    printf("run reconstruct with -R to fix or -U to remove\n");
+	    syslog(LOG_ERR, "run reconstruct with -R to fix or -U to remove");
 	    return 0;
 	}
     }

@@ -163,7 +163,7 @@ int main(int argc, char **argv)
     assert(INDEX_HEADER_SIZE == (OFFSET_HEADER_CRC+4));
     assert(INDEX_RECORD_SIZE == (OFFSET_RECORD_CRC+4));
 
-    while ((opt = getopt(argc, argv, "C:kp:rmfsxgGq")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:kp:rmfsxgGqRoO")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
@@ -211,6 +211,22 @@ int main(int argc, char **argv)
 
 	case 'q':
 	    reconstruct_flags |= RECONSTRUCT_QUIET;
+	    break;
+
+	case 'R':
+	    reconstruct_flags |= RECONSTRUCT_GUID_REWRITE;
+	    break;
+
+	case 'U':
+	    reconstruct_flags |= RECONSTRUCT_GUID_UNLINK;
+	    break;
+
+	case 'o':
+	    reconstruct_flags |= RECONSTRUCT_IGNORE_ODDFILES;
+	    break;
+
+	case 'O':
+	    reconstruct_flags |= RECONSTRUCT_REMOVE_ODDFILES;
 	    break;
 
 	default:

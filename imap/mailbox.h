@@ -324,8 +324,9 @@ struct mailbox {
 #define RECONSTRUCT_DO_STAT         (1<<3)
 #define RECONSTRUCT_ALWAYS_PARSE    (1<<4)
 #define RECONSTRUCT_GUID_REWRITE    (1<<5)
-#define RECONSTRUCT_REMOVE_ODDFILES (1<<6)
-#define RECONSTRUCT_IGNORE_ODDFILES (1<<7)
+#define RECONSTRUCT_GUID_UNLINK     (1<<6)
+#define RECONSTRUCT_REMOVE_ODDFILES (1<<7)
+#define RECONSTRUCT_IGNORE_ODDFILES (1<<8)
 
 struct mailbox_header_cache {
     const char *name; /* Name of header */
