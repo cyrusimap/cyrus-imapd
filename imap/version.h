@@ -42,18 +42,8 @@
  * $Id: version.h,v 1.164 2010/01/06 17:01:42 murch Exp $
  */
 
-#define _CYRUS_VERSION "v2.4.0"
-
-/* EXTRA_IDENT is a hack to add some version information for which compile
- * was used to build this version (at CMU, but we don't care what you do with
- * it).
- */
-
-#ifdef EXTRA_IDENT
-#define CYRUS_VERSION _CYRUS_VERSION "-" EXTRA_IDENT
-#else
-#define CYRUS_VERSION _CYRUS_VERSION
-#endif
+#ifndef _CYRUS_VERSION_H
+#define _CYRUS_VERSION_H
 
 enum {
     CAPA_PREAUTH = 0x1,
@@ -94,3 +84,7 @@ enum {
     MAXIDPAIRS = 30,
     MAXIDLOGLEN = (MAXIDPAIRS * (MAXIDFIELDLEN + MAXIDVALUELEN + 6))
 };
+
+const char *cyrus_version();
+
+#endif /* _CYRUS_VERSION_H */
