@@ -8,6 +8,19 @@
 </head>
 <body>
 
+<h1>Changes to the Cyrus IMAP Server since 2.4.0</h1>
+<ul>
+<li>Reconstruct added flags -R, -U, -o, -O to give options
+  handling corrupt or missing files</li>
+<li>Fixed EXPUNGE in murder</li>
+<li>Fixed LSUB where subscribed mailboxes are on
+  different murder backends</li>
+<li>New build system using git commit ID rather than CVS
+  date information to uniquely identify a release or
+  development build via the "ID" command.  Also changes
+  the CYRUS_VERSION string for builds directly from git.</li>
+</ul>
+
 <h1>Changes to the Cyrus IMAP Server since 2.3.x</h1>
 <ul>
 <li>All databases are now default skiplist, and ctl_cyrusdb

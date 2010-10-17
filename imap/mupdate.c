@@ -1133,7 +1133,7 @@ static void dobanner(struct conn *c)
     prot_printf(c->pout,
 		"* OK MUPDATE \"%s\" \"Cyrus Murder\" \"%s\" \"%s\"\r\n",
 		config_servername,
-		CYRUS_VERSION, masterp ? "(master)" : slavebuf);
+		cyrus_version(), masterp ? "(master)" : slavebuf);
 
     prot_flush(c->pout);
 }

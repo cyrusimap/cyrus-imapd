@@ -75,6 +75,15 @@ reconstruct \- reconstruct mailboxes
 [
 .B \-G
 ]
+[
+.B \-R
+]
+[
+.B \-o
+]
+[
+.B \-O
+]
 .IR mailbox ...
 .br
 .br
@@ -159,6 +168,27 @@ where problems are reported, but not fixed.
 Force re-parsing of the underlying message (checks GUID correctness).
 Reconstruct with -G should fix all possible individual message issues,
 including corrupted data files.
+.TP
+.B \-R
+Perform a UID upgrade operation on GUID mismatch files.  Use this option
+if you think your index is corrupted rather than your message files, or if
+all backup attempts have failed and you're happy to be served the missing
+files.
+.TP
+.B \-U
+Use this option if you have corrupt message files in your spool and have
+been unable to restore them from backup.  This will make the mailbox
+IOERROR free and fix replication.
+.B WARNING
+this deletes corrupt message files for ever - so make sure you've exhausted
+other options first!
+.TP
+.B -o
+Ignore odd files in your mailbox disk directories.  Probably useful if you
+are using some tool which adds additional tracking files.
+.TP
+.B -O
+Delete odd files.  This is the opposite of '-o'.
 .TP
 .B \-m
 .B NOTE: CURRENTLY UNAVAILABLE
