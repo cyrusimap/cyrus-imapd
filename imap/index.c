@@ -5122,10 +5122,10 @@ void appendsequencelist(struct index_state *state,
 			char *sequence, int usinguid)
 {
     unsigned maxval = usinguid ? state->last_uid : state->exists;
-    return seqset_append(l, sequence, maxval);
+    seqset_append(l, sequence, maxval);
 }
 
 void freesequencelist(struct seqset *l)
 {
-    return seqset_free(l);
+    seqset_free(l);
 }
