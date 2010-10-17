@@ -40,7 +40,6 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Makefile.in,v 1.107 2010/01/06 17:01:26 murch Exp $
 
 SUBDIRS = man @PRE_SUBDIRS@ lib @SIEVE_SUBDIRS@ @SERVER_SUBDIRS@ \
 	imtest @SNMP_SUBDIRS@ @EXTRA_SUBDIRS@
@@ -67,7 +66,7 @@ COMPILE_ET = @COMPILE_ET@
 PACKAGE = cyrus-imapd
 VERSION = 2.4.0
 
-all:: 
+all:: xversion
 	@for d in  $(SUBDIRS); \
 	do \
 		(cd $$d; echo "### Making" all "in" `pwd`;	\
@@ -96,7 +95,18 @@ distgit:
 	if [ \! -d dist ]; then mkdir dist ; fi
 	@echo "checking out the distribution"
 	git archive --format=tar --prefix=$(PACKAGE)-$(VERSION)/ HEAD | tar -C dist -x -f -
+	echo "/* Release $(PACKAGE)-$(VERSION) */" > dist/$(PACKAGE)-$(VERSION)/xversion.h
+	echo "#define _CYRUS_VERSION \"v$(VERSION)\"" >> dist/$(PACKAGE)-$(VERSION)/xversion.h
+	echo "#define CYRUS_GITVERSION \"`git log --abbrev=8 --pretty="%h %ci" -1 | cut -c 1-18`\"" >> dist/$(PACKAGE)-$(VERSION)/xversion.h
+	touch dist/$(PACKAGE)-$(VERSION)/xversion
 	touch distgit
+
+xversion xversion.h:
+	@echo "/* Development version */" > xversion.h.tmp
+	@echo "#define _CYRUS_VERSION \"git$(VERSION)+`git log --pretty=oneline $(PACKAGE)-$(VERSION)..HEAD | wc -l`\"" >> xversion.h.tmp
+	@echo "#define CYRUS_GITVERSION \"`git log --abbrev=8 --pretty=\"%h %ci\" -1 | cut -c 1-18`\"" >> xversion.h.tmp
+	@cmp -s xversion.h.tmp xversion.h || mv xversion.h.tmp xversion.h
+	@rm -f xversion.h.tmp
 
 install::
 	$(srcdir)/install-sh -d ${DESTDIR}$(exec_prefix)/bin

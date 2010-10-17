@@ -55,6 +55,9 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#ifdef HAVE_STDINT_H
+#include <stdint.h>
+#endif
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
@@ -630,7 +633,7 @@ int service_main(int argc __attribute__((unused)),
     if (config_serverinfo) prot_printf(nntp_out, " %s", config_servername);
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
 	prot_printf(nntp_out, " Cyrus NNTP%s %s",
-		    config_mupdate_server ? " Murder" : "", CYRUS_VERSION);
+		    config_mupdate_server ? " Murder" : "", cyrus_version());
     }
     if (shutdown) {
 	prot_printf(nntp_out, "server unavailable, %s\r\n", unavail);
@@ -1800,7 +1803,7 @@ static void cmd_capabilities(char *keyword __attribute__((unused)))
     if (nntp_authstate || (config_serverinfo == IMAP_ENUM_SERVERINFO_ON)) {
 	prot_printf(nntp_out,
 		    "IMPLEMENTATION Cyrus NNTP%s %s\r\n",
-		    config_mupdate_server ? " Murder" : "", CYRUS_VERSION);
+		    config_mupdate_server ? " Murder" : "", cyrus_version());
     }
 
     /* add STARTTLS */
@@ -2720,7 +2723,7 @@ static void cmd_mode(char *arg)
 	}
 	if (nntp_authstate || (config_serverinfo == IMAP_ENUM_SERVERINFO_ON)) {
 	    prot_printf(nntp_out, " Cyrus NNTP%s %s",
-			config_mupdate_server ? " Murder" : "", CYRUS_VERSION);
+			config_mupdate_server ? " Murder" : "", cyrus_version());
 	}
 	prot_printf(nntp_out, " server ready, posting %s\r\n",
 		    (nntp_capa & MODE_READ) ? "allowed" : "prohibited");

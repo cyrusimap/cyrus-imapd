@@ -1,6 +1,10 @@
 *.o
 *.a
 *~
+*.patch
+*.orig
+*.rej
+*.tar.gz
 Makefile
 Makefile.bak
 Makefile.old
@@ -67,7 +71,6 @@ imap/sync_reset
 imap/sync_server
 imap/tls_prune
 imap/unexpunge
-imap/xversion.h
 imtest/imtest
 lib/chartable.c
 lib/imapopts.c
@@ -96,3 +99,4 @@ sieve/sieve_err.c
 sieve/sieve_err.h
 sieve/sievec
 sieve/sieved
+xversion.h

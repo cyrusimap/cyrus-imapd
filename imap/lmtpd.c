@@ -245,7 +245,7 @@ int service_init(int argc __attribute__((unused)),
 
     /* create connection to the SNMP listener, if available. */
     snmp_connect(); /* ignore return code */
-    snmp_set_str(SERVER_NAME_VERSION, CYRUS_VERSION);
+    snmp_set_str(SERVER_NAME_VERSION, cyrus_version());
 
     return 0;
 }
@@ -312,7 +312,7 @@ int service_main(int argc, char **argv,
 	if (config_serverinfo) prot_printf(deliver_out, " %s", config_servername);
 	if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
 	    prot_printf(deliver_out, " Cyrus LMTP%s %s",
-			config_mupdate_server ? " Murder" : "", CYRUS_VERSION);
+			config_mupdate_server ? " Murder" : "", cyrus_version());
 	}
 	prot_printf(deliver_out, " %s\r\n", error_message(r));
     }
@@ -342,7 +342,7 @@ static void
 usage()
 {
     fprintf(stderr, "421-4.3.0 usage: lmtpd [-C <alt_config>] [-a]\r\n");
-    fprintf(stderr, "421 4.3.0 %s\n", CYRUS_VERSION);
+    fprintf(stderr, "421 4.3.0 %s\n", cyrus_version());
     exit(EC_USAGE);
 }
 

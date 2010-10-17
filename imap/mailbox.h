@@ -297,7 +297,7 @@ struct mailbox {
 #define FLAG_DRAFT (1<<3)
 #define FLAG_SEEN (1<<4)
 #define FLAG_UNLINKED (1<<30)
-#define FLAG_EXPUNGED (1<<31)
+#define FLAG_EXPUNGED (1U<<31)
 
 #define OPT_POP3_NEW_UIDL (1<<0)	/* added for Outlook stupidity */
 /* NOTE: not used anymore - but don't reuse it */
@@ -309,7 +309,7 @@ struct mailbox {
 #define OPT_IMAP_DUPDELIVER (1<<3)	/* added to allow duplicate delivery */
 #define OPT_MAILBOX_NEEDS_UNLINK (1<<29)	/* files to be unlinked */
 #define OPT_MAILBOX_NEEDS_REPACK (1<<30)	/* repacking to do */
-#define OPT_MAILBOX_DELETED (1<<31)	/* mailbox is deleted an awaiting cleanup */
+#define OPT_MAILBOX_DELETED (1U<<31)	/* mailbox is deleted an awaiting cleanup */
 #define MAILBOX_CLEANUP_MASK (OPT_MAILBOX_NEEDS_UNLINK | \
 			      OPT_MAILBOX_NEEDS_REPACK | \
 			      OPT_MAILBOX_DELETED)
@@ -324,8 +324,9 @@ struct mailbox {
 #define RECONSTRUCT_DO_STAT         (1<<3)
 #define RECONSTRUCT_ALWAYS_PARSE    (1<<4)
 #define RECONSTRUCT_GUID_REWRITE    (1<<5)
-#define RECONSTRUCT_REMOVE_ODDFILES (1<<6)
-#define RECONSTRUCT_IGNORE_ODDFILES (1<<7)
+#define RECONSTRUCT_GUID_UNLINK     (1<<6)
+#define RECONSTRUCT_REMOVE_ODDFILES (1<<7)
+#define RECONSTRUCT_IGNORE_ODDFILES (1<<8)
 
 struct mailbox_header_cache {
     const char *name; /* Name of header */

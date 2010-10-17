@@ -187,7 +187,7 @@ int capabilities(struct protstream *conn, sasl_conn_t *saslconn,
     /* implementation */
     prot_printf(conn,
 		"\"IMPLEMENTATION\" \"Cyrus timsieved%s %s\"\r\n",
-		config_mupdate_server ? " (Murder)" : "", CYRUS_VERSION);
+		config_mupdate_server ? " (Murder)" : "", cyrus_version());
     
     /* SASL */
     if ((!authenticated || sasl_ssf) &&

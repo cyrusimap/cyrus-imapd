@@ -39,7 +39,6 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-# $Id: Makefile.in,v 1.201 2010/06/28 12:05:04 brong Exp $
 
 DEFINES=-DSETPROCTITLE
 
@@ -103,9 +102,9 @@ LOBJS= append.o mailbox.o mboxlist.o mupdate-client.o mboxname.o message.o \
 	imapparse.o telemetry.o user.o notify.o idle.o quota_db.o \
 	sync_log.o $(SEEN) mboxkey.o backend.o tls.o message_guid.o \
 	statuscache_db.o userdeny_db.o sequence.o upgrade_index.o \
-	dlist.o
+	dlist.o version.o
 
-IMAPDOBJS=pushstats.o imapd.o proxy.o imap_proxy.o index.o version.o
+IMAPDOBJS=pushstats.o imapd.o proxy.o imap_proxy.o index.o
 
 LMTPOBJS=lmtpstats.o lmtpengine.o spool.o
 
@@ -122,10 +121,10 @@ PROGS = imapd lmtpd pop3d \
 	unexpunge cyr_df cyr_sequence cyr_userseen @IMAP_PROGS@
 
 BUILTSOURCES = imap_err.c imap_err.h pushstats.c pushstats.h \
-	lmtpstats.c lmtpstats.h xversion.h mupdate_err.c mupdate_err.h \
+	lmtpstats.c lmtpstats.h mupdate_err.c mupdate_err.h \
 	nntp_err.c nntp_err.h
 
-all: xversion $(BUILTSOURCES) $(PROGS) $(SUIDPROGS)
+all: $(BUILTSOURCES) $(PROGS) $(SUIDPROGS)
 
 pure: imapd.pure lmtpd.pure mupdate.pure
 
@@ -153,10 +152,7 @@ libimap.a: $(LOBJS)
 
 ### Built Source Files
 
-xversion xversion.h:
-	AWK=$(AWK) $(srcdir)/xversion.sh
-
-version.o: xversion.h
+version.o: ../xversion.h
 
 pushstats.c: pushstats.snmp $(srcdir)/../snmp/snmpgen
 	$(srcdir)/../snmp/snmpgen $(srcdir)/pushstats.snmp

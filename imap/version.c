@@ -57,8 +57,8 @@
 #endif
 
 #include <string.h>
+#include "../xversion.h"
 #include "version.h"
-#include "xversion.h"
 #include "prot.h"
 #include "cyrusdb.h"
 #include "map.h"
@@ -72,6 +72,22 @@
 
 static char id_resp_command[MAXIDVALUELEN];
 static char id_resp_arguments[MAXIDVALUELEN] = "";
+
+/* EXTRA_IDENT is a hack to add some version information for which compile
+ * was used to build this version (at CMU, but we don't care what you do with
+ * it).
+ */
+
+#ifdef EXTRA_IDENT
+#define CYRUS_VERSION _CYRUS_VERSION "-" EXTRA_IDENT
+#else
+#define CYRUS_VERSION _CYRUS_VERSION
+#endif
+
+const char *cyrus_version()
+{
+    return CYRUS_VERSION;
+}
 
 /*
  * Grab the command line args for the ID response.
@@ -102,7 +118,7 @@ void id_response(struct protstream *pout)
 		" \"version\" \"%s %s\""
 		" \"vendor\" \"Project Cyrus\""
 		" \"support-url\" \"http://cyrusimap.web.cmu.edu\"",
-		CYRUS_VERSION, CYRUS_CVSDATE);
+		CYRUS_VERSION, CYRUS_GITVERSION);
 
     /* add the os info */
     if (uname(&os) != -1)

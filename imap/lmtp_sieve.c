@@ -277,7 +277,7 @@ static int send_rejection(const char *origid,
 	    "Content-Type: message/disposition-notification\r\n\r\n",
 	    (int) p, config_servername);
     fprintf(sm, "Reporting-UA: %s; Cyrus %s/%s\r\n",
-	    config_servername, CYRUS_VERSION, SIEVE_VERSION);
+	    config_servername, cyrus_version(), SIEVE_VERSION);
     if (origreceip)
 	fprintf(sm, "Original-Recipient: rfc822; %s\r\n", origreceip);
     fprintf(sm, "Final-Recipient: rfc822; %s\r\n", mailreceip);

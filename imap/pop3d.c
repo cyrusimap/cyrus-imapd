@@ -599,7 +599,7 @@ int service_main(int argc __attribute__((unused)),
     if (config_serverinfo) prot_printf(popd_out, " %s", config_servername);
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
 	prot_printf(popd_out, " Cyrus POP3%s %s",
-		    config_mupdate_server ? " Murder" : "", CYRUS_VERSION);
+		    config_mupdate_server ? " Murder" : "", cyrus_version());
     }
     prot_printf(popd_out, " server ready %s\r\n", popd_apop_chal);
 
@@ -1512,7 +1512,7 @@ void cmd_capa()
     if (popd_authstate || (config_serverinfo == IMAP_ENUM_SERVERINFO_ON)) {
 	prot_printf(popd_out,
 		    "IMPLEMENTATION Cyrus POP3%s %s\r\n",
-		    config_mupdate_server ? " Murder" : "", CYRUS_VERSION);
+		    config_mupdate_server ? " Murder" : "", cyrus_version());
     }
 
     prot_printf(popd_out, ".\r\n");

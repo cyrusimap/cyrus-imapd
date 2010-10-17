@@ -655,7 +655,7 @@ static int savemsg(struct clientdata *cd,
     rfc822date_gen(datestr, sizeof(datestr), now);
     addlen = 8 + strlen(cd->lhlo_param) + strlen(cd->clienthost);
     if (m->authuser) addlen += 28 + strlen(m->authuser) + 5; /* +5 for ssf */
-    addlen += 25 + strlen(config_servername) + strlen(CYRUS_VERSION);
+    addlen += 25 + strlen(config_servername) + strlen(cyrus_version());
 #ifdef HAVE_SSL
     if (cd->tls_conn) {
 	addlen += 3 + tls_get_info(cd->tls_conn, tls_info, sizeof(tls_info));
@@ -679,7 +679,7 @@ static int savemsg(struct clientdata *cd,
     /* We are always atleast "with LMTPA" -- no unauth delivery */
     p += sprintf(p, " by %s", config_servername);
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
-	p += sprintf(p, " (Cyrus %s)", CYRUS_VERSION);
+	p += sprintf(p, " (Cyrus %s)", cyrus_version());
     }
     p += sprintf(p, " with LMTP%s%s",
 		 cd->starttls_done ? "S" : "",
@@ -1114,7 +1114,7 @@ void lmtpmode(struct lmtp_func *func,
     prot_printf(pout, "220 %s", config_servername);
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
 	prot_printf(pout, " Cyrus LMTP%s %s",
-		    config_mupdate_server ? " Murder" : "", CYRUS_VERSION);
+		    config_mupdate_server ? " Murder" : "", cyrus_version());
     }
     prot_printf(pout, " server ready\r\n");
 
