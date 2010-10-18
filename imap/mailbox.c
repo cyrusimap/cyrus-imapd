@@ -1294,9 +1294,38 @@ int mailbox_buf_to_index_header(struct index_header *i, const char *buf)
     return 0;
 }
 
-static int mailbox_read_index_header(struct mailbox *mailbox)
+static int mailbox_refresh_index_map(struct mailbox *mailbox)
 {
     size_t need_size;
+    struct stat sbuf;
+
+    /* check if we need to extend the mmaped space for the index file
+     * (i.e. new records appended since last read) */
+    need_size = mailbox->i.start_offset +
+		mailbox->i.num_records * mailbox->i.record_size;
+    if (mailbox->index_size < need_size) {
+	if (fstat(mailbox->index_fd, &sbuf) == -1)
+	    return IMAP_IOERROR;
+
+	if (sbuf.st_size < (int)need_size)
+	    return IMAP_MAILBOX_BADFORMAT;
+
+	mailbox->index_size = sbuf.st_size;
+
+	/* need to map some more space! */
+	map_refresh(mailbox->index_fd, 1, &mailbox->index_base,
+		    &mailbox->index_len, mailbox->index_size,
+		    "index", mailbox->name);
+
+	/* and the cache will be stale too */
+	mailbox->need_cache_refresh = 1;
+    }
+
+    return 0;
+}
+
+static int mailbox_read_index_header(struct mailbox *mailbox)
+{
     int r;
 
     /* no dirty mailboxes please */
@@ -1319,29 +1348,8 @@ static int mailbox_read_index_header(struct mailbox *mailbox)
     r = mailbox_buf_to_index_header(&mailbox->i, mailbox->index_base);
     if (r) return r;
 
-    /* check if we need to extend the mmaped space for the index file
-     * (i.e. new records appended since last read) */
-    need_size = mailbox->i.start_offset +
-		mailbox->i.num_records * mailbox->i.record_size;
-    if (mailbox->index_size < need_size) {
-	struct stat sbuf;
-
-	if (fstat(mailbox->index_fd, &sbuf) == -1)
-	    return IMAP_IOERROR;
-
-	if (sbuf.st_size < (int)need_size)
-	    return IMAP_MAILBOX_BADFORMAT;
-
-	mailbox->index_size = sbuf.st_size;
-
-	/* need to map some more space! */
-	map_refresh(mailbox->index_fd, 1, &mailbox->index_base,
-		    &mailbox->index_len, mailbox->index_size,
-		    "index", mailbox->name);
-
-	/* and the cache will be stale too */
-	mailbox->need_cache_refresh = 1;
-    }
+    r = mailbox_refresh_index_map(mailbox);
+    if (r) return r;
 
     return 0;
 }
@@ -3724,6 +3732,9 @@ int mailbox_reconstruct(const char *name, int flags)
 	if (r) goto close;
 	msg++;
     }
+
+    /* make sure we have enough index file mmaped */
+    r = mailbox_refresh_index_map(mailbox);
 
     old_header = mailbox->i;
 
