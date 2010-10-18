@@ -484,7 +484,7 @@ static const char *path_to_qr(const char *path, char *buf)
     return qr;
 }
 
-static int compar_qr(const void *v1, __const void *v2)
+static int compar_qr(const void *v1, const void *v2)
 {
     const char *qr1, *qr2;
     char qrbuf1[MAX_QUOTA_PATH+1], qrbuf2[MAX_QUOTA_PATH+1];
