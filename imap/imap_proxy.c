@@ -475,11 +475,11 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
     int cur_flags_size = 64;
     char *flags = xmalloc(cur_flags_size);
 
-    const char *end_strip_flags[] = { " \\nonexistent)", "\\nonexistent)",
-				      " \\noselect)", "\\noselect)",
+    const char *end_strip_flags[] = { " \\NonExistent)", "\\NonExistent)",
+				      " \\Noselect)", "\\Noselect)",
 				      NULL };
-    const char *mid_strip_flags[] = { "\\nonexistent ",
-				      "\\noselect ",
+    const char *mid_strip_flags[] = { "\\NonExistent ",
+				      "\\Noselect ",
 				      NULL 
 				    };
 
@@ -596,7 +596,7 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
 	    /* Check for flags that we should remove
 	     * (e.g. Noselect, NonExistent) */
 	    for(i=0; end_strip_flags[i]; i++) {
-		p = strcasestr(flags, end_strip_flags[i]);
+		p = strstr(flags, end_strip_flags[i]);
 		if(p) {
 		    *p = ')';
 		    *(p+1) = '\0';
@@ -605,10 +605,10 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
 
 	    for(i=0; mid_strip_flags[i]; i++) {
 		int mid_strip_len = strlen(mid_strip_flags[i]);
-		p = strcasestr(flags, mid_strip_flags[i]);
+		p = strstr(flags, mid_strip_flags[i]);
 		while(p) {
 		    strcpy(p, p + mid_strip_len);
-		    p = strcasestr(flags, mid_strip_flags[i]);
+		    p = strstr(flags, mid_strip_flags[i]);
 		}
 	    }
 
