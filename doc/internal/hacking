@@ -85,3 +85,254 @@ shut_down() if it can (though it should have a recursive fatal() trap just
 in case).  Similarly, commandline utilities probably don't need a shut_down().
 
 
+
+- Coding Standards
+
+These are the generally agreed upon coding standards as thrashed
+out on the cyrus-devel list in June 2010.
+
+  - Spacing is 4 characters with soft tabs at 8 - mixed tabs and spaces
+    This corresponds to the vi settings sw=4 sts=4 ts=8 et.
+
+  - Group the '*' character with the variable not the type, i.e.
+    char *foo;  /* correct */
+    char* foo;  /* WRONG */
+
+  - The keywords 'if', 'for', and 'while' take a space after the keyword.
+    The parentheses around the following expression are not closely
+    connected to the expression without any spaces.  The ';' inside
+    the 'for' expression have a space after them and not before.
+    For example:
+
+    if (condition)              /* correct */
+    if(condition)               /* WRONG */
+    if( condition )             /* WRONG */
+
+    for (i = 0; i < x; i++)     /* correct */
+    for(i = 0; i < x; i++)      /* WRONG */
+    for (i = 0 ;i < x ;i++)     /* WRONG */
+    for(i = 0 ;i < x ;i++)      /* WRONG */
+
+    while (foo)                 /* correct */
+    while(foo)                  /* WRONG */
+    while( foo )                /* WRONG */
+
+  - Use spaces around the double-character logical operator
+    '||' but don't use spaces around single-character bitwise
+    operator '|'.
+
+    int flags = FOO|BAR;        /* correct */
+    int flags = FOO | BAR;      /* WRONG */
+    if (itchy || scratchy)      /* correct */
+    if (itchy||scratchy)        /* WRONG */
+
+  - Function definitions are followed by a brace on a line by itself,
+    all other braces are inline.  Return types are inline with function
+    definition.  Old K&R style function definitions are not allowed.
+
+    void thing(int val)         /* correct */
+    {                           /* correct */
+        ...body...
+    }                           /* correct */
+
+    void                        /* WRONG */
+    thing(int val)              /* WRONG */
+    {                           /* WRONG */
+        ...body...
+    }                           /* WRONG */
+
+    void                        /* WRONG */
+    thing(                      /* WRONG */
+        int val)                /* WRONG */
+    {                           /* WRONG */
+        ...body...
+    }                           /* WRONG */
+
+    void                        /* WRONG */
+    antique(val)                /* WRONG */
+        int val;                /* WRONG */
+    {                           /* WRONG */
+        ...body...
+    }                           /* WRONG */
+
+    void thing(int val) {       /* WRONG */
+        ...body...
+    }                           /* WRONG */
+
+    void noargs(void)           /* correct */
+    {                           /* correct */
+        ...body...
+    }                           /* correct */
+
+    void noargs()               /* WRONG */
+    {                           /* WRONG */
+        ...body...
+    }                           /* WRONG */
+
+
+    Long argument lists should be split across multiple lines,
+    with the second and subsequent lines indented so that they
+    line up with the start of the first line of arguments.
+
+    void toomanyargs(int arg1, const char *arg2,        /* correct */
+                     struct whatever *arg3, int arg4)   /* correct */
+    {                                                   /* correct */
+        ...body...
+    }                                                   /* correct */
+
+    void toomanyargs(int arg1, const char *arg2,        /* WRONG */
+    struct whatever *arg3, int arg4)                    /* WRONG */
+    {                                                   /* WRONG */
+        ...body...
+    }                                                   /* WRONG */
+
+    void toomanyargs(                                   /* WRONG */
+        int arg1,                                       /* WRONG */
+        const char *arg2,                               /* WRONG */
+        struct whatever *arg3,                          /* WRONG */
+        int arg4)                                       /* WRONG */
+    {                                                   /* WRONG */
+        ...body...
+    }                                                   /* WRONG */
+
+  - Within a function, braces are used in old-fashioned K&R style.
+    Specifically:
+
+    - open braces are placed at the end of the line containing the
+      statement (such as an 'if') to which they belong, after a
+      single space.
+
+    - closing braces are placed on a line by themselves, aligned
+      with the start of the statement to which their matching
+      open brace belongs.
+
+    - this applies even when the closing brace is followed by
+      an 'else' keyword.
+
+    Yes, it's ugly and hard to read, but you get used to it and
+    most of the code is currently like that.  Deal with it.
+
+    while (cond) {              /* correct */
+        ...body...              /* correct */
+    }                           /* correct */
+
+    while (cond){               /* WRONG */
+        ...body...              /* WRONG */
+    }                           /* WRONG */
+
+    while (cond) { ...body... } /* WRONG */
+
+    while (cond) {              /* WRONG */
+        ...body... }            /* WRONG */
+
+    while (cond)                /* WRONG */
+    {                           /* WRONG */
+        ...body...              /* WRONG */
+    }                           /* WRONG */
+
+    while (cond)                /* WRONG */
+      {                         /* WRONG */
+        ...body...              /* WRONG */
+      }                         /* WRONG */
+
+    if (cond) {                 /* correct */
+        ...body...              /* correct */
+    }                           /* correct */
+    else if (othercond) {       /* correct */
+        ...body...              /* correct */
+    }                           /* correct */
+    else {                      /* correct */
+        ...body...              /* correct */
+    }                           /* correct */
+
+    if (cond) {                 /* WRONG */
+        ...body...              /* WRONG */
+    } else if (othercond) {     /* WRONG */
+        ...body...              /* WRONG */
+    } else {                    /* WRONG */
+        ...body...              /* WRONG */
+    }                           /* WRONG */
+
+    if (cond)                   /* WRONG */
+    {                           /* WRONG */
+        ...body...              /* WRONG */
+    }                           /* WRONG */
+    else if (othercond)         /* WRONG */
+    {                           /* WRONG */
+        ...body...              /* WRONG */
+    }                           /* WRONG */
+    else                        /* WRONG */
+    {                           /* WRONG */
+        ...body...              /* WRONG */
+    }                           /* WRONG */
+
+  - The braces around a block used in an 'if'...'else if'...'else'
+    may be omitted if the statement is very simple and clear, such
+    as a single function call.  This is a judgement call though,
+    so play it safe and use braces.
+
+    if (cond)                   /* correct, maybe */
+        function();             /* correct, maybe */
+    else                        /* correct, maybe */
+        other_function();       /* correct, maybe */
+
+  - The 'goto' keyword needs to be used very very sparingly and only
+    with forethought.  The only clearly good example is to goto
+    a label at the end of a function to do cleanup under error
+    conditions.
+
+    void foo(struct bar *b)     /* correct */
+    {                           /* correct */
+        char *x = xmalloc(...); /* correct */
+
+        if (b == NULL)          /* correct */
+            goto error;         /* correct */
+
+        if (b->quux != 42)      /* correct */
+            goto error;         /* correct */
+
+        ...do useful things...  /* correct */
+    error:                      /* correct */
+        free(x);                /* correct */
+    }                           /* correct */
+
+
+    Very occasionally, it may be permissable to use 'goto' from within
+    a complicated or multiply-nested loop, to the top of a loop, but
+    only if using another control structure is *less* clear.
+
+  - Generally, zero return is SUCCESS and integer return is an error code.
+
+  - Use "const char *" where possible.
+
+    int is_tacky(const char *name)              /* correct */
+    {                                           /* correct */
+        return !strcmp(name, "britney");        /* correct */
+    }                                           /* correct */
+
+    int is_tacky(char *name)                    /* WRONG */
+    {                                           /* WRONG */
+        return !strcmp(name, "britney");        /* WRONG */
+    }                                           /* WRONG */
+
+  - Use 'struct buf' for variable length strings where possible.
+
+  - RAII http://en.wikipedia.org/wiki/Resource_Acquisition_Is_Initialization
+    In practice, this means each structure should have a single cleanup
+    function which handles all possible states of the structure and
+    is called whenever the structure needs cleaning up.  Likewise,
+    any resources allocated during a function should be cleaned up
+    in the same function, in a single code block at the end of the
+    function (see the comments on 'goto').
+
+  - If you find yourself passing the same multiple parameters through many
+    functions, create a struct and pass around a pointer to that instead.
+
+  - DON'T EVER REUSE THE SAME VARIABLE FOR TWO DIFFERENT PURPOSES IN THE SAME
+    FUNCTION.  IN FACT, DON'T REUSE THE SAME VARIABLE _NAME_ FOR DIFFERENT
+    PURPOSES.  KTHXBYE.  (note: this doesn't apply to 'i', 'n', etc which are
+    used in multiple loops.  It applies to using the same name for an absolute
+    offset and a "within this mmap" offset though, and it also applies to
+    using the same variable name for native order and network order numbers,
+    which is where I've seen it a few times and been super frustrated!)
+
