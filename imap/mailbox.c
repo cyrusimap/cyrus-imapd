@@ -2548,6 +2548,7 @@ int mailbox_create(const char *name,
     mailbox->i.record_size = INDEX_RECORD_SIZE;
     mailbox->i.uidvalidity = uidvalidity;
     mailbox->i.options = options;
+    mailbox->i.highestmodseq = 1;
 
     mailbox->header_dirty = 1;
     if (!uniqueid) {
