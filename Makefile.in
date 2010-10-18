@@ -93,8 +93,8 @@ dist:: distgit
 
 distgit:
 	if [ \! -d dist ]; then mkdir dist ; fi
-	@echo "checking out the distribution"
-	git archive --format=tar --prefix=$(PACKAGE)-$(VERSION)/ HEAD | tar -C dist -x -f -
+	@echo "checking out the distribution from tag $(PACKAGE)-$(VERSION)"
+	git archive --format=tar --prefix=$(PACKAGE)-$(VERSION)/ $(PACKAGE)-$(VERSION) | tar -C dist -x -f -
 	echo "/* Release $(PACKAGE)-$(VERSION) */" > dist/$(PACKAGE)-$(VERSION)/xversion.h
 	echo "#define _CYRUS_VERSION \"v$(VERSION)\"" >> dist/$(PACKAGE)-$(VERSION)/xversion.h
 	echo "#define CYRUS_GITVERSION \"`git log --abbrev=8 --pretty="%h %ci" -1 | cut -c 1-18`\"" >> dist/$(PACKAGE)-$(VERSION)/xversion.h
