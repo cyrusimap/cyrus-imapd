@@ -3150,7 +3150,7 @@ static int mailbox_reconstruct_create(const char *name, struct mailbox **mbptr)
          * no point trying to rescue anything else... */
 	mailbox_close(&mailbox);
 	return mailbox_create(name, mbentry.partition, mbentry.acl,
-			      NULL, options, 0, mbptr);
+			      NULL, options, time(0), mbptr);
     }
 
     /* read header, if it is not there, we need to create it */
