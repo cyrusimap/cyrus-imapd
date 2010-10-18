@@ -1504,6 +1504,24 @@ restart:
 	return IMAP_MAILBOX_CRC;
     }
 
+    /* fix up 2.4.0 bug breakage */
+    if (mailbox->i.uidvalidity == 0) {
+	mailbox->i.uidvalidity = time(0);
+	if (locktype == LOCK_EXCLUSIVE) {
+	    mailbox_index_dirty(mailbox);
+	    mailbox_commit(mailbox);
+	    syslog(LOG_ERR, "%s: fixing zero uidvalidity", mailbox->name);
+	}
+    }
+    if (mailbox->i.highestmodseq == 0) {
+	mailbox->i.highestmodseq = 1;
+	if (locktype == LOCK_EXCLUSIVE) {
+	    mailbox_index_dirty(mailbox);
+	    mailbox_commit(mailbox);
+	    syslog(LOG_ERR, "%s: fixing zero highestmodseq", mailbox->name);
+	}
+    }
+
     return 0;
 }
 
@@ -3715,6 +3733,18 @@ int mailbox_reconstruct(const char *name, int flags)
 
     /* inform users of any changed header fields */
     reconstruct_compare_headers(mailbox, &old_header, &mailbox->i);
+
+    /* fix up 2.4.0 bug breakage */
+    if (mailbox->i.uidvalidity == 0) {
+	mailbox->i.uidvalidity = time(0);
+	mailbox_index_dirty(mailbox);
+	syslog(LOG_ERR, "%s: fixing zero uidvalidity", mailbox->name);
+    }
+    if (mailbox->i.highestmodseq == 0) {
+	mailbox->i.highestmodseq = 1;
+	mailbox_index_dirty(mailbox);
+	syslog(LOG_ERR, "%s: fixing zero highestmodseq", mailbox->name);
+    }
 
     if (make_changes) {
 	r = mailbox_commit(mailbox);
