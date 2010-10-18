@@ -1,0 +1,70 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
+<!ENTITY % BOOK_ENTITIES SYSTEM "Deployment_Guide.ent">
+%BOOK_ENTITIES;
+]>
+<chapter id="chap-Deployment_Guide-Deployment_Scenarios">
+    <title>Deployment Scenarios</title>
+    <para>
+        Depending on the target use of Cyrus IMAP, different features and architectures may be used to make optimal use of the Cyrus IMAP features. This chapter briefly touches different deployment scenarios.
+    </para>
+
+    <section id="sect-Deployment_Guide-Deployment_Scenarios-Single_Server_Deployments">
+        <title>Single Server Deployments</title>
+        <para>
+            In a deployment scenario with a single server, use this checklist to make sure you get the right scalability and functionality;
+        </para>
+        <para>
+            <itemizedlist>
+                <listitem>
+                    <para>
+                        In the foreseeable future, might this deployment run for multiple domain name spaces?
+                    </para>
+                </listitem>
+                <listitem>
+                    <para>
+                        Is this deployment going to close in on it's maximum capacity?
+                    </para>
+                </listitem>
+                <listitem>
+                    <para>
+                        Is high-availability required?
+                    </para>
+                </listitem>
+            </itemizedlist>
+        </para>
+        <para>
+            If the answer to all of these questions is a consistent no, then please continue with the Installation Guide.
+        </para>
+    </section>
+
+    <section id="sect-Deployment_Guide-Deployment_Scenarios-Multi_Server_Deployments">
+        <title>Multi Server Deployments</title>
+        <para>
+            This is a test paragraph in a section
+        </para>
+    </section>
+
+    <section id="sect-Deployment_Guide-Deployment_Scenarios-Cyrus_Murder">
+        <title>Cyrus Murder</title>
+        <para>
+            This is a test paragraph in a section
+        </para>
+    </section>
+
+    <section id="sect-Deployment_Guide-Deployment_Scenarios-Cyrus_Replication">
+        <title>Cyrus Replication</title>
+        <para>
+            This is a test paragraph in a section
+        </para>
+    </section>
+
+    <section id="sect-Deployment_Guide-Infrastructure_Architecture-Hosted_Environments">
+        <title>Hosted Environments</title>
+        <para>
+            This is a test paragraph in a section
+        </para>
+    </section>
+
+</chapter>
+
