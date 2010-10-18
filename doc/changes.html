@@ -10,8 +10,15 @@
 
 <h1>Changes to the Cyrus IMAP Server since 2.4.0</h1>
 <ul>
+<li>Fix cyrdump to work with -C for alternate config</li>
+<li>Change master to process all pending child messages once per
+  loop, which fixes a DoS situation if there is too much message churn
+  in a slower box - thanks to Henrique de Moraes Holschuh 
+  &lt;hmh@debian.org&gt;</li>
 <li>Reconstruct added flags -R, -U, -o, -O to give options
   handling corrupt or missing files</li>
+<li>Reconstruct fixed a pile of bugs, including a nasty one
+  which created mailboxes with a UIDVALIDITY of 0</li>
 <li>Fixed EXPUNGE in murder</li>
 <li>Fixed LSUB where subscribed mailboxes are on
   different murder backends</li>
