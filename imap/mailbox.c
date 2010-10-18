@@ -3204,64 +3204,82 @@ static int mailbox_reconstruct_acl(struct mailbox *mailbox, int flags)
     return r;
 }
 
-static int records_match(struct index_record *old, struct index_record *new)
+static int records_match(const char *mboxname,
+			 struct index_record *old,
+			 struct index_record *new)
 {
     int i;
     int match = 1;
+    int userflags_dirty = 0;
 
     if (old->internaldate != new->internaldate) {
-	printf("mismatch: internaldate\n");
+	printf("%s uid %u mismatch: internaldate\n",
+	       mboxname, new->uid);
 	match = 0;
     }
     if (old->sentdate != new->sentdate) {
-	printf("mismatch: sentdate\n");
+	printf("%s uid %u mismatch: sentdate\n",
+	       mboxname, new->uid);
 	match = 0;
     }
     if (old->size != new->size) {
-	printf("mismatch: size\n");
+	printf("%s uid %u mismatch: size\n",
+	       mboxname, new->uid);
 	match = 0;
     }
     if (old->header_size != new->header_size) {
-	printf("mismatch: header_size\n");
+	printf("%s uid %u mismatch: header_size\n",
+	       mboxname, new->uid);
 	match = 0;
     }
     if (old->gmtime != new->gmtime) {
-	printf("mismatch: gmtime\n");
+	printf("%s uid %u mismatch: gmtime\n",
+	       mboxname, new->uid);
 	match = 0;
     }
     if (old->content_lines != new->content_lines) {
-	printf("mismatch: content_lines\n");
-	match = 0;
-    }
-    if (old->cache_version != new->cache_version) {
-	printf("mismatch: cache_version\n");
-	match = 0;
-    }
-    if (old->cache_crc != new->cache_crc) {
-	printf("mismatch: cache_crc\n");
+	printf("%s uid %u mismatch: content_lines\n",
+	       mboxname, new->uid);
 	match = 0;
     }
     if (old->system_flags != new->system_flags) {
-	printf("mismatch: systemflags\n");
+	printf("%s uid %u mismatch: systemflags\n",
+	       mboxname, new->uid);
 	match = 0;
     }
     for (i = 0; i < MAX_USER_FLAGS/32; i++) {
-	if (old->user_flags[i] != new->user_flags[i]) {
-	    printf("mismatch: userflags\n");
-	    match = 0;
-	}
+	if (old->user_flags[i] != new->user_flags[i])
+	    userflags_dirty = 1;
+    }
+    if (userflags_dirty) {
+	printf("%s uid %u mismatch: userflags\n",
+	       mboxname, new->uid);
+	match = 0;
+    }
+    if (!message_guid_compare(&old->guid, &new->guid)) {
+	printf("%s uid %u mismatch: guid\n",
+	       mboxname, new->uid);
+	match = 0;
+    }
+
+    if (!match) {
+	syslog(LOG_ERR, "%s uid %u record mismatch, rewriting",
+	       mboxname, new->uid);
+    }
+
+    /* cache issues - don't print, probably just a version
+     * upgrade... */
+    if (old->cache_version != new->cache_version) {
+	match = 0;
+    }
+    if (old->cache_crc != new->cache_crc) {
+	match = 0;
     }
     if (cache_size(old) != cache_size(new)) {
-	printf("mismatch: cache_size\n");
 	match = 0;
     }
     /* only compare cache records if size matches */
     else if (memcmp(cache_base(old), cache_base(new), cache_size(new))) {
-	printf("mismatch: cache\n");
-	match = 0;
-    }
-    if (!message_guid_compare(&old->guid, &new->guid)) {
-	printf("mismatch: guid\n");
 	match = 0;
     }
 
@@ -3428,13 +3446,8 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
 
     /* after all this - if it still matches in every respect, we don't need
      * to rewrite the record - just return */
-    if (records_match(&copy, record))
+    if (records_match(mailbox->name, &copy, record))
 	return 0;
-
-    printf("%s uid %u record mismatch, rewriting\n",
-	   mailbox->name, record->uid);
-    syslog(LOG_ERR, "%s uid %u record mismatch, rewriting",
-	   mailbox->name, record->uid);
 
     /* XXX - inform of changes */
     if (!make_changes)
