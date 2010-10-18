@@ -3736,14 +3736,18 @@ int mailbox_reconstruct(const char *name, int flags)
 
     /* fix up 2.4.0 bug breakage */
     if (mailbox->i.uidvalidity == 0) {
-	mailbox->i.uidvalidity = time(0);
-	mailbox_index_dirty(mailbox);
-	syslog(LOG_ERR, "%s: fixing zero uidvalidity", mailbox->name);
+	if (make_changes) {
+	    mailbox->i.uidvalidity = time(0);
+	    mailbox_index_dirty(mailbox);
+	}
+	syslog(LOG_ERR, "%s: zero uidvalidity", mailbox->name);
     }
     if (mailbox->i.highestmodseq == 0) {
-	mailbox->i.highestmodseq = 1;
-	mailbox_index_dirty(mailbox);
-	syslog(LOG_ERR, "%s: fixing zero highestmodseq", mailbox->name);
+	if (make_changes) {
+	    mailbox_index_dirty(mailbox);
+	    mailbox->i.highestmodseq = 1;
+	}
+	syslog(LOG_ERR, "%s:  zero highestmodseq", mailbox->name);
     }
 
     if (make_changes) {
