@@ -894,7 +894,6 @@ void reap_child(void)
 		} 
 	    } else {
 	    	/* children from spawn_schedule (events) or
-		 * children that messaged us before being registered or
 		 * children of services removed by reread_conf() */
 		if (c->service_state != SERVICE_STATE_READY) {
 		    syslog(LOG_WARNING,
@@ -906,17 +905,11 @@ void reap_child(void)
 	    c->service_state = SERVICE_STATE_DEAD;
 	    c->janitor_deadline = time(NULL) + 2;
 	} else {
-	    /* weird. Are we multithreaded now? we don't know this child */
-	    syslog(LOG_WARNING,
-		   "receiving signals from unregistered child %d. Handling it anyway",
+	    /* Are we multithreaded now? we don't know this child */
+	    syslog(LOG_ERR,
+		   "received SIGCHLD from unknown child pid %d, ignoring",
 		   pid);
-	    c = get_centry();
-	    c->pid = pid;
-	    c->service_state = SERVICE_STATE_DEAD;
-	    c->janitor_deadline = time(NULL) + 2;
-	    c->si = SERVICE_NONE;
-	    c->next = ctable[pid % child_table_size];
-	    ctable[pid % child_table_size] = c;
+	    /* FIXME: is this something we should take lightly? */
 	}
 	if (verbose && c && (c->si != SERVICE_NONE))
 	    syslog(LOG_DEBUG, "service %s now has %d ready workers\n", 
@@ -1069,6 +1062,36 @@ void sighandler_setup(void)
     }
 }
 
+/*
+ * Receives a message from a service.
+ *
+ * Returns zero if all goes well
+ * 1 if no msg available
+ * 2 if bad message received (incorrectly sized)
+ * -1 on error (errno set)
+ */
+int read_msg(int fd, struct notify_message *msg)
+{
+    ssize_t r;
+    size_t off = 0;
+    int s = sizeof(struct notify_message);
+
+    while (s > 0) {
+        do
+            r = read(fd, msg + off, s);
+        while ((r == -1) && (errno == EINTR));
+        if (r <= 0) break;
+        s -= r;
+        off += r;
+    }
+    if ( ((r == 0) && (off == 0)) ||
+         ((r == -1) && (errno == EAGAIN)) )
+        return 1;
+    if (r == -1) return -1;
+    if (s != 0) return 2;
+    return 0;
+}
+
 void process_msg(const int si, struct notify_message *msg) 
 {
     struct centry *c;
@@ -1081,13 +1104,21 @@ void process_msg(const int si, struct notify_message *msg)
     
     /* Did we find it? */
     if (!c || c->pid != msg->service_pid) {
-	syslog(LOG_WARNING, "service %s pid %d: while trying to process message 0x%x: not registered yet", 
-	       SERVICENAME(s->name), msg->service_pid, msg->message);
-	/* resilience paranoia. Causes small performance loss when used */
+	/* If we don't know about the child, that means it has expired from
+	 * the child list, due to large message delivery delays.  This is
+	 * indeed possible, although it is rare (Debian bug report).
+	 *
+	 * Note that this analysis depends on master's single-threaded
+	 * nature */
+	syslog(LOG_WARNING,
+		"service %s pid %d: receiving messages from long dead children",
+	       SERVICENAME(s->name), msg->service_pid);
+	/* re-add child to list */
 	c = get_centry();
 	c->si = si;
 	c->pid = msg->service_pid;
-	c->service_state = SERVICE_STATE_UNKNOWN;
+	c->service_state = SERVICE_STATE_DEAD;
+	c->janitor_deadline = time(NULL) + 2;
 	c->next = ctable[c->pid % child_table_size];
 	ctable[c->pid % child_table_size] = c;
     }
@@ -1149,6 +1180,11 @@ void process_msg(const int si, struct notify_message *msg)
 	    c->service_state = SERVICE_STATE_READY;
 	    s->ready_workers++;
 	    break;
+
+	case SERVICE_STATE_DEAD:
+	    /* echoes from the past... just ignore */
+	    break;
+
 	default:
 	    /* Shouldn't get here */
 	    break;
@@ -1179,6 +1215,11 @@ void process_msg(const int si, struct notify_message *msg)
 	    c->service_state = SERVICE_STATE_BUSY;
 	    s->ready_workers--;
 	    break;
+
+	case SERVICE_STATE_DEAD:
+	    /* echoes from the past... just ignore */
+	    break;
+
 	default:
 	    /* Shouldn't get here */
 	    break;
@@ -1212,6 +1253,12 @@ void process_msg(const int si, struct notify_message *msg)
 	    c->service_state = SERVICE_STATE_BUSY;
 	    s->nconnections++;
 	    s->ready_workers--;
+
+	case SERVICE_STATE_DEAD:
+	    /* echoes from the past... do the accounting */
+	    s->nconnections++;
+	    break;
+
 	default:
 	    /* Shouldn't get here */
 	    break;
@@ -1246,6 +1293,12 @@ void process_msg(const int si, struct notify_message *msg)
 		   "service %s pid %d in UNKNOWN state: serving one more multi-threaded connection, forced to READY state",
 		   SERVICENAME(s->name), c->pid);
 	    break;
+
+	case SERVICE_STATE_DEAD:
+	    /* echoes from the past... do the accounting */
+	    s->nconnections++;
+	    break;
+
 	default:
 	    /* Shouldn't get here */
 	    break;
@@ -1407,7 +1460,7 @@ void add_service(const char *name, struct entry *e, void *rock)
 	Services[i].desired_workers = prefork;
 	Services[i].babysit = babysit;
 	Services[i].max_workers = atoi(max);
-	if (Services[i].max_workers == -1) {
+	if (Services[i].max_workers < 0) {
 	    Services[i].max_workers = INT_MAX;
 	}
     } else {
@@ -2064,13 +2117,19 @@ int main(int argc, char **argv)
 	    int j;
 
 	    if (FD_ISSET(x, &rfds)) {
-		r = read(x, &msg, sizeof(msg));
-		if (r != sizeof(msg)) {
-		    syslog(LOG_ERR, "got incorrectly sized response from child: %x", i);
+		while ((r = read_msg(x, &msg)) == 0)
+		    process_msg(i, &msg);
+
+		if (r == 2) {
+		    syslog(LOG_ERR,
+			"got incorrectly sized response from child: %x", i);
 		    continue;
 		}
-		
-		process_msg(i, &msg);
+		if (r < 0) {
+		    syslog(LOG_ERR,
+			"error while receiving message from child %x: %m", i);
+		    continue;
+		}
 	    }
 
 	    if (Services[i].exec &&
