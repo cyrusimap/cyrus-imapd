@@ -9096,7 +9096,81 @@ int getlistretopts(char *tag, unsigned *opts) {
 }
 
 /*
- * Parse a date_time, for the APPEND command
+ * Parse a string in IMAP date-time format (and some more
+ * obscure legacy formats too) to a time_t.  Parses both
+ * date and time parts.
+ *
+ * Specific formats accepted are listed below.  Note that
+ * the " quotes are part of the format.  Also note that only
+ * the first two are compliant with RFC3501, the remainder
+ * are legacy formats.
+ *
+ *  "dd-mmm-yyyy HH:MM:SS zzzzz"
+ *  " d-mmm-yyyy HH:MM:SS zzzzz"
+ *  "dd-mmm-yy HH:MM:SS-z"
+ *  " d-mmm-yy HH:MM:SS-z"
+ *  "dd-mmm-yy HH:MM:SS-zz"
+ *  " d-mmm-yy HH:MM:SS-zz"
+ *  "dd-mmm-yy HH:MM:SS-zzz"
+ *  " d-mmm-yy HH:MM:SS-zzz"
+ *
+ * where:
+ *  dd	is the day-of-month between 1 and 31 inclusive.
+ * mmm	is the three-letter abbreviation for the English
+ *      month name (case insensitive).
+ * yy	is the 2 digit year, between 00 (the year 1900)
+ *	and 99 (the year 1999) inclusive.
+ * yyyy is the 4 digit year, between 1900 and disaster
+ *      (31b time_t wrapping in 2038 is not handled, sorry).
+ * HH	is the hour, zero padded, between 00 and 23 inclusive.
+ * MM 	is the minute, zero padded, between 00 and 59 inclusive.
+ * MM 	is the second, zero padded, between 00 and 60 inclusive
+ *      (to account for leap seconds).
+ * z	is a US military style single character time zone.
+ *	    A (Alpha) is +0100 ... M (Mike) is +1200
+ *	    N (November) is -0100 ... Y (Yankee) is -1200
+ *	    Z (Zulu) is UTC
+ * zz	is the case-insensitive string "UT", denoting UTC time.
+ * zzz	is a three-character case insensitive North American
+ *	time zone name, one of the following (listed with the
+ *	UTC offsets and comments):
+ *	    AST	-0400	Atlantic Standard Time
+ *	    ADT	-0500	Atlantic Daylight Time
+ *			WRONG -> -0300
+ *	    EST	-0500	Eastern Standard Time
+ *	    EDT	-0600	Eastern Daylight Time
+ *			WRONG -> -0400
+ *	    CST	-0600	Central Standard Time
+ *	    CDT	-0700	Central Daylight Time
+ *			WRONG -> -0500
+ *	    MST	-0700	Mountain Standard Time
+ *	    MDT	-0800	Mountain Daylight Time
+ *			WRONG -> -0600
+ *	    PST	-0800	Pacific Standard Time
+ *	    PDT	-0900	Pacific Daylight Time
+ *			WRONG -> -0700
+ *	    YST	-0900	Yukon Standard Time
+ *			(Obsolete, now AKST = Alaska S.T.)
+ *	    YDT	-1000	Yukon Daylight Time
+ *			(Obsolete, now AKDT = Alaska D.T.)
+ *			WRONG -> -0800
+ *	    HST	-1000	Hawaiian Standard Time
+ *			(Obsolete, now HAST = Hawaiian/Aleutian S.T.)
+ *	    HDT	-1100	Hawaiian Daylight Time
+ *			(Obsolete, now HADT = Hawaiian/Aleutian D.T.)
+ *			WRONG -> -0900
+ *	    BST	-1100	Used in American Samoa & Midway Island
+ *			(Obsolete, now SST = Samoa S.T.)
+ *	    BDT	-1200	Nonsensical, standard time is used
+ *			all year around in the SST territories.
+ * zzzzz is an numeric time zone offset in the form +HHMM
+ *	or -HMMM.
+ *
+ * Note that the longest accepted format is 28 chars long
+ * including the surrounding " quotes.
+ *
+ * Returns: the next character read from imapd_in, or
+ *	    or EOF on error.
  */
 int getdatetime(date)
 time_t *date;
