@@ -9,3 +9,4 @@ clean:
 
 clean_ids:
 	@publican clean_ids
+	@sed -i -r -e 's/\t/    /g' -e 's/((\s{4})+)\s*/\1/g' `find en-US/ -type f -name "*.xml"`
