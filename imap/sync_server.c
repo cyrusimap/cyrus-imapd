@@ -1288,6 +1288,16 @@ static int do_mailbox(struct dlist *kin,
 	if (rrecord.uid >= mrecord.uid)
 	    continue; /* guess it got UNLINKED along the way... */
 
+	/* not found and less than LAST_UID, bogus */
+	if (mrecord.uid <= mailbox->i.last_uid) {
+	    /* Expunged, just skip it */
+	    if (mrecord.system_flags & FLAG_EXPUNGED)
+		continue;
+	    /* Otherwise we want to abort and fix up */
+	    r = IMAP_MAILBOX_CRC;
+	    goto done;
+	}
+
 	mrecord.silent = 1;
 	r = sync_append_copyfile(mailbox, &mrecord);
 	if (r) {
