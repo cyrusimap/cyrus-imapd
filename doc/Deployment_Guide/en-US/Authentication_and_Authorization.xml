@@ -33,6 +33,7 @@
                     </para>
                     <para>
                         For example, the user that authenticated as <code>john.doe@example.org</code> may have a mailbox named <code>jdoe</code>.
+                    </para>
                 </listitem>
                 <listitem>
                     <para>
