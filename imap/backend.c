@@ -533,8 +533,12 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
     if ((server[0] != '/') ||
 	(strcmp(prot->sasl_service, "lmtp") &&
 	 strcmp(prot->sasl_service, "csync"))) {
-	char *mlist = xstrdup(mechlist); /* backend_auth is destructive */
+	char *mlist = NULL;
 	const char *my_status;
+
+    if ( mechlist ) {
+        mlist = xstrdup(mechlist); /* backend_auth is destructive */
+    }
 
 	if ((r = backend_authenticate(ret, prot, &mlist, userid,
 				      cb, &my_status))) {
@@ -573,6 +577,11 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
 		    prot_BLOCK(ret->in);
 		}
 
+        /*
+         * A flawed check: backend_authenticate() may be given a
+         * NULL mechlist, negotiate SSL, and get a new mechlist.
+         * This new, correct mechlist won't be visible here.
+         */
 		new_mechlist = ask_capability(ret->out, ret->in, prot,
 					      &ret->capability, auto_capa);
 		if (new_mechlist && strcmp(new_mechlist, mechlist)) {
