@@ -9135,33 +9135,26 @@ int getlistretopts(char *tag, unsigned *opts) {
  *	time zone name, one of the following (listed with the
  *	UTC offsets and comments):
  *	    AST	-0400	Atlantic Standard Time
- *	    ADT	-0500	Atlantic Daylight Time
- *			WRONG -> -0300
+ *	    ADT	-0300	Atlantic Daylight Time
  *	    EST	-0500	Eastern Standard Time
- *	    EDT	-0600	Eastern Daylight Time
- *			WRONG -> -0400
+ *	    EDT	-0400	Eastern Daylight Time
  *	    CST	-0600	Central Standard Time
- *	    CDT	-0700	Central Daylight Time
- *			WRONG -> -0500
+ *	    CDT	-0500	Central Daylight Time
  *	    MST	-0700	Mountain Standard Time
- *	    MDT	-0800	Mountain Daylight Time
- *			WRONG -> -0600
+ *	    MDT	-0600	Mountain Daylight Time
  *	    PST	-0800	Pacific Standard Time
- *	    PDT	-0900	Pacific Daylight Time
- *			WRONG -> -0700
+ *	    PDT	-0700	Pacific Daylight Time
  *	    YST	-0900	Yukon Standard Time
  *			(Obsolete, now AKST = Alaska S.T.)
- *	    YDT	-1000	Yukon Daylight Time
+ *	    YDT	-0800	Yukon Daylight Time
  *			(Obsolete, now AKDT = Alaska D.T.)
- *			WRONG -> -0800
  *	    HST	-1000	Hawaiian Standard Time
  *			(Obsolete, now HAST = Hawaiian/Aleutian S.T.)
- *	    HDT	-1100	Hawaiian Daylight Time
+ *	    HDT	-0900	Hawaiian Daylight Time
  *			(Obsolete, now HADT = Hawaiian/Aleutian D.T.)
- *			WRONG -> -0900
  *	    BST	-1100	Used in American Samoa & Midway Island
  *			(Obsolete, now SST = Samoa S.T.)
- *	    BDT	-1200	Nonsensical, standard time is used
+ *	    BDT	-1000	Nonsensical, standard time is used
  *			all year around in the SST territories.
  * zzzzz is an numeric time zone offset in the form +HHMM
  *	or -HMMM.
@@ -9318,7 +9311,7 @@ time_t *date;
 		p = strchr("aecmpyhb", zone[0]);
 		if (c != '\"' || zone[2] != 't' || !p) goto baddate;
 		zone_off = (strlen(p) - 12)*60;
-		if (zone[1] == 'd') zone_off -= 60;
+		if (zone[1] == 'd') zone_off += 60;
 		else if (zone[1] != 's') goto baddate;
 	    }
 	}
