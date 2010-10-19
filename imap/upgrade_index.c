@@ -51,6 +51,7 @@
 #include <string.h>
 #include <errno.h>
 #include <syslog.h>
+#include <utime.h>
 
 #ifdef HAVE_DIRENT_H
 # include <dirent.h>
@@ -143,6 +144,8 @@ static int upgrade_index_record(struct mailbox *mailbox,
     indexbuffer_t rbuf;
     char *recordbuf = (char *)rbuf.buf;
     int recalc = 0;
+    struct utimbuf settime;
+    const char *fname;
 
     memset(recordbuf, 0, INDEX_RECORD_SIZE);
     if (INDEX_RECORD_SIZE < record_size)
@@ -176,10 +179,17 @@ static int upgrade_index_record(struct mailbox *mailbox,
 	    recalc = 1;
     }
 
+    fname = mailbox_message_fname(mailbox, record->uid);
+
     if (recalc) {
-	char *fname = mailbox_message_fname(mailbox, record->uid);
-	return message_parse(fname, record);
+	int r = message_parse(fname, record);
+	if (r) return r;
     }
+
+    /* update the mtime to match the internaldate */
+    settime.actime = settime.modtime = record->internaldate;
+    if (utime(mailbox_message_fname(mailbox, record->uid), &settime) == -1)
+	return IMAP_IOERROR;
 
     return 0;
 }
