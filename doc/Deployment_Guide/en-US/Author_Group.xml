@@ -1,32 +1,38 @@
 <?xml version='1.0' encoding='utf-8' ?>
 <!DOCTYPE authorgroup PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
-<!ENTITY % BOOK_ENTITIES SYSTEM "Administrator_Guide.ent">
+<!ENTITY % BOOK_ENTITIES SYSTEM "Deployment_Guide.ent">
 %BOOK_ENTITIES;
 ]>
 <authorgroup>
-	<author>
-		<firstname>Jeroen</firstname>
-		<surname>van Meeuwen</surname>
-		<affiliation>
-			<orgname>Kolab Systems</orgname>
-		</affiliation>
-		<email>vanmeeuwen@kolabsys.com</email>
-	</author>
-	<author>
-		<firstname>Bron</firstname>
-		<surname>Gondwana</surname>
-		<affiliation>
-			<orgname>FastMail.FM</orgname>
-		</affiliation>
-		<email>brong@fastmail.fm</email>
-	</author>
-	<author>
-		<firstname>Dave</firstname>
-		<surname>McMurtrie</surname>
-		<affiliation>
-			<orgname>Carnegie Mellon University</orgname>
-		</affiliation>
-		<email>dave64@andrew.cmu.edu</email>
-	</author>
+    <author>
+        <firstname>Jeroen</firstname>
+        <surname>van Meeuwen</surname>
+        <affiliation>
+            <orgname>Kolab Systems</orgname>
+
+        </affiliation>
+        <email>vanmeeuwen@kolabsys.com</email>
+
+    </author>
+    <author>
+        <firstname>Bron</firstname>
+        <surname>Gondwana</surname>
+        <affiliation>
+            <orgname>FastMail.FM</orgname>
+
+        </affiliation>
+        <email>brong@fastmail.fm</email>
+
+    </author>
+    <author>
+        <firstname>Dave</firstname>
+        <surname>McMurtrie</surname>
+        <affiliation>
+            <orgname>Carnegie Mellon University</orgname>
+
+        </affiliation>
+        <email>dave64@andrew.cmu.edu</email>
+
+    </author>
 </authorgroup>
 

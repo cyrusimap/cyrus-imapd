@@ -11,11 +11,10 @@
     <para>
         Most commonly, an organisation has existing LDAP or SQL-based AAA infrastructure, that scales up sufficiently to service all components of said infrastructure with at least authentication and authorization.
     </para>
-
     <section id="sect-Deployment_Guide-Authentication_and_Authorization-Users_and_Mailboxes">
         <title>Users and Mailboxes</title>
         <para>
-            User mailboxes have an identifier which is not necessarily the same as the login name used. There are three distinguishable aspects to a user's entity and the mailbox associated with it;
+            User mailboxes have an identifier which is not necessarily the same as the login name used. There are three distinguishable aspects to a user&#39;s entity and the mailbox associated with it;
         </para>
         <para>
             <itemizedlist>
@@ -26,14 +25,16 @@
                     <para>
                         For example, the user logs in with username <code>john.doe@example.org</code> and password <code>verysecret</code>.
                     </para>
+
                 </listitem>
                 <listitem>
                     <para>
-                        The user's authentication entity &mdash;with all attributes associated with it&mdash; can have one of those attributes be used to create the relationship between the user authentication entity on the one side, and the mailbox entity on the other side.
+                        The user&#39;s authentication entity &mdash;with all attributes associated with it&mdash; can have one of those attributes be used to create the relationship between the user authentication entity on the one side, and the mailbox entity on the other side.
                     </para>
                     <para>
                         For example, the user that authenticated as <code>john.doe@example.org</code> may have a mailbox named <code>jdoe</code>.
                     </para>
+
                 </listitem>
                 <listitem>
                     <para>
@@ -42,10 +43,15 @@
                     <para>
                         For example, the user that authenticated as <code>john.doe@example.com</code> and has mailbox <code>jdoe</code> needs an access control list entry on that mailbox that assigns <code>jdoe</code> certain rights on said mailbox.
                     </para>
+
                 </listitem>
+
             </itemizedlist>
+
         </para>
+
     </section>
+    
 
 </chapter>
 

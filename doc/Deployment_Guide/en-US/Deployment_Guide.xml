@@ -6,12 +6,9 @@
 <book status="draft">
     <xi:include href="Book_Info.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
     <xi:include href="Preface.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-
     <xi:include href="Overview_and_Concepts.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-
     <xi:include href="Deployment_Scenarios.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
     <xi:include href="Authentication_and_Authorization.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-
     <xi:include href="Revision_History.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
     <index />
 </book>

@@ -14,13 +14,16 @@
         <para>
             A number of considerations need to be made prior to deploying Cyrus IMAP in an existing infrastructure, especially larger ones. This guide addresses these considerations, to aid in planning the successful deployment of Cyrus IMAP.
         </para>
+
     </abstract>
     <corpauthor>
         <inlinemediaobject>
             <imageobject>
                 <imagedata fileref="images/title_logo.svg" format="SVG" />
             </imageobject>
+
         </inlinemediaobject>
+
     </corpauthor>
     <xi:include href="Common_Content/Legal_Notice.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
     <xi:include href="Author_Group.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />

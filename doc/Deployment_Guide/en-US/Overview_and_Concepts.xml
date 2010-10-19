@@ -9,34 +9,32 @@
         This chapter gives an overview of the Cyrus IMAP server. The Cyrus IMAP (Internet Message Access Protocol) server provides access to personal mail and system-wide bulletin boards through the IMAP protocol. The Cyrus IMAP server is a scalable enterprise mail system designed for use from small to large enterprise environments using standards-based technologies.
     </para>
     <para>
-        A full Cyrus IMAP implementation allows a seamless mail and bulletin board environment to be set up across multiple servers. It differs from other IMAP server implementations in that it is run on "sealed" servers, where users are not normally permitted to log in. The mailbox database is stored in parts of the filesystem that are private to the Cyrus IMAP system.  All user access to mail is through software using the IMAP, IMAPS, POP3, POP3S, or KPOP protocols.
+        A full Cyrus IMAP implementation allows a seamless mail and bulletin board environment to be set up across multiple servers. It differs from other IMAP server implementations in that it is run on &#34;sealed&#34; servers, where users are not normally permitted to log in. The mailbox database is stored in parts of the filesystem that are private to the Cyrus IMAP system. All user access to mail is through software using the IMAP, IMAPS, POP3, POP3S, or KPOP protocols.
     </para>
     <para>
         The private mailbox database design gives the server large advantages in efficiency, scalability, and administratability. Multiple concurrent read/write connections to the same mailbox are permitted. The server supports access control lists on mailboxes and storage quotas on mailbox hierarchies.
     </para>
-
-    <section>
+    <section id="sect-Deployment_Guide-Overview_and_Concepts-Mailbox_Namespace">
         <title>Mailbox Namespace</title>
         <para>
-            By default, the Cyrus IMAP server presents mailboxes using the <code>netnews</code> namespace convention. This means mailbox names are case-sensitive. A mailbox name may not start or end with a "<code>.</code>" character, nor may it contain two "<code>.</code>" characters in a row.
+            By default, the Cyrus IMAP server presents mailboxes using the <code>netnews</code> namespace convention. This means mailbox names are case-sensitive. A mailbox name may not start or end with a &#34;<code>.</code>&#34; character, nor may it contain two &#34;<code>.</code>&#34; characters in a row.
         </para>
         <para>
-            When implemented using the default <code>netnews</code> namespace convention, non-ASCII characters and shell meta-characters are not permitted in mailbox names. Optionally, the server can present mailboxes using the UNIX hierarchy convention &mdash;see <xref linkend="sect-Deployment_Guide-Overview_and_Concepts-Alternate_Namespace" /> for more information.
+            When implemented using the default <code>netnews</code> namespace convention, non-ASCII characters and shell meta-characters are not permitted in mailbox names. Optionally, the server can present mailboxes using the UNIX hierarchy convention &mdash;see <xref linkend="sect-Deployment_Guide-Mailbox_Namespace-Alternate_Namespace" /> for more information.
         </para>
-
-        <section>
+        <section id="sect-Deployment_Guide-Mailbox_Namespace-Standard_Internal_Namespace">
             <title>Standard (Internal) Namespace</title>
             <para>
-                All personal mailboxes for user "<code>bovik</code>" begin with the string "<code>user.bovik.</code>".  For example, if user "<code>bovik</code>" had a personal "<code>work</code>" mailbox, it would be called "<code>user.bovik.work</code>".  To user "<code>bovik</code>", however, the prefix "<code>user.bovik.</code>" normally appears as "<code>INBOX.</code>". The mailbox "<code>user.bovik.work</code>" would therefore appear as "<code>INBOX.work</code>".  If the access control list of the mailbox permitted other users to see that mailbox, it would appear to them as "<code>user.bovik.work</code>".
+                All personal mailboxes for user &#34;<code>bovik</code>&#34; begin with the string &#34;<code>user.bovik.</code>&#34;. For example, if user &#34;<code>bovik</code>&#34; had a personal &#34;<code>work</code>&#34; mailbox, it would be called &#34;<code>user.bovik.work</code>&#34;. To user &#34;<code>bovik</code>&#34;, however, the prefix &#34;<code>user.bovik.</code>&#34; normally appears as &#34;<code>INBOX.</code>&#34;. The mailbox &#34;<code>user.bovik.work</code>&#34; would therefore appear as &#34;<code>INBOX.work</code>&#34;. If the access control list of the mailbox permitted other users to see that mailbox, it would appear to them as &#34;<code>user.bovik.work</code>&#34;.
             </para>
             <para>
-                The mailbox "<code>user.bovik</code>" is where the user "<code>bovik</code>" normally receives new mail, and normally appears to user "<code>bovik</code>" as "<code>INBOX</code>". The mailbox "<code>user.bovik</code>" is referred to in this document as user "<code>bovik</code>"'s <code>INBOX</code>.
+                The mailbox &#34;<code>user.bovik</code>&#34; is where the user &#34;<code>bovik</code>&#34; normally receives new mail, and normally appears to user &#34;<code>bovik</code>&#34; as &#34;<code>INBOX</code>&#34;. The mailbox &#34;<code>user.bovik</code>&#34; is referred to in this document as user &#34;<code>bovik</code>&#34;&#39;s <code>INBOX</code>.
             </para>
             <para>
-                Administrators create and delete users by creating and deleting the users' <code>INBOX</code>. If a user has an <code>INBOX</code>, then they are allowed to subscribe to mailboxes. Only users without dots in their userid are permitted to have an <code>INBOX</code>. (A user with a dot in their userid would be able to login but would not be able to receive mail. Note that when using the unix hierarchy seperator, this is not the case, and any user may have a dot in their userid.)
+                Administrators create and delete users by creating and deleting the users&#39; <code>INBOX</code>. If a user has an <code>INBOX</code>, then they are allowed to subscribe to mailboxes. Only users without dots in their userid are permitted to have an <code>INBOX</code>. (A user with a dot in their userid would be able to login but would not be able to receive mail. Note that when using the unix hierarchy seperator, this is not the case, and any user may have a dot in their userid.)
             </para>
             <para>
-                When an administrator deletes a user's <code>INBOX</code>, all of the user's personal mailboxes are deleted as well.
+                When an administrator deletes a user&#39;s <code>INBOX</code>, all of the user&#39;s personal mailboxes are deleted as well.
             </para>
             <para>
                 With the one notable exception of <code>INBOX</code>, all mailbox names are system-wide &mdash;they refer to the same mailbox regardless of the user. Access control lists determine which users can access or see which mailboxes. Using
@@ -48,41 +46,46 @@
                 <itemizedlist>
                     <listitem>
                         <para>
-                            Names that do not start with "." are fully qualified.
+                            Names that do not start with &#34;.&#34; are fully qualified.
                         </para>
+
                     </listitem>
                     <listitem>
                         <para>
-                            Names that start with "." are relative to the current context.
+                            Names that start with &#34;.&#34; are relative to the current context.
                         </para>
+
                     </listitem>
+
                 </itemizedlist>
+
             </para>
             <para>
-                Thus, if you are working with folder names and the top of the hierarchy is named "<code>cmu.</code>", the name "<code>comp.infosystems.www</code>" resolves to "<code>comp.infosystems.www</code>" and the name "<code>.comp.infosystems.www</code>" resolves to "<code>cmu.comp.infosystems.www</code>".
+                Thus, if you are working with folder names and the top of the hierarchy is named &#34;<code>cmu.</code>&#34;, the name &#34;<code>comp.infosystems.www</code>&#34; resolves to &#34;<code>comp.infosystems.www</code>&#34; and the name &#34;<code>.comp.infosystems.www</code>&#34; resolves to &#34;<code>cmu.comp.infosystems.www</code>&#34;.
             </para>
 
         </section>
-
-        <section id="sect-Deployment_Guide-Overview_and_Concepts-Alternate_Namespace">
+        
+        <section id="sect-Deployment_Guide-Mailbox_Namespace-Alternate_Namespace">
             <title>Alternate Namespace</title>
             <para>
-                The Cyrus IMAP server can also use analternate namespace which allows a user's personal mailboxes to appear as if they reside at the same level as that user's <code>INBOX</code> as opposed to children of it. With this feature, it may appear that there are non-unique names for mailboxes between users (2 different users may each have a top level "work" mailbox), but the internal representation is still <code>user.name.work</code>.
+                The Cyrus IMAP server can also use analternate namespace which allows a user&#39;s personal mailboxes to appear as if they reside at the same level as that user&#39;s <code>INBOX</code> as opposed to children of it. With this feature, it may appear that there are non-unique names for mailboxes between users (2 different users may each have a top level &#34;work&#34; mailbox), but the internal representation is still <code>user.name.work</code>.
             </para>
+
         </section>
+        
 
     </section>
-
+    
     <section id="sect-Deployment_Guide-Overview_and_Concepts-Access_Control_Lists">
         <title>Access Control Lists</title>
         <para>
-            Access to each mailbox is controlled by each mailbox's access control list. Access Control Lists (ACLs) provide a powerful mechanism for specifying the users or groups of users who have permission to access the mailboxes.
+            Access to each mailbox is controlled by each mailbox&#39;s access control list. Access Control Lists (ACLs) provide a powerful mechanism for specifying the users or groups of users who have permission to access the mailboxes.
         </para>
         <para>
             An ACL is a list of zero or more entries. Each entry has an identifier and a set of rights. The identifier specifies the user or group of users for which the entry applies. The set of rights is one or more letters or digits, each letter or digit conferring a particular privilege.
         </para>
-
-        <section id="sect-Deployment_Guide-Overview_and_Concepts-Access_Control_Lists-Access_Rights">
+        <section id="sect-Deployment_Guide-Access_Control_Lists-Access_Rights">
             <title>Access Rights</title>
             <para>
                 The following lists Access Rights that can be used in an Access Control List entry.
@@ -95,7 +98,9 @@
                             <para>
                                 The user may see that the mailbox exists (<emphasis>lookup</emphasis>).
                             </para>
+
                         </listitem>
+
                     </varlistentry>
                     <varlistentry>
                         <term>r</term>
@@ -106,7 +111,9 @@
                             <para>
                                 The user may select the mailbox, fetch data, perform searches, and copy messages from the mailbox.
                             </para>
+
                         </listitem>
+
                     </varlistentry>
                     <varlistentry>
                         <term>s</term>
@@ -115,17 +122,21 @@
                                 Keep per-user seen state (<emphasis>seen</emphasis>).
                             </para>
                             <para>
-                                The "Seen" and "Recent" flags are preserved for the user.
+                                The &#34;Seen&#34; and &#34;Recent&#34; flags are preserved for the user.
                             </para>
+
                         </listitem>
+
                     </varlistentry>
                     <varlistentry>
                         <term>w</term>
                         <listitem>
                             <para>
-                                The user may modify flags and keywords other then "Seen" and "Deleted" (which are controlled by other access rights).
+                                The user may modify flags and keywords other then &#34;Seen&#34; and &#34;Deleted&#34; (which are controlled by other access rights).
                             </para>
+
                         </listitem>
+
                     </varlistentry>
                     <varlistentry>
                         <term>i</term>
@@ -133,7 +144,9 @@
                             <para>
                                 The user may insert new messages into the mailbox (<emphasis>insert</emphasis>).
                             </para>
+
                         </listitem>
+
                     </varlistentry>
                     <varlistentry>
                         <term>p</term>
@@ -142,9 +155,11 @@
                                 The user may send email to the submission address for the mailbox (<emphasis>post</emphasis>).
                             </para>
                             <para>
-                                This right differs from the "<code>i</code>" (<emphasis>insert</emphasis>) right in that the delivery system inserts trace information into messages posted, whereas no delivery trace information is added to messages inserted (by move or copy).
+                                This right differs from the &#34;<code>i</code>&#34; (<emphasis>insert</emphasis>) right in that the delivery system inserts trace information into messages posted, whereas no delivery trace information is added to messages inserted (by move or copy).
                             </para>
+
                         </listitem>
+
                     </varlistentry>
                     <varlistentry>
                         <term>c</term>
@@ -152,15 +167,19 @@
                             <para>
                                 The user may create new mailboxes in this mailbox, delete the current mailbox, or rename the mailbox (<emphasis>create</emphasis>).
                             </para>
+
                         </listitem>
+
                     </varlistentry>
                     <varlistentry>
                         <term>d</term>
                         <listitem>
                             <para>
-                                The user may store the "Deleted" flag, and perform expunges (<emphasis>delete</emphasis>).
+                                The user may store the &#34;Deleted&#34; flag, and perform expunges (<emphasis>delete</emphasis>).
                             </para>
+
                         </listitem>
+
                     </varlistentry>
                     <varlistentry>
                         <term>a</term>
@@ -168,12 +187,14 @@
                             <para>
                                 The user may change the <emphasis>Access Control Information</emphasis> (ACI) on the mailbox (<emphasis>administer</emphasis>).
                             </para>
-                            <remark>
-                                FIXME: Clarification Needed! Does the <code>a</code> right imply any other rights?
-                            </remark>
+                            <remark> FIXME: Clarification Needed! Does the <code>a</code> right imply any other rights? </remark>
+
                         </listitem>
+
                     </varlistentry>
+
                 </variablelist>
+
             </para>
             <para>
                 You can combine these access rights in different ways. A few examples;
@@ -186,31 +207,39 @@
                             <para>
                                 Give the user read-only access to the mailbox (<emphasis>lookup</emphasis>, <emphasis>read</emphasis> and <emphasis>seen</emphasis>).
                             </para>
+
                         </listitem>
+
                     </varlistentry>
                     <varlistentry>
                         <term>lrsp</term>
                         <listitem>
                             <para>
-                                Give the user read access to the mailbox, and allow the user to post to the mailbox using the delivery system (<emphasis>lookup</emphasis>, <emphasis>read</emphasis>, <emphasis>seen</emphasis> and <emphasis>post</emphasis>). Most delivery systems do not provide authentication, so the "<code>p</code>" right usually has meaning only for the "anonymous" user.
+                                Give the user read access to the mailbox, and allow the user to post to the mailbox using the delivery system (<emphasis>lookup</emphasis>, <emphasis>read</emphasis>, <emphasis>seen</emphasis> and <emphasis>post</emphasis>). Most delivery systems do not provide authentication, so the &#34;<code>p</code>&#34; right usually has meaning only for the &#34;anonymous&#34; user.
                             </para>
+
                         </listitem>
+
                     </varlistentry>
                     <varlistentry>
                         <term>lr</term>
                         <listitem>
                             <para>
-                                The user can lookup and read the contents of the mailbox, but no "Seen" or "Recent" flags may be set on the mailbox nor its contents. This set of rights is primarily useful for anonymous IMAP, which is often used to make the archives of mailing lists available.
+                                The user can lookup and read the contents of the mailbox, but no &#34;Seen&#34; or &#34;Recent&#34; flags may be set on the mailbox nor its contents. This set of rights is primarily useful for anonymous IMAP, which is often used to make the archives of mailing lists available.
                             </para>
+
                         </listitem>
+
                     </varlistentry>
                     <varlistentry>
                         <term>rs</term>
                         <listitem>
                             <para>
-                                The user can read the mailbox and the server preserves the "Seen" and "Recent" flags, but the mailbox is not visible to the user through the various mailbox listing commands. The user must know the name of the mailbox to be able to access it.
+                                The user can read the mailbox and the server preserves the &#34;Seen&#34; and &#34;Recent&#34; flags, but the mailbox is not visible to the user through the various mailbox listing commands. The user must know the name of the mailbox to be able to access it.
                             </para>
+
                         </listitem>
+
                     </varlistentry>
                     <varlistentry>
                         <term>lrsip</term>
@@ -218,66 +247,70 @@
                             <para>
                                 The user can read and append to the mailbox, either through IMAP, or through the delivery system.
                             </para>
-                        </listitem>
-                    </varlistentry>
-                </variablelist>
-            </para>
-        </section>
 
-        <section id="sect-Deployment_Guide-Overview_and_Concepts-Access_Control_Lists-Identifiers">
+                        </listitem>
+
+                    </varlistentry>
+
+                </variablelist>
+
+            </para>
+
+        </section>
+        
+        <section id="sect-Deployment_Guide-Access_Control_Lists-Identifiers">
             <title>Identifiers</title>
             <para>
                 The identifier part of an ACL entry specifies the user or group for which the entry applies.
             </para>
-            <remark>
-                FIXME: Clarify what an ACL entry looks like first. Refer to how user login names are translated into their identifiers, and (in that section) refer to altnamespace, unixhiersep, default domain, virtdomains, sasl_auth_mech tips and tricks etc.
-            </remark>
+            <remark> FIXME: Clarify what an ACL entry looks like first. Refer to how user login names are translated into their identifiers, and (in that section) refer to altnamespace, unixhiersep, default domain, virtdomains, sasl_auth_mech tips and tricks etc. </remark>
             <para>
-                There are two special identifiers, "anonymous", and "anyone", which are explained below. The meaning of other identifiers usually depends on the authorization mechanism being used (selected by <code>&ndash;&ndash;with-auth</code> at compile time, defaulting to Unix).
+                There are two special identifiers, &#34;anonymous&#34;, and &#34;anyone&#34;, which are explained below. The meaning of other identifiers usually depends on the authorization mechanism being used (selected by <code>&ndash;&ndash;with-auth</code> at compile time, defaulting to Unix).
             </para>
-
-            <section id="sect-Deployment_Guide-Overview_and_Concepts-Access_Control_Lists-Identifiers-anonymous_and_anyone">
-                <title>"<code>anonymous</code>" and "<code>anyone</code>"</title>
-
+            <section id="sect-Deployment_Guide-Identifiers-anonymous_and_anyone">
+                <title>&#34;<code>anonymous</code>&#34; and &#34;<code>anyone</code>&#34;</title>
                 <para>
-                    With any authorization mechanism, two special identifiers are defined. The identifier "<code>anonymous</code>" refers to the anonymous, or unauthenticated user. The identifier "<code>anyone</code>" refers to all users, including the anonymous user.
+                    With any authorization mechanism, two special identifiers are defined. The identifier &#34;<code>anonymous</code>&#34; refers to the anonymous, or unauthenticated user. The identifier &#34;<code>anyone</code>&#34; refers to all users, including the anonymous user.
                 </para>
+
             </section>
+            
 
         </section>
-
-        <section>
+        
+        <section id="sect-Deployment_Guide-Access_Control_Lists-Kerberos_vs._Unix_Authorization">
             <title>Kerberos vs. Unix Authorization</title>
             <para>
-                The Cyrus IMAP server comes with four authorization mechanisms, one is compatible with Unix-style ("<code>/etc/passwd</code>") authorization, one for use with Kerberos 4, one for use with Kerberos 5, and one for use with an external authorization process (ptloader) which can interface with other group databases (e.g. AFS PTS groups, LDAP Groups, etc).
+                The Cyrus IMAP server comes with four authorization mechanisms, one is compatible with Unix-style (&#34;<code>/etc/passwd</code>&#34;) authorization, one for use with Kerberos 4, one for use with Kerberos 5, and one for use with an external authorization process (ptloader) which can interface with other group databases (e.g. AFS PTS groups, LDAP Groups, etc).
             </para>
             <note>
                 <title>Authentication !== Authorization</title>
                 <para>
                     Note that authorization is <emphasis>not</emphasis> the same thing as authentication. Authentication is the act of proving who you are. Authorization is the act of determining what rights you have. Authentication is discussed in the Login Authentication part of this document.
                 </para>
-                <remark>
-                    In the paragraph above, make sure 'Login Authentication' links to the appropriate section.
-                </remark>
+                <remark> In the paragraph above, make sure &#39;Login Authentication&#39; links to the appropriate section. </remark>
+
             </note>
             <para>
-                In the Unix authorization mechanism, identifiers are either a valid userid or the string "<code>group</code>": followed by a group listed in <filename>/etc/group</filename>. Thus:
+                In the Unix authorization mechanism, identifiers are either a valid userid or the string &#34;<code>group</code>&#34;: followed by a group listed in <filename>/etc/group</filename>. Thus:
             </para>
             <para>
-                <screen>    root                Refers to the user root
-    group:staff         Refers to the group staff</screen>
+                
+<screen>    root                Refers to the user root
+    group:staff        Refers to the group staff</screen>
+
             </para>
             <para>
                 It is also possible to use unix groups with users authenticated through a non-/etc/passwd backend. Note that using unix groups in this way (without associated <filename>/etc/passwd</filename> entries) is not recommended.
             </para>
-            <remark>
-                Actually, what Cyrus requires is the getgrent(3) POSIX sysctl. As such, NSS needs to be configured to have the groups available, one of which includes "files", but could also include "ldap".
-            </remark>
+            <remark> Actually, what Cyrus requires is the getgrent(3) POSIX sysctl. As such, NSS needs to be configured to have the groups available, one of which includes &#34;files&#34;, but could also include &#34;ldap&#34;. </remark>
             <para>
                 Using the Kerberos authorization mechanism, identifiers are of the form:
             </para>
             <para>
-                <screen><emphasis>$principal</emphasis>.<emphasis>$instance</emphasis>@<emphasis>$realm</emphasis></screen>
+                
+<screen><emphasis>$principal</emphasis>.<emphasis>$instance</emphasis>@<emphasis>$realm</emphasis></screen>
+
             </para>
             <para>
                 If <literal>$instance</literal> is omitted, it defaults to the null string. If <literal>$realm</literal> is omitted, it defaults to the local realm.
@@ -286,7 +319,9 @@
                 The file <filename>/etc/krb.equiv</filename> contains mappings between Kerberos principals. The file contains zero or more lines, each containing two fields. Any identity matching the first field of a line is changed to the second identity during canonicalization. For example, a line in <filename>/etc/krb.equiv</filename> of:
             </para>
             <para>
-                <screen>bovik@REMOTE.COM bovik</screen>
+                
+<screen>bovik@REMOTE.COM bovik</screen>
+
             </para>
             <para>
                 will cause the identity <literal>bovik@REMOTE.COM</literal> to be treated as if it were the local identity <literal>bovik</literal>.
@@ -294,12 +329,13 @@
             <para>
                 A site may wish to write their own authorization mechanism, perhaps to implement a local group mechanism. If it does so (by implementing an <code>auth_[whatever]</code> PTS module), it will dictate its own form and meaning of identifiers.
             </para>
+
         </section>
+        
 
     </section>
-
-
-<!--
+    
+    <!--    
 
 <H3><A name="aclneg">Negative Rights</A></H3>
 
@@ -318,8 +354,8 @@ to all groups the user is a member of.
 <p>For example, given the ACL:
 
 <pre>
-   anyone       lrsp
-   fred         lwi
+   anyone    lrsp
+   fred        lwi
    -anonymous   s
 </pre>
 
@@ -834,7 +870,6 @@ Cyrus now supports the distribution of mailboxes across a number of IMAP
 servers to allow for horizontal scalability.  For information on setting
 up this configuration, see <A href="install-murder.php">here</A>.
 
-//-->
-
+//    -->
 </chapter>
 

@@ -8,7 +8,6 @@
     <para>
         Depending on the target use of Cyrus IMAP, different features and architectures may be used to make optimal use of the Cyrus IMAP features. This chapter briefly touches different deployment scenarios.
     </para>
-
     <section id="sect-Deployment_Guide-Deployment_Scenarios-Single_Server_Deployments">
         <title>Single Server Deployments</title>
         <para>
@@ -20,51 +19,62 @@
                     <para>
                         In the foreseeable future, might this deployment run for multiple domain name spaces?
                     </para>
+
                 </listitem>
                 <listitem>
                     <para>
-                        Is this deployment going to close in on it's maximum capacity?
+                        Is this deployment going to close in on it&#39;s maximum capacity?
                     </para>
+
                 </listitem>
                 <listitem>
                     <para>
                         Is high-availability required?
                     </para>
+
                 </listitem>
+
             </itemizedlist>
+
         </para>
         <para>
             If the answer to all of these questions is a consistent no, then please continue with the Installation Guide.
         </para>
-    </section>
 
+    </section>
+    
     <section id="sect-Deployment_Guide-Deployment_Scenarios-Multi_Server_Deployments">
         <title>Multi Server Deployments</title>
         <para>
             This is a test paragraph in a section
         </para>
-    </section>
 
+    </section>
+    
     <section id="sect-Deployment_Guide-Deployment_Scenarios-Cyrus_Murder">
         <title>Cyrus Murder</title>
         <para>
             This is a test paragraph in a section
         </para>
-    </section>
 
+    </section>
+    
     <section id="sect-Deployment_Guide-Deployment_Scenarios-Cyrus_Replication">
         <title>Cyrus Replication</title>
         <para>
             This is a test paragraph in a section
         </para>
-    </section>
 
-    <section id="sect-Deployment_Guide-Infrastructure_Architecture-Hosted_Environments">
+    </section>
+    
+    <section id="sect-Deployment_Guide-Deployment_Scenarios-Hosted_Environments">
         <title>Hosted Environments</title>
         <para>
             This is a test paragraph in a section
         </para>
+
     </section>
+    
 
 </chapter>
 
