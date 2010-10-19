@@ -1,5 +1,12 @@
 PACKAGE = "Installation_Guide"
 
-all:
+all: clean clean_ids
 	@publican build --langs=en-US --formats=html,html-single,pdf
-	@rsync -aHvz tmp/en-US/{html,html-single,pdf} www.cyrusimap.org:./public_html/cyrus-imapd-2.4-docs/$(PACKAGE)/; \
+	@rsync -aHvz tmp/en-US/{html,html-single,pdf} www.cyrusimap.org:./public_html/cyrus-imapd-2.4-docs/$(PACKAGE)/
+
+clean:
+	@publican clean
+
+clean_ids:
+	@publican clean_ids
+	@sed -i -r -e 's/\t/    /g' -e 's/((\s{4})+)\s*/\1/g' `find en-US/ -type f -name "*.xml"`
