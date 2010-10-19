@@ -332,35 +332,41 @@
 
         </section>
         
+        <section id="sect-Deployment_Guide-Access_Control_Lists-Negative_Rights">
+            <title>Negative Rights</title>
+            <para>
+                Any of the above defined identifiers may be prefixed with a &#34;<code>-</code>&#34; character. The associated rights are then removed from that identifier. These are referred to as <emphasis>negative rights</emphasis>.
+            </para>
+
+        </section>
+        
+        <section id="sect-Deployment_Guide-Access_Control_Lists-Calculating_the_Users_Rights">
+            <title>Calculating the Users&#39; Rights</title>
+            <para>
+                To calculate the set of rights granted to a user, the server first calculates the union of all of the rights granted to the user and to all groups the user is a member of. The server then calculates and removes the union of all the negative rights granted to the user and to all groups the user is a member of.
+            </para>
+            <example id="exam-Deployment_Guide-Calculating_the_Users_Rights-Example_ACL_with_Negative_User_Rights">
+                <title>Example ACL with Negative User Rights</title>
+                <para>
+                    
+<screen>   anyone    lrsp
+   fred        lwi
+   -anonymous   s</screen>
+
+                </para>
+
+            </example>
+            <para>
+                The user &#34;<code>fred</code>&#34; will be granted the rights &#34;<code>lrswip</code>&#34; and the anonymous user will be granted the rights &#34;<code>lrp</code>&#34;.
+            </para>
+
+        </section>
+        
 
     </section>
     
-    <!--    
+    <!-- 
 
-<H3><A name="aclneg">Negative Rights</A></H3>
-
-Any of the above defined identifiers may be prefixed with a "<code>-</code>"
-character.  The associated rights are then removed from that
-identifier.  These are referred to as "negative rights".
-
-<H3><A NAME="acluser">Calculating Users' Rights</A></H3>
-
-To calculate the set of rights granted to a user, the server first
-calculates the union of all of the rights granted to the user and to
-all groups the user is a member of.  The server then calculates and
-removes the union of all the negative rights granted to the user and
-to all groups the user is a member of.
-
-<p>For example, given the ACL:
-
-<pre>
-   anyone    lrsp
-   fred        lwi
-   -anonymous   s
-</pre>
-
-The user "<code>fred</code>" will be granted the rights "<code>lrswip</code>"
-and the anonymous user will be granted the rights "<code>lrp</code>".
 
 <H4><A name="acladm">Implicit Rights for Administrators on Personal
 Mailboxes</A></H4>
