@@ -3492,12 +3492,13 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
 }
 
 static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid,
-				      int make_changes)
+				      int flags)
 {
     char *fname = mailbox_message_fname(mailbox, uid);
     int r = 0;
     struct index_record record;
     struct stat sbuf;
+    int make_changes = flags & RECONSTRUCT_MAKE_CHANGES;
 
     if (stat(fname, &sbuf) == -1) r = IMAP_MAILBOX_NONEXISTENT;
     else if (sbuf.st_size == 0) r = IMAP_MAILBOX_NONEXISTENT;
