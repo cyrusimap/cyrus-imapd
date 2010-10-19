@@ -4,10 +4,25 @@
 %BOOK_ENTITIES;
 ]>
 <preface id="pref-Deployment_Guide-Preface">
-	<title>Preface</title>
-	<xi:include href="Common_Content/Conventions.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-	<xi:include href="Feedback.xml" xmlns:xi="http://www.w3.org/2001/XInclude"><xi:fallback xmlns:xi="http://www.w3.org/2001/XInclude"><xi:include href="Common_Content/Feedback.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-	</xi:fallback>
-	</xi:include>
+    <title>Preface</title>
+    <xi:include href="Common_Content/Conventions.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="Feedback.xml" xmlns:xi="http://www.w3.org/2001/XInclude">
+        <xi:fallback xmlns:xi="http://www.w3.org/2001/XInclude">
+            <xi:include href="Common_Content/Feedback.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+        </xi:fallback>
+    </xi:include>
+
+    <section id="sect-Deployment_Guide-About_Cyrus">
+        <title>About Cyrus</title>
+        <para>
+            Prior to 1994, <emphasis>Carnegie Mellon University</emphasis> (CMU) exclusively used the locally-developed and non-standard <emphasis>Andrew Messaging System</emphasis> (AMS) to service its email communication needs. When, in 1994, CMU wanted to move to a better scalable, standards-compliant mail system that met or exceeded the feature set of AMS, it started the Cyrus project.
+        </para>
+        <para>
+            At the time of this writing, Cyrus IMAP and Cyrus SASL are amongst the most widely used Free Software products. The largest mail environment reported to run on Cyrus IMAP services over 2.3 million users.
+        </para>
+        <para>
+            Project Homepage: <ulink url="http://cyrusimap.org" />
+        </para>
+    </section>
 </preface>
 
