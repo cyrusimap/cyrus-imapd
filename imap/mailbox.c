@@ -3765,6 +3765,15 @@ int mailbox_reconstruct(const char *name, int flags)
     if (make_changes) {
 	r = mailbox_commit(mailbox);
     }
+    else {
+	/* undo any dirtyness before we close, we didn't actually
+	 * write any changes */
+	mailbox->i.dirty = 0;
+	mailbox->quota_dirty = 0;
+	mailbox->cache_dirty = 0;
+	mailbox->modseq_dirty = 0;
+	mailbox->header_dirty = 0;
+    }
 
 close:
     free_files(&files);
