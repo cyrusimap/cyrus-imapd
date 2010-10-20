@@ -613,6 +613,23 @@ static void output_entryatt(const char *mboxname, const char *entry,
     }
 }
 
+static int annotation_may_fetch(const struct fetchdata *fdata,
+				const struct mailbox_annotation_rock *mbrock,
+				unsigned needed)
+{
+    unsigned my_rights;
+
+    if (fdata->isadmin)
+	return 1;
+
+    if (!mbrock->acl)
+	return 0;
+
+    my_rights = cyrus_acl_myrights(fdata->auth_state, mbrock->acl);
+
+    return ((my_rights & needed) == needed);
+}
+
 static void annotation_get_fromfile(const char *int_mboxname __attribute__((unused)),
 				    const char *ext_mboxname,
 				    const char *entry,
@@ -686,9 +703,7 @@ static void annotation_get_server(const char *int_mboxname,
     if (!mbrock->server) return;
 
     /* Check ACL */
-    if(!fdata->isadmin &&
-       (!mbrock->acl ||
-        !(cyrus_acl_myrights(fdata->auth_state, mbrock->acl) & ACL_LOOKUP)))
+    if (!annotation_may_fetch(fdata, mbrock, ACL_LOOKUP))
 	return;
 
     memset(&attrib, 0, sizeof(attrib));
@@ -721,9 +736,7 @@ static void annotation_get_partition(const char *int_mboxname,
     if (mbrock->server) return;
 
     /* Check ACL */
-    if(!fdata->isadmin &&
-       (!mbrock->acl ||
-        !(cyrus_acl_myrights(fdata->auth_state, mbrock->acl) & ACL_LOOKUP)))
+    if (!annotation_may_fetch(fdata, mbrock, ACL_LOOKUP))
 	return;
 
     memset(&attrib, 0, sizeof(attrib));
@@ -758,10 +771,7 @@ static void annotation_get_size(const char *int_mboxname,
     if (mbrock->server) return;
 
     /* Check ACL */
-    if(!fdata->isadmin &&
-       (!mbrock->acl ||
-        !(cyrus_acl_myrights(fdata->auth_state, mbrock->acl) & ACL_LOOKUP) ||
-        !(cyrus_acl_myrights(fdata->auth_state, mbrock->acl) & ACL_READ)))
+    if (!annotation_may_fetch(fdata, mbrock, ACL_LOOKUP|ACL_READ))
 	return;
 
     if (mailbox_open_irl(int_mboxname, &mailbox))
@@ -803,10 +813,7 @@ static void annotation_get_lastupdate(const char *int_mboxname,
     if (mbrock->server) return;
 
     /* Check ACL */
-    if(!fdata->isadmin &&
-       (!mbrock->acl ||
-        !(cyrus_acl_myrights(fdata->auth_state, mbrock->acl) & ACL_LOOKUP) ||
-        !(cyrus_acl_myrights(fdata->auth_state, mbrock->acl) & ACL_READ)))
+    if (!annotation_may_fetch(fdata, mbrock, ACL_LOOKUP|ACL_READ))
 	return;
 
     fname = mboxname_metapath(mbrock->partition, int_mboxname, META_INDEX, 0);
@@ -845,12 +852,8 @@ static void annotation_get_lastpop(const char *int_mboxname,
     if (mbrock->server) return;
 
     /* Check ACL */
-    if(!fdata->isadmin &&
-       (!mbrock->acl ||
-      !(cyrus_acl_myrights(fdata->auth_state, mbrock->acl) & ACL_LOOKUP) ||
-      !(cyrus_acl_myrights(fdata->auth_state, mbrock->acl) & ACL_READ)))
-      return;
-
+    if (!annotation_may_fetch(fdata, mbrock, ACL_LOOKUP|ACL_READ))
+	return;
 
     if (mailbox_open_irl(int_mboxname, &mailbox) != 0)
       return;
@@ -903,12 +906,8 @@ static void annotation_get_mailboxopt(const char *int_mboxname,
     if (!flag) return;
   
     /* Check ACL */
-    if(!fdata->isadmin &&
-       (!mbrock->acl ||
-      !(cyrus_acl_myrights(fdata->auth_state, mbrock->acl) & ACL_LOOKUP) ||
-      !(cyrus_acl_myrights(fdata->auth_state, mbrock->acl) & ACL_READ)))
-      return;
-
+    if (!annotation_may_fetch(fdata, mbrock, ACL_LOOKUP|ACL_READ))
+	return;
 
     if (mailbox_open_irl(int_mboxname, &mailbox) != 0)
       return;
@@ -929,6 +928,50 @@ static void annotation_get_mailboxopt(const char *int_mboxname,
 
     output_entryatt(ext_mboxname, entry, "", &attrib, fdata);
 }
+
+static void annotation_get_pop3showafter(const char *int_mboxname,
+				        const char *ext_mboxname,
+				        const char *entry,
+				        struct fetchdata *fdata,
+				        struct mailbox_annotation_rock *mbrock,
+				        void *rock __attribute__((unused)))
+{
+    struct mailbox *mailbox = NULL;
+    char value[30];
+    struct annotation_data attrib;
+
+    if(!int_mboxname || !ext_mboxname || !entry || !fdata || !mbrock)
+      fatal("annotation_get_pop3showafter called with bad parameters",
+              EC_TEMPFAIL);
+
+    get_mb_data(int_mboxname, mbrock);
+
+    /* Make sure its a local mailbox */
+    if (mbrock->server) return;
+
+    /* Check ACL */
+    if (!annotation_may_fetch(fdata, mbrock, ACL_LOOKUP|ACL_READ))
+	return;
+
+    if (mailbox_open_irl(int_mboxname, &mailbox) != 0)
+      return;
+
+    if (mailbox->i.pop3_show_after == 0)
+	strcpy(value, "NIL");
+    else
+	cyrus_ctime(mailbox->i.pop3_show_after, value);
+
+    mailbox_close(&mailbox);
+
+    memset(&attrib, 0, sizeof(attrib));
+
+    attrib.value = value;
+    attrib.size = strlen(value);
+    attrib.contenttype = "text/plain";
+
+    output_entryatt(ext_mboxname, entry, "", &attrib, fdata);
+}
+
 
 struct rw_rock {
     const char *ext_mboxname;
@@ -977,10 +1020,7 @@ static void annotation_get_fromdb(const char *int_mboxname,
 	if (mbrock->server) return;
 
 	/* Check ACL */
-	if(!fdata->isadmin &&
-	   (!mbrock->acl ||
-	    !(cyrus_acl_myrights(fdata->auth_state, mbrock->acl) & ACL_LOOKUP) ||
-	    !(cyrus_acl_myrights(fdata->auth_state, mbrock->acl) & ACL_READ)))
+	if (!annotation_may_fetch(fdata, mbrock, ACL_LOOKUP|ACL_READ))
 	    return;
     }
 
@@ -1026,6 +1066,8 @@ const struct annotate_f_entry mailbox_ro_entries[] =
       annotation_get_mailboxopt, NULL },
     { "/vendor/cmu/cyrus-imapd/duplicatedeliver", BACKEND_ONLY,
       annotation_get_mailboxopt, NULL },
+    { "/vendor/cmu/cyrus-imapd/pop3showafter", BACKEND_ONLY,
+      annotation_get_pop3showafter, NULL },
     { NULL, ANNOTATION_PROXY_T_INVALID, NULL, NULL }
 };
 
@@ -1613,6 +1655,23 @@ static void store_proxy(char *server, void *data __attribute__((unused)),
     proxy_store_func(server, prock->mbox_pat, prock->entryatts);
 }
 
+static int annotation_may_store(const struct storedata *sdata,
+				const struct mailbox_annotation_rock *mbrock,
+				unsigned needed)
+{
+    unsigned my_rights;
+
+    if (sdata->isadmin)
+	return 1;
+
+    if (!mbrock->acl)
+	return 0;
+
+    my_rights = cyrus_acl_myrights(sdata->auth_state, mbrock->acl);
+
+    return ((my_rights & needed) == needed);
+}
+
 static int annotation_set_tofile(const char *int_mboxname __attribute__((unused)),
 				 struct annotate_st_entry_list *entry,
 				 struct storedata *sdata,
@@ -1729,12 +1788,8 @@ static int annotation_set_mailboxopt(const char *int_mboxname,
     if (!flag) return IMAP_PERMISSION_DENIED;
   
     /* Check ACL */
-    if(!sdata->isadmin &&
-       (!mbrock->acl ||
-	!(cyrus_acl_myrights(sdata->auth_state, mbrock->acl) & ACL_LOOKUP) ||
-	!(cyrus_acl_myrights(sdata->auth_state, mbrock->acl) & ACL_WRITE))) {
+    if (!annotation_may_store(sdata, mbrock, ACL_LOOKUP|ACL_WRITE))
 	return IMAP_PERMISSION_DENIED;
-    }
 
     r = mailbox_open_iwl(int_mboxname, &mailbox);
     if (r) return r;
@@ -1748,6 +1803,44 @@ static int annotation_set_mailboxopt(const char *int_mboxname,
     }
 
     if (oldopts != mailbox->i.options) {
+	mailbox_index_dirty(mailbox);
+	r = mailbox_commit(mailbox);
+    }
+
+    mailbox_close(&mailbox);
+
+    return r;
+}
+
+static int annotation_set_pop3showafter(const char *int_mboxname,
+				     struct annotate_st_entry_list *entry,
+				     struct storedata *sdata,
+				     struct mailbox_annotation_rock *mbrock,
+				     void *rock __attribute__((unused)))
+{
+    struct mailbox *mailbox = NULL;
+    int r = 0;
+    time_t date;
+
+    /* Check ACL */
+    if (!annotation_may_store(sdata, mbrock, ACL_LOOKUP|ACL_WRITE))
+	return IMAP_PERMISSION_DENIED;
+
+    if (!strcmp(entry->shared.value, "NIL")) {
+	/* Effectively removes the annotation */
+	date = 0;
+    }
+    else {
+	r = cyrus_parsetime(entry->shared.value, &date);
+	if (r != 0)
+	    return IMAP_PROTOCOL_BAD_PARAMETERS;
+    }
+
+    r = mailbox_open_iwl(int_mboxname, &mailbox);
+    if (r) return r;
+
+    if (date != mailbox->i.pop3_show_after) {
+	mailbox->i.pop3_show_after = date;
 	mailbox_index_dirty(mailbox);
 	r = mailbox_commit(mailbox);
     }
@@ -1824,6 +1917,9 @@ const struct annotate_st_entry mailbox_rw_entries[] =
     { "/vendor/cmu/cyrus-imapd/duplicatedeliver", ATTRIB_TYPE_BOOLEAN, BACKEND_ONLY,
       ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
       ACL_ADMIN, annotation_set_mailboxopt, NULL },
+    { "/vendor/cmu/cyrus-imapd/pop3showafter", ATTRIB_TYPE_STRING, BACKEND_ONLY,
+      ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
+      ACL_ADMIN, annotation_set_pop3showafter, NULL },
     { NULL, 0, ANNOTATION_PROXY_T_INVALID, 0, 0, NULL, NULL }
 };
 

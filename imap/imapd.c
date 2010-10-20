@@ -9096,195 +9096,36 @@ int getlistretopts(char *tag, unsigned *opts) {
 }
 
 /*
- * Parse a date_time, for the APPEND command
+ * Parse a string in IMAP date-time format (and some more
+ * obscure legacy formats too) to a time_t.  Parses both
+ * date and time parts.  See cyrus_parsetime() for formats.
+ *
+ * Returns: the next character read from imapd_in, or
+ *	    or EOF on error.
  */
 int getdatetime(date)
 time_t *date;
 {
     int c;
-    struct tm tm;
-    int old_format = 0;
-    char month[4], zone[4], *p;
-    time_t tmp_gmtime;
-    int zone_off;
-
-    memset(&tm, 0, sizeof tm);
+    int r;
+    int i = 0;
+    char buf[CYRUS_PARSETIME_MAX+1];
 
     c = prot_getc(imapd_in);
-    if (c != '\"') goto baddate;
-    
-    /* Day of month */
-    c = prot_getc(imapd_in);
-    if (c == ' ') c = '0';
-    if (!isdigit(c)) goto baddate;
-    tm.tm_mday = c - '0';
-    c = prot_getc(imapd_in);
-    if (isdigit(c)) {
-	tm.tm_mday = tm.tm_mday * 10 + c - '0';
-	c = prot_getc(imapd_in);
-	if(tm.tm_mday <= 0 || tm.tm_mday > 31)
+    if (c != '\"')
+	goto baddate;
+    while ((c = prot_getc(imapd_in)) != '\"') {
+	if (i >= CYRUS_PARSETIME_MAX)
 	    goto baddate;
+	buf[i++] = c;
     }
-    
-    if (c != '-') goto baddate;
-    c = prot_getc(imapd_in);
+    buf[i] = '\0';
 
-    /* Month name */
-    if (!isalpha(c)) goto baddate;
-    month[0] = c;
-    c = prot_getc(imapd_in);
-    if (!isalpha(c)) goto baddate;
-    month[1] = c;
-    c = prot_getc(imapd_in);
-    if (!isalpha(c)) goto baddate;
-    month[2] = c;
-    c = prot_getc(imapd_in);
-    month[3] = '\0';
-    lcase(month);
-
-    for (tm.tm_mon = 0; tm.tm_mon < 12; tm.tm_mon++) {
-	if (!strcmp(month, monthname[tm.tm_mon])) break;
-    }
-    if (tm.tm_mon == 12) goto baddate;
-    /* xxx this doesn't quite work in leap years */
-    if (tm.tm_mday > max_monthdays[tm.tm_mon]) goto baddate;
-
-    if (c != '-') goto baddate;
-    c = prot_getc(imapd_in);
-
-    /* Year */
-    if (!isdigit(c)) goto baddate;
-    tm.tm_year = c - '0';
-    c = prot_getc(imapd_in);
-    if (!isdigit(c)) goto baddate;
-    tm.tm_year = tm.tm_year * 10 + c - '0';
-    c = prot_getc(imapd_in);
-    if (isdigit(c)) {
-	if (tm.tm_year < 19) goto baddate;
-	tm.tm_year -= 19;
-	tm.tm_year = tm.tm_year * 10 + c - '0';
-	c = prot_getc(imapd_in);
-	if (!isdigit(c)) goto baddate;
-	tm.tm_year = tm.tm_year * 10 + c - '0';
-	c = prot_getc(imapd_in);
-    }
-    else old_format++;
-
-    /* Hour */
-    if (c != ' ') goto baddate;
-    c = prot_getc(imapd_in);
-    if (!isdigit(c)) goto baddate;
-    tm.tm_hour = c - '0';
-    c = prot_getc(imapd_in);
-    if (!isdigit(c)) goto baddate;
-    tm.tm_hour = tm.tm_hour * 10 + c - '0';
-    c = prot_getc(imapd_in);
-    if (tm.tm_hour > 23) goto baddate;
-
-    /* Minute */
-    if (c != ':') goto baddate;
-    c = prot_getc(imapd_in);
-    if (!isdigit(c)) goto baddate;
-    tm.tm_min = c - '0';
-    c = prot_getc(imapd_in);
-    if (!isdigit(c)) goto baddate;
-    tm.tm_min = tm.tm_min * 10 + c - '0';
-    c = prot_getc(imapd_in);
-    if (tm.tm_min > 59) goto baddate;
-
-    /* Second */
-    if (c != ':') goto baddate;
-    c = prot_getc(imapd_in);
-    if (!isdigit(c)) goto baddate;
-    tm.tm_sec = c - '0';
-    c = prot_getc(imapd_in);
-    if (!isdigit(c)) goto baddate;
-    tm.tm_sec = tm.tm_sec * 10 + c - '0';
-    c = prot_getc(imapd_in);
-    if (tm.tm_min > 60) goto baddate;
-
-    /* Time zone */
-    if (old_format) {
-	if (c != '-') goto baddate;
-	c = prot_getc(imapd_in);
-
-	if (!isalpha(c)) goto baddate;
-	zone[0] = c;
-	c = prot_getc(imapd_in);
-
-	if (c == '\"') {
-	    /* Military (single-char) zones */
-	    zone[1] = '\0';
-	    lcase(zone);
-	    if (zone[0] <= 'm') {
-		zone_off = (zone[0] - 'a' + 1)*60;
-	    }
-	    else if (zone[0] < 'z') {
-		zone_off = ('m' - zone[0])*60;
-	    }
-	    else zone_off = 0;
-	}
-	else {
-	    /* UT (universal time) */
-	    zone[1] = c;
-	    c = prot_getc(imapd_in);
-	    if (c == '\"') {
-		zone[2] = '\0';
-		lcase(zone);
-		if (!strcmp(zone, "ut")) goto baddate;
-		zone_off = 0;
-	    }
-	    else {
-		/* 3-char time zone */
-		zone[2] = c;
-		c = prot_getc(imapd_in);
-		if (c != '\"') goto baddate;
-		zone[3] = '\0';
-		lcase(zone);
-		p = strchr("aecmpyhb", zone[0]);
-		if (c != '\"' || zone[2] != 't' || !p) goto baddate;
-		zone_off = (strlen(p) - 12)*60;
-		if (zone[1] == 'd') zone_off -= 60;
-		else if (zone[1] != 's') goto baddate;
-	    }
-	}
-    }
-    else {
-	if (c != ' ') goto baddate;
-	c = prot_getc(imapd_in);
-
-	if (c != '+' && c != '-') goto baddate;
-	zone[0] = c;
-
-	c = prot_getc(imapd_in);
-	if (!isdigit(c)) goto baddate;
-	zone_off = c - '0';
-	c = prot_getc(imapd_in);
-	if (!isdigit(c)) goto baddate;
-	zone_off = zone_off * 10 + c - '0';
-	c = prot_getc(imapd_in);
-	if (!isdigit(c)) goto baddate;
-	zone_off = zone_off * 6 + c - '0';
-	c = prot_getc(imapd_in);
-	if (!isdigit(c)) goto baddate;
-	zone_off = zone_off * 10 + c - '0';
-
-	if (zone[0] == '-') zone_off = -zone_off;
-
-	c = prot_getc(imapd_in);
-	if (c != '\"') goto baddate;
-
-    }
+    r = cyrus_parsetime(buf, date);
+    if (r < 0)
+	goto baddate;
 
     c = prot_getc(imapd_in);
-
-    tm.tm_isdst = -1;
-
-    tmp_gmtime = mkgmtime(&tm);
-    if(tmp_gmtime == -1) goto baddate;
-
-    *date = tmp_gmtime - zone_off*60;
-
     return c;
 
  baddate:

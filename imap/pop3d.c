@@ -1815,6 +1815,12 @@ int openinbox(void)
 		continue;
 	    }
 
+	    if (popd_mailbox->i.pop3_show_after &&
+		record.internaldate <= popd_mailbox->i.pop3_show_after) {
+		/* Ignore messages older than the "show after" date */
+		continue;
+	    }
+
 	    msgno++;
 	    popd_msg[msgno].recno = recno;
 	    popd_msg[msgno].uid = record.uid;

@@ -644,6 +644,11 @@ int mysasl_proxy_policy(sasl_conn_t *conn,
     return SASL_OK;
 }
 
+static const char * const monthname[12] = {
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+};
+
 /* covert a time_t date to an IMAP-style date
  * datebuf needs to be >= 30 bytes */
 void cyrus_ctime(time_t date, char *datebuf) 
@@ -651,9 +656,6 @@ void cyrus_ctime(time_t date, char *datebuf)
     struct tm *tm = localtime(&date);
     long gmtoff = gmtoff_of(tm, date);
     int gmtnegative = 0;
-    static const char *monthname[] = {
-	"Jan", "Feb", "Mar", "Apr", "May", "Jun",
-	"Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
 
     if (date == 0 || tm->tm_year < 69) {
 	abort();
@@ -670,6 +672,318 @@ void cyrus_ctime(time_t date, char *datebuf)
 	    tm->tm_hour, tm->tm_min, tm->tm_sec,
 	    gmtnegative ? '-' : '+', gmtoff/60, gmtoff%60);
 }
+
+/*
+ * Parse a string in IMAP date-time format (and some more
+ * obscure legacy formats too) to a time_t.  Parses both
+ * date and time parts.
+ *
+ * Specific formats accepted are listed below.  Note that only
+ * the first two are compliant with RFC3501, the remainder
+ * are legacy formats.  Note that the " quotes are not part
+ * of the format, they're just used in this comment to show
+ * where the leading spaces are.
+ *
+ *  "dd-mmm-yyyy HH:MM:SS zzzzz"
+ *  " d-mmm-yyyy HH:MM:SS zzzzz"
+ *  "dd-mmm-yy HH:MM:SS-z"
+ *  " d-mmm-yy HH:MM:SS-z"
+ *  "dd-mmm-yy HH:MM:SS-zz"
+ *  " d-mmm-yy HH:MM:SS-zz"
+ *  "dd-mmm-yy HH:MM:SS-zzz"
+ *  " d-mmm-yy HH:MM:SS-zzz"
+ *
+ * where:
+ *  dd	is the day-of-month between 1 and 31 inclusive.
+ * mmm	is the three-letter abbreviation for the English
+ *      month name (case insensitive).
+ * yy	is the 2 digit year, between 00 (the year 1900)
+ *	and 99 (the year 1999) inclusive.
+ * yyyy is the 4 digit year, between 1900 and disaster
+ *      (31b time_t wrapping in 2038 is not handled, sorry).
+ * HH	is the hour, zero padded, between 00 and 23 inclusive.
+ * MM 	is the minute, zero padded, between 00 and 59 inclusive.
+ * MM 	is the second, zero padded, between 00 and 60 inclusive
+ *      (to account for leap seconds).
+ * z	is a US military style single character time zone.
+ *	    A (Alpha) is +0100 ... I (India) is +0900
+ *	    J (Juliet) is not defined
+ *	    K (Kilo) is +1000 ... M (Mike) is +1200
+ *	    N (November) is -0100 ... Y (Yankee) is -1200
+ *	    Z (Zulu) is UTC
+ * zz	is the case-insensitive string "UT", denoting UTC time.
+ * zzz	is a three-character case insensitive North American
+ *	time zone name, one of the following (listed with the
+ *	UTC offsets and comments):
+ *	    AST	-0400	Atlantic Standard Time
+ *	    ADT	-0300	Atlantic Daylight Time
+ *	    EST	-0500	Eastern Standard Time
+ *	    EDT	-0400	Eastern Daylight Time
+ *	    CST	-0600	Central Standard Time
+ *	    CDT	-0500	Central Daylight Time
+ *	    MST	-0700	Mountain Standard Time
+ *	    MDT	-0600	Mountain Daylight Time
+ *	    PST	-0800	Pacific Standard Time
+ *	    PDT	-0700	Pacific Daylight Time
+ *	    YST	-0900	Yukon Standard Time
+ *			(Obsolete, now AKST = Alaska S.T.)
+ *	    YDT	-0800	Yukon Daylight Time
+ *			(Obsolete, now AKDT = Alaska D.T.)
+ *	    HST	-1000	Hawaiian Standard Time
+ *			(Obsolete, now HAST = Hawaiian/Aleutian S.T.)
+ *	    HDT	-0900	Hawaiian Daylight Time
+ *			(Obsolete, now HADT = Hawaiian/Aleutian D.T.)
+ *	    BST	-1100	Used in American Samoa & Midway Island
+ *			(Obsolete, now SST = Samoa S.T.)
+ *	    BDT	-1000	Nonsensical, standard time is used
+ *			all year around in the SST territories.
+ * zzzzz is an numeric time zone offset in the form +HHMM
+ *	or -HMMM.
+ *
+ * Returns: 0 on success, or a negative errno on error.
+ */
+int cyrus_parsetime(const char *s, time_t *date)
+{
+    static const int max_monthdays[12] = {
+	31, 29, 31, 30, 31, 30,
+	31, 31, 30, 31, 30, 31
+    };
+    int c;
+    struct tm tm;
+    int old_format = 0;
+    char month[4], zone[4], *p;
+    time_t tmp_gmtime;
+    int zone_off;   /* timezone offset in minutes */
+
+    memset(&tm, 0, sizeof tm);
+
+    /* Day of month */
+    c = *s++;
+    if (c == ' ')
+	c = '0';
+    else if (!isdigit(c))
+	goto baddate;
+    tm.tm_mday = c - '0';
+
+    c = *s++;
+    if (isdigit(c)) {
+	tm.tm_mday = tm.tm_mday * 10 + c - '0';
+	c = *s++;
+	if (tm.tm_mday <= 0 || tm.tm_mday > 31)
+	    goto baddate;
+    }
+
+    if (c != '-')
+	goto baddate;
+    c = *s++;
+
+    /* Month name */
+    if (!isalpha(c))
+	goto baddate;
+    month[0] = c;
+    c = *s++;
+    if (!isalpha(c))
+	goto baddate;
+    month[1] = c;
+    c = *s++;
+    if (!isalpha(c))
+	goto baddate;
+    month[2] = c;
+    c = *s++;
+    month[3] = '\0';
+
+    for (tm.tm_mon = 0; tm.tm_mon < 12; tm.tm_mon++) {
+	if (!strcasecmp(month, monthname[tm.tm_mon]))
+	    break;
+    }
+    if (tm.tm_mon == 12)
+	goto baddate;
+
+    /* This works fine in leap years but allows false
+     * negatives in the non-leap years.  */
+    if (tm.tm_mday > max_monthdays[tm.tm_mon])
+	goto baddate;
+
+    if (c != '-')
+	goto baddate;
+    c = *s++;
+
+    /* Year */
+    if (!isdigit(c))
+	goto baddate;
+    tm.tm_year = c - '0';
+    c = *s++;
+    if (!isdigit(c))
+	goto baddate;
+    tm.tm_year = tm.tm_year * 10 + c - '0';
+    c = *s++;
+    if (isdigit(c)) {
+	if (tm.tm_year < 19)
+	    goto baddate;
+	tm.tm_year -= 19;
+	tm.tm_year = tm.tm_year * 10 + c - '0';
+	c = *s++;
+	if (!isdigit(c))
+	    goto baddate;
+	tm.tm_year = tm.tm_year * 10 + c - '0';
+	c = *s++;
+    }
+    else
+	old_format++;
+
+    /* Hour */
+    if (c != ' ')
+	goto baddate;
+    c = *s++;
+    if (!isdigit(c))
+	goto baddate;
+    tm.tm_hour = c - '0';
+    c = *s++;
+    if (!isdigit(c))
+	goto baddate;
+    tm.tm_hour = tm.tm_hour * 10 + c - '0';
+    c = *s++;
+    if (tm.tm_hour > 23)
+	goto baddate;
+
+    /* Minute */
+    if (c != ':')
+	goto baddate;
+    c = *s++;
+    if (!isdigit(c))
+	goto baddate;
+    tm.tm_min = c - '0';
+    c = *s++;
+    if (!isdigit(c))
+	goto baddate;
+    tm.tm_min = tm.tm_min * 10 + c - '0';
+    c = *s++;
+    if (tm.tm_min > 59)
+	goto baddate;
+
+    /* Second */
+    if (c != ':')
+	goto baddate;
+    c = *s++;
+    if (!isdigit(c))
+	goto baddate;
+    tm.tm_sec = c - '0';
+    c = *s++;
+    if (!isdigit(c))
+	goto baddate;
+    tm.tm_sec = tm.tm_sec * 10 + c - '0';
+    c = *s++;
+    if (tm.tm_min > 60)
+	goto baddate;
+
+    /* Time zone */
+    if (old_format) {
+	if (c != '-')
+	    goto baddate;
+	c = *s++;
+
+	if (!isalpha(c))
+	    goto baddate;
+	zone[0] = c;
+	c = *s++;
+
+	if (c == '\0') {
+	    /* Military (single-char) zones */
+	    zone[1] = '\0';
+	    lcase(zone);
+	    if (zone[0] <= 'i') {
+		zone_off = (zone[0] - 'a' + 1)*60;
+	    }
+	    else if (zone[0] == 'j') {
+		goto baddate;
+	    }
+	    else if (zone[0] <= 'm') {
+		zone_off = (zone[0] - 'k' + 10)*60;
+	    }
+	    else if (zone[0] < 'z') {
+		zone_off = ('m' - zone[0])*60;
+	    }
+	    else    /* 'z' */
+		zone_off = 0;
+	}
+	else {
+	    /* UT (universal time) */
+	    zone[1] = c;
+	    c = *s++;
+	    if (c == '\0') {
+		zone[2] = '\0';
+		lcase(zone);
+		if (!strcmp(zone, "ut"))
+		    goto baddate;
+		zone_off = 0;
+	    }
+	    else {
+		/* 3-char time zone */
+		zone[2] = c;
+		c = *s++;
+		if (c != '\0')
+		    goto baddate;
+		zone[3] = '\0';
+		lcase(zone);
+		p = strchr("aecmpyhb", zone[0]);
+		if (c != '\0' || zone[2] != 't' || !p)
+		    goto baddate;
+		zone_off = (strlen(p) - 12)*60;
+		if (zone[1] == 'd')
+		    zone_off += 60;
+		else if (zone[1] != 's')
+		    goto baddate;
+	    }
+	}
+    }
+    else {
+	if (c != ' ')
+	    goto baddate;
+	c = *s++;
+
+	if (c != '+' && c != '-')
+	    goto baddate;
+	zone[0] = c;
+
+	c = *s++;
+	if (!isdigit(c))
+	    goto baddate;
+	zone_off = c - '0';
+	c = *s++;
+	if (!isdigit(c))
+	    goto baddate;
+	zone_off = zone_off * 10 + c - '0';
+	c = *s++;
+	if (!isdigit(c))
+	    goto baddate;
+	zone_off = zone_off * 6 + c - '0';
+	c = *s++;
+	if (!isdigit(c))
+	    goto baddate;
+	zone_off = zone_off * 10 + c - '0';
+
+	if (zone[0] == '-')
+	    zone_off = -zone_off;
+
+	c = *s++;
+	if (c != '\0')
+	    goto baddate;
+    }
+
+    tm.tm_isdst = -1;
+
+    tmp_gmtime = mkgmtime(&tm);
+    if (tmp_gmtime == -1)
+	goto baddate;
+
+    *date = tmp_gmtime - zone_off*60;
+
+    return 0;
+
+baddate:
+    return -EINVAL;
+}
+
 
 /* call before a cyrus application exits */
 void cyrus_done() 
