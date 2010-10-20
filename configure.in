@@ -70,7 +70,7 @@ AC_DEFINE_UNQUOTED(CYRUS_PATH,"$cyrus_prefix",[Where will we be installed?])
 AC_ARG_WITH(service-path,[  --with-service-path=DIR    use DIR as service install directory],
 	service_path="$withval",service_path="$cyrus_prefix/bin")
 AC_SUBST(service_path)
-AC_DEFINE_UNQUOTED(SERVICE_PATH,"$service_path",[Directiory to use for service binaries])
+AC_DEFINE_UNQUOTED(SERVICE_PATH,"$service_path",[Directory to use for service binaries])
 AC_ARG_WITH(cyrus-user,[  --with-cyrus-user=USERID   use USERID cyrus userid],
 	cyrus_user="$withval",cyrus_user="cyrus")
 AC_SUBST(cyrus_user)
