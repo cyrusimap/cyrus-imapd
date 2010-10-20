@@ -1283,6 +1283,7 @@ int mailbox_buf_to_index_header(struct index_header *i, const char *buf)
     i->recentuid = ntohl(*((bit32 *)(buf+OFFSET_RECENTUID)));
     i->recenttime = ntohl(*((bit32 *)(buf+OFFSET_RECENTTIME)));
     i->header_crc = ntohl(*((bit32 *)(buf+OFFSET_HEADER_CRC)));
+    i->pop3_show_after = ntohl(*((bit32 *)(buf+OFFSET_POP3_SHOW_AFTER)));
 
     if (!i->exists)
 	i->options |= OPT_POP3_NEW_UIDL;
@@ -1694,7 +1695,7 @@ bit32 mailbox_index_header_to_buf(struct index_header *i, unsigned char *buf)
     *((bit32 *)(buf+OFFSET_SYNC_CRC)) = htonl(i->sync_crc);
     *((bit32 *)(buf+OFFSET_RECENTUID)) = htonl(i->recentuid);
     *((bit32 *)(buf+OFFSET_RECENTTIME)) = htonl(i->recenttime);
-    *((bit32 *)(buf+OFFSET_SPARE0)) = htonl(0); /* RESERVED */
+    *((bit32 *)(buf+OFFSET_POP3_SHOW_AFTER)) = htonl(i->pop3_show_after);
     *((bit32 *)(buf+OFFSET_SPARE1)) = htonl(0); /* RESERVED */
     *((bit32 *)(buf+OFFSET_SPARE2)) = htonl(0); /* RESERVED */
 

@@ -179,6 +179,7 @@ struct index_header {
     time_t recenttime;
 
     uint32_t header_crc;
+    time_t pop3_show_after;
 };
 
 struct mailbox {
@@ -258,7 +259,9 @@ struct mailbox {
 #define OFFSET_SYNC_CRC 100        /* XOR of SYNC CRCs of unexpunged records */
 #define OFFSET_RECENTUID 104       /* last UID the owner was told about */
 #define OFFSET_RECENTTIME 108      /* last timestamp for seen data */
-#define OFFSET_SPARE0 112 /* Spares - only use these if the index */
+#define OFFSET_POP3_SHOW_AFTER 112 /* time after which to show messages
+				    * to POP3 */
+			  /* Spares - only use these if the index */
 #define OFFSET_SPARE1 116 /*  record size remains the same */
 #define OFFSET_SPARE2 120 /*  (see note above about spares) */
 #define OFFSET_HEADER_CRC 124 /* includes all zero for the spares! */
