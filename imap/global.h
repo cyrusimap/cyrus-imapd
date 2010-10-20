@@ -139,6 +139,10 @@ void eatline(struct protstream *pin, int c);
 
 /* Misc utils */
 extern void cyrus_ctime(time_t date, char *datebuf);
+/* Size in bytes of longest date format accepted by
+ * cyrus_parsetime(), not including the nul terminator. */
+#define CYRUS_PARSETIME_MAX 26
+extern int cyrus_parsetime(const char *s, time_t *date);
 extern int shutdown_file(char *buf, int size);
 extern char *find_free_partition(unsigned long *tavail);
 
