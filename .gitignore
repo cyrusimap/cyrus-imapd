@@ -2,6 +2,7 @@
 *.a
 *~
 *.patch
+!debian/patches/*.patch
 *.orig
 *.rej
 *.tar.gz
