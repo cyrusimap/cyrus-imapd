@@ -1193,9 +1193,9 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
     return 1;
 }
 
-static int update_mailbox(struct sync_folder *local,
-			  struct sync_folder *remote,
-			  struct sync_reserve_list *reserve_guids)
+static int update_mailbox_once(struct sync_folder *local,
+			       struct sync_folder *remote,
+			       struct sync_reserve_list *reserve_guids)
 {
     struct sync_msgid_list *part_list;
     struct mailbox *mailbox = NULL;
@@ -1270,16 +1270,28 @@ static int update_mailbox(struct sync_folder *local,
     /* update the mailbox */
     sync_send_apply(kl, sync_out);
     r = sync_parse_response("MAILBOX", sync_in, NULL);
-    if (r == IMAP_MAILBOX_CRC) {
-	syslog(LOG_ERR, "CRC failure on sync update for %s", local->name);
-	r = mailbox_full_update(local->name);
-	if (!r) r = update_mailbox(local, remote, reserve_guids);
-    }
 
 done:
     if (mailbox) mailbox_close(&mailbox);
     dlist_free(&kupload);
     dlist_free(&kl);
+    return r;
+}
+
+static int update_mailbox(struct sync_folder *local,
+			  struct sync_folder *remote,
+			  struct sync_reserve_list *reserve_guids)
+{
+    int r = update_mailbox_once(local, remote, reserve_guids);
+
+    if (r == IMAP_MAILBOX_CRC) {
+	syslog(LOG_ERR, "CRC failure on sync for %s, trying full update",
+	       local->name);
+	r = mailbox_full_update(local->name);
+	if (!r)
+	    r = update_mailbox_once(local, remote, reserve_guids);
+    }
+
     return r;
 }
 
