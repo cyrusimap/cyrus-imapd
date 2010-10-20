@@ -706,7 +706,9 @@ void cyrus_ctime(time_t date, char *datebuf)
  * MM 	is the second, zero padded, between 00 and 60 inclusive
  *      (to account for leap seconds).
  * z	is a US military style single character time zone.
- *	    A (Alpha) is +0100 ... M (Mike) is +1200
+ *	    A (Alpha) is +0100 ... I (India) is +0900
+ *	    J (Juliet) is not defined
+ *	    K (Kilo) is +1000 ... M (Mike) is +1200
  *	    N (November) is -0100 ... Y (Yankee) is -1200
  *	    Z (Zulu) is UTC
  * zz	is the case-insensitive string "UT", denoting UTC time.
@@ -889,13 +891,20 @@ int cyrus_parsetime(const char *s, time_t *date)
 	    /* Military (single-char) zones */
 	    zone[1] = '\0';
 	    lcase(zone);
-	    if (zone[0] <= 'm') {
+	    if (zone[0] <= 'i') {
 		zone_off = (zone[0] - 'a' + 1)*60;
+	    }
+	    else if (zone[0] == 'j') {
+		goto baddate;
+	    }
+	    else if (zone[0] <= 'm') {
+		zone_off = (zone[0] - 'k' + 10)*60;
 	    }
 	    else if (zone[0] < 'z') {
 		zone_off = ('m' - zone[0])*60;
 	    }
-	    else zone_off = 0;
+	    else    /* 'z' */
+		zone_off = 0;
 	}
 	else {
 	    /* UT (universal time) */
