@@ -274,7 +274,7 @@ server.  It will prompt for automatic login unless the C<--noauthenticate>
 option is specified.  (This may change; in particular, either automatic
 authentication will be removed or all C<authenticate> options will be added.)
 
-When connected to a server, B<cyradm>'s prompt changes from C<cyradmE<gt>> to
+When connected to a server, the B<cyradm> prompt changes from C<cyradmE<gt>> to
 C<servernameE<gt>>, where I<servername> is the fully qualified domain name
 of the connected server.
 
