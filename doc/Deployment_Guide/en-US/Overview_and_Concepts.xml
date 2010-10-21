@@ -6,14 +6,22 @@
 <chapter id="chap-Deployment_Guide-Overview_and_Concepts">
     <title>Overview and Concepts</title>
     <para>
-        This chapter gives an overview of the Cyrus IMAP server. The Cyrus IMAP (Internet Message Access Protocol) server provides access to personal mail and system-wide bulletin boards through the IMAP protocol. The Cyrus IMAP server is a scalable enterprise mail system designed for use from small to large enterprise environments using standards-based technologies.
+        This chapter gives an overview of several aspects of the Cyrus IMAP server, as they relate to deployment.
     </para>
-    <para>
-        A full Cyrus IMAP implementation allows a seamless mail and bulletin board environment to be set up across multiple servers. It differs from other IMAP server implementations in that it is run on &#34;sealed&#34; servers, where users are not normally permitted to log in. The mailbox database is stored in parts of the filesystem that are private to the Cyrus IMAP system. All user access to mail is through software using the IMAP, IMAPS, POP3, POP3S, or KPOP protocols.
-    </para>
-    <para>
-        The private mailbox database design gives the server large advantages in efficiency, scalability, and administratability. Multiple concurrent read/write connections to the same mailbox are permitted. The server supports access control lists on mailboxes and storage quotas on mailbox hierarchies.
-    </para>
+    <section id="sect-Deployment_Guide-Overview_and_Concepts-Cyrus_IMAP">
+        <title>Cyrus IMAP</title>
+        <para>
+            The Cyrus IMAP (Internet Message Access Protocol) server provides access to personal mail and system-wide bulletin boards through the IMAP protocol. The Cyrus IMAP server is a scalable enterprise mail system designed for use from small to large enterprise environments using standards-based technologies.
+        </para>
+        <para>
+            A full Cyrus IMAP implementation allows a seamless mail and bulletin board environment to be set up across one or more nodes. It differs from other IMAP server implementations in that it is run on <emphasis>sealed nodes</emphasis>, where users are not normally permitted to log in. The mailbox database is stored in parts of the filesystem that are private to the Cyrus IMAP system. All user access to mail is through software using the IMAP, IMAPS, POP3, POP3S, or KPOP protocols.
+        </para>
+        <para>
+            The private mailbox database design gives the Cyrus IMAP server large advantages in efficiency, scalability, and administratability. Multiple concurrent read/write connections to the same mailbox are permitted. The server supports access control lists on mailboxes and storage quotas on mailbox hierarchies.
+        </para>
+
+    </section>
+
     <section id="sect-Deployment_Guide-Overview_and_Concepts-Mailbox_Namespace">
         <title>Mailbox Namespace</title>
         <para>
@@ -65,7 +73,7 @@
             </para>
 
         </section>
-        
+
         <section id="sect-Deployment_Guide-Mailbox_Namespace-Alternate_Namespace">
             <title>Alternate Namespace</title>
             <para>
@@ -73,10 +81,10 @@
             </para>
 
         </section>
-        
+
 
     </section>
-    
+
     <section id="sect-Deployment_Guide-Overview_and_Concepts-Access_Control_Lists">
         <title>Access Control Lists</title>
         <para>
@@ -257,7 +265,7 @@
             </para>
 
         </section>
-        
+
         <section id="sect-Deployment_Guide-Access_Control_Lists-Identifiers">
             <title>Identifiers</title>
             <para>
@@ -274,10 +282,10 @@
                 </para>
 
             </section>
-            
+
 
         </section>
-        
+
         <section id="sect-Deployment_Guide-Access_Control_Lists-Kerberos_vs._Unix_Authorization">
             <title>Kerberos vs. Unix Authorization</title>
             <para>
@@ -295,9 +303,9 @@
                 In the Unix authorization mechanism, identifiers are either a valid userid or the string &#34;<code>group</code>&#34;: followed by a group listed in <filename>/etc/group</filename>. Thus:
             </para>
             <para>
-                
-<screen>    root                Refers to the user root
-    group:staff        Refers to the group staff</screen>
+
+<screen>    root&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Refers to the user root
+    group:staff&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Refers to the group staff</screen>
 
             </para>
             <para>
@@ -308,7 +316,7 @@
                 Using the Kerberos authorization mechanism, identifiers are of the form:
             </para>
             <para>
-                
+
 <screen><emphasis>$principal</emphasis>.<emphasis>$instance</emphasis>@<emphasis>$realm</emphasis></screen>
 
             </para>
@@ -319,7 +327,7 @@
                 The file <filename>/etc/krb.equiv</filename> contains mappings between Kerberos principals. The file contains zero or more lines, each containing two fields. Any identity matching the first field of a line is changed to the second identity during canonicalization. For example, a line in <filename>/etc/krb.equiv</filename> of:
             </para>
             <para>
-                
+
 <screen>bovik@REMOTE.COM bovik</screen>
 
             </para>
@@ -331,7 +339,7 @@
             </para>
 
         </section>
-        
+
         <section id="sect-Deployment_Guide-Access_Control_Lists-Negative_Rights">
             <title>Negative Rights</title>
             <para>
@@ -339,7 +347,7 @@
             </para>
 
         </section>
-        
+
         <section id="sect-Deployment_Guide-Access_Control_Lists-Calculating_the_Users_Rights">
             <title>Calculating the Users&#39; Rights</title>
             <para>
@@ -348,7 +356,7 @@
             <example id="exam-Deployment_Guide-Calculating_the_Users_Rights-Example_ACL_with_Negative_User_Rights">
                 <title>Example ACL with Negative User Rights</title>
                 <para>
-                    
+
 <screen>   anyone&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lrsp
    fred&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lwi
    -anonymous&nbsp;&nbsp;&nbsp;s</screen>
@@ -359,227 +367,230 @@
             <para>
                 The user &#34;<code>fred</code>&#34; will be granted the rights &#34;<code>lrswip</code>&#34; and the anonymous user will be granted the rights &#34;<code>lrp</code>&#34;.
             </para>
+            <section id="sect-Deployment_Guide-Calculating_the_Users_Rights-Implicit_Rights_for_Administrators_on_Personal_Mailboxes">
+                <title>Implicit Rights for Administrators on Personal Mailboxes</title>
+                <para>
+                    Regardless of the ACL on a mailbox, users who are listed in the &#34;admins&#34; configuration option in &#34;<code>/etc/imapd.conf</code>&#34; implicitly have the &#34;<code>l</code>&#34; and &#34;<code>a</code>&#34; rights on all mailboxes. Users also implicitly have the &#34;<code>l</code>&#34; and &#34;<code>a</code>&#34; rights on their INBOX and all of their personal mailboxes.
+                </para>
+
+            </section>
+
 
         </section>
-        
+
+        <section id="sect-Deployment_Guide-Access_Control_Lists-Initial_ACLs_for_Newly_Created_Mailboxes">
+            <title>Initial ACLs for Newly Created Mailboxes</title>
+            <para>
+                When a mailbox is created, its ACL starts off with a copy of the ACL of its closest parent mailbox. When a user is created, the ACL on the user&#39;s <code>INBOX</code> starts off with a single entry granting all rights to the user. When a non-user mailbox is created and does not have a parent, its ACL is initialized to the value of the &#34;<code>defaultacl</code>&#34; option in &#34;<code>/etc/imapd.conf</code>&#34;.
+            </para>
+            <para>
+                Note that some rights are available implicitly, for example &#39;anonymous&#39; always has &#39;p&#39; on user INBOXes, and users always have rights on mailboxes within their INBOX hierarchy.
+            </para>
+
+        </section>
+
 
     </section>
-    
-    <!-- 
+
+    <section id="sect-Deployment_Guide-Overview_and_Concepts-Login_Authentication">
+        <title>Login Authentication</title>
+        <para>
+            This section discusses different types of authentication (ways of logging in) that can be used with Cyrus IMAP.
+        </para>
+        <para>
+            The Cyrus IMAP server uses the Cyrus SASL library for authentication. This section describes how to configure SASL with use with Cyrus imapd. Please consult the Cyrus SASL System Administrator&#39;s Guide for more detailed, up-to-date information.
+        </para>
+        <section id="sect-Deployment_Guide-Login_Authentication-Anonymous_Login">
+            <title>Anonymous Login</title>
+            <para>
+                Regardless of the SASL mechanism used by an individual connection, the server can support anonymous login. If the &#34;<code>allowanonymouslogin</code>&#34; option in &#34;<code>/etc/imapd.conf</code>&#34; is turned on, then the server will permit plaintext password logins using the user &#34;<code>anonymous</code>&#34; and any password.
+            </para>
+            <para>
+                Additionally, the server will enable any SASL mechanisms that allow anonymous logins.
+            </para>
+
+        </section>
+
+        <section id="sect-Deployment_Guide-Login_Authentication-Plaintext_Authentication">
+            <title>Plaintext Authentication</title>
+            <para>
+                The SASL library has several ways of verifying plaintext passwords. Plaintext passwords are passed either by the IMAP <code>LOGIN</code> command or by the SASL <code>PLAIN</code> mechanism (under a TLS layer).
+            </para>
+            <para>
+                <itemizedlist>
+                    <listitem>
+                        <para>
+                            PAM
+                        </para>
+
+                    </listitem>
+                    <listitem>
+                        <para>
+                            Kerberos v4
+                        </para>
+                        <para>
+                            Plaintext passwords are verified by obtaining a ticket for the server&#39;s Kerberos identity, to protect against Kerberos server spoofing attacks.
+                        </para>
+
+                    </listitem>
+                    <listitem>
+                        <para>
+                            <filename>/etc/passwd</filename>
+                        </para>
+
+                    </listitem>
+                    <listitem>
+                        <para>
+                            <filename>/etc/shadow</filename>
+                        </para>
+
+                    </listitem>
+
+                </itemizedlist>
+
+            </para>
+            <para>
+                <code>sasl_auto_transition</code> automatically creates secrets for shared secret authentication when given a password.
+            </para>
+            <para>
+                The method of plaintext password verification is always through the SASL library, even in the case of the internal LOGIN command. This is to allow the SASL library to be the only source of authentication information. You&#39;ll want to look at the <code>sasl_pwcheck_method</code> option in the SASL documentation to understand how to configure a plaintext password verifier for your system.
+            </para>
+            <para>
+                To disallow the use of plaintext passwords for authentication, you can set <code>allowplaintext: no</code> in imapd.conf. This will still allow PLAIN under TLS, but IMAP LOGIN commands will now fail.
+            </para>
+
+        </section>
+
+        <section id="sect-Deployment_Guide-Login_Authentication-Kerberos_Logins">
+            <title>Kerberos Logins</title>
+            <para>
+                The Kerberos SASL mechanism supports the <code>KERBEROS_V4</code> authentication mechanism. The mechanism requires that a <code>srvtab</code> file exist in the location given in the &#34;<code>srvtab</code>&#34; configuration option. The <code>srvtab</code> file must be readable by the Cyrus server and must contain a &#34;<code>imap.$host@$realm</code>&#34; service key, where <code>$host</code> is the first component of the server&#39;s host name and <code>$realm</code> is the server&#39;s Kerberos realm.
+            </para>
+            <para>
+                The server will permit logins by identities in the local realm and identities in the realms listed in the <code>loginrealms</code> option in <filename>/etc/imapd.conf</filename>.
+            </para>
+            <para>
+                The file <filename>/etc/krb.equiv</filename> contains mappings between Kerberos principals. The file contains zero or more lines, each containing two fields. Any identity matching the first field of a line is permitted to log in as the identity in the second field.
+            </para>
+            <para>
+                If the <code>loginuseacl</code> configuration option is turned on, than any Kerberos identity that is granted the &#34;<code>a</code>&#34; right on the user&#39;s <code>INBOX</code> is permitted to log in as that user.
+            </para>
+
+        </section>
+
+        <section id="sect-Deployment_Guide-Login_Authentication-Shared_Secrets_Logins">
+            <title>Shared Secrets Logins</title>
+            <para>
+                Some mechanisms require the user and the server to share a secret (generally a password) that can be used for comparison without actually passing the password in the clear across the network. For these mechanism (such as CRAM-MD5 and DIGEST-MD5), you will need to supply a source of passwords, such as the sasldb (which is described more fully in the Cyrus SASL distribution)
+            </para>
+
+        </section>
 
 
-<H4><A name="acladm">Implicit Rights for Administrators on Personal
-Mailboxes</A></H4>
+    </section>
 
-Regardless of the ACL on a mailbox, users who are listed in the
-"admins" configuration option in "<code>/etc/imapd.conf</code>" implicitly
-have the "<code>l</code>" and "<code>a</code>" rights on all mailboxes.  Users
-also implicitly have the "<code>l</code>" and "<code>a</code>" rights on their
-INBOX and all of their personal mailboxes.
+    <section id="sect-Deployment_Guide-Overview_and_Concepts-Quota">
+        <title>Quota</title>
+        <para>
+            Quotas allow server administrators to limit resources used by hierarchies of mailboxes on the server.
+        </para>
+        <section id="sect-Deployment_Guide-Quota-Supports_Quotas_on_Storage">
+            <title>Supports Quotas on Storage</title>
+            <para>
+                The Cyrus IMAP server supports quotas on storage, which is defined as the number of bytes of the relevant RFC-822 messages, in kilobytes. Each copy of a message is counted independently, even when the server can conserve disk space use by making hard links to message files. The additional disk space overhead used by mailbox index and cache files is not charged against a quota.
+            </para>
 
-<H3><A name="aclmbox">Initial ACLs for Newly Created Mailboxes</A></H3>
+        </section>
 
-When a mailbox is created, its ACL starts off with a copy of the ACL
-of its closest parent mailbox.  When a user is created, the ACL on the
-user's <code>INBOX</code> starts off with a single entry granting all
-rights to the user.  When a non-user mailbox is created and does not
-have a parent, its ACL is initialized to the value of the
-"<code>defaultacl</code>" option in "<code>/etc/imapd.conf</code>"<p>
+        <section id="sect-Deployment_Guide-Quota-Quota_Roots">
+            <title>Quota Roots</title>
+            <para>
+                Quotas are applied to quota roots, which can be at any level of the mailbox hierarchy. Quota roots need not also be mailboxes.
+            </para>
+            <para>
+                Quotas on a quota root apply to the sum of the usage of any mailbox at that level and any sub-mailboxes of that level that are not underneath a quota root on a sub-hierarchy. This means that each mailbox is limited by at most one quota root.
+            </para>
+            <para>
+                For example, if the mailboxes
+            </para>
+            <para>
 
-Note that some rights are available implicitly, for example
-'anonymous' always has 'p' on user INBOXes, and users always
-have rights on mailboxes within their INBOX hierarchy.
-
-<h2><a name="login">Login Authentication</A></H2>
-
-This section discusses different types of authentication (ways of logging
-in) that can be used with Cyrus IMAP.
-
-<p>The Cyrus IMAP server uses the Cyrus SASL library for
-authentication.  This section describes how to configure SASL with use
-with Cyrus imapd.  Please consult the Cyrus SASL System
-Administrator's Guide for more detailed, up-to-date information.
-
-<h3><a name="loginanon">Anonymous Logins</A></H3>
-
-Regardless of the SASL mechanism used by an individual connection, the
-server can support anonymous login.  If the
-"<code>allowanonymouslogin</code>" option in "<code>/etc/imapd.conf</code>" is
-turned on, then the server will permit plaintext password logins using
-the user "<code>anonymous</code>" and any password.
-
-Additionally, the server will enable any SASL mechanisms that allow
-anonymous logins.
-
-<h3><a name="loginplain">Plaintext Authentication</a></h3>
-
-The SASL library has several ways of verifying plaintext passwords
-Plaintext passwords are passed either by the IMAP <code>LOGIN</code>
-command or by the SASL <code>PLAIN</code> mechanism (under a TLS layer).
-
-<ul>
-<li>PAM
-<li>Kerberos v4
-
-Plaintext passwords are verified by obtaining a ticket for the
-server's Kerberos identity, to protect against Kerberos server
-spoofing attacks.
-
-<li><code>/etc/passwd</code>
-<li><code>/etc/shadow</code>
-<li>etc.
-</ul>
-
-<code>sasl_auto_transition</code> automatically creates secrets for shared
-secret authentication when given a password.
-
-<p>The method of plaintext password verification is always through the
-SASL library, even in the case of the internal LOGIN command.  This is
-to allow the SASL library to be the only source of authentication
-information.  You'll want to look at the <code>sasl_pwcheck_method</code> option
-in the SASL documentation to understand how to configure a plaintext
-password verifier for your system.
-
-<p>To disallow the use of plaintext passwords for authentication, you
-can set <code>allowplaintext: no</code> in imapd.conf.  This will still allow
-PLAIN under TLS, but IMAP LOGIN commands will now fail.
-
-<h3><a name="loginker">Kerberos Logins</A></H3>
-
-The Kerberos SASL mechanism supports the <code>KERBEROS_V4</code>
-authentication mechanism.  The mechanism requires that a
-<code>srvtab</code> file exist in the location given in the
-"<code>srvtab</code>" configuration option.  The <code>srvtab</code> file must
-be readable by the Cyrus server and must contain a
-"<code>imap.<VAR>&lt;host&gt;</VAR><VAR>@&lt;realm&gt;</VAR></code>"
-service key, where <code><VAR>&lt;host&gt;</VAR></code> is the first
-component of the server's host name and
-<code><VAR>&lt;realm&gt;</VAR></code> is the server's Kerberos realm.
-
-<p>The server will permit logins by identities in the local realm and
-identities in the realms listed in the "<code>loginrealms</code>" option
-in "<code>/etc/imapd.conf</code>".
-
-<p>The file "<code>/etc/krb.equiv</code>" contains mappings between
-Kerberos principals.  The file contains zero or more lines, each
-containing two fields.  Any identity matching the first field of a
-line is permitted to log in as the identity in the second field.
-
-<p>If the "<code>loginuseacl</code>" configuration option is turned on,
-than any Kerberos identity that is granted the "<code>a</code>" right on
-the user's <code>INBOX</code> is permitted to log in as that user.
-
-<h3><a name="loginmd5">Shared Secrets Logins</a></h3>
-
-Some mechanisms require the user and the server to share a secret (generally
-a password) that can be used for comparison without actually passing the
-password in the clear across the network.  For these mechanism (such as
-CRAM-MD5 and DIGEST-MD5), you will need to supply a source of passwords,
-such as the sasldb (which is described more fully in the Cyrus SASL
-distribution)
-
-<h2><a name="quota">Quotas</a></h2>
-
-Quotas allow server administrators to limit resources used by
-hierarchies of mailboxes on the server.
-
-<h3><a name="quotasup">Supports Quotas on Storage</a></h3>
-
-<p>The Cyrus IMAP server supports quotas on storage, which is defined
-as the number of bytes of the relevant RFC-822 messages, in kilobytes.
-Each copy of a message is counted independently, even when the server
-can conserve disk space use by making hard links to message files.
-The additional disk space overhead used by mailbox index and cache
-files is not charged against a quota.
-
-<h3><a name="quotaroots">Quota Roots</a></h3>
-
-Quotas are applied to quota roots, which can be at any level of the
-mailbox hierarchy.  Quota roots need not also be mailboxes.
-
-<p>Quotas on a quota root apply to the sum of the usage of any mailbox at
-that level and any sub-mailboxes of that level that are not underneath
-a quota root on a sub-hierarchy.  This means that each mailbox is
-limited by at most one quota root.
-
-<p>For example, if the mailboxes
-
-<pre>
+<screen>
    user.bovik
    user.bovik.list.imap
    user.bovik.list.info-cyrus
    user.bovik.saved
    user.bovik.todo
-</pre>
+</screen>
 
-<p>exist and the quota roots
+            </para>
+            <para>
+                exist and the quota roots
+            </para>
+            <para>
 
-<pre>
+<screen>
    user.bovik
    user.bovik.list
    user.bovik.saved
-</pre>
+</screen>
 
-exist, then the quota root "<code>user.bovik</code>" applies to the
-mailboxes "<code>user.bovik</code>" and "<code>user.bovik.todo</code>"; the
-quota root "<code>user.bovik.list</code>" applies to the mailboxes
-"<code>user.bovik.list.imap</code>" and
-"<code>user.bovik.list.info-cyrus</code>"; and the quota root
-"<code>user.bovik.saved</code>" applies to the mailbox
-"<code>user.bovik.saved</code>".
+            </para>
+            <para>
+                exist, then the quota root &#34;<code>user.bovik</code>&#34; applies to the mailboxes &#34;<code>user.bovik</code>&#34; and &#34;<code>user.bovik.todo</code>&#34;; the quota root &#34;<code>user.bovik.list</code>&#34; applies to the mailboxes &#34;<code>user.bovik.list.imap</code>&#34; and &#34;<code>user.bovik.list.info-cyrus</code>&#34;; and the quota root &#34;<code>user.bovik.saved</code>&#34; applies to the mailbox &#34;<code>user.bovik.saved</code>&#34;.
+            </para>
+            <para>
+                Quota roots are created automatically when they are mentioned in the <code>setquota</code> command. Quota roots may not be deleted through the protocol, see Removing Quota Roots for instructions on how to delete them.
+            </para>
 
-<p>Quota roots are created automatically when they
-are mentioned in the
-"<code>setquota</code>" command.  Quota roots may not be deleted through the
-protocol, see <A href="#recoveryquotasrm">Removing Quota Roots</A> for
-instructions on how to delete them.
+        </section>
 
-<h3><a name="quotamail">Mail Delivery Behavior</a></h3>
+        <section id="sect-Deployment_Guide-Quota-Mail_Delivery_Behavior">
+            <title>Mail Delivery Behavior</title>
+            <para>
+                Normally, in order for a message to be inserted into a mailbox, the quota root for the mailbox must have enough unused storage so that inserting the message will not cause the block quota to go over the limit.
+            </para>
+            <para>
+                Mail delivery is a special case. In order for a message to be delivered to a mailbox, the quota root for the mailbox must not have usage that is over the limit. If the usage is not over the limit, then one message may be delivered regardless of its size. This puts the mailbox&#39;s usage over the quota, causing a user to be informed of the problem and permitting them to correct it. If delivery were not permitted in this case, the user would have no practical way of knowing that there was mail that could not be delivered.
+            </para>
+            <para>
+                If the usage is over the limit, then the mail delivery will fail with a temporary error. This will cause the delivery system to re-attempt delivery for a couple of days (permitting the user time to notice and correct the problem) and then return the mail to the sender.
+            </para>
 
-Normally, in order for a message to be inserted into a mailbox, the
-quota root for the mailbox must have enough unused storage so that
-inserting the message will not cause the block quota to go over the limit.
+        </section>
 
-<p>Mail delivery is a special case.  In order for a message to be
-delivered to a mailbox, the quota root for the mailbox must not have
-usage that is over the limit.  If the usage is not over the limit,
-then one message may be delivered regardless of its size.  This puts
-the mailbox's usage over the quota, causing a user to be informed of
-the problem and permitting them to correct it.  If delivery were not
-permitted in this case, the user would have no practical way of
-knowing that there was mail that could not be delivered.
+        <section id="sect-Deployment_Guide-Quota-Quota_Warnings_Upon_Select_When_User_Has_d_Rights">
+            <title>Quota Warnings Upon Select When User Has &#34;<code>d</code>&#34; Rights</title>
+            <para>
+                When a user selects a mailbox whose quota root has usage that is close to or over the limit and the user has &#34;<code>d</code>&#34; rights on the mailbox, the server will issue an alert notifying the user that usage is close to or over the limit. The threshold of usage at which the server will issue quota warnings is set by the <code>quotawarn</code> configuration option.
+            </para>
+            <para>
+                The server only issues warnings when the user has &#34;<code>d</code>&#34; rights because only users with &#34;<code>d</code>&#34; rights are capable of correcting the problem.
+            </para>
 
-<p>If the usage is over the limit, then the mail delivery will fail with
-a temporary error.  This will cause the delivery system to re-attempt
-delivery for a couple of days (permitting the user time to notice and
-correct the problem) and then return the mail to the sender.
+        </section>
 
-<h3><a name="quotawarnings">Quota Warnings Upon Select When User Has "<code>d</code>" Rights</a></h3>
+        <section id="sect-Deployment_Guide-Quota-Quotas_and_Partitions">
+            <title>Quotas and Partitions</title>
+            <para>
+                Quota roots are independent of partitions. A single quota root can apply to mailboxes in different partitions.
+            </para>
 
-When a user selects a mailbox whose quota root has usage that is close
-to or over the limit and the user has "<code>d</code>" rights on the mailbox, the
-server will issue an alert notifying the user that usage is close to
-or over the limit.  The threshold of usage at which the server will
-issue quota warnings is set by the "<code>quotawarn</code>" configuration option.
+        </section>
 
-<p>The server only issues warnings when the user has "<code>d</code>"
-rights because only users with "<code>d</code>" rights are capable of
-correcting the problem.
 
-<h3><a name="quotapartitions">Quotas and Partitions</a></h3>
+    </section>
 
-Quota roots are independent of <A href="#partitions">partitions</A>.  A single
-quota root can apply to mailboxes in different partitions.
-
+    <!--
 <h2><a name="notification">New Mail Notification</a></h2>
 
-<p>The Cyrus IMAP server comes with a notification daemon which
+The Cyrus IMAP server comes with a notification daemon which
 supports multiple mechanisms for notifying users of new mail.
 Notifications can be configured to be sent upon normal delivery
 (<code>"MAIL"</code> class) and/or sent as requested by a <a
 href=specs.php#sieve>Sieve</a> script (<code>"SIEVE"</code> class).
 
-<p>By default, both types of notifications are disabled.
+By default, both types of notifications are disabled.
 Notifications are enabled by using one or both of the following
 configuration options:
 
@@ -646,7 +657,7 @@ user's <code>INBOX</code> and only one instance of a POP3 server may exist for a
 one user at any time.  While a POP3 server has a user's <code>INBOX</code> open,
 expunge operations from any concurrent IMAP session will fail.
 
-<p>When Kerberos login authentication is being used, the POP3 server
+When Kerberos login authentication is being used, the POP3 server
 uses the server identity
 "<code>pop.<VAR>host</VAR>@<VAR>realm</VAR></code>" instead of
 "<code>imap.<VAR>host</VAR>@<VAR>realm</VAR></code>", where
@@ -716,18 +727,18 @@ state "<code>reconstruct</code>" attempts to preserve includes the flag
 names, flag state, and internal date.  "<code>Reconstruct</code>"
 derives all other information from the message files.
 
-<p>An administrator may recover from a damaged disk by restoring message
+An administrator may recover from a damaged disk by restoring message
 files from a backup and then running reconstruct to regenerate what it
 can of the other files.
 
-<p>The "<code>reconstruct</code>" program does not adjust the quota usage
+The "<code>reconstruct</code>" program does not adjust the quota usage
 recorded in any quota root files.  After running reconstruct, it is
 advisable to run "<code>quota -f</code>" (described below) in order to fix
 the quota root files.
 
 <h3><a name="recoverymbox">Reconstructing the Mailboxes File</a></h3>
 
-<B><I> NOTE: CURRENTLY UNAVAILABLE </I></B> <p>
+<B><I> NOTE: CURRENTLY UNAVAILABLE </I></B>
 
 The mailboxes file in the configuration directory is the most critical
 file in the entire Cyrus IMAP system.  It contains a sorted list of
