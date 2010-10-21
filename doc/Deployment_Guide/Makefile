@@ -8,6 +8,7 @@ clean:
 	@publican clean
 
 clean_ids:
+	@cp -a ../Common_Content/en-US/*.xml en-US/.
 	@publican clean_ids
 	@sed -i -r \
 		-e 's/\t/    /g' \
