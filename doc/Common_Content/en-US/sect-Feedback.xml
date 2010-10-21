@@ -1,0 +1,78 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<!DOCTYPE section PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
+<!ENTITY % BOOK_ENTITIES SYSTEM "../Deployment_Guide.ent">
+%BOOK_ENTITIES;
+]>
+<section lang="en-US" id="sect-Feedback">
+    <title>Feedback</title>
+     <indexterm>
+        <primary>feedback</primary>
+         <secondary>contact information for this manual</secondary>
+
+    </indexterm>
+     <para>
+        We value feedback on our software as well as our documentation. Please find ways to contact us in this section.
+    </para>
+
+    <section id="sect-Feedback-Reporting_Bugs_in_Cyrus_IMAP">
+        <title>Reporting Bugs in Cyrus IMAP</title>
+        <para>
+            Bug reports can be logged in our <ulink url="http://bugzilla.cyrusimap.org">Bugzilla issue tracker</ulink>. Please bear in mind registration is required.
+        </para>
+        <para>
+            When reporting a bug, please prepare to provide the following information;
+        </para>
+        <para>
+            <itemizedlist>
+                <listitem>
+                    <para>
+                        Your platform, and if applicable, your distribution and the distribution version.
+                    </para>
+                </listitem>
+                <listitem>
+                    <para>
+                        The exact version of Cyrus IMAP you are using.
+                    </para>
+                </listitem>
+                <listitem>
+                    <para>
+                        If a packaged version is used, the source of the packaged version.
+                    </para>
+                </listitem>
+                <listitem>
+                    <para>
+                        If a custom version is used, any options that may have specified during the build process.
+                    </para>
+                </listitem>
+            </itemizedlist>
+        </para>
+        <para>
+            provide some text on logging a new ticket in our bugzilla, information to provide, etc. Possibly mention the life cycle of a product version series.
+        </para>
+    </section>
+
+    <section id="sect-Feedback-Mailing_Lists">
+        <title>Mailing Lists</title>
+        <para>
+            Refer to the mailing lists here.
+        </para>
+
+        <section id="sect-Feedback-Mailing_Lists-Archives">
+            <title>Archives</title>
+            <para>
+                Refer to the availability of the mailing lists archives here.
+            </para>
+        </section>
+
+    </section>
+
+    <section id="sect-Feedback-IRC">
+        <title>IRC</title>
+        <para>
+            Refer to irc://irc.freenode.net/cyrus here.
+        </para>
+    </section>
+
+</section>
+
+
