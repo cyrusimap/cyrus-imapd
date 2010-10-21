@@ -69,6 +69,7 @@
 #include "libconfig.h"
 #include "libcyr_cfg.h"
 #include "mboxlist.h"
+#include "mkgmtime.h"
 #include "mupdate_err.h"
 #include "mutex.h"
 #include "prot.h" /* for PROT_BUFSIZE */
