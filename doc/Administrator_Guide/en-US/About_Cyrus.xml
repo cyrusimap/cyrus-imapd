@@ -1,9 +1,9 @@
 <?xml version='1.0' encoding='utf-8' ?>
-<!DOCTYPE preface PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
-<!ENTITY % BOOK_ENTITIES SYSTEM "Deployment_Guide.ent">
+<!DOCTYPE section PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
+<!ENTITY % BOOK_ENTITIES SYSTEM "Administrator_Guide.ent">
 %BOOK_ENTITIES;
 ]>
-<section id="sect-About_Cyrus">
+<section id="sect-Administrator_Guide-About_Cyrus">
     <title>About Cyrus</title>
     <para>
         Prior to 1994, <emphasis>Carnegie Mellon University</emphasis> (CMU) exclusively used the locally-developed and non-standard <emphasis>Andrew Messaging System</emphasis> (AMS) to service its email communication needs. When, in 1994, CMU wanted to move to a better scalable, standards-compliant mail system that met or exceeded the feature set of AMS, it started the Cyrus project.
@@ -13,3 +13,5 @@
     </para>
 
 </section>
+
+
