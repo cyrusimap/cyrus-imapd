@@ -1,0 +1,32 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
+<!ENTITY % BOOK_ENTITIES SYSTEM "Deployment_Guide.ent">
+%BOOK_ENTITIES;
+]>
+<chapter id="chap-Deployment_Guide-Known_Protocol_Limitations">
+    <title>Known Protocol Limitations</title>
+    <para>
+        This chapter lists known limitations to protocols commonly in use today, that may impact your deployment.
+    </para>
+    <section id="sect-Deployment_Guide-Known_Protocol_Limitations-POP3_and_Mailbox_Locking">
+        <title>POP3 and Mailbox Locking</title>
+        <para>
+            POP3, as described in <ulink url="http://www.ietf.org/rfc/rfc1939.txt">RFC 1939</ulink>, requires a mailbox to be locked by a POP3 session.
+        </para>
+        <para>
+            As such, when POP3 is used simultaneously across multiple clients, and a common set of mailboxes, an error similar to the following may occur;
+        </para>
+        <blockquote>
+            <para>
+                Mailbox locked by POP server.
+            </para>
+        </blockquote>
+        <para>
+            The exact error message may be subject to the specific error message a client application wishes to display.
+        </para>
+
+    </section>
+
+
+</chapter>
+
