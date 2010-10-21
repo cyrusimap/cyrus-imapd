@@ -149,7 +149,7 @@
                             Should MySQL &mdash;the client libraries or the development headers&mdash; be installed on a non-standard location, please consider using any of the following options;
                         </para>
                         <para>
-                            <screen>  --with-mysql=DIR          use MySQL (in DIR) [no]
+                            <screen>  --with-mysql=DIR            use MySQL (in DIR) [no]
   --with-mysql-libdir=DIR   MySQL lib files are in DIR
   --with-mysql-incdir=DIR   MySQL include files are in DIR</screen>
                         </para>
