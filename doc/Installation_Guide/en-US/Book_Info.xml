@@ -4,25 +4,28 @@
 %BOOK_ENTITIES;
 ]>
 <bookinfo id="book-Installation_Guide-Installation_Guide">
-	<title>Installation Guide</title>
-	<subtitle>short description</subtitle>
-	<productname>Cyrus IMAP</productname>
-	<productnumber>2.4</productnumber>
-	<edition>1</edition>
-	<pubsnumber>0</pubsnumber>
-	<abstract>
-		<para>
-			A short overview and summary of the book&#39;s subject and purpose, traditionally no more than one paragraph long. Note: the abstract will appear in the front matter of your book and will also be placed in the description field of the book&#39;s RPM spec file.
-		</para>
-	</abstract>
-	<corpauthor>
-		<inlinemediaobject>
-			<imageobject>
-				<imagedata fileref="Common_Content/images/title_logo.svg" format="SVG" />
-			</imageobject>
-		</inlinemediaobject>
-	</corpauthor>
-	<xi:include href="Common_Content/Legal_Notice.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-	<xi:include href="Author_Group.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <title>Installation Guide</title>
+    <subtitle>short description</subtitle>
+    <productname>Cyrus IMAP</productname>
+    <productnumber>2.4</productnumber>
+    <edition>1</edition>
+    <pubsnumber>0</pubsnumber>
+    <abstract>
+        <para>
+            A short overview and summary of the book&#39;s subject and purpose, traditionally no more than one paragraph long. Note: the abstract will appear in the front matter of your book and will also be placed in the description field of the book&#39;s RPM spec file.
+        </para>
+
+    </abstract>
+    <corpauthor>
+        <inlinemediaobject>
+            <imageobject>
+                <imagedata fileref="Common_Content/images/title_logo.svg" format="SVG" />
+            </imageobject>
+
+        </inlinemediaobject>
+
+    </corpauthor>
+    <xi:include href="Common_Content/Legal_Notice.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="Author_Group.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
 </bookinfo>
 
