@@ -1,0 +1,69 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
+<!ENTITY % BOOK_ENTITIES SYSTEM "Deployment_Guide.ent">
+%BOOK_ENTITIES;
+]>
+<section id="sect-Supported_Platforms_and_System_Requirements">
+    <title>Supported Platforms and System Requirements</title>
+    <para>
+        Cyrus IMAP supports the following platforms;
+    </para>
+    <para>
+        <itemizedlist>
+            <listitem>
+                <para>
+                    All reasonably recent versions of Linux, including but not limited to the following distributions, in no particular order other then alphabetic;
+                </para>
+                <para>
+                    <itemizedlist>
+                        <listitem>
+                            <para>
+                                <ulink url="http://centos.org">CentOS</ulink>
+                            </para>
+                        </listitem>
+                        <listitem>
+                            <para>
+                                <ulink url="http://debian.org">Debian</ulink>
+                            </para>
+                        </listitem>
+                        <listitem>
+                            <para>
+                                <ulink url="http://fedoraproject.org">Fedora</ulink>
+                            </para>
+                        </listitem>
+<!--
+                        <listitem>
+                            <para>
+                                <ulink url="http://gentoo.org">Gentoo</ulink>
+                            </para>
+                        </listitem>
+-->
+                        <listitem>
+                            <para>
+                                <ulink url="http://opensuse.org">openSUSE</ulink>
+                            </para>
+                        </listitem>
+                        <listitem>
+                            <para>
+                                <ulink url="http://redhat.com">Red Hat Enterprise Linux</ulink>
+                            </para>
+                        </listitem>
+<!--
+                        <listitem>
+                            <para>
+                                <ulink url="http://www.novell.com/linux">SUSE Linux</ulink>
+                            </para>
+                        </listitem>
+-->
+                    </itemizedlist>
+                </para>
+                <para>
+                    Should your Linux distribution not be listed here, please let us know.
+                </para>
+                <para>
+                    By reasonably recent versions of Linux, we intend to indicate the Cyrus project can keep up with the latest distribution release ear-marked stable.
+                </para>
+            </listitem>
+        </itemizedlist>
+    </para>
+</section>
