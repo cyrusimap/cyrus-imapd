@@ -11,7 +11,7 @@
     <section id="sect-Deployment_Guide-Overview_and_Concepts-Cyrus_IMAP">
         <title>Cyrus IMAP</title>
         <para>
-            The Cyrus IMAP (Internet Message Access Protocol) server provides access to personal mail and system-wide bulletin boards through the IMAP protocol. The Cyrus IMAP server is a scalable enterprise mail system designed for use from small to large enterprise environments using standards-based technologies.
+            The Cyrus IMAP (Internet Message Access Protocol) server provides access to personal mail and system-wide bulletin boards through the IMAP protocol. The Cyrus IMAP server is a scalable enterprise mail system designed for use from small to large enterprise environments using technologies based on well-established Open Standards.
         </para>
         <para>
             A full Cyrus IMAP implementation allows a seamless mail and bulletin board environment to be set up across one or more nodes. It differs from other IMAP server implementations in that it is run on <emphasis>sealed nodes</emphasis>, where users are not normally permitted to log in. The mailbox database is stored in parts of the filesystem that are private to the Cyrus IMAP system. All user access to mail is through software using the IMAP, IMAPS, POP3, POP3S, or KPOP protocols.
@@ -22,10 +22,11 @@
 
     </section>
 
+    <xi:include href="sect-Supported_Platforms_and_System_Requirements.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
     <section id="sect-Deployment_Guide-Overview_and_Concepts-Mailbox_Namespace">
         <title>Mailbox Namespace</title>
         <para>
-            By default, the Cyrus IMAP server presents mailboxes using the <code>netnews</code> namespace convention. This means mailbox names are case-sensitive. A mailbox name may not start or end with a &#34;<code>.</code>&#34; character, nor may it contain two &#34;<code>.</code>&#34; characters in a row.
+            By default, the Cyrus IMAP server presents mailboxes using the <code>netnews</code> namespace convention. This means mailbox names are case-sensitive. A mailbox name may not start or end with a <code>.</code> (dot) character, nor may it contain two <code>.</code> (dot) characters in a row.
         </para>
         <para>
             When implemented using the default <code>netnews</code> namespace convention, non-ASCII characters and shell meta-characters are not permitted in mailbox names. Optionally, the server can present mailboxes using the UNIX hierarchy convention &mdash;see <xref linkend="sect-Deployment_Guide-Mailbox_Namespace-Alternate_Namespace" /> for more information.

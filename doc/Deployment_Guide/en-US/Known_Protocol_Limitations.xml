@@ -20,6 +20,7 @@
             <para>
                 Mailbox locked by POP server.
             </para>
+
         </blockquote>
         <para>
             The exact error message may be subject to the specific error message a client application wishes to display.
