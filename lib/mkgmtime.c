@@ -85,8 +85,23 @@
 **	just 32 bits, its a max of 32 iterations (even at 64 bits it
 **	would still be very reasonable).
 */
+/*
+ * Fortunately, modern libc implementations on Linux, BSD and Solaris
+ * provide a timegm() function that does exactly this but more efficiently
+ * using the internal libc data structures.  We use that if configure
+ * discovered it - gnb@fastmail.fm
+ */
 
 #include <config.h>
+
+#if HAVE_TIMEGM
+
+time_t mkgmtime(struct tm * const tmp)
+{
+    return timegm(tmp);
+}
+
+#else
 
 #ifndef WRONG
 #define WRONG	(-1)
@@ -161,3 +176,4 @@ struct tm * const	tmp;
 	return t;
 }
 
+#endif /* HAVE_TIMEGM */
