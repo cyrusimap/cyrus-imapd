@@ -1687,21 +1687,31 @@ int do_user_main(char *user, struct sync_folder_list *replica_folders,
 					  user, buf);
     do_mailbox_info(buf, 0, 0, &info);
 
-    strlcat(buf, ".*", sizeof(buf));
-    r = (sync_namespace.mboxlist_findall)(&sync_namespace, buf, 1,
-					  user, NULL, do_mailbox_info,
-					  &info);
-
-    if (r) {
-	syslog(LOG_ERR, "IOERROR: %s", error_message(r));
-	return(r);
+    /* deleted namespace items if enabled */
+    if (mboxlist_delayed_delete_isenabled()) {
+	char deletedname[MAX_MAILBOX_BUFFER];
+	mboxname_todeleted(buf, deletedname, 0);
+	strlcat(deletedname, ".*", sizeof(deletedname));
+	r = (sync_namespace.mboxlist_findall)(&sync_namespace, deletedname, 1,
+					      user, NULL, do_mailbox_info,
+					      &info);
     }
 
-    r = do_folders(mboxname_list, replica_folders);
+    /* subfolders */
+    if (!r) {
+	strlcat(buf, ".*", sizeof(buf));
+        r = (sync_namespace.mboxlist_findall)(&sync_namespace, buf, 1,
+					      user, NULL, do_mailbox_info,
+					      &info);
+    }
+
+    if (!r) r = do_folders(mboxname_list, replica_folders);
     if (!r) r = do_user_quota(master_quotaroots, replica_quota);
 
     sync_name_list_free(&mboxname_list);
     sync_name_list_free(&master_quotaroots);
+
+    if (r) syslog(LOG_ERR, "IOERROR: %s", error_message(r));
 
     return r;
 }

@@ -1561,8 +1561,19 @@ static int do_getuser(struct dlist *kin)
     ((*sync_namespacep).mboxname_tointernal)(sync_namespacep, "INBOX",
 					     userid, buf);
     r = mailbox_cb(buf, 0, 0, quotaroots);
-
     if (r) goto bail;
+
+    /* deleted namespace items if enabled */
+    if (mboxlist_delayed_delete_isenabled()) {
+        char deletedname[MAX_MAILBOX_BUFFER];
+        mboxname_todeleted(buf, deletedname, 0);
+        strlcat(deletedname, ".*", sizeof(deletedname));
+        r = (sync_namespace.mboxlist_findall)(sync_namespacep, deletedname, 
+					      sync_userisadmin,
+					      userid, sync_authstate,
+					      mailbox_cb, quotaroots);
+	if (r) goto bail;
+    }
 
     /* And then all folders */
     strlcat(buf, ".*", sizeof(buf));
