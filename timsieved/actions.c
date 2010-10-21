@@ -311,160 +311,138 @@ static int countscripts(char *name)
 
 /* save name as a sieve script */
 int putscript(struct protstream *conn, mystring_t *name, mystring_t *data,
-                int verify_only)
+	      int verify_only)
 {
-    FILE *stream;
-    char *dataptr;
-    char *errstr;
-    int lup;
-    int result;
-    char path[1024], p2[1024];
-    char bc_path[1024], bc_p2[1024];
-    int maxscripts;
-    sieve_script_t *s;
+  FILE *stream;
+  char *dataptr;
+  char *errstr;
+  int lup;
+  int result;
+  char path[1024], p2[1024];
+  char bc_path[1024], bc_p2[1024];
+  int maxscripts;
+  sieve_script_t *s;
 
-    result = scriptname_valid(name);
-    if (result!=TIMSIEVE_OK) {
-        prot_printf(conn,"NO \"Invalid script name\"\r\n");
-        return result;
-    }
+  result = scriptname_valid(name);
+  if (result!=TIMSIEVE_OK)
+  {
+      prot_printf(conn,"NO \"Invalid script name\"\r\n");
+      return result;
+  }
 
-    if (verify_only) {
-        stream = tmpfile();
-    } else {
-        /* see if this would put the user over quota */
-        maxscripts = config_getint(IMAPOPT_SIEVE_MAXSCRIPTS);
+  if (verify_only)
+      stream = tmpfile();
 
-        if (countscripts(string_DATAPTR(name))+1 > maxscripts) {
-            prot_printf(conn,
-                "NO (\"QUOTA\") \"You are only allowed %d scripts on this server\"\r\n",
-                maxscripts);
-            return TIMSIEVE_FAIL;
-        }
+  else {
+      /* see if this would put the user over quota */
+      maxscripts = config_getint(IMAPOPT_SIEVE_MAXSCRIPTS);
 
-        snprintf(path, 1023, "%s.script.NEW", string_DATAPTR(name));
+      if (countscripts(string_DATAPTR(name))+1 > maxscripts)
+      {
+	  prot_printf(conn,
+		      "NO (\"QUOTA\") \"You are only allowed %d scripts on this server\"\r\n",
+		      maxscripts);
+	  return TIMSIEVE_FAIL;
+      }
 
-        stream = fopen(path, "w+");
-    }
+      snprintf(path, 1023, "%s.script.NEW", string_DATAPTR(name));
 
-
-    if (stream == NULL) {
-        prot_printf(conn, "NO \"Unable to open script for writing (%s)\"\r\n",
-            path);
-
-        return TIMSIEVE_NOEXIST;
-    }
-
-    dataptr = string_DATAPTR(data);
-
-    char *str2 = malloc(BLOCKSIZE *2 +1);
-    for (lup=0;lup<= data->len / BLOCKSIZE; lup++) {
-        int amount = BLOCKSIZE;
-
-        if (lup*BLOCKSIZE+BLOCKSIZE > data->len)
-            amount=data->len % BLOCKSIZE;
-
-        /* Now, replace single \r or \n with \r\n */
-        int i, j = 0;
-        for (i = 0; i < amount; i++) {
-            if (dataptr[i] == '\r' && dataptr[i+1] != '\n') {
-                str2[i+j] = '\r';
-                j++;
-                str2[i+j] = '\n';
-            } else {
-                if (dataptr[i+1] == '\n' && dataptr[i] != '\r') {
-                    str2[i+j] = dataptr[i];
-                    j++;
-                    str2[i+j] = '\r';
-                    str2[i+j+1] = '\n';
-                    i++;
-                } else {
-                    str2[i+j] = dataptr[i];
-                }
-            }
-            fwrite(str2, 1, amount + j, stream);
-            dataptr += amount;
-        }
-    }
-    free(str2);
+      stream = fopen(path, "w+");
+  }
 
 
-    /* let's make sure this is a valid script
-     * (no parse errors)
-     */
-    result = is_script_parsable(stream, &errstr, &s);
+  if (stream == NULL) {
+      prot_printf(conn, "NO \"Unable to open script for writing (%s)\"\r\n",
+		  path);
+      return TIMSIEVE_NOEXIST;
+  }
 
-    if (result != TIMSIEVE_OK) {
-        if (errstr && *errstr) {
-            prot_printf(conn, "NO {" SIZE_T_FMT "}\r\n%s\r\n",
-                strlen(errstr), errstr);
-            free(errstr);
-        } else {
-            if (errstr)
-                free(errstr);
+  dataptr = string_DATAPTR(data);
 
-            prot_printf(conn, "NO \"parse failed\"\r\n");
-        }
+  for (lup=0;lup<= data->len / BLOCKSIZE; lup++) {
+      int amount = BLOCKSIZE;
 
-        fclose(stream);
-        unlink(path);
-        return result;
-    }
+      if (lup*BLOCKSIZE+BLOCKSIZE > data->len)
+	  amount=data->len % BLOCKSIZE;
 
-    fflush(stream);
-    fclose(stream);
+      fwrite(dataptr, 1, amount, stream);
+      
+      dataptr += amount;
+  }
 
-    if (!verify_only) {
-        int fd;
-        bytecode_info_t *bc;
+  /* let's make sure this is a valid script
+     (no parse errors)
+  */
+  result = is_script_parsable(stream, &errstr, &s);
 
-        /* Now, generate the bytecode */
-        if (sieve_generate_bytecode(&bc, s) == -1) {
-            unlink(path);
-            sieve_script_free(&s);
-            prot_printf(conn, "NO \"bytecode generate failed\"\r\n");
-            return TIMSIEVE_FAIL;
-        }
+  if (result != TIMSIEVE_OK) {
+      if (errstr && *errstr) { 
+	  prot_printf(conn, "NO {" SIZE_T_FMT "}\r\n%s\r\n",
+		      strlen(errstr), errstr);
+	  free(errstr);
+      } else {
+	  if (errstr) free(errstr);
+	  prot_printf(conn, "NO \"parse failed\"\r\n");
+      }
+      fclose(stream);
+      unlink(path);
+      return result;
+  }
 
-        /* Now, open the new file */
-        snprintf(bc_path, 1023, "%s.bc.NEW", string_DATAPTR(name));
-        fd = open(bc_path, O_CREAT | O_TRUNC | O_WRONLY, 0600);
-        if (fd < 0) {
-            unlink(path);
-            sieve_free_bytecode(&bc);
-            sieve_script_free(&s);
-            prot_printf(conn, "NO \"couldn't open bytecode file\"\r\n");
-            return TIMSIEVE_FAIL;
-        }
+  fflush(stream);
+  fclose(stream);
+  
+  if (!verify_only) {
+      int fd;
+      bytecode_info_t *bc;
+      
+      /* Now, generate the bytecode */
+      if(sieve_generate_bytecode(&bc, s) == -1) {
+	  unlink(path);
+	  sieve_script_free(&s);
+	  prot_printf(conn, "NO \"bytecode generate failed\"\r\n");
+	  return TIMSIEVE_FAIL;
+      }
 
-        /* Now, emit the bytecode */
-        if (sieve_emit_bytecode(fd, bc) == -1) {
-            close(fd);
-            unlink(path);
-            unlink(bc_path);
-            sieve_free_bytecode(&bc);
-            sieve_script_free(&s);
-            prot_printf(conn, "NO \"bytecode emit failed\"\r\n");
-            return TIMSIEVE_FAIL;
-        }
+      /* Now, open the new file */
+      snprintf(bc_path, 1023, "%s.bc.NEW", string_DATAPTR(name));
+      fd = open(bc_path, O_CREAT | O_TRUNC | O_WRONLY, 0600);
+      if(fd < 0) {
+	  unlink(path);
+	  sieve_free_bytecode(&bc);
+	  sieve_script_free(&s);
+	  prot_printf(conn, "NO \"couldn't open bytecode file\"\r\n");
+	  return TIMSIEVE_FAIL;
+      }
+	  
+      /* Now, emit the bytecode */
+      if(sieve_emit_bytecode(fd, bc) == -1) {
+	  close(fd);
+	  unlink(path);
+	  unlink(bc_path);
+	  sieve_free_bytecode(&bc);
+	  sieve_script_free(&s);
+	  prot_printf(conn, "NO \"bytecode emit failed\"\r\n");
+	  return TIMSIEVE_FAIL;
+      }
 
-        sieve_free_bytecode(&bc);
-        sieve_script_free(&s);
+      sieve_free_bytecode(&bc);
+      sieve_script_free(&s);
 
-        close(fd);
+      close(fd);
 
-        /* Now, rename! */
-        snprintf(p2, 1023, "%s.script", string_DATAPTR(name));
-        snprintf(bc_p2, 1023, "%s.bc", string_DATAPTR(name));
-        rename(path, p2);
-        rename(bc_path, bc_p2);
+      /* Now, rename! */
+      snprintf(p2, 1023, "%s.script", string_DATAPTR(name));
+      snprintf(bc_p2, 1023, "%s.bc", string_DATAPTR(name));
+      rename(path, p2);
+      rename(bc_path, bc_p2);
 
-    }
+  }
 
-    prot_printf(conn, "OK\r\n");
-    sync_log_sieve(sieved_userid);
+  prot_printf(conn, "OK\r\n");
+  sync_log_sieve(sieved_userid);
 
-    return TIMSIEVE_OK;
+  return TIMSIEVE_OK;
 }
 
 /* delete the active script */
