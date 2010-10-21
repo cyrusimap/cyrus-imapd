@@ -349,9 +349,9 @@
                 <title>Example ACL with Negative User Rights</title>
                 <para>
                     
-<screen>   anyone    lrsp
-   fred        lwi
-   -anonymous   s</screen>
+<screen>   anyone&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lrsp
+   fred&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;lwi
+   -anonymous&nbsp;&nbsp;&nbsp;s</screen>
 
                 </para>
 
