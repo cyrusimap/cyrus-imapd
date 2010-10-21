@@ -42,7 +42,7 @@
         </para>
 
     </section>
-    
+
     <section id="sect-Deployment_Guide-Deployment_Scenarios-Multi_Server_Deployments">
         <title>Multi Server Deployments</title>
         <para>
@@ -50,7 +50,7 @@
         </para>
 
     </section>
-    
+
     <section id="sect-Deployment_Guide-Deployment_Scenarios-Cyrus_Murder">
         <title>Cyrus Murder</title>
         <para>
@@ -58,7 +58,7 @@
         </para>
 
     </section>
-    
+
     <section id="sect-Deployment_Guide-Deployment_Scenarios-Cyrus_Replication">
         <title>Cyrus Replication</title>
         <para>
@@ -66,7 +66,7 @@
         </para>
 
     </section>
-    
+
     <section id="sect-Deployment_Guide-Deployment_Scenarios-Hosted_Environments">
         <title>Hosted Environments</title>
         <para>
@@ -74,7 +74,7 @@
         </para>
 
     </section>
-    
+
 
 </chapter>
 
