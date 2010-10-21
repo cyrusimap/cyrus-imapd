@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='utf-8' ?>
-<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
+<!DOCTYPE section PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
 <!ENTITY % BOOK_ENTITIES SYSTEM "Deployment_Guide.ent">
 %BOOK_ENTITIES;
 ]>
@@ -12,7 +12,15 @@
         <itemizedlist>
             <listitem>
                 <para>
-                    All reasonably recent versions of Linux, including but not limited to the following distributions, in no particular order other then alphabetic;
+                    FreeBSD
+                </para>
+            </listitem>
+            <listitem>
+                <para>
+                    All reasonably recent versions of Linux<footnote> <para>
+                        By reasonably recent versions of Linux, we intend to indicate the Cyrus project can keep up with the latest distribution release ear-marked stable.
+                    </para>
+                    </footnote>, including but not limited to the following distributions, in no particular order other then alphabetic;
                 </para>
                 <para>
                     <itemizedlist>
@@ -58,12 +66,105 @@
                     </itemizedlist>
                 </para>
                 <para>
-                    Should your Linux distribution not be listed here, please let us know.
+                    Should your Linux distribution not be listed here, please refer to <xref linkend="sect-Feedback" /> for ways of contacting the Cyrus IMAP team.
                 </para>
+            </listitem>
+            <listitem>
                 <para>
-                    By reasonably recent versions of Linux, we intend to indicate the Cyrus project can keep up with the latest distribution release ear-marked stable.
+                    Solaris
                 </para>
             </listitem>
         </itemizedlist>
     </para>
+    <remark>
+        Obviously, the list is not complete
+    </remark>
+
+    <section id="sect-Supported_Platforms_and_System_Requirements-Building_Cyrus_IMAP">
+        <title>Building Cyrus IMAP</title>
+
+        <section id="sect-Supported_Platforms_and_System_Requirements-Building_Cyrus_IMAP-Required_Software_Components">
+            <title>Required Software Components</title>
+            <para>
+                The following software components are required for Cyrus IMAP to build with minimal functionality;
+            </para>
+            <para>
+                <itemizedlist>
+                    <listitem>
+                        <para>
+                            <application>autoconf</application>
+                        </para>
+                    </listitem>
+                    <listitem>
+                        <para>
+                            <application>automake</application>
+                        </para>
+                    </listitem>
+                </itemizedlist>
+            </para>
+            <remark>
+                Obviously, the list is not complete
+            </remark>
+        </section>
+
+        <section id="sect-Supported_Platforms_and_System_Requirements-Building_Cyrus_IMAP-Recommended_Software_Components">
+            <title>Recommended Software Components</title>
+            <para>
+                We recommend you build Cyrus IMAP with the following software components included;
+            </para>
+            <para>
+                <itemizedlist>
+                    <listitem>
+                        <para>
+                            <application>autoconf</application>
+                        </para>
+                    </listitem>
+                    <listitem>
+                        <para>
+                            <application>automake</application>
+                        </para>
+                    </listitem>
+                </itemizedlist>
+            </para>
+            <remark>
+                Obviously, the list is not complete
+            </remark>
+        </section>
+
+        <section id="sect-Supported_Platforms_and_System_Requirements-Building_Cyrus_IMAP-Optional_Software_Components">
+            <title>Optional Software Components</title>
+            <para>
+                When including the following software components during the build process, additional, optional functionality can be implemented;
+            </para>
+            <para>
+                <itemizedlist>
+                    <listitem>
+                        <formalpara>
+                            <title><application>MySQL</application> (Development headers)</title>
+                            <para>
+                                To enable using MySQL as a database server backend, include the MySQL development headers and make sure to compile Cyrus IMAP with <literal>--with-mysql</literal>.
+                            </para>
+                        </formalpara>
+                        <para>
+                            Should MySQL &mdash;the client libraries or the development headers&mdash; be installed on a non-standard location, please consider using any of the following options;
+                        </para>
+                        <para>
+                            <screen>  --with-mysql=DIR          use MySQL (in DIR) [no]
+  --with-mysql-libdir=DIR   MySQL lib files are in DIR
+  --with-mysql-incdir=DIR   MySQL include files are in DIR</screen>
+                        </para>
+                    </listitem>
+                    <listitem>
+                        <para>
+                            <application>PostgreSQL</application> (Development headers)
+                        </para>
+                    </listitem>
+                </itemizedlist>
+            </para>
+            <remark>
+                Obviously, the list is not complete
+            </remark>
+        </section>
+
+    </section>
 </section>
