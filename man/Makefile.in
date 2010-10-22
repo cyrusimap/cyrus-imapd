@@ -82,6 +82,8 @@ $(srcdir)/imapd.conf.5: $(srcdir)/../lib/imapoptions $(srcdir)/../tools/config2m
 	@echo creating imapd.conf.5
 	$(srcdir)/../tools/config2man $(srcdir)/../lib/imapoptions > $(srcdir)/imapd.conf.5
 
+check:
+
 install:
 	for file in $(MAN1); \
 	do \

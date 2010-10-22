@@ -131,6 +131,14 @@ xversion xversion.h:
 	@cmp -s xversion.h.tmp xversion.h || mv xversion.h.tmp xversion.h
 	@rm -f xversion.h.tmp
 
+check:
+	@-for d in  $(SUBDIRS); \
+	do \
+		(cd $$d; echo "### Making" check "in" `pwd`;	\
+			$(MAKE) $(MFLAGS) DESTDIR=$(DESTDIR) check ;	\
+			echo "### Done with" `pwd`);		\
+	done
+
 install::
 	$(srcdir)/install-sh -d ${DESTDIR}$(exec_prefix)/bin
 	$(srcdir)/install-sh -d ${DESTDIR}$(exec_prefix)/lib

@@ -77,6 +77,8 @@ BUILT_SOURCES = addr.c addr.h addr-lex.c \
 
 all: libsieve.a sievec sieved
 
+check:
+
 dist: $(BUILT_SOURCES)
 
 install: sievec sieved

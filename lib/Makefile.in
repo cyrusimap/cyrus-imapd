@@ -108,6 +108,8 @@ LIBCYRM_OBJS = libconfig.o imapopts.o hash.o mpool.o xmalloc.o strhash.o \
 
 all: $(BUILTSOURCES) libcyrus_min.a libcyrus.a
 
+check:
+
 install:
 	$(srcdir)/../install-sh -d $(DESTDIR)$(libdir)
 	$(INSTALL) -m 644 libcyrus.a $(DESTDIR)$(libdir)

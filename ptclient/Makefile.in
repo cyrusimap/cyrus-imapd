@@ -88,6 +88,8 @@ SERVICETHREAD=../master/service-thread.o
 
 all: $(PROGS)
 
+check:
+
 install:
 	$(INSTALL) -m 755 ptloader $(DESTDIR)$(service_path)
 	$(INSTALL) -m 755 ptexpire $(DESTDIR)$(service_path)

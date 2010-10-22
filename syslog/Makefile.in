@@ -63,6 +63,8 @@ MAKEDEPEND = @MAKEDEPEND@
 
 all: libsyslog.a syslogd
 
+check:
+
 install:
 	@echo "Install syslogd and syslog.conf as appropriate"
 

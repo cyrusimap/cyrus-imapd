@@ -81,6 +81,8 @@ PUREOPT=-best-effort
 
 all: timsieved
 
+check:
+
 install:
 	$(INSTALL) -m 755 timsieved $(DESTDIR)$(service_path)
 

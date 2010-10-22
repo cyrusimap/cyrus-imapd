@@ -81,6 +81,8 @@ PUREOPT=-best-effort
 
 all: notifyd
 
+check:
+
 install:
 	$(INSTALL) -m 755 notifyd $(DESTDIR)$(service_path)
 

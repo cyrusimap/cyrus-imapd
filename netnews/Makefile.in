@@ -70,6 +70,8 @@ OBJS = remotepurge.o readconfig.o
 
 all: remotepurge
 
+check:
+
 install:
 	$(INSTALL) -s -m 755 remotepurge $(DESTDIR)$(service_path)
 

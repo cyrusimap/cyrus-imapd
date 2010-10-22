@@ -67,6 +67,8 @@ cyrus_prefix = @cyrus_prefix@
 
 all:
 
+check:
+
 install:
 	$(srcdir)/../install-sh -d ${DESTDIR}etc
 	$(INSTALL) -m 644 $(srcdir)/depot.conf $(DESTDIR)

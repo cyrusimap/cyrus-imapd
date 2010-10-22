@@ -380,6 +380,8 @@ clean:
 distclean: clean
 	rm -f Makefile
 
+check:
+
 depend: imap_err.h
 	${MAKEDEPEND} $(CPPFLAGS) $(DEFS) $(CFLAGS) *.c $(srcdir)/*.c 1>makedepend.log 2>&1
 

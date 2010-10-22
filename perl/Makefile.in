@@ -91,6 +91,8 @@ all::
 			$(MAKE) $(MFLAGS) DESTDIR=$(DESTDIR) all) || exit 1; \
 	done
 
+check:
+
 install::
 	@for d in  $(SUBDIRS); \
 	do \

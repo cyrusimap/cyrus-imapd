@@ -72,6 +72,8 @@ cyrus_prefix = @cyrus_prefix@
 
 all: imtest
 
+check:
+
 install:
 	$(INSTALL) -s -m 755 imtest $(DESTDIR)$(exec_prefix)/bin
 	ln -f $(DESTDIR)$(exec_prefix)/bin/imtest $(DESTDIR)$(exec_prefix)/bin/pop3test
