@@ -1238,6 +1238,13 @@ static int do_mailbox(struct dlist *kin,
 
     /* now we're committed to writing something no matter what happens! */
 
+    if (mailbox->i.uidvalidity < uidvalidity) {
+	syslog(LOG_ERR, "%s uidvalidity higher on master, updating %u => %u",
+	       mailbox->name, mailbox->i.uidvalidity, uidvalidity);
+	mailbox_index_dirty(mailbox);
+	mailbox->i.uidvalidity = uidvalidity;
+    }
+
     part_list = sync_reserve_partlist(reserved_list, mailbox->part);
     old_num_records = mailbox->i.num_records;
 
