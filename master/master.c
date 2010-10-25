@@ -160,7 +160,7 @@ enum sstate {
     SERVICE_STATE_UNKNOWN = 0,  /* duh */
     SERVICE_STATE_INIT    = 1,  /* Service forked - UNUSED */
     SERVICE_STATE_READY   = 2,  /* Service told us it is ready */
-    				/* or it just forked and has not
+				/* or it just forked and has not
 				 * talked to us yet */
     SERVICE_STATE_BUSY    = 3,  /* Service told us it is not ready */
     SERVICE_STATE_DEAD    = 4   /* We received a sigchld from this service */
@@ -855,10 +855,12 @@ void reap_child(void)
 		break;
 	    default:
 		syslog(LOG_CRIT, 
-		       "service %s pid %d in ILLEGAL STATE: exited. Serious software bug or memory corruption detected!",
+		       "service %s pid %d in ILLEGAL STATE: exited. Serious "
+		       "software bug or memory corruption detected!",
 		       s ? SERVICENAME(s->name) : "unknown", pid);
 		syslog(LOG_DEBUG,
-		       "service %s pid %d in ILLEGAL state: forced to valid UNKNOWN state",
+		       "service %s pid %d in ILLEGAL state: forced to valid "
+		       "UNKNOWN state",
 		       s ? SERVICENAME(s->name) : "unknown", pid);
 		c->service_state = SERVICE_STATE_UNKNOWN;
 	    }
@@ -871,7 +873,8 @@ void reap_child(void)
 		    if (!in_shutdown && (WIFSIGNALED(status) ||
 			(WIFEXITED(status) && WEXITSTATUS(status)))) {
 			syslog(LOG_WARNING, 
-			       "service %s pid %d in READY state: terminated abnormally",
+			       "service %s pid %d in READY state: "
+			       "terminated abnormally",
 			       SERVICENAME(s->name), pid);
 		    }
 		    break;
@@ -879,7 +882,8 @@ void reap_child(void)
 		case SERVICE_STATE_DEAD:
 		    /* uh? either we got duplicate signals, or we are now MT */
 		    syslog(LOG_WARNING, 
-			   "service %s pid %d in DEAD state: receiving duplicate signals", 
+			   "service %s pid %d in DEAD state: "
+			   "receiving duplicate signals", 
 			   SERVICENAME(s->name), pid);
 		    break;
 		    
@@ -888,7 +892,8 @@ void reap_child(void)
 		    if (!in_shutdown && (WIFSIGNALED(status) ||
 			(WIFEXITED(status) && WEXITSTATUS(status)))) {
 			syslog(LOG_DEBUG,
-			       "service %s pid %d in BUSY state: terminated abnormally",
+			       "service %s pid %d in BUSY state: "
+			       "terminated abnormally",
 			       SERVICENAME(s->name), pid);
 		    }
 		    break;
@@ -908,8 +913,9 @@ void reap_child(void)
 		 * children of services removed by reread_conf() */
 		if (c->service_state != SERVICE_STATE_READY) {
 		    syslog(LOG_WARNING,
-			   "unknown service pid %d in state %d: exited (maybe using a service as an event,"
-			   " or a service was removed by SIGHUP?)",
+			   "unknown service pid %d in state %d: exited "
+			   "(maybe using a service as an event, "
+			   "or a service was removed by SIGHUP?)",
 			   pid, c->service_state);
 		}
 	    }
