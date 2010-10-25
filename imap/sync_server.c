@@ -997,6 +997,7 @@ void reserve_folder(const char *part, const char *mboxname,
 {
     struct mailbox *mailbox = NULL;
     struct index_record record;
+    struct index_record record2;
     int r;
     struct sync_msgid *item;
     const char *mailbox_msg_path, *stage_msg_path;
@@ -1023,6 +1024,20 @@ void reserve_folder(const char *part, const char *mboxname,
 	/* Attempt to reserve this message */
 	mailbox_msg_path = mailbox_message_fname(mailbox, record.uid);
 	stage_msg_path = dlist_reserve_path(part, &record.guid);
+
+	/* check that the sha1 of the file on disk is correct */
+	memset(&record2, 0, sizeof(struct index_record));
+	r = message_parse(mailbox_msg_path, &record2);
+	if (r) {
+	    syslog(LOG_ERR, "IOERROR: Unable to parse %s",
+		   mailbox_msg_path);
+	    continue;
+	}
+	if (!message_guid_compare(&record.guid, &record2.guid)) {
+	    syslog(LOG_ERR, "IOERROR: GUID mismatch on parse for %s",
+		   mailbox_msg_path);
+	    continue;
+	}
 
 	if (mailbox_copyfile(mailbox_msg_path, stage_msg_path, 0) != 0) {
 	    syslog(LOG_ERR, "IOERROR: Unable to link %s -> %s: %m",
