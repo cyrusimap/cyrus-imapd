@@ -49,7 +49,7 @@
 #include <fcntl.h>
 #include <errno.h>
 
-#include "lock.h"
+#include "cyr_lock.h"
 
 const char *lock_method_desc = "fcntl";
 

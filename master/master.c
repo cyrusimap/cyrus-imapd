@@ -115,7 +115,7 @@
 #include "master.h"
 #include "service.h"
 
-#include "lock.h"
+#include "cyr_lock.h"
 #include "util.h"
 #include "xmalloc.h"
 

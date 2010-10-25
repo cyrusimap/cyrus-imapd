@@ -59,7 +59,7 @@
 #include "cyrusdb.h"
 #include "exitcodes.h"
 #include "libcyr_cfg.h"
-#include "lock.h"
+#include "cyr_lock.h"
 #include "retry.h"
 #include "strhash.h"
 #include "xmalloc.h"

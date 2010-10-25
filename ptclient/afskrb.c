@@ -41,7 +41,6 @@
  *
  * $Id: afskrb.c,v 1.19 2010/01/06 17:01:57 murch Exp $
  */
-
 #include <config.h>
 #include "ptloader.h"
 #include "exitcodes.h"
@@ -49,7 +48,6 @@
 #include "xmalloc.h"
 
 #ifdef HAVE_AFSKRB
-
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -73,7 +71,7 @@
 #include "strhash.h"
 
 /* AFS stuff */
-#include <des.h> /* for int32, necessary for the AFS includes below */
+#include <lock.h>
 #include <afs/ptserver.h>
 #include <afs/pterror.h>
 #include <afs/cellconfig.h>

@@ -78,7 +78,7 @@
 #include "global.h"
 #include "imap_err.h"
 #include "imparse.h"
-#include "lock.h"
+#include "cyr_lock.h"
 #include "mailbox.h"
 #include "message.h"
 #include "map.h"

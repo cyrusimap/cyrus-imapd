@@ -61,7 +61,7 @@
 #include "auth.h"
 #include "prot.h"
 #include "imparse.h"
-#include "lock.h"
+#include "cyr_lock.h"
 #include "global.h"
 #include "exitcodes.h"
 #include "imap_err.h"

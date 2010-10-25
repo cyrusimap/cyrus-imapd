@@ -62,7 +62,7 @@
 #include "exitcodes.h"
 #include "map.h"
 #include "bsearch.h"
-#include "lock.h"
+#include "cyr_lock.h"
 #include "retry.h"
 #include "util.h"
 #include "xmalloc.h"

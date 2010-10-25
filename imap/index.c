@@ -65,7 +65,7 @@
 #include "imap_err.h"
 #include "global.h"
 #include "imapd.h"
-#include "lock.h"
+#include "cyr_lock.h"
 #include "lsort.h"
 #include "mailbox.h"
 #include "map.h"
