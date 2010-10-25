@@ -1,0 +1,42 @@
+#include "cunit/cunit.h"
+#include "md5.h"
+
+static const char *asciify(unsigned char mac[16])
+{
+    static char buf[33];
+    int i;
+
+    for (i = 0 ; i < 16 ; i++)
+	sprintf(buf+2*i, "%02x", mac[i]);
+    return buf;
+}
+
+static void test_single(void)
+{
+    MD5_CTX ctx;
+    unsigned char result[16];
+    static const char text[] = "Hello World";
+    static const char expected[33] = "b10a8db164e0754105b7a99be72e3fe5";
+
+    MD5Init(&ctx);
+    MD5Update(&ctx, text, strlen(text));
+    MD5Final(result, &ctx);
+    CU_ASSERT_STRING_EQUAL(asciify(result), expected);
+}
+
+static void test_multiple(void)
+{
+    MD5_CTX ctx;
+    unsigned char result[16];
+    static const char text1[] = "lorem ipsum";
+    static const char text2[] = " dolor sit amet,";
+    static const char text3[] = " consectetur adipisicing elit";
+    static const char expected[33] = "247ce3dcb025a6fd563b878072be7cc9";
+
+    MD5Init(&ctx);
+    MD5Update(&ctx, text1, strlen(text1));
+    MD5Update(&ctx, text2, strlen(text2));
+    MD5Update(&ctx, text3, strlen(text3));
+    MD5Final(result, &ctx);
+    CU_ASSERT_STRING_EQUAL(asciify(result), expected);
+}
