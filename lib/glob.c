@@ -62,7 +62,7 @@ static char inbox[] = "INBOX";
 /* initialize globbing structure
  *  This makes the following changes to the input string:
  *   1) '*' added to each end if GLOB_SUBSTRING
- *   2) '%' converted to '?' if no GLOB_HIERARCHIAL
+ *   2) '%' converted to '?' if no GLOB_HIERARCHY
  *   3) '?'s moved to left of '*'
  *   4) '*' eats all '*'s and '%'s connected by any wildcard
  *   5) '%' eats all adjacent '%'s
