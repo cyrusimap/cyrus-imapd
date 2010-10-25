@@ -1359,6 +1359,7 @@ int sync_mailbox(struct mailbox *mailbox,
 
     if (printrecords) {
 	struct index_record record;
+	struct index_record record2;
 	struct dlist *il;
 	struct dlist *rl = dlist_list(kl, "RECORD");
 	struct stat sbuf;
@@ -1366,6 +1367,7 @@ int sync_mailbox(struct mailbox *mailbox,
 	struct sync_msgid *msgid;
 	uint32_t recno;
 	int send_file;
+	int r;
 
 	for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	    /* we can't send bogus records, just skip them! */
@@ -1411,6 +1413,15 @@ int sync_mailbox(struct mailbox *mailbox,
 			       mailbox->name, record.uid, sbuf.st_size, record.size);
 			return IMAP_IOERROR;
 		    }
+		    memset(&record2, 0, sizeof(struct index_record));
+		    r = message_parse(fname, &record2);
+		    if (r) return r;
+		    if (!message_guid_compare(&record.guid, &record2.guid)) {
+			syslog(LOG_ERR, "IOERROR: GUID mismatch %s %u",
+			       mailbox->name, record.uid);
+			return IMAP_IOERROR;
+		    }
+		    /* XXX - what if the sha1 is wrong? */
 		    dlist_file(kupload, "MESSAGE", mailbox->part, &record.guid,
 			       record.size, fname);
 		}
