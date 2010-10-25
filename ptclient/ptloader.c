@@ -62,7 +62,7 @@
 #include "hash.h"
 #include "global.h"
 #include "libconfig.h"
-#include "lock.h"
+#include "cyr_lock.h"
 #include "retry.h"
 #include "xmalloc.h"
 #include "ptloader.h"
@@ -124,11 +124,6 @@ const int config_need_data = 0;
 
 /* Globals */
 #define DB (config_ptscache_db)
-
-/* XXXXXXXXX */
-void des_init_random_number_generator() {
-        return;
-} 
 
 static char ptclient_debug = 0;
 struct db *ptsdb = NULL;

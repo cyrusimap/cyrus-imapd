@@ -65,7 +65,7 @@
 
 #include "sync_log.h"
 #include "global.h"
-#include "lock.h"
+#include "cyr_lock.h"
 #include "mailbox.h"
 #include "retry.h"
 #include "util.h"

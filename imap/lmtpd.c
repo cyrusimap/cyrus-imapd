@@ -77,7 +77,7 @@
 #include "idle.h"
 #include "imap_err.h"
 #include "imparse.h"
-#include "lock.h"
+#include "cyr_lock.h"
 #include "mailbox.h"
 #include "map.h"
 #include "mboxlist.h"

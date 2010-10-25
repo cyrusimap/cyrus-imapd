@@ -63,7 +63,7 @@
 
 #include "mboxname.h"
 #include "mboxlist.h"
-#include "lock.h"
+#include "cyr_lock.h"
 
 struct mboxlocklist {
     struct mboxlocklist *next;

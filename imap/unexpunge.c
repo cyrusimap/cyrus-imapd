@@ -66,7 +66,7 @@
 #include "imap_err.h"
 #include "index.h"
 #include "libcyr_cfg.h"
-#include "lock.h"
+#include "cyr_lock.h"
 #include "map.h"
 #include "mailbox.h"
 #include "mboxlist.h"

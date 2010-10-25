@@ -65,7 +65,7 @@
 #include "bsearch.h"
 #include "cyrusdb.h"
 #include "libcyr_cfg.h"
-#include "lock.h"
+#include "cyr_lock.h"
 #include "map.h"
 #include "retry.h"
 #include "util.h"

@@ -104,7 +104,7 @@
 #include "convert_code.h"
 #include "util.h"
 #include "sync_log.h"
-#include "lock.h"
+#include "cyr_lock.h"
 
 extern int optind;
 extern char *optarg;
