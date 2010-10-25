@@ -1006,6 +1006,7 @@ static int mailbox_full_update(const char *mboxname)
     struct dlist *kaction = NULL;
     struct dlist *kexpunge = NULL;
     modseq_t highestmodseq;
+    uint32_t uidvalidity;
     uint32_t last_uid;
 
     kl = dlist_atom(NULL, cmd, mboxname);
@@ -1035,6 +1036,11 @@ static int mailbox_full_update(const char *mboxname)
 	goto done;
     }
 
+    if (!dlist_getnum(kl, "UIDVALIDITY", &uidvalidity)) {
+	r = IMAP_PROTOCOL_BAD_PARAMETERS;
+	goto done;
+    }
+
     if (!dlist_getnum(kl, "LAST_UID", &last_uid)) {
 	r = IMAP_PROTOCOL_BAD_PARAMETERS;
 	goto done;
@@ -1055,10 +1061,19 @@ static int mailbox_full_update(const char *mboxname)
 
     old_num_records = mailbox->i.num_records;
 
+    /* if local UIDVALIDITY is lower, copy from remote, otherwise
+     * remote will copy ours when we sync */
+    if (mailbox->i.uidvalidity < uidvalidity) {
+	syslog(LOG_ERR, "%s uidvalidity higher on replica, updating %u => %u",
+	       mailbox->name, mailbox->i.uidvalidity, uidvalidity);
+	mailbox_index_dirty(mailbox);
+	mailbox->i.uidvalidity = uidvalidity;
+    }
+
     if (mailbox->i.highestmodseq < highestmodseq) {
-	/* highestmodseq on replica is dirty - we must go to at least one higher! */
-	mailbox->i.highestmodseq = highestmodseq;
 	mailbox_modseq_dirty(mailbox);
+	/* highestmodseq on replica is dirty - we must go to at least one higher! */
+	mailbox->i.highestmodseq = highestmodseq+1;
     }
 
     /* initialise the two loops */
@@ -1224,18 +1239,21 @@ static int update_mailbox_once(struct sync_folder *local,
 	goto done;
 
     /* check that replication stands a chance of succeeding */
-    if (remote && (mailbox->i.deletedmodseq > remote->highestmodseq)) {
-	syslog(LOG_NOTICE, "inefficient replication ("
-	       MODSEQ_FMT " > " MODSEQ_FMT ") %s", 
-	       mailbox->i.deletedmodseq, remote->highestmodseq,
-	       local->name);
-	/* close the mailbox here before sending */
-	mailbox_close(&mailbox);
-	r = mailbox_full_update(local->name);
-	if (r) goto done;
-	/* and open it again afterwards */
-	r = mailbox_open_irl(local->name, &mailbox);
-	if (r) goto done;
+    if (remote) {
+	if (mailbox->i.deletedmodseq > remote->highestmodseq) {
+	    syslog(LOG_NOTICE, "inefficient replication ("
+		   MODSEQ_FMT " > " MODSEQ_FMT ") %s", 
+		   mailbox->i.deletedmodseq, remote->highestmodseq,
+		   local->name);
+	    r = IMAP_AGAIN;
+	    goto done;
+	}
+	/* need a full sync to fix uidvalidity issues so we get a
+	 * writelocked mailbox */
+	if (mailbox->i.uidvalidity < remote->uidvalidity) {
+	    r = IMAP_AGAIN;
+	    goto done;
+	}
     }
 
     part_list = sync_reserve_partlist(reserve_guids, mailbox->part);
@@ -1284,12 +1302,15 @@ static int update_mailbox(struct sync_folder *local,
 {
     int r = update_mailbox_once(local, remote, reserve_guids);
 
-    if (r == IMAP_MAILBOX_CRC) {
+    if (r == IMAP_AGAIN) {
+	r = mailbox_full_update(local->name);
+	if (!r) r = update_mailbox_once(local, remote, reserve_guids);
+    }
+    else if (r == IMAP_MAILBOX_CRC) {
 	syslog(LOG_ERR, "CRC failure on sync for %s, trying full update",
 	       local->name);
 	r = mailbox_full_update(local->name);
-	if (!r)
-	    r = update_mailbox_once(local, remote, reserve_guids);
+	if (!r) r = update_mailbox_once(local, remote, reserve_guids);
     }
 
     return r;
