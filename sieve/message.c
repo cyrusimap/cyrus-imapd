@@ -56,7 +56,6 @@
 #include <fcntl.h>
 #include <string.h>
 
-#include "md5global.h"
 #include "md5.h"
 #include "sieve_interface.h"
 #include "interp.h"
