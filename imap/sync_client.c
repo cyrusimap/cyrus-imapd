@@ -103,6 +103,7 @@ extern char *optarg;
 extern int optind;
 
 static const char *servername = NULL;
+static struct backend *sync_backend = NULL;
 static struct protstream *sync_out = NULL;
 static struct protstream *sync_in = NULL;
 
@@ -2436,20 +2437,25 @@ int do_daemon_work(const char *sync_log_file, const char *sync_shutdown_file,
     return(r);
 }
 
-struct backend *replica_connect(struct backend *be, const char *servername,
-				sasl_callback_t *cb)
+void replica_connect()
 {
     int wait;
     struct protoent *proto;
+    sasl_callback_t *cb;
+
+    cb = mysasl_callbacks(NULL,
+			  config_getstring(IMAPOPT_SYNC_AUTHNAME),
+			  config_getstring(IMAPOPT_SYNC_REALM),
+			  config_getstring(IMAPOPT_SYNC_PASSWORD));
 
     /* get the right port */
     csync_protocol.service = config_getstring(IMAPOPT_SYNC_PORT);
 
     for (wait = 15;; wait *= 2) {
-	be = backend_connect(be, servername, &csync_protocol,
-			     "", cb, NULL);
+	sync_backend = backend_connect(sync_backend, servername,
+				       &csync_protocol, "", cb, NULL);
 
-	if (be || connect_once || wait > 1000) break;
+	if (sync_backend || connect_once || wait > 1000) break;
 
 	fprintf(stderr,
 		"Can not connect to server '%s', retrying in %d seconds\n",
@@ -2457,7 +2463,7 @@ struct backend *replica_connect(struct backend *be, const char *servername,
 	sleep(wait);
     }
 
-    if (!be) {
+    if (!sync_backend) {
 	fprintf(stderr, "Can not connect to server '%s'\n",
 		servername);
 	syslog(LOG_ERR, "Can not connect to server '%s'", servername);
@@ -2469,10 +2475,10 @@ struct backend *replica_connect(struct backend *be, const char *servername,
      * http://en.wikipedia.org/wiki/Nagle's_algorithm
      */ 
     if (servername[0] != '/') {
-	if (be->sock >= 0 && (proto = getprotobyname("tcp")) != NULL) {
+	if (sync_backend->sock >= 0 && (proto = getprotobyname("tcp")) != NULL) {
 	    int on = 1;
 
-	    if (setsockopt(be->sock, proto->p_proto, TCP_NODELAY,
+	    if (setsockopt(sync_backend->sock, proto->p_proto, TCP_NODELAY,
 			   (void *) &on, sizeof(on)) != 0) {
 		syslog(LOG_ERR, "unable to setsocketopt(TCP_NODELAY): %m");
 	    }
@@ -2483,13 +2489,13 @@ struct backend *replica_connect(struct backend *be, const char *servername,
                 int optval = 1;
                 socklen_t optlen = sizeof(optval);
 
-                r = setsockopt(be->sock, SOL_SOCKET, SO_KEEPALIVE, &optval, optlen);
+                r = setsockopt(sync_backend->sock, SOL_SOCKET, SO_KEEPALIVE, &optval, optlen);
                 if (r < 0) {
                     syslog(LOG_ERR, "unable to setsocketopt(SO_KEEPALIVE): %m");
                 }
 #ifdef TCP_KEEPCNT
                 if (config_getint(IMAPOPT_TCP_KEEPALIVE_CNT)) {
-                    r = setsockopt(be->sock, SOL_TCP, TCP_KEEPCNT, &optval, optlen);
+                    r = setsockopt(sync_backend->sock, SOL_TCP, TCP_KEEPCNT, &optval, optlen);
                     if (r < 0) {
                         syslog(LOG_ERR, "unable to setsocketopt(TCP_KEEPCNT): %m");
                     }
@@ -2497,7 +2503,7 @@ struct backend *replica_connect(struct backend *be, const char *servername,
 #endif
 #ifdef TCP_KEEPIDLE
                 if (config_getint(IMAPOPT_TCP_KEEPALIVE_IDLE)) {
-                    r = setsockopt(be->sock, SOL_TCP, TCP_KEEPIDLE, &optval, optlen);
+                    r = setsockopt(sync_backend->sock, SOL_TCP, TCP_KEEPIDLE, &optval, optlen);
                     if (r < 0) {
                         syslog(LOG_ERR, "unable to setsocketopt(TCP_KEEPIDLE): %m");
                     }
@@ -2505,7 +2511,7 @@ struct backend *replica_connect(struct backend *be, const char *servername,
 #endif
 #ifdef TCP_KEEPINTVL
                 if (config_getint(IMAPOPT_TCP_KEEPALIVE_INTVL)) {
-                    r = setsockopt(be->sock, SOL_TCP, TCP_KEEPINTVL, &optval, optlen);
+                    r = setsockopt(sync_backend->sock, SOL_TCP, TCP_KEEPINTVL, &optval, optlen);
                     if (r < 0) {
                         syslog(LOG_ERR, "unable to setsocketopt(TCP_KEEPINTVL): %m");
                     }
@@ -2520,25 +2526,31 @@ struct backend *replica_connect(struct backend *be, const char *servername,
 #ifdef HAVE_ZLIB
     /* check if we should compress */
     if (do_compress || config_getswitch(IMAPOPT_SYNC_COMPRESS)) {
-        prot_printf(be->out, "COMPRESS DEFLATE\r\n");
-        prot_flush(be->out);
+        prot_printf(sync_backend->out, "COMPRESS DEFLATE\r\n");
+        prot_flush(sync_backend->out);
 
-        if (sync_parse_response("COMPRESS", be->in, NULL)) {
+        if (sync_parse_response("COMPRESS", sync_backend->in, NULL)) {
 	    syslog(LOG_ERR, "Failed to enable compression, continuing uncompressed");
 	}
 	else {
-	    prot_setcompress(be->in);
-	    prot_setcompress(be->out);
+	    prot_setcompress(sync_backend->in);
+	    prot_setcompress(sync_backend->out);
         }
     }
 #endif
 
-    return be;
+    /* links to sockets */
+    sync_in = sync_backend->in;
+    sync_out = sync_backend->out;
+}
+
+static void replica_disconnect()
+{
+    backend_disconnect(sync_backend);
 }
 
 void do_daemon(const char *sync_log_file, const char *sync_shutdown_file,
-	       unsigned long timeout, unsigned long min_delta,
-	       struct backend *be, sasl_callback_t *cb)
+	       unsigned long timeout, unsigned long min_delta)
 {
     int r = 0;
     pid_t pid;
@@ -2557,8 +2569,10 @@ void do_daemon(const char *sync_log_file, const char *sync_shutdown_file,
     }
 
     if (foreground || timeout == 0) {
+	replica_connect();
         do_daemon_work(sync_log_file, sync_shutdown_file,
                        timeout, min_delta, &restart);
+	replica_disconnect();
         return;
     }
 
@@ -2569,45 +2583,31 @@ void do_daemon(const char *sync_log_file, const char *sync_shutdown_file,
         if ((pid=fork()) < 0) fatal("fork failed", EC_SOFTWARE);
 
         if (pid == 0) { /* child */
+	    replica_connect();
 
-	    if (be->sock == -1) {
-		/* Reopen up connection to server */
-		be = replica_connect(be, servername, cb);
+	    r = do_daemon_work(sync_log_file, sync_shutdown_file,
+			       timeout, min_delta, &restart);
 
-		if (!be) {
-		    fprintf(stderr, "Can not connect to server '%s'\n",
-			    be->hostname);
-		    syslog(LOG_ERR, "Can not connect to server '%s'",
-			   be->hostname);
-		    _exit(1);
-		}
-
-		sync_in = be->in;
-		sync_out = be->out;
-	    }
-
-            r = do_daemon_work(sync_log_file, sync_shutdown_file,
-                               timeout, min_delta, &restart);
-
-            if (r) {
+	    if (r) {
 		/* See if we're still connected to the server.
 		 * If we are, we had some type of error, so we exit.
 		 * Otherwise, try reconnecting.
 		 */
-		if (!backend_ping(be)) _exit(1);
-
+		if (!backend_ping(sync_backend)) _exit(1);
+else 
 		syslog(LOG_WARNING, "Lost connection to server. Reconnecting");
 		restart = 1;
 	    }
 
-            if (restart) _exit(EX_TEMPFAIL);
-            _exit(0);
+	    replica_disconnect();
+
+	    if (restart) _exit(EX_TEMPFAIL);
+	    else _exit(0);
         }
 
 	/* parent */
         if (waitpid(pid, &status, 0) < 0) fatal("waitpid failed", EC_SOFTWARE);
 
-	backend_disconnect(be);
     } while (WIFEXITED(status) && (WEXITSTATUS(status) == EX_TEMPFAIL));
 
     if (WIFEXITED(status)) {
@@ -2654,9 +2654,9 @@ int main(int argc, char **argv)
     char buf[512];
     FILE *file;
     int len;
-    struct backend *be = NULL;
-    sasl_callback_t *cb;
     int config_virtdomains;
+    struct sync_name_list *mboxname_list;
+    char mailboxname[MAX_MAILBOX_BUFFER];
 
     if ((geteuid()) == 0 && (become_cyrus() != 0)) {
 	fatal("must run as the Cyrus user", EC_USAGE);
@@ -2790,24 +2790,11 @@ int main(int argc, char **argv)
     /* load the SASL plugins */
     global_sasl_init(1, 0, mysasl_cb);
 
-    cb = mysasl_callbacks(NULL,
-			  config_getstring(IMAPOPT_SYNC_AUTHNAME),
-			  config_getstring(IMAPOPT_SYNC_REALM),
-			  config_getstring(IMAPOPT_SYNC_PASSWORD));
-
-    /* Open up connection to server */
-    be = replica_connect(NULL, servername, cb);
-
-    if (!be) {
-        fprintf(stderr, "Can not connect to server '%s'\n", servername);
-        exit(1);
-    }
-
-    sync_in = be->in;
-    sync_out = be->out;
-
     switch (mode) {
     case MODE_USER:
+	/* Open up connection to server */
+	replica_connect();
+
 	if (input_filename) {
 	    if ((file=fopen(input_filename, "r")) == NULL) {
 		syslog(LOG_NOTICE, "Unable to open %s: %m", input_filename);
@@ -2847,13 +2834,15 @@ int main(int argc, char **argv)
 		exit_rc = 1;
 	    }
 	}
+
+	replica_disconnect();
 	break;
 
     case MODE_MAILBOX:
-    {
-	struct sync_name_list *mboxname_list = sync_name_list_create();
-	char mailboxname[MAX_MAILBOX_BUFFER];
+	/* Open up connection to server */
+	replica_connect();
 
+	mboxname_list = sync_name_list_create();
 	if (input_filename) {
 	    if ((file=fopen(input_filename, "r")) == NULL) {
 		syslog(LOG_NOTICE, "Unable to open %s: %m", input_filename);
@@ -2890,10 +2879,13 @@ int main(int argc, char **argv)
 	}
 
 	sync_name_list_free(&mboxname_list);
-    }
-    break;
+	replica_disconnect();
+	break;
 
     case MODE_META:
+	/* Open up connection to server */
+	replica_connect();
+
         for (i = optind; i < argc; i++) {
 	    mboxname_hiersep_tointernal(&sync_namespace, argv[i],
 					config_virtdomains ?
@@ -2908,14 +2900,23 @@ int main(int argc, char **argv)
 		       argv[i]);
 		exit_rc = 1;
 	    }
-        }
+	}
+
+	replica_disconnect();
+
 	break;
 
     case MODE_REPEAT:
 	if (input_filename) {
+	    /* Open up connection to server */
+	    replica_connect();
+
 	    exit_rc = do_sync(input_filename);
+
+	    replica_disconnect();
 	}
 	else {
+	    /* rolling replication */
 	    if (sync_log_name) {
 		strlcpy(sync_log_file, config_dir, sizeof(sync_log_file));
 		strlcat(sync_log_file, "/sync/", sizeof(sync_log_file));
@@ -2932,17 +2933,15 @@ int main(int argc, char **argv)
 	    if (!min_delta)
 		min_delta = config_getint(IMAPOPT_SYNC_REPEAT_INTERVAL);
 
-	    do_daemon(sync_log_file, sync_shutdown_file, timeout, min_delta,
-		      be, cb);
+	    do_daemon(sync_log_file, sync_shutdown_file, timeout, min_delta);
 	}
+
 	break;
 
     default:
 	if (verbose) fprintf(stderr, "Nothing to do!\n");
 	break;
     }
-
-    backend_disconnect(be);
 
     shut_down(exit_rc);
 }
