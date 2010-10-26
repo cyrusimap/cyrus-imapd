@@ -87,22 +87,14 @@
 #include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
+#include "md5.h"
 
 #ifdef HAVE_SSL
 #include <openssl/ssl.h>
-#include <openssl/md5.h>
 
 static SSL_CTX *tls_ctx = NULL;
 static SSL *tls_conn = NULL;
 static SSL_SESSION *tls_sess = NULL;
-
-#else /* HAVE_SSL */
-#include <sasl/md5global.h>
-#include <sasl/md5.h>
-
-#define MD5_Init _sasl_MD5Init
-#define MD5_Update _sasl_MD5Update
-#define MD5_Final _sasl_MD5Final
 
 #endif /* HAVE_SSL */
 
@@ -1959,8 +1951,8 @@ static int auth_apop(char *apop_chal)
     unsigned int passlen;
     int i;
     MD5_CTX ctx;
-    unsigned char digest[16];
-    char digeststr[32];
+    unsigned char digest[MD5_DIGEST_LENGTH];
+    char digeststr[2*MD5_DIGEST_LENGTH+1];
     
     if (!apop_chal) {
 	printf("[Server does not support APOP]\n");
@@ -1971,10 +1963,10 @@ static int auth_apop(char *apop_chal)
     interaction(SASL_CB_PASS,NULL, "Please enter your password",
 		&pass, &passlen);
     
-    MD5_Init(&ctx);
-    MD5_Update(&ctx,apop_chal,strlen(apop_chal));
-    MD5_Update(&ctx,pass,passlen);
-    MD5_Final(digest, &ctx);
+    MD5Init(&ctx);
+    MD5Update(&ctx,apop_chal,strlen(apop_chal));
+    MD5Update(&ctx,pass,passlen);
+    MD5Final(digest, &ctx);
     
     /* convert digest from binary to ASCII hex */
     for (i = 0; i < 16; i++)
