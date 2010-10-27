@@ -1235,10 +1235,6 @@ static int update_mailbox_once(struct sync_folder *local,
 	goto done;
     }
 
-    /* nothing changed - nothing to send */
-    if (is_unchanged(mailbox, remote))
-	goto done;
-
     /* check that replication stands a chance of succeeding */
     if (remote) {
 	if (mailbox->i.deletedmodseq > remote->highestmodseq) {
@@ -1256,6 +1252,10 @@ static int update_mailbox_once(struct sync_folder *local,
 	    goto done;
 	}
     }
+
+    /* nothing changed - nothing to send */
+    if (is_unchanged(mailbox, remote))
+	goto done;
 
     part_list = sync_reserve_partlist(reserve_guids, mailbox->part);
     r = sync_mailbox(mailbox, remote, part_list, kl, kupload, 1);
