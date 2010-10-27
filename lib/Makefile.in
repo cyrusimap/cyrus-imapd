@@ -80,7 +80,7 @@ BUILTSOURCES = imapopts.h imapopts.c
 LIBCYR_HDRS = $(srcdir)/acl.h $(srcdir)/assert.h $(srcdir)/auth.h \
 	$(srcdir)/bsearch.h $(srcdir)/charset.h $(srcdir)/glob.h \
 	$(srcdir)/gmtoff.h $(srcdir)/imclient.h $(srcdir)/imparse.h \
-	$(srcdir)/lock.h $(srcdir)/map.h $(srcdir)/mkgmtime.h \
+	$(srcdir)/cyr_lock.h $(srcdir)/map.h $(srcdir)/mkgmtime.h \
 	$(srcdir)/nonblock.h $(srcdir)/parseaddr.h $(srcdir)/prot.h \
 	$(srcdir)/retry.h $(srcdir)/sysexits.h $(srcdir)/strhash.h \
 	$(srcdir)/lsort.h $(srcdir)/stristr.h $(srcdir)/signals.h \

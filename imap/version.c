@@ -62,7 +62,7 @@
 #include "prot.h"
 #include "cyrusdb.h"
 #include "map.h"
-#include "lock.h"
+#include "cyr_lock.h"
 #include "nonblock.h"
 #include "idle.h"
 

@@ -51,7 +51,7 @@
 #include <unistd.h>
 #endif
 
-#include "lock.h"
+#include "cyr_lock.h"
 
 const char *lock_method_desc = "flock";
 

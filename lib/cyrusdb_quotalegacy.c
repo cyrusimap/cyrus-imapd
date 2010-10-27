@@ -80,7 +80,7 @@
 #include "hash.h"
 #include "map.h"
 #include "libcyr_cfg.h"
-#include "lock.h"
+#include "cyr_lock.h"
 #include "retry.h"
 #include "util.h"
 #include "xmalloc.h"

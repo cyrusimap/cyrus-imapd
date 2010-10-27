@@ -85,7 +85,7 @@
 #include "prot.h"
 #include "message_guid.h"
 #include "sync_support.h"
-#include "lock.h"
+#include "cyr_lock.h"
 #include "backend.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"

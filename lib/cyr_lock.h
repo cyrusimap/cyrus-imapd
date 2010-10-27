@@ -1,4 +1,4 @@
-/* lock.h -- file locking primitives
+/* cyr_lock.h -- file locking primitives
  *
  * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
  *

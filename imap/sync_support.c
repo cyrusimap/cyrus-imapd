@@ -81,7 +81,7 @@
 #include "util.h"
 #include "user.h"
 #include "retry.h"
-#include "lock.h"
+#include "cyr_lock.h"
 #include "prot.h"
 #include "dlist.h"
 

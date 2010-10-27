@@ -62,7 +62,7 @@
 #include "exitcodes.h"
 #include "global.h"
 #include "gmtoff.h"
-#include "lock.h"
+#include "cyr_lock.h"
 #include "prot.h"
 #include "util.h"
 #include "xmalloc.h"
