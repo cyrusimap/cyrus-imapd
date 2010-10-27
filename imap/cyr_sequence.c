@@ -1,4 +1,4 @@
-/* cyr_seqence.c -- manipulate sequences
+/* cyr_sequence.c -- manipulate sequences
  *
  * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
  *
