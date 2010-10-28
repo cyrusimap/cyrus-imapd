@@ -379,6 +379,8 @@ static int response_parse(const char *cmd,
     if (r == IMAP_MAILBOX_NONEXISTENT)
         return 0;
 
+    if (r) return r;
+
     for (kl = kin->head; kl; kl = kl->next) {
 	if (!strcmp(kl->name, "SIEVE")) {
 	    const char *filename = NULL;
