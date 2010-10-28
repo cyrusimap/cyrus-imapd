@@ -947,6 +947,7 @@ static void annotation_get_pop3showafter(const char *int_mboxname,
 				        void *rock __attribute__((unused)))
 {
     struct mailbox *mailbox = NULL;
+    time_t date;
     char value[30];
     struct annotation_data attrib;
 
@@ -964,18 +965,19 @@ static void annotation_get_pop3showafter(const char *int_mboxname,
     if (mailbox_open_irl(int_mboxname, &mailbox) != 0)
       return;
 
-    if (mailbox->i.pop3_show_after == 0)
-	strcpy(value, "NIL");
-    else
-	cyrus_ctime(mailbox->i.pop3_show_after, value);
+    date = mailbox->i.pop3_show_after;
 
     mailbox_close(&mailbox);
 
     memset(&attrib, 0, sizeof(attrib));
 
-    attrib.value = value;
-    attrib.size = strlen(value);
-    attrib.contenttype = "text/plain";
+    if (date != 0)
+    {
+	cyrus_ctime(date, value);
+	attrib.value = value;
+	attrib.size = strlen(value);
+	attrib.contenttype = "text/plain";
+    }
 
     output_entryatt(ext_mboxname, entry, "", &attrib, fdata);
 }
@@ -1868,6 +1870,11 @@ static int annotation_set_pop3showafter(const char *int_mboxname,
     if (!annotation_may_store(sdata, mbentry, ACL_LOOKUP|ACL_WRITE))
 	return IMAP_PERMISSION_DENIED;
 
+    /*
+     * Note that at this point we cannot tell the difference
+     * between the cases where the client gave NIL or "NIL"
+     * as the value, because getnstring() collapsed them.
+     */
     if (!strcmp(entry->shared.value, "NIL")) {
 	/* Effectively removes the annotation */
 	date = 0;
