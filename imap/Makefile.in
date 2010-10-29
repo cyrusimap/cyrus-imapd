@@ -102,7 +102,7 @@ LOBJS= append.o mailbox.o mboxlist.o mupdate-client.o mboxname.o message.o \
 	imapparse.o telemetry.o user.o notify.o idle.o quota_db.o \
 	sync_log.o $(SEEN) mboxkey.o backend.o tls.o message_guid.o \
 	statuscache_db.o userdeny_db.o sequence.o upgrade_index.o \
-	dlist.o version.o
+	dlist.o version.o rfc822_header.o
 
 IMAPDOBJS=pushstats.o imapd.o proxy.o imap_proxy.o index.o
 
@@ -122,7 +122,7 @@ PROGS = imapd lmtpd pop3d \
 
 BUILTSOURCES = imap_err.c imap_err.h pushstats.c pushstats.h \
 	lmtpstats.c lmtpstats.h mupdate_err.c mupdate_err.h \
-	nntp_err.c nntp_err.h
+	nntp_err.c nntp_err.h rfc822_header.c rfc822_header.h
 
 all: $(BUILTSOURCES) $(PROGS) $(SUIDPROGS)
 
@@ -178,6 +178,12 @@ mupdate_err.c: mupdate_err.et
 	$(COMPILE_ET) $(srcdir)/mupdate_err.et
 
 mupdate_err.h: mupdate_err.c
+
+rfc822_header.c: rfc822_header.st
+	@top_srcdir@/tools/compile_st.pl -c $< | gperf > $@
+
+rfc822_header.h: rfc822_header.st
+	@top_srcdir@/tools/compile_st.pl -h $< > $@
 
 ### Services
 idled: idled.o mutex_fake.o libimap.a $(DEPLIBS)
