@@ -23,10 +23,11 @@ enum rfc822_header {
     RFC822_MESSAGE_ID=13,
     RFC822_REPLY_TO=14,
     RFC822_RECEIVED=15,
-    RFC822_SUBJECT=16,
-    RFC822_SENDER=17,
-    RFC822_TO=18,
-    RFC822_X_DELIVEREDINTERNALDATE=19,
+    RFC822_REFERENCES=16,
+    RFC822_SUBJECT=17,
+    RFC822_SENDER=18,
+    RFC822_TO=19,
+    RFC822_X_DELIVEREDINTERNALDATE=20,
 };
 extern enum rfc822_header rfc822_header_from_string(const char *s);
 extern enum rfc822_header rfc822_header_from_string_len(const char *s, size_t len);

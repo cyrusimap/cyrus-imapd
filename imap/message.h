@@ -104,6 +104,7 @@ struct body {
     struct address *bcc;
     char *in_reply_to;
     char *message_id;
+    char *references;
     char *received_date;
 
     /*

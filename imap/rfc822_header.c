@@ -1,5 +1,5 @@
 /* ANSI-C code produced by gperf version 3.0.3 */
-/* Command-line: gperf /tmp/compile_st_RasMbB.gperf  */
+/* Command-line: gperf /tmp/compile_st_BRI5sx.gperf  */
 /* Computed positions: -k'1,10,$' */
 
 #if !((' ' == 32) && ('!' == 33) && ('"' == 34) && ('#' == 35) \
@@ -35,7 +35,7 @@
 struct rfc822_header_desc { const char *name; enum rfc822_header value; };
 #include <string.h>
 
-#define TOTAL_KEYWORDS 20
+#define TOTAL_KEYWORDS 21
 #define MIN_WORD_LENGTH 2
 #define MAX_WORD_LENGTH 25
 #define MIN_HASH_VALUE 2
@@ -104,13 +104,13 @@ hash (register const char *str, register unsigned int len)
       34, 34, 34, 34, 34, 34, 34, 34, 34, 34,
       34, 34, 34, 34, 34, 34, 34, 34, 34, 34,
       34, 34, 34, 34, 34, 34, 34, 34, 34, 34,
-      34, 34, 34,  0, 34, 34, 34, 34, 34, 34,
+      34, 34, 34,  5, 34, 34, 34, 34, 34, 34,
       34, 34, 34, 34, 34, 10,  0,  0,  0,  5,
-       5,  0, 34,  0, 34, 34, 34,  5,  0, 10,
-      34, 34,  0,  0,  0, 34, 34, 34,  0,  0,
+       0,  0, 34,  0, 34, 34, 34, 10,  0, 10,
+      34, 34,  5,  0,  0, 34, 34, 34,  0,  0,
       34, 34, 34, 34, 34, 34, 34, 10,  0,  0,
-       0,  5,  5,  0, 34,  0, 34, 34, 34,  5,
-       0, 10, 34, 34,  0,  0,  0, 34, 34, 34,
+       0,  5,  0,  0, 34,  0, 34, 34, 34, 10,
+       0, 10, 34, 34,  5,  0,  0, 34, 34, 34,
        0,  0, 34, 34, 34, 34, 34, 34, 34, 34,
       34, 34, 34, 34, 34, 34, 34, 34, 34, 34,
       34, 34, 34, 34, 34, 34, 34, 34, 34, 34,
@@ -162,28 +162,29 @@ __rfc822_header_lookup (register const char *str, register unsigned int len)
       {"", 0}, {"", 0},
       {"Cc", RFC822_CC},
       {"Bcc", RFC822_BCC},
-      {"", 0}, {"", 0},
-      {"Sender", RFC822_SENDER},
+      {"", 0}, {"", 0}, {"", 0},
       {"Subject", RFC822_SUBJECT},
-      {"Received", RFC822_RECEIVED},
+      {"", 0},
       {"Date", RFC822_DATE},
       {"Content-Id", RFC822_CONTENT_ID},
-      {"Content-MD5", RFC822_CONTENT_MD5},
+      {"Sender", RFC822_SENDER},
       {"To", RFC822_TO},
-      {"", 0},
+      {"Received", RFC822_RECEIVED},
       {"From", RFC822_FROM},
-      {"Message-ID", RFC822_MESSAGE_ID},
-      {"", 0},
+      {"References", RFC822_REFERENCES},
+      {"Content-MD5", RFC822_CONTENT_MD5},
       {"Content-Type", RFC822_CONTENT_TYPE},
-      {"Reply-To", RFC822_REPLY_TO},
-      {"Content-Disposition", RFC822_CONTENT_DISPOSITION},
       {"", 0},
+      {"Content-Disposition", RFC822_CONTENT_DISPOSITION},
+      {"Message-ID", RFC822_MESSAGE_ID},
       {"In-Reply-To", RFC822_IN_REPLY_TO},
-      {"", 0}, {"", 0},
+      {"", 0},
+      {"Reply-To", RFC822_REPLY_TO},
       {"Content-Description", RFC822_CONTENT_DESCRIPTION},
-      {"Content-Transfer-Encoding", RFC822_CONTENT_TRANSFER_ENCODING},
+      {"", 0},
       {"Content-Location", RFC822_CONTENT_LOCATION},
-      {"", 0}, {"", 0}, {"", 0}, {"", 0},
+      {"", 0}, {"", 0}, {"", 0},
+      {"Content-Transfer-Encoding", RFC822_CONTENT_TRANSFER_ENCODING},
       {"Content-Language", RFC822_CONTENT_LANGUAGE},
       {"", 0},
       {"X-Deliveredinternaldate", RFC822_X_DELIVEREDINTERNALDATE}
@@ -235,6 +236,7 @@ const char *rfc822_header_to_string(enum rfc822_header v)
 	"Message-ID", /* RFC822_MESSAGE_ID */
 	"Reply-To", /* RFC822_REPLY_TO */
 	"Received", /* RFC822_RECEIVED */
+	"References", /* RFC822_REFERENCES */
 	"Subject", /* RFC822_SUBJECT */
 	"Sender", /* RFC822_SENDER */
 	"To", /* RFC822_TO */

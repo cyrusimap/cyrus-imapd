@@ -726,6 +726,9 @@ static int message_parse_headers(struct msg *msg, struct body *body,
 	    case RFC822_RECEIVED:
 		message_parse_received_date(value, &body->received_date);
 		break;
+	    case RFC822_REFERENCES:
+		message_parse_string(value, &body->references);
+		break;
 	    case RFC822_SUBJECT:
 		message_parse_string(value, &body->subject);
 		break;
@@ -2282,6 +2285,7 @@ void message_free_body(struct body *body)
     if (body->bcc) parseaddr_free(body->bcc);
     if (body->in_reply_to) free(body->in_reply_to);
     if (body->message_id) free(body->message_id);
+    if (body->references) free(body->references);
     if (body->received_date) free(body->received_date);
 
     if (body->subpart) {
