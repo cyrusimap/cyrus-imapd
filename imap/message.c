@@ -76,6 +76,7 @@
 #include "xstrlcat.h"
 #include "global.h"
 #include "retry.h"
+#include "rfc822_header.h"
 
 /* Message being parsed */
 struct msg {
@@ -599,6 +600,18 @@ int message_create_record(struct index_record *record,
     return 0;
 }
 
+static enum rfc822_header
+message_header_lookup(const char *buf, const char **valp)
+{
+    unsigned int len = strcspn(buf, ":\r\n");
+    if (buf[len] != ':')
+	return RFC822_BAD;
+    if (valp)
+	*valp = buf+len+1;
+    return rfc822_header_from_string_len(buf, len);
+}
+
+
 /*
  * Parse a body-part
  */
@@ -679,6 +692,7 @@ static int message_parse_headers(struct msg *msg, struct body *body,
     int sawboundary = 0;
     int maxlines = config_getint(IMAPOPT_MAXHEADERLINES);
     int have_max = 0;
+    const char *value;
 
     body->header_offset = msg->offset;
 
@@ -753,147 +767,84 @@ static int message_parse_headers(struct msg *msg, struct body *body,
 		    message_parse_header(next+1, &body->cacheheaders);
 	    }
 
-	    switch (next[1]) {
-	    case 'b':
-	    case 'B':
-		if (!strncasecmp(next+2, "cc:", 3)) {
-		    message_parse_address(next+5, &body->bcc);
+	    switch (message_header_lookup(next+1, &value)) {
+	    case RFC822_BCC:
+		message_parse_address(value, &body->bcc);
+		break;
+	    case RFC822_CC:
+		message_parse_address(value, &body->cc);
+		break;
+	    case RFC822_CONTENT_DESCRIPTION:
+		message_parse_string(value, &body->description);
+		break;
+	    case RFC822_CONTENT_DISPOSITION:
+		message_parse_disposition(value, body);
+		break;
+	    case RFC822_CONTENT_ID:
+		message_parse_string(value, &body->id);
+		break;
+	    case RFC822_CONTENT_LANGUAGE:
+		message_parse_language(value, &body->language);
+		break;
+	    case RFC822_CONTENT_LOCATION:
+		message_parse_string(value, &body->location);
+		break;
+	    case RFC822_CONTENT_MD5:
+		message_parse_string(value, &body->md5);
+		break;
+	    case RFC822_CONTENT_TRANSFER_ENCODING:
+		message_parse_encoding(value, &body->encoding);
+
+		/* If we're encoding binary, replace "binary"
+		   with "base64" in CTE header body */
+		if (msg->encode &&
+		    !strcmp(body->encoding, "BINARY")) {
+		    char *p = (char*)
+			stristr(msg->base + body->header_offset +
+				(next - headers) + 27,
+				"binary");
+		    memcpy(p, "base64", 6);
 		}
 		break;
-		
-	    case 'c':
-	    case 'C':
-		if (!strncasecmp(next+2, "c:", 2)) {
-		    message_parse_address(next+4, &body->cc);
-		}
-		if (!strncasecmp(next+2, "ontent-", 7)) {
-		    switch (next[9]) {
-		    case 'd':
-		    case 'D':
-			if (!strncasecmp(next+10, "escription:", 11)) {
-			    message_parse_string(next+21, &body->description);
-			}
-			else if (!strncasecmp(next+10, "isposition:", 11)) {
-			    message_parse_disposition(next+21, body);
-			}
-			break;
-
-		    case 'i':
-		    case 'I':
-			if (!strncasecmp(next+10, "d:", 2)) {
-			    message_parse_string(next+12, &body->id);
-			}
-			break;
-
-		    case 'l':
-		    case 'L':
-			if (!strncasecmp(next+10, "anguage:", 8)) {
-			    message_parse_language(next+18, &body->language);
-			}
-			else if (!strncasecmp(next+10, "ocation:", 8)) {
-			    message_parse_string(next+18, &body->location);
-			}
-			break;
-
-		    case 'm':
-		    case 'M':
-			if (!strncasecmp(next+10, "d5:", 3)) {
-			    message_parse_string(next+13, &body->md5);
-			}
-			break;
-
-		    case 't':
-		    case 'T':
-			if (!strncasecmp(next+10, "ransfer-encoding:", 17)) {
-			    message_parse_encoding(next+27, &body->encoding);
-
-			    /* If we're encoding binary, replace "binary"
-			       with "base64" in CTE header body */
-			    if (msg->encode &&
-				!strcmp(body->encoding, "BINARY")) {
-				char *p = (char*)
-				    stristr(msg->base + body->header_offset +
-					    (next - headers) + 27,
-					    "binary");
-				memcpy(p, "base64", 6);
-			    }
-			}
-			else if (!strncasecmp(next+10, "ype:", 4)) {
-			    message_parse_type(next+14, body);
-			}
-			break;
-		    }
-		}
+	    case RFC822_CONTENT_TYPE:
+		message_parse_type(value, body);
 		break;
-
-	    case 'd':
-	    case 'D':
-		if (!strncasecmp(next+2, "ate:", 4)) {
-		    message_parse_string(next+6, &body->date);
-		}
+	    case RFC822_DATE:
+		message_parse_string(value, &body->date);
 		break;
-
-	    case 'f':
-	    case 'F':
-		if (!strncasecmp(next+2, "rom:", 4)) {
-		    message_parse_address(next+6, &body->from);
-		}
+	    case RFC822_FROM:
+		message_parse_address(value, &body->from);
 		break;
-
-	    case 'i':
-	    case 'I':
-		if (!strncasecmp(next+2, "n-reply-to:", 11)) {
-		    message_parse_string(next+13, &body->in_reply_to);
-		}
+	    case RFC822_IN_REPLY_TO:
+		message_parse_string(value, &body->in_reply_to);
 		break;
-
-	    case 'm':
-	    case 'M':
-		if (!strncasecmp(next+2, "essage-id:", 10)) {
-		    message_parse_string(next+12, &body->message_id);
-		}
+	    case RFC822_MESSAGE_ID:
+		message_parse_string(value, &body->message_id);
 		break;
-
-	    case 'r':
-	    case 'R':
-		if (!strncasecmp(next+2, "eply-to:", 8)) {
-		    message_parse_address(next+10, &body->reply_to);
-		}
-		if (!strncasecmp(next+2, "eceived:", 8)) {
-		    message_parse_received_date(next+10, &body->received_date);
-		}
-
+	    case RFC822_REPLY_TO:
+		message_parse_address(value, &body->reply_to);
 		break;
-
-	    case 's':
-	    case 'S':
-		if (!strncasecmp(next+2, "ubject:", 7)) {
-		    message_parse_string(next+9, &body->subject);
-		}
-		if (!strncasecmp(next+2, "ender:", 6)) {
-		    message_parse_address(next+8, &body->sender);
-		}
+	    case RFC822_RECEIVED:
+		message_parse_received_date(value, &body->received_date);
 		break;
-
-	    case 't':
-	    case 'T':
-		if (!strncasecmp(next+2, "o:", 2)) {
-		    message_parse_address(next+4, &body->to);
+	    case RFC822_SUBJECT:
+		message_parse_string(value, &body->subject);
+		break;
+	    case RFC822_SENDER:
+		message_parse_address(value, &body->sender);
+		break;
+	    case RFC822_TO:
+		message_parse_address(value, &body->to);
+		break;
+	    case RFC822_X_DELIVEREDINTERNALDATE:
+		/* Explicit x-deliveredinternaldate overrides received: headers */
+		if (body->received_date) {
+		    free(body->received_date);
+		    body->received_date = 0;
 		}
+		message_parse_string(value, &body->received_date);
 		break;
-
-	    case 'x':
-	    case 'X':
-		if (!strncasecmp(next+2, "-deliveredinternaldate:", 23)) {
-        /* Explicit x-deliveredinternaldate overrides received: headers */
-        if (body->received_date) {
-          free(body->received_date);
-          body->received_date = 0;
-        }
-		    message_parse_string(next+25, &body->received_date);
-   }
-		break;
-	    } /* switch(next[1]) */
+	    } /* switch() */
 	} /* if (*next == '\n') */
     }
 

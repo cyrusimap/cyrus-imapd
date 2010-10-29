@@ -84,8 +84,8 @@ install: sievec sieved
 	$(srcdir)/../install-sh -c -m 755 sievec $(DESTDIR)$(service_path) || exit
 	$(srcdir)/../install-sh -c -m 755 sieved $(DESTDIR)$(service_path) || exit
 
-test: $(DEPLIBS) libsieve.a test.o ../imap/message.o
-	$(CC) $(LDFLAGS) -o test test.o ../imap/message.o \
+test: $(DEPLIBS) libsieve.a test.o ../imap/libimap.a
+	$(CC) $(LDFLAGS) -o test test.o ../imap/libimap.a \
 	libsieve.a $(DEPLIBS) $(LIBS)
 
 OBJS = sieve_err.o \
