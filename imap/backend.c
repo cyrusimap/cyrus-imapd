@@ -106,7 +106,7 @@ static char *parse_capability(const char str[],
 
 static char *ask_capability(struct protstream *pout, struct protstream *pin,
 			    struct protocol_t *prot, unsigned long *capa,
-			    int automatic)
+			    char *banner, int automatic)
 {
     char str[4096];
     char *mechlist = NULL, *ret;
@@ -140,6 +140,8 @@ static char *ask_capability(struct protstream *pout, struct protstream *pin,
 	    /* multiline response with no distinct end (IMAP banner) */
 	    prot_NONBLOCK(pin);
 	}
+
+	if (banner) strncpy(banner, str, 2048);
 
 	/* look for the end of the capabilities */
     } while (!resp || strncasecmp(str, resp, strlen(resp)));
@@ -372,7 +374,7 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
     } while (r == SASL_NOMECH && CAPA(s, CAPA_STARTTLS) &&
 	     do_starttls(s, &prot->tls_cmd) != -1 &&
 	     (*mechlist = ask_capability(s->out, s->in, prot,
-					 &s->capability,
+					 &s->capability, NULL,
 					 prot->tls_cmd.auto_capa)));
 
     /* xxx unclear that this is correct */
@@ -502,7 +504,8 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
     if (prot->banner.auto_capa) {
 	/* try to get the capabilities from the banner */
 	mechlist = ask_capability(ret->out, ret->in, prot,
-				  &ret->capability, AUTO_CAPA_BANNER);
+				  &ret->capability, ret->banner,
+				  AUTO_CAPA_BANNER);
 	if (mechlist || ret->capability) {
 	    /* found capabilities in banner -> don't ask */
 	    ask = 0;
@@ -520,12 +523,13 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
 	    }
 	} while (strncasecmp(buf, prot->banner.resp,
 			     strlen(prot->banner.resp)));
+	strncpy(ret->banner, buf, 2048);
     }
 
     if (ask) {
 	/* get the capabilities */
 	mechlist = ask_capability(ret->out, ret->in, prot,
-				  &ret->capability, AUTO_CAPA_NO);
+				  &ret->capability, NULL, AUTO_CAPA_NO);
     }
 
     /* now need to authenticate to backend server,
@@ -583,7 +587,7 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
          * This new, correct mechlist won't be visible here.
          */
 		new_mechlist = ask_capability(ret->out, ret->in, prot,
-					      &ret->capability, auto_capa);
+					      &ret->capability, NULL, auto_capa);
 		if (new_mechlist && strcmp(new_mechlist, mechlist)) {
 		    syslog(LOG_ERR, "possible MITM attack:"
 			   "list of available SASL mechanisms changed");

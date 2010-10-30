@@ -320,8 +320,8 @@ int upgrade_index(struct mailbox *mailbox)
 	    }
 	}
 	if (r) { /* no seen data? */
-	    mailbox->i.recentuid = mailbox->i.last_uid;
-	    mailbox->i.recenttime = time(NULL);
+	    mailbox->i.recentuid = 0;
+	    mailbox->i.recenttime = 0;
 	}
 	else {
 	    mailbox->i.recentuid = sd.lastuid;
