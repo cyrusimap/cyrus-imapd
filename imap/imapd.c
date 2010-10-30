@@ -96,6 +96,7 @@
 #include "mbdump.h"
 #include "mupdate-client.h"
 #include "quota.h"
+#include "seen.h"
 #include "statuscache.h"
 #include "sync_log.h"
 #include "telemetry.h"
@@ -109,8 +110,6 @@
 #include "xstrlcpy.h"
 
 #include "pushstats.h"		/* SNMP interface */
-
-extern void seen_done(void);
 
 extern int optind;
 extern char *optarg;
@@ -7973,7 +7972,7 @@ void cmd_dump(char *tag, char *name, int uid_start)
     
     if (!r) r = mailbox_open_irl(mailboxname, &mailbox);
 
-    if (!r) r = dump_mailbox(tag, mailbox, uid_start,
+    if (!r) r = dump_mailbox(tag, mailbox, uid_start, MAILBOX_MINOR_VERSION,
 			     imapd_in, imapd_out, imapd_authstate);
 
     if (r) {
@@ -8251,6 +8250,7 @@ struct xfer_item {
 struct xfer_header {
     mupdate_handle *mupdate_h;
     struct backend *be;
+    int remoteversion;
     char *toserver;
     char *topart;
     struct xfer_item *items;
@@ -8355,6 +8355,48 @@ static void xfer_done(struct xfer_header **xferptr)
     *xferptr = NULL;
 }
 
+static int backend_version(struct backend *be)
+{
+    const char *minor;
+
+    /* check for current version */
+    if (strstr(be->banner, "v2.4.") || strstr(be->banner, "git2.4.")) {
+	return 12;
+    }
+
+    minor = strstr(be->banner, "v2.3.");
+    if (!minor) return 6;
+
+    /* at least version 2.3.10 */
+    if (minor[1] != ' ') {
+	return 10;
+    }
+    /* single digit version, figure out which */
+    switch (minor[0]) {
+    case '0':
+    case '1':
+    case '2':
+    case '3':
+	return 7;
+	break;
+
+    case '4':
+    case '5':
+    case '6':
+	return 8;
+	break;
+
+    case '7':
+    case '8':
+    case '9':
+	return 9;
+	break;
+    }
+
+    /* fallthrough, shouldn't happen */
+    return 6;
+}
+
 static int xfer_init(const char *toserver, const char *topart,
 		     struct xfer_header **xferptr)
 {
@@ -8368,6 +8410,8 @@ static int xfer_init(const char *toserver, const char *topart,
 	r = IMAP_SERVER_UNAVAILABLE;
 	goto fail;
     }
+
+    xfer->remoteversion = backend_version(xfer->be);
 
     xfer->toserver = xstrdup(toserver);
     xfer->topart = xstrdup(topart);
@@ -8436,6 +8480,60 @@ static int xfer_localcreate(struct xfer_header *xfer)
     return 0;
 }
 
+static int xfer_backport_seen_item(struct xfer_item *item,
+				   struct seen *seendb)
+{
+    struct mailbox *mailbox = item->mailbox;
+    struct seqset *outlist = seqset_init(mailbox->i.last_uid, SEQ_MERGE);
+    struct index_record record;
+    struct seendata sd;
+    unsigned recno;
+    int r;
+
+    for (recno = 1; recno < mailbox->i.num_records; recno++) {
+	if (mailbox_read_index_record(mailbox, recno, &record))
+	    continue;
+	if (record.system_flags & FLAG_EXPUNGED)
+	    continue;
+	if (record.system_flags & FLAG_SEEN)
+	    seqset_add(outlist, record.uid, 1);
+	else
+	    seqset_add(outlist, record.uid, 0);
+    }
+
+    sd.lastread = mailbox->i.recenttime;
+    sd.lastuid = mailbox->i.recentuid;
+    sd.lastchange = mailbox->i.last_appenddate;
+    sd.seenuids = seqset_cstring(outlist);
+    if (!sd.seenuids) sd.seenuids = xstrdup("");
+
+    r = seen_write(seendb, mailbox->uniqueid, &sd);
+
+    seen_freedata(&sd);
+
+    return r;
+}
+
+static int xfer_backport_seen(struct xfer_header *xfer, const char *userid)
+{
+    struct xfer_item *item;
+    struct seen *seendb = NULL;
+    int r;
+
+    r = seen_open(userid, SEEN_CREATE, &seendb);
+    if (r) return r;
+
+    /* Step 3: mupdate.DEACTIVATE(mailbox, newserver) */
+    for (item = xfer->items; item; item = item->next) {
+	r = xfer_backport_seen_item(item, seendb);
+	if (r) break;
+    }
+
+    seen_close(seendb);
+
+    return r;
+}
+
 static int xfer_deactivate(struct xfer_header *xfer)
 {
     struct xfer_item *item;
@@ -8467,7 +8565,7 @@ static int xfer_undump(struct xfer_header *xfer)
 	prot_printf(xfer->be->out, "D01 UNDUMP {" SIZE_T_FMT "+}\r\n%s ",
 		    strlen(item->mailbox->name), item->mailbox->name);
 
-	r = dump_mailbox(NULL, item->mailbox, 0,
+	r = dump_mailbox(NULL, item->mailbox, 0, xfer->remoteversion,
 			 xfer->be->in, xfer->be->out, imapd_authstate);
 
 	if (r) {
@@ -8676,6 +8774,7 @@ static int xfer_addsubmailboxes(struct xfer_header *xfer, const char *mboxname)
     return r;
 }
 
+
 void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 {
     int r = 0;
@@ -8764,6 +8863,12 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 	/* add all submailboxes to the move list as well */
 	r = xfer_addsubmailboxes(xfer, mailboxname);
 	if (r) goto done;
+
+	/* backport the seen file if needed */
+	if (xfer->remoteversion < 12) {
+	    r = xfer_backport_seen(xfer, userid);
+	    if (r) goto done;
+	}
 
 	/* NOTE: mailboxes were added in reverse, so the inbox is
 	 * done last */

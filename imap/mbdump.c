@@ -73,13 +73,238 @@
 #include "mboxkey.h"
 #include "mboxlist.h"
 #include "quota.h"
+#include "retry.h"
 #include "seen.h"
+#include "sequence.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
+#include "upgrade_index.h"
 #include "user.h"
 #include "util.h"
 #include "index.h"
+
+static int dump_file(int first, int sync,
+		     struct protstream *pin, struct protstream *pout,
+		     const char *filename, const char *ftag);
+
+/* support for downgrading index files on copying back to an
+ * earlier version of Cyrus */
+static void downgrade_header(struct index_header *i, char *buf, int version)
+{
+    unsigned UP_version = version;
+    unsigned UP_validopts = 15;
+    unsigned UP_num_records = i->exists;
+
+    memset(buf, 0, INDEX_HEADER_SIZE);
+
+    if (version < 10)
+	UP_validopts = 3;
+    /* was just called POP3_NEW_UIDL back then, single value */
+    if (version < 8)
+	UP_validopts = 1;
+
+    /* has to match cyrus.cache still */
+    *((bit32 *)(buf+OFFSET_GENERATION_NO)) = htonl(i->generation_no);
+    *((bit32 *)(buf+OFFSET_FORMAT)) = htonl(i->format);
+    /* version is changed of course */
+    *((bit32 *)(buf+OFFSET_MINOR_VERSION)) = htonl(UP_version);
+    *((bit32 *)(buf+OFFSET_START_OFFSET)) = htonl(i->start_offset);
+    *((bit32 *)(buf+OFFSET_RECORD_SIZE)) = htonl(i->record_size);
+    /* NUM_RECORDS replaces "exists" in the older headers */
+    *((bit32 *)(buf+OFFSET_NUM_RECORDS)) = htonl(UP_num_records);
+    *((bit32 *)(buf+OFFSET_LAST_APPENDDATE)) = htonl(i->last_appenddate);
+    *((bit32 *)(buf+OFFSET_LAST_UID)) = htonl(i->last_uid);
+
+    /* quotas may be 64bit now */
+#ifdef HAVE_LONG_LONG_INT
+    *((bit64 *)(buf+OFFSET_QUOTA_MAILBOX_USED64)) = htonll(i->quota_mailbox_used);
+#else
+    /* zero the unused 32bits */
+    *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED64)) = htonl(0);
+    *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)) = htonl(i->quota_mailbox_used);
+#endif
+
+    *((bit32 *)(buf+OFFSET_POP3_LAST_LOGIN)) = htonl(i->pop3_last_login);
+    *((bit32 *)(buf+OFFSET_UIDVALIDITY)) = htonl(i->uidvalidity);
+    *((bit32 *)(buf+OFFSET_DELETED)) = htonl(i->deleted);
+    *((bit32 *)(buf+OFFSET_ANSWERED)) = htonl(i->answered);
+    *((bit32 *)(buf+OFFSET_FLAGGED)) = htonl(i->flagged);
+    *((bit32 *)(buf+OFFSET_MAILBOX_OPTIONS)) = htonl(i->options & UP_validopts);
+    *((bit32 *)(buf+OFFSET_LEAKED_CACHE)) = htonl(i->leaked_cache_records);
+    /* don't put values in the "SPARE" spots */
+    if (version < 8) return;
+#ifdef HAVE_LONG_LONG_INT
+    align_htonll(buf+OFFSET_HIGHESTMODSEQ_64, i->highestmodseq);
+#else
+    /* zero the unused 32bits */
+    *((bit32 *)(buf+OFFSET_HIGHESTMODSEQ_64)) = htonl(0);
+    *((bit32 *)(buf+OFFSET_HIGHESTMODSEQ)) = htonl(i->highestmodseq);
+#endif
+}
+
+static void downgrade_record(struct index_record *record, char *buf,
+			     int version)
+{
+    int n;
+    unsigned UP_content_offset = record->header_size;
+    unsigned UP_validflags = 15;
+    unsigned UP_modseqbase = OFFSET_MODSEQ_64;
+
+    /* GUID was UUID and only 12 bytes long in versions 8 and 9.
+     * it doesn't hurt to write it to the buffer in older versions,
+     * because it won't be written out to file anyway due to the
+     * record_size value. */
+    if (version < 10)
+	UP_modseqbase = OFFSET_MESSAGE_GUID+12;
+
+    *((bit32 *)(buf+OFFSET_UID)) = htonl(record->uid);
+    *((bit32 *)(buf+OFFSET_INTERNALDATE)) = htonl(record->internaldate);
+    *((bit32 *)(buf+OFFSET_SENTDATE)) = htonl(record->sentdate);
+    *((bit32 *)(buf+OFFSET_SIZE)) = htonl(record->size);
+    *((bit32 *)(buf+OFFSET_HEADER_SIZE)) = htonl(record->header_size);
+    /* content_offset in previous versions, identical to header_size */
+    *((bit32 *)(buf+OFFSET_GMTIME)) = htonl(UP_content_offset);
+    *((bit32 *)(buf+OFFSET_CACHE_OFFSET)) = htonl(record->cache_offset);
+    *((bit32 *)(buf+OFFSET_LAST_UPDATED)) = htonl(record->last_updated);
+    *((bit32 *)(buf+OFFSET_SYSTEM_FLAGS))
+	= htonl(record->system_flags & UP_validflags);
+    for (n = 0; n < MAX_USER_FLAGS/32; n++) {
+	*((bit32 *)(buf+OFFSET_USER_FLAGS+4*n)) = htonl(record->user_flags[n]);
+    }
+    *((bit32 *)(buf+OFFSET_CONTENT_LINES)) = htonl(record->content_lines);
+    *((bit32 *)(buf+OFFSET_CACHE_VERSION)) = htonl(record->cache_version);
+    message_guid_export(&record->guid,
+			(unsigned char *)buf+OFFSET_MESSAGE_GUID);
+#ifdef HAVE_LONG_LONG_INT
+    *((bit64 *)(buf+UP_modseqbase)) = htonll(record->modseq);
+#else
+    /* zero the unused 32bits */
+    *((bit32 *)(buf+UP_modseqbase)) = htonl(0);
+    *((bit32 *)(buf+UP_modseqbase)) = htonl(record->modseq);
+#endif
+}
+
+/* create a downgraded index file in cyrus.index.  We don't copy back
+ * expunged messages, sorry */
+static int dump_index(struct mailbox *mailbox, int oldversion,
+		      struct seqset *expunged_seq, int first, int sync,
+		      struct protstream *pin, struct protstream *pout)
+{
+    char oldname[MAX_MAILBOX_PATH];
+    const char *fname;
+    int oldindex_fd = -1;
+    indexbuffer_t headerbuf;
+    indexbuffer_t recordbuf;
+    char *hbuf = (char *)headerbuf.buf;
+    char *rbuf = (char *)recordbuf.buf;
+    int header_size;
+    int record_size;
+    int n, r;
+    struct index_record record;
+    unsigned recno;
+
+    if (oldversion == 6) {
+	header_size = 76;
+	record_size = 60;
+    }
+    else if (oldversion == 7) {
+	header_size = 76;
+	record_size = 72;
+    }
+    else if (oldversion == 8) {
+	header_size = 92;
+	record_size = 80;
+    }
+    else if (oldversion == 9) {
+	header_size = 96;
+	record_size = 80;
+    }
+    else if (oldversion == 10) {
+	header_size = 96;
+	record_size = 88;
+    }
+    else {
+	return IMAP_MAILBOX_BADFORMAT;
+    }
+
+    fname = mailbox_meta_fname(mailbox, META_INDEX);
+    snprintf(oldname, MAX_MAILBOX_PATH, "%s.OLD", fname);
+    
+    oldindex_fd = open(oldname, O_RDWR|O_TRUNC|O_CREAT, 0666);
+    if (oldindex_fd == -1) goto fail;
+
+    downgrade_header(&mailbox->i, hbuf, oldversion);
+
+    /* Write header - everything we'll say */
+    n = retry_write(oldindex_fd, hbuf, header_size);
+    if (n == -1) goto fail;
+
+    for (recno = 1; recno <= mailbox->i.num_records; recno++) {
+	if (mailbox_read_index_record(mailbox, recno, &record))
+	    goto fail;
+	/* we don't care about unlinked records at all */
+	if (record.system_flags & FLAG_UNLINKED)
+	    continue;
+	/* we have to make sure expunged records don't get the
+	 * file copied, or a reconstruct could bring them back
+	 * to life!  It we're not creating an expunged file... */
+	if (record.system_flags & FLAG_EXPUNGED) {
+	    if (oldversion < 9) seqset_add(expunged_seq, record.uid, 1);
+	    continue;
+	}
+	/* not making sure exists matches, we do trust a bit */
+	downgrade_record(&record, rbuf, oldversion);
+	n = retry_write(oldindex_fd, rbuf, record_size);
+	if (n == -1) goto fail;
+    }
+
+    close(oldindex_fd);
+    r = dump_file(first, sync, pin, pout, oldname, "cyrus.index");
+    unlink(oldname);
+    if (r) return r;
+
+    /* create cyrus.expunge */
+    if (oldversion > 8 && mailbox->i.num_records > mailbox->i.exists) {
+	int nexpunge = mailbox->i.num_records - mailbox->i.exists;
+	fname = mailbox_meta_fname(mailbox, META_EXPUNGE);
+	snprintf(oldname, MAX_MAILBOX_PATH, "%s.OLD", fname);
+	
+	oldindex_fd = open(oldname, O_RDWR|O_TRUNC|O_CREAT, 0666);
+	if (oldindex_fd == -1) goto fail;
+
+	*((bit32 *)(hbuf+OFFSET_NUM_RECORDS)) = htonl(nexpunge);
+
+	/* Write header - everything we'll say */
+	n = retry_write(oldindex_fd, hbuf, header_size);
+	if (n == -1) goto fail;
+
+	for (recno = 1; recno <= mailbox->i.num_records; recno++) {
+	    if (mailbox_read_index_record(mailbox, recno, &record))
+		goto fail;
+	    /* ignore non-expunged records */
+	    if (!(record.system_flags & FLAG_EXPUNGED))
+		continue;
+	    downgrade_record(&record, rbuf, oldversion);
+	    n = retry_write(oldindex_fd, rbuf, record_size);
+	    if (n == -1) goto fail;
+	}
+
+	close(oldindex_fd);
+	r = dump_file(first, sync, pin, pout, oldname, "cyrus.expunge");
+	unlink(oldname);
+	if (r) return r;
+    }
+
+    return 0;
+
+fail:
+    if (oldindex_fd != -1)
+	close(oldindex_fd);
+    unlink(oldname);
+
+    return IMAP_IOERROR;
+}
 
 /* is this the active script? */
 static int sieve_isactive(const char *sievepath, const char *name)
@@ -173,7 +398,7 @@ static int dump_file(int first, int sync,
     if (fstat(filefd, &sbuf) == -1) {
 	syslog(LOG_ERR, "IOERROR: fstat on %s: %m", filename);
 	fatal("can't fstat message file", EC_OSFILE);
-    }	
+    }
 
     base = NULL;
     len = 0;
@@ -230,6 +455,7 @@ enum { SEEN_DB = 0, SUBS_DB = 1, MBOXKEY_DB = 2 };
 static int NUM_USER_DATA_FILES = 3;
 
 int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid_start,
+		 int oldversion,
 		 struct protstream *pin, struct protstream *pout,
 		 struct auth_state *auth_state __attribute((unused)))
 {
@@ -237,10 +463,11 @@ int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid_start,
     int r = 0;
     struct dirent *next = NULL;
     char filename[MAX_MAILBOX_PATH + 1024];
-    char *fname;
+    const char *fname;
     int first = 1;
     int i;
     struct data_file *df;
+    struct seqset *expunged_seq = NULL;
 
     mbdir = opendir(mailbox_datapath(mailbox));
     if (!mbdir && errno == EACCES) {
@@ -280,9 +507,19 @@ int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid_start,
     /* Dump cyrus data files */
     for (df = data_files; df->metaname; df++) {
 	fname = mailbox_meta_fname(mailbox, df->metaname);
+	if (df->metaname == META_INDEX && oldversion < MAILBOX_MINOR_VERSION) {
+	    expunged_seq = seqset_init(mailbox->i.last_uid, SEQ_SPARSE);
+	    syslog(LOG_NOTICE, "%s downgrading index to version %d for XFER",
+		   mailbox->name, oldversion);
 
-	r = dump_file(first, !tag, pin, pout, fname, df->fname);
-	if (r) goto done;
+	    r = dump_index(mailbox, oldversion, expunged_seq,
+			   first, !tag, pin, pout);
+	    if (r) goto done;
+
+	} else {
+	    r = dump_file(first, !tag, pin, pout, fname, df->fname);
+	    if (r) goto done;
+	}
 
 	first = 0;
     }
@@ -303,6 +540,11 @@ int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid_start,
 	/* ensure (number) is >= our target uid */
         uid = atoi(name);
 	if (uid < uid_start) continue;
+
+	/* ensure uid is not in the expunged records that got skipped
+	 * in a downgraded index file */
+	if (seqset_ismember(expunged_seq, uid))
+	   continue;
 
 	/* construct path/filename */
 	fname = mailbox_message_fname(mailbox, uid);
@@ -410,6 +652,79 @@ int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid_start,
     prot_flush(pout);
 
     if (mbdir) closedir(mbdir);
+    seqset_free(expunged_seq);
+
+    return r;
+}
+
+static int cleanup_seen_cb(char *name,
+			   int matchlen __attribute__((unused)),
+			   int maycreate __attribute__((unused)),
+			   void *rock) 
+{
+    struct seen *seendb = (struct seen *)rock;
+    int r;
+    struct seqset *seq = NULL;
+    struct mailbox *mailbox = NULL;
+    struct seendata sd;
+    unsigned recno;
+    struct index_record record;
+
+    r = mailbox_open_iwl(name, &mailbox);
+    if (r) goto done;
+
+    /* already got a RECENTUID, it's probably got seen data.  Either we
+     * had a race condition (unlikely) or we've just been unlucky */
+    if (mailbox->i.recentuid) goto done;
+
+    /* otherwise read in the seen data from the seendb */
+    r = seen_read(seendb, mailbox->uniqueid, &sd);
+    if (r) goto done;
+
+    seq = seqset_parse(sd.seenuids, NULL, sd.lastuid);
+    seen_freedata(&sd);
+
+    /* update all the seen records */
+    for (recno = 1; recno <= mailbox->i.num_records; recno++) {
+	if (mailbox_read_index_record(mailbox, recno, &record))
+	    continue;
+	if (seqset_ismember(seq, record.uid)) {
+	    record.system_flags |= FLAG_SEEN;
+	    r = mailbox_rewrite_index_record(mailbox, &record);
+	    if (r) break;
+	}
+    }
+
+    /* and the header values */
+    mailbox_index_dirty(mailbox);
+    mailbox->i.recentuid = sd.lastuid;
+    mailbox->i.recenttime = sd.lastread;
+
+    /* commit everything */
+    mailbox_commit(mailbox);
+
+ done:
+    if (seq) seqset_free(seq);
+    if (mailbox) mailbox_close(&mailbox);
+    return r;
+}
+
+static int cleanup_seen_subfolders(const char *mbname)
+{
+    const char *userid = mboxname_to_userid(mbname);
+    struct seen *seendb = NULL;
+    char buf[MAX_MAILBOX_NAME];
+    int r;
+
+    /* no need to do inbox, it will have upgraded OK, just
+     * the subfolders */
+
+    r = seen_open(userid, 0, &seendb);
+
+    snprintf(buf, sizeof(buf), "%s.*", mbname);
+    if (!r) r = mboxlist_findall(NULL, buf, 1, NULL, NULL, cleanup_seen_cb, seendb);
+
+    if (seendb) seen_close(seendb);
 
     return r;
 }
@@ -615,7 +930,7 @@ int undump_mailbox(const char *mbname,
 	    prot_flush(pout);
 	}
 
-	if(userid && !strcmp(file.s, "SUBS")) {
+	if (userid && !strcmp(file.s, "SUBS")) {
 	    /* overwriting this outright is absolutely what we want to do */
 	    char *s = user_hash_subs(userid);
 	    strlcpy(fnamebuf, s, sizeof(fnamebuf));
@@ -759,6 +1074,12 @@ int undump_mailbox(const char *mbname,
 	}
     }
 
+    /* patch up seen data for subfolders */
+    if (userid) {
+	r = cleanup_seen_subfolders(mbname);
+	/* XXX - patch up seen data here */
+    }
+
  done:
     /* eat the rest of the line, we have atleast a \r\n coming */
     eatline(pin, c);
@@ -779,11 +1100,14 @@ int undump_mailbox(const char *mbname,
 
 	/* cheeky - we're not actually changing anything real */
 	r = mailbox_open_irl(mbname, &mailbox);
-	if (r) goto done2;
+	if (r) {
+	    r = 0; /* no point throwing errors */
+	    goto done2;
+	}
 
 	for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	    r = mailbox_read_index_record(mailbox, recno, &record);
-	    if (r) goto done2;
+	    if (r) continue;
 	    if (record.system_flags & FLAG_UNLINKED)
 		continue; /* no file! */
 	    fname = mailbox_message_fname(mailbox, record.uid);
@@ -793,6 +1117,7 @@ int undump_mailbox(const char *mbname,
 		goto done2;
 	    }
 	}
+	r = 0; /* just in case one leaked */
     }
 
  done2:

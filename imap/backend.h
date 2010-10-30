@@ -55,6 +55,7 @@
 
 struct backend {
     char hostname[MAX_PARTITION_LEN];
+    char banner[2048];
     struct sockaddr_storage addr;
     int sock;
 
