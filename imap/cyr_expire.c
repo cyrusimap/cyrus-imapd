@@ -228,6 +228,7 @@ int expire(char *name, int matchlen, int maycreate __attribute__((unused)),
 	}
 
 	r = mailbox_expunge(mailbox, expire_cb, erock, NULL);
+	if (!r) r = mailbox_commit(mailbox);
 	if (r) {
 	    syslog(LOG_ERR, "failed to expire old messages: %s", mailbox->name);
 	    mailbox_close(&mailbox);
