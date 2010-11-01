@@ -8242,146 +8242,292 @@ static int dumpacl(struct protstream *pin, struct protstream *pout,
     return r;
 }
 
-static int do_xfer_single(char *toserver, char *topart,
-			  char *name, char *mailboxname,
-			  int prereserved,
-			  mupdate_handle **h_in,
-			  struct backend *be_in) 
+struct xfer_item {
+    char *mboxname;
+    struct mailbox *mailbox;
+    int remote_created;
+    struct xfer_item *next;
+};
+
+struct xfer_header {
+    mupdate_handle *mupdate_h;
+    struct backend *be;
+    char *toserver;
+    char *topart;
+    struct xfer_item *items;
+};
+
+static int xfer_mupdate(struct xfer_header *xfer, int isactivate,
+			const char *mboxname, const char *part,
+			const char *servername, const char *acl)
 {
-    int r = 0, rerr = 0;
     char buf[MAX_PARTITION_LEN+HOSTNAME_SIZE+2];
-    struct backend *be = NULL;
-    mupdate_handle *mupdate_h = NULL;
-    int backout_mupdate = 0;
-    int backout_remotebox = 0;
-    int backout_remoteflag = 0;
-    struct mailbox *mailbox = NULL;
+    int retry = 0;
+    int r = 0;
 
-    /* Make sure we're given a sane value */
-    if(topart && !imparse_isatom(topart))
-	return IMAP_PARTITION_UNKNOWN;
+    /* no mupdate handle */
+    if (!xfer->mupdate_h)
+	return 0;
 
-    if(!strcmp(toserver, config_servername)) 
-	return IMAP_BAD_SERVER;
+    snprintf(buf, sizeof(buf), "%s!%s", servername, part);
 
-    if (imapd_index && !strcmp(mailboxname, imapd_index->mailbox->name))
-	return IMAP_MAILBOX_LOCKED;
+retry:
+    /* make the change */
+    if (isactivate)
+	r = mupdate_activate(xfer->mupdate_h, mboxname, buf, acl);
+    else 
+	r = mupdate_deactivate(xfer->mupdate_h, mboxname, buf);
+
+    if (r && !retry) {
+	syslog(LOG_INFO, "MUPDATE: lost connection, retrying");
+	mupdate_disconnect(&xfer->mupdate_h);
+	r = mupdate_connect(config_mupdate_server, NULL, 
+			    &xfer->mupdate_h, NULL);
+	retry = 1;
+	goto retry;
+    }
+
+    return r;
+}
+
+/* nothing you can do about failures, just try to clean up */
+static void xfer_done(struct xfer_header **xferptr)
+{
+    struct xfer_header *xfer = *xferptr;
+    struct xfer_item *item, *next;
+    int r;
+
+    for (item = xfer->items; item; item = item->next) {
+	/* already done, woot */
+	if (!item->mailbox)
+	    continue;
+
+	/* tell murder it's back here and active */
+	r = xfer_mupdate(xfer, 1,
+			 item->mailbox->name, item->mailbox->part,
+			 config_servername, item->mailbox->acl);
+	if (r) {
+	    syslog(LOG_ERR,
+		   "Could not back out mupdate during move of %s (%s)",
+		   item->mailbox->name, error_message(r));
+	}
+
+	/* delete remote if created */
+	if (item->remote_created) {
+	    prot_printf(xfer->be->out, "LD1 LOCALDELETE {" SIZE_T_FMT "+}\r\n%s\r\n",
+			strlen(item->mailbox->name), item->mailbox->name);
+	    r = getresult(xfer->be->in, "LD1");
+	    if (r) {
+		syslog(LOG_ERR,
+		       "Could not back out remote mailbox during move of %s (%s)",
+		       item->mailbox->name, error_message(r));
+	    }
+	}
+
+	/* remove remote flag from local mailbox */
+	r = mboxlist_update(item->mailbox->name, item->mailbox->mbtype,
+			    item->mailbox->part, item->mailbox->acl, 1);
+	if (r) {
+	    syslog(LOG_ERR,
+		   "Could not unset remote flag on mailbox: %s",
+		   item->mailbox->name);
+	}
+
+	/* finally close the mailbox */
+	mailbox_close(&item->mailbox);
+    }
+
+    /* remove items */
+    item = xfer->items;
+    while (item) {
+	next = item->next;
+	free(item);
+	item = next;
+    }
+
+    /* disconnect */
+    if (xfer->mupdate_h) mupdate_disconnect(&xfer->mupdate_h);
+    if (xfer->be) backend_disconnect(xfer->be);
+    free(xfer->toserver);
+    free(xfer->topart);
+
+    free(xfer);
+
+    *xferptr = NULL;
+}
+
+static int xfer_init(const char *toserver, const char *topart,
+		     struct xfer_header **xferptr)
+{
+    struct xfer_header *xfer = xzmalloc(sizeof(struct xfer_header));
+    int r;
+
+    /* Get a connection to the remote backend */
+    xfer->be = backend_connect(NULL, toserver, &imap_protocol,
+			       "", NULL, NULL);
+    if (!xfer->be) {
+	r = IMAP_SERVER_UNAVAILABLE;
+	goto fail;
+    }
+
+    xfer->toserver = xstrdup(toserver);
+    xfer->topart = xstrdup(topart);
+
+    /* connect to mupdate server if configured */
+    if (config_mupdate_server) {
+	r = mupdate_connect(config_mupdate_server, NULL,
+			    &xfer->mupdate_h, NULL);
+	if (r) goto fail;
+    }
+
+    *xferptr = xfer;
+    return 0;
+
+fail:
+    xfer_done(&xfer);
+    return r;
+}
+
+static int xfer_addmbox(struct xfer_header *xfer,
+			const char *mboxname)
+{
+    struct xfer_item *item = xzmalloc(sizeof(struct xfer_item));
+    int r;
 
     /* Grab an exclusive lock on the mailbox, we'll be deleting it later
-     * if all goes well. */
-    r = mailbox_open_iwl(mailboxname, &mailbox);
-    
-    /* Okay, we have the mailbox, now the order of steps is:
-     *
-     * 1) Connect to remote server.
-     * 2) LOCALCREATE on remote server
-     * 3) mupdate.DEACTIVATE(mailbox, remoteserver) xxx what partition?
-     * 4) undump mailbox from local to remote
-     * 5) Sync remote acl
-     * 6) mupdate.ACTIVATE(mailbox, remoteserver)
-     * ** MAILBOX NOW LIVING ON REMOTE SERVER
-     * 6.5) force remote server to push the final mupdate entry to ensure
-     *      that the state of the world is correct (required if we do not
-     *      know the remote partition, but worst case it will be caught
-     *      when they next sync)
-     * 7) local delete of mailbobox
-     */
-
-    /* Step 1: Connect to remote server */
-    if (!be_in) {
-	/* Just authorize as the IMAP server, so pass "" as our authzid */
-	be = backend_connect(NULL, toserver, &imap_protocol,
-			     "", NULL, NULL);
-	if (!be) r = IMAP_SERVER_UNAVAILABLE;
-	if (r) {
-	    syslog(LOG_ERR,
-		   "Could not move mailbox: %s, Backend connect failed",
-		   mailboxname);
-	    goto done;
-	}
-    }
-    else {
-	be = be_in;
+     * if all goes well.  NOTE - this has the potential to deadlock since
+     * we don't have the concept of an exclusive user lock in the code
+     * at this time!  It would be a good thing to have... */
+    r = mailbox_open_iwl(mboxname, &item->mailbox);
+    if (r) {
+	free(item);
+	return r;
     }
 
-    /* Step 1a: Connect to mupdate (as needed) */
-    if (h_in && *h_in) {
-	mupdate_h = *h_in;
-    } else if (config_mupdate_server) {
-	r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
-	if (r) {
-	    syslog(LOG_ERR,
-		   "Could not move mailbox: %s, MUPDATE connect failed",
-		   mailboxname);
-	    goto done;
-	}
-    }
+    item->next = xfer->items;
+    xfer->items = item;
 
-    /* Step 2: LOCALCREATE on remote server */
-    if (!r) {
-	if (topart) {
+    return 0;
+}
+
+static int xfer_localcreate(struct xfer_header *xfer)
+{
+    struct xfer_item *item;
+    int r;
+
+    for (item = xfer->items; item; item = item->next) {
+	if (xfer->topart) {
 	    /* need to send partition as an atom */
-	    prot_printf(be->out, "LC1 LOCALCREATE {" SIZE_T_FMT "+}\r\n%s %s\r\n",
-			strlen(name), name, topart);
+	    prot_printf(xfer->be->out, "LC1 LOCALCREATE {" SIZE_T_FMT "+}\r\n%s %s\r\n",
+			strlen(item->mailbox->name), item->mailbox->name,
+			xfer->topart);
 	} else {
-	    prot_printf(be->out, "LC1 LOCALCREATE {" SIZE_T_FMT "+}\r\n%s\r\n",
-			strlen(name), name);
+	    prot_printf(xfer->be->out, "LC1 LOCALCREATE {" SIZE_T_FMT "+}\r\n%s\r\n",
+			strlen(item->mailbox->name), item->mailbox->name);
 	}
-	r = getresult(be->in, "LC1");
-	if (r) syslog(LOG_ERR, "Could not move mailbox: %s, LOCALCREATE failed",
-		      mailboxname);
-	else backout_remotebox = 1;
+	r = getresult(xfer->be->in, "LC1");
+	if (r) {
+	    syslog(LOG_ERR, "Could not move mailbox: %s, LOCALCREATE failed",
+		   item->mailbox->name);
+	    return r;
+	}
+	item->remote_created = 1;
     }
+
+    return 0;
+}
+
+static int xfer_deactivate(struct xfer_header *xfer)
+{
+    struct xfer_item *item;
+    int r;
 
     /* Step 3: mupdate.DEACTIVATE(mailbox, newserver) */
-    /* (only if mailbox has not been already deactivated by our caller) */
-    if (!r && mupdate_h && !prereserved) {
-	backout_remoteflag = 1;
-
-	/* Note we are making the reservation on OUR host so that recovery
-	 * make sense */
-	snprintf(buf, sizeof(buf), "%s!%s", config_servername, mailbox->part);
-	r = mupdate_deactivate(mupdate_h, mailboxname, buf);
-	if (r) syslog(LOG_ERR,
-		      "Could not move mailbox: %s, MUPDATE DEACTIVATE failed",
-		      mailboxname);
+    for (item = xfer->items; item; item = item->next) {
+	r = xfer_mupdate(xfer, 0,
+			 item->mailbox->name, item->mailbox->part,
+			 config_servername, item->mailbox->acl);
+	if (r) {
+	    syslog(LOG_ERR,
+		   "Could not move mailbox: %s, MUPDATE DEACTIVATE failed",
+		   item->mailbox->name);
+	    return r;
+	}
     }
 
-    /* Step 4: Dump local -> remote */
-    if (!r) {
-	backout_mupdate = 1;
+    return 0;
+}
 
-	prot_printf(be->out, "D01 UNDUMP {" SIZE_T_FMT "+}\r\n%s ",
-		    strlen(name), name);
+static int xfer_undump(struct xfer_header *xfer)
+{
+    struct xfer_item *item;
+    int r;
 
-	r = dump_mailbox(NULL, mailbox, 0, be->in, be->out, imapd_authstate);
+    for (item = xfer->items; item; item = item->next) {
+	/* Step 4: Dump local -> remote */
+	prot_printf(xfer->be->out, "D01 UNDUMP {" SIZE_T_FMT "+}\r\n%s ",
+		    strlen(item->mailbox->name), item->mailbox->name);
 
-	if (r) syslog(LOG_ERR,
-		      "Could not move mailbox: %s, dump_mailbox() failed %s",
-		      mailboxname, error_message(r));
-    }
+	r = dump_mailbox(NULL, item->mailbox, 0,
+			 xfer->be->in, xfer->be->out, imapd_authstate);
 
-    if (!r) {
-	r = getresult(be->in, "D01");
-	if (r) syslog(LOG_ERR, "Could not move mailbox: %s, UNDUMP failed %s",
-		      mailboxname, error_message(r));
-    }
+	if (r) {
+	    syslog(LOG_ERR,
+		   "Could not move mailbox: %s, dump_mailbox() failed %s",
+		   item->mailbox->name, error_message(r));
+	    return r;
+	}
+
+	r = getresult(xfer->be->in, "D01");
+	if (r) {
+	    syslog(LOG_ERR, "Could not move mailbox: %s, UNDUMP failed %s",
+		   item->mailbox->name, error_message(r));
+	    return r;
+	}
     
-    /* Step 5: Set ACL on remote */
-    if (!r) {
-	r = trashacl(be->in, be->out, name);
-	if (r) syslog(LOG_ERR, "Could not clear remote acl on %s",
-		      mailboxname);
+	/* Step 5: Set ACL on remote */
+	r = trashacl(xfer->be->in, xfer->be->out,
+		     item->mailbox->name);
+	if (r) {
+	    syslog(LOG_ERR, "Could not clear remote acl on %s",
+		   item->mailbox->name);
+	    return r;
+	}
+
+	r = dumpacl(xfer->be->in, xfer->be->out,
+		    item->mailbox->name, item->mailbox->acl);
+	if (r) {
+	    syslog(LOG_ERR, "Could not set remote acl on %s",
+		   item->mailbox->name);
+	    return r;
+	}
+
+	/* 6.5) Kick remote server to correct mupdate entry */
+	/* Note that we don't really care if this succeeds or not */
+	if (xfer->mupdate_h) {
+	    prot_printf(xfer->be->out, "MP1 MUPDATEPUSH {" SIZE_T_FMT "+}\r\n%s\r\n",
+			strlen(item->mailbox->name), item->mailbox->name);
+	    r = getresult(xfer->be->in, "MP1");
+	    if (r) {
+		syslog(LOG_ERR,
+		       "Could not trigger remote push to mupdate server "
+		       "during move of %s", item->mailbox->name);
+	    }
+	}
     }
-    if (!r) {
-	r = dumpacl(be->in, be->out, name, mailbox->acl);
-	if (r) syslog(LOG_ERR, "Could not set remote acl on %s",
-		      mailboxname);
-    }
+
+    return 0;
+}
+
+static int xfer_reactivate(struct xfer_header *xfer)
+{
+    struct xfer_item *item;
+    int r;
 
     /* Step 6: mupdate.activate(mailbox, remote) */
     /* We do this from the local server first so that recovery is easier */
-    if (!r && mupdate_h) {
+    for (item = xfer->items; item; item = item->next) {
+	const char *topart = xfer->topart;
 	/*
 	 * If we don't have a partition on the target server, we use
 	 * the string "MOVED" instead.  When we issue MUPDATEPUSH to the
@@ -8390,157 +8536,73 @@ static int do_xfer_single(char *toserver, char *topart,
 	 * required to match config_servername on the target server.  So
 	 * much for making recovery easier!
 	 */
-	if (topart) {
-	    snprintf(buf, sizeof(buf), "%s!%s", toserver, topart);
-	} else {
-	    snprintf(buf, sizeof(buf), "%s!MOVED", toserver);
-	}
-	r = mupdate_activate(mupdate_h, mailboxname, buf, mailbox->acl);
+	if (!topart) topart = "MOVED";
+	r = xfer_mupdate(xfer, 1, 
+			 item->mailbox->name, topart,
+			 xfer->toserver, item->mailbox->acl);
 	if (r) {
-	    syslog( LOG_INFO, "MUPDATE: lost connection, retrying" );
-	    mupdate_disconnect(&mupdate_h);
-	    r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
-	    if (!r) {
-		r = mupdate_activate(mupdate_h, mailboxname, buf, mailbox->acl);
-	    }
-	}
-	if (r) {
-	    syslog( LOG_ERR, "MUPDATE: can't activate mailbox entry '%s'",
-		mailboxname );
+	    syslog(LOG_ERR, "MUPDATE: can't activate mailbox entry '%s'",
+		   item->mailbox->name);
+	    return r;
 	}
     }
 
-    /* MAILBOX NOW LIVES ON REMOTE */
-    if (!r) {
-	backout_remotebox = 0;
-	backout_mupdate = 0;
-	backout_remoteflag = 0;
+    return 0;
+}
 
-	/* 6.5) Kick remote server to correct mupdate entry */
-	/* Note that we don't really care if this succeeds or not */
-	if (mupdate_h) {
-	    prot_printf(be->out, "MP1 MUPDATEPUSH {" SIZE_T_FMT "+}\r\n%s\r\n",
-			strlen(name), name);
-	    rerr = getresult(be->in, "MP1");
-	    if (rerr) {
-		syslog(LOG_ERR,
-		       "Could not trigger remote push to mupdate server" \
-		       "during move of %s",
-		       mailboxname);
-	    }
-	}
-    }
+static int xfer_delete(struct xfer_header *xfer)
+{
+    struct xfer_item *item;
+    int r;
 
     /* 7) local delete of mailbox
      * & remove local "remote" mailboxlist entry */
-    if (!r) {
+    for (item = xfer->items; item; item = item->next) {
+	/* keep a copy for once the mailbox has gone away */
+	char *mailboxname = xstrdup(item->mailbox->name);
+
 	if (config_mupdate_config != IMAP_ENUM_MUPDATE_CONFIG_UNIFIED) {
 	    /* have to close it because the mboxlist interface re-opens it */
-	    mailbox_close(&mailbox);
+	    mailbox_close(&item->mailbox);
 	    /* Note that we do not check the ACL, and we don't update MUPDATE */
 	    /* note also that we need to remember to let proxyadmins do this */
 	    r = mboxlist_deletemailbox(mailboxname,
 				       imapd_userisadmin || imapd_userisproxyadmin,
 				       imapd_userid, imapd_authstate, 0, 1, 0);
-	    if (r) syslog(LOG_ERR,
-			  "Could not delete local mailbox during move of %s",
-			  mailboxname);
+	    if (r) {
+		syslog(LOG_ERR,
+		       "Could not delete local mailbox during move of %s",
+		       mailboxname);
+		/* can't abort now! */
+	    }
 	} else {
 	    /* Delete mailbox and quota root */
 	    /* note: delete closes mailbox */
-	    r = mailbox_delete(&mailbox);
-	    if (r) syslog(LOG_ERR,
-			 "Could not delete local mailbox during move of %s",
-			 mailboxname);
-	}
-
-	if (!r) {
-	    /* Delete mailbox annotations */
-	    annotatemore_delete(mailboxname);
-	}
-     }
-
-done:
-    if (r && mupdate_h && backout_mupdate) {
-	rerr = 0;
-	/* mailbox must still be open if we have backup_mupdate */
-	snprintf(buf, sizeof(buf), "%s!%s",
-		 config_servername, mailbox->part);
-	rerr = mupdate_activate(mupdate_h, mailboxname, buf, mailbox->acl);
-	if (rerr) {
-	    syslog( LOG_INFO, "MUPDATE: lost connection, retrying" );
-	    mupdate_disconnect(&mupdate_h);
-	    rerr = mupdate_connect(config_mupdate_server, NULL, 
-				   &mupdate_h, NULL);
-	    if (!rerr) {
-		rerr = mupdate_activate(mupdate_h, mailboxname,
-					buf, mailbox->acl);
+	    r = mailbox_delete(&item->mailbox);
+	    if (r) {
+		syslog(LOG_ERR,
+		       "Could not delete local mailbox during move of %s",
+		       mailboxname);
 	    }
 	}
-	if (rerr) {
-	    syslog(LOG_ERR,
-		   "Could not back out mupdate during move of %s (%s)",
-		   mailboxname, error_message(rerr));
-	}
-    }
-    if (r && backout_remotebox) {
-	rerr = 0;
-	prot_printf(be->out, "LD1 LOCALDELETE {" SIZE_T_FMT "+}\r\n%s\r\n",
-		    strlen(name), name);
-	rerr = getresult(be->in, "LD1");
- 	if(rerr) {
-	    syslog(LOG_ERR,
-		   "Could not back out remote mailbox during move of %s (%s)",
-		   name, error_message(rerr));
-	}   
-    }
-    if (r && backout_remoteflag) {
-	rerr = 0;
 
-	rerr = mboxlist_update(mailboxname, mailbox->mbtype,
-			       mailbox->part, mailbox->acl, 1);
-	if(rerr) syslog(LOG_ERR, "Could not unset remote flag on mailbox: %s",
-			mailboxname);
+	/* Delete mailbox annotations */
+	annotatemore_delete(mailboxname);
+
+	free(mailboxname);
     }
 
-    /* release the handles we got locally if necessary */
-    if (mupdate_h) {
-	if (h_in && *h_in) {
-	    if (*h_in != mupdate_h) {
-		*h_in = mupdate_h;
-	    }
-	} else {
-	    mupdate_disconnect(&mupdate_h);
-	}
-    }
-    if (be && !be_in)
-	backend_disconnect(be);
-
-    if (mailbox) mailbox_close(&mailbox);
-
-    return r;
+    return 0;
 }
-
-struct xfer_user_rock 
-{
-    char *toserver;
-    char *topart;
-    mupdate_handle **h;
-    struct backend *be;
-};
 
 static int xfer_user_cb(char *name,
 			int matchlen __attribute__((unused)),
 			int maycreate __attribute__((unused)),
 			void *rock) 
 {
-    mupdate_handle **mupdate_h = ((struct xfer_user_rock *)rock)->h;
-    char *toserver = ((struct xfer_user_rock *)rock)->toserver;
-    char *topart = ((struct xfer_user_rock *)rock)->topart;
-    struct backend *be = ((struct xfer_user_rock *)rock)->be;
-    char externalname[MAX_MAILBOX_BUFFER];
-    int r = 0;
+    struct xfer_header *xfer = (struct xfer_header *)rock;
     struct mboxlist_entry mbentry;
+    int r;
 
     /* NOTE: NOT mlookup() because we don't want to issue a referral */
     r = mboxlist_lookup(name, &mbentry, NULL);
@@ -8549,43 +8611,98 @@ static int xfer_user_cb(char *name,
     /* Skip remote mailbox */
     if (mbentry.mbtype & MBTYPE_REMOTE) return 0;
 
-    r = (*imapd_namespace.mboxname_toexternal)(&imapd_namespace,
-					       name,
-					       imapd_userid,
-					       externalname);
-    if (r) return r;
+    xfer_addmbox(xfer, name);
 
-    r = do_xfer_single(toserver, topart, externalname, name, 0, mupdate_h, be);
+    return 0;
+}
+
+static int do_xfer(struct xfer_header *xfer)
+{
+    int r;
+
+    r = xfer_deactivate(xfer);
+    if (!r) r = xfer_localcreate(xfer);
+    if (!r) r = xfer_undump(xfer);
+    if (!r) r = xfer_reactivate(xfer);
+    /* note - we don't report errors if this one
+     * fails! */
+    if (!r) xfer_delete(xfer);
 
     return r;
 }
 
+static int xfer_setquotaroot(struct xfer_header *xfer, const char *mboxname)
+{
+    struct quota quota;
+    int r;
+    
+    quota.root = mboxname;
+    r = quota_read(&quota, NULL, 0);
+    if (r == IMAP_QUOTAROOT_NONEXISTENT) return 0;
+    if (r) return r;
+    
+    /* note use of + to force the setting of a nonexistant
+     * quotaroot */
+    prot_printf(xfer->be->out, "Q01 SETQUOTA {" SIZE_T_FMT "+}\r\n" \
+		"+%s (STORAGE %d)\r\n",
+		strlen(mboxname)+1, mboxname, quota.limit);
+    r = getresult(xfer->be->in, "Q01");
+    if (r) syslog(LOG_ERR,
+		  "Could not move mailbox: %s, " \
+		  "failed setting initial quota root\r\n",
+		  mboxname);
+    return r;
+}
+
+static int xfer_addsubmailboxes(struct xfer_header *xfer, const char *mboxname)
+{
+    char buf[MAX_MAILBOX_NAME];
+    int r;
+
+    snprintf(buf, sizeof(buf), "%s.*", mboxname);
+    r = mboxlist_findall(NULL, buf, 1, imapd_userid,
+			 imapd_authstate, xfer_user_cb,
+			 xfer);
+    if (r) return r;
+
+    /* also move DELETED maiboxes for this user */
+    if (mboxlist_delayed_delete_isenabled()) {
+	snprintf(buf, sizeof(buf), "%s.%s.*",
+		config_getstring(IMAPOPT_DELETEDPREFIX), mboxname);
+	r = mboxlist_findall(NULL, buf, 1, imapd_userid,
+			     imapd_authstate, xfer_user_cb,
+			     xfer);
+    }
+
+    return r;
+}
 
 void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 {
     int r = 0;
-    char buf[MAX_PARTITION_LEN+HOSTNAME_SIZE+2];
     char mailboxname[MAX_MAILBOX_BUFFER];
-    int mbflags;
     int moving_user = 0;
-    int backout_mupdate = 0;
-    mupdate_handle *mupdate_h = NULL;
-    char *inpart, *inacl;
-    char *part = NULL, *acl = NULL;
     char *p, *mbox = mailboxname;
-    
+    struct mboxlist_entry mbentry;
+    struct xfer_header *xfer = NULL;
+
     /* administrators only please */
     /* however, proxys can do this, if their authzid is an admin */
     if (!imapd_userisadmin && !imapd_userisproxyadmin) {
 	r = IMAP_PERMISSION_DENIED;
+	goto done;
     }
 
-    if (!r) {
-	r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace,
-						   name,
-						   imapd_userid,
-						   mailboxname);
+    if (!strcmp(toserver, config_servername)) {
+	r = IMAP_BAD_SERVER;
+	goto done;
     }
+
+    r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace,
+					       name,
+					       imapd_userid,
+					       mailboxname);
+    if (r) goto done;
 
     /* NOTE: Since XFER can only be used by an admin, and we always connect
      * to the destination backend as an admin, we take advantage of the fact
@@ -8599,7 +8716,7 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 	mbox = p + 1;
     }
 
-    if(!strncmp(mbox, "user.", 5) && !strchr(mbox+5, '.')) {
+    if (!strncmp(mbox, "user.", 5) && !strchr(mbox+5, '.')) {
 	if ((strlen(mbox+5) == (strlen(imapd_userid) - (mbox - mailboxname))) &&
 	    !strncmp(mbox+5, imapd_userid, strlen(mbox+5))) {
 	    /* don't move your own inbox, that could be troublesome */
@@ -8611,152 +8728,61 @@ void cmd_xfer(char *tag, char *name, char *toserver, char *topart)
 	    moving_user = 1;
 	}
     }
-    
-    if (!r) {
-	r = mlookup(tag, name, mailboxname, &mbflags, &inpart, &inacl, NULL);
-    }
-    if (r == IMAP_MAILBOX_MOVED) return;
-    
-    if (!r) {
-	part = xstrdup(inpart);
-	acl = xstrdup(inacl);
-    }
+    if (r) goto done;
+
+    r = mboxlist_lookup(mailboxname, &mbentry, NULL);
+    if (r) goto done;
+
+    if (!topart) topart = mbentry.partition;
+    r = xfer_init(toserver, topart, &xfer);
+    if (r) goto done;
+
+    /* we're always moving this mailbox */
+    xfer_addmbox(xfer, mailboxname);
 
     /* if we are not moving a user, just move the one mailbox */
-    if(!r && !moving_user) {
-	r = do_xfer_single(toserver, topart, name, mailboxname, 0, NULL, NULL);
-    } else if (!r) {
-	struct backend *be = NULL;
-	
-	/* we need to reserve the users inbox - connect to mupdate */
-	if(!r && config_mupdate_server) {
-	    r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
-	    if(r) {
-		syslog(LOG_ERR,
-		       "Could not move mailbox: %s, MUPDATE connect failed",
-		       mailboxname);
-		goto done;
-	    }
+    if (!moving_user) {
+	/* is the selected mailbox the one we're moving? */
+	if (imapd_index && !strcmp(mailboxname, imapd_index->mailbox->name)) {
+	    r = IMAP_MAILBOX_LOCKED;
+	    goto done;
+	}
+	r = do_xfer(xfer);
+    } else {
+	char *userid = mboxname_to_userid(mailboxname);
+
+	/* is the selected mailbox in the namespace we're moving? */
+	if (imapd_index && !strncmp(mailboxname, imapd_index->mailbox->name,
+				    strlen(mailboxname))) {
+	    r = IMAP_MAILBOX_LOCKED;
+	    goto done;
 	}
 
-	/* Get a single connection to the remote backend */
-	be = backend_connect(NULL, toserver, &imap_protocol,
-			     "", NULL, NULL);
-	if(!be) {
-	    r = IMAP_SERVER_UNAVAILABLE;
-	    syslog(LOG_ERR,
-		   "Could not move mailbox: %s, " \
-		   "Initial backend connect failed",
-		   mailboxname);
-	}
+	/* set the quotaroot if needed */
+	r = xfer_setquotaroot(xfer, mailboxname);
+	if (r) goto done;
 
-	/* deactivate their inbox */
-	if(!r && mupdate_h) {
-	    /* Note we are making the reservation on OUR host so that recovery
-	     * make sense */
-	    snprintf(buf, sizeof(buf), "%s!%s", config_servername, part);
-	    r = mupdate_deactivate(mupdate_h, mailboxname, buf);
-	    if(r) syslog(LOG_ERR,
-			 "Could not deactivate mailbox: %s, during move (%s)",
-			 mailboxname, error_message(r));
-	    else backout_mupdate = 1;
-	}
+	/* add all submailboxes to the move list as well */
+	r = xfer_addsubmailboxes(xfer, mailboxname);
+	if (r) goto done;
 
-	/* If needed, set an uppermost quota root */
-	if(!r) {
-	    struct quota quota;
-	    
-	    quota.root = mailboxname;
-	    r = quota_read(&quota, NULL, 0);
-	    
-	    if(!r) {
-		/* note use of + to force the setting of a nonexistant
-		 * quotaroot */
-		prot_printf(be->out, "Q01 SETQUOTA {" SIZE_T_FMT "+}\r\n" \
-			    "+%s (STORAGE %d)\r\n",
-			    strlen(name)+1, name, quota.limit);
-		r = getresult(be->in, "Q01");
-		if(r) syslog(LOG_ERR,
-			     "Could not move mailbox: %s, " \
-			     "failed setting initial quota root\r\n",
-			     mailboxname);
-	    }
-	    else if (r == IMAP_QUOTAROOT_NONEXISTENT) r = 0;
-	}
+	/* NOTE: mailboxes were added in reverse, so the inbox is
+	 * done last */
+	r = do_xfer(xfer);
+	if (r) goto done;
 
-	/* move this mailbox */
-	/* ...and seen file, and subs file, and sieve scripts... */
-	if (!r) {
-	    r = do_xfer_single(toserver, topart, name,
-			       mailboxname, 1, &mupdate_h, be);
-	}
-
-	/* recursively move all sub-mailboxes, using internal names */
-	/* xxx how do you back out if one of the moves fails? */
-	if (!r) {
-	    struct xfer_user_rock rock;
-
-	    rock.toserver = toserver;
-	    rock.topart = topart;
-	    rock.h = &mupdate_h;
-	    rock.be = be;
-
-	    snprintf(buf, sizeof(buf), "%s.*", mailboxname);
-	    r = mboxlist_findall(NULL, buf, 1, imapd_userid,
-				 imapd_authstate, xfer_user_cb,
-				 &rock);
-
-	    /* also move DELETED maiboxes for this user */
-	    if (!r && mboxlist_delayed_delete_isenabled()) {
-		snprintf(buf, sizeof(buf), "%s.%s.*",
-			config_getstring(IMAPOPT_DELETEDPREFIX), mailboxname);
-		r = mboxlist_findall(NULL, buf, 1, imapd_userid,
-				     imapd_authstate, xfer_user_cb,
-				     &rock);
-	    }
-	}
-
-	if (be) {
-	    backend_disconnect(be);
-	    free(be);
-	}
-
-	if(r && mupdate_h && backout_mupdate) {
-	    int rerr = 0;
-	    snprintf(buf, sizeof(buf), "%s!%s", config_servername, part);
-	    rerr = mupdate_activate(mupdate_h, mailboxname, buf, acl);
-	    if (rerr) {
-		syslog( LOG_INFO, "MUPDATE: lost connection, retrying" );
-		mupdate_disconnect(&mupdate_h);
-		rerr = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
-		if (!rerr) {
-		    rerr = mupdate_activate(mupdate_h, mailboxname, buf, acl);
-		}
-	    }
-	    if(rerr) {
-		syslog(LOG_ERR,
-		       "Could not back out mupdate during move of %s (%s)",
-		       mailboxname, error_message(rerr));
-	    }
-	} else if(!r) {
-	    /* this was a successful user delete, and we need to delete
-	       certain user meta-data (but not seen state!) */
-	    user_deletedata(mailboxname+5, imapd_userid, imapd_authstate, 0);
-	}
-	
-	if (mupdate_h)
-	    mupdate_disconnect(&mupdate_h);
+	/* this was a successful user delete, and we need to delete
+	   certain user meta-data (but not seen state!) */
+	user_deletedata(userid, imapd_userid, imapd_authstate, 0);
     }
 
- done:
-    if(part) free(part);
-    if(acl) free(acl);
+done:
+    if (xfer) xfer_done(&xfer);
 
     imapd_check(NULL, 0);
 
     if (r) {
-	prot_printf(imapd_out, "%s NO %s\r\n",
-		    tag,
+	prot_printf(imapd_out, "%s NO %s\r\n", tag,
 		    error_message(r));
     } else {
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
