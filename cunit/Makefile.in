@@ -87,6 +87,8 @@ PUREOPT= -best-effort -logfile=/tmp/pure/%v.%p.log -always_use_cache_dir -cached
 QUANTIFY=/usr/local/bin/quantify
 QUANTOPT=-windows=no -filename-prefix=/tmp/quant/%v.%p -write-summary-file= -logfile=/tmp/quant/%v.%p.log
 
+VALGRIND_yes = valgrind --tool=memcheck --leak-check=full
+
 prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
@@ -150,7 +152,7 @@ distclean: clean
 	rm -f Makefile
 
 check: unit
-	./unit
+	$(VALGRIND_$(VG)) ./unit
 
 depend: 
 	${MAKEDEPEND} $(CPPFLAGS) $(DEFS) $(CFLAGS) *.c $(srcdir)/*.c 1>makedepend.log 2>&1

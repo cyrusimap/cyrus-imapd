@@ -139,6 +139,9 @@ check:
 			echo "### Done with" `pwd`);		\
 	done
 
+valgrind:
+	$(MAKE) VG=yes check
+
 install::
 	$(srcdir)/install-sh -d ${DESTDIR}$(exec_prefix)/bin
 	$(srcdir)/install-sh -d ${DESTDIR}$(exec_prefix)/lib
