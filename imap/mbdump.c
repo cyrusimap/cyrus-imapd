@@ -215,10 +215,14 @@ struct data_file {
     char *fname;
 };
 
+/* even though 2.4.x doesn't use cyrus.expunge, we need to be aware
+ * that it may exist so XFER from any 2.3.x server will work
+ */
 static struct data_file data_files[] = {
-    { META_HEADER, "cyrus.header" },
-    { META_INDEX,  "cyrus.index"  },
-    { META_CACHE,  "cyrus.cache"  },
+    { META_HEADER,  "cyrus.header"  },
+    { META_INDEX,   "cyrus.index"   },
+    { META_CACHE,   "cyrus.cache"   },
+    { META_EXPUNGE, "cyrus.expunge" },
     { 0, NULL }
 };
 
