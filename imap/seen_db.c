@@ -572,3 +572,57 @@ int seen_compare(struct seendata *a, struct seendata *b)
 
     return 0;
 }
+
+/* Look up the unique id in the new file, if it is there, compare the
+ * last change times, and ensure that the database uses the newer of
+ * the two */
+static int seen_merge_cb(void *rockp,
+			 const char *key, int keylen,
+			 const char *newdata, int newlen) 
+{
+    int r;
+    struct seen *seendb = (struct seen *)rockp;
+    struct seendata oldsd, newsd;
+    char *uniqueid = xstrndup(key, keylen);
+    int dirty = 0;
+
+    parse_data(newdata, newlen, &newsd);
+
+    if (seen_lockread(seendb, uniqueid, &oldsd)) {
+	dirty = 1; /* no record */
+    }
+    else {
+	if (newsd.lastuid > oldsd.lastuid) dirty = 1;
+	if (newsd.lastread > oldsd.lastread) dirty = 1;
+    }
+    
+    if (dirty) {
+	/* write back data from new entry */
+	r = seen_write(seendb, uniqueid, &newsd);
+    }
+
+    free(uniqueid);
+
+    return r;
+}
+
+/* we want to merge records from "newfile" into
+ * the already existing "currentfile", but only
+ * if the record in newfile is actually newer
+ * (or doesn't exist in currentfile yet)  */
+int seen_merge(struct seen *seendb, const char *newfile)
+{
+    int r = 0;
+    struct db *newdb = NULL;
+
+    r = (DB->open)(newfile, 0, &newdb);
+    /* if it doesn't exist, there's nothing
+     * to do, so abort without an error */
+    if (r == CYRUSDB_NOTFOUND) return 0;
+
+    if (!r) r = DB->foreach(newdb, "", 0, NULL, seen_merge_cb, seendb, NULL);
+
+    if (newdb) (DB->close)(newdb);
+
+    return r;
+}
