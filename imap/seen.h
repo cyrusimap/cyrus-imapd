@@ -105,6 +105,10 @@ int seen_done(void);
 /* compare seendata = returns 1 if match */
 int seen_compare(struct seendata *a, struct seendata *b);
 
+/* merge another .seen file (same format) into
+ * the current seendb */
+int seen_merge(struct seen *seendb, const char *newfile);
+
 char *seen_getpath(const char *userid);
 
 #endif /* SEEN_LOCAL_H */
