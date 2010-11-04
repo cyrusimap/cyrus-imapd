@@ -1155,19 +1155,17 @@ product version in the capabilities */
 /* The cyrusdb backend to use for the imap status cache. */
 
 { "sync_authname", NULL, STRING }
-/* The authentication name to use when authenticating to a sync server. */
-
-{ "sync_batch_size", 0, INT }
-/* Maximum number of messages to upload to a replica at one time.
-   A batch size of 0, the default, will disable batching (ALL messages
-   will be sent). */
+/* The authentication name to use when authenticating to a sync server.
+   Prefix with a channel name to only apply for that channel */
 
 { "sync_compress", 0, SWITCH }
-/* Enable compression on replication traffic */
+/* Enable compression on replication traffic.
+   Prefix with a channel name to only apply for that channel */
 
 { "sync_host", NULL, STRING }
 /* Name of the host (replica running sync_server(8)) to which
-   replication actions will be sent by sync_client(8). */
+   replication actions will be sent by sync_client(8).
+   Prefix with a channel name to only apply for that channel */
 
 { "sync_log", 0, SWITCH }
 /* Enable replication action logging by lmtpd(8), imapd(8), pop3d(8),
@@ -1178,31 +1176,37 @@ product version in the capabilities */
 /* Enable replication action logging by sync_server as well, allowing
    chaining of replicas.  Use this on 'B' for A => B => C replication layout */
 
-{ "sync_log_names", NULL, STRING }
+{ "sync_log_channels", NULL, STRING }
 /* If specified, log all events to multiple log files in directories
-   specified by "name".  To run these log files, you need to pass the
-   -N option to sync_client with the same name.  Use this for a mesh
-   style replication layout */
+   specified by each "channel".  To run these log files, you need to pass
+   the -n option to sync_client -r with the channel name.  Use this for
+   a mesh style replication layout - every machine replicating to every
+   other machine. */
 
 { "sync_password", NULL, STRING }
-/* The default password to use when authenticating to a sync server. */
+/* The default password to use when authenticating to a sync server.
+   Prefix with a channel name to only apply for that channel */
 
 { "sync_port", "csync", STRING }
 /* Name of the service (or port number) of the replication service on
    replica host.  The default is "csync" which is usally port 2005, but
-   any service name or numeric port can be specified. */
+   any service name or numeric port can be specified.
+   Prefix with a channel name to only apply for that channel */
 
 { "sync_realm", NULL, STRING }
-/* The authentication realm to use when authenticating to a sync server. */
+/* The authentication realm to use when authenticating to a sync server.
+   Prefix with a channel name to only apply for that channel */
 
 { "sync_repeat_interval", 1, INT }
 /* Minimum interval (in seconds) between replication runs in rolling
    replication mode. If a replication run takes longer than this
-   time, we repeat immediately. */
+   time, we repeat immediately.
+   Prefix with a channel name to only apply for that channel */
 
 { "sync_shutdown_file", NULL, STRING }
 /* Simple latch used to tell sync_client(8) that it should shut down at the
-   next opportunity. Safer than sending signals to running processes */
+   next opportunity. Safer than sending signals to running processes.
+   Prefix with a channel name to only apply for that channel */
 
 { "syslog_prefix", NULL, STRING }
 /* String to be prepended to the process name in syslog entries. */

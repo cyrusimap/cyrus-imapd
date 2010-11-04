@@ -54,7 +54,7 @@ void sync_log_init(void);
 void sync_log_suppress(void);
 void sync_log_done(void);
 
-void sync_log(char *fmt, ...);
+void sync_log(const char *fmt, ...);
 
 #define sync_log_user(user) \
     sync_log("USER %s\n", user)
@@ -79,5 +79,33 @@ void sync_log(char *fmt, ...);
 
 #define sync_log_subscribe(user, name) \
     sync_log("SUB %s %s\n", user, name)
+
+char *sync_log_fname(const char *channel);
+void sync_log_suppress_channel(const char *channel);
+void sync_log_channel(const char *channel, const char *fmt, ...);
+
+#define sync_log_user_channel(channel, user) \
+    sync_log_channel(channel, "USER %s\n", user)
+
+#define sync_log_sieve_channel(channel, user) \
+    sync_log_channel(channel, "META %s\n", user)
+
+#define sync_log_mailbox_channel(channel, name) \
+    sync_log_channel(channel, "MAILBOX %s\n", name)
+
+#define sync_log_mailbox_double_channel(channel, name1, name2) \
+    sync_log_channel(channel, "MAILBOX %s\nMAILBOX %s\n", name1, name2)
+
+#define sync_log_quota_channel(channel, name) \
+    sync_log_channel(channel, "QUOTA %s\n", name)
+
+#define sync_log_annotation_channel(channel, name) \
+    sync_log_channel(channel, "ANNOTATION %s\n", name)
+
+#define sync_log_seen_channel(channel, user, name) \
+    sync_log_channel(channel, "SEEN %s %s\n", user, name)
+
+#define sync_log_subscribe_channel(channel, user, name) \
+    sync_log_channel(channel, "SUB %s %s\n", user, name)
 
 #endif /* INCLUDED_SYNC_LOG_H */

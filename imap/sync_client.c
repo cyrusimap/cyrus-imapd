@@ -84,6 +84,7 @@
 #include "util.h"
 #include "prot.h"
 #include "message_guid.h"
+#include "sync_log.h"
 #include "sync_support.h"
 #include "cyr_lock.h"
 #include "backend.h"
@@ -2439,19 +2440,70 @@ int do_daemon_work(const char *sync_log_file, const char *sync_shutdown_file,
     return(r);
 }
 
-void replica_connect()
+static int get_intconfig(const char *channel, const char *val)
+{
+    int response = -1;
+
+    if (channel) {
+	const char *result = NULL;
+	char name[MAX_MAILBOX_NAME]; /* crazy long, but hey */
+	snprintf(name, MAX_MAILBOX_NAME, "%s_%s", channel, val);
+	result = config_getoverflowstring(name, NULL);
+	if (result) response = atoi(result);
+    }
+
+    if (response == -1) {
+	if (!strcmp(val, "sync_repeat_interval"))
+	    response = config_getint(IMAPOPT_SYNC_REPEAT_INTERVAL);
+    }
+
+    return response;
+}
+
+static const char *get_config(const char *channel, const char *val)
+{
+    const char *response = NULL;
+
+    if (channel) {
+	char name[MAX_MAILBOX_NAME]; /* crazy long, but hey */
+	snprintf(name, MAX_MAILBOX_NAME, "%s_%s", channel, val);
+	response = config_getoverflowstring(name, NULL);
+    }
+
+    if (!response) {
+	/* get the core value */
+	if (!strcmp(val, "sync_host"))
+	    response = config_getstring(IMAPOPT_SYNC_HOST);
+	else if (!strcmp(val, "sync_authname"))
+	    response = config_getstring(IMAPOPT_SYNC_AUTHNAME);
+	else if (!strcmp(val, "sync_password"))
+	    response = config_getstring(IMAPOPT_SYNC_PASSWORD);
+	else if (!strcmp(val, "sync_realm"))
+	    response = config_getstring(IMAPOPT_SYNC_REALM);
+	else if (!strcmp(val, "sync_port"))
+	    response = config_getstring(IMAPOPT_SYNC_PORT);
+	else if (!strcmp(val, "sync_shutdown_file"))
+	    response = config_getstring(IMAPOPT_SYNC_SHUTDOWN_FILE);
+	else
+	    fatal("unknown config variable requested", EC_SOFTWARE);
+    }
+
+    return response;
+}
+
+void replica_connect(const char *channel)
 {
     int wait;
     struct protoent *proto;
     sasl_callback_t *cb;
 
     cb = mysasl_callbacks(NULL,
-			  config_getstring(IMAPOPT_SYNC_AUTHNAME),
-			  config_getstring(IMAPOPT_SYNC_REALM),
-			  config_getstring(IMAPOPT_SYNC_PASSWORD));
+			  get_config(channel, "sync_authname"),
+			  get_config(channel, "sync_realm"),
+			  get_config(channel, "sync_password"));
 
     /* get the right port */
-    csync_protocol.service = config_getstring(IMAPOPT_SYNC_PORT);
+    csync_protocol.service = get_config(channel, "sync_port");
 
     for (wait = 15;; wait *= 2) {
 	sync_backend = backend_connect(sync_backend, servername,
@@ -2552,7 +2604,7 @@ static void replica_disconnect()
 }
 
 void do_daemon(const char *sync_log_file, const char *sync_shutdown_file,
-	       unsigned long timeout, unsigned long min_delta)
+	       const char *channel, unsigned long timeout, unsigned long min_delta)
 {
     int r = 0;
     pid_t pid;
@@ -2571,7 +2623,7 @@ void do_daemon(const char *sync_log_file, const char *sync_shutdown_file,
     }
 
     if (foreground || timeout == 0) {
-	replica_connect();
+	replica_connect(channel);
         do_daemon_work(sync_log_file, sync_shutdown_file,
                        timeout, min_delta, &restart);
 	replica_disconnect();
@@ -2585,7 +2637,7 @@ void do_daemon(const char *sync_log_file, const char *sync_shutdown_file,
         if ((pid=fork()) < 0) fatal("fork failed", EC_SOFTWARE);
 
         if (pid == 0) { /* child */
-	    replica_connect();
+	    replica_connect(channel);
 
 	    r = do_daemon_work(sync_log_file, sync_shutdown_file,
 			       timeout, min_delta, &restart);
@@ -2650,8 +2702,8 @@ int main(int argc, char **argv)
     int   wait     = 0;
     int   timeout  = 600;
     int   min_delta = 0;
-    char sync_log_file[MAX_MAILBOX_PATH+1];
-    char *sync_log_name = NULL;
+    const char *sync_log_file;
+    const char *channel = NULL;
     const char *sync_shutdown_file = NULL;
     char buf[512];
     FILE *file;
@@ -2698,7 +2750,7 @@ int main(int argc, char **argv)
             break;
 
         case 'n':
-	    sync_log_name = optarg;
+	    channel = optarg;
 	    break;
 
         case 'w':
@@ -2757,10 +2809,12 @@ int main(int argc, char **argv)
 
     cyrus_init(alt_config, "sync_client", 0);
 
-    if (!servername &&
-	!(servername = config_getstring(IMAPOPT_SYNC_HOST))) {
+    /* get the server name if not specified */
+    if (!servername)
+	servername = get_config(channel, "sync_host");
+
+    if (!servername)
         fatal("sync_host not defined", EC_SOFTWARE);
-    }
 
     /* Just to help with debugging, so we have time to attach debugger */
     if (wait > 0) {
@@ -2795,7 +2849,7 @@ int main(int argc, char **argv)
     switch (mode) {
     case MODE_USER:
 	/* Open up connection to server */
-	replica_connect();
+	replica_connect(channel);
 
 	if (input_filename) {
 	    if ((file=fopen(input_filename, "r")) == NULL) {
@@ -2842,7 +2896,7 @@ int main(int argc, char **argv)
 
     case MODE_MAILBOX:
 	/* Open up connection to server */
-	replica_connect();
+	replica_connect(channel);
 
 	mboxname_list = sync_name_list_create();
 	if (input_filename) {
@@ -2886,7 +2940,7 @@ int main(int argc, char **argv)
 
     case MODE_META:
 	/* Open up connection to server */
-	replica_connect();
+	replica_connect(channel);
 
         for (i = optind; i < argc; i++) {
 	    mboxname_hiersep_tointernal(&sync_namespace, argv[i],
@@ -2911,7 +2965,7 @@ int main(int argc, char **argv)
     case MODE_REPEAT:
 	if (input_filename) {
 	    /* Open up connection to server */
-	    replica_connect();
+	    replica_connect(channel);
 
 	    exit_rc = do_sync(input_filename);
 
@@ -2919,23 +2973,15 @@ int main(int argc, char **argv)
 	}
 	else {
 	    /* rolling replication */
-	    if (sync_log_name) {
-		strlcpy(sync_log_file, config_dir, sizeof(sync_log_file));
-		strlcat(sync_log_file, "/sync/", sizeof(sync_log_file));
-		strlcat(sync_log_file, sync_log_name, sizeof(sync_log_file));
-		strlcat(sync_log_file, "/log", sizeof(sync_log_file));
-	    } else {
-		strlcpy(sync_log_file, config_dir, sizeof(sync_log_file));
-		strlcat(sync_log_file, "/sync/log", sizeof(sync_log_file));
-	    }
+	    sync_log_file = sync_log_fname(channel);
 
 	    if (!sync_shutdown_file)
-		sync_shutdown_file = config_getstring(IMAPOPT_SYNC_SHUTDOWN_FILE);
+		sync_shutdown_file = get_config(channel, "sync_shutdown_file");
 
 	    if (!min_delta)
-		min_delta = config_getint(IMAPOPT_SYNC_REPEAT_INTERVAL);
+		min_delta = get_intconfig(channel, "sync_repeat_interval");
 
-	    do_daemon(sync_log_file, sync_shutdown_file, timeout, min_delta);
+	    do_daemon(sync_log_file, sync_shutdown_file, channel, timeout, min_delta);
 	}
 
 	break;
