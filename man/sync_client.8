@@ -172,6 +172,14 @@ Repeat until
 .I sync_shutdwon_file
 appears.
 .TP
+.BI \-n
+Use the named channel for rolling replication mode.  If multiple channels
+are specified in
+.I sync_log_channels
+then use one of them.  This option is
+probably best combined with -S to connect to a different server with each
+channel.
+.TP
 .BI \-u
 User mode.
 Remaining arguments are list of users who should be replicated.
