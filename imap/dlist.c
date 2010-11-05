@@ -495,7 +495,7 @@ char dlist_parse(struct dlist **dlp, int parsekey, struct protstream *in)
 
 fail:
     dlist_free(&dl);
-    return '-';
+    return EOF;
 }
 
 static struct dlist *dlist_getchild(struct dlist *dl, const char *name)
