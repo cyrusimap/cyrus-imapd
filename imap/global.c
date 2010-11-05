@@ -1101,7 +1101,7 @@ void session_new_id()
     }
     ++session_id_count;
     base = config_getstring(IMAPOPT_SYSLOG_PREFIX);
-    if (!base) base = config_getstring(IMAPOPT_SERVERNAME);
+    if (!base) base = config_servername;
     snprintf(session_id_buf, MAX_SESSIONID_SIZE, "%.128s-%d-%d-%d",
              base, getpid(), session_id_time, session_id_count);
 }
