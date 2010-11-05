@@ -90,7 +90,8 @@ static int dump_file(int first, int sync,
 
 /* support for downgrading index files on copying back to an
  * earlier version of Cyrus */
-static void downgrade_header(struct index_header *i, char *buf, int version)
+static void downgrade_header(struct index_header *i, char *buf, int version,
+			     int header_size, int record_size)
 {
     unsigned UP_version = version;
     unsigned UP_validopts = 15;
@@ -109,8 +110,8 @@ static void downgrade_header(struct index_header *i, char *buf, int version)
     *((bit32 *)(buf+OFFSET_FORMAT)) = htonl(i->format);
     /* version is changed of course */
     *((bit32 *)(buf+OFFSET_MINOR_VERSION)) = htonl(UP_version);
-    *((bit32 *)(buf+OFFSET_START_OFFSET)) = htonl(i->start_offset);
-    *((bit32 *)(buf+OFFSET_RECORD_SIZE)) = htonl(i->record_size);
+    *((bit32 *)(buf+OFFSET_START_OFFSET)) = htonl(header_size);
+    *((bit32 *)(buf+OFFSET_RECORD_SIZE)) = htonl(record_size);
     /* NUM_RECORDS replaces "exists" in the older headers */
     *((bit32 *)(buf+OFFSET_NUM_RECORDS)) = htonl(UP_num_records);
     *((bit32 *)(buf+OFFSET_LAST_APPENDDATE)) = htonl(i->last_appenddate);
@@ -234,7 +235,8 @@ static int dump_index(struct mailbox *mailbox, int oldversion,
     oldindex_fd = open(oldname, O_RDWR|O_TRUNC|O_CREAT, 0666);
     if (oldindex_fd == -1) goto fail;
 
-    downgrade_header(&mailbox->i, hbuf, oldversion);
+    downgrade_header(&mailbox->i, hbuf, oldversion,
+		     header_size, record_size);
 
     /* Write header - everything we'll say */
     n = retry_write(oldindex_fd, hbuf, header_size);
