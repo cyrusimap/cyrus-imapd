@@ -135,11 +135,11 @@ static int update_record_from_cache(struct mailbox *mailbox,
     return 0;
 }
 
-static int upgrade_index_record(struct mailbox *mailbox,
-				const char *buf,
-				int old_version,
-				struct index_record *record,
-				int record_size)
+static void upgrade_index_record(struct mailbox *mailbox,
+				 const char *buf,
+				 int old_version,
+				 struct index_record *record,
+				 int record_size)
 {
     indexbuffer_t rbuf;
     char *recordbuf = (char *)rbuf.buf;
@@ -182,16 +182,20 @@ static int upgrade_index_record(struct mailbox *mailbox,
     fname = mailbox_message_fname(mailbox, record->uid);
 
     if (recalc) {
-	int r = message_parse(fname, record);
-	if (r) return r;
+	if (message_parse(fname, record)) {
+	    /* failed to create, don't try to write */
+	    record->crec.len = 0;
+	    /* and the record is expunged too! */
+	    record->system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
+	    syslog(LOG_ERR, "IOERROR: FATAL - failed to parse "
+			    "file %s for upgrade, expunging", fname);
+	    return;
+	}
     }
 
     /* update the mtime to match the internaldate */
     settime.actime = settime.modtime = record->internaldate;
-    if (utime(mailbox_message_fname(mailbox, record->uid), &settime) == -1)
-	return IMAP_IOERROR;
-
-    return 0;
+    utime(fname, &settime);
 }
 
 /*
@@ -211,7 +215,9 @@ int upgrade_index(struct mailbox *mailbox)
     char *hbuf = (char *)headerbuf.buf;
     char *rbuf = (char *)recordbuf.buf;
     int newindex_fd = -1;
-    char *fname;
+    const char *fname;
+    const char *datadirname;
+    struct stat sbuf;
     struct seqset *seq = NULL;
     struct index_record record;
     struct index_record *expunge_records = NULL;
@@ -235,6 +241,18 @@ int upgrade_index(struct mailbox *mailbox)
     /* check if someone else already upgraded the index! */
     if (oldminor_version == MAILBOX_MINOR_VERSION)
 	goto done;
+
+    /* check that the data directory exists.  If not, it may be that
+     * something isn't correctly mounted.  We don't want to wipe out
+     * all the index records due to IOERRORs just because the admin
+     * made a temporary mistake */
+    datadirname = mailbox_message_fname(mailbox, 0);
+    if (stat(datadirname, &sbuf)) {
+	syslog(LOG_ERR, "IOERROR: unable to find data directory %s "
+			"for mailbox %s, refusing to upgrade",
+			datadirname, mailbox->name);
+	return IMAP_IOERROR;
+    }
 
     /* Copy existing header so we can upgrade it */ 
     memset(hbuf, 0, INDEX_HEADER_SIZE);
@@ -282,7 +300,6 @@ int upgrade_index(struct mailbox *mailbox)
 	unsigned long emapnum;
 	bit32 eversion, eoffset, esize;
 	char *owner_userid;
-	struct stat sbuf;
 	int expunge_fd = -1;
 	const char *expunge_base = NULL;
 	unsigned long expunge_len = 0;   /* mapped size */
