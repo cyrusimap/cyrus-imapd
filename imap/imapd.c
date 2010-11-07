@@ -4511,7 +4511,7 @@ void cmd_sort(char *tag, int usinguid)
     struct sortcrit *sortcrit = NULL;
     static struct buf arg;
     int charset = 0;
-    struct searchargs *searchargs;
+    struct searchargs *searchargs = NULL;
     clock_t start = clock();
     char mytime[100];
     int n;
@@ -4529,28 +4529,21 @@ void cmd_sort(char *tag, int usinguid)
 
     /* local mailbox */
     c = getsortcriteria(tag, &sortcrit);
-    if (c == EOF) {
-	eatline(imapd_in, ' ');
-	freesortcrit(sortcrit);
-	return;
-    }
+    if (c == EOF)
+	goto error;
 
     /* get charset */
     if (c != ' ') {
 	prot_printf(imapd_out, "%s BAD Missing charset in Sort\r\n",
 		    tag);
-	eatline(imapd_in, c);
-	freesortcrit(sortcrit);
-	return;
+	goto error;
     }
 
     c = getword(imapd_in, &arg);
     if (c != ' ') {
 	prot_printf(imapd_out, "%s BAD Missing search criteria in Sort\r\n",
 		    tag);
-	eatline(imapd_in, c);
-	freesortcrit(sortcrit);
-	return;
+	goto error;
     }
     lcase(arg.s);
     charset = charset_lookupname(arg.s);
@@ -4558,30 +4551,20 @@ void cmd_sort(char *tag, int usinguid)
     if (charset == -1) {
 	prot_printf(imapd_out, "%s NO %s\r\n", tag,
 	       error_message(IMAP_UNRECOGNIZED_CHARSET));
-	eatline(imapd_in, c);
-	freesortcrit(sortcrit);
-	return;
+	goto error;
     }
 
     searchargs = (struct searchargs *)xzmalloc(sizeof(struct searchargs));
 
     c = getsearchprogram(tag, searchargs, &charset, 0);
-    if (c == EOF) {
-	eatline(imapd_in, ' ');
-	freesearchargs(searchargs);
-	freesortcrit(sortcrit);
-	return;
-    }
+    if (c == EOF)
+	goto error;
 
     if (c == '\r') c = prot_getc(imapd_in);
-    if (c != '\n') {
+    if (c != '\n')
 	prot_printf(imapd_out, 
 		    "%s BAD Unexpected extra arguments to Sort\r\n", tag);
-	eatline(imapd_in, c);
-	freesearchargs(searchargs);
-	freesortcrit(sortcrit);
-	return;
-    }
+	goto error;
 
     n = index_sort(imapd_index, sortcrit, searchargs, usinguid);
     snprintf(mytime, sizeof(mytime), "%2.3f",
@@ -4592,6 +4575,11 @@ void cmd_sort(char *tag, int usinguid)
     freesortcrit(sortcrit);
     freesearchargs(searchargs);
     return;
+
+error:
+    eatline(imapd_in, (c == EOF ? ' ' : c));
+    freesortcrit(sortcrit);
+    freesearchargs(searchargs);
 }
 
 /*
