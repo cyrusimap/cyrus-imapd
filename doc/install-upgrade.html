@@ -10,6 +10,11 @@
 
 <h2>Upgrading from 2.4.2</h2>
 <ul>
+<li>The AFS ptloader configure options have changed.  If you were
+    previously specifying --with-afs when you built, you'll now 
+    want to use --enable-afs instead.  Additionally, you may 
+    now specify --with-afs-libdir and --with-afs-incdir to
+    facilitate finding the AFS libraries and header files.</li>
 <li>The <i>sync_log_names</i> option has been replaced with
     <i>sync_log_channels</i> and the documentation and tools
     updated to match.  This is to use a less overloaded term
