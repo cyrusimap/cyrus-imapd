@@ -313,13 +313,15 @@ struct mailbox {
 #define OPT_MAILBOX_NEEDS_UNLINK (1<<29)	/* files to be unlinked */
 #define OPT_MAILBOX_NEEDS_REPACK (1<<30)	/* repacking to do */
 #define OPT_MAILBOX_DELETED (1U<<31)	/* mailbox is deleted an awaiting cleanup */
+
+#define MAILBOX_OPTIONS_MASK (OPT_POP3_NEW_UIDL | \
+			      OPT_IMAP_SHAREDSEEN | \
+			      OPT_IMAP_DUPDELIVER)
 #define MAILBOX_CLEANUP_MASK (OPT_MAILBOX_NEEDS_UNLINK | \
 			      OPT_MAILBOX_NEEDS_REPACK | \
 			      OPT_MAILBOX_DELETED)
-
-#define OPT_VALID (OPT_POP3_NEW_UIDL | OPT_IMAP_SHAREDSEEN | \
-		   OPT_IMAP_DUPDELIVER | OPT_MAILBOX_NEEDS_UNLINK | \
-		   OPT_MAILBOX_NEEDS_REPACK | OPT_MAILBOX_DELETED)
+#define MAILBOX_OPT_VALID (MAILBOX_OPTIONS_MASK | \
+			   MAILBOX_CLEANUP_MASK)
 
 /* reconstruct flags */
 #define RECONSTRUCT_QUIET           (1<<1)
