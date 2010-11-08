@@ -8,6 +8,22 @@
 
 <h1>Upgrading From Previous Versions</h1>
 
+<h2>Upgrading from 2.4.2</h2>
+<ul>
+<li>The <i>sync_log_names</i> option has been replaced with
+    <i>sync_log_channels</i> and the documentation and tools
+    updated to match.  This is to use a less overloaded term
+    and allow multi-channel replication to be used.</li>
+<li>Cyrus 2.4.3 can now XFER mailboxes back to earlier
+    version (at least as far back as Cyrus 2.2.12) in a
+    murder configuration.</li>
+<li>sync_client in rolling mode now only connects after
+    forking, so it no longer blocks startup.  You can
+    remove the '-o' option from your cyrus.conf entry
+    if you want, and not have to start sync_client
+    manually afterwards!</li>
+</ul>
+
 <h2>Upgrading from 2.4.0</h2>
 <ul>
 <li>The response to the "ID" command has changed slightly to include
