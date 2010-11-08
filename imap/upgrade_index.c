@@ -231,6 +231,11 @@ int upgrade_index(struct mailbox *mailbox)
     oldstart_offset = ntohl(*((bit32 *)(mailbox->index_base+OFFSET_START_OFFSET)));
     oldrecord_size = ntohl(*((bit32 *)(mailbox->index_base+OFFSET_RECORD_SIZE)));
     oldnum_records = ntohl(*((bit32 *)(mailbox->index_base+OFFSET_NUM_RECORDS)));
+
+    /* bogus data at the start of the index file? */
+    if (!oldstart_offset || !oldrecord_size)
+	return IMAP_MAILBOX_BADFORMAT;
+
     oldmapnum = (mailbox->index_size - oldstart_offset) / oldrecord_size;
     if (oldmapnum < oldnum_records) {
 	syslog(LOG_ERR, "upgrade: %s map doesn't fit, shrinking index %lu to %lu",
@@ -366,6 +371,11 @@ int upgrade_index(struct mailbox *mailbox)
 	eoffset = ntohl(*((bit32 *)(expunge_base+OFFSET_START_OFFSET)));
 	esize = ntohl(*((bit32 *)(expunge_base+OFFSET_RECORD_SIZE)));
 	expunge_num = ntohl(*((bit32 *)(expunge_base+OFFSET_NUM_RECORDS)));
+
+	/* bogus data at the start of the expunge file? */
+	if (!eoffset || !esize)
+	    goto no_expunge;
+
 	expunge_records = xmalloc(expunge_num * sizeof(struct index_record));
 	emapnum = (sbuf.st_size - eoffset) / esize;
 	if (emapnum < expunge_num) {
