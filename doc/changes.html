@@ -8,6 +8,47 @@
 </head>
 <body>
 
+<h1>Changes to the Cyrus IMAP Server since 2.4.2</h1>
+<ul>
+<li>Many fixes to replication edge case handling</li>
+<li>Added missing flags to reconstruct</li>
+<li>Replicate DELETED.user folders in sync_client -u
+  (matches XFER behaviour now)</li>
+<li>Make sync_client only connect after forking
+  in rolling mode.  Fixes two things - ssl crashes
+  due to shared resource conflicts, and also means
+  master will start up even if the replica is not
+  contactable</li>
+<li>Fixed crash on cyr_expire and ipurge annotation
+  based expiry</li>
+<li>Many XFER fixes for compatibility across versions:
+ <ul>
+ <li>allowing XFER in from delayed_expunge mailboxes</li>
+ <li>allowing XFER back all the way to Cyrus 2.2.12.
+  This was accomplished by adding logic that can
+  generate backwards-compatible older version indexes,
+  and version detection from the imapd banner.</li>
+ <li>correctly fixing seen information for
+  sub-mailboxes on XFER in</li>
+ </ul></li>
+<li>Multi-target replication.  Strictly this is a new
+ feature - there was a broken implementation in 2.4.0,
+ which is how this snuck in to the bugfix release.
+ It's not super-well documented yet, but it works by
+ creating a separate log file for each destination
+ "channel", and then running one sync_client process
+ per channel, so replication can fall behind on one
+ without affecting replication to the other.</li>
+<li>Fixed some crashes and errors which occured when
+ upgrading and opening corrupted mailboxes</li>
+</ul>
+
+
+<h1>Changes to the Cyrus IMAP Server since 2.4.1</h1>
+<ul>
+<li>Fix build on Solaris</li>
+</ul>
+
 <h1>Changes to the Cyrus IMAP Server since 2.4.0</h1>
 <ul>
 <li>Fix cyrdump to work with -C for alternate config</li>
