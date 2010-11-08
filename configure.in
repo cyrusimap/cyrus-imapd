@@ -620,7 +620,7 @@ AC_SUBST(cyrus_cv_sigveclib)
 
 # ok, we still look for this stuff because of checking groups, but
 # all authentication goes through SASL
-AC_ARG_ENABLE(afs,[  --enable-afs            Enable AFS with ptloader],[with_afs=yes],[with_afs=no])
+AC_ARG_ENABLE([afs],[  --enable-afs            Enable AFS with ptloader])
 
 AC_ARG_WITH(afs-libdir,[  --with-afs-libdir=PATH  use AFS libraries from PATH [[/usr/lib]]],
 	    afs_libdir="${withval}", afs_libdir="/usr/lib")
@@ -632,11 +632,14 @@ AC_ARG_WITH(ldap, [  --with-ldap=DIR         use LDAP (in DIR) (experimental) [/
 	    with_ldap="${withval}", with_ldap="no")
   
 dnl select mode of afspts
-AC_ARG_ENABLE(krb5afspts,[  --enable-krb5afspts     compile afskrb PTS module with krb5 support],
-	[SASL_SET_GSSAPI_LIBS
-         AC_DEFINE(AFSPTS_USE_KRB5,[],[Should the AFS PTS plugin use krb5?])])
+AC_ARG_ENABLE(krb5afspts,[  --enable-krb5afspts     compile afskrb PTS module with krb5 support])
 
-if test "x$with_afs" != "xno"; then
+if test "x$enable_afs" = "xyes"; then
+# krb5afspts is only valid if AFS is enabled, so check inside here.
+    AS_IF([test "x$enable_krb5afspts" = "xyes"], [SASL_SET_GSSAPI_LIBS
+      AC_DEFINE(AFSPTS_USE_KRB5,[],[Should the AFS PTS plugin use krb5?])    
+    ])
+
     CFLAGS="${CFLAGS} -I${with_afs_incdir}/include"
     AFS_LIBS="${with_afs_libdir}/afs/libkauth.a ${with_afs_libdir}/afs/libprot.a  ${with_afs_libdir}/afs/libauth.a ${with_afs_libdir}/afs/libsys.a ${with_afs_libdir}/librxkad.a ${with_afs_libdir}/librx.a ${with_afs_libdir}/afs/libsys.a ${with_afs_libdir}/libubik.a  ${with_afs_libdir}/liblwp.a ${with_afs_libdir}/afs/util.a ${with_afs_libdir}/afs/libcom_err.a"
     if test -f ${with_afs_libdir}/afs/libaudit.a; then
@@ -727,7 +730,7 @@ if test "x$with_ldap" != "xno"; then
     LDFLAGS=$save_LDFLAGS
 fi
  
-if test "x$with_afs" != "xno" -o "x$with_ldap" != "xno"; then
+if test "x$enable_afs" = "xyes" -o "x$with_ldap" != "xno"; then
         EXTRA_SUBDIRS="${EXTRA_SUBDIRS} ptclient"
         EXTRA_OUTPUT="${EXTRA_OUTPUT} ptclient/Makefile"
 
