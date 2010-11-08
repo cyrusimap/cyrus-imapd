@@ -1343,7 +1343,7 @@ static int mailbox_read_index_header(struct mailbox *mailbox)
      * sized header */
     if (!mailbox->index_base)
 	return IMAP_MAILBOX_BADFORMAT;
-    if (mailbox->index_size < OFFSET_HEADER_SIZE)
+    if (mailbox->index_size < INDEX_HEADER_SIZE)
 	return IMAP_MAILBOX_BADFORMAT;
 
     r = mailbox_buf_to_index_header(&mailbox->i, mailbox->index_base);
