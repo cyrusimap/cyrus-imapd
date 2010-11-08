@@ -1214,7 +1214,8 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
 
 static int update_mailbox_once(struct sync_folder *local,
 			       struct sync_folder *remote,
-			       struct sync_reserve_list *reserve_guids)
+			       struct sync_reserve_list *reserve_guids,
+			       int is_repeat)
 {
     struct sync_msgid_list *part_list;
     struct mailbox *mailbox = NULL;
@@ -1239,7 +1240,7 @@ static int update_mailbox_once(struct sync_folder *local,
     }
 
     /* check that replication stands a chance of succeeding */
-    if (remote) {
+    if (remote && !is_repeat) {
 	if (mailbox->i.deletedmodseq > remote->highestmodseq) {
 	    syslog(LOG_NOTICE, "inefficient replication ("
 		   MODSEQ_FMT " > " MODSEQ_FMT ") %s", 
@@ -1304,17 +1305,17 @@ static int update_mailbox(struct sync_folder *local,
 			  struct sync_folder *remote,
 			  struct sync_reserve_list *reserve_guids)
 {
-    int r = update_mailbox_once(local, remote, reserve_guids);
+    int r = update_mailbox_once(local, remote, reserve_guids, 0);
 
     if (r == IMAP_AGAIN) {
 	r = mailbox_full_update(local->name);
-	if (!r) r = update_mailbox_once(local, remote, reserve_guids);
+	if (!r) r = update_mailbox_once(local, remote, reserve_guids, 1);
     }
     else if (r == IMAP_MAILBOX_CRC) {
 	syslog(LOG_ERR, "CRC failure on sync for %s, trying full update",
 	       local->name);
 	r = mailbox_full_update(local->name);
-	if (!r) r = update_mailbox_once(local, remote, reserve_guids);
+	if (!r) r = update_mailbox_once(local, remote, reserve_guids, 1);
     }
 
     return r;
