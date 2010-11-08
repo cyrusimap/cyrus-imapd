@@ -1198,6 +1198,7 @@ done:
 static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
 {
     /* look for any mismatches */
+    unsigned options = mailbox->i.options & MAILBOX_OPTIONS_MASK;
     if (!remote) return 0;
     if (remote->last_uid != mailbox->i.last_uid) return 0;
     if (remote->highestmodseq != mailbox->i.highestmodseq) return 0;
@@ -1205,7 +1206,7 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
     if (remote->recentuid != mailbox->i.recentuid) return 0;
     if (remote->recenttime != mailbox->i.recenttime) return 0;
     if (remote->pop3_last_login != mailbox->i.pop3_last_login) return 0;
-    if (remote->options != mailbox->i.options) return 0;
+    if (remote->options != options) return 0;
     if (strcmp(remote->acl, mailbox->acl)) return 0;
 
     /* otherwise it's unchanged! */

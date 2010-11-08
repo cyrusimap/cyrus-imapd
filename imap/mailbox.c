@@ -1674,7 +1674,7 @@ bit32 mailbox_index_header_to_buf(struct index_header *i, unsigned char *buf)
     *((bit32 *)(buf+OFFSET_DELETED)) = htonl(i->deleted);
     *((bit32 *)(buf+OFFSET_ANSWERED)) = htonl(i->answered);
     *((bit32 *)(buf+OFFSET_FLAGGED)) = htonl(i->flagged);
-    *((bit32 *)(buf+OFFSET_MAILBOX_OPTIONS)) = htonl(i->options & OPT_VALID);
+    *((bit32 *)(buf+OFFSET_MAILBOX_OPTIONS)) = htonl(i->options & MAILBOX_OPT_VALID);
     *((bit32 *)(buf+OFFSET_LEAKED_CACHE)) = htonl(i->leaked_cache_records);
 #ifdef HAVE_LONG_LONG_INT
     align_htonll(buf+OFFSET_HIGHESTMODSEQ_64, i->highestmodseq);
