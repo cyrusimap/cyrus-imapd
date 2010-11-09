@@ -141,6 +141,7 @@ void eatline(struct protstream *pin, int c);
 /* Misc utils */
 extern int shutdown_file(char *buf, int size);
 extern char *find_free_partition(unsigned long *tavail);
+extern char *find_msgid(char *, char **);
 
 /* Misc globals */
 extern int in_shutdown;

@@ -142,7 +142,6 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
 			    struct fetchargs *fetchargs);
 static void index_printflags(struct index_state *state, uint32_t msgno, int usinguid);
 static void index_checkflags(struct index_state *state, int dirty);
-static char *find_msgid(char *str, char **rem);
 static char *get_localpart_addr(const char *header);
 static char *index_extract_subject(const char *subj, size_t len, int *is_refwd);
 static char *_index_extract_subject(char *s, int *is_refwd);
@@ -3758,103 +3757,6 @@ static char *_index_extract_subject(char *s, int *is_refwd)
     }
 
     return base;
-}
-
-/* Find a message-id looking thingy in a string.  Returns a pointer to the
- * alloc'd id and the remaining string is returned in the **loc parameter.
- *
- * This is a poor-man's way of finding the message-id.  We simply look for
- * any string having the format "< ... @ ... >" and assume that the mail
- * client created a properly formatted message-id.
- */
-#define MSGID_SPECIALS "<> @\\"
-
-static char *find_msgid(char *str, char **rem)
-{
-    char *msgid, *src, *dst, *cp;
-
-    if (!str) return NULL;
-
-    msgid = NULL;
-    src = str;
-
-    /* find the start of a msgid (don't go past the end of the header) */
-    while ((cp = src = strpbrk(src, "<\r")) != NULL) {
-
-	/* check for fold or end of header
-	 *
-	 * Per RFC 2822 section 2.2.3, a long header may be folded by
-	 * inserting CRLF before any WSP (SP and HTAB, per section 2.2.2).
-	 * Any other CRLF is the end of the header.
-	 */
-	if (*cp++ == '\r') {
-	    if (*cp++ == '\n' && !(*cp == ' ' || *cp == '\t')) {
-		/* end of header, we're done */
-		break;
-	    }
-
-	    /* skip fold (or junk) */
-	    src++;
-	    continue;
-	}
-
-	/* see if we have (and skip) a quoted localpart */
-	if (*cp == '\"') {
-	    /* find the endquote, making sure it isn't escaped */
-	    do {
-		++cp; cp = strchr(cp, '\"');
-	    } while (cp && *(cp-1) == '\\');
-
-	    /* no endquote, so bail */
-	    if (!cp) {
-		src++;
-		continue;
-	    }
-	}
-
-	/* find the end of the msgid */
-	if ((cp = strchr(cp, '>')) == NULL)
-	    return NULL;
-
-	/* alloc space for the msgid */
-	dst = msgid = (char*) xrealloc(msgid, cp - src + 2);
-
-	*dst++ = *src++;
-
-	/* quoted string */
-	if (*src == '\"') {
-	    src++;
-	    while (*src != '\"') {
-		if (*src == '\\') {
-		    src++;
-		}
-		*dst++ = *src++;
-	    }
-	    src++;
-	}
-	/* atom */
-	else {
-	    while (!strchr(MSGID_SPECIALS, *src))
-		*dst++ = *src++;
-	}
-
-	if (*src != '@' || *(dst-1) == '<') continue;
-	*dst++ = *src++;
-
-	/* domain atom */
-	while (!strchr(MSGID_SPECIALS, *src))
-	    *dst++ = *src++;
-
-	if (*src != '>' || *(dst-1) == '@') continue;
-	*dst++ = *src++;
-	*dst = '\0';
-
-	if (rem) *rem = src;
-	return msgid;
-    }
-
-    if (msgid) free(msgid);
-    return NULL;
 }
 
 /* Get message-id, and references/in-reply-to */
