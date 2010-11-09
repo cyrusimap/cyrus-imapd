@@ -86,7 +86,7 @@
 /* global state */
 const int config_need_data = 0;
 
-/* Static global variables and support routines for sync_server */
+/* Static global variables and support routines for sync_reset */
 
 extern char *optarg;
 extern int optind;
@@ -102,6 +102,9 @@ static void shut_down(int code) __attribute__((noreturn));
 static void shut_down(int code)
 {
     in_shutdown = 1;
+
+    annotatemore_close();
+    annotatemore_done();
 
     if (sync_userid)    free(sync_userid);
     if (sync_authstate) auth_freestate(sync_authstate);
@@ -126,7 +129,7 @@ static int usage(const char *name)
 
 void fatal(const char* s, int code)
 {
-    fprintf(stderr, "sync_server: %s\n", s);
+    fprintf(stderr, "sync_reset: %s\n", s);
     exit(code);
 }
 
@@ -240,6 +243,9 @@ main(int argc, char **argv)
 
     signals_set_shutdown(&shut_down);
     signals_add_handlers(0);
+
+    annotatemore_init(0, NULL, NULL);
+    annotatemore_open(NULL);
 
     if (!force) {
         fprintf(stderr, "Usage: sync_reset -f user user user ...\n");
