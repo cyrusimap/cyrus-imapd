@@ -1,0 +1,496 @@
+#if HAVE_CONFIG_H
+#include <config.h>
+#endif
+#include "cunit/cunit.h"
+#include "global.h"
+#include "xmalloc.h"
+
+static void test_simple(void)
+{
+#define C_MSGID1    "<001.02.00003@example.com>"
+    static const char C_MSGIDS[] = C_MSGID1;
+    char *buf;
+    char *s;
+    char *m;
+
+    buf = strdup(C_MSGIDS);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(buf);
+    s = buf;
+
+    /* first call returns a newly allocated string which is the
+     * only msgid in the input */
+    m = find_msgid(s, &s);
+    CU_ASSERT_PTR_NOT_NULL(m);
+    CU_ASSERT_PTR_NOT_EQUAL(m, s);
+    CU_ASSERT_PTR_NOT_EQUAL(m, buf);
+    CU_ASSERT_STRING_EQUAL(m, C_MSGID1);
+
+    /* 's' should point somewhere into the buffer */
+    CU_ASSERT(s >= buf && s <= buf+sizeof(C_MSGIDS));
+
+    /* the buffer should be unmolested */
+    CU_ASSERT(memcmp(buf, C_MSGIDS, sizeof(C_MSGIDS)) == 0);
+
+    free(m);
+
+    /* second call returns NULL, there are no more msgids */
+    m = find_msgid(s, &s);
+    CU_ASSERT_PTR_NULL(m);
+
+    free(buf);
+#undef C_MSGID1
+}
+
+
+/* multiple msgids separated by a single space */
+static void test_multiple(void)
+{
+#define C_MSGID1    "<004.05.00006@example.com>"
+#define C_MSGID2    "<007.08.09@gmail.com>"
+#define C_MSGID3    "<0000A-0B-0000C@apple.com>"
+#define C_MSGID4    "<010309849374836@fastmail.fm>"
+    static const char C_MSGIDS[] = C_MSGID1 " " C_MSGID2 " " C_MSGID3 " " C_MSGID4;
+    char *s;
+    char *m1;
+    char *m2;
+    char *m3;
+    char *m4;
+    char *m5;
+
+    /* We checked in the "simple" test that buffers are unmolested,
+     * so this time just pass find_msgid() a const variable */
+    s = (char *)C_MSGIDS;
+
+    /* each call should returns a separate newly allocated string
+     * which is the next msgid in the input */
+
+    m1 = find_msgid(s, &s);
+    CU_ASSERT_PTR_NOT_NULL(m1);
+    CU_ASSERT_STRING_EQUAL(m1, C_MSGID1);
+    CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
+
+    m2 = find_msgid(s, &s);
+    CU_ASSERT_PTR_NOT_NULL(m2);
+    CU_ASSERT_STRING_EQUAL(m2, C_MSGID2);
+    CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
+
+    m3 = find_msgid(s, &s);
+    CU_ASSERT_PTR_NOT_NULL(m3);
+    CU_ASSERT_STRING_EQUAL(m3, C_MSGID3);
+    CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
+
+    m4 = find_msgid(s, &s);
+    CU_ASSERT_PTR_NOT_NULL(m4);
+    CU_ASSERT_STRING_EQUAL(m4, C_MSGID4);
+    CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
+
+    /* last call returns NULL, there are no more msgids */
+    m5 = find_msgid(s, &s);
+    CU_ASSERT_PTR_NULL(m5);
+
+    /* check the returned msgids are all distinct */
+    CU_ASSERT_PTR_NOT_EQUAL(m1, m2);
+    CU_ASSERT_PTR_NOT_EQUAL(m1, m3);
+    CU_ASSERT_PTR_NOT_EQUAL(m1, m4);
+    CU_ASSERT_PTR_NOT_EQUAL(m2, m3);
+    CU_ASSERT_PTR_NOT_EQUAL(m2, m4);
+    CU_ASSERT_PTR_NOT_EQUAL(m3, m4);
+
+    free(m1);
+    free(m2);
+    free(m3);
+    free(m4);
+#undef C_MSGID1
+#undef C_MSGID2
+#undef C_MSGID3
+#undef C_MSGID4
+}
+
+
+/* multiple msgids separated by more interesting whitespace */
+static void test_whitespace(void)
+{
+#define C_MSGID1    "<104.05.00006@example.com>"
+#define C_MSGID2    "<107.08.09@gmail.com>"
+#define C_MSGID3    "<1000A-0B-0000C@apple.com>"
+#define C_MSGID4    "<110309849374836@fastmail.fm>"
+    static const char C_MSGIDS[] =
+	C_MSGID1 "     " C_MSGID2 "\t" C_MSGID3 "\t\r\n\t" C_MSGID4 "\r\n";
+    char *s;
+    char *m1;
+    char *m2;
+    char *m3;
+    char *m4;
+    char *m5;
+
+    /* We checked in the "simple" test that buffers are unmolested,
+     * so this time just pass find_msgid() a const variable */
+    s = (char *)C_MSGIDS;
+
+    /* each call should returns a separate newly allocated string
+     * which is the next msgid in the input */
+
+    m1 = find_msgid(s, &s);
+    CU_ASSERT_PTR_NOT_NULL(m1);
+    CU_ASSERT_STRING_EQUAL(m1, C_MSGID1);
+    CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
+
+    m2 = find_msgid(s, &s);
+    CU_ASSERT_PTR_NOT_NULL(m2);
+    CU_ASSERT_STRING_EQUAL(m2, C_MSGID2);
+    CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
+
+    m3 = find_msgid(s, &s);
+    CU_ASSERT_PTR_NOT_NULL(m3);
+    CU_ASSERT_STRING_EQUAL(m3, C_MSGID3);
+    CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
+
+    m4 = find_msgid(s, &s);
+    CU_ASSERT_PTR_NOT_NULL(m4);
+    CU_ASSERT_STRING_EQUAL(m4, C_MSGID4);
+    CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
+
+    /* last call returns NULL, there are no more msgids */
+    m5 = find_msgid(s, &s);
+    CU_ASSERT_PTR_NULL(m5);
+
+    /* check the returned msgids are all distinct */
+    CU_ASSERT_PTR_NOT_EQUAL(m1, m2);
+    CU_ASSERT_PTR_NOT_EQUAL(m1, m3);
+    CU_ASSERT_PTR_NOT_EQUAL(m1, m4);
+    CU_ASSERT_PTR_NOT_EQUAL(m2, m3);
+    CU_ASSERT_PTR_NOT_EQUAL(m2, m4);
+    CU_ASSERT_PTR_NOT_EQUAL(m3, m4);
+
+    free(m1);
+    free(m2);
+    free(m3);
+    free(m4);
+#undef C_MSGID1
+#undef C_MSGID2
+#undef C_MSGID3
+#undef C_MSGID4
+}
+
+
+
+/* duplicate msgids are returned, not elided */
+static void test_dups(void)
+{
+#define C_MSGID1    "<204.05.00006@example.com>"
+#define C_MSGID2    "<207.08.09@gmail.com>"
+    static const char C_MSGIDS[] =
+	C_MSGID1 " " C_MSGID2 " " C_MSGID2 " " C_MSGID1;
+    char *s;
+    char *m1;
+    char *m2;
+    char *m3;
+    char *m4;
+    char *m5;
+
+    /* We checked in the "simple" test that buffers are unmolested,
+     * so this time just pass find_msgid() a const variable */
+    s = (char *)C_MSGIDS;
+
+    /* each call should returns a separate newly allocated string
+     * which is the next msgid in the input */
+
+    m1 = find_msgid(s, &s);
+    CU_ASSERT_PTR_NOT_NULL(m1);
+    CU_ASSERT_STRING_EQUAL(m1, C_MSGID1);
+    CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
+
+    m2 = find_msgid(s, &s);
+    CU_ASSERT_PTR_NOT_NULL(m2);
+    CU_ASSERT_STRING_EQUAL(m2, C_MSGID2);
+    CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
+
+    m3 = find_msgid(s, &s);
+    CU_ASSERT_PTR_NOT_NULL(m3);
+    CU_ASSERT_STRING_EQUAL(m3, C_MSGID2);
+    CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
+
+    m4 = find_msgid(s, &s);
+    CU_ASSERT_PTR_NOT_NULL(m4);
+    CU_ASSERT_STRING_EQUAL(m4, C_MSGID1);
+    CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
+
+    /* last call returns NULL, there are no more msgids */
+    m5 = find_msgid(s, &s);
+    CU_ASSERT_PTR_NULL(m5);
+
+    /* check the returned msgids are all distinct */
+    CU_ASSERT_PTR_NOT_EQUAL(m1, m2);
+    CU_ASSERT_PTR_NOT_EQUAL(m1, m3);
+    CU_ASSERT_PTR_NOT_EQUAL(m1, m4);
+    CU_ASSERT_PTR_NOT_EQUAL(m2, m3);
+    CU_ASSERT_PTR_NOT_EQUAL(m2, m4);
+    CU_ASSERT_PTR_NOT_EQUAL(m3, m4);
+
+    free(m1);
+    free(m2);
+    free(m3);
+    free(m4);
+#undef C_MSGID1
+#undef C_MSGID2
+}
+
+
+/* a CRLF followed by a non WS marks the end of the header */
+static void test_eol(void)
+{
+#define C_MSGID1    "<304.05.00006@example.com>"
+#define C_MSGID2    "<307.08.09@gmail.com>"
+#define C_MSGID3    "<3000A-0B-0000C@apple.com>"
+#define C_MSGID4    "<310309849374836@fastmail.fm>"
+    static const char C_MSGIDS[] =
+	C_MSGID1 "\r\n"
+	" " C_MSGID2 "\r\n"
+	"In-Reply-To: " C_MSGID3 "\r\n"
+	"Message-Id: " C_MSGID4 "\r\n"
+	"\r\n";
+    char *s;
+    char *m1;
+    char *m2;
+    char *m3;
+    char *m4;
+    char *m5;
+
+    /* We checked in the "simple" test that buffers are unmolested,
+     * so this time just pass find_msgid() a const variable */
+    s = (char *)C_MSGIDS;
+
+    /* each call should returns a separate newly allocated string
+     * which is the next msgid in the input */
+
+    m1 = find_msgid(s, &s);
+    CU_ASSERT_PTR_NOT_NULL(m1);
+    CU_ASSERT_STRING_EQUAL(m1, C_MSGID1);
+    CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
+
+    m2 = find_msgid(s, &s);
+    CU_ASSERT_PTR_NOT_NULL(m2);
+    CU_ASSERT_STRING_EQUAL(m2, C_MSGID2);
+    CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
+
+    /* we stop seeing msgids after the end of the first header */
+    m3 = find_msgid(s, &s);
+    CU_ASSERT_PTR_NULL(m3);
+
+    /* check the returned msgids are all distinct */
+    CU_ASSERT_PTR_NOT_EQUAL(m1, m2);
+
+    free(m1);
+    free(m2);
+#undef C_MSGID1
+#undef C_MSGID2
+#undef C_MSGID3
+#undef C_MSGID4
+}
+
+
+/* ignore a malformed msgid with no @ sign */
+static void test_noatsign(void)
+{
+#define C_MSGID1    "<404.05.00006@example.com>"
+#define C_MSGID2    "<407.08.09-no-at-here-gmail.com>"
+#define C_MSGID3    "<4000A-0B-0000C@apple.com>"
+    static const char C_MSGIDS[] =
+	C_MSGID1 " " C_MSGID2 " " C_MSGID3;
+    char *s;
+    char *m1;
+    char *m2;
+    char *m3;
+    char *m4;
+    char *m5;
+
+    /* We checked in the "simple" test that buffers are unmolested,
+     * so this time just pass find_msgid() a const variable */
+    s = (char *)C_MSGIDS;
+
+    /* each call should returns a separate newly allocated string
+     * which is the next msgid in the input */
+
+    m1 = find_msgid(s, &s);
+    CU_ASSERT_PTR_NOT_NULL(m1);
+    CU_ASSERT_STRING_EQUAL(m1, C_MSGID1);
+    CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
+
+    m2 = find_msgid(s, &s);
+    CU_ASSERT_PTR_NOT_NULL(m2);
+    CU_ASSERT_STRING_EQUAL(m2, C_MSGID3);
+    CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
+
+    /* we stop seeing msgids after 2nd msgid */
+    m3 = find_msgid(s, &s);
+    CU_ASSERT_PTR_NULL(m3);
+
+    /* check the returned msgids are all distinct */
+    CU_ASSERT_PTR_NOT_EQUAL(m1, m2);
+
+    free(m1);
+    free(m2);
+#undef C_MSGID1
+#undef C_MSGID2
+#undef C_MSGID3
+}
+
+
+/* handle a msgid with a quoted localpart */
+static void test_quoted_localpart(void)
+{
+#define C_MSGID1    "<504.05.00006@example.com>"
+#define C_MSGID2    "<\"507>0 8@09\"@gmail.com>"
+#define C_MSGID2ret "<507>0 8@09@gmail.com>"
+#define C_MSGID3    "<5000A-0B-0000C@apple.com>"
+    static const char C_MSGIDS[] =
+	C_MSGID1 " " C_MSGID2 " " C_MSGID3;
+    char *s;
+    char *m1;
+    char *m2;
+    char *m3;
+    char *m4;
+
+    /* We checked in the "simple" test that buffers are unmolested,
+     * so this time just pass find_msgid() a const variable */
+    s = (char *)C_MSGIDS;
+
+    /* each call should returns a separate newly allocated string
+     * which is the next msgid in the input */
+
+    m1 = find_msgid(s, &s);
+    CU_ASSERT_PTR_NOT_NULL(m1);
+    CU_ASSERT_STRING_EQUAL(m1, C_MSGID1);
+    CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
+
+    m2 = find_msgid(s, &s);
+    CU_ASSERT_PTR_NOT_NULL(m2);
+    CU_ASSERT_STRING_EQUAL(m2, C_MSGID2ret);
+    CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
+
+    m3 = find_msgid(s, &s);
+    CU_ASSERT_PTR_NOT_NULL(m3);
+    CU_ASSERT_STRING_EQUAL(m3, C_MSGID3);
+    CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
+
+    /* we stop seeing msgids after 2nd msgid */
+    m4 = find_msgid(s, &s);
+    CU_ASSERT_PTR_NULL(m4);
+
+    /* check the returned msgids are all distinct */
+    CU_ASSERT_PTR_NOT_EQUAL(m1, m2);
+    CU_ASSERT_PTR_NOT_EQUAL(m1, m3);
+    CU_ASSERT_PTR_NOT_EQUAL(m2, m3);
+
+    free(m1);
+    free(m2);
+    free(m3);
+#undef C_MSGID1
+#undef C_MSGID2
+#undef C_MSGID2ret
+#undef C_MSGID3
+}
+
+
+/* handle a msgid with a quoted localpart containing an escaped quote */
+static void test_escaped_quoted_localpart(void)
+{
+#define C_MSGID1    "<504.05.00006@example.com>"
+#define C_MSGID2    "<\"507>0\\\"8@09\"@gmail.com>"
+#define C_MSGID2ret "<507>0\"8@09@gmail.com>"
+#define C_MSGID3    "<5000A-0B-0000C@apple.com>"
+    static const char C_MSGIDS[] =
+	C_MSGID1 " " C_MSGID2 " " C_MSGID3;
+    char *s;
+    char *m1;
+    char *m2;
+    char *m3;
+    char *m4;
+
+    /* We checked in the "simple" test that buffers are unmolested,
+     * so this time just pass find_msgid() a const variable */
+    s = (char *)C_MSGIDS;
+
+    /* each call should returns a separate newly allocated string
+     * which is the next msgid in the input */
+
+    m1 = find_msgid(s, &s);
+    CU_ASSERT_PTR_NOT_NULL(m1);
+    CU_ASSERT_STRING_EQUAL(m1, C_MSGID1);
+    CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
+
+    m2 = find_msgid(s, &s);
+    CU_ASSERT_PTR_NOT_NULL(m2);
+    CU_ASSERT_STRING_EQUAL(m2, C_MSGID2ret);
+    CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
+
+    m3 = find_msgid(s, &s);
+    CU_ASSERT_PTR_NOT_NULL(m3);
+    CU_ASSERT_STRING_EQUAL(m3, C_MSGID3);
+    CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
+
+    /* we stop seeing msgids after 2nd msgid */
+    m4 = find_msgid(s, &s);
+    CU_ASSERT_PTR_NULL(m4);
+
+    /* check the returned msgids are all distinct */
+    CU_ASSERT_PTR_NOT_EQUAL(m1, m2);
+    CU_ASSERT_PTR_NOT_EQUAL(m1, m3);
+    CU_ASSERT_PTR_NOT_EQUAL(m2, m3);
+
+    free(m1);
+    free(m2);
+    free(m3);
+#undef C_MSGID1
+#undef C_MSGID2
+#undef C_MSGID2ret
+#undef C_MSGID3
+}
+
+
+/* handle a msgid with malformed <> */
+static void test_malformed_angles(void)
+{
+#define C_MSGID1    "<604.05.00006@example.com>"
+#define C_MSGID2    "<607.08.09@gmail.com"
+#define C_MSGID3    "<6000A-0B-0000C@apple.com>"
+    static const char C_MSGIDS[] =
+	C_MSGID1 " " C_MSGID2 " " C_MSGID3;
+    char *s;
+    char *m1;
+    char *m2;
+    char *m3;
+    char *m4;
+    char *m5;
+
+    /* We checked in the "simple" test that buffers are unmolested,
+     * so this time just pass find_msgid() a const variable */
+    s = (char *)C_MSGIDS;
+
+    /* each call should returns a separate newly allocated string
+     * which is the next msgid in the input */
+
+    m1 = find_msgid(s, &s);
+    CU_ASSERT_PTR_NOT_NULL(m1);
+    CU_ASSERT_STRING_EQUAL(m1, C_MSGID1);
+    CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
+
+    m2 = find_msgid(s, &s);
+    CU_ASSERT_PTR_NOT_NULL(m2);
+    CU_ASSERT_STRING_EQUAL(m2, C_MSGID3);
+    CU_ASSERT(s >= C_MSGIDS && s <= C_MSGIDS+sizeof(C_MSGIDS));
+
+    /* we stop seeing msgids after 2nd msgid */
+    m3 = find_msgid(s, &s);
+    CU_ASSERT_PTR_NULL(m3);
+
+    /* check the returned msgids are all distinct */
+    CU_ASSERT_PTR_NOT_EQUAL(m1, m2);
+
+    free(m1);
+    free(m2);
+#undef C_MSGID1
+#undef C_MSGID2
+#undef C_MSGID3
+}
+
