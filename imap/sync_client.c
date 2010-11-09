@@ -1764,7 +1764,7 @@ int do_user_sub(const char *userid, struct sync_name_list *replica_subs)
     for (msubs = master_subs->head; msubs; msubs = msubs->next) {
 	r = (sync_namespace.mboxname_tointernal)(&sync_namespace, msubs->name,
 						 userid, buf);
-	if (r) continue;
+	if (r) continue; /* just ignore invalid subs */
 	rsubs = sync_name_lookup(replica_subs, buf);
 	if (rsubs) {
 	    rsubs->mark = 1;

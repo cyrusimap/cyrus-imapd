@@ -149,11 +149,11 @@ static int reset_single(const char *userid)
 					    addmbox_sub, (void *)list, 1);
     if (r) goto fail;
 
+    /* ignore failures here - the subs file gets deleted soon anyway */
     for (item = list->head; item; item = item->next) {
 	r = (sync_namespacep->mboxname_tointernal)(sync_namespacep, item->name,
 						   userid, buf);
         if (!r) r = mboxlist_changesub(buf, userid, sync_authstate, 0, 0);
-        if (r) goto fail;
     }
     sync_name_list_free(&list);
 
