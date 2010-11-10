@@ -1242,7 +1242,7 @@ int mailbox_user_flag(struct mailbox *mailbox, const char *flag,
     return 0;
 }
 
-int mailbox_buf_to_index_header(struct index_header *i, const char *buf)
+int mailbox_buf_to_index_header(const char *buf, struct index_header *i)
 {
     uint32_t crc;
 
@@ -1346,7 +1346,7 @@ static int mailbox_read_index_header(struct mailbox *mailbox)
     if (mailbox->index_size < INDEX_HEADER_SIZE)
 	return IMAP_MAILBOX_BADFORMAT;
 
-    r = mailbox_buf_to_index_header(&mailbox->i, mailbox->index_base);
+    r = mailbox_buf_to_index_header(mailbox->index_base, &mailbox->i);
     if (r) return r;
 
     r = mailbox_refresh_index_map(mailbox);
@@ -1892,7 +1892,7 @@ static void mailbox_quota_dirty(struct mailbox *mailbox)
     }
 }
 
-void mailbox_index_update_counts(struct mailbox *mailbox,
+static void header_update_counts(struct index_header *i,
 				 struct index_record *record,
 				 int is_add)
 {
@@ -1902,35 +1902,43 @@ void mailbox_index_update_counts(struct mailbox *mailbox,
     if (record->system_flags & FLAG_EXPUNGED)
 	return;
 
-    mailbox_quota_dirty(mailbox);
-
     /* update mailbox header fields */
     if (record->system_flags & FLAG_ANSWERED)
-	mailbox->i.answered += num;
+	i->answered += num;
 
     if (record->system_flags & FLAG_FLAGGED)
-	mailbox->i.flagged += num;
+	i->flagged += num;
 
     if (record->system_flags & FLAG_DELETED)
-	mailbox->i.deleted += num;
+	i->deleted += num;
 
     if (is_add) {
-	mailbox->i.exists++;
-	mailbox->i.quota_mailbox_used += record->size;
+	i->exists++;
+	i->quota_mailbox_used += record->size;
     }
     else {
-	if (mailbox->i.exists) 
-	    mailbox->i.exists--;
+	if (i->exists) i->exists--;
 
 	/* corruption prevention - check we don't go negative */
-	if (mailbox->i.quota_mailbox_used > record->size)
-	    mailbox->i.quota_mailbox_used -= record->size;
+	if (i->quota_mailbox_used > record->size)
+	    i->quota_mailbox_used -= record->size;
 	else
-	    mailbox->i.quota_mailbox_used = 0;
+	    i->quota_mailbox_used = 0;
     }
-    mailbox->i.sync_crc ^= make_sync_crc(mailbox, record);
+}
 
+static void mailbox_index_update_counts(struct mailbox *mailbox,
+					struct index_record *record,
+					int is_add)
+{
+    /* avoid dirtying for expunged */
+    if (record->system_flags & FLAG_EXPUNGED)
+	return;
+    mailbox_quota_dirty(mailbox);
     mailbox_index_dirty(mailbox);
+    header_update_counts(&mailbox->i, record, is_add);
+    /* xor doesn't care if it's an add! */
+    mailbox->i.sync_crc ^= make_sync_crc(mailbox, record);
 }
 
 int mailbox_index_recalc(struct mailbox *mailbox)
@@ -1955,7 +1963,7 @@ int mailbox_index_recalc(struct mailbox *mailbox)
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	r = mailbox_read_index_record(mailbox, recno, &record);
 	if (r) return r;
-	mailbox_index_update_counts(mailbox, &record, 1);
+	header_update_counts(&mailbox->i, &record, 1);
     }
 
     return 0;
@@ -2024,6 +2032,7 @@ int mailbox_rewrite_index_record(struct mailbox *mailbox,
 
     /* remove the counts for the old copy, and add them for
      * the new copy */
+
     mailbox_index_update_counts(mailbox, &oldrecord, 0);
     mailbox_index_update_counts(mailbox, record, 1);
 
@@ -2208,36 +2217,166 @@ static int mailbox_index_unlink(struct mailbox *mailbox)
     return 0;
 }
 
+int mailbox_repack_setup(struct mailbox *mailbox,
+			 struct mailbox_repack **repackptr)
+{
+    struct mailbox_repack *repack = xzmalloc(sizeof(struct mailbox_repack));
+    const char *fname;
+    indexbuffer_t ibuf;
+    unsigned char *buf = ibuf.buf;
+    int n;
+
+    /* init */
+    repack->mailbox = mailbox;
+    repack->i = mailbox->i; /* struct copy */
+    repack->newindex_fd = -1;
+    repack->newcache_fd = -1;
+
+    /* new files */
+    fname = mailbox_meta_newfname(mailbox, META_INDEX);
+    repack->newindex_fd = open(fname, O_RDWR|O_TRUNC|O_CREAT, 0666);
+    if (repack->newindex_fd == -1) goto fail;
+
+    fname = mailbox_meta_newfname(mailbox, META_CACHE);
+    repack->newcache_fd = open(fname, O_RDWR|O_TRUNC|O_CREAT, 0666);
+    if (repack->newcache_fd == -1) goto fail;
+
+    /* update the generation number */
+    repack->i.generation_no++;
+
+    /* zero out some values */
+    repack->i.num_records = 0;
+    repack->i.quota_mailbox_used = 0;
+    repack->i.num_records = 0;
+    repack->i.sync_crc = 0; /* no records is blank */
+    repack->i.answered = 0;
+    repack->i.deleted = 0;
+    repack->i.flagged = 0;
+    repack->i.exists = 0;   
+    repack->i.first_expunged = 0;
+    repack->i.leaked_cache_records = 0;
+
+    /* prepare initial header buffer */
+    mailbox_index_header_to_buf(&repack->i, buf);
+
+    /* write initial headers */
+    n = retry_write(repack->newcache_fd, buf, 4);
+    if (n == -1) goto fail;
+
+    n = retry_write(repack->newindex_fd, buf, INDEX_HEADER_SIZE);
+    if (n == -1) goto fail;    
+    
+    *repackptr = repack;
+    return 0;
+
+ fail:
+    mailbox_repack_abort(&repack);
+    return IMAP_IOERROR;
+}
+
+int mailbox_repack_add(struct mailbox_repack *repack,
+		       struct index_record *record)
+{
+    int r;
+    int n;
+    indexbuffer_t ibuf;
+    unsigned char *buf = ibuf.buf;
+
+    /* write out the new cache record - need to clear the cache_offset
+     * so it gets reset in the new record */
+    record->cache_offset = 0;
+    r = cache_append_record(repack->newcache_fd, record);
+    if (r) return r;
+
+    /* update counters */
+    header_update_counts(&repack->i, record, 1);
+
+    /* write the index record out */
+    mailbox_index_record_to_buf(record, buf);
+    n = retry_write(repack->newindex_fd, buf, INDEX_RECORD_SIZE);
+    if (n == -1)
+	return IMAP_IOERROR;
+
+    repack->i.num_records++;
+
+    return 0;
+}
+
+/* clean up memory structures and abort repack */
+void mailbox_repack_abort(struct mailbox_repack **repackptr)
+{
+    struct mailbox_repack *repack = *repackptr;
+    if (!repack) return; /* safe against double-free */
+    if (repack->newcache_fd != -1) close(repack->newcache_fd);
+    unlink(mailbox_meta_newfname(repack->mailbox, META_CACHE));
+    if (repack->newindex_fd != -1) close(repack->newindex_fd);
+    unlink(mailbox_meta_newfname(repack->mailbox, META_INDEX));
+    free(repack);
+    *repackptr = NULL;
+}
+
+int mailbox_repack_commit(struct mailbox_repack **repackptr)
+{
+    indexbuffer_t ibuf;
+    unsigned char *buf = ibuf.buf;
+    struct mailbox_repack *repack = *repackptr;
+    int n;
+    int r;
+
+    assert(repack);
+
+    repack->i.last_repack_time = time(0);
+
+    /* rewrite the header with updated details */
+    mailbox_index_header_to_buf(&repack->i, buf);
+    n = lseek(repack->newindex_fd, 0, SEEK_SET);
+    if (n == -1) {
+	r = IMAP_IOERROR;
+	goto fail;
+    }
+    n = retry_write(repack->newindex_fd, buf, INDEX_HEADER_SIZE);
+    if (n == -1) {
+	r = IMAP_IOERROR;
+	goto fail;
+    }
+
+    /* ensure everything is committed to disk */
+    if (fsync(repack->newindex_fd) || fsync(repack->newcache_fd))
+	goto fail;
+
+    close(repack->newcache_fd);
+    repack->newcache_fd = -1;
+    close(repack->newindex_fd);
+    repack->newindex_fd = -1;
+
+    /* rename index first - loader will handle un-renamed cache if
+     * the generation is lower */
+    r = mailbox_meta_rename(repack->mailbox, META_INDEX);
+    if (r) goto fail;
+
+    mailbox_meta_rename(repack->mailbox, META_CACHE);
+
+    free(repack);
+    *repackptr = NULL;
+    return 0;
+
+ fail:
+    mailbox_repack_abort(repackptr);
+    return r;
+}
+
 /* need a mailbox exclusive lock, we're rewriting files */
 static int mailbox_index_repack(struct mailbox *mailbox)
 {
-    char *fname;
-    uint32_t newrecno = 1;
-    indexbuffer_t ibuf;
-    unsigned char *buf = ibuf.buf;
+    struct mailbox_repack *repack = NULL;
     uint32_t recno;
-    int newindex_fd = -1, newcache_fd = -1;
     struct index_record record;
-    size_t offset;
-    int newgeneration;
     int r = IMAP_IOERROR;
-    int n;
 
     syslog(LOG_INFO, "Repacking mailbox %s", mailbox->name);
 
-    fname = mailbox_meta_newfname(mailbox, META_INDEX);
-    newindex_fd = open(fname, O_RDWR|O_TRUNC|O_CREAT, 0666);
-    if (newindex_fd == -1) goto fail;
-
-    fname = mailbox_meta_newfname(mailbox, META_CACHE);
-    newcache_fd = open(fname, O_RDWR|O_TRUNC|O_CREAT, 0666);
-    if (newcache_fd == -1) goto fail;
-
-    /* update the generation number */
-    newgeneration = mailbox->i.generation_no + 1;
-    *((bit32 *)(buf)) = htonl(newgeneration);
-    n = retry_write(newcache_fd, buf, 4);
-    if (n != 4) goto fail;
+    r = mailbox_repack_setup(mailbox, &repack);
+    if (r) goto fail;
 
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	r = mailbox_read_index_record(mailbox, recno, &record);
@@ -2248,8 +2387,8 @@ static int mailbox_index_repack(struct mailbox *mailbox)
 	    /* just in case it was left lying around */
 	    /* XXX - log error if unlink fails */
 	    mailbox_message_unlink(mailbox, record.uid);
-	    if (record.modseq > mailbox->i.deletedmodseq)
-		mailbox->i.deletedmodseq = record.modseq;
+	    if (record.modseq > repack->i.deletedmodseq)
+		repack->i.deletedmodseq = record.modseq;
 	    continue;
 	}
 
@@ -2257,63 +2396,18 @@ static int mailbox_index_repack(struct mailbox *mailbox)
 	r = mailbox_cacherecord(mailbox, &record);
 	if (r) goto fail;
 
-	/* write out the new cache record - need to clear the cache_offset
-	 * so it gets reset in the new record */
-	record.cache_offset = 0;
-	r = cache_append_record(newcache_fd, &record);
+	r = mailbox_repack_add(repack, &record);
 	if (r) goto fail;
-
-	offset = mailbox->i.start_offset +
-		 (newrecno-1) * mailbox->i.record_size;
-
-	/* write the index record out */
-	mailbox_index_record_to_buf(&record, buf);
-	n = lseek(newindex_fd, offset, SEEK_SET);
-	if (n == -1) {
-	    syslog(LOG_ERR, "IOERROR: seeking index record %u for %s: %m",
-		   recno, mailbox->name);
-	    goto fail;
-	}
-	n = retry_write(newindex_fd, buf, INDEX_RECORD_SIZE);
-	if (n != INDEX_RECORD_SIZE) {
-	    syslog(LOG_ERR, "IOERROR: writing index record %u for %s: %m",
-		   recno, mailbox->name);
-	    goto fail;
-	}
-
-	newrecno++;
     }
 
-    /* update final header fields */
-    mailbox->i.generation_no = newgeneration;
-    mailbox->i.first_expunged = 0;
-    mailbox->i.last_repack_time = time(0);
-    mailbox->i.num_records = newrecno - 1;
-    mailbox->i.leaked_cache_records = 0;
     /* we unlinked any "needs unlink" in the process */
-    mailbox->i.options &= ~(OPT_MAILBOX_NEEDS_REPACK|OPT_MAILBOX_NEEDS_UNLINK);
+    repack->i.options &= ~(OPT_MAILBOX_NEEDS_REPACK|OPT_MAILBOX_NEEDS_UNLINK);
 
-    mailbox_index_header_to_buf(&mailbox->i, buf);
-    n = lseek(newindex_fd, 0, SEEK_SET);
-    if (n == -1) goto fail;
-    n = retry_write(newindex_fd, buf, INDEX_HEADER_SIZE);
-    if (n != INDEX_HEADER_SIZE) goto fail;
-
-    if (fsync(newindex_fd) || fsync(newcache_fd))
-	goto fail;
-
-    close(newcache_fd);
-    close(newindex_fd);
-
-    r = mailbox_meta_rename(mailbox, META_INDEX);
-    if (!r) r = mailbox_meta_rename(mailbox, META_CACHE);
-
-    return r;
+    return mailbox_repack_commit(&repack);
 
 fail:
-    if (newcache_fd != -1) close(newcache_fd);
-    if (newindex_fd != -1) close(newindex_fd);
-    return IMAP_IOERROR;
+    mailbox_repack_abort(&repack);
+    return r;
 }
 
 /*

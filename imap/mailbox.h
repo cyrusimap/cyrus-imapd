@@ -501,17 +501,25 @@ extern int mailbox_reconstruct(const char *name, int flags);
 extern int mailbox_index_recalc(struct mailbox *mailbox);
 
 /* for upgrade index */
+extern int mailbox_open_index(struct mailbox *mailbox);
 extern int mailbox_buf_to_index_record(const char *buf,
 				       struct index_record *record);
-extern int mailbox_open_index(struct mailbox *mailbox);
-extern int mailbox_buf_to_index_header(struct index_header *i, const char *buf);
-extern bit32 mailbox_index_header_to_buf(struct index_header *i,
-					 unsigned char *buf);
-extern void mailbox_index_update_counts(struct mailbox *mailbox,
-					struct index_record *record,
-					int is_add);
-extern bit32 mailbox_index_record_to_buf(struct index_record *record,
-					 unsigned char *buf);
+extern int mailbox_buf_to_index_header(const char *buf,
+				       struct index_header *i);
 
+/* for repack */
+struct mailbox_repack {
+    struct mailbox *mailbox;
+    struct index_header i;
+    int newindex_fd;
+    int newcache_fd;
+};
+
+extern int mailbox_repack_setup(struct mailbox *mailbox,
+			        struct mailbox_repack **repackptr);
+extern int mailbox_repack_add(struct mailbox_repack *repack,
+			      struct index_record *record);
+extern void mailbox_repack_abort(struct mailbox_repack **repackptr);
+extern int mailbox_repack_commit(struct mailbox_repack **repackptr);
 
 #endif /* INCLUDED_MAILBOX_H */
