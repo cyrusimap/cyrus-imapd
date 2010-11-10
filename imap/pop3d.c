@@ -86,6 +86,7 @@
 #include "idle.h"
 #include "telemetry.h"
 #include "backend.h"
+#include "proc.h"
 #include "proxy.h"
 #include "seen.h"
 #include "userdeny.h"
@@ -197,12 +198,6 @@ static int msg_exists_or_err(uint32_t msgno);
 static int update_seen(void);
 void usage(void);
 void shut_down(int code) __attribute__ ((noreturn));
-
-
-extern void setproctitle_init(int argc, char **argv, char **envp);
-extern int proc_register(const char *progname, const char *clienthost, 
-			 const char *userid, const char *mailbox);
-extern void proc_cleanup(void);
 
 extern int saslserver(sasl_conn_t *conn, const char *mech,
 		      const char *init_resp, const char *resp_prefix,
@@ -1751,8 +1746,6 @@ int openinbox(void)
 	     !sdata.messages) {
 	/* local mailbox (empty) -- don't bother opening the mailbox */
 	syslog(LOG_INFO, "optimized mode for empty maildrop: %s", popd_userid);
-
-	proc_register("pop3d", popd_clienthost, popd_userid, inboxname);
     }
     else {
 	/* local mailbox */
@@ -1827,8 +1820,6 @@ int openinbox(void)
 	}
 	popd_exists = msgno;
 
-	proc_register("pop3d", popd_clienthost, popd_userid,
-		      popd_mailbox->name);
 	/* finished our initial read */
 	mailbox_unlock_index(popd_mailbox, NULL);
 
@@ -1845,6 +1836,9 @@ int openinbox(void)
 	    statuscache_update(inboxname, &sdata);
 	}
     }
+
+    /* register process */
+    proc_register("pop3d", popd_clienthost, popd_userid, inboxname);
 
     /* Create telemetry log */
     popd_logfd = telemetry_log(popd_userid, popd_in, popd_out, 0);

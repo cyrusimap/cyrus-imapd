@@ -63,19 +63,20 @@
 #include <errno.h>
 #include <pwd.h>
 
+#include "acl.h"
 #include "assert.h"
 #include "mboxlist.h"
 #include "global.h"
 #include "exitcodes.h"
 #include "imap_err.h"
 #include "mailbox.h"
+#include "map.h"
+#include "mboxname.h"
+#include "proc.h"
+#include "seen.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
-#include "acl.h"
-#include "seen.h"
-#include "mboxname.h"
-#include "map.h"
 
 #define REQ_OK		0
 #define REQ_DENY	1
@@ -89,9 +90,6 @@ static struct namespace fud_namespace;
 /* config.c info.  note that technically we may need partition data, but
  * only if we're not on a frontend, so we won't flat-out require it here */
 const int config_need_data = 0;
-
-/* forward decls */
-extern void setproctitle_init(int argc, char **argv, char **envp);
 
 int handle_request(const char *who, const char *name, 
 		   struct sockaddr_storage sfrom, socklen_t sfromsiz);
