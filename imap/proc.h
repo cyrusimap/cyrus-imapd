@@ -42,75 +42,15 @@
  * $Id: proc.c,v 1.27 2010/01/06 17:01:38 murch Exp $
  */
 
-#include <config.h>
+#ifndef _PROC_H
+#define _PROC_H
 
-#include <stdlib.h>
-#include <stdio.h>
-#ifdef HAVE_UNISTD_H
-#include <unistd.h>
-#endif
-#include <syslog.h>
-#include <string.h>
+extern void setproctitle_init(int argc, char **argv, char **envp);
+extern void setproctitle(const char *fmt, ...);
 
-#include "exitcodes.h"
-#include "global.h"
-#include "proc.h"
-#include "xmalloc.h"
+extern int proc_register(const char *progname, const char *clienthost,
+		         const char *userid, const char *mailbox);
 
-#define FNAME_PROCDIR "/proc/"
+extern void proc_cleanup(void);
 
-static char *procfname = 0;
-static FILE *procfile = 0;
-
-int proc_register(const char *progname, const char *clienthost,
-		  const char *userid, const char *mailbox)
-{
-    unsigned pid;
-    int pos;
-
-    if (!procfname) {
-	pid = getpid();
-    
-	procfname = xmalloc(strlen(config_dir)+sizeof(FNAME_PROCDIR)+10);
-	sprintf(procfname, "%s%s%u", config_dir, FNAME_PROCDIR, pid);
-
-	procfile = fopen(procfname, "w+");
-	if (!procfile) {
-	    syslog(LOG_ERR, "IOERROR: creating %s: %m", procfname);
-	    fatal("can't write proc file", EC_IOERR);
-	}
-    }
-
-    rewind(procfile);
-    fprintf(procfile, "%s", clienthost);
-    if (userid) {
-	fprintf(procfile, "\t%s", userid);
-	if (mailbox) {
-	    fprintf(procfile, "\t%s", mailbox);
-	}
-    }
-    putc('\n', procfile);
-    fflush(procfile);
-    pos = ftell(procfile);
-    if (pos < 0 || ftruncate(fileno(procfile), pos)) {
-	syslog(LOG_ERR, "IOERROR: creating %s: %m", procfname);
-	fatal("can't write proc file", EC_IOERR);
-    }
-	
-
-    setproctitle("%s: %s %s %s", progname, clienthost, 
-		 userid ? userid : "",
-		 mailbox ? mailbox : "");
-
-    return 0;
-}
-
-void proc_cleanup(void)
-{
-    if (procfname) {
-	fclose(procfile);
-	unlink(procfname);
-	free(procfname);
-	procfname = NULL;
-    }
-}
+#endif /* _PROC_H */

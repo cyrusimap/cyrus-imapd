@@ -89,11 +89,12 @@
 
 #include "acl.h"
 #include "append.h"
-#include "mboxlist.h"
-#include "global.h"
 #include "exitcodes.h"
+#include "global.h"
 #include "imap_err.h"
+#include "mboxlist.h"
 #include "mupdate-client.h"
+#include "proc.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
@@ -113,7 +114,6 @@ static struct namespace map_namespace;
 const int config_need_data = 0;
 
 /* forward decls */
-extern void setproctitle_init(int argc, char **argv, char **envp);
 int begin_handling(void);
 
 void smmapd_reset(void)

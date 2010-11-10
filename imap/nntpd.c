@@ -97,6 +97,7 @@
 #include "mkgmtime.h"
 #include "mupdate-client.h"
 #include "nntp_err.h"
+#include "proc.h"
 #include "prot.h"
 #include "proxy.h"
 #include "retry.h"
@@ -233,12 +234,6 @@ static void cmd_post(char *msgid, int mode);
 static void cmd_starttls(int nntps);
 void usage(void);
 void shut_down(int code) __attribute__ ((noreturn));
-
-
-extern void setproctitle_init(int argc, char **argv, char **envp);
-extern int proc_register(const char *progname, const char *clienthost, 
-			 const char *userid, const char *mailbox);
-extern void proc_cleanup(void);
 
 extern int saslserver(sasl_conn_t *conn, const char *mech,
 		      const char *init_resp, const char *resp_prefix,
@@ -2197,7 +2192,7 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
     }
     nntp_userid = xstrdup((const char *) val);
 
-    proc_register("nntpd", nntp_clienthost, nntp_userid, (char *)0);
+    proc_register("nntpd", nntp_clienthost, nntp_userid, NULL);
 
     syslog(LOG_NOTICE, "login: %s %s %s%s %s", nntp_clienthost, nntp_userid,
 	   mech, nntp_starttls_done ? "+TLS" : "", "User logged in");

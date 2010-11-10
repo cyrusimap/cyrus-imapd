@@ -86,6 +86,7 @@
 #include "mailbox.h"
 #include "map.h"
 #include "mboxlist.h"
+#include "proc.h"
 #include "prot.h"
 #include "quota.h"
 #include "retry.h"
@@ -150,11 +151,6 @@ static void cmd_apply(struct dlist *kl,
 
 void usage(void);
 void shut_down(int code) __attribute__ ((noreturn));
-
-extern void setproctitle_init(int argc, char **argv, char **envp);
-extern int proc_register(const char *progname, const char *clienthost, 
-			 const char *userid, const char *mailbox);
-extern void proc_cleanup(void);
 
 extern int saslserver(sasl_conn_t *conn, const char *mech,
 		      const char *init_resp, const char *resp_prefix,
@@ -820,7 +816,7 @@ static void cmd_authenticate(char *mech, char *resp)
     }
 
     sync_userid = xstrdup((const char *) val);
-    proc_register("sync_server", sync_clienthost, sync_userid, (char *)0);
+    proc_register("sync_server", sync_clienthost, sync_userid, NULL);
 
     syslog(LOG_NOTICE, "login: %s %s %s%s %s", sync_clienthost, sync_userid,
 	   mech, sync_starttls_done ? "+TLS" : "", "User logged in");

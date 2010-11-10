@@ -95,6 +95,7 @@
 #include "mboxname.h"
 #include "mbdump.h"
 #include "mupdate-client.h"
+#include "proc.h"
 #include "quota.h"
 #include "seen.h"
 #include "statuscache.h"
@@ -377,11 +378,6 @@ static int subscribed_cb(char *name, int matchlen, int maycreate,
 			 struct list_rock *rock);
 static void list_data(struct listargs *listargs);
 static void list_data_remote(char *tag, struct listargs *listargs);
-
-extern void setproctitle_init(int argc, char **argv, char **envp);
-extern int proc_register(const char *progname, const char *clienthost, 
-			 const char *userid, const char *mailbox);
-extern void proc_cleanup(void);
 
 extern int saslserver(sasl_conn_t *conn, const char *mech,
 		      const char *init_resp, const char *resp_prefix,
@@ -2077,6 +2073,36 @@ void cmdloop()
     }
 }
 
+static void authentication_success(void)
+{
+    int r;
+
+    /* register the user */
+    proc_register("imapd", imapd_clienthost, imapd_userid, NULL);
+    
+    /* authstate already created by mysasl_proxy_policy() */
+    imapd_userisadmin = global_authisa(imapd_authstate, IMAPOPT_ADMINS);
+
+    /* Create telemetry log */
+    imapd_logfd = telemetry_log(imapd_userid, imapd_in, imapd_out, 0);
+
+    /* Set namespace */
+    r = mboxname_init_namespace(&imapd_namespace,
+				imapd_userisadmin || imapd_userisproxyadmin);
+    if (r) {
+	syslog(LOG_ERR, "%s", error_message(r));
+	fatal(error_message(r), EC_CONFIG);
+    }
+
+    /* Make a copy of the external userid for use in proxying */
+    proxy_userid = xstrdup(imapd_userid);
+
+    /* Translate any separators in userid */
+    mboxname_hiersep_tointernal(&imapd_namespace, imapd_userid,
+				config_virtdomains ?
+				strcspn(imapd_userid, "@") : 0);
+}
+
 /*
  * Perform a LOGIN command
  */
@@ -2229,41 +2255,20 @@ void cmd_login(char *tag, char *user)
 	    plaintextloginalert = config_getstring(IMAPOPT_PLAINTEXTLOGINALERT);
 	}
     }
-    
-    /* authstate already created by mysasl_proxy_policy() */
-    imapd_userisadmin = global_authisa(imapd_authstate, IMAPOPT_ADMINS);
+
+    buf_free(&passwdbuf);
 
     prot_printf(imapd_out, "%s OK [CAPABILITY ", tag);
     capa_response(CAPA_PREAUTH|CAPA_POSTAUTH);
     prot_printf(imapd_out, "] %s\r\n", reply);
 
-    /* Create telemetry log */
-    imapd_logfd = telemetry_log(imapd_userid, imapd_in, imapd_out, 0);
-
-    /* Set namespace */
-    if ((r = mboxname_init_namespace(&imapd_namespace,
-				     imapd_userisadmin || imapd_userisproxyadmin)) != 0) {
-	syslog(LOG_ERR, "%s", error_message(r));
-	fatal(error_message(r), EC_CONFIG);
-    }
-
-    /* Make a copy of the external userid for use in proxying */
-    proxy_userid = xstrdup(imapd_userid);
-
-    /* Translate any separators in userid */
-    mboxname_hiersep_tointernal(&imapd_namespace, imapd_userid,
-				config_virtdomains ?
-				strcspn(imapd_userid, "@") : 0);
-
-    buf_free(&passwdbuf);
-    return;
+    authentication_success();
 }
 
 /*
  * Perform an AUTHENTICATE command
  */
-void
-cmd_authenticate(char *tag, char *authtype, char *resp)
+void cmd_authenticate(char *tag, char *authtype, char *resp)
 {
     int sasl_result;
 
@@ -2355,8 +2360,6 @@ cmd_authenticate(char *tag, char *authtype, char *resp)
 	imapd_userid = xstrdup(canon_user);
     }
 
-    proc_register("imapd", imapd_clienthost, imapd_userid, (char *)0);
-
     syslog(LOG_NOTICE, "login: %s %s%s %s%s %s", imapd_clienthost,
 	   imapd_userid, imapd_magicplus ? imapd_magicplus : "",
 	   authtype, imapd_starttls_done ? "+TLS" : "", "User logged in");
@@ -2395,25 +2398,7 @@ cmd_authenticate(char *tag, char *authtype, char *resp)
     prot_setsasl(imapd_in,  imapd_saslconn);
     prot_setsasl(imapd_out, imapd_saslconn);
 
-    /* Create telemetry log */
-    imapd_logfd = telemetry_log(imapd_userid, imapd_in, imapd_out, 0);
-
-    /* Set namespace */
-    if ((r = mboxname_init_namespace(&imapd_namespace,
-				     imapd_userisadmin || imapd_userisproxyadmin)) != 0) {
-	syslog(LOG_ERR, "%s", error_message(r));
-	fatal(error_message(r), EC_CONFIG);
-    }
-
-    /* Make a copy of the external userid for use in proxying */
-    proxy_userid = xstrdup(imapd_userid);
-
-    /* Translate any separators in userid */
-    mboxname_hiersep_tointernal(&imapd_namespace, imapd_userid,
-				config_virtdomains ?
-				strcspn(imapd_userid, "@") : 0);
-
-    return;
+    authentication_success();
 }
 
 /*
@@ -3526,6 +3511,13 @@ void cmd_select(char *tag, char *cmd, char *name)
 	wasopen = 1;
     }
 
+    if (wasopen) {
+	/* un-register currently selected mailbox, it may get
+	 * overwritten later, but easier here than handling
+	 * all possible error paths */
+	proc_register("imapd", imapd_clienthost, imapd_userid, NULL);
+    }
+
     r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
 					       imapd_userid, mailboxname);
 
@@ -3711,6 +3703,9 @@ void cmd_select(char *tag, char *cmd, char *name)
  */
 void cmd_close(char *tag, char *cmd)
 {
+    /* unregister the selected mailbox */
+    proc_register("imapd", imapd_clienthost, imapd_userid, NULL);
+
     if (backend_current) {
 	/* remote mailbox */
 	prot_printf(backend_current->out, "%s %s\r\n", tag, cmd);
