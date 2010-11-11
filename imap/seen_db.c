@@ -580,7 +580,7 @@ static int seen_merge_cb(void *rockp,
 			 const char *key, int keylen,
 			 const char *newdata, int newlen) 
 {
-    int r;
+    int r = 0;
     struct seen *seendb = (struct seen *)rockp;
     struct seendata oldsd, newsd;
     char *uniqueid = xstrndup(key, keylen);
