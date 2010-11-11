@@ -3227,6 +3227,75 @@ static int find_files(struct mailbox *mailbox, struct found_files *files,
     return 0;
 }
 
+static void cleanup_stale_expunged(struct mailbox *mailbox)
+{
+    const char *fname;
+    int expunge_fd = -1;
+    const char *expunge_base = NULL;
+    unsigned long expunge_len = 0;   /* mapped size */
+    unsigned long expunge_num;
+    unsigned long emapnum;
+    uint32_t erecno;
+    uint32_t uid;
+    bit32 eoffset, expungerecord_size;
+    const char *bufp;
+    struct stat sbuf;
+    int count = 0;
+    int r;
+
+    /* it's always read-writes */
+    fname = mailbox_meta_fname(mailbox, META_EXPUNGE);
+    expunge_fd = open(fname, O_RDWR, 0);
+    if (expunge_fd == -1)
+	goto done; /* yay, no crappy expunge file */
+
+    /* boo - gotta read and find out the UIDs */
+    r = fstat(expunge_fd, &sbuf);
+    if (r == -1)
+	goto done;
+
+    if (sbuf.st_size < INDEX_HEADER_SIZE)
+	goto done;
+
+    map_refresh(expunge_fd, 1, &expunge_base,
+		&expunge_len, sbuf.st_size, "expunge",
+		mailbox->name);
+
+    /* use the expunge file's header information just in case
+     * versions are skewed for some reason */
+    eoffset = ntohl(*((bit32 *)(expunge_base+OFFSET_START_OFFSET)));
+    expungerecord_size = ntohl(*((bit32 *)(expunge_base+OFFSET_RECORD_SIZE)));
+
+    /* bogus data at the start of the expunge file? */
+    if (!eoffset || !expungerecord_size)
+	goto done;
+
+    expunge_num = ntohl(*((bit32 *)(expunge_base+OFFSET_NUM_RECORDS)));
+    emapnum = (sbuf.st_size - eoffset) / expungerecord_size;
+    if (emapnum < expunge_num) {
+	expunge_num = emapnum;
+    }
+
+    /* add every UID to the files list */
+    for (erecno = 1; erecno <= expunge_num; erecno++) {
+	bufp = expunge_base + eoffset + (erecno-1)*expungerecord_size;
+	uid = ntohl(*((bit32 *)(bufp+OFFSET_UID)));
+	fname = mailbox_message_fname(mailbox, uid);
+	unlink(fname);
+	count++;
+    }
+
+    printf("%s removed %d records from stale cyrus.expunge\n",
+	   mailbox->name, count);
+
+    fname = mailbox_meta_fname(mailbox, META_EXPUNGE);
+    unlink(fname);
+
+done:
+    if (expunge_base) map_free(&expunge_base, &expunge_len);
+    if (expunge_fd != -1) close(expunge_fd);
+}
+
 /* this is kind of like mailbox_create, but we try to rescue
  * what we can from the filesystem! */
 static int mailbox_reconstruct_create(const char *name, struct mailbox **mbptr)
@@ -3773,6 +3842,9 @@ int mailbox_reconstruct(const char *name, int flags)
 	/* ensure that next user will create the MMAPing */
 	mailbox->need_cache_refresh = 1;
     }
+
+    /* find cyrus.expunge file if present */
+    cleanup_stale_expunged(mailbox);
 
     r = find_files(mailbox, &files, flags);
     if (r) goto close;
