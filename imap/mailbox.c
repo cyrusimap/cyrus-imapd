@@ -1962,7 +1962,7 @@ int mailbox_index_recalc(struct mailbox *mailbox)
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	r = mailbox_read_index_record(mailbox, recno, &record);
 	if (r) return r;
-	header_update_counts(&mailbox->i, &record, 1);
+	mailbox_index_update_counts(mailbox, &record, 1);
     }
 
     return 0;
