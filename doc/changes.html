@@ -8,6 +8,23 @@
 </head>
 <body>
 
+<h1>Changes to the Cyrus IMAP Server since 2.4.3</h1>
+<ul>
+<li>Rewrite index_upgrade to always parse the message
+  files and re-create cyrus.cache, to avoid upgrade
+  upgrade failures where cache errors occured.</li>
+<li>Fixed sync_reset handling of user deletions</li>
+<li>Fixed proc file handling of LOGIN and
+  folder unselect</li>
+<li>use cyrus.expunge file (if still present) to
+  delete bogus records from a failed index upgrade
+  (cause by bugs in earlier version)</li>
+<li>detect version 2.5 in XFER to support use with
+  master git branch in a murder</li>
+<li>made pop3 expunge much more efficient</li>
+<li>handle missing seen file in XFER</li>
+</ul>
+
 <h1>Changes to the Cyrus IMAP Server since 2.4.2</h1>
 <ul>
 <li>Many fixes to replication edge case handling</li>
