@@ -147,8 +147,6 @@ int popd_starttls_done = 0;
 
 static int popd_myrights;
 
-static mailbox_decideproc_t expungedeleted;
-
 /* the sasl proxy policy context */
 static struct proxy_context popd_proxyctx = {
     0, 1, &popd_authstate, NULL, NULL
@@ -813,6 +811,42 @@ void kpop(void)
 }
 #endif
 
+static int expunge_deleted(void)
+{
+    struct index_record record;
+    uint32_t msgno;
+    int r = 0;
+
+    /* loop over all known messages looking for deletes */
+    for (msgno = 1; msgno <= popd_exists; msgno++) {
+	/* not deleted? skip */
+	if (!popd_msg[msgno].deleted)
+	    continue;
+
+	/* error reading? abort */
+	r = mailbox_read_index_record(popd_mailbox, popd_msg[msgno].recno, &record);
+	if (r) break;
+
+	/* already expunged? skip */
+	if (record.system_flags & FLAG_EXPUNGED)
+	    continue;
+
+	/* mark expunged */
+	record.system_flags |= FLAG_EXPUNGED;
+
+	/* store back to the mailbox */
+	r = mailbox_rewrite_index_record(popd_mailbox, &record);
+	if (r) break;
+    }
+
+    if (r) {
+	syslog(LOG_ERR, "IOERROR: %s failed to expunge record %u uid %u, aborting",
+	       popd_mailbox->name, msgno, popd_msg[msgno].uid);
+    }
+
+    return r;
+}
+
 /*
  * Top-level command loop parsing
  */
@@ -931,12 +965,8 @@ static void cmdloop(void)
 		if (msgno <= popd_exists)
 		    update_seen();
 
-		/* check for changes */
-		for (msgno = 1; msgno <= popd_exists; msgno++)
-		    if (popd_msg[msgno].deleted) break;
-
-		if (msgno <= popd_exists)
-		    mailbox_expunge(popd_mailbox, expungedeleted, NULL, NULL);
+		/* process looking for deleted messages */
+		expunge_deleted();
 
 		mailbox_commit(popd_mailbox);
 		mailbox_unlock_index(popd_mailbox, NULL);
@@ -1902,21 +1932,6 @@ static int blat(int msgno, int lines)
        pushing data to the client over a slow link. */
     prot_resettimeout(popd_in);
 
-    return 0;
-}
-
-static unsigned expungedeleted(struct mailbox *mailbox __attribute__((unused)),
-			       struct index_record *record,
-			       void *rock __attribute__((unused)))
-{
-    uint32_t msgno;
-
-    /* XXX - could make this more efficient with binary search */
-    for (msgno = 1; msgno <= popd_exists; msgno++) {
-	if (popd_msg[msgno].uid == record->uid) {
-	    return popd_msg[msgno].deleted;
-	}
-    }
     return 0;
 }
 
