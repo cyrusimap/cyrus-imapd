@@ -721,12 +721,13 @@ static int cleanup_seen_subfolders(const char *mbname)
     /* no need to do inbox, it will have upgraded OK, just
      * the subfolders */
 
-    r = seen_open(userid, 0, &seendb);
+    r = seen_open(userid, SEEN_SILENT, &seendb);
+    if (r) return 0; /* oh well, maybe they didn't have one */
 
     snprintf(buf, sizeof(buf), "%s.*", mbname);
-    if (!r) r = mboxlist_findall(NULL, buf, 1, NULL, NULL, cleanup_seen_cb, seendb);
+    r = mboxlist_findall(NULL, buf, 1, NULL, NULL, cleanup_seen_cb, seendb);
 
-    if (seendb) seen_close(seendb);
+    seen_close(seendb);
 
     return r;
 }
