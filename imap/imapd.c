@@ -8355,6 +8355,11 @@ static int backend_version(struct backend *be)
 {
     const char *minor;
 
+    /* master branch? */
+    if (strstr(be->banner, "git2.5.")) {
+	return 12;
+    }
+
     /* check for current version */
     if (strstr(be->banner, "v2.4.") || strstr(be->banner, "git2.4.")) {
 	return 12;
