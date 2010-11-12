@@ -852,6 +852,36 @@ char *mboxname_to_userid(const char *mboxname)
 }
 
 /*
+ * Check whether two mboxnames have the same userid.
+ * Needed for some corner cases in the COPY command.
+ * Returns: 1 if the userids are the same, 0 if not,
+ *	    or negative error.
+ */
+int mboxname_same_userid(const char *name1, const char *name2)
+{
+    struct mboxname_parts parts1, parts2;
+    int r;
+
+    if (mboxname_to_parts(name1, &parts1))
+	return IMAP_MAILBOX_BADNAME;
+    if (mboxname_to_parts(name2, &parts2)) {
+	mboxname_free_parts(&parts1);
+	return IMAP_MAILBOX_BADNAME;
+    }
+
+    r = strcmp((parts1.domain == NULL ? "" : parts1.domain),
+	       (parts2.domain == NULL ? "" : parts2.domain));
+    if (!r)
+	r = strcmp((parts1.userid == NULL ? "" : parts1.userid),
+		   (parts2.userid == NULL ? "" : parts2.userid));
+
+    mboxname_free_parts(&parts1);
+    mboxname_free_parts(&parts2);
+
+    return !r;
+}
+
+/*
  * Split an (internal) inboxname into it's constituent
  * parts, filling out and returning a parts structure.
  * The caller must clean up the parts structure by

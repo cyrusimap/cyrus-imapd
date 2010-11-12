@@ -150,6 +150,11 @@ void mboxname_free_parts(struct mboxname_parts *parts);
 char *mboxname_to_userid(const char *mboxname);
 
 /*
+ * Check whether two mboxnames have the same userid.
+ */
+int mboxname_same_userid(const char *mboxname1, const char *mboxname2);
+
+/*
  * Access files (or directories by leaving last parameter
  * zero) for a particular mailbox on partition.
  */
