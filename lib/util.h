@@ -51,6 +51,7 @@
 #include <config.h>
 #include <sys/types.h>
 #include <limits.h>
+#include <stdarg.h>
 
 #define BIT32_MAX 4294967295U
 
@@ -186,5 +187,16 @@ void buf_appendbit32(struct buf *buf, bit32 num);
 void buf_appendmap(struct buf *buf, char *base, int len);
 void buf_putc(struct buf *buf, char c);
 void buf_free(struct buf *buf);
+
+/*
+ * Given a list of strings, terminated by (char *)NULL,
+ * return a newly allocated string containing the
+ * concatention of all the argument strings.  The
+ * caller must free the returned string using free().
+ *
+ * This API idea based on glib's g_strconcat() which
+ * is really quite amazingly convenient.
+ */
+char *strconcat(const char *s1, ...);
 
 #endif /* INCLUDED_UTIL_H */
