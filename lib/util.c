@@ -294,6 +294,13 @@ int dir_hash_c(const char *name, int full)
     return c;
 }
 
+char *dir_hash_b(const char *name, int full, char buf[2])
+{
+    buf[0] = (char)dir_hash_c(name, full);
+    buf[1] = '\0';
+    return buf;
+}
+
 int cyrus_close_sock(int fd) 
 {
     shutdown(fd, SHUT_RD);

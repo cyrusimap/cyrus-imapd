@@ -123,6 +123,12 @@ extern keyvalue *kv_bsearch (const char *key, keyvalue *kv, int nelem,
  *  of the name.
  */
 extern int dir_hash_c(const char *name, int full);
+/*
+ * Like dir_hash_c() but builds the result as a single-byte
+ * C string in the provided buffer, and returns the buffer,
+ * which is sometimes more convenient.
+ */
+extern char *dir_hash_b(const char *name, int full, char buf[2]);
 
 /* 
  * create an [unlinked] temporary file and return the file descriptor.
