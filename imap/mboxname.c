@@ -831,39 +831,77 @@ int mboxname_isdeletedmailbox(const char *name, time_t *timestampp)
 char *mboxname_to_userid(const char *mboxname)
 {
     static char userid[MAX_MAILBOX_BUFFER];
-    const char *domain = NULL, *cp;
-    char *rp;
-    int domainlen = 0;
+    char *ret;
+    struct mboxname_parts parts;
 
-    if (config_virtdomains && (cp = strchr(mboxname, '!'))) {
-	/* locate, save, and skip domain */
-	domain = mboxname;
-	domainlen = cp++ - mboxname;
-    } else {
-	cp = mboxname;
-    }
-
-    /* not a user mailbox? */
-    if (strncmp(cp, "user.", 5))
+    if (mboxname_to_parts(mboxname, &parts))
 	return NULL;
 
-    /* skip "user." */
-    strcpy(userid, cp + 5);
-
-    /* find end of userid */
-    rp = strchr(userid, '.');
-    if (!rp) rp = userid + strlen(userid);
-
-    if (domain) {
-	/* append domain */
-	sprintf(rp, "@%.*s", domainlen, domain);
-    }
-    else {
-	/* otherwise close off at end of userid anyway */
-	*rp = '\0';
+    if (parts.userid == NULL) {
+	ret = NULL;
+    } else {
+	if (parts.domain)
+	    snprintf(userid, sizeof(userid), "%s@%s", parts.userid, parts.domain);
+	else
+	    strncpy(userid, parts.userid, sizeof(userid));
+	ret = userid;
     }
 
-    return(userid);
+    mboxname_free_parts(&parts);
+    return ret;
+}
+
+/*
+ * Split an (internal) inboxname into it's constituent
+ * parts, filling out and returning a parts structure.
+ * The caller must clean up the parts structure by
+ * calling mboxname_free_parts().
+ * Returns 0 on success, -ve error otherwise.
+ */
+int mboxname_to_parts(const char *mboxname, struct mboxname_parts *parts)
+{
+    char *b, *e;    /* beginning and end of string parts */
+
+    memset(parts, 0, sizeof(*parts));
+    b = parts->freeme = xstrdup(mboxname);
+
+    if (config_virtdomains && (e = strchr(b, '!'))) {
+	parts->domain = b;
+	*e++ = '\0';
+	b = e;
+    }
+
+    if (!strncmp(b, "user.", 5)) {
+	/* user mailbox */
+	b += 5;
+	parts->userid = b;
+	/* find end of userid */
+	e = strchr(b, '.');
+	if (e) {
+	    *e++ = '\0';
+	    b = e;
+	} else {
+	    b += strlen(b);
+	}
+    } else if (!strncmp(b, "Other Folders.", 14)) {
+	/* shared space mailbox */
+	b += 14;
+    } else {
+	mboxname_free_parts(parts);
+	return IMAP_MAILBOX_BADNAME;
+    }
+
+    parts->box = (*b ? b : NULL);
+
+    return 0;
+}
+
+void mboxname_free_parts(struct mboxname_parts *parts)
+{
+    if (parts->freeme) {
+	free(parts->freeme);
+	memset(parts, 0, sizeof(*parts));
+    }
 }
 
 /*

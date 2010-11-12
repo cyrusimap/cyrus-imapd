@@ -85,6 +85,13 @@ struct mboxlock {
     int locktype;
 };
 
+struct mboxname_parts {
+    const char *domain;
+    const char *userid;	    /* userid WITHOUT the domain */
+    const char *box;
+    char *freeme;
+};
+
 int mboxname_lock(const char *mboxname, struct mboxlock **mboxlockptr,
 		  int locktype);
 void mboxname_release(struct mboxlock **mboxlockptr);
@@ -126,6 +133,16 @@ char *mboxname_isusermailbox(const char *name, int isinbox);
  * returns boolean
  */
 int mboxname_isdeletedmailbox(const char *name, time_t *timestampp);
+
+/*
+ * Split an (internal) inboxname into it's constituent parts.
+ */
+int mboxname_to_parts(const char *mboxname, struct mboxname_parts *parts);
+/*
+ * Cleanup up a mboxname_parts structure.
+ */
+void mboxname_free_parts(struct mboxname_parts *parts);
+
 
 /*
  * Translate (internal) inboxname into corresponding userid.
