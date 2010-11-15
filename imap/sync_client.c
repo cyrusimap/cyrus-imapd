@@ -113,7 +113,7 @@ static struct namespace   sync_namespace;
 static int verbose         = 0;
 static int verbose_logging = 0;
 static int connect_once    = 0;
-static int foreground      = 0;
+static int background      = 0;
 static int do_compress     = 0;
 
 static struct protocol_t csync_protocol =
@@ -2347,12 +2347,11 @@ int do_daemon_work(const char *sync_log_file, const char *sync_shutdown_file,
 
     *restartp = RESTART_NONE;
 
-    /* Create a work log filename.  Use the parent PID so we can
-     * try to reprocess it if the child fails.
-     */
+    /* Create a work log filename.  Use the PID so we can
+     * try to reprocess it if the sync fails */
     work_file_name = xmalloc(strlen(sync_log_file)+20);
     snprintf(work_file_name, strlen(sync_log_file)+20,
-             "%s-%d", sync_log_file, getppid());
+             "%s-%d", sync_log_file, getpid());
 
     session_start = time(NULL);
 
@@ -2374,8 +2373,7 @@ int do_daemon_work(const char *sync_log_file, const char *sync_shutdown_file,
             break;
         }
 
-        if ((stat(work_file_name, &sbuf) == 0) &&
-	    (sbuf.st_mtime - single_start < 3600)) {
+        if (stat(work_file_name, &sbuf) == 0) {
 	    /* Existing work log file from our parent < 1 hour old */
 	    /* XXX  Is 60 minutes a resonable timeframe? */
 	    syslog(LOG_NOTICE,
@@ -2607,71 +2605,22 @@ void do_daemon(const char *sync_log_file, const char *sync_shutdown_file,
 	       const char *channel, unsigned long timeout, unsigned long min_delta)
 {
     int r = 0;
-    pid_t pid;
-    int status;
-    int restart;
-
-    if (!foreground) {
-	/* fork a child so we can release from master */
-	if ((pid=fork()) < 0) fatal("fork failed", EC_SOFTWARE);
-
-	if (pid != 0) { /* parent */
-	    cyrus_done();
-	    exit(0);
-	}
-	/* child */
-    }
-
-    if (foreground || timeout == 0) {
-	replica_connect(channel);
-        do_daemon_work(sync_log_file, sync_shutdown_file,
-                       timeout, min_delta, &restart);
-	replica_disconnect();
-        return;
-    }
+    int restart = 1;
 
     signal(SIGPIPE, SIG_IGN); /* don't fail on server disconnects */
 
-    do {
-	/* fork a child so we can RESTART (flush memory) */
-        if ((pid=fork()) < 0) fatal("fork failed", EC_SOFTWARE);
-
-        if (pid == 0) { /* child */
-	    replica_connect(channel);
-
-	    r = do_daemon_work(sync_log_file, sync_shutdown_file,
-			       timeout, min_delta, &restart);
-
-	    if (r) {
-		/* See if we're still connected to the server.
-		 * If we are, we had some type of error, so we exit.
-		 * Otherwise, try reconnecting.
-		 */
-		if (!backend_ping(sync_backend)) _exit(1);
-else 
-		syslog(LOG_WARNING, "Lost connection to server. Reconnecting");
-		restart = 1;
-	    }
-
-	    replica_disconnect();
-
-	    if (restart) _exit(EX_TEMPFAIL);
-	    else _exit(0);
-        }
-
-	/* parent */
-        if (waitpid(pid, &status, 0) < 0) fatal("waitpid failed", EC_SOFTWARE);
-
-    } while (WIFEXITED(status) && (WEXITSTATUS(status) == EX_TEMPFAIL));
-
-    if (WIFEXITED(status)) {
-	syslog(LOG_ERR, "process %d exited, status %d\n", pid, 
-	       WEXITSTATUS(status));
-    }
-    if (WIFSIGNALED(status)) {
-	syslog(LOG_ERR, 
-	       "process %d exited, signaled to death by %d\n",
-	       pid, WTERMSIG(status));
+    while (restart) {
+	replica_connect(channel);
+	r = do_daemon_work(sync_log_file, sync_shutdown_file,
+			   timeout, min_delta, &restart);
+	if (r) {
+	    /* See if we're still connected to the server.
+	     * If we are, we had some type of error, so we exit.
+	     * Otherwise, try reconnecting.
+	     */
+	    if (!backend_ping(sync_backend)) restart = 1;
+	}
+	replica_disconnect();
     }
 }
 
@@ -2765,9 +2714,11 @@ int main(int argc, char **argv)
             min_delta = atoi(optarg);
             break;
 
-        case 'R':
-	    foreground = 1;
         case 'r':
+	    background = 1;
+	    /* fallthrough */
+
+        case 'R':
 	    if (mode != MODE_UNKNOWN)
 		fatal("Mutually exclusive options defined", EC_USAGE);
             mode = MODE_REPEAT;
@@ -2806,6 +2757,20 @@ int main(int argc, char **argv)
 
     if (mode == MODE_UNKNOWN)
         fatal("No replication mode specified", EC_USAGE);
+
+    /* fork if required */
+    if (background || !input_filename) {
+	int pid = fork();
+
+	if (pid == -1) {
+	    perror("fork");
+	    exit(1);
+	}
+
+	if (pid != 0) { /* parent */
+	    exit(0);
+	}
+    }
 
     cyrus_init(alt_config, "sync_client", 0);
 
