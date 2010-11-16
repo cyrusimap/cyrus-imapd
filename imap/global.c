@@ -650,7 +650,7 @@ static const char * const monthname[12] = {
     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
 };
 
-/* covert a time_t date to an IMAP-style date
+/* Convert a time_t date to an IMAP-style date
  * datebuf needs to be >= 30 bytes */
 void cyrus_ctime(time_t date, char *datebuf) 
 {
