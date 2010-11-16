@@ -3005,9 +3005,9 @@ static int index_search_evaluate(struct index_state *state,
 	return 0;
     if (searchargs->before && im->record.internaldate >= searchargs->before)
 	return 0;
-    if (searchargs->sentafter && im->record.gmtime < searchargs->sentafter)
+    if (searchargs->sentafter && im->record.sentdate < searchargs->sentafter)
 	return 0;
-    if (searchargs->sentbefore && im->record.gmtime >= searchargs->sentbefore)
+    if (searchargs->sentbefore && im->record.sentdate >= searchargs->sentbefore)
 	return 0;
 
     if (searchargs->modseq && im->record.modseq < searchargs->modseq)
