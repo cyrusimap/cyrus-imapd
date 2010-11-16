@@ -63,14 +63,7 @@ extern int message_copy_strict P((struct protstream *from, FILE *to,
 
 extern int message_parse(const char *fname, struct index_record *record);
 
-/* Flags for parsing message date/time - to be bitwise OR'd */
-#define PARSE_DATE	(1<<0)  /* Default (always parsed) */
-#define PARSE_TIME	(1<<1)
-#define PARSE_ZONE	(1<<2)
-#define PARSE_GMT	(1<<3) /* Output time in GMT rather than local timezone */
-#define PARSE_NOCREATE	(1<<15) /* Don't create one if its missing/invalid */
-
-extern time_t message_parse_date P((const char *hdr, unsigned flags));
+extern time_t message_parse_date P((const char *hdr, int dayonly));
 
 /* declare this here so it can be used externally, but remain opaque */
 struct body;

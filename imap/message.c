@@ -56,6 +56,7 @@
 #include <sys/stat.h>
 #include <netinet/in.h>
 #include <stdlib.h>
+#include <assert.h>
 
 #include "crc32.h"
 #include "exitcodes.h"
@@ -563,8 +564,7 @@ int message_create_record(struct index_record *record,
 	    == IMAP_ENUM_INTERNALDATE_HEURISTIC_RECEIVEDHEADER) {
 	time_t newdate = 0;
 	if (body->received_date)
-	    newdate = message_parse_date(body->received_date,
-		PARSE_DATE|PARSE_TIME|PARSE_ZONE|PARSE_NOCREATE|PARSE_GMT);
+	    newdate = message_parse_date(body->received_date, 0);
 	if (newdate)
 	    record->internaldate = newdate;
     }
@@ -573,7 +573,7 @@ int message_create_record(struct index_record *record,
 	record->internaldate = time(NULL);
 
     /* used for sent time searching, truncated to day with no TZ */
-    record->sentdate = message_parse_date(body->date, PARSE_NOCREATE);
+    record->sentdate = message_parse_date(body->date, /*dayonly*/1);
     if (!record->sentdate) {
 	struct tm *tm = localtime(&record->internaldate);
 	/* truncate to the day */
@@ -585,7 +585,7 @@ int message_create_record(struct index_record *record,
 
     /* used for sent time sorting, full gmtime of Date: header */
     record->gmtime =
-	message_parse_date(body->date, PARSE_DATE|PARSE_TIME|PARSE_ZONE|PARSE_NOCREATE|PARSE_GMT);
+	message_parse_date(body->date, 0);
     if (!record->gmtime)
 	record->gmtime = record->internaldate;
 
@@ -1525,10 +1525,15 @@ static void message_parse_language(const char *hdr, struct param **paramp)
 }
 
 /*
- * Parse a RFC-822 date from a header.
- * Only parses to day granularity--ignores the time of day.
+ * Parse a RFC-822 datetime from a header.
+ *
+ * If the 'dayonly' flag is supplied, parse only the
+ * day portion, ignoring the time and timezone, and
+ * interpret the day in the server's timezone.  This
+ * is used only for extracting the data used for
+ * the SEARCH command.
  */
-time_t message_parse_date(const char *hdr, unsigned flags)
+time_t message_parse_date(const char *hdr, int dayonly)
 {
     struct tm tm;
     time_t t;
@@ -1607,7 +1612,7 @@ time_t message_parse_date(const char *hdr, unsigned flags)
      }
 
     message_parse_rfc822space(&hdr);
-    if (hdr && (flags & PARSE_TIME)) {
+    if (hdr && !dayonly) {
 	/* Parse hour */
 	if (!hdr || !Uisdigit(*hdr)) goto badtime;
 	tm.tm_hour = *hdr++ - '0';
@@ -1630,7 +1635,7 @@ time_t message_parse_date(const char *hdr, unsigned flags)
 	}
 
 	message_parse_rfc822space(&hdr);
-	if (hdr && (flags & PARSE_ZONE)) {
+	if (hdr) {
 	    /* Parse timezone offset */
 	    if (*hdr == '+' || *hdr == '-') {
 		/* Parse numeric offset */
@@ -1707,17 +1712,19 @@ time_t message_parse_date(const char *hdr, unsigned flags)
 
     tm.tm_isdst = -1;
 
-    if (flags & PARSE_GMT)
+    if (!dayonly)
 	t = mkgmtime(&tm);
-    else
+    else {
+	assert(zone_off == 0);
 	t = mktime(&tm);
+    }
     /* Don't return -1; it's never right.  Return the current time instead.
      * That's much closer than 1969.
      */
     if (t >= 0) return (t - zone_off * 60);
     
  baddate:
-    return (flags & PARSE_NOCREATE) ? 0 : time(0);
+    return 0;
 }
 
 /*
