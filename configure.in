@@ -1225,6 +1225,34 @@ AC_SUBST(PERL_SUBDIRS)
 AC_SUBST(PERL_DEPSUBDIRS)
 AC_SUBST(PERL)
 
+dnl
+dnl Enable/disable unit tests.  These are disabled by default, as
+dnl they require an additional library (the CUnit library).
+dnl
+AC_ARG_ENABLE(unit-tests,
+[  --enable-unit-tests     enable CUnit-based unit regression tests],,
+enable_unit_tests=no)
+
+dnl Unit tests need the CUnit library, so check if we
+dnl have both the header and the library.
+if test "$enable_unit_tests" != "no" ; then
+    AC_CHECK_LIB(cunit,CU_initialize_registry,found_lib=yes,found_lib=no)
+    AC_CHECK_HEADER([CUnit/CUnit.h],found_hdr=yes,found_hdr=no)
+    if test "$found_lib$found_hdr" != "yesyes" ; then
+	AC_MSG_NOTICE([Disabling unit tests because the required CUnit library is not installed])
+	enable_unit_tests=no
+    fi
+fi
+
+CUNIT_SUBDIRS=
+if test "$enable_unit_tests" != "no" ; then
+    CUNIT_SUBDIRS=cunit
+fi
+AC_SUBST(CUNIT_SUBDIRS)
+
+dnl
+
+
 AH_TOP([
 /*
  * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
