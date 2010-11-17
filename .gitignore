@@ -27,6 +27,11 @@ com_err/et/error_message.o
 com_err/et/et_name.o
 com_err/et/init_et.o
 com_err/et/libcom_err.a
+cunit/cunit.mk
+cunit/.cunit-*.c
+cunit/default.cunit
+cunit/registers.h
+cunit/unit
 imap/arbitron
 imap/chk_cyrus
 imap/ctl_cyrusdb

@@ -1440,4 +1440,4 @@ enum {
 ])
 
 dnl make sure that Makefile is the last thing output
-AC_OUTPUT(man/Makefile master/Makefile lib/Makefile imap/Makefile imtest/Makefile netnews/Makefile perl/Makefile $EXTRA_OUTPUT Makefile)
+AC_OUTPUT(man/Makefile master/Makefile lib/Makefile imap/Makefile imtest/Makefile netnews/Makefile perl/Makefile cunit/Makefile $EXTRA_OUTPUT Makefile)
