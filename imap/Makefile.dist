@@ -7,7 +7,8 @@
 SNMPGEN = ../snmp/snmpgen
 
 BUILT_SOURCES = lmtpstats.c lmtpstats.h \
-	pushstats.c pushstats.h
+	pushstats.c pushstats.h \
+	rfc822_header.c rfc822_header.h
 
 dist: $(BUILT_SOURCES)
 
@@ -16,3 +17,10 @@ pushstats.c pushstats.h: pushstats.snmp
 
 lmtpstats.c lmtpstats.h: lmtpstats.snmp
 	$(SNMPGEN) lmtpstats.snmp
+
+rfc822_header.c: rfc822_header.st
+	../tools/compile_st.pl -c $< | gperf > $@
+
+rfc822_header.h: rfc822_header.st
+	../tools/compile_st.pl -h $< > $@
+
