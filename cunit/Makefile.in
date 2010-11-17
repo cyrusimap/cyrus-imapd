@@ -152,7 +152,7 @@ distclean: clean
 	rm -f Makefile
 
 check: unit
-	$(VALGRIND_$(VG)) ./unit
+	$(VALGRIND_$(VG)) ./unit -v
 
 depend: 
 	${MAKEDEPEND} $(CPPFLAGS) $(DEFS) $(CFLAGS) *.c $(srcdir)/*.c 1>makedepend.log 2>&1

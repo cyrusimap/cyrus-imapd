@@ -47,6 +47,8 @@
 #include <stdarg.h>
 #include <CUnit/CUnit.h>
 
+extern int verbose;
+
 /*
  * The standard CUnit assertion *EQUAL* macros have a flaw: they do
  * not report the actual values of the 'actual' and 'expected' values,
@@ -68,6 +70,9 @@ static CU_BOOL CU_assertFormatImplementation(
     va_start(args, strConditionFormat);
     vsnprintf(buf, sizeof(buf), strConditionFormat, args);
     va_end(args);
+
+    if (verbose > 1 && bValue)
+	fprintf(stderr, "    %s:%u %s\n", strFile, uiLine, buf);
 
     return CU_assertImplementation(bValue, uiLine, buf, strFile, strFunction, bFatal);
 }
