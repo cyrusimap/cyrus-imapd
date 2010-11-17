@@ -353,7 +353,7 @@ int append_fromstage(struct appendstate *as, struct body **body,
 		     const char **flag, int nflags, int nolink)
 {
     struct mailbox *mailbox = as->mailbox;
-    struct index_record message_index;
+    struct index_record record;
     char *fname;
     FILE *destfile;
     int i, r;
@@ -366,7 +366,7 @@ int append_fromstage(struct appendstate *as, struct body **body,
 
     assert(stage != NULL && stage->parts[0] != '\0');
 
-    zero_index(message_index);
+    zero_index(record);
 
     /* xxx check errors */
     mboxlist_findstage(mailbox->name, stagefile, sizeof(stagefile));
@@ -437,12 +437,12 @@ int append_fromstage(struct appendstate *as, struct body **body,
        as the mailbox we're looking at */
 
     /* Setup */
-    message_index.uid = as->baseuid + as->nummsg;
-    message_index.internaldate = internaldate;
+    record.uid = as->baseuid + as->nummsg;
+    record.internaldate = internaldate;
 
     /* Create message file */
     as->nummsg++;
-    fname = mailbox_message_fname(mailbox, message_index.uid);
+    fname = mailbox_message_fname(mailbox, record.uid);
 
     r = mailbox_copyfile(p, fname, nolink);
     destfile = fopen(fname, "r");
@@ -450,7 +450,7 @@ int append_fromstage(struct appendstate *as, struct body **body,
 	/* ok, we've successfully created the file */
 	if (!*body || (as->nummsg - 1))
 	    r = message_parse_file(destfile, NULL, NULL, body);
-	if (!r) r = message_create_record(&message_index, *body);
+	if (!r) r = message_create_record(&record, *body);
     }
     if (destfile) {
 	/* this will hopefully ensure that the link() actually happened
@@ -466,37 +466,37 @@ int append_fromstage(struct appendstate *as, struct body **body,
     /* Handle flags the user wants to set in the message */
     for (i = 0; i < nflags; i++) {
 	if (!strcmp(flag[i], "\\seen")) {
-	    append_setseen(as, &message_index);
+	    append_setseen(as, &record);
 	}
 	else if (!strcmp(flag[i], "\\deleted")) {
 	    if (as->myrights & ACL_DELETEMSG) {
-		message_index.system_flags |= FLAG_DELETED;
+		record.system_flags |= FLAG_DELETED;
 	    }
 	}
 	else if (!strcmp(flag[i], "\\draft")) {
 	    if (as->myrights & ACL_WRITE) {
-		message_index.system_flags |= FLAG_DRAFT;
+		record.system_flags |= FLAG_DRAFT;
 	    }
 	}
 	else if (!strcmp(flag[i], "\\flagged")) {
 	    if (as->myrights & ACL_WRITE) {
-		message_index.system_flags |= FLAG_FLAGGED;
+		record.system_flags |= FLAG_FLAGGED;
 	    }
 	}
 	else if (!strcmp(flag[i], "\\answered")) {
 	    if (as->myrights & ACL_WRITE) {
-		message_index.system_flags |= FLAG_ANSWERED;
+		record.system_flags |= FLAG_ANSWERED;
 	    }
 	}
 	else if (as->myrights & ACL_WRITE) {
 	    /* User flag */
 	    r = mailbox_user_flag(mailbox, flag[i], &userflag);
 	    if (!r) 
-		message_index.user_flags[userflag/32] |= 1<<(userflag&31);
+		record.user_flags[userflag/32] |= 1<<(userflag&31);
 	}
     }
     /* Write out index file entry */
-    r = mailbox_append_index_record(mailbox, &message_index);
+    r = mailbox_append_index_record(mailbox, &record);
     if (r) {
 	append_abort(as);
 	return r;
@@ -547,7 +547,7 @@ int append_fromstream(struct appendstate *as, struct body **body,
 		      int nflags)
 {
     struct mailbox *mailbox = as->mailbox;
-    struct index_record message_index;
+    struct index_record record;
     char *fname;
     FILE *destfile;
     int i, r;
@@ -555,13 +555,13 @@ int append_fromstream(struct appendstate *as, struct body **body,
 
     assert(size != 0);
 
-    zero_index(message_index);
+    zero_index(record);
     /* Setup */
-    message_index.uid = as->baseuid + as->nummsg;
-    message_index.internaldate = internaldate;
+    record.uid = as->baseuid + as->nummsg;
+    record.internaldate = internaldate;
 
     /* Create message file */
-    fname = mailbox_message_fname(mailbox, message_index.uid);
+    fname = mailbox_message_fname(mailbox, record.uid);
     as->nummsg++;
 
     unlink(fname);
@@ -577,7 +577,7 @@ int append_fromstream(struct appendstate *as, struct body **body,
     if (!r) {
 	if (!*body || (as->nummsg - 1))
 	    r = message_parse_file(destfile, NULL, NULL, body);
-	if (!r) r = message_create_record(&message_index, *body);
+	if (!r) r = message_create_record(&record, *body);
     }
     fclose(destfile);
     if (r) {
@@ -588,38 +588,38 @@ int append_fromstream(struct appendstate *as, struct body **body,
     /* Handle flags the user wants to set in the message */
     for (i = 0; i < nflags; i++) {
 	if (!strcmp(flag[i], "\\seen")) {
-	    append_setseen(as, &message_index);
+	    append_setseen(as, &record);
 	}
 	else if (!strcmp(flag[i], "\\deleted")) {
 	    if (as->myrights & ACL_DELETEMSG) {
-		message_index.system_flags |= FLAG_DELETED;
+		record.system_flags |= FLAG_DELETED;
 	    }
 	}
 	else if (!strcmp(flag[i], "\\draft")) {
 	    if (as->myrights & ACL_WRITE) {
-		message_index.system_flags |= FLAG_DRAFT;
+		record.system_flags |= FLAG_DRAFT;
 	    }
 	}
 	else if (!strcmp(flag[i], "\\flagged")) {
 	    if (as->myrights & ACL_WRITE) {
-		message_index.system_flags |= FLAG_FLAGGED;
+		record.system_flags |= FLAG_FLAGGED;
 	    }
 	}
 	else if (!strcmp(flag[i], "\\answered")) {
 	    if (as->myrights & ACL_WRITE) {
-		message_index.system_flags |= FLAG_ANSWERED;
+		record.system_flags |= FLAG_ANSWERED;
 	    }
 	}
 	else if (as->myrights & ACL_WRITE) {
 	    r = mailbox_user_flag(mailbox, flag[i], &userflag);
 	    if (!r)
-		message_index.user_flags[userflag/32] |= 1<<(userflag&31);
+		record.user_flags[userflag/32] |= 1<<(userflag&31);
 	}
     }
 
     /* Write out index file entry; if we abort later, it's not
        important */
-    r = mailbox_append_index_record(mailbox, &message_index);
+    r = mailbox_append_index_record(mailbox, &record);
     if (r) {
 	append_abort(as);
 	return r;
