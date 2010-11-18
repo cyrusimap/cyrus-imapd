@@ -65,6 +65,8 @@ static void test_parse_trivial(void)
 
     CU_ASSERT_PTR_NULL(body.in_reply_to);
 
+    CU_ASSERT_PTR_NULL(body.references);
+
     CU_ASSERT_PTR_NULL(body.received_date);
 
     /* simple body */
@@ -166,6 +168,8 @@ static void test_parse_simple(void)
 
     /* In-Reply-To: <fake999@gmail.com> */
     CU_ASSERT_STRING_EQUAL(body.in_reply_to, "<fake999@gmail.com>");
+
+    CU_ASSERT_PTR_NULL(body.references);
 
     /* Received: from foo.fastmail.fm (foo.fastmail.fm [10.0.0.1]) ... */
     CU_ASSERT_STRING_EQUAL(body.received_date, "Thu, 28 Oct 2010 18:55:54 +1100");
@@ -601,6 +605,43 @@ static void test_rfc2231_extended_continuations(void)
     CU_ASSERT_STRING_EQUAL(body.params->attribute, "TITLE*");
     CU_ASSERT_STRING_EQUAL(body.params->value, TITLE);
     CU_ASSERT_PTR_NULL(body.params->next);
+
+    message_free_body(&body);
+}
+
+static void test_references(void)
+{
+    static const char msg[] =
+"From: Fred Bloggs <fbloggs@fastmail.fm>\r\n"
+"To: Sarah Jane Smith <sjsmith@gmail.com>\r\n"
+"Date: Wed, 27 Oct 2010 18:37:26 +1100\r\n"
+"Subject: Trivial testing email\r\n"
+"Message-ID: <fake800@fastmail.fm>\r\n"
+"In-Reply-To: <fake701@fastmail.fm>\r\n"
+"References: <fake332@gmail.com> <fake437@garage.com>\r\n"
+"\t<fake589@speakeasy.com>\t(Hey ignore me I'm a comment) <fake679@gmail.com>\r\n"
+"\t<fake701@fastmail.fm>\r\n"
+"\r\n"
+"Hello, World\n";
+    int r;
+    struct body body;
+
+    memset(&body, 0x45, sizeof(body));
+    r = message_parse_mapped(msg, sizeof(msg)-1, &body);
+
+    CU_ASSERT_EQUAL(r, 0);
+
+    /* Message-ID: <fake800@fastmail.fm> */
+    CU_ASSERT_STRING_EQUAL(body.message_id, "<fake800@fastmail.fm>");
+
+    /* In_Reply-To: <fake701@fastmail.fm> */
+    CU_ASSERT_STRING_EQUAL(body.in_reply_to, "<fake701@fastmail.fm>");
+
+    CU_ASSERT_PTR_NOT_NULL(strstr(body.references, "<fake332@gmail.com>"));
+    CU_ASSERT_PTR_NOT_NULL(strstr(body.references, "<fake437@garage.com>"));
+    CU_ASSERT_PTR_NOT_NULL(strstr(body.references, "<fake589@speakeasy.com>"));
+    CU_ASSERT_PTR_NOT_NULL(strstr(body.references, "<fake679@gmail.com>"));
+    CU_ASSERT_PTR_NOT_NULL(strstr(body.references, "<fake701@fastmail.fm>"));
 
     message_free_body(&body);
 }
