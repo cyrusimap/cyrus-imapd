@@ -180,10 +180,10 @@ mupdate_err.c: mupdate_err.et
 mupdate_err.h: mupdate_err.c
 
 rfc822_header.c: rfc822_header.st
-	@top_srcdir@/tools/compile_st.pl -c $< | gperf > $@
+	@top_srcdir@/tools/compile_st.pl -c rfc822_header.st | gperf > $@
 
 rfc822_header.h: rfc822_header.st
-	@top_srcdir@/tools/compile_st.pl -h $< > $@
+	@top_srcdir@/tools/compile_st.pl -h rfc822_header.st > $@
 
 ### Services
 idled: idled.o mutex_fake.o libimap.a $(DEPLIBS)
