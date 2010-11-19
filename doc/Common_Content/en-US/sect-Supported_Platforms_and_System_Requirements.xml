@@ -82,11 +82,14 @@
 
     <section id="sect-Supported_Platforms_and_System_Requirements-Building_Cyrus_IMAP">
         <title>Building Cyrus IMAP</title>
+        <para>
+            In this section, we only list the aspects of building Cyrus IMAP of particular interest to most common deployment scenarios. For more information on all <literal>configure</literal> options with full details, we refer you to <literal>./configure --help</literal>.
+        </para>
 
         <section id="sect-Supported_Platforms_and_System_Requirements-Building_Cyrus_IMAP-Required_Software_Components">
             <title>Required Software Components</title>
             <para>
-                The following software components are required for Cyrus IMAP to build with minimal functionality;
+                The following software components are required for Cyrus IMAP to build at all, with minimal functionality;
             </para>
             <para>
                 <itemizedlist>
@@ -98,6 +101,16 @@
                     <listitem>
                         <para>
                             <application>automake</application>
+                        </para>
+                    </listitem>
+                    <listitem>
+                        <para>
+                            <application>gperf</application>
+                        </para>
+                    </listitem>
+                    <listitem>
+                        <para>
+                            <application>zlib</application> (Development Headers)
                         </para>
                     </listitem>
                 </itemizedlist>
@@ -110,19 +123,53 @@
         <section id="sect-Supported_Platforms_and_System_Requirements-Building_Cyrus_IMAP-Recommended_Software_Components">
             <title>Recommended Software Components</title>
             <para>
-                We recommend you build Cyrus IMAP with the following software components included;
+                We recommend you consider building Cyrus IMAP with the following software components included;
             </para>
             <para>
                 <itemizedlist>
                     <listitem>
-                        <para>
-                            <application>autoconf</application>
-                        </para>
+                        <formalpara>
+                            <title>Idled Support</title>
+                            <para>
+                                To enable near real-time client updates through IMAP IDLE (as described in <ulink url="http://tools.ietf.org/html/rfc2177">RFC 2177</ulink>), configure Cyrus IMAP with the <literal>--enable-idled</literal> option.
+                            </para>
+                        </formalpara>
                     </listitem>
                     <listitem>
-                        <para>
-                            <application>automake</application>
-                        </para>
+                        <formalpara>
+                            <title>Murder Support</title>
+                            <para>
+                                To enable horizontal scalability, Cyrus IMAP supports the distribution of mailboxes across Cyrus IMAP servers in a Murder setup. To enable murder support in Cyrus IMAP, configure Cyrus IMAP with the <literal>--enable-murder</literal> option.
+                            </para>
+                        </formalpara>
+                    </listitem>
+                    <listitem>
+                        <formalpara>
+                            <title>Replication Support</title>
+                            <para>
+                                To enable replication support in Cyrus IMAP, configure Cyrus IMAP with the <literal>--enable-replication</literal> option.
+                            </para>
+                        </formalpara>
+                    </listitem>
+                </itemizedlist>
+            </para>
+            <remark>
+                Obviously, the list is not complete
+            </remark>
+
+        </section>
+
+        <section id="sect-Supported_Platforms_and_System_Requirements-Building_Cyrus_IMAP-Recommended_Software_Components_Enabled_by_Default">
+            <title>Recommended Software Components Enabled by Default</title>
+            <para>
+                <itemizedlist>
+                    <listitem>
+                        <formalpara>
+                            <title>Sieve Support</title>
+                            <para>
+                                Without any additional effort, Sieve support is already enabled by default. To disable Sieve, use the <literal>--disable-sieve</literal> option to <application>configure</application>.
+                            </para>
+                        </formalpara>
                     </listitem>
                 </itemizedlist>
             </para>
@@ -134,40 +181,62 @@
         <section id="sect-Supported_Platforms_and_System_Requirements-Building_Cyrus_IMAP-Optional_Software_Components">
             <title>Optional Software Components</title>
             <para>
-                When including the following software components during the build process, additional, optional functionality can be implemented;
+                When including the following software components during the build process, and providing the options listed here, additional optional functionality can be implemented;
             </para>
             <para>
                 <itemizedlist>
                     <listitem>
                         <formalpara>
+                            <title><application>Berkeley DB</application> (Development headers)</title>
+                            <para>
+                                To enable using Berkely DB as a database backend, include the Berkeley DB development headers and make sure to configure Cyrus IMAP with <literal>--with-bdb</literal>.
+                            </para>
+                        </formalpara>
+                        <note>
+                            <title>Berkeley DB Versions and Conversion</title>
+                            <para>
+                                The Cyrus IMAP <literal>configure</literal> process attempts to automatically detect and use the latest Berkeley DB technology available on the system. This may, however, not be the same version on your production systems. Since database conversions between versions of the Berkeley DB technology are particularly difficult and therefor NOT considered fully supported, we recommend you do NOT use Berkeley DB.
+                            </para>
+                        </note>
+                        <para>
+                            Should the Berkeley DB development headers be installed in a non-standard location, or should you need a specific version when multiple versions are available on the system, please consider using any of the following options;
+                        </para>
+                        <para>
+                            <screen>  --with-bdb=DIR&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use Berkeley DB (in DIR) [yes]
+  --with-bdb-libdir=DIR&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Berkeley DB lib files are in DIR
+  --with-bdb-incdir=DIR&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Berkeley DB include files are in DIR</screen>
+                        </para>
+                    </listitem>
+                    <listitem>
+                        <formalpara>
                             <title><application>MySQL</application> (Development headers)</title>
                             <para>
-                                To enable using MySQL as a database server backend, include the MySQL development headers and make sure to compile Cyrus IMAP with <literal>--with-mysql</literal>.
+                                To enable using MySQL as a database server backend, include the MySQL development headers and make sure to configure Cyrus IMAP with <literal>--with-mysql</literal>.
                             </para>
                         </formalpara>
                         <para>
-                            Should MySQL &mdash;the client libraries or the development headers&mdash; be installed on a non-standard location, please consider using any of the following options;
+                            Should MySQL &ndash;the client libraries or the development headers&ndash; be installed in a non-standard location, please consider using any of the following options;
                         </para>
                         <para>
-                            <screen>  --with-mysql=DIR            use MySQL (in DIR) [no]
-  --with-mysql-libdir=DIR   MySQL lib files are in DIR
-  --with-mysql-incdir=DIR   MySQL include files are in DIR</screen>
+                            <screen>  --with-mysql=DIR&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use MySQL (in DIR) [no]
+  --with-mysql-libdir=DIR&nbsp;&nbsp;&nbsp;MySQL lib files are in DIR
+  --with-mysql-incdir=DIR&nbsp;&nbsp;&nbsp;MySQL include files are in DIR</screen>
                         </para>
                     </listitem>
                     <listitem>
                         <formalpara>
                             <title><application>PostgreSQL</application> (Development headers)</title>
                             <para>
-                                To enable using PostgreSQL as a database server backend, include the PostgreSQL development headers and make sure to compile Cyrus IMAP with <literal>--with-pgsql</literal>.
+                                To enable using PostgreSQL as a database server backend, include the PostgreSQL development headers and make sure to configure Cyrus IMAP with <literal>--with-pgsql</literal>.
                             </para>
                         </formalpara>
                         <para>
-                            Should PostgreSQL &mdash;the client libraries or the development headers&mdash; be installed in a non-standard location, please consider using any of the following options;
+                            Should PostgreSQL &ndash;the client libraries or the development headers&ndash; be installed in a non-standard location, please consider using any of the following options;
                         </para>
                         <para>
-                            <screen>  --with-pgsql=DIR            use PostgreSQL (in DIR) [no]
-  --with-pgsql-libdir=DIR   Pgsql lib files are in DIR
-  --with-pgsql-incdir=DIR   Pgsql include files are in DIR</screen>
+                            <screen>  --with-pgsql=DIR&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;use PostgreSQL (in DIR) [no]
+  --with-pgsql-libdir=DIR&nbsp;&nbsp;&nbsp;Pgsql lib files are in DIR
+  --with-pgsql-incdir=DIR&nbsp;&nbsp;&nbsp;Pgsql include files are in DIR</screen>
                         </para>
                     </listitem>
                 </itemizedlist>
