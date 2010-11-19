@@ -153,20 +153,18 @@ int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *uids,
 		     unsigned nuids, time_t time_since, unsigned *numrestored)
 {
     uint32_t recno;
+    uint32_t olduid;
     struct index_record record;
     unsigned uidnum = 0;
     char oldfname[MAX_MAILBOX_PATH];
-    char *fname;
-    uint32_t *deleteduids;
+    const char *fname;
     int r = 0;
 
-    deleteduids = (uint32_t *)
-		  xmalloc(mailbox->i.num_records * sizeof(uint32_t));
     *numrestored = 0;
 
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	r = mailbox_read_index_record(mailbox, recno, &record);
-	if (r) goto done;
+	if (r) return r;
 
 	/* still active */
 	if (!(record.system_flags & FLAG_EXPUNGED))
@@ -191,13 +189,13 @@ int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *uids,
 	}
 
 	/* mark the old one unlinked so we don't see it again */
-	deleteduids[*numrestored] = record.uid;
-	fname = mailbox_message_fname(mailbox, record.uid);
+	olduid = record.uid;
 	record.system_flags |= FLAG_UNLINKED;
 	r = mailbox_rewrite_index_record(mailbox, &record);
-	if (r) goto done;
+	if (r) return r;
 
 	/* duplicate the old filename */
+	fname = mailbox_message_fname(mailbox, olduid);
 	strncpy(oldfname, fname, MAX_MAILBOX_PATH);
 
 	/* bump the UID, strip the flags */
@@ -209,34 +207,19 @@ int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *uids,
 	/* copy the message file */
 	fname = mailbox_message_fname(mailbox, record.uid);
 	r = mailbox_copyfile(oldfname, fname, 0);
-	if (r) goto done;
+	if (r) return r;
 
 	/* and append the new record */
 	mailbox_append_index_record(mailbox, &record);
 
 	if (verbose)
-	    printf("Unexpunged %s: %u => %u\n", mailbox->name, 
-		   deleteduids[*numrestored], record.uid);
+	    printf("Unexpunged %s: %u => %u\n",
+		   mailbox->name, olduid, record.uid);
 
 	(*numrestored)++;
     }
 
-    if (*numrestored) {
-	unsigned i;
-	/* commit first */
-	mailbox_commit(mailbox);
-
-	/* then complete the unlinks once safe to do so */
-	for (i = 0; i < *numrestored; i++) {
-	    fname = mailbox_message_fname(mailbox, deleteduids[i]);
-	    unlink(fname);
-	}
-    }
-
-done:
-    free(deleteduids);
-
-    return r;
+    return 0;
 }
 
 int main(int argc, char *argv[])

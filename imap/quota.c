@@ -407,7 +407,7 @@ int fixquota_mailbox(char *name,
 
     return r;
 }
-	
+
 int fixquota_fixroot(struct mailbox *mailbox,
 		     const char *root)
 {
@@ -419,8 +419,7 @@ int fixquota_fixroot(struct mailbox *mailbox,
 	   mailbox->quotaroot ? mailbox->quotaroot : "(none)",
 	   root ? root : "(none)");
 
-    mailbox_set_quotaroot(mailbox, root);
-    r = mailbox_commit(mailbox);
+    r = mailbox_set_quotaroot(mailbox, root);
     if (r) errmsg("failed writing header for mailbox '%s'", mailbox->name, r);
 
     return r;

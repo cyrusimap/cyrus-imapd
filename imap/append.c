@@ -242,7 +242,8 @@ int append_commit(struct appendstate *as,
 	append_addseen(as->mailbox, as->userid, as->seen_seq);
     seqset_free(as->seen_seq);
     
-    /* Write out index header & synchronize to disk. */
+    /* We want to commit here to guarantee mailbox on disk vs
+     * duplicate DB consistency */
     r = mailbox_commit(as->mailbox);
     if (r) {
 	syslog(LOG_ERR, "IOERROR: commiting mailbox append %s: %s",

@@ -3474,8 +3474,7 @@ static int cancel_cb(const char *msgid __attribute__((unused)),
 	    r = IMAP_PERMISSION_DENIED;
 
 	if (!r) r = mailbox_expunge(mailbox, expunge_cancelled, &uid, NULL);
-	if (!r) r = mailbox_commit(mailbox);
-	if (mailbox) mailbox_close(&mailbox);
+	mailbox_close(&mailbox);
 
 	/* if we failed, pass the return code back in the rock */
 	if (r) *((int *) rock) = r;

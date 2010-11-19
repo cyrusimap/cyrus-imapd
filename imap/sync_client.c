@@ -1175,10 +1175,8 @@ static int mailbox_full_update(const char *mboxname)
 	}
     }
 
-    /* commit and close the mailbox before sending any expunges
+    /* close the mailbox before sending any expunges
      * to avoid deadlocks */
-    r = mailbox_commit(mailbox);
-    if (r) goto done;
     mailbox_close(&mailbox);
 
     /* only send expunge if we have some UIDs to expunge */

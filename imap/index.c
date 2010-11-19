@@ -1189,7 +1189,6 @@ void index_unlock(struct index_state *state)
     /* XXX - errors */
 
     index_writeseen(state);
-    mailbox_commit(state->mailbox);
 
     /* grab the latest modseq */
     state->highestmodseq = state->mailbox->i.highestmodseq;

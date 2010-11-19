@@ -533,6 +533,7 @@ int deliver_mailbox(FILE *f,
 	    append_abort(&as);
 	} else {
 	    struct mailbox *mailbox = NULL;
+	    /* hold the mailbox open until the duplicate mark is done */
 	    r = append_commit(&as, quotaoverride ? -1 : 0, NULL, &uid,
 			      NULL, &mailbox);
 	    if (!r) {

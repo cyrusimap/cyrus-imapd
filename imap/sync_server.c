@@ -1342,7 +1342,6 @@ static int do_mailbox(struct dlist *kin,
     if (mailbox->i.sync_crc != sync_crc) {
 	mailbox_index_recalc(mailbox);
     }
-    mailbox_commit(mailbox);
     newcrc = mailbox->i.sync_crc;
     mailbox_close(&mailbox);
 
@@ -1948,7 +1947,7 @@ static int do_expunge(struct dlist *kin)
     struct mailbox *mailbox = NULL;
     struct index_record record;
     uint32_t recno;
-    int r;
+    int r = 0;
 
     if (!dlist_getatom(kin, "MBOXNAME", &mboxname))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
@@ -1958,7 +1957,7 @@ static int do_expunge(struct dlist *kin)
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
 
     r = mailbox_open_iwl(mboxname, &mailbox);
-    if (r) return r;
+    if (r) goto done;
 
     /* don't want to expunge the wrong mailbox! */
     if (strcmp(mailbox->uniqueid, uniqueid)) {
@@ -1970,7 +1969,7 @@ static int do_expunge(struct dlist *kin)
 
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	r = mailbox_read_index_record(mailbox, recno, &record);
-	if (r) return r;
+	if (r) goto done;
 	if (record.system_flags & FLAG_EXPUNGED) continue;
 	while (ui && ui->nval < record.uid) ui = ui->next;
 	if (!ui) break; /* no point continuing */
@@ -1982,7 +1981,6 @@ static int do_expunge(struct dlist *kin)
 	    if (r) goto done;
 	}
     }
-    r = mailbox_commit(mailbox);
 
 done:
     mailbox_close(&mailbox);

@@ -467,7 +467,6 @@ extern int mailbox_set_quotaroot(struct mailbox *mailbox, const char *quotaroot)
 extern int mailbox_user_flag(struct mailbox *mailbox, const char *flag,
 			     int *flagnum);
 extern int mailbox_commit(struct mailbox *mailbox);
-extern int mailbox_commit_cache(struct mailbox *mailbox);
 
 /* seen state check */
 extern int mailbox_internal_seen(struct mailbox *mailbox, const char *userid);

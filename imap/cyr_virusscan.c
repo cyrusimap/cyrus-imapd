@@ -381,7 +381,6 @@ int scan_me(char *name,
     }
 
     mailbox_expunge(mailbox, virus_check, i_mbox, 0, NULL);
-    mailbox_commit(mailbox, 0);
     mailbox_close(&mailbox);
 
     return 0;
