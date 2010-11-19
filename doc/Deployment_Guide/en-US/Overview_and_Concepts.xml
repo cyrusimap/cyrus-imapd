@@ -23,27 +23,166 @@
     </section>
 
     <xi:include href="sect-Supported_Platforms_and_System_Requirements.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <section id="sect-Deployment_Guide-Overview_and_Concepts-Mailbox_Namespace">
-        <title>Mailbox Namespace</title>
+    <section id="sect-Deployment_Guide-Overview_and_Concepts-Cyrus_IMAP_Features">
+        <title>Cyrus IMAP Features</title>
         <para>
-            By default, the Cyrus IMAP server presents mailboxes using the <code>netnews</code> namespace convention. This means mailbox names are case-sensitive. A mailbox name may not start or end with a <code>.</code> (dot) character, nor may it contain two <code>.</code> (dot) characters in a row.
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Deployment_Guide-Overview_and_Concepts-Mailbox_Namespaces">
+        <title>Mailbox Namespaces</title>
+        <para>
+            By default, the Cyrus IMAP server presents mailboxes using the <literal>netnews</literal> namespace convention. This means that;
         </para>
         <para>
-            When implemented using the default <code>netnews</code> namespace convention, non-ASCII characters and shell meta-characters are not permitted in mailbox names. Optionally, the server can present mailboxes using the UNIX hierarchy convention &mdash;see <xref linkend="sect-Deployment_Guide-Mailbox_Namespace-Alternate_Namespace" /> for more information.
+            <itemizedlist>
+                <listitem>
+                    <para>
+                        mailbox names are case-sensitive,
+                    </para>
+
+                </listitem>
+                <listitem>
+                    <para>
+                        a mailbox name may not start or end with a <code>.</code> (dot) character,
+                    </para>
+
+                </listitem>
+                <listitem>
+                    <para>
+                        a mailbox name may not contain two subsequent <code>.</code> (dot) characters.
+                    </para>
+
+                </listitem>
+
+            </itemizedlist>
+
         </para>
-        <section id="sect-Deployment_Guide-Mailbox_Namespace-Standard_Internal_Namespace">
+        <para>
+            While the aforementioned implications of the <literal>netnews</literal> namespace convention apply under all circumstances, some of the implications imposed by the <literal>netnews</literal> namespace convention can be influenced by specifying additional configuration options to Cyrus IMAP, such as is the case with the hierarchy seperator.
+        </para>
+        <para>
+            When using the <literal>netnews</literal> namespace convention, the default, a user's shorthand qualifier (e.g. `<emphasis>user</emphasis>' for <literal>user@example.org</literal>) MAY NOT contain a <code>.</code> (dot) character, as the character is being used as a hierarchy separator in mailbox names, and would thus create a personal mailbox rather then a user's INBOX.
+        </para>
+        <para>
+            The same limitation goes for the use of virtual domains. Since a mailbox in a virtual domain typically uses a fully qualified user identifier (e.g. `<emphasis>user@example.org</emphasis>`, thus including a valid (sub-)domain name), the '.' (dot) character is inherited from the Domain Name System naming convention. This poses a problem without the use of the '.' (dot) character as a mailbox hierarchy separator.
+        </para>
+        <para>
+            To illustrate the effects on an environment, please examine the following procedure, starting from a clean Cyrus IMAP installation:
+        </para>
+        <procedure id="proc-Deployment_Guide-Mailbox_Namespaces-Example_Effects_of_the_Netnews_Namespace_Convention">
+            <title>Example Effects of the Netnews Namespace Convention</title>
+            <step>
+                <para>
+                    In <filename>imapd.conf</filename>, set <literal>unixhierarchysep</literal> to <literal>0</literal>.
+                </para>
+
+            </step>
+            <step>
+                <para>
+                    Attempt to create a mailbox for user <emphasis>bovik@example.org</emphasis> using the shorthand qualifier (e.g. `<emphasis>bovik</emphasis>`), and the fully qualified user identifier (e.g. `<emphasis>bovik@example.org</emphasis>`).
+                </para>
+                <para>
+
+<screen>$ cyradm -u cyrus localhost
+verify error:num=18:self signed certificate
+IMAP Password:
+localhost.localdomain&gt; lm
+localhost.localdomain&gt; cm user/bovik
+createmailbox: Invalid mailbox name
+localhost.localdomain&gt; cm user.bovik
+localhost.localdomain&gt; lm
+user.bovik (\HasNoChildren)
+localhost.localdomain&gt; lam user.bovik
+bovik lrswipkxtecda</screen>
+
+                </para>
+                <para>
+                    As you can see, the mailbox has been created succesfully using the shorthand qualifier.
+                </para>
+                <para>
+
+<screen>localhost.localdomain&gt; cm user.bovik@example.org
+createmailbox: Permission denied
+localhost.localdomain&gt; sam user.bovik cyrus all
+localhost.localdomain&gt; cm user.bovik@example.org
+createmailbox: Permission denied
+localhost.localdomain&gt; dm user.bovik
+localhost.localdomain&gt; cm user.bovik@example.org
+createmailbox: Permission denied</screen>
+
+                </para>
+
+            </step>
+            <step>
+                <para>
+                    In <filename>imapd.conf</filename>, set <literal>unixhierarchysep</literal> to <literal>1</literal>.
+                </para>
+
+            </step>
+            <step>
+                <para>
+                    Attempt to create a mailbox for user <emphasis>bovik@example.org</emphasis> using the shorthand qualifier (e.g. `<emphasis>bovik</emphasis>`), and the fully qualified user identifier (e.g. `<emphasis>bovik@example.org</emphasis>`).
+                </para>
+                <para>
+
+<screen>$ cyradm -u cyrus localhost
+verify error:num=18:self signed certificate
+IMAP Password:
+localhost.localdomain&gt; lm
+localhost.localdomain&gt; cm user/bovik
+localhost.localdomain&gt; lm
+user/bovik (\HasNoChildren)
+localhost.localdomain&gt; cm user/bovik@example.org
+localhost.localdomain&gt; lm
+user/bovik (\HasNoChildren)
+user/bovik@example.org (\HasNoChildren)
+localhost.localdomain&gt; lam user/bovik
+bovik lrswipkxtecda
+localhost.localdomain&gt; lam user/bovik@example.org
+bovik@example.org lrswipkxtecda
+localhost.localdomain&gt; sam user/bovik cyrus all
+localhost.localdomain&gt; sam user/bovik@example.org cyrus all
+localhost.localdomain&gt; dm user/bovik
+localhost.localdomain&gt; dm user/bovik@example.org
+localhost.localdomain&gt; lm
+localhost.localdomain&gt;</screen>
+
+                </para>
+                <para>
+                    As you can see, the mailbox has been created succesfully using the shorthand qualifier, and has been created using the fully qualified user identifier as well.
+                </para>
+
+            </step>
+
+        </procedure>
+
+
+    </section>
+
+    <section id="sect-Deployment_Guide-Overview_and_Concepts-Top_level_or_Nested_Personal_Folders">
+        <title>Top-level or Nested Personal Folders</title>
+        <para>
+            Cyrus IMAP allows the use of an alternative namespace for the presentation of personal mailboxes to the client (see the <literal>altnamespace</literal> configuration option), and the use of a different hierarchy seperator in its presentation of personal mailboxes to the client (see <literal>unixhierarchysep</literal>). A couple of examples are listed in our <ulink url="http://www.cyrusimap.org/~vanmeeuwen/cyrus-imapd-2.4-docs/Administrator_Guide/html/">Administrator Guide</ulink>.
+        </para>
+        <para>
+            When implemented using the default <code>netnews</code> namespace convention, non-ASCII characters and shell meta-characters are not permitted in mailbox names. Optionally, the server can present mailboxes using the UNIX hierarchy convention &mdash;see <xref linkend="sect-Deployment_Guide-Top_level_or_Nested_Personal_Folders-Alternate_Namespace" /> for more information.
+        </para>
+        <section id="sect-Deployment_Guide-Top_level_or_Nested_Personal_Folders-Standard_Internal_Namespace">
             <title>Standard (Internal) Namespace</title>
             <para>
-                All personal mailboxes for user &#34;<code>bovik</code>&#34; begin with the string &#34;<code>user.bovik.</code>&#34;. For example, if user &#34;<code>bovik</code>&#34; had a personal &#34;<code>work</code>&#34; mailbox, it would be called &#34;<code>user.bovik.work</code>&#34;. To user &#34;<code>bovik</code>&#34;, however, the prefix &#34;<code>user.bovik.</code>&#34; normally appears as &#34;<code>INBOX.</code>&#34;. The mailbox &#34;<code>user.bovik.work</code>&#34; would therefore appear as &#34;<code>INBOX.work</code>&#34;. If the access control list of the mailbox permitted other users to see that mailbox, it would appear to them as &#34;<code>user.bovik.work</code>&#34;.
+                All personal mailboxes for user "<code>bovik</code>" begin with the string "<code>user.bovik.</code>". For example, if user "<code>bovik</code>" had a personal "<code>work</code>" mailbox, it would be called "<code>user.bovik.work</code>". To user "<code>bovik</code>", however, the prefix "<code>user.bovik.</code>" normally appears as "<code>INBOX.</code>". The mailbox "<code>user.bovik.work</code>" would therefore appear as "<code>INBOX.work</code>". If the access control list of the mailbox permitted other users to see that mailbox, it would appear to them as "<code>user.bovik.work</code>".
             </para>
             <para>
-                The mailbox &#34;<code>user.bovik</code>&#34; is where the user &#34;<code>bovik</code>&#34; normally receives new mail, and normally appears to user &#34;<code>bovik</code>&#34; as &#34;<code>INBOX</code>&#34;. The mailbox &#34;<code>user.bovik</code>&#34; is referred to in this document as user &#34;<code>bovik</code>&#34;&#39;s <code>INBOX</code>.
+                The mailbox "<code>user.bovik</code>" is where the user "<code>bovik</code>" normally receives new mail, and normally appears to user "<code>bovik</code>" as "<code>INBOX</code>". The mailbox "<code>user.bovik</code>" is referred to in this document as user "<code>bovik</code>"'s <code>INBOX</code>.
             </para>
             <para>
-                Administrators create and delete users by creating and deleting the users&#39; <code>INBOX</code>. If a user has an <code>INBOX</code>, then they are allowed to subscribe to mailboxes. Only users without dots in their userid are permitted to have an <code>INBOX</code>. (A user with a dot in their userid would be able to login but would not be able to receive mail. Note that when using the unix hierarchy seperator, this is not the case, and any user may have a dot in their userid.)
+                Administrators create and delete users by creating and deleting the users' <code>INBOX</code>. If a user has an <code>INBOX</code>, then they are allowed to subscribe to mailboxes. Only users without dots in their userid are permitted to have an <code>INBOX</code>. (A user with a dot in their userid would be able to login but would not be able to receive mail. Note that when using the unix hierarchy seperator, this is not the case, and any user may have a dot in their userid.)
             </para>
             <para>
-                When an administrator deletes a user&#39;s <code>INBOX</code>, all of the user&#39;s personal mailboxes are deleted as well.
+                When an administrator deletes a user's <code>INBOX</code>, all of the user's personal mailboxes are deleted as well.
             </para>
             <para>
                 With the one notable exception of <code>INBOX</code>, all mailbox names are system-wide &mdash;they refer to the same mailbox regardless of the user. Access control lists determine which users can access or see which mailboxes. Using
@@ -55,13 +194,13 @@
                 <itemizedlist>
                     <listitem>
                         <para>
-                            Names that do not start with &#34;.&#34; are fully qualified.
+                            Names that do not start with <code>.</code> (dot) character are fully qualified.
                         </para>
 
                     </listitem>
                     <listitem>
                         <para>
-                            Names that start with &#34;.&#34; are relative to the current context.
+                            Names that start with <code>.</code> (dot) character are relative to the current context.
                         </para>
 
                     </listitem>
@@ -70,15 +209,15 @@
 
             </para>
             <para>
-                Thus, if you are working with folder names and the top of the hierarchy is named &#34;<code>cmu.</code>&#34;, the name &#34;<code>comp.infosystems.www</code>&#34; resolves to &#34;<code>comp.infosystems.www</code>&#34; and the name &#34;<code>.comp.infosystems.www</code>&#34; resolves to &#34;<code>cmu.comp.infosystems.www</code>&#34;.
+                Thus, if you are working with folder names and the top of the hierarchy is named "<code>cmu.</code>", the name "<code>comp.infosystems.www</code>" resolves to "<code>comp.infosystems.www</code>" and the name "<code>.comp.infosystems.www</code>" resolves to "<code>cmu.comp.infosystems.www</code>".
             </para>
 
         </section>
 
-        <section id="sect-Deployment_Guide-Mailbox_Namespace-Alternate_Namespace">
+        <section id="sect-Deployment_Guide-Top_level_or_Nested_Personal_Folders-Alternate_Namespace">
             <title>Alternate Namespace</title>
             <para>
-                The Cyrus IMAP server can also use analternate namespace which allows a user&#39;s personal mailboxes to appear as if they reside at the same level as that user&#39;s <code>INBOX</code> as opposed to children of it. With this feature, it may appear that there are non-unique names for mailboxes between users (2 different users may each have a top level &#34;work&#34; mailbox), but the internal representation is still <code>user.name.work</code>.
+                The Cyrus IMAP server can also use analternate namespace which allows a user's personal mailboxes to appear as if they reside at the same level as that user's <code>INBOX</code> as opposed to children of it. With this feature, it may appear that there are non-unique names for mailboxes between users (2 different users may each have a top level "work" mailbox), but the internal representation is still <code>user.name.work</code>.
             </para>
 
         </section>
@@ -89,7 +228,7 @@
     <section id="sect-Deployment_Guide-Overview_and_Concepts-Access_Control_Lists">
         <title>Access Control Lists</title>
         <para>
-            Access to each mailbox is controlled by each mailbox&#39;s access control list. Access Control Lists (ACLs) provide a powerful mechanism for specifying the users or groups of users who have permission to access the mailboxes.
+            Access to each mailbox is controlled by each mailbox's access control list. Access Control Lists (ACLs) provide a powerful mechanism for specifying the users or groups of users who have permission to access the mailboxes.
         </para>
         <para>
             An ACL is a list of zero or more entries. Each entry has an identifier and a set of rights. The identifier specifies the user or group of users for which the entry applies. The set of rights is one or more letters or digits, each letter or digit conferring a particular privilege.
@@ -131,7 +270,7 @@
                                 Keep per-user seen state (<emphasis>seen</emphasis>).
                             </para>
                             <para>
-                                The &#34;Seen&#34; and &#34;Recent&#34; flags are preserved for the user.
+                                The "Seen" and "Recent" flags are preserved for the user.
                             </para>
 
                         </listitem>
@@ -141,7 +280,7 @@
                         <term>w</term>
                         <listitem>
                             <para>
-                                The user may modify flags and keywords other then &#34;Seen&#34; and &#34;Deleted&#34; (which are controlled by other access rights).
+                                The user may modify flags and keywords other then "Seen" and "Deleted" (which are controlled by other access rights).
                             </para>
 
                         </listitem>
@@ -164,7 +303,7 @@
                                 The user may send email to the submission address for the mailbox (<emphasis>post</emphasis>).
                             </para>
                             <para>
-                                This right differs from the &#34;<code>i</code>&#34; (<emphasis>insert</emphasis>) right in that the delivery system inserts trace information into messages posted, whereas no delivery trace information is added to messages inserted (by move or copy).
+                                This right differs from the "<code>i</code>" (<emphasis>insert</emphasis>) right in that the delivery system inserts trace information into messages posted, whereas no delivery trace information is added to messages inserted (by move or copy).
                             </para>
 
                         </listitem>
@@ -184,7 +323,7 @@
                         <term>d</term>
                         <listitem>
                             <para>
-                                The user may store the &#34;Deleted&#34; flag, and perform expunges (<emphasis>delete</emphasis>).
+                                The user may store the "Deleted" flag, and perform expunges (<emphasis>delete</emphasis>).
                             </para>
 
                         </listitem>
@@ -224,7 +363,7 @@
                         <term>lrsp</term>
                         <listitem>
                             <para>
-                                Give the user read access to the mailbox, and allow the user to post to the mailbox using the delivery system (<emphasis>lookup</emphasis>, <emphasis>read</emphasis>, <emphasis>seen</emphasis> and <emphasis>post</emphasis>). Most delivery systems do not provide authentication, so the &#34;<code>p</code>&#34; right usually has meaning only for the &#34;anonymous&#34; user.
+                                Give the user read access to the mailbox, and allow the user to post to the mailbox using the delivery system (<emphasis>lookup</emphasis>, <emphasis>read</emphasis>, <emphasis>seen</emphasis> and <emphasis>post</emphasis>). Most delivery systems do not provide authentication, so the "<code>p</code>" right usually has meaning only for the "anonymous" user.
                             </para>
 
                         </listitem>
@@ -234,7 +373,7 @@
                         <term>lr</term>
                         <listitem>
                             <para>
-                                The user can lookup and read the contents of the mailbox, but no &#34;Seen&#34; or &#34;Recent&#34; flags may be set on the mailbox nor its contents. This set of rights is primarily useful for anonymous IMAP, which is often used to make the archives of mailing lists available.
+                                The user can lookup and read the contents of the mailbox, but no "Seen" or "Recent" flags may be set on the mailbox nor its contents. This set of rights is primarily useful for anonymous IMAP, which is often used to make the archives of mailing lists available.
                             </para>
 
                         </listitem>
@@ -244,7 +383,7 @@
                         <term>rs</term>
                         <listitem>
                             <para>
-                                The user can read the mailbox and the server preserves the &#34;Seen&#34; and &#34;Recent&#34; flags, but the mailbox is not visible to the user through the various mailbox listing commands. The user must know the name of the mailbox to be able to access it.
+                                The user can read the mailbox and the server preserves the "Seen" and "Recent" flags, but the mailbox is not visible to the user through the various mailbox listing commands. The user must know the name of the mailbox to be able to access it.
                             </para>
 
                         </listitem>
@@ -274,12 +413,12 @@
             </para>
             <remark> FIXME: Clarify what an ACL entry looks like first. Refer to how user login names are translated into their identifiers, and (in that section) refer to altnamespace, unixhiersep, default domain, virtdomains, sasl_auth_mech tips and tricks etc. </remark>
             <para>
-                There are two special identifiers, &#34;anonymous&#34;, and &#34;anyone&#34;, which are explained below. The meaning of other identifiers usually depends on the authorization mechanism being used (selected by <code>&ndash;&ndash;with-auth</code> at compile time, defaulting to Unix).
+                There are two special identifiers, "anonymous", and "anyone", which are explained below. The meaning of other identifiers usually depends on the authorization mechanism being used (selected by <code>&ndash;&ndash;with-auth</code> at compile time, defaulting to Unix).
             </para>
             <section id="sect-Deployment_Guide-Identifiers-anonymous_and_anyone">
-                <title>&#34;<code>anonymous</code>&#34; and &#34;<code>anyone</code>&#34;</title>
+                <title>"<code>anonymous</code>" and "<code>anyone</code>"</title>
                 <para>
-                    With any authorization mechanism, two special identifiers are defined. The identifier &#34;<code>anonymous</code>&#34; refers to the anonymous, or unauthenticated user. The identifier &#34;<code>anyone</code>&#34; refers to all users, including the anonymous user.
+                    With any authorization mechanism, two special identifiers are defined. The identifier "<code>anonymous</code>" refers to the anonymous, or unauthenticated user. The identifier "<code>anyone</code>" refers to all users, including the anonymous user.
                 </para>
 
             </section>
@@ -290,18 +429,18 @@
         <section id="sect-Deployment_Guide-Access_Control_Lists-Kerberos_vs._Unix_Authorization">
             <title>Kerberos vs. Unix Authorization</title>
             <para>
-                The Cyrus IMAP server comes with four authorization mechanisms, one is compatible with Unix-style (&#34;<code>/etc/passwd</code>&#34;) authorization, one for use with Kerberos 4, one for use with Kerberos 5, and one for use with an external authorization process (ptloader) which can interface with other group databases (e.g. AFS PTS groups, LDAP Groups, etc).
+                The Cyrus IMAP server comes with four authorization mechanisms, one is compatible with Unix-style ("<code>/etc/passwd</code>") authorization, one for use with Kerberos 4, one for use with Kerberos 5, and one for use with an external authorization process (ptloader) which can interface with other group databases (e.g. AFS PTS groups, LDAP Groups, etc).
             </para>
             <note>
                 <title>Authentication !== Authorization</title>
                 <para>
                     Note that authorization is <emphasis>not</emphasis> the same thing as authentication. Authentication is the act of proving who you are. Authorization is the act of determining what rights you have. Authentication is discussed in the Login Authentication part of this document.
                 </para>
-                <remark> In the paragraph above, make sure &#39;Login Authentication&#39; links to the appropriate section. </remark>
+                <remark> In the paragraph above, make sure 'Login Authentication' links to the appropriate section. </remark>
 
             </note>
             <para>
-                In the Unix authorization mechanism, identifiers are either a valid userid or the string &#34;<code>group</code>&#34;: followed by a group listed in <filename>/etc/group</filename>. Thus:
+                In the Unix authorization mechanism, identifiers are either a valid userid or the string "<code>group</code>": followed by a group listed in <filename>/etc/group</filename>. Thus:
             </para>
             <para>
 
@@ -312,7 +451,7 @@
             <para>
                 It is also possible to use unix groups with users authenticated through a non-/etc/passwd backend. Note that using unix groups in this way (without associated <filename>/etc/passwd</filename> entries) is not recommended.
             </para>
-            <remark> Actually, what Cyrus requires is the getgrent(3) POSIX sysctl. As such, NSS needs to be configured to have the groups available, one of which includes &#34;files&#34;, but could also include &#34;ldap&#34;. </remark>
+            <remark> Actually, what Cyrus requires is the getgrent(3) POSIX sysctl. As such, NSS needs to be configured to have the groups available, one of which includes "files", but could also include "ldap". </remark>
             <para>
                 Using the Kerberos authorization mechanism, identifiers are of the form:
             </para>
@@ -344,13 +483,13 @@
         <section id="sect-Deployment_Guide-Access_Control_Lists-Negative_Rights">
             <title>Negative Rights</title>
             <para>
-                Any of the above defined identifiers may be prefixed with a &#34;<code>-</code>&#34; character. The associated rights are then removed from that identifier. These are referred to as <emphasis>negative rights</emphasis>.
+                Any of the above defined identifiers may be prefixed with a "<code>-</code>" character. The associated rights are then removed from that identifier. These are referred to as <emphasis>negative rights</emphasis>.
             </para>
 
         </section>
 
         <section id="sect-Deployment_Guide-Access_Control_Lists-Calculating_the_Users_Rights">
-            <title>Calculating the Users&#39; Rights</title>
+            <title>Calculating the Users' Rights</title>
             <para>
                 To calculate the set of rights granted to a user, the server first calculates the union of all of the rights granted to the user and to all groups the user is a member of. The server then calculates and removes the union of all the negative rights granted to the user and to all groups the user is a member of.
             </para>
@@ -366,12 +505,12 @@
 
             </example>
             <para>
-                The user &#34;<code>fred</code>&#34; will be granted the rights &#34;<code>lrswip</code>&#34; and the anonymous user will be granted the rights &#34;<code>lrp</code>&#34;.
+                The user "<code>fred</code>" will be granted the rights "<code>lrswip</code>" and the anonymous user will be granted the rights "<code>lrp</code>".
             </para>
             <section id="sect-Deployment_Guide-Calculating_the_Users_Rights-Implicit_Rights_for_Administrators_on_Personal_Mailboxes">
                 <title>Implicit Rights for Administrators on Personal Mailboxes</title>
                 <para>
-                    Regardless of the ACL on a mailbox, users who are listed in the &#34;admins&#34; configuration option in &#34;<code>/etc/imapd.conf</code>&#34; implicitly have the &#34;<code>l</code>&#34; and &#34;<code>a</code>&#34; rights on all mailboxes. Users also implicitly have the &#34;<code>l</code>&#34; and &#34;<code>a</code>&#34; rights on their INBOX and all of their personal mailboxes.
+                    Regardless of the ACL on a mailbox, users who are listed in the "admins" configuration option in "<code>/etc/imapd.conf</code>" implicitly have the "<code>l</code>" and "<code>a</code>" rights on all mailboxes. Users also implicitly have the "<code>l</code>" and "<code>a</code>" rights on their INBOX and all of their personal mailboxes.
                 </para>
 
             </section>
@@ -382,10 +521,10 @@
         <section id="sect-Deployment_Guide-Access_Control_Lists-Initial_ACLs_for_Newly_Created_Mailboxes">
             <title>Initial ACLs for Newly Created Mailboxes</title>
             <para>
-                When a mailbox is created, its ACL starts off with a copy of the ACL of its closest parent mailbox. When a user is created, the ACL on the user&#39;s <code>INBOX</code> starts off with a single entry granting all rights to the user. When a non-user mailbox is created and does not have a parent, its ACL is initialized to the value of the &#34;<code>defaultacl</code>&#34; option in &#34;<code>/etc/imapd.conf</code>&#34;.
+                When a mailbox is created, its ACL starts off with a copy of the ACL of its closest parent mailbox. When a user is created, the ACL on the user's <code>INBOX</code> starts off with a single entry granting all rights to the user. When a non-user mailbox is created and does not have a parent, its ACL is initialized to the value of the "<code>defaultacl</code>" option in "<code>/etc/imapd.conf</code>".
             </para>
             <para>
-                Note that some rights are available implicitly, for example &#39;anonymous&#39; always has &#39;p&#39; on user INBOXes, and users always have rights on mailboxes within their INBOX hierarchy.
+                Note that some rights are available implicitly, for example 'anonymous' always has 'p' on user INBOXes, and users always have rights on mailboxes within their INBOX hierarchy.
             </para>
 
         </section>
@@ -399,12 +538,12 @@
             This section discusses different types of authentication (ways of logging in) that can be used with Cyrus IMAP.
         </para>
         <para>
-            The Cyrus IMAP server uses the Cyrus SASL library for authentication. This section describes how to configure SASL with use with Cyrus imapd. Please consult the Cyrus SASL System Administrator&#39;s Guide for more detailed, up-to-date information.
+            The Cyrus IMAP server uses the Cyrus SASL library for authentication. This section describes how to configure SASL with use with Cyrus imapd. Please consult the Cyrus SASL System Administrator's Guide for more detailed, up-to-date information.
         </para>
         <section id="sect-Deployment_Guide-Login_Authentication-Anonymous_Login">
             <title>Anonymous Login</title>
             <para>
-                Regardless of the SASL mechanism used by an individual connection, the server can support anonymous login. If the &#34;<code>allowanonymouslogin</code>&#34; option in &#34;<code>/etc/imapd.conf</code>&#34; is turned on, then the server will permit plaintext password logins using the user &#34;<code>anonymous</code>&#34; and any password.
+                Regardless of the SASL mechanism used by an individual connection, the server can support anonymous login. If the "<code>allowanonymouslogin</code>" option in "<code>/etc/imapd.conf</code>" is turned on, then the server will permit plaintext password logins using the user "<code>anonymous</code>" and any password.
             </para>
             <para>
                 Additionally, the server will enable any SASL mechanisms that allow anonymous logins.
@@ -430,7 +569,7 @@
                             Kerberos v4
                         </para>
                         <para>
-                            Plaintext passwords are verified by obtaining a ticket for the server&#39;s Kerberos identity, to protect against Kerberos server spoofing attacks.
+                            Plaintext passwords are verified by obtaining a ticket for the server's Kerberos identity, to protect against Kerberos server spoofing attacks.
                         </para>
 
                     </listitem>
@@ -454,7 +593,7 @@
                 <code>sasl_auto_transition</code> automatically creates secrets for shared secret authentication when given a password.
             </para>
             <para>
-                The method of plaintext password verification is always through the SASL library, even in the case of the internal LOGIN command. This is to allow the SASL library to be the only source of authentication information. You&#39;ll want to look at the <code>sasl_pwcheck_method</code> option in the SASL documentation to understand how to configure a plaintext password verifier for your system.
+                The method of plaintext password verification is always through the SASL library, even in the case of the internal LOGIN command. This is to allow the SASL library to be the only source of authentication information. You'll want to look at the <code>sasl_pwcheck_method</code> option in the SASL documentation to understand how to configure a plaintext password verifier for your system.
             </para>
             <para>
                 To disallow the use of plaintext passwords for authentication, you can set <code>allowplaintext: no</code> in imapd.conf. This will still allow PLAIN under TLS, but IMAP LOGIN commands will now fail.
@@ -465,7 +604,7 @@
         <section id="sect-Deployment_Guide-Login_Authentication-Kerberos_Logins">
             <title>Kerberos Logins</title>
             <para>
-                The Kerberos SASL mechanism supports the <code>KERBEROS_V4</code> authentication mechanism. The mechanism requires that a <code>srvtab</code> file exist in the location given in the &#34;<code>srvtab</code>&#34; configuration option. The <code>srvtab</code> file must be readable by the Cyrus server and must contain a &#34;<code>imap.$host@$realm</code>&#34; service key, where <code>$host</code> is the first component of the server&#39;s host name and <code>$realm</code> is the server&#39;s Kerberos realm.
+                The Kerberos SASL mechanism supports the <code>KERBEROS_V4</code> authentication mechanism. The mechanism requires that a <code>srvtab</code> file exist in the location given in the "<code>srvtab</code>" configuration option. The <code>srvtab</code> file must be readable by the Cyrus server and must contain a "<code>imap.$host@$realm</code>" service key, where <code>$host</code> is the first component of the server's host name and <code>$realm</code> is the server's Kerberos realm.
             </para>
             <para>
                 The server will permit logins by identities in the local realm and identities in the realms listed in the <code>loginrealms</code> option in <filename>/etc/imapd.conf</filename>.
@@ -474,7 +613,7 @@
                 The file <filename>/etc/krb.equiv</filename> contains mappings between Kerberos principals. The file contains zero or more lines, each containing two fields. Any identity matching the first field of a line is permitted to log in as the identity in the second field.
             </para>
             <para>
-                If the <code>loginuseacl</code> configuration option is turned on, than any Kerberos identity that is granted the &#34;<code>a</code>&#34; right on the user&#39;s <code>INBOX</code> is permitted to log in as that user.
+                If the <code>loginuseacl</code> configuration option is turned on, than any Kerberos identity that is granted the "<code>a</code>" right on the user's <code>INBOX</code> is permitted to log in as that user.
             </para>
 
         </section>
@@ -538,7 +677,7 @@
 
             </para>
             <para>
-                exist, then the quota root &#34;<code>user.bovik</code>&#34; applies to the mailboxes &#34;<code>user.bovik</code>&#34; and &#34;<code>user.bovik.todo</code>&#34;; the quota root &#34;<code>user.bovik.list</code>&#34; applies to the mailboxes &#34;<code>user.bovik.list.imap</code>&#34; and &#34;<code>user.bovik.list.info-cyrus</code>&#34;; and the quota root &#34;<code>user.bovik.saved</code>&#34; applies to the mailbox &#34;<code>user.bovik.saved</code>&#34;.
+                exist, then the quota root "<code>user.bovik</code>" applies to the mailboxes "<code>user.bovik</code>" and "<code>user.bovik.todo</code>"; the quota root "<code>user.bovik.list</code>" applies to the mailboxes "<code>user.bovik.list.imap</code>" and "<code>user.bovik.list.info-cyrus</code>"; and the quota root "<code>user.bovik.saved</code>" applies to the mailbox "<code>user.bovik.saved</code>".
             </para>
             <para>
                 Quota roots are created automatically when they are mentioned in the <code>setquota</code> command. Quota roots may not be deleted through the protocol, see Removing Quota Roots for instructions on how to delete them.
@@ -552,7 +691,7 @@
                 Normally, in order for a message to be inserted into a mailbox, the quota root for the mailbox must have enough unused storage so that inserting the message will not cause the block quota to go over the limit.
             </para>
             <para>
-                Mail delivery is a special case. In order for a message to be delivered to a mailbox, the quota root for the mailbox must not have usage that is over the limit. If the usage is not over the limit, then one message may be delivered regardless of its size. This puts the mailbox&#39;s usage over the quota, causing a user to be informed of the problem and permitting them to correct it. If delivery were not permitted in this case, the user would have no practical way of knowing that there was mail that could not be delivered.
+                Mail delivery is a special case. In order for a message to be delivered to a mailbox, the quota root for the mailbox must not have usage that is over the limit. If the usage is not over the limit, then one message may be delivered regardless of its size. This puts the mailbox's usage over the quota, causing a user to be informed of the problem and permitting them to correct it. If delivery were not permitted in this case, the user would have no practical way of knowing that there was mail that could not be delivered.
             </para>
             <para>
                 If the usage is over the limit, then the mail delivery will fail with a temporary error. This will cause the delivery system to re-attempt delivery for a couple of days (permitting the user time to notice and correct the problem) and then return the mail to the sender.
@@ -561,12 +700,12 @@
         </section>
 
         <section id="sect-Deployment_Guide-Quota-Quota_Warnings_Upon_Select_When_User_Has_d_Rights">
-            <title>Quota Warnings Upon Select When User Has &#34;<code>d</code>&#34; Rights</title>
+            <title>Quota Warnings Upon Select When User Has "<code>d</code>" Rights</title>
             <para>
-                When a user selects a mailbox whose quota root has usage that is close to or over the limit and the user has &#34;<code>d</code>&#34; rights on the mailbox, the server will issue an alert notifying the user that usage is close to or over the limit. The threshold of usage at which the server will issue quota warnings is set by the <code>quotawarn</code> configuration option.
+                When a user selects a mailbox whose quota root has usage that is close to or over the limit and the user has "<code>d</code>" rights on the mailbox, the server will issue an alert notifying the user that usage is close to or over the limit. The threshold of usage at which the server will issue quota warnings is set by the <code>quotawarn</code> configuration option.
             </para>
             <para>
-                The server only issues warnings when the user has &#34;<code>d</code>&#34; rights because only users with &#34;<code>d</code>&#34; rights are capable of correcting the problem.
+                The server only issues warnings when the user has "<code>d</code>" rights because only users with "<code>d</code>" rights are capable of correcting the problem.
             </para>
 
         </section>

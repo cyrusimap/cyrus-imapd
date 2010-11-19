@@ -1,0 +1,13 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<!DOCTYPE part PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
+<!ENTITY % BOOK_ENTITIES SYSTEM "Administrator_Guide.ent">
+%BOOK_ENTITIES;
+]>
+<part id="part-Administrator_Guide-Standard_Operating_Procedures">
+    <title>Standard Operating Procedures</title>
+    <xi:include href="Alternative_Namespace.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="Database_Conversion_Export_and_Import.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="Reconstructing_Mailboxes.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="Using_Squatter_for_Faster_IMAP_SEARCH.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+</part>
+

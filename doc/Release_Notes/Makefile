@@ -1,4 +1,4 @@
-PACKAGE = "Installation_Guide"
+PACKAGE = "Release_Notes"
 
 all: clean clean_ids
 	@publican build --langs=en-US --formats=html,html-single,pdf
