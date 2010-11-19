@@ -871,8 +871,6 @@ int squat_scan(SquatSearchIndex* index, char first_char,
   buf[0] = first_char;
 
   return(squat_scan_recurse(s, index->data_end, buf, 1, handler, closure));
-
-  return SQUAT_OK;
 }
 
 /* ====================================================================== */

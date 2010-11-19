@@ -56,10 +56,11 @@
  * Keep calling the read() system call with 'fd', 'buf', and 'nbyte'
  * until all the data is read in or an error occurs.
  */
-int retry_read(int fd, void *buf, size_t nbyte)
+int retry_read(int fd, void *vbuf, size_t nbyte)
 {
     int n;
     int nread = 0;
+    char *buf = vbuf;
 
     if (nbyte == 0) return 0;
 
@@ -88,10 +89,11 @@ int retry_read(int fd, void *buf, size_t nbyte)
  * Keep calling the write() system call with 'fd', 'buf', and 'nbyte'
  * until all the data is written out or an error occurs.
  */
-int retry_write(int fd, const void *buf, size_t nbyte)
+int retry_write(int fd, const void *vbuf, size_t nbyte)
 {
     int n;
     int written = 0;
+    const char *buf = vbuf;
 
     if (nbyte == 0) return 0;
 
