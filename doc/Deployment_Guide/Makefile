@@ -2,7 +2,7 @@ PACKAGE = "Deployment_Guide"
 
 all: clean clean_ids
 	@publican build --langs=en-US --formats=html,html-single,pdf
-	@rsync -aHvz tmp/en-US/{html,html-single,pdf} www.cyrusimap.org:./public_html/cyrus-imapd-2.5-docs/$(PACKAGE)/
+	@rsync -aHvz tmp/en-US/{html,html-single,pdf} www.cyrusimap.org:./public_html/cyrus-imapd-2.4-docs/$(PACKAGE)/
 
 clean:
 	@publican clean
