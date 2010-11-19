@@ -105,11 +105,6 @@
                     </listitem>
                     <listitem>
                         <para>
-                            <application>gperf</application>
-                        </para>
-                    </listitem>
-                    <listitem>
-                        <para>
                             <application>zlib</application> (Development Headers)
                         </para>
                     </listitem>

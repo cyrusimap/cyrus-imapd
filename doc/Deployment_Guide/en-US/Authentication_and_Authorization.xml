@@ -14,7 +14,7 @@
     <section id="sect-Deployment_Guide-Authentication_and_Authorization-Users_and_Mailboxes">
         <title>Users and Mailboxes</title>
         <para>
-            User mailboxes have an identifier which is not necessarily the same as the login name used. There are three distinguishable aspects to a user&#39;s entity and the mailbox associated with it;
+            User mailboxes have an identifier which is not necessarily the same as the login name used. There are three distinguishable aspects to a user's entity and the mailbox associated with it;
         </para>
         <para>
             <itemizedlist>
@@ -29,7 +29,7 @@
                 </listitem>
                 <listitem>
                     <para>
-                        The user&#39;s authentication entity &mdash;with all attributes associated with it&mdash; can have one of those attributes be used to create the relationship between the user authentication entity on the one side, and the mailbox entity on the other side.
+                        The user's authentication entity &mdash;with all attributes associated with it&mdash; can have one of those attributes be used to create the relationship between the user authentication entity on the one side, and the mailbox entity on the other side.
                     </para>
                     <para>
                         For example, the user that authenticated as <code>john.doe@example.org</code> may have a mailbox named <code>jdoe</code>.

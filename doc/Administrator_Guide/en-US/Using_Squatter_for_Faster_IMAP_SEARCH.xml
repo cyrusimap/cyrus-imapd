@@ -1,0 +1,53 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
+<!ENTITY % BOOK_ENTITIES SYSTEM "Administrator_Guide.ent">
+%BOOK_ENTITIES;
+]>
+<chapter id="chap-Administrator_Guide-Using_Squatter_for_Faster_IMAP_SEARCH">
+    <title>Using Squatter for Faster IMAP SEARCH</title>
+    <para>
+        IMAP SEARCH, as described in <ulink url="http://tools.ietf.org/html/rfc3501">RFC 3501</ulink>, is a IMAP4 (Rev1) command issued by the client, but executed on the server. The Cyrus IMAP server will search the mailbox for the content matching the search command issued. This may be an intensive operation if executed on large mailboxes, and may therefor delay the response to the client.
+    </para>
+    <para>
+        To significantly speed up the searching, Cyrus IMAP can create a cache of message contents and meta-data using <application>cyrus-squatter(8)</application>. This chapter explains how to generate and maintain these caches.
+    </para>
+    <section id="sect-Administrator_Guide-Using_Squatter_for_Faster_IMAP_SEARCH-Squatter_Invocation">
+        <title>Squatter Invocation</title>
+        <para>
+            Consider the following implications of running <application>cyrus-squatter</application>;
+        </para>
+        <para>
+            <itemizedlist>
+                <listitem>
+                    <para>
+                        Squatter creates the search index from all messages in the mailbox
+                    </para>
+
+                </listitem>
+
+            </itemizedlist>
+
+        </para>
+        <remark> list not complete </remark>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-Using_Squatter_for_Faster_IMAP_SEARCH-Generating_the_Search_Indexes">
+        <title>Generating the Search Indexes</title>
+        <para>
+            To generate the search index for all mailboxes, issue the following command:
+        </para>
+        <para>
+
+<screen>$ squatter -v</screen>
+
+        </para>
+        <para>
+            While the Cyrus IMAP server now has the search index available for the mailbox contents, it does not automatically update the search index with new messages coming in.
+        </para>
+
+    </section>
+
+
+</chapter>
+
