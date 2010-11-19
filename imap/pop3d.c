@@ -958,17 +958,13 @@ static void cmdloop(void)
 		    popd_mailbox->i.pop3_last_login = popd_login_time;
 		}
 
-		/* check for changes */
-		for (msgno = 1; msgno <= popd_exists; msgno++)
-		    if (popd_msg[msgno].seen) break;
-
-		if (msgno <= popd_exists)
-		    update_seen();
-
-		/* process looking for deleted messages */
+		/* look for deleted messages */
 		expunge_deleted();
 
-		mailbox_commit(popd_mailbox);
+		/* update seen data */
+		update_seen();
+
+		/* unlock will commit changes */
 		mailbox_unlock_index(popd_mailbox, NULL);
 
 done:

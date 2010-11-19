@@ -971,6 +971,9 @@ void mailbox_close(struct mailbox **mailboxptr)
     struct mailboxlist *listitem;
     int expunge_days = config_getint(IMAPOPT_EXPUNGE_DAYS);
 
+    /* be safe against double-close */
+    if (!mailbox) return;
+
     listitem = find_listitem(mailbox->name);
     assert(listitem && &listitem->m == mailbox);
 
@@ -1539,9 +1542,13 @@ restart:
 void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *sdata)
 {
     /* naughty - you can't unlock a dirty mailbox! */
-    if (mailbox->i.dirty || mailbox->header_dirty ||
-	mailbox->modseq_dirty || mailbox->quota_dirty)
+    int r = mailbox_commit(mailbox);
+    if (r) {
+	syslog(LOG_ERR, "IOERROR: failed to commit mailbox %s, "
+	       "probably need to reconstruct",
+	       mailbox->name);
 	abort();
+    }
 
     if (mailbox->has_changed) {
 	if (updatenotifier) updatenotifier(mailbox->name);
@@ -2537,7 +2544,6 @@ int mailbox_expunge_cleanup(struct mailbox *mailbox, time_t expunge_mark,
 	mailbox_index_dirty(mailbox);
 	mailbox->i.options |= OPT_MAILBOX_NEEDS_REPACK;
 	mailbox->i.first_expunged = first_expunged;
-	r = mailbox_commit(mailbox);
     }
 
     if (ndeleted) *ndeleted = numdeleted;

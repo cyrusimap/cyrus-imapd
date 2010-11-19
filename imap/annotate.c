@@ -1717,7 +1717,7 @@ static int annotation_set_mailboxopt(const char *int_mboxname,
 {
     struct mailbox *mailbox = NULL;
     int flag = 0, r = 0, i;
-    unsigned long oldopts;
+    unsigned long newopts;
 
     /* Check entry */
     for (i = 0; annotate_mailbox_flags[i].name; i++) {
@@ -1739,22 +1739,23 @@ static int annotation_set_mailboxopt(const char *int_mboxname,
     r = mailbox_open_iwl(int_mboxname, &mailbox);
     if (r) return r;
 
-    oldopts = mailbox->i.options;
+    newopts = mailbox->i.options;
 
     if (!strcmp(entry->shared.value, "true")) {
-	mailbox->i.options |= flag;
+	newopts |= flag;
     } else {
-	mailbox->i.options &= ~flag;
+	newopts &= ~flag;
     }
 
-    if (oldopts != mailbox->i.options) {
+    /* only commit if there's been a change */
+    if (mailbox->i.options != newopts) {
 	mailbox_index_dirty(mailbox);
-	r = mailbox_commit(mailbox);
+	mailbox->i.options = newopts;
     }
 
     mailbox_close(&mailbox);
 
-    return r;
+    return 0;
 }
 
 const struct annotate_st_entry server_entries[] =

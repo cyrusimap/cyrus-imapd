@@ -702,12 +702,9 @@ static int cleanup_seen_cb(char *name,
     mailbox->i.recentuid = sd.lastuid;
     mailbox->i.recenttime = sd.lastread;
 
-    /* commit everything */
-    mailbox_commit(mailbox);
-
  done:
-    if (seq) seqset_free(seq);
-    if (mailbox) mailbox_close(&mailbox);
+    seqset_free(seq);
+    mailbox_close(&mailbox);
     return r;
 }
 
