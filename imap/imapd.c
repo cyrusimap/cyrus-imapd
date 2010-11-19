@@ -1116,7 +1116,7 @@ void cmdloop(void)
 	      userdeny(imapd_userid, config_ident, shut, sizeof(shut)))) {
 	    for (p = shut; *p == '['; p++); /* can't have [ be first char */
 	    prot_printf(imapd_out, "* BYE [ALERT] %s\r\n", p);
-           telemetry_rusage( imapd_userid );
+	    telemetry_rusage(imapd_userid);
 	    shut_down(0);
 	}
 
@@ -4529,8 +4529,7 @@ void cmd_sort(char *tag, int usinguid)
 
     /* local mailbox */
     c = getsortcriteria(tag, &sortcrit);
-    if (c == EOF)
-	goto error;
+    if (c == EOF) goto error;
 
     /* get charset */
     if (c != ' ') {
@@ -4557,14 +4556,14 @@ void cmd_sort(char *tag, int usinguid)
     searchargs = (struct searchargs *)xzmalloc(sizeof(struct searchargs));
 
     c = getsearchprogram(tag, searchargs, &charset, 0);
-    if (c == EOF)
-	goto error;
+    if (c == EOF) goto error;
 
     if (c == '\r') c = prot_getc(imapd_in);
-    if (c != '\n')
+    if (c != '\n') {
 	prot_printf(imapd_out, 
 		    "%s BAD Unexpected extra arguments to Sort\r\n", tag);
 	goto error;
+    }
 
     n = index_sort(imapd_index, sortcrit, searchargs, usinguid);
     snprintf(mytime, sizeof(mytime), "%2.3f",
