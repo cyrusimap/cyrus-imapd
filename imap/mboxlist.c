@@ -982,7 +982,6 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
     struct mailbox *oldmailbox = NULL;
     struct mailbox *newmailbox = NULL;
     struct txn *tid;
-    char *newacl = NULL;
     const char *root = NULL;
     char *newpartition = NULL;
     char *mboxent = NULL;
@@ -1133,7 +1132,7 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
 		r = mupdate_delete(mupdate_h, oldname);
 	    if (!r) r = mupdate_reserve(mupdate_h, newname, buf);
 	}
-	if (!r) r = mupdate_activate(mupdate_h, newname, buf, newacl);
+	if (!r) r = mupdate_activate(mupdate_h, newname, buf, newmailbox->acl);
 	if (r) {
 	    syslog(LOG_ERR,
 		   "MUPDATE: can't commit mailbox entry for '%s'",
@@ -1155,7 +1154,6 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
     }
     
     /* free memory */
-    free(newacl); /* we're done with the new ACL */
     free(newpartition);
     free(mboxent);
 
