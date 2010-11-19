@@ -5,11 +5,12 @@
 ]>
 <article status="draft">
     <xi:include href="Article_Info.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <section id="sect-Release_Notes-Changes_to_Build_Requirements">
+    <section id="sect-Release_Notes-Not_Available">
         <title>Not Available</title>
         <para>
             The release notes are not available with 2.4
         </para>
+
     </section>
 
     <xi:include href="Revision_History.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
