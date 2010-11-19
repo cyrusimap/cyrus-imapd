@@ -155,8 +155,19 @@
                         </para>
                     </listitem>
                     <listitem>
+                        <formalpara>
+                            <title><application>PostgreSQL</application> (Development headers)</title>
+                            <para>
+                                To enable using PostgreSQL as a database server backend, include the PostgreSQL development headers and make sure to compile Cyrus IMAP with <literal>--with-pgsql</literal>.
+                            </para>
+                        </formalpara>
                         <para>
-                            <application>PostgreSQL</application> (Development headers)
+                            Should PostgreSQL &mdash;the client libraries or the development headers&mdash; be installed in a non-standard location, please consider using any of the following options;
+                        </para>
+                        <para>
+                            <screen>  --with-pgsql=DIR            use PostgreSQL (in DIR) [no]
+  --with-pgsql-libdir=DIR   Pgsql lib files are in DIR
+  --with-pgsql-incdir=DIR   Pgsql include files are in DIR</screen>
                         </para>
                     </listitem>
                 </itemizedlist>
