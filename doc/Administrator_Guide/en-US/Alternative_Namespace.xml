@@ -8,5 +8,12 @@
     <para>
         para
     </para>
+
+   <section>
+       <title>Switching the Alternative Namespace</title>
+       <para>
+           When switching the alternative namespace configuration variable in <filename>/etc/imapd.conf</filename>, bear in mind that client applications might conclude folders to have been removed and to have been added, as opposed to having been moved, resulting in a complete download of all folders and messages.
+       </para>
+   </section>
 </chapter>
 
