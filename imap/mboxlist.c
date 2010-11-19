@@ -1384,7 +1384,7 @@ int mboxlist_setacl(const char *name, const char *identifier,
     if (r && tid) {
 	/* if we are mid-transaction, abort it! */
 	int r2 = DB->abort(mbdb, tid);
-	if(r2) {
+	if (r2) {
 	    syslog(LOG_ERR,
 		   "DBERROR: error aborting txn in mboxlist_setacl: %s",
 		   cyrusdb_strerror(r2));

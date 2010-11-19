@@ -887,9 +887,9 @@ static void annotation_get_mailboxopt(const char *int_mboxname,
     char value[40];
     struct annotation_data attrib;
   
-    if(!int_mboxname || !ext_mboxname || !entry || !fdata || !mbrock)
-      fatal("annotation_get_mailboxopt called with bad parameters",
-              EC_TEMPFAIL);
+    if (!int_mboxname || !ext_mboxname || !entry || !fdata || !mbrock)
+	fatal("annotation_get_mailboxopt called with bad parameters",
+	      EC_TEMPFAIL);
 
     get_mb_data(int_mboxname, mbrock);
 
@@ -910,7 +910,7 @@ static void annotation_get_mailboxopt(const char *int_mboxname,
 	return;
 
     if (mailbox_open_irl(int_mboxname, &mailbox) != 0)
-      return;
+	return;
 
     if (mailbox->i.options & flag) {
 	strcpy(value, "true");

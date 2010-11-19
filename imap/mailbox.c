@@ -1556,9 +1556,8 @@ void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *sdata)
 	if (lock_unlock(mailbox->index_fd))
 	    syslog(LOG_ERR, "IOERROR: unlocking index of %s: %m", 
 		mailbox->name);
+	mailbox->index_locktype = 0;
     }
-
-    mailbox->index_locktype = 0;
 }
 
 /*
