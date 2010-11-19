@@ -179,6 +179,8 @@ if ($h_flag)
     printf "#ifndef __STRING_TABLE_%s_H_\n", $name;
     printf "#define __STRING_TABLE_%s_H_ 1\n", $name;
     printf "\n";
+    printf "#include <string.h>\n";
+    printf "\n";
 
     printf "enum %s {\n", $name;
     foreach my $e (@entries)
@@ -189,6 +191,10 @@ if ($h_flag)
 	printf ",\n"
     }
     printf "};\n";
+
+    printf "extern enum %s %s_from_string(const char *s);\n", $name, $name;
+    printf "extern enum %s %s_from_string_len(const char *s, size_t len);\n", $name, $name;
+    printf "extern const char *%s_to_string(enum %s v);\n", $name, $name;
 
     printf "\n";
     printf "#endif /* __STRING_TABLE_%s_H_ */\n", $name;
