@@ -130,8 +130,8 @@ static void message_parse_content(struct msg *msg,
 				     struct boundary *boundaries);
 
 static char *message_getline(char *s, unsigned n, struct msg *msg);
-static int message_pendingboundary(const char *s, char **boundaries,
-				      int *boundaryct);
+static int message_pendingboundary(const char *s, int slen,
+				   char **boundaries, int *boundaryct);
 
 static void message_write_envelope(struct ibuf *ibuf, const struct body *body);
 static void message_write_body(struct ibuf *ibuf, const struct body *body,
@@ -637,9 +637,11 @@ static int message_parse_headers(struct msg *msg, struct body *body,
 	   (next[-1] != '\n' ||
 	    (*next != '\r' || next[1] != '\n'))) {
 
+	len = strlen(next);
+
 	if (next[-1] == '\n' && *next == '-' &&
-	    message_pendingboundary(next, boundaries->id, &boundaries->count)) {
-	    body->boundary_size = strlen(next);
+	    message_pendingboundary(next, len, boundaries->id, &boundaries->count)) {
+	    body->boundary_size = len;
 	    body->boundary_lines++;
 	    if (next - 1 > headers) {
 		body->boundary_size += 2;
@@ -653,7 +655,6 @@ static int message_parse_headers(struct msg *msg, struct body *body,
 	    break;
 	}
 
-	len = strlen(next);
 	left -= len;
 	next += len;
 
@@ -1795,7 +1796,7 @@ static void message_parse_content(struct msg *msg, struct body *body,
 	msg->offset += len;
 
 	if (line[0] == '-' && line[1] == '-' &&
-	    message_pendingboundary(line, boundaries->id, &boundaries->count)) {
+	    message_pendingboundary(line, len, boundaries->id, &boundaries->count)) {
 	    body->boundary_size = len;
 	    body->boundary_lines++;
 	    if (body->content_lines) {
@@ -1911,20 +1912,31 @@ static char *message_getline(char *s, unsigned n, struct msg *msg)
  * If we hit a terminating boundary, the integer pointed to by
  * 'boundaryct' is modified appropriately.
  */
-static int message_pendingboundary(const char *s,
+static int message_pendingboundary(const char *s, int slen,
 				   char **boundaries, int *boundaryct)
 {
     int i, len;
     int rfc2046_strict = config_getswitch(IMAPOPT_RFC2046_STRICT);
+    const char *bbase;
+    int blen;
 
-    if (s[0] != '-' || s[1] != '-') return(0);
-    s+=2;
+    /* skip initial '--' */
+    if (slen < 2) return 0;
+    if (s[0] != '-' || s[1] != '-') return 0;
+    bbase = s + 2;
+    blen = slen - 2;
 
-    for (i=0; i < *boundaryct; ++i) {
+    for (i = 0; i < *boundaryct; ++i) {
 	len = strlen(boundaries[i]);
-        if (!strncmp(s, boundaries[i], len)) {
-            if (s[len] == '-' && s[len+1] == '-') *boundaryct = i;
-	    else if (!rfc2046_strict && s[len] && !Uisspace(s[len])) {
+	/* basic sanity check and overflow protection */
+	if (blen < len) continue;
+
+	if (!strncmp(bbase, boundaries[i], len)) {
+	    /* trailing '--', it's the end of this part */
+	    if (blen >= len+2 && bbase[len] == '-' && bbase[len+1] == '-')
+		*boundaryct = i;
+	    else if (!rfc2046_strict && blen > len+1 &&
+		     bbase[len] && !Uisspace(bbase[len])) {
 		/* Allow substring matches in the boundary.
 		 *
 		 * If rfc2046_strict is enabled, boundaries containing
@@ -1934,10 +1946,10 @@ static int message_pendingboundary(const char *s,
 		 */
 		continue;
 	    }
-            return(1);
-        }
+	    return 1;
+	}
     }
-    return(0);
+    return 0;
 }
 
 /*
