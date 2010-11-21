@@ -80,7 +80,7 @@ snapshot::
 	@git archive --format=tar --prefix=$(PACKAGE)-snapshot-$(GIT_VERSION)/ $(GIT_VERSION) | tar -C snapshot/ -x -f -
 	@echo "/* Snapshot $(PACKAGE) $(GIT_VERSION) */" > snapshot/$(PACKAGE)-snapshot-$(GIT_VERSION)/xversion.h
 	@echo "#define _CYRUS_VERSION \"git$(VERSION)+`git log --pretty=oneline $(PACKAGE)-$(VERSION)..$(GIT_VERSION) | wc -l`\"" >> snapshot/$(PACKAGE)-snapshot-$(GIT_VERSION)/xversion.h
-	@echo "#define CYRUS_GITVERSION \"`git log --abbrev=8 --pretty="%h %ci" -1 | cut -c 1-18`\"" >> snapshot/$(PACKAGE)-snapshot-$(GIT_VERSION)/xversion.h
+	@echo "#define CYRUS_GITVERSION \"`git log --abbrev=8 --pretty=\"%h %ci\" -1 | cut -d\" \" -f1,2`\"" >> snapshot/$(PACKAGE)-snapshot-$(GIT_VERSION)/xversion.h
 	@touch snapshot/$(PACKAGE)-snapshot-$(GIT_VERSION)/xversion
 	@cd snapshot/cyrus-imapd-snapshot-$(GIT_VERSION) ; sh SMakefile
 	@for d in $(SUBDIRS) $(DISTSUBDIRS); \
@@ -121,14 +121,14 @@ distgit:
 	git archive --format=tar --prefix=$(PACKAGE)-$(VERSION)/ $(PACKAGE)-$(VERSION) | tar -C dist -x -f -
 	echo "/* Release $(PACKAGE)-$(VERSION) */" > dist/$(PACKAGE)-$(VERSION)/xversion.h
 	echo "#define _CYRUS_VERSION \"v$(VERSION)\"" >> dist/$(PACKAGE)-$(VERSION)/xversion.h
-	echo "#define CYRUS_GITVERSION \"`git log --abbrev=8 --pretty="%h %ci" -1 | cut -c 1-19`\"" >> dist/$(PACKAGE)-$(VERSION)/xversion.h
+	echo "#define CYRUS_GITVERSION \"`git log --abbrev=8 --pretty=\"%h %ci\" -1 | cut -d\" \" -f1,2`\"" >> dist/$(PACKAGE)-$(VERSION)/xversion.h
 	touch dist/$(PACKAGE)-$(VERSION)/xversion
 	touch distgit
 
 xversion xversion.h:
 	@echo "/* Development version */" > xversion.h.tmp
 	@echo "#define _CYRUS_VERSION \"git$(VERSION)+`git log --pretty=oneline $(PACKAGE)-$(VERSION)..HEAD | wc -l`\"" >> xversion.h.tmp
-	@echo "#define CYRUS_GITVERSION \"`git log --abbrev=8 --pretty=\"%h %ci\" -1 | cut -c 1-19`\"" >> xversion.h.tmp
+	@echo "#define CYRUS_GITVERSION \"`git log --abbrev=8 --pretty=\"%h %ci\" -1 | cut -d\" \" -f1,2`\"" >> xversion.h.tmp
 	@cmp -s xversion.h.tmp xversion.h || mv xversion.h.tmp xversion.h
 	@rm -f xversion.h.tmp
 
