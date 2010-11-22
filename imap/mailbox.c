@@ -769,6 +769,55 @@ void mailbox_unmap_message(struct mailbox *mailbox __attribute__((unused)),
     map_free(basep, lenp);
 }
 
+/*
+ * Open the index file for 'mailbox'
+ */
+int mailbox_open_index(struct mailbox *mailbox)
+{
+    struct stat sbuf;
+    char *fname;
+    int openflags = mailbox->is_readonly ? O_RDONLY : O_RDWR;
+
+    if (mailbox->i.dirty || mailbox->cache_dirty)
+	abort();
+
+    if (mailbox->index_fd != -1) {
+	close(mailbox->index_fd);
+	mailbox->index_fd = -1;
+    }
+    if (mailbox->index_base)
+	map_free(&mailbox->index_base, &mailbox->index_len);
+
+    if (mailbox->cache_fd != -1) {
+	close(mailbox->cache_fd);
+	mailbox->cache_fd = -1;
+    }
+    if (mailbox->cache_buf.s)
+	map_free((const char **)&mailbox->cache_buf.s, &mailbox->cache_len);
+
+    /* open and map the index file */
+    fname = mailbox_meta_fname(mailbox, META_INDEX);
+    if (!fname)
+	return IMAP_MAILBOX_BADNAME;
+
+    mailbox->index_fd = open(fname, openflags, 0);
+    if (mailbox->index_fd == -1)
+	return IMAP_IOERROR;
+
+    /* don't open the cache yet, it will be loaded by lazy-loading
+     * later */
+
+    fstat(mailbox->index_fd, &sbuf);
+    mailbox->index_ino = sbuf.st_ino;
+    mailbox->index_mtime = sbuf.st_mtime;
+    mailbox->index_size = sbuf.st_size;
+    map_refresh(mailbox->index_fd, 0, &mailbox->index_base,
+		&mailbox->index_len, mailbox->index_size,
+		"index", mailbox->name);
+
+    return 0;
+}
+
 int mailbox_mboxlock_upgrade(struct mailboxlist *listitem, int locktype)
 {
     struct mailbox *mailbox = &listitem->m;
@@ -898,55 +947,6 @@ int mailbox_open_exclusive(const char *name, struct mailbox **mailboxptr)
 {
     return mailbox_open_advanced(name, mailboxptr, LOCK_EXCLUSIVE,
 				 LOCK_EXCLUSIVE);
-}
-
-/*
- * Open the index file for 'mailbox'
- */
-int mailbox_open_index(struct mailbox *mailbox)
-{
-    struct stat sbuf;
-    char *fname;
-    int openflags = mailbox->is_readonly ? O_RDONLY : O_RDWR;
-
-    if (mailbox->i.dirty || mailbox->cache_dirty)
-	abort();
-
-    if (mailbox->index_fd != -1) {
-	close(mailbox->index_fd);
-	mailbox->index_fd = -1;
-    }
-    if (mailbox->index_base)
-	map_free(&mailbox->index_base, &mailbox->index_len);
-
-    if (mailbox->cache_fd != -1) {
-	close(mailbox->cache_fd);
-	mailbox->cache_fd = -1;
-    }
-    if (mailbox->cache_buf.s)
-	map_free((const char **)&mailbox->cache_buf.s, &mailbox->cache_len);
-
-    /* open and map the index file */
-    fname = mailbox_meta_fname(mailbox, META_INDEX);
-    if (!fname)
-	return IMAP_MAILBOX_BADNAME;
-
-    mailbox->index_fd = open(fname, openflags, 0);
-    if (mailbox->index_fd == -1)
-	return IMAP_IOERROR;
-
-    /* don't open the cache yet, it will be loaded by lazy-loading
-     * later */
-
-    fstat(mailbox->index_fd, &sbuf);
-    mailbox->index_ino = sbuf.st_ino;
-    mailbox->index_mtime = sbuf.st_mtime;
-    mailbox->index_size = sbuf.st_size;
-    map_refresh(mailbox->index_fd, 0, &mailbox->index_base,
-		&mailbox->index_len, mailbox->index_size,
-		"index", mailbox->name);
-
-    return 0;
 }
 
 void mailbox_index_dirty(struct mailbox *mailbox)
