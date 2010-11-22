@@ -1506,6 +1506,8 @@ restart:
 	    mailbox->index_locktype = LOCK_EXCLUSIVE;
 	    r = upgrade_index(mailbox);
 	    if (r) return r;
+	    r = mailbox_open_index(mailbox);
+	    if (r) return r;
 	    goto restart;
 	}
     }

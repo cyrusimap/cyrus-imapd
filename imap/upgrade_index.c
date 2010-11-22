@@ -387,10 +387,6 @@ done:
     seqset_free(seq);
     free(expunge_data);
 
-    /* it's definitely changed! */
-    r = mailbox_open_index(mailbox);
-    if (r) return r;
-
     return 0;
 
 fail:

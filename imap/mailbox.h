@@ -501,7 +501,6 @@ extern int mailbox_reconstruct(const char *name, int flags);
 extern int mailbox_index_recalc(struct mailbox *mailbox);
 
 /* for upgrade index */
-extern int mailbox_open_index(struct mailbox *mailbox);
 extern int mailbox_buf_to_index_record(const char *buf,
 				       struct index_record *record);
 extern int mailbox_buf_to_index_header(const char *buf,
