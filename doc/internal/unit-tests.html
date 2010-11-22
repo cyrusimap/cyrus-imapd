@@ -1,0 +1,606 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="author" content="Greg Banks" />
+<link rel="stylesheet" type="text/css" href="cyrus.css"/>
+
+<title>Unit Tests</title>
+</head>
+
+<body>
+<h1>Unit Tests</h1>
+
+<h2>Table of Contents</h2>
+
+<ul class="toc">
+<li><a href="#introduction">1. Introduction</a></li>
+<li><a href="#what-is-a-unit-test">2. What Is A Unit Test?</a></li>
+<li><a href="#running-the-tests">3. Running The Tests</a>
+  <ul class="toc">
+  <li><a href="#setting-up-the-machine">3.1. Setting Up The Machine</a></li>
+  <li><a href="#configure-scripts">3.2 Configure Script</a></li>
+  <li><a href="#running-the-tests">3.3 Make</a></li>
+  <li><a href="#using-valgrind">3.4 Using Valgrind</a></li>
+  </ul>
+</li>
+<li><a href="#adding-your-own-tests">4. Adding Your Own Tests</a>
+  <ul class="toc">
+  <li><a href="#where-to-put-your-tests">4.1 Where To Put Your Tests</a></li>
+  <li><a href="#adding-a-new-suite">4.1 Adding A New Suite</a></li>
+  <li><a href="#adding-a-test-to-a-suite">4.2 Adding A Test To A Suite</a></li>
+  <li><a href="#suite-init-and-cleanup">4.3 Suite Init And Cleanup</a></li>
+  </ul>
+</li>
+</ul>
+
+<a name="introduction"/><h2>1. Introduction</h2>
+
+<p>Recently, a set of regression unit tests has been added to Cyrus.  This
+document explains the purpose implementation of those unit tests, and gives
+an example of how to add more unit tests (because there are never enough
+unit tests!).</p>
+
+<a name="what-is-a-unit-test"/><h2>2. What Is A Unit Test?</h2>
+
+<p>The
+<a href="http://en.wikipedia.org/wiki/Unit_test">definition on Wikipedia</a>
+sheds some light:</p>
+
+<blockquote>
+...<b>unit testing</b> is a method by which individual units of source code are
+tested to determine if they are fit for use. A unit is the smallest
+testable part of an application.
+</blockquote>
+
+In other words, unit testing is about verifying that small pieces of code,
+like individual functions, modules, or classes, work in isolation.  It is
+<b>not</b> about testing the system as a whole.
+
+<p>The tests implemenented here are also <b>regression tests</b>, which in
+<a href="http://en.wikipedia.org/wiki/Regression_testing">Wikipedia&apos;s words</a>
+means:</p>
+
+<blockquote>
+<b>Regression testing</b> is any type of software testing that seeks to
+uncover software errors after changes to the program (e.g. bugfixes
+or new functionality) have been made, by retesting the program. The
+intent of regression testing is to assure that a change, such as a
+bugfix, did not introduce new bugs.
+</blockquote>
+
+<p>In other words, the tests are designed to be easy to run and to
+work out fully automatically whether they have passed or failed,
+so that they can be run usefully by people who didn&apos;t write
+them.</p>
+
+<a name="running-the-tests"/><h2>3. Running The Tests</h2>
+
+<p>This section takes you through the process of running Cyrus&apos;
+unit tests.</p>
+
+<a name="setting-up-the-machine"/><h3>3.1. Setting Up The Machine</h3>
+
+<p>Cyrus&apos; unit tests are all located in a new directory,
+<tt>cyrus-imapd/cunit/</tt>.  They're written in C, like the remainder of
+Cyrus, and use the
+<a href="http://cunit.sourceforge.net/">CUnit library from SourceForge</a>,
+with some home grown wrappers and other improvements to make our
+lives easier.</p>
+
+<p>Your first step is step is to ensure that the CUnit library (including
+the headers) is installed.  Some modern operating systems already have
+CUnit, for example on Ubuntu you can just do:</p>
+
+<blockquote class="cmds">me@ubuntu&gt; <b>sudo apt-get install libcunit1-dev</b>
+</blockquote>
+
+<p>Alternately, you can download the CUnit source, build it and install it.
+It&apos;s not a complicated or difficult library, this shouldn&apos;t take
+long.  When you&apos;ve done, install it in <tt>/usr/include</tt> and
+<tt>/usr/lib</tt>.</p>
+
+<a name="configure-scripts"/><h3>3.2 Configure Script</h3>
+
+<p>Because of the dependency on the CUnit library, the tests are disabled by
+default; this means you need enable them with an option to the
+<tt>configure</tt> script:</p>
+
+<blockquote class="cmds">me@mybox&gt; <b>./configure --enable-unit-tests</b>
+...
+checking for CU_initialize_registry in -lcunit... yes
+checking CUnit/CUnit.h usability... yes
+checking CUnit/CUnit.h presence... yes
+checking for CUnit/CUnit.h... yes
+...
+</blockquote>
+
+<a name="running-the-tests"/><h3>3.3 Make</h3>
+
+<p>First you need to build Cyrus itself, using the traditional <tt>all:</tt>
+target.</p>
+
+<blockquote class="cmds">me@mybox&gt; <b>make all</b>
+...
+</blockquote>
+
+<p>Then, use the new <tt>check:</tt> target to build and run the unit
+tests.</p>
+
+<blockquote class="cmds">me@mybox&gt; <b>make check</b>
+...
+### Making check in /home/gnb/software/cyrus/imapd/lib  <span class="note">(a)</span>
+make[1]: Entering directory `/home/gnb/software/cyrus/imapd/lib'
+make[1]: Nothing to be done for `check'.
+make[1]: Leaving directory `/home/gnb/software/cyrus/imapd/lib'
+### Done with /home/gnb/software/cyrus/imapd/lib
+...
+make[1]: Entering directory `/home/gnb/software/cyrus/imapd/cunit'   <span class="note">(b)</span>
+...
+../cunit/cunit.pl [...] --generate-wrapper mboxname.c   <span class="note">(c)</span>
+gcc -c [...] -g -O2 .cunit-mboxname.c
+...
+gcc [...] -o unit unit.o [...] .cunit-mboxname.o [...] \  <span class="note">(d)</span>
+    ../imap/libimap.a ../lib/libcyrus.a [...]
+./unit -v   <span class="note">(e)</span>
+
+
+     CUnit - A Unit testing framework for C - Version 2.1-0
+     http://cunit.sourceforge.net/
+
+...
+Suite: mboxname   <span class="note">(f)</span>
+  Test: to_parts ... passed
+  Test: to_userid ... passed
+  Test: same_userid ... passed
+  Test: same_userid_domain ... passed
+...
+--Run Summary: Type      Total     Ran  Passed  Failed  <span class="note">(g)</span>
+               suites        9       9     n/a       0
+               tests        51      51      50       1
+               asserts     474     474     473       1
+make[1]: Leaving directory `/home/gnb/software/cyrus/imapd/cunit'
+</blockquote>
+
+<p>Let&apos;s take a closer look at what's happening here.</p>
+
+<dl>
+
+<dt><span class="note">(a)</span></dt>
+<dd>The <tt>check:</tt> target recurses into each subdirectory, which
+is normal behaviour for most targets in a top-level Makefile but actually
+rather useless in this case.</dd>
+
+<dt><span class="note">(b)</span></dt>
+<dd>Finally, the <tt>check:</tt> target recurses into the <tt>cunit/</tt>
+directory, which is where all the interesting stuff happens.</dd>
+
+<dt><span class="note">(c)</span></dt>
+<dd>The <tt>cunit/</tt> directory contains a number of C source files
+with test code in them.  For each of those, a small wrapper C source
+file is generated and then compiled into an object file.</dd>
+
+<dt><span class="note">(d)</span></dt>
+<dd>Finally, all the compiled object files are linked into an executable,
+with a <tt>main()</tt> routine from <tt>unit.c</tt>, and a number of
+libraries and object files from other parts of the Cyrus tree.</dd>
+
+<dt><span class="note">(e)</span></dt>
+<dd>The resulting executable is then run.  The <tt>-v</tt> flag tells
+it to be verbose.</dd>
+
+<dt><span class="note">(f)</span></dt>
+<dd>With no other arguments, the test executable runs all the built
+tests one by one, telling us which ones passed and which ones failed.</dd>
+
+<dt><span class="note">(g)</span></dt>
+<dd>At the end, the text executable prints a summary of how many
+tests it ran and how many passed and failed.</dd>
+
+</dl>
+
+<a name="using-valgrind"/><h3>3.4 Using Valgrind</h3>
+
+<p>Some failure modes are subtle, and cannot be detected in the C code
+itself; this is where
+<a href="http://valgrind.org/">the Valgrind program</a>
+comes in very handy.  It detects buffer overruns and memory leaks and
+various other kinds of subtle errors.</p>
+
+<p>To run the unit tests with Valgrind, use the new
+<tt>valgrind:</tt> target.</p>
+
+<blockquote class="cmds">me@mybox&gt; <b>make valgrind</b>
+...
+valgrind --tool=memcheck --leak-check=full ./unit -v   <span class="note">(a)</span>
+==2999== Memcheck, a memory error detector
+==2999== Copyright (C) 2002-2010, and GNU GPL'd, by Julian Seward et al.
+==2999== Using Valgrind-3.6.0.SVN-Debian and LibVEX; [...]
+==2999== Command: ./unit -v
+==2999== 
+...
+--Run Summary: Type      Total     Ran  Passed  Failed   <span class="note">(b)</span>
+               suites        9       9     n/a       0
+               tests        51      51      50       1
+               asserts     474     474     473       1
+...
+==2999== HEAP SUMMARY:   <span class="note">(c)</span>
+==2999==     in use at exit: 4,489 bytes in 134 blocks
+==2999==   total heap usage: 715 allocs, 581 frees, 352,763 bytes allocated
+==2999== 
+==2999== 4 bytes in 1 blocks are definitely lost in loss record 3 of 50
+==2999==    at 0x4C2815C: malloc (vg_replace_malloc.c:236)
+==2999==    by 0x44A0CA: xmalloc (xmalloc.c:57)
+==2999==    by 0x4399D8: strconcat (util.c:631)
+==2999==    by 0x40C059: test_uncast_null (strconcat.c:51)
+==2999==    by 0x61B32A9: ??? (in /usr/lib/libcunit.so.1.0.1)
+==2999==    by 0x61B36ED: ??? (in /usr/lib/libcunit.so.1.0.1)
+==2999==    by 0x61B3827: CU_run_all_tests (in /usr/lib/libcunit.so.1.0.1)
+==2999==    by 0x4066CC: run_tests (unit.c:144)
+==2999==    by 0x406806: main (unit.c:283)
+==2999== 
+...
+</blockquote>
+
+<p>Here's an explanation of what's happening in the example.</p>
+
+<dl>
+
+<dt><span class="note">(a)</span></dt>
+<dd>The test executable is run as before, but using the <tt>valgrind</tt>
+program.  The first thing we see is Valgrind's banner message.</dd>
+
+<dt><span class="note">(b)</span></dt>
+<dd>The test executable proceeds as normal and eventually emits it's
+run summary, then exits.</dd>
+
+<dt><span class="note">(c)</span></dt>
+<dd>After the test executable exits, Valgrind checks for memory leaks
+and prints both a summary of all leaks and a stack trace showing where
+each block of leaked memory was allocated.</dd>
+
+</dl>
+
+<p>I'd just like to say that I love Valgrind and I think it's immensely
+useful.  I would have made running the tests under Valgrind the only
+option for the <tt>check:</tt> target, except that Valgrind is not
+available on all of Cyrus' supported platforms.</p>
+
+
+<a name="adding-your-own-tests"/><h2>4. Adding Your Own Tests</h2>
+
+<p>Adding your own tests is quite simple.  Here's how.</p>
+
+<a name="where-to-put-your-tests"/><h2>4.1 Where To Put Your Tests</h2>
+
+<p>The unit test code in Cyrus is contained in a set of C source files
+in the <tt>cunit</tt> directory.  If you look closely, you will see
+that each of those C source files maps to a "Suite" in CUnit parlance.
+For example, <tt>cunit/glob.c</tt> is listed as the Suite "glob" in
+CUnit's runtime output.</p>
+
+<p>Typically, each Suite tests a single module or a related set of
+functions; for example, <tt>cunit/glob.c</tt> contains tests for
+the glob module in <tt>lib/glob.c</tt>.</p>
+
+<p>So, if you want to add a new test for a module which already has
+some existing tests, the sensible thing to do is to
+<a href="#adding-a-test-to-a-suite">add a new test to the existing suite</a>.
+Otherwise, you'll need to
+<a href="#adding-a-new-suite">add a new Suite</a>.</p>
+
+<a name="adding-a-new-suite"/><h2>4.1 Adding A New Suite</h2>
+
+<p>Each Suite is a single C source file in the <tt>cunit/</tt> directory.
+Your first step is to create a new C source file.  For this example,
+you'll create a new Suite to test the CRC32 routines which live
+in <tt>lib/crc32.c</tt>.</p>
+
+<blockquote class="cmds">me@mybox&gt; <b>vi cunit/crc32.c</b>
+...
+</blockquote>
+
+<p>The file should contain something like this.</p>
+
+<blockquote class="src">/* Unit test for lib/crc32.c */
+#include "cunit/cunit.h"  <span class="note">(a)</span>
+#include "crc32.h"  <span class="note">(b)</span>
+
+static void test_map(void)  <span class="note">(c)</span>
+{
+    static const char TEXT[] = "lorem ipsum";  <span class="note">(d)</span>
+    static uint32_t CRC32 = 0x0;
+    uint32_t c;  <span class="note">(e)</span>
+
+    c = crc32_map(TEXT, sizeof(TEXT)-1);  <span class="note">(f)</span>
+    CU_ASSERT_EQUAL(c, CRC32);  <span class="note">(g)</span>
+}
+</blockquote>
+
+<p>Here's an explanation of what all these bits are for.</p>
+
+<dl>
+
+<dt><span class="note">(a)</span></dt>
+<dd>You need to include the header <tt>"cunit/cunit.h"</tt>,
+which is a thin Cyrus wrapper around the CUnit's library's
+header, <tt>&lt;CUnit/CUnit.h&gt;</tt> with some extra
+conveniences.</dd>
+
+<dt><span class="note">(b)</span></dt>
+<dd>You should also include any headers you need for declarations
+of the functions which you'll be testing.  Note that the Cyrus
+<tt>lib/</tt> and <tt>imap/</tt> directories are already in the
+include path, so any header in there can be included without
+the directory prefix, e.g. <tt>"crc32.h"</tt> for <tt>lib/crc32.h</tt>.</dd>
+
+<dt><span class="note">(c)</span></dt>
+<dd>You need to have at least one function which looks like this:
+it takes no arguments, returns void, and is named <tt>test_whatever</tt>.
+It may be <tt>static</tt> or <tt>extern</tt>, but I recommend <tt>static</tt>.
+Functions with this signature are automatically discovered in the source
+code by the Cyrus unit test infrastructure, so all you have to do is
+write the function.  Later, a CUnit test named "whatever" will be
+created automatically for your <tt>test_whatever</tt> function.
+</dd>
+
+<dt><span class="note">(d)</span></dt>
+<dd>Here's a good place to define the test inputs and expected outputs.
+Note that for this example you have no idea of the actual correct output.
+The right thing to do there is to manually calculate the expected result
+from first principles, or to use a different piece of software which
+you believe to be working.  For this example, let's just use a known
+incorrect value and see what happens.</dd>
+
+<dt><span class="note">(e)</span></dt>
+<dd>Here's a good place for local variables you need during the test.</dd>
+
+<dt><span class="note">(f)</span></dt>
+<dd>Call the function under test (<tt>crc32_map()</tt> in this example)
+with known inputs, and capture the results in a local variable
+<tt>c</tt>.</dd>
+
+<dt><span class="note">(g)</span></dt>
+<dd>Compare the actual result in <tt>c</tt> with the expected
+result in <tt>CRC32</tt>.  The <tt>CU_ASSERT_EQUAL()</tt> macro
+checks that it's two arguments are equal (using an integer
+comparison), and if they're different it prints a message and
+records a failure.  Note that unlike the libc <tt>assert()</tt>
+macro, control will continue even if the assert fails.  The CUnit
+library provides a whole family of similar macros, see
+<a href="http://cunit.sourceforge.net/doc/writing_tests.html#assertions">the
+online CUnit documentation</a> for more details.
+</dd>
+
+</dl>
+
+<p>Now you need to tell the Cyrus makefiles about your new Suite.</p>
+
+<blockquote class="cmds">me@mybox&gt; <b>vi cunit/Makefile.in</b>
+...
+</blockquote>
+
+<p>You need to add the filename of your new test to the definition
+of the <tt>TESTSOURCES</tt> variable.</p>
+
+<blockquote class="src">PROGS = unit
+
+TESTSOURCES = times.c glob.c md5.c parseaddr.c message.c \
+            strconcat.c conversations.c msgid.c mboxname.c <b>\</b>
+	    <b>crc32.c</b>
+TESTLIBS = @top_srcdir@/imap/mutex_fake.o @top_srcdir@/imap/libimap.a \
+        @top_srcdir@/lib/libcyrus.a @top_srcdir@/lib/libcyrus_min.a
+
+</blockquote>
+
+<p>Now you need to use <tt>autoconf</tt> to build <tt>cunit/Makefile</tt>
+from <tt>cunit/Makefile.in</tt>.  The easiest way to do this is to run
+the <tt>config.status</tt> shell script which is one of the files
+that <tt>autoconf</tt> generates. Alternately, you could re-run
+the <tt>configure</tt> script (but that would be a lot slower).</p>
+
+<blockquote class="cmds">me@mybox&gt; <b>./config.status</b>
+...
+config.status: creating cunit/Makefile
+...
+</blockquote>
+
+<p>Now, you finally get to build and run your new test code.  Run
+<tt>make check</tt> and you should see your new code being
+built and run.</p>
+
+<blockquote class="cmds">me@mybox&gt; <b>make check</b>
+...
+../cunit/cunit.pl [...] --add-sources [...] <b>crc32.c</b>
+...
+../cunit/cunit.pl [...] --generate-wrapper <b>crc32.c</b>
+gcc -c [...] -g -O2 <b>.cunit-crc32.c</b>
+gcc [...] -o unit [...] <b>.cunit-crc32.o</b> ...
+./unit -v
+
+
+     CUnit - A Unit testing framework for C - Version 2.1-0
+     http://cunit.sourceforge.net/
+
+...
+Suite: <b>crc32</b>
+  Test: <b>map</b> ... FAILED
+    1. crc32.c:12  - CU_ASSERT_EQUAL(c=1926722702,CRC32=0)
+
+</blockquote>
+
+<p>Note how the test failure told us which in source file and
+at what line number the failure occurred, and what the actual
+and expected values were.  Let's go and fix that up now.</p>
+
+<blockquote class="src">    static const char TEXT[] = "lorem ipsum";
+    static uint32_t CRC32 = <b>0x72d7748e</b>;
+</blockquote>
+
+<p>Re-run <tt>make check</tt> and you'll see your test being
+rebuilt and rerun, and this time passing.</p>
+
+<blockquote class="cmds">me@mybox&gt; <b>make check</b>
+...
+../cunit/cunit.pl [...] --generate-wrapper <b>crc32.c</b>
+gcc -c [...] -g -O2 <b>.cunit-crc32.c</b>
+gcc [...] -o unit [...] <b>.cunit-crc32.o</b> ...
+./unit -v
+
+
+     CUnit - A Unit testing framework for C - Version 2.1-0
+     http://cunit.sourceforge.net/
+
+...
+Suite: <b>crc32</b>
+  Test: <b>map</b> ... passed
+</blockquote>
+
+<a name="adding-a-test-to-a-suite"/><h2>4.2 Adding A Test To A Suite</h2>
+
+<p>Adding a new test to an existing test is easy: all you have to
+do is add a new function to an existing C source file in the
+<tt>cunit/</tt> directory.  As an example, let's add a test for
+the <tt>crc_iovec()</tt> function.</p>
+
+<blockquote class="cmds">me@mybox&gt; <b>vi cunit/crc32.c</b>
+...
+</blockquote>
+
+<blockquote class="src">static void test_iovec(void)  <span class="note">(a)</span>
+{
+    static const char TEXT1[] = "lorem";  <span class="note">(b)</span>
+    static const char TEXT2[] = " ipsum";
+    static uint32_t CRC32 = 0x72d7748e;
+    uint32_t c;  <span class="note">(c)</span>
+    struct iovec iov[2];
+
+    memset(iov, 0, sizeof(iov));  <span class="note">(d)</span>
+    iov[0].iov_base = TEXT1;
+    iov[0].iov_len = sizeof(TEXT1)-1;
+    iov[1].iov_base = TEXT2;
+    iov[1].iov_len = sizeof(TEXT2)-1;
+
+    c = crc32_iovec(iov, 2);  <span class="note">(e)</span>
+    CU_ASSERT_EQUAL(c, CRC32);  <span class="note">(f)</span>
+}
+</blockquote>
+
+<p>Here's an explanation of what all these bits are for.</p>
+
+<dl>
+
+<dt><span class="note">(a)</span></dt>
+<dd>Your new test function should look like this:
+it takes no arguments, returns void, and is named <tt>test_whatever</tt>.
+It may be <tt>static</tt> or <tt>extern</tt>, but I recommend <tt>static</tt>.
+Functions with this signature are automatically discovered in the source
+code by the Cyrus unit test infrastructure, so all you have to do is
+write the function.  Later, a CUnit test named "whatever" will be
+created automatically for your <tt>test_whatever</tt> function.
+</dd>
+
+<dt><span class="note">(b)</span></dt>
+<dd>Here's a good place to define the test inputs and expected outputs.
+</dd>
+
+<dt><span class="note">(c)</span></dt>
+<dd>Here's a good place for local variables you need during the test.</dd>
+
+<dt><span class="note">(d)</span></dt>
+<dd>Here you set up the input conditions for the function under test.</dd>
+
+<dt><span class="note">(e)</span></dt>
+<dd>Call the function under test with your known inputs, and capture the
+results in a local variable, here <tt>c</tt>.</dd>
+
+<dt><span class="note">(f)</span></dt>
+<dd>Compare the actual result in <tt>c</tt> with the expected
+result in <tt>CRC32</tt>.  The <tt>CU_ASSERT_EQUAL()</tt> macro
+checks that it's two arguments are equal (using an integer
+comparison), and if they're different it prints a message and
+records a failure.  Note that unlike the libc <tt>assert()</tt>
+macro, control will continue even if the assert fails.  The CUnit
+library provides a whole family of similar macros, see
+<a href="http://cunit.sourceforge.net/doc/writing_tests.html#assertions">the
+online CUnit documentation</a> for more details.
+</dd>
+
+</dl>
+
+<p>Now run <tt>make check</tt> and you'll see your test being built and run.</p>
+
+<blockquote class="cmds">me@mybox&gt; <b>make check</b>
+...
+../cunit/cunit.pl [...] --generate-wrapper <b>crc32.c</b>
+gcc -c [...] -g -O2 <b>.cunit-crc32.c</b>
+gcc [...] -o unit [...] <b>.cunit-crc32.o</b> ...
+./unit -v
+
+
+     CUnit - A Unit testing framework for C - Version 2.1-0
+     http://cunit.sourceforge.net/
+
+...
+Suite: crc32
+  Test: map ... passed
+  Test: <b>iovec</b> ... passed
+
+</blockquote>
+
+<a name="suite-init-and-cleanup"/><h2>4.3 Suite Init And Cleanup</h2>
+
+<p>Sometimes the behaviour of the functions under test depend on 
+external influences such as environment variables, global variables,
+or the presence of certain files.</p>
+
+<p>These kinds of functions need special treatment to ensure that their
+behaviour is locked down during the running of your tests.  Otherwise,
+all sorts of strange behaviour may confuse the results of the tests.
+For example, a test might succeed the first time it's run in a given
+directory and fail the next time.  Or a test might succeed when run
+by the author of the test but fail when run by another user.</p>
+
+<p>CUnit provides a special arrangement which helps you in such
+cases: the suite initialisation and cleanup functions.  These are
+two functions that you write and which live in the suite source.
+They are called from CUnit respectively before any of the tests in
+the suite is run, and after all tests from that suite are run.</p>
+
+<p>Here's how to use them.  The suite initialisation function should
+set up any global state that the functions under test rely on, in
+such a way that their state is predictable and always the same no
+matter who runs the test or when or how many times.  Similarly the
+suite cleanup function should clean up any state which might possibly
+interfere with other test suites.  Note that some suites will need
+an initialisation function but not necessarily a cleanup function.</p>
+
+<p>Adding these functions is very easy: you just write functions
+of the appropriate signature (names, arguments and return type) and
+the Cyrus unit test infrastructure will automatically discover them
+and arrange for them to be called.  The functions should look like
+(actual example taken from <tt>cunit/mboxname.c</tt>) this:</p>
+
+<blockquote class="cmds">static enum enum_value old_config_virtdomains;
+
+<b>static int init(void)</b>
+{
+    old_config_virtdomains = config_virtdomains;
+    config_virtdomains = IMAP_ENUM_VIRTDOMAINS_ON;
+    return 0;
+}
+
+<b>static int cleanup(void)</b>
+{
+    config_virtdomains = old_config_virtdomains;
+    return 0;
+}
+</blockquote>
+
+<p>The functions should return 0 on success, and non-zero on error.  They
+must not call and <tt>CU_*</tt> functions or macros.</p>
+
+</body>
+</html>
