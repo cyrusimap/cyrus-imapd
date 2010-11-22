@@ -194,6 +194,7 @@ struct mailbox {
     unsigned long cache_len;	/* mapped size */
 
     int index_locktype; /* 0 = none, 1 = shared, 2 = exclusive */
+    int is_readonly; /* true = open index and cache files readonly */
 
     ino_t header_file_ino;
     bit32 header_file_crc;

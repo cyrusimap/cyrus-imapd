@@ -456,6 +456,7 @@ int mailbox_open_cache(struct mailbox *mailbox)
     struct stat sbuf;
     unsigned generation;
     int retry = 0;
+    int openflags = mailbox->is_readonly ? O_RDONLY : O_RDWR;
 
     /* already got everything? great */
     if (mailbox->cache_fd != -1 && !mailbox->need_cache_refresh)
@@ -471,7 +472,7 @@ int mailbox_open_cache(struct mailbox *mailbox)
 	    abort();
 
 	fname = mailbox_meta_fname(mailbox, META_CACHE);
-	mailbox->cache_fd = open(fname, O_RDWR, 0);
+	mailbox->cache_fd = open(fname, openflags, 0);
 	if (mailbox->cache_fd == -1)
 	    goto fail;
     }
@@ -572,6 +573,8 @@ int mailbox_append_cache(struct mailbox *mailbox,
 			 struct index_record *record)
 {
     int r;
+
+    assert(mailbox_index_islocked(mailbox, 1));
 
     /* no cache content */
     if (!record->crec.len)
@@ -852,6 +855,9 @@ int mailbox_open_advanced(const char *name,
     mailbox->acl = xstrdup(mbentry.acl);
     mailbox->mbtype = mbentry.mbtype;
 
+    if (index_locktype == LOCK_SHARED)
+	mailbox->is_readonly = 1;
+
     r = mailbox_open_index(mailbox);
     if (r) {
 	syslog(LOG_ERR, "IOERROR: opening index %s: %m", mailbox->name);
@@ -901,6 +907,7 @@ int mailbox_open_index(struct mailbox *mailbox)
 {
     struct stat sbuf;
     char *fname;
+    int openflags = mailbox->is_readonly ? O_RDONLY : O_RDWR;
 
     if (mailbox->i.dirty || mailbox->cache_dirty)
 	abort();
@@ -924,7 +931,7 @@ int mailbox_open_index(struct mailbox *mailbox)
     if (!fname)
 	return IMAP_MAILBOX_BADNAME;
 
-    mailbox->index_fd = open(fname, O_RDWR, 0);
+    mailbox->index_fd = open(fname, openflags, 0);
     if (mailbox->index_fd == -1)
 	return IMAP_IOERROR;
 
@@ -1445,12 +1452,19 @@ int mailbox_lock_index(struct mailbox *mailbox, int locktype)
 
 restart:
 
-    if (locktype == LOCK_EXCLUSIVE)
-	r = lock_blocking(mailbox->index_fd);
-    else
+    if (locktype == LOCK_EXCLUSIVE) {
+	/* handle read-only case cleanly - we need to re-open read-write first! */
+	if (mailbox->is_readonly) {
+	    mailbox->is_readonly = 0;
+	    r = mailbox_open_index(mailbox);
+	}
+	if (!r) r = lock_blocking(mailbox->index_fd);
+    }
+    else {
 	r = lock_shared(mailbox->index_fd);
+    }
 
-    if (r == -1) {
+    if (r) {
 	syslog(LOG_ERR, "IOERROR: locking index for %s: %m",
 	       mailbox->name);
 	return IMAP_IOERROR;
