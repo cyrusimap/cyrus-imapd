@@ -100,7 +100,7 @@ sync_client \- client side of the synchronization (replication) engine
 .IR objects ...
 
 .SH DESCRIPTION
-.I Sync_client
+.B sync_client
 is the client side of the replication system.  It runs on the client
 (master) system and connects to the target (replica) system and
 generates an appropriate sequence of transactions to synchronize the
@@ -119,9 +119,9 @@ up to 1000 seconds before giving up.
 .TP
 .BI \-z
 Require compression.
-The replication protocol will always try to enable compression if both
-ends support it.  Set this flag when you want to abort if compression is
-not available.
+The replication protocol will always try to enable deflate compression if
+both ends support it.  Set this flag when you want to abort if compression
+is not available.
 .TP
 .BI \-C " config-file"
 Read configuration options from \fIconfig-file\fR.
@@ -135,19 +135,21 @@ configuration option.
 .BI \-f " input-file"
 In mailbox or user replication mode: provides list of users or mailboxes
 to replicate.  In rolling replication mode, specifies an alternate log
-file (sync_client will exit after processing the log file).
+file
+.RB ( sync_client
+will exit after processing the log file).
 .TP
 .BI \-F " shutdown-file"
 Rolling replication checks for this file at the end of each replication
-cycle and shuts down if it is present. Used to request nice clean shutdown
-at first convenient point. The file in question is removed on shutdown.
+cycle and shuts down if it is present. Used to request a nice clean shutdown
+at the first convenient point. The file is removed on shutdown.
 Overrides
 .I sync_shutdown_file
 option in
 .I imapd.conf
 .TP
 .BI \-w " interval"
-Wait this long before starting. Typically used so that we can attach a
+Wait this long before starting. This option is typically used so that we can attach a
 debugger to one end of the replication system or the other.
 .TP
 .BI \-t " timeout"
@@ -165,11 +167,11 @@ group. Default: 3 seconds.
 .BI \-r
 Rolling (repeat) replication mode. Pick up a list of actions recorded by
 the
-.B lmtpd(8), imapd(8), popd(8) and nntpd(8)
+.BR lmtpd "(8), " imapd "(8), " popd "(8) and " nntpd (8)
 daemons from the file specified in
-.I sync_log_file.
+.IR sync_log_file .
 Repeat until
-.I sync_shutdwon_file
+.I sync_shutdown_file
 appears.
 .TP
 .BI \-n
@@ -177,8 +179,9 @@ Use the named channel for rolling replication mode.  If multiple channels
 are specified in
 .I sync_log_channels
 then use one of them.  This option is
-probably best combined with -S to connect to a different server with each
-channel.
+probably best combined with
+.B \-S
+to connect to a different server with each channel.
 .TP
 .BI \-u
 User mode.
@@ -192,12 +195,12 @@ Remaining arguments are list of mailboxes which should be replicated.
 Sieve mode.
 Remaining arguments are list of users whose Sieve files should be replicated.
 Principally used for debugging purposes: not exposed to
-.B sync_client(8).
+.BR sync_client (8).
 .SH FILES
 .TP
 .B /etc/imapd.conf
 .SH SEE ALSO
 .PP
-\fBsync_server(8)\fR
+\fBsync_server\fR(8)
 .SH AUTHORS
 David Carter (dpc22@cam.ac.uk), Ken Murchison (ken@oceana.com)
