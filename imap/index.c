@@ -214,23 +214,32 @@ int index_open(const char *name, struct index_init *init,
     struct index_state *state = xzmalloc(sizeof(struct index_state));
     struct seqset *vanishedlist = NULL;
 
-    r = mailbox_open_iwl(name, &state->mailbox);
-    if (r) goto fail;
-
     if (init) {
-	state->myrights = cyrus_acl_myrights(init->authstate, state->mailbox->acl);
-	if (init->examine_mode)
+	if (init->examine_mode) {
 	    state->myrights &= ~ACL_READ_WRITE;
+	    r = mailbox_open_irl(name, &state->mailbox);
+	    if (r) goto fail;
+	} else {
+	    r = mailbox_open_iwl(name, &state->mailbox);
+	    if (r) goto fail;
+	}
+	state->myrights = cyrus_acl_myrights(init->authstate,
+					     state->mailbox->acl);
 
 	state->authstate = init->authstate;
 	state->userid = init->userid ? xstrdup(init->userid) : NULL;
 
-	state->internalseen = mailbox_internal_seen(state->mailbox, state->userid);
+	state->internalseen = mailbox_internal_seen(state->mailbox,
+						    state->userid);
 	state->keepingseen = (state->myrights & ACL_SEEN);
 	state->examining = init->examine_mode;
 
 	state->out = init->out;
 	state->qresync = init->qresync;
+    }
+    else {
+	r = mailbox_open_iwl(name, &state->mailbox);
+	if (r) goto fail;
     }
 
     /* initialise the index_state */
