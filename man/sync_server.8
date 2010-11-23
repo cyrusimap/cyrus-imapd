@@ -55,10 +55,10 @@ sync_server \- server side of the synchronization (replication) engine
 ]
 .SH DESCRIPTION
 
-.I Sync_server
+.B sync_server
 is the server side of the the replication system.  It runs on the
 target (replica) system and listens for connections from
-.I sync_client
+.B sync_client
 which provides instructions for synchronizing the replica system with
 the master system.
 
@@ -69,7 +69,7 @@ Read configuration options from \fIconfig-file\fR.
 .TP
 .BI \-p " ssf"
 Tell
-.I sync_server
+.B sync_server
 that an external layer exists.  An SSF (security strength factor) of 1
 means an integrity protection layer exists.  Any higher SSF implies
 some form of privacy protection.
@@ -78,6 +78,6 @@ some form of privacy protection.
 .B /etc/imapd.conf
 .SH SEE ALSO
 .PP
-\fBsync_client(8)\fR
+\fBsync_client\fR(8)
 .SH AUTHORS
 David Carter (dpc22@cam.ac.uk), Ken Murchison (ken@oceana.com)
