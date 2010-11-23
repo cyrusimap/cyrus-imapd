@@ -18,6 +18,8 @@ static void test_single(void)
     static const char text[] = "Hello World";
     static const char expected[33] = "b10a8db164e0754105b7a99be72e3fe5";
 
+    CU_ASSERT_EQUAL(MD5_DIGEST_LENGTH, 16);
+
     MD5Init(&ctx);
     MD5Update(&ctx, text, strlen(text));
     MD5Final(result, &ctx);
