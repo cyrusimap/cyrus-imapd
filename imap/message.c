@@ -130,8 +130,7 @@ static void message_parse_content(struct msg *msg,
 				     struct boundary *boundaries);
 
 static char *message_getline(char *s, unsigned n, struct msg *msg);
-static int message_pendingboundary(const char *s, int slen,
-				   char **boundaries, int *boundaryct);
+static int message_pendingboundary(const char *s, int slen, struct boundary *);
 
 static void message_write_envelope(struct ibuf *ibuf, const struct body *body);
 static void message_write_body(struct ibuf *ibuf, const struct body *body,
@@ -640,7 +639,7 @@ static int message_parse_headers(struct msg *msg, struct body *body,
 	len = strlen(next);
 
 	if (next[-1] == '\n' && *next == '-' &&
-	    message_pendingboundary(next, len, boundaries->id, &boundaries->count)) {
+	    message_pendingboundary(next, len, boundaries)) {
 	    body->boundary_size = len;
 	    body->boundary_lines++;
 	    if (next - 1 > headers) {
@@ -1796,7 +1795,7 @@ static void message_parse_content(struct msg *msg, struct body *body,
 	msg->offset += len;
 
 	if (line[0] == '-' && line[1] == '-' &&
-	    message_pendingboundary(line, len, boundaries->id, &boundaries->count)) {
+	    message_pendingboundary(line, len, boundaries)) {
 	    body->boundary_size = len;
 	    body->boundary_lines++;
 	    if (body->content_lines) {
@@ -1913,7 +1912,7 @@ static char *message_getline(char *s, unsigned n, struct msg *msg)
  * 'boundaryct' is modified appropriately.
  */
 static int message_pendingboundary(const char *s, int slen,
-				   char **boundaries, int *boundaryct)
+				   struct boundary *boundaries)
 {
     int i, len;
     int rfc2046_strict = config_getswitch(IMAPOPT_RFC2046_STRICT);
@@ -1926,15 +1925,15 @@ static int message_pendingboundary(const char *s, int slen,
     bbase = s + 2;
     blen = slen - 2;
 
-    for (i = 0; i < *boundaryct; ++i) {
-	len = strlen(boundaries[i]);
+    for (i = 0; i < boundaries->count ; ++i) {
+	len = strlen(boundaries->id[i]);
 	/* basic sanity check and overflow protection */
 	if (blen < len) continue;
 
-	if (!strncmp(bbase, boundaries[i], len)) {
+	if (!strncmp(bbase, boundaries->id[i], len)) {
 	    /* trailing '--', it's the end of this part */
 	    if (blen >= len+2 && bbase[len] == '-' && bbase[len+1] == '-')
-		*boundaryct = i;
+		boundaries->count = i;
 	    else if (!rfc2046_strict && blen > len+1 &&
 		     bbase[len] && !Uisspace(bbase[len])) {
 		/* Allow substring matches in the boundary.
