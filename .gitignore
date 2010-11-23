@@ -71,8 +71,6 @@ imap/pushstats.c
 imap/pushstats.h
 imap/quota
 imap/reconstruct
-imap/rfc822_header.c
-imap/rfc822_header.h
 imap/smmapd
 imap/squatter
 imap/sync_client

@@ -1070,6 +1070,13 @@ AC_SUBST(COM_ERR_LIBS)
 AC_SUBST(COM_ERR_LDFLAGS)
 AC_SUBST(COM_ERR_CPPFLAGS)
 
+if test "$USE_MAINTAINER_MODE" = "yes" ; then
+    AC_CHECK_PROG(GPERF,gperf,yes,no)
+    if test "$GPERF" != "yes"; then
+	AC_MSG_ERROR([gperf is not installed on this system, but is required for maintainer mode build rules])
+    fi
+fi
+
 AC_MSG_CHECKING(for modern syslog)
 AC_CACHE_VAL(cyrus_cv_lib_syslog, AC_TRY_CPP([#include <syslog.h>
 #ifndef LOG_LOCAL6
