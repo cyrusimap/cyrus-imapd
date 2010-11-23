@@ -60,6 +60,9 @@ if test "$MAKEDEPEND" != "makedepend"; then
         AC_MSG_WARN([Makedepend is not installed on this system.  You should compile and install the version from the makedepend subdirectory.])
 fi
 
+dnl If we were using Automake, this would be AM_MAINTAINER_MODE
+CMU_MAINTAINER_MODE
+
 AC_ARG_WITH(login,,AC_ERROR([--with-login is no longer supported.
 Configure SASL appropriately instead.]))
 
