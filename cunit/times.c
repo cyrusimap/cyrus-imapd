@@ -86,17 +86,14 @@ static void push_tz(const char *tz)
     tzset();
 }
 
-static char *unstash_tz(void)
-{
-    assert(n_tz_stack > 0);
-    free(tz_stack[n_tz_stack--]);
-}
-
 static void pop_tz(void)
 {
-    unstash_tz();
+    char *old;
+    assert(n_tz_stack > 1);
+    old = tz_stack[--n_tz_stack];
     putenv(tz_stack[n_tz_stack-1]);
     tzset();
+    free(old);
 }
 
 static int init(void)
