@@ -299,3 +299,56 @@ static void test_parse_rxdate(void)
     message_free_body(&body);
 }
 
+
+static void test_mime_trivial(void)
+{
+    static const char msg[] =
+"From: Fred Bloggs <fbloggs@fastmail.fm>\r\n"
+"Reply-To: <bounce.me.harder@fastmail.fm>\r\n"
+"To: Sarah Jane Smith <sjsmith@gmail.com>\r\n"
+"Date: Thu, 28 Oct 2010 18:37:26 +1100\r\n"
+"Subject: MIME testing email\r\n"
+"MIME-Version: 1.0\r\n"
+"Content-Type: multipart/mixed; boundary=\"2b47bc7b64285b8be25dcdca86fbc501b048eab1\"\r\n"
+"Content-Language: en\r\n"
+"Message-ID: <fake1001@fastmail.fm>\r\n"
+"\r\n"
+"--2b47bc7b64285b8be25dcdca86fbc501b048eab1\r\n"
+"\r\n"
+"Hello, World\n"
+"\r\n--2b47bc7b64285b8be25dcdca86fbc501b048eab1--\r\n";
+    int r;
+    struct body body;
+
+    memset(&body, 0x45, sizeof(body));
+    r = message_parse_mapped(msg, sizeof(msg)-1, &body);
+
+    CU_ASSERT_EQUAL(r, 0);
+
+    /* Content-Type: */
+    CU_ASSERT_STRING_EQUAL(body.type, "MULTIPART");
+    CU_ASSERT_STRING_EQUAL(body.subtype, "MIXED");
+    CU_ASSERT_PTR_NOT_NULL(body.params);
+    CU_ASSERT_STRING_EQUAL(body.params->attribute, "BOUNDARY");
+    CU_ASSERT_STRING_EQUAL(body.params->value, "2b47bc7b64285b8be25dcdca86fbc501b048eab1");
+    CU_ASSERT_PTR_NULL(body.params->next);
+
+    /*
+     * RFC2046 says that all headers and in particular the Content-Type:
+     * header may be missing in an entity, and if so the default
+     * Content-Type is text/plain;charset="us-ascii"
+     */
+
+    /* simple body */
+    CU_ASSERT_EQUAL(body.numparts, 1);
+    CU_ASSERT_PTR_NOT_NULL(body.subpart);
+    CU_ASSERT_STRING_EQUAL(body.subpart[0].type, "TEXT");
+    CU_ASSERT_STRING_EQUAL(body.subpart[0].subtype, "PLAIN");
+    CU_ASSERT_PTR_NOT_NULL(body.subpart[0].params);
+    CU_ASSERT_STRING_EQUAL(body.subpart[0].params->attribute, "CHARSET");
+    CU_ASSERT_STRING_EQUAL(body.subpart[0].params->value, "us-ascii");
+    CU_ASSERT_PTR_NULL(body.subpart[0].params->next);
+
+    message_free_body(&body);
+}
+
