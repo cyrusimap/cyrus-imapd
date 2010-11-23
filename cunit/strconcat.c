@@ -1,3 +1,4 @@
+#include <malloc.h>
 #include "cunit/cunit.h"
 #include "util.h"
 
@@ -17,6 +18,7 @@ static void test_single(void)
     s = strconcat(word1, (char *)NULL);
     CU_ASSERT_PTR_NOT_NULL(s);
     CU_ASSERT_STRING_EQUAL(s, "lorem");
+    free(s);
 }
 
 static void test_multiple(void)
@@ -34,6 +36,7 @@ static void test_multiple(void)
 		  (char *)NULL);
     CU_ASSERT_PTR_NOT_NULL(s);
     CU_ASSERT_STRING_EQUAL(s, "lorem ipsum dolor sit amet, consectetur adipisicing elit");
+    free(s);
 }
 
 static void test_uncast_null(void)
@@ -51,4 +54,5 @@ static void test_uncast_null(void)
     s = strconcat(word1, NULL, word2, (char *)NULL);
     CU_ASSERT_PTR_NOT_NULL(s);
     CU_ASSERT_STRING_EQUAL(s, "foo");
+    free(s);
 }
