@@ -97,7 +97,7 @@ service_path = @service_path@
 
 LOBJS= append.o mailbox.o mboxlist.o mupdate-client.o mboxname.o message.o \
 	global.o imap_err.o mupdate_err.o proc.o setproctitle.o \
-	convert_code.o duplicate.o saslclient.o saslserver.o ../lib/signals.o \
+	convert_code.o duplicate.o saslclient.o saslserver.o \
 	annotate.o search_engines.o squat.o squat_internal.o mbdump.o \
 	imapparse.o telemetry.o user.o notify.o idle.o quota_db.o \
 	sync_log.o $(SEEN) mboxkey.o backend.o tls.o message_guid.o \
@@ -146,9 +146,9 @@ install:
 ### libimap
 
 libimap.a: $(LOBJS)
-	rm -f libimap.a
-	ar cr libimap.a $(LOBJS)
-	$(RANLIB) libimap.a
+	rm -f $@
+	ar cr $@ $(LOBJS)
+	$(RANLIB) $@
 
 ### Built Source Files
 
