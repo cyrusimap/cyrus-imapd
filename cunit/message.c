@@ -352,3 +352,96 @@ static void test_mime_trivial(void)
     message_free_body(&body);
 }
 
+/*
+ * RFC2231 specifies, amongst other things, a method for
+ * breaking up across multiple lines, long parameter values
+ * which cannot have whitespace inserted into them.
+ */
+static void test_rfc2231_continuations(void)
+{
+    static const char msg[] =
+"From: Fred Bloggs <fbloggs@fastmail.fm>\r\n"
+"To: Sarah Jane Smith <sjsmith@gmail.com>\r\n"
+"Date: Wed, 27 Oct 2010 18:37:26 +1100\r\n"
+/* This example based on one in RFC2231 */
+"Content-Type: message/external-body; access-type=URL;\r\n"
+"\tURL*0=\"ftp://\";\r\n"
+"\tURL*1=\"cs.utk.edu/pub/moore/\";\r\n"
+"\tURL*2=\"bulk-mailer/bulk-mailer.tar\"\r\n"
+"Subject: RFC2231 continuation testing email\r\n"
+"Message-ID: <fake1002@fastmail.fm>\r\n"
+"\r\n"
+"Hello, World\n";
+    int r;
+    static const char URL[] = "ftp://cs.utk.edu/pub/moore/bulk-mailer/bulk-mailer.tar";
+    struct body body;
+
+    memset(&body, 0x45, sizeof(body));
+    r = message_parse_mapped(msg, sizeof(msg)-1, &body);
+
+    CU_ASSERT_EQUAL(r, 0);
+
+    /* Date: Wed, 27 Oct 2010 18:37:26 +1100 */
+    CU_ASSERT_STRING_EQUAL(body.date, "Wed, 27 Oct 2010 18:37:26 +1100");
+
+    /* Subject: Trivial testing email */
+    CU_ASSERT_STRING_EQUAL(body.subject, "RFC2231 continuation testing email");
+
+    CU_ASSERT_STRING_EQUAL(body.type, "MESSAGE");
+    CU_ASSERT_STRING_EQUAL(body.subtype, "EXTERNAL-BODY");
+    CU_ASSERT_PTR_NOT_NULL(body.params);
+    CU_ASSERT_STRING_EQUAL(body.params->attribute, "ACCESS-TYPE");
+    CU_ASSERT_STRING_EQUAL(body.params->value, "URL");
+    CU_ASSERT_PTR_NOT_NULL(body.params->next);
+    CU_ASSERT_STRING_EQUAL(body.params->next->attribute, "URL");
+    CU_ASSERT_STRING_EQUAL(body.params->next->value, URL);
+    CU_ASSERT_PTR_NULL(body.params->next->next);
+
+    message_free_body(&body);
+}
+
+/*
+ * RFC2231 has a second syntax for continuations, which
+ * indicates the language & charset info may be encoded
+ * in the value and allows for %xx encoded chars.
+ */
+static void test_rfc2231_extended_continuations(void)
+{
+    static const char msg[] =
+"From: Fred Bloggs <fbloggs@fastmail.fm>\r\n"
+"To: Sarah Jane Smith <sjsmith@gmail.com>\r\n"
+"Date: Wed, 27 Oct 2010 18:37:26 +1100\r\n"
+/* This example also loosely based on one in RFC2231 */
+"Content-Type: application/x-stuff;\r\n"
+"\ttitle*0*=us-ascii'en'This%20is%20even%20more%20;\r\n"
+"\ttitle*1*=%2A%2A%2Afun%2A%2A%2A%20;\r\n"
+"\ttitle*2=\"isn't it!\"\r\n"
+"Subject: RFC2231 extended continuation testing email\r\n"
+"Message-ID: <fake1002@fastmail.fm>\r\n"
+"\r\n"
+"Hello, World\n";
+    int r;
+    static const char TITLE[] =
+		"us-ascii'en'This%20is%20even%20more%20%2A%2A%2Afun%2A%2A%2A%20isn%27t%20it!";
+    struct body body;
+
+    memset(&body, 0x45, sizeof(body));
+    r = message_parse_mapped(msg, sizeof(msg)-1, &body);
+
+    CU_ASSERT_EQUAL(r, 0);
+
+    /* Date: Wed, 27 Oct 2010 18:37:26 +1100 */
+    CU_ASSERT_STRING_EQUAL(body.date, "Wed, 27 Oct 2010 18:37:26 +1100");
+
+    /* Subject: Trivial testing email */
+    CU_ASSERT_STRING_EQUAL(body.subject, "RFC2231 extended continuation testing email");
+
+    CU_ASSERT_STRING_EQUAL(body.type, "APPLICATION");
+    CU_ASSERT_STRING_EQUAL(body.subtype, "X-STUFF");
+    CU_ASSERT_PTR_NOT_NULL_FATAL(body.params);
+    CU_ASSERT_STRING_EQUAL(body.params->attribute, "TITLE*");
+    CU_ASSERT_STRING_EQUAL(body.params->value, TITLE);
+    CU_ASSERT_PTR_NULL(body.params->next);
+
+    message_free_body(&body);
+}
