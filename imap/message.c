@@ -1188,9 +1188,6 @@ static void message_parse_params(const char *hdr, struct param **paramp)
     }
 }
 
-/* Alphabet for hex encoding */
-static const char basis_hex[] = "0123456789ABCDEF";
-
 /*
  * Decode RFC-2231 parameter continuations
  *
@@ -1271,8 +1268,7 @@ static void message_fold_params(struct param **params)
 				*from == '*' || *from == '\'' ||
 				*from == '%' || strchr(TSPECIALS, *from)) {
 				*to++ = '%';
-				*to++ = basis_hex[(*from>>4) & 0xf];
-				*to++ = basis_hex[*from & 0xf];
+				to += bin_to_hex(from, 1, to, BH_UPPER);
 			    } else {
 				*to++ = *from;
 			    }
@@ -1318,8 +1314,7 @@ static void message_fold_params(struct param **params)
 				*from == '*' || *from == '\'' ||
 				*from == '%' || strchr(TSPECIALS, *from)) {
 				*to++ = '%';
-				*to++ = basis_hex[(*from>>4) & 0xf];
-				*to++ = basis_hex[*from & 0xf];
+				to += bin_to_hex(from, 1, to, BH_UPPER);
 			    } else {
 				*to++ = *from;
 			    }
