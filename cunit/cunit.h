@@ -139,28 +139,28 @@ static CU_BOOL CU_assertFormatImplementation(
 #undef CU_ASSERT_STRING_EQUAL
 #define CU_ASSERT_STRING_EQUAL(actual,expected) \
   { const char *_a = (actual), *_e = (expected); \
-    CU_assertFormatImplementation(!strcmp(_a,_e), __LINE__, \
+    CU_assertFormatImplementation(!strcmp(_a?_a:"",_e?_e:""), __LINE__, \
      __FILE__, "", CU_FALSE, \
     "CU_ASSERT_STRING_EQUAL(" #actual "=\"%s\"," #expected "=\"%s\")", _a, _e); }
 
 #undef CU_ASSERT_STRING_EQUAL_FATAL
 #define CU_ASSERT_STRING_EQUAL_FATAL(actual,expected) \
   { const char *_a = (actual), *_e = (expected); \
-    CU_assertFormatImplementation(!strcmp(_a,_e), __LINE__, \
+    CU_assertFormatImplementation(!strcmp(_a?_a:"",_e?_e:""), __LINE__, \
      __FILE__, "", CU_TRUE, \
     "CU_ASSERT_STRING_EQUAL_FATAL(" #actual "=\"%s\"," #expected "=\"%s\")", _a, _e); }
 
 #undef CU_ASSERT_STRING_NOT_EQUAL
 #define CU_ASSERT_STRING_NOT_EQUAL(actual,expected) \
   { const char *_a = (actual), *_e = (expected); \
-    CU_assertFormatImplementation(!strcmp(_a,_e), __LINE__, \
+    CU_assertFormatImplementation(!!strcmp(_a?_a:"",_e?_e:""), __LINE__, \
      __FILE__, "", CU_FALSE, \
     "CU_ASSERT_STRING_NOT_EQUAL(" #actual "=\"%s\"," #expected "=\"%s\")", _a, _e); }
 
 #undef CU_ASSERT_STRING_NOT_EQUAL_FATAL
 #define CU_ASSERT_STRING_NOT_EQUAL_FATAL(actual,expected) \
   { const char *_a = (actual), *_e = (expected); \
-    CU_assertFormatImplementation(!strcmp(_a,_e), __LINE__, \
+    CU_assertFormatImplementation(!!strcmp(_a?_a:"",_e?_e:""), __LINE__, \
      __FILE__, "", CU_TRUE, \
     "CU_ASSERT_STRING_NOT_EQUAL_FATAL(" #actual "=\"%s\"," #expected "=\"%s\")", _a, _e); }
 
