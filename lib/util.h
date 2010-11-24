@@ -200,4 +200,12 @@ void buf_free(struct buf *buf);
  */
 char *strconcat(const char *s1, ...);
 
+#define BH_LOWER	    (0)
+#define BH_UPPER	    (1<<8)
+#define _BH_SEP		    (1<<9)
+#define BH_SEPARATOR(c)	    (_BH_SEP|((c)&0x7f))
+#define _BH_GETSEP(flags)   (flags & _BH_SEP ? (char)(flags & 0x7f) : '\0')
+int bin_to_hex(const void *bin, size_t binlen, char *hex, int flags);
+int hex_to_bin(const char *hex, size_t hexlen, void *bin);
+
 #endif /* INCLUDED_UTIL_H */
