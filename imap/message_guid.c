@@ -251,22 +251,12 @@ struct message_guid *message_guid_import(struct message_guid *guid,
  *
  ************************************************************************/
 
-static const char XDIGIT[] = "0123456789abcdef";
-
 char *message_guid_encode(const struct message_guid *guid)
 {
     static char text[2*MESSAGE_GUID_SIZE+1];
-    const unsigned char *v = guid->value;
-    char *p = text;
-    int i;
-
-    for (i = 0; i < MESSAGE_GUID_SIZE; i++, v++) {
-        *p++ = XDIGIT[(*v >> 4) & 0xf];
-        *p++ = XDIGIT[*v & 0xf];
-    }
-    *p = '\0';
-
-    return(text);
+    int r = bin_to_hex(&guid->value, MESSAGE_GUID_SIZE, text, BH_LOWER);
+    assert(r == 2*MESSAGE_GUID_SIZE);
+    return text;
 }
 
 /* message_guid_decode() *************************************************
@@ -278,24 +268,7 @@ char *message_guid_encode(const struct message_guid *guid)
 
 int message_guid_decode(struct message_guid *guid, const char *text)
 {
-    unsigned char *v = guid->value, msn, lsn;
-    const char *p = text;
-    int i;
-
-    guid->status = GUID_NULL;
-
-    for (i = 0; i < MESSAGE_GUID_SIZE; i++, v++) {
-	if (!Uisxdigit(*p)) return(0);
-	msn = (*p > '9') ? tolower((int) *p) - 'a' + 10 : *p - '0';
-	p++;
-
-	if (!Uisxdigit(*p)) return(0);
-	lsn = (*p > '9') ? tolower((int) *p) - 'a' + 10 : *p - '0';
-	p++;
-	
-	*v = (unsigned char) (msn << 4) | lsn;
-	if (*v) guid->status = GUID_NONNULL;
-    }
-
-    return(*p == '\0');
+    int r = hex_to_bin(text, 0, &guid->value);
+    guid->status = (r > 0 ? GUID_NONNULL : GUID_NULL);
+    return (r == MESSAGE_GUID_SIZE);
 }
