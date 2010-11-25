@@ -55,33 +55,6 @@
 #include "xmalloc.h"
 #include "util.h"
 
-/* hexadecimal lookup table */
-static const char hex[] = "0123456789ABCDEF";
-
-#define XX 127
-/*
- * Table for decoding hexadecimal in %encoding
- */
-static const char index_hex[256] = {
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-     0, 1, 2, 3,  4, 5, 6, 7,  8, 9,XX,XX, XX,XX,XX,XX,
-    XX,10,11,12, 13,14,15,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,10,11,12, 13,14,15,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-    XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
-};
-#define HEXCHAR(c)  (index_hex[(unsigned char)(c)])
-
 /* URL unsafe printable characters */
 static const char urlunsafe[] = " \"#%&+:;<=>?@[\\]^`{|}";
 
@@ -124,10 +97,8 @@ static void MailboxToURL(char *dst, const char *src)
         if (c != '&' || *src == '-') {
             if (c < ' ' || c > '~' || strchr(urlunsafe, c) != NULL) {
                 /* hex encode if necessary */
-                dst[0] = '%';
-                dst[1] = hex[c >> 4];
-                dst[2] = hex[c & 0x0f];
-                dst += 3;
+                *dst++ = '%';
+		dst += bin_to_hex(&c, 1, dst, BH_UPPER);
             } else {
                 /* encode literally */
                 *dst++ = c;
@@ -179,13 +150,12 @@ static void MailboxToURL(char *dst, const char *src)
                         utf8[3] = 0x80 | (ucs4 & 0x3f);
                         i = 4;
                     }
-                    /* convert utf8 to hex */
-                    for (c = 0; c < i; ++c) {
-                        dst[0] = '%';
-                        dst[1] = hex[utf8[c] >> 4];
-                        dst[2] = hex[utf8[c] & 0x0f];
-                        dst += 3;
-                    }
+                    /* convert utf8 to hex.
+		     * RFC3986 says: For consistency, URI producers and
+		     * normalizers should use uppercase hexadecimal digits
+		     * for all percent-encodings. */
+		    *dst++ = '%';
+		    dst += bin_to_hex(utf8, i, dst, BH_UPPER|BH_SEPARATOR('%'));
                 }
             }
             /* skip over trailing '-' in modified UTF-7 encoding */
@@ -202,7 +172,8 @@ static void MailboxToURL(char *dst, const char *src)
  */
 int URLtoMailbox(char *dst, const char *src)
 {
-    unsigned int utf8pos = 0, utf8total, i, c, utf7mode, bitstogo, utf16flag;
+    unsigned char c;
+    unsigned int utf8pos = 0, utf8total, utf7mode, bitstogo, utf16flag;
     unsigned long ucs4 = 0, bitbuf = 0;
 
     utf7mode = 0; /* is the output UTF7 currently in base64 mode? */
@@ -214,12 +185,8 @@ int URLtoMailbox(char *dst, const char *src)
         ++src;
         /* undo hex-encoding */
         if (c == '%' && src[0] != '\0' && src[1] != '\0') {
-	    c = HEXCHAR(src[0]);
-	    i = HEXCHAR(src[1]);
-	    if (c == XX || i == XX)
+	    if (hex_to_bin(src, 2, &c) != 1)
 		return -1;
-	    else
-		c = (char)((c << 4) | i);
             src += 2;
         }
 
@@ -335,18 +302,13 @@ int URLtoMailbox(char *dst, const char *src)
 static int decode_url(char *dst, char *src)
 {
     unsigned char c;
-    unsigned char i;
     
     while ((c = (unsigned char)*src) != '\0') {
         ++src;
         /* undo hex-encoding */
         if (c == '%' && src[0] != '\0' && src[1] != '\0') {
-	    c = HEXCHAR(src[0]);
-	    i = HEXCHAR(src[1]);
-	    if (c == XX || i == XX)
+	    if (hex_to_bin(src, 2, &c) != 1)
 		return -1;
-	    else
-		c = (char)((c << 4) | i);
             src += 2;
         }
         *dst++ = (char) c;
