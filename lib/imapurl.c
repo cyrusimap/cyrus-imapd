@@ -53,6 +53,7 @@
 
 #include "imapurl.h"
 #include "xmalloc.h"
+#include "mkgmtime.h"
 #include "util.h"
 
 /* URL unsafe printable characters */
@@ -460,7 +461,7 @@ int imapurl_fromURL(struct imapurl *url, const char *s)
 		}
 
 		/* normalize to GMT */
-		url->urlauth.expire = mktime(&exp) - tm_off;
+		url->urlauth.expire = mkgmtime(&exp) - tm_off;
 		step = 5;
 	    }
 	    else if (step >= 2 && step < 6 && !strncasecmp(src, "urlauth=", 8)) {
