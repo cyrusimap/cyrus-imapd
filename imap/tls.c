@@ -136,9 +136,6 @@
 static struct db *sessdb = NULL;
 static int sess_dbopen = 0;
 
-/* We must keep some of the info available */
-static const char hexcodes[] = "0123456789ABCDEF";
-
 enum {
     var_imapd_tls_loglevel = 0,
     var_proxy_tls_loglevel = 0,
@@ -805,7 +802,6 @@ int tls_start_servertls(int readfd, int writefd, int timeout,
 			int *layerbits, char **authid, SSL **ret)
 {
     int     sts;
-    int     j;
     unsigned int n;
     SSL_CIPHER *cipher;
     X509   *peer;
@@ -957,16 +953,7 @@ int tls_start_servertls(int readfd, int writefd, int timeout,
 	    syslog(LOG_DEBUG, "issuer=%s", peer_issuer);
 
 	if (X509_digest(peer, EVP_md5(), md, &n)) {
-	    for (j = 0; j < (int) n; j++)
-	    {
-		fingerprint[j * 3] = hexcodes[(md[j] & 0xf0) >> 4];
-		fingerprint[(j * 3) + 1] = hexcodes[(md[j] & 0x0f)];
-		if (j + 1 != (int) n) {
-		    fingerprint[(j * 3) + 2] = '_';
-		} else {
-		    fingerprint[(j * 3) + 2] = '\0';
-		}
-	    }
+	    bin_to_hex(md, n, fingerprint, BH_UPPER|BH_SEPARATOR('_'));
 	    if (var_imapd_tls_loglevel >= 2)
 		syslog(LOG_DEBUG, "fingerprint=%s", fingerprint);
 	}
