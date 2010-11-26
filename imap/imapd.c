@@ -80,6 +80,7 @@
 #include "exitcodes.h"
 #include "idle.h"
 #include "global.h"
+#include "times.h"
 #include "hash.h"
 #include "imap_err.h"
 #include "proxy.h"

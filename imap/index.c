@@ -64,6 +64,7 @@
 #include "hash.h"
 #include "imap_err.h"
 #include "global.h"
+#include "times.h"
 #include "imapd.h"
 #include "cyr_lock.h"
 #include "lsort.h"

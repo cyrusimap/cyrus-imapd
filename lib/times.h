@@ -45,10 +45,25 @@
 
 #include <time.h>
 
+/*
+ * RFC822 datetime format
+ */
 /* 'buf' must be at least 80 characters */
 void rfc822date_gen(char *buf, size_t len, time_t t);
 
+/*
+ * ISO8601 (RFC3339) datetime format
+ */
 int time_from_iso8601(const char *s, time_t *);
 int time_to_iso8601(time_t t, char *buf, size_t len);
+
+/*
+ * RFC3501 datetime format
+ */
+void cyrus_ctime(time_t date, char *datebuf);
+/* Size in bytes of longest date format accepted by
+ * cyrus_parsetime(), not including the nul terminator. */
+#define CYRUS_PARSETIME_MAX 26
+int cyrus_parsetime(const char *s, time_t *date);
 
 #endif /* __CYRUS__TIME_H__ */

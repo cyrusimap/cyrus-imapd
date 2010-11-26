@@ -50,7 +50,6 @@
 #include <errno.h>
 #include <assert.h>
 #include "cunit/cunit.h"
-#include "global.h"
 #include "message.h"
 #include "times.h"
 
