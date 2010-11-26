@@ -53,9 +53,9 @@
 #include "global.h"
 #include "message.h"
 
-#define TZ_UTC		"UTC+00.00"
-#define TZ_NEWYORK	"EST+05.00"
-#define TZ_MELBOURNE	"AEST-11.00"
+#define TZ_UTC		"UTC+00"
+#define TZ_NEWYORK	"EST+05"
+#define TZ_MELBOURNE	"AEST-11"
 
 #define MAX_TZ_STACK	5
 static int n_tz_stack = 0;
