@@ -77,6 +77,7 @@
 #include "global.h"
 #include "retry.h"
 #include "rfc822_header.h"
+#include "times.h"
 
 /* Message being parsed */
 struct msg {
@@ -487,21 +488,17 @@ void message_fetch_part(struct message_content *msg,
 int message_create_record(struct index_record *record,
 			  const struct body *body)
 {
-    if (config_getenum(IMAPOPT_INTERNALDATE_HEURISTIC) 
+    if (config_getenum(IMAPOPT_INTERNALDATE_HEURISTIC)
 	    == IMAP_ENUM_INTERNALDATE_HEURISTIC_RECEIVEDHEADER) {
-	time_t newdate = 0;
 	if (body->received_date)
-	    newdate = message_parse_date(body->received_date, 0);
-	if (newdate)
-	    record->internaldate = newdate;
+	    time_from_rfc822(body->received_date, &record->internaldate);
     }
 
     if (!record->internaldate)
 	record->internaldate = time(NULL);
 
     /* used for sent time searching, truncated to day with no TZ */
-    record->sentdate = message_parse_date(body->date, /*dayonly*/1);
-    if (!record->sentdate) {
+    if (day_from_rfc822(body->date, &record->sentdate) < 0) {
 	struct tm *tm = localtime(&record->internaldate);
 	/* truncate to the day */
 	tm->tm_sec = 0;
@@ -511,9 +508,7 @@ int message_create_record(struct index_record *record,
     }
 
     /* used for sent time sorting, full gmtime of Date: header */
-    record->gmtime =
-	message_parse_date(body->date, 0);
-    if (!record->gmtime)
+    if (time_from_rfc822(body->date, &record->gmtime) < 0)
 	record->gmtime = record->internaldate;
 
     record->size = body->header_size + body->content_size;
@@ -1397,209 +1392,6 @@ static void message_parse_language(const char *hdr, struct param **paramp)
 	/* Get ready to parse the next parameter */
 	paramp = &param->next;
     }
-}
-
-/*
- * Parse a RFC-822 datetime from a header.
- *
- * If the 'dayonly' flag is supplied, parse only the
- * day portion, ignoring the time and timezone, and
- * interpret the day in the server's timezone.  This
- * is used only for extracting the data used for
- * the SEARCH command.
- */
-time_t message_parse_date(const char *hdr, int dayonly)
-{
-    struct tm tm;
-    time_t t;
-    char month[4];
-    static char *monthname[] = {
-	"jan", "feb", "mar", "apr", "may", "jun",
-	"jul", "aug", "sep", "oct", "nov", "dec"
-    };
-    int zone_off = 0;
-
-    if (!hdr) goto baddate;
-
-    memset(&tm, 0, sizeof(tm));
-
-    message_parse_rfc822space(&hdr);
-    if (!hdr) goto baddate;
-
-    if (Uisalpha(*hdr)) {
-	/* Day name -- skip over it */
-	hdr++;
-	if (!Uisalpha(*hdr)) goto baddate;
-	hdr++;
-	if (!Uisalpha(*hdr)) goto baddate;
-	hdr++;
-	message_parse_rfc822space(&hdr);
-	if (!hdr || *hdr++ != ',') goto baddate;
-	message_parse_rfc822space(&hdr);
-	if (!hdr) goto baddate;
-    }
-
-    if (!Uisdigit(*hdr)) goto baddate;
-    tm.tm_mday = *hdr++ - '0';
-    if (Uisdigit(*hdr)) {
-	tm.tm_mday = tm.tm_mday*10 + *hdr++ - '0';
-    }
-    
-    /* Parse month name */
-    message_parse_rfc822space(&hdr);
-    if (!hdr) goto baddate;
-    month[0] = *hdr++;
-    if (!Uisalpha(month[0])) goto baddate;
-    month[1] = *hdr++;
-    if (!Uisalpha(month[1])) goto baddate;
-    month[2] = *hdr++;
-    if (!Uisalpha(month[2])) goto baddate;
-    month[3] = '\0';
-    lcase(month);
-    for (tm.tm_mon = 0; tm.tm_mon < 12; tm.tm_mon++) {
-	if (!strcmp(month, monthname[tm.tm_mon])) break;
-    }
-    if (tm.tm_mon == 12) goto baddate;
-    
-    /* Parse year */
-    message_parse_rfc822space(&hdr);
-    if (!hdr || !Uisdigit(*hdr)) goto baddate;
-    tm.tm_year = *hdr++ - '0';
-    if (!Uisdigit(*hdr)) goto baddate;
-    tm.tm_year = tm.tm_year * 10 + *hdr++ - '0';
-    if (Uisdigit(*hdr)) {
-	if (tm.tm_year < 19) goto baddate;
-	tm.tm_year -= 19;
-	tm.tm_year = tm.tm_year * 10 + *hdr++ - '0';
-	if (!Uisdigit(*hdr)) goto baddate;
-	tm.tm_year = tm.tm_year * 10 + *hdr++ - '0';
-    } else {
-	if (tm.tm_year < 70) {
-	    /* two-digit year, probably after 2000.
-	     * This patent was overturned, right?
-	     */
-	    tm.tm_year += 100;
-	}
-    }
-    if (Uisdigit(*hdr)) {
-       /* five-digit date */
-       goto baddate;
-     }
-
-    message_parse_rfc822space(&hdr);
-    if (hdr && !dayonly) {
-	/* Parse hour */
-	if (!hdr || !Uisdigit(*hdr)) goto badtime;
-	tm.tm_hour = *hdr++ - '0';
-	if (!Uisdigit(*hdr)) goto badtime;
-	tm.tm_hour = tm.tm_hour * 10 + *hdr++ - '0';
-	if (!hdr || *hdr++ != ':') goto badtime;
-
-	/* Parse min */
-	if (!hdr || !Uisdigit(*hdr)) goto badtime;
-	tm.tm_min = *hdr++ - '0';
-	if (!Uisdigit(*hdr)) goto badtime;
-	tm.tm_min = tm.tm_min * 10 + *hdr++ - '0';
-
-	if (*hdr == ':') {
-	    /* Parse sec */
-	    if (!++hdr || !Uisdigit(*hdr)) goto badtime;
-	    tm.tm_sec = *hdr++ - '0';
-	    if (!Uisdigit(*hdr)) goto badtime;
-	    tm.tm_sec = tm.tm_sec * 10 + *hdr++ - '0';
-	}
-
-	message_parse_rfc822space(&hdr);
-	if (hdr) {
-	    /* Parse timezone offset */
-	    if (*hdr == '+' || *hdr == '-') {
-		/* Parse numeric offset */
-		int east = (*hdr++ == '-');
-
-		if (!hdr || !Uisdigit(*hdr)) goto badzone;
-		zone_off = *hdr++ - '0';
-		if (!hdr || !Uisdigit(*hdr)) goto badzone;
-		zone_off = zone_off * 10 + *hdr++ - '0';
-		if (!hdr || !Uisdigit(*hdr)) goto badzone;
-		zone_off = zone_off * 6 + *hdr++ - '0';
-		if (!hdr || !Uisdigit(*hdr)) goto badzone;
-		zone_off = zone_off * 10 + *hdr++ - '0';
-
-		if (east) zone_off = -zone_off;
-	    }
-	    else if (Uisalpha(*hdr)) {
-		char zone[4];
-
-		zone[0] = *hdr++;
-		if (!Uisalpha(*hdr)) {
-		    /* Parse military (single-char) zone */
-		    zone[1] = '\0';
-		    lcase(zone);
-		    if (zone[0] < 'j')
-			zone_off = (zone[0] - 'a' + 1) * 60;
-		    else if (zone[0] == 'j')
-			goto badzone;
-		    else if (zone[0] <= 'm')
-			zone_off = (zone[0] - 'a') * 60;
-		    else if (zone[0] < 'z')
-			zone_off = ('m' - zone[0]) * 60;
-		    else
-			zone_off = 0;
-		}
-		else {
-		    zone[1] = *hdr++;
-		    if (!Uisalpha(*hdr)) {
-			/* Parse UT (universal time) */
-			zone[2] = '\0';
-			lcase(zone);
-			if (strcmp(zone, "ut")) goto badzone;
-			zone_off = 0;
-		    }
-		    else {
-			/* Parse 3-char time zone */
-			char *p;
-
-			zone[2] = *hdr;
-			zone[3] = '\0';
-			lcase(zone);
-			/* GMT (Greenwich mean time) */
-			if (!strcmp(zone, "gmt")) zone_off = 0;
-
-			/* US time zone */
-			else {
-			    p = strchr("aecmpyhb", zone[0]);
-			    if (!p || zone[2] != 't') goto badzone;
-			    zone_off = (strlen(p) - 12) * 60;
-			    if (zone[1] == 'd') zone_off += 60;
-			    else if (zone[1] != 's') goto badzone;
-			}
-		    }
-		}
-	    }
-	    else
- badzone:
-		zone_off = 0;
-	}
-    }
-    else
- badtime:
-	tm.tm_hour = 12;
-
-    tm.tm_isdst = -1;
-
-    if (!dayonly)
-	t = mkgmtime(&tm);
-    else {
-	assert(zone_off == 0);
-	t = mktime(&tm);
-    }
-    /* Don't return -1; it's never right.  Return the current time instead.
-     * That's much closer than 1969.
-     */
-    if (t >= 0) return (t - zone_off * 60);
-    
- baddate:
-    return 0;
 }
 
 /*

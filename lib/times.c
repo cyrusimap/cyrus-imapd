@@ -82,6 +82,292 @@ int time_to_rfc822(time_t t, char *buf, size_t len)
 	     gmtnegative ? '-' : '+', gmtoff / 60, gmtoff % 60);
 }
 
+
+/*
+ * Skip RFC822 FWS = Folding White Space.  This is the white
+ * space that can be inserted harmlessly into structured
+ * RFC822 headers, including splitting them over multiple lines.
+ *
+ * Note that RFC822 isn't entirely clear about whether such
+ * space may be present in date-times, but it's successor
+ * RFC2822 is quite clear and explicit.  Note also that
+ * neither RFC allows for (comments) inside a date-time,
+ * so we don't attempt to handle that here.
+ */
+static const char *skip_fws(const char *p)
+{
+    if (!p)
+	return NULL;
+    while (*p && Uisspace(*p)) {
+	/* check for end of an RFC822 header line */
+	if (*p == '\n') {
+	    p++;
+	    if (*p != ' ' && *p != '\t')
+		return NULL;
+	}
+	else
+	    p++;
+    }
+    return (*p ? p : NULL);
+}
+
+static int parse_rfc822(const char *s, time_t *tp, int dayonly)
+{
+    const char *origs = s;
+    struct tm tm;
+    time_t t;
+    char month[4];
+    static char *monthname[] = {
+	"jan", "feb", "mar", "apr", "may", "jun",
+	"jul", "aug", "sep", "oct", "nov", "dec"
+    };
+    int zone_off = 0;
+
+    if (!s)
+	goto baddate;
+
+    memset(&tm, 0, sizeof(tm));
+
+    s = skip_fws(s);
+    if (!s)
+	goto baddate;
+
+    if (Uisalpha(*s)) {
+	/* Day name -- skip over it */
+	s++;
+	if (!Uisalpha(*s))
+	    goto baddate;
+	s++;
+	if (!Uisalpha(*s))
+	    goto baddate;
+	s++;
+	s = skip_fws(s);
+	if (!s || *s++ != ',')
+	    goto baddate;
+	s = skip_fws(s);
+	if (!s)
+	    goto baddate;
+    }
+
+    if (!Uisdigit(*s))
+	goto baddate;
+    tm.tm_mday = *s++ - '0';
+    if (Uisdigit(*s)) {
+	tm.tm_mday = tm.tm_mday*10 + *s++ - '0';
+    }
+
+    /* Parse month name */
+    s = skip_fws(s);
+    if (!s)
+	goto baddate;
+    month[0] = *s++;
+    if (!Uisalpha(month[0]))
+	goto baddate;
+    month[1] = *s++;
+    if (!Uisalpha(month[1]))
+	goto baddate;
+    month[2] = *s++;
+    if (!Uisalpha(month[2]))
+	goto baddate;
+    month[3] = '\0';
+    lcase(month);
+    for (tm.tm_mon = 0; tm.tm_mon < 12; tm.tm_mon++) {
+	if (!strcmp(month, monthname[tm.tm_mon])) break;
+    }
+    if (tm.tm_mon == 12)
+	goto baddate;
+
+    /* Parse year */
+    s = skip_fws(s);
+    if (!s || !Uisdigit(*s))
+	goto baddate;
+    tm.tm_year = *s++ - '0';
+    if (!Uisdigit(*s))
+	goto baddate;
+    tm.tm_year = tm.tm_year * 10 + *s++ - '0';
+    if (Uisdigit(*s)) {
+	if (tm.tm_year < 19)
+	    goto baddate;
+	tm.tm_year -= 19;
+	tm.tm_year = tm.tm_year * 10 + *s++ - '0';
+	if (!Uisdigit(*s))
+	    goto baddate;
+	tm.tm_year = tm.tm_year * 10 + *s++ - '0';
+    } else {
+	if (tm.tm_year < 70) {
+	    /* two-digit year, probably after 2000.
+	     * This patent was overturned, right?
+	     */
+	    tm.tm_year += 100;
+	}
+    }
+    if (Uisdigit(*s)) {
+       /* five-digit date */
+       goto baddate;
+     }
+
+    s = skip_fws(s);
+    if (s && !dayonly) {
+	/* Parse hour */
+	if (!s || !Uisdigit(*s))
+	    goto badtime;
+	tm.tm_hour = *s++ - '0';
+	if (!Uisdigit(*s))
+	    goto badtime;
+	tm.tm_hour = tm.tm_hour * 10 + *s++ - '0';
+	if (!s || *s++ != ':')
+	    goto badtime;
+
+	/* Parse min */
+	if (!s || !Uisdigit(*s))
+	    goto badtime;
+	tm.tm_min = *s++ - '0';
+	if (!Uisdigit(*s))
+	    goto badtime;
+	tm.tm_min = tm.tm_min * 10 + *s++ - '0';
+
+	if (*s == ':') {
+	    /* Parse sec */
+	    if (!++s || !Uisdigit(*s))
+		goto badtime;
+	    tm.tm_sec = *s++ - '0';
+	    if (!Uisdigit(*s))
+		goto badtime;
+	    tm.tm_sec = tm.tm_sec * 10 + *s++ - '0';
+	}
+
+	s = skip_fws(s);
+	if (s) {
+	    /* Parse timezone offset */
+	    if (*s == '+' || *s == '-') {
+		/* Parse numeric offset */
+		int east = (*s++ == '-');
+
+		if (!s || !Uisdigit(*s))
+		    goto badzone;
+		zone_off = *s++ - '0';
+		if (!s || !Uisdigit(*s))
+		    goto badzone;
+		zone_off = zone_off * 10 + *s++ - '0';
+		if (!s || !Uisdigit(*s))
+		    goto badzone;
+		zone_off = zone_off * 6 + *s++ - '0';
+		if (!s || !Uisdigit(*s))
+		    goto badzone;
+		zone_off = zone_off * 10 + *s++ - '0';
+
+		if (east)
+		    zone_off = -zone_off;
+	    }
+	    else if (Uisalpha(*s)) {
+		char zone[4];
+
+		zone[0] = *s++;
+		if (!Uisalpha(*s)) {
+		    /* Parse military (single-char) zone */
+		    zone[1] = '\0';
+		    lcase(zone);
+		    if (zone[0] < 'j')
+			zone_off = (zone[0] - 'a' + 1) * 60;
+		    else if (zone[0] == 'j')
+			goto badzone;
+		    else if (zone[0] <= 'm')
+			zone_off = (zone[0] - 'a') * 60;
+		    else if (zone[0] < 'z')
+			zone_off = ('m' - zone[0]) * 60;
+		    else
+			zone_off = 0;
+		}
+		else {
+		    zone[1] = *s++;
+		    if (!Uisalpha(*s)) {
+			/* Parse UT (universal time) */
+			zone[2] = '\0';
+			lcase(zone);
+			if (strcmp(zone, "ut"))
+			    goto badzone;
+			zone_off = 0;
+		    }
+		    else {
+			/* Parse 3-char time zone */
+			char *p;
+
+			zone[2] = *s;
+			zone[3] = '\0';
+			lcase(zone);
+			/* GMT (Greenwich mean time) */
+			if (!strcmp(zone, "gmt"))
+			    zone_off = 0;
+
+			/* US time zone */
+			else {
+			    p = strchr("aecmpyhb", zone[0]);
+			    if (!p || zone[2] != 't')
+				goto badzone;
+			    zone_off = (strlen(p) - 12) * 60;
+			    if (zone[1] == 'd')
+				zone_off += 60;
+			    else if (zone[1] != 's')
+				goto badzone;
+			}
+		    }
+		}
+	    }
+	    else
+ badzone:
+		zone_off = 0;
+	}
+    }
+    else
+ badtime:
+	tm.tm_hour = 12;
+
+    tm.tm_isdst = -1;
+
+    if (!dayonly)
+	t = mkgmtime(&tm);
+    else {
+	assert(zone_off == 0);
+	t = mktime(&tm);
+    }
+    if (t >= 0) {
+	*tp = (t - zone_off * 60);
+	return s - origs;
+    }
+
+ baddate:
+    return -1;
+}
+
+/*
+ * Parse an RFC822 (strictly speaking, RFC2822) date-time
+ * from the @s into a UNIX time_t *@tp.  The string @s is
+ * terminated either by a NUL or by an RFC822 end of header
+ * line (CRLF not followed by whitespace); this allows
+ * parsing dates directly out of mapped messages.
+ *
+ * Returns: number of characters consumed from @s or -1 on error.
+ */
+int time_from_rfc822(const char *s, time_t *tp)
+{
+    return parse_rfc822(s, tp, 0);
+}
+
+/*
+ * Parse an RFC822 (strictly speaking, RFC2822) date-time
+ * from the @s into a UNIX time_t *@tp, but parse only the
+ * date portion, ignoring the time and timezone and returning
+ * a time in the server's timezone.  This is a godawful hack
+ * designed to support the Cyrus implementation of the
+ * IMAP SEARCH command.
+ *
+ * Returns: number of characters consumed from @s or -1 on error.
+ */
+int day_from_rfc822(const char *s, time_t *tp)
+{
+    return parse_rfc822(s, tp, 1);
+}
+
 #define isleap(year) (!((year) % 4) && (((year) % 100) || !((year) % 400)))
 
 /*

@@ -135,8 +135,6 @@ extern int message_copy_strict P((struct protstream *from, FILE *to,
 
 extern int message_parse(const char *fname, struct index_record *record);
 
-extern time_t message_parse_date P((const char *hdr, int dayonly));
-
 /* declare this here so it can be used externally, but remain opaque */
 struct body;
 

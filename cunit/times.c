@@ -50,7 +50,6 @@
 #include <errno.h>
 #include <assert.h>
 #include "cunit/cunit.h"
-#include "message.h"
 #include "times.h"
 
 #define TZ_UTC		"UTC+00"
@@ -223,28 +222,35 @@ test_military_timezones(void)
 /*  " d-mmm-yy HH:MM:SS-zzz" */
 
 /*
- * Test message_parse_date()
+ * Test time_from_rfc822()
  */
 static void test_parse_rfc822(void)
 {
     static const char DATETIME[] = "Tue, 16 Nov 2010 12:46:49 +1100";
     static const time_t TIMET = 1289872009;
     time_t t;
+    int r;
 
     /*
      * Convert the datetime string into a time_t, which is always
      * expressed in UTC regardless of the current timezone.
      */
-    t = message_parse_date(DATETIME, 0);
+    t = 0xdeadbeef;
+    r = time_from_rfc822(DATETIME, &t);
+    CU_ASSERT_EQUAL(r, 31);
     CU_ASSERT_EQUAL(t, TIMET);
 
     push_tz(TZ_UTC);
-    t = message_parse_date(DATETIME, 0);
+    t = 0xdeadbeef;
+    r = time_from_rfc822(DATETIME, &t);
+    CU_ASSERT_EQUAL(r, 31);
     CU_ASSERT_EQUAL(t, TIMET);
     pop_tz();
 
     push_tz(TZ_NEWYORK);
-    t = message_parse_date(DATETIME, 0);
+    t = 0xdeadbeef;
+    r = time_from_rfc822(DATETIME, &t);
+    CU_ASSERT_EQUAL(r, 31);
     CU_ASSERT_EQUAL(t, TIMET);
     pop_tz();
 }
@@ -309,19 +315,26 @@ static void test_zerohour(void)
     static const char DATETIME_MEL[] = " 1-Jan-1970 11:36:29 +1100";
     static const time_t TIMET = 2189;
     time_t t;
+    int r;
     char buf[RFC3501_DATETIME_MAX+1];
 
-    t = message_parse_date(DATETIME_NY, 0);
-    CU_ASSERT_EQUAL(t, 0);  /* fail gracefully */
+    t = 0xdeadbeef;
+    r = time_from_rfc822(DATETIME_NY, &t);
+    CU_ASSERT_EQUAL(r, -1);
+    CU_ASSERT_EQUAL(t, 0xdeadbeef);  /* fail gracefully */
 
     push_tz(TZ_UTC);
-    t = message_parse_date(DATETIME_NY, 0);
-    CU_ASSERT_EQUAL(t, 0);  /* fail gracefully */
+    t = 0xdeadbeef;
+    r = time_from_rfc822(DATETIME_NY, &t);
+    CU_ASSERT_EQUAL(r, -1);
+    CU_ASSERT_EQUAL(t, 0xdeadbeef);  /* fail gracefully */
     pop_tz();
 
     push_tz(TZ_NEWYORK);
-    t = message_parse_date(DATETIME_NY, 0);
-    CU_ASSERT_EQUAL(t, 0);  /* fail gracefully */
+    t = 0xdeadbeef;
+    r = time_from_rfc822(DATETIME_NY, &t);
+    CU_ASSERT_EQUAL(r, -1);
+    CU_ASSERT_EQUAL(t, 0xdeadbeef);  /* fail gracefully */
     pop_tz();
 
     memset(buf, 0, sizeof(buf));
