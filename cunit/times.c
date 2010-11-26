@@ -52,6 +52,7 @@
 #include "cunit/cunit.h"
 #include "global.h"
 #include "message.h"
+#include "rfc822date.h"
 
 #define TZ_UTC		"UTC+00"
 #define TZ_NEWYORK	"EST+05"
@@ -246,6 +247,34 @@ static void test_parse_rfc822(void)
     push_tz(TZ_NEWYORK);
     t = message_parse_date(DATETIME, 0);
     CU_ASSERT_EQUAL(t, TIMET);
+    pop_tz();
+}
+
+/*
+ * Test rfc822date_gen()
+ */
+static void test_gen_rfc822(void)
+{
+    static const char DATETIME_MEL[] = "Fri, 26 Nov 2010 14:22:02 +1100";
+    static const char DATETIME_UTC[] = "Fri, 26 Nov 2010 03:22:02 +0000";
+    static const char DATETIME_NYC[] = "Thu, 25 Nov 2010 22:22:02 -0500";
+    static const time_t TIMET = 1290741722;
+    char buf[80];
+
+    memset(buf, 0x45, sizeof(buf));
+    rfc822date_gen(buf, sizeof(buf), TIMET);
+    CU_ASSERT_STRING_EQUAL(buf, DATETIME_MEL);
+
+    push_tz(TZ_UTC);
+    memset(buf, 0x45, sizeof(buf));
+    rfc822date_gen(buf, sizeof(buf), TIMET);
+    CU_ASSERT_STRING_EQUAL(buf, DATETIME_UTC);
+    pop_tz();
+
+    push_tz(TZ_NEWYORK);
+    memset(buf, 0x45, sizeof(buf));
+    rfc822date_gen(buf, sizeof(buf), TIMET);
+    CU_ASSERT_STRING_EQUAL(buf, DATETIME_NYC);
     pop_tz();
 }
 
