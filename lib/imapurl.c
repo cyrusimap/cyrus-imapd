@@ -53,7 +53,7 @@
 
 #include "imapurl.h"
 #include "xmalloc.h"
-#include "mkgmtime.h"
+#include "times.h"
 #include "util.h"
 
 /* URL unsafe printable characters */
@@ -321,12 +321,6 @@ static int decode_url(char *dst, char *src)
     return 0;
 }
 
-static const int numdays[] = {
-    31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
-};
-
-#define isleap(year) (!((year) % 4) && (((year) % 100) || !((year) % 400)))
-
 int imapurl_fromURL(struct imapurl *url, const char *s)
 {
     char *src;
@@ -415,53 +409,13 @@ int imapurl_fromURL(struct imapurl *url, const char *s)
 		step = 4;
 	    }
 	    else if (step >= 2 && step < 5 && !strncasecmp(src, "expire=", 7)) {
-		struct tm exp;
-		int n, tm_off, leapday;
+		int n;
 
 		src += 7; /* skip expire= */
-
-		/* parse the ISO 8601 date/time */
-		memset(&exp, 0, sizeof(struct tm));
-		n = sscanf(src, "%4d-%2d-%2dT%2d:%2d:%2d", 
-			   &exp.tm_year, &exp.tm_mon, &exp.tm_mday,
-			   &exp.tm_hour, &exp.tm_min, &exp.tm_sec);
-		if (n != 6) return -1;
-
-		src += 19;
-		if (*src == '.') {
-		    /* skip fractional secs */
-		    while (Uisdigit(*(++src)));
-		}
-
-		/* handle offset */
-		switch (*src++) {
-		case 'Z': tm_off = 0; break;
-		case '-': tm_off = -1; break;
-		case '+': tm_off = 1; break;
-		default: return -1;
-		}
-		if (tm_off) {
-		    int tm_houroff, tm_minoff;
-
-		    n = sscanf(src, "%2d:%2d", &tm_houroff, &tm_minoff);
-		    if (n != 2) return -1;
-		    tm_off *= 60 * (60 * tm_houroff + tm_minoff);
-		}
-
-		exp.tm_year -= 1900; /* normalize to years since 1900 */
-		exp.tm_mon--; /* normalize to months since January */
-
-		/* sanity check the date/time (including leap day & second) */
-		leapday = exp.tm_mon == 1 && isleap(exp.tm_year + 1900);
-		if (exp.tm_year < 70 || exp.tm_mon < 0 || exp.tm_mon > 11 ||
-		    exp.tm_mday < 1 ||
-		    exp.tm_mday > (numdays[exp.tm_mon] + leapday) ||
-		    exp.tm_hour > 23 || exp.tm_min > 59 || exp.tm_sec > 60) {
+		n = time_from_iso8601(src, &url->urlauth.expire);
+		if (n < 0)
 		    return -1;
-		}
-
-		/* normalize to GMT */
-		url->urlauth.expire = mkgmtime(&exp) - tm_off;
+		src += n;
 		step = 5;
 	    }
 	    else if (step >= 2 && step < 6 && !strncasecmp(src, "urlauth=", 8)) {
@@ -522,8 +476,9 @@ void imapurl_toURL(char *dst, struct imapurl *url)
     }
     if (url->urlauth.access) {
 	if (url->urlauth.expire) {
-	    struct tm *exp = (struct tm *) gmtime(&url->urlauth.expire);
-	    dst += strftime(dst, INT_MAX, ";EXPIRE=%Y-%m-%dT%H:%M:%SZ", exp);
+	    strcpy(dst, ";EXPIRE=");
+	    dst += strlen(dst);
+	    dst += time_to_iso8601(url->urlauth.expire, dst, INT_MAX);
 	}
 	dst += sprintf(dst, ";URLAUTH=%s", url->urlauth.access);
 	if (url->urlauth.mech) {

@@ -48,4 +48,7 @@
 /* 'buf' must be at least 80 characters */
 void rfc822date_gen(char *buf, size_t len, time_t t);
 
+int time_from_iso8601(const char *s, time_t *);
+int time_to_iso8601(time_t t, char *buf, size_t len);
+
 #endif /* __CYRUS__TIME_H__ */

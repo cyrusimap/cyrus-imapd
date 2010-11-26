@@ -325,3 +325,43 @@ static void test_zerohour(void)
     cyrus_ctime(TIMET, buf);
     CU_ASSERT_STRING_EQUAL(buf, DATETIME_MEL);
 }
+
+static void
+test_parse_iso8601(void)
+{
+    static const char DATETIME_MEL[] = "2010-11-26T14:22:02+11:00";
+    static const char DATETIME_UTC[] = "2010-11-26T03:22:02Z";
+    static const char DATETIME_NYC[] = "2010-11-25T22:22:02-05:00";
+    static const time_t TIMET = 1290741722;
+    time_t t;
+    int r;
+
+    t = 0xdeadbeef;
+    r = time_from_iso8601(DATETIME_MEL, &t);
+    CU_ASSERT_EQUAL(r, 25);
+    CU_ASSERT_EQUAL(t, TIMET);
+
+    t = 0xdeadbeef;
+    r = time_from_iso8601(DATETIME_UTC, &t);
+    CU_ASSERT_EQUAL(r, 20);
+    CU_ASSERT_EQUAL(t, TIMET);
+
+    t = 0xdeadbeef;
+    r = time_from_iso8601(DATETIME_NYC, &t);
+    CU_ASSERT_EQUAL(r, 25);
+    CU_ASSERT_EQUAL(t, TIMET);
+}
+
+static void
+test_gen_iso8601(void)
+{
+    static const char DATETIME_UTC[] = "2010-11-26T03:22:02Z";
+    static const time_t TIMET = 1290741722;
+    char buf[30];
+    int r;
+
+    r = time_to_iso8601(TIMET, buf, sizeof(buf));
+    CU_ASSERT_EQUAL(r, 20);
+    CU_ASSERT_STRING_EQUAL(buf, DATETIME_UTC);
+}
+
