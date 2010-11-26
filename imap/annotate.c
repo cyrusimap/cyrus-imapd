@@ -816,7 +816,7 @@ static void annotation_get_lastupdate(const char *int_mboxname,
 				      void *rock __attribute__((unused))) 
 {
     struct stat sbuf;
-    char valuebuf[128];
+    char valuebuf[RFC3501_DATETIME_MAX+1];
     struct annotation_data attrib;
     char *fname;
 
@@ -835,7 +835,7 @@ static void annotation_get_lastupdate(const char *int_mboxname,
     if (!fname) return;
     if (stat(fname, &sbuf) == -1) return;
     
-    cyrus_ctime(sbuf.st_mtime, valuebuf);
+    time_to_rfc3501(sbuf.st_mtime, valuebuf, sizeof(valuebuf));
     
     memset(&attrib, 0, sizeof(attrib));
 
@@ -854,7 +854,7 @@ static void annotation_get_lastpop(const char *int_mboxname,
 				   void *rock __attribute__((unused)))
 { 
     struct mailbox *mailbox = NULL;
-    char value[40];
+    char value[RFC3501_DATETIME_MAX+1];
     struct annotation_data attrib;
   
     if(!int_mboxname || !ext_mboxname || !fdata || !mbentry)
@@ -874,7 +874,7 @@ static void annotation_get_lastpop(const char *int_mboxname,
     if (mailbox->i.pop3_last_login == 0) {
 	strcpy (value, " ");
     } else {
-	cyrus_ctime(mailbox->i.pop3_last_login, value);
+	time_to_rfc3501(mailbox->i.pop3_last_login, value, sizeof(value));
     }
 
     mailbox_close(&mailbox);
@@ -949,7 +949,7 @@ static void annotation_get_pop3showafter(const char *int_mboxname,
 {
     struct mailbox *mailbox = NULL;
     time_t date;
-    char value[30];
+    char value[RFC3501_DATETIME_MAX+1];
     struct annotation_data attrib;
 
     if(!int_mboxname || !ext_mboxname || !entry || !fdata || !mbentry)
@@ -974,7 +974,7 @@ static void annotation_get_pop3showafter(const char *int_mboxname,
 
     if (date != 0)
     {
-	cyrus_ctime(date, value);
+	time_to_rfc3501(date, value, sizeof(value));
 	attrib.value = value;
 	attrib.size = strlen(value);
 	attrib.contenttype = "text/plain";
@@ -1881,8 +1881,8 @@ static int annotation_set_pop3showafter(const char *int_mboxname,
 	date = 0;
     }
     else {
-	r = cyrus_parsetime(entry->shared.value, &date);
-	if (r != 0)
+	r = time_from_rfc3501(entry->shared.value, &date);
+	if (r < 0)
 	    return IMAP_PROTOCOL_BAD_PARAMETERS;
     }
 

@@ -1540,7 +1540,7 @@ static int index_appendremote(struct index_state *state, uint32_t msgno,
     const char *msg_base = 0;
     unsigned long msg_size = 0;
     unsigned flag, flagmask;
-    char datebuf[30];
+    char datebuf[RFC3501_DATETIME_MAX+1];
     char sepchar = '(';
     struct index_map *im = &state->map[msgno-1];
 
@@ -1585,7 +1585,7 @@ static int index_appendremote(struct index_state *state, uint32_t msgno,
     }
 
     /* add internal date */
-    cyrus_ctime(im->record.internaldate, datebuf);
+    time_to_rfc3501(im->record.internaldate, datebuf, sizeof(datebuf));
     prot_printf(pout, ") \"%s\" ", datebuf);
 
     /* message literal */
@@ -2468,9 +2468,9 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
     }
     if (fetchitems & FETCH_INTERNALDATE) {
 	time_t msgdate = im->record.internaldate;
-	char datebuf[30];
+	char datebuf[RFC3501_DATETIME_MAX+1];
 
-	cyrus_ctime(msgdate, datebuf);
+	time_to_rfc3501(msgdate, datebuf, sizeof(datebuf));
 
 	prot_printf(state->out, "%cINTERNALDATE \"%s\"",
 		    sepchar, datebuf);

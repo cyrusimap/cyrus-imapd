@@ -126,15 +126,15 @@ test_rfc3501(void)
     /* Well-formed full RFC3501 format with 2-digit day
      * "dd-mmm-yyyy HH:MM:SS zzzzz" */
     t = 0xdeadbeef;
-    r = cyrus_parsetime("15-Oct-2010 03:19:52 +1100", &t);
-    CU_ASSERT_EQUAL(r, 0);
+    r = time_from_rfc3501("15-Oct-2010 03:19:52 +1100", &t);
+    CU_ASSERT_EQUAL(r, 26);
     CU_ASSERT_EQUAL(t, 1287073192);
 
     /* Well-formed full RFC3501 format with 1-digit day
      * " d-mmm-yyyy HH:MM:SS zzzzz" */
     t = 0xdeadbeef;
-    r = cyrus_parsetime(" 5-Oct-2010 03:19:52 +1100", &t);
-    CU_ASSERT_EQUAL(r, 0);
+    r = time_from_rfc3501(" 5-Oct-2010 03:19:52 +1100", &t);
+    CU_ASSERT_EQUAL(r, 26);
     CU_ASSERT_EQUAL(t, 1286209192);
 }
 
@@ -148,71 +148,71 @@ test_military_timezones(void)
     /* Well-formed legacy format with 2-digit day, 2-digit year,
      * uppercase 1-char timezone = UTC, "dd-mmm-yy HH:MM:SS-z" */
     t = 0xdeadbeef;
-    r = cyrus_parsetime("15-Oct-95 03:19:52-Z", &t);
-    CU_ASSERT_EQUAL(r, 0);
+    r = time_from_rfc3501("15-Oct-95 03:19:52-Z", &t);
+    CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
      * lowercase 1-char timezone = UTC, "dd-mmm-yy HH:MM:SS-z" */
     t = 0xdeadbeef;
-    r = cyrus_parsetime("15-Oct-95 03:19:52-z", &t);
-    CU_ASSERT_EQUAL(r, 0);
+    r = time_from_rfc3501("15-Oct-95 03:19:52-z", &t);
+    CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
      * uppercase 1-char timezone = +0100, "dd-mmm-yy HH:MM:SS-z" */
     t = 0xdeadbeef;
-    r = cyrus_parsetime("15-Oct-95 03:19:52-A", &t);
-    CU_ASSERT_EQUAL(r, 0);
+    r = time_from_rfc3501("15-Oct-95 03:19:52-A", &t);
+    CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu-1*3600);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
      * uppercase 1-char timezone = +0200, "dd-mmm-yy HH:MM:SS-z" */
     t = 0xdeadbeef;
-    r = cyrus_parsetime("15-Oct-95 03:19:52-B", &t);
-    CU_ASSERT_EQUAL(r, 0);
+    r = time_from_rfc3501("15-Oct-95 03:19:52-B", &t);
+    CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu-2*3600);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
      * uppercase 1-char timezone = +0900, "dd-mmm-yy HH:MM:SS-z" */
     t = 0xdeadbeef;
-    r = cyrus_parsetime("15-Oct-95 03:19:52-I", &t);
-    CU_ASSERT_EQUAL(r, 0);
+    r = time_from_rfc3501("15-Oct-95 03:19:52-I", &t);
+    CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu-9*3600);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
      * erroneous uppercase 1-char timezone, "dd-mmm-yy HH:MM:SS-z" */
     t = 0xdeadbeef;
-    r = cyrus_parsetime("15-Oct-95 03:19:52-J", &t);
-    CU_ASSERT_EQUAL(r, -EINVAL);
+    r = time_from_rfc3501("15-Oct-95 03:19:52-J", &t);
+    CU_ASSERT_EQUAL(r, -1);
     CU_ASSERT_EQUAL(t, 0xdeadbeef);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
      * uppercase 1-char timezone = +1000, "dd-mmm-yy HH:MM:SS-z" */
     t = 0xdeadbeef;
-    r = cyrus_parsetime("15-Oct-95 03:19:52-K", &t);
-    CU_ASSERT_EQUAL(r, 0);
+    r = time_from_rfc3501("15-Oct-95 03:19:52-K", &t);
+    CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu-10*3600);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
      * 1-char timezone = +1200, "dd-mmm-yy HH:MM:SS-z" */
     t = 0xdeadbeef;
-    r = cyrus_parsetime("15-Oct-95 03:19:52-M", &t);
-    CU_ASSERT_EQUAL(r, 0);
+    r = time_from_rfc3501("15-Oct-95 03:19:52-M", &t);
+    CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu-12*3600);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
      * uppercase 1-char timezone = -0100, "dd-mmm-yy HH:MM:SS-z" */
     t = 0xdeadbeef;
-    r = cyrus_parsetime("15-Oct-95 03:19:52-N", &t);
-    CU_ASSERT_EQUAL(r, 0);
+    r = time_from_rfc3501("15-Oct-95 03:19:52-N", &t);
+    CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu+1*3600);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
      * 1-char timezone = -1200, "dd-mmm-yy HH:MM:SS-z" */
     t = 0xdeadbeef;
-    r = cyrus_parsetime("15-Oct-95 03:19:52-Y", &t);
-    CU_ASSERT_EQUAL(r, 0);
+    r = time_from_rfc3501("15-Oct-95 03:19:52-Y", &t);
+    CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu+12*3600);
 }
 
@@ -283,10 +283,10 @@ static void test_ctime(void)
     static const char DATETIME[] = "16-Nov-2010 13:15:25 +1100";
     static const time_t TIMET = 1289873725;
     time_t t;
-    char buf[30];
+    char buf[RFC3501_DATETIME_MAX+1];
 
     memset(buf, 0, sizeof(buf));
-    cyrus_ctime(TIMET, buf);
+    time_to_rfc3501(TIMET, buf, sizeof(buf));
     CU_ASSERT_STRING_EQUAL(buf, DATETIME);
 }
 
@@ -305,7 +305,7 @@ static void test_zerohour(void)
     static const char DATETIME_MEL[] = " 1-Jan-1970 11:36:29 +1100";
     static const time_t TIMET = 2189;
     time_t t;
-    char buf[30];
+    char buf[RFC3501_DATETIME_MAX+1];
 
     t = message_parse_date(DATETIME_NY, 0);
     CU_ASSERT_EQUAL(t, 0);  /* fail gracefully */
@@ -321,7 +321,7 @@ static void test_zerohour(void)
     pop_tz();
 
     memset(buf, 0, sizeof(buf));
-    cyrus_ctime(TIMET, buf);
+    time_to_rfc3501(TIMET, buf, sizeof(buf));
     CU_ASSERT_STRING_EQUAL(buf, DATETIME_MEL);
 }
 

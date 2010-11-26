@@ -164,9 +164,13 @@ static const char * const monthname[12] = {
     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
 };
 
-/* Convert a time_t date to an IMAP-style date
- * datebuf needs to be >= 30 bytes */
-void cyrus_ctime(time_t date, char *datebuf) 
+/*
+ * Convert a time_t date to an IMAP-style date
+ * datebuf needs to be >= 30 bytes.
+ *
+ * Returns: number of characters in @buf generated, or -1 on error.
+ */
+int time_to_rfc3501(time_t date, char *buf, size_t len)
 {
     struct tm *tm = localtime(&date);
     long gmtoff = gmtoff_of(tm, date);
@@ -180,7 +184,7 @@ void cyrus_ctime(time_t date, char *datebuf)
 	gmtnegative = 1;
     }
     gmtoff /= 60;
-    sprintf(datebuf,
+    return snprintf(buf, len,
 	    "%2u-%s-%u %.2u:%.2u:%.2u %c%.2lu%.2lu",
 	    tm->tm_mday, monthname[tm->tm_mon], tm->tm_year+1900,
 	    tm->tm_hour, tm->tm_min, tm->tm_sec,
@@ -255,10 +259,12 @@ void cyrus_ctime(time_t date, char *datebuf)
  * zzzzz is an numeric time zone offset in the form +HHMM
  *	or -HMMM.
  *
- * Returns: 0 on success, or a negative errno on error.
+ * Returns: Number of characters consumed from @s on success,
+ *	    or -1 on error.
  */
-int cyrus_parsetime(const char *s, time_t *date)
+int time_from_rfc3501(const char *s, time_t *date)
 {
+    const char *origs = s;
     static const int max_monthdays[12] = {
 	31, 29, 31, 30, 31, 30,
 	31, 31, 30, 31, 30, 31
@@ -493,9 +499,9 @@ int cyrus_parsetime(const char *s, time_t *date)
 
     *date = tmp_gmtime - zone_off*60;
 
-    return 0;
+    return s-1 - origs;
 
 baddate:
-    return -EINVAL;
+    return -1;
 }
 
