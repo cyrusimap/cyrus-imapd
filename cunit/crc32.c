@@ -21,9 +21,9 @@ static void test_iovec(void)
     struct iovec iov[2];
 
     memset(iov, 0, sizeof(iov));
-    iov[0].iov_base = TEXT1;
+    iov[0].iov_base = (char *)TEXT1;
     iov[0].iov_len = sizeof(TEXT1)-1;
-    iov[1].iov_base = TEXT2;
+    iov[1].iov_base = (char *)TEXT2;
     iov[1].iov_len = sizeof(TEXT2)-1;
 
     c = crc32_iovec(iov, 2);
