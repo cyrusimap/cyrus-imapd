@@ -59,7 +59,7 @@ static char *month[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
 static char *wday[] = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
 
 /* 'buf' must be at least 80 characters */
-void rfc822date_gen(char *buf, size_t len, time_t t)
+int time_to_rfc822(time_t t, char *buf, size_t len)
 {
     struct tm *tm;
     long gmtoff;
@@ -75,7 +75,7 @@ void rfc822date_gen(char *buf, size_t len, time_t t)
     }
     gmtoff /= 60;
 
-    snprintf(buf, len, "%s, %02d %s %4d %02d:%02d:%02d %c%.2lu%.2lu",
+    return snprintf(buf, len, "%s, %02d %s %4d %02d:%02d:%02d %c%.2lu%.2lu",
 	     wday[tm->tm_wday], 
 	     tm->tm_mday, month[tm->tm_mon], tm->tm_year + 1900,
 	     tm->tm_hour, tm->tm_min, tm->tm_sec,

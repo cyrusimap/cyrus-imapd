@@ -250,7 +250,7 @@ static void test_parse_rfc822(void)
 }
 
 /*
- * Test rfc822date_gen()
+ * Test time_to_rfc822()
  */
 static void test_gen_rfc822(void)
 {
@@ -258,21 +258,25 @@ static void test_gen_rfc822(void)
     static const char DATETIME_UTC[] = "Fri, 26 Nov 2010 03:22:02 +0000";
     static const char DATETIME_NYC[] = "Thu, 25 Nov 2010 22:22:02 -0500";
     static const time_t TIMET = 1290741722;
-    char buf[80];
+    int r;
+    char buf[RFC822_DATETIME_MAX+1];
 
     memset(buf, 0x45, sizeof(buf));
-    rfc822date_gen(buf, sizeof(buf), TIMET);
+    r = time_to_rfc822(TIMET, buf, sizeof(buf));
+    CU_ASSERT_EQUAL(r, 31);
     CU_ASSERT_STRING_EQUAL(buf, DATETIME_MEL);
 
     push_tz(TZ_UTC);
     memset(buf, 0x45, sizeof(buf));
-    rfc822date_gen(buf, sizeof(buf), TIMET);
+    r = time_to_rfc822(TIMET, buf, sizeof(buf));
+    CU_ASSERT_EQUAL(r, 31);
     CU_ASSERT_STRING_EQUAL(buf, DATETIME_UTC);
     pop_tz();
 
     push_tz(TZ_NEWYORK);
     memset(buf, 0x45, sizeof(buf));
-    rfc822date_gen(buf, sizeof(buf), TIMET);
+    r = time_to_rfc822(TIMET, buf, sizeof(buf));
+    CU_ASSERT_EQUAL(r, 31);
     CU_ASSERT_STRING_EQUAL(buf, DATETIME_NYC);
     pop_tz();
 }

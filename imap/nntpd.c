@@ -3036,9 +3036,9 @@ static int savemsg(message_data_t *m, FILE *f)
     /* get date */
     if ((body = spool_getheader(m->hdrcache, "date")) == NULL) {
 	/* no date, create one */
-	char datestr[80];
+	char datestr[RFC822_DATETIME_MAX+1];
 
-	rfc822date_gen(datestr, sizeof(datestr), now);
+	time_to_rfc822(now, datestr, sizeof(datestr));
 	fprintf(f, "Date: %s\r\n", datestr);
 	spool_cache_header(xstrdup("Date"), xstrdup(datestr), m->hdrcache);
     }

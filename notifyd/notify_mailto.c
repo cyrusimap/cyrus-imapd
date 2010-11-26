@@ -74,7 +74,7 @@ char* notify_mailto(const char *class,
     char outmsgid[8192];
     int sm_stat;
     time_t t;
-    char datestr[80];
+    char datestr[RFC822_DATETIME_MAX+1];
     pid_t sm_pid;
     int fds[2];
 
@@ -116,7 +116,7 @@ char* notify_mailto(const char *class,
     
     fprintf(sm, "Message-ID: %s\r\n", outmsgid);
 
-    rfc822date_gen(datestr, sizeof(datestr), t);
+    time_to_rfc822(t, datestr, sizeof(datestr));
     fprintf(sm, "Date: %s\r\n", datestr);
     
     fprintf(sm, "X-Sieve: %s\r\n", SIEVE_VERSION);

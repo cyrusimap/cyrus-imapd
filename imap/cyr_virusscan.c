@@ -456,7 +456,7 @@ void append_notifications()
 	    FILE *f = fdopen(fd, "w+");
 	    size_t ownerlen;
 	    struct infected_msg *msg;
-	    char buf[8192], datestr[80];
+	    char buf[8192], datestr[RFC822_DATETIME_MAX+1];
 	    time_t t;
 	    struct protstream *pout;
 	    struct appendstate as;
@@ -469,7 +469,7 @@ void append_notifications()
 		     (int) p, (int) t, 
 		     outgoing_count++, config_servername);
 	    fprintf(f, "Message-ID: %s\r\n", buf);
-	    rfc822date_gen(datestr, sizeof(datestr), t);
+	    time_to_rfc822(t, datestr, sizeof(datestr));
 	    fprintf(f, "Date: %s\r\n", datestr);
 	    fprintf(f, "From: Mail System Administrator <%s>\r\n",
 		    config_getstring(IMAPOPT_POSTMASTER));

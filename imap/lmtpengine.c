@@ -608,7 +608,7 @@ static int savemsg(struct clientdata *cd,
     int nrcpts = m->rcpt_num;
     time_t now = time(NULL);
     static unsigned msgid_count = 0;
-    char datestr[80], tls_info[250] = "";
+    char datestr[RFC822_DATETIME_MAX+1], tls_info[250] = "";
     const char *skipheaders[] = {
 	"Return-Path",  /* need to remove (we add our own) */
 	NULL
@@ -652,7 +652,7 @@ static int savemsg(struct clientdata *cd,
     }
 
     /* add a received header */
-    rfc822date_gen(datestr, sizeof(datestr), now);
+    time_to_rfc822(now, datestr, sizeof(datestr));
     addlen = 8 + strlen(cd->lhlo_param) + strlen(cd->clienthost);
     if (m->authuser) addlen += 28 + strlen(m->authuser) + 5; /* +5 for ssf */
     addlen += 25 + strlen(config_servername) + strlen(cyrus_version());

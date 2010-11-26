@@ -223,7 +223,7 @@ static int send_rejection(const char *origid,
     char buf[8192], *namebuf;
     int i, sm_stat;
     time_t t;
-    char datestr[80];
+    char datestr[RFC822_DATETIME_MAX+1];
     pid_t sm_pid, p;
 
     smbuf[0] = "sendmail";
@@ -247,7 +247,7 @@ static int send_rejection(const char *origid,
     duplicate_mark(buf, strlen(buf), namebuf, strlen(namebuf), t, 0);
     fprintf(sm, "Message-ID: %s\r\n", buf);
 
-    rfc822date_gen(datestr, sizeof(datestr), t);
+    time_to_rfc822(t, datestr, sizeof(datestr));
     fprintf(sm, "Date: %s\r\n", datestr);
 
     fprintf(sm, "X-Sieve: %s\r\n", SIEVE_VERSION);
@@ -602,7 +602,7 @@ static int send_response(void *ac,
     char outmsgid[8192], *sievedb;
     int i, sl, sm_stat;
     time_t t;
-    char datestr[80];
+    char datestr[RFC822_DATETIME_MAX+1];
     pid_t sm_pid, p;
     sieve_send_response_context_t *src = (sieve_send_response_context_t *) ac;
     message_data_t *md = ((deliver_data_t *) mc)->m;
@@ -628,7 +628,7 @@ static int send_response(void *ac,
     
     fprintf(sm, "Message-ID: %s\r\n", outmsgid);
 
-    rfc822date_gen(datestr, sizeof(datestr), t);
+    time_to_rfc822(t, datestr, sizeof(datestr));
     fprintf(sm, "Date: %s\r\n", datestr);
     
     fprintf(sm, "X-Sieve: %s\r\n", SIEVE_VERSION);
