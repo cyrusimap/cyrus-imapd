@@ -1,4 +1,4 @@
-/* rfc822date.h -- Generate an 822 date
+/* times.h -- Time/date utility routines
  *
  * Copyright (c) 1994-2010 Carnegie Mellon University.  All rights reserved.
  *
@@ -38,13 +38,14 @@
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- *
- * $Id: rfc822date.h,v 1.5 2010/01/06 17:01:47 murch Exp $
  */
 
-#ifndef INCLUDED_RFC822DATE_H
-#define INCLUDED_RFC822DATE_H
+#ifndef __CYRUS__TIME_H__
+#define __CYRUS__TIME_H__
 
-#include "times.h"
+#include <time.h>
 
-#endif
+/* 'buf' must be at least 80 characters */
+void rfc822date_gen(char *buf, size_t len, time_t t);
+
+#endif /* __CYRUS__TIME_H__ */

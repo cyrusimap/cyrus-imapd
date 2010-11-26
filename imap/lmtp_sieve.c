@@ -69,7 +69,7 @@
 #include "lmtpstats.h"
 #include "notify.h"
 #include "prot.h"
-#include "rfc822date.h"
+#include "times.h"
 #include "sieve_interface.h"
 #include "smtpclient.h"
 #include "util.h"

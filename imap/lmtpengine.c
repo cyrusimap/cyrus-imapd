@@ -76,7 +76,7 @@
 #include "util.h"
 #include "auth.h"
 #include "prot.h"
-#include "rfc822date.h"
+#include "times.h"
 #include "global.h"
 #include "iptostring.h"
 #include "exitcodes.h"

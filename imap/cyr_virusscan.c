@@ -66,7 +66,7 @@
 #include "prot.h"
 #include "util.h"
 #include "sync_log.h"
-#include "rfc822date.h"
+#include "times.h"
 
 /* config.c stuff */
 const int config_need_data = CONFIG_NEED_PARTITION_DATA;

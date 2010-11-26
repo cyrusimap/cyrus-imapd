@@ -101,7 +101,7 @@
 #include "prot.h"
 #include "proxy.h"
 #include "retry.h"
-#include "rfc822date.h"
+#include "times.h"
 #include "smtpclient.h"
 #include "spool.h"
 #include "sync_log.h"

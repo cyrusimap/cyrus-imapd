@@ -52,7 +52,7 @@
 #include "cunit/cunit.h"
 #include "global.h"
 #include "message.h"
-#include "rfc822date.h"
+#include "times.h"
 
 #define TZ_UTC		"UTC+00"
 #define TZ_NEWYORK	"EST+05"

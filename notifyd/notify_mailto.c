@@ -55,7 +55,7 @@
 
 #include "global.h"
 #include "libconfig.h"
-#include "rfc822date.h"
+#include "times.h"
 #include "sieve_interface.h"
 
 static int contains_8bit(const char *msg);

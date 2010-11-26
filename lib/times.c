@@ -1,6 +1,6 @@
-/* rfc822date.c -- Generate an 822 date
+/* times.c -- Time/date utilities
  *
- * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2010 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -45,7 +45,7 @@
 #include <stdio.h>
 
 #include "assert.h"
-#include "rfc822date.h"
+#include "times.h"
 #include "gmtoff.h"
 
 static char *month[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
