@@ -10678,26 +10678,6 @@ void cmd_mupdatepush(char *tag, char *name)
 }
 
 #ifdef HAVE_SSL
-/* Convert the ASCII hex into binary data
- *
- * 'bin' MUST be able to accomodate at least strlen(hex)/2 bytes
- */
-void hex2bin(const char *hex, unsigned char *bin, unsigned int *binlen)
-{
-    int i;
-    const char *c;
-    unsigned char msn, lsn;
-
-    for (c = hex, i = 0; *c && Uisxdigit(*c); c++) {
-	msn = (*c > '9') ? tolower((int) *c) - 'a' + 10 : *c - '0';
-	c++;
-	lsn = (*c > '9') ? tolower((int) *c) - 'a' + 10 : *c - '0';
-	
-	bin[i++] = (unsigned char) (msn << 4) | lsn;
-    }
-    *binlen = i;
-}
-
 enum {
     URLAUTH_ALG_HMAC_SHA1 =	0 /* HMAC-SHA1 */
 };
@@ -10830,8 +10810,8 @@ void cmd_urlfetch(char *tag)
 	if (!r) {
 	    if (url.urlauth.token) {
 		/* validate the URLAUTH token */
-		hex2bin(url.urlauth.token,
-			(unsigned char *) url.urlauth.token, &token_len);
+		token_len = hex_to_bin(url.urlauth.token, 0,
+			(unsigned char *) url.urlauth.token);
 
 		/* first byte is the algorithm used to create token */
 		switch (url.urlauth.token[0]) {
@@ -10926,24 +10906,6 @@ void cmd_urlfetch(char *tag)
     prot_printf(imapd_out,
 		"%s BAD Invalid extended URLFETCH parameters\r\n", tag);
     eatline(imapd_in, c);
-}
-
-/* Convert the binary data into ASCII hex
- *
- * 'hex' MUST be able to accomodate at least 2*binlen+1 bytes
- */
-void bin2hex(unsigned char *bin, int binlen, char *hex)
-{
-    int i;
-    unsigned char c;
-    
-    for (i = 0; i < binlen; i++) {
-	c = (bin[i] >> 4) & 0xf;
-	hex[i*2] = (c > 9) ? ('a' + c - 10) : ('0' + c);
-	c = bin[i] & 0xf;
-	hex[i*2+1] = (c > 9) ? ('a' + c - 10) : ('0' + c);
-    }
-    hex[i*2] = '\0';
 }
 
 #define MBOX_KEY_LEN 16		  /* 128 bits */
@@ -11070,7 +11032,7 @@ void cmd_genurlauth(char *tag)
 			   2 * (EVP_MAX_MD_SIZE+1) + 1);
 	strcpy(urlauth, arg1.s);
 	strcat(urlauth, ":internal:");
-	bin2hex(token, token_len, urlauth+strlen(urlauth));
+	bin_to_hex(token, token_len, urlauth+strlen(urlauth), BH_LOWER);
 
 	if (first) {
 	    prot_printf(imapd_out, "* GENURLAUTH");
