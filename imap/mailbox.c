@@ -1852,6 +1852,10 @@ bit32 make_sync_crc(struct mailbox *mailbox, struct index_record *record)
     bit32 flagcrc = 0;
     int flag;
 
+    /* expunged flags have no sync CRC */
+    if (record->system_flags & FLAG_EXPUNGED)
+	return 0;
+
     /* calculate an XORed CRC32 over all the flags on the message, so no
      * matter what order they are store in the header, the final value 
      * is the same */
@@ -1877,9 +1881,6 @@ bit32 make_sync_crc(struct mailbox *mailbox, struct index_record *record)
 	flagcrc ^= crc32_cstring(buf);
     }
 
-    /* NOTE: this format is idential to an UPDATE COPY command except
-     * that the string format of the flags has been replaced with a
-     * checksum over the flags */
     snprintf(buf, 4096, "%u " MODSEQ_FMT " %lu (%u) %lu %s",
 	    record->uid, record->modseq, record->last_updated,
 	    flagcrc,
@@ -1937,9 +1938,6 @@ static void mailbox_index_update_counts(struct mailbox *mailbox,
 					struct index_record *record,
 					int is_add)
 {
-    /* avoid dirtying for expunged */
-    if (record->system_flags & FLAG_EXPUNGED)
-	return;
     mailbox_quota_dirty(mailbox);
     mailbox_index_dirty(mailbox);
     header_update_counts(&mailbox->i, record, is_add);
@@ -2296,6 +2294,8 @@ int mailbox_repack_add(struct mailbox_repack *repack,
 
     /* update counters */
     header_update_counts(&repack->i, record, 1);
+    /* sync_crc needs mailbox for user_flag names */
+    repack->i.sync_crc ^= make_sync_crc(repack->mailbox, record);
 
     /* write the index record out */
     mailbox_index_record_to_buf(record, buf);
@@ -2404,6 +2404,9 @@ static int mailbox_index_repack(struct mailbox *mailbox)
 
 	r = mailbox_repack_add(repack, &record);
 	if (r) goto fail;
+
+	/* update the sync crc */
+	mailbox->i.sync_crc ^= make_sync_crc(mailbox, &record);
     }
 
     /* we unlinked any "needs unlink" in the process */
