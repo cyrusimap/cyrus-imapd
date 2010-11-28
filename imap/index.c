@@ -385,8 +385,6 @@ int index_writeseen(struct index_state *state)
     struct seendata sd;
     struct mailbox *mailbox = state->mailbox;
 
-    assert(mailbox->index_locktype == LOCK_EXCLUSIVE);
-
     if (!state->seen_dirty)
 	return 0;
 
