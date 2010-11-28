@@ -591,8 +591,7 @@ int mboxlist_createmailbox_full(const char *name, int mbtype,
     if (r) goto done; /* CREATE failed */ 
 
     /* all is well - activate the mailbox */
-    mboxent = mboxlist_makeentry(newmailbox->mbtype, newmailbox->part,
-				 newmailbox->acl);
+    mboxent = mboxlist_makeentry(mbtype, newpartition, acl);
     r = DB->store(mbdb, name, strlen(name), mboxent, strlen(mboxent), NULL);
 
     if (r) {
