@@ -266,6 +266,63 @@ struct list_rock_recursivematch {
     struct list_entry *array;
 };
 
+/* CAPABILITIES are defined here, not including TLS/SASL ones,
+   and those that are configurable */
+
+enum {
+    CAPA_PREAUTH = 0x1,
+    CAPA_POSTAUTH = 0x2
+};
+
+struct capa_struct {
+    const char *str;
+    int mask;
+};
+
+struct capa_struct base_capabilities[] = {
+/* pre-auth capabilities */
+    { "IMAP4rev1",             3 },
+    { "LITERAL+",              3 },
+    { "ID",                    3 },
+    { "ENABLE",                3 },
+/* post-auth capabilities */
+    { "ACL",                   2 },
+    { "RIGHTS=kxte",           2 },
+    { "QUOTA",                 2 },
+    { "MAILBOX-REFERRALS",     2 },
+    { "NAMESPACE",             2 }, 
+    { "UIDPLUS",               2 },
+    { "NO_ATOMIC_RENAME",      2 },
+    { "UNSELECT",              2 },
+    { "CHILDREN",              2 },
+    { "MULTIAPPEND",           2 },
+    { "BINARY",                2 },
+    { "CATENATE",              2 },
+    { "CONDSTORE",             2 },
+    { "ESEARCH",               2 },
+    { "SORT",                  2 },
+    { "SORT=MODSEQ",           2 },
+    { "THREAD=ORDEREDSUBJECT", 2 },
+    { "THREAD=REFERENCES",     2 },
+    { "ANNOTATEMORE",          2 },
+    { "LIST-EXTENDED",         2 },
+    { "WITHIN",                2 },
+    { "SCAN",                  2 },
+    { "XLIST",                 2 },
+
+#ifdef HAVE_SSL
+    { "URLAUTH",               2 },
+    { "URLAUTH=BINARY",        2 },
+#endif
+#ifdef ENABLE_X_NETSCAPE_HACK
+    { "X-NETSCAPE"             2 },
+#endif
+
+/* keep this to mark the end of the list */
+    { 0,                       0 }
+};
+
+
 void motd_file(int fd);
 void shut_down(int code);
 void fatal(const char *s, int code);
@@ -2739,10 +2796,19 @@ void capa_response(int flags)
 {
     const char *sasllist; /* the list of SASL mechanisms */
     int mechcount;
+    int need_space = 0;
+    int i;
 
-    prot_printf(imapd_out, CAPA_PREAUTH_STRING);
+    for (i = 0; base_capabilities[i].str; i++) {
+	/* XXX - add filtering here */
+	if (base_capabilities[i].mask & flags) {
+	    if (need_space) prot_putc(' ', imapd_out);
+	    else need_space = 1;
+	    prot_printf(imapd_out, "%s", base_capabilities[i].str);
+	}
+    }
 
-    if(config_mupdate_server) {
+    if (config_mupdate_server) {
 	prot_printf(imapd_out, " MUPDATE=mupdate://%s/", config_mupdate_server);
     }
 
@@ -2767,8 +2833,6 @@ void capa_response(int flags)
     }
 
     if (!(flags & CAPA_POSTAUTH)) return;
-
-    prot_printf(imapd_out, CAPA_POSTAUTH_STRING);
 
 #ifdef HAVE_ZLIB
     if (!imapd_compress_done && !imapd_tls_comp) {
