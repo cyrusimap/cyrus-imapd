@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl5
+#!/usr/bin/perl
 
 #
 # Created by Alison Greenwald 21 Sep 2000

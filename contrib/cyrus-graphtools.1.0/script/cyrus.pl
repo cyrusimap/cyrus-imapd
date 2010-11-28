@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl5 
+#!/usr/bin/perl
 
 # This will read information from the cyrus MIB for all devices specified
 # in cyrusrc 

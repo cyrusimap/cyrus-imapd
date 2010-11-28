@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl
+#!/usr/bin/perl
 
 # Create a workload against a murder frontend
 # that will give the MUPDATE server a workout.
