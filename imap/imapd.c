@@ -3619,9 +3619,7 @@ void cmd_select(char *tag, char *cmd, char *name)
     }
     backend_current = NULL;
 
-    if (wasopen && (imapd_client_capa & CAPA_QRESYNC)) {
-	prot_printf(imapd_out, "* OK [CLOSED] Ok\r\n");
-    }
+    if (wasopen) prot_printf(imapd_out, "* OK [CLOSED] Ok\r\n");
 
     init.qresync = imapd_client_capa & CAPA_QRESYNC;
     init.userid = imapd_userid;
