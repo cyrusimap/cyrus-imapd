@@ -394,11 +394,23 @@ if test "$sievedir" != "no"; then
 	AC_PROG_LEX
 	AC_CHECK_LIB(fl,main)
 
-	AC_CHECK_HEADERS(pcreposix.h rxposix.h)
+	AC_CHECK_HEADER(pcreposix.h)
 	if test "$ac_cv_header_pcreposix_h" == "yes"; then
+		AC_MSG_CHECKING(for utf8 enabled pcre)
+		AC_CACHE_VAL(cyrus_cv_pcre_utf8, AC_TRY_CPP([#include <pcreposix.h>
+#ifndef REG_UTF8
+#include </nonexistent>
+#endif],cyrus_cv_pcre_utf8=yes,cyrus_cv_pcre_utf8=no))
+		AC_MSG_RESULT($cyrus_cv_pcre_utf8)
+	else
+		cyrus_cv_pcre_utf8="no"
+	fi
+	if test "$cyrus_cv_pcre_utf8" == "yes"; then
 		LIBS="$LIBS -lpcre -lpcreposix";
 		AC_DEFINE(ENABLE_REGEX, [], [Do we have a regex library?])
+		AC_DEFINE(HAVE_PCREPOSIX_H, [], [Do we have usable pcre library?])
 	else 
+		AC_CHECK_HEADERS(rxposix.h)
 		if test "$ac_cv_header_rxposix_h" == "yes"; then
 			LIBS="$LIBS -lrx"
 			AC_DEFINE(ENABLE_REGEX, [],
