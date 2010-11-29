@@ -754,6 +754,7 @@ int undump_mailbox(const char *mbname,
     const char *userid = NULL;
     char *annotation, *contenttype, *content;
     char *seen_file = NULL, *mboxkey_file = NULL;
+    uquota_t old_quota_used;
 
     memset(&file, 0, sizeof(file));
     memset(&data, 0, sizeof(data));
@@ -805,6 +806,9 @@ int undump_mailbox(const char *mbname,
 				   NULL, 0, 0, &mailbox);
     }
     if(r) goto done;
+
+    /* track quota use */
+    old_quota_used = mailbox->i.quota_mailbox_used;
 
     while(1) {
 	char fnamebuf[MAX_MAILBOX_PATH + 1024];
@@ -1114,6 +1118,28 @@ int undump_mailbox(const char *mbname,
 	if (r) {
 	    r = 0; /* no point throwing errors */
 	    goto done2;
+	}
+
+	/* update the quota if necessary */
+	if (mailbox->quotaroot &&
+	    old_quota_used != mailbox->i.quota_mailbox_used) {
+	    struct txn *tid = NULL;
+	    struct quota q;
+
+	    q.root = mailbox->quotaroot;
+	    r = quota_read(&q, &tid, 1);
+	    if (!r) {
+		q.used += mailbox->i.quota_mailbox_used - old_quota_used;
+		r = quota_write(&q, &tid);
+	    }
+	    if (!r) quota_commit(&tid);
+	    else {
+		quota_abort(&tid);
+		syslog(LOG_ERR, "LOSTQUOTA: unable to record add of " 
+		       UQUOTA_T_FMT " bytes in quota %s",
+		       mailbox->i.quota_mailbox_used - old_quota_used,
+		       mailbox->quotaroot);
+	    }
 	}
 
 	for (recno = 1; recno <= mailbox->i.num_records; recno++) {
