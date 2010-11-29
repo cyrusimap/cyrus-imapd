@@ -88,6 +88,12 @@ static int dump_file(int first, int sync,
 		     struct protstream *pin, struct protstream *pout,
 		     const char *filename, const char *ftag);
 
+static void downgrade_header(struct index_header *i, char *buf, int version,
+			     int header_size, int record_size)
+			     __attribute__((noinline));
+static void header_set_num_records(char *buf, unsigned int nrecords)
+			     __attribute__((noinline));
+
 /* support for downgrading index files on copying back to an
  * earlier version of Cyrus */
 static void downgrade_header(struct index_header *i, char *buf, int version,
@@ -186,6 +192,11 @@ static void downgrade_record(struct index_record *record, char *buf,
 #endif
 }
 
+static void header_set_num_records(char *buf, unsigned int nrecords)
+{
+    *((bit32 *)(buf+OFFSET_NUM_RECORDS)) = htonl(nrecords);
+}
+
 /* create a downgraded index file in cyrus.index.  We don't copy back
  * expunged messages, sorry */
 static int dump_index(struct mailbox *mailbox, int oldversion,
@@ -275,7 +286,7 @@ static int dump_index(struct mailbox *mailbox, int oldversion,
 	oldindex_fd = open(oldname, O_RDWR|O_TRUNC|O_CREAT, 0666);
 	if (oldindex_fd == -1) goto fail;
 
-	*((bit32 *)(hbuf+OFFSET_NUM_RECORDS)) = htonl(nexpunge);
+	header_set_num_records(hbuf, nexpunge);
 
 	/* Write header - everything we'll say */
 	n = retry_write(oldindex_fd, hbuf, header_size);

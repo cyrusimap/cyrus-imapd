@@ -118,7 +118,7 @@ static int libwrap_ask(struct request_info *r, int fd)
 
     /* is this a connection from the local host? */
     if (getpeername(fd, (struct sockaddr *) &sin, &len) == 0) {
-	if (((struct sockaddr *)&sin)->sa_family == AF_UNIX) {
+	if (sin.ss_family == AF_UNIX) {
 	    return 1;
 	}
     }

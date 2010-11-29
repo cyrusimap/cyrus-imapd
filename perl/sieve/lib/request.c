@@ -546,6 +546,7 @@ static int writefile(mystring_t *data, char *name, char **errstrp)
   FILE *stream;
 
   char *scrname;
+  char *dp; /* this is only necessary to shut up gcc */
 
   scrname=malloc(strlen(name)+10);
   strcpy(scrname, name);
@@ -562,7 +563,8 @@ static int writefile(mystring_t *data, char *name, char **errstrp)
       return -1;
   }
 
-  fwrite(string_DATAPTR(data), 1, data->len, stream);
+  dp = string_DATAPTR(data);
+  fwrite(dp, 1, data->len, stream);
 
   fclose(stream);
 

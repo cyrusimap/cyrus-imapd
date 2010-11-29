@@ -60,6 +60,7 @@ static int ncom;	/* number of open comments */
 
 %option noyywrap
 %option nounput
+%option noinput
 %option prefix="addr"
 
 %x QSTRING DOMAINLIT COMMENT

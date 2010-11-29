@@ -521,7 +521,7 @@ fail:
 	const char *fname;
 	uint32_t recno;
 	uint32_t offset;
-	char buf[4];
+	uint32_t gen;
 
 	/* make sure we have a file */
 	if (mailbox->cache_fd == -1) {
@@ -530,8 +530,8 @@ fail:
 	}
 
 	/* update the generation number */
-	*((bit32 *)(buf)) = htonl(mailbox->i.generation_no);
-	retry_write(mailbox->cache_fd, buf, 4);
+	gen = htonl(mailbox->i.generation_no);
+	retry_write(mailbox->cache_fd, (char *)&gen, 4);
 
 	for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	    if (mailbox_read_index_record(mailbox, recno, &record))
@@ -2363,8 +2363,10 @@ int mailbox_repack_commit(struct mailbox_repack **repackptr)
     }
 
     /* ensure everything is committed to disk */
-    if (fsync(repack->newindex_fd) || fsync(repack->newcache_fd))
+    if (fsync(repack->newindex_fd) || fsync(repack->newcache_fd)) {
+	r = IMAP_IOERROR;
 	goto fail;
+    }
 
     close(repack->newcache_fd);
     repack->newcache_fd = -1;
@@ -2601,7 +2603,7 @@ int mailbox_create(const char *name,
     char *fname;
     struct mailbox *mailbox = NULL;
     int n;
-    char generation_buf[4];
+    uint32_t generation_buf;
     int createfnames[] = { META_INDEX, META_CACHE, META_HEADER, 0 };
     struct mailboxlist *listitem;
 
@@ -2703,8 +2705,8 @@ int mailbox_create(const char *name,
     }
 
     /* write out the initial generation number to the cache file */
-    *((bit32 *)generation_buf) = htonl(mailbox->i.generation_no);
-    n = retry_write(mailbox->cache_fd, generation_buf, 4);
+    generation_buf = htonl(mailbox->i.generation_no);
+    n = retry_write(mailbox->cache_fd, (char *)&generation_buf, 4);
     if (n != 4 || fsync(mailbox->cache_fd)) {
 	syslog(LOG_ERR, "IOERROR: writing initial cache for %s: %m",
 	       mailbox->name);
@@ -3845,7 +3847,7 @@ int mailbox_reconstruct(const char *name, int flags)
     r = mailbox_open_cache(mailbox);
     if (r) {
 	const char *fname = mailbox_meta_fname(mailbox, META_CACHE);
-	char buf[4];
+	uint32_t buf;
 	int n;
 
 	printf("%s: missing cache file, recreating\n",
@@ -3860,8 +3862,8 @@ int mailbox_reconstruct(const char *name, int flags)
 	if (mailbox->cache_fd == -1) goto close;
 
 	/* set the generation number */
-	*((bit32 *)(buf)) = htonl(mailbox->i.generation_no);
-	n = retry_write(mailbox->cache_fd, buf, 4);
+	buf = htonl(mailbox->i.generation_no);
+	n = retry_write(mailbox->cache_fd, (char *)&buf, 4);
 	if (n != 4) goto close;
 
 	/* ensure that next user will create the MMAPing */

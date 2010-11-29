@@ -771,6 +771,8 @@ static int message_parse_headers(struct msg *msg, struct body *body,
 		}
 		message_parse_string(value, &body->received_date);
 		break;
+	    default:
+		break;
 	    } /* switch() */
 	} /* if (*next == '\n') */
     }

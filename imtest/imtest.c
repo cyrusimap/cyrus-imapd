@@ -88,6 +88,7 @@
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
 #include "md5.h"
+#include "retry.h"
 
 #ifdef HAVE_SSL
 #include <openssl/ssl.h>
@@ -974,9 +975,11 @@ void interaction (int id, const char *challenge, const char *prompt,
 	if (id==SASL_CB_NOECHOPROMPT) {
 	    strcpy(result, getpass(""));
 	} else {
-	    fgets(result, sizeof(result) - 1, stdin);
-	    c = strlen(result);
-	    result[c - 1] = '\0';
+	    result[0] = '\0';
+	    if (fgets(result, sizeof(result) - 1, stdin) != NULL) {
+		c = strlen(result);
+		result[c - 1] = '\0';
+	    }
 	}
     }
     
@@ -1358,7 +1361,7 @@ static void interactive(struct protocol_t *protocol, char *filename)
 		    imtest_fatal("prot_read");
 		}
 		if(output_socket)
-		    write(fd_out, buf, count);
+		    retry_write(fd_out, buf, count);
 		else {
 		    /* use the stream API */
 		    buf[count] = '\0';
@@ -1400,7 +1403,7 @@ static void interactive(struct protocol_t *protocol, char *filename)
 	    } else {
 		if (!output_socket) {
 		    /* echo for the user - if not in socket mode */
-		    write(1, buf, numr);
+		    retry_write(1, buf, numr);
 		} 
 
 		if (output_socket && protocol->pipe) {
