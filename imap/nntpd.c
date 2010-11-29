@@ -1566,7 +1566,7 @@ static int find_cb(const char *msgid __attribute__((unused)),
     return CYRUSDB_DONE;
 }
 
-static int find_msgid(char *msgid, char **mailbox, uint32_t *uid)
+static int my_find_msgid(char *msgid, char **mailbox, uint32_t *uid)
 {
     struct findrock frock = { NULL, 0 };
 
@@ -1613,7 +1613,7 @@ static int parserange(char *str, uint32_t *uid, uint32_t *last,
     else if (*str == '<') {
 	/* message-id, find server and/or mailbox */
 	if (!msgid) goto badrange;
-	if (!find_msgid(str, &mboxname, uid)) goto nomsgid;
+	if (!my_find_msgid(str, &mboxname, uid)) goto nomsgid;
 
 	*msgid = str;
 
@@ -3894,7 +3894,7 @@ static void cmd_post(char *msgid, int mode)
     int r = 0;
 
     /* check if we want this article */
-    if (msgid && find_msgid(msgid, &mboxname, NULL)) {
+    if (msgid && my_find_msgid(msgid, &mboxname, NULL)) {
 	/* already have it */
 	syslog(LOG_INFO,
 	       "dupelim: news article id %s already present in mailbox %s",
