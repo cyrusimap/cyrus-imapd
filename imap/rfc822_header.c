@@ -1,5 +1,5 @@
 /* ANSI-C code produced by gperf version 3.0.3 */
-/* Command-line: gperf  */
+/* Command-line: gperf /tmp/compile_st_IpSMBb.gperf  */
 /* Computed positions: -k'1,10,$' */
 
 #if !((' ' == 32) && ('!' == 33) && ('"' == 34) && ('#' == 35) \
@@ -159,12 +159,12 @@ __rfc822_header_lookup (register const char *str, register unsigned int len)
 {
   static const struct rfc822_header_desc wordlist[] =
     {
-      {""}, {""},
+      {"", 0}, {"", 0},
       {"Cc", RFC822_CC},
       {"Bcc", RFC822_BCC},
-      {""}, {""}, {""},
+      {"", 0}, {"", 0}, {"", 0},
       {"Subject", RFC822_SUBJECT},
-      {""},
+      {"", 0},
       {"Date", RFC822_DATE},
       {"Content-Id", RFC822_CONTENT_ID},
       {"Sender", RFC822_SENDER},
@@ -174,19 +174,19 @@ __rfc822_header_lookup (register const char *str, register unsigned int len)
       {"References", RFC822_REFERENCES},
       {"Content-MD5", RFC822_CONTENT_MD5},
       {"Content-Type", RFC822_CONTENT_TYPE},
-      {""},
+      {"", 0},
       {"Content-Disposition", RFC822_CONTENT_DISPOSITION},
       {"Message-ID", RFC822_MESSAGE_ID},
       {"In-Reply-To", RFC822_IN_REPLY_TO},
-      {""},
+      {"", 0},
       {"Reply-To", RFC822_REPLY_TO},
       {"Content-Description", RFC822_CONTENT_DESCRIPTION},
-      {""},
+      {"", 0},
       {"Content-Location", RFC822_CONTENT_LOCATION},
-      {""}, {""}, {""},
+      {"", 0}, {"", 0}, {"", 0},
       {"Content-Transfer-Encoding", RFC822_CONTENT_TRANSFER_ENCODING},
       {"Content-Language", RFC822_CONTENT_LANGUAGE},
-      {""},
+      {"", 0},
       {"X-Deliveredinternaldate", RFC822_X_DELIVEREDINTERNALDATE}
     };
 
@@ -242,5 +242,5 @@ const char *rfc822_header_to_string(enum rfc822_header v)
 	"To", /* RFC822_TO */
 	"X-Deliveredinternaldate", /* RFC822_X_DELIVEREDINTERNALDATE */
     };
-    return (v >= 0 && v < sizeof(strs)/sizeof(strs[0]) ? strs[v] : NULL);
+    return (v >= 0 && v < (int)(sizeof(strs)/sizeof(strs[0])) ? strs[v] : NULL);
 }
