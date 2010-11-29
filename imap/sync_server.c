@@ -1282,17 +1282,6 @@ static int do_mailbox(struct dlist *kin,
 		goto done;
 	    }
 	    recno++;
-
-	    /* usual case, no stale records here, great */
-	    if (rrecord.uid >= mrecord.uid) break;
-
-	    /* otherwise, if it's expunged, that's OK */
-	    if (rrecord.system_flags & FLAG_EXPUNGED)
-		continue;
-
-	    /* Otherwise we want to abort and fix up */
-	    r = IMAP_MAILBOX_CRC;
-	    goto done;
 	}
 
 	/* found a match, check for updates */
