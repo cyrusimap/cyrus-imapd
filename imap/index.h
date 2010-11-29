@@ -97,6 +97,7 @@ struct index_map {
 struct index_state {
     struct mailbox *mailbox;
     unsigned num_records;
+    unsigned oldexists;
     unsigned exists;
     unsigned long last_uid;
     modseq_t highestmodseq;
@@ -112,7 +113,6 @@ struct index_state {
     unsigned numrecent;
     unsigned numunseen;
     unsigned firstnotseen;
-    int havenewrecords;
     char *flagname[MAX_USER_FLAGS];
     char *userid;
     struct protstream *out;
