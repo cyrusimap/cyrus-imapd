@@ -8,6 +8,17 @@
 
 <h1>Upgrading From Previous Versions</h1>
 
+<h2>Upgrading from 2.4.4</h2>
+<ul>
+<li>sync_client no longer forks two process - it just pre-forks
+  a single process in rolling replication mode and uses it
+  "forever".  This is to avoid the bug where it used to open
+  the BDB environment once before forking, then close it in
+  every child, causing the reference count to go negative.
+  This also means you can start it without '-o' and still
+  have the master start without the replica already running.</li>
+</ul>
+
 <h2>Upgrading from 2.4.3</h2>
 <ul>
 <li>Actually, it's more upgrading directly to here from 2.3.x or
