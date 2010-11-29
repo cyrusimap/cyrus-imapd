@@ -87,8 +87,8 @@
 /* Forward declarations */
 static void index_refresh(struct index_state *state);
 static void index_tellexists(struct index_state *state);
-int index_lock(struct index_state *state);
-void index_unlock(struct index_state *state);
+static int index_lock(struct index_state *state);
+static void index_unlock(struct index_state *state);
 
 int index_writeseen(struct index_state *state);
 void index_fetchmsg(struct index_state *state,
@@ -1175,7 +1175,7 @@ int index_getuidsequence(struct index_state *state,
     return n;
 }
 
-int index_lock(struct index_state *state)
+static int index_lock(struct index_state *state)
 {
     int r = mailbox_lock_index(state->mailbox, LOCK_EXCLUSIVE);
     if (!r) index_refresh(state);
@@ -1191,7 +1191,7 @@ int index_status(struct index_state *state, struct statusdata *sdata)
     return 0;
 }
 
-void index_unlock(struct index_state *state)
+static void index_unlock(struct index_state *state)
 {
     /* XXX - errors */
 

@@ -3784,6 +3784,7 @@ void cmd_close(char *tag, char *cmd)
     /* local mailbox */
     if ((cmd[0] == 'C') && (imapd_index->myrights & ACL_EXPUNGE)) {
 	index_expunge(imapd_index, NULL);
+	/* don't tell changes here */
     }
 
     index_close(&imapd_index);
