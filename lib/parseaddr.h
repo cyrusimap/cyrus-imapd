@@ -45,25 +45,17 @@
 #ifndef INCLUDED_PARSEADDR_H
 #define INCLUDED_PARSEADDR_H
 
-#ifndef P
-#ifdef __STDC__
-#define P(x) x
-#else
-#define P(x) ()
-#endif
-#endif
-
 struct address {
-    char *name;
-    char *route;
-    char *mailbox;
-    char *domain;
+    const char *name;
+    const char *route;
+    const char *mailbox;
+    const char *domain;
     struct address *next;
     char *freeme;		/* If non-nil, free */
 };
 
-extern void parseaddr_list P((const char *s, struct address **addrp));
-extern void parseaddr_free P((struct address *addr));
+extern void parseaddr_list(const char *s, struct address **addrp);
+extern void parseaddr_free(struct address *addr);
 
 
 #endif /* INCLUDED_PARSEADDR_H */
