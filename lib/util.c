@@ -538,12 +538,12 @@ void buf_reset(struct buf *buf)
     buf->flags &= ~BUF_CSTRING;
 }
 
-void buf_setcstr(struct buf *buf, char *str)
+void buf_setcstr(struct buf *buf, const char *str)
 {
     buf_setmap(buf, str, strlen(str));
 }
 
-void buf_setmap(struct buf *buf, char *base, int len)
+void buf_setmap(struct buf *buf, const char *base, int len)
 {
     buf_reset(buf);
     if (len) {
@@ -553,17 +553,17 @@ void buf_setmap(struct buf *buf, char *base, int len)
     }
 }
 
-void buf_copy(struct buf *dst, struct buf *src)
+void buf_copy(struct buf *dst, const struct buf *src)
 {
     buf_setmap(dst, src->s, src->len);
 }
 
-void buf_append(struct buf *dst, struct buf *src)
+void buf_append(struct buf *dst, const struct buf *src)
 {
     buf_appendmap(dst, src->s, src->len);
 }
 
-void buf_appendcstr(struct buf *buf, char *str)
+void buf_appendcstr(struct buf *buf, const char *str)
 {
     buf_appendmap(buf, str, strlen(str));
 }
@@ -575,7 +575,7 @@ void buf_appendbit32(struct buf *buf, bit32 num)
     buf_appendmap(buf, item, 4);
 }
 
-void buf_appendmap(struct buf *buf, char *base, int len)
+void buf_appendmap(struct buf *buf, const char *base, int len)
 {
     if (len) {
 	buf_ensure(buf, len);
