@@ -237,7 +237,7 @@ int upgrade_index(struct mailbox *mailbox)
     if (oldminor_version < 12) {
 	struct seen *seendb;
 	struct seendata sd;
-	char *owner_userid;
+	const char *owner_userid;
 
 	/* remove the CONDSTORE option - it's implicit now */
 	mailbox->i.options &= ~OPT_IMAP_CONDSTORE;

@@ -754,7 +754,7 @@ static void cmd_authenticate(char *mech, char *resp)
 {
     int r, sasl_result;
     sasl_ssf_t ssf;
-    char *ssfmsg = NULL;
+    const char *ssfmsg = NULL;
     const void *val;
 
     if (sync_userid) {

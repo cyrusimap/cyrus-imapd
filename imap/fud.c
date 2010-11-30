@@ -250,7 +250,7 @@ int do_proxy_request(const char *who, const char *name,
     struct sockaddr_storage cin, cout;
     struct addrinfo hints, *res0, *res;
     socklen_t cinsiz, coutsiz;
-    static char *backend_port = NULL; /* fud port */
+    static const char *backend_port = NULL; /* fud port */
 
     /* Open a UDP socket to the Cyrus mail server */
     memset(&hints, 0, sizeof(hints));

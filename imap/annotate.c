@@ -1117,9 +1117,9 @@ const struct annotate_f_entry mailbox_rw_entry =
 
 const struct annotate_f_entry server_legacy_entries[] =
 {
-    { "/motd", PROXY_AND_BACKEND, annotation_get_fromfile, "motd" },
+    { "/motd", PROXY_AND_BACKEND, annotation_get_fromfile, (void *)"motd" },
     { "/vendor/cmu/cyrus-imapd/shutdown", PROXY_AND_BACKEND,
-      annotation_get_fromfile, "shutdown" },
+      annotation_get_fromfile, (void *)"shutdown" },
     { "/vendor/cmu/cyrus-imapd/freespace", BACKEND_ONLY,
       annotation_get_freespace, NULL },
     { NULL, ANNOTATION_PROXY_T_INVALID, NULL, NULL }
@@ -1954,13 +1954,13 @@ const struct annotate_st_entry server_entries[] =
       ACL_ADMIN, annotation_set_todb, NULL },
     { "/motd", ATTRIB_TYPE_STRING, PROXY_AND_BACKEND,
       ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
-      ACL_ADMIN, annotation_set_tofile, "motd" },
+      ACL_ADMIN, annotation_set_tofile, (void *)"motd" },
     { "/admin", ATTRIB_TYPE_STRING, PROXY_AND_BACKEND,
       ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
       ACL_ADMIN, annotation_set_todb, NULL },
     { "/vendor/cmu/cyrus-imapd/shutdown", ATTRIB_TYPE_STRING, PROXY_AND_BACKEND,
       ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
-      ACL_ADMIN, annotation_set_tofile, "shutdown" },
+      ACL_ADMIN, annotation_set_tofile, (void *)"shutdown" },
     { "/vendor/cmu/cyrus-imapd/squat", ATTRIB_TYPE_BOOLEAN, PROXY_AND_BACKEND,
       ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
       ACL_ADMIN, annotation_set_todb, NULL },
@@ -2345,7 +2345,7 @@ const struct annotate_attrib attribute_type_names[] =
  * errmsg is used to hint the user where we failed
  */
 int table_lookup(const struct annotate_attrib *table,
-		 char *name, size_t namelen, char *errmsg) 
+		 const char *name, size_t namelen, const char *errmsg)
 {
     char errbuf[ANNOT_DEF_MAXLINELEN*2];
     int entry;
@@ -2388,7 +2388,7 @@ char *consume_comma(char* p)
  * On error errmsg is used to identify item to be parsed.
  */
 int parse_table_lookup_bitmask(const struct annotate_attrib *table,
-                               char** s, char* errmsg) 
+                               char** s, const char* errmsg) 
 {
     int result = 0;
     char *p, *p2;
@@ -2407,7 +2407,7 @@ int parse_table_lookup_bitmask(const struct annotate_attrib *table,
 }
 
 /* Create array of allowed annotations, both internally & externally defined */
-void init_annotation_definitions()
+void init_annotation_definitions(void)
 {
     char *p, *p2, *tmp;
     const char *filename;

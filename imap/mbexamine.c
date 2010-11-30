@@ -203,7 +203,7 @@ void usage(void)
     exit(EC_USAGE);
 }
 
-void print_rec(char *name, struct buf *citem)
+void print_rec(const char *name, const struct buf *citem)
 {
     printf(" %s>{%d}%.*s\n", name, citem->len, citem->len, citem->s); 
 }
