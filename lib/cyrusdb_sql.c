@@ -688,7 +688,7 @@ static int fetch(struct db *db,
 }
 
 static int foreach(struct db *db,
-		   char *prefix, int prefixlen,
+		   const char *prefix, int prefixlen,
 		   foreach_p *goodp,
 		   foreach_cb *cb, void *rock, 
 		   struct txn **tid)

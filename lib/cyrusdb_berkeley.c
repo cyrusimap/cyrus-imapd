@@ -578,7 +578,7 @@ static int fetchlock(struct db *mydb,
 /* instead of "DB_DBT_REALLOC", we might want DB_DBT_USERMEM and allocate
    this to the maximum length at the beginning. */
 static int foreach(struct db *mydb,
-		   char *prefix, int prefixlen,
+		   const char *prefix, int prefixlen,
 		   foreach_p *goodp,
 		   foreach_cb *cb, void *rock, 
 		   struct txn **mytid)
@@ -612,7 +612,7 @@ static int foreach(struct db *mydb,
     /* find first record */
     if (prefix && *prefix) {
 	/* if (k.data) free(k.data); */
-	k.data = prefix;
+	k.data = (char *)prefix;
 	k.size = prefixlen;
 
 	r = cursor->c_get(cursor, &k, &d, DB_SET_RANGE);

@@ -146,7 +146,7 @@ struct cyrusdb_backend {
        unless you're using transactions and pass the same transaction
        to all db calls during the life of foreach() */
     int (*foreach)(struct db *mydb,
-		   char *prefix, int prefixlen,
+		   const char *prefix, int prefixlen,
 		   foreach_p *p,
 		   foreach_cb *cb, void *rock, 
 		   struct txn **tid);

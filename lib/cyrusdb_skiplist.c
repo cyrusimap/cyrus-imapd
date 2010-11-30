@@ -1053,7 +1053,7 @@ static int fetchlock(struct db *db,
    if there is a txn, 'cb' must make use of it.
 */
 int myforeach(struct db *db,
-	      char *prefix, int prefixlen,
+	      const char *prefix, int prefixlen,
 	      foreach_p *goodp,
 	      foreach_cb *cb, void *rock, 
 	      struct txn **tidptr)

@@ -502,7 +502,8 @@ struct qr_path {
     size_t alloc;
 };
 
-static void scan_qr_dir(char *quota_path, char *prefix, struct qr_path *pathbuf)
+static void scan_qr_dir(char *quota_path, const char *prefix,
+			struct qr_path *pathbuf)
 {
     int config_fulldirhash = libcyrus_config_getswitch(CYRUSOPT_FULLDIRHASH);
     int config_virtdomains = libcyrus_config_getswitch(CYRUSOPT_VIRTDOMAINS);
@@ -563,7 +564,7 @@ static void scan_qr_dir(char *quota_path, char *prefix, struct qr_path *pathbuf)
 }
 
 static int foreach(struct db *db,
-		   char *prefix, int prefixlen,
+		   const char *prefix, int prefixlen,
 		   foreach_p *goodp,
 		   foreach_cb *cb, void *rock, 
 		   struct txn **tid)

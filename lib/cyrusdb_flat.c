@@ -368,7 +368,7 @@ static int fetchlock(struct db *db,
      datalen = dataend - data;
 
 static int foreach(struct db *db,
-		   char *prefix, int prefixlen,
+		   const char *prefix, int prefixlen,
 		   foreach_p *goodp,
 		   foreach_cb *cb, void *rock, 
 		   struct txn **mytid)
@@ -420,16 +420,16 @@ static int foreach(struct db *db,
 
     if (prefix) {
 	char *realprefix;
-	if(prefix[prefixlen] != '\0') {
+	if (prefix[prefixlen] != '\0') {
 	    realprefix = xmalloc(prefixlen+1);
 	    memcpy(realprefix, prefix, prefixlen);
 	    realprefix[prefixlen] = '\0';
 	} else {
-	    realprefix = prefix;
+	    realprefix = xstrdup(prefix);
 	}
 	offset = bsearch_mem(realprefix, 1, dbbase, db->size, 0, &len);
 
-	if(prefix[prefixlen] != '\0') free(realprefix);
+	free(realprefix);
     } else {
 	offset = 0;
     }
