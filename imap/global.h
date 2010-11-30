@@ -79,7 +79,8 @@ extern int mysasl_config(void *context,
 extern sasl_security_properties_t *mysasl_secprops(int flags);
 
 /* user canonification */
-extern char *canonify_userid(char *user, char *loginid, int *domain_from_ip);
+extern const char *canonify_userid(char *user, const char *loginid,
+				   int *domain_from_ip);
 
 extern int is_userid_anonymous(const char *user);
 

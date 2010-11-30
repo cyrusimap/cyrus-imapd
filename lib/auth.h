@@ -50,7 +50,7 @@ struct auth_state;
 struct auth_mech {
     const char *name;
 
-    char *(*canonifyid)(const char *identifier, size_t len);
+    const char *(*canonifyid)(const char *identifier, size_t len);
     int (*memberof)(struct auth_state *auth_state, 
              const char *identifier);
     struct auth_state *(*newstate)(const char *identifier);
@@ -71,7 +71,7 @@ extern struct auth_mech auth_krb5;
  *                  failure */
 /* identifier: id to canonify */
 /* len: length of id, or 0 to do strlen(identifier) */
-char *auth_canonifyid(const char *identifier, size_t len);
+const char *auth_canonifyid(const char *identifier, size_t len);
 
 int auth_memberof(struct auth_state *auth_state, 
  	 const char *identifier);

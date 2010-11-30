@@ -246,7 +246,7 @@ const char *real_realm;
  * Returns a pointer to a static buffer containing the canonical form
  * or NULL if 'identifier' is invalid.
  */
-static char *mycanonifyid(const char *identifier, size_t len)
+static const char *mycanonifyid(const char *identifier, size_t len)
 {
     static char retbuf[MAX_K_NAME_SZ+1];
     char aname[ANAME_SZ];
@@ -342,7 +342,7 @@ static int mymemberof(
 	return 0;
 }
 
-static char *mycanonifyid(
+static const char *mycanonifyid(
     const char *identifier __attribute__((unused)), 
     size_t len __attribute__((unused)))
 {

@@ -386,7 +386,8 @@ int global_authisa(struct auth_state *authstate, enum imapopt opt)
 
 /* Note: This function is not idempotent! Only call it once for a given ID
  * or you will be unhappy (think IP hosting). */
-char *canonify_userid(char *user, char *loginid, int *domain_from_ip)
+const char *canonify_userid(char *user, const char *loginid,
+			    int *domain_from_ip)
 {
     char *domain = NULL;
     int len = strlen(user);
@@ -454,7 +455,7 @@ int mysasl_canon_user(sasl_conn_t *conn,
 		      char *out,
 		      unsigned out_max, unsigned *out_ulen)
 {
-    char *canonuser = NULL;
+    const char *canonuser = NULL;
 
     if (ulen+1 > out_max) {
 	sasl_seterror(conn, 0, "buffer overflow while canonicalizing");

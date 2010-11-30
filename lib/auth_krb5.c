@@ -98,7 +98,7 @@ static int mymemberof(struct auth_state *auth_state, const char *identifier)
  * Returns a pointer to a static buffer containing the canonical form
  * or NULL if 'identifier' is invalid.
  */
-static char *mycanonifyid(const char *identifier, size_t len)
+static const char *mycanonifyid(const char *identifier, size_t len)
 {
     static char *retbuf = NULL;
     krb5_context context;
@@ -209,7 +209,7 @@ static int mymemberof(
 	return 0;
 }
 
-static char *mycanonifyid(
+static const char *mycanonifyid(
     const char *identifier __attribute__((unused)), 
     size_t len __attribute__((unused)))
 {

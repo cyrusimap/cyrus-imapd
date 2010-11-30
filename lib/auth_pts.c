@@ -225,7 +225,7 @@ static int mymemberof(struct auth_state *auth_state,
  * Returns a pointer to a static buffer containing the canonical form
  * or NULL if 'identifier' is invalid.
  */
-static char *mycanonifyid(const char *identifier,
+static const char *mycanonifyid(const char *identifier,
 		      size_t len __attribute__((unused)))
 {
     static char retbuf[PTS_DB_KEYSIZE];

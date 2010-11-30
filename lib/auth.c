@@ -92,7 +92,7 @@ int auth_memberof(struct auth_state *auth_state, const char *identifier)
     return auth->memberof(auth_state, identifier);
 }
 
-char *auth_canonifyid(const char *identifier, size_t len)
+const char *auth_canonifyid(const char *identifier, size_t len)
 {
     struct auth_mech *auth = auth_fromname();
 

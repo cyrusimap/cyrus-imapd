@@ -149,7 +149,7 @@ static char allowedchars[256] = {
  * representations: one for getpwent calls and one for folder names.  The
  * latter canonicalizes to a MUTF7 representation.
  */
-static char *mycanonifyid(const char *identifier, size_t len)
+static const char *mycanonifyid(const char *identifier, size_t len)
 {
     static char retbuf[81];
     struct group *grp;

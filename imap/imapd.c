@@ -6220,7 +6220,7 @@ void cmd_listrights(char *tag, char *name, char *identifier)
     }
 
     struct auth_state *authstate = auth_newstate(identifier);
-    char *canon_identifier;
+    const char *canon_identifier;
     int canonidlen = 0;
     int implicit;
     char rightsdesc[100], optional[33];
