@@ -114,7 +114,7 @@ static int compdb(const void *v1, const void *v2)
     struct cyrusdb_backend *b2 = *db2->backendptr;
 
     /* compare archive pointers for sort */
-    return (b1->archive - b2->archive);
+    return ((char *)b1->archive - (char *)b2->archive);
 }
 
 void usage(void)
