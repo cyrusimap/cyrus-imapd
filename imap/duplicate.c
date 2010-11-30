@@ -86,7 +86,7 @@ static struct db *dupdb = NULL;
 static int duplicate_dbopen = 0;
 
 /* must be called after cyrus_init */
-int duplicate_init(char *fname, int myflags __attribute__((unused)))
+int duplicate_init(const char *fname, int myflags __attribute__((unused)))
 {
     char buf[1024];
     int r = 0;
@@ -99,10 +99,10 @@ int duplicate_init(char *fname, int myflags __attribute__((unused)))
 
 	/* create db file name */
 	if (!fname) {
-	    fname = xmalloc(strlen(config_dir)+sizeof(FNAME_DELIVERDB));
-	    tofree = fname;
-	    strcpy(fname, config_dir);
-	    strcat(fname, FNAME_DELIVERDB);
+	    tofree = xmalloc(strlen(config_dir)+sizeof(FNAME_DELIVERDB));
+	    strcpy(tofree, config_dir);
+	    strcat(tofree, FNAME_DELIVERDB);
+	    fname = tofree;
 	}
 
 	r = (DB->open)(fname, CYRUSDB_CREATE, &dupdb);
@@ -118,7 +118,7 @@ int duplicate_init(char *fname, int myflags __attribute__((unused)))
     return r;
 }
 
-time_t duplicate_check(char *id, int idlen, const char *to, int tolen)
+time_t duplicate_check(const char *id, int idlen, const char *to, int tolen)
 {
     char buf[1024];
     int r;
@@ -162,7 +162,7 @@ time_t duplicate_check(char *id, int idlen, const char *to, int tolen)
     return mark;
 }
 
-void duplicate_log(char *msgid, const char *name, char *action)
+void duplicate_log(const char *msgid, const char *name, char *action)
 {
     syslog(LOG_INFO, "dupelim: eliminated duplicate message to %s id %s (%s)",
 	   name, msgid, action);
@@ -171,8 +171,9 @@ void duplicate_log(char *msgid, const char *name, char *action)
 	       session_id(), action, msgid, name); 
 }
 
-void duplicate_mark(char *id, int idlen, const char *to, int tolen, time_t mark,
-		    unsigned long uid)
+void duplicate_mark(const char *id, int idlen,
+		    const char *to, int tolen,
+		    time_t mark, unsigned long uid)
 {
     char buf[1024], data[100];
     int r;
@@ -202,7 +203,7 @@ void duplicate_mark(char *id, int idlen, const char *to, int tolen, time_t mark,
 }
 
 struct findrock {
-    int (*proc)();
+    duplicate_find_proc_t proc;
     void *rock;
 };
 
@@ -242,7 +243,9 @@ static int find_cb(void *rock, const char *id,
     return r;
 }
 
-int duplicate_find(char *msgid, int (*proc)(), void *rock)
+int duplicate_find(const char *msgid,
+		   duplicate_find_proc_t proc,
+		   void *rock)
 {
     struct findrock frock;
 

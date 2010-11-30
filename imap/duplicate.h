@@ -49,13 +49,17 @@
 /* name of the duplicate delivery database */
 #define FNAME_DELIVERDB "/deliver.db"
 
-int duplicate_init(char*, int);
+int duplicate_init(const char*, int);
 
-time_t duplicate_check(char *id, int idlen, const char *to, int tolen);
-void duplicate_log(char *msgid, const char *name, char *action);
-void duplicate_mark(char *id, int idlen, const char *to, int tolen, time_t mark,
-		    unsigned long uid);
-int duplicate_find(char *msgid, int (*proc)(), void *rock);
+time_t duplicate_check(const char *id, int idlen, const char *to, int tolen);
+void duplicate_log(const char *msgid, const char *name, char *action);
+void duplicate_mark(const char *id, int idlen,
+		    const char *to, int tolen,
+		    time_t mark, unsigned long uid);
+
+typedef int (*duplicate_find_proc_t)(const char *, const char *, time_t,
+				     unsigned long, void *);
+int duplicate_find(const char *msgid, duplicate_find_proc_t, void *rock);
 
 int duplicate_prune(int days, struct hash_table *expire_table);
 int duplicate_dump(FILE *f);
