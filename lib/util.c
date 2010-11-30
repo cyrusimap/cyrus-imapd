@@ -577,12 +577,12 @@ void buf_setmap(struct buf *buf, const char *base, int len)
     }
 }
 
-void buf_copy(struct buf *dst, struct buf *src)
+void buf_copy(struct buf *dst, const struct buf *src)
 {
     buf_setmap(dst, src->s, src->len);
 }
 
-void buf_append(struct buf *dst, struct buf *src)
+void buf_append(struct buf *dst, const struct buf *src)
 {
     buf_appendmap(dst, src->s, src->len);
 }
