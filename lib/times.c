@@ -53,10 +53,29 @@
 #include "gmtoff.h"
 #include "mkgmtime.h"
 
-static char *month[] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                         "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+static const char * const monthname[12] = {
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+};
+static const char * const wday[7] = {
+    "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
+};
 
-static char *wday[] = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
+
+static int monthdays(int year/*since 1900*/, int month/*0-based*/)
+{
+    int leapday;
+    static const int mdays[12] = {
+	31, 28, 31, 30, 31, 30,
+	31, 31, 30, 31, 30, 31
+    };
+
+#define isleap(year) (!((year) % 4) && (((year) % 100) || !((year) % 400)))
+    leapday = (month == 1 && isleap(year+1900));
+    return mdays[month] + leapday;
+#undef isleap
+}
+
 
 /* 'buf' must be at least 80 characters */
 int time_to_rfc822(time_t t, char *buf, size_t len)
@@ -77,7 +96,7 @@ int time_to_rfc822(time_t t, char *buf, size_t len)
 
     return snprintf(buf, len, "%s, %02d %s %4d %02d:%02d:%02d %c%.2lu%.2lu",
 	     wday[tm->tm_wday], 
-	     tm->tm_mday, month[tm->tm_mon], tm->tm_year + 1900,
+	     tm->tm_mday, monthname[tm->tm_mon], tm->tm_year + 1900,
 	     tm->tm_hour, tm->tm_min, tm->tm_sec,
 	     gmtnegative ? '-' : '+', gmtoff / 60, gmtoff % 60);
 }
@@ -117,10 +136,6 @@ static int parse_rfc822(const char *s, time_t *tp, int dayonly)
     struct tm tm;
     time_t t;
     char month[4];
-    static char *monthname[] = {
-	"jan", "feb", "mar", "apr", "may", "jun",
-	"jul", "aug", "sep", "oct", "nov", "dec"
-    };
     int zone_off = 0;
 
     if (!s)
@@ -170,9 +185,8 @@ static int parse_rfc822(const char *s, time_t *tp, int dayonly)
     if (!Uisalpha(month[2]))
 	goto baddate;
     month[3] = '\0';
-    lcase(month);
     for (tm.tm_mon = 0; tm.tm_mon < 12; tm.tm_mon++) {
-	if (!strcmp(month, monthname[tm.tm_mon])) break;
+	if (!strcasecmp(month, monthname[tm.tm_mon])) break;
     }
     if (tm.tm_mon == 12)
 	goto baddate;
@@ -205,6 +219,9 @@ static int parse_rfc822(const char *s, time_t *tp, int dayonly)
        /* five-digit date */
        goto baddate;
      }
+
+    if (tm.tm_mday > monthdays(tm.tm_year, tm.tm_mon))
+	goto baddate;
 
     s = skip_fws(s);
     if (s && !dayonly) {
@@ -368,8 +385,6 @@ int day_from_rfc822(const char *s, time_t *tp)
     return parse_rfc822(s, tp, 1);
 }
 
-#define isleap(year) (!((year) % 4) && (((year) % 100) || !((year) % 400)))
-
 /*
  * Parse an RFC 3339 = ISO 8601 format date-time string.
  * Returns: number of characters in @s consumed, or -1 on error.
@@ -378,10 +393,7 @@ int time_from_iso8601(const char *s, time_t *tp)
 {
     const char *origs = s;
     struct tm exp;
-    int n, tm_off, leapday;
-    static const int numdays[] = {
-	31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
-    };
+    int n, tm_off;
 
     /* parse the ISO 8601 date/time */
     memset(&exp, 0, sizeof(struct tm));
@@ -418,10 +430,9 @@ int time_from_iso8601(const char *s, time_t *tp)
     exp.tm_mon--; /* normalize to months since January */
 
     /* sanity check the date/time (including leap day & second) */
-    leapday = exp.tm_mon == 1 && isleap(exp.tm_year + 1900);
     if (exp.tm_year < 70 || exp.tm_mon < 0 || exp.tm_mon > 11 ||
 	exp.tm_mday < 1 ||
-	exp.tm_mday > (numdays[exp.tm_mon] + leapday) ||
+	exp.tm_mday > monthdays(exp.tm_year, exp.tm_mon) ||
 	exp.tm_hour > 23 || exp.tm_min > 59 || exp.tm_sec > 60) {
 	return -1;
     }
@@ -444,11 +455,6 @@ int time_to_iso8601(time_t t, char *buf, size_t len)
     return strftime(buf, len, "%Y-%m-%dT%H:%M:%SZ", exp);
 }
 
-
-static const char * const monthname[12] = {
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-};
 
 /*
  * Convert a time_t date to an IMAP-style date
@@ -551,10 +557,6 @@ int time_to_rfc3501(time_t date, char *buf, size_t len)
 int time_from_rfc3501(const char *s, time_t *date)
 {
     const char *origs = s;
-    static const int max_monthdays[12] = {
-	31, 29, 31, 30, 31, 30,
-	31, 31, 30, 31, 30, 31
-    };
     int c;
     struct tm tm;
     int old_format = 0;
@@ -606,11 +608,6 @@ int time_from_rfc3501(const char *s, time_t *date)
     if (tm.tm_mon == 12)
 	goto baddate;
 
-    /* This works fine in leap years but allows false
-     * negatives in the non-leap years.  */
-    if (tm.tm_mday > max_monthdays[tm.tm_mon])
-	goto baddate;
-
     if (c != '-')
 	goto baddate;
     c = *s++;
@@ -637,6 +634,9 @@ int time_from_rfc3501(const char *s, time_t *date)
     }
     else
 	old_format++;
+
+    if (tm.tm_mday > monthdays(tm.tm_year, tm.tm_mon))
+	goto baddate;
 
     /* Hour */
     if (c != ' ')
