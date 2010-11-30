@@ -61,7 +61,7 @@ struct auth_mech *auth_mechs[] = {
 #endif
     NULL };
 
-static struct auth_mech *auth_fromname()
+static struct auth_mech *auth_fromname(void)
 {
     int i;
     const char *name = libcyrus_config_getstring(CYRUSOPT_AUTH_MECH);
@@ -85,34 +85,28 @@ static struct auth_mech *auth_fromname()
     return auth;
 }
 
-int auth_memberof(auth_state, identifier)
-struct auth_state *auth_state;
-const char *identifier;
+int auth_memberof(struct auth_state *auth_state, const char *identifier)
 {
     struct auth_mech *auth = auth_fromname();
 
     return auth->memberof(auth_state, identifier);
 }
 
-char *auth_canonifyid(identifier, len)
-const char *identifier;
-size_t len;
+char *auth_canonifyid(const char *identifier, size_t len)
 {
     struct auth_mech *auth = auth_fromname();
 
     return auth->canonifyid(identifier, len);
 }
 
-struct auth_state *auth_newstate(identifier)
-const char *identifier;
+struct auth_state *auth_newstate(const char *identifier)
 {
     struct auth_mech *auth = auth_fromname();
 
     return auth->newstate(identifier);
 }
 
-void auth_freestate(auth_state)
-struct auth_state *auth_state;
+void auth_freestate(struct auth_state *auth_state)
 {
     struct auth_mech *auth = auth_fromname();
 

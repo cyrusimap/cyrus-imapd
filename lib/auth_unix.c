@@ -72,9 +72,7 @@ static struct auth_state auth_anonymous = {
  *	2	User is in the group that is identifier
  *	3	User is identifer
  */
-static int mymemberof(auth_state, identifier)
-struct auth_state *auth_state;
-const char *identifier;
+static int mymemberof(struct auth_state *auth_state, const char *identifier)
 {
     int i;
 
@@ -151,9 +149,7 @@ static char allowedchars[256] = {
  * representations: one for getpwent calls and one for folder names.  The
  * latter canonicalizes to a MUTF7 representation.
  */
-static char *mycanonifyid(identifier, len)
-const char *identifier;
-size_t len;
+static char *mycanonifyid(const char *identifier, size_t len)
 {
     static char retbuf[81];
     struct group *grp;
@@ -303,8 +299,7 @@ err:
     return newstate;
 }
 
-static void myfreestate(auth_state)
-struct auth_state *auth_state;
+static void myfreestate(struct auth_state *auth_state)
 {
     if (auth_state->group) {
 	while (auth_state->ngroups) {
