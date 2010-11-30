@@ -460,7 +460,7 @@ static int myclose(struct db *db)
     return r;
 }
 
-static int gettid(struct txn **mytid, DB_TXN **tid, char *where)
+static int gettid(struct txn **mytid, DB_TXN **tid, const char *where)
 {
     int r;
 

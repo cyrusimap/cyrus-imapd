@@ -1642,7 +1642,7 @@ int mailbox_commit_header(struct mailbox *mailbox)
     int flag;
     int fd;
     int r = 0;
-    char *quotaroot;
+    const char *quotaroot;
     const char *newfname;
     struct iovec iov[10];
     int niov;
