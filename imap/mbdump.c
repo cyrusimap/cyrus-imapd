@@ -675,11 +675,7 @@ static int cleanup_seen_cb(char *name,
     r = mailbox_open_iwl(name, &mailbox);
     if (r) goto done;
 
-    /* already got a RECENTUID, it's probably got seen data.  Either we
-     * had a race condition (unlikely) or we've just been unlucky */
-    if (mailbox->i.recentuid) goto done;
-
-    /* otherwise read in the seen data from the seendb */
+    /* read in the seen data from the seendb */
     r = seen_read(seendb, mailbox->uniqueid, &sd);
     if (r) goto done;
 
@@ -690,6 +686,8 @@ static int cleanup_seen_cb(char *name,
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	if (mailbox_read_index_record(mailbox, recno, &record))
 	    continue;
+	if (record.system_flags & (FLAG_SEEN|FLAG_EXPUNGED))
+	    continue; /* no need to rewrite */
 	if (seqset_ismember(seq, record.uid)) {
 	    record.system_flags |= FLAG_SEEN;
 	    r = mailbox_rewrite_index_record(mailbox, &record);
@@ -699,8 +697,10 @@ static int cleanup_seen_cb(char *name,
 
     /* and the header values */
     mailbox_index_dirty(mailbox);
-    mailbox->i.recentuid = sd.lastuid;
-    mailbox->i.recenttime = sd.lastread;
+    if (mailbox->i.recentuid < sd.lastuid)
+	mailbox->i.recentuid = sd.lastuid;
+    if (mailbox->i.recenttime < sd.lastread)
+	mailbox->i.recenttime = sd.lastread;
 
  done:
     seqset_free(seq);
