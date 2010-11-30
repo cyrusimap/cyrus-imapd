@@ -459,9 +459,9 @@ int auth_sasl(char *mechlist, isieve_t *obj, const char **mechusing,
 
 	/* eat the auth line that confirms that we canceled */
 	if(getauthline(obj,&in,&inlen,errstr) != STAT_NO) {
-	    *errstr = strdup("protocol error");
+	    *errstr = xstrdup("protocol error");
 	} else {
-	    *errstr = strdup(sasl_errstring(saslresult,NULL,NULL));
+	    *errstr = xstrdup(sasl_errstring(saslresult,NULL,NULL));
 	}
 	
 	return saslresult;
@@ -717,7 +717,7 @@ int isieve_put_file(isieve_t *obj, char *filename, char *destname,
 	if(ret == STAT_OK) {
 	    ret = isieve_put_file(obj, filename, destname, errstr);
 	} else {
-	    *errstr = "referral failed";
+	    *errstr = xstrdup("referral failed");
 	}
     }
     return ret;
@@ -734,7 +734,7 @@ int isieve_put(isieve_t *obj, char *name, char *data, int len, char **errstr)
 	if(ret == STAT_OK) {
 	    ret = isieve_put(obj, name, data, len, errstr);
 	} else {
-	    *errstr = "referral failed";
+	    *errstr = xstrdup("referral failed");
 	}
     }
     return ret;
@@ -751,7 +751,7 @@ int isieve_delete(isieve_t *obj, char *name, char **errstr)
 	if(ret == STAT_OK) {
 	    ret = isieve_delete(obj, name, errstr);
 	} else {
-	    *errstr = "referral failed";
+	    *errstr = xstrdup("referral failed");
 	}
     }
     return ret;
@@ -780,7 +780,7 @@ int isieve_activate(isieve_t *obj, char *name, char **errstr)
 	if(ret == STAT_OK) {
 	    ret = isieve_activate(obj, name, errstr);
 	} else {
-	    *errstr = "referral failed";
+	    *errstr = xstrdup("referral failed");
 	}
     }
     return ret;
@@ -801,7 +801,7 @@ int isieve_get(isieve_t *obj,char *name, char **output, char **errstr)
 	    ret = isieve_get(obj,name,output,errstr);
 	    return ret;
 	} else {
-	    *errstr = "referral failed";
+	    *errstr = xstrdup("referral failed");
 	}
     }
 

@@ -90,7 +90,7 @@ int getscriptvalue(int version,struct protstream *pout, struct protstream *pin,
 		   char *name, mystring_t **data, char **refer_to, 
 		   char **errstr);
 
-void parseerror(char *str);
+void parseerror(const char *str);
 
 
 #endif

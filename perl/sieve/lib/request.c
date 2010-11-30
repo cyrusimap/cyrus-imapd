@@ -69,7 +69,7 @@
 
 #define BLOCKSIZE 1024
 
-void parseerror(char *str)
+void parseerror(const char *str)
 {
   printf("Bad protocol from MANAGESIEVE server: %s\n", str);
 
@@ -224,9 +224,9 @@ int deleteascript(int version, struct protstream *pout,
   if(ret == -2 && *refer_to) {
       return -2;
   } else if (ret!=0) {
-      *errstrp = malloc(128);
-      snprintf(*errstrp, 127, 
-	       "Deleting script: %s",string_DATAPTR(errstr));
+      *errstrp = strconcat("Deleting script: ",
+			   string_DATAPTR(errstr),
+			   (char *)NULL);
       return -1;
   }
 
@@ -260,9 +260,9 @@ int installdata(int version,struct protstream *pout, struct protstream *pin,
   if(ret == -2 && *refer_to) {
       return -2;
   } else if (ret!=0) {
-      *errstrp = malloc(128);
-      snprintf(*errstrp, 127, 
-	       "Putting script: %s",string_DATAPTR(errstr));
+      *errstrp = strconcat("Putting script: ",
+			   string_DATAPTR(errstr),
+			   (char *)NULL);
       return -1;
   }
 
@@ -314,11 +314,7 @@ int installafile(int version,struct protstream *pout, struct protstream *pin,
   result=stat(filename,&filestats);
 
   if (result!=0) {
-      if (errno == ENOENT) {
-	  *errstrp = "no such file";
-      } else {
-	  *errstrp = "file i/o error";
-      }
+      *errstrp = xstrdup(strerror(errno));
       return -1;
   }
 
@@ -328,9 +324,8 @@ int installafile(int version,struct protstream *pout, struct protstream *pin,
 
   if (stream==NULL)
   {
-      *errstrp = malloc(128);
-      snprintf(*errstrp, 127, 
-	       "put script: internal error: couldn't open temporary file");
+      *errstrp = xstrdup(
+	"put script: internal error: couldn't open temporary file");
       return -1;
   }
 
@@ -353,8 +348,7 @@ int installafile(int version,struct protstream *pout, struct protstream *pin,
 
     n = fread(buf, 1, BLOCKSIZE, stream);
     if (!n) {
-      *errstrp = malloc(128);
-      snprintf(*errstrp, 127, "put script: failed to finish reading");
+      *errstrp = xstrdup("put script: failed to finish reading");
       fclose(stream);
       free(sievename);
       return -1;
@@ -380,9 +374,9 @@ int installafile(int version,struct protstream *pout, struct protstream *pin,
   if(ret == -2 && *refer_to) {
       return -2;
   } else if (ret!=0) {
-      *errstrp = malloc(128);
-      snprintf(*errstrp, 127, 
-	       "put script: %s", string_DATAPTR(errstr));
+      *errstrp = strconcat("put script: ",
+			   string_DATAPTR(errstr),
+			   (char *)NULL);
       return -1;
   }
 
@@ -526,9 +520,9 @@ int setscriptactive(int version, struct protstream *pout,
   if(ret == -2 && *refer_to) {
       return -2;
   } else if (ret != 0) {
-      *errstrp = malloc(128);
-      snprintf(*errstrp, 127, 
-	       "Setting script active: %s",string_DATAPTR(errstr));
+      *errstrp = strconcat("Setting script active: ",
+			   string_DATAPTR(errstr),
+			   (char *)NULL);
       return -1;
   }
   return 0;
@@ -557,9 +551,11 @@ static int writefile(mystring_t *data, char *name, char **errstrp)
   free(scrname);
 
   if (stream==NULL) {
-      *errstrp = malloc(128);
-      snprintf(*errstrp, 127,
-	       "writefile: unable to open %s for writing", name);
+      *errstrp = strconcat(
+		    "writefile: unable to open ",
+		    name,
+		    " for writing",
+		    (char *)NULL);
       return -1;
   }
 
@@ -605,9 +601,7 @@ int getscript(int version, struct protstream *pout,
   if(ret == -2 && *refer_to) {
       return -2;
   } else if (ret!=0) {
-      *errstrp = malloc(128);
-      snprintf(*errstrp, 127, 
-	       "Getting script: %s",string_DATAPTR(errstr));
+      *errstrp = xstrdup(string_DATAPTR(errstr));
   }
 
   return ret;
@@ -644,9 +638,7 @@ int getscriptvalue(int version, struct protstream *pout,
   if(ret == -2 && *refer_to) {
       return -2;
   } else if (ret!=0) {
-      *errstrp = malloc(128);
-      snprintf(*errstrp, 127, 
-	       "Getting script: %s",string_DATAPTR(errstr));
+      *errstrp = xstrdup(string_DATAPTR(errstr));
       return -1;
   }
 
