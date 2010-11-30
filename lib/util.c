@@ -194,7 +194,6 @@ char *beautify_copy(char* dst, const char* src)
 
 /* clean up control characters in a string while copying it
  *  returns pointer to a static buffer containing the cleaned-up version
- *  returns NULL on malloc() error
  */
 char *beautify_string(const char* src)
 {
@@ -212,14 +211,10 @@ char *beautify_string(const char* src)
 	    if (len > beautysize) beautysize = len;
 	    beautybuf = xrealloc(beautybuf, beautysize);
 	}
-	if (!beautybuf) {
-	    beautysize = 0;
-	    return "";
-	}
     }
     (void) beautify_copy(beautybuf, src);
 
-    return (beautybuf);
+    return beautybuf;
 }
 
 /* do a binary search in a keyvalue array
