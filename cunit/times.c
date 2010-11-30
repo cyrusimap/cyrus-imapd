@@ -381,3 +381,94 @@ test_gen_iso8601(void)
     CU_ASSERT_STRING_EQUAL(buf, DATETIME_UTC);
 }
 
+/* Test that the 29 Feb works in some actual leap years,
+ * and not in some not-leap years */
+static void
+test_leapyear_rfc3501(void)
+{
+    /* 2000 is a leapyear */
+    static const char FEB2000_STR[] = "29-Feb-2000 11:22:33 +1100";
+    static const time_t FEB2000_TIMET = 951783753;
+    /* 2001 is not a leapyear */
+    static const char FEB2001_STR[] = "29-Feb-2001 11:22:33 +1100";
+    /* 2004 is a leapyear */
+    static const char FEB2004_STR[] = "29-Feb-2004 11:22:33 +1100";
+    static const time_t FEB2004_TIMET = 1078014153;
+    time_t t;
+    int r;
+
+    t = 0xdeadbeef;
+    r = time_from_rfc3501(FEB2000_STR, &t);
+    CU_ASSERT_EQUAL(r, 26);
+    CU_ASSERT_EQUAL(t, FEB2000_TIMET);
+
+    t = 0xdeadbeef;
+    r = time_from_rfc3501(FEB2001_STR, &t);
+    CU_ASSERT_EQUAL(r, -1);
+    CU_ASSERT_EQUAL(t, 0xdeadbeef);
+
+    t = 0xdeadbeef;
+    r = time_from_rfc3501(FEB2004_STR, &t);
+    CU_ASSERT_EQUAL(r, 26);
+    CU_ASSERT_EQUAL(t, FEB2004_TIMET);
+}
+
+static void
+test_leapyear_iso8601(void)
+{
+    /* 2000 is a leapyear */
+    static const char FEB2000_STR[] = "2000-02-29T11:22:33+11:00";
+    static const time_t FEB2000_TIMET = 951783753;
+    /* 2001 is not a leapyear */
+    static const char FEB2001_STR[] = "2001-02-29T11:22:33+11:00";
+    /* 2004 is a leapyear */
+    static const char FEB2004_STR[] = "2004-02-29T11:22:33+11:00";
+    static const time_t FEB2004_TIMET = 1078014153;
+    time_t t;
+    int r;
+
+    t = 0xdeadbeef;
+    r = time_from_iso8601(FEB2000_STR, &t);
+    CU_ASSERT_EQUAL(r, 25);
+    CU_ASSERT_EQUAL(t, FEB2000_TIMET);
+
+    t = 0xdeadbeef;
+    r = time_from_iso8601(FEB2001_STR, &t);
+    CU_ASSERT_EQUAL(r, -1);
+    CU_ASSERT_EQUAL(t, 0xdeadbeef);
+
+    t = 0xdeadbeef;
+    r = time_from_iso8601(FEB2004_STR, &t);
+    CU_ASSERT_EQUAL(r, 25);
+    CU_ASSERT_EQUAL(t, FEB2004_TIMET);
+}
+
+static void
+test_leapyear_rfc822(void)
+{
+    /* 2000 is a leapyear */
+    static const char FEB2000_STR[] = "Tue, 29 Feb 2000 11:22:33 +1100";
+    static const time_t FEB2000_TIMET = 951783753;
+    /* 2001 is not a leapyear */
+    static const char FEB2001_STR[] = "Thu, 29 Feb 2001 11:22:33 +1100";
+    /* 2004 is a leapyear */
+    static const char FEB2004_STR[] = "Sun, 29 Feb 2004 11:22:33 +1100";
+    static const time_t FEB2004_TIMET = 1078014153;
+    time_t t;
+    int r;
+
+    t = 0xdeadbeef;
+    r = time_from_rfc822(FEB2000_STR, &t);
+    CU_ASSERT_EQUAL(r, 31);
+    CU_ASSERT_EQUAL(t, FEB2000_TIMET);
+
+    t = 0xdeadbeef;
+    r = time_from_rfc822(FEB2001_STR, &t);
+    CU_ASSERT_EQUAL(r, -1);
+    CU_ASSERT_EQUAL(t, 0xdeadbeef);
+
+    t = 0xdeadbeef;
+    r = time_from_rfc822(FEB2004_STR, &t);
+    CU_ASSERT_EQUAL(r, 31);
+    CU_ASSERT_EQUAL(t, FEB2004_TIMET);
+}
