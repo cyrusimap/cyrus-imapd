@@ -486,12 +486,10 @@ int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid_start,
     if (!mbdir && errno == EACCES) {
 	syslog(LOG_ERR,
 	       "could not dump mailbox %s (permission denied)", mailbox->name);
-	mailbox_close(&mailbox);
 	return IMAP_PERMISSION_DENIED;
     } else if (!mbdir) {
 	syslog(LOG_ERR,
 	       "could not dump mailbox %s (unknown error)", mailbox->name);
-	mailbox_close(&mailbox);
 	return IMAP_SYS_ERROR;
     }
 
@@ -1104,7 +1102,7 @@ int undump_mailbox(const char *mbname,
     if (curfile >= 0) close(curfile);
     /* we fiddled the files under the hood, so we can't do anything
      * BUT close it */
-    if (mailbox) mailbox_close(&mailbox);
+    mailbox_close(&mailbox);
 
     /* let's make sure the modification times are right */
     if (!r) {
@@ -1159,7 +1157,7 @@ int undump_mailbox(const char *mbname,
 
  done2:
     /* just in case we failed during the modifications, close again */
-    if (mailbox) mailbox_close(&mailbox);
+    mailbox_close(&mailbox);
     
     free(annotation);
     free(content);
