@@ -50,6 +50,7 @@
 #include "interp.h"
 #include "message.h"
 #include "script.h"
+#include "parseaddr.h"
 
 #include "bytecode.h"
 
@@ -174,16 +175,17 @@ static char* look_for_me(char *myaddr, int numaddresses,
 
     /* loop through each TO header */
     for (l = 0; body[l] != NULL && !found; l++) {
-	void *data = NULL, *marker = NULL;
-	char *addr;
-	
-	parse_address(body[l], &data, &marker);
+	struct address_itr ai;
+	const struct address *a;
+
+	address_itr_init(&ai, body[l]);
 
 	/* loop through each address in the header */
-	while (!found &&
-	       ((addr = get_address(ADDRESS_ALL,&data, &marker, 1))!= NULL)) {
+	while (!found && (a = address_itr_next(&ai)) != NULL) {
+	    char *addr = address_get_all(a, 0);
 
 	    if (!strcasecmp(addr, myaddr)) {
+		free(addr);
 		found = xstrdup(myaddr);
 		break;
 	    }
@@ -192,27 +194,24 @@ static char* look_for_me(char *myaddr, int numaddresses,
 
 	    for(x=0; x<numaddresses; x++)
 	    {
-		void *altdata = NULL, *altmarker = NULL;
 		char *altaddr;
 		const char *str;
 
 		curra = unwrap_string(bc, curra, &str, NULL);
 		
 		/* is this address one of my addresses? */
-      		parse_address(str, &altdata, &altmarker);
-
-		altaddr = get_address(ADDRESS_ALL, &altdata, &altmarker, 1);
+		altaddr = address_canonicalise(str);
 
 		if (!strcasecmp(addr,altaddr)) {
+		    free(altaddr);
 		    found=xstrdup(str);
 		    break;
 		}
-
-		free_address(&altdata, &altmarker);
+		free(altaddr);
 	    }
-
+	    free(addr);
 	}
-	free_address(&data, &marker);
+	address_itr_fini(&ai);
     }
 
     return found;
@@ -238,8 +237,6 @@ static int shouldRespond(void * m, sieve_interp_t *interp,
     char buf[128];
     char *myaddr = NULL;
     int l = SIEVE_OK, j;
-    void *data = NULL, *marker = NULL;
-    char *tmp;
     int curra, x;
     char *found = NULL;
     char *reply_to = NULL;
@@ -286,12 +283,8 @@ static int shouldRespond(void * m, sieve_interp_t *interp,
 	strcpy(buf, "to");
 	l = interp->getenvelope(m, buf, &body);
 	
-	if (body[0]) {  
-	    parse_address(body[0], &data, &marker);
-	    tmp = get_address(ADDRESS_ALL, &data, &marker, 1);
-	    myaddr = (tmp != NULL) ? xstrdup(tmp) : NULL;
-	    free_address(&data, &marker);
-	}  
+	if (body[0])
+	    myaddr = address_canonicalise(body[0]);
     }  
   
     if (l == SIEVE_OK) {
@@ -301,10 +294,7 @@ static int shouldRespond(void * m, sieve_interp_t *interp,
     if (l == SIEVE_OK && body[0]) {
 	/* we have to parse this address & decide whether we
 	   want to respond to it */
-	parse_address(body[0], &data, &marker);
-	tmp = get_address(ADDRESS_ALL, &data, &marker, 1);
-	reply_to = (tmp != NULL) ? xstrdup(tmp) : NULL;
-	free_address(&data, &marker);
+	reply_to = address_canonicalise(body[0]);
 
 	/* first, is there a reply-to address? */
 	if (reply_to == NULL) {
@@ -488,10 +478,9 @@ static int eval_bc_test(sieve_interp_t *interp, void* m,
     case BC_ENVELOPE:/*8*/
     {
 	const char ** val;
-	void * data=NULL;
-	void * marker=NULL;
-	char * addr;
-	int addrpart=ADDRESS_ALL;/* XXX correct default behavior?*/
+	struct address_itr ai;
+	const struct address *a;
+	char *addr;
 
  	int headersi=i+5;/* the i value for the begining of the headers */
 	int datai=(ntohl(bc[headersi+1].value)/4);
@@ -531,26 +520,6 @@ static int eval_bc_test(sieve_interp_t *interp, void* m,
 	    res = SIEVE_RUN_ERROR;
 	    break;
 	}
-	
-	/*find the part of the address that we want*/
-	switch(apart)
-	{
-	case B_ALL:
-	    addrpart = ADDRESS_ALL; break;
-	case B_LOCALPART:
-	    addrpart = ADDRESS_LOCALPART; break;
-	case B_DOMAIN:
-	    addrpart = ADDRESS_DOMAIN; break;
-	case B_USER:
-	    addrpart = ADDRESS_USER; break;
-	case B_DETAIL:
-	    addrpart = ADDRESS_DETAIL; break;
-	default:
-	    /* this shouldn't happen with correcct bytecode */
-	    res = SIEVE_RUN_ERROR;
-	}
-
-	if(res == SIEVE_RUN_ERROR) break;
 
 	/*loop through all the headers*/
 	currh=headersi+2;
@@ -586,14 +555,35 @@ static int eval_bc_test(sieve_interp_t *interp, void* m,
 		printf("about to parse %s\n", val[y]);
 #endif
 		    
-		if (parse_address(val[y], &data, &marker)!=SIEVE_OK) 
-		    return 0;
-		    
-		while (!res &&
-		       (addr = get_address(addrpart, &data, &marker, 0))) {
+		address_itr_init(&ai, val[y]);
+
+		while (!res && (a = address_itr_next(&ai)) != NULL) {
 #if VERBOSE
 		    printf("working addr %s\n", (addr ? addr : "[nil]"));
 #endif
+		    /*find the part of the address that we want*/
+		    switch(apart)
+		    {
+		    case B_ALL:
+			addr = address_get_all(a, /*canon_domain*/0);
+			break;
+		    case B_LOCALPART:
+			addr = address_get_localpart(a);
+			break;
+		    case B_DOMAIN:
+			addr = address_get_domain(a, /*canon_domain*/0);
+			break;
+		    case B_USER:
+			addr = address_get_user(a);
+			break;
+		    case B_DETAIL:
+			addr = address_get_detail(a);
+			break;
+		    default:
+			/* this shouldn't happen with correct bytecode */
+			res = SIEVE_RUN_ERROR;
+			goto envelope_err;
+		    }
 			
 		    if (match == B_COUNT) {
 			count++;
@@ -630,7 +620,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m,
 		    }
 		} /* For each address */
 
-		free_address(&data, &marker);
+		address_itr_fini(&ai);
 	    }/* For each message header */
 	    
 #if VERBOSE
@@ -656,6 +646,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m,
 	/* Update IP */
 	i=(ntohl(bc[datai+1].value)/4);
 	
+envelope_err:
 	break;
     }
     case BC_HEADER:/*9*/

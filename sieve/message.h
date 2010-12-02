@@ -111,19 +111,6 @@ typedef struct notify_list_s {
     struct notify_list_s *next;
 } notify_list_t;
 
-/* header parsing */
-typedef enum {
-    ADDRESS_ALL,
-    ADDRESS_LOCALPART,
-    ADDRESS_DOMAIN,
-    ADDRESS_USER,
-    ADDRESS_DETAIL
-} address_part_t;
-
-int parse_address(const char *header, void **data, void **marker);
-char *get_address(address_part_t addrpart, void **data, void **marker,
-		  int canon_domain);
-int free_address(void **data, void **marker);
 notify_list_t *new_notify_list(void);
 void free_notify_list(notify_list_t *n);
 
