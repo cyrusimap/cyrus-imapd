@@ -52,7 +52,8 @@
 #include "xmalloc.h"
 #include "util.h"
 
-static const char parseaddr_unspecified_domain[] = "unspecified-domain";
+static const char unknown_user[] = "unknown-user";
+static const char unspecified_domain[] = "unspecified-domain";
 
 static void parseaddr_append(struct address ***addrpp, const char *name,
 			     const char *route, const char *mailbox,
@@ -182,7 +183,7 @@ static void parseaddr_append(struct address ***addrpp, const char *name,
     newaddr->mailbox = mailbox;
 
     if (domain && !*domain) {
-	domain = parseaddr_unspecified_domain;
+	domain = unspecified_domain;
     }
     newaddr->domain = domain;
 
@@ -348,5 +349,107 @@ static int parseaddr_route(char **inp, char **routep)
 	    return c;
 	}
     }
+}
+
+char *address_get_all(const struct address *a, int canon_domain)
+{
+    char *s = NULL;
+
+    if (a->mailbox || a->domain) {
+	const char *m = a->mailbox ? a->mailbox : unknown_user;
+	const char *d = a->domain ? a->domain : unspecified_domain;
+	s = strconcat(m, "@", d, (char *)NULL);
+	if (canon_domain)
+	    lcase(s + strlen(m) + 1);
+    }
+
+    return s;
+}
+
+char *address_get_localpart(const struct address *a)
+{
+    return a->mailbox ? xstrdup(a->mailbox) : NULL;
+}
+
+char *address_get_domain(const struct address *a, int canon_domain)
+{
+    char *s = NULL;
+
+    if (a->domain) {
+	s = xstrdup(a->domain);
+	if (canon_domain)
+	    lcase(s);
+    }
+
+    return s;
+}
+
+char *address_get_user(const struct address *a)
+{
+    char *s = NULL;
+
+    if (a->mailbox) {
+	char *p = strchr(a->mailbox, '+');
+	int len = p ? p - a->mailbox : (int)strlen(a->mailbox);
+	s = xstrndup(a->mailbox, len);
+    }
+
+    return s;
+}
+
+char *address_get_detail(const struct address *a)
+{
+    char *s = NULL;
+
+    if (a->mailbox) {
+	char *p = strchr(a->mailbox, '+');
+	s = p ? xstrdup(p + 1) : NULL;
+    }
+
+    return s;
+}
+
+/*
+ * Address iterator interface
+ */
+
+void address_itr_init(struct address_itr *ai, const char *str)
+{
+    memset(ai, 0, sizeof(*ai));
+    parseaddr_list(str, &ai->addrlist);
+    ai->anext = ai->addrlist;
+}
+
+const struct address *address_itr_next(struct address_itr *ai)
+{
+    struct address *a;
+    if (ai->anext == NULL)
+	return NULL;
+    a = ai->anext;
+    ai->anext = ai->anext->next;
+    return a;
+}
+
+void address_itr_fini(struct address_itr *ai)
+{
+    parseaddr_free(ai->addrlist);
+    memset(ai, 0, sizeof(*ai));
+}
+
+
+/*
+ * Convenience function to return a single canonicalised address.
+ */
+char *address_canonicalise(const char *str)
+{
+    struct address *addrlist = NULL;
+    char *s = NULL;
+
+    parseaddr_list(str, &addrlist);
+    if (addrlist)
+	s = address_get_all(addrlist, 1);
+    parseaddr_free(addrlist);
+
+    return s;
 }
 
