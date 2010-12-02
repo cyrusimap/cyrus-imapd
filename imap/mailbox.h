@@ -444,6 +444,8 @@ extern int mailbox_open_iwl(const char *name,
 			    struct mailbox **mailboxptr);
 extern int mailbox_open_irl(const char *name,
 			    struct mailbox **mailboxptr);
+extern int mailbox_open_trylock(const char *name,
+				struct mailbox **mailboxptr);
 extern int mailbox_open_exclusive(const char *name,
 			          struct mailbox **mailboxptr);
 extern void mailbox_close(struct mailbox **mailboxptr);

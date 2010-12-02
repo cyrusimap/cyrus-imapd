@@ -849,10 +849,10 @@ int mailbox_mboxlock_upgrade(struct mailboxlist *listitem, int locktype)
  * Open and read the header of the mailbox with name 'name'
  * The structure pointed to by 'mailbox' is initialized.
  */
-int mailbox_open_advanced(const char *name,
-			  struct mailbox **mailboxptr,
-			  int locktype,
-			  int index_locktype)
+static int mailbox_open_advanced(const char *name,
+				 int locktype,
+				 int index_locktype,
+				 struct mailbox **mailboxptr)
 {
     struct mboxlist_entry mbentry;
     struct mailboxlist *listitem;
@@ -935,18 +935,26 @@ done:
 
 int mailbox_open_irl(const char *name, struct mailbox **mailboxptr)
 {
-    return mailbox_open_advanced(name, mailboxptr, LOCK_SHARED, LOCK_SHARED);
+    return mailbox_open_advanced(name, LOCK_SHARED, LOCK_SHARED,
+				 mailboxptr);
 }
 
 int mailbox_open_iwl(const char *name, struct mailbox **mailboxptr)
 {
-    return mailbox_open_advanced(name, mailboxptr, LOCK_SHARED, LOCK_EXCLUSIVE);
+    return mailbox_open_advanced(name, LOCK_SHARED, LOCK_EXCLUSIVE,
+				 mailboxptr);
+}
+
+int mailbox_open_trylock(const char *name, struct mailbox **mailboxptr)
+{
+    return mailbox_open_advanced(name, LOCK_SHARED, LOCK_NONBLOCKING,
+				 mailboxptr);
 }
 
 int mailbox_open_exclusive(const char *name, struct mailbox **mailboxptr)
 {
-    return mailbox_open_advanced(name, mailboxptr, LOCK_EXCLUSIVE,
-				 LOCK_EXCLUSIVE);
+    return mailbox_open_advanced(name, LOCK_EXCLUSIVE, LOCK_EXCLUSIVE,
+				 mailboxptr);
 }
 
 void mailbox_index_dirty(struct mailbox *mailbox)
