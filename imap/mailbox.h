@@ -52,7 +52,6 @@
 
 #include "auth.h"
 #include "byteorder64.h"
-#include "mboxlist.h"
 #include "message_guid.h"
 #include "prot.h"
 #include "quota.h"

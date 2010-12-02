@@ -555,7 +555,8 @@ int mboxlist_createmailbox_full(const char *name, int mbtype,
 				struct auth_state *auth_state,
 				int options, unsigned uidvalidity,
 				const char *copyacl, const char *uniqueid,
-				int localonly, int forceuser, int dbonly)
+				int localonly, int forceuser, int dbonly,
+				struct mailbox **mboxptr)
 {
     int r;
     char *newpartition = NULL;
@@ -619,6 +620,7 @@ int mboxlist_createmailbox_full(const char *name, int mbtype,
 done:
     if (newmailbox) {
 	if (r) mailbox_delete(&newmailbox);
+	else if (mboxptr) *mboxptr = newmailbox;
 	else mailbox_close(&newmailbox);
     }
 
@@ -640,19 +642,20 @@ int mboxlist_createmailbox(const char *name, int mbtype,
     return mboxlist_createmailbox_full(name, mbtype, partition,
 				       isadmin, userid, auth_state,
 				       options, uidvalidity, NULL, NULL,
-				       localonly, forceuser, dbonly);
+				       localonly, forceuser, dbonly, NULL);
 }
 
 int mboxlist_createsync(const char *name, int mbtype,
 			const char *partition,
 			const char *userid, struct auth_state *auth_state,
 			int options, unsigned uidvalidity,
-			const char *acl, const char *uniqueid)
+			const char *acl, const char *uniqueid,
+			struct mailbox **mboxptr)
 {
     return mboxlist_createmailbox_full(name, mbtype, partition,
 				       1, userid, auth_state,
 				       options, uidvalidity, acl, uniqueid,
-				       0, 1, 0);
+				       0, 1, 0, mboxptr);
 }
 
 /* insert an entry for the proxy */
