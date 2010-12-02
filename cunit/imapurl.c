@@ -355,3 +355,28 @@ static void test_fromurl_utf2_high(void)
     free(iurl.freeme);
 }
 
+/* This test was located in lib/test/imapurl.c.  */
+static void test_cycle(void)
+{
+    struct imapurl iurl;
+    struct imapurl iurl2;
+    static const char URL[] = "imap://;AUTH=*@server/%E4 %C4/;UIDVALIDITY=1234567890";
+    int r;
+    char url[400];
+
+    memset(&iurl, 0, sizeof(struct imapurl));
+    iurl.server = "server";
+    iurl.auth = "*";
+    iurl.mailbox = "&AOQ- &AMQ-";  /* "ä Ä" */
+    iurl.uidvalidity = 1234567890;
+
+    memset(url, 0x45, sizeof(url));
+    imapurl_toURL(url, &iurl);
+
+    r = imapurl_fromURL(&iurl2, url);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_STRING_EQUAL(iurl2.mailbox, "&AOQ- &AMQ-");
+    CU_ASSERT_EQUAL(iurl2.uidvalidity, 1234567890);
+    free(iurl2.freeme);
+}
+
