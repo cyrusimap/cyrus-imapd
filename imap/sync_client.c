@@ -476,7 +476,7 @@ static int response_parse(const char *cmd,
     return IMAP_PROTOCOL_BAD_PARAMETERS;
 }
 
-static int user_reset(char *userid)
+static int user_reset(const char *userid)
 {
     const char *cmd = "UNUSER";
     struct dlist *kl;
@@ -1696,8 +1696,9 @@ static int do_user_quota(struct sync_name_list *master_quotaroots,
     return 0;
 }
 
-int do_user_main(char *user, struct sync_folder_list *replica_folders,
-		 struct sync_quota_list *replica_quota)
+static int do_user_main(const char *user,
+			struct sync_folder_list *replica_folders,
+		        struct sync_quota_list *replica_quota)
 {
     char buf[MAX_MAILBOX_BUFFER];
     int r = 0;
@@ -1796,7 +1797,7 @@ static int get_seen(const char *uniqueid, struct seendata *sd, void *rock)
     return 0;
 }
 
-static int do_user_seen(char *user, struct sync_seen_list *replica_seen)
+static int do_user_seen(const char *user, struct sync_seen_list *replica_seen)
 {
     int r;
     struct sync_seen *mseen, *rseen;
@@ -1829,7 +1830,7 @@ static int do_user_seen(char *user, struct sync_seen_list *replica_seen)
     return 0;
 }
 
-int do_user_sieve(char *userid, struct sync_sieve_list *replica_sieve)
+static int do_user_sieve(const char *userid, struct sync_sieve_list *replica_sieve)
 {
     int r = 0;
     struct sync_sieve_list *master_sieve;
@@ -1893,7 +1894,7 @@ int do_user_sieve(char *userid, struct sync_sieve_list *replica_sieve)
     return(r);
 }
 
-int do_user(char *userid)
+static int do_user(const char *userid)
 {
     char buf[MAX_MAILBOX_BUFFER];
     int r = 0;
@@ -1905,7 +1906,7 @@ int do_user(char *userid)
     struct dlist *kl = NULL;
     struct mailbox *mailbox = NULL;
 
-    if (verbose) 
+    if (verbose)
         printf("USER %s\n", userid);
 
     if (verbose_logging)
