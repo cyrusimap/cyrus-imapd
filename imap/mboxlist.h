@@ -119,7 +119,7 @@ int mboxlist_createsync(const char *name, int mbtype,
 			const char *partition, 
 			const char *userid, struct auth_state *auth_state,
 			int options, unsigned uidvalidity, const char *acl,
-			const char *uniqueid);
+			const char *uniqueid, struct mailbox **mboxptr);
 
 /* delated delete */
 /* Translate delete into rename */
