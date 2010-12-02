@@ -1338,7 +1338,7 @@ int mboxlist_setacl(const char *name, const char *identifier,
     /* 4. Change backup copy (cyrus.header) */
     /* we already have it locked from above */
     if (!r && !(mbentry.mbtype & MBTYPE_REMOTE)) {
-	mailbox_set_acl(mailbox, newacl);
+	mailbox_set_acl(mailbox, newacl, 1);
 	/* want to commit immediately to ensure ordering */
 	r = mailbox_commit(mailbox);
     }

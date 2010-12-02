@@ -1238,7 +1238,7 @@ static int do_mailbox(struct dlist *kin,
     }
 
     if (strcmp(mailbox->acl, acl)) {
-	mailbox_set_acl(mailbox, acl);
+	mailbox_set_acl(mailbox, acl, 0);
 	r = mboxlist_sync_setacls(mboxname, acl);
 	if (r) {
 	    mailbox_close(&mailbox);

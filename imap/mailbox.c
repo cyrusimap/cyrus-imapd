@@ -1197,7 +1197,8 @@ done:
 }
 
 /* set a new ACL - only dirty if changed */
-int mailbox_set_acl(struct mailbox *mailbox, const char *acl)
+int mailbox_set_acl(struct mailbox *mailbox, const char *acl,
+		    int dirty_modseq)
 {
     if (mailbox->acl) {
 	if (!strcmp(mailbox->acl, acl))
@@ -1206,6 +1207,8 @@ int mailbox_set_acl(struct mailbox *mailbox, const char *acl)
     }
     mailbox->acl = xstrdup(acl);
     mailbox->header_dirty = 1;
+    if (dirty_modseq)
+	mailbox_modseq_dirty(mailbox);
     return 0;
 }
 

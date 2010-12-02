@@ -465,7 +465,8 @@ extern int mailbox_rewrite_index_record(struct mailbox *mailbox,
 extern int mailbox_append_index_record(struct mailbox *mailbox,
 				       struct index_record *record);
 
-extern int mailbox_set_acl(struct mailbox *mailbox, const char *acl);
+extern int mailbox_set_acl(struct mailbox *mailbox, const char *acl,
+			   int dirty_modseq);
 extern int mailbox_set_quotaroot(struct mailbox *mailbox, const char *quotaroot);
 extern int mailbox_user_flag(struct mailbox *mailbox, const char *flag,
 			     int *flagnum);
