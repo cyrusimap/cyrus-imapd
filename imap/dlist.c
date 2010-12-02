@@ -160,6 +160,8 @@ static int reservefile(struct protstream *in, const char *part,
     if (!file) {
 	syslog(LOG_ERR, "Failed to upload file %s", message_guid_encode(guid));
 	r = IMAP_IOERROR;
+	/* Note: we still read the file's data from the wire,
+	 * to avoid losing protocol sync */
     }
 
     /* XXX - calculate sha1 on the fly? */
@@ -175,23 +177,32 @@ static int reservefile(struct protstream *in, const char *part,
 	if (!r) fwrite(buf, 1, n, file);
     }
 
-    if (r) return r;
+    if (r)
+	goto error;
 
     /* Make sure that message flushed to disk just incase mmap has problems */
     fflush(file);
     if (ferror(file)) {
-	fclose(file);
-	return IMAP_IOERROR;
+	r = IMAP_IOERROR;
+	goto error;
     }
 
     if (fsync(fileno(file)) < 0) {
-	fclose(file);
-	return IMAP_IOERROR;
+	r = IMAP_IOERROR;
+	goto error;
     }
 
     fclose(file);
 
     return 0;
+
+error:
+    if (file) {
+	fclose(file);
+	unlink(*fname);
+	*fname = NULL;
+    }
+    return r;
 }
 
 /* DLIST STUFF */
