@@ -69,6 +69,7 @@
 #include "sieve.h"
 #include "imap/message.h"
 #include "util.h"
+#include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
 
@@ -80,7 +81,7 @@ typedef struct Header {
     char *contents[1];
 } header_t;
 
-typedef struct message_data {
+typedef struct {
     char *name;
     FILE *data;
     int size;
@@ -94,7 +95,7 @@ int hashheader(char *header)
 {
     int x = 0;
     /* any CHAR except ' ', :, or a ctrl char */
-    for (; !Uiscntrl(*header) && (*header != ' ') && (*header != ':'); 
+    for (; !Uiscntrl(*header) && (*header != ' ') && (*header != ':');
 	 header++) {
 	x *= 256;
 	x += *header;
@@ -115,7 +116,8 @@ typedef enum {
     HDR_CONTENT
 } state;
 
-int parseheader(FILE *f, char **headname, char **contents) {
+static int parseheader(FILE *f, char **headname, char **contents)
+{
     char c;
     char name[80], body[1024];
     int off = 0;
@@ -150,7 +152,7 @@ int parseheader(FILE *f, char **headname, char **contents) {
 	    }
 	    name[off++] = tolower(c);
 	    break;
-	
+
 	case COLON:
 	    if (c == ':') {
 		s = HDR_CONTENT_START;
@@ -210,7 +212,7 @@ int parseheader(FILE *f, char **headname, char **contents) {
     return 0;
 }
 
-void fill_cache(message_data_t *m)
+static void fill_cache(message_data_t *m)
 {
     rewind(m->data);
 
@@ -269,7 +271,7 @@ void fill_cache(message_data_t *m)
 }
 
 /* gets the header "head" from msg. */
-int getheader(void *v, const char *phead, const char ***body)
+static int getheader(void *v, const char *phead, const char ***body)
 {
     message_data_t *m = (message_data_t *) v;
     int cl, clinit;
@@ -314,7 +316,7 @@ int getheader(void *v, const char *phead, const char ***body)
     }
 }
 
-message_data_t *new_msg(FILE *msg, int size, char *name)
+static message_data_t *new_msg(FILE *msg, int size, const char *name)
 {
     int i;
     message_data_t *m;
@@ -326,7 +328,7 @@ message_data_t *new_msg(FILE *msg, int size, char *name)
     }
     m->data = msg;
     m->size = size;
-    m->name = name;
+    m->name = xstrdup(name);
     m->content.base = NULL;
     m->content.len = 0;
     m->content.body = NULL;
@@ -338,7 +340,7 @@ message_data_t *new_msg(FILE *msg, int size, char *name)
     return m;
 }
 
-int getsize(void *mc, int *size)
+static int getsize(void *mc, int *size)
 {
     message_data_t *m = (message_data_t *) mc;
 
@@ -346,7 +348,7 @@ int getsize(void *mc, int *size)
     return SIEVE_OK;
 }
 
-int getenvelope(void *v __attribute__((unused)),
+static int getenvelope(void *v __attribute__((unused)),
 		const char *head, const char ***body)
 {
     static const char *buf[2];
@@ -359,7 +361,7 @@ int getenvelope(void *v __attribute__((unused)),
     return SIEVE_OK;
 }
 
-int getbody(void *mc, const char **content_types, sieve_bodypart_t ***parts)
+static int getbody(void *mc, const char **content_types, sieve_bodypart_t ***parts)
 {
     message_data_t *m = (message_data_t *) mc;
     int r = 0;
@@ -377,10 +379,10 @@ int getbody(void *mc, const char **content_types, sieve_bodypart_t ***parts)
     return (!r ? SIEVE_OK : SIEVE_FAIL);
 }
 
-int getinclude(void *sc __attribute__((unused)),
-	       const char *script,
-	       int isglobal __attribute__((unused)),
-	       char *fpath, size_t size)
+static int getinclude(void *sc __attribute__((unused)),
+		      const char *script,
+		      int isglobal __attribute__((unused)),
+		      char *fpath, size_t size)
 {
     strlcpy(fpath, script, size);
     strlcat(fpath, ".bc", size);
@@ -388,8 +390,8 @@ int getinclude(void *sc __attribute__((unused)),
     return SIEVE_OK;
 }
 
-int redirect(void *ac, void *ic, void *sc __attribute__((unused)),
-	     void *mc, const char **errmsg __attribute__((unused)))
+static int redirect(void *ac, void *ic, void *sc __attribute__((unused)),
+		    void *mc, const char **errmsg __attribute__((unused)))
 {
     sieve_redirect_context_t *rc = (sieve_redirect_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
@@ -400,9 +402,9 @@ int redirect(void *ac, void *ic, void *sc __attribute__((unused)),
     return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
 
-int discard(void *ac __attribute__((unused)),
-	    void *ic, void *sc __attribute__((unused)),
-	    void *mc, const char **errmsg __attribute__((unused)))
+static int discard(void *ac __attribute__((unused)),
+		   void *ic, void *sc __attribute__((unused)),
+		   void *mc, const char **errmsg __attribute__((unused)))
 {
     message_data_t *m = (message_data_t *) mc;
     int *force_fail = (int*) ic;
@@ -412,8 +414,8 @@ int discard(void *ac __attribute__((unused)),
     return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
 
-int reject(void *ac, void *ic, void *sc __attribute__((unused)),
-	   void *mc, const char **errmsg __attribute__((unused)))
+static int reject(void *ac, void *ic, void *sc __attribute__((unused)),
+	          void *mc, const char **errmsg __attribute__((unused)))
 {
     sieve_reject_context_t *rc = (sieve_reject_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
@@ -424,8 +426,8 @@ int reject(void *ac, void *ic, void *sc __attribute__((unused)),
     return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
 
-int fileinto(void *ac, void *ic, void *sc __attribute__((unused)),
-	     void *mc, const char **errmsg __attribute__((unused)))
+static int fileinto(void *ac, void *ic, void *sc __attribute__((unused)),
+		    void *mc, const char **errmsg __attribute__((unused)))
 {
     sieve_fileinto_context_t *fc = (sieve_fileinto_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
@@ -444,8 +446,8 @@ int fileinto(void *ac, void *ic, void *sc __attribute__((unused)),
     return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
 
-int keep(void *ac, void *ic, void *sc __attribute__((unused)),
-	 void *mc, const char **errmsg __attribute__((unused)))
+static int keep(void *ac, void *ic, void *sc __attribute__((unused)),
+	        void *mc, const char **errmsg __attribute__((unused)))
 {
     sieve_keep_context_t *kc = (sieve_keep_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
@@ -463,9 +465,9 @@ int keep(void *ac, void *ic, void *sc __attribute__((unused)),
     return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
 
-int notify(void *ac, void *ic, void *sc __attribute__((unused)),
-	   void *mc __attribute__((unused)),
-	   const char **errmsg __attribute__((unused)))
+static int notify(void *ac, void *ic, void *sc __attribute__((unused)),
+	          void *mc __attribute__((unused)),
+	          const char **errmsg __attribute__((unused)))
 {
     sieve_notify_context_t *nc = (sieve_notify_context_t *) ac;
     int *force_fail = (int*) ic;
@@ -488,29 +490,31 @@ int notify(void *ac, void *ic, void *sc __attribute__((unused)),
 
     return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
- 
-int mysieve_error(int lineno, const char *msg, void *i __attribute__((unused)),
-		  void *s __attribute__((unused)))
+
+static int mysieve_error(int lineno, const char *msg,
+			 void *i __attribute__((unused)),
+		         void *s __attribute__((unused)))
 {
     fprintf(stderr, "line %d: %s\r\n", lineno, msg);
 
     return SIEVE_OK;
 }
 
-int mysieve_execute_error(const char *msg, void *i __attribute__((unused)),
-			  void *s __attribute__((unused)),
-			  void *m __attribute__((unused)))
+static int mysieve_execute_error(const char *msg,
+				 void *i __attribute__((unused)),
+			         void *s __attribute__((unused)),
+			         void *m __attribute__((unused)))
 {
     fprintf(stderr, "%s\r\n", msg);
- 
+
     return SIEVE_OK;
 }
 
 
-int autorespond(void *ac, void *ic __attribute__((unused)),
-		void *sc __attribute__((unused)),
-		void *mc __attribute__((unused)),
-		const char **errmsg __attribute__((unused)))
+static int autorespond(void *ac, void *ic __attribute__((unused)),
+		       void *sc __attribute__((unused)),
+		       void *mc __attribute__((unused)),
+		       const char **errmsg __attribute__((unused)))
 {
     sieve_autorespond_context_t *arc = (sieve_autorespond_context_t *) ac;
     char yn;
@@ -529,8 +533,8 @@ int autorespond(void *ac, void *ic __attribute__((unused)),
     return SIEVE_FAIL;
 }
 
-int send_response(void *ac, void *ic, void *sc __attribute__((unused)),
-		  void *mc, const char **errmsg __attribute__((unused)))
+static int send_response(void *ac, void *ic, void *sc __attribute__((unused)),
+			 void *mc, const char **errmsg __attribute__((unused)))
 {
     sieve_send_response_context_t *src = (sieve_send_response_context_t *) ac;
     message_data_t *m = (message_data_t *) mc;
@@ -555,15 +559,22 @@ sieve_imapflags_t mark = { markflags, 1 };
 
 int config_need_data = 0;
 
+static int usage(const char *argv0) __attribute__((noreturn));
+static int usage(const char *argv0)
+{
+    fprintf(stderr, "usage:\n");
+    fprintf(stderr, "%s message script\n", argv0);
+    fprintf(stderr, "%s -v script\n", argv0);
+    exit(1);
+}
+
 int main(int argc, char *argv[])
 {
     sieve_interp_t *i;
     sieve_execute_t *exe = NULL;
     message_data_t *m = NULL;
     char *script = NULL, *message = NULL;
-    int c, force_fail = 0, usage_error = 0;
-    /* (crom cvs update) FILE *f;
-    */
+    int c, force_fail = 0;
     int fd, res;
     struct stat sbuf;
 
@@ -576,24 +587,17 @@ int main(int argc, char *argv[])
 	    force_fail = 1;
 	    break;
 	default:
-	    usage_error = 1;
+	    usage(argv[0]);
 	    break;
 	}
 
     if (!script) {
 	if ((argc - optind) < 2)
-	    usage_error = 1;
+	    usage(argv[0]);
 	else {
 	    message = argv[optind];
 	    script = argv[optind+1];
 	}
-    }
-
-    if (usage_error) {
-	fprintf(stderr, "usage:\n");
-	fprintf(stderr, "%s message script\n", argv[0]);
-	fprintf(stderr, "%s -v script\n", argv[0]);
-	exit(1);
     }
 
     res = sieve_interp_alloc(&i, &force_fail);
@@ -602,57 +606,57 @@ int main(int argc, char *argv[])
 	exit(1);
     }
 
-    res = sieve_register_redirect(i, &redirect);
+    res = sieve_register_redirect(i, redirect);
     if (res != SIEVE_OK) {
 	printf("sieve_register_redirect() returns %d\n", res);
 	exit(1);
     }
-    res = sieve_register_discard(i, &discard);
+    res = sieve_register_discard(i, discard);
     if (res != SIEVE_OK) {
 	printf("sieve_register_discard() returns %d\n", res);
 	exit(1);
     }
-    res = sieve_register_reject(i, &reject);
+    res = sieve_register_reject(i, reject);
     if (res != SIEVE_OK) {
 	printf("sieve_register_reject() returns %d\n", res);
 	exit(1);
     }
-    res = sieve_register_fileinto(i, &fileinto);
+    res = sieve_register_fileinto(i, fileinto);
     if (res != SIEVE_OK) {
 	printf("sieve_register_fileinto() returns %d\n", res);
 	exit(1);
     }
-    res = sieve_register_keep(i, &keep);
+    res = sieve_register_keep(i, keep);
     if (res != SIEVE_OK) {
 	printf("sieve_register_keep() returns %d\n", res);
 	exit(1);
     }
 
-    res = sieve_register_size(i, &getsize);
+    res = sieve_register_size(i, getsize);
     if (res != SIEVE_OK) {
 	printf("sieve_register_size() returns %d\n", res);
 	exit(1);
     }
 
-    res = sieve_register_header(i, &getheader);
+    res = sieve_register_header(i, getheader);
     if (res != SIEVE_OK) {
 	printf("sieve_register_header() returns %d\n", res);
 	exit(1);
     }
 
-    res = sieve_register_envelope(i, &getenvelope);
+    res = sieve_register_envelope(i, getenvelope);
     if (res != SIEVE_OK) {
 	printf("sieve_register_envelope() returns %d\n", res);
 	exit(1);
     }
 
-    res = sieve_register_body(i, &getbody);
+    res = sieve_register_body(i, getbody);
     if (res != SIEVE_OK) {
 	printf("sieve_register_body() returns %d\n", res);
 	exit(1);
     }
 
-    res = sieve_register_include(i, &getinclude);
+    res = sieve_register_include(i, getinclude);
     if (res != SIEVE_OK) {
 	printf("sieve_register_include() returns %d\n", res);
 	exit(1);
@@ -671,23 +675,23 @@ int main(int argc, char *argv[])
 	exit(1);
     }
 
-    res = sieve_register_notify(i, &notify);
+    res = sieve_register_notify(i, notify);
     if (res != SIEVE_OK) {
 	printf("sieve_register_notify() returns %d\n", res);
 	exit(1);
     }
- 
-    res = sieve_register_parse_error(i, &mysieve_error);
+
+    res = sieve_register_parse_error(i, mysieve_error);
     if (res != SIEVE_OK) {
 	printf("sieve_register_parse_error() returns %d\n", res);
 	exit(1);
     }
-    
-    res = sieve_register_execute_error(i, &mysieve_execute_error);
+
+    res = sieve_register_execute_error(i, mysieve_execute_error);
     if (res != SIEVE_OK) {
 	printf("sieve_register_execute_error() returns %d\n", res);
         exit(1);
-    }   
+    }
 
     res = sieve_script_load(argv[2], &exe);
     if (res != SIEVE_OK) {
@@ -716,7 +720,7 @@ int main(int argc, char *argv[])
 	    printf("sieve_execute_bytecode() returns %d\n", res);
 	    exit(1);
 	}
-	
+
 	fclose(f);
 	close(fd);
     }
@@ -735,7 +739,8 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-void fatal(char* message, int rc) {
+void fatal(const char* message, int rc)
+{
     fprintf(stderr, "fatal error: %s\n", message);
     exit(rc);
 }
