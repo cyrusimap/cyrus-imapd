@@ -306,6 +306,7 @@ struct capa_struct base_capabilities[] = {
     { "ANNOTATEMORE",          2 },
     { "LIST-EXTENDED",         2 },
     { "WITHIN",                2 },
+    { "QRESYNC",               2 },
     { "SCAN",                  2 },
     { "XLIST",                 2 },
 
