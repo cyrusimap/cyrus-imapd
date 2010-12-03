@@ -1,0 +1,729 @@
+<HTML><HEAD>
+<title>Cyrus IMAP Server:  Cyrus Murder Concepts</title>
+<!-- $Id$ -->
+</HEAD><BODY>
+<H1>Cyrus IMAP Server:  Cyrus Murder Concepts</H1>
+
+<ul>
+<li><a href="#abstract">Abstract</a></li>
+<li><a href="#overview">Overview</a></li>
+<li><a href="#architecture">Architecture</a></li>
+<li><a href="#implementation">Implementation</a></li>
+<li><a href="#analysis">Analysis</a></li>
+<li><a href="#futures">Futures</a></li>
+</ul>
+</div>    
+
+<div class="bodytext">
+
+<h3><a name="abstract">Abstract</a></h3>
+
+<p>
+The Cyrus IMAP Aggregator transparently distributes IMAP and POP
+mailboxes across multiple servers. Unlike other systems for load
+balancing IMAP mailboxes, the aggregator allows users to access
+mailboxes on any of the IMAP servers in the system.
+</p>
+
+<p><i>The software described below is now available as part of the <a
+	href="http://www.cyrusimap.org/mediawiki/index.php/Downloads#IMAP_Server">Cyrus IMAP distribution</a>
+, versions 2.1.3 and higher. Please refer to the
+<a href="install-murder.html">documentation</a> for setup and install
+instructions.</i></p>
+
+<p>
+Please send any questions or comments to <a
+href="mailto:cyrus-bugs+@andrew.cmu.edu">cyrus-bugs@andrew.cmu.edu</a>.
+</p>
+
+<h3><a name="overview">1.0 Overview</a></h3>
+
+Scaling a service usually takes one of two paths: buy bigger and
+faster machines, or distribute the load across multiple machines.  The
+first approach is obvious and (hopefully) easy, though at some point
+software tuning becomes necessary to take advantage of the bigger
+machines. However, if one of these large machines go down, then your
+entire system is unavailable.
+
+<p>The second approach has the benefit that there is no longer a
+single point of failure and the aggregate cost of multiple machines
+may be significantly lower than the cost of a single large
+machine. However, the system may be harder to implement as well as
+harder to manage.
+</p>
+
+<p>In the IMAP space, the approach of buying a larger machine is pretty
+obvious. Distributing the load is a bit trickier since there is no concept
+of mailbox location in IMAP (excluding <a
+href="http://tools.ietf.org/html/rfc2193">RFC2193</a> mailbox
+referrals, which are not widely implemented by clients). Clients
+traditionally assume that the server they are talking to is the server
+with the mailbox they are looking for.</p>
+
+<p>The approaches to distributing the load among IMAP servers
+generally sacrifice the unified system image. For pure email, this is
+an acceptable compromise; however, trying to share mailboxes becomes
+difficult or even impossible. Specific examples can be found in <a
+href="#AA">Appendix A: DNS Name Load Balancing</a> and <a
+href="#AB">Appendix B: IMAP Multiplexing</a>).</p>
+
+<p>We propose a new approach to overcome these problems. We call it
+the the Cyrus IMAP Aggregator.  The Cyrus aggregator takes a <a
+href="#def_murder">murder of IMAP servers</a> and presents a server
+independent view to the clients. That is, all the mailboxes across all
+the IMAP servers are aggregated to a single image, thereby appearing
+to be only one IMAP server to the clients.</p>
+
+<h3><a name="architecture">2.0 Architecture</a></h3>
+
+The Cyrus IMAP Aggregator has three classes of servers: IMAP frontend,
+IMAP backend, and MUPDATE. The frontend servers act as the primary
+communication point between the end user clients and the back endservers.
+The frontends use the MUPDATE server as an authoritative source for
+mailbox names, locations, and permissions. The back end servers store the
+actual IMAP data (and keep the MUPDATE server appraised as to changes in the
+Mailbox list).
+
+<p>The Cyrus IMAP Aggregator requires version 2.1.3 or higher of the
+Cyrus IMAP Distribution.</p>
+
+<h3>2.1 Back End Servers</h3>
+
+<p>The backend servers serve the actual data and are fully functional
+standalone IMAP servers that serve a set of mailboxes. Each backend server
+maintains a local <tt>mailboxes</tt> database that lists what
+mailboxes are available on that server.</p>
+
+<p>The <tt>imapd</tt> processes on a backend server can stand by
+themselves, so that each backend IMAP server can be used in isolation,
+without a MUPDATE server or any frontend servers.  However, they are
+configured so that they won't process any mailbox operations (CREATE,
+DELETE, RENAME, SETACL, etc) unless the master MUPDATE server can be
+contacted and authorizes the transaction.</p>
+
+<p>In this mode, the <tt>imapd</tt> processes update the local mailboxes
+database themselves.  Additionally, on a CREATE they need to reserve a
+place with the MUPDATE server to insure that other backend servers aren't
+creating the same mailbox before proceeding.  Once the local aspects of
+mailbox creation are complete, the mailbox is activated on the MUPDATE
+server, and is considered available to any client through the frontends.</p>
+
+
+<h3>2.2 Front End Servers</h3>
+
+<p>The front end servers, unlike the back end servers, are fully
+interchangeable with each other and the front end servers can be
+considered 'dataless'; any loss of a proxy results in no loss of data.
+The only persistent data that is needed (the mailbox list) is kept on
+the MUPDATE master server.  This list is synchronized between the
+frontend and the MUPDATE master when the frontend comes up.</p>
+
+<p>The list of mailboxes in the murder is maintained by the MUPDATE
+server. The MUPDATE protocol is described at <a
+href="http://www.ietf.org/rfc/rfc3656.txt">
+RFC3656</a>.</p> 
+
+<p>For IMAP service on a frontend, there are two main types of processes,
+the <tt>proxyd</tt> and the <tt>mupdate</tt> (slave mode) synchronization
+process. The <tt>proxyd</tt> handles the IMAP session with clients.  It
+relies on a consistent and complete mailboxes database that reflects the
+state of the world.  It never writes to the mailboxes database.  Instead,
+the mailboxes database is kept in sync with the master by a slave mupdate
+process.</p>
+
+<h3>2.3 Mail Delivery</h3>
+
+<p>The incoming mail messages go to an lmtp proxy (either running on a
+frontend, a mail exchanger, or any other server).  The lmtp proxy running
+on the front end server uses the master MUPDATE server to determine the
+location of the destination folder and then transfers the message to the
+appropriate back end server via LMTP.  If the backend is not up (or
+otherwise fails to accept the message), then the LMTP proxy returns a
+failure to the connected MTA.</p>
+
+<p>If a sieve script is
+present, the lmtp proxy server must do the processing as the end result
+of the processing may result in the mail message going to a different
+back end server than where the user's <tt>INBOX</tt> is. <i>Note that
+the current implementation runs SIEVE on the backend servers, and
+holds the requirement that all of a user's mailboxes live on the same
+backend.</i></p>
+
+<h3>2.4 Clients</h3>
+
+<p>Clients that support <a
+href="http://tools.ietf.org/html/rfc2193">RFC2193</a> IMAP referrals
+can bypass the aggregator front end. See section <a
+href="#referrals">3.8</a> for more details.</p>
+
+<p>Clients are encouraged to bypass the front ends via approved
+mechanisms. This should result in better performance for the client
+and less load for the servers.</p>
+
+<h3><a name="implementation">3.0 Implementation</a></h3>
+
+<h3>3.1 Assumptions</h3>
+
+<ul>
+
+<li>Operations that change the mailbox list are (comparatively) rare.  The
+vast majority of IMAP sessions do not manipulate the state of the
+mailbox list.</li>
+
+<li>Read operations on the mailbox list are very frequent.</li>
+
+<li>A mailbox name must be unique among all the back end servers.</li>
+
+<li>The MUPDATE master server will be able to handle the load from the
+frontend, backend, and LMTP proxy servers. Currently, the MUPDATE master
+can be a bottleneck in the throughput of mailbox operations, but as the
+MUPDATE protocol allows for slave server to act as replicas, it is
+theoretically possible to reduce the load of read operations against the
+master to a very low level.</li>
+
+<li>IMAP clients are not sensitive to somewhat loose mailbox tree
+consistency, and some amount of consistency can be sacrificed for speed.
+As is, IMAP gives no guarantees about the state of the mailbox tree from
+one command to the next.  However, it's important to note that different
+IMAP sessions do communicate out of band: two sessions for the same client
+should see sensible results.  In the Murder case, this means that the
+same client talking to two different frontends should see sensible results.</li>
+
+<li>A single IMAP connection should see consistent results: once an
+operation is done, it is done, and needs to be reflected in the
+current session.  The straightforward case that must work
+correctly is (provided there is no interleaved DELETE in another session):
+<pre>
+     A001 CREATE INBOX.new
+     A002 SELECT INBOX.new
+</pre></li>
+
+<li>Accesses to non-existant mailboxes are rare.</li>
+</ul>
+
+<h3>3.2 Authentication</h3>
+
+<p>The user authenticates to the frontend server via any supported SASL
+mechanism or via plaintext. If authentication is successful, the front end
+server will authenticate to the back end server using a SASL mechanism (in
+our case KERBEROS_V4 or GSSAPI) as a privileged user. This user is able to
+switch to the authorization of the actual user being proxied for and any
+authorization checks happen as if the user actually authenticated directly
+to the back end server. Note this is a native feature of many SASL
+mechanisms and nothing special with the aggregator.</p>
+
+<p>To help protect the backends from a compromised frontends, all
+administrative actions (creating users, top level mailboxes, quota
+changes, etc) must be done directly from the client to the backend, as
+administrative permissions are not granted to any of the proxy servers.  
+IMAP Referrals provide a way to accomplish this with minimal
+client UI changes.</p>
+
+<h3>3.3 Subscriptions</h3>
+
+<tt>[LSUB, SUBSCRIBE, UNSUBSCRIBE]</tt><br />
+
+The front end server directs the <tt>LSUB</tt> to the back end server
+that has the user's <tt>INBOX</tt>. As such, the back end server may
+have entries in the subscription database that do not exist on that
+server.  The frontend server needs to process the list returned by
+the backend server and either remove or tag with \NoSelect the entries
+which are not currently active within the murder.
+
+
+<p>If the user's <tt>INBOX</tt> server is down and the <tt>LSUB</tt>
+fails, then the aggregator replies with <tt>NO</tt> with an appropriate
+error message.  Clients should not assume that the user has no
+subscriptions (though apparently some clients do this).</p>
+
+<h3>3.4 Finding a Mailbox</h3>
+
+<tt>[SETQUOTA, GETQUOTA, EXAMINE, STATUS]</tt><br />
+
+The front end machine looks up the location of the mailbox,
+connects via IMAP to the back end server, and issues the equivalent
+command there.  
+
+
+<p>A quota root is not allowed to span across multiple servers.  Atleast,
+not with the semantics that it will be inclusive across the murder.</p>
+
+<p><tt>[SELECT]</tt><br />
+
+To <tt>SELECT</tt> a mailbox:</p>
+<ol >
+<li><tt>proxyd</tt>: lookup foo.bar in local mailboxes database</li>
+<li>if yes, <tt>proxyd</tt> -> back end: send SELECT</li>
+<li>if no, <tt>proxyd</tt> -> <tt>mupdate slave</tt> -> mupdate master:
+send a ping along the UPDATE channel in order to ensure that we have received
+the latest data from the MUPDATE master.</li>
+
+<li>if mailbox still doesn't exist, fail operation</li>
+<li>if mailbox does exist, and the client supports referrals, refer the
+client.  Otherwise continue as a proxy with a selected mailbox.</li>
+</ol>
+<p><tt>SELECT</tt> on mailboxes that do not exist are much more
+expensive but the assumption is that this does not frequently occur (or if
+it does, it is just after the mailbox has been created and the frontend hasn't
+seen the update yet).</p>
+
+<h3>3.5 Operations within a Mailbox</h3>
+
+<tt>[APPEND, CHECK, CLOSE, EXPUNGE, SEARCH, FETCH, STORE, UID]</tt><br />
+
+These commands are sent to the appropriate back end server. The
+aggregator does not need to modify any of these commands before
+sending them to the back end server.
+
+<h3>3.6 COPY</h3>
+
+<p><tt>COPY</tt> is somewhat special as it acts upon messages in the
+currently <tt>SELECT</tt>'d mailbox but then interacts with another
+mailbox.</p>
+
+<p>In the case where the destination mailbox is on the same back end
+server as the the source folder, the <tt>COPY</tt> command is issued
+to the back end server and the back end server takes care of the
+command.</p>
+
+<p>If the destination folder is on a different back end server, the
+front end intervenes and does the <tt>COPY</tt> by <tt>FETCH</tt>ing
+the messages from the source back end server and then <tt>APPEND</tt>s
+the messages to the destination server.</p>
+
+
+<h3>3.7 Operations on the Mailbox List</h3>
+
+<tt>[CREATE, DELETE, RENAME, SETACL]</tt><br />
+
+These commands are all done by the back end server using the MUPDATE
+server as a lock manager.  Changes are then propogated to the frontend
+via the MUPDATE protocol.
+
+<p><tt>[LIST]</tt></p>
+
+<br />
+
+<tt>LIST</tt> is handled by the front end servers; no interaction
+is required with the back end server as the front ends have a local
+database that is never more than a few seconds out of date.
+
+<p><tt>[CREATE]</tt><br />
+
+<tt>CREATE</tt> creates the mailbox on the same back end server as the
+parent mailbox. If the parent exists but exists on multiple back end
+servers, if there is no parent folder, a tagged <tt>NO</tt> response is
+returned.</p>
+
+
+<p>When this happens, the administrator has two choices. He may
+connect directly to a back end server and issue the <tt>CREATE</tt> on
+that server. Alternatively, a second argument can be given to
+<tt>CREATE</tt> after the mailbox name. This argument specifies the
+specific host name on which the mailbox is to be created.</p>
+
+<p>The following operations occur for <tt>CREATE</tt> on the front end:</p>
+<ol>
+<li><tt>proxyd</tt>: verify that mailbox doesn't exist in MUPDATE
+      mailbox list.</li>
+<li><tt>proxyd</tt>: decide where to send <tt>CREATE</tt> (the server
+      of the parent mailbox, as top level mailboxes cannot be created
+      by the proxies).</li>
+
+<li><tt>proxyd</tt> -> back end: duplicate CREATE command and verifies
+      that the <tt>CREATE</tt> does not create an  inconsistency in
+      the mailbox list (i.e. the folder name is still unique).</li>
+</ol>
+
+<p>The following operations occur for <tt>CREATE</tt> on the back end:</p>
+<ol >
+<li><tt>imapd</tt>: verify ACLs to best of ability (CRASH: aborted)
+<li><tt>imapd</tt>: start mailboxes transaction (CRASH: aborted)
+
+<li><tt>imapd</tt> may have to open an MUPDATE connection here if one
+doesn't already exist
+<li><tt>imapd</tt> -> MUPDATE: set foo.bar reserved (CRASH: MUPDATE externally
+inconsistent)
+<li><tt>imapd</tt>: create foo.bar in spool disk (CRASH: MUPDATE externally
+inconsistent, back end externally inconsistent, this can be resolved
+when the backend comes back up by clearing the state from both
+MUPDATE and the backend)
+<li><tt>imapd</tt>: add foo.bar to mailboxes dataset (CRASH: ditto)
+<li><tt>imapd</tt>: commit transaction (CRASH: ditto, but the
+recovery can activate the mailbox in mupdate instead)
+<li><tt>imapd</tt> -> MUPDATE: set foo.bar active (CRASH: committed)
+</ol>
+
+<p> Failure modes: Above, all back end inconsistencies result in the
+next CREATE attempt failing.  The earlier MUPDATE inconsistency results
+in any attempts to CREATE the mailbox on another back end failing.  The
+latter one makes the mailbox unreachable and un-createable.  Though, this
+is safer than potentially having the mailbox appaear in two places when
+the failed backend comes back up.</p>
+
+<p><tt>[RENAME]</tt><br />
+
+<tt>RENAME</tt> is only interesting in the cross-server case.  In this
+case it issues a (non-standard) XFER command to the backend that currently
+hosts the mailbox, which performs a binary transfer of the mailbox (and in
+the case of a user's inbox, their associated seen state and subscription
+list) to the new backend.  During this time the mailbox is marked as
+RESERVED in mupdate, and when it is complete it is activated on the new
+server in MUPDATE.  The deactivation prevents clients from accessing the
+mailbox, and causes mail delivery to temporarily fail.
+
+<a name="#referrals"></a>
+<h3>3.8 IMAP Referrals</h3>
+
+<p>If clients support IMAP Mailbox Referrals <a
+href="http://tools.ietf.org/html/rfc2193">[MBOXREF]</a>, the client
+can improve performance and reduce the load on the aggregator by using the
+IMAP referrals that are sent to it and going to the appropriate back end
+servers.</p>
+
+<p>The front end servers will advertise the <tt>MAILBOX-REFERRALS</tt>
+
+capability. The back end servers will also advertise this capability
+(but only because they need to refer clients while a mailbox is
+moving between servers).</p>
+
+<p>Since there is no way for the server to know if a client supports
+referrals, the Cyrus IMAP Aggregator will assume the clients do not
+support referrals unless the client issues a <tt>RLSUB</tt> or a
+<tt>RLIST</tt> command.</p>
+
+<p>Once a client issues one of those commands, then the aggregator
+will issue referrals for any command that is safe for the client to
+contact the IMAP server directly. Most commands that perform
+operations within a mailbox (cf Section <a href="#3.3">3.3</a>) fall
+into this category.  Some commands will not be possible without a
+referrals-capable client (such as most commands done as
+administrator).</p>
+
+<p>RFC2193 indicates that the client does not stick the referred server.
+As such the <tt>SELECT</tt> will get issued to the front end server and
+not the referred server.  Additionally, <tt>CREATE, RENAME</tt>, and
+<tt>DELETE</tt> get sent to the frontend which will proxy the command to
+the correct back end server.</p>
+
+<h3>3.9 POP</h3>
+
+POP is easy given that POP only allows access to the user's
+<tt>INBOX</tt>.  When it comes to POP, the IMAP Aggregator acts just
+like a <a href="#AB">multiplexor</a>. The user authenticates to
+front end server. The front end determines where the user's
+<tt>INBOX</tt> is located and does a direct pass through of the POP
+commands from the client to the appropriate back end server.
+
+<h3>3.10 MUPDATE</h3>
+
+<p>The <tt>mupdate</tt> (slave) process (one per front end) holds open an
+MUPDATE connection and listens for updates from the MUPDATE master server
+(as backends inform it of updates). The slave makes these modifications on
+the local copy of the mailboxes database.
+
+<a name="analysis"><h3>4.0 Analysis</h3></a>
+
+<p><b>???</b> Add timing info? Random load testing?
+
+<h3>4.1 Mailboxes Database</h3>
+
+<p>A benefit of having the mailbox information on the front end is
+that <tt>LIST</tt> is very cheap. The front end servers can process
+this request without having to contact each back end server.
+
+
+<p>We're also assuming that LIST is a much more frequent operation
+than any of the mailbox operations and thus should be the case to
+optimize.  (In addition to the fact that any operation that needs
+to be forwarded to a backend needs to know which backend it is being
+forwarded to, so lookups in the mailbox list are also quite frequent).
+
+<h3>4.2 Failure Mode Analysis</h3>
+
+<p><b>What happens when a back end server comes up?</b>
+Resynchronization with the MUPDATE server.  Any mailboxes that exist
+locally but are not in MUPDATE are pushed to MUPDATE.  Any mailboxes
+that exist locally but are in MUPDATE as living on a different server
+are deleted.  Any mailboxes that do not exist locally but exist in
+MUPDATE as living on this server are removed from MUPDATE.
+
+<p><b>What happens when a front end server comes up?</b> The only
+thing that needs to happen is for the front end to connect to the MUPDATE
+server, issue an UPDATE command, and resynchronize its local database
+copy with the copy on the master server.
+
+<p><b>Where's the true mailboxes file?</b> The MUPDATE master contains
+authoritative information as to the location of any mailbox (in the
+case of a conflict), but the backends are authoritative as to which
+mailboxes actually exist.
+
+<h3>4.3 Summary of Benefits</h3>
+
+<ul>
+
+<li>Availability - By allowing multiple front-ends, failures of the
+front-end only result in a reduction of capacity. Users currently
+connected still lose their session but can just reconnect to get back
+online.
+
+<p>The failure of the back-ends will result in the loss of
+availability. However, given that the data is distributed among
+multiple servers, the failure of a single server does not result the
+entire system being down. Our experience with AFS was that this type
+of partitioned failure was acceptable (if not ideal).
+
+<p>The failure of the mupdate master will cause write operations to the
+mailbox list to fail, but accesses to mailboxes themselves (as well as
+read operations to the mailbox list) will continue uninterrupted.
+
+<p>At this point, there may be some ideas but no plans for providing a
+high availability solution which would allow for back-end servers or
+the MUPDATE server to fail with no availability impact.
+
+<li>Load scalability - We have not done any specific benchmarks to show
+that this system actually performs better.  However, it is clear that it
+scales to a larger number of users than a single server architechure
+would.  Though, based on the fact that we have not had any performance
+problems similar to when we were running a single machine, and we are
+handling about 20% more concurrent users, things have been a rousing
+success.
+
+<p>Live statistics can be found under the "cyrus overview" section at:
+<a href="http://graphs.andrew.cmu.edu">http://graphs.andrew.cmu.edu</a>.
+
+<li>Management benefits - As with AFS, administrators have the
+flexibility of placement of data on the servers, "live" move of data
+between servers,
+
+<li> User benefits - The user only needs to know a single server name for
+configuration. The same name can be handed out to all users.
+
+<p>Users don't lose the ability to share their folders and those
+folders are visible to other users. A user's <tt>INBOX</tt> folder
+hierarchy can also exist across multiple machines.
+
+</ul>
+
+<a name="futures"><h3>5.0 Futures</h3></a>
+
+<ul>
+<li>It would be nice to be able to replicate the messages in a
+mailbox among multiple servers and not just do partitioning for
+availability.
+
+<p><li>We are also evaluating using the aggregator to be able to provide
+mailboxes to the user with a different backup policy or even different
+"quality of service."  Foe example, we are looking to give users a
+larger quota than default but not back up the servers where these
+mailboxes exist.
+
+<p><li>There is possibility that LDAP could be used instead of
+MUPDATE. However at this time the replication capabilities of LDAP are
+insufficient for the needs of the Aggregator
+
+<p><li>It would be nice if quotaroots had some better semantics with
+respect to the murder (either make them first-class entities, or 
+have them apply across servers).
+
+</ul>
+
+<a name="AA"></a>
+<h3>Appendix A: DNS Name Load Balancing</h3>
+
+<p>One method of load balancing is to use DNS to spread your users to
+multiple machines.
+
+<p>One method is to create a DNS CNAME for each letter of the
+alphabet. Then, each user sets their IMAP server to be the first
+letter of their userid. For example, the userid 'tom' would set his
+IMAP server to be <tt>T.IMAP.ANDREW.CMU.EDU</tt> and
+
+<tt>T.IMAP.ANDREW.CMU.EDU</tt> would resolve to an actual mail server.
+
+<p>Given that this does not provide a good distribution, another
+option is to create a DNS CNAME for each user. Using the previous
+example, the user 'tom' would set his IMAP server to be
+<tt>TOM.IMAP.ANDREW.CMU.EDU</tt> which then points to an actual mail
+server.
+
+<p>The good part is that you don't have all your users on one machine
+and growth can be accommodated without any user reconfiguration.
+
+<p>The drawback is with shared folders. The mail client now must
+support multiple servers and users must potentially configure a server
+for each user with a shared folder he wishes to view. Also, the user's
+<tt>INBOX</tt> hierarchy must also reside on a single machine.
+
+<a name="AB"></a>
+<h3>Appendix B: IMAP Multiplexing</h3>
+
+<p>Another method of spreading out the load is to use IMAP
+multiplexing. This is very similar to the IMAP Aggregator in that
+there are frontend and backend servers. The frontend servers do the
+lookup and then forward the request to the appropriate backend
+server.
+
+
+<p>The multiplexor looks at the user who has authenticated. Once the
+user has authenticated, the frontend does a lookup for the backend
+server and then connects the session to a single backend server. This
+provides the flexibility of balancing the users among any arbitrary
+server but it creates a problem where a user can not share a folder
+with a user on a different back end server.
+
+<p>Multiplexors references: 
+<ul >
+<li><a href="http://www.bluetail.com/big/common/wp11.pdf">BLUETAIL Mail
+Robustifier</a> - Note this link broken due to the acquisition of
+Bluetail by Alteon Web Systems.
+
+<li><a
+href="http://enterprise.netscape.com/docs/messaging/60/admin/mmp.htm">
+Netscape Messaging Multiplexor</a>
+
+<li><a href="http://www.som.siu.edu/pfleming/development/email/">Paul
+Fleming's IMAP Proxy</a>
+
+<li><a href="http://www.vergenet.net/linux/perdition/">Perdition IMAP Proxy</a>
+
+<li><a href="http://www.mirapoint.com/products/MessageDirector.shtml">
+
+Mirapoint Message Director</a> - This is a hardware solution that also
+does content filtering.
+</ul>
+
+<a name="AC"></a>
+<h3>Appendix C: Definitions</h3>
+
+<dl>
+
+<dt><i>IMAP connection</i></dt>
+<dd>A single IMAP TCP/IP session with a single IMAP server is a "connection".
+</dd>
+
+<dt><i>client</i></dt>
+
+<dd>A client is a process on a remote computer that communicates with
+the set of servers distributing mail data, be they ACAP, IMAP, LDAP,
+or IMSP servers.  A client opens one or more connections to various
+servers.
+</dd>
+
+<dt><i>mailbox tree</i></dt>
+<dd>The collection of all mailboxes at a given site in a namespace is
+called the mailbox tree.  Generally, the user Bovik's personal data is
+found in <tt>user.bovik</tt>.
+</dd>
+
+<dt><i>mailboxes database</i></dt>
+<dd>A local database containing a list of mailboxes known to a
+particular server.  (In old Cyrus terms, this maps to
+<tt>/var/imap/mailboxes</tt>.)
+</dd>
+
+<dt><i>mailbox dataset</i></dt>
+<dd>The store of mailbox information on the ACAP server is the
+"mailbox dataset".
+</dd>
+
+<dt><i>mailbox operation</i></dt>
+<dd>The following IMAP commands are "mailbox operations": CREATE,
+RENAME, DELETE, and SETACL.
+</dd>
+
+<dt><i>MTA</i></dt>
+<dd>The mail transport agent (e.g. sendmail, postfix).
+</dd>
+
+
+<dt><a name="def_murder"></a>
+
+Murder of IMAP servers</dt>
+<dd>A grouping of IMAP servers. It sounded cool for crows so we
+decided to use it for IMAP servers as well. 
+</dd>
+
+<dt><i>quota operations</i></dt>
+<dd>The quota IMAP commands (GETQUOTA, GETQUOTAROOT, and SETQUOTA)
+operate on mailbox trees.  In future versions of Cyrus, it is expected
+that a quotaroot will be a subset of a mailbox tree that resides on
+one partition on one server.  For rational, see section xxx.
+</dd>
+</dl>
+
+<a name="AD"></a>
+<h3>Appendix D: ACAP</h3>
+
+It was originally intended to use the general purpose protocol ACAP
+instead of the (task specific) MUPDATE.  We expected the following
+commands to query the ACAP server:
+
+<p>
+
+<tt>[LSUB, SUBSCRIBE, UNSUBSCRIBE, SETQUOTA, GETQUOTA, EXAMINE,
+      STATUS]</tt><br />
+
+All these commands could be handled by the mailboxes
+dataset.[MBOXDSET] This would mainly be a client enhancement. For
+example, a client could use this to quickly check all the new messages
+in every folder a user is subscribed to and would also be able to talk
+directly to the back-end where the data is and thereby skipping the
+front-ends.
+
+
+
+<a name="AE"></a>
+<h3>Appendix E: Naming</h3>
+
+<p>An alternate name was suggested (unfortunately too late) by Philip
+Lewis. He writes:
+
+<blockquote>
+i would have called it an atlas....  or iatlas (pronounced "yatlas")
+<br />
+it is a collection of (i)maps.
+</blockquote>
+
+<h3>References</h3>
+
+<ul>
+<li>[ACAP] Newman, Myers, "ACAP -- Application Configuration Access
+Protocol", RFC 2244, November 1997.
+
+<li>[AFS] J. Howard, "An Overview of the Andrew File System", Usenix,
+Feb 1988.
+
+<li>[IMAP] M. Crispin, "Internet Message Access Protocol", RFC 2060,
+December 1996.
+
+<li>[LMTP] J. Myers, "Local Mail Transfer Protocol", RFC 2033, October
+1996.
+
+<li>[MBOXDSET] L. Greenfield, "ACAP Mailbox Dataset Class", November
+1998, available from the author, <tt>leg+@andrew.cmu.edu</tt>.
+
+<li>[MBOXREF] M. Gahrns, "IMAP4 Mailbox Referrals", RFC 2193,
+September 1997.
+
+<li>[SIEVE] T. Showalter, "Sieve: A Mail Filtering Language", RFC
+3028, January 2001.
+
+</ul>
+
+
+<a name="ChangeLog"></a>
+<h3>Document Change Log</h3>
+
+<ul>
+<li>3.1 - cleanups
+<li>3.0 - actual implementation. MUPDATE instead of ACAP, mailbox moves
+now possible (4/4/02)
+<li>2.0 - closer to implementation. ACAP is now required. Ditch MOIS
+<li>1.0 - Initial revision.
+</ul>
+
+</div> 
+
+</body>
+</html>
