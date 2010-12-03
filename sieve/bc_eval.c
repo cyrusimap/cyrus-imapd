@@ -601,6 +601,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m,
 						       errbuf, sizeof(errbuf));
 				if (!reg) {
 				    /* Oops */
+				    free(addr);
 				    res=-1;
 				    goto alldone;
 				}
@@ -618,6 +619,7 @@ static int eval_bc_test(sieve_interp_t *interp, void* m,
 			    }
 			} /* For each data */
 		    }
+		    free(addr);
 		} /* For each address */
 
 		address_itr_fini(&ai);
