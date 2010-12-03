@@ -8,22 +8,18 @@
 </h1>
 <body>
 
-<b><i>Note that Cyrus Murder is still relatively young in the grand scheme of
-things, and if you choose to deploy you are doing so at your own risk.
-Many of the failure modes can be difficult to track without a detailed
-understanding of the mupdate protocol and IMAP in general, and thus even
-considering a deployment is not for the faint at heart.<p>
-Sites which think they need the Murder functionality but do not need
-a uniform namespace (no shared mailboxes) should consider other IMAP
-proxy solutions.<p>
-At the same time, we are using it successfully in production at Carnegie
-Mellon.
-</i></b><br>
+<p>The Cyrus Murder provides the ability to horizontally scale your Cyrus
+IMAP environment across multiple servers.  It is similar in nature to 
+various proxy solutions such as nginx or perdition with the difference
+being that Murder offers a uniform namespace.  If you're not currently
+using shared mailboxes and you don't intend to use shared mailboxes in the
+future, you should probably just consider using a simple proxy solution.</p>
+<br>
 
 <h3>Introduction &amp; Assumptions</h3>
 This document is intended to be a guide to the configuration of a Cyrus
 IMAP Aggregator, aka Cyrus Murder.  It is recommended that you review
-<A HREF=http://cyrusimap.web.cmu.edu/ag.html>this document</A> to be familliar
+<A HREF="ag.html">this document</A> to become familliar
 with the concepts at work.  This document is a work in progress and is at this
 point incomplete.<p>
 This document assumes that you have successfully been able to setup atleast
@@ -342,14 +338,6 @@ where you want it to actually live.</li>
 <li><b>Databases are never created on the frontends/slaves</b> - Check
 to ensure that the mupdate slave process is started, (is prefork=1)</li>
 </ul>
-
-<p><h3>References</h3><ul>
-<li><A HREF=http://cyrusimap.web.cmu.edu/ag.html>Aggregator Overview</A></li>
-<li><A HREF=http://cyrusimap.web.cmu.edu/archives/mupdate.html>MUPDATE Protocol Reference</A></li>
-</ul>
-
-<P><HR>
-last modified: $Date: 2010/01/06 17:01:29 $
 </BODY></HTML>
 
 
