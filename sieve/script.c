@@ -568,12 +568,15 @@ int sieve_script_unload(sieve_execute_t **s)
 {
     if(s && *s) {
 	sieve_bytecode_t *bc = (*s)->bc_list;
+	sieve_bytecode_t *nextbc;
 
 	/* free each bytecode buffer in the linked list */
 	while (bc) {
 	    map_free(&(bc->data), &(bc->len));
 	    close(bc->fd);
-	    bc = bc->next;
+	    nextbc = bc->next;
+	    free(bc);
+	    bc = nextbc;
 	}
 	free(*s);
 	*s = NULL;
