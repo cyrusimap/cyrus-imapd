@@ -1,23 +1,31 @@
-Introduction
-============
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<title>Cyrus IMAP Server: Replication Examples</title>
+</head>
+<body>
+<h1>Cyrus IMAP Server: Replication Examples</h1>
 
-The replication system creates a link between two Cyrus mailstores: a
+<h2>Introduction</h2>
+
+<p>The replication system creates a link between two Cyrus mailstores: a
 master and a replica system. Both systems can be live mailstores with
-active users: here in Cambridge we install systems in pairs.
+active users: here in Cambridge we install systems in pairs.</p>
 
-Typically half of the users will be using each system, and each system
+<p>Typically half of the users will be using each system, and each system
 replicates to its partner. In the event of a failover everyone uses the
 remaining system in a pair. This is typically safe as the IMAP/POP/SMTP
 servers define which of the two systems is the live server for any given
-account, and the replica just plays a game of follow my leader.
+account, and the replica just plays a game of follow my leader.</p>
 
-Occasionally I think about introducing some form of sanity check so that we
+<p>Occasionally I think about introducing some form of sanity check so that we
 have to explicitly issue a command to the remaining backend system as well
-as the proxies in the event of a failover.
+as the proxies in the event of a failover.</p>
 
-A short example of replication in action
-========================================
+<h2>A short example of replication in action</h2>
 
+<pre>
 Index:
 
   #: Annotation
@@ -113,10 +121,11 @@ S: OK User_Some finished
 
 # Back where we started: the replication engine reinserted message UID 0
 # which was missing, and removed "hello world" from message UID 4140
+</pre>
 
-Tracking messages between folders
-=================================
+<h2>Tracking messages between folders</h2>
 
+<pre>
 # I've just saved a message from my inbox into a folder named "zzz",
 # creating the folder the process.
 
@@ -149,4 +158,7 @@ S: SELECT user.dpc22.zzz
 S: UPLOAD [1 msgs]
 S: SETSEEN dpc22 ...
 S: ENDUSER
+</pre>
 
+</body>
+</html>

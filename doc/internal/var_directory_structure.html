@@ -1,6 +1,16 @@
-Directory structure under /var/spool/imap
-=========================================
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<title>Cyrus IMAP Server: var directory structure</title>
+</head>
+<body>
 
+<h1>Cyrus IMAP Server: var directory structure</h1>
+
+<h2>Directory structure under /var/spool/imap</h2>
+
+<pre>
 stage./
   Normal staging directory
 
@@ -17,10 +27,11 @@ sync./
 
 user/
   Familiar user.userid space.
+</pre>
 
-Directory structure under /var/imap
-===================================
+<h2>Directory structure under /var/imap</h2>
 
+<pre>
 Complete list:
 
   drwxr-xr-x    2 cyrus    cyrus         232 Sep  7 08:21 db
@@ -60,4 +71,6 @@ sync/current
   sync_client running as asynchronous replication engine.
 
   Rotated to be sync/current-<pid> by asychronous runner.
-
+</pre>
+</body>
+</html>
