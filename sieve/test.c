@@ -552,219 +552,6 @@ sieve_vacation_t vacation = {
 char *markflags[] = { "\\flagged" };
 sieve_imapflags_t mark = { markflags, 1 };
 
-struct testcase {
-    int comp; 
-    int mode;
-    const char *pat;
-    const char *text;
-    int result;
-};
-
-struct testcase tc[] =
-{ { B_OCTET, B_IS, "", "", 1 },
-  { B_OCTET, B_IS, "a", "", 0 },
-  { B_OCTET, B_IS, "", "a", 0 },
-  { B_OCTET, B_IS, "a", "a", 1 },
-  { B_OCTET, B_IS, "a", "A", 0 },
-
-  { B_ASCIICASEMAP, B_IS, "", "", 1 },
-  { B_ASCIICASEMAP, B_IS, "a", "", 0 },
-  { B_ASCIICASEMAP, B_IS, "", "a", 0 },
-  { B_ASCIICASEMAP, B_IS, "a", "a", 1 },
-  { B_ASCIICASEMAP, B_IS, "a", "A", 1 },
-
-  { B_ASCIINUMERIC, B_IS, "123", "123", 1 },
-  { B_ASCIINUMERIC, B_IS, "123", "-123", 0 },
-  { B_ASCIINUMERIC, B_IS, "abc", "123", 0 },
-  { B_ASCIINUMERIC, B_IS, "abc", "abc", 1 },
-  { B_ASCIINUMERIC, B_IS, "12345678900", "3755744308", 0 },    /* test for 32bit overflow */
-  { B_ASCIINUMERIC, B_IS, "1567", "1567pounds", 1 },
-  { B_ASCIINUMERIC, B_IS, "", "", 1 },
-  { B_ASCIINUMERIC, B_IS, "123456789", "567", 0 },
-  { B_ASCIINUMERIC, B_IS, "567", "123456789", 0 },
-  { B_ASCIINUMERIC, B_IS, "123456789", "00000123456789", 1 },
-  { B_ASCIINUMERIC, B_IS, "102", "1024", 0 },
-  { B_ASCIINUMERIC, B_IS, "1567M", "1567 arg", 1 },
-
-  { B_OCTET, B_CONTAINS, "", "", 1 },
-  { B_OCTET, B_CONTAINS, "", "a", 1 },
-  { B_OCTET, B_CONTAINS, "a", "", 0 },
-  { B_OCTET, B_CONTAINS, "a", "a", 1 },
-  { B_OCTET, B_CONTAINS, "a", "ab", 1 },
-  { B_OCTET, B_CONTAINS, "a", "ba", 1 },
-  { B_OCTET, B_CONTAINS, "a", "aba", 1 },
-  { B_OCTET, B_CONTAINS, "a", "bab", 1 },
-  { B_OCTET, B_CONTAINS, "a", "bb", 0 },
-  { B_OCTET, B_CONTAINS, "a", "bbb", 0 },
-
-  { B_OCTET, B_MATCHES, "", "", 1 },
-  { B_OCTET, B_MATCHES, "", "a", 0 },
-  { B_OCTET, B_MATCHES, "a", "", 0 },
-  { B_OCTET, B_MATCHES, "a", "a", 1 },
-  { B_OCTET, B_MATCHES, "a", "ab", 0 },
-  { B_OCTET, B_MATCHES, "a", "ba", 0 },
-  { B_OCTET, B_MATCHES, "a", "aba", 0 },
-  { B_OCTET, B_MATCHES, "a", "bab", 0 },
-  { B_OCTET, B_MATCHES, "a", "bb", 0 },
-  { B_OCTET, B_MATCHES, "a", "bbb", 0 },
-
-  { B_OCTET, B_MATCHES, "*", "", 1 },
-  { B_OCTET, B_MATCHES, "*", "a", 1 },
-  { B_OCTET, B_MATCHES, "*a*", "", 0 },
-  { B_OCTET, B_MATCHES, "*a*", "a", 1 },
-  { B_OCTET, B_MATCHES, "*a*", "ab", 1 },
-  { B_OCTET, B_MATCHES, "*a*", "ba", 1 },
-  { B_OCTET, B_MATCHES, "*a*", "aba", 1 },
-  { B_OCTET, B_MATCHES, "*a*", "bab", 1 },
-  { B_OCTET, B_MATCHES, "*a*", "bb", 0 },
-  { B_OCTET, B_MATCHES, "*a*", "bbb", 0 },
-
-  { B_OCTET, B_MATCHES, "*a", "", 0 },
-  { B_OCTET, B_MATCHES, "*a", "a", 1 },
-  { B_OCTET, B_MATCHES, "*a", "ab", 0 },
-  { B_OCTET, B_MATCHES, "*a", "ba", 1 },
-  { B_OCTET, B_MATCHES, "*a", "aba", 1 },
-  { B_OCTET, B_MATCHES, "*a", "bab", 0 },
-  { B_OCTET, B_MATCHES, "*a", "bb", 0 },
-  { B_OCTET, B_MATCHES, "*a", "bbb", 0 },
-
-  { B_OCTET, B_MATCHES, "a*", "", 0 },
-  { B_OCTET, B_MATCHES, "a*", "a", 1 },
-  { B_OCTET, B_MATCHES, "a*", "ab", 1 },
-  { B_OCTET, B_MATCHES, "a*", "ba", 0 },
-  { B_OCTET, B_MATCHES, "a*", "aba", 1 },
-  { B_OCTET, B_MATCHES, "a*", "bab", 0 },
-  { B_OCTET, B_MATCHES, "a*", "bb", 0 },
-  { B_OCTET, B_MATCHES, "a*", "bbb", 0 },
-
-  { B_OCTET, B_MATCHES, "a*b", "", 0 },
-  { B_OCTET, B_MATCHES, "a*b", "a", 0 },
-  { B_OCTET, B_MATCHES, "a*b", "ab", 1 },
-  { B_OCTET, B_MATCHES, "a*b", "ba", 0 },
-  { B_OCTET, B_MATCHES, "a*b", "aba", 0 },
-  { B_OCTET, B_MATCHES, "a*b", "bab", 0 },
-  { B_OCTET, B_MATCHES, "a*b", "bb", 0 },
-  { B_OCTET, B_MATCHES, "a*b", "bbb", 0 },
-  { B_OCTET, B_MATCHES, "a*b", "abbb", 1 },
-  { B_OCTET, B_MATCHES, "a*b", "acb", 1 },
-  { B_OCTET, B_MATCHES, "a*b", "acbc", 0 },
-
-  { B_OCTET, B_MATCHES, "a?b", "", 0 },
-  { B_OCTET, B_MATCHES, "a?b", "a", 0 },
-  { B_OCTET, B_MATCHES, "a?b", "ab", 0 },
-  { B_OCTET, B_MATCHES, "a?b", "ba", 0 },
-  { B_OCTET, B_MATCHES, "a?b", "aba", 0 },
-  { B_OCTET, B_MATCHES, "a?b", "bab", 0 },
-  { B_OCTET, B_MATCHES, "a?b", "bb", 0 },
-  { B_OCTET, B_MATCHES, "a?b", "bbb", 0 },
-  { B_OCTET, B_MATCHES, "a?b", "abbb", 0 },
-  { B_OCTET, B_MATCHES, "a?b", "acb", 1 },
-  { B_OCTET, B_MATCHES, "a?b", "acbc", 0 },
-
-  { B_OCTET, B_MATCHES, "a*?b", "", 0 },
-  { B_OCTET, B_MATCHES, "a*?b", "a", 0 },
-  { B_OCTET, B_MATCHES, "a*?b", "ab", 0 },
-  { B_OCTET, B_MATCHES, "a*?b", "ba", 0 },
-  { B_OCTET, B_MATCHES, "a*?b", "aba", 0 },
-  { B_OCTET, B_MATCHES, "a*?b", "bab", 0 },
-  { B_OCTET, B_MATCHES, "a*?b", "bb", 0 },
-  { B_OCTET, B_MATCHES, "a*?b", "bbb", 0 },
-  { B_OCTET, B_MATCHES, "a*?b", "abbb", 1 },
-  { B_OCTET, B_MATCHES, "a*?b", "acb", 1 },
-  { B_OCTET, B_MATCHES, "a*?b", "acbc", 0 },
-
-  { B_OCTET, B_MATCHES, "a?*b", "", 0 },
-  { B_OCTET, B_MATCHES, "a?*b", "a", 0 },
-  { B_OCTET, B_MATCHES, "a?*b", "ab", 0 },
-  { B_OCTET, B_MATCHES, "a?*b", "ba", 0 },
-  { B_OCTET, B_MATCHES, "a?*b", "aba", 0 },
-  { B_OCTET, B_MATCHES, "a?*b", "bab", 0 },
-  { B_OCTET, B_MATCHES, "a?*b", "bb", 0 },
-  { B_OCTET, B_MATCHES, "a?*b", "bbb", 0 },
-  { B_OCTET, B_MATCHES, "a?*b", "abbb", 1 },
-  { B_OCTET, B_MATCHES, "a?*b", "acb", 1 },
-  { B_OCTET, B_MATCHES, "a?*b", "acbc", 0 },
-
-  { B_OCTET, B_MATCHES, "a*?*b", "", 0 },
-  { B_OCTET, B_MATCHES, "a*?*b", "a", 0 },
-  { B_OCTET, B_MATCHES, "a*?*b", "ab", 0 },
-  { B_OCTET, B_MATCHES, "a*?*b", "ba", 0 },
-  { B_OCTET, B_MATCHES, "a*?*b", "aba", 0 },
-  { B_OCTET, B_MATCHES, "a*?*b", "bab", 0 },
-  { B_OCTET, B_MATCHES, "a*?*b", "bb", 0 },
-  { B_OCTET, B_MATCHES, "a*?*b", "bbb", 0 },
-  { B_OCTET, B_MATCHES, "a*?*b", "abbb", 1 },
-  { B_OCTET, B_MATCHES, "a*?*b", "acb", 1 },
-  { B_OCTET, B_MATCHES, "a*?*b?", "acbc", 1 },
-
-  { B_ASCIICASEMAP, B_MATCHES, "a*b", "", 0 },
-  { B_ASCIICASEMAP, B_MATCHES, "a*b", "a", 0 },
-  { B_ASCIICASEMAP, B_MATCHES, "a*b", "ab", 1 },
-  { B_ASCIICASEMAP, B_MATCHES, "a*b", "ba", 0 },
-  { B_ASCIICASEMAP, B_MATCHES, "a*b", "aba", 0 },
-  { B_ASCIICASEMAP, B_MATCHES, "a*b", "bab", 0 },
-  { B_ASCIICASEMAP, B_MATCHES, "a*b", "bb", 0 },
-  { B_ASCIICASEMAP, B_MATCHES, "a*b", "bbb", 0 },
-  { B_ASCIICASEMAP, B_MATCHES, "a*b", "abbb", 1 },
-  { B_ASCIICASEMAP, B_MATCHES, "a*b", "acb", 1 },
-  { B_ASCIICASEMAP, B_MATCHES, "a*b", "acbc", 0 },
-
-  { B_ASCIICASEMAP, B_MATCHES, "a*b", "", 0 },
-  { B_ASCIICASEMAP, B_MATCHES, "a*b", "A", 0 },
-  { B_ASCIICASEMAP, B_MATCHES, "a*b", "Ab", 1 },
-  { B_ASCIICASEMAP, B_MATCHES, "a*b", "BA", 0 },
-  { B_ASCIICASEMAP, B_MATCHES, "a*b", "ABA", 0 },
-  { B_ASCIICASEMAP, B_MATCHES, "a*b", "BAb", 0 },
-  { B_ASCIICASEMAP, B_MATCHES, "a*b", "BB", 0 },
-  { B_ASCIICASEMAP, B_MATCHES, "a*b", "BBB", 0 },
-  { B_ASCIICASEMAP, B_MATCHES, "a*b", "aBBB", 1 },
-  { B_ASCIICASEMAP, B_MATCHES, "a*b", "ACB", 1 },
-  { B_ASCIICASEMAP, B_MATCHES, "a*b", "ACBC", 0 },
-
-  { 0, 0, NULL, NULL, 0 } };
-
-static int test_comparator(void)
-{
-    struct testcase *t;
-    int didfail = 0;
-
-    for (t = tc; t->comp != 0; t++) {
-	void *comprock = NULL;
-	comparator_t *c = lookup_comp(t->comp, t->mode, -1, &comprock);
-	int res;
-	char *comp, *mode;
-
-	if (t->comp == B_OCTET) comp = "i;octet";
-	else if (t->comp == B_ASCIICASEMAP) comp = "i;ascii-casemap";
-	else if (t->comp == B_ASCIINUMERIC) comp = "i;ascii-numeric";
-	else comp = "<unknown comp>";
-
-	if (t->mode == B_IS) mode = "IS";
-	else if (t->mode == B_CONTAINS) mode = "CONTAINS";
-	else if (t->mode == B_MATCHES) mode = "MATCHES";
-	else if (t->mode == B_REGEX) mode = "REGEX";
-	else mode = "<unknown mode>";
-	
-	if (!c) {
-	    printf("FAIL: can't find a comparator %s/%s\n", 
-		   comp, mode);
-	    didfail++;
-	    continue;
-	}
-	res = c(t->text, strlen(t->text), t->pat, comprock);
-	if (res != t->result) {
-	    printf("FAIL: %s/%s(%s, %s) = %d, not %d\n", 
-		   comp, mode, t->pat, t->text, res, t->result);
-	    didfail++;
-	}
-    }
-    if (didfail) {
-	fprintf(stderr, "failed %d tests\n", didfail);
-	exit(1);
-    } else {
-	exit(0);
-    }
-}
 
 int config_need_data = 0;
 
@@ -772,7 +559,7 @@ int main(int argc, char *argv[])
 {
     sieve_interp_t *i;
     sieve_execute_t *exe = NULL;
-    message_data_t *m;
+    message_data_t *m = NULL;
     char *script = NULL, *message = NULL;
     int c, force_fail = 0, usage_error = 0;
     /* (crom cvs update) FILE *f;
@@ -780,14 +567,10 @@ int main(int argc, char *argv[])
     int fd, res;
     struct stat sbuf;
 
-    while ((c = getopt(argc, argv, "v:cf")) != EOF)
+    while ((c = getopt(argc, argv, "v:f")) != EOF)
 	switch (c) {
 	case 'v':
 	    script = optarg;
-	    break;
-	case 'c':
-	    test_comparator();
-	    /* test_comparator exits for us */
 	    break;
 	case 'f':
 	    force_fail = 1;
