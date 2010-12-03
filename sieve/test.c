@@ -75,7 +75,7 @@
 
 #define HEADERCACHESIZE 1019
 
-typedef struct Header {
+typedef struct {
     char *name;
     int ncontents;
     char *contents[1];
@@ -206,8 +206,8 @@ static int parseheader(FILE *f, char **headname, char **contents)
     return -1;
 
  got_header:
-    if (headname != NULL) *headname = strdup(name);
-    if (contents != NULL) *contents = strdup(body);
+    if (headname != NULL) *headname = xstrdup(name);
+    if (contents != NULL) *contents = xstrdup(body);
 
     return 0;
 }
@@ -242,22 +242,14 @@ static void fill_cache(message_data_t *m)
 	    if (!(m->cache[cl]->ncontents % 8)) {
 		/* increase the size */
 		m->cache[cl] = (header_t *)
-		    realloc(m->cache[cl],sizeof(header_t) +
+		    xrealloc(m->cache[cl],sizeof(header_t) +
 			    ((8 + m->cache[cl]->ncontents) * sizeof(char *)));
-		if (m->cache[cl] == NULL) {
-		    fprintf(stderr, "realloc() returned NULL\n");
-		    exit(1);
-		}
 	    }
 
 	} else {
 	    /* create a new entry in the hash table */
-	    m->cache[cl] = (header_t *) malloc(sizeof(header_t) + 
+	    m->cache[cl] = xmalloc(sizeof(header_t) + 
 					       8 * sizeof(char*));
-	    if (m->cache[cl] == NULL) {
-		fprintf(stderr, "malloc() returned NULL\n");
-		exit(1);
-	    }
 	    m->cache[cl]->name = name;
 	    m->cache[cl]->contents[0] = body;
 	    m->cache[cl]->ncontents = 1;
@@ -285,9 +277,7 @@ static int getheader(void *v, const char *phead, const char ***body)
     }
 
     /* copy header parameter so we can mangle it */
-    head = malloc(strlen(phead)+1);
-    if (!head) return SIEVE_FAIL;
-    strcpy(head, phead);
+    head = xstrdup(phead);
 
     h = head;
     while (*h != '\0') {
@@ -321,11 +311,7 @@ static message_data_t *new_msg(FILE *msg, int size, const char *name)
     int i;
     message_data_t *m;
 
-    m = (message_data_t *) malloc(sizeof(message_data_t));
-    if (m == NULL) {
-	fprintf(stderr, "malloc() returned NULL\n");
-	exit(1);
-    }
+    m = xmalloc(sizeof(message_data_t));
     m->data = msg;
     m->size = size;
     m->name = xstrdup(name);
@@ -340,24 +326,28 @@ static message_data_t *new_msg(FILE *msg, int size, const char *name)
     return m;
 }
 
+static void free_msg(message_data_t *m)
+{
+    int i;
+    int j;
+
+    for (i = 0 ; i < HEADERCACHESIZE ; i++) {
+	if (m->cache[i] == NULL)
+	    continue;
+	for (j = 0 ; j < m->cache[i]->ncontents ; j++)
+	    free(m->cache[i]->contents[j]);
+	free(m->cache[i]->name);
+	free(m->cache[i]);
+    }
+    free(m->name);
+    free(m);
+}
+
 static int getsize(void *mc, int *size)
 {
     message_data_t *m = (message_data_t *) mc;
 
     *size = m->size;
-    return SIEVE_OK;
-}
-
-static int getenvelope(void *v __attribute__((unused)),
-		const char *head, const char ***body)
-{
-    static const char *buf[2];
-
-    if (buf[0] == NULL) { buf[0] = malloc(sizeof(char) * 256); buf[1] = NULL; }
-    printf("Envelope body of '%s'? ", head);
-    scanf("%s", (char*) buf[0]);
-    *body = buf;
-
     return SIEVE_OK;
 }
 
@@ -644,7 +634,7 @@ int main(int argc, char *argv[])
 	exit(1);
     }
 
-    res = sieve_register_envelope(i, getenvelope);
+    res = sieve_register_envelope(i, getheader);
     if (res != SIEVE_OK) {
 	printf("sieve_register_envelope() returns %d\n", res);
 	exit(1);
@@ -735,6 +725,9 @@ int main(int argc, char *argv[])
 	printf("sieve_interp_free() returns %d\n", res);
 	exit(1);
     }
+
+    if (m)
+	free_msg(m);
 
     return 0;
 }
