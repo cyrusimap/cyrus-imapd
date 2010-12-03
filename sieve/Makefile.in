@@ -70,6 +70,7 @@ IMAP_COM_ERR_LIBS = @IMAP_COM_ERR_LIBS@
 IMAP_LIBS = @IMAP_LIBS@ @LIB_RT@
 LIBS = libsieve.a $(IMAP_LIBS) $(IMAP_COM_ERR_LIBS)
 DEPLIBS=../lib/libcyrus.a ../lib/libcyrus_min.a @DEPLIBS@
+LIBIMAP = ../imap/mutex_fake.o ../imap/libimap.a
 
 BUILT_SOURCES = addr.c addr.h addr-lex.c \
 	sieve.c sieve.h sieve-lex.c \
@@ -86,9 +87,9 @@ install: sievec sieved
 	$(srcdir)/../install-sh -c -m 755 sievec $(DESTDIR)$(service_path) || exit
 	$(srcdir)/../install-sh -c -m 755 sieved $(DESTDIR)$(service_path) || exit
 
-test: $(DEPLIBS) libsieve.a test.o ../imap/libimap.a
-	$(CC) $(LDFLAGS) -o test test.o ../imap/libimap.a \
-	libsieve.a $(DEPLIBS) $(LIBS)
+test: $(DEPLIBS) libsieve.a test.o $(LIBIMAP)
+	$(CC) $(LDFLAGS) -o test test.o \
+	libsieve.a $(LIBIMAP) $(DEPLIBS) $(LIBS)
 
 OBJS = sieve_err.o \
        sieve.o sieve-lex.o comparator.o interp.o message.o \

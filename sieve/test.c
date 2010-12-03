@@ -72,19 +72,6 @@
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
 
-/* XXX so we can link against imap/message.o */
-unsigned mailbox_cached_header_inline(const char *text __attribute__((unused)))
-{ return BIT32_MAX; }
-void message_guid_generate(struct message_guid *guid __attribute__((unused)),
-			   const char *msg_base __attribute__((unused)),
-			   unsigned long msg_len __attribute__((unused)))
-{ return; }
-void message_guid_copy(struct message_guid *dst __attribute__((unused)),
-		       const struct message_guid *src __attribute__((unused)))
-{ return; }
-int message_guid_isnull(struct message_guid *guid __attribute__((unused)))
-{ return 0; }
-
 #define HEADERCACHESIZE 1019
 
 typedef struct Header {
