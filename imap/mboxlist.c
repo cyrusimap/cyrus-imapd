@@ -93,8 +93,8 @@ struct db *mbdb;
 
 static int mboxlist_dbopen = 0;
 
-static int mboxlist_opensubs();
-static void mboxlist_closesubs();
+static int mboxlist_opensubs(const char *userid, struct db **ret);
+static void mboxlist_closesubs(struct db *sub);
 
 static int mboxlist_rmquota(const char *name, int matchlen, int maycreate,
 			    void *rock);

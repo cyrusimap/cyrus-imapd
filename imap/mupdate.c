@@ -228,7 +228,7 @@ void cmd_starttls(struct conn *C, const char *tag);
 void cmd_compress(struct conn *C, const char *tag, const char *alg);
 void shut_down(int code);
 static int reset_saslconn(struct conn *c);
-void database_init();
+static void database_init(void);
 void sendupdates(struct conn *C, int flushnow);
 
 extern int saslserver(sasl_conn_t *conn, const char *mech,
@@ -1443,7 +1443,7 @@ static void *thread_main(void *rock __attribute__((unused)))
 }
 
 /* read from disk database must be unlocked. */
-void database_init()
+static void database_init(void)
 {
     pthread_mutex_lock(&mailboxes_mutex); /* LOCK */
 

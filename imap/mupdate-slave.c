@@ -81,7 +81,7 @@
 #include "exitcodes.h"
 
 /* Returns file descriptor of kick socket (or does not return) */
-static int open_kick_socket() 
+static int open_kick_socket(void)
 {
     int r,s,len;
     char fnamebuf[2048];

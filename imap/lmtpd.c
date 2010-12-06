@@ -126,7 +126,7 @@ struct lmtp_func mylmtp = { &deliver, &verify_user, &shut_down,
 			    &spoolfile, &removespool, &lmtpd_namespace,
 			    0, 1, 0 };
 
-static void usage();
+static void usage(void);
 
 /* global state */
 const int config_need_data = CONFIG_NEED_PARTITION_DATA;
@@ -338,8 +338,7 @@ void service_abort(int error)
     shut_down(error);
 }
 
-static void
-usage()
+static void usage(void)
 {
     fprintf(stderr, "421-4.3.0 usage: lmtpd [-C <alt_config>] [-a]\r\n");
     fprintf(stderr, "421 4.3.0 %s\n", cyrus_version());
