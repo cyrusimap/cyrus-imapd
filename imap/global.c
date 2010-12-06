@@ -649,12 +649,14 @@ int mysasl_proxy_policy(sasl_conn_t *conn,
 
 
 /* call before a cyrus application exits */
-void cyrus_done() 
+void cyrus_done(void)
 {
-    if(cyrus_init_run != RUNNING) return;
+    if (cyrus_init_run != RUNNING)
+	return;
     cyrus_init_run = DONE;
-    
-    if (!cyrus_init_nodb) libcyrus_done();
+
+    if (!cyrus_init_nodb)
+	libcyrus_done();
 }
 
 /*
@@ -753,7 +755,7 @@ char *find_free_partition(unsigned long *tavail)
 }
 
 /* Set up the Session ID Buffer */
-void session_new_id()
+void session_new_id(void)
 {
     const char *base;
     int now = time(NULL);    
@@ -769,7 +771,7 @@ void session_new_id()
 }
 
 /* Return the session id */
-const char *session_id()
+const char *session_id(void)
 {
     if (!session_id_count) 
         session_new_id();

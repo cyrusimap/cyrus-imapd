@@ -68,7 +68,7 @@ extern void global_sasl_init(int client, int server,
 			     const sasl_callback_t *callbacks);
 
 /* Shutdown a cyrus process */
-extern void cyrus_done();
+extern void cyrus_done(void);
 
 /* sasl configuration */
 extern int mysasl_config(void *context,
@@ -160,8 +160,8 @@ extern struct cyrusdb_backend *config_statuscache_db;
 extern struct cyrusdb_backend *config_userdeny_db;
 
 /* Session ID */
-extern void session_new_id();
-extern const char *session_id();
+extern void session_new_id(void);
+extern const char *session_id(void);
 
 /* Capability suppression */
 extern int capa_is_disabled(const char *str);
