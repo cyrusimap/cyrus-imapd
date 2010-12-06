@@ -425,7 +425,7 @@ static RSA *tmp_rsa_cb(SSL * s __attribute__((unused)),
  * tim - this seems to just be giving logging messages
  */
 
-static void apps_ssl_info_callback(SSL * s, int where, int ret)
+static void apps_ssl_info_callback(const SSL * s, int where, int ret)
 {
     char   *str;
     int     w;
@@ -510,7 +510,7 @@ static int tls_init_clientengine(int verifydepth, char *var_tls_cert_file, char 
     
     off |= SSL_OP_ALL;		/* Work around all known bugs */
     SSL_CTX_set_options(tls_ctx, off);
-    SSL_CTX_set_info_callback(tls_ctx, (void (*)()) apps_ssl_info_callback);
+    SSL_CTX_set_info_callback(tls_ctx, apps_ssl_info_callback);
     
     if (strlen(var_tls_CAfile) == 0)
 	CAfile = NULL;

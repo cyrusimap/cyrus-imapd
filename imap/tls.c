@@ -169,7 +169,7 @@ int tls_enabled(void)
  * tim - this seems to just be giving logging messages
  */
 
-static void apps_ssl_info_callback(SSL * s, int where, int ret)
+static void apps_ssl_info_callback(const SSL * s, int where, int ret)
 {
     char   *str;
     int     w;
@@ -664,7 +664,7 @@ int     tls_init_serverengine(const char *ident,
 	off |= SSL_OP_NO_SSLv3;
     }
     SSL_CTX_set_options(s_ctx, off);
-    SSL_CTX_set_info_callback(s_ctx, (void (*)()) apps_ssl_info_callback);
+    SSL_CTX_set_info_callback(s_ctx, apps_ssl_info_callback);
 
     /* Don't use an internal session cache */
     SSL_CTX_sess_set_cache_size(s_ctx, 1);  /* 0 is unlimited, so use 1 */
@@ -1189,7 +1189,7 @@ int tls_init_clientengine(int verifydepth,
     
     off |= SSL_OP_ALL;		/* Work around all known bugs */
     SSL_CTX_set_options(c_ctx, off);
-    SSL_CTX_set_info_callback(c_ctx, (void (*)()) apps_ssl_info_callback);
+    SSL_CTX_set_info_callback(c_ctx, apps_ssl_info_callback);
     
     CAfile = config_getstring(IMAPOPT_TLS_CA_FILE);
     CApath = config_getstring(IMAPOPT_TLS_CA_PATH);
