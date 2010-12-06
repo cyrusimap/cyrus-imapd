@@ -360,7 +360,7 @@ static void test_cycle(void)
 {
     struct imapurl iurl;
     struct imapurl iurl2;
-    static const char URL[] = "imap://;AUTH=*@server/%E4 %C4/;UIDVALIDITY=1234567890";
+    static const char URL[] = "imap://;AUTH=*@server/%C3%A4%20%C3%84;UIDVALIDITY=1234567890";
     int r;
     char url[400];
 
@@ -372,6 +372,7 @@ static void test_cycle(void)
 
     memset(url, 0x45, sizeof(url));
     imapurl_toURL(url, &iurl);
+    CU_ASSERT_STRING_EQUAL(url, URL);
 
     r = imapurl_fromURL(&iurl2, url);
     CU_ASSERT_EQUAL(r, 0);
