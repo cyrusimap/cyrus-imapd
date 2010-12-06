@@ -101,11 +101,11 @@ static struct namespace purge_namespace;
 int verbose = 1;
 int forceall = 0;
 
-int purge_me(char *, int, int);
+static int purge_me(char *, int, int, void *);
 unsigned purge_check(struct mailbox *mailbox,
 		     struct index_record *record,
 		     void *rock);
-int usage(char *name);
+static int usage(const char *name);
 void print_stats(mbox_stats_t *stats);
 
 int main (int argc, char *argv[]) {
@@ -217,8 +217,8 @@ int main (int argc, char *argv[]) {
   return 0;
 }
 
-int
-usage(char *name) {
+static int usage(const char *name)
+{
   printf("usage: %s [-f] [-s] [-C <alt_config>] [-x] [-X] [-i] {-d days | -b bytes|-k Kbytes|-m Mbytes}\n\t[mboxpattern1 ... [mboxpatternN]]\n", name);
   printf("\tthere are no defaults and at least one of -d, -b, -k, -m\n\tmust be specified\n");
   printf("\tif no mboxpattern is given %s works on all mailboxes\n", name);
@@ -231,8 +231,10 @@ usage(char *name) {
 }
 
 /* we don't check what comes in on matchlen and maycreate, should we? */
-int purge_me(char *name, int matchlen __attribute__((unused)),
-	     int maycreate __attribute__((unused))) {
+static int purge_me(char *name, int matchlen __attribute__((unused)),
+		    int maycreate __attribute__((unused)),
+		    void *rock __attribute__((unused)))
+{
   struct mailbox *mailbox = NULL;
   int r;
   mbox_stats_t stats;
