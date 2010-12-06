@@ -47,9 +47,7 @@
 /*
  * Returns the GMT offset of the struct tm 'tm', obtained from 'time'.
  */
-int gmtoff_of(tm, time)
-struct tm *tm;
-time_t time;
+int gmtoff_of(struct tm *tm, time_t time)
 {
     struct tm local, gmt;
     struct tm *gtm;

@@ -45,17 +45,9 @@
 #ifndef INCLUDED_GMTOFF_H
 #define INCLUDED_GMTOFF_H
 
-#ifndef P
-#ifdef __STDC__
-#define P(x) x
-#else
-#define P(x) ()
-#endif
-#endif
-
 #include <time.h>
 
-extern int gmtoff_of P((struct tm *tm, time_t time));
+extern int gmtoff_of(struct tm *tm, time_t time);
 
 #endif /* INCLUDED_GMTOFF_H */
 
