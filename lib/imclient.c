@@ -445,15 +445,9 @@ va_dcl
  *         which are written as space separated astrings)
  *   %B -- (internal use only) base64-encoded data at end of command line
  */ 
-#ifdef __STDC__
 void
-imclient_send(struct imclient *imclient, void (*finishproc)(),
+imclient_send(struct imclient *imclient, imclient_proc_t *finishproc,
 	      void *finishrock, const char *fmt, ...)
-#else
-void
-imclient_send(va_alist)
-va_dcl
-#endif
 {
     va_list pvar;
     struct imclient_cmdcallback *newcmdcallback;
@@ -462,20 +456,7 @@ va_dcl
     int num;
     unsigned unum;
     int abortcommand = 0;
-#ifdef __STDC__
     va_start(pvar, fmt);
-#else
-    struct imclient *imclient;
-    imclient_proc_t *finishproc;
-    void *finishrock;
-    char *fmt;
-
-    va_start(pvar);
-    imclient = va_arg(pvar, struct imclient *);
-    finishproc = va_arg(pvar, imclient_proc_t *);
-    finishrock = va_arg(pvar, void *);
-    fmt = va_arg(pvar, char *);
-#endif
 
     assert(imclient);
 
