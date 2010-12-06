@@ -1367,7 +1367,7 @@ int annotate_store_proxy(const char *server, const char *mbox_pat,
 }
 
 
-char *find_free_server()
+char *find_free_server(void)
 {
     const char *servers = config_getstring(IMAPOPT_SERVERLIST);
     unsigned long max_avail = 0;

@@ -88,5 +88,5 @@ int annotate_fetch_proxy(const char *server, const char *mbox_pat,
 			 struct strlist *attribute_pat);
 int annotate_store_proxy(const char *server, const char *mbox_pat,
 			 struct entryattlist *entryatts);
-char *find_free_server();
+char *find_free_server(void);
 #endif /* _IMAP_PROXY_H */
