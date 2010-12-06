@@ -219,12 +219,12 @@ void libcyrus_config_setswitch(enum cyrus_opt opt, int val)
     cyrus_options[opt].val.b = val;
 }
 
-void libcyrus_init()
+void libcyrus_init(void)
 {
     cyrusdb_init();
 }
 
-void libcyrus_done()
+void libcyrus_done(void)
 {
     cyrusdb_done();
 }

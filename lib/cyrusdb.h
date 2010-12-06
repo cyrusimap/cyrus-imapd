@@ -201,8 +201,8 @@ extern void cyrusdb_convert(const char *fromfname, const char *tofname,
 extern const char *cyrusdb_detect(const char *fname);
 
 /* Start/Stop the backends */
-void cyrusdb_init();
-void cyrusdb_done();
+void cyrusdb_init(void);
+void cyrusdb_done(void);
 
 /* Configuration */
 struct cyrusdb_backend *cyrusdb_fromname(const char *name);

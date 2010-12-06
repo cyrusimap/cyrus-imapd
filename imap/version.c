@@ -84,7 +84,7 @@ static char id_resp_arguments[MAXIDVALUELEN] = "";
 #define CYRUS_VERSION _CYRUS_VERSION
 #endif
 
-const char *cyrus_version()
+const char *cyrus_version(void)
 {
     return CYRUS_VERSION;
 }

@@ -143,7 +143,7 @@ void libcyrus_config_setswitch(enum cyrus_opt opt, int val);
 
 /* Start/Stop the Library */
 /* Should be done AFTER setting configuration options */
-void libcyrus_init();
-void libcyrus_done();
+void libcyrus_init(void);
+void libcyrus_done(void);
 
 #endif

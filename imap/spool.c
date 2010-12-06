@@ -72,7 +72,7 @@ struct Header {
     char *contents[1];
 };
 
-hdrcache_t spool_new_hdrcache()
+hdrcache_t spool_new_hdrcache(void)
 {
     int i;
     hdrcache_t cache;

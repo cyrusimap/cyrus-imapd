@@ -55,6 +55,6 @@ enum {
     MAXIDLOGLEN = (MAXIDPAIRS * (MAXIDFIELDLEN + MAXIDVALUELEN + 6))
 };
 
-const char *cyrus_version();
+const char *cyrus_version(void);
 
 #endif /* _CYRUS_VERSION_H */

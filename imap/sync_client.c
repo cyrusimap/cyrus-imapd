@@ -2600,7 +2600,7 @@ void replica_connect(const char *channel)
     sync_out = sync_backend->out;
 }
 
-static void replica_disconnect()
+static void replica_disconnect(void)
 {
     backend_disconnect(sync_backend);
 }

@@ -50,7 +50,7 @@
 
 typedef struct Header **hdrcache_t;
 
-hdrcache_t spool_new_hdrcache();
+hdrcache_t spool_new_hdrcache(void);
 void spool_cache_header(char *name, char *body, hdrcache_t cache);
 int spool_fill_hdrcache(struct protstream *fin, FILE *fout, hdrcache_t cache,
 			const char **skipheaders);

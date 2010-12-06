@@ -77,7 +77,7 @@ struct cyrusdb_backend *cyrusdb_backends[] = {
 #endif
     NULL };
 
-void cyrusdb_init() 
+void cyrusdb_init(void)
 {
     int i, r;
     char dbdir[1024];
@@ -96,7 +96,7 @@ void cyrusdb_init()
     }
 }
 
-void cyrusdb_done() 
+void cyrusdb_done(void)
 {
     int i;
     
