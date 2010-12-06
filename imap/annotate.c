@@ -87,7 +87,7 @@ int (*proxy_fetch_func)(const char *server, const char *mbox_pat,
 int (*proxy_store_func)(const char *server, const char *mbox_pat,
 			struct entryattlist *entryatts) = NULL;
 
-void init_annotation_definitions();
+static void init_annotation_definitions(void);
 
 /* String List Management */
 /*
@@ -2407,7 +2407,7 @@ int parse_table_lookup_bitmask(const struct annotate_attrib *table,
 }
 
 /* Create array of allowed annotations, both internally & externally defined */
-void init_annotation_definitions(void)
+static void init_annotation_definitions(void)
 {
     char *p, *p2, *tmp;
     const char *filename;
