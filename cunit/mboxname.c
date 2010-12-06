@@ -49,7 +49,7 @@ static void test_to_userid(void)
     static const char BETTYAT_SENT[] = "boop.com!user.betty.Sent";
     static const char SHARED[] = "shared.Gossip";
     static const char SHAREDAT[] = "foonly.com!shared.Tattle";
-    char *r;
+    const char *r;
 
     r = mboxname_to_userid(SAM_DRAFTS);
     CU_ASSERT_STRING_EQUAL(r, "sam");
@@ -66,7 +66,7 @@ static void test_to_userid(void)
 
 static void test_to_inbox(void)
 {
-    char *r;
+    const char *r;
 
     r = mboxname_user_inbox("sam");
     CU_ASSERT_STRING_EQUAL(r, "user.sam");

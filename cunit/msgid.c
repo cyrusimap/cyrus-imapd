@@ -253,8 +253,6 @@ static void test_eol(void)
     char *m1;
     char *m2;
     char *m3;
-    char *m4;
-    char *m5;
 
     /* We checked in the "simple" test that buffers are unmolested,
      * so this time just pass find_msgid() a const variable */
@@ -301,8 +299,6 @@ static void test_noatsign(void)
     char *m1;
     char *m2;
     char *m3;
-    char *m4;
-    char *m5;
 
     /* We checked in the "simple" test that buffers are unmolested,
      * so this time just pass find_msgid() a const variable */
@@ -460,8 +456,6 @@ static void test_malformed_angles(void)
     char *m1;
     char *m2;
     char *m3;
-    char *m4;
-    char *m5;
 
     /* We checked in the "simple" test that buffers are unmolested,
      * so this time just pass find_msgid() a const variable */

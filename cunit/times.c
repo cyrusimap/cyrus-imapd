@@ -294,7 +294,6 @@ static void test_ctime(void)
 {
     static const char DATETIME[] = "16-Nov-2010 13:15:25 +1100";
     static const time_t TIMET = 1289873725;
-    time_t t;
     char buf[RFC3501_DATETIME_MAX+1];
 
     memset(buf, 0, sizeof(buf));
