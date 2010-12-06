@@ -1963,7 +1963,7 @@ static void cmd_article(int part, char *msgid, unsigned long uid)
 
 static void cmd_authinfo_user(char *user)
 {
-    char *p;
+    const char *p;
 
     if (nntp_authstate) {
 	prot_printf(nntp_out, "502 Already authenticated\r\n");
