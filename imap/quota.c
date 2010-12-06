@@ -117,7 +117,8 @@ void usage(void);
 void reportquota(void);
 int buildquotalist(char *domain, char **roots, int nroots,
 		   struct fix_rock *frock);
-int fixquota_mailbox(char *name, int matchlen, int maycreate, void *rock);
+static int fixquota_mailbox(char *name, int matchlen,
+			    int maycreate, void *rock);
 int fixquota(struct fix_rock *frock);
 int fixquota_fixroot(struct mailbox *mailbox, const char *root);
 int fixquota_finish(int thisquota, struct txn **tid, unsigned long *count);
@@ -336,10 +337,10 @@ int buildquotalist(char *domain, char **roots, int nroots,
 /*
  * Account for mailbox 'name' when fixing the quota roots
  */
-int fixquota_mailbox(char *name,
-		     int matchlen __attribute__((unused)),
-		     int maycreate __attribute__((unused)),
-		     void *rock)
+static int fixquota_mailbox(char *name,
+			    int matchlen __attribute__((unused)),
+			    int maycreate __attribute__((unused)),
+			    void *rock)
 {
     int r;
     struct mailbox *mailbox = NULL;

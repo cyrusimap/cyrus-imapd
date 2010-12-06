@@ -2406,8 +2406,8 @@ struct list_rock {
 /*
  * mboxlist_findall() callback function to LIST
  */
-int list_cb(char *name, int matchlen, int maycreate __attribute__((unused)),
-	    void *rock)
+static int list_cb(char *name, int matchlen,
+		   int maycreate __attribute__((unused)), void *rock)
 {
     static char lastname[MAX_MAILBOX_BUFFER];
     struct list_rock *lrock = (struct list_rock *) rock;
@@ -2474,7 +2474,7 @@ void list_proxy(char *server, void *data __attribute__((unused)), void *rock)
 /*
  * perform LIST ACTIVE (backend) or create a server hash table (proxy)
  */
-int do_active(char *name, void *rock)
+static int do_active(char *name, void *rock)
 {
     struct list_rock *lrock = (struct list_rock *) rock;
     int r, postable;
@@ -2507,7 +2507,7 @@ int do_active(char *name, void *rock)
 /*
  * perform LIST NEWSGROUPS (backend) or create a server hash table (proxy)
  */
-int do_newsgroups(char *name, void *rock)
+static int do_newsgroups(char *name, void *rock)
 {
     struct list_rock *lrock = (struct list_rock *) rock;
     struct mboxlist_entry *mbentry = NULL;

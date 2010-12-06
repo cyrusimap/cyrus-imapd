@@ -129,7 +129,7 @@ const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
 /* forward declarations */
 void do_mboxlist(void);
-int do_reconstruct(char *name, int matchlen, int maycreate, void *rock);
+static int do_reconstruct(char *name, int matchlen, int maycreate, void *rock);
 int reconstruct(char *name, struct discovered *l);
 void usage(void);
 char * getmailname (char * mailboxname);
@@ -411,11 +411,10 @@ void usage(void)
 /*
  * mboxlist_findall() callback function to reconstruct a mailbox
  */
-int
-do_reconstruct(char *name,
-	       int matchlen,
-	       int maycreate __attribute__((unused)),
-	       void *rock)
+static int do_reconstruct(char *name,
+		          int matchlen,
+		          int maycreate __attribute__((unused)),
+		          void *rock)
 {
     struct discovered *found = (struct discovered *)rock;
     int r;

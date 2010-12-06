@@ -107,8 +107,8 @@ static struct namespace recon_namespace;
 const int config_need_data = 0;
 
 /* forward declarations */
-int do_examine(char *name, int matchlen, int maycreate, void *rock);
-int do_quota(char *name, int matchlen, int maycreate, void *rock);
+static int do_examine(char *name, int matchlen, int maycreate, void *rock);
+static int do_quota(char *name, int matchlen, int maycreate, void *rock);
 void usage(void);
 void shut_down(int code);
 
@@ -211,10 +211,10 @@ void print_rec(const char *name, const struct buf *citem)
 /*
  * mboxlist_findall() callback function to examine a mailbox
  */
-int do_examine(char *name,
-	       int matchlen __attribute__((unused)),
-	       int maycreate __attribute__((unused)),
-	       void *rock __attribute__((unused)))
+static int do_examine(char *name,
+		      int matchlen __attribute__((unused)),
+		      int maycreate __attribute__((unused)),
+		      void *rock __attribute__((unused)))
 {
     unsigned i, msgno, recno;
     int r = 0;
@@ -363,10 +363,10 @@ int do_examine(char *name,
 /*
  * mboxlist_findall() callback function to examine a mailbox quota usage
  */
-int do_quota(char *name,
-	       int matchlen __attribute__((unused)),
-	       int maycreate __attribute__((unused)),
-	       void *rock __attribute__((unused)))
+static int do_quota(char *name,
+		    int matchlen __attribute__((unused)),
+		    int maycreate __attribute__((unused)),
+		    void *rock __attribute__((unused)))
 {
     uint32_t recno;
     int r = 0;
