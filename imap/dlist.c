@@ -602,7 +602,7 @@ int dlist_getlist(struct dlist *dl, const char *name, struct dlist **val)
     return 1;
 }
 
-const char *dlist_lastkey()
+const char *dlist_lastkey(void)
 {
     return lastkey;
 }

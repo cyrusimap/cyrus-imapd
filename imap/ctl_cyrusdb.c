@@ -156,7 +156,7 @@ static int fixmbox(char *name,
     return 0;
 }
 
-void recover_reserved() 
+static void recover_reserved(void)
 {
     char pattern[2] = { '*', '\0' };
     

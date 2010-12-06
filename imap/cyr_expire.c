@@ -135,8 +135,8 @@ static unsigned expire_cb(struct mailbox *mailbox __attribute__((unused)),
  * - build a hash table of mailboxes in which we expired messages,
  * - and perform a cleanup of expunged messages
  */
-int expire(char *name, int matchlen, int maycreate __attribute__((unused)),
-	   void *rock)
+static int expire(char *name, int matchlen,
+	          int maycreate __attribute__((unused)), void *rock)
 {
     struct mboxlist_entry *mbentry = NULL;
     struct expire_rock *erock = (struct expire_rock *) rock;
@@ -254,10 +254,10 @@ int expire(char *name, int matchlen, int maycreate __attribute__((unused)),
     return 0;
 }
 
-int delete(char *name,
-	   int matchlen __attribute__((unused)),
-	   int maycreate __attribute__((unused)),
-	   void *rock)
+static int delete(char *name,
+	          int matchlen __attribute__((unused)),
+	          int maycreate __attribute__((unused)),
+	          void *rock)
 {
     struct mboxlist_entry *mbentry = NULL;
     struct delete_rock *drock = (struct delete_rock *) rock;
@@ -445,7 +445,7 @@ int main(int argc, char *argv[])
 	    strlcpy(buf, "*", sizeof(buf));
 	}
 
-	mboxlist_findall(NULL, buf, 1, 0, 0, &expire, &erock);
+	mboxlist_findall(NULL, buf, 1, 0, 0, expire, &erock);
 
 	syslog(LOG_NOTICE, "Expunged %lu out of %lu messages from %lu mailboxes",
 	       erock.deleted, erock.messages, erock.mailboxes);
@@ -476,7 +476,7 @@ int main(int argc, char *argv[])
         drock.head = NULL;
         drock.tail = NULL;
 
-        mboxlist_findall(NULL, buf, 1, 0, 0, &delete, &drock);
+        mboxlist_findall(NULL, buf, 1, 0, 0, delete, &drock);
 
         for (node = drock.head ; node ; node = node->next) {
 	    if (sigquit) {

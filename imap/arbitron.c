@@ -109,12 +109,12 @@ int long_report = 0;
 static struct namespace arb_namespace;
 
 /* forward declarations */
-void usage(void);
-void run_users(void);
-void make_report(char *key, void *data, void *rock);
-void process_seen(const char *path, const char *user);
-void process_subs(const char *path, const char *user);
-int do_mailbox(const char *name, int matchlen, int maycreate, void *rock);
+static void usage(void);
+static void run_users(void);
+static void make_report(char *key, void *data, void *rock);
+static void process_seen(const char *path, const char *user);
+static void process_subs(const char *path, const char *user);
+static int do_mailbox(const char *name, int matchlen, int maycreate, void *rock);
 
 int main(int argc,char **argv)
 {
@@ -251,7 +251,7 @@ int main(int argc,char **argv)
     return code;
 }
 
-void usage(void)
+static void usage(void)
 {
     fprintf(stderr,
 	    "usage: arbitron [-o] [-u] [-l] [-C alt_config] "
@@ -260,9 +260,9 @@ void usage(void)
     exit(EC_USAGE);
 }    
 
-int do_mailbox(const char *name, int matchlen __attribute__((unused)),
-	       int maycreate __attribute__((unused)),
-	       void *rock __attribute__((unused)))
+static int do_mailbox(const char *name, int matchlen __attribute__((unused)),
+		      int maycreate __attribute__((unused)),
+		      void *rock __attribute__((unused)))
 {
     int r;
     struct mailbox *mailbox = NULL;
@@ -286,7 +286,7 @@ int do_mailbox(const char *name, int matchlen __attribute__((unused)),
     return 0;
 }
 
-void run_users() 
+static void run_users(void)
 {
     char prefix[MAX_MAILBOX_PATH+1],path[MAX_MAILBOX_PATH+1],
 	file[MAX_MAILBOX_PATH+1];    
@@ -414,7 +414,7 @@ static int process_user_p(void *rockp,
     return ret;    
 }
 
-void process_seen(const char *path, const char *user) 
+static void process_seen(const char *path, const char *user)
 {
     int r;    
     struct db *tmp = NULL;
@@ -470,7 +470,7 @@ static int process_subs_p(void *rockp,
     return 0; /* never do callback */
 }
 
-void process_subs(const char *path, const char *user) 
+static void process_subs(const char *path, const char *user)
 {
     int r;    
     struct db *tmp = NULL;
@@ -514,7 +514,7 @@ void long_report_users(struct user_list *u, const char *mbox, char type)
     }
 }
 
-void make_report(char *key, void *data, void *rock __attribute__((unused))) 
+static void make_report(char *key, void *data, void *rock __attribute__((unused)))
 {
     struct arb_mailbox_data *mbox = (struct arb_mailbox_data *)data;
 

@@ -114,7 +114,7 @@ static int deliver_msg(char *return_path, char *authuser, int ignorequota,
 		       char **users, int numusers, char *mailbox);
 static struct backend *init_net(const char *sockaddr);
 
-static void usage()
+static void usage(void)
 {
     fprintf(stderr, 
 	    "421-4.3.0 usage: deliver [-C <alt_config> ] [-m mailbox]"
