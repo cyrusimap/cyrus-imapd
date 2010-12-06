@@ -401,39 +401,49 @@ static int cmdtime_enabled = 0;
 static struct timeval cmdtime_start, cmdtime_end, nettime_start, nettime_end;
 static double totaltime, cmdtime, nettime;
 
-double timesub(struct timeval * start, struct timeval * end) {
-  return (double)(end->tv_sec - start->tv_sec) +
-    (double)(end->tv_usec - start->tv_usec)/1000000.0;
+static double timesub(const struct timeval *start, const struct timeval *end)
+{
+    return (double)(end->tv_sec - start->tv_sec) +
+	   (double)(end->tv_usec - start->tv_usec)/1000000.0;
 }
 
-void cmdtime_settimer(int enable) {
-  cmdtime_enabled = enable;
+void cmdtime_settimer(int enable)
+{
+    cmdtime_enabled = enable;
 }
 
-void cmdtime_starttimer() {
-  if (!cmdtime_enabled) { return; }
-  gettimeofday(&cmdtime_start, 0);
-  totaltime = cmdtime = nettime = 0.0;
+void cmdtime_starttimer(void)
+{
+    if (!cmdtime_enabled)
+	return;
+    gettimeofday(&cmdtime_start, 0);
+    totaltime = cmdtime = nettime = 0.0;
 }
 
-void cmdtime_endtimer(double * pcmdtime, double * pnettime) {
-  if (!cmdtime_enabled) { return; }
-  gettimeofday(&cmdtime_end, 0);
-  totaltime = timesub(&cmdtime_start, &cmdtime_end);
-  cmdtime = totaltime - nettime;
-  *pcmdtime = cmdtime;
-  *pnettime = nettime;
+void cmdtime_endtimer(double *pcmdtime, double *pnettime)
+{
+    if (!cmdtime_enabled)
+	return;
+    gettimeofday(&cmdtime_end, 0);
+    totaltime = timesub(&cmdtime_start, &cmdtime_end);
+    cmdtime = totaltime - nettime;
+    *pcmdtime = cmdtime;
+    *pnettime = nettime;
 }
 
-void cmdtime_netstart() {
-  if (!cmdtime_enabled) { return; }
-  gettimeofday(&nettime_start, 0);
+void cmdtime_netstart(void)
+{
+    if (!cmdtime_enabled)
+	return;
+    gettimeofday(&nettime_start, 0);
 }
 
-void cmdtime_netend() {
-  if (!cmdtime_enabled) { return; }
-  gettimeofday(&nettime_end, 0);
-  nettime += timesub(&nettime_start, &nettime_end);
+void cmdtime_netend(void)
+{
+    if (!cmdtime_enabled)
+	return;
+    gettimeofday(&nettime_end, 0);
+    nettime += timesub(&nettime_start, &nettime_end);
 }
 
 int parseint32(const char *p, const char **ptr, int32_t *res)

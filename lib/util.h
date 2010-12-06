@@ -158,10 +158,10 @@ extern int parseuint32(const char *p, const char **ptr, uint32_t *res);
 
 /* Timing related funcs/vars */
 extern void cmdtime_settimer(int enable);
-extern void cmdtime_starttimer();
+extern void cmdtime_starttimer(void);
 extern void cmdtime_endtimer(double * cmdtime, double * nettime);
-extern void cmdtime_netstart();
-extern void cmdtime_netend();
+extern void cmdtime_netstart(void);
+extern void cmdtime_netend(void);
 
 
 #define BUF_CSTRING 1
