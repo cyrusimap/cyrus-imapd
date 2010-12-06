@@ -98,7 +98,7 @@ char *fetch_arg(char *head, char* tail)
 
 #define NOTIFY_MAXSIZE 8192
 
-int do_notify()
+static int do_notify(void)
 {
     struct sockaddr_un sun_data;
     socklen_t sunlen = sizeof(sun_data);
@@ -219,7 +219,7 @@ void printstring(const char *s __attribute__((unused)))
 	  EC_SOFTWARE);
 }
 
-void usage(void)
+static void usage(void)
 {
     syslog(LOG_ERR, "usage: notifyd [-C <alt_config>]");
     exit(EC_USAGE);

@@ -176,7 +176,7 @@ void shut_down(int code)
     exit(code);
 }
 
-void cmdloop()
+static void cmdloop(void)
 {
     int ret = FALSE;
     
