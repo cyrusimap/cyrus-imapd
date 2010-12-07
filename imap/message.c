@@ -265,7 +265,8 @@ int message_copy_strict(struct protstream *from, FILE *to,
     }
 }
 
-int message_parse(const char *fname, struct index_record *record)
+int message_parse2(const char *fname, struct index_record *record,
+		   struct body **bodyp)
 {
     struct body *body = NULL;
     FILE *f;
@@ -280,8 +281,13 @@ int message_parse(const char *fname, struct index_record *record)
     if (f) fclose(f);
 
     if (body) {
-	message_free_body(body);
-	free(body);
+	if (!r && bodyp) {
+	    *bodyp = body;
+	}
+	else {
+	    message_free_body(body);
+	    free(body);
+	}
     }
 
     return r;

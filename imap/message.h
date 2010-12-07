@@ -130,10 +130,9 @@ struct param {
 extern int message_copy_strict P((struct protstream *from, FILE *to,
 				  unsigned size, int allow_null));
 
-extern int message_parse(const char *fname, struct index_record *record);
-
-/* declare this here so it can be used externally, but remain opaque */
-struct body;
+extern int message_parse2(const char *fname, struct index_record *record,
+			  struct body **bodyp);
+#define message_parse(fname, record) message_parse2((fname), (record), NULL)
 
 struct message_content {
     const char *base;  /* memory mapped file */
