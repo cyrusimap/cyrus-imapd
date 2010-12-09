@@ -163,4 +163,7 @@ extern struct cyrusdb_backend *config_userdeny_db;
 extern void session_new_id();
 extern const char *session_id();
 
+/* Capability suppression */
+extern int capa_is_disabled(const char *str);
+
 #endif /* INCLUDED_GLOBAL_H */

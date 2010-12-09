@@ -2793,35 +2793,6 @@ void idle_update(idle_flags_t flags)
     prot_flush(imapd_out);
 }
 
-static int is_exact_match(const char *base, int len)
-{
-    /* space before and after */
-    if (base[0] == ' ' && (base[len+1] != ' ' || base[len+1] != '\0'))
-	return 1;
-    return 0;
-} 
-
-static int capa_is_disabled(const char *str)
-{
-    const char *cfg = config_getstring(IMAPOPT_SUPPRESS_CAPABILITIES);
-    const char *found = strstr(cfg, str);
-    int len = strlen(str);
-
-    /* special case first item */
-    if (found == cfg) {
-	if (found[len] == ' ' || found[len] == '\0')
-	    return 1;
-	else
-	    found = strstr(cfg+len, str);
-    }
-
-    /* skip non-matches */
-    while (found && !is_exact_match(found - 1, len))
-	found = strstr(cfg+len, str);
-
-    return found ? 1 : 0;
-}
-
 void capa_response(int flags)
 {
     const char *sasllist; /* the list of SASL mechanisms */
