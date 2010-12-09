@@ -1148,6 +1148,12 @@ product version in the capabilities */
 { "subscription_db", "flat", STRINGLIST("flat", "berkeley", "berkeley-hash", "skiplist")}
 /* The cyrusdb backend to use for the subscriptions list. */
 
+{ "suppress_capabilities", NULL, STRING }
+/* Suppress the named capabilities from any capability response.  Use all
+   UPPERCASE, e.g. "suppress_capabilities: ESEARCH QRESYNC WITHIN" if you
+   have a murder with 2.3.x backends and don't want clients being confused
+   by new capabilities that the backend then doesn't support */
+
 { "statuscache", 0, SWITCH }
 /* Enable/disable the imap status cache. */
 
