@@ -1066,10 +1066,16 @@ int main(int argc, char *argv[])
 	mboxlist_init(0);
 	mboxlist_open(mboxdb_fname);
 
- 	quotadb_init(0);
- 	quotadb_open(NULL);
-	
+	quotadb_init(0);
+	quotadb_open(NULL);
+
+	annotatemore_init(0, NULL, NULL);
+	annotatemore_open(NULL);
+
 	do_dump(op, partition, dopurge);
+
+	annotatemore_close();
+	annotatemore_done();
 
 	quotadb_close();
 	quotadb_done();
@@ -1082,10 +1088,16 @@ int main(int argc, char *argv[])
 	mboxlist_init(0);
 	mboxlist_open(mboxdb_fname);
 
- 	quotadb_init(0);
- 	quotadb_open(NULL);
+	quotadb_init(0);
+	quotadb_open(NULL);
+
+	annotatemore_init(0, NULL, NULL);
+	annotatemore_open(NULL);
 
 	do_undump();
+
+	annotatemore_close();
+	annotatemore_done();
 
 	quotadb_close();
 	quotadb_done();
