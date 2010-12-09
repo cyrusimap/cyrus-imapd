@@ -1112,3 +1112,37 @@ const char *session_id()
         session_new_id();
     return (const char *)session_id_buf;
 }
+
+static int is_exact_match(const char *base, int len)
+{
+    /* space before and after */
+    if (base[0] == ' ' && (base[len+1] != ' ' || base[len+1] != '\0'))
+	return 1;
+    return 0;
+} 
+
+int capa_is_disabled(const char *str)
+{
+    const char *cfg = config_getstring(IMAPOPT_SUPPRESS_CAPABILITIES);
+    const char *found;
+    int len;
+
+    if (!cfg) return 0;
+
+    len = strlen(str);
+    found = strstr(cfg, str);
+
+    /* special case first item */
+    if (found == cfg) {
+	if (found[len] == ' ' || found[len] == '\0')
+	    return 1;
+	else
+	    found = strstr(cfg+len, str);
+    }
+
+    /* skip non-matches */
+    while (found && !is_exact_match(found - 1, len))
+	found = strstr(cfg+len, str);
+
+    return found ? 1 : 0;
+}
