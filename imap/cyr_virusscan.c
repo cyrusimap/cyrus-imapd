@@ -124,7 +124,6 @@ struct scan_engine {
 
 struct clamav_state {
     struct cl_engine *av_engine;
-    struct cl_limits av_limits;
 };
 
 void *clamav_init()
@@ -133,9 +132,17 @@ void *clamav_init()
     int r;
 
     struct clamav_state *st = xzmalloc(sizeof(struct clamav_state));
+    if (st == NULL) {
+      fatal("memory allocation failed", EC_SOFTWARE);
+    }
 
+    st->av_engine = cl_engine_new();
+    if ( ! st->av_engine ) {
+      fatal("Failed to initialize AV engine", EC_SOFTWARE);
+    }
+    
     /* load all available databases from default directory */
-    if ((r = cl_load(cl_retdbdir(), &st->av_engine, &sigs, CL_DB_STDOPT))) {
+    if ((r = cl_load(cl_retdbdir(), st->av_engine, &sigs, CL_DB_STDOPT))) {
 	syslog(LOG_ERR, "cl_load: %s", cl_strerror(r));
 	fatal(cl_strerror(r), EC_SOFTWARE);
     }
@@ -143,25 +150,26 @@ void *clamav_init()
     if (verbose) printf("Loaded %d virus signatures.\n", sigs);
 
     /* build av_engine */
-    if((r = cl_build(st->av_engine))) {
+    if((r = cl_engine_compile(st->av_engine))) {
 	syslog(LOG_ERR,
 	       "Database initialization error: %s", cl_strerror(r));
-	cl_free(st->av_engine);
+	cl_engine_free(st->av_engine);
 	fatal(cl_strerror(r), EC_SOFTWARE);
     }
 
     /* set up archive av_limits */
-    st->av_limits.maxfiles = 10000; /* max files */
-    st->av_limits.maxscansize = 100 * 1048576; /* during the scanning of
-						* archives
-						* this size (100 MB) will never
-						* be exceeded
-						*/
-    st->av_limits.maxfilesize = 10 * 1048576; /* compressed files will only be
-					       * decompressed and scanned up to
-					       * this size (10 MB)
-					       */
-    st->av_limits.maxreclevel = 16; /* maximum recursion level for archives */
+    /* max files */
+    cl_engine_set_num(st->av_engine, CL_ENGINE_MAX_FILES, 10000);
+    /* during the scanning of archives, this size (100 MB) will
+     * never be exceeded
+     */
+    cl_engine_set_num(st->av_engine, CL_ENGINE_MAX_SCANSIZE, 100 * 1048576);
+    /* compressed files will only be decompressed and scanned up to 
+     * this size (10 MB)
+     */
+    cl_engine_set_num(st->av_engine, CL_ENGINE_MAX_FILESIZE, 10 * 1048576);
+    /* maximum recursion level for archives */
+    cl_engine_set_num(st->av_engine, CL_ENGINE_MAX_RECURSION, 16);
 
     return (void *) st;
 }
@@ -174,7 +182,7 @@ int clamav_scanfile(void *state, const char *fname,
     int r;
 
     /* scan file */
-    r = cl_scanfile(fname, virname, NULL, st->av_engine, &st->av_limits,
+    r = cl_scanfile(fname, virname, NULL, st->av_engine,
 		    CL_SCAN_STDOPT);
 
     switch (r) {
@@ -200,7 +208,7 @@ void clamav_destroy(void *state)
 
     if (st->av_engine) {
 	/* free memory */
-	cl_free(st->av_engine);
+	cl_engine_free(st->av_engine);
     }
     free(st);
 }
