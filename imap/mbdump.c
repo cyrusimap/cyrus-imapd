@@ -750,8 +750,11 @@ int undump_mailbox(const char *mbname,
     const char *sieve_path = NULL;
     int sieve_usehomedir = config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR);
     const char *userid = NULL;
-    char *annotation, *contenttype, *content;
-    char *seen_file = NULL, *mboxkey_file = NULL;
+    char *annotation = NULL;
+    char *contenttype = NULL;
+    char *content = NULL;
+    char *seen_file = NULL;
+    char *mboxkey_file = NULL;
     uquota_t old_quota_used;
 
     memset(&file, 0, sizeof(file));
