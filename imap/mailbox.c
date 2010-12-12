@@ -1367,6 +1367,11 @@ static int mailbox_read_index_header(struct mailbox *mailbox)
     if (mailbox->index_size < INDEX_HEADER_SIZE)
 	return IMAP_MAILBOX_BADFORMAT;
 
+    /* need to make sure we're reading fresh data! */
+    map_refresh(mailbox->index_fd, 1, &mailbox->index_base,
+		&mailbox->index_len, mailbox->index_size,
+		"index", mailbox->name);
+
     r = mailbox_buf_to_index_header(mailbox->index_base, &mailbox->i);
     if (r) return r;
 
