@@ -1457,7 +1457,18 @@ restart:
     else
 	r = lock_shared(mailbox->index_fd);
 
-    if (r == -1) {
+    /* double check that the index exists and has at least a full
+     * sized header */
+    if (!r) {
+	if (!mailbox->index_base)
+	    r = IMAP_MAILBOX_BADFORMAT;
+	else if (mailbox->index_size < INDEX_HEADER_SIZE)
+	    r = IMAP_MAILBOX_BADFORMAT;
+	if (r)
+	    lock_unlock(mailbox->index_fd);
+    }
+
+    if (r) {
 	syslog(LOG_ERR, "IOERROR: locking index for %s: %m",
 	       mailbox->name);
 	return IMAP_IOERROR;
