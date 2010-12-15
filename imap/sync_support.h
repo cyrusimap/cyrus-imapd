@@ -146,7 +146,7 @@ struct sync_folder {
     modseq_t highestmodseq;
     unsigned options;
     unsigned long uidvalidity;
-    bit32 sync_crc;
+    char *sync_crc;
     unsigned long recentuid;
     time_t recenttime;
     time_t pop3_last_login;
@@ -169,7 +169,7 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
 					 uint32_t uidvalidity, 
 					 uint32_t last_uid,
 					 modseq_t highestmodseq,
-					 uint32_t crc,
+					 const char *crc,
 					 uint32_t recentuid,
 					 time_t recenttime,
 					 time_t pop3_last_login,
@@ -404,6 +404,10 @@ int parse_upload(struct dlist *kr, struct mailbox *mailbox,
 		 struct index_record *record);
 int sync_append_copyfile(struct mailbox *mailbox,
 			 struct index_record *record);
+
+/* ====================================================================== */
+
+int sync_crc_calc(struct mailbox *, char *, int);
 
 /* ====================================================================== */
 

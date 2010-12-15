@@ -1317,7 +1317,7 @@ int mailbox_buf_to_index_header(const char *buf, struct index_header *i)
     i->first_expunged = ntohl(*((bit32 *)(buf+OFFSET_FIRST_EXPUNGED)));
     i->last_repack_time = ntohl(*((bit32 *)(buf+OFFSET_LAST_REPACK_TIME)));
     i->header_file_crc = ntohl(*((bit32 *)(buf+OFFSET_HEADER_FILE_CRC)));
-    i->sync_crc = ntohl(*((bit32 *)(buf+OFFSET_SYNC_CRC)));
+    /* sync_crc was here */
     i->recentuid = ntohl(*((bit32 *)(buf+OFFSET_RECENTUID)));
     i->recenttime = ntohl(*((bit32 *)(buf+OFFSET_RECENTTIME)));
     i->header_crc = ntohl(*((bit32 *)(buf+OFFSET_HEADER_CRC)));
@@ -1805,7 +1805,7 @@ bit32 mailbox_index_header_to_buf(struct index_header *i, unsigned char *buf)
     *((bit32 *)(buf+OFFSET_FIRST_EXPUNGED)) = htonl(i->first_expunged);
     *((bit32 *)(buf+OFFSET_LAST_REPACK_TIME)) = htonl(i->last_repack_time);
     *((bit32 *)(buf+OFFSET_HEADER_FILE_CRC)) = htonl(i->header_file_crc);
-    *((bit32 *)(buf+OFFSET_SYNC_CRC)) = htonl(i->sync_crc);
+    /* sync_crc was here */
     *((bit32 *)(buf+OFFSET_RECENTUID)) = htonl(i->recentuid);
     *((bit32 *)(buf+OFFSET_RECENTTIME)) = htonl(i->recenttime);
     *((bit32 *)(buf+OFFSET_POP3_SHOW_AFTER)) = htonl(i->pop3_show_after);
@@ -1948,49 +1948,6 @@ bit32 mailbox_index_record_to_buf(struct index_record *record,
     return crc;
 }
 
-bit32 make_sync_crc(struct mailbox *mailbox, struct index_record *record)
-{
-    char buf[4096];
-    bit32 flagcrc = 0;
-    int flag;
-
-    /* expunged flags have no sync CRC */
-    if (record->system_flags & FLAG_EXPUNGED)
-	return 0;
-
-    /* calculate an XORed CRC32 over all the flags on the message, so no
-     * matter what order they are store in the header, the final value 
-     * is the same */
-    if (record->system_flags & FLAG_DELETED)
-	flagcrc ^= crc32_cstring("\\deleted");
-    if (record->system_flags & FLAG_ANSWERED)
-	flagcrc ^= crc32_cstring("\\answered");
-    if (record->system_flags & FLAG_FLAGGED)
-	flagcrc ^= crc32_cstring("\\flagged");
-    if (record->system_flags & FLAG_DRAFT)
-	flagcrc ^= crc32_cstring("\\draft");
-    if (record->system_flags & FLAG_SEEN)
-	flagcrc ^= crc32_cstring("\\seen");
-
-    for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
-	if (!mailbox->flagname[flag])
-	    continue;
-	if (!(record->user_flags[flag/32] & (1<<(flag&31))))
-	    continue;
-	/* need to compare without case being significant */
-	strlcpy(buf, mailbox->flagname[flag], 4096);
-	lcase(buf);
-	flagcrc ^= crc32_cstring(buf);
-    }
-
-    snprintf(buf, 4096, "%u " MODSEQ_FMT " %lu (%u) %lu %s",
-	    record->uid, record->modseq, record->last_updated,
-	    flagcrc,
-	    record->internaldate,
-	    message_guid_encode(&record->guid));
-
-    return crc32_cstring(buf);
-}
 
 static void mailbox_quota_dirty(struct mailbox *mailbox)
 {
@@ -2043,8 +2000,6 @@ static void mailbox_index_update_counts(struct mailbox *mailbox,
     mailbox_quota_dirty(mailbox);
     mailbox_index_dirty(mailbox);
     header_update_counts(&mailbox->i, record, is_add);
-    /* xor doesn't care if it's an add! */
-    mailbox->i.sync_crc ^= make_sync_crc(mailbox, record);
 }
 
 int mailbox_index_recalc(struct mailbox *mailbox)
@@ -2064,7 +2019,6 @@ int mailbox_index_recalc(struct mailbox *mailbox)
     mailbox->i.deleted = 0;
     mailbox->i.exists = 0;
     mailbox->i.quota_mailbox_used = 0;
-    mailbox->i.sync_crc = 0;
 
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	r = mailbox_read_index_record(mailbox, recno, &record);
@@ -2394,7 +2348,6 @@ int mailbox_repack_setup(struct mailbox *mailbox,
     repack->i.num_records = 0;
     repack->i.quota_mailbox_used = 0;
     repack->i.num_records = 0;
-    repack->i.sync_crc = 0; /* no records is blank */
     repack->i.answered = 0;
     repack->i.deleted = 0;
     repack->i.flagged = 0;
@@ -2436,8 +2389,6 @@ int mailbox_repack_add(struct mailbox_repack *repack,
 
     /* update counters */
     header_update_counts(&repack->i, record, 1);
-    /* sync_crc needs mailbox for user_flag names */
-    repack->i.sync_crc ^= make_sync_crc(repack->mailbox, record);
 
     /* write the index record out */
     mailbox_index_record_to_buf(record, buf);
@@ -2551,9 +2502,6 @@ static int mailbox_index_repack(struct mailbox *mailbox)
 
 	r = mailbox_repack_add(repack, &record);
 	if (r) goto fail;
-
-	/* update the sync crc */
-	mailbox->i.sync_crc ^= make_sync_crc(mailbox, &record);
     }
 
     /* we unlinked any "needs unlink" in the process */
@@ -3979,13 +3927,6 @@ static void reconstruct_compare_headers(struct mailbox *mailbox,
 	       mailbox->name, old->exists, new->exists);
 	printf("%s: updating exists %u => %u\n",
 	       mailbox->name, old->exists, new->exists);
-    }
-
-    if (old->sync_crc != new->sync_crc) {
-	syslog(LOG_ERR, "%s: updating sync_crc %08X => %08X",
-	       mailbox->name, old->sync_crc, new->sync_crc);
-	printf("%s: updating sync_crc %08X => %08X\n",
-	       mailbox->name, old->sync_crc, new->sync_crc);
     }
 }
 

@@ -1276,7 +1276,10 @@ static int do_mailbox(struct dlist *kin)
     uint32_t uidvalidity;
     const char *acl;
     const char *options_str;
-    uint32_t sync_crc;
+    struct {
+	const char *mvalue;	/* master's value, points into dlist */
+	char rvalue[128];	/* replica's value */
+    } sync_crc;
 
     uint32_t options;
 
@@ -1306,8 +1309,6 @@ static int do_mailbox(struct dlist *kin)
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getdate(kin, "POP3_LAST_LOGIN", &pop3_last_login))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
-    if (!dlist_getnum(kin, "SYNC_CRC", &sync_crc))
-	return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getnum(kin, "UIDVALIDITY", &uidvalidity))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getatom(kin, "ACL", &acl))
@@ -1315,6 +1316,10 @@ static int do_mailbox(struct dlist *kin)
     if (!dlist_getatom(kin, "OPTIONS", &options_str))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getlist(kin, "RECORD", &kr))
+	return IMAP_PROTOCOL_BAD_PARAMETERS;
+
+    /* Get the CRC */
+    if (!dlist_getatom(kin, "SYNC_CRC", &sync_crc.mvalue))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
 
     /* optional */
@@ -1395,11 +1400,10 @@ static int do_mailbox(struct dlist *kin)
 	mailbox->i.uidvalidity = uidvalidity;
     }
 
-    /* try re-calculating the CRC on mismatch... */
-    if (mailbox->i.sync_crc != sync_crc) {
-	mailbox_index_recalc(mailbox);
-    }
-    newcrc = mailbox->i.sync_crc;
+    /* TODO: we might be able to do this in a single pass above.
+       Need to check whether the above code ensures that we traverse
+       all the replica records in the correct order */
+    r = sync_crc_calc(mailbox, sync_crc.rvalue, sizeof(sync_crc.rvalue));
 
     /* this is an ugly construct that's an artifact of the
      * inversion of mboxlist and mailbox stuff that means
@@ -1410,11 +1414,12 @@ static int do_mailbox(struct dlist *kin)
 	mailbox_close(&mailbox);
 	r = mboxlist_setspecialuse(mboxname, specialuse);
     }
+
     mailbox_close(&mailbox);
 
     /* check return value */
     if (r) return r;
-    if (newcrc != sync_crc)
+    if (strcmp(sync_crc.rvalue, sync_crc.mvalue))
 	return IMAP_SYNC_CHECKSUM;
     return 0;
 }

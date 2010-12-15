@@ -84,6 +84,7 @@
 #include "cyr_lock.h"
 #include "prot.h"
 #include "dlist.h"
+#include "crc32.h"
 
 #include "message_guid.h"
 #include "sync_support.h"
@@ -472,7 +473,7 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
 					 uint32_t uidvalidity, 
 					 uint32_t last_uid,
 					 modseq_t highestmodseq,
-					 uint32_t crc,
+					 const char *crc,
 					 uint32_t recentuid,
 					 time_t recenttime,
 					 time_t pop3_last_login,
@@ -497,7 +498,7 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
     result->last_uid = last_uid;
     result->highestmodseq = highestmodseq;
     result->options = options;
-    result->sync_crc = crc;
+    result->sync_crc = xstrdup(crc);
     result->recentuid = recentuid;
     result->recenttime = recenttime;
     result->pop3_last_login = pop3_last_login;
@@ -560,6 +561,7 @@ void sync_folder_list_free(struct sync_folder_list **lp)
 	free(current->part);
 	free(current->acl);
 	free(current->specialuse);
+	free(current->sync_crc);
 	free(current);
 	current = next;
     }
@@ -1395,6 +1397,12 @@ int sync_mailbox(struct mailbox *mailbox,
 		 struct dlist *kl, struct dlist *kupload,
 		 int printrecords)
 {
+    int r;
+    char sync_crc[128];
+
+    r = sync_crc_calc(mailbox, sync_crc, sizeof(sync_crc));
+    if (r)
+	return r;
 
     dlist_atom(kl, "UNIQUEID", mailbox->uniqueid);
     dlist_atom(kl, "MBOXNAME", mailbox->name);
@@ -1408,7 +1416,7 @@ int sync_mailbox(struct mailbox *mailbox,
     dlist_atom(kl, "PARTITION", mailbox->part);
     dlist_atom(kl, "ACL", mailbox->acl);
     dlist_atom(kl, "OPTIONS", sync_encode_options(mailbox->i.options));
-    dlist_num(kl, "SYNC_CRC", mailbox->i.sync_crc);
+    dlist_atom(kl, "SYNC_CRC", sync_crc);
     if (mailbox->quotaroot) 
 	dlist_atom(kl, "QUOTAROOT", mailbox->quotaroot);
     if (mailbox->specialuse)
@@ -1584,3 +1592,118 @@ int sync_append_copyfile(struct mailbox *mailbox,
     return mailbox_append_index_record(mailbox, record);
 }
 
+/* ====================================================================== */
+
+#define SYNC_CRC_BASIC	(1<<0)
+
+struct sync_crc_algorithm {
+    const char *name;
+    int (*setup)(int);
+    void (*begin)(void);
+    void (*update)(const struct mailbox *, const struct index_record *, int);
+    int (*end)(char *, int);
+};
+
+
+
+static bit32 sync_crc32;
+
+static int sync_crc32_setup(int cflags __attribute__((unused)))
+{
+    return 0;
+}
+
+static void sync_crc32_begin(void)
+{
+    sync_crc32 = 0;
+}
+
+static void sync_crc32_update(const struct mailbox *mailbox,
+			      const struct index_record *record,
+			      int cflags __attribute__((unused)))
+{
+    char buf[4096];
+    bit32 flagcrc = 0;
+    int flag;
+
+    /* calculate an XORed CRC32 over all the flags on the message, so no
+     * matter what order they are store in the header, the final value 
+     * is the same */
+    if (record->system_flags & FLAG_DELETED)
+	flagcrc ^= crc32_cstring("\\deleted");
+    if (record->system_flags & FLAG_ANSWERED)
+	flagcrc ^= crc32_cstring("\\answered");
+    if (record->system_flags & FLAG_FLAGGED)
+	flagcrc ^= crc32_cstring("\\flagged");
+    if (record->system_flags & FLAG_DRAFT)
+	flagcrc ^= crc32_cstring("\\draft");
+    if (record->system_flags & FLAG_SEEN)
+	flagcrc ^= crc32_cstring("\\seen");
+
+    for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
+	if (!mailbox->flagname[flag])
+	    continue;
+	if (!(record->user_flags[flag/32] & (1<<(flag&31))))
+	    continue;
+	/* need to compare without case being significant */
+	strlcpy(buf, mailbox->flagname[flag], 4096);
+	lcase(buf);
+	flagcrc ^= crc32_cstring(buf);
+    }
+
+    snprintf(buf, 4096, "%u " MODSEQ_FMT " %lu (%u) %lu %s",
+	    record->uid, record->modseq, record->last_updated,
+	    flagcrc,
+	    record->internaldate,
+	    message_guid_encode(&record->guid));
+
+    sync_crc32 ^= crc32_cstring(buf);
+}
+
+static int sync_crc32_end(char *buf, int maxlen)
+{
+    snprintf(buf, maxlen, "%u", sync_crc32);
+    return 0;
+}
+
+static const struct sync_crc_algorithm sync_crc_algorithms[] = {
+    { "CRC32",
+	sync_crc32_setup,
+	sync_crc32_begin,
+	sync_crc32_update,
+	sync_crc32_end },
+    { NULL, NULL, NULL, NULL, NULL }
+};
+
+static const struct sync_crc_algorithm *sync_crc_algorithm = &sync_crc_algorithms[0];
+static int sync_crc_covers = SYNC_CRC_BASIC;
+
+/*
+ * Calculate a sync CRC for the entire mailbox, and store the result
+ * formatted as a nul-terminated ASCII string (suitable for use as an
+ * IMAP atom) in @buf.
+ * Returns: 0 on success, -ve on error.
+ */
+int sync_crc_calc(struct mailbox *mailbox, char *buf, int maxlen)
+{
+    struct index_record record;
+    uint32_t recno;
+
+    sync_crc_algorithm->begin();
+
+    for (recno = 1; recno <= mailbox->i.num_records; recno++) {
+	/* we can't send bogus records, just skip them! */
+	if (mailbox_read_index_record(mailbox, recno, &record))
+	    continue;
+
+	/* expunged flags have no sync CRC */
+	if (record.system_flags & FLAG_EXPUNGED)
+	    continue;
+
+	sync_crc_algorithm->update(mailbox, &record, sync_crc_covers);
+    }
+
+    return sync_crc_algorithm->end(buf, maxlen);
+}
+
+/* ====================================================================== */

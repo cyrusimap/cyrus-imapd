@@ -211,6 +211,7 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
     struct sync_folder *rfolder;
     struct sync_msgid_list *part_list;
     struct mailbox *mailbox = NULL;
+    char sync_crc[128];
     int r = 0;
 
     /* Find messages we want to upload that are available on server */
@@ -240,12 +241,20 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
 
 	/* mailbox is open from here, no exiting without closing it! */
 
+	r = sync_crc_calc(mailbox, sync_crc, sizeof(sync_crc));
+	if (r) {
+	    syslog(LOG_ERR, "Failed to calculate CRC %s: %s",
+		   mbox->name, error_message(r));
+	    mailbox_close(&mailbox);
+	    goto bail;
+	}
+
 	part_list = sync_reserve_partlist(reserve_guids, mailbox->part);
 
 	sync_folder_list_add(master_folders, mailbox->uniqueid, mailbox->name, 
 			     mailbox->part, mailbox->acl, mailbox->i.options,
 			     mailbox->i.uidvalidity, mailbox->i.last_uid,
-			     mailbox->i.highestmodseq, mailbox->i.sync_crc,
+			     mailbox->i.highestmodseq, sync_crc,
 			     mailbox->i.recentuid, mailbox->i.recenttime,
 			     mailbox->i.pop3_last_login, mailbox->specialuse);
 
@@ -448,7 +457,7 @@ static int response_parse(const char *cmd,
 	    modseq_t highestmodseq = 0;
 	    uint32_t uidvalidity = 0;
 	    uint32_t last_uid = 0;
-	    uint32_t sync_crc = 0;
+	    const char *sync_crc = NULL;
 	    uint32_t recentuid = 0;
 	    time_t recenttime = 0;
 	    time_t pop3_last_login = 0;
@@ -462,7 +471,7 @@ static int response_parse(const char *cmd,
 	    if (!dlist_getmodseq(kl, "HIGHESTMODSEQ", &highestmodseq)) goto parse_err;
 	    if (!dlist_getnum(kl, "UIDVALIDITY", &uidvalidity)) goto parse_err;
 	    if (!dlist_getnum(kl, "LAST_UID", &last_uid)) goto parse_err;
-	    if (!dlist_getnum(kl, "SYNC_CRC", &sync_crc)) goto parse_err;
+	    if (!dlist_getatom(kl, "SYNC_CRC", &sync_crc)) goto parse_err;
 	    if (!dlist_getnum(kl, "RECENTUID", &recentuid)) goto parse_err;
 	    if (!dlist_getdate(kl, "RECENTTIME", &recenttime)) goto parse_err;
 	    if (!dlist_getdate(kl, "POP3_LAST_LOGIN", &pop3_last_login)) goto parse_err;
@@ -1287,10 +1296,12 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
 {
     /* look for any mismatches */
     unsigned options = mailbox->i.options & MAILBOX_OPTIONS_MASK;
+    int r;
+    char sync_crc[128];
+
     if (!remote) return 0;
     if (remote->last_uid != mailbox->i.last_uid) return 0;
     if (remote->highestmodseq != mailbox->i.highestmodseq) return 0;
-    if (remote->sync_crc != mailbox->i.sync_crc) return 0;
     if (remote->recentuid != mailbox->i.recentuid) return 0;
     if (remote->recenttime != mailbox->i.recenttime) return 0;
     if (remote->pop3_last_login != mailbox->i.pop3_last_login) return 0;
@@ -1303,6 +1314,9 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
     else  {
 	 if (remote->specialuse) return 0;
     }
+
+    r = sync_crc_calc(mailbox, sync_crc, sizeof(sync_crc));
+    if (!r && strcmp(remote->sync_crc, sync_crc)) return 0;
 
     /* otherwise it's unchanged! */
     return 1;

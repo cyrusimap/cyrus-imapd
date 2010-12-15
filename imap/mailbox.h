@@ -173,7 +173,6 @@ struct index_header {
     time_t last_repack_time;
 
     bit32 header_file_crc;
-    bit32 sync_crc;
 
     uint32_t recentuid;
     time_t recenttime;
