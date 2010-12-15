@@ -47,7 +47,9 @@
 
 #include "saslclient.h"
 
-#define MAX_CAPA 8
+struct backend;
+
+#define MAX_CAPA 9
 
 enum {
     /* generic capabilities */
@@ -74,13 +76,19 @@ struct capa_t {
     unsigned long flag;
 };
 
+#define CAPAF_MANY_PER_LINE	(0)
+#define CAPAF_ONE_PER_LINE	(1<<0)
+#define CAPAF_SKIP_FIRST_WORD	(1<<1)
+#define CAPAF_QUOTE_WORDS	(1<<2)
+
 struct capa_cmd_t {
     const char *cmd;		/* [OPTIONAL] capability command string */
     const char *arg;		/* [OPTIONAL] capability command argument */
     const char *resp;		/* end of capability response */
-    char *(*parse_mechlist)(const char *str, struct protocol_t *prot);
-				/* [OPTIONAL] parse capability string,
-				   returns space-separated list of mechs */
+    void (*postcapability)(struct backend *);
+				/* [OPTIONAL] called after capabilities,
+				 * received from server, are parsed */
+    int formatflags;		/* CAPAF* constants above */
     struct capa_t capa[MAX_CAPA+1];/* list of capabilities to parse for
 				      (MUST end with NULL entry) */
 };

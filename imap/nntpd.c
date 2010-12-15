@@ -272,6 +272,7 @@ static struct protocol_t nntp_protocol =
 { "nntp", "nntp",
   { 0, "20" },
   { "CAPABILITIES", NULL, ".", NULL,
+    CAPAF_ONE_PER_LINE,
     { { "SASL ", CAPA_AUTH },
       { "STARTTLS", CAPA_STARTTLS },
       { NULL, 0 } } },

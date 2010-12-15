@@ -81,35 +81,292 @@ enum {
     AUTO_CAPA_NO = 0,
 };
 
-static char *parse_capability(const char str[],
-			      struct protocol_t *prot, unsigned long *capa)
+static void forget_capabilities(struct backend *s)
 {
-    char *ret = NULL, *tmp;
-    struct capa_t *c;
+    int i;
 
-    /* look for capabilities in the string */
-    for (c = prot->capa_cmd.capa; c->str; c++) {
-	if ((tmp = strstr(str, c->str)) != NULL) {
-	    *capa = *capa | c->flag;
+    for (i = 0 ; i < s->num_cap_params ; i++)
+	free(s->cap_params[i].params);
+    s->capability = 0;
+    free(s->cap_params);
+    s->cap_params = NULL;
+    s->num_cap_params = 0;
+}
 
-	    if (c->flag == CAPA_AUTH) {
-		if (prot->capa_cmd.parse_mechlist)
-		    ret = prot->capa_cmd.parse_mechlist(str, prot);
-		else
-		    ret = xstrdup(tmp+strlen(c->str));
+static char *append_word(char *w1, const char *w2)
+{
+    int len1 = strlen(w1);
+    int len2 = strlen(w2);
+    w1 = xrealloc(w1, len1 + len2 + 2);
+    w1[len1] = ' ';
+    strcpy(w1+len1+1, w2);
+    return w1;
+}
+
+/*
+ * Save the capability.  Updates @s->capability so that the CAPA() macro
+ * will find the flag.  Saves the @param string if not NULL.
+ */
+static void save_capability(struct backend *s,
+			    const struct capa_t *c,
+			    const char *param)
+{
+    int i;
+
+    s->capability |= c->flag;
+
+    if (param) {
+	/* find the matching cap_params entry */
+	for (i = 0 ; i < s->num_cap_params ; i++)
+	    if (s->cap_params[i].capa == c->flag)
+		break;
+
+	if (i == s->num_cap_params) {
+	    /* not found, expand the array and add a params */
+	    s->num_cap_params++;
+	    s->cap_params = xrealloc(s->cap_params,
+		     sizeof(*s->cap_params) * s->num_cap_params);
+
+	    s->cap_params[i].capa = c->flag;
+	    s->cap_params[i].params = xstrdup(param);
+	} else {
+	    /* append to the existing params */
+	    s->cap_params[i].params = append_word(s->cap_params[i].params, param);
+	}
+    }
+}
+
+/*
+ * We have been given a @name and optionally a @value by the server,
+ * check to see if the protocol_t knows about this specific capability.
+ * If known, save the capability.
+ */
+static int match_capability(struct backend *s,
+			    const char *name, const char *value)
+{
+    const struct capa_t *c;
+    const char *cend;
+
+    for (c = s->prot->capa_cmd.capa; c->str; c++) {
+	cend = strchr(c->str, '=');
+
+	if (cend) {
+	    /* c->str is of the form NAME=VALUE, we want to match
+	     * @name against the the NAME part and @value against
+	     * the VALUE part */
+	    if (strlen(name) == (unsigned)(cend - c->str) &&
+		!strncasecmp(name, c->str, (int)(cend - c->str)) &&
+		value &&
+		!strcasecmp(value, cend+1)) {
+		save_capability(s, c, NULL);
+		return 1;   /* full match, stop calling me with this @name */
+	    }
+	} else {
+	    /* c->str is a bare NAME, just try to match it against @name */
+	    if (!strcasecmp(c->str, name)) {
+		save_capability(s, c, value);
+		return 2;   /* partial match, keep calling with new @value
+			     * for this @name */
 	    }
 	}
     }
 
-    return ret;
+    return 0;	/* no match, stop calling me with this @name */
 }
 
-static char *ask_capability(struct protstream *pout, struct protstream *pin,
-			    struct protocol_t *prot, unsigned long *capa,
-			    char *banner, int automatic)
+/*
+ * Given a line buffer @buf, find the IMAP response code named by @code,
+ * isolate it and return the start of it, or NULL if not found.
+ */
+static char *find_response_code(char *buf, const char *code)
 {
+    char *start;
+    char *end;
+    int codelen = strlen(code);
+
+    /* Try to find the first response code */
+    start = strchr(buf, '[');
+    if (!start)
+	return NULL;	/* no response codes */
+
+    start++;
+    for (;;) {
+	while (*start && Uisspace(*start))
+	    start++;
+	if (!*start)
+	    break;	/* nothing to see here */
+	/* response codes are delineated by [] */
+	if (!(end = strchr(start, ']')))
+	    break;	/* unbalanced [response code] */
+	if (!strncasecmp(start, code, codelen) && Uisspace(start[codelen])) {
+	    *end = '\0';
+	    start += codelen+1;
+	    return start;
+	} else {
+	    start = end+1;
+	}
+    }
+
+    return NULL;
+}
+
+/* Tokenize on whitespace, for parse_capability */
+static char *ws_tok(char *buf)
+{
+    return strtok(buf, " \t\r\n");
+}
+
+/* Tokenize on alternate "quoted-words", for parse_capability.
+ * Note that we probably don't need the general case with escapes. */
+static char *quote_tok(char *buf)
+{
+    char *p;
+    static const char sep[] = "\"";
+
+    p = strtok(buf, sep);
+    if (p)
+	strtok(NULL, sep);
+    return p;
+}
+
+
+/*
+ * Parse a line of text from the wire which might contain
+ * capabilities, using various details in the capa_cmd field of
+ * the protocol_t to decode capabilities.  Only capabilities
+ * explicitly named in an entry in the capa_cmd.capa[] array
+ * are detected; any others present on the wire are ignored.
+ * All string matches are case-insensitive.  Entries are
+ * matched thus:
+ *
+ * { "NAME", FLAG }
+ *	If a capability named NAME is present on the wire,
+ *	the corresponding FLAG will be set where the CAPA()
+ *	macro will test it.  Furthermore, if any parameters
+ *	are present on the wire they will be saved where
+ *	the backend_get_cap_params() function will find them.
+ *	If multiple parameters are present on the wire, all
+ *	of them will be saved, separated by space characters.
+ *
+ * { "NAME=VALUE", FLAG }
+ *	If a capability named NAME is present on the wire,
+ *	*and* a parameter which matches VALUE is also present,
+ *	the corresponding FLAG will be set where the CAPA()
+ *	macro will test it.  VALUE is not saved	anywhere and
+ *	backend_get_cap_params() will not return it.
+ *
+ * Returns: 1 if any capabilities were found in the string,
+ *	    0 otherwise.
+ */
+static int parse_capability(struct backend *s, const char *str)
+{
+    char *buf;
+    char *word;
+    char *param;
+    int matches = 0;
+    char *(*tok)(char *) = ws_tok;
+    static const char code[] = "CAPABILITY";
+
+    /* save the buffer, we're going to be destructively parsing it */
+    buf = xstrdup(str);
+
+    if ((s->prot->capa_cmd.formatflags & CAPAF_ONE_PER_LINE)) {
+	/*
+	 * POP3, LMTP and sync protocol style: one capability per line.
+	 */
+	if ((s->prot->capa_cmd.formatflags & CAPAF_QUOTE_WORDS))
+	    tok = quote_tok;
+
+	word = tok(buf);
+
+	/* Ignore the first word of the line.  Used for LMTP and POP3 */
+	if (word && (s->prot->capa_cmd.formatflags & CAPAF_SKIP_FIRST_WORD))
+	    word = tok(NULL);
+
+	if (!word)
+	    goto out;
+	/* @word is the capability name. Any remaining atoms are parameters */
+	param = tok(NULL);
+
+	if (!param) {
+	    /* no parameters */
+	    matches |= match_capability(s, word, NULL);
+	} else {
+	    /* 1 or more parameters */
+	    for ( ; param ; param = tok(NULL)) {
+		int r = match_capability(s, word, param);
+		matches |= r;
+		if (r != 2)
+		    break;
+	    }
+	}
+
+    } else {
+	/*
+	 * IMAP style: one humungous line with a list of atoms
+	 * of the form NAME or NAME=PARAM, preceeded by the atom
+	 * CAPABILITY, and either surrounded by [] or being an
+	 * untagged response like "* CAPABILITY ...atoms... CRLF"
+	 */
+	char *start;
+
+	if ((start = find_response_code(buf, code))) {
+	    /* The line is probably a PREAUTH or OK response, possibly
+	     * containing a CAPABILITY response code, and possibly
+	     * containing some other response codes we don't care about. */
+	    word = tok(start);
+	} else {
+	    /* The line is probably an untagged response to a CAPABILITY
+	     * command.  Tokenize until we find the CAPABILITY atom */
+	    for (word = tok(buf) ;
+		 word && strcasecmp(word, code) ;
+		 word = tok(NULL))
+		;
+	    if (word)
+		word = tok(NULL);   /* skip the CAPABILITY atom itself */
+	}
+
+	/* `word' now points to the first capability; parse it and
+	 * each remaining word as a NAME or NAME=VALUE capability */
+	for ( ; word ; word = tok(NULL)) {
+	    param = strchr(word, '=');
+	    if (param)
+		*param++ = '\0';
+	    matches |= match_capability(s, word, param);
+	}
+    }
+
+out:
+    free(buf);
+    return !!matches;
+}
+
+static void post_parse_capability(struct backend *s)
+{
+    if (s->prot->capa_cmd.postcapability)
+	s->prot->capa_cmd.postcapability(s);
+}
+
+/*
+ * Get capabilities from the server, and parse them according to
+ * details in the protocol_t, so that the CAPA() macro and perhaps
+ * the backend_get_cap_params() function will notice them.  Any
+ * capabilities previously parsed are forgotten.
+ *
+ * The server might give us capabilities for free just because we
+ * connected (or did a STARTTLS or logged in); in this case, call
+ * with a non-zero value for @automatic.  Otherwise, we send a
+ * protocol-specific command to the server to tickle it into
+ * disgorging some capabilities.
+ *
+ * Returns: 1 if any capabilities were found, 0 otherwise.
+ */
+static int ask_capability(struct backend *s, int dobanner, int automatic)
+{
+    struct protstream *pout = s->out, *pin = s->in;
+    const struct protocol_t *prot = s->prot;
+    int matches = 0;
     char str[4096];
-    char *mechlist = NULL, *ret;
     const char *resp;
 
     resp = (automatic == AUTO_CAPA_BANNER) ?
@@ -117,7 +374,7 @@ static char *ask_capability(struct protstream *pout, struct protstream *pin,
 
     if (!automatic) {
 	/* no capability command */
-	if (!prot->capa_cmd.cmd) return NULL;
+	if (!prot->capa_cmd.cmd) return -1;
 	
 	/* request capabilities of server */
 	prot_printf(pout, "%s", prot->capa_cmd.cmd);
@@ -126,28 +383,51 @@ static char *ask_capability(struct protstream *pout, struct protstream *pin,
 	prot_flush(pout);
     }
 
-    *capa = 0;
-    
+    forget_capabilities(s);
+
     do {
 	if (prot_fgets(str, sizeof(str), pin) == NULL) break;
 
-	if ((ret = parse_capability(str, prot, capa))) {
-	    if (mechlist) free(mechlist);
-	    mechlist = ret;
-	}
+	matches |= parse_capability(s, str);
 
 	if (!resp) {
 	    /* multiline response with no distinct end (IMAP banner) */
 	    prot_NONBLOCK(pin);
 	}
 
-	if (banner) strncpy(banner, str, 2048);
+	if (dobanner) strncpy(s->banner, str, sizeof(s->banner));
 
 	/* look for the end of the capabilities */
     } while (!resp || strncasecmp(str, resp, strlen(resp)));
     
     prot_BLOCK(pin);
-    return mechlist;
+    post_parse_capability(s);
+    return matches;
+}
+
+/*
+ * Return the parameters reported by the server for the given
+ * capability.  @capa must be a single capability flag, as given in the
+ * protocol_t.  Return value is a string, comprising all the parameters
+ * for the given capability, in their original string form, in the order
+ * seen on the wire, separated by a single space character.  If the
+ * capability was not reported by the server, or was reported with no
+ * parameters, NULL is returned.
+ */
+char *backend_get_cap_params(const struct backend *s, unsigned long capa)
+{
+    int i;
+
+    if (!(s->capability & capa))
+	return NULL;
+
+    for (i = 0 ; i < s->num_cap_params ; i++) {
+	if (s->cap_params[i].capa == capa) {
+	    return xstrdup(s->cap_params[i].params);
+	}
+    }
+
+    return NULL;
 }
 
 static int do_compress(struct backend *s, struct simple_cmd_t *compress_cmd)
@@ -173,11 +453,12 @@ static int do_compress(struct backend *s, struct simple_cmd_t *compress_cmd)
 #endif /* HAVE_ZLIB */
 }
 
-static int do_starttls(struct backend *s, struct tls_cmd_t *tls_cmd)
+static int do_starttls(struct backend *s)
 {
 #ifndef HAVE_SSL
     return -1;
 #else
+    const struct tls_cmd_t *tls_cmd = &s->prot->tls_cmd;
     char buf[2048];
     int r;
     int *layerp;
@@ -210,6 +491,8 @@ static int do_starttls(struct backend *s, struct tls_cmd_t *tls_cmd)
 
     prot_settls(s->in,  s->tlsconn);
     prot_settls(s->out, s->tlsconn);
+
+    ask_capability(s, /*dobanner*/1, s->prot->tls_cmd.auto_capa);
 
     return 0;
 #endif /* HAVE_SSL */
@@ -274,11 +557,12 @@ static char *intersect_mechlists( char *config, char *server )
     return( newmechlist );
 }
 
-static int backend_authenticate(struct backend *s, struct protocol_t *prot,
-				char **mechlist, const char *userid,
+static int backend_authenticate(struct backend *s, const char *userid,
 				sasl_callback_t *cb, const char **status)
 {
+    struct protocol_t *prot = s->prot;
     int r;
+    char *mechlist;
     sasl_security_properties_t secprops =
 	{ 0, 0xFF, PROT_BUFSIZE, 0, NULL, NULL }; /* default secprops */
     struct sockaddr_storage saddr_l, saddr_r;
@@ -320,16 +604,12 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
 			(userid  && *userid ? SASL_NEED_PROXY : 0) |
 			(prot->sasl_cmd.parse_success ? SASL_SUCCESS_DATA : 0),
 			&s->saslconn);
-    if (r != SASL_OK) {
-	if (local_cb) free_callbacks(cb);
-	return r;
-    }
+    if (r != SASL_OK)
+	goto out;
 
     r = sasl_setprop(s->saslconn, SASL_SEC_PROPS, &secprops);
-    if (r != SASL_OK) {
-	if (local_cb) free_callbacks(cb);
-	return r;
-    }
+    if (r != SASL_OK)
+	goto out;
 
     /* Get SASL mechanism list.  We can force a particular
        mechanism using a <shorthost>_mechs option */
@@ -339,15 +619,17 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
     strcat(buf, "_mechs");
     mech_conf = config_getoverflowstring(buf, NULL);
 
-    if(!mech_conf) {
+    if (!mech_conf) {
 	mech_conf = config_getstring(IMAPOPT_FORCE_SASL_CLIENT_MECH);
     }
 
+    mechlist = backend_get_cap_params(s, CAPA_AUTH);
+
     do {
 	/* If we have a mech_conf, use it */
-	if (mech_conf && *mechlist) {
+	if (mech_conf && mechlist) {
 	    char *conf = xstrdup(mech_conf);
-	    char *newmechlist = intersect_mechlists( conf, *mechlist );
+	    char *newmechlist = intersect_mechlists( conf, mechlist );
 
 	    if ( newmechlist == NULL ) {
 		syslog( LOG_INFO, "%s did not offer %s", s->hostname,
@@ -355,37 +637,37 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
 	    }
 
 	    free(conf);
-	    free(*mechlist);
-	    *mechlist = newmechlist;
+	    free(mechlist);
+	    mechlist = newmechlist;
 	}
 
-	if (*mechlist) {
+	if (mechlist) {
 	    /* we now do the actual SASL exchange */
-	    saslclient(s->saslconn, &prot->sasl_cmd, *mechlist,
+	    saslclient(s->saslconn, &prot->sasl_cmd, mechlist,
 		       s->in, s->out, &r, status);
 
 	    /* garbage collect */
-	    free(*mechlist);
-	    *mechlist = NULL;
+	    free(mechlist);
+	    mechlist = NULL;
 	}
 	else r = SASL_NOMECH;
 
 	/* If we don't have a usable mech, do TLS and try again */
-    } while (r == SASL_NOMECH && CAPA(s, CAPA_STARTTLS) &&
-	     do_starttls(s, &prot->tls_cmd) != -1 &&
-	     (*mechlist = ask_capability(s->out, s->in, prot,
-					 &s->capability, NULL,
-					 prot->tls_cmd.auto_capa)));
-
-    /* xxx unclear that this is correct */
-    if (local_cb) free_callbacks(cb);
+    } while (r == SASL_NOMECH &&
+	     CAPA(s, CAPA_STARTTLS) &&
+	     do_starttls(s) != -1 &&
+	     (mechlist = backend_get_cap_params(s, CAPA_AUTH)));
 
     if (r == SASL_OK) {
 	prot_setsasl(s->in, s->saslconn);
 	prot_setsasl(s->out, s->saslconn);
     }
 
+    if (mechlist) free(mechlist);
+
+out:
     /* r == SASL_OK on success */
+    if (local_cb) free_callbacks(cb);
     return r;
 }
 
@@ -411,7 +693,7 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
     int ask = 1; /* should we explicitly ask for capabilities? */
     struct addrinfo hints, *res0 = NULL, *res;
     struct sockaddr_un sunsock;
-    char buf[2048], *mechlist = NULL;
+    char buf[2048];
     struct sigaction action;
     struct backend *ret;
 
@@ -451,8 +733,7 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
 	if (err) {
 	    syslog(LOG_ERR, "getaddrinfo(%s) failed: %s",
 		   server, gai_strerror(err));
-	    if (!ret_backend) free(ret);
-	    return NULL;
+	    goto error;
 	}
     }
 
@@ -488,8 +769,7 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
 	if (res0 != &hints)
 	    freeaddrinfo(res0);
 	syslog(LOG_ERR, "connect(%s) failed: %m", server);
-	if (!ret_backend) free(ret);
-	return NULL;
+	goto error;
     }
     memcpy(&ret->addr, res->ai_addr, res->ai_addrlen);
     if (res0 != &hints)
@@ -507,10 +787,8 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
     
     if (prot->banner.auto_capa) {
 	/* try to get the capabilities from the banner */
-	mechlist = ask_capability(ret->out, ret->in, prot,
-				  &ret->capability, ret->banner,
-				  AUTO_CAPA_BANNER);
-	if (mechlist || ret->capability) {
+	r = ask_capability(ret, /*dobanner*/1, AUTO_CAPA_BANNER);
+	if (r) {
 	    /* found capabilities in banner -> don't ask */
 	    ask = 0;
 	}
@@ -521,9 +799,7 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
 		syslog(LOG_ERR,
 		       "backend_connect(): couldn't read initial greeting: %s",
 		       ret->in->error ? ret->in->error : "(null)");
-		if (!ret_backend) free(ret);
-		close(sock);
-		return NULL;
+		goto error;
 	    }
 	} while (strncasecmp(buf, prot->banner.resp,
 			     strlen(prot->banner.resp)));
@@ -532,8 +808,7 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
 
     if (ask) {
 	/* get the capabilities */
-	mechlist = ask_capability(ret->out, ret->in, prot,
-				  &ret->capability, NULL, AUTO_CAPA_NO);
+	ask_capability(ret, /*dobanner*/0, AUTO_CAPA_NO);
     }
 
     /* now need to authenticate to backend server,
@@ -541,20 +816,14 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
     if ((server[0] != '/') ||
 	(strcmp(prot->sasl_service, "lmtp") &&
 	 strcmp(prot->sasl_service, "csync"))) {
-	char *mlist = NULL;
+	char *old_mechlist = backend_get_cap_params(ret, CAPA_AUTH);
 	const char *my_status;
 
-    if ( mechlist ) {
-        mlist = xstrdup(mechlist); /* backend_auth is destructive */
-    }
-
-	if ((r = backend_authenticate(ret, prot, &mlist, userid,
-				      cb, &my_status))) {
+	if ((r = backend_authenticate(ret, userid, cb, &my_status))) {
 	    syslog(LOG_ERR, "couldn't authenticate to backend server: %s",
 		   sasl_errstring(r, NULL, NULL));
-	    if (!ret_backend) free(ret);
-	    close(sock);
-	    ret = NULL;
+	    free(old_mechlist);
+	    goto error;
 	}
 	else {
 	    const void *ssf;
@@ -585,37 +854,30 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
 		    prot_BLOCK(ret->in);
 		}
 
-        /*
-         * A flawed check: backend_authenticate() may be given a
-         * NULL mechlist, negotiate SSL, and get a new mechlist.
-         * This new, correct mechlist won't be visible here.
-         */
-		new_mechlist = ask_capability(ret->out, ret->in, prot,
-					      &ret->capability, NULL, auto_capa);
-		if (new_mechlist && strcmp(new_mechlist, mechlist)) {
+		ask_capability(ret, /*dobanner*/0, auto_capa);
+		new_mechlist = backend_get_cap_params(ret, CAPA_AUTH);
+		if (new_mechlist &&
+		    old_mechlist &&
+		    strcmp(new_mechlist, old_mechlist)) {
 		    syslog(LOG_ERR, "possible MITM attack:"
 			   "list of available SASL mechanisms changed");
-		    if (!ret_backend) free(ret);
-		    close(sock);
-		    ret = NULL;
+		    free(new_mechlist);
+		    free(old_mechlist);
+		    goto error;
 		}
-
-		if (new_mechlist) free(new_mechlist);
+		free(new_mechlist);
 	    }
 	    else if (prot->sasl_cmd.auto_capa == AUTO_CAPA_AUTH_OK) {
 		/* try to get the capabilities from the AUTH success response */
-		ret->capability = 0;
-		if (mechlist) free(mechlist);
-		mechlist = parse_capability(my_status, prot,
-						&ret->capability);
+		forget_capabilities(ret);
+		parse_capability(ret, my_status);
+		post_parse_capability(ret);
 	    }
 	}
 
-	if (mlist) free(mlist);
 	if (auth_status) *auth_status = my_status;
+	free(old_mechlist);
     }
-
-    if (mechlist) free(mechlist);
 
     /* start compression if requested and both client/server support it */
     if (config_getswitch(IMAPOPT_PROXY_COMPRESS) && ret &&
@@ -624,14 +886,30 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
 	do_compress(ret, &prot->compress_cmd)) {
 
 	syslog(LOG_ERR, "couldn't enable compression on backend server");
-	if (!ret_backend) free(ret);
-	close(sock);
-	ret = NULL;
+	goto error;
     }
 
-    if (!ret_backend) ret_backend = ret;
-	    
     return ret;
+
+error:
+    forget_capabilities(ret);
+    if (ret->in) {
+	prot_free(ret->in);
+	ret->in = NULL;
+    }
+    if (ret->out) {
+	prot_free(ret->out);
+	ret->out = NULL;
+    }
+    if (sock >= 0)
+	close(sock);
+    if (ret->saslconn) {
+	sasl_dispose(&ret->saslconn);
+	ret->saslconn = NULL;
+    }
+    if (!ret_backend)
+	free(ret);
+    return NULL;
 }
 
 int backend_ping(struct backend *s)
@@ -717,4 +995,6 @@ void backend_disconnect(struct backend *s)
 
     /* free last_result buffer */
     buf_free(&s->last_result);
+
+    forget_capabilities(s);
 }

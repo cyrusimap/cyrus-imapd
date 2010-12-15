@@ -72,45 +72,28 @@ extern struct backend *backend_inbox, *backend_current, **backend_cached;
 extern char *imapd_userid, *proxy_userid;
 extern struct namespace imapd_namespace;
 
-static char *imap_parsemechlist(const char *str, struct protocol_t *prot)
+static void imap_postcapability(struct backend *s)
 {
-    char *ret = xzmalloc(strlen(str)+1);
-    char *tmp;
-    int num = 0;
-    
-    if (strstr(str, " SASL-IR")) {
+    if (CAPA(s, CAPA_SASL_IR)) {
 	/* server supports initial response in AUTHENTICATE command */
-	prot->sasl_cmd.maxlen = USHRT_MAX;
+	s->prot->sasl_cmd.maxlen = USHRT_MAX;
     }
-    
-    while ((tmp = strstr(str, " AUTH="))) {
-	char *end = (tmp += 6);
-	
-	while((*end != ' ') && (*end != '\0')) end++;
-	
-	/* add entry to list */
-	if (num++ > 0) strcat(ret, " ");
-	strlcat(ret, tmp, strlen(ret) + (end - tmp) + 1);
-	
-	/* reset the string */
-	str = end;
-    }
-    
-    return ret;
 }
 
 struct protocol_t imap_protocol =
 { "imap", "imap",
   { 1, NULL },
-  { "C01 CAPABILITY", NULL, "C01 ", &imap_parsemechlist,
-    { { " AUTH=", CAPA_AUTH },
-      { " STARTTLS", CAPA_STARTTLS },
-      { " COMPRESS=DEFLATE", CAPA_COMPRESS },
-      { " IDLE", CAPA_IDLE },
-      { " MUPDATE", CAPA_MUPDATE },
-      { " MULTIAPPEND", CAPA_MULTIAPPEND },
-      { " RIGHTS=kxte", CAPA_ACLRIGHTS },
-      { " LIST-EXTENDED", CAPA_LISTEXTENDED },
+  { "C01 CAPABILITY", NULL, "C01 ", imap_postcapability,
+    CAPAF_MANY_PER_LINE,
+    { { "AUTH", CAPA_AUTH },
+      { "STARTTLS", CAPA_STARTTLS },
+      { "COMPRESS=DEFLATE", CAPA_COMPRESS },
+      { "IDLE", CAPA_IDLE },
+      { "MUPDATE", CAPA_MUPDATE },
+      { "MULTIAPPEND", CAPA_MULTIAPPEND },
+      { "RIGHTS=kxte", CAPA_ACLRIGHTS },
+      { "LIST-EXTENDED", CAPA_LISTEXTENDED },
+      { "SASL-IR", CAPA_SASL_IR },
       { NULL, 0 } } },
   { "S01 STARTTLS", "S01 OK", "S01 NO", 0 },
   { "A01 AUTHENTICATE", 0, 0, "A01 OK", "A01 NO", "+ ", "*",

@@ -53,6 +53,11 @@
 
 /* Functionality to bring up/down connections to backend servers */
 
+struct backend_cap_params {
+    unsigned long capa;
+    char *params;	/* each BAR from FOO=BAR, in order, space separated */
+};
+
 struct backend {
     char hostname[MAX_PARTITION_LEN];
     char banner[2048];
@@ -77,6 +82,8 @@ struct backend {
 #endif /* HAVE_SSL */
 
     unsigned long capability;
+    int num_cap_params;
+    struct backend_cap_params *cap_params;
 
     struct buf last_result;
     struct protstream *in; /* from the be server to me, the proxy */
@@ -90,6 +97,7 @@ struct backend *backend_connect(struct backend *cache, const char *server,
 				sasl_callback_t *cb, const char **auth_status);
 int backend_ping(struct backend *s);
 void backend_disconnect(struct backend *s);
+char *backend_get_cap_params(const struct backend *, unsigned long capa);
 
 #define CAPA(s, c) ((s)->capability & (c))
 
