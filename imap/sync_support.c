@@ -1675,8 +1675,135 @@ static const struct sync_crc_algorithm sync_crc_algorithms[] = {
     { NULL, NULL, NULL, NULL, NULL }
 };
 
-static const struct sync_crc_algorithm *sync_crc_algorithm = &sync_crc_algorithms[0];
-static int sync_crc_covers = SYNC_CRC_BASIC;
+static const struct sync_crc_algorithm *find_algorithm(const char *string)
+{
+    char *b;	    /* temporary writable copy, for tokenising */
+    char *word;
+    const struct sync_crc_algorithm *alg;
+    static const char sep[] = " \t,";
+
+    b = xstrdup(string);
+    for (word = strtok(b, sep) ; word != NULL ; word = strtok(NULL, sep)) {
+	for (alg = sync_crc_algorithms ; alg->name ; alg++) {
+	    if (!strcasecmp(alg->name, word)) {
+		free(b);
+		return alg;
+	    }
+	}
+    }
+
+    free(b);
+    return NULL;
+}
+
+const char *sync_crc_list_algorithms(void)
+{
+    static char *buf;
+
+    if (!buf) {
+	/* TODO: we really need an expanding string class */
+	const struct sync_crc_algorithm *alg;
+	int len = 0;
+
+	for (alg = sync_crc_algorithms ; alg->name ; alg++)
+	    len += 1 + strlen(alg->name);
+	buf = xmalloc(len);
+	buf[0] = '\0';
+	for (alg = sync_crc_algorithms ; alg->name ; alg++) {
+	    if (buf[0])
+		strcat(buf, " ");
+	    strcat(buf, alg->name);
+	}
+    }
+
+    return buf;
+}
+
+static int covers_from_string(const char *str, int strict)
+{
+    int flags = 0;
+    char *b;	    /* temporary writable copy, for tokenising */
+    const char *p;
+    static const char sep[] = " \t,";
+
+    b = xstrdup(str);
+    for (p = strtok(b, sep) ; p ; p = strtok(NULL, sep)) {
+	if (!strcasecmp(p, "BASIC"))
+	    flags |= SYNC_CRC_BASIC;
+	else if (strict) {
+	    flags = IMAP_INVALID_IDENTIFIER;
+	    goto done;
+	}
+    }
+done:
+    free(b);
+    return flags;
+}
+
+static const char *covers_to_string(int flags)
+{
+    static char buf[128];
+
+    /* TODO: we really need an expanding string class */
+    buf[0] = '\0';
+    if ((flags & SYNC_CRC_BASIC))
+	strcat(buf, " BASIC");
+    return (buf[0] ? buf+1 : NULL);
+}
+
+const char *sync_crc_list_covers(void)
+{
+    int cflags = SYNC_CRC_BASIC;
+    return covers_to_string(cflags);
+}
+
+static const struct sync_crc_algorithm *sync_crc_algorithm;
+static int sync_crc_covers;
+
+int sync_crc_setup(const char *algorithm, const char *covers,
+		   int strict_covers)
+{
+    const struct sync_crc_algorithm *alg;
+    int cflags;
+    int r;
+
+    if (!algorithm || !*algorithm) {
+	/* default is first one */
+	alg = &sync_crc_algorithms[0];
+    } else {
+	alg = find_algorithm(algorithm);
+	if (!alg)
+	    return IMAP_INVALID_IDENTIFIER;
+    }
+
+    if (!covers || !*covers) {
+	/* default is BASIC only: the sync_client must
+	 * explicitly request anything more */
+	cflags = SYNC_CRC_BASIC;
+    } else {
+	cflags = covers_from_string(covers, strict_covers);
+	if (cflags < 0)
+	    return cflags;
+    }
+
+    r = alg->setup(cflags);
+    if (r < 0)
+	return r;
+
+    sync_crc_algorithm = alg;
+    sync_crc_covers = cflags;
+    return 0;
+}
+
+const char *sync_crc_get_algorithm(void)
+{
+    return (sync_crc_algorithm ? sync_crc_algorithm->name : "");
+}
+
+const char *sync_crc_get_covers(void)
+{
+    return covers_to_string(sync_crc_covers);
+}
 
 /*
  * Calculate a sync CRC for the entire mailbox, and store the result

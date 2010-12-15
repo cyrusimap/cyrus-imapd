@@ -2730,6 +2730,8 @@ void replica_connect(const char *channel)
 	prot_setlog(sync_in, fileno(stderr));
 	prot_setlog(sync_out, fileno(stderr));
     }
+
+    sync_crc_setup(NULL, NULL, /*strict*/0);
 }
 
 static void replica_disconnect(void)

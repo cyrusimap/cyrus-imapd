@@ -438,6 +438,8 @@ int service_main(int argc __attribute__((unused)),
     if (!config_getswitch(IMAPOPT_SYNC_LOG_CHAIN))
 	sync_log_suppress();
 
+    sync_crc_setup(NULL, NULL, /*strict*/1);	/* initialise with defaults */
+
     dobanner();
 
     cmdloop();

@@ -407,6 +407,11 @@ int sync_append_copyfile(struct mailbox *mailbox,
 
 /* ====================================================================== */
 
+const char *sync_crc_get_algorithm(void);
+const char *sync_crc_list_algorithms(void);
+const char *sync_crc_get_covers(void);
+const char *sync_crc_list_covers(void);
+int sync_crc_setup(const char *, const char *, int);
 int sync_crc_calc(struct mailbox *, char *, int);
 
 /* ====================================================================== */
