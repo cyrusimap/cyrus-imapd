@@ -323,6 +323,12 @@ static void dobanner(void)
 #endif
     }
 
+    /* Tell the client about how we're willing to do SYNC_CRCs */
+    prot_printf(sync_out, "* SYNC_CRC_ALGORITHM %s\r\n",
+			  sync_crc_list_algorithms());
+    prot_printf(sync_out, "* SYNC_CRC_COVERS %s\r\n",
+			  sync_crc_list_covers());
+
     prot_printf(sync_out,
 		"* OK %s Cyrus sync server %s\r\n",
 		config_servername, cyrus_version());

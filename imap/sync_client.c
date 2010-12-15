@@ -116,6 +116,9 @@ static int connect_once    = 0;
 static int background      = 0;
 static int do_compress     = 0;
 
+#define CAPA_SYNC_CRC_ALGORITHM	    (CAPA_COMPRESS<<1)
+#define CAPA_SYNC_CRC_COVERS	    (CAPA_COMPRESS<<2)
+
 static struct protocol_t csync_protocol =
 { "csync", "csync",
   { 1, "* OK" },
@@ -124,6 +127,8 @@ static struct protocol_t csync_protocol =
     { { "SASL", CAPA_AUTH },
       { "STARTTLS", CAPA_STARTTLS },
       { "COMPRESS=DEFLATE", CAPA_COMPRESS },
+      { "SYNC_CRC_ALGORITHM", CAPA_SYNC_CRC_ALGORITHM },
+      { "SYNC_CRC_COVERS", CAPA_SYNC_CRC_COVERS },
       { NULL, 0 } } },
   { "STARTTLS", "OK", "NO", 1 },
   { "AUTHENTICATE", USHRT_MAX, 0, "OK", "NO", "+ ", "*", NULL, 0 },
@@ -2731,7 +2736,23 @@ void replica_connect(const char *channel)
 	prot_setlog(sync_out, fileno(stderr));
     }
 
-    sync_crc_setup(NULL, NULL, /*strict*/0);
+    /* SYNC_CRC parameter negotiation.  We look for the server's
+     * capabilities, and if they're provided then try to use them
+     * to initialise ourself.  If that fails (e.g. the server
+     * uses only algorithms unknown to us), fail miserably. */
+    {
+	char *algorithm = backend_get_cap_params(sync_backend, CAPA_SYNC_CRC_ALGORITHM);
+	char *covers = backend_get_cap_params(sync_backend, CAPA_SYNC_CRC_COVERS);
+	if (sync_crc_setup(algorithm, covers, /*strict*/0) < 0) {
+	    fprintf(stderr, "Can not negotiate SYNC_CRC params with server '%s'\n",
+		    servername);
+	    syslog(LOG_ERR, "Can not negotiate SYNC_CRC params with server '%s'\n",
+		    servername);
+	    _exit(1);
+	}
+	free(algorithm);
+	free(covers);
+    }
 }
 
 static void replica_disconnect(void)
