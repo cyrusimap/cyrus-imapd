@@ -1285,6 +1285,8 @@ static int do_mailbox(struct dlist *kin)
     const char *acl;
     const char *options_str;
     struct {
+	const char *algorithm;
+	const char *covers;
 	const char *mvalue;	/* master's value, points into dlist */
 	char rvalue[128];	/* replica's value */
     } sync_crc;
@@ -1326,9 +1328,16 @@ static int do_mailbox(struct dlist *kin)
     if (!dlist_getlist(kin, "RECORD", &kr))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
 
-    /* Get the CRC */
+    /* Get the various CRC-related fields.  Note that the SYNC_CRC_ALGORITHM
+     * and SYNC_CRC_COVERS fields are new and optional, and NULL means
+     * use the default, but SYNC_CRC must always be present. */
     if (!dlist_getatom(kin, "SYNC_CRC", &sync_crc.mvalue))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
+    dlist_getatom(kin, "SYNC_CRC_ALGORITHM", &sync_crc.algorithm);
+    dlist_getatom(kin, "SYNC_CRC_COVERS", &sync_crc.covers);
+    r = sync_crc_setup(sync_crc.algorithm, sync_crc.covers, /*strict*/1);
+    if (r)
+	return r;
 
     /* optional */
     dlist_getatom(kin, "SPECIALUSE", &specialuse);

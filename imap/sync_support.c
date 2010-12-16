@@ -1417,6 +1417,8 @@ int sync_mailbox(struct mailbox *mailbox,
     dlist_atom(kl, "ACL", mailbox->acl);
     dlist_atom(kl, "OPTIONS", sync_encode_options(mailbox->i.options));
     dlist_atom(kl, "SYNC_CRC", sync_crc);
+    dlist_atom(kl, "SYNC_CRC_ALGORITHM", sync_crc_get_algorithm());
+    dlist_atom(kl, "SYNC_CRC_COVERS", sync_crc_get_covers());
     if (mailbox->quotaroot) 
 	dlist_atom(kl, "QUOTAROOT", mailbox->quotaroot);
     if (mailbox->specialuse)
