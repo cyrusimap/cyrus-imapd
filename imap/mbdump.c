@@ -899,6 +899,9 @@ int undump_mailbox(const char *mbname,
 	    free(annotation);
 	    free(content);
 	    free(contenttype);
+	    annotation = NULL;
+	    content = NULL;
+	    contenttype = NULL;
 
 	    c = prot_getc(pin);
 	    if(c == ')') break; /* that was the last item */
