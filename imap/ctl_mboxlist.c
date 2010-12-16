@@ -74,6 +74,7 @@
 #include <sasl/sasl.h>
 
 #include "assert.h"
+#include "annotate.h"
 #include "exitcodes.h"
 #include "imap_err.h"
 #include "global.h"
