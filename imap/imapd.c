@@ -9519,9 +9519,9 @@ static void list_response(char *name, int attributes,
 	 * we might be a backend and need to report folders that don't
 	 * exist on this backend - this is awful and complex and brittle
 	 * and should be changed, but we're stuck with it for now */
-	if (!config_mupdate_server) return;
-	attributes |= (listargs->cmd & LIST_CMD_EXTENDED ?
-		       MBOX_ATTRIBUTE_NONEXISTENT : MBOX_ATTRIBUTE_NOSELECT);
+	if (!config_mupdate_server && (listargs->cmd & LIST_CMD_LSUB)) return;
+	attributes |= (listargs->cmd & LIST_CMD_EXTENDED) ?
+		       MBOX_ATTRIBUTE_NONEXISTENT : MBOX_ATTRIBUTE_NOSELECT;
     }
     else if (r) return;
 
@@ -9708,7 +9708,8 @@ static int list_cb(char *name, int matchlen, int maycreate,
 	    mboxlist_findsub(&imapd_namespace, name, imapd_userisadmin,
 			     imapd_userid, imapd_authstate, set_subscribed,
 			     &rock->last_attributes, 0);
-    } else if (name[matchlen] == '.'
+    } else if ((name[matchlen] == '.' || 
+		name[matchlen] == imapd_namespace.hier_sep)
 	    && ! (rock->listargs->cmd & LIST_CMD_EXTENDED)
 	    && rock->trailing_percent) {
 	/* special case: if the mailbox name argument of a non-extended List
@@ -9716,7 +9717,8 @@ static int list_cb(char *name, int matchlen, int maycreate,
 	if ( ! (rock->last_name
 		    && !strncmp(rock->last_name, name, matchlen)
 		    && (rock->last_name[matchlen] == '\0'
-			|| rock->last_name[matchlen] == '.')) ) {
+			|| rock->last_name[matchlen] == '.'\
+			|| rock->last_name[matchlen] == imapd_namespace.hier_sep)) ) {
 	    list_response(rock->last_name, rock->last_attributes, rock->listargs);
 	    free(rock->last_name);
 	    rock->last_name = xstrndup(name, matchlen);
