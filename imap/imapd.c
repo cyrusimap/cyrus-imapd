@@ -8544,7 +8544,7 @@ static int xfer_backport_seen_item(struct xfer_item *item,
 				   struct seen *seendb)
 {
     struct mailbox *mailbox = NULL;
-    struct seqset *outlist = seqset_init(mailbox->i.last_uid, SEQ_MERGE);
+    struct seqset *outlist = NULL;
     struct index_record record;
     struct seendata sd;
     unsigned recno;
@@ -8552,6 +8552,8 @@ static int xfer_backport_seen_item(struct xfer_item *item,
 
     r = mailbox_open_irl(item->name, &mailbox);
     if (r) return r;
+
+    outlist = seqset_init(mailbox->i.last_uid, SEQ_MERGE);
 
     for (recno = 1; recno < mailbox->i.num_records; recno++) {
 	if (mailbox_read_index_record(mailbox, recno, &record))
