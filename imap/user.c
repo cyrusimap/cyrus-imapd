@@ -393,6 +393,7 @@ int user_renameacl(char *name, char *olduser, char *newuser)
     char *aclalloc;
 
     r = mboxlist_lookup(name, &mbentry, NULL);
+    if (r) return r;
 
     /* setacl re-calls mboxlist_lookup and will stomp on us */
     aclalloc = acl = xstrdup(mbentry.acl);
