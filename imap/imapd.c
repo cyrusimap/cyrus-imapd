@@ -9979,12 +9979,17 @@ static int list_cb(char *name, int matchlen, int maycreate,
 	    && rock->trailing_percent) {
 	/* special case: if the mailbox name argument of a non-extended List
 	 * command ends with %, we must include matching levels of hierarchy */
-	if ( ! (rock->last_name
-		    && !strncmp(rock->last_name, name, matchlen)
-		    && (rock->last_name[matchlen] == '\0'
-			|| rock->last_name[matchlen] == '.'\
-			|| rock->last_name[matchlen] == imapd_namespace.hier_sep)) ) {
-	    list_response(rock->last_name, rock->last_attributes, rock->listargs);
+	/* XXX: this is so awful because we could get passed
+	 * "Shared Folders/" in the unixheirsep + altnamspace case, even
+	 * though what's passed here is a sort-of-internal-name-but-with
+	 * -INBOX name.  Ugly, ugly, ugly */
+	if (!(rock->last_name
+	      && !strncmp(rock->last_name, name, matchlen)
+	      && (rock->last_name[matchlen] == '\0'
+		  || rock->last_name[matchlen] == '.'
+		  || rock->last_name[matchlen] == imapd_namespace.hier_sep))) {
+	    list_response(rock->last_name, rock->last_attributes,
+			  rock->listargs);
 	    free(rock->last_name);
 	    rock->last_name = xstrndup(name, matchlen);
 	    rock->last_attributes = MBOX_ATTRIBUTE_NONEXISTENT
