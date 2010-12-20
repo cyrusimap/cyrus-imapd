@@ -8,6 +8,15 @@
 
 <h1>Upgrading From Previous Versions</h1>
 
+<h2>Upgrading from 2.4.5</h2>
+<ul>
+<li>New config option: <tt>suppress_capabilities</tt>, which 
+  takes a space separated list of capabilities which will NOT
+  be given in any imap capability response.  This can be used
+  on frontends to not display capabilities that older backends
+  don't have, so clients don't get confused</li>
+</ul>
+
 <h2>Upgrading from 2.4.4</h2>
 <ul>
 <li>sync_client no longer forks two process - it just pre-forks

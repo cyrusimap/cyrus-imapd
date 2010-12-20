@@ -8,6 +8,29 @@
 </head>
 <body>
 
+<h1>Changes to the Cyrus IMAP Server since 2.4.5</h1>
+<ul>
+<li>Fixed Bug #3370 - corruption on OpenBSD and other
+  systems without a reliable mmap</li>
+<li>Fixed Bug #3360 - race condition which could lose
+  seen data on XFER with upgrade</li>
+<li>Lots of documentation updates</li>
+<li>Fixed Bug #3355 - added an option to suppress
+  items from the capability response (and bug #3356
+  when the first attempt was buggy)</li>
+<li>Fixed Bug #3357 - crash when calling ctl_mboxlist
+  on mailboxes with annotations</li>
+<li>Fixed Bug #3369 - crash when undumping mailbox
+  during XFER</li>
+<li>Fixed Bug #3361 - shared folders not listing in
+  LSUB "" % - only with unixheirsep and altnamespace</li>
+<li>Fixed Bug #3362 - "too many open files" when doing
+  XFER of a user with too many sub mailboxes.  Makes
+  XFER less "atomic", but now it works, which is good!</li>
+<li>Fixed Bug #3313 - md5 library usage.  Properly this
+  time!</li>
+</ul>
+
 <h1>Changes to the Cyrus IMAP Server since 2.4.4</h1>
 <ul>
 <li>Tidy up of the git version number added to the ID response</li>
