@@ -2799,14 +2799,20 @@ void capa_response(int flags)
     int i;
 
     for (i = 0; base_capabilities[i].str; i++) {
-	/* XXX - add filtering here */
+	/* Filter capabilities if requested */
 	if (capa_is_disabled(base_capabilities[i].str))
 	    continue;
-	if (base_capabilities[i].mask & flags) {
-	    if (need_space) prot_putc(' ', imapd_out);
-	    else need_space = 1;
-	    prot_printf(imapd_out, "%s", base_capabilities[i].str);
-	}
+	/* Don't show "MAILBOX-REFERRALS" if disabled by config */
+	if (disable_referrals && 
+	    !strcmp(base_capabilities[i].str, "MAILBOX-REFERRALS"))
+	    continue;
+	/* Don't show if they're not shown at this level of login */
+	if (!(base_capabilities[i].mask & flags))
+	    continue;
+	/* print the capability */
+	if (need_space) prot_putc(' ', imapd_out);
+	else need_space = 1;
+	prot_printf(imapd_out, "%s", base_capabilities[i].str);
     }
 
     if (config_mupdate_server) {
