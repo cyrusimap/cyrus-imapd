@@ -9723,7 +9723,7 @@ static int list_cb(char *name, int matchlen, int maycreate,
 	/* special case: if the mailbox name argument of a non-extended List
 	 * command ends with %, we must include matching levels of hierarchy */
 	/* XXX: this is so awful because we could get passed
-	 * "Shared Folders/" in the unixheirsep + altnamspace case, even
+	 * "Shared Folders/" in the unixhiersep + altnamspace case, even
 	 * though what's passed here is a sort-of-internal-name-but-with
 	 * -INBOX name.  Ugly, ugly, ugly */
 	if (!(rock->last_name
