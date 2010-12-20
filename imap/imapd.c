@@ -315,7 +315,7 @@ struct capa_struct base_capabilities[] = {
     { "URLAUTH=BINARY",        2 },
 #endif
 #ifdef ENABLE_X_NETSCAPE_HACK
-    { "X-NETSCAPE"             2 },
+    { "X-NETSCAPE",            2 },
 #endif
 
 /* keep this to mark the end of the list */
