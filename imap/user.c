@@ -435,25 +435,21 @@ int user_copyquotaroot(char *oldname, char *newname)
     return r;
 }
 
-struct find_rock {
-    char *inboxname;
-    struct txn **tid;
-};
-
 static int find_p(void *rockp,
 		  const char *key, int keylen,
 		  const char *data __attribute__((unused)),
 		  int datalen __attribute__((unused)))
 {
-    char *inboxname = ((struct find_rock *) rockp)->inboxname;
+    char *inboxname = (char *)rockp;
+    int inboxlen = strlen(inboxname);
 
-    return (!strncmp(key, inboxname, strlen(inboxname)) &&
-	    (keylen == (int) strlen(inboxname) || key[strlen(inboxname)] == '.'));
+    return (!strncmp(key, inboxname, inboxlen) &&
+	    (keylen == inboxlen || key[inboxlen] == '.'));
 }
 
 static int find_cb(void *rockp __attribute__((unused)),
-		  const char *key, int keylen,
-		  const char *data __attribute__((unused)),
+		   const char *key, int keylen,
+		   const char *data __attribute__((unused)),
 		   int datalen __attribute__((unused)))
 {
     char *root;
@@ -470,7 +466,6 @@ int user_deletequotaroots(const char *user)
 {
     struct namespace namespace;
     char buf[MAX_MAILBOX_BUFFER], *inboxname = buf;
-    struct txn *tid = NULL;
     int r;
 
     /* set namespace */
@@ -483,14 +478,9 @@ int user_deletequotaroots(const char *user)
     }
 
     if (!r) {
-	struct find_rock frock = { NULL, NULL };
-	frock.inboxname = inboxname;
-	frock.tid = &tid;
 	r = config_quota_db->foreach(qdb, inboxname, strlen(inboxname),
-				     &find_p, &find_cb, &frock, &tid);
+				     &find_p, &find_cb, inboxname, NULL);
     }
-
-    if (!r) quota_commit(&tid);
 
     return r;
 }
