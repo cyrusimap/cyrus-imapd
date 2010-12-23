@@ -57,7 +57,6 @@
  * Parse a word
  * (token not containing whitespace, parens, or double quotes)
  */
-#define BUFGROWSIZE 100
 int getword(struct protstream *in, struct buf *buf)
 {
     int c;
