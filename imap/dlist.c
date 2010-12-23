@@ -294,9 +294,7 @@ struct dlist *dlist_buf(struct dlist *dl, const char *name,
 {
     struct dlist *i = dlist_child(dl, name);
     i->type = DL_BUF;
-    i->sval = xmalloc(len+1);
-    memcpy(i->sval, val, len);
-    i->sval[len] = '\0'; /* make it string safe too */
+    i->sval = xstrndup(val, len);
     i->nval = len;
     return i;
 }
