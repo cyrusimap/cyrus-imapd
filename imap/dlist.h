@@ -86,7 +86,7 @@ struct dlist *dlist_num(struct dlist *dl, const char *name, unsigned long val);
 struct dlist *dlist_date(struct dlist *dl, const char *name, time_t val);
 struct dlist *dlist_modseq(struct dlist *dl, const char *name, modseq_t val);
 struct dlist *dlist_buf(struct dlist *dl,
-			const char *name, char *val, size_t len);
+			const char *name, const char *val, size_t len);
 struct dlist *dlist_list(struct dlist *dl, const char *name);
 struct dlist *dlist_kvlist(struct dlist *dl, const char *name);
 struct dlist *dlist_guid(struct dlist *dl,
@@ -98,7 +98,7 @@ struct dlist *dlist_file(struct dlist *dl,
 struct dlist *dlist_new(const char *name);
 void dlist_free(struct dlist **dlp);
 
-void dlist_print(struct dlist *dl, int printkeys, struct protstream *out);
+void dlist_print(const struct dlist *dl, int printkeys, struct protstream *out);
 char dlist_parse(struct dlist **dlp, int parsekeys, struct protstream *in);
 
 void dlist_stitch(struct dlist *dl, struct dlist *child);

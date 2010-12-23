@@ -89,7 +89,7 @@
 
 const char *lastkey = NULL;
 
-static void printfile(struct protstream *out, struct dlist *dl)
+static void printfile(struct protstream *out, const struct dlist *dl)
 {
     char buf[4096];
     struct stat sbuf;
@@ -289,8 +289,8 @@ struct dlist *dlist_file(struct dlist *dl, const char *name,
     return i;
 }
 
-struct dlist *dlist_buf(struct dlist *dl, const char *name, 
-			       char *val, size_t len)
+struct dlist *dlist_buf(struct dlist *dl, const char *name,
+		        const char *val, size_t len)
 {
     struct dlist *i = dlist_child(dl, name);
     i->type = DL_BUF;
@@ -320,8 +320,8 @@ struct dlist *dlist_new(const char *name)
     return dlist_kvlist(NULL, name);
 }
 
-void dlist_print_helper(struct dlist *dl, int printkeys,
-			struct protstream *out, int level)
+static void dlist_print_helper(const struct dlist *dl, int printkeys,
+			       struct protstream *out, int level)
 {
     struct dlist *di;
     int i;
@@ -374,7 +374,7 @@ void dlist_print_helper(struct dlist *dl, int printkeys,
     }
 }
 
-void dlist_print(struct dlist *dl, int printkeys, struct protstream *out)
+void dlist_print(const struct dlist *dl, int printkeys, struct protstream *out)
 {
     dlist_print_helper(dl, printkeys, out, 0);
 }
