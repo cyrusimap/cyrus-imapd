@@ -2743,13 +2743,31 @@ void replica_connect(const char *channel)
     {
 	char *algorithm = backend_get_cap_params(sync_backend, CAPA_SYNC_CRC_ALGORITHM);
 	char *covers = backend_get_cap_params(sync_backend, CAPA_SYNC_CRC_COVERS);
+	struct dlist *kl;
+	int r;
+
 	if (sync_crc_setup(algorithm, covers, /*strict*/0) < 0) {
+negfailed:
 	    fprintf(stderr, "Can not negotiate SYNC_CRC params with server '%s'\n",
 		    servername);
 	    syslog(LOG_ERR, "Can not negotiate SYNC_CRC params with server '%s'\n",
 		    servername);
 	    _exit(1);
 	}
+
+	if (algorithm && covers) {
+	    /* server advertised the caps, presumably it knows
+	     * how to handle a SET */
+	    kl = dlist_new("OPTIONS");
+	    dlist_atom(kl, "SYNC_CRC_ALGORITHM", sync_crc_get_algorithm());
+	    dlist_atom(kl, "SYNC_CRC_COVERS", sync_crc_get_covers());
+	    sync_send_set(kl, sync_out);
+	    dlist_free(&kl);
+
+	    r = sync_parse_response("SET", sync_in, NULL);
+	    if (r) goto negfailed;
+	}
+
 	free(algorithm);
 	free(covers);
     }

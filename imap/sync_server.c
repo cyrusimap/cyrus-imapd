@@ -149,6 +149,7 @@ static void cmd_compress(char *alg);
 
 /* generic commands - in dlist format */
 static void cmd_get(struct dlist *kl);
+static void cmd_set(const struct dlist *kl);
 static void cmd_apply(struct dlist *kl,
 		      struct sync_reserve_list *reserve_list);
 
@@ -731,6 +732,16 @@ static void cmdloop(void)
 		cmd_starttls();
 		continue;
 	    }
+	    else if (!strcmp(cmd.s, "Set")) {
+		kl = sync_parseline(sync_in);
+		if (kl) {
+		    cmd_set(kl);
+		    dlist_free(&kl);
+		}
+		else
+		    prot_printf(sync_out, "BAD IMAP_PROTOCOL_ERROR Failed to parse SET line\r\n");
+		continue;
+	    }
 	    break;
 
         }
@@ -1285,8 +1296,6 @@ static int do_mailbox(struct dlist *kin)
     const char *acl;
     const char *options_str;
     struct {
-	const char *algorithm;
-	const char *covers;
 	const char *mvalue;	/* master's value, points into dlist */
 	char rvalue[128];	/* replica's value */
     } sync_crc;
@@ -1328,16 +1337,9 @@ static int do_mailbox(struct dlist *kin)
     if (!dlist_getlist(kin, "RECORD", &kr))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
 
-    /* Get the various CRC-related fields.  Note that the SYNC_CRC_ALGORITHM
-     * and SYNC_CRC_COVERS fields are new and optional, and NULL means
-     * use the default, but SYNC_CRC must always be present. */
+    /* Get the CRC */
     if (!dlist_getatom(kin, "SYNC_CRC", &sync_crc.mvalue))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
-    dlist_getatom(kin, "SYNC_CRC_ALGORITHM", &sync_crc.algorithm);
-    dlist_getatom(kin, "SYNC_CRC_COVERS", &sync_crc.covers);
-    r = sync_crc_setup(sync_crc.algorithm, sync_crc.covers, /*strict*/1);
-    if (r)
-	return r;
 
     /* optional */
     dlist_getatom(kin, "SPECIALUSE", &specialuse);
@@ -2182,6 +2184,41 @@ static void cmd_get(struct dlist *kin)
 	r = do_getquota(kin);
     else if (!strcmp(kin->name, "USER"))
 	r = do_getuser(kin);
+    else
+	r = IMAP_PROTOCOL_ERROR;
+
+    print_response(r);
+}
+
+static int do_set_options(const struct dlist *kin)
+{
+    int r = 0;
+    struct dlist *child;
+    const char *algorithm = NULL;
+    const char *covers = NULL;
+
+    for (child = kin->head ; child ; child = child->next) {
+	if (!strcmp(child->name, "SYNC_CRC_ALGORITHM"))
+	    algorithm = child->sval;
+	else if (!strcmp(child->name, "SYNC_CRC_COVERS"))
+	    covers = child->sval;
+	else {
+	    return IMAP_PROTOCOL_ERROR;
+	}
+    }
+
+    if (algorithm || covers)
+	r = sync_crc_setup(algorithm, covers, /*strict*/1);
+
+    return r;
+}
+
+static void cmd_set(const struct dlist *kin)
+{
+    int r;
+
+    if (!strcmp(kin->name, "OPTIONS"))
+	r = do_set_options(kin);
     else
 	r = IMAP_PROTOCOL_ERROR;
 

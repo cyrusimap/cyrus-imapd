@@ -1328,6 +1328,14 @@ void sync_send_lookup(struct dlist *kl, struct protstream *out)
     prot_flush(out);
 }
 
+void sync_send_set(struct dlist *kl, struct protstream *out)
+{
+    prot_printf(out, "SET ");
+    dlist_print(kl, 1, out);
+    prot_printf(out, "\r\n");
+    prot_flush(out);
+}
+
 struct dlist *sync_parseline(struct protstream *in)
 {
     struct dlist *dl = NULL;
@@ -1417,8 +1425,6 @@ int sync_mailbox(struct mailbox *mailbox,
     dlist_atom(kl, "ACL", mailbox->acl);
     dlist_atom(kl, "OPTIONS", sync_encode_options(mailbox->i.options));
     dlist_atom(kl, "SYNC_CRC", sync_crc);
-    dlist_atom(kl, "SYNC_CRC_ALGORITHM", sync_crc_get_algorithm());
-    dlist_atom(kl, "SYNC_CRC_COVERS", sync_crc_get_covers());
     if (mailbox->quotaroot) 
 	dlist_atom(kl, "QUOTAROOT", mailbox->quotaroot);
     if (mailbox->specialuse)
