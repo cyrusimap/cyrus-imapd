@@ -1697,7 +1697,7 @@ int openinbox(void)
     int myrights = 0;
     int r, log_level = LOG_ERR;
     const char *statusline = NULL;
-    struct mboxlist_entry mbentry;
+    struct mboxlist_entry *mbentry = NULL;
     struct statusdata sdata;
 
     /* Translate any separators in userid
@@ -1717,8 +1717,8 @@ int openinbox(void)
 
     if (!r) r = mboxlist_lookup(inboxname, &mbentry, NULL);
     if (!r && (config_popuseacl = config_getswitch(IMAPOPT_POPUSEACL)) &&
-	(!mbentry.acl ||
-	 !((myrights = cyrus_acl_myrights(popd_authstate, mbentry.acl)) & ACL_READ))) {
+	(!mbentry->acl ||
+	 !((myrights = cyrus_acl_myrights(popd_authstate, mbentry->acl)) & ACL_READ))) {
 	r = (myrights & ACL_LOOKUP) ?
 	    IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
 	log_level = LOG_INFO;
@@ -1733,14 +1733,8 @@ int openinbox(void)
 	goto fail;
     }
 
-    if (mbentry.mbtype & MBTYPE_REMOTE) {
+    if (mbentry->mbtype & MBTYPE_REMOTE) {
 	/* remote mailbox */
-	char *server = mbentry.partition;
-	char *c;
-
-	/* xxx hide the fact that we are storing partitions */
-	c = strchr(server, '!');
-	if(c) *c = '\0';
 
 	/* Make a working copy of userid in case we need to alter it */
 	strlcpy(userid, popd_userid, sizeof(userid));
@@ -1754,7 +1748,7 @@ int openinbox(void)
 	    memcpy(p, popd_subfolder, n);
 	}
 
-	backend = backend_connect(NULL, server, &pop3_protocol,
+	backend = backend_connect(NULL, mbentry->server, &pop3_protocol,
 				  userid, NULL, &statusline);
 
 	if (!backend) {
@@ -1875,14 +1869,18 @@ int openinbox(void)
     /* Create telemetry log */
     popd_logfd = telemetry_log(popd_userid, popd_in, popd_out, 0);
 
+    mboxlist_entry_free(&mbentry);
+
     if (statusline)
 	prot_printf(popd_out, "+OK%s", statusline);
     else
 	prot_printf(popd_out, "+OK Mailbox locked and ready SESSIONID=<%s>\r\n", session_id());
     prot_flush(popd_out);
+
     return 0;
 
   fail:
+    mboxlist_entry_free(&mbentry);
     free(popd_userid);
     popd_userid = 0;
     if (popd_subfolder) {

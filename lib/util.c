@@ -521,6 +521,25 @@ const char *buf_cstring(struct buf *buf)
     return buf->s;
 }
 
+char *buf_release(struct buf *buf)
+{
+    char *ret;
+
+    /* make sure it's NULL terminated - also guarantees it's a
+     * malloc'ed string */
+    buf_ensure(buf, 1);
+    ret = buf->s;
+    ret[buf->len] = '\0';
+
+    /* zero out the buffer so it no longer manages the string */
+    buf->s = NULL;
+    buf->len = 0;
+    buf->alloc = 0;
+    buf->flags = 0;
+
+    return ret;
+}
+
 void buf_getmap(struct buf *buf, const char **base, int *len)
 {
     *base = buf->s;
@@ -538,12 +557,12 @@ void buf_reset(struct buf *buf)
     buf->flags &= ~BUF_CSTRING;
 }
 
-void buf_setcstr(struct buf *buf, char *str)
+void buf_setcstr(struct buf *buf, const char *str)
 {
     buf_setmap(buf, str, strlen(str));
 }
 
-void buf_setmap(struct buf *buf, char *base, int len)
+void buf_setmap(struct buf *buf, const char *base, int len)
 {
     buf_reset(buf);
     if (len) {
@@ -563,7 +582,7 @@ void buf_append(struct buf *dst, struct buf *src)
     buf_appendmap(dst, src->s, src->len);
 }
 
-void buf_appendcstr(struct buf *buf, char *str)
+void buf_appendcstr(struct buf *buf, const char *str)
 {
     buf_appendmap(buf, str, strlen(str));
 }
@@ -574,7 +593,7 @@ void buf_appendbit32(struct buf *buf, bit32 num)
     buf_appendmap(buf, (char *)&item, 4);
 }
 
-void buf_appendmap(struct buf *buf, char *base, int len)
+void buf_appendmap(struct buf *buf, const char *base, int len)
 {
     if (len) {
 	buf_ensure(buf, len);

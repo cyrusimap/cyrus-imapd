@@ -87,7 +87,7 @@ static int chkmbox(char *name,
 		   void *rock __attribute__((unused))) 
 {
     int r;
-    struct mboxlist_entry mbentry;
+    struct mboxlist_entry *mbentry = NULL;
 
     r = mboxlist_lookup(name, &mbentry, NULL);
 
@@ -99,12 +99,16 @@ static int chkmbox(char *name,
     }
 
     /* are we on the partition we are checking? */
-    if (check_part && strcmp(mbentry.partition, check_part))
+    if (check_part && strcmp(mbentry->partition, check_part)) {
+	mboxlist_entry_free(&mbentry);
 	return 0;
+    }
 
     fprintf(stderr, "checking: %s\n", name);
 
     mailbox_reconstruct(name, 0); /* no changes allowed */
+
+    mboxlist_entry_free(&mbentry);
 
     return 0;
 }

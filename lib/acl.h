@@ -100,7 +100,7 @@ extern char *cyrus_acl_masktostr(int acl, char *str);
  * Calculate the set of rights the user in 'auth_state' has in the ACL 'acl'.
  * 'acl' must be writable, but is restored to its original condition.
  */
-extern int cyrus_acl_myrights(struct auth_state *auth_state, char *acl);
+extern int cyrus_acl_myrights(struct auth_state *auth_state, const char *acl);
 
 /*  cyrus_acl_set(acl, identifier, mode, access, canonproc, canonrock) Modify the
  * ACL pointed to by 'acl' to modify the rights granted to

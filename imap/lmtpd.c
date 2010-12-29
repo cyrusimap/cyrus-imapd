@@ -425,12 +425,11 @@ int fuzzy_match(char *mboxname)
 /* proxy mboxlist_lookup; on misses, it asks the listener for this
    machine to make a roundtrip to the master mailbox server to make
    sure it's up to date */
-static int mlookup(const char *name, char **server, char **aclp, void *tid)
+static int mlookup(const char *name, struct mboxlist_entry **mbentryptr)
 {
     int r;
     char *c;
-
-    if (server) *server = NULL;
+    struct mboxlist_entry *mbentry = NULL;
 
     if (mhandle) {
 	/* proxy only, so check the mupdate master */
@@ -448,31 +447,29 @@ static int mlookup(const char *name, char **server, char **aclp, void *tid)
 	    fatal("error communicating with MUPDATE server", EC_TEMPFAIL);
 	}
 
-	if (aclp) *aclp = (char *) mailboxdata->acl;
-	if (server) *server = (char *) mailboxdata->server;
-	c = strchr(*server, '!');
-	if (c) *c = '\0';
+	mbentry = mboxlist_entry_create();
+	mbentry->acl = mailboxdata->acl;
+	mbentry->server = mailboxdata->server;
+
+	/* XXX hack for now - should pull this out into mupdate_find */
+	c = strchr(mbentry->server, '!');
+	if (c) {
+	    *c++ = '\0';
+	    mbentry->partition = c;
+	}
     }
     else {
-	struct mboxlist_entry mbentry;
 	/* do a local lookup and kick the slave if necessary */
-	r = mboxlist_lookup(name, &mbentry, tid);
+	r = mboxlist_lookup(name, &mbentry, NULL);
 	if (r == IMAP_MAILBOX_NONEXISTENT && config_mupdate_server) {
 	    kick_mupdate();
-	    r = mboxlist_lookup(name, &mbentry, tid);
-	}
-	if (r) return r;
-
-	if (aclp) *aclp = mbentry.acl;
-	if (server) {
-	    if (mbentry.mbtype & MBTYPE_REMOTE) {
-		/* xxx hide the fact that we are storing partitions */
-		*server = mbentry.partition;
-		c = strchr(*server, '!');
-		if (c) *c = '\0';
-	    }
+	    mboxlist_entry_free(&mbentry);
+	    r = mboxlist_lookup(name, &mbentry, NULL);
 	}
     }
+
+    if (mbentryptr && !r) *mbentryptr = mbentry;
+    else mboxlist_entry_free(&mbentry);
 
     return r;
 }
@@ -770,9 +767,10 @@ int deliver(message_data_t *msgdata, char *authuser,
     
     /* loop through each recipient, attempting delivery for each */
     for (n = 0; n < nrcpts; n++) {
-	char namebuf[MAX_MAILBOX_BUFFER] = "", *server;
+	char namebuf[MAX_MAILBOX_BUFFER] = "";
 	char userbuf[MAX_MAILBOX_BUFFER];
 	const char *rcpt, *user, *domain, *mailbox;
+	struct mboxlist_entry *mbentry = NULL;
 	int r = 0;
 
 	rcpt = msg_getrcptall(msgdata, n);
@@ -799,10 +797,10 @@ int deliver(message_data_t *msgdata, char *authuser,
 	    strlcat(userbuf, domain, sizeof(userbuf));
 	}
 
-	r = mlookup(namebuf, &server, NULL, NULL);
-	if (!r && server) {
+	r = mlookup(namebuf, &mbentry);
+	if (!r && mbentry->server) {
 	    /* remote mailbox */
-	    proxy_adddest(&dlist, rcpt, n, server, authuser);
+	    proxy_adddest(&dlist, rcpt, n, mbentry->server, authuser);
 	    status[n] = nosieve;
 	}
 	else if (!r) {
@@ -823,6 +821,8 @@ int deliver(message_data_t *msgdata, char *authuser,
 
 	telemetry_rusage( user );
 	msg_setrcpt_status(msgdata, n, r);
+
+	mboxlist_entry_free(&mbentry);
     }
 
     if (dlist) {
@@ -1009,7 +1009,7 @@ static int verify_user(const char *user, const char *domain, char *mailbox,
     }
 
     if (!r) {
-	char *server, *acl;
+	struct mboxlist_entry *mbentry = NULL;
 	long aclcheck = !user ? ACL_POST : 0;
 	/*
 	 * check to see if mailbox exists and we can append to it:
@@ -1018,7 +1018,7 @@ static int verify_user(const char *user, const char *domain, char *mailbox,
 	 * - don't care about ACL on INBOX (always allow post)
 	 * - don't care about message size (1 msg over quota allowed)
 	 */
-	r = mlookup(namebuf, &server, &acl, NULL);
+	r = mlookup(namebuf, &mbentry);
 
 	if (r == IMAP_MAILBOX_NONEXISTENT && !user &&
 	    config_getswitch(IMAPOPT_LMTP_FUZZY_MAILBOX_MATCH) &&
@@ -1031,11 +1031,12 @@ static int verify_user(const char *user, const char *domain, char *mailbox,
 	       fuzzy match multiple times. */
 	    strcpy(mailbox, domain ? namebuf+strlen(domain)+1 : namebuf);
 
-	    r = mlookup(namebuf, &server, &acl, NULL);
+	    mboxlist_entry_free(&mbentry);
+	    r = mlookup(namebuf, &mbentry);
 	}
 
-	if (!r && server) {
-	    int access = cyrus_acl_myrights(authstate, acl);
+	if (!r && mbentry->server) {
+	    int access = cyrus_acl_myrights(authstate, mbentry->acl);
 
 	    if ((access & aclcheck) != aclcheck) {
 		r = (access & ACL_LOOKUP) ?
@@ -1047,6 +1048,8 @@ static int verify_user(const char *user, const char *domain, char *mailbox,
 			     || config_getswitch(IMAPOPT_LMTP_STRICT_QUOTA) ?
 			     quotacheck : 0);
 	}
+
+	mboxlist_entry_free(&mbentry);
     }
 
     if (r) syslog(LOG_DEBUG, "verify_user(%s) failed: %s", namebuf,
@@ -1104,7 +1107,8 @@ FILE *spoolfile(message_data_t *msgdata)
        (don't bother if we're only a proxy) */
     n = mhandle ? 0 : msg_getnumrcpt(msgdata);
     for (i = 0; !f && (i < n); i++) {
-	char namebuf[MAX_MAILBOX_BUFFER] = "", *server;
+	struct mboxlist_entry *mbentry = NULL;
+	char namebuf[MAX_MAILBOX_BUFFER] = "";
 	const char *user, *domain, *mailbox;
 	int r;
 
@@ -1125,11 +1129,13 @@ FILE *spoolfile(message_data_t *msgdata)
 	    strlcat(namebuf, user, sizeof(namebuf));
 	}
 
-	r = mlookup(namebuf, &server, NULL, NULL);
-	if (!r && !server) {
+	r = mlookup(namebuf, &mbentry);
+	if (!r && !mbentry->server) {
 	    /* local mailbox -- setup stage for later use by deliver() */
 	    f = append_newstage(namebuf, now, 0, &stage);
 	}
+
+	mboxlist_entry_free(&mbentry);
     }
 
     if (!f) {

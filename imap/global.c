@@ -508,7 +508,7 @@ int is_userid_anonymous(const char *user)
 static int acl_ok(const char *user, struct auth_state *authstate)
 {
     struct namespace namespace;
-    struct mboxlist_entry mbentry;
+    struct mboxlist_entry *mbentry = NULL;
     char bufuser[MAX_MAILBOX_BUFFER], inboxname[MAX_MAILBOX_BUFFER];
     int r;
 
@@ -534,8 +534,9 @@ static int acl_ok(const char *user, struct auth_state *authstate)
 	r = 0;  /* Failed so assume no proxy access */
     }
     else {
-	r = (cyrus_acl_myrights(authstate, mbentry.acl) & ACL_ADMIN) != 0;
+	r = (cyrus_acl_myrights(authstate, mbentry->acl) & ACL_ADMIN) != 0;
     }
+    mboxlist_entry_free(&mbentry);
     return r;
 }
 

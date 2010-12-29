@@ -355,7 +355,7 @@ int handle_request(const char *who, const char *name,
     unsigned recentuid;
     unsigned numrecent;
     char mboxname[MAX_MAILBOX_BUFFER];
-    struct mboxlist_entry mbentry;
+    struct mboxlist_entry *mbentry = NULL;
     struct auth_state *mystate;
     int internalseen;
 
@@ -367,32 +367,32 @@ int handle_request(const char *who, const char *name,
     if (r) return r; 
 
     r = mboxlist_lookup(mboxname, &mbentry, NULL);
-    if(r || mbentry.mbtype & MBTYPE_RESERVE) {
+    if (r || mbentry->mbtype & MBTYPE_RESERVE) {
 	send_reply(sfrom, sfromsiz, REQ_UNK, who, name, 0, 0, 0);
+	mboxlist_entry_free(&mbentry);
 	return r;
     }
 
     mystate = auth_newstate("anonymous");
 
-    if(mbentry.mbtype & MBTYPE_REMOTE) {
-	char *p = NULL;
-
-	/* xxx hide that we are storing partitions */
-	p = strchr(mbentry.partition, '!');
-	if(p) *p = '\0';
-
+    if (mbentry->mbtype & MBTYPE_REMOTE) {
 	/* Check the ACL */
-	if(cyrus_acl_myrights(mystate, mbentry.acl) & ACL_USER0) {
+	if(cyrus_acl_myrights(mystate, mbentry->acl) & ACL_USER0) {
 	    /* We want to proxy this one */
 	    auth_freestate(mystate);
-	    return do_proxy_request(who, name, mbentry.partition, sfrom, sfromsiz);
+	    r = do_proxy_request(who, name, mbentry->server, sfrom, sfromsiz);
+	    mboxlist_entry_free(&mbentry);
+	    return r;
 	} else {
 	    /* Permission Denied */
 	    auth_freestate(mystate);
+	    mboxlist_entry_free(&mbentry);
 	    send_reply(sfrom, sfromsiz, REQ_DENY, who, name, 0, 0, 0);
 	    return 0;
 	}
     }
+
+    mboxlist_entry_free(&mbentry);
 
     /*
      * Open/lock header 
@@ -458,7 +458,7 @@ int handle_request(const char *who, const char *name,
     send_reply(sfrom, sfromsiz, REQ_OK, who, name, numrecent,
 	       lastread, lastarrived);
     
-    return(0);
+    return 0;
 }
 
 void

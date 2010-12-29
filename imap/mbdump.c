@@ -801,10 +801,11 @@ int undump_mailbox(const char *mbname,
     
     r = mailbox_open_exclusive(mbname, &mailbox);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
-	struct mboxlist_entry mbentry;
+	struct mboxlist_entry *mbentry = NULL;
 	r = mboxlist_lookup(mbname, &mbentry, NULL);
-	if (!r) r = mailbox_create(mbname, mbentry.partition, mbentry.acl,
+	if (!r) r = mailbox_create(mbname, mbentry->partition, mbentry->acl,
 				   NULL, 0, 0, &mailbox);
+	mboxlist_entry_free(&mbentry);
     }
     if(r) goto done;
 

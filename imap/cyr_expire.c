@@ -138,7 +138,7 @@ static unsigned expire_cb(struct mailbox *mailbox __attribute__((unused)),
 int expire(char *name, int matchlen, int maycreate __attribute__((unused)),
 	   void *rock)
 {
-    struct mboxlist_entry mbentry;
+    struct mboxlist_entry *mbentry = NULL;
     struct expire_rock *erock = (struct expire_rock *) rock;
     char buf[MAX_MAILBOX_BUFFER] = "", *p;
     struct annotation_data attrib;
@@ -157,7 +157,12 @@ int expire(char *name, int matchlen, int maycreate __attribute__((unused)),
 	}
 	return 1;
     }
-    if (mbentry.mbtype & MBTYPE_REMOTE) return 0;
+
+    if (mbentry->mbtype & MBTYPE_REMOTE) {
+	mboxlist_entry_free(&mbentry);
+	return 0;
+    }
+    mboxlist_entry_free(&mbentry);
 
     if (config_virtdomains && (p = strchr(name, '!')))
 	domainlen = p - name + 1;
@@ -254,7 +259,7 @@ int delete(char *name,
 	   int maycreate __attribute__((unused)),
 	   void *rock)
 {
-    struct mboxlist_entry mbentry;
+    struct mboxlist_entry *mbentry = NULL;
     struct delete_rock *drock = (struct delete_rock *) rock;
     char *p;
     int i, r, domainlen = 0;
@@ -279,7 +284,12 @@ int delete(char *name,
 	}
 	return 1;
     }
-    if (mbentry.mbtype & MBTYPE_REMOTE) return 0;
+
+    if (mbentry->mbtype & MBTYPE_REMOTE) {
+	mboxlist_entry_free(&mbentry);
+	return 0;
+    }
+    mboxlist_entry_free(&mbentry);
 
     /* Sanity check for 8 hex digits only at the end */
     p = strrchr(name, '.');

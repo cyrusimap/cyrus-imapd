@@ -64,7 +64,7 @@
 #include "xstrlcat.h"
 
 void proxy_adddest(struct dest **dlist, const char *rcpt, int rcpt_num,
-		   char *server, const char *authas)
+		   const char *server, const char *authas)
 {
     struct dest *d;
 

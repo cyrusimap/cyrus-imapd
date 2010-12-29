@@ -90,7 +90,7 @@ usage(void) {
 int
 main(int argc, char **argv)
 {
-  struct mboxlist_entry mbentry;
+  struct mboxlist_entry *mbentry = NULL;
   int rc, i, quiet = 0, stop_on_error=0, metadata=0;
   int opt;		/* getopt() returns an int */
   char *alt_config = NULL;
@@ -131,11 +131,14 @@ main(int argc, char **argv)
 
   for (i = optind; i < argc; i++) {
     /* Translate mailboxname */
-    (*mbpath_namespace.mboxname_tointernal)(&mbpath_namespace, argv[i], NULL, buf);
+    (*mbpath_namespace.mboxname_tointernal)(&mbpath_namespace,
+					    argv[i], NULL, buf);
 
     if ((rc = mboxlist_lookup(buf, &mbentry, NULL)) == 0) {
-      char *path = mboxname_metapath(mbentry.partition, mbentry.name, 0, 0);
-      printf("%s\n", path);
+	const char *path = mboxname_metapath(mbentry->partition,
+					     mbentry->name, 0, 0);
+	printf("%s\n", path);
+	mboxlist_entry_free(&mbentry);
     } else {
       if (!quiet && (rc == IMAP_MAILBOX_NONEXISTENT)) {
 	fprintf(stderr, "Invalid mailbox name: %s\n", argv[i]);

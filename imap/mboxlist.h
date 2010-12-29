@@ -77,24 +77,31 @@ extern struct db *mbdb;
 /* each mailbox has the following data */
 struct mboxlist_entry {
     const char *name;
+    char * _alloc;
     int mbtype;
-    char *partition;
-				/* holds remote machine for REMOTE mailboxes */
-    char *acl;
+    const char *partition;
+    const char *server; /* holds remote machine for REMOTE mailboxes */
+    const char *acl;
 };
 
+struct mboxlist_entry *mboxlist_entry_create();
+
+void mboxlist_entry_free(struct mboxlist_entry **mbentryptr);
+
+/* formats a cstring from a mboxlist_entry.  Caller must free
+ * after use */
+char *mboxlist_entry_cstring(struct mboxlist_entry *mbentry);
+
 /* Lookup 'name' in the mailbox list. */
-int mboxlist_lookup(const char *name, struct mboxlist_entry *entry, struct txn **tid);
+int mboxlist_lookup(const char *name, struct mboxlist_entry **mbentryptr,
+		    struct txn **tid);
 
 /* insert/delete stub entries */
-int mboxlist_insertremote(const char *name, int mbtype, const char *host,
-			  const char *acl, struct txn **rettid);
+int mboxlist_insertremote(struct mboxlist_entry *mbentry, struct txn **rettid);
 int mboxlist_deleteremote(const char *name, struct txn **in_tid);
 
 /* Update a mailbox's entry */
-int mboxlist_update(const char *name, int mbtype, 
-		    const char *part, 
-		    const char *acl, int localonly);
+int mboxlist_update(struct mboxlist_entry *mbentry, int localonly);
 
 /* check user's ability to create mailbox */
 int mboxlist_createmailboxcheck(const char *name, int mbtype,
@@ -192,10 +199,6 @@ int mboxlist_changesub(const char *name, const char *userid,
 /* set or create quota root */
 int mboxlist_setquota(const char *root, int newquota, int force);
 int mboxlist_unsetquota(const char *root);
-
-/* returns a malloc() string that is the representation in the mailboxes 
-   file.  for ctl_mboxlist */
-char *mboxlist_makeentry(int mbtype, const char *part, const char *acl);
 
 /* open the mailboxes db */
 void mboxlist_open(const char *name);

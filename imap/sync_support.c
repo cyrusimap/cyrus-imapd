@@ -1267,14 +1267,16 @@ int addmbox(char *name,
 	    void *rock)
 {
     struct sync_name_list *list = (struct sync_name_list *) rock;
-    struct mboxlist_entry mbentry;
+    struct mboxlist_entry *mbentry = NULL;
 
     if (mboxlist_lookup(name, &mbentry, NULL))
 	return 0;
 
     /* only want normal mailboxes... */
-    if (!(mbentry.mbtype & (MBTYPE_RESERVE | MBTYPE_MOVING | MBTYPE_REMOTE))) 
+    if (!(mbentry->mbtype & (MBTYPE_RESERVE | MBTYPE_MOVING | MBTYPE_REMOTE))) 
 	sync_name_list_add(list, name);
+
+    mboxlist_entry_free(&mbentry);
 
     return 0;
 }

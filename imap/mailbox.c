@@ -854,7 +854,7 @@ static int mailbox_open_advanced(const char *name,
 				 int index_locktype,
 				 struct mailbox **mailboxptr)
 {
-    struct mboxlist_entry mbentry;
+    struct mboxlist_entry *mbentry = NULL;
     struct mailboxlist *listitem;
     struct mailbox *mailbox = NULL;
     int r = 0;
@@ -897,12 +897,14 @@ static int mailbox_open_advanced(const char *name,
     r = mboxlist_lookup(name, &mbentry, NULL);
     if (r) goto done;
 
-    mailbox->part = xstrdup(mbentry.partition);
+    mailbox->part = xstrdup(mbentry->partition);
     /* Note that the header does have the ACL information, but it is only
      * a backup, and the mboxlist data is considered authoritative, so
      * we will just use what we were passed */
-    mailbox->acl = xstrdup(mbentry.acl);
-    mailbox->mbtype = mbentry.mbtype;
+    mailbox->acl = xstrdup(mbentry->acl);
+    mailbox->mbtype = mbentry->mbtype;
+
+    mboxlist_entry_free(&mbentry);
 
     if (index_locktype == LOCK_SHARED)
 	mailbox->is_readonly = 1;
@@ -3346,7 +3348,7 @@ static int mailbox_reconstruct_create(const char *name, struct mailbox **mbptr)
     struct mailbox *mailbox = NULL;
     int options = config_getint(IMAPOPT_MAILBOX_DEFAULT_OPTIONS)
 		| OPT_POP3_NEW_UIDL;
-    struct mboxlist_entry mbentry;
+    struct mboxlist_entry *mbentry = NULL;
     struct mailboxlist *listitem;
     int r;
 
@@ -3368,10 +3370,10 @@ static int mailbox_reconstruct_create(const char *name, struct mailbox **mbptr)
     r = mboxlist_lookup(name, &mbentry, NULL);
     if (r) goto done;
 
-    syslog(LOG_NOTICE, "create new mailbox %s", name);
+    mailbox->part = xstrdup(mbentry->partition);
+    mailbox->acl = xstrdup(mbentry->acl);
 
-    mailbox->part = xstrdup(mbentry.partition);
-    mailbox->acl = xstrdup(mbentry.acl);
+    syslog(LOG_NOTICE, "create new mailbox %s", name);
  
     /* Attempt to open index */
     r = mailbox_open_index(mailbox);
@@ -3382,9 +3384,11 @@ static int mailbox_reconstruct_create(const char *name, struct mailbox **mbptr)
 	/* no cyrus.index file at all - well, we're in a pickle!
          * no point trying to rescue anything else... */
 	mailbox_close(&mailbox);
-	return mailbox_create(name, mbentry.partition, mbentry.acl,
+	return mailbox_create(name, mbentry->partition, mbentry->acl,
 			      NULL, options, time(0), mbptr);
     }
+
+    mboxlist_entry_free(&mbentry);
 
     /* read header, if it is not there, we need to create it */
     r = mailbox_read_header(mailbox, NULL);
@@ -3427,8 +3431,13 @@ static int mailbox_reconstruct_acl(struct mailbox *mailbox, int flags)
 	printf("%s: update acl from header %s => %s\n", mailbox->name,
 	       mailbox->acl, acl);
 	if (make_changes) {
-	    r = mboxlist_update(mailbox->name, mailbox->mbtype,
-				mailbox->part, acl, 0);
+	    struct mboxlist_entry *mbentry = NULL;
+	    r = mboxlist_lookup(mailbox->name, &mbentry, NULL);
+	    if (!r) {
+		mbentry->acl = acl;
+		r = mboxlist_update(mbentry, 0);
+	    }
+	    mboxlist_entry_free(&mbentry);
 	}
     }
 

@@ -1056,7 +1056,7 @@ static int do_reserve(struct dlist *kl, struct sync_reserve_list *reserve_list)
     struct sync_msgid_list *part_list;
     struct sync_msgid *item;
     struct sync_name *folder;
-    struct mboxlist_entry mbentry;
+    struct mboxlist_entry *mbentry = NULL;
     const char *partition = NULL;
     struct dlist *ml;
     struct dlist *gl;
@@ -1083,7 +1083,7 @@ static int do_reserve(struct dlist *kl, struct sync_reserve_list *reserve_list)
 	 part_list->marked < part_list->count && folder;
 	 folder = folder->next) {
 	if (mboxlist_lookup(folder->name, &mbentry, 0) ||
-	    strcmp(mbentry.partition, partition))
+	    strcmp(mbentry->partition, partition))
 	    continue; /* try folders on the same partition first! */
 	reserve_folder(partition, folder->name, part_list);
 	folder->mark = 1;
@@ -1113,12 +1113,14 @@ static int do_reserve(struct dlist *kl, struct sync_reserve_list *reserve_list)
 
     sync_name_list_free(&folder_names);
     sync_name_list_free(&missing);
+    mboxlist_entry_free(&mbentry);
 
     return 0;
 
  parse_err:
     sync_name_list_free(&folder_names);
     sync_name_list_free(&missing);
+    mboxlist_entry_free(&mbentry);
 
     return IMAP_PROTOCOL_BAD_PARAMETERS;
 }

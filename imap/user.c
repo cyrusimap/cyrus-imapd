@@ -389,14 +389,14 @@ int user_renameacl(char *name, char *olduser, char *newuser)
     int r = 0;
     char *acl;
     char *rights, *nextid;
-    struct mboxlist_entry mbentry;
+    struct mboxlist_entry *mbentry = NULL;
     char *aclalloc;
 
     r = mboxlist_lookup(name, &mbentry, NULL);
     if (r) return r;
 
     /* setacl re-calls mboxlist_lookup and will stomp on us */
-    aclalloc = acl = xstrdup(mbentry.acl);
+    aclalloc = acl = xstrdup(mbentry->acl);
 
     while (!r && acl) {
 	rights = strchr(acl, '\t');
@@ -419,6 +419,7 @@ int user_renameacl(char *name, char *olduser, char *newuser)
     }
 
     free(aclalloc);
+    mboxlist_entry_free(&mbentry);
 
     return r;
 }

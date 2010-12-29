@@ -416,11 +416,6 @@ typedef enum {
     PROXY_AND_BACKEND = 3
 } annotation_proxy_t;
 
-struct mailbox_annotation_rock
-{
-    char *server, *partition, *acl, *path, *mpath;
-};
-
 const struct annotate_info_t annotate_mailbox_flags[] =
 {
     { "/vendor/cmu/cyrus-imapd/pop3newuidl",
@@ -431,34 +426,6 @@ const struct annotate_info_t annotate_mailbox_flags[] =
       OPT_IMAP_SHAREDSEEN },
     { NULL, 0 }
 };
-
-/* To free values in the mailbox_annotation_rock as needed */
-static void cleanup_mbrock(struct mailbox_annotation_rock *mbrock __attribute__((unused))) 
-{
-    /* Don't free server and partition, since they're straight from the
-     * output of mboxlist_lookup() */
-    return;
-}
-
-static void get_mb_data(const char *mboxname,
-			struct mailbox_annotation_rock *mbrock) 
-{
-    if(!mbrock->server && !mbrock->partition) {
-	struct mboxlist_entry mbentry;
-	int r = mboxlist_lookup(mboxname, &mbentry, NULL);
-	if (r) return;
-	mbrock->server = mbentry.partition;
-	mbrock->acl = mbentry.acl;
-
-	mbrock->partition = strchr(mbrock->server, '!');
-	if (mbrock->partition) {
-	    *(mbrock->partition)++ = '\0';
-	} else {
-	    mbrock->partition = mbrock->server;
-	    mbrock->server = NULL;
-	}
-    }
-}
 
 /***************************  Annotation Fetching  ***************************/
 
@@ -669,7 +636,7 @@ static void output_entryatt(const char *mboxname, const char *entry,
 }
 
 static int annotation_may_fetch(const struct fetchdata *fdata,
-				const struct mailbox_annotation_rock *mbrock,
+				const struct mboxlist_entry *mbentry,
 				unsigned needed)
 {
     unsigned my_rights;
@@ -677,10 +644,10 @@ static int annotation_may_fetch(const struct fetchdata *fdata,
     if (fdata->isadmin)
 	return 1;
 
-    if (!mbrock->acl)
+    if (!mbentry->acl)
 	return 0;
 
-    my_rights = cyrus_acl_myrights(fdata->auth_state, mbrock->acl);
+    my_rights = cyrus_acl_myrights(fdata->auth_state, mbentry->acl);
 
     return ((my_rights & needed) == needed);
 }
@@ -689,7 +656,7 @@ static void annotation_get_fromfile(const char *int_mboxname __attribute__((unus
 				    const char *ext_mboxname,
 				    const char *entry,
 				    struct fetchdata *fdata,
-				    struct mailbox_annotation_rock *mbrock __attribute__((unused)),
+				    struct mboxlist_entry *mbentry __attribute__((unused)),
 				    void *rock)
 {
     const char *filename = (const char *) rock;
@@ -720,7 +687,7 @@ static void annotation_get_freespace(const char *int_mboxname __attribute__((unu
 				     const char *ext_mboxname,
 				     const char *entry,
 				     struct fetchdata *fdata,
-				     struct mailbox_annotation_rock *mbrock __attribute__((unused)),
+				     struct mboxlist_entry *mbentry __attribute__((unused)),
 				     void *rock __attribute__((unused)))
 {
     unsigned long tavail;
@@ -744,28 +711,26 @@ static void annotation_get_server(const char *int_mboxname,
 				  const char *ext_mboxname,
 				  const char *entry,
 				  struct fetchdata *fdata,
-				  struct mailbox_annotation_rock *mbrock,
+				  struct mboxlist_entry *mbentry,
 				  void *rock __attribute__((unused))) 
 {
     struct annotation_data attrib;
 
-    if(!int_mboxname || !ext_mboxname || !fdata || !mbrock)
+    if(!int_mboxname || !ext_mboxname || !fdata || !mbentry)
 	fatal("annotation_get_server called with bad parameters", EC_TEMPFAIL);
     
-    get_mb_data(int_mboxname, mbrock);
-
     /* Make sure its a remote mailbox */
-    if (!mbrock->server) return;
+    if (!mbentry->server) return;
 
     /* Check ACL */
-    if (!annotation_may_fetch(fdata, mbrock, ACL_LOOKUP))
+    if (!annotation_may_fetch(fdata, mbentry, ACL_LOOKUP))
 	return;
 
     memset(&attrib, 0, sizeof(attrib));
 
-    attrib.value = mbrock->server;
-    if(mbrock->server) {
-	attrib.size = strlen(mbrock->server);
+    attrib.value = mbentry->server;
+    if (mbentry->server) {
+	attrib.size = strlen(mbentry->server);
 	attrib.contenttype = "text/plain";
     }
 
@@ -776,29 +741,27 @@ static void annotation_get_partition(const char *int_mboxname,
 				     const char *ext_mboxname,
 				     const char *entry,
 				     struct fetchdata *fdata,
-				     struct mailbox_annotation_rock *mbrock,
+				     struct mboxlist_entry *mbentry,
 				     void *rock __attribute__((unused))) 
 {
     struct annotation_data attrib;
 
-    if(!int_mboxname || !ext_mboxname || !fdata || !mbrock)
+    if(!int_mboxname || !ext_mboxname || !fdata || !mbentry)
 	fatal("annotation_get_partition called with bad parameters",
 	      EC_TEMPFAIL);
     
-    get_mb_data(int_mboxname, mbrock);
-
     /* Make sure its a local mailbox */
-    if (mbrock->server) return;
+    if (mbentry->server) return;
 
     /* Check ACL */
-    if (!annotation_may_fetch(fdata, mbrock, ACL_LOOKUP))
+    if (!annotation_may_fetch(fdata, mbentry, ACL_LOOKUP))
 	return;
 
     memset(&attrib, 0, sizeof(attrib));
 
-    attrib.value = mbrock->partition;
-    if(mbrock->partition) {
-	attrib.size = strlen(mbrock->partition);
+    attrib.value = mbentry->partition;
+    if (mbentry->partition) {
+	attrib.size = strlen(mbentry->partition);
 	attrib.contenttype = "text/plain";
     }
 
@@ -809,24 +772,22 @@ static void annotation_get_size(const char *int_mboxname,
 				const char *ext_mboxname,
 				const char *entry,
 				struct fetchdata *fdata,
-				struct mailbox_annotation_rock *mbrock,
+				struct mboxlist_entry *mbentry,
 				void *rock __attribute__((unused))) 
 {
     struct mailbox *mailbox = NULL;
     char value[21];
     struct annotation_data attrib;
 
-    if (!int_mboxname || !ext_mboxname || !fdata || !mbrock)
+    if (!int_mboxname || !ext_mboxname || !fdata || !mbentry)
 	fatal("annotation_get_size called with bad parameters",
 	      EC_TEMPFAIL);
     
-    get_mb_data(int_mboxname, mbrock);
-
     /* Make sure its a local mailbox */
-    if (mbrock->server) return;
+    if (mbentry->server) return;
 
     /* Check ACL */
-    if (!annotation_may_fetch(fdata, mbrock, ACL_LOOKUP|ACL_READ))
+    if (!annotation_may_fetch(fdata, mbentry, ACL_LOOKUP|ACL_READ))
 	return;
 
     if (mailbox_open_irl(int_mboxname, &mailbox))
@@ -850,7 +811,7 @@ static void annotation_get_lastupdate(const char *int_mboxname,
 				      const char *ext_mboxname,
 				      const char *entry,
 				      struct fetchdata *fdata,
-				      struct mailbox_annotation_rock *mbrock,
+				      struct mboxlist_entry *mbentry,
 				      void *rock __attribute__((unused))) 
 {
     struct stat sbuf;
@@ -858,20 +819,18 @@ static void annotation_get_lastupdate(const char *int_mboxname,
     struct annotation_data attrib;
     char *fname;
 
-    if(!int_mboxname || !ext_mboxname || !fdata || !mbrock)
+    if(!int_mboxname || !ext_mboxname || !fdata || !mbentry)
 	fatal("annotation_get_lastupdate called with bad parameters",
 	      EC_TEMPFAIL);
     
-    get_mb_data(int_mboxname, mbrock);
-
     /* Make sure its a local mailbox */
-    if (mbrock->server) return;
+    if (mbentry->server) return;
 
     /* Check ACL */
-    if (!annotation_may_fetch(fdata, mbrock, ACL_LOOKUP|ACL_READ))
+    if (!annotation_may_fetch(fdata, mbentry, ACL_LOOKUP|ACL_READ))
 	return;
 
-    fname = mboxname_metapath(mbrock->partition, int_mboxname, META_INDEX, 0);
+    fname = mboxname_metapath(mbentry->partition, int_mboxname, META_INDEX, 0);
     if (!fname) return;
     if (stat(fname, &sbuf) == -1) return;
     
@@ -887,31 +846,29 @@ static void annotation_get_lastupdate(const char *int_mboxname,
 }
 
 static void annotation_get_lastpop(const char *int_mboxname,
-                                 const char *ext_mboxname,
-                                 const char *entry,
-                                 struct fetchdata *fdata,
-                                 struct mailbox_annotation_rock *mbrock,
-                                 void *rock __attribute__((unused)))
+				   const char *ext_mboxname,
+				   const char *entry,
+				   struct fetchdata *fdata,
+				   struct mboxlist_entry *mbentry,
+				   void *rock __attribute__((unused)))
 { 
     struct mailbox *mailbox = NULL;
     char value[40];
     struct annotation_data attrib;
   
-    if(!int_mboxname || !ext_mboxname || !fdata || !mbrock)
+    if(!int_mboxname || !ext_mboxname || !fdata || !mbentry)
       fatal("annotation_get_lastpop called with bad parameters",
               EC_TEMPFAIL);
 
-    get_mb_data(int_mboxname, mbrock);
-
     /* Make sure its a local mailbox */
-    if (mbrock->server) return;
+    if (mbentry->server) return;
 
     /* Check ACL */
-    if (!annotation_may_fetch(fdata, mbrock, ACL_LOOKUP|ACL_READ))
+    if (!annotation_may_fetch(fdata, mbentry, ACL_LOOKUP|ACL_READ))
 	return;
 
     if (mailbox_open_irl(int_mboxname, &mailbox) != 0)
-      return;
+	return;
 
     if (mailbox->i.pop3_last_login == 0) {
 	strcpy (value, " ");
@@ -934,7 +891,7 @@ static void annotation_get_mailboxopt(const char *int_mboxname,
 				      const char *ext_mboxname,
 				      const char *entry,
 				      struct fetchdata *fdata,
-				      struct mailbox_annotation_rock *mbrock,
+				      struct mboxlist_entry *mbentry,
 				      void *rock __attribute__((unused)))
 { 
     struct mailbox *mailbox = NULL;
@@ -942,14 +899,12 @@ static void annotation_get_mailboxopt(const char *int_mboxname,
     char value[40];
     struct annotation_data attrib;
   
-    if (!int_mboxname || !ext_mboxname || !entry || !fdata || !mbrock)
+    if (!int_mboxname || !ext_mboxname || !entry || !fdata || !mbentry)
 	fatal("annotation_get_mailboxopt called with bad parameters",
 	      EC_TEMPFAIL);
 
-    get_mb_data(int_mboxname, mbrock);
-
     /* Make sure its a local mailbox */
-    if (mbrock->server) return;
+    if (mbentry->server) return;
 
     /* check that this is a mailboxopt annotation */
     for (i = 0; annotate_mailbox_flags[i].name; i++) {
@@ -961,7 +916,7 @@ static void annotation_get_mailboxopt(const char *int_mboxname,
     if (!flag) return;
   
     /* Check ACL */
-    if (!annotation_may_fetch(fdata, mbrock, ACL_LOOKUP|ACL_READ))
+    if (!annotation_may_fetch(fdata, mbentry, ACL_LOOKUP|ACL_READ))
 	return;
 
     if (mailbox_open_irl(int_mboxname, &mailbox) != 0)
@@ -988,24 +943,22 @@ static void annotation_get_pop3showafter(const char *int_mboxname,
 				        const char *ext_mboxname,
 				        const char *entry,
 				        struct fetchdata *fdata,
-				        struct mailbox_annotation_rock *mbrock,
+				        struct mboxlist_entry *mbentry,
 				        void *rock __attribute__((unused)))
 {
     struct mailbox *mailbox = NULL;
     char value[30];
     struct annotation_data attrib;
 
-    if(!int_mboxname || !ext_mboxname || !entry || !fdata || !mbrock)
+    if(!int_mboxname || !ext_mboxname || !entry || !fdata || !mbentry)
       fatal("annotation_get_pop3showafter called with bad parameters",
               EC_TEMPFAIL);
 
-    get_mb_data(int_mboxname, mbrock);
-
     /* Make sure its a local mailbox */
-    if (mbrock->server) return;
+    if (mbentry->server) return;
 
     /* Check ACL */
-    if (!annotation_may_fetch(fdata, mbrock, ACL_LOOKUP|ACL_READ))
+    if (!annotation_may_fetch(fdata, mbentry, ACL_LOOKUP|ACL_READ))
 	return;
 
     if (mailbox_open_irl(int_mboxname, &mailbox) != 0)
@@ -1051,14 +1004,14 @@ static void annotation_get_fromdb(const char *int_mboxname,
 				  const char *ext_mboxname,
 				  const char *entry  __attribute__((unused)),
 				  struct fetchdata *fdata,
-				  struct mailbox_annotation_rock *mbrock,
+				  struct mboxlist_entry *mbentry,
 				  void *rock)
 {
     struct rw_rock rw_rock;
     const char *entrypat = (const char *) rock;
 
     if(!int_mboxname || !ext_mboxname || !entrypat || !fdata ||
-       (int_mboxname[0] && !mbrock)) {
+       (int_mboxname[0] && !mbentry)) {
 	fatal("annotation_get_fromdb called with bad parameters", EC_TEMPFAIL);
     }
 
@@ -1068,14 +1021,11 @@ static void annotation_get_fromdb(const char *int_mboxname,
 	/* XXX any kind of access controls for reading? */
     }
     else {
-	/* mailbox annotation */
-	get_mb_data(int_mboxname, mbrock);
-
 	/* Make sure its a local mailbox */
-	if (mbrock->server) return;
+	if (mbentry->server) return;
 
 	/* Check ACL */
-	if (!annotation_may_fetch(fdata, mbrock, ACL_LOOKUP|ACL_READ))
+	if (!annotation_may_fetch(fdata, mbentry, ACL_LOOKUP|ACL_READ))
 	    return;
     }
 
@@ -1091,7 +1041,7 @@ struct annotate_f_entry
     annotation_proxy_t proxytype; /* mask of allowed server types */
     void (*get)(const char *int_mboxname, const char *ext_mboxname,
 		const char *name, struct fetchdata *fdata,
-		struct mailbox_annotation_rock *mbrock,
+		struct mboxlist_entry *mbentry,
 		void *rock);	/* function to get the entry */
     void *rock;			/* rock passed to get() function */
 };
@@ -1175,7 +1125,7 @@ static int fetch_cb(char *name, int matchlen,
     static int sawuser = 0;
     int c;
     char int_mboxname[MAX_MAILBOX_BUFFER], ext_mboxname[MAX_MAILBOX_BUFFER];
-    struct mailbox_annotation_rock mbrock;
+    struct mboxlist_entry *mbentry = NULL;
 
     /* We have to reset the sawuser flag before each fetch command.
      * Handle it as a dirty hack.
@@ -1216,33 +1166,30 @@ static int fetch_cb(char *name, int matchlen,
 					     fdata->userid, ext_mboxname);
     if (c) name[matchlen] = c;
 
-    memset(&mbrock, 0, sizeof(struct mailbox_annotation_rock));
-
-    if (proxy_fetch_func && fdata->orig_entry) {
-	get_mb_data(int_mboxname, &mbrock);
-    }
+    if (mboxlist_lookup(int_mboxname, &mbentry, NULL))
+	return 0;
 
     /* Loop through the list of provided entries to get */
     for (entries_ptr = fdata->entry_list;
 	 entries_ptr;
 	 entries_ptr = entries_ptr->next) {
-	
+
 	entries_ptr->entry->get(int_mboxname, ext_mboxname,
 				entries_ptr->entry->name, fdata,
-				&mbrock, (entries_ptr->entry->rock ?
+				mbentry, (entries_ptr->entry->rock ?
 					  entries_ptr->entry->rock :
 					  (void*) entries_ptr->entrypat));
     }
 
-    if (proxy_fetch_func && fdata->orig_entry && mbrock.server &&
-	!hash_lookup(mbrock.server, &(fdata->server_table))) {
+    if (proxy_fetch_func && fdata->orig_entry && mbentry->server &&
+	!hash_lookup(mbentry->server, &(fdata->server_table))) {
 	/* xxx ignoring result */
-	proxy_fetch_func(mbrock.server, fdata->orig_mailbox,
+	proxy_fetch_func(mbentry->server, fdata->orig_mailbox,
 			 fdata->orig_entry, fdata->orig_attribute);
-	hash_insert(mbrock.server, (void *)0xDEADBEEF, &(fdata->server_table));
+	hash_insert(mbentry->server, (void *)0xDEADBEEF, &(fdata->server_table));
     }
 
-    cleanup_mbrock(&mbrock);
+    mboxlist_entry_free(&mbentry);
 
     return 0;
 }
@@ -1562,7 +1509,7 @@ struct annotate_st_entry {
     int attribs;		/* mask of allowed attributes */
     int acl;			/* add'l required ACL for .shared */
     int (*set)(const char *int_mboxname, struct annotate_st_entry_list *entry,
-	       struct storedata *sdata, struct mailbox_annotation_rock *mbrock,
+	       struct storedata *sdata, struct mboxlist_entry *mbentry,
 	       void *rock);	/* function to set the entry */
     void *rock;			/* rock passed to set() function */
 };
@@ -1640,7 +1587,7 @@ static int store_cb(const char *name, int matchlen,
     static char lastname[MAX_MAILBOX_PATH+1];
     static int sawuser = 0;
     char int_mboxname[MAX_MAILBOX_BUFFER];
-    struct mailbox_annotation_rock mbrock;
+    struct mboxlist_entry *mbentry = NULL;
     int r = 0;
 
     /* We have to reset the sawuser flag before each fetch command.
@@ -1676,14 +1623,14 @@ static int store_cb(const char *name, int matchlen,
     else
 	strlcpy(int_mboxname, lastname, sizeof(int_mboxname));
 
-    memset(&mbrock, 0, sizeof(struct mailbox_annotation_rock));
-    get_mb_data(int_mboxname, &mbrock);
+    if (mboxlist_lookup(int_mboxname, &mbentry, NULL))
+	return 0;
 
     for (entries_ptr = sdata->entry_list;
 	 entries_ptr;
 	 entries_ptr = entries_ptr->next) {
 
-	r = entries_ptr->entry->set(int_mboxname, entries_ptr, sdata, &mbrock,
+	r = entries_ptr->entry->set(int_mboxname, entries_ptr, sdata, mbentry,
 				    entries_ptr->entry->rock);
 	if (r) goto cleanup;
     }
@@ -1692,13 +1639,13 @@ static int store_cb(const char *name, int matchlen,
 
     sdata->count++;
 
-    if (proxy_store_func && mbrock.server &&
-	!hash_lookup(mbrock.server, &(sdata->server_table))) {
-	hash_insert(mbrock.server, (void *)0xDEADBEEF, &(sdata->server_table));
+    if (proxy_store_func && mbentry->server &&
+	!hash_lookup(mbentry->server, &(sdata->server_table))) {
+	hash_insert(mbentry->server, (void *)0xDEADBEEF, &(sdata->server_table));
     }
 
-  cleanup:
-    cleanup_mbrock(&mbrock);
+ cleanup:
+    mboxlist_entry_free(&mbentry);
 
     return r;
 }
@@ -1717,7 +1664,7 @@ static void store_proxy(char *server, void *data __attribute__((unused)),
 }
 
 static int annotation_may_store(const struct storedata *sdata,
-				const struct mailbox_annotation_rock *mbrock,
+				const struct mboxlist_entry *mbentry,
 				unsigned needed)
 {
     unsigned my_rights;
@@ -1725,10 +1672,10 @@ static int annotation_may_store(const struct storedata *sdata,
     if (sdata->isadmin)
 	return 1;
 
-    if (!mbrock->acl)
+    if (!mbentry->acl)
 	return 0;
 
-    my_rights = cyrus_acl_myrights(sdata->auth_state, mbrock->acl);
+    my_rights = cyrus_acl_myrights(sdata->auth_state, mbentry->acl);
 
     return ((my_rights & needed) == needed);
 }
@@ -1736,7 +1683,7 @@ static int annotation_may_store(const struct storedata *sdata,
 static int annotation_set_tofile(const char *int_mboxname __attribute__((unused)),
 				 struct annotate_st_entry_list *entry,
 				 struct storedata *sdata,
-				 struct mailbox_annotation_rock *mbrock __attribute__((unused)),
+				 struct mboxlist_entry *mbentry __attribute__((unused)),
 				 void *rock)
 {
     const char *filename = (const char *) rock;
@@ -1762,7 +1709,7 @@ static int annotation_set_tofile(const char *int_mboxname __attribute__((unused)
 static int annotation_set_todb(const char *int_mboxname,
 			       struct annotate_st_entry_list *entry,
 			       struct storedata *sdata,
-			       struct mailbox_annotation_rock *mbrock,
+			       struct mboxlist_entry *mbentry,
 			       void *rock __attribute__((unused)))
 {
     int r = 0;
@@ -1776,14 +1723,14 @@ static int annotation_set_todb(const char *int_mboxname,
 	int acl = ACL_READ | ACL_WRITE | entry->entry->acl;
 
 	if (!sdata->isadmin &&
-	    (!int_mboxname[0] || !mbrock->acl ||
+	    (!int_mboxname[0] || !mbentry->acl ||
 	     ((cyrus_acl_myrights(sdata->auth_state,
-				  mbrock->acl) & acl) != acl))) {
+				  mbentry->acl) & acl) != acl))) {
 	    return IMAP_PERMISSION_DENIED;
 	}
 
 	/* Make sure its a server or local mailbox annotation */
-	if (!int_mboxname[0] || !mbrock->server) {
+	if (!int_mboxname[0] || !mbentry->server) {
 	    /* if we don't have a value, retrieve the existing entry */
 	    if (!entry->shared.value) {
 		struct annotation_data shared;
@@ -1809,7 +1756,7 @@ static int annotation_set_todb(const char *int_mboxname,
 	 */
 
 	/* Make sure its a server or local mailbox annotation */
-	if (!int_mboxname[0] || !mbrock->server) {
+	if (!int_mboxname[0] || !mbentry->server) {
 	    /* if we don't have a value, retrieve the existing entry */
 	    if (!entry->priv.value) {
 		struct annotation_data priv;
@@ -1832,7 +1779,7 @@ static int annotation_set_todb(const char *int_mboxname,
 static int annotation_set_mailboxopt(const char *int_mboxname,
 				     struct annotate_st_entry_list *entry,
 				     struct storedata *sdata,
-				     struct mailbox_annotation_rock *mbrock,
+				     struct mboxlist_entry *mbentry,
 				     void *rock __attribute__((unused)))
 {
     struct mailbox *mailbox = NULL;
@@ -1849,7 +1796,7 @@ static int annotation_set_mailboxopt(const char *int_mboxname,
     if (!flag) return IMAP_PERMISSION_DENIED;
   
     /* Check ACL */
-    if (!annotation_may_store(sdata, mbrock, ACL_LOOKUP|ACL_WRITE))
+    if (!annotation_may_store(sdata, mbentry, ACL_LOOKUP|ACL_WRITE))
 	return IMAP_PERMISSION_DENIED;
 
     r = mailbox_open_iwl(int_mboxname, &mailbox);
@@ -1877,7 +1824,7 @@ static int annotation_set_mailboxopt(const char *int_mboxname,
 static int annotation_set_pop3showafter(const char *int_mboxname,
 				     struct annotate_st_entry_list *entry,
 				     struct storedata *sdata,
-				     struct mailbox_annotation_rock *mbrock,
+				     struct mboxlist_entry *mbentry,
 				     void *rock __attribute__((unused)))
 {
     struct mailbox *mailbox = NULL;
@@ -1885,7 +1832,7 @@ static int annotation_set_pop3showafter(const char *int_mboxname,
     time_t date;
 
     /* Check ACL */
-    if (!annotation_may_store(sdata, mbrock, ACL_LOOKUP|ACL_WRITE))
+    if (!annotation_may_store(sdata, mbentry, ACL_LOOKUP|ACL_WRITE))
 	return IMAP_PERMISSION_DENIED;
 
     if (!strcmp(entry->shared.value, "NIL")) {

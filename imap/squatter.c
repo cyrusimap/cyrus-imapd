@@ -527,7 +527,7 @@ static int squat_single(struct index_state *state, int incremental)
 static int index_me(char *name, int matchlen __attribute__((unused)),
 		    int maycreate __attribute__((unused)),
 		    void *rock) {
-    struct mboxlist_entry mbentry;
+    struct mboxlist_entry *mbentry = NULL;
     struct index_state *state = NULL;
     int r;
     char *fname;
@@ -551,7 +551,12 @@ static int index_me(char *name, int matchlen __attribute__((unused)),
 
         return 1;
     }
-    if (mbentry.mbtype & MBTYPE_REMOTE) return 0;
+    if (mbentry->mbtype & MBTYPE_REMOTE) {
+	mboxlist_entry_free(&mbentry);
+	return 0;
+    }
+
+    mboxlist_entry_free(&mbentry);
 
     /* make sure the mailbox (or an ancestor) has
        /vendor/cmu/cyrus-imapd/squat set to "true" */

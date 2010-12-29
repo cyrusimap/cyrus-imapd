@@ -130,30 +130,32 @@ static int fixmbox(char *name,
 		   int maycreate __attribute__((unused)),
 		   void *rock __attribute__((unused)))
 {
-    struct mboxlist_entry mbentry;
+    struct mboxlist_entry *mbentry = NULL;
     int r;
 
     r = mboxlist_lookup(name, &mbentry, NULL);
+    if (r) return 0;
 
     /* if MBTYPE_RESERVED, unset it & call mboxlist_delete */
-    if(!r && (mbentry.mbtype & MBTYPE_RESERVE)) {
-	if(!r) {
-	    r = mboxlist_deletemailbox(name, 1, NULL, NULL, 0, 0, 1);
-	    if(r) {
-		/* log the error */
-		syslog(LOG_ERR,
-		       "could not remove reserved mailbox '%s': %s",
-		       name, error_message(r));
-	    } else {
-		syslog(LOG_ERR,
-		       "removed reserved mailbox '%s'",
-		       name);
-	    }
+    if (mbentry->mbtype & MBTYPE_RESERVE) {
+	r = mboxlist_deletemailbox(name, 1, NULL, NULL, 0, 0, 1);
+	if (r) {
+	    /* log the error */
+	    syslog(LOG_ERR,
+		   "could not remove reserved mailbox '%s': %s",
+		   name, error_message(r));
+	} else {
+	    syslog(LOG_ERR,
+		   "removed reserved mailbox '%s'",
+		   name);
 	}
     }
 
+    mboxlist_entry_free(&mbentry);
+
     return 0;
 }
+
 void recover_reserved() 
 {
     char pattern[2] = { '*', '\0' };

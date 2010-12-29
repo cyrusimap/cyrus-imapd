@@ -285,28 +285,20 @@ static struct protocol_t nntp_protocol =
 /* proxy mboxlist_lookup; on misses, it asks the listener for this
    machine to make a roundtrip to the master mailbox server to make
    sure it's up to date */
-static int mlookup(const char *name, char **server, char **aclp, void *tid)
+static int mlookup(const char *name, struct mboxlist_entry **mbentryptr)
 {
-    struct mboxlist_entry mbentry;
+    struct mboxlist_entry *mbentry = NULL;
     int r;
     
-    r = mboxlist_lookup(name, &mbentry, tid);
+    r = mboxlist_lookup(name, &mbentry, NULL);
     if (r == IMAP_MAILBOX_NONEXISTENT && config_mupdate_server) {
 	kick_mupdate();
-	r = mboxlist_lookup(name, &mbentry, tid);
+	mboxlist_entry_free(&mbentry);
+	r = mboxlist_lookup(name, &mbentry, NULL);
     }
 
-    if (aclp) *aclp = mbentry.acl;
-
-    if (server) {
-	*server = NULL;
-	if (mbentry.mbtype & MBTYPE_REMOTE) {
-	    char *c;
-	    *server = mbentry.partition;
-	    c = strchr(*server, '!');
-	    if(c) *c = '\0';
-	}
-    }
+    if (mbentryptr && !r) *mbentryptr = mbentry;
+    else mboxlist_entry_free(&mbentry);
 
     return r;
 }
@@ -1733,7 +1725,7 @@ static int open_group(char *name, int has_prefix, struct backend **ret,
 {
     char mailboxname[MAX_MAILBOX_BUFFER];
     int r = 0;
-    char *acl, *newserver;
+    struct mboxlist_entry *mbentry = NULL;
     struct backend *backend_next = NULL;
 
     /* close local group */
@@ -1745,10 +1737,10 @@ static int open_group(char *name, int has_prefix, struct backend **ret,
 	name = mailboxname;
     }
 
-    if (!r) r = mlookup(name, &newserver, &acl, NULL);
+    if (!r) r = mlookup(name, &mbentry);
 
-    if (!r && acl) {
-	int myrights = cyrus_acl_myrights(nntp_authstate, acl);
+    if (!r && mbentry->acl) {
+	int myrights = cyrus_acl_myrights(nntp_authstate, mbentry->acl);
 
 	if (postable) *postable = myrights & ACL_POST;
 	if (!postable && /* allow limited 'r' for LIST ACTIVE */
@@ -1758,14 +1750,18 @@ static int open_group(char *name, int has_prefix, struct backend **ret,
 	}
     }
 
-    if (r) return r;
+    if (r) {
+	mboxlist_entry_free(&mbentry);
+	return r;
+    }
 
-    if (newserver) {
+    if (mbentry->server) {
 	/* remote group */
-	backend_next = proxy_findserver(newserver, &nntp_protocol,
+	backend_next = proxy_findserver(mbentry->server, &nntp_protocol,
 					nntp_userid ? nntp_userid : "anonymous",
 					&backend_cached, &backend_current,
 					NULL, nntp_in);
+	mboxlist_entry_free(&mbentry);
 	if (!backend_next) return IMAP_SERVER_UNAVAILABLE;
 
 	*ret = backend_next;
@@ -1773,6 +1769,8 @@ static int open_group(char *name, int has_prefix, struct backend **ret,
     else {
 	/* local group */
 	struct index_init init;
+
+	mboxlist_entry_free(&mbentry);
 	memset(&init, 0, sizeof(struct index_init));
 	init.userid = nntp_userid;
 	init.authstate = nntp_authstate;
@@ -2512,23 +2510,28 @@ int do_active(char *name, void *rock)
 int do_newsgroups(char *name, void *rock)
 {
     struct list_rock *lrock = (struct list_rock *) rock;
-    char *acl, *server;
+    struct mboxlist_entry *mbentry = NULL;
     int r;
 
-    r = mlookup(name, &server, &acl, NULL);
+    r = mlookup(name, &mbentry);
 
-    if (r || !acl || !(cyrus_acl_myrights(nntp_authstate, acl) && ACL_LOOKUP))
+    if (r || !mbentry->acl ||
+	!(cyrus_acl_myrights(nntp_authstate, mbentry->acl) && ACL_LOOKUP)) {
+	mboxlist_entry_free(&mbentry);
 	return 0;
+    }
 
-    if (server) {
+    if (mbentry->server) {
 	/* remote group */
-	if (!hash_lookup(server, &lrock->server_table)) {
+	if (!hash_lookup(mbentry->server, &lrock->server_table)) {
 	    /* add this server to our table */
-	    hash_insert(server, (void *)0xDEADBEEF, &lrock->server_table);
+	    hash_insert(mbentry->server, (void *)0xDEADBEEF, &lrock->server_table);
 	}
+	mboxlist_entry_free(&mbentry);
     }
     else {
 	/* local group */
+	mboxlist_entry_free(&mbentry);
 	return CYRUSDB_DONE;
     }
 
@@ -2949,7 +2952,7 @@ static int parse_groups(const char *groups, message_data_t *msg)
 	if (!is_newsgroup(rcpt)) continue;
 
 	/* Only add mailboxes that exist */
-	if (!mlookup(rcpt, NULL, NULL, NULL)) {
+	if (!mlookup(rcpt, NULL)) {
 	    msg->rcpt[msg->rcpt_num] = rcpt;
 	    msg->rcpt_num++;
 	    msg->rcpt[msg->rcpt_num] = rcpt = NULL;
@@ -3264,7 +3267,7 @@ static int deliver_remote(message_data_t *msg, struct dest *dlist)
 static int deliver(message_data_t *msg)
 {
     int n, r = 0, myrights;
-    char *rcpt = NULL, *local_rcpt = NULL, *server, *acl;
+    char *rcpt = NULL, *local_rcpt = NULL;
     time_t now = time(NULL);
     unsigned long uid;
     struct body *body = NULL;
@@ -3272,19 +3275,22 @@ static int deliver(message_data_t *msg)
 
     /* check ACLs of all mailboxes */
     for (n = 0; n < msg->rcpt_num; n++) {
+	struct mboxlist_entry *mbentry = NULL;
 	rcpt = msg->rcpt[n];
 
 	/* look it up */
-	r = mlookup(rcpt, &server, &acl, NULL);
+	r = mlookup(rcpt, &mbentry);
 	if (r) return IMAP_MAILBOX_NONEXISTENT;
 
-	if (!(acl && (myrights = cyrus_acl_myrights(nntp_authstate, acl)) &&
-	      (myrights & ACL_POST)))
+	if (!(mbentry->acl && (myrights = cyrus_acl_myrights(nntp_authstate, mbentry->acl)) &&
+	      (myrights & ACL_POST))) {
+	    mboxlist_entry_free(&mbentry);
 	    return IMAP_PERMISSION_DENIED;
+	}
 
-	if (server) {
+	if (mbentry->server) {
 	    /* remote group */
-	    proxy_adddest(&dlist, NULL, 0, server, "");
+	    proxy_adddest(&dlist, NULL, 0, mbentry->server, "");
 	}
 	else {
 	    /* local group */
@@ -3329,10 +3335,14 @@ static int deliver(message_data_t *msg)
 		duplicate_mark(msg->id, strlen(msg->id), rcpt, strlen(rcpt),
 			       now, uid);
 
-	    if (r) return r;
+	    if (r) {
+		mboxlist_entry_free(&mbentry);
+		return r;
+	    }
 
 	    local_rcpt = rcpt;
 	}
+	mboxlist_entry_free(&mbentry);
     }
 
     if (body) {

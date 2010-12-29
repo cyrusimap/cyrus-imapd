@@ -480,20 +480,19 @@ void do_dump(enum mboxop op, const char *part, int purge)
     /* Dump Database */
     config_mboxlist_db->foreach(mbdb, "", 0, NULL, &dump_cb, &d, NULL);
 
-    if(d.tid) {
+    if (d.tid) {
 	config_mboxlist_db->commit(mbdb, d.tid);
 	d.tid = NULL;
     }
 
-    if(op == M_POPULATE) {
+    if (op == M_POPULATE) {
 	/* Remove MBTYPE_MOVING flags (unflag_head) */
-	while(unflag_head) {
-	    struct mboxlist_entry mbentry;
+	while (unflag_head) {
+	    struct mboxlist_entry *mbentry = NULL;
 	    struct mb_node *me = unflag_head;
-	    char *newpart;
-	    
+
 	    unflag_head = unflag_head->next;
-	    
+
 	    ret = mboxlist_lookup(me->mailbox, &mbentry, NULL);
 	    if(ret) {
 		fprintf(stderr,
@@ -503,30 +502,27 @@ void do_dump(enum mboxop op, const char *part, int purge)
 	    }
 
 	    /* Reset the partition! */
-	    newpart = strchr(mbentry.partition, '!');
-	    if(!newpart) newpart = mbentry.partition;
-	    else newpart++;
-
-	    /* XXX - FIXME, pull uniqueid from detail */
-	    ret = mboxlist_update(me->mailbox, mbentry.mbtype & ~MBTYPE_MOVING,
-				  newpart, mbentry.acl, 1);
-	    if(ret) {
+	    mbentry->server = NULL;
+	    mbentry->mbtype &= ~(MBTYPE_MOVING|MBTYPE_REMOTE);
+	    ret = mboxlist_update(mbentry, 1);
+	    if (ret) {
 		fprintf(stderr,
 			"couldn't perform update to un-remote-flag %s\n",
 			me->mailbox);
 		exit(1);
 	    } 
-	    
+
 	    /* force a push to mupdate */
-	    snprintf(buf, sizeof(buf), "%s!%s", config_servername, newpart);
-	    ret = mupdate_activate(d.h, me->mailbox, buf, mbentry.acl);
-	    if(ret) {
+	    snprintf(buf, sizeof(buf), "%s!%s", config_servername, mbentry->partition);
+	    ret = mupdate_activate(d.h, me->mailbox, buf, mbentry->acl);
+	    if (ret) {
 		fprintf(stderr,
 			"couldn't perform mupdatepush to un-remote-flag %s\n",
 			me->mailbox);
 		exit(1);
 	    }
-	    
+
+	    mboxlist_entry_free(&mbentry);
 	    free(me);
 	}
 
@@ -586,7 +582,8 @@ void do_undump(void)
 	char *name, *partition, *acl;
 	char *p;
 	int mbtype = 0, tries = 0;
-	
+	struct mboxlist_entry *newmbentry = NULL;
+
 	line++;
 
 	name = buf;
@@ -623,10 +620,20 @@ void do_undump(void)
 	    continue;
 	}
 
-	key = name; keylen = strlen(key);
-	data = mboxlist_makeentry(mbtype, partition, acl);
+	key = name;
+	keylen = strlen(key);
+
+	/* generate a new entry */
+	newmbentry = mboxlist_entry_create();
+	newmbentry->mbtype = mbtype;
+	newmbentry->partition = partition;
+	newmbentry->acl = acl;
+
+	data = mboxlist_entry_cstring(newmbentry);
 	datalen = strlen(data);
-	
+
+	mboxlist_entry_free(&newmbentry);
+
 	tries = 0;
     retry:
 	r = config_mboxlist_db->store(mbdb, key, keylen, data, datalen, &tid);

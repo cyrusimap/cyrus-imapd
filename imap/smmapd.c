@@ -286,10 +286,8 @@ int verify_user(const char *key, long quotacheck,
 
     if (!r) {
 	long aclcheck = !user ? ACL_POST : 0;
-        struct mboxlist_entry mbentry;
-        char *c;
+        struct mboxlist_entry *mbentry = NULL;
         struct hostent *hp;
-        char *host;
         struct sockaddr_in sin,sfrom;
         char buf[512];
         int soc, rc;
@@ -305,19 +303,21 @@ int verify_user(const char *key, long quotacheck,
 	r = mboxlist_lookup(namebuf, &mbentry, NULL);
 	if (r == IMAP_MAILBOX_NONEXISTENT && config_mupdate_server) {
 	    kick_mupdate();
+	    mboxlist_entry_free(&mbentry);
 	    r = mboxlist_lookup(namebuf, &mbentry, NULL);
 	}
 
-	if (!r && (mbentry.mbtype & MBTYPE_REMOTE)) {
+	if (!r && (mbentry->mbtype & MBTYPE_REMOTE)) {
 	    /* XXX  Perhaps we should support the VRFY command in lmtpd
 	     * and then we could do a VRFY to the correct backend which
 	     * would also do a quotacheck.
 	     */
-	    int access = cyrus_acl_myrights(authstate, mbentry.acl);
+	    int access = cyrus_acl_myrights(authstate, mbentry->acl);
 
 	    if ((access & aclcheck) != aclcheck) {
 		r = (access & ACL_LOOKUP) ?
 		    IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
+		mboxlist_entry_free(&mbentry);
                 return r;
 	    } else {
                 r = 0;
@@ -328,25 +328,22 @@ int verify_user(const char *key, long quotacheck,
              * (asuume under quota)
              */
 
-            host = xstrdup(mbentry.partition);
-            c = strchr(host, '!');
-            if (c) *c = 0;
-
             syslog(LOG_ERR, "verify_user(%s) proxying to host %s",
-                   namebuf, host);
+                   namebuf, mbentry->server);
 
-            hp = gethostbyname(host);
+            hp = gethostbyname(mbentry->server);
             if (hp == (struct hostent*) 0) {
-               syslog(LOG_ERR, "verify_user(%s) failed: can't find host %s",
-                      namebuf, host);
-               return r;
+                syslog(LOG_ERR, "verify_user(%s) failed: can't find host %s",
+                       namebuf, mbentry->server);
+		mboxlist_entry_free(&mbentry);
+                return r;
             }
 
             soc = socket(PF_INET, SOCK_STREAM, 0);
 	    if (soc < 0) {
                 syslog(LOG_ERR, "verify_user(%s) failed: can't connect to %s", 
-                       namebuf, host);
-		free(host);
+                       namebuf, mbentry->server);
+		mboxlist_entry_free(&mbentry);
 		return r;
 	    }
             memcpy(&sin.sin_addr.s_addr,hp->h_addr,hp->h_length);
@@ -357,8 +354,8 @@ int verify_user(const char *key, long quotacheck,
 
             if (connect(soc,(struct sockaddr *) &sin, sizeof(sin)) < 0) { 
                 syslog(LOG_ERR, "verify_user(%s) failed: can't connect to %s", 
-                       namebuf, host);
-		free(host);
+                       namebuf, mbentry->server);
+		mboxlist_entry_free(&mbentry);
                 return r;
             }
 
@@ -374,7 +371,9 @@ int verify_user(const char *key, long quotacheck,
 		buf[rc] = '\0';
 		prot_printf(map_out, "%s", buf);
 	    }
-	    free(host);
+
+	    mboxlist_entry_free(&mbentry);
+
             return -1;   /* tell calling function we already replied */
 
 	} else if (!r) {
@@ -383,6 +382,8 @@ int verify_user(const char *key, long quotacheck,
 			     || config_getswitch(IMAPOPT_LMTP_STRICT_QUOTA) ?
 			     quotacheck : 0);
 	}
+
+	mboxlist_entry_free(&mbentry);
     }
 
     if (r) syslog(LOG_DEBUG, "verify_user(%s) failed: %s", namebuf,

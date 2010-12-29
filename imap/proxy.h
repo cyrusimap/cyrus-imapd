@@ -67,7 +67,7 @@ struct dest {
 };
 
 void proxy_adddest(struct dest **dlist, const char *rcpt, int rcpt_num,
-		   char *server, const char *authas);
+		   const char *server, const char *authas);
 
 struct backend *
 proxy_findserver(const char *server, struct protocol_t *prot,

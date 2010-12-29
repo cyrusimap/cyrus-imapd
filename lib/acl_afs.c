@@ -63,8 +63,9 @@
  * Calculate the set of rights the user in 'auth_state' has in the ACL 'acl'.
  * 'acl' must be writable, but is restored to its original condition.
  */
-int cyrus_acl_myrights(struct auth_state *auth_state, char *acl)
+int cyrus_acl_myrights(struct auth_state *auth_state, const char *origacl)
 {
+    char *acl = xstrdup(origacl);
     char *thisid, *rights, *nextid;
     long acl_positive = 0, acl_negative = 0;
     long *acl_ptr;
@@ -91,11 +92,9 @@ int cyrus_acl_myrights(struct auth_state *auth_state, char *acl)
 	if (auth_memberof(auth_state, thisid)) {
 	    *acl_ptr |= cyrus_acl_strtomask(rights);
 	}
-
-	/* Put the delimiters back */
-	rights[-1] = '\t';
-	nextid[-1] = '\t';
     }
+
+    free(acl);
 
     return acl_positive & ~acl_negative;
 }

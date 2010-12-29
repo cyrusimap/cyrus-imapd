@@ -72,10 +72,6 @@ extern struct backend *backend_inbox, *backend_current, **backend_cached;
 extern char *imapd_userid, *proxy_userid;
 extern struct namespace imapd_namespace;
 
-extern int mlookup(const char *tag, const char *ext_name,
-		   const char *name, int *flags,
-		   char **partp, char **aclp, struct txn **tid) ;
-
 static char *imap_parsemechlist(const char *str, struct protocol_t *prot)
 {
     char *ret = xzmalloc(strlen(str)+1);
@@ -132,21 +128,24 @@ void proxy_gentag(char *tag, size_t len)
 struct backend *proxy_findinboxserver(const char *userid)
 {
     char inbox[MAX_MAILBOX_BUFFER];
-    int r, mbtype;
-    char *server = NULL;
+    struct mboxlist_entry *mbentry = NULL;
     struct backend *s = NULL;
+    int r;
 
     r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, "INBOX",
 					       userid, inbox);
+    if (r) return NULL;
 
-    if(!r) {
-	r = mlookup(NULL, NULL, inbox, &mbtype, &server, NULL, NULL);
-	if (!r && (mbtype & MBTYPE_REMOTE)) {
-	    s = proxy_findserver(server, &imap_protocol,
-				 proxy_userid, &backend_cached,
-				 &backend_current, &backend_inbox, imapd_in);
-	}
+    r = mboxlist_lookup(inbox, &mbentry, NULL);
+    if (r) return NULL;
+
+    if (mbentry->mbtype & MBTYPE_REMOTE) {
+	s = proxy_findserver(mbentry->server, &imap_protocol,
+			     proxy_userid, &backend_cached,
+			     &backend_current, &backend_inbox, imapd_in);
     }
+
+    mboxlist_entry_free(&mbentry);
 
     return s;
 }
@@ -644,10 +643,11 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
 							userid,
 							mailboxname);
 	    if (!r) {
-		struct mboxlist_entry mbentry;
+		struct mboxlist_entry *mbentry = NULL;
 		exist_r = mboxlist_lookup(mailboxname, &mbentry, NULL);
-		if(!exist_r && (mbentry.mbtype & MBTYPE_RESERVE))
+		if(!exist_r && (mbentry->mbtype & MBTYPE_RESERVE))
 		    exist_r = IMAP_MAILBOX_RESERVED;
+		mboxlist_entry_free(&mbentry);
 	    } else {
 		/* skip this one */
 		syslog(LOG_ERR, "could not convert %s to internal form",
@@ -657,7 +657,7 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
 
 	    /* send our response */
 	    /* we need to set \Noselect if it's not in our mailboxes.db */
-	    if(resp[0] == 'L') {
+	    if (resp[0] == 'L') {
 		if(!exist_r) {
 		    prot_printf(imapd_out, "* %s %s \"%s\" ",
 				resp, flags, sep.s);

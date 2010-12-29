@@ -1456,14 +1456,22 @@ void database_init()
 /* log change to database. database must be locked. */
 void database_log(const struct mbent *mb, struct txn **mytid)
 {
+    struct mboxlist_entry *mbentry = NULL;
+
+    mbentry = mboxlist_entry_create();
+    mbentry->name = mb->mailbox;
+    mbentry->server = mb->server;
+    mbentry->acl = mb->acl;
+
     switch (mb->t) {
     case SET_ACTIVE:
-	mboxlist_insertremote(mb->mailbox, 0, mb->server, mb->acl, mytid);
+	mbentry->mbtype = 0;
+	mboxlist_insertremote(mbentry, mytid);
 	break;
 
     case SET_RESERVE:
-	mboxlist_insertremote(mb->mailbox, MBTYPE_RESERVE, mb->server,
-			      "", mytid);
+	mbentry->mbtype = MBTYPE_RESERVE;
+	mboxlist_insertremote(mbentry, mytid);
 	break;
 
     case SET_DELETE:
@@ -1475,6 +1483,8 @@ void database_log(const struct mbent *mb, struct txn **mytid)
 	   mailbox can have! */
 	abort();
     }
+
+    mboxlist_entry_free(&mbentry);
 }
 
 /* lookup in database. database must be locked */
@@ -1483,7 +1493,7 @@ void database_log(const struct mbent *mb, struct txn **mytid)
  * a non-null pool implies we should use the mpool functionality */
 struct mbent *database_lookup(const char *name, struct mpool *pool) 
 {
-    struct mboxlist_entry mbentry;
+    struct mboxlist_entry *mbentry = NULL;
     struct mbent *out;
     int r;
     
@@ -1500,10 +1510,10 @@ struct mbent *database_lookup(const char *name, struct mpool *pool)
 	break;
 
     case 0:
-	if(!pool) out = xmalloc(sizeof(struct mbent) + strlen(mbentry.acl));
-	else out = mpool_malloc(pool, sizeof(struct mbent) + strlen(mbentry.acl));
+	if(!pool) out = xmalloc(sizeof(struct mbent) + strlen(mbentry->acl));
+	else out = mpool_malloc(pool, sizeof(struct mbent) + strlen(mbentry->acl));
 	out->t = SET_ACTIVE;
-	strcpy(out->acl, mbentry.acl);
+	strcpy(out->acl, mbentry->acl);
 	break;
 
     default:
@@ -1511,8 +1521,10 @@ struct mbent *database_lookup(const char *name, struct mpool *pool)
     }
 
     out->mailbox = (pool) ? mpool_strdup(pool, name) : xstrdup(name);
-    out->server = (pool) ? mpool_strdup(pool, mbentry.partition) 
-			 : xstrdup(mbentry.partition);
+    out->server = (pool) ? mpool_strdup(pool, mbentry->partition) 
+			 : xstrdup(mbentry->partition);
+
+    mboxlist_entry_free(&mbentry);
 
     return out;
 }
@@ -2426,10 +2438,13 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
 			    l->mailbox );
 		    err++;
 		} else {
-		    mboxlist_insertremote(r->mailbox, 
-					 (r->t == SET_RESERVE ?
-					    MBTYPE_RESERVE : 0),
-					  r->server, r->acl, &tid);
+		    struct mboxlist_entry *mbentry = mboxlist_entry_create();
+		    mbentry->name = r->mailbox;
+		    mbentry->mbtype = (r->t == SET_RESERVE ? MBTYPE_RESERVE : 0);
+		    mbentry->server = r->server;
+		    mbentry->acl = r->acl;
+		    mboxlist_insertremote(mbentry, &tid);
+		    mboxlist_entry_free(&mbentry);
 		}
 	    }
 	    /* Okay, dump these two */
@@ -2460,10 +2475,13 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
 	    local_boxes.head = l->next;
 	} else /* (ret > 0) */ {
 	    /* Remote without corresponding local, insert it */
-	    mboxlist_insertremote(r->mailbox, 
-				  (r->t == SET_RESERVE ?
-				   MBTYPE_RESERVE : 0),
-				  r->server, r->acl, &tid);
+	    struct mboxlist_entry *mbentry = mboxlist_entry_create();
+	    mbentry->name = r->mailbox;
+	    mbentry->mbtype = (r->t == SET_RESERVE ? MBTYPE_RESERVE : 0);
+	    mbentry->server = r->server;
+	    mbentry->acl = r->acl;
+	    mboxlist_insertremote(mbentry, &tid);
+	    mboxlist_entry_free(&mbentry);
 	    remote_boxes->head = r->next;
 	}
     }
@@ -2484,11 +2502,14 @@ int mupdate_synchronize(struct mbent_queue *remote_boxes, struct mpool *pool)
 	}
     } else if (r && !l) {
 	/* we have more inserts to do */
-	while(r) {
-	    mboxlist_insertremote(r->mailbox, 
-				  (r->t == SET_RESERVE ?
-				   MBTYPE_RESERVE : 0),
-				  r->server, r->acl, &tid);
+	while (r) {
+	    struct mboxlist_entry *mbentry = mboxlist_entry_create();
+	    mbentry->name = r->mailbox;
+	    mbentry->mbtype = (r->t == SET_RESERVE ? MBTYPE_RESERVE : 0);
+	    mbentry->server = r->server;
+	    mbentry->acl = r->acl;
+	    mboxlist_insertremote(mbentry, &tid);
+	    mboxlist_entry_free(&mbentry);
 	    remote_boxes->head = r->next;
 	    r = remote_boxes->head;
 	}
