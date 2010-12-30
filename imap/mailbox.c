@@ -1076,13 +1076,17 @@ void mailbox_close(struct mailbox **mailboxptr)
 
 /*
  * Read the header of 'mailbox'
+ * format:
+ * MAGIC
+ * quotaroot TAB uniqueid TAB specialuse
+ * userflag1 SPACE userflag2 SPACE userflag3 [...] (with no trailing space)
+ * user1 TAB user1acl TAB user2 TAB user2acl TAB (with trailing tab!)
  */
 int mailbox_read_header(struct mailbox *mailbox, char **aclptr)
 {
     int r = 0;
     int flag;
     const char *name, *p, *tab, *eol;
-    int oldformat = 0;
     const char *fname;
     struct stat sbuf;
     const char *base = NULL;
@@ -1123,39 +1127,52 @@ int mailbox_read_header(struct mailbox *mailbox, char **aclptr)
 	goto done;
     }
 
-    /* Read quota file pathname */
+    /* Read quota data line */
     p = base + sizeof(MAILBOX_HEADER_MAGIC)-1;
     tab = memchr(p, '\t', sbuf.st_size - (p - base));
     eol = memchr(p, '\n', sbuf.st_size - (p - base));
-    if (!tab || tab > eol || !eol) {
-	oldformat = 1;
-	if (!eol) {
-	    r = IMAP_MAILBOX_BADFORMAT;
-	    goto done;
-	}
-	else {
-	    syslog(LOG_DEBUG, "mailbox '%s' has old cyrus.header",
-		   mailbox->name);
-	}
+    if (!eol) {
+	r = IMAP_MAILBOX_BADFORMAT;
+	goto done;
+    }
+
+    /* quotaroot (if present) */
+    free(mailbox->quotaroot);
+    if (!tab || tab > eol) {
+	syslog(LOG_DEBUG, "mailbox '%s' has old cyrus.header",
+	       mailbox->name);
 	tab = eol;
     }
-    free(mailbox->quotaroot);
-    mailbox->quotaroot = NULL;
     if (p < tab) {
 	mailbox->quotaroot = xstrndup(p, tab - p);
     }
+    else {
+	mailbox->quotaroot = NULL;
+    }
 
-    if (oldformat) {
-	/* uniqueid needs to be generated when we know the uidvalidity */
-	mailbox->uniqueid = NULL;
-    } else {
-	/* read uniqueid */
+    /* read uniqueid (should always exist unless old format) */
+    free(mailbox->uniqueid);
+    if (tab < eol) {
 	p = tab + 1;
 	if (p == eol) {
 	    r = IMAP_MAILBOX_BADFORMAT;
 	    goto done;
 	}
-	mailbox->uniqueid = xstrndup(p, eol - p);
+	tab = memchr(p, '\t', sbuf.st_size - (p - base));
+	if (!tab || tab > eol) tab = eol;
+	mailbox->uniqueid = xstrndup(p, tab - p);
+    } else {
+	/* uniqueid needs to be generated when we know the uidvalidity */
+	mailbox->uniqueid = NULL;
+    }
+
+    /* read special use list flags (optional) */
+    free(mailbox->specialuse);
+    mailbox->specialuse = NULL;
+    if (tab < eol) {
+	p = tab + 1;
+	if (p < eol)
+	    mailbox->specialuse = xstrndup(p, eol - p);
     }
 
     /* Read names of user flags */
@@ -1639,6 +1656,10 @@ int mailbox_commit_header(struct mailbox *mailbox)
 	WRITEV_ADDSTR_TO_IOVEC(iov,niov,quotaroot);
 	WRITEV_ADD_TO_IOVEC(iov,niov,"\t",1);
 	WRITEV_ADDSTR_TO_IOVEC(iov,niov,mailbox->uniqueid);
+	if (mailbox->specialuse) {
+	    WRITEV_ADD_TO_IOVEC(iov,niov,"\t",1);
+	    WRITEV_ADDSTR_TO_IOVEC(iov,niov,mailbox->specialuse);
+	}
 	WRITEV_ADD_TO_IOVEC(iov,niov,"\n",1);
 	r = retry_writev(fd, iov, niov);
     }

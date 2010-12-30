@@ -213,6 +213,7 @@ struct mailbox {
 
     /* Information in header */
     char *uniqueid;
+    char *specialuse;
     char *quotaroot;
     char *flagname[MAX_USER_FLAGS];
 
