@@ -82,6 +82,9 @@ struct mboxlist_entry {
     const char *partition;
     const char *server; /* holds remote machine for REMOTE mailboxes */
     const char *acl;
+    /* extra fields */
+    const char *specialuse;
+    const char *uniqueid;
 };
 
 struct mboxlist_entry *mboxlist_entry_create();

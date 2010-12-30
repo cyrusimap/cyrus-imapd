@@ -127,11 +127,29 @@ void mboxlist_entry_free(struct mboxlist_entry **mbentryptr)
 char *mboxlist_entry_cstring(struct mboxlist_entry *mbentry)
 {
     struct buf ebuf;
+    char sep = '(';
     char nbuf[30];
     char *ret;
 
     memset(&ebuf, 0, sizeof(struct buf));
 
+    if (mbentry->specialuse) {
+	buf_putc(&ebuf, sep);
+	buf_appendcstr(&ebuf, "specialuse");
+	buf_putc(&ebuf, ' ');
+	buf_appendcstr(&ebuf, mbentry->specialuse);
+	sep = ' ';
+    }
+    if (mbentry->uniqueid) {
+	buf_putc(&ebuf, sep);
+	buf_appendcstr(&ebuf, "uniqueid");
+	buf_putc(&ebuf, ' ');
+	buf_appendcstr(&ebuf, mbentry->uniqueid);
+	sep = ' ';
+    }
+    if (sep == ' ') {
+	buf_appendcstr(&ebuf, ") ");
+    }
     sprintf(nbuf, "%d", mbentry->mbtype);
     buf_appendcstr(&ebuf, nbuf);
     buf_putc(&ebuf, ' ');
@@ -205,6 +223,7 @@ static int mboxlist_mylookup(const char *name,
     int r;
     char *p, *q;
     const char *data;
+    const char **target;
     int datalen;
     struct mboxlist_entry *mbentry;
 
@@ -214,6 +233,28 @@ static int mboxlist_mylookup(const char *name,
     mbentry = mboxlist_entry_create();
 
     mbentry->_alloc = p = xstrndup(data, datalen);
+
+    /* check for extended mboxlist entry */
+    if (*p == '(') {
+	int last = 0;
+	p++; /* past leading '(' */
+	while (!last) {
+	    target = NULL;
+	    q = p;
+	    while (*q && *q != ' ' && *q != ')') q++;
+	    if (*q != ' ') break;
+	    *q++ = '\0';
+	    if (!strcmp(p, "specialuse")) target = &mbentry->specialuse;
+	    if (!strcmp(p, "uniqueid")) target = &mbentry->uniqueid;
+	    p = q;
+	    while (*q && *q != ' ' && *q != ')') q++;
+	    if (*q != ' ') last = 1;
+	    if (*q) *q++ = '\0';
+	    if (target) *target = p;
+	    p = q;
+	}
+	if (*p == ' ') p++; /* past trailing ' ' */
+    }
 
     /* copy out interesting parts */
     mbentry->mbtype = strtol(p, &p, 10);
