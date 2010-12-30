@@ -161,6 +161,9 @@ int mboxlist_setacl(const char *name, const char *identifier,
 /* Change all ACLs on mailbox */
 int mboxlist_sync_setacls(const char *name, const char *acl);
 
+/* Set specialuse on a mailbox */
+int mboxlist_setspecialuse(const char *name, const char *specialuse);
+
 /* Find all mailboxes that match 'pattern'. */
 int mboxlist_findall(struct namespace *namespace,
 		     const char *pattern, int isadmin, const char *userid, 

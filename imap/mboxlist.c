@@ -1585,6 +1585,86 @@ mboxlist_sync_setacls(const char *name, const char *newacl)
     return r;
 }
 
+/* set the XLIST flag for a mailbox.  Note: no mupdate changes required
+ * yet because mupdate protocol doesn't support xlist flags */
+int mboxlist_setspecialuse(const char *name, const char *specialuse)
+{
+    struct mailbox *mailbox = NULL;
+    struct mboxlist_entry *mbentry = NULL;
+    struct txn *tid = NULL;
+    char *mboxent = NULL;
+    int r;
+
+    r = mailbox_open_iwl(name, &mailbox);
+    if (r) goto done;
+
+    /* 1. Start Transaction */
+    /* lookup the mailbox to make sure it exists and get its acl */
+    do {
+	r = mboxlist_mylookup(name, &mbentry, &tid, 1);
+    } while (r == IMAP_AGAIN);    
+
+    /* both empty? */
+    if (!mbentry->specialuse && !specialuse)
+	goto done;
+
+    /* both the same? */
+    if (mbentry->specialuse && specialuse &&
+	!strcmp(mbentry->specialuse, specialuse))
+	goto done;
+
+    /* Can't do this to anything other than a normal mailbox */
+    if (!r && mbentry->mbtype) {
+	r = IMAP_MAILBOX_NOTSUPPORTED;
+	goto done;
+    }
+
+    r = mailbox_set_specialuse(mailbox, specialuse);
+    if (r) goto done;
+
+    r = mailbox_commit(mailbox);
+    if (r) goto done;
+
+    mbentry->specialuse = specialuse;
+    mboxent = mboxlist_entry_cstring(mbentry);
+    do {
+	r = DB->store(mbdb, name, strlen(name),
+		      mboxent, strlen(mboxent), &tid);
+    } while (r == CYRUSDB_AGAIN);
+
+    if (r) {
+	syslog(LOG_ERR, "DBERROR: error updating acl %s: %s",
+	       name, cyrusdb_strerror(r));
+	r = IMAP_IOERROR;
+	goto done;
+    }
+
+    /* 3. Commit transaction */
+    r = DB->commit(mbdb, tid);
+    if (r) {
+	syslog(LOG_ERR, "DBERROR: failed on commit, header inconsistent %s: %s",
+	       name, cyrusdb_strerror(r));
+	r = IMAP_IOERROR;
+	goto done;
+    }
+
+    tid = NULL;
+
+ done:
+    if (tid) {
+	int r2 = DB->abort(mbdb, tid);
+	if (r2) {
+	    syslog(LOG_ERR, "DBERROR: failed on abort %s: %s",
+		   name, cyrusdb_strerror(r2));
+	}
+    }
+    mailbox_close(&mailbox);
+    mboxlist_entry_free(&mbentry);
+    free(mboxent);
+
+    return r;
+}
+
 struct find_rock {
     struct glob *g;
     struct namespace *namespace;
