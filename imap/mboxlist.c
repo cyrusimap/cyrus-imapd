@@ -1,4 +1,4 @@
-/* uboxlist.c -- Mailbox list manipulation routines
+/* mboxlist.c -- Mailbox list manipulation routines
  *
  * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
  *
