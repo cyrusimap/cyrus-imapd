@@ -674,6 +674,7 @@ int mboxlist_createmailbox_full(const char *name, int mbtype,
     newmbentry->acl = acl;
     newmbentry->mbtype = mbtype;
     newmbentry->partition = newpartition;
+    newmbentry->uniqueid = newmailbox ? newmailbox->uniqueid : uniqueid;
     mboxent = mboxlist_entry_cstring(newmbentry);
     r = DB->store(mbdb, name, strlen(name), mboxent, strlen(mboxent), NULL);
 
