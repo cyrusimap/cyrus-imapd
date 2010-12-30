@@ -9970,7 +9970,7 @@ static void xlist_check(const char *key, const char *val, void *rock)
     r->sep = " ";
 }
 
-static void xlist_flags(const char *mboxname, char *sep)
+static void specialuse_flags(struct mboxlist_entry *mbentry, char *sep)
 {
     char inboxname[MAX_MAILBOX_PATH+1];
     int inboxlen;
@@ -9980,19 +9980,25 @@ static void xlist_flags(const char *mboxname, char *sep)
     inboxlen = strlen(inboxname);
 
     /* doesn't match inbox, not xlistable */
-    if (strncmp(mboxname, inboxname, inboxlen))
+    if (strncmp(mbentry->name, inboxname, inboxlen))
 	return;
 
     /* inbox */
-    if (mboxname[inboxlen] == '\0') {
+    if (mbentry->name[inboxlen] == '\0') {
 	prot_printf(imapd_out, "%s\\Inbox", sep);
     }
     /* subdir */
-    else if (mboxname[inboxlen] == '.') {
-	struct xlist_rock rock;
-	rock.sep = sep;
-	rock.mboxname = mboxname + inboxlen + 1;
-	config_foreachoverflowstring(xlist_check, &rock);
+    else if (mbentry->name[inboxlen] == '.') {
+	/* check if there's a special use flag set */
+	if (mbentry->specialuse)
+	    prot_printf(imapd_out, "%s\\%s", sep, mbentry->specialuse);
+	else {
+	    /* oldschool xlist flags! */
+	    struct xlist_rock rock;
+	    rock.sep = sep;
+	    rock.mboxname = mbentry->name + inboxlen + 1;
+	    config_foreachoverflowstring(xlist_check, &rock);
+	}
     }
     /* otherwise it's actually another user who matches for
      * the substr.  Ok to just print nothing */
@@ -10158,7 +10164,7 @@ static void list_response(char *name, int attributes,
             imapd_userid, mboxname);
 
     if (listargs->cmd == LIST_CMD_XLIST)
-	xlist_flags(internal_name, sep);
+	specialuse_flags(mbentry, sep);
     prot_printf(imapd_out, ") ");
 
     prot_printf(imapd_out, "\"%c\" ", imapd_namespace.hier_sep);
