@@ -245,7 +245,7 @@ void do_syncnews(void)
     for (i = 0; i < group_num; i++) {
 	if (!group_seen[i]) {
 	    r = mboxlist_createmailbox(group[i], 0, "news",
-				       1, "anonymous", NULL, 0, 0, 0);
+				       1, "anonymous", NULL, 0, 0, 0, NULL);
 
 	    if (r == IMAP_MAILBOX_BADNAME) {
 		printf("ignored %s\n", group[i]);

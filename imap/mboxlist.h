@@ -47,6 +47,7 @@
 
 #include "config.h"
 #include "cyrusdb.h"
+#include "dlist.h"
 #include "mailbox.h"
 #include "auth.h"
 #include "mboxname.h"
@@ -122,7 +123,8 @@ int mboxlist_createmailbox(const char *name, int mbtype,
 			   const char *partition,
 			   int isadmin, const char *userid, 
 			   struct auth_state *auth_state,
-			   int localonly, int forceuser, int dbonly);
+			   int localonly, int forceuser, int dbonly,
+			   struct dlist *extargs);
 
 /* create mailbox from sync */
 int mboxlist_createsync(const char *name, int mbtype,

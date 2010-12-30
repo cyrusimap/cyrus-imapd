@@ -633,7 +633,7 @@ int mboxlist_createmailbox_full(const char *name, int mbtype,
 				int options, unsigned uidvalidity,
 				const char *copyacl, const char *uniqueid,
 				int localonly, int forceuser, int dbonly,
-				struct mailbox **mboxptr)
+				struct mailbox **mboxptr, struct dlist *extargs)
 {
     int r;
     char *newpartition = NULL;
@@ -643,10 +643,16 @@ int mboxlist_createmailbox_full(const char *name, int mbtype,
     struct mailbox *newmailbox = NULL;
     int isremote = mbtype & MBTYPE_REMOTE;
     struct mboxlist_entry *newmbentry = NULL;
+    struct dlist *item;
+    const char *useptr = NULL;
 
     /* Must be atleast MAX_PARTITION_LEN + 30 for partition, need
      * MAX_PARTITION_LEN + HOSTNAME_SIZE + 2 for mupdate location */
     char buf[MAX_PARTITION_LEN + HOSTNAME_SIZE + 2];
+
+    /* XXX - better DLIST API - handle multi-value? */
+    if (dlist_getlist(extargs, "USE", &item))
+	dlist_getatom(item, "USE", &useptr);
 
     if (copyacl) {
 	newpartition = xstrdup(partition);
@@ -662,9 +668,10 @@ int mboxlist_createmailbox_full(const char *name, int mbtype,
     }
 
     if (!dbonly && !isremote) {
+
 	/* Filesystem Operations */
 	r = mailbox_create(name, newpartition, acl, uniqueid,
-			   options, uidvalidity, &newmailbox);
+			   useptr, options, uidvalidity, &newmailbox);
     }
 
     if (r) goto done; /* CREATE failed */ 
@@ -675,6 +682,7 @@ int mboxlist_createmailbox_full(const char *name, int mbtype,
     newmbentry->mbtype = mbtype;
     newmbentry->partition = newpartition;
     newmbentry->uniqueid = newmailbox ? newmailbox->uniqueid : uniqueid;
+    newmbentry->specialuse = useptr;
     mboxent = mboxlist_entry_cstring(newmbentry);
     r = DB->store(mbdb, name, strlen(name), mboxent, strlen(mboxent), NULL);
 
@@ -719,14 +727,15 @@ int mboxlist_createmailbox(const char *name, int mbtype,
 			   const char *partition, 
 			   int isadmin, const char *userid, 
 			   struct auth_state *auth_state,
-			   int localonly, int forceuser, int dbonly)
+			   int localonly, int forceuser, int dbonly,
+			   struct dlist *extargs)
 {
     int options = config_getint(IMAPOPT_MAILBOX_DEFAULT_OPTIONS) | OPT_POP3_NEW_UIDL;
     unsigned uidvalidity = time(0);
     return mboxlist_createmailbox_full(name, mbtype, partition,
 				       isadmin, userid, auth_state,
 				       options, uidvalidity, NULL, NULL,
-				       localonly, forceuser, dbonly, NULL);
+				       localonly, forceuser, dbonly, NULL, extargs);
 }
 
 int mboxlist_createsync(const char *name, int mbtype,
@@ -739,7 +748,7 @@ int mboxlist_createsync(const char *name, int mbtype,
     return mboxlist_createmailbox_full(name, mbtype, partition,
 				       1, userid, auth_state,
 				       options, uidvalidity, acl, uniqueid,
-				       0, 1, 0, mboxptr);
+				       0, 1, 0, mboxptr, NULL);
 }
 
 /* insert an entry for the proxy */

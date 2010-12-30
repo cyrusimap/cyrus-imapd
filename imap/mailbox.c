@@ -1064,6 +1064,7 @@ void mailbox_close(struct mailbox **mailboxptr)
     free(mailbox->acl);
     free(mailbox->uniqueid);
     free(mailbox->quotaroot);
+    free(mailbox->specialuse);
 
     for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
 	free(mailbox->flagname[flag]);
@@ -2646,6 +2647,7 @@ int mailbox_create(const char *name,
 		   const char *part,
 		   const char *acl,
 		   const char *uniqueid,
+		   const char *specialuse,
 		   int options,
 		   unsigned uidvalidity,
 		   struct mailbox **mailboxptr)
@@ -2675,6 +2677,7 @@ int mailbox_create(const char *name,
 
     mailbox->part = xstrdup(part);
     mailbox->acl = xstrdup(acl);
+    if (specialuse) mailbox->specialuse = xstrdup(specialuse);
 
     hasquota = quota_findroot(quotaroot, sizeof(quotaroot), name);
 
@@ -3012,7 +3015,8 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
     /* Create new mailbox */
     r = mailbox_create(newname, newpartition,
 		       oldmailbox->acl, (userid ? NULL : oldmailbox->uniqueid),
-		       oldmailbox->i.options, uidvalidity, &newmailbox);
+		       oldmailbox->specialuse, oldmailbox->i.options,
+		       uidvalidity, &newmailbox);
 
     if (r) return r;
 
@@ -3421,7 +3425,7 @@ static int mailbox_reconstruct_create(const char *name, struct mailbox **mbptr)
          * no point trying to rescue anything else... */
 	mailbox_close(&mailbox);
 	return mailbox_create(name, mbentry->partition, mbentry->acl,
-			      NULL, options, time(0), mbptr);
+			      mbentry->specialuse, NULL, options, time(0), mbptr);
     }
 
     mboxlist_entry_free(&mbentry);

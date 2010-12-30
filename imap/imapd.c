@@ -76,6 +76,7 @@
 #include "backend.h"
 #include "bsearch.h"
 #include "charset.h"
+#include "dlist.h"
 #include "exitcodes.h"
 #include "idle.h"
 #include "global.h"
@@ -344,7 +345,7 @@ void cmd_sort(char *tag, int usinguid);
 void cmd_thread(char *tag, int usinguid);
 void cmd_copy(char *tag, char *sequence, char *name, int usinguid);
 void cmd_expunge(char *tag, char *sequence);
-void cmd_create(char *tag, char *name, char *partition, int localonly);
+void cmd_create(char *tag, char *name, struct dlist *extargs, int localonly);
 void cmd_delete(char *tag, char *name, int localonly, int force);
 void cmd_dump(char *tag, char *name, int uid_start);
 void cmd_undump(char *tag, char *name);
@@ -395,6 +396,8 @@ void cmd_setannotation(char* tag, char *mboxpat);
 void cmd_setmetadata(char* tag, char *mboxpat);
 
 void cmd_enable(char* tag);
+
+int parsecreateargs(struct dlist **extargs);
 
 int getannotatefetchdata(char *tag,
 			 struct strlist **entries, struct strlist **attribs);
@@ -1324,18 +1327,19 @@ void cmdloop(void)
 		snmp_increment(COPY_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Create")) {
-		havepartition = 0;
+		struct dlist *extargs = NULL;
+
 		if (c != ' ') goto missingargs;
 		c = getastring(imapd_in, imapd_out, &arg1);
 		if (c == EOF) goto missingargs;
 		if (c == ' ') {
-		    havepartition = 1;
-		    c = getword(imapd_in, &arg2);
-		    if (!imparse_isatom(arg2.s)) goto badpartition;
+		    c = parsecreateargs(&extargs);
+		    if (c == EOF) goto badpartition;
 		}
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
-		cmd_create(tag.s, arg1.s, havepartition ? arg2.s : 0, 0);
+		cmd_create(tag.s, arg1.s, extargs, 0);
+		dlist_free(&extargs);
 
 		snmp_increment(CREATE_COUNT, 1);
 	    }
@@ -1600,18 +1604,19 @@ void cmdloop(void)
 	    }
 	    else if (!strcmp(cmd.s, "Localcreate")) {
 		/* create a local-only mailbox */
-		havepartition = 0;
+		struct dlist *extargs = NULL;
+
 		if (c != ' ') goto missingargs;
 		c = getastring(imapd_in, imapd_out, &arg1);
 		if (c == EOF) goto missingargs;
 		if (c == ' ') {
-		    havepartition = 1;
-		    c = getword(imapd_in, &arg2);
-		    if (!imparse_isatom(arg2.s)) goto badpartition;
+		    c = parsecreateargs(&extargs);
+		    if (c == EOF) goto badpartition;
 		}
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
-		cmd_create(tag.s, arg1.s, havepartition ? arg2.s : NULL, 1);
+		cmd_create(tag.s, arg1.s, extargs, 1);
+		dlist_free(&extargs);
 
 		/* xxxx snmp_increment(CREATE_COUNT, 1); */
 	    }
@@ -4967,11 +4972,16 @@ void cmd_expunge(char *tag, char *sequence)
 /*
  * Perform a CREATE command
  */
-void cmd_create(char *tag, char *name, char *partition, int localonly)
+void cmd_create(char *tag, char *name, struct dlist *extargs, int localonly)
 {
     int r = 0;
     char mailboxname[MAX_MAILBOX_BUFFER];
     int autocreatequota;
+    const char *partition = NULL;
+    const char *server = NULL;
+
+    dlist_getatom(extargs, "PARTITION", &partition);
+    dlist_getatom(extargs, "SERVER", &server);
 
     if (partition && !imapd_userisadmin) {
 	r = IMAP_PERMISSION_DENIED;
@@ -4991,12 +5001,14 @@ void cmd_create(char *tag, char *name, char *partition, int localonly)
 	int guessedpart = 0;
 
 	/* determine if we're creating locally or remotely */
-	if (!partition) {
+	if (!partition && !server) {
+	    char *foundpart = NULL;
 	    guessedpart = 1;
 	    r = mboxlist_createmailboxcheck(mailboxname, 0, 0,
 					    imapd_userisadmin || imapd_userisproxyadmin,
 					    imapd_userid, imapd_authstate,
-					    NULL, &partition, 0);
+					    NULL, &foundpart, 0);
+	    partition = foundpart;
 
 	    if (!r && !partition &&
 		(config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD) &&
@@ -5005,7 +5017,7 @@ void cmd_create(char *tag, char *name, char *partition, int localonly)
 		guessedpart = 0;
 
 		/* use defaultserver if specified */
-		partition = (char *)config_getstring(IMAPOPT_DEFAULTSERVER);
+		partition = config_getstring(IMAPOPT_DEFAULTSERVER);
 
 		/* otherwise, find server with most available space */
 		if (!partition) partition = find_free_server();
@@ -5016,14 +5028,11 @@ void cmd_create(char *tag, char *name, char *partition, int localonly)
 
 	if (!r && !config_partitiondir(partition)) {
 	    /* invalid partition, assume its a server (remote mailbox) */
-	    char *server;
 	    struct backend *s = NULL;
 	    int res;
  
 	    /* check for a remote partition */
 	    server = partition;
-	    partition = strchr(server, '!');
-	    if (partition) *partition++ = '\0';
 	    if (guessedpart) partition = NULL;
 
 	    s = proxy_findserver(server, &imap_protocol,
@@ -5046,15 +5055,13 @@ void cmd_create(char *tag, char *name, char *partition, int localonly)
 
 	    if (!r) {
 		/* ok, send the create to that server */
-		if (partition) {
-		    /* Send partition as an atom, since its all we accept */
-		    prot_printf(s->out,
-				"%s CREATE {" SIZE_T_FMT "+}\r\n%s %s\r\n", 
-				tag, strlen(name), name, partition);
-		}
-		else
-		    prot_printf(s->out, "%s CREATE {" SIZE_T_FMT "+}\r\n%s\r\n", 
-				tag, strlen(name), name);
+		prot_printf(s->out, "%s CREATE ", tag);
+		prot_printastring(s->out, name);
+		prot_putc(' ', s->out);
+		/* Send partition as an atom, since its all we accept */
+		if (partition) prot_printastring(s->out, partition);
+		prot_printf(s->out, "\r\n");
+
 		res = pipe_until_tag(s, tag, 0);
 	
 		if (!CAPA(s, CAPA_MUPDATE)) {
@@ -5099,7 +5106,7 @@ void cmd_create(char *tag, char *name, char *partition, int localonly)
 	r = mboxlist_createmailbox(mailboxname, 0, partition,
 				   imapd_userisadmin || imapd_userisproxyadmin, 
 				   imapd_userid, imapd_authstate,
-				   localonly, localonly, 0);
+				   localonly, localonly, 0, extargs);
 
 	if (r == IMAP_PERMISSION_DENIED && !strcasecmp(name, "INBOX") &&
 	    (autocreatequota = config_getint(IMAPOPT_AUTOCREATEQUOTA))) {
@@ -5107,7 +5114,7 @@ void cmd_create(char *tag, char *name, char *partition, int localonly)
 	    /* Auto create */
 	    r = mboxlist_createmailbox(mailboxname, 0, partition, 
 				       1, imapd_userid, imapd_authstate,
-				       0, 0, 0);
+				       0, 0, 0, extargs);
 	    
 	    if (!r && autocreatequota > 0) {
 		(void) mboxlist_setquota(mailboxname, autocreatequota, 0);
@@ -5129,7 +5136,7 @@ void cmd_create(char *tag, char *name, char *partition, int localonly)
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
     }
-}	
+}
 
 /* Callback for use by cmd_delete */
 static int delmbox(char *name,
@@ -7164,6 +7171,68 @@ void cmd_namespace(char* tag)
 
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
+}
+
+int parsecreateargs(struct dlist **extargs)
+{
+    int c;
+    static struct buf arg, val;
+    struct dlist *res;
+    struct dlist *sub;
+    char *p;
+    const char *name;
+
+    res = dlist_kvlist(NULL, "CREATE");
+
+    c = prot_getc(imapd_in);
+    if (c == '(') {
+	/* new style RFC4466 arguments */
+	do {
+	    c = getword(imapd_in, &arg);
+	    name = ucase(arg.s);
+	    if (c != ' ') goto fail;
+	    c = prot_getc(imapd_in);
+	    if (c == '(') {
+		/* fun - more lists! */
+		sub = dlist_list(res, name);
+		do {
+		    c = getword(imapd_in, &val);
+		    dlist_atom(sub, name, val.s);
+		} while (c == ' ');
+		if (c != ')') goto fail;
+		c = prot_getc(imapd_in);
+	    }
+	    else {
+		prot_ungetc(c, imapd_in);
+		c = getword(imapd_in, &val);
+		dlist_atom(res, name, val.s);
+	    }
+	} while (c == ' ');
+	if (c != ')') goto fail;
+	c = prot_getc(imapd_in);
+    }
+    else {
+	prot_ungetc(c, imapd_in);
+	c = getword(imapd_in, &arg);
+	if (c == EOF) goto fail;
+	p = strchr(arg.s, '!');
+	if (p) {
+	    /* with a server */
+	    *p = '\0';
+	    dlist_atom(res, "SERVER", arg.s);
+	    dlist_atom(res, "PARTITION", p+1);
+	}
+	else {
+	    dlist_atom(res, "PARTITION", arg.s);
+	}
+    }
+
+    *extargs = res;
+    return c;
+
+ fail:
+    dlist_free(&res);
+    return EOF;
 }
 
 /*

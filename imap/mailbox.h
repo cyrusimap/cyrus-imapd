@@ -489,7 +489,8 @@ extern int mailbox_cleanup(struct mailbox *mailbox, int iscurrentdir,
 extern void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *sd);
 
 extern int mailbox_create(const char *name, const char *part, const char *acl,
-			  const char *uniqueid, int options, unsigned uidvalidity,
+			  const char *uniqueid, const char *specialuse,
+			  int options, unsigned uidvalidity,
 			  struct mailbox **mailboxptr);
 
 extern int mailbox_rename_copy(struct mailbox *oldmailbox, 

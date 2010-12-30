@@ -980,6 +980,37 @@ static void annotation_get_pop3showafter(const char *int_mboxname,
     output_entryatt(ext_mboxname, entry, "", &attrib, fdata);
 }
 
+static void annotation_get_specialuse(const char *int_mboxname,
+				      const char *ext_mboxname,
+				      const char *entry,
+				      struct fetchdata *fdata,
+				      struct mboxlist_entry *mbentry,
+				      void *rock __attribute__((unused)))
+{
+    struct annotation_data attrib;
+
+    if (!int_mboxname || !ext_mboxname || !fdata || !mbentry)
+	fatal("annotation_get_lastupdate called with bad parameters",
+	      EC_TEMPFAIL);
+
+    /* Make sure its a local mailbox */
+    if (mbentry->server) return;
+
+    /* Check ACL */
+    if (!annotation_may_fetch(fdata, mbentry, ACL_LOOKUP|ACL_READ))
+	return;
+
+    if (!mbentry->specialuse)
+	return;
+
+    memset(&attrib, 0, sizeof(attrib));
+
+    attrib.value = mbentry->specialuse;
+    attrib.size = strlen(mbentry->specialuse);
+    attrib.contenttype = "text/plain";
+
+    output_entryatt(ext_mboxname, entry, "", &attrib, fdata);
+}
 
 struct rw_rock {
     const char *ext_mboxname;
@@ -1073,6 +1104,8 @@ const struct annotate_f_entry mailbox_ro_entries[] =
       annotation_get_mailboxopt, NULL },
     { "/vendor/cmu/cyrus-imapd/pop3showafter", BACKEND_ONLY,
       annotation_get_pop3showafter, NULL },
+    { "/specialuse", BACKEND_ONLY,
+      annotation_get_specialuse, NULL },
     { NULL, ANNOTATION_PROXY_T_INVALID, NULL, NULL }
 };
 
@@ -1858,6 +1891,53 @@ static int annotation_set_pop3showafter(const char *int_mboxname,
     return 0;
 }
 
+const char *valid_specialuse[] = {
+/*   "\\All",  -- we don't support virtual folders right now */
+  "\\Archive",
+  "\\Drafts",
+/*  "\\Flagged",  -- we don't support virtual folders right now */
+  "\\Junk",
+  "\\Sent",
+  "\\Trash",
+  NULL
+};
+
+static int annotation_set_specialuse(const char *int_mboxname,
+				     struct annotate_st_entry_list *entry,
+				     struct storedata *sdata,
+				     struct mboxlist_entry *mbentry,
+				     void *rock __attribute__((unused)))
+{
+    int r = 0;
+    const char *val;
+    int i;
+
+    /* Check ACL */
+    if (!annotation_may_store(sdata, mbentry, ACL_LOOKUP|ACL_WRITE))
+	return IMAP_PERMISSION_DENIED;
+
+    if (!strcmp(entry->shared.value, "NIL")) {
+	/* Effectively removes the annotation */
+	val = NULL;
+    }
+    else {
+	for (i = 0; valid_specialuse[i]; i++) {
+	    if (!strcasecmp(valid_specialuse[i], entry->shared.value))
+		break;
+	    /* or without the leading '\' */
+	    if (!strcasecmp(valid_specialuse[i]+1, entry->shared.value))
+		break;
+	}
+	val = valid_specialuse[i];
+	if (!val) return IMAP_ANNOTATION_BADVALUE;
+    }
+
+
+    r = mboxlist_setspecialuse(int_mboxname, val);
+
+    return r;
+}
+
 const struct annotate_st_entry server_entries[] =
 {
     { "/comment", ATTRIB_TYPE_STRING, PROXY_AND_BACKEND,
@@ -1904,6 +1984,9 @@ const struct annotate_st_entry mailbox_rw_entries[] =
       ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV
       | ATTRIB_CONTENTTYPE_SHARED | ATTRIB_CONTENTTYPE_PRIV,
       0, annotation_set_todb, NULL },
+    { "/specialuse", ATTRIB_TYPE_STRING, BACKEND_ONLY,
+      ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
+      0, annotation_set_specialuse, NULL },
     { "/vendor/cmu/cyrus-imapd/squat", ATTRIB_TYPE_BOOLEAN, BACKEND_ONLY,
       ATTRIB_VALUE_SHARED | ATTRIB_CONTENTTYPE_SHARED,
       ACL_ADMIN, annotation_set_todb, NULL },
