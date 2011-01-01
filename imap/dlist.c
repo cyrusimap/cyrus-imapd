@@ -502,6 +502,9 @@ fail:
 static struct dlist *dlist_getchild(struct dlist *dl, const char *name)
 {
     struct dlist *i;
+
+    if (!dl) return NULL;
+
     for (i = dl->head; i; i = i->next) {
 	if (!strcmp(name, i->name))
 	    return i;
