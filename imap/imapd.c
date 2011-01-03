@@ -311,6 +311,8 @@ struct capa_struct base_capabilities[] = {
     { "QRESYNC",               2 },
     { "SCAN",                  2 },
     { "XLIST",                 2 },
+    { "SPECIAL-USE",           2 },
+    { "CREATE-SPECIAL-USE",    2 },
 
 #ifdef HAVE_SSL
     { "URLAUTH",               2 },
