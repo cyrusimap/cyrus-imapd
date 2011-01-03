@@ -1246,6 +1246,21 @@ int mailbox_set_quotaroot(struct mailbox *mailbox, const char *quotaroot)
     return 0;
 }
 
+/* set a new XLISTFLAG - only dirty if changed */
+int mailbox_set_specialuse(struct mailbox *mailbox, const char *specialuse)
+{
+    if (mailbox->specialuse) {
+	if (specialuse && !strcmp(mailbox->specialuse, specialuse))
+	    return 0; /* no change */
+	free(mailbox->specialuse);
+	mailbox->specialuse = NULL;
+    }
+    if (specialuse) 
+	mailbox->specialuse = xstrdup(specialuse);
+    mailbox->header_dirty = 1;
+    return 0;
+}
+
 /* find or create a user flag - dirty header if change needed */
 int mailbox_user_flag(struct mailbox *mailbox, const char *flag,
 		      int *flagnum)
