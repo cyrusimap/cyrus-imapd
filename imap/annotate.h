@@ -110,7 +110,8 @@ int annotatemore_findall(const char *mailbox, const char *entry,
 int annotatemore_fetch(char *mailbox,
 		       struct strlist *entries, struct strlist *attribs,
 		       struct namespace *namespace, int isadmin, char *userid,
-		       struct auth_state *auth_state, struct protstream *pout);
+		       struct auth_state *auth_state, struct protstream *pout,
+		       int ismetadata, int *maxsize);
 
 struct annotation_data {
     const char *value;

@@ -304,6 +304,7 @@ struct capa_struct base_capabilities[] = {
     { "THREAD=ORDEREDSUBJECT", 2 },
     { "THREAD=REFERENCES",     2 },
     { "ANNOTATEMORE",          2 },
+    { "METADATA",              2 },
     { "LIST-EXTENDED",         2 },
     { "WITHIN",                2 },
     { "QRESYNC",               2 },
@@ -388,13 +389,18 @@ void cmd_netscrape(char* tag);
 #endif
 
 void cmd_getannotation(char* tag, char *mboxpat);
+void cmd_getmetadata(char* tag, char *mboxpat);
 void cmd_setannotation(char* tag, char *mboxpat);
+void cmd_setmetadata(char* tag, char *mboxpat);
 
 void cmd_enable(char* tag);
 
 int getannotatefetchdata(char *tag,
 			 struct strlist **entries, struct strlist **attribs);
+int getmetadatafetchdata(char *tag,
+			 struct strlist **entries, struct strlist **attribs);
 int getannotatestoredata(char *tag, struct entryattlist **entryatts);
+int getmetadatastoredata(char *tag, struct entryattlist **entryatts);
 
 void annotate_response(struct entryattlist *l);
 
@@ -1462,6 +1468,15 @@ void cmdloop(void)
 
 		snmp_increment(GETANNOTATION_COUNT, 1);
 	    }
+	    else if (!strcmp(cmd.s, "Getmetadata")) {
+		if (c != ' ') goto missingargs;
+		c = getastring(imapd_in, imapd_out, &arg1);
+		if (c != ' ') goto missingargs;
+
+		cmd_getmetadata(tag.s, arg1.s);
+
+		snmp_increment(GETANNOTATION_COUNT, 1);
+	    }
 	    else if (!strcmp(cmd.s, "Getquota")) {
 		if (c != ' ') goto missingargs;
 		c = getastring(imapd_in, imapd_out, &arg1);
@@ -1881,6 +1896,15 @@ void cmdloop(void)
 		if (c != ' ') goto missingargs;
 
 		cmd_setannotation(tag.s, arg1.s);
+
+		snmp_increment(SETANNOTATION_COUNT, 1);
+	    }
+	    else if (!strcmp(cmd.s, "Setmetadata")) {
+		if (c != ' ') goto missingargs;
+		c = getastring(imapd_in, imapd_out, &arg1);
+		if (c != ' ') goto missingargs;
+
+		cmd_setmetadata(tag.s, arg1.s);
 
 		snmp_increment(SETANNOTATION_COUNT, 1);
 	    }
@@ -7221,6 +7245,111 @@ int getannotatefetchdata(char *tag,
 }
 
 /*
+ * Parse metadata fetch data.
+ *
+ * This is a generic routine which parses just the annotation data.
+ * Any surrounding command text must be parsed elsewhere, ie,
+ * GETANNOTATION, FETCH.
+ */
+int getmetadatafetchdata(char *tag,
+			 struct strlist **entries, struct strlist **attribs)
+{
+    int c;
+    static struct buf arg;
+
+    *entries = *attribs = NULL;
+
+    c = prot_getc(imapd_in);
+    if (c == EOF) {
+	prot_printf(imapd_out,
+		    "%s BAD Missing metadata entry\r\n", tag);
+	goto baddata;
+    }
+    else if (c == '(') {
+	/* entry list */
+	do {
+	    c = getastring(imapd_in, imapd_out, &arg);
+	    if (c == EOF) {
+		prot_printf(imapd_out,
+			    "%s BAD Missing metadata entry\r\n", tag);
+		goto baddata;
+	    }
+
+	    /* add the entry to the list */
+	    appendstrlist(entries, arg.s);
+
+	} while (c == ' ');
+
+	if (c != ')') {
+	    prot_printf(imapd_out,
+			"%s BAD Missing close paren in metadata entry list \r\n",
+			tag);
+	    goto baddata;
+	}
+
+	c = prot_getc(imapd_in);
+    }
+    else {
+	/* single entry -- add it to the list */
+	prot_ungetc(c, imapd_in);
+	c = getastring(imapd_in, imapd_out, &arg);
+	if (c == EOF) {
+	    prot_printf(imapd_out,
+			"%s BAD Missing metadata entry\r\n", tag);
+	    goto baddata;
+	}
+
+	appendstrlist(entries, arg.s);
+    }
+
+    if (c != ' ') return c;
+
+    /* entries were actually options!  So we're going to read the new
+     * entries into the "attribs" value and sort it out later */
+    c = prot_getc(imapd_in);
+    if (c == '(') {
+	do {
+	    c = getastring(imapd_in, imapd_out, &arg);
+	    if (c == EOF) {
+		prot_printf(imapd_out,
+			    "%s BAD Missing metadata attribute(s)\r\n", tag);
+		goto baddata;
+	    }
+
+	    /* add the attrib to the list */
+	    appendstrlist(attribs, arg.s);
+
+	} while (c == ' ');
+
+	if (c != ')') {
+	    prot_printf(imapd_out,
+			"%s BAD Missing close paren in "
+			"annotation attribute list\r\n", tag);
+	    goto baddata;
+	}
+
+	c = prot_getc(imapd_in);
+    }
+    else {
+	/* single attrib */
+	prot_ungetc(c, imapd_in);
+	c = getastring(imapd_in, imapd_out, &arg);
+	if (c == EOF) {
+	    prot_printf(imapd_out,
+			"%s BAD Missing annotation attribute\r\n", tag);
+	    goto baddata;
+	}
+	appendstrlist(attribs, arg.s);
+    }
+
+    return c;
+
+  baddata:
+    if (c != EOF) prot_ungetc(c, imapd_in);
+    return EOF;
+}
+
+/*
  * Parse annotate store data.
  *
  * This is a generic routine which parses just the annotation data.
@@ -7325,6 +7454,96 @@ int getannotatestoredata(char *tag, struct entryattlist **entryatts)
 }
 
 /*
+ * Parse metadata store data.
+ *
+ * This is a generic routine which parses just the annotation data.
+ * Any surrounding command text must be parsed elsewhere, ie,
+ * SETANNOTATION, STORE, APPEND.
+ */
+int getmetadatastoredata(char *tag, struct entryattlist **entryatts)
+{
+    int c;
+    const char *name;
+    const char *att;
+    static struct buf entry, value;
+    struct attvaluelist *attvalues = NULL;
+    struct entryattlist *entryp;
+    int need_add;
+
+    *entryatts = NULL;
+
+    c = prot_getc(imapd_in);
+    if (c != '(') {
+	prot_printf(imapd_out,
+		    "%s BAD Missing metadata entry list\r\n", tag);
+	goto baddata;
+    }
+
+    do {
+	/* get entry */
+	c = getastring(imapd_in, imapd_out, &entry);
+	if (c != ' ') {
+	    prot_printf(imapd_out,
+			"%s BAD Missing metadata entry\r\n", tag);
+	    goto baddata;
+	}
+
+	/* get value */
+	c = getnstring(imapd_in, imapd_out, &value);
+	if (c == EOF) {
+	    prot_printf(imapd_out,
+			"%s BAD Missing metadata value\r\n", tag);
+	    goto baddata;
+	}
+
+	if (!strncmp(entry.s, "/private", 8)) {
+	    att = "value.priv";
+	    name = entry.s + 8;
+	}
+	else if (!strncmp(entry.s, "/shared", 7)) {
+	    att = "value.shared";
+	    name = entry.s + 7;
+	}
+	else {
+	    prot_printf(imapd_out,
+			"%s BAD entry must begin with /shared or /private\r\n",
+			tag);
+	    goto baddata;
+	}
+
+	need_add = 1;
+	for (entryp = *entryatts; entryp; entryp = entryp->next) {
+	    if (strcmp(entryp->entry, name)) continue;
+	    /* it's a match, have to append! */
+	    appendattvalue(&entryp->attvalues, att, value.s);
+	    need_add = 0;
+	    break;
+	}
+	if (need_add) {
+	    appendattvalue(&attvalues, att, value.s);
+	    appendentryatt(entryatts, name, attvalues);
+	    attvalues = NULL;
+	}
+    } while (c == ' ');
+
+    if (c != ')') {
+	prot_printf(imapd_out,
+		    "%s BAD Missing close paren in annotation entry list \r\n",
+		    tag);
+	goto baddata;
+    }
+
+    c = prot_getc(imapd_in);
+
+    return c;
+
+  baddata:
+    if (attvalues) freeattvalues(attvalues);
+    if (c != EOF) prot_ungetc(c, imapd_in);
+    return EOF;
+}
+
+/*
  * Output an entry/attribute-value list response.
  *
  * This is a generic routine which outputs just the annotation data.
@@ -7398,7 +7617,7 @@ void cmd_getannotation(char *tag, char *mboxpat)
 
     r = annotatemore_fetch(mboxpat, entries, attribs, &imapd_namespace,
 			   imapd_userisadmin || imapd_userisproxyadmin,
-			   imapd_userid, imapd_authstate, imapd_out);
+			   imapd_userid, imapd_authstate, imapd_out, 0, 0);
 
     imapd_check(NULL, 0);
 
@@ -7412,6 +7631,139 @@ void cmd_getannotation(char *tag, char *mboxpat)
   freeargs:
     if (entries) freestrlist(entries);
     if (attribs) freestrlist(attribs);
+
+    return;
+}
+
+/*
+ * Perform a GETMETADATA command
+ *
+ * The command has been parsed up to the entries
+ */    
+void cmd_getmetadata(char *tag, char *mboxpat)
+{
+    int c, r = 0;
+    struct strlist *entries = NULL, *attribs = NULL;
+    struct strlist *newe = NULL, *newa = NULL;
+    struct strlist *real_entries;
+    struct strlist *item;
+    int maxsize = -1;
+    int basesize = 0;
+    int *sizeptr = NULL;
+    int depth = 0;
+    int have_shared = 0;
+    int have_private = 0;
+
+    c = getmetadatafetchdata(tag, &entries, &attribs);
+    if (c == EOF) {
+	eatline(imapd_in, c);
+	return;
+    }
+
+    /* check for CRLF */
+    if (c == '\r') c = prot_getc(imapd_in);
+    if (c != '\n') {
+	prot_printf(imapd_out,
+		    "%s BAD Unexpected extra arguments to Getannotation\r\n",
+		    tag);
+	eatline(imapd_in, c);
+	goto freeargs;
+    }
+
+    /* we need to rewrite the entries and attribs to match the way that
+     * the old annotation system works.  also, we need to handle the
+     * options if there are any */
+    if (attribs) {
+	while (entries) {
+	    item = entries->next;
+	    if (!item) {
+		prot_printf(imapd_out,
+			    "%s BAD missing value to metadata option\r\n",
+			    tag);
+		goto freeargs;
+	    }
+	    if (!strcasecmp(entries->s, "MAXSIZE")) {
+		/* XXX - scan for "is number" */
+		maxsize = atoi(item->s);
+		sizeptr = &maxsize;
+	    }
+	    else if (!strcasecmp(entries->s, "DEPTH")) {
+		if (!strcmp(item->s, "0")) {
+		    depth = 0;
+		}
+		else if (!strcmp(item->s, "1")) {
+		    depth = 1;
+		}
+		else if (!strcasecmp(item->s, "infinity")) {
+		    depth = -1;
+		}
+		else {
+		    prot_printf(imapd_out,
+				"%s BAD invalid depth option\r\n",
+				tag);
+		    goto freeargs;
+		}
+	    }
+	    entries = item->next;
+	}
+	real_entries = attribs;
+    }
+    else {
+	real_entries = entries;
+    }
+
+    for (item = real_entries; item; item = item->next) {
+	char entry[MAX_MAILBOX_NAME];
+	/* there's no way to perfect this - unfortunately - the old style
+	 * syntax doesn't support everything.  XXX - will be nice to get
+	 * rid of this... */
+	if (!strncmp(real_entries->s, "/private", 8)) {
+	    strncpy(entry, real_entries->s + 8, MAX_MAILBOX_NAME);
+	    have_private = 1;
+	}
+	else if (!strncmp(real_entries->s, "/shared", 7)) {
+	    strncpy(entry, real_entries->s + 7, MAX_MAILBOX_NAME);
+	    have_shared = 1;
+	}
+	else {
+	    prot_printf(imapd_out,
+			"%s BAD entry must /private or /shared\r\n",
+			tag);
+	    goto freeargs;
+	}
+	if (depth == 1)
+	    strncat(entry, "/%", MAX_MAILBOX_NAME);
+	else if (depth == -1)
+	    strncat(entry, "/*", MAX_MAILBOX_NAME);
+	appendstrlist(&newe, entry);
+    }
+
+    if (have_private) appendstrlist(&newa, "value.priv");
+    if (have_shared) appendstrlist(&newa, "value.shared");
+
+    basesize = maxsize;
+    r = annotatemore_fetch(mboxpat, newe, newa, &imapd_namespace,
+			   imapd_userisadmin || imapd_userisproxyadmin,
+			   imapd_userid, imapd_authstate, imapd_out, 1,
+			   sizeptr);
+
+    imapd_check(NULL, 0);
+
+    if (r) {
+	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+    } else if (sizeptr && *sizeptr > basesize) {
+	prot_printf(imapd_out, "%s OK [METADATA LONGENTRIES %d] %s\r\n",
+		    tag, *sizeptr, error_message(IMAP_OK_COMPLETED));
+    } else {
+	prot_printf(imapd_out, "%s OK %s\r\n",
+		    tag, error_message(IMAP_OK_COMPLETED));
+    }
+
+  freeargs:
+    if (entries) freestrlist(entries);
+    if (attribs) freestrlist(attribs);
+    if (newe) freestrlist(newe);
+    if (newa) freestrlist(newa);
 
     return;
 }
@@ -7437,6 +7789,50 @@ void cmd_setannotation(char *tag, char *mboxpat)
     if (c != '\n') {
 	prot_printf(imapd_out,
 		    "%s BAD Unexpected extra arguments to Setannotation\r\n",
+		    tag);
+	eatline(imapd_in, c);
+	goto freeargs;
+    }
+
+    r = annotatemore_store(mboxpat,
+			   entryatts, &imapd_namespace, imapd_userisadmin,
+			   imapd_userid, imapd_authstate);
+
+    imapd_check(NULL, 0);
+
+    if (r) {
+	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+    } else {
+	prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		    error_message(IMAP_OK_COMPLETED));
+    }
+
+  freeargs:
+    if (entryatts) freeentryatts(entryatts);
+    return;
+}
+
+/*
+ * Perform a SETMETADATA command
+ *
+ * The command has been parsed up to the entry-att list
+ */    
+void cmd_setmetadata(char *tag, char *mboxpat)
+{
+    int c, r = 0;
+    struct entryattlist *entryatts = NULL;
+
+    c = getmetadatastoredata(tag, &entryatts);
+    if (c == EOF) {
+	eatline(imapd_in, c);
+	return;
+    }
+
+    /* check for CRLF */
+    if (c == '\r') c = prot_getc(imapd_in);
+    if (c != '\n') {
+	prot_printf(imapd_out,
+		    "%s BAD Unexpected extra arguments to Setmetadata\r\n",
 		    tag);
 	eatline(imapd_in, c);
 	goto freeargs;

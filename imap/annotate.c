@@ -480,6 +480,9 @@ struct fetchdata {
     const char *orig_mailbox;
     struct strlist *orig_entry;
     struct strlist *orig_attribute;
+    int ismetadata;
+    int maxsize;
+    int *sizeptr;
 };
 
 static void output_attlist(struct protstream *pout, struct attvaluelist *l) 
@@ -504,6 +507,41 @@ static void output_attlist(struct protstream *pout, struct attvaluelist *l)
     prot_putc(')',pout);
 }
 
+static void output_metalist(struct protstream *pout, struct attvaluelist *l,
+			    const char *entry)
+{
+    int flag = 0;
+    const char *prefix;
+
+    assert(l);
+
+    prot_putc('(', pout);
+
+    while (l) {
+	prefix = NULL;
+
+	/* check if it's a value we print... */
+	if (!strcmp(l->attrib, "value.shared"))
+	    prefix = "/shared";
+	else if (!strcmp(l->attrib, "value.priv"))
+	    prefix = "/private";
+
+	if (prefix) {
+	    if (flag) prot_putc(' ', pout);
+	    else flag = 1;
+
+	    /* a little dodgy, but legit here because of limitations on
+	     * valid entry names ... */
+	    prot_printf(pout, "%s%s ", prefix, entry);
+	    prot_printstring(pout, l->value);
+	}
+
+	l = l->next;
+    }
+
+    prot_putc(')', pout);
+}
+
 /* Output a single entry and attributes for a single mailbox.
  * Shared and private annotations are output together by caching
  * the attributes until the mailbox and/or entry changes.
@@ -520,6 +558,7 @@ static void output_entryatt(const char *mboxname, const char *entry,
     static char lastentry[MAX_MAILBOX_BUFFER];
     char key[MAX_MAILBOX_BUFFER]; /* XXX MAX_MAILBOX_NAME + entry + userid */
     char buf[100];
+    int vallen;
 
     /* We have to reset before each GETANNOTATION command.
      * Handle it as a dirty hack.
@@ -539,10 +578,18 @@ static void output_entryatt(const char *mboxname, const char *entry,
      */
     if ((!attrib || strcmp(mboxname, lastname) || strcmp(entry, lastentry))
 	&& attvalues) {
-	prot_printf(fdata->pout, "* ANNOTATION \"%s\" \"%s\" ",
-		    lastname, lastentry);
-	output_attlist(fdata->pout, attvalues);
-	prot_printf(fdata->pout, "\r\n");
+	if (fdata->ismetadata) {
+	    prot_printf(fdata->pout, "* METADATA \"%s\" ",
+			lastname);
+	    output_metalist(fdata->pout, attvalues, lastentry);
+	    prot_printf(fdata->pout, "\r\n");
+	}
+	else {
+	    prot_printf(fdata->pout, "* ANNOTATION \"%s\" \"%s\" ",
+			lastname, lastentry);
+	    output_attlist(fdata->pout, attvalues);
+	    prot_printf(fdata->pout, "\r\n");
+	}
 	
 	freeattvalues(attvalues);
 	attvalues = NULL;
@@ -558,6 +605,14 @@ static void output_entryatt(const char *mboxname, const char *entry,
     strlcat(key, userid, sizeof(key));
     if (hash_lookup(key, &(fdata->entry_table))) return;
     hash_insert(key, (void *)0xDEADBEEF, &(fdata->entry_table));
+
+    vallen = strlen(attrib->value);
+    if (fdata->sizeptr && fdata->maxsize < vallen) {
+	/* too big - track the size of the largest */
+	int *sp = fdata->sizeptr;
+	if (*sp < vallen) *sp = vallen;
+	return;
+    }
 
     if (!userid[0]) { /* shared annotation */
 	if ((fdata->attribs & ATTRIB_VALUE_SHARED) && attrib->value) {
@@ -1195,7 +1250,8 @@ static int fetch_cb(char *name, int matchlen,
 int annotatemore_fetch(char *mailbox,
 		       struct strlist *entries, struct strlist *attribs,
 		       struct namespace *namespace, int isadmin, char *userid,
-		       struct auth_state *auth_state, struct protstream *pout)
+		       struct auth_state *auth_state, struct protstream *pout,
+		       int ismetadata, int *maxsizeptr)
 {
     struct strlist *e = entries;
     struct strlist *a = attribs;
@@ -1210,6 +1266,11 @@ int annotatemore_fetch(char *mailbox,
     fdata.userid = userid;
     fdata.isadmin = isadmin;
     fdata.auth_state = auth_state;
+    fdata.ismetadata = ismetadata;
+    if (maxsizeptr) {
+	fdata.maxsize = *maxsizeptr; /* copy to check against */
+        fdata.sizeptr = maxsizeptr; /* pointer to push largest back */
+    }
 
     /* Reset state in output_entryatt() */
     output_entryatt(NULL, NULL, NULL, NULL, NULL);
