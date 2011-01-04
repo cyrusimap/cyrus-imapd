@@ -216,23 +216,16 @@ static int mboxlist_read(const char *name, const char **dataptr, int *datalenptr
     /* never get here */
 }
 
-static int mboxlist_mylookup(const char *name,
-			     struct mboxlist_entry **mbentryptr,
-			     struct txn **tid, int wrlock)
+static int mboxlist_parse_entry(struct mboxlist_entry **mbentryptr,
+				const char *name,
+				const char *data, int datalen)
 {
-    int r;
     char *p, *q;
-    const char *data;
     const char **target;
-    int datalen;
     struct mboxlist_entry *mbentry;
     int namelen = strlen(name);
 
-    r = mboxlist_read(name, &data, &datalen, tid, wrlock);
-    if (r) return r;
-
     mbentry = mboxlist_entry_create();
-
     mbentry->_alloc = p = xmalloc(namelen + datalen + 2);
 
     /* copy name */
@@ -294,6 +287,20 @@ static int mboxlist_mylookup(const char *name,
     else mboxlist_entry_free(&mbentry);
 
     return 0;
+}
+
+static int mboxlist_mylookup(const char *name,
+			     struct mboxlist_entry **mbentryptr,
+			     struct txn **tid, int wrlock)
+{
+    int r;
+    const char *data;
+    int datalen;
+
+    r = mboxlist_read(name, &data, &datalen, tid, wrlock);
+    if (r) return r;
+
+    return mboxlist_parse_entry(mbentryptr, name, data, datalen);
 }
 
 /*
@@ -1777,34 +1784,16 @@ static int find_p(void *rockp,
 
     /* check acl */
     if (!rock->isadmin) {
-	/* check the acls */
-	const char *p, *acl;
 	int rights;
-	int acllen;
-	static char *aclbuf = NULL;
-	static int aclbufsz = 0;
+	struct mboxlist_entry *mbentry = NULL;
 
-	p = strchr(data, ' ');
-	if (!p) {
-	    syslog(LOG_ERR, "%s: can't find partition", key);
+	if (mboxlist_parse_entry(&mbentry, "", data, datalen))
 	    return 0;
-	}
-	p++;
-	acl = strchr(p, ' ');
-	if (!acl) {
-	    syslog(LOG_ERR, "%s: can't find acl", key);
-	    return 0;
-	}
-	acl++;
-	acllen = datalen - (acl - data);
-	if (acllen >= aclbufsz) {
-	    aclbufsz = acllen + 500;
-	    aclbuf = xrealloc(aclbuf, aclbufsz);
-	}
-	memcpy(aclbuf, acl, acllen);
-	aclbuf[acllen] = '\0';
 
-	rights = cyrus_acl_myrights(rock->auth_state, aclbuf);
+	/* check the acls */
+	rights = cyrus_acl_myrights(rock->auth_state, mbentry->acl);
+	mboxlist_entry_free(&mbentry);
+
 	if (!(rights & ACL_LOOKUP)) {
 	    return 0;
 	}
