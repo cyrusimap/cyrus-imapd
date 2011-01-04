@@ -290,7 +290,8 @@ static int mboxlist_mylookup(const char *name,
 	return IMAP_MAILBOX_RESERVED;
     }
 
-    *mbentryptr = mbentry;
+    if (mbentryptr) *mbentryptr = mbentry;
+    else mboxlist_entry_free(&mbentry);
 
     return 0;
 }
