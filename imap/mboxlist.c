@@ -226,13 +226,24 @@ static int mboxlist_mylookup(const char *name,
     const char **target;
     int datalen;
     struct mboxlist_entry *mbentry;
+    int namelen = strlen(name);
 
     r = mboxlist_read(name, &data, &datalen, tid, wrlock);
     if (r) return r;
 
     mbentry = mboxlist_entry_create();
 
-    mbentry->_alloc = p = xstrndup(data, datalen);
+    mbentry->_alloc = p = xmalloc(namelen + datalen + 2);
+
+    /* copy name */
+    memcpy(p, name, namelen);
+    p[namelen] = '\0';
+    mbentry->name = p;
+    p += namelen + 1;
+
+    /* copy data */
+    memcpy(p, data, datalen);
+    p[datalen] = '\0';
 
     /* check for extended mboxlist entry */
     if (*p == '(') {
