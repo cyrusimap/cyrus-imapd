@@ -9993,7 +9993,7 @@ static void specialuse_flags(struct mboxlist_entry *mbentry, char *sep)
     else if (mbentry->name[inboxlen] == '.') {
 	/* check if there's a special use flag set */
 	if (mbentry->specialuse)
-	    prot_printf(imapd_out, "%s\\%s", sep, mbentry->specialuse);
+	    prot_printf(imapd_out, "%s%s", sep, mbentry->specialuse);
 	else {
 	    /* oldschool xlist flags! */
 	    struct xlist_rock rock;
