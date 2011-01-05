@@ -2313,7 +2313,6 @@ int mboxlist_setquota(const char *root, int newquota, int force)
     int have_mailbox = 1;
     int r;
     struct txn *tid = NULL;
-    struct mboxlist_entry *mbentry = NULL;
 
     if (!root[0] || root[0] == '.' || strchr(root, '/')
 	|| strchr(root, '*') || strchr(root, '%') || strchr(root, '?')) {
@@ -2350,6 +2349,7 @@ int mboxlist_setquota(const char *root, int newquota, int force)
 	strlcat(pattern, "*", sizeof(pattern));
     }
     else {
+	struct mboxlist_entry *mbentry = NULL;
 	strlcat(pattern, ".*", sizeof(pattern));
 
 	/* look for a top-level mailbox in the proposed quotaroot */
@@ -2360,20 +2360,18 @@ int mboxlist_setquota(const char *root, int newquota, int force)
 		 mboxlist_findall(NULL, pattern, 1, NULL, NULL,
 				 child_cb, (void *) &force);
 	    }
-
 	    /* are we going to force the create anyway? */
-	    if (!force) goto done;
-	    else {
+	    if (force) {
 		have_mailbox = 0;
-		mbentry->mbtype = 0;
+		r = 0;
 	    }
 	}
-
-	if (mbentry->mbtype & (MBTYPE_REMOTE | MBTYPE_MOVING)) {
+	else if (mbentry->mbtype & (MBTYPE_REMOTE | MBTYPE_MOVING)) {
 	    /* Can't set quota on a remote mailbox */
 	    r = IMAP_MAILBOX_NOTSUPPORTED;
-	    goto done;
 	}
+	mboxlist_entry_free(&mbentry);
+	if (r) goto done;
     }
 
     /* initialise the quota */
@@ -2396,7 +2394,6 @@ int mboxlist_setquota(const char *root, int newquota, int force)
 
 done:
     if (!r) sync_log_quota(root);
-    mboxlist_entry_free(&mbentry);
 
     return r;
 }
