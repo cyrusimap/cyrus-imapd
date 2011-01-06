@@ -100,7 +100,7 @@ struct delete_node {
 };
 
 struct delete_rock {
-    char prefix[100];
+    char *prefix;
     int prefixlen;
     time_t delete_mark;
     struct delete_node *head;
@@ -329,8 +329,7 @@ int main(int argc, char *argv[])
     extern char *optarg;
     int opt, r = 0, expire_days = 0, expunge_days = -1, delete_days = -1, do_expunge = 1;
     char *alt_config = NULL;
-    char *find_prefix = NULL;
-    char buf[100];
+    const char *find_prefix = "*";
     struct hash_table expire_table;
     struct expire_rock erock;
     struct delete_rock drock;
@@ -439,13 +438,7 @@ int main(int argc, char *argv[])
 	    }
 	}
 
-	if (find_prefix) {
-	    strlcpy(buf, find_prefix, sizeof(buf));
-	} else {
-	    strlcpy(buf, "*", sizeof(buf));
-	}
-
-	mboxlist_findall(NULL, buf, 1, 0, 0, expire, &erock);
+	mboxlist_findall(NULL, find_prefix, 1, 0, 0, expire, &erock);
 
 	syslog(LOG_NOTICE, "Expunged %lu out of %lu messages from %lu mailboxes",
 	       erock.deleted, erock.messages, erock.mailboxes);
@@ -469,14 +462,13 @@ int main(int argc, char *argv[])
                     delete_days);
         }
 
-        strlcpy(drock.prefix, deletedprefix, sizeof(drock.prefix));
-        strlcat(drock.prefix, ".", sizeof(drock.prefix));
+	drock.prefix = strconcat(deletedprefix, ".", (char *)NULL);
         drock.prefixlen = strlen(drock.prefix);
         drock.delete_mark = time(0) - (delete_days * 60 * 60 * 24);
         drock.head = NULL;
         drock.tail = NULL;
 
-        mboxlist_findall(NULL, buf, 1, 0, 0, delete, &drock);
+        mboxlist_findall(NULL, find_prefix, 1, 0, 0, delete, &drock);
 
         for (node = drock.head ; node ; node = node->next) {
 	    if (sigquit) {
