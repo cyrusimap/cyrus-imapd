@@ -1191,3 +1191,27 @@ void mboxname_todeleted(const char *name, char *result, int withtime)
 		 deletedprefix, name+domainlen);
     }
 }
+
+int mboxname_make_parent(char *name)
+{
+    int domainlen = 0;
+    char *p;
+
+    if (config_virtdomains && (p = strchr(name, '!')))
+	domainlen = p - name + 1;
+
+    if (!name[0] || !strcmp(name+domainlen, "user"))
+	return 0;				/* stop now */
+
+    p = strrchr(name, '.');
+
+    if (p && (p - name > domainlen))		/* don't split subdomain */
+	*p = '\0';
+    else if (!name[domainlen])			/* server entry */
+	name[0] = '\0';
+    else					/* domain entry */
+	name[domainlen] = '\0';
+
+    return 1;
+}
+

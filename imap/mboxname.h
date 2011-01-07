@@ -158,4 +158,12 @@ int mboxname_netnewscheck(const char *name);
 
 void mboxname_todeleted(const char *name, char *result, int withtime);
 
+/*
+ * Given a writable buffer containing an internal mbox name,
+ * convert that buffer in-place to be the name of the mbox'
+ * parent (by truncating off the last component).
+ * Returns 0 if no more truncation is possible, 1 otherwise.
+ */
+int mboxname_make_parent(char *namebuf);
+
 #endif
