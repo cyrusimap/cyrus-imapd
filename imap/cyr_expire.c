@@ -88,9 +88,10 @@ struct expire_rock {
     struct hash_table table;
     time_t expire_mark;
     time_t expunge_mark;
-    unsigned long mailboxes;
-    unsigned long messages;
-    unsigned long deleted;
+    unsigned long mailboxes_seen;
+    unsigned long messages_seen;
+    unsigned long messages_expired;
+    unsigned long messages_expunged;
     int skip_annotate;
 };
 
@@ -116,11 +117,9 @@ static unsigned expire_cb(struct mailbox *mailbox __attribute__((unused)),
 {
     struct expire_rock *erock = (struct expire_rock *) rock;
 
-    erock->messages++;
-
     /* otherwise, we're expiring messages by sent date */
     if (record->gmtime < erock->expire_mark) {
-	erock->deleted++;
+	erock->messages_expired++;
 	return 1;
     }
 
@@ -143,7 +142,7 @@ static int expire(char *name, int matchlen __attribute__((unused)),
     struct annotation_data attrib;
     int r;
     struct mailbox *mailbox = NULL;
-    unsigned numdeleted = 0;
+    unsigned numexpunged = 0;
 
     if (sigquit) {
 	return 1;
@@ -198,8 +197,6 @@ static int expire(char *name, int matchlen __attribute__((unused)),
 	unsigned long expire_days = strtoul(attrib.value, NULL, 10);
 	time_t *expire_mark = (time_t *) xmalloc(sizeof(time_t));
 
-	/* XXX - stats are bound to be bogus... */
-	erock->mailboxes++;
 	erock->expire_mark = 0;
 
 	*expire_mark = expire_days ?
@@ -220,11 +217,12 @@ static int expire(char *name, int matchlen __attribute__((unused)),
 	}
     }
 
-    r = mailbox_expunge_cleanup(mailbox, erock->expunge_mark, &numdeleted);
+    erock->messages_seen += mailbox->i.num_records;
 
-    erock->deleted += numdeleted;
-    erock->mailboxes++;
-    erock->messages += mailbox->i.num_records;
+    r = mailbox_expunge_cleanup(mailbox, erock->expunge_mark, &numexpunged);
+
+    erock->messages_expunged += numexpunged;
+    erock->mailboxes_seen++;
 
     mailbox_close(&mailbox);
 
@@ -419,11 +417,19 @@ int main(int argc, char *argv[])
 
 	mboxlist_findall(NULL, find_prefix, 1, 0, 0, expire, &erock);
 
-	syslog(LOG_NOTICE, "Expunged %lu out of %lu messages from %lu mailboxes",
-	       erock.deleted, erock.messages, erock.mailboxes);
+	syslog(LOG_NOTICE, "Expired %lu and expunged %lu out of %lu "
+			    "messages from %lu mailboxes",
+			   erock.messages_expired,
+			   erock.messages_expunged,
+			   erock.messages_seen,
+			   erock.mailboxes_seen);
 	if (verbose) {
-	    fprintf(stderr, "\nExpunged %lu out of %lu messages from %lu mailboxes\n",
-		    erock.deleted, erock.messages, erock.mailboxes);
+	    fprintf(stderr, "\nExpired %lu and expunged %lu out of %lu "
+			    "messages from %lu mailboxes\n",
+			   erock.messages_expired,
+			   erock.messages_expunged,
+			   erock.messages_seen,
+			   erock.mailboxes_seen);
 	}
     }
     if (sigquit) {
