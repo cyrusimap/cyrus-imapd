@@ -194,27 +194,25 @@ static int expire(char *name, int matchlen __attribute__((unused)),
     }
 
     if (attrib.value) {
+	/* add mailbox to table */
+	unsigned long expire_days = strtoul(attrib.value, NULL, 10);
+	time_t *expire_mark = (time_t *) xmalloc(sizeof(time_t));
+
 	/* XXX - stats are bound to be bogus... */
 	erock->mailboxes++;
 	erock->expire_mark = 0;
 
-	if (attrib.value) {
-	    /* add mailbox to table */
-	    unsigned long expire_days = strtoul(attrib.value, NULL, 10);
-	    time_t *expire_mark = (time_t *) xmalloc(sizeof(time_t));
+	*expire_mark = expire_days ?
+	    time(0) - (expire_days * 60 * 60 * 24) : 0 /* never */ ;
+	hash_insert(name, (void *) expire_mark, &erock->table);
 
-	    *expire_mark = expire_days ?
-		time(0) - (expire_days * 60 * 60 * 24) : 0 /* never */ ;
-	    hash_insert(name, (void *) expire_mark, &erock->table);
-
-	    if (verbose) {
-		fprintf(stderr,
-			"expiring messages in %s older than %ld days\n",
-			name, expire_days);
-	    }
-
-	    erock->expire_mark = *expire_mark;
+	if (verbose) {
+	    fprintf(stderr,
+		    "expiring messages in %s older than %ld days\n",
+		    name, expire_days);
 	}
+
+	erock->expire_mark = *expire_mark;
 
 	r = mailbox_expunge(mailbox, expire_cb, erock, NULL);
 	if (r) {
