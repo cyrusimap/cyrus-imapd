@@ -140,9 +140,9 @@ static int expire(char *name, int matchlen __attribute__((unused)),
 {
     struct mboxlist_entry *mbentry = NULL;
     struct expire_rock *erock = (struct expire_rock *) rock;
-    char *buf, *p;
+    char *buf;
     struct annotation_data attrib;
-    int r, domainlen = 0;
+    int r;
     struct mailbox *mailbox = NULL;
     unsigned numdeleted = 0;
 
@@ -164,9 +164,6 @@ static int expire(char *name, int matchlen __attribute__((unused)),
     }
     mboxlist_entry_free(&mbentry);
 
-    if (config_virtdomains && (p = strchr(name, '!')))
-	domainlen = p - name + 1;
-
     buf = xstrdup(name);
 
     /* see if we need to expire messages.
@@ -178,27 +175,15 @@ static int expire(char *name, int matchlen __attribute__((unused)),
       attrib.value = 0;
     }
     else {
-        while (1) {
+        do {
 	    r = annotatemore_lookup(buf, "/vendor/cmu/cyrus-imapd/expire", "",
 				    &attrib);
-    
+
 	    if (r ||				/* error */
-	        attrib.value ||			/* found an entry */
-	        !buf[0] ||				/* done recursing */
-	        !strcmp(buf+domainlen, "user")) {	/* server entry doesn't apply
-						       to personal mailboxes */
+	        attrib.value)			/* found an entry */
 	        break;
-	    }
-    
-	    p = strrchr(buf, '.');			/* find parent mailbox */
-    
-	    if (p && (p - buf > domainlen))		/* don't split subdomain */
-	        *p = '\0';
-	    else if (!buf[domainlen])		/* server entry */
-	        buf[0] = '\0';
-	    else					/* domain entry */
-	        buf[domainlen] = '\0';
-        }
+
+	} while (mboxname_make_parent(buf));
     }
     free(buf);
 
