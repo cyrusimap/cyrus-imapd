@@ -99,9 +99,7 @@ int duplicate_init(const char *fname, int myflags __attribute__((unused)))
 
 	/* create db file name */
 	if (!fname) {
-	    tofree = xmalloc(strlen(config_dir)+sizeof(FNAME_DELIVERDB));
-	    strcpy(tofree, config_dir);
-	    strcat(tofree, FNAME_DELIVERDB);
+	    tofree = strconcat(config_dir, FNAME_DELIVERDB, (char *)NULL);
 	    fname = tofree;
 	}
 
