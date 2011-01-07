@@ -85,7 +85,7 @@ void usage(void)
 }
 
 struct expire_rock {
-    struct hash_table *table;
+    struct hash_table table;
     time_t expire_mark;
     time_t expunge_mark;
     unsigned long mailboxes;
@@ -205,7 +205,7 @@ static int expire(char *name, int matchlen __attribute__((unused)),
 
 	    *expire_mark = expire_days ?
 		time(0) - (expire_days * 60 * 60 * 24) : 0 /* never */ ;
-	    hash_insert(name, (void *) expire_mark, erock->table);
+	    hash_insert(name, (void *) expire_mark, &erock->table);
 
 	    if (verbose) {
 		fprintf(stderr,
@@ -314,7 +314,6 @@ int main(int argc, char *argv[])
     int opt, r = 0, expire_days = 0, expunge_days = -1, delete_days = -1, do_expunge = 1;
     char *alt_config = NULL;
     const char *find_prefix = "*";
-    struct hash_table expire_table;
     struct expire_rock erock;
     struct delete_rock drock;
     const char *deletedprefix;
@@ -326,6 +325,7 @@ int main(int argc, char *argv[])
 
     /* zero the expire_rock & delete_rock */
     memset(&erock, 0, sizeof(erock));
+    construct_hash_table(&erock.table, 10000, 1);
     memset(&drock, 0, sizeof(drock));
 
     while ((opt = getopt(argc, argv, "C:D:E:X:p:vax")) != EOF) {
@@ -402,13 +402,11 @@ int main(int argc, char *argv[])
 
     if (do_expunge) {
 	/* xxx better way to determine a size for this table? */
-	construct_hash_table(&expire_table, 10000, 1);
 
 	/* expire messages from mailboxes,
 	 * build a hash table of mailboxes in which we expired messages,
 	 * and perform a cleanup of expunged messages
 	 */
-	erock.table = &expire_table;
 	if (expunge_days == -1) {
 	    erock.expunge_mark = 0;
 	} else {
@@ -478,10 +476,10 @@ int main(int argc, char *argv[])
     }
 
     /* purge deliver.db entries of expired messages */
-    r = duplicate_prune(expire_days, &expire_table);
+    r = duplicate_prune(expire_days, &erock.table);
 
 finish:
-    free_hash_table(&expire_table, free);
+    free_hash_table(&erock.table, free);
 
     quotadb_close();
     quotadb_done();
