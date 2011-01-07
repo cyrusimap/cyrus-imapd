@@ -2,7 +2,9 @@ PACKAGE = "Release_Notes"
 
 all: clean clean_ids
 	@publican build --langs=en-US --formats=html,html-single,pdf
-	@rsync -aHvz tmp/en-US/{html,html-single,pdf} www.cyrusimap.org:./public_html/cyrus-imapd-2.4-docs/$(PACKAGE)/
+	@mkdir -p tmp/en-US/txt/
+	@w3m -dump tmp/en-US/html-single/index.html > tmp/en-US/txt/$(PACKAGE).txt
+	@rsync -aHvz tmp/en-US/{html,html-single,pdf,txt} www.cyrusimap.org:./public_html/cyrus-imapd-2.4-docs/$(PACKAGE)/
 
 clean:
 	@publican clean
