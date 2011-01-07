@@ -57,6 +57,15 @@ my $ZLIB = $ENV{ZLIB};
 # the contents of the Makefile that is written.
 $libs = "-lcyrus";
 
+sub MY::postamble
+{
+    return <<'EOT';
+cyradm: cyradm.sh
+	$(ABSPERLRUN) -pne 's|\@INSTALLSITEARCH\@|$(INSTALLSITEARCH)|g;' < $< > $@
+
+EOT
+}
+
 WriteMakefile( 
     'NAME'	=> 'Cyrus::IMAP',
     'ABSTRACT'  => 'Cyrus administrative interface',
