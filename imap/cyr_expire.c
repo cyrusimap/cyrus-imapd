@@ -75,6 +75,7 @@
 /* global state */
 const int config_need_data = 0;
 static int sigquit = 0;
+static int verbose = 0;
 
 void usage(void)
 {
@@ -90,7 +91,6 @@ struct expire_rock {
     unsigned long mailboxes;
     unsigned long messages;
     unsigned long deleted;
-    int verbose;
     int skip_annotate;
 };
 
@@ -105,7 +105,6 @@ struct delete_rock {
     time_t delete_mark;
     struct delete_node *head;
     struct delete_node *tail;
-    int verbose;
 };
 
 /*
@@ -152,7 +151,7 @@ static int expire(char *name, int matchlen __attribute__((unused)),
     /* Skip remote mailboxes */
     r = mboxlist_lookup(name, &mbentry, NULL);
     if (r) {
-	if (erock->verbose) {
+	if (verbose) {
 	    printf("error looking up %s: %s\n", name, error_message(r));
 	}
 	return 1;
@@ -208,7 +207,7 @@ static int expire(char *name, int matchlen __attribute__((unused)),
 		time(0) - (expire_days * 60 * 60 * 24) : 0 /* never */ ;
 	    hash_insert(name, (void *) expire_mark, erock->table);
 
-	    if (erock->verbose) {
+	    if (verbose) {
 		fprintf(stderr,
 			"expiring messages in %s older than %ld days\n",
 			name, expire_days);
@@ -264,7 +263,7 @@ static int delete(char *name,
     /* Skip remote mailboxes */
     r = mboxlist_lookup(name, &mbentry, NULL);
     if (r) {
-	if (drock->verbose) {
+	if (verbose) {
 	    printf("error looking up %s: %s\n", name, error_message(r));
 	}
 	return 1;
@@ -360,8 +359,7 @@ int main(int argc, char *argv[])
 	    break;
 
 	case 'v':
-	    erock.verbose++;
-	    drock.verbose++;
+	    verbose++;
 	    break;
 
 	case 'a':
@@ -416,7 +414,7 @@ int main(int argc, char *argv[])
 	} else {
 	    erock.expunge_mark = time(0) - (expunge_days * 60 * 60 * 24);
 
-	    if (erock.verbose) {
+	    if (verbose) {
 		fprintf(stderr,
 			"Expunging deleted messages in mailboxes older than %d days\n",
 			expunge_days);
@@ -427,7 +425,7 @@ int main(int argc, char *argv[])
 
 	syslog(LOG_NOTICE, "Expunged %lu out of %lu messages from %lu mailboxes",
 	       erock.deleted, erock.messages, erock.mailboxes);
-	if (erock.verbose) {
+	if (verbose) {
 	    fprintf(stderr, "\nExpunged %lu out of %lu messages from %lu mailboxes\n",
 		    erock.deleted, erock.messages, erock.mailboxes);
 	}
@@ -441,7 +439,7 @@ int main(int argc, char *argv[])
         struct delete_node *node;
         int count = 0;
         
-        if (drock.verbose) {
+        if (verbose) {
             fprintf(stderr,
                     "Removing deleted mailboxes older than %d days\n",
                     delete_days);
@@ -459,14 +457,14 @@ int main(int argc, char *argv[])
 	    if (sigquit) {
 		goto finish;
 	    }
-            if (drock.verbose) {
+            if (verbose) {
                 fprintf(stderr, "Removing: %s\n", node->name);
             }
             r = mboxlist_deletemailbox(node->name, 1, NULL, NULL, 0, 0, 0);
             count++;
         }
 
-        if (drock.verbose) {
+        if (verbose) {
             if (count != 1) {
                 fprintf(stderr, "Removed %d deleted mailboxes\n", count);
             } else {
