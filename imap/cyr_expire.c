@@ -135,12 +135,12 @@ static unsigned expire_cb(struct mailbox *mailbox __attribute__((unused)),
  * - build a hash table of mailboxes in which we expired messages,
  * - and perform a cleanup of expunged messages
  */
-static int expire(char *name, int matchlen,
+static int expire(char *name, int matchlen __attribute__((unused)),
 	          int maycreate __attribute__((unused)), void *rock)
 {
     struct mboxlist_entry *mbentry = NULL;
     struct expire_rock *erock = (struct expire_rock *) rock;
-    char buf[MAX_MAILBOX_BUFFER] = "", *p;
+    char *buf, *p;
     struct annotation_data attrib;
     int r, domainlen = 0;
     struct mailbox *mailbox = NULL;
@@ -167,8 +167,7 @@ static int expire(char *name, int matchlen,
     if (config_virtdomains && (p = strchr(name, '!')))
 	domainlen = p - name + 1;
 
-    strncpy(buf, name, matchlen);
-    buf[matchlen] = '\0';
+    buf = xstrdup(name);
 
     /* see if we need to expire messages.
      * since mailboxes inherit /vendor/cmu/cyrus-imapd/expire,
@@ -201,6 +200,7 @@ static int expire(char *name, int matchlen,
 	        buf[domainlen] = '\0';
         }
     }
+    free(buf);
 
     r = mailbox_open_iwl(name, &mailbox);
     if (r) {
