@@ -40,9 +40,16 @@
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 # $Id: cyradm.sh,v 1.21 2010/01/06 17:01:55 murch Exp $
+
+INCS=
+SITEARCH="@INSTALLSITEARCH@"
+if [ -n "$SITEARCH" -a -d "$SITEARCH" ]; then
+    INCS="-I$SITEARCH"
+fi
+
 case "x$BASH_VERSION" in
-x) exec perl -MCyrus::IMAP::Shell -e shell -- ${1+"$@"} ;;
-*) exec perl -MCyrus::IMAP::Shell -e shell -- "$@" ;;
+x) exec perl $INCS -MCyrus::IMAP::Shell -e shell -- ${1+"$@"} ;;
+*) exec perl $INCS -MCyrus::IMAP::Shell -e shell -- "$@" ;;
 esac
 echo "$0: how did I get here?" >&2
 exit 1
