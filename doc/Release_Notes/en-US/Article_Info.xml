@@ -26,6 +26,6 @@
 
     </corpauthor>
     <xi:include href="Common_Content/Legal_Notice.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <xi:include href="Author_Group.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="auth-Author_Group.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
 </articleinfo>
 
