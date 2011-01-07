@@ -120,10 +120,12 @@ int mboxname_userownsmailbox(const char *userid, const char *name);
 char *mboxname_isusermailbox(const char *name, int isinbox);
 
 /*
- * If (internal) mailbox 'name' is in the DELETED namespace
+ * If (internal) mailbox 'name' is in the DELETED namespace.
+ * If timestampp is not NULL, the delete timestamp encoded in
+ * the name is parsed and filled in.
  * returns boolean
  */
-int mboxname_isdeletedmailbox(const char *name);
+int mboxname_isdeletedmailbox(const char *name, time_t *timestampp);
 
 /*
  * Translate (internal) inboxname into corresponding userid.

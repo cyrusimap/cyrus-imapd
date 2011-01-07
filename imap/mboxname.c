@@ -48,6 +48,7 @@
 #include <string.h>
 #include <errno.h>
 #include <syslog.h>
+#include <ctype.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -784,12 +785,13 @@ char *mboxname_isusermailbox(const char *name, int isinbox)
  * If (internal) mailbox 'name' is a DELETED mailbox
  * returns boolean
  */
-int mboxname_isdeletedmailbox(const char *name)
+int mboxname_isdeletedmailbox(const char *name, time_t *timestampp)
 {
     static const char *deletedprefix = NULL;
     static int deletedprefix_len = 0;
     int domainlen = 0;
     char *p;
+    int i;
 
     if (!deletedprefix) {
 	deletedprefix = config_getstring(IMAPOPT_DELETEDPREFIX);
@@ -799,8 +801,28 @@ int mboxname_isdeletedmailbox(const char *name)
     if (config_virtdomains && (p = strchr(name, '!')))
 	domainlen = p - name + 1;
 
-    return ((!strncmp(name + domainlen, deletedprefix, deletedprefix_len) &&
-	     name[domainlen + deletedprefix_len] == '.') ? 1 : 0);
+    if (strncmp(name + domainlen, deletedprefix, deletedprefix_len))
+	return 0;
+    if (name[domainlen + deletedprefix_len] != '.')
+	return 0;
+
+    /* Sanity check for 8 hex digits only at the end */
+    p = strrchr(name, '.');
+    if (!p)
+	return 0;
+    p++;
+
+    for (i = 0 ; i < 7; i++) {
+        if (!Uisxdigit(p[i]))
+	    return 0;
+    }
+    if (p[8] != '\0')
+	return 0;
+
+    if (timestampp)
+	*timestampp = (time_t)strtoul(p, NULL, 16);
+
+    return 1;
 }
 
 /*
@@ -904,7 +926,7 @@ int mboxname_policycheck(const char *name)
      * A thorough fix might remove the prefix and timestamp
      * then continue with the check
      */
-    if (!mboxname_isdeletedmailbox(name)) {
+    if (!mboxname_isdeletedmailbox(name, NULL)) {
 	if (strlen(name) > MAX_MAILBOX_NAME)
 	    return IMAP_MAILBOX_BADNAME;
     }

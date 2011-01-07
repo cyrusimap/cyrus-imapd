@@ -101,8 +101,6 @@ struct delete_node {
 };
 
 struct delete_rock {
-    char *prefix;
-    int prefixlen;
     time_t delete_mark;
     struct delete_node *head;
     struct delete_node *tail;
@@ -241,19 +239,16 @@ static int delete(char *name,
 {
     struct mboxlist_entry *mbentry = NULL;
     struct delete_rock *drock = (struct delete_rock *) rock;
-    char *p;
-    int i, r, domainlen = 0;
+    int r;
     struct delete_node *node;
     time_t timestamp;
 
     if (sigquit) {
 	return 1;
     }
-    if (config_virtdomains && (p = strchr(name, '!')))
-	domainlen = p - name + 1;
 
     /* check if this is a mailbox we want to examine */
-    if (strncmp(name+domainlen, drock->prefix, drock->prefixlen))
+    if (!mboxname_isdeletedmailbox(name, &timestamp))
 	return 0;
 
     /* Skip remote mailboxes */
@@ -271,19 +266,8 @@ static int delete(char *name,
     }
     mboxlist_entry_free(&mbentry);
 
-    /* Sanity check for 8 hex digits only at the end */
-    p = strrchr(name, '.');
-    if (!p) return(0);
-    p++;
-
-    for (i = 0 ; i < 7; i++) {
-        if (!Uisxdigit(p[i])) return(0);
-    }
-    if (p[8] != '\0') return(0);
-
-    timestamp = strtoul(p, NULL, 16);
     if ((timestamp == 0) || (timestamp > drock->delete_mark))
-        return(0);
+        return 0;
 
     /* Add this mailbox to list of mailboxes to delete */
     node = xmalloc(sizeof(struct delete_node));
@@ -312,7 +296,6 @@ int main(int argc, char *argv[])
     const char *find_prefix = "*";
     struct expire_rock erock;
     struct delete_rock drock;
-    const char *deletedprefix;
     struct sigaction action;
 
     if ((geteuid()) == 0 && (become_cyrus() != 0)) {
@@ -437,7 +420,7 @@ int main(int argc, char *argv[])
     }
 
     if ((delete_days != -1) && mboxlist_delayed_delete_isenabled() &&
-	(deletedprefix = config_getstring(IMAPOPT_DELETEDPREFIX))) {
+	config_getstring(IMAPOPT_DELETEDPREFIX)) {
         struct delete_node *node;
         int count = 0;
         
@@ -447,8 +430,6 @@ int main(int argc, char *argv[])
                     delete_days);
         }
 
-	drock.prefix = strconcat(deletedprefix, ".", (char *)NULL);
-        drock.prefixlen = strlen(drock.prefix);
         drock.delete_mark = time(0) - (delete_days * 60 * 60 * 24);
         drock.head = NULL;
         drock.tail = NULL;

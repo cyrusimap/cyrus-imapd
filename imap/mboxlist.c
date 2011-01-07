@@ -1142,7 +1142,7 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
 	    isusermbox = 1;
 	} else if ((config_getswitch(IMAPOPT_ALLOWUSERMOVES) &&
 		    mboxname_isusermailbox(newname, 1)) ||
-		   mboxname_isdeletedmailbox(newname)) {
+		   mboxname_isdeletedmailbox(newname, NULL)) {
 	    /* Special case of renaming a user */
 	    if (!(myrights & ACL_DELETEMBOX) && !isadmin) {
 		r = (myrights & ACL_LOOKUP) ?
@@ -1167,7 +1167,7 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
 	if (mboxname_isusermailbox(newname, 1)) {
 	    if ((config_getswitch(IMAPOPT_ALLOWUSERMOVES) &&
 		 mboxname_isusermailbox(oldname, 1)) ||
-		mboxname_isdeletedmailbox(oldname)) {
+		mboxname_isdeletedmailbox(oldname, NULL)) {
 		if (!isadmin) {
 		    /* Only admins can rename users (INBOX to INBOX) */
 		    r = IMAP_MAILBOX_NOTSUPPORTED;
@@ -1843,7 +1843,7 @@ static int find_p(void *rockp,
 	memcpy(namebuf, key, keylen);
 	namebuf[keylen] = '\0';
 	if (mboxlist_delayed_delete_isenabled() && 
-	    mboxname_isdeletedmailbox(namebuf))
+	    mboxname_isdeletedmailbox(namebuf, NULL))
 	    return 0;
     }
 

@@ -5155,7 +5155,7 @@ static int delmbox(char *name,
                                    imapd_userid, imapd_authstate,
                                    0, 0, 0);
     } else if ((imapd_userisadmin || imapd_userisproxyadmin) && 
-	       mboxname_isdeletedmailbox(name)) {
+	       mboxname_isdeletedmailbox(name, NULL)) {
         r = mboxlist_deletemailbox(name,
 				   imapd_userisadmin || imapd_userisproxyadmin,
                                    imapd_userid, imapd_authstate,
@@ -5245,7 +5245,7 @@ void cmd_delete(char *tag, char *name, int localonly, int force)
                                        imapd_userid, imapd_authstate, 
                                        1-force, localonly, 0);
         } else if ((imapd_userisadmin || imapd_userisproxyadmin) &&
-                   mboxname_isdeletedmailbox(mailboxname)) {
+                   mboxname_isdeletedmailbox(mailboxname, NULL)) {
             r = mboxlist_deletemailbox(mailboxname,
 				       imapd_userisadmin || imapd_userisproxyadmin,
                                        imapd_userid, imapd_authstate,
