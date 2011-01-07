@@ -334,8 +334,6 @@ struct dumprock {
     int count;
 };
 
-static const char hexcodes[] = "0123456789ABCDEF";
-
 static int dump_cb(void *rock,
 		   const char *key, int keylen __attribute__((unused)),
 		   const char *data, int datalen)
@@ -364,12 +362,8 @@ static int dump_cb(void *rock,
 
     if (i != idlen) {
 	/* change to hexadecimal */
-	freeme = (char *) xmalloc(sizeof(char) * idlen * 2 + 1);
-	for (i = 0; i < idlen; i++) {
-	    freeme[2 * i] = hexcodes[(id[i] >> 4) & 0xf];
-	    freeme[2 * i + 1] = hexcodes[id[i] & 0xf];
-	}
-	freeme[2 * idlen] = '\0';
+	freeme = xmalloc(idlen * 2 + 1);
+	bin_to_hex(id, idlen, freeme, BH_UPPER);
 	id = freeme;
     } else {
 	freeme = NULL;
