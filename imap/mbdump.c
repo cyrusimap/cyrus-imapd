@@ -755,7 +755,7 @@ int undump_mailbox(const char *mbname,
     char *content = NULL;
     char *seen_file = NULL;
     char *mboxkey_file = NULL;
-    uquota_t old_quota_used;
+    uquota_t old_quota_used = 0;
 
     memset(&file, 0, sizeof(file));
     memset(&data, 0, sizeof(data));
