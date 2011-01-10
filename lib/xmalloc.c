@@ -106,3 +106,10 @@ char *xstrndup(const char* str, unsigned len)
     p[len] = '\0';
     return p;
 }
+
+void *xmemdup(void *ptr, unsigned size)
+{
+    void *p = xmalloc(size);
+    memcpy(p, ptr, size);
+    return p;
+}

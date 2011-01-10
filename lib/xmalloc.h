@@ -56,6 +56,7 @@ extern void *xcalloc (unsigned nmemb, unsigned size);
 extern void *xrealloc (void *ptr, unsigned size);
 extern char *xstrdup (const char *str);
 extern char *xstrndup (const char *str, unsigned len);
+extern void *xmemdup (void *ptr, unsigned size);
 
 /* Functions using xmalloc.h must provide a function called fatal() conforming
    to the following: */
