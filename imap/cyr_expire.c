@@ -107,6 +107,28 @@ struct delete_rock {
 };
 
 /*
+ * Parse a string as an unsigned decimal integer.
+ * Note: returned value is signed to allow the caller to
+ * use negative values as an error case.
+ * Returns 1 if successful and *@valp is filled in,
+ *  or 0 on error.
+ * gnb:TODO should return bool
+ */
+static int parse_uint(const char *s, int *valp)
+{
+    char *end = NULL;
+    int val;
+
+    if (*s == '-')
+	return 0;
+    val = (int)strtoul(s, &end, 10);
+    if (end == NULL || *end || end == s)
+	return 0;
+    *valp = val;
+    return 1;
+}
+
+/*
  * mailbox_expunge() callback to expunge expired articles.
  */
 static unsigned expire_cb(struct mailbox *mailbox __attribute__((unused)), 
@@ -141,6 +163,7 @@ static int expire(char *name, int matchlen __attribute__((unused)),
     int r;
     struct mailbox *mailbox = NULL;
     unsigned numexpunged = 0;
+    int expire_days;
 
     if (sigquit) {
 	return 1;
@@ -190,28 +213,24 @@ static int expire(char *name, int matchlen __attribute__((unused)),
 	return 0;
     }
 
-    if (attrib.value) {
+    if (attrib.value && parse_uint(attrib.value, &expire_days)) {
 	/* add mailbox to table */
-	unsigned long expire_days = strtoul(attrib.value, NULL, 10);
-	time_t *expire_mark = (time_t *) xmalloc(sizeof(time_t));
-
-	erock->expire_mark = 0;
-
-	*expire_mark = expire_days ?
+	erock->expire_mark = expire_days ?
 	    time(0) - (expire_days * 60 * 60 * 24) : 0 /* never */ ;
-	hash_insert(name, (void *) expire_mark, &erock->table);
+	hash_insert(name,
+		    xmemdup(&erock->expire_mark, sizeof(erock->expire_mark)),
+		    &erock->table);
 
-	if (verbose) {
-	    fprintf(stderr,
-		    "expiring messages in %s older than %ld days\n",
-		    name, expire_days);
-	}
+	if (expire_days) {
+	    if (verbose) {
+		fprintf(stderr,
+			"expiring messages in %s older than %d days\n",
+			name, expire_days);
+	    }
 
-	erock->expire_mark = *expire_mark;
-
-	r = mailbox_expunge(mailbox, expire_cb, erock, NULL);
-	if (r) {
-	    syslog(LOG_ERR, "failed to expire old messages: %s", mailbox->name);
+	    r = mailbox_expunge(mailbox, expire_cb, erock, NULL);
+	    if (r)
+		syslog(LOG_ERR, "failed to expire old messages: %s", mailbox->name);
 	}
     }
 
@@ -291,7 +310,11 @@ static void sighandler (int sig __attribute((unused)))
 int main(int argc, char *argv[])
 {
     extern char *optarg;
-    int opt, r = 0, expire_days = 0, expunge_days = -1, delete_days = -1, do_expunge = 1;
+    int opt, r = 0;
+    int expire_days = 0;
+    int expunge_days = -1;
+    int delete_days = -1;
+    int do_expunge = 1;	/* gnb:TODO bool */
     char *alt_config = NULL;
     const char *find_prefix = "*";
     struct expire_rock erock;
@@ -315,17 +338,17 @@ int main(int argc, char *argv[])
 
 	case 'D':
 	    if (delete_days >= 0) usage();
-	    delete_days = atoi(optarg);
+	    if (!parse_uint(optarg, &delete_days)) usage();
 	    break;
 
 	case 'E':
 	    if (expire_days) usage();
-	    expire_days = atoi(optarg);
+	    if (!parse_uint(optarg, &expire_days)) usage();
 	    break;
 
 	case 'X':
 	    if (expunge_days >= 0) usage();
-	    expunge_days = atoi(optarg);
+	    if (!parse_uint(optarg, &expunge_days)) usage();
 	    break;
 
 	case 'x':
@@ -344,7 +367,7 @@ int main(int argc, char *argv[])
 	case 'a':
 	    erock.skip_annotate = 1;
 	    break;
-	
+
 	default:
 	    usage();
 	    break;
