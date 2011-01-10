@@ -533,6 +533,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
   const void *canon_user, *val;
   char *username;
   int ret = TRUE;
+  struct mboxlist_entry *mbentry = NULL;
 
   clientinstr = initial_challenge;
   if (clientinstr!=NULL)
@@ -683,7 +684,6 @@ static int cmd_authenticate(struct protstream *sieved_out,
       /* Check for a remote mailbox (should we setup a redirect?) */
       struct namespace sieved_namespace;
       char inboxname[MAX_MAILBOX_BUFFER];
-      struct mboxlist_entry mbentry;
       int r;
       
       /* Set namespace */
@@ -714,7 +714,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
 	  goto cleanup;
       }
 
-      if(mbentry.mbtype & MBTYPE_REMOTE) {
+      if(mbentry->mbtype & MBTYPE_REMOTE) {
 	  /* It's a remote mailbox */
 	  if (config_getswitch(IMAPOPT_SIEVE_ALLOWREFERRALS)) {
 	      /* We want to set up a referral */
@@ -747,25 +747,20 @@ static int cmd_authenticate(struct protstream *sieved_out,
 
 		  referral_host =
 		      (char*) xmalloc(strlen(authname)+1+strlen(username)+1+
-				      strlen(mbentry.partition)+1);
+				      strlen(mbentry->server)+1);
 		  sprintf((char*) referral_host, "%s;%s@%s",
-			  authname, username, mbentry.partition);
+			  authname, username, mbentry->server);
 
 		  free(authname);
 	      }
 	      else
-		  referral_host = xstrdup(mbentry.partition);
+		  referral_host = xstrdup(mbentry->server);
 	  }
 	  else {
 	      /* We want to set up a connection to the backend for proxying */
 	      const char *statusline = NULL;
-	      char *c;
 
-	      /* xxx hide the fact that we are storing partitions */
-	      c = strchr(mbentry.partition, '!');
-	      if(c) *c = '\0';
-
-	      backend = backend_connect(NULL, mbentry.partition, &sieve_protocol,
+	      backend = backend_connect(NULL, mbentry->server, &sieve_protocol,
 					username, NULL, &statusline);
 
 	      if (!backend) {
@@ -830,6 +825,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
   
   cleanup:
   /* free memory */
+  mboxlist_entry_free(&mbentry);
   free(username);
 
   return ret;
