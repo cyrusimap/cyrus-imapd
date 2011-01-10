@@ -86,9 +86,7 @@ struct protgroup
  * Create a new protection stream for file descriptor 'fd'.  Stream
  * will be used for writing iff 'write' is nonzero.
  */
-struct protstream *prot_new(fd, write)
-int fd;
-int write;
+struct protstream *prot_new(int fd, int write)
 {
     struct protstream *newstream;
 
@@ -105,9 +103,23 @@ int write;
     if(write)
 	newstream->cnt = PROT_BUFSIZE;
 
-    newstream->can_unget = 0;
-    newstream->bytes_in = 0;
-    newstream->bytes_out = 0;
+    return newstream;
+}
+
+/* Create a protstream which is just an interface to a mapped piece of
+ * memory, allowing prot commands to be used to read from it */
+struct protstream *prot_readmap(const char *buf, uint32_t len)
+{
+    struct protstream *newstream;
+
+    newstream = (struct protstream *) xzmalloc(sizeof(struct protstream));
+    /* dodgy, but the alternative is two pointers */
+    newstream->ptr = (unsigned char *)buf;
+    newstream->cnt = len;
+    newstream->fixedsize = 1;
+    newstream->fd = PROT_NO_FD;
+    newstream->logfd = PROT_NO_FD;
+    newstream->big_buffer = PROT_NO_FD;
 
     return newstream;
 }
@@ -134,7 +146,7 @@ int prot_free(struct protstream *s)
     if (s->zbuf) free(s->zbuf);
 #endif
 
-    free((char*)s);
+    free(s);
 
     return 0;
 }
@@ -567,6 +579,7 @@ int prot_fill(struct protstream *s)
     errno = 0;
 
     if (s->eof || s->error) return EOF;
+    if (s->fixedsize) return EOF;
 
     do {
 #ifdef HAVE_ZLIB
