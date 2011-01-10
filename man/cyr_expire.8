@@ -57,38 +57,53 @@ cyr_expire \- expire messages and duplicate delivery database entries
 .BI \-X " expunge-days"
 ]
 [
-.B \-p " mailbox-prefix"
+.BI \-p " mailbox-prefix"
 ]
 [
 .B \-v
 ]
 .SH DESCRIPTION
-.I Cyr_expire
-is used to expire messages and duplicate delivery database entries.
-.I Cyr_expire
-also cleanses mailboxes of partially expunged messages
-(when using the "delayed" expunge mode).
+.PP
+\fBCyr_expire\fR is used to run a number of regular maintenance tasks
+on Cyrus databases, specifically:
+.IP \(bu 2m
+expire messages from mailboxes, and
+.IP \(bu 2m
+expire entries from the duplicate delivery database, and
+.IP \(bu 2m
+cleanse mailboxes of partially expunged messages (when
+using the "delayed" expunge mode), and
+.IP \(bu 2m
+remove deleted mailboxes (when using the "delayed" delete mode).
+.PP
 The expiration of messages is controlled by the
 \fB/vendor/cmu/cyrus-imapd/expire\fR mailbox annotation which
 specifies the age (in days) of messages in the given mailbox that
-should be deleted.  Any duplicate delivery database entries which
-correspond to the mailbox are also deleted at the same frequency.
-.br
-.sp
+should be deleted.  A value of 0 means that no expiration is to be
+performed on that mailbox.
+.PP
 The value of the \fB/vendor/cmu/cyrus-imapd/expire\fR annotation is
-inherited by all children of the given mailbox, so an entire mailbox
-tree can be expired by seting a single annotation on the root of that
-tree.  If a mailbox does not have a
+inherited by all children of the mailbox on which it is set, so an entire
+mailbox tree can be configured by setting a single annotation on the
+root of that tree.  If a mailbox does not have a
 \fB/vendor/cmu/cyrus-imapd/expire\fR annotation set on it (or does not
 inherit one), then no messages are expired from the mailbox.
 .PP
-.I Cyr_expire
-reads its configuration options out of the
-.IR imapd.conf (5)
+The annotation can be examined using the \fBinfo\fR command of
+\fBcyradm(1p)\fR, and modified using the \fBmboxconfig\fR and
+\fBsetinfo\fR commands of \fBcyradm(1p)\fR.
+.PP
+Expiry of duplicate delivery database entries for a given mailbox
+is also controlled by the \fB/vendor/cmu/cyrus-imapd/expire\fR annotation
+which applies to that mailbox.  Unlike message expiration, if no
+annotation applies to the mailbox then duplicate database entries are
+expired using the value given to the \fB-E\fR option.
+.PP
+\fBCyr_expire\fR reads its configuration options out of the \fIimapd.conf\fR(5)
 file unless specified otherwise by \fB-C\fR.
 .SH OPTIONS
 .TP
-.BI \-C " config-file"
+\fB\-C\fI config-file\fR
 Read configuration options from \fIconfig-file\fR.
 .TP
 \fB\-D \fIdelete-days\fR
@@ -104,14 +119,14 @@ value is only used for entries which do not have a corresponding
 Expunge previously deleted messages older than \fIexpunge-days\fR
 (when using the "delayed" expunge mode).
 .TP
-\fB \-x
-Do not expunge messages even if using delayed expunge mode (reduces the
-IO hit considerably, allowing you to run cyr_expire frequently to clean
-up the duplicate database without overloading your server)
+\fB\-x
+Do not expunge messages even if using delayed expunge mode.  This reduces IO
+traffic considerably, allowing \fBcyr_expire\fR to be run frequently to clean
+up the duplicate database without overloading the machine.
 .TP
 \fB\-p \fImailbox-prefix\fR
-Only find mailboxes starting with this prefix.  e.g.
-"user.justgotspammedlots"
+Only find mailboxes starting with this prefix,  e.g.
+"user.justgotspammedlots".
 .TP
 .B \-v
 Enable verbose output.
@@ -125,4 +140,4 @@ only \fIexpire-days\fR is considered for all mailboxes.
 .B /etc/imapd.conf
 .SH SEE ALSO
 .PP
-\fBimapd.conf(5)\fR, \fBmaster(8)\fR
+\fBimapd.conf(5)\fR, \fBmaster(8)\fR, \fBcyradm(1p)\fR
