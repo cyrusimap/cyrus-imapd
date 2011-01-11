@@ -281,7 +281,7 @@ int cyrus_close_sock(int fd)
     return close(fd);
 }
 
-void cyrus_reset_stdio()
+void cyrus_reset_stdio(void)
 {
     int devnull = open("/dev/null", O_RDWR, 0);
     

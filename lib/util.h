@@ -139,7 +139,7 @@ extern int create_tempfile(const char *path);
 extern int cyrus_close_sock(int fd);
 
 /* Reset stdin/stdout/stderr */
-extern void cyrus_reset_stdio();
+extern void cyrus_reset_stdio(void);
 
 /* Create all parent directories for the given path,
  * up to but not including the basename.
