@@ -118,10 +118,10 @@ Only attempt to connect to the backend server once rather than waiting
 up to 1000 seconds before giving up.
 .TP
 .BI \-z
-Enable compress.
-If you set 'sync_compress' in the imapd.conf or pass -z to sync_client, the
-replication protocol will attempt to enable deflate compression on the
-connection.
+Require compression.
+The replication protocol will always try to enable compression if both
+ends support it.  Set this flag when you want to abort if compression is
+not available.
 .TP
 .BI \-C " config-file"
 Read configuration options from \fIconfig-file\fR.

@@ -1165,10 +1165,6 @@ product version in the capabilities */
 /* The authentication name to use when authenticating to a sync server.
    Prefix with a channel name to only apply for that channel */
 
-{ "sync_compress", 0, SWITCH }
-/* Enable compression on replication traffic.
-   Prefix with a channel name to only apply for that channel */
-
 { "sync_host", NULL, STRING }
 /* Name of the host (replica running sync_server(8)) to which
    replication actions will be sent by sync_client(8).

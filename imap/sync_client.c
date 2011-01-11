@@ -122,6 +122,7 @@ static struct protocol_t csync_protocol =
   { NULL, NULL, "* OK", NULL,
     { { "* SASL ", CAPA_AUTH },
       { "* STARTTLS", CAPA_STARTTLS },
+      { "* COMPRESS DEFLATE", CAPA_COMPRESS },
       { NULL, 0 } } },
   { "STARTTLS", "OK", "NO", 1 },
   { "AUTHENTICATE", USHRT_MAX, 0, "OK", "NO", "+ ", "*", NULL, 0 },
@@ -2576,19 +2577,21 @@ void replica_connect(const char *channel)
     }
 
 #ifdef HAVE_ZLIB
-    /* check if we should compress */
-    if (do_compress || config_getswitch(IMAPOPT_SYNC_COMPRESS)) {
-        prot_printf(sync_backend->out, "COMPRESS DEFLATE\r\n");
-        prot_flush(sync_backend->out);
+    /* Does the backend support compression? */
+    if (CAPA(sync_backend, CAPA_COMPRESS)) {
+	prot_printf(sync_backend->out, "COMPRESS DEFLATE\r\n");
+	prot_flush(sync_backend->out);
 
-        if (sync_parse_response("COMPRESS", sync_backend->in, NULL)) {
-	    syslog(LOG_ERR, "Failed to enable compression, continuing uncompressed");
+	if (sync_parse_response("COMPRESS", sync_backend->in, NULL)) {
+	    if (do_compress) fatal("Failed to enable compression, aborting", EC_SOFTWARE);
+	    syslog(LOG_NOTICE, "Failed to enable compression, continuing uncompressed");
 	}
 	else {
 	    prot_setcompress(sync_backend->in);
 	    prot_setcompress(sync_backend->out);
-        }
+	}
     }
+    else if (do_compress) fatal("Backend does not support compression, aborting", EC_SOFTWARE);
 #endif
 
     /* links to sockets */
