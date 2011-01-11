@@ -73,6 +73,20 @@ struct entryattlist {
     struct entryattlist *next;
 };
 
+struct annotation_data {
+    const char *value;
+    size_t size;
+    time_t modifiedsince;
+    const char *contenttype;
+};
+
+struct annotate_info_t
+{
+    const char *name;
+    int flag;
+};
+
+
 /* String List Management */
 void appendstrlist(struct strlist **l, char *s);
 void appendstrlistpat(struct strlist **l, char *s);
@@ -102,9 +116,14 @@ void annotatemore_init(int myflags,
 /* open the annotation db */
 void annotatemore_open(char *name);
 
+typedef int (*annotatemore_find_proc_t)(const char *mailbox,
+		    const char *entry, const char *userid,
+		    struct annotation_data *attrib, void *rock);
+
 /* 'proc'ess all annotations matching 'mailbox' and 'entry' */
 int annotatemore_findall(const char *mailbox, const char *entry,
-			 int (*proc)(), void *rock, struct txn **tid);
+			 annotatemore_find_proc_t proc, void *rock,
+			 struct txn **tid);
 
 /* fetch annotations and output results */
 int annotatemore_fetch(char *mailbox,
@@ -112,19 +131,6 @@ int annotatemore_fetch(char *mailbox,
 		       struct namespace *namespace, int isadmin, char *userid,
 		       struct auth_state *auth_state, struct protstream *pout,
 		       int ismetadata, int *maxsize);
-
-struct annotation_data {
-    const char *value;
-    size_t size;
-    time_t modifiedsince;
-    const char *contenttype;
-};
-
-struct annotate_info_t
-{
-    const char *name;
-    int flag;
-};
 
 extern const struct annotate_info_t annotate_mailbox_flags[];
 

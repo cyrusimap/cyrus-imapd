@@ -2398,7 +2398,7 @@ static void cmd_help(void)
 }
 
 struct list_rock {
-    int (*proc)();
+    int (*proc)(char *, void *);
     struct wildmat *wild;
     struct hash_table server_table;
 };

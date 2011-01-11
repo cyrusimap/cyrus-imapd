@@ -329,7 +329,7 @@ static int split_attribs(const char *data, int datalen __attribute__((unused)),
 struct find_rock {
     struct glob *mglob;
     struct glob *eglob;
-    int (*proc)();
+    annotatemore_find_proc_t proc;
     void *rock;
 };
 
@@ -370,7 +370,8 @@ static int find_cb(void *rock, const char *key,
 }
 
 int annotatemore_findall(const char *mailbox, const char *entry,
-			 int (*proc)(), void *rock, struct txn **tid)
+			 annotatemore_find_proc_t proc, void *rock,
+			 struct txn **tid)
 {
     char key[MAX_MAILBOX_PATH+1], *p;
     int keylen, r;
