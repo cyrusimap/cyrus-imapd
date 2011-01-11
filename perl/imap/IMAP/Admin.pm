@@ -790,7 +790,8 @@ sub mboxconfig {
 		 "news2mail" => "/vendor/cmu/cyrus-imapd/news2mail",
 		 "sharedseen" => "/vendor/cmu/cyrus-imapd/sharedseen",
 		 "sieve" => "/vendor/cmu/cyrus-imapd/sieve",
-		 "squat" => "/vendor/cmu/cyrus-imapd/squat" );
+		 "squat" => "/vendor/cmu/cyrus-imapd/squat",
+		 "pop3showafter" => "/vendor/cmu/cyrus-imapd/pop3showafter" );
 
   if(!$self->{support_annotatemore}) {
     $self->{error} = "Remote does not support ANNOTATEMORE.";
@@ -860,7 +861,7 @@ sub setinfoserver {
 		 "admin" => "/admin",
 		 "shutdown" => "/vendor/cmu/cyrus-imapd/shutdown",
 		 "expire" => "/vendor/cmu/cyrus-imapd/expire",
-		 "squat" => "/vendor/cmu/cyrus-imapd/squat" );
+		 "squat" => "/vendor/cmu/cyrus-imapd/squat");
 
   $entry = $values{$entry} if (exists($values{$entry}));
 

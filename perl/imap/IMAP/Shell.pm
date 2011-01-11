@@ -1437,7 +1437,7 @@ sub _sc_mboxcfg {
   while (defined ($opt = shift(@argv))) {
     last if $opt eq '--';
     if ($opt =~ /^-/) {
-      die "usage: mboxconfig mailbox [comment|condstore|expire|news2mail|sharedseen|sieve|squat|/<explicit annotation>] value\n";
+      die "usage: mboxconfig mailbox [comment|condstore|expire|news2mail|pop3showafter|sharedseen|sieve|squat|/<explicit annotation>] value\n";
     }
     else {
       push(@nargv, $opt);
@@ -1446,7 +1446,7 @@ sub _sc_mboxcfg {
   }
   push(@nargv, @argv);
   if (@nargv < 2) {
-    die "usage: mboxconfig mailbox [comment|condstore|expire|news2mail|sharedseen|sieve|squat|/<explicit annotation>] value\n";
+    die "usage: mboxconfig mailbox [comment|condstore|expire|news2mail|pop3showafter|sharedseen|sieve|squat|/<explicit annotation>] value\n";
   }
   if (!$cyrref || !$$cyrref) {
     die "mboxconfig: no connection to server\n";
@@ -1688,6 +1688,12 @@ Sets the number of days after which messages will be expired from the mailbox.
 
 Sets an email address to which messages injected into the server via NNTP 
 will be sent.
+
+=item C<pop3showafter>
+
+Sets a time (in RFC3501 format, for example "6-Jan-2011 11:45:32 +1100")
+which specifies a cutoff date such that POP3 fetching of the folder does
+not see messages whose internaldate is before or equal to the date.
 
 =item C<sharedseen>
 

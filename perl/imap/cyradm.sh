@@ -232,6 +232,12 @@ Sets the number of days after which messages will be expired from the mailbox.
 Sets an email address to which messages injected into the server via NNTP 
 will be sent.
 
+=item C<pop3showafter>
+
+Sets a time (in RFC3501 format, for example "6-Jan-2011 11:45:32 +1100")
+which specifies a cutoff date such that POP3 fetching of the folder does
+not see messages whose internaldate is before or equal to the date.
+
 =item C<sharedseen>
 
 Enables the use of a shared \Seen flag on messages rather than a
