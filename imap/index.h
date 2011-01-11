@@ -167,7 +167,7 @@ struct rootset {
 };
 
 struct thread_algorithm {
-    char *alg_name;
+    const char *alg_name;
     void (*threader)(struct index_state *state, unsigned *msgno_list, int nmsg, int usinguid);
 };
 

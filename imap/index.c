@@ -1358,8 +1358,10 @@ int index_sort(struct index_state *state, struct sortcrit *sortcrit,
     /* debug */
     if (CONFIG_TIMING_VERBOSE) {
 	int len;
-	char *key_names[] = { "SEQUENCE", "ARRIVAL", "CC", "DATE", "FROM",
-			      "SIZE", "SUBJECT", "TO", "ANNOTATION", "MODSEQ" };
+	static const char * const key_names[] = {
+	    "SEQUENCE", "ARRIVAL", "CC", "DATE", "FROM",
+	    "SIZE", "SUBJECT", "TO", "ANNOTATION", "MODSEQ"
+	};
 	char buf[1024] = "";
 
 	while (sortcrit->key && sortcrit->key < VECTOR_SIZE(key_names)) {

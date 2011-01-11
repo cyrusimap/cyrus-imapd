@@ -213,9 +213,9 @@ static const int max_monthdays[] = {
 /* track if we're idling */
 static int idling = 0;
 
-static struct mbox_name_attribute {
+static const struct mbox_name_attribute {
     int flag;
-    char *id;
+    const char *id;
 } mbox_name_attributes[] = {
     /* from RFC 3501 */
     { MBOX_ATTRIBUTE_NOINFERIORS,   "\\Noinferiors"   },
@@ -2354,7 +2354,7 @@ void cmd_authenticate(char *tag, char *authtype, char *resp)
     int sasl_result;
 
     const void *val;
-    char *ssfmsg=NULL;
+    const char *ssfmsg = NULL;
 
     const char *canon_user;
 
@@ -4622,7 +4622,7 @@ void cmd_sort(char *tag, int usinguid)
 
     if (backend_current) {
 	/* remote mailbox */
-	char *cmd = usinguid ? "UID Sort" : "Sort";
+	const char *cmd = usinguid ? "UID Sort" : "Sort";
 
 	prot_printf(backend_current->out, "%s %s ", tag, cmd);
 	if (!pipe_command(backend_current, 65536)) {
@@ -8566,7 +8566,7 @@ void cmd_undump(char *tag, char *name)
     }
 }
 
-static int getresult(struct protstream *p, char *tag) 
+static int getresult(struct protstream *p, const char *tag)
 {
     char buf[4096];
     char *str = (char *) buf;
@@ -9973,7 +9973,7 @@ static void xlist_check(const char *key, const char *val, void *rock)
     r->sep = " ";
 }
 
-static void specialuse_flags(struct mboxlist_entry *mbentry, char *sep)
+static void specialuse_flags(struct mboxlist_entry *mbentry, const char *sep)
 {
     char inboxname[MAX_MAILBOX_PATH+1];
     int inboxlen;
@@ -10011,11 +10011,11 @@ static void specialuse_flags(struct mboxlist_entry *mbentry, char *sep)
 static void list_response(char *name, int attributes,
 			  struct listargs *listargs)
 {
-    struct mbox_name_attribute *attr;
+    const struct mbox_name_attribute *attr;
     char internal_name[MAX_MAILBOX_PATH+1];
     int r;
     char mboxname[MAX_MAILBOX_PATH+1];
-    char *sep;
+    const char *sep;
     const char *cmd;
     struct mboxlist_entry *mbentry = NULL;
 

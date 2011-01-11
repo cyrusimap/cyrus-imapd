@@ -62,7 +62,7 @@ extern int retry_writev P((int fd, struct iovec *iov, int iovcnt));
 
 /* add a buffer 's' of length 'len' to iovec 'iov' */
 #define WRITEV_ADD_TO_IOVEC(iov, num_iov, s, len) \
-    do { (iov)[(num_iov)].iov_base = (s); \
+    do { (iov)[(num_iov)].iov_base = (char *)(s); \
          (iov)[(num_iov)++].iov_len = (len); } while (0)
 
 /* add a string 's' to iovec 'iov' */

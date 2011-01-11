@@ -74,7 +74,7 @@ struct mboxlocklist {
 static struct mboxlocklist *open_mboxlocks = NULL;
 
 /* Mailbox patterns which the design of the server prohibits */
-static char *badmboxpatterns[] = {
+static const char * const badmboxpatterns[] = {
     "",
     "*\t*",
     "*\n*",

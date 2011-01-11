@@ -684,7 +684,7 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
 
 /* xxx  start of separate proxy-only code
    (remove when we move to a unified environment) */
-static int chomp(struct protstream *p, char *s)
+static int chomp(struct protstream *p, const char *s)
 {
     int c = prot_getc(p);
 
