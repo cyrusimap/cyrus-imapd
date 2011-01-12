@@ -89,6 +89,7 @@
 #include "xstrlcpy.h"
 #include "md5.h"
 #include "retry.h"
+#include "strarray.h"
 
 #ifdef HAVE_SSL
 #include <openssl/ssl.h>
@@ -134,13 +135,7 @@ int mysasl_config(void*, const char*, const char*, const char**, unsigned*);
 extern int _sasl_debug;
 extern char *optarg;
 
-struct stringlist 
-{
-    char *str;
-    struct stringlist *next;
-};
-
-struct stringlist *strlist_head = NULL;
+static strarray_t stashed_strings = STRARRAY_INITIALIZER;
 
 /* callbacks we support */
 static sasl_callback_t callbacks[] = {
@@ -925,26 +920,15 @@ imt_stat getauthline(struct sasl_cmd_t *sasl_cmd, char **line, int *linelen)
 void interaction (int id, const char *challenge, const char *prompt,
 		  char **tresult, unsigned int *tlen)
 {
+    char *s;
     char result[1024];
-    
-    struct stringlist *cur;
-    
-    cur = malloc(sizeof(struct stringlist));
-    if(!cur) {
-	*tlen=0;
-	*tresult=NULL;
-	return;
-    }
-    
-    cur->str = NULL;
-    cur->next = strlist_head;
-    strlist_head = cur;
-    
+
     if (id==SASL_CB_PASS && !cmdline_password) {
 	printf("%s: ", prompt);
-	cur->str=strdup(getpass(""));
-	*tlen=strlen(cur->str);
-	*tresult = cur->str;
+	s = xstrdup(getpass(""));
+	strarray_appendm(&stashed_strings, s);
+	*tlen = strlen(s);
+	*tresult = s;
 	return;
     } else if (id==SASL_CB_PASS && cmdline_password) {
 	strcpy(result, cmdline_password);
@@ -982,16 +966,11 @@ void interaction (int id, const char *challenge, const char *prompt,
 	    }
 	}
     }
-    
-    *tlen = strlen(result);
-    cur->str = (char *) malloc(*tlen+1);
-    if(!cur->str) {
-	*tresult = NULL;
-	return;
-    }
-    memset(cur->str, 0, *tlen+1);
-    memcpy(cur->str, result, *tlen);
-    *tresult = cur->str;
+
+    s = xstrdup(result);
+    strarray_appendm(&stashed_strings, s);
+    *tlen = strlen(s);
+    *tresult = s;
 }
 
 void fillin_interactions(sasl_interact_t *tlist)
@@ -2357,9 +2336,7 @@ int main(int argc, char **argv)
     int reauth = 1;
     int dochallenge = 0, noinitresp = 0;
     char *val;
-    
-    struct stringlist *cur, *cur_next;
-    
+
     if (!construct_hash_table(&confighash, CONFIGHASHSIZE, 1)) {
 	imtest_fatal("could not construct config hash table");
     }
@@ -2762,14 +2739,10 @@ int main(int argc, char **argv)
 	   pipe in a filename if applicable */
 	interactive(protocol, filename);
     }
-    
-    for (cur = strlist_head; cur; cur = cur_next) {
-	cur_next = cur->next;
-	free(cur->str);
-	free(cur);
-    }
 
+    while (stashed_strings.count)
+	free(strarray_pop(&stashed_strings));
     free_hash_table(&confighash, free);
-    
+
     exit(0);
 }
