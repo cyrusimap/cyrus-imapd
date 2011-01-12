@@ -3491,8 +3491,7 @@ static MsgData *index_msgdata_load(struct index_state *state,
     if (!n) return NULL;
 
     /* create an array of MsgData to use as nodes of linked list */
-    md = (MsgData *) xmalloc(n * sizeof(MsgData));
-    memset(md, 0, n * sizeof(MsgData));
+    md = (MsgData *) xzmalloc(n * sizeof(MsgData));
 
     for (i = 0, cur = md; i < n; i++, cur = cur->next) {
 	/* set msgno */
