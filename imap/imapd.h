@@ -50,6 +50,7 @@
 #include "hash.h"
 #include "mailbox.h"
 #include "prot.h"
+#include "strarray.h"
 
 /* Userid client has logged in as */
 extern char *imapd_userid;
@@ -63,7 +64,7 @@ extern unsigned imapd_client_capa;
 /* List of HEADER.FIELDS[.NOT] fetch specifications */
 struct fieldlist {
     char *section;		/* First part of BODY[x] value */
-    struct strlist *fields;	/* List of field-names */
+    strarray_t *fields;		/* Array of field-names */
     char *trail;		/* Last part of BODY[x] value */
     void *rock;
     struct fieldlist *next;
@@ -76,8 +77,8 @@ struct fetchargs {
     struct strlist *sizesections; /* BINARY.SIZE[x] values */
     struct strlist *bodysections; /* BODY[x]<x> values */
     struct fieldlist *fsections;  /* BODY[xHEADER.FIELDSx]<x> values */
-    struct strlist *headers;	  /* RFC822.HEADER.LINES */
-    struct strlist *headers_not;  /* RFC822.HEADER.LINES.NOT */
+    strarray_t headers;		  /* RFC822.HEADER.LINES */
+    strarray_t headers_not;	  /* RFC822.HEADER.LINES.NOT */
     int start_octet;              /* start_octet for partial fetch */
     int octet_count;              /* octet_count for partial fetch, or 0 */
     modseq_t changedsince;        /* changed since modseq, or 0 */

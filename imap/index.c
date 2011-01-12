@@ -108,15 +108,15 @@ static void index_fetchfsection(struct index_state *state,
 				unsigned start_octet, unsigned octet_count);
 static char *index_readheader(const char *msg_base, unsigned long msg_size,
 			      unsigned offset, unsigned size);
-static void index_pruneheader(char *buf, struct strlist *headers,
-			      struct strlist *headers_not);
+static void index_pruneheader(char *buf, const strarray_t *headers,
+			      const strarray_t *headers_not);
 static void index_fetchheader(struct index_state *state,
 			      const char *msg_base, unsigned long msg_size,
 			      unsigned size,
-			      struct strlist *headers,
-			      struct strlist *headers_not);
+			      const strarray_t *headers,
+			      const strarray_t *headers_not);
 static void index_fetchcacheheader(struct index_state *state, struct index_record *record, 
-				   struct strlist *headers, unsigned start_octet, 
+				   const strarray_t *headers, unsigned start_octet, 
 				   unsigned octet_count);
 static void index_listflags(struct index_state *state);
 static void index_fetchflags(struct index_state *state, uint32_t msgno);
@@ -2042,22 +2042,22 @@ unsigned size;
  * not in headers_not.
  */
 static void
-index_pruneheader(char *buf, struct strlist *headers,
-		  struct strlist *headers_not)
+index_pruneheader(char *buf, const strarray_t *headers,
+		  const strarray_t *headers_not)
 {
     char *p, *colon, *nextheader;
     int goodheader;
     char *endlastgood = buf;
-    struct strlist *l;
-    
+    char **l;
+
     p = buf;
     while (*p && *p != '\r') {
 	colon = strchr(p, ':');
-	if (colon && headers_not) {
+	if (colon && headers_not && headers_not->count) {
 	    goodheader = 1;
-	    for (l = headers_not; l; l = l->next) {
-		if ((size_t) (colon - p) == strlen(l->s) &&
-		    !strncasecmp(p, l->s, colon - p)) {
+	    for (l = headers_not->data ; *l ; l++) {
+		if ((size_t) (colon - p) == strlen(*l) &&
+		    !strncasecmp(p, *l, colon - p)) {
 		    goodheader = 0;
 		    break;
 		}
@@ -2065,10 +2065,10 @@ index_pruneheader(char *buf, struct strlist *headers,
 	} else {
 	    goodheader = 0;
 	}
-	if (colon) {
-	    for (l = headers; l; l = l->next) {
-		if ((size_t) (colon - p) == strlen(l->s) &&
-		    !strncasecmp(p, l->s, colon - p)) {
+	if (colon && headers && headers->count) {
+	    for (l = headers->data ; *l ; l++) {
+		if ((size_t) (colon - p) == strlen(*l) &&
+		    !strncasecmp(p, *l, colon - p)) {
 		    goodheader = 1;
 		    break;
 		}
@@ -2105,8 +2105,8 @@ static void index_fetchheader(struct index_state *state,
 			      const char *msg_base,
 			      unsigned long msg_size,
 			      unsigned size,
-			      struct strlist *headers,
-			      struct strlist *headers_not)
+			      const strarray_t *headers,
+			      const strarray_t *headers_not)
 {
     char *buf;
 
@@ -2130,7 +2130,7 @@ static void index_fetchheader(struct index_state *state,
  */
 static void
 index_fetchcacheheader(struct index_state *state, struct index_record *record,
-		       struct strlist *headers, unsigned start_octet,
+		       const strarray_t *headers, unsigned start_octet,
 		       unsigned octet_count)
 {
     static char *buf;
@@ -2428,7 +2428,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
     struct octetinfo *oi = NULL;
     int sepchar = '(';
     int started = 0;
-    struct strlist *section, *field;
+    struct strlist *section;
     struct fieldlist *fsection;
     char respbuf[100];
     int r = 0;
@@ -2459,7 +2459,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
 	sepchar = ' ';
     }
     else if ((fetchitems & ~FETCH_SETSEEN) ||  fetchargs->fsections ||
-	     fetchargs->headers || fetchargs->headers_not) {
+	     fetchargs->headers.count || fetchargs->headers_not.count) {
 	/* these fetch items will always succeed, so start the response */
 	prot_printf(state->out, "* %u FETCH ", msgno);
 	started = 1;
@@ -2520,15 +2520,15 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
 		       (fetchitems & FETCH_IS_PARTIAL) ?
 		         fetchargs->octet_count : 0);
     }
-    else if (fetchargs->headers || fetchargs->headers_not) {
+    else if (fetchargs->headers.count || fetchargs->headers_not.count) {
 	prot_printf(state->out, "%cRFC822.HEADER ", sepchar);
 	sepchar = ' ';
 	if (fetchargs->cache_atleast > im->record.cache_version) {
 	    index_fetchheader(state, msg_base, msg_size,
 			      im->record.header_size,
-			      fetchargs->headers, fetchargs->headers_not);
+			      &fetchargs->headers, &fetchargs->headers_not);
 	} else {
-	    index_fetchcacheheader(state, &im->record, fetchargs->headers, 0, 0);
+	    index_fetchcacheheader(state, &im->record, &fetchargs->headers, 0, 0);
 	}
     }
 
@@ -2552,12 +2552,13 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
 		         fetchargs->octet_count : 0);
     }
     for (fsection = fetchargs->fsections; fsection; fsection = fsection->next) {
+	int i;
 	prot_printf(state->out, "%cBODY[%s ", sepchar, fsection->section);
 	sepchar = '(';
-	for (field = fsection->fields; field; field = field->next) {
+	for (i = 0 ; i < fsection->fields->count ; i++) {
 	    (void)prot_putc(sepchar, state->out);
 	    sepchar = ' ';
-	    prot_printastring(state->out, field->s);
+	    prot_printastring(state->out, fsection->fields->data[i]);
 	}
 	(void)prot_putc(')', state->out);
 	sepchar = ' ';
@@ -3239,12 +3240,14 @@ static int index_searchheader(char *name,
 {
     char *p, *q;
     int r;
-    static struct strlist header;
+    strarray_t header = STRARRAY_INITIALIZER;
 
-    header.s = name;
+    strarray_append(&header, name);
 
     p = index_readheader(msgfile->base, msgfile->size, 0, size);
     index_pruneheader(p, &header, 0);
+    strarray_fini(&header);
+
     if (!*p) return 0;		/* Header not present, fail */
     if (!*substr) return 1;	/* Only checking existence, succeed */
     q = charset_decode_mimeheader(strchr(p, ':') + 1, NULL, 0);
@@ -3260,7 +3263,7 @@ static int index_searchcacheheader(struct index_state *state, uint32_t msgno,
 				   char *name, char *substr, comp_pat *pat)
 {
     char *q;
-    static struct strlist header;
+    strarray_t header = STRARRAY_INITIALIZER;
     static char *buf;
     static unsigned bufsize;
     unsigned size;
@@ -3283,9 +3286,10 @@ static int index_searchcacheheader(struct index_state *state, uint32_t msgno,
     memcpy(buf, cacheitem_base(&im->record, CACHE_HEADERS), size);
     buf[size] = '\0';
 
-    header.s = name;
-
+    strarray_append(&header, name);
     index_pruneheader(buf, &header, 0);
+    strarray_fini(&header);
+
     if (!*buf) return 0;	/* Header not present, fail */
     if (!*substr) return 1;	/* Only checking existence, succeed */
     /* XXX - we could do this in one pass maybe? charset_search_mimeheader */
@@ -3869,7 +3873,7 @@ void index_get_ids(MsgData *msgdata, char *envtokens[], const char *headers,
 {
     static char *buf;
     static unsigned bufsize;
-    static struct strlist refhdr;
+    strarray_t refhdr = STRARRAY_INITIALIZER;
     char *refstr, *ref, *in_reply_to;
 
     if (bufsize < size+2) {
@@ -3890,8 +3894,10 @@ void index_get_ids(MsgData *msgdata, char *envtokens[], const char *headers,
     buf[size] = '\0';
 
     /* grab the References header */
-    refhdr.s = "references";
+    strarray_append(&refhdr, "references");
     index_pruneheader(buf, &refhdr, 0);
+    strarray_fini(&refhdr);
+
     if (*buf) {
 	/* allocate some space for refs */
 	/* find references */
@@ -4945,7 +4951,7 @@ extern struct nntp_overview *index_overview(struct index_state *state,
     int size;
     char *envtokens[NUMENVTOKENS];
     struct address addr = { NULL, NULL, NULL, NULL, NULL, NULL };
-    static struct strlist refhdr;
+    strarray_t refhdr = STRARRAY_INITIALIZER;
     struct mailbox *mailbox = state->mailbox;
     struct index_map *im = &state->map[msgno-1];
 
@@ -5008,8 +5014,10 @@ extern struct nntp_overview *index_overview(struct index_state *state,
 	over.from = NULL;
 
     /* massage references */
-    refhdr.s = "references";
+    strarray_append(&refhdr, "references");
     index_pruneheader(hdr, &refhdr, 0);
+    strarray_fini(&refhdr);
+
     if (*hdr) {
 	over.ref = hdr + 11; /* skip over header name */
 	massage_header(over.ref);
@@ -5023,15 +5031,13 @@ extern char *index_getheader(struct index_state *state, uint32_t msgno,
 {
     static const char *msg_base = 0;
     static unsigned long msg_size = 0;
-    struct strlist headers = { NULL, NULL, NULL, NULL };
+    strarray_t headers = STRARRAY_INITIALIZER;
     static char *alloc = NULL;
     static unsigned allocsize = 0;
     unsigned size;
     char *buf;
     struct mailbox *mailbox = state->mailbox;
     struct index_map *im = &state->map[msgno-1];
-
-    headers.s = hdr;
 
     if (msg_base) {
 	mailbox_unmap_message(NULL, 0, &msg_base, &msg_size);
@@ -5062,7 +5068,9 @@ extern char *index_getheader(struct index_state *state, uint32_t msgno,
 	buf = index_readheader(msg_base, msg_size, 0, im->record.header_size);
     }
 
+    strarray_append(&headers, hdr);
     index_pruneheader(buf, &headers, NULL);
+    strarray_fini(&headers);
 
     if (*buf) {
 	buf += strlen(hdr) + 1; /* skip header: */

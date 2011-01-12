@@ -424,7 +424,7 @@ int getsortcriteria(char *tag, struct sortcrit **sortcrit);
 int getdatetime(time_t *date);
 
 void appendfieldlist(struct fieldlist **l, char *section,
-		     struct strlist *fields, char *trail,
+		     strarray_t *fields, char *trail,
 		     void *d, size_t size);
 void freefieldlist(struct fieldlist *l);
 void freestrlist(struct strlist *l);
@@ -3886,7 +3886,7 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
     int fetchitems = 0;
     struct fetchargs fetchargs;
     struct octetinfo oi;
-    struct strlist *newfields = 0;
+    strarray_t *newfields = strarray_new();
     char *p, *section;
     int fetchedsomething, r;
     clock_t start = clock();
@@ -4021,7 +4021,7 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
 			    eatline(imapd_in, c);
 			    goto freeargs;
 			}
-			appendstrlist(&newfields, fieldname.s);
+			strarray_append(newfields, fieldname.s);
 			if (fetchargs.cache_atleast < BIT32_MAX) {
 			    bit32 this_ver =
 				mailbox_cached_header(fieldname.s);
@@ -4056,7 +4056,7 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
 		    appendfieldlist(&fetchargs.fsections,
 				    section, newfields, fieldname.s,
 				    &oi, sizeof(oi));
-		    newfields = 0;
+		    newfields = NULL;
 		    break;
 		}
 
@@ -4177,7 +4177,7 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
 		    lcase(fieldname.s);;
 		    /* 19 is magic number -- length of 
 		     * "RFC822.HEADERS.NOT" */
-		    appendstrlist(strlen(fetchatt.s) == 19 ?
+		    strarray_append(strlen(fetchatt.s) == 19 ?
 				  &fetchargs.headers : &fetchargs.headers_not,
 				  fieldname.s);
 		    if (strlen(fetchatt.s) != 19) {
@@ -4291,7 +4291,7 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
 
     if (!fetchitems && !fetchargs.bodysections && !fetchargs.fsections &&
 	!fetchargs.binsections && !fetchargs.sizesections &&
-	!fetchargs.headers && !fetchargs.headers_not) {
+	!fetchargs.headers.count && !fetchargs.headers_not.count) {
 	prot_printf(imapd_out, "%s BAD Missing required argument to %s\r\n", tag, cmd);
 	goto freeargs;
     }
@@ -4332,11 +4332,11 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
     }
 
  freeargs:
-    freestrlist(newfields);
+    strarray_free(newfields);
     freestrlist(fetchargs.bodysections);
     freefieldlist(fetchargs.fsections);
-    freestrlist(fetchargs.headers);
-    freestrlist(fetchargs.headers_not);
+    strarray_fini(&fetchargs.headers);
+    strarray_fini(&fetchargs.headers_not);
 }
 
 #undef PARSE_PARTIAL /* cleanup */
@@ -9828,7 +9828,7 @@ int getdatetime(time_t *date)
  * Append 'section', 'fields', 'trail' to the fieldlist 'l'.
  */
 void appendfieldlist(struct fieldlist **l, char *section,
-		     struct strlist *fields, char *trail,
+		     strarray_t *fields, char *trail,
 		     void *d, size_t size)
 {
     struct fieldlist **tail = l;
@@ -9859,7 +9859,7 @@ void freefieldlist(struct fieldlist *l)
     while (l) {
 	n = l->next;
 	free(l->section);
-	freestrlist(l->fields);
+	strarray_free(l->fields);
 	free(l->trail);
 	if (l->rock) free(l->rock);
 	free((char *)l);
