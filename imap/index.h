@@ -63,6 +63,7 @@
 #include "annotate.h" /* for strlist functionality */
 #include "message_guid.h"
 #include "sequence.h"
+#include "strarray.h"
 
 /* Special "sort criteria" to load message-id and references/in-reply-to
  * into msgdata array for threaders that need them.
@@ -148,9 +149,8 @@ typedef struct msgdata {
     char *xsubj;		/* extracted subject text */
     unsigned xsubj_hash;	/* hash of extracted subject text */
     int is_refwd;		/* is message a reply or forward? */
-    char **annot;		/* array of annotation attribute values
+    strarray_t annot;		/* array of annotation attribute values
 				   (stored in order of sortcrit) */
-    int nannot;			/* number of annotation values */
     struct msgdata *next;
 } MsgData;
 

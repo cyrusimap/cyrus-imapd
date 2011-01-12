@@ -3472,8 +3472,6 @@ static int index_copysetup(struct index_state *state, uint32_t msgno,
  * We fill these structs with the processed info that will be needed
  * by the specified sort criteria.
  */
-#define ANNOTGROWSIZE 10
-
 static MsgData *index_msgdata_load(struct index_state *state,
 				   unsigned *msgno_list, int n,
 				   struct sortcrit *sortcrit)
@@ -3484,7 +3482,6 @@ static MsgData *index_msgdata_load(struct index_state *state,
     char *envtokens[NUMENVTOKENS];
     int did_cache, did_env;
     int label;
-    int annotsize;
     struct mailbox *mailbox = state->mailbox;
     struct index_map *im;
 
@@ -3504,7 +3501,6 @@ static MsgData *index_msgdata_load(struct index_state *state,
 
 	did_cache = did_env = 0;
 	tmpenv = NULL;
-	annotsize = 0;
 
 	for (j = 0; sortcrit[j].key; j++) {
 	    label = sortcrit[j].key;
@@ -3567,16 +3563,8 @@ static MsgData *index_msgdata_load(struct index_state *state,
 		cur->to = get_localpart_addr(cacheitem_base(&im->record, CACHE_TO));
 		break;
  	    case SORT_ANNOTATION:
- 		/* reallocate space for the annotation values if necessary */
- 		if (cur->nannot == annotsize) {
- 		    annotsize += ANNOTGROWSIZE;
- 		    cur->annot = (char **)
- 			xrealloc(cur->annot, annotsize * sizeof(char *));
- 		}
-
  		/* fetch attribute value - we fake it for now */
- 		cur->annot[cur->nannot] = xstrdup(sortcrit[j].args.annot.attrib);
- 		cur->nannot++;
+		strarray_append(&cur->annot, sortcrit[j].args.annot.attrib);
  		break;
 	    case LOAD_IDS:
 		index_get_ids(cur, envtokens, cacheitem_base(&im->record, CACHE_HEADERS),
@@ -4000,7 +3988,7 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
 	    ret = strcmp(md1->to, md2->to);
 	    break;
 	case SORT_ANNOTATION:
-	    ret = strcmp(md1->annot[ann], md2->annot[ann]);
+	    ret = strcmp(md1->annot.data[ann], md2->annot.data[ann]);
 	    ann++;
 	    break;
 	case SORT_MODSEQ:
@@ -4030,9 +4018,7 @@ static void index_msgdata_free(MsgData *md)
     for (i = 0; i < md->nref; i++)
 	free(md->ref[i]);
     FREE(md->ref);
-    for (i = 0; i < md->nannot; i++)
-	free(md->annot[i]);
-    FREE(md->annot);
+    strarray_fini(&md->annot);
 }
 
 /*
