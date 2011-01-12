@@ -66,6 +66,7 @@
 #include "global.h"
 #include "libconfig.h"
 #include "xmalloc.h"
+#include "strarray.h"
 
 
 /* global state */
@@ -105,14 +106,13 @@ static int do_notify(void)
     char buf[NOTIFY_MAXSIZE+1], *cp, *tail;
     int r, i;
     char *method, *class, *priority, *user, *mailbox, *message;
-    char **options;
+    strarray_t options = STRARRAY_INITIALIZER;
     long nopt;
     char *reply;
     notifymethod_t *nmethod;
 
     while (1) {
 	method = class = priority = user = mailbox = message = reply = NULL;
-	options = NULL;
 	nopt = 0;
 
 	if (signals_poll() == SIGHUP) {
@@ -145,21 +145,14 @@ static int do_notify(void)
 	if (cp) nopt = strtol(cp, NULL, 10);
 	if (nopt < 0 || errno == ERANGE) cp = NULL;
 
-	if (cp && nopt) {
-	    options = (char**) xrealloc(options, nopt * sizeof(char*));
-	    if (!options)
-		fatal("xmalloc(): can't allocate options", EC_OSERR);
-	}
-
-	for (i = 0; cp && i < nopt; i++) {
-	    options[i] = (cp = fetch_arg(cp, tail));
-	}
+	for (i = 0; cp && i < nopt; i++)
+	    strarray_appendm(&options, cp = fetch_arg(cp, tail));
 
 	if (cp) message = (cp = fetch_arg(cp, tail));
 
 	if (!message) {
 	    syslog(LOG_ERR, "malformed notify request");
-	    free(options);
+	    strarray_fini(&options);
 	    return 0;
 	}
 
@@ -178,7 +171,7 @@ static int do_notify(void)
 
 	if (nmethod->name) {
 	    reply = nmethod->notify(class, priority, user, mailbox,
-				    nopt, options, message);
+				    nopt, options.data, message);
 	}
 #if 0  /* we don't care about responses right now */
 	else {
@@ -190,7 +183,7 @@ static int do_notify(void)
 #endif
 
 	free(reply);
-	free(options);
+	strarray_fini(&options);
     }
 
     /* never reached */
