@@ -3863,7 +3863,6 @@ static char *find_msgid(char *str, char **rem)
 }
 
 /* Get message-id, and references/in-reply-to */
-#define REFGROWSIZE 20
 
 void index_get_ids(MsgData *msgdata, char *envtokens[], const char *headers,
 		   unsigned size)
@@ -3872,7 +3871,6 @@ void index_get_ids(MsgData *msgdata, char *envtokens[], const char *headers,
     static unsigned bufsize;
     static struct strlist refhdr;
     char *refstr, *ref, *in_reply_to;
-    int refsize = REFGROWSIZE;
 
     if (bufsize < size+2) {
 	bufsize = size+100;
@@ -3896,30 +3894,19 @@ void index_get_ids(MsgData *msgdata, char *envtokens[], const char *headers,
     index_pruneheader(buf, &refhdr, 0);
     if (*buf) {
 	/* allocate some space for refs */
-	msgdata->ref = (char **) xmalloc(refsize * sizeof(char *));
 	/* find references */
 	refstr = buf;
-	while ((ref = find_msgid(refstr, &refstr)) != NULL) {
-	    /* reallocate space for this msgid if necessary */
-	    if (msgdata->nref == refsize) {
-		refsize += REFGROWSIZE;
-		msgdata->ref = (char **)
-		    xrealloc(msgdata->ref, refsize * sizeof(char *));
-	    }
-	    /* store this msgid in the array */
-	    msgdata->ref[msgdata->nref++] = ref;
-	}
+	while ((ref = find_msgid(refstr, &refstr)) != NULL)
+	    strarray_append(&msgdata->ref, ref);
     }
 
     /* if we have no references, try in-reply-to */
-    if (!msgdata->nref) {
+    if (!msgdata->ref.count) {
 	/* get in-reply-to id */
 	in_reply_to = find_msgid(envtokens[ENV_INREPLYTO], NULL);
 	/* if we have an in-reply-to id, make it the ref */
-	if (in_reply_to) {
-	    msgdata->ref = (char **) xmalloc(sizeof(char *));
-	    msgdata->ref[msgdata->nref++] = in_reply_to;
-	}
+	if (in_reply_to)
+	    strarray_append(&msgdata->ref, in_reply_to);
     }
 }
 
@@ -4006,8 +3993,6 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
 static void index_msgdata_free(MsgData *md)
 {
 #define FREE(x)	if (x) free(x)
-    int i;
-
     if (!md)
 	return;
     FREE(md->cc);
@@ -4015,9 +4000,7 @@ static void index_msgdata_free(MsgData *md)
     FREE(md->to);
     FREE(md->xsubj);
     FREE(md->msgid);
-    for (i = 0; i < md->nref; i++)
-	free(md->ref[i]);
-    FREE(md->ref);
+    strarray_fini(&md->ref);
     strarray_fini(&md->annot);
 }
 
@@ -4363,13 +4346,13 @@ static void ref_link_messages(MsgData *msgdata, Thread **newnode,
 	}
 
 	/* Step 1.A */
-	for (i = 0, parent = NULL; i < msgdata->nref; i++) {
+	for (i = 0, parent = NULL; i < msgdata->ref.count; i++) {
 	    /* if we don't already have a container for the reference,
 	     * make and index a new (empty) container
 	     */
-	    if (!(ref = (Thread *) hash_lookup(msgdata->ref[i], id_table))) {
+	    if (!(ref = (Thread *) hash_lookup(msgdata->ref.data[i], id_table))) {
 		ref = *newnode;
-		hash_insert(msgdata->ref[i], ref, id_table);
+		hash_insert(msgdata->ref.data[i], ref, id_table);
 		(*newnode)++;
 	    }
 
@@ -4772,7 +4755,7 @@ static void _index_thread_ref(struct index_state *state, unsigned *msgno_list, i
 
     /* calculate the sum of the number of references for all messages */
     for (md = msgdata, tref = 0; md; md = md->next)
-	tref += md->nref;
+	tref += md->ref.count;
 
     /* create an array of Thread to use as nodes of thread tree (including
      * empty containers)

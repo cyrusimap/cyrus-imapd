@@ -136,8 +136,7 @@ typedef struct msgdata {
     bit32 uid;                  /* UID for output purposes */
     uint32_t msgno;		/* message number */
     char *msgid;		/* message ID */
-    char **ref;			/* array of references */
-    int nref;			/* number of references */
+    strarray_t ref;		/* array of references */
     time_t date;		/* sent date & time of message
 				   from Date: header (adjusted by time zone) */
     time_t internaldate;        /* internaldate */
