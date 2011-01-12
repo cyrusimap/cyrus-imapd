@@ -95,6 +95,7 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
+#include "strarray.h"
 #include "global.h"
 #include "mboxname.h"
 #include "mboxlist.h"
@@ -109,10 +110,6 @@
 extern int optind;
 extern char *optarg;
 
-struct discovered {
-    char *name;
-    struct discovered *next;
-};       
 struct uniqmailid {
     char * uniqmbxid;
     char *uniqname;
@@ -130,7 +127,7 @@ const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 /* forward declarations */
 void do_mboxlist(void);
 static int do_reconstruct(char *name, int matchlen, int maycreate, void *rock);
-int reconstruct(char *name, struct discovered *l);
+int reconstruct(char *name, const strarray_t *);
 void usage(void);
 char * getmailname (char * mailboxname);
 struct uniqmailid * add_uniqid (char * mailboxname, char * mailboxid);
@@ -149,11 +146,9 @@ int main(int argc, char **argv)
     int xflag = 0;
     char buf[MAX_MAILBOX_PATH+1];
     char *fname;
-    struct discovered head;
+    strarray_t discovered = STRARRAY_INITIALIZER;
     char *alt_config = NULL;
     char *start_part = NULL;
-
-    memset(&head, 0, sizeof(head));
 
     if ((geteuid()) == 0 && (become_cyrus() != 0)) {
 	fatal("must run as the Cyrus user", EC_USAGE);
@@ -345,8 +340,8 @@ int main(int argc, char **argv)
 
 	/* reconstruct the first mailbox/pattern */
 	(*recon_namespace.mboxlist_findall)(&recon_namespace, buf, 1, 0,
-					    0, do_reconstruct, 
-					    fflag ? &head : NULL);
+					    0, do_reconstruct,
+					    fflag ? &discovered : NULL);
 	if (rflag) {
 	    /* build a pattern for submailboxes */
 	    char *p = strchr(buf, '@');
@@ -358,33 +353,29 @@ int main(int argc, char **argv)
 
 	    /* reconstruct the submailboxes */
 	    (*recon_namespace.mboxlist_findall)(&recon_namespace, buf, 1, 0,
-						0, do_reconstruct, 
-						fflag ? &head : NULL);
+						0, do_reconstruct,
+						fflag ? &discovered : NULL);
 	}
     }
 
     /* examine our list to see if we discovered anything */
-    while (head.next) {
-	struct discovered *p;
+    while (discovered.count) {
+	char *name = strarray_shift(&discovered);
 	int r = 0;
-
-	p = head.next;
-	head.next = p->next;
 
 	/* create p (database only) and reconstruct it */
 	/* partition is defined by the parent mailbox */
-	r = mboxlist_createmailbox(p->name, 0, NULL, 1,
+	r = mboxlist_createmailbox(name, 0, NULL, 1,
 				   "cyrus", NULL, 0, 0, !xflag, NULL);
 	if (r) {
 	    fprintf(stderr, "createmailbox %s: %s\n",
-		    p->name, error_message(r));
+		    name, error_message(r));
 	} else {
-	    do_reconstruct(p->name, strlen(p->name), 0, &head);
+	    do_reconstruct(name, strlen(name), 0, &discovered);
 	}
 	/* may have added more things into our list */
 
-	free(p->name);
-	free(p);
+	free(name);
     }
 
     sync_log_done();
@@ -396,6 +387,8 @@ int main(int argc, char **argv)
     quotadb_done();
 
     cyrus_done();
+
+    strarray_fini(&discovered);
 
     return 0;
 }
@@ -416,7 +409,7 @@ static int do_reconstruct(char *name,
 		          int maycreate __attribute__((unused)),
 		          void *rock)
 {
-    struct discovered *found = (struct discovered *)rock;
+    strarray_t *discovered = (strarray_t *)rock;
     int r;
     char buf[MAX_MAILBOX_NAME];
     static char lastname[MAX_MAILBOX_NAME] = "";
@@ -462,7 +455,7 @@ static int do_reconstruct(char *name,
     strncpy(outpath, mailbox_meta_fname(mailbox, META_HEADER), MAX_MAILBOX_NAME);
     mailbox_close(&mailbox);
 
-    if (found) {
+    if (discovered) {
 	char fnamebuf[MAX_MAILBOX_PATH];
 	char *ptr;
 	DIR *dirp;
@@ -482,8 +475,6 @@ static int do_reconstruct(char *name,
 	if (!dirp) return 0;
 
 	while ((dirent = readdir(dirp)) != NULL) {
-	    struct discovered *new;
-
 	    /* mailbox directories never have a dot in them */
 	    if (strchr(dirent->d_name, '.')) continue;
 	    if (stat(dirent->d_name, &sbuf) < 0) continue;
@@ -510,10 +501,7 @@ static int do_reconstruct(char *name,
 	    else r = 0; /* reset error condition */
 
 	    printf("discovered %s\n", buf);
-	    new = (struct discovered *) xmalloc(sizeof(struct discovered));
-	    new->name = strdup(buf);
-	    new->next = found->next;
-	    found->next = new;
+	    strarray_append(discovered, buf);
 	}
 	closedir(dirp);
     }
