@@ -714,7 +714,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
 	  goto cleanup;
       }
 
-      if(mbentry->mbtype & MBTYPE_REMOTE) {
+      if (mbentry && mbentry->mbtype & MBTYPE_REMOTE) {
 	  /* It's a remote mailbox */
 	  if (config_getswitch(IMAPOPT_SIEVE_ALLOWREFERRALS)) {
 	      /* We want to set up a referral */
