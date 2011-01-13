@@ -56,6 +56,8 @@
 #define TZ_NEWYORK	"EST+05"
 #define TZ_MELBOURNE	"AEST-11"
 
+#define UNINIT_TIMET ((time_t)0xdeadbeef)
+
 #define MAX_TZ_STACK	5
 static int n_tz_stack = 0;
 static char *tz_stack[MAX_TZ_STACK];
@@ -124,14 +126,14 @@ test_rfc3501(void)
 
     /* Well-formed full RFC3501 format with 2-digit day
      * "dd-mmm-yyyy HH:MM:SS zzzzz" */
-    t = 0xdeadbeef;
+    t = UNINIT_TIMET;
     r = time_from_rfc3501("15-Oct-2010 03:19:52 +1100", &t);
     CU_ASSERT_EQUAL(r, 26);
     CU_ASSERT_EQUAL(t, 1287073192);
 
     /* Well-formed full RFC3501 format with 1-digit day
      * " d-mmm-yyyy HH:MM:SS zzzzz" */
-    t = 0xdeadbeef;
+    t = UNINIT_TIMET;
     r = time_from_rfc3501(" 5-Oct-2010 03:19:52 +1100", &t);
     CU_ASSERT_EQUAL(r, 26);
     CU_ASSERT_EQUAL(t, 1286209192);
@@ -146,70 +148,70 @@ test_military_timezones(void)
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
      * uppercase 1-char timezone = UTC, "dd-mmm-yy HH:MM:SS-z" */
-    t = 0xdeadbeef;
+    t = UNINIT_TIMET;
     r = time_from_rfc3501("15-Oct-95 03:19:52-Z", &t);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
      * lowercase 1-char timezone = UTC, "dd-mmm-yy HH:MM:SS-z" */
-    t = 0xdeadbeef;
+    t = UNINIT_TIMET;
     r = time_from_rfc3501("15-Oct-95 03:19:52-z", &t);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
      * uppercase 1-char timezone = +0100, "dd-mmm-yy HH:MM:SS-z" */
-    t = 0xdeadbeef;
+    t = UNINIT_TIMET;
     r = time_from_rfc3501("15-Oct-95 03:19:52-A", &t);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu-1*3600);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
      * uppercase 1-char timezone = +0200, "dd-mmm-yy HH:MM:SS-z" */
-    t = 0xdeadbeef;
+    t = UNINIT_TIMET;
     r = time_from_rfc3501("15-Oct-95 03:19:52-B", &t);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu-2*3600);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
      * uppercase 1-char timezone = +0900, "dd-mmm-yy HH:MM:SS-z" */
-    t = 0xdeadbeef;
+    t = UNINIT_TIMET;
     r = time_from_rfc3501("15-Oct-95 03:19:52-I", &t);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu-9*3600);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
      * erroneous uppercase 1-char timezone, "dd-mmm-yy HH:MM:SS-z" */
-    t = 0xdeadbeef;
+    t = UNINIT_TIMET;
     r = time_from_rfc3501("15-Oct-95 03:19:52-J", &t);
     CU_ASSERT_EQUAL(r, -1);
-    CU_ASSERT_EQUAL(t, 0xdeadbeef);
+    CU_ASSERT_EQUAL(t, UNINIT_TIMET);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
      * uppercase 1-char timezone = +1000, "dd-mmm-yy HH:MM:SS-z" */
-    t = 0xdeadbeef;
+    t = UNINIT_TIMET;
     r = time_from_rfc3501("15-Oct-95 03:19:52-K", &t);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu-10*3600);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
      * 1-char timezone = +1200, "dd-mmm-yy HH:MM:SS-z" */
-    t = 0xdeadbeef;
+    t = UNINIT_TIMET;
     r = time_from_rfc3501("15-Oct-95 03:19:52-M", &t);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu-12*3600);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
      * uppercase 1-char timezone = -0100, "dd-mmm-yy HH:MM:SS-z" */
-    t = 0xdeadbeef;
+    t = UNINIT_TIMET;
     r = time_from_rfc3501("15-Oct-95 03:19:52-N", &t);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu+1*3600);
 
     /* Well-formed legacy format with 2-digit day, 2-digit year,
      * 1-char timezone = -1200, "dd-mmm-yy HH:MM:SS-z" */
-    t = 0xdeadbeef;
+    t = UNINIT_TIMET;
     r = time_from_rfc3501("15-Oct-95 03:19:52-Y", &t);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, zulu+12*3600);
@@ -235,20 +237,20 @@ static void test_parse_rfc822(void)
      * Convert the datetime string into a time_t, which is always
      * expressed in UTC regardless of the current timezone.
      */
-    t = 0xdeadbeef;
+    t = UNINIT_TIMET;
     r = time_from_rfc822(DATETIME, &t);
     CU_ASSERT_EQUAL(r, 31);
     CU_ASSERT_EQUAL(t, TIMET);
 
     push_tz(TZ_UTC);
-    t = 0xdeadbeef;
+    t = UNINIT_TIMET;
     r = time_from_rfc822(DATETIME, &t);
     CU_ASSERT_EQUAL(r, 31);
     CU_ASSERT_EQUAL(t, TIMET);
     pop_tz();
 
     push_tz(TZ_NEWYORK);
-    t = 0xdeadbeef;
+    t = UNINIT_TIMET;
     r = time_from_rfc822(DATETIME, &t);
     CU_ASSERT_EQUAL(r, 31);
     CU_ASSERT_EQUAL(t, TIMET);
@@ -318,23 +320,23 @@ static void test_zerohour(void)
     int r;
     char buf[RFC3501_DATETIME_MAX+1];
 
-    t = 0xdeadbeef;
+    t = UNINIT_TIMET;
     r = time_from_rfc822(DATETIME_NY, &t);
     CU_ASSERT_EQUAL(r, -1);
-    CU_ASSERT_EQUAL(t, 0xdeadbeef);  /* fail gracefully */
+    CU_ASSERT_EQUAL(t, UNINIT_TIMET);  /* fail gracefully */
 
     push_tz(TZ_UTC);
-    t = 0xdeadbeef;
+    t = UNINIT_TIMET;
     r = time_from_rfc822(DATETIME_NY, &t);
     CU_ASSERT_EQUAL(r, -1);
-    CU_ASSERT_EQUAL(t, 0xdeadbeef);  /* fail gracefully */
+    CU_ASSERT_EQUAL(t, UNINIT_TIMET);  /* fail gracefully */
     pop_tz();
 
     push_tz(TZ_NEWYORK);
-    t = 0xdeadbeef;
+    t = UNINIT_TIMET;
     r = time_from_rfc822(DATETIME_NY, &t);
     CU_ASSERT_EQUAL(r, -1);
-    CU_ASSERT_EQUAL(t, 0xdeadbeef);  /* fail gracefully */
+    CU_ASSERT_EQUAL(t, UNINIT_TIMET);  /* fail gracefully */
     pop_tz();
 
     memset(buf, 0, sizeof(buf));
@@ -352,17 +354,17 @@ test_parse_iso8601(void)
     time_t t;
     int r;
 
-    t = 0xdeadbeef;
+    t = UNINIT_TIMET;
     r = time_from_iso8601(DATETIME_MEL, &t);
     CU_ASSERT_EQUAL(r, 25);
     CU_ASSERT_EQUAL(t, TIMET);
 
-    t = 0xdeadbeef;
+    t = UNINIT_TIMET;
     r = time_from_iso8601(DATETIME_UTC, &t);
     CU_ASSERT_EQUAL(r, 20);
     CU_ASSERT_EQUAL(t, TIMET);
 
-    t = 0xdeadbeef;
+    t = UNINIT_TIMET;
     r = time_from_iso8601(DATETIME_NYC, &t);
     CU_ASSERT_EQUAL(r, 25);
     CU_ASSERT_EQUAL(t, TIMET);
@@ -397,17 +399,17 @@ test_leapyear_rfc3501(void)
     time_t t;
     int r;
 
-    t = 0xdeadbeef;
+    t = UNINIT_TIMET;
     r = time_from_rfc3501(FEB2000_STR, &t);
     CU_ASSERT_EQUAL(r, 26);
     CU_ASSERT_EQUAL(t, FEB2000_TIMET);
 
-    t = 0xdeadbeef;
+    t = UNINIT_TIMET;
     r = time_from_rfc3501(FEB2001_STR, &t);
     CU_ASSERT_EQUAL(r, -1);
-    CU_ASSERT_EQUAL(t, 0xdeadbeef);
+    CU_ASSERT_EQUAL(t, UNINIT_TIMET);
 
-    t = 0xdeadbeef;
+    t = UNINIT_TIMET;
     r = time_from_rfc3501(FEB2004_STR, &t);
     CU_ASSERT_EQUAL(r, 26);
     CU_ASSERT_EQUAL(t, FEB2004_TIMET);
@@ -427,17 +429,17 @@ test_leapyear_iso8601(void)
     time_t t;
     int r;
 
-    t = 0xdeadbeef;
+    t = UNINIT_TIMET;
     r = time_from_iso8601(FEB2000_STR, &t);
     CU_ASSERT_EQUAL(r, 25);
     CU_ASSERT_EQUAL(t, FEB2000_TIMET);
 
-    t = 0xdeadbeef;
+    t = UNINIT_TIMET;
     r = time_from_iso8601(FEB2001_STR, &t);
     CU_ASSERT_EQUAL(r, -1);
-    CU_ASSERT_EQUAL(t, 0xdeadbeef);
+    CU_ASSERT_EQUAL(t, UNINIT_TIMET);
 
-    t = 0xdeadbeef;
+    t = UNINIT_TIMET;
     r = time_from_iso8601(FEB2004_STR, &t);
     CU_ASSERT_EQUAL(r, 25);
     CU_ASSERT_EQUAL(t, FEB2004_TIMET);
@@ -457,17 +459,17 @@ test_leapyear_rfc822(void)
     time_t t;
     int r;
 
-    t = 0xdeadbeef;
+    t = UNINIT_TIMET;
     r = time_from_rfc822(FEB2000_STR, &t);
     CU_ASSERT_EQUAL(r, 31);
     CU_ASSERT_EQUAL(t, FEB2000_TIMET);
 
-    t = 0xdeadbeef;
+    t = UNINIT_TIMET;
     r = time_from_rfc822(FEB2001_STR, &t);
     CU_ASSERT_EQUAL(r, -1);
-    CU_ASSERT_EQUAL(t, 0xdeadbeef);
+    CU_ASSERT_EQUAL(t, UNINIT_TIMET);
 
-    t = 0xdeadbeef;
+    t = UNINIT_TIMET;
     r = time_from_rfc822(FEB2004_STR, &t);
     CU_ASSERT_EQUAL(r, 31);
     CU_ASSERT_EQUAL(t, FEB2004_TIMET);
