@@ -442,7 +442,7 @@ static int set_subscribed(char *name, int matchlen, int maycreate,
 static char *canonical_list_pattern(const char *reference,
 				    const char *pattern);
 static void canonical_list_patterns(const char *reference,
-				    struct strlist *patterns);
+				    strarray_t *patterns);
 static int list_cb(char *name, int matchlen, int maycreate,
 		  struct list_rock *rock);
 static int subscribed_cb(char *name, int matchlen, int maycreate,
@@ -1560,7 +1560,7 @@ void cmdloop(void)
 		memset(&listargs, 0, sizeof(struct listargs));
 		listargs.ret = LIST_RET_CHILDREN;
 		getlistargs(tag.s, &listargs);
-		if (listargs.pat) cmd_list(tag.s, &listargs);
+		if (listargs.pat.count) cmd_list(tag.s, &listargs);
 
 		snmp_increment(LIST_COUNT, 1);
 	    }
@@ -1577,7 +1577,7 @@ void cmdloop(void)
 		listargs.cmd = LIST_CMD_LSUB;
 		listargs.sel = LIST_SEL_SUBSCRIBED;
 		listargs.ref = arg1.s;
-		appendstrlist(&listargs.pat, arg2.s);
+		strarray_append(&listargs.pat, arg2.s);
 
 		cmd_list(tag.s, &listargs);
 
@@ -1738,7 +1738,7 @@ void cmdloop(void)
 		listargs.sel = LIST_SEL_REMOTE;
 		listargs.ret = LIST_RET_CHILDREN;
 		listargs.ref = arg1.s;
-		appendstrlist(&listargs.pat, arg2.s);
+		strarray_append(&listargs.pat, arg2.s);
 
 		cmd_list(tag.s, &listargs);
 
@@ -1757,7 +1757,7 @@ void cmdloop(void)
 		listargs.cmd = LIST_CMD_LSUB;
 		listargs.sel = LIST_SEL_REMOTE | LIST_SEL_SUBSCRIBED;
 		listargs.ref = arg1.s;
-		appendstrlist(&listargs.pat, arg2.s);
+		strarray_append(&listargs.pat, arg2.s);
 
 		cmd_list(tag.s, &listargs);
 
@@ -1946,7 +1946,7 @@ void cmdloop(void)
 
 		memset(&listargs, 0, sizeof(struct listargs));
 		listargs.ref = arg1.s;
-		appendstrlist(&listargs.pat, arg2.s);
+		strarray_append(&listargs.pat, arg2.s);
 		listargs.scan = arg3.s;
 
 		cmd_list(tag.s, &listargs);
@@ -2095,7 +2095,7 @@ void cmdloop(void)
 		listargs.cmd = LIST_CMD_XLIST;
 		listargs.ret = LIST_RET_CHILDREN;
 		getlistargs(tag.s, &listargs);
-		if (listargs.pat) cmd_list(tag.s, &listargs);
+		if (listargs.pat.count) cmd_list(tag.s, &listargs);
 
 		snmp_increment(LIST_COUNT, 1);
 	    }
@@ -5965,7 +5965,7 @@ void getlistargs(char *tag, struct listargs *listargs)
 	for (;;) {
 	    c = getastring(imapd_in, imapd_out, &buf);
 	    if (*buf.s)
-		appendstrlist(&listargs->pat, buf.s);
+		strarray_append(&listargs->pat, buf.s);
 	    if (c != ' ') break;
 	}
 	if (c != ')') {
@@ -5986,7 +5986,7 @@ void getlistargs(char *tag, struct listargs *listargs)
 	    eatline(imapd_in, c);
 	    goto freeargs;
 	}
-	appendstrlist(&listargs->pat, buf.s);
+	strarray_append(&listargs->pat, buf.s);
     }
 
     /* Check for and parse LIST-EXTENDED return options */
@@ -6012,8 +6012,7 @@ void getlistargs(char *tag, struct listargs *listargs)
     return;
 
   freeargs:
-    freestrlist(listargs->pat);
-    listargs->pat = NULL;
+    strarray_fini(&listargs->pat);
     return;
 }
 
@@ -6029,7 +6028,7 @@ void cmd_list(char *tag, struct listargs *listargs)
 
     list_callback_calls = 0;
 
-    if (!listargs->pat->s[0] && !(listargs->cmd & LIST_CMD_LSUB)) {
+    if (!listargs->pat.data[0] && !(listargs->cmd & LIST_CMD_LSUB)) {
 	/* special case: query top-level hierarchy separator */
 	prot_printf(imapd_out, "* LIST (\\Noselect) \"%c\" \"\"\r\n",
 		    imapd_namespace.hier_sep);
@@ -6048,7 +6047,7 @@ void cmd_list(char *tag, struct listargs *listargs)
 	list_data(listargs);
     }
 
-    freestrlist(listargs->pat);
+    strarray_fini(&listargs->pat);
 
     imapd_check((listargs->sel & LIST_SEL_SUBSCRIBED) ?  NULL : backend_inbox, 0);
 
@@ -10096,7 +10095,7 @@ static void list_response(char *name, int attributes,
 			    "%s Scan {%tu+}\r\n%s {%tu+}\r\n%s {%tu+}\r\n%s\r\n",
 			    mytag,
 			    strlen(listargs->ref), listargs->ref,
-			    strlen(listargs->pat->s), listargs->pat->s,
+			    strlen(listargs->pat.data[0]), listargs->pat.data[0],
 			    strlen(listargs->scan), listargs->scan);
 
 		r = pipe_until_tag(s, mytag, 0);
@@ -10361,26 +10360,27 @@ static char *canonical_list_pattern(const char *reference, const char *pattern)
  * translates any hierarchy separators.
  */
 static void canonical_list_patterns(const char *reference,
-				    struct strlist *patterns)
+				    strarray_t *patterns)
 {
     static int ignorereference = 0;
-    char *old;
+    int i;
 
     /* Ignore the reference argument?
        (the behavior in 1.5.10 & older) */
     if (ignorereference == 0)
 	ignorereference = config_getswitch(IMAPOPT_IGNOREREFERENCE);
 
-    for (; patterns; patterns = patterns->next) {
-	if (!ignorereference || patterns->s[0] == imapd_namespace.hier_sep) {
-	    old = patterns->s;
-	    patterns->s = canonical_list_pattern(reference, old);
-	    free(old);
+    for (i = 0 ; i < patterns->count ; i++) {
+	char *p = patterns->data[i];
+	if (!ignorereference || p[0] == imapd_namespace.hier_sep) {
+	    strarray_setm(patterns, i,
+			  canonical_list_pattern(reference, p));
+	    p = patterns->data[i];
 	}
 	/* Translate any separators in pattern */
-	mboxname_hiersep_tointernal(&imapd_namespace, patterns->s,
+	mboxname_hiersep_tointernal(&imapd_namespace, p,
 				    config_virtdomains ?
-				    strcspn(patterns->s, "@") : 0);
+				    strcspn(p, "@") : 0);
     }
 }
 
@@ -10441,7 +10441,7 @@ static void list_data_recursivematch(struct listargs *listargs,
 					 const char *, int, const char *,
 					 struct auth_state *, int (*)(),
 					 void *, int)) {
-    struct strlist *pattern;
+    char **pattern;
     struct list_rock_recursivematch rock;
 
     rock.count = 0;
@@ -10449,9 +10449,10 @@ static void list_data_recursivematch(struct listargs *listargs,
     construct_hash_table(&rock.table, 100, 1);
 
     /* find */
-    for (pattern = listargs->pat; pattern; pattern = pattern->next)
-	findsub(&imapd_namespace, pattern->s, imapd_userisadmin, imapd_userid,
+    for (pattern = listargs->pat.data ; *pattern ; pattern++) {
+	findsub(&imapd_namespace, *pattern, imapd_userisadmin, imapd_userid,
 		imapd_authstate, recursivematch_cb, &rock, 1);
+    }
 
     if (rock.count) {
 	/* sort */
@@ -10486,14 +10487,13 @@ static void list_data(struct listargs *listargs)
 		   struct auth_state *auth_state, int (*proc)(),
 		   void *rock, int force);
 
-    canonical_list_patterns(listargs->ref, listargs->pat);
+    canonical_list_patterns(listargs->ref, &listargs->pat);
 
     /* Check to see if we should only list the personal namespace */
     if (!(listargs->cmd & LIST_CMD_EXTENDED)
-	    && !strcmp(listargs->pat->s, "*")
+	    && !strcmp(listargs->pat.data[0], "*")
 	    && config_getswitch(IMAPOPT_FOOLSTUPIDCLIENTS)) {
-	free(listargs->pat->s);
-	listargs->pat->s = xstrdup("INBOX*");
+	strarray_set(&listargs->pat, 0, "INBOX*");
 	findsub = mboxlist_findsub;
 	findall = mboxlist_findall;
     } else {
@@ -10504,16 +10504,16 @@ static void list_data(struct listargs *listargs)
     if (listargs->sel & LIST_SEL_RECURSIVEMATCH) {
 	list_data_recursivematch(listargs, findsub);
     } else {
-	struct strlist *pattern;
+	char **pattern;
 	struct list_rock rock;
 	rock.listargs = listargs;
 	rock.last_name = NULL;
 	rock.last_attributes = 0;
 	if (listargs->sel & LIST_SEL_SUBSCRIBED) {
-	    for (pattern = listargs->pat; pattern; pattern = pattern->next) {
+	    for (pattern = listargs->pat.data ; pattern && *pattern ; pattern++) {
 		rock.trailing_percent =
-		    pattern->s[strlen(pattern->s) - 1] == '%';
-		findsub(&imapd_namespace, pattern->s, imapd_userisadmin,
+		    (*pattern)[strlen(*pattern) - 1] == '%';
+		findsub(&imapd_namespace, *pattern, imapd_userisadmin,
 			imapd_userid, imapd_authstate, subscribed_cb, &rock, 1);
 		list_response(rock.last_name, rock.last_attributes, rock.listargs);
 		free(rock.last_name);
@@ -10524,10 +10524,10 @@ static void list_data(struct listargs *listargs)
 		construct_hash_table(&listargs->server_table, 10, 1);
 	    }
 
-	    for (pattern = listargs->pat; pattern; pattern = pattern->next) {
+	    for (pattern = listargs->pat.data ; pattern && *pattern ; pattern++) {
 		rock.trailing_percent =
-		    pattern->s[strlen(pattern->s) - 1] == '%';
-		findall(&imapd_namespace, pattern->s, imapd_userisadmin,
+		    (*pattern)[strlen(*pattern) - 1] == '%';
+		findall(&imapd_namespace, *pattern, imapd_userisadmin,
 			imapd_userid, imapd_authstate, list_cb, &rock);
 		list_response(rock.last_name, rock.last_attributes, rock.listargs);
 		free(rock.last_name);
@@ -10575,19 +10575,19 @@ static void list_data_remote(char *tag, struct listargs *listargs)
 		"{%tu+}\r\n%s ", strlen(listargs->ref), listargs->ref);
 
     /* print mailbox pattern(s) */
-    if (listargs->pat->next) {
-	struct strlist *pattern;
+    if (listargs->pat.count > 1) {
+	char **p;
 	char c = '(';
 
-	for (pattern = listargs->pat; pattern; pattern = pattern->next) {
-	    prot_printf(backend_inbox->out, 
-			"%c{%tu+}\r\n%s", c, strlen(pattern->s), pattern->s);
+	for (p = listargs->pat.data ; *p ; p++) {
+	    prot_printf(backend_inbox->out,
+			"%c{%tu+}\r\n%s", c, strlen(*p), *p);
 	    c = ' ';
 	}
 	(void)prot_putc(')', backend_inbox->out);
     } else {
 	prot_printf(backend_inbox->out, 
-		    "{%tu+}\r\n%s", strlen(listargs->pat->s), listargs->pat->s);
+		    "{%tu+}\r\n%s", strlen(listargs->pat.data[0]), listargs->pat.data[0]);
     }
 
     /* print list return options */

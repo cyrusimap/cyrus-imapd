@@ -253,7 +253,7 @@ struct listargs {
     unsigned sel;		/* Selection options */
     unsigned ret;		/* Return options */
     const char *ref;		/* Reference name */
-    struct strlist *pat;	/* Mailbox pattern(s) */
+    strarray_t pat;		/* Mailbox pattern(s) */
     const char *scan;		/* SCAN content */
     hash_table server_table;	/* for proxying SCAN */
 };
