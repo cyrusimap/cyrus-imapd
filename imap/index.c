@@ -2428,7 +2428,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
     struct octetinfo *oi = NULL;
     int sepchar = '(';
     int started = 0;
-    struct strlist *section;
+    struct section *section;
     struct fieldlist *fsection;
     char respbuf[100];
     int r = 0;
@@ -2595,14 +2595,14 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
 	    snprintf(respbuf, sizeof(respbuf), "* %u FETCH ", msgno);
 	}
 	snprintf(respbuf+strlen(respbuf), sizeof(respbuf)-strlen(respbuf),
-		 "%cBODY[%s ", sepchar, section->s);
+		 "%cBODY[%s ", sepchar, section->name);
 
-	oi = section->rock;
+	oi = &section->octetinfo;
 
 	if (!mailbox_cacherecord(mailbox, &im->record)) {
 	    r = index_fetchsection(state, respbuf,
 				   msg_base, msg_size,
-				   section->s, cacheitem_base(&im->record, CACHE_SECTION),
+				   section->name, cacheitem_base(&im->record, CACHE_SECTION),
 				   im->record.size,
 				   (fetchitems & FETCH_IS_PARTIAL) ?
 				    fetchargs->start_octet : oi->start_octet,
@@ -2618,13 +2618,13 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
 	    snprintf(respbuf, sizeof(respbuf), "* %u FETCH ", msgno);
 	}
 	snprintf(respbuf+strlen(respbuf), sizeof(respbuf)-strlen(respbuf),
-		 "%cBINARY[%s ", sepchar, section->s);
+		 "%cBINARY[%s ", sepchar, section->name);
 
 	if (!mailbox_cacherecord(mailbox, &im->record)) {
-	    oi = section->rock;
+	    oi = &section->octetinfo;
 	    r = index_fetchsection(state, respbuf,
 				   msg_base, msg_size,
-				   section->s, cacheitem_base(&im->record, CACHE_SECTION),
+				   section->name, cacheitem_base(&im->record, CACHE_SECTION),
 				   im->record.size,
 				   (fetchitems & FETCH_IS_PARTIAL) ?
 				    fetchargs->start_octet : oi->start_octet,
@@ -2640,12 +2640,12 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
 	    snprintf(respbuf, sizeof(respbuf), "* %u FETCH ", msgno);
 	}
 	snprintf(respbuf+strlen(respbuf), sizeof(respbuf)-strlen(respbuf),
-		 "%cBINARY.SIZE[%s ", sepchar, section->s);
+		 "%cBINARY.SIZE[%s ", sepchar, section->name);
 
         if (!mailbox_cacherecord(mailbox, &im->record)) {
 	    r = index_fetchsection(state, respbuf,
 				   msg_base, msg_size,
-				   section->s, cacheitem_base(&im->record, CACHE_SECTION),
+				   section->name, cacheitem_base(&im->record, CACHE_SECTION),
 				   im->record.size,
 				   fetchargs->start_octet, fetchargs->octet_count);
 	    if (!r) sepchar = ' ';

@@ -3837,6 +3837,36 @@ void cmd_close(char *tag, char *cmd)
 		tag, error_message(IMAP_OK_COMPLETED));
 }
 
+
+/*
+ * Append to the section list.
+ */
+static void section_list_append(struct section **l,
+				const char *name,
+				const struct octetinfo *oi)
+{
+    struct section **tail = l;
+
+    while (*tail) tail = &(*tail)->next;
+
+    *tail = xmalloc(sizeof(struct strlist));
+    (*tail)->name = xstrdup(name);
+    (*tail)->octetinfo = *oi;
+    (*tail)->next = 0;
+}
+
+void section_list_free(struct section *l)
+{
+    struct section *n;
+
+    while (l) {
+	n = l->next;
+	free(l->name);
+	free(l);
+	l = n;
+    }
+}
+
 /*
  * Parse the syntax for a partial fetch:
  *   "<" number "." nz-number ">"
@@ -3958,9 +3988,9 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
 		    goto freeargs;
 		}
 		if (binsize)
-		    appendstrlist_withdata(&fetchargs.sizesections, section, &oi, sizeof(oi));
+		    section_list_append(&fetchargs.sizesections, section, &oi);
 		else
-		    appendstrlist_withdata(&fetchargs.binsections, section, &oi, sizeof(oi));
+		    section_list_append(&fetchargs.binsections, section, &oi);
 	    }
 	    else if (!strcmp(fetchatt.s, "BODY")) {
 		fetchitems |= FETCH_BODY;
@@ -4090,8 +4120,7 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
 		    eatline(imapd_in, c);
 		    goto freeargs;
 		}
-		appendstrlist_withdata(&fetchargs.bodysections, section,
-				       &oi, sizeof(oi));
+		section_list_append(&fetchargs.bodysections, section, &oi);
 	    }
 	    else goto badatt;
 	    break;
@@ -4333,7 +4362,7 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
 
  freeargs:
     strarray_free(newfields);
-    freestrlist(fetchargs.bodysections);
+    section_list_free(fetchargs.bodysections);
     freefieldlist(fetchargs.fsections);
     strarray_fini(&fetchargs.headers);
     strarray_fini(&fetchargs.headers_not);

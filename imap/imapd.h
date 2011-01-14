@@ -61,6 +61,18 @@ extern struct auth_state *imapd_authstate;
 /* Client capabilities (via ENABLE) */
 extern unsigned imapd_client_capa;
 
+struct octetinfo
+{
+    int start_octet;
+    int octet_count;
+};
+
+struct section {
+    char *name;
+    struct octetinfo octetinfo;
+    struct section *next;
+};
+
 /* List of HEADER.FIELDS[.NOT] fetch specifications */
 struct fieldlist {
     char *section;		/* First part of BODY[x] value */
@@ -73,9 +85,9 @@ struct fieldlist {
 /* Items that may be fetched */
 struct fetchargs {
     int fetchitems;		  /* Bitmask */
-    struct strlist *binsections;  /* BINARY[x]<x> values */
-    struct strlist *sizesections; /* BINARY.SIZE[x] values */
-    struct strlist *bodysections; /* BODY[x]<x> values */
+    struct section *binsections;  /* BINARY[x]<x> values */
+    struct section *sizesections; /* BINARY.SIZE[x] values */
+    struct section *bodysections; /* BODY[x]<x> values */
     struct fieldlist *fsections;  /* BODY[xHEADER.FIELDSx]<x> values */
     strarray_t headers;		  /* RFC822.HEADER.LINES */
     strarray_t headers_not;	  /* RFC822.HEADER.LINES.NOT */
@@ -88,12 +100,6 @@ struct fetchargs {
 
     bit32 cache_atleast;          /* to do headers we need atleast this
 				   * cache version */
-};
-
-struct octetinfo 
-{
-    int start_octet;
-    int octet_count;
 };
 
 /* Bitmasks for fetchitems */
