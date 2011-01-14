@@ -4366,8 +4366,7 @@ void cmd_store(char *tag, char *sequence, int usinguid)
     struct storeargs storeargs;
     static struct buf operation, flagname;
     int len, c;
-    char **flag = 0;
-    int nflags = 0, flagalloc = 0;
+    strarray_t flags = STRARRAY_INITIALIZER;
     int flagsparsed = 0, inlist = 0;
     int r;
 
@@ -4507,15 +4506,8 @@ void cmd_store(char *tag, char *sequence, int usinguid)
 	    eatline(imapd_in, c);
 	    goto freeflags;
 	}
-	else {
-	    if (nflags == flagalloc) {
-		flagalloc += FLAGGROW;
-		flag = (char **)xrealloc((char *)flag,
-					 flagalloc*sizeof(char *));
-	    }
-	    flag[nflags] = xstrdup(flagname.s);
-	    nflags++;
-	}
+	else
+	    strarray_append(&flags, flagname.s);
 
 	flagsparsed++;
 	if (c != ' ') break;
@@ -4549,8 +4541,7 @@ void cmd_store(char *tag, char *sequence, int usinguid)
 		    index_highestmodseq(imapd_index));
     }
 
-    r = index_store(imapd_index, sequence, usinguid, &storeargs,
-		    flag, nflags);
+    r = index_store(imapd_index, sequence, usinguid, &storeargs, &flags);
 
     if (r) {
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
@@ -4561,10 +4552,7 @@ void cmd_store(char *tag, char *sequence, int usinguid)
     }
 
  freeflags:
-    while (nflags--) {
-	free(flag[nflags]);
-    }
-    if (flag) free((char *)flag);
+    strarray_fini(&flags);
 }
 
 void cmd_search(char *tag, int usinguid)

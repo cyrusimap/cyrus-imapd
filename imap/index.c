@@ -907,7 +907,7 @@ int index_fetch(struct index_state *state,
  * Perform a STORE command on a sequence
  */
 int index_store(struct index_state *state, char *sequence, int usinguid,
-		struct storeargs *storeargs, char **flag, int nflags)
+		struct storeargs *storeargs, const strarray_t *flags)
 {
     struct mailbox *mailbox = state->mailbox;
     int i, r = 0;
@@ -921,7 +921,7 @@ int index_store(struct index_state *state, char *sequence, int usinguid,
     if ((storeargs->seen && !(state->myrights & ACL_SEEN)) ||
 	((storeargs->system_flags & FLAG_DELETED) &&
 	 !(state->myrights & ACL_DELETEMSG)) ||
-	(((storeargs->system_flags & ~FLAG_DELETED) || nflags) &&
+	(((storeargs->system_flags & ~FLAG_DELETED) || flags->count) &&
 	 !(state->myrights & ACL_WRITE))) {
 	return IMAP_PERMISSION_DENIED;
     }
@@ -931,8 +931,8 @@ int index_store(struct index_state *state, char *sequence, int usinguid,
 
     seq = _parse_sequence(state, sequence, usinguid);
 
-    for (i = 0; i < nflags; i++) {
-	r = mailbox_user_flag(mailbox, flag[i], &userflag);
+    for (i = 0; i < flags->count ; i++) {
+	r = mailbox_user_flag(mailbox, flags->data[i], &userflag);
 	if (r) goto fail;
 	storeargs->user_flags[userflag/32] |= 1<<(userflag&31);
     }

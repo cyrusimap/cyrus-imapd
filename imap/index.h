@@ -190,7 +190,7 @@ extern int index_store(struct index_state *state,
 		       char *sequence,
 		       int usinguid,
 		       struct storeargs *storeargs,
-		       char **flag, int nflags);
+		       const strarray_t *flags);
 extern int index_sort(struct index_state *state, struct sortcrit *sortcrit,
 		      struct searchargs *searchargs, int usinguid);
 extern int index_thread(struct index_state *state, int algorithm,
