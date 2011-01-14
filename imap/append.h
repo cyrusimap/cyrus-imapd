@@ -49,6 +49,7 @@
 #include "message.h"
 #include "prot.h"
 #include "sequence.h"
+#include "strarray.h"
 
 struct copymsg {
     unsigned long uid;
@@ -115,7 +116,7 @@ extern FILE *append_newstage(const char *mailboxname, time_t internaldate,
 /* adds a new mailbox to the stage initially created by append_newstage() */
 extern int append_fromstage(struct appendstate *mailbox, struct body **body,
 			    struct stagemsg *stage, time_t internaldate,
-			    const char **flag, int nflags, int nolink);
+			    const strarray_t *flags, int nolink);
 
 /* removes the stage (frees memory, deletes the staging files) */
 extern int append_removestage(struct stagemsg *stage);

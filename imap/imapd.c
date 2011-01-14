@@ -182,8 +182,7 @@ static SSL *tls_conn = NULL;
 struct appendstage {
     struct stagemsg *stage;
     FILE *f;
-    char **flag;
-    int nflags, flagalloc;
+    strarray_t flags;
     time_t internaldate;
     int binary;
 } **stage = NULL;
@@ -1084,10 +1083,7 @@ void fatal(const char *s, int code)
 
 	    if (curstage->f != NULL) fclose(curstage->f);
 	    append_removestage(curstage->stage);
-	    while (curstage->nflags--) {
-		free(curstage->flag[curstage->nflags]);
-	    }
-	    if (curstage->flag) free((char *) curstage->flag);
+	    strarray_fini(&curstage->flags);
 	    free(curstage);
 	}
 	free(stage);
@@ -3307,23 +3303,16 @@ void cmd_append(char *tag, char *name, const char *cur_name)
 	/* Parse flags */
 	c = getword(imapd_in, &arg);
 	if  (c == '(' && !arg.s[0]) {
-	    curstage->nflags = 0;
+	    strarray_init(&curstage->flags);
 	    do {
 		c = getword(imapd_in, &arg);
-		if (!curstage->nflags && !arg.s[0] && c == ')') break; /* empty list */
+		if (!curstage->flags.count && !arg.s[0] && c == ')') break; /* empty list */
 		if (!isokflag(arg.s, &sync_seen)) {
 		    parseerr = "Invalid flag in Append command";
 		    r = IMAP_PROTOCOL_ERROR;
 		    goto done;
 		}
-		if (curstage->nflags == curstage->flagalloc) {
-		    curstage->flagalloc += FLAGGROW;
-		    curstage->flag =
-			(char **) xrealloc((char *) curstage->flag, 
-					   curstage->flagalloc * sizeof(char *));
-		}
-		curstage->flag[curstage->nflags] = xstrdup(arg.s);
-		curstage->nflags++;
+		strarray_append(&curstage->flags, arg.s);
 	    } while (c == ' ');
 	    if (c != ')') {
 		parseerr = 
@@ -3433,9 +3422,8 @@ void cmd_append(char *tag, char *name, const char *cur_name)
 	    }
 	    if (!r) {
 		r = append_fromstage(&appendstate, &body, stage[i]->stage,
-				     stage[i]->internaldate, 
-				     (const char **) stage[i]->flag,
-				     stage[i]->nflags, 0);
+				     stage[i]->internaldate,
+				     &stage[i]->flags, 0);
 	    }
 	    if (body) message_free_body(body);
 	}
@@ -3453,10 +3441,7 @@ void cmd_append(char *tag, char *name, const char *cur_name)
 
 	if (curstage->f != NULL) fclose(curstage->f);
 	append_removestage(curstage->stage);
-	while (curstage->nflags--) {
-	    free(curstage->flag[curstage->nflags]);
-	}
-	if (curstage->flag) free((char *) curstage->flag);
+	strarray_fini(&curstage->flags);
 	free(curstage);
     }
     if (stage) free(stage);

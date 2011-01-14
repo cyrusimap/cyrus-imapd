@@ -351,7 +351,7 @@ FILE *append_newstage(const char *mailboxname, time_t internaldate,
  */
 int append_fromstage(struct appendstate *as, struct body **body,
 		     struct stagemsg *stage, time_t internaldate,
-		     const char **flag, int nflags, int nolink)
+		     const strarray_t *flags, int nolink)
 {
     struct mailbox *mailbox = as->mailbox;
     struct index_record record;
@@ -465,33 +465,34 @@ int append_fromstage(struct appendstate *as, struct body **body,
     }
 
     /* Handle flags the user wants to set in the message */
-    for (i = 0; i < nflags; i++) {
-	if (!strcmp(flag[i], "\\seen")) {
+    for (i = 0; i < flags->count ; i++) {
+	const char *flag = strarray_nth(flags, i);
+	if (!strcmp(flag, "\\seen")) {
 	    append_setseen(as, &record);
 	}
-	else if (!strcmp(flag[i], "\\deleted")) {
+	else if (!strcmp(flag, "\\deleted")) {
 	    if (as->myrights & ACL_DELETEMSG) {
 		record.system_flags |= FLAG_DELETED;
 	    }
 	}
-	else if (!strcmp(flag[i], "\\draft")) {
+	else if (!strcmp(flag, "\\draft")) {
 	    if (as->myrights & ACL_WRITE) {
 		record.system_flags |= FLAG_DRAFT;
 	    }
 	}
-	else if (!strcmp(flag[i], "\\flagged")) {
+	else if (!strcmp(flag, "\\flagged")) {
 	    if (as->myrights & ACL_WRITE) {
 		record.system_flags |= FLAG_FLAGGED;
 	    }
 	}
-	else if (!strcmp(flag[i], "\\answered")) {
+	else if (!strcmp(flag, "\\answered")) {
 	    if (as->myrights & ACL_WRITE) {
 		record.system_flags |= FLAG_ANSWERED;
 	    }
 	}
 	else if (as->myrights & ACL_WRITE) {
 	    /* User flag */
-	    r = mailbox_user_flag(mailbox, flag[i], &userflag);
+	    r = mailbox_user_flag(mailbox, flag, &userflag);
 	    if (!r) 
 		record.user_flags[userflag/32] |= 1<<(userflag&31);
 	}
