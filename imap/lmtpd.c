@@ -534,8 +534,13 @@ int deliver_mailbox(FILE *f,
     }
 
     if (!r) {
+	/* this is an awful hack but works because we don't
+	 * need to modify the strarray_t from here on */
+	strarray_t flags = STRARRAY_INITIALIZER;
+	flags.count = nflags;
+	flags.data = flag;
 	r = append_fromstage(&as, &content->body, stage, 0,
-			     (const char **) flag, nflags, !singleinstance);
+			     &flags, !singleinstance);
 
 	if (r) {
 	    append_abort(&as);
