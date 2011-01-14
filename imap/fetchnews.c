@@ -67,6 +67,7 @@
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcat.h"
+#include "strarray.h"
 
 /* global state */
 const int config_need_data = 0;
@@ -250,7 +251,6 @@ int fetch(char *msgid, int bymsgid,
     return 0;
 }
 
-#define RESP_GROW 100
 #define BUFFERSIZE 4096
 
 int main(int argc, char *argv[])
@@ -264,9 +264,9 @@ int main(int argc, char *argv[])
     struct protstream *pin, *pout, *sin, *sout;
     char buf[BUFFERSIZE];
     char sfile[1024] = "";
-    int fd = -1, i, n, offered, rejected, accepted, failed;
+    int fd = -1, i, offered, rejected, accepted, failed;
     time_t stamp;
-    char **resp = NULL;
+    strarray_t resp = STRARRAY_INITIALIZER;
     int newnews = 1;
     char *datefmt = "%y%m%d %H%M%S";
 
@@ -454,15 +454,9 @@ int main(int argc, char *argv[])
     }
 
     /* process the NEWNEWS/LIST ACTIVE list */
-    n = 0;
     while (prot_fgets(buf, sizeof(buf), pin)) {
 	if (buf[0] == '.') break;
-
-	if (!(n % RESP_GROW)) { /* time to alloc more */
-	    resp = (char **)
-		xrealloc(resp, (n + RESP_GROW) * sizeof(char *));
-	}
-	resp[n++] = xstrdup(buf);
+	strarray_append(&resp, buf);
     }
     if (buf[0] != '.') {
 	syslog(LOG_ERR, "%s terminated abnormally",
@@ -470,7 +464,7 @@ int main(int argc, char *argv[])
 	goto quit;
     }
 
-    if (!n) {
+    if (!resp.count) {
 	/* nothing matches our wildmat */
 	goto quit;
     }
@@ -491,12 +485,12 @@ int main(int argc, char *argv[])
     offered = rejected = accepted = failed = 0;
     if (newnews) {
 	/* response is a list of msgids */
-	for (i = 0; i < n; i++) {
+	for (i = 0; i < resp.count; i++) {
 	    /* find the end of the msgid */
-	    *(strrchr(resp[i], '>') + 1) = '\0';
+	    *(strrchr(resp.data[i], '>') + 1) = '\0';
 
 	    offered++;
-	    if (fetch(resp[i], 1, pin, pout, sin, sout,
+	    if (fetch(resp.data[i], 1, pin, pout, sin, sout,
 		      &rejected, &accepted, &failed)) {
 		goto quit;
 	    }
@@ -523,9 +517,9 @@ int main(int argc, char *argv[])
 	 * response is a list of groups.
 	 * select each group, and STAT each article we haven't seen yet.
 	 */
-	for (i = 0; i < n; i++) {
+	for (i = 0; i < resp.count; i++) {
 	    /* parse the LIST ACTIVE response */
-	    sscanf(resp[i], "%s %lu %lu", group, &high, &low);
+	    sscanf(resp.data[i], "%s %lu %lu", group, &high, &low);
 
 	    last = 0;
 	    if (!DB->fetchlock(newsrc_db, group, strlen(group),
