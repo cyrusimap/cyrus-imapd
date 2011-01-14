@@ -63,6 +63,7 @@
 #include "annotate.h" /* for strlist functionality */
 #include "message_guid.h"
 #include "sequence.h"
+#include "strarray.h"
 
 /* Special "sort criteria" to load message-id and references/in-reply-to
  * into msgdata array for threaders that need them.
@@ -193,7 +194,7 @@ extern int index_store(struct index_state *state,
 		       char *sequence,
 		       int usinguid,
 		       struct storeargs *storeargs,
-		       char **flag, int nflags);
+		       const strarray_t *flags);
 extern int index_sort(struct index_state *state, struct sortcrit *sortcrit,
 		      struct searchargs *searchargs, int usinguid);
 extern int index_thread(struct index_state *state, int algorithm,
