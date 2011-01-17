@@ -52,16 +52,16 @@
 #include "auth.h"
 #include "libcyr_cfg.h"
 #include "xmalloc.h"
+#include "strarray.h"
 #include "util.h"
 
 struct auth_state {
     char userid[81];
-    char **group;
-    int ngroups;
+    strarray_t groups;
 };
 
 static struct auth_state auth_anonymous = {
-    "anonymous", 0, 0
+    "anonymous", STRARRAY_INITIALIZER
 };
 
 /*
@@ -84,8 +84,8 @@ static int mymemberof(struct auth_state *auth_state, const char *identifier)
 
     if (strncmp(identifier, "group:", 6) != 0) return 0;
 
-    for (i=0; i<auth_state->ngroups; i++) {
-	if (strcmp(identifier+6, auth_state->group[i]) == 0) return 2;
+    for (i=0; i<auth_state->groups.count ; i++) {
+	if (strcmp(identifier+6, auth_state->groups.data[i]) == 0) return 2;
     }
     return 0;
 }
@@ -222,7 +222,7 @@ static struct auth_state *mynewstate(const char *identifier)
     struct group *grp;
 #if defined(HAVE_GETGROUPLIST) && defined(__GLIBC__)
     gid_t gid, *groupids = NULL;
-    int ret, ngroups = 10;
+    int ret, ngroups = 10, oldngroups;
 #else
     char **mem;
 #endif
@@ -234,8 +234,7 @@ static struct auth_state *mynewstate(const char *identifier)
     newstate = (struct auth_state *)xmalloc(sizeof(struct auth_state));
 
     strcpy(newstate->userid, identifier);
-    newstate->ngroups = 0;
-    newstate->group = NULL;
+    strarray_init(&newstate->groups);
     
     if(!libcyrus_config_getswitch(CYRUSOPT_AUTH_UNIX_GROUP_ENABLE))
 	return newstate;
@@ -250,29 +249,22 @@ static struct auth_state *mynewstate(const char *identifier)
 	groupids = (gid_t *)xrealloc((gid_t *)groupids,
 				     ngroups * sizeof(gid_t));
 
-	newstate->ngroups = ngroups; /* copy of ngroups for comparision */
+	oldngroups = ngroups; /* copy of ngroups for comparision */
 	ret = getgrouplist(identifier, gid, groupids, &ngroups);
 	/*
 	 * This is tricky. We do this as long as getgrouplist tells us to
 	 * realloc _and_ the number of groups changes. It tells us to realloc
 	 * also in the case of failure...
 	 */
-    } while (ret == -1 && ngroups != newstate->ngroups);
+    } while (ret == -1 && ngroups != oldngroups);
 
-    if (ret == -1) {
-	newstate->ngroups = 0;
-	newstate->group = NULL;
+    if (ret == -1)
 	goto err;
-    }
 
-    newstate->ngroups = 0;
-    newstate->group = (char **)xmalloc(ngroups * sizeof(char *));
     while (ngroups--) {
 	if (pwd || groupids[ngroups] != gid) {
-	    if ((grp = getgrgid(groupids[ngroups]))) {
-		newstate->ngroups++;
-		newstate->group[newstate->ngroups-1] = xstrdup(grp->gr_name);
-	    }
+	    if ((grp = getgrgid(groupids[ngroups])))
+		strarray_append(&newstate->groups, grp->gr_name);
 	}
     }
 
@@ -286,12 +278,8 @@ err:
 	    if (!strcmp(*mem, identifier)) break;
 	}
 
-	if (*mem || (pwd && pwd->pw_gid == grp->gr_gid)) {
-	    newstate->ngroups++;
-	    newstate->group = (char **)xrealloc((char *)newstate->group,
-						newstate->ngroups * sizeof(char *));
-	    newstate->group[newstate->ngroups-1] = xstrdup(grp->gr_name);
-	}
+	if (*mem || (pwd && pwd->pw_gid == grp->gr_gid))
+	    strarray_append(&newstate->groups, grp->gr_name);
     }
     endgrent();
 #endif /* HAVE_GETGROUPLIST */
@@ -301,13 +289,8 @@ err:
 
 static void myfreestate(struct auth_state *auth_state)
 {
-    if (auth_state->group) {
-	while (auth_state->ngroups) {
-	    free((char *)auth_state->group[--auth_state->ngroups]);
-	}
-	free((char *)auth_state->group);
-    }
-    free((char *)auth_state);
+    strarray_fini(&auth_state->groups);
+    free(auth_state);
 }
 
 
