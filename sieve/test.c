@@ -72,13 +72,13 @@
 #include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
+#include "strarray.h"
 
 #define HEADERCACHESIZE 1019
 
 typedef struct {
     char *name;
-    int ncontents;
-    char *contents[1];
+    strarray_t contents;
 } header_t;
 
 typedef struct {
@@ -235,28 +235,14 @@ static void fill_cache(message_data_t *m)
 	/* found where to put it, so insert it into a list */
 	if (m->cache[cl]) {
 	    /* add this body on */
-
-	    m->cache[cl]->contents[m->cache[cl]->ncontents++] = body;
-
-	    /* whoops, won't have room for the null at the end! */
-	    if (!(m->cache[cl]->ncontents % 8)) {
-		/* increase the size */
-		m->cache[cl] = (header_t *)
-		    xrealloc(m->cache[cl],sizeof(header_t) +
-			    ((8 + m->cache[cl]->ncontents) * sizeof(char *)));
-	    }
-
+	    strarray_appendm(&m->cache[cl]->contents, body);
 	} else {
 	    /* create a new entry in the hash table */
-	    m->cache[cl] = xmalloc(sizeof(header_t) + 
-					       8 * sizeof(char*));
+	    m->cache[cl] = xmalloc(sizeof(header_t));
 	    m->cache[cl]->name = name;
-	    m->cache[cl]->contents[0] = body;
-	    m->cache[cl]->ncontents = 1;
+	    strarray_init(&m->cache[cl]->contents);
+	    strarray_appendm(&m->cache[cl]->contents, body);
 	}
-
-	/* we always want a NULL at the end */
-	m->cache[cl]->contents[m->cache[cl]->ncontents] = NULL;
     }
 
     m->cache_full = 1;
@@ -289,7 +275,7 @@ static int getheader(void *v, const char *phead, const char ***body)
     clinit = cl = hashheader(head);
     while (m->cache[cl] != NULL) {
 	if (!strcmp(head, m->cache[cl]->name)) {
-	    *body = (const char **) m->cache[cl]->contents;
+	    *body = (const char **) m->cache[cl]->contents.data;
 	    break;
 	}
 	cl++; /* try next hash bin */
@@ -329,13 +315,11 @@ static message_data_t *new_msg(FILE *msg, int size, const char *name)
 static void free_msg(message_data_t *m)
 {
     int i;
-    int j;
 
     for (i = 0 ; i < HEADERCACHESIZE ; i++) {
 	if (m->cache[i] == NULL)
 	    continue;
-	for (j = 0 ; j < m->cache[i]->ncontents ; j++)
-	    free(m->cache[i]->contents[j]);
+	strarray_fini(&m->cache[i]->contents);
 	free(m->cache[i]->name);
 	free(m->cache[i]);
     }
