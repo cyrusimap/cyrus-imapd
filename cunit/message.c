@@ -352,6 +352,141 @@ static void test_mime_trivial(void)
     message_free_body(&body);
 }
 
+static void test_mime_multiple(void)
+{
+#define TEXT_PART \
+    "Hello, World"
+#define HTML_PART \
+    "<html><head><title>Hello, World</title></head>\r\n" \
+    "<body>\r\n" \
+    "<p>Hello, World</p>\r\n" \
+    "<body></html>"
+
+    static const char msg[] =
+"From: Fred Bloggs <fbloggs@fastmail.fm>\r\n"
+"Reply-To: <bounce.me.harder@fastmail.fm>\r\n"
+"To: Sarah Jane Smith <sjsmith@gmail.com>\r\n"
+"Date: Thu, 28 Oct 2010 18:37:26 +1100\r\n"
+"Subject: MIME testing email\r\n"
+"MIME-Version: 1.0\r\n"
+"Content-Type: multipart/mixed; boundary=\"7225e50d962de81173be22223f706458743c3a9a\"\r\n"
+"Content-Language: en\r\n"
+"Message-ID: <fake1003@fastmail.fm>\r\n"
+"\r\n"
+"--7225e50d962de81173be22223f706458743c3a9a\r\n"
+"Content-Type: text/plain; charset=\"us-ascii\"\r\n"
+"\r\n"
+TEXT_PART "\r\n"
+"--7225e50d962de81173be22223f706458743c3a9a\r\n"
+"Content-Type: text/html; charset=\"us-ascii\"\r\n"
+"\r\n"
+HTML_PART "\r\n"
+"--7225e50d962de81173be22223f706458743c3a9a\r\n"
+"Content-Type: image/png\r\n"
+"Content-Disposition: attachment; filename=cyrus-favicon.png\r\n"
+"Content-Transfer-Encoding: base64\r\n"
+"\r\n"
+"iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAAXNSR0IArs4c6QAAAAZiS0dEAP8A\r\n"
+"/wD/oL2nkwAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB9sBEQEMHNieJnIAAAIsSURBVDjL\r\n"
+"tZNPSNNhGMc/r+xSUY4hbHO1LYyRSXRw4iaSRVFCiNBf8BA/mwWVB1sQFGgdgqjfph6i0EEUXaxJ\r\n"
+"3tTmkA6zQxieVlR0GP0xy7n9Ftipng6/NZMM6dBzenmf5/083+d53gf+l42Njkm1zychTZPZ2Vn5\r\n"
+"p8dRPSIuu0NcdodsdDgl4K+TqVRqRYj6dZhKpaQv2kuhYJBOp0GKXgGlzLBAMAjAdV2nakuVWka6\r\n"
+"3N0tyYkJWc2G43GJ6vpyNbGBQXHZHZJMJFYFJBMJqfb55MHQkABYQpomV3p6QKmSVIC+SATD+AqA\r\n"
+"x7OJ9o6OYtGKglEg3HWOkKYJle7N0hgIynA8LtlsdlUF2WxWkomENAYbxGV3iGXR6SHl38ePWwN4\r\n"
+"vV5sNhsA/dEo+byBUgq3e0lBPpej55rOU38L5d/HwVrfJDx8JegjUrHdL726/tfsd2Ix8TTsFvQR\r\n"
+"If5arPW7pAwUKAWebcyfv0144hnHDh0hl8uV+rGwsMDJ9hOcvT9C5tQN8NaAmIMoE5HizBWsK4e2\r\n"
+"Czx+/4U9O5uYTCZ5Pj1N64EWRief8O1o2IwpNlNEsJS+kwhkXlAe78eo2sHM1lraOrsAmOu4CpmX\r\n"
+"VAxeZL75ONTtL6kzAQKM34UPbzHOREpZ5i7dM8FrN4C3hvmmw/DoJryZgdbTvwEyaajdC82aWYoU\r\n"
+"qWvWL//xAhzshMUCfH5neqp9PvlodS4tR7G2P5ZmhfvK/Cd+At3OXF7AwYF1AAAAAElFTkSuQmCC\r\n"
+"\r\n--7225e50d962de81173be22223f706458743c3a9a--\r\n";
+    int r;
+    struct body body;
+    struct body *part;
+    struct message_content mcontent;
+    const char *types[2] = { NULL, NULL };
+    struct bodypart **parts = NULL;
+
+    memset(&body, 0x45, sizeof(body));
+    r = message_parse_mapped(msg, sizeof(msg)-1, &body);
+
+    CU_ASSERT_EQUAL(r, 0);
+
+    /* Content-Type: */
+    CU_ASSERT_STRING_EQUAL(body.type, "MULTIPART");
+    CU_ASSERT_STRING_EQUAL(body.subtype, "MIXED");
+    CU_ASSERT_PTR_NOT_NULL(body.params);
+    CU_ASSERT_STRING_EQUAL(body.params->attribute, "BOUNDARY");
+    CU_ASSERT_STRING_EQUAL(body.params->value, "7225e50d962de81173be22223f706458743c3a9a");
+    CU_ASSERT_PTR_NULL(body.params->next);
+
+    CU_ASSERT_EQUAL(body.numparts, 3);
+    CU_ASSERT_PTR_NOT_NULL(body.subpart);
+
+    part = &body.subpart[0];
+    CU_ASSERT_PTR_NOT_NULL(part);
+    CU_ASSERT_STRING_EQUAL(part->type, "TEXT");
+    CU_ASSERT_STRING_EQUAL(part->subtype, "PLAIN");
+    CU_ASSERT_PTR_NOT_NULL(part->params);
+    CU_ASSERT_STRING_EQUAL(part->params->attribute, "CHARSET");
+    CU_ASSERT_STRING_EQUAL(part->params->value, "us-ascii");
+    CU_ASSERT_PTR_NULL(part->params->next);
+    CU_ASSERT_PTR_NULL(part->disposition);
+    CU_ASSERT_PTR_NULL(part->encoding);
+
+    part = &body.subpart[1];
+    CU_ASSERT_PTR_NOT_NULL(part);
+    CU_ASSERT_STRING_EQUAL(part->type, "TEXT");
+    CU_ASSERT_STRING_EQUAL(part->subtype, "HTML");
+    CU_ASSERT_PTR_NOT_NULL(part->params);
+    CU_ASSERT_STRING_EQUAL(part->params->attribute, "CHARSET");
+    CU_ASSERT_STRING_EQUAL(part->params->value, "us-ascii");
+    CU_ASSERT_PTR_NULL(part->params->next);
+    CU_ASSERT_PTR_NULL(part->disposition);
+    CU_ASSERT_PTR_NULL(part->encoding);
+
+    part = &body.subpart[2];
+    CU_ASSERT_PTR_NOT_NULL(part);
+    CU_ASSERT_STRING_EQUAL(part->type, "IMAGE");
+    CU_ASSERT_STRING_EQUAL(part->subtype, "PNG");
+    CU_ASSERT_PTR_NULL(part->params);
+    CU_ASSERT_STRING_EQUAL(part->disposition, "ATTACHMENT");
+    CU_ASSERT_STRING_EQUAL(part->encoding, "BASE64");
+
+    mcontent.base = msg;
+    mcontent.len = sizeof(msg)-1;
+    mcontent.body = &body;
+
+    types[0] = "TEXT/PLAIN";
+    parts = NULL;
+    message_fetch_part(&mcontent, types, &parts);
+    CU_ASSERT_PTR_NOT_NULL(parts);
+    if (parts) {
+	CU_ASSERT_PTR_NOT_NULL(parts[0]);
+	CU_ASSERT_PTR_NULL(parts[1]);
+	CU_ASSERT_STRING_EQUAL(parts[0]->decoded_body, TEXT_PART);
+	free(parts[0]);
+	free(parts);
+	parts = NULL;
+    }
+
+    types[0] = "TEXT/HTML";
+    parts = NULL;
+    message_fetch_part(&mcontent, types, &parts);
+    CU_ASSERT_PTR_NOT_NULL(parts);
+    if (parts) {
+	CU_ASSERT_PTR_NOT_NULL(parts[0]);
+	CU_ASSERT_PTR_NULL(parts[1]);
+	CU_ASSERT_STRING_EQUAL(parts[0]->decoded_body, HTML_PART);
+	free(parts[0]);
+	free(parts);
+	parts = NULL;
+    }
+
+    message_free_body(&body);
+#undef TEXT_PART
+#undef HTML_PART
+}
+
 /*
  * RFC2231 specifies, amongst other things, a method for
  * breaking up across multiple lines, long parameter values
