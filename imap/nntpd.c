@@ -3758,31 +3758,27 @@ static void feedpeer(char *peer, message_data_t *msg)
     return;
 }
 
-#define ALLOC_SIZE 10
-
 static void news2mail(message_data_t *msg)
 {
     struct annotation_data attrib;
-    int n, i, r;
+    int n, r;
     FILE *sm;
-    static const char **smbuf = NULL;
-    static int allocsize = 0;
+    static strarray_t smbuf = STRARRAY_INITIALIZER;
+    static int smbuf_basic_count;
     int sm_stat;
     pid_t sm_pid;
     char buf[4096], to[1024] = "";
 
-    if (!smbuf) {
-	allocsize += ALLOC_SIZE;
-	smbuf = xzmalloc(allocsize * sizeof(const char *));
-
-	smbuf[0] = "sendmail";
-	smbuf[1] = "-i";		/* ignore dots */
-	smbuf[2] = "-f";
-	smbuf[3] = "<>";
-	smbuf[4] = "--";
+    if (!smbuf.count) {
+	strarray_append(&smbuf, "sendmail");
+	strarray_append(&smbuf, "-i");		/* ignore dots */
+	strarray_append(&smbuf, "-f");
+	strarray_append(&smbuf, "<>");
+	strarray_append(&smbuf, "--");
+	smbuf_basic_count = smbuf.count;
     }
 
-    for (i = 5, n = 0; n < msg->rcpt.count ; n++) {
+    for (n = 0; n < msg->rcpt.count ; n++) {
 	/* see if we want to send this to a mailing list */
 	r = annotatemore_lookup(msg->rcpt.data[n],
 				"/vendor/cmu/cyrus-imapd/news2mail", "",
@@ -3791,13 +3787,7 @@ static void news2mail(message_data_t *msg)
 
 	/* add the email address to our argv[] and to our To: header */
 	if (attrib.value) {
-	    if (i >= allocsize - 1) {
-		allocsize += ALLOC_SIZE;
-		smbuf = xrealloc(smbuf, allocsize * sizeof(const char *));
-	    }
-
-	    smbuf[i++] = xstrdup(attrib.value);
-	    smbuf[i] = NULL;
+	    strarray_append(&smbuf, attrib.value);
 
 	    if (to[0]) strlcat(to, ", ", sizeof(to));
 	    strlcat(to, attrib.value, sizeof(to));
@@ -3805,8 +3795,8 @@ static void news2mail(message_data_t *msg)
     }
 
     /* send the message */
-    if (i > 5) {
-	sm_pid = open_sendmail(smbuf, &sm);
+    if (smbuf.count > smbuf_basic_count) {
+	sm_pid = open_sendmail(smbuf.data, &sm);
 
 	if (!sm)
 	    syslog(LOG_ERR, "news2mail: could not spawn sendmail process");
@@ -3866,10 +3856,7 @@ static void news2mail(message_data_t *msg)
 	}
 
 	/* free the RCPTs */
-	for (i = 5; smbuf[i]; i++) {
-	    free((char *) smbuf[i]);
-	    smbuf[i] = NULL;
-	}
+	strarray_truncate(&smbuf, smbuf_basic_count);
     }
 
     return;
