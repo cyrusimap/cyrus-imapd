@@ -70,6 +70,7 @@
 #include "service.h"
 #include "libconfig.h"
 #include "xmalloc.h"
+#include "strarray.h"
 #include "signals.h"
 
 extern int optind;
@@ -149,8 +150,6 @@ static int libwrap_ask(struct request_info *r __attribute__((unused)),
 
 extern void cyrus_init(const char *, const char *, unsigned);
 
-#define ARGV_GROW 10
-
 int main(int argc, char **argv, char **envp)
 {
     int fdflags;
@@ -160,13 +159,12 @@ int main(int argc, char **argv, char **envp)
     int opt;
     char *alt_config = NULL;
     int call_debugger = 0;
-    int newargc = 0;
-    char **newargv = (char **) xmalloc(ARGV_GROW * sizeof(char *));
+    strarray_t newargv = STRARRAY_INITIALIZER;
 
     opterr = 0; /* disable error reporting,
 		   since we don't know about service-specific options */
 
-    newargv[newargc++] = argv[0];
+    strarray_append(&newargv, argv[0]);
 
     while ((opt = getopt(argc, argv, "C:D")) != EOF) {
 	switch (opt) {
@@ -177,27 +175,18 @@ int main(int argc, char **argv, char **envp)
 	    call_debugger = 1;
 	    break;
 	default:
-	    if (!((newargc+1) % ARGV_GROW)) { /* time to alloc more */
-		newargv = (char **) xrealloc(newargv, (newargc + ARGV_GROW) * 
-					     sizeof(char *));
-	    }
-	    newargv[newargc++] = argv[optind-1];
+	    strarray_append(&newargv, argv[optind-1]);
 
 	    /* option has an argument */
 	    if (optind < argc && argv[optind][0] != '-')
-		newargv[newargc++] = argv[optind++];
+		strarray_append(&newargv, argv[optind++]);
 
 	    break;
 	}
     }
     /* grab the remaining arguments */
-    for (; optind < argc; optind++) {
-	if (!(newargc % ARGV_GROW)) { /* time to alloc more */
-	    newargv = (char **) xrealloc(newargv, (newargc + ARGV_GROW) * 
-					 sizeof(char *));
-	}
-	newargv[newargc++] = argv[optind];
-    }
+    for (; optind < argc; optind++)
+	strarray_append(&newargv, argv[optind]);
 
     opterr = 1; /* enable error reporting */
     optind = 1; /* reset the option index for parsing by the service */
@@ -253,7 +242,7 @@ int main(int argc, char **argv, char **envp)
 	return 1;
     }
 
-    if (service_init(newargc, newargv, envp) != 0) {
+    if (service_init(newargv.count, newargv.data, envp) != 0) {
 	if (MESSAGE_MASTER_ON_EXIT) 
 	    notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
 	return 1;
@@ -305,7 +294,7 @@ int main(int argc, char **argv, char **envp)
 
 	use_count++;
 	notify_master(STATUS_FD, MASTER_SERVICE_CONNECTION_MULTI);
-	if (service_main_fd(fd, newargc, newargv, envp) < 0) {
+	if (service_main_fd(fd, newargv.count, newargv.data, envp) < 0) {
 	    break;
 	}
     }

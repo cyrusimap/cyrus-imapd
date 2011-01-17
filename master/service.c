@@ -74,6 +74,7 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
+#include "strarray.h"
 #include "signals.h"
 
 extern int optind, opterr;
@@ -240,8 +241,6 @@ static int unlockaccept(void)
     return 0;
 }
 
-#define ARGV_GROW 10
-
 int main(int argc, char **argv, char **envp)
 {
     int fdflags;
@@ -255,8 +254,7 @@ int main(int argc, char **argv, char **envp)
     int reuse_timeout = REUSE_TIMEOUT;
     int soctype;
     socklen_t typelen = sizeof(soctype);
-    int newargc = 0;
-    char **newargv = (char **) xmalloc(ARGV_GROW * sizeof(char *));
+    strarray_t newargv = STRARRAY_INITIALIZER;
     int id;
     char path[PATH_MAX];
     struct stat sbuf;
@@ -267,7 +265,7 @@ int main(int argc, char **argv, char **envp)
     opterr = 0; /* disable error reporting,
 		   since we don't know about service-specific options */
 
-    newargv[newargc++] = argv[0];
+    strarray_append(&newargv, argv[0]);
 
     while ((opt = getopt(argc, argv, "C:U:T:D")) != EOF) {
 	if (argv[optind-1][0] == '-' && strlen(argv[optind-1]) > 2) {
@@ -293,27 +291,18 @@ int main(int argc, char **argv, char **envp)
 	    call_debugger = 1;
 	    break;
 	default:
-	    if (!((newargc+1) % ARGV_GROW)) { /* time to alloc more */
-		newargv = (char **) xrealloc(newargv, (newargc + ARGV_GROW) * 
-					     sizeof(char *));
-	    }
-	    newargv[newargc++] = argv[optind-1];
+	    strarray_append(&newargv, argv[optind-1]);
 
 	    /* option has an argument */
 	    if (optind < argc && argv[optind][0] != '-')
-		newargv[newargc++] = argv[optind++];
+		strarray_append(&newargv, argv[optind++]);
 
 	    break;
 	}
     }
     /* grab the remaining arguments */
-    for (; optind < argc; optind++) {
-	if (!(newargc % ARGV_GROW)) { /* time to alloc more */
-	    newargv = (char **) xrealloc(newargv, (newargc + ARGV_GROW) * 
-					 sizeof(char *));
-	}
-	newargv[newargc++] = argv[optind];
-    }
+    for (; optind < argc; optind++)
+	strarray_append(&newargv, argv[optind]);
 
     opterr = 1; /* enable error reporting */
     optind = 1; /* reset the option index for parsing by the service */
@@ -390,17 +379,17 @@ int main(int argc, char **argv, char **envp)
 	return 1;
     }
 
-    if (service_init(newargc, newargv, envp) != 0) {
+    if (service_init(newargv.count, newargv.data, envp) != 0) {
 	if (MESSAGE_MASTER_ON_EXIT) 
 	    notify_master(STATUS_FD, MASTER_SERVICE_UNAVAILABLE);
 	return 1;
     }
 
     /* determine initial process file inode, size and mtime */
-    if (newargv[0][0] == '/')
-	strlcpy(path, newargv[0], sizeof(path));
+    if (newargv.data[0][0] == '/')
+	strlcpy(path, newargv.data[0], sizeof(path));
     else
-	snprintf(path, sizeof(path), "%s/%s", SERVICE_PATH, newargv[0]);
+	snprintf(path, sizeof(path), "%s/%s", SERVICE_PATH, newargv.data[0]);
 
     stat(path, &sbuf);
     start_ino= sbuf.st_ino;
@@ -578,7 +567,7 @@ int main(int argc, char **argv, char **envp)
 	
 	notify_master(STATUS_FD, MASTER_SERVICE_CONNECTION);
 	use_count++;
-	service_main(newargc, newargv, envp);
+	service_main(newargv.count, newargv.data, envp);
 	/* if we returned, we can service another client with this process */
 
 	if (signals_poll() || use_count >= max_use) {
