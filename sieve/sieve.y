@@ -72,7 +72,7 @@ char errbuf[ERR_BUF_SIZE];
 
 struct vtags {
     int days;
-    stringlist_t *addresses;
+    strarray_t *addresses;
     char *subject;
     char *from;
     char *handle;
@@ -95,7 +95,7 @@ struct aetags {
 struct btags {
     int transform;
     int offset;
-    stringlist_t *content_types;
+    strarray_t *content_types;
     char *comparator;
     int comptag;
     int relation;
@@ -104,7 +104,7 @@ struct btags {
 struct ntags {
     char *method;
     char *id;
-    stringlist_t *options;
+    strarray_t *options;
     int priority;
     char *message;
 };
@@ -118,12 +118,12 @@ struct dtags {
 
 static commandlist_t *ret;
 static sieve_script_t *parse_script;
-static char *check_reqs(stringlist_t *sl);
+static char *check_reqs(strarray_t *sl);
 static test_t *build_address(int t, struct aetags *ae,
-			     stringlist_t *sl, stringlist_t *pl);
+			     strarray_t *sl, strarray_t *pl);
 static test_t *build_header(int t, struct htags *h,
-			    stringlist_t *sl, stringlist_t *pl);
-static test_t *build_body(int t, struct btags *b, stringlist_t *pl);
+			    strarray_t *sl, strarray_t *pl);
+static test_t *build_body(int t, struct btags *b, strarray_t *pl);
 static commandlist_t *build_vacation(int t, struct vtags *h, char *s);
 static commandlist_t *build_notify(int t, struct ntags *n);
 static commandlist_t *build_denotify(int t, struct dtags *n);
@@ -148,7 +148,7 @@ static struct dtags *new_dtags(void);
 static struct dtags *canon_dtags(struct dtags *d);
 static void free_dtags(struct dtags *d);
 
-static int verify_stringlist(stringlist_t *sl, int (*verify)(char *));
+static int verify_stringlist(strarray_t *sl, int (*verify)(char *));
 static int verify_mailbox(char *s);
 static int verify_address(char *s);
 static int verify_header(char *s);
@@ -158,7 +158,7 @@ static int verify_flag(char *s);
 static int verify_relat(char *s);
 #ifdef ENABLE_REGEX
 static int verify_regex(char *s, int cflags);
-static int verify_regexs(stringlist_t *sl, char *comp);
+static int verify_regexs(const strarray_t *sl, char *comp);
 #endif
 static int verify_utf8(char *s);
 
@@ -172,7 +172,7 @@ extern void yyrestart(FILE *f);
 %union {
     int nval;
     char *sval;
-    stringlist_t *sl;
+    strarray_t *sl;
     test_t *test;
     testlist_t *testl;
     commandlist_t *cl;
@@ -441,12 +441,21 @@ vtags: /* empty */		 { $$ = new_vtags(); }
 				   else { $$->mime = MIME; } }
 	;
 
-stringlist: '[' strings ']'      { $$ = sl_reverse($2); }
-	| STRING		 { $$ = new_sl($1, NULL); }
+stringlist: '[' strings ']'      { $$ = $2; }
+	| STRING		 {
+				    $$ = strarray_new();
+				    strarray_appendm($$, $1);
+				 }
 	;
 
-strings: STRING			 { $$ = new_sl($1, NULL); }
-	| strings ',' STRING	 { $$ = new_sl($3, $1); }
+strings: STRING			 {
+				    $$ = strarray_new();
+				    strarray_appendm($$, $1);
+				 }
+	| strings ',' STRING	 {
+				    $$ = $1;
+				    strarray_appendm($$, $3);
+				 }
 	;
 
 block: '{' commands '}'		 { $$ = $2; }
@@ -724,40 +733,36 @@ int yyerror(char *msg)
     return 0;
 }
 
-static char *check_reqs(stringlist_t *sl)
+static char *check_reqs(strarray_t *sa)
 {
-    stringlist_t *s;
+    char *s;
     char *err = NULL, *p, sep = ':';
     size_t alloc = 0;
-    
-    while (sl != NULL) {
-	s = sl;
-	sl = sl->next;
 
-	if (!script_require(parse_script, s->s)) {
+    while ((s = strarray_shift(sa))) {
+	if (!script_require(parse_script, s)) {
 	    if (!err) {
 		alloc = 100;
 		p = err = xmalloc(alloc);
 		p += sprintf(p, "Unsupported feature(s) in \"require\"");
 	    }
-	    else if ((size_t) (p - err + strlen(s->s) + 5) > alloc) {
+	    else if ((size_t) (p - err + strlen(s) + 5) > alloc) {
 		alloc += 100;
 		err = xrealloc(err, alloc);
 		p = err + strlen(err);
 	    }
 
-	    p += sprintf(p, "%c \"%s\"", sep, s->s);
+	    p += sprintf(p, "%c \"%s\"", sep, s);
 	    sep = ',';
 	}
 
-	free(s->s);
 	free(s);
     }
     return err;
 }
 
 static test_t *build_address(int t, struct aetags *ae,
-			     stringlist_t *sl, stringlist_t *pl)
+			     strarray_t *sl, strarray_t *pl)
 {
     test_t *ret = new_test(t);	/* can be either ADDRESS or ENVELOPE */
 
@@ -777,7 +782,7 @@ static test_t *build_address(int t, struct aetags *ae,
 }
 
 static test_t *build_header(int t, struct htags *h,
-			    stringlist_t *sl, stringlist_t *pl)
+			    strarray_t *sl, strarray_t *pl)
 {
     test_t *ret = new_test(t);	/* can be HEADER */
 
@@ -794,7 +799,7 @@ static test_t *build_header(int t, struct htags *h,
     return ret;
 }
 
-static test_t *build_body(int t, struct btags *b, stringlist_t *pl)
+static test_t *build_body(int t, struct btags *b, strarray_t *pl)
 {
     test_t *ret = new_test(t);	/* can be BODY */
 
@@ -964,10 +969,11 @@ static struct btags *canon_btags(struct btags *b)
 {
     if (b->transform == -1) { b->transform = TEXT; }
     if (b->content_types == NULL) {
+	b->content_types = strarray_new();
 	if (b->transform == RAW) {
-	    b->content_types = new_sl(xstrdup(""), NULL);
+	    strarray_append(b->content_types, "");
 	} else {
-	    b->content_types = new_sl(xstrdup("text"), NULL);
+	    strarray_append(b->content_types, "text");
 	}
     }
     if (b->offset == -1) { b->offset = 0; }
@@ -978,7 +984,7 @@ static struct btags *canon_btags(struct btags *b)
 
 static void free_btags(struct btags *b)
 {
-    if (b->content_types) { free_sl(b->content_types); }
+    if (b->content_types) { strarray_free(b->content_types); }
     free(b->comparator);
     free(b);
 }
@@ -1013,7 +1019,7 @@ static struct vtags *canon_vtags(struct vtags *v)
 
 static void free_vtags(struct vtags *v)
 {
-    if (v->addresses) { free_sl(v->addresses); }
+    if (v->addresses) { strarray_free(v->addresses); }
     if (v->subject) { free(v->subject); }
     if (v->from) { free(v->from); }
     if (v->handle) { free(v->handle); }
@@ -1051,7 +1057,7 @@ static void free_ntags(struct ntags *n)
 {
     if (n->method) { free(n->method); }
     if (n->id) { free(n->id); }
-    if (n->options) { free_sl(n->options); }
+    if (n->options) { strarray_free(n->options); }
     if (n->message) { free(n->message); }
     free(n);
 }
@@ -1072,10 +1078,14 @@ static void free_dtags(struct dtags *d)
     free(d);
 }
 
-static int verify_stringlist(stringlist_t *sl, int (*verify)(char *))
+static int verify_stringlist(strarray_t *sa, int (*verify)(char *))
 {
-    for (; sl != NULL && verify(sl->s); sl = sl->next) ;
-    return (sl == NULL);
+    int i;
+
+    for (i = 0 ; i < sa->count ; i++)
+	if (!verify(sa->data[i]))
+	    return 0;
+    return 1;
 }
 
 char *addrptr;		/* pointer to address string for address lexer */
@@ -1229,25 +1239,20 @@ static int verify_regex(char *s, int cflags)
     return 1;
 }
 
-static int verify_regexs(stringlist_t *sl, char *comp)
+static int verify_regexs(const strarray_t *sa, char *comp)
 {
-    stringlist_t *sl2;
+    int i;
     int cflags = REG_EXTENDED | REG_NOSUB;
- 
 
     if (!strcmp(comp, "i;ascii-casemap")) {
 	cflags |= REG_ICASE;
     }
 
-    for (sl2 = sl; sl2 != NULL; sl2 = sl2->next) {
-	if ((verify_regex(sl2->s, cflags)) == 0) {
-	    break;
-	}
+    for (i = 0 ; i < sa->count ; i++) {
+	if ((verify_regex(sa->data[i], cflags)) == 0)
+	    return 0;
     }
-    if (sl2 == NULL) {
-	return 1;
-    }
-    return 0;
+    return 1;
 }
 #endif
 

@@ -47,7 +47,7 @@
 #define MESSAGE_H
 
 #include "sieve_interface.h"	/* for action contexts */
-#include "tree.h"		/* for stringlist_t */
+#include "tree.h"
 
 typedef struct Action action_list_t;
 
