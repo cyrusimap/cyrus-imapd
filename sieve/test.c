@@ -73,13 +73,7 @@
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
 #include "strarray.h"
-
-#define HEADERCACHESIZE 1019
-
-typedef struct {
-    char *name;
-    strarray_t contents;
-} header_t;
+#include "hash.h"
 
 typedef struct {
     char *name;
@@ -88,21 +82,8 @@ typedef struct {
     struct message_content content;
 
     int cache_full;
-    header_t *cache[HEADERCACHESIZE];
+    struct hash_table cache;
 } message_data_t;
-
-int hashheader(char *header)
-{
-    int x = 0;
-    /* any CHAR except ' ', :, or a ctrl char */
-    for (; !Uiscntrl(*header) && (*header != ' ') && (*header != ':');
-	 header++) {
-	x *= 256;
-	x += *header;
-	x %= HEADERCACHESIZE;
-    }
-    return x;
-}
 
 /* take a list of headers, pull the first one out and return it in
    name and contents.
@@ -136,7 +117,7 @@ static int parseheader(FILE *f, char **headname, char **contents)
 	    }
 	    if (!isalpha(c))
 		goto ph_error;
-	    name[0] = tolower(c);
+	    name[0] = TOLOWER(c);
 	    off = 1;
 	    s = HDR_NAME;
 	    break;
@@ -150,7 +131,7 @@ static int parseheader(FILE *f, char **headname, char **contents)
 	    if (iscntrl(c)) {
 		goto ph_error;
 	    }
-	    name[off++] = tolower(c);
+	    name[off++] = TOLOWER(c);
 	    break;
 
 	case COLON:
@@ -219,30 +200,17 @@ static void fill_cache(message_data_t *m)
     /* let's fill that header cache */
     for (;;) {
 	char *name, *body;
-	int cl, clinit;
+	strarray_t *contents;
 
 	if (parseheader(m->data, &name, &body) < 0) {
 	    break;
 	}
 	/* put it in the hash table */
-	clinit = cl = hashheader(name);
-	while (m->cache[cl] != NULL && strcmp(name, m->cache[cl]->name)) {
-	    cl++;		/* resolve collisions linearly */
-	    cl %= HEADERCACHESIZE;
-	    if (cl == clinit) break; /* gone all the way around, so bail */
-	}
-
-	/* found where to put it, so insert it into a list */
-	if (m->cache[cl]) {
-	    /* add this body on */
-	    strarray_appendm(&m->cache[cl]->contents, body);
-	} else {
-	    /* create a new entry in the hash table */
-	    m->cache[cl] = xmalloc(sizeof(header_t));
-	    m->cache[cl]->name = name;
-	    strarray_init(&m->cache[cl]->contents);
-	    strarray_appendm(&m->cache[cl]->contents, body);
-	}
+	contents = (strarray_t *)hash_lookup(name, &m->cache);
+	if (!contents)
+	    contents = hash_insert(name, strarray_new(), &m->cache);
+	strarray_appendm(contents, body);
+	free(name);
     }
 
     m->cache_full = 1;
@@ -252,8 +220,7 @@ static void fill_cache(message_data_t *m)
 static int getheader(void *v, const char *phead, const char ***body)
 {
     message_data_t *m = (message_data_t *) v;
-    int cl, clinit;
-    char *h;
+    strarray_t *contents;
     char *head;
 
     *body = NULL;
@@ -264,24 +231,12 @@ static int getheader(void *v, const char *phead, const char ***body)
 
     /* copy header parameter so we can mangle it */
     head = xstrdup(phead);
-
-    h = head;
-    while (*h != '\0') {
-	*h = tolower(*h);
-	h++;
-    }
+    lcase(head);
 
     /* check the cache */
-    clinit = cl = hashheader(head);
-    while (m->cache[cl] != NULL) {
-	if (!strcmp(head, m->cache[cl]->name)) {
-	    *body = (const char **) m->cache[cl]->contents.data;
-	    break;
-	}
-	cl++; /* try next hash bin */
-	cl %= HEADERCACHESIZE;
-	if (cl == clinit) break; /* gone all the way around */
-    }
+    contents = (strarray_t *)hash_lookup(head, &m->cache);
+    if (contents)
+	*body = (const char **) contents->data;
 
     free(head);
 
@@ -294,7 +249,6 @@ static int getheader(void *v, const char *phead, const char ***body)
 
 static message_data_t *new_msg(FILE *msg, int size, const char *name)
 {
-    int i;
     message_data_t *m;
 
     m = xmalloc(sizeof(message_data_t));
@@ -304,9 +258,7 @@ static message_data_t *new_msg(FILE *msg, int size, const char *name)
     m->content.base = NULL;
     m->content.len = 0;
     m->content.body = NULL;
-    for (i = 0; i < HEADERCACHESIZE; i++) {
-	m->cache[i] = NULL;
-    }
+    construct_hash_table(&m->cache, 1000, 0);
     m->cache_full = 0;
 
     return m;
@@ -314,15 +266,7 @@ static message_data_t *new_msg(FILE *msg, int size, const char *name)
 
 static void free_msg(message_data_t *m)
 {
-    int i;
-
-    for (i = 0 ; i < HEADERCACHESIZE ; i++) {
-	if (m->cache[i] == NULL)
-	    continue;
-	strarray_fini(&m->cache[i]->contents);
-	free(m->cache[i]->name);
-	free(m->cache[i]);
-    }
+    free_hash_table(&m->cache, (void(*)(void*))strarray_free);
     free(m->name);
     free(m);
 }
@@ -501,8 +445,8 @@ static int autorespond(void *ac, void *ic __attribute__((unused)),
     printf("' in %d days? ", arc->days);
     scanf(" %c", &yn);
 
-    if (tolower(yn) == 'y') return SIEVE_DONE;
-    if (tolower(yn) == 'n') return SIEVE_OK;
+    if (TOLOWER(yn) == 'y') return SIEVE_DONE;
+    if (TOLOWER(yn) == 'n') return SIEVE_OK;
 
     return SIEVE_FAIL;
 }
