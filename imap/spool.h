@@ -47,8 +47,9 @@
 
 #include <stdio.h>
 #include "prot.h"
+#include "hash.h"
 
-typedef struct Header **hdrcache_t;
+typedef hash_table *hdrcache_t;
 
 hdrcache_t spool_new_hdrcache(void);
 void spool_cache_header(char *name, char *body, hdrcache_t cache);

@@ -60,44 +60,12 @@
 #include "imap_err.h"
 #include "nntp_err.h"
 #include "global.h"
-
-#define HEADERCACHESIZE 4009
-
-typedef struct Header header_t;
-
-/* data per message */
-struct Header {
-    char *name;
-    int ncontents;
-    char *contents[1];
-};
+#include "strarray.h"
 
 hdrcache_t spool_new_hdrcache(void)
 {
-    int i;
-    hdrcache_t cache;
-
-    cache = (hdrcache_t) xmalloc(HEADERCACHESIZE * sizeof(header_t*));
-    if (!cache) return NULL;
-
-    for (i = 0; i < HEADERCACHESIZE; i++)
-	cache[i] = NULL;
-
-    return cache;
-}
-
-/* hash function used for header cache in struct msg */
-static int hashheader(char *header)
-{
-    int x = 0;
-    /* any CHAR except ' ', :, or a ctrl char */
-    for (; !Uiscntrl(*header) && (*header != ' ') && (*header != ':'); 
-	 header++) {
-	x *= 256;
-	x += *header;
-	x %= HEADERCACHESIZE;
-    }
-    return x;
+    hash_table *ht = xmalloc(sizeof(*ht));
+    return construct_hash_table(ht, 4000, 0);
 }
 
 /* take a list of headers, pull the first one out and return it in
@@ -306,41 +274,15 @@ static int parseheader(struct protstream *fin, FILE *fout,
 
 void spool_cache_header(char *name, char *body, hdrcache_t cache)
 {
-    int cl, clinit;
+    strarray_t *contents;
 
     lcase(name);
-    clinit = cl = hashheader(name);
-    while (cache[cl] != NULL && strcmp(name, cache[cl]->name)) {
-	cl++;		/* resolve collisions linearly */
-	cl %= HEADERCACHESIZE;
-	if (cl == clinit) break; /* gone all the way around, so bail */
-    }
 
-    /* found where to put it, so insert it into a list */
-    if (cache[cl]) {
-	/* add this body on */
-	cache[cl]->contents[cache[cl]->ncontents++] = body;
-
-	/* whoops, won't have room for the null at the end! */
-	if (!(cache[cl]->ncontents % 8)) {
-	    /* increase the size */
-	    cache[cl] = (header_t *)
-		xrealloc(cache[cl],sizeof(header_t) +
-			 ((8 + cache[cl]->ncontents) * sizeof(char *)));
-	}
-
-	/* have no need of this */
-	free(name);
-    } else {
-	/* create a new entry in the hash table */
-	cache[cl] = (header_t *) xmalloc(sizeof(header_t) + 8 * sizeof(char*));
-	cache[cl]->name = name;
-	cache[cl]->contents[0] = body;
-	cache[cl]->ncontents = 1;
-    }
-
-    /* we always want a NULL at the end */
-    cache[cl]->contents[cache[cl]->ncontents] = NULL;
+    contents = (strarray_t *)hash_lookup(name, cache);
+    if (!contents)
+	contents = hash_insert(name, strarray_new(), cache);
+    strarray_appendm(contents, body);
+    free(name);
 }
 
 int spool_fill_hdrcache(struct protstream *fin, FILE *fout, hdrcache_t cache,
@@ -371,8 +313,7 @@ int spool_fill_hdrcache(struct protstream *fin, FILE *fout, hdrcache_t cache,
 const char **spool_getheader(hdrcache_t cache, const char *phead)
 {
     char *head;
-    const char **ret = NULL;
-    int clinit, cl;
+    strarray_t *contents;
 
     assert(cache && phead);
 
@@ -380,37 +321,18 @@ const char **spool_getheader(hdrcache_t cache, const char *phead)
     lcase(head);
 
     /* check the cache */
-    clinit = cl = hashheader(head);
-    while (cache[cl] != NULL) {
-	if (!strcmp(head, cache[cl]->name)) {
-	    ret = (const char **) cache[cl]->contents;
-	    break;
-	}
-	cl++; /* try next hash bin */
-	cl %= HEADERCACHESIZE;
-	if (cl == clinit) break; /* gone all the way around */
-    }
+    contents = (strarray_t *)hash_lookup(head, cache);
 
     free(head);
 
-    return ret;
+    return contents ? (const char **)contents->data : NULL;
 }
 
 void spool_free_hdrcache(hdrcache_t cache)
 {
-    int i, j;
-
     if (!cache) return;
 
-    for (i = 0; i < HEADERCACHESIZE; i++) {
-	if (cache[i]) {
-	    free(cache[i]->name);
-	    for (j = 0; j < cache[i]->ncontents; j++) {
-		free(cache[i]->contents[j]);
-	    }
-	    free(cache[i]);
-	}
-    }
+    free_hash_table(cache, (void (*)(void *))strarray_free);
     free(cache);
 }
 
