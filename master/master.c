@@ -118,6 +118,7 @@
 #include "cyr_lock.h"
 #include "util.h"
 #include "xmalloc.h"
+#include "strarray.h"
 
 enum {
     become_cyrus_early = 1,
@@ -192,7 +193,12 @@ void fatal(const char *msg, int code)
 
 void event_free(struct event *a) 
 {
-    if(a->exec) free((char**)a->exec);
+    if(a->exec) {
+	char **p;
+	for (p = (char **)a->exec ; *p ; p++)
+	    free(*p);
+	free((char *)a->exec);
+    }
     if(a->name) free((char*)a->name);
     free(a);
 }
@@ -1364,49 +1370,26 @@ void process_msg(const int si, struct notify_message *msg)
 	       SERVICENAME(s->name), s->ready_workers);
 }
 
-static char **tokenize(char *p)
+static char **tokenize(const char *p)
 {
-    char **tokens = NULL; /* allocated in increments of 10 */
-    int i = 0;
-
-    if (!p || !*p) return NULL; /* sanity check */
-    while (*p) {
-	while (*p && Uisspace(*p)) p++; /* skip whitespace */
-
-	if (!(i % 10)) tokens = xrealloc(tokens, (i+10) * sizeof(char *));
-
-	/* got a token */
-	tokens[i++] = p;
-	while (*p && !Uisspace(*p)) p++;
-
-	/* p is whitespace or end of cmd */
-	if (*p) *p++ = '\0';
-    }
-    /* add a NULL on the end */
-    if (!(i % 10)) tokens = xrealloc(tokens, (i+1) * sizeof(char *));
-    if (!tokens) return NULL;
-    tokens[i] = NULL;
-
-    return tokens;
+    return strarray_takevf(strarray_split(p, NULL));
 }
 
 void add_start(const char *name, struct entry *e,
 	       void *rock __attribute__((unused)))
 {
-    char *cmd = xstrdup(masterconf_getstring(e, "cmd", ""));
+    const char *cmd = masterconf_getstring(e, "cmd", "");
     char buf[256];
-    char **tok;
+    strarray_t *tok;
 
     if (!strcmp(cmd,"")) {
 	snprintf(buf, sizeof(buf), "unable to find command for %s", name);
 	fatal(buf, EX_CONFIG);
     }
 
-    tok = tokenize(cmd);
-    if (!tok) fatal("out of memory", EX_UNAVAILABLE);
-    run_startup(tok);
-    free(tok);
-    free(cmd);
+    tok = strarray_split(cmd, NULL);
+    run_startup(tok->data);
+    strarray_free(tok);
 }
 
 void add_service(const char *name, struct entry *e, void *rock)
