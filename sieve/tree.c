@@ -53,28 +53,6 @@
 #include "tree.h"
 #include "sieve.h"
 
-stringlist_t *new_sl(char *s, stringlist_t *n)
-{
-    stringlist_t *p = (stringlist_t *) xmalloc(sizeof(stringlist_t));
-    p->s = s;
-    p->next = n;
-    return p;
-}
-
-stringlist_t *sl_reverse(stringlist_t *l)
-{
-    stringlist_t *prev = NULL;
-    stringlist_t *next;
-    stringlist_t *cur = l;
-    while (cur) {
-	next = cur->next;
-	cur->next = prev;
-	prev = cur;
-	cur = next;
-    }
-    return prev;
-}
-
 tag_t *new_tag(int type, char *s)
 {
     tag_t *p = (tag_t *) xmalloc(sizeof(tag_t));
@@ -125,21 +103,6 @@ commandlist_t *new_if(test_t *t, commandlist_t *y, commandlist_t *n)
     return p;
 }
 
-void free_sl(stringlist_t *sl) 
-{
-    stringlist_t *sl2;
-    
-    while (sl != NULL) {
-	sl2 = sl->next;
-
-	if (sl->s) free(sl->s);
-
-	free(sl);
-	sl = sl2;
-    }
-}
-
-
 void free_test(test_t *t);
 
 static void free_tl(testlist_t *tl)
@@ -167,7 +130,7 @@ void free_test(test_t *t)
 	break;
 
     case EXISTS:
-	free_sl(t->u.sl);
+	strarray_free(t->u.sl);
 	break;
 
     case SIZE:
@@ -176,19 +139,19 @@ void free_test(test_t *t)
 	break;
 
     case HEADER:
-	free_sl(t->u.h.sl);
-	free_sl(t->u.h.pl);
+	strarray_free(t->u.h.sl);
+	strarray_free(t->u.h.pl);
 	
 	break;
 
     case ADDRESS:
-	free_sl(t->u.ae.sl);
-	free_sl(t->u.ae.pl);
+	strarray_free(t->u.ae.sl);
+	strarray_free(t->u.ae.pl);
 	break;
 
     case BODY:
-	free_sl(t->u.b.content_types);
-	free_sl(t->u.b.pl);
+	strarray_free(t->u.b.content_types);
+	strarray_free(t->u.b.pl);
 	break;
 
     case NOT:
@@ -230,14 +193,14 @@ void free_tree(commandlist_t *cl)
 
 	case VACATION:
 	    if (cl->u.v.subject) free(cl->u.v.subject);
-	    if (cl->u.v.addresses) free_sl(cl->u.v.addresses);
+	    if (cl->u.v.addresses) strarray_free(cl->u.v.addresses);
 	    if (cl->u.v.message) free(cl->u.v.message);
 	    break;
 	    
 	case SETFLAG:
 	case ADDFLAG:
 	case REMOVEFLAG:
-	    free_sl(cl->u.sl);
+	    strarray_free(cl->u.sl);
 	    break;
 
 	case KEEP:
@@ -249,7 +212,7 @@ void free_tree(commandlist_t *cl)
 	case NOTIFY:
 	    if (cl->u.n.method) free(cl->u.n.method);
 	    if (cl->u.n.id) free(cl->u.n.id);
-	    if (cl->u.n.options) free_sl(cl->u.n.options);
+	    if (cl->u.n.options) strarray_free(cl->u.n.options);
 	    if (cl->u.n.message) free(cl->u.n.message);
 	    break;
 

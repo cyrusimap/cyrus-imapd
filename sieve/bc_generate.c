@@ -100,31 +100,34 @@ static int atleast(bytecode_info_t *arr, size_t len)
 /* given a location and a string list, compile it into almost-flat form.
  * <list len> <string len><string ptr><string len><string ptr> etc... */
 static int bc_stringlist_generate(int codep, bytecode_info_t *retval,
-				  stringlist_t *sl) 
+				  strarray_t *sa)
 {
     int len_codep = codep;
     int strcount = 0;
-    stringlist_t *cur;
-    
+    int i;
+
     codep++;
 
     /* Bounds check the string list length */
     if(!atleast(retval,codep+1)) 
 	return -1;
 
-    for(cur=sl; cur; cur=cur->next) 
-    {
-	strcount++;
-	assert((cur->s)!=NULL);
-	
-	/* Bounds check for each string before we allocate it */
-	if(!atleast(retval,codep+2)) 
-	    return -1;
+    if (sa) {
+	for (i = 0 ; i < sa->count ; i++) {
+	    char *s = sa->data[i];
 
-	retval->data[codep++].len = strlen(cur->s);
-	retval->data[codep++].str = cur->s;
+	    strcount++;
+	    assert(s!=NULL);
+
+	    /* Bounds check for each string before we allocate it */
+	    if(!atleast(retval,codep+2)) 
+		return -1;
+
+	    retval->data[codep++].len = strlen(s);
+	    retval->data[codep++].str = s;
+	}
     }
-    
+
     retval->data[len_codep].listlen = strcount;
     return codep;
 }
