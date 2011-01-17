@@ -195,13 +195,15 @@ int sieve_register_keep(sieve_interp_t *interp, sieve_callback *f)
     return SIEVE_OK;
 }
 
-static char *default_markflags[] = { "\\flagged" };
-static sieve_imapflags_t default_mark = { default_markflags, 1 };
-
-int sieve_register_imapflags(sieve_interp_t *interp, sieve_imapflags_t *mark)
+int sieve_register_imapflags(sieve_interp_t *interp, const strarray_t *mark)
 {
+    static strarray_t default_mark = STRARRAY_INITIALIZER;
+
+    if (!default_mark.count)
+	strarray_append(&default_mark, "\\flagged");
+
     interp->markflags =
-	(mark && mark->flag && mark->nflags) ? mark : &default_mark;
+	(mark && mark->data && mark->count) ? mark : &default_mark;
 
     return SIEVE_OK;
 }

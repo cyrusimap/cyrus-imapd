@@ -63,7 +63,7 @@ struct sieve_interp {
     sieve_parse_error *err;
 
     /* site-specific imapflags for mark/unmark */
-    sieve_imapflags_t *markflags;
+    const strarray_t *markflags;
 
     sieve_execute_error *execute_err;
 

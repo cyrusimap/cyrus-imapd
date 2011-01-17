@@ -119,7 +119,7 @@ int script_require(sieve_script_t *s, char *req)
 	    return 0;
 	}
     } else if (!strcmp("imapflags", req)) {
-	if (s->interp.markflags->flag &&
+	if (s->interp.markflags->count &&
 	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_IMAPFLAGS)) {
 	    s->support.imapflags = 1;
 	    return 1;
@@ -206,15 +206,6 @@ int sieve_script_parse(sieve_interp_t *interp, FILE *script,
     return res;
 }
 
-static void free_imapflags(sieve_imapflags_t *imapflags)
-{
-    while (imapflags->nflags)
-	free(imapflags->flag[--imapflags->nflags]);
-    free(imapflags->flag);
-    
-    imapflags->flag = NULL;
-}
-  
 int sieve_script_free(sieve_script_t **s)
 {
     if (*s) {
@@ -353,54 +344,35 @@ static int build_notify_message(sieve_interp_t *i,
     return SIEVE_OK;
 }
 
-static int sieve_addflag(sieve_imapflags_t *imapflags, const char *flag)
+static int sieve_addflag(strarray_t *imapflags, const char *flag)
 {
     int n;
     /* search for flag already in list */
-    for (n = 0; n < imapflags->nflags; n++) {
-	if (!strcmp(imapflags->flag[n], flag))
+    for (n = 0; n < imapflags->count; n++) {
+	if (!strcmp(imapflags->data[n], flag))
 	    break;
     }
- 
+
     /* add flag to list, iff not in list */
-    if (n == imapflags->nflags) {
-	imapflags->nflags++;
-	imapflags->flag =
-	    (char **) xrealloc((char *)imapflags->flag,
-			       imapflags->nflags*sizeof(char *));
-	imapflags->flag[imapflags->nflags-1] = xstrdup(flag);
-    }
- 
+    if (n == imapflags->count)
+	strarray_append(imapflags, flag);
+
     return SIEVE_OK;
 }
 
-static int sieve_removeflag(sieve_imapflags_t *imapflags, const char *flag)
+static int sieve_removeflag(strarray_t *imapflags, const char *flag)
 {
     int n;
     /* search for flag already in list */
-    for (n = 0; n < imapflags->nflags; n++) {
-      if (!strcmp(imapflags->flag[n], flag))
+    for (n = 0; n < imapflags->count; n++) {
+      if (!strcmp(imapflags->data[n], flag))
 	break;
     }
-    
+
      /* remove flag from list, iff in list */
-    if (n < imapflags->nflags) 
-      {
-	free(imapflags->flag[n]);
-	imapflags->nflags--;
-	
-	for (; n < imapflags->nflags; n++)
-	  imapflags->flag[n] = imapflags->flag[n+1];
-	
-	if (imapflags->nflags)
-	  {imapflags->flag =
-	     (char **) xrealloc((char *)imapflags->flag,
-				imapflags->nflags*sizeof(char *));}
-	else
-	  {free(imapflags->flag);
-	  imapflags->flag=NULL;}
-      }
-    
+    if (n < imapflags->count)
+	free(strarray_remove(imapflags, n));
+
     return SIEVE_OK;
 }
 
@@ -594,7 +566,7 @@ static int do_sieve_error(int ret,
 			  sieve_interp_t *interp,
 			  void *script_context,
 			  void *message_context,
-			  sieve_imapflags_t * imapflags,
+			  strarray_t *imapflags,
 			  action_list_t *actions,
 			  notify_list_t *notify_list,
 			  /* notify_action_t *notify_action,*/
@@ -697,7 +669,7 @@ static int do_sieve_error(int ret,
 static int do_action_list(sieve_interp_t *interp,
 			  void *script_context,
 			  void *message_context,
-			  sieve_imapflags_t *imapflags,
+			  strarray_t *imapflags,
 			  action_list_t *actions,
 			  notify_list_t *notify_list,
 			  /* notify_action_t *notify_action,*/
@@ -823,7 +795,7 @@ static int do_action_list(sieve_interp_t *interp,
 
  
 	case ACTION_SETFLAG:
-	    free_imapflags(imapflags);
+	    strarray_fini(imapflags);
 	    ret = sieve_addflag(imapflags, a->u.fla.flag);
 	    break;
 	case ACTION_ADDFLAG:
@@ -834,23 +806,23 @@ static int do_action_list(sieve_interp_t *interp,
 	    break;
 	case ACTION_MARK:
 	    {
-		int n = interp->markflags->nflags;
+		int n = interp->markflags->count;
 
 		ret = SIEVE_OK;
 		while (n && ret == SIEVE_OK) {
 		    ret = sieve_addflag(imapflags,
-					interp->markflags->flag[--n]);
+					interp->markflags->data[--n]);
 		}
 		break;
 	    }
 	case ACTION_UNMARK:
 	  {
 	   
-		int n = interp->markflags->nflags;
+		int n = interp->markflags->count;
 		ret = SIEVE_OK;
 		while (n && ret == SIEVE_OK) {
 		    ret = sieve_removeflag(imapflags,
-					   interp->markflags->flag[--n]);
+					   interp->markflags->data[--n]);
 		}
 		break;
 	    }
@@ -880,7 +852,7 @@ static int do_action_list(sieve_interp_t *interp,
 /* execute some bytecode */
 int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 		  void *sc, void *m,
-		  sieve_imapflags_t * imapflags, action_list_t *actions,
+		  const strarray_t * , action_list_t *actions,
 		  notify_list_t *notify_list, const char **errmsg);
 
 int sieve_execute_bytecode(sieve_execute_t *exe, sieve_interp_t *interp,
@@ -893,13 +865,10 @@ int sieve_execute_bytecode(sieve_execute_t *exe, sieve_interp_t *interp,
     int ret;
     char actions_string[ACTIONS_STRING_LEN] = "";
     const char *errmsg = NULL;
-    sieve_imapflags_t imapflags;
+    strarray_t imapflags = STRARRAY_INITIALIZER;
     
     if (!interp) return SIEVE_FAIL;
 
-    imapflags.flag = NULL; 
-    imapflags.nflags = 0;
-    
     if (interp->notify) {
 	notify_list = new_notify_list();
 	if (notify_list == NULL) {
@@ -935,6 +904,8 @@ int sieve_execute_bytecode(sieve_execute_t *exe, sieve_interp_t *interp,
 				 actions_string, errmsg);
 	}
     }
+
+    strarray_fini(&imapflags);
 
     return ret;
 }
