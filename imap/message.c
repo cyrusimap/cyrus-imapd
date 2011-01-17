@@ -73,6 +73,7 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
+#include "strarray.h"
 #include "global.h"
 #include "retry.h"
 
@@ -84,13 +85,6 @@ struct msg {
     int encode;
 };
 
-/* List of pending multipart boundaries */
-struct boundary {
-    char **id;
-    int count;
-    int alloc;
-};
-
 /* (draft standard) MIME tspecials */
 #define TSPECIALS "()<>@,;:\\\"/[]?="
 
@@ -100,12 +94,12 @@ struct boundary {
 static int message_parse_body P((struct msg *msg,
 				 struct body *body,
 				 char *defaultContentType,
-				 struct boundary *boundaries));
+				 strarray_t *boundaries));
 
 static int message_parse_headers P((struct msg *msg,
 				    struct body *body,
 				    char *defaultContentType,
-				    struct boundary *boundaries));
+				    strarray_t *boundaries));
 static void message_parse_address P((char *hdr, struct address **addrp));
 static void message_parse_encoding P((char *hdr, char **hdrp));
 static void message_parse_charset P((struct body *body, int *encoding, int *charset));
@@ -121,14 +115,14 @@ static void message_parse_received_date P((char *hdr, char **hdrp));
 
 static void message_parse_multipart P((struct msg *msg,
 				       struct body *body,
-				       struct boundary *boundaries));
+				       strarray_t *boundaries));
 static void message_parse_content P((struct msg *msg,
 				     struct body *body,
-				     struct boundary *boundaries));
+				     strarray_t *boundaries));
 
 static char *message_getline P((char *s, unsigned n, struct msg *msg));
 static int message_pendingboundary P((const char *s, int len,
-				      char **boundaries, int *boundaryct));
+				      strarray_t *boundaries));
 
 static void message_write_envelope P((struct ibuf *ibuf, struct body *body));
 static void message_write_body P((struct ibuf *ibuf, struct body *body,
@@ -369,7 +363,7 @@ int message_parse_binary_file(FILE *infile, struct body **body)
 
     if (!*body) *body = (struct body *) xmalloc(sizeof(struct body));
     message_parse_body(&msg, *body,
-		       DEFAULT_CONTENT_TYPE, (struct boundary *)0);
+		       DEFAULT_CONTENT_TYPE, (strarray_t *)0);
 
     message_guid_generate(&(*body)->guid, msg.base, msg.len);
 
@@ -401,7 +395,7 @@ int message_parse_mapped(const char *msg_base, unsigned long msg_len,
     msg.encode = 0;
 
     message_parse_body(&msg, body,
-		       DEFAULT_CONTENT_TYPE, (struct boundary *)0);
+		       DEFAULT_CONTENT_TYPE, (strarray_t *)0);
 
     message_guid_generate(&body->guid, msg_base, msg_len);
 
@@ -531,18 +525,16 @@ message_parse_body(msg, body, defaultContentType, boundaries)
 struct msg *msg;
 struct body *body;
 char *defaultContentType;
-struct boundary *boundaries;
+strarray_t *boundaries;
 {
-    struct boundary newboundaries;
+    strarray_t newboundaries = STRARRAY_INITIALIZER;
     int sawboundary;
 
     memset(body, 0, sizeof(struct body));
-    newboundaries.id = 0;
 
     /* No passed-in boundary structure, create a new, empty one */
     if (!boundaries) {
 	boundaries = &newboundaries;
-	boundaries->alloc = boundaries->count = 0;
 	/* We're at top-level--set up to store cached headers */
 	message_ibuf_init(&body->cacheheaders);
     }
@@ -586,7 +578,7 @@ struct boundary *boundaries;
     }
 
     /* Free up boundary storage if necessary */
-    if (newboundaries.id) free(newboundaries.id);
+    strarray_fini(&newboundaries);
 
     return 0;
 }
@@ -601,7 +593,7 @@ message_parse_headers(msg, body, defaultContentType,
 struct msg *msg;
 struct body *body;
 char *defaultContentType;
-struct boundary *boundaries;
+strarray_t *boundaries;
 {
     static int alloced = 0;
     static char *headers;
@@ -630,7 +622,7 @@ struct boundary *boundaries;
 	len = strlen(next);
 
 	if (next[-1] == '\n' && *next == '-' &&
-	    message_pendingboundary(next, len, boundaries->id, &boundaries->count)) {
+	    message_pendingboundary(next, len, boundaries)) {
 	    body->boundary_size = len;
 	    body->boundary_lines++;
 	    if (next - 1 > headers) {
@@ -1740,7 +1732,7 @@ static void
 message_parse_multipart(msg, body, boundaries)
 struct msg *msg;
 struct body *body;
-struct boundary *boundaries;
+strarray_t *boundaries;
 {
     struct body preamble, epilogue;
     struct param *boundary;
@@ -1766,15 +1758,8 @@ struct boundary *boundaries;
 	return;
     }
 
-    /* Expand boundaries array if necessary */
-    if (boundaries->count == boundaries->alloc) {
-	boundaries->alloc += 20;
-	boundaries->id = (char **)xrealloc((char *)boundaries->id,
-					   boundaries->alloc * sizeof(char *));
-    }
-    
     /* Add the new boundary id */
-    boundaries->id[boundaries->count++] = boundary->value;
+    strarray_append(boundaries, boundary->value);
     depth = boundaries->count;
 
     /* Parse preamble */
@@ -1857,7 +1842,7 @@ static void
 message_parse_content(msg, body, boundaries)
 struct msg *msg;
 struct body *body;
-struct boundary *boundaries;
+strarray_t *boundaries;
 {
     const char *line, *endline;
     unsigned long s_offset = msg->offset;
@@ -1881,7 +1866,7 @@ struct boundary *boundaries;
 	msg->offset += len;
 
 	if (line[0] == '-' && line[1] == '-' &&
-	    message_pendingboundary(line, len, boundaries->id, &boundaries->count)) {
+	    message_pendingboundary(line, len, boundaries)) {
 	    body->boundary_size = len;
 	    body->boundary_lines++;
 	    if (body->content_lines) {
@@ -2004,11 +1989,10 @@ struct msg *msg;
  * If we hit a terminating boundary, the integer pointed to by
  * 'boundaryct' is modified appropriately.
  */
-static int message_pendingboundary(s, slen, boundaries, boundaryct)
+static int message_pendingboundary(s, slen, boundaries)
 const char *s;
 int slen;
-char **boundaries;
-int *boundaryct;
+strarray_t *boundaries;
 {
     int i, len;
     int rfc2046_strict = config_getswitch(IMAPOPT_RFC2046_STRICT);
@@ -2021,15 +2005,15 @@ int *boundaryct;
     bbase = s + 2;
     blen = slen - 2;
 
-    for (i = 0; i < *boundaryct; ++i) {
-	len = strlen(boundaries[i]);
+    for (i = 0; i < boundaries->count ; ++i) {
+	len = strlen(boundaries->data[i]);
 	/* basic sanity check and overflow protection */
 	if (blen < len) continue;
 
-	if (!strncmp(bbase, boundaries[i], len)) {
+	if (!strncmp(bbase, boundaries->data[i], len)) {
 	    /* trailing '--', it's the end of this part */
 	    if (blen >= len+2 && bbase[len] == '-' && bbase[len+1] == '-')
-		*boundaryct = i;
+		strarray_truncate(boundaries, i);
 	    else if (!rfc2046_strict && blen > len+1 &&
 		     bbase[len] && !Uisspace(bbase[len])) {
 		/* Allow substring matches in the boundary.
