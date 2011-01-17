@@ -74,6 +74,7 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
+#include "strarray.h"
 #include "global.h"
 #include "retry.h"
 #include "rfc822_header.h"
@@ -87,13 +88,6 @@ struct msg {
     int encode;
 };
 
-/* List of pending multipart boundaries */
-struct boundary {
-    char **id;
-    int count;
-    int alloc;
-};
-
 /* (draft standard) MIME tspecials */
 #define TSPECIALS "()<>@,;:\\\"/[]?="
 
@@ -103,12 +97,12 @@ struct boundary {
 static int message_parse_body(struct msg *msg,
 				 struct body *body,
 				 const char *defaultContentType,
-				 struct boundary *boundaries);
+				 strarray_t *boundaries);
 
 static int message_parse_headers(struct msg *msg,
 				    struct body *body,
 				    const char *defaultContentType,
-				    struct boundary *boundaries);
+				    strarray_t *boundaries);
 static void message_parse_address(const char *hdr, struct address **addrp);
 static void message_parse_encoding(const char *hdr, char **hdrp);
 static void message_parse_charset(const struct body *body,
@@ -125,13 +119,13 @@ static void message_parse_received_date(const char *hdr, char **hdrp);
 
 static void message_parse_multipart(struct msg *msg,
 				       struct body *body,
-				       struct boundary *boundaries);
+				       strarray_t *boundaries);
 static void message_parse_content(struct msg *msg,
 				     struct body *body,
-				     struct boundary *boundaries);
+				     strarray_t *boundaries);
 
 static char *message_getline(char *s, unsigned n, struct msg *msg);
-static int message_pendingboundary(const char *s, int slen, struct boundary *);
+static int message_pendingboundary(const char *s, int slen, strarray_t *);
 
 static void message_write_envelope(struct ibuf *ibuf, const struct body *body);
 static void message_write_body(struct ibuf *ibuf, const struct body *body,
@@ -366,7 +360,7 @@ int message_parse_binary_file(FILE *infile, struct body **body)
 
     if (!*body) *body = (struct body *) xmalloc(sizeof(struct body));
     message_parse_body(&msg, *body,
-		       DEFAULT_CONTENT_TYPE, (struct boundary *)0);
+		       DEFAULT_CONTENT_TYPE, (strarray_t *)0);
 
     lseek(fd, 0L, SEEK_SET);
     n = retry_write(fd, msg.base, msg.len);
@@ -396,7 +390,7 @@ int message_parse_mapped(const char *msg_base, unsigned long msg_len,
     msg.encode = 0;
 
     message_parse_body(&msg, body,
-		       DEFAULT_CONTENT_TYPE, (struct boundary *)0);
+		       DEFAULT_CONTENT_TYPE, (strarray_t *)0);
 
     message_guid_generate(&body->guid, msg_base, msg_len);
 
@@ -538,18 +532,16 @@ message_header_lookup(const char *buf, const char **valp)
  */
 static int message_parse_body(struct msg *msg, struct body *body,
 			      const char *defaultContentType,
-			      struct boundary *boundaries)
+			      strarray_t *boundaries)
 {
-    struct boundary newboundaries;
+    strarray_t newboundaries = STRARRAY_INITIALIZER;
     int sawboundary;
 
     memset(body, 0, sizeof(struct body));
-    newboundaries.id = 0;
 
     /* No passed-in boundary structure, create a new, empty one */
     if (!boundaries) {
 	boundaries = &newboundaries;
-	boundaries->alloc = boundaries->count = 0;
 	/* We're at top-level--set up to store cached headers */
 	message_ibuf_init(&body->cacheheaders);
     }
@@ -593,7 +585,7 @@ static int message_parse_body(struct msg *msg, struct body *body,
     }
 
     /* Free up boundary storage if necessary */
-    if (newboundaries.id) free(newboundaries.id);
+    strarray_fini(&newboundaries);
 
     return 0;
 }
@@ -604,7 +596,7 @@ static int message_parse_body(struct msg *msg, struct body *body,
 #define HEADGROWSIZE 1000
 static int message_parse_headers(struct msg *msg, struct body *body,
 				 const char *defaultContentType,
-				 struct boundary *boundaries)
+				 strarray_t *boundaries)
 {
     static int alloced = 0;
     static char *headers;
@@ -1453,7 +1445,7 @@ static void message_parse_rfc822space(const char **s)
  * Parse the content of a MIME multipart body-part
  */
 static void message_parse_multipart(struct msg *msg, struct body *body,
-				    struct boundary *boundaries)
+				    strarray_t *boundaries)
 {
     struct body preamble, epilogue;
     struct param *boundary;
@@ -1478,15 +1470,8 @@ static void message_parse_multipart(struct msg *msg, struct body *body,
 	return;
     }
 
-    /* Expand boundaries array if necessary */
-    if (boundaries->count == boundaries->alloc) {
-	boundaries->alloc += 20;
-	boundaries->id = (char **)xrealloc((char *)boundaries->id,
-					   boundaries->alloc * sizeof(char *));
-    }
-    
     /* Add the new boundary id */
-    boundaries->id[boundaries->count++] = boundary->value;
+    strarray_append(boundaries, boundary->value);
     depth = boundaries->count;
 
     /* Parse preamble */
@@ -1560,7 +1545,7 @@ static void message_parse_multipart(struct msg *msg, struct body *body,
  * Parse the content of a generic body-part
  */
 static void message_parse_content(struct msg *msg, struct body *body,
-				  struct boundary *boundaries)
+				  strarray_t *boundaries)
 {
     const char *line, *endline;
     unsigned long s_offset = msg->offset;
@@ -1701,7 +1686,7 @@ static char *message_getline(char *s, unsigned n, struct msg *msg)
  * 'boundaryct' is modified appropriately.
  */
 static int message_pendingboundary(const char *s, int slen,
-				   struct boundary *boundaries)
+				   strarray_t *boundaries)
 {
     int i, len;
     int rfc2046_strict = config_getswitch(IMAPOPT_RFC2046_STRICT);
@@ -1715,14 +1700,14 @@ static int message_pendingboundary(const char *s, int slen,
     blen = slen - 2;
 
     for (i = 0; i < boundaries->count ; ++i) {
-	len = strlen(boundaries->id[i]);
+	len = strlen(boundaries->data[i]);
 	/* basic sanity check and overflow protection */
 	if (blen < len) continue;
 
-	if (!strncmp(bbase, boundaries->id[i], len)) {
+	if (!strncmp(bbase, boundaries->data[i], len)) {
 	    /* trailing '--', it's the end of this part */
 	    if (blen >= len+2 && bbase[len] == '-' && bbase[len+1] == '-')
-		boundaries->count = i;
+		strarray_truncate(boundaries, i);
 	    else if (!rfc2046_strict && blen > len+1 &&
 		     bbase[len] && !Uisspace(bbase[len])) {
 		/* Allow substring matches in the boundary.
