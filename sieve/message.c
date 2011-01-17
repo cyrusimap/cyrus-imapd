@@ -109,7 +109,7 @@ int do_reject(action_list_t *a, const char *msg)
  * incompatible with: reject
  */
 int do_fileinto(action_list_t *a, const char *mbox, int cancel_keep,
-		sieve_imapflags_t *imapflags)
+		strarray_t *imapflags)
 {
     action_list_t *b = NULL;
 
@@ -168,7 +168,7 @@ int do_redirect(action_list_t *a, const char *addr, int cancel_keep)
  *
  * incompatible with: reject
  */
-int do_keep(action_list_t *a, sieve_imapflags_t *imapflags)
+int do_keep(action_list_t *a, strarray_t *imapflags)
 {
     action_list_t *b = NULL;
 

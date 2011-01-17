@@ -72,8 +72,7 @@ typedef struct deliver_data {
 
 /* forward declarations */
 extern int deliver_local(deliver_data_t *mydata,
-			 char **flag,
-			 int nflags,
+			 const strarray_t *flags,
 			 const char *username,
 			 const char *mailboxname);
 
@@ -81,8 +80,7 @@ extern int deliver_mailbox(FILE *f,
 			   struct message_content *content,
 			   struct stagemsg *stage,
 			   unsigned size,
-			   char **flag,
-			   int nflags,
+			   const strarray_t *flags,
 			   char *authuser,
 			   struct auth_state *authstate,
 			   char *id,

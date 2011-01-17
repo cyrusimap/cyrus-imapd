@@ -495,7 +495,7 @@ static int sieve_fileinto(void *ac,
 						   sd->username, namebuf);
     if (!ret) {
 	ret = deliver_mailbox(md->f, mdata->content, mdata->stage, md->size,
-			      fc->imapflags->flag, fc->imapflags->nflags,
+			      fc->imapflags,
 			      (char *) sd->username, sd->authstate, md->id,
 			      sd->username, mdata->notifyheader,
 			      namebuf, md->date, quotaoverride, 0);
@@ -519,7 +519,7 @@ static int sieve_keep(void *ac,
     deliver_data_t *mydata = (deliver_data_t *) mc;
     int ret;
 
-    ret = deliver_local(mydata, kc->imapflags->flag, kc->imapflags->nflags,
+    ret = deliver_local(mydata, kc->imapflags,
 			(char *) sd->username, sd->mailboxname);
 
     if (!ret) {
@@ -707,10 +707,6 @@ sieve_vacation_t vacation = {
     &send_response,		/* send_response() */
 };
 
-/* imapflags support */
-static char *markflags[] = { "\\flagged" };
-static sieve_imapflags_t mark = { markflags, 1 };
-
 static int sieve_parse_error_handler(int lineno, const char *msg, 
 				     void *ic __attribute__((unused)),
 				     void *sc)
@@ -740,6 +736,10 @@ sieve_interp_t *setup_sieve(void)
 {
     sieve_interp_t *interp = NULL;
     int res;
+    static strarray_t mark = STRARRAY_INITIALIZER;
+
+    if (!mark.count)
+	strarray_append(&mark, "\\flagged");
 
     sieve_usehomedir = config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR);
     if (!sieve_usehomedir) {

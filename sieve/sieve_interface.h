@@ -53,6 +53,7 @@
 #define SIEVE_OK (0)
 
 #include "sieve_err.h"
+#include "strarray.h"
 
 /* external sieve types */
 typedef struct sieve_interp sieve_interp_t;
@@ -95,10 +96,8 @@ typedef struct sieve_vacation {
     sieve_callback *send_response;
 } sieve_vacation_t;
 
-typedef struct sieve_imapflags {
-    char **flag;		/* NULL -> defaults to \flagged */
-    int nflags;
-} sieve_imapflags_t;
+
+/* sieve_imapflags: NULL -> defaults to \flagged */
 
 typedef struct sieve_redirect_context {
     const char *addr;
@@ -110,11 +109,11 @@ typedef struct sieve_reject_context {
 
 typedef struct sieve_fileinto_context {
     const char *mailbox;
-    sieve_imapflags_t *imapflags;
+    strarray_t *imapflags;
 } sieve_fileinto_context_t;
 
 typedef struct sieve_keep_context {
-    sieve_imapflags_t *imapflags;
+    strarray_t *imapflags;
 } sieve_keep_context_t;
 
 typedef struct sieve_notify_context {
@@ -151,7 +150,7 @@ int sieve_register_reject(sieve_interp_t *interp, sieve_callback *f);
 int sieve_register_fileinto(sieve_interp_t *interp, sieve_callback *f);
 int sieve_register_keep(sieve_interp_t *interp, sieve_callback *f);
 int sieve_register_vacation(sieve_interp_t *interp, sieve_vacation_t *v);
-int sieve_register_imapflags(sieve_interp_t *interp, sieve_imapflags_t *mark);
+int sieve_register_imapflags(sieve_interp_t *interp, const strarray_t *mark);
 int sieve_register_notify(sieve_interp_t *interp, sieve_callback *f);
 int sieve_register_include(sieve_interp_t *interp, sieve_get_include *f);
 

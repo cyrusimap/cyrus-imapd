@@ -492,8 +492,7 @@ int deliver_mailbox(FILE *f,
 		    struct message_content *content,
 		    struct stagemsg *stage,
 		    unsigned size,
-		    char **flag,
-		    int nflags,
+		    const strarray_t *flags,
 		    char *authuser,
 		    struct auth_state *authstate,
 		    char *id,
@@ -534,13 +533,8 @@ int deliver_mailbox(FILE *f,
     }
 
     if (!r) {
-	/* this is an awful hack but works because we don't
-	 * need to modify the strarray_t from here on */
-	strarray_t flags = STRARRAY_INITIALIZER;
-	flags.count = nflags;
-	flags.data = flag;
 	r = append_fromstage(&as, &content->body, stage, 0,
-			     &flags, !singleinstance);
+			     flags, !singleinstance);
 
 	if (r) {
 	    append_abort(&as);
@@ -686,7 +680,7 @@ void deliver_remote(message_data_t *msgdata,
     }
 }
 
-int deliver_local(deliver_data_t *mydata, char **flag, int nflags,
+int deliver_local(deliver_data_t *mydata, const strarray_t *flags,
 		  const char *username, const char *mailboxname)
 {
     char namebuf[MAX_MAILBOX_BUFFER] = "", *tail;
@@ -700,7 +694,7 @@ int deliver_local(deliver_data_t *mydata, char **flag, int nflags,
 	strlcat(namebuf, mailboxname, sizeof(namebuf));
 
 	return deliver_mailbox(md->f, mydata->content, mydata->stage,
-			       md->size, flag, nflags,
+			       md->size, flags,
 			       mydata->authuser, mydata->authstate, md->id,
 			       NULL, mydata->notifyheader,
 			       namebuf, md->date, quotaoverride, 0);
@@ -720,7 +714,7 @@ int deliver_local(deliver_data_t *mydata, char **flag, int nflags,
 	    strlcat(namebuf, mailboxname, sizeof(namebuf));
 
 	    ret2 = deliver_mailbox(md->f, mydata->content, mydata->stage,
-				   md->size, flag, nflags,
+				   md->size, flags,
 				   mydata->authuser, mydata->authstate, md->id,
 				   username, mydata->notifyheader,
 				   namebuf, md->date, quotaoverride, 0);
@@ -730,7 +724,7 @@ int deliver_local(deliver_data_t *mydata, char **flag, int nflags,
 	    fuzzy_match(namebuf)) {
 	    /* try delivery to a fuzzy matched mailbox */
 	    ret2 = deliver_mailbox(md->f, mydata->content, mydata->stage,
-				   md->size, flag, nflags,
+				   md->size, flags,
 				   mydata->authuser, mydata->authstate, md->id,
 				   username, mydata->notifyheader,
 				   namebuf, md->date, quotaoverride, 0);
@@ -742,7 +736,7 @@ int deliver_local(deliver_data_t *mydata, char **flag, int nflags,
 	    *tail = '\0';
 
 	    ret = deliver_mailbox(md->f, mydata->content, mydata->stage,
-				  md->size, flag, nflags,
+				  md->size, flags,
 				  (char *) username, authstate, md->id,
 				  username, mydata->notifyheader,
 				  namebuf, md->date, quotaoverride, 1);
@@ -831,7 +825,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 #endif
 
 	    if (r) {
-		r = deliver_local(&mydata, NULL, 0, userbuf, mailbox);
+		r = deliver_local(&mydata, NULL, userbuf, mailbox);
 	    }
 	}
 

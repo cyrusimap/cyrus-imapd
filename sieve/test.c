@@ -446,12 +446,12 @@ int fileinto(void *ac, void *ic, void *sc __attribute__((unused)),
 
     printf("filing message '%s' into '%s'\n", m->name, fc->mailbox);
 
-    if (fc->imapflags->flag) {
-	int n;
-	printf("\twith flags");
-	for (n = 0; n < fc->imapflags->nflags; n++)
-	    printf(" '%s'", fc->imapflags->flag[n]);
-	printf("\n");
+    if (fc->imapflags->count) {
+	char *s = strarray_join(fc->imapflags, "' '");
+	if (s) {
+	    printf("\twith flags '%s'\n", s);
+	    free(s);
+	}
     }
 
     return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
@@ -465,12 +465,12 @@ int keep(void *ac, void *ic, void *sc __attribute__((unused)),
     int *force_fail = (int*) ic;
 
     printf("keeping message '%s'\n", m->name);
-    if (kc->imapflags->flag) {
-	int n;
-	printf("\twith flags");
-	for (n = 0; n < kc->imapflags->nflags; n++)
-	    printf(" '%s'", kc->imapflags->flag[n]);
-	printf("\n");
+    if (kc->imapflags->count) {
+	char *s = strarray_join(kc->imapflags, "' '");
+	if (s) {
+	    printf("\twith flags '%s'\n", s);
+	    free(s);
+	}
     }
 
     return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
@@ -562,8 +562,6 @@ sieve_vacation_t vacation = {
     &send_response		/* send_response() */
 };
 
-char *markflags[] = { "\\flagged" };
-sieve_imapflags_t mark = { markflags, 1 };
 
 struct testcase {
     int comp; 
@@ -792,6 +790,7 @@ int main(int argc, char *argv[])
     */
     int fd, res;
     struct stat sbuf;
+    static strarray_t mark = STRARRAY_INITIALIZER;
 
     while ((c = getopt(argc, argv, "v:cf")) != EOF)
 	switch (c) {
@@ -894,6 +893,7 @@ int main(int argc, char *argv[])
 	exit(1);
     }
 
+    strarray_append(&mark, "\\flagged");
     res = sieve_register_imapflags(i, &mark);
 
     if (res != SIEVE_OK) {
