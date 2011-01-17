@@ -2864,8 +2864,7 @@ struct message_data {
     char *control;		/* control message */
     unsigned long size;		/* size of message in bytes */
 
-    char **rcpt;		/* mailboxes to post message */
-    int rcpt_num;		/* number of groups */
+    strarray_t rcpt;		/* mailboxes to post message */
 
     hdrcache_t hdrcache;
 };
@@ -2881,8 +2880,7 @@ int msg_new(message_data_t **m)
     ret->path = NULL;
     ret->control = NULL;
     ret->size = 0;
-    ret->rcpt = NULL;
-    ret->rcpt_num = 0;
+    strarray_init(&ret->rcpt);
 
     ret->hdrcache = spool_new_hdrcache();
 
@@ -2910,56 +2908,36 @@ void msg_free(message_data_t *m)
 	free(m->control);
     }
 
-    if (m->rcpt) {
-	for (i = 0; i < m->rcpt_num; i++) {
-	    free(m->rcpt[i]);
-	}
-	free(m->rcpt);
-    }
+    strarray_fini(&m->rcpt);
 
     spool_free_hdrcache(m->hdrcache);
 
     free(m);
 }
 
-static int parse_groups(const char *groups, message_data_t *msg)
+static void parse_groups(const char *groups, message_data_t *msg)
 {
     const char *p;
     char *rcpt = NULL;
-    size_t n;
+    char *buf = xstrdup(groups);
+    const char sep[] = ", \t";
 
-    for (p = groups;; p += n) {
-	/* skip whitespace */
-	while (p && *p && (Uisspace(*p) || *p == ',')) p++;
-
-	if (!p || !*p) return 0;
-
-	if (!(msg->rcpt_num % RCPT_GROW)) { /* time to alloc more */
-	    msg->rcpt = (char **)
-		xrealloc(msg->rcpt, (msg->rcpt_num + RCPT_GROW + 1) * 
-			 sizeof(char *));
-	}
-
-	/* find end of group name */
-	n = strcspn(p, ", \t");
-	rcpt = xrealloc(rcpt, strlen(newsprefix) + n + 1);
-	if (!rcpt) return -1;
-
+    for (p = strtok(buf, sep) ; p ; p = strtok(NULL, sep)) {
 	/* construct the mailbox name */
-	sprintf(rcpt, "%s%.*s", newsprefix, (int) n, p);
+	free(rcpt);
+	rcpt = strconcat(newsprefix, p, (char *)NULL);
 
 	/* skip mailboxes that we don't serve as newsgroups */
 	if (!is_newsgroup(rcpt)) continue;
 
 	/* Only add mailboxes that exist */
 	if (!mlookup(rcpt, NULL)) {
-	    msg->rcpt[msg->rcpt_num] = rcpt;
-	    msg->rcpt_num++;
-	    msg->rcpt[msg->rcpt_num] = rcpt = NULL;
+	    strarray_appendm(&msg->rcpt, rcpt);
+	    rcpt = NULL;
 	}
     }
-
-    /* never reached */
+    free(rcpt);
+    free(buf);
 }
 
 /*
@@ -3046,23 +3024,24 @@ static int savemsg(message_data_t *m, FILE *f)
     /* get control */
     if ((body = spool_getheader(m->hdrcache, "control")) != NULL) {
 	size_t len;
+	char *s;
 
 	m->control = xstrdup(body[0]);
 
 	/* create a recipient for the appropriate pseudo newsgroup */
-	m->rcpt_num = 1;
-	m->rcpt = (char **) xmalloc(sizeof(char *));
 	len = strcspn(m->control, " \t\r\n");
-	m->rcpt[0] = xmalloc(strlen(newsprefix) + 8 + len + 1);
-	sprintf(m->rcpt[0], "%scontrol.%.*s", newsprefix, (int) len, m->control);
+	s = xmalloc(strlen(newsprefix) + 8 + len + 1);
+	sprintf(s, "%scontrol.%.*s", newsprefix, (int) len, m->control);
+
+	strarray_appendm(&m->rcpt, s);
     } else {
 	m->control = NULL;	/* no control */
 
 	/* get newsgroups */
 	if ((groups = spool_getheader(m->hdrcache, "newsgroups")) != NULL) {
 	    /* parse newsgroups and create recipients */
-	    r = parse_groups(groups[0], m);
-	    if (!r && !m->rcpt_num) {
+	    parse_groups(groups[0], m);
+	    if (!m->rcpt.count) {
 		r = IMAP_MAILBOX_NONEXISTENT; /* no newsgroups that we serve */
 	    }
 	    if (!r) {
@@ -3166,8 +3145,8 @@ static int savemsg(message_data_t *m, FILE *f)
     }
 
     /* spool to the stage of one of the recipients */
-    for (i = 0; !stagef && (i < m->rcpt_num); i++) {
-	stagef = append_newstage(m->rcpt[i], now, 0, &stage);
+    for (i = 0; !stagef && (i < m->rcpt.count); i++) {
+	stagef = append_newstage(m->rcpt.data[i], now, 0, &stage);
     }
 
     if (stagef) {
@@ -3274,9 +3253,9 @@ static int deliver(message_data_t *msg)
     struct dest *dlist = NULL;
 
     /* check ACLs of all mailboxes */
-    for (n = 0; n < msg->rcpt_num; n++) {
+    for (n = 0; n < msg->rcpt.count; n++) {
 	struct mboxlist_entry *mbentry = NULL;
-	rcpt = msg->rcpt[n];
+	rcpt = msg->rcpt.data[n];
 
 	/* look it up */
 	r = mlookup(rcpt, &mbentry);
@@ -3605,11 +3584,11 @@ static void feedpeer(char *peer, message_data_t *msg)
 	wmat = split_wildmats(wild);
 
 	feed = 0;
-	for (n = 0; n < msg->rcpt_num; n++) {
+	for (n = 0; n < msg->rcpt.count; n++) {
 	    /* see if the newsgroup matches one of our wildmats */
 	    w = wmat;
 	    while (w->pat &&
-		   wildmat(msg->rcpt[n], w->pat) != 1) {
+		   wildmat(msg->rcpt.data[n], w->pat) != 1) {
 		w++;
 	    }
 
@@ -3803,9 +3782,9 @@ static void news2mail(message_data_t *msg)
 	smbuf[4] = "--";
     }
 
-    for (i = 5, n = 0; n < msg->rcpt_num; n++) {
+    for (i = 5, n = 0; n < msg->rcpt.count ; n++) {
 	/* see if we want to send this to a mailing list */
-	r = annotatemore_lookup(msg->rcpt[n],
+	r = annotatemore_lookup(msg->rcpt.data[n],
 				"/vendor/cmu/cyrus-imapd/news2mail", "",
 				&attrib);
 	if (r) continue;
