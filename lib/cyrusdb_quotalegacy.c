@@ -86,6 +86,7 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
+#include "strarray.h"
 
 #define FNAME_QUOTADIR "/quota/"
 #define MAX_QUOTA_PATH 4096
@@ -495,15 +496,8 @@ static int compar_qr(const void *v1, const void *v2)
     return strcmp(qr1, qr2);
 }
 
-#define PATH_ALLOC 100
-struct qr_path {
-    char **path;
-    size_t count;
-    size_t alloc;
-};
-
 static void scan_qr_dir(char *quota_path, const char *prefix,
-			struct qr_path *pathbuf)
+			strarray_t *pathbuf)
 {
     int config_fulldirhash = libcyrus_config_getswitch(CYRUSOPT_FULLDIRHASH);
     int config_virtdomains = libcyrus_config_getswitch(CYRUSOPT_VIRTDOMAINS);
@@ -527,16 +521,9 @@ static void scan_qr_dir(char *quota_path, const char *prefix,
 		if (!strcmp(next->d_name, ".")
 		    || !strcmp(next->d_name, "..")) continue;
 
-		if (!strncmp(next->d_name, prefix, strlen(prefix))) {
-		    if (pathbuf->count == pathbuf->alloc) {
-			pathbuf->alloc += PATH_ALLOC;
-			pathbuf->path = xrealloc(pathbuf->path,
-						 pathbuf->alloc * sizeof(char *));
-		    }
-		    pathbuf->path[pathbuf->count] = xmalloc(MAX_QUOTA_PATH+1);
-		    sprintf(pathbuf->path[pathbuf->count++],
-			    "%s%s", quota_path, next->d_name);
-		}
+		if (!strncmp(next->d_name, prefix, strlen(prefix)))
+		    strarray_appendm(pathbuf,
+				     strconcat(quota_path, next->d_name, (char *)NULL));
 	    }
 
 	    closedir(qrdir);
@@ -550,16 +537,8 @@ static void scan_qr_dir(char *quota_path, const char *prefix,
 
 	strcpy(endp, "root");
 
-	if (!stat(quota_path, &buf)) {
-	    if (pathbuf->count == pathbuf->alloc) {
-		pathbuf->alloc += PATH_ALLOC;
-		pathbuf->path = xrealloc(pathbuf->path,
-					 pathbuf->alloc * sizeof(char *));
-	    }
-	    pathbuf->path[pathbuf->count] = xmalloc(MAX_QUOTA_PATH+1);
-	    sprintf(pathbuf->path[pathbuf->count++],
-		    "%s", quota_path);
-	}
+	if (!stat(quota_path, &buf))
+	    strarray_append(pathbuf, quota_path);
     }
 }
 
@@ -573,8 +552,8 @@ static int foreach(struct db *db,
     int config_fulldirhash = libcyrus_config_getswitch(CYRUSOPT_FULLDIRHASH);
     int config_virtdomains = libcyrus_config_getswitch(CYRUSOPT_VIRTDOMAINS);
     char quota_path[MAX_QUOTA_PATH+1];
-    struct qr_path pathbuf;
-    size_t i;
+    strarray_t pathbuf = STRARRAY_INITIALIZER;
+    int i;
     char *tmpprefix = NULL, *p = NULL;
 
     /* if we need to truncate the prefix, do so */
@@ -590,7 +569,6 @@ static int foreach(struct db *db,
 	prefix = p + 1;
 
     /* search for the quotaroots */
-    memset(&pathbuf, 0, sizeof(struct qr_path));
     scan_qr_dir(quota_path, prefix, &pathbuf);
 
     if (config_virtdomains && !prefixlen) {
@@ -632,19 +610,17 @@ static int foreach(struct db *db,
     if (tid && !*tid) *tid = &db->txn;
 
     /* sort the quotaroots (ignoring paths) */
-    qsort(pathbuf.path, pathbuf.count, sizeof(char *), &compar_qr);
+    qsort(pathbuf.data, pathbuf.count, sizeof(char *), compar_qr);
 
     for (i = 0; i < pathbuf.count; i++) {
 	const char *data, *key;
 	int keylen, datalen;
 
-	r = myfetch(db, pathbuf.path[i], &data, &datalen, tid);
+	r = myfetch(db, pathbuf.data[i], &data, &datalen, tid);
 	if (r) break;
 
-	key = path_to_qr(pathbuf.path[i], quota_path);
+	key = path_to_qr(pathbuf.data[i], quota_path);
 	keylen = strlen(key);
-
-	free(pathbuf.path[i]);
 
 	if (!goodp || goodp(rock, key, keylen, data, datalen)) {
 	    /* make callback */
@@ -653,7 +629,7 @@ static int foreach(struct db *db,
 	}
     }
 
-    free(pathbuf.path);
+    strarray_fini(&pathbuf);
 
     return r;
 }
