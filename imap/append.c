@@ -73,20 +73,12 @@
 #include "util.h"
 
 #include "message_guid.h"
+#include "strarray.h"
 
 struct stagemsg {
     char fname[1024];
 
-    /* the parts buffer consists of
-       /part1/stage./file \0
-       /part2/stage./file \0
-       ... \0
-       \0
-       
-       the main invariant is double \0 at the end
-    */
-    char *parts; /* buffer of current stage parts */
-    char *partend; /* end of buffer */
+    strarray_t parts; /* buffer of current stage parts */
     struct message_guid guid;
 };
 
@@ -301,8 +293,7 @@ FILE *append_newstage(const char *mailboxname, time_t internaldate,
     *stagep = NULL;
 
     stage = xmalloc(sizeof(struct stagemsg));
-    stage->parts = xzmalloc(5 * (MAX_MAILBOX_PATH+1) * sizeof(char));
-    stage->partend = stage->parts + 5 * (MAX_MAILBOX_PATH+1) * sizeof(char);
+    strarray_init(&stage->parts);
 
     snprintf(stage->fname, sizeof(stage->fname), "%d-%d-%d",
 	     (int) getpid(), (int) internaldate, msgnum);
@@ -333,13 +324,12 @@ FILE *append_newstage(const char *mailboxname, time_t internaldate,
     if (!f) {
 	syslog(LOG_ERR, "IOERROR: creating message file %s: %m", 
 	       stagefile);
+	strarray_fini(&stage->parts);
 	free(stage);
 	return NULL;
     }
 
-    strlcpy(stage->parts, stagefile, MAX_MAILBOX_PATH+1);
-    /* make sure there's a NUL NUL at the end */
-    stage->parts[strlen(stagefile) + 1] = '\0';
+    strarray_append(&stage->parts, stagefile);
 
     *stagep = stage;
     return f;
@@ -363,9 +353,8 @@ int append_fromstage(struct appendstate *as, struct body **body,
     /* for staging */
     char stagefile[MAX_MAILBOX_PATH+1];
     int sflen;
-    char *p;
 
-    assert(stage != NULL && stage->parts[0] != '\0');
+    assert(stage != NULL && stage->parts.count);
 
     zero_index(record);
 
@@ -374,28 +363,18 @@ int append_fromstage(struct appendstate *as, struct body **body,
     strlcat(stagefile, stage->fname, sizeof(stagefile));
     sflen = strlen(stagefile);
 
-    p = stage->parts;
-    while (p < stage->partend) {
-	int sl = strlen(p);
-
-	if (sl == 0) {
-	    /* our partition isn't here */
-	    break;
-	}
-	if (!strcmp(stagefile, p)) {
+    for (i = 0 ; i < stage->parts.count ; i++) {
+	if (!strcmp(stagefile, stage->parts.data[i])) {
 	    /* aha, this is us */
 	    break;
 	}
-	
-	p += sl + 1;
     }
 
-    if (*p == '\0') {
-	/* ok, create this file, and copy the name of it into 'p'.
-	   make sure not to overwrite stage->partend */
+    if (i == stage->parts.count) {
+	/* ok, create this file, and copy the name of it into stage->parts. */
 
 	/* create the new staging file from the first stage part */
-	r = mailbox_copyfile(stage->parts, stagefile, 0);
+	r = mailbox_copyfile(stage->parts.data[0], stagefile, 0);
 	if (r) {
 	    /* maybe the directory doesn't exist? */
 	    char stagedir[MAX_MAILBOX_PATH+1];
@@ -408,7 +387,7 @@ int append_fromstage(struct appendstate *as, struct body **body,
 	    } else {
 		syslog(LOG_NOTICE, "created stage directory %s",
 		       stagedir);
-		r = mailbox_copyfile(stage->parts, stagefile, 0);
+		r = mailbox_copyfile(stage->parts.data[0], stagefile, 0);
 	    }
 	}
 	if (r) {
@@ -419,22 +398,11 @@ int append_fromstage(struct appendstate *as, struct body **body,
 	    unlink(stagefile);
 	    return r;
 	}
-	
-	if (p + sflen > stage->partend - 5) {
-	    int cursize = stage->partend - stage->parts;
-	    int curp = p - stage->parts;
 
-	    /* need more room; double the buffer */
-	    stage->parts = xrealloc(stage->parts, 2 * cursize);
-	    stage->partend = stage->parts + 2 * cursize;
-	    p = stage->parts + curp;
-	}
-	strcpy(p, stagefile);
-	/* make sure there's a NUL NUL at the end */
-	p[sflen + 1] = '\0';
+	strarray_append(&stage->parts, stagefile);
     }
 
-    /* 'p' contains the message and is on the same partition
+    /* 'stagefile' contains the message and is on the same partition
        as the mailbox we're looking at */
 
     /* Setup */
@@ -445,7 +413,7 @@ int append_fromstage(struct appendstate *as, struct body **body,
     as->nummsg++;
     fname = mailbox_message_fname(mailbox, record.uid);
 
-    r = mailbox_copyfile(p, fname, nolink);
+    r = mailbox_copyfile(stagefile, fname, nolink);
     destfile = fopen(fname, "r");
     if (!r && destfile) {
 	/* ok, we've successfully created the file */
@@ -513,16 +481,14 @@ int append_removestage(struct stagemsg *stage)
 
     if (stage == NULL) return 0;
 
-    p = stage->parts;
-    while (*p != '\0' && p < stage->partend) {
+    while ((p = strarray_pop(&stage->parts))) {
 	/* unlink the staging file */
 	if (unlink(p) != 0) {
 	    syslog(LOG_ERR, "IOERROR: error unlinking file %s: %m", p);
 	}
-	p += strlen(p) + 1;
     }
-    
-    free(stage->parts);
+
+    strarray_fini(&stage->parts);
     free(stage);
     return 0;
 }
