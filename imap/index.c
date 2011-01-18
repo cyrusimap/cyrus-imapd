@@ -3890,7 +3890,7 @@ void index_get_ids(MsgData *msgdata, char *envtokens[], const char *headers,
 	/* find references */
 	refstr = buf;
 	while ((ref = find_msgid(refstr, &refstr)) != NULL)
-	    strarray_append(&msgdata->ref, ref);
+	    strarray_appendm(&msgdata->ref, ref);
     }
 
     /* if we have no references, try in-reply-to */
