@@ -4081,8 +4081,7 @@ static void index_thread_orderedsubj(struct index_state *state,
      * we will be building threads under a dummy head,
      * so we need (nmsg + 1) nodes
      */
-    head = (Thread *) xmalloc((nmsg + 1) * sizeof(Thread));
-    memset(head, 0, (nmsg + 1) * sizeof(Thread));
+    head = (Thread *) xzmalloc((nmsg + 1) * sizeof(Thread));
 
     newnode = head + 1;	/* set next newnode to the second
 			   one in the array (skip the head) */
