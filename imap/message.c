@@ -1749,7 +1749,7 @@ int message_write_cache(struct index_record *record, const struct body *body)
      * toplevel.subpart as const in message_write_section(). */
     toplevel.subpart = (struct body *)body;
 
-    subject = charset_decode_mimeheader(body->subject, NULL, 0);
+    subject = charset_decode_mimeheader(body->subject);
 
     /* copy into ibufs */
     message_write_envelope(&ib[CACHE_ENVELOPE], body);
@@ -2254,7 +2254,7 @@ static void message_write_searchaddr(struct ibuf *ibuf,
 	    if (addrlist->mailbox) {
 		if (prevaddr) PUTIBUF(ibuf, ',');
 		
-		tmp = charset_decode_mimeheader(addrlist->mailbox, NULL, 0);
+		tmp = charset_decode_mimeheader(addrlist->mailbox);
 		message_write_text(ibuf, tmp);
 		free(tmp);
 		tmp = NULL;
@@ -2272,7 +2272,7 @@ static void message_write_searchaddr(struct ibuf *ibuf,
 	    if (prevaddr) PUTIBUF(ibuf, ',');
 
 	    if (addrlist->name) {
-		tmp = charset_decode_mimeheader(addrlist->name, NULL, 0);
+		tmp = charset_decode_mimeheader(addrlist->name);
 		message_write_text(ibuf, tmp);
 		free(tmp); tmp = NULL;
 		PUTIBUF(ibuf, ' ');

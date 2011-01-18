@@ -8088,7 +8088,7 @@ int getsearchcriteria(char *tag, struct searchargs *searchargs,
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(imapd_in, imapd_out, &arg);
 	    if (c == EOF) goto missingarg;
-	    str = charset_convert(arg.s, *charset, NULL, 0);
+	    str = charset_convert(arg.s, *charset);
 	    if (str) appendstrlistpat(&searchargs->bcc, str);
 	    else searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	}
@@ -8096,7 +8096,7 @@ int getsearchcriteria(char *tag, struct searchargs *searchargs,
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(imapd_in, imapd_out, &arg);
 	    if (c == EOF) goto missingarg;
-	    str = charset_convert(arg.s, *charset, NULL, 0);
+	    str = charset_convert(arg.s, *charset);
 	    if (str) appendstrlistpat(&searchargs->body, str);
 	    else searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	}
@@ -8108,7 +8108,7 @@ int getsearchcriteria(char *tag, struct searchargs *searchargs,
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(imapd_in, imapd_out, &arg);
 	    if (c == EOF) goto missingarg;
-	    str = charset_convert(arg.s, *charset, NULL, 0);
+	    str = charset_convert(arg.s, *charset);
 	    if (str) appendstrlistpat(&searchargs->cc, str);
 	    else searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	}
@@ -8140,7 +8140,7 @@ int getsearchcriteria(char *tag, struct searchargs *searchargs,
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(imapd_in, imapd_out, &arg);
 	    if (c == EOF) goto missingarg;
-	    str = charset_convert(arg.s, *charset, NULL, 0);
+	    str = charset_convert(arg.s, *charset);
 	    if (str) appendstrlistpat(&searchargs->from, str);
 	    else searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	}
@@ -8192,7 +8192,7 @@ int getsearchcriteria(char *tag, struct searchargs *searchargs,
 
 	    c = getastring(imapd_in, imapd_out, &arg);
 	    if (c == EOF) goto missingarg;
-	    str = charset_convert(arg.s, *charset, NULL, 0);
+	    str = charset_convert(arg.s, *charset);
 	    if (str) appendstrlistpat(patlist, str);
 	    else searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	}
@@ -8383,7 +8383,7 @@ int getsearchcriteria(char *tag, struct searchargs *searchargs,
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(imapd_in, imapd_out, &arg);
 	    if (c == EOF) goto missingarg;
-	    str = charset_convert(arg.s, *charset, NULL, 0);
+	    str = charset_convert(arg.s, *charset);
 	    if (str) appendstrlistpat(&searchargs->subject, str);
 	    else searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	}
@@ -8395,7 +8395,7 @@ int getsearchcriteria(char *tag, struct searchargs *searchargs,
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(imapd_in, imapd_out, &arg);
 	    if (c == EOF) goto missingarg;
-	    str = charset_convert(arg.s, *charset, NULL, 0);
+	    str = charset_convert(arg.s, *charset);
 	    if (str) appendstrlistpat(&searchargs->to, str);
 	    else searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	}
@@ -8403,7 +8403,7 @@ int getsearchcriteria(char *tag, struct searchargs *searchargs,
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(imapd_in, imapd_out, &arg);
 	    if (c == EOF) goto missingarg;
-	    str = charset_convert(arg.s, *charset, NULL, 0);
+	    str = charset_convert(arg.s, *charset);
 	    if (str) appendstrlistpat(&searchargs->text, str);
 	    else searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	}

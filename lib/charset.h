@@ -55,10 +55,8 @@ typedef int comp_pat;
 typedef int charset_index;
 
 /* ensure up to MAXTRANSLATION times expansion into buf */
-extern char *charset_convert(const char *s, charset_index charset, char *buf,
-    size_t bufsz);
-extern char *charset_decode_mimeheader(const char *s, char *buf, 
-    size_t bufsz);
+extern char *charset_convert(const char *s, charset_index charset);
+extern char *charset_decode_mimeheader(const char *s);
 extern char *charset_parse_mimeheader(const char *s);
 
 extern charset_index charset_lookupname(const char *name);
@@ -69,9 +67,9 @@ extern int charset_searchstring(const char *substr, comp_pat *pat,
 extern int charset_searchfile(const char *substr, comp_pat *pat,
                               const char *msg_base, size_t len, 
                               charset_index charset, int encoding);
-extern char *charset_decode_mimebody(const char *msg_base, size_t len,
-				     int encoding, char **retval, size_t alloced,
-				     size_t *outlen);
+extern const char *charset_decode_mimebody(const char *msg_base, size_t len,
+					   int encoding, char **retval,
+					   size_t *outlen);
 extern char *charset_encode_mimebody(const char *msg_base, size_t len,
 				     char *retval, size_t *outlen, 
 				     int *outlines);

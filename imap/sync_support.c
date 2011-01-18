@@ -133,17 +133,12 @@ int sync_parse_options(const char *options)
 }
 
 /* Get a simple line (typically error text) */
-#define BUFGROWSIZE 100
 int sync_getline(struct protstream *in, struct buf *buf)
 {
-    unsigned len = 0;
     int c;
 
-    if (buf->alloc == 0) {
-	buf->alloc = BUFGROWSIZE;
-	buf->s = xmalloc(buf->alloc+1);
-    }
-	
+    buf_reset(buf);
+
     for (;;) {
 	c = prot_getc(in);
 
@@ -153,20 +148,14 @@ int sync_getline(struct protstream *in, struct buf *buf)
 		prot_ungetc(c, in);
 		c = '\r';
 	    }
-	    buf->s[len] = '\0';
-	    buf->len = len;
+	    buf_cstring(buf);
 	    return c;
 	}
-	if (len == buf->alloc) {
-	    buf->alloc += BUFGROWSIZE;
-	    buf->s = xrealloc(buf->s, buf->alloc+1);
-	    if (len > config_maxword) {
-		fatal("word too long", EC_IOERR);
-	    }
-	}
-	buf->s[len++] = c;
+	if (buf->len > config_maxword)
+	    fatal("word too long", EC_IOERR);
+	buf_putc(buf, c);
     }
-    return(c);
+    return c;
 }
 
 /*

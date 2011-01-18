@@ -573,20 +573,11 @@ void table_switch(struct convert_rock *rock, int charset_num)
 /* Extract a cstring from a buffer.  NOTE: caller must free the memory
  * themselves once this is called.  Resets the state.  If you don't
  * call this function then buffer_free will clean up */
-unsigned char *buffer_cstring(struct convert_rock *rock)
+static char *buffer_cstring(struct convert_rock *rock)
 {
     struct buf *buf = (struct buf *)rock->state;
-    unsigned char *res;
 
-    /* copy the pointer out */
-    res = (unsigned char *)buf_cstring(buf);
-
-    /* clean up the buffer so it frees correctly later */
-    buf->s = 0;
-    buf->len = 0;
-    buf->alloc = 0;
-
-    return res;
+    return buf_release(buf);
 }
 
 static inline int search_havematch(struct convert_rock *rock)
@@ -614,7 +605,8 @@ void search_free(struct convert_rock *rock)
     basic_free(rock);
 }
 
-void buffer_free(struct convert_rock *rock) {
+static void buffer_free(struct convert_rock *rock)
+{
     if (rock && rock->state) {
 	struct buf *buf = (struct buf *)rock->state;
 	buf_free(buf);
@@ -717,14 +709,10 @@ struct convert_rock *search_init(const char *substr, comp_pat *pat) {
     return rock;
 }
 
-struct convert_rock *buffer_init(unsigned char *str, int len)
+static struct convert_rock *buffer_init(void)
 {
     struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
     struct buf *buf = xzmalloc(sizeof(struct buf));
-
-    /* fiddling under the hood */
-    buf->s = (char *)str;
-    buf->alloc = len;
 
     rock->f = byte2buffer;
     rock->cleanup = buffer_free;
@@ -753,10 +741,10 @@ int charset_lookupname(const char *name)
 
 /*
  * Convert the string 's' in the character set numbered 'charset'
- * into canonical searching form.  Decodes into 'retval', which 
- * must be reallocable and currently at least size 'alloced'.
+ * into canonical searching form.  Returns a newly allocated string
+ * which must be free()d by the caller.
  */
-char *charset_convert(const char *s, int charset, char *buf, size_t bufsz)
+char *charset_convert(const char *s, int charset)
 {
     struct convert_rock *input, *tobuffer;
     char *res;
@@ -767,7 +755,7 @@ char *charset_convert(const char *s, int charset, char *buf, size_t bufsz)
 	return xstrdup("X");
 
     /* set up the conversion path */
-    tobuffer = buffer_init((unsigned char *)buf, bufsz);
+    tobuffer = buffer_init();
     input = uni_init(tobuffer);
     input = canon_init(1, input);
     input = table_init(charset, input);
@@ -776,7 +764,7 @@ char *charset_convert(const char *s, int charset, char *buf, size_t bufsz)
     convert_cat(input, s);
 
     /* extract the result */
-    res = (char *)buffer_cstring(tobuffer);
+    res = buffer_cstring(tobuffer);
 
     /* clean up */
     convert_free(input);
@@ -799,7 +787,7 @@ char *charset_to_utf8(const char *msg_base, size_t len, int charset, int encodin
 	return xstrdup("");
 
     /* set up the conversion path */
-    tobuffer = buffer_init(0, 0);
+    tobuffer = buffer_init();
     input = uni_init(tobuffer);
     input = table_init(charset, input);
 
@@ -826,7 +814,7 @@ char *charset_to_utf8(const char *msg_base, size_t len, int charset, int encodin
     }
 
     convert_catn(input, msg_base, len);
-    res = (char *)buffer_cstring(tobuffer);
+    res = buffer_cstring(tobuffer);
     convert_free(input);
 
     return res;
@@ -928,22 +916,22 @@ void mimeheader_cat(struct convert_rock *target, const char *s)
 }
 
 /*
- * Decode MIME strings (per RFC 2047) in 's'.  It writes the decoded
- * string to 'retval', calling realloc() as needed. (Thus retval may
- * be NULL.) Returns retval, contining 's' in canonical searching form.
+ * Decode MIME strings (per RFC 2047) in 's'.  Returns a newly allocated
+ * string, contining 's' in canonical searching form, which must be
+ * free()d by the caller.
  */
-char *charset_decode_mimeheader(const char *s, char *retval, size_t alloced)
+char *charset_decode_mimeheader(const char *s)
 {
     struct convert_rock *tobuffer, *input;
     char *res;
 
-    tobuffer = buffer_init((unsigned char *)retval, alloced);
+    tobuffer = buffer_init();
     input = uni_init(tobuffer);
     input = canon_init(1, input);
 
     mimeheader_cat(input, s);
  
-    res = (char *)buffer_cstring(tobuffer);
+    res = buffer_cstring(tobuffer);
 
     convert_free(input);
 
@@ -951,21 +939,21 @@ char *charset_decode_mimeheader(const char *s, char *retval, size_t alloced)
 }
 
 /*
- * Decode MIME strings (per RFC 2047) in 's'.  It writes the decoded
- * string to 'retval', calling realloc() as needed. (Thus retval may
- * be NULL.) Returns retval, contining 's' in canonical searching form.
+ * Decode MIME strings (per RFC 2047) in 's'.  Returns a newly allocated
+ * string, containing the decoded string, which must be free()d by the
+ * caller.
  */
 char *charset_parse_mimeheader(const char *s)
 {
     struct convert_rock *tobuffer, *input;
     char *res;
 
-    tobuffer = buffer_init(0, 0);
+    tobuffer = buffer_init();
     input = uni_init(tobuffer);
 
     mimeheader_cat(input, s);
  
-    res = (char *)buffer_cstring(tobuffer);
+    res = buffer_cstring(tobuffer);
 
     convert_free(input);
 
@@ -1127,7 +1115,7 @@ int charset_extractfile(index_search_text_receiver_t receiver,
 	return 0;
 
     /* set up the conversion path */
-    tobuffer = buffer_init(0, 0);
+    tobuffer = buffer_init();
     input = uni_init(tobuffer);
     input = canon_init(1, input);
     input = table_init(charset, input);
@@ -1177,29 +1165,35 @@ int charset_extractfile(index_search_text_receiver_t receiver,
 }
 
 /*
- * Decode the MIME body part (per RFC 2045) of 'len' bytes located at
- * 'msg_base' having the content transfer 'encoding'.  Decodes into
- * 'retval' (if necessary), which must be reallocable and currently at
- * least size 'alloced'.  Returns the number of decoded bytes in
- * 'outlen'. 
+ * Decode the MIME body part (per RFC 2045) of @len bytes located at
+ * @msg_base having the content transfer @encoding.  Returns a pointer
+ * to decoded bytes.  The number of decoded bytes is returned in
+ * *@outlen.  Depending on the encoding, a newly allocated buffer may be
+ * written to *@decbuf, which should be free()d by the caller if it not
+ * zero.  Note that the return value may point to either @msg_base or
+ * @decbuf, so @decbuf should not be free()d until the return value has
+ * been used.
  */
-char *charset_decode_mimebody(const char *msg_base, size_t len, int encoding,
-			      char **retval, size_t alloced, size_t *outlen)
+const char *charset_decode_mimebody(const char *msg_base, size_t len, int encoding,
+				    char **decbuf, size_t *outlen)
 {
     struct convert_rock *input, *tobuffer;
+
+    *decbuf = NULL;
+    *outlen = 0;
 
     switch (encoding) {
     case ENCODING_NONE:
 	*outlen = len;
-	return (char *) msg_base;
+	return msg_base;
 
     case ENCODING_QP:
-	tobuffer = buffer_init((unsigned char *)*retval, alloced);
+	tobuffer = buffer_init();
 	input = qp_init(0, tobuffer);
 	break;
 
     case ENCODING_BASE64:
-	tobuffer = buffer_init((unsigned char *)*retval, alloced);
+	tobuffer = buffer_init();
 	input = b64_init(tobuffer);
 	break;
 
@@ -1210,26 +1204,22 @@ char *charset_decode_mimebody(const char *msg_base, size_t len, int encoding,
 
     convert_catn(input, msg_base, len);
 
-    /* extract the string from the buffer, messy - but we want to
-     * do it without becoming a cstring or being prematurely freed! */
+    /* extract the string from the buffer */
     {
 	struct buf *buf = (struct buf *)tobuffer->state;
-	*retval = buf->s;
 	*outlen = buf->len;
-	buf->s = 0;
-	buf->len = 0;
-	buf->alloc = 0;
+	*decbuf = buf_release(buf);
     }
 
     convert_free(input);
 
-    if (!*retval) {
+    if (!*decbuf) {
 	/* didn't get a result - maybe blank input, don't return NULL */
 	*outlen = len;
-	return (char *) msg_base;
+	return msg_base;
     }
 
-    return *retval;
+    return *decbuf;
 }
 
 /*

@@ -1000,8 +1000,7 @@ int index_scan(struct index_state *state, const char *contents)
     searchargs.text = &strlist;
 
     /* Use US-ASCII to emulate fgrep */
-    strlist.s = charset_convert(contents, charset_lookupname("US-ASCII"),
-				NULL, 0); 
+    strlist.s = charset_convert(contents, charset_lookupname("US-ASCII"));
     strlist.p = charset_compilepat(strlist.s);
     strlist.next = NULL;
 
@@ -1847,7 +1846,7 @@ static int index_fetchsection(struct index_state *state, const char *resp,
 	}
 
 	msg_base = charset_decode_mimebody(msg_base + offset, size, encoding,
-					   &decbuf, 0, &newsize);
+					   &decbuf, &newsize);
 
 	if (!msg_base) {
 	    /* failed to decode */
@@ -2669,7 +2668,7 @@ int index_urlfetch(struct index_state *state, uint32_t msgno,
     unsigned long msg_size = 0;
     const char *cacheitem;
     int fetchmime = 0, domain = DOMAIN_7BIT;
-    unsigned size;
+    size_t size;
     int32_t skip = 0;
     int n, r = 0;
     char *decbuf = NULL;
@@ -2784,7 +2783,7 @@ int index_urlfetch(struct index_state *state, uint32_t msgno,
 	prot_printf(pout, " (BINARY");
 
 	data = charset_decode_mimebody(data, size, encoding,
-				       &decbuf, 0, (size_t *) &size);
+				       &decbuf, &size);
 	if (!data) {
 	    /* failed to decode */
 	    prot_printf(pout, " NIL)");
@@ -3187,7 +3186,7 @@ static int index_searchmsg(char *substr,
 		    p = index_readheader(msgfile->base, msgfile->size,
 					 CACHE_ITEM_BIT32(cachestr),
 					 len);
-		    q = charset_decode_mimeheader(p, NULL, 0);
+		    q = charset_decode_mimeheader(p);
 		    if (charset_searchstring(substr, pat, q, strlen(q))) {
 			free(q);
 			return 1;
@@ -3238,7 +3237,7 @@ static int index_searchheader(char *name,
 
     if (!*p) return 0;		/* Header not present, fail */
     if (!*substr) return 1;	/* Only checking existence, succeed */
-    q = charset_decode_mimeheader(strchr(p, ':') + 1, NULL, 0);
+    q = charset_decode_mimeheader(strchr(p, ':') + 1);
     r = charset_searchstring(substr, pat, q, strlen(q));
     free(q);
     return r;
@@ -3281,7 +3280,7 @@ static int index_searchcacheheader(struct index_state *state, uint32_t msgno,
     if (!*buf) return 0;	/* Header not present, fail */
     if (!*substr) return 1;	/* Only checking existence, succeed */
     /* XXX - we could do this in one pass maybe? charset_search_mimeheader */
-    q = charset_decode_mimeheader(strchr(buf, ':') + 1, NULL, 0);
+    q = charset_decode_mimeheader(strchr(buf, ':') + 1);
     r = charset_searchstring(substr, pat, q, strlen(q));
     free(q);
     return r;
@@ -3324,7 +3323,7 @@ static void index_getsearchtextmsg(struct index_state *state,
               p = index_readheader(msgfile.base, msgfile.size,
                                    CACHE_ITEM_BIT32(cachestr),
                                    len);
-              q = charset_decode_mimeheader(p, NULL, 0);
+              q = charset_decode_mimeheader(p);
               if (partcount == 1) {
                 receiver(uid, SEARCHINDEX_PART_HEADERS,
                          SEARCHINDEX_CMD_STUFFPART, q, strlen(q), rock);
