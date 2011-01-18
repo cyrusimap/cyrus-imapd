@@ -3858,37 +3858,34 @@ static char *find_msgid(char *str, char **rem)
 void index_get_ids(MsgData *msgdata, char *envtokens[], const char *headers,
 		   unsigned size)
 {
-    static char *buf;
-    static unsigned bufsize;
+    static struct buf buf;
     strarray_t refhdr = STRARRAY_INITIALIZER;
     char *refstr, *ref, *in_reply_to;
 
-    if (bufsize < size+2) {
-	bufsize = size+100;
-	buf = xrealloc(buf, bufsize);
-    }
+    buf_reset(&buf);
 
     /* get msgid */
     msgdata->msgid = find_msgid(envtokens[ENV_MSGID], NULL);
      /* if we don't have one, create one */
     if (!msgdata->msgid) {
-	snprintf(buf, bufsize, "<Empty-ID: %u>", msgdata->msgno);
-	msgdata->msgid = xstrdup(buf);
+	buf_printf(&buf, "<Empty-ID: %u>", msgdata->msgno);
+	msgdata->msgid = xstrdup(buf.s);
+	buf_reset(&buf);
     }
 
     /* Copy headers to the buffer */
-    memcpy(buf, headers, size);
-    buf[size] = '\0';
+    buf_appendmap(&buf, headers, size);
+    buf_cstring(&buf);
 
     /* grab the References header */
     strarray_append(&refhdr, "references");
-    index_pruneheader(buf, &refhdr, 0);
+    index_pruneheader(buf.s, &refhdr, 0);
     strarray_fini(&refhdr);
 
-    if (*buf) {
+    if (buf.s) {
 	/* allocate some space for refs */
 	/* find references */
-	refstr = buf;
+	refstr = buf.s;
 	while ((ref = find_msgid(refstr, &refstr)) != NULL)
 	    strarray_appendm(&msgdata->ref, ref);
     }
