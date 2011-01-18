@@ -172,6 +172,7 @@ struct buf {
     unsigned alloc;
     int flags;
 };
+#define BUF_INITIALIZER	{ NULL, 0, 0, 0 }
 
 const char *buf_cstring(struct buf *buf);
 char *buf_release(struct buf *buf);
@@ -186,6 +187,8 @@ void buf_appendcstr(struct buf *buf, const char *str);
 void buf_appendbit32(struct buf *buf, bit32 num);
 void buf_appendmap(struct buf *buf, const char *base, int len);
 void buf_putc(struct buf *buf, char c);
+void buf_printf(struct buf *buf, const char *fmt, ...)
+    __attribute__((format(printf,2,3)));
 void buf_free(struct buf *buf);
 
 /*
