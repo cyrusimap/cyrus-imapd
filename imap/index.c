@@ -1680,19 +1680,13 @@ static int data_domain(const char *p, size_t n)
  * further constrained by 'start_octet' and 'octet_count' as per the
  * IMAP command PARTIAL.
  */
-void
-index_fetchmsg(state, msg_base, msg_size, offset, size,
-	       start_octet, octet_count)
-struct index_state *state;
-const char *msg_base;
-unsigned long msg_size;
-unsigned offset;
-unsigned size;     /* this is the correct size for a news message after
-		      having LF translated to CRLF */
-unsigned start_octet;
-unsigned octet_count;
+void index_fetchmsg(struct index_state *state, const char *msg_base,
+		    unsigned long msg_size, unsigned offset,
+		    unsigned size,     /* this is the correct size for a news message after
+					  having LF translated to CRLF */
+		    unsigned start_octet, unsigned octet_count)
 {
-  unsigned n, domain;
+    unsigned n, domain;
 
     /* If no data, output NIL */
     if (!msg_base) {
@@ -2003,12 +1997,8 @@ static void index_fetchfsection(struct index_state *state,
 /*
  * Helper function to read a header section into a static buffer
  */
-static char *
-index_readheader(msg_base, msg_size, offset, size)
-const char *msg_base;
-unsigned long msg_size;
-unsigned offset;
-unsigned size;
+static char *index_readheader(const char *msg_base, unsigned long msg_size,
+			      unsigned offset, unsigned size)
 {
     static char *buf;
     static unsigned bufsize;
@@ -2041,9 +2031,8 @@ unsigned size;
  * listed in headers or (if headers_not is non-empty) those headers
  * not in headers_not.
  */
-static void
-index_pruneheader(char *buf, const strarray_t *headers,
-		  const strarray_t *headers_not)
+static void index_pruneheader(char *buf, const strarray_t *headers,
+			      const strarray_t *headers_not)
 {
     char *p, *colon, *nextheader;
     int goodheader;
@@ -3168,12 +3157,11 @@ static int index_search_evaluate(struct index_state *state,
  * Search part of a message for a substring.
  * Keep this in sync with index_getsearchtextmsg!
  */
-static int
-index_searchmsg(char *substr,
-		comp_pat *pat,
-		struct mapfile *msgfile,
-		int skipheader,
-		const char *cachestr)
+static int index_searchmsg(char *substr,
+			   comp_pat *pat,
+			   struct mapfile *msgfile,
+			   int skipheader,
+			   const char *cachestr)
 {
     int partsleft = 1;
     int subparts;
