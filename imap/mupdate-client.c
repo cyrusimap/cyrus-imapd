@@ -163,7 +163,7 @@ void mupdate_disconnect(mupdate_handle **hp)
     buf_free(&(h->arg2));
     buf_free(&(h->arg3));
 
-    if(h->acl_buf) free(h->acl_buf);
+    free(h->acl);
 
     free(h); 
     *hp = NULL;
@@ -322,27 +322,14 @@ static int mupdate_find_cb(struct mupdate_mailboxdata *mdata,
     strlcpy(h->server_buf, mdata->server, sizeof(h->server_buf));
 
     if(!strncmp(cmd, "MAILBOX", 7)) {
-	size_t len = strlen(mdata->acl) + 1;
-	
 	h->mailboxdata_buf.t = ACTIVE;
 	
-	if(len > h->acl_buf_len) {
-	    /* we want to at least double the buffer */
-	    if (len < 2 * h->acl_buf_len) {
-		len = 2 * h->acl_buf_len;
-	    }
-
-	    h->acl_buf = xrealloc(h->acl_buf, len);
-	    strcpy(h->acl_buf, mdata->acl);
-	}
+	free(h->acl);
+	h->acl = xstrdup(mdata->acl);
     } else if (!strncmp(cmd, "RESERVE", 7)) {
 	h->mailboxdata_buf.t = RESERVE;
-	if(!h->acl_buf) {
-	    h->acl_buf = xstrdup("");
-	    h->acl_buf_len = 1;
-	} else {
-	    h->acl_buf[0] = '\0';
-	}
+	free(h->acl);
+	h->acl = xstrdup("");
     } else {
 	/* Bad command */
 	return 1;
@@ -350,7 +337,7 @@ static int mupdate_find_cb(struct mupdate_mailboxdata *mdata,
    
     h->mailboxdata_buf.mailbox = h->mailbox_buf;
     h->mailboxdata_buf.server = h->server_buf;
-    h->mailboxdata_buf.acl = h->acl_buf;
+    h->mailboxdata_buf.acl = h->acl;
     
     return 0;
 }

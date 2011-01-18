@@ -73,8 +73,7 @@ struct mupdate_handle_s {
     /* For client side mupdate_find calls */
     char mailbox_buf[MAX_MAILBOX_BUFFER];
     char server_buf[MAX_MAILBOX_BUFFER];
-    char *acl_buf;
-    size_t acl_buf_len;
+    char *acl;
     struct mupdate_mailboxdata mailboxdata_buf;
 
     int saslcompleted;
