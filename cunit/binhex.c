@@ -113,13 +113,17 @@ static void test_hex_to_bin_capitals(void)
 
 static void test_hex_to_bin_odd(void)
 {
-    static const char HEX[9] = "cafebab";
+    static const char HEX[8] = "cafebab";
     int r;
-    char bin[4];
+    unsigned char bin[4];
 
     memset(bin, 0xff, sizeof(bin));
     r = hex_to_bin(HEX, sizeof(HEX)-1, bin);
     CU_ASSERT_EQUAL(r, -1);
+    CU_ASSERT_EQUAL(bin[0], 0xff);
+    CU_ASSERT_EQUAL(bin[1], 0xff);
+    CU_ASSERT_EQUAL(bin[2], 0xff);
+    CU_ASSERT_EQUAL(bin[3], 0xff);
 }
 
 static void test_hex_to_bin_nonxdigit(void)
@@ -155,5 +159,16 @@ static void test_hex_to_bin_nolength(void)
     r = hex_to_bin(HEX, 0, bin);
     CU_ASSERT_EQUAL(r, sizeof(bin));
     CU_ASSERT_EQUAL(memcmp(bin, BIN, sizeof(bin)), 0);
+}
+
+static void test_hex_to_bin_null(void)
+{
+    int r;
+    unsigned char bin[1];
+
+    memset(bin, 0xff, sizeof(bin));
+    r = hex_to_bin(NULL, 0, bin);
+    CU_ASSERT_EQUAL(r, -1);
+    CU_ASSERT_EQUAL(bin[0], 0xff);
 }
 
