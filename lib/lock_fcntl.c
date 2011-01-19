@@ -67,11 +67,8 @@ const char *lock_method_desc = "fcntl";
  * string naming the action that failed.
  *
  */
-int lock_reopen(fd, filename, sbuf, failaction)
-int fd;
-const char *filename;
-struct stat *sbuf;
-const char **failaction;
+int lock_reopen(int fd, const char *filename,
+		struct stat *sbuf, const char **failaction)
 {
     int r;
     struct flock fl;
@@ -126,8 +123,7 @@ const char **failaction;
  * Returns 0 for success, -1 for failure, with errno set to an
  * appropriate error code.
  */
-int lock_blocking(fd)
-int fd;
+int lock_blocking(int fd)
 {
     int r;
     struct flock fl;
@@ -149,8 +145,7 @@ int fd;
  * Returns 0 for success, -1 for failure, with errno set to an
  * appropriate error code.
  */
-int lock_shared(fd)
-int fd;
+int lock_shared(int fd)
 {
     int r;
     struct flock fl;
@@ -172,8 +167,7 @@ int fd;
  * Returns 0 for success, -1 for failure, with errno set to an
  * appropriate error code.
  */
-int lock_nonblocking(fd)
-int fd;
+int lock_nonblocking(int fd)
 {
     int r;
     struct flock fl;

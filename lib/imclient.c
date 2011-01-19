@@ -1950,7 +1950,8 @@ int tls_start_clienttls(struct imclient *imclient,
 }
 #endif /* HAVE_SSL */
 
-int imclient_havetls () {
+int imclient_havetls(void)
+{
 #ifdef HAVE_SSL
   return 1;
 #else

@@ -50,10 +50,7 @@
 #include "assert.h"
 
 void
-assertionfailed(file, line, expr)
-const char *file;
-int line;
-const char *expr;
+assertionfailed(const char *file, int line, const char *expr)
 {
     char buf[1024];
 

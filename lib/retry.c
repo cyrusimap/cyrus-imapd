@@ -120,11 +120,7 @@ int retry_write(int fd, const void *vbuf, size_t nbyte)
  *
  * Now no longer destructive of parameters!
  */
-int
-retry_writev(fd, srciov, iovcnt)
-int fd;
-struct iovec *srciov;
-int iovcnt;
+int retry_writev(int fd, struct iovec *srciov, int iovcnt)
 {
     int n;
     int i;

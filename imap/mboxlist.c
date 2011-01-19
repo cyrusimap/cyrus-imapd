@@ -101,7 +101,7 @@ static int mboxlist_rmquota(const char *name, int matchlen, int maycreate,
 static int mboxlist_changequota(const char *name, int matchlen, int maycreate,
 				void *rock);
 
-struct mboxlist_entry *mboxlist_entry_create()
+struct mboxlist_entry *mboxlist_entry_create(void)
 {
     struct mboxlist_entry *ret = xzmalloc(sizeof(struct mboxlist_entry));
     /* xxx - initialiser functions here? */
@@ -2510,10 +2510,8 @@ int mboxlist_unsetquota(const char *root)
  * ACL access canonicalization routine which ensures that 'owner'
  * retains lookup, administer, and create rights over a mailbox.
  */
-int mboxlist_ensureOwnerRights(rock, identifier, myrights)
-void *rock;
-const char *identifier;
-int myrights;
+int mboxlist_ensureOwnerRights(void *rock, const char *identifier,
+			       int myrights)
 {
     char *owner = (char *)rock;
     if (strcmp(identifier, owner) != 0) return myrights;

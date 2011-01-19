@@ -68,10 +68,7 @@ const char *nonblock_method_desc = "fcntl";
  * 'mode' is nonzero, sets non-blocking mode, if 'mode' is zero
  * clears non-blocking mode.
  */
-void
-nonblock(fd, mode)
-int fd;
-int mode;
+void nonblock(int fd, int mode)
 {
     int flags;
 

@@ -704,7 +704,7 @@ void sync_quota_list_free(struct sync_quota_list **lp)
 
 /* ====================================================================== */
 
-struct sync_sieve_list *sync_sieve_list_create()
+struct sync_sieve_list *sync_sieve_list_create(void)
 {
     struct sync_sieve_list *l = xzmalloc(sizeof (struct sync_sieve_list));
 
@@ -997,7 +997,7 @@ int sync_sieve_delete(const char *userid, const char *name)
 
 /* ====================================================================== */
 
-struct sync_name_list *sync_name_list_create()
+struct sync_name_list *sync_name_list_create(void)
 {
     struct sync_name_list *l = xzmalloc(sizeof (struct sync_name_list));
     l->head = NULL;
@@ -1055,7 +1055,7 @@ void sync_name_list_free(struct sync_name_list **lp)
 
 /* ====================================================================== */
 
-struct sync_seen_list *sync_seen_list_create()
+struct sync_seen_list *sync_seen_list_create(void)
 {
     struct sync_seen_list *l = xzmalloc(sizeof (struct sync_seen_list));
     l->head = NULL;
@@ -1119,7 +1119,7 @@ void sync_seen_list_free(struct sync_seen_list **lp)
 
 /* ====================================================================== */
 
-struct sync_annot_list *sync_annot_list_create()
+struct sync_annot_list *sync_annot_list_create(void)
 {
     struct sync_annot_list *l = xzmalloc(sizeof (struct sync_annot_list));
 

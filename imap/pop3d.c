@@ -1489,7 +1489,7 @@ void cmd_pass(char *pass)
 
 /* Handle the POP3 Extension extension.
  */
-void cmd_capa()
+void cmd_capa(void)
 {
     int minpoll = config_getint(IMAPOPT_POPMINPOLL) * 60;
     int expire = config_getint(IMAPOPT_POPEXPIRETIME);

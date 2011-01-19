@@ -104,13 +104,10 @@ int cyrus_acl_myrights(struct auth_state *auth_state, const char *origacl)
  * 'identifier' the set specified in the mask 'access'.  The pointer
  * pointed to by 'acl' must have been obtained from malloc().
  */
-int cyrus_acl_set(acl, identifier, mode, access, canonproc, canonrock)
-char **acl;
-const char *identifier;
-int mode;
-int access;
-cyrus_acl_canonproc_t *canonproc;
-void *canonrock;
+int cyrus_acl_set(char **acl, const char *identifier,
+		  int mode, int access,
+		  cyrus_acl_canonproc_t *canonproc,
+		  void *canonrock)
 {
     const char *canonid;
     char *newidentifier = 0;

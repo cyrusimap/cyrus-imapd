@@ -222,9 +222,7 @@ int prot_sasldecode(struct protstream *s, int n)
  * Turn on SASL for this connection
  */
 
-int prot_setsasl(s, conn)
-struct protstream *s;
-sasl_conn_t *conn;
+int prot_setsasl(struct protstream *s, sasl_conn_t *conn)
 {
     const void *ssfp;
     int result;
