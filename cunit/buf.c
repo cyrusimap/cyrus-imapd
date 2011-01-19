@@ -57,7 +57,7 @@ static void test_map(void)
     CU_ASSERT(b.alloc >= b.len);
     CU_ASSERT_PTR_NOT_NULL(b.s);
 
-    map = 0xdeadbeef;
+    map = (void *)0xdeadbeef;
     len = 42;
     buf_getmap(&b, &map, &len);
     CU_ASSERT_EQUAL(b.len, sizeof(WORD0)+2);
