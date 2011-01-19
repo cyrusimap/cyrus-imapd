@@ -254,6 +254,9 @@ static void test_canonicalise(void)
     free(addr);
 }
 
+/*
+ * Test getting parts of a fully featured address
+ */
 static void test_getparts(void)
 {
     struct address *a;
@@ -293,3 +296,88 @@ static void test_getparts(void)
 
     parseaddr_free(a);
 }
+
+/*
+ * Test getting parts of an address with no detail part
+ */
+static void test_getparts_nodetail(void)
+{
+    struct address *a;
+    char *s;
+
+    a = NULL;
+    parseaddr_list("Fred Bloggs <fbloggs@FastMAIL.fm>", &a);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(a);
+
+    s = address_get_all(a, 0);
+    CU_ASSERT_STRING_EQUAL(s, "fbloggs@FastMAIL.fm");
+    free(s);
+
+    s = address_get_all(a, 1);
+    CU_ASSERT_STRING_EQUAL(s, "fbloggs@fastmail.fm");
+    free(s);
+
+    s = address_get_localpart(a);
+    CU_ASSERT_STRING_EQUAL(s, "fbloggs");
+    free(s);
+
+    s = address_get_domain(a, 0);
+    CU_ASSERT_STRING_EQUAL(s, "FastMAIL.fm");
+    free(s);
+
+    s = address_get_domain(a, 1);
+    CU_ASSERT_STRING_EQUAL(s, "fastmail.fm");
+    free(s);
+
+    s = address_get_user(a);
+    CU_ASSERT_STRING_EQUAL(s, "fbloggs");
+    free(s);
+
+    s = address_get_detail(a);
+    CU_ASSERT_PTR_NULL(s);
+
+    parseaddr_free(a);
+}
+
+/*
+ * Test getting parts of an address with no domain part
+ */
+static void test_getparts_nodomain(void)
+{
+    struct address *a;
+    char *s;
+
+    a = NULL;
+    parseaddr_list("Fred Bloggs <fbloggs>", &a);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(a);
+
+    s = address_get_all(a, 0);
+    CU_ASSERT_STRING_EQUAL(s, "fbloggs@unspecified-domain");
+    free(s);
+
+    s = address_get_all(a, 1);
+    CU_ASSERT_STRING_EQUAL(s, "fbloggs@unspecified-domain");
+    free(s);
+
+    s = address_get_localpart(a);
+    CU_ASSERT_STRING_EQUAL(s, "fbloggs");
+    free(s);
+
+    s = address_get_domain(a, 0);
+    CU_ASSERT_STRING_EQUAL(s, "unspecified-domain");
+    free(s);
+
+    s = address_get_domain(a, 1);
+    CU_ASSERT_STRING_EQUAL(s, "unspecified-domain");
+    free(s);
+
+    s = address_get_user(a);
+    CU_ASSERT_STRING_EQUAL(s, "fbloggs");
+    free(s);
+
+    s = address_get_detail(a);
+    CU_ASSERT_PTR_NULL(s);
+
+    parseaddr_free(a);
+}
+
