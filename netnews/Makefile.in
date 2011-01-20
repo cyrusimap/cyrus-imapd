@@ -55,8 +55,8 @@ CPPFLAGS = -I.. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../com_err/et @CPPFLA
 LIBS =  @IMAP_LIBS@ @LIB_RT@
 DEPLIBS = ../lib/libcyrus.a ../lib/libcyrus_min.a @DEPLIBS@ 
 
-CFLAGS = @CFLAGS@
-LDFLAGS = @LDFLAGS@
+CFLAGS = @CFLAGS@ $(EXTRACFLAGS)
+LDFLAGS = @LDFLAGS@ $(EXTRALDFLAGS)
 
 SHELL = /bin/sh
 MAKEDEPEND = @MAKEDEPEND@
@@ -84,7 +84,7 @@ remotepurge: $(OBJS) $(DEPLIBS)
 
 
 clean:
-	rm -f *.o Makefile.bak remotepurge makedepend.log
+	rm -f *.o Makefile.bak remotepurge makedepend.log *.gcno *.gcda
 
 distclean: clean
 	rm -f Makefile

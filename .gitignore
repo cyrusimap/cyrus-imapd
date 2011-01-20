@@ -6,6 +6,8 @@
 *.orig
 *.rej
 *.tar.gz
+*.gcno
+*.gcda
 Makefile
 Makefile.bak
 Makefile.old

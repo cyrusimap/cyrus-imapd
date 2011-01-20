@@ -56,8 +56,8 @@ CYRUS_GROUP=@cyrus_group@
 
 DEFS = @DEFS@ @LOCALDEFS@
 CPPFLAGS = -I.. -I$(srcdir)/../sieve -I$(srcdir)/../imap -I$(srcdir)/../lib @COM_ERR_CPPFLAGS@ @CPPFLAGS@ @SASLFLAGS@
-CFLAGS = @CFLAGS@
-LDFLAGS = @LDFLAGS@
+CFLAGS = @CFLAGS@ $(EXTRACFLAGS)
+LDFLAGS = @LDFLAGS@ $(EXTRALDFLAGS)
 
 prefix = @prefix@
 exec_prefix = @exec_prefix@
@@ -103,7 +103,7 @@ notifyd.pure: $(OBJS) $(SERVICE)
 	 $(SERVICE) $(OBJS) $(DEPLIBS) $(IMAP_LIBS) $(LIBS) $(LIB_WRAP)
 
 clean:
-	rm -f notifyd notifytest *.o *.a *~ Makefile.bak makedepend.log
+	rm -f notifyd notifytest *.o *.a *~ Makefile.bak makedepend.log *.gcno *.gcda
 
 distclean: clean
 	rm -f Makefile

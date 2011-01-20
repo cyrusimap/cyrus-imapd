@@ -56,8 +56,8 @@ DEFS = @DEFS@ @LOCALDEFS@
 CPPFLAGS = -I.. -I$(srcdir)/../lib -I$(srcdir)/../imap @CPPFLAGS@ @COM_ERR_CPPFLAGS@
 DEPLIBS = @DEPLIBS@
 
-CFLAGS = @CFLAGS@
-LDFLAGS = @LDFLAGS@ @COM_ERR_LDFLAGS@
+CFLAGS = @CFLAGS@ $(EXTRACFLAGS)
+LDFLAGS = @LDFLAGS@ @COM_ERR_LDFLAGS@ $(EXTRALDFLAGS)
 LIBS = ../lib/libcyrus_min.a @LIB_UCDSNMP@ @LIBS@ @COM_ERR_LIBS@
 
 SHELL = /bin/sh
@@ -96,7 +96,7 @@ master: master.o masterconf.o cyrusMasterMIB.o $(LIBCYRUS)
 	$(CC) $(LDFLAGS) -o master master.o masterconf.o cyrusMasterMIB.o $(LIBCYRUS) $(LIBS) $(DEPLIBS)
 
 clean:
-	rm -f *.o *.a Makefile.bak $(PROGS)
+	rm -f *.o *.a Makefile.bak $(PROGS) *.gcno *.gcda
 
 distclean: clean
 	rm -f Makefile

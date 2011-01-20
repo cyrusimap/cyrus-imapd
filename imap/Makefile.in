@@ -68,8 +68,8 @@ LIB_WRAP = @LIB_WRAP@
 LIBS = $(IMAP_LIBS) $(IMAP_COM_ERR_LIBS)
 DEPLIBS = ../lib/libcyrus.a ../lib/libcyrus_min.a @DEPLIBS@
 
-CFLAGS = @CFLAGS@
-LDFLAGS = @LDFLAGS@ @COM_ERR_LDFLAGS@ 
+CFLAGS = @CFLAGS@ $(EXTRACFLAGS)
+LDFLAGS = @LDFLAGS@ @COM_ERR_LDFLAGS@ $(EXTRALDFLAGS)
 
 SHELL = /bin/sh
 MAKEDEPEND = @MAKEDEPEND@
@@ -377,7 +377,7 @@ sync_reset: sync_reset.o sync_support.o \
 
 clean:
 	rm -f *.o *.a Makefile.bak makedepend.log \
-	$(BUILTSOURCES) $(PROGS) $(SUIDPROGS) cyr_virusscan
+	$(BUILTSOURCES) $(PROGS) $(SUIDPROGS) cyr_virusscan *.gcno *.gcda
 
 distclean: clean
 	rm -f Makefile

@@ -60,8 +60,8 @@ COMPILE_ET = @COMPILE_ET@
 DEFS = @DEFS@ @LOCALDEFS@
 CPPFLAGS = -I.. -I$(srcdir)/../lib @COM_ERR_CPPFLAGS@ @CPPFLAGS@ @SASLFLAGS@
 MAKEDEPEND_CFLAGS = @CFLAGS@
-CFLAGS = @CFLAGS@ @PERL_CCCDLFLAGS@
-LDFLAGS = @LDFLAGS@
+CFLAGS = @CFLAGS@ @PERL_CCCDLFLAGS@ $(EXTRACFLAGS)
+LDFLAGS = @LDFLAGS@ $(EXTRALDFLAGS)
 
 MAKEDEPEND = @MAKEDEPEND@
 
@@ -139,7 +139,7 @@ sieve_err.h sieve_err.c: sieve_err.et
 	$(COMPILE_ET) $(srcdir)/sieve_err.et
 
 clean:
-	rm -f sievec sieved test *~ *.o *.a Makefile.bak makedepend.log
+	rm -f sievec sieved test *~ *.o *.a Makefile.bak makedepend.log *.gcno *.gcda
 
 distclean: clean
 	rm -f sieve_err.c sieve_err.h

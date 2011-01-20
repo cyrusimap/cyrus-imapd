@@ -55,8 +55,8 @@ DEFS = @DEFS@
 CPPFLAGS = @CPPFLAGS@
 LIBS = @LIBS@
 
-CFLAGS = @CFLAGS@
-LDFLAGS = @LDFLAGS@
+CFLAGS = @CFLAGS@ $(EXTRACFLAGS)
+LDFLAGS = @LDFLAGS@ $(EXTRALDFLAGS)
 
 SHELL = /bin/sh
 MAKEDEPEND = @MAKEDEPEND@
@@ -79,7 +79,7 @@ syslogd: syslogd.o
 	$(CC) $(LDFLAGS) -o syslogd syslogd.o $(LIBS)
 
 clean:
-	rm -f *.o *.a Makefile.bak
+	rm -f *.o *.a Makefile.bak *.gcno *.gcda
 
 distclean: clean
 	rm -f Makefile

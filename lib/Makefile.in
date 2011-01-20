@@ -63,8 +63,8 @@ CPPFLAGS = -I.. @CPPFLAGS@ @COM_ERR_CPPFLAGS@ @SASLFLAGS@
 LIBS = @LIBS@
 
 MAKEDEPEND_CFLAGS = @CFLAGS@
-CFLAGS = @CFLAGS@ @PERL_CCCDLFLAGS@
-LDFLAGS = @LDFLAGS@
+CFLAGS = @CFLAGS@ @PERL_CCCDLFLAGS@ $(EXTRACFLAGS)
+LDFLAGS = @LDFLAGS@ $(EXTRALDFLAGS)
 
 SHELL = /bin/sh
 MAKEDEPEND = @MAKEDEPEND@
@@ -156,7 +156,7 @@ chartable.c: mkchartable.pl charset/*.t charset/unifix.txt charset/unidata5_2.tx
 
 clean:
 	rm -f *.o *.a chartable.c Makefile.bak makedepend.log \
-	$(BUILTSOURCES)
+	$(BUILTSOURCES) *.gcno *.gcda
 
 distclean: clean
 	rm -f Makefile

@@ -55,8 +55,8 @@ CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../et @CPPFLAGS@
 LIBS = @LIBS@ 
 DEPLIBS = ../lib/libcyrus.a ../lib/libcyrus_min.a @DEPLIBS@
 
-CFLAGS = @CFLAGS@
-LDFLAGS = @LDFLAGS@
+CFLAGS = @CFLAGS@ $(EXTRACFLAGS)
+LDFLAGS = @LDFLAGS@ $(EXTRALDFLAGS)
 
 SHELL = /bin/sh
 MAKEDEPEND = @MAKEDEPEND@
@@ -79,7 +79,7 @@ install:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
 
 clean:
-	rm -f *.o Makefile.bak makedepend.log
+	rm -f *.o Makefile.bak makedepend.log *.gcno *.gcda
 
 distclean: clean
 	rm -f Makefile

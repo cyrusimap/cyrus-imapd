@@ -66,7 +66,7 @@ LIBS = $(IMAP_LIBS) $(IMAP_COM_ERR_LIBS) -lcunit
 DEPLIBS = @DEPLIBS@
 
 CFLAGS = @CFLAGS@
-LDFLAGS = @LDFLAGS@ @COM_ERR_LDFLAGS@
+LDFLAGS = @LDFLAGS@ @COM_ERR_LDFLAGS@ $(EXTRALDFLAGS)
 
 SHELL = /bin/sh
 MAKEDEPEND = @MAKEDEPEND@
@@ -150,7 +150,7 @@ unit.quant: $(UNITOBJS) $(CUNIT_DEPLIBS) $(DEPLIBS)
 clean::
 	rm -f *.o *.a Makefile.bak makedepend.log \
 	$(BUILTSOURCES) $(PROGS) $(UNITOBJS) cunit.mk \
-	default.cunit
+	default.cunit *.gcno *.gcda
 
 distclean: clean
 	rm -f Makefile

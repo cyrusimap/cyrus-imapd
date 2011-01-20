@@ -57,8 +57,8 @@ LIBS = @LIBS@
 IMAP_LIBS = @IMAP_LIBS@ @LIB_RT@
 DEPLIBS = ../lib/libcyrus.a ../lib/libcyrus_min.a @DEPLIBS@
 
-CFLAGS = @CFLAGS@
-LDFLAGS = @LDFLAGS@ @COM_ERR_LDFLAGS@
+CFLAGS = @CFLAGS@ $(EXTRACFLAGS)
+LDFLAGS = @LDFLAGS@ @COM_ERR_LDFLAGS@ $(EXTRALDFLAGS)
 
 SHELL = /bin/sh
 MAKEDEPEND = @MAKEDEPEND@
@@ -94,7 +94,7 @@ imtest.pure: imtest.o $(DEPLIBS)
 	$(PURIFY) $(PUREOPT) $(CC) $(LDFLAGS) -o imtest $(OBJS) $(DEPLIBS) $(LIBS) $(IMAP_LIBS)
 
 clean:
-	rm -f *.o Makefile.bak makedepend.log imtest
+	rm -f *.o Makefile.bak makedepend.log imtest *.gcno *.gcda
 
 distclean: clean
 	rm -f Makefile

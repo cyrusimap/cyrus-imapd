@@ -58,8 +58,8 @@ DEFS = @DEFS@
 CPPFLAGS = @CPPFLAGS@
 LIBS = @LIBS@
 
-CFLAGS = @CFLAGS@
-LDFLAGS = @LDFLAGS@
+CFLAGS = @CFLAGS@ $(EXTRACFLAGS)
+LDFLAGS = @LDFLAGS@ $(EXTRALDFLAGS)
 
 SHELL = /bin/sh
 
@@ -96,7 +96,7 @@ et_h.awk: $(srcdir)/et_h.awk
 clean:
 	rm -f compile_et compile_et.o error_table.o 
 	rm -f libcom_err.a
-	rm -f $(LIBOBJS)
+	rm -f $(LIBOBJS) *.gcno *.gcda
 
 distclean: clean
 	rm -f compile_et compile_et.o error_table.o 
