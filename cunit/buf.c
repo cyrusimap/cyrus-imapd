@@ -73,3 +73,313 @@ static void test_map(void)
 #undef WORD0
 #undef WORD1
 }
+
+static void test_long(void)
+{
+    struct buf b = BUF_INITIALIZER;
+    int i;
+    char *exp;
+#define SZ  6
+#define N 10000
+    char tt[SZ+1];
+
+    CU_ASSERT_EQUAL(b.len, 0);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT_PTR_NULL(b.s);
+
+    for (i = 0 ; i < N ; i++) {
+	snprintf(tt, sizeof(tt), "%c%05d", 'A'+(i%26), i);
+	buf_appendcstr(&b, tt);
+    }
+    buf_cstring(&b);
+
+    CU_ASSERT_EQUAL(b.len, SZ*N);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+
+    exp = xmalloc(SZ*N+1);
+    for (i = 0 ; i < N ; i++)
+	snprintf(exp+SZ*i, SZ+1, "%c%05d", 'A'+(i%26), i);
+    CU_ASSERT(!strcmp(b.s, exp));
+    free(exp);
+
+    buf_free(&b);
+#undef N
+#undef SZ
+}
+
+static void test_setcstr(void)
+{
+#define WORD0	"lorem"
+    struct buf b = BUF_INITIALIZER;
+
+    CU_ASSERT_EQUAL(b.len, 0);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT_PTR_NULL(b.s);
+
+    buf_setcstr(&b, WORD0);
+    buf_cstring(&b);
+
+    CU_ASSERT_EQUAL(b.len, sizeof(WORD0)-1);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    CU_ASSERT_STRING_EQUAL(b.s, WORD0);
+
+    buf_free(&b);
+#undef WORD0
+}
+
+static void test_setmap(void)
+{
+#define WORD1	"ipsum"
+    struct buf b = BUF_INITIALIZER;
+
+    CU_ASSERT_EQUAL(b.len, 0);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT_PTR_NULL(b.s);
+
+    buf_setmap(&b, WORD1, sizeof(WORD1)-1);
+    buf_cstring(&b);
+
+    CU_ASSERT_EQUAL(b.len, sizeof(WORD1)-1);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    CU_ASSERT_STRING_EQUAL(b.s, WORD1);
+
+    buf_free(&b);
+#undef WORD1
+}
+
+static void test_append(void)
+{
+#define WORD0	"lorem"
+#define WORD1	"ipsum"
+    struct buf b = BUF_INITIALIZER;
+    struct buf b2 = BUF_INITIALIZER;
+    const char *s;
+
+    CU_ASSERT_EQUAL(b.len, 0);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT_PTR_NULL(b.s);
+
+    CU_ASSERT_EQUAL(b2.len, 0);
+    CU_ASSERT(b2.alloc >= b2.len);
+    CU_ASSERT_EQUAL(buf_len(&b2), b2.len);
+    CU_ASSERT_PTR_NULL(b2.s);
+
+    buf_setmap(&b, WORD0, sizeof(WORD0)-1);
+    buf_setmap(&b2, WORD1, sizeof(WORD1)-1);
+    buf_append(&b, &b2);
+
+    CU_ASSERT_EQUAL(b.len, sizeof(WORD0)-1+sizeof(WORD1)-1);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    s = buf_cstring(&b);
+    CU_ASSERT_STRING_EQUAL(s, WORD0""WORD1);
+
+    CU_ASSERT_EQUAL(b2.len, sizeof(WORD1)-1);
+    CU_ASSERT_EQUAL(buf_len(&b2), b2.len);
+    CU_ASSERT(b2.alloc >= b2.len);
+    CU_ASSERT_PTR_NOT_NULL(b2.s);
+    s = buf_cstring(&b2);
+    CU_ASSERT_STRING_EQUAL(s, WORD1);
+
+    buf_free(&b);
+    buf_free(&b2);
+#undef WORD0
+#undef WORD1
+}
+
+static void test_appendbit32(void)
+{
+#define HEX0	0xcafebabe
+#define HEX1	0xdeadbeef
+    static const unsigned char HEX[8] = {
+	0xca, 0xfe, 0xba, 0xbe,
+	0xde, 0xad, 0xbe, 0xef
+    };
+    struct buf b = BUF_INITIALIZER;
+
+    CU_ASSERT_EQUAL(b.len, 0);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT_PTR_NULL(b.s);
+
+    buf_appendbit32(&b, HEX0);
+    buf_appendbit32(&b, HEX1);
+
+    CU_ASSERT_EQUAL(b.len, 8);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    CU_ASSERT(!memcmp(b.s, HEX, sizeof(HEX)));
+
+    buf_free(&b);
+#undef HEX0
+#undef HEX1
+}
+
+static void test_reset(void)
+{
+#define WORD0	"lorem"
+#define WORD1	"ipsum"
+    struct buf b = BUF_INITIALIZER;
+    const char *s;
+
+    CU_ASSERT_EQUAL(b.len, 0);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT_PTR_NULL(b.s);
+
+    buf_appendcstr(&b, WORD0);
+    buf_reset(&b);
+    buf_appendcstr(&b, WORD1);
+    CU_ASSERT_EQUAL(b.len, sizeof(WORD1)-1);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+
+    s = buf_cstring(&b);
+    CU_ASSERT_PTR_NOT_NULL(s);
+    CU_ASSERT_STRING_EQUAL(s, WORD1);
+
+    buf_free(&b);
+
+#undef WORD0
+#undef WORD1
+}
+
+static void test_copy(void)
+{
+#define WORD0	"lorem"
+#define WORD1	"ipsum"
+    struct buf b = BUF_INITIALIZER;
+    struct buf b2 = BUF_INITIALIZER;
+    const char *s;
+
+    CU_ASSERT_EQUAL(b.len, 0);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT_PTR_NULL(b.s);
+
+    CU_ASSERT_EQUAL(b2.len, 0);
+    CU_ASSERT(b2.alloc >= b2.len);
+    CU_ASSERT_EQUAL(buf_len(&b2), b2.len);
+    CU_ASSERT_PTR_NULL(b2.s);
+
+    buf_setmap(&b, WORD0, sizeof(WORD0)-1);
+    buf_setmap(&b2, WORD1, sizeof(WORD1)-1);
+    buf_copy(&b, &b2);
+
+    CU_ASSERT_EQUAL(b.len, sizeof(WORD1)-1);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    s = buf_cstring(&b);
+    CU_ASSERT_STRING_EQUAL(s, WORD1);
+
+    CU_ASSERT_EQUAL(b2.len, sizeof(WORD1)-1);
+    CU_ASSERT_EQUAL(buf_len(&b2), b2.len);
+    CU_ASSERT(b2.alloc >= b2.len);
+    CU_ASSERT_PTR_NOT_NULL(b2.s);
+    s = buf_cstring(&b2);
+    CU_ASSERT_STRING_EQUAL(s, WORD1);
+
+    buf_free(&b);
+    buf_free(&b2);
+#undef WORD0
+#undef WORD1
+}
+
+static void test_printf(void)
+{
+#define WORD0	"lorem"
+#define WORD1	"ipsum"
+#define DEC0	31337
+#define HEX0	0xcafebabe
+    struct buf b = BUF_INITIALIZER;
+    const char *s;
+
+    CU_ASSERT_EQUAL(b.len, 0);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT_PTR_NULL(b.s);
+
+    buf_printf(&b, WORD0" %s 0x%x %d", WORD1, HEX0, DEC0);
+    CU_ASSERT_EQUAL(b.len, sizeof(WORD0)+sizeof(WORD1)+16);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+
+    s = buf_cstring(&b);
+    CU_ASSERT_PTR_NOT_NULL(s);
+    CU_ASSERT_STRING_EQUAL(s, WORD0" "WORD1" 0xcafebabe 31337");
+
+    buf_free(&b);
+#undef WORD0
+#undef WORD1
+#undef DEC0
+#undef HEX0
+}
+
+/*
+ * This test exercises an important feature of buf_printf, namely
+ * formatting a result which is longer than the size that buf_printf()
+ * initially guesses it will need.  That feature relies on vsnprintf()
+ * correctly realizing that it's about to overrun the buffer provided,
+ * and returning the correct formatted size.  Experiment shows that
+ * vsnprintf() behaves correctly (at least in glibc 2.11 on Ubuntu) but
+ * something really bad happens in Valgrind (version
+ * 1:3.6.0~svn20100724-0ubuntu2).  I suspect a bug in Valgrind's
+ * replacement mempcpy() routine.  Until Valgrind is fixed, let's just
+ * disable this test.
+ */
+
+// static void test_long_printf(void)
+// {
+//     struct buf b = BUF_INITIALIZER;
+//     int i;
+//     const char *s;
+//     char *exp;
+// #define SZ  6
+// #define N 10000
+// 
+//     CU_ASSERT_EQUAL(b.len, 0);
+//     CU_ASSERT(b.alloc >= b.len);
+//     CU_ASSERT_EQUAL(buf_len(&b), b.len);
+//     CU_ASSERT_PTR_NULL(b.s);
+// 
+//     exp = xmalloc(SZ*N+1);
+//     for (i = 0 ; i < N ; i++)
+// 	snprintf(exp+SZ*i, SZ+1, "%c%05d", 'A'+(i%26), i);
+// 
+//     buf_printf(&b, "x%sy", exp);
+//     s = buf_cstring(&b);
+// 
+//     CU_ASSERT_EQUAL(b.len, SZ*N+2);
+//     CU_ASSERT_EQUAL(buf_len(&b), b.len);
+//     CU_ASSERT(b.alloc >= b.len);
+//     CU_ASSERT_PTR_NOT_NULL(b.s);
+// 
+//     CU_ASSERT_PTR_NOT_NULL(s);
+//     CU_ASSERT_EQUAL(s[0], 'x');
+//     CU_ASSERT(!memcmp(s+1, exp, SZ*N));
+//     CU_ASSERT_EQUAL(s[SZ*N+1], 'y');
+// 
+//     buf_free(&b);
+//     free(exp);
+// #undef N
+// #undef SZ
+// }
+
+
+/* TODO: test the Copy-On-Write feature of buf_ensure()...if anyone
+ * actually uses it */
