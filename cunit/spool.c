@@ -1,0 +1,229 @@
+#include "config.h"
+#include "cunit/cunit.h"
+#include "prot.h"
+#include "retry.h"
+#include "xmalloc.h"
+#include "spool.h"
+
+#define DELIVERED   "Fri, 29 Oct 2010 13:07:07 +1100"
+#define FIRST_RX    "Fri, 29 Oct 2010 13:05:01 +1100"
+#define SECOND_RX   "Fri, 29 Oct 2010 13:03:03 +1100"
+#define THIRD_RX    "Fri, 29 Oct 2010 13:01:01 +1100"
+#define SENT	    "Thu, 28 Oct 2010 18:37:26 +1100"
+#define HFROM	    "Fred Bloggs <fbloggs@fastmail.fm>"
+#define HTO	    "Sarah Jane Smith <sjsmith@gmail.com>"
+#define HDATE	    SENT
+#define HSUBJECT    "Simple testing email"
+#define HMESSAGEID  "<fake1000@fastmail.fm>"
+#define HRECEIVED1  "from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software); " FIRST_RX
+#define HRECEIVED2  "from mail.bar.com (mail.bar.com [10.0.0.1]) by mail.quux.com (Software); " SECOND_RX
+#define HRECEIVED3  "from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by mail.bar.com (Software); " THIRD_RX
+
+static void test_simple(void)
+{
+    hdrcache_t cache;
+    const char **val;
+
+    cache = spool_new_hdrcache();
+    CU_ASSERT_PTR_NOT_NULL(cache);
+
+    val = spool_getheader(cache, "Nonesuch");
+    CU_ASSERT_PTR_NULL(val);
+    val = spool_getheader(cache, "From");
+    CU_ASSERT_PTR_NULL(val);
+    val = spool_getheader(cache, "fRoM");
+    CU_ASSERT_PTR_NULL(val);
+    val = spool_getheader(cache, "from");
+    CU_ASSERT_PTR_NULL(val);
+
+    spool_cache_header(xstrdup("From"), xstrdup(HFROM), cache);
+    val = spool_getheader(cache, "Nonesuch");
+    CU_ASSERT_PTR_NULL(val);
+    val = spool_getheader(cache, "From");
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val[0], HFROM);
+    CU_ASSERT_PTR_NULL(val[1]);
+    val = spool_getheader(cache, "fRoM");
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val[0], HFROM);
+    CU_ASSERT_PTR_NULL(val[1]);
+    val = spool_getheader(cache, "from");
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val[0], HFROM);
+    CU_ASSERT_PTR_NULL(val[1]);
+
+    spool_cache_header(xstrdup("To"), xstrdup(HTO), cache);
+    spool_cache_header(xstrdup("Date"), xstrdup(HDATE), cache);
+    spool_cache_header(xstrdup("Subject"), xstrdup(HSUBJECT), cache);
+    spool_cache_header(xstrdup("Message-ID"), xstrdup(HMESSAGEID), cache);
+    spool_cache_header(xstrdup("Received"), xstrdup(HRECEIVED1), cache);
+    spool_cache_header(xstrdup("Received"), xstrdup(HRECEIVED2), cache);
+    spool_cache_header(xstrdup("Received"), xstrdup(HRECEIVED3), cache);
+
+    val = spool_getheader(cache, "Nonesuch");
+    CU_ASSERT_PTR_NULL(val);
+    val = spool_getheader(cache, "From");
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val[0], HFROM);
+    CU_ASSERT_PTR_NULL(val[1]);
+    val = spool_getheader(cache, "fRoM");
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val[0], HFROM);
+    CU_ASSERT_PTR_NULL(val[1]);
+    val = spool_getheader(cache, "from");
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val[0], HFROM);
+    CU_ASSERT_PTR_NULL(val[1]);
+
+    val = spool_getheader(cache, "To");
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val[0], HTO);
+    CU_ASSERT_PTR_NULL(val[1]);
+
+    val = spool_getheader(cache, "Subject");
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val[0], HSUBJECT);
+    CU_ASSERT_PTR_NULL(val[1]);
+
+    val = spool_getheader(cache, "message-id");
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val[0], HMESSAGEID);
+    CU_ASSERT_PTR_NULL(val[1]);
+
+    val = spool_getheader(cache, "received");
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val[0], HRECEIVED1);
+    CU_ASSERT_STRING_EQUAL(val[1], HRECEIVED2);
+    CU_ASSERT_STRING_EQUAL(val[2], HRECEIVED3);
+    CU_ASSERT_PTR_NULL(val[3]);
+
+    spool_free_hdrcache(cache);
+}
+
+static void test_fill(void)
+{
+    static const char MSG[] =
+"From: " HFROM "\r\n"
+"To: " HTO "\r\n"
+"Date: " HDATE "\r\n"
+"Subject: " HSUBJECT "\r\n"
+"Message-ID: " HMESSAGEID "\r\n"
+"Received: " HRECEIVED1 "\r\n"
+"Received: " HRECEIVED2 "\r\n"
+"Received: " HRECEIVED3 "\r\n"
+"\r\n"
+"Hello, World\r\n";
+
+    hdrcache_t cache;
+    const char **val;
+    int fd;
+    char tempfile1[32];
+    char tempfile2[32];
+    int r;
+    struct protstream *pin;
+    FILE *fout;
+
+    /* Setup @pin to point to the start of a file open for (at least)
+     * reading containing the message. */
+    strcpy(tempfile1, "/tmp/spooltestAXXXXXX");
+    fd = mkstemp(tempfile1);
+    CU_ASSERT(fd >= 0);
+    r = retry_write(fd, MSG, sizeof(MSG)-1);
+    CU_ASSERT_EQUAL(r, sizeof(MSG)-1);
+    lseek(fd, SEEK_SET, 0);
+    pin = prot_new(fd, /*read*/0);
+    CU_ASSERT_PTR_NOT_NULL(pin);
+
+    /* Setup @fout to point to the start of an empty file */
+    strcpy(tempfile2, "/tmp/spooltestBXXXXXX");
+    fd = mkstemp(tempfile2);
+    CU_ASSERT(fd >= 0);
+    fout = fdopen(fd, "w+");
+    CU_ASSERT_PTR_NOT_NULL(fout);
+
+    cache = spool_new_hdrcache();
+    CU_ASSERT_PTR_NOT_NULL(cache);
+
+    /* TODO: test non-NULL skipheaders */
+    r = spool_fill_hdrcache(pin, fout, cache, NULL);
+    CU_ASSERT_EQUAL(r, 0);
+
+    val = spool_getheader(cache, "Nonesuch");
+    CU_ASSERT_PTR_NULL(val);
+    val = spool_getheader(cache, "From");
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val[0], HFROM);
+    CU_ASSERT_PTR_NULL(val[1]);
+    val = spool_getheader(cache, "fRoM");
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val[0], HFROM);
+    CU_ASSERT_PTR_NULL(val[1]);
+    val = spool_getheader(cache, "from");
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val[0], HFROM);
+    CU_ASSERT_PTR_NULL(val[1]);
+
+    val = spool_getheader(cache, "To");
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val[0], HTO);
+    CU_ASSERT_PTR_NULL(val[1]);
+
+    val = spool_getheader(cache, "Subject");
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val[0], HSUBJECT);
+    CU_ASSERT_PTR_NULL(val[1]);
+
+    val = spool_getheader(cache, "message-id");
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val[0], HMESSAGEID);
+    CU_ASSERT_PTR_NULL(val[1]);
+
+    val = spool_getheader(cache, "received");
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val[0], HRECEIVED1);
+    CU_ASSERT_STRING_EQUAL(val[1], HRECEIVED2);
+    CU_ASSERT_STRING_EQUAL(val[2], HRECEIVED3);
+    CU_ASSERT_PTR_NULL(val[3]);
+
+    spool_free_hdrcache(cache);
+    fclose(fout);
+    prot_free(pin);
+    unlink(tempfile1);
+    unlink(tempfile2);
+}
+
+/* BZ3386: insert more unique headers than the internal limit of 4009
+ * headers, and see what happens. */
+static void test_bz3386(void)
+{
+    hdrcache_t cache;
+#define N 5000
+    int i;
+    char name[32];
+    char body[128];
+    char body2[128];	/* use a different buffer Just In Case */
+    const char **val;
+
+    cache = spool_new_hdrcache();
+    CU_ASSERT_PTR_NOT_NULL(cache);
+
+    for (i = 0 ; i < N ; i++) {
+	snprintf(name, sizeof(name), "X-Foo-%d-%c", i, 'A'+(i%26));
+	snprintf(body, sizeof(body), "value %d %c", i, 'A'+(i%26));
+	spool_cache_header(xstrdup(name), xstrdup(body), cache);
+    }
+
+    strcpy(body, "Old Buffer");
+
+    for (i = 0 ; i < N ; i++) {
+	snprintf(name, sizeof(name), "X-Foo-%d-%c", i, 'A'+(i%26));
+	snprintf(body2, sizeof(body2), "value %d %c", i, 'A'+(i%26));
+	val = spool_getheader(cache, name);
+	CU_ASSERT_PTR_NOT_NULL(val);
+	CU_ASSERT_STRING_EQUAL(val[0], body2);
+	CU_ASSERT_PTR_NULL(val[1]);
+    }
+
+    spool_free_hdrcache(cache);
+#undef N
+}

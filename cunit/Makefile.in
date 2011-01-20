@@ -101,9 +101,10 @@ PROGS = unit
 
 TESTSOURCES = times.c glob.c md5.c parseaddr.c message.c \
 	    strconcat.c crc32.c binhex.c guid.c imapurl.c \
-	    @SIEVE_TESTSOURCES@ strarray.c
+	    @SIEVE_TESTSOURCES@ strarray.c spool.c
 TESTLIBS = @SIEVE_LIBS@ \
 	@top_srcdir@/imap/mutex_fake.o @top_srcdir@/imap/libimap.a \
+	@top_srcdir@/imap/spool.o \
 	@top_srcdir@/lib/libcyrus.a @top_srcdir@/lib/libcyrus_min.a
 
 BUILTSOURCES = registers.h
