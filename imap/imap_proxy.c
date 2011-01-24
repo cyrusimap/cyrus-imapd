@@ -180,7 +180,7 @@ static int pipe_response(struct backend *s, const char *tag, int include_last,
 	}
     }
 
-    s->last_result.len = 0;
+    buf_reset(&s->last_result);
 
     /* the only complication here are literals */
     do {
@@ -228,16 +228,8 @@ static int pipe_response(struct backend *s, const char *tag, int include_last,
 	
 	    if (last && !include_last) {
 		/* Store the tagged line */
-		if (sl > s->last_result.alloc - s->last_result.len) {
-		    s->last_result.alloc =
-			(s->last_result.alloc == 0) ? (int) sizeof(buf) :
-			s->last_result.alloc * 2;
-		    s->last_result.s = xrealloc(s->last_result.s,
-						s->last_result.alloc+1);
-		}
-
-		strcpy(s->last_result.s + s->last_result.len, buf + taglen + 1);
-		s->last_result.len += sl - taglen - 1;
+		buf_appendcstr(&s->last_result, buf+taglen+1);
+		buf_cstring(&s->last_result);
 	    }
 	}
 
@@ -509,12 +501,8 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
 		return PROXY_NOCONNECTION;
 	    }	
 	    /* Got the end of the response */
-	    if (s->last_result.alloc == 0) {
-		s->last_result.alloc = sizeof(buf);
-		s->last_result.s = xmalloc(s->last_result.alloc+1);
-	    }
-	    strcpy(s->last_result.s, buf);
-	    s->last_result.len = strlen(buf);
+	    buf_appendcstr(&s->last_result, buf);
+	    buf_cstring(&s->last_result);
 
 	    switch (buf[0]) {
 	    case 'O': case 'o':
