@@ -117,16 +117,15 @@ static void test_fill(void)
     hdrcache_t cache;
     const char **val;
     int fd;
-    char tempfile1[32];
-    char tempfile2[32];
+    char tempfile[32];
     int r;
     struct protstream *pin;
     FILE *fout;
 
     /* Setup @pin to point to the start of a file open for (at least)
      * reading containing the message. */
-    strcpy(tempfile1, "/tmp/spooltestAXXXXXX");
-    fd = mkstemp(tempfile1);
+    strcpy(tempfile, "/tmp/spooltestAXXXXXX");
+    fd = mkstemp(tempfile);
     CU_ASSERT(fd >= 0);
     r = retry_write(fd, MSG, sizeof(MSG)-1);
     CU_ASSERT_EQUAL(r, sizeof(MSG)-1);
@@ -134,11 +133,8 @@ static void test_fill(void)
     pin = prot_new(fd, /*read*/0);
     CU_ASSERT_PTR_NOT_NULL(pin);
 
-    /* Setup @fout to point to the start of an empty file */
-    strcpy(tempfile2, "/tmp/spooltestBXXXXXX");
-    fd = mkstemp(tempfile2);
-    CU_ASSERT(fd >= 0);
-    fout = fdopen(fd, "w+");
+    /* Setup @fout to ignore data written to it */
+    fout = fopen("/dev/null", "w");
     CU_ASSERT_PTR_NOT_NULL(fout);
 
     cache = spool_new_hdrcache();
@@ -188,8 +184,7 @@ static void test_fill(void)
     spool_free_hdrcache(cache);
     fclose(fout);
     prot_free(pin);
-    unlink(tempfile1);
-    unlink(tempfile2);
+    unlink(tempfile);
 }
 
 /* BZ3386: insert more unique headers than the internal limit of 4009
