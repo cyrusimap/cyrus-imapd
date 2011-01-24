@@ -82,7 +82,9 @@ void strarray_truncate(strarray_t *sa, int newlen);
 #define strarray_pushm(sa, s)	    strarray_appendm((sa), (s))
 
 char *strarray_join(const strarray_t *, const char *sep);
+strarray_t *strarray_splitm(char *buf, const char *sep);
 strarray_t *strarray_split(const char *buf, const char *sep);
+strarray_t *strarray_nsplit(const char *buf, size_t len, const char *sep);
 
 char **strarray_takevf(strarray_t *sa);
 
