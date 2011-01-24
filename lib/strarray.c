@@ -239,10 +239,9 @@ char *strarray_join(const strarray_t *sa, const char *sep)
     return buf;
 }
 
-strarray_t *strarray_split(const char *line, const char *sep)
+strarray_t *strarray_splitm(char *buf, const char *sep)
 {
     strarray_t *sa = strarray_new();
-    char *buf = xstrdup(line);
     char *p;
 
     if (!sep)
@@ -253,6 +252,16 @@ strarray_t *strarray_split(const char *line, const char *sep)
 
     free(buf);
     return sa;
+}
+
+strarray_t *strarray_split(const char *line, const char *sep)
+{
+    return strarray_splitm(xstrdup(line), sep);
+}
+
+strarray_t *strarray_nsplit(const char *buf, size_t len, const char *sep)
+{
+    return strarray_splitm(xstrndup(buf, len), sep);
 }
 
 char **strarray_takevf(strarray_t *sa)
