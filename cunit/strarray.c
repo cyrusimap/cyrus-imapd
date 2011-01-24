@@ -442,6 +442,31 @@ static void test_split(void)
     CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 4), WORD4);
     strarray_free(sa);
 
+    /* splitm - takes ownership of a strdup()d argument */
+    sa = strarray_splitm(xstrdup(WORD0" "WORD1" "WORD2" "WORD3" "WORD4), " ");
+    CU_ASSERT_PTR_NOT_NULL(sa);
+    CU_ASSERT_EQUAL(sa->count, 5);
+    CU_ASSERT(sa->alloc >= sa->count);
+    CU_ASSERT_PTR_NOT_NULL(sa->data);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 0), WORD0);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 1), WORD1);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 2), WORD2);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 3), WORD3);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 4), WORD4);
+    strarray_free(sa);
+
+    /* nsplit - specify a byte range to copy and split */
+    sa = strarray_nsplit(WORD0" "WORD1" "WORD2" "WORD3" "WORD4,
+			 sizeof(WORD0)+sizeof(WORD1)+sizeof(WORD2), " ");
+    CU_ASSERT_PTR_NOT_NULL(sa);
+    CU_ASSERT_EQUAL(sa->count, 3);
+    CU_ASSERT(sa->alloc >= sa->count);
+    CU_ASSERT_PTR_NOT_NULL(sa->data);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 0), WORD0);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 1), WORD1);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(sa, 2), WORD2);
+    strarray_free(sa);
+
 #undef WORD0
 #undef WORD1
 #undef WORD2
