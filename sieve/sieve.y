@@ -736,29 +736,18 @@ int yyerror(char *msg)
 static char *check_reqs(strarray_t *sa)
 {
     char *s;
-    char *err = NULL, *p, sep = ':';
-    size_t alloc = 0;
+    struct buf errs = BUF_INITIALIZER;
 
     while ((s = strarray_shift(sa))) {
 	if (!script_require(parse_script, s)) {
-	    if (!err) {
-		alloc = 100;
-		p = err = xmalloc(alloc);
-		p += sprintf(p, "Unsupported feature(s) in \"require\"");
-	    }
-	    else if ((size_t) (p - err + strlen(s) + 5) > alloc) {
-		alloc += 100;
-		err = xrealloc(err, alloc);
-		p = err + strlen(err);
-	    }
-
-	    p += sprintf(p, "%c \"%s\"", sep, s);
-	    sep = ',';
+	    if (!errs.len)
+		buf_printf(&errs, "Unsupported feature(s) in \"require\": \"%s\"", s);
+	    else
+		buf_printf(&errs, ", \"%s\"", s);
 	}
-
 	free(s);
     }
-    return err;
+    return buf_release(&errs);
 }
 
 static test_t *build_address(int t, struct aetags *ae,
