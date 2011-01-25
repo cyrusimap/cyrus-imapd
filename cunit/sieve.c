@@ -558,6 +558,7 @@ static void context_setup(sieve_test_context_t *ctx,
     r = sieve_emit_bytecode(fd, bytecode);
     CU_ASSERT(r > 0);
     sieve_free_bytecode(&bytecode);
+    sieve_script_free(&scr);
 
     /* Now load the compiled bytecode */
     r = sieve_script_load(tempfile, &ctx->exe);
