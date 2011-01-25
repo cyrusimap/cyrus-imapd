@@ -145,6 +145,8 @@ void free_test(test_t *t)
 	break;
 
     case ADDRESS:
+    case ENVELOPE:
+	free(t->u.ae.comparator);
 	strarray_free(t->u.ae.sl);
 	strarray_free(t->u.ae.pl);
 	break;
