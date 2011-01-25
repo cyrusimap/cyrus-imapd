@@ -845,6 +845,94 @@ static void test_exists(void)
     context_cleanup(&ctx);
 }
 
+static void test_address_domain(void)
+{
+    static const char SCRIPT[] =
+    "if address :domain :is \"from\" \"true.com\"\n"
+    "{redirect \"me@blah.com\";}\n"
+    ;
+    static const char MSG_TRUE[] =
+    "Date: Mon, 25 Jan 2003 08:51:06 -0500\r\n"
+    "From: zme@true.com\r\n"
+    "To: you\r\n"
+    "Subject: simple address test\r\n"
+    "\r\n"
+    "blah\n"
+    ;
+    static const char MSG_FALSE[] =
+    "Date: Mon, 25 Jan 2003 08:51:06 -0500\r\n"
+    "From: zme@false.com\r\n"
+    "To: you\r\n"
+    "Subject: simple address test\r\n"
+    "\r\n"
+    "blah\n"
+    ;
+    sieve_test_context_t ctx;
+
+    context_setup(&ctx, SCRIPT);
+    CU_ASSERT_EQUAL(ctx.stats.errors, 0);
+
+    run_message(&ctx, MSG_TRUE);
+    CU_ASSERT_EQUAL(ctx.stats.errors, 0);
+    CU_ASSERT_EQUAL(ctx.stats.actions, 1);
+    CU_ASSERT_EQUAL(ctx.stats.redirects, 1);
+    CU_ASSERT_EQUAL(ctx.stats.keeps, 0);
+    CU_ASSERT_STRING_EQUAL(ctx.redirected_to, "me@blah.com");
+
+    run_message(&ctx, MSG_FALSE);
+    CU_ASSERT_EQUAL(ctx.stats.errors, 0);
+    CU_ASSERT_EQUAL(ctx.stats.actions, 2);
+    CU_ASSERT_EQUAL(ctx.stats.redirects, 1);
+    CU_ASSERT_EQUAL(ctx.stats.keeps, 1);
+    CU_ASSERT_STRING_EQUAL(ctx.redirected_to, "me@blah.com");
+
+    context_cleanup(&ctx);
+}
+
+static void test_address_localpart(void)
+{
+    static const char SCRIPT[] =
+    "if address :localpart :is \"from\" \"zme\"\n"
+    "{redirect \"me@blah.com\";}\n"
+    ;
+    static const char MSG_TRUE[] =
+    "Date: Mon, 25 Jan 2003 08:51:06 -0500\r\n"
+    "From: zme@true.com\r\n"
+    "To: you\r\n"
+    "Subject: simple address test\r\n"
+    "\r\n"
+    "blah\n"
+    ;
+    static const char MSG_FALSE[] =
+    "Date: Mon, 25 Jan 2003 08:51:06 -0500\r\n"
+    "From: yme@false.com\r\n"
+    "To: you\r\n"
+    "Subject: simple address test\r\n"
+    "\r\n"
+    "blah\n"
+    ;
+    sieve_test_context_t ctx;
+
+    context_setup(&ctx, SCRIPT);
+    CU_ASSERT_EQUAL(ctx.stats.errors, 0);
+
+    run_message(&ctx, MSG_TRUE);
+    CU_ASSERT_EQUAL(ctx.stats.errors, 0);
+    CU_ASSERT_EQUAL(ctx.stats.actions, 1);
+    CU_ASSERT_EQUAL(ctx.stats.redirects, 1);
+    CU_ASSERT_EQUAL(ctx.stats.keeps, 0);
+    CU_ASSERT_STRING_EQUAL(ctx.redirected_to, "me@blah.com");
+
+    run_message(&ctx, MSG_FALSE);
+    CU_ASSERT_EQUAL(ctx.stats.errors, 0);
+    CU_ASSERT_EQUAL(ctx.stats.actions, 2);
+    CU_ASSERT_EQUAL(ctx.stats.redirects, 1);
+    CU_ASSERT_EQUAL(ctx.stats.keeps, 1);
+    CU_ASSERT_STRING_EQUAL(ctx.redirected_to, "me@blah.com");
+
+    context_cleanup(&ctx);
+}
+
 // TODO: test
 // if size :over 10K { redirect "me@blah.com"; }
 // TODO: test
