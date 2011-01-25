@@ -66,6 +66,7 @@
 #include "tree.h"
 #include "map.h"
 #include "sieve.h"
+#include "util.h"
 #include "message.h"
 #include "bytecode.h"
 #include "libconfig.h"
@@ -218,15 +219,11 @@ int sieve_script_free(sieve_script_t **s)
     return SIEVE_OK;
 }
  
-#define GROW_AMOUNT 100
-
 static void add_header(sieve_interp_t *i, int isenv, char *header, 
-		       void *message_context, char **out, 
-		       int *outlen, int *outalloc)
+		       void *message_context, struct buf *out)
 {
     const char **h;
     char *decoded_header;
-    int addlen;
     /* get header value */
     if (isenv)
 	i->getenvelope(message_context, header, &h);	
@@ -237,35 +234,17 @@ static void add_header(sieve_interp_t *i, int isenv, char *header,
 	return;
 
     decoded_header = charset_parse_mimeheader(h[0]);
-
-    addlen = strlen(decoded_header) + 1;
-
-    /* realloc if necessary */
-    if ( (*outlen) + addlen >= *outalloc)
-    {
-	*outalloc = (*outlen) + addlen + GROW_AMOUNT;
-	*out = xrealloc(*out, *outalloc);
-    }
-
-    /* add header value */
-    strcat(*out, decoded_header);
-
+    buf_appendcstr(out, decoded_header);
     free(decoded_header);
-
-    *outlen += addlen;
 }
 
 static int build_notify_message(sieve_interp_t *i,
 				const char *msg, 
-				void *message_context, char **out, int *outlen)
+				void *message_context,
+				struct buf *out)
 {
-    int allocsize = GROW_AMOUNT;
     const char *c;
     size_t n;
-
-    *out = xmalloc(GROW_AMOUNT);
-    *outlen = 0;
-    (*out)[0]='\0';
 
     if (msg == NULL) return SIEVE_OK;
 
@@ -274,15 +253,15 @@ static int build_notify_message(sieve_interp_t *i,
     while (*c) {
 	/* expand variables */
 	if (!strncasecmp(c, "$from$", 6)) {
-	    add_header(i, 0 ,"From", message_context, out, outlen, &allocsize);
+	    add_header(i, 0 ,"From", message_context, out);
 	    c += 6;
 	}
 	else if (!strncasecmp(c, "$env-from$", 10)) {
-	    add_header(i, 1, "From", message_context, out, outlen, &allocsize);
+	    add_header(i, 1, "From", message_context, out);
 	    c += 10;
 	}
 	else if (!strncasecmp(c, "$subject$", 9)) {
-	    add_header(i, 0, "Subject", message_context, out, outlen, &allocsize);
+	    add_header(i, 0, "Subject", message_context, out);
 	    c += 9;
 	}
 	else if (i->getbody &&
@@ -300,22 +279,8 @@ static int build_notify_message(sieve_interp_t *i,
 	    i->getbody(message_context, content_types, &parts);
 
 	    /* we only use the first text part */
-	    if (parts && parts[0] && parts[0]->decoded_body) {
-		const char *content = parts[0]->decoded_body;
-		int size = strlen(content);
-
-		if (n == 0 || n > (size_t)size) n = size;
-
-		/* realloc if necessary */
-		if ( (*outlen) + n+1 >= (size_t)allocsize) {
-		    allocsize = (*outlen) + n+1 + GROW_AMOUNT;
-		    *out = xrealloc(*out, allocsize);
-		}
-		/* copy the plaintext */
-		strncat(*out, content, n);
-		(*out)[*outlen+n]='\0';
-		(*outlen) += n;
-	    }
+	    if (parts && parts[0] && parts[0]->decoded_body)
+		buf_appendcstr(out, parts[0]->decoded_body);
 
 	    /* free the results */
 	    if (parts) {
@@ -328,19 +293,12 @@ static int build_notify_message(sieve_interp_t *i,
 	else {
 	    /* find length of plaintext up to next potential variable */
 	    n = strcspn(c+1, "$") + 1; /* skip opening '$' */
-	    /* realloc if necessary */
-	    if ( (*outlen) + n+1 >= (size_t)allocsize) {
-		allocsize = (*outlen) + n+1 + GROW_AMOUNT;
-		*out = xrealloc(*out, allocsize);
-	    }
-	    /* copy the plaintext */
-	    strncat(*out, c, n);
-	    (*out)[*outlen+n]='\0';
-	    (*outlen) += n;
+	    buf_appendmap(out, c, n);
 	    c += n;
 	}
     }
 
+    buf_cstring(out);
     return SIEVE_OK;
 }
 
@@ -382,8 +340,7 @@ static int send_notify_callback(sieve_interp_t *interp,
 				char *actions_string, const char **errmsg)
 {
     sieve_notify_context_t nc;
-    char *out_msg, *build_msg;
-    int out_msglen;    
+    struct buf out = BUF_INITIALIZER;
     int ret;
 
     assert(notify->isactive);
@@ -401,18 +358,12 @@ static int send_notify_callback(sieve_interp_t *interp,
       if(!strcmp("$env-from$",*nc.options))
         interp->getenvelope(message_context, "From", &nc.options);
 
-    build_notify_message(interp, notify->message, message_context, 
-			 &out_msg, &out_msglen);
+    build_notify_message(interp, notify->message, message_context,
+			 &out);
+    buf_appendcstr(&out, "\n\n");
+    buf_appendcstr(&out, actions_string);
 
-    build_msg = xmalloc(out_msglen + strlen(actions_string) + 30);
-
-    strcpy(build_msg, out_msg);
-    strcat(build_msg, "\n\n");
-    strcat(build_msg, actions_string);
-
-    nc.message = build_msg;
-
-    free(out_msg);
+    nc.message = buf_cstring(&out);
 
     ret = interp->notify(&nc,
 			 interp->interp_context,
@@ -420,7 +371,7 @@ static int send_notify_callback(sieve_interp_t *interp,
 			 message_context,
 			 errmsg);    
 
-    free(build_msg);
+    buf_free(&out);
 
     return ret;
 }
