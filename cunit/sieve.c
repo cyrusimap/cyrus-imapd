@@ -799,3 +799,83 @@ static void test_address_all(void)
 
     context_cleanup(&ctx);
 }
+
+static void test_exists(void)
+{
+    static const char SCRIPT[] =
+    "if exists \"flooglewart\"\n"
+    "{redirect \"me@blah.com\";}\n"
+    ;
+    static const char MSG_TRUE[] =
+    "Date: Mon, 25 Jan 2003 08:51:06 -0500\r\n"
+    "From: zme@true.com\r\n"
+    "To: you\r\n"
+    "Subject: simple address test\r\n"
+    "Flooglewart: fnarp fmeh oogedyboogedy\r\n"
+    "\r\n"
+    "blah\n"
+    ;
+    static const char MSG_FALSE[] =
+    "Date: Mon, 25 Jan 2003 08:51:06 -0500\r\n"
+    "From: yme@false.com\r\n"
+    "To: you\r\n"
+    "Subject: simple address test\r\n"
+    "\r\n"
+    "blah\n"
+    ;
+    sieve_test_context_t ctx;
+
+    context_setup(&ctx, SCRIPT);
+    CU_ASSERT_EQUAL(ctx.stats.errors, 0);
+
+    run_message(&ctx, MSG_TRUE);
+    CU_ASSERT_EQUAL(ctx.stats.errors, 0);
+    CU_ASSERT_EQUAL(ctx.stats.actions, 1);
+    CU_ASSERT_EQUAL(ctx.stats.redirects, 1);
+    CU_ASSERT_EQUAL(ctx.stats.keeps, 0);
+    CU_ASSERT_STRING_EQUAL(ctx.redirected_to, "me@blah.com");
+
+    run_message(&ctx, MSG_FALSE);
+    CU_ASSERT_EQUAL(ctx.stats.errors, 0);
+    CU_ASSERT_EQUAL(ctx.stats.actions, 2);
+    CU_ASSERT_EQUAL(ctx.stats.redirects, 1);
+    CU_ASSERT_EQUAL(ctx.stats.keeps, 1);
+    CU_ASSERT_STRING_EQUAL(ctx.redirected_to, "me@blah.com");
+
+    context_cleanup(&ctx);
+}
+
+// TODO: test
+// if size :over 10K { redirect "me@blah.com"; }
+// TODO: test
+// if true {...}
+//
+// if false {...}
+//
+// if not false {...}
+//
+// if true {...} else {...}
+//
+// if false {...} elsif true {...} else {...}
+//
+// if false {...} elsif false {...} else {...}
+//
+// if false {} else {...}
+//
+// if true { if true { if true { ... } } }
+//
+// if allof(false, false) {...} else {...}
+//
+// if allof(false,true) {...} else {...}
+//
+// if allof(true,false) {...} else {...}
+//
+// if allof(true,true) {...} else {...}
+//
+// if anyof(false, false) {...} else {...}
+//
+// if anyof(false,true) {...} else {...}
+//
+// if anyof(true,false) {...} else {...}
+//
+// if anyof(true,true) {...} else {...}
