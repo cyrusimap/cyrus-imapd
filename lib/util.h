@@ -189,6 +189,8 @@ void buf_appendmap(struct buf *buf, const char *base, int len);
 void buf_putc(struct buf *buf, char c);
 void buf_printf(struct buf *buf, const char *fmt, ...)
     __attribute__((format(printf,2,3)));
+unsigned int buf_replace_all(struct buf *buf, const char *match,
+			     const char *replace);
 void buf_free(struct buf *buf);
 
 /*
