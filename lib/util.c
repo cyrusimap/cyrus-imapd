@@ -538,6 +538,18 @@ void buf_reset(struct buf *buf)
     buf->flags &= ~BUF_CSTRING;
 }
 
+void buf_truncate(struct buf *buf, unsigned int len)
+{
+    if (len > buf->alloc) {
+	/* grow the buffer and zero-fill the new bytes */
+	unsigned int more = len - buf->len;
+	buf_ensure(buf, more);
+	memset(buf->s + buf->len, 0, more);
+    }
+    buf->len = len;
+    buf->flags &= ~BUF_CSTRING;
+}
+
 void buf_setcstr(struct buf *buf, const char *str)
 {
     buf_setmap(buf, str, strlen(str));
@@ -659,6 +671,14 @@ unsigned int buf_replace_all(struct buf *buf, const char *match,
     }
 
     return n;
+}
+
+void buf_init(struct buf *buf)
+{
+    buf->alloc = 0;
+    buf->len = 0;
+    buf->flags = 0;
+    buf->s = NULL;
 }
 
 void buf_free(struct buf *buf)

@@ -176,9 +176,11 @@ struct buf {
 #define BUF_INITIALIZER	{ NULL, 0, 0, 0 }
 
 const char *buf_cstring(struct buf *buf);
+void buf_ensure(struct buf *buf, int morebytes);
 void buf_getmap(struct buf *buf, const char **base, int *len);
 unsigned buf_len(struct buf *buf);
 void buf_reset(struct buf *buf);
+void buf_truncate(struct buf *buf, unsigned int len);
 void buf_setcstr(struct buf *buf, const char *str);
 void buf_setmap(struct buf *buf, const char *base, int len);
 void buf_copy(struct buf *dst, const struct buf *src);
@@ -191,6 +193,7 @@ void buf_printf(struct buf *buf, const char *fmt, ...)
     __attribute__((format(printf,2,3)));
 unsigned int buf_replace_all(struct buf *buf, const char *match,
 			     const char *replace);
+void buf_init(struct buf *buf);
 void buf_free(struct buf *buf);
 
 /* use getpassphrase on machines which support it */
