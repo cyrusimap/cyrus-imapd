@@ -622,6 +622,45 @@ void buf_printf(struct buf *buf, const char *fmt, ...)
     buf->flags |= BUF_CSTRING;
 }
 
+/**
+ * Replace all instances of the string literal @match in @buf
+ * with the string @replace, which may be NULL to just remove
+ * instances of @match.
+ * Returns: the number of substitutions made.
+ */
+unsigned int buf_replace_all(struct buf *buf, const char *match,
+			     const char *replace)
+{
+    unsigned int n = 0;
+    int matchlen = strlen(match);
+    int replacelen = (replace ? strlen(replace) : 0);
+    char *p;
+
+    /* we need buf to be a nul terminated string now please */
+    buf_cstring(buf);
+
+    p = buf->s;
+    while ((p = strstr(p, match))) {
+	if (replacelen > matchlen) {
+	    /* string will need to expand */
+	    int dp = (p - buf->s);
+	    buf_ensure(buf, replacelen - matchlen);
+	    p = buf->s + dp;
+	}
+	if (matchlen != replacelen) {
+	    memmove(p+replacelen, p+matchlen,
+		    buf->len - (p - buf->s) - matchlen + replacelen + 1);
+	    buf->len += (replacelen - matchlen);
+	}
+	if (replace)
+	    memcpy(p, replace, replacelen);
+	n++;
+	p += replacelen;
+    }
+
+    return n;
+}
+
 void buf_free(struct buf *buf)
 {
     if (buf->alloc)
