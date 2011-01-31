@@ -77,6 +77,7 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
+#include "strarray.h"
 #include "imparse.h"
 #include "imclient.h"
 #include "nonblock.h"
@@ -100,12 +101,6 @@ struct imclient_callback {
     char *keyword;		/* Untagged data protocol keyword */
     imclient_proc_t *proc;		/* Callback function */
     void *rock;			/* Callback rock */
-};
-
-struct stringlist 
-{
-    char *str;
-    struct stringlist *next;
 };
 
 /* Connection data */
@@ -151,7 +146,7 @@ struct imclient {
     int callback_alloc;
     struct imclient_callback *callback;
 
-    struct stringlist *interact_results;
+    strarray_t interact_results;
 
     sasl_conn_t *saslconn;
     int saslcompleted;
@@ -258,7 +253,7 @@ int imclient_connect(struct imclient **imclient,
     freeaddrinfo(res0);
     (*imclient)->outptr = (*imclient)->outstart = (*imclient)->outbuf;
     (*imclient)->outleft = (*imclient)->maxplain = sizeof((*imclient)->outbuf);
-    (*imclient)->interact_results = NULL;
+    strarray_init(&(*imclient)->interact_results);
     imclient_addcallback(*imclient,
 		 "", 0, (imclient_proc_t *) 0, (void *)0,
 		 "OK", CALLBACK_NOLITERAL, (imclient_proc_t *)0, (void *)0,
@@ -299,7 +294,6 @@ void
 imclient_close(struct imclient *imclient)
 {
     int i;
-    struct stringlist *cur, *cur_next;
 
     assert(imclient);
 
@@ -312,15 +306,11 @@ imclient_close(struct imclient *imclient)
     for (i = 0; i < imclient->callback_num; i++) {
 	free(imclient->callback[i].keyword);
     }
-    if (imclient->callback) free((char *)imclient->callback);
+    if (imclient->callback) free(imclient->callback);
 
-    for(cur=imclient->interact_results; cur; cur=cur_next) {
-	cur_next = cur->next;
-	free(cur->str);
-	free(cur);
-    }
+    strarray_fini(&imclient->interact_results);
 
-    free((char *)imclient);
+    free(imclient);
 }
 
 void imclient_setflags(struct imclient *imclient, int flags)
@@ -1117,46 +1107,33 @@ static sasl_security_properties_t *make_secprops(int min,int max)
   return ret;
 }
 
-void interaction (struct imclient *context, sasl_interact_t *t, char *user)
+void interaction(struct imclient *context, sasl_interact_t *t, char *user)
 {
-  char result[1024];
-  struct stringlist *cur;
-  
-  assert(context);
-  assert(t);
+    char result[1024];
+    char *str = NULL;
 
-  cur = malloc(sizeof(struct stringlist));
-  if(!cur) {
-      t->len=0;
-      t->result=NULL;
-      return;
-  }
+    assert(context);
+    assert(t);
 
-  cur->str = NULL;
-  cur->next = context->interact_results;
-  context->interact_results = cur;
-
-  if ((t->id == SASL_CB_USER || t->id == SASL_CB_AUTHNAME) 
+    if ((t->id == SASL_CB_USER || t->id == SASL_CB_AUTHNAME)
             && user && user[0]) {
-      t->len = strlen(user);
-      cur->str = xstrdup(user);
-  } else {
-      printf("%s: ", t->prompt);
-      if (t->id == SASL_CB_PASS) {
-	  char *ptr = getpass("");
-	  strlcpy(result, ptr, sizeof(result));
-      } else {
-	  if (!fgets(result, sizeof(result)-1, stdin)) return;
-	  result[strlen(result) - 1] = '\0';
-      }
+	str = xstrdup(user);
+    } else {
+	printf("%s: ", t->prompt);
+	if (t->id == SASL_CB_PASS) {
+	    char *ptr = getpass("");
+	    strlcpy(result, ptr, sizeof(result));
+	} else {
+	    if (!fgets(result, sizeof(result)-1, stdin))
+		return;
+	}
+	str = xstrdup(result);
+    }
 
-      t->len = strlen(result);
-      cur->str = (char *) xmalloc(t->len+1);
-      memset(cur->str, 0, t->len+1);
-      memcpy(cur->str, result, t->len);
-  }
-
-  t->result = cur->str;
+    assert(str);
+    t->result = str;
+    t->len = strlen(str);
+    strarray_appendm(&context->interact_results, str);
 }
 
 void fillin_interactions(struct imclient *context,
