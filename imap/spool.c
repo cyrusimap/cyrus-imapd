@@ -82,11 +82,6 @@ typedef enum {
     BODY
 } state;
 
-enum {
-    NAMEINC = 128,
-    BODYINC = 1024
-};
-
 /* we don't have to worry about dotstuffing here, since it's illegal
    for a header to begin with a dot!
 
@@ -101,23 +96,16 @@ static int parseheader(struct protstream *fin, FILE *fout,
 		       const char **skipheaders)
 {
     int c;
-    static char *name = NULL, *body = NULL;
-    static int namelen = 0, bodylen = 0;
-    int off = 0;
+    static struct buf name = BUF_INITIALIZER;
+    static struct buf body = BUF_INITIALIZER;
     state s = NAME_START;
     int r = 0;
     int reject8bit = config_getswitch(IMAPOPT_REJECT8BIT);
     int munge8bit = config_getswitch(IMAPOPT_MUNGE8BIT);
     const char **skip = NULL;
 
-    if (namelen == 0) {
-	namelen += NAMEINC;
-	name = (char *) xrealloc(name, namelen * sizeof(char));
-    }
-    if (bodylen == 0) {
-	bodylen += BODYINC;
-	body = (char *) xrealloc(body, bodylen * sizeof(char));
-    }
+    buf_reset(&name);
+    buf_reset(&body);
 
     /* there are two ways out of this loop, both via gotos:
        either we successfully read a header (got_header)
@@ -152,20 +140,19 @@ static int parseheader(struct protstream *fin, FILE *fout,
 		r = IMAP_MESSAGE_BADHEADER;
 		goto ph_error;
 	    }
-	    name[0] = c;
-	    off = 1;
+	    buf_putc(&name, c);
 	    s = NAME;
 	    break;
 
 	case NAME:
 	    if (c == ' ' || c == '\t' || c == ':') {
-		name[off] = '\0';
+		buf_cstring(&name);
 		/* see if this header is in our skip list */
 		for (skip = skipheaders;
-		     skip && *skip && strcasecmp(name, *skip); skip++);
+		     skip && *skip && strcasecmp(name.s, *skip); skip++);
 		if (!skip || !*skip) {
 		    /* write the header name to the output */
-		    fputs(name, fout);
+		    fputs(name.s, fout);
 		    skip = NULL;
 		}
 		s = (c == ':' ? BODY_START : COLON);
@@ -175,11 +162,7 @@ static int parseheader(struct protstream *fin, FILE *fout,
 		r = IMAP_MESSAGE_BADHEADER;
 		goto ph_error;
 	    }
-	    name[off++] = c;
-	    if (off >= namelen - 3) {
-		namelen += NAMEINC;
-		name = (char *) xrealloc(name, namelen);
-	    }
+	    buf_putc(&name, c);
 	    break;
 	
 	case COLON:
@@ -199,7 +182,7 @@ static int parseheader(struct protstream *fin, FILE *fout,
 	case BODY_START:
 	    if (c == ' ' || c == '\t') /* eat the whitespace */
 		break;
-	    off = 0;
+	    buf_reset(&body);
 	    s = BODY;
 	    /* falls through! */
 	case BODY:
@@ -221,7 +204,7 @@ static int parseheader(struct protstream *fin, FILE *fout,
 		}
 		if (c != ' ' && c != '\t') {
 		    /* this is the end of the header */
-		    body[off] = '\0';
+		    buf_cstring(&body);
 		    prot_ungetc(c, fin);
 		    goto got_header;
 		}
@@ -241,11 +224,7 @@ static int parseheader(struct protstream *fin, FILE *fout,
 		    }
 		}
 		/* just an ordinary character */
-		body[off++] = c;
-		if (off >= bodylen - 3) {
-		    bodylen += BODYINC;
-		    body = (char *) xrealloc(body, bodylen);
-		}
+		buf_putc(&body, c);
 	    }
 	}
 
@@ -266,8 +245,11 @@ static int parseheader(struct protstream *fin, FILE *fout,
     return r;
 
  got_header:
-    if (headname != NULL) *headname = xstrdup(name);
-    if (contents != NULL) *contents = xstrdup(body);
+    /* Note: xstrdup()ing the string ensures we return
+     * a minimal length string with no allocation slack
+     * at the end */
+    if (headname != NULL) *headname = xstrdup(name.s);
+    if (contents != NULL) *contents = xstrdup(body.s);
 
     return 0;
 }
