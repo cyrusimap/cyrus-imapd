@@ -380,6 +380,181 @@ static void test_printf(void)
 // #undef SZ
 // }
 
+static void test_replace_all(void)
+{
+#define WORD0	"lorem"
+#define WORD0REP "LAUREN BACALL"
+#define WORD0REP2 "L0R3M"
+#define WORD0REP3 "LRM"
+#define WORD0REP4 "XloremY"
+#define WORD1	"ipsum"
+#define WORD1	"ipsum"
+#define WORD2	"dolor"
+#define WORD3	"sit"
+#define WORD4	"amet"
+    struct buf b = BUF_INITIALIZER;
+    unsigned int n;
+    char *buf_s;
+
+    CU_ASSERT_EQUAL(b.len, 0);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT_PTR_NULL(b.s);
+
+    /* simple test: a single replacement */
+    buf_reset(&b);
+    buf_appendcstr(&b, WORD0" "WORD1);
+    buf_cstring(&b);
+    CU_ASSERT_EQUAL(b.len, sizeof(WORD0" "WORD1)-1);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    CU_ASSERT_STRING_EQUAL(b.s, WORD0" "WORD1);
+
+    n = buf_replace_all(&b, WORD0, WORD0REP);
+    CU_ASSERT_EQUAL(n, 1);
+    CU_ASSERT_EQUAL(b.len, sizeof(WORD0REP" "WORD1)-1);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    CU_ASSERT_STRING_EQUAL(b.s, WORD0REP" "WORD1);
+
+    /* simple test: failure to match */
+    buf_reset(&b);
+    buf_appendcstr(&b, WORD0" "WORD1);
+    buf_cstring(&b);
+    CU_ASSERT_EQUAL(b.len, sizeof(WORD0" "WORD1)-1);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    CU_ASSERT_STRING_EQUAL(b.s, WORD0" "WORD1);
+
+    n = buf_replace_all(&b, WORD4, WORD0REP);
+    CU_ASSERT_EQUAL(n, 0);
+    CU_ASSERT_EQUAL(b.len, sizeof(WORD0" "WORD1)-1);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    CU_ASSERT_STRING_EQUAL(b.s, WORD0" "WORD1);
+
+    /* a replacement which doesn't change the size */
+    buf_reset(&b);
+    buf_appendcstr(&b, WORD0" "WORD1);
+    buf_cstring(&b);
+    CU_ASSERT_EQUAL(b.len, sizeof(WORD0" "WORD1)-1);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    CU_ASSERT_STRING_EQUAL(b.s, WORD0" "WORD1);
+
+    buf_s = b.s;
+    n = buf_replace_all(&b, WORD0, WORD0REP2);
+    CU_ASSERT_EQUAL(n, 1);
+    CU_ASSERT_EQUAL(b.len, sizeof(WORD0REP2" "WORD1)-1);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    CU_ASSERT_PTR_EQUAL(b.s, buf_s);  /* no size change => no realloc */
+    CU_ASSERT_STRING_EQUAL(b.s, WORD0REP2" "WORD1);
+
+    /* a replacement which shrinks the size */
+    buf_reset(&b);
+    buf_appendcstr(&b, WORD0" "WORD1);
+    buf_cstring(&b);
+    CU_ASSERT_EQUAL(b.len, sizeof(WORD0" "WORD1)-1);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    CU_ASSERT_STRING_EQUAL(b.s, WORD0" "WORD1);
+
+    /* a replacement with an empty string */
+    buf_reset(&b);
+    buf_appendcstr(&b, WORD0" "WORD1);
+    buf_cstring(&b);
+    CU_ASSERT_EQUAL(b.len, sizeof(WORD0" "WORD1)-1);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    CU_ASSERT_STRING_EQUAL(b.s, WORD0" "WORD1);
+
+    buf_s = b.s;
+    n = buf_replace_all(&b, WORD0, "");
+    CU_ASSERT_EQUAL(n, 1);
+    CU_ASSERT_EQUAL(b.len, sizeof(" "WORD1)-1);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    CU_ASSERT_PTR_EQUAL(b.s, buf_s);  /* no size change => no realloc */
+    CU_ASSERT_STRING_EQUAL(b.s, " "WORD1);
+
+    /* a replacement with a NULL string */
+    buf_reset(&b);
+    buf_appendcstr(&b, WORD0" "WORD1);
+    buf_cstring(&b);
+    CU_ASSERT_EQUAL(b.len, sizeof(WORD0" "WORD1)-1);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    CU_ASSERT_STRING_EQUAL(b.s, WORD0" "WORD1);
+
+    buf_s = b.s;
+    n = buf_replace_all(&b, WORD0, NULL);
+    CU_ASSERT_EQUAL(n, 1);
+    CU_ASSERT_EQUAL(b.len, sizeof(" "WORD1)-1);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    CU_ASSERT_PTR_EQUAL(b.s, buf_s);  /* no size change => no realloc */
+    CU_ASSERT_STRING_EQUAL(b.s, " "WORD1);
+
+    /* multiple replacements, including abutted ones */
+    buf_reset(&b);
+    buf_appendcstr(&b, WORD0" "WORD1" "WORD2" "WORD0" "WORD3" "WORD0""WORD0" "WORD4);
+    buf_cstring(&b);
+    CU_ASSERT_EQUAL(b.len, sizeof(WORD0" "WORD1" "WORD2" "WORD0" "WORD3" "WORD0""WORD0" "WORD4)-1);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    CU_ASSERT_STRING_EQUAL(b.s, WORD0" "WORD1" "WORD2" "WORD0" "WORD3" "WORD0""WORD0" "WORD4);
+
+    n = buf_replace_all(&b, WORD0, WORD0REP2);
+    CU_ASSERT_EQUAL(n, 4);
+    CU_ASSERT_EQUAL(b.len, sizeof(WORD0REP2" "WORD1" "WORD2" "WORD0REP2" "WORD3" "WORD0REP2""WORD0REP2" "WORD4)-1);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    CU_ASSERT_STRING_EQUAL(b.s, WORD0REP2" "WORD1" "WORD2" "WORD0REP2" "WORD3" "WORD0REP2""WORD0REP2" "WORD4);
+
+    /* multiple replacements with a replacement which contains the match */
+    buf_reset(&b);
+    buf_appendcstr(&b, WORD0" "WORD1" "WORD2" "WORD0" "WORD3" "WORD0""WORD0" "WORD4);
+    buf_cstring(&b);
+    CU_ASSERT_EQUAL(b.len, sizeof(WORD0" "WORD1" "WORD2" "WORD0" "WORD3" "WORD0""WORD0" "WORD4)-1);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    CU_ASSERT_STRING_EQUAL(b.s, WORD0" "WORD1" "WORD2" "WORD0" "WORD3" "WORD0""WORD0" "WORD4);
+
+    n = buf_replace_all(&b, WORD0, WORD0REP4);
+    CU_ASSERT_EQUAL(n, 4);
+    CU_ASSERT_EQUAL(b.len, sizeof(WORD0REP4" "WORD1" "WORD2" "WORD0REP4" "WORD3" "WORD0REP4""WORD0REP4" "WORD4)-1);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    CU_ASSERT_STRING_EQUAL(b.s, WORD0REP4" "WORD1" "WORD2" "WORD0REP4" "WORD3" "WORD0REP4""WORD0REP4" "WORD4);
+
+    buf_free(&b);
+
+#undef WORD0
+#undef WORD0REP
+#undef WORD0REP2
+#undef WORD0REP3
+#undef WORD0REP4
+#undef WORD1
+#undef WORD2
+#undef WORD3
+#undef WORD4
+}
 
 /* TODO: test the Copy-On-Write feature of buf_ensure()...if anyone
  * actually uses it */
