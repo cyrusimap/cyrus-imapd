@@ -556,5 +556,63 @@ static void test_replace_all(void)
 #undef WORD4
 }
 
+static void test_truncate(void)
+{
+#define WORD0	"lorem"
+#define WORD1	"ipsum"
+    struct buf b = BUF_INITIALIZER;
+    unsigned int i;
+
+    CU_ASSERT_EQUAL(b.len, 0);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT_PTR_NULL(b.s);
+
+    /* buf_truncate() which shortens the buffer */
+    buf_reset(&b);
+    buf_appendcstr(&b, WORD0" "WORD1);
+    buf_cstring(&b);
+    CU_ASSERT_EQUAL(b.len, sizeof(WORD0" "WORD1)-1);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    CU_ASSERT_STRING_EQUAL(b.s, WORD0" "WORD1);
+
+    buf_truncate(&b, sizeof(WORD0)-1);
+    buf_cstring(&b);
+    CU_ASSERT_EQUAL(b.len, sizeof(WORD0)-1);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    CU_ASSERT_STRING_EQUAL(b.s, WORD0);
+
+    /* buf_truncate() which extends and zero-fills the buffer */
+    buf_reset(&b);
+    buf_appendcstr(&b, WORD0" "WORD1);
+    buf_cstring(&b);
+    CU_ASSERT_EQUAL(b.len, sizeof(WORD0" "WORD1)-1);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    CU_ASSERT_STRING_EQUAL(b.s, WORD0" "WORD1);
+
+    buf_truncate(&b, sizeof(WORD0" "WORD1)-1+2048);
+    buf_cstring(&b);
+    CU_ASSERT_EQUAL(b.len, sizeof(WORD0" "WORD1)-1+2048);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    CU_ASSERT_STRING_EQUAL(b.s, WORD0" "WORD1);
+    for (i=sizeof(WORD0" "WORD1)-1; i<sizeof(WORD0" "WORD1)-1+2048 ; i++)
+	if (b.s[i] != 0)
+	    break;
+    CU_ASSERT_EQUAL(i, sizeof(WORD0" "WORD1)-1+2048);
+
+    buf_free(&b);
+
+#undef WORD0
+#undef WORD1
+}
+
 /* TODO: test the Copy-On-Write feature of buf_ensure()...if anyone
  * actually uses it */
