@@ -463,8 +463,7 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
     int exist_r;
     char mailboxname[MAX_MAILBOX_BUFFER];
     static struct buf tagb, cmd, sep, name;
-    int cur_flags_size = 64;
-    char *flags = xmalloc(cur_flags_size);
+    struct buf flags = BUF_INITIALIZER;
 
     const char *end_strip_flags[] = { " \\NonExistent)", "\\NonExistent)",
 				      " \\Noselect)", "\\Noselect)",
@@ -486,8 +485,8 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
 	    if(s == backend_current && !force_notfatal)
 		fatal("Lost connection to selected backend", EC_UNAVAILABLE);
 	    proxy_downserver(s);
-	    free(flags);
-	    return PROXY_NOCONNECTION;
+	    r = PROXY_NOCONNECTION;
+	    goto out;
 	}
 
 	if(!strncmp(tag, tagb.s, taglen)) {
@@ -497,8 +496,8 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
 		    fatal("Lost connection to selected backend",
 			  EC_UNAVAILABLE);
 		proxy_downserver(s);
-		free(flags);
-		return PROXY_NOCONNECTION;
+		r = PROXY_NOCONNECTION;
+		goto out;
 	    }	
 	    /* Got the end of the response */
 	    buf_appendcstr(&s->last_result, buf);
@@ -531,42 +530,31 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
 	    if(s == backend_current && !force_notfatal)
 		fatal("Lost connection to selected backend", EC_UNAVAILABLE);
 	    proxy_downserver(s);
-	    free(flags);
-	    return PROXY_NOCONNECTION;
+	    r = PROXY_NOCONNECTION;
+	    goto out;
 	}
 
 	if(strncasecmp("LSUB", cmd.s, 4) && strncasecmp("LIST", cmd.s, 4)) {
 	    prot_printf(imapd_out, "%s %s ", tagb.s, cmd.s);
 	    r = pipe_to_end_of_response(s, force_notfatal);
-	    if(r != PROXY_OK) {
-		free(flags);
-		return r;
-	    }
+	    if (r != PROXY_OK)
+		goto out;
 	} else {
 	    /* build up the response bit by bit */
-	    int i = 0;
-	    char *p;
+	    int i;
 
+	    buf_reset(&flags);
 	    c = prot_getc(s->in);
 	    while(c != ')' && c != EOF) {
-		flags[i++] = c;
-		if(i == cur_flags_size) {
-		    /* expand our buffer */
-		    cur_flags_size *= 2;
-		    flags = xrealloc(flags, cur_flags_size);
-		}
+		buf_putc(&flags, c);
 		c = prot_getc(s->in);
 	    }
 
 	    if(c != EOF) {
 		/* terminate string */
-		flags[i++] = ')';
-		if(i == cur_flags_size) {
-		    /* expand our buffer */
-		    cur_flags_size *= 2;
-		    flags = xrealloc(flags, cur_flags_size);
-		}
-		flags[i] = '\0';
+		buf_putc(&flags, ')');
+		buf_cstring(&flags);
+
 		/* get the next character */
  		c = prot_getc(s->in);
 	    }
@@ -576,28 +564,17 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
 		    fatal("Bad LSUB response from selected backend",
 			  EC_UNAVAILABLE);
 		proxy_downserver(s);
-		free(flags);
-		return PROXY_NOCONNECTION;
+		r = PROXY_NOCONNECTION;
+		goto out;
 	    }
 
 	    /* Check for flags that we should remove
 	     * (e.g. Noselect, NonExistent) */
-	    for(i=0; end_strip_flags[i]; i++) {
-		p = strstr(flags, end_strip_flags[i]);
-		if(p) {
-		    *p = ')';
-		    *(p+1) = '\0';
-		}
-	    }
+	    for(i=0; end_strip_flags[i]; i++)
+		buf_replace_all(&flags, end_strip_flags[i], ")");
 
-	    for(i=0; mid_strip_flags[i]; i++) {
-		int mid_strip_len = strlen(mid_strip_flags[i]);
-		p = strstr(flags, mid_strip_flags[i]);
-		while(p) {
-		    strcpy(p, p + mid_strip_len);
-		    p = strstr(flags, mid_strip_flags[i]);
-		}
-	    }
+	    for (i=0; mid_strip_flags[i]; i++)
+		buf_replace_all(&flags, mid_strip_flags[i], NULL);
 
 	    /* Get separator */
 	    c = getastring(s->in, s->out, &sep);
@@ -607,8 +584,8 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
 		    fatal("Bad LSUB response from selected backend",
 			  EC_UNAVAILABLE);
 		proxy_downserver(s);
-		free(flags);
-		return PROXY_NOCONNECTION;
+		r = PROXY_NOCONNECTION;
+		goto out;
 	    }
 
 	    /* Get name */
@@ -620,8 +597,8 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
 		    fatal("Bad LSUB response from selected backend",
 			  EC_UNAVAILABLE);
 		proxy_downserver(s);
-		free(flags);
-		return PROXY_NOCONNECTION;
+		r = PROXY_NOCONNECTION;
+		goto out;
 	    }
 
 	    /* lookup name */
@@ -648,7 +625,7 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
 	    if (resp[0] == 'L') {
 		if(!exist_r) {
 		    prot_printf(imapd_out, "* %s %s \"%s\" ",
-				resp, flags, sep.s);
+				resp, flags.s, sep.s);
 		} else {
 		    prot_printf(imapd_out, "* %s (\\Noselect) \"%s\" ",
 				resp, sep.s);
@@ -666,7 +643,8 @@ int pipe_lsub(struct backend *s, const char *userid, const char *tag,
 	}
     } /* while(1) */
 
-    free(flags);
+out:
+    buf_free(&flags);
     return r;
 }
 
