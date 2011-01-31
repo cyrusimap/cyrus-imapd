@@ -52,11 +52,7 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
-#ifdef HAVE_STDARG_H
 #include <stdarg.h>
-#else
-#include <varargs.h>
-#endif
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -366,12 +362,7 @@ imclient_servername(struct imclient *imclient)
  * may scribble on the text of the untagged data.
  * 
  */
-#ifdef __STDC__
 void imclient_addcallback(struct imclient *imclient, ...)
-#else
-void imclient_addcallback(va_alist)
-va_dcl
-#endif
 {
     va_list pvar;
     char *keyword;
@@ -379,14 +370,7 @@ va_dcl
     imclient_proc_t *proc;
     void *rock;
     int i;
-#ifdef __STDC__
     va_start(pvar, imclient);
-#else
-    struct imclient *imclient;
-
-    va_start(pvar);
-    imclient = va_arg(pvar, struct imclient *);
-#endif
 
     assert(imclient);
 
