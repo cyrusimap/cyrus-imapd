@@ -101,16 +101,14 @@
 #include "message.h"
 
 #include "assert.h"
+#include "util.h"
 #include "index.h"
 #include "xmalloc.h"
 
 /* A simple write-buffering module which avoids copying of the output data. */
 
 typedef struct {
-    char* buf;		    /* The malloc'ed buffer, or NULL if there
-			       isn't one. */
-    int buf_size;           /* The size of that buffer. */
-    int data_len;           /* How much data in that buffer is valid. */
+    struct buf buf;	    /* The extending malloc'ed buffer */
     int fd;                 /* The fd to write to. */
     int total_output_bytes; /* How much data have we written out
 			       through this buffer in total? */
@@ -118,10 +116,9 @@ typedef struct {
 
 static int init_write_buffer(SquatWriteBuffer* b, int buf_size, int fd)
 {
-    b->buf_size = buf_size;
-    b->buf = xmalloc(b->buf_size);
+    buf_init(&b->buf);
+    buf_ensure(&b->buf, buf_size);
     b->fd = fd;
-    b->data_len = 0;
     b->total_output_bytes = 0;
 
     return SQUAT_OK;
@@ -131,44 +128,37 @@ static int init_write_buffer(SquatWriteBuffer* b, int buf_size, int fd)
    Return a pointer to where the written data should be placed. */
 static char *prepare_buffered_write(SquatWriteBuffer *b, int len)
 {
-    if (b->data_len + len >= b->buf_size) {
-	if (write(b->fd, b->buf, b->data_len) != b->data_len) {
+    if (b->buf.len + len >= b->buf.alloc) {
+	if (write(b->fd, b->buf.s, b->buf.len) != b->buf.len) {
 	    squat_set_last_error(SQUAT_ERR_SYSERR);
 	    return NULL;
 	}
-	if (b->buf_size < len) {
-	    b->buf = (char *)xrealloc(b->buf, len);
-	    if (b->buf == NULL) {
-		squat_set_last_error(SQUAT_ERR_OUT_OF_MEMORY);
-		return NULL;
-	    }
-	}
-	b->data_len = 0;
+	buf_reset(&b->buf);
+	buf_ensure(&b->buf, len);
     }
 
-    return b->buf + b->data_len;
+    return b->buf.s + b->buf.len;
 }
 
 /* Signal that data has been written up to the mark 'ptr'.
    Call this after prepare_buffered_write. */
 static void complete_buffered_write(SquatWriteBuffer *b, char *ptr)
 {
-    int old_data_len = b->data_len;
-
-    b->data_len = ptr - b->buf;
-    b->total_output_bytes += b->data_len - old_data_len;
+    int newbytes = ptr - b->buf.s;
+    buf_truncate(&b->buf, newbytes);
+    b->total_output_bytes += newbytes;
 }
 
 /* Flush the output buffer to the file. Reset the file pointer to the start
    of the file. */
 static int flush_and_reset_buffered_writes(SquatWriteBuffer *b)
 {
-    if (b->data_len > 0) {
-	if (write(b->fd, b->buf, b->data_len) != b->data_len) {
+    if (b->buf.len) {
+	if (write(b->fd, b->buf.s, b->buf.len) != b->buf.len) {
 	    squat_set_last_error(SQUAT_ERR_SYSERR);
 	    return SQUAT_ERR;
 	}
-	b->data_len = 0;
+	buf_reset(&b->buf);
     }
 
     if (lseek(b->fd, 0, SEEK_SET) != 0) {
@@ -490,7 +480,8 @@ SquatIndex *squat_index_init(int fd, const SquatOptions *options)
 
     /* Finish initializing the SquatIndex */
     for (i = 0; i < VECTOR_SIZE(index->index_buffers); i++) {
-	index->index_buffers[i].buf = NULL;
+	buf_init(&index->index_buffers[i].buf);
+	index->index_buffers[i].fd = -1;
     }
 
     index->doc_ID_list_size = 1000;
@@ -522,7 +513,7 @@ SquatIndex *squat_index_init(int fd, const SquatOptions *options)
     return index;
 
 cleanup_out_buffer:
-    free(index->out.buf);
+    buf_free(&index->out.buf);
 
 cleanup_doc_ID_list:
     free(index->doc_ID_list);
@@ -1044,7 +1035,7 @@ int squat_index_close_document(SquatIndex *index)
 	    char word_buf[SQUAT_WORD_SIZE - 1];
 	    int cur_offset;
 
-	    if (index->index_buffers[i].buf == NULL) {
+	    if (index->index_buffers[i].fd < 0) {
 		/* This is the first document that used a word starting with this byte.
 		   We need to create the temporary file. */
 		if (init_write_buffer_to_temp
@@ -1595,7 +1586,7 @@ static int index_close_internal(SquatIndex *index, int OK)
 	    event.completed_initial_char.completed_char = i;
 	    event.completed_initial_char.num_words =
 		index->total_num_words[i];
-	    if (index->index_buffers[i].buf != NULL) {
+	    if (index->index_buffers[i].fd >= 0) {
 		event.completed_initial_char.temp_file_size =
 		    index->index_buffers[i].total_output_bytes;
 	    } else {
@@ -1604,7 +1595,7 @@ static int index_close_internal(SquatIndex *index, int OK)
 	    index->stats_callback(index->stats_callback_closure, &event);
 	}
 
-	if (index->index_buffers[i].buf != NULL) {
+	if (index->index_buffers[i].fd >= 0) {
 	    /* We have to flush the temporary file output buffer before we try to use
 	       the temporary file. */
 	    if (flush_and_reset_buffered_writes(index->index_buffers + i)
@@ -1620,8 +1611,8 @@ static int index_close_internal(SquatIndex *index, int OK)
 		squat_set_last_error(SQUAT_ERR_SYSERR);
 		r = SQUAT_ERR;
 	    }
-	    free(index->index_buffers[i].buf);
-	    index->index_buffers[i].buf = NULL;
+	    index->index_buffers[i].fd = -1;
+	    buf_free(&index->index_buffers[i].buf);
 	} else if (index->old_index) {
 	    /* Only needed if incremental updates going on */
 	    /* Just copy across existing trie if nothing new to merge in */
@@ -1696,15 +1687,14 @@ static int index_close_internal(SquatIndex *index, int OK)
     /* WOOHOO! It's done! */
 
 cleanup:
-    free(index->out.buf);
+    buf_free(&index->out.buf);
     delete_doc_word_table(index->doc_word_table, SQUAT_WORD_SIZE - 1);
     /* If we're bailing out because of an error, we might not have
        released all the temporary file resources. */
     for (i = 0; i < VECTOR_SIZE(index->index_buffers); i++) {
-	if (index->index_buffers[i].buf != NULL) {
+	if (index->index_buffers[i].fd >= 0)
 	    close(index->index_buffers[i].fd);
-	    free(index->index_buffers[i].buf);
-	}
+	buf_free(&index->index_buffers[i].buf);
     }
     free(index->tmp_path);
     free(index->doc_ID_list);
