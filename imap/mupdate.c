@@ -75,6 +75,7 @@
 #include "mupdate-client.h"
 #include "telemetry.h"
 
+#include "strarray.h"
 #include "assert.h"
 #include "exitcodes.h"
 #include "global.h"
@@ -115,12 +116,6 @@ struct pending {
     char mailbox[MAX_MAILBOX_BUFFER];
 };
 
-struct stringlist 
-{
-    char *str;
-    struct stringlist *next;
-};
-
 struct conn {
     int fd;
     int logfd;
@@ -154,7 +149,7 @@ struct conn {
 
     /* UPDATE command handling */
     const char *streaming; /* tag */
-    struct stringlist *streaming_hosts; /* partial updates */
+    strarray_t *streaming_hosts; /* partial updates */
 
     /* pending changes to send, in reverse order */
     pthread_mutex_t m;
@@ -223,7 +218,7 @@ void cmd_find(struct conn *C, const char *tag, const char *mailbox,
 	      int send_ok, int send_delete);
 void cmd_list(struct conn *C, const char *tag, const char *host_prefix);
 void cmd_startupdate(struct conn *C, const char *tag,
-		     struct stringlist *partial);
+		     strarray_t *partial);
 void cmd_starttls(struct conn *C, const char *tag);
 void cmd_compress(struct conn *C, const char *tag, const char *alg);
 void shut_down(int code);
@@ -236,11 +231,6 @@ extern int saslserver(sasl_conn_t *conn, const char *mech,
 		      const char *continuation, const char *empty_chal,
 		      struct protstream *pin, struct protstream *pout,
 		      int *sasl_result, char **success_data);
-
-/* Functions for manipulating stringlists */
-static void stringlist_add(struct stringlist **list, const char *string);
-static void stringlist_free(struct stringlist **list);
-static int stringlist_contains(struct stringlist *list, const char *str);
 
 /* --- prototypes in mupdate-slave.c */
 void *mupdate_client_start(void *rock);
@@ -428,46 +418,10 @@ static void conn_free(struct conn *C)
     buf_free(&(C->arg2));
     buf_free(&(C->arg3));
 
-    if(C->streaming_hosts) stringlist_free(&(C->streaming_hosts));
+    if(C->streaming_hosts) strarray_free(C->streaming_hosts);
 
     free(C);
 }
-
-static void stringlist_add(struct stringlist **list, const char *string) 
-{
-    struct stringlist *tmp;
-
-    assert(list);
-    assert(string);
-    
-    tmp = xmalloc(sizeof(struct stringlist));
-    tmp->str = xstrdup(string);
-    
-    tmp->next = *list;
-    *list = tmp;
-}
-
-static void stringlist_free(struct stringlist **list) 
-{
-    struct stringlist *tmp, *tmp_next;
-    for(tmp = *list; tmp; tmp=tmp_next) {
-	tmp_next = tmp->next;
-	free(tmp->str);
-	free(tmp);
-    }
-    *list = NULL;
-}
-
-/* returns true if the list contains an exact match */
-static int stringlist_contains(struct stringlist *list, const char *str) 
-{
-    struct stringlist *tmp;
-    for(tmp = list; tmp; tmp=tmp->next) {
-	if(!strcmp(str, tmp->str)) return 1;
-    }
-    return 0;
-}
-
 
 /*
  * The auth_*.c backends called by mysasl_proxy_policy()
@@ -958,21 +912,21 @@ mupdate_docmd_result_t docmd(struct conn *c)
     case 'U':
 	if (!c->userid) goto nologin;
 	else if (!strcmp(c->cmd.s, "Update")) {
-	    struct stringlist *arg = NULL;
+	    strarray_t *arg = strarray_new();
 	    int counter = 30; /* limit on number of processed hosts */
 	    
 	    while(ch == ' ') {
 		/* Hey, look, more bits of a PARTIAL-UPDATE command */
 		ch = getstring(c->pin, c->pout, &(c->arg1));
 		if(c->arg1.s[0] == '\0') {
-		    stringlist_free(&arg);
+		    strarray_free(arg);
 		    goto badargs;
 		}
 		if(counter-- == 0) {
-		    stringlist_free(&arg);
+		    strarray_free(arg);
 		    goto extraargs;
 		}
-		stringlist_add(&arg,c->arg1.s);
+		strarray_append(arg, c->arg1.s);
 	    }
 
 	    CHECKNEWLINE(c, ch);
@@ -1610,10 +1564,10 @@ void log_update(const char *mailbox,
 	
 	/* this might need to be inside the mutex, but I doubt it */
 	if(upc->streaming_hosts
-	   && (!oldserver || !stringlist_contains(upc->streaming_hosts,
-						  oldserver))
-	   && (!thisserver || !stringlist_contains(upc->streaming_hosts,
-						   thisserver))) {
+	   && (!oldserver || strarray_find(upc->streaming_hosts,
+						  oldserver, 0) < 0)
+	   && (!thisserver || strarray_find(upc->streaming_hosts,
+						   thisserver, 0) < 0)) {
 	    /* No Match! Continue! */
 	    continue;
 	}
@@ -1829,7 +1783,7 @@ static int sendupdate(char *name,
 	}
 	
 	if(!C->streaming_hosts ||
-	   stringlist_contains(C->streaming_hosts, server)) {
+	   strarray_find(C->streaming_hosts, server, 0) >= 0) {
 	    switch (m->t) {
 	    case SET_ACTIVE:
 		prot_printf(C->pout,
@@ -1910,7 +1864,7 @@ struct prot_waitevent *sendupdates_evt(struct protstream *s __attribute__((unuse
 }
 
 void cmd_startupdate(struct conn *C, const char *tag,
-		     struct stringlist *partial)
+		     strarray_t *partial)
 {
     char pattern[2] = {'*','\0'};
 
