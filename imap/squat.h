@@ -139,7 +139,7 @@ extern char const squat_index_file_header[8]; /* "SQUAT 1\n" */
 
 /* SQUAT error codes */
 #define SQUAT_ERR_OK                         1
-#define SQUAT_ERR_OUT_OF_MEMORY              2
+/* was SQUAT_ERR_OUT_OF_MEMORY */
 #define SQUAT_ERR_SYSERR                     3   /* check errno */
 #define SQUAT_ERR_INVALID_INDEX_FILE         4
 #define SQUAT_ERR_SEARCH_STRING_TOO_SHORT    5

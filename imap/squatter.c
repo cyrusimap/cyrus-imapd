@@ -165,9 +165,6 @@ static void fatal_squat_error(const char* s)
   int err = squat_get_last_error();
 
   switch (err) {
-  case SQUAT_ERR_OUT_OF_MEMORY:
-    fprintf(stderr, "SQUAT: Out of memory (%s)\n", s);
-    break;
   case SQUAT_ERR_SYSERR:
     perror(s);
     break;

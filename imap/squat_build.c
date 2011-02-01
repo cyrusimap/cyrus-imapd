@@ -570,11 +570,6 @@ int squat_index_open_document(SquatIndex *index, char const *name)
 	index->doc_ID_list =
 	    (char *)xrealloc(index->doc_ID_list,
 			     index->doc_ID_list_size * sizeof(SquatInt32));
-
-	if (index->doc_ID_list == NULL) {
-	    squat_set_last_error(SQUAT_ERR_OUT_OF_MEMORY);
-	    return SQUAT_ERR;
-	}
     }
 
     /* Store the offset of the new document record into the array */
