@@ -646,34 +646,13 @@ static int index_me(char *name, int matchlen __attribute__((unused)),
     return 0;
 }
 
-struct tmpnode {
-    struct tmpnode *next;
-    char *name;
-};
-struct tmplist {
-    struct tmpnode *head;
-    struct tmpnode *tail;
-};
-
 static int addmbox(char *name,
 		   int matchlen __attribute__((unused)),
 		   int maycreate __attribute__((unused)),
 		   void *rock)
 {
-    struct tmplist **lptr = (struct tmplist **) rock;
-    struct tmplist *l = *lptr;
-    struct tmpnode *n = xmalloc(sizeof (struct tmpnode));
-
-    n->next = NULL;
-    n->name = xstrdup(name);
-
-    if (l->head) {
-        l->tail->next = n;
-        l->tail = l->tail->next;
-    } else {
-        l->head = l->tail = n;
-    }
-
+    strarray_t *sa = (strarray_t *) rock;
+    strarray_append(sa, name);
     return 0;
 }
 
@@ -741,11 +720,7 @@ int main(int argc, char **argv)
     start_stats(&total_stats);
 
     if (optind == argc) {
-	struct tmplist *l;
-	struct tmpnode *current;
-
-	l = xmalloc(sizeof(struct tmplist));
-	l->head = l->tail = NULL;
+	strarray_t sa = STRARRAY_INITIALIZER;
 
 	if (rflag) {
 	    fprintf(stderr, "please specify a mailbox to recurse from\n");
@@ -754,12 +729,13 @@ int main(int argc, char **argv)
 	assert(!rflag);
 	strlcpy(buf, "*", sizeof(buf));
 	(*squat_namespace.mboxlist_findall) (&squat_namespace, buf, 1,
-					     0, 0, addmbox, &l);
+					     0, 0, addmbox, &sa);
 
-	for (current = l->head; current; current = current->next) {
-	    index_me(current->name, strlen(current->name), 0, &use_annot);
+	for (i = 0 ; i < sa.count ; i++) {
+	    index_me(sa.data[i], strlen(sa.data[i]), 0, &use_annot);
 	    /* Ignore errors: most will be mailboxes moving around */
 	}
+	strarray_fini(&sa);
     }
 
     for (i = optind; i < argc; i++) {
