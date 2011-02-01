@@ -57,11 +57,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <signal.h>
-#ifdef HAVE_STDARG_H
 #include <stdarg.h>
-#else
-#include <varargs.h>
-#endif
 
 #include <limits.h>
 #include <unistd.h>

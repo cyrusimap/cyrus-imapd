@@ -51,11 +51,7 @@
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
 #include <syslog.h>
-#ifdef HAVE_STDARG_H
 #include <stdarg.h>
-#else
-#include <varargs.h>
-#endif
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif

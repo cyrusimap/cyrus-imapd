@@ -48,11 +48,7 @@
 #include <string.h>
 #include <syslog.h>
 #include <signal.h>
-#ifdef HAVE_STDARG_H
 #include <stdarg.h>
-#else
-#include <varargs.h>
-#endif
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
