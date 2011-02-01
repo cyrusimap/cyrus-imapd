@@ -420,15 +420,17 @@ int squat_index_add_existing(SquatIndex *index,
 /* ====================================================================== */
 
 /* Initally, before we see a document, there are no words for the document. */
-static void init_doc_word_table(SquatWordTable **t)
+static SquatWordTable *word_table_new(void)
 {
     SquatWordTable *ret =
-	(SquatWordTable *) xmalloc(sizeof(SquatWordTable));
+	(SquatWordTable *) xzmalloc(sizeof(SquatWordTable));
 
+    /* Initially there are no valid entries. Set things up so that
+       the obvious tests will set first_valid_entry and
+       last_valid_entry correctly. */
     ret->first_valid_entry = 256;
     ret->last_valid_entry = 0;
-    memset(ret->entries, 0, sizeof(ret->entries));
-    *t = ret;
+    return ret;
 }
 
 SquatIndex *squat_index_init(int fd, const SquatOptions *options)
@@ -503,7 +505,7 @@ SquatIndex *squat_index_init(int fd, const SquatOptions *options)
     complete_buffered_write(&index->out, buf + sizeof(SquatDiskHeader));
 
     index->current_doc_ID = 0;
-    init_doc_word_table(&index->doc_word_table);
+    index->doc_word_table = word_table_new();
 
     memset(index->total_num_words, 0, sizeof(index->total_num_words));
 
@@ -600,7 +602,7 @@ int squat_index_open_document(SquatIndex *index, char const *name)
 }
 
 /* Destroy the SquatWordTable. The leaf data and the internal nodes are free'd. */
-static void delete_doc_word_table(SquatWordTable *t, int depth)
+static void word_table_delete(SquatWordTable *t, int depth)
 {
     if (depth > 2) {
 	unsigned i;
@@ -610,7 +612,7 @@ static void delete_doc_word_table(SquatWordTable *t, int depth)
 	    SquatWordTableEntry *e = &(t->entries[i]);
 
 	    if (e->table != NULL) {
-		delete_doc_word_table(e->table, depth);
+		word_table_delete(e->table, depth);
 	    }
 	}
     } else {
@@ -684,16 +686,8 @@ static int add_to_table(SquatIndex *index, char const *data, int data_len,
 	e = t->entries + ch;
 	t = e->table;
 	/* Allocate the next branch node if it doesn't already exist. */
-	if (t == NULL) {
-	    t = (SquatWordTable *) xmalloc(sizeof(SquatWordTable));
-	    e->table = t;
-	    /* Initially there are no valid entries. Set things up so that
-	       the obvious tests will set first_valid_entry and
-	       last_valid_entry correctly. */
-	    t->first_valid_entry = 256;
-	    t->last_valid_entry = 0;
-	    memset(t->entries, 0, sizeof(t->entries));
-	}
+	if (t == NULL)
+	    e->table = t = word_table_new();
 
 	data++;
 	data_len--;
@@ -1555,8 +1549,8 @@ static int index_close_internal(SquatIndex *index, int OK)
 
     /* Clear the current trie. We are now going to use it to build
        all-documents tries. */
-    delete_doc_word_table(index->doc_word_table, SQUAT_WORD_SIZE);
-    init_doc_word_table(&index->doc_word_table);
+    word_table_delete(index->doc_word_table, SQUAT_WORD_SIZE);
+    index->doc_word_table = word_table_new();
 
     /* Write out the array that maps document IDs to offsets of the
        document records. */
@@ -1688,7 +1682,7 @@ static int index_close_internal(SquatIndex *index, int OK)
 
 cleanup:
     buf_free(&index->out.buf);
-    delete_doc_word_table(index->doc_word_table, SQUAT_WORD_SIZE - 1);
+    word_table_delete(index->doc_word_table, SQUAT_WORD_SIZE - 1);
     /* If we're bailing out because of an error, we might not have
        released all the temporary file resources. */
     for (i = 0; i < VECTOR_SIZE(index->index_buffers); i++) {
