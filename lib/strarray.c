@@ -272,3 +272,13 @@ char **strarray_takevf(strarray_t *sa)
     strarray_free(sa);
     return d;
 }
+
+int strarray_find(const strarray_t *sa, const char *match, int starting)
+{
+    int i;
+
+    for (i = starting ; i < sa->count ; i++)
+	if (!strcmp(match, sa->data[i]))
+	    return i;
+    return -1;
+}
