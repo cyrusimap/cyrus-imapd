@@ -88,4 +88,7 @@ strarray_t *strarray_nsplit(const char *buf, size_t len, const char *sep);
 
 char **strarray_takevf(strarray_t *sa);
 
+int strarray_find(const strarray_t *sa, const char *match,
+		  int starting);
+
 #endif /* __CYRUS_STRARRAY_H__ */
