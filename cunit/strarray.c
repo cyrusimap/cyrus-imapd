@@ -682,3 +682,68 @@ static void test_truncate(void)
 #undef WORD4
 }
 
+static void test_find(void)
+{
+    strarray_t sa = STRARRAY_INITIALIZER;
+    int i;
+#define WORD0	"lorem"
+#define WORD1	"ipsum"
+#define WORD2	"dolor"
+#define WORD3	"sit"
+#define WORD4	"amet"
+
+    CU_ASSERT_EQUAL(sa.count, 0);
+    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_PTR_NULL(strarray_nth(&sa, 0));
+    CU_ASSERT_PTR_NULL(strarray_nth(&sa, -1));
+
+    strarray_append(&sa, WORD0);
+    strarray_append(&sa, WORD1);
+    strarray_append(&sa, WORD2);
+    strarray_append(&sa, WORD3);
+    strarray_append(&sa, WORD0);
+    strarray_append(&sa, WORD4);
+    CU_ASSERT_EQUAL(sa.count, 6);
+    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_PTR_NOT_NULL(sa.data);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 2), WORD2);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 3), WORD3);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 4), WORD0);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 5), WORD4);
+
+    /* search for something which isn't there */
+    i = strarray_find(&sa, "NotHere", 0);
+    CU_ASSERT_EQUAL(i, -1);
+
+    /* search for something which isn't there, starting off the end */
+    i = strarray_find(&sa, "NotHere", 7);
+    CU_ASSERT_EQUAL(i, -1);
+
+    /* search for something which is there */
+    i = strarray_find(&sa, WORD1, 0);
+    CU_ASSERT_EQUAL(i, 1);
+    i = strarray_find(&sa, WORD1, i+1);
+    CU_ASSERT_EQUAL(i, -1);
+
+    /* search for something which is there, starting off the end */
+    i = strarray_find(&sa, WORD1, 7);
+    CU_ASSERT_EQUAL(i, -1);
+
+    /* search for something which is there multiple times */
+    i = strarray_find(&sa, WORD0, 0);
+    CU_ASSERT_EQUAL(i, 0);
+    i = strarray_find(&sa, WORD0, i+1);
+    CU_ASSERT_EQUAL(i, 4);
+    i = strarray_find(&sa, WORD0, i+1);
+    CU_ASSERT_EQUAL(i, -1);
+
+    strarray_fini(&sa);
+#undef WORD0
+#undef WORD1
+#undef WORD2
+#undef WORD3
+#undef WORD4
+}
+
