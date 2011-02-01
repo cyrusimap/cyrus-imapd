@@ -437,7 +437,6 @@ SquatIndex *squat_index_init(int fd, const SquatOptions *options)
 {
     SquatIndex *index;
     unsigned i;
-    int path_len;
     char *buf;
     char const *tmp_path;
 
@@ -452,10 +451,7 @@ SquatIndex *squat_index_init(int fd, const SquatOptions *options)
     } else {
 	tmp_path = "/tmp";
     }
-    path_len = strlen(tmp_path);
-    index->tmp_path = xmalloc(path_len + 1 + 12);
-    memcpy(index->tmp_path, tmp_path, path_len);
-    strcpy(index->tmp_path + path_len, "/squatXXXXXX");
+    index->tmp_path = strconcat(tmp_path, "/squatXXXXXX", (char *)NULL);
 
     if (options != NULL &&
 	(options->option_mask & SQUAT_OPTION_VALID_CHARS) != 0) {
@@ -534,28 +530,30 @@ cleanup_doc_ID_list:
 static int init_write_buffer_to_temp(SquatIndex *index,
 				     SquatWriteBuffer *b)
 {
-    int fd = mkstemp(index->tmp_path);
+    char *tmp_path = xstrdup(index->tmp_path);
+    int fd = mkstemp(tmp_path);
 
     if (fd < 0) {
+	free(tmp_path);
 	squat_set_last_error(SQUAT_ERR_SYSERR);
 	return SQUAT_ERR;
     }
 
-    if (unlink(index->tmp_path) < 0) {
+    if (unlink(tmp_path) < 0) {
 	squat_set_last_error(SQUAT_ERR_SYSERR);
 	goto cleanup_fd;
     }
-
-    strcpy(index->tmp_path + strlen(index->tmp_path) - 6, "XXXXXX");
 
     if (init_write_buffer(b, 64 * 1024, fd) != SQUAT_OK) {
 	goto cleanup_fd;
     }
 
+    free(tmp_path);
     return SQUAT_OK;
 
 cleanup_fd:
     close(b->fd);
+    free(tmp_path);
     return SQUAT_ERR;
 }
 
