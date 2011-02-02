@@ -267,7 +267,7 @@ void table2uni(struct convert_rock *rock, int c)
     struct table_state *s = (struct table_state *)rock->state;
     struct charmap *map = (struct charmap *)&s->curtable[0][c & 0xff];
 
-    /* propogate errors */
+    /* propagate errors */
     if (c == 0xfffd) {
 	convert_putc(rock->next, c);
 	return;
@@ -283,7 +283,7 @@ void utf8_2uni(struct convert_rock *rock, int c)
 {
     struct table_state *s = (struct table_state *)rock->state;
 
-    /* propogate errors */
+    /* propagate errors */
     if (c == 0xfffd) {
 	convert_putc(rock->next, c);
 	return;
@@ -326,7 +326,7 @@ void utf7_2uni (struct convert_rock *rock, int c)
 {
     struct table_state *s = (struct table_state *)rock->state;
 
-    /* propogate errors */
+    /* propagate errors */
     if (c == 0xfffd) {
 	convert_putc(rock->next, c);
 	return;
