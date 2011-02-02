@@ -43,7 +43,6 @@ struct service {
 };
 
 extern struct service *Services;
-extern int allocservices;
 extern int nservices;
 
 /*

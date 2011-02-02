@@ -139,7 +139,7 @@ const char *MASTER_CONFIG_FILENAME = DEFAULT_MASTER_CONFIG_FILENAME;
 #define SERVICENAME(x) ((x) ? x : "unknown")
 
 struct service *Services = NULL;
-int allocservices = 0;
+static int allocservices = 0;
 int nservices = 0;
 
 /* make libcyrus_min happy */
@@ -181,8 +181,8 @@ static int janitor_frequency = 1;	/* Janitor sweeps per second */
 static int janitor_position;		/* Entry to begin at in next sweep */
 static struct timeval janitor_mark;	/* Last time janitor did a sweep */
 
-void limit_fds(rlim_t);
-void schedule_event(struct event *a);
+static void limit_fds(rlim_t);
+static void schedule_event(struct event *a);
 
 void fatal(const char *msg, int code)
 {
@@ -191,7 +191,7 @@ void fatal(const char *msg, int code)
     exit(code);
 }
 
-void event_free(struct event *a) 
+static void event_free(struct event *a) 
 {
     if(a->exec) {
 	char **p;
@@ -203,7 +203,7 @@ void event_free(struct event *a)
     free(a);
 }
 
-void get_prog(char *path, unsigned size, char *const *cmd)
+static void get_prog(char *path, unsigned size, char *const *cmd)
 {
     if (cmd[0][0] == '/') {
 	/* master lacks strlcpy, due to no libcyrus */
@@ -212,7 +212,7 @@ void get_prog(char *path, unsigned size, char *const *cmd)
     else snprintf(path, size, "%s/%s", SERVICE_PATH, cmd[0]);
 }
 
-void get_statsock(int filedes[2])
+static void get_statsock(int filedes[2])
 {
     int r, fdflags;
 
@@ -265,7 +265,7 @@ static struct centry *get_centry(void)
 }
 
 /* see if 'listen' parameter has both hostname and port, or just port */
-char *parse_listen(char *listen)
+static char *parse_listen(char *listen)
 {
     char *cp;
     char *port = NULL;
@@ -288,7 +288,7 @@ char *parse_listen(char *listen)
     return port;
 }
 
-char *parse_host(char *listen)
+static char *parse_host(char *listen)
 {
     char *cp;
 
@@ -303,7 +303,7 @@ char *parse_host(char *listen)
     return listen;
 }
 
-int verify_service_file(char *const *filename)
+static int verify_service_file(char *const *filename)
 {
     char path[PATH_MAX];
     struct stat statbuf;
@@ -314,7 +314,7 @@ int verify_service_file(char *const *filename)
     return statbuf.st_mode & S_IXUSR;
 }
 
-void service_create(struct service *s)
+static void service_create(struct service *s)
 {
     struct service service0, service;
     struct addrinfo hints, *res0, *res;
@@ -515,7 +515,7 @@ void service_create(struct service *s)
     }
 }
 
-void run_startup(char **cmd)
+static void run_startup(char **cmd)
 {
     pid_t pid;
     int status;
@@ -562,7 +562,7 @@ void run_startup(char **cmd)
     }
 }
 
-void fcntl_unset(int fd, int flag)
+static void fcntl_unset(int fd, int flag)
 {
     int fdflags = fcntl(fd, F_GETFD, 0);
     if (fdflags != -1) fdflags = fcntl(STATUS_FD, F_SETFD, 
@@ -572,7 +572,7 @@ void fcntl_unset(int fd, int flag)
     }
 }
 
-void spawn_service(const int si)
+static void spawn_service(const int si)
 {
     /* Note that there is logic that depends on this being 2 */
     const int FORKRATE_INTERVAL = 2;
@@ -695,7 +695,7 @@ void spawn_service(const int si)
 
 }
 
-void schedule_event(struct event *a)
+static void schedule_event(struct event *a)
 {
     struct event *ptr;
 
@@ -717,7 +717,7 @@ void schedule_event(struct event *a)
     ptr->next = a;
 }
 
-void spawn_schedule(time_t now)
+static void spawn_schedule(time_t now)
 {
     struct event *a, *b;
     int i;
@@ -827,7 +827,7 @@ void spawn_schedule(time_t now)
     }
 }
 
-void reap_child(void)
+static void reap_child(void)
 {
     int status;
     pid_t pid;
@@ -941,7 +941,7 @@ void reap_child(void)
     }
 }
 
-void init_janitor(void)
+static void init_janitor(void)
 {
     struct event *evt = (struct event *) malloc(sizeof(struct event));
     
@@ -958,7 +958,7 @@ void init_janitor(void)
     schedule_event(evt);
 }
 
-void child_janitor(time_t now)
+static void child_janitor(time_t now)
 {
     int i;
     struct centry **p;
@@ -1004,7 +1004,7 @@ void child_janitor(time_t now)
 }
 
 /* Allow a clean shutdown on SIGQUIT */
-void sigquit_handler(int sig __attribute__((unused)))
+static void sigquit_handler(int sig __attribute__((unused)))
 {
     struct sigaction action;
 
@@ -1030,19 +1030,19 @@ void sigquit_handler(int sig __attribute__((unused)))
 
 static volatile sig_atomic_t gotsigchld = 0;
 
-void sigchld_handler(int sig __attribute__((unused)))
+static void sigchld_handler(int sig __attribute__((unused)))
 {
     gotsigchld = 1;
 }
 
 static volatile int gotsighup = 0;
 
-void sighup_handler(int sig __attribute__((unused)))
+static void sighup_handler(int sig __attribute__((unused)))
 {
     gotsighup = 1;
 }
 
-void sigterm_handler(int sig __attribute__((unused)))
+static void sigterm_handler(int sig __attribute__((unused)))
 {
     struct sigaction action;
 
@@ -1068,12 +1068,12 @@ void sigterm_handler(int sig __attribute__((unused)))
     exit(0);
 }
 
-void sigalrm_handler(int sig __attribute__((unused)))
+static void sigalrm_handler(int sig __attribute__((unused)))
 {
     return;
 }
 
-void sighandler_setup(void)
+static void sighandler_setup(void)
 {
     struct sigaction action;
     
@@ -1124,7 +1124,7 @@ void sighandler_setup(void)
  * 2 if bad message received (incorrectly sized)
  * -1 on error (errno set)
  */
-int read_msg(int fd, struct notify_message *msg)
+static int read_msg(int fd, struct notify_message *msg)
 {
     ssize_t r;
     size_t off = 0;
@@ -1146,7 +1146,7 @@ int read_msg(int fd, struct notify_message *msg)
     return 0;
 }
 
-void process_msg(const int si, struct notify_message *msg) 
+static void process_msg(const int si, struct notify_message *msg) 
 {
     struct centry *c;
     /* si must NOT point to an invalid service */
@@ -1375,8 +1375,8 @@ static char **tokenize(const char *p)
     return strarray_takevf(strarray_split(p, NULL));
 }
 
-void add_start(const char *name, struct entry *e,
-	       void *rock __attribute__((unused)))
+static void add_start(const char *name, struct entry *e,
+		      void *rock __attribute__((unused)))
 {
     const char *cmd = masterconf_getstring(e, "cmd", "");
     char buf[256];
@@ -1392,7 +1392,7 @@ void add_start(const char *name, struct entry *e,
     strarray_free(tok);
 }
 
-void add_service(const char *name, struct entry *e, void *rock)
+static void add_service(const char *name, struct entry *e, void *rock)
 {
     int ignore_err = rock ? 1 : 0;
     char *cmd = xstrdup(masterconf_getstring(e, "cmd", ""));
@@ -1534,7 +1534,7 @@ done:
     return;
 }
 
-void add_event(const char *name, struct entry *e, void *rock)
+static void add_event(const char *name, struct entry *e, void *rock)
 {
     int ignore_err = rock ? 1 : 0;
     char *cmd = xstrdup(masterconf_getstring(e, "cmd", ""));
@@ -1595,7 +1595,7 @@ void add_event(const char *name, struct entry *e, void *rock)
 #  define RLIMIT_NUMFDS RLIMIT_OFILE
 # endif
 #endif
-void limit_fds(rlim_t x)
+static void limit_fds(rlim_t x)
 {
     struct rlimit rl;
     int r;
@@ -1627,12 +1627,12 @@ void limit_fds(rlim_t x)
 #endif /* HAVE_GETRLIMIT */
 }
 #else
-void limit_fds(rlim_t x)
+static void limit_fds(rlim_t x)
 {
 }
 #endif /* HAVE_SETRLIMIT */
 
-void reread_conf(void)
+static void reread_conf(void)
 {
     int i,j;
     struct event *ptr;
