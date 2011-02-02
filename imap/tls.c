@@ -508,13 +508,9 @@ static void remove_session(unsigned char *id, int idlen)
 
     /* log this transaction */
     if (var_imapd_tls_loglevel > 0) {
-	int i;
 	char idstr[SSL_MAX_SSL_SESSION_ID_LENGTH*2 + 1];
 
-	for (i = 0; i < idlen; i++) {
-	    sprintf(idstr+i*2, "%02X", id[i]);
-	}
-	    
+	bin_to_hex(id, idlen, idstr, BH_UPPER);
 	syslog(LOG_DEBUG, "remove TLS session: id=%s", idstr);
     }
 }
