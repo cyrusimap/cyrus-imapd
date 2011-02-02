@@ -304,32 +304,27 @@ void cyrus_reset_stdio(void)
     if (devnull > 2) close(devnull);
 }
 
-/* Given a mkstemp(3) pattern for a filename,
- * create the file and return the file descriptor.
+/* Given a directory, create a unique temporary file open for
+ * reading and writing and return the file descriptor.
  *
  * This routine also unlinks the file so it won't appear in the
  * directory listing (but you won't have to worry about cleaning up
  * after it)
  */
-int create_tempfile(const char *path) 
+int create_tempfile(const char *path)
 {
     int fd;
-    char pattern[2048];
+    char *pattern;
 
-    if(snprintf(pattern, sizeof(pattern), "%s/cyrus_tmpfile_XXXXXX",
-		path) >= (int) sizeof(pattern)){
-	fatal("temporary file pathname is too long in prot_flush",
-	      EC_TEMPFAIL);
-    }
+    pattern = strconcat(path, "/cyrus_tmpfile_XXXXXX", (char *)NULL);
 
     fd = mkstemp(pattern);
-    if(fd == -1) {
-	return -1;
-    } else if(unlink(pattern) == -1) {
+    if (fd >= 0 && unlink(pattern) == -1) {
 	close(fd);
-	return -1;
+	fd = -1;
     }
 
+    free(pattern);
     return fd;
 }
 
