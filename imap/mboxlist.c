@@ -1279,6 +1279,33 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
 }
 
 /*
+ * Verify if the 'user' is the mailbox 'name' owner.
+ */
+static int mboxlist_is_owner(const char *name, int domainlen,
+			     const char *user, int userlen)
+{
+    char *cp = NULL;
+
+    int enough_length = !strncmp(name+domainlen, "user.", 5);
+    int user_complete = (!(cp = strchr(user, '.')) || (cp - user) > userlen);
+    int match_strings = !strncmp(name+domainlen+5, user, userlen);
+    int match_length = (name[domainlen+5+userlen] == '\0' ||
+			name[domainlen+5+userlen] == '.');
+
+    return (enough_length && user_complete && match_strings && match_length);
+}
+
+/*
+ * Check if the admin rights are present in the 'rights'
+ */
+static int mboxlist_have_admin_rights(const char* rights) {
+    int access = cyrus_acl_strtomask(rights);
+    int have_admin_access = access & ACL_ADMIN;
+
+    return have_admin_access;
+}
+
+/*
  * Change the ACL for mailbox 'name' so that 'identifier' has the
  * rights enumerated in the string 'rights'.  If 'rights' is the null
  * pointer, removes the ACL entry for 'identifier'.   'isadmin' is
@@ -1298,13 +1325,19 @@ int mboxlist_setacl(const char *name, const char *identifier,
 		    struct auth_state *auth_state)
 {
     struct mboxlist_entry *mbentry = NULL;
-    int useridlen = strlen(userid), domainlen = 0;
+    int useridlen = strlen(userid);
+    int domainlen = 0;
+    int identifierlen = strlen(identifier);
     char *cp, ident[256];
     const char *domain = NULL;
     int r;
     int myrights;
     int mode = ACL_MODE_SET;
-    int isusermbox = 0, anyoneuseracl = 1;
+    int isusermbox = 0;
+    int isidentifiermbox = 0;
+    int anyoneuseracl = 1;
+    int ensure_owner_rights = 0;
+    const char *mailbox_owner = NULL;
     struct mailbox *mailbox = NULL;
     char *newacl = NULL;
     char *mboxent = NULL;
@@ -1351,14 +1384,29 @@ int mboxlist_setacl(const char *name, const char *identifier,
 	identifier = ident;
     }
 
-    if (!strncmp(name+domainlen, "user.", 5) &&
-	(!(cp = strchr(userid, '.')) || (cp - userid) > useridlen) &&
-	!strncmp(name+domainlen+5, userid, useridlen) &&
-	(name[domainlen+5+useridlen] == '\0' ||
-	 name[domainlen+5+useridlen] == '.')) {
+    /* checks if the mailbox belongs to the user who is trying to change the
+       access rights */
+    if (mboxlist_is_owner(name, domainlen, userid, useridlen)) {
 	isusermbox = 1;
     }
     anyoneuseracl = config_getswitch(IMAPOPT_ANYONEUSERACL);
+
+    /* checks if the identifier is the mailbox owner */
+    if (mboxlist_is_owner(name, domainlen, identifier, identifierlen)) {
+	isidentifiermbox = 1;
+    }
+
+    /* who is the mailbox owner? */
+    if (isusermbox) {
+	mailbox_owner = userid;
+    }
+    else if (isidentifiermbox) {
+	mailbox_owner = identifier;
+    }
+
+    /* ensure the access rights if the folder owner is the current user or
+       the identifier */
+    ensure_owner_rights = isusermbox || isidentifiermbox;
 
     /* 1. Start Transaction */
     /* lookup the mailbox to make sure it exists and get its acl */
@@ -1423,17 +1471,35 @@ int mboxlist_setacl(const char *name, const char *identifier,
 		rights++;
 		mode = ACL_MODE_REMOVE;
 	    }
-	    
+	    /* do not allow to remove the admin rights from mailbox owner */
+	    if (isidentifiermbox && (mode != ACL_MODE_ADD) &&
+		!mboxlist_have_admin_rights(rights)) {
+		syslog(LOG_ERR,"Denied to change admin access rights for "
+		       "folder \"%s\" (owner: %s) by user \"%s\"", name,
+		       mailbox_owner, userid);
+		r = IMAP_PERMISSION_DENIED;
+		goto done;
+	    }
+
 	    if (cyrus_acl_set(&newacl, identifier, mode,
 			      cyrus_acl_strtomask(rights),
-			      isusermbox ? mboxlist_ensureOwnerRights : 0,
-			      (void *)userid)) {
+			      ensure_owner_rights ? mboxlist_ensureOwnerRights : 0,
+			      (void *)mailbox_owner)) {
 		r = IMAP_INVALID_IDENTIFIER;
 	    }
 	} else {
+	    /* do not allow to remove the admin rights from mailbox owner */
+	    if (isidentifiermbox) {
+		syslog(LOG_ERR,"Denied to delete admin access rights for "
+		       "folder \"%s\" (owner: %s) by user \"%s\"", name,
+		       mailbox_owner, userid);
+		r = IMAP_PERMISSION_DENIED;
+		goto done;
+	    }
+
 	    if (cyrus_acl_remove(&newacl, identifier,
-				 isusermbox ? mboxlist_ensureOwnerRights : 0,
-				 (void *)userid)) {
+				 ensure_owner_rights ? mboxlist_ensureOwnerRights : 0,
+				 (void *)mailbox_owner)) {
 		r = IMAP_INVALID_IDENTIFIER;
 	    }
 	}
