@@ -40,7 +40,7 @@ my $store = Cassandane::MessageStoreFactory->create(%params);
 my $now = DateTime->now()->epoch();
 my $gen = Cassandane::Generator->new();
 
-$store->begin();
+$store->write_begin();
 for (my $offset = -86400*10 ; $offset <= 0 ; $offset += 3600)
 {
     my $then = DateTime->from_epoch(epoch => $now + $offset);
@@ -48,6 +48,6 @@ for (my $offset = -86400*10 ; $offset <= 0 ; $offset += 3600)
 	date => $then,
 	subject => "message at " . to_iso8601($then),
     );
-    $store->message($msg);
+    $store->write_message($msg);
 }
-$store->end();
+$store->write_end();

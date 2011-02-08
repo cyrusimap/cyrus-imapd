@@ -24,7 +24,7 @@ sub new
     return $self;
 }
 
-sub begin
+sub write_begin
 {
     my ($self) = @_;
     if (defined $self->{filename})
@@ -42,7 +42,7 @@ sub begin
     }
 }
 
-sub message
+sub write_message
 {
     my ($self, $msg) = @_;
     my $datestr = $msg->get_headers('date')->[0];
@@ -50,7 +50,7 @@ sub message
     print $fh "From - " . $datestr . "\r\n" . $msg;
 }
 
-sub end
+sub write_end
 {
     my ($self) = @_;
     if ($self->{ourfh})

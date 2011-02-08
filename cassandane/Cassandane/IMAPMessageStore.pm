@@ -39,7 +39,7 @@ sub new
     return $self;
 }
 
-sub begin
+sub write_begin
 {
     my ($self) = @_;
     my $r;
@@ -68,7 +68,7 @@ sub begin
     $self->{client} = $client;
 }
 
-sub message
+sub write_message
 {
     my ($self, $msg) = @_;
 
@@ -76,7 +76,7 @@ sub message
 			    { Literal => $msg->as_string() } );
 }
 
-sub end
+sub write_end
 {
     my ($self) = @_;
 

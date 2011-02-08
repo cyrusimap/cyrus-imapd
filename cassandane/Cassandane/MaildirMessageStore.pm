@@ -26,7 +26,7 @@ sub new
     return $self;
 }
 
-sub begin
+sub write_begin
 {
     my ($self) = @_;
 
@@ -37,7 +37,7 @@ sub begin
     }
 }
 
-sub message
+sub write_message
 {
     my ($self, $msg) = @_;
 
@@ -59,7 +59,7 @@ sub message
     close $fh;
 }
 
-sub end
+sub write_end
 {
 }
 
