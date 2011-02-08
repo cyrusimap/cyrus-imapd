@@ -231,6 +231,71 @@ die "Woops, default message has bad as_string"
 die "Woops, default message has bad as_string (2)"
     unless "" . $m1 eq $exp;
 
+# Test setting lines.
+my $txt = <<'EOF';
+From: Fred J. Bloggs <fbloggs@fastmail.fm>
+To: Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>
+Subject: Hello World
+Received: from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software);
+	Fri, 29 Oct 2010 13:05:01 +1100
+Received: from mail.bar.com (mail.bar.com [10.0.0.1])
+	by mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100
+Received: from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by
+	mail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100
+
+This is a message to let you know
+that I'm alive and well
+EOF
+my @lines = split(/\n/, $txt);
+$exp = <<'EOF';
+From: Fred J. Bloggs <fbloggs@fastmail.fm>
+To: Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>
+Subject: Hello World
+Received: from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software); Fri, 29 Oct 2010 13:05:01 +1100
+Received: from mail.bar.com (mail.bar.com [10.0.0.1]) by mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100
+Received: from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by mail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100
+
+This is a message to let you know
+that I'm alive and well
+EOF
+$exp =~ s/\n/\r\n/g;
+
+$m1->set_lines(@lines);
+die "Woops, default message has no From: header"
+    unless $m1->get_headers('from')->[0] eq 'Fred J. Bloggs <fbloggs@fastmail.fm>';
+die "Woops, default message has no To: header"
+    unless $m1->get_headers('to')->[0] eq 'Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>';
+die "Woops, default message has no Subject: header"
+    unless $m1->get_headers('Subject')->[0] eq 'Hello World';
+die "Woops, default message has no Received: header"
+    unless $m1->get_headers('received')->[0] eq "from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software); Fri, 29 Oct 2010 13:05:01 +1100";
+die "Woops, default message has no Received: header (2)"
+    unless $m1->get_headers("received")->[1] eq "from mail.bar.com (mail.bar.com [10.0.0.1]) by mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100";
+die "Woops, default message has no Received: header (3)"
+    unless $m1->get_headers("received")->[2] eq "from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by mail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100";
+die "Woops, default message has bad as_string"
+    unless $m1->as_string eq $exp;
+die "Woops, default message has bad as_string (2)"
+    unless "" . $m1 eq $exp;
+
+$m1 = Cassandane::Message->new(lines => \@lines);
+die "Woops, default message has no From: header"
+    unless $m1->get_headers('from')->[0] eq 'Fred J. Bloggs <fbloggs@fastmail.fm>';
+die "Woops, default message has no To: header"
+    unless $m1->get_headers('to')->[0] eq 'Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>';
+die "Woops, default message has no Subject: header"
+    unless $m1->get_headers('Subject')->[0] eq 'Hello World';
+die "Woops, default message has no Received: header"
+    unless $m1->get_headers('received')->[0] eq "from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software); Fri, 29 Oct 2010 13:05:01 +1100";
+die "Woops, default message has no Received: header (2)"
+    unless $m1->get_headers("received")->[1] eq "from mail.bar.com (mail.bar.com [10.0.0.1]) by mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100";
+die "Woops, default message has no Received: header (3)"
+    unless $m1->get_headers("received")->[2] eq "from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by mail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100";
+die "Woops, default message has bad as_string"
+    unless $m1->as_string eq $exp;
+die "Woops, default message has bad as_string (2)"
+    unless "" . $m1 eq $exp;
+
 ########################################################################
 printf "    MessageStoreFactory\n";
 
