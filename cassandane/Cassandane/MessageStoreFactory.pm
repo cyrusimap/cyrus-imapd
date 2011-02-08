@@ -1,0 +1,109 @@
+#!/usr/bin/perl
+
+package Cassandane::MessageStoreFactory;
+use strict;
+use warnings;
+use Mail::IMAPTalk;
+use Cassandane::MboxMessageStore;
+use Cassandane::MaildirMessageStore;
+use Cassandane::IMAPMessageStore;
+use URI;
+
+use Exporter ();
+our @ISA = qw(Exporter);
+our @EXPORT = qw(create);
+
+our %fmethods =
+(
+    mbox => sub { return Cassandane::MboxMessageStore->new(@_); },
+    maildir => sub { return Cassandane::MaildirMessageStore->new(@_); },
+    imap => sub { return Cassandane::IMAPMessageStore->new(@_); },
+);
+
+our %uriparsers =
+(
+    file => sub
+    {
+	my ($uri, $params) = @_;
+	$params->{filename} = $uri->file();
+	return 'mbox';
+    },
+    mbox => sub
+    {
+	my ($uri, $params) = @_;
+	$params->{filename} = $uri->path();
+	return 'mbox';
+    },
+    maildir => sub
+    {
+	my ($uri, $params) = @_;
+	$params->{directory} = $uri->path();
+	return 'maildir';
+    },
+    imap => sub
+    {
+	my ($uri, $params) = @_;
+
+	# The URI module doesn't know how to parse imap: URIs.
+	# But it does know how to parse pop: URIs, and those
+	# are sufficiently close to work for us (as we ignore
+	# the special UIDVALIDITY and TYPE stuff anyway).  So
+	# hackily recreate the URI object.
+	my $u = "" . $uri;
+	$u =~ s/^imap:/pop:/;
+	$uri = URI->new($u);
+
+	$params->{host} = $uri->host();
+	$uri->_port() and $params->{port} = 0 + $uri->_port();
+	$uri->userinfo() and
+	    ($params->{username}, $params->{password}) = split(/:/, $uri->userinfo());
+	$params->{folder} = substr($uri->path(),1)
+	    if (defined $uri->path() && $uri->path() ne "/");
+	return 'imap';
+    },
+);
+
+sub create
+{
+    my $class = shift;
+    my %params = @_;
+    my $type;
+
+    if (defined $params{uri})
+    {
+	my $uri = URI->new($params{uri});
+	delete $params{uri};
+
+	die "Unsupported URI scheme \"$uri->scheme\""
+	    unless defined $uriparsers{$uri->scheme()};
+	$type = $uriparsers{$uri->scheme()}->($uri, \%params);
+    }
+
+    if (!defined $type && defined $params{type})
+    {
+	$type = $params{type};
+	delete $params{type};
+    }
+
+    # some heuristics
+    if (defined $params{directory})
+    {
+	$type = 'maildir';
+    }
+    elsif (defined $params{filename})
+    {
+	$type = 'mbox';
+    }
+    elsif (defined $params{host})
+    {
+	$type = 'imap';
+    }
+
+    $type = 'mbox'
+	unless defined $type;
+    die "No such type \"$type\""
+	unless defined $fmethods{$type};
+    return $fmethods{$type}->(%params);
+}
+
+1;

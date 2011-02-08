@@ -5,6 +5,7 @@ use warnings;
 use Cassandane::Util::DateTime;
 use Cassandane::Address;
 use Cassandane::Message;
+use Cassandane::MessageStoreFactory;
 
 my $exp;
 
@@ -230,4 +231,127 @@ die "Woops, default message has bad as_string"
 die "Woops, default message has bad as_string (2)"
     unless "" . $m1 eq $exp;
 
+########################################################################
+printf "    MessageStoreFactory\n";
+
+my $ms;
+
+# Test no args at all - default is mbox to stdout/stdin
+$ms = Cassandane::MessageStoreFactory->create();
+die "Woops, wrong type"
+    unless ref $ms eq 'Cassandane::MboxMessageStore';
+die "Woops, wrong filename"
+    unless !defined $ms->{filename};
+
+# Test guessing type from single attribute, one of 'filename'
+# 'directory' or 'host'.
+$ms = Cassandane::MessageStoreFactory->create(filename => 'foo');
+die "Woops, wrong type"
+    unless ref $ms eq 'Cassandane::MboxMessageStore';
+die "Woops, wrong filename"
+    unless $ms->{filename} eq 'foo';
+
+$ms = Cassandane::MessageStoreFactory->create(directory => 'foo');
+die "Woops, wrong type"
+    unless ref $ms eq 'Cassandane::MaildirMessageStore';
+die "Woops, wrong directory"
+    unless $ms->{directory} eq 'foo';
+
+$ms = Cassandane::MessageStoreFactory->create(host => 'foo');
+die "Woops, wrong type"
+    unless ref $ms eq 'Cassandane::IMAPMessageStore';
+die "Woops, wrong host"
+    unless $ms->{host} eq 'foo';
+
+# Test creating from a URI
+$ms = Cassandane::MessageStoreFactory->create(uri => 'mbox:///foo/bar');
+die "Woops, wrong type"
+    unless ref $ms eq 'Cassandane::MboxMessageStore';
+die "Woops, wrong filename"
+    unless $ms->{filename} eq '/foo/bar';
+
+$ms = Cassandane::MessageStoreFactory->create(uri => 'file:///foo/bar');
+die "Woops, wrong type"
+    unless ref $ms eq 'Cassandane::MboxMessageStore';
+die "Woops, wrong filename"
+    unless $ms->{filename} eq '/foo/bar';
+
+$ms = Cassandane::MessageStoreFactory->create(uri => 'maildir:///foo/bar');
+die "Woops, wrong type"
+    unless ref $ms eq 'Cassandane::MaildirMessageStore';
+die "Woops, wrong directory"
+    unless $ms->{directory} eq '/foo/bar';
+
+$ms = Cassandane::MessageStoreFactory->create(uri => 'imap://victoria:secret@foo.com:9143/inbox.foo');
+die "Woops, wrong type"
+    unless ref $ms eq 'Cassandane::IMAPMessageStore';
+die "Woops, wrong username"
+    unless $ms->{username} eq 'victoria';
+die "Woops, wrong password"
+    unless $ms->{password} eq 'secret';
+die "Woops, wrong host"
+    unless $ms->{host} eq 'foo.com';
+die "Woops, wrong port"
+    unless $ms->{port} == 9143;
+die "Woops, wrong folder"
+    unless $ms->{folder} eq 'inbox.foo';
+
+$ms = Cassandane::MessageStoreFactory->create(uri => 'imap://victoria@foo.com:9143/inbox.foo');
+die "Woops, wrong type"
+    unless ref $ms eq 'Cassandane::IMAPMessageStore';
+die "Woops, wrong username"
+    unless $ms->{username} eq 'victoria';
+die "Woops, wrong password"
+    unless !defined $ms->{password};
+die "Woops, wrong host"
+    unless $ms->{host} eq 'foo.com';
+die "Woops, wrong port"
+    unless $ms->{port} == 9143;
+die "Woops, wrong folder"
+    unless $ms->{folder} eq 'inbox.foo';
+
+$ms = Cassandane::MessageStoreFactory->create(uri => 'imap://foo.com:9143/inbox.foo');
+die "Woops, wrong type"
+    unless ref $ms eq 'Cassandane::IMAPMessageStore';
+die "Woops, wrong username"
+    unless !defined $ms->{username};
+die "Woops, wrong password"
+    unless !defined $ms->{password};
+die "Woops, wrong host"
+    unless $ms->{host} eq 'foo.com';
+die "Woops, wrong port"
+    unless $ms->{port} == 9143;
+die "Woops, wrong folder"
+    unless $ms->{folder} eq 'inbox.foo';
+
+$ms = Cassandane::MessageStoreFactory->create(uri => 'imap://foo.com/inbox.foo');
+die "Woops, wrong type"
+    unless ref $ms eq 'Cassandane::IMAPMessageStore';
+die "Woops, wrong username"
+    unless !defined $ms->{username};
+die "Woops, wrong password"
+    unless !defined $ms->{password};
+die "Woops, wrong host"
+    unless $ms->{host} eq 'foo.com';
+die "Woops, wrong port"
+    unless $ms->{port} == 143;
+die "Woops, wrong folder"
+    unless $ms->{folder} eq 'inbox.foo';
+
+$ms = Cassandane::MessageStoreFactory->create(uri => 'imap://foo.com/');
+die "Woops, wrong type"
+    unless ref $ms eq 'Cassandane::IMAPMessageStore';
+die "Woops, wrong username"
+    unless !defined $ms->{username};
+die "Woops, wrong password"
+    unless !defined $ms->{password};
+die "Woops, wrong host"
+    unless $ms->{host} eq 'foo.com';
+die "Woops, wrong port"
+    unless $ms->{port} == 143;
+die "Woops, wrong folder"
+    unless $ms->{folder} eq 'INBOX';
+
+
+########################################################################
 print "All tests passed\n";

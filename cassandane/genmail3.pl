@@ -5,22 +5,40 @@ use warnings;
 use DateTime;
 use Cassandane::Generator;
 use Cassandane::Util::DateTime qw(to_iso8601);
-# use Cassandane::MboxMessageStore;
-# use Cassandane::MaildirMessageStore;
-use Cassandane::IMAPMessageStore;
+use Cassandane::MessageStoreFactory;
 
+sub usage
+{
+    die "Usage: genmail3.pl [ -f format [maildir] | -u uri]";
+}
+
+my %params;
+while (my $a = shift)
+{
+    if ($a eq '-f')
+    {
+	usage() if defined $params{uri};
+	$params{type} = shift;
+    }
+    elsif ($a eq '-u')
+    {
+	usage() if defined $params{type};
+	$params{uri} = shift;
+    }
+    elsif ($a =~ m/^-/)
+    {
+	usage();
+    }
+    else
+    {
+	usage() if defined $params{path};
+	$params{path} = $a;
+    }
+}
+
+my $store = Cassandane::MessageStoreFactory->create(%params);
 my $now = DateTime->now()->epoch();
 my $gen = Cassandane::Generator->new();
-# my $store = Cassandane::MboxMessageStore->new();
-# my $store = Cassandane::MaildirMessageStore->new( directory => 'foo' );
-my $store = Cassandane::IMAPMessageStore->new(
-	host => '127.0.0.2',
-	port => 2143,
-	folder => 'inbox.showaftertest2',
-	username => 'test@vmtom.com',
-	password => 'testpw',
-	verbose => 1
-    );
 
 $store->begin();
 for (my $offset = -86400*10 ; $offset <= 0 ; $offset += 3600)
