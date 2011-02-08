@@ -20,6 +20,28 @@ our %fmethods =
     imap => sub { return Cassandane::IMAPMessageStore->new(@_); },
 );
 
+our %cleanups =
+(
+    mbox => sub
+    {
+	my ($params) = @_;
+	if (defined $params->{path})
+	{
+	    $params->{filename} = $params->{path};
+	    delete $params->{path};
+	}
+    },
+    maildir => sub
+    {
+	my ($params) = @_;
+	if (defined $params->{path})
+	{
+	    $params->{directory} = $params->{path};
+	    delete $params->{path};
+	}
+    }
+);
+
 our %uriparsers =
 (
     file => sub
@@ -101,6 +123,10 @@ sub create
 
     $type = 'mbox'
 	unless defined $type;
+
+    $cleanups{$type}->(\%params)
+	if defined $cleanups{$type};
+
     die "No such type \"$type\""
 	unless defined $fmethods{$type};
     return $fmethods{$type}->(%params);

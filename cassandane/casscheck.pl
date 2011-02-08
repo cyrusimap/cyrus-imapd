@@ -352,6 +352,26 @@ die "Woops, wrong port"
 die "Woops, wrong folder"
     unless $ms->{folder} eq 'INBOX';
 
+# Test creation with the 'path' and 'type' attribute - default
+# arguments for genmail3.pl
+$ms = Cassandane::MessageStoreFactory->create(path => 'foo');
+die "Woops, wrong type"
+    unless ref $ms eq 'Cassandane::MboxMessageStore';
+die "Woops, wrong filename"
+    unless $ms->{filename} eq 'foo';
+
+$ms = Cassandane::MessageStoreFactory->create(type => 'mbox', path => 'foo');
+die "Woops, wrong type"
+    unless ref $ms eq 'Cassandane::MboxMessageStore';
+die "Woops, wrong filename"
+    unless $ms->{filename} eq 'foo';
+
+$ms = Cassandane::MessageStoreFactory->create(type => 'maildir', path => 'foo');
+die "Woops, wrong type"
+    unless ref $ms eq 'Cassandane::MaildirMessageStore';
+die "Woops, wrong directory"
+    unless $ms->{directory} eq 'foo';
+
 
 ########################################################################
 print "All tests passed\n";
