@@ -1,0 +1,16 @@
+SOFTWARE DEPENDENCIES
+
+Cassandane needs the following software to work:
+
+ * Mail::IMAPTalk
+    this is a fully featured IMAP client package, available on CPAN
+    and also a more recent version on github at
+
+    https://github.com/robmueller/mail-imaptalk
+
+    There is a Ubuntu package for this, libmail-imaptalk-perl,
+    but it's based on the old CPAN version so we use one
+    built from git.
+
+ * Encode::IMAPUTF7
+    not needed currently, but expect it will be in the future.
