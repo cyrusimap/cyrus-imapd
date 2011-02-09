@@ -5,8 +5,11 @@ use strict;
 use warnings;
 use Mail::IMAPTalk;
 use Cassandane::Util::DateTime qw(to_rfc822);
+# use Data::Dumper;
 
 # TODO: isa Cassandane::MessageStore
+
+our $BATCHSIZE = 10;
 
 sub new
 {
@@ -20,6 +23,11 @@ sub new
 	password => undef,
 	verbose => 0,
 	client => undef,
+	# state for streaming read
+	next_uid => undef,
+	last_uid => undef,
+	last_batch_uid => undef,
+	batch => undef,
     };
 
     $self->{host} = $params{host}
@@ -39,10 +47,15 @@ sub new
     return $self;
 }
 
-sub write_begin
+sub _connect
 {
     my ($self) = @_;
-    my $r;
+
+    # if already successfully connected, do nothing
+    return
+	if (defined $self->{client} &&
+	    ($self->{client}->state() == Mail::IMAPTalk::Authenticated ||
+	     $self->{client}->state() == Mail::IMAPTalk::Selected));
 
     my $client = Mail::IMAPTalk->new(
 			    Server => $self->{host},
@@ -55,17 +68,34 @@ sub write_begin
 	if $self->{verbose};
     $client->parse_mode(Envelope => 1);
 
-    $r = $client->select($self->{folder});
-    if (!$r && $client->get_last_error() =~ m/does not exist/)
+    $self->{client} = $client;
+}
+
+sub _disconnect
+{
+    my ($self) = @_;
+
+    $self->{client}->logout();
+    $self->{client} = undef;
+}
+
+sub write_begin
+{
+    my ($self) = @_;
+    my $r;
+
+    $self->_connect();
+
+    $r = $self->{client}->select($self->{folder});
+    if (!$r && $self->{client}->get_last_error() =~ m/does not exist/)
     {
-	$r = $client->create($self->{folder});
+	$r = $self->{client}->create($self->{folder});
     }
     if (!$r)
     {
 	die "Cannot select folder \"$self->{folder}\": $@";
     }
 
-    $self->{client} = $client;
 }
 
 sub write_message
@@ -80,8 +110,80 @@ sub write_end
 {
     my ($self) = @_;
 
-    $self->{client}->logout();
-    $self->{client} = undef;
+    $self->_disconnect();
+}
+
+sub read_begin
+{
+    my ($self) = @_;
+    my $r;
+
+    $self->_connect();
+
+    $r = $self->{client}->select($self->{folder});
+    if (!$r)
+    {
+	die "Cannot select folder \"$self->{folder}\": $@";
+    }
+    $self->{next_uid} = 1;
+    $self->{last_uid} = -1 + $self->{client}->get_response_code('uidnext');
+    $self->{last_batch_uid} = undef;
+    $self->{batch} = undef;
+}
+
+sub read_message
+{
+    my ($self, $msg) = @_;
+
+    for (;;)
+    {
+	while (defined $self->{batch})
+	{
+	    my $uid = $self->{next_uid};
+	    last if $uid > $self->{last_batch_uid};
+	    $self->{next_uid}++;
+	    my $rr = $self->{batch}->{$uid};
+	    next unless defined $rr;
+	    delete $self->{batch}->{$uid};
+
+	    # printf STDERR "XXX found uid=$uid in batch\n";
+	    # printf STDERR "rr=%s\n", Dumper($rr);
+	    return Cassandane::Message->new(raw => $rr->{'body'});
+	}
+	$self->{batch} = undef;
+
+	# printf STDERR "XXX batch empty or no batch available\n";
+
+	for (;;)
+	{
+	    my $first_uid = $self->{next_uid};
+	    return undef
+		if $first_uid > $self->{last_uid};  # EOF
+	    my $last_uid = $first_uid + $BATCHSIZE - 1;
+	    $last_uid = $self->{last_uid}
+		if $last_uid > $self->{last_uid};
+	    # printf STDERR "XXX fetching batch range $first_uid:$last_uid\n";
+	    $self->{batch} = $self->{client}->fetch("$first_uid:$last_uid",
+						    '(BODY.PEEK[])');
+	    $self->{last_batch_uid} = $last_uid;
+	    last if (scalar $self->{batch} > 0);
+	    $self->{next_uid} = $last_uid + 1;
+	}
+	# printf STDERR "XXX have a batch, next_uid=$self->{next_uid}\n";
+    }
+
+    return undef;
+}
+
+sub read_end
+{
+    my ($self) = @_;
+
+    $self->_disconnect();
+    $self->{next_uid} = undef;
+    $self->{last_uid} = undef;
+    $self->{last_batch_uid} = undef;
+    $self->{batch} = undef;
 }
 
 1;

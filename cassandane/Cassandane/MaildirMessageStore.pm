@@ -15,6 +15,7 @@ sub new
     my $self = {
 	directory => undef,
 	next_uid => 1,
+	uids_to_read => [],
     };
 
     $self->{directory} = $params{directory}
@@ -61,6 +62,68 @@ sub write_message
 
 sub write_end
 {
+}
+
+sub read_begin
+{
+    my ($self) = @_;
+
+    die "No such directory: $self->{directory}"
+	if (defined $self->{directory} && ! -d $self->{directory});
+
+    # Scan the directory for filenames.  We need to read the
+    # whole directory and sort the results because the messages
+    # need to be returned in uid order not directory order.
+    $self->{uids_to_read} = [];
+    my @uids;
+    my $directory = ($self->{directory} || ".");
+    my $fh;
+    opendir $fh,$directory
+	or die "Cannot open directory $directory for reading: $!";
+
+    while (my $e = readdir $fh)
+    {
+	my ($uid) = ($e =~ m/^(\d+)\.$/);
+	next unless defined $uid;
+	push(@uids, 0+$uid);
+    }
+
+    @uids = sort { $a <=> $b } @uids;
+    $self->{uids_to_read} = \@uids;
+    closedir $fh;
+}
+
+sub read_message
+{
+    my ($self) = @_;
+
+    my $directory = ($self->{directory} || ".");
+    my $filename;
+
+    for (;;)
+    {
+	my $uid = shift(@{$self->{uids_to_read}});
+	return undef
+	    unless defined $uid;
+	$filename = "$directory/$uid.";
+	# keep trying if a message disappeared
+	last if ( -f $filename );
+    }
+
+    my $fh;
+    open $fh,'<',$filename
+	or die "Cannot open $filename for reading: $!";
+    my $msg = Cassandane::Message->new(fh => $fh);
+    close $fh;
+
+    return $msg;
+}
+
+sub read_end
+{
+    my ($self) = @_;
+
+    $self->{uids_to_read} = [];
 }
 
 1;
