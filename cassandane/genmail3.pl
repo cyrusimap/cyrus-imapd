@@ -25,6 +25,10 @@ while (my $a = shift)
 	usage() if defined $params{type};
 	$params{uri} = shift;
     }
+    elsif ($a eq '-v')
+    {
+	$params{verbose} = 1;
+    }
     elsif ($a =~ m/^-/)
     {
 	usage();
