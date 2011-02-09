@@ -14,3 +14,7 @@ Cassandane needs the following software to work:
 
  * Encode::IMAPUTF7
     not needed currently, but expect it will be in the future.
+
+ * URI, URI::Escape
+    Handles URIs.  CPAN package at http://search.cpan.org/dist/URI/
+    Ubuntu package liburi-perl.
