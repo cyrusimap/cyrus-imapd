@@ -116,5 +116,23 @@ sub read_end
     $self->{lineno} = undef;
 }
 
+sub remove
+{
+    my ($self) = @_;
+
+    if (defined $self->{filename})
+    {
+	my $r = unlink($self->{filename});
+	die "unlink failed: $!"
+	    if (!$r && ! $!{ENOENT} );
+    }
+}
+
+sub get_client
+{
+    my ($self) = @_;
+
+    die "No client object for Mbox";
+}
 
 1;

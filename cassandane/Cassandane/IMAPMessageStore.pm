@@ -190,4 +190,22 @@ sub read_end
     $self->{batch} = undef;
 }
 
+sub remove
+{
+    my ($self) = @_;
+
+    $self->_connect();
+    my $r = $self->{client}->delete($self->{folder});
+    die "IMAP DELETE failed: $@"
+	if (!defined $r && !($self->{client}->get_last_error() =~ m/does not exist/));
+}
+
+sub get_client
+{
+    my ($self) = @_;
+
+    $self->_connect();
+    return $self->{client};
+}
+
 1;

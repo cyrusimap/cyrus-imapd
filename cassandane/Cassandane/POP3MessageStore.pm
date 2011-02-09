@@ -149,4 +149,19 @@ sub read_end
     $self->{next_id} = undef;
 }
 
+sub remove
+{
+    my ($self) = @_;
+
+    die "cannot remove folder with POP3 server";
+}
+
+sub get_client
+{
+    my ($self) = @_;
+
+    $self->_connect();
+    return $self->{client};
+}
+
 1;
