@@ -19,6 +19,10 @@ sub new
 
     $self->set_lines(@{$params{lines}})
 	if (defined $params{lines});
+    $self->set_raw($params{raw})
+	if (defined $params{raw});
+    $self->set_fh($params{fh})
+	if (defined $params{fh});
 
     return $self;
 }
@@ -166,8 +170,29 @@ sub set_lines
     # Now collect the body...assuming any remains.
     if (scalar @lines)
     {
-	$self->set_body(join('', map { s/[\r\n]*$//; "$_\r\n"; } @lines));
+	$self->set_body(join('', @lines));
     }
+}
+
+sub set_fh
+{
+    my ($self, $fh) = @_;
+    my @lines;
+    while (<$fh>)
+    {
+	push(@lines, $_);
+    }
+    $self->set_lines(@lines);
+}
+
+sub set_raw
+{
+    my ($self, $raw) = @_;
+    my $fh;
+    open $fh,'<',\$raw
+	or die "Cannot open in-memory file for reading: $!";
+    $self->set_fh($fh);
+    close $fh;
 }
 
 1;
