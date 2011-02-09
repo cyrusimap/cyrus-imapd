@@ -7,6 +7,7 @@ use Mail::IMAPTalk;
 use Cassandane::MboxMessageStore;
 use Cassandane::MaildirMessageStore;
 use Cassandane::IMAPMessageStore;
+use Cassandane::POP3MessageStore;
 use URI;
 use URI::Escape qw(uri_unescape);
 
@@ -19,6 +20,7 @@ our %fmethods =
     mbox => sub { return Cassandane::MboxMessageStore->new(@_); },
     maildir => sub { return Cassandane::MaildirMessageStore->new(@_); },
     imap => sub { return Cassandane::IMAPMessageStore->new(@_); },
+    pop3 => sub { return Cassandane::POP3MessageStore->new(@_); },
 );
 
 our %cleanups =
@@ -90,6 +92,24 @@ our %uriparsers =
 	    if (defined $uri->path() && $uri->path() ne "/");
 	return 'imap';
     },
+    'pop' => sub
+    {
+	my ($uri, $params) = @_;
+
+	$params->{host} = $uri->host();
+	$uri->_port() and $params->{port} = 0 + $uri->_port();
+	if ($uri->userinfo())
+	{
+	    my ($u, $p) = split(/:/, $uri->userinfo());
+	    $params->{username} = uri_unescape($u)
+		if defined $u;
+	    $params->{password} = uri_unescape($p)
+		if defined $p;
+	}
+	$params->{folder} = substr($uri->path(),1)
+	    if (defined $uri->path() && $uri->path() ne "/");
+	return 'pop3';
+    },
 );
 
 sub create
@@ -122,10 +142,6 @@ sub create
     elsif (defined $params{filename})
     {
 	$type = 'mbox';
-    }
-    elsif (defined $params{host})
-    {
-	$type = 'imap';
     }
 
     $type = 'mbox'
