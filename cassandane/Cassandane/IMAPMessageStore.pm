@@ -148,7 +148,11 @@ sub read_message
 
 	    # printf STDERR "XXX found uid=$uid in batch\n";
 	    # printf STDERR "rr=%s\n", Dumper($rr);
-	    return Cassandane::Message->new(raw => $rr->{'body'});
+	    return Cassandane::Message->new(
+				raw => $rr->{'body'},
+				uid => $rr->{'uid'},
+				internaldate => $rr->{'internaldate'},
+			    );
 	}
 	$self->{batch} = undef;
 
@@ -164,7 +168,7 @@ sub read_message
 		if $last_uid > $self->{last_uid};
 	    # printf STDERR "XXX fetching batch range $first_uid:$last_uid\n";
 	    $self->{batch} = $self->{client}->fetch("$first_uid:$last_uid",
-						    '(BODY.PEEK[])');
+						    '(UID INTERNALDATE BODY.PEEK[])');
 	    $self->{last_batch_uid} = $last_uid;
 	    last if (scalar $self->{batch} > 0);
 	    $self->{next_uid} = $last_uid + 1;

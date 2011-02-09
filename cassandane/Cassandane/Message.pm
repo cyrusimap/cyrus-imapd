@@ -3,6 +3,7 @@
 package Cassandane::Message;
 use strict;
 use warnings;
+use Cassandane::Util::DateTime qw(from_rfc3501);
 use overload qw("") => \&as_string;
 
 sub new
@@ -13,6 +14,9 @@ sub new
 	headers => [],
 	headers_by_name => {},
 	body => undef,
+	# Only filled in by IMAP
+	uid => undef,		    # an integer or undef
+	internaldate => undef,	    # a DateTime object or undef
     };
 
     bless $self, $class;
@@ -23,6 +27,10 @@ sub new
 	if (defined $params{raw});
     $self->set_fh($params{fh})
 	if (defined $params{fh});
+    $self->{uid} = 0 + $params{uid}
+	if (defined $params{uid});
+    $self->set_internaldate($params{internaldate})
+	if (defined $params{internaldate});
 
     return $self;
 }
@@ -193,6 +201,21 @@ sub set_raw
 	or die "Cannot open in-memory file for reading: $!";
     $self->set_fh($fh);
     close $fh;
+}
+
+
+sub set_internaldate
+{
+    my ($self, $id) = @_;
+
+    if (ref $id eq 'DateTime')
+    {
+	$self->{internaldate} = $id;
+    }
+    else
+    {
+	$self->{internaldate} = from_rfc3501($id);
+    }
 }
 
 1;
