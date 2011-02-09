@@ -8,6 +8,7 @@ use Cassandane::MboxMessageStore;
 use Cassandane::MaildirMessageStore;
 use Cassandane::IMAPMessageStore;
 use URI;
+use URI::Escape qw(uri_unescape);
 
 use Exporter ();
 our @ISA = qw(Exporter);
@@ -77,8 +78,14 @@ our %uriparsers =
 
 	$params->{host} = $uri->host();
 	$uri->_port() and $params->{port} = 0 + $uri->_port();
-	$uri->userinfo() and
-	    ($params->{username}, $params->{password}) = split(/:/, $uri->userinfo());
+	if ($uri->userinfo())
+	{
+	    my ($u, $p) = split(/:/, $uri->userinfo());
+	    $params->{username} = uri_unescape($u)
+		if defined $u;
+	    $params->{password} = uri_unescape($p)
+		if defined $p;
+	}
 	$params->{folder} = substr($uri->path(),1)
 	    if (defined $uri->path() && $uri->path() ne "/");
 	return 'imap';
