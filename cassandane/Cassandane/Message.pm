@@ -63,6 +63,18 @@ sub get_headers
     return $self->{headers_by_name}->{$name};
 }
 
+sub get_header
+{
+    my ($self, $name) = @_;
+    $name = lc($name);
+    my $values = $self->{headers_by_name}->{$name};
+    return undef
+	unless defined $values;
+    die "Too many values for header \"$name\""
+	unless (scalar @$values == 1);
+    return $values->[0];
+}
+
 sub set_headers
 {
     my ($self, $name, @values) = @_;
