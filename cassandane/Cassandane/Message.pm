@@ -14,9 +14,8 @@ sub new
 	headers => [],
 	headers_by_name => {},
 	body => undef,
-	# Only filled in by IMAP
-	uid => undef,		    # an integer or undef
-	internaldate => undef,	    # a DateTime object or undef
+	# Other message attributes - e.g. IMAP uid & internaldate
+	attrs => {},
     };
 
     bless $self, $class;
@@ -27,10 +26,15 @@ sub new
 	if (defined $params{raw});
     $self->set_fh($params{fh})
 	if (defined $params{fh});
-    $self->{uid} = 0 + $params{uid}
-	if (defined $params{uid});
-    $self->set_internaldate($params{internaldate})
-	if (defined $params{internaldate});
+    # do these one by one to normalise the incoming keys
+    # and any other logic that set_attribute() wants to do.
+    if (defined $params{attrs})
+    {
+	while (my ($n, $v) = each %{$params{attrs}})
+	{
+	    $self->set_attribute($n, $v);
+	}
+    }
 
     return $self;
 }
@@ -124,6 +128,18 @@ sub get_body
 {
     my ($self) = @_;
     return $self->{body};
+}
+
+sub set_attribute
+{
+    my ($self, $name, $value) = @_;
+    $self->{attrs}->{lc($name)} = $value;
+}
+
+sub get_attribute
+{
+    my ($self, $name) = @_;
+    return $self->{attrs}->{lc($name)};
 }
 
 sub as_string

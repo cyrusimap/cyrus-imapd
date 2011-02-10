@@ -28,6 +28,7 @@ sub new
 	last_uid => undef,
 	last_batch_uid => undef,
 	batch => undef,
+	fetch_attrs => {},
     };
 
     $self->{host} = $params{host}
@@ -113,6 +114,23 @@ sub write_end
     $self->_disconnect();
 }
 
+sub set_fetch_attributes
+{
+    my ($self, @attrs) = @_;
+
+    $self->{fetch_attrs} = {};
+    foreach my $attr (@attrs)
+    {
+	$attr = lc($attr);
+	next
+	    unless ($attr =~ m/^[a-z0-9.\[\]<>]+$/);
+	next
+	    if ($attr =~ m/^body/);
+	$self->{fetch_attrs}->{$attr} = 1;
+    }
+    $self->{fetch_attrs}->{'body.peek[]'} = 1;
+}
+
 sub read_begin
 {
     my ($self) = @_;
@@ -148,11 +166,9 @@ sub read_message
 
 	    # printf STDERR "XXX found uid=$uid in batch\n";
 	    # printf STDERR "rr=%s\n", Dumper($rr);
-	    return Cassandane::Message->new(
-				raw => $rr->{'body'},
-				uid => $rr->{'uid'},
-				internaldate => $rr->{'internaldate'},
-			    );
+	    my $raw = $rr->{'body'};
+	    delete $rr->{'body'};
+	    return Cassandane::Message->new(raw => $raw, attrs => $rr);
 	}
 	$self->{batch} = undef;
 
@@ -167,8 +183,9 @@ sub read_message
 	    $last_uid = $self->{last_uid}
 		if $last_uid > $self->{last_uid};
 	    # printf STDERR "XXX fetching batch range $first_uid:$last_uid\n";
+	    my $attrs = join(' ', keys %{$self->{fetch_attrs}});
 	    $self->{batch} = $self->{client}->fetch("$first_uid:$last_uid",
-						    '(UID INTERNALDATE BODY.PEEK[])');
+						    "($attrs)");
 	    $self->{last_batch_uid} = $last_uid;
 	    last if (scalar $self->{batch} > 0);
 	    $self->{next_uid} = $last_uid + 1;

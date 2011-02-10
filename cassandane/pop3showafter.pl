@@ -6,7 +6,8 @@ use DateTime;
 use URI::Escape;
 use Cassandane::Generator;
 use Cassandane::Util::DateTime qw(to_iso8601 from_iso8601
-				  from_rfc822 to_rfc3501);
+				  from_rfc822
+				  to_rfc3501 from_rfc3501);
 use Cassandane::MessageStoreFactory;
 
 sub usage
@@ -99,7 +100,7 @@ sub check_messages($$$$)
 	if ($expect_internaldate)
 	{
 	    # Check that an internaldate field is present and well formed.
-	    $internal_dt = $msg->{internaldate};
+	    $internal_dt = from_rfc3501($msg->get_attribute('internaldate'));
 	    die "No or bogus INTERNALDATE"
 		unless defined $internal_dt;
 	    printf "    internaldate=%u\n", $internal_dt->epoch() if $verbose;
@@ -173,6 +174,7 @@ my $imap_store = Cassandane::MessageStoreFactory->create(
 			port => $imapport,
 			%store_params
 		    );
+$imap_store->set_fetch_attributes('uid', 'internaldate');
 my $pop3_store = Cassandane::MessageStoreFactory->create(
 			type => 'pop3',
 			port => $pop3port,

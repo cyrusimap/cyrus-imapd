@@ -247,6 +247,7 @@ This is a message to let you know
 that I'm alive and well
 EOF
 my @lines = split(/\n/, $txt);
+map { $_ .= "\r\n" } @lines;
 $exp = <<'EOF';
 From: Fred J. Bloggs <fbloggs@fastmail.fm>
 To: Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>
@@ -296,6 +297,47 @@ die "Woops, default message has bad as_string"
 die "Woops, default message has bad as_string (2)"
     unless "" . $m1 eq $exp;
 
+# Test message attributes
+$m1 = Cassandane::Message->new();
+die "Woops, default message has uid attribute\n"
+    unless !defined $m1->get_attribute('uid');
+die "Woops, default message has UID attribute\n"
+    unless !defined $m1->get_attribute('UID');
+die "Woops, default message has uId attribute\n"
+    unless !defined $m1->get_attribute('uId');
+die "Woops, default message has internaldate attribute\n"
+    unless !defined $m1->get_attribute('internaldate');
+
+$m1->set_attribute('uid', 123);
+die "Woops, message has no uid attribute\n"
+    unless $m1->get_attribute('uid') == 123;
+die "Woops, message has no UID attribute\n"
+    unless $m1->get_attribute('UID') == 123;
+die "Woops, message has no uId attribute\n"
+    unless $m1->get_attribute('uId') == 123;
+die "Woops, message has internaldate attribute\n"
+    unless !defined $m1->get_attribute('internaldate');
+
+$m1->set_attribute('uid');
+die "Woops, default message has uid attribute\n"
+    unless !defined $m1->get_attribute('uid');
+die "Woops, default message has UID attribute\n"
+    unless !defined $m1->get_attribute('UID');
+die "Woops, default message has uId attribute\n"
+    unless !defined $m1->get_attribute('uId');
+die "Woops, default message has internaldate attribute\n"
+    unless !defined $m1->get_attribute('internaldate');
+
+$m1 = Cassandane::Message->new(attrs => { UID => 456 });
+die "Woops, message has no uid attribute\n"
+    unless $m1->get_attribute('uid') == 456;
+die "Woops, message has no UID attribute\n"
+    unless $m1->get_attribute('UID') == 456;
+die "Woops, message has no uId attribute\n"
+    unless $m1->get_attribute('uId') == 456;
+die "Woops, message has internaldate attribute\n"
+    unless !defined $m1->get_attribute('internaldate');
+
 ########################################################################
 printf "    MessageStoreFactory\n";
 
@@ -321,12 +363,6 @@ die "Woops, wrong type"
     unless ref $ms eq 'Cassandane::MaildirMessageStore';
 die "Woops, wrong directory"
     unless $ms->{directory} eq 'foo';
-
-$ms = Cassandane::MessageStoreFactory->create(host => 'foo');
-die "Woops, wrong type"
-    unless ref $ms eq 'Cassandane::IMAPMessageStore';
-die "Woops, wrong host"
-    unless $ms->{host} eq 'foo';
 
 # Test creating from a URI
 $ms = Cassandane::MessageStoreFactory->create(uri => 'mbox:///foo/bar');
