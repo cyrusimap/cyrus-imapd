@@ -23,6 +23,7 @@ sub new
 	password => undef,
 	verbose => 0,
 	client => undef,
+	banner => undef,
 	# state for streaming read
 	next_uid => undef,
 	last_uid => undef,
@@ -60,16 +61,20 @@ sub _connect
 
     my $client = Mail::IMAPTalk->new(
 			    Server => $self->{host},
-			    Port => $self->{port},
-			    Username => $self->{username},
-			    Password => $self->{password}
+			    Port => $self->{port}
 			)
 	or die "Cannot connect to server \"$self->{host}:$self->{port}\": $@";
+
+    my $banner = $client->get_response_code('remainder');
+    $client->login($self->{username}, $self->{password})
+	or die "Cannot login to server \"$self->{host}:$self->{port}\": $@";
+
     $client->set_tracing(1)
 	if $self->{verbose};
     $client->parse_mode(Envelope => 1);
 
     $self->{client} = $client;
+    $self->{banner} = $banner;
 }
 
 sub _disconnect
@@ -223,6 +228,21 @@ sub get_client
 
     $self->_connect();
     return $self->{client};
+}
+
+sub get_server_name
+{
+    my ($self) = @_;
+
+    $self->_connect();
+
+    # Cyrus returns the servername config variable in the first
+    # word of the untagged OK reponse sent on connection.  We
+    # Capture the non-response code part of that in {banner}.
+    # which looks like
+    # slott02 Cyrus IMAP git2.5.0+0-git-work-6640 server ready
+    my ($servername) = ($self->{banner} =~ m/^(\S+)\s+Cyrus\s+IMAP\s+/);
+    return $servername;
 }
 
 1;
