@@ -7,6 +7,7 @@ use Cassandane::Util::DateTime qw(to_rfc822);
 use Cassandane::Address;
 use Cassandane::Message;
 use Digest::MD5 qw(md5_hex);
+use Digest::SHA1 qw(sha1_hex);
 
 our $admin = 'gnb@fastmail.fm';
 
@@ -155,6 +156,11 @@ sub _params_defaults
     return $params;
 }
 
+sub _generate_unique
+{
+    return sha1_hex("" . int(rand(65536)));
+}
+
 #
 # Generate a single email.
 # Args: Generator, (param-key => param-value ... )
@@ -179,8 +185,11 @@ sub generate
     $msg->add_header("Subject", $params->{subject});
     $msg->add_header("From", $from);
     $msg->add_header("Message-ID", "<" . $params->{messageid} . ">");
+    $msg->add_header("References", $params->{references})
+	if defined $params->{references};
     $msg->add_header("Date", $datestr);
     $msg->add_header("To", $to);
+    $msg->add_header('X-Cassandane-Unique', _generate_unique());
     $msg->set_body("This is a generated test email.  If received, please notify $admin\r\n");
 
     return $msg;
