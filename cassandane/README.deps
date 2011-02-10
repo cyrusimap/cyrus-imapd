@@ -16,5 +16,11 @@ Cassandane needs the following software to work:
     not needed currently, but expect it will be in the future.
 
  * URI, URI::Escape
-    Handles URIs.  CPAN package at http://search.cpan.org/dist/URI/
+    Handles URIs.
+    CPAN package at http://search.cpan.org/dist/URI/
     Ubuntu package liburi-perl.
+
+ * Digest::SHA1
+    Does the SHA1 message digest algorithm.
+    CPAN package http://search.cpan.org/dist/Digest-SHA1/
+    Ubuntu package libdigest-sha1-perl.
