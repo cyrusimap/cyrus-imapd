@@ -12,35 +12,7 @@ use Cassandane::MessageStoreFactory;
 
 sub usage
 {
-    die "Usage: pop3showafter.pl [ -f format [maildir] | -u uri]";
-}
-
-my %params;
-while (my $a = shift)
-{
-    if ($a eq '-f')
-    {
-	usage() if defined $params{uri};
-	$params{type} = shift;
-    }
-    elsif ($a eq '-u')
-    {
-	usage() if defined $params{type};
-	$params{uri} = shift;
-    }
-    elsif ($a eq '-v')
-    {
-	$params{verbose} = 1;
-    }
-    elsif ($a =~ m/^-/)
-    {
-	usage();
-    }
-    else
-    {
-	usage() if defined $params{path};
-	$params{path} = $a;
-    }
+    die "Usage: pop3showafter.pl";
 }
 
 my $verbose = 1;
@@ -181,7 +153,6 @@ my $pop3_store = Cassandane::MessageStoreFactory->create(
 			%store_params
 		    );
 
-# Generate the messages in the (presumably new) folder.
 my $now = DateTime->now()->epoch();
 my $cutoff_dt = DateTime->from_epoch(epoch => $now - 86400/2);
 my $gen = Cassandane::Generator->new();
