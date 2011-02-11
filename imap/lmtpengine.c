@@ -1817,7 +1817,10 @@ static void pushmsg(struct protstream *in, struct protstream *out,
 
     if (!isdotstuffed) {
 	/* signify end of message */
-	prot_printf(out, "\r\n.\r\n");
+	if (!lastline_hadendline) {
+	    prot_printf(out, "\r\n");
+	}
+	prot_printf(out, ".\r\n");
     }
 }
 
