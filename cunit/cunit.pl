@@ -323,8 +323,8 @@ sub suite_new($$)
 	name => suite_path_to_name($abspath),
 	wrap => suite_path_to_wrapper($relpath),
 	object => suite_path_to_object($relpath),
-	initfn => 'NULL',
-	cleanupfn => 'NULL',
+	setupfn => undef,
+	teardownfn => undef,
 	tests => []
     };
     $suite->{suitevar} = suite_name_to_var($suite->{name});
@@ -355,6 +355,21 @@ sub suite_get_linkable($)
     return path_relativise($suite->{basedir} . "/" . $suite->{object}, $here);
 }
 
+# Any of these (case insensitive) names can be used as the setup function
+my %setup_names = (
+    'setup' => 1,	# standard name from Kent Beck's original paper
+    'set_up' => 1,	# standard, C style with underscore
+    'init' => 1,	# allowed in older versions of cunit.pl
+    'before' => 1,	# like jUnit's @Before annotation
+);
+# Any of these (case insensitive) names can be used as the teardown function
+my %teardown_names = (
+    'teardown' => 1,	# standard name from Kent Beck's original paper
+    'tear_down' => 1,	# standard, C style with underscore
+    'cleanup' => 1,	# allowed in older versions of cunit.pl
+    'after' => 1,	# like jUnit's @After annotation
+);
+
 #
 # Scan the C source file of the given suite for function
 # definitions of one of the signatures:
@@ -369,7 +384,7 @@ sub suite_get_linkable($)
 #	we use this as the suite's cleanup function
 #
 # The names of any such functions found are added to the
-# suite hash, using {initfn}, {cleanupfn} and {tests}.
+# suite hash, using {setupfn}, {teardownfn} and {tests}.
 #
 # Args: ref to suite hash
 # Returns: number of tests found
@@ -397,19 +412,25 @@ sub suite_scan_for_tests($)
 	next
 	    unless defined $fn;
 
-	if ($fn eq 'cleanup' && (!defined($rtype) || $rtype eq 'int'))
+	if (defined $teardown_names{lc($fn)} && (!defined($rtype) || $rtype eq 'int'))
 	{
-	    vmsg("Found cleanup function");
-	    $suite->{cleanupfn} = $fn;
+	    vmsg("Found teardown function");
+	    die "$suite->{abspath}: Too many teardown functions: " .
+		"both \"$fn\" and \"$suite->{teardownfn}\" found"
+		if defined($suite->{teardownfn});
+	    $suite->{teardownfn} = $fn;
 	}
-	elsif ($fn eq 'init' && (!defined($rtype) || $rtype eq 'int'))
+	elsif (defined $setup_names{lc($fn)} && (!defined($rtype) || $rtype eq 'int'))
 	{
-	    vmsg("Found init function");
-	    $suite->{initfn} = $fn;
+	    vmsg("Found setup function");
+	    die "$suite->{abspath}: too many setup functions: both " .
+		"\"$fn\" and \"$suite->{setupfn}\" found"
+		if defined($suite->{setupfn});
+	    $suite->{setupfn} = $fn;
 	}
 	else
 	{
-	    my ($name) = ($fn =~ m/^test_(\w+)/);
+	    my ($name) = ($fn =~ m/^test_*(\w+)/);
 	    if (defined $name && (!defined($rtype) || $rtype eq 'void'))
 	    {
 		vmsg("Found test function \"$fn\" -> name \"$name\"");
@@ -615,7 +636,11 @@ sub suite_generate_wrap($)
 	print WRAP "    { \"$test->{name}\", $test->{func} },\n";
     }
     print WRAP "    CU_TEST_INFO_NULL\n};\n";
-    print WRAP "const CU_SuiteInfo $suite->{suitevar} = {\"$suite->{name}\", $suite->{initfn}, $suite->{cleanupfn}, _tests};\n";
+
+    my $setupfn = $suite->{setupfn} || 'NULL';
+    my $teardownfn = $suite->{teardownfn} || 'NULL';
+    print WRAP "const CU_SuiteInfo $suite->{suitevar} = {" .
+	       "\"$suite->{name}\", $setupfn, $teardownfn, _tests};\n";
     close WRAP;
 
     atomic_rewrite_end($suite->{wrap});
