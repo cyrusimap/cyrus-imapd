@@ -267,6 +267,21 @@ void spool_cache_header(char *name, char *body, hdrcache_t cache)
     free(name);
 }
 
+void spool_replace_header(char *name, char *body, hdrcache_t cache)
+{
+    strarray_t *contents;
+
+    lcase(name);
+
+    contents = (strarray_t *)hash_lookup(name, cache);
+    if (!contents)
+	contents = hash_insert(name, strarray_new(), cache);
+    else
+	strarray_truncate(contents, 0);
+    strarray_appendm(contents, body);
+    free(name);
+}
+
 int spool_fill_hdrcache(struct protstream *fin, FILE *fout, hdrcache_t cache,
 			const char **skipheaders)
 {
