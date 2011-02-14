@@ -2890,8 +2890,6 @@ int msg_new(message_data_t **m)
 
 void msg_free(message_data_t *m)
 {
-    int i;
-
     if (m->data) {
 	prot_free(m->data);
     }
@@ -2981,8 +2979,7 @@ static int savemsg(message_data_t *m, FILE *f)
     if ((body = spool_getheader(m->hdrcache, "path")) != NULL) {
 	/* prepend to the cached path */
 	m->path = strconcat(config_servername, "!", body[0], (char *)NULL);
-	free(body[0]);
-	body[0] = xstrdup(m->path);
+	spool_replace_header(xstrdup("Path"), xstrdup(m->path), m->hdrcache);
     } else {
 	/* no path, create one */
 	m->path = strconcat(config_servername, "!",
@@ -3047,7 +3044,7 @@ static int savemsg(message_data_t *m, FILE *f)
 		/* add Reply-To: header */
 		if (body || newspostuser) {
 		    const char **postto, *p;
-		    size_t fold = 0;
+		    int fold = 0;
 		    const char *sep = "";
 		    char *replyto;
 		    size_t n;
@@ -3084,8 +3081,8 @@ static int savemsg(message_data_t *m, FILE *f)
 			replyto = buf_release(&buf);
 			if (body) {
 			    /* replace the existing header */
-			    free(body[0]);
-			    body[0] = replyto;
+			    spool_replace_header(xstrdup("Reply-To"), replyto,
+					         m->hdrcache);
 			} else {
 			    /* add the new header to the cache */
 			    spool_cache_header(xstrdup("Reply-To"), replyto,
@@ -3100,7 +3097,7 @@ static int savemsg(message_data_t *m, FILE *f)
 		    fprintf(f, "Reply-To: ");
 		    if (fold)
 			fprintf(f, "%.*s\r\n\t", fold, replyto);
-		    fprintf(f, "%s\r\n", r+fold);
+		    fprintf(f, "%s\r\n", replyto+fold);
 		}
 	    }
 	} else {
@@ -3269,7 +3266,7 @@ static int deliver(message_data_t *msg)
 		prot_rewind(msg->data);
 		if (stage) {
 		    r = append_fromstage(&as, &body, stage, now,
-					 (const char **) NULL, 0, !singleinstance);
+					 NULL, !singleinstance);
 		} else {
 		    /* XXX should never get here */
 		    r = append_fromstream(&as, &body, msg->data, msg->size, now,
@@ -3777,7 +3774,7 @@ static void news2mail(message_data_t *msg)
 
     /* send the message */
     if (smbuf.count > smbuf_basic_count) {
-	sm_pid = open_sendmail(smbuf.data, &sm);
+	sm_pid = open_sendmail((const char **)smbuf.data, &sm);
 
 	if (!sm)
 	    syslog(LOG_ERR, "news2mail: could not spawn sendmail process");

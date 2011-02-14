@@ -433,7 +433,7 @@ int append_fromstage(struct appendstate *as, struct body **body,
     }
 
     /* Handle flags the user wants to set in the message */
-    for (i = 0; i < flags->count ; i++) {
+    for (i = 0; flags && i < flags->count ; i++) {
 	const char *flag = strarray_nth(flags, i);
 	if (!strcmp(flag, "\\seen")) {
 	    append_setseen(as, &record);
