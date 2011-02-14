@@ -11,6 +11,7 @@
 #define THIRD_RX    "Fri, 29 Oct 2010 13:01:01 +1100"
 #define SENT	    "Thu, 28 Oct 2010 18:37:26 +1100"
 #define HFROM	    "Fred Bloggs <fbloggs@fastmail.fm>"
+#define HFROM2	    "Antoine Lavoisier <lavoisier@chemistry.fr>"
 #define HTO	    "Sarah Jane Smith <sjsmith@gmail.com>"
 #define HDATE	    SENT
 #define HSUBJECT    "Simple testing email"
@@ -221,4 +222,57 @@ static void test_bz3386(void)
 
     spool_free_hdrcache(cache);
 #undef N
+}
+
+static void test_replace(void)
+{
+#define FOOBAR1	    "If music be the foo of love"
+#define FOOBAR2	    "Foo glorious foo"
+#define FOOBAR3	    "Foo is an important part of a balanced diet"
+		    /* apologies to Fran Liebowitz */
+#define FOOBAR4	    "Foo and Drug Administration"
+    hdrcache_t cache;
+    const char **val;
+
+    cache = spool_new_hdrcache();
+    CU_ASSERT_PTR_NOT_NULL(cache);
+
+    val = spool_getheader(cache, "From");
+    CU_ASSERT_PTR_NULL(val);
+
+    /* replace a single line */
+    spool_cache_header(xstrdup("From"), xstrdup(HFROM), cache);
+    val = spool_getheader(cache, "From");
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val[0], HFROM);
+    CU_ASSERT_PTR_NULL(val[1]);
+
+    spool_replace_header(xstrdup("From"), xstrdup(HFROM2), cache);
+    val = spool_getheader(cache, "From");
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val[0], HFROM2);
+    CU_ASSERT_PTR_NULL(val[1]);
+
+    /* replace multiple lines with one */
+    spool_cache_header(xstrdup("X-FooBar"), xstrdup(FOOBAR1), cache);
+    spool_cache_header(xstrdup("X-FooBar"), xstrdup(FOOBAR2), cache);
+    spool_cache_header(xstrdup("X-FooBar"), xstrdup(FOOBAR3), cache);
+    val = spool_getheader(cache, "X-FooBar");
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val[0], FOOBAR1);
+    CU_ASSERT_STRING_EQUAL(val[1], FOOBAR2);
+    CU_ASSERT_STRING_EQUAL(val[2], FOOBAR3);
+    CU_ASSERT_PTR_NULL(val[3]);
+
+    spool_replace_header(xstrdup("X-FooBar"), xstrdup(FOOBAR4), cache);
+    val = spool_getheader(cache, "X-FooBar");
+    CU_ASSERT_PTR_NOT_NULL(val);
+    CU_ASSERT_STRING_EQUAL(val[0], FOOBAR4);
+    CU_ASSERT_PTR_NULL(val[1]);
+
+    spool_free_hdrcache(cache);
+#undef FOOBAR1
+#undef FOOBAR2
+#undef FOOBAR3
+#undef FOOBAR4
 }
