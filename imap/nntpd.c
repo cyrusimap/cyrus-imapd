@@ -3418,7 +3418,7 @@ static int deliver(message_data_t *msg)
 		prot_rewind(msg->data);
 		if (stage) {
 		    r = append_fromstage(&as, &body, stage, 0,
-					 (const char **) NULL, 0, !singleinstance);
+					 NULL, !singleinstance);
 		} else {
 		    /* XXX should never get here */
 		    r = append_fromstream(&as, &body, msg->data, msg->size, 0,
