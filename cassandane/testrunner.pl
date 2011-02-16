@@ -7,10 +7,11 @@ use Test::Unit::Runner::XML;
 
 my $format = 'xml';
 my $output_dir = 'reports';
-my @suite_prefixes = (
+my @default_names = (
     'Cassandane::Test',
     'Cassandane::Cyrus',
 );
+my @names;
 
 my %runners =
 (
@@ -44,7 +45,7 @@ my %runners =
 
 sub usage
 {
-    printf STDERR "Usage: testrunner.pl [ -f xml | -f tap ]\n";
+    printf STDERR "Usage: testrunner.pl [ -f xml | -f tap ] [testname...]\n";
     exit(1);
 }
 
@@ -61,26 +62,38 @@ while (my $a = shift)
     }
     else
     {
-	usage;
+	push(@names, $a);
     }
 }
 
+@names = @default_names
+    unless scalar @names;
+
 my @suites;
-foreach my $prefix (@suite_prefixes)
+foreach my $name (@names)
 {
-    my $dir = $prefix;
+    my $dir = $name;
     $dir =~ s/::/\//g;
-    opendir DIR, $dir
-	or die "Cannot open directory $dir for reading: $!";
-    while ($_ = readdir DIR)
+    my $file = "$dir.pm";
+
+    if ( -d $dir )
     {
-	next unless m/\.pm$/;
-	$_ = "$dir/$_";
-	s/\.pm$//;
-	s/\//::/g;
-	push(@suites, $_);
+	opendir DIR, $dir
+	    or die "Cannot open directory $dir for reading: $!";
+	while ($_ = readdir DIR)
+	{
+	    next unless m/\.pm$/;
+	    $_ = "$dir/$_";
+	    s/\.pm$//;
+	    s/\//::/g;
+	    push(@suites, $_);
+	}
+	closedir DIR;
     }
-    closedir DIR;
+    elsif ( -f $file )
+    {
+	push(@suites, $name);
+    }
 }
 
 # printf STDERR "List of suites: %s\n", join(' ',@suites);
