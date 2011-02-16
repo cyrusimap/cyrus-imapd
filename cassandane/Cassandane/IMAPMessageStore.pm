@@ -6,6 +6,7 @@ use warnings;
 use Mail::IMAPTalk;
 use Cassandane::Util::DateTime qw(to_rfc822);
 # use Data::Dumper;
+use overload qw("") => \&as_string;
 
 # TODO: isa Cassandane::MessageStore
 
@@ -253,6 +254,13 @@ sub get_server_name
     # slott02 Cyrus IMAP git2.5.0+0-git-work-6640 server ready
     my ($servername) = ($self->{banner} =~ m/^(\S+)\s+Cyrus\s+IMAP\s+/);
     return $servername;
+}
+
+sub as_string
+{
+    my ($self) = @_;
+
+    return 'imap://' . $self->{host} . ':' . $self->{port} . '/' .  $self->{folder};
 }
 
 1;
