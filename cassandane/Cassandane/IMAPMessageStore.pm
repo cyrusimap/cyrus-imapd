@@ -59,6 +59,10 @@ sub _connect
 	    ($self->{client}->state() == Mail::IMAPTalk::Authenticated ||
 	     $self->{client}->state() == Mail::IMAPTalk::Selected));
 
+    $self->{client}->logout()
+	if defined $self->{client};
+    $self->{client} = undef;
+
     my $client = Mail::IMAPTalk->new(
 			    Server => $self->{host},
 			    Port => $self->{port}
@@ -77,12 +81,25 @@ sub _connect
     $self->{banner} = $banner;
 }
 
-sub _disconnect
+sub disconnect
 {
     my ($self) = @_;
 
-    $self->{client}->logout();
+    $self->{client}->logout()
+	if defined $self->{client};
     $self->{client} = undef;
+}
+
+sub _select
+{
+    my ($self) = @_;
+
+    if ($self->{client}->state() == Mail::IMAPTalk::Selected)
+    {
+	$self->{client}->unselect()
+	    or die "Cannot unselect: $@";
+    }
+    return $self->{client}->select($self->{folder});
 }
 
 sub write_begin
@@ -92,16 +109,14 @@ sub write_begin
 
     $self->_connect();
 
-    $r = $self->{client}->select($self->{folder});
-    if (!$r && $self->{client}->get_last_error() =~ m/does not exist/)
+    $r = $self->_select();
+    if (!defined $r)
     {
-	$r = $self->{client}->create($self->{folder});
+	die "Cannot select folder \"$self->{folder}\": $@"
+	    unless $self->{client}->get_last_error() =~ m/does not exist/;
+	$self->{client}->create($self->{folder})
+	    or die "Cannot create folder \"$self->{folder}\": $@"
     }
-    if (!$r)
-    {
-	die "Cannot select folder \"$self->{folder}\": $@";
-    }
-
 }
 
 sub write_message
@@ -115,8 +130,6 @@ sub write_message
 sub write_end
 {
     my ($self) = @_;
-
-    $self->_disconnect();
 }
 
 sub set_fetch_attributes
@@ -143,11 +156,9 @@ sub read_begin
 
     $self->_connect();
 
-    $r = $self->{client}->select($self->{folder});
-    if (!$r)
-    {
-	die "Cannot select folder \"$self->{folder}\": $@";
-    }
+    $self->_select()
+	or die "Cannot select folder \"$self->{folder}\": $@";
+
     $self->{next_uid} = 1;
     $self->{last_uid} = -1 + $self->{client}->get_response_code('uidnext');
     $self->{last_batch_uid} = undef;
@@ -205,7 +216,6 @@ sub read_end
 {
     my ($self) = @_;
 
-    $self->_disconnect();
     $self->{next_uid} = undef;
     $self->{last_uid} = undef;
     $self->{last_batch_uid} = undef;
