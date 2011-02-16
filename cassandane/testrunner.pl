@@ -8,7 +8,8 @@ use Test::Unit::Runner::XML;
 my $format = 'xml';
 my $output_dir = 'reports';
 my @suite_prefixes = (
-    'Cassandane::Test'
+    'Cassandane::Test',
+    'Cassandane::Cyrus',
 );
 
 my %runners =
