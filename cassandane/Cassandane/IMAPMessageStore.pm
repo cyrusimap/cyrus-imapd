@@ -30,7 +30,7 @@ sub new
 	last_uid => undef,
 	last_batch_uid => undef,
 	batch => undef,
-	fetch_attrs => {},
+	fetch_attrs => { 'body.peek[]' => 1 },
     };
 
     $self->{host} = $params{host}
@@ -137,7 +137,7 @@ sub set_fetch_attributes
 {
     my ($self, @attrs) = @_;
 
-    $self->{fetch_attrs} = {};
+    $self->{fetch_attrs} = { 'body.peek[]' => 1 };
     foreach my $attr (@attrs)
     {
 	$attr = lc($attr);
@@ -147,7 +147,6 @@ sub set_fetch_attributes
 	    if ($attr =~ m/^body/);
 	$self->{fetch_attrs}->{$attr} = 1;
     }
-    $self->{fetch_attrs}->{'body.peek[]'} = 1;
 }
 
 sub read_begin
