@@ -24,3 +24,14 @@ Cassandane needs the following software to work:
     Does the SHA1 message digest algorithm.
     CPAN package http://search.cpan.org/dist/Digest-SHA1/
     Ubuntu package libdigest-sha1-perl.
+
+ * Test::Unit
+    Unit testing framework for Perl
+    CPAN package http://search.cpan.org/dist/Test-Unit/
+    Ubuntu package libtest-unit-perl
+
+ * Test::Unit::Runner::XML
+    Addition to Test::Unit which outputs in jUnit's XML
+    format, for integration with Jenkins CI.
+    CPAN package http://search.cpan.org/dist/Test-Unit-Runner-Xml/
+    No Ubuntu package (sorry)
