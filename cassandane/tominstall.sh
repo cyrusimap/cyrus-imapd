@@ -1,6 +1,14 @@
 #!/bin/sh
 
-scp -r genmail3.pl listmail.pl pop3showafter.pl \
-	cidtest.pl cidclashtest.pl \
-	cidclash3test.pl cidclashrepltest.pl \
-	Cassandane root@vmtom.com:
+DESTINATION="root@vmtom.com:cass/"
+INSTALLABLES="\
+    genmail3.pl \
+    listmail.pl \
+    pop3showafter.pl \
+    cidclashrepltest.pl \
+    testrunner.pl \
+    Cassandane \
+"
+
+
+rsync -av --delete -e ssh $INSTALLABLES $DESTINATION
