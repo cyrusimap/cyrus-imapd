@@ -183,6 +183,7 @@ static char* look_for_me(char *myaddr, int numaddresses,
 	/* loop through each address in the header */
 	while (!found && (a = address_itr_next(&ai)) != NULL) {
 	    char *addr = address_get_all(a, 0);
+	    if (!addr) addr = xstrdup("");
 
 	    if (!strcasecmp(addr, myaddr)) {
 		free(addr);
