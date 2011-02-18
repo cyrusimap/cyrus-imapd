@@ -4071,7 +4071,7 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
 		    appendfieldlist(&fetchargs.fsections,
 				    section, newfields, fieldname.s,
 				    &oi, sizeof(oi));
-		    newfields = NULL;
+		    newfields = strarray_new();
 		    break;
 		}
 
