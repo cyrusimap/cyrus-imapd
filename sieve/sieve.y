@@ -737,6 +737,7 @@ static char *check_reqs(strarray_t *sa)
 {
     char *s;
     struct buf errs = BUF_INITIALIZER;
+    char *res;
 
     while ((s = strarray_shift(sa))) {
 	if (!script_require(parse_script, s)) {
@@ -747,7 +748,13 @@ static char *check_reqs(strarray_t *sa)
 	}
 	free(s);
     }
-    return buf_release(&errs);
+    res = buf_release(&errs);
+    if (!res[0]) {
+	free(res);
+	return NULL;
+    }
+
+    return res;
 }
 
 static test_t *build_address(int t, struct aetags *ae,
