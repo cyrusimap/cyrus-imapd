@@ -5951,7 +5951,7 @@ void getlistargs(char *tag, struct listargs *listargs)
     }
     else {
 	prot_ungetc(c, imapd_in);
-    	c = getastring(imapd_in, imapd_out, &buf);
+	c = getastring(imapd_in, imapd_out, &buf);
 	if (c == EOF) {
 	    prot_printf(imapd_out,
 			"%s BAD Missing required argument to List: mailbox pattern\r\n",
