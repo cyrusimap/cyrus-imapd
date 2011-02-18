@@ -584,7 +584,9 @@ static int eval_bc_test(sieve_interp_t *interp, void* m,
 			res = SIEVE_RUN_ERROR;
 			goto envelope_err;
 		    }
-			
+
+		    if (!addr) addr = xstrdup("");
+
 		    if (match == B_COUNT) {
 			count++;
 		    } else {
