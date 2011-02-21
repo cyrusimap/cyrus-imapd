@@ -75,6 +75,8 @@
 #include "strarray.h"
 #include "hash.h"
 
+char vacation_answer;
+
 typedef struct {
     char *name;
     FILE *data;
@@ -83,6 +85,8 @@ typedef struct {
 
     int cache_full;
     struct hash_table cache;
+    strarray_t *env_from;
+    strarray_t *env_to;
 } message_data_t;
 
 /* take a list of headers, pull the first one out and return it in
@@ -214,6 +218,24 @@ static void fill_cache(message_data_t *m)
     }
 
     m->cache_full = 1;
+}
+
+/* we use the temp field in message_data to avoid having to malloc memory
+   to return, and we also can't expose our the receipients to the message */
+static int getenvelope(void *mc, const char *field, const char ***contents)
+{
+    message_data_t *m = (message_data_t *)mc;
+
+    if (!strcasecmp(field, "from")) {
+	*contents = (const char **)m->env_from->data;
+	return SIEVE_OK;
+    } else if (!strcasecmp(field, "to")) {
+	*contents = (const char **)m->env_to->data;
+	return SIEVE_OK;
+    } else {
+	*contents = NULL;
+	return SIEVE_FAIL;
+    }
 }
 
 /* gets the header "head" from msg. */
@@ -438,12 +460,16 @@ static int autorespond(void *ac, void *ic __attribute__((unused)),
     char yn;
     int i;
 
+    if (vacation_answer)
+	yn = vacation_answer;
+    else {
     printf("Have I already responded to '");
     for (i = 0; i < SIEVE_HASHLEN; i++) {
 	printf("%x", arc->hash[i]);
     }
     printf("' in %d days? ", arc->days);
     scanf(" %c", &yn);
+    }
 
     if (TOLOWER(yn) == 'y') return SIEVE_DONE;
     if (TOLOWER(yn) == 'n') return SIEVE_OK;
@@ -477,8 +503,12 @@ static int usage(const char *argv0) __attribute__((noreturn));
 static int usage(const char *argv0)
 {
     fprintf(stderr, "usage:\n");
-    fprintf(stderr, "%s message script\n", argv0);
     fprintf(stderr, "%s -v script\n", argv0);
+    fprintf(stderr, "%s [opts] message script\n", argv0);
+    fprintf(stderr, "\n");
+    fprintf(stderr, "   -e envelope_from\n");
+    fprintf(stderr, "   -t envelope_to\n");
+    fprintf(stderr, "   -r y|n - have sent vacation response already? (if required)\n");
     exit(1);
 }
 
@@ -492,14 +522,25 @@ int main(int argc, char *argv[])
     int fd, res;
     struct stat sbuf;
     static strarray_t mark = STRARRAY_INITIALIZER;
+    static strarray_t e_from = STRARRAY_INITIALIZER;
+    static strarray_t e_to = STRARRAY_INITIALIZER;
 
-    while ((c = getopt(argc, argv, "v:f")) != EOF)
+    while ((c = getopt(argc, argv, "v:fe:t:r:")) != EOF)
 	switch (c) {
 	case 'v':
 	    script = optarg;
 	    break;
 	case 'f':
 	    force_fail = 1;
+	    break;
+	case 'e':
+	    strarray_append(&e_from, optarg);
+	    break;
+	case 't':
+	    strarray_append(&e_to, optarg);
+	    break;
+	case 'r':
+	    vacation_answer = optarg[0];
 	    break;
 	default:
 	    usage(argv[0]);
@@ -559,7 +600,7 @@ int main(int argc, char *argv[])
 	exit(1);
     }
 
-    res = sieve_register_envelope(i, getheader);
+    res = sieve_register_envelope(i, getenvelope);
     if (res != SIEVE_OK) {
 	printf("sieve_register_envelope() returns %d\n", res);
 	exit(1);
@@ -630,6 +671,9 @@ int main(int argc, char *argv[])
 	    printf("can not open message '%s'\n", message);
 	    exit(1);
 	}
+
+	m->env_from = &e_from;
+	m->env_to = &e_to;
 
 	res = sieve_execute_bytecode(exe, i, NULL, m);
 	if (res != SIEVE_OK) {
