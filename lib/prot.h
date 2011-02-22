@@ -205,6 +205,10 @@ extern int prot_setsasl(struct protstream *s, sasl_conn_t *conn);
 extern int prot_settls(struct protstream *s, SSL *tlsconn);
 #endif /* HAVE_SSL */
 
+/* Mark this protstream as a "client" for the purpose of generating
+ * or consuming literals (thanks LITERAL+) */
+int prot_setisclient(struct protstream *s, int val);
+
 #ifdef HAVE_ZLIB
 /* Enable (de)compression for a given protstream */
 int prot_setcompress(struct protstream *s);
