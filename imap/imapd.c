@@ -9694,6 +9694,8 @@ int getlistselopts(char *tag, unsigned *opts)
 	    *opts |= LIST_SEL_REMOTE;
 	} else if (!strcmp(buf.s, "recursivematch")) {
 	    *opts |= LIST_SEL_RECURSIVEMATCH;
+	} else if (!strcmp(buf.s, "special-use")) {
+	    *opts |= LIST_SEL_SPECIALUSE;
 	} else {
 	    prot_printf(imapd_out,
 			"%s BAD Invalid List selection option \"%s\"\r\n",
@@ -9769,6 +9771,8 @@ int getlistretopts(char *tag, unsigned *opts) {
 	    *opts |= LIST_RET_SUBSCRIBED;
 	else if (!strcmp(buf.s, "children"))
 	    *opts |= LIST_RET_CHILDREN;
+	else if (!strcmp(buf.s, "special-use"))
+	    *opts |= LIST_RET_SPECIALUSE;
 	else {
 	    prot_printf(imapd_out,
 			"%s BAD Invalid List return option \"%s\"\r\n",
