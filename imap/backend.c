@@ -500,6 +500,10 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
     ret->sock = sock;
     prot_setflushonread(ret->in, ret->out);
     ret->prot = prot;
+
+    /* use literal+ to send literals */
+    prot_setisclient(ret->in, 1);
+    prot_setisclient(ret->out, 1);
     
     if (prot->banner.auto_capa) {
 	/* try to get the capabilities from the banner */

@@ -138,7 +138,7 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 	}
 
 	/* Literal */
-	isnowait = 0;
+	isnowait = pin->isclient;
 	buf_reset(buf);
 	c = getint32(pin, &len);
 	if (c == '+') {

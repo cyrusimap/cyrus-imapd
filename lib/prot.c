@@ -148,6 +148,12 @@ int prot_setlog(struct protstream *s, int fd)
     return 0;
 }
 
+int prot_setisclient(struct protstream *s, int val)
+{
+    s->isclient = val;
+    return 0;
+}
+
 #ifdef HAVE_SSL
 
 /*
@@ -1274,7 +1280,10 @@ int prot_printf(struct protstream *s, const char *fmt, ...)
 int prot_printliteral(struct protstream *out, const char *s, size_t size)
 {
     int r;
-    r = prot_printf(out, "{" SIZE_T_FMT "+}\r\n", size);
+    if (out->isclient)
+	r = prot_printf(out, "{" SIZE_T_FMT "+}\r\n", size);
+    else
+	r = prot_printf(out, "{" SIZE_T_FMT "}\r\n", size);
     if (r) return r;
     return prot_write(out, s, size);
 }
