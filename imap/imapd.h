@@ -270,13 +270,15 @@ enum {
 enum {
     LIST_SEL_SUBSCRIBED =	(1<<0),
     LIST_SEL_REMOTE =		(1<<1),
-    LIST_SEL_RECURSIVEMATCH =	(1<<2)
+    LIST_SEL_RECURSIVEMATCH =	(1<<2),
+    LIST_SEL_SPECIALUSE =	(1<<3)
 };
 
 /* Bitmask for List return options */
 enum {
     LIST_RET_SUBSCRIBED =	(1<<0),
-    LIST_RET_CHILDREN =		(1<<1)
+    LIST_RET_CHILDREN =		(1<<1),
+    LIST_RET_SPECIALUSE =	(1<<2)
 };
 
 /* Bitmask for List name attributes */

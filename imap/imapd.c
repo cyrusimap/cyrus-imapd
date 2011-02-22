@@ -2089,7 +2089,7 @@ void cmdloop(void)
 
 		memset(&listargs, 0, sizeof(struct listargs));
 		listargs.cmd = LIST_CMD_XLIST;
-		listargs.ret = LIST_RET_CHILDREN;
+		listargs.ret = LIST_RET_CHILDREN | LIST_RET_SPECIALUSE;
 		getlistargs(tag.s, &listargs);
 		if (listargs.pat.count) cmd_list(tag.s, &listargs);
 
@@ -10145,6 +10145,11 @@ static void list_response(char *name, int attributes,
 	    attributes &= ~MBOX_ATTRIBUTE_NOSELECT;
     }
 
+    if (listargs->sel & LIST_SEL_SPECIALUSE) {
+	/* check that this IS a specialuse folder */
+	if (!mbentry->specialuse) goto done;
+    }
+
     switch (listargs->cmd) {
     case LIST_CMD_LSUB:
 	cmd = "LSUB";
@@ -10167,8 +10172,11 @@ static void list_response(char *name, int attributes,
     (*imapd_namespace.mboxname_toexternal)(&imapd_namespace, name,
             imapd_userid, mboxname);
 
-    if (listargs->cmd == LIST_CMD_XLIST)
+    if (listargs->cmd == LIST_CMD_XLIST || 
+	listargs->ret & LIST_RET_SPECIALUSE ||
+	listargs->sel & LIST_SEL_SPECIALUSE) {
 	specialuse_flags(mbentry, sep);
+    }
     prot_printf(imapd_out, ") ");
 
     prot_printf(imapd_out, "\"%c\" ", imapd_namespace.hier_sep);
