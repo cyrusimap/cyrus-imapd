@@ -22,6 +22,7 @@ config.status
 config.status.lineno
 configure
 cscope.out
+sieve/test
 sieve/tests/
 perl/sieve/managesieve/
 com_err/et/com_err.o
