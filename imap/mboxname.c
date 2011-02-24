@@ -66,6 +66,8 @@
 #include "mboxlist.h"
 #include "cyr_lock.h"
 
+static int mboxname_strip_deletedprefix(char *name, char **ptr);
+
 struct mboxlocklist {
     struct mboxlocklist *next;
     struct mboxlock l;
@@ -797,33 +799,49 @@ char *mboxname_isusermailbox(const char *name, int isinbox)
 	return NULL;
 }
 
+/* NOTE - name must have had domain removed already */
+static int mboxname_strip_deletedprefix(char *name, char **ptr)
+{
+    static const char *deletedprefix = NULL;
+    static int deletedprefix_len = 0;
+
+    /* cache for efficiency, this code can get called 
+     * in an inner loop */
+    if (!deletedprefix) {
+	deletedprefix = config_getstring(IMAPOPT_DELETEDPREFIX);
+	deletedprefix_len = strlen(deletedprefix);
+    }
+
+    if (strncmp(name, deletedprefix, deletedprefix_len))
+	return IMAP_MAILBOX_BADNAME;
+
+    if (name[deletedprefix_len] != '.')
+	return IMAP_MAILBOX_BADNAME;
+
+    *ptr = name + deletedprefix_len + 1;
+
+    return 0;
+}
+
 /*
  * If (internal) mailbox 'name' is a DELETED mailbox
  * returns boolean
  */
 int mboxname_isdeletedmailbox(const char *name, time_t *timestampp)
 {
-    static const char *deletedprefix = NULL;
-    static int deletedprefix_len = 0;
     int domainlen = 0;
+    char *rest = NULL;
     char *p;
     int i;
-
-    if (!deletedprefix) {
-	deletedprefix = config_getstring(IMAPOPT_DELETEDPREFIX);
-	deletedprefix_len = strlen(deletedprefix);
-    }
 
     if (config_virtdomains && (p = strchr(name, '!')))
 	domainlen = p - name + 1;
 
-    if (strncmp(name + domainlen, deletedprefix, deletedprefix_len))
-	return 0;
-    if (name[domainlen + deletedprefix_len] != '.')
+    if (mboxname_strip_deletedprefix((char *)(name + domainlen), &rest))
 	return 0;
 
     /* Sanity check for 8 hex digits only at the end */
-    p = strrchr(name, '.');
+    p = strrchr(rest, '.');
     if (!p)
 	return 0;
     p++;
@@ -940,6 +958,10 @@ int mboxname_to_parts(const char *mboxname, struct mboxname_parts *parts)
 	b = e;
     }
 
+    if (!mboxname_strip_deletedprefix(b, &b)) {
+	parts->is_deleted = 1;
+    }
+
     if (!strncmp(b, "user.", 5)) {
 	/* user mailbox */
 	b += 5;
@@ -952,12 +974,8 @@ int mboxname_to_parts(const char *mboxname, struct mboxname_parts *parts)
 	} else {
 	    b += strlen(b);
 	}
-    } else if (!strncmp(b, "Other Folders.", 14)) {
-	/* shared space mailbox */
-	b += 14;
     } else {
-	mboxname_free_parts(parts);
-	return IMAP_MAILBOX_BADNAME;
+	/* shared mailbox - nothing to strip */
     }
 
     parts->box = (*b ? b : NULL);

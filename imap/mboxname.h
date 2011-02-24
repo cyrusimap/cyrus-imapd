@@ -89,6 +89,7 @@ struct mboxname_parts {
     const char *domain;
     const char *userid;	    /* userid WITHOUT the domain */
     const char *box;
+    int is_deleted;
     char *freeme;
 };
 
