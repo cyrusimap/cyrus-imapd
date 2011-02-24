@@ -2706,6 +2706,10 @@ int mailbox_create(const char *name,
     mailbox->i.options = options;
     mailbox->i.highestmodseq = 1;
 
+    /* initialise header size field so appends calculate the
+     * correct map size */
+    mailbox->index_size = INDEX_HEADER_SIZE;
+
     mailbox->header_dirty = 1;
     if (!uniqueid) {
 	mailbox_make_uniqueid(mailbox);
