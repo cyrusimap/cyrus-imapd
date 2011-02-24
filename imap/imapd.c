@@ -9952,33 +9952,8 @@ static int set_haschildren(char *name, int matchlen,
     return 0;
 }
 
-
-struct xlist_rock {
-    const char *mboxname;
-    const char *sep;
-};
-
-static void xlist_check(const char *key, const char *val, void *rock)
-{
-    struct xlist_rock *r = (struct xlist_rock *)rock;
-    char *flag;
-
-    if (strncmp(key, "xlist-", 6))
-	return;
-
-    if (strcmp(val, r->mboxname))
-	return;
-
-    flag = xstrdup(key + 6);
-    lcase(flag);
-    flag[0] = toupper((unsigned char)flag[0]);
-    prot_printf(imapd_out, "%s\\%s", r->sep, flag);
-    free(flag);
-
-    r->sep = " ";
-}
-
-static void specialuse_flags(struct mboxlist_entry *mbentry, const char *sep)
+static void specialuse_flags(struct mboxlist_entry *mbentry, const char *sep,
+			     int isxlist)
 {
     char inboxname[MAX_MAILBOX_PATH+1];
     int inboxlen;
@@ -9991,22 +9966,15 @@ static void specialuse_flags(struct mboxlist_entry *mbentry, const char *sep)
     if (strncmp(mbentry->name, inboxname, inboxlen))
 	return;
 
-    /* inbox */
+    /* inbox - only print if command is XLIST */
     if (mbentry->name[inboxlen] == '\0') {
-	prot_printf(imapd_out, "%s\\Inbox", sep);
+	if (isxlist) prot_printf(imapd_out, "%s\\Inbox", sep);
     }
     /* subdir */
     else if (mbentry->name[inboxlen] == '.') {
 	/* check if there's a special use flag set */
 	if (mbentry->specialuse)
 	    prot_printf(imapd_out, "%s%s", sep, mbentry->specialuse);
-	else {
-	    /* oldschool xlist flags! */
-	    struct xlist_rock rock;
-	    rock.sep = sep;
-	    rock.mboxname = mbentry->name + inboxlen + 1;
-	    config_foreachoverflowstring(xlist_check, &rock);
-	}
     }
     /* otherwise it's actually another user who matches for
      * the substr.  Ok to just print nothing */
@@ -10182,7 +10150,7 @@ static void list_response(char *name, int attributes,
     if (listargs->cmd == LIST_CMD_XLIST || 
 	listargs->ret & LIST_RET_SPECIALUSE ||
 	listargs->sel & LIST_SEL_SPECIALUSE) {
-	specialuse_flags(mbentry, sep);
+	specialuse_flags(mbentry, sep, listargs->cmd == LIST_CMD_XLIST);
     }
     prot_printf(imapd_out, ") ");
 
