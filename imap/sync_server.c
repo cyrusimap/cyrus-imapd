@@ -1167,6 +1167,9 @@ static int do_mailbox(struct dlist *kin,
 
     uint32_t options;
 
+    /* optional fields */
+    const char *specialuse = NULL;
+
     struct mailbox *mailbox = NULL;
     struct index_record mrecord, rrecord;
     struct sync_msgid_list *part_list;
@@ -1209,6 +1212,9 @@ static int do_mailbox(struct dlist *kin,
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getlist(kin, "RECORD", &kr))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
+
+    /* optional */
+    dlist_getatom(kin, "SPECIALUSE", &specialuse);
 
     options = sync_parse_options(options_str);
  
@@ -1355,6 +1361,16 @@ static int do_mailbox(struct dlist *kin,
 	mailbox_index_recalc(mailbox);
     }
     newcrc = mailbox->i.sync_crc;
+
+    /* this is an ugly construct that's an artifact of the
+     * inversion of mboxlist and mailbox stuff that means
+     * we can't be efficient in mboxlist_setspecialuse, so
+     * we want to check it's needed first. */
+    if (!specialuse || !mailbox->specialuse || 
+	strcmp(specialuse, mailbox->specialuse)) {
+	mailbox_close(&mailbox);
+	r = mboxlist_setspecialuse(mboxname, specialuse);
+    }
     mailbox_close(&mailbox);
 
     /* check return value */

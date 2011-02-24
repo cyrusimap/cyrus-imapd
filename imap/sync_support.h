@@ -141,6 +141,7 @@ struct sync_folder {
     char *name;
     char *part;
     char *acl;
+    char *specialuse;
     unsigned last_uid;
     modseq_t highestmodseq;
     unsigned options;
@@ -171,7 +172,8 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
 					 uint32_t crc,
 					 uint32_t recentuid,
 					 time_t recenttime,
-					 time_t pop3_last_login);
+					 time_t pop3_last_login,
+					 const char *specialuse);
 
 struct sync_folder *sync_folder_lookup(struct sync_folder_list *l,
 				       const char *uniqueid);

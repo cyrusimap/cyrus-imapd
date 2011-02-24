@@ -475,7 +475,8 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
 					 uint32_t crc,
 					 uint32_t recentuid,
 					 time_t recenttime,
-					 time_t pop3_last_login)
+					 time_t pop3_last_login,
+					 const char *specialuse)
 {
     struct sync_folder *result = xzmalloc(sizeof(struct sync_folder));
 
@@ -500,6 +501,7 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
     result->recentuid = recentuid;
     result->recenttime = recenttime;
     result->pop3_last_login = pop3_last_login;
+    result->specialuse = (specialuse) ? xstrdup(specialuse) : NULL;
 
     result->mark     = 0;
     result->reserve  = 0;
@@ -552,13 +554,14 @@ void sync_folder_list_free(struct sync_folder_list **lp)
 
     current = l->head;
     while (current) {
-        next = current->next;
-        free(current->uniqueid);
-        free(current->name);
-        free(current->part);
-        free(current->acl);
-        free(current);
-        current = next;
+	next = current->next;
+	free(current->uniqueid);
+	free(current->name);
+	free(current->part);
+	free(current->acl);
+	free(current->specialuse);
+	free(current);
+	current = next;
     }
     free(l);
     *lp = NULL;
@@ -1347,6 +1350,8 @@ int sync_mailbox(struct mailbox *mailbox,
     dlist_num(kl, "SYNC_CRC", mailbox->i.sync_crc);
     if (mailbox->quotaroot) 
 	dlist_atom(kl, "QUOTAROOT", mailbox->quotaroot);
+    if (mailbox->specialuse)
+	dlist_atom(kl, "SPECIALUSE", mailbox->specialuse);
 
     if (printrecords) {
 	struct index_record record;
