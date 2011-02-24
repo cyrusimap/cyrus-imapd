@@ -1206,9 +1206,17 @@ int mailbox_set_quotaroot(struct mailbox *mailbox, const char *quotaroot)
 	free(mailbox->quotaroot);
 	mailbox->quotaroot = NULL;
     }
+    else {
+	if (!quotaroot)
+	    return 0; /* no change */
+    }
+
     if (quotaroot) 
 	mailbox->quotaroot = xstrdup(quotaroot);
+
+    /* either way, it's changed, so dirty */
     mailbox->header_dirty = 1;
+
     return 0;
 }
 
