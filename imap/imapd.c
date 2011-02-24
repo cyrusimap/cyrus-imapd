@@ -10152,6 +10152,9 @@ static void list_response(char *name, int attributes,
     if (listargs->sel & LIST_SEL_SPECIALUSE) {
 	/* check that this IS a specialuse folder */
 	if (!mbentry->specialuse) goto done;
+	/* and owned by the user as well */
+	if (!mboxname_userownsmailbox(imapd_userid, mbentry->name))
+	    goto done;
     }
 
     switch (listargs->cmd) {
