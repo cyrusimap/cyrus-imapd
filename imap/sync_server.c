@@ -1254,6 +1254,21 @@ static int do_mailbox(struct dlist *kin,
 	}
     }
 
+    /* this is an ugly construct that's an artifact of the
+     * inversion of mboxlist and mailbox stuff that means
+     * we can't be efficient in mboxlist_setspecialuse, so
+     * we want to check it's needed first. */
+    if (dlist_getlist(kin, "SPECIALUSE", &specialuse) || mailbox->specialuse) {
+	if (!specialuse || !mailbox->specialuse ||
+	    strcmp(specialuse, mailbox->specialuse)) {
+	    r = mboxlist_setspecialuse(mailbox->name, specialuse);
+	    if (r) {
+		mailbox_close(&mailbox);
+		return r;
+	    }
+	}
+    }
+
     /* now we're committed to writing something no matter what happens! */
 
     if (mailbox->i.uidvalidity < uidvalidity) {
