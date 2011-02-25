@@ -46,6 +46,7 @@
 #include <unistd.h>
 #include <CUnit/CUnit.h>
 #include <CUnit/Basic.h>
+#include <CUnit/Automated.h>
 
 #include "registers.h"
 
@@ -57,6 +58,7 @@ int verbose = 0;
 int num_testspecs = 0;
 const char **testspecs;
 enum { RUN, LIST } mode = RUN;
+int xml_flag = 0;
 const int config_need_data = 0;
 
 void fatal(char *s)
@@ -135,6 +137,17 @@ static void run_tests(void)
     CU_RunSummary summ;
     CU_FailureRecord *failures = NULL;
     CU_AllTestsCompleteMessageHandler all_complete;
+
+    if (xml_flag) {
+	if (num_testspecs == 0) {
+	    /* not specified: run all tests in order listed */
+	    CU_automated_run_tests();
+	    return;
+	}
+	fprintf(stderr, "unit: test specifications not "
+			"supported in XML mode, sorry\n");
+	exit(1);
+    }
 
     if (verbose)
 	CU_basic_set_mode(CU_BRM_VERBOSE);
@@ -251,7 +264,7 @@ static void parse_args(int argc, char **argv)
 {
     int c;
 
-    while ((c = getopt(argc, argv, "hlv")) > 0)
+    while ((c = getopt(argc, argv, "hlvx")) > 0)
     {
 	switch (c)
 	{
@@ -263,6 +276,9 @@ static void parse_args(int argc, char **argv)
 	    break;
 	case 'v':
 	    verbose++;
+	    break;
+	case 'x':
+	    xml_flag = 1;
 	    break;
 	case '?':
 	    usage(1);

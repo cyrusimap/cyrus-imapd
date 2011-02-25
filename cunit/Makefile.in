@@ -156,8 +156,15 @@ clean::
 distclean: clean
 	rm -f Makefile
 
+CUFORMAT= basic
+UNIT_FLAGS_basic=   -v
+UNIT_POST_basic=    :
+UNIT_FLAGS_junit=   -x
+UNIT_POST_junit=    ./cunit-to-junit.pl
+
 check: unit
-	$(VALGRIND_$(VG)) ./unit -v
+	$(VALGRIND_$(VG)) ./unit $(UNIT_FLAGS_$(CUFORMAT))
+	$(UNIT_POST_$(CUFORMAT))
 
 depend: 
 	${MAKEDEPEND} $(CPPFLAGS) $(DEFS) $(CFLAGS) *.c $(srcdir)/*.c 1>makedepend.log 2>&1
