@@ -10008,11 +10008,6 @@ static void list_response(char *name, int attributes,
     r = mboxlist_lookup(internal_name, &mbentry, NULL);
 
     if (r == IMAP_MAILBOX_NONEXISTENT) {
-	/* if mupdate isn't configured we can drop out now, otherwise
-	 * we might be a backend and need to report folders that don't
-	 * exist on this backend - this is awful and complex and brittle
-	 * and should be changed, but we're stuck with it for now */
-	if (!config_mupdate_server && (listargs->cmd & LIST_CMD_LSUB)) return;
 	attributes |= (listargs->cmd & LIST_CMD_EXTENDED) ?
 		       MBOX_ATTRIBUTE_NONEXISTENT : MBOX_ATTRIBUTE_NOSELECT;
     }
@@ -10127,6 +10122,13 @@ static void list_response(char *name, int attributes,
 
     switch (listargs->cmd) {
     case LIST_CMD_LSUB:
+	if (attributes & MBOX_ATTRIBUTE_NONEXISTENT) {
+	    /* if mupdate isn't configured we can drop out now, otherwise
+	     * we might be a backend and need to report folders that don't
+	     * exist on this backend - this is awful and complex and brittle
+	     * and should be changed, but we're stuck with it for now */
+	    if (!config_mupdate_server) goto done;
+	}
 	cmd = "LSUB";
 	break;
     case LIST_CMD_XLIST:
