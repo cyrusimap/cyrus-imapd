@@ -9,8 +9,8 @@ static void test_to_parts(void)
 {
     static const char FRED_DRAFTS[] = "user.fred.Drafts";
     static const char JANEAT_SENT[] = "bloggs.com!user.jane.Sent";
-    static const char SHARED[] = "Other Folders.Gossip";
-    static const char SHAREDAT[] = "foonly.com!Other Folders.Tattle";
+    static const char SHARED[] = "shared.Gossip";
+    static const char SHAREDAT[] = "foonly.com!shared.Tattle";
     struct mboxname_parts parts;
     int r;
 
@@ -32,14 +32,14 @@ static void test_to_parts(void)
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_PTR_NULL(parts.domain);
     CU_ASSERT_PTR_NULL(parts.userid);
-    CU_ASSERT_STRING_EQUAL(parts.box, "Gossip");
+    CU_ASSERT_STRING_EQUAL(parts.box, "shared.Gossip");
     mboxname_free_parts(&parts);
 
     r = mboxname_to_parts(SHAREDAT, &parts);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_STRING_EQUAL(parts.domain, "foonly.com");
     CU_ASSERT_PTR_NULL(parts.userid);
-    CU_ASSERT_STRING_EQUAL(parts.box, "Tattle");
+    CU_ASSERT_STRING_EQUAL(parts.box, "shared.Tattle");
     mboxname_free_parts(&parts);
 }
 
@@ -47,8 +47,8 @@ static void test_to_userid(void)
 {
     static const char SAM_DRAFTS[] = "user.sam.Drafts";
     static const char BETTYAT_SENT[] = "boop.com!user.betty.Sent";
-    static const char SHARED[] = "Other Folders.Gossip";
-    static const char SHAREDAT[] = "foonly.com!Other Folders.Tattle";
+    static const char SHARED[] = "shared.Gossip";
+    static const char SHAREDAT[] = "foonly.com!shared.Tattle";
     char *r;
 
     r = mboxname_to_userid(SAM_DRAFTS);
