@@ -919,7 +919,7 @@ int main(int argc, char *argv[])
         exit(1);
     }   
 
-    res = sieve_script_load(argv[2], &exe);
+    res = sieve_script_load(script, &exe);
     if (res != SIEVE_OK) {
 	printf("sieve_script_load() returns %d\n", res);
 	exit(1);
