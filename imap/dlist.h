@@ -59,6 +59,7 @@ enum dlist_t {
     DL_NUM,
     DL_DATE,
     DL_MODSEQ,
+    DL_HEX64,
     DL_BUF,
     DL_GUID,
     DL_FILE,
@@ -85,6 +86,7 @@ struct dlist *dlist_flag(struct dlist *dl, const char *name, const char *val);
 struct dlist *dlist_num(struct dlist *dl, const char *name, unsigned long val);
 struct dlist *dlist_date(struct dlist *dl, const char *name, time_t val);
 struct dlist *dlist_modseq(struct dlist *dl, const char *name, modseq_t val);
+struct dlist *dlist_hex64(struct dlist *dl, const char *name, bit64 val);
 struct dlist *dlist_buf(struct dlist *dl,
 			const char *name, const char *val, size_t len);
 struct dlist *dlist_list(struct dlist *dl, const char *name);
@@ -108,6 +110,7 @@ int dlist_getbuf(struct dlist *dl,
 int dlist_getnum(struct dlist *dl, const char *name, uint32_t *val);
 int dlist_getdate(struct dlist *dl, const char *name, time_t *val);
 int dlist_getmodseq(struct dlist *dl, const char *name, modseq_t *val);
+int dlist_gethex64(struct dlist *dl, const char *name, bit64 *val);
 int dlist_getlist(struct dlist *dl, const char *name, struct dlist **val);
 int dlist_getguid(struct dlist *dl,
 		  const char *name, struct message_guid **guid);

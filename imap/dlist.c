@@ -265,6 +265,14 @@ struct dlist *dlist_modseq(struct dlist *dl, const char *name, modseq_t val)
     return i;
 }
 
+struct dlist *dlist_hex64(struct dlist *dl, const char *name, modseq_t val)
+{
+    struct dlist *i = dlist_child(dl, name);
+    i->type = DL_HEX64;
+    i->nval = val;
+    return i;
+}
+
 struct dlist *dlist_guid(struct dlist *dl, const char *name,
 			   struct message_guid *guid)
 {
@@ -495,8 +503,6 @@ char dlist_parse(struct dlist **dlp, int parsekey, struct protstream *in)
 	prot_ungetc(c, in);
 	c = getastring(in, NULL, &vbuf);
 	dl = dlist_atom(NULL, kbuf.s, vbuf.s);
-	if (imparse_isnumber(vbuf.s))
-	    dl->nval = atomodseq_t(vbuf.s);
     }
 
     /* success */
@@ -537,32 +543,81 @@ int dlist_getbuf(struct dlist *dl, const char *name, const char **val, size_t *l
     struct dlist *i = dlist_getchild(dl, name);
     if (!i) return 0;
     *val = i->sval;
-    *len = (size_t)i->nval;
+    if (i->type == DL_BUF)
+	*len = (size_t)i->nval;
+    else
+	*len = strlen(*val);
     return 1;
 }
 
+/* ensure value is exactly one number */
+static int _getn(struct dlist *dl, const char *name, bit64 *val)
+{
+    const char *str;
+    size_t strlen;
+    const char *end;
+
+    if (dlist_getbuf(dl, name, &str, &strlen))
+	return 0;
+
+    if (parsenum(str, &end, strlen, val))
+	return 0;
+
+    if (end - str != strlen)
+	return 0;
+
+    return 1;
+}
+
+
 int dlist_getnum(struct dlist *dl, const char *name, uint32_t *val)
 {
-    struct dlist *i = dlist_getchild(dl, name);
-    if (!i) return 0;
-    *val = (uint32_t)i->nval;
+    bit64 v;
+
+    if (!_getn(dl, name, &v))
+	return 0;
+    *val = (uint32_t)v;
+
     return 1;
 }
 
 int dlist_getdate(struct dlist *dl, const char *name, time_t *val)
 {
-    struct dlist *i = dlist_getchild(dl, name);
-    if (!i) return 0;
-    /* XXX: string parse when the date format changes */
-    *val = (time_t)i->nval;
+    bit64 v;
+
+    if (!_getn(dl, name, &v))
+	return 0;
+    *val = (time_t)v;
+
     return 1;
 }
 
 int dlist_getmodseq(struct dlist *dl, const char *name, modseq_t *val)
 {
-    struct dlist *i = dlist_getchild(dl, name);
-    if (!i) return 0;
-    *val = (modseq_t)i->nval;
+    bit64 v;
+
+    if (!_getn(dl, name, &v))
+	return 0;
+    *val = (modseq_t)v;
+
+    return 1;
+}
+
+int dlist_gethex64(struct dlist *dl, const char *name, bit64 *val)
+{
+    const char *str;
+    size_t strlen;
+    const char *end;
+
+    if (dlist_getbuf(dl, name, &str, &strlen))
+	return 0;
+
+    if (parsehex(str, &end, strlen, val))
+	return 0;
+
+    if (end - str != strlen)
+	return 0;
+
     return 1;
 }
 
