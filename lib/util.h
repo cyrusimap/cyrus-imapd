@@ -147,8 +147,10 @@ extern int become_cyrus(void);
  */
 
 #define cyrus_isdigit(x) ((x) >= '0' && (x) <= '9')
-extern int parseint32(const char *p, const char **ptr, int32_t *res);
-extern int parseuint32(const char *p, const char **ptr, uint32_t *res);
+int parseint32(const char *p, const char **ptr, int32_t *res);
+int parseuint32(const char *p, const char **ptr, uint32_t *res);
+int parsenum(const char *p, const char **ptr, int maxlen, bit64 *res);
+int parsehex(const char *p, const char **ptr, int maxlen, bit64 *res);
 
 /* Timing related funcs/vars */
 extern void cmdtime_settimer(int enable);
