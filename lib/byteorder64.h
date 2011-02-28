@@ -47,8 +47,6 @@
 
 #include <config.h>
 
-#ifdef HAVE_LONG_LONG_INT
-
 /* 64-bit host/network byte-order swap macros */
 #ifdef WORDS_BIGENDIAN
 #define htonll(x) (x)
@@ -67,5 +65,4 @@ extern unsigned long long _ntohll(unsigned long long);
 extern void *align_htonll(void *dst, unsigned long long src);
 extern unsigned long long align_ntohll(const void *src);
 
-#endif /* HAVE_LONG_LONG_INT */
 #endif /* _BYTEORDER64_H */

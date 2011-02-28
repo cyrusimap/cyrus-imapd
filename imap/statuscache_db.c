@@ -299,11 +299,7 @@ int statuscache_lookup(const char *mboxname, const char *userid,
     if (p < dend) sdata->uidnext = strtoul(p, &p, 10);
     if (p < dend) sdata->uidvalidity = strtoul(p, &p, 10);
     if (p < dend) sdata->unseen = strtoul(p, &p, 10);
-#ifdef HAVE_LONG_LONG_INT
     if (p < dend) sdata->highestmodseq = strtoull(p, &p, 10);
-#else
-    if (p < dend) sdata->highestmodseq = strtoul(p, &p, 10);
-#endif
 
     /* Sanity check the data */
     if (!sdata->statusitems || !sdata->uidnext || !sdata->uidvalidity) {

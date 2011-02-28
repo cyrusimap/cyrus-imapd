@@ -1198,7 +1198,6 @@ int prot_printf(struct protstream *s, const char *fmt, ...)
 		prot_write(s, buf, strlen(buf));
 		break;
 
-#ifdef HAVE_LONG_LONG_INT
             case 'l': {
 		long long int ll;
 		unsigned long long int ull;
@@ -1221,7 +1220,6 @@ int prot_printf(struct protstream *s, const char *fmt, ...)
 		}
 		break;
 	    }
-#endif
 
 	    default:
 		abort();

@@ -56,19 +56,11 @@
  * long or a long long int depending upon what the
  * the compiler supports.
  */
-#ifdef HAVE_LONG_LONG_INT
 typedef unsigned long long int uquota_t;
 typedef long long int quota_t;
 #define UQUOTA_T_FMT     "%llu"
 #define QUOTA_T_FMT      "%lld"
 #define QUOTA_REPORT_FMT "%8llu"
-#else
-typedef unsigned long uquota_t;
-typedef long quota_t;
-#define UQUOTA_T_FMT     "%lu"
-#define QUOTA_T_FMT      "%ld"
-#define QUOTA_REPORT_FMT "%8lu"
-#endif
 
 extern struct db *qdb;
 

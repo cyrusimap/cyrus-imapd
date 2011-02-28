@@ -45,8 +45,6 @@
 #include <config.h>
 #include "byteorder64.h"
 
-#if defined(HAVE_LONG_LONG_INT)
-
 #if !defined(WORDS_BIGENDIAN)
 
 #include <netinet/in.h>
@@ -113,5 +111,3 @@ unsigned long long align_ntohll(const void *src)
     memcpy((void *) &dst, src, sizeof(unsigned long long));
     return ntohll(dst);
 }
-
-#endif /* defined(HAVE_LONG_LONG_INT) */

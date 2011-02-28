@@ -109,13 +109,14 @@ AC_CHECK_SIZEOF(long)
 AC_CHECK_SIZEOF(size_t)
 AC_CHECK_SIZEOF(off_t)
 
-dnl Check if `long long int' is available
+dnl Check that `long long int' is available
 AC_CHECK_SIZEOF(long long int)
 AC_CHECK_SIZEOF(unsigned long long int)
 if test "$ac_cv_sizeof_long_long_int" -eq 8 -a \
         "$ac_cv_sizeof_unsigned_long_long_int" -eq 8; then
-  AC_DEFINE(HAVE_LONG_LONG_INT,[],[Does the compiler support long long int?])
   AC_C_BIGENDIAN
+else
+  AC_MSG_ERROR(The Cyrus IMAPD requires support for long long int)
 fi
 
 CMU_C___ATTRIBUTE__

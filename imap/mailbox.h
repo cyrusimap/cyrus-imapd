@@ -347,11 +347,7 @@ extern const int MAILBOX_NUM_CACHE_HEADERS;
 typedef union {
     unsigned char buf[INDEX_HEADER_SIZE > INDEX_RECORD_SIZE ?
 		      INDEX_HEADER_SIZE : INDEX_RECORD_SIZE];
-#ifdef HAVE_LONG_LONG_INT
     bit64 align8; /* align on 8-byte boundary */
-#else
-    bit32 align4; /* align on 4-byte boundary */
-#endif
 } indexbuffer_t;
 
 /* Access assistance macros for memory-mapped cache file data */

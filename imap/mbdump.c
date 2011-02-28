@@ -124,13 +124,7 @@ static void downgrade_header(struct index_header *i, char *buf, int version,
     *((bit32 *)(buf+OFFSET_LAST_UID)) = htonl(i->last_uid);
 
     /* quotas may be 64bit now */
-#ifdef HAVE_LONG_LONG_INT
-    *((bit64 *)(buf+OFFSET_QUOTA_MAILBOX_USED64)) = htonll(i->quota_mailbox_used);
-#else
-    /* zero the unused 32bits */
-    *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED64)) = htonl(0);
-    *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)) = htonl(i->quota_mailbox_used);
-#endif
+    *((bit64 *)(buf+OFFSET_QUOTA_MAILBOX_USED)) = htonll(i->quota_mailbox_used);
 
     *((bit32 *)(buf+OFFSET_POP3_LAST_LOGIN)) = htonl(i->pop3_last_login);
     *((bit32 *)(buf+OFFSET_UIDVALIDITY)) = htonl(i->uidvalidity);
@@ -141,13 +135,7 @@ static void downgrade_header(struct index_header *i, char *buf, int version,
     *((bit32 *)(buf+OFFSET_LEAKED_CACHE)) = htonl(i->leaked_cache_records);
     /* don't put values in the "SPARE" spots */
     if (version < 8) return;
-#ifdef HAVE_LONG_LONG_INT
-    align_htonll(buf+OFFSET_HIGHESTMODSEQ_64, i->highestmodseq);
-#else
-    /* zero the unused 32bits */
-    *((bit32 *)(buf+OFFSET_HIGHESTMODSEQ_64)) = htonl(0);
-    *((bit32 *)(buf+OFFSET_HIGHESTMODSEQ)) = htonl(i->highestmodseq);
-#endif
+    align_htonll(buf+OFFSET_HIGHESTMODSEQ, i->highestmodseq);
 }
 
 static void downgrade_record(struct index_record *record, char *buf,
@@ -156,7 +144,7 @@ static void downgrade_record(struct index_record *record, char *buf,
     int n;
     unsigned UP_content_offset = record->header_size;
     unsigned UP_validflags = 15;
-    unsigned UP_modseqbase = OFFSET_MODSEQ_64;
+    unsigned UP_modseqbase = OFFSET_MODSEQ;
 
     /* GUID was UUID and only 12 bytes long in versions 8 and 9.
      * it doesn't hurt to write it to the buffer in older versions,
@@ -183,13 +171,7 @@ static void downgrade_record(struct index_record *record, char *buf,
     *((bit32 *)(buf+OFFSET_CACHE_VERSION)) = htonl(record->cache_version);
     message_guid_export(&record->guid,
 			(unsigned char *)buf+OFFSET_MESSAGE_GUID);
-#ifdef HAVE_LONG_LONG_INT
     *((bit64 *)(buf+UP_modseqbase)) = htonll(record->modseq);
-#else
-    /* zero the unused 32bits */
-    *((bit32 *)(buf+UP_modseqbase)) = htonl(0);
-    *((bit32 *)(buf+UP_modseqbase)) = htonl(record->modseq);
-#endif
 }
 
 static void header_set_num_records(char *buf, unsigned int nrecords)

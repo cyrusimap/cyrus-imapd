@@ -65,16 +65,10 @@ typedef unsigned short bit32;
 #error dont know what to use for bit32
 #endif
 
-#ifdef HAVE_LONG_LONG_INT
 typedef unsigned long long int bit64;
 typedef unsigned long long int modseq_t;
 #define MODSEQ_FMT "%llu"
 #define atomodseq_t(s) strtoull(s, NULL, 10)
-#else
-typedef unsigned long int modseq_t;
-#define MODSEQ_FMT "%lu"
-#define atomodseq_t(s) strtoul(s, NULL, 10)
-#endif
 
 #define Uisalnum(c) isalnum((int)((unsigned char)(c)))
 #define Uisalpha(c) isalpha((int)((unsigned char)(c)))

@@ -1320,11 +1320,7 @@ int mailbox_buf_to_index_header(const char *buf, struct index_header *i)
     i->num_records = ntohl(*((bit32 *)(buf+OFFSET_NUM_RECORDS)));
     i->last_appenddate = ntohl(*((bit32 *)(buf+OFFSET_LAST_APPENDDATE)));
     i->last_uid = ntohl(*((bit32 *)(buf+OFFSET_LAST_UID)));
-#ifdef HAVE_LONG_LONG_INT
-    i->quota_mailbox_used = align_ntohll(buf+OFFSET_QUOTA_MAILBOX_USED64);
-#else
-    i->quota_mailbox_used = ntohl(*((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)));
-#endif
+    i->quota_mailbox_used = align_ntohll(buf+OFFSET_QUOTA_MAILBOX_USED);
     i->pop3_last_login = ntohl(*((bit32 *)(buf+OFFSET_POP3_LAST_LOGIN)));
     i->uidvalidity = ntohl(*((bit32 *)(buf+OFFSET_UIDVALIDITY)));
     i->deleted = ntohl(*((bit32 *)(buf+OFFSET_DELETED)));
@@ -1332,13 +1328,8 @@ int mailbox_buf_to_index_header(const char *buf, struct index_header *i)
     i->flagged = ntohl(*((bit32 *)(buf+OFFSET_FLAGGED)));
     i->options = ntohl(*((bit32 *)(buf+OFFSET_MAILBOX_OPTIONS)));
     i->leaked_cache_records = ntohl(*((bit32 *)(buf+OFFSET_LEAKED_CACHE)));
-#ifdef HAVE_LONG_LONG_INT
-    i->highestmodseq = align_ntohll(buf+OFFSET_HIGHESTMODSEQ_64);
-    i->deletedmodseq = align_ntohll(buf+OFFSET_DELETEDMODSEQ_64);
-#else
-    i->highestmodseq = ntohl(*((bit32 *)(buf+OFFSET_HIGHESTMODSEQ)));
-    i->deletedmodseq = ntohl(*((bit32 *)(buf+OFFSET_DELETEDMODSEQ)));
-#endif
+    i->highestmodseq = align_ntohll(buf+OFFSET_HIGHESTMODSEQ);
+    i->deletedmodseq = align_ntohll(buf+OFFSET_DELETEDMODSEQ);
     i->exists = ntohl(*((bit32 *)(buf+OFFSET_EXISTS)));
     i->first_expunged = ntohl(*((bit32 *)(buf+OFFSET_FIRST_EXPUNGED)));
     i->last_repack_time = ntohl(*((bit32 *)(buf+OFFSET_LAST_REPACK_TIME)));
@@ -1452,11 +1443,7 @@ int mailbox_buf_to_index_record(const char *buf,
     record->content_lines = ntohl(*((bit32 *)(buf+OFFSET_CONTENT_LINES)));
     record->cache_version = ntohl(*((bit32 *)(buf+OFFSET_CACHE_VERSION)));
     message_guid_import(&record->guid, (unsigned char *)buf+OFFSET_MESSAGE_GUID);
-#ifdef HAVE_LONG_LONG_INT
-    record->modseq = ntohll(*((bit64 *)(buf+OFFSET_MODSEQ_64)));
-#else
-    record->modseq = ntohl(*((bit32 *)(buf+OFFSET_MODSEQ)));
-#endif
+    record->modseq = ntohll(*((bit64 *)(buf+OFFSET_MODSEQ)));
     record->cache_crc = ntohl(*((bit32 *)(buf+OFFSET_CACHE_CRC)));
     record->record_crc = ntohl(*((bit32 *)(buf+OFFSET_RECORD_CRC)));
 
@@ -1747,6 +1734,7 @@ int mailbox_commit_header(struct mailbox *mailbox)
 bit32 mailbox_index_header_to_buf(struct index_header *i, unsigned char *buf)
 {
     bit32 crc;
+    bit32 options = i->options & MAILBOX_OPT_VALID;
 
     *((bit32 *)(buf+OFFSET_GENERATION_NO)) = htonl(i->generation_no);
     *((bit32 *)(buf+OFFSET_FORMAT)) = htonl(i->format);
@@ -1758,32 +1746,17 @@ bit32 mailbox_index_header_to_buf(struct index_header *i, unsigned char *buf)
     *((bit32 *)(buf+OFFSET_LAST_UID)) = htonl(i->last_uid);
 
     /* quotas may be 64bit now */
-#ifdef HAVE_LONG_LONG_INT
-    *((bit64 *)(buf+OFFSET_QUOTA_MAILBOX_USED64)) = htonll(i->quota_mailbox_used);
-#else	
-    /* zero the unused 32bits */
-    *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED64)) = htonl(0);
-    *((bit32 *)(buf+OFFSET_QUOTA_MAILBOX_USED)) = htonl(i->quota_mailbox_used);
-#endif
+    align_htonll(buf+OFFSET_QUOTA_MAILBOX_USED, i->quota_mailbox_used);
 
     *((bit32 *)(buf+OFFSET_POP3_LAST_LOGIN)) = htonl(i->pop3_last_login);
     *((bit32 *)(buf+OFFSET_UIDVALIDITY)) = htonl(i->uidvalidity);
     *((bit32 *)(buf+OFFSET_DELETED)) = htonl(i->deleted);
     *((bit32 *)(buf+OFFSET_ANSWERED)) = htonl(i->answered);
     *((bit32 *)(buf+OFFSET_FLAGGED)) = htonl(i->flagged);
-    *((bit32 *)(buf+OFFSET_MAILBOX_OPTIONS)) = htonl(i->options & MAILBOX_OPT_VALID);
+    *((bit32 *)(buf+OFFSET_MAILBOX_OPTIONS)) = htonl(options);
     *((bit32 *)(buf+OFFSET_LEAKED_CACHE)) = htonl(i->leaked_cache_records);
-#ifdef HAVE_LONG_LONG_INT
-    align_htonll(buf+OFFSET_HIGHESTMODSEQ_64, i->highestmodseq);
-    align_htonll(buf+OFFSET_DELETEDMODSEQ_64, i->deletedmodseq);
-#else
-    /* zero the unused 32bits */
-    *((bit32 *)(buf+OFFSET_HIGHESTMODSEQ_64)) = htonl(0);
-    *((bit32 *)(buf+OFFSET_HIGHESTMODSEQ)) = htonl(i->highestmodseq);
-    /* zero the unused 32bits */
-    *((bit32 *)(buf+OFFSET_DELETEDMODSEQ_64)) = htonl(0);
-    *((bit32 *)(buf+OFFSET_DELETEDMODSEQ)) = htonl(i->deletedmodseq);
-#endif
+    align_htonll(buf+OFFSET_HIGHESTMODSEQ, i->highestmodseq);
+    align_htonll(buf+OFFSET_DELETEDMODSEQ, i->deletedmodseq);
     *((bit32 *)(buf+OFFSET_EXISTS)) = htonl(i->exists);
     *((bit32 *)(buf+OFFSET_FIRST_EXPUNGED)) = htonl(i->first_expunged);
     *((bit32 *)(buf+OFFSET_LAST_REPACK_TIME)) = htonl(i->last_repack_time);
@@ -1920,13 +1893,7 @@ bit32 mailbox_index_record_to_buf(struct index_record *record,
     *((bit32 *)(buf+OFFSET_CONTENT_LINES)) = htonl(record->content_lines);
     *((bit32 *)(buf+OFFSET_CACHE_VERSION)) = htonl(record->cache_version);
     message_guid_export(&record->guid, buf+OFFSET_MESSAGE_GUID);
-#ifdef HAVE_LONG_LONG_INT
-    *((bit64 *)(buf+OFFSET_MODSEQ_64)) = htonll(record->modseq);
-#else
-    /* zero the unused 32bits */
-    *((bit32 *)(buf+OFFSET_MODSEQ_64)) = htonl(0);
-    *((bit32 *)(buf+OFFSET_MODSEQ)) = htonl(record->modseq);
-#endif
+    *((bit64 *)(buf+OFFSET_MODSEQ)) = htonll(record->modseq);
     *((bit32 *)(buf+OFFSET_CACHE_CRC)) = htonl(record->cache_crc);   
 
     /* calculate the checksum */
