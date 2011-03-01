@@ -545,7 +545,7 @@ int parsehex(const char *p, const char **ptr, int maxlen, bit64 *res)
     for (n = 0; !maxlen || n < maxlen; n++) {
 	if (result > 1844674407370955161ULL)
 	    fatal("num too big", EC_IOERR);
-	cval = unxdigit[p[n]];
+	cval = unxdigit[(int)p[n]];
 	if (cval == 0xff) break;
 	result = result * 10 + (p[n] - '0');
     }

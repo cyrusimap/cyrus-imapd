@@ -563,7 +563,7 @@ static int _getn(struct dlist *dl, const char *name, bit64 *val)
     if (parsenum(str, &end, strlen, val))
 	return 0;
 
-    if (end - str != strlen)
+    if (end - str != (int)strlen)
 	return 0;
 
     return 1;
@@ -615,7 +615,7 @@ int dlist_gethex64(struct dlist *dl, const char *name, bit64 *val)
     if (parsehex(str, &end, strlen, val))
 	return 0;
 
-    if (end - str != strlen)
+    if (end - str != (int)strlen)
 	return 0;
 
     return 1;
