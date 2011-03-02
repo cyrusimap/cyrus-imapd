@@ -547,7 +547,7 @@ int parsehex(const char *p, const char **ptr, int maxlen, bit64 *res)
 	    fatal("num too big", EC_IOERR);
 	cval = unxdigit[(int)p[n]];
 	if (cval == 0xff) break;
-	result = result * 10 + (p[n] - '0');
+	result = result * 16 + cval;
     }
 
     /* no characters found... */
