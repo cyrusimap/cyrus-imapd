@@ -141,12 +141,12 @@ imapopts.c: imapoptions $(srcdir)/../tools/config2header
 
 imapopts.h: imapopts.c
 
-chartable.c: mkchartable.pl charset/*.t charset/unifix.txt charset/unidata5_2.txt
+chartable.c: mkchartable.pl charset/*.t charset/unifix.txt charset/UnicodeData.txt
 	@echo "### Building chartables..."
 	rm -f chartable.c
 	perl ./mkchartable.pl \
 	 -m $(srcdir)/charset/unifix.txt \
-	 -m $(srcdir)/charset/unidata5_2.txt \
+	 -m $(srcdir)/charset/UnicodeData.txt \
 	 $(srcdir)/charset/*.t \
 	 > chartable.c \
 	 || (rm -f chartable.c && exit 1)
