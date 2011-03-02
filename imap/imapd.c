@@ -10122,7 +10122,7 @@ static void list_response(char *name, int attributes,
 
     switch (listargs->cmd) {
     case LIST_CMD_LSUB:
-	if (attributes & MBOX_ATTRIBUTE_NONEXISTENT) {
+	if (attributes & (MBOX_ATTRIBUTE_NONEXISTENT | MBOX_ATTRIBUTE_NOSELECT)) {
 	    /* if mupdate isn't configured we can drop out now, otherwise
 	     * we might be a backend and need to report folders that don't
 	     * exist on this backend - this is awful and complex and brittle
