@@ -280,7 +280,7 @@ static int build_notify_message(sieve_interp_t *i,
 
 	    /* we only use the first text part */
 	    if (parts && parts[0] && parts[0]->decoded_body) {
-		int size = strlen(parts[0]->decoded_body);
+		size_t size = strlen(parts[0]->decoded_body);
 		if (size > n) size = n;
 		buf_appendmap(out, parts[0]->decoded_body, size);
 	    }
