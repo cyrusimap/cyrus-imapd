@@ -1258,7 +1258,7 @@ static int do_mailbox(struct dlist *kin,
      * inversion of mboxlist and mailbox stuff that means
      * we can't be efficient in mboxlist_setspecialuse, so
      * we want to check it's needed first. */
-    if (dlist_getlist(kin, "SPECIALUSE", &specialuse) || mailbox->specialuse) {
+    if (dlist_getatom(kin, "SPECIALUSE", &specialuse) || mailbox->specialuse) {
 	if (!specialuse || !mailbox->specialuse ||
 	    strcmp(specialuse, mailbox->specialuse)) {
 	    r = mboxlist_setspecialuse(mailbox->name, specialuse);
