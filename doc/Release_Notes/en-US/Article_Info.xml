@@ -7,7 +7,7 @@
     <title>Release Notes</title>
     <subtitle>short description</subtitle>
     <productname>Cyrus IMAP</productname>
-    <productnumber>2.5</productnumber>
+    <productnumber>2.4</productnumber>
     <edition>0</edition>
     <pubsnumber>0</pubsnumber>
     <abstract>
@@ -26,6 +26,6 @@
 
     </corpauthor>
     <xi:include href="Common_Content/Legal_Notice.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <xi:include href="Author_Group.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="auth-Author_Group.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
 </articleinfo>
 
