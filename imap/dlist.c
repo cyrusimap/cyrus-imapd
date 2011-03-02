@@ -557,7 +557,7 @@ static int _getn(struct dlist *dl, const char *name, bit64 *val)
     size_t strlen;
     const char *end;
 
-    if (dlist_getbuf(dl, name, &str, &strlen))
+    if (!dlist_getbuf(dl, name, &str, &strlen))
 	return 0;
 
     if (parsenum(str, &end, strlen, val))
@@ -598,6 +598,7 @@ int dlist_getmodseq(struct dlist *dl, const char *name, modseq_t *val)
 
     if (!_getn(dl, name, &v))
 	return 0;
+
     *val = (modseq_t)v;
 
     return 1;
