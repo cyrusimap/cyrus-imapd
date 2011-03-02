@@ -15,8 +15,14 @@
 #include "spool.h"
 #include "map.h"
 #include "message.h"
+#include "cyrusdb.h"
+#include "libcyr_cfg.h"
+#include "libconfig.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
+
+#define DBDIR       "test-sieve-dbdir"
+#define PARTITION   "default"
 
 typedef struct {
     sieve_interp_t *interp;
@@ -55,6 +61,8 @@ typedef struct {
     char *filename;
 } sieve_test_message_t;
 
+/* set to SIEVE_DONE if you want to test "already responded */
+int autorespond_reponse = SIEVE_OK;
 
 extern int verbose;
 
@@ -427,27 +435,13 @@ static int mysieve_execute_error(const char *msg,
     return SIEVE_OK;
 }
 
-static int autorespond(void *ac, void *ic,
+static int autorespond(void *ac __attribute__((unused)),
+		       void *ic __attribute__((unused)),
 		       void *sc __attribute__((unused)),
 		       void *mc __attribute__((unused)),
 		       const char **errmsg __attribute__((unused)))
 {
-//     sieve_autorespond_context_t *arc = (sieve_autorespond_context_t *)ac;
-//     sieve_test_context_t *ctx = (sieve_test_context_t *)ic;
-//     char yn;
-//     int i;
-// 
-//     printf("Have I already responded to '");
-//     for (i = 0; i < SIEVE_HASHLEN; i++) {
-// 	printf("%x", arc->hash[i]);
-//     }
-//     printf("' in %d days? ", arc->days);
-//     scanf(" %c", &yn);
-// 
-//     if (TOLOWER(yn) == 'y') return SIEVE_DONE;
-//     if (TOLOWER(yn) == 'n') return SIEVE_OK;
-
-    return SIEVE_FAIL;
+    return autorespond_reponse;
 }
 
 static int send_response(void *ac, void *ic, void *sc __attribute__((unused)),
@@ -484,6 +478,38 @@ static FILE *fmemopen(const void *buf, size_t len, const char *mode)
     return fp;
 }
 #endif
+
+static void config_read_string(const char *s)
+{
+    char *fname = xstrdup("/tmp/cyrus-cunit-configXXXXXX");
+    int fd = mkstemp(fname);
+    retry_write(fd, s, strlen(s));
+    config_read(fname);
+    unlink(fname);
+    free(fname);
+    close(fd);
+}
+
+static int set_up(void)
+{
+    libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, DBDIR);
+    config_read_string(
+	"configdirectory: "DBDIR"/conf\n"
+	"defaultpartition: "PARTITION"\n"
+	"partition-"PARTITION": "DBDIR"/data\n"
+	"sievenotifier: mailto\n"
+	"sieve_extensions: fileinto reject vacation imapflags notify" \
+	    " envelope body relational regex subaddress copy\n"
+    );
+    libcyrus_init();
+    return 0;
+}
+
+static int tear_down(void)
+{
+    libcyrus_done();
+    return 0;
+}
 
 static void context_setup(sieve_test_context_t *ctx,
 			  const char *script)
