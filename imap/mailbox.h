@@ -240,8 +240,7 @@ struct mailbox {
 #define OFFSET_NUM_RECORDS 20
 #define OFFSET_LAST_APPENDDATE 24
 #define OFFSET_LAST_UID 28
-#define OFFSET_QUOTA_MAILBOX_USED64 32  /* offset for 64bit quotas */
-#define OFFSET_QUOTA_MAILBOX_USED 36    /* offset for 32bit quotas */
+#define OFFSET_QUOTA_MAILBOX_USED 32  /* offset for 64bit quotas */
 #define OFFSET_POP3_LAST_LOGIN 40
 #define OFFSET_UIDVALIDITY 44
 #define OFFSET_DELETED 48      /* added for ACAP */
@@ -249,10 +248,8 @@ struct mailbox {
 #define OFFSET_FLAGGED 56
 #define OFFSET_MAILBOX_OPTIONS 60
 #define OFFSET_LEAKED_CACHE 64     /* Number of leaked records in cache file */
-#define OFFSET_HIGHESTMODSEQ_64 68 /* CONDSTORE (64-bit modseq) */
-#define OFFSET_HIGHESTMODSEQ 72    /* CONDSTORE (32-bit modseq) */
-#define OFFSET_DELETEDMODSEQ_64 76 /* CONDSTORE (64-bit modseq) */
-#define OFFSET_DELETEDMODSEQ 80    /* CONDSTORE (32-bit modseq) */
+#define OFFSET_HIGHESTMODSEQ 68    /* CONDSTORE (64-bit modseq) */
+#define OFFSET_DELETEDMODSEQ 76    /* CONDSTORE (64-bit modseq) */
 #define OFFSET_EXISTS 84           /* Non-expunged records */
 #define OFFSET_FIRST_EXPUNGED 88   /* last_updated of oldest expunged message */
 #define OFFSET_LAST_REPACK_TIME 92 /* time of last expunged cleanup  */
@@ -286,8 +283,7 @@ struct mailbox {
 #define OFFSET_CONTENT_LINES 52 /* added for nntpd */
 #define OFFSET_CACHE_VERSION 56
 #define OFFSET_MESSAGE_GUID 60
-#define OFFSET_MODSEQ_64 80 /* CONDSTORE (64-bit modseq) */
-#define OFFSET_MODSEQ 84 /* CONDSTORE (32-bit modseq) */
+#define OFFSET_MODSEQ 80 /* CONDSTORE (64-bit modseq) */
 #define OFFSET_CACHE_CRC 88 /* CRC32 of cache record */
 #define OFFSET_RECORD_CRC 92
 

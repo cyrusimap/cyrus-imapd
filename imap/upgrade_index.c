@@ -202,13 +202,13 @@ int upgrade_index(struct mailbox *mailbox)
     else 
 	memcpy(hbuf, mailbox->index_base, oldstart_offset);
 
-    /* QUOTA_MAILBOX_USED64 added with minor version 6 */
+    /* QUOTA_MAILBOX_USED changed to 64 bit added with minor version 6 */
     if (oldminor_version < 6) {
 	/* upgrade quota to 64-bits (bump existing fields) */
-	memmove(hbuf+OFFSET_QUOTA_MAILBOX_USED, hbuf+OFFSET_QUOTA_MAILBOX_USED64,
-		INDEX_HEADER_SIZE - OFFSET_QUOTA_MAILBOX_USED);
+	memmove(hbuf+OFFSET_QUOTA_MAILBOX_USED + 4, hbuf+OFFSET_QUOTA_MAILBOX_USED,
+		INDEX_HEADER_SIZE - OFFSET_QUOTA_MAILBOX_USED + 4);
 	/* zero the unused 32-bits */
-	*((bit32 *)(hbuf+OFFSET_QUOTA_MAILBOX_USED64)) = htonl(0);
+	*((bit32 *)(hbuf+OFFSET_QUOTA_MAILBOX_USED)) = htonl(0);
     }
 
     /* ignore the result - we EXPECT a CRC32 mismatch */
