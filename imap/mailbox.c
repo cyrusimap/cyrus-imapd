@@ -3198,6 +3198,23 @@ static void free_files(struct found_files *ff)
     init_files(ff);
 }
 
+static int parse_datafilename(const char *name, uint32_t *uidp)
+{
+    const char *p = name;
+
+    /* must be at least one digit */
+    if (!cyrus_isdigit(*p)) return IMAP_MAILBOX_BADNAME;
+    do {
+	p++;
+    } while cyrus_isdigit(*p);
+
+    /* has to end with a dot */
+    if (*p != '.') return IMAP_MAILBOX_BADNAME;
+    if (p[1]) return IMAP_MAILBOX_BADNAME;
+
+    return parseuint32(name, &p, uidp);
+}
+
 static int find_files(struct mailbox *mailbox, struct found_files *files,
 		      int flags)
 {
@@ -3232,10 +3249,10 @@ static int find_files(struct mailbox *mailbox, struct found_files *files,
 	if (*p == '.') continue; /* dot files */
 	if (!strncmp(p, "cyrus.", 6)) continue; /* cyrus.* files */
 
-	r = parseuint32(p, &p, &uid);
+	r = parse_datafilename(p, &uid);
 
 	/* it has to have a . after the number and nothing else */
-	if (r || uid == 0 || *p++ != '.' || *p) {
+	if (r) {
 	    /* check if it's a directory */
 	    snprintf(buf, MAX_MAILBOX_PATH, "%s/%s", dirpath, dirent->d_name);
 	    if (stat(buf, &sbuf) == -1) continue; /* ignore emepheral */
