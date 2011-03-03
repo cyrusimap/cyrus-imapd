@@ -1094,17 +1094,23 @@ static int mailbox_full_update(const char *mboxname)
 	    }
 	    else if (rrecord.uid > mrecord.uid) {
 		/* record only exists on the master */
-		syslog(LOG_ERR, "ONLY EXIST ON MASTER, RENUMBER %s %u", mailbox->name, mrecord.uid);
-		r = renumber_one_record(&mrecord, kaction);
-		if (r) goto done;
+		if (!(mrecord.system_flags & FLAG_EXPUNGED)) {
+		    syslog(LOG_ERR, "ONLY EXISTS ON MASTER, RENUMBER %s %u",
+			   mailbox->name, mrecord.uid);
+		    r = renumber_one_record(&mrecord, kaction);
+		    if (r) goto done;
+		}
 		/* only increment master */
 		recno++;
 	    }
 	    else {
 		/* record only exists on the replica */
-		syslog(LOG_ERR, "ONLY EXIST ON REPLICA, COPYBACK %s %u", mailbox->name, rrecord.uid);
-		r = copyback_one_record(mailbox, &rrecord, kaction);
-		if (r) goto done;
+		if (!(rrecord.system_flags & FLAG_EXPUNGED)) {
+		    syslog(LOG_ERR, "ONLY EXISTS ON REPLICA, COPYBACK %s %u",
+			   mailbox->name, rrecord.uid);
+		    r = copyback_one_record(mailbox, &rrecord, kaction);
+		    if (r) goto done;
+		}
 		/* only increment replica */
 		ki = ki->next;
 	    }
