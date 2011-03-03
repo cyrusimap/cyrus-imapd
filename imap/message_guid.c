@@ -108,47 +108,16 @@ void message_guid_copy(struct message_guid *dst, const struct message_guid *src)
     memcpy(dst, src, sizeof(struct message_guid));
 }
 
-/* _message_guid_compare() ***********************************************
+/* message_guid_equal() **************************************************
  *
  * Compare a pair of GUIDs: Returns 1 => match.
  *
- * If allownull is 1, match if either GUID is NULL (trust caller knows
- * what they are doing).
- * Otherwise, refuse to match NULL GUIDs (message could be anything).
- *
  ************************************************************************/
 
-static int _message_guid_compare(struct message_guid *g1,
-				 struct message_guid *g2,
-				 int allownull)
+int message_guid_equal(struct message_guid *g1,
+		       struct message_guid *g2)
 {
-    if (message_guid_isnull(g1) || message_guid_isnull(g2)) return(allownull);
-
     return (memcmp(g1->value, g2->value, MESSAGE_GUID_SIZE) == 0);
-}
-
-/* message_guid_compare() ************************************************
- *
- * Compare a pair of GUIDs: Returns 1 => match.  NULL GUIDs do not match.
- *
- ************************************************************************/
-
-int message_guid_compare(struct message_guid *guid1,
-			 struct message_guid *guid2)
-{
-    return _message_guid_compare(guid1, guid2, 0);
-}
-
-/* message_guid_compare_allow_null() *************************************
- *
- * Compare a pair of GUIDs: Returns 1 => match.  NULL GUIDs match anything.
- *
- ************************************************************************/
-
-int message_guid_compare_allow_null(struct message_guid *guid1,
-				    struct message_guid *guid2)
-{
-    return _message_guid_compare(guid1, guid2, 1);
 }
 
 /* message_guid_hash() ***************************************************

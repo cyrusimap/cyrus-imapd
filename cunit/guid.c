@@ -27,12 +27,12 @@ static void test_guid(void)
     CU_ASSERT_EQUAL(memcmp(&guid.value, SHA1, sizeof(SHA1)), 0);
 
     memset(&guid2, 0x45, sizeof(guid2));
-    r = message_guid_compare(&guid, &guid2);
+    r = message_guid_equal(&guid, &guid2);
     CU_ASSERT_EQUAL(r, 0);
 
     message_guid_copy(&guid2, &guid);
     CU_ASSERT_EQUAL(memcmp(&guid2.value, SHA1, sizeof(SHA1)), 0);
-    r = message_guid_compare(&guid, &guid2);
+    r = message_guid_equal(&guid, &guid2);
     CU_ASSERT_EQUAL(r, 1);
 }
 
