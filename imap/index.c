@@ -1711,7 +1711,13 @@ unsigned octet_count;
     offset += start_octet;
     n = size;
     if (offset + size > msg_size) {
-	n = msg_size - offset;
+	if (msg_size > offset) {
+	    n = msg_size - offset;
+	}
+	else {
+	    prot_printf(state->out, "\"\"");
+	    return;
+	}
     }
 
     /* Get domain of the data */
