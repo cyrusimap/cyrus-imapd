@@ -1443,9 +1443,6 @@ int mailbox_read_index_record(struct mailbox *mailbox,
 
     if (!r) record->recno = recno;
 
-    if (!record->uid)
-	return IMAP_MESSAGE_CONTAINSNULL;
-
     return r;
 }
 
@@ -3972,18 +3969,16 @@ int mailbox_reconstruct(const char *name, int flags)
 
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	r = mailbox_read_index_record(mailbox, recno, &record);
-	/* skip over null records */
-	if (r == IMAP_MESSAGE_CONTAINSNULL)
-	    continue;
-	else if (r) {
+	if (r) {
 	    printf("%s: record corrupted %u (maybe uid %u)\n",
 		   mailbox->name, recno, record.uid);
 	    continue;
 	}
 
 	if (record.uid <= last_seen_uid) {
-	    syslog(LOG_ERR, "%s out of order uid %u at record %u, wiping",
-		   mailbox->name, record.uid, recno);
+	    if (record.uid)
+		syslog(LOG_ERR, "%s out of order uid %u at record %u, wiping",
+		       mailbox->name, record.uid, recno);
 	    mailbox_wipe_index_record(mailbox, &record);
 	    continue;
 	}
