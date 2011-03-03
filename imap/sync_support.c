@@ -1381,10 +1381,6 @@ int sync_mailbox(struct mailbox *mailbox,
 	    if (remote && record.modseq <= remote->highestmodseq)
 		continue;
 
-	    /* skip expunged if we're not updating something */
-	    if (!remote && (record.system_flags & FLAG_EXPUNGED))
-		continue;
-
 	    /* does it exist at the other end?  Don't send it */
 	    if (remote && record.uid <= remote->last_uid)
 		send_file = 0;
