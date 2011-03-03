@@ -921,7 +921,8 @@ static int compare_one_record(struct mailbox *mailbox,
     /* if the GUIDs don't match, then treat as two 
      * un-matched records :) */
     if (!message_guid_equal(&mp->guid, &rp->guid)) {
-    	if (!(rp->system_flags & FLAG_EXPUNGED))
+	syslog(LOG_ERR, "GUID MISMATCH, renumbering %s %u", mailbox->name, mp->uid);
+	if (!(rp->system_flags & FLAG_EXPUNGED))
 	    dlist_num(kaction, "COPYBACK", rp->uid);
     	if (!(mp->system_flags & FLAG_EXPUNGED))
 	    dlist_num(kaction, "RENUMBER", mp->uid);
@@ -949,40 +950,26 @@ static int compare_one_record(struct mailbox *mailbox,
     if (diff) {
 	/* interesting case - expunged locally */
 	if (mp->system_flags & FLAG_EXPUNGED) {
-	    /* if the remote record is MORE recent, we
-	     * probably want to keep it */
-	    if (rp->modseq > mp->modseq ||
-		rp->last_updated > mp->last_updated)
-		return copyback_one_record(mailbox, rp, kaction);
-	    /* otherwise fall through - the modseq update
-	     * will cause it to expunge */
+	    /* if expunged, fall through - the rewrite will lift
+	     * the modseq to force the change to stick */
 	}
-	/* evil - expunged remotely, NOT locally */
 	else if (rp->system_flags & FLAG_EXPUNGED) {
-	    /* is the replica "newer"? */
-	    if (rp->modseq > mp->modseq ||
-		rp->last_updated > mp->last_updated) {
-		syslog(LOG_ERR, "recent expunged on replica %s:%u, expunging locally",
-		       mailbox->name, mp->uid);
-		mp->system_flags |= FLAG_EXPUNGED;
-	    }
-	    else {
-		/* will have to move the local record */
-		return renumber_one_record(mp, kaction);
-	    }
+	    syslog(LOG_ERR, "EXPUNGED ON REPLICA, expunging locally %s %u",
+		   mailbox->name, mp->uid);
+	    mp->system_flags |= FLAG_EXPUNGED;
 	}
 
 	/* general case */
 	else {
 	    /* is the replica "newer"? */
-	    if (rp->modseq > mp->modseq ||
-		rp->last_updated > mp->last_updated) {
-		log_mismatch("more recent on replica", mailbox, mp, rp);
+	    if (rp->modseq > mp->modseq && rp->last_updated >= mp->last_updated) {
 		mp->system_flags = rp->system_flags;
 		for (i = 0; i < MAX_USER_FLAGS/32; i++) 
 		    mp->user_flags[i] = rp->user_flags[i];
 		mp->internaldate = rp->internaldate;
 		/* no point copying modseq, it will be updated regardless */
+
+		log_mismatch("more recent on replica", mailbox, mp, rp);
 	    }
 	    else {
 		log_mismatch("more recent on master", mailbox, mp, rp);
@@ -1101,13 +1088,10 @@ static int mailbox_full_update(const char *mboxname)
 
 	    /* same UID - compare the records */
 	    if (rrecord.uid == mrecord.uid) {
-		/* hasn't been changed already, check it */
-		if (mrecord.modseq <= highestmodseq) {
-		    r = compare_one_record(mailbox,
-					   &mrecord, &rrecord,
-					   kaction);
-		    if (r) goto done;
-		}
+		r = compare_one_record(mailbox,
+				       &mrecord, &rrecord,
+				       kaction);
+		if (r) goto done;
 		/* increment both */
 		recno++;
 		ki = ki->next;
