@@ -1481,6 +1481,9 @@ int mailbox_read_index_record(struct mailbox *mailbox,
 
     if (!r) record->recno = recno;
 
+    if (!record->uid)
+	return IMAP_MESSAGE_CONTAINSNULL;
+
     return r;
 }
 
@@ -2446,6 +2449,9 @@ static int mailbox_index_repack(struct mailbox *mailbox)
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	r = mailbox_read_index_record(mailbox, recno, &record);
 	if (r) goto fail;
+
+	/* been marked for removal, just skip */
+	if (!record.uid) continue;
 
 	/* we aren't keeping unlinked files, that's kind of the point */
 	if (record.system_flags & FLAG_UNLINKED) {
@@ -3861,6 +3867,47 @@ static void reconstruct_compare_headers(struct mailbox *mailbox,
     }
 }
 
+static int mailbox_wipe_index_record(struct mailbox *mailbox,
+				     struct index_record *record)
+{
+    int n;
+    indexbuffer_t ibuf;
+    unsigned char *buf = ibuf.buf;
+    size_t offset;
+
+    assert(mailbox_index_islocked(mailbox, 1));
+    assert(record->recno > 0 &&
+	   record->recno <= mailbox->i.num_records);
+
+    record->uid = 0;
+    record->system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
+
+    mailbox->i.options |= OPT_MAILBOX_NEEDS_REPACK;
+    mailbox_index_dirty(mailbox);
+
+    mailbox_index_record_to_buf(record, buf);
+
+    offset = mailbox->i.start_offset +
+	     (record->recno-1) * mailbox->i.record_size;
+
+    n = lseek(mailbox->index_fd, offset, SEEK_SET);
+    if (n == -1) {
+	syslog(LOG_ERR, "IOERROR: seeking index record %u for %s: %m",
+	       record->recno, mailbox->name);
+	return IMAP_IOERROR;
+    }
+
+    n = retry_write(mailbox->index_fd, buf, INDEX_RECORD_SIZE);
+    if (n != INDEX_RECORD_SIZE) {
+	syslog(LOG_ERR, "IOERROR: writing index record %u for %s: %m",
+	       record->recno, mailbox->name);
+	return IMAP_IOERROR;
+    }
+
+    return 0;
+}
+
+
 /*
  * Reconstruct the single mailbox named 'name'
  */
@@ -3879,6 +3926,7 @@ int mailbox_reconstruct(const char *name, int flags)
     struct index_header old_header;
     int have_file;
     uint32_t recno;
+    uint32_t last_seen_uid = 0;
     bit32 valid_user_flags[MAX_USER_FLAGS/32];
 
     if (make_changes && !(flags & RECONSTRUCT_QUIET)) {
@@ -3951,11 +3999,24 @@ int mailbox_reconstruct(const char *name, int flags)
     msg = 0;
 
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
-	if (mailbox_read_index_record(mailbox, recno, &record)) {
+	r = mailbox_read_index_record(mailbox, recno, &record);
+	/* skip over null records */
+	if (r == IMAP_MESSAGE_CONTAINSNULL)
+	    continue;
+	else if (r) {
 	    printf("%s: record corrupted %u (maybe uid %u)\n",
 		   mailbox->name, recno, record.uid);
 	    continue;
 	}
+
+	if (record.uid <= last_seen_uid) {
+	    syslog(LOG_ERR, "%s out of order uid %u at record %u, wiping",
+		   mailbox->name, record.uid, recno);
+	    mailbox_wipe_index_record(mailbox, &record);
+	    continue;
+	}
+
+	last_seen_uid = record.uid;
 
 	/* lower UID file exists */
 	while (msg < files.nused && files.uids[msg] < record.uid) {
