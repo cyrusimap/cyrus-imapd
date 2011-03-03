@@ -3692,9 +3692,11 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
 	    }
 
 	    if (do_unlink) {
-		record->system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
+		/* rewrite with the original so we don't break the
+		 * expectation that GUID never changes */
+		copy.system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
 		mailbox->i.options |= OPT_MAILBOX_NEEDS_UNLINK;
-		return mailbox_rewrite_index_record(mailbox, record);
+		return mailbox_rewrite_index_record(mailbox, &copy);
 	    }
 
 	    /* otherwise we just report it and move on - hopefully the
