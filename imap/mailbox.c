@@ -2058,17 +2058,17 @@ int mailbox_rewrite_index_record(struct mailbox *mailbox,
     if (r) return r;
 
     /* the UID has to match, of course, for it to be the same
-     * record.  XXX - possibly test all the other suposedly
-     * invarient fields here too? */
-    if (record->uid != oldrecord.uid)
-	return IMAP_IOERROR;
+     * record.  XXX - test fields like "internaldate", etc here
+     * too?  Maybe replication should be more strict about it */
+    assert(record->uid == oldrecord.uid);
+    assert(message_guid_equal(&oldrecord.guid, &record->guid));
+    assert(record->modseq >= oldrecord.modseq);
 
     if (oldrecord.system_flags & FLAG_EXPUNGED) {
 	/* it is a sin to unexpunge a message.  unexpunge.c copies
 	 * the data from the old record and appends it with a new
 	 * UID, which is righteous in the eyes of the IMAP client */
-	if (!(record->system_flags & FLAG_EXPUNGED))
-	    return IMAP_IOERROR;
+	assert(record->system_flags & FLAG_EXPUNGED);
     }
 
     /* handle immediate expunges here... */
@@ -2152,8 +2152,20 @@ int mailbox_append_index_record(struct mailbox *mailbox,
     assert(mailbox_index_islocked(mailbox, 1));
 
     /* Append MUST be a higher UID than any we've yet seen */
-    if (record->uid <= mailbox->i.last_uid)
-	return IMAP_IOERROR; /* XXX - better code */
+    assert (record->uid > mailbox->i.last_uid)
+
+    /* belt AND suspenders - check the previous record too */
+    if (mailbox->i.num_records) {
+	struct index_record prev;
+	r = mailbox_read_index_record(mailbox, mailbox->i.num_records, &prev);
+	if (r) return r;
+	assert(record->uid > prev.uid);
+	if (message_guid_equal(&prev.guid, &record->guid)) {
+	    syslog(LOG_INFO, "%s: same message appears twice %u %u",
+		   mailbox->name, prev.uid, record->uid);
+	    /* but it's OK, we won't reject it */
+	}
+    }
 
     if (!(record->system_flags & FLAG_UNLINKED)) {
 	/* make the file timestamp correct */
