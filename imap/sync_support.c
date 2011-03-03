@@ -370,7 +370,7 @@ void sync_msgid_remove(struct sync_msgid_list *l,
     if (message_guid_isnull(guid)) return;
 
     for (msgid = l->hash[offset] ; msgid ; msgid = msgid->hash_next) {
-	if (message_guid_compare(&msgid->guid, guid)) {
+	if (message_guid_equal(&msgid->guid, guid)) {
 	    message_guid_set_null(&msgid->guid);
 	    return;
 	}
@@ -404,7 +404,7 @@ struct sync_msgid *sync_msgid_lookup(struct sync_msgid_list *l,
         return(NULL);
 
     for (msgid = l->hash[offset] ; msgid ; msgid = msgid->hash_next) {
-        if (message_guid_compare(&msgid->guid, guid))
+        if (message_guid_equal(&msgid->guid, guid))
             return(msgid);
     }
     return(NULL);
@@ -1416,7 +1416,7 @@ int sync_mailbox(struct mailbox *mailbox,
 		    memset(&record2, 0, sizeof(struct index_record));
 		    r = message_parse(fname, &record2);
 		    if (r) return r;
-		    if (!message_guid_compare(&record.guid, &record2.guid)) {
+		    if (!message_guid_equal(&record.guid, &record2.guid)) {
 			syslog(LOG_ERR, "IOERROR: GUID mismatch %s %u",
 			       mailbox->name, record.uid);
 			return IMAP_IOERROR;
@@ -1533,7 +1533,7 @@ int sync_append_copyfile(struct mailbox *mailbox,
 	return r;
     }
 
-    if (!message_guid_compare(&tmp_guid, &record->guid)) {
+    if (!message_guid_equal(&tmp_guid, &record->guid)) {
 	syslog(LOG_ERR, "IOERROR: guid mismatch on parse %s", fname);
 	return IMAP_MAILBOX_CRC;
     }

@@ -759,7 +759,7 @@ static int fetch_file(struct mailbox *mailbox, unsigned long uid,
 	goto done;
     }
 
-    if (!message_guid_compare(&kl->gval, &rp->guid))
+    if (!message_guid_equal(&kl->gval, &rp->guid))
 	r = IMAP_MAILBOX_CRC;
 
 done:
@@ -916,7 +916,7 @@ static int compare_one_record(struct mailbox *mailbox,
 
     /* if the GUIDs don't match, then treat as two 
      * un-matched records :) */
-    if (!message_guid_compare(&mp->guid, &rp->guid)) {
+    if (!message_guid_equal(&mp->guid, &rp->guid)) {
     	if (!(rp->system_flags & FLAG_EXPUNGED))
 	    dlist_num(kaction, "COPYBACK", rp->uid);
     	if (!(mp->system_flags & FLAG_EXPUNGED))

@@ -67,13 +67,9 @@ void message_guid_generate(struct message_guid *guid,
 /* Copy a GUID */
 void message_guid_copy(struct message_guid *dst, struct message_guid *src);
 
-/* Compare a pair of GUIDs: Returns 1 => match.  NULL GUIDs do not match. */
-int message_guid_compare(struct message_guid *guid1,
+/* Compare a pair of GUIDs: Returns 1 => match. */
+int message_guid_equal(struct message_guid *guid1,
 			 struct message_guid *guid2);
-
-/* Compare a pair of GUIDs: Returns 1 => match.  NULL GUIDs match anything. */
-int message_guid_compare_allow_null(struct message_guid *guid1,
-				    struct message_guid *guid2);
 
 /* Convert GUID into hash value for hash table lookup
  * Returns: positive int in range [0, hash_size-1]

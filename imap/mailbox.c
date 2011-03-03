@@ -3503,7 +3503,7 @@ static int records_match(const char *mboxname,
 	       mboxname, new->uid);
 	match = 0;
     }
-    if (!message_guid_compare(&old->guid, &new->guid)) {
+    if (!message_guid_equal(&old->guid, &new->guid)) {
 	printf("%s uid %u mismatch: guid\n",
 	       mboxname, new->uid);
 	match = 0;
@@ -3596,7 +3596,7 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
 	if (r) return r;
 
 	/* it's not the same message! */
-	if (!message_guid_compare(&record->guid, &copy.guid)) {
+	if (!message_guid_equal(&record->guid, &copy.guid)) {
 	    int do_unlink = 0;
 
 	    printf("%s uid %u guid mismatch\n",

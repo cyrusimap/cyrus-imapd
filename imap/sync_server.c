@@ -1029,7 +1029,7 @@ void reserve_folder(const char *part, const char *mboxname,
 		   mailbox_msg_path);
 	    continue;
 	}
-	if (!message_guid_compare(&record.guid, &record2.guid)) {
+	if (!message_guid_equal(&record.guid, &record2.guid)) {
 	    syslog(LOG_ERR, "IOERROR: GUID mismatch on parse for %s",
 		   mailbox_msg_path);
 	    continue;
@@ -1288,7 +1288,7 @@ static int do_mailbox(struct dlist *kin,
 	if (rrecord.uid == mrecord.uid) {
 	    /* GUID mismatch on a non-expunged record is an error straight away */
 	    if (!(mrecord.system_flags & FLAG_EXPUNGED) &&
-		!message_guid_compare(&mrecord.guid, &rrecord.guid)) {
+		!message_guid_equal(&mrecord.guid, &rrecord.guid)) {
 		r = IMAP_MAILBOX_CRC;
 		goto done;
 	    }
