@@ -1714,7 +1714,13 @@ void index_fetchmsg(struct index_state *state, const char *msg_base,
     offset += start_octet;
     n = size;
     if (offset + size > msg_size) {
-	n = msg_size - offset;
+	if (msg_size > offset) {
+	    n = msg_size - offset;
+	}
+	else {
+	    prot_printf(state->out, "\"\"");
+	    return;
+	}
     }
 
     /* Get domain of the data */
