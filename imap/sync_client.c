@@ -1098,6 +1098,7 @@ static int mailbox_full_update(const char *mboxname)
 	    }
 	    else if (rrecord.uid > mrecord.uid) {
 		/* record only exists on the master */
+		syslog(LOG_ERR, "ONLY EXIST ON MASTER, RENUMBER %s %u", mailbox->name, mrecord.uid);
 		r = renumber_one_record(&mrecord, kaction);
 		if (r) goto done;
 		/* only increment master */
@@ -1105,6 +1106,7 @@ static int mailbox_full_update(const char *mboxname)
 	    }
 	    else {
 		/* record only exists on the replica */
+		syslog(LOG_ERR, "ONLY EXIST ON REPLICA, COPYBACK %s %u", mailbox->name, rrecord.uid);
 		r = copyback_one_record(mailbox, &rrecord, kaction);
 		if (r) goto done;
 		/* only increment replica */
@@ -1122,6 +1124,11 @@ static int mailbox_full_update(const char *mboxname)
 		r = renumber_one_record(&mrecord, kaction);
 		if (r) goto done;
 	    }
+	    if (mrecord.modseq <= highestmodseq) {
+		/* bump our modseq so we sync */
+		syslog(LOG_ERR, "BUMPING MODSEQ %s %u", mailbox->name, mrecord.uid);
+		mailbox_rewrite_index_record(mailbox, &mrecord);
+	    }
 	    recno++;
 	}
 
@@ -1129,7 +1136,9 @@ static int mailbox_full_update(const char *mboxname)
 	else {
 	    r = parse_upload(ki, mailbox, &rrecord);
 	    if (r) goto done;
-	    
+
+	    syslog(LOG_ERR, "ONLY ON THE REPLICA %s %u", mailbox->name, rrecord.uid);
+
 	    /* going to need this one */
 	    r = copyback_one_record(mailbox, &rrecord, kaction);
 	    if (r) goto done;
