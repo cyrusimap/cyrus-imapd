@@ -90,6 +90,15 @@ sub service_params
     };
 }
 
+sub _binary
+{
+    my ($self, $name) = @_;
+
+    # TODO: stick in valgrind here.  That's why we return
+    # a list rather than a scalar.
+    return ( $self->{cyrus_prefix} . '/bin/' . $name );
+}
+
 sub _imapd_conf
 {
     my ($self) = @_;
@@ -161,7 +170,7 @@ sub _generate_master_conf
     foreach my $srv (values %{$self->{services}})
     {
 	print MASTER '    ' . $srv->{name};
-	print MASTER ' cmd="' . $srv->{binary} . ' -C ' .  $self->_imapd_conf() . '"';
+	print MASTER ' cmd="' . $self->_binary($srv->{binary}) . ' -C ' .  $self->_imapd_conf() . '"';
 	print MASTER ' listen="' . $srv->{host} . ':' . $srv->{port} .  '"';
 	print MASTER "\n";
     }
@@ -185,7 +194,7 @@ sub _setup_mboxlist
     my ($self) = @_;
     my @cmd =
     (
-	$self->{cyrus_prefix} . '/bin/ctl_mboxlist',
+	$self->_binary('ctl_mboxlist'),
 	'-C', $self->_imapd_conf(),
 	'-u',
     );
@@ -222,7 +231,7 @@ sub _reconstruct
     my $mboxname = "user.$owner";   # or realm!user.owner.whatever
     my @cmd =
     (
-	$self->{cyrus_prefix} . '/bin/reconstruct',
+	$self->_binary('reconstruct'),
 	'-C', $self->_imapd_conf(),
 	$mboxname
     );
@@ -234,7 +243,7 @@ sub _start_master
     my ($self) = @_;
     my @cmd =
     (
-	$self->{cyrus_prefix} . '/bin/master',
+	$self->_binary('master'),
 	'-l', '255',
 	'-p', $self->{basedir} . '/run/cyrus.pid',
 	'-d',
