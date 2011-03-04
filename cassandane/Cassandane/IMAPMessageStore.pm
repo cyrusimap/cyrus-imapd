@@ -65,6 +65,8 @@ sub _connect
 	if defined $self->{client};
     $self->{client} = undef;
 
+    xlog "_connect Server=$self->{host} Port=$self->{port}";
+
     my $client = Mail::IMAPTalk->new(
 			    Server => $self->{host},
 			    Port => $self->{port}

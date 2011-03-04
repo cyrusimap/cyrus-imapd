@@ -5,7 +5,8 @@ use strict;
 use warnings;
 use File::Path qw(mkpath rmtree);
 use File::Find qw(find);
-use POSIX qw(geteuid);
+use POSIX qw(geteuid :signal_h);
+use Time::HiRes qw(sleep gettimeofday);
 use DateTime;
 use Cassandane::Util::DateTime qw(to_iso8601);
 use Cassandane::Util::Log;
@@ -90,6 +91,50 @@ sub service_params
     };
 }
 
+sub _service_is_listening
+{
+    my ($self, $srv) = @_;
+
+    # hardcoded for TCP4
+    die "Sorry, the host argument \"$srv->{host}\" must be a numeric IP address"
+	unless ($srv->{host} =~ m/^\d+\.\d+\.\d+\.\d+$/);
+    die "Sorry, the port argument \"$srv->{port}\" must be a numeric TCP port"
+	unless ($srv->{port} =~ m/^\d+$/);
+
+    my @cmd = (
+	'netstat',
+	'-l',		# listening ports only
+	'-n',		# numeric output
+	'-Ainet',	# AF_INET only
+	);
+
+    open NETSTAT,'-|',@cmd
+	or die "Cannot run netstat to check for port $srv->{port}: $!";
+    #     # netstat -ln -Ainet
+    #     Active Internet connections (only servers)
+    #     Proto Recv-Q Send-Q Local Address           Foreign Address State
+    #     tcp        0      0 0.0.0.0:56686           0.0.0.0:* LISTEN
+    my $found;
+    while (<NETSTAT>)
+    {
+	chomp;
+	my @a = split;
+	next unless scalar(@a) == 6;
+	next unless $a[0] eq 'tcp';
+	next unless $a[5] eq 'LISTEN';
+	next unless $a[3] eq "$srv->{host}:$srv->{port}";
+	$found = 1;
+	last;
+    }
+    close NETSTAT;
+
+    xlog "_service_is_listening: service $srv->{name} is " .
+	 "listening on port $srv->{port}"
+	if ($found);
+
+    return $found;
+}
+
 sub _binary
 {
     my ($self, $name) = @_;
@@ -111,6 +156,13 @@ sub _master_conf
     my ($self) = @_;
 
     return $self->{basedir} . '/conf/cyrus.conf';
+}
+
+sub _pid_file
+{
+    my ($self) = @_;
+
+    return $self->{basedir} . '/run/cyrus.pid';
 }
 
 sub _build_skeleton
@@ -238,21 +290,104 @@ sub _reconstruct
     system(@cmd);
 }
 
+sub _timed_wait
+{
+    my ($condition, %p) = @_;
+    $p{delay} = 0.010		# 10 millisec
+	unless defined $p{delay};
+    $p{maxwait} = 3.0
+	unless defined $p{maxwait};
+    $p{description} = 'unknown condition'
+	unless defined $p{description};
+
+    my $start = [gettimeofday()];
+    my $delayed = 0;
+    while ( ! $condition->() )
+    {
+	die "Timed out waiting for " . $p{description}
+	    if (tv_interval($start, [gettimeofday()]) > $p{maxwait});
+	sleep($p{delay});
+	$delayed = 1;
+    }
+
+    xlog "_timed_wait: waited " .
+	tv_interval($start, [gettimeofday()]) .
+	" sec for " .
+	$p{description}
+	if ($delayed);
+}
+
+sub _read_pid_file
+{
+    my ($self) = @_;
+    my $file = $self->_pid_file();
+    my $pid;
+
+    return undef if ( ! -f $file );
+
+    open PID,'<',$file
+	or return undef;
+    while(<PID>)
+    {
+	chomp;
+	($pid) = m/^(\d+)$/;
+	last;
+    }
+    close PID;
+
+    return undef unless defined $pid;
+    return undef unless $pid > 1;
+    return undef unless kill(0, $pid) > 0;
+    return $pid;
+}
+
 sub _start_master
 {
     my ($self) = @_;
+
+    # First check that nothing is listening on any of the ports
+    # we expect to be able to use.  That would indicate a failure
+    # of test containment - i.e. we failed to shut something down
+    # earlier.  Or it might indicate that someone is trying to run
+    # a second set of Cassandane tests on this machine, which is
+    # also going to fail miserably.  In any case we want to know.
+    foreach my $srv (values %{$self->{services}})
+    {
+	die "Some process is already listening on $srv->{host}:$srv->{port}"
+	    if $self->_service_is_listening($srv);
+    }
+
+    # Now start the master process.
     my @cmd =
     (
 	$self->_binary('master'),
 	'-l', '255',
-	'-p', $self->{basedir} . '/run/cyrus.pid',
+	'-p', $self->_pid_file(),
 	'-d',
 	'-C', $self->_imapd_conf(),
 	'-M', $self->_master_conf(),
     );
+    unlink $self->_pid_file();
     system(@cmd);
-    sleep(3);
-    # TODO: check for the pid file etc
+
+    # wait until the pidfile exists and contains a PID
+    # that we can verify is still alive.
+    xlog "_start_master: waiting for PID file";
+    _timed_wait(sub { $self->_read_pid_file() },
+	        description => "the master PID file to exist");
+    xlog "_start_master: PID file present and correct";
+
+    # Wait until all the defined services are reported as listening.
+    # That doesn't mean they're ready to use but it means that at least
+    # a client will be able to connect(), although the first response
+    # might be a bit slow.
+    xlog "_start_master: PID waiting for services";
+    foreach my $srv (values %{$self->{services}})
+    {
+	_timed_wait(sub { $self->_service_is_listening($srv) },
+	        description => "port $srv->{port} to be in LISTEN state");
+    }
+    xlog "_start_master: all services listening";
 }
 
 sub start
@@ -271,12 +406,33 @@ sub start
     $self->_start_master();
 }
 
+sub _stop_pid
+{
+    my ($pid) = @_;
+
+    # try to be nice
+    xlog "_stop_pid: sending SIGQUIT to $pid";
+    kill(SIGQUIT, $pid);
+    eval {
+	_timed_wait(sub { kill(0, $pid) == 0 });
+    };
+    if ($@)
+    {
+	# Timed out -- No More Mr Nice Guy
+	xlog "_stop_pid: sending SIGTERM to $pid";
+	kill(SIGTERM, $pid);
+    }
+}
+
 sub stop
 {
     my ($self) = @_;
 
     xlog "stop";
-# TODO: shut down the master and any other processes
+
+    my $pid = $self->_read_pid_file();
+    _stop_pid($pid) if defined $pid;
+
 #     rmtree $self->{basedir};
 }
 
