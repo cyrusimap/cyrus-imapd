@@ -5,6 +5,9 @@ INSTALLABLES="\
     genmail3.pl \
     listmail.pl \
     pop3showafter.pl \
+    split-by-thread.pl \
+    imap-append.pl \
+    sprinkle.pl \
     testrunner.pl \
     Cassandane \
 "
