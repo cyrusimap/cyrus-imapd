@@ -3,7 +3,8 @@
 package Cassandane::MboxMessageStore;
 use strict;
 use warnings;
-use Cassandane::Util::DateTime qw(to_rfc822);
+use Cassandane::Util::DateTime qw(to_rfc822 from_rfc822);
+use POSIX qw(strftime);
 use Cassandane::Message;
 
 # TODO: isa Cassandane::MessageStore
@@ -47,9 +48,18 @@ sub write_begin
 sub write_message
 {
     my ($self, $msg) = @_;
-    my $datestr = $msg->get_headers('date')->[0];
     my $fh = $self->{fh};
-    print $fh "From - " . $datestr . "\r\n" . $msg;
+
+    my $from = $msg->get_header('from');
+    $from =~ s/^.*<//;
+    $from =~ s/>.*$//;
+
+    my $dt = from_rfc822($msg->get_header('date'));
+    my $date = 'Mon Dec  1 00:03:08 2008';
+    $date = strftime("%a %b %d %T %Y", localtime($dt->epoch))
+	if defined $dt;
+
+    printf $fh "From %s %s\r\n%s", $from, $date, $msg;
 }
 
 sub write_end
