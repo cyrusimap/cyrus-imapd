@@ -15,6 +15,7 @@ my $verbose = 1;
 sub xlog
 {
     my ($pkg, $file, $line) = caller;
+    $pkg =~ s/^Cassandane:://;
     my $prefix = "=====> " . $pkg . "[" . $line . "]";
     my $msg = join(' ', @_);
     print STDERR "$prefix $msg\n" if $verbose;
