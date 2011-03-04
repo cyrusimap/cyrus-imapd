@@ -10,7 +10,7 @@ our @EXPORT = qw(
     &xlog &set_verbose &get_verbose
     );
 
-my $verbose = 1;
+my $verbose = 0;
 
 sub xlog
 {
