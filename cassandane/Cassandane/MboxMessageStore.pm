@@ -116,12 +116,13 @@ sub read_message
 		unless m/^From /;
 	    next;
 	}
-	last if m/^From /;
+	return Cassandane::Message->new(lines => \@lines)
+	    if m/^From /;
 
 	push(@lines, $_);
     }
 
-    return Cassandane::Message->new(lines => \@lines);
+    return undef;
 }
 
 sub read_end
