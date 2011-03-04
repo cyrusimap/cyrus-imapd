@@ -8,12 +8,11 @@ use DateTime;
 use URI::Escape;
 use Digest::SHA1 qw(sha1_hex);
 use Cassandane::Generator;
+use Cassandane::Util::Log;
 use Cassandane::Util::DateTime qw(to_iso8601 from_iso8601
 				  from_rfc822
 				  to_rfc3501 from_rfc3501);
 use Cassandane::MessageStoreFactory;
-
-my $verbose = 1;
 
 sub new
 {
@@ -29,7 +28,7 @@ sub new
 	folder => 'inbox.cidclashtest',
 	username => 'test@vmtom.com',
 	password => 'testpw',
-	verbose => $verbose,
+	verbose => get_verbose,
     };
     $self->{replica_params} =
     {
@@ -100,7 +99,7 @@ sub check_messages
     my $expected = $self->{expected};
     my $store = $params{store} || $self->{store};
 
-    printf "check_messages: %s\n", join(' ',%params) if $verbose;
+    xlog "check_messages: " . join(' ',%params);
 
     $store->read_begin();
     while (my $msg = $store->read_message())
@@ -148,22 +147,22 @@ sub test_append
     # let the rolling replication catch up
     sleep(3);
 
-    printf "removing folder\n" if $verbose;
+    xlog "removing folder";
     $self->{store}->remove();
 
-    printf "generating message A\n" if $verbose;
+    xlog "generating message A";
     $self->{expected}->{A} = $self->make_message("Message A");
     $self->check_messages();
 
-    printf "generating message B\n" if $verbose;
+    xlog "generating message B";
     $self->{expected}->{B} = $self->make_message("Message B");
     $self->check_messages();
 
-    printf "generating message C\n" if $verbose;
+    xlog "generating message C";
     $self->{expected}->{C} = $self->make_message("Message C");
     my $actual = $self->check_messages();
 
-    printf "generating message D\n" if $verbose;
+    xlog "generating message D";
     $self->{expected}->{D} = $self->make_message("Message D");
     $self->check_messages();
 }
@@ -182,18 +181,18 @@ sub test_append_clash
     # let the rolling replication catch up
     sleep(3);
 
-    printf "removing folder\n" if $verbose;
+    xlog "removing folder";
     $self->{store}->remove();
 
-    printf "generating message A\n" if $verbose;
+    xlog "generating message A";
     $self->{expected}->{A} = $self->make_message("Message A");
     $self->check_messages();
 
-    printf "generating message B\n" if $verbose;
+    xlog "generating message B";
     $self->{expected}->{B} = $self->make_message("Message B");
     my $actual = $self->check_messages();
 
-    printf "generating message C\n" if $verbose;
+    xlog "generating message C";
     $self->{expected}->{C} = $self->make_message(
 				 "Message C",
 				 references =>
@@ -219,22 +218,22 @@ sub test_double_clash
     # let the rolling replication catch up
     sleep(3);
 
-    printf "removing folder\n" if $verbose;
+    xlog "removing folder";
     $self->{store}->remove();
 
-    printf "generating message A\n" if $verbose;
+    xlog "generating message A";
     $self->{expected}->{A} = $self->make_message("Message A");
     $self->check_messages();
 
-    printf "generating message B\n" if $verbose;
+    xlog "generating message B";
     $self->{expected}->{B} = $self->make_message("Message B");
     $self->check_messages();
 
-    printf "generating message C\n" if $verbose;
+    xlog "generating message C";
     $self->{expected}->{C} = $self->make_message("Message C");
     my $actual = $self->check_messages();
 
-    printf "generating message D\n" if $verbose;
+    xlog "generating message D";
     $self->{expected}->{D} = $self->make_message(
 				 "Message D",
 				 references =>
@@ -275,28 +274,28 @@ sub test_replication_clash
     # let the rolling replication catch up
     sleep(3);
 
-    printf "removing folder\n" if $verbose;
+    xlog "removing folder";
     $self->{store}->remove();
 
-    printf "generating message A\n" if $verbose;
+    xlog "generating message A";
     $self->{expected}->{A} = $self->make_message("Message A");
     sleep(3);   # let the replication catch up
     $self->check_messages();
     $self->check_messages(store => $replica);
 
-    printf "generating message B\n" if $verbose;
+    xlog "generating message B";
     $self->{expected}->{B} = $self->make_message("Message B");
     sleep(3);   # let the replication catch up
     $self->check_messages();
     $self->check_messages(store => $replica);
 
-    printf "generating message C\n" if $verbose;
+    xlog "generating message C";
     $self->{expected}->{C} = $self->make_message("Message C");
     sleep(3);   # let the replication catch up
     my $actual = $self->check_messages();
     $self->check_messages(store => $replica);
 
-    printf "generating message D\n" if $verbose;
+    xlog "generating message D";
     $self->{expected}->{D} = $self->make_message("Message D",
 				 references =>
 				       $self->{expected}->{A}->get_header('message-id') .  ", " .

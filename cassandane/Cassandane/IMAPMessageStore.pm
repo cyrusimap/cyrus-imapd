@@ -4,6 +4,7 @@ package Cassandane::IMAPMessageStore;
 use strict;
 use warnings;
 use Mail::IMAPTalk;
+use Cassandane::Util::Log;
 use Cassandane::Util::DateTime qw(to_rfc822);
 # use Data::Dumper;
 use overload qw("") => \&as_string;
@@ -180,15 +181,15 @@ sub read_message
 	    next unless defined $rr;
 	    delete $self->{batch}->{$uid};
 
-	    # printf STDERR "XXX found uid=$uid in batch\n";
-	    # printf STDERR "rr=%s\n", Dumper($rr);
+	    # xlog "found uid=$uid in batch";
+	    # xlog "rr=" . Dumper($rr);
 	    my $raw = $rr->{'body'};
 	    delete $rr->{'body'};
 	    return Cassandane::Message->new(raw => $raw, attrs => $rr);
 	}
 	$self->{batch} = undef;
 
-	# printf STDERR "XXX batch empty or no batch available\n";
+	# xlog "batch empty or no batch available";
 
 	for (;;)
 	{
@@ -198,7 +199,7 @@ sub read_message
 	    my $last_uid = $first_uid + $BATCHSIZE - 1;
 	    $last_uid = $self->{last_uid}
 		if $last_uid > $self->{last_uid};
-	    # printf STDERR "XXX fetching batch range $first_uid:$last_uid\n";
+	    # xlog "fetching batch range $first_uid:$last_uid";
 	    my $attrs = join(' ', keys %{$self->{fetch_attrs}});
 	    $self->{batch} = $self->{client}->fetch("$first_uid:$last_uid",
 						    "($attrs)");
@@ -206,7 +207,7 @@ sub read_message
 	    last if (scalar $self->{batch} > 0);
 	    $self->{next_uid} = $last_uid + 1;
 	}
-	# printf STDERR "XXX have a batch, next_uid=$self->{next_uid}\n";
+	# xlog "have a batch, next_uid=$self->{next_uid}";
     }
 
     return undef;

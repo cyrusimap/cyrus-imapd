@@ -4,6 +4,7 @@ package Cassandane::POP3MessageStore;
 use strict;
 use warnings;
 use Net::POP3;
+use Cassandane::Util::Log;
 # use Cassandane::Util::DateTime qw(to_rfc822);
 # use Data::Dumper;
 
@@ -51,7 +52,7 @@ sub _connect
     return
 	if (defined $self->{client});
 
-    # printf STDERR "_connect: creating POP3 object\n";
+    # xlog "_connect: creating POP3 object";
     my %opts;
     $opts{Debug} = $self->{verbose}
 	if $self->{verbose};
@@ -77,15 +78,15 @@ sub _connect
     }
 
     my $pop3_username = "$uu$ff$ud";
-    # printf STDERR "_connect: pop3_username=\"%s\"\n", $pop3_username;
-    # printf STDERR "_connect: password=\"%s\"\n", $self->{password};
+    # xlog "_connect: pop3_username=\"$pop3_username\"", ;
+    # xlog "_connect: password=\"" . $self->{password} . "\"";
 
     my $res = $client->login($pop3_username, $self->{password})
 	or die "Cannot login via POP3";
     $res = 0 if ($res eq '0E0');
     $res = 0 + $res;
 
-    # printf STDERR "_connect: found %u messages\n", $res;
+    # xlog "_connect: found $res messages";
 
     $self->{last_id} = $res;
     $self->{client} = $client;

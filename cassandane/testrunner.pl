@@ -4,6 +4,7 @@ use strict;
 use warnings;
 use Test::Unit::TestRunner;
 use Test::Unit::Runner::XML;
+use Cassandane::Util::Log;
 
 my $format = 'xml';
 my $output_dir = 'reports';
@@ -55,6 +56,10 @@ while (my $a = shift)
     {
 	$format = shift;
 	usage unless defined $runners{$format};
+    }
+    elsif ($a eq '-v' || $a eq '--verbose')
+    {
+	set_verbose(1);
     }
     elsif ($a =~ m/^-/)
     {

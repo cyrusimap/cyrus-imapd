@@ -3,6 +3,7 @@
 package Cassandane::Message;
 use strict;
 use warnings;
+use Cassandane::Util::Log;
 use Cassandane::Util::DateTime qw(from_rfc3501);
 use overload qw("") => \&as_string;
 
@@ -163,7 +164,7 @@ sub set_lines
     my ($self, @lines) = @_;
     my $pending = '';
 
-#     print STDERR "Message::set_lines\n";
+#     xlog "set_lines";
     $self->_clear();
 
     # First parse the headers
@@ -173,35 +174,35 @@ sub set_lines
 	# remove trailing end of line chars
 	$line =~ s/[\r\n]*$//;
 
-# 	printf STDERR "    raw line \"%s\"\n", $line;
+# 	xlog "    raw line \"$line\"";
 
 	if ($line =~ m/^\s/)
 	{
 	    # continuation line -- collapse FWS and gather the line
 	    $line =~ s/^\s*/ /;
 	    $pending .= $line;
-# 	    printf STDERR "    gathering continuation line\n";
+# 	    xlog "    gathering continuation line";
 	    next;
 	}
-#  	printf STDERR "    pending \"%s\"\n", $pending;
+#  	xlog "    pending \"$pending\"";
 
 	# Not a continuation line; handle the previous pending line
 	if ($pending ne '')
 	{
-# 	    printf STDERR "    finished joined line \"%s\"\n", $pending;
+# 	    xlog "    finished joined line \"$pending\"";
 	    my ($name, $value) = ($pending =~ m/^([!-9;-~]+):\s*(.*)$/);
 
 	    die "Malformed RFC822 header at or near \"$pending\""
 		unless defined $value;
 
-# 	    printf STDERR "    saving header %s=%s\n", $name, $value;
+# 	    xlog "    saving header $name=$value";
 	    $self->add_header($name, $value);
 	}
 
 	last if ($line eq '');
 	$pending = $line;
     }
-#     printf STDERR "    finished with headers, next line is \"%s\"\n", $lines[0];
+#     xlog "    finished with headers, next line is \"" . $lines[0] . "\"";
 
     # Now collect the body...assuming any remains.
     my $body = '';

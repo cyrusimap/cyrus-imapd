@@ -3,6 +3,7 @@
 use strict;
 use warnings;
 use DateTime;
+use Cassandane::Util::Log;
 use Cassandane::MessageStoreFactory;
 
 sub usage
@@ -49,7 +50,7 @@ sub choose_folder
     }
 
     my $folder = join('.', ($base_folder, @parts));
-    printf STDERR "--> choosing folder %s\n", $folder if $verbose;
+    xlog "choosing folder $folder";
     return $folder;
 }
 
@@ -73,7 +74,7 @@ sub sprinkle
 	    $imap_store->write_begin();
 	    $num_remaining = 1 + int(rand(300));
 	    $num_written = 0;
-	    printf STDERR "--> choosing %u messages\n", $num_remaining if $verbose;
+	    xlog "choosing $num_remaining messages";
 	}
 	$imap_store->write_message($msg);
 	$num_remaining--;

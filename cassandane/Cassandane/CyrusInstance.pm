@@ -8,10 +8,10 @@ use File::Find qw(find);
 use POSIX qw(geteuid);
 use DateTime;
 use Cassandane::Util::DateTime qw(to_iso8601);
+use Cassandane::Util::Log;
 use Cassandane::Config;
 
 my $rootdir = '/var/tmp/cassandane';
-my $verbose = 1;
 
 sub new
 {
@@ -40,7 +40,7 @@ sub new
 	unless defined $self->{basedir};
 
     bless $self, $class;
-print STDERR "=====> CyrusInstance::new basedir $self->{basedir}\n";
+    xlog "basedir $self->{basedir}";
     return $self;
 }
 
@@ -86,7 +86,7 @@ sub service_params
 	folder => 'inbox.CassandaneTestFolder',
 	username => 'cassandane',
 	password => 'testpw',
-	verbose => $verbose,
+	verbose => get_verbose,
     };
 }
 
@@ -250,7 +250,7 @@ sub start
 {
     my ($self) = @_;
 
-print STDERR "=====> CyrusInstance::start\n";
+    xlog "start";
     rmtree $self->{basedir};
     $self->_build_skeleton();
     # TODO: system("echo 1 >/proc/sys/kernel/core_uses_pid");
@@ -266,7 +266,7 @@ sub stop
 {
     my ($self) = @_;
 
-print STDERR "=====> CyrusInstance::stop\n";
+    xlog "stop";
 # TODO: shut down the master and any other processes
 #     rmtree $self->{basedir};
 }
