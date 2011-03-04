@@ -78,8 +78,17 @@ sub read_begin
     if (defined $self->{filename})
     {
 	my $fh;
-	open $fh,'<',$self->{filename}
-	    or die "Cannot open $self->{filename} for reading: $!";
+
+	if ($self->{filename} =~ m/\.gz$/)
+	{
+	    open $fh,'-|',('gunzip', '-dc', $self->{filename})
+		or die "Cannot gunzip $self->{filename} for reading: $!";
+	}
+	else
+	{
+	    open $fh,'<',$self->{filename}
+		or die "Cannot open $self->{filename} for reading: $!";
+	}
 	$self->{fh} = $fh;
 	$self->{ourfh} = 1;
     }
