@@ -189,7 +189,7 @@ sub set_lines
 	if ($pending ne '')
 	{
 # 	    printf STDERR "    finished joined line \"%s\"\n", $pending;
-	    my ($name, $value) = ($pending =~ m/^([A-Za-z0-9-]+):\s*(.*)$/);
+	    my ($name, $value) = ($pending =~ m/^([!-9;-~]+):\s*(.*)$/);
 
 	    die "Malformed RFC822 header at or near \"$pending\""
 		unless defined $value;
