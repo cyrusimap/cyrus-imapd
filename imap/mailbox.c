@@ -3250,6 +3250,7 @@ static void free_files(struct found_files *ff)
 
 static int parse_datafilename(const char *name, uint32_t *uidp)
 {
+    int r;
     const char *p = name;
 
     /* must be at least one digit */
@@ -3262,7 +3263,11 @@ static int parse_datafilename(const char *name, uint32_t *uidp)
     if (*p != '.') return IMAP_MAILBOX_BADNAME;
     if (p[1]) return IMAP_MAILBOX_BADNAME;
 
-    return parseuint32(name, &p, uidp);
+    r = parseuint32(name, &p, uidp);
+    if (r) return r;
+    /* '0.' isn't actually a valid message name */
+    if (*uidp == 0) return IMAP_MAILBOX_BADNAME;
+    return 0;
 }
 
 static int find_files(struct mailbox *mailbox, struct found_files *files,
@@ -3301,7 +3306,6 @@ static int find_files(struct mailbox *mailbox, struct found_files *files,
 
 	r = parse_datafilename(p, &uid);
 
-	/* it has to have a . after the number and nothing else */
 	if (r) {
 	    /* check if it's a directory */
 	    snprintf(buf, MAX_MAILBOX_PATH, "%s/%s", dirpath, dirent->d_name);
