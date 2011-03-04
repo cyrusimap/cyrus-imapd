@@ -1295,13 +1295,24 @@ static int do_mailbox(struct dlist *kin,
 	/* found a match, check for updates */
 	if (rrecord.uid == mrecord.uid) {
 	    /* GUID mismatch on a non-expunged record is an error straight away */
-	    if (!(mrecord.system_flags & FLAG_EXPUNGED) &&
-		!message_guid_equal(&mrecord.guid, &rrecord.guid)) {
-		r = IMAP_MAILBOX_CRC;
-		goto done;
+	    if (!(mrecord.system_flags & FLAG_EXPUNGED)) {
+		if (!message_guid_equal(&mrecord.guid, &rrecord.guid)) {
+		    syslog(LOG_ERR, "%s: GUID MISMATCH FOR %u",
+			   mailbox->name, mrecord.uid);
+		    r = IMAP_MAILBOX_CRC;
+		    goto done;
+		}
+		if (rrecord.system_flags & FLAG_EXPUNGED) {
+		    syslog(LOG_ERR, "%s: EXPUNGED ON REPLICA, NOT MASTER %u",
+			   mailbox->name, mrecord.uid);
+		    r = IMAP_MAILBOX_CRC;
+		    goto done;
+		}
 	    }
 	    /* higher modseq on the replica is an error */
 	    if (rrecord.modseq > mrecord.modseq) {
+		syslog(LOG_ERR, "%s: HIGHER MODSEQ ON REPLICA %u",
+		       mailbox->name, mrecord.uid);
 		r = IMAP_MAILBOX_CRC;
 		goto done;
 	    }
