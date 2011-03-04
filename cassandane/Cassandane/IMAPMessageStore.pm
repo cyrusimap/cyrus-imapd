@@ -262,4 +262,14 @@ sub as_string
     return 'imap://' . $self->{host} . ':' . $self->{port} . '/' .  $self->{folder};
 }
 
+sub set_folder
+{
+    my ($self, $folder) = @_;
+
+    if ($self->{folder} ne $folder)
+    {
+	$self->{folder} = $folder;
+    }
+}
+
 1;
