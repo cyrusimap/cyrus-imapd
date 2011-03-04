@@ -204,10 +204,13 @@ sub set_lines
 #     printf STDERR "    finished with headers, next line is \"%s\"\n", $lines[0];
 
     # Now collect the body...assuming any remains.
-    if (scalar @lines)
+    my $body = '';
+    foreach my $line (@lines)
     {
-	$self->set_body(join('', @lines));
+	$line =~ s/[\r\n]*$//;
+	$body .= $line . "\r\n";
     }
+    $self->set_body($body);
 }
 
 sub set_fh
