@@ -8,14 +8,14 @@ use DateTime;
 use Cassandane::Util::Log;
 use Cassandane::Generator;
 use Cassandane::MessageStoreFactory;
-use Cassandane::CyrusInstance;
+use Cassandane::Instance;
 
 sub new
 {
     my $class = shift;
     my $self = $class->SUPER::new(@_);
 
-    $self->{instance} = Cassandane::CyrusInstance->new();
+    $self->{instance} = Cassandane::Instance->new();
     $self->{instance}->add_service('imap');
     # Connection information for the IMAP server
     $self->{store_params} = $self->{instance}->service_params('imap');

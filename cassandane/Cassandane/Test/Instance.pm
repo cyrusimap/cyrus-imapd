@@ -2,9 +2,9 @@
 
 use strict;
 use warnings;
-package Cassandane::Test::CyrusInstance;
+package Cassandane::Test::Instance;
 use base qw(Test::Unit::TestCase);
-use Cassandane::CyrusInstance;
+use Cassandane::Instance;
 
 sub new
 {
@@ -17,7 +17,7 @@ sub test_basic
 {
 #     my ($self) = @_;
 # 
-#     my $ci = Cassandane::CyrusInstance->new();
+#     my $ci = Cassandane::Instance->new();
 #     $ci->add_service('imapd');
 #     $ci->start();
 #     $ci->stop();

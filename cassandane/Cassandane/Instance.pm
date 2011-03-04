@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-package Cassandane::CyrusInstance;
+package Cassandane::Instance;
 use strict;
 use warnings;
 use File::Path qw(mkpath rmtree);

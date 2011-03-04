@@ -13,7 +13,7 @@ use Cassandane::Util::DateTime qw(to_iso8601 from_iso8601
 				  from_rfc822
 				  to_rfc3501 from_rfc3501);
 use Cassandane::MessageStoreFactory;
-use Cassandane::CyrusInstance;
+use Cassandane::Instance;
 
 sub new
 {
@@ -22,7 +22,7 @@ sub new
 
     my $config = Cassandane::Config->default()->clone();
     $config->set(conversations => 'on');
-    $self->{instance} = Cassandane::CyrusInstance->new(config => $config);
+    $self->{instance} = Cassandane::Instance->new(config => $config);
     $self->{instance}->add_service('imap');
     # Connection information for the IMAP server
     $self->{store_params} = $self->{instance}->service_params('imap');
