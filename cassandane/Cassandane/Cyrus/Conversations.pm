@@ -13,28 +13,25 @@ use Cassandane::Util::DateTime qw(to_iso8601 from_iso8601
 				  from_rfc822
 				  to_rfc3501 from_rfc3501);
 use Cassandane::MessageStoreFactory;
+use Cassandane::CyrusInstance;
 
 sub new
 {
     my $class = shift;
     my $self = $class->SUPER::new(@_);
 
+    my $config = Cassandane::Config->default()->clone();
+    $config->set(conversations => 'on');
+    $self->{instance} = Cassandane::CyrusInstance->new(config => $config);
+    $self->{instance}->add_service('imap');
     # Connection information for the IMAP server
-    $self->{store_params} =
-    {
-	type => 'imap',
-	host => 'slott02',
-	port => 2144,
-	folder => 'inbox.cidclashtest',
-	username => 'test@vmtom.com',
-	password => 'testpw',
-	verbose => get_verbose,
-    };
-    $self->{replica_params} =
-    {
-	%{$self->{store_params}},
-	host => 'slott01'
-    };
+    $self->{store_params} = $self->{instance}->service_params('imap');
+
+#     $self->{replica_params} =
+#     {
+# 	%{$self->{store_params}},
+# 	host => 'slott01'
+#     };
 
     $self->{gen} = Cassandane::Generator->new();
 
@@ -45,6 +42,7 @@ sub set_up
 {
     my ($self) = @_;
 
+    $self->{instance}->start();
     $self->{store} =
 	Cassandane::MessageStoreFactory->create(%{$self->{store_params}});
     $self->{store}->set_fetch_attributes('uid', 'cid');
@@ -59,6 +57,7 @@ sub tear_down
     $self->{store}->disconnect()
 	if defined $self->{store};
     $self->{store} = undef;
+    $self->{instance}->stop();
 }
 
 # Calculate a CID from a message - this is the CID that the
@@ -144,9 +143,6 @@ sub test_append
     # check IMAP server has the XCONVERSATIONS capability
     $self->assert($self->{store}->get_client()->capability()->{xconversations});
 
-    # let the rolling replication catch up
-    sleep(3);
-
     xlog "removing folder";
     $self->{store}->remove();
 
@@ -177,9 +173,6 @@ sub test_append_clash
 
     # check IMAP server has the XCONVERSATIONS capability
     $self->assert($self->{store}->get_client()->capability()->{xconversations});
-
-    # let the rolling replication catch up
-    sleep(3);
 
     xlog "removing folder";
     $self->{store}->remove();
@@ -215,9 +208,6 @@ sub test_double_clash
     # check IMAP server has the XCONVERSATIONS capability
     $self->assert($self->{store}->get_client()->capability()->{xconversations});
 
-    # let the rolling replication catch up
-    sleep(3);
-
     xlog "removing folder";
     $self->{store}->remove();
 
@@ -248,68 +238,68 @@ sub test_double_clash
 				    ));
 }
 
-#
-# Test that a CID clash resolved on the master is replicated
-#
-sub test_replication_clash
-{
-    my ($self) = @_;
-
-    my $replica =
-	Cassandane::MessageStoreFactory->create(%{$self->{replica_params}});
-    $replica->set_fetch_attributes('uid', 'cid');
-
-    #
-    # Double check that we're connected to the servers
-    # we wanted to be connected to.
-    #
-    $self->assert($self->{store_params}->{host} ne $self->{replica_params}->{host});
-    $self->assert($self->{store}->get_server_name() eq $self->{store_params}->{host});
-    $self->assert($replica->get_server_name() eq $self->{replica_params}->{host});
-
-    # check IMAP server has the XCONVERSATIONS capability
-    $self->assert($self->{store}->get_client()->capability()->{xconversations});
-    $self->assert($replica->get_client()->capability()->{xconversations});
-
-    # let the rolling replication catch up
-    sleep(3);
-
-    xlog "removing folder";
-    $self->{store}->remove();
-
-    xlog "generating message A";
-    $self->{expected}->{A} = $self->make_message("Message A");
-    sleep(3);   # let the replication catch up
-    $self->check_messages();
-    $self->check_messages(store => $replica);
-
-    xlog "generating message B";
-    $self->{expected}->{B} = $self->make_message("Message B");
-    sleep(3);   # let the replication catch up
-    $self->check_messages();
-    $self->check_messages(store => $replica);
-
-    xlog "generating message C";
-    $self->{expected}->{C} = $self->make_message("Message C");
-    sleep(3);   # let the replication catch up
-    my $actual = $self->check_messages();
-    $self->check_messages(store => $replica);
-
-    xlog "generating message D";
-    $self->{expected}->{D} = $self->make_message("Message D",
-				 references =>
-				       $self->{expected}->{A}->get_header('message-id') .  ", " .
-				       $self->{expected}->{B}->get_header('message-id') .  ", " .
-				       $self->{expected}->{C}->get_header('message-id')
-				 );
-    sleep(3);   # let the replication catch up
-    my $ElCid = choose_cid(
-		    calc_cid($actual->{'Message A'}),
-		    calc_cid($actual->{'Message B'}),
-		    calc_cid($actual->{'Message C'})
-		);
-    $self->check_messages(cid => $ElCid);
-    $self->check_messages(store => $replica, cid => $ElCid);
-}
+# #
+# # Test that a CID clash resolved on the master is replicated
+# #
+# sub test_replication_clash
+# {
+#     my ($self) = @_;
+# 
+#     my $replica =
+# 	Cassandane::MessageStoreFactory->create(%{$self->{replica_params}});
+#     $replica->set_fetch_attributes('uid', 'cid');
+# 
+#     #
+#     # Double check that we're connected to the servers
+#     # we wanted to be connected to.
+#     #
+#     $self->assert($self->{store_params}->{host} ne $self->{replica_params}->{host});
+#     $self->assert($self->{store}->get_server_name() eq $self->{store_params}->{host});
+#     $self->assert($replica->get_server_name() eq $self->{replica_params}->{host});
+# 
+#     # check IMAP server has the XCONVERSATIONS capability
+#     $self->assert($self->{store}->get_client()->capability()->{xconversations});
+#     $self->assert($replica->get_client()->capability()->{xconversations});
+# 
+#     # let the rolling replication catch up
+#     sleep(3);
+# 
+#     xlog "removing folder";
+#     $self->{store}->remove();
+# 
+#     xlog "generating message A";
+#     $self->{expected}->{A} = $self->make_message("Message A");
+#     sleep(3);   # let the replication catch up
+#     $self->check_messages();
+#     $self->check_messages(store => $replica);
+# 
+#     xlog "generating message B";
+#     $self->{expected}->{B} = $self->make_message("Message B");
+#     sleep(3);   # let the replication catch up
+#     $self->check_messages();
+#     $self->check_messages(store => $replica);
+# 
+#     xlog "generating message C";
+#     $self->{expected}->{C} = $self->make_message("Message C");
+#     sleep(3);   # let the replication catch up
+#     my $actual = $self->check_messages();
+#     $self->check_messages(store => $replica);
+# 
+#     xlog "generating message D";
+#     $self->{expected}->{D} = $self->make_message("Message D",
+# 				 references =>
+# 				       $self->{expected}->{A}->get_header('message-id') .  ", " .
+# 				       $self->{expected}->{B}->get_header('message-id') .  ", " .
+# 				       $self->{expected}->{C}->get_header('message-id')
+# 				 );
+#     sleep(3);   # let the replication catch up
+#     my $ElCid = choose_cid(
+# 		    calc_cid($actual->{'Message A'}),
+# 		    calc_cid($actual->{'Message B'}),
+# 		    calc_cid($actual->{'Message C'})
+# 		);
+#     $self->check_messages(cid => $ElCid);
+#     $self->check_messages(store => $replica, cid => $ElCid);
+# }
 
 1;
