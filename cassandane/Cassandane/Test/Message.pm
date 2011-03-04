@@ -281,4 +281,65 @@ sub test_attributes
     $self->assert(!defined $m->get_attribute('internaldate'));
 }
 
+# Test parsing lines with unusually but validly named headers
+sub test_strange_headers
+{
+    my ($self) = @_;
+    my $m = Cassandane::Message->new();
+
+    my $txt = <<'EOF';
+From: Fred J. Bloggs <fbloggs@fastmail.fm>
+To: Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>
+X-Foo_Bar.Baz&Quux: Foonly
+Subject: Hello World
+Received: from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software);
+	Fri, 29 Oct 2010 13:05:01 +1100
+Received: from mail.bar.com (mail.bar.com [10.0.0.1])
+	by mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100
+Received: from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by
+	mail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100
+
+This is a message to let you know
+that I'm alive and well
+EOF
+    my @lines = split(/\n/, $txt);
+    map { $_ .= "\r\n" } @lines;
+
+    my $exp = <<'EOF';
+From: Fred J. Bloggs <fbloggs@fastmail.fm>
+To: Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>
+X-Foo_Bar.Baz&Quux: Foonly
+Subject: Hello World
+Received: from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software); Fri, 29 Oct 2010 13:05:01 +1100
+Received: from mail.bar.com (mail.bar.com [10.0.0.1]) by mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100
+Received: from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by mail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100
+
+This is a message to let you know
+that I'm alive and well
+EOF
+    $exp =~ s/\n/\r\n/g;
+
+    $m->set_lines(@lines);
+    $self->assert($m->get_headers('from')->[0] eq 'Fred J. Bloggs <fbloggs@fastmail.fm>');
+    $self->assert($m->get_headers('to')->[0] eq 'Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>');
+    $self->assert($m->get_headers('X-Foo_Bar.Baz&Quux')->[0] eq 'Foonly');
+    $self->assert($m->get_headers('Subject')->[0] eq 'Hello World');
+    $self->assert($m->get_headers('received')->[0] eq "from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software); Fri, 29 Oct 2010 13:05:01 +1100");
+    $self->assert($m->get_headers("received")->[1] eq "from mail.bar.com (mail.bar.com [10.0.0.1]) by mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100");
+    $self->assert($m->get_headers("received")->[2] eq "from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by mail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100");
+    $self->assert($m->as_string eq $exp);
+    $self->assert("" . $m eq $exp);
+
+    $m = Cassandane::Message->new(lines => \@lines);
+    $self->assert($m->get_headers('from')->[0] eq 'Fred J. Bloggs <fbloggs@fastmail.fm>');
+    $self->assert($m->get_headers('to')->[0] eq 'Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>');
+    $self->assert($m->get_headers('X-Foo_Bar.Baz&Quux')->[0] eq 'Foonly');
+    $self->assert($m->get_headers('Subject')->[0] eq 'Hello World');
+    $self->assert($m->get_headers('received')->[0] eq "from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software); Fri, 29 Oct 2010 13:05:01 +1100");
+    $self->assert($m->get_headers("received")->[1] eq "from mail.bar.com (mail.bar.com [10.0.0.1]) by mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100");
+    $self->assert($m->get_headers("received")->[2] eq "from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by mail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100");
+    $self->assert($m->as_string eq $exp);
+    $self->assert("" . $m eq $exp);
+}
+
 1;
