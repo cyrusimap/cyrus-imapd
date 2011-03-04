@@ -51,13 +51,13 @@ sub _canon_name($)
 {
     my ($name) = @_;
 
-    my @cc = split(/-/, lc($name));
+    my @cc = split(/([^[:alnum:]])+/, lc($name));
     map
     {
 	$_ = ucfirst($_);
 	$_ = 'ID' if m/^Id$/;
     } @cc;
-    return join('-', @cc);
+    return join('', @cc);
 }
 
 sub get_headers
