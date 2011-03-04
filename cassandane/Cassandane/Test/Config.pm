@@ -124,4 +124,41 @@ sub test_generate
     unlink $filename;
 }
 
+sub test_variables
+{
+    my ($self) = @_;
+
+    my $c = Cassandane::Config->new();
+    $c->set(foo => 'b@grade@r');
+    $c->set(quux => 'fo@grade@nly');
+    my $c2 = $c->clone();
+    $c2->set(hello => 'w@grade@rld');
+    $c2->set(foo => 'baz');
+    $c2->set_variables('grade' => 'A');
+
+    # Write the file
+    my ($fh, $filename) = tempfile()
+	or die "Cannot open temporary file: $!";
+    $c2->generate($filename);
+
+    # read it back again to check
+    my %nv;
+    while (<$fh>)
+    {
+	chomp;
+	my ($n, $v) = m/^([^:\s]+):\s*(\S+)$/;
+	$self->assert(defined $v);
+	$nv{$n} = $v;
+    }
+
+    $self->assert(scalar(keys(%nv)) == 3);
+    $self->assert($nv{foo} eq 'baz');
+    $self->assert($nv{hello} eq 'wArld');
+    $self->assert($nv{quux} eq 'foAnly');
+
+    close $fh;
+    unlink $filename;
+}
+
+
 1;

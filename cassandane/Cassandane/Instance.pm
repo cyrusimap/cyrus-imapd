@@ -32,13 +32,17 @@ sub new
 	if defined $params{basedir};
     $self->{cyrus_prefix} = $params{cyrus_prefix}
 	if defined $params{cyrus_prefix};
-    $self->{config} = $params{config}
+    $self->{config} = $params{config}->clone()
 	if defined $params{config};
 
     $self->{name} = 'cass' . to_iso8601(DateTime->now)
 	unless defined $self->{name};
     $self->{basedir} = $rootdir . '/' . $self->{name}
 	unless defined $self->{basedir};
+    $self->{config}->set_variables(
+		name => $self->{name},
+		basedir => $self->{basedir},
+	    );
 
     bless $self, $class;
     xlog "basedir $self->{basedir}";
@@ -193,21 +197,9 @@ sub _build_skeleton
 
 sub _generate_imapd_conf
 {
-    my ($self, $filename) = @_;
-    my $conf = $self->{config}->clone();
+    my ($self) = @_;
 
-    $conf->set(
-	    servername => $self->{name},
-	    syslog_prefix => $self->{name},
-	    configdirectory => $self->{basedir} . '/conf',
-	    sievedir => $self->{basedir} . '/conf/sieve',
-	    defaultpartition => 'default',
-	    'partition-default' => $self->{basedir} . '/data',
-	    sasl_mech_list => 'PLAIN LOGIN DIGEST-MD5',
-	    allowplaintext => 'yes',
-	    sasl_pwcheck_method => 'alwaystrue',
-	);
-    $conf->generate($self->_imapd_conf());
+    $self->{config}->generate($self->_imapd_conf());
 }
 
 sub _generate_master_conf

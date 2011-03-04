@@ -3,6 +3,7 @@
 package Cassandane::Config;
 use strict;
 use warnings;
+use Cassandane::Util::Log;
 
 my $default;
 
@@ -11,6 +12,7 @@ sub new
     my $class = shift;
     my $self = {
 	parent => undef,
+	variables => {},
 	params => { @_ },
     };
 
@@ -20,7 +22,15 @@ sub new
 
 sub default
 {
-    $default = Cassandane::Config->new()
+    $default = Cassandane::Config->new(
+	    configdirectory => '@basedir@/conf',
+	    sievedir => '@basedir@/conf/sieve',
+	    defaultpartition => 'default',
+	    'partition-default' => '@basedir@/data',
+	    sasl_mech_list => 'PLAIN LOGIN DIGEST-MD5',
+	    allowplaintext => 'yes',
+	    sasl_pwcheck_method => 'alwaystrue',
+	)
 	unless defined $default;
     return $default;
 }
@@ -63,18 +73,61 @@ sub get
     return undef;
 }
 
+sub set_variables
+{
+    my ($self, %nv) = @_;
+    while (my ($n, $v) = each %nv)
+    {
+	$self->{variables}->{$n} = $v;
+    }
+}
+
+sub _get_variable
+{
+    my ($self, $n) = @_;
+    $n =~ s/@//g;
+    while (defined $self)
+    {
+	my $v = $self->{variables}->{$n};
+	return $v if defined $v;
+	$self = $self->{parent};
+    }
+    die "Variable $n not defined";
+}
+
+sub _substitute
+{
+    my ($self, $s) = @_;
+
+    my $r = '';
+    while (defined $s)
+    {
+	my ($pre, $ref, $post) = ($s =~ m/(.*)(@[a-z]+@)(.*)/);
+	if (defined $ref)
+	{
+	    $r .= $pre . $self->_get_variable($ref);
+	    $s = $post;
+	}
+	else
+	{
+	    $r .= $s;
+	    last;
+	}
+    }
+    return $r;
+}
+
 sub _flatten
 {
     my ($self) = @_;
     my %nv;
-    while (defined $self)
+    for (my $conf = $self ; defined $conf ; $conf = $conf->{parent})
     {
-	while (my ($n, $v) = each %{$self->{params}})
+	while (my ($n, $v) = each %{$conf->{params}})
 	{
-	    $nv{$n} = $v
+	    $nv{$n} = $self->_substitute($v)
 		unless defined $nv{$n};
 	}
-	$self = $self->{parent};
     }
     return \%nv;
 }
