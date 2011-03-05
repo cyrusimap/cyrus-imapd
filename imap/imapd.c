@@ -9958,6 +9958,8 @@ static void specialuse_flags(struct mboxlist_entry *mbentry, const char *sep,
     char inboxname[MAX_MAILBOX_PATH+1];
     int inboxlen;
 
+    if (!mbentry) return;
+
     (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, "INBOX",
 					   imapd_userid, inboxname);
     inboxlen = strlen(inboxname);
@@ -10113,6 +10115,7 @@ static void list_response(char *name, int attributes,
     }
 
     if (listargs->sel & LIST_SEL_SPECIALUSE) {
+	if (!mbentry) goto done;
 	/* check that this IS a specialuse folder */
 	if (!mbentry->specialuse) goto done;
 	/* and owned by the user as well */
