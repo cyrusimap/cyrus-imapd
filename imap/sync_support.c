@@ -1543,11 +1543,12 @@ int sync_append_copyfile(struct mailbox *mailbox,
 	return r;
     }
 
+ just_write:
     /* repair broken internaldate if requried */
     if (!record->internaldate)
 	record->internaldate = internaldate;
 
- just_write:
     record->silent = 1;
     return mailbox_append_index_record(mailbox, record);
 }
+
