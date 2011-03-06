@@ -273,20 +273,22 @@ static int mark_missing (struct dlist *kin,
     if (!kl) return 0;
 
     if (strcmp(kl->name, "MISSING")) {
-	syslog(LOG_ERR, "Illegal response to RESERVE: %s", kl->name);
+	syslog(LOG_ERR, "SYNCERROR: Illegal response to RESERVE: %s",
+	       kl->name);
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
     }
 
     /* unmark each missing item */
     for (ki = kl->head; ki; ki = ki->next) {
 	if (!message_guid_decode(&tmp_guid, ki->sval)) {
-	    syslog(LOG_ERR, "RESERVE: failed to parse GUID %s", ki->sval);
+	    syslog(LOG_ERR, "SYNCERROR: reserve: failed to parse GUID %s",
+		   ki->sval);
 	    return IMAP_PROTOCOL_BAD_PARAMETERS;
         }
 
 	msgid = sync_msgid_lookup(part_list, &tmp_guid);
 	if (!msgid) {
-	    syslog(LOG_ERR, "RESERVE: Got unexpected GUID %s", ki->sval);
+	    syslog(LOG_ERR, "SYNCERROR: reserve: Got unexpected GUID %s", ki->sval);
 	    return IMAP_PROTOCOL_BAD_PARAMETERS;
 	}
 
@@ -471,7 +473,8 @@ static int response_parse(const char *cmd,
 
  parse_err:
     dlist_free(&kin);
-    syslog(LOG_ERR, "%s: Invalid response %s", cmd, dlist_lastkey());
+    syslog(LOG_ERR, "SYNCERROR: %s: Invalid response %s",
+	   cmd, dlist_lastkey());
     return IMAP_PROTOCOL_BAD_PARAMETERS;
 }
 
@@ -892,15 +895,19 @@ static const char *make_flags(struct mailbox *mailbox, struct index_record *reco
 static void log_record(const char *name, struct mailbox *mailbox,
 		       struct index_record *record)
 {
-    syslog(LOG_ERR, "%s uid:%u modseq:" MODSEQ_FMT " last_updated:%lu internaldate:%lu flags:(%s)", name,
-	   record->uid, record->modseq, record->last_updated, record->internaldate, make_flags(mailbox, record));
+    syslog(LOG_NOTICE, "SYNCNOTICE: %s uid:%u modseq:" MODSEQ_FMT " "
+	  "last_updated:%lu internaldate:%lu flags:(%s)",
+	   name, record->uid, record->modseq,
+	   record->last_updated, record->internaldate,
+	   make_flags(mailbox, record));
 }
 
 static void log_mismatch(const char *reason, struct mailbox *mailbox,
 			 struct index_record *mp,
 			 struct index_record *rp)
 {
-    syslog(LOG_ERR, "RECORD MISMATCH WITH REPLICA: %s", reason);
+    syslog(LOG_NOTICE, "SYNCNOTICE: record mismatch with replica: %s %s",
+	   mailbox->name, reason);
     log_record("master", mailbox, mp);
     log_record("replica", mailbox, rp);
 }
@@ -950,15 +957,16 @@ static int compare_one_record(struct mailbox *mailbox,
 	     * the modseq to force the change to stick */
 	}
 	else if (rp->system_flags & FLAG_EXPUNGED) {
-	    syslog(LOG_ERR, "EXPUNGED ON REPLICA, expunging locally %s %u",
-		   mailbox->name, mp->uid);
+	    /* mark expunged - rewrite will cause both sides to agree
+	     * again */
 	    mp->system_flags |= FLAG_EXPUNGED;
 	}
 
 	/* general case */
 	else {
 	    /* is the replica "newer"? */
-	    if (rp->modseq > mp->modseq && rp->last_updated >= mp->last_updated) {
+	    if (rp->modseq > mp->modseq &&
+		rp->last_updated >= mp->last_updated) {
 		mp->system_flags = rp->system_flags;
 		for (i = 0; i < MAX_USER_FLAGS/32; i++) 
 		    mp->user_flags[i] = rp->user_flags[i];
@@ -1055,7 +1063,8 @@ static int mailbox_full_update(const char *mboxname)
     /* if local UIDVALIDITY is lower, copy from remote, otherwise
      * remote will copy ours when we sync */
     if (mailbox->i.uidvalidity < uidvalidity) {
-	syslog(LOG_ERR, "%s uidvalidity higher on replica, updating %u => %u",
+	syslog(LOG_NOTICE, "SYNCNOTICE: uidvalidity higher on replica %s"
+	       ", updating %u => %u",
 	       mailbox->name, mailbox->i.uidvalidity, uidvalidity);
 	mailbox_index_dirty(mailbox);
 	mailbox->i.uidvalidity = uidvalidity;
@@ -1063,7 +1072,11 @@ static int mailbox_full_update(const char *mboxname)
 
     if (mailbox->i.highestmodseq < highestmodseq) {
 	mailbox_modseq_dirty(mailbox);
-	/* highestmodseq on replica is dirty - we must go to at least one higher! */
+	/* highestmodseq on replica is dirty - we must go to at least 
+	 * one higher! */
+	syslog(LOG_NOTICE, "SYNCNOTICE: highestmodseq higher on replica %s"
+	       ", updating " MODSEQ_FMT " => " MODSEQ_FMT,
+	       mailbox->name, mailbox->i.highestmodseq, highestmodseq+1);
 	mailbox->i.highestmodseq = highestmodseq+1;
     }
 
@@ -1126,9 +1139,10 @@ static int mailbox_full_update(const char *mboxname)
 		r = renumber_one_record(&mrecord, kaction);
 		if (r) goto done;
 	    }
-	    if (mrecord.modseq <= highestmodseq) {
+	    else if (mrecord.modseq <= highestmodseq) {
 		/* bump our modseq so we sync */
-		syslog(LOG_ERR, "BUMPING MODSEQ %s %u", mailbox->name, mrecord.uid);
+		syslog(LOG_NOTICE, "SYNCNOTICE: bumping modseq %s %u",
+		       mailbox->name, mrecord.uid);
 		mailbox_rewrite_index_record(mailbox, &mrecord);
 	    }
 	    recno++;
@@ -1139,7 +1153,8 @@ static int mailbox_full_update(const char *mboxname)
 	    r = parse_upload(ki, mailbox, &rrecord);
 	    if (r) goto done;
 
-	    syslog(LOG_ERR, "ONLY ON THE REPLICA %s %u", mailbox->name, rrecord.uid);
+	    syslog(LOG_NOTICE, "SYNCNOTICE: only on replica %s %u",
+		   mailbox->name, rrecord.uid);
 
 	    /* going to need this one */
 	    r = copyback_one_record(mailbox, &rrecord, kaction);
