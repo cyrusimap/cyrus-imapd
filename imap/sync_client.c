@@ -921,31 +921,22 @@ static int compare_one_record(struct mailbox *mailbox,
     int i;
     int r;
 
-    /* if the GUIDs don't match, then treat as two 
-     * un-matched records :) */
-    if (!message_guid_equal(&mp->guid, &rp->guid)) {
-	syslog(LOG_ERR, "GUID MISMATCH, renumbering %s %u", mailbox->name, mp->uid);
-	if (!(rp->system_flags & FLAG_EXPUNGED))
-	    dlist_num(kaction, "COPYBACK", rp->uid);
-    	if (!(mp->system_flags & FLAG_EXPUNGED))
-	    dlist_num(kaction, "RENUMBER", mp->uid);
-	return 0;
-    }
-
-    /* UIDs match, GUIDs match: look for differences in 
-     * everything else that's part of sync_crc! */
-
+    /* are there any differences? */
     if (mp->modseq != rp->modseq)
 	diff = 1;
-    if (mp->last_updated != rp->last_updated)
+    else if (mp->last_updated != rp->last_updated)
 	diff = 1;
-    if (mp->internaldate != rp->internaldate)
+    else if (mp->internaldate != rp->internaldate)
 	diff = 1;
-    if (mp->system_flags != rp->system_flags)
+    else if (mp->system_flags != rp->system_flags)
 	diff = 1;
-    for (i = 0; i < MAX_USER_FLAGS/32; i++) {
-	if (mp->user_flags[i] != rp->user_flags[i])
-	    diff = 1;
+    else if (!message_guid_equal(&mp->guid, &rp->guid))
+	diff = 1;
+    else {
+	for (i = 0; i < MAX_USER_FLAGS/32; i++) {
+	    if (mp->user_flags[i] != rp->user_flags[i])
+		diff = 1;
+	}
     }
 
     /* if differences we'll have to rewrite to bump the modseq
@@ -964,14 +955,26 @@ static int compare_one_record(struct mailbox *mailbox,
 
 	/* general case */
 	else {
+	    if (!message_guid_equal(&mp->guid, &rp->guid)) {
+		char *mguid = xstrdup(message_guid_encode(&mp->guid));
+		char *rguid = xstrdup(message_guid_encode(&rp->guid));
+		syslog(LOG_ERR, "SYNCERROR: guid mismatch %s %u (%s %s)",
+		       mailbox->name, mp->uid, rguid, mguid);
+		free(rguid);
+		free(mguid);
+		/* we will need to renumber both ends to get in sync */
+		dlist_num(kaction, "COPYBACK", rp->uid);
+		dlist_num(kaction, "RENUMBER", mp->uid);
+		return 0;
+	    }
+
 	    /* is the replica "newer"? */
 	    if (rp->modseq > mp->modseq &&
 		rp->last_updated >= mp->last_updated) {
+		/* then copy all the flag data over from the replica */
 		mp->system_flags = rp->system_flags;
 		for (i = 0; i < MAX_USER_FLAGS/32; i++) 
 		    mp->user_flags[i] = rp->user_flags[i];
-		mp->internaldate = rp->internaldate;
-		/* no point copying modseq, it will be updated regardless */
 
 		log_mismatch("more recent on replica", mailbox, mp, rp);
 	    }
@@ -1108,8 +1111,9 @@ static int mailbox_full_update(const char *mboxname)
 	    else if (rrecord.uid > mrecord.uid) {
 		/* record only exists on the master */
 		if (!(mrecord.system_flags & FLAG_EXPUNGED)) {
-		    syslog(LOG_ERR, "ONLY EXISTS ON MASTER, RENUMBER %s %u",
-			   mailbox->name, mrecord.uid);
+		    syslog(LOG_ERR, "SYNCERROR: only exists on master %s %u (%s)",
+			   mailbox->name, mrecord.uid,
+			   message_guid_encode(&mrecord.guid));
 		    r = renumber_one_record(&mrecord, kaction);
 		    if (r) goto done;
 		}
@@ -1119,8 +1123,9 @@ static int mailbox_full_update(const char *mboxname)
 	    else {
 		/* record only exists on the replica */
 		if (!(rrecord.system_flags & FLAG_EXPUNGED)) {
-		    syslog(LOG_ERR, "ONLY EXISTS ON REPLICA, COPYBACK %s %u",
-			   mailbox->name, rrecord.uid);
+		    syslog(LOG_ERR, "SYNCERROR: only exists on replica %s %u (%s)",
+			   mailbox->name, rrecord.uid,
+			   message_guid_encode(&rrecord.guid));
 		    r = copyback_one_record(mailbox, &rrecord, kaction);
 		    if (r) goto done;
 		}
