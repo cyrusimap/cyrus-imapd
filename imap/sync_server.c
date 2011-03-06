@@ -1297,13 +1297,13 @@ static int do_mailbox(struct dlist *kin,
 	    /* GUID mismatch on a non-expunged record is an error straight away */
 	    if (!(mrecord.system_flags & FLAG_EXPUNGED)) {
 		if (!message_guid_equal(&mrecord.guid, &rrecord.guid)) {
-		    syslog(LOG_ERR, "%s: GUID MISMATCH FOR %u",
+		    syslog(LOG_ERR, "SYNCERROR: guid mismatch %s %u",
 			   mailbox->name, mrecord.uid);
 		    r = IMAP_MAILBOX_CRC;
 		    goto done;
 		}
 		if (rrecord.system_flags & FLAG_EXPUNGED) {
-		    syslog(LOG_ERR, "%s: EXPUNGED ON REPLICA, NOT MASTER %u",
+		    syslog(LOG_ERR, "SYNCERROR: expunged on replica %s %u",
 			   mailbox->name, mrecord.uid);
 		    r = IMAP_MAILBOX_CRC;
 		    goto done;
@@ -1311,7 +1311,7 @@ static int do_mailbox(struct dlist *kin,
 	    }
 	    /* higher modseq on the replica is an error */
 	    if (rrecord.modseq > mrecord.modseq) {
-		syslog(LOG_ERR, "%s: HIGHER MODSEQ ON REPLICA %u",
+		syslog(LOG_ERR, "SYNCERROR: higher modseq on replica %s %u",
 		       mailbox->name, mrecord.uid);
 		r = IMAP_MAILBOX_CRC;
 		goto done;
@@ -1326,7 +1326,7 @@ static int do_mailbox(struct dlist *kin,
 	    rrecord.silent = 1;
 	    r = mailbox_rewrite_index_record(mailbox, &rrecord);
 	    if (r) {
-		syslog(LOG_ERR, "Failed to rewrite record %s %d",
+		syslog(LOG_ERR, "IOERROR: failed to rewrite record %s %d",
 		       mboxname, recno);
 		goto done;
 	    }
@@ -1357,6 +1357,7 @@ static int do_mailbox(struct dlist *kin,
  done:
     if (!r) {
 	mailbox_index_dirty(mailbox);
+	assert(mailbox->i.last_uid <= last_uid);
 	mailbox->i.last_uid = last_uid;
 	mailbox->i.highestmodseq = highestmodseq;
 	mailbox->i.recentuid = recentuid;
@@ -2014,8 +2015,7 @@ static int do_expunge(struct dlist *kin)
 	if (!ui) break; /* no point continuing */
 	if (record.uid == ui->nval) {
 	    record.system_flags |= FLAG_EXPUNGED;
-	    /* don't get the modseqs out of sync too! */
-	    record.silent = 1;
+	    record.silent = 1; /* so the next sync will succeed */
 	    r = mailbox_rewrite_index_record(mailbox, &record);
 	    if (r) goto done;
 	}

@@ -2145,6 +2145,7 @@ int mailbox_append_index_record(struct mailbox *mailbox,
     int r;
     int n;
     struct utimbuf settime;
+    uint32_t recno;
 
     assert(mailbox_index_islocked(mailbox, 1));
 
@@ -2190,9 +2191,11 @@ int mailbox_append_index_record(struct mailbox *mailbox,
     mailbox_index_update_counts(mailbox, record, 1);
 
     mailbox_index_record_to_buf(record, buf);
+    
+    recno = mailbox->i.num_records + 1;
 
     offset = mailbox->i.start_offset +
-	     (mailbox->i.num_records * mailbox->i.record_size);
+	     ((recno - 1) * mailbox->i.record_size);
 
     n = lseek(mailbox->index_fd, offset, SEEK_SET);
     if (n == -1) {
@@ -2209,7 +2212,7 @@ int mailbox_append_index_record(struct mailbox *mailbox,
     }
 
     mailbox->i.last_uid = record->uid;
-    mailbox->i.num_records++;
+    mailbox->i.num_records = recno;
     mailbox->index_size += INDEX_RECORD_SIZE;
 
     /* extend the mmaped space for the index file */
