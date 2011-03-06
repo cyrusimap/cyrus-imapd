@@ -1406,11 +1406,22 @@ int sync_mailbox(struct mailbox *mailbox,
 	struct dlist *rl = dlist_list(kl, "RECORD");
 	uint32_t recno;
 	int send_file;
+	uint32_t prevuid = 0;
 
 	for (recno = 1; recno <= mailbox->i.num_records; recno++) {
-	    /* we can't send bogus records, just skip them! */
-	    if (mailbox_read_index_record(mailbox, recno, &record))
-		continue;
+	    /* we can't send bogus records */
+	    if (mailbox_read_index_record(mailbox, recno, &record)) {
+		syslog(LOG_ERR, "SYNCERROR: corrupt mailbox %s %u, IOERROR",
+		       mailbox->name, recno);
+		return IMAP_IOERROR;
+	    }
+
+	    if  (record.uid <= prevuid) {
+		syslog(LOG_ERR, "SYNCERROR: corrupt mailbox %s %u, ordering",
+		       mailbox->name, recno);
+		return IMAP_IOERROR;
+	    }
+	    prevuid = record.uid;
 
 	    /* start off thinking we're sending the file too */
 	    send_file = 1;
