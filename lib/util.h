@@ -86,6 +86,13 @@ extern const unsigned char convert_to_uppercase[256];
 #define TOUPPER(c) (convert_to_uppercase[(unsigned char)(c)])
 #define TOLOWER(c) (convert_to_lowercase[(unsigned char)(c)])
 
+#ifndef MAX
+#define MAX(x, y) ((x) > (y) ? (x) : (y))
+#endif
+#ifndef MIN
+#define MIN(x, y) ((x) < (y) ? (x) : (y))
+#endif
+
 typedef struct keyvalue {
     char *key, *value;
 } keyvalue;

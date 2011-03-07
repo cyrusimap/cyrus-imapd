@@ -136,7 +136,6 @@ unsigned int seq_lastnum(const char *list, const char **numstart)
 
 
 
-#define MAX(x, y) (x > y ? x : y)
 
 /* Comparator function that sorts ranges by the low value,
    and coalesces intersecting ranges to have the same high value */
