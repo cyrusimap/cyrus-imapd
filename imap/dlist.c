@@ -302,7 +302,12 @@ struct dlist *dlist_buf(struct dlist *dl, const char *name,
 {
     struct dlist *i = dlist_child(dl, name);
     i->type = DL_BUF;
-    i->sval = xstrndup(val, len);
+    /* WARNING - DO NOT replace this with xstrndup - the
+     * data may be binary, and xstrndup does not copy
+     * binary data correctly */
+    i->sval = xmalloc(len+1);
+    memcpy(i->sval, val, len);
+    i->sval[len] = '\0'; /* make it string safe too */
     i->nval = len;
     return i;
 }
