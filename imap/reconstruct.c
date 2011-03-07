@@ -158,7 +158,7 @@ int main(int argc, char **argv)
     assert(INDEX_HEADER_SIZE == (OFFSET_HEADER_CRC+4));
     assert(INDEX_RECORD_SIZE == (OFFSET_RECORD_CRC+4));
 
-    while ((opt = getopt(argc, argv, "C:kp:rmfsxgGqRUoO")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:kp:rmfsxgGqRUoOn")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
