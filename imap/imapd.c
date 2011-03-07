@@ -10245,14 +10245,14 @@ static void list_data(struct listargs *listargs)
 	    }
 
 	    for (pattern = listargs->pat; pattern; pattern = pattern->next) {
-		rock.trailing_percent =
-		    pattern->s[strlen(pattern->s) - 1] == '%';
+		char lastchar = pattern->s[strlen(pattern->s) - 1];
+		rock.trailing_percent = (lastchar == '%');
 		findall(&imapd_namespace, pattern->s, imapd_userisadmin,
 			imapd_userid, imapd_authstate, list_cb, &rock);
 
 		/* handle LIST "" user - and other such "only has children" cases */
-		if (!rock.last_name && !rock.trailing_percent) 
-		    rock.last_name = xstrdup(*pattern);
+		if (!rock.last_name && lastchar != '%' && lastchar != '*')
+		    rock.last_name = xstrdup(pattern->s);
 
 		list_response(rock.last_name, rock.last_attributes, rock.listargs);
 		free(rock.last_name);
