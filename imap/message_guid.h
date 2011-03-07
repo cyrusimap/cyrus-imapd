@@ -70,6 +70,8 @@ void message_guid_copy(struct message_guid *dst, struct message_guid *src);
 /* Compare a pair of GUIDs: Returns 1 => match. */
 int message_guid_equal(struct message_guid *guid1,
 			 struct message_guid *guid2);
+int message_guid_cmp(struct message_guid *guid1,
+		     struct message_guid *guid2);
 
 /* Convert GUID into hash value for hash table lookup
  * Returns: positive int in range [0, hash_size-1]
