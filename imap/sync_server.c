@@ -1338,6 +1338,13 @@ static int do_mailbox(struct dlist *kin)
 	return IMAP_SYNC_CHECKSUM;
     }
 
+    if (last_uid < mailbox->i.last_uid) {
+	syslog(LOG_ERR, "higher last_uid on replica %s - %u < %u",
+	       mboxname, last_uid, mailbox->i.last_uid);
+	mailbox_close(&mailbox);
+	return IMAP_SYNC_CHECKSUM;
+    }
+
     if (strcmp(mailbox->acl, acl)) {
 	mailbox_set_acl(mailbox, acl, 0);
 	r = mboxlist_sync_setacls(mboxname, acl);
