@@ -247,6 +247,34 @@ int getint32(struct protstream *pin, int32_t *num)
     return c;
 }
 
+/* Like getint32() but explicitly signed, i.e. negative numbers
+ * are accepted */
+int getsint32(struct protstream *pin, int32_t *num)
+{
+    int c;
+    int sgn = 1;
+
+    c = prot_getc(pin);
+    if (c == EOF)
+	return EOF;
+
+    if (c == '-')
+	sgn = -1;
+    else if (c == '+')
+	sgn = 1;
+    else
+	prot_ungetc(c, pin);
+
+    c = getint32(pin, num);
+    if (c == EOF)
+	return EOF;
+    /* this is slightly buggy: the number INT_MIN = -2147483648
+     * is a valid signed 32b int but is not accepted */
+    if (sgn < 0)
+	*num = - (*num);
+    return c;
+}
+
 /* can't flag with -1 if there is no number here, so return EOF */
 int getuint32(struct protstream *pin, uint32_t *num)
 {
