@@ -120,6 +120,12 @@ int message_guid_equal(struct message_guid *g1,
     return (memcmp(g1->value, g2->value, MESSAGE_GUID_SIZE) == 0);
 }
 
+int message_guid_cmp(struct message_guid *g1,
+		       struct message_guid *g2)
+{
+    return memcmp(g1->value, g2->value, MESSAGE_GUID_SIZE);
+}
+
 /* message_guid_hash() ***************************************************
  *
  * Convert GUID into hash value for hash table lookup
