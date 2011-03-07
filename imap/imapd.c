@@ -10122,16 +10122,23 @@ static void list_response(char *name, int attributes,
 	if (!mboxname_userownsmailbox(imapd_userid, mbentry->name))
 	    goto done;
     }
-
-    switch (listargs->cmd) {
-    case LIST_CMD_LSUB:
-	if (attributes & (MBOX_ATTRIBUTE_NONEXISTENT | MBOX_ATTRIBUTE_NOSELECT)) {
+    if (attributes & (MBOX_ATTRIBUTE_NONEXISTENT | MBOX_ATTRIBUTE_NOSELECT)) {
+	if (listargs->cmd == LIST_CMD_LSUB) {
 	    /* if mupdate isn't configured we can drop out now, otherwise
 	     * we might be a backend and need to report folders that don't
 	     * exist on this backend - this is awful and complex and brittle
 	     * and should be changed, but we're stuck with it for now */
 	    if (!config_mupdate_server) goto done;
 	}
+	else {
+	    /* only mention folders with children */
+	    if (!(attributes & MBOX_ATTRIBUTE_HASCHILDREN))
+		goto done;
+	}
+    }
+
+    switch (listargs->cmd) {
+    case LIST_CMD_LSUB:
 	cmd = "LSUB";
 	break;
     case LIST_CMD_XLIST:
