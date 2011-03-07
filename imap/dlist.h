@@ -81,6 +81,8 @@ struct dlist {
 
 const char *dlist_reserve_path(const char *part, struct message_guid *guid);
 
+uint32_t dlist_nval(struct dlist *dl);
+
 struct dlist *dlist_atom(struct dlist *dl, const char *name, const char *val);
 struct dlist *dlist_flag(struct dlist *dl, const char *name, const char *val);
 struct dlist *dlist_num(struct dlist *dl, const char *name, unsigned long val);

@@ -2020,9 +2020,9 @@ static int do_expunge(struct dlist *kin)
 	r = mailbox_read_index_record(mailbox, recno, &record);
 	if (r) goto done;
 	if (record.system_flags & FLAG_EXPUNGED) continue;
-	while (ui && ui->nval < record.uid) ui = ui->next;
+	while (ui && dlist_nval(ui) < record.uid) ui = ui->next;
 	if (!ui) break; /* no point continuing */
-	if (record.uid == ui->nval) {
+	if (record.uid == dlist_nval(ui)) {
 	    record.system_flags |= FLAG_EXPUNGED;
 	    record.silent = 1; /* so the next sync will succeed */
 	    r = mailbox_rewrite_index_record(mailbox, &record);

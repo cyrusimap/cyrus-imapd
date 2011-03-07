@@ -982,7 +982,7 @@ static int compare_one_record(struct mailbox *mailbox,
 		/* we will need to renumber both ends to get in sync */
 
 		/* ORDERING - always lower GUID first */
-		if (message_guid_cmp(&mp->guid, &rp->guid) < 0) {
+		if (message_guid_cmp(&mp->guid, &rp->guid) > 0) {
 		    r = copyback_one_record(mailbox, rp, kaction);
 		    if (!r) r = renumber_one_record(mp, kaction);
 		}
@@ -1235,15 +1235,15 @@ static int mailbox_full_update(const char *mboxname)
     kuids = dlist_list(kexpunge, "UID");
     for (ka = kaction->head; ka; ka = ka->next) {
 	if (!strcmp(ka->name, "EXPUNGE")) {
-	    dlist_num(kuids, "UID", ka->nval);
+	    dlist_num(kuids, "UID", dlist_nval(ka));
 	}
 	else if (!strcmp(ka->name, "COPYBACK")) {
-	    r = copy_remote(mailbox, ka->nval, kr);
+	    r = copy_remote(mailbox, dlist_nval(ka), kr);
 	    if (r) goto cleanup;
-	    dlist_num(kuids, "UID", ka->nval);
+	    dlist_num(kuids, "UID", dlist_nval(ka));
 	}
 	else if (!strcmp(ka->name, "RENUMBER")) {
-	    r = copy_local(mailbox, ka->nval);
+	    r = copy_local(mailbox, dlist_nval(ka));
 	    if (r) goto cleanup;
 	}
     }

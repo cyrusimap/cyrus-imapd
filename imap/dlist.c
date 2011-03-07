@@ -545,16 +545,21 @@ int dlist_getatom(struct dlist *dl, const char *name, const char **val)
     return 1;
 }
 
+static int dlist_bufval(struct dlist *dl, const char **val, size_t *len)
+{
+    *val = dl->sval;
+    if (dl->type == DL_BUF)
+	*len = (size_t)dl->nval;
+    else
+	*len = strlen(*val);
+    return 1;
+}
+
 int dlist_getbuf(struct dlist *dl, const char *name, const char **val, size_t *len)
 {
     struct dlist *i = dlist_getchild(dl, name);
     if (!i) return 0;
-    *val = i->sval;
-    if (i->type == DL_BUF)
-	*len = (size_t)i->nval;
-    else
-	*len = strlen(*val);
-    return 1;
+    return dlist_bufval(i, val, len);
 }
 
 /* ensure value is exactly one number */
@@ -574,6 +579,28 @@ static int _getn(struct dlist *dl, const char *name, bit64 *val)
 	return 0;
 
     return 1;
+}
+
+/* XXX - this stuff is all shitty, rationalise later */
+uint32_t dlist_nval(struct dlist *dl)
+{
+    const char *str;
+    size_t strlen;
+    const char *end;
+    bit64 v;
+
+    switch(dl->type) {
+    case DL_ATOM:
+    case DL_BUF:
+	assert(dlist_bufval(dl, &str, &strlen));
+	assert(!parsenum(str, &end, strlen, &v));
+	assert(end - str == (int)strlen);
+	return (uint32_t)v;
+    case DL_NUM:
+	return (uint32_t)dl->nval;
+    default:
+	fatal("INVALID TYPE FOR NVAL", EC_SOFTWARE);
+    }
 }
 
 
