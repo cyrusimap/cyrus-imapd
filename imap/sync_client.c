@@ -747,7 +747,7 @@ static int fetch_file(struct mailbox *mailbox, unsigned long uid,
     const char *cmd = "FETCH";
     struct dlist *kin = NULL;
     struct dlist *kl;
-    int r;
+    int r = 0;
 
     kl = dlist_new(cmd);
     dlist_atom(kl, "MBOXNAME", mailbox->name);
@@ -767,7 +767,7 @@ static int fetch_file(struct mailbox *mailbox, unsigned long uid,
     }
 
     if (!message_guid_equal(&kl->gval, &rp->guid))
-	r = IMAP_MAILBOX_CRC;
+	r = IMAP_IOERROR;
 
 done:
     dlist_free(&kin);
@@ -1340,7 +1340,7 @@ static int update_mailbox(struct sync_folder *local,
 	r = mailbox_full_update(local->name);
 	if (!r) r = update_mailbox_once(local, remote, reserve_guids, 1);
     }
-    else if (r == IMAP_MAILBOX_CRC) {
+    else if (r == IMAP_SYNC_CHECKSUM) {
 	syslog(LOG_ERR, "CRC failure on sync for %s, trying full update",
 	       local->name);
 	r = mailbox_full_update(local->name);

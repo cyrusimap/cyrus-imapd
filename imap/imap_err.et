@@ -73,7 +73,10 @@ ec IMAP_NAMESPACE_BADPREFIX,
 ec IMAP_MAILBOX_BADFORMAT,
    "Mailbox has an invalid format"
 
-ec IMAP_MAILBOX_CRC,
+ec IMAP_SYNC_CHECKSUM,
+   "Replication inconsitency detected"
+
+ec IMAP_MAILBOX_CHECKSUM,
    "Mailbox format corruption detected"
 
 ec IMAP_MAILBOX_NOTSUPPORTED,

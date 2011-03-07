@@ -1503,9 +1503,9 @@ int sync_parse_response(const char *cmd, struct protstream *in,
         else if (!strncmp(errmsg.s, "IMAP_MAILBOX_NONEXISTENT ",
                           strlen("IMAP_MAILBOX_NONEXISTENT ")))
             return IMAP_MAILBOX_NONEXISTENT;
-        else if (!strncmp(errmsg.s, "IMAP_MAILBOX_CRC ",
-                          strlen("IMAP_MAILBOX_CRC ")))
-            return IMAP_MAILBOX_CRC;
+        else if (!strncmp(errmsg.s, "IMAP_SYNC_CHECKSUM ",
+                          strlen("IMAP_SYNC_CHECKSUM ")))
+            return IMAP_SYNC_CHECKSUM;
         else if (!strncmp(errmsg.s, "IMAP_PROTOCOL_ERROR ",
                           strlen("IMAP_PROTOCOL_ERROR ")))
             return IMAP_PROTOCOL_ERROR;
@@ -1555,7 +1555,7 @@ int sync_append_copyfile(struct mailbox *mailbox,
 
     if (!message_guid_equal(&tmp_guid, &record->guid)) {
 	syslog(LOG_ERR, "IOERROR: guid mismatch on parse %s", fname);
-	return IMAP_MAILBOX_CRC;
+	return IMAP_IOERROR;
     }
 
     destname = mailbox_message_fname(mailbox, record->uid);

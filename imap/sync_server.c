@@ -1007,6 +1007,8 @@ void reserve_folder(const char *part, const char *mboxname,
     for (recno = 1; 
 	 part_list->marked < part_list->count && recno <= mailbox->i.num_records;
 	 recno++) {
+	/* ok to skip errors here - just means they'll be uploaded
+	 * rather than reserved */
 	if (mailbox_read_index_record(mailbox, recno, &record))
 	    continue;
 
@@ -1161,8 +1163,8 @@ static int mailbox_compare_update(struct mailbox *mailbox,
     for (ki = kr->head; ki; ki = ki->next) {
 	r = parse_upload(ki, mailbox, &mrecord);
 	if (r) {
-	    syslog(LOG_ERR, "Failed to parse uploaded record"); 
-	    return r;
+	    syslog(LOG_ERR, "SYNCERROR: failed to parse uploaded record"); 
+	    return IMAP_PROTOCOL_ERROR;
 	}
 
 	while (rrecord.uid < mrecord.uid) {
@@ -1175,7 +1177,7 @@ static int mailbox_compare_update(struct mailbox *mailbox,
 	    /* read another record */
 	    r = mailbox_read_index_record(mailbox, recno, &rrecord);
 	    if (r) {
-		syslog(LOG_ERR, "Failed to read record %s %d",
+		syslog(LOG_ERR, "IOERROR: failed to read record %s %u",
 		       mailbox->name, recno);
 		return r;
 	    }
@@ -1189,19 +1191,19 @@ static int mailbox_compare_update(struct mailbox *mailbox,
 		if (!message_guid_equal(&mrecord.guid, &rrecord.guid)) {
 		    syslog(LOG_ERR, "SYNCERROR: guid mismatch %s %u",
 			   mailbox->name, mrecord.uid);
-		    return IMAP_MAILBOX_CRC;
+		    return IMAP_SYNC_CHECKSUM;
 		}
 		if (rrecord.system_flags & FLAG_EXPUNGED) {
 		    syslog(LOG_ERR, "SYNCERROR: expunged on replica %s %u",
 			   mailbox->name, mrecord.uid);
-		    return IMAP_MAILBOX_CRC;
+		    return IMAP_SYNC_CHECKSUM;
 		}
 	    }
 	    /* higher modseq on the replica is an error */
 	    if (rrecord.modseq > mrecord.modseq) {
 		syslog(LOG_ERR, "SYNCERROR: higher modseq on replica %s %u",
 		       mailbox->name, mrecord.uid);
-		return IMAP_MAILBOX_CRC;
+		return IMAP_SYNC_CHECKSUM;
 	    }
 
 	    /* skip out on the first pass */
@@ -1217,7 +1219,7 @@ static int mailbox_compare_update(struct mailbox *mailbox,
 	    rrecord.silent = 1;
 	    r = mailbox_rewrite_index_record(mailbox, &rrecord);
 	    if (r) {
-		syslog(LOG_ERR, "IOERROR: failed to rewrite record %s %d",
+		syslog(LOG_ERR, "IOERROR: failed to rewrite record %s %u",
 		       mailbox->name, recno);
 		return r;
 	    }
@@ -1227,7 +1229,7 @@ static int mailbox_compare_update(struct mailbox *mailbox,
 	else if (mrecord.uid <= mailbox->i.last_uid) {
 	    /* Expunged, just skip it */
 	    if (!(mrecord.system_flags & FLAG_EXPUNGED))
-		return IMAP_MAILBOX_CRC;
+		return IMAP_SYNC_CHECKSUM;
 	}
 
 	/* after LAST_UID, it's an append, that's OK */
@@ -1333,7 +1335,7 @@ static int do_mailbox(struct dlist *kin)
 	       MODSEQ_FMT " < " MODSEQ_FMT,
 	       mboxname, highestmodseq, mailbox->i.highestmodseq);
 	mailbox_close(&mailbox);
-	return IMAP_MAILBOX_CRC;
+	return IMAP_SYNC_CHECKSUM;
     }
 
     if (strcmp(mailbox->acl, acl)) {
@@ -1395,7 +1397,7 @@ static int do_mailbox(struct dlist *kin)
     /* check return value */
     if (r) return r;
     if (newcrc != sync_crc)
-	return IMAP_MAILBOX_CRC;
+	return IMAP_SYNC_CHECKSUM;
     return 0;
 }
 
@@ -2068,8 +2070,8 @@ static void print_response(int r)
     case IMAP_MAILBOX_NONEXISTENT:
 	prot_printf(sync_out, "NO IMAP_MAILBOX_NONEXISTENT No Such Mailbox\r\n");
 	break;
-    case IMAP_MAILBOX_CRC:
-	prot_printf(sync_out, "NO IMAP_MAILBOX_CRC Checksum Failure\r\n");
+    case IMAP_SYNC_CHECKSUM:
+	prot_printf(sync_out, "NO IMAP_SYNC_CHECKSUM Checksum Failure\r\n");
 	break;
     case IMAP_PROTOCOL_ERROR:
 	prot_printf(sync_out, "NO IMAP_PROTOCOL_ERROR Protocol error\r\n");

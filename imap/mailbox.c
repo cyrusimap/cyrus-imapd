@@ -629,7 +629,7 @@ int mailbox_cacherecord(struct mailbox *mailbox,
     if (r) goto done;
     crc = crc32_buf(cache_buf(record));
     if (crc != record->cache_crc)
-	r = IMAP_MAILBOX_CRC;
+	r = IMAP_MAILBOX_CHECKSUM;
 
 done:
     if (r) 
@@ -654,7 +654,7 @@ int cache_append_record(int fd, struct index_record *record)
 	return 0;
 
     if (record->cache_crc != crc32_buf(cache_buf(record)))
-	return IMAP_MAILBOX_CRC;
+	return IMAP_MAILBOX_CHECKSUM;
 
     offset = lseek(fd, 0L, SEEK_END);
     n = retry_write(fd, cache_base(record), size);
@@ -1345,7 +1345,7 @@ int mailbox_buf_to_index_header(const char *buf, struct index_header *i)
 
     crc = crc32_map(buf, OFFSET_HEADER_CRC);
     if (crc != i->header_crc)
-	return IMAP_MAILBOX_CRC;
+	return IMAP_MAILBOX_CHECKSUM;
 
     return 0;
 }
@@ -1450,7 +1450,7 @@ int mailbox_buf_to_index_record(const char *buf,
     /* check CRC32 */
     crc = crc32_map(buf, OFFSET_RECORD_CRC);
     if (crc != record->record_crc)
-	return IMAP_MAILBOX_CRC;
+	return IMAP_MAILBOX_CHECKSUM;
 
     return 0;
 }
@@ -1586,7 +1586,7 @@ restart:
 	       mailbox->name, (unsigned int)mailbox->header_file_crc,
 	       (unsigned int)mailbox->i.header_file_crc);
 	mailbox_unlock_index(mailbox, NULL);
-	return IMAP_MAILBOX_CRC;
+	return IMAP_MAILBOX_CHECKSUM;
     }
 
     /* fix up 2.4.0 bug breakage */
