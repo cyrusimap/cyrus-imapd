@@ -748,6 +748,12 @@ static int fetch_file(struct mailbox *mailbox, unsigned long uid,
     struct dlist *kin = NULL;
     struct dlist *kl;
     int r = 0;
+    const char *fname = dlist_reserve_path(mailbox->part, &rp->guid);
+    struct stat sbuf;
+
+    /* already reserved? great */
+    if (stat(fname, &sbuf) == 0)
+	return 0;
 
     kl = dlist_new(cmd);
     dlist_atom(kl, "MBOXNAME", mailbox->name);
@@ -785,12 +791,10 @@ static int copy_remote(struct mailbox *mailbox, unsigned long uid,
 	r = parse_upload(ki, mailbox, &record);
 	if (r) return r;
 	if (record.uid == uid) {
-	    /* find the destination UID */
+	    /* choose the destination UID */
 	    record.uid = mailbox->i.last_uid + 1;
 
-	    /* upload the file */
-	    r = fetch_file(mailbox, uid, &record);
-	    if (r) return r;
+	    /* already fetched the file in the parse phase */
 
 	    /* append the file */
 	    r = sync_append_copyfile(mailbox, &record);
@@ -819,10 +823,16 @@ static int copyback_one_record(struct mailbox *mailbox,
 	 * (has been cleaned out locally) or an error.
 	 * In the error case we copy back, stale
 	 * we remove from the replica */
-	if (rp->modseq < mailbox->i.deletedmodseq)
-	    dlist_num(kaction, "EXPUNGE", rp->uid);
-	else
-	    dlist_num(kaction, "COPYBACK", rp->uid);
+	if (rp->modseq < mailbox->i.deletedmodseq) {
+	    if (kaction)
+		dlist_num(kaction, "EXPUNGE", rp->uid);
+	}
+	else {
+	    r = fetch_file(mailbox, rp->uid, rp);
+	    if (r) return r;
+	    if (kaction)
+		dlist_num(kaction, "COPYBACK", rp->uid);
+	}
     }
 
     /* otherwise we can pull it in with the same UID,
@@ -832,6 +842,8 @@ static int copyback_one_record(struct mailbox *mailbox,
 	/* grab the file */
 	r = fetch_file(mailbox, rp->uid, rp);
 	if (r) return r;
+	/* make sure we're actually making changes now */
+	if (!kaction) return 0;
 	/* append the file */
 	r = sync_append_copyfile(mailbox, rp);
 	if (r) return r;
@@ -847,7 +859,8 @@ static int renumber_one_record(struct index_record *mp,
     if (mp->system_flags & FLAG_EXPUNGED)
 	return 0;
 
-    dlist_num(kaction, "RENUMBER", mp->uid);
+    if (kaction)
+	dlist_num(kaction, "RENUMBER", mp->uid);
 
     return 0;
 }
@@ -967,9 +980,9 @@ static int compare_one_record(struct mailbox *mailbox,
 		free(rguid);
 		free(mguid);
 		/* we will need to renumber both ends to get in sync */
-		dlist_num(kaction, "COPYBACK", rp->uid);
-		dlist_num(kaction, "RENUMBER", mp->uid);
-		return 0;
+		r = copyback_one_record(mailbox, rp, kaction);
+		if (!r) r = renumber_one_record(mp, kaction);
+		return r;
 	    }
 
 	    /* is the replica "newer"? */
@@ -987,6 +1000,9 @@ static int compare_one_record(struct mailbox *mailbox,
 	    }
 	}
 
+	/* are we making changes yet? */
+	if (!kaction) return 0;
+
 	/* this will bump the modseq and force a resync either way :) */
 	r = mailbox_rewrite_index_record(mailbox, mp);
 	if (r) return r;
@@ -995,16 +1011,114 @@ static int compare_one_record(struct mailbox *mailbox,
     return 0;
 }
 
+
+static int mailbox_update_loop(struct mailbox *mailbox,
+			       struct dlist *ki,
+			       uint32_t last_uid,
+			       modseq_t highestmodseq,
+			       struct dlist *kaction)
+{
+    struct index_record mrecord;
+    struct index_record rrecord;
+    uint32_t recno = 1;
+    uint32_t old_num_records = mailbox->i.num_records;
+    int r;
+
+    /* while there are more records on either master OR replica,
+     * work out what to do with them */
+    while (ki || recno <= old_num_records) {
+	/* most common case - both a master AND a replica record exist */
+	if (ki && recno <= old_num_records) {
+	    r = mailbox_read_index_record(mailbox, recno, &mrecord);
+	    if (r) return r;
+	    r = parse_upload(ki, mailbox, &rrecord);
+	    if (r) return r;
+
+	    /* same UID - compare the records */
+	    if (rrecord.uid == mrecord.uid) {
+		r = compare_one_record(mailbox,
+				       &mrecord, &rrecord,
+				       kaction);
+		if (r) return r;
+		/* increment both */
+		recno++;
+		ki = ki->next;
+	    }
+	    else if (rrecord.uid > mrecord.uid) {
+		/* record only exists on the master */
+		if (!(mrecord.system_flags & FLAG_EXPUNGED)) {
+		    syslog(LOG_ERR, "SYNCERROR: only exists on master %s %u (%s)",
+			   mailbox->name, mrecord.uid,
+			   message_guid_encode(&mrecord.guid));
+		    r = renumber_one_record(&mrecord, kaction);
+		    if (r) return r;
+		}
+		/* only increment master */
+		recno++;
+	    }
+	    else {
+		/* record only exists on the replica */
+		if (!(rrecord.system_flags & FLAG_EXPUNGED)) {
+		    if (kaction)
+			syslog(LOG_ERR, "SYNCERROR: only exists on replica %s %u (%s)",
+			       mailbox->name, rrecord.uid,
+			       message_guid_encode(&rrecord.guid));
+		    r = copyback_one_record(mailbox, &rrecord, kaction);
+		    if (r) return r;
+		}
+		/* only increment replica */
+		ki = ki->next;
+	    }
+	}
+
+	/* no more replica records, but still master records */
+	else if (recno <= old_num_records) {
+	    r = mailbox_read_index_record(mailbox, recno, &mrecord);
+	    if (r) return r;
+	    /* if the replica has seen this UID, we need to renumber.
+	     * Otherwise it will replicate fine as-is */
+	    if (mrecord.uid <= last_uid) {
+		r = renumber_one_record(&mrecord, kaction);
+		if (r) return r;
+	    }
+	    else if (mrecord.modseq <= highestmodseq) {
+		if (kaction) {
+		    /* bump our modseq so we sync */
+		    syslog(LOG_NOTICE, "SYNCNOTICE: bumping modseq %s %u",
+			   mailbox->name, mrecord.uid);
+		    r = mailbox_rewrite_index_record(mailbox, &mrecord);
+		    if (r) return r;
+		}
+	    }
+	    recno++;
+	}
+
+	/* record only exists on the replica */
+	else {
+	    r = parse_upload(ki, mailbox, &rrecord);
+	    if (r) return r;
+
+	    if (kaction)
+		syslog(LOG_NOTICE, "SYNCNOTICE: only on replica %s %u",
+		       mailbox->name, rrecord.uid);
+
+	    /* going to need this one */
+	    r = copyback_one_record(mailbox, &rrecord, kaction);
+	    if (r) return r;
+
+	    ki = ki->next;
+	}
+    }
+
+    return 0;
+}
+
 static int mailbox_full_update(const char *mboxname)
 {
     const char *cmd = "FULLMAILBOX";
-    uint32_t recno;
-    unsigned old_num_records;
-    struct index_record mrecord, rrecord;
     struct mailbox *mailbox = NULL;
     int r;
     struct dlist *kin = NULL;
-    struct dlist *ki = NULL;
     struct dlist *kr = NULL;
     struct dlist *ka = NULL;
     struct dlist *kuids = NULL;
@@ -1065,8 +1179,6 @@ static int mailbox_full_update(const char *mboxname)
     r = mailbox_index_recalc(mailbox);
     if (r) goto done;
 
-    old_num_records = mailbox->i.num_records;
-
     /* if local UIDVALIDITY is lower, copy from remote, otherwise
      * remote will copy ours when we sync */
     if (mailbox->i.uidvalidity < uidvalidity) {
@@ -1087,91 +1199,20 @@ static int mailbox_full_update(const char *mboxname)
 	mailbox->i.highestmodseq = highestmodseq+1;
     }
 
-    /* initialise the two loops */
-    kaction = dlist_list(NULL, "ACTION");
-    recno = 1;
-    ki = kr->head;
-
-    /* while there are more records on either master OR replica,
-     * work out what to do with them */
-    while (ki || recno <= old_num_records) {
-	/* most common case - both a master AND a replica record exist */
-	if (ki && recno <= old_num_records) {
-	    r = mailbox_read_index_record(mailbox, recno, &mrecord);
-	    if (r) goto done;
-	    r = parse_upload(ki, mailbox, &rrecord);
-	    if (r) goto done;
-
-	    /* same UID - compare the records */
-	    if (rrecord.uid == mrecord.uid) {
-		r = compare_one_record(mailbox,
-				       &mrecord, &rrecord,
-				       kaction);
-		if (r) goto done;
-		/* increment both */
-		recno++;
-		ki = ki->next;
-	    }
-	    else if (rrecord.uid > mrecord.uid) {
-		/* record only exists on the master */
-		if (!(mrecord.system_flags & FLAG_EXPUNGED)) {
-		    syslog(LOG_ERR, "SYNCERROR: only exists on master %s %u (%s)",
-			   mailbox->name, mrecord.uid,
-			   message_guid_encode(&mrecord.guid));
-		    r = renumber_one_record(&mrecord, kaction);
-		    if (r) goto done;
-		}
-		/* only increment master */
-		recno++;
-	    }
-	    else {
-		/* record only exists on the replica */
-		if (!(rrecord.system_flags & FLAG_EXPUNGED)) {
-		    syslog(LOG_ERR, "SYNCERROR: only exists on replica %s %u (%s)",
-			   mailbox->name, rrecord.uid,
-			   message_guid_encode(&rrecord.guid));
-		    r = copyback_one_record(mailbox, &rrecord, kaction);
-		    if (r) goto done;
-		}
-		/* only increment replica */
-		ki = ki->next;
-	    }
-	}
-
-	/* no more replica records, but still master records */
-	else if (recno <= old_num_records) {
-	    r = mailbox_read_index_record(mailbox, recno, &mrecord);
-	    if (r) goto done;
-	    /* if the replica has seen this UID, we need to renumber.
-	     * Otherwise it will replicate fine as-is */
-	    if (mrecord.uid <= last_uid) {
-		r = renumber_one_record(&mrecord, kaction);
-		if (r) goto done;
-	    }
-	    else if (mrecord.modseq <= highestmodseq) {
-		/* bump our modseq so we sync */
-		syslog(LOG_NOTICE, "SYNCNOTICE: bumping modseq %s %u",
-		       mailbox->name, mrecord.uid);
-		mailbox_rewrite_index_record(mailbox, &mrecord);
-	    }
-	    recno++;
-	}
-
-	/* record only exists on the replica */
-	else {
-	    r = parse_upload(ki, mailbox, &rrecord);
-	    if (r) goto done;
-
-	    syslog(LOG_NOTICE, "SYNCNOTICE: only on replica %s %u",
-		   mailbox->name, rrecord.uid);
-
-	    /* going to need this one */
-	    r = copyback_one_record(mailbox, &rrecord, kaction);
-	    if (r) goto done;
-
-	    ki = ki->next;
-	}
+    r = mailbox_update_loop(mailbox, kr->head, last_uid,
+			    highestmodseq, NULL);
+    if (r) {
+	syslog(LOG_ERR, "SYNCNOTICE: failed to prepare update for %s: %s",
+	       mailbox->name, error_message(r));
+	goto done;
     }
+
+    /* OK - now we're committed to make changes! */
+
+    kaction = dlist_list(NULL, "ACTION");
+    r = mailbox_update_loop(mailbox, kr->head, last_uid,
+			    highestmodseq, kaction);
+    if (r) goto cleanup;
 
     /* if replica still has a higher last_uid, bump our local
      * number to match so future records don't clash */
@@ -1189,14 +1230,17 @@ static int mailbox_full_update(const char *mboxname)
 	}
 	else if (!strcmp(ka->name, "COPYBACK")) {
 	    r = copy_remote(mailbox, ka->nval, kr);
-	    if (r) goto done;
+	    if (r) goto cleanup;
 	    dlist_num(kuids, "UID", ka->nval);
 	}
 	else if (!strcmp(ka->name, "RENUMBER")) {
 	    r = copy_local(mailbox, ka->nval);
-	    if (r) goto done;
+	    if (r) goto cleanup;
 	}
     }
+
+    /* we still need to do the EXPUNGEs */
+ cleanup:
 
     /* close the mailbox before sending any expunges
      * to avoid deadlocks */
@@ -1204,8 +1248,13 @@ static int mailbox_full_update(const char *mboxname)
 
     /* only send expunge if we have some UIDs to expunge */
     if (kuids->head) {
+	int r2;
 	sync_send_apply(kexpunge, sync_out);
-	r = sync_parse_response("EXPUNGE", sync_in, NULL);
+	r2 = sync_parse_response("EXPUNGE", sync_in, NULL);
+	if (r2) {
+	    syslog(LOG_ERR, "SYNCERROR: failed to expunge in cleanup %s",
+		   mailbox->name);
+	}
     }
 
 done:
