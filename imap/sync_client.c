@@ -976,8 +976,17 @@ static int compare_one_record(struct mailbox *mailbox,
 		free(rguid);
 		free(mguid);
 		/* we will need to renumber both ends to get in sync */
-		r = copyback_one_record(mailbox, rp, kaction);
-		if (!r) r = renumber_one_record(mp, kaction);
+
+		/* ORDERING - always lower GUID first */
+		if (message_guid_cmp(&mp->guid, &rp->guid) < 0) {
+		    r = copyback_one_record(mailbox, rp, kaction);
+		    if (!r) r = renumber_one_record(mp, kaction);
+		}
+		else {
+		    r = renumber_one_record(mp, kaction);
+		    if (!r) r = copyback_one_record(mailbox, rp, kaction);
+		}
+
 		return r;
 	    }
 
