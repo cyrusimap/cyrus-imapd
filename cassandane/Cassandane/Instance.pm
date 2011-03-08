@@ -356,4 +356,124 @@ sub stop
 #     rmtree $self->{basedir};
 }
 
+# Run a Cyrus utility program with the given arguments.  The first
+# argument may optionally be a mode string, either '-|' or '|-' which
+# affects how the utility's stdin and stdout are treated thus:
+#
+# -|	    stdin is redirected from /dev/null,
+#	    stdout is captured in the returned file handle,
+#	    stderr is redirected to /dev/null (or is unmolested
+#		is xlog is in verbose mode).
+#	    returns a new file handle
+#
+# |-	    stdin is fed from the returned file handle
+#	    stdout is redirected to /dev/null (or is unmolested
+#		is xlog is in verbose mode).
+#	    stderr likewise
+#	    returns a new file handle
+#
+# (none)    stdin is redirected from /dev/null,
+#	    stdout is redirected to /dev/null (or is unmolested
+#		is xlog is in verbose mode).
+#	    stderr likewise
+#	    returns UNIX exit code
+#
+sub run_utility
+{
+    my ($self, $mode, @argv) = @_;
+    my $binary;
+
+    die "No mode or binary specified"
+	unless defined $mode;
+
+    my %redirects;
+    if ($mode eq '-|')
+    {
+	# stdin is null, capture stdout
+	$redirects{stdin} = '/dev/null';
+	$binary = shift @argv;
+    }
+    elsif ($mode eq '|-')
+    {
+	# feed stdin, stdout is null or unmolested
+	$redirects{stdout} = '/dev/null'
+	    unless get_verbose;
+	$binary = shift @argv;
+    }
+    else
+    {
+	# stdin is null, stdout is null or unmolested
+	$redirects{stdin} = '/dev/null';
+	$redirects{stdout} = '/dev/null'
+	    unless get_verbose;
+	$binary = $mode;
+	$mode = undef;
+    }
+    $redirects{stderr} = '/dev/null'
+	unless get_verbose;
+    die "No binary specified"
+	unless defined $binary;
+
+    my @cmd =
+    (
+	$self->_binary($binary),
+	'-C', $self->_imapd_conf(),
+	@argv,
+    );
+    xlog "Running: " . join(' ', map { "\"$_\"" } @cmd);
+
+    if (defined $mode)
+    {
+	my $fh;
+	# Use the fork()ing form of open()
+	my $pid = open $fh,$mode;
+	die "Cannot fork: $!"
+	    if !defined $pid;
+	return $fh
+	    if $pid;	    # parent process
+    }
+    else
+    {
+	# No capturing - just plain fork()
+	my $pid = fork();
+	die "Cannot fork: $!"
+	    if !defined $pid;
+	if ($pid)
+	{
+	    # parent process...wait for child
+	    my $child = waitpid($pid,0);
+	    # and return it's exit status
+	    return ($child == $pid ? $? : 255);
+	}
+    }
+
+    # child process
+
+    my $cd = $self->{basedir} . '/conf/cores';
+    chdir($cd)
+	or die "Cannot cd to $cd: $!";
+
+    # TODO: do any setuid, umask, or environment futzing here
+
+    # implement redirects
+    if (defined $redirects{stdin})
+    {
+	open STDIN,'<',$redirects{stdin}
+	    or die "Cannot redirect STDIN from $redirects{stdin}: $!";
+    }
+    if (defined $redirects{stdout})
+    {
+	open STDOUT,'>',$redirects{stdout}
+	    or die "Cannot redirect STDOUT to $redirects{stdout}: $!";
+    }
+    if (defined $redirects{stderr})
+    {
+	open STDERR,'>',$redirects{stderr}
+	    or die "Cannot redirect STDERR to $redirects{stderr}: $!";
+    }
+
+    exec @cmd;
+    die "Cannot run $binary: $!";
+}
+
 1;
