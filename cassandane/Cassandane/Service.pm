@@ -6,6 +6,16 @@ use warnings;
 use Cassandane::Util::Log;
 use Cassandane::MessageStoreFactory;
 
+my $next_port = 9100;
+sub alloc_port
+{
+    my ($class) = @_;
+
+    my $port = $next_port;
+    $next_port++;
+    return $port;
+}
+
 sub new
 {
     my $class = shift;
@@ -18,9 +28,9 @@ sub new
     my $self =
     {
 	name => $name,
-	binary => 'imapd',
+	binary => undef,
 	host => '127.0.0.1',
-	port => 9143,
+	port => undef,
     };
 
     $self->{binary} = $params{binary}
@@ -29,6 +39,11 @@ sub new
 	if defined $params{host};
     $self->{port} = $params{port}
 	if defined $params{port};
+
+    $self->{port} = Cassandane::Service->alloc_port()
+	unless defined $self->{port};
+    die "No binary specified"
+	unless defined $self->{binary};
 
     bless $self, $class;
     return $self;
@@ -40,17 +55,11 @@ sub store_params
 {
     my ($self) = @_;
 
-    die "Can only handle imapd for now"
-	unless $self->{binary} eq "imapd";
-
     return
     {
-	type => 'imap',
+	type => 'unknown',
 	host => $self->{host},
 	port => $self->{port},
-	folder => 'inbox.CassandaneTestFolder',
-	username => 'cassandane',
-	password => 'testpw',
 	verbose => get_verbose,
     };
 }

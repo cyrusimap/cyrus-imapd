@@ -12,6 +12,7 @@ use Cassandane::Util::DateTime qw(to_iso8601);
 use Cassandane::Util::Log;
 use Cassandane::Config;
 use Cassandane::Service;
+use Cassandane::ServiceFactory;
 
 my $rootdir = '/var/tmp/cassandane';
 my $stamp;
@@ -65,8 +66,9 @@ sub add_service
     die "Already have a service named \"$name\""
 	if defined $self->{services}->{$name};
 
-    my $srv = Cassandane::Service->new($name, %params);
+    my $srv = Cassandane::ServiceFactory->create($name, %params);
     $self->{services}->{$name} = $srv;
+    return $srv;
 }
 
 sub get_service
