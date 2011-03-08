@@ -24,6 +24,7 @@ sub default
 {
     $default = Cassandane::Config->new(
 	    configdirectory => '@basedir@/conf',
+	    syslog_prefix => '@name@',
 	    sievedir => '@basedir@/conf/sieve',
 	    defaultpartition => 'default',
 	    'partition-default' => '@basedir@/data',
