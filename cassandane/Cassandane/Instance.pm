@@ -14,6 +14,8 @@ use Cassandane::Config;
 use Cassandane::Service;
 
 my $rootdir = '/var/tmp/cassandane';
+my $stamp;
+my $next_unique = 1;
 
 sub new
 {
@@ -36,8 +38,14 @@ sub new
     $self->{config} = $params{config}->clone()
 	if defined $params{config};
 
-    $self->{name} = 'cass' . to_iso8601(DateTime->now)
-	unless defined $self->{name};
+    $stamp = to_iso8601(DateTime->now)
+	unless defined $stamp;
+
+    if (!defined $self->{name})
+    {
+	$self->{name} = 'cass' . $stamp . $next_unique;
+	$next_unique++;
+    }
     $self->{basedir} = $rootdir . '/' . $self->{name}
 	unless defined $self->{basedir};
     $self->{config}->set_variables(
