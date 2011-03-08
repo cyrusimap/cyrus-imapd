@@ -17,8 +17,6 @@ sub new
 
     $self->{instance} = Cassandane::Instance->new();
     $self->{instance}->add_service('imap');
-    # Connection information for the IMAP server
-    $self->{store_params} = $self->{instance}->service_params('imap');
 
     $self->{gen} = Cassandane::Generator->new();
 
@@ -31,7 +29,7 @@ sub set_up
 
     $self->{instance}->start();
     $self->{store} =
-	Cassandane::MessageStoreFactory->create(%{$self->{store_params}});
+	$self->{instance}->get_service('imap')->create_store();
 
     $self->{expected} = {};
 }

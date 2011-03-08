@@ -24,8 +24,6 @@ sub new
     $config->set(conversations => 'on');
     $self->{instance} = Cassandane::Instance->new(config => $config);
     $self->{instance}->add_service('imap');
-    # Connection information for the IMAP server
-    $self->{store_params} = $self->{instance}->service_params('imap');
 
 #     $self->{replica_params} =
 #     {
@@ -44,7 +42,7 @@ sub set_up
 
     $self->{instance}->start();
     $self->{store} =
-	Cassandane::MessageStoreFactory->create(%{$self->{store_params}});
+	$self->{instance}->get_service('imap')->create_store();
     $self->{store}->set_fetch_attributes('uid', 'cid');
 
     $self->{expected} = {};

@@ -11,6 +11,7 @@ use DateTime;
 use Cassandane::Util::DateTime qw(to_iso8601);
 use Cassandane::Util::Log;
 use Cassandane::Config;
+use Cassandane::Service;
 
 my $rootdir = '/var/tmp/cassandane';
 
@@ -56,87 +57,14 @@ sub add_service
     die "Already have a service named \"$name\""
 	if defined $self->{services}->{$name};
 
-    my $srv =
-    {
-	name => $name,
-	binary => 'imapd',
-	host => '127.0.0.1',
-	port => 9143,
-    };
-    $srv->{binary} = $params{binary}
-	if defined $params{binary};
-    $srv->{host} = $params{host}
-	if defined $params{host};
-    $srv->{port} = $params{port}
-	if defined $params{port};
+    my $srv = Cassandane::Service->new($name, %params);
     $self->{services}->{$name} = $srv;
 }
 
-sub service_params
+sub get_service
 {
     my ($self, $name) = @_;
-
-    my $srv = $self->{services}->{$name};
-    die "No such service \"$name\""
-	unless defined $srv;
-
-    die "Can only handle imapd for now"
-	unless $srv->{binary} eq "imapd";
-
-    return
-    {
-	type => 'imap',
-	host => $srv->{host},
-	port => $srv->{port},
-	folder => 'inbox.CassandaneTestFolder',
-	username => 'cassandane',
-	password => 'testpw',
-	verbose => get_verbose,
-    };
-}
-
-sub _service_is_listening
-{
-    my ($self, $srv) = @_;
-
-    # hardcoded for TCP4
-    die "Sorry, the host argument \"$srv->{host}\" must be a numeric IP address"
-	unless ($srv->{host} =~ m/^\d+\.\d+\.\d+\.\d+$/);
-    die "Sorry, the port argument \"$srv->{port}\" must be a numeric TCP port"
-	unless ($srv->{port} =~ m/^\d+$/);
-
-    my @cmd = (
-	'netstat',
-	'-l',		# listening ports only
-	'-n',		# numeric output
-	'-Ainet',	# AF_INET only
-	);
-
-    open NETSTAT,'-|',@cmd
-	or die "Cannot run netstat to check for port $srv->{port}: $!";
-    #     # netstat -ln -Ainet
-    #     Active Internet connections (only servers)
-    #     Proto Recv-Q Send-Q Local Address           Foreign Address State
-    #     tcp        0      0 0.0.0.0:56686           0.0.0.0:* LISTEN
-    my $found;
-    while (<NETSTAT>)
-    {
-	chomp;
-	my @a = split;
-	next unless scalar(@a) == 6;
-	next unless $a[0] eq 'tcp';
-	next unless $a[5] eq 'LISTEN';
-	next unless $a[3] eq "$srv->{host}:$srv->{port}";
-	$found = 1;
-	last;
-    }
-    close NETSTAT;
-
-    xlog "_service_is_listening: service $srv->{name} is " .
-	 "listening on port $srv->{port}"
-	if ($found);
-
-    return $found;
+    return $self->{services}->{$name};
 }
 
 sub _binary
@@ -215,7 +143,7 @@ sub _generate_master_conf
     {
 	print MASTER '    ' . $srv->{name};
 	print MASTER ' cmd="' . $self->_binary($srv->{binary}) . ' -C ' .  $self->_imapd_conf() . '"';
-	print MASTER ' listen="' . $srv->{host} . ':' . $srv->{port} .  '"';
+	print MASTER ' listen="' . $srv->address() .  '"';
 	print MASTER "\n";
     }
 
@@ -345,8 +273,8 @@ sub _start_master
     # also going to fail miserably.  In any case we want to know.
     foreach my $srv (values %{$self->{services}})
     {
-	die "Some process is already listening on $srv->{host}:$srv->{port}"
-	    if $self->_service_is_listening($srv);
+	die "Some process is already listening on " . $srv->address()
+	    if $srv->is_listening();
     }
 
     # Now start the master process.
@@ -376,8 +304,8 @@ sub _start_master
     xlog "_start_master: PID waiting for services";
     foreach my $srv (values %{$self->{services}})
     {
-	_timed_wait(sub { $self->_service_is_listening($srv) },
-	        description => "port $srv->{port} to be in LISTEN state");
+	_timed_wait(sub { $srv->is_listening() },
+	        description => $srv->address() . " to be in LISTEN state");
     }
     xlog "_start_master: all services listening";
 }
