@@ -1916,7 +1916,7 @@ static int do_unuser(struct dlist *kin)
 			       sync_authstate, 0, 0, 1);
     if (r && (r != IMAP_MAILBOX_NONEXISTENT)) goto fail;
 
-    r = user_deletedata((char *)userid, sync_userid, sync_authstate, 1);
+    r = user_deletedata(userid, 1);
 
  fail:
     sync_name_list_free(&list);

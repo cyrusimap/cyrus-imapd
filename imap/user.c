@@ -183,42 +183,29 @@ static int user_deletesieve(const char *user)
     return 0;
 }
 
-int user_deletedata(char *user, char *userid __attribute__((unused)),
-		    struct auth_state *authstate __attribute__((unused)),
-		    int wipe_user)
+int user_deletedata(const char *userid, int wipe_user)
 {
     char *fname;
 
     /* delete seen state and mbox keys */
     if(wipe_user) {
-	seen_delete_user(user);
+	seen_delete_user(userid);
 	/* XXX  what do we do about multiple backends? */
-	mboxkey_delete_user(user);
+	mboxkey_delete_user(userid);
     }
 
     /* delete subscriptions */
-    fname = user_hash_subs(user);
+    fname = user_hash_subs(userid);
     (void) unlink(fname);
     free(fname);
 
     /* delete quotas */
-    user_deletequotaroots(user);
-
-    /* delete ACLs - we're using the internal names here */
-#if 0
-    /* xxx no reason to do this if user_deleteacl is a stub anyway. */
-    if(wipe_user) {
-	const char pat[] = "*";
-	mboxlist_findall(NULL, pat, sizeof(pat), userid,
-			 authstate, user_deleteacl,
-			 user);
-    }
-#endif
+    user_deletequotaroots(userid);
 
     /* delete sieve scripts */
-    user_deletesieve(user);
+    user_deletesieve(userid);
 
-    sync_log_user(user);
+    sync_log_user(userid);
     
     return 0;
 }

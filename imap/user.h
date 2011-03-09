@@ -55,8 +55,7 @@ const char *user_sieve_path(const char *user);
  *
  * wipe-user says to delete seen state also (remove the user from the murder)
  */
-int user_deletedata(char *user, char *userid, struct auth_state *authstate,
-		    int wipe_user);
+int user_deletedata(const char *userid, int wipe_user);
 
 /* Rename/copy user meta-data (seen state, subscriptions, sieve scripts)
  * from 'olduser' to 'newuser'.

@@ -5273,7 +5273,7 @@ void cmd_delete(char *tag, char *name, int localonly, int force)
     /* localonly deletes are only per-mailbox */
     if (!r && !localonly && mboxname_isusermailbox(mailboxname, 1)) {
 	size_t mailboxname_len = strlen(mailboxname);
-	char *user = mboxname_to_userid(mailboxname);
+	const char *userid = mboxname_to_userid(mailboxname);
 
 	/* If we aren't too close to MAX_MAILBOX_BUFFER, append .* */
 	p = mailboxname + mailboxname_len; /* end of mailboxname */
@@ -5287,7 +5287,7 @@ void cmd_delete(char *tag, char *name, int localonly, int force)
 			 imapd_userid,
 			 imapd_authstate, delmbox, NULL);
 
-	user_deletedata(user, imapd_userid, imapd_authstate, 1);
+	user_deletedata(userid, 1);
     }
 
     imapd_check(NULL, 0);
@@ -5725,7 +5725,7 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 
     /* take care of deleting old ACLs, subscriptions, seen state and quotas */
     if (!r && rename_user)
-	user_deletedata(olduser, imapd_userid, imapd_authstate, 1);
+	user_deletedata(olduser, 1);
 
     imapd_check(NULL, 0);
 
@@ -9433,7 +9433,7 @@ void cmd_xfer(const char *tag, const char *name,
 	}
 	r = do_xfer(xfer);
     } else {
-	char *userid = mboxname_to_userid(mailboxname);
+	const char *userid = mboxname_to_userid(mailboxname);
 
 	/* is the selected mailbox in the namespace we're moving? */
 	if (imapd_index && !strncmp(mailboxname, imapd_index->mailbox->name,
@@ -9463,7 +9463,7 @@ void cmd_xfer(const char *tag, const char *name,
 
 	/* this was a successful user delete, and we need to delete
 	   certain user meta-data (but not seen state!) */
-	user_deletedata(userid, imapd_userid, imapd_authstate, 0);
+	user_deletedata(userid, 0);
     }
 
 done:
