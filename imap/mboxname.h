@@ -145,9 +145,11 @@ void mboxname_free_parts(struct mboxname_parts *parts);
 
 
 /*
- * Translate (internal) inboxname into corresponding userid.
+ * Translate (internal) inboxname into corresponding userid,
+ * and vice-versa.
  */
-char *mboxname_to_userid(const char *mboxname);
+const char *mboxname_to_userid(const char *mboxname);
+const char *mboxname_user_inbox(const char *userid);
 
 /*
  * Check whether two mboxnames have the same userid.

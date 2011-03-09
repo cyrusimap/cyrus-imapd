@@ -828,7 +828,7 @@ int mboxname_isdeletedmailbox(const char *name, time_t *timestampp)
 /*
  * Translate (internal) inboxname into corresponding userid.
  */
-char *mboxname_to_userid(const char *mboxname)
+const char *mboxname_to_userid(const char *mboxname)
 {
     static char userid[MAX_MAILBOX_BUFFER];
     char *ret;
@@ -849,6 +849,28 @@ char *mboxname_to_userid(const char *mboxname)
 
     mboxname_free_parts(&parts);
     return ret;
+}
+
+const char *mboxname_user_inbox(const char *userid)
+{
+    static char mboxname[MAX_MAILBOX_BUFFER];
+
+    if (!userid) return NULL;
+
+    if (config_virtdomains) {
+	const char *atp;
+	atp = strchr(userid, '@');
+	if (atp) {
+	    snprintf(mboxname, MAX_MAILBOX_BUFFER,
+		     "%s!user.%.*s", atp+1, (int)(atp-userid), userid);
+	    return mboxname;
+	}
+    }
+
+    /* otherwise it's simple */
+    snprintf(mboxname, MAX_MAILBOX_BUFFER, "user.%s", userid);
+
+    return mboxname;
 }
 
 /*

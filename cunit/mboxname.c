@@ -64,6 +64,21 @@ static void test_to_userid(void)
     CU_ASSERT_PTR_NULL(r);
 }
 
+static void test_to_inbox(void)
+{
+    char *r;
+
+    r = mboxname_user_inbox("sam");
+    CU_ASSERT_STRING_EQUAL(r, "user.sam");
+
+    r = mboxname_user_inbox("betty@boop.com");
+    CU_ASSERT_STRING_EQUAL(r, "boop.com!user.betty");
+
+    r = mboxname_user_inbox(NULL);
+    CU_ASSERT_PTR_NULL(r);
+}
+
+
 static void test_same_userid(void)
 {
     static const char FRED_DRAFTS[] = "user.fred.Drafts";
