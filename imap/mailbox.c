@@ -2120,14 +2120,14 @@ int mailbox_append_index_record(struct mailbox *mailbox,
     assert(mailbox_index_islocked(mailbox, 1));
 
     /* Append MUST be a higher UID than any we've yet seen */
-    assert (record->uid > mailbox->i.last_uid)
+    assert(record->uid > mailbox->i.last_uid)
 
     /* belt AND suspenders - check the previous record too */
     if (mailbox->i.num_records) {
 	struct index_record prev;
 	r = mailbox_read_index_record(mailbox, mailbox->i.num_records, &prev);
 	if (r) return r;
-	assert(record->uid > prev.uid);
+	assert(prev.uid <= mailbox->i.last_uid);
 	if (message_guid_equal(&prev.guid, &record->guid)) {
 	    syslog(LOG_INFO, "%s: same message appears twice %u %u",
 		   mailbox->name, prev.uid, record->uid);
