@@ -353,6 +353,13 @@ static void dlist_print_helper(const struct dlist *dl, int printkeys,
     case DL_BUF:
 	prot_printliteral(out, dl->sval, dl->nval);
 	break;
+    case DL_HEX64:
+	{
+	    char buf[17];
+	    snprintf(buf, 17, "%016llx", dl->nval);
+	    prot_printf(out, "%s", buf);
+	}
+	break;
     case DL_KVLIST:
 	if (level) {
 	    prot_printf(out, "\r\n");
