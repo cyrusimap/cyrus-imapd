@@ -219,7 +219,8 @@ static void run_tests(void)
     }
 
     *(CU_RunSummary *)CU_get_run_summary() = summ;
-    all_complete(failures);
+    if (all_complete)
+	all_complete(failures);
 
     if (failed || summ.nAssertsFailed)
 	exit(1);
