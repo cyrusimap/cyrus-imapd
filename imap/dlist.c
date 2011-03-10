@@ -606,6 +606,9 @@ uint32_t dlist_nval(struct dlist *dl)
     default:
 	fatal("INVALID TYPE FOR NVAL", EC_SOFTWARE);
     }
+
+    /* shut GCC up - unreachable */
+    return 0;
 }
 
 
