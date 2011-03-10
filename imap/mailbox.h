@@ -68,7 +68,7 @@
      "\"The best thing about this system was that it had lots of goals.\"\n" \
      "\t--Jim Morris on Andrew\n")
 
-#define MAILBOX_MINOR_VERSION	12
+#define MAILBOX_MINOR_VERSION	13
 #define MAILBOX_CACHE_MINOR_VERSION 3
 
 #define FNAME_HEADER "/cyrus.header"
@@ -133,6 +133,7 @@ struct index_record {
     uint32_t cache_version;
     struct message_guid guid;
     modseq_t modseq;
+    bit64 cid;
     bit32 cache_crc;
     bit32 record_crc;
 
@@ -284,9 +285,9 @@ struct mailbox {
 #define OFFSET_CACHE_VERSION 56
 #define OFFSET_MESSAGE_GUID 60
 #define OFFSET_MODSEQ 80 /* CONDSTORE (64-bit modseq) */
-#define OFFSET_CACHE_CRC 88 /* CRC32 of cache record */
-#define OFFSET_RECORD_CRC 92
-
+#define OFFSET_CID 88       /* conversation id, added in v13 */
+#define OFFSET_CACHE_CRC 96 /* CRC32 of cache record */
+#define OFFSET_RECORD_CRC 100
 
 #define INDEX_HEADER_SIZE (OFFSET_HEADER_CRC+4)
 #define INDEX_RECORD_SIZE (OFFSET_RECORD_CRC+4)

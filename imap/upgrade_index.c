@@ -100,7 +100,8 @@ static int sort_expunge(const void *a, const void *b)
 static void upgrade_index_record(struct mailbox *mailbox,
 				 const char *buf,
 				 struct index_record *record,
-				 int record_size)
+				 int record_size,
+				 int oldversion)
 {
     char recordbuf[INDEX_RECORD_SIZE];
     struct utimbuf settime;
@@ -114,6 +115,21 @@ static void upgrade_index_record(struct mailbox *mailbox,
     /* do the initial parse.  Ignore the result, crc32 will mismatch
      * for sure */
     mailbox_buf_to_index_record(recordbuf, record);
+
+    if (oldversion == 12) {
+	/* avoid re-parsing the message by copying the old cache_crc,
+	 * but only if the old RECORD_CRC matches */
+	if (crc32_map(buf, 92) == ntohl(*((bit32 *)(buf+92)))) { 
+	    record->cache_crc = ntohl(*((bit32 *)(buf+88)));
+	    /* we need to read the cache record in here, so that repack
+	     * will write it out to a new cache file */
+	    if (!mailbox_cacherecord(mailbox, record))
+		return;
+	    /* record failed, drop through */
+	    record->cache_offset = 0;
+	}
+	/* CRC failed, drop through */
+    }
 
     fname = mailbox_message_fname(mailbox, record->uid);
 
@@ -349,20 +365,26 @@ no_expunge:
 
 	/* case: index UID is first, or the same */
 	if (uid <= euid) {
-	    upgrade_index_record(mailbox, bufp, &record, oldrecord_size);
+	    upgrade_index_record(mailbox, bufp, &record, oldrecord_size,
+				 oldminor_version);
 	    recno++;
 	    if (uid == euid) /* duplicate in both, skip expunged */
 		erecno++;
 	}
 	else {
 	    upgrade_index_record(mailbox, expunge_data[erecno-1].base,
-				 &record, expungerecord_size);
+				 &record, expungerecord_size, eversion);
 	    record.system_flags |= FLAG_EXPUNGED;
 	    erecno++;
 	}
 
+	/* user seen was merged into the index with version 12 */
 	if (oldminor_version < 12 && seqset_ismember(seq, record.uid))
 	    record.system_flags |= FLAG_SEEN;
+
+	/* CID was added with version 13 */
+	if (oldminor_version < 13)
+	    record.cid = 0;
 
 	r = mailbox_repack_add(repack, &record);
 	if (r) goto fail;
