@@ -106,8 +106,7 @@ static struct mailboxlist *open_mailboxes = NULL;
 #define zeromailbox(m) { memset(&m, 0, sizeof(struct mailbox)); \
                          (m).index_fd = -1; \
                          (m).cache_fd = -1; \
-                         (m).header_fd = -1; \
-                         (m).lock_fd = -1; }
+                         (m).header_fd = -1; }
 
 static int mailbox_delete_cleanup(struct mailbox *mailbox);
 static int mailbox_index_unlink(struct mailbox *mailbox);
@@ -1036,11 +1035,6 @@ void mailbox_close(struct mailbox **mailboxptr)
 	close(mailbox->cache_fd);
     if (mailbox->header_fd != -1)
 	close(mailbox->header_fd);
-
-    /* once we close this we're committed - no consistency
-     * guarantees left */
-    if (mailbox->lock_fd != -1)
-	close(mailbox->lock_fd);
 
     free(mailbox->name);
     free(mailbox->part);
