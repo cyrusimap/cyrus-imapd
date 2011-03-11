@@ -825,14 +825,14 @@ int mailbox_mboxlock_upgrade(struct mailboxlist *listitem, int locktype)
     if (listitem->l->locktype == LOCK_EXCLUSIVE)
 	return 0;
 
-    mboxname_release(&listitem->l);
-    r = mboxname_lock(mailbox->name, &listitem->l, locktype);
-    if (r) return r;
-
     if (mailbox->index_fd != -1) 
        close(mailbox->index_fd);
     if (mailbox->cache_fd != -1) 
        close(mailbox->cache_fd);
+
+    mboxname_release(&listitem->l);
+    r = mboxname_lock(mailbox->name, &listitem->l, locktype);
+    if (r) return r;
 
     if (mailbox->index_base)
        map_free(&mailbox->index_base, &mailbox->index_len);
