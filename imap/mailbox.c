@@ -817,13 +817,10 @@ int mailbox_open_index(struct mailbox *mailbox)
     return 0;
 }
 
-int mailbox_mboxlock_upgrade(struct mailboxlist *listitem, int locktype)
+int mailbox_mboxlock_reopen(struct mailboxlist *listitem, int locktype)
 {
     struct mailbox *mailbox = &listitem->m;
     int r;
-
-    if (listitem->l->locktype == LOCK_EXCLUSIVE)
-	return 0;
 
     if (mailbox->index_fd != -1) 
        close(mailbox->index_fd);
@@ -838,8 +835,6 @@ int mailbox_mboxlock_upgrade(struct mailboxlist *listitem, int locktype)
        map_free(&mailbox->index_base, &mailbox->index_len);
     if (mailbox->cache_buf.s)
        map_free((const char **)&mailbox->cache_buf.s, &mailbox->cache_len);
-
-    r = mailbox_open_index(mailbox);
 
     return r;
 }
@@ -1024,7 +1019,8 @@ void mailbox_close(struct mailbox **mailboxptr)
     /* do we need to try and clean up? (not if doing a shutdown,
      * speed is probably more important!) */
     if (!in_shutdown && (mailbox->i.options & MAILBOX_CLEANUP_MASK)) {
-	int r = mailbox_mboxlock_upgrade(listitem, LOCK_NONBLOCKING);
+	int r = mailbox_mboxlock_reopen(listitem, LOCK_NONBLOCKING);
+	if (!r) r = mailbox_open_index(mailbox);
 	if (!r) r = mailbox_lock_index(mailbox, LOCK_EXCLUSIVE);
 	if (!r) {
 	    /* finish cleaning up */
@@ -1549,16 +1545,37 @@ restart:
 	bit32 minor_version = ntohl(*((bit32 *)(mailbox->index_base+OFFSET_MINOR_VERSION)));
 	if (minor_version != MAILBOX_MINOR_VERSION) {
 	    struct mailboxlist *listitem = find_listitem(mailbox->name);
-	    r = mailbox_mboxlock_upgrade(listitem, LOCK_EXCLUSIVE);
-	    if (r) return r;
+	    int prev_locktype;
+
+	    assert(listitem);
+
+	    prev_locktype = listitem->l->locktype;
+
+	    if (prev_locktype != LOCK_EXCLUSIVE) {
+		/* we need to switch to an exclusive lock while upgrading */
+		r = mailbox_mboxlock_reopen(listitem, LOCK_EXCLUSIVE);
+		if (r) return r;
+		r = mailbox_open_index(mailbox);
+		if (r) return r;
+	    }
+
 	    /* lie about our index lock status - the exclusive namelock
 	     * provides equivalent properties - and we know it won't
 	     * leak because the 'restart' above will cover up our sins */
 	    mailbox->index_locktype = LOCK_EXCLUSIVE;
 	    r = upgrade_index(mailbox);
 	    if (r) return r;
+
+	    /* we have to downgrade again afterwards so a "SELECT" won't
+	     * hold an exclusive lock forever */
+	    if (prev_locktype != LOCK_EXCLUSIVE) {
+		r = mailbox_mboxlock_reopen(listitem, prev_locktype);
+		if (r) return r;
+	    }
+	    /* either way, must refresh index here.  The old one is stale */
 	    r = mailbox_open_index(mailbox);
 	    if (r) return r;
+
 	    goto restart;
 	}
     }
