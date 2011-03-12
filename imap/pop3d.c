@@ -1782,7 +1782,6 @@ int openinbox(void)
 	popd_login_time = time(0);
 
 	r = mailbox_open_iwl(inboxname, &popd_mailbox);
-	popd_myrights = cyrus_acl_myrights(popd_authstate, popd_mailbox->acl);
 	if (r) {
 	    sleep(3);
 	    syslog(log_level, "Unable to open maildrop %s: %s",
@@ -1792,6 +1791,7 @@ int openinbox(void)
 			error_message(r));
 	    goto fail;
 	}
+	popd_myrights = cyrus_acl_myrights(popd_authstate, popd_mailbox->acl);
 	if (config_popuseacl && !(popd_myrights & ACL_READ)) {
 	    r = (popd_myrights & ACL_LOOKUP) ?
 		 IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
