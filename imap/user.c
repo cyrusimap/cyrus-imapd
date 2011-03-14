@@ -76,6 +76,7 @@
 #include "user.h"
 #include "mboxkey.h"
 #include "mboxlist.h"
+#include "mboxname.h"
 #include "mailbox.h"
 #include "util.h"
 #include "seen.h"
@@ -473,29 +474,33 @@ int user_deletequotaroots(const char *user)
     return r;
 }
 
-/* hash the userid to a file containing the subscriptions for that user */
-char *user_hash_subs(const char *userid)
+static char *user_hash_meta(const char *userid, const char *suffix)
 {
-    char *fname = xmalloc(strlen(config_dir) + sizeof(FNAME_DOMAINDIR) +
-			  sizeof(FNAME_USERDIR) + strlen(userid) +
-			  sizeof(FNAME_SUBSSUFFIX) + 10);
-    char c, *domain;
+    struct mboxname_parts parts;
+    const char *domain;
+    char *result;
+
+    mboxname_init_parts(&parts);
 
     if (config_virtdomains && (domain = strchr(userid, '@'))) {
-	char d = (char) dir_hash_c(domain+1, config_fulldirhash);
-	*domain = '\0';  /* split user@domain */
-	c = (char) dir_hash_c(userid, config_fulldirhash);
-	sprintf(fname, "%s%s%c/%s%s%c/%s%s", config_dir, FNAME_DOMAINDIR, d,
-		domain+1, FNAME_USERDIR, c, userid, FNAME_SUBSSUFFIX);
-	*domain = '@';  /* replace '@' */
+	char *bareuserid = xstrndup(userid, domain-userid);
+	parts.userid = bareuserid;
+	parts.domain = domain + 1;
+	result = mboxname_conf_getpath(&parts, suffix);
+	free(bareuserid);
     }
     else {
-	c = (char) dir_hash_c(userid, config_fulldirhash);
-	sprintf(fname, "%s%s%c/%s%s", config_dir, FNAME_USERDIR, c, userid,
-		FNAME_SUBSSUFFIX);
+	parts.userid = userid;
+	result = mboxname_conf_getpath(&parts, suffix);
     }
 
-    return fname;
+    /* doesn't do anything here, but included for completeness */
+    mboxname_free_parts(&parts);
+
+    return result;
 }
 
-
+char *user_hash_subs(const char *userid)
+{
+    return user_hash_meta(userid, FNAME_SUBSSUFFIX);
+}

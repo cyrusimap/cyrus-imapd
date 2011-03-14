@@ -916,7 +916,8 @@ int mboxname_to_parts(const char *mboxname, struct mboxname_parts *parts)
 {
     char *b, *e;    /* beginning and end of string parts */
 
-    memset(parts, 0, sizeof(*parts));
+    mboxname_init_parts(parts);
+
     b = parts->freeme = xstrdup(mboxname);
 
     if (config_virtdomains && (e = strchr(b, '!'))) {
@@ -948,6 +949,11 @@ int mboxname_to_parts(const char *mboxname, struct mboxname_parts *parts)
     parts->box = (*b ? b : NULL);
 
     return 0;
+}
+
+void mboxname_init_parts(struct mboxname_parts *parts)
+{
+    memset(parts, 0, sizeof(*parts));
 }
 
 void mboxname_free_parts(struct mboxname_parts *parts)

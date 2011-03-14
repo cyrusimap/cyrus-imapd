@@ -141,6 +141,7 @@ int mboxname_to_parts(const char *mboxname, struct mboxname_parts *parts);
 /*
  * Cleanup up a mboxname_parts structure.
  */
+void mboxname_init_parts(struct mboxname_parts *parts);
 void mboxname_free_parts(struct mboxname_parts *parts);
 
 
