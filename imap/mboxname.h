@@ -192,4 +192,6 @@ void mboxname_todeleted(const char *name, char *result, int withtime);
  */
 int mboxname_make_parent(char *namebuf);
 
+char *mboxname_conf_getpath(struct mboxname_parts *parts,
+			    const char *suffix);
 #endif

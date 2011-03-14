@@ -112,6 +112,8 @@ static const char index_mod64[256] = {
 };
 #define CHARMOD64(c)  (index_mod64[(unsigned char)(c)])
 
+#define FNAME_SHAREDPREFIX "shared"
+
 
 static struct mboxlocklist *create_lockitem(const char *name)
 {
@@ -1331,3 +1333,47 @@ int mboxname_make_parent(char *name)
     return 1;
 }
 
+/* NOTE: caller must free, which is different from almost every
+ * other interface in the whole codebase.  Grr */
+char *mboxname_conf_getpath(struct mboxname_parts *parts, const char *suffix)
+{
+    char *fname = NULL;
+    char c[2], d[2];
+    
+    if (parts->domain) {
+	if (parts->userid) {
+	    fname = strconcat(config_dir,
+			      FNAME_DOMAINDIR,
+			      dir_hash_b(parts->domain, config_fulldirhash, d),
+			      "/", parts->domain,
+			      FNAME_USERDIR,
+			      dir_hash_b(parts->userid, config_fulldirhash, c),
+			      "/", parts->userid, ".", suffix,
+			      (char *)NULL);
+	}
+	else {
+	    fname = strconcat(config_dir,
+			      FNAME_DOMAINDIR,
+			      dir_hash_b(parts->domain, config_fulldirhash, d),
+			      "/", parts->domain,
+			      "/", FNAME_SHAREDPREFIX, ".", suffix,
+			      (char *)NULL);
+	}
+    }
+    else {
+	if (parts->userid) {
+	    fname = strconcat(config_dir,
+			      FNAME_USERDIR,
+			      dir_hash_b(parts->userid, config_fulldirhash, c),
+			      "/", parts->userid, ".", suffix,
+			      (char *)NULL);
+	}
+	else {
+	    fname = strconcat(config_dir,
+			      FNAME_SHAREDPREFIX, ".", suffix,
+			      (char *)NULL);
+	}
+    }
+
+    return fname;
+}
