@@ -1,6 +1,7 @@
 #if HAVE_CONFIG_H
 #include <config.h>
 #endif
+#include <assert.h>
 #include "cunit/cunit.h"
 #include "libconfig.h"
 #include "imap/mboxname.h"
@@ -350,10 +351,45 @@ static void test_toexternal_alt(void)
     toexternal_helper("shared.quux", "Chaired.shared.quux");
 }
 
+static void test_nextmodseq(void)
+{
+    static const char FREDNAME[] = "bloggs.com!user.fred";
+    struct mboxname_parts parts;
+    char *fname;
+
+    imapopts[IMAPOPT_CONVERSATIONS].val.b = 1;
+
+    /* ensure there is no file */
+    mboxname_to_parts(FREDNAME, &parts);
+    fname = mboxname_conf_getpath(&parts, "modseq");
+    unlink(fname);
+    free(fname);
+    mboxname_free_parts(&parts);
+
+    /* initial value should be 1 without file */
+    CU_ASSERT_EQUAL(mboxname_nextmodseq(FREDNAME, 0), 1);
+    /* next value should always increment */
+    CU_ASSERT_EQUAL(mboxname_nextmodseq(FREDNAME, 0), 2);
+    /* higher value should force a jump */
+    CU_ASSERT_EQUAL(mboxname_nextmodseq(FREDNAME, 100), 101);
+    /* lower value should not decrease */
+    CU_ASSERT_EQUAL(mboxname_nextmodseq(FREDNAME, 5), 102);
+}
+
 static enum enum_value old_config_virtdomains;
+static union config_value old_config_unixhierarchysep;
+static union config_value old_config_altnamespace;
+static union config_value old_config_userprefix;
+static union config_value old_config_sharedprefix;
+static union config_value old_config_conversations;
+static const char *old_config_defdomain;
+static char *old_config_dir;
 
 static int set_up(void)
 {
+    char cwd[PATH_MAX];
+    char *s;
+
     /*
      * TODO: this is pretty hacky.  There should be some
      * cleaner way of pushing aside the config for a moment
@@ -362,12 +398,43 @@ static int set_up(void)
      */
     old_config_virtdomains = config_virtdomains;
     config_virtdomains = IMAP_ENUM_VIRTDOMAINS_ON;
+
+    old_config_dir = (char *)config_dir;
+    s = getcwd(cwd, sizeof(cwd));
+    assert(s);
+    config_dir = strconcat(cwd, "/conf.d", (char *)NULL);
+
+    old_config_defdomain = config_defdomain;
+
+    old_config_unixhierarchysep = imapopts[IMAPOPT_UNIXHIERARCHYSEP].val;
+    old_config_altnamespace = imapopts[IMAPOPT_ALTNAMESPACE].val;
+    old_config_userprefix = imapopts[IMAPOPT_USERPREFIX].val;
+    old_config_sharedprefix = imapopts[IMAPOPT_SHAREDPREFIX].val;
+    old_config_conversations = imapopts[IMAPOPT_CONVERSATIONS].val;
+
     return 0;
 }
 
 static int tear_down(void)
 {
+    char *cmd;
+    int r;
+
+    cmd = strconcat("rm -rf \"", config_dir, "\"", (char *)NULL);
+    r = system(cmd);
+    assert(!r);
+    free(cmd);
+    free((char *)config_dir);
+    config_dir = old_config_dir;
+
     config_virtdomains = old_config_virtdomains;
+    config_defdomain = old_config_defdomain;
+    imapopts[IMAPOPT_UNIXHIERARCHYSEP].val = old_config_unixhierarchysep;
+    imapopts[IMAPOPT_ALTNAMESPACE].val = old_config_altnamespace;
+    imapopts[IMAPOPT_USERPREFIX].val = old_config_userprefix;
+    imapopts[IMAPOPT_SHAREDPREFIX].val = old_config_sharedprefix;
+    imapopts[IMAPOPT_CONVERSATIONS].val = old_config_conversations;
+
     return 0;
 }
 

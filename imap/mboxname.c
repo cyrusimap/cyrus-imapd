@@ -55,6 +55,9 @@
 #include "global.h"
 #include "imap/imap_err.h"
 #include "mailbox.h"
+#include "map.h"
+#include "retry.h"
+#include "user.h"
 #include "util.h"
 #include "xmalloc.h"
 
@@ -1591,3 +1594,184 @@ HIDDEN char *mboxname_conf_getpath(struct mboxname_parts *parts, const char *suf
 
     return fname;
 }
+
+static bit64 mboxname_readval(const char *mboxname, const char *metaname)
+{
+    bit64 fileval = 0;
+    struct mboxname_parts parts;
+    char *fname = NULL;
+    const char *base = NULL;
+    size_t len = 0;
+    int fd = -1;
+
+    mboxname_to_parts(mboxname, &parts);
+
+    fname = mboxname_conf_getpath(&parts, metaname);
+    if (!fname) goto done;
+
+    fd = open(fname, O_RDONLY);
+
+    /* read the value - note: we don't care if it's being rewritten,
+     * we'll still get a consistent read on either the old or new
+     * value */
+    if (fd != -1) {
+	struct stat sbuf;
+	if (fstat(fd, &sbuf)) {
+	    syslog(LOG_ERR, "IOERROR: failed to stat fd %s: %m", fname);
+	    goto done;
+	}
+	map_refresh(fd, 1, &base, &len, sbuf.st_size, metaname, mboxname);
+	if (len > 0)
+	    parsenum(base, NULL, len, &fileval);
+	map_free(&base, &len);
+    }
+
+ done:
+    if (fd != -1) close(fd);
+    mboxname_free_parts(&parts);
+    free(fname);
+    return fileval;
+}
+
+/* XXX - inform about errors?  Any error causes the value of at least
+   last+1 to be returned.  An error only on writing causes
+   max(last, fileval) + 1 to still be returned */
+static bit64 mboxname_setval(const char *mboxname, const char *metaname,
+			     bit64 last, int add)
+{
+    int fd = -1;
+    int newfd = -1;
+    char *fname = NULL;
+    char newfname[MAX_MAILBOX_PATH];
+    struct stat sbuf, fbuf;
+    const char *base = NULL;
+    size_t len = 0;
+    bit64 fileval = 0;
+    bit64 retval = last + add;
+    char numbuf[30];
+    struct mboxname_parts parts;
+    int n;
+
+    mboxname_to_parts(mboxname, &parts);
+
+    fname = mboxname_conf_getpath(&parts, metaname);
+    if (!fname) goto done;
+
+    /* get a blocking lock on fd */
+    for (;;) {
+	fd = open(fname, O_RDWR | O_CREAT, 0644);
+	if (fd == -1) {
+	    /* OK to not exist - try creating the directory first */
+	    if (cyrus_mkdir(fname, 0755)) goto done;
+	    fd = open(fname, O_RDWR | O_CREAT, 0644);
+	}
+	if (fd == -1) {
+	    syslog(LOG_ERR, "IOERROR: failed to create %s: %m", fname);
+	    goto done;
+	}
+	if (lock_blocking(fd)) {
+	    syslog(LOG_ERR, "IOERROR: failed to lock %s: %m", fname);
+	    goto done;
+	}
+	if (fstat(fd, &sbuf)) {
+	    syslog(LOG_ERR, "IOERROR: failed to stat fd %s: %m", fname);
+	    goto done;
+	}
+	if (stat(fname, &fbuf)) {
+	    syslog(LOG_ERR, "IOERROR: failed to stat file %s: %m", fname);
+	    goto done;
+	}
+	if (sbuf.st_ino == fbuf.st_ino) break;
+	close(fd);
+	fd = -1;
+    }
+
+    /* read the old value */
+    if (fd != -1) {
+	map_refresh(fd, 1, &base, &len, sbuf.st_size, metaname, mboxname);
+	if (len > 0)
+	    parsenum(base, NULL, len, &fileval);
+	map_free(&base, &len);
+	if (fileval > last) last = fileval;
+    }
+
+    retval = last + add;
+
+    /* unchanged, no need to write */
+    if (retval == fileval)
+	goto done;
+
+    snprintf(newfname, MAX_MAILBOX_PATH, "%s.NEW", fname);
+    newfd = open(newfname, O_CREAT | O_TRUNC | O_WRONLY, 0644);
+    if (newfd == -1) {
+	syslog(LOG_ERR, "IOERROR: failed to open for write %s: %m", newfname);
+	goto done;
+    }
+
+    snprintf(numbuf, 30, "%llu", retval);
+    n = retry_write(newfd, numbuf, strlen(numbuf));
+    if (n < 0) {
+	syslog(LOG_ERR, "IOERROR: failed to write %s: %m", newfname);
+	goto done;
+    }
+
+    if (fdatasync(newfd)) {
+	syslog(LOG_ERR, "IOERROR: failed to fdatasync %s: %m", newfname);
+	goto done;
+    }
+
+    close(newfd);
+    newfd = -1;
+
+    if (rename(newfname, fname)) {
+	syslog(LOG_ERR, "IOERROR: failed to rename %s: %m", newfname);
+	goto done;
+    }
+
+ done:
+    if (newfd != -1) close(newfd);
+    if (fd != -1) close(fd);
+    mboxname_free_parts(&parts);
+    free(fname);
+    return retval;
+}
+
+modseq_t mboxname_readmodseq(const char *mboxname)
+{
+    if (!config_getswitch(IMAPOPT_CONVERSATIONS))
+	return 0;
+    return (modseq_t)mboxname_readval(mboxname, "modseq");
+}
+
+modseq_t mboxname_nextmodseq(const char *mboxname, modseq_t last)
+{
+    if (!config_getswitch(IMAPOPT_CONVERSATIONS))
+	return last + 1;
+    return (modseq_t)mboxname_setval(mboxname, "modseq", (bit64)last, 1);
+}
+
+modseq_t mboxname_setmodseq(const char *mboxname, modseq_t val)
+{
+    return (modseq_t)mboxname_setval(mboxname, "modseq", (bit64)val, 0);
+}
+
+uint32_t mboxname_readuidvalidity(const char *mboxname)
+{
+    if (!config_getswitch(IMAPOPT_CONVERSATIONS))
+	return 0;
+    return (uint32_t)mboxname_readval(mboxname, "uidvalidity");
+}
+
+uint32_t mboxname_nextuidvalidity(const char *mboxname, uint32_t last)
+{
+    if (!config_getswitch(IMAPOPT_CONVERSATIONS))
+	return last + 1;
+    return (uint32_t)mboxname_setval(mboxname, "uidvalidity", (bit64)last, 1);
+}
+
+uint32_t mboxname_setuidvalidity(const char *mboxname, uint32_t val)
+{
+    return (uint32_t)mboxname_setval(mboxname, "uidvalidity", (bit64)val, 0);
+}
+
+
