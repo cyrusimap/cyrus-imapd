@@ -2760,6 +2760,9 @@ int mailbox_create(const char *name,
         
     if (hasquota) mailbox_set_quotaroot(mailbox, quotaroot);
 
+    /* ensure a UIDVALIDITY is set */
+    if (!uidvalidity)
+	uidvalidity = time(0);
     /* init non-zero fields */
     mailbox_index_dirty(mailbox);
     mailbox->i.minor_version = MAILBOX_MINOR_VERSION;

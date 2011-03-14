@@ -749,12 +749,12 @@ int mboxlist_createmailbox(const char *name, int mbtype,
 			   int localonly, int forceuser, int dbonly,
 			   struct dlist *extargs)
 {
-    int options = config_getint(IMAPOPT_MAILBOX_DEFAULT_OPTIONS) | OPT_POP3_NEW_UIDL;
-    unsigned uidvalidity = time(0);
+    int options = config_getint(IMAPOPT_MAILBOX_DEFAULT_OPTIONS)
+		  | OPT_POP3_NEW_UIDL;
     return mboxlist_createmailbox_full(name, mbtype, partition,
 				       isadmin, userid, auth_state,
-				       options, uidvalidity, NULL, NULL,
-				       localonly, forceuser, dbonly, NULL, extargs);
+				       options, 0, NULL, NULL, localonly,
+				       forceuser, dbonly, NULL, extargs);
 }
 
 int mboxlist_createsync(const char *name, int mbtype,
