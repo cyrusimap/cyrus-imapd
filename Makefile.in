@@ -65,7 +65,7 @@ COMPILE_ET = @COMPILE_ET@
 
 PACKAGE = cyrus-imapd
 VERSION = 2.4.6
-GIT_VERSION = $(shell git rev-list -1 HEAD | cut -c 1-8)
+GIT_VERSION = $(VERSION).git$(shell date +'%Y%m%d%H%M')
 
 all:: xversion
 	@for d in  $(SUBDIRS); \
@@ -77,15 +77,15 @@ all:: xversion
 snapshot::
 	@echo "creating snapshot $(GIT_VERSION)"
 	@if [ \! -d snapshot ]; then mkdir snapshot ; fi
-	@git archive --format=tar --prefix=$(PACKAGE)-snapshot-$(GIT_VERSION)/ $(GIT_VERSION) | tar -C snapshot/ -x -f -
-	@echo "/* Snapshot $(PACKAGE) $(GIT_VERSION) */" > snapshot/$(PACKAGE)-snapshot-$(GIT_VERSION)/xversion.h
-	@echo "#define _CYRUS_VERSION \"git$(VERSION)+`git log --pretty=oneline $(PACKAGE)-$(VERSION)..$(GIT_VERSION) | wc -l`\"" >> snapshot/$(PACKAGE)-snapshot-$(GIT_VERSION)/xversion.h
-	@echo "#define CYRUS_GITVERSION \"`git log --abbrev=8 --pretty=\"%h %ci\" -1 | cut -d\" \" -f1,2`\"" >> snapshot/$(PACKAGE)-snapshot-$(GIT_VERSION)/xversion.h
-	@touch snapshot/$(PACKAGE)-snapshot-$(GIT_VERSION)/xversion
-	@cd snapshot/cyrus-imapd-snapshot-$(GIT_VERSION) ; sh SMakefile
+	@git archive --format=tar --prefix=$(PACKAGE)-$(GIT_VERSION)/ HEAD | tar -C snapshot/ -x -f -
+	@echo "/* $(PACKAGE) $(GIT_VERSION) */" > snapshot/$(PACKAGE)-$(GIT_VERSION)/xversion.h
+	@echo "#define _CYRUS_VERSION \"git$(VERSION)+`git log --pretty=oneline $(PACKAGE)-$(VERSION)..HEAD | wc -l`\"" >> snapshot/$(PACKAGE)-$(GIT_VERSION)/xversion.h
+	@echo "#define CYRUS_GITVERSION \"`git log --abbrev=8 --pretty="%h %ci" -1 | cut -c 1-18`\"" >> snapshot/$(PACKAGE)-$(GIT_VERSION)/xversion.h
+	@touch snapshot/$(PACKAGE)-$(GIT_VERSION)/xversion
+	@cd snapshot/$(PACKAGE)-$(GIT_VERSION) ; sh SMakefile
 	@for d in $(SUBDIRS) $(DISTSUBDIRS); \
 	do \
-	(cd snapshot/cyrus-imapd-snapshot-$(GIT_VERSION)/$$d; \
+	(cd snapshot/$(PACKAGE)-$(GIT_VERSION)/$$d; \
 	if [ -f Makefile.dist ]; then \
 	echo "### Making" snapshot "in" `pwd`; \
 	$(MAKE) $(MFLAGS) YACC='$(YACC)' LEX='$(LEX)' \
@@ -93,8 +93,7 @@ snapshot::
 	fi) || exit 1; \
 	done
 	@echo "creating tarfile"
-	tar -C snapshot -c -f - $(PACKAGE)-snapshot-$(GIT_VERSION) | \
-	gzip -9 > $(PACKAGE)-snapshot-$(GIT_VERSION).tar.gz
+	tar -C snapshot -c -f - $(PACKAGE)-$(GIT_VERSION) | gzip -9 > $(PACKAGE)-$(GIT_VERSION).tar.gz
 	@rm -rf snapshot
 
 dist:: distgit
