@@ -8,6 +8,39 @@
 </head>
 <body>
 
+<h1>Changes to the Cyrus IMAP Server since 2.4.6</h1>
+<ul>
+<li>Fixed Bug #3357 - lmtpd offering STARTTLS in
+  pre-authorized mode.</li>
+<li>Fixed Bug #3392 - allowing INBOX.INBOX to be
+  created if the case didn't match</li>
+<li>Fixed Bug #3404 - incorrect LIST "" "user"
+  response</li>
+<li>Fixed Bug #3417 - crash on zero-byte quota file</li>
+<li>Fixed numberous bugs with mailbox upgrades</li>
+<li>Fixed replication errors, which have been reported many
+  times on the mailing list, but don't have bug numbers.</li>
+<li>Increated "paranoia" about record ordering in mailbox,
+  which would have detected some bad bugs in replication
+  that caused the infinite runaway mailbox filling reported
+  in 2.4.6 and below</li>
+<li>Increased syslogging detail about replication issues</li>
+<li>Fixed reconstruct crash with zero-byte index file</li>
+<li>Fixed cyradm perl library path finding</li>
+<li>Fixed incorrect use of LITERAL+ formats in our
+  responses to clients.  Unreported, but could be
+  causing wierd hard-to-track-down bugs out there</li>
+<li>Fixed append immediately on create</li>
+<li>Upgraded Unicode database to version 6.0</li>
+<li>Fixed reconstruct crash on folder names with many
+  digits (i.e. ebay auction numbers)</li>
+<li>Fixed reconstruct crash with file called '0.'</li>
+<li>Made reconstruct '-n' option actually exist, as
+  advertised in the man page</li>
+
+
+</ul>
+
 <h1>Changes to the Cyrus IMAP Server since 2.4.5</h1>
 <ul>
 <li>Fixed Bug #3370 - corruption on OpenBSD and other
