@@ -3020,7 +3020,7 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
     struct meta_file *mf;
     char *path, *mpath;
     struct mailbox *newmailbox = NULL;
-    unsigned uidvalidity;
+    unsigned uidvalidity = 0;
     uint32_t recno;
     struct index_record record;
 
@@ -3029,9 +3029,6 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
     if (strcmp(oldmailbox->name, newname) == 0) {
 	/* Just moving mailboxes between partitions */
 	uidvalidity = oldmailbox->i.uidvalidity;
-    }
-    else {
-	uidvalidity = time(0);
     }
 
     /* Create new mailbox */
@@ -3468,7 +3465,7 @@ static int mailbox_reconstruct_create(const char *name, struct mailbox **mbptr)
          * no point trying to rescue anything else... */
 	mailbox_close(&mailbox);
 	return mailbox_create(name, mbentry->partition, mbentry->acl,
-			      mbentry->specialuse, NULL, options, time(0), mbptr);
+			      mbentry->specialuse, NULL, options, 0, mbptr);
     }
 
     mboxlist_entry_free(&mbentry);
