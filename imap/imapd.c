@@ -9790,7 +9790,6 @@ static void list_response(char *name, int attributes,
 	 * we might be a backend and need to report folders that don't
 	 * exist on this backend - this is awful and complex and brittle
 	 * and should be changed, but we're stuck with it for now */
-	if (!config_mupdate_server && (listargs->cmd & LIST_CMD_LSUB)) return;
 	attributes |= (listargs->cmd & LIST_CMD_EXTENDED) ?
 		       MBOX_ATTRIBUTE_NONEXISTENT : MBOX_ATTRIBUTE_NOSELECT;
     }
@@ -9894,6 +9893,21 @@ static void list_response(char *name, int attributes,
 	/* \NonExistent implies \Noselect */
 	if (attributes & MBOX_ATTRIBUTE_NONEXISTENT)
 	    attributes &= ~MBOX_ATTRIBUTE_NOSELECT;
+    }
+
+    if (attributes & (MBOX_ATTRIBUTE_NONEXISTENT | MBOX_ATTRIBUTE_NOSELECT)) {
+	/* if mupdate isn't configured we can drop out now, otherwise
+	 * we might be a backend and need to report folders that don't
+	 * exist on this backend - this is awful and complex and brittle
+	 * and should be changed, but we're stuck with it for now */
+	if (listargs->cmd & LIST_CMD_LSUB) {
+	    if (!config_mupdate_server) return;
+	}
+	else {
+	    if (attributes & (MBOX_ATTRIBUTE_NOSELECT | 
+			      MBOX_ATTRIBUTE_HASNOCHILDREN))
+		return;
+	}
     }
 
     switch (listargs->cmd) {
