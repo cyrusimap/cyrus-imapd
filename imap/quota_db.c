@@ -89,15 +89,19 @@ int quota_read(struct quota *quota, struct txn **tid, int wrlock)
     else
 	r = QDB->fetch(qdb, quota->root, qrlen, &data, &datalen, tid);
 
+    if (!datalen) /* zero byte file can cause no data to be mapped */
+	return IMAP_QUOTAROOT_NONEXISTENT;
+
     switch (r) {
     case CYRUSDB_OK:
-	if (!*data || sscanf(data, UQUOTA_T_FMT " %d", 
-			     &quota->used, &quota->limit) != 2) {
-            char *buf = xstrndup(data, datalen);
-            syslog(LOG_ERR, "DBERROR: parsed bogus quota data <%s> for %s",
-               buf, quota->root);
-            free(buf);
-	    r = CYRUSDB_IOERROR;
+	if (!*data)
+	    return IMAP_QUOTAROOT_NONEXISTENT;
+	else if (sscanf(data, UQUOTA_T_FMT " %d", 
+			&quota->used, &quota->limit) != 2) {
+	    syslog(LOG_ERR, "DBERROR: error fetching quota "
+			    "root=<%s> value=<%s> error=<%s>",
+		   quota->root, data, cyrusdb_strerror(r));
+	    return CYRUSDB_IOERROR;
 	}
 	break;
 
