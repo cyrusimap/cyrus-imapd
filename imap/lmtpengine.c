@@ -1331,10 +1331,10 @@ void lmtpmode(struct lmtp_func *func,
 	      else
 		  prot_printf(pout, "250-SIZE\r\n");
 	      if (tls_enabled() && !cd.starttls_done &&
-		  cd.authenticated <= NOAUTH) {
+		  cd.authenticated == NOAUTH) {
 		  prot_printf(pout, "250-STARTTLS\r\n");
 	      }
-	      if ((cd.authenticated <= NOAUTH || saslprops.ssf) &&
+	      if ((cd.authenticated == NOAUTH) &&
 		  sasl_listmech(cd.conn, NULL, "AUTH ", " ", "", &mechs, 
 				NULL, &mechcount) == SASL_OK && 
 		  mechcount > 0) {
