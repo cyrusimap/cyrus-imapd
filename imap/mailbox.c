@@ -768,6 +768,34 @@ void mailbox_unmap_message(struct mailbox *mailbox __attribute__((unused)),
     map_free(basep, lenp);
 }
 
+static void mailbox_release_resources(struct mailbox *mailbox)
+{
+    if (mailbox->i.dirty || mailbox->cache_dirty)
+	abort();
+
+    /* just close the header */
+    if (mailbox->header_fd != -1) {
+	close(mailbox->header_fd);
+	mailbox->header_fd = -1;
+    }
+
+    /* release and unmap index */
+    if (mailbox->index_fd != -1) {
+	close(mailbox->index_fd);
+	mailbox->index_fd = -1;
+    }
+    if (mailbox->index_base)
+	map_free(&mailbox->index_base, &mailbox->index_len);
+
+    /* release and unmap cache */
+    if (mailbox->cache_fd != -1) {
+	close(mailbox->cache_fd);
+	mailbox->cache_fd = -1;
+    }
+    if (mailbox->cache_buf.s)
+	map_free((const char **)&mailbox->cache_buf.s, &mailbox->cache_len);
+}
+
 /*
  * Open the index file for 'mailbox'
  */
@@ -777,22 +805,7 @@ int mailbox_open_index(struct mailbox *mailbox)
     char *fname;
     int openflags = mailbox->is_readonly ? O_RDONLY : O_RDWR;
 
-    if (mailbox->i.dirty || mailbox->cache_dirty)
-	abort();
-
-    if (mailbox->index_fd != -1) {
-	close(mailbox->index_fd);
-	mailbox->index_fd = -1;
-    }
-    if (mailbox->index_base)
-	map_free(&mailbox->index_base, &mailbox->index_len);
-
-    if (mailbox->cache_fd != -1) {
-	close(mailbox->cache_fd);
-	mailbox->cache_fd = -1;
-    }
-    if (mailbox->cache_buf.s)
-	map_free((const char **)&mailbox->cache_buf.s, &mailbox->cache_len);
+    mailbox_release_resources(mailbox);
 
     /* open and map the index file */
     fname = mailbox_meta_fname(mailbox, META_INDEX);
@@ -822,19 +835,11 @@ int mailbox_mboxlock_reopen(struct mailboxlist *listitem, int locktype)
     struct mailbox *mailbox = &listitem->m;
     int r;
 
-    if (mailbox->index_fd != -1) 
-       close(mailbox->index_fd);
-    if (mailbox->cache_fd != -1) 
-       close(mailbox->cache_fd);
+    mailbox_release_resources(mailbox);
 
     mboxname_release(&listitem->l);
     r = mboxname_lock(mailbox->name, &listitem->l, locktype);
     if (r) return r;
-
-    if (mailbox->index_base)
-       map_free(&mailbox->index_base, &mailbox->index_len);
-    if (mailbox->cache_buf.s)
-       map_free((const char **)&mailbox->cache_buf.s, &mailbox->cache_len);
 
     return r;
 }
@@ -1037,17 +1042,7 @@ void mailbox_close(struct mailbox **mailboxptr)
 	 * THEIR mailbox_close call */
     }
 
-    if (mailbox->index_base)
-	map_free(&mailbox->index_base, &mailbox->index_len);
-    if (mailbox->cache_buf.s)
-	map_free((const char **)&mailbox->cache_buf.s, &mailbox->cache_len);
-
-    if (mailbox->index_fd != -1) 
-	close(mailbox->index_fd);
-    if (mailbox->cache_fd != -1) 
-	close(mailbox->cache_fd);
-    if (mailbox->header_fd != -1)
-	close(mailbox->header_fd);
+    mailbox_release_resources(mailbox);
 
     free(mailbox->name);
     free(mailbox->part);
