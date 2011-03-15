@@ -1491,8 +1491,11 @@ restart:
 	}
 	if (!r) r = lock_blocking(mailbox->index_fd);
     }
-    else {
+    else if (locktype == LOCK_SHARED) {
 	r = lock_shared(mailbox->index_fd);
+    }
+    else {
+	fatal("invalid locktype for index", EC_SOFTWARE);
     }
 
     /* double check that the index exists and has at least a full
