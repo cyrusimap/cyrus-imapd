@@ -909,7 +909,7 @@ int mboxname_policycheck(const char *name)
 	    return IMAP_MAILBOX_BADNAME;
     }
     for (i = 0; i < NUM_BADMBOXPATTERNS; i++) {
-	g = glob_init(badmboxpatterns[i], 0);
+	g = glob_init(badmboxpatterns[i], GLOB_ICASE);
 	if (GLOB_TEST(g, name) != -1) {
 	    glob_free(&g);
 	    return IMAP_MAILBOX_BADNAME;
