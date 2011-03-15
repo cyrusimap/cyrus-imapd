@@ -84,7 +84,7 @@
 #include "xmalloc.h"
 #include "sync_log.h"
 
-#define FNAME_SUBSSUFFIX ".sub"
+#define FNAME_SUBSSUFFIX "sub"
 
 #if 0
 static int user_deleteacl(char *name, int matchlen, int maycreate, void* rock)
