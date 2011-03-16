@@ -760,6 +760,7 @@ static void cmd_authenticate(char *mech, char *resp)
     sasl_ssf_t ssf;
     char *ssfmsg = NULL;
     const void *val;
+    int failedloginpause;
 
     if (sync_userid) {
 	prot_printf(sync_out, "BAD Already authenticated\r\n");
@@ -791,7 +792,10 @@ static void cmd_authenticate(char *mech, char *resp)
 	    syslog(LOG_NOTICE, "badlogin: %s %s [%s]",
 		   sync_clienthost, mech, sasl_errdetail(sync_saslconn));
 
-	    sleep(3);
+	    failedloginpause = config_getint(IMAPOPT_FAILEDLOGINPAUSE);
+	    if (failedloginpause != 0) {
+	        sleep(failedloginpause);
+	    }
 
 	    if (errorstring) {
 		prot_printf(sync_out, "NO %s\r\n", errorstring);

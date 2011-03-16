@@ -328,6 +328,9 @@ Blank lines and lines beginning with ``#'' are ignored.
    to work correctly.  If combined with delayed expunge (above) you
    will also be able to unexpunge messages during this time. */
 
+{ "failedloginpause", 3, INT }
+/* Number of seconds to pause after a failed login. */
+
 { "flushseenstate", 0, SWITCH }
 /* If enabled, changes to the seen state will be flushed to disk
    immediately, otherwise changes will be cached and flushed when the
