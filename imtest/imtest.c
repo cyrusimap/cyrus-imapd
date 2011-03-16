@@ -1485,10 +1485,6 @@ static char *ask_capability(struct protocol_t *prot,
     }
 
     do { /* look for the end of the capabilities */
-	if (ret) {
-	    free(ret);
-	    ret = NULL;
-	}
 	if (prot_fgets(str, sizeof(str), pin) == NULL) {
 	    if (!*str) imtest_fatal("prot layer failure");
 	    else break;
@@ -1510,6 +1506,7 @@ static char *ask_capability(struct protocol_t *prot,
 	/* check for auth */
 	if (prot->capa_cmd.auth &&
 	    (tmp = strstr(str, prot->capa_cmd.auth)) != NULL) {
+	    free(ret); /* avoid memory leak if duplicate mechlists */
 	    if (prot->capa_cmd.parse_mechlist)
 		ret = prot->capa_cmd.parse_mechlist(str, prot);
 	    else
