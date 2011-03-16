@@ -674,14 +674,6 @@ Blank lines and lines beginning with ``#'' are ignored.
    mailspool, but each have their own "replicated" copy of
    mailboxes.db. */
 
-{ "md5_dir", NULL, STRING }
-/* Top level directory for MD5 store manipulated by make_md5. File
-   structure within this directory is one file for each user on the system,
-   hashed on the first letter of the userid (e.g., /var/imap/md5/d/dpc22). */
-
-{ "md5_user_map", NULL, STRING }
-/* Map file (cdb) to allow partial make_md5 runs. Maps username to UID */
-
 { "munge8bit", 1, SWITCH }
 /* If enabled, lmtpd munges messages with 8-bit characters in the
    headers.  The 8-bit characters are changed to `X'.  If
@@ -1045,11 +1037,6 @@ And the notification message will be available on \fIstdin\fR.
 .br
    "on" = \fIservername\fR and product version in the greeting;
 product version in the capabilities */
-
-{ "sha1_dir", NULL, STRING }
-/* Top level directory for SHA1 store manipulated by make_sha1. File
-   structure within this directory is one file for each user on the system,
-   hashed on the first letter of the userid (e.g: /var/imap/sha1/d/dpc22). */
 
 { "sharedprefix", "Shared Folders", STRING }
 /* If using the alternate IMAP namespace, the prefix for the shared
