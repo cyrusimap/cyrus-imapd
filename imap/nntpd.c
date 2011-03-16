@@ -2000,6 +2000,7 @@ static void cmd_authinfo_user(char *user)
 
 static void cmd_authinfo_pass(char *pass)
 {
+    int failedloginpause;
     /* Conceal password in telemetry log */
     if (nntp_logfd != -1 && pass) {
 	int r; /* avoid warnings */
@@ -2039,7 +2040,10 @@ static void cmd_authinfo_pass(char *pass)
 			    strlen(pass))!=SASL_OK) { 
 	syslog(LOG_NOTICE, "badlogin: %s plaintext %s %s",
 	       nntp_clienthost, nntp_userid, sasl_errdetail(nntp_saslconn));
-	sleep(3);
+	failedloginpause = config_getint(IMAPOPT_FAILEDLOGINPAUSE);
+	if (failedloginpause != 0) {
+	    sleep(failedloginpause);
+	}
 	prot_printf(nntp_out, "481 Invalid login\r\n");
 	free(nntp_userid);
 	nntp_userid = 0;
@@ -2068,6 +2072,7 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
     sasl_ssf_t ssf;
     char *ssfmsg = NULL;
     const void *val;
+    int failedloginpause;
 
     /* Conceal initial response in telemetry log */
     if (nntp_logfd != -1 && resp) {
@@ -2160,7 +2165,10 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
 	    syslog(LOG_NOTICE, "badlogin: %s %s [%s]",
 		   nntp_clienthost, mech, sasl_errdetail(nntp_saslconn));
 
-	    sleep(3);
+	    failedloginpause = config_getint(IMAPOPT_FAILEDLOGINPAUSE);
+	    if (failedloginpause != 0) {
+	        sleep(failedloginpause);
+	    }
 
 	    /* Don't allow user probing */
 	    if (sasl_result == SASL_NOUSER) sasl_result = SASL_BADAUTH;

@@ -2198,6 +2198,7 @@ void cmd_login(char *tag, char *user)
     char *passwd;
     const char *reply = NULL;
     int r;
+    int failedloginpause;
     
     if (imapd_userid) {
 	eatline(imapd_in, ' ');
@@ -2277,7 +2278,10 @@ void cmd_login(char *tag, char *user)
 	syslog(LOG_NOTICE, "badlogin: %s plaintext %s %s",
 	       imapd_clienthost, canon_user, sasl_errdetail(imapd_saslconn));
 
-	sleep(3);
+	failedloginpause = config_getint(IMAPOPT_FAILEDLOGINPAUSE);
+	if (failedloginpause != 0) {
+	    sleep(failedloginpause);
+	}
 
 	/* Don't allow user probing */
 	if (r == SASL_NOUSER) r = SASL_BADAUTH;
@@ -2358,6 +2362,7 @@ void cmd_authenticate(char *tag, char *authtype, char *resp)
     const char *canon_user;
 
     int r;
+    int failedloginpause;
 
     r = saslserver(imapd_saslconn, authtype, resp, "", "+ ", "",
 		   imapd_in, imapd_out, &sasl_result, NULL);
@@ -2385,7 +2390,10 @@ void cmd_authenticate(char *tag, char *authtype, char *resp)
 	    snmp_increment_args(AUTHENTICATION_NO, 1,
 				VARIABLE_AUTH, 0, /* hash_simple(authtype) */ 
 				VARIABLE_LISTEND);
-	    sleep(3);
+	    failedloginpause = config_getint(IMAPOPT_FAILEDLOGINPAUSE);
+	    if (failedloginpause != 0) {
+	        sleep(failedloginpause);
+	    }
 
 	    /* Don't allow user probing */
 	    if (sasl_result == SASL_NOUSER) sasl_result = SASL_BADAUTH;

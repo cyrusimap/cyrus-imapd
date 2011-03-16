@@ -1492,6 +1492,7 @@ void cmd_authenticate(struct conn *C,
 {
     int r, sasl_result;
     const void *val;
+    int failedloginpause;
 
     r = saslserver(C->saslconn, mech, clientstart, "", "", "",
 		   C->pin, C->pout, &sasl_result, NULL);
@@ -1512,7 +1513,10 @@ void cmd_authenticate(struct conn *C,
 			tag, errorstring ? errorstring : "");
 	    break;
 	default:
-	    sleep(3);
+	    failedloginpause = config_getint(IMAPOPT_FAILEDLOGINPAUSE);
+	    if (failedloginpause != 0) {
+	        sleep(failedloginpause);
+	    }
 	
 	    syslog(LOG_ERR, "badlogin: %s %s %s",
 		   C->clienthost,

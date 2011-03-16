@@ -1289,6 +1289,7 @@ static void cmd_apop(char *response)
 {
     int sasl_result;
     const void *canon_user;
+    int failedloginpause;
 
     assert(response != NULL);
 
@@ -1310,7 +1311,10 @@ static void cmd_apop(char *response)
 	       popd_clienthost, popd_apop_chal,
 	       sasl_errdetail(popd_saslconn));
 	
-	sleep(3);      
+	failedloginpause = config_getint(IMAPOPT_FAILEDLOGINPAUSE);
+	if (failedloginpause != 0) {
+	    sleep(failedloginpause);
+	}
 
 	/* Don't allow user probing */
 	if (sasl_result == SASL_NOUSER) sasl_result = SASL_BADAUTH;
@@ -1392,6 +1396,8 @@ void cmd_user(char *user)
 
 void cmd_pass(char *pass)
 {
+    int failedloginpause;
+
     if (!popd_userid) {
 	prot_printf(popd_out, "-ERR [AUTH] Must give USER command\r\n");
 	return;
@@ -1441,7 +1447,10 @@ void cmd_pass(char *pass)
 			    strlen(pass))!=SASL_OK) { 
 	syslog(LOG_NOTICE, "badlogin: %s plaintext %s %s",
 	       popd_clienthost, popd_userid, sasl_errdetail(popd_saslconn));
-	sleep(3);
+	failedloginpause = config_getint(IMAPOPT_FAILEDLOGINPAUSE);
+	if (failedloginpause != 0) {
+	    sleep(failedloginpause);
+	}
 	prot_printf(popd_out, "-ERR [AUTH] Invalid login\r\n");
 	free(popd_userid);
 	popd_userid = 0;
@@ -1550,6 +1559,7 @@ void cmd_auth(char *arg)
     char *authtype;
     const void *val;
     const char *canon_user;
+    int failedloginpause;
 
     /* if client didn't specify an argument we give them the list
      *
@@ -1623,7 +1633,10 @@ void cmd_auth(char *arg)
 		       popd_clienthost, authtype);
 	    }
 
-	    sleep(3);
+	    failedloginpause = config_getint(IMAPOPT_FAILEDLOGINPAUSE);
+	    if (failedloginpause != 0) {
+	        sleep(failedloginpause);
+	    }
 
 	    /* Don't allow user probing */
 	    if (sasl_result == SASL_NOUSER) sasl_result = SASL_BADAUTH;
