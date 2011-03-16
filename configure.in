@@ -709,7 +709,7 @@ LDAP_LIBS=""
 
 if test "x$with_ldap" != "xno"; then
     if test ! -d $with_ldap; then
-        $with_ldap=/usr/local
+        with_ldap=/usr/local
     fi
 
     LDAP_CPPFLAGS="$CPPFLAGS -I${with_ldap}/include"
