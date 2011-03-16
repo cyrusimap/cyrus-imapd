@@ -76,8 +76,17 @@ int proc_register(const char *progname, const char *clienthost,
 
 	procfile = fopen(procfname, "w+");
 	if (!procfile) {
-	    syslog(LOG_ERR, "IOERROR: creating %s: %m", procfname);
-	    fatal("can't write proc file", EC_IOERR);
+	    if (cyrus_mkdir(procfname, 0755) == -1) {
+		fatal("couldn't create proc directory", EC_IOERR);
+	    }
+	    else {
+		syslog(LOG_NOTICE, "created proc directory");
+		procfile = fopen(procfname, "w+");
+		if (!procfile) {
+		    syslog(LOG_ERR, "IOERROR: creating %s: %m", procfname);
+		    fatal("can't write proc file", EC_IOERR);
+		}
+	    }
 	}
     }
 
