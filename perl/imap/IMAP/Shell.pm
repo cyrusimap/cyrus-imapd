@@ -127,7 +127,7 @@ my %builtins = (exit =>
 		  [\&_sc_info, '[mailbox]',
 		   'display mailbox/server metadata'],
 		mboxcfg =>
-		  [\&_sc_mboxcfg, 'mailbox [comment|condstore|expire|news2mail|sieve|squat|/<explicit annotation>] value',
+		  [\&_sc_mboxcfg, 'mailbox [comment|expire|news2mail|sieve|squat|/<explicit annotation>] value',
 		   'configure mailbox'],
 		mboxconfig => 'mboxcfg',
 		reconstruct =>
@@ -1437,7 +1437,7 @@ sub _sc_mboxcfg {
   while (defined ($opt = shift(@argv))) {
     last if $opt eq '--';
     if ($opt =~ /^-/) {
-      die "usage: mboxconfig mailbox [comment|condstore|expire|news2mail|sharedseen|sieve|squat|/<explicit annotation>] value\n";
+      die "usage: mboxconfig mailbox [comment|expire|news2mail|sharedseen|sieve|squat|/<explicit annotation>] value\n";
     }
     else {
       push(@nargv, $opt);
@@ -1446,7 +1446,7 @@ sub _sc_mboxcfg {
   }
   push(@nargv, @argv);
   if (@nargv < 2) {
-    die "usage: mboxconfig mailbox [comment|condstore|expire|news2mail|sharedseen|sieve|squat|/<explicit annotation>] value\n";
+    die "usage: mboxconfig mailbox [comment|expire|news2mail|sharedseen|sieve|squat|/<explicit annotation>] value\n";
   }
   if (!$cyrref || !$$cyrref) {
     die "mboxconfig: no connection to server\n";
@@ -1675,10 +1675,6 @@ The currently supported attributes are:
 =item C<comment>
 
 Sets a comment or description associated with the mailbox.
-
-=item C<condstore>
-
-Enables the IMAP CONDSTORE extension (modification sequences) on the mailbox.
 
 =item C<expire>
 

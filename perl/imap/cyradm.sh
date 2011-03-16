@@ -219,10 +219,6 @@ The currently supported attributes are:
 
 Sets a comment or description associated with the mailbox.
 
-=item C<condstore>
-
-Enables the IMAP CONDSTORE extension (modification sequences) on the mailbox.
-
 =item C<expire>
 
 Sets the number of days after which messages will be expired from the mailbox.

@@ -611,7 +611,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "mailbox_default_options", 0, INT }
 /* Default "options" field for the mailbox on create.  You'll want to know
    what you're doing before setting this, but it can apply some default
-   annotations like condstore or duplicate supression */
+   annotations like duplicate supression */
 
 { "mailnotifier", NULL, STRING }
 /* Notifyd(8) method to use for "MAIL" notifications.  If not set, "MAIL"
