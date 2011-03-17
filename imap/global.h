@@ -147,6 +147,7 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 int getint32(struct protstream *pin, int *num);
 int getsint32(struct protstream *pin, int *num);
 int getuint32(struct protstream *pin, unsigned int *num);
+int getmodseq(struct protstream *pin, modseq_t *num);
 
 void eatline(struct protstream *pin, int c);
 

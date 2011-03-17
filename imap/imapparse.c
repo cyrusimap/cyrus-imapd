@@ -292,6 +292,31 @@ int getuint32(struct protstream *pin, uint32_t *num)
     return c;
 }
 
+/* This would be called getuint64() if
+ * all were right with the world */
+int getmodseq(struct protstream *pin, modseq_t *num)
+{
+    int c;
+    unsigned int i = 0;
+    char buf[32];
+    int gotchar = 0;
+
+    while (i < sizeof(buf) &&
+	   (c = prot_getc(pin)) != EOF &&
+	   cyrus_isdigit(c)) {
+	buf[i++] = c;
+	gotchar = 1;
+    }
+
+    if (!gotchar || i == sizeof(buf))
+	return EOF;
+
+    buf[i] = '\0';
+    *num = strtoull(buf, NULL, 10);
+
+    return c;
+}
+
 /*
  * Eat characters up to and including the next newline
  * Also look for and eat non-synchronizing literals.
