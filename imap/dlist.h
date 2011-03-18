@@ -51,6 +51,7 @@
 #include "util.h"
 #include "prot.h"
 #include "mailbox.h"
+#include "message_guid.h"
 
 enum dlist_t {
     DL_NIL = 0,
@@ -82,6 +83,7 @@ struct dlist {
 const char *dlist_reserve_path(const char *part, struct message_guid *guid);
 
 uint32_t dlist_nval(struct dlist *dl);
+modseq_t dlist_modseqval(struct dlist *dl);
 
 struct dlist *dlist_atom(struct dlist *dl, const char *name, const char *val);
 struct dlist *dlist_flag(struct dlist *dl, const char *name, const char *val);

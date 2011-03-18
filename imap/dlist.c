@@ -218,7 +218,7 @@ void dlist_stitch(struct dlist *dl, struct dlist *child)
 static struct dlist *dlist_child(struct dlist *dl, const char *name)
 {
     struct dlist *i = xzmalloc(sizeof(struct dlist));
-    i->name = xstrdup(name);
+    if (name) i->name = xstrdup(name);
     i->type = DL_NIL;
     if (dl)
 	dlist_stitch(dl, i);
@@ -331,6 +331,13 @@ struct dlist *dlist_new(const char *name)
     return dlist_kvlist(NULL, name);
 }
 
+static int nextlevel(const struct dlist *dl, int level)
+{
+    if (level == -1) return -1;
+    if (dl->type == DL_KVLIST) return level + 1;
+    return level;
+}
+
 static void dlist_print_helper(const struct dlist *dl, int printkeys,
 			       struct protstream *out, int level)
 {
@@ -366,7 +373,7 @@ static void dlist_print_helper(const struct dlist *dl, int printkeys,
 	}
 	break;
     case DL_KVLIST:
-	if (level) {
+	if (level > 0) {
 	    prot_printf(out, "\r\n");
 	    for (i = 0; i <= level; i++)
 		prot_printf(out, " ");
@@ -383,7 +390,7 @@ static void dlist_print_helper(const struct dlist *dl, int printkeys,
     case DL_ATOMLIST:
 	prot_printf(out, "(");
 	for (di = dl->head; di; di = di->next) {
-	    dlist_print_helper(di, 0, out, di->type == DL_KVLIST ? level + 1 : level);
+	    dlist_print_helper(di, 0, out, nextlevel(di, level));
 	    if (di->next)
 		prot_printf(out, " ");
 	}
@@ -402,7 +409,7 @@ void dlist_printbuf(const struct dlist *dl, int printkeys, struct buf *outbuf)
     struct protstream *outstream;
 
     outstream = prot_writebuf(outbuf);
-    dlist_print(dl, printkeys, outstream);
+    dlist_print_helper(dl, printkeys, outstream, -1);
     prot_flush(outstream);
     prot_free(outstream);
 }
@@ -457,7 +464,7 @@ char dlist_parse(struct dlist **dlp, int parsekey, struct protstream *in)
 	buf_setcstr(&kbuf, "");
 	c = prot_getc(in);
     }
-    
+
     /* connection dropped? */
     if (c == EOF) goto fail;
 
@@ -479,7 +486,7 @@ char dlist_parse(struct dlist **dlp, int parsekey, struct protstream *in)
 	/* no whitespace allowed here */
 	c = prot_getc(in);
 	if (c == '(') {
-	    dl = dlist_list(NULL, kbuf.s);
+	    dl = dlist_kvlist(NULL, kbuf.s);
 	    c = next_nonspace(in, ' ');
 	    while (c != ')') {
 		struct dlist *di = NULL;
@@ -546,13 +553,18 @@ int dlist_parsemap(struct dlist **dlp, int parsekey,
 {
     struct protstream *stream;
     char c;
+    struct dlist *dl = NULL;
 
     stream = prot_readmap(base, len);
-    c = dlist_parse(dlp, parsekey, stream);
+    c = dlist_parse(&dl, parsekey, stream);
     prot_free(stream);
 
-    if (c != EOF)
+    if (c != EOF) {
+	dlist_free(&dl);
 	return IMAP_IOERROR; /* failed to slurp entire buffer */
+    }
+
+    *dlp = dl;
 
     return 0;
 }
@@ -564,7 +576,7 @@ struct dlist *dlist_getchild(struct dlist *dl, const char *name)
     if (!dl) return NULL;
 
     for (i = dl->head; i; i = i->next) {
-	if (!strcmp(name, i->name))
+	if (i->name && !strcmp(name, i->name))
 	    return i;
     }
     lastkey = name;
@@ -599,41 +611,23 @@ int dlist_getbuf(struct dlist *dl, const char *name, const char **val, size_t *l
 }
 
 /* ensure value is exactly one number */
-static int _getn(struct dlist *dl, const char *name, bit64 *val)
+static int _getn(struct dlist *dl, bit64 *val)
 {
     const char *str;
     size_t strlen;
     const char *end;
-
-    if (!dlist_getbuf(dl, name, &str, &strlen))
-	return 0;
-
-    if (parsenum(str, &end, strlen, val))
-	return 0;
-
-    if (end - str != (int)strlen)
-	return 0;
-
-    return 1;
-}
-
-/* XXX - this stuff is all shitty, rationalise later */
-uint32_t dlist_nval(struct dlist *dl)
-{
-    const char *str;
-    size_t strlen;
-    const char *end;
-    bit64 v;
 
     switch(dl->type) {
     case DL_ATOM:
     case DL_BUF:
 	assert(dlist_bufval(dl, &str, &strlen));
-	assert(!parsenum(str, &end, strlen, &v));
+	assert(!parsenum(str, &end, strlen, val));
 	assert(end - str == (int)strlen);
-	return (uint32_t)v;
+	return 1;
     case DL_NUM:
-	return (uint32_t)dl->nval;
+    case DL_MODSEQ:
+	*val = dl->nval;
+	return 1;
     default:
 	fatal("INVALID TYPE FOR NVAL", EC_SOFTWARE);
     }
@@ -642,12 +636,39 @@ uint32_t dlist_nval(struct dlist *dl)
     return 0;
 }
 
-
-int dlist_getnum(struct dlist *dl, const char *name, uint32_t *val)
+/* XXX - this stuff is all shitty, rationalise later */
+uint32_t dlist_nval(struct dlist *dl)
 {
     bit64 v;
 
-    if (!_getn(dl, name, &v))
+    if (!dl) fatal("NO DL", EC_SOFTWARE);
+
+    if (_getn(dl, &v))
+	return (uint32_t)v;
+
+    return 0;
+}
+
+modseq_t dlist_modseqval(struct dlist *dl)
+{
+    bit64 v;
+
+    if (!dl) fatal("NO DL", EC_SOFTWARE);
+
+    if (_getn(dl, &v))
+	return (modseq_t)v;
+
+    return 0;
+}
+
+int dlist_getnum(struct dlist *dl, const char *name, uint32_t *val)
+{
+    struct dlist *child = dlist_getchild(dl, name);
+    bit64 v;
+
+    if (!child) return 0;
+
+    if (!_getn(child, &v))
 	return 0;
     *val = (uint32_t)v;
 
@@ -656,9 +677,12 @@ int dlist_getnum(struct dlist *dl, const char *name, uint32_t *val)
 
 int dlist_getdate(struct dlist *dl, const char *name, time_t *val)
 {
+    struct dlist *child = dlist_getchild(dl, name);
     bit64 v;
 
-    if (!_getn(dl, name, &v))
+    if (!child) return 0;
+
+    if (!_getn(child, &v))
 	return 0;
     *val = (time_t)v;
 
@@ -667,11 +691,13 @@ int dlist_getdate(struct dlist *dl, const char *name, time_t *val)
 
 int dlist_getmodseq(struct dlist *dl, const char *name, modseq_t *val)
 {
+    struct dlist *child = dlist_getchild(dl, name);
     bit64 v;
 
-    if (!_getn(dl, name, &v))
-	return 0;
+    if (!child) return 0;
 
+    if (!_getn(child, &v))
+	return 0;
     *val = (modseq_t)v;
 
     return 1;
