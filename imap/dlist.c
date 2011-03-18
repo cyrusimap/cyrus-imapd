@@ -557,7 +557,7 @@ int dlist_parsemap(struct dlist **dlp, int parsekey,
     return 0;
 }
 
-static struct dlist *dlist_getchild(struct dlist *dl, const char *name)
+struct dlist *dlist_getchild(struct dlist *dl, const char *name)
 {
     struct dlist *i;
 
