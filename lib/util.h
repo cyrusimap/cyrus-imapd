@@ -52,6 +52,7 @@
 #include <sys/types.h>
 #include <limits.h>
 #include <stdarg.h>
+#include <stdio.h>
 
 #define BIT32_MAX 4294967295U
 
@@ -187,6 +188,7 @@ const char *buf_cstring(struct buf *buf);
 void buf_ensure(struct buf *buf, int morebytes);
 char *buf_release(struct buf *buf);
 void buf_getmap(struct buf *buf, const char **base, int *len);
+int buf_getline(struct buf *buf, FILE *fp);
 unsigned buf_len(struct buf *buf);
 void buf_reset(struct buf *buf);
 void buf_truncate(struct buf *buf, unsigned int len);

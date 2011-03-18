@@ -132,6 +132,7 @@ struct protstream *prot_readmap(const char *base, uint32_t len)
     /* dodgy, but the alternative is two pointers */
     newstream->ptr = (unsigned char *)base;
     newstream->cnt = len;
+    newstream->fixedsize = 1;
     newstream->fd = PROT_NO_FD;
     newstream->logfd = PROT_NO_FD;
     newstream->big_buffer = PROT_NO_FD;

@@ -625,6 +625,22 @@ void buf_getmap(struct buf *buf, const char **base, int *len)
     *len = buf->len;
 }
 
+int buf_getline(struct buf *buf, FILE *fp)
+{
+    int c;
+
+    buf_reset(buf);
+    while ((c = fgetc(fp)) != EOF) {
+       buf_putc(buf, c);
+       if (c == '\n')
+           break;
+    }
+    buf_cstring(buf);
+
+    /* EOF and no content, we're done */
+    return (!(buf->len == 0 && c == EOF));
+}
+
 unsigned buf_len(struct buf *buf)
 {
     return buf->len;

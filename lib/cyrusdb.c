@@ -57,6 +57,7 @@
 #include <fcntl.h>
 
 #include "cyrusdb.h"
+#include "util.h"
 #include "exitcodes.h"
 #include "libcyr_cfg.h"
 #include "retry.h"
@@ -161,18 +162,101 @@ int cyrusdb_copyfile(const char *srcname, const char *dstname)
     return 0;
 }
 
-struct convert_rock {
+struct db_rock {
     struct cyrusdb_backend *backend;
     struct db *db;
-    struct txn *tid;
+    struct txn **tid;
 };
+
+static int delete_cb(void *rock,
+		     const char *key, int keylen,
+		     const char *data __attribute__((unused)), 
+		     int datalen __attribute__((unused))) 
+{
+    struct db_rock *cr = (struct db_rock *)rock;
+    return (cr->backend->delete)(cr->db, key, keylen, cr->tid, 1);
+}
+
+static int print_cb(void *rock,
+		    const char *key, int keylen,
+		    const char *data, int datalen) 
+{
+    FILE *f = (FILE *)rock;
+
+    /* XXX: improve binary safety */
+    fprintf(f, "%.*s\t%.*s\n", keylen, key, datalen, data);
+
+    return 0;
+}
+
+
+int cyrusdb_dump(struct cyrusdb_backend *backend,
+		 struct db *db,
+		 const char *prefix, int prefixlen,
+		 FILE *f,
+		 struct txn **tid)
+{
+    return (backend->foreach)(db, prefix, prefixlen, NULL, print_cb, f, tid);
+}
+
+int cyrusdb_truncate(struct cyrusdb_backend *backend,
+		     struct db *db,
+		     struct txn **tid)
+{
+    struct db_rock tr;
+
+    tr.backend = backend;
+    tr.db = db;
+    tr.tid = tid;
+
+    return (backend->foreach)(db, "", 0, NULL, delete_cb, &tr, tid);
+}
+
+int cyrusdb_undump(struct cyrusdb_backend *backend,
+		   struct db *db,
+		   FILE *f,
+		   struct txn **tid)
+{
+    struct buf line = BUF_INITIALIZER;
+    const char *tab;
+    const char *str;
+    int r = 0;
+
+    while (buf_getline(&line, f)) {
+	/* skip blank lines */
+	if (!line.len) continue;
+	str = buf_cstring(&line);
+	/* skip comments */
+	if (str[0] == '#') continue;
+
+	tab = strchr(str, '\t');
+
+	/* deletion (no value) */
+	if (!tab) {
+	    r = (backend->delete)(db, str, line.len, tid, 1);
+	    if (r) goto out;
+	}
+
+	/* store */
+	else {
+	    unsigned klen = (tab - str);
+	    unsigned vlen = line.len - klen - 2; /* TAB and ENDLINE */
+	    r = (backend->store)(db, str, klen, tab + 1, vlen, tid);
+	    if (r) goto out;
+	}
+    }
+
+  out:
+    buf_free(&line);
+    return r;
+}
 
 static int converter_cb(void *rock,
 			const char *key, int keylen,
 			const char *data, int datalen) 
 {
-    struct convert_rock *cr = (struct convert_rock *)rock;
-    return (cr->backend->store)(cr->db, key, keylen, data, datalen, &cr->tid);
+    struct db_rock *cr = (struct db_rock *)rock;
+    return (cr->backend->store)(cr->db, key, keylen, data, datalen, cr->tid);
 }
 
 /* convert (just copy every record) from one database to another in possibly
@@ -183,8 +267,9 @@ void cyrusdb_convert(const char *fromfname, const char *tofname,
 		     struct cyrusdb_backend *tobackend)
 {
     struct db *fromdb, *todb;
-    struct convert_rock cr;
+    struct db_rock cr;
     struct txn *fromtid = NULL;
+    struct txn *totid = NULL;
     int r;
 
     /* open both databases (create todb) */
@@ -198,14 +283,14 @@ void cyrusdb_convert(const char *fromfname, const char *tofname,
     /* set up the copy rock */
     cr.backend = tobackend;
     cr.db = todb;
-    cr.tid = NULL;
+    cr.tid = &totid;
 
     /* copy each record to the destination DB (transactional for speed) */
     (frombackend->foreach)(fromdb, "", 0, NULL, converter_cb, &cr, &fromtid);
 
     /* commit both transactions */
     if (fromtid) (frombackend->commit)(fromdb, fromtid);
-    if (cr.tid) (tobackend->commit)(todb, cr.tid);
+    if (totid) (tobackend->commit)(todb, totid);
 
     /* and close the DBs */
     (frombackend->close)(fromdb);

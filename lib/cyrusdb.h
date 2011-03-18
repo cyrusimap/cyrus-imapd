@@ -44,6 +44,8 @@
 #ifndef INCLUDED_CYRUSDB_H
 #define INCLUDED_CYRUSDB_H
 
+#include <stdio.h>
+
 struct db;
 struct txn;
 
@@ -197,6 +199,20 @@ extern int cyrusdb_copyfile(const char *srcname, const char *dstname);
 extern void cyrusdb_convert(const char *fromfname, const char *tofname,
 			    struct cyrusdb_backend *frombackend,
 			    struct cyrusdb_backend *tobackend);
+
+int cyrusdb_dump(struct cyrusdb_backend *backend,
+		 struct db *db,
+		 const char *prefix, int prefixlen,
+		 FILE *f,
+		 struct txn **tid);
+int cyrusdb_truncate(struct cyrusdb_backend *backend,
+		     struct db *db,
+		     struct txn **tid);
+int cyrusdb_undump(struct cyrusdb_backend *backend,
+		   struct db *db,
+		   FILE *f,
+		   struct txn **tid);
+
 
 extern const char *cyrusdb_detect(const char *fname);
 
