@@ -521,6 +521,11 @@ char dlist_parse(struct dlist **dlp, int parsekey, struct protstream *in)
 	c = getbastring(in, NULL, &vbuf);
 	dl = dlist_buf(NULL, kbuf.s, vbuf.s, vbuf.len);
     }
+    else if (c == '\\') { /* special case for flags */
+	prot_ungetc(c, in);
+	c = getastring(in, NULL, &vbuf);
+	dl = dlist_flag(NULL, kbuf.s, vbuf.s);
+    }
     else {
 	prot_ungetc(c, in);
 	c = getastring(in, NULL, &vbuf);
