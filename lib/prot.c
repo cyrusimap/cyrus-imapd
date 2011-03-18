@@ -102,17 +102,36 @@ struct protstream *prot_new(int fd, int write)
     return newstream;
 }
 
-/* Create a protstream which is just an interface to a mapped piece of
- * memory, allowing prot commands to be used to read from it */
-struct protstream *prot_readmap(const char *buf, uint32_t len)
+struct protstream *prot_writebuf(struct buf *buf)
 {
     struct protstream *newstream;
 
     newstream = (struct protstream *) xzmalloc(sizeof(struct protstream));
     /* dodgy, but the alternative is two pointers */
-    newstream->ptr = (unsigned char *)buf;
+    newstream->buf = (unsigned char *) 
+	xmalloc(sizeof(char) * (PROT_BUFSIZE));
+    newstream->buf_size = PROT_BUFSIZE;
+    newstream->ptr = newstream->buf;
+    newstream->cnt = PROT_BUFSIZE;
+    newstream->write = 1;
+    newstream->writetobuf = buf;
+    newstream->fd = PROT_NO_FD;
+    newstream->logfd = PROT_NO_FD;
+    newstream->big_buffer = PROT_NO_FD;
+
+    return newstream;
+}
+
+/* Create a protstream which is just an interface to a mapped piece of
+ * memory, allowing prot commands to be used to read from it */
+struct protstream *prot_readmap(const char *base, uint32_t len)
+{
+    struct protstream *newstream;
+
+    newstream = (struct protstream *) xzmalloc(sizeof(struct protstream));
+    /* dodgy, but the alternative is two pointers */
+    newstream->ptr = (unsigned char *)base;
     newstream->cnt = len;
-    newstream->fixedsize = 1;
     newstream->fd = PROT_NO_FD;
     newstream->logfd = PROT_NO_FD;
     newstream->big_buffer = PROT_NO_FD;
@@ -937,8 +956,13 @@ int prot_flush_internal(struct protstream *s, int force)
     
     /* end protstream setup */
 
+    /* if writing to a buffer, just append the lot.  Always works */
+    if (s->writetobuf) {
+	buf_appendmap(s->writetobuf, ptr, left);
+    }
+
     /* If we're doing a blocking write, flush the buffers, bigbuffer first */
-    if(!s->dontblock) {
+    else if (!s->dontblock) {
 	if(s->big_buffer != PROT_NO_FD) {
 	    /* Write the bigbuffer */
 	    do {
@@ -985,7 +1009,10 @@ int prot_flush_internal(struct protstream *s, int force)
 		left -= n;
 	    }
 	} while(left);
-    } else { /* Nonblocking */
+    }
+
+    /* Nonblocking */
+    else {
 	/* If we've been feeding a bigbuffer, write out from the current
 	 * position as much as we can */
 	if (s->big_buffer != PROT_NO_FD) {

@@ -123,6 +123,8 @@ struct protstream {
     int read_timeout;
     time_t timeout_mark;
     struct protstream *flushonread;
+    /* hack to write to an in-memory-string */
+    struct buf *writetobuf;
 
     int can_unget;
     int bytes_in;
@@ -183,7 +185,8 @@ extern int prot_putc(int c, struct protstream *s);
 
 /* Allocate/free the protstream structure */
 extern struct protstream *prot_new(int fd, int write);
-extern struct protstream *prot_readmap(const char *buf, uint32_t len);
+extern struct protstream *prot_writebuf(struct buf *buf);
+extern struct protstream *prot_readmap(const char *base, uint32_t len);
 extern int prot_free(struct protstream *s);
 
 /* Set the telemetry logfile for a given protstream */
