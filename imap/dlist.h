@@ -103,7 +103,10 @@ struct dlist *dlist_new(const char *name);
 void dlist_free(struct dlist **dlp);
 
 void dlist_print(const struct dlist *dl, int printkeys, struct protstream *out);
+void dlist_printbuf(const struct dlist *dl, int printkeys, struct buf *outbuf);
 char dlist_parse(struct dlist **dlp, int parsekeys, struct protstream *in);
+int dlist_parsemap(struct dlist **dlp, int parsekeys,
+		   const char *base, unsigned len);
 
 void dlist_stitch(struct dlist *dl, struct dlist *child);
 int dlist_getatom(struct dlist *dl, const char *name, const char **val);
