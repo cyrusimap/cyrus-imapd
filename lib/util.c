@@ -625,6 +625,13 @@ void buf_getmap(struct buf *buf, const char **base, int *len)
     *len = buf->len;
 }
 
+/* fetch a single line a file - terminated with \n ONLY.
+ * buf does not contain the \n.
+ * NOTE: if the final line does not contain a \n we still
+ * return true so that the caller will process the line,
+ * so a file A\nB will return two true responses with bufs
+ * containing "A" and "B" respectively before returning a
+ * false to the third call */
 int buf_getline(struct buf *buf, FILE *fp)
 {
     int c;
