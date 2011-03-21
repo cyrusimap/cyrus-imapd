@@ -1376,7 +1376,7 @@ char *mboxname_conf_getpath(struct mboxname_parts *parts, const char *suffix)
 	}
 	else {
 	    fname = strconcat(config_dir,
-			      FNAME_SHAREDPREFIX, ".", suffix,
+			      "/", FNAME_SHAREDPREFIX, ".", suffix,
 			      (char *)NULL);
 	}
     }
