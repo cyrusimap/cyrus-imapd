@@ -4391,7 +4391,7 @@ void cmd_store(char *tag, char *sequence, int usinguid)
 
     /* local mailbox */
     memset(&storeargs, 0, sizeof storeargs);
-    storeargs.unchangedsince = ULONG_MAX;
+    storeargs.unchangedsince = ~0ULL;
 
     c = prot_getc(imapd_in);
     if (c == '(') {
