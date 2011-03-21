@@ -631,10 +631,11 @@ int buf_getline(struct buf *buf, FILE *fp)
 
     buf_reset(buf);
     while ((c = fgetc(fp)) != EOF) {
-       buf_putc(buf, c);
-       if (c == '\n')
-           break;
+	if (c == '\n')
+	    break;
+	buf_putc(buf, c);
     }
+    /* ensure trailing NULL */
     buf_cstring(buf);
 
     /* EOF and no content, we're done */
