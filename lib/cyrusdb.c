@@ -240,7 +240,7 @@ int cyrusdb_undump(struct cyrusdb_backend *backend,
 	/* store */
 	else {
 	    unsigned klen = (tab - str);
-	    unsigned vlen = line.len - klen - 2; /* TAB and ENDLINE */
+	    unsigned vlen = line.len - klen - 1; /* TAB */
 	    r = (backend->store)(db, str, klen, tab + 1, vlen, tid);
 	    if (r) goto out;
 	}
