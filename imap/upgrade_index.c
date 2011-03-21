@@ -206,7 +206,7 @@ int upgrade_index(struct mailbox *mailbox)
     if (oldminor_version < 6) {
 	/* upgrade quota to 64-bits (bump existing fields) */
 	memmove(hbuf+OFFSET_QUOTA_MAILBOX_USED + 4, hbuf+OFFSET_QUOTA_MAILBOX_USED,
-		INDEX_HEADER_SIZE - OFFSET_QUOTA_MAILBOX_USED + 4);
+		INDEX_HEADER_SIZE - (OFFSET_QUOTA_MAILBOX_USED + 4));
 	/* zero the unused 32-bits */
 	*((bit32 *)(hbuf+OFFSET_QUOTA_MAILBOX_USED)) = htonl(0);
     }
