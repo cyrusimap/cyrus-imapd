@@ -307,6 +307,7 @@ struct capa_struct base_capabilities[] = {
     { "ANNOTATEMORE",          2 },
     { "METADATA",              2 },
     { "LIST-EXTENDED",         2 },
+    { "LIST-STATUS",           2 },
     { "WITHIN",                2 },
     { "QRESYNC",               2 },
     { "SCAN",                  2 },
@@ -410,8 +411,8 @@ int getmetadatastoredata(char *tag, struct entryattlist **entryatts);
 
 void annotate_response(struct entryattlist *l);
 
-int getlistselopts(char *tag, unsigned *opts);
-int getlistretopts(char *tag, unsigned *opts);
+int getlistselopts(char *tag, struct listargs *args);
+int getlistretopts(char *tag, struct listargs *args);
 
 int getsearchreturnopts(char *tag, struct searchargs *searchargs);
 int getsearchprogram(char *tag, struct searchargs *searchargs,
@@ -5910,7 +5911,7 @@ void getlistargs(char *tag, struct listargs *listargs)
     if (c == '(') {
 	listargs->cmd = LIST_CMD_EXTENDED;
 	listargs->ret = 0;
-	c = getlistselopts(tag, &listargs->sel);
+	c = getlistselopts(tag, listargs);
 	if (c == EOF) {
 	    eatline(imapd_in, c);
 	    return;
@@ -5975,7 +5976,7 @@ void getlistargs(char *tag, struct listargs *listargs)
     if (c == ' ') {
 	listargs->cmd = LIST_CMD_EXTENDED;
 	listargs->ret = 0;
-	c = getlistretopts(tag, &listargs->ret);
+	c = getlistretopts(tag, listargs);
 	if (c == EOF) {
 	    eatline(imapd_in, c);
 	    goto freeargs;
@@ -6889,6 +6890,114 @@ void cmd_starttls(char *tag, int imaps)
 }
 #endif /* HAVE_SSL */
 
+static int parse_statusitems(unsigned *statusitemsp, const char **errstr)
+{
+    static struct buf arg;
+    unsigned statusitems = 0;
+    int c;
+
+    c = prot_getc(imapd_in);
+    if (c != '(') goto err;
+
+    c = getword(imapd_in, &arg);
+    if (arg.s[0] == '\0') goto err;
+    for (;;) {
+	lcase(arg.s);
+	if (!strcmp(arg.s, "messages")) {
+	    statusitems |= STATUS_MESSAGES;
+	}
+	else if (!strcmp(arg.s, "recent")) {
+	    statusitems |= STATUS_RECENT;
+	}
+	else if (!strcmp(arg.s, "uidnext")) {
+	    statusitems |= STATUS_UIDNEXT;
+	}
+	else if (!strcmp(arg.s, "uidvalidity")) {
+	    statusitems |= STATUS_UIDVALIDITY;
+	}
+	else if (!strcmp(arg.s, "unseen")) {
+	    statusitems |= STATUS_UNSEEN;
+	}
+	else if (!strcmp(arg.s, "highestmodseq")) {
+	    statusitems |= STATUS_HIGHESTMODSEQ;
+	}
+	else {
+	    static char buf[200];
+	    snprintf(buf, 200, "Invalid Status attributes %s", arg.s);
+	    *errstr = buf;
+	    return EOF;
+	}
+
+	if (c == ' ') c = getword(imapd_in, &arg);
+	else break;
+    }
+
+    if (c != ')') {
+	*errstr = "Missing close parenthesis in Status";
+	return EOF;
+    }
+    c = prot_getc(imapd_in);
+
+    /* success */
+    *statusitemsp = statusitems;
+    return c;
+
+ err:
+    *errstr = "Bad status string";
+    return EOF;
+}
+
+static int print_statusline(const char *extname, unsigned statusitems,
+			    struct statusdata *sd)
+{
+    int sepchar;
+    
+    prot_printf(imapd_out, "* STATUS ");
+    prot_printastring(imapd_out, extname);
+    prot_printf(imapd_out, " ");
+    sepchar = '(';
+
+    if (statusitems & STATUS_MESSAGES) {
+	prot_printf(imapd_out, "%cMESSAGES %u", sepchar, sd->messages);
+	sepchar = ' ';
+    }
+    if (statusitems & STATUS_RECENT) {
+	prot_printf(imapd_out, "%cRECENT %u", sepchar, sd->recent);
+	sepchar = ' ';
+    }
+    if (statusitems & STATUS_UIDNEXT) {
+	prot_printf(imapd_out, "%cUIDNEXT %u", sepchar, sd->uidnext);
+	sepchar = ' ';
+    }
+    if (statusitems & STATUS_UIDVALIDITY) {
+	prot_printf(imapd_out, "%cUIDVALIDITY %u", sepchar, sd->uidvalidity);
+	sepchar = ' ';
+    }
+    if (statusitems & STATUS_UNSEEN) {
+	prot_printf(imapd_out, "%cUNSEEN %u", sepchar, sd->unseen);
+	sepchar = ' ';
+    }
+    if (statusitems & STATUS_HIGHESTMODSEQ) {
+	prot_printf(imapd_out, "%cHIGHESTMODSEQ " MODSEQ_FMT,
+		    sepchar, sd->highestmodseq);
+	sepchar = ' ';
+    }
+    prot_printf(imapd_out, ")\r\n");
+
+    return 0;
+}
+
+static int imapd_statusdata(const char *mailboxname, unsigned statusitems,
+			    struct statusdata *sd)
+{
+    /* use the index status if we can so we get the 'alive' Recent count */
+    if (imapd_index && !strcmp(imapd_index->mailbox->name, mailboxname))
+	return index_status(imapd_index, sd);
+
+    /* fall back to generic lookup */
+    return status_lookup(mailboxname, imapd_userid, statusitems, sd);
+}
+
 /*
  * Parse and perform a STATUS command
  * The command has been parsed up to the attribute list
@@ -6897,12 +7006,11 @@ void cmd_status(char *tag, char *name)
 {
     int c;
     unsigned statusitems = 0;
-    static struct buf arg;
     char mailboxname[MAX_MAILBOX_BUFFER];
+    const char *errstr;
     struct mboxlist_entry *mbentry = NULL;
-    int r = 0;
-    int sepchar;
     struct statusdata sdata;
+    int r = 0;
 
     r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
 					       imapd_userid, mailboxname);
@@ -6954,50 +7062,13 @@ void cmd_status(char *tag, char *name)
 
     imapd_check(NULL, 0);
 
-    c = prot_getc(imapd_in);
-    if (c != '(') goto badlist;
-
-    c = getword(imapd_in, &arg);
-    if (arg.s[0] == '\0') goto badlist;
-    for (;;) {
-	lcase(arg.s);
-	if (!strcmp(arg.s, "messages")) {
-	    statusitems |= STATUS_MESSAGES;
-	}
-	else if (!strcmp(arg.s, "recent")) {
-	    statusitems |= STATUS_RECENT;
-	}
-	else if (!strcmp(arg.s, "uidnext")) {
-	    statusitems |= STATUS_UIDNEXT;
-	}
-	else if (!strcmp(arg.s, "uidvalidity")) {
-	    statusitems |= STATUS_UIDVALIDITY;
-	}
-	else if (!strcmp(arg.s, "unseen")) {
-	    statusitems |= STATUS_UNSEEN;
-	}
-	else if (!strcmp(arg.s, "highestmodseq")) {
-	    statusitems |= STATUS_HIGHESTMODSEQ;
-	}
-	else {
-	    prot_printf(imapd_out, "%s BAD Invalid Status attribute %s\r\n",
-			tag, arg.s);
-	    eatline(imapd_in, c);
-	    goto done;
-	}
-	    
-	if (c == ' ') c = getword(imapd_in, &arg);
-	else break;
-    }
-
-    if (c != ')') {
-	prot_printf(imapd_out,
-		    "%s BAD Missing close parenthesis in Status\r\n", tag);
-	eatline(imapd_in, c);
+    c = parse_statusitems(&statusitems, &errstr);
+    if (c == EOF) {
+	prot_printf(imapd_out, "%s BAD %s\r\n", tag, errstr);
 	goto done;
     }
+    syslog(LOG_ERR, "return from parse_statusitems is %d", c);
 
-    c = prot_getc(imapd_in);
     if (c == '\r') c = prot_getc(imapd_in);
     if (c != '\n') {
 	prot_printf(imapd_out,
@@ -7006,6 +7077,7 @@ void cmd_status(char *tag, char *name)
 	goto done;
     }
 
+    /* check permissions */
     if (!r) {
 	int myrights = cyrus_acl_myrights(imapd_authstate, mbentry->acl);
 
@@ -7015,61 +7087,21 @@ void cmd_status(char *tag, char *name)
 	}
     }
 
-    if (!r) {
-	/* use the index status if we can so we get the 'alive' Recent count */
-	if (imapd_index && !strcmp(imapd_index->mailbox->name, mailboxname))
-	    r = index_status(imapd_index, &sdata);
-	else
-	    r = status_lookup(mailboxname, imapd_userid, statusitems, &sdata);
-    }
+    if (!r) r = imapd_statusdata(mailboxname, statusitems, &sdata);
 
     if (r) {
-	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
-	goto done;
+	prot_printf(imapd_out, "%s NO %s\r\n", tag,
+		    error_message(r));
     }
-
-    prot_printf(imapd_out, "* STATUS ");
-    prot_printastring(imapd_out, name);
-    prot_printf(imapd_out, " ");
-    sepchar = '(';
-
-    if (statusitems & STATUS_MESSAGES) {
-	prot_printf(imapd_out, "%cMESSAGES %u", sepchar, sdata.messages);
-	sepchar = ' ';
+    else {
+	print_statusline(name, statusitems, &sdata);
+	prot_printf(imapd_out, "%s OK %s\r\n", tag,
+		    error_message(IMAP_OK_COMPLETED));
     }
-    if (statusitems & STATUS_RECENT) {
-	prot_printf(imapd_out, "%cRECENT %u", sepchar, sdata.recent);
-	sepchar = ' ';
-    }
-    if (statusitems & STATUS_UIDNEXT) {
-	prot_printf(imapd_out, "%cUIDNEXT %u", sepchar, sdata.uidnext);
-	sepchar = ' ';
-    }
-    if (statusitems & STATUS_UIDVALIDITY) {
-	prot_printf(imapd_out, "%cUIDVALIDITY %u", sepchar, sdata.uidvalidity);
-	sepchar = ' ';
-    }
-    if (statusitems & STATUS_UNSEEN) {
-	prot_printf(imapd_out, "%cUNSEEN %u", sepchar, sdata.unseen);
-	sepchar = ' ';
-    }
-    if (statusitems & STATUS_HIGHESTMODSEQ) {
-	prot_printf(imapd_out, "%cHIGHESTMODSEQ " MODSEQ_FMT,
-		    sepchar, sdata.highestmodseq);
-	sepchar = ' ';
-    }
-    prot_printf(imapd_out, ")\r\n");
-    
-    prot_printf(imapd_out, "%s OK %s\r\n", tag,
-		error_message(IMAP_OK_COMPLETED));
 
  done:
     mboxlist_entry_free(&mbentry);
     return;
-
- badlist:
-    prot_printf(imapd_out, "%s BAD Invalid status list in Status\r\n", tag);
-    eatline(imapd_in, c);
 }
 
 #ifdef ENABLE_X_NETSCAPE_HACK
@@ -9688,7 +9720,7 @@ int getsortcriteria(char *tag, struct sortcrit **sortcrit)
  * Parse LIST selection options.
  * The command has been parsed up to and including the opening '('.
  */
-int getlistselopts(char *tag, unsigned *opts)
+int getlistselopts(char *tag, struct listargs *args)
 {
     int c;
     static struct buf buf;
@@ -9711,13 +9743,13 @@ int getlistselopts(char *tag, unsigned *opts)
 	lcase(buf.s);
 
 	if (!strcmp(buf.s, "subscribed")) {
-	    *opts |= LIST_SEL_SUBSCRIBED | LIST_RET_SUBSCRIBED;
+	    args->sel |= LIST_SEL_SUBSCRIBED | LIST_RET_SUBSCRIBED;
 	} else if (!strcmp(buf.s, "remote")) {
-	    *opts |= LIST_SEL_REMOTE;
+	    args->sel |= LIST_SEL_REMOTE;
 	} else if (!strcmp(buf.s, "recursivematch")) {
-	    *opts |= LIST_SEL_RECURSIVEMATCH;
+	    args->sel |= LIST_SEL_RECURSIVEMATCH;
 	} else if (!strcmp(buf.s, "special-use")) {
-	    *opts |= LIST_SEL_SPECIALUSE;
+	    args->sel |= LIST_SEL_SPECIALUSE;
 	} else {
 	    prot_printf(imapd_out,
 			"%s BAD Invalid List selection option \"%s\"\r\n",
@@ -9734,8 +9766,8 @@ int getlistselopts(char *tag, unsigned *opts)
 	return EOF;
     }
 
-    if (*opts & list_select_mod_opts
-	    && ! (*opts & list_select_base_opts)) {
+    if (args->sel & list_select_mod_opts
+	    && ! (args->sel & list_select_base_opts)) {
 	prot_printf(imapd_out,
 		    "%s BAD Invalid combination of selection options\r\n",
 		    tag);
@@ -9749,7 +9781,8 @@ int getlistselopts(char *tag, unsigned *opts)
  * Parse LIST return options.
  * The command has been parsed up to and including the ' ' before RETURN.
  */
-int getlistretopts(char *tag, unsigned *opts) {
+int getlistretopts(char *tag, struct listargs *args)
+{
     static struct buf buf;
     int c;
 
@@ -9790,11 +9823,20 @@ int getlistretopts(char *tag, unsigned *opts) {
 	lcase(buf.s);
 
 	if (!strcmp(buf.s, "subscribed"))
-	    *opts |= LIST_RET_SUBSCRIBED;
+	    args->ret |= LIST_RET_SUBSCRIBED;
 	else if (!strcmp(buf.s, "children"))
-	    *opts |= LIST_RET_CHILDREN;
+	    args->ret |= LIST_RET_CHILDREN;
 	else if (!strcmp(buf.s, "special-use"))
-	    *opts |= LIST_RET_SPECIALUSE;
+	    args->ret |= LIST_RET_SPECIALUSE;
+	else if (!strcmp(buf.s, "status")) {
+	    const char *errstr;
+	    args->ret |= LIST_RET_STATUS;
+	    c = parse_statusitems(&args->statusitems, &errstr);
+	    if (c == EOF) {
+		prot_printf(imapd_out, "%s BAD %s", tag, errstr);
+		return EOF;
+	    }
+	}
 	else {
 	    prot_printf(imapd_out,
 			"%s BAD Invalid List return option \"%s\"\r\n",
@@ -10015,6 +10057,7 @@ static void list_response(char *name, int attributes,
     const char *sep;
     const char *cmd;
     struct mboxlist_entry *mbentry = NULL;
+    struct statusdata sdata;
 
     if (!name) return;
 
@@ -10165,6 +10208,17 @@ static void list_response(char *name, int attributes,
 	    goto done;
     }
 
+    /* can we read the status data ? */
+    if ((listargs->ret & LIST_RET_STATUS) &&
+	!(attributes & MBOX_ATTRIBUTE_NOSELECT)) {
+	r = imapd_statusdata(internal_name, listargs->statusitems, &sdata);
+	if (r) {
+	    /* RFC 5819: the STATUS response MUST NOT be returned and the
+	     * LIST response MUST include the \NoSelect attribute. */
+	    attributes |= MBOX_ATTRIBUTE_NOSELECT;
+	}
+    }
+
     switch (listargs->cmd) {
     case LIST_CMD_LSUB:
 	cmd = "LSUB";
@@ -10207,6 +10261,12 @@ static void list_response(char *name, int attributes,
     }
 
     prot_printf(imapd_out, "\r\n");
+
+    if ((listargs->ret & LIST_RET_STATUS) &&
+	!(attributes & MBOX_ATTRIBUTE_NOSELECT)) {
+	/* output the status line now, per rfc 5819 */
+	print_statusline(mboxname, listargs->statusitems, &sdata);
+    }
 
 done:
     mboxlist_entry_free(&mbentry);

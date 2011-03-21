@@ -256,6 +256,7 @@ struct listargs {
     strarray_t pat;		/* Mailbox pattern(s) */
     const char *scan;		/* SCAN content */
     hash_table server_table;	/* for proxying SCAN */
+    unsigned statusitems;       /* for RETURN STATUS */
 };
 
 /* Value for List command variant */
@@ -278,7 +279,8 @@ enum {
 enum {
     LIST_RET_SUBSCRIBED =	(1<<0),
     LIST_RET_CHILDREN =		(1<<1),
-    LIST_RET_SPECIALUSE =	(1<<2)
+    LIST_RET_SPECIALUSE =	(1<<2),
+    LIST_RET_STATUS =		(1<<3)
 };
 
 /* Bitmask for List name attributes */
