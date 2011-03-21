@@ -1711,7 +1711,9 @@ int prot_ungetc(int c, struct protstream *s)
     s->cnt++;
     s->can_unget--;
     s->bytes_in--;
-    *--(s->ptr) = c;
+    s->ptr--;
+    if (*s->ptr != c)
+	fatal("Trying to unput wrong character", EC_SOFTWARE);
 
     return c;
 }
