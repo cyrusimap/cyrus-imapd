@@ -155,7 +155,7 @@ int upgrade_index(struct mailbox *mailbox)
     const char *expunge_base = NULL;
     unsigned long expunge_len = 0;   /* mapped size */
     unsigned long emapnum;
-    bit32 eversion, eoffset, expungerecord_size = 0;
+    bit32 eversion = 0, eoffset = 0, expungerecord_size = 0;
     struct expunge_data *expunge_data = NULL;
     struct mailbox_repack *repack = NULL;
     int r;
