@@ -892,11 +892,27 @@ static int process_recipient(char *addr, struct namespace *namespace,
     r = verify_user(ret->user, ret->domain, ret->mailbox,
 		    (quota_t) (ignorequota ? -1 : msg->size), msg->authstate);
     if (r) {
-	/* we lost */
-	free(ret->all);
-	free(ret->rcpt);
-	free(ret);
-	return r;
+	char *catchall = NULL;
+	if (r == IMAP_MAILBOX_NONEXISTENT) {
+	    catchall = config_getstring(IMAPOPT_LMTP_CATCHALL_MAILBOX);
+	    if (catchall) {
+		if (!verify_user(catchall, NULL, NULL,
+				ignorequota ? -1 : msg->size,
+				msg->authstate)) {
+		    ret->user = xstrdup(catchall);
+		} else {
+		    catchall = NULL;
+		}
+	    }
+	}
+
+	if (catchall == NULL ) {
+	    /* we lost */
+	    free(ret->all);
+	    free(ret->rcpt);
+	    free(ret);
+	    return r;
+	}
     }
     ret->ignorequota = ignorequota;
 

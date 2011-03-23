@@ -1306,6 +1306,10 @@ product version in the capabilities */
    interface, otherwise the user is assumed to be in the default
    domain (if set). */
 
+{ "lmtp_catchall_mailbox", NULL, STRING }
+/* Send mail to mailboxes, which do not exists, to this user. NOTE: This must
+   be an existing local mailbox name. NOT an email address! */
+
 /*
 .SH SEE ALSO
 .PP
