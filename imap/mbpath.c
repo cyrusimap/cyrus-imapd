@@ -134,8 +134,12 @@ main(int argc, char **argv)
     (*mbpath_namespace.mboxname_tointernal)(&mbpath_namespace, argv[i], NULL, buf);
 
     if ((rc = mboxlist_lookup(buf, &mbentry, NULL)) == 0) {
-      char *path = mboxname_metapath(mbentry.partition, mbentry.name, 0, 0);
-      printf("%s\n", path);
+      if (mbentry.mbtype & MBTYPE_REMOTE) {
+	fprintf(stderr, "Remote mailbox: %s\n", argv[i]);
+      } else {
+	char *path = mboxname_metapath(mbentry.partition, mbentry.name, 0, 0);
+	printf("%s\n", path);
+      }
     } else {
       if (!quiet && (rc == IMAP_MAILBOX_NONEXISTENT)) {
 	fprintf(stderr, "Invalid mailbox name: %s\n", argv[i]);

@@ -1048,6 +1048,8 @@ char *mboxname_datapath(const char *partition, const char *mboxname, unsigned lo
     static char pathresult[MAX_MAILBOX_PATH+1];
     const char *root;
 
+    if (!partition) return NULL;
+
     root = config_partitiondir(partition);
     if (!root) return NULL;
 
@@ -1102,6 +1104,8 @@ char *mboxname_metapath(const char *partition, const char *mboxname,
     const char *root = NULL;
     const char *filename = NULL;
     char confkey[256];
+
+    if (!partition) return NULL;
 
     *confkey = '\0';
 
