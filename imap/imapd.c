@@ -8850,8 +8850,11 @@ static void xfer_done(struct xfer_header **xferptr)
     struct xfer_item *item, *next;
     struct mboxlist_entry *mbentry = NULL;
     int r;
+    char extname[MAX_MAILBOX_NAME];
 
     for (item = xfer->items; item; item = item->next) {
+	(*imapd_namespace.mboxname_toexternal)(&imapd_namespace, item->name,
+					       imapd_userid, extname);
 	/* done! */
 	if (item->done)
 	    continue;
@@ -8867,7 +8870,7 @@ static void xfer_done(struct xfer_header **xferptr)
 	/* delete remote if created */
 	if (item->remote_created) {
 	    prot_printf(xfer->be->out, "LD1 LOCALDELETE {" SIZE_T_FMT "+}\r\n%s\r\n",
-			strlen(item->name), item->name);
+			strlen(extname), extname);
 	    r = getresult(xfer->be->in, "LD1");
 	    if (r) {
 		syslog(LOG_ERR,
@@ -9015,15 +9018,18 @@ static int xfer_localcreate(struct xfer_header *xfer)
 {
     struct xfer_item *item;
     int r;
+    char extname[MAX_MAILBOX_NAME];
 
     for (item = xfer->items; item; item = item->next) {
+	(*imapd_namespace.mboxname_toexternal)(&imapd_namespace, item->name,
+					       imapd_userid, extname);
 	if (xfer->topart) {
 	    /* need to send partition as an atom */
 	    prot_printf(xfer->be->out, "LC1 LOCALCREATE {" SIZE_T_FMT "+}\r\n%s %s\r\n",
-			strlen(item->name), item->name, xfer->topart);
+			strlen(extname), extname, xfer->topart);
 	} else {
 	    prot_printf(xfer->be->out, "LC1 LOCALCREATE {" SIZE_T_FMT "+}\r\n%s\r\n",
-			strlen(item->name), item->name);
+			strlen(extname), extname);
 	}
 	r = getresult(xfer->be->in, "LC1");
 	if (r) {
@@ -9122,8 +9128,11 @@ static int xfer_undump(struct xfer_header *xfer)
     struct xfer_item *item;
     int r;
     struct mailbox *mailbox = NULL;
+    char extname[MAX_MAILBOX_NAME];
 
     for (item = xfer->items; item; item = item->next) {
+	(*imapd_namespace.mboxname_toexternal)(&imapd_namespace, item->name,
+					       imapd_userid, extname);
 	r = mailbox_open_irl(item->name, &mailbox);
 	if (r) {
 	    syslog(LOG_ERR,
@@ -9133,7 +9142,7 @@ static int xfer_undump(struct xfer_header *xfer)
 
 	/* Step 4: Dump local -> remote */
 	prot_printf(xfer->be->out, "D01 UNDUMP {" SIZE_T_FMT "+}\r\n%s ",
-		    strlen(item->name), item->name);
+		    strlen(extname), extname);
 
 	r = dump_mailbox(NULL, mailbox, 0, xfer->remoteversion,
 			 xfer->be->in, xfer->be->out, imapd_authstate);
@@ -9156,7 +9165,7 @@ static int xfer_undump(struct xfer_header *xfer)
     
 	/* Step 5: Set ACL on remote */
 	r = trashacl(xfer->be->in, xfer->be->out,
-		     item->name);
+		     extname);
 	if (r) {
 	    syslog(LOG_ERR, "Could not clear remote acl on %s",
 		   item->name);
@@ -9164,7 +9173,7 @@ static int xfer_undump(struct xfer_header *xfer)
 	}
 
 	r = dumpacl(xfer->be->in, xfer->be->out,
-		    item->name, item->acl);
+		    extname, item->acl);
 	if (r) {
 	    syslog(LOG_ERR, "Could not set remote acl on %s",
 		   item->name);
@@ -9175,7 +9184,7 @@ static int xfer_undump(struct xfer_header *xfer)
 	/* Note that we don't really care if this succeeds or not */
 	if (xfer->mupdate_h) {
 	    prot_printf(xfer->be->out, "MP1 MUPDATEPUSH {" SIZE_T_FMT "+}\r\n%s\r\n",
-			strlen(item->name), item->name);
+			strlen(extname), extname);
 	    r = getresult(xfer->be->in, "MP1");
 	    if (r) {
 		syslog(LOG_ERR,
@@ -9306,6 +9315,10 @@ static int xfer_setquotaroot(struct xfer_header *xfer, const char *mboxname)
 {
     struct quota quota;
     int r;
+    char extname[MAX_MAILBOX_NAME];
+
+    (*imapd_namespace.mboxname_toexternal)(&imapd_namespace, mboxname,
+					   imapd_userid, extname);
     
     quota.root = mboxname;
     r = quota_read(&quota, NULL, 0);
@@ -9316,7 +9329,7 @@ static int xfer_setquotaroot(struct xfer_header *xfer, const char *mboxname)
      * quotaroot */
     prot_printf(xfer->be->out, "Q01 SETQUOTA {" SIZE_T_FMT "+}\r\n" \
 		"+%s (STORAGE %d)\r\n",
-		strlen(mboxname)+1, mboxname, quota.limit);
+		strlen(extname)+1, extname, quota.limit);
     r = getresult(xfer->be->in, "Q01");
     if (r) syslog(LOG_ERR,
 		  "Could not move mailbox: %s, " \
