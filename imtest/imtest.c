@@ -941,7 +941,7 @@ void interaction (int id, const char *challenge, const char *prompt,
     
     if (id==SASL_CB_PASS && !cmdline_password) {
 	printf("%s: ", prompt);
-	cur->str=strdup(getpass(""));
+	cur->str=strdup(cyrus_getpass(""));
 	*tlen=strlen(cur->str);
 	*tresult = cur->str;
 	return;
@@ -972,7 +972,7 @@ void interaction (int id, const char *challenge, const char *prompt,
 	}
 	printf("%s: ",prompt);
 	if (id==SASL_CB_NOECHOPROMPT) {
-	    strcpy(result, getpass(""));
+	    strcpy(result, cyrus_getpass(""));
 	} else {
 	    fgets(result, sizeof(result) - 1, stdin);
 	    c = strlen(result);

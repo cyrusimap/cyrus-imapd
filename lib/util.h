@@ -51,6 +51,7 @@
 #include <config.h>
 #include <sys/types.h>
 #include <limits.h>
+#include <unistd.h>
 
 #define BIT32_MAX 4294967295U
 
@@ -186,5 +187,12 @@ void buf_appendbit32(struct buf *buf, bit32 num);
 void buf_appendmap(struct buf *buf, char *base, int len);
 void buf_putc(struct buf *buf, char c);
 void buf_free(struct buf *buf);
+
+/* use getpassphrase on machines which support it */
+#ifdef HAVE_GETPASSPHRASE
+#define cyrus_getpass getpassphrase
+#else
+#define cyrus_getpass getpass
+#endif
 
 #endif /* INCLUDED_UTIL_H */

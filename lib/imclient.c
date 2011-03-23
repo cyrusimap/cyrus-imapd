@@ -1178,7 +1178,7 @@ void interaction (struct imclient *context, sasl_interact_t *t, char *user)
   } else {
       printf("%s: ", t->prompt);
       if (t->id == SASL_CB_PASS) {
-	  char *ptr = getpass("");
+	  char *ptr = cyrus_getpass("");
 	  strlcpy(result, ptr, sizeof(result));
       } else {
 	  if (!fgets(result, sizeof(result)-1, stdin)) return;

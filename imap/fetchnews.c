@@ -352,7 +352,7 @@ int main(int argc, char *argv[])
 	else if (!strncmp("381", buf, 3)) {
 	    /* password required */
 	    if (!password)
-		password = getpass("Please enter the password: ");
+		password = cyrus_getpass("Please enter the password: ");
 
 	    if (!password) {
 		fprintf(stderr, "failed to get password\n");

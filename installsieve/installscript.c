@@ -116,7 +116,7 @@ getsecret(sasl_conn_t *conn,
   return -1;
 
   /*  printf("Password: ", prompt);
-  *tresult=strdup(getpass(""));
+  *tresult=strdup(cyrus_getpass(""));
   *tlen=strlen(*tresult);
   if (! password)
   return SASL_FAIL; */
@@ -195,7 +195,7 @@ void interaction (int id, const char *prompt,
 	
       } else {
 	printf("%s: ", prompt);
-	*tresult=strdup(getpass(""));
+	*tresult=strdup(cyrus_getpass(""));
 	*tlen=strlen(*tresult);
       }
 	return;
