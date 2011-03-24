@@ -511,56 +511,39 @@ static int mboxname_tointernal_alt(struct namespace *namespace,
  */
 
 /* Handle conversion from the internal namespace to the standard namespace */
-static int mboxname_toexternal(struct namespace *namespace, const char *name,
+static int mboxname_toexternal(struct namespace *namespace, const char *mboxname,
 			       const char *userid, char *result)
 {
-    char *domain = NULL, *cp;
-    size_t domainlen = 0, resultlen, userlen;
+    struct mboxname_parts mbparts;
+    struct mboxname_parts userparts;
 
     /* Blank the result, just in case */
     result[0] = '\0';
 
-    if(strlen(name) > MAX_MAILBOX_NAME) return IMAP_MAILBOX_BADNAME;
+    if (strlen(mboxname) > MAX_MAILBOX_NAME)
+	return IMAP_MAILBOX_BADNAME;
 
-    if (!userid) return IMAP_MAILBOX_BADNAME;
-    userlen = strlen(userid);
-    
-    if (config_virtdomains && (cp = strchr(name, '!'))) {
-	domain = (char*) name;
-	domainlen = cp++ - name;
-	name = cp;
+    mboxname_to_parts(mboxname, &mbparts);
+    mboxname_userid_to_parts(userid, &userparts);
 
-	/* don't use the domain if it matches the user's domain */
-	if (userid && (cp = strchr(userid, '@')) &&
-	    (strlen(++cp) == domainlen) && !strncmp(domain, cp, domainlen)) {
-	    domain = NULL;
-	    userlen -= domainlen +1;
-	}
+    if (mbparts.userid) {
+	if (userid && !namespace->isadmin && 
+	    mboxname_parts_same_userid(&mbparts, &userparts))
+	    strcpy(result, "INBOX");
+	else
+	    sprintf(result, "user.%s", mbparts.userid);
+
+	if (mbparts.box) 
+	    strcat(result, ".");
     }
+    if (mbparts.box) 
+	strcat(result, mbparts.box);
 
-    if (!namespace->isadmin &&
-	!strncmp(name, "user.", 5) &&
-	!strncmp(name+5, userid, userlen) &&
-	     (name[5+userlen] == '\0' ||
-	      name[5+userlen] == '.')) {
-	strcpy(result, "INBOX");
-	name += 5+userlen;
-    }
-    strcat(result, name);
-
-    /* Translate any separators in mailboxname */
-    mboxname_hiersep_toexternal(namespace, result, 0);
-
-    resultlen = strlen(result);
-
-
-    /* Append domain */
-    if (domain) {
-	if(resultlen+domainlen+1 > MAX_MAILBOX_NAME) 
-	    return IMAP_MAILBOX_BADNAME;
-
-	snprintf(result+resultlen, MAX_MAILBOX_BUFFER-resultlen, 
-		 "@%.*s", (int) domainlen, domain);
+    /* Append domain - only if not the same as the user */
+    if (mbparts.domain && (!userparts.domain ||
+	strcmp(userparts.domain, mbparts.domain))) {
+	strcat(result, "@");
+	strcat(result, mbparts.domain);
     }
 
     return 0;
@@ -907,6 +890,20 @@ const char *mboxname_user_inbox(const char *userid)
     return mboxname;
 }
 
+int mboxname_parts_same_userid(struct mboxname_parts *a,
+			       struct mboxname_parts *b)
+{
+    int r;
+
+    r = strcmp((a->domain == NULL ? "" : a->domain),
+	       (b->domain == NULL ? "" : b->domain));
+    if (r) return r;
+
+    r = strcmp((a->userid == NULL ? "" : a->userid),
+	       (b->userid == NULL ? "" : b->userid));
+    return r;
+}
+
 /*
  * Check whether two mboxnames have the same userid.
  * Needed for some corner cases in the COPY command.
@@ -925,11 +922,7 @@ int mboxname_same_userid(const char *name1, const char *name2)
 	return IMAP_MAILBOX_BADNAME;
     }
 
-    r = strcmp((parts1.domain == NULL ? "" : parts1.domain),
-	       (parts2.domain == NULL ? "" : parts2.domain));
-    if (!r)
-	r = strcmp((parts1.userid == NULL ? "" : parts1.userid),
-		   (parts2.userid == NULL ? "" : parts2.userid));
+    r = mboxname_parts_same_userid(&parts1, &parts2);
 
     mboxname_free_parts(&parts1);
     mboxname_free_parts(&parts2);
@@ -949,6 +942,9 @@ int mboxname_to_parts(const char *mboxname, struct mboxname_parts *parts)
     char *b, *e;    /* beginning and end of string parts */
 
     mboxname_init_parts(parts);
+
+    if (!mboxname)
+	return 0;
 
     b = parts->freeme = xstrdup(mboxname);
 
@@ -978,7 +974,28 @@ int mboxname_to_parts(const char *mboxname, struct mboxname_parts *parts)
 	/* shared mailbox - nothing to strip */
     }
 
-    parts->box = (*b ? b : NULL);
+    if (*b) parts->box = b;
+
+    return 0;
+}
+
+int mboxname_userid_to_parts(const char *userid, struct mboxname_parts *parts)
+{
+    char *b, *e;    /* beginning and end of string parts */
+
+    mboxname_init_parts(parts);
+
+    if (!userid)
+	return 0;
+
+    b = parts->freeme = xstrdup(userid);
+
+    parts->userid = b;
+
+    if (config_virtdomains && (e = strchr(b, '!'))) {
+	*e++ = '\0';
+	parts->domain = e;
+    }
 
     return 0;
 }

@@ -137,8 +137,10 @@ int mboxname_isdeletedmailbox(const char *name, time_t *timestampp);
 
 /*
  * Split an (internal) inboxname into it's constituent parts.
+ * also: userid
  */
 int mboxname_to_parts(const char *mboxname, struct mboxname_parts *parts);
+int mboxname_userid_to_parts(const char *userid, struct mboxname_parts *parts);
 /*
  * Cleanup up a mboxname_parts structure.
  */
@@ -156,7 +158,10 @@ const char *mboxname_user_inbox(const char *userid);
 /*
  * Check whether two mboxnames have the same userid.
  */
+int mboxname_parts_same_userid(struct mboxname_parts *a,
+			       struct mboxname_parts *b);
 int mboxname_same_userid(const char *mboxname1, const char *mboxname2);
+
 
 /*
  * Access files (or directories by leaving last parameter
