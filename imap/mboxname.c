@@ -513,12 +513,15 @@ static int mboxname_toexternal(struct namespace *namespace, const char *name,
 			       const char *userid, char *result)
 {
     char *domain = NULL, *cp;
-    size_t domainlen = 0, resultlen;
+    size_t domainlen = 0, resultlen, userlen;
 
     /* Blank the result, just in case */
     result[0] = '\0';
 
     if(strlen(name) > MAX_MAILBOX_NAME) return IMAP_MAILBOX_BADNAME;
+
+    if (!userid) return IMAP_MAILBOX_BADNAME;
+    userlen = strlen(userid);
     
     if (config_virtdomains && (cp = strchr(name, '!'))) {
 	domain = (char*) name;
@@ -527,16 +530,27 @@ static int mboxname_toexternal(struct namespace *namespace, const char *name,
 
 	/* don't use the domain if it matches the user's domain */
 	if (userid && (cp = strchr(userid, '@')) &&
-	    (strlen(++cp) == domainlen) && !strncmp(domain, cp, domainlen))
+	    (strlen(++cp) == domainlen) && !strncmp(domain, cp, domainlen)) {
 	    domain = NULL;
+	    userlen -= domainlen +1;
+	}
     }
 
-    strcpy(result, name);
+    if (!namespace->isadmin &&
+	!strncmp(name, "user.", 5) &&
+	!strncmp(name+5, userid, userlen) &&
+	     (name[5+userlen] == '\0' ||
+	      name[5+userlen] == '.')) {
+	strcpy(result, "INBOX");
+	name += 5+userlen;
+    }
+    strcat(result, name);
 
     /* Translate any separators in mailboxname */
     mboxname_hiersep_toexternal(namespace, result, 0);
 
     resultlen = strlen(result);
+
 
     /* Append domain */
     if (domain) {
