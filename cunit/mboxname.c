@@ -121,6 +121,73 @@ static void test_contains(void)
     CU_ASSERT_EQUAL(mboxname_is_prefix(FOO, FOONONE), 0);
 }
 
+static void test_parts_same_userid(void)
+{
+    static const char FRED_DRAFTS[] = "user.fred.Drafts";
+    static const char FRED_SENT[] = "user.fred.Sent";
+    static const char JANE_SENT[] = "user.jane.Sent";
+    struct mboxname_parts parts1, parts2;
+    int r;
+
+    r = mboxname_to_parts(FRED_DRAFTS, &parts1);
+    CU_ASSERT_EQUAL(r, 0);
+    r = mboxname_to_parts(FRED_SENT, &parts2);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(mboxname_parts_same_userid(&parts1, &parts2), 1);
+    mboxname_free_parts(&parts1);
+    mboxname_free_parts(&parts2);
+
+    r = mboxname_to_parts(JANE_SENT, &parts1);
+    CU_ASSERT_EQUAL(r, 0);
+    r = mboxname_to_parts(FRED_SENT, &parts2);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(mboxname_parts_same_userid(&parts1, &parts2), 0);
+    mboxname_free_parts(&parts1);
+    mboxname_free_parts(&parts2);
+}
+
+static void test_parts_same_userid_domain(void)
+{
+    static const char FREDAT_DRAFTS[] = "bloggs.com!user.fred.Drafts";
+    static const char FREDAT_SENT[] = "bloggs.com!user.fred.Sent";
+    static const char JANEAT_SENT[] = "bloggs.com!user.jane.Sent";
+    static const char JANE_SENT[] = "user.jane.Sent";
+    struct mboxname_parts parts1, parts2;
+    int r;
+
+    r = mboxname_to_parts(FREDAT_DRAFTS, &parts1);
+    CU_ASSERT_EQUAL(r, 0);
+    r = mboxname_to_parts(FREDAT_SENT, &parts2);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(mboxname_parts_same_userid(&parts1, &parts2), 1);
+    mboxname_free_parts(&parts1);
+    mboxname_free_parts(&parts2);
+
+    r = mboxname_to_parts(JANEAT_SENT, &parts1);
+    CU_ASSERT_EQUAL(r, 0);
+    r = mboxname_to_parts(FREDAT_SENT, &parts2);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(mboxname_parts_same_userid(&parts1, &parts2), 0);
+    mboxname_free_parts(&parts1);
+    mboxname_free_parts(&parts2);
+
+    r = mboxname_to_parts(JANE_SENT, &parts1);
+    CU_ASSERT_EQUAL(r, 0);
+    r = mboxname_to_parts(FREDAT_SENT, &parts2);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(mboxname_parts_same_userid(&parts1, &parts2), 0);
+    mboxname_free_parts(&parts1);
+    mboxname_free_parts(&parts2);
+
+    r = mboxname_to_parts(JANE_SENT, &parts1);
+    CU_ASSERT_EQUAL(r, 0);
+    r = mboxname_to_parts(JANEAT_SENT, &parts2);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(mboxname_parts_same_userid(&parts1, &parts2), 0);
+    mboxname_free_parts(&parts1);
+    mboxname_free_parts(&parts2);
+}
+
 static enum enum_value old_config_virtdomains;
 
 static int set_up(void)
