@@ -56,3 +56,27 @@ static void test_uncast_null(void)
     CU_ASSERT_STRING_EQUAL(s, "foo");
     free(s);
 }
+
+/* This doesn't really belong in this .c file
+ * but it's the least worst choice */
+static void test_strcmpsafe(void)
+{
+    /* chosen so word1 < word2 lexically */
+    static const char word1[] = "bar";
+    static const char word2[] = "foo";
+
+    /* basic behaviour is identical to strcmp() */
+    CU_ASSERT_EQUAL(strcmpsafe(word1, word1), 0);
+    CU_ASSERT_EQUAL(strcmpsafe(word2, word2), 0);
+    CU_ASSERT(strcmpsafe(word1, word2) < 0);
+    CU_ASSERT(strcmpsafe(word2, word1) > 0);
+
+    /* but it's safe with NULLs */
+    CU_ASSERT_EQUAL(strcmpsafe(NULL, NULL), 0);
+    CU_ASSERT_EQUAL(strcmpsafe("", NULL), 0);
+    CU_ASSERT_EQUAL(strcmpsafe(NULL, ""), 0);
+    CU_ASSERT(strcmpsafe(word1, NULL) > 0);
+    CU_ASSERT(strcmpsafe(word2, NULL) > 0);
+    CU_ASSERT(strcmpsafe(NULL, word1) < 0);
+    CU_ASSERT(strcmpsafe(NULL, word2) < 0);
+}
