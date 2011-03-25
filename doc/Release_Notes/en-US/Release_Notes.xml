@@ -24,6 +24,30 @@
             <para>
                 Cyrus IMAP developers and users alike therefor consider converting the mailbox local-parts to lowercase is therefor justified.
             </para>
+            <section id="sect-Release_Notes-lmtp_downcase_rcpt-Preserving_Old_Behavior">
+                <title>Preserving Old Behavior</title>
+                <para>
+                    To preserve the old behaviour, please make sure <filename>/etc/imapd.conf</filename> has the following snippet:
+                </para>
+                <para>
+
+<screen>(...)
+lmtp_downcase_rcpt: 0
+(...)
+</screen>
+
+                </para>
+
+            </section>
+
+            <section id="sect-Release_Notes-lmtp_downcase_rcpt-Reference">
+                <title>Reference</title>
+                <para>
+                    This switch has been suggested and discussed on the <ulink url="https://lists.andrew.cmu.edu/mailman/listinfo/cyrus-devel">Cyrus Development mailing list</ulink>, in <ulink url="http://lists.andrew.cmu.edu/pipermail/cyrus-devel/2011-February/001734.html">this thread</ulink>.
+                </para>
+
+            </section>
+
 
         </section>
 
