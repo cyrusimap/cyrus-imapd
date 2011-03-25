@@ -96,7 +96,7 @@ Once these settings are successfully made, any mailbox operation on the
 backend will be sent to the mupdate master for confirmation and entry into
 the mupdate database.<p>
 
-You will also want to configure atleast one user/group using the
+You must also configure atleast one user/group using the
 <tt>proxyservers</tt> imapd.conf option.  This user <i>should not</i>
 be an administrator, since this means that anyone who can get ahold
 of your proxy servers now has full administrative control on your
@@ -109,6 +109,9 @@ proxyservers: murder
 
 Keep in mind that you will need to create the proxy user(s) and be sure
 that they can authenticate to the backend as well.
+
+NOTE: <tt>proxyservers</tt> should not be set on your frontends.  It is
+also used to determine which servers to create mailboxes on.
 
 <h3>Importing the database from the backend</h3>
 Importing the current mailboxes database is easy, as there is a ctl_mboxlist
