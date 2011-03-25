@@ -890,18 +890,20 @@ const char *mboxname_user_inbox(const char *userid)
     return mboxname;
 }
 
+/*
+ * Check whether two parts have the same userid.
+ * Returns: 1 if the userids are the same, 0 if not,
+ *	    or negative error.
+ */
 int mboxname_parts_same_userid(struct mboxname_parts *a,
 			       struct mboxname_parts *b)
 {
     int r;
 
-    r = strcmp((a->domain == NULL ? "" : a->domain),
-	       (b->domain == NULL ? "" : b->domain));
-    if (r) return r;
-
-    r = strcmp((a->userid == NULL ? "" : a->userid),
-	       (b->userid == NULL ? "" : b->userid));
-    return r;
+    r = strcmpsafe(a->domain, b->domain);
+    if (!r)
+	r = strcmpsafe(a->userid, b->userid);
+    return !r;
 }
 
 /*
@@ -927,7 +929,7 @@ int mboxname_same_userid(const char *name1, const char *name2)
     mboxname_free_parts(&parts1);
     mboxname_free_parts(&parts2);
 
-    return !r;
+    return r;
 }
 
 /*
