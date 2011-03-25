@@ -746,10 +746,30 @@ int prot_fill(struct protstream *s)
 }
 
 /*
+ * If 's' is an input stream, discard any pending/buffered data.  Otherwise,
  * Write out any buffered data in the stream 's'
  */
 int prot_flush(struct protstream *s) 
 {
+    if (!s->write) {
+	int c, save_dontblock = s->dontblock;
+
+	/* Set stream to nonblocking mode */
+	if (!save_dontblock) nonblock(s->fd, (s->dontblock = 1));
+
+	/* Ingest any pending input */
+	while ((c = prot_fill(s)) != EOF);
+
+	/* Reset stream to previous blocking mode */
+	if (!save_dontblock) nonblock(s->fd, (s->dontblock = 0));
+
+	/* Discard any buffered input */
+	s->cnt = 0;
+	s->can_unget = 0;
+
+	return 0;
+    }
+
     return prot_flush_internal(s, 1);
 }
 

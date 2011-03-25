@@ -701,6 +701,10 @@ static void cmdloop(void)
 	    if (!strcmp(cmd.s, "Starttls") && tls_enabled()) {
 		if (c == '\r') c = prot_getc(sync_in);
 		if (c != '\n') goto extraargs;
+
+		/* XXX  discard any input pipelined after STARTTLS */
+		prot_flush(sync_in);
+
 		/* if we've already done SASL fail */
 		if (sync_userid != NULL) {
 		    prot_printf(sync_out, 
