@@ -117,6 +117,10 @@ extern char *beautify_copy (char *dst, const char *src);
  */
 extern char *beautify_string (const char *src);
 
+/* Same semantics as strcmp() but gracefully handles
+ * either or both it's arguments being NULL */
+int strcmpsafe(const char *a, const char *b);
+
 /* do a binary search in a keyvalue array
  *  nelem is the number of keyvalue elements in the kv array
  *  cmpf is the comparison function (strcmp, stricmp, etc).
