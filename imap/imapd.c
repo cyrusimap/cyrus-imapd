@@ -1688,6 +1688,9 @@ void cmdloop()
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
 
+		/* XXX  discard any input pipelined after STARTTLS */
+		prot_flush(imapd_in);
+
 		/* if we've already done SASL fail */
 		if (imapd_userid != NULL) {
 		    prot_printf(imapd_out, 

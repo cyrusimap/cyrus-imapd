@@ -1428,6 +1428,9 @@ static void cmdloop(void)
 		if (c == '\r') c = prot_getc(nntp_in);
 		if (c != '\n') goto extraargs;
 
+		/* XXX  discard any input pipelined after STARTTLS */
+		prot_flush(nntp_in);
+
 		cmd_starttls(0);
 	    }
 	    else if (!strcmp(cmd.s, "Stat")) {

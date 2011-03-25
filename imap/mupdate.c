@@ -927,6 +927,9 @@ mupdate_docmd_result_t docmd(struct conn *c)
 	if (!strcmp(c->cmd.s, "Starttls")) {
 	    CHECKNEWLINE(c, ch);
 	    
+	    /* XXX  discard any input pipelined after STARTTLS */
+	    prot_flush(c->pin);
+
 	    if (!tls_enabled()) {
 		/* we don't support starttls */
 		goto badcmd;

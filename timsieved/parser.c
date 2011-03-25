@@ -443,6 +443,9 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
       goto error;
     }
 
+    /* XXX  discard any input pipelined after STARTTLS */
+    prot_flush(sieved_in);
+
     if(referral_host)
 	goto do_referral;
 

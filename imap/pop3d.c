@@ -930,6 +930,9 @@ static void cmdloop(void)
 		if (arg) {
 		    prot_printf(popd_out, "-ERR Unexpected extra argument\r\n");
 		} else {
+		    /* XXX  discard any input pipelined after STLS */
+		    prot_flush(popd_in);
+
 		    cmd_starttls(0);
 		}
 	    }
