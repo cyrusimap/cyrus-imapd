@@ -3127,7 +3127,8 @@ int mailbox_rename_cleanup(struct mailbox **mailboxptr, int isinbox)
 /*
  * Copy (or link) the file 'from' to the file 'to'
  */
-int mailbox_copyfile(const char *from, const char *to, int nolink)
+static int mailbox_copyfile_core(const char *from, const char *to,
+				 int nolink)
 {
     int srcfd, destfd;
     struct stat sbuf;
@@ -3180,6 +3181,16 @@ int mailbox_copyfile(const char *from, const char *to, int nolink)
     map_free(&src_base, &src_size);
     close(srcfd);
     close(destfd);
+    return 0;
+}
+
+int mailbox_copyfile(const char *from, const char *to, int nolink)
+{
+    /* try to make the target dir if initial copy fails */
+    if (mailbox_copyfile_core(from, to, nolink)) {
+	cyrus_mkdir(to, 0755);
+	return mailbox_copyfile_core(from, to, nolink);
+    }
     return 0;
 }
 
