@@ -139,7 +139,7 @@ static int index_copysetup(struct index_state *state, uint32_t msgno, struct cop
 static int index_storeflag(struct index_state *state, uint32_t msgno,
 			   struct storeargs *storeargs);
 static int index_fetchreply(struct index_state *state, uint32_t msgno,
-			    struct fetchargs *fetchargs);
+			    const struct fetchargs *fetchargs);
 static void index_printflags(struct index_state *state, uint32_t msgno, int usinguid);
 static void index_checkflags(struct index_state *state, int dirty);
 static char *get_localpart_addr(const char *header);
@@ -824,6 +824,30 @@ static int _fetch_setseen(struct index_state *state, uint32_t msgno)
     return 0;
 }
 
+void index_fetchresponses(struct index_state *state,
+			  struct seqset *seq,
+			  int usinguid,
+			  const struct fetchargs *fetchargs,
+			  int *fetchedsomething)
+{
+    uint32_t msgno;
+    uint32_t checkval;
+    struct index_map *im;
+    int fetched = 0;
+
+    for (msgno = 1; msgno <= state->exists; msgno++) {
+	im = &state->map[msgno-1];
+	checkval = usinguid ? im->record.uid : msgno;
+	if (!seqset_ismember(seq, checkval))
+	    continue;
+	if (index_fetchreply(state, msgno, fetchargs))
+	    break;
+	fetched = 1;
+    }
+
+    if (fetchedsomething) *fetchedsomething = fetched;
+}
+
 /*
  * Perform a FETCH-related command on a sequence.
  * Fetchedsomething argument is 0 if nothing was fetched, 1 if something was
@@ -838,11 +862,10 @@ int index_fetch(struct index_state *state,
 {
     struct seqset *seq;
     struct seqset *vanishedlist = NULL;
-    uint32_t msgno;
-    unsigned checkval;
-    int r;
     struct index_map *im;
-    int fetched = 0;
+    unsigned checkval;
+    uint32_t msgno;
+    int r;
 
     r = index_lock(state);
     if (r) return r;
@@ -883,21 +906,11 @@ int index_fetch(struct index_state *state,
 
     seqset_free(vanishedlist);
 
-    for (msgno = 1; msgno <= state->exists; msgno++) {
-	im = &state->map[msgno-1];
-	checkval = usinguid ? im->record.uid : msgno;
-	if (!seqset_ismember(seq, checkval))
-	    continue;
-	r = index_fetchreply(state, msgno, fetchargs);
-	if (r) break;
-	fetched = 1;
-    }
+    index_fetchresponses(state, seq, usinguid, fetchargs, fetchedsomething);
 
     seqset_free(seq);
 
     index_tellchanges(state, usinguid, usinguid);
-
-    if (fetchedsomething) *fetchedsomething = fetched;
 
     return r;
 }
@@ -2414,7 +2427,7 @@ static void index_printflags(struct index_state *state,
  * Helper function to send requested * FETCH data for a message
  */
 static int index_fetchreply(struct index_state *state, uint32_t msgno,
-			    struct fetchargs *fetchargs)
+			    const struct fetchargs *fetchargs)
 {
     struct mailbox *mailbox = state->mailbox;
     int fetchitems = fetchargs->fetchitems;

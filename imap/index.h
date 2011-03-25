@@ -183,6 +183,13 @@ struct nntp_overview {
     unsigned long lines;
 };
 
+/* non-locking, non-updating - just do a fetch on the state
+ * we already have */
+extern void index_fetchresponses(struct index_state *state,
+				 struct seqset *seq,
+				 int usinguid,
+				 const struct fetchargs *fetchargs,
+				 int *fetchedsomething);
 extern int index_fetch(struct index_state *state,
 		       const char* sequence,
 		       int usinguid,
