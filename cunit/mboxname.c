@@ -4,6 +4,8 @@
 #include "cunit/cunit.h"
 #include "libconfig.h"
 #include "mboxname.h"
+#include "mailbox.h"
+#include "global.h"
 
 static void test_to_parts(void)
 {
@@ -186,6 +188,103 @@ static void test_parts_same_userid_domain(void)
     CU_ASSERT_EQUAL(mboxname_parts_same_userid(&parts1, &parts2), 0);
     mboxname_free_parts(&parts1);
     mboxname_free_parts(&parts2);
+}
+
+/* This structure encapsulates all the variables which affect
+ * namespace translation in one place */
+static struct
+{
+    const char *userid;
+    int isadmin;
+    int altnamespace;
+    int virtdomains;
+    const char *defdomain;
+    const char *userprefix;
+    const char *sharedprefix;
+    int unixhierarchysep;
+} conf;
+
+static void toexternal_helper(const char *intname,
+			      const char *extname_expected)
+{
+    struct namespace ns;
+    char extname[MAX_MAILBOX_NAME];
+    int r;
+
+    config_virtdomains = conf.virtdomains;
+    config_defdomain = conf.defdomain;
+    imapopts[IMAPOPT_UNIXHIERARCHYSEP].val.b = conf.unixhierarchysep;
+    imapopts[IMAPOPT_ALTNAMESPACE].val.b = conf.altnamespace;
+    imapopts[IMAPOPT_USERPREFIX].val.s = conf.userprefix;
+    imapopts[IMAPOPT_SHAREDPREFIX].val.s = conf.sharedprefix;
+
+    r = mboxname_init_namespace(&ns, conf.isadmin);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+
+    memset(extname, 0x45, sizeof(extname));
+    r = ns.mboxname_toexternal(&ns, intname, conf.userid, extname);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    CU_ASSERT_STRING_EQUAL(extname, extname_expected);
+}
+
+static void test_toexternal_simple(void)
+{
+    memset(&conf, 0, sizeof(conf));
+    conf.virtdomains = 0;
+    conf.userid = "fred";
+
+    toexternal_helper("user.fred", "INBOX");
+    toexternal_helper("user.fred.foo", "INBOX.foo");
+    toexternal_helper("user.fred.foo.barracuda", "INBOX.foo.barracuda");
+    toexternal_helper("user.jane", "user.jane");
+    toexternal_helper("user.jane.baz", "user.jane.baz");
+    toexternal_helper("shared.quux", "shared.quux");
+}
+
+static void test_toexternal_domains(void)
+{
+    memset(&conf, 0, sizeof(conf));
+    conf.virtdomains = 1;
+    conf.userid = "fred@bloggs.com";
+
+    toexternal_helper("bloggs.com!user.fred", "INBOX");
+    toexternal_helper("bloggs.com!user.fred.foo", "INBOX.foo");
+    toexternal_helper("bloggs.com!user.fred.foo.barracuda", "INBOX.foo.barracuda");
+    toexternal_helper("bloggs.com!user.jane", "user.jane");
+    toexternal_helper("bloggs.com!user.jane.baz", "user.jane.baz");
+    toexternal_helper("boop.com!user.betty", "user.betty@boop.com");
+    toexternal_helper("bloggs.com!shared.quux", "shared.quux");
+    toexternal_helper("boop.com!shared.quux", "shared.quux@boop.com");
+}
+
+static void test_toexternal_unixhier(void)
+{
+    memset(&conf, 0, sizeof(conf));
+    conf.unixhierarchysep = 1;
+    conf.userid = "fred";
+
+    toexternal_helper("user.fred", "INBOX");
+    toexternal_helper("user.fred.foo", "INBOX/foo");
+    toexternal_helper("user.fred.foo.barracuda", "INBOX/foo/barracuda");
+    toexternal_helper("user.jane", "user/jane");
+    toexternal_helper("user.jane.baz", "user/jane/baz");
+    toexternal_helper("shared.quux", "shared/quux");
+}
+
+static void test_toexternal_alt(void)
+{
+    memset(&conf, 0, sizeof(conf));
+    conf.altnamespace = 1;
+    conf.userprefix = "Uvvers";
+    conf.sharedprefix = "Chaired";
+    conf.userid = "fred";
+
+    toexternal_helper("user.fred", "INBOX");
+    toexternal_helper("user.fred.foo", "foo");
+    toexternal_helper("user.fred.foo.barracuda", "foo.barracuda");
+    toexternal_helper("user.jane", "Uvvers.jane");
+    toexternal_helper("user.jane.baz", "Uvvers.jane.baz");
+    toexternal_helper("shared.quux", "Chaired.shared.quux");
 }
 
 static enum enum_value old_config_virtdomains;
