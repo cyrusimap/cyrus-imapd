@@ -1572,6 +1572,9 @@ void lmtpmode(struct lmtp_func *func,
 		sasl_ssf_t ssf;
 		char *auth_id;
 
+		/* XXX  discard any input pipelined after STARTTLS */
+		prot_flush(pin);
+
 		/* SASL and openssl have different ideas
 		   about whether ssf is signed */
 		layerp = (int *) &ssf;
