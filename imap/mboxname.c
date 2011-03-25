@@ -527,25 +527,30 @@ static int mboxname_toexternal(struct namespace *namespace, const char *mboxname
     mboxname_userid_to_parts(userid, &userparts);
 
     if (mbparts.userid) {
-	if (userid && !namespace->isadmin && 
+	if (!namespace->isadmin &&
 	    mboxname_parts_same_userid(&mbparts, &userparts))
 	    strcpy(result, "INBOX");
 	else
 	    sprintf(result, "user.%s", mbparts.userid);
 
-	if (mbparts.box) 
+	if (mbparts.box)
 	    strcat(result, ".");
     }
-    if (mbparts.box) 
+    if (mbparts.box)
 	strcat(result, mbparts.box);
 
+    /* Translate any separators in mailboxname */
+    mboxname_hiersep_toexternal(namespace, result, 0);
+
     /* Append domain - only if not the same as the user */
-    if (mbparts.domain && (!userparts.domain ||
-	strcmp(userparts.domain, mbparts.domain))) {
+    if (mbparts.domain &&
+	strcmpsafe(userparts.domain, mbparts.domain)) {
 	strcat(result, "@");
 	strcat(result, mbparts.domain);
     }
 
+    mboxname_free_parts(&mbparts);
+    mboxname_free_parts(&userparts);
     return 0;
 }
 
@@ -994,7 +999,7 @@ int mboxname_userid_to_parts(const char *userid, struct mboxname_parts *parts)
 
     parts->userid = b;
 
-    if (config_virtdomains && (e = strchr(b, '!'))) {
+    if (config_virtdomains && (e = strchr(b, '@'))) {
 	*e++ = '\0';
 	parts->domain = e;
     }
