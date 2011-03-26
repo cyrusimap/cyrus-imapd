@@ -1452,12 +1452,12 @@ restart:
     else
 	r = lock_shared(mailbox->index_fd);
 
-    /* double check that the index exists and has at least a full
-     * sized header */
+    /* double check that the index exists and has at least enough
+     * data to check the version number */
     if (!r) {
 	if (!mailbox->index_base)
 	    r = IMAP_MAILBOX_BADFORMAT;
-	else if (mailbox->index_size < INDEX_HEADER_SIZE)
+	else if (mailbox->index_size < OFFSET_NUM_RECORDS)
 	    r = IMAP_MAILBOX_BADFORMAT;
 	if (r)
 	    lock_unlock(mailbox->index_fd);
