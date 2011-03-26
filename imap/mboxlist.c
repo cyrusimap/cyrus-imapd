@@ -583,6 +583,11 @@ int mboxlist_createmailbox_full(const char *name, int mbtype,
 	if (r) goto done;
     }
 
+    if (!newpartition) {
+	r = IMAP_IOERROR;
+	goto done;
+    }
+
     if (!dbonly && !isremote) {
 	/* Filesystem Operations */
 	r = mailbox_create(name, newpartition, acl, uniqueid,
