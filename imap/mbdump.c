@@ -706,6 +706,9 @@ static int cleanup_seen_subfolders(const char *mbname)
     char buf[MAX_MAILBOX_NAME];
     int r;
 
+    /* not owned by a user */
+    if (!userid) return 0;
+
     /* no need to do inbox, it will have upgraded OK, just
      * the subfolders */
 
