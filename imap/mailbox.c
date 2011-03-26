@@ -910,14 +910,16 @@ static int mailbox_open_advanced(const char *name,
 
     r = mailbox_open_index(mailbox);
     if (r) {
-	syslog(LOG_ERR, "IOERROR: opening index %s: %m", mailbox->name);
+	syslog(LOG_ERR, "IOERROR: opening index %s: %s",
+	       mailbox->name, error_message(r));
 	goto done;
     }
 
     /* this will open, map and parse the header file */
     r = mailbox_lock_index(mailbox, index_locktype);
     if (r) {
-	syslog(LOG_ERR, "IOERROR: locking index %s: %m", mailbox->name);
+	syslog(LOG_ERR, "IOERROR: locking index %s: %s",
+	       mailbox->name, error_message(r));
 	goto done;
     }
 
@@ -1504,8 +1506,8 @@ restart:
     }
 
     if (r) {
-	syslog(LOG_ERR, "IOERROR: locking index for %s: %m",
-	       mailbox->name);
+	syslog(LOG_ERR, "IOERROR: locking index for %s: %s",
+	       mailbox->name, error_message(r));
 	return IMAP_IOERROR;
     }
 
