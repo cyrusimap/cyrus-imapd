@@ -135,10 +135,14 @@ main(int argc, char **argv)
 					    argv[i], NULL, buf);
 
     if ((rc = mboxlist_lookup(buf, &mbentry, NULL)) == 0) {
-	const char *path = mboxname_metapath(mbentry->partition,
+      if (mbentry->mbtype & MBTYPE_REMOTE) {
+	fprintf(stderr, "Remote mailbox: %s\n", argv[i]);
+      } else {
+	const char *path = mboxname_metapath(mbentry->partition, 
 					     mbentry->name, 0, 0);
 	printf("%s\n", path);
-	mboxlist_entry_free(&mbentry);
+      }
+      mboxlist_entry_free(&mbentry);
     } else {
       if (!quiet && (rc == IMAP_MAILBOX_NONEXISTENT)) {
 	fprintf(stderr, "Invalid mailbox name: %s\n", argv[i]);
