@@ -427,7 +427,7 @@ int index_writeseen(struct index_state *state)
 	r = seen_write(seendb, mailbox->uniqueid, &sd);
     }
 
-    seen_close(seendb);
+    seen_close(&seendb);
 
     seen_freedata(&oldsd);
     seen_freedata(&sd);
@@ -446,15 +446,13 @@ static struct seqset *_readseen(struct index_state *state, unsigned *recentuid)
 	*recentuid = mailbox->i.recentuid;
     }
     else if (state->userid) {
-	struct seen *seendb;
+	struct seen *seendb = NULL;
 	struct seendata sd;
 	int r;
 
 	r = seen_open(state->userid, SEEN_CREATE, &seendb);
-	if (!r) {
-	    r = seen_read(seendb, mailbox->uniqueid, &sd);
-	    seen_close(seendb);
-	}
+	if (!r) r = seen_read(seendb, mailbox->uniqueid, &sd);
+	seen_close(&seendb);
 
 	/* handle no seen DB gracefully */
 	if (r) {

@@ -733,7 +733,7 @@ static int append_addseen(struct mailbox *mailbox,
 			  struct seqset *newseen)
 {
     int r;
-    struct seen *seendb;
+    struct seen *seendb = NULL;
     struct seendata sd;
     struct seqset *oldseen;
 
@@ -741,7 +741,7 @@ static int append_addseen(struct mailbox *mailbox,
 	return 0;
 
     r = seen_open(userid, SEEN_CREATE, &seendb);
-    if (r) return r;
+    if (r) goto done;
 
     r = seen_lockread(seendb, mailbox->uniqueid, &sd);
     if (r) goto done;
@@ -761,6 +761,6 @@ static int append_addseen(struct mailbox *mailbox,
     free(sd.seenuids);
 
  done:
-    seen_close(seendb);
+    seen_close(&seendb);
     return r;
 }

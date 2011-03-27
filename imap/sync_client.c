@@ -1438,13 +1438,13 @@ static int do_seen(char *user, char *uniqueid)
 
     r = seen_read(seendb, uniqueid, &sd);
     if (r) {
-	seen_close(seendb);
+	seen_close(&seendb);
 	return 0;
     }
 
     r = update_seen_work(user, uniqueid, &sd);
 
-    seen_close(seendb);
+    seen_close(&seendb);
     seen_freedata(&sd);
 
     return r;
@@ -1886,7 +1886,7 @@ static int do_user_seen(char *user, struct sync_seen_list *replica_seen)
     list = sync_seen_list_create();
 
     seen_foreach(seendb, get_seen, list);
-    seen_close(seendb);
+    seen_close(&seendb);
 
     for (mseen = list->head; mseen; mseen = mseen->next) {
 	rseen = sync_seen_list_lookup(replica_seen, mseen->uniqueid);

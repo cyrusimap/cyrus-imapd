@@ -84,10 +84,7 @@ int seen_write(struct seen *seendb, const char *uniqueid,
 	       struct seendata *data);
 
 /* close this handle */
-int seen_close(struct seen *seendb);
-
-/* discard lock on handle */
-int seen_unlock(struct seen *seendb);
+int seen_close(struct seen **seendb);
 
 /* called on mailbox operations */
 int seen_create_mailbox(const char *userid, struct mailbox *mailbox);

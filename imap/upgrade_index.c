@@ -235,7 +235,6 @@ int upgrade_index(struct mailbox *mailbox)
 	mailbox->i.options = config_getint(IMAPOPT_MAILBOX_DEFAULT_OPTIONS);
 
     if (oldminor_version < 12) {
-	struct seen *seendb;
 	struct seendata sd;
 	char *owner_userid;
 
@@ -263,11 +262,10 @@ int upgrade_index(struct mailbox *mailbox)
 	if (!owner_userid) {
 	    r = IMAP_MAILBOX_NONEXISTENT;
 	} else {
+	    struct seen *seendb = NULL;
 	    r = seen_open(owner_userid, SEEN_SILENT, &seendb);
-	    if (!r) {
-		r = seen_read(seendb, mailbox->uniqueid, &sd);
-		seen_close(seendb);
-	    }
+	    if (!r) r = seen_read(seendb, mailbox->uniqueid, &sd);
+	    seen_close(&seendb);
 	}
 	if (r) { /* no seen data? */
 	    mailbox->i.recentuid = 0;
