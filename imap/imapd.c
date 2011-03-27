@@ -9098,7 +9098,7 @@ static int xfer_backport_seen(struct xfer_header *xfer, const char *userid)
 	if (r) break;
     }
 
-    seen_close(seendb);
+    seen_close(&seendb);
 
     return r;
 }

@@ -215,14 +215,12 @@ int status_lookup(const char *mboxname, const char *userid,
 	if (internalseen) {
 	    recentuid = mailbox->i.recentuid;
 	} else {
-	    struct seen *seendb;
+	    struct seen *seendb = NULL;
 	    struct seendata sd;
 
 	    r = seen_open(userid, SEEN_CREATE, &seendb);
-	    if (r) goto done;
-
-	    r = seen_read(seendb, mailbox->uniqueid, &sd);
-	    seen_close(seendb);
+	    if (!r) r = seen_read(seendb, mailbox->uniqueid, &sd);
+	    seen_close(&seendb);
 	    if (r) goto done;
 
 	    recentuid = sd.lastuid;

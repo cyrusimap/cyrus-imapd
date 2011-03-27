@@ -712,15 +712,13 @@ static int cleanup_seen_subfolders(const char *mbname)
     /* no need to do inbox, it will have upgraded OK, just
      * the subfolders */
 
-    r = seen_open(userid, SEEN_SILENT, &seendb);
-    if (r) return 0; /* oh well, maybe they didn't have one */
-
     snprintf(buf, sizeof(buf), "%s.*", mbname);
-    r = mboxlist_findall(NULL, buf, 1, NULL, NULL, cleanup_seen_cb, seendb);
 
-    seen_close(seendb);
+    r = seen_open(userid, SEEN_SILENT, &seendb);
+    if (!r) mboxlist_findall(NULL, buf, 1, NULL, NULL, cleanup_seen_cb, seendb);
+    seen_close(&seendb);
 
-    return r;
+    return 0;
 }
 
 int undump_mailbox(const char *mbname, 
@@ -1054,7 +1052,7 @@ int undump_mailbox(const char *mbname,
 	    struct seen *seendb = NULL;
 	    r = seen_open(userid, SEEN_CREATE, &seendb);
 	    if (!r) r = seen_merge(seendb, fnamebuf);
-	    if (seendb) seen_close(seendb);
+	    seen_close(&seendb);
 
 	    free(seen_file);
 	    seen_file = NULL;

@@ -88,21 +88,7 @@ struct seen {
     struct txn *tid;		/* outstanding txn, if any */
 };
 
-static struct seen *lastseen = NULL;
-
 #define DB (config_seenstate_db)
-
-static void abortcurrent(struct seen *s)
-{
-    if (s && s->tid) {
-	int r = DB->abort(s->db, s->tid);
-	if (r) {
-	    syslog(LOG_ERR, "DBERROR: error aborting txn: %s", 
-		   cyrusdb_strerror(r));
-	}
-	s->tid = NULL;
-    }
-}
 
 char *seen_getpath(const char *userid)
 {
@@ -132,38 +118,19 @@ int seen_open(const char *user,
 	      int flags,
 	      struct seen **seendbptr)
 {
-    struct seen *seendb;
+    struct seen *seendb = NULL;
     char *fname = NULL;
     int dbflags = (flags & SEEN_CREATE) ? CYRUSDB_CREATE : 0;
     int r;
 
-    /* try to reuse the last db handle */
-    seendb = lastseen;
-    lastseen = NULL;
+    assert(user);
+    assert(*seendbptr == NULL);
+
+    /* create seendb */
+    seendb = (struct seen *) xmalloc(sizeof(struct seen));
+
     if (SEEN_DEBUG) {
 	syslog(LOG_DEBUG, "seen_db: seen_open(%s)", user);
-    }
-
-    /* if this is the db we've already opened, return it */
-    if (seendb && !strcmp(seendb->user, user)) {
-	abortcurrent(seendb);
-	*seendbptr = seendb;
-	return 0;
-    }
-
-    *seendbptr = NULL;
-    /* otherwise, close the existing database */
-    if (seendb) {
-	abortcurrent(seendb);
-	r = (DB->close)(seendb->db);
-	if (r) {
-	    syslog(LOG_ERR, "DBERROR: error closing seendb: %s", 
-		   cyrusdb_strerror(r));
-	}
-	free(seendb->user);
-    } else {
-	/* create seendb */
-	seendb = (struct seen *) xmalloc(sizeof(struct seen));
     }
 
     /* open the seendb corresponding to user */
@@ -360,15 +327,21 @@ int seen_write(struct seen *seendb, const char *uniqueid, struct seendata *sd)
     return r;
 }
 
-int seen_close(struct seen *seendb)
+int seen_close(struct seen **seendbptr)
 {
+    struct seen *seendb = *seendbptr;
     int r;
+
+    if (!seendb) return 0;
 
     if (SEEN_DEBUG) {
 	syslog(LOG_DEBUG, "seen_db: seen_close(%s)", seendb->user);
     }
 
     if (seendb->tid) {
+	if (SEEN_DEBUG) {
+	    syslog(LOG_DEBUG, "seen_db: committing changes for %s", seendb->user);
+	}
 	r = DB->commit(seendb->db, seendb->tid);
 	if (r != CYRUSDB_OK) {
 	    syslog(LOG_ERR, "DBERROR: error committing seen txn; "
@@ -377,25 +350,17 @@ int seen_close(struct seen *seendb)
 	seendb->tid = NULL;
     }
 
-    if (lastseen) {
-	int r;
-
-	/* free the old database hanging around */
-	abortcurrent(lastseen);
-	r = (DB->close)(lastseen->db);
-	if (r != CYRUSDB_OK) {
-	    syslog(LOG_ERR, "DBERROR: error closing lastseen: %s",
-		   cyrusdb_strerror(r));
-	    r = IMAP_IOERROR;
-	}
-	if(!r) lastseen->db = NULL;
-	free(lastseen->user);
-	free(lastseen);
-	lastseen = NULL;
+    r = (DB->close)(seendb->db);
+    if (r) {
+	syslog(LOG_ERR, "DBERROR: error closing: %s",
+	       cyrusdb_strerror(r));
+	r = IMAP_IOERROR;
     }
+    free(seendb->user);
+    free(seendb);
 
-    /* this database can now be reused */
-    lastseen = seendb;
+    *seendbptr = NULL;
+
     return 0;
 }
 
@@ -413,7 +378,7 @@ int seen_create_mailbox(const char *userid, struct mailbox *mailbox)
 int seen_delete_mailbox(const char *userid, struct mailbox *mailbox)
 {
     int r;
-    struct seen *seendb;
+    struct seen *seendb = NULL;
     const char *uniqueid = mailbox->uniqueid;
 
     if (SEEN_DEBUG) {
@@ -426,11 +391,10 @@ int seen_delete_mailbox(const char *userid, struct mailbox *mailbox)
 	return 0;
 
     r = seen_open(userid, SEEN_SILENT, &seendb);
-    if (!r) {
-	r = DB->delete(seendb->db, uniqueid, strlen(uniqueid),
-		       &seendb->tid, 1);
-	seen_close(seendb);
-    }
+    if (!r) r = DB->delete(seendb->db, uniqueid, strlen(uniqueid),
+			   &seendb->tid, 1);
+    seen_close(&seendb);
+
     return r;
 }
 
@@ -461,7 +425,6 @@ int seen_delete_user(const char *user)
     }
 
     free(fname);
-    
     return r;
 }
 
@@ -498,7 +461,7 @@ int seen_copy(const char *userid, struct mailbox *oldmailbox,
 
     if (userid && strcmp(oldmailbox->uniqueid, newmailbox->uniqueid)) {
 	int r;
-	struct seen *seendb;
+	struct seen *seendb = NULL;
 	struct seendata sd;
 
 	r = seen_open(userid, 0, &seendb);
@@ -507,8 +470,8 @@ int seen_copy(const char *userid, struct mailbox *oldmailbox,
 	r = seen_lockread(seendb, oldmailbox->uniqueid, &sd);
 	if (!r) r = seen_write(seendb, newmailbox->uniqueid, &sd);
 
+	seen_close(&seendb);
 	seen_freedata(&sd);
-	seen_close(seendb);
 	return r;
     }
 
@@ -516,50 +479,13 @@ int seen_copy(const char *userid, struct mailbox *oldmailbox,
     return 0;
 }
 
-/* database better have been locked before this ! */
-int seen_unlock(struct seen *seendb)
-{
-    int r;
-
-    assert(seendb);
-    if (!seendb->tid) return 0;
-
-    if (SEEN_DEBUG) {
-	syslog(LOG_DEBUG, "seen_db: seen_unlock %s",
-	       seendb->user);
-    }
-
-    r = DB->commit(seendb->db, seendb->tid);
-    if (r != CYRUSDB_OK) {
-	syslog(LOG_ERR, "DBERROR: error committing seen txn; "
-	       "seen state lost: %s", cyrusdb_strerror(r));
-    }
-    seendb->tid = NULL;
-
-    return 0;
-}
-
 int seen_done(void)
 {
-    int r = 0;
-
     if (SEEN_DEBUG) {
 	syslog(LOG_DEBUG, "seen_db: seen_done()");
     }
 
-    if (lastseen) {
-	abortcurrent(lastseen);
-	r = (DB->close)(lastseen->db);
-	if (r) {
-	    syslog(LOG_ERR, "DBERROR: error closing lastseen: %s",
-		   cyrusdb_strerror(r));
-	    r = IMAP_IOERROR;
-	}
-	free(lastseen->user);
-	free(lastseen);
-    }
-
-    return r;
+    return 0;
 }
 
 int seen_compare(struct seendata *a, struct seendata *b)

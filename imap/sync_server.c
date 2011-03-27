@@ -1547,14 +1547,14 @@ static int print_seen(const char *uniqueid, struct seendata *sd,
 
 static int user_seen(const char *userid)
 {
-    struct seen *seendb;
+    struct seen *seendb = NULL;
 
     /* no SEEN DB is OK, just return */
     if (seen_open(userid, SEEN_SILENT, &seendb))
 	return 0;
 
     seen_foreach(seendb, print_seen, NULL);
-    seen_close(seendb);
+    seen_close(&seendb);
 
     return 0;
 }
@@ -1854,7 +1854,7 @@ static int do_unactivate_sieve(struct dlist *kin)
 static int do_seen(struct dlist *kin)
 {
     int r;
-    struct seen *seendb;
+    struct seen *seendb = NULL;
     struct seendata sd;
     const char *userid;
     const char *uniqueid;
@@ -1876,7 +1876,7 @@ static int do_seen(struct dlist *kin)
     if (r) return r;
 
     r = seen_write(seendb, uniqueid, &sd);
-    seen_close(seendb);
+    seen_close(&seendb);
 
     return r;
 }
