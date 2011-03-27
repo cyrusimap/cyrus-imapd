@@ -892,7 +892,7 @@ static int process_recipient(char *addr, struct namespace *namespace,
     r = verify_user(ret->user, ret->domain, ret->mailbox,
 		    (quota_t) (ignorequota ? -1 : msg->size), msg->authstate);
     if (r) {
-	char *catchall = NULL;
+	const char *catchall = NULL;
 	if (r == IMAP_MAILBOX_NONEXISTENT) {
 	    catchall = config_getstring(IMAPOPT_LMTP_CATCHALL_MAILBOX);
 	    if (catchall) {
