@@ -2980,10 +2980,19 @@ int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
 		       const char *newname)
 {
     char oldbuf[MAX_MAILBOX_PATH], newbuf[MAX_MAILBOX_PATH];
+    const char *path;
     struct meta_file *mf;
     uint32_t recno;
     struct index_record record;
     int r;
+
+    /* make initial paths */
+    path = mboxname_datapath(newpart, newname, 0);
+    cyrus_mkdir(path, 0755);
+    mkdir(path, 0755);
+    path = mboxname_metapath(newpart, newname, 0, 0);
+    cyrus_mkdir(path, 0755);
+    mkdir(path, 0755);
 
     /* Copy over meta files */
     for (mf = meta_files; !r && mf->metaflag; mf++) {
