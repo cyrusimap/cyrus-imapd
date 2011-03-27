@@ -785,7 +785,6 @@ sub mboxconfig {
   my ($self, $mailbox, $entry, $value) = @_;
 
   my %values = ( "comment" => "/comment",
-		 "condstore" => "/vendor/cmu/cyrus-imapd/condstore",
 		 "expire" => "/vendor/cmu/cyrus-imapd/expire",
 		 "news2mail" => "/vendor/cmu/cyrus-imapd/news2mail",
 		 "sharedseen" => "/vendor/cmu/cyrus-imapd/sharedseen",
