@@ -130,6 +130,10 @@ AC_REPLACE_FUNCS(memmove strcasecmp ftruncate strerror)
 AC_CHECK_FUNCS(strlcat strlcpy getgrouplist fmemopen)
 AC_HEADER_DIRENT
 
+dnl check whether to use getpassphrase or getpass
+AC_CHECK_HEADERS(stdlib.h)
+AC_CHECK_FUNCS(getpassphrase)
+
 dnl do this before Berkeley DB/IPv6 detection
 CMU_SOCKETS
 LIBS="$LIBS ${LIB_SOCKET}"

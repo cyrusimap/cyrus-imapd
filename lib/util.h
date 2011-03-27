@@ -211,4 +211,11 @@ char *strconcat(const char *s1, ...);
 int bin_to_hex(const void *bin, size_t binlen, char *hex, int flags);
 int hex_to_bin(const char *hex, size_t hexlen, void *bin);
 
+/* use getpassphrase on machines which support it */
+#ifdef HAVE_GETPASSPHRASE
+#define cyrus_getpass getpassphrase
+#else
+#define cyrus_getpass getpass
+#endif
+
 #endif /* INCLUDED_UTIL_H */

@@ -90,10 +90,6 @@ overridden.
 <li> any utilities doing db operations should catch signals and poll
 for them to see if it should exit (like mbpath, ipurge).
 
-<li> <tt>imtest</tt> uses <tt>getpass()</tt> to grab passwords from
-users. On some systems (Solaris reported), this will only return the
-first 8 characters, causing authentication failures.
-
 </ul>
 
 <h3>libraries</h3>
