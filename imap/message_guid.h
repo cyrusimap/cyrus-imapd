@@ -87,7 +87,8 @@ int message_guid_isnull(struct message_guid *guid);
 /* Export Message GUID as byte sequence (MESSAGE_GUID_SIZE)
  * (Wrapper for memcpy() with current implementation)
  */
-void message_guid_export(struct message_guid *guid, unsigned char *buf);
+void message_guid_export(const struct message_guid *guid,
+			 unsigned char *buf);
 
 /* Import Message GUID from packed sequence (MESSAGE_GUID_SIZE)
  * (Wrapper for memcpy() with current implementation)
@@ -101,7 +102,7 @@ struct message_guid *message_guid_import(struct message_guid *guid,
 /* Returns ptr to '\0' terminated static char * which can be strdup()ed
  * NULL => error. Should be impossible as entire range covered
  */
-char *message_guid_encode(struct message_guid *guid);
+char *message_guid_encode(const struct message_guid *guid);
 
 /* Sets Message GUID from text form. Returns 1 if valid
  * Returns: Cyrus error code, 0 on sucess
