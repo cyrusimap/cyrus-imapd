@@ -83,6 +83,7 @@
 #include "hash.h"
 #include "imparse.h"
 #include "iptostring.h"
+#include "stristr.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcat.h"
@@ -177,7 +178,8 @@ struct capa_cmd_t {
     char *cmd;		/* capability command string (NULL = no capa cmd) */
     char *resp;		/* end of capability response */
     char *tls;		/* [OPTIONAL] TLS capability string */
-    char *auth;		/* [OPTIONAL] AUTH capability string */
+    char *login;	/* [OPTIONAL] plaintext login cmd capability string */
+    char *auth;		/* [OPTIONAL] AUTH (SASL) capability string */
     char *compress;	/* [OPTIONAL] COMPRESS capability string */
     char *(*parse_mechlist)(const char *str, struct protocol_t *prot);
 			/* [OPTIONAL] parse capability string,
@@ -222,15 +224,17 @@ struct protocol_t {
     char *protocol;	/* protocol service name */
     char *sprotocol;	/* SSL-wrapped service name (NULL = unsupported) */
     char *service;	/* SASL service name */
+    int login_enabled;	/* [OPTIONAL] login command on/off by default;
+			   toggled by capability string */
     struct banner_t banner;
     struct capa_cmd_t capa_cmd;
     struct tls_cmd_t tls_cmd;
     struct sasl_cmd_t sasl_cmd;
     struct compress_cmd_t compress_cmd;
     int (*do_auth)(struct sasl_cmd_t *sasl_cmd, void *rock,
-		   char *mech, char *mechlist);
-			/* [OPTIONAL] perform protocol-specific
-			   authentication; based on rock, mech, mechlist */
+		   int login_enabled, char *mech, char *mechlist);
+			/* [OPTIONAL] perform protocol-specific authentication;
+			   based on rock, login_enabled, mech, mechlist */
     struct logout_cmd_t logout_cmd;
 
     /* these 3 are used for maintaining connection state */
@@ -1463,14 +1467,20 @@ enum {
     AUTO_YES = 1
 };
 
+enum {
+    CAPA_LOGIN		= (1 << 0),
+    CAPA_STARTTLS	= (1 << 1),
+    CAPA_COMPRESS	= (1 << 2)
+};
+
 static char *ask_capability(struct protocol_t *prot,
-			    int *supports_starttls, int *supports_compress,
-			    int automatic)
+			    unsigned long *capabilities, int automatic)
 {
     char str[1024] = "";
     char *ret = NULL, *tmp, *resp;
     
-    *supports_starttls = 0;
+    /* default state of login command unless toggled by capabilities */
+    *capabilities = prot->login_enabled;
 
     resp = (automatic == AUTO_BANNER) ? prot->banner.resp : prot->capa_cmd.resp;
 
@@ -1491,16 +1501,22 @@ static char *ask_capability(struct protocol_t *prot,
 	}
 	printf("S: %s", str);
 
+	/* check for login - toggles existing state */
+	if (prot->capa_cmd.tls &&
+	    strstr(str, prot->capa_cmd.login) != NULL) {
+	    *capabilities ^= CAPA_LOGIN;
+	}
+	
 	/* check for starttls */
 	if (prot->capa_cmd.tls &&
 	    strstr(str, prot->capa_cmd.tls) != NULL) {
-	    *supports_starttls = 1;
+	    *capabilities |= CAPA_STARTTLS;
 	}
 	
 	/* check for compress */
 	if (prot->capa_cmd.compress &&
 	    strstr(str, prot->capa_cmd.compress) != NULL) {
-	    *supports_compress = 1;
+	    *capabilities |= CAPA_COMPRESS;
 	}
 	
 	/* check for auth */
@@ -1614,7 +1630,7 @@ static char *imap_parse_mechlist(const char *str, struct protocol_t *prot)
     char *tmp;
     int num = 0;
     
-    if (strstr(str, "SASL-IR")) {
+    if (strstr(str, " SASL-IR")) {
 	/* server supports initial response in AUTHENTICATE command */
 	prot->sasl_cmd.maxlen = USHRT_MAX;
     }
@@ -1677,20 +1693,27 @@ static int auth_imap(void)
 
 static int imap_do_auth(struct sasl_cmd_t *sasl_cmd,
 			void *rock __attribute__((unused)),
+			int login_enabled,
 			char *mech, char *mechlist)
 {
     int result = IMTEST_FAIL;
 
     if (mech) {
 	if (!strcasecmp(mech, "login")) {
-	    result = auth_imap();
+	    if (!login_enabled) {
+		printf("[Server advertised LOGINDISABLED]\n");
+	    } else {
+		result = auth_imap();
+	    }
+	} else if (!mechlist || !stristr(mechlist, mech)) {
+	    printf("[Server did not advertise AUTH=%s]\n", ucase(mech));
 	} else {
 	    result = auth_sasl(sasl_cmd, mech);
 	}
     } else {
 	if (mechlist) {
 	    result = auth_sasl(sasl_cmd, mechlist);
-	} else {
+	} else if (login_enabled) {
 	    result = auth_imap();
 	}
     }
@@ -1951,11 +1974,6 @@ static int auth_apop(char *apop_chal)
     unsigned char digest[MD5_DIGEST_LENGTH];
     char digeststr[2*MD5_DIGEST_LENGTH+1];
     
-    if (!apop_chal) {
-	printf("[Server does not support APOP]\n");
-	return IMTEST_FAIL;
-    }
-
     interaction(SASL_CB_AUTHNAME, NULL, "Authname", &username, &userlen);
     interaction(SASL_CB_PASS,NULL, "Please enter your password",
 		&pass, &passlen);
@@ -1986,25 +2004,35 @@ static int auth_apop(char *apop_chal)
     }
 }
 
-static int pop3_do_auth(struct sasl_cmd_t *sasl_cmd, void *rock,
-			char *mech, char *mechlist)
+static int pop3_do_auth(struct sasl_cmd_t *sasl_cmd, void *apop_chal,
+			int user_enabled, char *mech, char *mechlist)
 {
     int result = IMTEST_FAIL;
     
     if (mech) {
 	if (!strcasecmp(mech, "apop")) {
-	    result = auth_apop((char *) rock);
+	    if (!apop_chal) {
+		printf("[Server did not advertise APOP challenge]\n");
+	    } else {
+		result = auth_apop((char *) apop_chal);
+	    }
 	} else if (!strcasecmp(mech, "user")) {
-	    result = auth_pop();
+	    if (!user_enabled) {
+		printf("[Server did not advertise USER]\n");
+	    } else {
+		result = auth_pop();
+	    }
+	} else if (!mechlist || !stristr(mechlist, mech)) {
+	    printf("[Server did not advertise SASL %s]\n", ucase(mech));
 	} else {
 	    result = auth_sasl(sasl_cmd, mech);
 	}
     } else {
 	if (mechlist) {
 	    result = auth_sasl(sasl_cmd, mechlist);
-	} else if (rock) {
-	    result = auth_apop((char *) rock);
-	} else {
+	} else if (apop_chal) {
+	    result = auth_apop((char *) apop_chal);
+	} else if (user_enabled) {
 	    result = auth_pop();
 	}
     }
@@ -2014,7 +2042,7 @@ static int pop3_do_auth(struct sasl_cmd_t *sasl_cmd, void *rock,
 
 /********************************** NNTP *************************************/
 
-static int auth_nntp(void)
+static int auth_nntp()
 {
     char str[1024];
     /* we need username and password to do AUTHINFO USER/PASS */
@@ -2059,20 +2087,28 @@ static int auth_nntp(void)
 
 static int nntp_do_auth(struct sasl_cmd_t *sasl_cmd,
 			void *rock __attribute__((unused)),
-			char *mech, char *mechlist)
+			int user_enabled, char *mech, char *mechlist)
 {
     int result = IMTEST_OK;
 
     if (mech) {
 	if (!strcasecmp(mech, "user")) {
-	    result = auth_nntp();
+	    if (!user_enabled) {
+		printf("[Server did not advertise AUTHINFO USER]\n");
+		result = IMTEST_FAIL;
+	    } else {
+		result = auth_nntp(user_enabled);
+	    }
+	} else if (!mechlist || !stristr(mechlist, mech)) {
+	    printf("[Server did not advertise SASL %s]\n", ucase(mech));
+	    result = IMTEST_FAIL;
 	} else {
 	    result = auth_sasl(sasl_cmd, mech);
 	}
     } else {
 	if (mechlist) {
 	    result = auth_sasl(sasl_cmd, mechlist);
-	} else {
+	} else if (user_enabled) {
 	    result = auth_nntp();
 	}
     }
@@ -2097,6 +2133,7 @@ static char *nntp_parse_success(char *str)
 
 static int xmtp_do_auth(struct sasl_cmd_t *sasl_cmd,
 			void *rock __attribute__((unused)),
+			int login_enabled __attribute__((unused)),
 			char *mech, char *mechlist)
 {
     int result = IMTEST_OK;
@@ -2242,79 +2279,80 @@ void usage(char *prog, char *prot)
 
 
 static struct protocol_t protocols[] = {
-    { "imap", "imaps", "imap",
+    { "imap", "imaps", "imap", 1,  /* LOGIN available until LOGINDISABLED */
       { 1, NULL, NULL },
-      { "C01 CAPABILITY", "C01 ", " STARTTLS", " AUTH=", " COMPRESS=DEFLATE",
-	&imap_parse_mechlist },
+      { "C01 CAPABILITY", "C01 ", " STARTTLS", " LOGINDISABLED", " AUTH=",
+	" COMPRESS=DEFLATE", &imap_parse_mechlist },
       { "S01 STARTTLS", "S01 OK", "S01 NO", 0 },
-      { "A01 AUTHENTICATE", 0, 0, "A01 OK", "A01 NO", "+ ", "*", NULL, 0 },
+      { "A01 AUTHENTICATE", 0,  /* no init resp until SASL-IR advertised */
+	0, "A01 OK", "A01 NO", "+ ", "*", NULL, 0 },
       { "Z01 COMPRESS DEFLATE", "Z01 OK", "Z01 NO" },
       &imap_do_auth, { "Q01 LOGOUT", "Q01 " },
       &imap_init_conn, &generic_pipe, &imap_reset
     },
-    { "pop3", "pop3s", "pop",
+    { "pop3", "pop3s", "pop", 0,   /* USER unavailable until advertised */
       { 0, "+OK", &pop3_parse_banner },
-      { "CAPA", ".", "STLS", "SASL ", NULL, NULL },
+      { "CAPA", ".", "STLS", "USER", "SASL ", NULL, NULL },
       { "STLS", "+OK", "-ERR", 0 },
       { "AUTH", 255, 0, "+OK", "-ERR", "+ ", "*", NULL, 0 },
       { NULL, NULL, NULL, },
       &pop3_do_auth, { "QUIT", "+OK" }, NULL, NULL, NULL
     },
-    { "nntp", "nntps", "nntp",
+    { "nntp", "nntps", "nntp", 0,  /* AUTHINFO USER unavail until advertised */
       { 0, "20", NULL },
-      { "CAPABILITIES", ".", "STARTTLS", "SASL ", NULL, NULL },
+      { "CAPABILITIES", ".", "STARTTLS", "AUTHINFO USER", "SASL ", NULL, NULL },
       { "STARTTLS", "382", "580", 0 },
       { "AUTHINFO SASL", 512, 0, "28", "48", "383 ", "*",
 	&nntp_parse_success, 0 },
       { NULL, NULL, NULL, },
       &nntp_do_auth, { "QUIT", "205" }, NULL, NULL, NULL
     },
-    { "lmtp", NULL, "lmtp",
+    { "lmtp", NULL, "lmtp", 0,
       { 0, "220 ", NULL },
-      { "LHLO lmtptest", "250 ", "STARTTLS", "AUTH ", NULL, NULL },
+      { "LHLO lmtptest", "250 ", "STARTTLS", NULL, "AUTH ", NULL, NULL },
       { "STARTTLS", "220", "454", 0 },
       { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL, 0 },
       { NULL, NULL, NULL, },
       &xmtp_do_auth, { "QUIT", "221" },
       &xmtp_init_conn, &generic_pipe, &xmtp_reset
     },
-    { "smtp", "smtps", "smtp",
+    { "smtp", "smtps", "smtp", 0,
       { 0, "220 ", NULL },
-      { "EHLO smtptest", "250 ", "STARTTLS", "AUTH ", NULL, NULL },
+      { "EHLO smtptest", "250 ", "STARTTLS", NULL, "AUTH ", NULL, NULL },
       { "STARTTLS", "220", "454", 0 },
       { "AUTH", 512, 0, "235", "5", "334 ", "*", NULL, 0 },
       { NULL, NULL, NULL, },
       &xmtp_do_auth, { "QUIT", "221" },
       &xmtp_init_conn, &generic_pipe, &xmtp_reset
     },
-    { "mupdate", NULL, "mupdate",
+    { "mupdate", NULL, "mupdate", 0,
       { 1, "* OK", NULL },
-      { NULL , "* OK", "* STARTTLS", "* AUTH ", "* COMPRESS \"DEFLATE\"", NULL },
+      { NULL , "* OK", "* STARTTLS", NULL, "* AUTH ", "* COMPRESS \"DEFLATE\"", NULL },
       { "S01 STARTTLS", "S01 OK", "S01 NO", 1 },
       { "A01 AUTHENTICATE", USHRT_MAX, 1, "A01 OK", "A01 NO", "", "*", NULL, 0 },
       { "Z01 COMPRESS \"DEFLATE\"", "Z01 OK", "Z01 NO" },
       NULL, { "Q01 LOGOUT", "Q01 " }, NULL, NULL, NULL
     },
-    { "sieve", NULL, SIEVE_SERVICE_NAME,
+    { "sieve", NULL, SIEVE_SERVICE_NAME, 0,
       { 1, "OK", NULL },
-      { "CAPABILITY", "OK", "\"STARTTLS\"", "\"SASL\" ", NULL, NULL },
+      { "CAPABILITY", "OK", "\"STARTTLS\"", NULL, "\"SASL\" ", NULL, NULL },
       { "STARTTLS", "OK", "NO", 1 },
       { "AUTHENTICATE", USHRT_MAX, 1, "OK", "NO", NULL, "*",
 	&sieve_parse_success, 1 },
       { NULL, NULL, NULL, },
       NULL, { "LOGOUT", "OK" }, NULL, NULL, NULL
     },
-    { "csync", NULL, "csync",
+    { "csync", NULL, "csync", 0,
       { 1, "* OK", NULL },
-      { NULL , "* OK", "* STARTTLS", "* SASL ", "* COMPRESS DEFLATE", NULL },
+      { NULL , "* OK", "* STARTTLS", NULL, "* SASL ", "* COMPRESS DEFLATE", NULL },
       { "STARTTLS", "OK", "NO", 1 },
       { "AUTHENTICATE", USHRT_MAX, 0, "OK", "NO", "+ ", "*", NULL, 0 },
       { "COMPRESS DEFLATE", "OK", "NO" },
       NULL, { "EXIT", "OK" }, NULL, NULL, NULL
     },
-    { NULL, NULL, NULL,
+    { NULL, NULL, NULL, 0,
       { 0, NULL, NULL },
-      { NULL, NULL, NULL, NULL, NULL, NULL },
+      { NULL, NULL, NULL, NULL, NULL, NULL, NULL },
       { NULL, NULL, NULL, 0 },
       { NULL, 0, 0, NULL, NULL, NULL, NULL, NULL, 0 },
       { NULL, NULL, NULL, },
@@ -2344,7 +2382,7 @@ int main(int argc, char **argv)
     char *port = "", *prot = "";
     int run_stress_test=0;
     int dotls=0, dossl=0, docompress=0;
-    int server_supports_tls, server_supports_compress;
+    unsigned long capabilities = 0;
     char str[1024];
     const char *pidfile = NULL;
     void *rock = NULL;
@@ -2598,9 +2636,8 @@ int main(int argc, char **argv)
 
 	if (protocol->banner.is_capa) {
 	    /* try to get the capabilities from the banner */
-	    mechlist = ask_capability(protocol, &server_supports_tls,
-				      &server_supports_compress, AUTO_BANNER);
-	    if (!mechlist && !server_supports_tls) {
+	    mechlist = ask_capability(protocol, &capabilities, AUTO_BANNER);
+	    if (!mechlist && !(capabilities & CAPA_STARTTLS)) {
 		/* found no capabilities in banner -> get them explicitly */
 		protocol->banner.is_capa = 0;
 	    }
@@ -2619,12 +2656,11 @@ int main(int argc, char **argv)
 				 strlen(protocol->banner.resp)));
 	}	
 	if (!protocol->banner.is_capa) {
-	    mechlist = ask_capability(protocol, &server_supports_tls,
-				      &server_supports_compress, AUTO_NO);
+	    mechlist = ask_capability(protocol, &capabilities, AUTO_NO);
 	}
 	
 #ifdef HAVE_SSL
-	if ((dossl==0) && (dotls==1) && (server_supports_tls==1)) {
+	if ((dossl==0) && (dotls==1) && (capabilities & CAPA_STARTTLS)) {
 	    char *resp;
 
 	    printf("C: %s\r\n", protocol->tls_cmd.cmd);
@@ -2643,18 +2679,17 @@ int main(int argc, char **argv)
 		    printf("Asking for capabilities again "
 			   "since they might have changed\n");
 		if (mechlist) free(mechlist);
-		mechlist = ask_capability(protocol, &server_supports_tls,
-					  &server_supports_compress,
+		mechlist = ask_capability(protocol, &capabilities,
 					  protocol->tls_cmd.auto_capa);
 	    }
 	    
-	} else if ((dotls==1) && (server_supports_tls!=1)) {
+	} else if ((dotls==1) && !(capabilities & CAPA_STARTTLS)) {
 	    imtest_fatal("STARTTLS not supported by the server!\n");
 	}
 #endif /* HAVE_SSL */
 
 #ifdef HAVE_ZLIB
-	if ((reauth == 1) && (docompress==1) && (server_supports_compress==1)) {
+	if ((reauth == 1) && (docompress==1) && (capabilities & CAPA_COMPRESS)) {
 	char *resp;
 
 	printf("C: %s\r\n", protocol->compress_cmd.cmd);
@@ -2678,6 +2713,7 @@ int main(int argc, char **argv)
 
 	if (protocol->do_auth)
 	    result = protocol->do_auth(&protocol->sasl_cmd, rock,
+				       capabilities & CAPA_LOGIN,
 				       mechanism, mechlist);
 	else {
 	    if (mechanism) {
@@ -2735,8 +2771,7 @@ int main(int argc, char **argv)
 		    }
 		    prot_BLOCK(pin);
 		}
-		new_mechlist = ask_capability(protocol, &server_supports_tls,
-					      &server_supports_compress,
+		new_mechlist = ask_capability(protocol, &capabilities,
 					      protocol->sasl_cmd.auto_capa);
 		if (new_mechlist && strcmp(new_mechlist, mechlist)) {
 		    printf("WARNING: possible MITM attack: "
