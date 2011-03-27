@@ -5608,7 +5608,7 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
     }
 
     /* rename all mailboxes matching this */
-    if (!r && recursive_rename) {
+    if (!r && recursive_rename && strcmp(oldmailboxname, newmailboxname)) {
 	struct renrock rock;
 	int ol = omlen + 1;
 	int nl = nmlen + 1;

@@ -1098,7 +1098,7 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
     int partitionmove = 0;
     struct mailbox *oldmailbox = NULL;
     struct mailbox *newmailbox = NULL;
-    struct txn *tid;
+    struct txn *tid = NULL;
     const char *root = NULL;
     char *newpartition = NULL;
     char *mboxent = NULL;
@@ -1168,7 +1168,27 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
     }
 
     /* Check ability to create new mailbox */
-    if (!partitionmove) {
+    if (partitionmove) {
+	/* NOTE: this is a rename to the same mailbox name on a
+	 * different partition.  This is a pretty filthy hack,
+	 * which should be handled by having four totally different
+	 * codepaths: INBOX -> INBOX.foo, user rename, regular rename
+	 * and of course this one, partition move */
+	newpartition = xstrdup(partition);
+	r = mailbox_copy_files(oldmailbox, newpartition, newname);
+	if (r) goto done;
+	newmbentry = mboxlist_entry_create();
+	newmbentry->mbtype = oldmailbox->mbtype;
+	newmbentry->partition = newpartition;
+	newmbentry->acl = oldmailbox->acl;
+	mboxent = mboxlist_entry_cstring(newmbentry);
+	r = DB->store(mbdb, newname, strlen(newname), 
+		      mboxent, strlen(mboxent), &tid);
+	mboxlist_entry_free(&newmbentry);
+	if (r) goto done;
+	goto dbdone;
+    }
+    else {
 	if (mboxname_isusermailbox(newname, 1)) {
 	    if ((config_getswitch(IMAPOPT_ALLOWUSERMOVES) &&
 		 mboxname_isusermailbox(oldname, 1)) ||
@@ -1188,9 +1208,8 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
 					  userid, auth_state, NULL, 
 					  &newpartition, 1, 0, forceuser, NULL);
 	if (r) goto done;
-    }
-    else if (partition) {
-	newpartition = xstrdup(partition);
+
+	if (!newpartition) newpartition = xstrdup(config_defpartition);
     }
 
     /* Rename the actual mailbox */
@@ -1207,7 +1226,6 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
     mboxent = mboxlist_entry_cstring(newmbentry);
 
     do {
-	tid = NULL;
 	/* 7b. put it into the db */
 	r = DB->store(mbdb, newname, strlen(newname), 
 		      mboxent, strlen(mboxent), &tid);
@@ -1221,6 +1239,7 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
 	case 0: /* success */
 	    break;
 	case CYRUSDB_AGAIN:
+	    tid = NULL;
 	    break;
 	default:
 	    syslog(LOG_ERR, "DBERROR: error renaming %s %s: %s",
@@ -1230,6 +1249,8 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
 	    break;
 	}
     } while (r == CYRUSDB_AGAIN);
+
+ dbdone:
 
     /* 3. Commit transaction */
     r = DB->commit(mbdb, tid);
@@ -1267,10 +1288,23 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
     if (r) {
 	/* XXX - rollback DB changes if it was an mupdate failure */
 	if (newmailbox) mailbox_delete(&newmailbox);
+	if (partitionmove && newpartition)
+	    mailbox_delete_cleanup(newpartition, newname);
 	mailbox_close(&oldmailbox);
     } else {
-	mailbox_close(&newmailbox);
-	mailbox_rename_cleanup(&oldmailbox, isusermbox);
+	if (newmailbox) {
+	    mailbox_close(&newmailbox);
+	    mailbox_rename_cleanup(&oldmailbox, isusermbox);
+	}
+	else if (partitionmove) {
+	    char *oldpartition = xstrdup(oldmailbox->part);
+	    mailbox_close(&oldmailbox);
+	    mailbox_delete_cleanup(oldpartition, oldname);
+	    free(oldpartition);
+	}
+	else
+	    abort(); /* impossible, in theory */
+
 	/* log the rename */
 	sync_log_mailbox_double(oldname, newname);
     }

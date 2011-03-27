@@ -108,7 +108,6 @@ static struct mailboxlist *open_mailboxes = NULL;
                          (m).cache_fd = -1; \
                          (m).header_fd = -1; }
 
-static int mailbox_delete_cleanup(struct mailbox *mailbox);
 static int mailbox_index_unlink(struct mailbox *mailbox);
 static int mailbox_index_repack(struct mailbox *mailbox);
 
@@ -1026,7 +1025,7 @@ void mailbox_close(struct mailbox **mailboxptr)
 	if (!r) {
 	    /* finish cleaning up */
 	    if (mailbox->i.options & OPT_MAILBOX_DELETED)
-		mailbox_delete_cleanup(mailbox);
+		mailbox_delete_cleanup(mailbox->part, mailbox->name);
 	    else if (mailbox->i.options & OPT_MAILBOX_NEEDS_REPACK)
 		mailbox_index_repack(mailbox);
 	    else if (mailbox->i.options & OPT_MAILBOX_NEEDS_UNLINK)
@@ -2854,12 +2853,24 @@ static void mailbox_delete_files(char *path)
 }
 
 /* Callback for use by cmd_delete */
-static int chkchildren(char *name __attribute__((unused)),
+static int chkchildren(char *name,
 		       int matchlen __attribute__((unused)),
 		       int maycreate __attribute__((unused)),
-		       void *rock __attribute__((unused)))
+		       void *rock)
 {
-    return CYRUSDB_DONE;
+    const char *part = (const char *)rock;
+    struct mboxlist_entry *mbentry;
+    int r;
+
+    r = mboxlist_lookup(name, &mbentry, 0);
+    if (r) return r;
+
+    if (!strcmp(part, mbentry->partition))
+	r = CYRUSDB_DONE;
+
+    mboxlist_entry_free(&mbentry);
+
+    return 0;
 }
 
 /*
@@ -2910,40 +2921,38 @@ int mailbox_delete(struct mailbox **mailboxptr)
  * try to create a mailbox while the delete is underway.
  * VERY tight race condition exists right now... */
 /* we need an exclusive namelock for this */
-int mailbox_delete_cleanup(struct mailbox *mailbox)
+int mailbox_delete_cleanup(const char *part, const char *name)
 {
     char nbuf[MAX_MAILBOX_BUFFER];
     char pbuf[MAX_MAILBOX_PATH+1], mbuf[MAX_MAILBOX_PATH+1];
     char *ntail, *ptail, *mtail = NULL;
     char *path, *mpath;
+    struct mboxlist_entry *mbentry;
     int r;
-
-    /* make sure it really is deleted! */
-    assert(mailbox->i.options & OPT_MAILBOX_DELETED);
 
     /* XXX - use explicit paths to each type of file */
 
     /* Flush data (message file) directory */
-    path = mboxname_datapath(mailbox->part, mailbox->name, 0);
+    path = mboxname_datapath(part, name, 0);
     mailbox_delete_files(path);
     strlcpy(pbuf, path, sizeof(pbuf));
     ptail = pbuf + strlen(pbuf);
 
     /* Flush metadata directory */
-    mpath = mboxname_metapath(mailbox->part, mailbox->name, 0, 0);
+    mpath = mboxname_metapath(part, name, 0, 0);
     if (strcmp(path, mpath)) {
 	mailbox_delete_files(mpath);
 	strlcpy(mbuf, mpath, sizeof(mbuf));
 	mtail = mbuf + strlen(mbuf);
     }
 
-    strlcpy(nbuf, mailbox->name, sizeof(nbuf));
+    strlcpy(nbuf, name, sizeof(nbuf));
     ntail = nbuf + strlen(nbuf);
 
     do {
 	/* Check if the mailbox has children */
 	strcpy(ntail, ".*");
-	r = mboxlist_findall(NULL, nbuf, 1, NULL, NULL, chkchildren, NULL);
+	r = mboxlist_findall(NULL, nbuf, 1, NULL, NULL, chkchildren, (void *)part);
 	if (r != 0) break; /* We short-circuit with CYRUSDB_DONE */
 
 	/* No children, remove mailbox spool dir(s) */
@@ -2978,8 +2987,14 @@ int mailbox_delete_cleanup(struct mailbox *mailbox)
 	    /* Hit top of 'user' hierarchy */
 	    break;
 	}
-	r = mboxlist_lookup(nbuf, NULL, NULL);
-    } while(r == IMAP_MAILBOX_NONEXISTENT);
+	r = mboxlist_lookup(nbuf, &mbentry, NULL);
+	/* not the same partition, we can keep cleaning up */
+	if (!r) {
+	    if (strcmp(mbentry->partition, part))
+		r = IMAP_MAILBOX_NONEXISTENT;
+	    mboxlist_entry_free(&mbentry);
+	}
+    } while (r == IMAP_MAILBOX_NONEXISTENT);
 
     return 0;
 }
@@ -2991,11 +3006,57 @@ struct meta_file {
 };
 
 static struct meta_file meta_files[] = {
+    { META_HEADER, 0, 1 },
     { META_INDEX,  0, 1 },
     { META_CACHE,  0, 1 },
     { META_SQUAT,  1, 0 },
     { 0, 0, 0 }
 };
+
+int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
+		       const char *newname)
+{
+    char oldbuf[MAX_MAILBOX_PATH], newbuf[MAX_MAILBOX_PATH];
+    struct meta_file *mf;
+    uint32_t recno;
+    struct index_record record;
+    int r;
+
+    /* Copy over meta files */
+    for (mf = meta_files; !r && mf->metaflag; mf++) {
+	struct stat sbuf;
+
+	strncpy(oldbuf, mailbox_meta_fname(mailbox, mf->metaflag),
+		MAX_MAILBOX_PATH);
+	strncpy(newbuf, mboxname_metapath(newpart, newname, mf->metaflag, 0),
+		MAX_MAILBOX_PATH);
+
+	unlink(newbuf); /* Make link() possible */
+
+	if (!mf->optional || stat(oldbuf, &sbuf) != -1) {
+	    r = mailbox_copyfile(oldbuf, newbuf, mf->nolink);
+	    if (r) return r;
+	}
+    }
+
+    for (recno = 1; recno <= mailbox->i.num_records; recno++) {
+	r = mailbox_read_index_record(mailbox, recno, &record);
+	if (r) return r;
+
+	if (record.system_flags & FLAG_UNLINKED)
+	    continue;
+
+	strncpy(oldbuf, mailbox_message_fname(mailbox, record.uid),
+		MAX_MAILBOX_PATH);
+	strncpy(newbuf, mboxname_datapath(newpart, newname, record.uid),
+		MAX_MAILBOX_PATH);
+
+	r = mailbox_copyfile(oldbuf, newbuf, 0);
+	if (r) return r;
+    }
+
+    return 0;
+}
 
 /* if 'userid' is set, we perform the funky RENAME INBOX INBOX.old
    semantics, regardless of whether or not the name of the mailbox is
@@ -3009,27 +3070,15 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
 			struct mailbox **newmailboxptr)
 {
     int r;
-    unsigned int flag;
-    char oldbuf[MAX_MAILBOX_PATH], newbuf[MAX_MAILBOX_PATH];
-    struct meta_file *mf;
-    char *path, *mpath;
     struct mailbox *newmailbox = NULL;
-    unsigned uidvalidity = 0;
-    uint32_t recno;
-    struct index_record record;
 
     assert(mailbox_index_islocked(oldmailbox, 1));
-
-    if (strcmp(oldmailbox->name, newname) == 0) {
-	/* Just moving mailboxes between partitions */
-	uidvalidity = oldmailbox->i.uidvalidity;
-    }
 
     /* Create new mailbox */
     r = mailbox_create(newname, newpartition,
 		       oldmailbox->acl, (userid ? NULL : oldmailbox->uniqueid),
 		       oldmailbox->specialuse, oldmailbox->i.options,
-		       uidvalidity, &newmailbox);
+		       0, &newmailbox);
 
     if (r) return r;
 
@@ -3052,49 +3101,22 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
 	    goto fail;
     }
 
-    /* Copy over meta files */
-    for (mf = meta_files; !r && mf->metaflag; mf++) {
-	struct stat sbuf;
-
-	strncpy(oldbuf, mailbox_meta_fname(oldmailbox, mf->metaflag), MAX_MAILBOX_PATH);
-	strncpy(newbuf, mailbox_meta_fname(newmailbox, mf->metaflag), MAX_MAILBOX_PATH);
-
-	unlink(newbuf); /* Make link() possible */
-
-	if (!mf->optional || stat(oldbuf, &sbuf) != -1) {
-	    r = mailbox_copyfile(oldbuf, newbuf, mf->nolink);
-	    if (r) goto fail;
-	}
-    }
+    r = mailbox_copy_files(oldmailbox, newpartition, newname);
+    if (r) goto fail;
 
     /* Re-open index file  */
     r = mailbox_open_index(newmailbox);
     if (r) goto fail;
 
+    /* Re-open header file */
     r = mailbox_read_index_header(newmailbox);
     if (r) goto fail;
 
-    for (recno = 1; recno <= newmailbox->i.num_records; recno++) {
-	r = mailbox_read_index_record(newmailbox, recno, &record);
-	if (r) goto fail;
+    /* update uidvalidity */
+    newmailbox->i.uidvalidity = time(0);
 
-	if (record.system_flags & FLAG_UNLINKED)
-	    continue;
-
-	strncpy(oldbuf, mailbox_message_fname(oldmailbox, record.uid), MAX_MAILBOX_PATH);
-	strncpy(newbuf, mailbox_message_fname(newmailbox, record.uid), MAX_MAILBOX_PATH);
-
-	r = mailbox_copyfile(oldbuf, newbuf, 0);
-	if (r) goto fail;
-    }
-
-    /* Copy flag names */
-    newmailbox->header_dirty = 1;
-    for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
-	if (oldmailbox->flagname[flag]) {
-	    newmailbox->flagname[flag] = xstrdup(oldmailbox->flagname[flag]);
-	}
-    }
+    /* INBOX rename - change uniqueid */
+    if (!userid) mailbox_make_uniqueid(newmailbox);
 
     r = seen_copy(userid, oldmailbox, newmailbox);
     if (r) goto fail;
@@ -3103,7 +3125,7 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
     mailbox_quota_dirty(newmailbox);
     newmailbox->quota_previously_used = 0;
 
-    /* commit the index changes last, once files are in place */
+    /* commit the index changes */
     r = mailbox_commit(newmailbox);
     if (r) goto fail;
 
@@ -3121,10 +3143,7 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
 fail:
      /* failure and back out */
     /* XXX - per file paths, need to clean up individual filenames */
-    path = mboxname_datapath(newmailbox->part, newmailbox->name, 0);
-    mailbox_delete_files(path);
-    mpath = mboxname_metapath(newmailbox->part, newmailbox->name, 0, 0);
-    if (strcmp(path, mpath)) mailbox_delete_files(mpath);
+    mailbox_delete_cleanup(newmailbox->part, newmailbox->name);
     mailbox_close(&newmailbox);
 
     return r;
