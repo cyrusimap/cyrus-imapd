@@ -37,8 +37,24 @@
 <li>Fixed reconstruct crash with file called '0.'</li>
 <li>Made reconstruct '-n' option actually exist, as
   advertised in the man page</li>
-
-
+<li>Fixed bug #3423 - STARTTLS plaintext command
+  injection vulnerability</li>
+<li>Bug #3382 Added "failedloginpause" config option</li>
+<li>Bugs #3383/3385 Removed some obsolete config options</li>
+<li>Bug #3389 $confdir/proc not created on the fly</li>
+<li>Bug #3394 fix imtest parsing of MECHLIST</li>
+<li>Bug #3399 fix with_ldap option default</li>
+<li>Bug #3307 fix mbpath crash on remote mailbox</li>
+<li>Bug #3420 use getpassphrase on Solaris, now passwords
+  over 8 characters long work with cyrus tools</li>
+<li>Bug #3400 and others - lots of bugs with XFER between
+  different versions in murder clusters fixed, including
+  a bug that caused only mailboxes with zero messages to
+  be rejected for upgrade</li>
+<li>Bug #3391 fix rename which just moves between
+  partitions</li>
+<li>Bug #3103 fix imtest using plain authentication when
+  it must not</li>
 </ul>
 
 <h1>Changes to the Cyrus IMAP Server since 2.4.5</h1>

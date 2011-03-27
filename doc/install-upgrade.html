@@ -10,9 +10,15 @@
 
 <h2>Upgrading from 2.4.6</h2>
 <ul>
-<li>There should be no change from 2.4.6, however if you have
-  damaged mailboxes that weren't previously fixable, a
-  reconstruct of those mailboxes may be advised</li>
+<li>New config option: <tt>failedloginpause</tt> allows you to
+  change the pause after a failed login from the existing default
+  of 3 seconds</li>
+<li>On Solaris: now getpassphrase is used, so passwords longer
+  than 8 characters will work with management tools</li>
+<li>$confdir/proc now gets created automatically if it doesn't
+  exist, which may impact init script design</li>
+<li>If you have damaged mailboxes that weren't previously
+  fixable, a reconstruct of those mailboxes may be advised</li>
 </ul>
 
 <h2>Upgrading from 2.4.5</h2>
