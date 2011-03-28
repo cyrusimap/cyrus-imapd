@@ -867,7 +867,7 @@ int tls_start_servertls(int readfd, int writefd, int timeout,
 	tv.tv_sec = timeout;
 	tv.tv_usec = 0;
 
-	sts = select(1, &rfds, NULL, NULL, &tv);
+	sts = select(readfd+1, &rfds, NULL, NULL, &tv);
 	if (sts <= 0) {
 	    if (sts == 0) {
 		syslog(LOG_DEBUG, "SSL_accept() timed out -> fail");
