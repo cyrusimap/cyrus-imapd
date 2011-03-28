@@ -3034,7 +3034,7 @@ int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
     struct meta_file *mf;
     uint32_t recno;
     struct index_record record;
-    int r;
+    int r = 0;
 
     /* Copy over meta files */
     for (mf = meta_files; mf->metaflag; mf++) {
