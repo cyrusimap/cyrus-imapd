@@ -62,7 +62,7 @@ my $store = Cassandane::MessageStoreFactory->create(%params);
 my %threads_by_msgid;
 my @threads;
 my $next_thread_id = 1;
-my $max_msgs = 500;
+my $max_msgs = 1000;
 
 sub thread_new
 {
@@ -90,14 +90,28 @@ while (my $msg = $store->read_message())
     die "duplicate msgid $msgid"
 	if defined $threads_by_msgid{$msgid};
 
+    my @refs;
+    eval
+    {
+	@refs = extract_refs($msg);
+    };
+    if ($@)
+    {
+	print STDERR "Can't get references: $@";
+	next;
+    }
+
     my $thread;
-    foreach my $ref (extract_refs($msg))
+    foreach my $ref (@refs)
     {
 	my $t = $threads_by_msgid{$ref};
-	die "Thread clash!"
-	    if (defined $t &&
-		defined $thread &&
-		$t->{id} != $thread->{id});
+	if (defined $t &&
+	    defined $thread &&
+	    $t->{id} != $thread->{id})
+	{
+	    print STDERR "Thread clash! $t->{id} vs $thread->{id}\n";
+	    next;
+	}
 	$thread = $t;
     }
 
