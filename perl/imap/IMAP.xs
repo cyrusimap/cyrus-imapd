@@ -55,6 +55,7 @@
 
 #include "imclient.h"
 #include "imapurl.h"
+#include "util.h"
 #include "xmalloc.h"
 
 #include "cyrperl.h"

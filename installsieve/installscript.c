@@ -70,6 +70,7 @@
 #include "prot.h"
 #include "lex.h"
 #include "request.h"
+#include "util.h"
 
 #define IMTEST_OK    0
 #define IMTEST_FAIL -1
