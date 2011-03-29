@@ -95,7 +95,7 @@ cyrus_prefix = @cyrus_prefix@
 service_path = @service_path@
 
 CUNIT = @top_srcdir@/cunit/cunit.pl --project @top_srcdir@/cunit
-UNITOBJS = unit.o
+UNITOBJS = unit.o timeout.o
 
 PROGS = unit
 

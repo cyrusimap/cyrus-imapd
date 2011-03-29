@@ -47,6 +47,7 @@
 #include <CUnit/CUnit.h>
 #include <CUnit/Basic.h>
 #include <CUnit/Automated.h>
+#include "timeout.h"
 
 #include "registers.h"
 
@@ -125,6 +126,25 @@ static void accumulate_summary(CU_RunSummary *summp)
     summp->nFailureRecords += ss->nFailureRecords;
 }
 
+/* Each test gets a maximum of 20 seconds. */
+#define TEST_TIMEOUT_MS (20*1000)
+
+static void fail_on_timeout(void)
+{
+    CU_FAIL_FATAL("Test timed out");
+}
+
+void __cunit_start_test(void)
+{
+    timeout_begin(TEST_TIMEOUT_MS);
+}
+
+void __cunit_complete_test(void)
+{
+    timeout_end();
+}
+
+
 static void run_tests(void)
 {
     int i;
@@ -138,10 +158,16 @@ static void run_tests(void)
     CU_FailureRecord *failures = NULL;
     CU_AllTestsCompleteMessageHandler all_complete;
 
+    /* Setup to catch long-running tests.  This seems to be
+     * particularly a problem on CentOS 5.5. */
+    if (timeout_init(fail_on_timeout) < 0)
+	exit(1);
+
     if (xml_flag) {
 	if (num_testspecs == 0) {
 	    /* not specified: run all tests in order listed */
 	    CU_automated_run_tests();
+	    timeout_fini();
 	    return;
 	}
 	fprintf(stderr, "unit: test specifications not "
@@ -155,6 +181,7 @@ static void run_tests(void)
     if (num_testspecs == 0) {
 	/* not specified: run all tests in order listed */
 	CU_basic_run_tests();
+	timeout_fini();
 	return;
     }
 
@@ -217,6 +244,8 @@ static void run_tests(void)
 		failed++;
 	}
     }
+
+    timeout_fini();
 
     *(CU_RunSummary *)CU_get_run_summary() = summ;
     if (all_complete)

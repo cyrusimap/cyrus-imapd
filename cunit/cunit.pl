@@ -637,10 +637,27 @@ sub suite_generate_wrap($)
     }
     print WRAP "    CU_TEST_INFO_NULL\n};\n";
 
-    my $setupfn = $suite->{setupfn} || 'NULL';
-    my $teardownfn = $suite->{teardownfn} || 'NULL';
+    my $setupfn = $suite->{setupfn};
+    my $teardownfn = $suite->{teardownfn};
+    print WRAP "extern void __cunit_start_test(void);\n";
+    print WRAP "extern void __cunit_complete_test(void);\n";
+    print WRAP "static int __cunit_setup(void)\n";
+    print WRAP "{\n";
+    print WRAP "    int r = 0;\n";
+    print WRAP "    __cunit_start_test();\n";
+    print WRAP "    r = $setupfn();\n" if defined $setupfn;
+    print WRAP "    return r;\n";
+    print WRAP "}\n";
+    print WRAP "static int __cunit_teardown(void)\n";
+    print WRAP "{\n";
+    print WRAP "    int r = 0;\n";
+    print WRAP "    __cunit_complete_test();\n";
+    print WRAP "    r = $teardownfn();\n" if defined $teardownfn;
+    print WRAP "    return r;\n";
+    print WRAP "}\n";
+
     print WRAP "const CU_SuiteInfo $suite->{suitevar} = {" .
-	       "\"$suite->{name}\", $setupfn, $teardownfn, _tests};\n";
+	       "\"$suite->{name}\", __cunit_setup, __cunit_teardown, _tests};\n";
     close WRAP;
 
     atomic_rewrite_end($suite->{wrap});
