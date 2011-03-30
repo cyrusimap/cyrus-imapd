@@ -124,6 +124,12 @@ void strarray_append(strarray_t *sa, const char *s)
     strarray_appendm(sa, xstrdup(s));
 }
 
+void strarray_add(strarray_t *sa, const char *s)
+{
+    if (strarray_find(sa, s, 0) < 0)
+	strarray_append(sa, s);
+}
+
 void strarray_appendm(strarray_t *sa, char *s)
 {
     ensure_alloc(sa, sa->count+1);
