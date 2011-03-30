@@ -109,6 +109,10 @@ static void timeout_mainloop(int fd, pid_t pid)
 	    perror("timeout: read");
 	    exit(1);
 	}
+	if (r == 0) {
+	    /* EOF: parent closed pipe */
+	    exit(0);
+	}
 	if (r != 1) {
 	    fprintf(stderr, "timeout: short read\n");
 	    exit(1);
@@ -121,6 +125,10 @@ static void timeout_mainloop(int fd, pid_t pid)
 	    if (r < 0) {
 		perror("timeout: read");
 		exit(1);
+	    }
+	    if (r == 0) {
+		/* EOF: parent closed pipe */
+		exit(0);
 	    }
 	    if (r != sizeof(timeout)) {
 		fprintf(stderr, "timeout: short read\n");
@@ -184,7 +192,6 @@ int timeout_init(void (*cb)(void))
 	exit(0);
     }
 
-    timeout_callback = cb;
     return 0;
 }
 
@@ -193,6 +200,7 @@ int timeout_begin(int millisec)
     int c;
     int r;
 
+// fprintf(stderr, "timeout_begin\n");
     if (timeout_fd < 0)
 	return -1;
 
@@ -215,6 +223,7 @@ int timeout_end(void)
     int c;
     int r;
 
+// fprintf(stderr, "timeout_end\n");
     if (timeout_fd < 0)
 	return -1;
 

@@ -47,6 +47,7 @@
 #include <CUnit/CUnit.h>
 #include <CUnit/Basic.h>
 #include <CUnit/Automated.h>
+#include <setjmp.h>
 #include "timeout.h"
 
 #include "registers.h"
@@ -129,23 +130,79 @@ static void accumulate_summary(CU_RunSummary *summp)
 /* Each test gets a maximum of 20 seconds. */
 #define TEST_TIMEOUT_MS (20*1000)
 
-static void fail_on_timeout(void)
+static jmp_buf jbuf;
+static const char *code;
+static enum { IDLE, INTEST, INFIXTURE } running = IDLE;
+
+void exit(int status)
 {
-    CU_FAIL_FATAL("Test timed out");
+    switch (running) {
+    case INTEST:
+	fprintf(stderr, "unit: code under test (%s) exited with status %d\n",
+			code, status);
+	running = IDLE;
+	CU_FAIL_FATAL("Code under test exited");
+	break;
+    case INFIXTURE:
+	fprintf(stderr, "unit: fixture code (%s) exited with status %d\n",
+			code, status);
+	running = IDLE;
+	longjmp(jbuf, status);
+	break;
+    }
+    /* had atexit() handlers? stiff! */
+    _exit(status);
 }
 
-void __cunit_start_test(void)
+static void handle_timeout(void)
 {
+    switch (running) {
+    case INTEST:
+	fprintf(stderr, "unit: code under test (%s) timed out\n",
+			code);
+	running = IDLE;
+	CU_FAIL_FATAL("Code under test timed out");
+	break;
+    case INFIXTURE:
+	fprintf(stderr, "unit: fixture code (%s) timed out\n",
+			code);
+	running = IDLE;
+	longjmp(jbuf, -1);
+	break;
+    default:
+	fprintf(stderr, "unit: unexpected timeout running=%d\n",
+			running);
+	_exit(1);
+    }
+}
+
+void __cunit_wrap_test(const char *name, void (*fn)(void))
+{
+    code = name;
+    running = INTEST;
     if (timeout_begin(TEST_TIMEOUT_MS) < 0)
 	exit(1);
-}
-
-void __cunit_complete_test(void)
-{
+    fn();
     if (timeout_end() < 0)
 	exit(1);
+    running = IDLE;
 }
 
+int __cunit_wrap_fixture(const char *name, int (*fn)(void))
+{
+    int r = setjmp(jbuf);
+    if (r)
+	return r;
+    code = name;
+    running = INFIXTURE;
+    if (timeout_begin(TEST_TIMEOUT_MS) < 0)
+	exit(1);
+    r = fn();
+    if (timeout_end() < 0)
+	exit(1);
+    running = IDLE;
+    return r;
+}
 
 static void run_tests(void)
 {
@@ -162,7 +219,7 @@ static void run_tests(void)
 
     /* Setup to catch long-running tests.  This seems to be
      * particularly a problem on CentOS 5.5. */
-    if (timeout_init(fail_on_timeout) < 0)
+    if (timeout_init(handle_timeout) < 0)
 	exit(1);
 
     if (xml_flag) {
