@@ -136,12 +136,14 @@ static void fail_on_timeout(void)
 
 void __cunit_start_test(void)
 {
-    timeout_begin(TEST_TIMEOUT_MS);
+    if (timeout_begin(TEST_TIMEOUT_MS) < 0)
+	exit(1);
 }
 
 void __cunit_complete_test(void)
 {
-    timeout_end();
+    if (timeout_end() < 0)
+	exit(1);
 }
 
 

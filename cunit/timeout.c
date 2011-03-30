@@ -50,8 +50,8 @@
 #include "timeout.h"
 
 static void (*timeout_callback)(void);
-static pid_t timeout_pid;
-static int timeout_fd;
+static pid_t timeout_pid = -1;
+static int timeout_fd = -1;
 
 #define PIPE_READ	0
 #define PIPE_WRITE	1
@@ -143,6 +143,7 @@ int timeout_init(void (*cb)(void))
 {
     int pipefd[2];
     pid_t pid;
+    struct sigaction sa;
     int r;
 
     timeout_callback = cb;
@@ -171,7 +172,11 @@ int timeout_init(void (*cb)(void))
 	}
 	close(pipefd[PIPE_READ]);
 	close(pipefd[PIPE_WRITE]);
-	signal(SIGUSR1, sigusr1_handler);
+
+	memset(&sa, 0, sizeof(sa));
+	sa.sa_handler = sigusr1_handler;
+	sa.sa_flags = SA_NODEFER;
+	sigaction(SIGUSR1, &sa, NULL);
     } else {
 	/* child */
 	close(pipefd[PIPE_WRITE]);
@@ -232,13 +237,13 @@ void timeout_fini(void)
 	timeout_fd = -1;
     }
 
-    if (timeout_pid) {
+    if (timeout_pid > 0) {
 	r = kill(timeout_pid, SIGTERM);
 	if (r < 0 && errno != ESRCH)
 	    perror("timeout: kill");
 	else
 	    waitpid(timeout_pid, &status, 0);
-	timeout_pid = 0;
+	timeout_pid = -1;
     }
 
     signal(SIGUSR1, SIG_IGN);
