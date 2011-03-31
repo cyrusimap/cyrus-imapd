@@ -65,11 +65,14 @@ sub get_content
 }
 
 my @suites;
-sub add_suite
+sub get_suite
 {
     my ($sname) = @_;
 
     printf STDERR "Suite \"%s\"\n", $sname if $verbose;
+
+    my @existing = grep { $_->{name} eq $sname; } @suites;
+    return $existing[0] if scalar @existing;
 
     my $s = {
 	name => $sname,
@@ -123,31 +126,62 @@ my $result = get_child($root, 'CUNIT_RESULT_LISTING');
 
 foreach my $suite (get_children($result, 'CUNIT_RUN_SUITE'))
 {
-    my $succ = get_child($suite, 'CUNIT_RUN_SUITE_SUCCESS');
-    my $s = add_suite(get_content(get_child($succ, 'SUITE_NAME')));
+    my $succ = get_child_maybe($suite, 'CUNIT_RUN_SUITE_SUCCESS');
+    my $fail = get_child_maybe($suite, 'CUNIT_RUN_SUITE_FAILURE');
 
-    foreach my $record (get_children($succ, 'CUNIT_RUN_TEST_RECORD'))
+    if (defined $succ)
     {
-	my $tr;
+	my $s = get_suite(get_content(get_child($succ, 'SUITE_NAME')));
 
-	$tr = get_child_maybe($record, 'CUNIT_RUN_TEST_SUCCESS');
-	if (defined $tr)
+	foreach my $record (get_children($succ, 'CUNIT_RUN_TEST_RECORD'))
 	{
-	    my $tname = get_content(get_child($tr, 'TEST_NAME'));
-	    add_pass($s, $tname);
-	    next;
-	}
+	    my $tr;
 
-	foreach $tr (get_children($record, 'CUNIT_RUN_TEST_FAILURE'))
-	{
-	    my $tname = get_content(get_child($tr, 'TEST_NAME'));
-	    my $fname = get_content(get_child($tr, 'FILE_NAME'));
-	    my $lineno = get_content(get_child($tr, 'LINE_NUMBER'));
-	    my $cond = get_content(get_child($tr, 'CONDITION'));
-	    add_fail($s, $tname, "$fname:$lineno: $cond");
-	    next;
+	    $tr = get_child_maybe($record, 'CUNIT_RUN_TEST_SUCCESS');
+	    if (defined $tr)
+	    {
+		my $tname = get_content(get_child($tr, 'TEST_NAME'));
+		add_pass($s, $tname);
+		next;
+	    }
+
+	    foreach $tr (get_children($record, 'CUNIT_RUN_TEST_FAILURE'))
+	    {
+		my $tname = get_content(get_child($tr, 'TEST_NAME'));
+		my $fname = get_content(get_child($tr, 'FILE_NAME'));
+		my $lineno = get_content(get_child($tr, 'LINE_NUMBER'));
+		my $cond = get_content(get_child($tr, 'CONDITION'));
+		add_fail($s, $tname, "$fname:$lineno: $cond");
+		next;
+	    }
 	}
     }
+    elsif (defined $fail)
+    {
+	# TODO: there must be a way in the jUnit output format
+	# to report a failure of the suite fixture code, but
+	# I have no idea what it is.  Instead use a fake test name.
+	my $s = get_suite(get_content(get_child($fail, 'SUITE_NAME')));
+	my $reason = get_content(get_child($fail, 'FAILURE_REASON'));
+
+	my $tname = '__wtf';
+	if ($reason =~ m/cleanup/i)
+	{
+	    $tname = '__cleanup';
+	}
+	elsif ($reason =~ m/initialization/i)
+	{
+	    $tname = '__cleanup';
+	}
+
+	add_fail($s, $tname, $reason);
+    }
+    else
+    {
+	carp "Neither a CUNIT_RUN_SUITE_SUCCESS nor a " .
+	     "CUNIT_RUN_SUITE_FAILURE child are present";
+    }
+
 }
 
 my $dir = dirname($outbase . 'foo');
