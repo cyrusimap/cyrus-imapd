@@ -1434,7 +1434,7 @@ static int update_seen_work(const char *user, const char *uniqueid,
 static int do_seen(char *user, char *uniqueid)
 {
     int r = 0;
-    struct seen *seendb;
+    struct seen *seendb = NULL;
     struct seendata sd;
 
     if (verbose) 
@@ -1448,12 +1448,8 @@ static int do_seen(char *user, char *uniqueid)
     if (r) return 0;
 
     r = seen_read(seendb, uniqueid, &sd);
-    if (r) {
-	seen_close(&seendb);
-	return 0;
-    }
 
-    r = update_seen_work(user, uniqueid, &sd);
+    if (!r) r = update_seen_work(user, uniqueid, &sd);
 
     seen_close(&seendb);
     seen_freedata(&sd);
