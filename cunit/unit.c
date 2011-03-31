@@ -61,6 +61,7 @@ int num_testspecs = 0;
 const char **testspecs;
 enum { RUN, LIST } mode = RUN;
 int xml_flag = 0;
+int timeouts_flag = 1;
 const int config_need_data = 0;
 
 void fatal(char *s)
@@ -180,10 +181,10 @@ void __cunit_wrap_test(const char *name, void (*fn)(void))
 {
     code = name;
     running = INTEST;
-    if (timeout_begin(TEST_TIMEOUT_MS) < 0)
+    if (timeouts_flag && timeout_begin(TEST_TIMEOUT_MS) < 0)
 	exit(1);
     fn();
-    if (timeout_end() < 0)
+    if (timeouts_flag && timeout_end() < 0)
 	exit(1);
     running = IDLE;
 }
@@ -195,10 +196,10 @@ int __cunit_wrap_fixture(const char *name, int (*fn)(void))
 	return r;
     code = name;
     running = INFIXTURE;
-    if (timeout_begin(TEST_TIMEOUT_MS) < 0)
+    if (timeouts_flag && timeout_begin(TEST_TIMEOUT_MS) < 0)
 	exit(1);
     r = fn();
-    if (timeout_end() < 0)
+    if (timeouts_flag && timeout_end() < 0)
 	exit(1);
     running = IDLE;
     return r;
@@ -219,14 +220,15 @@ static void run_tests(void)
 
     /* Setup to catch long-running tests.  This seems to be
      * particularly a problem on CentOS 5.5. */
-    if (timeout_init(handle_timeout) < 0)
+    if (timeouts_flag && timeout_init(handle_timeout) < 0)
 	exit(1);
 
     if (xml_flag) {
 	if (num_testspecs == 0) {
 	    /* not specified: run all tests in order listed */
 	    CU_automated_run_tests();
-	    timeout_fini();
+	    if (timeouts_flag)
+		timeout_fini();
 	    return;
 	}
 	fprintf(stderr, "unit: test specifications not "
@@ -240,7 +242,8 @@ static void run_tests(void)
     if (num_testspecs == 0) {
 	/* not specified: run all tests in order listed */
 	CU_basic_run_tests();
-	timeout_fini();
+	if (timeouts_flag)
+	    timeout_fini();
 	return;
     }
 
@@ -304,7 +307,8 @@ static void run_tests(void)
 	}
     }
 
-    timeout_fini();
+    if (timeouts_flag)
+	timeout_fini();
 
     *(CU_RunSummary *)CU_get_run_summary() = summ;
     if (all_complete)
@@ -339,6 +343,7 @@ static void usage(int ec)
 "Usage: cunit/unit [options] [suite|suite:test ...]\n"
 "options are:\n"
 "    -l      list all tests\n"
+"    -t      disable per-test timeouts\n"
 "    -v      be more verbose\n"
 "    -h      print this message\n"
     ;
@@ -353,7 +358,7 @@ static void parse_args(int argc, char **argv)
 {
     int c;
 
-    while ((c = getopt(argc, argv, "hlvx")) > 0)
+    while ((c = getopt(argc, argv, "hltvx")) > 0)
     {
 	switch (c)
 	{
@@ -362,6 +367,9 @@ static void parse_args(int argc, char **argv)
 	    break;
 	case 'l':
 	    mode = LIST;
+	    break;
+	case 't':
+	    timeouts_flag = 0;
 	    break;
 	case 'v':
 	    verbose++;
