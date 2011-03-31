@@ -1480,7 +1480,7 @@ static char *ask_capability(struct protocol_t *prot,
 	printf("S: %s", str);
 
 	/* check for login - toggles existing state */
-	if (prot->capa_cmd.tls &&
+	if (prot->capa_cmd.login &&
 	    strstr(str, prot->capa_cmd.login) != NULL) {
 	    *capabilities ^= CAPA_LOGIN;
 	}
