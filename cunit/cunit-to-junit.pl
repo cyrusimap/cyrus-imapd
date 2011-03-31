@@ -6,6 +6,7 @@ use XML::DOM;
 use File::Path qw(mkpath rmtree);
 use File::Basename qw(dirname);
 use Data::Dumper;
+use Carp;
 
 my $verbose = 0;
 my $infile = 'CUnitAutomated-Results.xml';
@@ -15,10 +16,10 @@ sub get_child
 {
     my ($node, $name) = @_;
 
-    die "Invalid document"
+    croak "Invalid document"
 	unless defined $node;
     my $kids = $node->getElementsByTagName($name, 0);
-    die "Invalid document: name=$name"
+    croak "Invalid document: name=$name"
 	unless (defined $kids && $kids->getLength == 1);
     return $kids->item(0);
 }
@@ -27,14 +28,14 @@ sub get_child_maybe
 {
     my ($node, $name) = @_;
 
-    die "Invalid document"
+    croak "Invalid document"
 	unless defined $node;
     my $kids = $node->getElementsByTagName($name, 0);
     return undef
 	if !defined $kids;
     return undef
 	if $kids->getLength == 0;
-    die "Invalid document"
+    croak "Invalid document"
 	if $kids->getLength > 1;
     return $kids->item(0);
 }
@@ -43,7 +44,7 @@ sub get_children
 {
     my ($node, $name) = @_;
 
-    die "Invalid document"
+    croak "Invalid document"
 	unless defined $node;
     return ( $node->getElementsByTagName($name, 0) );
 }
@@ -52,7 +53,7 @@ sub get_content
 {
     my ($node, $name) = @_;
 
-    die "Invalid document"
+    croak "Invalid document"
 	unless defined $node;
     my $s = $node->getFirstChild->getData;
     if (defined $s)
