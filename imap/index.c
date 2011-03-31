@@ -3954,12 +3954,15 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
 	case SORT_MODSEQ:
 	    ret = numcmp(md1->modseq, md2->modseq);
 	    break;
-        case SORT_DISPLAYFROM:
-            ret = strcmp(md1->displayfrom, md2->displayfrom);
-            break;
-        case SORT_DISPLAYTO:
-            ret = strcmp(md1->displayto, md2->displayto);
-            break;
+	case SORT_DISPLAYFROM:
+	    ret = strcmp(md1->displayfrom, md2->displayfrom);
+	    break;
+	case SORT_DISPLAYTO:
+	    ret = strcmp(md1->displayto, md2->displayto);
+	    break;
+	case SORT_UID:
+	    ret = numcmp(md1->uid, md2->uid);
+	    break;
 	}
     } while (!ret && sortcrit[i++].key != SORT_SEQUENCE);
 

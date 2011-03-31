@@ -301,6 +301,7 @@ struct capa_struct base_capabilities[] = {
     { "SORT",                  2 },
     { "SORT=MODSEQ",           2 },
     { "SORT=DISPLAY",          2 },
+    { "SORT=UID",              2 },  /* not standard */
     { "THREAD=ORDEREDSUBJECT", 2 },
     { "THREAD=REFERENCES",     2 },
     { "ANNOTATEMORE",          2 },
@@ -9690,6 +9691,8 @@ int getsortcriteria(char *tag, struct sortcrit **sortcrit)
 #endif
 	else if (!strcmp(criteria.s, "modseq"))
 	    (*sortcrit)[n].key = SORT_MODSEQ;
+	else if (!strcmp(criteria.s, "uid"))
+	    (*sortcrit)[n].key = SORT_UID;
 	else {
 	    prot_printf(imapd_out, "%s BAD Invalid Sort criterion %s\r\n",
 			tag, criteria.s);
