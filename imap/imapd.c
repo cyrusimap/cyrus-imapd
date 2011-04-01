@@ -6698,9 +6698,16 @@ void cmd_setquota(const char *tag, const char *quotaroot)
 	    imapd_check(s, 0);
 
 	    if (!r) {
-		prot_printf(s->out, "%s Setquota {" SIZE_T_FMT "+}\r\n%s"
-			    " (Storage %d)\r\n",
-			    tag, strlen(quotaroot), quotaroot, newquota);
+		if (newquota == -1) {
+		    prot_printf(s->out, "%s Setquota {" SIZE_T_FMT "+}\r\n%s"
+				" ()\r\n",
+				tag, strlen(quotaroot), quotaroot);
+		}
+		else {
+		    prot_printf(s->out, "%s Setquota {" SIZE_T_FMT "+}\r\n%s"
+				" (Storage %d)\r\n",
+				tag, strlen(quotaroot), quotaroot, newquota);
+		}
 		pipe_including_tag(s, tag, 0);
 	    }
 	}
