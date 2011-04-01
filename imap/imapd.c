@@ -3350,8 +3350,6 @@ void cmd_append(char *tag, char *name, const char *cur_name)
 		goto done;
 	    }
 	    c = getword(imapd_in, &arg);
-	} else {
-	    curstage->internaldate = now;
 	}
 
 	/* Stage the message */

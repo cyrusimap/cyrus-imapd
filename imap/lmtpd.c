@@ -496,7 +496,6 @@ int deliver_mailbox(FILE *f,
 {
     int r;
     struct appendstate as;
-    time_t now = time(NULL);
     unsigned long uid;
     const char *notifier;
 
@@ -521,7 +520,7 @@ int deliver_mailbox(FILE *f,
     }
 
     if (!r) {
-	r = append_fromstage(&as, &content->body, stage, now,
+	r = append_fromstage(&as, &content->body, stage, 0,
 			     flags, !singleinstance);
 
 	if (r) {
@@ -536,7 +535,7 @@ int deliver_mailbox(FILE *f,
 		       id, mailboxname);
 		if (dupelim && id) {
 		    duplicate_mark(id, strlen(id), mailboxname, 
-				   strlen(mailboxname), now, uid);
+				   strlen(mailboxname), time(NULL), uid);
 		}
 		mailbox_close(&mailbox);
 	    }

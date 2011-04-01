@@ -482,14 +482,14 @@ void message_fetch_part(struct message_content *msg,
 int message_create_record(struct index_record *record,
 			  const struct body *body)
 {
-    if (config_getenum(IMAPOPT_INTERNALDATE_HEURISTIC)
-	    == IMAP_ENUM_INTERNALDATE_HEURISTIC_RECEIVEDHEADER) {
-	if (body->received_date)
+    if (!record->internaldate) {
+	if (body->received_date &&
+		config_getenum(IMAPOPT_INTERNALDATE_HEURISTIC) 
+		== IMAP_ENUM_INTERNALDATE_HEURISTIC_RECEIVEDHEADER)
 	    time_from_rfc822(body->received_date, &record->internaldate);
+	else
+	    record->internaldate = time(NULL);
     }
-
-    if (!record->internaldate)
-	record->internaldate = time(NULL);
 
     /* used for sent time searching, truncated to day with no TZ */
     if (day_from_rfc822(body->date, &record->sentdate) < 0) {

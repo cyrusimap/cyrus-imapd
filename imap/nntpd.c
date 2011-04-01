@@ -3236,7 +3236,6 @@ static int deliver(message_data_t *msg)
 {
     int n, r = 0, myrights;
     char *rcpt = NULL, *local_rcpt = NULL;
-    time_t now = time(NULL);
     unsigned long uid;
     struct body *body = NULL;
     struct dest *dlist = NULL;
@@ -3276,11 +3275,11 @@ static int deliver(message_data_t *msg)
 	    if (!r) {
 		prot_rewind(msg->data);
 		if (stage) {
-		    r = append_fromstage(&as, &body, stage, now,
+		    r = append_fromstage(&as, &body, stage, 0,
 					 NULL, !singleinstance);
 		} else {
 		    /* XXX should never get here */
-		    r = append_fromstream(&as, &body, msg->data, msg->size, now,
+		    r = append_fromstream(&as, &body, msg->data, msg->size, 0,
 					  (const char **) NULL, 0);
 		}
 		if (r || (msg->id &&   
@@ -3301,7 +3300,7 @@ static int deliver(message_data_t *msg)
 
 	    if (!r && msg->id)
 		duplicate_mark(msg->id, strlen(msg->id), rcpt, strlen(rcpt),
-			       now, uid);
+			       time(NULL), uid);
 
 	    if (r) {
 		mboxlist_entry_free(&mbentry);
@@ -3465,7 +3464,6 @@ static int cancel(message_data_t *msg)
 {
     int r = 0;
     char *msgid, *p;
-    time_t now = time(NULL);
 
     /* isolate msgid */
     msgid = strchr(msg->control, '<');
@@ -3478,7 +3476,7 @@ static int cancel(message_data_t *msg)
     /* store msgid of cancelled message for IHAVE/CHECK/TAKETHIS
      * (in case we haven't received the message yet)
      */
-    duplicate_mark(msgid, strlen(msgid), "", 0, 0, now);
+    duplicate_mark(msgid, strlen(msgid), "", 0, 0, time(NULL));
 
     return r;
 }
