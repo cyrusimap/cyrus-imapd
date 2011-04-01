@@ -94,7 +94,7 @@
 #include "cyrusdb.h"
 
 /* signal to config.c */
-const int config_need_data = 0;  /* YYY */
+const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
 /* ====================================================================== */
 
