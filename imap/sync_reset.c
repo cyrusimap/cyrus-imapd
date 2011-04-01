@@ -84,7 +84,7 @@
 /*#include "cdb.h"*/
 
 /* global state */
-const int config_need_data = 0;
+const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
 /* Static global variables and support routines for sync_reset */
 
