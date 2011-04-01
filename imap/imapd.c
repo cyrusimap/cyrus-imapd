@@ -9928,8 +9928,7 @@ static void list_response(char *name, int attributes,
 	    if (!config_mupdate_server) return;
 	}
 	else {
-	    if (attributes & (MBOX_ATTRIBUTE_NOSELECT | 
-			      MBOX_ATTRIBUTE_HASNOCHILDREN))
+	    if (!(attributes & MBOX_ATTRIBUTE_HASCHILDREN))
 		return;
 	}
     }
