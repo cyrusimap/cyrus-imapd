@@ -1053,7 +1053,7 @@ static void cmdloop(void)
 		be = backend_current;
 		if (arg1.len &&
 		    (!is_newsgroup(arg1.s) ||
-		     (r = open_group(arg1.s, 0, &be, NULL)))) goto nogroup;
+		     (r = open_group(arg1.s, 1, &be, NULL)))) goto nogroup;
 		else if (be) {
 		    prot_printf(be->out, "%s", cmd.s);
 		    if (arg1.len) {
@@ -2505,7 +2505,7 @@ int do_active(char *name, void *rock)
 	}
     }
     else {
-	prot_printf(nntp_out, "%s %u %u %c\r\n", name+strlen(newsprefix),
+	prot_printf(nntp_out, "%s %u %u %c\r\n", name,
 		    group_state->exists ? index_getuid(group_state, group_state->exists) :
 		    group_state->mailbox->i.last_uid,
 		    group_state->exists ? index_getuid(group_state, 1) :
@@ -2954,7 +2954,7 @@ static int parse_groups(const char *groups, message_data_t *msg)
 	if (!rcpt) return -1;
 
 	/* construct the mailbox name */
-	sprintf(rcpt, "%s%.*s", newsprefix, (int) n, p);
+	sprintf(rcpt, "%.*s", (int) n, p);
 
 	/* skip mailboxes that we don't serve as newsgroups */
 	if (!is_newsgroup(rcpt)) continue;
