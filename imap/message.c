@@ -564,18 +564,18 @@ message_create_record(record, body)
 struct index_record *record;
 struct body *body;
 {
-    if (config_getenum(IMAPOPT_INTERNALDATE_HEURISTIC) 
-	    == IMAP_ENUM_INTERNALDATE_HEURISTIC_RECEIVEDHEADER) {
-	time_t newdate = 0;
-	if (body->received_date)
-	    newdate = message_parse_date(body->received_date,
-		PARSE_DATE|PARSE_TIME|PARSE_ZONE|PARSE_NOCREATE|PARSE_GMT);
-	if (newdate)
-	    record->internaldate = newdate;
+    if (!record->internaldate) {
+	if (config_getenum(IMAPOPT_INTERNALDATE_HEURISTIC) 
+	    == IMAP_ENUM_INTERNALDATE_HEURISTIC_RECEIVEDHEADER &&
+	    body->received_date)
+	    record->internaldate = message_parse_date(
+			body->received_date,
+			PARSE_DATE|PARSE_TIME|PARSE_ZONE|
+			PARSE_NOCREATE|PARSE_GMT);
+	else
+	    record->internaldate = time(NULL);
     }
 
-    if (!record->internaldate)
-	record->internaldate = time(NULL);
 
     /* used for sent time searching, truncated to day with no TZ */
     record->sentdate = message_parse_date(body->date, PARSE_NOCREATE);
