@@ -3711,26 +3711,12 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
 	}
     }
 
-    /* get internaldate from the file if not available from the file */
+    /* get internaldate from the file if not set */
     if (!record->internaldate) {
 	if (did_stat || stat(fname, &sbuf) != -1)
 	    record->internaldate = sbuf.st_mtime;
 	else
 	    record->internaldate = time(NULL);
-    }
-
-    if (did_stat && sbuf.st_mtime != record->internaldate) {
-	printf("%s timestamp mismatch %u\n",
-	       mailbox->name, record->uid);
-	syslog(LOG_ERR, "%s timestamp mismatch %u",
-	       mailbox->name, record->uid);
-	if (make_changes) {
-	    /* make the file timestamp correct */
-	    struct utimbuf settime;
-	    settime.actime = settime.modtime = record->internaldate;
-	    if (utime(fname, &settime) == -1)
-		return IMAP_IOERROR;
-	}
     }
 
     /* XXX - conditions under which modseq or uid or internaldate could be bogus? */
