@@ -296,12 +296,22 @@ void config_read(const char *alt_config)
 	if (Uisupper(*p)) *p = tolower((unsigned char) *p);
     }
 
+    config_mupdate_server = config_getstring(IMAPOPT_MUPDATE_SERVER);
+
+    if (config_mupdate_server) {
+	config_mupdate_config = config_getenum(IMAPOPT_MUPDATE_CONFIG);
+    }
+
     if (config_need_data & CONFIG_NEED_PARTITION_DATA) {
 	int found = 0;
 
 	if (config_defpartition) {
 	    /* see if defaultpartition is specified properly */
 	    if (config_partitiondir(config_defpartition)) found = 1;
+	}
+	else if ((config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD)
+		 && !config_getstring(IMAPOPT_PROXYSERVERS)) {
+	    found = 1; /* don't need partitions on the frontend */
 	}
 	else {
 	    /* see if we have ANY partition-<name> options */
@@ -333,12 +343,6 @@ void config_read(const char *alt_config)
 	gethostname((char *) config_servername, 256);
     }
     config_serverinfo = config_getenum(IMAPOPT_SERVERINFO);
-
-    config_mupdate_server = config_getstring(IMAPOPT_MUPDATE_SERVER);
-
-    if (config_mupdate_server) {
-	config_mupdate_config = config_getenum(IMAPOPT_MUPDATE_CONFIG);
-    }
 
     /* set some limits */
     config_maxquoted = config_getint(IMAPOPT_MAXQUOTED);
