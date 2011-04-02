@@ -354,6 +354,7 @@ static int dump_annotations(const char *mailbox __attribute__((unused)),
     /* "A-" userid entry */
     /* entry is delimited by its leading / */
     unsigned long ename_size = 2 + strlen(userid) +  strlen(entry);
+    static const char contenttype[] = "text/plain"; /* fake */
 
     /* Transfer all attributes for this annotation, don't transfer size
      * separately since that can be implicitly determined */
@@ -362,11 +363,11 @@ static int dump_annotations(const char *mailbox __attribute__((unused)),
 		" {" SIZE_T_FMT "%s}\r\n%s)",
 		ename_size, (!ctx->tag ? "+" : ""),
 		userid, entry,
-		attrib->modifiedsince,
+		0L,  /* was modifiedsince */
 		attrib->size, (!ctx->tag ? "+" : ""),
 		attrib->value,
-		strlen(attrib->contenttype), (!ctx->tag ? "+" : ""),
-		attrib->contenttype);
+		strlen(contenttype), (!ctx->tag ? "+" : ""),
+		contenttype);
 
     return 0;
 }
@@ -776,7 +777,6 @@ int undump_mailbox(const char *mbname,
     int sieve_usehomedir = config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR);
     const char *userid = NULL;
     char *annotation = NULL;
-    char *contenttype = NULL;
     char *content = NULL;
     char *seen_file = NULL;
     char *mboxkey_file = NULL;
@@ -845,7 +845,6 @@ int undump_mailbox(const char *mbname,
 	unsigned long cutoff = ULONG_MAX / 10;
 	unsigned digit, cutlim = ULONG_MAX % 10;
 	annotation = NULL;
-	contenttype = NULL;
 	content = NULL;
 	seen_file = NULL;
 	mboxkey_file = NULL;
@@ -859,10 +858,8 @@ int undump_mailbox(const char *mbname,
 	if(!strncmp(file.s, "A-", 2)) {
 	    /* Annotation */
 	    size_t contentsize;
-	    uint32_t modtime = 0;
 	    int i;
 	    char *tmpuserid;
-	    const char *ptr;
 
 	    for(i=2; file.s[i]; i++) {
 		if(file.s[i] == '/') break;
@@ -884,16 +881,9 @@ int undump_mailbox(const char *mbname,
 		goto done;
 	    }	    
 
-	    /* Parse the modtime */
+	    /* Parse the modtime...and ignore it */
 	    c = getword(pin, &data);
 	    if (c != ' ')  {
-		r = IMAP_PROTOCOL_ERROR;
-		free(tmpuserid);
-		goto done;
-	    }
-
-	    r = parseuint32(data.s, &ptr, &modtime);
-	    if (r || *ptr) {
 		r = IMAP_PROTOCOL_ERROR;
 		free(tmpuserid);
 		goto done;
@@ -910,8 +900,8 @@ int undump_mailbox(const char *mbname,
 		goto done;
 	    }
 
+	    /* got the contenttype...and ignore it */
 	    c = getastring(pin, pout, &data);
-	    contenttype = xstrdup(data.s);
 	    
 	    if(c != ')') {
 		r = IMAP_PROTOCOL_ERROR;
@@ -920,15 +910,13 @@ int undump_mailbox(const char *mbname,
 	    }
 
 	    annotatemore_write_entry(mbname, annotation, tmpuserid, content,
-				     contenttype, contentsize, modtime, NULL);
+				     contentsize, NULL);
     
 	    free(tmpuserid);
 	    free(annotation);
 	    free(content);
-	    free(contenttype);
 	    annotation = NULL;
 	    content = NULL;
-	    contenttype = NULL;
 
 	    c = prot_getc(pin);
 	    if(c == ')') break; /* that was the last item */
@@ -1194,7 +1182,6 @@ int undump_mailbox(const char *mbname,
     
     free(annotation);
     free(content);
-    free(contenttype);
     free(seen_file);
     free(mboxkey_file);
 

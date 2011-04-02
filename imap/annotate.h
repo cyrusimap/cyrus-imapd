@@ -76,8 +76,6 @@ struct entryattlist {
 struct annotation_data {
     const char *value;
     size_t size;
-    time_t modifiedsince;
-    const char *contenttype;
 };
 
 struct annotate_info_t
@@ -147,8 +145,8 @@ int annotatemore_store(const char *mboxname,
 /* low-level interface for use by mbdump routines */
 int annotatemore_write_entry(const char *mboxname, const char *entry,
 			     const char *userid,
-			     const char *value, const char *contenttype,
-			     size_t size, time_t modifiedsince,
+			     const char *value,
+			     size_t size,
 			     struct txn **tid);
 int annotatemore_commit(struct txn *tid);
 int annotatemore_abort(struct txn *tid);
