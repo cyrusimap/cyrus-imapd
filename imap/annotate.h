@@ -50,6 +50,7 @@
 #include "mboxname.h"
 #include "prot.h"
 #include "cyrusdb.h"
+#include "strarray.h"
 
 /* List of strings, for fetch and search argument blocks */
 struct strlist {
@@ -107,7 +108,7 @@ void freeentryatts(struct entryattlist *l);
 #define ANNOTATE_SYNC (1 << 1)
 void annotatemore_init(int myflags,
 		       int (*fetch_func)(const char *, const char *,
-					 struct strlist *, struct strlist *),
+					 const strarray_t *, const strarray_t *),
 		       int (*store_func)(const char *, const char *,
 					 struct entryattlist *));
 
@@ -125,7 +126,7 @@ int annotatemore_findall(const char *mailbox, const char *entry,
 
 /* fetch annotations and output results */
 int annotatemore_fetch(char *mailbox,
-		       struct strlist *entries, struct strlist *attribs,
+		       const strarray_t *entries, const strarray_t *attribs,
 		       struct namespace *namespace, int isadmin, char *userid,
 		       struct auth_state *auth_state, struct protstream *pout,
 		       int ismetadata, int *maxsize);

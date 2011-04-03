@@ -1242,11 +1242,11 @@ int proxy_catenate_url(struct backend *s, struct imapurl *url, FILE *f,
 
 /* Proxy GETANNOTATION commands to backend */
 int annotate_fetch_proxy(const char *server, const char *mbox_pat,
-			 struct strlist *entry_pat,
-			 struct strlist *attribute_pat) 
+			 const strarray_t *entry_pat,
+			 const strarray_t *attribute_pat)
 {
     struct backend *be;
-    struct strlist *l;
+    int i;
     char mytag[128];
     
     assert(server && mbox_pat && entry_pat && attribute_pat);
@@ -1259,12 +1259,12 @@ int annotate_fetch_proxy(const char *server, const char *mbox_pat,
     /* Send command to remote */
     proxy_gentag(mytag, sizeof(mytag));
     prot_printf(be->out, "%s GETANNOTATION \"%s\" (", mytag, mbox_pat);
-    for (l = entry_pat; l; l = l->next) {
-	prot_printf(be->out, "\"%s\"%s", l->s, l->next ? " " : "");
+    for (i = 0 ; i < entry_pat->count ; i++) {
+	prot_printf(be->out, "%s\"%s\"", i ? " " : "", entry_pat->data[i]);
     }
     prot_printf(be->out, ") (");
-    for (l = attribute_pat; l; l = l->next) {
-	prot_printf(be->out, "\"%s\"%s", l->s, l->next ? " " : "");
+    for (i = 0 ; i < attribute_pat->count ; i++) {
+	prot_printf(be->out, "%s\"%s\"", i ? " " : "", attribute_pat->data[i]);
     }
     prot_printf(be->out, ")\r\n");
     prot_flush(be->out);

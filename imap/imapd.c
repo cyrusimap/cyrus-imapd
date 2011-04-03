@@ -411,11 +411,11 @@ void cmd_enable(char* tag);
 int parsecreateargs(struct dlist **extargs);
 
 static int parse_annotate_fetch_data(const char *tag,
-				     struct strlist **entries,
-				     struct strlist **attribs);
+				     strarray_t *entries,
+				     strarray_t *attribs);
 static int parse_metadata_fetch_data(const char *tag,
-				     struct strlist **entries,
-				     struct strlist **attribs);
+				     strarray_t *entries,
+				     strarray_t *attribs);
 static int parse_annotate_store_data(const char *tag,
 				     struct entryattlist **entryatts);
 static int parse_metadata_store_data(const char *tag,
@@ -7350,13 +7350,11 @@ int parsecreateargs(struct dlist **extargs)
  */
 
 static int parse_annotate_fetch_data(const char *tag,
-				     struct strlist **entries,
-				     struct strlist **attribs)
+				     strarray_t *entries,
+				     strarray_t *attribs)
 {
     int c;
     static struct buf arg;
-
-    *entries = *attribs = NULL;
 
     c = prot_getc(imapd_in);
     if (c == EOF) {
@@ -7375,7 +7373,7 @@ static int parse_annotate_fetch_data(const char *tag,
 	    }
 
 	    /* add the entry to the list */
-	    appendstrlist(entries, arg.s);
+	    strarray_append(entries, arg.s);
 
 	} while (c == ' ');
 
@@ -7398,7 +7396,7 @@ static int parse_annotate_fetch_data(const char *tag,
 	    goto baddata;
 	}
 
-	appendstrlist(entries, arg.s);
+	strarray_append(entries, arg.s);
     }
 
     if (c != ' ' || (c = prot_getc(imapd_in)) == EOF) {
@@ -7418,7 +7416,7 @@ static int parse_annotate_fetch_data(const char *tag,
 	    }
 
 	    /* add the attrib to the list */
-	    appendstrlist(attribs, arg.s);
+	    strarray_append(attribs, arg.s);
 
 	} while (c == ' ');
 
@@ -7441,7 +7439,7 @@ static int parse_annotate_fetch_data(const char *tag,
 		goto baddata;
 	    }
 
-	appendstrlist(attribs, arg.s);
+	strarray_append(attribs, arg.s);
    }
 
     return c;
@@ -7459,13 +7457,11 @@ static int parse_annotate_fetch_data(const char *tag,
  * GETANNOTATION, FETCH.
  */
 static int parse_metadata_fetch_data(const char *tag,
-				     struct strlist **entries,
-				     struct strlist **attribs)
+				     strarray_t *entries,
+				     strarray_t *attribs)
 {
     int c;
     static struct buf arg;
-
-    *entries = *attribs = NULL;
 
     c = prot_getc(imapd_in);
     if (c == EOF) {
@@ -7484,7 +7480,7 @@ static int parse_metadata_fetch_data(const char *tag,
 	    }
 
 	    /* add the entry to the list */
-	    appendstrlist(entries, arg.s);
+	    strarray_append(entries, arg.s);
 
 	} while (c == ' ');
 
@@ -7507,7 +7503,7 @@ static int parse_metadata_fetch_data(const char *tag,
 	    goto baddata;
 	}
 
-	appendstrlist(entries, arg.s);
+	strarray_append(entries, arg.s);
     }
 
     if (c != ' ') return c;
@@ -7525,7 +7521,7 @@ static int parse_metadata_fetch_data(const char *tag,
 	    }
 
 	    /* add the attrib to the list */
-	    appendstrlist(attribs, arg.s);
+	    strarray_append(attribs, arg.s);
 
 	} while (c == ' ');
 
@@ -7547,7 +7543,7 @@ static int parse_metadata_fetch_data(const char *tag,
 			"%s BAD Missing annotation attribute\r\n", tag);
 	    goto baddata;
 	}
-	appendstrlist(attribs, arg.s);
+	strarray_append(attribs, arg.s);
     }
 
     return c;
@@ -7807,7 +7803,8 @@ void annotate_response(struct entryattlist *l)
 static void cmd_getannotation(const char *tag, char *mboxpat)
 {
     int c, r = 0;
-    struct strlist *entries = NULL, *attribs = NULL;
+    strarray_t entries = STRARRAY_INITIALIZER;
+    strarray_t attribs = STRARRAY_INITIALIZER;
 
     c = parse_annotate_fetch_data(tag, &entries, &attribs);
     if (c == EOF) {
@@ -7825,7 +7822,7 @@ static void cmd_getannotation(const char *tag, char *mboxpat)
 	goto freeargs;
     }
 
-    r = annotatemore_fetch(mboxpat, entries, attribs, &imapd_namespace,
+    r = annotatemore_fetch(mboxpat, &entries, &attribs, &imapd_namespace,
 			   imapd_userisadmin || imapd_userisproxyadmin,
 			   imapd_userid, imapd_authstate, imapd_out, 0, 0);
 
@@ -7839,8 +7836,8 @@ static void cmd_getannotation(const char *tag, char *mboxpat)
     }
 
   freeargs:
-    if (entries) freestrlist(entries);
-    if (attribs) freestrlist(attribs);
+    strarray_fini(&entries);
+    strarray_fini(&attribs);
 
     return;
 }
@@ -7853,16 +7850,18 @@ static void cmd_getannotation(const char *tag, char *mboxpat)
 static void cmd_getmetadata(const char *tag, char *mboxpat)
 {
     int c, r = 0;
-    struct strlist *entries = NULL, *attribs = NULL;
-    struct strlist *newe = NULL, *newa = NULL;
-    struct strlist *real_entries;
-    struct strlist *item;
+    strarray_t entries = STRARRAY_INITIALIZER;
+    strarray_t attribs = STRARRAY_INITIALIZER;
+    strarray_t newe = STRARRAY_INITIALIZER;
+    strarray_t newa = STRARRAY_INITIALIZER;
+    strarray_t *real_entries;
     int maxsize = -1;
     int basesize = 0;
     int *sizeptr = NULL;
     int depth = 0;
     int have_shared = 0;
     int have_private = 0;
+    int i;
 
     c = parse_metadata_fetch_data(tag, &entries, &attribs);
     if (c == EOF) {
@@ -7883,28 +7882,29 @@ static void cmd_getmetadata(const char *tag, char *mboxpat)
     /* we need to rewrite the entries and attribs to match the way that
      * the old annotation system works.  also, we need to handle the
      * options if there are any */
-    if (attribs) {
-	while (entries) {
-	    item = entries->next;
-	    if (!item) {
+    if (attribs.count) {
+	for (i = 0 ; i < entries.count ; i+=2) {
+	    const char *option = entries.data[i];
+	    const char *value = entries.data[i+1];
+	    if (!value) {
 		prot_printf(imapd_out,
 			    "%s BAD missing value to metadata option\r\n",
 			    tag);
 		goto freeargs;
 	    }
-	    if (!strcasecmp(entries->s, "MAXSIZE")) {
+	    if (!strcasecmp(option, "MAXSIZE")) {
 		/* XXX - scan for "is number" */
-		maxsize = atoi(item->s);
+		maxsize = atoi(value);
 		sizeptr = &maxsize;
 	    }
-	    else if (!strcasecmp(entries->s, "DEPTH")) {
-		if (!strcmp(item->s, "0")) {
+	    else if (!strcasecmp(option, "DEPTH")) {
+		if (!strcmp(value, "0")) {
 		    depth = 0;
 		}
-		else if (!strcmp(item->s, "1")) {
+		else if (!strcmp(value, "1")) {
 		    depth = 1;
 		}
-		else if (!strcasecmp(item->s, "infinity")) {
+		else if (!strcasecmp(value, "infinity")) {
 		    depth = -1;
 		}
 		else {
@@ -7914,25 +7914,26 @@ static void cmd_getmetadata(const char *tag, char *mboxpat)
 		    goto freeargs;
 		}
 	    }
-	    entries = item->next;
 	}
-	real_entries = attribs;
+	real_entries = &attribs;
     }
     else {
-	real_entries = entries;
+	real_entries = &entries;
     }
 
-    for (item = real_entries; item; item = item->next) {
+    for (i = 0 ; i < real_entries->count ; i++) {
+	const char *ent = real_entries->data[i];
 	char entry[MAX_MAILBOX_NAME];
 	/* there's no way to perfect this - unfortunately - the old style
 	 * syntax doesn't support everything.  XXX - will be nice to get
 	 * rid of this... */
-	if (!strncmp(real_entries->s, "/private", 8)) {
-	    strncpy(entry, real_entries->s + 8, MAX_MAILBOX_NAME);
+	/* TODO: this is bogus, we should compare against /private/ */
+	if (!strncmp(ent, "/private", 8)) {
+	    strncpy(entry, ent + 8, MAX_MAILBOX_NAME);
 	    have_private = 1;
 	}
-	else if (!strncmp(real_entries->s, "/shared", 7)) {
-	    strncpy(entry, real_entries->s + 7, MAX_MAILBOX_NAME);
+	else if (!strncmp(ent, "/shared", 7)) {
+	    strncpy(entry, ent + 7, MAX_MAILBOX_NAME);
 	    have_shared = 1;
 	}
 	else {
@@ -7945,14 +7946,14 @@ static void cmd_getmetadata(const char *tag, char *mboxpat)
 	    strncat(entry, "/%", MAX_MAILBOX_NAME);
 	else if (depth == -1)
 	    strncat(entry, "/*", MAX_MAILBOX_NAME);
-	appendstrlist(&newe, entry);
+	strarray_append(&newe, entry);
     }
 
-    if (have_private) appendstrlist(&newa, "value.priv");
-    if (have_shared) appendstrlist(&newa, "value.shared");
+    if (have_private) strarray_append(&newa, "value.priv");
+    if (have_shared) strarray_append(&newa, "value.shared");
 
     basesize = maxsize;
-    r = annotatemore_fetch(mboxpat, newe, newa, &imapd_namespace,
+    r = annotatemore_fetch(mboxpat, &newe, &newa, &imapd_namespace,
 			   imapd_userisadmin || imapd_userisproxyadmin,
 			   imapd_userid, imapd_authstate, imapd_out, 1,
 			   sizeptr);
@@ -7970,10 +7971,10 @@ static void cmd_getmetadata(const char *tag, char *mboxpat)
     }
 
   freeargs:
-    if (entries) freestrlist(entries);
-    if (attribs) freestrlist(attribs);
-    if (newe) freestrlist(newe);
-    if (newa) freestrlist(newa);
+    strarray_fini(&entries);
+    strarray_fini(&attribs);
+    strarray_fini(&newe);
+    strarray_fini(&newa);
 
     return;
 }

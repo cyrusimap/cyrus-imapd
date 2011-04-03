@@ -82,8 +82,8 @@
 struct db *anndb;
 static int annotate_dbopen = 0;
 int (*proxy_fetch_func)(const char *server, const char *mbox_pat,
-			struct strlist *entry_pat,
-			struct strlist *attribute_pat) = NULL;
+			const strarray_t *entry_pat,
+			const strarray_t *attribute_pat) = NULL;
 int (*proxy_store_func)(const char *server, const char *mbox_pat,
 			struct entryattlist *entryatts) = NULL;
 
@@ -219,7 +219,7 @@ void freeentryatts(struct entryattlist *l)
 /* must be called after cyrus_init */
 void annotatemore_init(int myflags,
 		       int (*fetch_func)(const char *, const char *,
-					 struct strlist *, struct strlist *),
+					 const strarray_t *, const strarray_t *),
 		       int (*store_func)(const char *, const char *,
 					 struct entryattlist *))
 {
@@ -445,8 +445,8 @@ struct fetchdata {
        DO NOT proxy */
     struct hash_table server_table;
     const char *orig_mailbox;
-    struct strlist *orig_entry;
-    struct strlist *orig_attribute;
+    const strarray_t *orig_entry;
+    const strarray_t *orig_attribute;
     int ismetadata;
     int maxsize;
     int *sizeptr;
@@ -1196,13 +1196,12 @@ static int fetch_cb(char *name, int matchlen,
 }
 
 int annotatemore_fetch(char *mailbox,
-		       struct strlist *entries, struct strlist *attribs,
+		       const strarray_t *entries, const strarray_t *attribs,
 		       struct namespace *namespace, int isadmin, char *userid,
 		       struct auth_state *auth_state, struct protstream *pout,
 		       int ismetadata, int *maxsizeptr)
 {
-    struct strlist *e = entries;
-    struct strlist *a = attribs;
+    int i;
     struct fetchdata fdata;
     struct glob *g;
     const struct annotate_f_entry *non_db_entries;
@@ -1224,7 +1223,9 @@ int annotatemore_fetch(char *mailbox,
     output_entryatt(NULL, NULL, NULL, NULL, NULL);
 
     /* Build list of attributes to fetch */
-    while (a) {
+    for (i = 0 ; i < attribs->count ; i++)
+    {
+	const char *s = attribs->data[i];
 	int attribcount;
 
 	/*
@@ -1233,14 +1234,14 @@ int annotatemore_fetch(char *mailbox,
 	 * extension, but not in later drafts where those characters are
 	 * actually illegal in attribute names.
 	 */
-	g = glob_init(a->s, GLOB_HIERARCHY);
+	g = glob_init(s, GLOB_HIERARCHY);
 	
 	for (attribcount = 0;
 	     annotation_attributes[attribcount].name;
 	     attribcount++) {
 	    if (GLOB_TEST(g, annotation_attributes[attribcount].name) != -1) {
 		if (annotation_attributes[attribcount].entry & ATTRIB_DEPRECATED) {
-		    if (strcmp(a->s, "*"))
+		    if (strcmp(s, "*"))
 			syslog(LOG_WARNING, "annotatemore_fetch: client used "
 					    "deprecated attribute \"%s\", ignoring",
 					    annotation_attributes[attribcount].name);
@@ -1251,8 +1252,6 @@ int annotatemore_fetch(char *mailbox,
 	}
 	
 	glob_free(&g);
-
-	a = a->next;
     }
 
     if (!fdata.attribs) return 0;
@@ -1269,11 +1268,13 @@ int annotatemore_fetch(char *mailbox,
     }
 
     /* Build a list of callbacks for fetching the annotations */
-    while (e) {
+    for (i = 0 ; i < entries->count ; i++)
+    {
+	const char *s = entries->data[i];
 	int entrycount;
 	int check_db = 0; /* should we check the db for this entry? */
 
-	g = glob_init(e->s, GLOB_HIERARCHY);
+	g = glob_init(s, GLOB_HIERARCHY);
 	GLOB_SET_SEPARATOR(g, '/');
 
 	for (entrycount = 0;
@@ -1294,7 +1295,7 @@ int annotatemore_fetch(char *mailbox,
 		}
 	    }
 
-	    if (!strcmp(e->s, non_db_entries[entrycount].name)) {
+	    if (!strcmp(s, non_db_entries[entrycount].name)) {
 		/* exact match */
 		if (non_db_entries[entrycount].proxytype != PROXY_ONLY) {
 		    fdata.orig_entry = entries;  /* proxy it */
@@ -1319,13 +1320,11 @@ int annotatemore_fetch(char *mailbox,
 
 	    nentry->next = fdata.entry_list;
 	    nentry->entry = db_entry;
-	    nentry->entrypat = e->s;
+	    nentry->entrypat = s;
 	    fdata.entry_list = nentry;
 	}
 	    
 	glob_free(&g);
-
-	e = e->next;
     }
 
     if (!mailbox[0]) {
