@@ -239,17 +239,18 @@ void annotatemore_init(int myflags,
     init_annotation_definitions();
 }
 
-void annotatemore_open(char *fname)
+void annotatemore_open(const char *fname)
 {
     int ret;
     char *tofree = NULL;
 
+    if (!fname)
+	fname = config_getstring(IMAPOPT_ANNOTATION_DB_PATH);
+
     /* create db file name */
     if (!fname) {
-	fname = xmalloc(strlen(config_dir)+sizeof(FNAME_ANNOTATIONS));
-	tofree = fname;
-	strcpy(fname, config_dir);
-	strcat(fname, FNAME_ANNOTATIONS);
+	tofree = strconcat(config_dir, FNAME_ANNOTATIONS, (char *)NULL);
+	fname = tofree;
     }
 
     ret = (DB->open)(fname, CYRUSDB_CREATE, &anndb);
@@ -259,7 +260,7 @@ void annotatemore_open(char *fname)
 	fatal("can't read annotations file", EC_TEMPFAIL);
     }    
 
-    if (tofree) free(tofree);
+    free(tofree);
 
     annotate_dbopen = 1;
 }

@@ -168,6 +168,10 @@ are listed with ``<none>''.
 { "annotation_db", "skiplist", STRINGLIST("berkeley", "berkeley-hash", "skiplist")}
 /* The cyrusdb backend to use for mailbox annotations. */
 
+{ "annotation_db_path", NULL, STRING }
+/* The absolute path to the ptscache db file.  If not specified,
+   will be confdir/annotations.db */
+
 { "anyoneuseracl", 1, SWITCH }
 /* Should non-admin users be allowed to set ACLs for the 'anyone'
    user on their mailboxes?  In a large organization this can cause
@@ -299,6 +303,10 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "duplicate_db", "skiplist", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist", "sql")}
 /* The cyrusdb backend to use for the duplicate delivery suppression
    and sieve. */
+
+{ "duplicate_db_path", NULL, STRING }
+/* The absolute path to the ptscache db file.  If not specified,
+   will be confdir/duplicate.db */
 
 { "duplicatesuppression", 1, SWITCH }
 /* If enabled, lmtpd will suppress delivery of a message to a mailbox if
@@ -641,6 +649,10 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "mboxlist_db", "skiplist", STRINGLIST("flat", "berkeley", "berkeley-hash", "skiplist")}
 /* The cyrusdb backend to use for the mailbox list. */
 
+{ "mboxlist_db_path", NULL, STRING }
+/* The absolute path to the mailboxes db file.  If not specified
+   will be confdir/mailboxes.db */
+
 { "mboxname_lockpath", NULL, STRING }
 /* Path to mailbox name lock files (default $conf/lock) */
 
@@ -780,6 +792,10 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "newsprefix", NULL, STRING }
 /* Prefix to be prepended to newsgroup names to make the corresponding
    IMAP mailbox names. */
+
+{ "newsrc_db_path", NULL, STRING }
+/* The absolute path to the newsrc db file.  If not specified,
+   will be confdir/fetchnews.db */
 
 { "nntptimeout", 3, INT }
 /* Set the length of the NNTP server's inactivity autologout timer,    
@@ -936,6 +952,10 @@ And the notification message will be available on \fIstdin\fR.
 { "ptscache_db", "skiplist", STRINGLIST("berkeley", "berkeley-hash", "skiplist")}
 /* The cyrusdb backend to use for the pts cache. */
 
+{ "ptscache_db_path", NULL, STRING }
+/* The absolute path to the ptscache db file.  If not specified,
+   will be confdir/ptscache.db */
+
 { "ptscache_timeout", 10800, INT }
 /* The timeout (in seconds) for the PTS cache database when using the
    auth_krb_pts authorization method (default: 3 hours). */
@@ -956,6 +976,11 @@ And the notification message will be available on \fIstdin\fR.
 
 { "quota_db", "quotalegacy", STRINGLIST("flat", "berkeley", "berkeley-hash", "skiplist", "sql", "quotalegacy")}
 /* The cyrusdb backend to use for quotas. */
+
+{ "quota_db_path", NULL, STRING }
+/* The absolute path for the quota database (if you choose a single-file
+   quota DB type - or the base path if you choose quotalegacy).  If
+   not specified will be confdir/quota.db or confdir/quota/ */
 
 { "quotawarn", 90, INT }
 /* The percent of quota utilization over which the server generates
@@ -1151,6 +1176,10 @@ product version in the capabilities */
 { "statuscache_db", "skiplist", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist") }
 /* The cyrusdb backend to use for the imap status cache. */
 
+{ "statuscache_db_path", NULL, STRING }
+/* The absolute path to the statuscache db file.  If not specified,
+   will be confdir/statuscache.db */
+
 { "sync_authname", NULL, STRING }
 /* The authentication name to use when authenticating to a sync server.
    Prefix with a channel name to only apply for that channel */
@@ -1236,6 +1265,10 @@ product version in the capabilities */
 { "tlscache_db", "skiplist", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist", "sql")}
 /* The cyrusdb backend to use for the TLS cache. */
 
+{ "tlscache_db_path", NULL, STRING }
+/* The absolute path to the tlscache db file.  If not specified,
+   will be confdir/tlscache.db */
+
 { "tls_cert_file", NULL, STRING }
 /* File containing the certificate presented for server authentication
    during STARTTLS.  A value of "disabled" will disable SSL/TLS. */
@@ -1261,6 +1294,10 @@ product version in the capabilities */
 
 { "userdeny_db", "flat", STRINGLIST("flat", "berkeley", "berkeley-hash", "skiplist", "sql")}
 /* The cyrusdb backend to use for the user access list. */
+
+{ "userdeny_db_path", NULL, STRING }
+/* The absolute path to the userdeny db file.  If not specified,
+   will be confdir/userdeny.db */
 
 { "user_folder_limit", 0, INT }
 /* Limit the number of folders a user can create in their INBOX.  

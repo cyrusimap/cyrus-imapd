@@ -79,7 +79,7 @@ static struct db *newsrc_db = NULL;
 static int newsrc_dbopen = 0;
 
 /* must be called after cyrus_init */
-int newsrc_init(char *fname, int myflags __attribute__((unused)))
+int newsrc_init(const char *fname, int myflags __attribute__((unused)))
 {
     char buf[1024];
     int r = 0;
@@ -90,12 +90,13 @@ int newsrc_init(char *fname, int myflags __attribute__((unused)))
     else {
 	char *tofree = NULL;
 
+	if (!fname)
+	    fname = config_getstring(IMAPOPT_NEWSRC_DB_PATH);
+
 	/* create db file name */
 	if (!fname) {
-	    fname = xmalloc(strlen(config_dir)+sizeof(FNAME_NEWSRCDB));
-	    tofree = fname;
-	    strcpy(fname, config_dir);
-	    strcat(fname, FNAME_NEWSRCDB);
+	    tofree = strconcat(config_dir, FNAME_NEWSRCDB, (char *)NULL);
+	    fname = tofree;
 	}
 
 	r = (DB->open)(fname, CYRUSDB_CREATE, &newsrc_db);
@@ -105,7 +106,7 @@ int newsrc_init(char *fname, int myflags __attribute__((unused)))
 	else
 	    newsrc_dbopen = 1;
 
-	if (tofree) free(tofree);
+	free(tofree);
     }
 
     return r;

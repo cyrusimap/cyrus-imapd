@@ -95,7 +95,11 @@ struct cyrusopt_s cyrus_options[] = {
       CYRUS_OPT_SWITCH },
 
     { CYRUSOPT_PTSCACHE_DB,
-      CFGVAL(const char *, "berkeley"),
+      CFGVAL(const char *, "skiplist"),
+      CYRUS_OPT_STRING },
+
+    { CYRUSOPT_PTSCACHE_DB_PATH,
+      CFGVAL(const char *, NULL),
       CYRUS_OPT_STRING },
 
     { CYRUSOPT_PTLOADER_SOCK,

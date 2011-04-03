@@ -114,7 +114,7 @@ void annotatemore_init(int myflags,
 					 struct entryattlist *));
 
 /* open the annotation db */
-void annotatemore_open(char *name);
+void annotatemore_open(const char *fname);
 
 typedef int (*annotatemore_find_proc_t)(const char *mailbox,
 		    const char *entry, const char *userid,

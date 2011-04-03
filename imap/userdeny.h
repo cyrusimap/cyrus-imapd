@@ -57,7 +57,7 @@ extern int userdeny(const char *user, const char *service,
 		    char *msgbuf, size_t bufsiz);
 
 /* open the user deny db */
-void denydb_open(char *name);
+void denydb_open(const char *fname);
 
 /* close the database */
 void denydb_close(void);

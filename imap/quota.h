@@ -89,7 +89,7 @@ extern int quota_findroot(char *ret, size_t retlen, const char *name);
 extern void quota_free(struct quota *quota);
 
 /* open the quotas db */
-void quotadb_open(char *name);
+void quotadb_open(const char *fname);
 
 /* close the database */
 void quotadb_close(void);

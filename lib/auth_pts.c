@@ -62,6 +62,7 @@
 #include "cyr_lock.h"
 #include "retry.h"
 #include "strhash.h"
+#include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
@@ -336,7 +337,8 @@ static int ptload(const char *identifier, struct auth_state **state)
     size_t id_len;
     const char *data = NULL;
     int dsize;
-    char fnamebuf[1024];
+    const char *fname = NULL;
+    char *tofree = NULL;
     struct db *ptdb;
     int s;
     struct sockaddr_un srvaddr;
@@ -357,16 +359,23 @@ static int ptload(const char *identifier, struct auth_state **state)
     if(!state || *state) {
 	fatal("bad state pointer passed to ptload()", EC_TEMPFAIL);
     }
+
+    fname = libcyrus_config_getstring(CYRUSOPT_PTSCACHE_DB_PATH);
     
-    strcpy(fnamebuf, config_dir);
-    strcat(fnamebuf, PTS_DBFIL);
-    r = (the_ptscache_db->open)(fnamebuf, CYRUSDB_CREATE, &ptdb);
+    if (!fname) {
+	tofree = strconcat(config_dir, PTS_DBFIL, (char *)NULL);
+	fname = tofree;
+    }
+    r = (the_ptscache_db->open)(fname, CYRUSDB_CREATE, &ptdb);
     if (r != 0) {
-	syslog(LOG_ERR, "DBERROR: opening %s: %s", fnamebuf,
+	syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
 	       cyrusdb_strerror(ret));
-        *state = NULL;
+	free(tofree);
+	*state = NULL;
 	return -1;
     }
+    free(tofree);
+    tofree = NULL;
 
     id_len = strlen(identifier);
     if(id_len > PTS_DB_KEYSIZE) {
@@ -415,17 +424,17 @@ static int ptload(const char *identifier, struct auth_state **state)
         goto done;
     }
         
-    if (libcyrus_config_getstring(CYRUSOPT_PTLOADER_SOCK))
-        strcpy(fnamebuf, libcyrus_config_getstring(CYRUSOPT_PTLOADER_SOCK));
-    else {
-        strcpy(fnamebuf, config_dir);
-        strcat(fnamebuf, PTS_DBSOCKET);
+    fname = libcyrus_config_getstring(CYRUSOPT_PTLOADER_SOCK);
+    if (!fname) {
+	tofree = strconcat(config_dir, PTS_DBSOCKET, (char *)NULL);
+	fname = tofree;
     }
 
     memset((char *)&srvaddr, 0, sizeof(srvaddr));
     srvaddr.sun_family = AF_UNIX;
-    strcpy(srvaddr.sun_path, fnamebuf);
+    strcpy(srvaddr.sun_path, fname);
     r = nb_connect(s, (struct sockaddr *)&srvaddr, sizeof(srvaddr), PT_TIMEOUT_SEC);
+    free(tofree);
 
     if (r == -1) {
 	syslog(LOG_ERR, "ptload(): can't connect to ptloader server: %m");

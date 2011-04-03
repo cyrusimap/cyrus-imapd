@@ -97,6 +97,9 @@ int duplicate_init(const char *fname, int myflags __attribute__((unused)))
     else {
 	char *tofree = NULL;
 
+	if (!fname)
+	    fname = config_getstring(IMAPOPT_DUPLICATE_DB_PATH);
+
 	/* create db file name */
 	if (!fname) {
 	    tofree = strconcat(config_dir, FNAME_DELIVERDB, (char *)NULL);
@@ -110,7 +113,7 @@ int duplicate_init(const char *fname, int myflags __attribute__((unused)))
 	else
 	    duplicate_dbopen = 1;
 
-	if (tofree) free(tofree);
+	free(tofree);
     }
 
     return r;
