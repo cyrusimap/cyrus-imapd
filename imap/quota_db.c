@@ -238,20 +238,18 @@ void quotadb_init(int myflags)
     }
 }
 
-void quotadb_open(char *fname)
+void quotadb_open(const char *fname)
 {
     int ret;
     char *tofree = NULL;
 
+    if (!fname)
+	fname = config_getstring(IMAPOPT_QUOTA_DB_PATH);
+
     /* create db file name */
     if (!fname) {
-	size_t fname_len = strlen(config_dir)+strlen(FNAME_QUOTADB)+1;
-	
-	fname = xmalloc(fname_len);
-	tofree = fname;
-
-	strlcpy(fname, config_dir, fname_len);
-	strlcat(fname, FNAME_QUOTADB, fname_len);
+	tofree = strconcat(config_dir, FNAME_QUOTADB, (char *)NULL);
+	fname = tofree;
     }
 
     ret = (QDB->open)(fname, CYRUSDB_CREATE, &qdb);
@@ -263,7 +261,7 @@ void quotadb_open(char *fname)
 	fatal("can't read quotas file", EC_TEMPFAIL);
     }
 
-    if (tofree) free(tofree);
+    free(tofree);
 
     quota_dbopen = 1;
 }

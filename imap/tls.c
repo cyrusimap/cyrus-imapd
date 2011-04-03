@@ -682,7 +682,8 @@ int     tls_init_serverengine(const char *ident,
 
     /* A timeout of zero disables session caching */
     if (timeout) {
-	char dbdir[1024];
+	const char *fname = NULL;
+	char *tofree = NULL;
 	int r;
 
 	/* Set the context for session reuse -- use the service ident */
@@ -696,17 +697,23 @@ int     tls_init_serverengine(const char *ident,
 	SSL_CTX_sess_set_remove_cb(s_ctx, remove_session_cb);
 	SSL_CTX_sess_set_get_cb(s_ctx, get_session_cb);
 
-	/* create the name of the db file */
-	strlcpy(dbdir, config_dir, sizeof(dbdir));
-	strlcat(dbdir, FNAME_TLSSESSIONS, sizeof(dbdir));
+	fname = config_getstring(IMAPOPT_TLSCACHE_DB_PATH);
 
-	r = (DB->open)(dbdir, CYRUSDB_CREATE, &sessdb);
+	/* create the name of the db file */
+	if (!fname) {
+	    tofree = strconcat(config_dir, FNAME_TLSSESSIONS, (char *)NULL);
+	    fname = tofree;
+	}
+
+	r = (DB->open)(fname, CYRUSDB_CREATE, &sessdb);
 	if (r != 0) {
 	    syslog(LOG_ERR, "DBERROR: opening %s: %s",
-		   dbdir, cyrusdb_strerror(ret));
+		   fname, cyrusdb_strerror(ret));
 	}
 	else
 	    sess_dbopen = 1;
+
+	free(tofree);
     }
 
     cipher_list = config_getstring(IMAPOPT_TLS_CIPHER_LIST);

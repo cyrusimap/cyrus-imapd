@@ -83,12 +83,13 @@ void statuscache_open(char *fname)
     int ret;
     char *tofree = NULL;
 
+    if (!fname)
+	fname = config_getstring(IMAPOPT_STATUSCACHE_DB_PATH);
+
     /* create db file name */
     if (!fname) {
-	fname = xmalloc(strlen(config_dir)+sizeof(FNAME_STATUSCACHEDB));
-	tofree = fname;
-	strcpy(fname, config_dir);
-	strcat(fname, FNAME_STATUSCACHEDB);
+	tofree = strconcat(config_dir, FNAME_STATUSCACHEDB, (char *)NULL);
+	fname = tofree;
     }
 
     ret = DB->open(fname, CYRUSDB_CREATE, &statuscachedb);
@@ -99,7 +100,7 @@ void statuscache_open(char *fname)
 	return;
     }    
 
-    if (tofree) free(tofree);
+    free(tofree);
 
     statuscache_dbopen = 1;
 }

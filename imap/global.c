@@ -223,6 +223,8 @@ int cyrus_init(const char *alt_config, const char *ident, unsigned flags)
 				  config_getswitch(IMAPOPT_FULLDIRHASH));
 	libcyrus_config_setstring(CYRUSOPT_PTSCACHE_DB,
 				  config_getstring(IMAPOPT_PTSCACHE_DB));
+	libcyrus_config_setstring(CYRUSOPT_PTSCACHE_DB_PATH,
+				  config_getstring(IMAPOPT_PTSCACHE_DB_PATH));
 	libcyrus_config_setstring(CYRUSOPT_PTLOADER_SOCK,
 				  config_getstring(IMAPOPT_PTLOADER_SOCK));
 	libcyrus_config_setswitch(CYRUSOPT_VIRTDOMAINS,

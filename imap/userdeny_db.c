@@ -171,20 +171,18 @@ void denydb_init(int myflags)
     }
 }
 
-void denydb_open(char *fname)
+void denydb_open(const char *fname)
 {
     int ret;
     char *tofree = NULL;
 
+    if (!fname)
+	fname = config_getstring(IMAPOPT_USERDENY_DB_PATH);
+
     /* create db file name */
     if (!fname) {
-	size_t fname_len = strlen(config_dir)+strlen(FNAME_USERDENYDB)+1;
-	
-	fname = xmalloc(fname_len);
-	tofree = fname;
-
-	strlcpy(fname, config_dir, fname_len);
-	strlcat(fname, FNAME_USERDENYDB, fname_len);
+	tofree =strconcat(config_dir, FNAME_USERDENYDB, (char *)NULL);
+	fname = tofree;
     }
 
     ret = (DENYDB->open)(fname, 0, &denydb);
@@ -196,7 +194,7 @@ void denydb_open(char *fname)
 	       cyrusdb_strerror(ret));
     }
 
-    if (tofree) free(tofree);
+    free(tofree);
 }
 
 void denydb_close(void)

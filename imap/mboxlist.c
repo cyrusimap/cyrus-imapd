@@ -2449,14 +2449,12 @@ void mboxlist_open(const char *fname)
     int ret, flags;
     char *tofree = NULL;
 
+    if (!fname)
+	fname = config_getstring(IMAPOPT_MBOXLIST_DB_PATH);
+
     /* create db file name */
     if (!fname) {
-	size_t fname_len = strlen(config_dir)+strlen(FNAME_MBOXLIST)+1;
-
-	tofree = xmalloc(fname_len);
-	strlcpy(tofree, config_dir, fname_len);
-	strlcat(tofree, FNAME_MBOXLIST, fname_len);
-
+	tofree = strconcat(config_dir, FNAME_MBOXLIST, (char *)NULL);
 	fname = tofree;
     }
 
@@ -2474,7 +2472,7 @@ void mboxlist_open(const char *fname)
 	fatal("can't read mailboxes file", EC_TEMPFAIL);
     }    
 
-    if (tofree) free(tofree);
+    free(tofree);
 
     mboxlist_dbopen = 1;
 }

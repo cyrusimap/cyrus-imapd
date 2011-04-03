@@ -86,6 +86,8 @@ enum cyrus_opt {
     CYRUSOPT_FULLDIRHASH,
     /* Database for use by AUTH_PTS */
     CYRUSOPT_PTSCACHE_DB,
+    /* Path to database for use by AUTH_PTS */
+    CYRUSOPT_PTSCACHE_DB_PATH,
     /* ptloader socket for use by AUTH_PTS */
     CYRUSOPT_PTLOADER_SOCK,
     /* Virtual Domains (OFF) */

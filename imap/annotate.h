@@ -100,7 +100,7 @@ void annotatemore_init(int myflags,
 					 struct entryattlist *));
 
 /* open the annotation db */
-void annotatemore_open(char *name);
+void annotatemore_open(const char *fname);
 
 /* 'proc'ess all annotations matching 'mailbox' and 'entry' */
 int annotatemore_findall(const char *mailbox, const char *entry,
