@@ -237,13 +237,13 @@ void annotatemore_init(int myflags,
     init_annotation_definitions();
 }
 
-void annotatemore_open(const char *fname)
+void annotatemore_open(void)
 {
     int ret;
     char *tofree = NULL;
+    const char *fname;
 
-    if (!fname)
-	fname = config_getstring(IMAPOPT_ANNOTATION_DB_PATH);
+    fname = config_getstring(IMAPOPT_ANNOTATION_DB_PATH);
 
     /* create db file name */
     if (!fname) {

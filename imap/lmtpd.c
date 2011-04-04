@@ -229,7 +229,7 @@ int service_init(int argc __attribute__((unused)),
 
 	/* Initialize the annotatemore db (for sieve on shared mailboxes) */
 	annotatemore_init(0, NULL, NULL);
-	annotatemore_open(NULL);
+	annotatemore_open();
 
 	/* setup for statuscache invalidation */
 	statuscache_open(NULL);

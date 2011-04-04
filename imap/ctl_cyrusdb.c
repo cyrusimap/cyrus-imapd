@@ -165,7 +165,7 @@ static void recover_reserved(void)
 
     /* Need annotations.db for mboxlist_deletemailbox() */
     annotatemore_init(0, NULL, NULL);
-    annotatemore_open(NULL);
+    annotatemore_open();
 
     /* Need quotadb for deleting mailboxes with quotas */
     quotadb_init(0);

@@ -2998,7 +2998,7 @@ int main(int argc, char **argv)
 
     /* open the annotation db */
     annotatemore_init(0, NULL, NULL);
-    annotatemore_open(NULL);
+    annotatemore_open();
 
     signals_set_shutdown(&shut_down);
     signals_add_handlers(0);

@@ -287,7 +287,7 @@ int service_init(int argc __attribute__((unused)),
 
     /* Initialize the annotatemore extention */
     annotatemore_init(0, NULL, NULL);
-    annotatemore_open(NULL);
+    annotatemore_open();
 
     /* Open the statuscache so we can invalidate seen states */
     if (config_getswitch(IMAPOPT_STATUSCACHE)) {

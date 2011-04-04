@@ -241,7 +241,7 @@ main(int argc, char **argv)
     signals_add_handlers(0);
 
     annotatemore_init(0, NULL, NULL);
-    annotatemore_open(NULL);
+    annotatemore_open();
 
     if (!force) {
         fprintf(stderr, "Usage: sync_reset -f user user user ...\n");

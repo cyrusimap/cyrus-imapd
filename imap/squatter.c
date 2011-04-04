@@ -712,7 +712,7 @@ int main(int argc, char **argv)
     }
 
     annotatemore_init(0, NULL, NULL);
-    annotatemore_open(NULL);
+    annotatemore_open();
 
     mboxlist_init(0);
     mboxlist_open(NULL);
