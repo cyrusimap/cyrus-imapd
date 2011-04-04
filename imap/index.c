@@ -187,10 +187,12 @@ static const struct thread_algorithm thread_algs[] = {
 /*
  * A mailbox is about to be closed.
  */
-int index_close(struct index_state **stateptr)
+void index_close(struct index_state **stateptr)
 {
     unsigned i;
     struct index_state *state = *stateptr;
+
+    if (!state) return;
 
     free(state->userid);
     free(state->map);
@@ -200,8 +202,6 @@ int index_close(struct index_state **stateptr)
     free(state);
 
     *stateptr = NULL;
-
-    return 0;
 }
 
 /*

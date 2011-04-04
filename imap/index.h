@@ -211,7 +211,7 @@ extern int find_thread_algorithm(char *arg);
 extern int index_open(const char *name, struct index_init *init,
 		      struct index_state **stateptr);
 extern int index_status(struct index_state *state, struct statusdata *sdata);
-extern int index_close(struct index_state **stateptr);
+extern void index_close(struct index_state **stateptr);
 extern unsigned index_finduid(struct index_state *state, unsigned uid);
 extern void index_tellchanges(struct index_state *state, int canexpunge,
 			      int printuid);
