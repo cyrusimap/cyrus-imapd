@@ -1529,7 +1529,6 @@ int sync_append_copyfile(struct mailbox *mailbox,
 {
     const char *fname, *destname;
     struct message_guid tmp_guid;
-    int internaldate = record->internaldate;
     int r;
 
     message_guid_copy(&tmp_guid, &record->guid);
@@ -1568,10 +1567,6 @@ int sync_append_copyfile(struct mailbox *mailbox,
     }
 
  just_write:
-    /* repair broken internaldate if requried */
-    if (!record->internaldate)
-	record->internaldate = internaldate;
-
     record->silent = 1;
     return mailbox_append_index_record(mailbox, record);
 }

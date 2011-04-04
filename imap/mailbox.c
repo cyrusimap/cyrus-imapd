@@ -2169,6 +2169,19 @@ int mailbox_append_index_record(struct mailbox *mailbox,
 	}
     }
 
+    if (!record->internaldate)
+	record->internaldate = time(NULL);
+    if (!record->gmtime)
+	record->gmtime = record->internaldate;
+    if (!record->sentdate) {
+	struct tm *tm = localtime(&record->internaldate);
+	/* truncate to the day */
+	tm->tm_sec = 0;
+	tm->tm_min = 0;
+	tm->tm_hour = 0;
+	record->sentdate = mktime(tm);
+    }
+
     if (!(record->system_flags & FLAG_UNLINKED)) {
 	/* make the file timestamp correct */
 	settime.actime = settime.modtime = record->internaldate;
@@ -3691,8 +3704,15 @@ static int mailbox_reconstruct_compare_update(struct mailbox *mailbox,
 
     /* re-calculate all the "derived" fields by parsing the file on disk */
     if (re_parse) {
+	/* set NULL in case parse finds a new value */
+	record->internaldate = 0;
+
 	r = message_parse(fname, record);
 	if (r) return r;
+
+	/* unchanged, keep the old value */
+	if (!record->internaldate)
+	    record->internaldate = copy.internaldate;
 
 	/* it's not the same message! */
 	if (!message_guid_equal(&record->guid, &copy.guid)) {
@@ -3820,7 +3840,6 @@ static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid,
     }
 
     memset(&record, 0, sizeof(struct index_record));
-    record.internaldate = sbuf.st_mtime;
 
     r = message_parse(fname, &record);
     if (r) return r;
