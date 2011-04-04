@@ -50,6 +50,7 @@
 #include <errno.h>
 #include <limits.h>
 #include <time.h>
+#include <sys/types.h>
 
 #include "imapurl.h"
 #include "xmalloc.h"
