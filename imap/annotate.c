@@ -89,6 +89,35 @@ struct annotate_cursor
     struct mboxlist_entry *mbentry;
 };
 
+enum {
+    ATTRIB_VALUE_SHARED =		(1<<0),
+    ATTRIB_VALUE_PRIV =			(1<<1),
+    ATTRIB_SIZE_SHARED =		(1<<2),
+    ATTRIB_SIZE_PRIV =			(1<<3),
+    ATTRIB_DEPRECATED =			(1<<4)
+};
+
+typedef enum {
+    ANNOTATION_PROXY_T_INVALID = 0,
+
+    PROXY_ONLY = 1,
+    BACKEND_ONLY = 2,
+    PROXY_AND_BACKEND = 3
+} annotation_proxy_t;
+
+struct fetchdata;
+typedef struct annotate_entrydesc annotate_entrydesc_t;
+struct annotate_entrydesc
+{
+    const char *name;		/* entry name */
+    annotation_proxy_t proxytype; /* mask of allowed server types */
+    void (*get)(const annotate_cursor_t *cursor,
+		const char *name, struct fetchdata *fdata,
+		void *rock);	/* function to get the entry */
+    void *rock;			/* rock passed to get() function */
+};
+
+
 #define DB config_annotation_db
 
 struct db *anndb;
@@ -441,22 +470,6 @@ static int annotatemore_findall2(const annotate_cursor_t *cursor,
     return r;
 }
 
-enum {
-    ATTRIB_VALUE_SHARED =		(1<<0),
-    ATTRIB_VALUE_PRIV =			(1<<1),
-    ATTRIB_SIZE_SHARED =		(1<<2),
-    ATTRIB_SIZE_PRIV =			(1<<3),
-    ATTRIB_DEPRECATED =			(1<<4)
-};
-
-typedef enum {
-    ANNOTATION_PROXY_T_INVALID = 0,
-
-    PROXY_ONLY = 1,
-    BACKEND_ONLY = 2,
-    PROXY_AND_BACKEND = 3
-} annotation_proxy_t;
-
 const struct annotate_info_t annotate_mailbox_flags[] =
 {
     { "/vendor/cmu/cyrus-imapd/pop3newuidl",
@@ -476,7 +489,7 @@ struct fetchdata {
     char *userid;
     int isadmin;
     struct auth_state *auth_state;
-     struct annotate_f_entry_list *entry_list;
+    struct annotate_f_entry_list *entry_list;
     unsigned attribs;
     struct entryattlist **entryatts;
     struct hash_table entry_table;
@@ -1048,24 +1061,14 @@ static void annotation_get_fromdb(const annotate_cursor_t *cursor,
     annotatemore_findall2(cursor, entrypat, &rw_cb, &rw_rock, NULL);
 }
 
-struct annotate_f_entry
-{
-    const char *name;		/* entry name */
-    annotation_proxy_t proxytype; /* mask of allowed server types */
-    void (*get)(const annotate_cursor_t *cursor,
-		const char *name, struct fetchdata *fdata,
-		void *rock);	/* function to get the entry */
-    void *rock;			/* rock passed to get() function */
-};
-
 struct annotate_f_entry_list
 {
-    const struct annotate_f_entry *entry;
+    const annotate_entrydesc_t *entry;
     const char *entrypat;
     struct annotate_f_entry_list *next;
 };
 
-const struct annotate_f_entry mailbox_ro_entries[] =
+const annotate_entrydesc_t mailbox_ro_entries[] =
 {
     { "/vendor/cmu/cyrus-imapd/partition", BACKEND_ONLY,
       annotation_get_partition, NULL },
@@ -1090,10 +1093,10 @@ const struct annotate_f_entry mailbox_ro_entries[] =
     { NULL, ANNOTATION_PROXY_T_INVALID, NULL, NULL }
 };
 
-const struct annotate_f_entry mailbox_rw_entry =
+const annotate_entrydesc_t mailbox_rw_entry =
     { NULL, BACKEND_ONLY, annotation_get_fromdb, NULL };
 
-const struct annotate_f_entry server_legacy_entries[] =
+const annotate_entrydesc_t server_legacy_entries[] =
 {
     { "/motd", PROXY_AND_BACKEND, annotation_get_fromfile, (void *)"motd" },
     { "/vendor/cmu/cyrus-imapd/shutdown", PROXY_AND_BACKEND,
@@ -1103,7 +1106,7 @@ const struct annotate_f_entry server_legacy_entries[] =
     { NULL, ANNOTATION_PROXY_T_INVALID, NULL, NULL }
 };
 
-const struct annotate_f_entry server_entry =
+const annotate_entrydesc_t server_entry =
     { NULL, PROXY_AND_BACKEND, annotation_get_fromdb, NULL };
 
 /* Annotation attributes and their flags */
@@ -1230,8 +1233,8 @@ int annotatemore_fetch(const annotate_scope_t *scope,
     int i;
     struct fetchdata fdata;
     struct glob *g;
-    const struct annotate_f_entry *non_db_entries;
-    const struct annotate_f_entry *db_entry;
+    const annotate_entrydesc_t *non_db_entries;
+    const annotate_entrydesc_t *db_entry;
 
     memset(&fdata, 0, sizeof(struct fetchdata));
     fdata.pout = pout;
