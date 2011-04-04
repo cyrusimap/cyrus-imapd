@@ -1872,7 +1872,7 @@ static int do_user_seen(char *user, struct sync_seen_list *replica_seen)
 {
     int r;
     struct sync_seen *mseen, *rseen;
-    struct seen *seendb;
+    struct seen *seendb = NULL;
     struct sync_seen_list *list;
 
     /* silently ignore errors */
