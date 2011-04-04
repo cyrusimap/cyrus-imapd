@@ -78,7 +78,7 @@
 struct db *statuscachedb;
 static int statuscache_dbopen = 0;
 
-void statuscache_open(char *fname)
+void statuscache_open(const char *fname)
 {
     int ret;
     char *tofree = NULL;
