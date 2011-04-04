@@ -1634,8 +1634,8 @@ static void message_parse_received_date(const char *hdr, char **hdrp)
   /* Ignore if we already saw one of these headers */
   if (*hdrp) return;
 
-  /* Decode header to temp buffer */
-  hdrbuf = charset_decode_mimeheader(hdr);
+  /* Copy header to temp buffer */
+  message_parse_string(hdr, &hdrbuf);
 
   /* From rfc2822, 3.6.7
    *   received = "Received:" name-val-list ";" date-time CRLF
