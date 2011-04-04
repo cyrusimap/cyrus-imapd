@@ -85,6 +85,29 @@ struct annotate_info_t
     int flag;
 };
 
+enum {
+  ANNOTATION_SCOPE_SERVER = 1,
+  ANNOTATION_SCOPE_MAILBOX = 2
+};
+
+typedef struct annotate_scope annotate_scope_t;
+struct annotate_scope
+{
+    int which;			/* ANNOTATION_SCOPE_* */
+    const char *mailbox;	/* external mailbox pattern if _MAILBOX */
+};
+
+#define annotate_scope_init_server(_scope) \
+    do { \
+	memset((_scope), 0, sizeof(annotate_scope_t)); \
+	(_scope)->which = ANNOTATION_SCOPE_SERVER; \
+    } while(0)
+#define annotate_scope_init_mailbox(_scope, _mboxnamepatt) \
+    do { \
+	memset((_scope), 0, sizeof(annotate_scope_t)); \
+	(_scope)->which = ANNOTATION_SCOPE_MAILBOX; \
+	(_scope)->mailbox = (_mboxnamepatt); \
+    } while(0)
 
 /* String List Management */
 void appendstrlist(struct strlist **l, char *s);
@@ -125,7 +148,7 @@ int annotatemore_findall(const char *mailbox, const char *entry,
 			 struct txn **tid);
 
 /* fetch annotations and output results */
-int annotatemore_fetch(char *mailbox,
+int annotatemore_fetch(const annotate_scope_t *,
 		       const strarray_t *entries, const strarray_t *attribs,
 		       struct namespace *namespace, int isadmin, char *userid,
 		       struct auth_state *auth_state, struct protstream *pout,
@@ -138,7 +161,7 @@ int annotatemore_lookup(const char *mboxname, const char *entry,
 			const char *userid, struct annotation_data *attrib);
 
 /* store annotations */
-int annotatemore_store(const char *mboxname,
+int annotatemore_store(const annotate_scope_t *,
 		       struct entryattlist *l, struct namespace *namespace,
 		       int isadmin, const char *userid,
 		       struct auth_state *auth_state);

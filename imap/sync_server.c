@@ -1771,6 +1771,7 @@ static int do_annotation(struct dlist *kin)
     const char *value = NULL;
     const char *userid = NULL;
     char *name = NULL;
+    annotate_scope_t scope;
     int r;
 
     if (!dlist_getatom(kin, "MBOXNAME", &mboxname))
@@ -1789,7 +1790,8 @@ static int do_annotation(struct dlist *kin)
 
     appendattvalue(&attvalues, *userid ? "value.priv" : "value.shared", value);
     appendentryatt(&entryatts, entry, attvalues);
-    r = annotatemore_store(name, entryatts, sync_namespacep,
+    annotate_scope_init_mailbox(&scope, name);
+    r = annotatemore_store(&scope, entryatts, sync_namespacep,
 			   sync_userisadmin, userid, sync_authstate);
 
     freeentryatts(entryatts);
@@ -1806,6 +1808,7 @@ static int do_unannotation(struct dlist *kin)
     const char *entry = NULL;
     const char *userid = NULL;
     char *name = NULL;
+    annotate_scope_t scope;
     int r;
 
     if (!dlist_getatom(kin, "MBOXNAME", &mboxname))
@@ -1822,7 +1825,8 @@ static int do_unannotation(struct dlist *kin)
 
     appendattvalue(&attvalues, *userid ? "value.priv" : "value.shared", NULL);
     appendentryatt(&entryatts, entry, attvalues);
-    r = annotatemore_store(name, entryatts, sync_namespacep,
+    annotate_scope_init_mailbox(&scope, name);
+    r = annotatemore_store(&scope, entryatts, sync_namespacep,
 			   sync_userisadmin, userid, sync_authstate);
 
     freeentryatts(entryatts);
