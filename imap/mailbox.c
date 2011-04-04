@@ -2056,6 +2056,12 @@ int mailbox_rewrite_index_record(struct mailbox *mailbox,
 	    mailbox->i.options |= OPT_MAILBOX_NEEDS_REPACK;
 	mailbox->i.options |= OPT_MAILBOX_NEEDS_UNLINK;
     }
+    else {
+	/* write the cache record before buffering the message, it
+	 * will set the cache_offset field. */
+	r = mailbox_append_cache(mailbox, record);
+	if (r) return r;
+    }
 
     /* make sure highestmodseq gets updated unless we're
      * being silent about it (i.e. marking an already EXPUNGED
