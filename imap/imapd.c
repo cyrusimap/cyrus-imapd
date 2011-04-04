@@ -4738,7 +4738,7 @@ void cmd_thread(char *tag, int usinguid)
     }
 
     /* get charset */
-    c = getstring(imapd_in, imapd_out, &arg);
+    c = getastring(imapd_in, imapd_out, &arg);
     if (c != ' ') {
 	prot_printf(imapd_out, "%s BAD Missing charset in Thread\r\n",
 		    tag);
