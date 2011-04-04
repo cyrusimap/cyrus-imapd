@@ -747,7 +747,6 @@ int prot_flush(struct protstream *s)
 
 	/* Discard any buffered input */
 	s->cnt = 0;
-	s->can_unget = 0;
 
 	return 0;
     }
