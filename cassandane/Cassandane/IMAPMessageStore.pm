@@ -32,6 +32,8 @@ sub new
 	last_batch_uid => undef,
 	batch => undef,
 	fetch_attrs => { 'body.peek[]' => 1 },
+	# state for XCONVFETCH
+	fetched => undef,
     };
 
     $self->{host} = $params{host}
@@ -273,6 +275,76 @@ sub set_folder
     {
 	$self->{folder} = $folder;
     }
+}
+
+sub xconvfetch_begin
+{
+    my ($self, $cid, $valtoken) = @_;
+    my $attrs = join(' ', keys %{$self->{fetch_attrs}});
+    $valtoken = "()"
+	unless defined $valtoken;
+    my @args = ( $cid, $valtoken, "($attrs)" );
+
+    my $results =
+    {
+	folderstate => [],
+	valtoken => undef,
+    };
+    $self->{fetched} = undef;
+    my $c_uidv = 0;
+    my $c_hms = 0;
+    my %handlers =
+    (
+	folderstate => sub
+	{
+	    my ($response, $args) = @_;
+	    my ($f_name, $f_uidv, $f_hms) = @$args;
+# 	    xlog "FOLDERSTATE name=\"$f_name\" uidv=$f_uidv hms=$f_hms";
+	    push(@{$results->{folderstate}},
+		{
+		    name => $f_name,
+		    uidvalidity => $f_uidv,
+		    highestmodseq => $f_hms,
+		});
+	    $c_uidv = ($f_uidv > $c_uidv ? $f_uidv : $c_uidv);
+	    $c_hms = ($f_hms > $c_hms ? $f_hms : $c_hms);
+	},
+	fetch => sub
+	{
+	    my ($response, $rr) = @_;
+# 	    xlog "FETCH rr=" . Dumper($rr);
+	    push(@{$self->{fetched}}, $rr);
+	}
+    );
+
+    $self->_connect();
+
+    $self->{client}->_imap_cmd("xconvfetch", 0, \%handlers, @args)
+	or return undef;
+
+    $results->{valtoken} = "($c_uidv $c_hms)"
+	if $c_uidv > 0 && $c_hms > 0;
+
+    return $results;
+}
+
+sub xconvfetch_message
+{
+    my ($self) = @_;
+
+    my $rr = shift @{$self->{fetched}};
+    return undef
+	if !defined $rr;
+
+    my $raw = $rr->{'body'};
+    delete $rr->{'body'};
+    return Cassandane::Message->new(raw => $raw, attrs => $rr);
+}
+
+sub xconvfetch_end
+{
+    my ($self) = @_;
+    $self->{fetched} = undef;
 }
 
 1;
