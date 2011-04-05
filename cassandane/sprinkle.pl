@@ -4,6 +4,7 @@ use strict;
 use warnings;
 use DateTime;
 use Cassandane::Util::Log;
+use Cassandane::Util::Words;
 use Cassandane::MessageStoreFactory;
 
 sub usage
@@ -14,30 +15,7 @@ sub usage
 my $base_folder;
 my $num_remaining = 0;
 my $num_written = 0;
-my @words;
 my $verbose = 1;
-
-# Extract some well-formatted short words from the dictionary file
-sub read_words
-{
-    my $filename = "/usr/share/dict/words";
-    my $i = 0;
-    my $stride = 200;
-    open DICT,'<',$filename
-	or die "Cannot open $filename for reading: $!";
-    while (<DICT>)
-    {
-	chomp;
-	$_ = lc;
-	next unless m/^[a-z]+$/;
-	next if length $_ > 5 || length $_ < 2;
-	next if $i++ < $stride;
-	$i = 0;
-	push(@words, $_);
-	last if scalar @words == 200;
-    }
-    close DICT;
-}
 
 sub choose_folder
 {
@@ -46,7 +24,7 @@ sub choose_folder
 
     for (my $i = 0 ; $i < $nparts ; $i++)
     {
-	push(@parts, $words[int(rand(scalar @words))]);
+	push(@parts, random_word());
     }
 
     my $folder = join('.', ($base_folder, @parts));
@@ -83,7 +61,6 @@ sub sprinkle
     $mbox_store->read_end();
 }
 
-read_words();
 my $imap_store = Cassandane::MessageStoreFactory->create((
 	type => 'imap',
 	host => 'slott02',
