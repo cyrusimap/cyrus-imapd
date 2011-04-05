@@ -25,6 +25,11 @@ Cassandane needs the following software to work:
     CPAN package http://search.cpan.org/dist/Digest-SHA1/
     Ubuntu package libdigest-sha1-perl.
 
+ * Datetime
+    Does time manipulation.
+    CPAN package http://search.cpan.org/dist/DateTime/
+    Ubuntu package libdatetime-perl
+
  * Test::Unit
     Unit testing framework for Perl
     CPAN package http://search.cpan.org/dist/Test-Unit/
