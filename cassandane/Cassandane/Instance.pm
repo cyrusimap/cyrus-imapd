@@ -45,7 +45,7 @@ use warnings;
 use File::Path qw(mkpath rmtree);
 use File::Find qw(find);
 use POSIX qw(geteuid :signal_h);
-use Time::HiRes qw(sleep gettimeofday);
+use Time::HiRes qw(sleep gettimeofday tv_interval);
 use DateTime;
 use Cassandane::Util::DateTime qw(to_iso8601);
 use Cassandane::Util::Log;
