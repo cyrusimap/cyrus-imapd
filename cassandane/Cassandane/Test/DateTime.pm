@@ -55,12 +55,12 @@ sub new
 sub test_basic
 {
     my ($self) = @_;
-    $self->assert_num_equals(from_iso8601('20101014T161952Z')->epoch, 1287073192);
-    $self->assert_num_equals(from_rfc822('Fri, 15 Oct 2010 03:19:52 +1100')->epoch, 1287073192);
-    $self->assert_num_equals(from_rfc3501('15-Oct-2010 03:19:52 +1100')->epoch, 1287073192);
-    $self->assert_str_equals(to_iso8601(DateTime->from_epoch(epoch => 1287073192)), '20101014T161952Z');
-    $self->assert_str_equals(to_rfc822(DateTime->from_epoch(epoch => 1287073192)), 'Fri, 15 Oct 2010 03:19:52 +1100');
-    $self->assert_str_equals(to_rfc3501(DateTime->from_epoch(epoch => 1287073192)), '15-Oct-2010 03:19:52 +1100');
+    $self->assert_num_equals(1287073192, from_iso8601('20101014T161952Z')->epoch);
+    $self->assert_num_equals(1287073192, from_rfc822('Fri, 15 Oct 2010 03:19:52 +1100')->epoch);
+    $self->assert_num_equals(1287073192, from_rfc3501('15-Oct-2010 03:19:52 +1100')->epoch);
+    $self->assert_str_equals('20101014T161952Z', to_iso8601(DateTime->from_epoch(epoch => 1287073192)));
+    $self->assert_str_equals('Fri, 15 Oct 2010 03:19:52 +1100', to_rfc822(DateTime->from_epoch(epoch => 1287073192)));
+    $self->assert_str_equals('15-Oct-2010 03:19:52 +1100', to_rfc3501(DateTime->from_epoch(epoch => 1287073192)));
 }
 
 1;
