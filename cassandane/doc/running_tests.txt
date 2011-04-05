@@ -1,0 +1,127 @@
+Copyright (c) 2011 Opera Software Australia Pty. Ltd.  All rights reserved.
+
+This document describes how to run the Cassandane tests.
+
+Prerequisites
+-------------
+
+Before running any Cassandane tests, you need to have the following:
+
+ * A Cyrus installation, such as an installed package, installed
+   under /usr/cyrus/.  Currently only the bin/ subdirectory is
+   needed.
+
+ * A user "cyrus" in the system password database (e.g. /etc/passwd).
+   Most Cyrus packages will ensure this exists as a side effect
+   of installation.
+
+ * The various pieces of Perl software mentioned in README.deps
+   installed where they available to Perl (e.g. in a directory
+   mentioned in $PERL5LIB).
+
+Running Tests
+-------------
+
+Cassandane tests are run out of the Cassandane directory itself, without
+installing Cassandane anywhere.  This is not the result of deliberate policy so
+much as implementation laziness.
+
+All runtime state is created under the directory /var/tmp/cassandane/, and
+results reports are written to the current working directory.  Apart from
+reports, Cassandane does not require write permission to its source directory.
+
+Cassandane (or more precisely, the Cyrus code it exercises) needs to be run
+either as the superuser or as the "cyrus" user.
+
+The script 'testrunner.pl' is your interface for running Cassandane tests.
+There are several other Perl scripts in the directory, but they are utilities
+which were helpful during manual testing rather than part of the test suite
+itself.
+
+With no arguments, testrunner.pl runs all the tests that come with Cassandane
+and reports the results in the jUnit test report format.  The testrunner.pl
+exit code will be 0 if all tests passed, non-zero otherwise.
+
+
+root@testbox# ls reports
+ls: cannot access reports: No such file or directory
+
+root@testbox# ./testrunner.pl
+
+root@testbox# ls reports
+TEST-Cassandane.Cyrus.Conversations.xml  TEST-Cassandane.Test.DateTime.xml
+TEST-Cassandane.Cyrus.Replication.xml	 TEST-Cassandane.Test.Instance.xml
+TEST-Cassandane.Cyrus.Simple.xml	 TEST-Cassandane.Test.Message.xml
+TEST-Cassandane.Test.Address.xml	 TEST-Cassandane.Test.MessageStoreFactory.xml
+TEST-Cassandane.Test.Config.xml
+
+
+The jUnit format is the default because it's widely used and in particular it's
+compatible with the Jenkins Continuous Integration server.  The reports will be
+available in the directory reports/ and will be named TEST-Cassandane.*.xml,
+one XML file for each group of tests.
+
+Conveniently, the first line of each XML report will contain a count of the
+number of test failures in the corresponding group, so you can use "head" to
+discover if anything went wrong.
+
+root@testbox# head -1 reports/TEST*.xml
+
+==> reports/TEST-Cassandane.Cyrus.Conversations.xml <==
+<testsuite failures="0"
+
+==> reports/TEST-Cassandane.Cyrus.Simple.xml <==
+<testsuite failures="0"
+
+==> reports/TEST-Cassandane.Test.Address.xml <==
+<testsuite failures="0"
+
+==> reports/TEST-Cassandane.Test.Config.xml <==
+<testsuite failures="0"
+
+==> reports/TEST-Cassandane.Test.CyrusInstance.xml <==
+<testsuite failures="0"
+
+==> reports/TEST-Cassandane.Test.DateTime.xml <==
+<testsuite failures="0"
+
+==> reports/TEST-Cassandane.Test.MessageStoreFactory.xml <==
+<testsuite failures="0"
+
+==> reports/TEST-Cassandane.Test.Message.xml <==
+<testsuite failures="0"
+
+More useful for manual running is the TAP output format, which is designed for
+automated use but is also more human friendly.  TAP is a common format which
+originated with Perl and is now widely used, see
+http://en.wikipedia.org/wiki/Test_Anything_Protocol for more information. The
+TAP format can be selected by using the "-f tap" option to testrunner.pl.
+
+
+root@testbox# ./testrunner.pl -f tap
+....
+Time:  0 wallclock secs ( 0.00 usr +  0.00 sys =  0.00 CPU)
+
+OK (4 tests)
+..
+Time:  0 wallclock secs ( 0.00 usr +  0.00 sys =  0.00 CPU)
+
+OK (2 tests)
+.
+Time:  0 wallclock secs ( 0.00 usr +  0.01 sys =  0.01 CPU)
+
+OK (1 tests)
+...........
+Time:  0 wallclock secs ( 0.00 usr +  0.00 sys =  0.00 CPU)
+
+OK (11 tests)
+....
+Time:  0 wallclock secs ( 0.00 usr +  0.00 sys =  0.00 CPU)
+
+OK (4 tests)
+.
+Time:  0 wallclock secs ( 0.01 usr +  0.00 sys =  0.01 CPU)
+
+OK (1 tests)
+
+
