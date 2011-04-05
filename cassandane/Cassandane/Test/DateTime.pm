@@ -59,6 +59,7 @@ sub test_basic
     $self->assert_num_equals(1287073192, from_rfc822('Fri, 15 Oct 2010 03:19:52 +1100')->epoch);
     $self->assert_num_equals(1287073192, from_rfc3501('15-Oct-2010 03:19:52 +1100')->epoch);
     $self->assert_str_equals('20101014T161952Z', to_iso8601(DateTime->from_epoch(epoch => 1287073192)));
+    local $ENV{TZ} = "Australia/Melbourne";
     $self->assert_str_equals('Fri, 15 Oct 2010 03:19:52 +1100', to_rfc822(DateTime->from_epoch(epoch => 1287073192)));
     $self->assert_str_equals('15-Oct-2010 03:19:52 +1100', to_rfc3501(DateTime->from_epoch(epoch => 1287073192)));
 }
