@@ -8,6 +8,7 @@ use DateTime;
 use URI::Escape;
 use Digest::SHA1 qw(sha1_hex);
 use Cassandane::Generator;
+use Cassandane::ThreadedGenerator;
 use Cassandane::Util::Log;
 use Cassandane::Util::DateTime qw(to_iso8601 from_iso8601
 				  from_rfc822
@@ -299,5 +300,78 @@ sub test_double_clash
 #     $self->check_messages(cid => $ElCid);
 #     $self->check_messages(store => $replica, cid => $ElCid);
 # }
+
+sub test_xconvfetch
+{
+    my ($self) = @_;
+    my $store = $self->{store};
+    my $foldername = "INBOX.xconvfetch";
+
+    # check IMAP server has the XCONVERSATIONS capability
+    $self->assert($store->get_client()->capability()->{xconversations});
+
+    xlog "removing folder";
+    $store->set_folder($foldername);
+    $store->remove();
+
+    xlog "generating messages";
+    my $generator = Cassandane::ThreadedGenerator->new();
+    $store->write_begin();
+    while (my $msg = $generator->generate())
+    {
+	$store->write_message($msg);
+    }
+    $store->write_end();
+
+    xlog "reading the whole folder again to discover CIDs etc";
+    my %cids;
+    my %uids;
+    $store->read_begin();
+    while (my $msg = $store->read_message())
+    {
+ 	my $uid = $msg->get_attribute('uid');
+ 	my $cid = $msg->get_attribute('cid');
+ 	my $threadid = $msg->get_header('X-Cassandane-Thread');
+	if (defined $cids{$cid})
+	{
+	    $self->assert($cids{$cid} == $threadid);
+	}
+	else
+	{
+	    $cids{$cid} = $threadid;
+	    xlog "Found CID $cid";
+	}
+	$self->assert(!defined $uids{$uid});
+	$uids{$uid} = 1;
+    }
+    $store->read_end();
+
+    xlog "Using XCONVFETCH on each conversation";
+    foreach my $cid (keys %cids)
+    {
+	xlog "XCONVFETCHing CID $cid";
+
+	my $result = $store->xconvfetch_begin($cid);
+	$self->assert(scalar @{$result->{folderstate}} == 1);
+	$self->assert($result->{folderstate}->[0]->{name} eq $foldername);
+	while (my $msg = $store->xconvfetch_message())
+	{
+	    my $muid = $msg->get_attribute('uid');
+	    my $mcid = $msg->get_attribute('cid');
+	    my $threadid = $msg->get_header('X-Cassandane-Thread');
+	    $self->assert($mcid eq $cid);
+	    $self->assert($threadid == $cids{$cid});
+	    $self->assert($uids{$muid} == 1);
+	    $uids{$muid} |= 2;
+	}
+	$store->xconvfetch_end();
+    }
+
+    xlog "checking that all the UIDs in the folder were XCONVFETCHed";
+    foreach my $uid (keys %uids)
+    {
+	$self->assert($uids{$uid} == 3);
+    }
+}
 
 1;
