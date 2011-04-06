@@ -97,7 +97,7 @@ LIBCYR_OBJS = acl.o bsearch.o charset.o glob.o retry.o util.o \
 	gmtoff_@WITH_GMTOFF@.o map_@WITH_MAP@.o $(ACL) $(AUTH) \
 	@LIBOBJS@ @CYRUSDB_OBJS@  \
 	iptostring.o xmalloc.o wildmat.o byteorder64.o \
-	xstrlcat.o xstrlcpy.o crc32.o
+	xstrlcat.o xstrlcpy.o crc32.o ptrarray.o
 
 LIBCYRM_HDRS = $(srcdir)/hash.h $(srcdir)/mpool.h $(srcdir)/xmalloc.h \
 	$(srcdir)/xstrlcat.h $(srcdir)/xstrlcpy.h $(srcdir)/util.h \
