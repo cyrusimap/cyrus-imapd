@@ -2139,17 +2139,6 @@ static int annotation_set_pop3showafter(const annotate_cursor_t *cursor,
     return 0;
 }
 
-const char *valid_specialuse[] = {
-/*   "\\All",  -- we don't support virtual folders right now */
-  "\\Archive",
-  "\\Drafts",
-/*  "\\Flagged",  -- we don't support virtual folders right now */
-  "\\Junk",
-  "\\Sent",
-  "\\Trash",
-  NULL
-};
-
 static int annotation_set_specialuse(const annotate_cursor_t *cursor,
 				     struct annotate_st_entry_list *entry,
 				     struct storedata *sdata,
@@ -2159,6 +2148,16 @@ static int annotation_set_specialuse(const annotate_cursor_t *cursor,
     const char *val;
     int i;
     strarray_t * specialuse_extra = 0;
+    static const char * const valid_specialuse[] = {
+    /*   "\\All",  -- we don't support virtual folders right now */
+      "\\Archive",
+      "\\Drafts",
+    /*  "\\Flagged",  -- we don't support virtual folders right now */
+      "\\Junk",
+      "\\Sent",
+      "\\Trash",
+      NULL
+    };
 
     /* Check ACL */
     if (!annotation_may_store(sdata, cursor->mbentry, ACL_LOOKUP|ACL_WRITE))
