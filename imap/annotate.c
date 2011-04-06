@@ -303,23 +303,18 @@ void freeentryatts(struct entryattlist *l)
 }
 
 /* must be called after cyrus_init */
-void annotatemore_init(int myflags,
-		       int (*fetch_func)(const char *, const char *,
+void annotatemore_init(int (*fetch_func)(const char *, const char *,
 					 const strarray_t *, const strarray_t *),
 		       int (*store_func)(const char *, const char *,
 					 struct entryattlist *))
 {
-    if (myflags & ANNOTATE_SYNC) {
-	DB->sync();
-    }
-
     if (fetch_func) {
 	proxy_fetch_func = fetch_func;
     }
     if (store_func) {
 	proxy_store_func = store_func;
     }
-    
+
     init_annotation_definitions();
 }
 

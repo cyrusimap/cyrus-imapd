@@ -122,8 +122,7 @@ void freeentryatts(struct entryattlist *l);
 #define FNAME_ANNOTATIONS "/annotations.db"
 
 /* initialize database structures */
-#define ANNOTATE_SYNC (1 << 1)
-void annotatemore_init(int myflags,
+void annotatemore_init(
 		       int (*fetch_func)(const char *, const char *,
 					 const strarray_t *, const strarray_t *),
 		       int (*store_func)(const char *, const char *,

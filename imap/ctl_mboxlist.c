@@ -1077,7 +1077,7 @@ int main(int argc, char *argv[])
 	quotadb_init(0);
 	quotadb_open(NULL);
 
-	annotatemore_init(0, NULL, NULL);
+	annotatemore_init(NULL, NULL);
 	annotatemore_open();
 
 	do_dump(op, partition, dopurge);
@@ -1099,7 +1099,7 @@ int main(int argc, char *argv[])
 	quotadb_init(0);
 	quotadb_open(NULL);
 
-	annotatemore_init(0, NULL, NULL);
+	annotatemore_init(NULL, NULL);
 	annotatemore_open();
 
 	do_undump();

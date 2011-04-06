@@ -508,7 +508,7 @@ int service_init(int argc __attribute__((unused)),
     }
 
     /* Initialize the annotatemore extention */
-    annotatemore_init(0, NULL, NULL);
+    annotatemore_init(NULL, NULL);
     annotatemore_open();
 
     newsmaster = (char *) config_getstring(IMAPOPT_NEWSMASTER);

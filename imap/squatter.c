@@ -711,7 +711,7 @@ int main(int argc, char **argv)
 	fatal(error_message(r), EC_CONFIG);
     }
 
-    annotatemore_init(0, NULL, NULL);
+    annotatemore_init(NULL, NULL);
     annotatemore_open();
 
     mboxlist_init(0);

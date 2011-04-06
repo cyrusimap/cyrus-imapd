@@ -228,7 +228,7 @@ int service_init(int argc __attribute__((unused)),
 	quotadb_open(NULL);
 
 	/* Initialize the annotatemore db (for sieve on shared mailboxes) */
-	annotatemore_init(0, NULL, NULL);
+	annotatemore_init(NULL, NULL);
 	annotatemore_open();
 
 	/* setup for statuscache invalidation */
