@@ -2995,7 +2995,7 @@ int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
     mkdir(path, 0755);
 
     /* Copy over meta files */
-    for (mf = meta_files; !r && mf->metaflag; mf++) {
+    for (mf = meta_files; mf->metaflag; mf++) {
 	struct stat sbuf;
 
 	strncpy(oldbuf, mailbox_meta_fname(mailbox, mf->metaflag),
