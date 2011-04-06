@@ -510,17 +510,6 @@ static int annotatemore_findall2(const annotate_cursor_t *cursor,
     return r;
 }
 
-const struct annotate_info_t annotate_mailbox_flags[] =
-{
-    { "/vendor/cmu/cyrus-imapd/pop3newuidl",
-      OPT_POP3_NEW_UIDL },
-    { "/vendor/cmu/cyrus-imapd/duplicatedeliver",
-      OPT_IMAP_DUPDELIVER },
-    { "/vendor/cmu/cyrus-imapd/sharedseen",
-      OPT_IMAP_SHAREDSEEN },
-    { NULL, 0 }
-};
-
 /***************************  Annotation Fetching  ***************************/
 
 struct fetchdata {
@@ -935,10 +924,10 @@ static void annotation_get_lastpop(const annotate_cursor_t *cursor,
 static void annotation_get_mailboxopt(const annotate_cursor_t *cursor,
 				      const char *entry,
 				      struct fetchdata *fdata,
-				      void *rock __attribute__((unused)))
+				      void *rock)
 { 
     struct mailbox *mailbox = NULL;
-    int flag = 0, i;
+    uint32_t flag = (unsigned long)rock;
     char value[40];
     struct annotation_data attrib;
   
@@ -949,15 +938,6 @@ static void annotation_get_mailboxopt(const annotate_cursor_t *cursor,
     /* Make sure its a local mailbox */
     if (cursor->mbentry->server) return;
 
-    /* check that this is a mailboxopt annotation */
-    for (i = 0; annotate_mailbox_flags[i].name; i++) {
-	if (!strcmp(entry, annotate_mailbox_flags[i].name)) {
-	    flag = annotate_mailbox_flags[i].flag;
-	    break;
-	}
-    }
-    if (!flag) return;
-  
     /* Check ACL */
     if (!annotation_may_fetch(fdata, cursor->mbentry, ACL_LOOKUP|ACL_READ))
 	return;
@@ -1172,7 +1152,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
 	ACL_ADMIN,
 	annotation_get_mailboxopt,
 	annotation_set_mailboxopt,
-	NULL
+	(void *)OPT_IMAP_DUPDELIVER
     },{
 	"/vendor/cmu/cyrus-imapd/expire",
 	ATTRIB_TYPE_UINT,
@@ -1226,7 +1206,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
 	ACL_ADMIN,
 	annotation_get_mailboxopt,
 	annotation_set_mailboxopt,
-	NULL
+	(void *)OPT_POP3_NEW_UIDL
     },{
 	"/vendor/cmu/cyrus-imapd/pop3showafter",
 	ATTRIB_TYPE_STRING,
@@ -1253,7 +1233,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
 	ACL_ADMIN,
 	annotation_get_mailboxopt,
 	annotation_set_mailboxopt,
-	NULL
+        (void *)OPT_IMAP_SHAREDSEEN
     },{
 	"/vendor/cmu/cyrus-imapd/sieve",
 	ATTRIB_TYPE_STRING,
@@ -2063,21 +2043,13 @@ static int annotation_set_todb(const annotate_cursor_t *cursor,
 static int annotation_set_mailboxopt(const annotate_cursor_t *cursor,
 				     struct annotate_st_entry_list *entry,
 				     struct storedata *sdata,
-				     void *rock __attribute__((unused)))
+				     void *rock)
 {
     struct mailbox *mailbox = NULL;
-    int flag = 0, r = 0, i;
+    uint32_t flag = (unsigned long)rock;
+    int r = 0;
     unsigned long newopts;
 
-    /* Check entry */
-    for (i = 0; annotate_mailbox_flags[i].name; i++) {
-	if (!strcmp(entry->entry->name, annotate_mailbox_flags[i].name)) {
-	    flag = annotate_mailbox_flags[i].flag;
-	    break;
-	}
-    }
-    if (!flag) return IMAP_PERMISSION_DENIED;
-  
     /* Check ACL */
     if (!annotation_may_store(sdata, cursor->mbentry, ACL_LOOKUP|ACL_WRITE))
 	return IMAP_PERMISSION_DENIED;

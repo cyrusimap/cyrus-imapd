@@ -79,12 +79,6 @@ struct annotation_data {
     size_t size;
 };
 
-struct annotate_info_t
-{
-    const char *name;
-    int flag;
-};
-
 enum {
   ANNOTATION_SCOPE_SERVER = 1,
   ANNOTATION_SCOPE_MAILBOX = 2
@@ -153,8 +147,6 @@ int annotatemore_fetch(const annotate_scope_t *,
 		       struct namespace *namespace, int isadmin, char *userid,
 		       struct auth_state *auth_state, struct protstream *pout,
 		       int ismetadata, int *maxsize);
-
-extern const struct annotate_info_t annotate_mailbox_flags[];
 
 /* lookup a single annotation and return result */
 int annotatemore_lookup(const char *mboxname, const char *entry,
