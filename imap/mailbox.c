@@ -3307,7 +3307,6 @@ static void free_files(struct found_files *ff)
 
 static int parse_datafilename(const char *name, uint32_t *uidp)
 {
-    int r;
     const char *p = name;
 
     /* must be at least one digit */
@@ -3320,11 +3319,7 @@ static int parse_datafilename(const char *name, uint32_t *uidp)
     if (*p != '.') return IMAP_MAILBOX_BADNAME;
     if (p[1]) return IMAP_MAILBOX_BADNAME;
 
-    r = parseuint32(name, &p, uidp);
-    if (r) return r;
-    /* '0.' isn't actually a valid message name */
-    if (*uidp == 0) return IMAP_MAILBOX_BADNAME;
-    return 0;
+    return parseuint32(name, &p, uidp);
 }
 
 static int find_files(struct mailbox *mailbox, struct found_files *files,
@@ -3833,6 +3828,13 @@ static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid,
     struct stat sbuf;
     int make_changes = flags & RECONSTRUCT_MAKE_CHANGES;
 
+    /* possible if '0.' file exists */
+    if (!uid) {
+	/* filthy hack - copy the path to '1.' and replace 1 with 0 */
+	fname = xstrdup(mailbox_message_fname(mailbox, 1));
+	fname[strlen(fname)-2] = '0';
+    }
+
     if (stat(fname, &sbuf) == -1) r = IMAP_MAILBOX_NONEXISTENT;
     else if (sbuf.st_size == 0) r = IMAP_MAILBOX_NONEXISTENT;
 
@@ -3866,7 +3868,7 @@ static int mailbox_reconstruct_append(struct mailbox *mailbox, uint32_t uid,
 
 	if (!make_changes) return 0;
 
-	oldfname = xstrdup(mailbox_message_fname(mailbox, uid));
+	oldfname = xstrdup(fname);
 	newfname = xstrdup(mailbox_message_fname(mailbox, record.uid));
 	r = rename(oldfname, newfname);
 	free(oldfname);
