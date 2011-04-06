@@ -1233,12 +1233,12 @@ static int mailbox_full_update(const char *mboxname)
     }
 
     if (mailbox->i.highestmodseq < highestmodseq) {
-	mailbox_modseq_dirty(mailbox);
 	/* highestmodseq on replica is dirty - we must go to at least 
 	 * one higher! */
 	syslog(LOG_NOTICE, "SYNCNOTICE: highestmodseq higher on replica %s"
 	       ", updating " MODSEQ_FMT " => " MODSEQ_FMT,
 	       mailbox->name, mailbox->i.highestmodseq, highestmodseq+1);
+	mailbox_modseq_dirty(mailbox);
 	mailbox->i.highestmodseq = highestmodseq+1;
     }
 

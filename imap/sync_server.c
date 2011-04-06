@@ -1348,6 +1348,9 @@ static int do_mailbox(struct dlist *kin)
 				sync_userid, sync_authstate,
 				options, uidvalidity, acl,
 				uniqueid, &mailbox);
+	/* set a highestmodseq of 0 so ALL changes are future
+	 * changes and get applied */
+	mailbox->i.highestmodseq = 0;
     }
     if (r) {
 	syslog(LOG_ERR, "Failed to open mailbox %s to update", mboxname);
@@ -1369,6 +1372,15 @@ static int do_mailbox(struct dlist *kin)
 	return IMAP_SYNC_CHECKSUM;
     }
 
+    /* skip out now, it's going to mismatch for sure! */
+    if (uidvalidity < mailbox->i.uidvalidity) {
+	syslog(LOG_ERR, "higher uidvalidity on replica %s - %u < %u",
+	       mboxname, uidvalidity, mailbox->i.uidvalidity);
+	mailbox_close(&mailbox);
+	return IMAP_SYNC_CHECKSUM;
+    }
+
+    /* skip out now, it's going to mismatch for sure! */
     if (last_uid < mailbox->i.last_uid) {
 	syslog(LOG_ERR, "higher last_uid on replica %s - %u < %u",
 	       mboxname, last_uid, mailbox->i.last_uid);
@@ -1376,6 +1388,7 @@ static int do_mailbox(struct dlist *kin)
 	return IMAP_SYNC_CHECKSUM;
     }
 
+    /* always take the ACL from the master, it's not versioned */
     if (strcmp(mailbox->acl, acl)) {
 	mailbox_set_acl(mailbox, acl, 0);
 	r = mboxlist_sync_setacls(mboxname, acl);
@@ -1402,13 +1415,18 @@ static int do_mailbox(struct dlist *kin)
     mailbox_index_dirty(mailbox);
     assert(mailbox->i.last_uid <= last_uid);
     mailbox->i.last_uid = last_uid;
-    mailbox->i.highestmodseq = highestmodseq;
     mailbox->i.recentuid = recentuid;
     mailbox->i.recenttime = recenttime;
     mailbox->i.last_appenddate = last_appenddate;
     mailbox->i.pop3_last_login = pop3_last_login;
     /* mailbox->i.options = options; ... not really, there's unsyncable stuff in here */
 
+    /* this happens all the time! */
+    if (mailbox->i.highestmodseq < highestmodseq) {
+	mailbox->i.highestmodseq = highestmodseq;
+    }
+
+    /* this happens rarely, so let us know */
     if (mailbox->i.uidvalidity < uidvalidity) {
 	syslog(LOG_ERR, "%s uidvalidity higher on master, updating %u => %u",
 	       mailbox->name, mailbox->i.uidvalidity, uidvalidity);
