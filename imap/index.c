@@ -824,6 +824,7 @@ static int _fetch_setseen(struct index_state *state, uint32_t msgno)
     return 0;
 }
 
+/* seq can be NULL - means "ALL" */
 void index_fetchresponses(struct index_state *state,
 			  struct seqset *seq,
 			  int usinguid,
@@ -838,7 +839,7 @@ void index_fetchresponses(struct index_state *state,
     for (msgno = 1; msgno <= state->exists; msgno++) {
 	im = &state->map[msgno-1];
 	checkval = usinguid ? im->record.uid : msgno;
-	if (!seqset_ismember(seq, checkval))
+	if (seq && !seqset_ismember(seq, checkval))
 	    continue;
 	if (index_fetchreply(state, msgno, fetchargs))
 	    break;
