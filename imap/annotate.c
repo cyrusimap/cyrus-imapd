@@ -71,6 +71,7 @@
 #include "mboxlist.h"
 #include "util.h"
 #include "xmalloc.h"
+#include "ptrarray.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 
@@ -143,6 +144,8 @@ int (*proxy_fetch_func)(const char *server, const char *mbox_pat,
 			const strarray_t *attribute_pat) = NULL;
 int (*proxy_store_func)(const char *server, const char *mbox_pat,
 			struct entryattlist *entryatts) = NULL;
+static ptrarray_t mailbox_entries = PTRARRAY_INITIALIZER;
+static ptrarray_t server_entries = PTRARRAY_INITIALIZER;
 
 static void init_annotation_definitions(void);
 static int annotatemore_findall2(const annotate_cursor_t *cursor,
@@ -1498,7 +1501,7 @@ int annotatemore_fetch(const annotate_scope_t *scope,
     int i;
     struct fetchdata fdata;
     struct glob *g;
-    const annotate_entrydesc_t *non_db_entries;
+    const ptrarray_t *non_db_entries;
     const annotate_entrydesc_t *db_entry;
 
     memset(&fdata, 0, sizeof(struct fetchdata));
@@ -1551,11 +1554,11 @@ int annotatemore_fetch(const annotate_scope_t *scope,
     if (!fdata.attribs) return 0;
 
     if (scope->which == ANNOTATION_SCOPE_SERVER) {
-	non_db_entries = server_builtin_entries;
+	non_db_entries = &server_entries;
 	db_entry = &server_db_entry;
     }
     else if (scope->which == ANNOTATION_SCOPE_MAILBOX) {
-	non_db_entries = mailbox_builtin_entries;
+	non_db_entries = &mailbox_entries;
 	db_entry = &mailbox_db_entry;
     }
     else
@@ -1565,43 +1568,42 @@ int annotatemore_fetch(const annotate_scope_t *scope,
     for (i = 0 ; i < entries->count ; i++)
     {
 	const char *s = entries->data[i];
-	int entrycount;
+	int j;
 	int check_db = 0; /* should we check the db for this entry? */
 
 	g = glob_init(s, GLOB_HIERARCHY);
 	GLOB_SET_SEPARATOR(g, '/');
 
-	for (entrycount = 0;
-	     non_db_entries[entrycount].name;
-	     entrycount++) {
+	for (j = 0 ; j < non_db_entries->count ; j++) {
+	    const annotate_entrydesc_t *desc = non_db_entries->data[j];
 
-	    if (!non_db_entries[entrycount].get)
+	    if (!desc->get)
 		continue;
 
-	    if (GLOB_TEST(g, non_db_entries[entrycount].name) != -1) {
+	    if (GLOB_TEST(g, desc->name) != -1) {
 		/* Add this entry to our list only if it
 		   applies to our particular server type */
-		if ((non_db_entries[entrycount].proxytype != PROXY_ONLY)
+		if ((desc->proxytype != PROXY_ONLY)
 		    || proxy_fetch_func) {
 		    struct annotate_f_entry_list *nentry =
 			xmalloc(sizeof(struct annotate_f_entry_list));
 
 		    nentry->next = fdata.entry_list;
-		    nentry->entry = &(non_db_entries[entrycount]);
+		    nentry->entry = desc;
 		    fdata.entry_list = nentry;
 		}
 	    }
 
-	    if (!strcmp(s, non_db_entries[entrycount].name)) {
+	    if (!strcmp(s, desc->name)) {
 		/* exact match */
-		if (non_db_entries[entrycount].proxytype != PROXY_ONLY) {
+		if (desc->proxytype != PROXY_ONLY) {
 		    fdata.orig_entry = entries;  /* proxy it */
 		}
 		break;
 	    }
 	}
-		
-	if (!non_db_entries[entrycount].name) {
+
+	if (j == non_db_entries->count) {
 	    /* no [exact] match */
 	    fdata.orig_entry = entries;  /* proxy it */
 	    check_db = 1;
@@ -2208,8 +2210,36 @@ done:
     return r;
 }
 
-struct annotate_st_entry_list *server_entries_list = NULL;
-struct annotate_st_entry_list *mailbox_entries_list = NULL;
+static int find_desc_store(const annotate_scope_t *scope,
+			   const char *name,
+			   const annotate_entrydesc_t **descp)
+{
+    const ptrarray_t *descs;
+    const annotate_entrydesc_t *desc;
+    int i;
+
+    if (scope->which == ANNOTATION_SCOPE_SERVER)
+	descs = &server_entries;
+    else if (scope->which == ANNOTATION_SCOPE_MAILBOX)
+	descs = &mailbox_entries;
+    else
+	return IMAP_INTERNAL;
+
+    for (i = 0 ; i < descs->count ; i++) {
+	desc = descs->data[i];
+	if (strcmp(name, desc->name))
+	    continue;
+	if (!desc->set) {
+	    /* read-only annotation */
+	    return IMAP_PERMISSION_DENIED;
+	}
+	*descp = desc;
+	return 0;
+    }
+
+    /* unknown annotation */
+    return IMAP_PERMISSION_DENIED;
+}
 
 int annotatemore_store(const annotate_scope_t *scope,
 		       struct entryattlist *l,
@@ -2222,7 +2252,6 @@ int annotatemore_store(const annotate_scope_t *scope,
     struct entryattlist *e = l;
     struct attvaluelist *av;
     struct storedata sdata;
-    const struct annotate_st_entry_list *entries, *currententry;
 
     memset(&sdata, 0, sizeof(struct storedata));
     sdata.namespace = namespace;
@@ -2230,47 +2259,29 @@ int annotatemore_store(const annotate_scope_t *scope,
     sdata.isadmin = isadmin;
     sdata.auth_state = auth_state;
 
-    if (scope->which == ANNOTATION_SCOPE_SERVER) {
-	entries = server_entries_list;
-    }
-    else if (scope->which == ANNOTATION_SCOPE_MAILBOX) {
-	entries = mailbox_entries_list;
-    }
-    else
-	return IMAP_INTERNAL;
-
     /* Build a list of callbacks for storing the annotations */
     while (e) {
 	int attribs;
+	const annotate_entrydesc_t *desc = NULL;
 	struct annotate_st_entry_list *nentry = NULL;
 
 	/* See if we support this entry */
-	for (currententry = entries;
-	     currententry;
-	     currententry = currententry->next) {
-	    if (!currententry->entry->set)
-		continue;
-	    if (!strcmp(e->entry, currententry->entry->name)) {
-		break;
-	    }
-	}
-	if (!currententry) {
-	    /* unknown annotation */
-	    return IMAP_PERMISSION_DENIED;
-	}
+	r = find_desc_store(scope, e->entry, &desc);
+	if (r)
+	    return r;
 
 	/* Add this entry to our list only if it
 	   applies to our particular server type */
-	if ((currententry->entry->proxytype != PROXY_ONLY)
+	if ((desc->proxytype != PROXY_ONLY)
 	    || proxy_store_func) {
 	    nentry = xzmalloc(sizeof(struct annotate_st_entry_list));
 	    nentry->next = sdata.entry_list;
-	    nentry->entry = currententry->entry;
+	    nentry->entry = desc;
 	    sdata.entry_list = nentry;
 	}
 
 	/* See if we are allowed to set the given attributes. */
-	attribs = currententry->entry->attribs;
+	attribs = desc->attribs;
 	av = e->attvalues;
 	while (av) {
 	    const char *value;
@@ -2280,7 +2291,7 @@ int annotatemore_store(const annotate_scope_t *scope,
 		    goto cleanup;
 		}
 		r = annotate_canon_value(av->value,
-					 currententry->entry->type,
+					 desc->type,
 					 &value);
 		if (r)
 		    goto cleanup;
@@ -2302,7 +2313,7 @@ int annotatemore_store(const annotate_scope_t *scope,
 		    goto cleanup;
 		}
 		r = annotate_canon_value(av->value,
-					 currententry->entry->type,
+					 desc->type,
 					 &value);
 		if (r)
 		    goto cleanup;
@@ -2587,44 +2598,24 @@ static void init_annotation_definitions(void)
     const char *filename;
     char aline[ANNOT_DEF_MAXLINELEN];
     char errbuf[ANNOT_DEF_MAXLINELEN*2];
-    struct annotate_st_entry_list *se, *me;
     annotate_entrydesc_t *ae;
     int i;
     FILE* f;
     int deprecated_warnings = 0;
 
-    /* NOTE: we assume # static entries > 0 */
-    server_entries_list = xmalloc(sizeof(struct annotate_st_entry_list));
-    mailbox_entries_list = xmalloc(sizeof(struct annotate_st_entry_list));
-    se = server_entries_list;
-    me = mailbox_entries_list;
+    /* copy static entries into list */
+    for (i = 0 ; server_builtin_entries[i].name ; i++)
+	ptrarray_append(&server_entries, (void *)&server_builtin_entries[i]);
 
     /* copy static entries into list */
-    for (i = 0; server_builtin_entries[i].name;i++) {
-	se->entry = &server_builtin_entries[i];
-	if (server_builtin_entries[i+1].name) {
-	    se->next = xmalloc(sizeof(struct annotate_st_entry_list));
-	    se = se->next;
-	}
-    }
-
-    /* copy static entries into list */
-    for (i = 0; mailbox_builtin_entries[i].name;i++) {
-	me->entry = &mailbox_builtin_entries[i];
-	if (mailbox_builtin_entries[i+1].name) {
-	    me->next = xmalloc(sizeof(struct annotate_st_entry_list));
-	    me = me->next;
-	}
-    }
+    for (i = 0 ; mailbox_builtin_entries[i].name ; i++)
+	ptrarray_append(&mailbox_entries, (void *)&mailbox_builtin_entries[i]);
 
     /* parse config file */
     filename = config_getstring(IMAPOPT_ANNOTATION_DEFINITIONS);
 
-    if (! filename) {
-	se->next = NULL;
-	me->next = NULL;
+    if (!filename)
 	return;
-    }
   
     f = fopen(filename,"r");
     if (! f) {
@@ -2640,7 +2631,7 @@ static void init_annotation_definitions(void)
 	/* note, we only do the most basic validity checking and may
 	   be more restrictive than neccessary */
 
-	ae = xmalloc(sizeof(*ae));
+	ae = xzmalloc(sizeof(*ae));
 
 	p2 = p;
 	for (; *p && (isalnum(*p) ||
@@ -2657,14 +2648,10 @@ static void init_annotation_definitions(void)
 
 	if (table_lookup(annotation_scope_names, p2, p-p2,
 			 "annotation scope")==ANNOTATION_SCOPE_SERVER) {
-	    se->next = xmalloc(sizeof(struct annotate_st_entry_list));
-	    se = se->next;
-	    se->entry = ae;
+	    ptrarray_append(&server_entries, ae);
 	}
 	else {
-	    me->next = xmalloc(sizeof(struct annotate_st_entry_list));
-	    me = me->next;      
-	    me->entry = ae;
+	    ptrarray_append(&mailbox_entries, ae);
 	}
 
 	p = consume_comma(p);
@@ -2712,6 +2699,4 @@ static void init_annotation_definitions(void)
     }
 
     fclose(f);
-    se->next = NULL;
-    me->next = NULL;
 }
