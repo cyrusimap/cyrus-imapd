@@ -105,15 +105,31 @@ typedef enum {
     PROXY_AND_BACKEND = 3
 } annotation_proxy_t;
 
+enum {
+    ATTRIB_TYPE_STRING,
+    ATTRIB_TYPE_BOOLEAN,
+    ATTRIB_TYPE_UINT,
+    ATTRIB_TYPE_INT
+};
+
 struct fetchdata;
+struct storedata;
+struct annotate_st_entry_list;
+
 typedef struct annotate_entrydesc annotate_entrydesc_t;
 struct annotate_entrydesc
 {
     const char *name;		/* entry name */
+    int type;			/* entry type */
     annotation_proxy_t proxytype; /* mask of allowed server types */
+    int attribs;		/* mask of allowed attributes */
+    int acl;			/* add'l required ACL for .shared */
     void (*get)(const annotate_cursor_t *cursor,
 		const char *name, struct fetchdata *fdata,
 		void *rock);	/* function to get the entry */
+    int (*set)(const annotate_cursor_t *cursor, struct annotate_st_entry_list *entry,
+	       struct storedata *sdata,
+	       void *rock);	/* function to set the entry */
     void *rock;			/* rock passed to get() function */
 };
 
@@ -134,6 +150,27 @@ static int annotatemore_findall2(const annotate_cursor_t *cursor,
 				 annotatemore_find_proc_t proc,
 				 void *rock,
 				 struct txn **tid);
+static int annotation_set_tofile(const annotate_cursor_t *cursor
+				    __attribute__((unused)),
+				 struct annotate_st_entry_list *entry,
+				 struct storedata *sdata,
+				 void *rock);
+static int annotation_set_todb(const annotate_cursor_t *cursor,
+			       struct annotate_st_entry_list *entry,
+			       struct storedata *sdata,
+			       void *rock __attribute__((unused)));
+static int annotation_set_mailboxopt(const annotate_cursor_t *cursor,
+				     struct annotate_st_entry_list *entry,
+				     struct storedata *sdata,
+				     void *rock __attribute__((unused)));
+static int annotation_set_pop3showafter(const annotate_cursor_t *cursor,
+				     struct annotate_st_entry_list *entry,
+				     struct storedata *sdata,
+				     void *rock __attribute__((unused)));
+static int annotation_set_specialuse(const annotate_cursor_t *cursor,
+				     struct annotate_st_entry_list *entry,
+				     struct storedata *sdata,
+				     void *rock __attribute__((unused)));
 
 /* String List Management */
 /*
@@ -1068,46 +1105,274 @@ struct annotate_f_entry_list
     struct annotate_f_entry_list *next;
 };
 
-const annotate_entrydesc_t mailbox_ro_entries[] =
+static const annotate_entrydesc_t mailbox_builtin_entries[] =
 {
-    { "/vendor/cmu/cyrus-imapd/partition", BACKEND_ONLY,
-      annotation_get_partition, NULL },
-    { "/vendor/cmu/cyrus-imapd/server", PROXY_ONLY,
-      annotation_get_server, NULL },
-    { "/vendor/cmu/cyrus-imapd/size", BACKEND_ONLY,
-      annotation_get_size, NULL },
-    { "/vendor/cmu/cyrus-imapd/lastupdate", BACKEND_ONLY,
-      annotation_get_lastupdate, NULL },
-    { "/vendor/cmu/cyrus-imapd/lastpop", BACKEND_ONLY,
-      annotation_get_lastpop, NULL },
-    { "/vendor/cmu/cyrus-imapd/pop3newuidl", BACKEND_ONLY,
-      annotation_get_mailboxopt, NULL },
-    { "/vendor/cmu/cyrus-imapd/sharedseen", BACKEND_ONLY,
-      annotation_get_mailboxopt, NULL },
-    { "/vendor/cmu/cyrus-imapd/duplicatedeliver", BACKEND_ONLY,
-      annotation_get_mailboxopt, NULL },
-    { "/vendor/cmu/cyrus-imapd/pop3showafter", BACKEND_ONLY,
-      annotation_get_pop3showafter, NULL },
-    { "/specialuse", BACKEND_ONLY,
-      annotation_get_specialuse, NULL },
-    { NULL, ANNOTATION_PROXY_T_INVALID, NULL, NULL }
+    {
+	"/check",
+	ATTRIB_TYPE_BOOLEAN,
+	BACKEND_ONLY,
+	ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV,
+	0,
+	annotation_get_fromdb,
+	annotation_set_todb,
+	NULL
+    },{
+	"/checkperiod",
+	ATTRIB_TYPE_UINT,
+	BACKEND_ONLY,
+	ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV,
+	0,
+	annotation_get_fromdb,
+	annotation_set_todb,
+	NULL
+    },{
+	"/comment",
+	ATTRIB_TYPE_STRING,
+	BACKEND_ONLY,
+	ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV,
+	0,
+	annotation_get_fromdb,
+	annotation_set_todb,
+	NULL
+    },{
+	"/sort",
+	ATTRIB_TYPE_STRING,
+	BACKEND_ONLY,
+	ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV,
+	0,
+	annotation_get_fromdb,
+	annotation_set_todb,
+	NULL
+    },{
+	"/specialuse",
+	ATTRIB_TYPE_STRING,
+	BACKEND_ONLY,
+	ATTRIB_VALUE_SHARED,
+	0,
+	annotation_get_specialuse,
+	annotation_set_specialuse,
+	NULL
+    },{
+	"/thread",
+	ATTRIB_TYPE_STRING,
+	BACKEND_ONLY,
+	ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV,
+	0,
+	annotation_get_fromdb,
+	annotation_set_todb,
+	NULL
+    },{
+	"/vendor/cmu/cyrus-imapd/duplicatedeliver",
+	ATTRIB_TYPE_BOOLEAN,
+	BACKEND_ONLY,
+	ATTRIB_VALUE_SHARED,
+	ACL_ADMIN,
+	annotation_get_mailboxopt,
+	annotation_set_mailboxopt,
+	NULL
+    },{
+	"/vendor/cmu/cyrus-imapd/expire",
+	ATTRIB_TYPE_UINT,
+	BACKEND_ONLY,
+	ATTRIB_VALUE_SHARED,
+	ACL_ADMIN,
+	annotation_get_fromdb,
+	annotation_set_todb,
+	NULL
+    },{
+	"/vendor/cmu/cyrus-imapd/lastpop",
+	ATTRIB_TYPE_STRING,
+	BACKEND_ONLY,
+	ATTRIB_VALUE_SHARED,
+	0,
+	annotation_get_lastpop,
+	/*set*/NULL,
+	NULL
+    },{
+	"/vendor/cmu/cyrus-imapd/lastupdate",
+	ATTRIB_TYPE_STRING,
+	BACKEND_ONLY,
+	ATTRIB_VALUE_SHARED,
+	0,
+	annotation_get_lastupdate,
+	/*set*/NULL,
+	NULL
+    },{
+	"/vendor/cmu/cyrus-imapd/news2mail",
+	ATTRIB_TYPE_STRING,
+	BACKEND_ONLY,
+	ATTRIB_VALUE_SHARED,
+	ACL_ADMIN,
+	annotation_get_fromdb,
+	annotation_set_todb,
+	NULL
+    },{
+	"/vendor/cmu/cyrus-imapd/partition",
+	ATTRIB_TYPE_STRING,
+        BACKEND_ONLY,
+	ATTRIB_VALUE_SHARED,
+	0,
+        annotation_get_partition,
+	/*set*/NULL,
+        NULL
+    },{
+	"/vendor/cmu/cyrus-imapd/pop3newuidl",
+	ATTRIB_TYPE_BOOLEAN,
+	BACKEND_ONLY,
+	ATTRIB_VALUE_SHARED,
+	ACL_ADMIN,
+	annotation_get_mailboxopt,
+	annotation_set_mailboxopt,
+	NULL
+    },{
+	"/vendor/cmu/cyrus-imapd/pop3showafter",
+	ATTRIB_TYPE_STRING,
+	BACKEND_ONLY,
+	ATTRIB_VALUE_SHARED,
+	ACL_ADMIN,
+	annotation_get_pop3showafter,
+	annotation_set_pop3showafter,
+	NULL
+    },{
+	"/vendor/cmu/cyrus-imapd/server",
+	ATTRIB_TYPE_STRING,
+	PROXY_ONLY,
+	ATTRIB_VALUE_SHARED,
+	0,
+	annotation_get_server,
+	/*set*/NULL,
+	NULL
+    },{
+	"/vendor/cmu/cyrus-imapd/sharedseen",
+	ATTRIB_TYPE_BOOLEAN,
+	BACKEND_ONLY,
+	ATTRIB_VALUE_SHARED,
+	ACL_ADMIN,
+	annotation_get_mailboxopt,
+	annotation_set_mailboxopt,
+	NULL
+    },{
+	"/vendor/cmu/cyrus-imapd/sieve",
+	ATTRIB_TYPE_STRING,
+	BACKEND_ONLY,
+	ATTRIB_VALUE_SHARED,
+	ACL_ADMIN,
+	annotation_get_fromdb,
+	annotation_set_todb,
+	NULL
+    },{
+	"/vendor/cmu/cyrus-imapd/size",
+	ATTRIB_TYPE_STRING,
+	BACKEND_ONLY,
+	ATTRIB_VALUE_SHARED,
+	0,
+        annotation_get_size,
+	/*set*/NULL,
+	NULL
+    },{
+	"/vendor/cmu/cyrus-imapd/squat",
+	ATTRIB_TYPE_BOOLEAN,
+	BACKEND_ONLY,
+	ATTRIB_VALUE_SHARED,
+	ACL_ADMIN,
+	annotation_get_fromdb,
+	annotation_set_todb,
+	NULL
+    },{ NULL, 0, ANNOTATION_PROXY_T_INVALID, 0, 0, NULL, NULL, NULL }
 };
 
-const annotate_entrydesc_t mailbox_rw_entry =
-    { NULL, BACKEND_ONLY, annotation_get_fromdb, NULL };
+static const annotate_entrydesc_t mailbox_db_entry =
+    {
+	NULL,
+	ATTRIB_TYPE_STRING,
+	BACKEND_ONLY,
+	ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV,
+	0,
+	annotation_get_fromdb,
+	/*set*/NULL,		    /* ??? */
+	NULL
+    };
 
-const annotate_entrydesc_t server_legacy_entries[] =
+static const annotate_entrydesc_t server_builtin_entries[] =
 {
-    { "/motd", PROXY_AND_BACKEND, annotation_get_fromfile, (void *)"motd" },
-    { "/vendor/cmu/cyrus-imapd/shutdown", PROXY_AND_BACKEND,
-      annotation_get_fromfile, (void *)"shutdown" },
-    { "/vendor/cmu/cyrus-imapd/freespace", BACKEND_ONLY,
-      annotation_get_freespace, NULL },
-    { NULL, ANNOTATION_PROXY_T_INVALID, NULL, NULL }
+    {
+	"/admin",
+	ATTRIB_TYPE_STRING,
+	PROXY_AND_BACKEND,
+	ATTRIB_VALUE_SHARED,
+	ACL_ADMIN,
+	annotation_get_fromdb,
+	annotation_set_todb,
+	NULL
+    },{
+	"/comment",
+	ATTRIB_TYPE_STRING,
+	PROXY_AND_BACKEND,
+	ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV,
+	ACL_ADMIN,
+	annotation_get_fromdb,
+	annotation_set_todb,
+	NULL
+    },{
+	"/motd",
+	ATTRIB_TYPE_STRING,
+	PROXY_AND_BACKEND,
+	ATTRIB_VALUE_SHARED,
+	ACL_ADMIN,
+	annotation_get_fromfile,
+	annotation_set_tofile,
+	(void *)"motd"
+    },{
+	"/vendor/cmu/cyrus-imapd/expire",
+	ATTRIB_TYPE_UINT,
+	PROXY_AND_BACKEND,
+	ATTRIB_VALUE_SHARED,
+	ACL_ADMIN,
+	annotation_get_fromdb,
+	annotation_set_todb,
+	NULL
+    },{
+	"/vendor/cmu/cyrus-imapd/freespace",
+	ATTRIB_TYPE_STRING,
+	BACKEND_ONLY,
+	ATTRIB_VALUE_SHARED,
+	0,
+	annotation_get_freespace,
+	/*set*/NULL,
+	NULL
+    },{
+	"/vendor/cmu/cyrus-imapd/shutdown",
+	ATTRIB_TYPE_STRING,
+	PROXY_AND_BACKEND,
+	ATTRIB_VALUE_SHARED,
+	ACL_ADMIN,
+	annotation_get_fromfile,
+	annotation_set_tofile,
+	(void *)"shutdown"
+    },{
+	"/vendor/cmu/cyrus-imapd/squat",
+	ATTRIB_TYPE_BOOLEAN,
+	PROXY_AND_BACKEND,
+	ATTRIB_VALUE_SHARED,
+	ACL_ADMIN,
+	annotation_get_fromdb,
+	annotation_set_todb,
+	NULL
+    },{ NULL, 0, ANNOTATION_PROXY_T_INVALID,
+	0, 0, NULL, NULL, NULL }
 };
 
-const annotate_entrydesc_t server_entry =
-    { NULL, PROXY_AND_BACKEND, annotation_get_fromdb, NULL };
+static const annotate_entrydesc_t server_db_entry =
+    {
+	NULL,
+	ATTRIB_TYPE_STRING,
+	PROXY_AND_BACKEND,
+	ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV,
+	0,
+	annotation_get_fromdb,
+	/*set*/NULL,
+	NULL
+    };
 
 /* Annotation attributes and their flags */
 struct annotate_attrib
@@ -1286,12 +1551,12 @@ int annotatemore_fetch(const annotate_scope_t *scope,
     if (!fdata.attribs) return 0;
 
     if (scope->which == ANNOTATION_SCOPE_SERVER) {
-	non_db_entries = server_legacy_entries;
-	db_entry = &server_entry;
+	non_db_entries = server_builtin_entries;
+	db_entry = &server_db_entry;
     }
     else if (scope->which == ANNOTATION_SCOPE_MAILBOX) {
-	non_db_entries = mailbox_ro_entries;
-	db_entry = &mailbox_rw_entry;
+	non_db_entries = mailbox_builtin_entries;
+	db_entry = &mailbox_db_entry;
     }
     else
 	return IMAP_INTERNAL;
@@ -1309,6 +1574,9 @@ int annotatemore_fetch(const annotate_scope_t *scope,
 	for (entrycount = 0;
 	     non_db_entries[entrycount].name;
 	     entrycount++) {
+
+	    if (!non_db_entries[entrycount].get)
+		continue;
 
 	    if (GLOB_TEST(g, non_db_entries[entrycount].name) != -1) {
 		/* Add this entry to our list only if it
@@ -1546,28 +1814,9 @@ struct storedata {
     struct hash_table server_table;
 };
 
-enum {
-    ATTRIB_TYPE_STRING,
-    ATTRIB_TYPE_BOOLEAN,
-    ATTRIB_TYPE_UINT,
-    ATTRIB_TYPE_INT
-};
-
-struct annotate_st_entry {
-    const char *name;		/* entry name */
-    int type;			/* entry type */
-    annotation_proxy_t proxytype; /* mask of allowed server types */
-    int attribs;		/* mask of allowed attributes */
-    int acl;			/* add'l required ACL for .shared */
-    int (*set)(const annotate_cursor_t *cursor, struct annotate_st_entry_list *entry,
-	       struct storedata *sdata,
-	       void *rock);	/* function to set the entry */
-    void *rock;			/* rock passed to set() function */
-};
-
 struct annotate_st_entry_list
 {
-    const struct annotate_st_entry *entry;
+    const annotate_entrydesc_t *entry;
     struct annotation_data shared;
     struct annotation_data priv;
     int have_shared;
@@ -1960,78 +2209,8 @@ done:
     return r;
 }
 
-const struct annotate_st_entry server_entries[] =
-{
-    { "/comment", ATTRIB_TYPE_STRING, PROXY_AND_BACKEND,
-      ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV,
-      ACL_ADMIN, annotation_set_todb, NULL },
-    { "/motd", ATTRIB_TYPE_STRING, PROXY_AND_BACKEND,
-      ATTRIB_VALUE_SHARED,
-      ACL_ADMIN, annotation_set_tofile, (void *)"motd" },
-    { "/admin", ATTRIB_TYPE_STRING, PROXY_AND_BACKEND,
-      ATTRIB_VALUE_SHARED,
-      ACL_ADMIN, annotation_set_todb, NULL },
-    { "/vendor/cmu/cyrus-imapd/shutdown", ATTRIB_TYPE_STRING, PROXY_AND_BACKEND,
-      ATTRIB_VALUE_SHARED,
-      ACL_ADMIN, annotation_set_tofile, (void *)"shutdown" },
-    { "/vendor/cmu/cyrus-imapd/squat", ATTRIB_TYPE_BOOLEAN, PROXY_AND_BACKEND,
-      ATTRIB_VALUE_SHARED,
-      ACL_ADMIN, annotation_set_todb, NULL },
-    { "/vendor/cmu/cyrus-imapd/expire", ATTRIB_TYPE_UINT, PROXY_AND_BACKEND,
-      ATTRIB_VALUE_SHARED,
-      ACL_ADMIN, annotation_set_todb, NULL },
-    { NULL, 0, ANNOTATION_PROXY_T_INVALID, 0, 0, NULL, NULL }
-};
-
-const struct annotate_st_entry mailbox_rw_entries[] =
-{
-    { "/comment", ATTRIB_TYPE_STRING, BACKEND_ONLY,
-      ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV,
-      0, annotation_set_todb, NULL },
-    { "/sort", ATTRIB_TYPE_STRING, BACKEND_ONLY,
-      ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV,
-      0, annotation_set_todb, NULL },
-    { "/thread", ATTRIB_TYPE_STRING, BACKEND_ONLY,
-      ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV,
-      0, annotation_set_todb, NULL },
-    { "/check", ATTRIB_TYPE_BOOLEAN, BACKEND_ONLY,
-      ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV,
-      0, annotation_set_todb, NULL },
-    { "/checkperiod", ATTRIB_TYPE_UINT, BACKEND_ONLY,
-      ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV,
-      0, annotation_set_todb, NULL },
-    { "/specialuse", ATTRIB_TYPE_STRING, BACKEND_ONLY,
-      ATTRIB_VALUE_SHARED,
-      0, annotation_set_specialuse, NULL },
-    { "/vendor/cmu/cyrus-imapd/squat", ATTRIB_TYPE_BOOLEAN, BACKEND_ONLY,
-      ATTRIB_VALUE_SHARED,
-      ACL_ADMIN, annotation_set_todb, NULL },
-    { "/vendor/cmu/cyrus-imapd/expire", ATTRIB_TYPE_UINT, BACKEND_ONLY,
-      ATTRIB_VALUE_SHARED,
-      ACL_ADMIN, annotation_set_todb, NULL },
-    { "/vendor/cmu/cyrus-imapd/news2mail", ATTRIB_TYPE_STRING, BACKEND_ONLY,
-      ATTRIB_VALUE_SHARED,
-      ACL_ADMIN, annotation_set_todb, NULL },
-    { "/vendor/cmu/cyrus-imapd/sieve", ATTRIB_TYPE_STRING, BACKEND_ONLY,
-      ATTRIB_VALUE_SHARED,
-      ACL_ADMIN, annotation_set_todb, NULL },
-    { "/vendor/cmu/cyrus-imapd/pop3newuidl", ATTRIB_TYPE_BOOLEAN, BACKEND_ONLY,
-      ATTRIB_VALUE_SHARED,
-      ACL_ADMIN, annotation_set_mailboxopt, NULL },
-    { "/vendor/cmu/cyrus-imapd/sharedseen", ATTRIB_TYPE_BOOLEAN, BACKEND_ONLY,
-      ATTRIB_VALUE_SHARED,
-      ACL_ADMIN, annotation_set_mailboxopt, NULL },
-    { "/vendor/cmu/cyrus-imapd/duplicatedeliver", ATTRIB_TYPE_BOOLEAN, BACKEND_ONLY,
-      ATTRIB_VALUE_SHARED,
-      ACL_ADMIN, annotation_set_mailboxopt, NULL },
-    { "/vendor/cmu/cyrus-imapd/pop3showafter", ATTRIB_TYPE_STRING, BACKEND_ONLY,
-      ATTRIB_VALUE_SHARED,
-      ACL_ADMIN, annotation_set_pop3showafter, NULL },
-    { NULL, 0, ANNOTATION_PROXY_T_INVALID, 0, 0, NULL, NULL }
-};
-
 struct annotate_st_entry_list *server_entries_list = NULL;
-struct annotate_st_entry_list *mailbox_rw_entries_list = NULL;
+struct annotate_st_entry_list *mailbox_entries_list = NULL;
 
 int annotatemore_store(const annotate_scope_t *scope,
 		       struct entryattlist *l,
@@ -2056,7 +2235,7 @@ int annotatemore_store(const annotate_scope_t *scope,
 	entries = server_entries_list;
     }
     else if (scope->which == ANNOTATION_SCOPE_MAILBOX) {
-	entries = mailbox_rw_entries_list;
+	entries = mailbox_entries_list;
     }
     else
 	return IMAP_INTERNAL;
@@ -2070,6 +2249,8 @@ int annotatemore_store(const annotate_scope_t *scope,
 	for (currententry = entries;
 	     currententry;
 	     currententry = currententry->next) {
+	    if (!currententry->entry->set)
+		continue;
 	    if (!strcmp(e->entry, currententry->entry->name)) {
 		break;
 	    }
@@ -2408,30 +2589,30 @@ static void init_annotation_definitions(void)
     char aline[ANNOT_DEF_MAXLINELEN];
     char errbuf[ANNOT_DEF_MAXLINELEN*2];
     struct annotate_st_entry_list *se, *me;
-    struct annotate_st_entry *ae;
+    annotate_entrydesc_t *ae;
     int i;
     FILE* f;
     int deprecated_warnings = 0;
 
     /* NOTE: we assume # static entries > 0 */
     server_entries_list = xmalloc(sizeof(struct annotate_st_entry_list));
-    mailbox_rw_entries_list = xmalloc(sizeof(struct annotate_st_entry_list));
+    mailbox_entries_list = xmalloc(sizeof(struct annotate_st_entry_list));
     se = server_entries_list;
-    me = mailbox_rw_entries_list;
+    me = mailbox_entries_list;
 
     /* copy static entries into list */
-    for (i = 0; server_entries[i].name;i++) {
-	se->entry = &server_entries[i];
-	if (server_entries[i+1].name) {
+    for (i = 0; server_builtin_entries[i].name;i++) {
+	se->entry = &server_builtin_entries[i];
+	if (server_builtin_entries[i+1].name) {
 	    se->next = xmalloc(sizeof(struct annotate_st_entry_list));
 	    se = se->next;
 	}
     }
 
     /* copy static entries into list */
-    for (i = 0; mailbox_rw_entries[i].name;i++) {
-	me->entry = &mailbox_rw_entries[i];
-	if (mailbox_rw_entries[i+1].name) {
+    for (i = 0; mailbox_builtin_entries[i].name;i++) {
+	me->entry = &mailbox_builtin_entries[i];
+	if (mailbox_builtin_entries[i+1].name) {
 	    me->next = xmalloc(sizeof(struct annotate_st_entry_list));
 	    me = me->next;
 	}
@@ -2460,7 +2641,7 @@ static void init_annotation_definitions(void)
 	/* note, we only do the most basic validity checking and may
 	   be more restrictive than neccessary */
 
-	ae = xmalloc(sizeof(struct annotate_st_entry));
+	ae = xmalloc(sizeof(*ae));
 
 	p2 = p;
 	for (; *p && (isalnum(*p) ||
@@ -2526,6 +2707,7 @@ static void init_annotation_definitions(void)
 	    fatal(errbuf, EC_CONFIG);
 	}
 
+	ae->get = annotation_get_fromdb;
 	ae->set = annotation_set_todb;
 	ae->rock = NULL;
     }
