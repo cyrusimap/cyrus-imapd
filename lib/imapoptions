@@ -169,7 +169,7 @@ are listed with ``<none>''.
 /* The cyrusdb backend to use for mailbox annotations. */
 
 { "annotation_db_path", NULL, STRING }
-/* The absolute path to the ptscache db file.  If not specified,
+/* The absolute path to the annotations db file.  If not specified,
    will be confdir/annotations.db */
 
 { "anyoneuseracl", 1, SWITCH }
@@ -305,8 +305,8 @@ Blank lines and lines beginning with ``#'' are ignored.
    and sieve. */
 
 { "duplicate_db_path", NULL, STRING }
-/* The absolute path to the ptscache db file.  If not specified,
-   will be confdir/duplicate.db */
+/* The absolute path to the duplicate db file.  If not specified,
+   will be confdir/deliver.db */
 
 { "duplicatesuppression", 1, SWITCH }
 /* If enabled, lmtpd will suppress delivery of a message to a mailbox if
@@ -1267,7 +1267,7 @@ product version in the capabilities */
 
 { "tlscache_db_path", NULL, STRING }
 /* The absolute path to the tlscache db file.  If not specified,
-   will be confdir/tlscache.db */
+   will be confdir/tls_sessions.db */
 
 { "tls_cert_file", NULL, STRING }
 /* File containing the certificate presented for server authentication
@@ -1297,7 +1297,7 @@ product version in the capabilities */
 
 { "userdeny_db_path", NULL, STRING }
 /* The absolute path to the userdeny db file.  If not specified,
-   will be confdir/userdeny.db */
+   will be confdir/user_deny.db */
 
 { "user_folder_limit", 0, INT }
 /* Limit the number of folders a user can create in their INBOX.  
