@@ -5,6 +5,53 @@
 ]>
 <article status="draft">
     <xi:include href="Article_Info.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <section id="sect-Release_Notes-New_Features">
+        <title>New Features</title>
+        <para>
+            The following new features are available in Cyrus IMAP 2.5.
+        </para>
+        <section id="sect-Release_Notes-New_Features-Catchall_Mailbox_for_LMTP">
+            <title>Catchall Mailbox for LMTP</title>
+            <para>
+                Thanks to the work by Carsten Hoeger and Ralf Haferkamp, this new feature enables administrators to configure a target mailbox for mail delivered through LMTP to targetted mailboxes that do not exist.
+            </para>
+            <para>
+                For example, a mail that LMTP would deliver to <literal>user/bovik</literal>, which for the sake of argument does not exist in this example, setting <code>lmtp_catchall_mailbox</code> to <literal>admin</literal> will instead deliver the mail to <literal>user/admin</literal>.
+            </para>
+            <note>
+                <title>Mailbox name, not Email Address</title>
+                <para>
+                    Note that <code>lmtp_catchall_mailbox</code> must be a user mailbox name, not an email address. Also note that the <code>user/</code> namespace indicator as well as the hierarchy separator are to be omitted.
+                </para>
+
+            </note>
+            <formalpara id="form-Release_Notes-Catchall_Mailbox_for_LMTP-Does_this_impact_lmtp_fuzzy_mailbox_match">
+                <title>Does this impact <code>lmtp_fuzzy_mailbox_match</code>?</title>
+                <para>
+                    Environments that have <code>lmtp_fuzzy_mailbox_match</code> enabled, in order to have LMTP seek from the targetted, non-existent mailbox sub-folder (example: <literal>user/bovik/spam/probably</literal>) all the way to the toplevel mailbox folder (i.e. <literal>user/bovik</literal>) until it finds a mailbox (sub-)folder that does exist (example: <literal>user/bovik/spam</literal>), are not impacted by this setting.
+                </para>
+
+            </formalpara>
+            <formalpara id="form-Release_Notes-Catchall_Mailbox_for_LMTP-Can_the_lmtp_catchall_mailbox_include_the_path_to_a_sub_folder_of_a_target_mailbox">
+                <title>Can the <code>lmtp_catchall_mailbox</code> include the path to a sub-folder of a target mailbox?</title>
+                <para>
+                    UNCONFIRMED
+                </para>
+
+            </formalpara>
+            <formalpara id="form-Release_Notes-Catchall_Mailbox_for_LMTP-Can_the_lmtp_catchall_mailbox_be_a_shared_folder">
+                <title>Can the <code>lmtp_catchall_mailbox</code> be a shared folder?</title>
+                <para>
+                    UNCONFIRMED
+                </para>
+
+            </formalpara>
+
+        </section>
+
+
+    </section>
+
     <section id="sect-Release_Notes-Changes_to_Default_Settings">
         <title>Changes to Default Settings</title>
         <para>
@@ -48,6 +95,192 @@ lmtp_downcase_rcpt: 0
 
             </section>
 
+
+        </section>
+
+
+    </section>
+
+    <section id="sect-Release_Notes-Notes_for_Packagers">
+        <title>Notes for Packagers</title>
+        <section id="sect-Release_Notes-Notes_for_Packagers-Services_in_etcservices">
+            <title>Services in <filename>/etc/services</filename></title>
+            <para>
+                Listing named services through <filename>/etc/services</filename> aids in cross-system consistency and cross-platform interoperability. Furthermore, it enables administrators and users to refer to the service by name (for example in <filename>/etc/cyrus.conf</filename>, 'listen=mupdate' can be specified instead of 'listen=3905').
+            </para>
+            <para>
+                Some of the services Cyrus IMAP would like to see available through <filename>/etc/services</filename> have not been assigned an IANA port number, and few have configuration options.
+            </para>
+            <para>
+                The following lists services Cyrus IMAP should have available in <filename>/etc/services</filename>:
+            </para>
+            <para>
+                <itemizedlist>
+                    <listitem>
+                        <formalpara id="form-Release_Notes-Services_in_etcservices-csync">
+                            <title><literal>csync</literal></title>
+                            <para>
+                                The Cyrus IMAP synchronisation server port, for replication clients to connect to.
+                            </para>
+
+                        </formalpara>
+                        <para>
+                            <itemizedlist>
+                                <listitem>
+                                    <para>
+                                        Description: <emphasis>Cyrus IMAP Replication Daemon</emphasis>
+                                    </para>
+
+                                </listitem>
+                                <listitem>
+                                    <para>
+                                        Suggested Port(s): <literal>2005/tcp</literal>
+                                    </para>
+                                    <note>
+                                        <title>Default in <filename>/etc/imapd.conf</filename></title>
+                                        <para>
+                                            While <literal>2005/tcp</literal> is the suggested default port for <literal>csync</literal>, the value of the port number is specified through the <literal>sync_port</literal> option in <filename>/etc/imapd.conf</filename> (generated from <filename>lib/imapoptions</filename>). Note that when changing the suggested port for csync we recommend you also patch <filename>lib/imapoptions</filename> prior to building Cyrus IMAP.
+                                        </para>
+
+                                    </note>
+
+                                </listitem>
+
+                            </itemizedlist>
+
+                        </para>
+
+                    </listitem>
+                    <listitem>
+                        <formalpara id="form-Release_Notes-Services_in_etcservices-lmtp">
+                            <title><literal>lmtp</literal></title>
+                            <para>
+                                Some platforms do not specify the service port for LMTP &ndash;like Solaris and Debian. Fedora-based Linux distributions allocate port 24/tcp for LMTP Mail Delivery, however. Whatever is the port packagers choose to use, please note they should be the same across all platforms deployed in a single environment.
+                            </para>
+
+                        </formalpara>
+                        <para>
+                            <itemizedlist>
+                                <listitem>
+                                    <para>
+                                        Description: <emphasis>LMTP Mail Delivery</emphasis>
+                                    </para>
+
+                                </listitem>
+                                <listitem>
+                                    <para>
+                                        Suggested Port(s): <literal>24/tcp</literal> (Fedora-based platforms), <literal>2003/tcp</literal> (other platforms)
+                                    </para>
+
+                                </listitem>
+
+                            </itemizedlist>
+
+                        </para>
+
+                    </listitem>
+                    <listitem>
+                        <formalpara id="form-Release_Notes-Services_in_etcservices-mupdate">
+                            <title><literal>mupdate</literal></title>
+                            <para>
+                                The Cyrus IMAP Murder Mailbox Update protocol (MUPDATE) ensures mailboxes
+                            </para>
+
+                        </formalpara>
+                        <para>
+                            <itemizedlist>
+                                <listitem>
+                                    <para>
+                                        Description: <emphasis>Mailbox Update (MUPDATE) protocol</emphasis>
+                                    </para>
+
+                                </listitem>
+                                <listitem>
+                                    <para>
+                                        Recommended Port(s): <literal>3905/tcp</literal>
+                                    </para>
+                                    <note>
+                                        <title>Default in <filename>/etc/imapd.conf</filename></title>
+                                        <para>
+                                            <literal>3905/tcp</literal> is the suggested default port for mupdate, as it is the default value specified for the <literal>mupdate_port</literal> option available in <filename>/etc/imapd.conf</filename> (generated from <filename>lib/imapoptions</filename>). Note that when changing the suggested port for mupdate we recommend you also patch <filename>lib/imapoptions</filename> prior to building Cyrus IMAP.
+                                        </para>
+
+                                    </note>
+
+                                </listitem>
+
+                            </itemizedlist>
+
+                        </para>
+
+                    </listitem>
+                    <listitem>
+                        <formalpara id="form-Release_Notes-Services_in_etcservices-sieve">
+                            <title><literal>sieve</literal></title>
+                            <para>
+                                para
+                            </para>
+
+                        </formalpara>
+                        <para>
+                            <itemizedlist>
+                                <listitem>
+                                    <para>
+                                        Description: <emphasis>ManageSieve protocol</emphasis>
+                                    </para>
+
+                                </listitem>
+                                <listitem>
+                                    <para>
+                                        IANA Port: <literal>4190/tcp</literal>
+                                    </para>
+                                    <note>
+                                        <title>Port <literal>2000/tcp</literal></title>
+                                        <para>
+                                            <literal>2000/tcp</literal> is actually <literal>sieve-filter</literal> with description <emphasis>Sieve Mail Filter Daemon</emphasis>.
+                                        </para>
+
+                                    </note>
+
+                                </listitem>
+
+                            </itemizedlist>
+
+                        </para>
+
+                    </listitem>
+                    <listitem>
+                        <formalpara id="form-Release_Notes-Services_in_etcservices-smmap">
+                            <title><literal>smmap</literal></title>
+                            <para>
+                                para
+                            </para>
+
+                        </formalpara>
+                        <para>
+                            <itemizedlist>
+                                <listitem>
+                                    <para>
+                                        Description: <emphasis>Cyrus smmapd (quota check) service</emphasis>
+                                    </para>
+
+                                </listitem>
+                                <listitem>
+                                    <para>
+                                        Suggested Port(s): <literal>/tcp</literal>
+                                    </para>
+
+                                </listitem>
+
+                            </itemizedlist>
+
+                        </para>
+
+                    </listitem>
+
+                </itemizedlist>
+
+            </para>
 
         </section>
 
