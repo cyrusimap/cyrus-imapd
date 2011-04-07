@@ -3131,6 +3131,10 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
     r = mailbox_read_index_header(newmailbox);
     if (r) goto fail;
 
+    /* read in the flags */
+    r = mailbox_read_header(newmailbox, NULL);
+    if (r) goto fail;
+
     /* update uidvalidity */
     newmailbox->i.uidvalidity = time(0);
 
