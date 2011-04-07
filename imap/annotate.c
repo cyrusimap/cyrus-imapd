@@ -2071,33 +2071,47 @@ static int annotation_set_todb(const annotate_cursor_t *cursor,
 	 */
 	int acl = ACL_READ | ACL_WRITE | entry->entry->acl;
 
-	if (!sdata->isadmin &&
-	    (!cursor->int_mboxname[0] || !cursor->mbentry->acl ||
-	     ((cyrus_acl_myrights(sdata->auth_state,
-				  cursor->mbentry->acl) & acl) != acl))) {
-	    return IMAP_PERMISSION_DENIED;
+	if (cursor->which == ANNOTATION_SCOPE_SERVER) {
+	    if (!sdata->isadmin)
+		return IMAP_PERMISSION_DENIED;
+	}
+	else if (cursor->which == ANNOTATION_SCOPE_MAILBOX) {
+	    if (!cursor->int_mboxname[0] || !cursor->mbentry->acl ||
+	        ((cyrus_acl_myrights(sdata->auth_state,
+				     cursor->mbentry->acl) & acl) != acl))
+		return IMAP_PERMISSION_DENIED;
+	    /* Make sure its a local mailbox annotation */
+	    if (cursor->mbentry->server)
+		return 0;
 	}
 
-	/* Make sure its a server or local mailbox annotation */
-	if (!cursor->int_mboxname[0] || !cursor->mbentry->server) {
-	    r = write_entry(cursor->int_mboxname, entry->entry->name, "",
-			    &(entry->shared), &(sdata->tid));
-	}
+	r = write_entry(cursor->int_mboxname,
+			entry->entry->name, "",
+			&(entry->shared), &(sdata->tid));
     }
     if (entry->have_priv) {
-	/* Check ACL
-	 *
+	/* Check ACL */
+
+	if (cursor->which == ANNOTATION_SCOPE_SERVER) {
+	/*
 	 * XXX We don't actually need to check anything here,
 	 * since we don't have any access control for server annotations
-	 * and all we need for private mailbox annotations is ACL_LOOKUP,
+	 */
+	    ;
+	}
+	else if (cursor->which == ANNOTATION_SCOPE_MAILBOX) {
+	/*
+	 * All we need for private mailbox annotations is ACL_LOOKUP,
 	 * and we wouldn't be in this callback without it.
 	 */
-
-	/* Make sure its a server or local mailbox annotation */
-	if (!cursor->int_mboxname[0] || !cursor->mbentry->server) {
-	    r = write_entry(cursor->int_mboxname, entry->entry->name, sdata->userid,
-			    &(entry->priv), &(sdata->tid));
+	    /* Make sure its a local mailbox annotation */
+	    if (cursor->mbentry->server)
+		return 0;
 	}
+
+	r = write_entry(cursor->int_mboxname,
+			entry->entry->name, sdata->userid,
+			&(entry->priv), &(sdata->tid));
     }
 
     return r;
