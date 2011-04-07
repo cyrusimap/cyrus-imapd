@@ -143,7 +143,7 @@ int annotatemore_findall(const char *mailbox, const char *entry,
 /* fetch annotations and output results */
 int annotatemore_fetch(const annotate_scope_t *,
 		       const strarray_t *entries, const strarray_t *attribs,
-		       struct namespace *namespace, int isadmin, char *userid,
+		       struct namespace *namespace, int isadmin, const char *userid,
 		       struct auth_state *auth_state, struct protstream *pout,
 		       int ismetadata, int *maxsize);
 

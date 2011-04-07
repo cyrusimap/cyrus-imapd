@@ -555,7 +555,7 @@ static int annotatemore_findall2(const annotate_cursor_t *cursor,
 struct fetchdata {
     struct namespace *namespace;
     struct protstream *pout;
-    char *userid;
+    const char *userid;
     int isadmin;
     struct auth_state *auth_state;
     struct annotate_f_entry_list *entry_list;
@@ -1537,7 +1537,7 @@ static int fetch_cb(char *name, int matchlen,
 
 int annotatemore_fetch(const annotate_scope_t *scope,
 		       const strarray_t *entries, const strarray_t *attribs,
-		       struct namespace *namespace, int isadmin, char *userid,
+		       struct namespace *namespace, int isadmin, const char *userid,
 		       struct auth_state *auth_state, struct protstream *pout,
 		       int ismetadata, int *maxsizeptr)
 {
