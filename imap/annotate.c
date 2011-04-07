@@ -562,6 +562,7 @@ struct fetchdata {
     unsigned attribs;
     struct entryattlist **entryatts;
     struct hash_table entry_table;
+    unsigned found;
 
     /* For proxies (a null entry_list indicates that we ONLY proxy) */
     /* if these are NULL, we have had a local exact match, and we
@@ -713,25 +714,27 @@ static void output_entryatt(const annotate_cursor_t *cursor, const char *entry,
     }
 
     if (!userid[0]) { /* shared annotation */
-	if ((fdata->attribs & ATTRIB_VALUE_SHARED))
+	if ((fdata->attribs & ATTRIB_VALUE_SHARED)) {
 	    appendattvalue(&attvalues, "value.shared", attrib->value);
+	    fdata->found |= ATTRIB_VALUE_SHARED;
+	}
 
-	/* Base the return of the size attribute on whether or not there is
-	 * an attribute, not whether size is nonzero. */
 	if ((fdata->attribs & ATTRIB_SIZE_SHARED)) {
 	    snprintf(buf, sizeof(buf), SIZE_T_FMT, attrib->size);
 	    appendattvalue(&attvalues, "size.shared", buf);
+	    fdata->found |= ATTRIB_SIZE_SHARED;
 	}
     }
     else { /* private annotation */
-	if ((fdata->attribs & ATTRIB_VALUE_PRIV))
+	if ((fdata->attribs & ATTRIB_VALUE_PRIV)) {
 	    appendattvalue(&attvalues, "value.priv", attrib->value);
+	    fdata->found |= ATTRIB_VALUE_PRIV;
+	}
 
-	/* Base the return of the size attribute on whether or not there is
-	 * an attribute, not whether size is nonzero. */
 	if ((fdata->attribs & ATTRIB_SIZE_PRIV)) {
 	    snprintf(buf, sizeof(buf), SIZE_T_FMT, attrib->size);
 	    appendattvalue(&attvalues, "size.priv", buf);
+	    fdata->found |= ATTRIB_SIZE_PRIV;
 	}
     }
 }
@@ -1117,8 +1120,28 @@ static void annotation_get_fromdb(const annotate_cursor_t *cursor,
 
     rw_rock.cursor = cursor;
     rw_rock.fdata = fdata;
+    fdata->found = 0;
 
     annotatemore_findall2(cursor, entrypat, &rw_cb, &rw_rock, NULL);
+
+    if (fdata->found != fdata->attribs &&
+	(!strchr(entrypat, '%') && !strchr(entrypat, '*'))) {
+	/* some results not found for an explicitly specified entry,
+	 * make sure we emit explicit NILs */
+	struct annotation_data empty = { NULL, 0 };
+	if (!(fdata->found & (ATTRIB_VALUE_PRIV|ATTRIB_SIZE_PRIV)) &&
+	    (fdata->attribs & (ATTRIB_VALUE_PRIV|ATTRIB_SIZE_PRIV))) {
+	    /* store up value.priv and/or size.priv */
+	    output_entryatt(cursor, entrypat, fdata->userid, &empty, fdata);
+	}
+	if (!(fdata->found & (ATTRIB_VALUE_SHARED|ATTRIB_SIZE_SHARED)) &&
+	    (fdata->attribs & (ATTRIB_VALUE_SHARED|ATTRIB_SIZE_SHARED))) {
+	    /* store up value.shared and/or size.shared */
+	    output_entryatt(cursor, entrypat, "", &empty, fdata);
+	}
+	/* flush any stored attribute-value pairs */
+	output_entryatt(NULL, "", "", NULL, fdata);
+    }
 }
 
 struct annotate_f_entry_list
