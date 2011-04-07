@@ -382,6 +382,46 @@ static int make_key(const char *mboxname, const char *entry,
     return keylen;
 }
 
+static int split_key(const char *key, int keysize,
+		     const char **mboxnamep,
+		     const char **entryp,
+		     const char **useridp)
+{
+#define NFIELDS 3
+    const char *fields[NFIELDS];
+    int nfields = 0;
+    const char *p;
+
+    /* paranoia: ensure the last character in the key is
+     * a NUL, which it should be because of the way we
+     * always build keys */
+    if (key[keysize-1])
+	return IMAP_ANNOTATION_BADENTRY;
+    keysize--;
+    /*
+     * paranoia: split the key into fields on NUL characters.
+     * We would use strarray_nsplit() for this, except that
+     * by design that function cannot split on NULs and does
+     * not handle embedded NULs.
+     */
+    fields[nfields++] = key;
+    for (p = key ; (p-key) < keysize ; p++) {
+	if (!*p) {
+	    if (nfields == NFIELDS)
+		return IMAP_ANNOTATION_BADENTRY;
+	    fields[nfields++] = p+1;
+	}
+    }
+    if (nfields != NFIELDS)
+	return IMAP_ANNOTATION_BADENTRY;
+
+    if (mboxnamep) *mboxnamep = fields[0];
+    if (entryp) *entryp = fields[1];
+    if (useridp) *useridp = fields[2];
+    return 0;
+#undef NFIELDS
+}
+
 static int split_attribs(const char *data, int datalen __attribute__((unused)),
 			 struct annotation_data *attrib)
 {
@@ -416,23 +456,27 @@ struct find_rock {
     void *rock;
 };
 
-static int find_p(void *rock, const char *key,
-		int keylen __attribute__((unused)),
+static int find_p(void *rock, const char *key, int keylen,
 		const char *data __attribute__((unused)),
 		int datalen __attribute__((unused)))
 {
     struct find_rock *frock = (struct find_rock *) rock;
-    const char *mboxname, *entry;
+    const char *mboxname, *entry, *userid;
+    int r;
 
-    mboxname = key;
-    entry = mboxname + strlen(mboxname) + 1;
+    r = split_key(key, keylen, &mboxname,
+		  &entry, &userid);
+    if (r < 0)
+	return 0;
 
-    return ((GLOB_TEST(frock->mglob, mboxname) != -1) &&
-	    (GLOB_TEST(frock->eglob, entry) != -1));
+    if (GLOB_TEST(frock->mglob, mboxname) == -1)
+	return 0;
+    if (GLOB_TEST(frock->eglob, entry) == -1)
+	return 0;
+    return 1;
 }
 
-static int find_cb(void *rock, const char *key,
-		   int keylen __attribute__((unused)),
+static int find_cb(void *rock, const char *key, int keylen,
 		   const char *data, int datalen)
 {
     struct find_rock *frock = (struct find_rock *) rock;
@@ -440,9 +484,10 @@ static int find_cb(void *rock, const char *key,
     struct annotation_data attrib;
     int r;
 
-    mboxname = key;
-    entry = mboxname + strlen(mboxname) + 1;
-    userid = entry + strlen(entry) + 1;
+    r = split_key(key, keylen, &mboxname,
+		  &entry, &userid);
+    if (r)
+	return r;
 
     r = split_attribs(data, datalen, &attrib);
 
