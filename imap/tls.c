@@ -1116,18 +1116,23 @@ static int prune_cb(void *rock, const char *id, int idlen,
 /* must be called after cyrus_init */
 int tls_prune_sessions(void)
 {
-    char dbdir[1024];
+    const char *fname = NULL;
+    char *tofree = NULL;
     int ret;
     struct prunerock prock;
 
-   /* create the name of the db file */
-    strlcpy(dbdir, config_dir, sizeof(dbdir));
-    strlcat(dbdir, FNAME_TLSSESSIONS, sizeof(dbdir));
+    fname = config_getstring(IMAPOPT_TLSCACHE_DB_PATH);
 
-    ret = (DB->open)(dbdir, 0, &sessdb);
+   /* create the name of the db file */
+    if (!fname) {
+	tofree = strconcat(config_dir, FNAME_TLSSESSIONS, (char *)NULL);
+	fname = tofree;
+    }
+
+    ret = (DB->open)(fname, 0, &sessdb);
     if (ret != CYRUSDB_OK) {
 	syslog(LOG_ERR, "DBERROR: opening %s: %s",
-	       dbdir, cyrusdb_strerror(ret));
+	       fname, cyrusdb_strerror(ret));
 	return 1;
     }
     else {
@@ -1142,6 +1147,8 @@ int tls_prune_sessions(void)
 	syslog(LOG_NOTICE, "tls_prune: purged %d out of %d entries",
 	       prock.deletions, prock.count);
     }
+
+    free(tofree);
 
     return 0;
 }
