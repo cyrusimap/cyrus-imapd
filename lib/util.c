@@ -801,12 +801,47 @@ unsigned int buf_replace_all(struct buf *buf, const char *match,
     return n;
 }
 
+/*
+ * Compare two struct bufs bytewise.  Returns a number
+ * like strcmp(), suitable for sorting e.g. with qsort(),
+ */
+int buf_cmp(const struct buf *a, const struct buf *b)
+{
+    unsigned len = MIN(a->len, b->len);
+    int r = 0;
+
+    if (len)
+	r = memcmp(a->s, b->s, len);
+
+    if (!r) {
+	if (a->len < b->len)
+	    r = -1;
+	else if (a->len > b->len)
+	    r = 1;
+    }
+
+    return r;
+}
+
 void buf_init(struct buf *buf)
 {
     buf->alloc = 0;
     buf->len = 0;
     buf->flags = 0;
     buf->s = NULL;
+}
+
+/*
+ * Initialise a struct buf to point to read-only data.  The key here is
+ * setting buf->alloc=0 which indicates CoW is in effect, i.e. the data
+ * pointed to needs to be copied should it ever be modified.
+ */
+void buf_init_ro(struct buf *buf, const char *base, int len)
+{
+    buf->alloc = 0;
+    buf->len = len;
+    buf->flags = 0;
+    buf->s = (char *)base;
 }
 
 void buf_free(struct buf *buf)
@@ -817,6 +852,14 @@ void buf_free(struct buf *buf)
     buf->s = NULL;
     buf->len = 0;
     buf->flags = 0;
+}
+
+void buf_move(struct buf *dst, struct buf *src)
+{
+    if (dst->alloc)
+	free(dst->s);
+    *dst = *src;
+    buf_init(src);
 }
 
 char *strconcat(const char *s1, ...)

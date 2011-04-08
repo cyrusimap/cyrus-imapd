@@ -208,8 +208,11 @@ void buf_printf(struct buf *buf, const char *fmt, ...)
     __attribute__((format(printf,2,3)));
 unsigned int buf_replace_all(struct buf *buf, const char *match,
 			     const char *replace);
+int buf_cmp(const struct buf *, const struct buf *);
 void buf_init(struct buf *buf);
+void buf_init_ro(struct buf *buf, const char *base, int len);
 void buf_free(struct buf *buf);
+void buf_move(struct buf *dst, struct buf *src);
 
 /*
  * Given a list of strings, terminated by (char *)NULL,
