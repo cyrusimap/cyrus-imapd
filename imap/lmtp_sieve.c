@@ -871,7 +871,7 @@ int run_sieve(const char *user, const char *domain, const char *mailbox,
 	      sieve_interp_t *interp, deliver_data_t *msgdata)
 {
     char namebuf[MAX_MAILBOX_BUFFER] = "";
-    struct annotation_data attrib;
+    struct buf attrib = BUF_INITIALIZER;
     const char *script = NULL;
     char fname[MAX_MAILBOX_PATH+1];
     sieve_execute_t *bc = NULL;
@@ -887,19 +887,22 @@ int run_sieve(const char *user, const char *domain, const char *mailbox,
 
 	if (annotatemore_lookup(namebuf,
 				"/vendor/cmu/cyrus-imapd/sieve", "",
-				&attrib) != 0 || !attrib.value) {
+				&attrib) != 0 || !attrib.s) {
 	    /* no sieve script annotation */
 	    return 1; /* do normal delivery actions */
 	}
 
-	script = attrib.value;
+	script = attrib.s;
     }
 
     if (sieve_find_script(user, domain, script, fname, sizeof(fname)) != 0 ||
 	sieve_script_load(fname, &bc) != SIEVE_OK) {
+	buf_free(&attrib);
 	/* no sieve script */
 	return 1; /* do normal delivery actions */
     }
+    buf_free(&attrib);
+    script = NULL;
 
     if (user) strlcpy(userbuf, user, sizeof(userbuf));
     if (domain) {

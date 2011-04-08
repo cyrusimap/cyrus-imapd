@@ -572,7 +572,7 @@ static int index_me(char *name, int matchlen __attribute__((unused)),
        /vendor/cmu/cyrus-imapd/squat set to "true" */
     if (use_annot) {
 	char buf[MAX_MAILBOX_BUFFER] = "", *p;
-	struct annotation_data attrib;
+	struct buf attrib = BUF_INITIALIZER;
 	int domainlen = 0;
 
 	if (config_virtdomains && (p = strchr(name, '!')))
@@ -587,7 +587,7 @@ static int index_me(char *name, int matchlen __attribute__((unused)),
 				    &attrib);
 
 	    if (r ||				/* error */
-		attrib.value ||			/* found an entry */
+		attrib.s ||			/* found an entry */
 		!buf[0]) {			/* done recursing */
 		break;
 	    }
@@ -602,8 +602,11 @@ static int index_me(char *name, int matchlen __attribute__((unused)),
 		buf[domainlen] = '\0';
 	}
 
-	if (r || !attrib.value || strcasecmp(attrib.value, "true"))
+	if (r || !attrib.s || strcasecmp(attrib.s, "true")) {
+	    buf_free(&attrib);
 	    return 0;
+	}
+	buf_free(&attrib);
     }
 
     r = index_open(name, NULL, &state);

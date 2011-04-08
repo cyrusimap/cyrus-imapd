@@ -340,7 +340,7 @@ struct sync_annot {
     struct sync_annot *next;
     char *entry;
     char *userid;
-    char *value;
+    struct buf value;
     int mark;
 };
 
@@ -354,7 +354,7 @@ struct sync_annot_list *sync_annot_list_create(void);
 
 void sync_annot_list_add(struct sync_annot_list *l,
 			 const char *entry, const char *userid,
-			 const char *value);
+			 const struct buf *value);
 
 void sync_annot_list_free(struct sync_annot_list **lp);
 

@@ -1461,7 +1461,7 @@ static int do_mailbox(struct dlist *kin)
 
 static int getannotation_cb(const char *mailbox __attribute__((unused)),
 			    const char *entry, const char *userid,
-			    struct annotation_data *attrib,
+			    const struct buf *value,
 			    void *rock)
 {
     const char *mboxname = (char *)rock;
@@ -1471,7 +1471,7 @@ static int getannotation_cb(const char *mailbox __attribute__((unused)),
     dlist_setatom(kl, "MBOXNAME", mboxname);
     dlist_setatom(kl, "ENTRY", entry);
     dlist_setatom(kl, "USERID", userid);
-    dlist_setatom(kl, "VALUE", attrib->value);
+    dlist_setmap(kl, "VALUE", value->s, value->len);
     sync_send_response(kl, sync_out);
     dlist_free(&kl);
 
@@ -1768,7 +1768,9 @@ static int do_annotation(struct dlist *kin)
     struct attvaluelist *attvalues = NULL;
     const char *mboxname = NULL;
     const char *entry = NULL;
-    const char *value = NULL;
+    const char *mapval = NULL;
+    size_t maplen = 0;
+    struct buf value = BUF_INITIALIZER;
     const char *userid = NULL;
     char *name = NULL;
     annotate_scope_t scope;
@@ -1780,15 +1782,18 @@ static int do_annotation(struct dlist *kin)
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getatom(kin, "USERID", &userid))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
-    if (!dlist_getatom(kin, "VALUE", &value))
+    if (!dlist_getmap(kin, "VALUE", &mapval, &maplen))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
+    buf_init_ro(&value, mapval, maplen);
 
     /* annotatemore_store() expects external mailbox names,
        so translate the separator character */
     name = xstrdup(mboxname);
     mboxname_hiersep_toexternal(sync_namespacep, name, 0);
 
-    appendattvalue(&attvalues, *userid ? "value.priv" : "value.shared", value);
+    appendattvalue(&attvalues,
+		   *userid ? "value.priv" : "value.shared",
+		   &value);
     appendentryatt(&entryatts, entry, attvalues);
     annotate_scope_init_mailbox(&scope, name);
     r = annotatemore_store(&scope, entryatts, sync_namespacep,
@@ -1807,6 +1812,7 @@ static int do_unannotation(struct dlist *kin)
     const char *mboxname = NULL;
     const char *entry = NULL;
     const char *userid = NULL;
+    struct buf empty = BUF_INITIALIZER;
     char *name = NULL;
     annotate_scope_t scope;
     int r;
@@ -1823,7 +1829,9 @@ static int do_unannotation(struct dlist *kin)
     name = xstrdup(mboxname);
     mboxname_hiersep_toexternal(sync_namespacep, name, 0);
 
-    appendattvalue(&attvalues, *userid ? "value.priv" : "value.shared", NULL);
+    appendattvalue(&attvalues,
+		   *userid ? "value.priv" : "value.shared",
+		   &empty);
     appendentryatt(&entryatts, entry, attvalues);
     annotate_scope_init_mailbox(&scope, name);
     r = annotatemore_store(&scope, entryatts, sync_namespacep,

@@ -50,6 +50,7 @@
 #include "mboxname.h"
 #include "prot.h"
 #include "cyrusdb.h"
+#include "util.h"
 #include "strarray.h"
 
 /* List of strings, for fetch and search argument blocks */
@@ -63,7 +64,7 @@ struct strlist {
 /* List of attrib-value pairs */
 struct attvaluelist {
     char *attrib;
-    char *value;
+    struct buf value;
     struct attvaluelist *next;
 };
 
@@ -72,11 +73,6 @@ struct entryattlist {
     char *entry;
     struct attvaluelist *attvalues;
     struct entryattlist *next;
-};
-
-struct annotation_data {
-    const char *value;
-    size_t size;
 };
 
 enum {
@@ -122,7 +118,8 @@ void appendstrlist_withdata(struct strlist **l, char *s, void *d, size_t size);
 void freestrlist(struct strlist *l);
 
 /* Attribute Management (also used by ID) */
-void appendattvalue(struct attvaluelist **l, const char *attrib, const char *value);
+void appendattvalue(struct attvaluelist **l, const char *attrib,
+		    const struct buf *value);
 void freeattvalues(struct attvaluelist *l);
 
 /* Entry Management */
@@ -145,7 +142,7 @@ void annotatemore_open(void);
 
 typedef int (*annotatemore_find_proc_t)(const char *mailbox,
 		    const char *entry, const char *userid,
-		    struct annotation_data *attrib, void *rock);
+		    const struct buf *value, void *rock);
 
 /* 'proc'ess all annotations matching 'mailbox' and 'entry' */
 int annotatemore_findall(const char *mailbox, const char *entry,
@@ -161,7 +158,7 @@ int annotatemore_fetch(const annotate_scope_t *,
 
 /* lookup a single annotation and return result */
 int annotatemore_lookup(const char *mboxname, const char *entry,
-			const char *userid, struct annotation_data *attrib);
+			const char *userid, struct buf *value);
 
 /* store annotations */
 int annotatemore_store(const annotate_scope_t *,
@@ -172,8 +169,7 @@ int annotatemore_store(const annotate_scope_t *,
 /* low-level interface for use by mbdump routines */
 int annotatemore_write_entry(const char *mboxname, const char *entry,
 			     const char *userid,
-			     const char *value,
-			     size_t size,
+			     const struct buf *value,
 			     struct txn **tid);
 int annotatemore_commit(struct txn *tid);
 int annotatemore_abort(struct txn *tid);

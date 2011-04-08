@@ -347,27 +347,26 @@ struct dump_annotation_rock
 static int dump_annotations(const char *mailbox __attribute__((unused)),
 			    const char *entry,
 			    const char *userid,
-			    struct annotation_data *attrib, void *rock) 
+			    const struct buf *value, void *rock)
 {
     struct dump_annotation_rock *ctx = (struct dump_annotation_rock *)rock;
 
     /* "A-" userid entry */
     /* entry is delimited by its leading / */
-    unsigned long ename_size = 2 + strlen(userid) +  strlen(entry);
+    char *ename;
     static const char contenttype[] = "text/plain"; /* fake */
 
     /* Transfer all attributes for this annotation, don't transfer size
      * separately since that can be implicitly determined */
-    prot_printf(ctx->pout,
-		" {%ld%s}\r\nA-%s%s (%ld {" SIZE_T_FMT "%s}\r\n%s"
-		" {" SIZE_T_FMT "%s}\r\n%s)",
-		ename_size, (!ctx->tag ? "+" : ""),
-		userid, entry,
-		0L,  /* was modifiedsince */
-		attrib->size, (!ctx->tag ? "+" : ""),
-		attrib->value,
-		strlen(contenttype), (!ctx->tag ? "+" : ""),
-		contenttype);
+
+    ename = strconcat("A-", userid, entry, (char *)NULL);
+    prot_printliteral(ctx->pout, ename, strlen(ename));
+    free(ename);
+
+    prot_printf(ctx->pout, " (%ld ", 0L);  /* was modifiedsince */
+    prot_printliteral(ctx->pout, value->s, value->len);
+    prot_putc(' ', ctx->pout);
+    prot_printliteral(ctx->pout, contenttype, strlen(contenttype));
 
     return 0;
 }
@@ -777,7 +776,7 @@ int undump_mailbox(const char *mbname,
     int sieve_usehomedir = config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR);
     const char *userid = NULL;
     char *annotation = NULL;
-    char *content = NULL;
+    struct buf content = BUF_INITIALIZER;
     char *seen_file = NULL;
     char *mboxkey_file = NULL;
     uquota_t old_quota_used = 0;
@@ -845,7 +844,7 @@ int undump_mailbox(const char *mbname,
 	unsigned long cutoff = ULONG_MAX / 10;
 	unsigned digit, cutlim = ULONG_MAX % 10;
 	annotation = NULL;
-	content = NULL;
+	buf_reset(&content);
 	seen_file = NULL;
 	mboxkey_file = NULL;
 	
@@ -857,7 +856,6 @@ int undump_mailbox(const char *mbname,
 
 	if(!strncmp(file.s, "A-", 2)) {
 	    /* Annotation */
-	    size_t contentsize;
 	    int i;
 	    char *tmpuserid;
 
@@ -889,10 +887,8 @@ int undump_mailbox(const char *mbname,
 		goto done;
 	    }
 
-	    c = getbastring(pin, pout, &data);
+	    c = getbastring(pin, pout, &content);
 	    /* xxx binary */
-	    content = xstrdup(data.s);
-	    contentsize = data.len;
 
 	    if(c != ' ') {
 		r = IMAP_PROTOCOL_ERROR;
@@ -909,14 +905,13 @@ int undump_mailbox(const char *mbname,
 		goto done;
 	    }
 
-	    annotatemore_write_entry(mbname, annotation, tmpuserid, content,
-				     contentsize, NULL);
+	    annotatemore_write_entry(mbname, annotation, tmpuserid,
+				     &content, NULL);
     
 	    free(tmpuserid);
 	    free(annotation);
-	    free(content);
 	    annotation = NULL;
-	    content = NULL;
+	    buf_reset(&content);
 
 	    c = prot_getc(pin);
 	    if(c == ')') break; /* that was the last item */
@@ -1181,7 +1176,7 @@ int undump_mailbox(const char *mbname,
     mailbox_close(&mailbox);
     
     free(annotation);
-    free(content);
+    buf_free(&content);
     free(seen_file);
     free(mboxkey_file);
 

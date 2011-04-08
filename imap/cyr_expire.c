@@ -179,7 +179,7 @@ static int expire(char *name, int matchlen __attribute__((unused)),
     struct mboxlist_entry *mbentry = NULL;
     struct expire_rock *erock = (struct expire_rock *) rock;
     char *buf;
-    struct annotation_data attrib;
+    struct buf attrib = BUF_INITIALIZER;
     int r;
     struct mailbox *mailbox = NULL;
     unsigned numexpunged = 0;
@@ -209,17 +209,15 @@ static int expire(char *name, int matchlen __attribute__((unused)),
      * since mailboxes inherit /vendor/cmu/cyrus-imapd/expire,
      * we need to iterate all the way up to "" (server entry)
      */
-    if (erock->skip_annotate) {
-      /* we don't want to check for annotations, so we didn't find any */
-      attrib.value = 0;
-    }
-    else {
+    if (!erock->skip_annotate) {
         do {
+	    buf_free(&attrib);
 	    r = annotatemore_lookup(buf, "/vendor/cmu/cyrus-imapd/expire", "",
 				    &attrib);
 
 	    if (r ||				/* error */
-	        attrib.value)			/* found an entry */ break;
+	        attrib.s)			/* found an entry */
+	        break;
 
 	} while (mboxname_make_parent(buf));
     }
@@ -232,7 +230,7 @@ static int expire(char *name, int matchlen __attribute__((unused)),
 	return 0;
     }
 
-    if (attrib.value && parse_duration(attrib.value, &expire_seconds)) {
+    if (attrib.s && parse_duration(attrib.s, &expire_seconds)) {
 	/* add mailbox to table */
 	erock->expire_mark = expire_seconds ?
 			     time(0) - expire_seconds : 0 /* never */ ;
@@ -252,6 +250,7 @@ static int expire(char *name, int matchlen __attribute__((unused)),
 		syslog(LOG_ERR, "failed to expire old messages: %s", mailbox->name);
 	}
     }
+    buf_free(&attrib);
 
     erock->messages_seen += mailbox->i.num_records;
 

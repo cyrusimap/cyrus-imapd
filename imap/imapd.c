@@ -2655,7 +2655,7 @@ void cmd_id(char *tag)
 	    }
 	    
 	    /* ok, we're happy enough */
-	    appendattvalue(&params, field.s, arg.s);
+	    appendattvalue(&params, field.s, &arg);
 	}
 
 	if (error || c != ')') {
@@ -2689,12 +2689,12 @@ void cmd_id(char *tag)
 	    /* should we check for and format literals here ??? */
 	    snprintf(logbuf + strlen(logbuf), MAXIDLOGLEN - strlen(logbuf),
 		     " \"%s\" ", pptr->attrib);
-	    if (!strcmp(pptr->value, "NIL"))
+	    if (pptr->value.s == NULL || !strcmp(pptr->value.s, "NIL"))
 		snprintf(logbuf + strlen(logbuf), MAXIDLOGLEN - strlen(logbuf),
 			 "NIL");
 	    else
 		snprintf(logbuf + strlen(logbuf), MAXIDLOGLEN - strlen(logbuf),
-			"\"%s\"", pptr->value);
+			"\"%s\"", pptr->value.s);
 	}
 
 	syslog(LOG_INFO, "client id:%s", logbuf);
@@ -7671,7 +7671,7 @@ static int parse_annotate_store_data(const char *tag,
 			    "%s BAD Missing annotation value\r\n", tag);
 		goto baddata;
 	    }
-	    c = getnstring(imapd_in, imapd_out, &value);
+	    c = getbnstring(imapd_in, imapd_out, &value);
 	    if (c == EOF) {
 		prot_printf(imapd_out,
 			    "%s BAD Missing annotation value\r\n", tag);
@@ -7679,7 +7679,7 @@ static int parse_annotate_store_data(const char *tag,
 	    }
 
 	    /* add the attrib-value pair to the list */
-	    appendattvalue(&attvalues, attrib.s, value.s);
+	    appendattvalue(&attvalues, attrib.s, &value);
 
 	} while (c == ' ');
 
@@ -7754,7 +7754,7 @@ static int parse_metadata_store_data(const char *tag,
 	}
 
 	/* get value */
-	c = getnstring(imapd_in, imapd_out, &value);
+	c = getbnstring(imapd_in, imapd_out, &value);
 	if (c == EOF) {
 	    prot_printf(imapd_out,
 			"%s BAD Missing metadata value\r\n", tag);
@@ -7780,12 +7780,12 @@ static int parse_metadata_store_data(const char *tag,
 	for (entryp = *entryatts; entryp; entryp = entryp->next) {
 	    if (strcmp(entryp->entry, name)) continue;
 	    /* it's a match, have to append! */
-	    appendattvalue(&entryp->attvalues, att, value.s);
+	    appendattvalue(&entryp->attvalues, att, &value);
 	    need_add = 0;
 	    break;
 	}
 	if (need_add) {
-	    appendattvalue(&attvalues, att, value.s);
+	    appendattvalue(&attvalues, att, &value);
 	    appendentryatt(entryatts, name, attvalues);
 	    attvalues = NULL;
 	}

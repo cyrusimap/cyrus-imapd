@@ -1105,13 +1105,13 @@ struct sync_annot_list *sync_annot_list_create(void)
 
 void sync_annot_list_add(struct sync_annot_list *l,
 			 const char *entry, const char *userid,
-			 const char *value)
+			 const struct buf *value)
 {
     struct sync_annot *item = xzmalloc(sizeof(struct sync_annot));
 
     item->entry = xstrdup(entry);
     item->userid = xstrdup(userid);
-    item->value = xstrdup(value);
+    buf_copy(&item->value, value);
     item->mark = 0;
 
     if (l->tail)
@@ -1132,7 +1132,7 @@ void sync_annot_list_free(struct sync_annot_list **lp)
         next = current->next;
         if (current->entry) free(current->entry);
         if (current->userid) free(current->userid);
-        if (current->value) free(current->value);
+        buf_free(&current->value);
         free(current);
         current = next;
     }

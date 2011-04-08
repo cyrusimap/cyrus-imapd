@@ -246,16 +246,17 @@ void freestrlist(struct strlist *l)
 /*
  * Append the 'attrib'/'value' pair to the attvaluelist 'l'.
  */
-void appendattvalue(struct attvaluelist **l, const char *attrib, const char *value)
+void appendattvalue(struct attvaluelist **l,
+		    const char *attrib,
+		    const struct buf *value)
 {
     struct attvaluelist **tail = l;
 
     while (*tail) tail = &(*tail)->next;
 
-    *tail = (struct attvaluelist *)xmalloc(sizeof(struct attvaluelist));
+    *tail = xzmalloc(sizeof(struct attvaluelist));
     (*tail)->attrib = xstrdup(attrib);
-    (*tail)->value = value ? xstrdup(value) : NULL;
-    (*tail)->next = 0;
+    buf_copy(&(*tail)->value, value);
 }
 
 /*
@@ -268,7 +269,7 @@ void freeattvalues(struct attvaluelist *l)
     while (l) {
 	n = l->next;
 	free(l->attrib);
-	free(l->value);
+	buf_free(&l->value);
 	l = n;
     }
 }
@@ -446,7 +447,7 @@ static int split_key(const char *key, int keysize,
 }
 
 static int split_attribs(const char *data, int datalen __attribute__((unused)),
-			 struct annotation_data *attrib)
+			 struct buf *value)
 {
     unsigned long tmp; /* for alignment */
 
@@ -459,10 +460,9 @@ static int split_attribs(const char *data, int datalen __attribute__((unused)),
      * platform.
      */
     memcpy(&tmp, data, sizeof(unsigned long));
-    attrib->size = (size_t) ntohl(tmp);
     data += sizeof(unsigned long); /* skip to value */
 
-    attrib->value = data;
+    buf_init_ro(value, data, ntohl(tmp));
 
     /*
      * In records written by older versions of Cyrus, there will be
@@ -509,7 +509,7 @@ static int find_cb(void *rock, const char *key, int keylen,
     struct find_rock *frock = (struct find_rock *) rock;
     const char *mboxname, *entry, *userid;
     unsigned int uid;
-    struct annotation_data attrib;
+    struct buf value = BUF_INITIALIZER;
     int r;
 
     r = split_key(key, keylen, &mboxname, &uid,
@@ -517,9 +517,9 @@ static int find_cb(void *rock, const char *key, int keylen,
     if (r)
 	return r;
 
-    r = split_attribs(data, datalen, &attrib);
+    r = split_attribs(data, datalen, &value);
 
-    if (!r) r = frock->proc(mboxname, entry, userid, &attrib, frock->rock);
+    if (!r) r = frock->proc(mboxname, entry, userid, &value, frock->rock);
 
     return r;
 }
@@ -625,8 +625,7 @@ static void output_attlist(struct protstream *pout, struct attvaluelist *l)
 
 	prot_printstring(pout, l->attrib);
 	prot_putc(' ', pout);
-	prot_printstring(pout, l->value);
-
+	prot_printmap(pout, l->value.s, l->value.len);
 	l = l->next;
     }
 
@@ -659,7 +658,7 @@ static void output_metalist(struct protstream *pout, struct attvaluelist *l,
 	    /* a little dodgy, but legit here because of limitations on
 	     * valid entry names ... */
 	    prot_printf(pout, "%s%s ", prefix, entry);
-	    prot_printstring(pout, l->value);
+	    prot_printmap(pout, l->value.s, l->value.len);
 	}
 
 	l = l->next;
@@ -676,7 +675,7 @@ static void output_metalist(struct protstream *pout, struct attvaluelist *l,
  * The last entry is flushed by calling with a NULL attrib.
  */
 static void output_entryatt(const annotate_cursor_t *cursor, const char *entry,
-			    const char *userid, struct annotation_data *attrib,
+			    const char *userid, const struct buf *value,
 			    struct fetchdata *fdata)
 {
     const char *mboxname = "";
@@ -687,7 +686,7 @@ static void output_entryatt(const annotate_cursor_t *cursor, const char *entry,
     static uint32_t lastuid;
     static const char *sep;
     char key[MAX_MAILBOX_BUFFER]; /* XXX MAX_MAILBOX_NAME + entry + userid */
-    char buf[100];
+    struct buf buf = BUF_INITIALIZER;
     int vallen;
 
     /* We have to reset before each GETANNOTATION command.
@@ -716,7 +715,7 @@ static void output_entryatt(const annotate_cursor_t *cursor, const char *entry,
      * We also need a way to flush the last cached entry when we're done.
      * Handle it as a dirty hack.
      */
-    if ((!attrib || !cursor || cursor->which != lastwhich ||
+    if ((!value || !cursor || cursor->which != lastwhich ||
 	cursor->uid != lastuid ||
 	strcmp(mboxname, lastname) || strcmp(entry, lastentry))
 	&& attvalues) {
@@ -743,7 +742,7 @@ static void output_entryatt(const annotate_cursor_t *cursor, const char *entry,
 	attvalues = NULL;
     }
     if (!cursor) return;
-    if (!attrib) return;
+    if (!value) return;
 
     lastwhich = cursor->which;
     if (cursor->which == ANNOTATION_SCOPE_MAILBOX ||
@@ -766,7 +765,7 @@ static void output_entryatt(const annotate_cursor_t *cursor, const char *entry,
     if (hash_lookup(key, &(fdata->entry_table))) return;
     hash_insert(key, (void *)0xDEADBEEF, &(fdata->entry_table));
 
-    vallen = attrib->size;
+    vallen = value->len;
     if (fdata->sizeptr && fdata->maxsize < vallen) {
 	/* too big - track the size of the largest */
 	int *sp = fdata->sizeptr;
@@ -776,28 +775,31 @@ static void output_entryatt(const annotate_cursor_t *cursor, const char *entry,
 
     if (!userid[0]) { /* shared annotation */
 	if ((fdata->attribs & ATTRIB_VALUE_SHARED)) {
-	    appendattvalue(&attvalues, "value.shared", attrib->value);
+	    appendattvalue(&attvalues, "value.shared", value);
 	    fdata->found |= ATTRIB_VALUE_SHARED;
 	}
 
 	if ((fdata->attribs & ATTRIB_SIZE_SHARED)) {
-	    snprintf(buf, sizeof(buf), SIZE_T_FMT, attrib->size);
-	    appendattvalue(&attvalues, "size.shared", buf);
+	    buf_reset(&buf);
+	    buf_printf(&buf, "%u", value->len);
+	    appendattvalue(&attvalues, "size.shared", &buf);
 	    fdata->found |= ATTRIB_SIZE_SHARED;
 	}
     }
     else { /* private annotation */
 	if ((fdata->attribs & ATTRIB_VALUE_PRIV)) {
-	    appendattvalue(&attvalues, "value.priv", attrib->value);
+	    appendattvalue(&attvalues, "value.priv", value);
 	    fdata->found |= ATTRIB_VALUE_PRIV;
 	}
 
 	if ((fdata->attribs & ATTRIB_SIZE_PRIV)) {
-	    snprintf(buf, sizeof(buf), SIZE_T_FMT, attrib->size);
-	    appendattvalue(&attvalues, "size.priv", buf);
+	    buf_reset(&buf);
+	    buf_printf(&buf, "%u", value->len);
+	    appendattvalue(&attvalues, "size.priv", &buf);
 	    fdata->found |= ATTRIB_SIZE_PRIV;
 	}
     }
+    buf_free(&buf);
 }
 
 static int annotation_may_fetch(const struct fetchdata *fdata,
@@ -823,22 +825,21 @@ static void annotation_get_fromfile(const annotate_cursor_t *cursor,
 				    void *rock)
 {
     const char *filename = (const char *) rock;
-    char path[MAX_MAILBOX_PATH+1], buf[MAX_MAILBOX_PATH+1], *p;
+    char path[MAX_MAILBOX_PATH+1];
+    struct buf value = BUF_INITIALIZER;
     FILE *f;
-    struct annotation_data attrib;
 
     snprintf(path, sizeof(path), "%s/msg/%s", config_dir, filename);
-    if ((f = fopen(path, "r")) && fgets(buf, sizeof(buf), f)) {
-	if ((p = strchr(buf, '\r'))!=NULL) *p = 0;
-	if ((p = strchr(buf, '\n'))!=NULL) *p = 0;
+    if ((f = fopen(path, "r")) && buf_getline(&value, f)) {
 
-	memset(&attrib, 0, sizeof(attrib));
+	/* TODO: we need a buf_chomp() */
+	if (value.s[value.len-1] == '\r')
+	    buf_truncate(&value, value.len-1);
 
-	attrib.value = buf;
-	attrib.size = strlen(buf);
-	output_entryatt(cursor, entry, "", &attrib, fdata);
+	output_entryatt(cursor, entry, "", &value, fdata);
     }
     if (f) fclose(f);
+    buf_free(&value);
 }
 
 static void annotation_get_freespace(const annotate_cursor_t *cursor,
@@ -847,19 +848,12 @@ static void annotation_get_freespace(const annotate_cursor_t *cursor,
 				     void *rock __attribute__((unused)))
 {
     unsigned long tavail;
-    char value[21];
-    struct annotation_data attrib;
+    struct buf value = BUF_INITIALIZER;
 
     (void) find_free_partition(&tavail);
-
-    if (snprintf(value, sizeof(value), "%lu", tavail) == -1) return;
-
-    memset(&attrib, 0, sizeof(attrib));
-
-    attrib.value = value;
-    attrib.size = strlen(value);
-
-    output_entryatt(cursor, entry, "", &attrib, fdata);
+    buf_printf(&value, "%lu", tavail);
+    output_entryatt(cursor, entry, "", &value, fdata);
+    buf_free(&value);
 }
 
 static void annotation_get_server(const annotate_cursor_t *cursor,
@@ -867,25 +861,21 @@ static void annotation_get_server(const annotate_cursor_t *cursor,
 				  struct fetchdata *fdata,
 				  void *rock __attribute__((unused))) 
 {
-    struct annotation_data attrib;
+    struct buf value = BUF_INITIALIZER;
 
     if(!fdata || !cursor->mbentry)
 	fatal("annotation_get_server called with bad parameters", EC_TEMPFAIL);
-    
-    /* Make sure its a remote mailbox */
-    if (!cursor->mbentry->server) return;
 
     /* Check ACL */
     if (!annotation_may_fetch(fdata, cursor->mbentry, ACL_LOOKUP))
-	return;
+	goto out;
 
-    memset(&attrib, 0, sizeof(attrib));
+    if (cursor->mbentry->server)
+	buf_appendcstr(&value, cursor->mbentry->server);
 
-    attrib.value = cursor->mbentry->server;
-    if (attrib.value)
-	attrib.size = strlen(attrib.value);
-
-    output_entryatt(cursor, entry, "", &attrib, fdata);
+    output_entryatt(cursor, entry, "", &value, fdata);
+out:
+    buf_free(&value);
 }
 
 static void annotation_get_partition(const annotate_cursor_t *cursor,
@@ -893,26 +883,22 @@ static void annotation_get_partition(const annotate_cursor_t *cursor,
 				     struct fetchdata *fdata,
 				     void *rock __attribute__((unused))) 
 {
-    struct annotation_data attrib;
+    struct buf value = BUF_INITIALIZER;
 
     if(!fdata || !cursor->mbentry)
 	fatal("annotation_get_partition called with bad parameters",
 	      EC_TEMPFAIL);
-    
-    /* Make sure its a local mailbox */
-    if (cursor->mbentry->server) return;
 
     /* Check ACL */
     if (!annotation_may_fetch(fdata, cursor->mbentry, ACL_LOOKUP))
-	return;
+	goto out;
 
-    memset(&attrib, 0, sizeof(attrib));
+    if (!cursor->mbentry->server)
+	buf_appendcstr(&value, cursor->mbentry->partition);
 
-    attrib.value = cursor->mbentry->partition;
-    if (attrib.value)
-	attrib.size = strlen(attrib.value);
-
-    output_entryatt(cursor, entry, "", &attrib, fdata);
+    output_entryatt(cursor, entry, "", &value, fdata);
+out:
+    buf_free(&value);
 }
 
 static void annotation_get_size(const annotate_cursor_t *cursor,
@@ -921,34 +907,30 @@ static void annotation_get_size(const annotate_cursor_t *cursor,
 				void *rock __attribute__((unused))) 
 {
     struct mailbox *mailbox = NULL;
-    char value[21];
-    struct annotation_data attrib;
+    struct buf value = BUF_INITIALIZER;
 
     if (!fdata || !cursor->mbentry)
 	fatal("annotation_get_size called with bad parameters",
 	      EC_TEMPFAIL);
     
     /* Make sure its a local mailbox */
-    if (cursor->mbentry->server) return;
+    if (cursor->mbentry->server)
+	goto out;
 
     /* Check ACL */
     if (!annotation_may_fetch(fdata, cursor->mbentry, ACL_LOOKUP|ACL_READ))
-	return;
+	goto out;
 
     if (mailbox_open_irl(cursor->int_mboxname, &mailbox))
-	return;
+	goto out;
 
-    if (snprintf(value, sizeof(value), QUOTA_T_FMT, mailbox->i.quota_mailbox_used) == -1)
-	return;
+    buf_printf(&value, QUOTA_T_FMT, mailbox->i.quota_mailbox_used);
 
     mailbox_close(&mailbox);
 
-    memset(&attrib, 0, sizeof(attrib));
-
-    attrib.value = value;
-    attrib.size = strlen(value);
-
-    output_entryatt(cursor, entry, "", &attrib, fdata);
+    output_entryatt(cursor, entry, "", &value, fdata);
+out:
+    buf_free(&value);
 }
 
 static void annotation_get_lastupdate(const annotate_cursor_t *cursor,
@@ -958,7 +940,7 @@ static void annotation_get_lastupdate(const annotate_cursor_t *cursor,
 {
     struct stat sbuf;
     char valuebuf[RFC3501_DATETIME_MAX+1];
-    struct annotation_data attrib;
+    struct buf value = BUF_INITIALIZER;
     char *fname;
 
     if(!fdata || !cursor->mbentry)
@@ -966,103 +948,97 @@ static void annotation_get_lastupdate(const annotate_cursor_t *cursor,
 	      EC_TEMPFAIL);
     
     /* Make sure its a local mailbox */
-    if (cursor->mbentry->server) return;
+    if (cursor->mbentry->server)
+	goto out;
 
     /* Check ACL */
     if (!annotation_may_fetch(fdata, cursor->mbentry, ACL_LOOKUP|ACL_READ))
-	return;
+	goto out;
 
     fname = mboxname_metapath(cursor->mbentry->partition,
 			      cursor->int_mboxname, META_INDEX, 0);
-    if (!fname) return;
-    if (stat(fname, &sbuf) == -1) return;
-    
+    if (!fname)
+	goto out;
+    if (stat(fname, &sbuf) == -1)
+	goto out;
+
     time_to_rfc3501(sbuf.st_mtime, valuebuf, sizeof(valuebuf));
-    
-    memset(&attrib, 0, sizeof(attrib));
+    buf_appendcstr(&value, valuebuf);
 
-    attrib.value = valuebuf;
-    attrib.size = strlen(valuebuf);
-
-    output_entryatt(cursor, entry, "", &attrib, fdata);
+    output_entryatt(cursor, entry, "", &value, fdata);
+out:
+    buf_free(&value);
 }
 
 static void annotation_get_lastpop(const annotate_cursor_t *cursor,
 				   const char *entry,
 				   struct fetchdata *fdata,
 				   void *rock __attribute__((unused)))
-{ 
-    time_t date;
+{
     struct mailbox *mailbox = NULL;
-    char value[RFC3501_DATETIME_MAX+1];
-    struct annotation_data attrib;
-  
+    char valuebuf[RFC3501_DATETIME_MAX+1];
+    struct buf value = BUF_INITIALIZER;
+
     if(!fdata || !cursor->mbentry)
       fatal("annotation_get_lastpop called with bad parameters",
               EC_TEMPFAIL);
 
     /* Make sure its a local mailbox */
-    if (cursor->mbentry->server) return;
+    if (cursor->mbentry->server)
+	goto out;
 
     /* Check ACL */
     if (!annotation_may_fetch(fdata, cursor->mbentry, ACL_LOOKUP|ACL_READ))
-	return;
+	goto out;
 
     if (mailbox_open_irl(cursor->int_mboxname, &mailbox) != 0)
-	return;
+	goto out;
 
-    date = mailbox->i.pop3_last_login;
+    if (mailbox->i.pop3_last_login) {
+	time_to_rfc3501(mailbox->i.pop3_last_login, valuebuf,
+			sizeof(valuebuf));
+	buf_appendcstr(&value, valuebuf);
+    }
 
     mailbox_close(&mailbox);
 
-    if (date != 0)
-    {
-	time_to_rfc3501(date, value, sizeof(value));
-	attrib.value = value;
-	attrib.size = strlen(value);
-    }
-
-    output_entryatt(cursor, entry, "", &attrib, fdata);
+    output_entryatt(cursor, entry, "", &value, fdata);
+out:
+    buf_free(&value);
 }
 
 static void annotation_get_mailboxopt(const annotate_cursor_t *cursor,
 				      const char *entry,
 				      struct fetchdata *fdata,
 				      void *rock)
-{ 
+{
     struct mailbox *mailbox = NULL;
     uint32_t flag = (unsigned long)rock;
-    char value[40];
-    struct annotation_data attrib;
-  
+    struct buf value = BUF_INITIALIZER;
+
     if (!cursor->int_mboxname || !entry || !fdata || !cursor->mbentry)
 	fatal("annotation_get_mailboxopt called with bad parameters",
 	      EC_TEMPFAIL);
 
     /* Make sure its a local mailbox */
-    if (cursor->mbentry->server) return;
+    if (cursor->mbentry->server)
+	goto out;
 
     /* Check ACL */
     if (!annotation_may_fetch(fdata, cursor->mbentry, ACL_LOOKUP|ACL_READ))
-	return;
+	goto out;
 
     if (mailbox_open_irl(cursor->int_mboxname, &mailbox) != 0)
-	return;
+	goto out;
 
-    if (mailbox->i.options & flag) {
-	strcpy(value, "true");
-    } else {
-	strcpy(value, "false");
-    }
+    buf_appendcstr(&value,
+		   (mailbox->i.options & flag ? "true" : "false"));
 
     mailbox_close(&mailbox);
 
-    memset(&attrib, 0, sizeof(attrib));
-
-    attrib.value = value;
-    attrib.size = strlen(value);
-
-    output_entryatt(cursor, entry, "", &attrib, fdata);
+    output_entryatt(cursor, entry, "", &value, fdata);
+out:
+    buf_free(&value);
 }
 
 static void annotation_get_pop3showafter(const annotate_cursor_t *cursor,
@@ -1071,38 +1047,35 @@ static void annotation_get_pop3showafter(const annotate_cursor_t *cursor,
 				        void *rock __attribute__((unused)))
 {
     struct mailbox *mailbox = NULL;
-    time_t date;
-    char value[RFC3501_DATETIME_MAX+1];
-    struct annotation_data attrib;
+    char valuebuf[RFC3501_DATETIME_MAX+1];
+    struct buf value = BUF_INITIALIZER;
 
     if(!cursor->int_mboxname || !entry || !fdata || !cursor->mbentry)
       fatal("annotation_get_pop3showafter called with bad parameters",
               EC_TEMPFAIL);
 
     /* Make sure its a local mailbox */
-    if (cursor->mbentry->server) return;
+    if (cursor->mbentry->server)
+	goto out;
 
     /* Check ACL */
     if (!annotation_may_fetch(fdata, cursor->mbentry, ACL_LOOKUP|ACL_READ))
-	return;
+	goto out;
 
     if (mailbox_open_irl(cursor->int_mboxname, &mailbox) != 0)
-      return;
+	goto out;
 
-    date = mailbox->i.pop3_show_after;
+    if (mailbox->i.pop3_show_after)
+    {
+	time_to_rfc3501(mailbox->i.pop3_show_after, valuebuf, sizeof(valuebuf));
+	buf_appendcstr(&value, valuebuf);
+    }
 
     mailbox_close(&mailbox);
 
-    memset(&attrib, 0, sizeof(attrib));
-
-    if (date != 0)
-    {
-	time_to_rfc3501(date, value, sizeof(value));
-	attrib.value = value;
-	attrib.size = strlen(value);
-    }
-
-    output_entryatt(cursor, entry, "", &attrib, fdata);
+    output_entryatt(cursor, entry, "", &value, fdata);
+out:
+    buf_free(&value);
 }
 
 static void annotation_get_specialuse(const annotate_cursor_t *cursor,
@@ -1110,28 +1083,26 @@ static void annotation_get_specialuse(const annotate_cursor_t *cursor,
 				      struct fetchdata *fdata,
 				      void *rock __attribute__((unused)))
 {
-    struct annotation_data attrib;
+    struct buf value = BUF_INITIALIZER;
 
     if (!cursor->int_mboxname || !fdata || !cursor->mbentry)
 	fatal("annotation_get_lastupdate called with bad parameters",
 	      EC_TEMPFAIL);
 
     /* Make sure its a local mailbox */
-    if (cursor->mbentry->server) return;
+    if (cursor->mbentry->server)
+	goto out;
 
     /* Check ACL */
     if (!annotation_may_fetch(fdata, cursor->mbentry, ACL_LOOKUP|ACL_READ))
-	return;
+	goto out;
 
-    if (!cursor->mbentry->specialuse)
-	return;
+    if (cursor->mbentry->specialuse)
+	buf_appendcstr(&value, cursor->mbentry->specialuse);
 
-    memset(&attrib, 0, sizeof(attrib));
-
-    attrib.value = cursor->mbentry->specialuse;
-    attrib.size = strlen(cursor->mbentry->specialuse);
-
-    output_entryatt(cursor, entry, "", &attrib, fdata);
+    output_entryatt(cursor, entry, "", &value, fdata);
+out:
+    buf_free(&value);
 }
 
 struct rw_rock {
@@ -1141,12 +1112,12 @@ struct rw_rock {
 
 static int rw_cb(const char *mailbox __attribute__((unused)),
 		 const char *entry, const char *userid,
-		 struct annotation_data *attrib, void *rock)
+		 const struct buf *value, void *rock)
 {
     struct rw_rock *rw_rock = (struct rw_rock *) rock;
 
     if (!userid[0] || !strcmp(userid, rw_rock->fdata->userid)) {
-	output_entryatt(rw_rock->cursor, entry, userid, attrib,
+	output_entryatt(rw_rock->cursor, entry, userid, value,
 			rw_rock->fdata);
     }
 
@@ -1189,7 +1160,7 @@ static void annotation_get_fromdb(const annotate_cursor_t *cursor,
 	(!strchr(entrypat, '%') && !strchr(entrypat, '*'))) {
 	/* some results not found for an explicitly specified entry,
 	 * make sure we emit explicit NILs */
-	struct annotation_data empty = { NULL, 0 };
+	struct buf empty = BUF_INITIALIZER;
 	if (!(fdata->found & (ATTRIB_VALUE_PRIV|ATTRIB_SIZE_PRIV)) &&
 	    (fdata->attribs & (ATTRIB_VALUE_PRIV|ATTRIB_SIZE_PRIV))) {
 	    /* store up value.priv and/or size.priv */
@@ -1894,13 +1865,13 @@ int annotatemore_fetch(const annotate_scope_t *scope,
 /**************************  Annotation Storing  *****************************/
 
 int annotatemore_lookup(const char *mboxname, const char *entry,
-			const char *userid, struct annotation_data *attrib)
+			const char *userid, struct buf *attrib)
 {
     char key[MAX_MAILBOX_PATH+1];
     int keylen, datalen, r;
     const char *data;
 
-    memset(attrib, 0, sizeof(struct annotation_data));
+    memset(attrib, 0, sizeof(*attrib));
 
     keylen = make_key(mboxname, 0, entry, userid, key, sizeof(key));
 
@@ -1920,7 +1891,7 @@ static int write_entry(const char *mboxname,
 		       unsigned int uid,
 		       const char *entry,
 		       const char *userid,
-		       const struct annotation_data *attrib,
+		       const struct buf *value,
 		       struct txn **tid)
 {
     char key[MAX_MAILBOX_PATH+1];
@@ -1928,7 +1899,7 @@ static int write_entry(const char *mboxname,
 
     keylen = make_key(mboxname, uid, entry, userid, key, sizeof(key));
 
-    if (attrib->value == NULL) {
+    if (value->s == NULL) {
 	do {
 	    r = DB->delete(anndb, key, keylen, tid, 0);
 	} while (r == CYRUSDB_AGAIN);
@@ -1938,10 +1909,10 @@ static int write_entry(const char *mboxname,
 	unsigned long l;
 	static const char contenttype[] = "text/plain"; /* fake */
 
-	l = htonl(attrib->size);
+	l = htonl(value->len);
 	buf_appendmap(&data, (const char *)&l, sizeof(l));
 
-	buf_appendmap(&data, attrib->value, attrib->size);
+	buf_appendmap(&data, value->s, value->len);
 	buf_putc(&data, '\0');
 
 	/*
@@ -1968,16 +1939,10 @@ static int write_entry(const char *mboxname,
 
 int annotatemore_write_entry(const char *mboxname, const char *entry,
 			     const char *userid,
-			     const char *value,
-			     size_t size,
+			     const struct buf *value,
 			     struct txn **tid)
 {
-    struct annotation_data theentry;
-
-    theentry.size = (value ? size : 0);
-    theentry.value = value;
-
-    return write_entry(mboxname, 0, entry, userid, &theentry, tid);
+    return write_entry(mboxname, 0, entry, userid, value, tid);
 }
 
 int annotatemore_commit(struct txn *tid) {
@@ -2008,23 +1973,20 @@ struct storedata {
 struct annotate_st_entry_list
 {
     const annotate_entrydesc_t *entry;
-    struct annotation_data shared;
-    struct annotation_data priv;
+    struct buf shared;
+    struct buf priv;
     int have_shared;
     int have_priv;
 
     struct annotate_st_entry_list *next;
 };
 
-static int annotate_canon_value(const char *value, int type,
-				const char **canon)
+static int annotate_canon_value(struct buf *value, int type)
 {
     char *p = NULL;
 
-    *canon = value;
-
     /* check for NIL */
-    if (value == NULL)
+    if (value->s == NULL)
 	return 0;
 
     switch (type) {
@@ -2034,19 +1996,27 @@ static int annotate_canon_value(const char *value, int type,
 
     case ATTRIB_TYPE_BOOLEAN:
 	/* make sure its "true" or "false" */
-	if (!strcasecmp(value, "true")) *canon = "true";
-	else if (!strcasecmp(value, "false")) *canon = "false";
+	if (!strcasecmp(value->s, "true")) {
+	    buf_reset(value);
+	    buf_appendcstr(value, "true");
+	}
+	else if (!strcasecmp(value->s, "false")) {
+	    buf_reset(value);
+	    buf_appendcstr(value, "false");
+	}
 	else return IMAP_ANNOTATION_BADVALUE;
 	break;
 
     case ATTRIB_TYPE_UINT:
 	/* make sure its a valid ulong ( >= 0 ) */
 	errno = 0;
-	strtoul(value, &p, 10);
-	if ((p == value)		/* no value */
+	strtoul(value->s, &p, 10);
+	if ((p == value->s)		/* no value */
 	    || (*p != '\0')		/* illegal char */
+	    || (unsigned)(p - value->s) != value->len
+					/* embedded NUL */
 	    || errno			/* overflow */
-	    || strchr(value, '-')) {	/* negative number */
+	    || strchr(value->s, '-')) {	/* negative number */
 	    return IMAP_ANNOTATION_BADVALUE;
 	}
 	break;
@@ -2054,9 +2024,11 @@ static int annotate_canon_value(const char *value, int type,
     case ATTRIB_TYPE_INT:
 	/* make sure its a valid long */
 	errno = 0;
-	strtol(value, &p, 10);
-	if ((p == value)		/* no value */
+	strtol(value->s, &p, 10);
+	if ((p == value->s)		/* no value */
 	    || (*p != '\0')		/* illegal char */
+	    || (unsigned)(p - value->s) != value->len
+					/* embedded NUL */
 	    || errno) {			/* underflow/overflow */
 	    return IMAP_ANNOTATION_BADVALUE;
 	}
@@ -2192,10 +2164,11 @@ static int annotation_set_tofile(const annotate_cursor_t *cursor
     snprintf(path, sizeof(path), "%s/msg/%s", config_dir, filename);
 
     /* XXX how do we do this atomically with other annotations? */
-    if (entry->shared.value == NULL)
+    if (entry->shared.s == NULL)
 	return unlink(path);
     else if ((f = fopen(path, "w"))) {
-	fprintf(f, "%s\n", entry->shared.value);
+	fwrite(entry->shared.s, 1, entry->shared.len, f);
+	fputc('\n', f);
 	return fclose(f);
     }
 
@@ -2289,8 +2262,8 @@ static int annotation_set_mailboxopt(const annotate_cursor_t *cursor,
 
     newopts = mailbox->i.options;
 
-    if (entry->shared.value &&
-	!strcmp(entry->shared.value, "true")) {
+    if (entry->shared.s &&
+	!strcmp(entry->shared.s, "true")) {
 	newopts |= flag;
     } else {
 	newopts &= ~flag;
@@ -2320,12 +2293,12 @@ static int annotation_set_pop3showafter(const annotate_cursor_t *cursor,
     if (!annotation_may_store(sdata, cursor->mbentry, ACL_LOOKUP|ACL_WRITE))
 	return IMAP_PERMISSION_DENIED;
 
-    if (entry->shared.value == NULL) {
+    if (entry->shared.s == NULL) {
 	/* Effectively removes the annotation */
 	date = 0;
     }
     else {
-	r = time_from_rfc3501(entry->shared.value, &date);
+	r = time_from_rfc3501(entry->shared.s, &date);
 	if (r < 0)
 	    return IMAP_PROTOCOL_BAD_PARAMETERS;
     }
@@ -2367,16 +2340,16 @@ static int annotation_set_specialuse(const annotate_cursor_t *cursor,
     if (!annotation_may_store(sdata, cursor->mbentry, ACL_LOOKUP|ACL_WRITE))
 	return IMAP_PERMISSION_DENIED;
 
-    if (entry->shared.value == NULL) {
+    if (entry->shared.s == NULL) {
 	/* Effectively removes the annotation */
 	val = NULL;
     }
     else {
 	for (i = 0; valid_specialuse[i]; i++) {
-	    if (!strcasecmp(valid_specialuse[i], entry->shared.value))
+	    if (!strcasecmp(valid_specialuse[i], entry->shared.s))
 		break;
 	    /* or without the leading '\' */
-	    if (!strcasecmp(valid_specialuse[i]+1, entry->shared.value))
+	    if (!strcasecmp(valid_specialuse[i]+1, entry->shared.s))
 		break;
 	}
 	val = valid_specialuse[i];
@@ -2389,7 +2362,7 @@ static int annotation_set_specialuse(const annotate_cursor_t *cursor,
 
 		for (i = 0; i < specialuse_extra->count; i++) {
 		    const char * extra_val = strarray_nth(specialuse_extra, i);
-		    if (!strcasecmp(extra_val, entry->shared.value)) {
+		    if (!strcasecmp(extra_val, entry->shared.s)) {
 			/* strarray owns string, keep specialuse_extra until after set call */
 			val = extra_val;
 			break;
@@ -2488,20 +2461,17 @@ int annotatemore_store(const annotate_scope_t *scope,
 	attribs = desc->attribs;
 	av = e->attvalues;
 	while (av) {
-	    const char *value;
 	    if (!strcmp(av->attrib, "value.shared")) {
 		if (!(attribs & ATTRIB_VALUE_SHARED)) {
 		    r = IMAP_PERMISSION_DENIED;
 		    goto cleanup;
 		}
-		r = annotate_canon_value(av->value,
-					 desc->type,
-					 &value);
+		r = annotate_canon_value(&av->value,
+					 desc->type);
 		if (r)
 		    goto cleanup;
 		if (nentry) {
-		    nentry->shared.value = value;
-		    nentry->shared.size = value ? strlen(value) : 0;
+		    buf_init_ro(&nentry->shared, av->value.s, av->value.len);
 		    nentry->have_shared = 1;
 		}
 	    }
@@ -2516,14 +2486,12 @@ int annotatemore_store(const annotate_scope_t *scope,
 		    r = IMAP_PERMISSION_DENIED;
 		    goto cleanup;
 		}
-		r = annotate_canon_value(av->value,
-					 desc->type,
-					 &value);
+		r = annotate_canon_value(&av->value,
+					 desc->type);
 		if (r)
 		    goto cleanup;
 		if (nentry) {
-		    nentry->priv.value = value;
-		    nentry->priv.size = value ? strlen(value) : 0;
+		    buf_init_ro(&nentry->priv, av->value.s, av->value.len);
 		    nentry->have_priv = 1;
 		}
 	    }
@@ -2665,7 +2633,7 @@ struct rename_rock {
 };
 
 static int rename_cb(const char *mailbox, const char *entry,
-		     const char *userid, struct annotation_data *attrib,
+		     const char *userid, const struct buf *value,
 		     void *rock)
 {
     struct rename_rock *rrock = (struct rename_rock *) rock;
@@ -2678,17 +2646,17 @@ static int rename_cb(const char *mailbox, const char *entry,
 	    !strcmp(rrock->olduserid, userid)) {
 	    /* renaming a user, so change the userid for priv annots */
 	    r = write_entry(rrock->newmboxname, 0, entry, rrock->newuserid,
-			    attrib, &rrock->tid);
+			    value, &rrock->tid);
 	}
 	else {
 	    r = write_entry(rrock->newmboxname, 0, entry, userid,
-			    attrib, &rrock->tid);
+			    value, &rrock->tid);
 	}
     }
 
     if (!r) {
 	/* delete existing entry */
-	struct annotation_data dattrib = { NULL, 0 };
+	struct buf dattrib = BUF_INITIALIZER;
 	r = write_entry(mailbox, 0, entry, userid, &dattrib, &rrock->tid);
     }
 
