@@ -299,6 +299,46 @@ static void test_copy(void)
 #undef WORD1
 }
 
+static void test_move(void)
+{
+#define WORD0	"lorem"
+#define WORD1	"ipsummma"
+    struct buf b = BUF_INITIALIZER;
+    struct buf b2 = BUF_INITIALIZER;
+    const char *s;
+
+    CU_ASSERT_EQUAL(b.len, 0);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT_PTR_NULL(b.s);
+
+    CU_ASSERT_EQUAL(b2.len, 0);
+    CU_ASSERT(b2.alloc >= b2.len);
+    CU_ASSERT_EQUAL(buf_len(&b2), b2.len);
+    CU_ASSERT_PTR_NULL(b2.s);
+
+    buf_setmap(&b, WORD0, sizeof(WORD0)-1);
+    buf_setmap(&b2, WORD1, sizeof(WORD1)-1);
+    buf_move(&b, &b2);
+
+    CU_ASSERT_EQUAL(b.len, sizeof(WORD1)-1);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    s = buf_cstring(&b);
+    CU_ASSERT_STRING_EQUAL(s, WORD1);
+
+    CU_ASSERT_EQUAL(b2.len, 0);
+    CU_ASSERT_EQUAL(buf_len(&b2), b2.len);
+    CU_ASSERT_EQUAL(b2.alloc, 0);
+    CU_ASSERT_PTR_NULL(b2.s);
+
+    buf_free(&b);
+    buf_free(&b2);
+#undef WORD0
+#undef WORD1
+}
+
 static void test_printf(void)
 {
 #define WORD0	"lorem"
@@ -614,5 +654,110 @@ static void test_truncate(void)
 #undef WORD1
 }
 
-/* TODO: test the Copy-On-Write feature of buf_ensure()...if anyone
- * actually uses it */
+static void test_cmp(void)
+{
+/* words chosen to be in alphabetical order */
+#define WORD0		"alpha"
+#define WORD0SUB	"alp"
+#define WORD1		"omega"
+    struct buf a = BUF_INITIALIZER;
+    struct buf b = BUF_INITIALIZER;
+    int d;
+
+    /* compare two empty (null) bufs */
+    CU_ASSERT_PTR_NULL(a.s);
+    CU_ASSERT_EQUAL(a.len, 0);
+    CU_ASSERT_PTR_NULL(b.s);
+    CU_ASSERT_EQUAL(b.len, 0);
+    d = buf_cmp(&a, &b);
+    CU_ASSERT_EQUAL(d, 0);
+    d = buf_cmp(&b, &a);
+    CU_ASSERT_EQUAL(d, 0);
+
+    /* compare empty (null) vs empty (zero-length) */
+    buf_appendcstr(&b, "foo");
+    buf_truncate(&b, 0);
+    CU_ASSERT_PTR_NULL(a.s);
+    CU_ASSERT_EQUAL(a.len, 0);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    CU_ASSERT_EQUAL(b.len, 0);
+    d = buf_cmp(&a, &b);
+    CU_ASSERT_EQUAL(d, 0);
+    d = buf_cmp(&b, &a);
+    CU_ASSERT_EQUAL(d, 0);
+
+    /* compare identical strings */
+    buf_reset(&a);
+    buf_appendcstr(&a, WORD0);
+    buf_reset(&b);
+    buf_appendcstr(&b, WORD0);
+    CU_ASSERT_PTR_NOT_NULL(a.s);
+    CU_ASSERT_EQUAL(a.len, sizeof(WORD0)-1);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    CU_ASSERT_EQUAL(b.len, sizeof(WORD0)-1);
+    d = buf_cmp(&a, &b);
+    CU_ASSERT_EQUAL(d, 0);
+    d = buf_cmp(&b, &a);
+    CU_ASSERT_EQUAL(d, 0);
+
+    /* compare different strings */
+    buf_reset(&a);
+    buf_appendcstr(&a, WORD0);
+    buf_reset(&b);
+    buf_appendcstr(&b, WORD1);
+    CU_ASSERT_PTR_NOT_NULL(a.s);
+    CU_ASSERT_EQUAL(a.len, sizeof(WORD0)-1);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    CU_ASSERT_EQUAL(b.len, sizeof(WORD1)-1);
+    d = buf_cmp(&a, &b);
+    CU_ASSERT(d < 0);
+    d = buf_cmp(&b, &a);
+    CU_ASSERT(d > 0);
+
+    /* compare different strings where one is
+     * an initial subset of the other */
+    buf_reset(&a);
+    buf_appendcstr(&a, WORD0SUB);
+    buf_reset(&b);
+    buf_appendcstr(&b, WORD0);
+    CU_ASSERT_PTR_NOT_NULL(a.s);
+    CU_ASSERT_EQUAL(a.len, sizeof(WORD0SUB)-1);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    CU_ASSERT_EQUAL(b.len, sizeof(WORD0)-1);
+    d = buf_cmp(&a, &b);
+    CU_ASSERT(d < 0);
+    d = buf_cmp(&b, &a);
+    CU_ASSERT(d > 0);
+
+    buf_free(&a);
+    buf_free(&b);
+#undef WORD0
+#undef WORD0SUB
+#undef WORD1
+}
+
+static void test_cow(void)
+{
+    static const char DATA0[] = "LoRem";
+    struct buf b = BUF_INITIALIZER;
+
+    CU_ASSERT_EQUAL(b.len, 0);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT_PTR_NULL(b.s);
+
+    buf_init_ro(&b, DATA0, sizeof(DATA0)-1);
+    CU_ASSERT_EQUAL(b.len, sizeof(DATA0)-1);
+    CU_ASSERT_EQUAL(b.alloc, 0);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT_PTR_EQUAL(b.s, (char *)DATA0);
+
+    buf_putc(&b, 'X');
+    CU_ASSERT_EQUAL(b.len, sizeof(DATA0)-1+1);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT_PTR_NOT_EQUAL(b.s, (char *)DATA0);
+
+    buf_free(&b);
+}
+
