@@ -2353,6 +2353,34 @@ void index_tellchanges(struct index_state *state, int canexpunge,
 	    index_printflags(state, msgno, printuid, printmodseq);
     }
 }
+
+/*
+ * Helper function to send FETCH data for the ANNOTATION
+ * fetch item.
+ */
+static int index_fetchannotations(struct index_state *state,
+				  uint32_t msgno,
+				  const struct fetchargs *fetchargs)
+{
+    annotate_scope_t scope;
+    int r = 0;
+
+    annotate_scope_init_message(&scope, state->mailbox,
+				state->map[msgno-1].record.uid);
+
+    r = annotatemore_fetch(&scope,
+			   &fetchargs->entries,
+			   &fetchargs->attribs,
+			   fetchargs->namespace,
+			   fetchargs->isadmin,
+			   fetchargs->userid,
+			   fetchargs->authstate,
+			   state->out,
+			   0, 0);
+
+    return r;
+}
+
 /*
  * Helper function to send * FETCH (FLAGS data.
  * Does not send the terminating close paren or CRLF.
@@ -2494,6 +2522,13 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
     if (fetchitems & FETCH_SIZE) {
 	prot_printf(state->out, "%cRFC822.SIZE %u", 
 		    sepchar, im->record.size);
+	sepchar = ' ';
+    }
+    if ((fetchitems & FETCH_ANNOTATION)) {
+	prot_printf(state->out, "%cANNOTATION (", sepchar);
+	r = index_fetchannotations(state, msgno, fetchargs);
+	r = 0;
+	prot_printf(state->out, ")");
 	sepchar = ' ';
     }
     if (fetchitems & FETCH_ENVELOPE) {

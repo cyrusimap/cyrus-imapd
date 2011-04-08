@@ -3964,6 +3964,27 @@ static int parse_fetch_args(const char *tag, const char *cmd,
 	    if (!inlist && !strcmp(fetchatt.s, "ALL")) {
 		fetchitems |= FETCH_ALL;
 	    }
+	    else if (!strcmp(fetchatt.s, "ANNOTATION")) {
+		fetchitems |= FETCH_ANNOTATION;
+		if (c != ' ')
+		    goto badannotation;
+		c = prot_getc(imapd_in);
+		if (c != '(')
+		    goto badannotation;
+		c = parse_annotate_fetch_data(tag, &fetchargs.entries,
+					      &fetchargs.attribs);
+		if (c == EOF) {
+		    eatline(imapd_in, c);
+		    goto freeargs;
+		}
+		if (c != ')') {
+badannotation:
+		    prot_printf(imapd_out, "%s BAD invalid Annotation\r\n", tag);
+		    eatline(imapd_in, c);
+		    goto freeargs;
+		}
+		c = prot_getc(imapd_in);
+	    }
 	    else goto badatt;
 	    break;
 
@@ -4356,6 +4377,13 @@ static int parse_fetch_args(const char *tag, const char *cmd,
 	}
     }
 
+    if (fetchitems & FETCH_ANNOTATION) {
+	fetchargs.namespace = &imapd_namespace;
+	fetchargs.userid = imapd_userid;
+	fetchargs.isadmin = imapd_userisadmin || imapd_userisproxyadmin;
+	fetchargs.authstate = imapd_authstate;
+    }
+
     *fa = fetchargs;
     fa->fetchitems = fetchitems;
     strarray_free(newfields);
@@ -4420,6 +4448,8 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
     freefieldlist(fetchargs.fsections);
     strarray_fini(&fetchargs.headers);
     strarray_fini(&fetchargs.headers_not);
+    strarray_fini(&fetchargs.entries);
+    strarray_fini(&fetchargs.attribs);
 }
 
 #undef PARSE_PARTIAL /* cleanup */

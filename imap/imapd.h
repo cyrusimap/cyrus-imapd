@@ -100,6 +100,12 @@ struct fetchargs {
 
     bit32 cache_atleast;          /* to do headers we need atleast this
 				   * cache version */
+    struct namespace *namespace; 
+    const char *userid;
+    strarray_t entries;		  /* for FETCH_ANNOTATION */
+    strarray_t attribs;
+    int isadmin;
+    struct auth_state *authstate;
 };
 
 /* Bitmasks for fetchitems */
@@ -117,7 +123,8 @@ enum {
     FETCH_SETSEEN =             (1<<10),
 /*     FETCH_UNCACHEDHEADER =      (1<<11) -- obsolete */
     FETCH_IS_PARTIAL =          (1<<12), /* this is the PARTIAL command */
-    FETCH_MODSEQ =		(1<<13)
+    FETCH_MODSEQ =		(1<<13),
+    FETCH_ANNOTATION =		(1<<14)
 };
 
 enum {
