@@ -262,6 +262,7 @@ extern int prot_printf(struct protstream *, const char *, ...)
 extern int prot_printliteral(struct protstream *out, const char *s,
 			     size_t size);
 extern int prot_printstring(struct protstream *out, const char *s);
+extern int prot_printmap(struct protstream *out, const char *s, size_t n);
 extern int prot_printastring(struct protstream *out, const char *s);
 extern int prot_read(struct protstream *s, char *buf, unsigned size);
 extern char *prot_fgets(char *buf, unsigned size, struct protstream *s);

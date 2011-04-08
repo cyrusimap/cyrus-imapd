@@ -1342,29 +1342,60 @@ int prot_printliteral(struct protstream *out, const char *s, size_t size)
     return prot_write(out, s, size);
 }
 
+#define isQCHAR(c) \
+	(!((c) & 0x80 || *p == '\r' || (c) == '\n' \
+	    || (c) == '\"' || (c) == '%' || (c) == '\\'))
+#define MAXQSTRING  1024
+
 /*
  * Print 's' as a quoted-string or literal (but not an atom)
  */
 int prot_printstring(struct protstream *out, const char *s)
 {
     const char *p;
-    int len = 0;
 
     if (!s) return prot_printf(out, "NIL");
 
     /* Look for any non-QCHAR characters */
-    for (p = s; *p && len < 1024; p++) {
-	len++;
-	if (*p & 0x80 || *p == '\r' || *p == '\n'
-	    || *p == '\"' || *p == '%' || *p == '\\') break;
+    for (p = s; *p && (p-s) < MAXQSTRING; p++) {
+	if (!isQCHAR(*p)) break;
     }
 
     /* if it's too long, literal it */
-    if (*p || len >= 1024) {
+    if (*p || (p-s) >= MAXQSTRING) {
 	return prot_printliteral(out, s, strlen(s));
     }
 
     return prot_printf(out, "\"%s\"", s);
+}
+
+/*
+ * Print the @n bytes at @s as a quoted-string or literal.
+ * Handles embedded NULs.
+ */
+int prot_printmap(struct protstream *out, const char *s, size_t n)
+{
+    const char *p;
+    int r;
+
+    if (!s) return prot_printf(out, "NIL");
+
+    /* if it's too long, literal it */
+    if (n >= MAXQSTRING)
+	return prot_printliteral(out, s, n);
+
+    /* Look for NULs or any non-QCHAR characters */
+    for (p = s; (size_t)(p-s) < n; p++) {
+	if (!*p || !isQCHAR(*p))
+	    return prot_printliteral(out, s, n);
+    }
+
+    prot_putc('"', out);
+    r = prot_write(out, s, n);
+    if (r < 0)
+	return r;
+    prot_putc('"', out);
+    return r+2;
 }
 
 /*
