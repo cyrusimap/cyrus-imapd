@@ -83,11 +83,12 @@
 typedef struct annotate_cursor annotate_cursor_t;
 struct annotate_cursor
 {
-    int which;		    /* ANNOTATION_SCOPE_* */
-    /* for _MAILBOX */
-    const char *int_mboxname;
-    const char *ext_mboxname;
-    struct mboxlist_entry *mbentry;
+    int which;			/* ANNOTATION_SCOPE_* */
+    const char *int_mboxname;	/* for _MAILBOX, _MESSAGE */
+    const char *ext_mboxname;	/* for _MAILBOX */
+    struct mboxlist_entry *mbentry; /* for _MAILBOX */
+    unsigned int uid;		/* for _MESSAGE */
+    const char *acl;		/* for _MESSAGE */
 };
 
 enum {
@@ -144,6 +145,7 @@ int (*proxy_fetch_func)(const char *server, const char *mbox_pat,
 			const strarray_t *attribute_pat) = NULL;
 int (*proxy_store_func)(const char *server, const char *mbox_pat,
 			struct entryattlist *entryatts) = NULL;
+static ptrarray_t message_entries = PTRARRAY_INITIALIZER;
 static ptrarray_t mailbox_entries = PTRARRAY_INITIALIZER;
 static ptrarray_t server_entries = PTRARRAY_INITIALIZER;
 
@@ -363,13 +365,21 @@ void annotatemore_done(void)
     /* DB->done() handled by cyrus_done() */
 }
 
-static int make_key(const char *mboxname, const char *entry,
-		    const char *userid, char *key, size_t keysize)
+static int make_key(const char *mboxname,
+		    unsigned int uid,
+		    const char *entry,
+		    const char *userid,
+		    char *key, size_t keysize)
 {
     int keylen = 0;
 
     strlcpy(key+keylen, mboxname, keysize-keylen);
     keylen += strlen(mboxname) + 1;
+    if (uid) {
+	snprintf(key+keylen, keysize-keylen,
+		 "/UID%u", uid);
+	keylen += strlen(key+keylen);
+    }
     strlcpy(key+keylen, entry, keysize-keylen);
     keylen += strlen(entry);
     /* if we don't have a userid, we're doing a foreach() */
@@ -384,6 +394,7 @@ static int make_key(const char *mboxname, const char *entry,
 
 static int split_key(const char *key, int keysize,
 		     const char **mboxnamep,
+		     unsigned int *uidp,
 		     const char **entryp,
 		     const char **useridp)
 {
@@ -391,6 +402,7 @@ static int split_key(const char *key, int keysize,
     const char *fields[NFIELDS];
     int nfields = 0;
     const char *p;
+    unsigned int uid = 0;
 
     /* paranoia: ensure the last character in the key is
      * a NUL, which it should be because of the way we
@@ -415,7 +427,18 @@ static int split_key(const char *key, int keysize,
     if (nfields != NFIELDS)
 	return IMAP_ANNOTATION_BADENTRY;
 
+    if (!strncmp(fields[1], "/UID", 4)) {
+	char *end = NULL;
+	uid = strtoul(fields[1]+4, &end, 10);
+	if (uid == 0 ||
+	    end == NULL ||
+	    *end != '/')
+	    return IMAP_ANNOTATION_BADENTRY;
+	fields[1] = end;
+    }
+
     if (mboxnamep) *mboxnamep = fields[0];
+    if (uidp) *uidp = uid;
     if (entryp) *entryp = fields[1];
     if (useridp) *useridp = fields[2];
     return 0;
@@ -452,6 +475,7 @@ static int split_attribs(const char *data, int datalen __attribute__((unused)),
 struct find_rock {
     struct glob *mglob;
     struct glob *eglob;
+    unsigned int uid;
     annotatemore_find_proc_t proc;
     void *rock;
 };
@@ -462,13 +486,16 @@ static int find_p(void *rock, const char *key, int keylen,
 {
     struct find_rock *frock = (struct find_rock *) rock;
     const char *mboxname, *entry, *userid;
+    unsigned int uid;
     int r;
 
-    r = split_key(key, keylen, &mboxname,
+    r = split_key(key, keylen, &mboxname, &uid,
 		  &entry, &userid);
     if (r < 0)
 	return 0;
 
+    if (frock->uid && frock->uid != uid)
+	return 0;
     if (GLOB_TEST(frock->mglob, mboxname) == -1)
 	return 0;
     if (GLOB_TEST(frock->eglob, entry) == -1)
@@ -481,10 +508,11 @@ static int find_cb(void *rock, const char *key, int keylen,
 {
     struct find_rock *frock = (struct find_rock *) rock;
     const char *mboxname, *entry, *userid;
+    unsigned int uid;
     struct annotation_data attrib;
     int r;
 
-    r = split_key(key, keylen, &mboxname,
+    r = split_key(key, keylen, &mboxname, &uid,
 		  &entry, &userid);
     if (r)
 	return r;
@@ -497,15 +525,19 @@ static int find_cb(void *rock, const char *key, int keylen,
 }
 
 static void annotate_cursor_setup(annotate_cursor_t *cursor,
-				  const char *mailbox)
+				  const char *mailbox, uint32_t uid)
 {
     memset(cursor, 0, sizeof(*cursor));
     cursor->int_mboxname = mailbox;
     if (!*mailbox) {
 	cursor->which = ANNOTATION_SCOPE_SERVER;
     }
-    else {
+    else if (!uid) {
 	cursor->which = ANNOTATION_SCOPE_MAILBOX;
+    }
+    else {
+	cursor->which = ANNOTATION_SCOPE_MESSAGE;
+	cursor->uid = uid;
     }
 }
 
@@ -514,7 +546,7 @@ int annotatemore_findall(const char *mailbox, const char *entry,
 			 struct txn **tid)
 {
     annotate_cursor_t cursor;
-    annotate_cursor_setup(&cursor, mailbox);
+    annotate_cursor_setup(&cursor, mailbox, 0);
     return annotatemore_findall2(&cursor, entry, proc, rock, tid);
 }
 
@@ -531,11 +563,13 @@ static int annotatemore_findall2(const annotate_cursor_t *cursor,
     frock.mglob = glob_init(cursor->int_mboxname, GLOB_HIERARCHY);
     frock.eglob = glob_init(entry, GLOB_HIERARCHY);
     GLOB_SET_SEPARATOR(frock.eglob, '/');
+    frock.uid = cursor->uid;
     frock.proc = proc;
     frock.rock = rock;
 
     /* Find fixed-string pattern prefix */
-    keylen = make_key(cursor->int_mboxname, entry, NULL, key, sizeof(key));
+    keylen = make_key(cursor->int_mboxname, cursor->uid,
+		      entry, NULL, key, sizeof(key));
 
     for (p = key; keylen; p++, keylen--) {
 	if (*p == '*' || *p == '%') break;
@@ -572,6 +606,7 @@ struct fetchdata {
     const strarray_t *orig_entry;
     const strarray_t *orig_attribute;
     int ismetadata;
+    int ismessage;
     int maxsize;
     int *sizeptr;
 };
@@ -644,10 +679,13 @@ static void output_entryatt(const annotate_cursor_t *cursor, const char *entry,
 			    const char *userid, struct annotation_data *attrib,
 			    struct fetchdata *fdata)
 {
+    const char *mboxname = "";
     static struct attvaluelist *attvalues = NULL;
     static int lastwhich;
     static char lastname[MAX_MAILBOX_BUFFER];
     static char lastentry[MAX_MAILBOX_BUFFER];
+    static uint32_t lastuid;
+    static const char *sep;
     char key[MAX_MAILBOX_BUFFER]; /* XXX MAX_MAILBOX_NAME + entry + userid */
     char buf[100];
     int vallen;
@@ -660,7 +698,16 @@ static void output_entryatt(const annotate_cursor_t *cursor, const char *entry,
 	lastwhich = 0;
 	lastname[0] = '\0';
 	lastentry[0] = '\0';
+	lastuid = 0;
+	sep = "";
 	return;
+    }
+
+    if (cursor) {
+	if (cursor->ext_mboxname)
+	    mboxname = cursor->ext_mboxname;
+	else
+	    mboxname = cursor->int_mboxname;
     }
 
     /* Check if this is a new entry.
@@ -670,9 +717,16 @@ static void output_entryatt(const annotate_cursor_t *cursor, const char *entry,
      * Handle it as a dirty hack.
      */
     if ((!attrib || !cursor || cursor->which != lastwhich ||
-	strcmp(cursor->int_mboxname, lastname) || strcmp(entry, lastentry))
+	cursor->uid != lastuid ||
+	strcmp(mboxname, lastname) || strcmp(entry, lastentry))
 	&& attvalues) {
-	if (fdata->ismetadata) {
+	if (fdata->ismessage) {
+	    prot_printf(fdata->pout, "%s\"%s\" ",
+			sep, lastentry);
+	    output_attlist(fdata->pout, attvalues);
+	    sep = " ";
+	}
+	else if (fdata->ismetadata) {
 	    prot_printf(fdata->pout, "* METADATA \"%s\" ",
 			lastname);
 	    output_metalist(fdata->pout, attvalues, lastentry);
@@ -692,14 +746,21 @@ static void output_entryatt(const annotate_cursor_t *cursor, const char *entry,
     if (!attrib) return;
 
     lastwhich = cursor->which;
-    if (cursor->which == ANNOTATION_SCOPE_MAILBOX)
-	strlcpy(lastname, cursor->int_mboxname, sizeof(lastname));
+    if (cursor->which == ANNOTATION_SCOPE_MAILBOX ||
+        cursor->which == ANNOTATION_SCOPE_MESSAGE)
+	strlcpy(lastname, mboxname, sizeof(lastname));
     else
 	lastname[0] = '\0';
     strlcpy(lastentry, entry, sizeof(lastentry));
+    lastuid = cursor->uid;
 
     /* check if we already returned this entry */
     strlcpy(key, lastname, sizeof(key));
+    if (cursor->uid) {
+	char uidbuf[32];
+	snprintf(uidbuf, sizeof(uidbuf), "/UID%u/", cursor->uid);
+	strlcat(key, uidbuf, sizeof(key));
+    }
     strlcat(key, entry, sizeof(key));
     strlcat(key, userid, sizeof(key));
     if (hash_lookup(key, &(fdata->entry_table))) return;
@@ -1151,6 +1212,42 @@ struct annotate_f_entry_list
     struct annotate_f_entry_list *next;
 };
 
+/* TODO: need to handle /<section-part>/ somehow */
+static const annotate_entrydesc_t message_builtin_entries[] =
+{
+    {
+	"/altsubject",
+	ATTRIB_TYPE_STRING,
+	BACKEND_ONLY,
+	ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV,
+	0,
+	annotation_get_fromdb,
+	annotation_set_todb,
+	NULL
+    },{
+	"/comment",
+	ATTRIB_TYPE_STRING,
+	BACKEND_ONLY,
+	ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV,
+	0,
+	annotation_get_fromdb,
+	annotation_set_todb,
+	NULL
+    },{ NULL, 0, ANNOTATION_PROXY_T_INVALID, 0, 0, NULL, NULL, NULL }
+};
+
+static const annotate_entrydesc_t message_db_entry =
+    {
+	NULL,
+	ATTRIB_TYPE_STRING,
+	BACKEND_ONLY,
+	ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV,
+	0,
+	annotation_get_fromdb,
+	/*set*/NULL,		    /* ??? */
+	NULL
+    };
+
 static const annotate_entrydesc_t mailbox_builtin_entries[] =
 {
     {
@@ -1506,7 +1603,7 @@ static int fetch_cb(char *name, int matchlen,
     if (mboxlist_lookup(int_mboxname, &mbentry, NULL))
 	return 0;
 
-    annotate_cursor_setup(&cursor, int_mboxname);
+    annotate_cursor_setup(&cursor, int_mboxname, 0);
     cursor.ext_mboxname = ext_mboxname;
     cursor.mbentry = mbentry;
 
@@ -1554,6 +1651,7 @@ int annotatemore_fetch(const annotate_scope_t *scope,
     fdata.isadmin = isadmin;
     fdata.auth_state = auth_state;
     fdata.ismetadata = ismetadata;
+    fdata.ismessage = scope->which == ANNOTATION_SCOPE_MESSAGE;
     if (maxsizeptr) {
 	fdata.maxsize = *maxsizeptr; /* copy to check against */
         fdata.sizeptr = maxsizeptr; /* pointer to push largest back */
@@ -1603,6 +1701,10 @@ int annotatemore_fetch(const annotate_scope_t *scope,
     else if (scope->which == ANNOTATION_SCOPE_MAILBOX) {
 	non_db_entries = &mailbox_entries;
 	db_entry = &mailbox_db_entry;
+    }
+    else if (scope->which == ANNOTATION_SCOPE_MESSAGE) {
+	non_db_entries = &message_entries;
+	db_entry = &message_db_entry;
     }
     else
 	return IMAP_INTERNAL;
@@ -1676,7 +1778,7 @@ int annotatemore_fetch(const annotate_scope_t *scope,
 	    struct annotate_f_entry_list *entries_ptr;
 	    annotate_cursor_t cursor;
 
-	    annotate_cursor_setup(&cursor, "");
+	    annotate_cursor_setup(&cursor, "", 0);
 
 	    /* xxx better way to determine a size for this table? */
 	    construct_hash_table(&fdata.entry_table, 100, 1);
@@ -1734,6 +1836,47 @@ int annotatemore_fetch(const annotate_scope_t *scope,
 	    }
 	}
     }
+    else if (scope->which == ANNOTATION_SCOPE_MESSAGE) {
+
+	if (fdata.entry_list || proxy_fetch_func) {
+	    struct annotate_f_entry_list *entries_ptr;
+	    annotate_cursor_t cursor;
+
+	    annotate_cursor_setup(&cursor, scope->mailbox, scope->uid);
+	    cursor.acl = scope->acl;
+
+	    /* xxx better way to determine a size for this table? */
+	    construct_hash_table(&fdata.entry_table, 100, 1);
+
+// 	    if(proxy_fetch_func && fdata.orig_entry) {
+// 		fdata.orig_mailbox = scope->mailbox;
+// 		fdata.orig_attribute = attribs;
+// 		/* xxx better way to determine a size for this table? */
+// 		construct_hash_table(&fdata.server_table, 10, 1);
+// 	    }
+
+	    /* Loop through the list of provided entries to get */
+	    for (entries_ptr = fdata.entry_list;
+		 entries_ptr;
+		 entries_ptr = entries_ptr->next) {
+
+// 		if (!(entries_ptr->entry->proxytype == BACKEND_ONLY &&
+// 		      proxy_fetch_func && !config_getstring(IMAPOPT_PROXYSERVERS))) {
+		    entries_ptr->entry->get(&cursor, entries_ptr->entry->name,
+					    &fdata,
+					    (entries_ptr->entry->rock ?
+					     entries_ptr->entry->rock :
+					     (void*) entries_ptr->entrypat));
+// 		}
+	    }
+
+	    free_hash_table(&fdata.entry_table, NULL);
+
+// 	    if(proxy_fetch_func && fdata.orig_entry) {
+// 		free_hash_table(&fdata.server_table, NULL);
+// 	    }
+	}
+    }
 
     /* Flush last cached entry in output_entryatt() */
     output_entryatt(NULL, "", "", NULL, &fdata);
@@ -1759,7 +1902,7 @@ int annotatemore_lookup(const char *mboxname, const char *entry,
 
     memset(attrib, 0, sizeof(struct annotation_data));
 
-    keylen = make_key(mboxname, entry, userid, key, sizeof(key));
+    keylen = make_key(mboxname, 0, entry, userid, key, sizeof(key));
 
     do {
 	r = DB->fetch(anndb, key, keylen, &data, &datalen, NULL);
@@ -1773,7 +1916,9 @@ int annotatemore_lookup(const char *mboxname, const char *entry,
     return r;
 }
 
-static int write_entry(const char *mboxname, const char *entry,
+static int write_entry(const char *mboxname,
+		       unsigned int uid,
+		       const char *entry,
 		       const char *userid,
 		       const struct annotation_data *attrib,
 		       struct txn **tid)
@@ -1781,7 +1926,7 @@ static int write_entry(const char *mboxname, const char *entry,
     char key[MAX_MAILBOX_PATH+1];
     int keylen, r;
 
-    keylen = make_key(mboxname, entry, userid, key, sizeof(key));
+    keylen = make_key(mboxname, uid, entry, userid, key, sizeof(key));
 
     if (attrib->value == NULL) {
 	do {
@@ -1832,7 +1977,7 @@ int annotatemore_write_entry(const char *mboxname, const char *entry,
     theentry.size = (value ? size : 0);
     theentry.value = value;
 
-    return write_entry(mboxname, entry, userid, &theentry, tid);
+    return write_entry(mboxname, 0, entry, userid, &theentry, tid);
 }
 
 int annotatemore_commit(struct txn *tid) {
@@ -1973,7 +2118,7 @@ static int store_cb(const char *name, int matchlen,
     if (mboxlist_lookup(int_mboxname, &mbentry, NULL))
 	return 0;
 
-    annotate_cursor_setup(&cursor, int_mboxname);
+    annotate_cursor_setup(&cursor, int_mboxname, 0);
     cursor.ext_mboxname = name;
     cursor.mbentry = mbentry;
 
@@ -2064,6 +2209,7 @@ static int annotation_set_todb(const annotate_cursor_t *cursor,
 {
     int r = 0;
 
+    /* TODO: access control for setting per-message annotations */
     if (entry->have_shared) {
 	/* Check ACL
 	 *
@@ -2085,8 +2231,11 @@ static int annotation_set_todb(const annotate_cursor_t *cursor,
 	    if (cursor->mbentry->server)
 		return 0;
 	}
+	else if (cursor->which == ANNOTATION_SCOPE_MESSAGE) {
+	    /* TODO: access control for storing per-message annotations */
+	}
 
-	r = write_entry(cursor->int_mboxname,
+	r = write_entry(cursor->int_mboxname, cursor->uid,
 			entry->entry->name, "",
 			&(entry->shared), &(sdata->tid));
     }
@@ -2109,8 +2258,11 @@ static int annotation_set_todb(const annotate_cursor_t *cursor,
 	    if (cursor->mbentry->server)
 		return 0;
 	}
+	else if (cursor->which == ANNOTATION_SCOPE_MESSAGE) {
+	    /* TODO: access control for storing per-message annotations */
+	}
 
-	r = write_entry(cursor->int_mboxname,
+	r = write_entry(cursor->int_mboxname, cursor->uid,
 			entry->entry->name, sdata->userid,
 			&(entry->priv), &(sdata->tid));
     }
@@ -2272,6 +2424,8 @@ static int find_desc_store(const annotate_scope_t *scope,
 	descs = &server_entries;
     else if (scope->which == ANNOTATION_SCOPE_MAILBOX)
 	descs = &mailbox_entries;
+    else if (scope->which == ANNOTATION_SCOPE_MESSAGE)
+	descs = &message_entries;
     else
 	return IMAP_INTERNAL;
 
@@ -2390,7 +2544,7 @@ int annotatemore_store(const annotate_scope_t *scope,
 	    struct annotate_st_entry_list *entries_ptr;
 	    annotate_cursor_t cursor;
 
-	    annotate_cursor_setup(&cursor, "");
+	    annotate_cursor_setup(&cursor, "", 0);
 
 	    /* Loop through the list of provided entries to get */
 	    for (entries_ptr = sdata.entry_list;
@@ -2442,6 +2596,44 @@ int annotatemore_store(const annotate_scope_t *scope,
 	    free_hash_table(&sdata.server_table, NULL);
 	}
     }
+    else if (scope->which == ANNOTATION_SCOPE_MESSAGE) {
+
+	struct annotate_st_entry_list *entries_ptr;
+	annotate_cursor_t cursor;
+
+	annotate_cursor_setup(&cursor, scope->mailbox, scope->uid);
+	cursor.acl = scope->acl;
+
+// 	if (proxy_store_func) {
+// 	    /* xxx better way to determine a size for this table? */
+// 	    construct_hash_table(&sdata.server_table, 10, 1);
+// 	}
+
+	/* Loop through the list of provided entries to set */
+	for (entries_ptr = sdata.entry_list;
+	     entries_ptr;
+	     entries_ptr = entries_ptr->next) {
+
+	    r = entries_ptr->entry->set(&cursor, entries_ptr, &sdata,
+					entries_ptr->entry->rock);
+	    if (r) break;
+	}
+
+	if (!r) sync_log_annotation("");
+
+// 	if (proxy_store_func) {
+// 	    if (!r) {
+// 		/* proxy command to backends */
+// 		struct proxy_rock prock = { NULL, NULL };
+// 		prock.mbox_pat = scope->mailbox;
+// 		prock.entryatts = l;
+// 		hash_enumerate(&sdata.server_table, store_proxy, &prock);
+// 	    }
+// 	    free_hash_table(&sdata.server_table, NULL);
+// 	}
+
+    }
+
 
     if (sdata.tid) {
 	if (!r) {
@@ -2485,11 +2677,11 @@ static int rename_cb(const char *mailbox, const char *entry,
 	if (rrock->olduserid  && rrock->newuserid &&
 	    !strcmp(rrock->olduserid, userid)) {
 	    /* renaming a user, so change the userid for priv annots */
-	    r = write_entry(rrock->newmboxname, entry, rrock->newuserid,
+	    r = write_entry(rrock->newmboxname, 0, entry, rrock->newuserid,
 			    attrib, &rrock->tid);
 	}
 	else {
-	    r = write_entry(rrock->newmboxname, entry, userid,
+	    r = write_entry(rrock->newmboxname, 0, entry, userid,
 			    attrib, &rrock->tid);
 	}
     }
@@ -2497,7 +2689,7 @@ static int rename_cb(const char *mailbox, const char *entry,
     if (!r) {
 	/* delete existing entry */
 	struct annotation_data dattrib = { NULL, 0 };
-	r = write_entry(mailbox, entry, userid, &dattrib, &rrock->tid);
+	r = write_entry(mailbox, 0, entry, userid, &dattrib, &rrock->tid);
     }
 
     return r;
@@ -2546,6 +2738,7 @@ const struct annotate_attrib annotation_scope_names[] =
 {
     { "server", ANNOTATION_SCOPE_SERVER },
     { "mailbox", ANNOTATION_SCOPE_MAILBOX },
+    { "message", ANNOTATION_SCOPE_MESSAGE },
     { NULL, 0 }
 };
 
@@ -2661,6 +2854,10 @@ static void init_annotation_definitions(void)
     for (i = 0 ; mailbox_builtin_entries[i].name ; i++)
 	ptrarray_append(&mailbox_entries, (void *)&mailbox_builtin_entries[i]);
 
+    /* copy static entries into list */
+    for (i = 0 ; message_builtin_entries[i].name ; i++)
+	ptrarray_append(&message_entries, (void *)&message_builtin_entries[i]);
+
     /* parse config file */
     filename = config_getstring(IMAPOPT_ANNOTATION_DEFINITIONS);
 
@@ -2696,12 +2893,17 @@ static void init_annotation_definitions(void)
 	for (; *p && (isalnum(*p) || *p=='.' || *p=='-' || *p=='_' || *p=='/');
 	     p++);
 
-	if (table_lookup(annotation_scope_names, p2, p-p2,
-			 "annotation scope")==ANNOTATION_SCOPE_SERVER) {
+	switch (table_lookup(annotation_scope_names, p2, p-p2,
+			 "annotation scope")) {
+	case ANNOTATION_SCOPE_SERVER:
 	    ptrarray_append(&server_entries, ae);
-	}
-	else {
+	    break;
+	case ANNOTATION_SCOPE_MAILBOX:
 	    ptrarray_append(&mailbox_entries, ae);
+	    break;
+	case ANNOTATION_SCOPE_MESSAGE:
+	    ptrarray_append(&message_entries, ae);
+	    break;
 	}
 
 	p = consume_comma(p);

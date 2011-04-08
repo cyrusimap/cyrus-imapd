@@ -81,14 +81,18 @@ struct annotation_data {
 
 enum {
   ANNOTATION_SCOPE_SERVER = 1,
-  ANNOTATION_SCOPE_MAILBOX = 2
+  ANNOTATION_SCOPE_MAILBOX = 2,
+  ANNOTATION_SCOPE_MESSAGE = 3
 };
 
 typedef struct annotate_scope annotate_scope_t;
 struct annotate_scope
 {
     int which;			/* ANNOTATION_SCOPE_* */
-    const char *mailbox;	/* external mailbox pattern if _MAILBOX */
+    const char *mailbox;	/* external mailbox pattern if _MAILBOX
+				 * or external mailbox name if _MESSAGE */
+    unsigned int uid;		/* for _MESSAGE */
+    const char *acl;		/* for _MESSAGE */
 };
 
 #define annotate_scope_init_server(_scope) \
@@ -101,6 +105,14 @@ struct annotate_scope
 	memset((_scope), 0, sizeof(annotate_scope_t)); \
 	(_scope)->which = ANNOTATION_SCOPE_MAILBOX; \
 	(_scope)->mailbox = (_mboxnamepatt); \
+    } while(0)
+#define annotate_scope_init_message(_scope, _mailbox, _uid) \
+    do { \
+	memset((_scope), 0, sizeof(annotate_scope_t)); \
+	(_scope)->which = ANNOTATION_SCOPE_MESSAGE; \
+	(_scope)->mailbox = (_mailbox)->name; \
+	(_scope)->acl = (_mailbox)->acl; \
+	(_scope)->uid = (_uid); \
     } while(0)
 
 /* String List Management */
