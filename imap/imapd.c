@@ -421,8 +421,6 @@ static int parse_annotate_store_data(const char *tag,
 static int parse_metadata_store_data(const char *tag,
 				     struct entryattlist **entryatts);
 
-void annotate_response(struct entryattlist *l);
-
 int getlistselopts(char *tag, struct listargs *args);
 int getlistretopts(char *tag, struct listargs *args);
 
@@ -7752,52 +7750,6 @@ static int parse_metadata_store_data(const char *tag,
     if (attvalues) freeattvalues(attvalues);
     if (c != EOF) prot_ungetc(c, imapd_in);
     return EOF;
-}
-
-/*
- * Output an entry/attribute-value list response.
- *
- * This is a generic routine which outputs just the annotation data.
- * Any surrounding response text must be output elsewhere, ie,
- * GETANNOTATION, FETCH. 
- */
-void annotate_response(struct entryattlist *l)
-{
-    int islist; /* do we have more than one entry? */
-
-    if (!l) return;
-
-    islist = (l->next != NULL);
-
-    if (islist) prot_printf(imapd_out, "(");
-
-    while (l) {
-	prot_printf(imapd_out, "\"%s\"", l->entry);
-
-	/* do we have attributes?  solicited vs. unsolicited */
-	if (l->attvalues) {
-	    struct attvaluelist *av = l->attvalues;
-
-	    prot_printf(imapd_out, " (");
-	    while (av) {
-		prot_printf(imapd_out, "\"%s\" ", av->attrib);
-		if (!strcasecmp(av->value, "NIL"))
-		    prot_printf(imapd_out, "NIL");
-		else
-		    prot_printf(imapd_out, "\"%s\"", av->value);
-
-		if ((av = av->next) == NULL)
-		    prot_printf(imapd_out, ")");
-		else
-		    prot_printf(imapd_out, " ");
-	    }
-	}
-
-	if ((l = l->next) != NULL)
-	    prot_printf(imapd_out, " ");
-    }
-
-    if (islist) prot_printf(imapd_out, ")");
 }
 
 /*
