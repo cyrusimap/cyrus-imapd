@@ -78,6 +78,8 @@ sub new
 	if defined $params{host};
     $self->{port} = $params{port}
 	if defined $params{port};
+    $self->{username} = $params{username}
+	if defined $params{username};
 
     $self->{port} = Cassandane::Service->alloc_port()
 	unless defined $self->{port};
@@ -99,6 +101,7 @@ sub store_params
 	type => 'unknown',
 	host => $self->{host},
 	port => $self->{port},
+	username => $self->{username},
 	verbose => get_verbose,
     };
 }
