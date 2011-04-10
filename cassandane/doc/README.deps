@@ -30,6 +30,11 @@ Cassandane needs the following software to work:
     CPAN package http://search.cpan.org/dist/DateTime/
     Ubuntu package libdatetime-perl
 
+ * File::chdir
+    Makes sure Cyrus dumps core in a sensible location
+    CPAN package http://search.cpan.org/dist/File-chdir/
+    Ubuntu package libfile-chdir-perl
+
  * Test::Unit
     Unit testing framework for Perl
     CPAN package http://search.cpan.org/dist/Test-Unit/

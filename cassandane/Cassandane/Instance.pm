@@ -47,6 +47,7 @@ use File::Find qw(find);
 use POSIX qw(geteuid :signal_h);
 use Time::HiRes qw(sleep gettimeofday tv_interval);
 use DateTime;
+use File::chdir;
 use Cassandane::Util::DateTime qw(to_iso8601);
 use Cassandane::Util::Log;
 use Cassandane::Config;
@@ -337,7 +338,11 @@ sub _start_master
 	'-M', $self->_master_conf(),
     );
     unlink $self->_pid_file();
-    system(@cmd);
+    {
+	# make sure core dumps go somewhere sane
+	$CWD = $self->{basedir} . "/conf/cores";
+	system(@cmd);
+    }
 
     # wait until the pidfile exists and contains a PID
     # that we can verify is still alive.
