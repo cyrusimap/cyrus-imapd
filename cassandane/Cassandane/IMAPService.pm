@@ -64,7 +64,7 @@ sub store_params
 	host => $self->{host},
 	port => $self->{port},
 	folder => 'inbox.CassandaneTestFolder',
-	username => 'cassandane',
+	username => $self->{username} || 'cassandane',
 	password => 'testpw',
 	verbose => get_verbose,
     };

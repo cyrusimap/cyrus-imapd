@@ -56,6 +56,7 @@ sub new
 
     $self->{instance} = Cassandane::Instance->new();
     $self->{instance}->add_service('imap');
+    $self->{instance}->add_service('imapadmin', username => 'admin');
 
     $self->{gen} = Cassandane::Generator->new();
 
@@ -69,6 +70,8 @@ sub set_up
     $self->{instance}->start();
     $self->{store} =
 	$self->{instance}->get_service('imap')->create_store();
+    $self->{adminstore} =
+	$self->{instance}->get_service('imapadmin')->create_store();
 }
 
 sub tear_down
@@ -78,6 +81,9 @@ sub tear_down
     $self->{store}->disconnect()
 	if defined $self->{store};
     $self->{store} = undef;
+    $self->{adminstore}->disconnect()
+	if defined $self->{adminstore};
+    $self->{adminstore} = undef;
     $self->{instance}->stop();
 }
 
@@ -107,12 +113,13 @@ sub test_shared
     # duplicate deliver should be false
     $self->assert_str_equals('false', $res->{INBOX}{"/shared/vendor/cmu/cyrus-imapd/duplicatedeliver"});
 
-    # set duplicate deliver
-    $imaptalk->setmetadata('INBOX', "/shared/vendor/cmu/cyrus-imapd/duplicatedeliver", 'true');
+    # set duplicate deliver (as admin)
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->setmetadata('user.cassandane', "/shared/vendor/cmu/cyrus-imapd/duplicatedeliver", 'true');
 
     # and make sure the change sticks
     my $dup = $imaptalk->getmetadata('INBOX', "/shared/vendor/cmu/cyrus-imapd/duplicatedeliver");
-    $self->assert_str_equals('true', $res->{INBOX}{"/shared/vendor/cmu/cyrus-imapd/duplicatedeliver"});
+    $self->assert_str_equals('true', $dup->{INBOX}{"/shared/vendor/cmu/cyrus-imapd/duplicatedeliver"});
 }
 
 sub test_private
