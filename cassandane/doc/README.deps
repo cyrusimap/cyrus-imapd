@@ -35,6 +35,11 @@ Cassandane needs the following software to work:
     CPAN package http://search.cpan.org/dist/File-chdir/
     Ubuntu package libfile-chdir-perl
 
+ * BSD::Resource
+    Allows Cyrus to generate core dumps at all
+    CPAN package http://search.cpan.org/dist/BSD-Resource/
+    Ubuntu package libbsd-resource-perl
+
  * Test::Unit
     Unit testing framework for Perl
     CPAN package http://search.cpan.org/dist/Test-Unit/
