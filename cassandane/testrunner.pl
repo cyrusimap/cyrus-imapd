@@ -47,6 +47,7 @@ use Cassandane::Util::Log;
 
 my $format = 'xml';
 my $output_dir = 'reports';
+my $do_list = 0;
 my @default_names = (
     'Cassandane::Test',
     'Cassandane::Cyrus',
@@ -100,6 +101,10 @@ while (my $a = shift)
     {
 	set_verbose(1);
     }
+    elsif ($a eq '-l' || $a eq '--list')
+    {
+	$do_list = 1;
+    }
     elsif ($a =~ m/^-/)
     {
 	usage;
@@ -138,6 +143,14 @@ foreach my $name (@names)
     {
 	push(@suites, $name);
     }
+}
+
+if ($do_list) {
+    foreach my $item (@suites)
+    {
+	print "$item\n";
+    }
+    exit 0;
 }
 
 # printf STDERR "List of suites: %s\n", join(' ',@suites);
