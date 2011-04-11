@@ -78,8 +78,6 @@ sub new
 	if defined $params{host};
     $self->{port} = $params{port}
 	if defined $params{port};
-    $self->{username} = $params{username}
-	if defined $params{username};
 
     $self->{port} = Cassandane::Service->alloc_port()
 	unless defined $self->{port};
@@ -94,22 +92,22 @@ sub new
 # to MessageStoreFactory::create.
 sub store_params
 {
-    my ($self) = @_;
+    my ($self, %params) = @_;
 
-    return
-    {
-	type => 'unknown',
-	host => $self->{host},
-	port => $self->{port},
-	username => $self->{username},
-	verbose => get_verbose,
-    };
+    $params{type} = 'unknown'
+	unless defined $params{type};
+    $params{host} = $self->{host};
+    $params{port} = $self->{port};
+    $params{verbose} = get_verbose
+	unless defined $params{verbose};
+    return \%params;
 }
 
 sub create_store
 {
-    my ($self) = @_;
-    return Cassandane::MessageStoreFactory->create(%{$self->store_params()});
+    my ($self, @args) = @_;
+    my $params = $self->store_params(@args);
+    return Cassandane::MessageStoreFactory->create(%$params);
 }
 
 sub address

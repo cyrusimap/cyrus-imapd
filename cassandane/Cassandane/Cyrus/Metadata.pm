@@ -45,7 +45,6 @@ package Cassandane::Cyrus::Metadata;
 use base qw(Test::Unit::TestCase);
 use DateTime;
 use Cassandane::Util::Log;
-use Cassandane::Generator;
 use Cassandane::MessageStoreFactory;
 use Cassandane::Instance;
 
@@ -56,9 +55,6 @@ sub new
 
     $self->{instance} = Cassandane::Instance->new();
     $self->{instance}->add_service('imap');
-    $self->{instance}->add_service('imapadmin', username => 'admin');
-
-    $self->{gen} = Cassandane::Generator->new();
 
     return $self;
 }
@@ -68,10 +64,9 @@ sub set_up
     my ($self) = @_;
 
     $self->{instance}->start();
-    $self->{store} =
-	$self->{instance}->get_service('imap')->create_store();
-    $self->{adminstore} =
-	$self->{instance}->get_service('imapadmin')->create_store();
+    my $svc = $self->{instance}->get_service('imap');
+    $self->{store} = $svc->create_store();
+    $self->{adminstore} = $svc->create_store(username => 'admin');
 }
 
 sub tear_down

@@ -56,18 +56,20 @@ sub new
 # to MessageStoreFactory::create.
 sub store_params
 {
-    my ($self) = @_;
+    my ($self, %params) = @_;
 
-    return
-    {
-	type => 'imap',
-	host => $self->{host},
-	port => $self->{port},
-	folder => 'inbox.CassandaneTestFolder',
-	username => $self->{username} || 'cassandane',
-	password => 'testpw',
-	verbose => get_verbose,
-    };
+    $params{type} = 'imap';
+    $params{host} = $self->{host};
+    $params{port} = $self->{port};
+    $params{folder} = 'inbox.CassandaneTestFolder'
+	unless defined $params{folder};
+    $params{username} = 'cassandane'
+	unless defined $params{username};
+    $params{password} = 'testpw'
+	unless defined $params{password};
+    $params{verbose} = get_verbose
+	unless defined $params{verbose};
+    return \%params;
 }
 
 1;
