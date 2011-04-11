@@ -636,35 +636,35 @@ static void output_metalist(struct protstream *pout, struct attvaluelist *l,
 			    const char *entry)
 {
     int flag = 0;
-    const char *prefix;
+    struct buf mentry = BUF_INITIALIZER;
 
     assert(l);
 
     prot_putc('(', pout);
 
-    while (l) {
-	prefix = NULL;
+    for ( ; l ; l = l->next) {
+	buf_reset(&mentry);
 
 	/* check if it's a value we print... */
 	if (!strcmp(l->attrib, "value.shared"))
-	    prefix = "/shared";
+	    buf_appendcstr(&mentry, "/shared");
 	else if (!strcmp(l->attrib, "value.priv"))
-	    prefix = "/private";
+	    buf_appendcstr(&mentry, "/private");
+	else
+	    continue;
+	buf_appendcstr(&mentry, entry);
+	buf_cstring(&mentry);
 
-	if (prefix) {
-	    if (flag) prot_putc(' ', pout);
-	    else flag = 1;
+	if (flag) prot_putc(' ', pout);
+	else flag = 1;
 
-	    /* a little dodgy, but legit here because of limitations on
-	     * valid entry names ... */
-	    prot_printf(pout, "%s%s ", prefix, entry);
-	    prot_printmap(pout, l->value.s, l->value.len);
-	}
-
-	l = l->next;
+	prot_printastring(pout, mentry.s);
+	prot_putc(' ', pout);
+	prot_printmap(pout, l->value.s, l->value.len);
     }
 
     prot_putc(')', pout);
+    buf_free(&mentry);
 }
 
 /* Output a single entry and attributes for a single mailbox.
@@ -726,8 +726,9 @@ static void output_entryatt(const annotate_cursor_t *cursor, const char *entry,
 	    sep = " ";
 	}
 	else if (fdata->ismetadata) {
-	    prot_printf(fdata->pout, "* METADATA \"%s\" ",
-			lastname);
+	    prot_printf(fdata->pout, "* METADATA ");
+	    prot_printastring(fdata->pout, lastname);
+	    prot_putc(' ', fdata->pout);
 	    output_metalist(fdata->pout, attvalues, lastentry);
 	    prot_printf(fdata->pout, "\r\n");
 	}
