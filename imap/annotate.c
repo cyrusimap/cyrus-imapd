@@ -611,22 +611,21 @@ struct fetchdata {
     int *sizeptr;
 };
 
-static void output_attlist(struct protstream *pout, struct attvaluelist *l) 
+static void output_attlist(struct protstream *pout, struct attvaluelist *l)
 {
     int flag = 0;
-    
+
     assert(l);
-    
+
     prot_putc('(',pout);
-    
-    while(l) {
+
+    for ( ; l ; l = l->next) {
 	if (flag) prot_putc(' ', pout);
 	else flag = 1;
 
 	prot_printstring(pout, l->attrib);
 	prot_putc(' ', pout);
 	prot_printmap(pout, l->value.s, l->value.len);
-	l = l->next;
     }
 
     prot_putc(')',pout);
@@ -733,8 +732,11 @@ static void output_entryatt(const annotate_cursor_t *cursor, const char *entry,
 	    prot_printf(fdata->pout, "\r\n");
 	}
 	else {
-	    prot_printf(fdata->pout, "* ANNOTATION \"%s\" \"%s\" ",
-			lastname, lastentry);
+	    prot_printf(fdata->pout, "* ANNOTATION ");
+	    prot_printastring(fdata->pout, lastname);
+	    prot_putc(' ', fdata->pout);
+	    prot_printstring(fdata->pout, lastentry);
+	    prot_putc(' ', fdata->pout);
 	    output_attlist(fdata->pout, attvalues);
 	    prot_printf(fdata->pout, "\r\n");
 	}
