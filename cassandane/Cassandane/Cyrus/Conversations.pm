@@ -391,8 +391,8 @@ sub test_xconvfetch
 	xlog "XCONVFETCHing CID $cid";
 
 	my $result = $store->xconvfetch_begin($cid);
-	$self->assert(scalar @{$result->{folderstate}} == 1);
-	$self->assert($result->{folderstate}->[0]->{name} eq $foldername);
+	$self->assert_num_equals(1, scalar @{$result->{folderstate}});
+	$self->assert_str_equals($foldername, $result->{folderstate}->[0]->{name});
 	while (my $msg = $store->xconvfetch_message())
 	{
 	    my $muid = $msg->get_attribute('uid');
