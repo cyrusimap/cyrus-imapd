@@ -43,7 +43,6 @@ use strict;
 use warnings;
 use Test::Unit::TestRunner;
 use Test::Unit::Runner::XML;
-use BSD::Resource;
 use Cassandane::Util::Log;
 
 my $format = 'xml';
@@ -156,6 +155,4 @@ if ($do_list) {
 
 # printf STDERR "List of suites: %s\n", join(' ',@suites);
 
-# ulimit -c 102400
-setrlimit(RLIMIT_CORE, 102400*1024, 102400*1024);
 exit(! $runners{$format}->(@suites));

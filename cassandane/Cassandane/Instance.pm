@@ -47,7 +47,7 @@ use File::Find qw(find);
 use POSIX qw(geteuid :signal_h);
 use Time::HiRes qw(sleep gettimeofday tv_interval);
 use DateTime;
-use File::chdir;
+use BSD::Resource;
 use Cassandane::Util::DateTime qw(to_iso8601);
 use Cassandane::Util::Log;
 use Cassandane::Config;
@@ -330,19 +330,16 @@ sub _start_master
     # Now start the master process.
     my @cmd =
     (
-	$self->_binary('master'),
+	'master',
+	# The following is added automatically by _fork_utility:
+	# '-C', $self->_imapd_conf(),
 	'-l', '255',
 	'-p', $self->_pid_file(),
 	'-d',
-	'-C', $self->_imapd_conf(),
 	'-M', $self->_master_conf(),
     );
     unlink $self->_pid_file();
-    {
-	# make sure core dumps go somewhere sane
-	$CWD = $self->{basedir} . "/conf/cores";
-	system(@cmd);
-    }
+    $self->_fork_utility(@cmd);
 
     # wait until the pidfile exists and contains a PID
     # that we can verify is still alive.
@@ -434,6 +431,21 @@ sub stop
 #
 sub run_utility
 {
+    my ($self, @args) = @_;
+
+    my $ret = $self->_fork_utility(@args);
+    my $pid = 0 + $ret;
+    if ($pid)
+    {
+	# parent process...wait for child
+	my $child = waitpid($pid,0);
+	# and return it's exit status
+	return ($child == $pid ? $? : 255);
+    }
+}
+
+sub _fork_utility
+{
     my ($self, $mode, @argv) = @_;
     my $binary;
 
@@ -492,13 +504,8 @@ sub run_utility
 	my $pid = fork();
 	die "Cannot fork: $!"
 	    if !defined $pid;
-	if ($pid)
-	{
-	    # parent process...wait for child
-	    my $child = waitpid($pid,0);
-	    # and return it's exit status
-	    return ($child == $pid ? $? : 255);
-	}
+	return $pid
+	    if ($pid);	    # parent process
     }
 
     # child process
@@ -506,6 +513,9 @@ sub run_utility
     my $cd = $self->{basedir} . '/conf/cores';
     chdir($cd)
 	or die "Cannot cd to $cd: $!";
+
+    # ulimit -c 102400
+    setrlimit(RLIMIT_CORE, 102400*1024, 102400*1024);
 
     # TODO: do any setuid, umask, or environment futzing here
 
