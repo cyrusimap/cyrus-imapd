@@ -1873,22 +1873,26 @@ int annotatemore_fetch(const annotate_scope_t *scope,
 /**************************  Annotation Storing  *****************************/
 
 int annotatemore_lookup(const char *mboxname, const char *entry,
-			const char *userid, struct buf *attrib)
+			const char *userid, struct buf *value)
+{
+    return annotatemore_msg_lookup(mboxname, /*uid*/0, entry, userid, value);
+}
+
+int annotatemore_msg_lookup(const char *mboxname, uint32_t uid, const char *entry,
+			    const char *userid, struct buf *value)
 {
     char key[MAX_MAILBOX_PATH+1];
     int keylen, datalen, r;
     const char *data;
 
-    memset(attrib, 0, sizeof(*attrib));
-
-    keylen = make_key(mboxname, 0, entry, userid, key, sizeof(key));
+    keylen = make_key(mboxname, uid, entry, userid, key, sizeof(key));
 
     do {
 	r = DB->fetch(anndb, key, keylen, &data, &datalen, NULL);
     } while (r == CYRUSDB_AGAIN);
 
     if (!r && data) {
-	r = split_attribs(data, datalen, attrib);
+	r = split_attribs(data, datalen, value);
     }
     else if (r == CYRUSDB_NOTFOUND) r = 0;
 

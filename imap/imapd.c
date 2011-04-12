@@ -433,6 +433,7 @@ int getsearchcriteria(char *tag, struct searchargs *searchargs,
 			 int *charsetp, int *searchstatep);
 int getsearchdate(time_t *start, time_t *end);
 int getsortcriteria(char *tag, struct sortcrit **sortcrit);
+static char *sortcrit_as_string(const struct sortcrit *sortcrit);
 int getdatetime(time_t *date);
 
 void appendfieldlist(struct fieldlist **l, char *section,
@@ -4809,6 +4810,12 @@ void cmd_sort(char *tag, int usinguid)
     n = index_sort(imapd_index, sortcrit, searchargs, usinguid);
     snprintf(mytime, sizeof(mytime), "%2.3f",
 	     (clock() - start) / (double) CLOCKS_PER_SEC);
+    if (CONFIG_TIMING_VERBOSE) {
+	char *s = sortcrit_as_string(sortcrit);
+	syslog(LOG_DEBUG, "SORT (%s) processing time: %d msg in %s sec",
+	       s, n, mytime);
+	free(s);
+    }
     prot_printf(imapd_out, "%s OK %s (%d msgs in %s secs)\r\n", tag,
 		error_message(IMAP_OK_COMPLETED), n, mytime);
 
@@ -9792,18 +9799,24 @@ int getsortcriteria(char *tag, struct sortcrit **sortcrit)
 	    (*sortcrit)[n].key = SORT_SUBJECT;
 	else if (!strcmp(criteria.s, "to"))
 	    (*sortcrit)[n].key = SORT_TO;
-#if 0
 	else if (!strcmp(criteria.s, "annotation")) {
+	    const char *userid = NULL;
+
 	    (*sortcrit)[n].key = SORT_ANNOTATION;
 	    if (c != ' ') goto missingarg;
-	    c = getstring(imapd_in, &arg);
+	    c = getastring(imapd_in, imapd_out, &criteria);
 	    if (c != ' ') goto missingarg;
-	    (*sortcrit)[n].args.annot.entry = xstrdup(arg.s);
-	    c = getstring(imapd_in, &arg);
+	    (*sortcrit)[n].args.annot.entry = xstrdup(criteria.s);
+	    c = getastring(imapd_in, imapd_out, &criteria);
 	    if (c == EOF) goto missingarg;
-	    (*sortcrit)[n].args.annot.attrib = xstrdup(arg.s);
+	    if (!strcmp(criteria.s, "value.shared"))
+		userid = "";
+	    else if (!strcmp(criteria.s, "value.priv"))
+		userid = imapd_userid;
+	    else
+		goto missingarg;
+	    (*sortcrit)[n].args.annot.userid = xstrdup(userid);
 	}
-#endif
 	else if (!strcmp(criteria.s, "modseq"))
 	    (*sortcrit)[n].key = SORT_MODSEQ;
 	else if (!strcmp(criteria.s, "uid"))
@@ -9847,13 +9860,44 @@ int getsortcriteria(char *tag, struct sortcrit **sortcrit)
     prot_printf(imapd_out, "%s BAD Missing Sort criteria\r\n", tag);
     if (c != EOF) prot_ungetc(c, imapd_in);
     return EOF;
-#if 0 /* For annotations stuff above */
  missingarg:
     prot_printf(imapd_out, "%s BAD Missing argument to Sort criterion %s\r\n",
 		tag, criteria.s);
     if (c != EOF) prot_ungetc(c, imapd_in);
     return EOF;
-#endif
+}
+
+static char *sortcrit_as_string(const struct sortcrit *sortcrit)
+{
+    struct buf b = BUF_INITIALIZER;
+    static const char * const key_names[] = {
+	"SEQUENCE", "ARRIVAL", "CC", "DATE",
+	"DISPLAYFROM", "DISPLAYTO", "FROM",
+	"SIZE", "SUBJECT", "TO", "ANNOTATION",
+	"MODSEQ", "UID"
+    };
+
+    for ( ; sortcrit->key ; sortcrit++) {
+	if (b.len)
+	    buf_putc(&b, ' ');
+	if (sortcrit->flags & SORT_REVERSE)
+	    buf_appendcstr(&b, "REVERSE ");
+
+	if (sortcrit->key < VECTOR_SIZE(key_names))
+	    buf_appendcstr(&b, key_names[sortcrit->key]);
+	else
+	    buf_printf(&b, "UNKNOWN%u", sortcrit->key);
+
+	switch (sortcrit->key) {
+	case SORT_ANNOTATION:
+	    buf_printf(&b, " \"%s\" \"%s\"",
+		       sortcrit->args.annot.entry,
+		       *sortcrit->args.annot.userid ?
+			    "value.priv" : "value.shared");
+	    break;
+	}
+    }
+    return buf_release(&b);
 }
 
 /*
@@ -10136,7 +10180,7 @@ static void freesortcrit(struct sortcrit *s)
 	switch (s[i].key) {
 	case SORT_ANNOTATION:
 	    free(s[i].args.annot.entry);
-	    free(s[i].args.annot.attrib);
+	    free(s[i].args.annot.userid);
 	    break;
 	}
 	i++;

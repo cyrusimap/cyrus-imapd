@@ -1322,16 +1322,12 @@ int index_sort(struct index_state *state, struct sortcrit *sortcrit,
     unsigned *msgno_list;
     MsgData *msgdata = NULL, *freeme = NULL;
     int nmsg;
-    clock_t start;
     modseq_t highestmodseq = 0;
     int i, modseq = 0;
 
     /* update the index */
     if (index_check(state, 0, 0))
 	return 0;
-
-    if(CONFIG_TIMING_VERBOSE)
-	start = clock();
 
     if (searchargs->modseq) modseq = 1;
     else {
@@ -1381,37 +1377,6 @@ int index_sort(struct index_state *state, struct sortcrit *sortcrit,
 	prot_printf(state->out, " (MODSEQ " MODSEQ_FMT ")", highestmodseq);
 
     prot_printf(state->out, "\r\n");
-
-    /* debug */
-    if (CONFIG_TIMING_VERBOSE) {
-	int len;
-	static const char * const key_names[] = {
-	    "SEQUENCE", "ARRIVAL", "CC", "DATE", "FROM",
-	    "SIZE", "SUBJECT", "TO", "ANNOTATION", "MODSEQ",
-	    "DISPLAYFROM", "DISPLAYTO"
-	};
-	char buf[1024] = "";
-
-	while (sortcrit->key && sortcrit->key < VECTOR_SIZE(key_names)) {
-	    if (sortcrit->flags & SORT_REVERSE)
-		strlcat(buf, "REVERSE ", sizeof(buf));
-
-	    strlcat(buf, key_names[sortcrit->key], sizeof(buf));
-
-	    switch (sortcrit->key) {
-	    case SORT_ANNOTATION:
-		len = strlen(buf);
-		snprintf(buf + len, sizeof(buf) - len,
-			 " \"%s\" \"%s\"",
-			 sortcrit->args.annot.entry, sortcrit->args.annot.attrib);
-		break;
-	    }
-	    if ((++sortcrit)->key) strlcat(buf, " ", sizeof(buf));
-	}
-
-	syslog(LOG_DEBUG, "SORT (%s) processing time: %d msg in %f sec",
-	       buf, nmsg, (clock() - start) / (double) CLOCKS_PER_SEC);
-    }
 
     return nmsg;
 }
@@ -3669,10 +3634,20 @@ static MsgData *index_msgdata_load(struct index_state *state,
 	    case SORT_TO:
 		cur->to = get_localpart_addr(cacheitem_base(&im->record, CACHE_TO));
 		break;
- 	    case SORT_ANNOTATION:
- 		/* fetch attribute value - we fake it for now */
-		strarray_append(&cur->annot, sortcrit[j].args.annot.attrib);
+ 	    case SORT_ANNOTATION: {
+		struct buf value = BUF_INITIALIZER;
+
+		annotatemore_msg_lookup(state->mailbox->name,
+					im->record.uid,
+					sortcrit[j].args.annot.entry,
+					sortcrit[j].args.annot.userid,
+					&value);
+
+		/* buf_release() never returns NULL, so if the lookup
+		 * fails for any reason we just get an empty string here */
+		strarray_append(&cur->annot, buf_release(&value));
  		break;
+	    }
 	    case LOAD_IDS:
 		index_get_ids(cur, envtokens, cacheitem_base(&im->record, CACHE_HEADERS),
 					      cacheitem_size(&im->record, CACHE_HEADERS));

@@ -159,6 +159,9 @@ int annotatemore_fetch(const annotate_scope_t *,
 /* lookup a single annotation and return result */
 int annotatemore_lookup(const char *mboxname, const char *entry,
 			const char *userid, struct buf *value);
+/* lookup a single per-message annotation and return result */
+int annotatemore_msg_lookup(const char *mboxname, uint32_t uid, const char *entry,
+			    const char *userid, struct buf *value);
 
 /* store annotations */
 int annotatemore_store(const annotate_scope_t *,
