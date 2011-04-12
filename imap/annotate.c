@@ -588,7 +588,6 @@ static int annotatemore_findall2(const annotate_cursor_t *cursor,
 
 struct fetchdata {
     struct namespace *namespace;
-    struct protstream *pout;
     const char *userid;
     int isadmin;
     struct auth_state *auth_state;
@@ -605,69 +604,30 @@ struct fetchdata {
     const char *orig_mailbox;
     const strarray_t *orig_entry;
     const strarray_t *orig_attribute;
-    int ismetadata;
-    int ismessage;
     int maxsize;
     int *sizeptr;
+
+    /* state for output_entryatt */
+    struct attvaluelist *attvalues;
+    char lastname[MAX_MAILBOX_BUFFER];
+    char lastentry[MAX_MAILBOX_BUFFER];
+    uint32_t lastuid;
+    annotate_fetch_cb_t callback;
+    void *callback_rock;
 };
 
-static void output_attlist(struct protstream *pout, struct attvaluelist *l,
-			   int atoms_flag)
+static void flush_entryatt(struct fetchdata *fdata)
 {
-    int flag = 0;
+    if (!fdata->attvalues)
+	return;	    /* nothing to flush */
 
-    assert(l);
-
-    prot_putc('(',pout);
-
-    for ( ; l ; l = l->next) {
-	if (flag) prot_putc(' ', pout);
-	else flag = 1;
-
-	if (atoms_flag)
-	    prot_printastring(pout, l->attrib);
-	else
-	    prot_printstring(pout, l->attrib);
-	prot_putc(' ', pout);
-	prot_printmap(pout, l->value.s, l->value.len);
-    }
-
-    prot_putc(')',pout);
-}
-
-static void output_metalist(struct protstream *pout, struct attvaluelist *l,
-			    const char *entry)
-{
-    int flag = 0;
-    struct buf mentry = BUF_INITIALIZER;
-
-    assert(l);
-
-    prot_putc('(', pout);
-
-    for ( ; l ; l = l->next) {
-	buf_reset(&mentry);
-
-	/* check if it's a value we print... */
-	if (!strcmp(l->attrib, "value.shared"))
-	    buf_appendcstr(&mentry, "/shared");
-	else if (!strcmp(l->attrib, "value.priv"))
-	    buf_appendcstr(&mentry, "/private");
-	else
-	    continue;
-	buf_appendcstr(&mentry, entry);
-	buf_cstring(&mentry);
-
-	if (flag) prot_putc(' ', pout);
-	else flag = 1;
-
-	prot_printastring(pout, mentry.s);
-	prot_putc(' ', pout);
-	prot_printmap(pout, l->value.s, l->value.len);
-    }
-
-    prot_putc(')', pout);
-    buf_free(&mentry);
+    fdata->callback(fdata->lastname,
+		    fdata->lastuid,
+		    fdata->lastentry,
+		    fdata->attvalues,
+		    fdata->callback_rock);
+    freeattvalues(fdata->attvalues);
+    fdata->attvalues = NULL;
 }
 
 /* Output a single entry and attributes for a single mailbox.
@@ -681,88 +641,47 @@ static void output_entryatt(const annotate_cursor_t *cursor, const char *entry,
 			    const char *userid, const struct buf *value,
 			    struct fetchdata *fdata)
 {
-    const char *mboxname = "";
-    static struct attvaluelist *attvalues = NULL;
-    static int lastwhich;
-    static char lastname[MAX_MAILBOX_BUFFER];
-    static char lastentry[MAX_MAILBOX_BUFFER];
-    static uint32_t lastuid;
-    static const char *sep;
+    const char *mboxname;
     char key[MAX_MAILBOX_BUFFER]; /* XXX MAX_MAILBOX_NAME + entry + userid */
     struct buf buf = BUF_INITIALIZER;
     int vallen;
+    char ext_mboxname[MAX_MAILBOX_BUFFER];
 
-    /* We have to reset before each GETANNOTATION command.
-     * Handle it as a dirty hack.
-     */
-    if (!entry) {
-	attvalues = NULL;
-	lastwhich = 0;
-	lastname[0] = '\0';
-	lastentry[0] = '\0';
-	lastuid = 0;
-	sep = "";
-	return;
-    }
+    /* We don't put any funny interpretations on NULL values for
+     * some of these anymore, now that the dirty hacks are gone. */
+    assert(cursor);
+    assert(entry);
+    assert(userid);
+    assert(value);
+    assert(fdata);
 
-    if (cursor) {
-	if (cursor->ext_mboxname)
-	    mboxname = cursor->ext_mboxname;
-	else
-	    mboxname = cursor->int_mboxname;
+    if (cursor->ext_mboxname)
+	mboxname = cursor->ext_mboxname;
+    else if (cursor->int_mboxname) {
+	fdata->namespace->mboxname_toexternal(fdata->namespace,
+					      cursor->int_mboxname,
+					      fdata->userid,
+					      ext_mboxname);
+	mboxname = ext_mboxname;
     }
+    else
+	mboxname = "";
+    /* @mboxname is now an external mailbox name */
 
     /* Check if this is a new entry.
-     * If so, flush our current entry.  Otherwise append the entry.
-     *
-     * We also need a way to flush the last cached entry when we're done.
-     * Handle it as a dirty hack.
+     * If so, flush our current entry.
      */
-    if ((!value || !cursor || cursor->which != lastwhich ||
-	cursor->uid != lastuid ||
-	strcmp(mboxname, lastname) || strcmp(entry, lastentry))
-	&& attvalues) {
-	if (fdata->ismessage) {
-	    prot_printf(fdata->pout, "%s", sep);
-	    prot_printastring(fdata->pout, lastentry);
-	    prot_putc(' ', fdata->pout);
-	    output_attlist(fdata->pout, attvalues, /*atoms_flag*/1);
-	    sep = " ";
-	}
-	else if (fdata->ismetadata) {
-	    prot_printf(fdata->pout, "* METADATA ");
-	    prot_printastring(fdata->pout, lastname);
-	    prot_putc(' ', fdata->pout);
-	    output_metalist(fdata->pout, attvalues, lastentry);
-	    prot_printf(fdata->pout, "\r\n");
-	}
-	else {
-	    prot_printf(fdata->pout, "* ANNOTATION ");
-	    prot_printastring(fdata->pout, lastname);
-	    prot_putc(' ', fdata->pout);
-	    prot_printstring(fdata->pout, lastentry);
-	    prot_putc(' ', fdata->pout);
-	    output_attlist(fdata->pout, attvalues, /*atoms_flag*/0);
-	    prot_printf(fdata->pout, "\r\n");
-	}
-	
-	freeattvalues(attvalues);
-	attvalues = NULL;
-    }
-    if (!cursor) return;
-    if (!value) return;
+    if (cursor->uid != fdata->lastuid ||
+	strcmp(mboxname, fdata->lastname) ||
+	strcmp(entry, fdata->lastentry))
+	flush_entryatt(fdata);
 
-    lastwhich = cursor->which;
-    if (cursor->which == ANNOTATION_SCOPE_MAILBOX ||
-        cursor->which == ANNOTATION_SCOPE_MESSAGE)
-	strlcpy(lastname, mboxname, sizeof(lastname));
-    else
-	lastname[0] = '\0';
-    strlcpy(lastentry, entry, sizeof(lastentry));
-    lastuid = cursor->uid;
+    strlcpy(fdata->lastname, mboxname, sizeof(fdata->lastname));
+    strlcpy(fdata->lastentry, entry, sizeof(fdata->lastentry));
+    fdata->lastuid = cursor->uid;
 
     /* check if we already returned this entry */
-    strlcpy(key, lastname, sizeof(key));
+    strlcpy(key, mboxname, sizeof(key));
     if (cursor->uid) {
 	char uidbuf[32];
 	snprintf(uidbuf, sizeof(uidbuf), "/UID%u/", cursor->uid);
@@ -783,27 +702,27 @@ static void output_entryatt(const annotate_cursor_t *cursor, const char *entry,
 
     if (!userid[0]) { /* shared annotation */
 	if ((fdata->attribs & ATTRIB_VALUE_SHARED)) {
-	    appendattvalue(&attvalues, "value.shared", value);
+	    appendattvalue(&fdata->attvalues, "value.shared", value);
 	    fdata->found |= ATTRIB_VALUE_SHARED;
 	}
 
 	if ((fdata->attribs & ATTRIB_SIZE_SHARED)) {
 	    buf_reset(&buf);
 	    buf_printf(&buf, "%u", value->len);
-	    appendattvalue(&attvalues, "size.shared", &buf);
+	    appendattvalue(&fdata->attvalues, "size.shared", &buf);
 	    fdata->found |= ATTRIB_SIZE_SHARED;
 	}
     }
     else { /* private annotation */
 	if ((fdata->attribs & ATTRIB_VALUE_PRIV)) {
-	    appendattvalue(&attvalues, "value.priv", value);
+	    appendattvalue(&fdata->attvalues, "value.priv", value);
 	    fdata->found |= ATTRIB_VALUE_PRIV;
 	}
 
 	if ((fdata->attribs & ATTRIB_SIZE_PRIV)) {
 	    buf_reset(&buf);
 	    buf_printf(&buf, "%u", value->len);
-	    appendattvalue(&attvalues, "size.priv", &buf);
+	    appendattvalue(&fdata->attvalues, "size.priv", &buf);
 	    fdata->found |= ATTRIB_SIZE_PRIV;
 	}
     }
@@ -1180,7 +1099,7 @@ static void annotation_get_fromdb(const annotate_cursor_t *cursor,
 	    output_entryatt(cursor, entrypat, "", &empty, fdata);
 	}
 	/* flush any stored attribute-value pairs */
-	output_entryatt(NULL, "", "", NULL, fdata);
+	flush_entryatt(fdata);
     }
 }
 
@@ -1614,8 +1533,9 @@ static int fetch_cb(char *name, int matchlen,
 int annotatemore_fetch(const annotate_scope_t *scope,
 		       const strarray_t *entries, const strarray_t *attribs,
 		       struct namespace *namespace, int isadmin, const char *userid,
-		       struct auth_state *auth_state, struct protstream *pout,
-		       int ismetadata, int *maxsizeptr)
+		       struct auth_state *auth_state,
+		       annotate_fetch_cb_t callback, void *rock,
+		       int *maxsizeptr)
 {
     int i;
     struct fetchdata fdata;
@@ -1624,20 +1544,16 @@ int annotatemore_fetch(const annotate_scope_t *scope,
     const annotate_entrydesc_t *db_entry;
 
     memset(&fdata, 0, sizeof(struct fetchdata));
-    fdata.pout = pout;
     fdata.namespace = namespace;
     fdata.userid = userid;
     fdata.isadmin = isadmin;
     fdata.auth_state = auth_state;
-    fdata.ismetadata = ismetadata;
-    fdata.ismessage = scope->which == ANNOTATION_SCOPE_MESSAGE;
+    fdata.callback = callback;
+    fdata.callback_rock = rock;
     if (maxsizeptr) {
 	fdata.maxsize = *maxsizeptr; /* copy to check against */
         fdata.sizeptr = maxsizeptr; /* pointer to push largest back */
     }
-
-    /* Reset state in output_entryatt() */
-    output_entryatt(NULL, NULL, NULL, NULL, NULL);
 
     /* Build list of attributes to fetch */
     for (i = 0 ; i < attribs->count ; i++)
@@ -1858,7 +1774,7 @@ int annotatemore_fetch(const annotate_scope_t *scope,
     }
 
     /* Flush last cached entry in output_entryatt() */
-    output_entryatt(NULL, "", "", NULL, &fdata);
+    flush_entryatt(&fdata);
 
     /* Free the entry list, if needed */
     while(fdata.entry_list) {

@@ -7842,6 +7842,31 @@ static int parse_metadata_store_data(const char *tag,
     return EOF;
 }
 
+static void getannotation_response(const char *mboxname,
+			           uint32_t uid
+					__attribute__((unused)),
+				   const char *entry,
+				   struct attvaluelist *attvalues,
+				   void *rock __attribute__((unused)))
+{
+    int sep = '(';
+    struct attvaluelist *l;
+
+    prot_printf(imapd_out, "* ANNOTATION ");
+    prot_printastring(imapd_out, mboxname);
+    prot_putc(' ', imapd_out);
+    prot_printstring(imapd_out, entry);
+    prot_putc(' ', imapd_out);
+    for (l = attvalues ; l ; l = l->next) {
+	prot_putc(sep, imapd_out);
+	sep = ' ';
+	prot_printstring(imapd_out, l->attrib);
+	prot_putc(' ',  imapd_out);
+	prot_printmap(imapd_out, l->value.s, l->value.len);
+    }
+    prot_printf(imapd_out, ")\r\n");
+}
+
 /*
  * Perform a GETANNOTATION command
  *
@@ -7876,7 +7901,9 @@ static void cmd_getannotation(const char *tag, char *mboxpat)
 
     r = annotatemore_fetch(&scope, &entries, &attribs, &imapd_namespace,
 			   imapd_userisadmin || imapd_userisproxyadmin,
-			   imapd_userid, imapd_authstate, imapd_out, 0, 0);
+			   imapd_userid, imapd_authstate,
+			   getannotation_response, NULL,
+			   0);
 
     imapd_check(NULL, 0);
 
@@ -7892,6 +7919,42 @@ static void cmd_getannotation(const char *tag, char *mboxpat)
     strarray_fini(&attribs);
 
     return;
+}
+
+static void getmetadata_response(const char *mboxname,
+			         uint32_t uid
+				    __attribute__((unused)),
+				 const char *entry,
+				 struct attvaluelist *attvalues,
+				 void *rock __attribute__((unused)))
+{
+    int sep = '(';
+    struct attvaluelist *l;
+    struct buf mentry = BUF_INITIALIZER;
+
+    prot_printf(imapd_out, "* METADATA ");
+    prot_printastring(imapd_out, mboxname);
+    prot_putc(' ', imapd_out);
+    for (l = attvalues ; l ; l = l->next) {
+	/* check if it's a value we print... */
+	buf_reset(&mentry);
+	if (!strcmp(l->attrib, "value.shared"))
+	    buf_appendcstr(&mentry, "/shared");
+	else if (!strcmp(l->attrib, "value.priv"))
+	    buf_appendcstr(&mentry, "/private");
+	else
+	    continue;
+	buf_appendcstr(&mentry, entry);
+	buf_cstring(&mentry);
+
+	prot_putc(sep, imapd_out);
+	sep = ' ';
+	prot_printastring(imapd_out, mentry.s);
+	prot_putc(' ',  imapd_out);
+	prot_printmap(imapd_out, l->value.s, l->value.len);
+    }
+    prot_printf(imapd_out, ")\r\n");
+    buf_free(&mentry);
 }
 
 /*
@@ -8012,7 +8075,8 @@ static void cmd_getmetadata(const char *tag, char *mboxpat)
     basesize = maxsize;
     r = annotatemore_fetch(&scope, &newe, &newa, &imapd_namespace,
 			   imapd_userisadmin || imapd_userisproxyadmin,
-			   imapd_userid, imapd_authstate, imapd_out, 1,
+			   imapd_userid, imapd_authstate,
+			   getmetadata_response, NULL,
 			   sizeptr);
 
     imapd_check(NULL, 0);

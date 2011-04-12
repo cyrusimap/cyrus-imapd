@@ -150,11 +150,17 @@ int annotatemore_findall(const char *mailbox, const char *entry,
 			 struct txn **tid);
 
 /* fetch annotations and output results */
+typedef void (*annotate_fetch_cb_t)(const char *mboxname,
+				    uint32_t uid,
+				    const char *entry,
+				    struct attvaluelist *,
+				    void *rock);
 int annotatemore_fetch(const annotate_scope_t *,
 		       const strarray_t *entries, const strarray_t *attribs,
 		       struct namespace *namespace, int isadmin, const char *userid,
-		       struct auth_state *auth_state, struct protstream *pout,
-		       int ismetadata, int *maxsize);
+		       struct auth_state *auth_state,
+		       annotate_fetch_cb_t callback, void *rock,
+		       int *maxsize);
 
 /* lookup a single annotation and return result */
 int annotatemore_lookup(const char *mboxname, const char *entry,

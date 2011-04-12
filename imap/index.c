@@ -2335,6 +2335,39 @@ void index_tellchanges(struct index_state *state, int canexpunge,
     }
 }
 
+struct fetch_annotation_rock {
+    struct protstream *pout;
+    const char *sep;
+};
+
+static void fetch_annotation_response(const char *mboxname
+					__attribute__((unused)),
+				      uint32_t uid
+					__attribute__((unused)),
+				      const char *entry,
+				      struct attvaluelist *attvalues,
+				      void *rock)
+{
+    char sep2 = '(';
+    struct attvaluelist *l;
+    struct fetch_annotation_rock *frock = rock;
+
+    prot_printf(frock->pout, "%s", frock->sep);
+    prot_printastring(frock->pout, entry);
+    prot_putc(' ', frock->pout);
+
+    for (l = attvalues ; l ; l = l->next) {
+	prot_putc(sep2, frock->pout);
+	sep2 = ' ';
+	prot_printastring(frock->pout, l->attrib);
+	prot_putc(' ', frock->pout);
+	prot_printmap(frock->pout, l->value.s, l->value.len);
+    }
+    prot_putc(')', frock->pout);
+
+    frock->sep = " ";
+}
+
 /*
  * Helper function to send FETCH data for the ANNOTATION
  * fetch item.
@@ -2344,10 +2377,15 @@ static int index_fetchannotations(struct index_state *state,
 				  const struct fetchargs *fetchargs)
 {
     annotate_scope_t scope;
+    struct fetch_annotation_rock rock;
     int r = 0;
 
     annotate_scope_init_message(&scope, state->mailbox,
 				state->map[msgno-1].record.uid);
+
+    memset(&rock, 0, sizeof(rock));
+    rock.pout = state->out;
+    rock.sep = "";
 
     r = annotatemore_fetch(&scope,
 			   &fetchargs->entries,
@@ -2356,8 +2394,8 @@ static int index_fetchannotations(struct index_state *state,
 			   fetchargs->isadmin,
 			   fetchargs->userid,
 			   fetchargs->authstate,
-			   state->out,
-			   0, 0);
+			   fetch_annotation_response, &rock,
+			   0);
 
     return r;
 }
