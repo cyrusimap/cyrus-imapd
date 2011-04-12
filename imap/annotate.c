@@ -611,7 +611,8 @@ struct fetchdata {
     int *sizeptr;
 };
 
-static void output_attlist(struct protstream *pout, struct attvaluelist *l)
+static void output_attlist(struct protstream *pout, struct attvaluelist *l,
+			   int atoms_flag)
 {
     int flag = 0;
 
@@ -623,7 +624,10 @@ static void output_attlist(struct protstream *pout, struct attvaluelist *l)
 	if (flag) prot_putc(' ', pout);
 	else flag = 1;
 
-	prot_printstring(pout, l->attrib);
+	if (atoms_flag)
+	    prot_printastring(pout, l->attrib);
+	else
+	    prot_printstring(pout, l->attrib);
 	prot_putc(' ', pout);
 	prot_printmap(pout, l->value.s, l->value.len);
     }
@@ -719,9 +723,10 @@ static void output_entryatt(const annotate_cursor_t *cursor, const char *entry,
 	strcmp(mboxname, lastname) || strcmp(entry, lastentry))
 	&& attvalues) {
 	if (fdata->ismessage) {
-	    prot_printf(fdata->pout, "%s\"%s\" ",
-			sep, lastentry);
-	    output_attlist(fdata->pout, attvalues);
+	    prot_printf(fdata->pout, "%s", sep);
+	    prot_printastring(fdata->pout, lastentry);
+	    prot_putc(' ', fdata->pout);
+	    output_attlist(fdata->pout, attvalues, /*atoms_flag*/1);
 	    sep = " ";
 	}
 	else if (fdata->ismetadata) {
@@ -737,7 +742,7 @@ static void output_entryatt(const annotate_cursor_t *cursor, const char *entry,
 	    prot_putc(' ', fdata->pout);
 	    prot_printstring(fdata->pout, lastentry);
 	    prot_putc(' ', fdata->pout);
-	    output_attlist(fdata->pout, attvalues);
+	    output_attlist(fdata->pout, attvalues, /*atoms_flag*/0);
 	    prot_printf(fdata->pout, "\r\n");
 	}
 	

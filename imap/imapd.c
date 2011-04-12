@@ -411,13 +411,14 @@ void cmd_enable(char* tag);
 int parsecreateargs(struct dlist **extargs);
 
 static int parse_annotate_fetch_data(const char *tag,
+				     int permessage_flag,
 				     strarray_t *entries,
 				     strarray_t *attribs);
 static int parse_metadata_fetch_data(const char *tag,
 				     strarray_t *entries,
 				     strarray_t *attribs);
 static int parse_annotate_store_data(const char *tag,
-				     int must_be_list,
+				     int permessage_flag,
 				     struct entryattlist **entryatts);
 static int parse_metadata_store_data(const char *tag,
 				     struct entryattlist **entryatts);
@@ -3972,7 +3973,9 @@ static int parse_fetch_args(const char *tag, const char *cmd,
 		c = prot_getc(imapd_in);
 		if (c != '(')
 		    goto badannotation;
-		c = parse_annotate_fetch_data(tag, &fetchargs.entries,
+		c = parse_annotate_fetch_data(tag,
+					      /*permessage_flag*/1,
+					      &fetchargs.entries,
 					      &fetchargs.attribs);
 		if (c == EOF) {
 		    eatline(imapd_in, c);
@@ -4565,7 +4568,7 @@ void cmd_store(char *tag, char *sequence, int usinguid)
 	/* ANNOTATION has implicit .SILENT behaviour */
 	storeargs.silent = 1;
 
-	c = parse_annotate_store_data(tag, /*must_be_list*/1,
+	c = parse_annotate_store_data(tag, /*permessage_flag*/1,
 				      &storeargs.entryatts);
 	if (c == EOF) {
 	    eatline(imapd_in, c);
@@ -7398,6 +7401,7 @@ int parsecreateargs(struct dlist **extargs)
  */
 
 static int parse_annotate_fetch_data(const char *tag,
+				     int permessage_flag,
 				     strarray_t *entries,
 				     strarray_t *attribs)
 {
@@ -7413,7 +7417,10 @@ static int parse_annotate_fetch_data(const char *tag,
     else if (c == '(') {
 	/* entry list */
 	do {
-	    c = getqstring(imapd_in, imapd_out, &arg);
+	    if (permessage_flag)
+		c = getastring(imapd_in, imapd_out, &arg);
+	    else
+		c = getqstring(imapd_in, imapd_out, &arg);
 	    if (c == EOF) {
 		prot_printf(imapd_out,
 			    "%s BAD Missing annotation entry\r\n", tag);
@@ -7437,7 +7444,10 @@ static int parse_annotate_fetch_data(const char *tag,
     else {
 	/* single entry -- add it to the list */
 	prot_ungetc(c, imapd_in);
-	c = getqstring(imapd_in, imapd_out, &arg);
+	if (permessage_flag)
+	    c = getastring(imapd_in, imapd_out, &arg);
+	else
+	    c = getqstring(imapd_in, imapd_out, &arg);
 	if (c == EOF) {
 	    prot_printf(imapd_out,
 			"%s BAD Missing annotation entry\r\n", tag);
@@ -7456,7 +7466,10 @@ static int parse_annotate_fetch_data(const char *tag,
     if (c == '(') {
 	/* attrib list */
 	do {
-	    c = getnstring(imapd_in, imapd_out, &arg);
+	    if (permessage_flag)
+		c = getastring(imapd_in, imapd_out, &arg);
+	    else
+		c = getnstring(imapd_in, imapd_out, &arg);
 	    if (c == EOF) {
 		prot_printf(imapd_out,
 			    "%s BAD Missing annotation attribute(s)\r\n", tag);
@@ -7480,7 +7493,10 @@ static int parse_annotate_fetch_data(const char *tag,
     else {
 	/* single attrib */
 	prot_ungetc(c, imapd_in);
-	c = getqstring(imapd_in, imapd_out, &arg);
+	if (permessage_flag)
+	    c = getastring(imapd_in, imapd_out, &arg);
+	else
+	    c = getqstring(imapd_in, imapd_out, &arg);
 	    if (c == EOF) {
 		prot_printf(imapd_out,
 			    "%s BAD Missing annotation attribute\r\n", tag);
@@ -7607,10 +7623,15 @@ static int parse_metadata_fetch_data(const char *tag,
  * This is a generic routine which parses just the annotation data.
  * Any surrounding command text must be parsed elsewhere, ie,
  * SETANNOTATION, STORE, APPEND.
+ *
+ * Also parse RFC5257 per-message annotation store data, which
+ * is almost identical but differs in that entry names and attrib
+ * names are astrings rather than strings, and that the whole set
+ * of data *must* be enclosed in parentheses.
  */
 
 static int parse_annotate_store_data(const char *tag,
-				     int must_be_list,
+				     int permessage_flag,
 				     struct entryattlist **entryatts)
 {
     int c, islist = 0;
@@ -7629,7 +7650,7 @@ static int parse_annotate_store_data(const char *tag,
 	/* entry list */
 	islist = 1;
     }
-    else if (must_be_list) {
+    else if (permessage_flag) {
 	prot_printf(imapd_out,
 		    "%s BAD Missing paren for annotation entry\r\n", tag);
 	goto baddata;
@@ -7641,7 +7662,10 @@ static int parse_annotate_store_data(const char *tag,
 
     do {
 	/* get entry */
-	c = getqstring(imapd_in, imapd_out, &entry);
+	if (permessage_flag)
+	    c = getastring(imapd_in, imapd_out, &entry);
+	else
+	    c = getqstring(imapd_in, imapd_out, &entry);
 	if (c == EOF) {
 	    prot_printf(imapd_out,
 			"%s BAD Missing annotation entry\r\n", tag);
@@ -7658,7 +7682,10 @@ static int parse_annotate_store_data(const char *tag,
 
 	do {
 	    /* get attrib */
-	    c = getqstring(imapd_in, imapd_out, &attrib);
+	    if (permessage_flag)
+		c = getastring(imapd_in, imapd_out, &attrib);
+	    else
+		c = getqstring(imapd_in, imapd_out, &attrib);
 	    if (c == EOF) {
 		prot_printf(imapd_out,
 			    "%s BAD Missing annotation attribute\r\n", tag);
@@ -7820,7 +7847,7 @@ static void cmd_getannotation(const char *tag, char *mboxpat)
     strarray_t attribs = STRARRAY_INITIALIZER;
     annotate_scope_t scope;
 
-    c = parse_annotate_fetch_data(tag, &entries, &attribs);
+    c = parse_annotate_fetch_data(tag, /*permessage_flag*/0, &entries, &attribs);
     if (c == EOF) {
 	eatline(imapd_in, c);
 	return;
