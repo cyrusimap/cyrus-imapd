@@ -169,6 +169,17 @@ enum {
     STORE_ANNOTATION
 };
 
+struct searchannot {
+    struct searchannot *next;
+    char *entry;
+    char *attrib;
+    struct namespace *namespace;
+    int isadmin;
+    const char *userid;
+    struct auth_state *auth_state;
+    struct buf value;
+};
+
 struct searchsub {
     struct searchsub *next;
     struct searchargs *sub1;
@@ -219,6 +230,7 @@ struct searchargs {
     struct strlist *header_name, *header;
     struct searchsub *sublist;
     modseq_t modseq;
+    struct searchannot *annotations;
 
     bit32 cache_atleast;
 

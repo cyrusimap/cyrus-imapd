@@ -8199,6 +8199,68 @@ static void cmd_setmetadata(const char *tag, char *mboxpat)
 }
 
 /*
+ * Parse a ANNOTATION item for SEARCH (RFC5257) into a struct
+ * searchannot and append it to the chain of such structures at *lp.
+ * Returns the next character.
+ */
+static int parse_search_annotation(int c, struct searchannot **lp)
+{
+    struct searchannot *sa;
+    struct buf entry = BUF_INITIALIZER;
+    struct buf attrib = BUF_INITIALIZER;
+    struct buf value = BUF_INITIALIZER;
+
+    if (c != ' ')
+	return EOF;
+
+    /* parse the entry */
+    c = getastring(imapd_in, imapd_out, &entry);
+    if (!entry.len || c != ' ') {
+	c = EOF;
+	goto out;
+    }
+
+    /* parse the attrib */
+    c = getastring(imapd_in, imapd_out, &attrib);
+    if (!attrib.len || c != ' ') {
+	c = EOF;
+	goto out;
+    }
+    if (strcmp(attrib.s, "value") &&
+        strcmp(attrib.s, "value.shared") &&
+        strcmp(attrib.s, "value.priv")) {
+	c = EOF;
+	goto out;
+    }
+
+    /* parse the value */
+    c = getbnstring(imapd_in, imapd_out, &value);
+    if (c == EOF)
+	goto out;
+
+    sa = xzmalloc(sizeof(*sa));
+    sa->entry = buf_release(&entry);
+    sa->attrib = buf_release(&attrib);
+    sa->namespace = &imapd_namespace;
+    sa->isadmin = imapd_userisadmin || imapd_userisproxyadmin;
+    sa->userid = imapd_userid;
+    sa->auth_state = imapd_authstate;
+    buf_move(&sa->value, &value);
+
+    /* append to *lp: move lp along the chain until
+     * it points to the last ->next pointer */
+    while (*lp && (*lp)->next)
+	lp = &(*lp)->next;
+    *lp = sa;
+
+out:
+    buf_free(&entry);
+    buf_free(&attrib);
+    buf_free(&value);
+    return c;
+}
+
+/*
  * Parse search return options
  */
 int getsearchreturnopts(char *tag, struct searchargs *searchargs)
@@ -8313,6 +8375,11 @@ int getsearchcriteria(char *tag, struct searchargs *searchargs,
 	}
 	else if (!strcmp(criteria.s, "all")) {
 	    break;
+	}
+	else if (!strcmp(criteria.s, "annotation")) {
+	    c = parse_search_annotation(c, &searchargs->annotations);
+	    if (c == EOF)
+		goto badcri;
 	}
 	else goto badcri;
 	break;
@@ -10208,6 +10275,7 @@ void appendsearchargs(struct searchargs *s,
 void freesearchargs(struct searchargs *s)
 {
     struct searchsub *sub, *n;
+    struct searchannot *sa;
 
     if (!s) return;
 
@@ -10222,6 +10290,14 @@ void freesearchargs(struct searchargs *s)
     freestrlist(s->text);
     freestrlist(s->header_name);
     freestrlist(s->header);
+
+    while ((sa = s->annotations)) {
+	s->annotations = sa->next;
+	free(sa->entry);
+	free(sa->attrib);
+	buf_free(&sa->value);
+	free(sa);
+    }
 
     for (sub = s->sublist; sub; sub = n) {
 	n = sub->next;
