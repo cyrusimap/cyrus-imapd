@@ -111,6 +111,7 @@
 #include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
+#include "ptrarray.h"
 
 #include "pushstats.h"		/* SNMP interface */
 
@@ -185,8 +186,8 @@ struct appendstage {
     strarray_t flags;
     time_t internaldate;
     int binary;
-} **stage = NULL;
-unsigned long numstage = 0;
+};
+static ptrarray_t stages = PTRARRAY_INITIALIZER;
 
 /* the sasl proxy policy context */
 static struct proxy_context imapd_proxyctx = {
@@ -1080,17 +1081,16 @@ void fatal(const char *s, int code)
 	prot_printf(imapd_out, "* BYE Fatal error: %s\r\n", s);
 	prot_flush(imapd_out);
     }
-    if (stage) {
+    if (stages.count) {
 	/* Cleanup the stage(s) */
-	while (numstage) {
-	    struct appendstage *curstage = stage[--numstage];
-
+	struct appendstage *curstage;
+	while ((curstage = ptrarray_pop(&stages))) {
 	    if (curstage->f != NULL) fclose(curstage->f);
 	    append_removestage(curstage->stage);
 	    strarray_fini(&curstage->flags);
 	    free(curstage);
 	}
-	free(stage);
+	ptrarray_fini(&stages);
     }
 
     syslog(LOG_ERR, "Fatal error: %s", s);
@@ -3249,14 +3249,13 @@ void cmd_append(char *tag, char *name, const char *cur_name)
     unsigned size;
     int sync_seen = 0;
     int r;
-    unsigned i;
+    int i;
     char mailboxname[MAX_MAILBOX_BUFFER];
     struct appendstate appendstate; 
     unsigned long uidvalidity;
     unsigned long firstuid, num;
     long doappenduid = 0;
     const char *parseerr = NULL, *url = NULL;
-    unsigned numalloc = 5;
     struct appendstage *curstage;
     struct mboxlist_entry *mbentry = NULL;
 
@@ -3337,21 +3336,11 @@ void cmd_append(char *tag, char *name, const char *cur_name)
 	return;
     }
 
-    stage = xmalloc(numalloc * sizeof(struct appendstage *));
-
     c = ' '; /* just parsed a space */
     /* we loop, to support MULTIAPPEND */
     while (!r && c == ' ') {
-	/* Grow the stage array, if necessary */
-	if (numstage == numalloc) {
-	    /* Avoid integer wrap as arg to xrealloc */
-	    if (numalloc > INT_MAX/(2*sizeof(struct appendstage *)))
-		goto done;
-	    numalloc *= 2;
-	    stage = xrealloc(stage, numalloc * sizeof(struct appendstage *));
-	}
-	curstage = stage[numstage] = xzmalloc(sizeof(struct appendstage));
-	numstage++;
+	curstage = xzmalloc(sizeof(*curstage));
+	ptrarray_push(&stages, curstage);
 	/* Parse flags */
 	c = getword(imapd_in, &arg);
 	if  (c == '(' && !arg.s[0]) {
@@ -3394,7 +3383,7 @@ void cmd_append(char *tag, char *name, const char *cur_name)
 	}
 
 	/* Stage the message */
-	curstage->f = append_newstage(mailboxname, now, numstage, &(curstage->stage));
+	curstage->f = append_newstage(mailboxname, now, stages.count, &(curstage->stage));
 	if (!curstage->f) {
 	    r = IMAP_IOERROR;
 	    goto done;
@@ -3463,17 +3452,18 @@ void cmd_append(char *tag, char *name, const char *cur_name)
 
 	doappenduid = (appendstate.myrights & ACL_READ);
 
-	for (i = 0; !r && i < numstage; i++) {
+	for (i = 0; !r && i < stages.count ; i++) {
+	    curstage = stages.data[i];
 	    body = NULL;
-	    if (stage[i]->binary) {
-		r = message_parse_binary_file(stage[i]->f, &body);
-		fclose(stage[i]->f);
-		stage[i]->f = NULL;
+	    if (curstage->binary) {
+		r = message_parse_binary_file(curstage->f, &body);
+		fclose(curstage->f);
+		curstage->f = NULL;
 	    }
 	    if (!r) {
-		r = append_fromstage(&appendstate, &body, stage[i]->stage,
-				     stage[i]->internaldate,
-				     &stage[i]->flags, 0);
+		r = append_fromstage(&appendstate, &body, curstage->stage,
+				     curstage->internaldate,
+				     &curstage->flags, 0);
 	    }
 	    if (body) message_free_body(body);
 	}
@@ -3486,16 +3476,13 @@ void cmd_append(char *tag, char *name, const char *cur_name)
     }
 
     /* Cleanup the stage(s) */
-    while (numstage) {
-	curstage = stage[--numstage];
-
+    while ((curstage = ptrarray_pop(&stages))) {
 	if (curstage->f != NULL) fclose(curstage->f);
 	append_removestage(curstage->stage);
 	strarray_fini(&curstage->flags);
 	free(curstage);
     }
-    if (stage) free(stage);
-    stage = NULL;
+    ptrarray_fini(&stages);
 
     imapd_check(NULL, 1);
 
