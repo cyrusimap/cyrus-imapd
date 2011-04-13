@@ -78,6 +78,8 @@
 #include "annotate.h"
 #include "sync_log.h"
 
+#define DEBUG 1
+
 /* Encapsulates all the state involved in providing the scope
  * for setting or getting a single annotation */
 typedef struct annotate_cursor annotate_cursor_t;
@@ -445,6 +447,25 @@ static int split_key(const char *key, int keysize,
     return 0;
 #undef NFIELDS
 }
+
+#if DEBUG
+static const char *key_as_string(const char *key, int keylen)
+{
+    const char *mboxname, *entry, *userid;
+    unsigned int uid;
+    int r;
+    static struct buf buf = BUF_INITIALIZER;
+
+    buf_reset(&buf);
+    r = split_key(key, keylen, &mboxname, &uid, &entry, &userid);
+    if (r)
+	buf_appendcstr(&buf, "invalid");
+    else
+	buf_printf(&buf, "{ mboxname=\"%s\" uid=%u entry=\"%s\" userid=\"%s\" }",
+		   mboxname, uid, entry, userid);
+    return buf.s;
+}
+#endif
 
 static int split_attribs(const char *data, int datalen __attribute__((unused)),
 			 struct buf *value)
@@ -1828,6 +1849,11 @@ static int write_entry(const char *mboxname,
     keylen = make_key(mboxname, uid, entry, userid, key, sizeof(key));
 
     if (value->s == NULL) {
+
+#if DEBUG
+	syslog(LOG_ERR, "write_entry: deleting key %s", key_as_string(key, keylen));
+#endif
+
 	do {
 	    r = DB->delete(anndb, key, keylen, tid, 0);
 	} while (r == CYRUSDB_AGAIN);
@@ -1854,6 +1880,10 @@ static int write_entry(const char *mboxname,
 
 	l = 0;	/* fake modifiedsince */
 	buf_appendmap(&data, (const char *)&l, sizeof(l));
+
+#if DEBUG
+	syslog(LOG_ERR, "write_entry: storing key %s", key_as_string(key, keylen));
+#endif
 
 	do {
 	    r = DB->store(anndb, key, keylen, data.s, data.len, tid);
