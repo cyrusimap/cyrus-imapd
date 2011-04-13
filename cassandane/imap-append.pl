@@ -51,22 +51,56 @@ sub usage
     die "Usage: imap-append.pl [ -f format [maildir] | -u uri]";
 }
 
-my %params;
+my %imap_params = (
+	type => 'imap',
+	host => 'storet1m.internal',
+	port => 2143,
+	folder => 'inbox',
+	username => 'muttster@vmtom.com',
+	password => 'testpw',
+);
+my %mbox_params;
 while (my $a = shift)
 {
     if ($a eq '-f')
     {
-	usage() if defined $params{uri};
-	$params{type} = shift;
+	usage() if defined $mbox_params{uri};
+	$mbox_params{type} = shift;
     }
     elsif ($a eq '-u')
     {
-	usage() if defined $params{type};
-	$params{uri} = shift;
+	usage() if defined $mbox_params{type};
+	$mbox_params{uri} = shift;
     }
-    elsif ($a eq '-v')
+    elsif ($a eq '-h' || $a eq '--host')
     {
-	$params{verbose} = 1;
+	$imap_params{host} = shift;
+	usage() unless defined $imap_params{host};
+    }
+    elsif ($a eq '-p' || $a eq '--port')
+    {
+	$imap_params{port} = shift;
+	usage() unless defined $imap_params{port};
+    }
+    elsif ($a eq '-F' || $a eq '--folder')
+    {
+	$imap_params{folder} = shift;
+	usage() unless defined $imap_params{folder};
+    }
+    elsif ($a eq '-U' || $a eq '--user')
+    {
+	$imap_params{username} = shift;
+	usage() unless defined $imap_params{username};
+    }
+    elsif ($a eq '-P' || $a eq '--password')
+    {
+	$imap_params{password} = shift;
+	usage() unless defined $imap_params{password};
+    }
+    elsif ($a eq '-v' || $a eq '--verbose')
+    {
+	$mbox_params{verbose} = 1;
+	$imap_params{verbose} = 1;
     }
     elsif ($a =~ m/^-/)
     {
@@ -74,21 +108,13 @@ while (my $a = shift)
     }
     else
     {
-	usage() if defined $params{filename};
-	$params{filename} = $a;
+	usage() if defined $mbox_params{filename};
+	$mbox_params{filename} = $a;
     }
 }
 
-my $imap_store = Cassandane::MessageStoreFactory->create(
-	type => 'imap',
-	host => 'storet1m.internal',
-	port => 2143,
-	folder => 'inbox',
-	username => 'muttster@vmtom.com',
-	password => 'testpw',
-	verbose => 1,
-    );
-my $mbox_store = Cassandane::MessageStoreFactory->create(%params);
+my $imap_store = Cassandane::MessageStoreFactory->create(%imap_params);
+my $mbox_store = Cassandane::MessageStoreFactory->create(%mbox_params);
 
 $imap_store->write_begin();
 $mbox_store->read_begin();
