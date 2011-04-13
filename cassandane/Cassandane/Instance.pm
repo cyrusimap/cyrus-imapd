@@ -68,6 +68,7 @@ sub new
 	cyrus_prefix => '/usr/cyrus',
 	config => Cassandane::Config->default()->clone(),
 	services => {},
+	re_use_dir => 0,
     };
 
     $self->{name} = $params{name}
@@ -78,6 +79,8 @@ sub new
 	if defined $params{cyrus_prefix};
     $self->{config} = $params{config}->clone()
 	if defined $params{config};
+    $self->{re_use_dir} = $params{re_use_dir}
+	if defined $params{re_use_dir};
 
     $stamp = to_iso8601(DateTime->now)
 	unless defined $stamp;
@@ -366,14 +369,17 @@ sub start
     my ($self) = @_;
 
     xlog "start";
-    rmtree $self->{basedir};
-    $self->_build_skeleton();
-    # TODO: system("echo 1 >/proc/sys/kernel/core_uses_pid");
-    $self->_generate_imapd_conf();
-    $self->_generate_master_conf();
-    $self->_fix_ownership();
-    $self->_setup_mboxlist();
-    $self->_reconstruct();
+    if (!$self->{re_use_dir} || ! -d $self->{basedir})
+    {
+	rmtree $self->{basedir};
+	$self->_build_skeleton();
+	# TODO: system("echo 1 >/proc/sys/kernel/core_uses_pid");
+	$self->_generate_imapd_conf();
+	$self->_generate_master_conf();
+	$self->_fix_ownership();
+	$self->_setup_mboxlist();
+	$self->_reconstruct();
+    }
     $self->_start_master();
 }
 
