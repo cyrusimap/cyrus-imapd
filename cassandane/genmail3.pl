@@ -42,31 +42,69 @@
 use strict;
 use warnings;
 use DateTime;
-use Cassandane::Generator;
-use Cassandane::Util::DateTime qw(to_iso8601);
+use Cassandane::SequenceGenerator;
+use Cassandane::ThreadedGenerator;
 use Cassandane::MessageStoreFactory;
 
 sub usage
 {
-    die "Usage: genmail3.pl [ -f format [maildir] | -u uri]";
+    print STDERR "Usage: genmail3.pl [ --threaded ] -u uri\n";
+    print STDERR "       genmail3.pl [ --threaded ] [ -U user ]\n";
+    print STDERR "                   [ -P password ] [ -F folder ]\n";
+    print STDERR "                   [ -h host ] [ -p port ]\n";
+    print STDERR "       genmail3.pl [ --threaded ] path\n";
+    exit(1);
 }
 
-my %params;
+my $mode = 'sequence';
+my %params = (
+	type => 'imap',
+	host => 'storet1m.internal',
+	port => 2143,
+	folder => 'inbox',
+	username => 'muttster@vmtom.com',
+	password => 'testpw',
+	verbose => 0,
+);
 while (my $a = shift)
 {
-    if ($a eq '-f')
+    if ($a eq '-u')
     {
 	usage() if defined $params{uri};
-	$params{type} = shift;
+	%params = ( uri => shift, verbose => $params{verbose} );
     }
-    elsif ($a eq '-u')
+    elsif ($a eq '-h' || $a eq '--host')
     {
-	usage() if defined $params{type};
-	$params{uri} = shift;
+	$params{host} = shift;
+	usage() unless defined $params{host};
     }
-    elsif ($a eq '-v')
+    elsif ($a eq '-p' || $a eq '--port')
+    {
+	$params{port} = shift;
+	usage() unless defined $params{port};
+    }
+    elsif ($a eq '-F' || $a eq '--folder')
+    {
+	$params{folder} = shift;
+	usage() unless defined $params{folder};
+    }
+    elsif ($a eq '-U' || $a eq '--user')
+    {
+	$params{username} = shift;
+	usage() unless defined $params{username};
+    }
+    elsif ($a eq '-P' || $a eq '--password')
+    {
+	$params{password} = shift;
+	usage() unless defined $params{password};
+    }
+    elsif ($a eq '-v' || $a eq '--verbose')
     {
 	$params{verbose} = 1;
+    }
+    elsif ($a eq '-T' || $a eq '--threaded')
+    {
+	$mode = 'threaded';
     }
     elsif ($a =~ m/^-/)
     {
@@ -75,22 +113,25 @@ while (my $a = shift)
     else
     {
 	usage() if defined $params{path};
-	$params{path} = $a;
+	%params = ( path => $a, verbose => $params{verbose} );
     }
 }
 
 my $store = Cassandane::MessageStoreFactory->create(%params);
 my $now = DateTime->now()->epoch();
-my $gen = Cassandane::Generator->new();
+my $gen;
+if ($mode eq 'sequence')
+{
+    $gen = Cassandane::SequenceGenerator->new();
+}
+elsif ($mode eq 'threaded')
+{
+    $gen = Cassandane::ThreadedGenerator->new();
+}
 
 $store->write_begin();
-for (my $offset = -86400*10 ; $offset <= 0 ; $offset += 3600)
+while (my $msg = $gen->generate())
 {
-    my $then = DateTime->from_epoch(epoch => $now + $offset);
-    my $msg = $gen->generate(
-	date => $then,
-	subject => "message at " . to_iso8601($then),
-    );
     $store->write_message($msg);
 }
 $store->write_end();
