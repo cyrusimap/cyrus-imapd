@@ -72,6 +72,7 @@
 #include "quota.h"
 #include "util.h"
 
+#include "annotate.h"
 #include "message_guid.h"
 #include "strarray.h"
 
@@ -673,6 +674,11 @@ int append_copy(struct mailbox *mailbox,
 
 	/* Write out index file entry */
 	r = mailbox_append_index_record(as->mailbox, &record);
+	if (r) goto out;
+
+	r = annotate_msg_copy(mailbox->name, copymsg[msg].uid,
+			      as->mailbox->name, record.uid,
+			      as->userid);
 	if (r) goto out;
     }
 

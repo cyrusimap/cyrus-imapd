@@ -176,6 +176,10 @@ static int annotation_set_specialuse(const annotate_cursor_t *cursor,
 				     struct annotate_st_entry_list *entry,
 				     struct storedata *sdata,
 				     void *rock __attribute__((unused)));
+static int _annotate_rewrite(const char *oldmboxname, uint32_t olduid,
+			     const char *olduserid, const char *newmboxname,
+			     uint32_t newuid, const char *newuserid,
+			     int copy);
 
 /* String List Management */
 /*
@@ -2583,9 +2587,13 @@ int annotatemore_store(const annotate_scope_t *scope,
 }
 
 struct rename_rock {
+    const char *oldmboxname;
     const char *newmboxname;
     const char *olduserid;
     const char *newuserid;
+    uint32_t olduid;
+    uint32_t newuid;
+    int copy;
     struct txn *tid;
 };
 
@@ -2601,22 +2609,22 @@ static int rename_cb(const char *mailbox,
     if (rrock->newmboxname) {
 	/* create newly renamed entry */
 
-	if (rrock->olduserid  && rrock->newuserid &&
+	if (rrock->olduserid && rrock->newuserid &&
 	    !strcmp(rrock->olduserid, userid)) {
 	    /* renaming a user, so change the userid for priv annots */
-	    r = write_entry(rrock->newmboxname, 0, entry, rrock->newuserid,
+	    r = write_entry(rrock->newmboxname, rrock->newuid, entry, rrock->newuserid,
 			    value, &rrock->tid);
 	}
 	else {
-	    r = write_entry(rrock->newmboxname, 0, entry, userid,
+	    r = write_entry(rrock->newmboxname, rrock->newuid, entry, userid,
 			    value, &rrock->tid);
 	}
     }
 
-    if (!r) {
+    if (!rrock->copy && !r) {
 	/* delete existing entry */
 	struct buf dattrib = BUF_INITIALIZER;
-	r = write_entry(mailbox, 0, entry, userid, &dattrib, &rrock->tid);
+	r = write_entry(mailbox, uid, entry, userid, &dattrib, &rrock->tid);
     }
 
     return r;
@@ -2625,15 +2633,32 @@ static int rename_cb(const char *mailbox,
 int annotatemore_rename(const char *oldmboxname, const char *newmboxname,
 			const char *olduserid, const char *newuserid)
 {
+    return _annotate_rewrite(oldmboxname, 0, olduserid,
+			     newmboxname, 0, newuserid,
+			     /*copy*/0);
+}
+
+static int _annotate_rewrite(const char *oldmboxname,
+			     uint32_t olduid,
+			     const char *olduserid,
+			     const char *newmboxname,
+			     uint32_t newuid,
+			     const char *newuserid,
+			     int copy)
+{
     struct rename_rock rrock;
     int r;
     annotate_cursor_t cursor;
 
-    annotate_cursor_setup(&cursor, oldmboxname, 0);
+    annotate_cursor_setup(&cursor, oldmboxname, olduid);
 
+    rrock.oldmboxname = oldmboxname;
     rrock.newmboxname = newmboxname;
     rrock.olduserid = olduserid;
     rrock.newuserid = newuserid;
+    rrock.olduid = olduid;
+    rrock.newuid = newuid;
+    rrock.copy = copy;
     rrock.tid = NULL;
 
     r = _annotate_find(&cursor, "*", &rename_cb, &rrock, &rrock.tid);
@@ -2655,8 +2680,18 @@ int annotatemore_rename(const char *oldmboxname, const char *newmboxname,
 int annotatemore_delete(const char *mboxname)
 {
     /* we treat a deleteion as a rename without a new name */
+    return _annotate_rewrite(mboxname, /*olduid*/0, /*olduserid*/NULL,
+			     /*newmboxname*/NULL, /*newuid*/0, /*newuserid*/NULL,
+			     /*copy*/0);
+}
 
-    return annotatemore_rename(mboxname, NULL, NULL, NULL);
+int annotate_msg_copy(const char *oldmboxname, uint32_t olduid,
+		      const char *newmboxname, uint32_t newuid,
+		      const char *userid)
+{
+    return _annotate_rewrite(oldmboxname, olduid, userid,
+			     newmboxname, newuid, userid,
+			     /*copy*/1);
 }
 
 /*************************  Annotation Initialization  ************************/
