@@ -160,4 +160,15 @@ sub is_listening
     return $found;
 }
 
+sub describe
+{
+    my ($self) = @_;
+
+    printf "%s, binary %s, listening on %s\n",
+	    $self->{name},
+	    $self->{binary},
+	    $self->address();
+}
+
+
 1;

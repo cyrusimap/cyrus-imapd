@@ -540,4 +540,19 @@ sub _fork_utility
     die "Cannot run $binary: $!";
 }
 
+sub describe
+{
+    my ($self) = @_;
+
+    print "Cyrus instance\n";
+    printf "    name: %s\n", $self->{name};
+    printf "    imapd.conf: %s\n", $self->_imapd_conf();
+    printf "    services:\n";
+    foreach my $srv (values %{$self->{services}})
+    {
+	printf "        ";
+	$srv->describe();
+    }
+}
+
 1;
