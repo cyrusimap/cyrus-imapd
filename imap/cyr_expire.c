@@ -408,13 +408,14 @@ int main(int argc, char *argv[])
 	exit(1);
     }
 
+    /* xxx better way to determine a size for this table? */
+    construct_hash_table(&expire_table, 10000, 1);
+
     if (do_expunge) {
-	/* xxx better way to determine a size for this table? */
-	construct_hash_table(&expire_table, 10000, 1);
 
 	/* expire messages from mailboxes,
 	 * build a hash table of mailboxes in which we expired messages,
-	 * and perform a cleanup of expunged messages
+	 * so we can prune those immediately from the duplicate db.
 	 */
 	erock.table = &expire_table;
 	if (expunge_days == -1) {
