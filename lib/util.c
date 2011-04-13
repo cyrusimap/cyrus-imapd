@@ -405,6 +405,15 @@ int become_cyrus(void)
     newuid = p->pw_uid;
     newgid = p->pw_gid;
 
+    if (newuid == (int)geteuid() &&
+        newuid == (int)getuid() &&
+	newgid == (int)getegid() &&
+	newgid == (int)getgid()) {
+	/* already the Cyrus user, stop trying */
+	uid = newuid;
+	return 0;
+    }
+
     if (initgroups(CYRUS_USER, newgid)) {
         syslog(LOG_ERR, "unable to initialize groups for user %s: %s",
 	       CYRUS_USER, strerror(errno));
