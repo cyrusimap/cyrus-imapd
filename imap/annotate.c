@@ -152,11 +152,9 @@ static ptrarray_t mailbox_entries = PTRARRAY_INITIALIZER;
 static ptrarray_t server_entries = PTRARRAY_INITIALIZER;
 
 static void init_annotation_definitions(void);
-static int annotatemore_findall2(const annotate_cursor_t *cursor,
-				 const char *entry,
-				 annotatemore_find_proc_t proc,
-				 void *rock,
-				 struct txn **tid);
+static int _annotate_find(const annotate_cursor_t *cursor, const char *entry,
+			  annotatemore_find_proc_t proc, void *rock,
+			  struct txn **tid);
 static int annotation_set_tofile(const annotate_cursor_t *cursor
 				    __attribute__((unused)),
 				 struct annotate_st_entry_list *entry,
@@ -540,7 +538,7 @@ static int find_cb(void *rock, const char *key, int keylen,
 
     r = split_attribs(data, datalen, &value);
 
-    if (!r) r = frock->proc(mboxname, entry, userid, &value, frock->rock);
+    if (!r) r = frock->proc(mboxname, uid, entry, userid, &value, frock->rock);
 
     return r;
 }
@@ -562,20 +560,20 @@ static void annotate_cursor_setup(annotate_cursor_t *cursor,
     }
 }
 
-int annotatemore_findall(const char *mailbox, const char *entry,
+int annotatemore_findall(const char *mailbox, uint32_t uid, const char *entry,
 			 annotatemore_find_proc_t proc, void *rock,
 			 struct txn **tid)
 {
     annotate_cursor_t cursor;
-    annotate_cursor_setup(&cursor, mailbox, 0);
-    return annotatemore_findall2(&cursor, entry, proc, rock, tid);
+    annotate_cursor_setup(&cursor, mailbox, uid);
+    return _annotate_find(&cursor, entry, proc, rock, tid);
 }
 
-static int annotatemore_findall2(const annotate_cursor_t *cursor,
-				 const char *entry,
-				 annotatemore_find_proc_t proc,
-				 void *rock,
-				 struct txn **tid)
+static int _annotate_find(const annotate_cursor_t *cursor,
+			  const char *entry,
+			  annotatemore_find_proc_t proc,
+			  void *rock,
+			  struct txn **tid)
 {
     char key[MAX_MAILBOX_PATH+1], *p;
     int keylen, r;
@@ -1059,6 +1057,7 @@ struct rw_rock {
 };
 
 static int rw_cb(const char *mailbox __attribute__((unused)),
+		 uint32_t uid __attribute__((unused)),
 		 const char *entry, const char *userid,
 		 const struct buf *value, void *rock)
 {
@@ -1102,7 +1101,7 @@ static void annotation_get_fromdb(const annotate_cursor_t *cursor,
     rw_rock.fdata = fdata;
     fdata->found = 0;
 
-    annotatemore_findall2(cursor, entrypat, &rw_cb, &rw_rock, NULL);
+    _annotate_find(cursor, entrypat, &rw_cb, &rw_rock, NULL);
 
     if (fdata->found != fdata->attribs &&
 	(!strchr(entrypat, '%') && !strchr(entrypat, '*'))) {
@@ -2590,7 +2589,9 @@ struct rename_rock {
     struct txn *tid;
 };
 
-static int rename_cb(const char *mailbox, const char *entry,
+static int rename_cb(const char *mailbox,
+		     uint32_t uid __attribute__((unused)),
+		     const char *entry,
 		     const char *userid, const struct buf *value,
 		     void *rock)
 {
@@ -2626,13 +2627,16 @@ int annotatemore_rename(const char *oldmboxname, const char *newmboxname,
 {
     struct rename_rock rrock;
     int r;
+    annotate_cursor_t cursor;
+
+    annotate_cursor_setup(&cursor, oldmboxname, 0);
 
     rrock.newmboxname = newmboxname;
     rrock.olduserid = olduserid;
     rrock.newuserid = newuserid;
     rrock.tid = NULL;
 
-    r = annotatemore_findall(oldmboxname, "*", &rename_cb, &rrock, &rrock.tid);
+    r = _annotate_find(&cursor, "*", &rename_cb, &rrock, &rrock.tid);
 
     if (rrock.tid) {
 	if (!r) {

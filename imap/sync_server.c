@@ -1460,6 +1460,7 @@ static int do_mailbox(struct dlist *kin)
 /* ====================================================================== */
 
 static int getannotation_cb(const char *mailbox __attribute__((unused)),
+			    uint32_t uid __attribute__((unused)),
 			    const char *entry, const char *userid,
 			    const struct buf *value,
 			    void *rock)
@@ -1481,7 +1482,7 @@ static int getannotation_cb(const char *mailbox __attribute__((unused)),
 static int do_getannotation(struct dlist *kin)
 {
     const char *mboxname = kin->sval;
-    return annotatemore_findall(mboxname, "*", &getannotation_cb,
+    return annotatemore_findall(mboxname, 0, "*", &getannotation_cb,
 				(void *)mboxname, NULL);
 }
 

@@ -1520,6 +1520,7 @@ static int do_quota(const char *root)
 }
 
 static int getannotation_cb(const char *mailbox __attribute__((unused)),
+			    uint32_t uid __attribute__((unused)),
 			    const char *entry, const char *userid,
 			    const struct buf *value, void *rock)
 {
@@ -1587,7 +1588,7 @@ static int do_annotation(const char *mboxname)
     r = do_getannotation(mboxname, replica_annot);
     if (r) goto bail;
 
-    r = annotatemore_findall(mboxname, "*", &getannotation_cb, master_annot, NULL);
+    r = annotatemore_findall(mboxname, 0, "*", &getannotation_cb, master_annot, NULL);
     if (r) goto bail;
 
     /* both lists are sorted, so we work our way through the lists

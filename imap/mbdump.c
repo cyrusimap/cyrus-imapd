@@ -345,6 +345,7 @@ struct dump_annotation_rock
 };
 
 static int dump_annotations(const char *mailbox __attribute__((unused)),
+			    uint32_t uid  __attribute__((unused)),
 			    const char *entry,
 			    const char *userid,
 			    const struct buf *value, void *rock)
@@ -595,7 +596,7 @@ int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid_start,
 	struct dump_annotation_rock actx;
 	actx.tag = tag;
 	actx.pout = pout;
-	annotatemore_findall(mailbox->name, "*", dump_annotations,
+	annotatemore_findall(mailbox->name, 0, "*", dump_annotations,
 			     (void *) &actx, NULL);
     }
 
