@@ -3296,13 +3296,15 @@ static int deliver(message_data_t *msg)
 		continue;
 	    }
 
-	    r = append_setup(&as, rcpt, nntp_userid, nntp_authstate, ACL_POST, 0);
+	    r = append_setup(&as, rcpt, nntp_userid, nntp_authstate,
+			     ACL_POST, 0, NULL, 0);
 
 	    if (!r) {
 		prot_rewind(msg->data);
 		if (stage) {
 		    r = append_fromstage(&as, &body, stage, 0,
-					 NULL, !singleinstance);
+					 NULL, !singleinstance,
+					 /*annotations*/NULL);
 		} else {
 		    /* XXX should never get here */
 		    r = append_fromstream(&as, &body, msg->data, msg->size, 0,

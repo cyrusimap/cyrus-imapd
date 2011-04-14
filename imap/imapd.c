@@ -186,6 +186,7 @@ struct appendstage {
     strarray_t flags;
     time_t internaldate;
     int binary;
+    struct entryattlist *annotations;
 };
 static ptrarray_t stages = PTRARRAY_INITIALIZER;
 
@@ -1097,6 +1098,7 @@ void fatal(const char *s, int code)
 	    if (curstage->f != NULL) fclose(curstage->f);
 	    append_removestage(curstage->stage);
 	    strarray_fini(&curstage->flags);
+	    freeentryatts(curstage->annotations);
 	    free(curstage);
 	}
 	ptrarray_fini(&stages);
@@ -3350,6 +3352,9 @@ void cmd_append(char *tag, char *name, const char *cur_name)
     while (!r && c == ' ') {
 	curstage = xzmalloc(sizeof(*curstage));
 	ptrarray_push(&stages, curstage);
+
+	/* now parsing "append-opts" in the ABNF */
+
 	/* Parse flags */
 	c = getword(imapd_in, &arg);
 	if  (c == '(' && !arg.s[0]) {
@@ -3391,12 +3396,36 @@ void cmd_append(char *tag, char *name, const char *cur_name)
 	    c = getword(imapd_in, &arg);
 	}
 
+	/* try to parse a sequence of "append-ext" */
+	for (;;) {
+	    if (!strcasecmp(arg.s, "ANNOTATION")) {
+		/* RFC5257 */
+		if (c != ' ') {
+		    parseerr = "Missing annotation data in Append command";
+		    r = IMAP_PROTOCOL_ERROR;
+		    goto done;
+		}
+		c = parse_annotate_store_data(tag,
+					      /*permessage_flag*/1,
+					      &curstage->annotations);
+		if (c == EOF) {
+		    eatline(imapd_in, c);
+		    goto cleanup;
+		}
+		c = getword(imapd_in, &arg);
+	    }
+	    else
+		break;	/* not a known extension keyword */
+	}
+
 	/* Stage the message */
 	curstage->f = append_newstage(mailboxname, now, stages.count, &(curstage->stage));
 	if (!curstage->f) {
 	    r = IMAP_IOERROR;
 	    goto done;
 	}
+
+	/* now parsing "append-data" in the ABNF */
 
 	if (!strcasecmp(arg.s, "CATENATE")) {
 	    if (c != ' ' || (c = prot_getc(imapd_in) != '(')) {
@@ -3454,7 +3483,9 @@ void cmd_append(char *tag, char *name, const char *cur_name)
     /* Append from the stage(s) */
     if (!r) {
 	r = append_setup(&appendstate, mailboxname, 
-			 imapd_userid, imapd_authstate, ACL_INSERT, totalsize);
+			 imapd_userid, imapd_authstate, ACL_INSERT, totalsize,
+			 &imapd_namespace,
+			 (imapd_userisadmin || imapd_userisproxyadmin));
     }
     if (!r) {
 	struct body *body;
@@ -3472,7 +3503,8 @@ void cmd_append(char *tag, char *name, const char *cur_name)
 	    if (!r) {
 		r = append_fromstage(&appendstate, &body, curstage->stage,
 				     curstage->internaldate,
-				     &curstage->flags, 0);
+				     &curstage->flags, 0,
+				     curstage->annotations);
 	    }
 	    if (body) message_free_body(body);
 	}
@@ -3483,15 +3515,6 @@ void cmd_append(char *tag, char *name, const char *cur_name)
 	    append_abort(&appendstate);
 	}
     }
-
-    /* Cleanup the stage(s) */
-    while ((curstage = ptrarray_pop(&stages))) {
-	if (curstage->f != NULL) fclose(curstage->f);
-	append_removestage(curstage->stage);
-	strarray_fini(&curstage->flags);
-	free(curstage);
-    }
-    ptrarray_fini(&stages);
 
     imapd_check(NULL, 1);
 
@@ -3523,6 +3546,17 @@ void cmd_append(char *tag, char *name, const char *cur_name)
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
     }
+
+cleanup:
+    /* Cleanup the stage(s) */
+    while ((curstage = ptrarray_pop(&stages))) {
+	if (curstage->f != NULL) fclose(curstage->f);
+	append_removestage(curstage->stage);
+	strarray_fini(&curstage->flags);
+	freeentryatts(curstage->annotations);
+	free(curstage);
+    }
+    ptrarray_fini(&stages);
 }
 
 /*
@@ -5042,7 +5076,9 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
     /* local mailbox -> local mailbox */
     if (!r) {
 	r = index_copy(imapd_index, sequence, usinguid, mailboxname,
-		       &copyuid, !config_getswitch(IMAPOPT_SINGLEINSTANCESTORE));
+		       &copyuid, !config_getswitch(IMAPOPT_SINGLEINSTANCESTORE),
+		       &imapd_namespace,
+		       (imapd_userisadmin || imapd_userisproxyadmin));
     }
 
     imapd_check(NULL, usinguid);

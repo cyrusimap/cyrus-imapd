@@ -216,7 +216,9 @@ extern int index_copy(struct index_state *state,
 		      int usinguid,
 		      char *name, 
 		      char **copyuidp,
-		      int nolink);
+		      int nolink,
+		      struct namespace *namespace,
+		      int isadmin);
 extern int find_thread_algorithm(char *arg);
 
 extern int index_open(const char *name, struct index_init *init,

@@ -506,7 +506,7 @@ void append_notifications()
 	    fflush(f);
 	    msgsize = ftell(f);
 
-	    append_setup(&as, i_mbox->owner, NULL, NULL, 0, -1);
+	    append_setup(&as, i_mbox->owner, NULL, NULL, 0, -1, NULL, 0);
 	    pout = prot_new(fd, 0);
 	    prot_rewind(pout);
 	    append_fromstream(&as, &body, pout, msgsize, t, NULL, 0);

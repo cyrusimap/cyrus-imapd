@@ -149,7 +149,8 @@ done:
  */
 int append_setup(struct appendstate *as, const char *name,
 		 const char *userid, struct auth_state *auth_state,
-		 long aclcheck, quota_t quotacheck)
+		 long aclcheck, quota_t quotacheck,
+		 struct namespace *namespace, int isadmin)
 {
     int r;
     struct quota q;
@@ -187,6 +188,9 @@ int append_setup(struct appendstate *as, const char *name,
     } else {
 	as->userid[0] = '\0';
     }
+    as->namespace = namespace;
+    as->auth_state = auth_state;
+    as->isadmin = isadmin;
 
     /* we'll need the cache file open */
     r = mailbox_open_cache(as->mailbox);
@@ -342,7 +346,8 @@ FILE *append_newstage(const char *mailboxname, time_t internaldate,
  */
 int append_fromstage(struct appendstate *as, struct body **body,
 		     struct stagemsg *stage, time_t internaldate,
-		     const strarray_t *flags, int nolink)
+		     const strarray_t *flags, int nolink,
+		     struct entryattlist *annotations)
 {
     struct mailbox *mailbox = as->mailbox;
     struct index_record record;
@@ -425,6 +430,17 @@ int append_fromstage(struct appendstate *as, struct body **body,
 	   and makes sure that the file actually hits disk */
 	fsync(fileno(destfile));
 	fclose(destfile);
+    }
+    if (!r && annotations) {
+	annotate_scope_t scope;
+	annotate_scope_init_message(&scope, as->mailbox, record.uid);
+
+	r = annotatemore_store(&scope,
+			       annotations,
+			       as->namespace,
+			       as->isadmin,
+			       as->userid,
+			       as->auth_state);
     }
     if (r) {
 	append_abort(as);

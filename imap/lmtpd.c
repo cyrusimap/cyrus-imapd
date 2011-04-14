@@ -504,7 +504,8 @@ int deliver_mailbox(FILE *f,
 		     authuser, authstate, acloverride ? 0 : ACL_POST, 
 		     quotaoverride ? (long) -1 :
 		     config_getswitch(IMAPOPT_LMTP_STRICT_QUOTA) ?
-		     (long) size : 0);
+		     (long) size : 0,
+		     NULL, 0);
 
     /* check for duplicate message */
     if (!r && id && dupelim && !(as.mailbox->i.options & OPT_IMAP_DUPDELIVER) &&
@@ -522,7 +523,8 @@ int deliver_mailbox(FILE *f,
 
     if (!r) {
 	r = append_fromstage(&as, &content->body, stage, 0,
-			     flags, !singleinstance);
+			     flags, !singleinstance,
+			     /*annotations*/NULL);
 
 	if (r) {
 	    append_abort(&as);

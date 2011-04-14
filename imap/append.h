@@ -50,6 +50,7 @@
 #include "prot.h"
 #include "sequence.h"
 #include "strarray.h"
+#include "annotate.h"
 
 struct copymsg {
     unsigned long uid;
@@ -86,6 +87,11 @@ struct appendstate {
     /* set seen on these message on commit */
     int internalseen;
     struct seqset *seen_seq;
+
+    /* for annotations */
+    struct namespace *namespace;
+    struct auth_state *auth_state;
+    int isadmin;
 };
 
 /* add helper function to determine uid range appended? */
@@ -99,7 +105,8 @@ extern int append_check(const char *name,
 /* appendstate must be allocated by client */
 extern int append_setup(struct appendstate *as, const char *name,
 			const char *userid, struct auth_state *auth_state,
-			long aclcheck, quota_t quotacheck);
+			long aclcheck, quota_t quotacheck,
+			struct namespace *, int isadmin);
 
 extern int append_commit(struct appendstate *as,
 			 quota_t quotacheck,
@@ -116,7 +123,8 @@ extern FILE *append_newstage(const char *mailboxname, time_t internaldate,
 /* adds a new mailbox to the stage initially created by append_newstage() */
 extern int append_fromstage(struct appendstate *mailbox, struct body **body,
 			    struct stagemsg *stage, time_t internaldate,
-			    const strarray_t *flags, int nolink);
+			    const strarray_t *flags, int nolink,
+			    struct entryattlist *annotations);
 
 /* removes the stage (frees memory, deletes the staging files) */
 extern int append_removestage(struct stagemsg *stage);
