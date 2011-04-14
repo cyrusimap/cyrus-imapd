@@ -599,6 +599,12 @@ void index_select(struct index_state *state, struct index_init *init)
 		state->highestmodseq);
     prot_printf(state->out, "* OK [URLMECH INTERNAL] Ok\r\n");
 
+    /*
+     * RFC5257.  Note that we must report a maximum size for annotations
+     * but we don't enforce any such limit, so pick a "large" number.
+     */
+    prot_printf(state->out, "* OK [ANNOTATIONS %u] Ok\r\n", 64*1024);
+
     if (init->vanishedlist) {
 	char *vanished;
 	const char *sequence = NULL;

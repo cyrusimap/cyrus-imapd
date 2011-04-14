@@ -3635,6 +3635,15 @@ void cmd_select(char *tag, char *cmd, char *name)
 		if (c != ')') goto badqresync;
 		c = prot_getc(imapd_in);
  	    }
+	    else if (!strcmp(arg.s, "ANNOTATE")) {
+		/*
+		 * RFC5257 requires us to parse this keyword, which
+		 * indicates that the client wants unsolicited
+		 * ANNOTATION responses in this session, but we don't
+		 * actually have to do anything with it, so we won't.
+		 */
+		;
+	    }
 	    else {
 		prot_printf(imapd_out, "%s BAD Invalid %s modifier %s\r\n",
 			    tag, cmd, arg.s);
