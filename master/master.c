@@ -1472,8 +1472,6 @@ static void add_service(const char *name, struct entry *e, void *rock)
     proto = NULL; /* avoid freeing it */
 
     Services[i].exec = tokenize(cmd);
-    cmd = NULL; /* avoid freeing it */
-    if (!Services[i].exec) fatal("out of memory", EX_UNAVAILABLE);
 
     /* is this service actually there? */
     if (!verify_service_file(Services[i].exec)) {
