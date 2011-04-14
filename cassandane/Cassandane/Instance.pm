@@ -268,7 +268,7 @@ sub _timed_wait
     my ($condition, %p) = @_;
     $p{delay} = 0.010		# 10 millisec
 	unless defined $p{delay};
-    $p{maxwait} = 3.0
+    $p{maxwait} = 20.0
 	unless defined $p{maxwait};
     $p{description} = 'unknown condition'
 	unless defined $p{description};
@@ -281,6 +281,7 @@ sub _timed_wait
 	    if (tv_interval($start, [gettimeofday()]) > $p{maxwait});
 	sleep($p{delay});
 	$delayed = 1;
+	$p{delay} *= 1.5;	# backoff
     }
 
     xlog "_timed_wait: waited " .
