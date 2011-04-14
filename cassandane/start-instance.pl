@@ -49,6 +49,7 @@ my $name;
 my $config = Cassandane::Config->default()->clone();
 my $start_flag = 0;
 my $re_use_dir = 1;
+my $valgrind = 0;
 $start_flag = 1 if $0 =~ m/start-instance/;
 
 sub usage
@@ -82,6 +83,10 @@ while (my $a = shift)
     {
 	$re_use_dir = 0;
     }
+    elsif ($a eq '--valgrind')
+    {
+	$valgrind = 1;
+    }
     elsif ($a =~ m/^-/)
     {
 	printf STDERR "Unknown option $a\n";
@@ -99,6 +104,7 @@ my $instance = Cassandane::Instance->new(
 		name => $name,
 		config => $config,
 		re_use_dir => $re_use_dir,
+		valgrind => $valgrind,
 	       );
 $instance->add_service('imap');
 

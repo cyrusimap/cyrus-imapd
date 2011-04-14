@@ -55,6 +55,7 @@ use Cassandane::Service;
 use Cassandane::ServiceFactory;
 
 my $rootdir = '/var/tmp/cassandane';
+my $valgrind_logdir = '/var/tmp/valgrind-logs';
 my $stamp;
 my $next_unique = 1;
 
@@ -69,6 +70,7 @@ sub new
 	config => Cassandane::Config->default()->clone(),
 	services => {},
 	re_use_dir => 0,
+	valgrind => 0,
     };
 
     $self->{name} = $params{name}
@@ -81,6 +83,8 @@ sub new
 	if defined $params{config};
     $self->{re_use_dir} = $params{re_use_dir}
 	if defined $params{re_use_dir};
+    $self->{valgrind} = $params{valgrind}
+	if defined $params{valgrind};
 
     $stamp = to_iso8601(DateTime->now)
 	unless defined $stamp;
@@ -124,9 +128,24 @@ sub _binary
 {
     my ($self, $name) = @_;
 
-    # TODO: stick in valgrind here.  That's why we return
-    # a list rather than a scalar.
-    return ( $self->{cyrus_prefix} . '/bin/' . $name );
+    my @cmd;
+
+    if ($self->{valgrind})
+    {
+	mkpath $valgrind_logdir
+	    unless ( -d $valgrind_logdir );
+	push(@cmd,
+	    '/usr/bin/valgrind',
+	    '--quiet',
+	    "--log-file=$valgrind_logdir/$name.%p",
+	    '--tool=memcheck',
+	    '--leak-check=full'
+	);
+    }
+
+    push(@cmd, $self->{cyrus_prefix} . '/bin/' . $name );
+
+    return @cmd;
 }
 
 sub _imapd_conf
@@ -195,7 +214,7 @@ sub _generate_master_conf
     foreach my $srv (values %{$self->{services}})
     {
 	print MASTER '    ' . $srv->{name};
-	print MASTER ' cmd="' . $self->_binary($srv->{binary}) . ' -C ' .  $self->_imapd_conf() . '"';
+	print MASTER ' cmd="' . join(' ', $self->_binary($srv->{binary})) . ' -C ' .  $self->_imapd_conf() . '"';
 	print MASTER ' listen="' . $srv->address() .  '"';
 	print MASTER "\n";
     }
