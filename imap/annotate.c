@@ -2852,6 +2852,14 @@ static void init_annotation_definitions(void)
 	/* TV-TODO: should test for empty */
 	ae->name = xstrndup(p2, p-p2);
 
+	if (!strncmp(ae->name, "/vendor/cmu/cyrus-imapd/", 24)) {
+	    syslog(LOG_WARNING, "annotation definitions file contains an "
+				"annotation in /vendor/cmu/cyrus-imapd/, ignoring");
+	    free((char *)ae->name);
+	    free(ae);
+	    continue;
+	}
+
 	p = consume_comma(p);
   
 	p2 = p;
