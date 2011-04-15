@@ -437,3 +437,75 @@ static void test_getnstring(void)
     TESTCASE(getnstring, "{7}\r\nfoo\0bar ", EOF, ""); /* should be ' ', "foo\0bar" */
 }
 
+/*
+ * getbnstring() is just like getnstring() but allows embedded NULs in
+ * literals.
+ */
+static void test_getbnstring(void)
+{
+    /* Simple sequences of ascii alphanumerics characters are atoms */
+    TESTCASE(getbnstring, "hydrogen helium", EOF, "");
+    TESTCASE(getbnstring, "258 uranium", EOF, "");
+    TESTCASE(getbnstring, "uranium258 plutonium", EOF, "");
+
+    /* The character sequence NIL is special for nstrings only */
+    TESTCASE(getbnstring, "NIL by mouth", ' ', "NIL");
+    TESTCASE(getbnstring, "NELLY ", EOF, "");
+
+    /*
+     * List wildcards aren't part of an atom, but Cyrus accepts them
+     * in order to implement the "mailbox" and "list-mailbox" rules,
+     * which are like astrings but also allow unquoted wildcards,
+     * as astrings.
+     */
+    TESTCASE(getnstring, "foo*bar baz", EOF, "");
+    TESTCASE(getbnstring, "baz%quux foo", EOF, "");
+
+    /*
+     * Various special characters are not part of atoms.
+     *
+     * Again the server code is very liberal in accepting all kinds of
+     * things which aren't in the ABNF, so we test for the liberal
+     * interpretation and note the conservative one in a comment.
+     */
+    TESTCASE(getbnstring, "foo(bar baz", EOF, "");
+    TESTCASE(getbnstring, "foo)bar baz", EOF, "");
+    TESTCASE(getbnstring, "foo{bar baz", EOF, "");
+    TESTCASE(getbnstring, "foo\"bar baz", EOF, "");
+    TESTCASE(getbnstring, "foo\\bar baz", EOF, "");
+    TESTCASE(getbnstring, "foo]bar baz", EOF, "");
+
+    /*
+     * Quoted strings are nstrings
+     */
+    TESTCASE(getbnstring, "\"foo\" bar", ' ', "foo");
+    TESTCASE(getbnstring, "\"foo bar\" baz", ' ', "foo bar");
+    TESTCASE(getbnstring, "\"foo bar", EOF, "");
+    TESTCASE(getbnstring, "\"foo\\\"bar\" baz", ' ', "foo\"bar");
+    TESTCASE(getbnstring, "\"foo\\\\bar\" baz", ' ', "foo\\bar");
+    /* Any non-special char can be escaped with \ */
+    TESTCASE(getbnstring, "\"foo\\bar\" baz", ' ', "foobar");
+    /* \n and \r can be escaped with \ */
+    TESTCASE(getbnstring, "\"foo\\\nbar\" baz", ' ', "foo\nbar");
+    TESTCASE(getbnstring, "\"foo\\\rbar\" baz", ' ', "foo\rbar");
+    /* Non-escaped \n and \r.  The server is actually more
+     * conversative than the ABNF and rejects these. */
+    TESTCASE(getbnstring, "\"foo\nbar\" baz", EOF, ""); /* should be ' ', "foo\nbar" */
+    TESTCASE(getbnstring, "\"foo\rbar\" baz", EOF, ""); /* should be ' ', "foo\rbar" */
+
+    /*
+     * Literals are nstrings
+     */
+    /* boring literal */
+    TESTCASE(getbnstring, "{3}\r\nfoo ", ' ', "foo");
+    /* literals with embedded space */
+    TESTCASE(getbnstring, "{7}\r\nfoo bar ", ' ', "foo bar");
+    /* literals with embedded \n or \r */
+    TESTCASE(getbnstring, "{7}\r\nfoo\nbar ", ' ', "foo\nbar");
+    TESTCASE(getbnstring, "{7}\r\nfoo\rbar ", ' ', "foo\rbar");
+    /* literals with 8-bit chars */
+    TESTCASE(getbnstring, "{7}\r\nfoo\277bar ", ' ', "foo\277bar");
+    /* literals with embedded NUL - getbnstring() allows these */
+    TESTCASE(getbnstring, "{7}\r\nfoo\0bar ", ' ', "foo\0bar");
+}
+
