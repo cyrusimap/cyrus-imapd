@@ -80,7 +80,7 @@ int getword(struct protstream *in, struct buf *buf)
  * (astring, nstring or string based on type)
  */
 int getxstring(struct protstream *pin, struct protstream *pout,
-	       struct buf *buf, int type)
+	       struct buf *buf, enum getxstring_flags flags)
 {
     int c;
     int i;
@@ -98,12 +98,14 @@ int getxstring(struct protstream *pin, struct protstream *pout,
     case '\r':
     case '\n':
 	/* Invalid starting character */
-	buf_reset(buf);
-	buf_cstring(buf);
-	if (c != EOF) prot_ungetc(c, pin);
-	return EOF;
+	goto fail;
 
     case '\"':
+	if (!(flags & GXS_QUOTED)) {
+	    /* Invalid starting character */
+	    goto fail;
+	}
+
 	/*
 	 * Quoted-string.  Server is liberal in accepting qspecials
 	 * other than double-quote, CR, and LF.
@@ -129,11 +131,9 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 	}
 
     case '{':
-	if (type == IMAP_QSTRING) {
+	if (!(flags & GXS_LITERAL)) {
 	    /* Invalid starting character */
-	    buf_cstring(buf);
-	    if (c != EOF) prot_ungetc(c, pin);
-	    return EOF;
+	    goto fail;
 	}
 
 	/* Literal */
@@ -175,14 +175,12 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 	    buf_putc(buf, c);
 	}
 	buf_cstring(buf);
-	if (type != IMAP_BIN_ASTRING && strlen(buf_cstring(buf)) != (unsigned)buf_len(buf))
-	    return EOF; /* Disallow imbedded NUL for non IMAP_BIN_ASTRING */
+	if (!(flags & GXS_BINARY) && strlen(buf_cstring(buf)) != (unsigned)buf_len(buf))
+	    return EOF; /* Disallow imbedded NUL */
 	return prot_getc(pin);
 
     default:
-	switch (type) {
-	case IMAP_BIN_ASTRING:   /* binary-allowed ASTRING */
-	case IMAP_ASTRING:	 /* atom, quoted-string or literal */
+	if ((flags & GXS_ATOM)) {
 	    /*
 	     * Atom -- server is liberal in accepting specials other
 	     * than whitespace, parens, or double quotes
@@ -197,9 +195,8 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 		c = prot_getc(pin);
 	    }
 	    /* never gets here */
-	    break;
-
-	case IMAP_NSTRING:	 /* "NIL", quoted-string or literal */
+	}
+	else if ((flags & GXS_NIL)) {
 	    /*
 	     * Look for "NIL"
 	     */
@@ -208,20 +205,17 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 		c = getword(pin, buf);
 		if (!strcmp(buf_cstring(buf), "NIL"))
 		    return c;
+		return EOF;
 	    }
-	    if (c != EOF) prot_ungetc(c, pin);
-	    return EOF;
-	    break;
-
-	case IMAP_QSTRING:	 /* quoted-string */
-	case IMAP_STRING:	 /* quoted-string or literal */
-	    /* atoms aren't acceptable */
-	    if (c != EOF) prot_ungetc(c, pin);
-	    return EOF;
-	    break;
 	}
+	goto fail;
     }
 
+    return EOF;
+
+fail:
+    buf_cstring(buf);
+    if (c != EOF) prot_ungetc(c, pin);
     return EOF;
 }
 

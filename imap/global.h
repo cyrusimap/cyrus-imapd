@@ -118,16 +118,25 @@ struct proxy_context {
 /* imap parsing functions (imapparse.c) */
 int getword(struct protstream *in, struct buf *buf);
 
+/* Flags for getxstring() */
 /* IMAP_BIN_ASTRING is an IMAP_ASTRING that does not perform the
  * does-not-contain-a-NULL check (in the case of a literal) */
-enum string_types { IMAP_ASTRING,
-		    IMAP_BIN_ASTRING,
-		    IMAP_NSTRING,
-		    IMAP_QSTRING,
-		    IMAP_STRING };
+enum getxstring_flags {
+    GXS_ATOM	= (1<<0),   /* result may be a bare atom */
+    GXS_QUOTED	= (1<<1),   /* result may be "quoted" */
+    GXS_LITERAL	= (1<<2),   /* result may be {N}literal */
+    GXS_NIL	= (1<<3),   /* result may be the special atom NIL */
+    GXS_BINARY	= (1<<4),   /* result may contain embedded NULs */
+
+    IMAP_ASTRING = GXS_ATOM|GXS_QUOTED|GXS_LITERAL,
+    IMAP_BIN_ASTRING = IMAP_ASTRING|GXS_BINARY,
+    IMAP_NSTRING = GXS_NIL|GXS_QUOTED|GXS_LITERAL,
+    IMAP_QSTRING = GXS_QUOTED,
+    IMAP_STRING = GXS_QUOTED|GXS_LITERAL
+};
 
 int getxstring(struct protstream *pin, struct protstream *pout,
-	       struct buf *buf, int type);
+	       struct buf *buf, enum getxstring_flags);
 #define getastring(pin, pout, buf) getxstring((pin), (pout), (buf), IMAP_ASTRING)
 #define getbastring(pin, pout, buf) getxstring((pin), (pout), (buf), IMAP_BIN_ASTRING)
 #define getnstring(pin, pout, buf) getxstring((pin), (pout), (buf), IMAP_NSTRING)
