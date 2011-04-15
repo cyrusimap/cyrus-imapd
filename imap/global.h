@@ -131,6 +131,7 @@ enum getxstring_flags {
     IMAP_ASTRING = GXS_ATOM|GXS_QUOTED|GXS_LITERAL,
     IMAP_BIN_ASTRING = IMAP_ASTRING|GXS_BINARY,
     IMAP_NSTRING = GXS_NIL|GXS_QUOTED|GXS_LITERAL,
+    IMAP_BIN_NSTRING = IMAP_NSTRING|GXS_BINARY,
     IMAP_QSTRING = GXS_QUOTED,
     IMAP_STRING = GXS_QUOTED|GXS_LITERAL
 };
@@ -140,6 +141,7 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 #define getastring(pin, pout, buf) getxstring((pin), (pout), (buf), IMAP_ASTRING)
 #define getbastring(pin, pout, buf) getxstring((pin), (pout), (buf), IMAP_BIN_ASTRING)
 #define getnstring(pin, pout, buf) getxstring((pin), (pout), (buf), IMAP_NSTRING)
+#define getbnstring(pin, pout, buf) getxstring((pin), (pout), (buf), IMAP_BIN_NSTRING)
 #define getqstring(pin, pout, buf) getxstring((pin), (pout), (buf), IMAP_QSTRING)
 #define getstring(pin, pout, buf) getxstring((pin), (pout), (buf), IMAP_STRING)
 int getint32(struct protstream *pin, int *num);
