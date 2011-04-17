@@ -2003,11 +2003,25 @@ static int annotate_canon_value(struct buf *value, int type)
     return 0;
 }
 
+static int _annotate_store_entries(struct storedata *sdata,
+				   const annotate_cursor_t *cursor)
+{
+    struct annotate_st_entry_list *ee;
+    int r;
+
+    /* Loop through the list of provided entries to get */
+    for (ee = sdata->entry_list ; ee ; ee = ee->next) {
+	r = ee->entry->set(cursor, ee, sdata, ee->entry->rock);
+	if (r)
+	    return r;
+    }
+    return 0;
+}
+
 static int store_cb(const char *name, int matchlen,
 		    int maycreate __attribute__((unused)), void *rock)
 {
     struct storedata *sdata = (struct storedata *) rock;
-    struct annotate_st_entry_list *entries_ptr;
     static char lastname[MAX_MAILBOX_PATH+1];
     static int sawuser = 0;
     char int_mboxname[MAX_MAILBOX_BUFFER];
@@ -2055,14 +2069,9 @@ static int store_cb(const char *name, int matchlen,
     cursor.ext_mboxname = name;
     cursor.mbentry = mbentry;
 
-    for (entries_ptr = sdata->entry_list;
-	 entries_ptr;
-	 entries_ptr = entries_ptr->next) {
-
-	r = entries_ptr->entry->set(&cursor, entries_ptr, sdata,
-				    entries_ptr->entry->rock);
-	if (r) goto cleanup;
-    }
+    r = _annotate_store_entries(sdata, &cursor);
+    if (r)
+	goto cleanup;
 
     sync_log_annotation(int_mboxname);
 
@@ -2470,20 +2479,11 @@ int annotatemore_store(const annotate_scope_t *scope,
     if (scope->which == ANNOTATION_SCOPE_SERVER) {
 
 	if (sdata.entry_list) {
-	    struct annotate_st_entry_list *entries_ptr;
 	    annotate_cursor_t cursor;
 
 	    annotate_cursor_setup(&cursor, "", 0);
 
-	    /* Loop through the list of provided entries to get */
-	    for (entries_ptr = sdata.entry_list;
-		 entries_ptr;
-		 entries_ptr = entries_ptr->next) {
-
-		r = entries_ptr->entry->set(&cursor, entries_ptr, &sdata,
-					    entries_ptr->entry->rock);
-		if (r) break;
-	    }
+	    r = _annotate_store_entries(&sdata, &cursor);
 
 	    if (!r) sync_log_annotation("");
 	}
@@ -2527,7 +2527,6 @@ int annotatemore_store(const annotate_scope_t *scope,
     }
     else if (scope->which == ANNOTATION_SCOPE_MESSAGE) {
 
-	struct annotate_st_entry_list *entries_ptr;
 	annotate_cursor_t cursor;
 
 	annotate_cursor_setup(&cursor, scope->mailbox, scope->uid);
@@ -2537,16 +2536,7 @@ int annotatemore_store(const annotate_scope_t *scope,
 // 	    /* xxx better way to determine a size for this table? */
 // 	    construct_hash_table(&sdata.server_table, 10, 1);
 // 	}
-
-	/* Loop through the list of provided entries to set */
-	for (entries_ptr = sdata.entry_list;
-	     entries_ptr;
-	     entries_ptr = entries_ptr->next) {
-
-	    r = entries_ptr->entry->set(&cursor, entries_ptr, &sdata,
-					entries_ptr->entry->rock);
-	    if (r) break;
-	}
+	r = _annotate_store_entries(&sdata, &cursor);
 
 	if (!r) sync_log_annotation("");
 
