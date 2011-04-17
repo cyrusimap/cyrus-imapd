@@ -203,8 +203,11 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 	    if (c == 'N') {
 		prot_ungetc(c, pin);
 		c = getword(pin, buf);
-		if (!strcmp(buf_cstring(buf), "NIL"))
+		if (buf->len == 3 && !memcmp(buf->s, "NIL", 3)) {
+		    /* indicated NIL with a NULL buf.s pointer */
+		    buf_free(buf);
 		    return c;
+		}
 		return EOF;
 	    }
 	}

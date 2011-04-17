@@ -2643,7 +2643,7 @@ void cmd_id(char *tag)
 		error = 1;
 		break;
 	    }
-	    if (strlen(arg.s) > MAXIDVALUELEN) {
+	    if (arg.len > MAXIDVALUELEN) {
 		prot_printf(imapd_out,
 			    "%s BAD value longer than %u octets in Id\r\n",
 			    tag, MAXIDVALUELEN);
@@ -7521,7 +7521,7 @@ static int parse_annotate_fetch_data(const char *tag,
 	    if (permessage_flag)
 		c = getastring(imapd_in, imapd_out, &arg);
 	    else
-		c = getnstring(imapd_in, imapd_out, &arg);
+		c = getqstring(imapd_in, imapd_out, &arg);
 	    if (c == EOF) {
 		prot_printf(imapd_out,
 			    "%s BAD Missing annotation attribute(s)\r\n", tag);

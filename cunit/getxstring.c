@@ -52,24 +52,37 @@
  * Note: prot_setisclient() turns off off literal synchronising so
  * we don't have to futz around with testing that.
  */
-#define TESTCASE(fut, input, retval, output) \
+#define _TESTCASE_PRE(fut, input, retval) \
     do { \
 	struct buf b = BUF_INITIALIZER; \
 	struct protstream *p; \
-	int outputlen = sizeof(output)-1; \
 	int c; \
 	p = prot_readmap(input, sizeof(input)-1); \
 	CU_ASSERT_PTR_NOT_NULL(p); \
 	prot_setisclient(p, 1); \
 	c = fut(p, NULL, &b); \
 	CU_ASSERT_EQUAL(c, retval); \
-	if (c != EOF) { \
-	    CU_ASSERT_EQUAL(b.len, outputlen); \
-	    CU_ASSERT(!memcmp(b.s, output, outputlen)); \
+	if (c != EOF) {
+#define _TESTCASE_POST() \
 	} \
 	prot_free(p); \
 	buf_free(&b); \
     } while (0)
+#define TESTCASE(fut, input, retval, output) \
+    do { \
+	int outputlen = sizeof(output)-1; \
+	_TESTCASE_PRE(fut, input, retval); \
+	CU_ASSERT_EQUAL(b.len, outputlen); \
+	CU_ASSERT(!memcmp(b.s, output, outputlen)); \
+	_TESTCASE_POST(); \
+    } while(0)
+#define TESTCASE_NULL(fut, input, retval) \
+    do { \
+	_TESTCASE_PRE(fut, input, retval); \
+	CU_ASSERT_EQUAL(b.len, 0); \
+	CU_ASSERT_PTR_NULL(b.s); \
+	_TESTCASE_POST(); \
+    } while(0)
 
 /*
  * getastring() parses something vaguely like an astring, with a few differences.
@@ -377,7 +390,7 @@ static void test_getnstring(void)
     TESTCASE(getnstring, "uranium258 plutonium", EOF, "");
 
     /* The character sequence NIL is special for nstrings only */
-    TESTCASE(getnstring, "NIL by mouth", ' ', "NIL");
+    TESTCASE_NULL(getnstring, "NIL by mouth", ' ');
     TESTCASE(getnstring, "NELLY ", EOF, "");
 
     /*
@@ -449,7 +462,7 @@ static void test_getbnstring(void)
     TESTCASE(getbnstring, "uranium258 plutonium", EOF, "");
 
     /* The character sequence NIL is special for nstrings only */
-    TESTCASE(getbnstring, "NIL by mouth", ' ', "NIL");
+    TESTCASE_NULL(getbnstring, "NIL by mouth", ' ');
     TESTCASE(getbnstring, "NELLY ", EOF, "");
 
     /*
