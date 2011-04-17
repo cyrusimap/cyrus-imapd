@@ -328,12 +328,12 @@ int prot_setcompress(struct protstream *s)
 
 	s->zlevel = Z_DEFAULT_COMPRESSION;
 	zr = deflateInit2(zstrm, s->zlevel, Z_DEFLATED,
-		          -15, 8, Z_DEFAULT_STRATEGY);
+		          -MAX_WBITS, MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY);
     }
     else {
 	zstrm->next_in = Z_NULL;
 	zstrm->avail_in = 0;
-	zr = inflateInit2(zstrm, -15);
+	zr = inflateInit2(zstrm, -MAX_WBITS);
     }
 
     if (zr != Z_OK)
