@@ -127,7 +127,7 @@ struct annotate_entrydesc
     int type;			/* entry type */
     annotation_proxy_t proxytype; /* mask of allowed server types */
     int attribs;		/* mask of allowed attributes */
-    int acl;			/* add'l required ACL for .shared */
+    int extra_rights;		/* for set of shared mailbox annotations */
     void (*get)(const annotate_cursor_t *cursor,
 		const char *name, struct fetchdata *fdata,
 		void *rock);	/* function to get the entry */
@@ -180,6 +180,10 @@ static int _annotate_rewrite(const char *oldmboxname, uint32_t olduid,
 			     const char *olduserid, const char *newmboxname,
 			     uint32_t newuid, const char *newuserid,
 			     int copy);
+static int _annotate_may_store(const struct storedata *sdata,
+			       const annotate_cursor_t *cursor,
+			       int is_shared,
+			       const annotate_entrydesc_t *desc);
 
 /* String List Management */
 /*
@@ -1993,6 +1997,15 @@ static int _annotate_store_entries(struct storedata *sdata,
 
     /* Loop through the list of provided entries to get */
     for (ee = sdata->entry_list ; ee ; ee = ee->next) {
+
+	if (ee->have_shared &&
+	    !_annotate_may_store(sdata, cursor, /*shared*/1, ee->entry))
+	    return IMAP_PERMISSION_DENIED;
+
+	if (ee->have_priv &&
+	    !_annotate_may_store(sdata, cursor, /*shared*/0, ee->entry))
+	    return IMAP_PERMISSION_DENIED;
+
 	r = ee->entry->set(cursor, ee, sdata, ee->entry->rock);
 	if (r)
 	    return r;
@@ -2083,19 +2096,53 @@ static void store_proxy(const char *server, void *data __attribute__((unused)),
     proxy_store_func(server, prock->mbox_pat, prock->entryatts);
 }
 
-static int annotation_may_store(const struct storedata *sdata,
-				const struct mboxlist_entry *mbentry,
-				unsigned needed)
+static int _annotate_may_store(const struct storedata *sdata,
+			       const annotate_cursor_t *cursor,
+			       int is_shared,
+			       const annotate_entrydesc_t *desc)
 {
-    unsigned my_rights;
+    unsigned int my_rights;
+    unsigned int needed = 0;
+    const char *acl = NULL;
 
+    /* Admins can do anything */
     if (sdata->isadmin)
 	return 1;
 
-    if (!mbentry->acl)
+    if (cursor->which == ANNOTATION_SCOPE_SERVER) {
+	/* RFC5464 doesn't mention access control for server
+	 * annotations, but this seems a sensible practice and is
+	 * consistent with past Cyrus behaviour */
+	return !is_shared;
+    }
+    else if (cursor->which == ANNOTATION_SCOPE_MAILBOX) {
+	assert(cursor->int_mboxname[0]);
+	assert(cursor->mbentry);
+
+	/* Make sure its a local mailbox annotation */
+	if (cursor->mbentry->server)
+	    return 0;
+
+	acl = cursor->mbentry->acl;
+	/* RFC5464 is a trifle vague about access control for mailbox
+	 * annotations but this seems to be compliant */
+	needed = ACL_LOOKUP;
+	if (is_shared)
+	    needed |= ACL_READ|ACL_WRITE|desc->extra_rights;
+	/* fall through to ACL check */
+    }
+    else if (cursor->which == ANNOTATION_SCOPE_MESSAGE) {
+	acl = cursor->acl;
+	/* RFC5257: writing to a private annotation needs 'r'.
+	 * Writing to a shared annotation needs 'n' */
+	needed = (is_shared ? ACL_ANNOTATEMSG : ACL_READ);
+	/* fall through to ACL check */
+    }
+
+    if (!acl)
 	return 0;
 
-    my_rights = cyrus_acl_myrights(sdata->auth_state, mbentry->acl);
+    my_rights = cyrus_acl_myrights(sdata->auth_state, acl);
 
     return ((my_rights & needed) == needed);
 }
@@ -2103,15 +2150,13 @@ static int annotation_may_store(const struct storedata *sdata,
 static int annotation_set_tofile(const annotate_cursor_t *cursor
 				    __attribute__((unused)),
 				 struct annotate_st_entry_list *entry,
-				 struct storedata *sdata,
+				 struct storedata *sdata
+				    __attribute__((unused)),
 				 void *rock)
 {
     const char *filename = (const char *) rock;
     char path[MAX_MAILBOX_PATH+1];
     FILE *f;
-
-    /* Check ACL */
-    if (!sdata->isadmin) return IMAP_PERMISSION_DENIED;
 
     snprintf(path, sizeof(path), "%s/msg/%s", config_dir, filename);
 
@@ -2134,80 +2179,28 @@ static int annotation_set_todb(const annotate_cursor_t *cursor,
 {
     int r = 0;
 
-    /* TODO: access control for setting per-message annotations */
-    if (entry->have_shared) {
-	/* Check ACL
-	 *
-	 * Must be an admin to set shared server annotations and
-	 * must have the required rights for shared mailbox annotations.
-	 */
-	int acl = ACL_READ | ACL_WRITE | entry->entry->acl;
-
-	if (cursor->which == ANNOTATION_SCOPE_SERVER) {
-	    if (!sdata->isadmin)
-		return IMAP_PERMISSION_DENIED;
-	}
-	else if (cursor->which == ANNOTATION_SCOPE_MAILBOX) {
-	    if (!cursor->int_mboxname[0] || !cursor->mbentry->acl ||
-	        ((cyrus_acl_myrights(sdata->auth_state,
-				     cursor->mbentry->acl) & acl) != acl))
-		return IMAP_PERMISSION_DENIED;
-	    /* Make sure its a local mailbox annotation */
-	    if (cursor->mbentry->server)
-		return 0;
-	}
-	else if (cursor->which == ANNOTATION_SCOPE_MESSAGE) {
-	    /* TODO: access control for storing per-message annotations */
-	}
-
+    if (entry->have_shared)
 	r = write_entry(cursor->int_mboxname, cursor->uid,
 			entry->entry->name, "",
 			&(entry->shared), &(sdata->tid));
-    }
-    if (entry->have_priv) {
-	/* Check ACL */
-
-	if (cursor->which == ANNOTATION_SCOPE_SERVER) {
-	/*
-	 * XXX We don't actually need to check anything here,
-	 * since we don't have any access control for server annotations
-	 */
-	    ;
-	}
-	else if (cursor->which == ANNOTATION_SCOPE_MAILBOX) {
-	/*
-	 * All we need for private mailbox annotations is ACL_LOOKUP,
-	 * and we wouldn't be in this callback without it.
-	 */
-	    /* Make sure its a local mailbox annotation */
-	    if (cursor->mbentry->server)
-		return 0;
-	}
-	else if (cursor->which == ANNOTATION_SCOPE_MESSAGE) {
-	    /* TODO: access control for storing per-message annotations */
-	}
-
+    if (!r && entry->have_priv)
 	r = write_entry(cursor->int_mboxname, cursor->uid,
 			entry->entry->name, sdata->userid,
 			&(entry->priv), &(sdata->tid));
-    }
 
     return r;
 }
 
 static int annotation_set_mailboxopt(const annotate_cursor_t *cursor,
 				     struct annotate_st_entry_list *entry,
-				     struct storedata *sdata,
+				     struct storedata *sdata
+					__attribute__((unused)),
 				     void *rock)
 {
     struct mailbox *mailbox = NULL;
     uint32_t flag = (unsigned long)rock;
     int r = 0;
     unsigned long newopts;
-
-    /* Check ACL */
-    if (!annotation_may_store(sdata, cursor->mbentry, ACL_LOOKUP|ACL_WRITE))
-	return IMAP_PERMISSION_DENIED;
 
     r = mailbox_open_iwl(cursor->int_mboxname, &mailbox);
     if (r) return r;
@@ -2234,16 +2227,13 @@ static int annotation_set_mailboxopt(const annotate_cursor_t *cursor,
 
 static int annotation_set_pop3showafter(const annotate_cursor_t *cursor,
 				     struct annotate_st_entry_list *entry,
-				     struct storedata *sdata,
+				     struct storedata *sdata
+					__attribute__((unused)),
 				     void *rock __attribute__((unused)))
 {
     struct mailbox *mailbox = NULL;
     int r = 0;
     time_t date;
-
-    /* Check ACL */
-    if (!annotation_may_store(sdata, cursor->mbentry, ACL_LOOKUP|ACL_WRITE))
-	return IMAP_PERMISSION_DENIED;
 
     if (entry->shared.s == NULL) {
 	/* Effectively removes the annotation */
@@ -2270,7 +2260,8 @@ static int annotation_set_pop3showafter(const annotate_cursor_t *cursor,
 
 static int annotation_set_specialuse(const annotate_cursor_t *cursor,
 				     struct annotate_st_entry_list *entry,
-				     struct storedata *sdata,
+				     struct storedata *sdata
+					 __attribute__((unused)),
 				     void *rock __attribute__((unused)))
 {
     int r = 0;
@@ -2287,10 +2278,6 @@ static int annotation_set_specialuse(const annotate_cursor_t *cursor,
       "\\Trash",
       NULL
     };
-
-    /* Check ACL */
-    if (!annotation_may_store(sdata, cursor->mbentry, ACL_LOOKUP|ACL_WRITE))
-	return IMAP_PERMISSION_DENIED;
 
     if (entry->shared.s == NULL) {
 	/* Effectively removes the annotation */
@@ -2889,7 +2876,7 @@ static void init_annotation_definitions(void)
 	for (; *p && (isalnum(*p) || *p=='.' || *p=='-' || *p=='_' || *p=='/');
 	     p++);
 	tmp = xstrndup(p2, p-p2);
-	ae->acl = cyrus_acl_strtomask(tmp);
+	ae->extra_rights = cyrus_acl_strtomask(tmp);
 	free(tmp);
 
 	for (; *p && isspace(*p); p++);
