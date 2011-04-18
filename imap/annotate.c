@@ -166,7 +166,7 @@ void appendattvalue(struct attvaluelist **l, const char *attrib, const char *val
 
     *tail = (struct attvaluelist *)xmalloc(sizeof(struct attvaluelist));
     (*tail)->attrib = xstrdup(attrib);
-    (*tail)->value = xstrdup(value);
+    (*tail)->value = value ? xstrdup(value) : NULL;
     (*tail)->next = 0;
 }
 
@@ -585,7 +585,7 @@ static void output_entryatt(const char *mboxname, const char *entry,
     }
 
     if (!userid[0]) { /* shared annotation */
-	if ((fdata->attribs & ATTRIB_VALUE_SHARED) && attrib->value) {
+	if ((fdata->attribs & ATTRIB_VALUE_SHARED)) {
 	    appendattvalue(&attvalues, "value.shared", attrib->value);
 	}
 
@@ -597,7 +597,7 @@ static void output_entryatt(const char *mboxname, const char *entry,
 
 	/* Base the return of the size attribute on whether or not there is
 	 * an attribute, not whether size is nonzero. */
-	if ((fdata->attribs & ATTRIB_SIZE_SHARED) && attrib->value) {
+	if ((fdata->attribs & ATTRIB_SIZE_SHARED)) {
 	    snprintf(buf, sizeof(buf), SIZE_T_FMT, attrib->size);
 	    appendattvalue(&attvalues, "size.shared", buf);
 	}
@@ -605,25 +605,25 @@ static void output_entryatt(const char *mboxname, const char *entry,
 	/* For this one we need both a value for the entry *and* a nonzero
 	 * modifiedsince time */
 	if ((fdata->attribs & ATTRIB_MODIFIEDSINCE_SHARED)
-	    && attrib->value && attrib->modifiedsince) {
+	    && attrib->modifiedsince) {
 	    snprintf(buf, sizeof(buf), "%ld", attrib->modifiedsince);
 	    appendattvalue(&attvalues, "modifiedsince.shared", buf);
 	}
     }
     else { /* private annotation */
-	if ((fdata->attribs & ATTRIB_VALUE_PRIV) && attrib->value) {
+	if ((fdata->attribs & ATTRIB_VALUE_PRIV)) {
 	    appendattvalue(&attvalues, "value.priv", attrib->value);
 	}
 
 	if ((fdata->attribs & ATTRIB_CONTENTTYPE_PRIV)
-	    && attrib->value && attrib->contenttype) {
+	    && attrib->contenttype) {
 	    appendattvalue(&attvalues, "content-type.priv",
 			   attrib->contenttype);
 	}
 
 	/* Base the return of the size attribute on whether or not there is
 	 * an attribute, not whether size is nonzero. */
-	if ((fdata->attribs & ATTRIB_SIZE_PRIV) && attrib->value) {
+	if ((fdata->attribs & ATTRIB_SIZE_PRIV)) {
 	    snprintf(buf, sizeof(buf), SIZE_T_FMT, attrib->size);
 	    appendattvalue(&attvalues, "size.priv", buf);
 	}
@@ -631,7 +631,7 @@ static void output_entryatt(const char *mboxname, const char *entry,
 	/* For this one we need both a value for the entry *and* a nonzero
 	 * modifiedsince time */
 	if ((fdata->attribs & ATTRIB_MODIFIEDSINCE_PRIV)
-	    && attrib->value && attrib->modifiedsince) {
+	    && attrib->modifiedsince) {
 	    snprintf(buf, sizeof(buf), "%ld", attrib->modifiedsince);
 	    appendattvalue(&attvalues, "modifiedsince.priv", buf);
 	}
