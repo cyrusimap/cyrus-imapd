@@ -115,6 +115,7 @@ enum {
     ATTRIB_TYPE_UINT,
     ATTRIB_TYPE_INT
 };
+#define ATTRIB_NO_FETCH_ACL_CHECK   (1<<30)
 
 struct fetchdata;
 struct storedata;
@@ -756,19 +757,56 @@ static void output_entryatt(const annotate_cursor_t *cursor, const char *entry,
     buf_free(&buf);
 }
 
-static int annotation_may_fetch(const struct fetchdata *fdata,
-				const struct mboxlist_entry *mbentry,
-				unsigned needed)
+/* Note that unlike store access control, fetch access control
+ * is identical between shared and private annotations */
+static int _annotate_may_fetch(const struct fetchdata *fdata,
+			       const annotate_cursor_t *cursor,
+			       const annotate_entrydesc_t *desc)
 {
-    unsigned my_rights;
+    unsigned int my_rights;
+    unsigned int needed = 0;
+    const char *acl = NULL;
 
+    /* Admins can do anything */
     if (fdata->isadmin)
 	return 1;
 
-    if (!mbentry->acl)
+    /* Some entries need to do their own access control */
+    if ((desc->type & ATTRIB_NO_FETCH_ACL_CHECK))
+	return 1;
+
+    if (cursor->which == ANNOTATION_SCOPE_SERVER) {
+	/* RFC5464 doesn't mention access control for server
+	 * annotations, but this seems a sensible practice and is
+	 * consistent with past Cyrus behaviour */
+	return 1;
+    }
+    else if (cursor->which == ANNOTATION_SCOPE_MAILBOX) {
+	assert(cursor->int_mboxname[0]);
+	assert(cursor->mbentry);
+
+	/* Make sure its a local mailbox annotation */
+	if (cursor->mbentry->server)
+	    return 0;
+
+	acl = cursor->mbentry->acl;
+	/* RFC5464 is a trifle vague about access control for mailbox
+	 * annotations but this seems to be compliant */
+	needed = ACL_LOOKUP|ACL_READ;
+	/* fall through to ACL check */
+    }
+    else if (cursor->which == ANNOTATION_SCOPE_MESSAGE) {
+	acl = cursor->acl;
+	/* RFC5257: reading from a private annotation needs 'r'.
+	 * Reading from a shared annotation needs 'r' */
+	needed = ACL_READ;
+	/* fall through to ACL check */
+    }
+
+    if (!acl)
 	return 0;
 
-    my_rights = cyrus_acl_myrights(fdata->auth_state, mbentry->acl);
+    my_rights = cyrus_acl_myrights(fdata->auth_state, acl);
 
     return ((my_rights & needed) == needed);
 }
@@ -817,11 +855,16 @@ static void annotation_get_server(const annotate_cursor_t *cursor,
 {
     struct buf value = BUF_INITIALIZER;
 
-    if(!fdata || !cursor->mbentry)
-	fatal("annotation_get_server called with bad parameters", EC_TEMPFAIL);
+    assert(fdata);
+    assert(cursor->which == ANNOTATION_SCOPE_MAILBOX);
+    assert(cursor->mbentry);
 
     /* Check ACL */
-    if (!annotation_may_fetch(fdata, cursor->mbentry, ACL_LOOKUP))
+    /* Note that we use a weaker form of access control than
+     * normal - we only check for ACL_LOOKUP and we don't refuse
+     * access if the mailbox is not local */
+    if (!cursor->mbentry->acl ||
+        !(cyrus_acl_myrights(fdata->auth_state, cursor->mbentry->acl) & ACL_LOOKUP))
 	goto out;
 
     if (cursor->mbentry->server)
@@ -839,12 +882,13 @@ static void annotation_get_partition(const annotate_cursor_t *cursor,
 {
     struct buf value = BUF_INITIALIZER;
 
-    if(!fdata || !cursor->mbentry)
-	fatal("annotation_get_partition called with bad parameters",
-	      EC_TEMPFAIL);
+    assert(fdata);
+    assert(cursor->which == ANNOTATION_SCOPE_MAILBOX);
+    assert(cursor->mbentry);
 
     /* Check ACL */
-    if (!annotation_may_fetch(fdata, cursor->mbentry, ACL_LOOKUP))
+    if (!cursor->mbentry->acl ||
+        !(cyrus_acl_myrights(fdata->auth_state, cursor->mbentry->acl) & ACL_LOOKUP))
 	goto out;
 
     if (!cursor->mbentry->server)
@@ -866,14 +910,6 @@ static void annotation_get_size(const annotate_cursor_t *cursor,
     if (!fdata || !cursor->mbentry)
 	fatal("annotation_get_size called with bad parameters",
 	      EC_TEMPFAIL);
-    
-    /* Make sure its a local mailbox */
-    if (cursor->mbentry->server)
-	goto out;
-
-    /* Check ACL */
-    if (!annotation_may_fetch(fdata, cursor->mbentry, ACL_LOOKUP|ACL_READ))
-	goto out;
 
     if (mailbox_open_irl(cursor->int_mboxname, &mailbox))
 	goto out;
@@ -900,14 +936,6 @@ static void annotation_get_lastupdate(const annotate_cursor_t *cursor,
     if(!fdata || !cursor->mbentry)
 	fatal("annotation_get_lastupdate called with bad parameters",
 	      EC_TEMPFAIL);
-    
-    /* Make sure its a local mailbox */
-    if (cursor->mbentry->server)
-	goto out;
-
-    /* Check ACL */
-    if (!annotation_may_fetch(fdata, cursor->mbentry, ACL_LOOKUP|ACL_READ))
-	goto out;
 
     fname = mboxname_metapath(cursor->mbentry->partition,
 			      cursor->int_mboxname, META_INDEX, 0);
@@ -936,14 +964,6 @@ static void annotation_get_lastpop(const annotate_cursor_t *cursor,
     if(!fdata || !cursor->mbentry)
       fatal("annotation_get_lastpop called with bad parameters",
               EC_TEMPFAIL);
-
-    /* Make sure its a local mailbox */
-    if (cursor->mbentry->server)
-	goto out;
-
-    /* Check ACL */
-    if (!annotation_may_fetch(fdata, cursor->mbentry, ACL_LOOKUP|ACL_READ))
-	goto out;
 
     if (mailbox_open_irl(cursor->int_mboxname, &mailbox) != 0)
 	goto out;
@@ -974,14 +994,6 @@ static void annotation_get_mailboxopt(const annotate_cursor_t *cursor,
 	fatal("annotation_get_mailboxopt called with bad parameters",
 	      EC_TEMPFAIL);
 
-    /* Make sure its a local mailbox */
-    if (cursor->mbentry->server)
-	goto out;
-
-    /* Check ACL */
-    if (!annotation_may_fetch(fdata, cursor->mbentry, ACL_LOOKUP|ACL_READ))
-	goto out;
-
     if (mailbox_open_irl(cursor->int_mboxname, &mailbox) != 0)
 	goto out;
 
@@ -1007,14 +1019,6 @@ static void annotation_get_pop3showafter(const annotate_cursor_t *cursor,
     if(!cursor->int_mboxname || !entry || !fdata || !cursor->mbentry)
       fatal("annotation_get_pop3showafter called with bad parameters",
               EC_TEMPFAIL);
-
-    /* Make sure its a local mailbox */
-    if (cursor->mbentry->server)
-	goto out;
-
-    /* Check ACL */
-    if (!annotation_may_fetch(fdata, cursor->mbentry, ACL_LOOKUP|ACL_READ))
-	goto out;
 
     if (mailbox_open_irl(cursor->int_mboxname, &mailbox) != 0)
 	goto out;
@@ -1043,19 +1047,10 @@ static void annotation_get_specialuse(const annotate_cursor_t *cursor,
 	fatal("annotation_get_lastupdate called with bad parameters",
 	      EC_TEMPFAIL);
 
-    /* Make sure its a local mailbox */
-    if (cursor->mbentry->server)
-	goto out;
-
-    /* Check ACL */
-    if (!annotation_may_fetch(fdata, cursor->mbentry, ACL_LOOKUP|ACL_READ))
-	goto out;
-
     if (cursor->mbentry->specialuse)
 	buf_appendcstr(&value, cursor->mbentry->specialuse);
 
     output_entryatt(cursor, entry, "", &value, fdata);
-out:
     buf_free(&value);
 }
 
@@ -1086,24 +1081,6 @@ static void annotation_get_fromdb(const annotate_cursor_t *cursor,
 {
     struct rw_rock rw_rock;
     const char *entrypat = (const char *) rock;
-
-    if (cursor->which == ANNOTATION_SCOPE_SERVER) {
-	if(cursor->int_mboxname || !entrypat || !fdata)
-	    fatal("annotation_get_fromdb called with bad parameters", EC_TEMPFAIL);
-
-	/* XXX any kind of access controls for reading? */
-
-    } else if (cursor->which == ANNOTATION_SCOPE_MAILBOX) {
-	if(!cursor->int_mboxname || !entrypat || !fdata || !cursor->mbentry)
-	    fatal("annotation_get_fromdb called with bad parameters", EC_TEMPFAIL);
-
-	/* Make sure its a local mailbox */
-	if (cursor->mbentry->server) return;
-
-	/* Check ACL */
-	if (!annotation_may_fetch(fdata, cursor->mbentry, ACL_LOOKUP|ACL_READ))
-	    return;
-    }
 
     rw_rock.cursor = cursor;
     rw_rock.fdata = fdata;
@@ -1277,7 +1254,8 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
 	NULL
     },{
 	"/vendor/cmu/cyrus-imapd/partition",
-	ATTRIB_TYPE_STRING,
+	/* _get_partition does its own access control check */
+	ATTRIB_TYPE_STRING | ATTRIB_NO_FETCH_ACL_CHECK,
         BACKEND_ONLY,
 	ATTRIB_VALUE_SHARED,
 	0,
@@ -1304,7 +1282,8 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
 	NULL
     },{
 	"/vendor/cmu/cyrus-imapd/server",
-	ATTRIB_TYPE_STRING,
+	/* _get_server does its own access control check */
+	ATTRIB_TYPE_STRING | ATTRIB_NO_FETCH_ACL_CHECK,
 	PROXY_ONLY,
 	ATTRIB_VALUE_SHARED,
 	0,
@@ -1490,6 +1469,9 @@ static void _annotate_fetch_entries(struct fetchdata *fdata,
 		!config_getstring(IMAPOPT_PROXYSERVERS))
 		continue;
 	}
+
+	if (!_annotate_may_fetch(fdata, cursor, ee->entry))
+	    continue;
 
 	ee->entry->get(cursor, ee->entry->name, fdata,
 		       (ee->entry->rock ? ee->entry->rock : (void*) ee->entrypat));
