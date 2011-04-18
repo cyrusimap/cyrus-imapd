@@ -576,7 +576,7 @@ static void output_entryatt(const char *mboxname, const char *entry,
     if (hash_lookup(key, &(fdata->entry_table))) return;
     hash_insert(key, (void *)0xDEADBEEF, &(fdata->entry_table));
 
-    vallen = strlen(attrib->value);
+    vallen = attrib->value ? strlen(attrib->value) : 0;
     if (fdata->sizeptr && fdata->maxsize < vallen) {
 	/* too big - track the size of the largest */
 	int *sp = fdata->sizeptr;
