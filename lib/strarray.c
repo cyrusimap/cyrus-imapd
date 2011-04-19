@@ -119,6 +119,17 @@ static inline int adjust_index_rw(strarray_t *sa, int idx, int len)
     return idx;
 }
 
+strarray_t *strarray_dup(const strarray_t *sa)
+{
+    strarray_t *new = strarray_new();
+    int i;
+
+    strarray_truncate(new, sa->count);
+    for (i = 0 ; i < sa->count ; i++)
+	new->data[i] = xstrdup(sa->data[i]);
+    return new;
+}
+
 void strarray_append(strarray_t *sa, const char *s)
 {
     strarray_appendm(sa, xstrdup(s));
