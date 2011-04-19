@@ -875,12 +875,12 @@ static void cmdloop(void)
 	     userdeny(popd_userid, config_ident, inputbuf, sizeof(inputbuf)))) {
 	    for (p = inputbuf; *p == '['; p++); /* can't have [ be first char */
 	    prot_printf(popd_out, "-ERR [SYS/TEMP] %s\r\n", p);
-           telemetry_rusage( popd_userid );
+	    telemetry_rusage( popd_userid );
 	    shut_down(0);
 	}
 
 	if (!prot_fgets(inputbuf, sizeof(inputbuf), popd_in)) {
-           telemetry_rusage( popd_userid );
+	    telemetry_rusage( popd_userid );
 	    shut_down(0);
 	}
 
