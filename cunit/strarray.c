@@ -747,3 +747,69 @@ static void test_find(void)
 #undef WORD4
 }
 
+static void test_dup(void)
+{
+    strarray_t sa = STRARRAY_INITIALIZER;
+    strarray_t *dup;
+#define WORD0	"lorem"
+#define WORD1	"ipsum"
+#define WORD2	"dolor"
+#define WORD3	"sit"
+#define WORD4	"amet"
+
+    CU_ASSERT_EQUAL(sa.count, 0);
+    CU_ASSERT(sa.alloc >= sa.count);
+
+    /* dup an empty array */
+    dup = strarray_dup(&sa);
+    CU_ASSERT_PTR_NOT_NULL(dup);
+    CU_ASSERT_PTR_NOT_EQUAL(dup, &sa);
+    CU_ASSERT_EQUAL(dup->count, 0);
+    CU_ASSERT(dup->alloc >= dup->count);
+    strarray_free(dup);
+
+    /* dup a non-empty array */
+    strarray_append(&sa, WORD0);
+    strarray_append(&sa, WORD1);
+    strarray_append(&sa, WORD2);
+    strarray_append(&sa, WORD3);
+    strarray_append(&sa, WORD0);
+    strarray_append(&sa, WORD4);
+    CU_ASSERT_EQUAL(sa.count, 6);
+    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_PTR_NOT_NULL(sa.data);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 2), WORD2);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 3), WORD3);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 4), WORD0);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 5), WORD4);
+
+    dup = strarray_dup(&sa);
+    CU_ASSERT_PTR_NOT_NULL(dup);
+    CU_ASSERT_PTR_NOT_EQUAL(dup, &sa);
+    CU_ASSERT_EQUAL(dup->count, 6);
+    CU_ASSERT(dup->alloc >= dup->count);
+    CU_ASSERT_PTR_NOT_NULL(dup->data);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(dup, 0), WORD0);
+    CU_ASSERT_PTR_NOT_EQUAL((void *)strarray_nth(dup, 0), (void *)strarray_nth(&sa, 0));
+    CU_ASSERT_STRING_EQUAL(strarray_nth(dup, 1), WORD1);
+    CU_ASSERT_PTR_NOT_EQUAL((void *)strarray_nth(dup, 1), (void *)strarray_nth(&sa, 1));
+    CU_ASSERT_STRING_EQUAL(strarray_nth(dup, 2), WORD2);
+    CU_ASSERT_PTR_NOT_EQUAL((void *)strarray_nth(dup, 2), (void *)strarray_nth(&sa, 2));
+    CU_ASSERT_STRING_EQUAL(strarray_nth(dup, 3), WORD3);
+    CU_ASSERT_PTR_NOT_EQUAL((void *)strarray_nth(dup, 3), (void *)strarray_nth(&sa, 3));
+    CU_ASSERT_STRING_EQUAL(strarray_nth(dup, 4), WORD0);
+    CU_ASSERT_PTR_NOT_EQUAL((void *)strarray_nth(dup, 4), (void *)strarray_nth(&sa, 4));
+    CU_ASSERT_STRING_EQUAL(strarray_nth(dup, 5), WORD4);
+    CU_ASSERT_PTR_NOT_EQUAL((void *)strarray_nth(dup, 5), (void *)strarray_nth(&sa, 5));
+    strarray_free(dup);
+
+    strarray_fini(&sa);
+#undef WORD0
+#undef WORD1
+#undef WORD2
+#undef WORD3
+#undef WORD4
+}
+
