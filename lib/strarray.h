@@ -71,6 +71,7 @@ void strarray_setm(strarray_t *, int idx, char *);
 void strarray_insert(strarray_t *, int idx, const char *);
 void strarray_insertm(strarray_t *, int idx, char *);
 char *strarray_remove(strarray_t *, int idx);
+void strarray_remove_all(strarray_t *sa, const char *s);
 const char *strarray_nth(const strarray_t *sa, int idx);
 void strarray_truncate(strarray_t *sa, int newlen);
 strarray_t *strarray_dup(const strarray_t *);

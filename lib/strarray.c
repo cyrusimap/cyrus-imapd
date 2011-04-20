@@ -199,6 +199,18 @@ char *strarray_remove(strarray_t *sa, int idx)
     return s;
 }
 
+void strarray_remove_all(strarray_t *sa, const char *s)
+{
+    int i = 0;
+
+    for (;;) {
+	i = strarray_find(sa, s, i);
+	if (i < 0)
+	    break;
+	free(strarray_remove(sa, i));
+    }
+}
+
 void strarray_truncate(strarray_t *sa, int newlen)
 {
     int i;
