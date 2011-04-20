@@ -1687,7 +1687,7 @@ static int message_pendingboundary(const char *s, int slen,
 int message_write_cache(struct index_record *record, const struct body *body)
 {
     static struct buf cacheitem_buffer;
-    struct buf ib[10];
+    struct buf ib[CACHE_NUM];
     struct body toplevel;
     char *subject;
     int len;
@@ -1695,7 +1695,7 @@ int message_write_cache(struct index_record *record, const struct body *body)
 
     /* initialise data structures */
     buf_reset(&cacheitem_buffer);
-    for (i = 0; i < 10; i++)
+    for (i = 0; i < CACHE_NUM; i++)
 	buf_init(&ib[i]);
 
     toplevel.type = "MESSAGE";
@@ -1721,7 +1721,7 @@ int message_write_cache(struct index_record *record, const struct body *body)
     free(subject);
 
     /* append the records to the buffer */
-    for (i = 0; i < 10; i++) {
+    for (i = 0; i < CACHE_NUM; i++) {
 	buf_appendmap(&ib[i], "\0\0\0", 3);
 	record->crec.item[i].len = buf_len(&ib[i]);
 	buf_appendbit32(&cacheitem_buffer, record->crec.item[i].len);

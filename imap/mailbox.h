@@ -369,7 +369,9 @@ enum {
     CACHE_TO,
     CACHE_CC,
     CACHE_BCC,
-    CACHE_SUBJECT
+    CACHE_SUBJECT,
+
+    CACHE_NUM
 };
 
 /* Cached envelope token positions */
