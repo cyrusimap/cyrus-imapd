@@ -149,6 +149,24 @@ static void message_ibuf_pad(struct ibuf *ibuf);
 static void message_ibuf_free(struct ibuf *ibuf);
 
 /*
+ * Convert a string to uppercase.  Returns the string.
+ *
+ * This differs from the ucase() function in lib/util.c by using the
+ * libc tolower() instead of our hardcoded builtin lookup table.
+ * Whether this is a good thing is unclear, but that's what the old code
+ * did so I'm going to preserve it - gnb
+ */
+static char *message_ucase(char *s)
+{
+    char *p;
+
+    for (p = s ; *p ; p++)
+	if (Uislower(*p))
+	    *p = toupper((int) *p);
+    return s;
+}
+
+/*
  * Copy a message of 'size' bytes from 'from' to 'to',
  * ensuring minimal RFC-822 compliance.
  *
@@ -800,7 +818,6 @@ static void message_parse_encoding(const char *hdr, char **hdrp)
 {
     int len;
     const char *p;
-    char *q;
 
     /* Ignore if we already saw one of these headers */
     if (*hdrp) return;
@@ -820,11 +837,7 @@ static void message_parse_encoding(const char *hdr, char **hdrp)
     if (p) return;
 
     /* Save encoding token */
-    *hdrp = xmalloc(len + 1);
-    strlcpy(*hdrp, hdr, len + 1);
-    for (q = *hdrp; *q; q++) {
-	if (Uislower(*q)) *q = toupper((int) *q);
-    }
+    *hdrp = message_ucase(xstrndup(hdr, len));
 }
 
 /* 
@@ -893,7 +906,6 @@ static void message_parse_charset(const struct body *body,
  */
 static void message_parse_string(const char *hdr, char **hdrp)
 {
-    int len;
     const char *hdrend;
     char *he;
 
@@ -916,9 +928,7 @@ static void message_parse_string(const char *hdr, char **hdrp)
     }
 
     /* Save header value */
-    len = hdrend - hdr;
-    *hdrp = xmalloc(len + 1);
-    strlcpy(*hdrp, hdr, len + 1);
+    *hdrp = xstrndup(hdr, (hdrend - hdr));
 
     /* Un-fold header (overlapping buffers, use memmove) */
     he = *hdrp;
@@ -972,7 +982,6 @@ static void message_parse_type(const char *hdr, struct body *body)
     int typelen;
     const char *subtype;
     int subtypelen;
-    char *p;
 
     /* Ignore if we already saw one of these headers */
     if (body->type) return;
@@ -1013,16 +1022,8 @@ static void message_parse_type(const char *hdr, struct body *body)
     if (hdr && *hdr != ';') return;
 
     /* Save content type & subtype */
-    body->type = xmalloc(typelen + 1);
-    strlcpy(body->type, type, typelen + 1);
-    for (p = body->type; *p; p++) {
-	if (Uislower(*p)) *p = toupper((int) *p);
-    }
-    body->subtype = xmalloc(subtypelen + 1);
-    strlcpy(body->subtype, subtype, subtypelen + 1);
-    for (p = body->subtype; *p; p++) {
-	if (Uislower(*p)) *p = toupper((int) *p);
-    }
+    body->type = message_ucase(xstrndup(type, typelen));
+    body->subtype = message_ucase(xstrndup(subtype, subtypelen));
 
     /* Parse parameter list */
     if (hdr) {
@@ -1038,7 +1039,6 @@ static void message_parse_type(const char *hdr, struct body *body)
 {
     const char *disposition;
     int dispositionlen;
-    char *p;
 
     /* Ignore if we already saw one of these headers */
     if (body->disposition) return;
@@ -1061,12 +1061,7 @@ static void message_parse_type(const char *hdr, struct body *body)
     if (hdr && *hdr != ';') return;
 
     /* Save content disposition */
-    body->disposition = xmalloc(dispositionlen + 1);
-    strlcpy(body->disposition, disposition, dispositionlen + 1);
-
-    for (p = body->disposition; *p; p++) {
-	if (Uislower(*p)) *p = toupper((int) *p);
-    }
+    body->disposition = message_ucase(xstrndup(disposition, dispositionlen));
 
     /* Parse parameter list */
     if (hdr) {
@@ -1141,14 +1136,8 @@ static void message_parse_params(const char *hdr, struct param **paramp)
 	if (hdr && *hdr++ != ';') return;
 		  
 	/* Save attribute/value pair */
-	*paramp = param = (struct param *)xmalloc(sizeof(struct param));
-	memset(param, 0, sizeof(struct param));
-	param->attribute = xmalloc(attributelen + 1);
-	strlcpy(param->attribute, attribute, attributelen + 1);
-
-	for (p = param->attribute; *p; p++) {
-	    if (Uislower(*p)) *p = toupper((int) *p);
-	}
+	*paramp = param = (struct param *)xzmalloc(sizeof(struct param));
+	param->attribute = message_ucase(xstrndup(attribute, attributelen));
 	param->value = xmalloc(valuelen + 1);
 	if (*value == '\"') {
 	    p = param->value;
@@ -1341,7 +1330,6 @@ static void message_parse_language(const char *hdr, struct param **paramp)
     struct param *param;
     const char *value;
     int valuelen;
-    char *p;
 
     for (;;) {
 	/* Skip over leading whitespace */
@@ -1366,14 +1354,8 @@ static void message_parse_language(const char *hdr, struct param **paramp)
 	if (hdr && *hdr++ != ',') return;
 		  
 	/* Save value pair */
-	*paramp = param = (struct param *)xmalloc(sizeof(struct param));
-	memset(param, 0, sizeof(struct param));
-	param->value = xmalloc(valuelen + 1);
-	strlcpy(param->value, value, valuelen + 1);
-
-	for (p = param->value; *p; p++) {
-	    if (Uislower(*p)) *p = toupper((int) *p);
-	}
+	*paramp = param = (struct param *)xzmalloc(sizeof(struct param));
+	param->value = message_ucase(xstrndup(value, valuelen));
 
 	/* Get ready to parse the next parameter */
 	paramp = &param->next;
