@@ -373,8 +373,9 @@ struct buf *cache_buf(struct index_record *record)
 {
     static struct buf staticbuf;
 
-    staticbuf.s = (char *)cache_base(record);
-    staticbuf.len = cache_size(record);
+    buf_init_ro(&staticbuf,
+		cache_base(record),
+		cache_size(record));
 
     return &staticbuf;
 }
@@ -394,8 +395,9 @@ struct buf *cacheitem_buf(struct index_record *record, int field)
 {
     static struct buf staticbuf;
 
-    staticbuf.s = (char *)cacheitem_base(record, field);
-    staticbuf.len = cacheitem_size(record, field);
+    buf_init_ro(&staticbuf,
+		cacheitem_base(record, field),
+		cacheitem_size(record, field));
 
     return &staticbuf;
 }
