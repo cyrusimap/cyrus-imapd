@@ -124,7 +124,7 @@ static void message_parse_content(struct msg *msg,
 				     struct body *body,
 				     strarray_t *boundaries);
 
-static char *message_getline(char *s, unsigned n, struct msg *msg);
+static char *message_getline(struct buf *, struct msg *msg);
 static int message_pendingboundary(const char *s, int slen, strarray_t *);
 
 static void message_write_envelope(struct ibuf *ibuf, const struct body *body);
@@ -605,15 +605,13 @@ static int message_parse_body(struct msg *msg, struct body *body,
 /*
  * Parse the headers of a body-part
  */
-#define HEADGROWSIZE 1000
 static int message_parse_headers(struct msg *msg, struct body *body,
 				 const char *defaultContentType,
 				 strarray_t *boundaries)
 {
-    static int alloced = 0;
-    static char *headers;
-    int left, len;
+    struct buf headers = BUF_INITIALIZER;
     char *next;
+    int len;
     int sawboundary = 0;
     int maxlines = config_getint(IMAPOPT_MAXHEADERLINES);
     int have_max = 0;
@@ -621,17 +619,10 @@ static int message_parse_headers(struct msg *msg, struct body *body,
 
     body->header_offset = msg->offset;
 
-    if (!alloced) {
-	headers = xmalloc(alloced = HEADGROWSIZE);
-    }
-
-    next = headers;
-    *next++ = '\n';		/* Leading newline to prime the pump */
-    left = alloced - 3;		/* Allow for leading newline, added CR */
-				/*  and trailing NUL */
+    buf_putc(&headers, '\n');	/* Leading newline to prime the pump */
 
     /* Slurp up all of the headers into 'headers' */
-    while (message_getline(next, left, msg) &&
+    while ((next = message_getline(&headers, msg)) &&
 	   (next[-1] != '\n' ||
 	    (*next != '\r' || next[1] != '\n'))) {
 
@@ -641,7 +632,7 @@ static int message_parse_headers(struct msg *msg, struct body *body,
 	    message_pendingboundary(next, len, boundaries)) {
 	    body->boundary_size = len;
 	    body->boundary_lines++;
-	    if (next - 1 > headers) {
+	    if (next - 1 > headers.s) {
 		body->boundary_size += 2;
 		body->boundary_lines++;
 		next[-2] = '\0';
@@ -652,26 +643,14 @@ static int message_parse_headers(struct msg *msg, struct body *body,
 	    sawboundary = 1;
 	    break;
 	}
-
-	left -= len;
-	next += len;
-
-	/* Allocate more header space if necessary */
-	if (left < 100) {
-	    len = next - headers;
-	    alloced += HEADGROWSIZE;
-	    left += HEADGROWSIZE;
-	    headers = xrealloc(headers, alloced);
-	    next = headers + len;
-	}
     }
 
     body->content_offset = msg->offset;
-    body->header_size = strlen(headers+1);
+    body->header_size = strlen(headers.s+1);
 
     /* Scan over the slurped-up headers for interesting header information */
     body->header_lines = -1;	/* Correct for leading newline */
-    for (next = headers; *next; next++) {
+    for (next = headers.s; *next; next++) {
 	if (*next == '\n') {
 	    body->header_lines++;
 
@@ -727,7 +706,7 @@ static int message_parse_headers(struct msg *msg, struct body *body,
 		    !strcmp(body->encoding, "BINARY")) {
 		    char *p = (char*)
 			stristr(msg->base + body->header_offset +
-				(next - headers) + 27,
+				(next - headers.s) + 27,
 				"binary");
 		    memcpy(p, "base64", 6);
 		}
@@ -780,6 +759,7 @@ static int message_parse_headers(struct msg *msg, struct body *body,
     if (!body->type) {
 	message_parse_type(defaultContentType, body);
     }
+    buf_free(&headers);
     return sawboundary;
 }
 
@@ -1644,22 +1624,25 @@ static void message_parse_received_date(const char *hdr, char **hdrp)
 
 
 /*
- * Read a line from 'msg' (or at most 'n' characters) into 's'
+ * Read a line from @msg into @buf.  Returns a pointer to the start of
+ * the line inside @buf, or NULL at the end of @msg.
  */
-static char *message_getline(char *s, unsigned n, struct msg *msg)
+static char *message_getline(struct buf *buf, struct msg *msg)
 {
-    char *rval = s;
+    unsigned int oldlen = buf_len(buf);
+    int c;
 
-    if (n == 0) return 0;
-    n--;			/* Allow for terminating nul */
-
-    while (msg->offset < msg->len && n--) {
-	if ((*s++ = msg->base[msg->offset++]) == '\n') break;
+    while (msg->offset < msg->len) {
+	c = msg->base[msg->offset++];
+	buf_putc(buf, c);
+	if (c == '\n')
+	    break;
     }
-    *s = '\0';
+    buf_cstring(buf);
 
-    if (s == rval) return 0;
-    return rval;
+    if (buf_len(buf) == oldlen)
+	return 0;
+    return buf->s + oldlen;
 }
 
 
