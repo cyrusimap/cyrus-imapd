@@ -813,3 +813,64 @@ static void test_dup(void)
 #undef WORD4
 }
 
+static void test_remove_all(void)
+{
+    strarray_t sa = STRARRAY_INITIALIZER;
+#define WORD0	"lorem"
+#define WORD1	"ipsum"
+#define WORD2	"dolor"
+#define WORD3	"sit"
+#define WORD4	"amet"
+
+    CU_ASSERT_EQUAL(sa.count, 0);
+    CU_ASSERT(sa.alloc >= sa.count);
+
+    /* removing from an empty array */
+    strarray_remove_all(&sa, WORD0);
+    CU_ASSERT_EQUAL(sa.count, 0);
+    CU_ASSERT(sa.alloc >= sa.count);
+
+    /* removing a single item from a non-empty array */
+    strarray_append(&sa, WORD0);
+    strarray_append(&sa, WORD1);
+    strarray_append(&sa, WORD2);
+    strarray_append(&sa, WORD3);
+    strarray_append(&sa, WORD0);
+    strarray_append(&sa, WORD4);
+    CU_ASSERT_EQUAL(sa.count, 6);
+    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_PTR_NOT_NULL(sa.data);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 2), WORD2);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 3), WORD3);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 4), WORD0);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 5), WORD4);
+
+    strarray_remove_all(&sa, WORD1);
+    CU_ASSERT_EQUAL(sa.count, 5);
+    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_PTR_NOT_NULL(sa.data);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD2);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 2), WORD3);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 3), WORD0);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 4), WORD4);
+
+    /* removing an item that appears more than once */
+    strarray_remove_all(&sa, WORD0);
+    CU_ASSERT_EQUAL(sa.count, 3);
+    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_PTR_NOT_NULL(sa.data);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD2);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD3);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 2), WORD4);
+
+    strarray_fini(&sa);
+#undef WORD0
+#undef WORD1
+#undef WORD2
+#undef WORD3
+#undef WORD4
+}
+
