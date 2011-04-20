@@ -57,11 +57,7 @@
 
 #include "prot.h"
 #include "mailbox.h"
-
-/* cyrus.cache file item buffer */
-struct ibuf {
-    char *start, *end, *last;
-};
+#include "util.h"
 
 /*
  * Parsed form of a body-part
@@ -113,7 +109,7 @@ struct body {
     /*
      * Cached headers.  Only filled in at top-level
      */
-    struct ibuf cacheheaders;
+    struct buf cacheheaders;
 
     /*
      * decoded body.  Filled in as needed.

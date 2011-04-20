@@ -108,7 +108,7 @@ static void message_parse_encoding(const char *hdr, char **hdrp);
 static void message_parse_charset(const struct body *body,
 				  int *encoding, int *charset);
 static void message_parse_string(const char *hdr, char **hdrp);
-static void message_parse_header(const char *hdr, struct ibuf *ibuf);
+static void message_parse_header(const char *hdr, struct buf *buf);
 static void message_parse_type(const char *hdr, struct body *body);
 /* static */ void message_parse_disposition(const char *hdr, struct body *body);
 static void message_parse_params(const char *hdr, struct param **paramp);
@@ -127,26 +127,17 @@ static void message_parse_content(struct msg *msg,
 static char *message_getline(struct buf *, struct msg *msg);
 static int message_pendingboundary(const char *s, int slen, strarray_t *);
 
-static void message_write_envelope(struct ibuf *ibuf, const struct body *body);
-static void message_write_body(struct ibuf *ibuf, const struct body *body,
+static void message_write_envelope(struct buf *buf, const struct body *body);
+static void message_write_body(struct buf *buf, const struct body *body,
 				  int newformat);
-static void message_write_address(struct ibuf *ibuf,
+static void message_write_address(struct buf *buf,
 				  const struct address *addrlist);
-static void message_write_nstring(struct ibuf *ibuf, const char *s);
-static void message_write_text(struct ibuf *ibuf, const char *s);
-static void message_write_text_lcase(struct ibuf *ibuf, const char *s);
-static void message_write_number(struct ibuf *ibuf, unsigned n);
-static void message_write_section(struct ibuf *ibuf, const struct body *body);
-static void message_write_charset(struct ibuf *ibuf, const struct body *body);
-static void message_write_bit32(struct ibuf *ibuf, bit32 val);
-static void message_write_searchaddr(struct ibuf *ibuf,
+static void message_write_nstring(struct buf *buf, const char *s);
+static void message_write_text_lcase(struct buf *buf, const char *s);
+static void message_write_section(struct buf *buf, const struct body *body);
+static void message_write_charset(struct buf *buf, const struct body *body);
+static void message_write_searchaddr(struct buf *buf,
 				     const struct address *addrlist);
-
-static void message_ibuf_init(struct ibuf *ibuf);
-static void message_ibuf_copy(struct ibuf *desc, const struct ibuf *src);
-static int message_ibuf_ensure(struct ibuf *ibuf, unsigned len);
-static void message_ibuf_pad(struct ibuf *ibuf);
-static void message_ibuf_free(struct ibuf *ibuf);
 
 /*
  * Convert a string to uppercase.  Returns the string.
@@ -555,7 +546,7 @@ static int message_parse_body(struct msg *msg, struct body *body,
     if (!boundaries) {
 	boundaries = &newboundaries;
 	/* We're at top-level--set up to store cached headers */
-	message_ibuf_init(&body->cacheheaders);
+	buf_init(&body->cacheheaders);
     }
 
     sawboundary = message_parse_headers(msg, body, defaultContentType,
@@ -666,7 +657,7 @@ static int message_parse_headers(struct msg *msg, struct body *body,
 	    }
 
 	    /* Check for headers in generic cache */
-	    if (body->cacheheaders.start &&
+	    if (body->cacheheaders.len &&
 		(next[1] != ' ') && (next[1] != '\t') &&
 		mailbox_cached_header_inline(next+1) != BIT32_MAX) {
 		    message_parse_header(next+1, &body->cacheheaders);
@@ -927,7 +918,7 @@ static void message_parse_string(const char *hdr, char **hdrp)
  * Cache a header
  */
 static void
-message_parse_header(const char *hdr, struct ibuf *ibuf)
+message_parse_header(const char *hdr, struct buf *buf)
 {
     int len;
     const char *hdrend;
@@ -946,11 +937,9 @@ message_parse_header(const char *hdr, struct ibuf *ibuf)
 
     /* Save header value */
     len = hdrend - hdr;
-    message_ibuf_ensure(ibuf, len+2);
-    strncpy(ibuf->end, hdr, len);
-    ibuf->end += len;
-    *(ibuf->end)++ = '\r';
-    *(ibuf->end)++ = '\n';
+    buf_appendmap(buf, hdr, len);
+    buf_putc(buf, '\r');
+    buf_putc(buf, '\n');
 }
 
 /*
@@ -1698,7 +1687,7 @@ static int message_pendingboundary(const char *s, int slen,
 int message_write_cache(struct index_record *record, const struct body *body)
 {
     static struct buf cacheitem_buffer;
-    struct ibuf ib[10];
+    struct buf ib[10];
     struct body toplevel;
     char *subject;
     int len;
@@ -1707,7 +1696,7 @@ int message_write_cache(struct index_record *record, const struct body *body)
     /* initialise data structures */
     buf_reset(&cacheitem_buffer);
     for (i = 0; i < 10; i++)
-	message_ibuf_init(&ib[i]);
+	buf_init(&ib[i]);
 
     toplevel.type = "MESSAGE";
     toplevel.subtype = "RFC822";
@@ -1717,10 +1706,10 @@ int message_write_cache(struct index_record *record, const struct body *body)
 
     subject = charset_decode_mimeheader(body->subject);
 
-    /* copy into ibufs */
+    /* copy into bufs */
     message_write_envelope(&ib[CACHE_ENVELOPE], body);
     message_write_body(&ib[CACHE_BODYSTRUCTURE], body, 1);
-    message_ibuf_copy(&ib[CACHE_HEADERS], &body->cacheheaders); 
+    buf_copy(&ib[CACHE_HEADERS], &body->cacheheaders);
     message_write_body(&ib[CACHE_BODY], body, 0);
     message_write_section(&ib[CACHE_SECTION], &toplevel);
     message_write_searchaddr(&ib[CACHE_FROM], body->from);
@@ -1733,12 +1722,12 @@ int message_write_cache(struct index_record *record, const struct body *body)
 
     /* append the records to the buffer */
     for (i = 0; i < 10; i++) {
-	message_ibuf_pad(&ib[i]);
-	record->crec.item[i].len = ib[i].end - ib[i].start;
+	buf_appendmap(&ib[i], "\0\0\0", 3);
+	record->crec.item[i].len = buf_len(&ib[i]);
 	buf_appendbit32(&cacheitem_buffer, record->crec.item[i].len);
 	record->crec.item[i].offset = buf_len(&cacheitem_buffer);
-	buf_appendmap(&cacheitem_buffer, ib[i].start, (record->crec.item[i].len + 3) & ~3);
-	message_ibuf_free(&ib[i]);
+	buf_appendmap(&cacheitem_buffer, ib[i].s, (record->crec.item[i].len + 3) & ~3);
+	buf_free(&ib[i]);
     }
 
     len = buf_len(&cacheitem_buffer);
@@ -1746,7 +1735,7 @@ int message_write_cache(struct index_record *record, const struct body *body)
     /* copy the fields into the message */
     record->cache_offset = 0; /* calculate on write! */
     record->cache_version = MAILBOX_CACHE_MINOR_VERSION;
-    record->cache_crc = crc32_map(cacheitem_buffer.s, len); /* XXX - hacky */
+    record->cache_crc = crc32_map(cacheitem_buffer.s, len);
     record->crec.base = &cacheitem_buffer;
     record->crec.offset = 0; /* we're at the start of the buffer */
     record->crec.len = len;
@@ -1754,43 +1743,41 @@ int message_write_cache(struct index_record *record, const struct body *body)
     return 0;
 }
 
-/* Append character 'c' to 'ibuf' */
-#define PUTIBUF(ibuf,c) (((void)((ibuf)->end<(ibuf)->last || message_ibuf_ensure((ibuf),1))),(*((ibuf)->end)++ = (c)))
 
 /*
- * Write the IMAP envelope for 'body' to 'ibuf'
+ * Write the IMAP envelope for 'body' to 'buf'
  */
-static void message_write_envelope(struct ibuf *ibuf, const struct body *body)
+static void message_write_envelope(struct buf *buf, const struct body *body)
 {
-    PUTIBUF(ibuf, '(');
-    message_write_nstring(ibuf, body->date);
-    PUTIBUF(ibuf, ' ');
-    message_write_nstring(ibuf, body->subject);
-    PUTIBUF(ibuf, ' ');
-    message_write_address(ibuf, body->from);
-    PUTIBUF(ibuf, ' ');
-    message_write_address(ibuf, body->sender ? body->sender : body->from);
-    PUTIBUF(ibuf, ' ');
-    message_write_address(ibuf, body->reply_to ? body->reply_to : body->from);
-    PUTIBUF(ibuf, ' ');
-    message_write_address(ibuf, body->to);
-    PUTIBUF(ibuf, ' ');
-    message_write_address(ibuf, body->cc);
-    PUTIBUF(ibuf, ' ');
-    message_write_address(ibuf, body->bcc);
-    PUTIBUF(ibuf, ' ');
-    message_write_nstring(ibuf, body->in_reply_to);
-    PUTIBUF(ibuf, ' ');
-    message_write_nstring(ibuf, body->message_id);
-    PUTIBUF(ibuf, ')');
+    buf_putc(buf, '(');
+    message_write_nstring(buf, body->date);
+    buf_putc(buf, ' ');
+    message_write_nstring(buf, body->subject);
+    buf_putc(buf, ' ');
+    message_write_address(buf, body->from);
+    buf_putc(buf, ' ');
+    message_write_address(buf, body->sender ? body->sender : body->from);
+    buf_putc(buf, ' ');
+    message_write_address(buf, body->reply_to ? body->reply_to : body->from);
+    buf_putc(buf, ' ');
+    message_write_address(buf, body->to);
+    buf_putc(buf, ' ');
+    message_write_address(buf, body->cc);
+    buf_putc(buf, ' ');
+    message_write_address(buf, body->bcc);
+    buf_putc(buf, ' ');
+    message_write_nstring(buf, body->in_reply_to);
+    buf_putc(buf, ' ');
+    message_write_nstring(buf, body->message_id);
+    buf_putc(buf, ')');
 }
 
 /*
  * Write the BODY (if 'newformat' is zero) or BODYSTRUCTURE
- * (if 'newformat' is nonzero) for 'body' to 'ibuf'.
+ * (if 'newformat' is nonzero) for 'body' to 'buf'.
  */
-static void message_write_body(struct ibuf *ibuf, const struct body *body,
-			       int newformat)
+static void message_write_body(struct buf *buf, const struct body *body,
+		        int newformat)
 {
     struct param *param;
 
@@ -1804,211 +1791,208 @@ static void message_write_body(struct ibuf *ibuf, const struct body *body,
 	    if (!zerotextbody.type) {
 		message_parse_type(DEFAULT_CONTENT_TYPE, &zerotextbody);
 	    }
-	    message_write_body(ibuf, &zerotextbody, newformat);
+	    message_write_body(buf, &zerotextbody, newformat);
 	    return;
 	}
 
 	/* Multipart types get a body_multipart */
-	PUTIBUF(ibuf, '(');
+	buf_putc(buf, '(');
 	for (i = 0; i < body->numparts; i++) {
-	    message_write_body(ibuf, &body->subpart[i], newformat);
+	    message_write_body(buf, &body->subpart[i], newformat);
 	}
-	PUTIBUF(ibuf, ' ');
-	message_write_nstring(ibuf, body->subtype);
+	buf_putc(buf, ' ');
+	message_write_nstring(buf, body->subtype);
 
 	if (newformat) {
-	    PUTIBUF(ibuf, ' ');
+	    buf_putc(buf, ' ');
 	    if ((param = body->params)!=NULL) {
-		PUTIBUF(ibuf, '(');
+		buf_putc(buf, '(');
 		while (param) {
-		    message_write_nstring(ibuf, param->attribute);
-		    PUTIBUF(ibuf, ' ');
-		    message_write_nstring(ibuf, param->value);
+		    message_write_nstring(buf, param->attribute);
+		    buf_putc(buf, ' ');
+		    message_write_nstring(buf, param->value);
 		    if ((param = param->next)!=NULL) {
-			PUTIBUF(ibuf, ' ');
+			buf_putc(buf, ' ');
 		    }
 		}
-		PUTIBUF(ibuf, ')');
+		buf_putc(buf, ')');
 	    }
-	    else message_write_nstring(ibuf, (char *)0);
-	    PUTIBUF(ibuf, ' ');
+	    else message_write_nstring(buf, (char *)0);
+	    buf_putc(buf, ' ');
 	    if (body->disposition) {
-		PUTIBUF(ibuf, '(');
-		message_write_nstring(ibuf, body->disposition);
-		PUTIBUF(ibuf, ' ');
+		buf_putc(buf, '(');
+		message_write_nstring(buf, body->disposition);
+		buf_putc(buf, ' ');
 		if ((param = body->disposition_params)!=NULL) {
-		    PUTIBUF(ibuf, '(');
+		    buf_putc(buf, '(');
 		    while (param) {
-			message_write_nstring(ibuf, param->attribute);
-			PUTIBUF(ibuf, ' ');
-			message_write_nstring(ibuf, param->value);
+			message_write_nstring(buf, param->attribute);
+			buf_putc(buf, ' ');
+			message_write_nstring(buf, param->value);
 			if ((param = param->next)!=NULL) {
-			    PUTIBUF(ibuf, ' ');
+			    buf_putc(buf, ' ');
 			}
 		    }
-		    PUTIBUF(ibuf, ')');
+		    buf_putc(buf, ')');
 		}
-		else message_write_nstring(ibuf, (char *)0);
-		PUTIBUF(ibuf, ')');
+		else message_write_nstring(buf, (char *)0);
+		buf_putc(buf, ')');
 	    }
 	    else {
-		message_write_nstring(ibuf, (char *)0);
+		message_write_nstring(buf, (char *)0);
 	    }
-	    PUTIBUF(ibuf, ' ');
+	    buf_putc(buf, ' ');
 	    if ((param = body->language)!=NULL) {
-		PUTIBUF(ibuf, '(');
+		buf_putc(buf, '(');
 		while (param) {
-		    message_write_nstring(ibuf, param->value);
+		    message_write_nstring(buf, param->value);
 		    if ((param = param->next)!=NULL) {
-			PUTIBUF(ibuf, ' ');
+			buf_putc(buf, ' ');
 		    }
 		}
-		PUTIBUF(ibuf, ')');
+		buf_putc(buf, ')');
 	    }
-	    else message_write_nstring(ibuf, (char *)0);
-	    PUTIBUF(ibuf, ' ');
-	    message_write_nstring(ibuf, body->location);
+	    else message_write_nstring(buf, (char *)0);
+	    buf_putc(buf, ' ');
+	    message_write_nstring(buf, body->location);
 	}
 
-	PUTIBUF(ibuf, ')');
+	buf_putc(buf, ')');
 	return;
     }
 
-    PUTIBUF(ibuf, '(');
-    message_write_nstring(ibuf, body->type);
-    PUTIBUF(ibuf, ' ');
-    message_write_nstring(ibuf, body->subtype);
-    PUTIBUF(ibuf, ' ');
+    buf_putc(buf, '(');
+    message_write_nstring(buf, body->type);
+    buf_putc(buf, ' ');
+    message_write_nstring(buf, body->subtype);
+    buf_putc(buf, ' ');
 
     if ((param = body->params)!=NULL) {
-	PUTIBUF(ibuf, '(');
+	buf_putc(buf, '(');
 	while (param) {
-	    message_write_nstring(ibuf, param->attribute);
-	    PUTIBUF(ibuf, ' ');
-	    message_write_nstring(ibuf, param->value);
+	    message_write_nstring(buf, param->attribute);
+	    buf_putc(buf, ' ');
+	    message_write_nstring(buf, param->value);
 	    if ((param = param->next)!=NULL) {
-		PUTIBUF(ibuf, ' ');
+		buf_putc(buf, ' ');
 	    }
 	}
-	PUTIBUF(ibuf, ')');
+	buf_putc(buf, ')');
     }
-    else message_write_nstring(ibuf, (char *)0);
-    PUTIBUF(ibuf, ' ');
+    else message_write_nstring(buf, (char *)0);
+    buf_putc(buf, ' ');
 
-    message_write_nstring(ibuf, body->id);
-    PUTIBUF(ibuf, ' ');
-    message_write_nstring(ibuf, body->description);
-    PUTIBUF(ibuf, ' ');
-    message_write_nstring(ibuf, body->encoding ? body->encoding : "7BIT");
-    PUTIBUF(ibuf, ' ');
-    message_write_number(ibuf, body->content_size);
+    message_write_nstring(buf, body->id);
+    buf_putc(buf, ' ');
+    message_write_nstring(buf, body->description);
+    buf_putc(buf, ' ');
+    message_write_nstring(buf, body->encoding ? body->encoding : "7BIT");
+    buf_putc(buf, ' ');
+    buf_printf(buf, "%lu", body->content_size);
 
     if (strcmp(body->type, "TEXT") == 0) {
 	/* Text types get a line count */
-	PUTIBUF(ibuf, ' ');
-	message_write_number(ibuf, body->content_lines);
+	buf_putc(buf, ' ');
+	buf_printf(buf, "%lu", body->content_lines);
     }
     else if (strcmp(body->type, "MESSAGE") == 0
 	     && strcmp(body->subtype, "RFC822") == 0) {
 	/* Message/rfc822 gets a body_msg */
-	PUTIBUF(ibuf, ' ');
-	message_write_envelope(ibuf, body->subpart);
-	PUTIBUF(ibuf, ' ');
-	message_write_body(ibuf, body->subpart, newformat);
-	PUTIBUF(ibuf, ' ');
-	message_write_number(ibuf, body->content_lines);
+	buf_putc(buf, ' ');
+	message_write_envelope(buf, body->subpart);
+	buf_putc(buf, ' ');
+	message_write_body(buf, body->subpart, newformat);
+	buf_putc(buf, ' ');
+	buf_printf(buf, "%lu", body->content_lines);
     }
 
     if (newformat) {
 	/* Add additional fields for BODYSTRUCTURE */
-	PUTIBUF(ibuf, ' ');
-	message_write_nstring(ibuf, body->md5);
-	PUTIBUF(ibuf, ' ');
+	buf_putc(buf, ' ');
+	message_write_nstring(buf, body->md5);
+	buf_putc(buf, ' ');
 	if (body->disposition) {
-	    PUTIBUF(ibuf, '(');
-	    message_write_nstring(ibuf, body->disposition);
-	    PUTIBUF(ibuf, ' ');
+	    buf_putc(buf, '(');
+	    message_write_nstring(buf, body->disposition);
+	    buf_putc(buf, ' ');
 	    if ((param = body->disposition_params)!=NULL) {
-		PUTIBUF(ibuf, '(');
+		buf_putc(buf, '(');
 		while (param) {
-		    message_write_nstring(ibuf, param->attribute);
-		    PUTIBUF(ibuf, ' ');
-		    message_write_nstring(ibuf, param->value);
+		    message_write_nstring(buf, param->attribute);
+		    buf_putc(buf, ' ');
+		    message_write_nstring(buf, param->value);
 		    if ((param = param->next)!=NULL) {
-			PUTIBUF(ibuf, ' ');
+			buf_putc(buf, ' ');
 		    }
 		}
-		PUTIBUF(ibuf, ')');
+		buf_putc(buf, ')');
 	    }
-	    else message_write_nstring(ibuf, (char *)0);
-	    PUTIBUF(ibuf, ')');
+	    else message_write_nstring(buf, (char *)0);
+	    buf_putc(buf, ')');
 	}
 	else {
-	    message_write_nstring(ibuf, (char *)0);
+	    message_write_nstring(buf, (char *)0);
 	}
-	PUTIBUF(ibuf, ' ');
+	buf_putc(buf, ' ');
 	if ((param = body->language)!=NULL) {
-	    PUTIBUF(ibuf, '(');
+	    buf_putc(buf, '(');
 	    while (param) {
-		message_write_nstring(ibuf, param->value);
+		message_write_nstring(buf, param->value);
 		if ((param = param->next)!=NULL) {
-		    PUTIBUF(ibuf, ' ');
+		    buf_putc(buf, ' ');
 		}
 	    }
-	    PUTIBUF(ibuf, ')');
+	    buf_putc(buf, ')');
 	}
-	else message_write_nstring(ibuf, (char *)0);
-	PUTIBUF(ibuf, ' ');
-	message_write_nstring(ibuf, body->location);
+	else message_write_nstring(buf, (char *)0);
+	buf_putc(buf, ' ');
+	message_write_nstring(buf, body->location);
     }
 
-    PUTIBUF(ibuf, ')');
+    buf_putc(buf, ')');
 }
 
 /*
- * Write the address list 'addrlist' to 'ibuf'
+ * Write the address list 'addrlist' to 'buf'
  */
-static void message_write_address(struct ibuf *ibuf,
+static void message_write_address(struct buf *buf,
 				  const struct address *addrlist)
 {
     /* If no addresses, write out NIL */
     if (!addrlist) {
-	message_write_nstring(ibuf, (char *)0);
+	message_write_nstring(buf, (char *)0);
 	return;
     }
 
-    PUTIBUF(ibuf, '(');
+    buf_putc(buf, '(');
 
     while (addrlist) {
-	PUTIBUF(ibuf, '(');
-	message_write_nstring(ibuf, addrlist->name);
-	PUTIBUF(ibuf, ' ');
-	message_write_nstring(ibuf, addrlist->route);
-	PUTIBUF(ibuf, ' ');
-	message_write_nstring(ibuf, addrlist->mailbox);
-	PUTIBUF(ibuf, ' ');
-	message_write_nstring(ibuf, addrlist->domain);
-	PUTIBUF(ibuf, ')');
+	buf_putc(buf, '(');
+	message_write_nstring(buf, addrlist->name);
+	buf_putc(buf, ' ');
+	message_write_nstring(buf, addrlist->route);
+	buf_putc(buf, ' ');
+	message_write_nstring(buf, addrlist->mailbox);
+	buf_putc(buf, ' ');
+	message_write_nstring(buf, addrlist->domain);
+	buf_putc(buf, ')');
 	addrlist = addrlist->next;
     }
 
-    PUTIBUF(ibuf, ')');
+    buf_putc(buf, ')');
 }
 
 /*
- * Write the nil-or-string 's' to 'ibuf'
+ * Write the nil-or-string 's' to 'buf'
  */
-static void message_write_nstring(struct ibuf *ibuf, const char *s)
+static void message_write_nstring(struct buf *buf, const char *s)
 {
     const char *p;
     int len = 0;
 
     /* Write null pointer as NIL */
     if (!s) {
-	message_ibuf_ensure(ibuf, 3);
-	*(ibuf->end)++ = 'N';
-	*(ibuf->end)++ = 'I';
-	*(ibuf->end)++ = 'L';
+	buf_appendcstr(buf, "NIL");
 	return;
     }
 
@@ -2021,60 +2005,31 @@ static void message_write_nstring(struct ibuf *ibuf, const char *s)
 
     if (*p || len >= 1024) {
 	/* Write out as literal */
-	char buf[100];
-	snprintf(buf, sizeof(buf), "{" SIZE_T_FMT "}\r\n", strlen(s));
-	message_ibuf_ensure(ibuf, strlen(s)+strlen(buf));
-	for (p = buf; *p; p++) *(ibuf->end)++ = *p;
-	for (p = s; *p; p++) *(ibuf->end)++ = *p;
+	buf_printf(buf, "{" SIZE_T_FMT "}\r\n", strlen(s));
+	buf_appendcstr(buf, s);
     }
     else {
 	/* Write out as quoted string */
-	message_ibuf_ensure(ibuf, strlen(s)+2);
-	*(ibuf->end)++ = '\"';
-	for (p = s; *p; p++) *(ibuf->end)++ = *p;
-	*(ibuf->end)++ = '\"';
+	buf_putc(buf, '"');
+	buf_appendcstr(buf, s);
+	buf_putc(buf, '"');
     }
 }
 
 /*
- * Write the text 's' to 'ibuf'
+ * Write the text 's' to 'buf', converting to lower case as we go.
  */
-static void message_write_text(struct ibuf *ibuf, const char *s)
+static void message_write_text_lcase(struct buf *buf, const char *s)
 {
     const char *p;
 
-    message_ibuf_ensure(ibuf, strlen(s));
-    for (p = s; *p; p++) *(ibuf->end)++ = *p;
+    for (p = s; *p; p++) buf_putc(buf, TOLOWER(*p));
 }
 
 /*
- * Write the text 's' to 'ibuf', converting to lower case as we go.
+ * Write out the FETCH BODY[section] location/size information to 'buf'.
  */
-static void message_write_text_lcase(struct ibuf *ibuf, const char *s)
-{
-    const char *p;
-
-    message_ibuf_ensure(ibuf, strlen(s));
-    for (p = s; *p; p++) *(ibuf->end)++ = TOLOWER(*p);
-}
-
-/*
- * Write out the IMAP number 'n' to 'ibuf'
- */
-static void message_write_number(struct ibuf *ibuf, unsigned n)
-{
-    char buf[100], *p;
-
-    snprintf(buf, sizeof(buf), "%u", n);
-
-    message_ibuf_ensure(ibuf, strlen(buf));
-    for (p = buf; *p; p++) *(ibuf->end)++ = *p;
-}
-
-/*
- * Write out the FETCH BODY[section] location/size information to 'ibuf'.
- */
-static void message_write_section(struct ibuf *ibuf, const struct body *body)
+static void message_write_section(struct buf *buf, const struct body *body)
 {
     int part;
 
@@ -2086,28 +2041,28 @@ static void message_write_section(struct ibuf *ibuf, const struct body *body)
 	     * Nested parts of a message/rfc822 containing a multipart
 	     * are the sub-parts of the multipart.
 	     */
-	    message_write_bit32(ibuf, body->subpart->numparts+1);
-	    message_write_bit32(ibuf, body->subpart->header_offset);
-	    message_write_bit32(ibuf, body->subpart->header_size);
-	    message_write_bit32(ibuf, body->subpart->content_offset);
-	    message_write_bit32(ibuf, body->subpart->content_size);
-	    message_write_bit32(ibuf, (-1<<16)|ENCODING_NONE);
+	    buf_appendbit32(buf, body->subpart->numparts+1);
+	    buf_appendbit32(buf, body->subpart->header_offset);
+	    buf_appendbit32(buf, body->subpart->header_size);
+	    buf_appendbit32(buf, body->subpart->content_offset);
+	    buf_appendbit32(buf, body->subpart->content_size);
+	    buf_appendbit32(buf, (-1<<16)|ENCODING_NONE);
 	    for (part = 0; part < body->subpart->numparts; part++) {
-		message_write_bit32(ibuf, body->subpart->subpart[part].header_offset);
-		message_write_bit32(ibuf, body->subpart->subpart[part].header_size);
-		message_write_bit32(ibuf, body->subpart->subpart[part].content_offset);
+		buf_appendbit32(buf, body->subpart->subpart[part].header_offset);
+		buf_appendbit32(buf, body->subpart->subpart[part].header_size);
+		buf_appendbit32(buf, body->subpart->subpart[part].content_offset);
 		if (body->subpart->subpart[part].numparts == 0 &&
 		    strcmp(body->subpart->subpart[part].type, "MULTIPART") == 0) {
 		    /* Treat 0-part multipart as 0-length text */
-		    message_write_bit32(ibuf, 0);
+		    buf_appendbit32(buf, 0);
 		}
 		else {
-		    message_write_bit32(ibuf, body->subpart->subpart[part].content_size);
+		    buf_appendbit32(buf, body->subpart->subpart[part].content_size);
 		}
-		message_write_charset(ibuf, &body->subpart->subpart[part]);
+		message_write_charset(buf, &body->subpart->subpart[part]);
 	    }
 	    for (part = 0; part < body->subpart->numparts; part++) {
-		message_write_section(ibuf, &body->subpart->subpart[part]);
+		message_write_section(buf, &body->subpart->subpart[part]);
 	    }
 	}
 	else {
@@ -2116,25 +2071,25 @@ static void message_write_section(struct ibuf *ibuf, const struct body *body)
 	     * Part 1 of a message/rfc822 containing a non-multipart
 	     * is the message body.
 	     */
-	    message_write_bit32(ibuf, 2);
-	    message_write_bit32(ibuf, body->subpart->header_offset);
-	    message_write_bit32(ibuf, body->subpart->header_size);
-	    message_write_bit32(ibuf, body->subpart->content_offset);
-	    message_write_bit32(ibuf, body->subpart->content_size);
-	    message_write_bit32(ibuf, (-1<<16)|ENCODING_NONE);
-	    message_write_bit32(ibuf, body->subpart->header_offset);
-	    message_write_bit32(ibuf, body->subpart->header_size);
-	    message_write_bit32(ibuf, body->subpart->content_offset);
+	    buf_appendbit32(buf, 2);
+	    buf_appendbit32(buf, body->subpart->header_offset);
+	    buf_appendbit32(buf, body->subpart->header_size);
+	    buf_appendbit32(buf, body->subpart->content_offset);
+	    buf_appendbit32(buf, body->subpart->content_size);
+	    buf_appendbit32(buf, (-1<<16)|ENCODING_NONE);
+	    buf_appendbit32(buf, body->subpart->header_offset);
+	    buf_appendbit32(buf, body->subpart->header_size);
+	    buf_appendbit32(buf, body->subpart->content_offset);
 	    if (strcmp(body->subpart->type, "MULTIPART") == 0) {
 		/* Treat 0-part multipart as 0-length text */
-		message_write_bit32(ibuf, 0);
-		message_write_bit32(ibuf, (-1<<16)|ENCODING_NONE);
+		buf_appendbit32(buf, 0);
+		buf_appendbit32(buf, (-1<<16)|ENCODING_NONE);
 	    }
 	    else {
-		message_write_bit32(ibuf, body->subpart->content_size);
-		message_write_charset(ibuf, body->subpart);
+		buf_appendbit32(buf, body->subpart->content_size);
+		message_write_charset(buf, body->subpart);
 	    }
-	    message_write_section(ibuf, body->subpart);
+	    message_write_section(buf, body->subpart);
 	}
     }
     else if (body->numparts) {
@@ -2142,72 +2097,55 @@ static void message_write_section(struct ibuf *ibuf, const struct body *body)
 	 * Cannot fetch part 0 of a multipart.
 	 * Nested parts of a multipart are the sub-parts.
 	 */
-	message_write_bit32(ibuf, body->numparts+1);	
-	message_write_bit32(ibuf, 0);
-	message_write_bit32(ibuf, -1);
-	message_write_bit32(ibuf, 0);
-	message_write_bit32(ibuf, -1);
-	message_write_bit32(ibuf, (-1<<16)|ENCODING_NONE);
+	buf_appendbit32(buf, body->numparts+1);	
+	buf_appendbit32(buf, 0);
+	buf_appendbit32(buf, -1);
+	buf_appendbit32(buf, 0);
+	buf_appendbit32(buf, -1);
+	buf_appendbit32(buf, (-1<<16)|ENCODING_NONE);
 	for (part = 0; part < body->numparts; part++) {
-	    message_write_bit32(ibuf, body->subpart[part].header_offset);
-	    message_write_bit32(ibuf, body->subpart[part].header_size);
-	    message_write_bit32(ibuf, body->subpart[part].content_offset);
+	    buf_appendbit32(buf, body->subpart[part].header_offset);
+	    buf_appendbit32(buf, body->subpart[part].header_size);
+	    buf_appendbit32(buf, body->subpart[part].content_offset);
 	    if (body->subpart[part].numparts == 0 &&
 		strcmp(body->subpart[part].type, "MULTIPART") == 0) {
 		/* Treat 0-part multipart as 0-length text */
-		message_write_bit32(ibuf, 0);
-		message_write_bit32(ibuf, (-1<<16)|ENCODING_NONE);
+		buf_appendbit32(buf, 0);
+		buf_appendbit32(buf, (-1<<16)|ENCODING_NONE);
 	    }
 	    else {
-		message_write_bit32(ibuf, body->subpart[part].content_size);
-		message_write_charset(ibuf, &body->subpart[part]);
+		buf_appendbit32(buf, body->subpart[part].content_size);
+		message_write_charset(buf, &body->subpart[part]);
 	    }
 	}
 	for (part = 0; part < body->numparts; part++) {
-	    message_write_section(ibuf, &body->subpart[part]);
+	    message_write_section(buf, &body->subpart[part]);
 	}
     }
     else {
 	/*
 	 * Leaf section--no part 0 or nested parts
 	 */
-	message_write_bit32(ibuf, 0);
+	buf_appendbit32(buf, 0);
     }
 }
 
 /*
- * Write the 32-bit charset/encoding value for section 'body' to 'ibuf'
+ * Write the 32-bit charset/encoding value for section 'body' to 'buf'
  */
-static void message_write_charset(struct ibuf *ibuf, const struct body *body)
+static void message_write_charset(struct buf *buf, const struct body *body)
 {
     int encoding, charset;
 
     message_parse_charset(body, &encoding, &charset);
 
-    message_write_bit32(ibuf, (charset<<16)|encoding);
+    buf_appendbit32(buf, (charset<<16)|encoding);
 }
 
 /*
- * Write the 32-bit integer quantitiy 'val' to 'ibuf'
+ * Unparse the address list 'addrlist' to 'buf'
  */
-static void message_write_bit32(struct ibuf *ibuf, bit32 val)
-{
-    bit32 buf;
-    unsigned i;
-    char *p = (char *)&buf;
-    
-    message_ibuf_ensure(ibuf, sizeof(bit32));
-    buf = htonl(val);
-
-    for (i=0; i < sizeof(bit32); i++) {
-	*(ibuf->end)++ = *p++;
-    }
-}
-
-/*
- * Unparse the address list 'addrlist' to 'ibuf'
- */
-static void message_write_searchaddr(struct ibuf *ibuf,
+static void message_write_searchaddr(struct buf *buf,
 				     const struct address *addrlist)
 {
     int prevaddr = 0;
@@ -2218,110 +2156,48 @@ static void message_write_searchaddr(struct ibuf *ibuf,
 	/* Handle RFC-822 group addresses */
 	if (!addrlist->domain) {
 	    if (addrlist->mailbox) {
-		if (prevaddr) PUTIBUF(ibuf, ',');
+		if (prevaddr) buf_putc(buf, ',');
 		
 		tmp = charset_decode_mimeheader(addrlist->mailbox);
-		message_write_text(ibuf, tmp);
+		buf_appendcstr(buf, tmp);
 		free(tmp);
 		tmp = NULL;
-		PUTIBUF(ibuf, ':');
+		buf_putc(buf, ':');
 	
 		/* Suppress a trailing comma */
 		prevaddr = 0;
 	    }
 	    else {
-		PUTIBUF(ibuf, ';');
+		buf_putc(buf, ';');
 		prevaddr = 1;
 	    }
 	}
 	else {
-	    if (prevaddr) PUTIBUF(ibuf, ',');
+	    if (prevaddr) buf_putc(buf, ',');
 
 	    if (addrlist->name) {
 		tmp = charset_decode_mimeheader(addrlist->name);
-		message_write_text(ibuf, tmp);
+		buf_appendcstr(buf, tmp);
 		free(tmp); tmp = NULL;
-		PUTIBUF(ibuf, ' ');
+		buf_putc(buf, ' ');
 	    }
 
-	    PUTIBUF(ibuf, '<');
+	    buf_putc(buf, '<');
 	    if (addrlist->route) {
-		message_write_text_lcase(ibuf, addrlist->route);
-		PUTIBUF(ibuf, ':');
+		message_write_text_lcase(buf, addrlist->route);
+		buf_putc(buf, ':');
 	    }
 
-	    message_write_text_lcase(ibuf, addrlist->mailbox);
-	    PUTIBUF(ibuf, '@');
+	    message_write_text_lcase(buf, addrlist->mailbox);
+	    buf_putc(buf, '@');
 
-	    message_write_text_lcase(ibuf, addrlist->domain);
-	    PUTIBUF(ibuf, '>');
+	    message_write_text_lcase(buf, addrlist->domain);
+	    buf_putc(buf, '>');
 	    prevaddr = 1;
 	}
 
 	addrlist = addrlist->next;
     }
-}
-
-/*
- * Initialize 'ibuf'
- */
-#define IBUFGROWSIZE 1000
-static void message_ibuf_init(struct ibuf *ibuf)
-{
-    char *s = xmalloc(IBUFGROWSIZE);
-
-    ibuf->start = ibuf->end = s + sizeof(bit32);
-    ibuf->last = ibuf->start + IBUFGROWSIZE - sizeof(bit32);
-}
-
-static void message_ibuf_copy(struct ibuf *dest, const struct ibuf *src)
-{
-    unsigned len = src->end - src->start;
-    message_ibuf_ensure(dest, len);
-    strncpy(dest->end, src->start, len);
-    dest->end += len;
-}
-
-/*
- * Ensure 'ibuf' has enough free space to append 'len' bytes.
- */
-static int message_ibuf_ensure(struct ibuf *ibuf, unsigned len)
-{
-    char *s;
-    int size;
-
-    if ((unsigned) (ibuf->last - ibuf->end) >= len) return 0;
-    if (len < IBUFGROWSIZE) len = IBUFGROWSIZE;
-
-    s = ibuf->start - sizeof(bit32);
-    size = len + (ibuf->last - ibuf->start);
-    s = xrealloc(s, size + sizeof(bit32));
-    s += sizeof(bit32);
-    ibuf->end = (ibuf->end - ibuf->start) + s;
-    ibuf->start = s;
-    ibuf->last = s + size;
-
-    return 1;
-}
-
-/*
- * Copy the value in to the cache iov
- */
-static void message_ibuf_pad(struct ibuf *ibuf)
-{
-    /* make sure we can write these things out, ho hum */
-    message_ibuf_ensure(ibuf, 3);
-    ibuf->end[0] = '\0';
-    ibuf->end[1] = '\0';
-    ibuf->end[2] = '\0';
-}
-
-/*
- * Free the space used by 'ibuf'
- */
-static void message_ibuf_free(struct ibuf *ibuf)
-{
-    free(ibuf->start - sizeof(bit32));
 }
 
 /*
@@ -2385,9 +2261,7 @@ void message_free_body(struct body *body)
 	free(body->subpart);
     }
 
-    if (body->cacheheaders.start) {
-	message_ibuf_free(&body->cacheheaders);
-    }
+    buf_free(&body->cacheheaders);
 
     if (body->decoded_body) free(body->decoded_body);
 }
