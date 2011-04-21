@@ -215,6 +215,12 @@ server
 Blank lines and lines beginning with ``#'' are ignored.
 */
 
+{ "annotation_callout", NULL, STRING }
+/* The pathname of a callout to be used to automatically add annotations
+   or flags to a message when it is appended to a mailbox.  The path can
+   be either an executable (including a script), or a UNIX domain
+   socket.  */
+
 { "auditlog", 0, SWITCH }
 /* Should cyrus output log entries for every action taken on a message
    file or mailboxes list entry?  It's noisy so disabled by default, but

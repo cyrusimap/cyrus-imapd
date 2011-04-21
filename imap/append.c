@@ -54,6 +54,9 @@
 #include <sys/types.h>
 #include <syslog.h>
 #include <sys/stat.h>
+#include <sys/un.h>
+#include <sys/wait.h>
+#include <sys/poll.h>
 
 #include "acl.h"
 #include "assert.h"
@@ -341,6 +344,406 @@ FILE *append_newstage(const char *mailboxname, time_t internaldate,
 }
 
 /*
+ * Send the args down a socket.  We use a counted encoding
+ * similar in concept to HTTP chunked encoding, with a decimal
+ * ASCII encoded length followed by that many bytes of data.
+ * A zero length indicates end of message.
+ */
+static int callout_send_args(int fd, const struct buf *args)
+{
+    char lenbuf[32];
+    int r = 0;
+
+    snprintf(lenbuf, sizeof(lenbuf), "%u\n", args->len);
+    r = retry_write(fd, lenbuf, strlen(lenbuf));
+    if (r < 0)
+	goto out;
+
+    if (args->len) {
+	r = retry_write(fd, args->s, args->len);
+	if (r < 0)
+	    goto out;
+	r = retry_write(fd, "0\n", 2);
+    }
+
+out:
+    return (r < 0 ? IMAP_SYS_ERROR : 0);
+}
+
+#define CALLOUT_TIMEOUT_MS	(10*1000)
+
+static int callout_receive_reply(const char *callout,
+				 int fd, struct dlist **results)
+{
+    struct protstream *p = NULL;
+    int r;
+    int c;
+    struct pollfd pfd;
+
+    memset(&pfd, 0, sizeof(pfd));
+    pfd.fd = fd;
+    pfd.events = POLLIN;
+
+    r = poll(&pfd, 1, CALLOUT_TIMEOUT_MS);
+    if (r < 0) {
+	syslog(LOG_ERR, "cannot poll() waiting for callout %s: %m",
+	       callout);
+	r = IMAP_SYS_ERROR;
+	goto out;
+    }
+    if (r == 0) {
+	syslog(LOG_ERR, "timed out waiting for callout %s",
+	       callout);
+	r = IMAP_SYS_ERROR;
+	goto out;
+    }
+
+    p = prot_new(fd, /*write*/0);
+    prot_setisclient(p, 1);
+
+    /* read and parse the reply as a dlist */
+    c = dlist_parse(results, /*parsekeys*/0, p);
+    r = (c == EOF ? IMAP_SYS_ERROR : 0);
+
+out:
+    if (p)
+	prot_free(p);
+    return r;
+}
+
+/*
+ * Handle the callout as a service listening on a UNIX domain socket.
+ * Send the encoded arguments down the socket; capture the reply and
+ * decode it as a dlist.
+ */
+static int callout_run_socket(const char *callout,
+			      const struct buf *args,
+			      struct dlist **results)
+{
+    int sock = -1;
+    struct sockaddr_un sun;
+    int r;
+
+    sock = socket(PF_UNIX, SOCK_STREAM, 0);
+    if (sock < 0) {
+	syslog(LOG_ERR, "cannot create socket for callout: %m");
+	r = IMAP_SYS_ERROR;
+	goto out;
+    }
+
+    memset(&sun, 0, sizeof(sun));
+    sun.sun_family = AF_UNIX;
+    strncpy(sun.sun_path, callout, sizeof(sun.sun_path));
+    r = connect(sock, (struct sockaddr *)&sun, sizeof(sun));
+    if (r < 0) {
+	syslog(LOG_ERR, "cannot connect socket for callout: %m");
+	r = IMAP_SYS_ERROR;
+	goto out;
+    }
+
+    r = callout_send_args(sock, args);
+    if (r)
+	goto out;
+
+    r = callout_receive_reply(callout, sock, results);
+
+out:
+    if (sock >= 0)
+	close(sock);
+    return r;
+}
+
+/*
+ * Handle the callout as an executable.  Fork and exec the callout as an
+ * executable, with the encoded arguments appearing on stdin and the
+ * stdout captured as a dlist.
+ */
+static int callout_run_executable(const char *callout,
+				  const struct buf *args,
+				  struct dlist **results)
+{
+    pid_t pid, reaped;
+#define PIPE_READ    0
+#define PIPE_WRITE   1
+    int inpipe[2] = { -1, -1 };
+    int outpipe[2] = { -1, -1 };
+    int status;
+    int r;
+
+    r = pipe(inpipe);
+    if (!r)
+	r = pipe(outpipe);
+    if (r < 0) {
+	syslog(LOG_ERR, "cannot create pipe for callout: %m");
+	r = IMAP_SYS_ERROR;
+	goto out;
+    }
+
+    pid = fork();
+    if (pid < 0) {
+	syslog(LOG_ERR, "cannot fork for callout: %m");
+	r = IMAP_SYS_ERROR;
+	goto out;
+    }
+
+    if (pid == 0) {
+	/* child process */
+
+	close(inpipe[PIPE_WRITE]);
+	dup2(inpipe[PIPE_READ], /*FILENO_STDIN*/0);
+	close(inpipe[PIPE_READ]);
+
+	close(outpipe[PIPE_READ]);
+	dup2(outpipe[PIPE_WRITE], /*FILENO_STDOUT*/1);
+	close(outpipe[PIPE_WRITE]);
+
+	execl(callout, callout, (char *)NULL);
+	syslog(LOG_ERR, "cannot exec callout %s: %m", callout);
+	exit(1);
+    }
+    /* parent process */
+    close(inpipe[PIPE_READ]);
+    inpipe[PIPE_READ] = -1;
+    close(outpipe[PIPE_WRITE]);
+    outpipe[PIPE_WRITE] = -1;
+
+    r = callout_send_args(inpipe[PIPE_WRITE], args);
+    if (r)
+	goto out;
+
+    r = callout_receive_reply(callout, outpipe[PIPE_READ], results);
+    if (r)
+	goto out;
+
+    /* reap the child process */
+    do {
+	reaped = waitpid(pid, &status, 0);
+	if (reaped < 0) {
+	    if (errno == EINTR)
+		continue;
+	    if (errno == ESRCH)
+		break;
+	    if (errno == ECHILD)
+		break;
+	    syslog(LOG_ERR, "error reaping callout pid %d: %m",
+		    (int)pid);
+	    r = IMAP_SYS_ERROR;
+	    goto out;
+	}
+    }
+    while (reaped != pid);
+    r = 0;
+
+out:
+    if (inpipe[PIPE_READ] >= 0)
+	close(inpipe[PIPE_READ]);
+    if (inpipe[PIPE_WRITE] >= 0)
+	close(inpipe[PIPE_WRITE]);
+    if (outpipe[PIPE_READ] >= 0)
+	close(outpipe[PIPE_READ]);
+    if (outpipe[PIPE_WRITE] >= 0)
+	close(outpipe[PIPE_WRITE]);
+    return r;
+#undef PIPE_READ
+#undef PIPE_WRITE
+}
+
+/*
+ * Encode the arguments for a callout into @buf.
+ */
+static void callout_encode_args(struct buf *args,
+				const char *fname,
+				const struct body *body,
+				struct entryattlist *annotations,
+				strarray_t *flags)
+{
+    struct entryattlist *ee;
+    int i;
+
+    buf_putc(args, '(');
+
+    buf_printf(args, "FILENAME ");
+    message_write_nstring(args, fname);
+
+    buf_printf(args, " ANNOTATIONS (");
+    for (ee = annotations ; ee ; ee = ee->next) {
+	struct attvaluelist *av;
+	message_write_nstring(args, ee->entry);
+	buf_putc(args, '(');
+	for (av = ee->attvalues ; av ; av = av->next) {
+	    message_write_nstring(args, av->attrib);
+	    buf_putc(args, ' ');
+	    message_write_nstring_map(args, av->value.s, av->value.len);
+	    if (av->next)
+		buf_putc(args, ' ');
+	}
+	buf_putc(args, ')');
+	if (ee->next)
+	    buf_putc(args, ' ');
+    }
+    buf_putc(args, ')');
+
+    buf_printf(args, " FLAGS (");
+    for (i = 0 ; i < flags->count ; i++) {
+	if (i)
+	    buf_putc(args, ' ');
+	buf_appendcstr(args, flags->data[i]);
+    }
+    buf_putc(args, ')');
+
+    buf_appendcstr(args, " BODY ");
+    message_write_body(args, body, 2);
+
+    buf_putc(args, ')');
+    buf_cstring(args);
+}
+
+/*
+ * Parse the reply from the callout.  This designed to be similar to the
+ * arguments of the STORE command, except that we can have multiple
+ * items one after the other and the whole thing is in a list.
+ *
+ * Examples:
+ * (+FLAGS \Flagged)
+ * (+FLAGS (\Flagged \Seen))
+ * (-FLAGS \Flagged)
+ * (ANNOTATION (/comment (value.shared "Hello World")))
+ * (+FLAGS \Flagged ANNOTATION (/comment (value.shared "Hello")))
+ *
+ * The result is merged into @annotations and @flags.
+ */
+static void callout_decode_results(const char *callout,
+				   const struct dlist *results,
+			           struct entryattlist **annotations,
+				   strarray_t *flags)
+{
+    struct dlist *dd;
+
+    for (dd = results->head ; dd ; dd = dd->next) {
+	const char *key = dlist_cstring(dd);
+	const char *val;
+	dd = dd->next;
+	if (!dd)
+	    goto error;
+
+	if (!strcasecmp(key, "+FLAGS")) {
+	    if (dd->head) {
+		struct dlist *dflag;
+		for (dflag = dd->head ; dflag ; dflag = dflag->next)
+		    if ((val = dlist_cstring(dflag)))
+			strarray_add(flags, lcase((char *)val));
+	    }
+	    else if ((val = dlist_cstring(dd))) {
+		strarray_add(flags, lcase((char *)val));
+	    }
+	}
+	else if (!strcasecmp(key, "-FLAGS")) {
+	    if (dd->head) {
+		struct dlist *dflag;
+		for (dflag = dd->head ; dflag ; dflag = dflag->next) {
+		    if ((val = dlist_cstring(dflag)))
+			strarray_remove_all(flags, lcase((char *)val));
+		}
+	    }
+	    else if ((val = dlist_cstring(dd))) {
+		strarray_remove_all(flags, lcase((char *)val));
+	    }
+	}
+	else if (!strcasecmp(key, "ANNOTATION")) {
+	    const char *entry;
+	    struct dlist *dx = dd->head;
+
+	    if (!dx)
+		goto error;
+	    entry = dlist_cstring(dx);
+	    if (!entry)
+		goto error;
+
+	    for (dx = dx->next ; dx ; dx = dx->next) {
+		const char *attrib;
+		const char *valmap;
+		size_t vallen;
+		struct buf value = BUF_INITIALIZER;
+
+		/* must be a list with exactly two elements,
+		 * an attrib and a value */
+		if (!dx->head || !dx->head->next || dx->head->next->next)
+		    goto error;
+		attrib = dlist_cstring(dx->head);
+		if (!attrib)
+		    goto error;
+		if (!dlist_tomap(dx->head->next, &valmap, &vallen))
+		    goto error;
+		buf_init_ro(&value, valmap, vallen);
+		setentryatt(annotations, entry, attrib, &value);
+		buf_free(&value);
+	    }
+	}
+	else {
+	    goto error;
+	}
+    }
+
+    return;
+error:
+    syslog(LOG_WARNING, "Unexpected data in response from callout %s",
+	   callout);
+}
+
+static int callout_run(const char *fname,
+		       const struct body *body,
+		       struct entryattlist **annotations,
+		       strarray_t *flags)
+{
+    const char *callout;
+    struct stat sb;
+    struct buf args = BUF_INITIALIZER;
+    struct dlist *results = NULL;
+    int r;
+
+    callout = config_getstring(IMAPOPT_ANNOTATION_CALLOUT);
+    assert(callout);
+    assert(flags);
+
+    callout_encode_args(&args, fname, body, *annotations, flags);
+
+    if (stat(callout, &sb) < 0) {
+	syslog(LOG_ERR, "cannot stat annotation_callout %s: %m", callout);
+	r = IMAP_IOERROR;
+	goto out;
+    }
+    if (S_ISSOCK(sb.st_mode)) {
+	/* UNIX domain socket on which a service is listening */
+	r = callout_run_socket(callout, &args, &results);
+	if (r)
+	    goto out;
+    }
+    else if (S_ISREG(sb.st_mode) &&
+	     (sb.st_mode & (S_IXUSR|S_IXGRP|S_IXOTH))) {
+	/* regular file, executable */
+	r = callout_run_executable(callout, &args, &results);
+	if (r)
+	    goto out;
+    }
+    else {
+	syslog(LOG_ERR, "cannot classify annotation_callout %s", callout);
+	r = IMAP_IOERROR;
+	goto out;
+    }
+
+    if (results) {
+	/* We have some results, parse them and merge them back into
+	 * the annotations and flags we were given */
+	callout_decode_results(callout, results, annotations, flags);
+    }
+
+out:
+    buf_free(&args);
+    dlist_free(&results);
+    return r;
+}
+
+/*
  * staging, to allow for single-instance store.  the complication here
  * is multiple partitions.
  */
@@ -355,6 +758,9 @@ int append_fromstage(struct appendstate *as, struct body **body,
     FILE *destfile;
     int i, r;
     int userflag;
+    strarray_t *newflags = NULL;
+    struct entryattlist *origannotations = annotations;
+    struct entryattlist *newannotations = NULL;
 
     /* for staging */
     char stagefile[MAX_MAILBOX_PATH+1];
@@ -431,6 +837,20 @@ int append_fromstage(struct appendstate *as, struct body **body,
 	fsync(fileno(destfile));
 	fclose(destfile);
     }
+    if (!r && config_getstring(IMAPOPT_ANNOTATION_CALLOUT)) {
+	if (flags)
+	    newflags = strarray_dup(flags);
+	else
+	    newflags = strarray_new();
+	dupentryatt(&newannotations, annotations);
+	r = callout_run(fname, *body, &newannotations, newflags);
+	if (r) {
+	    syslog(LOG_ERR, "Annotation callout failed, ignoring\n");
+	    r = 0;
+	}
+	flags = newflags;
+	annotations = newannotations;
+    }
     if (!r && annotations) {
 	annotate_scope_t scope;
 	annotate_scope_init_message(&scope, as->mailbox, record.uid);
@@ -441,11 +861,16 @@ int append_fromstage(struct appendstate *as, struct body **body,
 			       as->isadmin,
 			       as->userid,
 			       as->auth_state);
+
+	if (r && !origannotations) {
+	    /* Nasty hack to log & ignore failed annotations from callout */
+	    syslog(LOG_ERR, "Setting annnotations failed (%s), "
+			    "ignoring\n", error_message(r));
+	    r = 0;
+	}
     }
-    if (r) {
-	append_abort(as);
-	return r;
-    }
+    if (r)
+	goto out;
 
     /* Handle flags the user wants to set in the message */
     for (i = 0; flags && i < flags->count ; i++) {
@@ -484,6 +909,9 @@ int append_fromstage(struct appendstate *as, struct body **body,
     r = mailbox_append_index_record(mailbox, &record);
 
 out:
+    if (newflags)
+	strarray_free(newflags);
+    freeentryatts(newannotations);
     if (r) {
 	append_abort(as);
 	return r;

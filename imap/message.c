@@ -128,8 +128,6 @@ static char *message_getline(struct buf *, struct msg *msg);
 static int message_pendingboundary(const char *s, int slen, strarray_t *);
 
 static void message_write_envelope(struct buf *buf, const struct body *body);
-static void message_write_body(struct buf *buf, const struct body *body,
-				  int newformat);
 static void message_write_address(struct buf *buf,
 				  const struct address *addrlist);
 static void message_write_text_lcase(struct buf *buf, const char *s);
@@ -1787,7 +1785,7 @@ static void message_write_envelope(struct buf *buf, const struct body *body)
  * Write the BODY (if 'newformat' is zero) or BODYSTRUCTURE
  * (if 'newformat' is nonzero) for 'body' to 'buf'.
  */
-static void message_write_body(struct buf *buf, const struct body *body,
+void message_write_body(struct buf *buf, const struct body *body,
 		        int newformat)
 {
     struct param *param;
@@ -1958,6 +1956,13 @@ static void message_write_body(struct buf *buf, const struct body *body,
 	else message_write_nstring(buf, (char *)0);
 	buf_putc(buf, ' ');
 	message_write_nstring(buf, body->location);
+
+	if (newformat > 1 && !body->numparts) {
+	    /* even newer extension fields for annotation callout */
+	    buf_printf(buf, " (OFFSET %lu HEADERSIZE %lu)",
+		       body->content_offset,
+		       body->header_size);
+	}
     }
 
     buf_putc(buf, ')');
