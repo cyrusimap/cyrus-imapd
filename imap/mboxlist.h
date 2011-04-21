@@ -170,10 +170,6 @@ int mboxlist_setspecialuse(const char *name, const char *specialuse);
 int mboxlist_findall(struct namespace *namespace,
 		     const char *pattern, int isadmin, const char *userid, 
 		     struct auth_state *auth_state, int (*proc)(), void *rock);
-int mboxlist_findall_std(struct namespace *namespace,
-			 const char *pattern, int isadmin, const char *userid, 
-			 struct auth_state *auth_state, int (*proc)(),
-			 void *rock);
 int mboxlist_findall_alt(struct namespace *namespace,
 			 const char *pattern, int isadmin, const char *userid, 
 			 struct auth_state *auth_state, int (*proc)(),
@@ -184,10 +180,6 @@ int mboxlist_findsub(struct namespace *namespace,
 		     const char *pattern, int isadmin, const char *userid, 
 		     struct auth_state *auth_state, int (*proc)(), void *rock,
 		     int force);
-int mboxlist_findsub_std(struct namespace *namespace,
-			 const char *pattern, int isadmin, const char *userid, 
-			 struct auth_state *auth_state, int (*proc)(),
-			 void *rock, int force);
 int mboxlist_findsub_alt(struct namespace *namespace,
 			 const char *pattern, int isadmin, char const *userid, 
 			 struct auth_state *auth_state, int (*proc)(),
