@@ -1279,14 +1279,16 @@ int addmbox(char *name,
     return 0;
 }
 
-int addmbox_sub(char *name,
-		int matchlen __attribute__((unused)),
-		int maycreate __attribute__((unused)),
-		void *rock)
+int addmbox_sub(void *rock, const char *key, int keylen,
+		const char *data __attribute__((unused)),
+		int datalen __attribute__((unused)))
 {
     struct sync_name_list *list = (struct sync_name_list *) rock;
 
+    /* XXX - double malloc because of list_add, clean up later */
+    char *name = xstrndup(key, keylen);
     sync_name_list_add(list, name);
+    free(name);
 
     return 0;
 }

@@ -1545,25 +1545,15 @@ static int user_seen(const char *userid)
 
 static int user_sub(const char *userid)
 {
-    char buf[MAX_MAILBOX_BUFFER];
-    struct sync_name_list *list = NULL;
+    struct sync_name_list *list = sync_name_list_create();
     struct sync_name *item;
     struct dlist *kl;
-    int r;
 
-    list = sync_name_list_create();
-
-    ((*sync_namespacep).mboxlist_findsub)(sync_namespacep, "*",
-					  sync_userisadmin,
-					  (char *)userid, sync_authstate,
-					  addmbox_sub, list, 1);
+    mboxlist_allsubs(userid, addmbox_sub, list);
 
     kl = dlist_list(NULL, "LSUB");
     for (item = list->head; item; item = item->next) {
-	r = (sync_namespacep->mboxname_tointernal)(sync_namespacep, item->name,
-						   userid, buf);
-        if (r) continue;
-	dlist_atom(kl, "MBOXNAME", buf);
+	dlist_atom(kl, "MBOXNAME", item->name);
     }
     if (kl->head)
 	sync_send_response(kl, sync_out);
@@ -1866,25 +1856,18 @@ static int do_seen(struct dlist *kin)
 
 static int do_unuser(struct dlist *kin)
 {
-    struct sync_name_list *list = NULL;
+    struct sync_name_list *list = sync_name_list_create();
     struct sync_name *item;
-    char buf[MAX_MAILBOX_BUFFER];
     const char *userid = kin->sval;
+    char buf[MAX_MAILBOX_NAME];
     int r = 0;
 
     /* Nuke subscriptions */
-    list = sync_name_list_create();
-    r = (sync_namespacep->mboxlist_findsub)(sync_namespacep, "*",
-					    sync_userisadmin,
-                                            (char *)userid, sync_authstate,
-					    addmbox_sub, (void *)list, 1);
-    if (r) goto fail;
+    mboxlist_allsubs(userid, addmbox_sub, list);
 
     /* ignore failures here - the subs file gets deleted soon anyway */
     for (item = list->head; item; item = item->next) {
-	r = (sync_namespacep->mboxname_tointernal)(sync_namespacep, item->name,
-						   userid, buf);
-        if (!r) r = mboxlist_changesub(buf, userid, sync_authstate, 0, 0);
+        mboxlist_changesub(item->name, userid, sync_authstate, 0, 0);
     }
     sync_name_list_free(&list);
 
