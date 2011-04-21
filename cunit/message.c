@@ -580,3 +580,76 @@ static void test_rfc2231_extended_continuations(void)
 
     message_free_body(&body);
 }
+
+#undef TESTCASE
+#define TESTCASE(input, explen, expout) \
+    buf_reset(&b); \
+    message_write_nstring(&b, input); \
+    buf_cstring(&b); \
+    CU_ASSERT_EQUAL(b.len, explen); \
+    CU_ASSERT_STRING_EQUAL(b.s, expout)
+
+static void test_write_nstring(void)
+{
+    struct buf b = BUF_INITIALIZER;
+
+    /* NULL string */
+    TESTCASE(0, 3, "NIL");
+
+    /* Zero length string */
+    TESTCASE("", 2, "\"\"");
+
+    /* Boring string */
+    TESTCASE("Hello", 7, "\"Hello\"");
+
+    /* String with non-dangerous whitespace */
+    TESTCASE("Hello World\tagain", 19, "\"Hello World\tagain\"");
+
+    /* String with dangerous whitespace */
+    TESTCASE("Good\rBye\nEarth", 20, "{14}\r\nGood\rBye\nEarth");
+
+    /* String with embedded dquote */
+    TESTCASE("Quot\"able", 14, "{9}\r\nQuot\"able");
+
+    /* String with embedded percent */
+    TESTCASE("per%ent", 12, "{7}\r\nper%ent");
+
+    /* String with embedded backslash */
+    TESTCASE("slash\\dot", 14, "{9}\r\nslash\\dot");
+
+    /* String with embedded 8-bit chars */
+    TESTCASE("Hi I'm \330l\345f", 17, "{11}\r\nHi I'm \330l\345f");
+
+    /* Boring but overly long string */
+    {
+	struct buf llb = BUF_INITIALIZER;
+	int i;
+
+	for (i = 0 ; i<500 ; i++)
+	    buf_appendcstr(&llb, "blah ");
+	buf_cstring(&llb);
+
+	buf_reset(&b);
+	message_write_nstring(&b, llb.s);
+	buf_cstring(&b);
+	CU_ASSERT_EQUAL(b.len, llb.len+8); \
+	CU_ASSERT_STRING_EQUAL(b.s+8, llb.s);
+	b.s[8] = '\0';
+	CU_ASSERT_STRING_EQUAL(b.s, "{2500}\r\n");
+	buf_free(&llb);
+    }
+
+    /* embedded NULs not handled in message_write_nstring */
+    TESTCASE("Hello\0World", 7, "\"Hello\"");
+
+    /* embedded NULs in message_write_nstring_map */
+    buf_reset(&b);
+    message_write_nstring_map(&b, "Hello\0World", 11);
+    buf_cstring(&b);
+    CU_ASSERT_EQUAL(b.len, 17);
+    CU_ASSERT(!memcmp(b.s, "{11}\r\nHello\0World", 17));
+
+    buf_free(&b);
+}
+
+#undef TESTCASE
