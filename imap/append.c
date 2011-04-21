@@ -484,6 +484,7 @@ int append_removestage(struct stagemsg *stage)
 	if (unlink(p) != 0) {
 	    syslog(LOG_ERR, "IOERROR: error unlinking file %s: %m", p);
 	}
+	free(p);
     }
 
     strarray_fini(&stage->parts);
