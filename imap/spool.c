@@ -152,7 +152,7 @@ static int parseheader(struct protstream *fin, FILE *fout,
 		     skip && *skip && strcasecmp(name.s, *skip); skip++);
 		if (!skip || !*skip) {
 		    /* write the header name to the output */
-		    fputs(name.s, fout);
+		    if (fout) fputs(name.s, fout);
 		    skip = NULL;
 		}
 		s = (c == ':' ? BODY_START : COLON);
@@ -171,7 +171,7 @@ static int parseheader(struct protstream *fin, FILE *fout,
 	    } else if (c != ' ' && c != '\t') {
 		/* i want to avoid confusing dot-stuffing later */
 		while (c == '.') {
-		    if (!skip) fputc(c, fout);
+		    if (fout && !skip) fputc(c, fout);
 		    c = prot_getc(fin);
 		}
 		r = IMAP_MESSAGE_BADHEADER;
@@ -192,7 +192,7 @@ static int parseheader(struct protstream *fin, FILE *fout,
 
 		peek = prot_getc(fin);
 		
-		if (!skip) {
+		if (fout && !skip) {
 		    fputc('\r', fout);
 		    fputc('\n', fout);
 		}
@@ -229,7 +229,7 @@ static int parseheader(struct protstream *fin, FILE *fout,
 	}
 
 	/* copy this to the output */
-	if (s != NAME && !skip) fputc(c, fout);
+	if (fout && s != NAME && !skip) fputc(c, fout);
     }
 
     /* if we fall off the end of the loop, we hit some sort of error
