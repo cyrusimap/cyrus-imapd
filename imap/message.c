@@ -132,7 +132,6 @@ static void message_write_body(struct buf *buf, const struct body *body,
 				  int newformat);
 static void message_write_address(struct buf *buf,
 				  const struct address *addrlist);
-static void message_write_nstring(struct buf *buf, const char *s);
 static void message_write_text_lcase(struct buf *buf, const char *s);
 static void message_write_section(struct buf *buf, const struct body *body);
 static void message_write_charset(struct buf *buf, const struct body *body);
@@ -1985,10 +1984,17 @@ static void message_write_address(struct buf *buf,
 /*
  * Write the nil-or-string 's' to 'buf'
  */
-static void message_write_nstring(struct buf *buf, const char *s)
+void message_write_nstring(struct buf *buf, const char *s)
+{
+    message_write_nstring_map(buf, s, (s ? strlen(s) : 0));
+}
+
+void message_write_nstring_map(struct buf *buf,
+			       const char *s,
+			       unsigned int len)
 {
     const char *p;
-    int len = 0;
+    int is_literal = 0;
 
     /* Write null pointer as NIL */
     if (!s) {
@@ -1996,22 +2002,31 @@ static void message_write_nstring(struct buf *buf, const char *s)
 	return;
     }
 
-    /* Look for any non-QCHAR characters */
-    for (p = s; *p; p++) {
-	len++;
-	if (*p & 0x80 || *p == '\r' || *p == '\n'
-	    || *p == '\"' || *p == '%' || *p == '\\') break;
+    if (len >= 1024)
+    {
+	is_literal = 1;
+    }
+    else
+    {
+	/* Look for any non-QCHAR characters */
+	for (p = s; (unsigned)(p-s) < len ; p++) {
+	    if (!*p || *p & 0x80 || *p == '\r' || *p == '\n'
+		|| *p == '\"' || *p == '%' || *p == '\\') {
+		is_literal = 1;
+		break;
+	    }
+	}
     }
 
-    if (*p || len >= 1024) {
+    if (is_literal) {
 	/* Write out as literal */
-	buf_printf(buf, "{" SIZE_T_FMT "}\r\n", strlen(s));
-	buf_appendcstr(buf, s);
+	buf_printf(buf, "{" SIZE_T_FMT "}\r\n", len);
+	buf_appendmap(buf, s, len);
     }
     else {
 	/* Write out as quoted string */
 	buf_putc(buf, '"');
-	buf_appendcstr(buf, s);
+	buf_appendmap(buf, s, len);
 	buf_putc(buf, '"');
     }
 }

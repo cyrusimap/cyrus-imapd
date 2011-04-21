@@ -160,6 +160,8 @@ extern int message_parse_file P((FILE *infile,
 extern void message_fetch_part P((struct message_content *msg,
 				  const char **content_types,
 				  struct bodypart ***parts));
+extern void message_write_nstring(struct buf *buf, const char *s);
+extern void message_write_nstring_map(struct buf *buf, const char *s, unsigned int len);
 extern int message_write_cache P((struct index_record *record, const struct body *body));
 
 extern int message_create_record P((struct index_record *message_index,
