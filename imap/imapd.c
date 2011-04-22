@@ -10122,7 +10122,7 @@ static void list_response(char *name, int attributes,
 	/* \Noselect has a special second meaning with (R)LSUB */
 	if ( !(attributes & MBOX_ATTRIBUTE_SUBSCRIBED)
 	     && attributes & MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED)
-	    attributes |= MBOX_ATTRIBUTE_NOSELECT;
+	    attributes |= MBOX_ATTRIBUTE_NOSELECT | MBOX_ATTRIBUTE_HASCHILDREN;
 	attributes &= ~MBOX_ATTRIBUTE_SUBSCRIBED;
     }
 
@@ -10145,18 +10145,22 @@ static void list_response(char *name, int attributes,
 	    goto done;
     }
     if (attributes & (MBOX_ATTRIBUTE_NONEXISTENT | MBOX_ATTRIBUTE_NOSELECT)) {
-	if (listargs->cmd == LIST_CMD_LSUB) {
-	    /* if mupdate isn't configured we can drop out now, otherwise
-	     * we might be a backend and need to report folders that don't
-	     * exist on this backend - this is awful and complex and brittle
-	     * and should be changed, but we're stuck with it for now */
-	    if (!config_mupdate_server) goto done;
+	int keep = 0;
+	/* we have to mention this, it has children */
+	if (attributes & MBOX_ATTRIBUTE_HASCHILDREN)
+	    keep = 1;
+	else if (listargs->cmd & LIST_CMD_LSUB) {
+	    /* subscribed children need a mention */
+	    if (attributes & MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED)
+		keep = 1;
+	    /* if mupdate is configured we can't drop out, we might
+	     * be a backend and need to report folders that don't
+	     * exist on this backend - this is awful and complex
+	     * and brittle and should be changed */
+	    if (config_mupdate_server)
+		keep = 1;
 	}
-	else {
-	    /* only mention folders with children */
-	    if (!(attributes & MBOX_ATTRIBUTE_HASCHILDREN))
-		goto done;
-	}
+	if (!keep) goto done;
     }
 
     switch (listargs->cmd) {
