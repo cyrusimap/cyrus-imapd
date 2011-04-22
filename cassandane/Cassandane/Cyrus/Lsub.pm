@@ -142,6 +142,14 @@ sub test_lsub
             '.',
             'INBOX'
           ],
+          [
+            [
+              '\\Noselect',
+              '\\HasChildren'
+            ],
+            '.',
+            'user'
+          ],
     ], "LSUB top data mismatch:" . Dumper($topdata));
 }
 
