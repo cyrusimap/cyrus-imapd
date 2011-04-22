@@ -397,6 +397,16 @@ void dlist_print(const struct dlist *dl, int printkeys, struct protstream *out)
     dlist_print_helper(dl, printkeys, out, 0);
 }
 
+void dlist_printbuf(const struct dlist *dl, int printkeys, struct buf *outbuf)
+{
+    struct protstream *outstream;
+
+    outstream = prot_writebuf(outbuf);
+    dlist_print(dl, printkeys, outstream);
+    prot_flush(outstream);
+    prot_free(outstream);
+}
+
 void dlist_free(struct dlist **dlp)
 {
     struct dlist *i, *next;
@@ -524,6 +534,22 @@ char dlist_parse(struct dlist **dlp, int parsekey, struct protstream *in)
 fail:
     dlist_free(&dl);
     return EOF;
+}
+
+int dlist_parsemap(struct dlist **dlp, int parsekey,
+		   const char *base, unsigned len)
+{
+    struct protstream *stream;
+    char c;
+
+    stream = prot_readmap(base, len);
+    c = dlist_parse(dlp, parsekey, stream);
+    prot_free(stream);
+
+    if (c != EOF)
+	return IMAP_IOERROR; /* failed to slurp entire buffer */
+
+    return 0;
 }
 
 static struct dlist *dlist_getchild(struct dlist *dl, const char *name)

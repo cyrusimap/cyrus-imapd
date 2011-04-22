@@ -2934,6 +2934,22 @@ int mboxlist_findsub(struct namespace *namespace __attribute__((unused)),
     return r;
 }
 
+int mboxlist_allsubs(const char *userid, foreach_cb *proc, void *rock)
+{
+    struct db *subs = NULL;
+    int r;
+
+    /* open subs DB */
+    r = mboxlist_opensubs(userid, &subs);
+    if (r) return r;
+
+    r = SUBDB->foreach(subs, "", 0, NULL, proc, rock, 0);
+
+    mboxlist_closesubs(subs);
+
+    return r;
+}
+
 int mboxlist_findsub_alt(struct namespace *namespace,
 			 const char *pattern, int isadmin __attribute__((unused)),
 			 const char *userid, struct auth_state *auth_state, 

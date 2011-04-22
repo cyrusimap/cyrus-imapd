@@ -388,7 +388,9 @@ struct dlist *sync_parseline(struct protstream *in);
 /* ====================================================================== */
 
 int addmbox(char *name, int matchlen, int maycreate, void *rock);
-int addmbox_sub(char *name, int matchlen, int maycreate, void *rock);
+int addmbox_sub(void *rockp, const char *key, int keylen,
+		const char *data __attribute__((unused)),
+		int datalen __attribute__((unused)));
 
 int sync_mailbox(struct mailbox *mailbox,
 		 struct sync_folder *remote,
