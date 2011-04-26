@@ -212,6 +212,11 @@ sub generate
     my $datestr = to_rfc822($params->{date});
     my $from = $params->{from};
     my $to = $params->{to};
+    my $extra_lines = $params->{extra_lines};
+    my $extra = '';
+    if ($extra_lines) {
+	$extra .= "This is an extra line\r\n" x $extra_lines;
+    }
     my $msg = Cassandane::Message->new();
 
     $msg->add_header("Return-Path", "<" . $from->address() . ">");
@@ -229,7 +234,7 @@ sub generate
     $msg->add_header("Date", $datestr);
     $msg->add_header("To", $to);
     $msg->add_header('X-Cassandane-Unique', _generate_unique());
-    $msg->set_body("This is a generated test email.  If received, please notify $admin\r\n");
+    $msg->set_body("This is a generated test email.  If received, please notify $admin\r\n$extra");
 
     return $msg;
 }
