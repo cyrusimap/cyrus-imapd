@@ -70,6 +70,9 @@ sub default
 	    sasl_mech_list => 'PLAIN LOGIN DIGEST-MD5',
 	    allowplaintext => 'yes',
 	    sasl_pwcheck_method => 'alwaystrue',
+	    # config options used at FastMail - may as well be testing our stuff
+	    expunge_mode => 'delayed',
+	    delete_mode => 'delayed',
 	)
 	unless defined $default;
     return $default;
