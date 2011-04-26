@@ -181,11 +181,13 @@ sub _build_skeleton
 	'conf/sieve',
 	'conf/socket',
 	'conf/proc',
+	'conf/log',
+	'conf/log/admin',
+	'conf/log/cassandane',
 	'lock',
 	'data',
 	'meta',
 	'run',
-	'log'
     );
     foreach my $sd (@subdirs)
     {
