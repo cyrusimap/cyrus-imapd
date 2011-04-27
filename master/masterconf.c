@@ -123,7 +123,7 @@ const char *masterconf_getstring(struct entry *e, const char *key,
 	p += strlen(k);
 	if (*p == '"') {
 	    p++;
-	    for (i = 0; i < 255; i++) {
+	    for (i = 0; *p && i < 255; i++) {
 		if (*p == '"') break;
 		v[i] = *p++;
 	    }
@@ -134,7 +134,7 @@ const char *masterconf_getstring(struct entry *e, const char *key,
 	    }
 	} else {
 	    /* one word */
-	    for (i = 0; i < 255; i++) {
+	    for (i = 0; *p && i < 255; i++) {
 		if (Uisspace(*p)) break;
 		v[i] = *p++;
 	    }
