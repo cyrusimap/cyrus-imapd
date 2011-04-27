@@ -1535,6 +1535,8 @@ done:
 static void add_event(const char *name, struct entry *e, void *rock)
 {
     int ignore_err = rock ? 1 : 0;
+    /* Note: masterconf_getstring() shares a static buffer with
+     * masterconf_getint() so we *must* strdup here */
     char *cmd = xstrdup(masterconf_getstring(e, "cmd", ""));
     int period = 60 * masterconf_getint(e, "period", 0);
     int at = masterconf_getint(e, "at", -1), hour, min;
@@ -1579,6 +1581,7 @@ static void add_event(const char *name, struct entry *e, void *rock)
     evt->period = period;
 
     evt->exec = tokenize(cmd);
+    free(cmd);
     if (!evt->exec) fatal("out of memory", EX_UNAVAILABLE);
 
     schedule_event(evt);
