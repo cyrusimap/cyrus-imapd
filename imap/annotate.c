@@ -2275,7 +2275,8 @@ void init_annotation_definitions()
 	ae = xmalloc(sizeof(struct annotate_st_entry));
 
 	p2 = p;
-	for (; *p && (isalnum(*p) || *p=='.' || *p=='-' || *p=='_' || *p=='/');
+	for (; *p && (isalnum(*p) ||
+		      *p=='.' || *p=='-' || *p=='_' || *p=='/' || *p==':');
 	     p++);
 	/* TV-TODO: should test for empty */
 	ae->name = xstrndup(p2, p-p2);
