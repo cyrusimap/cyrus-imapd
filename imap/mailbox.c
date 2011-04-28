@@ -3090,6 +3090,7 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
 {
     int r;
     struct mailbox *newmailbox = NULL;
+    char *newquotaroot = NULL;
 
     assert(mailbox_index_islocked(oldmailbox, 1));
 
@@ -3119,6 +3120,7 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
 	if (r && r != IMAP_QUOTAROOT_NONEXISTENT)
 	    goto fail;
     }
+    if (newmailbox->quotaroot) newquotaroot = xstrdup(newmailbox->quotaroot);
 
     r = mailbox_copy_files(oldmailbox, newpartition, newname);
     if (r) goto fail;
@@ -3145,6 +3147,7 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
     if (r) goto fail;
 
     /* mark the "used" back to zero, so it updates the new quota! */
+    mailbox_set_quotaroot(newmailbox, newquotaroot);
     mailbox_quota_dirty(newmailbox);
     newmailbox->quota_previously_used = 0;
 
@@ -3160,6 +3163,7 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
 
     if (newmailboxptr) *newmailboxptr = newmailbox;
     else mailbox_close(&newmailbox);
+    free(newquotaroot);
 
     return 0;
 
@@ -3168,6 +3172,7 @@ fail:
     /* XXX - per file paths, need to clean up individual filenames */
     mailbox_delete_cleanup(newmailbox->part, newmailbox->name);
     mailbox_close(&newmailbox);
+    free(newquotaroot);
 
     return r;
 }

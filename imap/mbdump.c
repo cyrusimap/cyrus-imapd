@@ -639,9 +639,10 @@ int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid_start,
 	    
     } /* end if user INBOX */
 
+ done:
+
     prot_printf(pout,")\r\n");
 
- done:
     prot_flush(pout);
 
     if (mbdir) closedir(mbdir);
