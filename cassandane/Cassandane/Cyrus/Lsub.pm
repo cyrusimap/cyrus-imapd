@@ -106,7 +106,7 @@ sub tear_down
 #
 # Test LSUB behaviour
 #
-sub test_lsub
+sub test_lsub_toplevel
 {
     my ($self) = @_;
 
@@ -151,6 +151,52 @@ sub test_lsub
             'user'
           ],
     ], "LSUB top data mismatch:" . Dumper($topdata));
+}
+
+sub test_lsub_delete
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create("INBOX.deltest") || die;
+    $imaptalk->create("INBOX.deltest.sub1") || die;
+    $imaptalk->create("INBOX.deltest.sub2") || die;
+    $imaptalk->subscribe("INBOX.deltest") || die;
+    $imaptalk->subscribe("INBOX.deltest.sub2") || die;
+    my $subdata = $imaptalk->lsub("INBOX.deltest", "*");
+    $self->assert_deep_equals($subdata, [
+          [
+            [
+              '\\HasChildren'
+            ],
+            '.',
+            'INBOX.deltest'
+          ],
+          [
+            [],
+            '.',
+            'INBOX.deltest.sub2'
+          ],
+    ], "LSUB deltest setup mismatch: " . Dumper($subdata));
+
+    $imaptalk->delete("INBOX.deltest");
+    my $onedata = $imaptalk->lsub("INBOX.deltest", "*");
+    $self->assert_deep_equals($onedata, [
+          [
+            [],
+            '.',
+            'INBOX.deltest.sub2'
+          ],
+    ], "LSUB deltest setup mismatch: " . Dumper($onedata));
+
+
+    $imaptalk->delete("INBOX.deltest.sub2");
+    my $nodata = $imaptalk->lsub("INBOX.deltest", "*");
+    $nodata = [] unless ref($nodata); # dammit Completed return
+    $self->assert_deep_equals($nodata, [
+    ], "LSUB deltest after delete mismatch: " . Dumper($nodata));
+
 }
 
 1;
