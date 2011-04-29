@@ -19,7 +19,7 @@
 	if (fstat(_fd, &_sb) < 0) CU_FAIL_FATAL("fstat"); \
 	(n) = read(_fd, (b), _sb.st_size); \
 	if ((n) < _sb.st_size) CU_FAIL_FATAL("short read"); \
-	(b)[(n)] = '\0'; \
+	if ((n) >= 0) (b)[(n)] = '\0'; \
     }
 #define EPILOG \
     unlink(_fname); \
@@ -92,7 +92,7 @@ static void test_printstring(void)
     prot_flush(p);
     END(str, len);
     CU_ASSERT_EQUAL(len, 12);
-    CU_ASSERT_STRING_EQUAL(str, "{7}\r\nper%ent");
+    CU_ASSERT(!strcmp(str, "{7}\r\nper%ent"));
 
     /* String with embedded backslash */
     BEGIN;
@@ -202,7 +202,7 @@ static void test_printmap(void)
     prot_flush(p);
     END(str, len);
     CU_ASSERT_EQUAL(len, 12);
-    CU_ASSERT_STRING_EQUAL(str, "{7}\r\nper%ent");
+    CU_ASSERT(!strcmp(str, "{7}\r\nper%ent"));
 
     /* String with embedded backslash */
     BEGIN;
