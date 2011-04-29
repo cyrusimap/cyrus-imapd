@@ -2020,7 +2020,7 @@ void message_write_nstring_map(struct buf *buf,
 
     if (is_literal) {
 	/* Write out as literal */
-	buf_printf(buf, "{" SIZE_T_FMT "}\r\n", len);
+	buf_printf(buf, "{%u}\r\n", len);
 	buf_appendmap(buf, s, len);
     }
     else {
