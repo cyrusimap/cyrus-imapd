@@ -287,7 +287,7 @@ struct capa_struct base_capabilities[] = {
     { "ENABLE",                3 },
 /* post-auth capabilities */
     { "ACL",                   2 },
-    { "RIGHTS=kxte",           2 },
+    { "RIGHTS=kxten",          2 },
     { "QUOTA",                 2 },
     { "MAILBOX-REFERRALS",     2 },
     { "NAMESPACE",             2 }, 

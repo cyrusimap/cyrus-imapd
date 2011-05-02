@@ -78,6 +78,7 @@ int cyrus_acl_strtomask(const char *str)
 	    case 'd': /* legacy DELETE macro - build member rights */
 		legacy_delete = (ACL_DELETEMSG | ACL_EXPUNGE); break;
 	    case 'a': result |= ACL_ADMIN; break;
+	    case 'n': result |= ACL_ANNOTATEMSG; break;
 	    case '0': result |= ACL_USER0; break;
 	    case '1': result |= ACL_USER1; break;
 	    case '2': result |= ACL_USER2; break;
@@ -145,6 +146,7 @@ char *cyrus_acl_masktostr(int acl, char *str)
 	*pos++ = 'd';
     }
     if (acl & ACL_ADMIN) *pos++ = 'a';
+    if (acl & ACL_ANNOTATEMSG) *pos++ = 'n';
     if (acl & ACL_USER0) *pos++ = '0';
     if (acl & ACL_USER1) *pos++ = '1';
     if (acl & ACL_USER2) *pos++ = '2';
