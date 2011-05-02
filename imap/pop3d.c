@@ -2045,7 +2045,7 @@ static int update_seen(void)
     if (!config_popuseimapflags)
 	return 0;
 
-    if (config_popuseacl && !(popd_myrights & ACL_SEEN))
+    if (config_popuseacl && !(popd_myrights & ACL_SETSEEN))
 	return 0;
 
     /* we know this mailbox must be owned by the user, because 

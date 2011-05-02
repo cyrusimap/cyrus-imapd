@@ -232,7 +232,7 @@ int index_open(const char *name, struct index_init *init,
 
 	state->internalseen = mailbox_internal_seen(state->mailbox,
 						    state->userid);
-	state->keepingseen = (state->myrights & ACL_SEEN);
+	state->keepingseen = (state->myrights & ACL_SETSEEN);
 	state->examining = init->examine_mode;
 
 	state->out = init->out;
@@ -797,7 +797,7 @@ static int _fetch_setseen(struct index_state *state, uint32_t msgno)
 	return 0;
 
     /* no rights to change it */
-    if (!(state->myrights & ACL_SEEN))
+    if (!(state->myrights & ACL_SETSEEN))
 	return 0;
 
     /* store in the record if it's internal seen */
@@ -916,7 +916,7 @@ int index_store(struct index_state *state, char *sequence, int usinguid,
     struct index_map *im;
 
     /* First pass at checking permission */
-    if ((storeargs->seen && !(state->myrights & ACL_SEEN)) ||
+    if ((storeargs->seen && !(state->myrights & ACL_SETSEEN)) ||
 	((storeargs->system_flags & FLAG_DELETED) &&
 	 !(state->myrights & ACL_DELETEMSG)) ||
 	(((storeargs->system_flags & ~FLAG_DELETED) || flags->count) &&
@@ -2211,7 +2211,7 @@ static void index_listflags(struct index_state *state)
 	    prot_printf(state->out, "%c\\Deleted", sepchar);
 	    sepchar = ' ';
 	}
-	if (state->myrights & ACL_SEEN) {
+	if (state->myrights & ACL_SETSEEN) {
 	    prot_printf(state->out, "%c\\Seen", sepchar);
 	    sepchar = ' ';
 	}
@@ -2859,7 +2859,7 @@ static int index_storeflag(struct index_state *state, uint32_t msgno,
     oldmodseq = im->record.modseq;
 
     /* Change \Seen flag */
-    if (state->myrights & ACL_SEEN) {
+    if (state->myrights & ACL_SETSEEN) {
 	old = im->isseen ? 1 : 0;
 	new = old;
 	if (storeargs->operation == STORE_REPLACE)

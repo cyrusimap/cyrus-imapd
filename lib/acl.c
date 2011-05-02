@@ -65,7 +65,7 @@ int cyrus_acl_strtomask(const char *str)
 	switch (*str) {
 	    case 'l': result |= ACL_LOOKUP; break;
 	    case 'r': result |= ACL_READ; break;
-	    case 's': result |= ACL_SEEN; break;
+	    case 's': result |= ACL_SETSEEN; break;
 	    case 'w': result |= ACL_WRITE; break;
 	    case 'i': result |= ACL_INSERT; break;
 	    case 'p': result |= ACL_POST; break;
@@ -129,7 +129,7 @@ char *cyrus_acl_masktostr(int acl, char *str)
 
     if (acl & ACL_LOOKUP) *pos++ = 'l';
     if (acl & ACL_READ) *pos++ = 'r';
-    if (acl & ACL_SEEN) *pos++ = 's';
+    if (acl & ACL_SETSEEN) *pos++ = 's';
     if (acl & ACL_WRITE) *pos++ = 'w';
     if (acl & ACL_INSERT) *pos++ = 'i';
     if (acl & ACL_POST) *pos++ = 'p';
