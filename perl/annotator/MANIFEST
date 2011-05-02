@@ -1,0 +1,4 @@
+README			Notes on this mess
+Daemon.pm		Generic base class for Cyrus annotator daemons
+MANIFEST		This file
+Makefile.PL		Build Makefile for Cyrus::Annotator::Daemon

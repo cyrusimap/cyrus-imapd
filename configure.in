@@ -1209,6 +1209,10 @@ else
 	PERL_DEPSUBDIRS="none"
 fi
 
+dnl for the Cyrus annotator daemon class
+PERL_SUBDIRS="${PERL_SUBDIRS} annotator"
+PERL_DEPSUBDIRS="annotator"
+
 dnl snmp
 dnl (agentx was depricated, but SNMP_SUBDIRS is conveinent as a placeholder)
 SNMP_SUBDIRS=""

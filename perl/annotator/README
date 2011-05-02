@@ -1,0 +1,6 @@
+
+This is a Perl framework which enables site adminstrators to easily
+write custom daemons which automate the setting of annotations and flags
+on newly arrived messages.  See the perldoc for instructions on how to
+use it.
+
