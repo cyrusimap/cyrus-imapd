@@ -1012,6 +1012,12 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
 	    goto done;
 	}
 
+	/* No partition, we're definitely not moving anywhere */
+	if (!partition) {
+	    r = IMAP_MAILBOX_EXISTS;
+	    goto done;
+	}
+
 	partitionmove = 1;
 	/* this is OK because it uses a different static buffer */
 	root = config_partitiondir(partition);
