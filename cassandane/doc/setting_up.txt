@@ -39,7 +39,11 @@ at all.  This section documents those steps.
     easiest thing is to make /usr/cyrus a symlink to a directory you
     can install into.  For example:
 
-    gnb> sudo ln -snf /var/tmp/cassandane/cyrus/usr/cyrus /usr/cyrus
+    gnb> sudo ln -snf /var/tmp/cassandane-cyrus/usr/cyrus /usr/cyrus
     gnb> cd ~/my/cyrus/workarea
-    gnb> make DESTDIR=/var/tmp/cassandane/cyrus install
+    gnb> make DESTDIR=/var/tmp/cassandane-cyrus install
 
+Now, to run Cassandane use this command
+
+    gnb> cd ~/my/cassandane/workarea
+    gnb> sudo -u cyrus ./testrunner.pl -f tap
