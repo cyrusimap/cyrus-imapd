@@ -118,6 +118,9 @@ sub _connect
     $client->login($self->{username}, $self->{password})
 	or die "Cannot login to server \"$self->{host}:$self->{port}\": $@";
 
+    # Make Mail::IMAPTalk just stfu
+    $client->set_unicode_folders(1);
+
     $client->set_tracing(1)
 	if $self->{verbose};
     $client->parse_mode(Envelope => 1);
