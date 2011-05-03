@@ -89,7 +89,7 @@
 
 /* READ-WRITE: removed from regular ACL if you EXAMINE a mailbox,
    so that nothing accidentally tries to write */
-#define ACL_READ_WRITE (ACL_SETSEEN|ACL_WRITE|ACL_INSERT|\
+#define ACL_READ_WRITE (ACL_SETSEEN|ACL_WRITE|ACL_INSERT\
 		       |ACL_DELETEMSG|ACL_EXPUNGE|ACL_ANNOTATEMSG)
 
 #define ACL_MODE_SET 0
