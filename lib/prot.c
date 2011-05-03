@@ -136,7 +136,6 @@ struct protstream *prot_readmap(const char *base, uint32_t len)
     newstream->fd = PROT_NO_FD;
     newstream->logfd = PROT_NO_FD;
     newstream->big_buffer = PROT_NO_FD;
-    newstream->fixedsize = 1;
 
     return newstream;
 }
