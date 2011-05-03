@@ -166,9 +166,14 @@ sub write_begin
 
 sub write_message
 {
-    my ($self, $msg) = @_;
+    my ($self, $msg, %opts) = @_;
 
-    $self->{client}->append($self->{folder},
+    my @extra;
+    if ($opts{flags}) {
+	push @extra, '(' . join(' ', @{$opts{flags}}) . ')';
+    }
+
+    $self->{client}->append($self->{folder}, @extra,
 			    { Literal => $msg->as_string() } );
 }
 
