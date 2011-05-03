@@ -13,8 +13,11 @@ Cassandane needs the following software to work:
     built from git.
 
  * Encode::IMAPUTF7
-    not needed currently, but expect it will be in the future.
+    Needed by Mail::IMAPTalk
+    CPAN package http://search.cpan.org/perldoc?Encode::IMAPUTF7
     Ubuntu package libencode-imaputf7-perl
+    Note that to build a Ubuntu package you may need to
+    install libtest-nowarnings-perl first.
 
  * URI, URI::Escape
     Handles URIs.
