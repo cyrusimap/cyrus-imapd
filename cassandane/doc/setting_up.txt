@@ -1,0 +1,45 @@
+How To Setup A System To Run Cassandane
+---------------------------------------
+
+Cassandane is designed to be operated on a day-to-day basis as an
+unprivileged user.  However, Cassandane needs root to make some small
+one-time adjustments to be performed to your system before it will run
+at all.  This section documents those steps.
+
+1.  Your Cyrus install needs to have this patch applied, which
+    allows Cyrus to be started as the Cyrus user instead of being
+    started as root and changing to the Cyrus user.
+
+    https://github.com/gnb/cyrus-imapd/commit/a430440bc9d4f0a6b0761660c07438cc22d4a026
+
+2.  The passwd and group maps need valid entries for user "cyrus"
+    and group "mail".  An easy way is to manually add this line
+    to /etc/passwd
+
+    cyrus:x:501:8::/usr/cyrus:/bin/sh
+
+    and this line to /etc/group (it's likely already there)
+
+    mail:x:8:
+
+    and then add a password for the "cyrus" user
+
+    # passwd cyrus
+
+3.  You need to be able to run a program as the "cyrus" user, preferably
+    without entering your password all the time.  One way of doing this
+    is to add the following at the *end* of your /etc/sudoers file
+
+    gnb	ALL = (cyrus) NOPASSWD: ALL
+
+    Obviously, replace 'gnb' with your username.
+
+4.  The pathname /usr/cyrus needs to point to an installed Cyrus.  As
+    you will probably want to make changes and re-run tests a lot, the
+    easiest thing is to make /usr/cyrus a symlink to a directory you
+    can install into.  For example:
+
+    gnb> sudo ln -snf /var/tmp/cassandane/cyrus/usr/cyrus /usr/cyrus
+    gnb> cd ~/my/cyrus/workarea
+    gnb> make DESTDIR=/var/tmp/cassandane/cyrus install
+
