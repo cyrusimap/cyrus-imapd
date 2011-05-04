@@ -61,14 +61,22 @@
 #include "libcyr_cfg.h"
 #include "proc.h"
 #include "util.h"
+#include "../master/masterconf.h"
 #include "xmalloc.h"
 
 /* config.c stuff */
 const int config_need_data = 0;
+const char *MASTER_CONFIG_FILENAME = DEFAULT_MASTER_CONFIG_FILENAME;
+
+struct service_item {
+    char *prefix;
+    int prefixlen;
+    struct service_item *next;    
+};
 
 static void usage(void)
 {
-    fprintf(stderr, "cyr_info [-C <altconfig>] [-n servicename] command\n");
+    fprintf(stderr, "cyr_info [-C <altconfig>] [-M <cyrus.conf>] [-n servicename] command\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "If you give a service name, it will show config as if you were\n");
     fprintf(stderr, "running that service, i.e. imap\n");
@@ -78,6 +86,7 @@ static void usage(void)
     fprintf(stderr, "  * proc       - listing of all open processes\n");
     fprintf(stderr, "  * allconf    - listing of all config values\n");
     fprintf(stderr, "  * conf       - listing of non-default config values\n");
+    fprintf(stderr, "  * lint       - unknown config keys\n");
     cyrus_done();
     exit(-1);
 }
@@ -139,8 +148,8 @@ static void do_conf(int only_changed)
 		if (imapopts[i].def.e == imapopts[i].val.e) break;
 	    }
 	    printf("%s:", imapopts[i].optname);
-	    for (j = 0; imapopts[i].enum_options[j].val; j++) {
-		if (imapopts[i].val.e == j) {
+	    for (j = 0; imapopts[i].enum_options[j].name; j++) {
+		if (imapopts[i].val.e == (1<<j)) {
 		    printf(" %s", imapopts[i].enum_options[j].name);
 		    break;
 		}
@@ -152,7 +161,7 @@ static void do_conf(int only_changed)
 		if (imapopts[i].def.x == imapopts[i].val.x) break;
 	    }
 	    printf("%s:", imapopts[i].optname);
-	    for (j = 0; imapopts[i].enum_options[j].val; j++) {
+	    for (j = 0; imapopts[i].enum_options[j].name; j++) {
 		if (imapopts[i].val.x & (1<<j)) {
 		    printf(" %s", imapopts[i].enum_options[j].name);
 		}
@@ -168,6 +177,96 @@ static void do_conf(int only_changed)
     config_foreachoverflowstring(print_overflow, NULL);
 }
 
+static int known_overflowkey(const char *key)
+{
+    /* any partition is OK (XXX: are there name restrictions to check?) */
+    if (!strncmp(key, "partition-", 10)) return 1;
+
+    /* only valid if there's a partition with the same name */
+    if (!strncmp(key, "metapartition-", 14)) {
+	if (config_getoverflowstring(key+4, NULL))
+	    return 1;
+    }
+
+    return 0;
+}
+
+static int known_regularkey(const char *key)
+{
+    int i;
+
+    for (i = 1; i < IMAPOPT_LAST; i++) {
+	if (!strcmp(imapopts[i].optname, key))
+	    return 1;
+    }
+
+    return 0;
+}
+
+static int known_saslkey(const char *key __attribute__((unused)))
+{
+    /* XXX - we don't know all the sasl keys, assume it's OK! */
+    return 1;
+} 
+
+static void lint_callback(const char *key, const char *val, void *rock) 
+{
+    struct service_item *known_services = (struct service_item *)rock;
+    struct service_item *svc;
+
+    if (known_overflowkey(key)) return;
+
+    if (!strncmp(key, "sasl_", 5)) {
+	if (known_saslkey(key+5)) return;
+    }
+
+    for (svc = known_services; svc; svc = svc->next) {
+	if (!strncmp(key, svc->prefix, svc->prefixlen)) {
+	    /* check if it's a known key */
+	    if (known_regularkey(key+svc->prefixlen)) return;
+	    if (known_overflowkey(key+svc->prefixlen)) return;
+	}
+    }
+
+    printf("%s: %s\n", key, val);
+}
+
+static void add_service(const char *name,
+			struct entry *e __attribute__((unused)),
+			void *rock)
+{
+    struct service_item **ksp = (struct service_item **)rock;
+    struct service_item *knew = xmalloc(sizeof(struct service_item));
+    knew->prefixlen = strlen(name);
+    knew->prefix = xmalloc(knew->prefixlen+2);
+    memcpy(knew->prefix, name, knew->prefixlen);
+    knew->prefix[knew->prefixlen++] = '_';
+    knew->prefix[knew->prefixlen] = '\0';
+    knew->next = *ksp;
+    *ksp = knew;
+}
+
+static void do_lint(const char *srvname, const char *alt_config)
+{
+    struct service_item *ks = NULL;
+
+    /* pull the config from cyrus.conf to get service names */
+    masterconf_getsection("SERVICES", &add_service, &ks);
+
+    /* check all overflow strings */
+    config_foreachoverflowstring(lint_callback, ks);
+
+    /* XXX - check directories and permissions? */
+
+    /* clean up */
+    while (ks) {
+	struct service_item *next = ks->next;
+	free(ks->prefix);
+	free(ks);
+	ks = next;
+    }
+}
+
 int main(int argc, char *argv[])
 {
     extern char *optarg;
@@ -179,10 +278,14 @@ int main(int argc, char *argv[])
 	fatal("must run as the Cyrus user", EC_USAGE);
     }
 
-    while ((opt = getopt(argc, argv, "C:n:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:M:n:")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
+	    break;
+
+	case 'M': /* alt cyrus.conf file */
+	    MASTER_CONFIG_FILENAME = optarg;
 	    break;
 
 	case 'n':
@@ -203,6 +306,8 @@ int main(int argc, char *argv[])
 	do_conf(0);
     else if (!strcmp(argv[optind], "conf"))
 	do_conf(1);
+    else if (!strcmp(argv[optind], "lint"))
+	do_lint(srvname, alt_config);
     else
 	usage();
 

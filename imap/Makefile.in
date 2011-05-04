@@ -265,6 +265,7 @@ arbitron: arbitron.o $(CLIOBJS) libimap.a $(DEPLIBS)
 
 cyr_info: cyr_info.o mutex_fake.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o cyr_info cyr_info.o $(CLIOBJS) \
+	../master/masterconf.o \
 	libimap.a $(DEPLIBS) $(LIBS)
 
 cyr_userseen: cyr_userseen.o mutex_fake.o libimap.a $(DEPLIBS)
