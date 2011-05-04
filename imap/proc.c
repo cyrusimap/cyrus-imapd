@@ -51,6 +51,7 @@
 #endif
 #include <syslog.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #include "exitcodes.h"
 #include "global.h"
@@ -231,4 +232,41 @@ int proc_foreach(procdata_t *func, void *rock)
     }
 
     return r;
+}
+
+static int count_procusage(int pid __attribute__((unused)),
+			   const char *clienthost,
+			   const char *userid,
+			   const char *mboxname __attribute__((unused)),
+			   void *rock)
+{
+    struct proc_limits *limitsp = (struct proc_limits *)rock;
+
+    /* we only count logged in sessions */
+    if (!userid) return 0;
+
+    if (limitsp->clienthost && !strcmp(clienthost, limitsp->clienthost))
+	limitsp->host++;
+    if (limitsp->userid && !strcmp(userid, limitsp->userid))
+	limitsp->user++;
+    
+    return 0;
+}
+
+int proc_checklimits(struct proc_limits *limitsp)
+{
+    limitsp->maxhost = config_getint(IMAPOPT_MAXLOGINS_PER_HOST);
+    limitsp->maxuser = config_getint(IMAPOPT_MAXLOGINS_PER_USER);
+
+    if (!limitsp->maxuser && !limitsp->maxhost)
+	return 0;
+
+    limitsp->host = 0;
+    limitsp->user = 0;
+    proc_foreach(count_procusage, limitsp);
+
+    if (limitsp->maxhost && limitsp->host >= limitsp->maxhost) return 1;
+    if (limitsp->maxuser && limitsp->user >= limitsp->maxuser) return 1;
+
+    return 0;
 }

@@ -632,6 +632,14 @@ Blank lines and lines beginning with ``#'' are ignored.
    the lines in the header will be skipped.  This is to avoid malformed
    messages causing giant cache records */
 
+{ "maxlogins_per_host", 0, INT }
+/* Maximum number of logged in sessions allowed per host,
+   zero means no limit */
+
+{ "maxlogins_per_user", 0, INT }
+/* Maximum number of logged in sessions allowed per user,
+   zero means no limit */
+
 { "maxmessagesize", 0, INT }
 /* Maximum incoming LMTP message size.  If non-zero, lmtpd will reject
    messages larger than \fImaxmessagesize\fR bytes.  If set to 0, this

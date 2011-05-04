@@ -2073,6 +2073,7 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
     char *ssfmsg = NULL;
     const void *val;
     int failedloginpause;
+    struct proc_limits limits;
 
     /* Conceal initial response in telemetry log */
     if (nntp_logfd != -1 && resp) {
@@ -2201,11 +2202,6 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
     }
     nntp_userid = xstrdup((const char *) val);
 
-    proc_register("nntpd", nntp_clienthost, nntp_userid, NULL);
-
-    syslog(LOG_NOTICE, "login: %s %s %s%s %s", nntp_clienthost, nntp_userid,
-	   mech, nntp_starttls_done ? "+TLS" : "", "User logged in");
-
     sasl_getprop(nntp_saslconn, SASL_SSF, &val);
     ssf = *((sasl_ssf_t *) val);
 
@@ -2224,6 +2220,34 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
 	default: ssfmsg = "privacy protection"; break;
 	}
     }
+
+    limits.procname = "nntpd";
+    limits.clienthost = nntp_clienthost;
+    limits.userid = nntp_userid;
+    if (proc_checklimits(&limits)) {
+	const char *sep = "";
+	prot_printf(nntp_out,
+		    "452 Too many open connections (");
+	if (limits.maxhost) {
+	    prot_printf(nntp_out, "%s%d of %d from %s", sep,
+			limits.host, limits.maxhost, nntp_clienthost);
+	    sep = ", ";
+	}
+	if (limits.maxuser) {
+	    prot_printf(nntp_out, "%s%d of %d for %s", sep,
+			limits.user, limits.maxuser, nntp_userid);
+	}
+	prot_printf(nntp_out, ")\r\n");
+	reset_saslconn(&nntp_saslconn);
+	free(nntp_userid);
+	nntp_userid = NULL;
+	return;
+    }
+
+    syslog(LOG_NOTICE, "login: %s %s %s%s %s", nntp_clienthost, nntp_userid,
+	   mech, nntp_starttls_done ? "+TLS" : "", "User logged in");
+
+    proc_register("nntpd", nntp_clienthost, nntp_userid, NULL);
 
     if (success_data) {
 	prot_printf(nntp_out, "283 %s\r\n", success_data);

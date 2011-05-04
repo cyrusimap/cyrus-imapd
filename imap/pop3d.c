@@ -1715,6 +1715,7 @@ int openinbox(void)
     const char *statusline = NULL;
     struct mboxlist_entry *mbentry = NULL;
     struct statusdata sdata;
+    struct proc_limits limits;
 
     /* Translate any separators in userid
        (use a copy since we need the original userid for AUTH to backend) */
@@ -1877,6 +1878,27 @@ int openinbox(void)
 	    mailbox_close(&popd_mailbox);
 	    statuscache_update(inboxname, &sdata);
 	}
+    }
+
+    limits.procname = "pop3d";
+    limits.clienthost = popd_clienthost;
+    limits.userid = popd_userid;
+    if (proc_checklimits(&limits)) {
+	const char *sep = "";
+	prot_printf(popd_out,
+		    "-ERR Too many open connections (");
+	if (limits.maxhost) {
+	    prot_printf(popd_out, "%s%d of %d from %s", sep,
+		        limits.host, limits.maxhost, popd_clienthost);
+	    sep = ", ";
+	}
+	if (limits.maxuser) {
+	    prot_printf(popd_out, "%s%d of %d for %s", sep,
+		        limits.user, limits.maxuser, popd_userid);
+	}
+	prot_printf(popd_out, ")\r\n");
+	mailbox_close(&popd_mailbox);
+	goto fail;
     }
 
     /* register process */

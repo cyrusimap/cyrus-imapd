@@ -45,6 +45,16 @@
 #ifndef _PROC_H
 #define _PROC_H
 
+struct proc_limits {
+    const char *procname;
+    const char *clienthost;
+    const char *userid;
+    int user;
+    int maxuser;
+    int host;
+    int maxhost;
+};
+
 typedef int procdata_t(int pid, const char *clienthost,
 		       const char *userid, const char *mailbox,
 		       void *rock);
@@ -58,5 +68,7 @@ extern int proc_register(const char *progname, const char *clienthost,
 extern void proc_cleanup(void);
 
 extern int proc_foreach(procdata_t *func, void *rock);
+
+extern int proc_checklimits(struct proc_limits *limitsp);
 
 #endif /* _PROC_H */

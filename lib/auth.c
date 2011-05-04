@@ -110,5 +110,5 @@ void auth_freestate(struct auth_state *auth_state)
 {
     struct auth_mech *auth = auth_fromname();
 
-    auth->freestate(auth_state);
+    if (auth_state) auth->freestate(auth_state);
 }
