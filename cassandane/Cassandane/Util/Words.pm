@@ -50,25 +50,30 @@ our @EXPORT = qw(
     );
 
 my @words;
+my @remaining;
+
+use constant WORDFILE => '/usr/share/dict/words';
+use constant STRIDE => 7;
+use constant MAX_WORDS => 2048;
+use constant MIN_LENGTH => 2;
+use constant MAX_LENGTH => 7;
 
 # Extract some well-formatted short words from the dictionary file
 sub _read_words
 {
-    my $filename = "/usr/share/dict/words";
     my $i = 0;
-    my $stride = 200;
-    open DICT,'<',$filename
-	or die "Cannot open $filename for reading: $!";
+    open DICT,'<',WORDFILE
+	or die "Cannot open " . WORDFILE . " for reading: $!";
     while (<DICT>)
     {
 	chomp;
 	$_ = lc;
 	next unless m/^[a-z]+$/;
-	next if length $_ > 5 || length $_ < 2;
-	next if $i++ < $stride;
+	next if length $_ > MAX_LENGTH || length $_ < MIN_LENGTH;
+	next if $i++ < STRIDE;
 	$i = 0;
 	push(@words, $_);
-	last if scalar @words == 200;
+ 	last if scalar @words == MAX_WORDS;
     }
     close DICT;
 }
@@ -77,7 +82,8 @@ sub random_word
 {
     _read_words()
 	if (!scalar @words);
-    return $words[int(rand(scalar @words))];
+    @remaining = @words unless scalar @remaining;
+    return $remaining[int(rand(scalar @remaining))];
 }
 
 1;
