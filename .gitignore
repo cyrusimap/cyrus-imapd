@@ -46,6 +46,7 @@ imap/cyr_charset
 imap/cyr_dbtool
 imap/cyr_df
 imap/cyr_expire
+imap/cyr_info
 imap/cyr_sequence
 imap/cyr_synclog
 imap/cyr_userseen
