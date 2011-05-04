@@ -149,7 +149,7 @@ static void do_conf(int only_changed)
 	    }
 	    printf("%s:", imapopts[i].optname);
 	    for (j = 0; imapopts[i].enum_options[j].name; j++) {
-		if (imapopts[i].val.e == (1<<j)) {
+		if (imapopts[i].val.e & (1<<j)) {
 		    printf(" %s", imapopts[i].enum_options[j].name);
 		    break;
 		}
@@ -246,7 +246,7 @@ static void add_service(const char *name,
     *ksp = knew;
 }
 
-static void do_lint(const char *srvname, const char *alt_config)
+static void do_lint()
 {
     struct service_item *ks = NULL;
 
@@ -300,6 +300,9 @@ int main(int argc, char *argv[])
 
     cyrus_init(alt_config, srvname, 0);
 
+    if (optind >= argc)
+	usage();
+
     if (!strcmp(argv[optind], "proc"))
 	do_proc();
     else if (!strcmp(argv[optind], "allconf"))
@@ -307,7 +310,7 @@ int main(int argc, char *argv[])
     else if (!strcmp(argv[optind], "conf"))
 	do_conf(1);
     else if (!strcmp(argv[optind], "lint"))
-	do_lint(srvname, alt_config);
+	do_lint();
     else
 	usage();
 
