@@ -176,6 +176,17 @@ sub set_attribute
     $self->{attrs}->{lc($name)} = $value;
 }
 
+sub set_attributes
+{
+    my ($self, @args) = @_;
+
+    while (my $name = shift @args)
+    {
+	my $value = shift @args;
+	$self->set_attribute($name, $value);
+    }
+}
+
 sub get_attribute
 {
     my ($self, $name) = @_;
