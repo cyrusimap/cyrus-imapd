@@ -165,6 +165,7 @@ static int proc_foreach_helper(unsigned pid, procdata_t *func, void *rock)
 	/* yay, got a file */
 	int n;
 	struct stat sbuf;
+	char *p;
 	char *host = NULL;
 	char *user = NULL;
 	char *mailbox = NULL;
@@ -180,6 +181,14 @@ static int proc_foreach_helper(unsigned pid, procdata_t *func, void *rock)
 	    goto done;
 
 	buf[sbuf.st_size] = '\0';
+
+	/* remove any endline characters */
+	p = strchr(buf, '\r');
+	if (p) *p = '\0';
+	p = strchr(buf, '\n');
+	if (p) *p = '\0';
+
+	/* parse the fields */
 	host = buf;
 	user = strchr(host, '\t');
 	if (user) {
