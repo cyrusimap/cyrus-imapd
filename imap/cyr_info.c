@@ -68,13 +68,17 @@ const int config_need_data = 0;
 
 static void usage(void)
 {
-    fprintf(stderr, "cyr_info [-C <altconfig>] command\n");
+    fprintf(stderr, "cyr_info [-C <altconfig>] [-n servicename] command\n");
+    fprintf(stderr, "\n");
+    fprintf(stderr, "If you give a service name, it will show config as if you were\n");
+    fprintf(stderr, "running that service, i.e. imap\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "Where command is one of:\n");
     fprintf(stderr, "\n");
     fprintf(stderr, "  * proc       - listing of all open processes\n");
     fprintf(stderr, "  * allconf    - listing of all config values\n");
     fprintf(stderr, "  * conf       - listing of non-default config values\n");
+    cyrus_done();
     exit(-1);
 }
 
@@ -169,15 +173,20 @@ int main(int argc, char *argv[])
     extern char *optarg;
     int opt;
     char *alt_config = NULL;
+    char *srvname = "cyr_info";
 
     if ((geteuid()) == 0 && (become_cyrus() != 0)) {
 	fatal("must run as the Cyrus user", EC_USAGE);
     }
 
-    while ((opt = getopt(argc, argv, "C:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:n:")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
+	    break;
+
+	case 'n':
+	    srvname = optarg;
 	    break;
 
 	default:
@@ -186,7 +195,7 @@ int main(int argc, char *argv[])
 	}
     }
 
-    cyrus_init(alt_config, "cyr_info", 0);
+    cyrus_init(alt_config, srvname, 0);
 
     if (!strcmp(argv[optind], "proc"))
 	do_proc();
@@ -196,6 +205,8 @@ int main(int argc, char *argv[])
 	do_conf(1);
     else
 	usage();
+
+    cyrus_done();
 
     return 0;
 }
