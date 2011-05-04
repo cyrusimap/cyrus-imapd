@@ -55,12 +55,41 @@
 #include "exitcodes.h"
 #include "global.h"
 #include "proc.h"
+#include "retry.h"
 #include "xmalloc.h"
 
-#define FNAME_PROCDIR "/proc/"
+#ifdef HAVE_DIRENT_H
+# include <dirent.h>
+# define NAMLEN(dirent) strlen((dirent)->d_name)
+#else
+# define dirent direct
+# define NAMLEN(dirent) (dirent)->d_namlen
+# if HAVE_SYS_NDIR_H
+#  include <sys/ndir.h>
+# endif
+# if HAVE_SYS_DIR_H
+#  include <sys/dir.h>
+# endif
+# if HAVE_NDIR_H
+#  include <ndir.h>
+# endif
+#endif
+
+
+#define FNAME_PROCDIR "/proc"
 
 static char *procfname = 0;
 static FILE *procfile = 0;
+
+static char *proc_getpath(unsigned pid) {
+    char *path;
+    path = xmalloc(strlen(config_dir)+sizeof(FNAME_PROCDIR)+11);
+    if (pid)
+	sprintf(path, "%s%s/%u", config_dir, FNAME_PROCDIR, pid);
+    else 
+	sprintf(path, "%s%s", config_dir, FNAME_PROCDIR);
+    return path;
+}
 
 int proc_register(const char *progname, const char *clienthost,
 		  const char *userid, const char *mailbox)
@@ -70,9 +99,7 @@ int proc_register(const char *progname, const char *clienthost,
 
     if (!procfname) {
 	pid = getpid();
-    
-	procfname = xmalloc(strlen(config_dir)+sizeof(FNAME_PROCDIR)+10);
-	sprintf(procfname, "%s%s%u", config_dir, FNAME_PROCDIR, pid);
+	procfname = proc_getpath(pid);
 
 	procfile = fopen(procfname, "w+");
 	if (!procfile) {
@@ -122,4 +149,77 @@ void proc_cleanup(void)
 	free(procfname);
 	procfname = NULL;
     }
+}
+
+static int proc_foreach_helper(unsigned pid, procdata_t *func, void *rock)
+{
+    int r = 0;
+    char *buf = NULL;
+    char *path = NULL;
+    int fd = -1;
+
+    path = proc_getpath(pid);
+
+    fd = open(path, O_RDONLY, 0);
+    if (fd != -1) {
+	/* yay, got a file */
+	int n;
+	struct stat sbuf;
+	char *host = NULL;
+	char *user = NULL;
+	char *mailbox = NULL;
+
+	if (fstat(fd, &sbuf))
+	    goto done;
+
+	/* grab a copy of the file contents */
+	buf = xmalloc(sbuf.st_size+1);
+	n = retry_read(fd, buf, sbuf.st_size);
+	close(fd);
+	if (n != sbuf.st_size)
+	    goto done;
+
+	buf[sbuf.st_size] = '\0';
+	host = buf;
+	user = strchr(host, '\t');
+	if (user) {
+	    *user++ = '\0';
+	    mailbox = strchr(user, '\t');
+	    if (mailbox) *mailbox++ = '\0';
+	}
+
+	(*func)(pid, host, user, mailbox, rock);
+    }
+
+done:
+    free(buf);
+    free(path);
+    return r;
+}
+
+int proc_foreach(procdata_t *func, void *rock)
+{
+    DIR *dirp;
+    struct dirent *dirent;
+    char *path;
+    const char *p;
+    unsigned pid;
+    int r = 0;
+
+    path = proc_getpath(0);
+    dirp = opendir(path);
+    free(path);
+
+    if (dirp) {
+	while ((dirent = readdir(dirp)) != NULL) {
+	    p = dirent->d_name;
+	    if (*p == '.') continue; /* dot files */
+	    pid = strtoul(p, NULL, 10);
+	    r = proc_foreach_helper(pid, func, rock);
+	    if (r) break;
+	}
+	closedir(dirp);
+    }
+
+    return r;
 }

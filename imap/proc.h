@@ -45,6 +45,10 @@
 #ifndef _PROC_H
 #define _PROC_H
 
+typedef int procdata_t(int pid, const char *clienthost,
+		       const char *userid, const char *mailbox,
+		       void *rock);
+
 extern void setproctitle_init(int argc, char **argv, char **envp);
 extern void setproctitle(const char *fmt, ...);
 
@@ -52,5 +56,7 @@ extern int proc_register(const char *progname, const char *clienthost,
 		         const char *userid, const char *mailbox);
 
 extern void proc_cleanup(void);
+
+extern int proc_foreach(procdata_t *func, void *rock);
 
 #endif /* _PROC_H */
