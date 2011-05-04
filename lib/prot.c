@@ -578,8 +578,8 @@ int prot_fill(struct protstream *s)
     /* Zero errno just in case */
     errno = 0;
 
+    if (s->fixedsize) s->eof = 1;
     if (s->eof || s->error) return EOF;
-    if (s->fixedsize) return EOF;
 
     do {
 #ifdef HAVE_ZLIB
@@ -1704,6 +1704,8 @@ int prot_getc(struct protstream *s)
 int prot_ungetc(int c, struct protstream *s)
 {
     assert(!s->write);
+
+    if (c == EOF) return EOF;
 
     if (!s->can_unget)
 	fatal("Can't unwind any more", EC_SOFTWARE);
