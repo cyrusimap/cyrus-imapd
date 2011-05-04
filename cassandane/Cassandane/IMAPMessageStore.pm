@@ -236,7 +236,8 @@ sub read_message
 	    # xlog "rr=" . Dumper($rr);
 	    my $raw = $rr->{'body'};
 	    delete $rr->{'body'};
-	    return Cassandane::Message->new(raw => $raw, attrs => $rr);
+	    return Cassandane::Message->new(raw => $raw,
+					    attrs => { id => $uid, %$rr });
 	}
 	$self->{batch} = undef;
 
