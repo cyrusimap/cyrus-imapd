@@ -1433,6 +1433,42 @@ int mailbox_read_index_record(struct mailbox *mailbox,
 }
 
 /*
+ * bsearch() function to compare two index record buffers by UID
+ */
+static int rec_compar(const void *key, const void *mem)
+{
+    uint32_t uid = *((uint32_t *) key);
+    struct index_record record;
+    int r;
+
+    if ((r = mailbox_buf_to_index_record(mem, &record))) return r;
+
+    if (uid < record.uid) return -1;
+    return (uid > record.uid);
+}
+
+/*
+ * Find the index record in mailbox corresponding to UID
+ */
+int mailbox_find_index_record(struct mailbox *mailbox, uint32_t uid,
+			      struct index_record *record)
+{
+    const void *mem, *base = mailbox->index_base + mailbox->i.start_offset;
+    size_t num_records = mailbox->i.num_records;
+    size_t size = mailbox->i.record_size;
+    int r;
+
+    mem =  bsearch(&uid, base, num_records, size, rec_compar);
+    if (!mem) return CYRUSDB_NOTFOUND;
+
+    if ((r = mailbox_buf_to_index_record(mem, record))) return r;
+
+    record->recno = ((mem - base) / size) + 1;
+
+    return 0;
+}
+
+/*
  * Lock the index file for 'mailbox'.  Reread index file header if necessary.
  */
 int mailbox_lock_index(struct mailbox *mailbox, int locktype)
