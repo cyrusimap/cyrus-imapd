@@ -44,7 +44,7 @@ use strict;
 use warnings;
 use File::Path qw(mkpath rmtree);
 use File::Find qw(find);
-use POSIX qw(geteuid :signal_h);
+use POSIX qw(geteuid :signal_h :sys_wait_h);
 use Time::HiRes qw(sleep gettimeofday tv_interval);
 use DateTime;
 use BSD::Resource;
@@ -71,6 +71,7 @@ sub new
 	services => {},
 	re_use_dir => 0,
 	valgrind => 0,
+	_children => {},
     };
 
     $self->{name} = $params{name}
@@ -318,6 +319,8 @@ sub _start_master
 	'-M', $self->_master_conf(),
     );
     unlink $self->_pid_file();
+    # _fork_utility() returns a pid, but that doesn't help
+    # because master will fork again to background itself.
     $self->_fork_utility(@cmd);
 
     # wait until the pidfile exists and contains a PID
@@ -352,6 +355,7 @@ sub start
 	rmtree $self->{basedir};
 	$self->_build_skeleton();
 	# TODO: system("echo 1 >/proc/sys/kernel/core_uses_pid");
+	# TODO: system("echo 1 >/proc/sys/fs/suid_dumpable");
 	$self->_generate_imapd_conf();
 	$self->_generate_master_conf();
 	$self->_fix_ownership();
@@ -407,35 +411,48 @@ sub stop
 #	    stdout is captured in the returned file handle,
 #	    stderr is redirected to /dev/null (or is unmolested
 #		is xlog is in verbose mode).
-#	    returns a new file handle
+#	    returns a new file handle from the running process
 #
 # |-	    stdin is fed from the returned file handle
 #	    stdout is redirected to /dev/null (or is unmolested
 #		is xlog is in verbose mode).
 #	    stderr likewise
-#	    returns a new file handle
+#	    returns a new file handle to the running process
 #
 # (none)    stdin is redirected from /dev/null,
 #	    stdout is redirected to /dev/null (or is unmolested
 #		is xlog is in verbose mode).
 #	    stderr likewise
-#	    returns UNIX exit code
+#	    returns UNIX exit code to the finished process
+#	    and dies if the process failed
 #
 sub run_utility
 {
     my ($self, @args) = @_;
 
-    my $ret = $self->_fork_utility(@args);
-    my $pid = 0 + $ret;
-    if ($pid)
-    {
-	# parent process...wait for child
-	my $child = waitpid($pid,0);
-	# and return it's exit status
-	return ($child == $pid ? $? : 255);
-    }
+    my ($pid, $fh) = $self->_fork_utility(@args);
+
+    return $fh
+	if defined $fh;
+
+    # parent process...wait for child
+    my $child = waitpid($pid,0);
+    # and deal with it's exit status
+    return $self->_handle_wait_status($pid)
+	if $child == $pid;
+    return undef;
 }
 
+#
+# Starts a new process to run a Cyrus utility program.  Obeys
+# the "mode" argument like run_utility().
+#
+# Returns: ($pid, $fh, $desc) where $fh is the file handle of the
+#	   pipe to the captured input or output, or undef if
+#	   no capturing.  close()ing the filehandle does a
+#	   waitpid(); you must call _handle_wait_status() to
+#	   decode $?.  Dies on errors.
+#
 sub _fork_utility
 {
     my ($self, $mode, @argv) = @_;
@@ -487,8 +504,12 @@ sub _fork_utility
 	my $pid = open $fh,$mode;
 	die "Cannot fork: $!"
 	    if !defined $pid;
-	return $fh
-	    if $pid;	    # parent process
+	if ($pid)
+	{
+	    # parent process
+	    $self->{_children}->{$fh} = "(binary $binary pid $pid)";
+	    return ($pid, $fh);
+	}
     }
     else
     {
@@ -496,7 +517,13 @@ sub _fork_utility
 	my $pid = fork();
 	die "Cannot fork: $!"
 	    if !defined $pid;
-	return $pid
+	if ($pid)
+	{
+	    # parent process
+	    $self->{_children}->{$pid} = "(binary $binary pid $pid)";
+	    return ($pid, undef);
+	}
+	return ($pid, undef, "$binary (pid $pid)")
 	    if ($pid);	    # parent process
     }
 
@@ -530,6 +557,32 @@ sub _fork_utility
 
     exec @cmd;
     die "Cannot run $binary: $!";
+}
+
+sub _handle_wait_status
+{
+    my ($self, $key) = @_;
+    my $status = $?;
+
+    my $desc = $self->{_children}->{$key} || "unknown";
+    delete $self->{_children}->{$key};
+
+    if (WIFSIGNALED($status))
+    {
+	my $sig = WTERMSIG($status);
+	die "child process $desc terminated by signal $sig";
+    }
+    elsif (WIFEXITED($status))
+    {
+	my $code = WEXITSTATUS($status);
+	die "child process $desc exited with code $code"
+	    if $code != 0;
+    }
+    else
+    {
+	die "WTF? Cannot decode wait status $status";
+    }
+    return 0;
 }
 
 sub describe
