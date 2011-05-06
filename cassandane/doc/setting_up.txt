@@ -43,6 +43,21 @@ at all.  This section documents those steps.
     gnb> cd ~/my/cyrus/workarea
     gnb> make DESTDIR=/var/tmp/cassandane-cyrus install
 
+5.  It's also a good idea to set some kernel tunables.
+
+    When dumping core files, use the PID of the dumping process
+    in the name, so that if multiple processes dump core during the
+    test you'll see all the core files instead of just one named "core".
+
+    # echo 1 >/proc/sys/kernel/core_uses_pid
+
+    As a security feature, Linux won't generate cores for processes
+    which have changed ownership.  This prevents any of the Cyrus
+    processes in your test ever dumping core, so you want to turn
+    that feature off.
+
+    # echo 1 >/proc/sys/fs/suid_dumpable
+
 Now, to run Cassandane use this command
 
     gnb> cd ~/my/cassandane/workarea
