@@ -926,7 +926,7 @@ int index_fetch(struct index_state *state,
  * Perform a STORE command on a sequence
  */
 int index_store(struct index_state *state, char *sequence,
-		struct storeargs *storeargs, const strarray_t *flags)
+		struct storeargs *storeargs)
 {
     struct mailbox *mailbox = state->mailbox;
     int i, r = 0;
@@ -935,6 +935,7 @@ int index_store(struct index_state *state, char *sequence,
     int userflag;
     struct seqset *seq;
     struct index_map *im;
+    const strarray_t *flags = &storeargs->flags;
 
     /* First pass at checking permission */
     if ((storeargs->seen && !(state->myrights & ACL_SETSEEN)) ||

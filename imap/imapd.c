@@ -4525,7 +4525,6 @@ void cmd_store(char *tag, char *sequence, int usinguid)
     struct storeargs storeargs;
     static struct buf operation, flagname;
     int len, c;
-    strarray_t flags = STRARRAY_INITIALIZER;
     int flagsparsed = 0, inlist = 0;
     char *modified = NULL;
     int r;
@@ -4544,6 +4543,7 @@ void cmd_store(char *tag, char *sequence, int usinguid)
     memset(&storeargs, 0, sizeof storeargs);
     storeargs.unchangedsince = ~0ULL;
     storeargs.usinguid = usinguid;
+    strarray_init(&storeargs.flags);
 
     c = prot_getc(imapd_in);
     if (c == '(') {
@@ -4683,7 +4683,7 @@ void cmd_store(char *tag, char *sequence, int usinguid)
 	    goto freeflags;
 	}
 	else
-	    strarray_append(&flags, flagname.s);
+	    strarray_append(&storeargs.flags, flagname.s);
 
 	flagsparsed++;
 	if (c != ' ') break;
@@ -4718,7 +4718,7 @@ notflagsdammit:
 		    index_highestmodseq(imapd_index));
     }
 
-    r = index_store(imapd_index, sequence, &storeargs, &flags);
+    r = index_store(imapd_index, sequence, &storeargs);
 
     /* format the MODIFIED response code */
     if (storeargs.modified) {
@@ -4741,7 +4741,7 @@ notflagsdammit:
     }
 
  freeflags:
-    strarray_fini(&flags);
+    strarray_fini(&storeargs.flags);
     freeentryatts(storeargs.entryatts);
     seqset_free(storeargs.modified);
     free(modified);

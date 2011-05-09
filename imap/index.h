@@ -199,8 +199,7 @@ extern int index_fetch(struct index_state *state,
 		       int* fetchedsomething);
 extern int index_store(struct index_state *state,
 		       char *sequence,
-		       struct storeargs *storeargs,
-		       const strarray_t *flags);
+		       struct storeargs *storeargs);
 extern int index_sort(struct index_state *state, struct sortcrit *sortcrit,
 		      struct searchargs *searchargs, int usinguid);
 extern int index_thread(struct index_state *state, int algorithm,
