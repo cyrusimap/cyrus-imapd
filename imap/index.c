@@ -92,6 +92,8 @@ static int index_lock(struct index_state *state);
 static void index_unlock(struct index_state *state);
 // extern struct namespace imapd_namespace;
 
+static void index_checkflags(struct index_state *state, int dirty);
+
 int index_writeseen(struct index_state *state);
 void index_fetchmsg(struct index_state *state,
 		    const char *msg_base, unsigned long msg_size,
@@ -141,8 +143,8 @@ static int index_storeflag(struct index_state *state, uint32_t msgno,
 			   struct storeargs *storeargs);
 static int index_fetchreply(struct index_state *state, uint32_t msgno,
 			    const struct fetchargs *fetchargs);
-static void index_printflags(struct index_state *state, uint32_t msgno, int usinguid);
-static void index_checkflags(struct index_state *state, int dirty);
+static void index_printflags(struct index_state *state, uint32_t msgno,
+			     int usinguid, int printmodseq);
 static char *get_localpart_addr(const char *header);
 static char *get_displayname(const char *header);
 static char *index_extract_subject(const char *subj, size_t len, int *is_refwd);
@@ -620,7 +622,7 @@ void index_select(struct index_state *state, struct index_init *init)
 		continue;
 	    if (im->record.modseq <= init->vanished.modseq)
 		continue;
-	    index_printflags(state, msgno, 1);
+	    index_printflags(state, msgno, 1, 0);
 	}
 	seqset_free(seq);
     }
@@ -665,7 +667,7 @@ int index_check(struct index_state *state, int usinguid, int printuid)
     index_refresh(state);
 
     /* any updates? */
-    index_tellchanges(state, usinguid, printuid);
+    index_tellchanges(state, usinguid, printuid, 0);
 
 #if TOIMSP
     if (state->firstnotseen) {
@@ -906,7 +908,7 @@ int index_fetch(struct index_state *state,
 
     seqset_free(seq);
 
-    index_tellchanges(state, usinguid, usinguid);
+    index_tellchanges(state, usinguid, usinguid, 0);
 
     return r;
 }
@@ -960,7 +962,8 @@ int index_store(struct index_state *state, char *sequence, int usinguid,
 out:
     seqset_free(seq);
     index_unlock(state);
-    index_tellchanges(state, usinguid, usinguid);
+    index_tellchanges(state, usinguid, usinguid,
+		      (storeargs->unchangedsince != ~0ULL));
 
     return r;
 }
@@ -2326,7 +2329,7 @@ static void index_tellexists(struct index_state *state)
 }
 
 void index_tellchanges(struct index_state *state, int canexpunge,
-		       int printuid)
+		       int printuid, int printmodseq)
 {
     uint32_t msgno;
     struct index_map *im;
@@ -2347,7 +2350,7 @@ void index_tellchanges(struct index_state *state, int canexpunge,
 
 	/* report if it's changed since last told */
 	if (im->record.modseq > im->told_modseq)
-	    index_printflags(state, msgno, printuid);
+	    index_printflags(state, msgno, printuid, printmodseq);
     }
 }
 /*
@@ -2404,7 +2407,8 @@ static void index_fetchflags(struct index_state *state,
 }
 
 static void index_printflags(struct index_state *state,
-			     uint32_t msgno, int usinguid)
+			     uint32_t msgno, int usinguid,
+			     int printmodseq)
 {
     struct index_map *im = &state->map[msgno-1];
 
@@ -2414,7 +2418,7 @@ static void index_printflags(struct index_state *state,
      * untagged FETCH unsolicited responses */
     if (usinguid || state->qresync)
 	prot_printf(state->out, " UID %u", im->record.uid);
-    if (state->qresync)
+    if (printmodseq || state->qresync)
 	prot_printf(state->out, " MODSEQ (" MODSEQ_FMT ")", im->record.modseq);
     prot_printf(state->out, ")\r\n");
 }

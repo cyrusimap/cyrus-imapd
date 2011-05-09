@@ -5024,7 +5024,7 @@ void cmd_expunge(char *tag, char *sequence)
 
     if (!r) r = index_expunge(imapd_index, sequence);
     /* tell expunges */
-    if (!r) index_tellchanges(imapd_index, 1, sequence ? 1 : 0);
+    if (!r) index_tellchanges(imapd_index, 1, sequence ? 1 : 0, 0);
     
     if (r) {
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
