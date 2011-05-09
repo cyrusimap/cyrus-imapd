@@ -140,6 +140,8 @@ struct storeargs {
     /* private to index_storeflag() */
     unsigned last_msgno;
     unsigned last_found;
+    /* returned to caller */
+    struct seqset *modified;
 };
 
 /* values for operation */
