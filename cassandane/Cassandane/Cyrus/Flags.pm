@@ -577,6 +577,18 @@ sub get_modseq
     return 0 + $msl->[0];
 }
 
+# Get the modseq from a FETCH response
+sub get_modseq_from_fetch
+{
+    my ($fetched, $i) = @_;
+
+    my $msl = $fetched->{$i}->{modseq};
+    return undef unless defined $msl;
+    return undef unless ref $msl eq 'ARRAY';
+    return undef unless scalar @$msl == 1;
+    return 0 + $msl->[0];
+}
+
 # Get the highestmodseq of the folder
 sub get_highestmodseq
 {
@@ -605,8 +617,6 @@ sub get_highestmodseq
 # TODO: test that changing a flag results in an untagged
 #       FETCH response.
 # TODO: test the .SILENT suffix
-# TODO: test the UNCHANGEDSINCE modifier
-# TODO: test the MODIFIED response code
 #
 sub test_modseq
 {
@@ -680,6 +690,329 @@ sub test_modseq
     $self->assert(get_modseq($act4, 'B') == get_modseq($act3, 'B'));
     $self->assert($hms4 == $hms3);
     $self->assert(get_modseq($act4, 'A') == $hms4);
+}
+
+#
+# Test UNCHANGEDSINCE modifier; RFC4551 section 3.2.
+# - changing a flag with current modseq equal to the
+#   UNCHANGEDSINCE value
+#	- updates the flag
+#	- updates modseq
+#	- sends an untagged FETCH response
+#	- the FETCH response has the new modseq
+#	- returns an OK response
+#	- the UID does not appear in the MODIFIED response code
+# - ditto less than
+# - changing a flag with current modseq greater than the
+#   UNCHANGEDSINCE value
+#	- doesn't update the flag
+#	- doesn't update modseq
+#	- sent no FETCH untagged response
+#	- returns an OK response
+#	- but reports the UID in the MODIFIED response code
+#
+sub test_unchangedsince
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+    $self->{store}->_select();
+    $self->assert_num_equals(1, $talk->uid());
+    $self->{store}->set_fetch_attributes(qw(uid flags modseq));
+
+    xlog "Add two messages";
+    my %msg;
+    $msg{A} = $self->make_message('Message A');
+    $msg{A}->set_attributes(id => 1,
+			    uid => 1,
+			    flags => []);
+    $msg{B} = $self->make_message('Message B');
+    $msg{B}->set_attributes(id => 2,
+			    uid => 2,
+			    flags => []);
+    my $act0 = $self->check_messages(expected => \%msg,
+				     check => [qw(id uid flags)]);
+
+    my %fetched;
+    my $modified;
+    my %handlers =
+    (
+	fetch => sub
+	{
+	    my ($response, $rr, $id) = @_;
+
+	    # older versions of Mail::IMAPTalk don't have
+	    # the 3rd argument.  We can't test properly in
+	    # those circumstances.
+	    $self->assert_not_null($id);
+
+	    $fetched{$id} = $rr;
+	},
+	modified => sub
+	{
+	    my ($response, $rr) = @_;
+	    # we should not get more than one of these ever
+	    $self->assert_null($modified);
+	    $modified = $rr;
+	}
+    );
+
+    # Note: Mail::IMAPTalk::store() doesn't support modifiers
+    # so we have to resort to the lower level interface.
+
+    xlog "Changing a flag with current modseq == UNCHANGEDSINCE";
+    %fetched = ();
+    $modified = undef;
+    $talk->_imap_cmd('store', 1, \%handlers,
+		 '1', ['unchangedsince', get_modseq($act0, 'A')],
+		  '+flags', ['\\Flagged']);
+    my $res1 = $talk->get_last_completion_response();
+    #	- updates the flag
+    $msg{A}->set_attribute(flags => ['\\Flagged']);
+    my $act1 = $self->check_messages(expected => \%msg,
+				     check => [qw(id uid flags)]);
+    xlog "returns an OK response?";
+    $self->assert_str_equals('ok', $res1);
+    xlog "updated modseq?";
+    $self->assert(get_modseq($act1, 'A') > get_modseq($act0, 'A'));
+    xlog "returned no MODIFIED response code?";
+    $self->assert_null($modified);
+    xlog "sent an untagged FETCH response?";
+    $self->assert_num_equals(1, scalar keys %fetched);
+    $self->assert_not_null($fetched{1});
+    xlog "the FETCH response has the new modseq?";
+    $self->assert_num_equals(get_modseq($act1, 'A'),
+			     get_modseq_from_fetch(\%fetched, 1));
+
+    xlog "Changing a flag with current modseq < UNCHANGEDSINCE";
+    %fetched = ();
+    $modified = undef;
+    $talk->_imap_cmd('store', 1, \%handlers,
+		 '1', ['unchangedsince', get_modseq($act1, 'A')+1],
+		  '-flags', ['\\Flagged']);
+    my $res2 = $talk->get_last_completion_response();
+    #	- updates the flag
+    $msg{A}->set_attribute(flags => []);
+    my $act2 = $self->check_messages(expected => \%msg,
+				     check => [qw(id uid flags)]);
+    xlog "returns an OK response?";
+    $self->assert_str_equals('ok', $res2);
+    xlog "updated modseq?";
+    $self->assert(get_modseq($act2, 'A') > get_modseq($act0, 'A'));
+    xlog "returned no MODIFIED response code?";
+    $self->assert_null($modified);
+    xlog "sent an untagged FETCH response?";
+    $self->assert_num_equals(1, scalar keys %fetched);
+    $self->assert_not_null($fetched{1});
+    xlog "the FETCH response has the new modseq?";
+    $self->assert_num_equals(get_modseq($act2, 'A'),
+			     get_modseq_from_fetch(\%fetched, 1));
+
+    xlog "Changing a flag with current modseq > UNCHANGEDSINCE";
+    %fetched = ();
+    $modified = undef;
+    $talk->_imap_cmd('store', 1, \%handlers,
+		 '1', ['unchangedsince', get_modseq($act2, 'A')-1],
+		  '+flags', ['\\Flagged']);
+    my $res3 = $talk->get_last_completion_response();
+    #	- doesn't update the flag
+    $msg{A}->set_attribute(flags => []);
+    my $act3 = $self->check_messages(expected => \%msg,
+				     check => [qw(id uid flags)]);
+    xlog "returns an OK response?";
+    $self->assert_str_equals('ok', $res3);
+    xlog "didn't update modseq?";
+    $self->assert_num_equals(get_modseq($act3, 'A'), get_modseq($act2, 'A'));
+    xlog "reports the UID in the MODIFIED response code?";
+    $self->assert_not_null($modified);
+    $self->assert_deep_equals($modified, [1]);
+    xlog "sent no FETCH untagged response?";
+    $self->assert_num_equals(0, scalar keys %fetched);
+}
+
+#
+# More tests for UNCHANGEDSINCE, RFC4551 section 3.2.
+#
+# - success/failure is per-message, i.e. the update can
+#   fail on one message and succeed on another.
+# - example 11: STORE UNCHANGEDSINCE +FLAGS \Seen on a set
+#   of messages where some are expunged and some have been
+#   modified since: response is NO because of the expunged
+#   messages, with a MODIFIED response code.
+#
+#
+#
+# TODO: Once the client specified the UNCHANGEDSINCE modifier in a STORE
+# command, the server MUST include the MODSEQ fetch response data items
+# in all subsequent unsolicited FETCH responses.  Once the client
+# specified the UNCHANGEDSINCE modifier in a STORE command, the server
+# MUST include the MODSEQ fetch response data items in all subsequent
+# unsolicited FETCH responses.
+#
+# TODO the untagged FETCH response is returned even when
+#   .SILENT is used
+#
+sub test_unchangedsince_multi
+{
+    my ($self) = @_;
+
+    my $talk = $self->{store}->get_client();
+    $self->{store}->_select();
+    $self->assert_num_equals(1, $talk->uid());
+    $self->{store}->set_fetch_attributes(qw(uid flags modseq));
+
+    xlog "Add some messages";
+    my %msg;
+    for (my $i = 1 ; $i <= 26 ; $i++)
+    {
+	my $letter = chr(64 + $i);  # A ... Z
+	$msg{$letter} = $self->make_message('Message ' . $letter);
+	$msg{$letter}->set_attributes(id => $i,
+				      uid => $i,
+				      flags => []);
+    }
+
+    xlog "Bump the modseq on M,N,O";
+    $talk->store('13,14,15', '+flags', '(\\Draft)');
+    $msg{M}->set_attribute(flags => ['\\Draft']);
+    $msg{N}->set_attribute(flags => ['\\Draft']);
+    $msg{O}->set_attribute(flags => ['\\Draft']);
+
+    my $act0 = $self->check_messages(expected => \%msg,
+				     check => [qw(id uid flags)]);
+
+    {
+	my $store2 = $self->{instance}->get_service('imap')->create_store();
+	$store2->_connect();
+	$store2->_select();
+	my $talk2 = $store2->get_client();
+	xlog "Delete and expunge D,E,F from another session";
+	for (my $i = 4 ; $i <= 6 ; $i++)
+	{
+	    my $letter = chr(64 + $i);  # D, E, F
+	    $talk2->store($i, '+flags', '(\\Deleted)');
+	    delete $msg{$letter};
+	}
+	$talk2->expunge();
+	$store2->disconnect();
+    }
+
+
+    my %fetched;
+    my $modified;
+    my %handlers =
+    (
+	fetch => sub
+	{
+	    my ($response, $rr, $id) = @_;
+
+	    # older versions of Mail::IMAPTalk don't have
+	    # the 3rd argument.  We can't test properly in
+	    # those circumstances.
+	    $self->assert_not_null($id);
+
+	    $fetched{$id} = $rr;
+	},
+	modified => sub
+	{
+	    my ($response, $rr) = @_;
+	    # we should not get more than one of these ever
+	    $self->assert_null($modified);
+	    $modified = $rr;
+	}
+    );
+
+    # Note: Mail::IMAPTalk::store() doesn't support modifiers
+    # so we have to resort to the lower level interface.
+
+    xlog "Changing a flag on multiple messages";
+    %fetched = ();
+    $modified = undef;
+    $talk->_imap_cmd('store', 1, \%handlers,
+		 \'1:*', ['unchangedsince', get_modseq($act0, 'Z')],
+		  '+flags', ['\\Flagged']);
+    my $res1 = $talk->get_last_completion_response();
+
+    $msg{A}->set_attribute(flags => ['\\Flagged']);
+    $msg{B}->set_attribute(flags => ['\\Flagged']);
+    $msg{C}->set_attribute(flags => ['\\Flagged']);
+    # D,E,F deleted
+    $msg{G}->set_attribute(flags => ['\\Flagged']);
+    $msg{H}->set_attribute(flags => ['\\Flagged']);
+    $msg{I}->set_attribute(flags => ['\\Flagged']);
+    $msg{J}->set_attribute(flags => ['\\Flagged']);
+    $msg{K}->set_attribute(flags => ['\\Flagged']);
+    $msg{L}->set_attribute(flags => ['\\Flagged']);
+    # M,N,O should fail the conditional store
+    $msg{M}->set_attribute(flags => ['\\Draft']);
+    $msg{N}->set_attribute(flags => ['\\Draft']);
+    $msg{O}->set_attribute(flags => ['\\Draft']);
+    $msg{P}->set_attribute(flags => ['\\Flagged']);
+    $msg{Q}->set_attribute(flags => ['\\Flagged']);
+    $msg{R}->set_attribute(flags => ['\\Flagged']);
+    $msg{S}->set_attribute(flags => ['\\Flagged']);
+    $msg{T}->set_attribute(flags => ['\\Flagged']);
+    $msg{U}->set_attribute(flags => ['\\Flagged']);
+    $msg{V}->set_attribute(flags => ['\\Flagged']);
+    $msg{W}->set_attribute(flags => ['\\Flagged']);
+    $msg{X}->set_attribute(flags => ['\\Flagged']);
+    $msg{Y}->set_attribute(flags => ['\\Flagged']);
+    $msg{Z}->set_attribute(flags => ['\\Flagged']);
+    # We start a new session in check_messages, so we
+    # have to renumber here to account for deletion
+    for (my $i = 7 ; $i <= 26 ; $i++)
+    {
+	my $letter = chr(64 + $i);  # G ... Z
+	$msg{$letter}->set_attribute(id => $i-3);
+    }
+    my $act1 = $self->check_messages(expected => \%msg,
+				     check => [qw(id uid flags)]);
+
+# TODO: this fails with current Cyrus code
+#     xlog "returns a NO response?";
+#     $self->assert_str_equals('NO', $res1);
+
+    xlog "updated modseq?";
+    $self->assert(get_modseq($act1, 'A') > get_modseq($act0, 'A'));
+    $self->assert(get_modseq($act1, 'B') > get_modseq($act0, 'B'));
+    $self->assert(get_modseq($act1, 'C') > get_modseq($act0, 'C'));
+    # D,E,F deleted
+    $self->assert(get_modseq($act1, 'G') > get_modseq($act0, 'G'));
+    $self->assert(get_modseq($act1, 'H') > get_modseq($act0, 'H'));
+    $self->assert(get_modseq($act1, 'I') > get_modseq($act0, 'I'));
+    $self->assert(get_modseq($act1, 'J') > get_modseq($act0, 'J'));
+    $self->assert(get_modseq($act1, 'K') > get_modseq($act0, 'K'));
+    $self->assert(get_modseq($act1, 'L') > get_modseq($act0, 'L'));
+    # M,N,O have the same modseq
+    $self->assert(get_modseq($act1, 'M') == get_modseq($act0, 'M'));
+    $self->assert(get_modseq($act1, 'N') == get_modseq($act0, 'N'));
+    $self->assert(get_modseq($act1, 'O') == get_modseq($act0, 'O'));
+    $self->assert(get_modseq($act1, 'P') > get_modseq($act0, 'P'));
+    $self->assert(get_modseq($act1, 'Q') > get_modseq($act0, 'Q'));
+    $self->assert(get_modseq($act1, 'R') > get_modseq($act0, 'R'));
+    $self->assert(get_modseq($act1, 'S') > get_modseq($act0, 'S'));
+    $self->assert(get_modseq($act1, 'T') > get_modseq($act0, 'T'));
+    $self->assert(get_modseq($act1, 'U') > get_modseq($act0, 'U'));
+    $self->assert(get_modseq($act1, 'V') > get_modseq($act0, 'V'));
+    $self->assert(get_modseq($act1, 'W') > get_modseq($act0, 'W'));
+    $self->assert(get_modseq($act1, 'X') > get_modseq($act0, 'X'));
+    $self->assert(get_modseq($act1, 'Y') > get_modseq($act0, 'Y'));
+    $self->assert(get_modseq($act1, 'Z') > get_modseq($act0, 'Z'));
+
+    xlog "returned MODIFIED response code?";
+    $self->assert_not_null($modified);
+    $self->assert_deep_equals($modified, ['13:15']);
+
+    xlog "sent untagged FETCH responses with the new modseq?";
+    $self->assert_num_equals(20, scalar keys %fetched);
+    foreach my $i (1..3, 7..12, 16..26)
+    {
+	my $letter = chr(64 + $i);
+	$self->assert_not_null($fetched{$i});
+	$self->assert_num_equals(get_modseq($act1, $letter),
+				 get_modseq_from_fetch(\%fetched, $i));
+    }
+
 }
 
 1;
