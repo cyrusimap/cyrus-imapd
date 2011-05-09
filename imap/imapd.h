@@ -136,6 +136,7 @@ enum {
 /* Arguments to Store functions */
 struct storeargs {
     int operation;
+    int usinguid;
     modseq_t unchangedsince; /* unchanged since modseq, or ULLONG_MAX */
     int silent;
     int seen;
@@ -153,7 +154,6 @@ struct storeargs {
     /* private to index.c */
     bit32 user_flags[MAX_USER_FLAGS/32];
     time_t update_time;
-    int usinguid;
     /* private to index_storeflag() */
     unsigned last_msgno;
     unsigned last_found;

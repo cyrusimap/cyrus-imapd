@@ -199,7 +199,6 @@ extern int index_fetch(struct index_state *state,
 		       int* fetchedsomething);
 extern int index_store(struct index_state *state,
 		       char *sequence,
-		       int usinguid,
 		       struct storeargs *storeargs,
 		       const strarray_t *flags);
 extern int index_sort(struct index_state *state, struct sortcrit *sortcrit,

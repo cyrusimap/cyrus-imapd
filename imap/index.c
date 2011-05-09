@@ -925,7 +925,7 @@ int index_fetch(struct index_state *state,
 /*
  * Perform a STORE command on a sequence
  */
-int index_store(struct index_state *state, char *sequence, int usinguid,
+int index_store(struct index_state *state, char *sequence,
 		struct storeargs *storeargs, const strarray_t *flags)
 {
     struct mailbox *mailbox = state->mailbox;
@@ -948,7 +948,7 @@ int index_store(struct index_state *state, char *sequence, int usinguid,
     r = index_lock(state);
     if (r) return r;
 
-    seq = _parse_sequence(state, sequence, usinguid);
+    seq = _parse_sequence(state, sequence, storeargs->usinguid);
 
     for (i = 0; i < flags->count ; i++) {
 	r = mailbox_user_flag(mailbox, flags->data[i], &userflag, 1);
@@ -957,7 +957,6 @@ int index_store(struct index_state *state, char *sequence, int usinguid,
     }
 
     storeargs->update_time = time((time_t *)0);
-    storeargs->usinguid = usinguid;
 
     if (storeargs->operation == STORE_ANNOTATION) {
 	r = annotatemore_begin();
@@ -966,7 +965,7 @@ int index_store(struct index_state *state, char *sequence, int usinguid,
 
     for (msgno = 1; msgno <= state->exists; msgno++) {
 	im = &state->map[msgno-1];
-	checkval = usinguid ? im->record.uid : msgno;
+	checkval = storeargs->usinguid ? im->record.uid : msgno;
 	if (!seqset_ismember(seq, checkval))
 	    continue;
 
@@ -1010,7 +1009,7 @@ out:
 	annotatemore_commit();
     seqset_free(seq);
     index_unlock(state);
-    index_tellchanges(state, usinguid, usinguid,
+    index_tellchanges(state, storeargs->usinguid, storeargs->usinguid,
 		      (storeargs->unchangedsince != ~0ULL));
 
     return r;
