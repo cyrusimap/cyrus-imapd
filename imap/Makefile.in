@@ -130,7 +130,7 @@ pure: imapd.pure lmtpd.pure mupdate.pure
 
 
 install:
-	$(srcdir)/../install-sh -d ${DESTDIR}$(service_path)
+	$(INSTALL) -d ${DESTDIR}$(service_path)
 	for file in $(PROGS); \
 	do \
 		$(INSTALL) -m 755 $$file $(DESTDIR)$(service_path) || exit 1; \

@@ -111,7 +111,7 @@ all: $(BUILTSOURCES) libcyrus_min.a libcyrus.a
 check:
 
 install:
-	$(srcdir)/../install-sh -d $(DESTDIR)$(libdir)
+	$(INSTALL) -d $(DESTDIR)$(libdir)
 	$(INSTALL) -m 644 libcyrus.a $(DESTDIR)$(libdir)
 	$(INSTALL) -m 644 libcyrus_min.a $(DESTDIR)$(libdir)
 	 $(RANLIB) $(DESTDIR)$(libdir)/libcyrus.a

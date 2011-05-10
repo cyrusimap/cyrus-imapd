@@ -47,7 +47,6 @@ top_srcdir = @top_srcdir@
 VPATH = @srcdir@
 
 CC = @CC@
-INSTALL = @INSTALL@
 RANLIB = @RANLIB@
 AWK = @AWK@
 

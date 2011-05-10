@@ -143,13 +143,13 @@ valgrind:
 	$(MAKE) VG=yes check
 
 install::
-	$(srcdir)/install-sh -d ${DESTDIR}$(exec_prefix)/bin
-	$(srcdir)/install-sh -d ${DESTDIR}$(exec_prefix)/lib
-	$(srcdir)/install-sh -d ${DESTDIR}$(prefix)/include/cyrus
-	$(srcdir)/install-sh -d ${DESTDIR}$(mandir)/man1
-	$(srcdir)/install-sh -d ${DESTDIR}$(mandir)/man3
-	$(srcdir)/install-sh -d ${DESTDIR}$(mandir)/man5
-	$(srcdir)/install-sh -d ${DESTDIR}$(mandir)/man8
+	$(INSTALL) -d ${DESTDIR}$(exec_prefix)/bin
+	$(INSTALL) -d ${DESTDIR}$(exec_prefix)/lib
+	$(INSTALL) -d ${DESTDIR}$(prefix)/include/cyrus
+	$(INSTALL) -d ${DESTDIR}$(mandir)/man1
+	$(INSTALL) -d ${DESTDIR}$(mandir)/man3
+	$(INSTALL) -d ${DESTDIR}$(mandir)/man5
+	$(INSTALL) -d ${DESTDIR}$(mandir)/man8
 	@for d in  $(SUBDIRS); \
 	do \
 		(cd $$d; echo "### Making" install "in" `pwd`;	\
