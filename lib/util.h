@@ -51,7 +51,7 @@
 #include <config.h>
 #include <sys/types.h>
 #include <limits.h>
-#include <unistd.h>
+#include <stdarg.h>
 
 #define BIT32_MAX 4294967295U
 
@@ -194,5 +194,16 @@ void buf_free(struct buf *buf);
 #else
 #define cyrus_getpass getpass
 #endif
+
+/*
+ * Given a list of strings, terminated by (char *)NULL,
+ * return a newly allocated string containing the
+ * concatention of all the argument strings.  The
+ * caller must free the returned string using free().
+ *
+ * This API idea based on glib's g_strconcat() which
+ * is really quite amazingly convenient.
+ */
+char *strconcat(const char *s1, ...);
 
 #endif /* INCLUDED_UTIL_H */
