@@ -63,6 +63,10 @@ int yyerror(char *msg);
 extern int yylex(void);
 
 #define YYERROR_VERBOSE /* i want better error messages! */
+
+/* byacc default is 500, bison default is 10000 - go with the
+   larger to support big sieve scripts (see Bug #3461) */
+#define YYSTACKSIZE 10000 
 %}
 
 %token ATOM QTEXT DTEXT
