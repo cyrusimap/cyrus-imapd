@@ -110,8 +110,7 @@ $instance->add_service('imap');
 
 if ($start_flag)
 {
-    $instance->start()
-	or die "Cannot start instance";
+    $instance->start();
     $instance->describe();
 }
 else
