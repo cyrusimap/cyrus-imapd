@@ -86,13 +86,16 @@ sub set_up
 {
     my ($self) = @_;
 
+    # Use INBOX because we know it exists at both ends.
+    my %params = ( folder => 'INBOX' );
+
     $self->{master}->start();
     $self->{master_store} =
-	$self->{master}->get_service('imap')->create_store();
+	$self->{master}->get_service('imap')->create_store(%params);
 
     $self->{replica}->start();
     $self->{replica_store} =
-	$self->{replica}->get_service('imap')->create_store();
+	$self->{replica}->get_service('imap')->create_store(%params);
 
     $self->{expected} = {};
 }
@@ -164,17 +167,27 @@ sub run_replication
 {
     my ($self) = @_;
 
+    # Disconnect during replication to ensure no imapd
+    # is locking the mailbox, which gives us a spurious
+    # error which is ignored in real world scenarios.
+    $self->{master_store}->disconnect();
+    $self->{replica_store}->disconnect();
+
     my $params =
 	$self->{replica}->get_service('sync')->store_params();
 
     # TODO: need a timeout!!
 
-    my $code = $self->{master}->run_utility('sync_client',
+    $self->{master}->run_utility('sync_client',
 	'-v',			# verbose
 	'-S', $params->{host},	# hostname to connect to
 	'-u', 'cassandane',	# replicate the Cassandane user
 	);
-    $self->assert($code == 0);
+
+    $self->{master_store}->_connect();
+    $self->{master_store}->_select();
+    $self->{replica_store}->_connect();
+    $self->{replica_store}->_select();
 }
 
 #
@@ -183,10 +196,6 @@ sub run_replication
 sub test_append
 {
     my ($self) = @_;
-
-    # Use INBOX because we know it exists at both ends.
-    $self->{master_store}->set_folder('INBOX');
-    $self->{replica_store}->set_folder('INBOX');
 
     xlog "generating messages A..D";
     my $expected;
