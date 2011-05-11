@@ -216,7 +216,6 @@ int index_open(const char *name, struct index_init *init,
 
     if (init) {
 	if (init->examine_mode) {
-	    state->myrights &= ~ACL_READ_WRITE;
 	    r = mailbox_open_irl(name, &state->mailbox);
 	    if (r) goto fail;
 	} else {
@@ -225,6 +224,8 @@ int index_open(const char *name, struct index_init *init,
 	}
 	state->myrights = cyrus_acl_myrights(init->authstate,
 					     state->mailbox->acl);
+	if (init->examine_mode)
+	    state->myrights &= ~ACL_READ_WRITE;
 
 	state->authstate = init->authstate;
 	state->userid = init->userid ? xstrdup(init->userid) : NULL;
