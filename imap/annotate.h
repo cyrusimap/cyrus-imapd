@@ -143,6 +143,8 @@ int annotatemore_write_entry(const char *mboxname, const char *entry,
 			     const char *value, const char *contenttype,
 			     size_t size, time_t modifiedsince,
 			     struct txn **tid);
+int annotatemore_commit(struct txn *tid);
+int annotatemore_abort(struct txn *tid);
 
 /* rename the annotations for 'oldmboxname' to 'newmboxname'
  * if 'olduserid' is non-NULL then the private annotations

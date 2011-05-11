@@ -1428,6 +1428,14 @@ int annotatemore_write_entry(const char *mboxname, const char *entry,
     return write_entry(mboxname, entry, userid, &theentry, tid);
 }
 
+int annotatemore_commit(struct txn *tid) {
+    return tid ? DB->commit(anndb, tid) : 0;
+}
+
+int annotatemore_abort(struct txn *tid) {
+    return tid ? DB->abort(anndb, tid) : 0;
+}
+
 struct storedata {
     struct namespace *namespace;
     const char *userid;
