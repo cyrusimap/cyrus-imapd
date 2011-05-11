@@ -958,6 +958,11 @@ int index_store(struct index_state *state, char *sequence, int usinguid,
     storeargs->update_time = time((time_t *)0);
     storeargs->usinguid = usinguid;
 
+    if (storeargs->operation == STORE_ANNOTATION) {
+	r = annotatemore_begin();
+	if (r) goto out;
+    }
+
     for (msgno = 1; msgno <= state->exists; msgno++) {
 	im = &state->map[msgno-1];
 	checkval = usinguid ? im->record.uid : msgno;
@@ -1000,6 +1005,8 @@ int index_store(struct index_state *state, char *sequence, int usinguid,
     }
 
 out:
+    if (storeargs->operation == STORE_ANNOTATION && !r)
+	annotatemore_commit();
     seqset_free(seq);
     index_unlock(state);
     index_tellchanges(state, usinguid, usinguid,

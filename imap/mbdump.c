@@ -597,7 +597,7 @@ int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid_start,
 	actx.tag = tag;
 	actx.pout = pout;
 	annotatemore_findall(mailbox->name, 0, "*", dump_annotations,
-			     (void *) &actx, NULL);
+			     (void *) &actx);
     }
 
     /* Dump user files if this is an inbox */
@@ -838,6 +838,9 @@ int undump_mailbox(const char *mbname,
     /* track quota use */
     old_quota_used = mailbox->i.quota_mailbox_used;
 
+    r = annotatemore_begin();
+    if (r) goto done;
+
     while(1) {
 	char fnamebuf[MAX_MAILBOX_PATH + 1024];
 	int isnowait, sawdigit;
@@ -907,7 +910,7 @@ int undump_mailbox(const char *mbname,
 	    }
 
 	    annotatemore_write_entry(mbname, annotation, tmpuserid,
-				     &content, NULL);
+				     &content);
     
 	    free(tmpuserid);
 	    free(annotation);
@@ -1115,6 +1118,9 @@ int undump_mailbox(const char *mbname,
     eatline(pin, c);
     buf_free(&file);
     buf_free(&data);
+
+    if (!r)
+	annotatemore_commit();
 
     if (curfile >= 0) close(curfile);
     /* we fiddled the files under the hood, so we can't do anything

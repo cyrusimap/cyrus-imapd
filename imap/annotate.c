@@ -141,8 +141,10 @@ struct annotate_entrydesc
 
 #define DB config_annotation_db
 
-struct db *anndb;
+static struct db *anndb;
 static int annotate_dbopen = 0;
+static struct txn *anntxn = NULL;
+static struct txn **tid;
 int (*proxy_fetch_func)(const char *server, const char *mbox_pat,
 			const strarray_t *entry_pat,
 			const strarray_t *attribute_pat) = NULL;
@@ -154,8 +156,7 @@ static ptrarray_t server_entries = PTRARRAY_INITIALIZER;
 
 static void init_annotation_definitions(void);
 static int _annotate_find(const annotate_cursor_t *cursor, const char *entry,
-			  annotatemore_find_proc_t proc, void *rock,
-			  struct txn **tid);
+			  annotatemore_find_proc_t proc, void *rock);
 static int annotation_set_tofile(const annotate_cursor_t *cursor
 				    __attribute__((unused)),
 				 struct annotate_st_entry_list *entry,
@@ -423,6 +424,56 @@ void annotatemore_close(void)
     }
 }
 
+int annotatemore_begin(void)
+{
+    if (!annotate_dbopen)
+	return IMAP_INTERNAL;
+    if (tid && anntxn) {
+	/* abort dangling transaction */
+	DB->abort(anndb, anntxn);
+    }
+    anntxn = NULL;
+    tid = &anntxn;
+    return 0;
+}
+
+void annotatemore_abort(void)
+{
+    if (annotate_dbopen && anntxn)
+	DB->abort(anndb, anntxn);
+    tid = NULL;
+    anntxn = NULL;
+}
+
+int annotatemore_commit(void)
+{
+    int r = 0;
+
+    if (!annotate_dbopen) {
+	/* db not open */
+	r = IMAP_INTERNAL;
+	goto out;
+    }
+
+    if (!tid) {
+	/* transaction not begun */
+	r = IMAP_INTERNAL;
+	goto out;
+    }
+
+    if (!anntxn) {
+	/* no changes: not an error */
+	goto out;
+    }
+
+    r = DB->commit(anndb, anntxn);
+
+out:
+    tid = NULL;
+    anntxn = NULL;
+    return r;
+}
+
 void annotatemore_done(void)
 {
     /* DB->done() handled by cyrus_done() */
@@ -623,19 +674,17 @@ static void annotate_cursor_setup(annotate_cursor_t *cursor,
 }
 
 int annotatemore_findall(const char *mailbox, uint32_t uid, const char *entry,
-			 annotatemore_find_proc_t proc, void *rock,
-			 struct txn **tid)
+			 annotatemore_find_proc_t proc, void *rock)
 {
     annotate_cursor_t cursor;
     annotate_cursor_setup(&cursor, mailbox, uid);
-    return _annotate_find(&cursor, entry, proc, rock, tid);
+    return _annotate_find(&cursor, entry, proc, rock);
 }
 
 static int _annotate_find(const annotate_cursor_t *cursor,
 			  const char *entry,
 			  annotatemore_find_proc_t proc,
-			  void *rock,
-			  struct txn **tid)
+			  void *rock)
 {
     char key[MAX_MAILBOX_PATH+1], *p;
     int keylen, r;
@@ -1139,7 +1188,7 @@ static void annotation_get_fromdb(const annotate_cursor_t *cursor,
     rw_rock.fdata = fdata;
     fdata->found = 0;
 
-    _annotate_find(cursor, entrypat, &rw_cb, &rw_rock, NULL);
+    _annotate_find(cursor, entrypat, &rw_cb, &rw_rock);
 
     if (fdata->found != fdata->attribs &&
 	(!strchr(entrypat, '%') && !strchr(entrypat, '*'))) {
@@ -1849,7 +1898,7 @@ int annotatemore_msg_lookup(const char *mboxname, uint32_t uid, const char *entr
     keylen = make_key(mboxname, uid, entry, userid, key, sizeof(key));
 
     do {
-	r = DB->fetch(anndb, key, keylen, &data, &datalen, NULL);
+	r = DB->fetch(anndb, key, keylen, &data, &datalen, tid);
     } while (r == CYRUSDB_AGAIN);
 
     if (!r && data) {
@@ -1864,11 +1913,14 @@ static int write_entry(const char *mboxname,
 		       unsigned int uid,
 		       const char *entry,
 		       const char *userid,
-		       const struct buf *value,
-		       struct txn **tid)
+		       const struct buf *value)
 {
     char key[MAX_MAILBOX_PATH+1];
     int keylen, r;
+
+    /* must be in a transaction to modify the db */
+    if (!tid)
+	return IMAP_INTERNAL;
 
     keylen = make_key(mboxname, uid, entry, userid, key, sizeof(key));
 
@@ -1921,18 +1973,9 @@ static int write_entry(const char *mboxname,
 
 int annotatemore_write_entry(const char *mboxname, const char *entry,
 			     const char *userid,
-			     const struct buf *value,
-			     struct txn **tid)
+			     const struct buf *value)
 {
-    return write_entry(mboxname, 0, entry, userid, value, tid);
-}
-
-int annotatemore_commit(struct txn *tid) {
-    return tid ? DB->commit(anndb, tid) : 0;
-}
-
-int annotatemore_abort(struct txn *tid) {
-    return tid ? DB->abort(anndb, tid) : 0;
+    return write_entry(mboxname, 0, entry, userid, value);
 }
 
 struct storedata {
@@ -1944,9 +1987,6 @@ struct storedata {
 
     /* number of mailboxes matching the pattern */
     unsigned count;
-
-    /* for backends only */
-    struct txn *tid;
 
     /* for proxies only */
     struct hash_table server_table;
@@ -2217,11 +2257,11 @@ static int annotation_set_todb(const annotate_cursor_t *cursor,
     if (entry->have_shared)
 	r = write_entry(cursor->int_mboxname, cursor->uid,
 			entry->entry->name, "",
-			&(entry->shared), &(sdata->tid));
+			&entry->shared);
     if (!r && entry->have_priv)
 	r = write_entry(cursor->int_mboxname, cursor->uid,
 			entry->entry->name, sdata->userid,
-			&(entry->priv), &(sdata->tid));
+			&entry->priv);
 
     return r;
 }
@@ -2557,17 +2597,8 @@ int annotatemore_store(const annotate_scope_t *scope,
 
     }
 
-
-    if (sdata.tid) {
-	if (!r) {
-	    /* commit txn */
-	    DB->commit(anndb, sdata.tid);
-	}
-	else {
-	    /* abort txn */
-	    DB->abort(anndb, sdata.tid);
-	}
-    }
+    if (r)
+	annotatemore_abort();
 
   cleanup:
     /* Free the entry list */
@@ -2588,7 +2619,6 @@ struct rename_rock {
     uint32_t olduid;
     uint32_t newuid;
     int copy;
-    struct txn *tid;
 };
 
 static int rename_cb(const char *mailbox,
@@ -2607,18 +2637,18 @@ static int rename_cb(const char *mailbox,
 	    !strcmp(rrock->olduserid, userid)) {
 	    /* renaming a user, so change the userid for priv annots */
 	    r = write_entry(rrock->newmboxname, rrock->newuid, entry, rrock->newuserid,
-			    value, &rrock->tid);
+			    value);
 	}
 	else {
 	    r = write_entry(rrock->newmboxname, rrock->newuid, entry, userid,
-			    value, &rrock->tid);
+			    value);
 	}
     }
 
     if (!rrock->copy && !r) {
 	/* delete existing entry */
 	struct buf dattrib = BUF_INITIALIZER;
-	r = write_entry(mailbox, uid, entry, userid, &dattrib, &rrock->tid);
+	r = write_entry(mailbox, uid, entry, userid, &dattrib);
     }
 
     return r;
@@ -2627,9 +2657,16 @@ static int rename_cb(const char *mailbox,
 int annotatemore_rename(const char *oldmboxname, const char *newmboxname,
 			const char *olduserid, const char *newuserid)
 {
-    return _annotate_rewrite(oldmboxname, 0, olduserid,
-			     newmboxname, 0, newuserid,
-			     /*copy*/0);
+    int r;
+
+    r = annotatemore_begin();
+    if (!r)
+	r = _annotate_rewrite(oldmboxname, 0, olduserid,
+			      newmboxname, 0, newuserid,
+			      /*copy*/0);
+    if (!r)
+	r = annotatemore_commit();
+    return r;
 }
 
 static int _annotate_rewrite(const char *oldmboxname,
@@ -2653,20 +2690,11 @@ static int _annotate_rewrite(const char *oldmboxname,
     rrock.olduid = olduid;
     rrock.newuid = newuid;
     rrock.copy = copy;
-    rrock.tid = NULL;
 
-    r = _annotate_find(&cursor, "*", &rename_cb, &rrock, &rrock.tid);
+    r = _annotate_find(&cursor, "*", &rename_cb, &rrock);
 
-    if (rrock.tid) {
-	if (!r) {
-	    /* commit txn */
-	    DB->commit(anndb, rrock.tid);
-	}
-	else {
-	    /* abort txn */
-	    DB->abort(anndb, rrock.tid);
-	}
-    }
+    if (r)
+	annotatemore_abort();
 
     return r;
 }
@@ -2674,9 +2702,16 @@ static int _annotate_rewrite(const char *oldmboxname,
 int annotatemore_delete(const char *mboxname)
 {
     /* we treat a deleteion as a rename without a new name */
-    return _annotate_rewrite(mboxname, /*olduid*/0, /*olduserid*/NULL,
+    int r;
+
+    r = annotatemore_begin();
+    if (!r)
+	r = _annotate_rewrite(mboxname, /*olduid*/0, /*olduserid*/NULL,
 			     /*newmboxname*/NULL, /*newuid*/0, /*newuserid*/NULL,
 			     /*copy*/0);
+    if (!r)
+	r = annotatemore_commit();
+    return r;
 }
 
 int annotate_msg_copy(const char *oldmboxname, uint32_t olduid,

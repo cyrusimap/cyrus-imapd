@@ -1483,7 +1483,7 @@ static int do_getannotation(struct dlist *kin)
 {
     const char *mboxname = kin->sval;
     return annotatemore_findall(mboxname, 0, "*", &getannotation_cb,
-				(void *)mboxname, NULL);
+				(void *)mboxname);
 }
 
 static void print_quota(struct quota *q)
@@ -1797,8 +1797,13 @@ static int do_annotation(struct dlist *kin)
 		   &value);
     appendentryatt(&entryatts, entry, attvalues);
     annotate_scope_init_mailbox(&scope, name);
-    r = annotatemore_store(&scope, entryatts, sync_namespacep,
-			   sync_userisadmin, userid, sync_authstate);
+
+    r = annotatemore_begin();
+    if (!r)
+	r = annotatemore_store(&scope, entryatts, sync_namespacep,
+			       sync_userisadmin, userid, sync_authstate);
+    if (!r)
+	annotatemore_commit();
 
     freeentryatts(entryatts);
     free(name);
@@ -1835,8 +1840,13 @@ static int do_unannotation(struct dlist *kin)
 		   &empty);
     appendentryatt(&entryatts, entry, attvalues);
     annotate_scope_init_mailbox(&scope, name);
-    r = annotatemore_store(&scope, entryatts, sync_namespacep,
-			   sync_userisadmin, userid, sync_authstate);
+
+    r = annotatemore_begin();
+    if (!r)
+	r = annotatemore_store(&scope, entryatts, sync_namespacep,
+			       sync_userisadmin, userid, sync_authstate);
+    if (!r)
+	annotatemore_commit();
 
     freeentryatts(entryatts);
     free(name);

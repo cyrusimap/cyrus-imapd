@@ -49,7 +49,6 @@
 #include "imapd.h"
 #include "mboxname.h"
 #include "prot.h"
-#include "cyrusdb.h"
 #include "util.h"
 #include "strarray.h"
 
@@ -153,8 +152,7 @@ typedef int (*annotatemore_find_proc_t)(const char *mailbox,
 
 /* 'proc'ess all annotations matching 'mailbox' and 'entry' */
 int annotatemore_findall(const char *mailbox, uint32_t uid, const char *entry,
-			 annotatemore_find_proc_t proc, void *rock,
-			 struct txn **tid);
+			 annotatemore_find_proc_t proc, void *rock);
 
 /* fetch annotations and output results */
 typedef void (*annotate_fetch_cb_t)(const char *mboxname,
@@ -176,34 +174,42 @@ int annotatemore_lookup(const char *mboxname, const char *entry,
 int annotatemore_msg_lookup(const char *mboxname, uint32_t uid, const char *entry,
 			    const char *userid, struct buf *value);
 
-/* store annotations */
+/* store annotations.  Requires an open transaction */
 int annotatemore_store(const annotate_scope_t *,
 		       struct entryattlist *l, struct namespace *namespace,
 		       int isadmin, const char *userid,
 		       struct auth_state *auth_state);
 
-/* low-level interface for use by mbdump routines */
+/* low-level interface for use by mbdump routines.
+ * Requires an open transaction. */
 int annotatemore_write_entry(const char *mboxname, const char *entry,
 			     const char *userid,
-			     const struct buf *value,
-			     struct txn **tid);
-int annotatemore_commit(struct txn *tid);
-int annotatemore_abort(struct txn *tid);
+			     const struct buf *value);
 
 /* rename the annotations for 'oldmboxname' to 'newmboxname'
  * if 'olduserid' is non-NULL then the private annotations
  * for 'olduserid' are renamed to 'newuserid'
+ * Uses its own transaction.
  */
 int annotatemore_rename(const char *oldmboxname, const char *newmboxname,
 			const char *olduserid, const char *newuserid);
 /* Handle a message COPY, by copying all the appropriate
- * per-message annotations */
+ * per-message annotations. Requires an open transaction. */
 int annotate_msg_copy(const char *oldmboxname, uint32_t olduid,
 		      const char *newmboxname, uint32_t newuid,
 		      const char *userid);
 
-/* delete the annotations for 'mboxname' */
+/* delete the annotations for 'mboxname'
+ * Uses its own transaction. */
 int annotatemore_delete(const char *mboxname);
+
+/* Open a new transaction. Any currently open transaction
+ * is aborted. */
+int annotatemore_begin(void);
+/* Abort the current transaction */
+void annotatemore_abort(void);
+/* Commit the current transaction */
+int annotatemore_commit(void);
 
 /* close the database */
 void annotatemore_close(void);

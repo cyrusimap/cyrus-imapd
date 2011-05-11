@@ -2702,7 +2702,7 @@ static void cmd_list(char *arg1, char *arg2)
 	strcpy(pattern, newsprefix);
 	strcat(pattern, "*");
 	annotatemore_findall(pattern, 0, "/comment",
-			     newsgroups_cb, lrock.wild, NULL);
+			     newsgroups_cb, lrock.wild);
 
 	prot_printf(nntp_out, ".\r\n");
 

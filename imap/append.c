@@ -252,6 +252,9 @@ int append_commit(struct appendstate *as,
 	return r;
     }
 
+    /* TODO: what could we do in the case of an error? */
+    annotatemore_commit();
+
     if (mailboxptr) {
 	*mailboxptr = as->mailbox;
     }
@@ -276,6 +279,9 @@ int append_abort(struct appendstate *as)
 
     /* close mailbox */
     mailbox_close(&as->mailbox);
+
+    /* Abort any annotation changes */
+    annotatemore_abort();
 
     seqset_free(as->seen_seq);
 

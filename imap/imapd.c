@@ -8182,9 +8182,13 @@ static void cmd_setannotation(const char *tag, char *mboxpat)
     if (mboxpat[0])
 	annotate_scope_init_mailbox(&scope, mboxpat);
 
-    r = annotatemore_store(&scope,
-			   entryatts, &imapd_namespace, imapd_userisadmin,
-			   imapd_userid, imapd_authstate);
+    r = annotatemore_begin();
+    if (!r)
+	r = annotatemore_store(&scope,
+			       entryatts, &imapd_namespace, imapd_userisadmin,
+			       imapd_userid, imapd_authstate);
+    if (!r)
+	annotatemore_commit();
 
     imapd_check(NULL, 0);
 
@@ -8231,9 +8235,13 @@ static void cmd_setmetadata(const char *tag, char *mboxpat)
     if (mboxpat[0])
 	annotate_scope_init_mailbox(&scope, mboxpat);
 
-    r = annotatemore_store(&scope,
-			   entryatts, &imapd_namespace, imapd_userisadmin,
-			   imapd_userid, imapd_authstate);
+    r = annotatemore_begin();
+    if (!r)
+	r = annotatemore_store(&scope,
+			       entryatts, &imapd_namespace, imapd_userisadmin,
+			       imapd_userid, imapd_authstate);
+    if (!r)
+	annotatemore_commit();
 
     imapd_check(NULL, 0);
 

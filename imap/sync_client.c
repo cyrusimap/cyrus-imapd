@@ -1588,7 +1588,7 @@ static int do_annotation(const char *mboxname)
     r = do_getannotation(mboxname, replica_annot);
     if (r) goto bail;
 
-    r = annotatemore_findall(mboxname, 0, "*", &getannotation_cb, master_annot, NULL);
+    r = annotatemore_findall(mboxname, 0, "*", &getannotation_cb, master_annot);
     if (r) goto bail;
 
     /* both lists are sorted, so we work our way through the lists
