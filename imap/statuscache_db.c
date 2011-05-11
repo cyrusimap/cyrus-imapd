@@ -421,10 +421,12 @@ int statuscache_invalidate(const char *mboxname, struct statusdata *sdata)
 	r = statuscache_update_txn(mboxname, sdata, &drock.tid);
     }
 
-    if (r != CYRUSDB_OK)
-	DB->abort(drock.db, drock.tid);
-    else
+    if (r == CYRUSDB_OK) {
 	DB->commit(drock.db, drock.tid);
+    }
+    else {
+	if (drock.tid) DB->abort(drock.db, drock.tid);
+    }
 
     if (doclose)
 	statuscache_close();
