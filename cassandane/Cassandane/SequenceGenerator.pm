@@ -77,8 +77,9 @@ sub generate
     return undef
 	if (!$self->{nmessages});
 
-    $params{subject} = "message at " . to_iso8601($self->{next_date});
-    $params{date} = DateTime->from_epoch( epoch => $self->{next_date} );
+    my $dt = DateTime->from_epoch( epoch => $self->{next_date} );
+    $params{subject} = "message at " .  to_iso8601($dt);
+    $params{date} = $dt;
     $self->{next_date} += $self->{deltat};
 
     my $msg = $self->SUPER::generate(%params);
