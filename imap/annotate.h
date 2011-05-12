@@ -132,9 +132,6 @@ void dupentryatt(struct entryattlist **l,
 		 const struct entryattlist *);
 void freeentryatts(struct entryattlist *l);
 
-/* name of the annotation database */
-#define FNAME_ANNOTATIONS "/annotations.db"
-
 /* initialize database structures */
 void annotatemore_init(
 		       int (*fetch_func)(const char *, const char *,

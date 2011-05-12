@@ -138,13 +138,23 @@ struct annotate_entrydesc
     void *rock;			/* rock passed to get() function */
 };
 
+typedef struct annotate_db annotate_db_t;
+struct annotate_db
+{
+    annotate_db_t *next;
+    int refcount;
+    char *mboxname;
+    char *filename;
+    struct db *db;
+    struct txn *txn;
+};
 
 #define DB config_annotation_db
 
-static struct db *anndb;
-static int annotate_dbopen = 0;
-static struct txn *anntxn = NULL;
-static struct txn **tid;
+static annotate_db_t *all_dbs_head = NULL;
+static annotate_db_t *all_dbs_tail = NULL;
+static int in_txn = 0;
+#define tid(d)	(in_txn ? &(d)->txn : NULL)
 int (*proxy_fetch_func)(const char *server, const char *mbox_pat,
 			const strarray_t *entry_pat,
 			const strarray_t *attribute_pat) = NULL;
@@ -384,93 +394,270 @@ void annotatemore_init(int (*fetch_func)(const char *, const char *,
     init_annotation_definitions();
 }
 
-void annotatemore_open(void)
+/* detach the db_t from the global list */
+static void detach_db(annotate_db_t *prev, annotate_db_t *d)
 {
-    int ret;
-    char *tofree = NULL;
-    const char *fname;
+    if (prev)
+	prev->next = d->next;
+    else
+	all_dbs_head = d->next;
+    if (all_dbs_tail == d)
+	all_dbs_tail = prev;
+}
 
-    fname = config_getstring(IMAPOPT_ANNOTATION_DB_PATH);
+/* append the db_t to the global list */
+static void append_db(annotate_db_t *d)
+{
+    if (all_dbs_tail)
+	all_dbs_tail->next = d;
+    else
+	all_dbs_head = d;
+    all_dbs_tail = d;
+    d->next = NULL;
+}
 
-    /* create db file name */
-    if (!fname) {
-	tofree = strconcat(config_dir, FNAME_ANNOTATIONS, (char *)NULL);
-	fname = tofree;
+/*
+ * Generate a new string containing the db filename
+ * for the given @mboxname, (or the global db if
+ * @mboxname is NULL).  Returns the new string in
+ * *@fnamep.  Returns an error code.
+ */
+static int annotate_dbname(const char *mboxname, char **fnamep)
+{
+    char *fname;
+    int r = 0;
+
+    if (mboxname) {
+	/* per-mbox database */
+	struct mboxlist_entry *mbentry = NULL;
+
+	r = mboxlist_lookup(mboxname, &mbentry, NULL);
+	if (r)
+	    return r;
+	fname = mboxname_metapath(mbentry->partition, mboxname,
+			          META_ANNOTATIONS, /*isnew*/0);
+	mboxlist_entry_free(&mbentry);
+	if (!fname)
+	    return IMAP_MAILBOX_BADNAME;
+	fname = xstrdup(fname);
+    }
+    else {
+	/* global database */
+	const char *conf_fname = config_getstring(IMAPOPT_ANNOTATION_DB_PATH);
+
+	if (conf_fname)
+	    fname = xstrdup(conf_fname);
+	else
+	    fname = strconcat(config_dir, FNAME_ANNOTATIONS, (char *)NULL);
     }
 
-    ret = (DB->open)(fname, CYRUSDB_CREATE, &anndb);
-    if (ret != 0) {
-	syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
-	       cyrusdb_strerror(ret));
-	fatal("can't read annotations file", EC_TEMPFAIL);
-    }    
+    *fnamep = fname;
+    return r;
+}
 
-    free(tofree);
+static int annotate_getdb(const char *mboxname,
+			  unsigned int uid,
+			  int dbflags,
+		          annotate_db_t **dbp)
+{
+    annotate_db_t *d, *prev = NULL;
+    char *fname = NULL;
+    struct db *db;
+    int r;
 
-    annotate_dbopen = 1;
+    *dbp = NULL;
+
+    /*
+     * The incoming (mboxname,uid) tuple tells us which scope we
+     * need a database for.  Translate into the mboxname used to
+     * key annotate_db_t's, which is slightly different: message
+     * scope goes into a per-mailbox db, others in the global db.
+     */
+    if (!strcmpsafe(mboxname, NULL) /*server scope*/ ||
+        !uid /* mailbox scope*/)
+	mboxname = NULL;
+
+    /* try to find an existing db for the mbox */
+    for (d = all_dbs_head ; d ; prev = d, d = d->next) {
+	if (!strcmpsafe(mboxname, d->mboxname)) {
+	    /* found it, bump the refcount */
+	    d->refcount++;
+	    *dbp = d;
+	    /*
+	     * Splay the db_t to the end of the global list.
+	     * This ensures the list remains in getdb() call
+	     * order, and in particular that the dbs are
+	     * committed in getdb() call order.  This is
+	     * necessary to ensure safety should a commit fail
+	     * while moving annotations between per-mailbox dbs
+	     */
+	    detach_db(prev, d);
+	    append_db(d);
+	    return 0;
+	}
+    }
+    /* not found, open/create a new one */
+
+    r = annotate_dbname(mboxname, &fname);
+    if (r)
+	goto error;
+#if DEBUG
+    syslog(LOG_ERR, "Opening annotations db %s\n", fname);
+#endif
+
+    r = DB->open(fname, dbflags, &db);
+    if (r != 0) {
+	if (!(dbflags & CYRUSDB_CREATE) && r == CYRUSDB_NOTFOUND)
+	    goto error;
+	syslog(LOG_ERR, "DBERROR: opening %s: %s",
+			fname, cyrusdb_strerror(r));
+	goto error;
+    }
+
+    /* record all the above */
+    d = xzmalloc(sizeof(*d));
+    d->refcount = 1;
+    d->mboxname = (mboxname ? xstrdup(mboxname) : NULL);
+    d->filename = fname;
+    d->db = db;
+
+    append_db(d);
+
+    *dbp = d;
+    return 0;
+
+error:
+    free(fname);
+    *dbp = NULL;
+    return r;
+}
+
+static void annotate_closedb(annotate_db_t *d)
+{
+    annotate_db_t *dx, *prev = NULL;
+    int r;
+
+    /* detach from the global list */
+    for (dx = all_dbs_head ; dx && dx != d ; prev = dx, dx = dx->next)
+	;
+    assert(dx);
+    assert(d == dx);
+    detach_db(prev, d);
+
+#if DEBUG
+    syslog(LOG_ERR, "Closing annotations db %s\n", d->filename);
+#endif
+
+    r = DB->close(d->db);
+    if (r)
+	syslog(LOG_ERR, "DBERROR: error closing annotations %s: %s",
+	       d->filename, cyrusdb_strerror(r));
+
+    free(d->filename);
+    free(d->mboxname);
+    memset(d, 0, sizeof(*d));	/* JIC */
+    free(d);
+}
+
+static void annotate_putdb(annotate_db_t **dbp)
+{
+    annotate_db_t *d;
+
+    if (!dbp || !(d = *dbp))
+	return;
+    assert(d->refcount > 0);
+    if (--d->refcount == 0 && !in_txn)
+	annotate_closedb(d);
+    *dbp = NULL;
+}
+
+void annotatemore_open(void)
+{
+    int r;
+    annotate_db_t *d = NULL;
+
+    /* force opening the global annotations db */
+    r = annotate_getdb(NULL, 0, CYRUSDB_CREATE, &d);
+    if (r)
+	fatal("can't open global annotations database", EC_TEMPFAIL);
 }
 
 void annotatemore_close(void)
 {
-    int r;
-
-    if (annotate_dbopen) {
-	r = (DB->close)(anndb);
-	if (r) {
-	    syslog(LOG_ERR, "DBERROR: error closing annotations: %s",
-		   cyrusdb_strerror(r));
-	}
-	annotate_dbopen = 0;
-    }
+    /* close all the open databases */
+    while (all_dbs_head)
+	annotate_closedb(all_dbs_head);
 }
 
 int annotatemore_begin(void)
 {
-    if (!annotate_dbopen)
+    if (!all_dbs_head)
 	return IMAP_INTERNAL;
-    if (tid && anntxn) {
-	/* abort dangling transaction */
-	DB->abort(anndb, anntxn);
-    }
-    anntxn = NULL;
-    tid = &anntxn;
+    /* abort any dangling db-transactions */
+    annotatemore_abort();
+    in_txn = 1;			/* beginning of ann-transaction */
     return 0;
+}
+
+static void annotatemore_end(void)
+{
+    annotate_db_t *d, *next;
+
+    /* perform delayed close of any db_t's kept
+     * alive during an ann-transaction */
+    for (d = all_dbs_head ; d ; d = next) {
+	next = d->next;
+	if (!d->refcount)
+	    annotate_closedb(d);
+    }
+    in_txn = 0;			/* end of ann-transaction */
 }
 
 void annotatemore_abort(void)
 {
-    if (annotate_dbopen && anntxn)
-	DB->abort(anndb, anntxn);
-    tid = NULL;
-    anntxn = NULL;
+    annotate_db_t *d;
+
+    /* abort all open db-transactions */
+    for (d = all_dbs_head ; d ; d = d->next) {
+	if (d->txn) {
+#if DEBUG
+	    syslog(LOG_ERR, "Aborting annotations db %s\n", d->filename);
+#endif
+	    DB->abort(d->db, d->txn);
+	}
+	d->txn = NULL;
+    }
+    annotatemore_end();
 }
 
 int annotatemore_commit(void)
 {
+    annotate_db_t *d;
     int r = 0;
 
-    if (!annotate_dbopen) {
-	/* db not open */
-	r = IMAP_INTERNAL;
-	goto out;
+    if (!all_dbs_head)
+	return IMAP_INTERNAL;	/* no open dbs */
+    if (!in_txn)
+	return IMAP_INTERNAL;	/* not in an ann-transaction */
+
+    /* commit any open db-transactions */
+    for (d = all_dbs_head ; d ; d = d->next) {
+	if (!d->txn)
+	    continue;	/* no changes */
+
+#if DEBUG
+	syslog(LOG_ERR, "Committing annotations db %s\n", d->filename);
+#endif
+
+	r = DB->commit(d->db, d->txn);
+	d->txn = NULL;
+	if (r) {
+	    annotatemore_abort();
+	    return r;
+	}
     }
 
-    if (!tid) {
-	/* transaction not begun */
-	r = IMAP_INTERNAL;
-	goto out;
-    }
-
-    if (!anntxn) {
-	/* no changes: not an error */
-	goto out;
-    }
-
-    r = DB->commit(anndb, anntxn);
-
-out:
-    tid = NULL;
-    anntxn = NULL;
+    annotatemore_end();
     return r;
 }
 
@@ -487,12 +674,13 @@ static int make_key(const char *mboxname,
 {
     int keylen = 0;
 
-    strlcpy(key+keylen, mboxname, keysize-keylen);
-    keylen += strlen(mboxname) + 1;
-    if (uid) {
-	snprintf(key+keylen, keysize-keylen,
-		 "/UID%u", uid);
-	keylen += strlen(key+keylen);
+    if (!uid) {
+	strlcpy(key+keylen, mboxname, keysize-keylen);
+	keylen += strlen(mboxname) + 1;
+    }
+    else {
+	snprintf(key+keylen, keysize-keylen, "%u", uid);
+	keylen += strlen(key+keylen) + 1;
     }
     strlcpy(key+keylen, entry, keysize-keylen);
     keylen += strlen(entry);
@@ -506,7 +694,8 @@ static int make_key(const char *mboxname,
     return keylen;
 }
 
-static int split_key(const char *key, int keysize,
+static int split_key(const annotate_db_t *d,
+		     const char *key, int keysize,
 		     const char **mboxnamep,
 		     unsigned int *uidp,
 		     const char **entryp,
@@ -517,6 +706,7 @@ static int split_key(const char *key, int keysize,
     int nfields = 0;
     const char *p;
     unsigned int uid = 0;
+    const char *mboxname = "";
 
     /* paranoia: ensure the last character in the key is
      * a NUL, which it should be because of the way we
@@ -541,17 +731,21 @@ static int split_key(const char *key, int keysize,
     if (nfields != NFIELDS)
 	return IMAP_ANNOTATION_BADENTRY;
 
-    if (!strncmp(fields[1], "/UID", 4)) {
+    if (d->mboxname) {
+	/* per-folder db for message scope annotations */
 	char *end = NULL;
-	uid = strtoul(fields[1]+4, &end, 10);
-	if (uid == 0 ||
-	    end == NULL ||
-	    *end != '/')
+	uid = strtoul(fields[0], &end, 10);
+	if (uid == 0 || end == NULL || *end)
 	    return IMAP_ANNOTATION_BADENTRY;
-	fields[1] = end;
+	mboxname = d->mboxname;
+    }
+    else {
+	/* global db for mailnbox & server scope annotations */
+	uid = 0;
+	mboxname = fields[0];
     }
 
-    if (mboxnamep) *mboxnamep = fields[0];
+    if (mboxnamep) *mboxnamep = mboxname;
     if (uidp) *uidp = uid;
     if (entryp) *entryp = fields[1];
     if (useridp) *useridp = fields[2];
@@ -560,7 +754,8 @@ static int split_key(const char *key, int keysize,
 }
 
 #if DEBUG
-static const char *key_as_string(const char *key, int keylen)
+static const char *key_as_string(const annotate_db_t *d,
+			         const char *key, int keylen)
 {
     const char *mboxname, *entry, *userid;
     unsigned int uid;
@@ -568,13 +763,13 @@ static const char *key_as_string(const char *key, int keylen)
     static struct buf buf = BUF_INITIALIZER;
 
     buf_reset(&buf);
-    r = split_key(key, keylen, &mboxname, &uid, &entry, &userid);
+    r = split_key(d, key, keylen, &mboxname, &uid, &entry, &userid);
     if (r)
 	buf_appendcstr(&buf, "invalid");
     else
 	buf_printf(&buf, "{ mboxname=\"%s\" uid=%u entry=\"%s\" userid=\"%s\" }",
 		   mboxname, uid, entry, userid);
-    return buf.s;
+    return buf_cstring(&buf);
 }
 #endif
 
@@ -608,6 +803,7 @@ struct find_rock {
     struct glob *mglob;
     struct glob *eglob;
     unsigned int uid;
+    annotate_db_t *d;
     annotatemore_find_proc_t proc;
     void *rock;
 };
@@ -621,8 +817,8 @@ static int find_p(void *rock, const char *key, int keylen,
     unsigned int uid;
     int r;
 
-    r = split_key(key, keylen, &mboxname, &uid,
-		  &entry, &userid);
+    r = split_key(frock->d, key, keylen, &mboxname,
+		  &uid, &entry, &userid);
     if (r < 0)
 	return 0;
 
@@ -644,8 +840,13 @@ static int find_cb(void *rock, const char *key, int keylen,
     struct buf value = BUF_INITIALIZER;
     int r;
 
-    r = split_key(key, keylen, &mboxname, &uid,
-		  &entry, &userid);
+#if DEBUG
+    syslog(LOG_ERR, "find_cb: found key %s in %s",
+	    key_as_string(frock->d, key, keylen), frock->d->filename);
+#endif
+
+    r = split_key(frock->d, key, keylen, &mboxname,
+		  &uid, &entry, &userid);
     if (r)
 	return r;
 
@@ -696,6 +897,12 @@ static int _annotate_find(const annotate_cursor_t *cursor,
     frock.uid = cursor->uid;
     frock.proc = proc;
     frock.rock = rock;
+    r = annotate_getdb(cursor->int_mboxname, cursor->uid, 0, &frock.d);
+    if (r) {
+	if (r == CYRUSDB_NOTFOUND)
+	    r = 0;
+	goto out;
+    }
 
     /* Find fixed-string pattern prefix */
     keylen = make_key(cursor->int_mboxname, cursor->uid,
@@ -706,10 +913,13 @@ static int _annotate_find(const annotate_cursor_t *cursor,
     }
     keylen = p - key;
 
-    r = DB->foreach(anndb, key, keylen, &find_p, &find_cb, &frock, tid);
+    r = DB->foreach(frock.d->db, key, keylen, &find_p, &find_cb,
+		    &frock, tid(frock.d));
 
+out:
     glob_free(&frock.mglob);
     glob_free(&frock.eglob);
+    annotate_putdb(&frock.d);
 
     return r;
 }
@@ -1894,11 +2104,16 @@ int annotatemore_msg_lookup(const char *mboxname, uint32_t uid, const char *entr
     char key[MAX_MAILBOX_PATH+1];
     int keylen, datalen, r;
     const char *data;
+    annotate_db_t *d = NULL;
+
+    r = annotate_getdb(mboxname, uid, 0, &d);
+    if (r)
+	return (r == CYRUSDB_NOTFOUND ? 0 : r);
 
     keylen = make_key(mboxname, uid, entry, userid, key, sizeof(key));
 
     do {
-	r = DB->fetch(anndb, key, keylen, &data, &datalen, tid);
+	r = DB->fetch(d->db, key, keylen, &data, &datalen, tid(d));
     } while (r == CYRUSDB_AGAIN);
 
     if (!r && data) {
@@ -1906,6 +2121,7 @@ int annotatemore_msg_lookup(const char *mboxname, uint32_t uid, const char *entr
     }
     else if (r == CYRUSDB_NOTFOUND) r = 0;
 
+    annotate_putdb(&d);
     return r;
 }
 
@@ -1917,21 +2133,27 @@ static int write_entry(const char *mboxname,
 {
     char key[MAX_MAILBOX_PATH+1];
     int keylen, r;
+    annotate_db_t *d = NULL;
 
     /* must be in a transaction to modify the db */
-    if (!tid)
+    if (!in_txn)
 	return IMAP_INTERNAL;
+
+    r = annotate_getdb(mboxname, uid, CYRUSDB_CREATE, &d);
+    if (r)
+	return r;
 
     keylen = make_key(mboxname, uid, entry, userid, key, sizeof(key));
 
     if (value->s == NULL) {
 
 #if DEBUG
-	syslog(LOG_ERR, "write_entry: deleting key %s", key_as_string(key, keylen));
+	syslog(LOG_ERR, "write_entry: deleting key %s from %s",
+		key_as_string(d, key, keylen), d->filename);
 #endif
 
 	do {
-	    r = DB->delete(anndb, key, keylen, tid, 0);
+	    r = DB->delete(d->db, key, keylen, tid(d), 0);
 	} while (r == CYRUSDB_AGAIN);
     }
     else {
@@ -1958,15 +2180,18 @@ static int write_entry(const char *mboxname,
 	buf_appendmap(&data, (const char *)&l, sizeof(l));
 
 #if DEBUG
-	syslog(LOG_ERR, "write_entry: storing key %s", key_as_string(key, keylen));
+	syslog(LOG_ERR, "write_entry: storing key %s to %s",
+		key_as_string(d, key, keylen), d->filename);
 #endif
 
 	do {
-	    r = DB->store(anndb, key, keylen, data.s, data.len, tid);
+	    r = DB->store(d->db, key, keylen, data.s, data.len, tid(d));
 	} while (r == CYRUSDB_AGAIN);
 	sync_log_annotation(mboxname);
 	buf_free(&data);
     }
+
+    annotate_putdb(&d);
 
     return r;
 }
@@ -2658,14 +2883,42 @@ int annotatemore_rename(const char *oldmboxname, const char *newmboxname,
 			const char *olduserid, const char *newuserid)
 {
     int r;
+    char *oldfname = NULL, *newfname = NULL;
 
+    /* rewrite any per-folder annotations from the global db */
     r = annotatemore_begin();
-    if (!r)
-	r = _annotate_rewrite(oldmboxname, 0, olduserid,
-			      newmboxname, 0, newuserid,
-			      /*copy*/0);
-    if (!r)
-	r = annotatemore_commit();
+    if (r)
+	goto out;
+
+    r = _annotate_rewrite(oldmboxname, 0, olduserid,
+			  newmboxname, 0, newuserid,
+			  /*copy*/0);
+    if (r)
+	goto out;
+
+    /* rename the per-folder database */
+    r = annotate_dbname(oldmboxname, &oldfname);
+    if (r)
+	goto out;
+    r = annotate_dbname(newmboxname, &newfname);
+    if (r)
+	goto out;
+
+    r = rename(oldfname, newfname);
+    if (r < 0) {
+	syslog(LOG_ERR, "DBERROR: error renaming %s to %s: %m",
+	       oldfname, newfname);
+	r = IMAP_IOERROR;
+	goto out;
+    }
+
+    r = annotatemore_commit();
+
+out:
+    free(oldfname);
+    free(newfname);
+    if (r)
+	annotatemore_abort();
     return r;
 }
 
@@ -2701,16 +2954,40 @@ static int _annotate_rewrite(const char *oldmboxname,
 
 int annotatemore_delete(const char *mboxname)
 {
-    /* we treat a deleteion as a rename without a new name */
     int r;
+    char *fname = NULL;
 
+    assert(mboxname);
+
+    /* remove any per-folder annotations from the global db */
     r = annotatemore_begin();
-    if (!r)
-	r = _annotate_rewrite(mboxname, /*olduid*/0, /*olduserid*/NULL,
-			     /*newmboxname*/NULL, /*newuid*/0, /*newuserid*/NULL,
-			     /*copy*/0);
-    if (!r)
-	r = annotatemore_commit();
+    if (r)
+	goto out;
+
+    r = _annotate_rewrite(mboxname, /*olduid*/0, /*olduserid*/NULL,
+			 /*newmboxname*/NULL, /*newuid*/0, /*newuserid*/NULL,
+			 /*copy*/0);
+    if (r)
+	goto out;
+
+    /* remove the entire per-folder database */
+    r = annotate_dbname(mboxname, &fname);
+    if (r)
+	goto out;
+
+    r = unlink(fname);
+    if (r < 0) {
+	syslog(LOG_ERR, "cannot unlink %s: %m", fname);
+	r = IMAP_IOERROR;
+	goto out;
+    }
+
+    r = annotatemore_commit();
+
+out:
+    free(fname);
+    if (r)
+	annotatemore_abort();
     return r;
 }
 
