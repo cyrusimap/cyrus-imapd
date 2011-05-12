@@ -42,10 +42,9 @@
 use strict;
 use warnings;
 use Test::Unit::TestRunner;
-use Test::Unit::Runner::XML;
 use Cassandane::Util::Log;
 
-my $format = 'xml';
+my $format = 'tap';
 my $output_dir = 'reports';
 my $do_list = 0;
 my @default_names = (
@@ -56,18 +55,6 @@ my @names;
 
 my %runners =
 (
-    xml => sub
-    {
-	my (@suites) = @_;
-
-	mkdir($output_dir);
-	my $runner = Test::Unit::Runner::XML->new($output_dir);
-	foreach my $suite (@suites)
-	{
-	    $runner->start(Test::Unit::Loader::load($suite));
-	}
-	return $runner->all_tests_passed();
-    },
     tap => sub
     {
 	my (@suites) = @_;
@@ -82,6 +69,25 @@ my %runners =
 	return $passed;
     }
 );
+
+eval
+{
+    require Test::Unit::Runner::XML;
+
+    $runners{xml} = sub
+    {
+	my (@suites) = @_;
+
+	mkdir($output_dir);
+	my $runner = Test::Unit::Runner::XML->new($output_dir);
+	foreach my $suite (@suites)
+	{
+	    $runner->start(Test::Unit::Loader::load($suite));
+	}
+	return $runner->all_tests_passed();
+    };
+    $format = 'xml';
+} or print STDERR "Sorry, XML output format not available.\n";
 
 
 sub usage
