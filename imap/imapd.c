@@ -10199,6 +10199,10 @@ static void list_response(char *name, int attributes,
 
     if (attributes & (MBOX_ATTRIBUTE_NONEXISTENT | MBOX_ATTRIBUTE_NOSELECT)) {
 	int keep = 0;
+	/* extended get told everything */
+	if (listargs->cmd & LIST_CMD_EXTENDED) {
+	    keep = 1;
+	}
 	/* we have to mention this, it has children */
 	if (listargs->cmd & LIST_CMD_LSUB) {
 	    /* subscribed children need a mention */
