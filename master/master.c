@@ -262,6 +262,13 @@ static void centry_add(struct centry *c, pid_t p)
     ctable[p % child_table_size] = c;
 }
 
+static void centry_set_state(struct centry *c, enum sstate state)
+{
+    c->service_state = state;
+    if (state == SERVICE_STATE_DEAD)
+	c->janitor_deadline = time(NULL) + 2;
+}
+
 /* see if 'listen' parameter has both hostname and port, or just port */
 static char *parse_listen(char *listen)
 {
@@ -680,8 +687,8 @@ static void spawn_service(const int si)
 
 	/* add to child table */
 	c = centry_alloc();
-	c->service_state = SERVICE_STATE_READY;
 	c->si = si;
+	centry_set_state(c, SERVICE_STATE_READY);
 	centry_add(c, p);
 	break;
     }
@@ -772,7 +779,7 @@ static void spawn_schedule(time_t now)
 
 		/* add to child table */
 		c = centry_alloc();
-		c->service_state = SERVICE_STATE_READY;
+		centry_set_state(c, SERVICE_STATE_READY);
 		centry_add(c, p);
 		break;
 	    }
@@ -857,7 +864,7 @@ static void reap_child(void)
 		       "service %s pid %d in ILLEGAL state: forced to valid "
 		       "UNKNOWN state",
 		       s ? SERVICENAME(s->name) : "unknown", pid);
-		c->service_state = SERVICE_STATE_UNKNOWN;
+		centry_set_state(c, SERVICE_STATE_UNKNOWN);
 	    }
 	    if (s) {
 	        /* update counters for known services */
@@ -914,8 +921,7 @@ static void reap_child(void)
 			   pid, c->service_state);
 		}
 	    }
-	    c->service_state = SERVICE_STATE_DEAD;
-	    c->janitor_deadline = time(NULL) + 2;
+	    centry_set_state(c, SERVICE_STATE_DEAD);
 	} else {
 	    /* Are we multithreaded now? we don't know this child */
 	    syslog(LOG_ERR,
@@ -1166,8 +1172,7 @@ static void process_msg(const int si, struct notify_message *msg)
 	/* re-add child to list */
 	c = centry_alloc();
 	c->si = si;
-	c->service_state = SERVICE_STATE_DEAD;
-	c->janitor_deadline = time(NULL) + 2;
+	centry_set_state(c, SERVICE_STATE_DEAD);
 	centry_add(c, msg->service_pid);
     }
     
@@ -1196,7 +1201,7 @@ static void process_msg(const int si, struct notify_message *msg)
 	syslog(LOG_DEBUG,
 	       "service %s pid %d in ILLEGAL state: forced to valid UNKNOWN state",
 	       SERVICENAME(s->name), c->pid);
-	c->service_state = SERVICE_STATE_UNKNOWN;
+	centry_set_state(c, SERVICE_STATE_UNKNOWN);
 	break;
     }
     
@@ -1217,7 +1222,7 @@ static void process_msg(const int si, struct notify_message *msg)
 	    syslog(LOG_DEBUG,
 		   "service %s pid %d in UNKNOWN state: now available and in READY state",
 		   SERVICENAME(s->name), c->pid);
-	    c->service_state = SERVICE_STATE_READY;
+	    centry_set_state(c, SERVICE_STATE_READY);
 	    break;
 	    
 	case SERVICE_STATE_BUSY:
@@ -1225,7 +1230,7 @@ static void process_msg(const int si, struct notify_message *msg)
 		syslog(LOG_DEBUG,
 		       "service %s pid %d in BUSY state: now available and in READY state",
 		       SERVICENAME(s->name), c->pid);
-	    c->service_state = SERVICE_STATE_READY;
+	    centry_set_state(c, SERVICE_STATE_READY);
 	    s->ready_workers++;
 	    break;
 
@@ -1252,7 +1257,7 @@ static void process_msg(const int si, struct notify_message *msg)
 	    syslog(LOG_DEBUG,
 		   "service %s pid %d in UNKNOWN state: now unavailable and in BUSY state",
 		   SERVICENAME(s->name), c->pid);
-	    c->service_state = SERVICE_STATE_BUSY;
+	    centry_set_state(c, SERVICE_STATE_BUSY);
 	    break;
 	    
 	case SERVICE_STATE_READY:
@@ -1260,7 +1265,7 @@ static void process_msg(const int si, struct notify_message *msg)
 		syslog(LOG_DEBUG,
 		       "service %s pid %d in READY state: now unavailable and in BUSY state",
 		       SERVICENAME(s->name), c->pid);
-	    c->service_state = SERVICE_STATE_BUSY;
+	    centry_set_state(c, SERVICE_STATE_BUSY);
 	    s->ready_workers--;
 	    break;
 
@@ -1286,7 +1291,7 @@ static void process_msg(const int si, struct notify_message *msg)
 	    
 	case SERVICE_STATE_UNKNOWN:
 	    s->nconnections++;
-	    c->service_state = SERVICE_STATE_BUSY;
+	    centry_set_state(c, SERVICE_STATE_BUSY);
 	    syslog(LOG_DEBUG,
 		   "service %s pid %d in UNKNOWN state: now in BUSY state and serving connection",
 		   SERVICENAME(s->name), c->pid);
@@ -1298,7 +1303,7 @@ static void process_msg(const int si, struct notify_message *msg)
 		   SERVICENAME(s->name), c->pid);
 	    /* be resilient on face of a bogon source, so lets err to the side
 	     * of non-denial-of-service */
-	    c->service_state = SERVICE_STATE_BUSY;
+	    centry_set_state(c, SERVICE_STATE_BUSY);
 	    s->nconnections++;
 	    s->ready_workers--;
 	    break;
@@ -1330,14 +1335,14 @@ static void process_msg(const int si, struct notify_message *msg)
 		   SERVICENAME(s->name), c->pid);
 	    /* be resilient on face of a bogon source, so lets err to the side
 	     * of non-denial-of-service */
-	    c->service_state = SERVICE_STATE_READY;
+	    centry_set_state(c, SERVICE_STATE_READY);
 	    s->nconnections++;
 	    s->ready_workers++;
 	    break;
 	    
 	case SERVICE_STATE_UNKNOWN:
 	    s->nconnections++;
-	    c->service_state = SERVICE_STATE_READY;
+	    centry_set_state(c, SERVICE_STATE_READY);
 	    syslog(LOG_ERR,
 		   "service %s pid %d in UNKNOWN state: serving one more multi-threaded connection, forced to READY state",
 		   SERVICENAME(s->name), c->pid);
