@@ -1833,11 +1833,8 @@ int main(int argc, char **argv)
 	/* Daemonize */
 	pid_t pid = -1;
 
-	pidfile_lock = xmalloc(strlen(pidfile) + strlen(lock_suffix) + 1);
+	pidfile_lock = strconcat(pidfile, lock_suffix, (char *)NULL);
 
-	strcpy(pidfile_lock, pidfile);
-	strcat(pidfile_lock, lock_suffix);
-	
 	pidlock_fd = open(pidfile_lock, O_CREAT|O_TRUNC|O_RDWR, 0644);
 	if(pidlock_fd == -1) {
 	    syslog(LOG_ERR, "can't open pidfile lock: %s (%m)", pidfile_lock);
