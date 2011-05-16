@@ -235,55 +235,6 @@ sub _fix_ownership
     find(sub { chown($uid, $gid, $File::Find::name) }, $self->{basedir});
 }
 
-sub _setup_mboxlist
-{
-    my ($self) = @_;
-    my @cmd =
-    (
-	$self->_binary('ctl_mboxlist'),
-	'-C', $self->_imapd_conf(),
-	'-u',
-    );
-
-    my $owner = 'cassandane';	    # or name@realm
-    my $mboxname = "user.$owner";   # or realm!user.owner.whatever
-    my $partition = 'default';
-
-    # Construct the default ACL
-    my $userperms = 'lrswipkxtecd';
-    my @aclbits =
-    (
-	$owner, $userperms,
-	'admin', $userperms . 'a',
-	'anyone', 'p',
-    );
-    my $acl = join("\t", @aclbits);
-
-    open MBOXLIST,'|-',@cmd
-	or die "Cannot run ctl_mboxlist to set up mboxlist.db: $!";
-    # type 0 is a local mailbox
-    # Note the trailing TAB is very important
-    printf MBOXLIST "%s\t0 %s %s\t\n",
-	    $mboxname,
-	    $partition,
-	    $acl;
-    close MBOXLIST;
-}
-
-sub _reconstruct
-{
-    my ($self) = @_;
-    my $owner = 'cassandane';	    # or name@realm
-    my $mboxname = "user.$owner";   # or realm!user.owner.whatever
-    my @cmd =
-    (
-	$self->_binary('reconstruct'),
-	'-C', $self->_imapd_conf(),
-	$mboxname
-    );
-    system(@cmd);
-}
-
 sub _timed_wait
 {
     my ($condition, %p) = @_;
@@ -390,6 +341,8 @@ sub start
 {
     my ($self) = @_;
 
+    my $admincon = $self->add_service('adminimap');
+
     xlog "start";
     if (!$self->{re_use_dir} || ! -d $self->{basedir})
     {
@@ -399,10 +352,18 @@ sub start
 	$self->_generate_imapd_conf();
 	$self->_generate_master_conf();
 	$self->_fix_ownership();
-	$self->_setup_mboxlist();
-	$self->_reconstruct();
     }
     $self->_start_master();
+
+    my $owner = "cassandane";
+
+    xlog "create user $owner";
+    my $adminstore = $admincon->create_store(username => 'admin');
+    my $adminclient = $adminstore->get_client();
+    $adminclient->create("user.$owner");
+    $adminclient->setacl("user.$owner", admin => 'lrswipkxtecda');
+    $adminclient->setacl("user.$owner", $owner => 'lrswipkxtecd');
+    $adminclient->setacl("user.$owner", anyone => 'p');
 }
 
 sub _stop_pid
