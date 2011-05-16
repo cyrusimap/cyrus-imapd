@@ -621,9 +621,7 @@ static void spawn_service(const int si)
     /* (We schedule a wakeup call for sometime soon though to be
      * sure that we don't wait to do the fork that is required forever! */
     if(s->maxforkrate && s->forkrate >= s->maxforkrate) {
-	struct event *evt = (struct event *) xmalloc(sizeof(struct event));
-
-	memset(evt, 0, sizeof(struct event));
+	struct event *evt = (struct event *) xzmalloc(sizeof(struct event));
 
 	evt->name = xstrdup("forkrate wakeup call");
 	evt->mark = time(NULL) + FORKRATE_INTERVAL;
@@ -1556,7 +1554,7 @@ static void add_event(const char *name, struct entry *e, void *rock)
 	fatal(buf, EX_CONFIG);
     }
     
-    evt = (struct event *) xmalloc(sizeof(struct event));
+    evt = (struct event *) xzmalloc(sizeof(struct event));
     evt->name = xstrdup(name);
 
     if (at >= 0 && ((hour = at / 100) <= 23) && ((min = at % 100) <= 59)) {
