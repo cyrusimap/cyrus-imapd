@@ -123,7 +123,7 @@ sub test_quotarename
     @res = $admintalk->getquota("user.cassandane");
 
     my $base_usage = $res[1];
-    $self->assert_num_not_equals(0, $base_usage, "10 messages should use some quota");
+    $self->assert_num_not_equals(0, $base_usage, "10 messages should use some quota: " . Dumper(\@res));
 
     $imaptalk->create("INBOX.sub") || die;
     $imaptalk->select($self->{store}->{folder}) || die;
@@ -134,19 +134,19 @@ sub test_quotarename
     $self->assert_num_equals(3, scalar @res);
 
     my $more_usage = $res[1];
-    $self->assert_num_not_equals($base_usage, $more_usage, "another 15 messages should use more quota");
+    $self->assert_num_not_equals($base_usage, $more_usage, "another 15 messages should use more quota ($base_usage, $more_usage)");
 
     $imaptalk->rename("INBOX.sub", "INBOX.othersub") || die;
     $imaptalk->select("INBOX.othersub") || die;
 
     # usage should be the same after a rename
     @res = $admintalk->getquota("user.cassandane");
-    $self->assert_num_equals($more_usage, $res[1], "Usage should be unchanged after a rename");
+    $self->assert_num_equals($more_usage, $res[1], "Usage should be unchanged after a rename ($more_usage, $res[1])");
 
     $imaptalk->delete("INBOX.othersub") || die;
 
     @res = $admintalk->getquota("user.cassandane");
-    $self->assert_num_equals($base_usage, $res[1], "Usage should drop back after a delete");
+    $self->assert_num_equals($base_usage, $res[1], "Usage should drop back after a delete ($base_usage, $res[1])");
 }
 
 1;
