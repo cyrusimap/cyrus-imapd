@@ -242,6 +242,7 @@ static struct centry *centry_alloc(void)
     struct centry *t;
 
     t = xzmalloc(sizeof(*t));
+    t->si = SERVICE_NONE;
 
     return t;
 }
@@ -772,7 +773,6 @@ static void spawn_schedule(time_t now)
 		/* add to child table */
 		c = centry_alloc();
 		c->service_state = SERVICE_STATE_READY;
-		c->si = SERVICE_NONE;
 		centry_add(c, p);
 		break;
 	    }
