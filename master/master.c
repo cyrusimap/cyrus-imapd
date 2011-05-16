@@ -531,6 +531,36 @@ static void service_create(struct service *s)
     }
 }
 
+static int decode_wait_status(pid_t pid, int status)
+{
+    int failed = 0;
+
+    if (WIFEXITED(status)) {
+	if (!WEXITSTATUS(status)) {
+	    syslog(LOG_DEBUG, "process %d exited normally", pid);
+	}
+	else {
+	    syslog(LOG_ERR, "process %d exited, status %d", pid,
+		   WEXITSTATUS(status));
+	    failed = 1;
+	}
+    }
+
+    if (WIFSIGNALED(status)) {
+#ifdef WCOREDUMP
+	syslog(LOG_ERR, "process %d exited, signaled to death by %d%s",
+	       pid, WTERMSIG(status),
+	       WCOREDUMP(status) ? " (core dumped)" : "");
+	failed = WCOREDUMP(status) ? 2 : 1;
+#else
+	syslog(LOG_ERR, "process %d exited, signaled to death by %d",
+	       pid, WTERMSIG(status));
+	failed = 1;
+#endif
+    }
+    return failed;
+}
+
 static void run_startup(char **cmd)
 {
     pid_t pid;
@@ -564,15 +594,9 @@ static void run_startup(char **cmd)
 	if (waitpid(pid, &status, 0) < 0) {
 	    syslog(LOG_ERR, "waitpid(): %m");
 	} else if (status != 0) {
-	    if (WIFEXITED(status)) {
-		syslog(LOG_ERR, "process %d exited, status %d\n", pid, 
-		       WEXITSTATUS(status));
-	    }
-	    if (WIFSIGNALED(status)) {
-		syslog(LOG_ERR, 
-		       "process %d exited, signaled to death by %d\n",
-		       pid, WTERMSIG(status));
-	    }
+	    int failed = decode_wait_status(pid, status);
+	    if (failed)
+		fatal("can't run startup", 1);
 	}
 	break;
     }
@@ -839,17 +863,10 @@ static void reap_child(void)
     pid_t pid;
     struct centry *c;
     struct service *s;
+    int failed;
 
     while ((pid = waitpid((pid_t) -1, &status, WNOHANG)) > 0) {
-	if (WIFEXITED(status)) {
-	    syslog(LOG_DEBUG, "process %d exited, status %d", pid, 
-		   WEXITSTATUS(status));
-	}
-
-	if (WIFSIGNALED(status)) {
-	    syslog(LOG_ERR, "process %d exited, signaled to death by %d",
-		   pid, WTERMSIG(status));
-	}
+	failed = decode_wait_status(pid, status);
 
 	/* account for the child */
 	c = centry_find(pid);
@@ -881,9 +898,8 @@ static void reap_child(void)
 		case SERVICE_STATE_READY:
 		    s->nactive--;
 		    s->ready_workers--;
-		    if (!in_shutdown && (WIFSIGNALED(status) ||
-			(WIFEXITED(status) && WEXITSTATUS(status)))) {
-			syslog(LOG_WARNING, 
+		    if (!in_shutdown && failed) {
+			syslog(LOG_WARNING,
 			       "service %s pid %d in READY state: "
 			       "terminated abnormally",
 			       SERVICENAME(s->name), pid);
@@ -900,8 +916,7 @@ static void reap_child(void)
 		    
 		case SERVICE_STATE_BUSY:
 		    s->nactive--;
-		    if (!in_shutdown && (WIFSIGNALED(status) ||
-			(WIFEXITED(status) && WEXITSTATUS(status)))) {
+		    if (!in_shutdown && failed) {
 			syslog(LOG_DEBUG,
 			       "service %s pid %d in BUSY state: "
 			       "terminated abnormally",
