@@ -1795,9 +1795,6 @@ int main(int argc, char **argv)
 
     masterconf_init("master", alt_config);
 
-    /* zero out the children table */
-    memset(&ctable, 0, sizeof(struct centry *) * child_table_size);
-
     if (close_std) {
       /* close stdin/out/err */
       for (fd = 0; fd < 3; fd++) {
