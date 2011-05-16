@@ -331,10 +331,7 @@ static void service_create(struct service *s)
 
     if (s->listen[0] == '/') { /* unix socket */
 	res0_is_local = 1;
-	res0 = (struct addrinfo *)malloc(sizeof(struct addrinfo));
-	if (!res0)
-	    fatal("out of memory", EX_UNAVAILABLE);
-	memset(res0, 0, sizeof(struct addrinfo));
+	res0 = (struct addrinfo *)xzmalloc(sizeof(struct addrinfo));
 	res0->ai_flags = AI_PASSIVE;
 	res0->ai_family = PF_UNIX;
 	if(!strcmp(s->proto, "tcp")) {
@@ -935,14 +932,11 @@ static void reap_child(void)
 
 static void init_janitor(void)
 {
-    struct event *evt = (struct event *) malloc(sizeof(struct event));
-    
-    if (!evt) fatal("out of memory", EX_UNAVAILABLE);
-    memset(evt, 0, sizeof(struct event));
-    
+    struct event *evt = (struct event *) xzmalloc(sizeof(struct event));
+
     gettimeofday(&janitor_mark, NULL);
     janitor_position = 0;
-    
+
     evt->name = xstrdup("janitor periodic wakeup call");
     evt->period = 10;
     evt->periodic = 1;
