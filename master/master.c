@@ -1713,10 +1713,9 @@ static void reread_conf(void)
 
 int main(int argc, char **argv)
 {
-    const char *default_pidfile = MASTER_PIDFILE;
-    const char *lock_suffix = ".lock";
+    static const char lock_suffix[] = ".lock";
 
-    const char *pidfile = default_pidfile;
+    const char *pidfile = MASTER_PIDFILE;
     char *pidfile_lock = NULL;
 
     int startup_pipe[2] = { -1, -1 };
