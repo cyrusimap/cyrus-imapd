@@ -143,7 +143,7 @@ clean:
 	rm -f sievec sieved test *~ *.o *.a Makefile.bak makedepend.log *.gcno *.gcda
 
 distclean: clean
-	rm -f sieve_err.c sieve_err.h
+	rm -f $(BUILT_SOURCES)
 	rm -f Makefile
 
 clobber:
