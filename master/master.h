@@ -35,10 +35,10 @@ struct service {
     int nforks;			/* num child processes spawned */
     int nactive;		/* num children servicing clients */
     int nconnections;		/* num connections made to children */
-    unsigned int forkrate;	/* rate at which we're spawning children */
+    double forkrate;		/* rate at which we're spawning children */
 
     /* fork rate computation */
-    time_t last_interval_start;
+    struct timeval last_interval_start;
     unsigned int interval_forks;
 };
 

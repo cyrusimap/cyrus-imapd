@@ -71,6 +71,7 @@
 #include <sysexits.h>
 #include <errno.h>
 #include <limits.h>
+#include <math.h>
 
 #ifndef INADDR_NONE
 #define INADDR_NONE 0xffffffff
@@ -589,8 +590,8 @@ static void fcntl_unset(int fd, int flag)
 
 static void spawn_service(const int si)
 {
-    /* Note that there is logic that depends on this being 2 */
-    const int FORKRATE_INTERVAL = 2;
+#define FORKRATE_INTERVAL   2.0	/* seconds */
+#define FORKRATE_ALPHA	    0.5
 
     pid_t p;
     int i;
@@ -598,46 +599,44 @@ static void spawn_service(const int si)
     static char name_env[100], name_env2[100];
     struct centry *c;
     struct service * const s = &Services[si];
-    time_t now = time(NULL);
+    struct timeval now;
+    double interval;
 
     if (!s->name) {
 	fatal("Serious software bug found: spawn_service() called on unnamed service!",
 		EX_SOFTWARE);
     }
 
+    gettimeofday(&now, 0);
+    interval = timesub(&s->last_interval_start, &now);
     /* update our fork rate */
-    if(now - s->last_interval_start >= FORKRATE_INTERVAL) {
-	int interval;
-
-	s->forkrate = (s->interval_forks/2) + (s->forkrate/2);
+    if (interval >= 0.9*FORKRATE_INTERVAL) {
+	double f = pow(FORKRATE_ALPHA, interval/FORKRATE_INTERVAL);
+	s->forkrate = f * s->forkrate +
+		      (1.0-f) * (s->interval_forks/interval);
 	s->interval_forks = 0;
-	s->last_interval_start += FORKRATE_INTERVAL;
-
-	/* if there is an even wider window, however, we need
-	 * to account for a good deal of zeros, we can do this at once */
-	interval = now - s->last_interval_start;
-
-	if(interval > 2) {
-	    int skipped_intervals = interval / FORKRATE_INTERVAL;
-	    /* avoid a > 30 bit right shift) */
-	    if(skipped_intervals > 30) s->forkrate = 0;
-	    else {
-		/* divide by 2^(skipped_intervals).
-		 * this is the logic mentioned in the comment above */
-		s->forkrate >>= skipped_intervals;
-		s->last_interval_start = now;
-	    }
-	}
+	s->last_interval_start = now;
+    }
+    else if (interval < 0.0) {
+	/*
+	 * NTP or similar moved the time-of-day clock backwards more
+	 * than the interval we asked to be delayed for.  Given that, we
+	 * have no basis for updating forkrate and must reset our rate
+	 * estimating state.  Let's just hope this is a rare event.
+	 */
+	s->interval_forks = 0;
+	s->last_interval_start = now;
+	syslog(LOG_WARNING, "time of day clock went backwards");
     }
 
     /* If we've been busy lately, we will refuse to fork! */
     /* (We schedule a wakeup call for sometime soon though to be
      * sure that we don't wait to do the fork that is required forever! */
-    if(s->maxforkrate && s->forkrate >= s->maxforkrate) {
+    if(s->maxforkrate && (unsigned int)s->forkrate >= s->maxforkrate) {
 	struct event *evt = (struct event *) xzmalloc(sizeof(struct event));
 
 	evt->name = xstrdup("forkrate wakeup call");
-	evt->mark = time(NULL) + FORKRATE_INTERVAL;
+	evt->mark = time(NULL) + (unsigned int)FORKRATE_INTERVAL;
 	schedule_event(evt);
 
 	return;
@@ -1467,7 +1466,7 @@ static void add_service(const char *name, struct entry *e, void *rock)
 	}
 	memset(&Services[nservices++], 0, sizeof(struct service));
 
-	Services[i].last_interval_start = time(NULL);
+	gettimeofday(&Services[i].last_interval_start, 0);
     }
     else if (Services[i].listen) reconfig = 1;
 
