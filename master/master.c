@@ -252,6 +252,15 @@ static void centry_free(struct centry *c)
     free(c);
 }
 
+/* add a centry to the global table of all
+ * centries, using the given pid as the key */
+static void centry_add(struct centry *c, pid_t p)
+{
+    c->pid = p;
+    c->next = ctable[p % child_table_size];
+    ctable[p % child_table_size] = c;
+}
+
 /* see if 'listen' parameter has both hostname and port, or just port */
 static char *parse_listen(char *listen)
 {
@@ -673,11 +682,9 @@ static void spawn_service(const int si)
 
 	/* add to child table */
 	c = centry_alloc();
-	c->pid = p;
 	c->service_state = SERVICE_STATE_READY;
 	c->si = si;
-	c->next = ctable[p % child_table_size];
-	ctable[p % child_table_size] = c;
+	centry_add(c, p);
 	break;
     }
 
@@ -767,11 +774,9 @@ static void spawn_schedule(time_t now)
 
 		/* add to child table */
 		c = centry_alloc();
-		c->pid = p;
 		c->service_state = SERVICE_STATE_READY;
 		c->si = SERVICE_NONE;
-		c->next = ctable[p % child_table_size];
-		ctable[p % child_table_size] = c;
+		centry_add(c, p);
 		break;
 	    }
 	} /* a->exec */
@@ -1167,11 +1172,9 @@ static void process_msg(const int si, struct notify_message *msg)
 	/* re-add child to list */
 	c = centry_alloc();
 	c->si = si;
-	c->pid = msg->service_pid;
 	c->service_state = SERVICE_STATE_DEAD;
 	c->janitor_deadline = time(NULL) + 2;
-	c->next = ctable[c->pid % child_table_size];
-	ctable[c->pid % child_table_size] = c;
+	centry_add(c, msg->service_pid);
     }
     
     /* paranoia */
