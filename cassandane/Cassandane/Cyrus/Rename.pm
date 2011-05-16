@@ -101,7 +101,7 @@ sub test_rename_asuser
     my $imaptalk = $self->{store}->get_client();
 
     $imaptalk->create("INBOX.user-src") || die;
-    $self->{store}->{folder} = "INBOX.user-src";  # gah, API
+    $self->{store}->set_folder("INBOX.user-src");
     $self->{store}->write_begin();
     my $msg1 = $self->{gen}->generate(subject => "subject 1");
     $self->{store}->write_message($msg1, flags => ["\\Seen", "\$NotJunk"]);
