@@ -175,7 +175,6 @@ struct centry {
     struct centry *next;
 };
 static struct centry *ctable[child_table_size];
-static struct centry *cfreelist;
 
 static int janitor_frequency = 1;	/* Janitor sweeps per second */
 static int janitor_position;		/* Entry to begin at in next sweep */
@@ -237,31 +236,20 @@ static void get_statsock(int filedes[2])
     }
 }
 
-/* return a new 'centry', either from the freelist or by malloc'ing it */
-static struct centry *get_centry(void)
+/* return a new 'centry', by malloc'ing it */
+static struct centry *centry_alloc(void)
 {
     struct centry *t;
 
-    if (!cfreelist) {
-	/* create child_table_inc more and add them to the freelist */
-	struct centry *n;
-	int i;
-
-	n = xmalloc(child_table_inc * sizeof(struct centry));
-	cfreelist = n;
-	for (i = 0; i < child_table_inc - 1; i++) {
-	    n[i].next = n + (i + 1);
-	}
-	/* i == child_table_inc - 1, last item in block */
-	n[i].next = NULL;
-    }
-
-    t = cfreelist;
-    cfreelist = cfreelist->next;
-
-    t->janitor_deadline = 0;
+    t = xzmalloc(sizeof(*t));
 
     return t;
+}
+
+/* free a centry */
+static void centry_free(struct centry *c)
+{
+    free(c);
 }
 
 /* see if 'listen' parameter has both hostname and port, or just port */
@@ -684,7 +672,7 @@ static void spawn_service(const int si)
 	s->nactive++;
 
 	/* add to child table */
-	c = get_centry();
+	c = centry_alloc();
 	c->pid = p;
 	c->service_state = SERVICE_STATE_READY;
 	c->si = si;
@@ -776,15 +764,14 @@ static void spawn_schedule(time_t now)
 		
 	    default:
 		/* we don't wait for it to complete */
-		
+
 		/* add to child table */
-		c = get_centry();
+		c = centry_alloc();
 		c->pid = p;
 		c->service_state = SERVICE_STATE_READY;
 		c->si = SERVICE_NONE;
 		c->next = ctable[p % child_table_size];
 		ctable[p % child_table_size] = c;
-		
 		break;
 	    }
 	} /* a->exec */
@@ -991,8 +978,7 @@ static void child_janitor(time_t now)
 	    if (c->service_state == SERVICE_STATE_DEAD) {
 		if (c->janitor_deadline < now) {
 		    *p = c->next;
-		    c->next = cfreelist;
-		    cfreelist = c;
+		    centry_free(c);
 		} else {
 		    p = &((*p)->next);
 		}
@@ -1179,7 +1165,7 @@ static void process_msg(const int si, struct notify_message *msg)
 		"service %s pid %d: receiving messages from long dead children",
 	       SERVICENAME(s->name), msg->service_pid);
 	/* re-add child to list */
-	c = get_centry();
+	c = centry_alloc();
 	c->si = si;
 	c->pid = msg->service_pid;
 	c->service_state = SERVICE_STATE_DEAD;
