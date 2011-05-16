@@ -262,6 +262,19 @@ static void centry_add(struct centry *c, pid_t p)
     ctable[p % child_table_size] = c;
 }
 
+/* find a centry in the global table, using the
+ * given pid as the key.  Returns NULL if not
+ * found. */
+static struct centry *centry_find(pid_t p)
+{
+    struct centry *c;
+
+    c = ctable[p % child_table_size];
+    while (c && c->pid != p)
+	c = c->next;
+    return c;
+}
+
 static void centry_set_state(struct centry *c, enum sstate state)
 {
     c->service_state = state;
@@ -840,10 +853,9 @@ static void reap_child(void)
 	}
 
 	/* account for the child */
-	c = ctable[pid % child_table_size];
-	while(c && c->pid != pid) c = c->next;
-	
-	if (c && c->pid == pid) {
+	c = centry_find(pid);
+
+	if (c) {
 	    s = ((c->si) != SERVICE_NONE) ? &Services[c->si] : NULL;
 
 	    /* paranoia */
@@ -1150,14 +1162,12 @@ static void process_msg(const int si, struct notify_message *msg)
 {
     struct centry *c;
     /* si must NOT point to an invalid service */
-    struct service * const s = &Services[si];;
+    struct service * const s = &Services[si];
 
-    /* Search hash table with linked list for pid */
-    c = ctable[msg->service_pid % child_table_size];
-    while (c && c->pid != msg->service_pid) c = c->next;
-    
+    c = centry_find(msg->service_pid);
+
     /* Did we find it? */
-    if (!c || c->pid != msg->service_pid) {
+    if (!c) {
 	/* If we don't know about the child, that means it has expired from
 	 * the child list, due to large message delivery delays.  This is
 	 * indeed possible, although it is rare (Debian bug report).
