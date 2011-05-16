@@ -14,6 +14,7 @@ Cassandane needs the following software to work:
 
  * Encode::IMAPUTF7
     not needed currently, but expect it will be in the future.
+    Ubuntu package libencode-imaputf7-perl
 
  * URI, URI::Escape
     Handles URIs.
@@ -44,4 +45,12 @@ Cassandane needs the following software to work:
     Addition to Test::Unit which outputs in jUnit's XML
     format, for integration with Jenkins CI.
     CPAN package http://search.cpan.org/dist/Test-Unit-Runner-Xml/
-    No Ubuntu package (sorry)
+    No Ubuntu package (sorry) - but install depends on:
+        libxml-generator-perl libxml-xpath-perl
+
+Debian/Ubuntu copypasta:
+  sudo apt-get -y install liburi-perl libdigest-sha1-perl \
+       libdatetime-perl libbsd-resource-perl libtest-unit-perl \
+       libxml-generator-perl libxml-xpath-perl \
+       libencode-imaputf7-perl
+  sudo cpan Test::Unit::Runner::XML
