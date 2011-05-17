@@ -72,6 +72,7 @@ sub new
 	re_use_dir => 0,
 	valgrind => 0,
 	_children => {},
+	_stopped => 0,
     };
 
     $self->{name} = $params{name}
@@ -395,12 +396,31 @@ sub stop
 {
     my ($self) = @_;
 
+    return if ($self->{_stopped});
+    $self->{_stopped} = 1;
+
     xlog "stop";
 
     my $pid = $self->_read_pid_file();
     _stop_pid($pid) if defined $pid;
 
 #     rmtree $self->{basedir};
+}
+
+sub DESTROY
+{
+    my ($self) = @_;
+
+    if (!$self->{_stopped})
+    {
+	my $pid = $self->_read_pid_file();
+	if (defined $pid)
+	{
+	    # clean up any dangling master process
+	    xlog "cleaning up $pid";
+	    kill(SIGKILL, $pid);
+	}
+    }
 }
 
 # Run a Cyrus utility program with the given arguments.  The first
