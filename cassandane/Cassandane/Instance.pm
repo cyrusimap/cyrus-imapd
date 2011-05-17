@@ -145,7 +145,10 @@ sub _binary
 	);
     }
 
-    push(@cmd, $self->{cyrus_prefix} . '/bin/' . $name );
+    my $bin = $name;
+    $bin = $self->{cyrus_prefix} . '/bin/' . $bin
+	unless $bin =~ m/^\//;
+    push(@cmd, $bin);
 
     return @cmd;
 }
@@ -217,8 +220,13 @@ sub _generate_master_conf
 
     foreach my $srv (values %{$self->{services}})
     {
+	my @cmd = (
+	    $self->_binary($srv->{binary}),
+	    '-C', $self->_imapd_conf(),
+	    @{$srv->{args}}
+	);
 	print MASTER '    ' . $srv->{name};
-	print MASTER ' cmd="' . join(' ', $self->_binary($srv->{binary})) . ' -C ' .  $self->_imapd_conf() . '"';
+	print MASTER ' cmd="' . join(' ',  @cmd) . '"';
 	print MASTER ' listen="' . $srv->address() .  '"';
 	print MASTER "\n";
     }

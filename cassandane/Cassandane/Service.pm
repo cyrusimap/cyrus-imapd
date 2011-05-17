@@ -70,6 +70,7 @@ sub new
 	binary => undef,
 	host => '127.0.0.1',
 	port => undef,
+	args => [],
     };
 
     $self->{binary} = $params{binary}
@@ -78,6 +79,8 @@ sub new
 	if defined $params{host};
     $self->{port} = $params{port}
 	if defined $params{port};
+    $self->{args} = $params{args}
+	if defined $params{args};
 
     $self->{port} = Cassandane::Service->alloc_port()
 	unless defined $self->{port};
