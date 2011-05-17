@@ -41,7 +41,7 @@
 
 use strict;
 use warnings;
-use Test::Unit::TestRunner;
+use Cassandane::Unit::Runner;
 use Cassandane::Util::Log;
 
 my $format = 'tap';
@@ -59,7 +59,7 @@ my %runners =
     {
 	my (@suites) = @_;
 
-	my $runner = Test::Unit::TestRunner->new();
+	my $runner = Cassandane::Unit::Runner->new();
 	my $passed = 1;
 	foreach my $suite (@suites)
 	{
