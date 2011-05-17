@@ -137,6 +137,7 @@ int main(int argc,char **argv)
     int opt;
     int fflag = 0;
     int r, code = 0;
+    int do_report = 1;
     char *alt_config = NULL, *domain = NULL;
     struct fix_rock frock;
     struct txn *tid = NULL;
@@ -151,6 +152,10 @@ int main(int argc,char **argv)
 	    alt_config = optarg;
 	    break;
 
+	case 'q':
+	    do_report = 0;
+	    break;
+
 	case 'd':
 	    domain = optarg;
 	    break;
@@ -163,6 +168,10 @@ int main(int argc,char **argv)
 	    usage();
 	}
     }
+
+    /* always report if not fixing, otherwise we do nothing */
+    if (!fflag)
+	do_report = 1;
 
     cyrus_init(alt_config, "quota", 0);
 
@@ -203,7 +212,7 @@ int main(int argc,char **argv)
     mboxlist_done();
 
     if (r) code = convert_code(r);
-    else reportquota();
+    else if (do_report) reportquota();
 
     cyrus_done();
 
@@ -213,7 +222,7 @@ int main(int argc,char **argv)
 void usage(void)
 {
     fprintf(stderr,
-	    "usage: quota [-C <alt_config>] [-d <domain>] [-f] [prefix]...\n");
+	    "usage: quota [-C <alt_config>] [-d <domain>] [-f] [-q] [prefix]...\n");
     exit(EC_USAGE);
 }    
 
