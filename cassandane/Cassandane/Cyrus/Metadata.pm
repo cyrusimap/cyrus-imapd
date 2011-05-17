@@ -126,6 +126,7 @@ sub test_shared
     # set duplicate deliver (as admin)
     my $admintalk = $self->{adminstore}->get_client();
     $admintalk->setmetadata('user.cassandane', "/shared/vendor/cmu/cyrus-imapd/duplicatedeliver", 'true');
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
 
     # and make sure the change sticks
     my $dup = $imaptalk->getmetadata('INBOX', "/shared/vendor/cmu/cyrus-imapd/duplicatedeliver");
@@ -145,11 +146,13 @@ sub test_private
     $self->assert_num_equals(0, scalar keys %$res);
 
     $imaptalk->setmetadata('INBOX', "/private/comment", "This is a comment");
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     my $com = $imaptalk->getmetadata('INBOX', "/private/comment");
     $self->assert_str_equals("This is a comment", $com->{INBOX}{"/private/comment"});
 
     # remove it again
     $imaptalk->setmetadata('INBOX', "/private/comment", undef);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 
     my $meta = $imaptalk->getmetadata('INBOX', {depth => 'infinity'}, '/private');
     $self->assert_num_equals(0, scalar keys %$meta);
@@ -177,14 +180,14 @@ sub test_embedded_nuls
     $self->assert_null($res->{$folder}{$entry});
 
     xlog "set and then get the same back again";
-    $imaptalk->setmetadata($folder, $entry, $binary)
-	or die "Cannot set metadata: $@";
+    $imaptalk->setmetadata($folder, $entry, $binary);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $res = $imaptalk->getmetadata($folder, $entry);
     $self->assert_str_equals($binary, $res->{$folder}{$entry});
 
     xlog "remove it again";
-    $imaptalk->setmetadata($folder, $entry, undef)
-	or die "Cannot remove metadata: $@";
+    $imaptalk->setmetadata($folder, $entry, undef);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 
     xlog "check it's gone now";
     $res = $imaptalk->getmetadata($folder, $entry)
