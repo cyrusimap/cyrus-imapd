@@ -43,6 +43,7 @@ use strict;
 use warnings;
 package Cassandane::Cyrus::Quota;
 use base qw(Test::Unit::TestCase);
+use IO::File;
 use DateTime;
 use Cassandane::Util::Log;
 use Cassandane::Generator;
@@ -92,12 +93,12 @@ sub tear_down
 
 sub make_message
 {
-    my ($self, $subject, @attrs) = @_;
+    my ($self, $store, $subject, @attrs) = @_;
 
-    $self->{store}->write_begin();
+    $store->write_begin();
     my $msg = $self->{gen}->generate(subject => $subject, @attrs);
-    $self->{store}->write_message($msg);
-    $self->{store}->write_end();
+    $store->write_message($msg);
+    $store->write_end();
 
     return $msg;
 }
@@ -117,7 +118,7 @@ sub test_quotarename
     $self->assert_num_equals(0, $res[1]);
 
     for (1..10) {
-	$self->make_message("Message $_", extra_lines => 5000);
+	$self->make_message($self->{store}, "Message $_", extra_lines => 5000);
     }
 
     @res = $admintalk->getquota("user.cassandane");
@@ -147,6 +148,42 @@ sub test_quotarename
 
     @res = $admintalk->getquota("user.cassandane");
     $self->assert_num_equals($base_usage, $res[1], "Usage should drop back after a delete ($base_usage, $res[1])");
+}
+
+sub test_quota_f {
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $admintalk->create("user.quotafuser");
+    $admintalk->setacl("user.quotafuser", "admin", 'lrswipkxtecda');
+    $self->{adminstore}->set_folder("user.quotafuser");
+    for (1..10) {
+	$self->make_message($self->{adminstore}, "Message $_", extra_lines => 5000);
+    }
+
+    # create a bogus quota file
+    mkdir("$self->{instance}{basedir}/conf/quota");
+    mkdir("$self->{instance}{basedir}/conf/quota/q");
+    my $fh = IO::File->new(">$self->{instance}{basedir}/conf/quota/q/user.quotafuser") || die "Failed to open quota file";
+    print $fh "0\n100000\n";
+    close($fh);
+    $self->{instance}->_fix_ownership("$self->{instance}{basedir}/conf/quota");
+
+    # find and add the quota
+    $self->{instance}->run_utility('quota', '-f');
+
+    my @res = $admintalk->getquota("user.quotafuser");
+    $self->assert_num_equals(3, scalar @res, "First quota response: " . Dumper(\@res));
+
+    # re-run the quota utility
+    $self->{instance}->run_utility('quota', '-f');
+
+    my @res2 = $admintalk->getquota("user.quotafuser");
+    $self->assert_num_equals(3, scalar @res2);
+
+    # usage should be unchanged
+    $self->assert_num_equals($res[1], $res2[1]);
 }
 
 1;

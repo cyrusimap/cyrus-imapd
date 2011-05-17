@@ -227,12 +227,15 @@ sub _generate_master_conf
 
 sub _fix_ownership
 {
-    my ($self) = @_;
+    my ($self, $path) = @_;
+
+    $path ||= $self->{basedir};
 
     return if geteuid() != 0;
     my $uid = getpwnam('cyrus');
     my $gid = getgrnam('root');
-    find(sub { chown($uid, $gid, $File::Find::name) }, $self->{basedir});
+
+    find(sub { chown($uid, $gid, $File::Find::name) }, $path);
 }
 
 sub _timed_wait
