@@ -165,8 +165,19 @@ sub test_quota_f {
 	$self->make_message($self->{store}, "Cassandane $_", extra_lines => 5000);
     }
 
+    $admintalk->create("user.zlateuser");
+    $admintalk->setacl("user.zlateuser", "admin", 'lrswipkxtecda');
+    $self->{adminstore}->set_folder("user.zlateuser");
+    for (1..7) {
+	$self->make_message($self->{adminstore}, "Lateuser $_", extra_lines => 1200);
+    }
+    $admintalk->setquota("user.zlateuser", "(storage 750000)") || die "Failed $@";
+
     my @origcasres = $admintalk->getquota("user.cassandane");
     $self->assert_num_equals(3, scalar @origcasres);
+
+    my @origzres = $admintalk->getquota("user.zlateuser");
+    $self->assert_num_equals(3, scalar @origzres);
 
     # create a bogus quota file
     mkdir("$self->{instance}{basedir}/conf/quota");
@@ -183,6 +194,8 @@ sub test_quota_f {
     $self->assert_num_equals(3, scalar @res);
     my @casres = $admintalk->getquota("user.cassandane");
     $self->assert_num_equals(3, scalar @casres);
+    my @zres = $admintalk->getquota("user.zlateuser");
+    $self->assert_num_equals(3, scalar @zres);
 
     # re-run the quota utility
     $self->{instance}->run_utility('quota', '-f');
@@ -191,13 +204,18 @@ sub test_quota_f {
     $self->assert_num_equals(3, scalar @res2);
     my @casres2 = $admintalk->getquota("user.cassandane");
     $self->assert_num_equals(3, scalar @casres2);
+    my @zres2 = $admintalk->getquota("user.zlateuser");
+    $self->assert_num_equals(3, scalar @zres2);
 
     # usage should be unchanged
     $self->assert($res[1] == $res2[1] && 
 		  $casres[1] == $casres2[1] &&
 		  $casres[1] == $origcasres[1], 
+		  $zres[1] == $zres2[1] &&
+		  $zres[1] == $origzres[1], 
 		  "Quota mismatch: quotafuser (1: $res[1], 2: $res2[1]) " .
-		  "cassandane (0:$origcasres[1], 1:$casres[1], 2:$casres2[1])");
+		  "cassandane (0:$origcasres[1], 1:$casres[1], 2:$casres2[1]) " .
+		  "zlateuser (0:$origzres[1], 1:$zres[1], 2:$zres2[1])");
 }
 
 1;
