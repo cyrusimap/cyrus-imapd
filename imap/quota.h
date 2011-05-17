@@ -72,8 +72,6 @@ struct quota {
     int limit;			/* in QUOTA_UNITS */
 };
 
-extern void quota_setroot(struct quota *quota, const char *root);
-
 extern int quota_read(struct quota *quota, struct txn **tid, int wrlock);
 
 extern void quota_commit(struct txn **tid);
