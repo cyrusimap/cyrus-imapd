@@ -45,6 +45,8 @@ use warnings;
 use Cassandane::Util::Log;
 use Cassandane::MessageStoreFactory;
 
+my @otherparams = qw(prefork maxchild maxforkrate maxfds proto babysit);
+
 my $next_port = 9100;
 sub alloc_port
 {
@@ -81,6 +83,11 @@ sub new
 	if defined $params{port};
     $self->{args} = $params{args}
 	if defined $params{args};
+    foreach my $a (@otherparams)
+    {
+	$self->{$a} = $params{$a}
+	    if defined $params{$a};
+    }
 
     $self->{port} = Cassandane::Service->alloc_port()
 	unless defined $self->{port};
@@ -111,6 +118,23 @@ sub create_store
     my ($self, @args) = @_;
     my $params = $self->store_params(@args);
     return Cassandane::MessageStoreFactory->create(%$params);
+}
+
+# Return a hash of key,value pairs which need to go into the line in the
+# cyrus master config file.
+sub master_params
+{
+    my ($self) = @_;
+    my %params = (
+	cmd => [ $self->{binary}, @{$self->{args}} ],
+	listen => $self->address(),
+    );
+    foreach my $a (@otherparams)
+    {
+	$params{$a} = $self->{$a}
+	    if defined $self->{$a};
+    }
+    return \%params;
 }
 
 sub address

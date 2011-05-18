@@ -223,14 +223,23 @@ sub _generate_master_conf
 
     foreach my $srv (values %{$self->{services}})
     {
-	my @cmd = (
-	    $self->_binary($srv->{binary}),
+	my $mp = $srv->master_params();
+
+	# Fix up {cmd}
+	my $bin = shift @{$mp->{cmd}};
+	$mp->{cmd} = join(' ',
+	    $self->_binary($bin),
 	    '-C', $self->_imapd_conf(),
-	    @{$srv->{args}}
+	    @{$mp->{cmd}}
 	);
-	print MASTER '    ' . $srv->{name};
-	print MASTER ' cmd="' . join(' ',  @cmd) . '"';
-	print MASTER ' listen="' . $srv->address() .  '"';
+
+	print MASTER "    $srv->{name}";
+	while (my ($k, $v) = each %$mp)
+	{
+	    $v = "\"$v\""
+		if ($v =~ m/\s/);
+	    print MASTER " $k=$v";
+	}
 	print MASTER "\n";
     }
 
