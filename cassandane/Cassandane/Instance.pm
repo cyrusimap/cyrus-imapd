@@ -70,6 +70,7 @@ sub new
 	config => Cassandane::Config->default()->clone(),
 	services => {},
 	re_use_dir => 0,
+	setup_mailbox => 1,
 	valgrind => 0,
 	_children => {},
 	_stopped => 0,
@@ -85,6 +86,8 @@ sub new
 	if defined $params{config};
     $self->{re_use_dir} = $params{re_use_dir}
 	if defined $params{re_use_dir};
+    $self->{setup_mailbox} = $params{setup_mailbox}
+	if defined $params{setup_mailbox};
     $self->{valgrind} = $params{valgrind}
 	if defined $params{valgrind};
 
@@ -357,10 +360,12 @@ sub start
     my ($self) = @_;
 
     my $admincon = $self->add_service('adminimap');
+    my $created = 0;
 
     xlog "start";
     if (!$self->{re_use_dir} || ! -d $self->{basedir})
     {
+	$created = 1;
 	rmtree $self->{basedir};
 	$self->_build_skeleton();
 	# TODO: system("echo 1 >/proc/sys/kernel/core_uses_pid");
@@ -371,15 +376,18 @@ sub start
     }
     $self->_start_master();
 
-    my $owner = "cassandane";
+    if ($created && $self->{setup_mailbox})
+    {
+	my $owner = "cassandane";
 
-    xlog "create user $owner";
-    my $adminstore = $admincon->create_store(username => 'admin');
-    my $adminclient = $adminstore->get_client();
-    $adminclient->create("user.$owner");
-    $adminclient->setacl("user.$owner", admin => 'lrswipkxtecda');
-    $adminclient->setacl("user.$owner", $owner => 'lrswipkxtecd');
-    $adminclient->setacl("user.$owner", anyone => 'p');
+	xlog "create user $owner";
+	my $adminstore = $admincon->create_store(username => 'admin');
+	my $adminclient = $adminstore->get_client();
+	$adminclient->create("user.$owner");
+	$adminclient->setacl("user.$owner", admin => 'lrswipkxtecda');
+	$adminclient->setacl("user.$owner", $owner => 'lrswipkxtecd');
+	$adminclient->setacl("user.$owner", anyone => 'p');
+    }
 }
 
 sub _stop_pid
