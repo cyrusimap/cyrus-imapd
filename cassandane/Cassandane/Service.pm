@@ -69,20 +69,17 @@ sub new
     my $self =
     {
 	name => $name,
-	binary => undef,
 	host => '127.0.0.1',
 	port => undef,
-	args => [],
+	argv => [],
     };
 
-    $self->{binary} = $params{binary}
-	if defined $params{binary};
     $self->{host} = $params{host}
 	if defined $params{host};
     $self->{port} = $params{port}
 	if defined $params{port};
-    $self->{args} = $params{args}
-	if defined $params{args};
+    $self->{argv} = $params{argv}
+	if defined $params{argv};
     foreach my $a (@otherparams)
     {
 	$self->{$a} = $params{$a}
@@ -92,7 +89,7 @@ sub new
     $self->{port} = Cassandane::Service->alloc_port()
 	unless defined $self->{port};
     die "No binary specified"
-	unless defined $self->{binary};
+	unless defined $self->{argv} && scalar @{$self->{argv}};
 
     bless $self, $class;
     return $self;
@@ -126,7 +123,7 @@ sub master_params
 {
     my ($self) = @_;
     my %params = (
-	cmd => [ $self->{binary}, @{$self->{args}} ],
+	cmd => $self->{argv},
 	listen => $self->address(),
     );
     foreach my $a (@otherparams)
@@ -193,7 +190,7 @@ sub describe
 
     printf "%s, binary %s, listening on %s\n",
 	    $self->{name},
-	    $self->{binary},
+	    $self->{argv}->[0],
 	    $self->address();
 }
 

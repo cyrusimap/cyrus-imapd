@@ -59,19 +59,19 @@ sub create
     if ($name =~ m/imap/)
     {
 	return Cassandane::IMAPService->new($name,
-				binary => 'imapd',
+				argv => ['imapd'],
 				%params);
     }
     elsif ($name =~ m/sync/)
     {
 	return Cassandane::Service->new($name,
-				binary => 'sync_server',
+				argv => ['sync_server'],
 				%params);
     }
     else
     {
-	die "No binary specified and cannot guess a default"
-	    unless defined $params{binary};
+	die "No command specified and cannot guess a default"
+	    unless defined $params{argv};
 	return Cassandane::Service->new($name, %params);
     }
 }
