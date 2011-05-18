@@ -114,8 +114,6 @@ read_line_from_client(void)
 	syslog(LOG_ERR,  "cannot accept: %m");
 	exit(1);
     }
-    /* We don't need our copy of the listen fd anymore */
-    close(LISTEN_FD);
 
     tell_master(MASTER_SERVICE_UNAVAILABLE);
 
