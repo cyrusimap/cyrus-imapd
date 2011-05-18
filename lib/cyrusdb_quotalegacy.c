@@ -42,6 +42,13 @@
  * $Id: cyrusdb_quotalegacy.c,v 1.21 2010/01/06 17:01:45 murch Exp $
  */
 
+/* FILE FORMAT:
+ * used\nlimit\n
+ * where used is a 64 bit unsigned value in bytes
+ * limit is a 32 bit signed value in kilobytes (1024 bytes)
+ * special value: -1 means unlimited quota
+ */
+
 #include <config.h>
 
 #ifdef HAVE_UNISTD_H
