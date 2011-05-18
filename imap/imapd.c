@@ -7104,7 +7104,6 @@ void cmd_status(char *tag, char *name)
 	prot_printf(imapd_out, "%s BAD %s\r\n", tag, errstr);
 	goto done;
     }
-    syslog(LOG_ERR, "return from parse_statusitems is %d", c);
 
     if (c == '\r') c = prot_getc(imapd_in);
     if (c != '\n') {
