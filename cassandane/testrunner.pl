@@ -149,6 +149,10 @@ foreach my $name (@names)
     {
 	push(@suites, $name);
     }
+    elsif ( -f "Cassandane/Cyrus/$file" )
+    {
+	push(@suites, "Cassandane::Cyrus::$name");
+    }
 }
 
 if ($do_list) {
