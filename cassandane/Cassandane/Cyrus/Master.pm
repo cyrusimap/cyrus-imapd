@@ -91,12 +91,16 @@ sub lemming_push
 {
     my ($lemming, $mode) = @_;
 
+#     xlog "Pushing mode=$mode to pid=$lemming->{pid}";
+
     # Push the lemming over the metaphorical cliff.
     $lemming->{sock}->syswrite($mode . "\r\n");
     $lemming->{sock}->close();
 
     # Wait for the master process to wake up and reap the lemming.
-    Cassandane::Instance::_timed_wait(sub { kill(0, $lemming->{pid}) == 0 });
+    Cassandane::Instance::_timed_wait(
+	sub { kill(0, $lemming->{pid}) == 0 },
+	description => "master to reap lemming $lemming->{pid}");
 }
 
 sub lemming_census
@@ -216,7 +220,7 @@ sub test_multi_services
 {
     my ($self) = @_;
 
-    xlog "single successful service";
+    xlog "multiple successful services";
     my $inst = Cassandane::Instance->new(setup_mailbox => 0);
     my $srvA = $inst->add_service('A', argv => [$lemming_bin,qw(-t A -m serve)]);
     my $srvB = $inst->add_service('B', argv => [$lemming_bin,qw(-t B -m serve)]);
@@ -254,6 +258,120 @@ sub test_multi_services
 
     xlog "no more live lemmings";
     $self->assert_deep_equals({ A => [0, 1], B => [0, 1], C => [0, 1] },
+			      lemming_census($inst));
+
+    $inst->stop();
+}
+
+#
+# Test a preforked single running program in SERVICES
+#
+sub test_prefork
+{
+    my ($self) = @_;
+
+    xlog "single successful service";
+    my $inst = Cassandane::Instance->new(setup_mailbox => 0);
+    my $srv = $inst->add_service('A',
+				 prefork => 1,
+				 argv => [$lemming_bin, qw(-t A -m serve)]);
+    $inst->start();
+
+    xlog "preforked, so one lemming running already";
+    $self->assert_deep_equals({ A => [ 1, 0 ] },
+			      lemming_census($inst));
+
+    my $lemm1 = lemming_connect($srv);
+    $self->assert_not_null($lemm1);
+
+    xlog "connected so one lemming forked";
+    $self->assert_deep_equals({ A => [2, 0] },
+			      lemming_census($inst));
+
+    my $lemm2 = lemming_connect($srv);
+    $self->assert_not_null($lemm2);
+
+    xlog "connected again so two additional lemmings forked";
+    $self->assert_deep_equals({ A => [3, 0] },
+			      lemming_census($inst));
+
+    lemming_push($lemm1, 'success');
+    lemming_push($lemm2, 'success');
+
+    xlog "always at least one live lemming";
+    $self->assert_deep_equals({ A => [1, 2] },
+			      lemming_census($inst));
+
+    $inst->stop();
+}
+
+#
+# Test multiple running programs in SERVICES, some preforked.
+#
+sub test_multi_prefork
+{
+    my ($self) = @_;
+
+    xlog "multiple successful service some preforked";
+    my $inst = Cassandane::Instance->new(setup_mailbox => 0);
+    my $srvA = $inst->add_service('A',
+				  prefork => 2,
+				  argv => [$lemming_bin,qw(-t A -m serve)]);
+    my $srvB = $inst->add_service('B',
+				  # no preforking
+				  argv => [$lemming_bin,qw(-t B -m serve)]);
+    my $srvC = $inst->add_service('C',
+				  prefork => 3,
+				  argv => [$lemming_bin,qw(-t C -m serve)]);
+    $inst->start();
+
+    # wait for lemmings to be preforked
+    Cassandane::Instance::_timed_wait(
+	sub
+	{
+	    my $census = lemming_census($inst);
+	    $census->{A}->[0] == 2 && $census->{C}->[0] == 3
+	},
+	description => "master to prefork the configured lemmings");
+
+    my @lemmings;
+    my $lemm;
+
+    xlog "connect to A once";
+    $lemm = lemming_connect($srvA);
+    $self->assert_not_null($lemm);
+    push(@lemmings, $lemm);
+    $self->assert_deep_equals({ A => [3, 0], C => [3, 0] },
+			      lemming_census($inst));
+
+    xlog "connect to A again";
+    $lemm = lemming_connect($srvA);
+    $self->assert_not_null($lemm);
+    push(@lemmings, $lemm);
+    $self->assert_deep_equals({ A => [4, 0], C => [3, 0] },
+			      lemming_census($inst));
+
+    xlog "connect to A a third time";
+    $lemm = lemming_connect($srvA);
+    $self->assert_not_null($lemm);
+    push(@lemmings, $lemm);
+    $self->assert_deep_equals({ A => [5, 0], C => [3, 0] },
+			      lemming_census($inst));
+
+    xlog "connect to B";
+    $lemm = lemming_connect($srvB);
+    $self->assert_not_null($lemm);
+    push(@lemmings, $lemm);
+    $self->assert_deep_equals({ A => [5, 0], B => [1, 0], C => [3, 0] },
+			      lemming_census($inst));
+
+    foreach $lemm (@lemmings)
+    {
+	lemming_push($lemm, 'success');
+    }
+
+    xlog "our lemmings are gone, others have replaced them";
+    $self->assert_deep_equals({ A => [2, 3], B => [0, 1], C => [3, 0] },
 			      lemming_census($inst));
 
     $inst->stop();
