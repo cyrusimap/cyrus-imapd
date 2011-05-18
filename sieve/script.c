@@ -582,10 +582,18 @@ static int do_sieve_error(int ret,
 	if (lastaction == -1) /* we never executed an action */
 	    snprintf(buf, ERR_BUF_SIZE,
 		     "%s", errmsg ? errmsg : sieve_errstr(ret));
-	else
-	    snprintf(buf, ERR_BUF_SIZE,
-		    "%s: %s", action_to_string(lastaction),
-		    errmsg ? errmsg : sieve_errstr(ret));
+	else {
+	    if (interp->lastitem) {
+		snprintf(buf, ERR_BUF_SIZE, "%s (%s): %s", 
+			 action_to_string(lastaction), interp->lastitem,
+			 errmsg ? errmsg : sieve_errstr(ret));
+	    }
+	    else {
+		snprintf(buf, ERR_BUF_SIZE, "%s: %s",
+			 action_to_string(lastaction),
+			 errmsg ? errmsg : sieve_errstr(ret));
+	    }
+	}
  
 	ret |= interp->execute_err(buf, interp->interp_context,
 				   script_context, message_context);
@@ -652,6 +660,8 @@ static int do_action_list(sieve_interp_t *interp,
 				 script_context,
 				 message_context,
 				 &errmsg);
+	    free(interp->lastitem);
+	    interp->lastitem = xstrdup(a->u.rej.msg);
 	    
 	    if (ret == SIEVE_OK)
 		snprintf(actions_string+strlen(actions_string),
@@ -667,6 +677,8 @@ static int do_action_list(sieve_interp_t *interp,
 				   script_context,
 				   message_context,
 				   &errmsg);
+	    free(interp->lastitem);
+	    interp->lastitem = xstrdup(a->u.fil.mailbox);
 
 	    if (ret == SIEVE_OK)
 		snprintf(actions_string+strlen(actions_string),
@@ -681,6 +693,8 @@ static int do_action_list(sieve_interp_t *interp,
 			       script_context,
 			       message_context,
 			       &errmsg);
+	    free(interp->lastitem);
+	    interp->lastitem = NULL;
 	    if (ret == SIEVE_OK)
 		snprintf(actions_string+strlen(actions_string),
 			 ACTIONS_STRING_LEN-strlen(actions_string),
@@ -694,6 +708,8 @@ static int do_action_list(sieve_interp_t *interp,
 				   script_context,
 				   message_context,
 				   &errmsg);
+	    free(interp->lastitem);
+	    interp->lastitem = xstrdup(a->u.red.addr);
 	    if (ret == SIEVE_OK)
 		snprintf(actions_string+strlen(actions_string),
 			 ACTIONS_STRING_LEN-strlen(actions_string),
@@ -705,6 +721,8 @@ static int do_action_list(sieve_interp_t *interp,
 				      script_context,
 				      message_context,
 				      &errmsg);
+	    free(interp->lastitem);
+	    interp->lastitem = NULL;
 	    if (ret == SIEVE_OK)
 		snprintf(actions_string+strlen(actions_string),
 			 ACTIONS_STRING_LEN-strlen(actions_string),
@@ -722,6 +740,8 @@ static int do_action_list(sieve_interp_t *interp,
 						    script_context,
 						    message_context,
 						    &errmsg);
+		free(interp->lastitem);
+		interp->lastitem = NULL;
 
 		if (ret == SIEVE_OK) {
 		    /* send the response */
@@ -751,12 +771,18 @@ static int do_action_list(sieve_interp_t *interp,
 	case ACTION_SETFLAG:
 	    strarray_fini(imapflags);
 	    ret = sieve_addflag(imapflags, a->u.fla.flag);
+	    free(interp->lastitem);
+	    interp->lastitem = xstrdup(a->u.fla.flag);
 	    break;
 	case ACTION_ADDFLAG:
 	    ret = sieve_addflag(imapflags, a->u.fla.flag);
+	    free(interp->lastitem);
+	    interp->lastitem = xstrdup(a->u.fla.flag);
 	    break;
 	case ACTION_REMOVEFLAG:
 	    ret = sieve_removeflag(imapflags, a->u.fla.flag);
+	    free(interp->lastitem);
+	    interp->lastitem = xstrdup(a->u.fla.flag);
 	    break;
 	case ACTION_MARK:
 	    {
@@ -767,6 +793,8 @@ static int do_action_list(sieve_interp_t *interp,
 		    ret = sieve_addflag(imapflags,
 					interp->markflags->data[--n]);
 		}
+		free(interp->lastitem);
+		interp->lastitem = NULL;
 		break;
 	    }
 	case ACTION_UNMARK:
@@ -778,6 +806,8 @@ static int do_action_list(sieve_interp_t *interp,
 		    ret = sieve_removeflag(imapflags,
 					   interp->markflags->data[--n]);
 		}
+		free(interp->lastitem);
+		interp->lastitem = NULL;
 		break;
 	    }
 

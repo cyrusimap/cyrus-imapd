@@ -67,6 +67,8 @@ struct sieve_interp {
 
     sieve_execute_error *execute_err;
 
+    char *lastitem;
+
     /* context to pass along */
     void *interp_context;
 };

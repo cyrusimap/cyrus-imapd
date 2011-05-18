@@ -89,6 +89,7 @@ int sieve_interp_alloc(sieve_interp_t **interp, void *interp_context)
 
     i->interp_context = interp_context;
     i->err = NULL;
+    i->lastitem = NULL;
 
     *interp = i;
     return SIEVE_OK;
@@ -154,6 +155,7 @@ const char *sieve_listextensions(sieve_interp_t *i)
 
 int sieve_interp_free(sieve_interp_t **interp)
 {
+    free((*interp)->lastitem);
     free(*interp);
     
     return SIEVE_OK;
