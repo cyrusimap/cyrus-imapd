@@ -2106,6 +2106,51 @@ static void remove_folder(char *name, struct sync_action_list *list,
 
 /* ====================================================================== */
 
+static int do_sync_mailboxes(struct sync_name_list *mboxname_list,
+			     struct sync_action_list *user_list)
+{
+    int r = 0;
+
+    if (mboxname_list->count) {
+	r = do_mailboxes(mboxname_list);
+	if (r) {
+	    /* promote failed personal mailboxes to USER */
+	    int nonuser = 0;
+	    struct sync_name *mbox;
+	    char *userid, *p, *useridp;
+
+	    for (mbox = mboxname_list->head; mbox; mbox = mbox->next) {
+		/* done OK?  Good :) */
+		if (mbox->mark)
+		    continue;
+
+		useridp = mboxname_isusermailbox(mbox->name, 0);
+		if (useridp) {
+		    userid = xstrdup(useridp);
+		    if ((p = strchr(userid, '.'))) *p = '\0';
+		    mbox->mark = 1;
+
+		    sync_action_list_add(user_list, NULL, userid);
+		    if (verbose) {
+			printf("  Promoting: MAILBOX %s -> USER %s\n",
+			       mbox->name, userid);
+		    }
+		    if (verbose_logging) {
+			syslog(LOG_INFO, "  Promoting: MAILBOX %s -> USER %s",
+			       mbox->name, userid);
+		    }
+		    free(userid);
+		}
+		else
+		    nonuser = 1; /* there was a non-user mailbox */
+	    }
+	    if (!nonuser) r = 0;
+	}
+    }
+
+    return r;
+}
+
 static int do_sync(const char *filename)
 {
     struct sync_action_list *user_list = sync_action_list_create();
@@ -2332,45 +2377,18 @@ static int do_sync(const char *filename)
 	    continue;
 
 	sync_name_list_add(mboxname_list, action->name);
-    }
-
-    if (mboxname_list->count) {
-	int nonuser = 0;
-	r = do_mailboxes(mboxname_list);
-	if (r) {
-	    /* promote failed personal mailboxes to USER */
-	    struct sync_name *mbox;
-	    char *userid, *p, *useridp;
-
-	    for (mbox = mboxname_list->head; mbox; mbox = mbox->next) {
-		/* done OK?  Good :) */
-		if (mbox->mark)
-		    continue;
-
-		useridp = mboxname_isusermailbox(mbox->name, 0);
-		if (useridp) {
-		    userid = xstrdup(useridp);
-		    if ((p = strchr(userid, '.'))) *p = '\0';
-		    mbox->mark = 1;
-
-		    sync_action_list_add(user_list, NULL, userid);
-		    if (verbose) {
-			printf("  Promoting: MAILBOX %s -> USER %s\n",
-			       mbox->name, userid);
-		    }
-		    if (verbose_logging) {
-			syslog(LOG_INFO, "  Promoting: MAILBOX %s -> USER %s",
-			       mbox->name, userid);
-		    }
-		    free(userid);
-		}
-		else
-		    nonuser = 1;
-	    }
+	/* only do up to 1000 mailboxes at a time */
+	if (mboxname_list->count > 1000) {
+	    syslog(LOG_NOTICE, "sync_mailboxes: doing 1000");
+	    r = do_sync_mailboxes(mboxname_list, user_list);
+	    if (r) goto cleanup;
+	    sync_name_list_free(&mboxname_list);
+	    mboxname_list = sync_name_list_create();
 	}
-
-	if (r && nonuser) goto cleanup;
     }
+
+    r = do_sync_mailboxes(mboxname_list, user_list);
+    if (r) goto cleanup;
 
     for (action = meta_list->head; action; action = action->next) {
 	if (!action->active)
