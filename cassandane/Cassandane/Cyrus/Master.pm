@@ -54,6 +54,9 @@ use Time::HiRes qw(usleep);
 
 my $lemming_bin = getcwd() . '/utils/lemming';
 
+die "No lemming binary.  Did you run \"make\" in the Cassandane directory?"
+    unless -f $lemming_bin;
+
 sub new
 {
     my $class = shift;
