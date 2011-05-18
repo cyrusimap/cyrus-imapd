@@ -43,7 +43,7 @@ package Cassandane::Unit::SyslogListener;
 use strict;
 use warnings;
 use base qw(Test::Unit::Listener);
-use Sys::Syslog qw(:standard :macros);
+use Cassandane::Util::Log;
 # use Carp qw(cluck);
 
 sub new
@@ -55,10 +55,6 @@ sub new
     };
 
     bless $self, $class;
-
-    openlog('cassandane', '', LOG_LOCAL6)
-	or die "Cannot openlog";
-
     return $self;
 }
 
@@ -73,7 +69,7 @@ sub start_test
     my ($self, $test) = @_;
 
 #     cluck "start test";
-    syslog(LOG_ERR, "Cassandane test " . $test->name() . " starting.");
+    xlog "Cassandane test " . $test->name() . " starting.";
     $self->{nfail} = 0;
     $self->{nerr} = 0;
 }
@@ -99,8 +95,8 @@ sub end_test
 {
     my ($self, $test) = @_;
 #     cluck "end test";
-    syslog(LOG_ERR, "Cassandane test " . $test->name() . " ending, " .
-		    $self->{nfail} . " failures " . $self->{nerr} . " errors.");
+    xlog "Cassandane test " . $test->name() . " ending, " .
+		    $self->{nfail} . " failures " . $self->{nerr} . " errors.";
 }
 
 sub end_suite

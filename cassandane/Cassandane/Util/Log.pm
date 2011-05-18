@@ -42,6 +42,7 @@
 package Cassandane::Util::Log;
 use strict;
 use warnings;
+use Sys::Syslog qw(:standard :macros);
 
 use Exporter ();
 our @ISA = qw(Exporter);
@@ -51,13 +52,16 @@ our @EXPORT = qw(
 
 my $verbose = 0;
 
+openlog('cassandane', '', LOG_LOCAL6)
+    or die "Cannot openlog";
+
 sub xlog
 {
     my ($pkg, $file, $line) = caller;
     $pkg =~ s/^Cassandane:://;
-    my $prefix = "=====> " . $pkg . "[" . $line . "]";
-    my $msg = join(' ', @_);
-    print STDERR "$prefix $msg\n" if $verbose;
+    my $msg = "=====> " . $pkg . "[" . $line . "] " . join(' ', @_);
+    print STDERR "$msg\n" if $verbose;
+    syslog(LOG_ERR, "$msg");
 }
 
 sub set_verbose
