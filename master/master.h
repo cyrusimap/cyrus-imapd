@@ -36,6 +36,7 @@ struct service {
     int nactive;		/* num children servicing clients */
     int nconnections;		/* num connections made to children */
     double forkrate;		/* rate at which we're spawning children */
+    int nreadyfails;		/* number of failures in READY state */
 
     /* fork rate computation */
     struct timeval last_interval_start;

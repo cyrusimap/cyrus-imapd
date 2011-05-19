@@ -139,6 +139,8 @@ const char *MASTER_CONFIG_FILENAME = DEFAULT_MASTER_CONFIG_FILENAME;
 #define SERVICE_MAX  INT_MAX-10
 #define SERVICENAME(x) ((x) ? x : "unknown")
 
+#define MAX_READY_FAILS	    5
+
 struct service *Services = NULL;
 static int allocservices = 0;
 int nservices = 0;
@@ -903,6 +905,14 @@ static void reap_child(void)
 			       "service %s pid %d in READY state: "
 			       "terminated abnormally",
 			       SERVICENAME(s->name), pid);
+			if (++s->nreadyfails >= MAX_READY_FAILS && s->exec) {
+			    syslog(LOG_ERR, "too many failures for "
+				   "service %s, disabling until next SIGHUP",
+				   SERVICENAME(s->name));
+			    s->exec = NULL;
+			    close(s->socket);
+			    s->socket = 0;
+			}
 		    }
 		    break;
 		    
