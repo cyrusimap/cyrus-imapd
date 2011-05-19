@@ -387,14 +387,23 @@ static int response_parse(const char *cmd,
 
     for (kl = kin->head; kl; kl = kl->next) {
 	if (!strcmp(kl->name, "SIEVE")) {
+	    struct message_guid guid;
 	    const char *filename = NULL;
+	    const char *guidstr = NULL;
 	    time_t modtime = 0;
 	    uint32_t active = 0;
 	    if (!sieve_list) goto parse_err;
 	    if (!dlist_getatom(kl, "FILENAME", &filename)) goto parse_err;
 	    if (!dlist_getdate(kl, "LAST_UPDATE", &modtime)) goto parse_err;
+	    dlist_getatom(kl, "GUID", &guidstr); /* optional */
+	    if (guidstr) {
+		if (!message_guid_decode(&guid, guidstr)) goto parse_err;
+	    }
+	    else {
+		message_guid_set_null(&guid);
+	    }
 	    dlist_getnum(kl, "ISACTIVE", &active); /* optional */
-	    sync_sieve_list_add(sieve_list, filename, modtime, active);
+	    sync_sieve_list_add(sieve_list, filename, modtime, &guid, active);
 	}
 
 	else if (!strcmp(kl->name, "QUOTA")) {
@@ -1918,14 +1927,22 @@ static int do_user_sieve(const char *userid, struct sync_sieve_list *replica_sie
         return IMAP_IOERROR;
     }
 
-    /* Upload missing and out of date scripts */
+    /* Upload missing and out of date or mismatching scripts */
     for (mitem = master_sieve->head; mitem; mitem = mitem->next) {
         ritem = sync_sieve_lookup(replica_sieve, mitem->name);
 	if (ritem) {
 	    ritem->mark = 1;
-	    if (ritem->last_update >= mitem->last_update)
-		continue; /* doesn't need updating */
+	    /* compare the GUID if known */
+	    if (!message_guid_isnull(&ritem->guid)) {
+		if (message_guid_equal(&ritem->guid, &mitem->guid))
+		    continue;
+		/* XXX: copyback support */
+	    }
+	    /* fallback to date comparison */
+	    else if (ritem->last_update >= mitem->last_update)
+		continue; /* changed */
 	}
+
 	r = sieve_upload(userid, mitem->name, mitem->last_update);
 	if (r) goto bail;
     }

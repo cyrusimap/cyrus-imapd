@@ -1598,6 +1598,7 @@ static int user_sieve(const char *userid)
 	kl = dlist_new("SIEVE");
 	dlist_atom(kl, "FILENAME", sieve->name);
 	dlist_date(kl, "LAST_UPDATE", sieve->last_update);
+	dlist_atom(kl, "GUID", message_guid_encode(&sieve->guid));
 	dlist_num(kl, "ISACTIVE", sieve->active ? 1 : 0);
 	sync_send_response(kl, sync_out);
 	dlist_free(&kl);

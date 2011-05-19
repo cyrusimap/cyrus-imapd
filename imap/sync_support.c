@@ -719,13 +719,15 @@ struct sync_sieve_list *sync_sieve_list_create(void)
 }
 
 void sync_sieve_list_add(struct sync_sieve_list *l, const char *name,
-			 time_t last_update, int active)
+			 time_t last_update, struct message_guid *guidp,
+			 int active)
 {
     struct sync_sieve *item = xzmalloc(sizeof(struct sync_sieve));
 
     item->name = xstrdup(name);
     item->last_update = last_update;
     item->active = active;
+    message_guid_copy(&item->guid, guidp);
     item->mark = 0;
 
     if (l->tail)
@@ -787,39 +789,48 @@ struct sync_sieve_list *sync_sieve_list_generate(const char *userid)
     struct stat sbuf;
     int count;
 
-
-    if (!(mbdir = opendir(sieve_path)))
-        return(list);
+    mbdir = opendir(sieve_path);
+    if (!mbdir) return list;
 
     active[0] = '\0';
     while((next = readdir(mbdir)) != NULL) {
-        if(!strcmp(next->d_name, ".") || !strcmp(next->d_name, ".."))
-            continue;
+	uint32_t size;
+	char *result;
+	struct message_guid guid;
+	if (!strcmp(next->d_name, ".") || !strcmp(next->d_name, ".."))
+	    continue;
 
-        snprintf(filename, sizeof(filename), "%s/%s",
-                 sieve_path, next->d_name);
+	snprintf(filename, sizeof(filename), "%s/%s",
+		 sieve_path, next->d_name);
 
-        if (stat(filename, &sbuf) < 0)
-            continue;
+	if (stat(filename, &sbuf) < 0)
+	    continue;
 
-        if (!strcmp(next->d_name, "defaultbc")) {
-            if (sbuf.st_mode & S_IFLNK) {
-                count = readlink(filename, active, 2047);
+	if (!strcmp(next->d_name, "defaultbc")) {
+	    if (sbuf.st_mode & S_IFLNK) {
+		count = readlink(filename, active, 2047);
 
-                if (count >= 0) {
-                    active[count] = '\0';
-                } else {
-                    /* XXX Report problem? */
-                }
-            }
-            continue;
-        }
-        sync_sieve_list_add(list, next->d_name, sbuf.st_mtime, 0);
+		if (count >= 0) {
+		    active[count] = '\0';
+		} else {
+		    /* XXX Report problem? */
+		}
+	    }
+	    continue;
+	}
+
+	/* calculate the sha1 on the fly, relatively cheap */
+	result = sync_sieve_read(userid, next->d_name, &size);
+	if (!result) continue;
+	message_guid_generate(&guid, result, size);
+
+	sync_sieve_list_add(list, next->d_name, sbuf.st_mtime, &guid, 0);
+	free(result);
     }
     closedir(mbdir);
 
     if (active[0])
-        sync_sieve_list_set_active(list, active);
+	sync_sieve_list_set_active(list, active);
 
     return list;
 }
