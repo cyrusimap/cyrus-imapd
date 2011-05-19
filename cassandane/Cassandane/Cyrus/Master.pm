@@ -73,6 +73,8 @@ sub lemming_connect
 	    Type => SOCK_STREAM,
 	    PeerHost => $srv->{host},
 	    PeerPort => $srv->{port});
+    die "Cannot create sock"
+	unless defined $sock;
 
     # The lemming sends us his PID so we can later wait for him to die
     # properly.  It's easiest for synchronisation purposes to encode
@@ -150,7 +152,6 @@ sub test_service
 			      lemming_census($inst));
 
     my $lemm = lemming_connect($srv);
-    $self->assert_not_null($lemm);
 
     xlog "connected so one lemming forked";
     $self->assert_deep_equals({ A => [1, 0] },
@@ -182,21 +183,18 @@ sub test_multi_connections
 			      lemming_census($inst));
 
     my $lemm1 = lemming_connect($srv);
-    $self->assert_not_null($lemm1);
 
     xlog "connected so one lemming forked";
     $self->assert_deep_equals({ A => [1, 0] },
 			      lemming_census($inst));
 
     my $lemm2 = lemming_connect($srv);
-    $self->assert_not_null($lemm2);
 
     xlog "two connected so two lemmings forked";
     $self->assert_deep_equals({ A => [2, 0] },
 			      lemming_census($inst));
 
     my $lemm3 = lemming_connect($srv);
-    $self->assert_not_null($lemm3);
 
     xlog "three connected so three lemmings forked";
     $self->assert_deep_equals({ A => [3, 0] },
@@ -232,21 +230,18 @@ sub test_multi_services
 			      lemming_census($inst));
 
     my $lemmA = lemming_connect($srvA);
-    $self->assert_not_null($lemmA);
 
     xlog "connected so one lemming forked";
     $self->assert_deep_equals({ A => [1, 0] },
 			      lemming_census($inst));
 
     my $lemmB = lemming_connect($srvB);
-    $self->assert_not_null($lemmB);
 
     xlog "two connected so two lemmings forked";
     $self->assert_deep_equals({ A => [1, 0], B => [1, 0] },
 			      lemming_census($inst));
 
     my $lemmC = lemming_connect($srvC);
-    $self->assert_not_null($lemmC);
 
     xlog "three connected so three lemmings forked";
     $self->assert_deep_equals({ A => [1, 0], B => [1, 0], C => [1, 0] },
@@ -282,14 +277,12 @@ sub test_prefork
 			      lemming_census($inst));
 
     my $lemm1 = lemming_connect($srv);
-    $self->assert_not_null($lemm1);
 
     xlog "connected so one lemming forked";
     $self->assert_deep_equals({ A => [2, 0] },
 			      lemming_census($inst));
 
     my $lemm2 = lemming_connect($srv);
-    $self->assert_not_null($lemm2);
 
     xlog "connected again so two additional lemmings forked";
     $self->assert_deep_equals({ A => [3, 0] },
@@ -339,28 +332,24 @@ sub test_multi_prefork
 
     xlog "connect to A once";
     $lemm = lemming_connect($srvA);
-    $self->assert_not_null($lemm);
     push(@lemmings, $lemm);
     $self->assert_deep_equals({ A => [3, 0], C => [3, 0] },
 			      lemming_census($inst));
 
     xlog "connect to A again";
     $lemm = lemming_connect($srvA);
-    $self->assert_not_null($lemm);
     push(@lemmings, $lemm);
     $self->assert_deep_equals({ A => [4, 0], C => [3, 0] },
 			      lemming_census($inst));
 
     xlog "connect to A a third time";
     $lemm = lemming_connect($srvA);
-    $self->assert_not_null($lemm);
     push(@lemmings, $lemm);
     $self->assert_deep_equals({ A => [5, 0], C => [3, 0] },
 			      lemming_census($inst));
 
     xlog "connect to B";
     $lemm = lemming_connect($srvB);
-    $self->assert_not_null($lemm);
     push(@lemmings, $lemm);
     $self->assert_deep_equals({ A => [5, 0], B => [1, 0], C => [3, 0] },
 			      lemming_census($inst));
@@ -376,5 +365,87 @@ sub test_multi_prefork
 
     $inst->stop();
 }
+
+#
+# Test a single program in SERVICES which fails after connect
+#
+sub test_exit_after_connect
+{
+    my ($self) = @_;
+
+    xlog "single service will exit after connect";
+    my $inst = Cassandane::Instance->new(setup_mailbox => 0);
+    my $srv = $inst->add_service('A', argv => [$lemming_bin, qw(-t A -m serve)]);
+    $inst->start();
+
+    xlog "not preforked, so no lemmings running yet";
+    $self->assert_deep_equals({},
+			      lemming_census($inst));
+
+    my $lemm = lemming_connect($srv);
+
+    xlog "connected so one lemming forked";
+    $self->assert_deep_equals({ A => [1, 0] },
+			      lemming_census($inst));
+
+    xlog "push the lemming off the cliff";
+    lemming_push($lemm, 'exit');
+    $self->assert_deep_equals({ A => [0, 1] },
+			      lemming_census($inst));
+
+    xlog "can connect again";
+    $lemm = lemming_connect($srv);
+    $self->assert_deep_equals({ A => [1, 1] },
+			      lemming_census($inst));
+
+    xlog "push the lemming off the cliff";
+    lemming_push($lemm, 'exit');
+    $self->assert_deep_equals({ A => [0, 2] },
+			      lemming_census($inst));
+
+    $inst->stop();
+}
+
+#
+# Test a single program in SERVICES which fails during startup
+#
+sub test_exit_during_start
+{
+    my ($self) = @_;
+    my $lemm;
+
+    xlog "single service will exit during startup";
+    my $inst = Cassandane::Instance->new(setup_mailbox => 0);
+    my $srv = $inst->add_service('A', argv => [$lemming_bin, qw(-t A -d 100 -m exit)]);
+    $inst->start();
+
+    xlog "not preforked, so no lemmings running yet";
+    $self->assert_deep_equals({},
+			      lemming_census($inst));
+
+    xlog "connection fails due to dead lemming";
+    eval
+    {
+	$lemm = lemming_connect($srv);
+    };
+    $self->assert_null($lemm);
+
+    xlog "expect 5 dead lemmings";
+    $self->assert_deep_equals({ A => [0, 5] },
+			      lemming_census($inst));
+
+    xlog "connections should fail because service disabled";
+    eval
+    {
+	$lemm = lemming_connect($srv);
+    };
+    $self->assert_null($lemm);
+    $self->assert_deep_equals({ A => [0, 5] },
+			      lemming_census($inst));
+
+    $inst->stop();
+}
+
+# TODO: test exit during startup with prefork=
 
 1;
