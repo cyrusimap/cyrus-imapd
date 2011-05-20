@@ -3697,6 +3697,10 @@ static char *index_extract_subject(const char *subj, size_t len, int *is_refwd)
 
     free(buf);
 
+    for (s = base; *s; s++) {
+	*s = toupper(*s);
+    }
+
     return base;
 }
 
