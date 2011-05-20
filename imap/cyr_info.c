@@ -149,7 +149,7 @@ static void do_conf(int only_changed)
 	    }
 	    printf("%s:", imapopts[i].optname);
 	    for (j = 0; imapopts[i].enum_options[j].name; j++) {
-		if (imapopts[i].val.e & (1<<j)) {
+		if ((unsigned)imapopts[i].val.e == (1U<<j)) {
 		    printf(" %s", imapopts[i].enum_options[j].name);
 		    break;
 		}
@@ -246,7 +246,7 @@ static void add_service(const char *name,
     *ksp = knew;
 }
 
-static void do_lint()
+static void do_lint(void)
 {
     struct service_item *ks = NULL;
 
