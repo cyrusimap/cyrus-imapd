@@ -164,20 +164,31 @@ lmtpstats.c: lmtpstats.snmp $(srcdir)/../snmp/snmpgen
 
 lmtpstats.h: lmtpstats.c
 
-imap_err.c: imap_err.et
+imap_err.c imap_err.h: imap_err.et
 	$(COMPILE_ET) $(srcdir)/imap_err.et
 
-imap_err.h: imap_err.c
+annotate.o append.o arbitron.o convert_code.o: imap_err.h
+ctl_mboxlist.o cvt_cyrusdb.o: imap_err.h
+cyr_dbtool.o cyrdump.o cyr_sequence.o deliver.o dlist.o: imap_err.h
+duplicate.o fud.o global.o imapd.o imap_proxy.o index.o: imap_err.h
+ipurge.o lmtpd.o lmtpengine.o lmtp_sieve.o mailbox.o mbdump.o: imap_err.h
+mbexamine.o mboxkey.o mboxlist.o mboxname.o mbpath.o message.o: imap_err.h
+mupdate.o nntpd.o pop3d.o proxy.o quota.o quota_db.o: imap_err.h
+reconstruct.o saslclient.o saslserver.o seen_db.o smmapd.o: imap_err.h
+smtpclient.o spool.o squatter.o statuscache_db.o sync_client.o: imap_err.h
+sync_reset.o sync_server.o sync_support.o unexpunge.o: imap_err.h
+upgrade_index.o user.o: imap_err.h
 
-nntp_err.c: nntp_err.et
+nntp_err.c nntp_err.h: nntp_err.et
 	$(COMPILE_ET) $(srcdir)/nntp_err.et
 
-nntp_err.h: nntp_err.c
+nntpd.o spool.o: nntp_err.h
 
-mupdate_err.c: mupdate_err.et
+mupdate_err.c mupdate_err.h: mupdate_err.et
 	$(COMPILE_ET) $(srcdir)/mupdate_err.et
 
-mupdate_err.h: mupdate_err.c
+ctl_mboxlist.o global.o lmtpd.o lmtpengine.o: mupdate_err.h
+mupdate-client.o mupdate.o mupdate-slave.o: mupdate_err.h
 
 @MAINT@rfc822_header.c: rfc822_header.st
 @MAINT@	@top_srcdir@/tools/compile_st.pl -c rfc822_header.st > $@.NEW && mv $@.NEW $@

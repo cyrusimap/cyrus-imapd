@@ -99,21 +99,23 @@ OBJS = sieve_err.o \
 
 sieve-lex.c: sieve-lex.l sieve.h
 
-sieve.c sieve.h: sieve.y
-	$(YACC) $(YFLAGS) $(srcdir)/sieve.y
-	mv -f y.tab.c sieve.c 
-	mv -f y.tab.h sieve.h
+sieve.c: sieve.y
+	t=y.$$$$ ; $(YACC) $(YFLAGS) -b $$t $(srcdir)/sieve.y && mv $$t.tab.c $@
+sieve.h: sieve.y
+	t=y.$$$$ ; $(YACC) $(YFLAGS) -b $$t $(srcdir)/sieve.y && mv $$t.tab.h $@
 
+bc_generate.o comparator.o script.o sieve-lex.o tree.o: sieve.h
 
 addr-lex.c: addr-lex.l addr.h
 #taken out by new makefile
 #	$(LEX) -t -Paddr $(srcdir)/addr-lex.l > $@
 
-addr.c addr.h: addr.y
-	$(YACC) $(YFLAGS) -p addr $(srcdir)/addr.y
-	mv -f y.tab.c addr.c
-	mv -f y.tab.h addr.h
+addr.c: addr.y
+	t=y.$$$$ ; $(YACC) $(YFLAGS) -p addr -b $$t $(srcdir)/addr.y && mv $$t.tab.c $@
+addr.h: addr.y
+	t=y.$$$$ ; $(YACC) $(YFLAGS) -p addr -b $$t $(srcdir)/addr.y && mv $$t.tab.h $@
 
+addr.o addr-lex.o: addr.h
 
 # This is needed because 'makedepend' leaves it out 
 #(this is not in newer version, is it still needed?)
@@ -136,11 +138,15 @@ sieved: sieved.o libsieve.a
 
 sieve_interface.h: sieve_err.h
 
-sieve_err.h sieve_err.c: sieve_err.et 
+sieve_err.h sieve_err.c: sieve_err.et
 	$(COMPILE_ET) $(srcdir)/sieve_err.et
+
+addr.o bc_dump.o bc_emit.o bc_eval.o bc_generate.o: sieve_err.h
+interp.o message.o script.o sievec.o sieve.o sieved.o: sieve_err.h
 
 clean:
 	rm -f sievec sieved test *~ *.o *.a Makefile.bak makedepend.log *.gcno *.gcda
+	rm -f y*.tab.c y*.tab.h
 
 distclean: clean
 	rm -f $(BUILT_SOURCES)

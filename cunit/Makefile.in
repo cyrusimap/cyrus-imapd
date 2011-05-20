@@ -70,8 +70,6 @@ LDFLAGS = @LDFLAGS@ @COM_ERR_LDFLAGS@ $(EXTRALDFLAGS)
 SHELL = /bin/sh
 MAKEDEPEND = @MAKEDEPEND@
 
-COMPILE_ET=@COMPILE_ET@
-
 #
 # Some notes on purify --
 #     you probably want to run the make as the cyrus user as 
