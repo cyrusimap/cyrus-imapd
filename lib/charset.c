@@ -1019,6 +1019,9 @@ int charset_searchstring(const char *substr, comp_pat *pat,
     struct convert_rock *tosearch;
     int res;
 
+    if (!substr[0])
+	return 1; /* zero length string always matches */
+
     /* set up the search handler */
     tosearch = search_init(substr, pat);
 
