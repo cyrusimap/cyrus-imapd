@@ -217,6 +217,129 @@ static void test_group(void)
     parseaddr_free(a);
 }
 
+static void test_multi_group(void)
+{
+    struct address *a;
+    struct address *cur;
+
+    a = NULL;
+    parseaddr_list("group: g1@d1.org, g2@d2.org;, group2: g3@d3.org;", &a);
+
+    cur = a;
+    CU_ASSERT_PTR_NOT_NULL_FATAL(cur);
+    CU_ASSERT_PTR_NULL(cur->name);
+    CU_ASSERT_STRING_EQUAL(cur->mailbox, "group");
+    CU_ASSERT_PTR_NULL(cur->domain);
+
+    cur = cur->next;
+    CU_ASSERT_PTR_NOT_NULL_FATAL(cur);
+    CU_ASSERT_PTR_NULL(cur->name);
+    CU_ASSERT_STRING_EQUAL(cur->mailbox, "g1");
+    CU_ASSERT_STRING_EQUAL(cur->domain, "d1.org");
+
+    cur = cur->next;
+    CU_ASSERT_PTR_NOT_NULL_FATAL(cur);
+    CU_ASSERT_PTR_NULL(cur->name);
+    CU_ASSERT_STRING_EQUAL(cur->mailbox, "g2");
+    CU_ASSERT_STRING_EQUAL(cur->domain, "d2.org");
+
+    cur = cur->next;
+    CU_ASSERT_PTR_NOT_NULL_FATAL(cur);
+    CU_ASSERT_PTR_NULL(cur->name);
+    CU_ASSERT_PTR_NULL(cur->mailbox);
+    CU_ASSERT_PTR_NULL(cur->domain);
+
+    cur = cur->next;
+    CU_ASSERT_PTR_NOT_NULL_FATAL(cur);
+    CU_ASSERT_PTR_NULL(cur->name);
+    CU_ASSERT_STRING_EQUAL(cur->mailbox, "group2");
+    CU_ASSERT_PTR_NULL(cur->domain);
+
+    cur = cur->next;
+    CU_ASSERT_PTR_NOT_NULL_FATAL(cur);
+    CU_ASSERT_PTR_NULL(cur->name);
+    CU_ASSERT_STRING_EQUAL(cur->mailbox, "g3");
+    CU_ASSERT_STRING_EQUAL(cur->domain, "d3.org");
+
+    cur = cur->next;
+    CU_ASSERT_PTR_NOT_NULL_FATAL(cur);
+    CU_ASSERT_PTR_NULL(cur->name);
+    CU_ASSERT_PTR_NULL(cur->mailbox);
+    CU_ASSERT_PTR_NULL(cur->domain);
+
+    cur = cur->next;
+    CU_ASSERT_PTR_NULL(cur);
+
+    parseaddr_free(a);
+}
+
+static void test_multi_group_mixed(void)
+{
+    struct address *a;
+    struct address *cur;
+
+    a = NULL;
+    parseaddr_list("Buddies: Fred Bloggs <fbloggs@fastmail.fm>, "
+		   "Sarah Jane Smith <sjsmith@gmail.com>;, "
+		   "foobar@fastmail.fm, "
+		   "group2: Fred Bloggs Junior <fbloggs_jr@fastmail.fm>;",
+		   &a);
+
+    cur = a;
+
+    CU_ASSERT_PTR_NOT_NULL_FATAL(cur);
+    CU_ASSERT_PTR_NULL(cur->name);
+    CU_ASSERT_STRING_EQUAL(cur->mailbox, "Buddies");
+    CU_ASSERT_PTR_NULL(cur->domain);
+
+    cur = cur->next;
+    CU_ASSERT_PTR_NOT_NULL_FATAL(cur);
+    CU_ASSERT_STRING_EQUAL(cur->name, "Fred Bloggs");
+    CU_ASSERT_STRING_EQUAL(cur->mailbox, "fbloggs");
+    CU_ASSERT_STRING_EQUAL(cur->domain, "fastmail.fm");
+
+    cur = cur->next;
+    CU_ASSERT_PTR_NOT_NULL_FATAL(cur);
+    CU_ASSERT_STRING_EQUAL(cur->name, "Sarah Jane Smith");
+    CU_ASSERT_STRING_EQUAL(cur->mailbox, "sjsmith");
+    CU_ASSERT_STRING_EQUAL(cur->domain, "gmail.com");
+
+    cur = cur->next;
+    CU_ASSERT_PTR_NOT_NULL_FATAL(cur);
+    CU_ASSERT_PTR_NULL(cur->name);
+    CU_ASSERT_PTR_NULL(cur->mailbox);
+    CU_ASSERT_PTR_NULL(cur->domain);
+
+    cur = cur->next;
+    CU_ASSERT_PTR_NOT_NULL_FATAL(cur);
+    CU_ASSERT_PTR_NULL(cur->name);
+    CU_ASSERT_STRING_EQUAL(cur->mailbox, "foobar");
+    CU_ASSERT_STRING_EQUAL(cur->domain, "fastmail.fm");
+
+    cur = cur->next;
+    CU_ASSERT_PTR_NOT_NULL_FATAL(cur);
+    CU_ASSERT_PTR_NULL(cur->name);
+    CU_ASSERT_STRING_EQUAL(cur->mailbox, "group2");
+    CU_ASSERT_PTR_NULL(cur->domain);
+
+    cur = cur->next;
+    CU_ASSERT_PTR_NOT_NULL_FATAL(cur);
+    CU_ASSERT_STRING_EQUAL(cur->name, "Fred Bloggs Junior");
+    CU_ASSERT_STRING_EQUAL(cur->mailbox, "fbloggs_jr");
+    CU_ASSERT_STRING_EQUAL(cur->domain, "fastmail.fm");
+
+    cur = cur->next;
+    CU_ASSERT_PTR_NOT_NULL_FATAL(cur);
+    CU_ASSERT_PTR_NULL(cur->name);
+    CU_ASSERT_PTR_NULL(cur->mailbox);
+    CU_ASSERT_PTR_NULL(cur->domain);
+
+    cur = cur->next;
+    CU_ASSERT_PTR_NULL(cur);
+
+    parseaddr_free(a);
+}
+
 /* TODO: test the source routing feature */
 
 /* Test the iterator interface */
