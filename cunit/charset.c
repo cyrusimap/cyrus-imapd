@@ -102,8 +102,7 @@ static void test_decode_mimeheader(void)
     static const char SEARCH_3[] = "lorem ipsum dolor sit amet";
 
     s = charset_decode_mimeheader(NULL);
-    CU_ASSERT_PTR_NOT_NULL(s);
-    CU_ASSERT_STRING_EQUAL(s, "");
+    CU_ASSERT_PTR_NULL(s);
 
     s = charset_decode_mimeheader("");
     CU_ASSERT_PTR_NOT_NULL(s);
