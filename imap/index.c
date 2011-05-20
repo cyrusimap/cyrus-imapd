@@ -3596,17 +3596,20 @@ static char *get_localpart_addr(const char *header)
  */
 static char *index_extract_subject(const char *subj, size_t len, int *is_refwd)
 {
-    char *buf, *s, *base;
+    char *rawbuf, *buf, *s, *base;
 
     /* parse the subj NSTRING and make a working copy */
     if (!strcmp(subj, "NIL")) {		       	/* NIL? */
 	return xstrdup("");			/* yes, return empty */
     } else if (*subj == '"') {			/* quoted? */
-	buf = xstrndup(subj + 1, len - 2);	/* yes, strip quotes */
+	rawbuf = xstrndup(subj + 1, len - 2);	/* yes, strip quotes */
     } else {
 	s = strchr(subj, '}') + 3;		/* literal, skip { }\r\n */
-	buf = xstrndup(s, len - (s - subj));
+	rawbuf = xstrndup(s, len - (s - subj));
     }
+
+    buf = charset_parse_mimeheader(rawbuf);
+    free(rawbuf);
 
     for (s = buf;;) {
 	base = _index_extract_subject(s, is_refwd);
