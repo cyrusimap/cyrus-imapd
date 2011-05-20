@@ -106,6 +106,10 @@ struct address **addrp;
 	case '@':
 	    tok = parseaddr_domain(&s, &domain, &comment);
 	    parseaddr_append(&addrp, comment, 0, phrase, domain, &freeme);
+	    if (tok == ';') {
+		parseaddr_append(&addrp, 0, 0, 0, 0, &freeme);
+		ingroup = 0;
+	    }
 	    continue;
 
 	case '<':
