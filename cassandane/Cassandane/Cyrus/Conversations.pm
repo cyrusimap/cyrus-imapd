@@ -368,19 +368,19 @@ sub test_xconvfetch
     $store->read_begin();
     while (my $msg = $store->read_message())
     {
- 	my $uid = $msg->get_attribute('uid');
- 	my $cid = $msg->get_attribute('cid');
- 	my $threadid = $msg->get_header('X-Cassandane-Thread');
+	my $uid = $msg->get_attribute('uid');
+	my $cid = $msg->get_attribute('cid');
+	my $threadid = $msg->get_header('X-Cassandane-Thread');
 	if (defined $cids{$cid})
 	{
-	    $self->assert($cids{$cid} == $threadid);
+	    $self->assert_num_equals($threadid, $cids{$cid});
 	}
 	else
 	{
 	    $cids{$cid} = $threadid;
 	    xlog "Found CID $cid";
 	}
-	$self->assert(!defined $uids{$uid});
+	$self->assert_null($uids{$uid});
 	$uids{$uid} = 1;
     }
     $store->read_end();
@@ -391,16 +391,18 @@ sub test_xconvfetch
 	xlog "XCONVFETCHing CID $cid";
 
 	my $result = $store->xconvfetch_begin($cid);
-	$self->assert_num_equals(1, scalar @{$result->{folderstate}});
-	$self->assert_str_equals($foldername, $result->{folderstate}->[0]->{name});
+	$self->assert_not_null($result->{xconvmeta});
+	$self->assert_num_equals(1, scalar keys %{$result->{xconvmeta}});
+	$self->assert_not_null($result->{xconvmeta}->{$cid});
+	$self->assert_not_null($result->{xconvmeta}->{$cid}->{modseq});
 	while (my $msg = $store->xconvfetch_message())
 	{
 	    my $muid = $msg->get_attribute('uid');
 	    my $mcid = $msg->get_attribute('cid');
 	    my $threadid = $msg->get_header('X-Cassandane-Thread');
-	    $self->assert($mcid eq $cid);
-	    $self->assert($threadid == $cids{$cid});
-	    $self->assert($uids{$muid} == 1);
+	    $self->assert_str_equals($cid, $mcid);
+	    $self->assert_num_equals($cids{$cid}, $threadid);
+	    $self->assert_num_equals(1, $uids{$muid});
 	    $uids{$muid} |= 2;
 	}
 	$store->xconvfetch_end();
@@ -409,7 +411,7 @@ sub test_xconvfetch
     xlog "checking that all the UIDs in the folder were XCONVFETCHed";
     foreach my $uid (keys %uids)
     {
-	$self->assert($uids{$uid} == 3);
+	$self->assert_num_equals(3, $uids{$uid});
     }
 }
 

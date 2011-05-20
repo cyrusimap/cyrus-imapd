@@ -325,37 +325,36 @@ sub set_folder
     }
 }
 
+sub _kvlist_to_hash
+{
+    my (@kvlist) = @_;
+    my $h = {};
+    while (my $k = shift @kvlist)
+    {
+	my $v = shift @kvlist;
+	$h->{lc($k)} = $v;
+    }
+    return $h;
+}
+
 sub xconvfetch_begin
 {
-    my ($self, $cid, $valtoken) = @_;
-    my $attrs = join(' ', keys %{$self->{fetch_attrs}});
-    $valtoken = "()"
-	unless defined $valtoken;
-    my @args = ( $cid, $valtoken, "($attrs)" );
+    my ($self, $cid, $changedsince) = @_;
+    my @args = ( $cid, $changedsince || 0, [ keys %{$self->{fetch_attrs}} ] );
 
     my $results =
     {
-	folderstate => [],
-	valtoken => undef,
+	xconvmeta => {},
     };
     $self->{fetched} = undef;
-    my $c_uidv = 0;
-    my $c_hms = 0;
     my %handlers =
     (
-	folderstate => sub
+	xconvmeta => sub
 	{
-	    my ($response, $args) = @_;
-	    my ($f_name, $f_uidv, $f_hms) = @$args;
-# 	    xlog "FOLDERSTATE name=\"$f_name\" uidv=$f_uidv hms=$f_hms";
-	    push(@{$results->{folderstate}},
-		{
-		    name => $f_name,
-		    uidvalidity => $f_uidv,
-		    highestmodseq => $f_hms,
-		});
-	    $c_uidv = ($f_uidv > $c_uidv ? $f_uidv : $c_uidv);
-	    $c_hms = ($f_hms > $c_hms ? $f_hms : $c_hms);
+	    # expecting: * XCONVMETA d55a42549e674b82 (MODSEQ 29)
+	    my ($response, $rr) = @_;
+# 	    xlog "XCONVMETA rr=" . Dumper($rr);
+	    $results->{xconvmeta}->{$rr->[0]} = _kvlist_to_hash(@{$rr->[1]});
 	},
 	fetch => sub
 	{
@@ -369,9 +368,6 @@ sub xconvfetch_begin
 
     $self->{client}->_imap_cmd("xconvfetch", 0, \%handlers, @args)
 	or return undef;
-
-    $results->{valtoken} = "($c_uidv $c_hms)"
-	if $c_uidv > 0 && $c_hms > 0;
 
     return $results;
 }
