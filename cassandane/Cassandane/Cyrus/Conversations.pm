@@ -84,8 +84,6 @@ sub set_up
     $self->{store} =
 	$self->{instance}->get_service('imap')->create_store();
     $self->{store}->set_fetch_attributes('uid', 'cid');
-
-    $self->{expected} = {};
 }
 
 sub tear_down
@@ -131,9 +129,8 @@ sub make_message
 
 sub check_messages
 {
-    my ($self, %params) = @_;
+    my ($self, $expected, %params) = @_;
     my $actual = {};
-    my $expected = $self->{expected};
     my $store = $params{store} || $self->{store};
 
     xlog "check_messages: " . join(' ',%params);
@@ -154,18 +151,27 @@ sub check_messages
 	my $subj = $expmsg->get_header('subject');
 	my $actmsg = $actual->{$subj};
 
-	$self->assert(defined $actmsg);
+	$self->assert_not_null($actmsg);
 
-	$self->assert(defined $actmsg->get_attribute('cid'));
+	xlog "checking cid";
+	$self->assert_not_null($actmsg->get_attribute('cid'));
 
 	my $cid = (defined $params{cid} ? $params{cid} : calc_cid($actmsg));
 
-	$self->assert($actmsg->get_attribute('cid') eq $cid);
+	$self->assert_str_equals($cid, $actmsg->get_attribute('cid'));
 
-	$self->assert(defined $actmsg->get_header('x-cassandane-unique'));
+	xlog "checking x-cassandane-unique";
+	$self->assert_not_null($actmsg->get_header('x-cassandane-unique'));
 
-	$self->assert($actmsg->get_header('x-cassandane-unique') eq
-		      $expmsg->get_header('x-cassandane-unique'));
+	$self->assert_str_equals($actmsg->get_header('x-cassandane-unique'),
+			         $expmsg->get_header('x-cassandane-unique'));
+
+	if (defined $expmsg->get_attribute('uid'))
+	{
+	    xlog "checking uid";
+	    $self->assert_num_equals($expmsg->get_attribute('uid'),
+				     $actmsg->get_attribute('uid'));
+	}
     }
 
     return $actual;
@@ -177,28 +183,30 @@ sub check_messages
 sub test_append
 {
     my ($self) = @_;
+    my %exp;
 
     # check IMAP server has the XCONVERSATIONS capability
     $self->assert($self->{store}->get_client()->capability()->{xconversations});
 
-    xlog "removing folder";
-    $self->{store}->remove();
-
     xlog "generating message A";
-    $self->{expected}->{A} = $self->make_message("Message A");
-    $self->check_messages();
+    $exp{A} = $self->make_message("Message A");
+    $exp{A}->set_attribute(uid => 1);
+    $self->check_messages(\%exp);
 
     xlog "generating message B";
-    $self->{expected}->{B} = $self->make_message("Message B");
-    $self->check_messages();
+    $exp{B} = $self->make_message("Message B");
+    $exp{B}->set_attribute(uid => 2);
+    $self->check_messages(\%exp);
 
     xlog "generating message C";
-    $self->{expected}->{C} = $self->make_message("Message C");
-    my $actual = $self->check_messages();
+    $exp{C} = $self->make_message("Message C");
+    $exp{C}->set_attribute(uid => 3);
+    my $actual = $self->check_messages(\%exp);
 
     xlog "generating message D";
-    $self->{expected}->{D} = $self->make_message("Message D");
-    $self->check_messages();
+    $exp{D} = $self->make_message("Message D");
+    $exp{D}->set_attribute(uid => 4);
+    $self->check_messages(\%exp);
 }
 
 
@@ -208,29 +216,29 @@ sub test_append
 sub test_append_clash
 {
     my ($self) = @_;
+    my %exp;
 
     # check IMAP server has the XCONVERSATIONS capability
     $self->assert($self->{store}->get_client()->capability()->{xconversations});
 
-    xlog "removing folder";
-    $self->{store}->remove();
-
     xlog "generating message A";
-    $self->{expected}->{A} = $self->make_message("Message A");
-    $self->check_messages();
+    $exp{A} = $self->make_message("Message A");
+    $exp{A}->set_attribute(uid => 1);
+    $self->check_messages(\%exp);
 
     xlog "generating message B";
-    $self->{expected}->{B} = $self->make_message("Message B");
-    my $actual = $self->check_messages();
+    $exp{B} = $self->make_message("Message B");
+    $exp{B}->set_attribute(uid => 2);
+    my $actual = $self->check_messages(\%exp);
 
     xlog "generating message C";
-    $self->{expected}->{C} = $self->make_message(
-				 "Message C",
-				 references =>
-				       $self->{expected}->{A}->get_header('message-id') .  ", " .
-				       $self->{expected}->{B}->get_header('message-id'),
+    $exp{C} = $self->make_message("Message C",
+				  references =>
+				       $exp{A}->get_header('message-id') .  ", " .
+				       $exp{B}->get_header('message-id'),
 				 );
-    $self->check_messages(cid => choose_cid(
+    $exp{C}->set_attribute(uid => 3);
+    $self->check_messages(\%exp, cid => choose_cid(
 					calc_cid($actual->{'Message A'}),
 					calc_cid($actual->{'Message B'})
 				    ));
@@ -242,34 +250,35 @@ sub test_append_clash
 sub test_double_clash
 {
     my ($self) = @_;
+    my %exp;
 
     # check IMAP server has the XCONVERSATIONS capability
     $self->assert($self->{store}->get_client()->capability()->{xconversations});
 
-    xlog "removing folder";
-    $self->{store}->remove();
-
     xlog "generating message A";
-    $self->{expected}->{A} = $self->make_message("Message A");
-    $self->check_messages();
+    $exp{A} = $self->make_message("Message A");
+    $exp{A}->set_attribute(uid => 1);
+    $self->check_messages(\%exp);
 
     xlog "generating message B";
-    $self->{expected}->{B} = $self->make_message("Message B");
-    $self->check_messages();
+    $exp{B} = $self->make_message("Message B");
+    $exp{B}->set_attribute(uid => 2);
+    $self->check_messages(\%exp);
 
     xlog "generating message C";
-    $self->{expected}->{C} = $self->make_message("Message C");
-    my $actual = $self->check_messages();
+    $exp{C} = $self->make_message("Message C");
+    $exp{C}->set_attribute(uid => 3);
+    my $actual = $self->check_messages(\%exp);
 
     xlog "generating message D";
-    $self->{expected}->{D} = $self->make_message(
-				 "Message D",
-				 references =>
-				       $self->{expected}->{A}->get_header('message-id') .  ", " .
-				       $self->{expected}->{B}->get_header('message-id') .  ", " .
-				       $self->{expected}->{C}->get_header('message-id'),
+    $exp{D} = $self->make_message("Message D",
+				  references =>
+				       $exp{A}->get_header('message-id') .  ", " .
+				       $exp{B}->get_header('message-id') .  ", " .
+				       $exp{C}->get_header('message-id'),
 				 );
-    $self->check_messages(cid => choose_cid(
+    $exp{D}->set_attribute(uid => 4);
+    $self->check_messages(\%exp, cid => choose_cid(
 					calc_cid($actual->{'Message A'}),
 					calc_cid($actual->{'Message B'}),
 					calc_cid($actual->{'Message C'})
@@ -344,14 +353,9 @@ sub test_xconvfetch
 {
     my ($self) = @_;
     my $store = $self->{store};
-    my $foldername = "INBOX.xconvfetch";
 
     # check IMAP server has the XCONVERSATIONS capability
     $self->assert($store->get_client()->capability()->{xconversations});
-
-    xlog "removing folder";
-    $store->set_folder($foldername);
-    $store->remove();
 
     xlog "generating messages";
     my $generator = Cassandane::ThreadedGenerator->new();
