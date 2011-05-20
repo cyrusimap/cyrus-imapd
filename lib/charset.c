@@ -925,6 +925,8 @@ char *charset_decode_mimeheader(const char *s)
     struct convert_rock *tobuffer, *input;
     char *res;
 
+    if (!s) return NULL;
+
     tobuffer = buffer_init();
     input = uni_init(tobuffer);
     input = canon_init(1, input);
@@ -947,6 +949,8 @@ char *charset_parse_mimeheader(const char *s)
 {
     struct convert_rock *tobuffer, *input;
     char *res;
+
+    if (!s) return NULL;
 
     tobuffer = buffer_init();
     input = uni_init(tobuffer);
