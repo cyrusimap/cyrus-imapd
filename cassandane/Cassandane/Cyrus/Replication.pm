@@ -55,27 +55,12 @@ sub new
     my $class = shift;
     my $self = $class->SUPER::new(@_);
 
-    my $port = Cassandane::Service->alloc_port();
-    my $conf = Cassandane::Config->default()->clone();
-    $conf->set(
-	# sync_client will find the port in the config
-	sync_port => $port,
-	# tell sync_client how to login
-	sync_authname => 'repluser',
-	sync_password => 'replpass',
-	sync_realm => 'internal',
-	sasl_mech_list => 'PLAIN',
-	# Ensure sync_server gives sync_client enough privileges
-	admins => 'admin repluser',
-    );
+    my ($master, $replica) = Cassandane::Instance->create_replicated_pair();
+    $master->add_service('imap');
+    $replica->add_service('imap');
 
-
-    $self->{master} = Cassandane::Instance->new(config => $conf);
-    $self->{master}->add_service('imap');
-
-    $self->{replica} = Cassandane::Instance->new(config => $conf);
-    $self->{replica}->add_service('imap');
-    $self->{replica}->add_service('sync', port => $port);
+    $self->{master} = $master;
+    $self->{replica} = $replica;
 
     $self->{gen} = Cassandane::Generator->new();
 
@@ -167,27 +152,10 @@ sub run_replication
 {
     my ($self) = @_;
 
-    # Disconnect during replication to ensure no imapd
-    # is locking the mailbox, which gives us a spurious
-    # error which is ignored in real world scenarios.
-    $self->{master_store}->disconnect();
-    $self->{replica_store}->disconnect();
-
-    my $params =
-	$self->{replica}->get_service('sync')->store_params();
-
-    # TODO: need a timeout!!
-
-    $self->{master}->run_utility('sync_client',
-	'-v',			# verbose
-	'-S', $params->{host},	# hostname to connect to
-	'-u', 'cassandane',	# replicate the Cassandane user
-	);
-
-    $self->{master_store}->_connect();
-    $self->{master_store}->_select();
-    $self->{replica_store}->_connect();
-    $self->{replica_store}->_select();
+    Cassandane::Instance->run_replication($self->{master},
+					  $self->{replica},
+					  $self->{master_store},
+					  $self->{replica_store});
 }
 
 #
