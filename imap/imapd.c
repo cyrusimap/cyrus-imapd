@@ -10352,8 +10352,7 @@ static int list_cb(char *name, int matchlen, int maycreate,
 			     &rock->last_attributes, 0);
     } else if ((name[matchlen] == '.' || 
 		name[matchlen] == imapd_namespace.hier_sep)
-	    && ! (rock->listargs->cmd & LIST_CMD_EXTENDED)
-	    && rock->trailing_percent) {
+	    && (rock->trailing_percent || (rock->listargs->sel & LIST_SEL_RECURSIVEMATCH))) {
 	/* special case: if the mailbox name argument of a non-extended List
 	 * command ends with %, we must include matching levels of hierarchy */
 	/* XXX: this is so awful because we could get passed
@@ -10483,7 +10482,8 @@ static int recursivematch_cb(char *name, int matchlen, int maycreate,
     list_callback_calls++;
 
     if (name[matchlen]) {
-	if (name[matchlen] == '.') {
+	char c = name[matchlen];
+	if (c == '.' || c == imapd_namespace.hier_sep) {
 	    int *parent_info;
 	    name[matchlen] = '\0';
 	    parent_info = hash_lookup(name, &rock->table);
@@ -10494,7 +10494,7 @@ static int recursivematch_cb(char *name, int matchlen, int maycreate,
 		rock->count++;
 	    }
 	    *parent_info |= MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED;
-	    name[matchlen] = '.';
+	    name[matchlen] = c;
 	}
     } else {
 	int *list_info = hash_lookup(name, &rock->table);
