@@ -3190,12 +3190,14 @@ static int index_searchmsg(char *substr,
 		    p = index_readheader(msgfile->base, msgfile->size,
 					 CACHE_ITEM_BIT32(cachestr),
 					 len);
-		    q = charset_decode_mimeheader(p);
-		    if (charset_searchstring(substr, pat, q, strlen(q))) {
+		    if (p) {
+			q = charset_decode_mimeheader(p);
+			if (charset_searchstring(substr, pat, q, strlen(q))) {
+			    free(q);
+			    return 1;
+			}
 			free(q);
-			return 1;
 		    }
-		    free(q);
 		}
 	    }
 	    cachestr += 5*4;
@@ -3299,69 +3301,70 @@ static void index_getsearchtextmsg(struct index_state *state,
 				   index_search_text_receiver_t receiver,
 				   void *rock,
 				   char const *cachestr) {
-  struct mapfile msgfile;
-  int partsleft = 1;
-  int subparts;
-  unsigned long start;
-  int len, charset, encoding;
-  int partcount = 0;
-  char *p, *q;
-  struct mailbox *mailbox = state->mailbox;
+    struct mapfile msgfile;
+    int partsleft = 1;
+    int subparts;
+    unsigned long start;
+    int len, charset, encoding;
+    int partcount = 0;
+    char *p, *q;
+    struct mailbox *mailbox = state->mailbox;
   
-  if (mailbox_map_message(mailbox, uid, &msgfile.base, &msgfile.size)) {
-    return;
-  }
+    if (mailbox_map_message(mailbox, uid, &msgfile.base, &msgfile.size))
+	return;
 
-  /* Won't find anything in a truncated file */
-  if (msgfile.size > 0) {
-    while (partsleft--) {
-	subparts = CACHE_ITEM_BIT32(cachestr);
-	cachestr += 4;
-	if (subparts) {
-	    partsleft += subparts-1;
+    /* Won't find anything in a truncated file */
+    if (msgfile.size > 0) {
+	while (partsleft--) {
+	    subparts = CACHE_ITEM_BIT32(cachestr);
+	    cachestr += 4;
+	    if (subparts) {
+		partsleft += subparts-1;
 
-            partcount++;
+		partcount++;
 
-            len = CACHE_ITEM_BIT32(cachestr+4);
-            if (len > 0) {
-              p = index_readheader(msgfile.base, msgfile.size,
-                                   CACHE_ITEM_BIT32(cachestr),
-                                   len);
-              q = charset_decode_mimeheader(p);
-              if (partcount == 1) {
-                receiver(uid, SEARCHINDEX_PART_HEADERS,
-                         SEARCHINDEX_CMD_STUFFPART, q, strlen(q), rock);
-                receiver(uid, SEARCHINDEX_PART_BODY,
-                         SEARCHINDEX_CMD_BEGINPART, NULL, 0, rock);
-              } else {
-                receiver(uid, SEARCHINDEX_PART_BODY,
-                         SEARCHINDEX_CMD_APPENDPART, q, strlen(q), rock);
-              }
-              free(q);
-            }
-	    cachestr += 5*4;
-
-	    while (--subparts) {
-		start = CACHE_ITEM_BIT32(cachestr+2*4);
-		len = CACHE_ITEM_BIT32(cachestr+3*4);
-		charset = CACHE_ITEM_BIT32(cachestr+4*4) >> 16;
-		encoding = CACHE_ITEM_BIT32(cachestr+4*4) & 0xff;
-
-		if (start < msgfile.size && len > 0) {
-		  charset_extractfile(receiver, rock, uid,
-				      msgfile.base + start,
-				      len, charset, encoding);
+		len = CACHE_ITEM_BIT32(cachestr+4);
+		if (len > 0) {
+		    p = index_readheader(msgfile.base, msgfile.size,
+					 CACHE_ITEM_BIT32(cachestr),
+					 len);
+		    if (p) {
+			q = charset_decode_mimeheader(p);
+			if (partcount == 1) {
+			    receiver(uid, SEARCHINDEX_PART_HEADERS,
+				     SEARCHINDEX_CMD_STUFFPART, q, strlen(q), rock);
+			    receiver(uid, SEARCHINDEX_PART_BODY,
+				     SEARCHINDEX_CMD_BEGINPART, NULL, 0, rock);
+			} else {
+			    receiver(uid, SEARCHINDEX_PART_BODY,
+				 SEARCHINDEX_CMD_APPENDPART, q, strlen(q), rock);
+			}
+			free(q);
+		    }
 		}
 		cachestr += 5*4;
+
+		while (--subparts) {
+		    start = CACHE_ITEM_BIT32(cachestr+2*4);
+		    len = CACHE_ITEM_BIT32(cachestr+3*4);
+		    charset = CACHE_ITEM_BIT32(cachestr+4*4) >> 16;
+		    encoding = CACHE_ITEM_BIT32(cachestr+4*4) & 0xff;
+
+		    if (start < msgfile.size && len > 0) {
+		      charset_extractfile(receiver, rock, uid,
+					  msgfile.base + start,
+					  len, charset, encoding);
+		    }
+		    cachestr += 5*4;
+		}
 	    }
 	}
+
+	receiver(uid, SEARCHINDEX_PART_BODY,
+		 SEARCHINDEX_CMD_ENDPART, NULL, 0, rock);
     }
 
-    receiver(uid, SEARCHINDEX_PART_BODY,
-             SEARCHINDEX_CMD_ENDPART, NULL, 0, rock);
-  }
-  
-  mailbox_unmap_message(mailbox, uid, &msgfile.base, &msgfile.size);
+    mailbox_unmap_message(mailbox, uid, &msgfile.base, &msgfile.size);
 }
 
 void index_getsearchtext_single(struct index_state *state, uint32_t msgno,
