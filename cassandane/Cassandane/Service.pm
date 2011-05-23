@@ -188,9 +188,8 @@ sub describe
 {
     my ($self) = @_;
 
-    printf "%s, binary %s, listening on %s\n",
+    printf "%s listening on %s\n",
 	    $self->{name},
-	    $self->{argv}->[0],
 	    $self->address();
 }
 
