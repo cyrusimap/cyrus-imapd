@@ -368,7 +368,6 @@ sub start
 {
     my ($self) = @_;
 
-    my $admincon = $self->add_service('adminimap');
     my $created = 0;
 
     xlog "start";
@@ -385,12 +384,12 @@ sub start
     }
     $self->_start_master();
 
-    if ($created && $self->{setup_mailbox})
+    if ($created && $self->{setup_mailbox} && defined $self->get_service('imap'))
     {
 	my $owner = "cassandane";
 
 	xlog "create user $owner";
-	my $adminstore = $admincon->create_store(username => 'admin');
+	my $adminstore = $self->get_service('imap')->create_store(username => 'admin');
 	my $adminclient = $adminstore->get_client();
 	$adminclient->create("user.$owner");
 	$adminclient->setacl("user.$owner", admin => 'lrswipkxtecda');
