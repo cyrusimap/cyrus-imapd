@@ -152,9 +152,7 @@ sub check_messages
 
 	xlog "checking cid";
 	$self->assert_not_null($actmsg->get_attribute('cid'));
-
-	my $cid = (defined $params{cid} ? $params{cid} : calc_cid($actmsg));
-
+	my $cid = $expmsg->get_attribute('cid') || calc_cid($actmsg);
 	$self->assert_str_equals($cid, $actmsg->get_attribute('cid'));
 
 	xlog "checking x-cassandane-unique";
@@ -229,16 +227,29 @@ sub test_append_clash
     my $actual = $self->check_messages(\%exp);
 
     xlog "generating message C";
+    my $ElCid = choose_cid(calc_cid($actual->{'Message A'}),
+			   calc_cid($actual->{'Message B'}));
     $exp{C} = $self->make_message("Message C",
 				  references =>
 				       $exp{A}->get_header('message-id') .  ", " .
 				       $exp{B}->get_header('message-id'),
 				 );
-    $exp{C}->set_attribute(uid => 3);
-    $self->check_messages(\%exp, cid => choose_cid(
-					calc_cid($actual->{'Message A'}),
-					calc_cid($actual->{'Message B'})
-				    ));
+    $exp{C}->set_attributes(uid => 3, cid => $ElCid);
+
+    # Since IRIS-293, inserting this message will have the side effect
+    # of renumbering some of the existing messages.  Predict and test
+    # which messages get renumbered.
+    my $nextuid = 4;
+    foreach my $s (qw(A B))
+    {
+	if (calc_cid($actual->{"Message $s"}) ne $ElCid)
+	{
+	    $exp{$s}->set_attributes(uid => $nextuid, cid => $ElCid);
+	    $nextuid++;
+	}
+    }
+
+    $self->check_messages(\%exp);
 }
 
 #
@@ -268,18 +279,31 @@ sub test_double_clash
     my $actual = $self->check_messages(\%exp);
 
     xlog "generating message D";
+    my $ElCid = choose_cid(calc_cid($actual->{'Message A'}),
+			   calc_cid($actual->{'Message B'}),
+			   calc_cid($actual->{'Message C'}));
     $exp{D} = $self->make_message("Message D",
 				  references =>
 				       $exp{A}->get_header('message-id') .  ", " .
 				       $exp{B}->get_header('message-id') .  ", " .
 				       $exp{C}->get_header('message-id'),
 				 );
-    $exp{D}->set_attribute(uid => 4);
-    $self->check_messages(\%exp, cid => choose_cid(
-					calc_cid($actual->{'Message A'}),
-					calc_cid($actual->{'Message B'}),
-					calc_cid($actual->{'Message C'})
-				    ));
+    $exp{D}->set_attributes(uid => 4, cid => $ElCid);
+
+    # Since IRIS-293, inserting this message will have the side effect
+    # of renumbering some of the existing messages.  Predict and test
+    # which messages get renumbered.
+    my $nextuid = 5;
+    foreach my $s (qw(A B C))
+    {
+	if (calc_cid($actual->{"Message $s"}) ne $ElCid)
+	{
+	    $exp{$s}->set_attributes(uid => $nextuid, cid => $ElCid);
+	    $nextuid++;
+	}
+    }
+
+    $self->check_messages(\%exp);
 }
 
 #
@@ -338,6 +362,11 @@ sub test_replication_clash
     $self->check_messages(\%exp, store => $replica_store);
 
     xlog "generating message D";
+    my $ElCid = choose_cid(
+		    calc_cid($actual->{'Message A'}),
+		    calc_cid($actual->{'Message B'}),
+		    calc_cid($actual->{'Message C'})
+		);
     $exp{D} = $self->make_message("Message D",
 				  store => $master_store,
 				  references =>
@@ -345,16 +374,25 @@ sub test_replication_clash
 				       $exp{B}->get_header('message-id') .  ", " .
 				       $exp{C}->get_header('message-id')
 				 );
-    $exp{D}->set_attribute(uid => 4);
+    $exp{D}->set_attributes(uid => 4, cid => $ElCid);
+
+    # Since IRIS-293, inserting this message will have the side effect
+    # of renumbering some of the existing messages.  Predict and test
+    # which messages get renumbered.
+    my $nextuid = 5;
+    foreach my $s (qw(A B C))
+    {
+	if (calc_cid($actual->{"Message $s"}) ne $ElCid)
+	{
+	    $exp{$s}->set_attributes(uid => $nextuid, cid => $ElCid);
+	    $nextuid++;
+	}
+    }
+
     Cassandane::Instance->run_replication($master, $replica,
 					  $master_store, $replica_store);
-    my $ElCid = choose_cid(
-		    calc_cid($actual->{'Message A'}),
-		    calc_cid($actual->{'Message B'}),
-		    calc_cid($actual->{'Message C'})
-		);
-    $self->check_messages(\%exp, store => $master_store, cid => $ElCid);
-    $self->check_messages(\%exp, store => $replica_store, cid => $ElCid);
+    $self->check_messages(\%exp, store => $master_store);
+    $self->check_messages(\%exp, store => $replica_store);
 }
 
 sub test_xconvfetch
