@@ -71,6 +71,7 @@ sub new
 	services => {},
 	re_use_dir => 0,
 	setup_mailbox => 1,
+	persistent => 0,
 	valgrind => 0,
 	_children => {},
 	_stopped => 0,
@@ -90,6 +91,8 @@ sub new
 	if defined $params{setup_mailbox};
     $self->{valgrind} = $params{valgrind}
 	if defined $params{valgrind};
+    $self->{persistent} = $params{persistent}
+	if defined $params{persistent};
 
     $stamp = to_iso8601(DateTime->now)
 	unless defined $stamp;
@@ -420,6 +423,7 @@ sub stop
 {
     my ($self) = @_;
 
+    return if ($self->{persistent});
     return if ($self->{_stopped});
     $self->{_stopped} = 1;
 
@@ -435,7 +439,7 @@ sub DESTROY
 {
     my ($self) = @_;
 
-    if (!$self->{_stopped})
+    if (!$self->{persistent} && !$self->{_stopped})
     {
 	my $pid = $self->_read_pid_file();
 	if (defined $pid)
