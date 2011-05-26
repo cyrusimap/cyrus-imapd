@@ -225,7 +225,7 @@ void errmsg(const char *fmt, const char *arg, int err)
     if (len < sizeof(buf))
 	len += snprintf(buf+len, sizeof(buf)-len, ": %s", error_message(err));
     if ((err == IMAP_IOERROR) && (len < sizeof(buf)))
-	len += snprintf(buf+len, sizeof(buf)-len, ": %%m");
+	len += snprintf(buf+len, sizeof(buf)-len, ": %s", strerror(errno));
 
     syslog(LOG_ERR, "%s", buf);
     fprintf(stderr, "%s\n", buf);
