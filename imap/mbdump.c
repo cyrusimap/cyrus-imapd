@@ -788,6 +788,7 @@ int undump_mailbox(const char *mbname,
     char *seen_file = NULL;
     char *mboxkey_file = NULL;
     uquota_t old_quota_used = 0;
+    int quotalimit = -1;
 
     memset(&file, 0, sizeof(file));
     memset(&data, 0, sizeof(data));
@@ -810,12 +811,12 @@ int undump_mailbox(const char *mbname,
     
     /* We should now have a number or a NIL */
     c = getword(pin, &data);
-    if(!strcmp(data.s, "NIL")) {
+    if (!strcmp(data.s, "NIL")) {
 	/* Remove any existing quotaroot */
 	mboxlist_unsetquota(mbname);
-    } else if(imparse_isnumber(data.s)) {
-	/* Set a Quota */ 
-	mboxlist_setquota(mbname, atoi(data.s), 0);
+    } else if (sscanf(data.s, "%d", &quotalimit) == 1) {
+	/* Set a Quota (may be -1 for "unlimited") */ 
+	mboxlist_setquota(mbname, quotalimit, 0);
     } else {
 	/* Huh? */
 	buf_free(&data);
