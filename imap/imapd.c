@@ -323,6 +323,11 @@ struct capa_struct base_capabilities[] = {
     { 0,                       0 }
 };
 
+enum {
+    GETSEARCH_CHARSET = 0x01,
+    GETSEARCH_RETURN = 0x02,
+};
+
 
 void motd_file(int fd);
 void shut_down(int code);
@@ -404,9 +409,9 @@ int getlistretopts(char *tag, unsigned *opts);
 
 int getsearchreturnopts(char *tag, struct searchargs *searchargs);
 int getsearchprogram(char *tag, struct searchargs *searchargs,
-			int *charset, int parsecharset);
+			int *charsetp, int is_search_cmd);
 int getsearchcriteria(char *tag, struct searchargs *searchargs,
-			 int *charset, int parsecharset);
+			 int *charsetp, int *searchstatep);
 int getsearchdate(time_t *start, time_t *end);
 int getsortcriteria(char *tag, struct sortcrit **sortcrit);
 int getdatetime(time_t *date);
@@ -7550,17 +7555,17 @@ int getsearchreturnopts(char *tag, struct searchargs *searchargs)
 /*
  * Parse a search program
  */
-int getsearchprogram(tag, searchargs, charset, parsecharset)
-char *tag;
-struct searchargs *searchargs;
-int *charset;
-int parsecharset;
+int getsearchprogram(char *tag, struct searchargs *searchargs,
+		     int *charsetp, int is_search_cmd)
 {
     int c;
+    int searchstate = 0;
+
+    if (is_search_cmd)
+	searchstate |= GETSEARCH_CHARSET|GETSEARCH_RETURN;
 
     do {
-	c = getsearchcriteria(tag, searchargs, charset, parsecharset);
-	parsecharset = 0;
+	c = getsearchcriteria(tag, searchargs, charsetp, &searchstate);
     } while (c == ' ');
     return c;
 }
@@ -7568,11 +7573,8 @@ int parsecharset;
 /*
  * Parse a search criteria
  */
-int getsearchcriteria(tag, searchargs, charset, parsecharset)
-char *tag;
-struct searchargs *searchargs;
-int *charset;
-int parsecharset;
+int getsearchcriteria(char *tag, struct searchargs *searchargs,
+		      int *charsetp, int *searchstatep)
 {
     static struct buf criteria, arg;
     struct searchargs *sub1, *sub2;
@@ -7580,13 +7582,14 @@ int parsecharset;
     int c, flag;
     unsigned size;
     time_t start, end, now = time(0);
+    int keep_charset = 0;
 
     c = getword(imapd_in, &criteria);
     lcase(criteria.s);
     switch (criteria.s[0]) {
     case '\0':
 	if (c != '(') goto badcri;
-	c = getsearchprogram(tag, searchargs, charset, 0);
+	c = getsearchprogram(tag, searchargs, charsetp, 0);
 	if (c == EOF) return EOF;
 	if (c != ')') {
 	    prot_printf(imapd_out, "%s BAD Missing required close paren in Search command\r\n",
@@ -7629,7 +7632,7 @@ int parsecharset;
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(imapd_in, imapd_out, &arg);
 	    if (c == EOF) goto missingarg;
-	    str = charset_convert(arg.s, *charset, NULL, 0);
+	    str = charset_convert(arg.s, *charsetp, NULL, 0);
 	    if (str) appendstrlistpat(&searchargs->bcc, str);
 	    else searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	}
@@ -7637,7 +7640,7 @@ int parsecharset;
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(imapd_in, imapd_out, &arg);
 	    if (c == EOF) goto missingarg;
-	    str = charset_convert(arg.s, *charset, NULL, 0);
+	    str = charset_convert(arg.s, *charsetp, NULL, 0);
 	    if (str) appendstrlistpat(&searchargs->body, str);
 	    else searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	}
@@ -7649,16 +7652,17 @@ int parsecharset;
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(imapd_in, imapd_out, &arg);
 	    if (c == EOF) goto missingarg;
-	    str = charset_convert(arg.s, *charset, NULL, 0);
+	    str = charset_convert(arg.s, *charsetp, NULL, 0);
 	    if (str) appendstrlistpat(&searchargs->cc, str);
 	    else searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	}
-	else if (parsecharset && !strcmp(criteria.s, "charset")) {
+	else if ((*searchstatep & GETSEARCH_CHARSET)
+	      && !strcmp(criteria.s, "charset")) {
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(imapd_in, imapd_out, &arg);
 	    if (c != ' ') goto missingarg;
 	    lcase(arg.s);
-	    *charset = charset_lookupname(arg.s);
+	    *charsetp = charset_lookupname(arg.s);
 	}
 	else goto badcri;
 	break;
@@ -7681,7 +7685,7 @@ int parsecharset;
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(imapd_in, imapd_out, &arg);
 	    if (c == EOF) goto missingarg;
-	    str = charset_convert(arg.s, *charset, NULL, 0);
+	    str = charset_convert(arg.s, *charsetp, NULL, 0);
 	    if (str) appendstrlistpat(&searchargs->from, str);
 	    else searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	}
@@ -7733,7 +7737,7 @@ int parsecharset;
 
 	    c = getastring(imapd_in, imapd_out, &arg);
 	    if (c == EOF) goto missingarg;
-	    str = charset_convert(arg.s, *charset, NULL, 0);
+	    str = charset_convert(arg.s, *charsetp, NULL, 0);
 	    if (str) appendstrlistpat(patlist, str);
 	    else searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	}
@@ -7798,7 +7802,7 @@ int parsecharset;
 	if (!strcmp(criteria.s, "not")) {
 	    if (c != ' ') goto missingarg;		
 	    sub1 = (struct searchargs *)xzmalloc(sizeof(struct searchargs));
-	    c = getsearchcriteria(tag, sub1, charset, 0);
+	    c = getsearchcriteria(tag, sub1, charsetp, searchstatep);
 	    if (c == EOF) {
 		freesearchargs(sub1);
 		return EOF;
@@ -7816,14 +7820,14 @@ int parsecharset;
 	if (!strcmp(criteria.s, "or")) {
 	    if (c != ' ') goto missingarg;		
 	    sub1 = (struct searchargs *)xzmalloc(sizeof(struct searchargs));
-	    c = getsearchcriteria(tag, sub1, charset, 0);
+	    c = getsearchcriteria(tag, sub1, charsetp, searchstatep);
 	    if (c == EOF) {
 		freesearchargs(sub1);
 		return EOF;
 	    }
 	    if (c != ' ') goto missingarg;		
 	    sub2 = (struct searchargs *)xzmalloc(sizeof(struct searchargs));
-	    c = getsearchcriteria(tag, sub2, charset, 0);
+	    c = getsearchcriteria(tag, sub2, charsetp, searchstatep);
 	    if (c == EOF) {
 		freesearchargs(sub1);
 		freesearchargs(sub2);
@@ -7861,9 +7865,11 @@ int parsecharset;
 	if (!strcmp(criteria.s, "recent")) {
 	    searchargs->flags |= SEARCH_RECENT_SET;
 	}
-	else if (!strcmp(criteria.s, "return")) {
+	else if ((*searchstatep & GETSEARCH_RETURN) && 
+		 !strcmp(criteria.s, "return")) {
 	    c = getsearchreturnopts(tag, searchargs);
 	    if (c == EOF) return EOF;
+	    keep_charset = 1;
 	}
 	else goto badcri;
 	break;
@@ -7924,7 +7930,7 @@ int parsecharset;
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(imapd_in, imapd_out, &arg);
 	    if (c == EOF) goto missingarg;
-	    str = charset_convert(arg.s, *charset, NULL, 0);
+	    str = charset_convert(arg.s, *charsetp, NULL, 0);
 	    if (str) appendstrlistpat(&searchargs->subject, str);
 	    else searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	}
@@ -7936,7 +7942,7 @@ int parsecharset;
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(imapd_in, imapd_out, &arg);
 	    if (c == EOF) goto missingarg;
-	    str = charset_convert(arg.s, *charset, NULL, 0);
+	    str = charset_convert(arg.s, *charsetp, NULL, 0);
 	    if (str) appendstrlistpat(&searchargs->to, str);
 	    else searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	}
@@ -7944,7 +7950,7 @@ int parsecharset;
 	    if (c != ' ') goto missingarg;		
 	    c = getastring(imapd_in, imapd_out, &arg);
 	    if (c == EOF) goto missingarg;
-	    str = charset_convert(arg.s, *charset, NULL, 0);
+	    str = charset_convert(arg.s, *charsetp, NULL, 0);
 	    if (str) appendstrlistpat(&searchargs->text, str);
 	    else searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
 	}
@@ -8009,6 +8015,10 @@ int parsecharset;
 	if (c != EOF) prot_ungetc(c, imapd_in);
 	return EOF;
     }
+
+    if (!keep_charset)
+	*searchstatep &= ~GETSEARCH_CHARSET;
+    *searchstatep &= ~GETSEARCH_RETURN;
 
     return c;
 
