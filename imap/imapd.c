@@ -6434,9 +6434,10 @@ void cmd_getquota(const char *tag, const char *name)
 {
     int r;
     char quotarootbuf[MAX_MAILBOX_BUFFER];
-    char mailboxname[MAX_MAILBOX_BUFFER];
+    char internalname[MAX_MAILBOX_BUFFER];
     int mbtype;
     char *server_rock = NULL, *server_rock_tmp = NULL;
+    struct quota q;
 
     imapd_check(NULL, 0);
 
@@ -6444,11 +6445,11 @@ void cmd_getquota(const char *tag, const char *name)
 	r = IMAP_PERMISSION_DENIED;
     } else {
 	r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
-						   imapd_userid, mailboxname);
+						   imapd_userid, internalname);
     }
 
     if (!r) {
-    	r = mlookup(NULL, NULL, mailboxname, &mbtype,
+	r = mlookup(NULL, NULL, internalname, &mbtype,
 		    &server_rock_tmp, NULL, NULL);
     }
 
@@ -6456,7 +6457,7 @@ void cmd_getquota(const char *tag, const char *name)
 	/* remote mailbox */
 	server_rock = xstrdup(server_rock_tmp);
 
-	snprintf(quotarootbuf, sizeof(quotarootbuf), "%s.*", mailboxname);
+	snprintf(quotarootbuf, sizeof(quotarootbuf), "%s.*", internalname);
 
 	r = mboxlist_findall(&imapd_namespace, quotarootbuf,
 			     imapd_userisadmin, imapd_userid,
@@ -6486,28 +6487,22 @@ void cmd_getquota(const char *tag, const char *name)
     }
 
     /* local mailbox */
-    if (!r) {
-	struct quota q;
 
-	q.root = mailboxname;
-	r = quota_read(&q, NULL, 0);
-    
-	if (!r) {
-	    prot_printf(imapd_out, "* QUOTA ");
-	    prot_printastring(imapd_out, name);
-	    prot_printf(imapd_out, " (");
-	    if (q.limit >= 0) {
-		prot_printf(imapd_out, "STORAGE " UQUOTA_T_FMT " %d",
-			    q.used/QUOTA_UNITS, q.limit);
-	    }
-	    prot_printf(imapd_out, ")\r\n");
-	}
-    }
-
+    q.root = internalname;
+    r = quota_read(&q, NULL, 0);
     if (r) {
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
 	return;
     }
+
+    prot_printf(imapd_out, "* QUOTA ");
+    prot_printastring(imapd_out, name);
+    prot_printf(imapd_out, " (");
+    if (q.limit >= 0) {
+	prot_printf(imapd_out, "STORAGE " UQUOTA_T_FMT " %d",
+		    q.used/QUOTA_UNITS, q.limit);
+    }
+    prot_printf(imapd_out, ")\r\n");
 
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
