@@ -77,7 +77,7 @@ pid_t open_sendmail(const char *argv[], FILE **sm)
 
 	/* if we're here we suck */
 	printf("451 lmtpd: didn't exec() sendmail?!?\r\n");
-	fatal("couldn't exec() sendmail", EC_OSERR);
+	exit(EXIT_FAILURE);
     }
 
     if (p < 0) {
