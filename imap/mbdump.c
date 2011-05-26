@@ -86,7 +86,8 @@
 
 static int dump_file(int first, int sync,
 		     struct protstream *pin, struct protstream *pout,
-		     const char *filename, const char *ftag);
+		     const char *filename, const char *ftag,
+		     const char *fbase, unsigned long flen);
 
 /* support for downgrading index files on copying back to an
  * earlier version of Cyrus */
@@ -262,7 +263,7 @@ static int dump_index(struct mailbox *mailbox, int oldversion,
     }
 
     close(oldindex_fd);
-    r = dump_file(first, sync, pin, pout, oldname, "cyrus.index");
+    r = dump_file(first, sync, pin, pout, oldname, "cyrus.index", NULL, 0);
     unlink(oldname);
     if (r) return r;
 
@@ -293,7 +294,7 @@ static int dump_index(struct mailbox *mailbox, int oldversion,
 	}
 
 	close(oldindex_fd);
-	r = dump_file(first, sync, pin, pout, oldname, "cyrus.expunge");
+	r = dump_file(first, sync, pin, pout, oldname, "cyrus.expunge", NULL, 0);
 	unlink(oldname);
 	if (r) return r;
     }
@@ -379,7 +380,8 @@ static int dump_annotations(const char *mailbox __attribute__((unused)),
 
 static int dump_file(int first, int sync,
 		     struct protstream *pin, struct protstream *pout,
-		     const char *filename, const char *ftag)
+		     const char *filename, const char *ftag,
+		     const char *fbase, unsigned long flen)
 {
     int filefd;
     const char *base;
@@ -389,25 +391,42 @@ static int dump_file(int first, int sync,
 
     /* map file */
     syslog(LOG_DEBUG, "wanting to dump %s", filename);
-    filefd = open(filename, O_RDONLY, 0666);
-    if (filefd == -1) {
-	/* If an optional file doesn't exist, skip it */
-	if (errno == ENOENT) return 0;
-	syslog(LOG_ERR, "IOERROR: open on %s: %m", filename);
-	return IMAP_SYS_ERROR;
+    if (fbase) {
+	/* already mapped */
+	base = fbase;
+
+	/* we need to check real file size since actual mmap size may be larger */
+	if (stat(filename, &sbuf) == -1) {
+	    syslog(LOG_ERR, "IOERROR: stat on %s: %m", filename);
+	    fatal("can't stat message file", EC_OSFILE);
+	}
+	if ((unsigned long)sbuf.st_size > flen) {
+	   syslog(LOG_ERR, "IOERROR: size mismatch on %s", filename);
+	   return IMAP_SYS_ERROR;
+	}
+	len = sbuf.st_size;
     }
+    else {
+	filefd = open(filename, O_RDONLY, 0666);
+	if (filefd == -1) {
+	    /* If an optional file doesn't exist, skip it */
+	    if (errno == ENOENT) return 0;
+	    syslog(LOG_ERR, "IOERROR: open on %s: %m", filename);
+	    return IMAP_SYS_ERROR;
+	}
     
-    if (fstat(filefd, &sbuf) == -1) {
-	syslog(LOG_ERR, "IOERROR: fstat on %s: %m", filename);
-	fatal("can't fstat message file", EC_OSFILE);
+	if (fstat(filefd, &sbuf) == -1) {
+	    syslog(LOG_ERR, "IOERROR: fstat on %s: %m", filename);
+	    fatal("can't fstat message file", EC_OSFILE);
+	}	
+
+	base = NULL;
+	len = 0;
+
+	map_refresh(filefd, 1, &base, &len, sbuf.st_size, filename, NULL);
+
+	close(filefd);
     }
-
-    base = NULL;
-    len = 0;
-
-    map_refresh(filefd, 1, &base, &len, sbuf.st_size, filename, NULL);
-
-    close(filefd);
 
     /* send: name, size, and contents */
     if (first) {
@@ -432,7 +451,7 @@ static int dump_file(int first, int sync,
 		    ftag, len, (sync ? "+" : ""));
     }
     prot_write(pout, base, len);
-    map_free(&base, &len);
+    if (!fbase) map_free(&base, &len);
 
     return 0;
 }
@@ -506,7 +525,28 @@ int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid_start,
 
     /* Dump cyrus data files */
     for (df = data_files; df->metaname; df++) {
-	fname = mailbox_meta_fname(mailbox, df->metaname);
+	const char *fbase = NULL;
+	unsigned long flen = 0;
+
+	switch (df->metaname) {
+	case META_INDEX:
+	    if (mailbox->index_base) {
+		fbase = mailbox->index_base;
+		flen = mailbox->index_len;
+	    }
+	    break;
+
+	case META_CACHE:
+	    if (mailbox->cache_buf.s) {
+		fbase = mailbox->cache_buf.s;
+		flen = mailbox->cache_buf.len;
+	    }
+	    break;
+
+	default:
+	    break;
+	}
+
 	if (df->metaname == META_INDEX && oldversion < MAILBOX_MINOR_VERSION) {
 	    expunged_seq = seqset_init(mailbox->i.last_uid, SEQ_SPARSE);
 	    syslog(LOG_NOTICE, "%s downgrading index to version %d for XFER",
@@ -517,7 +557,8 @@ int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid_start,
 	    if (r) goto done;
 
 	} else {
-	    r = dump_file(first, !tag, pin, pout, fname, df->fname);
+	    fname = mailbox_meta_fname(mailbox, df->metaname);
+	    r = dump_file(first, !tag, pin, pout, fname, df->fname, fbase, flen);
 	    if (r) goto done;
 	}
 
@@ -549,7 +590,7 @@ int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid_start,
 	/* construct path/filename */
 	fname = mailbox_message_fname(mailbox, uid);
 
-	r = dump_file(0, !tag, pin, pout, fname, name);
+	r = dump_file(0, !tag, pin, pout, fname, name, NULL, 0);
 	if (r) goto done;
     }
 
@@ -592,7 +633,7 @@ int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid_start,
 		fatal("unknown user data file", EC_OSFILE);
 	    }
 
-	    r = dump_file(0, !tag, pin, pout, fname, ftag);
+	    r = dump_file(0, !tag, pin, pout, fname, ftag, NULL, 0);
 	    free(fname);
 	    if (r) goto done;
 	}
@@ -634,7 +675,7 @@ int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid_start,
 				 sieve_path, next->d_name);
 
 			/* dump file */
-			r = dump_file(0, !tag, pin, pout, filename, tag_fname);
+			r = dump_file(0, !tag, pin, pout, filename, tag_fname, NULL, 0);
 			if (r) goto done;
 		    }
 		}
