@@ -75,7 +75,7 @@ typedef struct xscyrus *Cyrus_IMAP;
 /* hack, since libcyrus apparently expects fatal() to exist */
 void fatal(const char *s, int exit)
 {
-  croak(s);
+  croak("%s\n", s);
 }
 
 /*
