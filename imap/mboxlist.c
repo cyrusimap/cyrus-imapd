@@ -2187,15 +2187,13 @@ int mboxlist_setquota(const char *root, int newquota, int force)
 	    q.limit = newquota;
 	    r = quota_write(&q, &tid);
 	}
-	if (!r) quota_commit(&tid);
-	else quota_abort(&tid);
+	if (!r)
+	    quota_commit(&tid);
 	goto done;
     }
 
-    if (r != IMAP_QUOTAROOT_NONEXISTENT) {
-	if (tid) quota_abort(&tid);
+    if (r != IMAP_QUOTAROOT_NONEXISTENT)
 	goto done;
-    }
 
     /*
      * Have to create a new quota root
@@ -2221,16 +2219,14 @@ int mboxlist_setquota(const char *root, int newquota, int force)
 
 	    /* are we going to force the create anyway? */
 	    if (!force) goto done;
-	    else {
-		have_mailbox = 0;
-		mbentry.mbtype = 0;
-	    }
+	    have_mailbox = 0;
 	}
-
-	if (mbentry.mbtype & (MBTYPE_REMOTE | MBTYPE_MOVING)) {
-	    /* Can't set quota on a remote mailbox */
-	    r = IMAP_MAILBOX_NOTSUPPORTED;
-	    goto done;
+	else {
+	    if (mbentry.mbtype & (MBTYPE_REMOTE | MBTYPE_MOVING)) {
+		/* Can't set quota on a remote mailbox */
+		r = IMAP_MAILBOX_NOTSUPPORTED;
+		goto done;
+	    }
 	}
     }
 
@@ -2238,21 +2234,21 @@ int mboxlist_setquota(const char *root, int newquota, int force)
     q.used = 0;
     q.limit = newquota;
     r = quota_write(&q, &tid);
-    if (!r) quota_commit(&tid);
-    else quota_abort(&tid);
+    if (r) goto done;
+
+    quota_commit(&tid);
 
     /* recurse through mailboxes, setting the quota and finding
      * out the usage */
-    if (!r) {
-	/* top level mailbox */
-	if (have_mailbox)
-	    mboxlist_changequota(root, 0, 0, (void *)root);
+    /* top level mailbox */
+    if (have_mailbox)
+	mboxlist_changequota(root, 0, 0, (void *)root);
 
-	/* submailboxes - we're using internal names here */
-	mboxlist_findall(NULL, pattern, 1, 0, 0, mboxlist_changequota, (void *)root);
-    }
+    /* submailboxes - we're using internal names here */
+    mboxlist_findall(NULL, pattern, 1, 0, 0, mboxlist_changequota, (void *)root);
 
 done:
+    if (tid) quota_abort(&tid);
     if (!r) sync_log_quota(root);
 
     return r;
