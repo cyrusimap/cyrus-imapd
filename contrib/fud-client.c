@@ -90,14 +90,14 @@ char **argv;
 	fd_set fset;
 	char buf[512];
 	time_t lread, lappend;
+	uint32_t lread32, lappend32;
 	int numrecent;
 	char username[16];
 	char mbox[512];
 	char time[35];
 	int port = 4201;
-	char ch,*hname;
-	
-	
+	char ch, *hname;
+
 	while ((ch = getopt(argc,argv,"p:")) != -1) {
 		switch(ch) {
 			case 'p':
@@ -110,7 +110,6 @@ char **argv;
 	argc -= optind;
 	argv += optind;
 
-	
 	if(!*argv)  
 		usage();
 	hname = *argv;
@@ -151,11 +150,15 @@ char **argv;
 			printf("Permission denied attempting get mailbox info for %s\n",mbox);
 			exit(EX_NOPERM);
 		default:
-			sscanf(buf,"%[^|]|%[^|]|%d|%d|%d", username, mbox, &numrecent, &lread, &lappend);
-			printf("user: %s\nmbox: %s\nNumber of Recent %d\n", username, mbox, numrecent);
-			strcpy(time,ctime(&lread));
+			sscanf(buf,"%[^|]|%[^|]|%d|%u|%u", username, mbox,
+			       &numrecent, &lread32, &lappend32);
+			lread = (time_t)lread32;
+			lappend = (time_t)lappend32;
+			printf("user: %s\nmbox: %s\nNumber of Recent %d\n",
+			       username, mbox, numrecent);
+			strcpy(time, ctime(&lread));
 			printf("Last read: %s", time);
-			strcpy(time,ctime(&lappend));
+			strcpy(time, ctime(&lappend));
 			printf("Last arrived: %s", time);
 	}
 	return(0);

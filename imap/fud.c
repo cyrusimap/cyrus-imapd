@@ -451,7 +451,7 @@ int handle_request(const char *who, const char *name,
     }
 
     mailbox_close(&mailbox);
-    
+
     send_reply(sfrom, sfromsiz, REQ_OK, who, name, numrecent,
 	       lastread, lastarrived);
     
@@ -471,9 +471,9 @@ send_reply(struct sockaddr_storage sfrom, socklen_t sfromsiz,
             sendto(soc,"PERMDENY",9,0,(struct sockaddr *) &sfrom, sfromsiz);       
             break;
         case REQ_OK:
-            siz = snprintf(buf, sizeof(buf), "%s|%s|%d|%d|%d",
-			   user,mbox,numrecent,(int) lastread,
-			   (int)lastarrived);
+            siz = snprintf(buf, sizeof(buf), "%s|%s|%d|%u|%u",
+			   user, mbox, numrecent,
+			   (uint32_t)lastread, (uint32_t)lastarrived);
             sendto(soc,buf,siz,0,(struct sockaddr *) &sfrom, sfromsiz);       
             break;
         case REQ_UNK:
