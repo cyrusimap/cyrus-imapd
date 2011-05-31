@@ -10284,11 +10284,19 @@ static void list_data(struct listargs *listargs)
 	rock.last_attributes = 0;
 	if (listargs->sel & LIST_SEL_SUBSCRIBED) {
 	    for (pattern = listargs->pat; pattern; pattern = pattern->next) {
-		rock.trailing_percent =
-		    pattern->s[strlen(pattern->s) - 1] == '%';
+		char lastchar = pattern->s[0] ?
+				pattern->s[strlen(pattern->s) - 1] : '\0';
+		rock.trailing_percent = (lastchar == '%');
 		findsub(&imapd_namespace, pattern->s, imapd_userisadmin,
 			imapd_userid, imapd_authstate, subscribed_cb, &rock, 1);
-		list_response(rock.last_name, rock.last_attributes, rock.listargs);
+
+		/* handle LIST "" user - and other such "only has children"
+		 * cases */
+		if (!rock.last_name && lastchar != '%' && lastchar != '*')
+		    rock.last_name = xstrdup(pattern->s);
+
+		list_response(rock.last_name, rock.last_attributes,
+			      rock.listargs);
 		free(rock.last_name);
 		rock.last_name = NULL;
 	    }
@@ -10298,16 +10306,19 @@ static void list_data(struct listargs *listargs)
 	    }
 
 	    for (pattern = listargs->pat; pattern; pattern = pattern->next) {
-		char lastchar = pattern->s[strlen(pattern->s) - 1];
+		char lastchar = pattern->s[0] ?
+				pattern->s[strlen(pattern->s) - 1] : '\0';
 		rock.trailing_percent = (lastchar == '%');
 		findall(&imapd_namespace, pattern->s, imapd_userisadmin,
 			imapd_userid, imapd_authstate, list_cb, &rock);
 
-		/* handle LIST "" user - and other such "only has children" cases */
+		/* handle LIST "" user - and other such "only has children"
+		 * cases */
 		if (!rock.last_name && lastchar != '%' && lastchar != '*')
 		    rock.last_name = xstrdup(pattern->s);
 
-		list_response(rock.last_name, rock.last_attributes, rock.listargs);
+		list_response(rock.last_name, rock.last_attributes,
+			      rock.listargs);
 		free(rock.last_name);
 		rock.last_name = NULL;
 	    }
