@@ -3555,7 +3555,6 @@ static MsgData *index_msgdata_load(struct index_state *state,
 		cur->xsubj = index_extract_subject(cacheitem_base(&im->record, CACHE_SUBJECT),
 						   cacheitem_size(&im->record, CACHE_SUBJECT),
 						   &cur->is_refwd);
-		syslog(LOG_ERR, "SUBJECT DECODED: %u \"%s\" (RAW: %.*s)", im->record.uid, cur->xsubj, cacheitem_size(&im->record, CACHE_SUBJECT), cacheitem_base(&im->record, CACHE_SUBJECT));
 		cur->xsubj_hash = strhash(cur->xsubj);
 		break;
 	    case SORT_TO:
