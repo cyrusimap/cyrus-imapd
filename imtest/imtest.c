@@ -1645,7 +1645,7 @@ static char *imap_parse_mechlist(const char *str, struct protocol_t *prot)
 	strlcat(ret, tmp, strlen(ret) + (end - tmp) + 1);
 	
 	/* reset the string */
-	str = end + 1;
+	str = end;
     }
     
     return ret;
