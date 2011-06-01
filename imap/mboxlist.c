@@ -2710,7 +2710,7 @@ int mboxlist_findsub_alt(struct namespace *namespace,
 {
     struct db *subs = NULL;
     struct find_rock cbrock;
-    char usermboxname[MAX_MAILBOX_BUFFER], patbuf[MAX_MAILBOX_BUFFER];
+    char usermboxname[MAX_MAILBOX_BUFFER];
     int usermboxnamelen = 0;
     const char *data;
     int datalen;
@@ -2796,9 +2796,7 @@ int mboxlist_findsub_alt(struct namespace *namespace,
      * Append pattern to "INBOX.", search for those subscriptions next
      */
     if (userid) {
-	strlcpy(patbuf, "INBOX.", sizeof(patbuf));
-	strlcat(patbuf, pattern, sizeof(patbuf));
-	cbrock.g = glob_init(patbuf, GLOB_HIERARCHY|GLOB_INBOXCASE);
+	cbrock.g = glob_init(usermboxname, GLOB_HIERARCHY|GLOB_INBOXCASE);
 	cbrock.inboxcase = glob_inboxcase(cbrock.g);
 	cbrock.inboxoffset = domainlen+userlen;
 	cbrock.find_namespace = NAMESPACE_INBOX;
@@ -2830,7 +2828,7 @@ int mboxlist_findsub_alt(struct namespace *namespace,
      * If "Other Users*" can match pattern, search for those subscriptions next
      */
     len = strlen(namespace->prefix[NAMESPACE_USER]);
-    if(len>0) len--; /* Remove Separator */
+    if (len>0) len--; /* Remove Separator */
     if (!strncmp(namespace->prefix[NAMESPACE_USER], pattern,
 		 prefixlen < len ? prefixlen : len)) {
 
@@ -2841,13 +2839,13 @@ int mboxlist_findsub_alt(struct namespace *namespace,
 	}
 	else {
 	    strlcpy(domainpat+domainlen, "user",
-		   sizeof(domainpat)-domainlen);
+		    sizeof(domainpat)-domainlen);
 	    strlcat(domainpat, pattern+len, sizeof(domainpat));
 	    cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
 	}
 	cbrock.find_namespace = NAMESPACE_USER;
 	cbrock.inboxoffset = 0;
-	
+
 	/* iterate through prefixes matching usermboxname */
 	strlcpy(domainpat+domainlen, "user", sizeof(domainpat)-domainlen);
 	SUBDB->foreach(subs,
