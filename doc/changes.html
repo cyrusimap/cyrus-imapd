@@ -8,6 +8,39 @@
 </head>
 <body>
 
+<h1>Changes to the Cyrus IMAP Server since 2.4.8</h1>
+<ul>
+<li>fixed crashes in seen handling</li>
+<li>Bug #3453 - fixed LSUB replication</li>
+<li>Bug #3442 - allow disabling PCRE if it's buggy at your site</li>
+<li>Bug #3443 - LSUB response fixes</li>
+<li>Bug #3448 - XFER error handling (murder)</li>
+<li>Bug #3437 - fixed regression: quotaroot wasn't being updated on rename</li>
+<li>Bug #3456 - fixed crash on rename user.foo user.foo without partition
+    change</li>
+<li>config update: database paths for most databases are now configurable
+    in imapd.conf</li>
+<li>Bug #3303 - fixed index lock breaking on XFER (thanks Julien Coloos)</li>
+<li>Bug #3457 - fixed ESEARCH parsing (was breaking iPhones)</li>
+<li>Bug #3188 - fixed XFER with unlimited quota (thanks again Julien
+    Coloos)</li>
+<li>Misc other quota fixes (there are still known bugs with the quota
+    system)</li>
+<li>Bug #3169 - fixed GETQUOTAROOT for domain quotaroots</li>
+<li>Bug #3465 - fixed compilation with Perl 5.14 (thanks hsk@imb-jena.de, and
+    also thanks to Ondrej Sury who reported it separately)</li>
+<li>Bug #3464 - fix for sendmail exec failure.  This was a nasty one, and
+    sat with a patch for years.  Big thanks to Jes&uacute;s Roncero for the
+    original patch, and to Donald Buczek for re-reporting it.</li>
+<li>Bug #3467 - compilation fix for stricter compilers</li>
+<li>Bug #3163 - lmtp delivery into subfolder.  Fixes a regression for 2.3.x
+    behaviour (thanks to baldur@email.de for multiple attempts at the patch
+    and for pushing until it got included!)</li>
+<li>Bug #3466 - fix FUD client handling of 64 bit time datatypes</li>
+<li>Bug #3477 - this is a replay of 3444 and 3446 which only got fixed on
+    master, not in stable (thanks Liinu Heino for the patch this time)</li>
+</ul>
+
 <h1>Changes to the Cyrus IMAP Server since 2.4.7</h1>
 <ul>
 <li>Bug #3428 - allow charset argument to "thread" to be

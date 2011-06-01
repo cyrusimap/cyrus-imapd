@@ -8,6 +8,19 @@
 
 <h1>Upgrading From Previous Versions</h1>
 
+<h2>Upgrading from 2.4.8</h2>
+<ul>
+<li>New config options: *_db_path allow moving individual DB files
+    to different partitions - for example you may want to put the
+    deliver.db onto tmpfs to improve performance</li>
+<li>KNOWN BUG: quota -f can double ALL quota usage values for all
+    users.  This is particularly bad because of the bug fixed in
+    this release where quotaroots were not correctly updated on
+    folder rename.  <b>Recommended workaround:</b> run quota -f
+    twice.</li>
+</ul>
+
+
 <h2>Upgrading from 2.4.7</h2>
 <ul>
 <li>New config option: <tt>proc_path</tt> allows setting the
