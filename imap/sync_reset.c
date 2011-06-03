@@ -139,21 +139,17 @@ static int reset_single(const char *userid)
 {
     struct sync_name_list *list = NULL;
     struct sync_name *item;
-    char buf[MAX_MAILBOX_BUFFER];
+    char buf[MAX_MAILBOX_NAME];
     int r = 0;
 
     /* Nuke subscriptions */
     list = sync_name_list_create();
-    r = (sync_namespacep->mboxlist_findsub)(sync_namespacep, "*", 1,
-					    (char *)userid, sync_authstate,
-					    addmbox_sub, (void *)list, 1);
+    r = mboxlist_allsubs(userid, addmbox_sub, list);
     if (r) goto fail;
 
     /* ignore failures here - the subs file gets deleted soon anyway */
     for (item = list->head; item; item = item->next) {
-	r = (sync_namespacep->mboxname_tointernal)(sync_namespacep, item->name,
-						   userid, buf);
-        if (!r) r = mboxlist_changesub(buf, userid, sync_authstate, 0, 0);
+        (void)mboxlist_changesub(item->name, userid, sync_authstate, 0, 0);
     }
     sync_name_list_free(&list);
 
