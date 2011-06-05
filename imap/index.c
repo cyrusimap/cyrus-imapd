@@ -1099,7 +1099,8 @@ static int _index_search(unsigned **msgno_list, struct index_state *state,
 		}
 		/* We're done */
 		listindex = listcount;
-		*highestmodseq = im->record.modseq;
+		if (highestmodseq)
+		    *highestmodseq = im->record.modseq;
 	    }
 	}
 	if (msgfile.base) {
