@@ -477,53 +477,6 @@ static int mlookup(const char *name, char **server, char **aclp, void *tid)
     return r;
 }
 
-/* helper function which notifies the user
- *
- */
-static void notify_user(const char *user, const char *notifyheader,
-			const char *mailboxname)
-{
-    const char *notifier = config_getstring(IMAPOPT_MAILNOTIFIER);
-    const char *notify_mailbox = mailboxname;
-    char inbox[MAX_MAILBOX_BUFFER];
-    char namebuf[MAX_MAILBOX_BUFFER];
-    char userbuf[MAX_MAILBOX_BUFFER];
-    int r;
-
-    if (!user) return;
-    if (!notifier) return;
-
-    /* translate user.foo to INBOX */
-    r = (*lmtpd_namespace.mboxname_tointernal)(&lmtpd_namespace,
-					      "INBOX", user, inbox);
-
-    if (r) {
-	size_t inboxlen = strlen(inbox);
-	if (strlen(mailboxname) >= inboxlen &&
-	    !strncmp(mailboxname, inbox, inboxlen) &&
-	    (!mailboxname[inboxlen] || mailboxname[inboxlen] == '.')) {
-	    strlcpy(inbox, "INBOX", sizeof(inbox)); 
-	    strlcat(inbox, mailboxname+inboxlen, sizeof(inbox));
-	    notify_mailbox = inbox;
-	}
-    }
-
-    /* translate mailboxname */
-    r = (*lmtpd_namespace.mboxname_toexternal)(&lmtpd_namespace,
-					       notify_mailbox,
-					       user, namebuf);
-    if (r) return;
-
-    strlcpy(userbuf, user, sizeof(userbuf));
-    /* translate any separators in user */
-    mboxname_hiersep_toexternal(&lmtpd_namespace, userbuf,
-				config_virtdomains ?
-				strcspn(userbuf, "@") : 0);
-
-    notify(notifier, "MAIL", NULL, userbuf, namebuf, 0, NULL,
-	   notifyheader ? notifyheader : "");
-}
-
 /* places msg in mailbox mailboxname.  
  * if you wish to use single instance store, pass stage as non-NULL
  * if you want to deliver message regardless of duplicates, pass id as NULL
@@ -547,69 +500,87 @@ int deliver_mailbox(FILE *f,
 		    int acloverride)
 {
     int r;
-    struct mailbox *mailbox = NULL;
     struct appendstate as;
     unsigned long uid;
-    long append_quota;
+    const char *notifier;
 
-    syslog(LOG_DEBUG, "deliver_mailbox: user=%s,mailboxname=%s,"
-		      "quotaoverride=%i,acloverride=%i",
-		       user, mailboxname, quotaoverride, acloverride);
+    r = append_setup(&as, mailboxname,
+		     authuser, authstate, acloverride ? 0 : ACL_POST, 
+		     quotaoverride ? (long) -1 :
+		     config_getswitch(IMAPOPT_LMTP_STRICT_QUOTA) ?
+		     (long) size : 0);
 
-    if (quotaoverride)
-	append_quota = -1;
-    else if (config_getswitch(IMAPOPT_LMTP_STRICT_QUOTA))
-	append_quota = size;
-    else
-	append_quota = 0; /* only reject if they're already over */
-
-    r = append_setup(&as, mailboxname, authuser, authstate,
-		     acloverride ? 0 : ACL_POST, append_quota);
-    if (r) return r;
-
-    /* check for duplicate message (must be after append_setup to
-     * avoid race conditions) */
-    if (id && dupelim
-	&& !(as.mailbox->i.options & OPT_IMAP_DUPDELIVER)
-	&& duplicate_check(id, strlen(id), mailboxname, strlen(mailboxname))) {
-
+    /* check for duplicate message */
+    if (!r && id && dupelim && !(as.mailbox->i.options & OPT_IMAP_DUPDELIVER) &&
+	duplicate_check(id, strlen(id), mailboxname, strlen(mailboxname))) {
 	duplicate_log(id, mailboxname, "delivery");
 	append_abort(&as);
 	return 0;
     }
 
-    if (!content->body) {
+    if (!r && !content->body) {
 	/* parse the message body if we haven't already,
 	   and keep the file mmap'ed */
-	r = message_parse_file(f, &content->base, &content->len,
-			       &content->body);
+	r = message_parse_file(f, &content->base, &content->len, &content->body);
+    }
+
+    if (!r) {
+	r = append_fromstage(&as, &content->body, stage, 0,
+			     (const char **) flag, nflags, !singleinstance);
+
 	if (r) {
 	    append_abort(&as);
-	    return r;
+	} else {
+	    struct mailbox *mailbox = NULL;
+	    /* hold the mailbox open until the duplicate mark is done */
+	    r = append_commit(&as, quotaoverride ? -1 : 0, NULL, &uid,
+			      NULL, &mailbox);
+	    if (!r) {
+		syslog(LOG_INFO, "Delivered: %s to mailbox: %s",
+		       id, mailboxname);
+		if (dupelim && id) {
+		    duplicate_mark(id, strlen(id), mailboxname, 
+				   strlen(mailboxname), time(NULL), uid);
+		}
+		mailbox_close(&mailbox);
+	    }
 	}
     }
 
-    r = append_fromstage(&as, &content->body, stage, 0,
-			 (const char **)flag, nflags, !singleinstance);
-    if (r) {
-	append_abort(&as);
-	return r;
+    if (!r && user && (notifier = config_getstring(IMAPOPT_MAILNOTIFIER))) {
+	char inbox[MAX_MAILBOX_BUFFER];
+	char namebuf[MAX_MAILBOX_BUFFER];
+	char userbuf[MAX_MAILBOX_BUFFER];
+	const char *notify_mailbox = mailboxname;
+	int r2;
+
+	/* translate user.foo to INBOX */
+	if (!(*lmtpd_namespace.mboxname_tointernal)(&lmtpd_namespace,
+						    "INBOX", user, inbox)) {
+	    size_t inboxlen = strlen(inbox);
+	    if (strlen(mailboxname) >= inboxlen &&
+		!strncmp(mailboxname, inbox, inboxlen) &&
+		(!mailboxname[inboxlen] || mailboxname[inboxlen] == '.')) {
+		strlcpy(inbox, "INBOX", sizeof(inbox)); 
+		strlcat(inbox, mailboxname+inboxlen, sizeof(inbox));
+		notify_mailbox = inbox;
+	    }
+	}
+
+	/* translate mailboxname */
+	r2 = (*lmtpd_namespace.mboxname_toexternal)(&lmtpd_namespace,
+						    notify_mailbox,
+						    user, namebuf);
+	if (!r2) {
+	    strlcpy(userbuf, user, sizeof(userbuf));
+	    /* translate any separators in user */
+	    mboxname_hiersep_toexternal(&lmtpd_namespace, userbuf,
+					config_virtdomains ?
+					strcspn(userbuf, "@") : 0);
+	    notify(notifier, "MAIL", NULL, userbuf, namebuf, 0, NULL,
+		   notifyheader ? notifyheader : "");
+	}
     }
-
-    /* hold the mailbox open until the duplicate mark is done */
-    r = append_commit(&as, quotaoverride ? -1 : 0, NULL, &uid,
-		      NULL, &mailbox);
-    if (r) return r;
-
-    syslog(LOG_INFO, "Delivered: %s to mailbox: %s", id, mailboxname);
-
-    if (dupelim && id) {
-	duplicate_mark(id, strlen(id), mailboxname, strlen(mailboxname),
-		       time(NULL), uid);
-    }
-    mailbox_close(&mailbox);
-
-    notify_user(user, notifyheader, mailboxname);
 
     return r;
 }
@@ -635,12 +606,12 @@ void deliver_remote(message_data_t *msgdata,
 	struct backend *remote;
 	int i = 0;
 	int r = 0;
-
+	
 	lt->from = msgdata->return_path;
 	lt->auth = d->authas[0] ? d->authas : NULL;
 	lt->isdotstuffed = 0;
 	lt->tempfail_unknown_mailbox = 1;
-
+	
 	prot_rewind(msgdata->data);
 	lt->data = msgdata->data;
 	lt->rcpt_num = d->rnum;
@@ -706,87 +677,66 @@ int deliver_local(deliver_data_t *mydata, char **flag, int nflags,
     char namebuf[MAX_MAILBOX_BUFFER] = "", *tail;
     message_data_t *md = mydata->m;
     int quotaoverride = msg_getrcpt_ignorequota(md, mydata->cur_rcpt);
-    struct auth_state *authstate = NULL;
-    int r;
-
-    syslog(LOG_DEBUG, "deliver_local: user=%s mailbox=%s",
-	   username, mailboxname);
+    int ret;
 
     /* case 1: shared mailbox request */
     if (!*username || username[0] == '@') {
-	if (*username)
-	    snprintf(namebuf, sizeof(namebuf), "%s!", username+1);
+	if (*username) snprintf(namebuf, sizeof(namebuf), "%s!", username+1);
 	strlcat(namebuf, mailboxname, sizeof(namebuf));
 
-	r = deliver_mailbox(md->f, mydata->content, mydata->stage,
-			    md->size, flag, nflags,
-			    mydata->authuser, mydata->authstate, md->id,
-			    NULL, mydata->notifyheader,
-			    namebuf, quotaoverride, 0);
-	if (!r)
-	    syslog(LOG_DEBUG, "delivered into shared mailbox %s", namebuf);
-	return r;
+	return deliver_mailbox(md->f, mydata->content, mydata->stage,
+			       md->size, flag, nflags,
+			       mydata->authuser, mydata->authstate, md->id,
+			       NULL, mydata->notifyheader,
+			       namebuf, quotaoverride, 0);
     }
 
     /* case 2: ordinary user */
-    r = (*mydata->namespace->mboxname_tointernal)(mydata->namespace,
-						  "INBOX",
-						  username, namebuf);
-    if (r) return r;
+    ret = (*mydata->namespace->mboxname_tointernal)(mydata->namespace,
+						    "INBOX",
+						    username, namebuf);
 
-    authstate = auth_newstate(username);
-    tail = namebuf + strlen(namebuf);
+    if (!ret) {
+	int ret2 = 1;
 
-    if (!mailboxname) {
-	/* normal delivery to INBOX */
-	*tail = '\0';
-	r = deliver_mailbox(md->f, mydata->content, mydata->stage,
-			    md->size, flag, nflags,
-			    (char *) username, authstate, md->id,
-			    username, mydata->notifyheader,
-			    namebuf, quotaoverride, 1);
-	if (!r) {
-	    syslog(LOG_DEBUG, "delivered into default mailbox %s", namebuf);
+	tail = namebuf + strlen(namebuf);
+	if (mailboxname) {
+	    strlcat(namebuf, ".", sizeof(namebuf));
+	    strlcat(namebuf, mailboxname, sizeof(namebuf));
+
+	    ret2 = deliver_mailbox(md->f, mydata->content, mydata->stage,
+				   md->size, flag, nflags,
+				   mydata->authuser, mydata->authstate, md->id,
+				   username, mydata->notifyheader,
+				   namebuf, quotaoverride, 0);
 	}
-	goto done;
+	if (ret2 == IMAP_MAILBOX_NONEXISTENT && mailboxname &&
+	    config_getswitch(IMAPOPT_LMTP_FUZZY_MAILBOX_MATCH) &&
+	    fuzzy_match(namebuf)) {
+	    /* try delivery to a fuzzy matched mailbox */
+	    ret2 = deliver_mailbox(md->f, mydata->content, mydata->stage,
+				   md->size, flag, nflags,
+				   mydata->authuser, mydata->authstate, md->id,
+				   username, mydata->notifyheader,
+				   namebuf, quotaoverride, 0);
+	}
+	if (ret2) {
+	    /* normal delivery to INBOX */
+	    struct auth_state *authstate = auth_newstate(username);
+
+	    *tail = '\0';
+
+	    ret = deliver_mailbox(md->f, mydata->content, mydata->stage,
+				  md->size, flag, nflags,
+				  (char *) username, authstate, md->id,
+				  username, mydata->notifyheader,
+				  namebuf, quotaoverride, 1);
+
+	    if (authstate) auth_freestate(authstate);
+	}
     }
 
-    /* if the prefix is already existing in the mailbox name,
-     * then do not attach him */
-    if (!strncmp(mailboxname, namebuf, strlen(namebuf))) {
-	strncpy(namebuf, mailboxname, strlen(mailboxname));
-    } else {
-	strlcat(namebuf, ".", sizeof(namebuf));
-	strlcat(namebuf, mailboxname, sizeof(namebuf));
-    }
-
-    r = deliver_mailbox(md->f, mydata->content, mydata->stage,
-			md->size, flag, nflags,
-			(char *) username, authstate, md->id,
-			username, mydata->notifyheader,
-			namebuf, quotaoverride, 0);
-    if (!r) {
-	syslog(LOG_DEBUG, "delivered into mailbox %s", namebuf);
-	goto done;
-    }
-
-    /* try delivery to a fuzzy matched mailbox , if enabled*/
-    if (r == IMAP_MAILBOX_NONEXISTENT
-	&& config_getswitch(IMAPOPT_LMTP_FUZZY_MAILBOX_MATCH)
-	&& fuzzy_match(namebuf)) {
-	r = deliver_mailbox(md->f, mydata->content, mydata->stage,
-			    md->size, flag, nflags,
-			    (char *) username, authstate, md->id,
-			    username, mydata->notifyheader,
-			    namebuf, quotaoverride, 0);
-    }
-    if (!r) {
-	syslog(LOG_DEBUG, "delivered with fuzzymatch into mailbox %s", namebuf);
-    }
-
-done:
-    if (authstate) auth_freestate(authstate);
-    return r;
+    return ret;
 }
 
 int deliver(message_data_t *msgdata, char *authuser,
@@ -798,7 +748,7 @@ int deliver(message_data_t *msgdata, char *authuser,
     struct message_content content = { NULL, 0, NULL };
     char *notifyheader;
     deliver_data_t mydata;
-
+    
     assert(msgdata);
     nrcpts = msg_getnumrcpt(msgdata);
     assert(nrcpts);
@@ -816,7 +766,7 @@ int deliver(message_data_t *msgdata, char *authuser,
     mydata.namespace = &lmtpd_namespace;
     mydata.authuser = authuser;
     mydata.authstate = authstate;
-
+    
     /* loop through each recipient, attempting delivery for each */
     for (n = 0; n < nrcpts; n++) {
 	char namebuf[MAX_MAILBOX_BUFFER] = "", *server;
@@ -885,7 +835,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 	while (d) {
 	    struct dest *nextd = d->next;
 	    struct rcpt *rc = d->to;
-
+   
 	    while (rc) {
 		struct rcpt *nextrc = rc->next;
 		free(rc);
@@ -903,7 +853,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 	    case s_err:
 	    case s_done:
 		/* yikes, we haven't implemented sieve ! */
-		syslog(LOG_CRIT,
+		syslog(LOG_CRIT, 
 		       "sieve states reached, but we don't implement sieve");
 		abort();
 	    break;
@@ -927,7 +877,7 @@ int deliver(message_data_t *msgdata, char *authuser,
 	    assert(status[n] == done || status[n] == s_done);
 	}
     }
-
+   
     /* cleanup */
     free(status);
     if (content.base) map_free(&content.base, &content.len);
