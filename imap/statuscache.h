@@ -52,7 +52,7 @@
 #define STATUSCACHE_VERSION 4
 
 /* open the statuscache db */
-extern void statuscache_open(char *name);
+extern void statuscache_open(const char *name);
 
 /* fill a statuscache entry */
 extern void statuscache_fill(struct statusdata *sdata, const char *userid,

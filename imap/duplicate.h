@@ -49,7 +49,7 @@
 /* name of the duplicate delivery database */
 #define FNAME_DELIVERDB "/deliver.db"
 
-int duplicate_init(char*, int);
+int duplicate_init(const char *fname, int myflags);
 
 time_t duplicate_check(char *id, int idlen, const char *to, int tolen);
 void duplicate_log(char *msgid, const char *name, char *action);

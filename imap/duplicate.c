@@ -86,7 +86,7 @@ static struct db *dupdb = NULL;
 static int duplicate_dbopen = 0;
 
 /* must be called after cyrus_init */
-int duplicate_init(char *fname, int myflags __attribute__((unused)))
+int duplicate_init(const char *fname, int myflags __attribute__((unused)))
 {
     char buf[1024];
     int r = 0;
@@ -102,10 +102,10 @@ int duplicate_init(char *fname, int myflags __attribute__((unused)))
 
 	/* create db file name */
 	if (!fname) {
-	    fname = xmalloc(strlen(config_dir)+sizeof(FNAME_DELIVERDB));
-	    tofree = fname;
-	    strcpy(fname, config_dir);
-	    strcat(fname, FNAME_DELIVERDB);
+	    tofree = xmalloc(strlen(config_dir)+sizeof(FNAME_DELIVERDB));
+	    strcpy(tofree, config_dir);
+	    strcat(tofree, FNAME_DELIVERDB);
+	    fname = tofree;
 	}
 
 	r = (DB->open)(fname, CYRUSDB_CREATE, &dupdb);
