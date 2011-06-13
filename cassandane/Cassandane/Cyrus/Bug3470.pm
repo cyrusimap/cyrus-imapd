@@ -79,6 +79,7 @@ sub set_up
 
     # Bug #3470 folders
     # sub folders only
+    $imaptalk->create("Drafts") || die;
     $imaptalk->create("2001/05/wk18") || die;
     $imaptalk->create("2001/05/wk19") || die;
     $imaptalk->create("2001/05/wk20") || die;
@@ -98,7 +99,7 @@ sub tear_down
 #
 # Test LSUB behaviour
 #
-sub test_list
+sub test_list_percent
 {
     my ($self) = @_;
 
@@ -109,7 +110,6 @@ sub test_list
           [
             [
               '\\Noinferiors',
-              '\\HasChildren'
             ],
             '/',
             'INBOX'
@@ -117,7 +117,35 @@ sub test_list
           [
             [
               '\\Noselect',
-              '\\NonExistent',
+              '\\HasChildren'
+            ],
+            '/',
+            '2001'
+          ],
+          [
+            [
+              '\\HasNoChildren'
+            ],
+            '/',
+            'Drafts'
+          ]
+    ], "LIST data mismatch: "  . Dumper($alldata));
+}
+
+#
+# Test LSUB behaviour
+#
+sub test_list_2011
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    my $alldata = $imaptalk->list("", "2001");
+    $self->assert_deep_equals($alldata, [
+          [
+            [
+              '\\Noselect',
               '\\HasChildren'
             ],
             '/',
@@ -132,12 +160,11 @@ sub test_lsub
 
     my $imaptalk = $self->{store}->get_client();
 
-    my $alldata = $imaptalk->lsub("", "2011");
+    my $alldata = $imaptalk->lsub("", "2001");
     $self->assert_deep_equals($alldata, [
           [
             [
               '\\Noselect',
-              '\\NonExistent',
               '\\HasChildren'
             ],
             '/',
