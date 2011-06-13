@@ -247,9 +247,6 @@ struct list_rock {
     struct listargs *listargs;
     char *last_name;
     int last_attributes;
-    int trailing_percent; /* the mailbox name arg ends with a %
-                           * causes special behavior with non-extended LIST
-			   * and LSUB */
 };
 
 /* Information about one mailbox name that LIST returns */
@@ -443,14 +440,14 @@ static int set_haschildren(char *name, int matchlen, int maycreate,
 static void list_response(char *name, int attributes,
 			  struct listargs *listargs);
 static int set_subscribed(char *name, int matchlen, int maycreate,
-			  int *attributes);
+			  void *rock);
 static char *canonical_list_pattern(const char *reference,
 				    const char *pattern);
 static void canonical_list_patterns(const char *reference,
 				    strarray_t *patterns);
 static int list_cb(char *name, int matchlen, int maycreate,
 		  struct list_rock *rock);
-static int subscribed_cb(char *name, int matchlen, int maycreate,
+static int subscribed_cb(const char *name, int matchlen, int maycreate,
 			 struct list_rock *rock);
 static void list_data(struct listargs *listargs);
 static void list_data_remote(char *tag, struct listargs *listargs);
@@ -10240,6 +10237,11 @@ static void list_response(char *name, int attributes,
 	attributes &= ~MBOX_ATTRIBUTE_SUBSCRIBED;
     }
 
+    /* no inferiors means no children (this basically means the INBOX
+     * in alt namespace mode */
+    if (attributes & MBOX_ATTRIBUTE_NOINFERIORS)
+	attributes &= ~MBOX_ATTRIBUTE_HASCHILDREN;
+
     /* remove redundant flags */
     if (listargs->cmd & LIST_CMD_EXTENDED) {
 	/* \NoInferiors implies \HasNoChildren */
@@ -10325,12 +10327,15 @@ done:
 
 static int set_subscribed(char *name, int matchlen,
 			  int maycreate __attribute__((unused)),
-			  int *attributes)
+			  void *rock)
 {
+    int *attributes = (int *)rock;
     list_callback_calls++;
-    if (!name[matchlen]) 
+    if (!name[matchlen])
 	*attributes |= MBOX_ATTRIBUTE_SUBSCRIBED;
-    return CYRUSDB_DONE;
+    else
+	*attributes |= MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED;
+    return 0;
 }
 
 /* callback for mboxlist_findall
@@ -10342,7 +10347,8 @@ static int list_cb(char *name, int matchlen, int maycreate,
     int last_name_is_ancestor =
 	rock->last_name
 	&& matchlen >= (last_len = strlen(rock->last_name))
-	&& name[last_len] == '.'
+	&& (name[last_len] == '.' || name[last_len] == imapd_namespace.hier_sep)
+	&& !(rock->last_attributes & MBOX_ATTRIBUTE_NOINFERIORS)
 	&& !memcmp(rock->last_name, name, last_len);
 
     list_callback_calls++;
@@ -10365,27 +10371,22 @@ static int list_cb(char *name, int matchlen, int maycreate,
 	    mboxlist_findsub(&imapd_namespace, name, imapd_userisadmin,
 			     imapd_userid, imapd_authstate, set_subscribed,
 			     &rock->last_attributes, 0);
-    } else if ((name[matchlen] == '.' || 
-		name[matchlen] == imapd_namespace.hier_sep)
-	    && (rock->trailing_percent || (rock->listargs->sel & LIST_SEL_RECURSIVEMATCH))) {
+    }
+    else if ((name[matchlen] == '.' ||
+	      name[matchlen] == imapd_namespace.hier_sep)
+	    && (!(rock->listargs->cmd & LIST_CMD_EXTENDED) || (rock->listargs->sel & LIST_SEL_RECURSIVEMATCH))
+	    && !last_name_is_ancestor) {
 	/* special case: if the mailbox name argument of a non-extended List
-	 * command ends with %, we must include matching levels of hierarchy */
+	 * command causes a partial match, we need to emit a "haschildren"
+	 * response */
 	/* XXX: this is so awful because we could get passed
 	 * "Shared Folders/" in the unixhiersep + altnamspace case, even
 	 * though what's passed here is a sort-of-internal-name-but-with
 	 * -INBOX name.  Ugly, ugly, ugly */
-	if (!(rock->last_name
-	      && !strncmp(rock->last_name, name, matchlen)
-	      && (rock->last_name[matchlen] == '\0'
-		  || rock->last_name[matchlen] == '.'
-		  || rock->last_name[matchlen] == imapd_namespace.hier_sep))) {
-	    list_response(rock->last_name, rock->last_attributes,
-			  rock->listargs);
-	    free(rock->last_name);
-	    rock->last_name = xstrndup(name, matchlen);
-	    rock->last_attributes = MBOX_ATTRIBUTE_NONEXISTENT
-		| MBOX_ATTRIBUTE_NOSELECT | MBOX_ATTRIBUTE_HASCHILDREN;
-	}
+	list_response(rock->last_name, rock->last_attributes, rock->listargs);
+	free(rock->last_name);
+	rock->last_name = xstrndup(name, matchlen);
+	rock->last_attributes = MBOX_ATTRIBUTE_HASCHILDREN;
     }
 
     return 0;
@@ -10393,7 +10394,7 @@ static int list_cb(char *name, int matchlen, int maycreate,
 
 /* callback for mboxlist_findsub
  * used when SUBSCRIBED but not RECURSIVEMATCH is given */
-static int subscribed_cb(char *name, int matchlen, int maycreate,
+static int subscribed_cb(const char *name, int matchlen, int maycreate,
 			 struct list_rock *rock)
 {
     int last_len;
@@ -10401,6 +10402,7 @@ static int subscribed_cb(char *name, int matchlen, int maycreate,
 	rock->last_name
 	&& matchlen >= (last_len = strlen(rock->last_name))
 	&& name[last_len] == '.'
+	&& !(rock->last_attributes & MBOX_ATTRIBUTE_NOINFERIORS)
 	&& !memcmp(rock->last_name, name, last_len);
 
     list_callback_calls++;
@@ -10416,21 +10418,18 @@ static int subscribed_cb(char *name, int matchlen, int maycreate,
 	rock->last_attributes = MBOX_ATTRIBUTE_SUBSCRIBED;
 	if (!maycreate)
 	    rock->last_attributes |= MBOX_ATTRIBUTE_NOINFERIORS;
-    } else if (name[matchlen] == '.'
-	    && rock->listargs->cmd & LIST_CMD_LSUB
-	    && rock->trailing_percent) {
-	/* special case: if the mailbox name argument of an Lsub command ends
-	 * with %, mailbox names that match the pattern but aren't subscribed
+    }
+    else if (name[matchlen] == '.' &&
+	     rock->listargs->cmd & LIST_CMD_LSUB &&
+	     !last_name_is_ancestor) {
+	/* special case: for LSUB,
+	 * mailbox names that match the pattern but aren't subscribed
 	 * must also be returned if they have a child mailbox that is
 	 * subscribed */
-	name[matchlen] = '\0';
-	if ( ! (rock->last_name && !strcmp(rock->last_name, name)) ) {
-	    list_response(rock->last_name, rock->last_attributes, rock->listargs);
-	    free(rock->last_name);
-	    rock->last_name = xstrdup(name);
-	    rock->last_attributes = MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED;
-	}
-	name[matchlen] = '.';
+	list_response(rock->last_name, rock->last_attributes, rock->listargs);
+	free(rock->last_name);
+	rock->last_name = xstrndup(name, matchlen);
+	rock->last_attributes = MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED;
     }
 
     return 0;
@@ -10618,11 +10617,11 @@ static void list_data(struct listargs *listargs)
 	rock.last_attributes = 0;
 	if (listargs->sel & LIST_SEL_SUBSCRIBED) {
 	    for (pattern = listargs->pat.data ; pattern && *pattern ; pattern++) {
-		rock.trailing_percent =
-		    (*pattern)[strlen(*pattern) - 1] == '%';
 		findsub(&imapd_namespace, *pattern, imapd_userisadmin,
-			imapd_userid, imapd_authstate, subscribed_cb, &rock, 1);
-		list_response(rock.last_name, rock.last_attributes, rock.listargs);
+			imapd_userid, imapd_authstate, subscribed_cb,
+		        &rock, 1);
+		list_response(rock.last_name, rock.last_attributes,
+			      rock.listargs);
 		free(rock.last_name);
 		rock.last_name = NULL;
 	    }
@@ -10632,16 +10631,10 @@ static void list_data(struct listargs *listargs)
 	    }
 
 	    for (pattern = listargs->pat.data ; pattern && *pattern ; pattern++) {
-		char lastchar = (*pattern)[strlen(*pattern) - 1];
-		rock.trailing_percent = (lastchar == '%');
 		findall(&imapd_namespace, *pattern, imapd_userisadmin,
 			imapd_userid, imapd_authstate, list_cb, &rock);
-
-		/* handle LIST "" user - and other such "only has children" cases */
-		if (!rock.last_name && lastchar != '%' && lastchar != '*')
-		    rock.last_name = xstrdup(*pattern);
-
-		list_response(rock.last_name, rock.last_attributes, rock.listargs);
+		list_response(rock.last_name, rock.last_attributes,
+			      rock.listargs);
 		free(rock.last_name);
 		rock.last_name = NULL;
 	    }
