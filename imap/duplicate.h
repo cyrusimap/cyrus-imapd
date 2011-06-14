@@ -57,7 +57,7 @@ void duplicate_mark(char *id, int idlen, const char *to, int tolen, time_t mark,
 		    unsigned long uid);
 int duplicate_find(char *msgid, int (*proc)(), void *rock);
 
-int duplicate_prune(int days, struct hash_table *expire_table);
+int duplicate_prune(int seconds, struct hash_table *expire_table);
 int duplicate_dump(FILE *f);
 
 int duplicate_done(void);

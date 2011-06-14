@@ -109,6 +109,52 @@ struct delete_rock {
 };
 
 /*
+ * Parse a duration string into a double.
+ *
+ * Convert "23.5m" to fractional days.  Accepts the suffixes "d" (day),
+ * (day), "h" (hour), "m" (minute) and "s" (second).  If no suffix, assume
+ * days.
+ * Returns 1 if successful and *@valp is filled in, or 0 if the suffix
+ * is unknown or on error.
+ */
+static int parse_duration(const char *s, int *secondsp)
+{
+    char *end = NULL;
+    double val;
+    int multiplier = 86400; /* default is days */
+
+    /* no negative or empty numbers please */
+    if (!*s || *s == '-')
+        return 0;
+
+    val = strtod(s, &end);
+    /* Allow 'd', 'h', 'm' and 's' as end, else return error. */
+    if (*end) {
+	if (end[1]) return 0; /* more junk! */
+	switch (*end) {
+	case 'd':
+	    /* already the default */
+	    break;
+	case 'h':
+	    multiplier = 3600;
+	    break;
+	case 'm':
+	    multiplier = 60;
+	    break;
+	case 's':
+	    multiplier = 1;
+	    break;
+	default:
+	    return 0;
+	}
+    }
+
+    *secondsp = multiplier * val;
+
+    return 1;
+}
+
+/*
  * mailbox_expunge() callback to expunge expired articles.
  */
 static unsigned expire_cb(struct mailbox *mailbox __attribute__((unused)), 
@@ -317,7 +363,10 @@ static void sighandler (int sig __attribute((unused)))
 int main(int argc, char *argv[])
 {
     extern char *optarg;
-    int opt, r = 0, expire_days = 0, expunge_days = -1, delete_days = -1, do_expunge = 1;
+    int opt, r = 0, do_expunge = 1;
+    int expunge_seconds = -1;
+    int delete_seconds = -1;
+    int expire_seconds = 0;
     char *alt_config = NULL;
     char *find_prefix = NULL;
     char buf[100];
@@ -342,18 +391,18 @@ int main(int argc, char *argv[])
 	    break;
 
 	case 'D':
-	    if (delete_days >= 0) usage();
-	    delete_days = atoi(optarg);
+	    if (delete_seconds >= 0) usage();
+	    if (!parse_duration(optarg, &delete_seconds)) usage();
 	    break;
 
 	case 'E':
-	    if (expire_days) usage();
-	    expire_days = atoi(optarg);
+	    if (expire_seconds > 0) usage();
+	    if (!parse_duration(optarg, &expire_seconds)) usage();
 	    break;
 
 	case 'X':
-	    if (expunge_days >= 0) usage();
-	    expunge_days = atoi(optarg);
+	    if (expunge_seconds >= 0) usage();
+	    if (!parse_duration(optarg, &expunge_seconds)) usage();
 	    break;
 
 	case 'x':
@@ -373,14 +422,14 @@ int main(int argc, char *argv[])
 	case 'a':
 	    erock.skip_annotate = 1;
 	    break;
-	
+
 	default:
 	    usage();
 	    break;
 	}
     }
 
-    if (!expire_days) usage();
+    if (!expire_seconds) usage();
 
     sigemptyset(&action.sa_mask);
     action.sa_flags = 0;
@@ -418,15 +467,15 @@ int main(int argc, char *argv[])
 	 * so we can prune those immediately from the duplicate db.
 	 */
 	erock.table = &expire_table;
-	if (expunge_days == -1) {
+	if (expunge_seconds < 0) {
 	    erock.expunge_mark = 0;
 	} else {
-	    erock.expunge_mark = time(0) - (expunge_days * 60 * 60 * 24);
+	    erock.expunge_mark = time(0) - expunge_seconds;
 
 	    if (erock.verbose) {
 		fprintf(stderr,
-			"Expunging deleted messages in mailboxes older than %d days\n",
-			expunge_days);
+			"Expunging deleted messages in mailboxes older than %0.2f days\n",
+			(double)(expunge_seconds/86400));
 	    }
 	}
 
@@ -449,21 +498,21 @@ int main(int argc, char *argv[])
 	goto finish;
     }
 
-    if ((delete_days != -1) && mboxlist_delayed_delete_isenabled() &&
+    if ((delete_seconds >= 0) && mboxlist_delayed_delete_isenabled() &&
 	(deletedprefix = config_getstring(IMAPOPT_DELETEDPREFIX))) {
         struct delete_node *node;
         int count = 0;
-        
+
         if (drock.verbose) {
             fprintf(stderr,
-                    "Removing deleted mailboxes older than %d days\n",
-                    delete_days);
+		    "Removing deleted mailboxes older than %0.2f days\n",
+		    (double)(delete_seconds/86400));
         }
 
         strlcpy(drock.prefix, deletedprefix, sizeof(drock.prefix));
         strlcat(drock.prefix, ".", sizeof(drock.prefix));
         drock.prefixlen = strlen(drock.prefix);
-        drock.delete_mark = time(0) - (delete_days * 60 * 60 * 24);
+        drock.delete_mark = time(0) - delete_seconds;
         drock.head = NULL;
         drock.tail = NULL;
 
@@ -494,7 +543,7 @@ int main(int argc, char *argv[])
     }
 
     /* purge deliver.db entries of expired messages */
-    r = duplicate_prune(expire_days, &expire_table);
+    r = duplicate_prune(expire_seconds, &expire_table);
 
 finish:
     free_hash_table(&expire_table, free);
