@@ -107,12 +107,12 @@ struct delete_rock {
 };
 
 /*
- * Parse a duration string into a double.
+ * Parse a non-negative duration string as seconds.
  *
  * Convert "23.5m" to fractional days.  Accepts the suffixes "d" (day),
  * (day), "h" (hour), "m" (minute) and "s" (second).  If no suffix, assume
  * days.
- * Returns 1 if successful and *@valp is filled in, or 0 if the suffix
+ * Returns 1 if successful and *secondsp is filled in, or 0 if the suffix
  * is unknown or on error.
  */
 static int parse_duration(const char *s, int *secondsp)
@@ -128,7 +128,8 @@ static int parse_duration(const char *s, int *secondsp)
     val = strtod(s, &end);
     /* Allow 'd', 'h', 'm' and 's' as end, else return error. */
     if (*end) {
-	if (end[1]) return 0; /* more junk! */
+	if (end[1]) return 0; /* trailing extra junk */
+
 	switch (*end) {
 	case 'd':
 	    /* already the default */

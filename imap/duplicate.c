@@ -318,7 +318,7 @@ int duplicate_prune(int seconds, struct hash_table *expire_table)
     prock.count = prock.deletions = 0;
     prock.expmark = time(NULL) - seconds;
     prock.expire_table = expire_table;
-    syslog(LOG_NOTICE, "duplicate_prune: pruning back %.2f days",
+    syslog(LOG_NOTICE, "duplicate_prune: pruning back %0.2f days",
 	   (double)(seconds/86400));
 
     /* check each entry in our database */

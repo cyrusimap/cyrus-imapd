@@ -106,21 +106,24 @@ file unless specified otherwise by \fB-C\fR.
 \fB\-C\fI config-file\fR
 Read configuration options from \fIconfig-file\fR.
 .TP
-\fB\-D \fIdelete-days\fR
-Remove previously deleted mailboxes older than \fIdelete-days\fR
+\fB\-D \fIdelete-duration\fR
+Remove previously deleted mailboxes older than \fIdelete-duration\fR
 (when using the "delayed" delete mode).
+The value can be a floating point number, and may have a suffix to
+specify the unit of time.  If no suffix, the value is number of days.
+Valid suffixes are \fBd\fR (days), \fBh\fR (hours),
+\fBm\fR (minutes) and \fBs\fR (seconds).
 .TP
 \fB\-E \fIexpire-duration\fR
 Prune the duplicate database of entries older than \fIexpire-duration\fR.
-The value can be a floating point number, and may have a suffix to use a
-unit other than days. Valid suffixes are \fBd\fR (days), \fBh\fR (hours),
-\fBm\fR (minutes) and \fBs\fR (seconds). This value is only used for
-entries which do not have a corresponding
+This value is only used for entries which do not have a corresponding
 \fB/vendor/cmu/cyrus-imapd/expire\fR mailbox annotation.
+Format is the same as delete-duration.
 .TP
-\fB\-X \fIexpunge-days\fR
-Expunge previously deleted messages older than \fIexpunge-days\fR
+\fB\-X \fIexpunge-duration\fR
+Expunge previously deleted messages older than \fIexpunge-duration\fR
 (when using the "delayed" expunge mode).
+Format is the same as delete-duration.
 .TP
 \fB\-x
 Do not expunge messages even if using delayed expunge mode.  This reduces IO
