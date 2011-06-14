@@ -1349,7 +1349,7 @@ void lmtpmode(struct lmtp_func *func,
 		  cd.authenticated == NOAUTH) {
 		  prot_printf(pout, "250-STARTTLS\r\n");
 	      }
-	      if ((cd.authenticated == NOAUTH) &&
+	      if ((cd.authenticated <= 0) &&
 		  sasl_listmech(cd.conn, NULL, "AUTH ", " ", "", &mechs, 
 				NULL, &mechcount) == SASL_OK && 
 		  mechcount > 0) {
