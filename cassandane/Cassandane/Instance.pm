@@ -361,6 +361,7 @@ sub _start_master
     xlog "_start_master: PID waiting for services";
     foreach my $srv (values %{$self->{services}})
     {
+	next unless $srv->{port} =~ m/^\d+$/;
 	_timed_wait(sub { $srv->is_listening() },
 	        description => $srv->address() . " to be in LISTEN state");
     }

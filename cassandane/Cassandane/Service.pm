@@ -137,7 +137,14 @@ sub master_params
 sub address
 {
     my ($self) = @_;
-    return "$self->{host}:$self->{port}";
+    if ($self->{port} =~ m/^\d+$/)
+    {
+	return "$self->{host}:$self->{port}";
+    }
+    else
+    {
+	return $self->{port};
+    }
 }
 
 sub is_listening
@@ -147,8 +154,8 @@ sub is_listening
     # hardcoded for TCP4
     die "Sorry, the host argument \"$self->{host}\" must be a numeric IP address"
 	unless ($self->{host} =~ m/^\d+\.\d+\.\d+\.\d+$/);
-    die "Sorry, the port argument \"$self->{port}\" must be a numeric TCP port"
-	unless ($self->{port} =~ m/^\d+$/);
+    die "Sorry, the port argument \"$self->{port}\" must be a numeric TCP port or unix path"
+	unless ($self->{port} =~ m/^\d+$/ or $self->{port} =~ m{^/});
 
     my @cmd = (
 	'netstat',
@@ -157,25 +164,27 @@ sub is_listening
 	'-Ainet',	# AF_INET only
 	);
 
-    open NETSTAT,'-|',@cmd
-	or die "Cannot run netstat to check for port $self->{port}: $!";
-    #     # netstat -ln -Ainet
-    #     Active Internet connections (only servers)
-    #     Proto Recv-Q Send-Q Local Address           Foreign Address State
-    #     tcp        0      0 0.0.0.0:56686           0.0.0.0:* LISTEN
     my $found;
-    while (<NETSTAT>)
-    {
-	chomp;
-	my @a = split;
-	next unless scalar(@a) == 6;
-	next unless $a[0] eq 'tcp';
-	next unless $a[5] eq 'LISTEN';
-	next unless $a[3] eq $self->address();
-	$found = 1;
-	last;
+    if ($self->{port} =~ m/^\d+$/) {
+	open NETSTAT,'-|',@cmd
+	    or die "Cannot run netstat to check for port $self->{port}: $!";
+	#     # netstat -ln -Ainet
+	#     Active Internet connections (only servers)
+	#     Proto Recv-Q Send-Q Local Address           Foreign Address State
+	#     tcp        0      0 0.0.0.0:56686           0.0.0.0:* LISTEN
+	while (<NETSTAT>)
+	{
+	    chomp;
+	    my @a = split;
+	    next unless scalar(@a) == 6;
+	    next unless $a[0] eq 'tcp';
+	    next unless $a[5] eq 'LISTEN';
+	    next unless $a[3] eq $self->address();
+	    $found = 1;
+	    last;
+	}
+	close NETSTAT;
     }
-    close NETSTAT;
 
     xlog "is_listening: service $self->{name} is " .
 	 "listening on " . $self->address()
