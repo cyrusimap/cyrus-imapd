@@ -10,9 +10,15 @@
 
 <h2>Upgrading from 2.4.8</h2>
 <ul>
+<li>CYRUS_PATH prefixing.  If you have a config file in CYRUS_PATH
+    it will override the default path now, so for example a file
+    in /usr/cyrus/etc/imapd.conf will override /etc/imapd.conf.
+    This is to make things easier for sites with multiple installs
+    on a single machine.  You will want to check that there aren't
+    unexpected files in those locations when upgrading.</li>
 <li>New config options: *_db_path allow moving individual DB files
     to different partitions - for example you may want to put the
-    deliver.db onto tmpfs to improve performance</li>
+    deliver.db onto tmpfs to improve performance.</li>
 <li>KNOWN BUG: quota -f can double ALL quota usage values for all
     users.  This is particularly bad because of the bug fixed in
     this release where quotaroots were not correctly updated on

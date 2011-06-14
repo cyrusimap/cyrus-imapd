@@ -33,12 +33,16 @@
     sat with a patch for years.  Big thanks to Jes&uacute;s Roncero for the
     original patch, and to Donald Buczek for re-reporting it.</li>
 <li>Bug #3467 - compilation fix for stricter compilers</li>
-<li>Bug #3163 - lmtp delivery into subfolder.  Fixes a regression for 2.3.x
-    behaviour (thanks to baldur@email.de for multiple attempts at the patch
-    and for pushing until it got included!)</li>
 <li>Bug #3466 - fix FUD client handling of 64 bit time datatypes</li>
 <li>Bug #3477 - this is a replay of 3444 and 3446 which only got fixed on
     master, not in stable (thanks Leena Heino for the patch this time)</li>
+<li>Bug #3470 - finally fix the underlying logic for LIST/LSUB and
+    children matches, which has been bandaid-fixed a few times in the past
+    few stable releases</li>
+<li>Bug #3438 - fix authentication (-a option) for deliver command</li>
+<li>Bug #3431 - actually an enhancement - look for config files in
+    ENV{CYRUS_PATH} first</li>
+<li>Bug #3430 - fractional days and other units in cyr_expire</li>
 </ul>
 
 <h1>Changes to the Cyrus IMAP Server since 2.4.7</h1>
