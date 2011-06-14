@@ -356,10 +356,11 @@ void config_read(const char *alt_config)
 
 void config_read_file(const char *filename)
 {
-    FILE *infile;
+    FILE *infile = NULL;
     enum imapopt opt = IMAPOPT_ZERO;
     int lineno = 0;
     char *buf, errbuf[1024];
+    const char *cyrus_path;
     unsigned bufsize, len;
     char *p, *q, *key, *fullkey, *srvkey, *val, *newval;
     int service_specific;
@@ -368,8 +369,18 @@ void config_read_file(const char *filename)
     bufsize = GROWSIZE;
     buf = xmalloc(bufsize);
 
-    /* read in config file */
-    infile = fopen(filename, "r");
+    /* read in config file
+       Check if we have CYRUS_PATH defined, and then use that config */
+    cyrus_path = getenv("CYRUS_PATH");
+    if (cyrus_path) {
+	strlcpy(buf, cyrus_path, bufsize);
+	strlcat(buf, filename, bufsize);
+	infile = fopen(buf, "r");
+    }
+
+    if (!infile)
+	infile = fopen(filename, "r");
+
     if (!infile) {
 	strlcpy(buf, CYRUS_PATH, bufsize);
 	strlcat(buf, filename, bufsize);
