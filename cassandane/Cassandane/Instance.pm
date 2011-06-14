@@ -452,6 +452,15 @@ sub DESTROY
     }
 }
 
+sub deliver
+{
+    my ($self, $msg) = @_;
+    my $str = $msg->as_string();
+    my $fh = $self->run_utility('|-', 'deliver', 'cassandane');
+    print $fh $str;
+    close($fh);
+}
+
 # Run a Cyrus utility program with the given arguments.  The first
 # argument may optionally be a mode string, either '-|' or '|-' which
 # affects how the utility's stdin and stdout are treated thus:
