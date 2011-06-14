@@ -219,13 +219,24 @@ static void process_section(FILE *f, int *lnptr,
 void masterconf_getsection(const char *section, masterconf_process *f,
 			   void *rock)
 {
-    FILE *infile;
+    FILE *infile = NULL;
     int seclen = strlen(section);
     int level = 0;
     int lineno = 0;
     char buf[4096];
+    const char *cyrus_path;
 
-    infile = fopen(MASTER_CONFIG_FILENAME, "r");
+    /* try loading the copy inside CYRUS_PATH first */
+    cyrus_path = getenv("CYRUS_PATH");
+    if (cyrus_path) {
+	strlcpy(buf, cyrus_path, sizeof(buf));
+	strlcat(buf, MASTER_CONFIG_FILENAME, sizeof(buf));
+	infile = fopen(buf, "r");
+    }
+
+    if (!infile)
+	infile = fopen(MASTER_CONFIG_FILENAME, "r");
+
     if (!infile) {
 	snprintf(buf, sizeof(buf), "can't open configuration file %s: %s",
 		MASTER_CONFIG_FILENAME, strerror(errno));
