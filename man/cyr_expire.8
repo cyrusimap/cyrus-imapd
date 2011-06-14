@@ -52,7 +52,7 @@ cyr_expire \- expire messages and duplicate delivery database entries
 [
 .BI \-D " delete-days"
 ]
-.BI \-E " expire-days"
+.BI \-E " expire-duration"
 [
 .BI \-X " expunge-days"
 ]
@@ -110,9 +110,12 @@ Read configuration options from \fIconfig-file\fR.
 Remove previously deleted mailboxes older than \fIdelete-days\fR
 (when using the "delayed" delete mode).
 .TP
-\fB\-E \fIexpire-days\fR
-Prune the duplicate database of entries older than \fIexpire-days\fR.  This
-value is only used for entries which do not have a corresponding
+\fB\-E \fIexpire-duration\fR
+Prune the duplicate database of entries older than \fIexpire-duration\fR.
+The value can be a floating point number, and may have a suffix to use a
+unit other than days. Valid suffixes are \fBd\fR (days), \fBh\fR (hours),
+\fBm\fR (minutes) and \fBs\fR (seconds). This value is only used for
+entries which do not have a corresponding
 \fB/vendor/cmu/cyrus-imapd/expire\fR mailbox annotation.
 .TP
 \fB\-X \fIexpunge-days\fR

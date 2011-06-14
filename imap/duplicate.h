@@ -61,7 +61,7 @@ typedef int (*duplicate_find_proc_t)(const char *, const char *, time_t,
 				     unsigned long, void *);
 int duplicate_find(const char *msgid, duplicate_find_proc_t, void *rock);
 
-int duplicate_prune(int days, struct hash_table *expire_table);
+int duplicate_prune(int seconds, struct hash_table *expire_table);
 int duplicate_dump(FILE *f);
 
 int duplicate_done(void);

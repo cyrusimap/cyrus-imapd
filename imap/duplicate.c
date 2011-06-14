@@ -309,16 +309,17 @@ static int prune_cb(void *rock, const char *id, int idlen,
     return 0;
 }
 
-int duplicate_prune(int days, struct hash_table *expire_table)
+int duplicate_prune(int seconds, struct hash_table *expire_table)
 {
     struct prunerock prock;
 
-    if (days < 0) fatal("must specify positive number of days", EC_USAGE);
+    if (seconds < 0) fatal("must specify positive number of seconds", EC_USAGE);
 
     prock.count = prock.deletions = 0;
-    prock.expmark = time(NULL) - (days * 60 * 60 * 24);
+    prock.expmark = time(NULL) - seconds;
     prock.expire_table = expire_table;
-    syslog(LOG_NOTICE, "duplicate_prune: pruning back %d days", days);
+    syslog(LOG_NOTICE, "duplicate_prune: pruning back %.2f days",
+	   (double)(seconds/86400));
 
     /* check each entry in our database */
     prock.db = dupdb;

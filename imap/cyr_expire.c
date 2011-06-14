@@ -107,24 +107,48 @@ struct delete_rock {
 };
 
 /*
- * Parse a string as an unsigned decimal integer.
- * Note: returned value is signed to allow the caller to
- * use negative values as an error case.
- * Returns 1 if successful and *@valp is filled in,
- *  or 0 on error.
- * gnb:TODO should return bool
+ * Parse a duration string into a double.
+ *
+ * Convert "23.5m" to fractional days.  Accepts the suffixes "d" (day),
+ * (day), "h" (hour), "m" (minute) and "s" (second).  If no suffix, assume
+ * days.
+ * Returns 1 if successful and *@valp is filled in, or 0 if the suffix
+ * is unknown or on error.
  */
-static int parse_uint(const char *s, int *valp)
+static int parse_duration(const char *s, int *secondsp)
 {
     char *end = NULL;
-    int val;
+    double val;
+    int multiplier = 86400; /* default is days */
 
-    if (*s == '-')
-	return 0;
-    val = (int)strtoul(s, &end, 10);
-    if (end == NULL || *end || end == s)
-	return 0;
-    *valp = val;
+    /* no negative or empty numbers please */
+    if (!*s || *s == '-')
+        return 0;
+
+    val = strtod(s, &end);
+    /* Allow 'd', 'h', 'm' and 's' as end, else return error. */
+    if (*end) {
+	if (end[1]) return 0; /* more junk! */
+	switch (*end) {
+	case 'd':
+	    /* already the default */
+	    break;
+	case 'h':
+	    multiplier = 3600;
+	    break;
+	case 'm':
+	    multiplier = 60;
+	    break;
+	case 's':
+	    multiplier = 1;
+	    break;
+	default:
+	    return 0;
+	}
+    }
+
+    *secondsp = multiplier * val;
+
     return 1;
 }
 
@@ -163,7 +187,7 @@ static int expire(char *name, int matchlen __attribute__((unused)),
     int r;
     struct mailbox *mailbox = NULL;
     unsigned numexpunged = 0;
-    int expire_days;
+    int expire_seconds = 0;
 
     if (sigquit) {
 	return 1;
@@ -199,8 +223,7 @@ static int expire(char *name, int matchlen __attribute__((unused)),
 				    &attrib);
 
 	    if (r ||				/* error */
-	        attrib.value)			/* found an entry */
-	        break;
+	        attrib.value)			/* found an entry */ break;
 
 	} while (mboxname_make_parent(buf));
     }
@@ -213,19 +236,19 @@ static int expire(char *name, int matchlen __attribute__((unused)),
 	return 0;
     }
 
-    if (attrib.value && parse_uint(attrib.value, &expire_days)) {
+    if (attrib.value && parse_duration(attrib.value, &expire_seconds)) {
 	/* add mailbox to table */
-	erock->expire_mark = expire_days ?
-	    time(0) - (expire_days * 60 * 60 * 24) : 0 /* never */ ;
+	erock->expire_mark = expire_seconds ?
+			     time(0) - expire_seconds : 0 /* never */ ;
 	hash_insert(name,
 		    xmemdup(&erock->expire_mark, sizeof(erock->expire_mark)),
 		    &erock->table);
 
-	if (expire_days) {
+	if (expire_seconds) {
 	    if (verbose) {
 		fprintf(stderr,
-			"expiring messages in %s older than %d days\n",
-			name, expire_days);
+			"expiring messages in %s older than %0.2f days\n",
+			name, expire_seconds);
 	    }
 
 	    r = mailbox_expunge(mailbox, expire_cb, erock, NULL);
@@ -311,10 +334,10 @@ int main(int argc, char *argv[])
 {
     extern char *optarg;
     int opt, r = 0;
-    int expire_days = 0;
-    int expunge_days = -1;
-    int delete_days = -1;
     int do_expunge = 1;	/* gnb:TODO bool */
+    int expunge_seconds = -1;
+    int delete_seconds = -1;
+    int expire_seconds = 0;
     char *alt_config = NULL;
     const char *find_prefix = "*";
     struct expire_rock erock;
@@ -337,18 +360,18 @@ int main(int argc, char *argv[])
 	    break;
 
 	case 'D':
-	    if (delete_days >= 0) usage();
-	    if (!parse_uint(optarg, &delete_days)) usage();
+	    if (delete_seconds >= 0) usage();
+	    if (!parse_duration(optarg, &delete_seconds)) usage();
 	    break;
 
 	case 'E':
-	    if (expire_days) usage();
-	    if (!parse_uint(optarg, &expire_days)) usage();
+	    if (expire_seconds > 0) usage();
+	    if (!parse_duration(optarg, &expire_seconds)) usage();
 	    break;
 
 	case 'X':
-	    if (expunge_days >= 0) usage();
-	    if (!parse_uint(optarg, &expunge_days)) usage();
+	    if (expunge_seconds >= 0) usage();
+	    if (!parse_duration(optarg, &expunge_seconds)) usage();
 	    break;
 
 	case 'x':
@@ -374,7 +397,7 @@ int main(int argc, char *argv[])
 	}
     }
 
-    if (!expire_days) usage();
+    if (!expire_seconds) usage();
 
     sigemptyset(&action.sa_mask);
     action.sa_flags = 0;
@@ -409,15 +432,15 @@ int main(int argc, char *argv[])
 	 * build a hash table of mailboxes in which we expired messages,
 	 * and perform a cleanup of expunged messages
 	 */
-	if (expunge_days == -1) {
+	if (expunge_seconds < 0) {
 	    erock.expunge_mark = 0;
 	} else {
-	    erock.expunge_mark = time(0) - (expunge_days * 60 * 60 * 24);
+	    erock.expunge_mark = time(0) - expunge_seconds;
 
 	    if (verbose) {
 		fprintf(stderr,
-			"Expunging deleted messages in mailboxes older than %d days\n",
-			expunge_days);
+			"Expunging deleted messages in mailboxes older than %0.2f days\n",
+			(double)(expunge_seconds/86400));
 	    }
 	}
 
@@ -442,18 +465,18 @@ int main(int argc, char *argv[])
 	goto finish;
     }
 
-    if ((delete_days != -1) && mboxlist_delayed_delete_isenabled() &&
+    if ((delete_seconds >= 0) && mboxlist_delayed_delete_isenabled() &&
 	config_getstring(IMAPOPT_DELETEDPREFIX)) {
         struct delete_node *node;
         int count = 0;
-        
+
         if (verbose) {
             fprintf(stderr,
-                    "Removing deleted mailboxes older than %d days\n",
-                    delete_days);
+		    "Removing deleted mailboxes older than %0.2f days\n",
+		    (double)(delete_seconds/86400));
         }
 
-        drock.delete_mark = time(0) - (delete_days * 60 * 60 * 24);
+        drock.delete_mark = time(0) - delete_seconds;
         drock.head = NULL;
         drock.tail = NULL;
 
@@ -484,7 +507,7 @@ int main(int argc, char *argv[])
     }
 
     /* purge deliver.db entries of expired messages */
-    r = duplicate_prune(expire_days, &erock.table);
+    r = duplicate_prune(expire_seconds, &erock.table);
 
 finish:
     free_hash_table(&erock.table, free);
