@@ -68,6 +68,18 @@ sub create
 				argv => ['sync_server'],
 				%params);
     }
+    elsif ($name =~ m/lmtp/)
+    {
+	return Cassandane::Service->new($name,
+				argv => ['lmtpd'],
+				%params);
+    }
+    elsif ($name =~ m/sieve/)
+    {
+	return Cassandane::Service->new($name,
+				argv => ['timsieved'],
+				%params);
+    }
     else
     {
 	die "No command specified and cannot guess a default"
