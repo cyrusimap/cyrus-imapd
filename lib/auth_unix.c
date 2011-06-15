@@ -153,12 +153,11 @@ static const char *mycanonifyid(const char *identifier, size_t len)
 {
     static char retbuf[81];
     struct group *grp;
-    char sawalpha;
     char *p;
     int username_tolower = 0;
 
-    if(!len) len = strlen(identifier);
-    if(len >= sizeof(retbuf)) return NULL;
+    if (!len) len = strlen(identifier);
+    if (len >= sizeof(retbuf)) return NULL;
 
     memmove(retbuf, identifier, len);
     retbuf[len] = '\0';
@@ -185,27 +184,17 @@ static const char *mycanonifyid(const char *identifier, size_t len)
      * Lowercase usernames if requested.
      */
     username_tolower = libcyrus_config_getswitch(CYRUSOPT_USERNAME_TOLOWER);
-    sawalpha = 0;
-    for(p = retbuf; *p; p++) {
+    for (p = retbuf; *p; p++) {
 	if (username_tolower && Uisupper(*p))
 	    *p = tolower((unsigned char)*p);
 
 	switch (allowedchars[*(unsigned char*) p]) {
 	case 0:
 	    return NULL;
-	    
-	case 2:
-	    sawalpha = 1;
-	    /* FALL THROUGH */
-	    
 	default:
-	    ;
+	    break;
 	}
     }
-
-    /* we used to enforce "has to be one alpha char" */
-    /* now we don't */
-    /* if (!sawalpha) return NULL;  */
 
     return retbuf;
 }

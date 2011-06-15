@@ -768,7 +768,6 @@ static int myopen(const char *fname, int flags, struct db **ret)
     struct db *db;
     struct db_list *list_ent = open_db;
     int r;
-    int new = 0;
 
     while (list_ent && strcmp(list_ent->db->fname, fname)) {
 	list_ent = list_ent->next;
@@ -798,7 +797,6 @@ static int myopen(const char *fname, int flags, struct db **ret)
 	    return CYRUSDB_IOERROR;
 	}
 	db->fd = open(fname, O_RDWR | O_CREAT, 0644);
-	new = 1;
     }
 
     if (db->fd == -1) {

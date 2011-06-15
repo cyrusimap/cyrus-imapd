@@ -75,7 +75,7 @@ struct auth_state {
  */
 static int mymemberof(struct auth_state *auth_state, const char *identifier)
 {
-    char *ident;
+    const char *ident;
     int ret=0;
 
     if (strcmp(identifier,"anyone") == 0) return 1;
@@ -86,7 +86,7 @@ static int mymemberof(struct auth_state *auth_state, const char *identifier)
 
     ident = auth_canonifyid(identifier,0);
 
-    if(!strcmp(ident, auth_state->userid)) {
+    if (!strcmp(ident, auth_state->userid)) {
 	ret = 3;
     }
     
@@ -181,7 +181,8 @@ static const char *mycanonifyid(const char *identifier, size_t len)
 static struct auth_state *mynewstate(const char *identifier)
 {
     struct auth_state *newstate;
-    char *ident;
+    const char *ident;
+
     ident = auth_canonifyid(identifier, 0);
     if (!ident) return NULL;
 

@@ -1497,7 +1497,6 @@ static int verify_error = X509_V_OK;
 
 #define CCERT_BUFSIZ 256
 static char peer_CN[CCERT_BUFSIZ];
-static char issuer_CN[CCERT_BUFSIZ];
 
 /*
   * Set up the cert things on the server side. We do need both the
@@ -1823,30 +1822,28 @@ static void apps_ssl_info_callback(SSL * s, int where, int ret)
 int tls_start_clienttls(struct imclient *imclient,
 			unsigned *layer, char **authid, int fd)
 {
-    int     sts;
+    int sts;
     SSL_SESSION *session;
-    SSL_CIPHER *cipher;
-    X509   *peer;
+    const SSL_CIPHER *cipher;
+    X509 *peer;
     int tls_cipher_usebits = 0;
     int tls_cipher_algbits = 0;
     char *tls_peer_CN = "";
-    char *tls_issuer_CN = NULL;
 
-    if (imclient->tls_conn == NULL) {
+    if (!imclient->tls_conn)
 	imclient->tls_conn = (SSL *) SSL_new(imclient->tls_ctx);
-    }
-    if (imclient->tls_conn == NULL) {
+
+    if (!imclient->tls_conn) {
 	printf("Could not allocate 'con' with SSL_new()\n");
 	return -1;
     }
+
     SSL_clear(imclient->tls_conn);
 
     if (!SSL_set_fd(imclient->tls_conn, fd)) {
-      printf("SSL_set_fd failed\n");
-      return -1;
+	printf("SSL_set_fd failed\n");
+	return -1;
     }
-
-    /*SSL_set_read_ahead(imclient->tls_conn, 1);*/
 
     /*
      * This is the actual handshake routine. It will do all the negotiations
@@ -1854,25 +1851,23 @@ int tls_start_clienttls(struct imclient *imclient,
      */
     SSL_set_connect_state(imclient->tls_conn);
 
-
     /*
      * We do have an SSL_set_fd() and now suddenly a BIO_ routine is called?
      * Well there is a BIO below the SSL routines that is automatically
      * created for us, so we can use it for debugging purposes.
      */
-    /*    if (verbose==1) */
-    /*    BIO_set_callback(SSL_get_rbio(imclient->tls_conn), bio_dump_cb);*/
 
     /* Dump the negotiation for loglevels 3 and 4 */
 
-    if ((sts = SSL_connect(imclient->tls_conn)) <= 0) {
+    sts = SSL_connect(imclient->tls_conn);
+    if (sts <= 0) {
 	printf("[ SSL_connect error %d ]\n", sts); /* xxx get string error? */
 	session = SSL_get_session(imclient->tls_conn);
 	if (session) {
 	    SSL_CTX_remove_session(imclient->tls_ctx, session);
 	    printf("[ SSL session removed ]\n");
 	}
-	if (imclient->tls_conn!=NULL)
+	if (imclient->tls_conn)
 	    SSL_free(imclient->tls_conn);
 	imclient->tls_conn = NULL;
 	return -1;
@@ -1883,30 +1878,22 @@ int tls_start_clienttls(struct imclient *imclient,
      * the actual information. We want to save it for later use.
      */
     peer = SSL_get_peer_certificate(imclient->tls_conn);
-    if (peer != NULL) {
+    if (peer) {
 	X509_NAME_get_text_by_NID(X509_get_subject_name(peer),
-			  NID_commonName, peer_CN, CCERT_BUFSIZ);
+				  NID_commonName, peer_CN, CCERT_BUFSIZ);
 	tls_peer_CN = peer_CN;
-	X509_NAME_get_text_by_NID(X509_get_issuer_name(peer),
-			  NID_commonName, issuer_CN, CCERT_BUFSIZ);
-	/*	if (verbose==1)
-		printf("subject_CN=%s, issuer_CN=%s\n", peer_CN, issuer_CN);*/
-	tls_issuer_CN = issuer_CN;
-
     }
+
     cipher = SSL_get_current_cipher(imclient->tls_conn);
     tls_cipher_usebits = SSL_CIPHER_get_bits(cipher,
-						 &tls_cipher_algbits);
+					     &tls_cipher_algbits);
 
-    if (layer!=NULL)
-      *layer = tls_cipher_usebits;
+    if (layer)
+	*layer = tls_cipher_usebits;
 
-    if (authid!=NULL)
-      *authid = tls_peer_CN;
+    if (authid)
+	*authid = tls_peer_CN;
 
-    /*    printf("TLS connection established: %s with cipher %s (%d/%d bits)\n",
-	   tls_protocol, tls_cipher_name,
-	   tls_cipher_usebits, tls_cipher_algbits);*/
     return 0;
 }
 #endif /* HAVE_SSL */
@@ -1914,9 +1901,9 @@ int tls_start_clienttls(struct imclient *imclient,
 int imclient_havetls(void)
 {
 #ifdef HAVE_SSL
-  return 1;
+    return 1;
 #else
-  return 0;
+    return 0;
 #endif
 }
 

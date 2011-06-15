@@ -535,7 +535,7 @@ int parsenum(const char *p, const char **ptr, int maxlen, bit64 *res)
 	if (!cyrus_isdigit(p[n]))
 	    break;
 	cval = p[n] - '0';
-	result = result * 10 + (p[n] - '0');
+	result = result * 10 + cval;
     }
 
     /* no characters found... */
