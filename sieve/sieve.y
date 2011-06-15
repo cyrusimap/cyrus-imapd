@@ -725,13 +725,12 @@ commandlist_t *sieve_parse(sieve_script_t *script, FILE *f)
 int yyerror(char *msg)
 {
     extern int yylineno;
-    int ret;
 
     parse_script->err++;
     if (parse_script->interp.err) {
-	ret = parse_script->interp.err(yylineno, msg, 
-				       parse_script->interp.interp_context,
-				       parse_script->script_context);
+	parse_script->interp.err(yylineno, msg, 
+				 parse_script->interp.interp_context,
+				 parse_script->script_context);
     }
 
     return 0;
