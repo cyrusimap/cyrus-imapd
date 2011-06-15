@@ -347,12 +347,14 @@ int message_parse(const char *fname, struct index_record *record)
     if (!f) return IMAP_IOERROR;
 
     r = message_parse_file(f, NULL, NULL, &body);
-    if (!r) {
-        r = message_create_record(record, body);
-        message_free_body(body);
-    }
+    if (!r) r = message_create_record(record, body);
 
     if (f) fclose(f);
+
+    if (body) {
+	message_free_body(body);
+	free(body);
+    }
 
     return r;
 }
