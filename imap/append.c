@@ -352,7 +352,6 @@ int append_fromstage(struct appendstate *as, struct body **body,
 
     /* for staging */
     char stagefile[MAX_MAILBOX_PATH+1];
-    int sflen;
 
     assert(stage != NULL && stage->parts.count);
 
@@ -361,7 +360,6 @@ int append_fromstage(struct appendstate *as, struct body **body,
     /* xxx check errors */
     mboxlist_findstage(mailbox->name, stagefile, sizeof(stagefile));
     strlcat(stagefile, stage->fname, sizeof(stagefile));
-    sflen = strlen(stagefile);
 
     for (i = 0 ; i < stage->parts.count ; i++) {
 	if (!strcmp(stagefile, stage->parts.data[i])) {

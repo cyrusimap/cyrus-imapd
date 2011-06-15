@@ -806,7 +806,7 @@ int tls_start_servertls(int readfd, int writefd, int timeout,
 {
     int     sts;
     unsigned int n;
-    SSL_CIPHER *cipher;
+    const SSL_CIPHER *cipher;
     X509   *peer;
     const char *tls_protocol = NULL;
     const char *tls_cipher_name = NULL;
@@ -1239,7 +1239,7 @@ int tls_start_clienttls(int readfd, int writefd,
 			SSL_SESSION **sess)
 {
     int     sts;
-    SSL_CIPHER *cipher;
+    const SSL_CIPHER *cipher;
     X509   *peer;
     const char *tls_protocol = NULL;
     const char *tls_cipher_name = NULL;
@@ -1354,8 +1354,8 @@ int tls_start_clienttls(int readfd, int writefd,
 	tls_conn = NULL;
     }
     *ret = tls_conn;
-    return r;
 
+    return r;
 }
 
 #else

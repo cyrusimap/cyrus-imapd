@@ -128,13 +128,10 @@ static struct mailboxlist *create_listitem(const char *name)
 static struct mailboxlist *find_listitem(const char *name)
 {
     struct mailboxlist *item;
-    struct mailboxlist *previtem = NULL;
 
-    /* remove from the active list */
     for (item = open_mailboxes; item; item = item->next) {
 	if (!strcmp(name, item->m.name))
 	    return item;
-	previtem = item;
     }
 
     return NULL;

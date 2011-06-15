@@ -406,7 +406,7 @@ int begin_handling(void)
 	int r = 0, len = 0, size = 0;
 	struct auth_state *authstate = NULL;
 	char request[MAXREQUEST+1];
-	char *mapname = NULL, *key = NULL;
+	char *key = NULL;
 	const char *errstring = NULL;
 
 	if (signals_poll() == SIGHUP) {
@@ -435,7 +435,6 @@ int begin_handling(void)
 
 	if (!r) {
 	    request[len] = '\0';
-	    mapname = request;
 	    if (!(key = strchr(request, ' '))) {
 		errstring = "missing key";
 		r = IMAP_PROTOCOL_ERROR;

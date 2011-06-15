@@ -1161,7 +1161,11 @@ unsigned parse_msgno(char **ptr)
 
     r = parseuint32(p, &p, &msgno);
 
-    if (*p) {
+    if (r) {
+	prot_printf(popd_out, "-ERR Not a number\r\n");
+	*ptr = (char *)p;
+    }
+    else if (*p) {
 	prot_printf(popd_out, "-ERR Unexpected extra argument\r\n");
 	*ptr = (char *)p;
     }

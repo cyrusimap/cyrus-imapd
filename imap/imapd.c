@@ -6242,6 +6242,10 @@ void cmd_listrights(char *tag, char *name, char *identifier)
     char mailboxname[MAX_MAILBOX_BUFFER];
     int r, rights;
     struct mboxlist_entry *mbentry = NULL;
+    struct auth_state *authstate;
+    const char *canon_identifier;
+    int implicit;
+    char rightsdesc[100], optional[33];
 
     r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, name,
 					       imapd_userid, mailboxname);
@@ -6269,19 +6273,12 @@ void cmd_listrights(char *tag, char *name, char *identifier)
 	return;
     }
 
-    struct auth_state *authstate = auth_newstate(identifier);
-    const char *canon_identifier;
-    int canonidlen = 0;
-    int implicit;
-    char rightsdesc[100], optional[33];
-
+    authstate = auth_newstate(identifier);
     if (global_authisa(authstate, IMAPOPT_ADMINS))
 	canon_identifier = identifier; /* don't canonify global admins */
     else
 	canon_identifier = canonify_userid(identifier, imapd_userid, NULL);
     auth_freestate(authstate);
-
-    if (canon_identifier) canonidlen = strlen(canon_identifier);
 
     if (!canon_identifier) {
 	implicit = 0;
@@ -10826,7 +10823,6 @@ void cmd_urlfetch(char *tag)
     char mailboxname[MAX_MAILBOX_BUFFER];
     struct index_state *state;
     uint32_t msgno;
-    unsigned int token_len;
     struct mboxlist_entry *mbentry = NULL;
     time_t now = time(NULL);
     unsigned extended, params;
@@ -10945,8 +10941,6 @@ void cmd_urlfetch(char *tag)
 	if (!r) {
 	    if (url.urlauth.token) {
 		/* validate the URLAUTH token */
-		token_len = hex_to_bin(url.urlauth.token, 0,
-			(unsigned char *) url.urlauth.token);
 
 		/* first byte is the algorithm used to create token */
 		switch (url.urlauth.token[0]) {

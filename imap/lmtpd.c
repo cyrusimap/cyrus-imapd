@@ -600,8 +600,7 @@ void deliver_remote(message_data_t *msgdata,
 	struct rcpt *rc;
 	struct backend *remote;
 	int i = 0;
-	int r = 0;
-	
+
 	lt->from = msgdata->return_path;
 	lt->auth = d->authas[0] ? d->authas : NULL;
 	lt->isdotstuffed = 0;
@@ -622,7 +621,7 @@ void deliver_remote(message_data_t *msgdata,
 	remote = proxy_findserver(d->server, &lmtp_protocol, "",
 				  &backend_cached, NULL, NULL, NULL);
 	if (remote) {
-	    r = lmtp_runtxn(remote, lt);
+	    lmtp_runtxn(remote, lt);
 	} else {
 	    /* remote server not available; tempfail all deliveries */
 	    for (rc = d->to, i = 0; i < d->rnum; i++) {

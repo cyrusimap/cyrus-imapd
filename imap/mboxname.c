@@ -134,13 +134,10 @@ static struct mboxlocklist *create_lockitem(const char *name)
 struct mboxlocklist *find_lockitem(const char *name)
 {
     struct mboxlocklist *item;
-    struct mboxlocklist *previtem = NULL;
 
-    /* remove from the active list */
     for (item = open_mboxlocks; item; item = item->next) {
 	if (!strcmp(name, item->l.name))
 	    return item;
-	previtem = item;
     }
 
     return NULL;

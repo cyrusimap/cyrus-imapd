@@ -411,7 +411,6 @@ mboxlist_mycreatemailboxcheck(const char *mboxname,
     char *defaultacl, *identifier, *rights;
     char parent[MAX_MAILBOX_BUFFER];
     unsigned long parentlen;
-    char *parentname = NULL;
     int user_folder_limit;
     char *ourpartition = NULL;
     char *ouracl;
@@ -467,7 +466,6 @@ mboxlist_mycreatemailboxcheck(const char *mboxname,
 
 	switch (r) {
 	case 0:
-	    parentname = parent;
 	    parentlen = strlen(parent);
 	    break;
 
@@ -2683,10 +2681,8 @@ static int mboxlist_changequota(const char *name,
 /* must be called after cyrus_init */
 void mboxlist_init(int myflags)
 {
-    int r;
-
     if (myflags & MBOXLIST_SYNC) {
-	r = DB->sync();
+	DB->sync();
     }
 }
 

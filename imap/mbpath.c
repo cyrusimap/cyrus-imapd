@@ -137,9 +137,14 @@ main(int argc, char **argv)
     if ((rc = mboxlist_lookup(buf, &mbentry, NULL)) == 0) {
       if (mbentry->mbtype & MBTYPE_REMOTE) {
 	fprintf(stderr, "Remote mailbox: %s\n", argv[i]);
-      } else {
+      } else if (metadata) {
 	const char *path = mboxname_metapath(mbentry->partition, 
 					     mbentry->name, 0, 0);
+	printf("%s\n", path);
+      }
+      else {
+	const char *path = mboxname_datapath(mbentry->partition, 
+					     mbentry->name, 0);
 	printf("%s\n", path);
       }
       mboxlist_entry_free(&mbentry);

@@ -223,10 +223,8 @@ void annotatemore_init(int myflags,
 		       int (*store_func)(const char *, const char *,
 					 struct entryattlist *))
 {
-    int r;
-
     if (myflags & ANNOTATE_SYNC) {
-	r = DB->sync();
+	DB->sync();
     }
 
     if (fetch_func) {
@@ -340,11 +338,10 @@ static int find_p(void *rock, const char *key,
 		int datalen __attribute__((unused)))
 {
     struct find_rock *frock = (struct find_rock *) rock;
-    const char *mboxname, *entry, *userid;
+    const char *mboxname, *entry;
 
     mboxname = key;
     entry = mboxname + strlen(mboxname) + 1;
-    userid = entry + strlen(entry) + 1;
 
     return ((GLOB_TEST(frock->mglob, mboxname) != -1) &&
 	    (GLOB_TEST(frock->eglob, entry) != -1));
@@ -1572,7 +1569,6 @@ struct annotate_st_entry_list
 static const char *annotate_canon_value(const char *value, int type)
 {
     char *p = NULL;
-    unsigned long n;
 
     /* check for "NIL" */
     if (!strcasecmp(value, "NIL")) return "NIL";
@@ -1596,7 +1592,7 @@ static const char *annotate_canon_value(const char *value, int type)
     case ATTRIB_TYPE_UINT:
 	/* make sure its a valid ulong ( >= 0 ) */
 	errno = 0;
-	n = strtoul(value, &p, 10);
+	strtoul(value, &p, 10);
 	if ((p == value)		/* no value */
 	    || (*p != '\0')		/* illegal char */
 	    || errno			/* overflow */
@@ -1608,7 +1604,7 @@ static const char *annotate_canon_value(const char *value, int type)
     case ATTRIB_TYPE_INT:
 	/* make sure its a valid long */
 	errno = 0;
-	n = strtol(value, &p, 10);
+	strtol(value, &p, 10);
 	if ((p == value)		/* no value */
 	    || (*p != '\0')		/* illegal char */
 	    || errno) {			/* underflow/overflow */
