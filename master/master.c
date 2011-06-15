@@ -1598,7 +1598,6 @@ static void add_event(const char *name, struct entry *e, void *rock)
 static void limit_fds(rlim_t x)
 {
     struct rlimit rl;
-    int r;
 
     rl.rlim_cur = x;
     rl.rlim_max = x;
@@ -1618,7 +1617,7 @@ static void limit_fds(rlim_t x)
 
 
     if (verbose > 1) {
-	r = getrlimit(RLIMIT_NUMFDS, &rl);
+	getrlimit(RLIMIT_NUMFDS, &rl);
 	syslog(LOG_DEBUG, "set maximum file descriptors to %ld/%ld", rl.rlim_cur,
 	       rl.rlim_max);
     }
@@ -1891,11 +1890,10 @@ int main(int argc, char **argv)
 	 * and obtain a new process group.
 	 */
 	if (setsid() == -1) {
-	    int r;
 	    int exit_result = EX_OSERR;
 	    
 	    /* Tell our parent that we failed. */
-	    r = write(startup_pipe[1], &exit_result, sizeof(exit_result));
+	    write(startup_pipe[1], &exit_result, sizeof(exit_result));
 	
 	    fatal("setsid failure", EX_OSERR);
 	}
@@ -1907,10 +1905,9 @@ int main(int argc, char **argv)
     pidfd = open(pidfile, O_CREAT|O_RDWR, 0644);
     if(pidfd == -1) {
 	int exit_result = EX_OSERR;
-	int r;
 
 	/* Tell our parent that we failed. */
-	r = write(startup_pipe[1], &exit_result, sizeof(exit_result));
+	write(startup_pipe[1], &exit_result, sizeof(exit_result));
 
 	syslog(LOG_ERR, "can't open pidfile: %m");
 	exit(EX_OSERR);
@@ -1919,10 +1916,9 @@ int main(int argc, char **argv)
 
 	if(lock_nonblocking(pidfd)) {
 	    int exit_result = EX_OSERR;
-	    int r;
 
 	    /* Tell our parent that we failed. */
-	    r = write(startup_pipe[1], &exit_result, sizeof(exit_result));
+	    write(startup_pipe[1], &exit_result, sizeof(exit_result));
 	    
 	    fatal("cannot get exclusive lock on pidfile (is another master still running?)", EX_OSERR);
 	} else {
@@ -1932,10 +1928,9 @@ int main(int argc, char **argv)
 				    pidfd_flags | FD_CLOEXEC);
 	    if (pidfd_flags == -1) {
 		int exit_result = EX_OSERR;
-		int r;
-		
+
 		/* Tell our parent that we failed. */
-		r = write(startup_pipe[1], &exit_result, sizeof(exit_result));
+		write(startup_pipe[1], &exit_result, sizeof(exit_result));
 
 		fatal("unable to set close-on-exec for pidfile: %m", EX_OSERR);
 	    }
@@ -1946,10 +1941,9 @@ int main(int argc, char **argv)
 	       ftruncate(pidfd, 0) == -1 ||
 	       write(pidfd, buf, strlen(buf)) == -1) {
 		int exit_result = EX_OSERR;
-		int r;
 
 		/* Tell our parent that we failed. */
-		r = write(startup_pipe[1], &exit_result, sizeof(exit_result));
+		write(startup_pipe[1], &exit_result, sizeof(exit_result));
 
 		fatal("unable to write to pidfile: %m", EX_OSERR);
 	    }
@@ -1962,14 +1956,14 @@ int main(int argc, char **argv)
 	int exit_result = 0;
 
 	/* success! */
-	if(write(startup_pipe[1], &exit_result, sizeof(exit_result)) == -1) {
+	if (write(startup_pipe[1], &exit_result, sizeof(exit_result)) == -1) {
 	    syslog(LOG_ERR,
 		   "could not write success result to startup pipe (%m)");
 	    exit(EX_OSERR);
 	}
 
 	close(startup_pipe[1]);
-	if(pidlock_fd != -1) close(pidlock_fd);
+	if (pidlock_fd != -1) close(pidlock_fd);
     }
 
     syslog(LOG_NOTICE, "process started");
