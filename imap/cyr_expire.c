@@ -249,7 +249,7 @@ static int expire(char *name, int matchlen __attribute__((unused)),
 	    if (verbose) {
 		fprintf(stderr,
 			"expiring messages in %s older than %0.2f days\n",
-			name, expire_seconds);
+			name, (double)(expire_seconds/86400));
 	    }
 
 	    r = mailbox_expunge(mailbox, expire_cb, erock, NULL);
