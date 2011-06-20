@@ -10942,6 +10942,14 @@ void cmd_urlfetch(char *tag)
 	    if (url.urlauth.token) {
 		/* validate the URLAUTH token */
 
+		/* yes, this is evil, in-place conversion from hex
+		 * to binary */
+		if (hex_to_bin(url.urlauth.token, 0,
+		    (unsigned char *) url.urlauth.token) < 1) {
+		    r = IMAP_BADURL;
+		    break;
+		}
+
 		/* first byte is the algorithm used to create token */
 		switch (url.urlauth.token[0]) {
 		case URLAUTH_ALG_HMAC_SHA1: {
