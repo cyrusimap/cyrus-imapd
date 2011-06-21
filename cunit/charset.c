@@ -102,6 +102,7 @@ static void test_decode_mimeheader(void)
 
     s = charset_decode_mimeheader(NULL);
     CU_ASSERT_PTR_NULL(s);
+    free(s);
 
     s = charset_decode_mimeheader("");
     CU_ASSERT_PTR_NOT_NULL(s);
