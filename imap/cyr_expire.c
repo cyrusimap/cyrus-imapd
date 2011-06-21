@@ -249,7 +249,7 @@ static int expire(char *name, int matchlen __attribute__((unused)),
 	    if (verbose) {
 		fprintf(stderr,
 			"expiring messages in %s older than %0.2f days\n",
-			name, (double)(expire_seconds/86400));
+			name, ((double)expire_seconds/86400));
 	    }
 
 	    r = mailbox_expunge(mailbox, expire_cb, erock, NULL);
@@ -441,7 +441,7 @@ int main(int argc, char *argv[])
 	    if (verbose) {
 		fprintf(stderr,
 			"Expunging deleted messages in mailboxes older than %0.2f days\n",
-			(double)(expunge_seconds/86400));
+			((double)expunge_seconds/86400));
 	    }
 	}
 
@@ -474,7 +474,7 @@ int main(int argc, char *argv[])
         if (verbose) {
             fprintf(stderr,
 		    "Removing deleted mailboxes older than %0.2f days\n",
-		    (double)(delete_seconds/86400));
+		    ((double)delete_seconds/86400));
         }
 
         drock.delete_mark = time(0) - delete_seconds;
