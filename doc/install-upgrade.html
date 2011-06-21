@@ -10,10 +10,10 @@
 
 <h2>Upgrading from 2.4.8</h2>
 <ul>
-<li>CYRUS_PATH prefixing.  If you have a config file in CYRUS_PATH
-    it will override the default path now, so for example the file
-    /usr/cyrus/etc/imapd.conf will override /etc/imapd.conf if
-    your CYRUS_PATH is /usr/cyrus.
+<li>CYRUS_PREFIX environemnt varabile.  If you have an environment
+    variable "CYRUS_PREFIX" then config files will be searched for
+    in there first, so for example the file /var/cyrus/etc/imapd.conf
+    will override /etc/imapd.conf if your CYRUS_PREFIX is /var/cyrus.
     This is to make things easier for sites with multiple installs
     on a single machine.  You will want to check that there aren't
     unexpected files in those locations when upgrading.</li>

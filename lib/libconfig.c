@@ -370,8 +370,8 @@ void config_read_file(const char *filename)
     buf = xmalloc(bufsize);
 
     /* read in config file
-       Check if we have CYRUS_PATH defined, and then use that config */
-    cyrus_path = getenv("CYRUS_PATH");
+       Check if we have CYRUS_PREFIX defined, and then use that config */
+    cyrus_path = getenv("CYRUS_PREFIX");
     if (cyrus_path) {
 	strlcpy(buf, cyrus_path, bufsize);
 	strlcat(buf, filename, bufsize);
@@ -381,11 +381,6 @@ void config_read_file(const char *filename)
     if (!infile)
 	infile = fopen(filename, "r");
 
-    if (!infile) {
-	strlcpy(buf, CYRUS_PATH, bufsize);
-	strlcat(buf, filename, bufsize);
-	infile = fopen(buf, "r");
-    }
     if (!infile) {
 	snprintf(buf, bufsize, "can't open configuration file %s: %s",
 		 filename, error_message(errno));

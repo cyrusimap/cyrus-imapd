@@ -226,8 +226,8 @@ void masterconf_getsection(const char *section, masterconf_process *f,
     char buf[4096];
     const char *cyrus_path;
 
-    /* try loading the copy inside CYRUS_PATH first */
-    cyrus_path = getenv("CYRUS_PATH");
+    /* try loading the copy inside CYRUS_PREFIX first */
+    cyrus_path = getenv("CYRUS_PREFIX");
     if (cyrus_path) {
 	strlcpy(buf, cyrus_path, sizeof(buf));
 	strlcat(buf, MASTER_CONFIG_FILENAME, sizeof(buf));
