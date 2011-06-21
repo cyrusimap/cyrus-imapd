@@ -156,13 +156,11 @@ foreach my $name (@names)
 }
 
 if ($do_list) {
-    foreach my $item (@suites)
+    foreach my $item (sort @suites)
     {
 	print "$item\n";
     }
     exit 0;
 }
-
-# printf STDERR "List of suites: %s\n", join(' ',@suites);
 
 exit(! $runners{$format}->(@suites));
