@@ -476,7 +476,7 @@ int main(int argc, char *argv[])
 	    if (erock.verbose) {
 		fprintf(stderr,
 			"Expunging deleted messages in mailboxes older than %0.2f days\n",
-			(double)(expunge_seconds/86400));
+			((double)expunge_seconds/86400));
 	    }
 	}
 
@@ -507,7 +507,7 @@ int main(int argc, char *argv[])
         if (drock.verbose) {
             fprintf(stderr,
 		    "Removing deleted mailboxes older than %0.2f days\n",
-		    (double)(delete_seconds/86400));
+		    ((double)delete_seconds/86400));
         }
 
         strlcpy(drock.prefix, deletedprefix, sizeof(drock.prefix));
