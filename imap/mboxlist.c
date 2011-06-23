@@ -1514,10 +1514,10 @@ int mboxlist_setacl(const char *name, const char *identifier,
 		rights++;
 		mode = ACL_MODE_REMOVE;
 	    }
-	    /* do not allow to remove the admin rights from mailbox owner */
-	    if (isidentifiermbox && (mode != ACL_MODE_ADD) &&
+	    /* do not allow non-admin user to remove the admin rights from mailbox owner */
+	    if (!isadmin && isidentifiermbox && (mode != ACL_MODE_ADD) &&
 		!mboxlist_have_admin_rights(rights)) {
-		syslog(LOG_ERR,"Denied to change admin access rights for "
+		syslog(LOG_ERR,"Denied removal of admin rights on "
 		       "folder \"%s\" (owner: %s) by user \"%s\"", name,
 		       mailbox_owner, userid);
 		r = IMAP_PERMISSION_DENIED;
@@ -1532,8 +1532,8 @@ int mboxlist_setacl(const char *name, const char *identifier,
 	    }
 	} else {
 	    /* do not allow to remove the admin rights from mailbox owner */
-	    if (isidentifiermbox) {
-		syslog(LOG_ERR,"Denied to delete admin access rights for "
+	    if (!isadmin && isidentifiermbox) {
+		syslog(LOG_ERR,"Denied removal of admin rights on "
 		       "folder \"%s\" (owner: %s) by user \"%s\"", name,
 		       mailbox_owner, userid);
 		r = IMAP_PERMISSION_DENIED;
