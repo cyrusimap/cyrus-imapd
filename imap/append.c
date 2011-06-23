@@ -422,7 +422,7 @@ int append_fromstage(struct appendstate *as, struct body **body,
     if (destfile) {
 	/* this will hopefully ensure that the link() actually happened
 	   and makes sure that the file actually hits disk */
-	r = fsync(fileno(destfile));
+	fsync(fileno(destfile));
 	fclose(destfile);
     }
     if (r) {
