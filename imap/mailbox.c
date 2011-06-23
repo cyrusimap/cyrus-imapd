@@ -2140,6 +2140,9 @@ int mailbox_append_index_record(struct mailbox *mailbox,
     /* Append MUST have a message with data */
     assert(record->size);
 
+    /* GUID must not be null */
+    assert(!message_guid_isnull(&record->guid));
+
     /* belt AND suspenders - check the previous record too */
     if (mailbox->i.num_records) {
 	struct index_record prev;
