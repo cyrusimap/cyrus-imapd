@@ -2118,6 +2118,11 @@ int annotatemore_msg_lookup(const char *mboxname, uint32_t uid, const char *entr
 
     if (!r && data) {
 	r = split_attribs(data, datalen, value);
+	if (!r) {
+	    /* Force a copy, in case the putdb() call destroys
+	     * the per-db data area that @data points to.  */
+	    buf_cstring(value);
+	}
     }
     else if (r == CYRUSDB_NOTFOUND) r = 0;
 
