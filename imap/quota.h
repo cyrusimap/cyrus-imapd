@@ -80,6 +80,8 @@ struct quota {
     int limit;			/* in QUOTA_UNITS */
 };
 
+typedef int quotaproc_t(struct quota *quota, void *rock);
+
 extern void quota_setroot(struct quota *quota, const char *root);
 
 extern int quota_read(struct quota *quota, struct txn **tid, int wrlock);
@@ -93,6 +95,8 @@ extern int quota_write(struct quota *quota, struct txn **tid);
 extern int quota_deleteroot(const char *quotaroot);
 
 extern int quota_findroot(char *ret, size_t retlen, const char *name);
+
+extern int quota_foreach(const char *prefix, quotaproc_t *proc, void *rock);
 
 extern void quota_free(struct quota *quota);
 
