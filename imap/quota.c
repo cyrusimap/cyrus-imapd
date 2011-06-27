@@ -139,7 +139,7 @@ int main(int argc,char **argv)
 	fatal("must run as the Cyrus user", EC_USAGE);
     }
 
-    while ((opt = getopt(argc, argv, "C:d:f")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:d:fq")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
