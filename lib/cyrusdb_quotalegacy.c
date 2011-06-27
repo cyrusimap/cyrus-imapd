@@ -603,15 +603,16 @@ static int foreach(struct db *db,
 	DIR *qrdir;
 	struct dirent *next = NULL;
 
-	n = snprintf(quota_path, sizeof(quota_path), "%s%s",
+	n = snprintf(quota_path, sizeof(quota_path)-3, "%s%s",
 		     db->path, FNAME_DOMAINDIR);
 
 	endp = quota_path + n;
-	strcpy(endp, "?/");
 
 	c = config_fulldirhash ? 'A' : 'a';
 	for (i = 0; i < 26; i++, c++) {
-	    *endp = c;
+	    endp[0] = c;
+	    endp[1] = '/';
+	    endp[2] = '\0';
 
 	    qrdir = opendir(quota_path);
 
