@@ -2006,6 +2006,16 @@ static int find_cb(void *rockp,
     return r;
 }
 
+int mboxlist_allmbox(const char *prefix, foreach_cb *proc, void *rock)
+{
+    int r;
+    const char *search = prefix ? prefix : "";
+
+    r = DB->foreach(mbdb, search, strlen(search), NULL, proc, rock, 0);
+
+    return r;
+}
+
 /*
  * Find all mailboxes that match 'pattern'.
  * 'isadmin' is nonzero if user is a mailbox admin.  'userid'
