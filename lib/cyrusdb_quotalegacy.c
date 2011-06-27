@@ -75,6 +75,7 @@
 #endif
 
 #include "assert.h"
+#include "bsearch.h"
 #include "cyrusdb.h"
 #include "exitcodes.h"
 #include "hash.h"
@@ -115,9 +116,14 @@ struct db {
     char *data;		/* allocated buffer for fetched data */
 
     struct txn txn;	/* transaction associated with this db handle */
+
+    /* sorting function */
+    int (*compar) (const char *s1, const char *s2);
 };
 
 static int abort_txn(struct db *db __attribute__((unused)), struct txn *tid);
+static int compar_qr(const void *v1, const void *v2);
+static int compar_qr_mbox(const void *v1, const void *v2);
 
 /* hash the prefix - either with or without 'user.' part */
 static char name_to_hashchar(const char *name)
@@ -343,6 +349,8 @@ static int myopen(const char *fname, int flags, struct db **ret)
 	return CYRUSDB_IOERROR;
     }
 
+    db->compar = (flags & CYRUSDB_MBOXSORT) ? compar_qr_mbox : compar_qr;
+
     *ret = db;
     return 0;
 }
@@ -507,6 +515,17 @@ static int compar_qr(const void *v1, const void *v2)
     return strcmp(qr1, qr2);
 }
 
+static int compar_qr_mbox(const void *v1, const void *v2)
+{
+    const char *qr1, *qr2;
+    char qrbuf1[MAX_QUOTA_PATH+1], qrbuf2[MAX_QUOTA_PATH+1];
+
+    qr1 = path_to_qr(*((const char **) v1), qrbuf1);
+    qr2 = path_to_qr(*((const char **) v2), qrbuf2);
+
+    return bsearch_compare(qr1, qr2);
+}
+
 #define PATH_ALLOC 100
 struct qr_path {
     char **path;
@@ -650,7 +669,7 @@ static int foreach(struct db *db,
     if (tid && !*tid) *tid = &db->txn;
 
     /* sort the quotaroots (ignoring paths) */
-    qsort(pathbuf.path, pathbuf.count, sizeof(char *), &compar_qr);
+    qsort(pathbuf.path, pathbuf.count, sizeof(char *), db->compar);
 
     for (i = 0; i < pathbuf.count; i++) {
 	const char *data, *key;
