@@ -127,6 +127,23 @@ struct db {
 
 static int abort_txn(struct db *db __attribute__((unused)), struct txn *tid);
 
+/* hash the prefix - either with or without 'user.' part */
+static char name_to_hashchar(const char *name)
+{
+    int config_fulldirhash = libcyrus_config_getswitch(CYRUSOPT_FULLDIRHASH);
+    const char *idx;
+
+    if (!*name) return '\0';
+
+    idx = strchr(name, '.'); /* skip past user. */
+    if (idx == NULL) {
+	idx = name;
+    } else {
+	idx++;
+    }
+
+    return (char) dir_hash_c(idx, config_fulldirhash);
+}
 
 /* simple hash so it's easy to find these things in the filesystem;
    our human time is worth more than efficiency */
@@ -134,7 +151,6 @@ static void hash_quota(char *buf, size_t size, const char *qr, char *path)
 {
     int config_virtdomains = libcyrus_config_getswitch(CYRUSOPT_VIRTDOMAINS);
     int config_fulldirhash = libcyrus_config_getswitch(CYRUSOPT_FULLDIRHASH);
-    const char *idx;
     char c, *p;
     unsigned len;
 
@@ -166,13 +182,7 @@ static void hash_quota(char *buf, size_t size, const char *qr, char *path)
 	}
     }
 
-    idx = strchr(qr, '.'); /* skip past user. */
-    if (idx == NULL) {
-	idx = qr;
-    } else {
-	idx++;
-    }
-    c = (char) dir_hash_c(idx, config_fulldirhash);
+    c = name_to_hashchar(qr);
 
     if (snprintf(buf, size, "%s%c/%s", FNAME_QUOTADIR, c, qr) >= (int) size) {
 	fatal("insufficient buffer size in hash_quota", EC_TEMPFAIL);
@@ -511,6 +521,7 @@ static void scan_qr_dir(char *quota_path, const char *prefix,
     int config_fulldirhash = libcyrus_config_getswitch(CYRUSOPT_FULLDIRHASH);
     int config_virtdomains = libcyrus_config_getswitch(CYRUSOPT_VIRTDOMAINS);
     char *endp;
+    char onlyc = '\0';
     int c, i;
     DIR *qrdir;
     struct dirent *next = NULL;
@@ -519,8 +530,13 @@ static void scan_qr_dir(char *quota_path, const char *prefix,
     endp = strstr(quota_path, FNAME_QUOTADIR) + strlen(FNAME_QUOTADIR);
     strcpy(endp, "?/");
 
+    /* check for path restriction - if there's a prefix we only
+     * need to scan a single directory */
+    onlyc = name_to_hashchar(prefix);
+
     c = config_fulldirhash ? 'A' : 'a';
     for (i = 0; i < 26; i++, c++) {
+	if (onlyc && c != onlyc) continue;
 	*endp = c;
 
 	qrdir = opendir(quota_path);
