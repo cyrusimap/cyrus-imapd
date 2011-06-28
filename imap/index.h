@@ -145,6 +145,8 @@ typedef struct msgdata {
     char *cc;			/* local-part of first "cc" address */
     char *from;			/* local-part of first "from" address */
     char *to;			/* local-part of first "to" address */
+    char *displayfrom;          /* display-name of first "from" address */
+    char *displayto;            /* display-name of first "to" address */
     char *xsubj;		/* extracted subject text */
     unsigned xsubj_hash;	/* hash of extracted subject text */
     int is_refwd;		/* is message a reply or forward? */
