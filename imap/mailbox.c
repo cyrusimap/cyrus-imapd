@@ -1008,6 +1008,9 @@ void mailbox_close(struct mailbox **mailboxptr)
 	    /* XXX - handle error code? */
 	}
     }
+    /* get a re-read of the options field for cleanup purposes */
+    if (!mailbox->index_locktype)
+	mailbox_lock_index(mailbox, LOCK_SHARED);
 
     /* drop the index lock here because we'll lose our right to it
      * when try to upgrade the mboxlock anyway. */
