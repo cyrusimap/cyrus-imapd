@@ -621,6 +621,9 @@ void deliver_remote(message_data_t *msgdata,
 	remote = proxy_findserver(d->server, &lmtp_protocol, "",
 				  &backend_cached, NULL, NULL, NULL);
 	if (remote) {
+	    int txn_timeout = config_getint(IMAPOPT_LMTPTXN_TIMEOUT);
+	    if (txn_timeout) 
+		prot_settimeout(remote->in, txn_timeout);
 	    lmtp_runtxn(remote, lt);
 	} else {
 	    /* remote server not available; tempfail all deliveries */
