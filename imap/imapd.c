@@ -299,6 +299,7 @@ struct capa_struct base_capabilities[] = {
     { "ESEARCH",               2 },
     { "SORT",                  2 },
     { "SORT=MODSEQ",           2 },
+    { "SORT=DISPLAY",          2 },
     { "THREAD=ORDEREDSUBJECT", 2 },
     { "THREAD=REFERENCES",     2 },
     { "ANNOTATEMORE",          2 },
@@ -9142,6 +9143,10 @@ int getsortcriteria(char *tag, struct sortcrit **sortcrit)
 	    (*sortcrit)[n].key = SORT_CC;
 	else if (!strcmp(criteria.s, "date"))
 	    (*sortcrit)[n].key = SORT_DATE;
+        else if (!strcmp(criteria.s, "displayfrom"))
+            (*sortcrit)[n].key = SORT_DISPLAYFROM;
+        else if (!strcmp(criteria.s, "displayto"))
+            (*sortcrit)[n].key = SORT_DISPLAYTO;
 	else if (!strcmp(criteria.s, "from"))
 	    (*sortcrit)[n].key = SORT_FROM;
 	else if (!strcmp(criteria.s, "size"))

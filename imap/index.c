@@ -143,6 +143,7 @@ static void index_printflags(struct index_state *state, uint32_t msgno, int usin
 static void index_checkflags(struct index_state *state, int dirty);
 static char *find_msgid(char *str, char **rem);
 static char *get_localpart_addr(const char *header);
+static char *get_displayname(const char *header);
 static char *index_extract_subject(const char *subj, size_t len, int *is_refwd);
 static char *_index_extract_subject(char *s, int *is_refwd);
 static void index_get_ids(MsgData *msgdata,
@@ -1350,7 +1351,8 @@ int index_sort(struct index_state *state, struct sortcrit *sortcrit,
     if (CONFIG_TIMING_VERBOSE) {
 	int len;
 	char *key_names[] = { "SEQUENCE", "ARRIVAL", "CC", "DATE", "FROM",
-			      "SIZE", "SUBJECT", "TO", "ANNOTATION", "MODSEQ" };
+			      "SIZE", "SUBJECT", "TO", "ANNOTATION", "MODSEQ",
+			      "DISPLAYFROM", "DISPLAYTO" };
 	char buf[1024] = "";
 
 	while (sortcrit->key && sortcrit->key < VECTOR_SIZE(key_names)) {
@@ -3505,9 +3507,10 @@ static MsgData *index_msgdata_load(struct index_state *state,
 	for (j = 0; sortcrit[j].key; j++) {
 	    label = sortcrit[j].key;
 
-	    if ((label == SORT_CC || 
+	    if ((label == SORT_CC || label == SORT_DATE ||
 		 label == SORT_FROM || label == SORT_SUBJECT ||
-		 label == SORT_TO || label == LOAD_IDS) &&
+		 label == SORT_TO || label == LOAD_IDS ||
+		 label == SORT_DISPLAYFROM || label == SORT_DISPLAYTO) &&
 		!did_cache) {
 
 		/* fetch cached info */
@@ -3578,6 +3581,14 @@ static MsgData *index_msgdata_load(struct index_state *state,
 		index_get_ids(cur, envtokens, cacheitem_base(&im->record, CACHE_HEADERS),
 					      cacheitem_size(&im->record, CACHE_HEADERS));
 		break;
+	    case SORT_DISPLAYFROM:
+		cur->displayfrom = get_displayname(
+				   cacheitem_base(&im->record, CACHE_FROM));
+		break;
+	    case SORT_DISPLAYTO:
+		cur->displayto = get_displayname(
+				 cacheitem_base(&im->record, CACHE_TO));
+		break;
 	    }
 	}
 
@@ -3587,17 +3598,58 @@ static MsgData *index_msgdata_load(struct index_state *state,
     return md;
 }
 
-/*
- * Get the 'local-part' of an address from a header
- */
 static char *get_localpart_addr(const char *header)
 {
     struct address *addr = NULL;
     char *ret;
 
     parseaddr_list(header, &addr);
-    ret = xstrdup(addr && addr->mailbox ? addr->mailbox : "");
+    if (!addr) return xstrdup("");
+
+    if (addr->mailbox) {
+	ret = xstrdup(addr->mailbox);
+    }
+    else {
+	ret = xstrdup("");
+    }
+
     parseaddr_free(addr);
+
+    return ret;
+}
+
+/*
+ * Get the 'display-name' of an address from a header
+ */
+static char *get_displayname(const char *header)
+{
+    struct address *addr = NULL;
+    char *ret;
+
+    parseaddr_list(header, &addr);
+    if (!addr) return xstrdup("");
+
+    if (addr->name && addr->name[0]) {
+	char *p;
+	ret = xstrdup(addr->name);
+	for (p = ret; *p; p++)
+	    *p = toupper(*p);
+    }
+    else if (addr->domain && addr->mailbox) {
+	/* mailbox@domain */
+	int len = strlen(addr->mailbox) + strlen(addr->domain) + 2;
+	ret = xmalloc(len);
+	snprintf(ret, len, "%s@%s", addr->mailbox, addr->domain);
+    }
+    else if (addr->mailbox) {
+	ret = xstrdup(addr->mailbox);
+    }
+    else {
+	ret = xstrdup("");
+    }
+
+    parseaddr_free(addr);
+
     return ret;
 }
 
@@ -4002,6 +4054,12 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
 	case SORT_MODSEQ:
 	    ret = numcmp(md1->modseq, md2->modseq);
 	    break;
+        case SORT_DISPLAYFROM:
+            ret = strcmp(md1->displayfrom, md2->displayfrom);
+            break;
+        case SORT_DISPLAYTO:
+            ret = strcmp(md1->displayto, md2->displayto);
+            break;
 	}
     } while (!ret && sortcrit[i++].key != SORT_SEQUENCE);
 
@@ -4021,6 +4079,8 @@ static void index_msgdata_free(MsgData *md)
     FREE(md->cc);
     FREE(md->from);
     FREE(md->to);
+    FREE(md->displayfrom);
+    FREE(md->displayto);
     FREE(md->xsubj);
     FREE(md->msgid);
     for (i = 0; i < md->nref; i++)
