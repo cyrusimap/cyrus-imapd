@@ -3142,7 +3142,7 @@ static void init_annotation_definitions(void)
   
     f = fopen(filename,"r");
     if (! f) {
-	sprintf(errbuf, "could not open annotation definiton %s", filename);
+	sprintf(errbuf, "could not open annotation definition %s", filename);
 	fatal(errbuf, EC_CONFIG);
     }
   
