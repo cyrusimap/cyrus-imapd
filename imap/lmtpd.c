@@ -605,7 +605,6 @@ void deliver_remote(message_data_t *msgdata,
 	struct rcpt *rc;
 	struct backend *remote;
 	int i = 0;
-	int r = 0;
 	
 	lt->from = msgdata->return_path;
 	lt->auth = d->authas[0] ? d->authas : NULL;
@@ -627,7 +626,10 @@ void deliver_remote(message_data_t *msgdata,
 	remote = proxy_findserver(d->server, &lmtp_protocol, "",
 				  &backend_cached, NULL, NULL, NULL);
 	if (remote) {
-	    r = lmtp_runtxn(remote, lt);
+	    int txn_timeout = config_getint(IMAPOPT_LMTPTXN_TIMEOUT);
+	    if (txn_timeout) 
+		prot_settimeout(remote->in, txn_timeout);
+	    lmtp_runtxn(remote, lt);
 	} else {
 	    /* remote server not available; tempfail all deliveries */
 	    for (rc = d->to, i = 0; i < d->rnum; i++) {

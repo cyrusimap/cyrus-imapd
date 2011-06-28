@@ -601,6 +601,12 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Unix domain socket that lmtpd listens on, used by deliver(8). This should
    match the path specified in cyrus.conf(5). */
 
+{ "lmtptxn_timeout", 300, INT }
+/* Timeout (in seconds) used during a lmtp transaction to a remote backend
+   (e.g. in a murder environment).  Can be used to prevent hung lmtpds
+   on proxy hosts when a backend server becomes unresponsive during a
+   lmtp transaction.  The default is 300 - change to zero for infinite. */
+
 # xxx how does this tie into virtual domains?
 { "loginrealms", "", STRING }
 /* The list of remote realms whose users may authenticate using cross-realm
