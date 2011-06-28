@@ -241,6 +241,12 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Maximum number of transactions to be supported in the berkeley
    environment. */
 
+{ "boundary_limit", 1000, INT }
+/* messages are parsed recursively and a deep enough MIME structure
+   can cause a stack overflow.  Do not parse deeper than this many
+   layers of MIME structure.  The default of 1000 is much higher
+   than any sane message should have. */
+
 { "client_timeout", 10, INT }
 /* Number of seconds to wait before returning a timeout failure when
    performing a client connection (e.g., in a murder environment) */
