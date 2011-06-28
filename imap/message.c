@@ -1817,6 +1817,7 @@ struct boundary *boundaries;
     struct param *boundary;
     char *defaultContentType = DEFAULT_CONTENT_TYPE;
     int i, depth;
+    int limit = config_getint(IMAPOPT_BOUNDARY_LIMIT);
 
     memset(&preamble, 0, sizeof(struct body));
     memset(&epilogue, 0, sizeof(struct body));
@@ -1851,7 +1852,8 @@ struct boundary *boundaries;
     message_parse_content(msg, &preamble, boundaries);
 
     /* Parse the component body-parts */
-    while (boundaries->count == depth) {
+    while (boundaries->count == depth &&
+	    (limit == 0 ? 1 : boundaries->count < limit)) {
 	body->subpart = (struct body *)xrealloc((char *)body->subpart,
 				 (body->numparts+1)*sizeof(struct body));
 	message_parse_body(msg, &body->subpart[body->numparts++],
@@ -1912,6 +1914,11 @@ struct boundary *boundaries;
      */
     body->boundary_size += epilogue.boundary_size;
     body->boundary_lines += epilogue.boundary_lines;
+
+    /* check if we've hit a limit and flag it */
+    if (limit && depth == limit) {
+	syslog(LOG_ERR, "ERROR: mime boundary limit %i exceeded, not parsing anymore", limit);
+    }
 }
 
 /*
