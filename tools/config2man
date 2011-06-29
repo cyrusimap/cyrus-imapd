@@ -79,6 +79,7 @@ sub print_values {
 my $mode = 0;
 my $save = "";
 my $enums = "";
+my $opt;
 
 my $blank = "";
 my $version = "\$Revision: 1.6 $blank";
@@ -91,7 +92,7 @@ while (<>) {
 	# look for { option, default, type [enums] }; don't output until we
 	# hit a comment
 	if (m|{\s*\"(.*?)\"\s*,\s*\"?(.*?)\"?\s*,\s*(.*?)\s*(\(.*\))?\s*}|) {
-	    my $opt = $1;
+	    $opt = $1;
 	    my $def = $2 eq "NULL" ? "<none>" : $2;
 	    if ($def eq "") { $def = "<empty string>" }
 	    $save = ".IP \"\\fB$1:\\fR $def\" 5\n";
@@ -103,12 +104,14 @@ while (<>) {
 	    print $save; $save = "";
 	    print "$1\n";
 	    if ($enums) { print_values($enums); }
+	    $opt = undef;
 	}
 
 	# look for /* to shift into passthrough mode; print current
 	# cached option header if any
 	elsif (m|/\*\s*(.*)|) {
 	    print $save; $save = "";
+	    if (defined $opt) { print ".RS 5\n"; }
 	    print $1;
 	    print "\n"; # add LF so lines don't run together
 	    $mode = 1;
@@ -124,6 +127,8 @@ while (<>) {
 	    print "\n";
 	    if ($enums) { print_values($enums); }
 	    $mode = 0; # back to search mode
+	    if (defined $opt) { print ".RE\n"; }
+	    $opt = undef;
 	} elsif (m|\s*(.*)\s*|) {
 	    print "$1\n";
 	}
