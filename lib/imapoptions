@@ -185,32 +185,63 @@ has the following form:
 .IP
 \fIname\fR, \fIscope\fR, \fIattrib-type\fR, \fIproxy-type\fR,
 \fIattrib-names\fR, \fIacl\fR
+.\"
 .IP \fIname\fR 5
-is the hierarchical name as in the draft standard, typically of the
-form /vendor/acme/blurdybloop
+is the hierarchical name as in RFC 5257 or RFC 5464 (in the latter case,
+without the leading \fB/shared\fR or \fB/private\fR).  For example,
+/vendor/acme/blurdybloop.
+.\"
 .IP \fIscope\fR 5
-specifies whether the annotation is for the \fBserver\fR or a
-\fBmailbox\fR
+specifies whether the annotation is for the \fBserver\fR, a
+\fBmailbox\fR, or a \fBmessage\fR.
+.\"
 .IP \fIattrib-type\fR 5
-specifies the attribute data type which is one of: \fBstring\fR,
-\fBboolean\fR, \fBint\fR, \fBuint\fR, or \fBcontent-type\fR
+.RS 5
+specifies the attribute data type, which is used only to check the
+string value passed by clients when setting annotations.  The
+\fIattrib-type\fR is one of:
+.\"
+.IP \fBstring\fR 5
+any value is accepted.
+.\"
+.IP \fBcontent-type\fR 5
+this obsolete data type, which was useful for early drafts of the standard,
+is accepted but silently translated to \fBstring\fR.
+.\"
+.IP \fBboolean\fR 5
+only the strings "true" or "false" are accepted.  Checking is
+case-insensitive but the value is forced to lowercase.
+.\"
+.IP \fBint\fR 5
+integers are accepted.
+.\"
+.IP \fBuint\fR 5
+non-negative integers are accepted.
+.\"
+.RE
+.\"
 .IP \fIproxy-type\fR 5
 specifies whether this attribute is for the \fBbackend\fR or
 \fBproxy\fR servers or both (\fBproxy_and_backend\fR) 
+.\"
 .IP \fIattrib-names\fR 5
 is the space-separated list of available attributes for the
-annotation. Possible attribute names are (where the suffixless \fBfoo\fR
-permits both \fBfoo.priv\fR and \fBfoo.shared\fR): \fBalue\fR,
-\fBvalue.shared\fR, \fBvalue.priv\fR, \fBsize\fR, \fBsize.shared\fR,
-\fBsize.priv\fR, \fBmodifiedsince\fR, \fBmodifiedsince.shared\fR,
-\fBmodifiedsince.priv\fR, \fBcontent-type\fR,
-\fBcontent-type.shared\fR, \fBcontent-type.priv\fR
-.IP \fIacl\fR 5
-is the extra ACL requirements for setting annotations. This is the
-standard IMAP ACL permission bit string format. Particularly useful
-is the \fBa\fR right to require admin privileges. Note that some ACL
-requirements (read and write on the mailbox) are hard-wired in the
-server
+annotation. Possible attribute names are \fBvalue.shared\fR,
+\fBvalue.priv\fR, and \fBvalue\fR (which permits both \fBvalue.priv\fR
+and \fBvalue.shared\fR).  The attribute names \fBsize\fR,
+\fBsize.shared\fR, and \fBsize.priv\fR are accepted but ignored; these
+attributes are automatically provided by the server if the corresponding
+\fBvalue\fR attribute is specified.  Some obsolete attributes, which were
+defined early drafts of the standard, are accepted and ignored with a
+warning.
+.\"
+.IP \fIextra-permissions\fR 5
+is the extra ACL permission bits required for setting this annotation, in
+standard IMAP ACL permission bit string format.  Note that this is
+in addition to the permission bits specified in RFC 5257 and RFC 5464,
+so leaving this field empty is harmless.  Note also that there is no way
+to specify that an annotation can only be set by an admin user; in
+particular the \fBa\fP permission bit does not achieve this.
 .PP
 Blank lines and lines beginning with ``#'' are ignored.
 */
