@@ -3110,6 +3110,31 @@ int parse_table_lookup_bitmask(const struct annotate_attrib *table,
     return result;
 }
 
+static int normalise_attribs(int attribs)
+{
+    int nattribs = 0;
+    static int deprecated_warnings = 0;
+
+    /* always provide size.shared if value.shared specified */
+    if ((attribs & ATTRIB_VALUE_SHARED))
+	nattribs |= ATTRIB_VALUE_SHARED|ATTRIB_SIZE_SHARED;
+
+    /* likewise size.priv */
+    if ((attribs & ATTRIB_VALUE_PRIV))
+	nattribs |= ATTRIB_VALUE_PRIV|ATTRIB_SIZE_PRIV;
+
+    /* ignore any other specified attributes */
+
+    if ((attribs & ATTRIB_DEPRECATED)) {
+	if (!deprecated_warnings++)
+	    syslog(LOG_WARNING, "annotation definitions file contains "
+				"deprecated attribute names such as "
+				"content-type or modified-since, ignoring");
+    }
+
+    return nattribs;
+}
+
 /* Create array of allowed annotations, both internally & externally defined */
 static void init_annotation_definitions(void)
 {
@@ -3120,7 +3145,6 @@ static void init_annotation_definitions(void)
     annotate_entrydesc_t *ae;
     int i;
     FILE* f;
-    int deprecated_warnings = 0;
 
     /* copy static entries into list */
     for (i = 0 ; server_builtin_entries[i].name ; i++)
@@ -3214,14 +3238,7 @@ static void init_annotation_definitions(void)
 	ae->attribs = parse_table_lookup_bitmask(annotation_attributes,
 						 &p,
 						 "annotation attributes");
-	if (ae->attribs & ATTRIB_DEPRECATED) {
-	    if (!deprecated_warnings++)
-		syslog(LOG_WARNING, "annotation definitions file contains "
-				    "deprecated attribute names such as "
-				    "content-type or modified-since, ignoring");
-	    ae->attribs &= ~ATTRIB_DEPRECATED;
-	}
-
+	ae->attribs = normalise_attribs(ae->attribs);
 
 	p = consume_comma(p);
 	p2 = p;
