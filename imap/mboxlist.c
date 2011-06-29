@@ -277,12 +277,6 @@ static int mboxlist_parse_entry(struct mboxlist_entry **mbentryptr,
 
     mbentry->acl = q;
 
-    /* here we go, ignore them! */
-    if (mbentry->mbtype & MBTYPE_RESERVE) {
-	mboxlist_entry_free(&mbentry);
-	return IMAP_MAILBOX_RESERVED;
-    }
-
     if (mbentryptr) *mbentryptr = mbentry;
     else mboxlist_entry_free(&mbentry);
 
@@ -312,6 +306,23 @@ static int mboxlist_mylookup(const char *name,
  */
 int mboxlist_lookup(const char *name, struct mboxlist_entry **entryptr,
 		    struct txn **tid)
+{
+    int r = mboxlist_mylookup(name, entryptr, tid, 0);
+
+    if (r) return r;
+
+    /* Ignore "reserved" entries, like they aren't there */
+    if ((*entryptr)->mbtype & MBTYPE_RESERVE) {
+	mboxlist_entry_free(entryptr);
+	return IMAP_MAILBOX_RESERVED;
+    }
+
+    return 0;
+}
+
+int mboxlist_lookup_allow_reserved(const char *name,
+				   struct mboxlist_entry **entryptr,
+				   struct txn **tid)
 {
     return mboxlist_mylookup(name, entryptr, tid, 0);
 }

@@ -99,6 +99,9 @@ char *mboxlist_entry_cstring(struct mboxlist_entry *mbentry);
 /* Lookup 'name' in the mailbox list. */
 int mboxlist_lookup(const char *name, struct mboxlist_entry **mbentryptr,
 		    struct txn **tid);
+int mboxlist_lookup_allow_reserved(const char *name,
+				   struct mboxlist_entry **mbentryptr,
+				   struct txn **tid);
 
 /* insert/delete stub entries */
 int mboxlist_insertremote(struct mboxlist_entry *mbentry, struct txn **rettid);
