@@ -2862,17 +2862,14 @@ static int rename_cb(const char *mailbox,
 
     if (rrock->newmboxname) {
 	/* create newly renamed entry */
+	const char *newuserid = userid;
 
 	if (rrock->olduserid && rrock->newuserid &&
 	    !strcmp(rrock->olduserid, userid)) {
 	    /* renaming a user, so change the userid for priv annots */
-	    r = write_entry(rrock->newmboxname, rrock->newuid, entry, rrock->newuserid,
-			    value);
+	    newuserid = rrock->newuserid;
 	}
-	else {
-	    r = write_entry(rrock->newmboxname, rrock->newuid, entry, userid,
-			    value);
-	}
+	r = write_entry(rrock->newmboxname, rrock->newuid, entry, newuserid, value);
     }
 
     if (!rrock->copy && !r) {
