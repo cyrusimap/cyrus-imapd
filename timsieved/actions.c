@@ -316,7 +316,8 @@ int putscript(struct protstream *conn, mystring_t *name, mystring_t *data,
   FILE *stream;
   char *dataptr;
   char *errstr;
-  int lup;
+  int i;
+  int last_was_r = 0;
   int result;
   char path[1024], p2[1024];
   char bc_path[1024], bc_p2[1024];
@@ -359,16 +360,23 @@ int putscript(struct protstream *conn, mystring_t *name, mystring_t *data,
 
   dataptr = string_DATAPTR(data);
 
-  for (lup=0;lup<= data->len / BLOCKSIZE; lup++) {
-      int amount = BLOCKSIZE;
-
-      if (lup*BLOCKSIZE+BLOCKSIZE > data->len)
-	  amount=data->len % BLOCKSIZE;
-
-      fwrite(dataptr, 1, amount, stream);
-      
-      dataptr += amount;
+  /* copy data to file - replacing any lone \r or \n with the
+   * \r\n pair so notify messages are SMTP compatible */ 
+  for (i = 0; i < data->len; i++) {
+      if (last_was_r) {
+	  if (dataptr[i] != '\n')
+	      putc('\n', stream);
+      }
+      else {
+	  if (dataptr[i] == '\n')
+	      putc('\r', stream);
+      }
+      putc(dataptr[i], stream);
+      last_was_r = (dataptr[i] == '\r');
   }
+  if (last_was_r)
+      putc('\n', stream);
+
 
   /* let's make sure this is a valid script
      (no parse errors)
