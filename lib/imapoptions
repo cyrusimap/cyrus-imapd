@@ -603,6 +603,13 @@ Blank lines and lines beginning with ``#'' are ignored.
    will cause the user's mailbox to exceed its quota.  By default, the
    failure won't occur until the mailbox is already over quota. */
 
+{ "lmtp_strict_rfc2821", 1, SWITCH }
+/* By default, lmtpd will be strict (per RFC 2821) with regards to which
+   envelope addresses are allowed.  If this option is set to false, 8bit
+   characters in the local-part of envelope addresses are changed to 'X'
+   instead.  This is useful to avoid generating backscatter with 
+   certain MTAs like Postfix or Exim which accept such messages. */
+
 { "lmtpsocket", "{configdirectory}/socket/lmtp", STRING }
 /* Unix domain socket that lmtpd listens on, used by deliver(8). This should
    match the path specified in cyrus.conf(5). */

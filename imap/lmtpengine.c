@@ -462,6 +462,7 @@ static char *parseaddr(char *s)
 {
     char *p, *ret;
     int len;
+    int lmtp_strict_rfc2821 = config_getswitch(IMAPOPT_LMTP_STRICT_RFC2821);
 
     p = s;
 
@@ -500,6 +501,12 @@ static char *parseaddr(char *s)
 		if (!*++p) return 0;
 	    }
 	    else {
+		if (*p & 128 && !lmtp_strict_rfc2821) {
+		    /* this prevents us from becoming a backscatter
+		       source if our MTA allows 8bit in local-part
+		       of adresses. */
+		    *p = 'X';
+		}
 		if (*p <= ' ' || (*p & 128) ||
 		    strchr("<>()[]\\,;:\"", *p)) return 0;
 	    }
