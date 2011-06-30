@@ -2646,39 +2646,42 @@ void replica_connect(const char *channel)
 		syslog(LOG_ERR, "unable to setsocketopt(TCP_NODELAY): %m");
 	    }
 
-            /* turn on TCP keepalive if set */
-            if (config_getswitch(IMAPOPT_TCP_KEEPALIVE)) {
+	    /* turn on TCP keepalive if set */
+	    if (config_getswitch(IMAPOPT_TCP_KEEPALIVE)) {
 		int r;
-                int optval = 1;
-                socklen_t optlen = sizeof(optval);
+		int optval = 1;
+		socklen_t optlen = sizeof(optval);
 
-                r = setsockopt(sync_backend->sock, SOL_SOCKET, SO_KEEPALIVE, &optval, optlen);
-                if (r < 0) {
-                    syslog(LOG_ERR, "unable to setsocketopt(SO_KEEPALIVE): %m");
-                }
+		r = setsockopt(sync_backend->sock, SOL_SOCKET, SO_KEEPALIVE, &optval, optlen);
+		if (r < 0) {
+		    syslog(LOG_ERR, "unable to setsocketopt(SO_KEEPALIVE): %m");
+		}
 #ifdef TCP_KEEPCNT
-                if (config_getint(IMAPOPT_TCP_KEEPALIVE_CNT)) {
-                    r = setsockopt(sync_backend->sock, SOL_TCP, TCP_KEEPCNT, &optval, optlen);
-                    if (r < 0) {
-                        syslog(LOG_ERR, "unable to setsocketopt(TCP_KEEPCNT): %m");
-                    }
-                }
+		optval = config_getint(IMAPOPT_TCP_KEEPALIVE_CNT);
+		if (optval) {
+		    r = setsockopt(sync_backend->sock, SOL_TCP, TCP_KEEPCNT, &optval, optlen);
+		    if (r < 0) {
+			syslog(LOG_ERR, "unable to setsocketopt(TCP_KEEPCNT): %m");
+		    }
+		}
 #endif
 #ifdef TCP_KEEPIDLE
-                if (config_getint(IMAPOPT_TCP_KEEPALIVE_IDLE)) {
-                    r = setsockopt(sync_backend->sock, SOL_TCP, TCP_KEEPIDLE, &optval, optlen);
-                    if (r < 0) {
-                        syslog(LOG_ERR, "unable to setsocketopt(TCP_KEEPIDLE): %m");
-                    }
-                }
+		optval = config_getint(IMAPOPT_TCP_KEEPALIVE_IDLE);
+		if (optval) {
+		    r = setsockopt(sync_backend->sock, SOL_TCP, TCP_KEEPIDLE, &optval, optlen);
+		    if (r < 0) {
+			syslog(LOG_ERR, "unable to setsocketopt(TCP_KEEPIDLE): %m");
+		    }
+		}
 #endif
 #ifdef TCP_KEEPINTVL
-                if (config_getint(IMAPOPT_TCP_KEEPALIVE_INTVL)) {
-                    r = setsockopt(sync_backend->sock, SOL_TCP, TCP_KEEPINTVL, &optval, optlen);
-                    if (r < 0) {
-                        syslog(LOG_ERR, "unable to setsocketopt(TCP_KEEPINTVL): %m");
-                    }
-                }
+		optval = config_getint(IMAPOPT_TCP_KEEPALIVE_INTVL);
+		if (optval) {
+		    r = setsockopt(sync_backend->sock, SOL_TCP, TCP_KEEPINTVL, &optval, optlen);
+		    if (r < 0) {
+			syslog(LOG_ERR, "unable to setsocketopt(TCP_KEEPINTVL): %m");
+		    }
+		}
 #endif
 	    }
 	} else {
