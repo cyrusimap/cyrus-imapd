@@ -634,12 +634,23 @@ sub suite_generate_wrap($)
     print WRAP "extern void __cunit_wrap_test(const char *name, void (*fn)(void));\n";
     print WRAP "extern int __cunit_wrap_fixture(const char *name, int (*fn)(void));\n";
 
+    my $setupfn = $suite->{setupfn};
+    my $teardownfn = $suite->{teardownfn};
+
     foreach my $test (@{$suite->{tests}})
     {
 	my $fn = $test->{func};
 	print WRAP "static void __cunit_$fn(void)\n";
 	print WRAP "{\n";
+	print WRAP "    if (__cunit_wrap_fixture(" .
+		   "\"$cfile:$setupfn\", $setupfn)) " .
+		   "CU_FAIL_FATAL(\"$setupfn failed\");\n"
+	    if defined $setupfn;
 	print WRAP "    __cunit_wrap_test(\"$cfile:$fn\", $fn);\n";
+	print WRAP "    if (__cunit_wrap_fixture(" .
+		   "\"$cfile:$teardownfn\", $teardownfn)) " .
+		   "CU_FAIL_FATAL(\"$teardownfn failed\");\n"
+	    if defined $teardownfn;
 	print WRAP "}\n";
     }
 
@@ -650,28 +661,8 @@ sub suite_generate_wrap($)
     }
     print WRAP "    CU_TEST_INFO_NULL\n};\n";
 
-    my $setupfn = $suite->{setupfn} || 'NULL';
-    if ($setupfn ne 'NULL')
-    {
-	print WRAP "static int __cunit_setup(void)\n";
-	print WRAP "{\n";
-	print WRAP "    return __cunit_wrap_fixture(\"$cfile:$setupfn\", $setupfn);\n";
-	print WRAP "}\n";
-	$setupfn = '__cunit_setup';
-    }
-
-    my $teardownfn = $suite->{teardownfn} || 'NULL';
-    if ($teardownfn ne 'NULL')
-    {
-	print WRAP "static int __cunit_teardown(void)\n";
-	print WRAP "{\n";
-	print WRAP "    return __cunit_wrap_fixture(\"$cfile:$teardownfn\", $teardownfn);\n";
-	print WRAP "}\n";
-	$teardownfn = '__cunit_teardown';
-    }
-
     print WRAP "const CU_SuiteInfo $suite->{suitevar} = {" .
-	       "\"$suite->{name}\", $setupfn, $teardownfn, _tests};\n";
+	       "\"$suite->{name}\", NULL, NULL, _tests};\n";
     close WRAP;
 
     atomic_rewrite_end($suite->{wrap});
