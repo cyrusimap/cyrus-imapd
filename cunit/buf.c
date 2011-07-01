@@ -1,4 +1,6 @@
+#include "config.h"
 #include "cunit/cunit.h"
+#include "prot.h"
 #include "xmalloc.h"
 #include "util.h"
 
@@ -761,3 +763,25 @@ static void test_cow(void)
     buf_free(&b);
 }
 
+static void test_bufprint(void)
+{
+    struct buf b = BUF_INITIALIZER;
+    struct protstream *outstream;
+    int i;
+
+    outstream = prot_writebuf(&b);
+
+    for (i = 0; i < 5000; i++) {
+	prot_putc('.', outstream);
+    }
+
+    prot_flush(outstream);
+    prot_free(outstream);
+
+    CU_ASSERT_EQUAL(b.len, 5000);
+
+    buf_free(&b);
+}
+
+/* TODO: test the Copy-On-Write feature of buf_ensure()...if anyone
+ * actually uses it */
