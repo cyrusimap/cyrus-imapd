@@ -738,7 +738,7 @@ void sync_sieve_list_add(struct sync_sieve_list *l, const char *name,
     l->count++;
 }
 
-struct sync_sieve *sync_sieve_lookup(struct sync_sieve_list *l, char *name)
+struct sync_sieve *sync_sieve_lookup(struct sync_sieve_list *l, const char *name)
 {
     struct sync_sieve *p;
 
@@ -750,7 +750,7 @@ struct sync_sieve *sync_sieve_lookup(struct sync_sieve_list *l, char *name)
     return NULL;
 }
 
-void sync_sieve_list_set_active(struct sync_sieve_list *l, char *name)
+void sync_sieve_list_set_active(struct sync_sieve_list *l, const char *name)
 {
     struct sync_sieve *item;
 
@@ -1193,7 +1193,8 @@ struct sync_action_list *sync_action_list_create(void)
     return(l);
 }
 
-void sync_action_list_add(struct sync_action_list *l, char *name, char *user)
+void sync_action_list_add(struct sync_action_list *l,
+			  const char *name, const char *user)
 {
     struct sync_action *current;
 
