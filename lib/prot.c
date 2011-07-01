@@ -113,6 +113,7 @@ struct protstream *prot_writebuf(struct buf *buf)
     newstream->buf_size = PROT_BUFSIZE;
     newstream->ptr = newstream->buf;
     newstream->cnt = PROT_BUFSIZE;
+    newstream->maxplain = PROT_BUFSIZE;
     newstream->write = 1;
     newstream->writetobuf = buf;
     newstream->fd = PROT_NO_FD;
