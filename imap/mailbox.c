@@ -1009,12 +1009,13 @@ void mailbox_close(struct mailbox **mailboxptr)
 	}
     }
     /* get a re-read of the options field for cleanup purposes */
-    if (!mailbox->index_locktype)
-	mailbox_lock_index(mailbox, LOCK_SHARED);
-
-    /* drop the index lock here because we'll lose our right to it
-     * when try to upgrade the mboxlock anyway. */
-    mailbox_unlock_index(mailbox, NULL);
+    if (mailbox->index_fd != -1) {
+	if (!mailbox->index_locktype)
+	    mailbox_lock_index(mailbox, LOCK_SHARED);
+	/* drop the index lock here because we'll lose our right to it
+	 * when try to upgrade the mboxlock anyway. */
+	mailbox_unlock_index(mailbox, NULL);
+    }
 
     /* do we need to try and clean up? (not if doing a shutdown,
      * speed is probably more important!) */
