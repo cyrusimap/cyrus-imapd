@@ -307,15 +307,20 @@ static int mboxlist_mylookup(const char *name,
 int mboxlist_lookup(const char *name, struct mboxlist_entry **entryptr,
 		    struct txn **tid)
 {
-    int r = mboxlist_mylookup(name, entryptr, tid, 0);
+    struct mboxlist_entry *entry = NULL;
+    int r;
+
+    r = mboxlist_mylookup(name, &entry, tid, 0);
 
     if (r) return r;
 
     /* Ignore "reserved" entries, like they aren't there */
-    if ((*entryptr)->mbtype & MBTYPE_RESERVE) {
-	mboxlist_entry_free(entryptr);
+    if (entry->mbtype & MBTYPE_RESERVE) {
+	mboxlist_entry_free(&entry);
 	return IMAP_MAILBOX_RESERVED;
     }
+
+    if (entryptr) *entryptr = entry;
 
     return 0;
 }
