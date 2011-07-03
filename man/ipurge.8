@@ -64,6 +64,9 @@ ipurge \- delete mail from IMAP mailbox or partition based on age or size
 [
 .B \-s
 ]
+[
+.B \-o
+]
 .br
        [
 .BI \-d " days"
@@ -129,6 +132,9 @@ Invert match logic: -x means not equal, date is for newer, size is for smaller
 .TP
 .B \-s
 Skip over messages that have the \\Flagged flag set.
+.TP
+.B \-o
+Only purge messages that have the \\Deleted flag set.
 .SH FILES
 .TP
 .B /etc/imapd.conf

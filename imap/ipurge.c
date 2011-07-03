@@ -82,6 +82,7 @@ int size = -1;
 int exact = -1;
 int pattern = -1;
 int skipflagged = 0;
+int onlydeleted = 0;
 int use_sentdate = 1;
 int invertmatch = 0;
 
@@ -118,7 +119,7 @@ int main (int argc, char *argv[]) {
       fatal("must run as the Cyrus user", EC_USAGE);
   }
 
-  while ((option = getopt(argc, argv, "C:hxd:b:k:m:fsXi")) != EOF) {
+  while ((option = getopt(argc, argv, "C:hxd:b:k:m:fsXio")) != EOF) {
     switch (option) {
     case 'C': /* alt config file */
       alt_config = optarg;
@@ -161,6 +162,9 @@ int main (int argc, char *argv[]) {
     } break;
     case 'i' : {
       invertmatch = 1;
+    } break;
+    case 'o' : {
+      onlydeleted = 1;
     } break;
     case 'h':
     default: usage(argv[0]);
@@ -219,7 +223,7 @@ int main (int argc, char *argv[]) {
 
 int
 usage(char *name) {
-  printf("usage: %s [-f] [-s] [-C <alt_config>] [-x] [-X] [-i] {-d days | -b bytes|-k Kbytes|-m Mbytes}\n\t[mboxpattern1 ... [mboxpatternN]]\n", name);
+  printf("usage: %s [-f] [-s] [-C <alt_config>] [-x] [-X] [-i] [-o] {-d days | -b bytes|-k Kbytes|-m Mbytes}\n\t[mboxpattern1 ... [mboxpatternN]]\n", name);
   printf("\tthere are no defaults and at least one of -d, -b, -k, -m\n\tmust be specified\n");
   printf("\tif no mboxpattern is given %s works on all mailboxes\n", name);
   printf("\t -x specifies an exact match for days or size\n");
@@ -227,6 +231,7 @@ usage(char *name) {
   printf("\t -s skip over messages that are flagged.\n");
   printf("\t -X use delivery time instead of date header for date matches.\n");
   printf("\t -i invert match logic: -x means not equal, date is for newer, size is for smaller.\n");
+  printf("\t -o only purge messages that are deleted.\n");
   exit(0);
 }
 
@@ -292,6 +297,9 @@ unsigned purge_check(struct mailbox *mailbox __attribute__((unused)),
   stats->total_bytes += record->size;
 
   if (skipflagged && record->system_flags & FLAG_FLAGGED)
+    return 0;
+
+  if (onlydeleted && !(record->system_flags & FLAG_DELETED))
     return 0;
 
   if (exact == 1) {
