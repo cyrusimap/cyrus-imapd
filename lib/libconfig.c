@@ -290,9 +290,12 @@ void config_read(const char *alt_config)
     /* Look up default partition */
     config_defpartition = config_getstring(IMAPOPT_DEFAULTPARTITION);
     for (p = (char *)config_defpartition; p && *p; p++) {
-	if (!Uisalnum(*p))
-	  fatal("defaultpartition option contains non-alphanumeric character",
-		EC_CONFIG);
+	if (!Uisalnum(*p)) {
+	    syslog(LOG_ERR, "INVALID defaultpartition: %s",
+		   config_defpartition);
+	    fatal("defaultpartition option contains non-alnum character",
+		  EC_CONFIG);
+	}
 	if (Uisupper(*p)) *p = tolower((unsigned char) *p);
     }
 
