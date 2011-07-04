@@ -8,6 +8,24 @@
 </head>
 <body>
 
+<h1>Changes to the Cyrus IMAP Server since 2.4.9</h1>
+<ul>
+<li>fixed handling of unparsable emails during append (which
+    would cause invalid cyrus.index records otherwise)</li>
+<li>quota: fix a pile of bugs.  #1801, virtdomain support;
+    #2728, slow user delete; #3178, "file name too long" with
+    big mailbox names; #3179, quota -f doubles usage.</li>
+<li>Bug #3043 - parse multiple groups in headers correctly</li>
+<li>Bug #3158 - lmtp backend connection timeout</li>
+<li>Bug #3223 - limit MIME parsing depth to avoid stack overflows</li>
+<li>Bug #3273 - add SORT=DISPLAY support (but note: still questions
+    about correctness of unicode sorting)</li>
+<li>Bug #3504 - convert all sieve scripts to \r\n line endings
+    on upload</li>
+<li>Bug #3402 - options to munge 8bit characters in headers
+    during lmtp delivery to avoid backscatter</li>
+</ul>
+
 <h1>Changes to the Cyrus IMAP Server since 2.4.8</h1>
 <ul>
 <li>fixed crashes in seen handling</li>

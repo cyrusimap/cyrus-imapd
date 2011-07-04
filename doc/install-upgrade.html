@@ -8,6 +8,22 @@
 
 <h1>Upgrading From Previous Versions</h1>
 
+<h2>Upgrading from 2.4.9</h2>
+<ul>
+<li>quota -f now works correctly.  If you are upgrading from earlier
+    than 2.4.9 we recommend that you run quota -f to ensure that all
+    quotas are now correct.  There is a slight race condition in the
+    quota command, so it's safest to run with the server shut down,
+    but this has always existed.</li>
+<li>On the topic of quota -f, the documentation has been updated to
+    make it quite clear that you need to give "complete" prefixes if
+    using quotalegacy, as it doesn't implement quite the same semantics
+    as other databases.  If you run 'quota -f a' and you have domains
+    starting with 'a', you will be quite sad at the results.  So don't
+    do that.  Running quota -f with no argument, or with a full domain
+    or full user specification is perfectly safe.</li>
+</ul>
+
 <h2>Upgrading from 2.4.8</h2>
 <ul>
 <li>CYRUS_PREFIX environemnt varabile.  If you have an environment
