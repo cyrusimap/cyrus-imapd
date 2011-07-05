@@ -402,9 +402,26 @@ int sync_mailbox(struct mailbox *mailbox,
 		 int printrecords);
 
 int parse_upload(struct dlist *kr, struct mailbox *mailbox,
-		 struct index_record *record);
+		 struct index_record *record,
+		 struct sync_annot_list **annotsp);
 int sync_append_copyfile(struct mailbox *mailbox,
-			 struct index_record *record);
+			 struct index_record *record,
+			 const struct sync_annot_list *sal);
+
+/* ====================================================================== */
+
+int read_annotations(const struct mailbox *,
+		     const struct index_record *,
+		     struct sync_annot_list **);
+void encode_annotations(struct dlist *parent,
+			const struct sync_annot_list *);
+int decode_annotations(/*const*/struct dlist *,
+		       struct sync_annot_list **);
+int apply_annotations(const struct mailbox *mailbox,
+		      const struct index_record *record,
+		      const struct sync_annot_list *local_annots,
+		      const struct sync_annot_list *remote_annots,
+		      int local_wins);
 
 /* ====================================================================== */
 

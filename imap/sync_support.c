@@ -269,7 +269,8 @@ int sync_getflags(struct dlist *kl,
 }
 
 int parse_upload(struct dlist *kr, struct mailbox *mailbox,
-			struct index_record *record)
+		 struct index_record *record,
+		 struct sync_annot_list **salp)
 {
     struct dlist *fl;
     struct message_guid *tmpguid;
@@ -297,6 +298,10 @@ int parse_upload(struct dlist *kr, struct mailbox *mailbox,
     /* parse the flags */
     r = sync_getflags(fl, mailbox, record);
     if (r) return r;
+
+    /* the ANNOTATIONS list is optional too */
+    if (salp && dlist_getlist(kr, "ANNOTATIONS", &fl))
+	decode_annotations(fl, salp);
 
     return 0;
 }
@@ -1127,6 +1132,8 @@ void sync_annot_list_free(struct sync_annot_list **lp)
     struct sync_annot_list *l = *lp;
     struct sync_annot *current, *next;
 
+    if (!l)
+	return;
     current = l->head;
     while (current) {
         next = current->next;
@@ -1395,6 +1402,8 @@ int sync_mailbox(struct mailbox *mailbox,
 	uint32_t recno;
 	int send_file;
 	uint32_t prevuid = 0;
+	struct sync_annot_list *annots;
+	int r;
 
 	for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	    /* we can't send bogus records */
@@ -1431,9 +1440,13 @@ int sync_mailbox(struct mailbox *mailbox,
 		send_file = 0;
 
 	    if (send_file) {
-		int r = sync_send_file(mailbox, &record, part_list, kupload);
+		r = sync_send_file(mailbox, &record, part_list, kupload);
 		if (r) return r;
 	    }
+
+	    r = read_annotations(mailbox, &record, &annots);
+	    if (r)
+		return r;
 
 	    il = dlist_newkvlist(rl, "RECORD");
 	    dlist_setnum32(il, "UID", record.uid);
@@ -1443,6 +1456,9 @@ int sync_mailbox(struct mailbox *mailbox,
 	    dlist_setdate(il, "INTERNALDATE", record.internaldate);
 	    dlist_setnum32(il, "SIZE", record.size);
 	    dlist_setatom(il, "GUID", message_guid_encode(&record.guid));
+	    encode_annotations(il, annots);
+
+	    sync_annot_list_free(&annots);
 	}
     }
 
@@ -1513,7 +1529,8 @@ int sync_parse_response(const char *cmd, struct protstream *in,
 }
 
 int sync_append_copyfile(struct mailbox *mailbox,
-			 struct index_record *record)
+			 struct index_record *record,
+			 const struct sync_annot_list *annots)
 {
     const char *fname, *destname;
     struct message_guid tmp_guid;
@@ -1554,8 +1571,196 @@ int sync_append_copyfile(struct mailbox *mailbox,
 	return r;
     }
 
+    /* apply the remote annotations */
+    r = apply_annotations(mailbox, record, NULL, annots, 0);
+    if (r) {
+	syslog(LOG_ERR, "Failed to apply annotations: %s",
+	       error_message(r));
+	return r;
+    }
+
  just_write:
     return mailbox_append_index_record(mailbox, record);
+}
+
+/* ====================================================================== */
+
+static int read_one_annot(const char *mailbox __attribute__((unused)),
+			  uint32_t uid __attribute__((unused)),
+			  const char *entry,
+			  const char *userid,
+			  const struct buf *value,
+			  void *rock)
+{
+    struct sync_annot_list **salp = (struct sync_annot_list **)rock;
+
+    if (!*salp)
+	*salp = sync_annot_list_create();
+    sync_annot_list_add(*salp, entry, userid, value);
+    return 0;
+}
+
+/*
+ * Read all the annotations in the local annotations database
+ * for the message given by @mailbox and @record, returning them
+ * as a new sync_annot_list.  The caller should free the new
+ * list with sync_annot_list_free().
+ *
+ * Returns: non-zero on error,
+ *	    resulting sync_annot_list in *@resp
+ */
+int read_annotations(const struct mailbox *mailbox,
+		     const struct index_record *record,
+		     struct sync_annot_list **resp)
+{
+    *resp = NULL;
+    return annotatemore_findall(mailbox->name, record->uid,
+				/* all entries*/"*",
+				read_one_annot, (void *)resp);
+}
+
+/*
+ * Encode the given list of annotations @sal as a dlist
+ * structure with the given @parent.
+ */
+void encode_annotations(struct dlist *parent,
+		        const struct sync_annot_list *sal)
+{
+    const struct sync_annot *sa;
+    struct dlist *annots = NULL;
+    struct dlist *aa;
+
+    if  (!sal)
+	return;
+    for (sa = sal->head ; sa ; sa = sa->next) {
+	if (!annots)
+	    annots = dlist_newlist(parent, "ANNOTATIONS");
+
+	aa = dlist_newkvlist(annots, "A");
+	dlist_setatom(aa, "ENTRY", sa->entry);
+	dlist_setatom(aa, "USERID", sa->userid);
+	dlist_setmap(aa, "VALUE", sa->value.s, sa->value.len);
+    }
+}
+
+/*
+ * Decode the given list of encoded annotations @annots and create
+ * a new sync_annot_list in *@salp, which the caller should free
+ * with sync_annot_list_free().
+ *
+ * Returns: zero on success or Cyrus error code.
+ */
+int decode_annotations(/*const*/struct dlist *annots,
+		       struct sync_annot_list **salp)
+{
+    struct dlist *aa;
+    const char *entry;
+    const char *userid;
+    const char *v;
+    size_t l;
+    struct buf value = BUF_INITIALIZER;
+
+    *salp = NULL;
+    if (strcmp(annots->name, "ANNOTATIONS"))
+	return IMAP_PROTOCOL_BAD_PARAMETERS;
+
+    for (aa = annots->head ; aa ; aa = aa->next) {
+	if (!*salp)
+	    *salp = sync_annot_list_create();
+	if (!dlist_getatom(aa, "ENTRY", &entry))
+	    return IMAP_PROTOCOL_BAD_PARAMETERS;
+	if (!dlist_getatom(aa, "USERID", &userid))
+	    return IMAP_PROTOCOL_BAD_PARAMETERS;
+	if (!dlist_getmap(aa, "VALUE", &v, &l))
+	    return IMAP_PROTOCOL_BAD_PARAMETERS;
+	buf_init_ro(&value, v, l);
+	sync_annot_list_add(*salp, entry, userid, &value);
+    }
+    return 0;
+}
+
+/*
+ * Merge a local and remote list of annotations, and apply the resulting
+ * list of annotations to the local annotation database, storing new values
+ * or deleting old values as necessary.  Manages its own annotations
+ * transaction.
+ */
+int apply_annotations(const struct mailbox *mailbox,
+		      const struct index_record *record,
+		      const struct sync_annot_list *local_annots,
+		      const struct sync_annot_list *remote_annots,
+		      int local_wins)
+{
+    const struct sync_annot *local = (local_annots ? local_annots->head : NULL);
+    const struct sync_annot *remote = (remote_annots ? remote_annots->head : NULL);
+    const struct sync_annot *chosen;
+    static const struct buf novalue = BUF_INITIALIZER;
+    const struct buf *value;
+    int r;
+    int diff;
+    int started_txn = 0;
+
+    /*
+     * We rely here on the database scan order resulting in lists
+     * of annotations that are ordered lexically on entry then userid.
+     * We walk over both lists at once, choosing an annotation from
+     * either the local list only (diff < 0), the remote list only
+     * (diff > 0), or both lists (diff == 0).
+     */
+    while (local || remote) {
+	diff = 0;
+	if (local)
+	    diff--;
+	if (remote)
+	    diff++;
+	if (!diff)
+	    diff = strcmp(local->entry, remote->entry);
+	if (!diff)
+	    diff = strcmp(local->userid, remote->userid);
+
+	chosen = 0;
+	if (diff < 0) {
+	    chosen = local;
+	    value = (local_wins ? &local->value : &novalue);
+	    local = local->next;
+	}
+	else if (diff > 0) {
+	    chosen = remote;
+	    value = (local_wins ? &novalue : &remote->value);
+	    remote = remote->next;
+	}
+	else {
+	    chosen = remote;
+	    value = (local_wins ? &local->value : &remote->value);
+	    diff = buf_cmp(&local->value, &remote->value);
+	    local = local->next;
+	    remote = remote->next;
+	    if (!diff)
+		continue;   /* same value, skip */
+	}
+
+	if (!started_txn) {
+	    r = annotatemore_begin();
+	    if (r)
+		break;
+	    started_txn = 1;
+	}
+
+	r = annotatemore_write_entry(mailbox->name, record->uid,
+				     chosen->entry, chosen->userid,
+				     value);
+	if (r)
+	    break;
+    }
+
+    if (started_txn) {
+	if (r)
+	    annotatemore_abort();
+	else
+	    r = annotatemore_commit();
+    }
+
+    return r;
 }
 
 /* ====================================================================== */

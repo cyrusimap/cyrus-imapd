@@ -1183,14 +1183,19 @@ static int mailbox_compare_update(struct mailbox *mailbox,
     struct index_record rrecord;
     uint32_t recno = 1;
     struct dlist *ki;
+    struct sync_annot_list *mannots = NULL;
+    struct sync_annot_list *rannots = NULL;
     int r;
     int i;
 
     rrecord.uid = 0;
     for (ki = kr->head; ki; ki = ki->next) {
-	r = parse_upload(ki, mailbox, &mrecord);
+	sync_annot_list_free(&mannots);
+	sync_annot_list_free(&rannots);
+
+	r = parse_upload(ki, mailbox, &mrecord, &mannots);
 	if (r) {
-	    syslog(LOG_ERR, "SYNCERROR: failed to parse uploaded record"); 
+	    syslog(LOG_ERR, "SYNCERROR: failed to parse uploaded record");
 	    return IMAP_PROTOCOL_ERROR;
 	}
 
@@ -1206,31 +1211,35 @@ static int mailbox_compare_update(struct mailbox *mailbox,
 	    if (r) {
 		syslog(LOG_ERR, "IOERROR: failed to read record %s %u",
 		       mailbox->name, recno);
-		return r;
+		goto out;
 	    }
 	    recno++;
 	}
 
 	/* found a match, check for updates */
 	if (rrecord.uid == mrecord.uid) {
-	    /* GUID mismatch on a non-expunged record is an error straight away */
+	    /* higher modseq on the replica is an error */
+	    if (rrecord.modseq > mrecord.modseq) {
+	        syslog(LOG_ERR, "SYNCERROR: higher modseq on replica %s %u",
+		       mailbox->name, mrecord.uid);
+	        r = IMAP_SYNC_CHECKSUM;
+		goto out;
+	    }
+
+	    /* everything else only matters if we're not expunged */
 	    if (!(mrecord.system_flags & FLAG_EXPUNGED)) {
 		if (!message_guid_equal(&mrecord.guid, &rrecord.guid)) {
 		    syslog(LOG_ERR, "SYNCERROR: guid mismatch %s %u",
 			   mailbox->name, mrecord.uid);
-		    return IMAP_SYNC_CHECKSUM;
+		    r = IMAP_SYNC_CHECKSUM;
+		    goto out;
 		}
 		if (rrecord.system_flags & FLAG_EXPUNGED) {
 		    syslog(LOG_ERR, "SYNCERROR: expunged on replica %s %u",
 			   mailbox->name, mrecord.uid);
-		    return IMAP_SYNC_CHECKSUM;
+		    r = IMAP_SYNC_CHECKSUM;
+		    goto out;
 		}
-	    }
-	    /* higher modseq on the replica is an error */
-	    if (rrecord.modseq > mrecord.modseq) {
-		syslog(LOG_ERR, "SYNCERROR: higher modseq on replica %s %u",
-		       mailbox->name, mrecord.uid);
-		return IMAP_SYNC_CHECKSUM;
 	    }
 
 	    /* skip out on the first pass */
@@ -1243,20 +1252,37 @@ static int mailbox_compare_update(struct mailbox *mailbox,
 				   (rrecord.system_flags & FLAG_UNLINKED);
 	    for (i = 0; i < MAX_USER_FLAGS/32; i++)
 		rrecord.user_flags[i] = mrecord.user_flags[i];
+
+	    r = read_annotations(mailbox, &rrecord, &rannots);
+	    if (r) {
+		syslog(LOG_ERR, "Failed to read local annotations %s %u: %s",
+		       mailbox->name, recno, error_message(r));
+		goto out;
+	    }
+
+	    r = apply_annotations(mailbox, &rrecord, rannots, mannots, 0);
+	    if (r) {
+		syslog(LOG_ERR, "Failed to write merged annotations %s %u: %s",
+		       mailbox->name, recno, error_message(r));
+		goto out;
+	    }
+
 	    rrecord.silent = 1;
 	    r = mailbox_rewrite_index_record(mailbox, &rrecord);
 	    if (r) {
 		syslog(LOG_ERR, "IOERROR: failed to rewrite record %s %u",
 		       mailbox->name, recno);
-		return r;
+		goto out;
 	    }
 	}
 
 	/* not found and less than LAST_UID, bogus */
 	else if (mrecord.uid <= mailbox->i.last_uid) {
 	    /* Expunged, just skip it */
-	    if (!(mrecord.system_flags & FLAG_EXPUNGED))
-		return IMAP_SYNC_CHECKSUM;
+	    if (!(mrecord.system_flags & FLAG_EXPUNGED)) {
+		r = IMAP_SYNC_CHECKSUM;
+		goto out;
+	    }
 	}
 
 	/* after LAST_UID, it's an append, that's OK */
@@ -1265,16 +1291,21 @@ static int mailbox_compare_update(struct mailbox *mailbox,
 	    if (!doupdate) continue;
 
 	    mrecord.silent = 1;
-	    r = sync_append_copyfile(mailbox, &mrecord);
+	    r = sync_append_copyfile(mailbox, &mrecord, mannots);
 	    if (r) {
 		syslog(LOG_ERR, "IOERROR: failed to append file %s %d",
 		       mailbox->name, recno);
-		return r;
+		goto out;
 	    }
 	}
     }
 
-    return 0;
+    r = 0;
+
+out:
+    sync_annot_list_free(&mannots);
+    sync_annot_list_free(&rannots);
+    return r;
 }
 
 static int do_mailbox(struct dlist *kin)
