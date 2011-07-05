@@ -722,9 +722,11 @@ sub run_replication
 
     $master->run_utility('sync_client',
 	'-v',			# verbose
+	'-v',			# even more verbose
 	'-S', $params->{host},	# hostname to connect to
 	'-u', 'cassandane',	# replicate the Cassandane user
 	);
+
 
     if (defined $master_store)
     {
