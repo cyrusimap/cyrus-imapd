@@ -2710,6 +2710,11 @@ void replica_connect(const char *channel)
     /* links to sockets */
     sync_in = sync_backend->in;
     sync_out = sync_backend->out;
+
+    if (verbose > 1) {
+	prot_setlog(sync_in, fileno(stderr));
+	prot_setlog(sync_out, fileno(stderr));
+    }
 }
 
 static void replica_disconnect(void)
