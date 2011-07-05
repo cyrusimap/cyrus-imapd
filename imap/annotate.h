@@ -179,7 +179,8 @@ int annotatemore_store(const annotate_scope_t *,
 
 /* low-level interface for use by mbdump routines.
  * Requires an open transaction. */
-int annotatemore_write_entry(const char *mboxname, const char *entry,
+int annotatemore_write_entry(const char *mboxname, uint32_t uid,
+			     const char *entry,
 			     const char *userid,
 			     const struct buf *value);
 

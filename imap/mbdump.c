@@ -909,7 +909,7 @@ int undump_mailbox(const char *mbname,
 		goto done;
 	    }
 
-	    annotatemore_write_entry(mbname, annotation, tmpuserid,
+	    annotatemore_write_entry(mbname, 0, annotation, tmpuserid,
 				     &content);
     
 	    free(tmpuserid);

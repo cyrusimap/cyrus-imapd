@@ -2201,11 +2201,13 @@ static int write_entry(const char *mboxname,
     return r;
 }
 
-int annotatemore_write_entry(const char *mboxname, const char *entry,
+int annotatemore_write_entry(const char *mboxname,
+			     uint32_t uid,
+			     const char *entry,
 			     const char *userid,
 			     const struct buf *value)
 {
-    return write_entry(mboxname, 0, entry, userid, value);
+    return write_entry(mboxname, uid, entry, userid, value);
 }
 
 struct storedata {
