@@ -87,12 +87,15 @@ sub tear_down
 
 sub make_message
 {
-    my ($self, $subject, @attrs) = @_;
+    my ($self, $subject, %attrs) = @_;
 
-    $self->{store}->write_begin();
-    my $msg = $self->{gen}->generate(subject => $subject, @attrs);
-    $self->{store}->write_message($msg);
-    $self->{store}->write_end();
+    my $store = $attrs{store} || $self->{store};
+    delete $attrs{store};
+
+    $store->write_begin();
+    my $msg = $self->{gen}->generate(subject => $subject, %attrs);
+    $store->write_message($msg);
+    $store->write_end();
 
     return $msg;
 }
@@ -200,7 +203,7 @@ sub test_embedded_nuls
 	or die "Cannot delete mailbox $folder: $@";
 }
 
-sub test_permessage
+sub test_permessage_getset
 {
     my ($self) = @_;
 
@@ -329,6 +332,145 @@ sub test_permessage
 	    },
 	    $res);
 }
+
+sub start_replicated_pair
+{
+    my ($self) = @_;
+
+    my $conf = $self->{instance}->{config};
+    my ($master, $replica) = Cassandane::Instance->create_replicated_pair($conf);
+
+    $master->add_service('imap');
+    $master->start();
+    # Use INBOX because we know it exists at both ends.
+    my %params = ( folder => 'INBOX' );
+    my $master_store =
+	$master->get_service('imap')->create_store(%params);
+
+    $replica->add_service('imap');
+    $replica->start();
+    my $replica_store =
+	$replica->get_service('imap')->create_store(%params);
+
+    return ($master, $replica, $master_store, $replica_store);
+}
+
+sub set_msg_annotation
+{
+    my ($self, $store, $uid, $entry, $attrib, $value) = @_;
+
+    $store->_connect();
+    $store->_select();
+    my $talk = $store->get_client();
+    $talk->store('' . $uid, 'annotation', [$entry, [$attrib, $value]]);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+}
+
+sub check_annotations
+{
+    my ($self, $store, $entry, $attrib, %expected) = @_;
+    my $res;
+
+    $store->_connect();
+    $store->_select();
+    my $talk = $store->get_client();
+
+    $res = $talk->fetch('1:*', ['annotation', [$entry, $attrib]]);
+    if (scalar keys %expected)
+    {
+	$self->assert_str_equals('ok', $talk->get_last_completion_response());
+	$self->assert_not_null($res);
+
+	my $exp = {};
+	while (my ($uid, $value) = each %expected)
+	{
+	    $exp->{$uid} = { annotation => [ $entry, [ $attrib, $value ] ] };
+	}
+	$self->assert_deep_equals($exp, $res);
+    }
+    else
+    {
+	$self->assert_str_equals('no', $talk->get_last_completion_response());
+	$self->assert($talk->get_last_error() =~ m/no matching messages/i);
+	$self->assert_null($res);
+    }
+}
+
+
+sub test_permessage_replication_a_m
+{
+    my ($self) = @_;
+
+    xlog "testing replication of message scope annotations";
+    xlog "case 1: message appears, on master only";
+
+    xlog "set up a master and replica pair";
+    my ($master, $replica, $master_store, $replica_store) = $self->start_replicated_pair();
+
+    my $entry = '/comment';
+    my $attrib = 'value.priv';
+    my $value1 = "Hello World";
+
+    xlog "Append a message and store an annotation";
+    my %msg;
+    $msg{A} = $self->make_message('Message A', store => $master_store);
+
+    $self->set_msg_annotation($master_store, 1, $entry, $attrib, $value1);
+
+    xlog "Before replication, message is present on the master";
+    $self->check_annotations($master_store, $entry, $attrib,
+			     1 => $value1);
+    xlog "Before replication, message is missing from the replica";
+    $self->check_annotations($replica_store, $entry, $attrib);
+
+    Cassandane::Instance->run_replication($master, $replica,
+					  $master_store, $replica_store);
+
+    xlog "After replication, message is still present on the master";
+    $self->check_annotations($master_store, $entry, $attrib,
+			     1 => $value1);
+    xlog "After replication, message is now present on the replica";
+    $self->check_annotations($replica_store, $entry, $attrib,
+			     1 => $value1);
+}
+
+sub test_permessage_replication_a_r
+{
+    my ($self) = @_;
+
+    xlog "testing replication of message scope annotations";
+    xlog "case 2: message appears, on replica only";
+
+    xlog "set up a master and replica pair";
+    my ($master, $replica, $master_store, $replica_store) = $self->start_replicated_pair();
+
+    my $entry = '/comment';
+    my $attrib = 'value.priv';
+    my $value1 = "Hello World";
+
+    xlog "Append a message and store an annotation";
+    my %msg;
+    $msg{A} = $self->make_message('Message A', store => $replica_store);
+
+    $self->set_msg_annotation($replica_store, 1, $entry, $attrib, $value1);
+
+    xlog "Before replication, message is missing from the master";
+    $self->check_annotations($master_store, $entry, $attrib);
+    xlog "Before replication, message is present on the replica";
+    $self->check_annotations($replica_store, $entry, $attrib,
+			     1 => $value1);
+
+    Cassandane::Instance->run_replication($master, $replica,
+					  $master_store, $replica_store);
+
+    xlog "After replication, message is now present on the master";
+    $self->check_annotations($master_store, $entry, $attrib,
+			     1 => $value1);
+    xlog "After replication, message is still present on the replica";
+    $self->check_annotations($replica_store, $entry, $attrib,
+			     1 => $value1);
+}
+
 
 # Get the highestmodseq of the folder
 sub get_highestmodseq
