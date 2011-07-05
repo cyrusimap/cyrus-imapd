@@ -533,6 +533,11 @@ sub _fork_utility
 	    unless get_verbose;
 	$binary = shift @argv;
     }
+    elsif ($mode eq 'gdb')
+    {
+	# stdin, stdout unmolested
+	$binary = shift @argv;
+    }
     else
     {
 	# stdin is null, stdout is null or unmolested
@@ -553,6 +558,19 @@ sub _fork_utility
 	'-C', $self->_imapd_conf(),
 	@argv,
     );
+
+    if (defined $mode && $mode eq 'gdb')
+    {
+	my $gdbx = '/var/tmp/gdb.x';
+	open GDBX, '>', $gdbx
+	    or die "Cannot open $gdbx for writing: $!";
+	print GDBX "file " . shift(@cmd) . "\n";
+	print GDBX "set args " . join(' ', @cmd) . "\n";
+	close GDBX;
+	@cmd = ( 'gdb', '-x', $gdbx );
+	$mode = undef;
+    }
+
     xlog "Running: " . join(' ', map { "\"$_\"" } @cmd);
 
     if (defined $mode)
