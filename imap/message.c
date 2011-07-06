@@ -656,8 +656,7 @@ static int message_parse_headers(struct msg *msg, struct body *body,
 	    }
 
 	    /* Check for headers in generic cache */
-	    if (body->cacheheaders.len &&
-		(next[1] != ' ') && (next[1] != '\t') &&
+	    if ((next[1] != ' ') && (next[1] != '\t') &&
 		mailbox_cached_header_inline(next+1) != BIT32_MAX) {
 		    message_parse_header(next+1, &body->cacheheaders);
 	    }
