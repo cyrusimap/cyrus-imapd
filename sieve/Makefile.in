@@ -100,9 +100,13 @@ OBJS = sieve_err.o \
 sieve-lex.c: sieve-lex.l sieve.h
 
 sieve.c: sieve.y
-	t=y.$$$$ ; $(YACC) $(YFLAGS) -b $$t $(srcdir)/sieve.y && mv $$t.tab.c $@
+	t=y.$$$$ ;\
+	$(YACC) $(YFLAGS) -b $$t $(srcdir)/sieve.y && mv $$t.tab.c $@ ;\
+	rm -f $$t.tab.c $$t.tab.h
 sieve.h: sieve.y
-	t=y.$$$$ ; $(YACC) $(YFLAGS) -b $$t $(srcdir)/sieve.y && mv $$t.tab.h $@
+	t=y.$$$$ ;\
+	$(YACC) $(YFLAGS) -b $$t $(srcdir)/sieve.y && mv $$t.tab.h $@ ;\
+	rm -f $$t.tab.c $$t.tab.h
 
 bc_generate.o comparator.o script.o sieve-lex.o tree.o: sieve.h
 
@@ -111,9 +115,13 @@ addr-lex.c: addr-lex.l addr.h
 #	$(LEX) -t -Paddr $(srcdir)/addr-lex.l > $@
 
 addr.c: addr.y
-	t=y.$$$$ ; $(YACC) $(YFLAGS) -p addr -b $$t $(srcdir)/addr.y && mv $$t.tab.c $@
+	t=y.$$$$ ;\
+	$(YACC) $(YFLAGS) -p addr -b $$t $(srcdir)/addr.y && mv $$t.tab.c $@ ;\
+	rm -f $$t.tab.c $$t.tab.h
 addr.h: addr.y
-	t=y.$$$$ ; $(YACC) $(YFLAGS) -p addr -b $$t $(srcdir)/addr.y && mv $$t.tab.h $@
+	t=y.$$$$ ;\
+	$(YACC) $(YFLAGS) -p addr -b $$t $(srcdir)/addr.y && mv $$t.tab.h $@ ;\
+	rm -f $$t.tab.c $$t.tab.h
 
 addr.o addr-lex.o: addr.h
 
