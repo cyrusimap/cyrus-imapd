@@ -333,28 +333,6 @@ sub test_permessage_getset
 	    $res);
 }
 
-sub start_replicated_pair
-{
-    my ($self) = @_;
-
-    my $conf = $self->{instance}->{config};
-    my ($master, $replica) = Cassandane::Instance->create_replicated_pair($conf);
-
-    $master->add_service('imap');
-    $master->start();
-    # Use INBOX because we know it exists at both ends.
-    my %params = ( folder => 'INBOX' );
-    my $master_store =
-	$master->get_service('imap')->create_store(%params);
-
-    $replica->add_service('imap');
-    $replica->start();
-    my $replica_store =
-	$replica->get_service('imap')->create_store(%params);
-
-    return ($master, $replica, $master_store, $replica_store);
-}
-
 sub set_msg_annotation
 {
     my ($self, $store, $uid, $entry, $attrib, $value) = @_;
@@ -405,7 +383,8 @@ sub test_permessage_replication_a_m
     xlog "case 1: message appears, on master only";
 
     xlog "set up a master and replica pair";
-    my ($master, $replica, $master_store, $replica_store) = $self->start_replicated_pair();
+    my ($master, $replica, $master_store, $replica_store) =
+	Cassandane::Instance->start_replicated_pair();
 
     my $entry = '/comment';
     my $attrib = 'value.priv';
@@ -442,7 +421,8 @@ sub test_permessage_replication_a_r
     xlog "case 2: message appears, on replica only";
 
     xlog "set up a master and replica pair";
-    my ($master, $replica, $master_store, $replica_store) = $self->start_replicated_pair();
+    my ($master, $replica, $master_store, $replica_store) =
+	Cassandane::Instance->start_replicated_pair();
 
     my $entry = '/comment';
     my $attrib = 'value.priv';

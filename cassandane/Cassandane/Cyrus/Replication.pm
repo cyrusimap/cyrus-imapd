@@ -55,13 +55,6 @@ sub new
     my $class = shift;
     my $self = $class->SUPER::new(@_);
 
-    my ($master, $replica) = Cassandane::Instance->create_replicated_pair();
-    $master->add_service('imap');
-    $replica->add_service('imap');
-
-    $self->{master} = $master;
-    $self->{replica} = $replica;
-
     $self->{gen} = Cassandane::Generator->new();
 
     return $self;
@@ -71,16 +64,12 @@ sub set_up
 {
     my ($self) = @_;
 
-    # Use INBOX because we know it exists at both ends.
-    my %params = ( folder => 'INBOX' );
-
-    $self->{master}->start();
-    $self->{master_store} =
-	$self->{master}->get_service('imap')->create_store(%params);
-
-    $self->{replica}->start();
-    $self->{replica_store} =
-	$self->{replica}->get_service('imap')->create_store(%params);
+    my ($master, $replica, $master_store, $replica_store) =
+	Cassandane::Instance->start_replicated_pair();
+    $self->{master} = $master;
+    $self->{master_store} = $master_store;
+    $self->{replica} = $replica;
+    $self->{replica_store} = $replica_store;
 
     $self->{expected} = {};
 }

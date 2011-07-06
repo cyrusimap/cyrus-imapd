@@ -676,9 +676,9 @@ sub describe
     }
 }
 
-sub create_replicated_pair
+sub start_replicated_pair
 {
-    my ($class, $conf) = @_;
+    my ($class, $conf, %params) = @_;
 
     my $port = Cassandane::Service->alloc_port();
     $conf ||= Cassandane::Config->default();
@@ -697,10 +697,38 @@ sub create_replicated_pair
 
     my $master = Cassandane::Instance->new(config => $conf);
 
-    my $replica = Cassandane::Instance->new(config => $conf);
+    my $replica = Cassandane::Instance->new(config => $conf,
+					    setup_mailbox => 0);
     $replica->add_service('sync', port => $port);
 
-    return ($master, $replica);
+    my $services = $params{'services'} || [ 'imap' ];
+    my $has_imap = 0;
+    foreach my $s (@$services)
+    {
+	$master->add_service($s);
+	$replica->add_service($s);
+	$has_imap = 1 if ($s eq 'imap');
+    }
+
+    $master->start();
+    $replica->start();
+
+    # Run the replication engine to create the user mailbox
+    # in the replica.  Doing it this way avoids issues with
+    # mismatched mailbox uniqueids.
+    $class->run_replication($master, $replica);
+
+    # Use INBOX because we know it exists at both ends.
+    my %params = ( folder => 'INBOX' );
+    my $master_store;
+    $master_store = $master->get_service('imap')->create_store(%params)
+	if $has_imap;
+
+    my $replica_store;
+    $replica_store = $replica->get_service('imap')->create_store(%params)
+	if $has_imap;
+
+    return ($master, $replica, $master_store, $replica_store);
 }
 
 sub run_replication

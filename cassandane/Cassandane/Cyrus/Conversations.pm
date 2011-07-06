@@ -316,16 +316,10 @@ sub test_replication_clash
 
     xlog "set up a master and replica pair";
     my $conf = $self->{instance}->{config};
-    my ($master, $replica) = Cassandane::Instance->create_replicated_pair($conf);
+    my ($master, $replica, $master_store, $replica_store) =
+	Cassandane::Instance->start_replicated_pair($conf);
 
-    $master->add_service('imap');
-    $master->start();
-    my $master_store = $master->get_service('imap')->create_store();
     $master_store->set_fetch_attributes('uid', 'cid');
-
-    $replica->add_service('imap');
-    $replica->start();
-    my $replica_store = $replica->get_service('imap')->create_store();
     $replica_store->set_fetch_attributes('uid', 'cid');
 
     # Double check that we're connected to the servers
