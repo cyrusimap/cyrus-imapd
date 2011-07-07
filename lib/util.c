@@ -656,7 +656,7 @@ int buf_getline(struct buf *buf, FILE *fp)
     return (!(buf->len == 0 && c == EOF));
 }
 
-unsigned buf_len(struct buf *buf)
+unsigned buf_len(const struct buf *buf)
 {
     return buf->len;
 }

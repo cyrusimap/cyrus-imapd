@@ -193,7 +193,7 @@ void buf_ensure(struct buf *buf, int morebytes);
 char *buf_release(struct buf *buf);
 void buf_getmap(struct buf *buf, const char **base, int *len);
 int buf_getline(struct buf *buf, FILE *fp);
-unsigned buf_len(struct buf *buf);
+unsigned buf_len(const struct buf *buf);
 void buf_reset(struct buf *buf);
 void buf_truncate(struct buf *buf, unsigned int len);
 void buf_setcstr(struct buf *buf, const char *str);
