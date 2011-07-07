@@ -540,12 +540,13 @@ static int message_parse_body(struct msg *msg, struct body *body,
     int sawboundary;
 
     memset(body, 0, sizeof(struct body));
+    buf_init(&body->cacheheaders);
 
     /* No passed-in boundary structure, create a new, empty one */
     if (!boundaries) {
 	boundaries = &newboundaries;
-	/* We're at top-level--set up to store cached headers */
-	buf_init(&body->cacheheaders);
+	/* We're at top-level--preallocate space to store cached headers */
+	buf_ensure(&body->cacheheaders, 1024);
     }
 
     sawboundary = message_parse_headers(msg, body, defaultContentType,
@@ -655,9 +656,13 @@ static int message_parse_headers(struct msg *msg, struct body *body,
 		continue;
 	    }
 
-	    /* Check for headers in generic cache */
-	    if ((next[1] != ' ') && (next[1] != '\t') &&
+	    if (/* space preallocated, i.e. must be top-level body */
+		body->cacheheaders.s &&
+		/* this is not a continuation line */
+		(next[1] != ' ') && (next[1] != '\t') &&
+		/* this header is supposed to be cached */
 		mailbox_cached_header_inline(next+1) != BIT32_MAX) {
+		    /* append to the headers cache */
 		    message_parse_header(next+1, &body->cacheheaders);
 	    }
 
