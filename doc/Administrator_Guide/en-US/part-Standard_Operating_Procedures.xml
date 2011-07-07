@@ -7,6 +7,7 @@
     <title>Standard Operating Procedures</title>
     <xi:include href="Alternative_Namespace.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
     <xi:include href="Database_Conversion_Export_and_Import.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="Deleting_and_Undeleting_Messages_and_Folders.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
     <xi:include href="Reconstructing_Mailboxes.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
     <xi:include href="Using_Squatter_for_Faster_IMAP_SEARCH.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
 </part>

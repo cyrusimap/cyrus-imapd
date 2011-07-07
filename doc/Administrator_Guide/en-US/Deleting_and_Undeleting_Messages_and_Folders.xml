@@ -1,0 +1,214 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
+<!ENTITY % BOOK_ENTITIES SYSTEM "Administrator_Guide.ent">
+%BOOK_ENTITIES;
+]>
+<chapter id="chap-Administrator_Guide-Deleting_and_Undeleting_Messages_and_Folders">
+    <title>Deleting and Undeleting Messages and Folders</title>
+    <section id="sect-Administrator_Guide-Deleting_and_Undeleting_Messages_and_Folders-Terminology_amp_Definitions">
+        <title>Terminology &amp; Definitions</title>
+        <para>
+            This section clarifies some of the subtle nuances between delete, expunge and expire in different contexts, used throughout this chapter.
+        </para>
+        <para>
+            <variablelist id="vari-Administrator_Guide-Terminology_amp_Definitions-Message_context">
+                <title>Message context</title>
+                <varlistentry>
+                    <term>Delete</term>
+                    <listitem>
+                        <para>
+                            sets the Deleted flag on the message using STORE +Flags \Deleted via IMAP client
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term>Expunge</term>
+                    <listitem>
+                        <para>
+                            delete messages from the cyrus folder index that have the Deleted flag set using EXPUNGE via IMAP client. With expunge_mode: delayed, this doesn't delete the file from the filesystem
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term>Unexpunge</term>
+                    <listitem>
+                        <para>
+                            recover messages into the cyrus folder index based on filesystem content (only possible with expunge_mode: delayed)
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term>Undelete</term>
+                    <listitem>
+                        <para>
+                            remove the Deleted flag on the message using STORE -Flags \Deleted via IMAP client
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+
+            </variablelist>
+
+        </para>
+        <para>
+            <variablelist id="vari-Administrator_Guide-Terminology_amp_Definitions-Folder_context">
+                <title>Folder context</title>
+                <varlistentry>
+                    <term>Delete</term>
+                    <listitem>
+                        <para>
+                            deletes the folder and all messages inside it using DELETE via IMAP client. If using delete_mode: delayed, this renames the folder as discussed below. Otherwise, the folder and messages are removed from the mailbox list and the filesystem.
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term>Undelete</term>
+                    <listitem>
+                        <para>
+                            rename the deleted folder back to the original location using renamemailbox in cyradm
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+
+            </variablelist>
+
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-Deleting_and_Undeleting_Messages_and_Folders-Expiring_Deleted_Messages_and_Folders">
+        <title>Expiring Deleted Messages and Folders</title>
+        <para>
+            In the EVENTS block of cyrus.conf, you should have a line similar to the following:
+        </para>
+        <para>
+
+<screen>    delprune  cmd="cyr_expire -E 1 -D 7 -X 7 -a" at=2300</screen>
+
+        </para>
+        <para>
+            <variablelist>
+                <varlistentry>
+                    <term>-D 7</term>
+                    <listitem>
+                        <para>
+                            permanently deletes from the filesystem mailboxes and folders that were deleted more than 7 days ago.
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term>-E 1</term>
+                    <listitem>
+                        <para>
+                            prunes entries older than 1 day from the duplicate delivery suppression database.
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term>-X 7</term>
+                    <listitem>
+                        <para>
+                            permanently deletes from the filesystem expunged messages that were expunged more than 7 days ago.
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+
+            </variablelist>
+
+        </para>
+        <para>
+            To use delayed deletion of mailboxes, you need the following entry in imapd.conf and a version at least 2.3.9;
+        </para>
+        <para>
+
+<screen>delete_mode: delayed</screen>
+
+        </para>
+        <para>
+            The default prefix for deleted mailboxes is DELETED but it probably doesn't hurt to specify it in imapd.conf as well.
+        </para>
+        <para>
+
+<screen>deletedprefix: DELETED</screen>
+
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-Deleting_and_Undeleting_Messages_and_Folders-Undeleting_Folders">
+        <title>Undeleting Folders</title>
+        <para>
+            The following assumes that unixhierarchysep is on. If it's off then replace '/' in the names with '.'
+        </para>
+        <para>
+            With the previous configuration options in place, whenever a mail folder or mailbox is deleted, it will be renamed to DELETED/mailfoldername/4D5C6B7A where 4D5C6B7A is a hex-encoded timestamp and DELETED/ is the prefix for deleted mailboxes.
+        </para>
+        <para>
+            4D5C6B7A can be converted back to a human-readable time using a simple one-liner in Perl.
+        </para>
+        <para>
+
+<screen>$ <userinput>perl -le 'print scalar(localtime(hex("4D5C6B7A")));'</userinput>
+Thu Feb 17 00:27:38 2011</screen>
+
+        </para>
+        <note>
+            <title>ACL Entries on the Deleted Folder</title>
+            <para>
+                The ACL on the deleted folder remains the same so undeleting it is as simple as renaming it as a sub-folder of the recreated mailbox or back to the original folder name depending on whether the mailbox has been recreated or not. If you have to add an ACL to be able to delete the mailbox, you may wish to remove the ACL after the undelete has been finished.
+            </para>
+
+        </note>
+        <para>
+            The following examples assume a mailbox for info@example.com has been deleted.
+        </para>
+        <para>
+
+<screen>cyradm&gt; <userinput>listmailbox user/info*@example.com</userinput></screen>
+
+        </para>
+        <para>
+            If there's no output from the above command, the mailbox has not been recreated since being deleted and you can rename the mailbox and any folders back to the original name as follows. If the mailbox has been recreated, you will probably want to rename the deleted folders into a subfolder of the new mailbox, for example user/info/4D88AF31@example.com becomes user/info/restored@example.com and user/info/Sent/4D88AF34@example.com becomes user/info/restored/Sent@example.com
+        </para>
+        <para>
+            In either case the commands are similar but with the latter option you need to insert the extra "/restored" after the user/info
+        </para>
+        <para>
+
+<screen>cyradm&gt; <userinput>listmailbox DELETED/user/info*@example.com</userinput>
+DELETED/user/info/4D88AF31@example.com (\HasNoChildren)
+DELETED/user/info/Drafts/4D88AF34@example.com (\HasNoChildren)
+DELETED/user/info/Sent/4D88AF34@example.com (\HasNoChildren)
+DELETED/user/info/Trash/4D88AF35@example.com (\HasNoChildren)
+cyradm&gt; <userinput>renamemailbox DELETED/user/info/4D88AF31@example.com user/info@example.com</userinput>
+cyradm&gt; <userinput>renamemailbox DELETED/user/info/Drafts/4D88AF34@example.com user/info/Drafts@example.com</userinput>
+cyradm&gt; <userinput>renamemailbox DELETED/user/info/Sent/4D88AF34@example.com user/info/Sent@example.com</userinput>
+cyradm&gt; <userinput>renamemailbox DELETED/user/info/Trash/4D88AF35@example.com user/info/Trash@example.com</userinput></screen>
+
+        </para>
+        <para>
+            Unfortunately there's no easy way to rename the entire mailbox back including all the subfolders and the hex timestamp can vary between folders in the same mailbox if it was a mailbox with some large folders. This is because it's the time that particular folder was deleted, not when the first folder was deleted. Recursively undeleting a mailbox and all subfolders: <ulink url="http://git.kolab.org/pykolab/tree/pykolab/imap/cyrus.py" />.
+        </para>
+
+    </section>
+
+
+</chapter>
+
