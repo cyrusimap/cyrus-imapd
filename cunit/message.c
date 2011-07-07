@@ -13,6 +13,7 @@ static void test_parse_trivial(void)
 "Date: Wed, 27 Oct 2010 18:37:26 +1100\r\n"
 "Subject: Trivial testing email\r\n"
 "Message-ID: <fake800@fastmail.fm>\r\n"
+"X-Mailer: Norman\r\n"
 "\r\n"
 "Hello, World\n";
     int r;
@@ -70,6 +71,10 @@ static void test_parse_trivial(void)
     CU_ASSERT_EQUAL(body.numparts, 0);
     CU_ASSERT_PTR_NULL(body.subpart);
 
+    /* check cacheheaders */
+    CU_ASSERT_PTR_NOT_NULL_FATAL(body.cacheheaders.s);
+    CU_ASSERT(strstr(body.cacheheaders.s, "Norman") != NULL);
+
     message_free_body(&body);
 }
 
@@ -87,6 +92,7 @@ static void test_parse_simple(void)
 "Content-Type: text/plain; charset=\"utf-8\"\r\n"
 "Content-Language: en\r\n"
 "Message-ID: <fake1000@fastmail.fm>\r\n"
+"X-Mailer: Norman\r\n"
 "In-Reply-To: <fake999@gmail.com>\r\n"
 "Received: from foo.fastmail.fm (foo.fastmail.fm [10.0.0.1])\r\n"
 "\tby bar.gmail.com (Software); Thu, 28 Oct 2010 18:55:54 +1100\r\n"
@@ -167,6 +173,10 @@ static void test_parse_simple(void)
     /* simple body */
     CU_ASSERT_EQUAL(body.numparts, 0);
     CU_ASSERT_PTR_NULL(body.subpart);
+
+    /* check cacheheaders */
+    CU_ASSERT_PTR_NOT_NULL_FATAL(body.cacheheaders.s);
+    CU_ASSERT(strstr(body.cacheheaders.s, "Norman") != NULL);
 
     message_free_body(&body);
 }
@@ -308,6 +318,7 @@ static void test_mime_trivial(void)
 "To: Sarah Jane Smith <sjsmith@gmail.com>\r\n"
 "Date: Thu, 28 Oct 2010 18:37:26 +1100\r\n"
 "Subject: MIME testing email\r\n"
+"X-Mailer: Norman\r\n"
 "MIME-Version: 1.0\r\n"
 "Content-Type: multipart/mixed; boundary=\"2b47bc7b64285b8be25dcdca86fbc501b048eab1\"\r\n"
 "Content-Language: en\r\n"
@@ -349,6 +360,11 @@ static void test_mime_trivial(void)
     CU_ASSERT_STRING_EQUAL(body.subpart[0].params->value, "us-ascii");
     CU_ASSERT_PTR_NULL(body.subpart[0].params->next);
 
+    /* check cacheheaders */
+    CU_ASSERT_PTR_NOT_NULL_FATAL(body.cacheheaders.s);
+    CU_ASSERT(strstr(body.cacheheaders.s, "Norman") != NULL);
+    CU_ASSERT_PTR_NULL(body.subpart[0].cacheheaders.s);
+
     message_free_body(&body);
 }
 
@@ -368,6 +384,7 @@ static void test_mime_multiple(void)
 "To: Sarah Jane Smith <sjsmith@gmail.com>\r\n"
 "Date: Thu, 28 Oct 2010 18:37:26 +1100\r\n"
 "Subject: MIME testing email\r\n"
+"X-Mailer: Norman\r\n"
 "MIME-Version: 1.0\r\n"
 "Content-Type: multipart/mixed; boundary=\"7225e50d962de81173be22223f706458743c3a9a\"\r\n"
 "Content-Language: en\r\n"
@@ -481,6 +498,13 @@ HTML_PART "\r\n"
 	free(parts);
 	parts = NULL;
     }
+
+    /* check cacheheaders */
+    CU_ASSERT_PTR_NOT_NULL_FATAL(body.cacheheaders.s);
+    CU_ASSERT(strstr(body.cacheheaders.s, "Norman") != NULL);
+    CU_ASSERT_PTR_NULL(body.subpart[0].cacheheaders.s);
+    CU_ASSERT_PTR_NULL(body.subpart[1].cacheheaders.s);
+    CU_ASSERT_PTR_NULL(body.subpart[2].cacheheaders.s);
 
     message_free_body(&body);
 #undef TEXT_PART
