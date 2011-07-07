@@ -1683,6 +1683,7 @@ static int message_pendingboundary(const char *s, int slen,
     return 0;
 }
 
+
 /*
  * Write the cache information for the message parsed to 'body'
  * to 'outfile'.
@@ -1725,11 +1726,9 @@ int message_write_cache(struct index_record *record, const struct body *body)
 
     /* append the records to the buffer */
     for (i = 0; i < NUM_CACHE_FIELDS; i++) {
-	buf_appendmap(&ib[i], "\0\0\0", 3);
 	record->crec.item[i].len = buf_len(&ib[i]);
-	buf_appendbit32(&cacheitem_buffer, record->crec.item[i].len);
 	record->crec.item[i].offset = buf_len(&cacheitem_buffer);
-	buf_appendmap(&cacheitem_buffer, ib[i].s, (record->crec.item[i].len + 3) & ~3);
+	message_write_xdrstring(&cacheitem_buffer, &ib[i]);
 	buf_free(&ib[i]);
     }
 
@@ -2033,6 +2032,23 @@ void message_write_nstring_map(struct buf *buf,
 	buf_appendmap(buf, s, len);
 	buf_putc(buf, '"');
     }
+}
+
+/*
+ * Append the string @s to the buffer @buf in a binary
+ * format almost exactly
+ */
+void message_write_xdrstring(struct buf *buf, const struct buf *s)
+{
+    unsigned padlen;
+
+    /* 32b string length in network order */
+    buf_appendbit32(buf, buf_len(s));
+    /* bytes of string */
+    buf_appendmap(buf, s->s, s->len);
+    /* 0 to 3 bytes padding */
+    padlen = (4 - (s->len & 3)) & 3;
+    buf_appendmap(buf, "\0\0\0", padlen);
 }
 
 /*
