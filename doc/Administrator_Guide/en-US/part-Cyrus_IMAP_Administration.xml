@@ -1,0 +1,12 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<!DOCTYPE part PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
+<!ENTITY % BOOK_ENTITIES SYSTEM "Administrator_Guide.ent">
+%BOOK_ENTITIES;
+]>
+<part id="part-Administrator_Guide-Cyrus_IMAP_Administration">
+    <title>Cyrus IMAP Administration</title>
+    <xi:include href="Access_Control.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="cyradm.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="Tools_and_Utilities.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+</part>
+

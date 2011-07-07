@@ -1,0 +1,23 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<!DOCTYPE part PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
+<!ENTITY % BOOK_ENTITIES SYSTEM "Administrator_Guide.ent">
+%BOOK_ENTITIES;
+]>
+<part id="part-Administrator_Guide-Frequently_Asked_Questions">
+    <title>Frequently Asked Questions</title>
+    <chapter id="chap-Administrator_Guide-Frequently_Asked_Questions-Databases_Essential_to_Cyrus_IMAP">
+        <title>Databases Essential to Cyrus IMAP</title>
+        <para>
+            It is important to know which databases are essential to Cyrus' operation, and thus to <emphasis>not delete</emphasis>, and / or backup so that Cyrus IMAP can be restored. Additionally, when migrating between a 32-bit and a 64-bit system, some database technologies like Berkely DB won't simply convert and sometimes a db_dump / db_load won't help.
+        </para>
+        <formalpara id="form-Administrator_Guide-Databases_Essential_to_Cyrus_IMAP-Suggested_Solution">
+            <title>Suggested Solution</title>
+            <para>
+                para
+            </para>
+
+        </formalpara>
+
+    </chapter>
+</part>
+

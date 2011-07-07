@@ -1,0 +1,229 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
+<!ENTITY % BOOK_ENTITIES SYSTEM "Administrator_Guide.ent">
+%BOOK_ENTITIES;
+]>
+<chapter id="chap-Administrator_Guide-Tools_amp_Utilities">
+    <title>Tools &amp; Utilities</title>
+    <para>
+        para
+    </para>
+    <section id="sect-Administrator_Guide-Tools_amp_Utilities-arbitron">
+        <title>arbitron</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-Tools_amp_Utilities-arbitronsort.pl">
+        <title>arbitronsort.pl</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-Tools_amp_Utilities-chk_cyrus">
+        <title>chk_cyrus</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-Tools_amp_Utilities-convert_sieve.pl">
+        <title>convert-sieve.pl</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-Tools_amp_Utilities-ctl_cyrusdb">
+        <title>ctl_cyrusdb</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-Tools_amp_Utilities-ctl_deliver">
+        <title>ctl_deliver</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-Tools_amp_Utilities-ctl_mboxlist">
+        <title>ctl_mboxlist</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-Tools_amp_Utilities-cvt_cyrusdb">
+        <title>cvt_cyrusdb</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-Tools_amp_Utilities-cvt_cyrusdb_all">
+        <title>cvt_cyrusdb_all</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-Tools_amp_Utilities-cyr_dbtool">
+        <title>cyr_dbtool</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-Tools_amp_Utilities-cyr_df">
+        <title>cyr_df</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-Tools_amp_Utilities-cyrdump">
+        <title>cyrdump</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-Tools_amp_Utilities-cyr_expire">
+        <title>cyr_expire</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-Tools_amp_Utilities-cyrfetchnews">
+        <title>cyrfetchnews</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-Tools_amp_Utilities-cyr_sequence">
+        <title>cyr_sequence</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-Tools_amp_Utilities-cyr_synclog">
+        <title>cyr_synclog</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-Tools_amp_Utilities-cyr_userseen">
+        <title>cyr_userseen</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-Tools_amp_Utilities-masssievec">
+        <title>masssievec</title>
+        <para>
+            Script to mass compile Sieve scripts
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-Tools_amp_Utilities-mbexamine">
+        <title>mbexamine</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-Tools_amp_Utilities-mbpath">
+        <title>mbpath</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-Tools_amp_Utilities-migrate_metadata">
+        <title>migrate-metadata</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-Tools_amp_Utilities-mkimap">
+        <title>mkimap</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-Tools_amp_Utilities-mknewsgroups">
+        <title>mknewsgroups</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-Tools_amp_Utilities-rehash">
+        <title>rehash</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-Tools_amp_Utilities-translatesieve">
+        <title>translatesieve</title>
+        <para>
+            script to translate sieve scripts to use unixhierarchysep and/or altnamespace
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-Tools_amp_Utilities-undohash">
+        <title>undohash</title>
+        <para>
+            absolutely ancient (downgrade to prior 1.6.2+), probably should be obsoleted entirely
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-Tools_amp_Utilities-upgradesieve">
+        <title>upgradesieve</title>
+        <para>
+            absolutely ancient (upgrade from 1.6.13), probably should be obsoleted entirely
+        </para>
+
+    </section>
+
+
+</chapter>
+

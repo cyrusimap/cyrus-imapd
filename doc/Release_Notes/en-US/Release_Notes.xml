@@ -10,6 +10,14 @@
         <para>
             The following new features are available in Cyrus IMAP 2.5.
         </para>
+        <section id="sect-Release_Notes-New_Features-Support_for_RFC_5464_IMAP_METADATA">
+            <title>Support for RFC 5464: IMAP METADATA</title>
+            <para>
+                Cyrus IMAP now fully supports <ulink url="http://tools.ietf.org/search/rfc5464">RFC 5464: "The IMAP METADATA Extension"</ulink>. This also means the support for the ANNOTATEMORE draft for IMAP has been dropped.
+            </para>
+
+        </section>
+
         <section id="sect-Release_Notes-New_Features-Catchall_Mailbox_for_LMTP">
             <title>Catchall Mailbox for LMTP</title>
             <para>

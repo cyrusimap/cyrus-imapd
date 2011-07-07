@@ -1,0 +1,560 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
+<!ENTITY % BOOK_ENTITIES SYSTEM "Administrator_Guide.ent">
+%BOOK_ENTITIES;
+]>
+<chapter id="chap-Administrator_Guide-cyradm">
+    <title><application>cyradm</application></title>
+    <indexterm>
+        <primary>cyradm</primary>
+
+    </indexterm>
+    <para>
+        <application>cyradm</application> is a simple command line utility for performing common administrative tasks to a Cyrus IMAP server. The utility can either be executed from a client where is has been installed and connect to the server via IMAP or it can be executed locally via a shell on the server.
+    </para>
+    <section id="sect-Administrator_Guide-cyradm-authenticate">
+        <title>authenticate</title>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>authenticate</secondary>
+
+        </indexterm>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>auth</secondary>
+            <see>authenticate</see>
+
+        </indexterm>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>login</secondary>
+            <see>authenticate</see>
+
+        </indexterm>
+        <para>
+            Authenticate to a server for which a connection has already been opened either when <application>cyradm</application> was started or via the <command>connect</command> command.
+        </para>
+        <formalpara id="form-Administrator_Guide-authenticate-Syntax">
+            <title>Syntax</title>
+            <para>
+                authenticate &lt;user name&gt;
+            </para>
+
+        </formalpara>
+        <para>
+            The user name must be provided as a parameter.
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-cyradm-chdir">
+        <title>chdir</title>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>chdir</secondary>
+
+        </indexterm>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>cd</secondary>
+            <see>chdir</see>
+
+        </indexterm>
+        <para>
+            Change the current directory.
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-cyradm-createmailbox">
+        <title>createmailbox</title>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>createmailbox</secondary>
+
+        </indexterm>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>cm</secondary>
+            <see>createmailbox</see>
+
+        </indexterm>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>create</secondary>
+            <see>createmailbox</see>
+
+        </indexterm>
+        <para>
+            Creates a new mailbox. New mailboxes inherit the ACL permissions of their parent mailbox, except for top-level mailboxes such as the user's INBOX. Mailboxes that are the user's INBOX are assigned <emphasis>all</emphasis> to the corresponding user.
+        </para>
+        <example id="exam-Administrator_Guide-createmailbox-Example_use_of_createmailbox">
+            <title>Example use of <command>createmailbox</command></title>
+            <para>
+
+<screen>localhost&gt; <userinput>cm user.bovik</userinput>
+localhost&gt; <userinput>lm</userinput>
+user.bovik (\HasNoChildren)
+localhost&gt; <userinput>lam user.bovik</userinput>
+bovik lrswipkxtecda</screen>
+
+            </para>
+
+        </example>
+        <note>
+            <title><literal>unixhierarchysep</literal></title>
+            <para>
+                Note that in the above example, the <literal>unixhierarchysep</literal> setting in <filename>/etc/imapd.conf</filename> is set to 0. When using the UNIX hierarchy seperator (uses the <literal>/</literal> (forward slash) character as the hierarchy seperator, the example would look as follows.
+            </para>
+
+        </note>
+        <example id="exam-Administrator_Guide-createmailbox-Example_use_of_createmailbox_with_unixhierachysep">
+            <title>Example use of <command>createmailbox</command> with <literal>unixhierachysep</literal></title>
+            <para>
+
+<screen>localhost&gt; <userinput>cm user/bovik</userinput>
+localhost&gt; <userinput>lm</userinput>
+user/bovik (\HasNoChildren)
+localhost&gt; <userinput>lam user/bovik</userinput>
+bovik lrswipkxtecda</screen>
+
+            </para>
+
+        </example>
+        <para>
+            Notice the use of the <literal>/</literal> (forward slash) character in <xref linkend="exam-Administrator_Guide-createmailbox-Example_use_of_createmailbox_with_unixhierachysep" /> as opposed to the <literal>.</literal> (dot) character in <xref linkend="exam-Administrator_Guide-createmailbox-Example_use_of_createmailbox" /> to seperate the hierarchical components of the mailbox name.
+        </para>
+        <note>
+            <title><literal>virtdomains</literal></title>
+            <para>
+                Also note the above examples use the unqualified, shorthand user identifier <literal>bovik</literal> as the mailbox name.
+            </para>
+            <para>
+                With the use of virtual domains, controlled through the <literal>virtdomains</literal> <citerefentry><refentrytitle>imapd.conf</refentrytitle>
+                <manvolnum>5</manvolnum></citerefentry> configuration option.
+            </para>
+
+        </note>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-cyradm-deleteaclmailbox">
+        <title>deleteaclmailbox</title>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>deleteaclmailbox</secondary>
+
+        </indexterm>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>dam</secondary>
+            <see>deleteaclmailbox</see>
+
+        </indexterm>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>deleteacl</secondary>
+            <see>deleteaclmailbox</see>
+
+        </indexterm>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-cyradm-deletemailbox">
+        <title>deletemailbox</title>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>deletemailbox</secondary>
+
+        </indexterm>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>delete</secondary>
+            <see>deletemailbox</see>
+
+        </indexterm>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>dm</secondary>
+            <see>deletemailbox</see>
+
+        </indexterm>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-cyradm-disconnect">
+        <title>disconnect</title>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>disconnect</secondary>
+
+        </indexterm>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>disc</secondary>
+            <see>disconnect</see>
+
+        </indexterm>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-cyradm-exit">
+        <title>exit</title>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>exit</secondary>
+
+        </indexterm>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>quit</secondary>
+            <see>exit</see>
+
+        </indexterm>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-cyradm-help">
+        <title>help</title>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>help</secondary>
+
+        </indexterm>
+        <para>
+            Show the commands, their aliases and a short description of each command.
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-cyradm-info">
+        <title>info</title>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>info</secondary>
+
+        </indexterm>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-cyradm-listaclmailbox">
+        <title>listaclmailbox</title>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>listaclmailbox</secondary>
+
+        </indexterm>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>lam</secondary>
+            <see>listaclmailbox</see>
+
+        </indexterm>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>listacl</secondary>
+            <see>listaclmailbox</see>
+
+        </indexterm>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-cyradm-listmailbox">
+        <title>listmailbox</title>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>listmailbox</secondary>
+
+        </indexterm>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>l</secondary>
+            <see>listmailbox</see>
+
+        </indexterm>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>lm</secondary>
+            <see>listmailbox</see>
+
+        </indexterm>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-cyradm-listquota">
+        <title>listquota</title>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>listquota</secondary>
+
+        </indexterm>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>lq</secondary>
+            <see>listquota</see>
+
+        </indexterm>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-cyradm-listquotaroot">
+        <title>listquotaroot</title>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>listquotaroot</secondary>
+
+        </indexterm>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>lqm</secondary>
+            <see>listquotaroot</see>
+
+        </indexterm>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>lqr</secondary>
+            <see>listquotaroot</see>
+
+        </indexterm>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-cyradm-mboxcfg">
+        <title>mboxcfg</title>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>mboxcfg</secondary>
+
+        </indexterm>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>mboxconfig</secondary>
+            <see>mboxcfg</see>
+
+        </indexterm>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-cyradm-pwd">
+        <title>pwd</title>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>pwd</secondary>
+
+        </indexterm>
+        <para>
+            Displas the current working directory.
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-cyradm-reconstruct">
+        <title>reconstruct</title>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>reconstruct</secondary>
+
+        </indexterm>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-cyradm-renamemailbox">
+        <title>renamemailbox</title>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>renamemailbox</secondary>
+
+        </indexterm>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>rename</secondary>
+            <see>renamemailbox</see>
+
+        </indexterm>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>renm</secondary>
+            <see>renamemailbox</see>
+
+        </indexterm>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-cyradm-server">
+        <title>server</title>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>server</secondary>
+
+        </indexterm>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>connect</secondary>
+            <see>server</see>
+
+        </indexterm>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>servername</secondary>
+            <see>server</see>
+
+        </indexterm>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-cyradm-setaclmailbox">
+        <title>setaclmailbox</title>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>setaclmailbox</secondary>
+
+        </indexterm>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>sam</secondary>
+            <see>setaclmailbox</see>
+
+        </indexterm>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>setacl</secondary>
+            <see>setaclmailbox</see>
+
+        </indexterm>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-cyradm-setinfo">
+        <title>setinfo</title>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>setinfo</secondary>
+
+        </indexterm>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-cyradm-setquota">
+        <title>setquota</title>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>setquota</secondary>
+
+        </indexterm>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>sq</secondary>
+            <see>setquota</see>
+
+        </indexterm>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-cyradm-subscribe">
+        <title>subscribe</title>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>subscribe</secondary>
+
+        </indexterm>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>sub</secondary>
+            <see>subscribe</see>
+
+        </indexterm>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-cyradm-unsubscribe">
+        <title>unsubscribe</title>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>unsubscribe</secondary>
+
+        </indexterm>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>unsub</secondary>
+            <see>unsubscribe</see>
+
+        </indexterm>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-cyradm-version">
+        <title>version</title>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>version</secondary>
+
+        </indexterm>
+        <indexterm>
+            <primary>cyradm</primary>
+            <secondary>ver</secondary>
+            <see>version</see>
+
+        </indexterm>
+        <para>
+            para
+        </para>
+
+    </section>
+
+
+</chapter>
+

@@ -1,4 +1,5 @@
 <!ENTITY PRODUCT "Cyrus IMAP">
+<!ENTITY PRODUCT_VERSION "2.5">
 <!ENTITY BOOKID "Administrator_Guide">
-<!ENTITY YEAR "2010">
-<!ENTITY HOLDER "| You need to change the HOLDER entity in the en-US/Administrator_Guide.ent file |">
+<!ENTITY YEAR "1993-2011">
+<!ENTITY HOLDER "The Cyrus Team">
