@@ -719,13 +719,13 @@ sub start_replicated_pair
     $class->run_replication($master, $replica);
 
     # Use INBOX because we know it exists at both ends.
-    my %params = ( folder => 'INBOX' );
+    my %store_params = ( folder => 'INBOX' );
     my $master_store;
-    $master_store = $master->get_service('imap')->create_store(%params)
+    $master_store = $master->get_service('imap')->create_store(%store_params)
 	if $has_imap;
 
     my $replica_store;
-    $replica_store = $replica->get_service('imap')->create_store(%params)
+    $replica_store = $replica->get_service('imap')->create_store(%store_params)
 	if $has_imap;
 
     return ($master, $replica, $master_store, $replica_store);
