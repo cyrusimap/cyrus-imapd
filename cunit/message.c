@@ -677,3 +677,39 @@ static void test_write_nstring(void)
 }
 
 #undef TESTCASE
+
+#define TESTCASE(input, expout) \
+    buf_reset(&b); \
+    buf_init_ro(&s, input, sizeof(input)-1); \
+    message_write_xdrstring(&b, &s); \
+    CU_ASSERT_EQUAL(b.len, sizeof(expout)-1); \
+    CU_ASSERT(!memcmp(b.s, expout, sizeof(expout)-1))
+
+static void test_write_xdrstring(void)
+{
+    struct buf b = BUF_INITIALIZER;
+    struct buf s = BUF_INITIALIZER;
+
+    /* Zero length string */
+    TESTCASE("", "\0\0\0\0");
+
+    /* 1-length string */
+    TESTCASE("H", "\0\0\0\001H\0\0\0");
+
+    /* 2-length string */
+    TESTCASE("He", "\0\0\0\002He\0\0");
+
+    /* 3-length string */
+    TESTCASE("Hel", "\0\0\0\003Hel\0");
+
+    /* 4-length string */
+    TESTCASE("Hell", "\0\0\0\004Hell");
+
+    /* 5-length string */
+    TESTCASE("Hello", "\0\0\0\005Hello\0\0\0");
+
+    buf_free(&b);
+    buf_free(&s);
+}
+
+#undef TESTCASE
