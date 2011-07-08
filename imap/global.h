@@ -55,7 +55,8 @@
 
 /* Flags for cyrus_init() */
 enum {
-    CYRUSINIT_NODB =	(1<<0)
+    CYRUSINIT_NODB =	(1<<0),
+    CYRUSINIT_PERROR =	(1<<1)
 };
 
 /* Startup the configuration subsystem */

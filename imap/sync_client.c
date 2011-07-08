@@ -2952,7 +2952,8 @@ int main(int argc, char **argv)
 	}
     }
 
-    cyrus_init(alt_config, "sync_client", 0);
+    cyrus_init(alt_config, "sync_client",
+	       (verbose > 1 ? CYRUSINIT_PERROR : 0));
 
     /* get the server name if not specified */
     if (!servername)

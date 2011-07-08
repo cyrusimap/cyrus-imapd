@@ -117,6 +117,7 @@ int cyrus_init(const char *alt_config, const char *ident, unsigned flags)
     const char *val;
     const char *prefix;
     int umaskval = 0;
+    int syslog_opts = LOG_PID;
 
     if(cyrus_init_run != NOT_RUNNING) {
 	fatal("cyrus_init called twice!", EC_CONFIG);
@@ -125,6 +126,10 @@ int cyrus_init(const char *alt_config, const char *ident, unsigned flags)
     }
 
     cyrus_init_nodb = (flags & CYRUSINIT_NODB);
+#ifdef LOG_PERROR
+    if ((flags & CYRUSINIT_PERROR))
+	syslog_opts |= LOG_PERROR;
+#endif
 
     initialize_imap_error_table();
     initialize_mupd_error_table();
@@ -136,7 +141,7 @@ int cyrus_init(const char *alt_config, const char *ident, unsigned flags)
     
     /* xxx we lose here since we can't have the prefix until we load the
      * config file */
-    openlog(config_ident, LOG_PID, SYSLOG_FACILITY);
+    openlog(config_ident, syslog_opts, SYSLOG_FACILITY);
 
     /* Load configuration file.  This will set config_dir when it finds it */
     config_read(alt_config);
@@ -153,7 +158,7 @@ int cyrus_init(const char *alt_config, const char *ident, unsigned flags)
 	strlcat(ident_buf, ident, size);
 
 	closelog();
-	openlog(ident_buf, LOG_PID, SYSLOG_FACILITY);
+	openlog(ident_buf, syslog_opts, SYSLOG_FACILITY);
 
 	/* don't free the openlog() string! */
     }
