@@ -159,6 +159,7 @@ S: A777 OK LIST completed
                         <para>
                             Even though Cyrus IMAP is backwards compatible when it comes to the <literal>c</literal> right, which it implements as implying as the <literal>k</literal> right, implementations should not count on the <literal>c</literal> right backwards compability to be around forever, and to fully implement the legacy <literal>c</literal> right, use <literal>kx</literal>.
                         </para>
+
                     </important>
 
                 </listitem>
@@ -177,13 +178,16 @@ S: A777 OK LIST completed
                         As such, the <literal>k</literal> is the right required on the parent folder of the target folder, and the <literal>x</literal> right on the source folder. To further illustrate;
                     </para>
                     <para>
-                        <example>
+                        <example id="exam-Administrator_Guide-Access_Rights_available_in_Cyrus_IMAP-Example_Client_Session_with_RENAME">
                             <title>Example Client Session with RENAME</title>
                             <para>
                                 Suppose the subject has the <literal>k</literal> right on folder "C/", and the <literal>x</literal> right on folder "A/B", then a RENAME A/B C/B would succeed.
                             </para>
+
                         </example>
+
                     </para>
+
                 </listitem>
 
             </varlistentry>
@@ -224,7 +228,10 @@ S: A777 OK LIST completed
                 <term>t</term>
                 <listitem>
                     <para>
-                        para
+                        The subject is allowed to delete messages from this folder, meaning that the subject is allowed to flag messages as deleted.
+                    </para>
+                    <para>
+                        In IMAP, messages are only actually deleted in a way that at least makes them invisible to the folder's users need to be expunged. For the corresponding <command>EXPUNGE</command> however, the <literal>x</literal> right is required.
                     </para>
 
                 </listitem>
@@ -237,7 +244,13 @@ S: A777 OK LIST completed
                         Stands for <literal>expunge</literal>.
                     </para>
                     <para>
-                        para
+                        The subject is allowed to <emphasis>expunge</emphasis> messages in this folder, meaning the subject has the right to remove all messages that have been flagged as deleted from all visibility.
+                    </para>
+                    <para>
+                        In IMAP, expunging messages only applies to messages flagged as deleted. For the subject to be able to flag messages as deleted, the however, the <literal>t</literal> right is required.
+                    </para>
+                    <para>
+                        We say "remove from all visibility", because the implementation of expunging messages in Cyrus IMAP is subject to the <literal>expunge_mode</literal> in <filename>/etc/imapd.conf</filename>, which when set to <literal>delayed</literal> only causes the reference to the expunged messages to be deleted from the folder index database &ndash;effectively removing the expunged message(s) from all visibility, while they remain in place on the Cyrus IMAP server filesystem.
                     </para>
                     <note>
                         <title>IMAP Clients</title>
@@ -267,6 +280,7 @@ S: A777 OK LIST completed
                         <para>
                             The <literal>deleteright</literal> setting in <filename>/etc/imapd.conf</filename> controls the <ulink url="http://tools.ietf.org/html/rfc2086">RFC 2086</ulink> right which controls whether or not the subject may delete a folder. However, this setting (as the original specification for the delete right was considered ambiguous) is ignored, and if it is set to <literal>c</literal>, is automatically converted to the <literal>x</literal> right.
                         </para>
+
                     </note>
 
                 </listitem>
