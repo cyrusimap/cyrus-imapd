@@ -19,10 +19,10 @@
                         Stands for <literal>lookup</literal>.
                     </para>
                     <para>
-                        The subject can <emphasis>lookup</emphasis> this folder, and see that the folder exists, meaning the folder will appear in a <code>LIST "" "*"</code>.
+                        The ACI subject can <emphasis>lookup</emphasis> this folder, and see that the folder exists, meaning the folder will appear in a <code>LIST "" "*"</code>.
                     </para>
                     <para>
-                        Folders to which the subject has no lookup rights may still be subscribed to. The lookup right is only required if Cyrus IMAP has been configured with the <literal>allowallsubscribe</literal> setting to <literal>false</literal> (0). In Cyrus IMAP &PRODUCT_VERSION;, this setting defaults to <literal>false</literal> (0). In a Cyrus IMAP Murder, this setting is typically set to <literal>true</literal> (1).
+                        Folders to which the ACI subject has no lookup rights may still be subscribed to. The lookup right is only required if Cyrus IMAP has been configured with the <literal>allowallsubscribe</literal> setting to <literal>false</literal> (0). In Cyrus IMAP &PRODUCT_VERSION;, this setting defaults to <literal>false</literal> (0). In a Cyrus IMAP Murder, this setting is typically set to <literal>true</literal> (1).
                     </para>
                     <para>
                         The <literal>l</literal> can be assigned to a folder, without the <literal>l</literal> right having been given out for the parent folder. Cyrus IMAP will pretend the parent folder does not exist;
@@ -68,7 +68,7 @@ S: A777 OK LIST completed
                         Stands for <literal>read</literal>.
                     </para>
                     <para>
-                        The subject can read the contents of this folder, meaning that the subject is allowed to <command>SELECT</command> or <command>EXAMINE</command> the folder, query its <command>STATUS</command>, <command>FETCH</command> data, <command>SEARCH</command> the contents, and <command>COPY</command> contents from the folder.
+                        The ACI subject can read the contents of this folder, meaning that the ACI subject is allowed to <command>SELECT</command> or <command>EXAMINE</command> the folder, query its <command>STATUS</command>, <command>FETCH</command> data, <command>SEARCH</command> the contents, and <command>COPY</command> contents from the folder.
                     </para>
 
                 </listitem>
@@ -81,7 +81,7 @@ S: A777 OK LIST completed
                         Stands for <literal>seen</literal>.
                     </para>
                     <para>
-                        The subject is permitted to maintain the subject's seen state for this folder, or the shared seen state in case the <literal>/vendor/cmu/cyrus-imapd/sharedseen</literal> has been set to <literal>true</literal> (see <command>mboxconfig</command> in <xref linkend="chap-Administrator_Guide-cyradm" />). Additionally, the <emphasis>\Recent</emphasis> flags are preserved for the subject.
+                        The ACI subject is permitted to maintain the ACI subject's seen state for this folder, or the shared seen state in case the <literal>/vendor/cmu/cyrus-imapd/sharedseen</literal> has been set to <literal>true</literal> (see <command>mboxconfig</command> in <xref linkend="chap-Administrator_Guide-cyradm" />). Additionally, the <emphasis>\Recent</emphasis> flags are preserved for the ACI subject.
                     </para>
 
                 </listitem>
@@ -94,12 +94,12 @@ S: A777 OK LIST completed
                         Stands for <literal>write</literal>.
                     </para>
                     <para>
-                        The subject is permitted to <emphasis>write</emphasis> to the folder, actually meaning the subject is permitted to maintain flags and keywords other then <emphasis>\Seen</emphasis> and <emphasis>\Deleted</emphasis>, which are controlled using the <literal>s</literal> and <literal>t</literal> rights respectively.
+                        The ACI subject is permitted to <emphasis>write</emphasis> to the folder, actually meaning the ACI subject is permitted to maintain flags and keywords other then <emphasis>\Seen</emphasis> and <emphasis>\Deleted</emphasis>, which are controlled using the <literal>s</literal> and <literal>t</literal> rights respectively.
                     </para>
                     <note>
                         <title>IMAP Clients</title>
                         <para>
-                            IMAP clients may expect to be able to set flags other then <emphasis>\Seen</emphasis> and <emphasis>\Deleted</emphasis> and attempt to set those flags immediately along with a "Mark as read" action, without the subject actually being permitted to set some of those flags through the <literal>w</literal> right.
+                            IMAP clients may expect to be able to set flags other then <emphasis>\Seen</emphasis> and <emphasis>\Deleted</emphasis> and attempt to set those flags immediately along with a "Mark as read" action, without the ACI subject actually being permitted to set some of those flags through the <literal>w</literal> right.
                         </para>
                         <para>
                             <ulink url="http://tools.ietf.org/html/rfc4314">RFC 4314</ulink>, section 4., page 15, states that the server SHOULD NOT fail, as the tagged NO response is not handled very will by deployed clients. In order to comply, we have <ulink url="https://bugzilla.cyrusimap.org/show_bug.cgi?id=3488">Bug #3488</ulink>, as Cyrus IMAP currently does seem to issue a tagged NO response.
@@ -117,7 +117,7 @@ S: A777 OK LIST completed
                         Stands for <literal>insert</literal>.
                     </para>
                     <para>
-                        A subject is permitted to <emphasis>insert</emphasis> content into a folder, meaning the subject may <command>COPY</command> messages with this folder as the target folder, and may <command>APPEND</command> messages to this folder.
+                        The ACI subject is permitted to <emphasis>insert</emphasis> content into a folder, meaning the ACI subject may <command>COPY</command> messages with this folder as the target folder, and may <command>APPEND</command> messages to this folder.
                     </para>
 
                 </listitem>
@@ -130,7 +130,7 @@ S: A777 OK LIST completed
                         Stands for <literal>post</literal>.
                     </para>
                     <para>
-                        The <emphasis>post</emphasis> right currently is exclusive to Cyrus IMAP, and allows the subject to send email to the submission address for the mailbox.
+                        The <emphasis>post</emphasis> right currently is exclusive to Cyrus IMAP, and allows the ACI subject to send email to the submission address for the mailbox.
                     </para>
                     <para>
                         This right differs from the <literal>i</literal> right in that the delivery system inserts trace information into submitted messages.
@@ -149,13 +149,13 @@ S: A777 OK LIST completed
                         Stands for <literal>create</literal>.
                     </para>
                     <para>
-                        The <emphasis>create</emphasis> right is a right introduced with <ulink url="http://tools.ietf.org/html/rfc2086">RFC 2086</ulink> (IMAP4 ACL extension), indicating the subject's right to create new sub-folders in the parent folder on which this right has been assigned, but also to delete the same folder.
+                        The <emphasis>create</emphasis> right is a right introduced with <ulink url="http://tools.ietf.org/html/rfc2086">RFC 2086</ulink> (IMAP4 ACL extension), indicating the ACI subject's right to create new sub-folders in the parent folder on which this right has been assigned, but also to delete the same folder.
                     </para>
                     <para>
                         Since <ulink url="http://tools.ietf.org/html/rfc4314">RFC 4314</ulink>, the <literal>c</literal> right has been replaced with the <literal>k</literal> right to <command>CREATE</command> folders with, the <literal>x</literal> right to <command>DELETE</command> folders with.
                     </para>
                     <important>
-                        <title>The <literal>c</literal> should no longer be used</title>
+                        <title>The <literal>c</literal> right should no longer be used</title>
                         <para>
                             Even though Cyrus IMAP is backwards compatible when it comes to the <literal>c</literal> right, which it implements as implying as the <literal>k</literal> right, implementations should not count on the <literal>c</literal> right backwards compability to be around forever, and to fully implement the legacy <literal>c</literal> right, use <literal>kx</literal>.
                         </para>
@@ -169,7 +169,7 @@ S: A777 OK LIST completed
                 <term>k</term>
                 <listitem>
                     <para>
-                        The subject has the right to <command>CREATE</command> a new folder if the <literal>k</literal> exists on the parent folder of the folder created.
+                        The ACI subject has the right to <command>CREATE</command> a new folder if the <literal>k</literal> exists on the parent folder of the folder created.
                     </para>
                     <para>
                         The rights required for a <command>RENAME</command> to be successful could be illustrated by describing a <command>RENAME</command> as a <command>CREATE</command> of the new folder, not exactly followed by a <command>COPY</command> on the old folder's contents, but more like a move like on a filesystem, and finally a <command>DELETE</command> on the old folder.
@@ -181,7 +181,7 @@ S: A777 OK LIST completed
                         <example id="exam-Administrator_Guide-Access_Rights_available_in_Cyrus_IMAP-Example_Client_Session_with_RENAME">
                             <title>Example Client Session with RENAME</title>
                             <para>
-                                Suppose the subject has the <literal>k</literal> right on folder "C/", and the <literal>x</literal> right on folder "A/B", then a RENAME A/B C/B would succeed.
+                                Suppose the ACI subject has the <literal>k</literal> right on folder "C/", and the <literal>x</literal> right on folder "A/B", then a RENAME A/B C/B would succeed.
                             </para>
 
                         </example>
@@ -198,15 +198,15 @@ S: A777 OK LIST completed
                         Stands for <literal>administer</literal>.
                     </para>
                     <para>
-                        The subject is allowed to administer the folder, meaning the subject is allowed to perform administrative operations on the folder. The <literal>a</literal> right is needed to successfully execute <command>SETACL</command>, <command>DELETEACL</command> (short for <command>SETACL ""</command>) and to execute <command>GETACL</command> or <command>LISTRIGHTS</command>.
+                        The ACI subject is allowed to administer the folder, meaning the ACI subject is allowed to perform administrative operations on the folder. The <literal>a</literal> right is needed to successfully execute <command>SETACL</command>, <command>DELETEACL</command> (short for <command>SETACL ""</command>) and to execute <command>GETACL</command> or <command>LISTRIGHTS</command>.
                     </para>
                     <note>
                         <title>IMAP Clients</title>
                         <para>
-                            IMAP clients may issue a <command>GETACL</command> in order to obtain the subject's rights on the folder, where they should be using <command>MYRIGHTS</command>, as <command>GETACL</command> or <command>LISTRIGHTS</command> return the full Access Control List, including other subject's identifiers.
+                            IMAP clients may issue a <command>GETACL</command> in order to obtain the ACI subject's rights on the folder, where they should be using <command>MYRIGHTS</command>, as <command>GETACL</command> or <command>LISTRIGHTS</command> return the full Access Control List, including other ACI subject's identifiers.
                         </para>
                         <para>
-                            Unless the subject has the <literal>a</literal> right on a folder, issuing a <command>GETACL</command> or <command>LISTRIGHTS</command> will cause Cyrus IMAP to send a tagged "NO: Permission denied" response if the subject has the <literal>l</literal> (lookup) right on the folder, and a "NO: No Such Mailbox" response otherwise, as per seciont 8. of RFC 2086 and section 6. of RFC 4314 &ndash; both conveniently called "Security Considerations".
+                            Unless the ACI subject has the <literal>a</literal> right on a folder, issuing a <command>GETACL</command> or <command>LISTRIGHTS</command> will cause Cyrus IMAP to send a tagged "NO: Permission denied" response if the ACI subject has the <literal>l</literal> (lookup) right on the folder, and a "NO: No Such Mailbox" response otherwise, as per seciont 8. of RFC 2086 and section 6. of RFC 4314 &ndash; both conveniently called "Security Considerations".
                         </para>
 
                     </note>
@@ -218,7 +218,7 @@ S: A777 OK LIST completed
                 <term>x</term>
                 <listitem>
                     <para>
-                        use this to indicate the subject has the right to delete the mailbox, as opposed to 'c' or 'd'
+                        use this to indicate the ACI subject has the right to delete the mailbox, as opposed to 'c' or 'd'
                     </para>
 
                 </listitem>
@@ -228,10 +228,23 @@ S: A777 OK LIST completed
                 <term>t</term>
                 <listitem>
                     <para>
-                        The subject is allowed to delete messages from this folder, meaning that the subject is allowed to flag messages as deleted.
+                        The ACI subject is allowed to delete messages from this folder, meaning that the ACI subject is allowed to flag messages as deleted.
                     </para>
                     <para>
                         In IMAP, messages are only actually deleted in a way that at least makes them invisible to the folder's users need to be expunged. For the corresponding <command>EXPUNGE</command> however, the <literal>x</literal> right is required.
+                    </para>
+
+                </listitem>
+
+            </varlistentry>
+            <varlistentry>
+                <term>n</term>
+                <listitem>
+                    <para>
+                        The ACI subject is allowed to annotate individual messages in this folder, in compliance with <ulink url="http://tools.ietf.org/html/rfc5257">RFC 5257</ulink>.
+                    </para>
+                    <para>
+                        The ACI subject must also have the <literal>r</literal> right, as otherwise the subject won't know which messages are available to annotate.
                     </para>
 
                 </listitem>
@@ -244,13 +257,13 @@ S: A777 OK LIST completed
                         Stands for <literal>expunge</literal>.
                     </para>
                     <para>
-                        The subject is allowed to <emphasis>expunge</emphasis> messages in this folder, meaning the subject has the right to remove all messages that have been flagged as deleted from all visibility.
+                        The ACI subject is allowed to <emphasis>expunge</emphasis> messages in this folder, meaning the ACI subject has the right to remove all messages that have been flagged as deleted from all visibility.
                     </para>
                     <para>
-                        In IMAP, expunging messages only applies to messages flagged as deleted. For the subject to be able to flag messages as deleted, the however, the <literal>t</literal> right is required.
+                        In IMAP, expunging messages only applies to messages flagged as deleted. For the ACI subject to be able to flag messages as deleted, the however, the <literal>t</literal> right is required.
                     </para>
                     <para>
-                        We say "remove from all visibility", because the implementation of expunging messages in Cyrus IMAP is subject to the <literal>expunge_mode</literal> in <filename>/etc/imapd.conf</filename>, which when set to <literal>delayed</literal> only causes the reference to the expunged messages to be deleted from the folder index database &ndash;effectively removing the expunged message(s) from all visibility, while they remain in place on the Cyrus IMAP server filesystem.
+                        We say "remove from all visibility", because the implementation of expunging messages in Cyrus IMAP is ACI subject to the <literal>expunge_mode</literal> in <filename>/etc/imapd.conf</filename>, which when set to <literal>delayed</literal> only causes the reference to the expunged messages to be deleted from the folder index database &ndash;effectively removing the expunged message(s) from all visibility, while they remain in place on the Cyrus IMAP server filesystem.
                     </para>
                     <note>
                         <title>IMAP Clients</title>
@@ -270,7 +283,7 @@ S: A777 OK LIST completed
                         Stands for <literal>delete</literal>.
                     </para>
                     <para>
-                        This is the legacy, <ulink url="http://tools.ietf.org/html/rfc2086">RFC 2086</ulink> access control right for the <emphasis>delete</emphasis> right. In versions of Cyrus IMAP implementing only this right, subjects were allowed to flag messages as deleted and expunge folders.
+                        This is the legacy, <ulink url="http://tools.ietf.org/html/rfc2086">RFC 2086</ulink> access control right for the <emphasis>delete</emphasis> right. In versions of Cyrus IMAP implementing only this right, ACI subjects were allowed to flag messages as deleted and expunge folders.
                     </para>
                     <para>
                         The <emphasis>delete</emphasis> right has been split in to three separate rights, <literal>t</literal> (flag messages as deleted), <literal>e</literal> (expunge folder) and <literal>k</literal> (delete folder).
@@ -278,10 +291,17 @@ S: A777 OK LIST completed
                     <note>
                         <title><literal>deleteright</literal> setting</title>
                         <para>
-                            The <literal>deleteright</literal> setting in <filename>/etc/imapd.conf</filename> controls the <ulink url="http://tools.ietf.org/html/rfc2086">RFC 2086</ulink> right which controls whether or not the subject may delete a folder. However, this setting (as the original specification for the delete right was considered ambiguous) is ignored, and if it is set to <literal>c</literal>, is automatically converted to the <literal>x</literal> right.
+                            The <literal>deleteright</literal> setting in <filename>/etc/imapd.conf</filename> controls the <ulink url="http://tools.ietf.org/html/rfc2086">RFC 2086</ulink> right which controls whether or not the ACI subject may delete a folder. However, this setting (as the original specification for the delete right was considered ambiguous) is ignored, and if it is set to <literal>c</literal>, is automatically converted to the <literal>x</literal> right.
                         </para>
 
                     </note>
+                    <important>
+                        <title>The <literal>d</literal> right should no longer be used</title>
+                        <para>
+                            Even though Cyrus IMAP is backwards compatible when it comes to the <literal>d</literal> right, which it implements as implying as the <literal>e</literal> and <literal>t</literal> rights, implementations should not count on the <literal>d</literal> right backwards compability to be around forever, instead use <literal>te</literal> rights.
+                        </para>
+
+                    </important>
 
                 </listitem>
 
@@ -294,8 +314,42 @@ S: A777 OK LIST completed
     <section id="sect-Administrator_Guide-Access_Control-Combining_Access_Rights">
         <title>Combining Access Rights</title>
         <para>
-            para
+            Access rights can combined to set a typical set of "read", "write" and "full control", potentially making it easier for client implementors to present their users with an interface to administer the ACLs to their mailboxes easily.
         </para>
+        <para>
+            Common sets of ACLs include:
+        </para>
+        <para>
+            <itemizedlist>
+                <listitem>
+                    <formalpara id="form-Administrator_Guide-Combining_Access_Rights-aci_lrs">
+                        <title><emphasis>&lt;aci&gt;</emphasis> <literal>lrs</literal></title>
+                        <para>
+                            The set of rights often referred to as "read-only". The ACI subject is allowed to lookup the folder, read its contents and maintain <emphasis>\Seen</emphasis> flags on messages. Meanwhile, the <emphasis>\Recent</emphasis> flags are maintained for the ACI subject as well.
+                        </para>
+
+                    </formalpara>
+
+                </listitem>
+
+            </itemizedlist>
+
+        </para>
+        <section id="sect-Administrator_Guide-Combining_Access_Rights-Features_and_Combined_Access_Rights">
+            <title>Features and Combined Access Rights</title>
+            <para>
+                For most features, ACI subjects need certain access rights on a folder in order to perform or control the feature.
+            </para>
+            <formalpara id="form-Administrator_Guide-Features_and_Combined_Access_Rights-METADATA">
+                <title><literal>METADATA</literal></title>
+                <para>
+                    In order to be allowed to retrieve and/or set annotations on a folder, the ACI subject requires the <literal>l</literal> right, and any of <literal>r</literal>, <literal>s</literal>, <literal>w</literal>, <literal>i</literal> or <literal>p</literal> rights.
+                </para>
+
+            </formalpara>
+
+        </section>
+
 
     </section>
 
