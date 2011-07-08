@@ -74,7 +74,7 @@ ec IMAP_MAILBOX_BADFORMAT,
    "Mailbox has an invalid format"
 
 ec IMAP_SYNC_CHECKSUM,
-   "Replication inconsitency detected"
+   "Replication inconsistency detected"
 
 ec IMAP_MAILBOX_CHECKSUM,
    "Mailbox format corruption detected"
