@@ -21,6 +21,9 @@
             <imageobject>
                 <imagedata fileref="images/title_logo.svg" format="SVG" />
             </imageobject>
+            <textobject>
+                <phrase>Logo</phrase>
+            </textobject>
 
         </inlinemediaobject>
 
