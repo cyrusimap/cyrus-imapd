@@ -33,6 +33,26 @@
                     <para>
                         The exact version of Cyrus IMAP you are using.
                     </para>
+                    <note>
+                        <title>Cyrus IMAP Version</title>
+                        <para>
+                            The Cyrus IMAP team would appreciate if you try your best to supply us with the exact version of Cyrus IMAP that you run. The Cyrus IMAP version from upstream, usually in the format <literal>x.y.z</literal> does not include important information on the <emphasis>build</emphasis> or <emphasis>release</emphasis>, nor the source for the package you may have used.
+                        </para>
+                        <para>
+                            <itemizedlist>
+                                <listitem>
+                                    <para>
+                                        Most Linux distributions allow you do get the full version with <command>rpm -qv cyrus-imapd</command> or <command>dpkg -l cyrus-imapd</command>.
+                                    </para>
+                                </listitem>
+                                <listitem>
+                                    <para>
+                                        If package management, for whatever reason, cannot tell you what version of Cyrus IMAP you have, connecting to your Cyrus IMAP server could.
+                                    </para>
+                                </listitem>
+                            </itemizedlist>
+                        </para>
+                    </note>
                 </listitem>
                 <listitem>
                     <para>
