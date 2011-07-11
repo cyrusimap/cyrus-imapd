@@ -804,7 +804,7 @@ done:
     return r;
 }
 
-static int copy_remote(struct mailbox *mailbox, unsigned long uid,
+static int copy_remote(struct mailbox *mailbox, uint32_t uid,
 		       struct dlist *kr)
 {
     struct index_record record;
