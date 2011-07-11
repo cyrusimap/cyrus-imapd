@@ -194,7 +194,8 @@ sub set_fetch_attributes
     {
 	$attr = lc($attr);
 	next
-	    unless ($attr =~ m/^[a-z0-9.\[\]<>]+$/);
+	    unless ($attr =~ m/^annotation\s+\(\S+\s+value\.(shared|priv)\)$/i ||
+		    $attr =~ m/^[a-z0-9.\[\]<>]+$/);
 	next
 	    if ($attr =~ m/^body/);
 	$self->{fetch_attrs}->{$attr} = 1;
