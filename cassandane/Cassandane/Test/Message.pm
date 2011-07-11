@@ -381,4 +381,49 @@ EOF
     $self->assert("" . $m eq $exp);
 }
 
+# Test parsing lines with unusually but validly named headers
+sub test_clone
+{
+    my ($self) = @_;
+
+    my $m = Cassandane::Message->new();
+    $m->add_header('subject', 'Hello World');
+    $m->set_body("This is a message to let you know\r\nthat I'm alive and well\r\n");
+    $m->set_attribute('uid', 42);
+
+    my $exp = <<'EOF';
+Subject: Hello World
+
+This is a message to let you know
+that I'm alive and well
+EOF
+    $exp =~ s/\n/\r\n/g;
+    $self->assert_str_equals($exp, $m->as_string);
+    $self->assert_num_equals(42, $m->get_attribute('uid'));
+    $self->assert_str_equals('Hello World', $m->get_header('subject'));
+
+    my $m2 = $m->clone();
+    $self->assert_str_equals($exp, $m2->as_string);
+    $self->assert_num_equals(42, $m2->get_attribute('uid'));
+    $self->assert_str_equals('Hello World', $m2->get_header('subject'));
+
+    my $addr = Cassandane::Address->new(
+	    name => 'Fred J. Bloggs',
+	    localpart => 'fbloggs',
+	    domain => 'fastmail.fm');
+    $m->add_header('From', $addr);
+    $self->assert_str_equals($addr->as_string, $m->get_header('from'));
+    $self->assert_null($m2->get_header('from'));
+    my $exp2 = <<'EOF';
+Subject: Hello World
+From: Fred J. Bloggs <fbloggs@fastmail.fm>
+
+This is a message to let you know
+that I'm alive and well
+EOF
+    $exp2 =~ s/\n/\r\n/g;
+    $self->assert_str_equals($exp2, $m->as_string);
+    $self->assert_str_equals($exp, $m2->as_string);
+}
+
 1;
