@@ -218,4 +218,50 @@ sub test_quota_f {
 		  "zlateuser (0:$origzres[1], 1:$zres[1], 2:$zres2[1])");
 }
 
+sub test_prefix_mboxexists {
+    my ($self) = @_;
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    $admintalk->create("user.base");
+    $admintalk->create("user.base.subdir");
+    $admintalk->create("user.base.subdir2");
+    $admintalk->setacl("user.base", "admin", 'lrswipkxtecda');
+    $admintalk->setacl("user.base.subdir2", "admin", 'lrswipkxtecda');
+    $self->{adminstore}->set_folder("user.base");
+    for (1..3) {
+	$self->make_message($self->{adminstore}, "base $_", extra_lines => 12345);
+    }
+    $self->{adminstore}->set_folder("user.base.subdir2");
+    for (1..3) {
+	$self->make_message($self->{adminstore}, "base $_", extra_lines => 12345);
+    }
+
+    $admintalk->create("user.baseplus");
+    $admintalk->create("user.baseplus.subdir");
+    $admintalk->setacl("user.baseplus", "admin", 'lrswipkxtecda');
+    $admintalk->setacl("user.baseplus.subdir", "admin", 'lrswipkxtecda');
+    $admintalk->setquota("user.baseplus", "(storage 1000000)");
+    $self->{adminstore}->set_folder("user.baseplus");
+    for (1..3) {
+	$self->make_message($self->{adminstore}, "baseplus $_", extra_lines => 31419);
+    }
+    $self->{adminstore}->set_folder("user.baseplus.subdir");
+    for (1..3) {
+	$self->make_message($self->{adminstore}, "baseplus $_", extra_lines => 31419);
+    }
+
+    my @origplus = $admintalk->getquota("user.baseplus");
+    $self->assert_num_equals(3, scalar @origplus);
+
+    $self->{instance}->run_utility('quota', '-f', "user.base");
+
+    my @nextplus = $admintalk->getquota("user.baseplus");
+    $self->assert_num_equals(3, scalar @nextplus);
+
+    # usage should be unchanged
+    $self->assert($origplus[1] == $nextplus[1],
+		  "usage of subdir (1: $origplus[1], 2: $nextplus[1])");
+}
+
 1;
