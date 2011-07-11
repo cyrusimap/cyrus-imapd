@@ -681,14 +681,14 @@ static int foreach(struct db *db,
 	key = path_to_qr(pathbuf.path[i], quota_path);
 	keylen = strlen(key);
 
-	free(pathbuf.path[i]);
-
 	if (!goodp || goodp(rock, key, keylen, data, datalen)) {
 	    /* make callback */
 	    r = cb(rock, key, keylen, data, datalen);
 	    if (r) break;
 	}
     }
+    for (i = 0; i < pathbuf.count; i++)
+	free(pathbuf.path[i]);
 
     free(pathbuf.path);
 
