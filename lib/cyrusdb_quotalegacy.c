@@ -118,7 +118,7 @@ struct db {
     struct txn txn;	/* transaction associated with this db handle */
 
     /* sorting function */
-    int (*compar) (const char *s1, const char *s2);
+    int (*compar) (const void *s1, const void *s2);
 };
 
 static int abort_txn(struct db *db __attribute__((unused)), struct txn *tid);
