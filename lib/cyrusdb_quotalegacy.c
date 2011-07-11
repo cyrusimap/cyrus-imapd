@@ -673,6 +673,8 @@ static int foreach(struct db *db,
 	    if (r) break;
 	}
     }
+    for (i = 0; i < pathbuf.count; i++)
+	free(pathbuf.path[i]);
 
     strarray_fini(&pathbuf);
 
