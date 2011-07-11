@@ -257,7 +257,7 @@ sub read_message
 	    $self->{batch} = $self->{client}->fetch("$first_uid:$last_uid",
 						    "($attrs)");
 	    $self->{last_batch_uid} = $last_uid;
-	    last if (scalar $self->{batch} > 0);
+	    last if (defined $self->{batch} && scalar $self->{batch} > 0);
 	    $self->{next_uid} = $last_uid + 1;
 	}
 	# xlog "have a batch, next_uid=$self->{next_uid}";
