@@ -44,6 +44,7 @@ use strict;
 use warnings;
 use Cassandane::Util::Log;
 use Cassandane::Util::DateTime qw(from_rfc3501);
+use Digest::SHA1 qw(sha1_hex);
 use overload qw("") => \&as_string;
 
 sub new
@@ -298,6 +299,14 @@ sub set_internaldate
     {
 	$self->{internaldate} = from_rfc3501($id);
     }
+}
+
+# Calculate and return the GUID of the message
+sub get_guid
+{
+    my ($self) = @_;
+
+    return sha1_hex($self->as_string());
 }
 
 1;
