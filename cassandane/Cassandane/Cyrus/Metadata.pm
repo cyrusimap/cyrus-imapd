@@ -85,20 +85,130 @@ sub tear_down
     $self->{instance}->stop();
 }
 
+sub _save_message
+{
+    my ($self, $msg, $store) = @_;
+
+    $store ||= $self->{store};
+
+    $store->write_begin();
+    $store->write_message($msg);
+    $store->write_end();
+}
+
 sub make_message
 {
     my ($self, $subject, %attrs) = @_;
 
-    my $store = $attrs{store} || $self->{store};
+    my $store = $attrs{store};	# may be undef
     delete $attrs{store};
 
-    $store->write_begin();
     my $msg = $self->{gen}->generate(subject => $subject, %attrs);
-    $store->write_message($msg);
-    $store->write_end();
+    $self->_save_message($msg, $store);
 
     return $msg;
 }
+
+#
+# Create and save two messages to two stores, according to GUID
+# on the messages, so that the first store gets the message with
+# the lower GUID and the second store the message with the higher
+# GUID.  Both cases need to be done in a controlled manner in order
+# to exercise some of the more obscure code paths in message
+# replication.
+#
+# Returns: Message, Message in the order they went to Stores
+#
+sub make_message_pair
+{
+    my ($self, $store0, $store1) = @_;
+
+    # Generate two messages and detect their resulting GUIDs
+    my $msg0 = $self->{gen}->generate(subject => 'Message Zero');
+    my $msg1 = $self->{gen}->generate(subject => 'Message One');
+    my $guid0 = $msg0->get_guid();
+    my $guid1 = $msg1->get_guid();
+    xlog "Message 'Message Zero' has GUID $guid0";
+    xlog "Message 'Message One' has GUID $guid1";
+
+    # choose ordering of messages
+    $self->assert_str_not_equals($guid0, $guid1);
+    if ($guid0 gt $guid1)
+    {
+	# swap
+	my $t = $msg0;
+	$msg0 = $msg1;
+	$msg1 = $t;
+    }
+
+    # Save and return the messages
+    $self->_save_message($msg0, $store0);
+    $self->_save_message($msg1, $store1);
+    return ($msg0, $msg1);
+}
+
+sub check_messages
+{
+    my ($self, $expected, %params) = @_;
+    my $actual = {};
+    my $store = $params{store} || $self->{store};
+
+    xlog "check_messages: " . join(' ',%params);
+
+    $store->read_begin();
+    while (my $msg = $store->read_message())
+    {
+	my $subj = $msg->get_header('subject');
+	$self->assert(!defined $actual->{$subj});
+	$actual->{$subj} = $msg;
+    }
+    $store->read_end();
+
+    $self->assert(scalar keys %$actual == scalar keys %$expected);
+
+    foreach my $expmsg (values %$expected)
+    {
+	my $subj = $expmsg->get_header('subject');
+	my $actmsg = $actual->{$subj};
+
+	$self->assert_not_null($actmsg);
+
+	xlog "checking guid";
+	$self->assert_str_equals($expmsg->get_guid(),
+				 $actmsg->get_guid());
+
+	xlog "checking x-cassandane-unique";
+	$self->assert_not_null($actmsg->get_header('x-cassandane-unique'));
+	$self->assert_str_equals($expmsg->get_header('x-cassandane-unique'),
+			         $actmsg->get_header('x-cassandane-unique'));
+
+	if (defined $expmsg->get_attribute('uid'))
+	{
+	    xlog "checking uid";
+	    $self->assert_num_equals($expmsg->get_attribute('uid'),
+				     $actmsg->get_attribute('uid'));
+	}
+
+	if (defined $expmsg->get_attribute('cid'))
+	{
+	    xlog "checking cid";
+	    $self->assert_not_null($actmsg->get_attribute('cid'));
+	    $self->assert_str_equals($expmsg->get_attribute('cid'),
+				     $actmsg->get_attribute('cid'));
+	}
+
+	foreach my $ea ($expmsg->list_annotations())
+	{
+	    xlog "checking annotation ($ea->{entry} $ea->{attrib})";
+	    $self->assert_not_null($actmsg->get_annotation($ea));
+	    $self->assert_str_equals($expmsg->get_annotation($ea),
+				     $actmsg->get_annotation($ea));
+	}
+    }
+
+    return $actual;
+}
+
 
 #
 # Test the cyrus annotations
@@ -340,47 +450,18 @@ sub set_msg_annotation
     $store->_connect();
     $store->_select();
     my $talk = $store->get_client();
-    $talk->store('' . $uid, 'annotation', [$entry, [$attrib, $value]]);
+    # Note $value might have no whitespace so we have to
+    # convince Mail::IMAPTalk to quote it anyway
+    $talk->store('' . $uid, 'annotation', [$entry, [$attrib, { Quote => $value }]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 }
 
-sub check_annotations
-{
-    my ($self, $store, $entry, $attrib, %expected) = @_;
-    my $res;
-
-    $store->_connect();
-    $store->_select();
-    my $talk = $store->get_client();
-
-    $res = $talk->fetch('1:*', ['annotation', [$entry, $attrib]]);
-    if (scalar keys %expected)
-    {
-	$self->assert_str_equals('ok', $talk->get_last_completion_response());
-	$self->assert_not_null($res);
-
-	my $exp = {};
-	while (my ($uid, $value) = each %expected)
-	{
-	    $exp->{$uid} = { annotation => [ $entry, [ $attrib, $value ] ] };
-	}
-	$self->assert_deep_equals($exp, $res);
-    }
-    else
-    {
-	$self->assert_str_equals('no', $talk->get_last_completion_response());
-	$self->assert($talk->get_last_error() =~ m/no matching messages/i);
-	$self->assert_null($res);
-    }
-}
-
-
-sub test_permessage_replication_a_m
+sub test_msg_replication_new_mas
 {
     my ($self) = @_;
 
     xlog "testing replication of message scope annotations";
-    xlog "case 1: message appears, on master only";
+    xlog "case new_mas: new message appears, on master only";
 
     xlog "set up a master and replica pair";
     my ($master, $replica, $master_store, $replica_store) =
@@ -390,35 +471,38 @@ sub test_permessage_replication_a_m
     my $attrib = 'value.priv';
     my $value1 = "Hello World";
 
-    xlog "Append a message and store an annotation";
-    my %msg;
-    $msg{A} = $self->make_message('Message A', store => $master_store);
+    $master_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
+    $replica_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
 
+    xlog "Append a message and store an annotation";
+    my %master_exp;
+    my %replica_exp;
+    $master_exp{A} = $self->make_message('Message A', store => $master_store);
     $self->set_msg_annotation($master_store, 1, $entry, $attrib, $value1);
+    $master_exp{A}->set_attribute('uid', 1);
+    $master_exp{A}->set_annotation($entry, $attrib, $value1);
 
     xlog "Before replication, message is present on the master";
-    $self->check_annotations($master_store, $entry, $attrib,
-			     1 => $value1);
+    $self->check_messages(\%master_exp, store => $master_store);
     xlog "Before replication, message is missing from the replica";
-    $self->check_annotations($replica_store, $entry, $attrib);
+    $self->check_messages(\%replica_exp, store => $replica_store);
 
     Cassandane::Instance->run_replication($master, $replica,
 					  $master_store, $replica_store);
 
+    $replica_exp{A} = $master_exp{A}->clone();
     xlog "After replication, message is still present on the master";
-    $self->check_annotations($master_store, $entry, $attrib,
-			     1 => $value1);
+    $self->check_messages(\%master_exp, store => $master_store);
     xlog "After replication, message is now present on the replica";
-    $self->check_annotations($replica_store, $entry, $attrib,
-			     1 => $value1);
+    $self->check_messages(\%replica_exp, store => $replica_store);
 }
 
-sub test_permessage_replication_a_r
+sub test_msg_replication_new_rep
 {
     my ($self) = @_;
 
     xlog "testing replication of message scope annotations";
-    xlog "case 2: message appears, on replica only";
+    xlog "case new_rep: new message appears, on replica only";
 
     xlog "set up a master and replica pair";
     my ($master, $replica, $master_store, $replica_store) =
@@ -428,29 +512,584 @@ sub test_permessage_replication_a_r
     my $attrib = 'value.priv';
     my $value1 = "Hello World";
 
-    xlog "Append a message and store an annotation";
-    my %msg;
-    $msg{A} = $self->make_message('Message A', store => $replica_store);
+    $master_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
+    $replica_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
 
+    xlog "Append a message and store an annotation";
+    my %master_exp;
+    my %replica_exp;
+    $replica_exp{A} = $self->make_message('Message A', store => $replica_store);
     $self->set_msg_annotation($replica_store, 1, $entry, $attrib, $value1);
+    $replica_exp{A}->set_attribute('uid', 1);
+    $replica_exp{A}->set_annotation($entry, $attrib, $value1);
 
     xlog "Before replication, message is missing from the master";
-    $self->check_annotations($master_store, $entry, $attrib);
+    $self->check_messages(\%master_exp, store => $master_store);
     xlog "Before replication, message is present on the replica";
-    $self->check_annotations($replica_store, $entry, $attrib,
-			     1 => $value1);
+    $self->check_messages(\%replica_exp, store => $replica_store);
 
     Cassandane::Instance->run_replication($master, $replica,
 					  $master_store, $replica_store);
 
+    $master_exp{A} = $replica_exp{A}->clone();
     xlog "After replication, message is now present on the master";
-    $self->check_annotations($master_store, $entry, $attrib,
-			     1 => $value1);
+    $self->check_messages(\%master_exp, store => $master_store);
     xlog "After replication, message is still present on the replica";
-    $self->check_annotations($replica_store, $entry, $attrib,
-			     1 => $value1);
+    $self->check_messages(\%replica_exp, store => $replica_store);
 }
 
+sub test_msg_replication_new_bot_mse_gul
+{
+    my ($self) = @_;
+
+    xlog "testing replication of message scope annotations";
+    xlog "case new_bot_mse_gul: new messages appear, on both master " .
+	 "and replica, with equal modseqs, lower GUID on master.";
+
+    xlog "set up a master and replica pair";
+    my ($master, $replica, $master_store, $replica_store) =
+	Cassandane::Instance->start_replicated_pair();
+
+    my $entry = '/comment';
+    my $attrib = 'value.priv';
+    my $valueA = "Hello World";
+    my $valueB = "Hello Dolly";
+
+    $master_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
+    $replica_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
+
+    xlog "Append a message and store an annotation to each store";
+    my ($msgA, $msgB) = $self->make_message_pair($master_store, $replica_store);
+    my %master_exp = ( A => $msgA );
+    my %replica_exp = ( B => $msgB );
+    $self->set_msg_annotation($master_store, 1, $entry, $attrib, $valueA);
+    $master_exp{A}->set_attribute('uid', 1);
+    $master_exp{A}->set_annotation($entry, $attrib, $valueA);
+    $self->set_msg_annotation($replica_store, 1, $entry, $attrib, $valueB);
+    $replica_exp{B}->set_attribute('uid', 1);
+    $replica_exp{B}->set_annotation($entry, $attrib, $valueB);
+
+    xlog "Before replication, only message A is present on the master";
+    $self->check_messages(\%master_exp, store => $master_store);
+    xlog "Before replication, only message B is present on the replica";
+    $self->check_messages(\%replica_exp, store => $replica_store);
+
+    Cassandane::Instance->run_replication($master, $replica,
+					  $master_store, $replica_store);
+
+    xlog "After replication, both messages are now present and renumbered on the master";
+    $master_exp{B} = $replica_exp{B}->clone();
+    $master_exp{A}->set_attribute('uid', 2);
+    $master_exp{B}->set_attribute('uid', 3);
+    $self->check_messages(\%master_exp, store => $master_store);
+    xlog "After replication, both messages are now present and renumbered on the replica";
+    $replica_exp{A} = $master_exp{A}->clone();
+    $replica_exp{A}->set_attribute('uid', 2);
+    $replica_exp{B}->set_attribute('uid', 3);
+    $self->check_messages(\%replica_exp, store => $replica_store);
+}
+
+sub test_msg_replication_new_bot_mse_guh
+{
+    my ($self) = @_;
+
+    xlog "testing replication of message scope annotations";
+    xlog "case new_bot_mse_guh: new messages appear, on both master " .
+	 "and replica, with equal modseqs, higher GUID on master.";
+
+    xlog "set up a master and replica pair";
+    my ($master, $replica, $master_store, $replica_store) =
+	Cassandane::Instance->start_replicated_pair();
+
+    my $entry = '/comment';
+    my $attrib = 'value.priv';
+    my $valueA = "Hello World";
+    my $valueB = "Hello Dolly";
+
+    $master_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
+    $replica_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
+
+    xlog "Append a message and store an annotation to each store";
+    my ($msgB, $msgA) = $self->make_message_pair($replica_store, $master_store);
+    my %master_exp = ( A => $msgA );
+    my %replica_exp = ( B => $msgB );
+    $self->set_msg_annotation($master_store, 1, $entry, $attrib, $valueA);
+    $master_exp{A}->set_attribute('uid', 1);
+    $master_exp{A}->set_annotation($entry, $attrib, $valueA);
+    $self->set_msg_annotation($replica_store, 1, $entry, $attrib, $valueB);
+    $replica_exp{B}->set_attribute('uid', 1);
+    $replica_exp{B}->set_annotation($entry, $attrib, $valueB);
+
+    xlog "Before replication, only message A is present on the master";
+    $self->check_messages(\%master_exp, store => $master_store);
+    xlog "Before replication, only message B is present on the replica";
+    $self->check_messages(\%replica_exp, store => $replica_store);
+
+    Cassandane::Instance->run_replication($master, $replica,
+					  $master_store, $replica_store);
+
+    xlog "After replication, both messages are now present and renumbered on the master";
+    $master_exp{B} = $replica_exp{B}->clone();
+    $master_exp{B}->set_attribute('uid', 2);
+    $master_exp{A}->set_attribute('uid', 3);
+    $self->check_messages(\%master_exp, store => $master_store);
+    xlog "After replication, both messages are now present and renumbered on the replica";
+    $replica_exp{A} = $master_exp{A}->clone();
+    $replica_exp{B}->set_attribute('uid', 2);
+    $replica_exp{A}->set_attribute('uid', 3);
+    $self->check_messages(\%replica_exp, store => $replica_store);
+}
+
+
+sub test_msg_replication_mod_mas
+{
+    my ($self) = @_;
+
+    xlog "testing replication of message scope annotations";
+    xlog "case mod_mas: message is modified, on master only";
+
+    xlog "set up a master and replica pair";
+    my ($master, $replica, $master_store, $replica_store) =
+	Cassandane::Instance->start_replicated_pair();
+
+    my $entry = '/comment';
+    my $attrib = 'value.priv';
+    my $value1 = "Hello World";
+
+    $master_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
+    $replica_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
+
+    xlog "Append a message";
+    my %master_exp;
+    my %replica_exp;
+    $master_exp{A} = $self->make_message('Message A', store => $master_store);
+    $master_exp{A}->set_attribute('uid', 1);
+
+    xlog "Before first replication, message is present on the master";
+    $self->check_messages(\%master_exp, store => $master_store);
+    xlog "Before first replication, message is missing from the replica";
+    $self->check_messages(\%replica_exp, store => $replica_store);
+
+    xlog "Replicate the message";
+    Cassandane::Instance->run_replication($master, $replica,
+					  $master_store, $replica_store);
+
+    $replica_exp{A} = $master_exp{A}->clone();
+    xlog "After first replication, message is still present on the master";
+    $self->check_messages(\%master_exp, store => $master_store);
+    xlog "After first replication, message is now present on the replica";
+    $self->check_messages(\%replica_exp, store => $replica_store);
+
+    xlog "Set an annotation on the master";
+    $self->set_msg_annotation($master_store, 1, $entry, $attrib, $value1);
+    $master_exp{A}->set_annotation($entry, $attrib, $value1);
+
+    xlog "Before second replication, the message annotation is present on the master";
+    $self->check_messages(\%master_exp, store => $master_store);
+    xlog "Before second replication, the message annotation is missing on the replica";
+    $self->check_messages(\%replica_exp, store => $replica_store);
+
+    Cassandane::Instance->run_replication($master, $replica,
+					  $master_store, $replica_store);
+
+    $replica_exp{A} = $master_exp{A}->clone();
+    xlog "After second replication, the message annotation is still present on the master";
+    $self->check_messages(\%master_exp, store => $master_store);
+    xlog "After second replication, the message annotation is now present on the replica";
+    $self->check_messages(\%replica_exp, store => $replica_store);
+}
+
+
+sub test_msg_replication_mod_rep
+{
+    my ($self) = @_;
+
+    xlog "testing replication of message scope annotations";
+    xlog "case mod_rep: message is modified, on replica only";
+
+    xlog "set up a master and replica pair";
+    my ($master, $replica, $master_store, $replica_store) =
+	Cassandane::Instance->start_replicated_pair();
+
+    my $entry = '/comment';
+    my $attrib = 'value.priv';
+    my $value1 = "Hello World";
+
+    $master_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
+    $replica_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
+
+    xlog "Append a message";
+    my %master_exp;
+    my %replica_exp;
+    $master_exp{A} = $self->make_message('Message A', store => $master_store);
+    $master_exp{A}->set_attribute('uid', 1);
+
+    xlog "Before first replication, message is present on the master";
+    $self->check_messages(\%master_exp, store => $master_store);
+    xlog "Before first replication, message is missing from the replica";
+    $self->check_messages(\%replica_exp, store => $replica_store);
+
+    xlog "Replicate the message";
+    Cassandane::Instance->run_replication($master, $replica,
+					  $master_store, $replica_store);
+
+    $replica_exp{A} = $master_exp{A}->clone();
+    xlog "After first replication, message is still present on the master";
+    $self->check_messages(\%master_exp, store => $master_store);
+    xlog "After first replication, message is now present on the replica";
+    $self->check_messages(\%replica_exp, store => $replica_store);
+
+    xlog "Set an annotation on the master";
+    $self->set_msg_annotation($master_store, 1, $entry, $attrib, $value1);
+    $master_exp{A}->set_annotation($entry, $attrib, $value1);
+
+    xlog "Before second replication, the message annotation is present on the master";
+    $self->check_messages(\%master_exp, store => $master_store);
+    xlog "Before second replication, the message annotation is missing on the replica";
+    $self->check_messages(\%replica_exp, store => $replica_store);
+
+    Cassandane::Instance->run_replication($master, $replica,
+					  $master_store, $replica_store);
+
+    $replica_exp{A} = $master_exp{A}->clone();
+    xlog "After second replication, the message annotation is still present on the master";
+    $self->check_messages(\%master_exp, store => $master_store);
+    xlog "After second replication, the message annotation is now present on the replica";
+    $self->check_messages(\%replica_exp, store => $replica_store);
+}
+
+sub test_msg_replication_mod_bot_msl
+{
+    my ($self) = @_;
+
+    xlog "testing replication of message scope annotations";
+    xlog "case mod_bot_msl: message is modified, on both ends, " .
+	 "modseq lower on master";
+
+    xlog "set up a master and replica pair";
+    my ($master, $replica, $master_store, $replica_store) =
+	Cassandane::Instance->start_replicated_pair();
+
+    my $entry = '/comment';
+    my $attrib = 'value.priv';
+    my $valueA = "Hello World";
+    my $valueB1 = "Jeepers";
+    my $valueB2 = "Creepers";
+
+    $master_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
+    $replica_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
+
+    xlog "Append a message";
+    my %master_exp;
+    my %replica_exp;
+    $master_exp{A} = $self->make_message('Message A', store => $master_store);
+    $master_exp{A}->set_attribute('uid', 1);
+
+    xlog "Before first replication, message is present on the master";
+    $self->check_messages(\%master_exp, store => $master_store);
+    xlog "Before first replication, message is missing from the replica";
+    $self->check_messages(\%replica_exp, store => $replica_store);
+
+    xlog "Replicate the message";
+    Cassandane::Instance->run_replication($master, $replica,
+					  $master_store, $replica_store);
+
+    $replica_exp{A} = $master_exp{A}->clone();
+    xlog "After first replication, message is still present on the master";
+    $self->check_messages(\%master_exp, store => $master_store);
+    xlog "After first replication, message is now present on the replica";
+    $self->check_messages(\%replica_exp, store => $replica_store);
+
+    xlog "Set an annotation once on the master, twice on the replica";
+    $self->set_msg_annotation($master_store, 1, $entry, $attrib, $valueA);
+    $master_exp{A}->set_annotation($entry, $attrib, $valueA);
+    $self->set_msg_annotation($replica_store, 1, $entry, $attrib, $valueB1);
+    $self->set_msg_annotation($replica_store, 1, $entry, $attrib, $valueB2);
+    $replica_exp{A}->set_annotation($entry, $attrib, $valueB2);
+
+    xlog "Before second replication, one message annotation is present on the master";
+    $self->check_messages(\%master_exp, store => $master_store);
+    xlog "Before second replication, a different message annotation is present on the replica";
+    $self->check_messages(\%replica_exp, store => $replica_store);
+
+    xlog "Replicate the annotation change";
+    Cassandane::Instance->run_replication($master, $replica,
+					  $master_store, $replica_store);
+
+    $master_exp{A}->set_annotation($entry, $attrib, $valueB2);
+    xlog "After second replication, the message annotation is updated on the master";
+    $self->check_messages(\%master_exp, store => $master_store);
+    xlog "After second replication, the message annotation is still present on the replica";
+    $self->check_messages(\%replica_exp, store => $replica_store);
+}
+
+sub test_msg_replication_mod_bot_msh
+{
+    my ($self) = @_;
+
+    xlog "testing replication of message scope annotations";
+    xlog "case mod_bot_msh: message is modified, on both ends, " .
+	 "modseq higher on master";
+
+    xlog "set up a master and replica pair";
+    my ($master, $replica, $master_store, $replica_store) =
+	Cassandane::Instance->start_replicated_pair();
+
+    my $entry = '/comment';
+    my $attrib = 'value.priv';
+    my $valueA1 = "Hello World";
+    my $valueA2 = "and friends";
+    my $valueB = "Jeepers";
+
+    $master_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
+    $replica_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
+
+    xlog "Append a message";
+    my %master_exp;
+    my %replica_exp;
+    $master_exp{A} = $self->make_message('Message A', store => $master_store);
+    $master_exp{A}->set_attribute('uid', 1);
+
+    xlog "Before first replication, message is present on the master";
+    $self->check_messages(\%master_exp, store => $master_store);
+    xlog "Before first replication, message is missing from the replica";
+    $self->check_messages(\%replica_exp, store => $replica_store);
+
+    xlog "Replicate the message";
+    Cassandane::Instance->run_replication($master, $replica,
+					  $master_store, $replica_store);
+
+    $replica_exp{A} = $master_exp{A}->clone();
+    xlog "After first replication, message is still present on the master";
+    $self->check_messages(\%master_exp, store => $master_store);
+    xlog "After first replication, message is now present on the replica";
+    $self->check_messages(\%replica_exp, store => $replica_store);
+
+    xlog "Set an annotation twice on the master, once on the replica";
+    $self->set_msg_annotation($master_store, 1, $entry, $attrib, $valueA1);
+    $self->set_msg_annotation($master_store, 1, $entry, $attrib, $valueA2);
+    $master_exp{A}->set_annotation($entry, $attrib, $valueA2);
+    $self->set_msg_annotation($replica_store, 1, $entry, $attrib, $valueB);
+    $replica_exp{A}->set_annotation($entry, $attrib, $valueB);
+
+    xlog "Before second replication, one message annotation is present on the master";
+    $self->check_messages(\%master_exp, store => $master_store);
+    xlog "Before second replication, a different message annotation is present on the replica";
+    $self->check_messages(\%replica_exp, store => $replica_store);
+
+    xlog "Replicate the annotation change";
+    Cassandane::Instance->run_replication($master, $replica,
+					  $master_store, $replica_store);
+
+    $replica_exp{A}->set_annotation($entry, $attrib, $valueA2);
+    xlog "After second replication, the message annotation is still present on the master";
+    $self->check_messages(\%master_exp, store => $master_store);
+    xlog "After second replication, the message annotation is updated on the replica";
+    $self->check_messages(\%replica_exp, store => $replica_store);
+}
+
+sub test_msg_replication_exp_mas
+{
+    my ($self) = @_;
+
+    xlog "testing replication of message scope annotations";
+    xlog "case exp_mas: message is expunged, on master only";
+
+    xlog "set up a master and replica pair";
+    my ($master, $replica, $master_store, $replica_store) =
+	Cassandane::Instance->start_replicated_pair();
+
+    my $entry = '/comment';
+    my $attrib = 'value.priv';
+    my $value1 = "Hello World";
+
+    $master_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
+    $replica_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
+
+    xlog "Append a message and store an annotation";
+    my %master_exp;
+    my %replica_exp;
+    $master_exp{A} = $self->make_message('Message A', store => $master_store);
+    $self->set_msg_annotation($master_store, 1, $entry, $attrib, $value1);
+    $master_exp{A}->set_attribute('uid', 1);
+    $master_exp{A}->set_annotation($entry, $attrib, $value1);
+
+    xlog "Before first replication, message is present on the master";
+    $self->check_messages(\%master_exp, store => $master_store);
+    xlog "Before first replication, message is missing from the replica";
+    $self->check_messages(\%replica_exp, store => $replica_store);
+
+    xlog "Replicate the message";
+    Cassandane::Instance->run_replication($master, $replica,
+					  $master_store, $replica_store);
+
+    $replica_exp{A} = $master_exp{A}->clone();
+    xlog "After first replication, message is still present on the master";
+    $self->check_messages(\%master_exp, store => $master_store);
+    xlog "After first replication, message is now present on the replica";
+    $self->check_messages(\%replica_exp, store => $replica_store);
+
+    xlog "Delete and expunge the message on the master";
+    my $talk = $master_store->get_client();
+    $master_store->_select();
+    $talk->store('1', '+flags', '(\\Deleted)');
+    $talk->expunge();
+
+    delete $master_exp{A};
+    xlog "Before second replication, the message is now missing on the master";
+    $self->check_messages(\%master_exp, store => $master_store);
+    xlog "Before second replication, the message is still present on the replica";
+    $self->check_messages(\%replica_exp, store => $replica_store);
+
+    xlog "Replicate the expunge";
+    Cassandane::Instance->run_replication($master, $replica,
+					  $master_store, $replica_store);
+
+    delete $replica_exp{A};
+    xlog "After second replication, the message is still missing on the master";
+    $self->check_messages(\%master_exp, store => $master_store);
+    xlog "After second replication, the message is now missing on the replica";
+    $self->check_messages(\%replica_exp, store => $replica_store);
+}
+
+sub test_msg_replication_exp_rep
+{
+    my ($self) = @_;
+
+    xlog "testing replication of message scope annotations";
+    xlog "case exp_rep: message is expunged, on replica only";
+
+    xlog "set up a master and replica pair";
+    my ($master, $replica, $master_store, $replica_store) =
+	Cassandane::Instance->start_replicated_pair();
+
+    my $entry = '/comment';
+    my $attrib = 'value.priv';
+    my $value1 = "Hello World";
+
+    $master_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
+    $replica_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
+
+    xlog "Append a message and store an annotation";
+    my %master_exp;
+    my %replica_exp;
+    $master_exp{A} = $self->make_message('Message A', store => $master_store);
+    $self->set_msg_annotation($master_store, 1, $entry, $attrib, $value1);
+    $master_exp{A}->set_attribute('uid', 1);
+    $master_exp{A}->set_annotation($entry, $attrib, $value1);
+
+    xlog "Before first replication, message is present on the master";
+    $self->check_messages(\%master_exp, store => $master_store);
+    xlog "Before first replication, message is missing from the replica";
+    $self->check_messages(\%replica_exp, store => $replica_store);
+
+    xlog "Replicate the message";
+    Cassandane::Instance->run_replication($master, $replica,
+					  $master_store, $replica_store);
+
+    $replica_exp{A} = $master_exp{A}->clone();
+    xlog "After first replication, message is still present on the master";
+    $self->check_messages(\%master_exp, store => $master_store);
+    xlog "After first replication, message is now present on the replica";
+    $self->check_messages(\%replica_exp, store => $replica_store);
+
+    xlog "Delete and expunge the message on the replica";
+    my $talk = $replica_store->get_client();
+    $replica_store->_select();
+    $talk->store('1', '+flags', '(\\Deleted)');
+    $talk->expunge();
+
+    delete $replica_exp{A};
+    xlog "Before second replication, the message is still present on the master";
+    $self->check_messages(\%master_exp, store => $master_store);
+    xlog "Before second replication, the message is now missing on the replica";
+    $self->check_messages(\%replica_exp, store => $replica_store);
+
+    xlog "Replicate the expunge";
+    Cassandane::Instance->run_replication($master, $replica,
+					  $master_store, $replica_store);
+
+    delete $master_exp{A};
+    xlog "After second replication, the message is now missing on the master";
+    $self->check_messages(\%master_exp, store => $master_store);
+    xlog "After second replication, the message is still missing on the replica";
+    $self->check_messages(\%replica_exp, store => $replica_store);
+}
+
+sub test_msg_replication_exp_bot
+{
+    my ($self) = @_;
+
+    xlog "testing replication of message scope annotations";
+    xlog "case exp_bot: message is expunged, on both ends";
+
+    xlog "set up a master and replica pair";
+    my ($master, $replica, $master_store, $replica_store) =
+	Cassandane::Instance->start_replicated_pair();
+
+    my $entry = '/comment';
+    my $attrib = 'value.priv';
+    my $value1 = "Hello World";
+
+    $master_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
+    $replica_store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
+
+    xlog "Append a message and store an annotation";
+    my %master_exp;
+    my %replica_exp;
+    $master_exp{A} = $self->make_message('Message A', store => $master_store);
+    $self->set_msg_annotation($master_store, 1, $entry, $attrib, $value1);
+    $master_exp{A}->set_attribute('uid', 1);
+    $master_exp{A}->set_annotation($entry, $attrib, $value1);
+
+    xlog "Before first replication, message is present on the master";
+    $self->check_messages(\%master_exp, store => $master_store);
+    xlog "Before first replication, message is missing from the replica";
+    $self->check_messages(\%replica_exp, store => $replica_store);
+
+    xlog "Replicate the message";
+    Cassandane::Instance->run_replication($master, $replica,
+					  $master_store, $replica_store);
+
+    $replica_exp{A} = $master_exp{A}->clone();
+    xlog "After first replication, message is still present on the master";
+    $self->check_messages(\%master_exp, store => $master_store);
+    xlog "After first replication, message is now present on the replica";
+    $self->check_messages(\%replica_exp, store => $replica_store);
+
+    xlog "Delete and expunge the message on the master";
+    my $talk = $master_store->get_client();
+    $master_store->_select();
+    $talk->store('1', '+flags', '(\\Deleted)');
+    $talk->expunge();
+
+    xlog "Delete and expunge the message on the replica";
+    $talk = $replica_store->get_client();
+    $replica_store->_select();
+    $talk->store('1', '+flags', '(\\Deleted)');
+    $talk->expunge();
+
+    delete $master_exp{A};
+    delete $replica_exp{A};
+    xlog "Before second replication, the message is now missing on the master";
+    $self->check_messages(\%master_exp, store => $master_store);
+    xlog "Before second replication, the message is now missing on the replica";
+    $self->check_messages(\%replica_exp, store => $replica_store);
+
+    xlog "Replicate the expunge";
+    Cassandane::Instance->run_replication($master, $replica,
+					  $master_store, $replica_store);
+
+    xlog "After second replication, the message is still missing on the master";
+    $self->check_messages(\%master_exp, store => $master_store);
+    xlog "After second replication, the message is still missing on the replica";
+    $self->check_messages(\%replica_exp, store => $replica_store);
+}
+
+
+
+# Not sure if this cases can even work...
+# sub test_msg_replication_mod_bot_mse
 
 # Get the highestmodseq of the folder
 sub get_highestmodseq
