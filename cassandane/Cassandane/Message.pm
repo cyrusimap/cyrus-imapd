@@ -73,6 +73,11 @@ sub new
     {
 	while (my ($n, $v) = each %{$params{attrs}})
 	{
+	    if (lc($n) eq 'annotation')
+	    {
+		$self->_set_annotations_from_fetch($v);
+		next;
+	    }
 	    $self->set_attribute($n, $v);
 	}
     }
@@ -192,6 +197,84 @@ sub get_attribute
 {
     my ($self, $name) = @_;
     return $self->{attrs}->{lc($name)};
+}
+
+sub _annotation_key
+{
+    my ($self, $ea) = @_;
+    return "annotation $ea->{entry} $ea->{attrib}";
+}
+
+sub _validate_ea
+{
+    my ($self, $ea) = @_;
+
+    die "Bad entry \"$ea->{entry}\""
+	unless $ea->{entry} =~ m/^(\/[a-z0-9]+)*$/i;
+    die "Bad attrib \"$ea->{attrib}\""
+	unless $ea->{attrib} =~ m/^value.(shared|priv)$/i;
+}
+
+sub get_annotation
+{
+    my $self = shift;
+    my $ea = shift;
+    if (ref $ea ne 'HASH')
+    {
+	$ea = { entry => $ea, attrib => shift };
+    }
+
+    $self->_validate_ea($ea);
+    return $self->get_attribute($self->_annotation_key($ea));
+}
+
+sub list_annotations
+{
+    my ($self) = @_;
+    my @res;
+
+    foreach my $key (keys %{$self->{attrs}})
+    {
+	my ($dummy, $entry, $attrib) = split / /,$key;
+	next unless defined $attrib && $dummy eq 'annotation';
+	push (@res, { entry => $entry, attrib => $attrib });
+    }
+    return @res;
+}
+
+sub set_annotation
+{
+    my $self = shift;
+    my $ea = shift;
+    if (ref $ea ne 'HASH')
+    {
+	$ea = { entry => $ea, attrib => shift };
+    }
+    my $value = shift;
+
+    $self->_validate_ea($ea);
+    $self->set_attribute($self->_annotation_key($ea), $value);
+}
+
+sub _set_annotations_from_fetch
+{
+    my ($self, $fetchitem) = @_;
+    my $ea = {};
+
+    while ($ea->{entry} = shift @$fetchitem)
+    {
+	my $attvalues = shift @$fetchitem;
+	die "Bad array in annotation data"
+	    unless ref($attvalues) eq 'ARRAY';
+	die "Bad array in annotation data (2)"
+	    unless (scalar(@$attvalues) % 2 == 0);
+
+	while ($ea->{attrib} = shift @$attvalues)
+	{
+	    my $value = shift @$attvalues;
+	    $self->set_annotation($ea, $value);
+	}
+    }
 }
 
 sub as_string
