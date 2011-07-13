@@ -1,0 +1,26 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<!DOCTYPE authorgroup PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
+%BOOK_ENTITIES;
+]>
+<authorgroup>
+    <author>
+        <firstname>Dan</firstname>
+        <surname>White</surname>
+        <affiliation>
+            <orgname>BTC Broadband</orgname>
+        </affiliation>
+        <email>dwhite@olp.net</email>
+
+    </author>
+
+    <author>
+        <firstname>Jeroen</firstname>
+        <surname>van Meeuwen</surname>
+        <affiliation>
+            <orgname>Kolab Systems</orgname>
+        </affiliation>
+        <email>vanmeeuwen@kolabsys.com</email>
+
+    </author>
+</authorgroup>
+

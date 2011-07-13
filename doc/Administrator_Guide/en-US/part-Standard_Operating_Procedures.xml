@@ -10,6 +10,5 @@
     <xi:include href="Deleting_and_Undeleting_Messages_and_Folders.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
     <xi:include href="Reconstructing_Mailboxes.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
     <xi:include href="Using_Squatter_for_Faster_IMAP_SEARCH.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <xi:include href="Setting_Up_Replication.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
 </part>
 

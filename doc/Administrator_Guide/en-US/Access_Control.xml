@@ -331,30 +331,6 @@ S: A777 OK LIST completed
                     </formalpara>
 
                 </listitem>
-                <listitem>
-                    <formalpara id="form-Administrator_Guide-Combining_Access_Rights-aci_lirstw">
-                        <title><emphasis>&lt;aci&gt;</emphasis> <literal>lirstw</literal></title>
-                        <para>
-                            The set of rights often that could arguably be referred to "semi-full". The ACI subject is allowed to lookup the folder, read its contents and maintain flags on messages, as well as insert new messages in to the folder, and flag messages as <emphasis>\Deleted</emphasis>, but not expunge the folder's contents.
-                        </para>
-
-                    </formalpara>
-                    <para>
-                        Allowing ACI subjects to flag messages as <emphasis>\Deleted</emphasis> but not delegating the right to <command>EXPUNGE</command> the folder's contents enables messages to quickly be restored by ACI subjects themselves, if the client used can be configured to show or hide messages flagged <emphasis>\Deleted</emphasis>.
-                    </para>
-                    <!--
-                    <para>
-                        This allows users, for example, to collaborate on the contents of a folder like a ticket queue, where users who have read messages flag them as <emphasis>\Seen</emphasis>, and flag them as <emphasis>\Deleted</emphasis> once the thread is handled. The user's client could be configured to hide messages flagged as <emphasis>\Deleted</emphasis> to not
-                        Since users would typically not be allowed to expunge the folder's contents,
-                    </para>
-                    <para>
-                        Since all flags other then the <emphasis>\Seen</emphasis> are global, one user flagging a message as deleted will make the and since flagging the message for deletion does not actually delete the message, allowing other users to potentially recover the message
-                    </para>
-    --> <para>
-                        Please note that the configuration value of <literal>/vendor/cmu/cyrus-imapd/sharedseen</literal> on the folder has no bearing on the <emphasis>\Deleted</emphasis> flag, but only on the <emphasis>\Seen</emphasis> flag. To be more precise, all flags other then <emphasis>\Seen</emphasis> are global.
-                    </para>
-
-                </listitem>
 
             </itemizedlist>
 
@@ -380,36 +356,7 @@ S: A777 OK LIST completed
     <section id="sect-Administrator_Guide-Access_Control-Access_Right_Identifiers">
         <title>Access Right Identifiers</title>
         <para>
-            An Access Right Identifier (or ACI) specifies the user or group to which the access rights apply.
-        </para>
-        <para>
-            Two special ACIs exist:
-        </para>
-        <para>
-            <itemizedlist>
-                <listitem>
-                    <formalpara id="form-Administrator_Guide-Access_Right_Identifiers-anonymous">
-                        <title><literal>anonymous</literal></title>
-                        <para>
-                            para
-                        </para>
-
-                    </formalpara>
-
-                </listitem>
-                <listitem>
-                    <formalpara id="form-Administrator_Guide-Access_Right_Identifiers-anyone">
-                        <title><literal>anyone</literal></title>
-                        <para>
-                            para
-                        </para>
-
-                    </formalpara>
-
-                </listitem>
-
-            </itemizedlist>
-
+            para
         </para>
         <para>
             note on authentication vs. authorization

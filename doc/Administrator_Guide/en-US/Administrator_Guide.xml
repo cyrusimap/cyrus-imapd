@@ -9,11 +9,6 @@
     <xi:include href="part-Cyrus_IMAP_Administration.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
     <xi:include href="part-Standard_Operating_Procedures.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
     <xi:include href="Revision_History.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <index /><!--
-
-Jul 17 14:27:59 test90-5 master[8656]: setrlimit: Unable to set file descriptors limit to -1: Operation not permitted
-
-
-   //    -->
+    <index />
 </book>
 
