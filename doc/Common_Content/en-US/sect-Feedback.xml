@@ -52,6 +52,9 @@
                                 </listitem>
                             </itemizedlist>
                         </para>
+                        <para>
+                            If you run a development version of Cyrus IMAP (i.e. your own compile from GIT's master or any of the stable branches), please remember to use the <literal>-next</literal> version for the Bugzilla report.
+                        </para>
                     </note>
                 </listitem>
                 <listitem>
