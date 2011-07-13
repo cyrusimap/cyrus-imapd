@@ -1,0 +1,17 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<!DOCTYPE preface PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
+<!ENTITY % BOOK_ENTITIES SYSTEM "Sasl_Guide.ent">
+%BOOK_ENTITIES;
+]>
+<preface id="pref-Sasl_Guide-Preface">
+    <title>Preface</title>
+    <xi:include href="Introduction.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="About_Cyrus_Sasl.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="Scope.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="Terminology.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="sect-Feedback.xml" xmlns:xi="http://www.w3.org/2001/XInclude"> <xi:fallback xmlns:xi="http://www.w3.org/2001/XInclude"> <xi:include href="Common_Content/Feedback.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+    </xi:fallback>
+    </xi:include>
+
+</preface>
+

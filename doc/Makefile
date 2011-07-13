@@ -2,7 +2,8 @@ SUBDIRS = \
 	Administrator_Guide \
 	Deployment_Guide \
 	Installation_Guide \
-	Release_Notes
+	Release_Notes \
+    Sasl_Guide
 
 all:
 	@for dir in $(SUBDIRS); do \

@@ -1,0 +1,181 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
+<!ENTITY % BOOK_ENTITIES SYSTEM "Sasl_Guide.ent">
+%BOOK_ENTITIES;
+]>
+<chapter id="chap-Sasl_Guide-Getting_Started">
+    <title>Getting Started</title>
+    <para>
+        para
+    </para>
+    <sect1 id="sect-Sasl_Guide-SASL">
+        <title>SASL</title>
+        <para>
+            para
+        </para>
+
+    </sect1>
+    <sect1 id="sect-Sasl_Guide-SASL-authentication-mechanisms">
+        <title>SASL Authentication Mechanisms</title>
+        <para>
+            para
+        </para>
+
+    </sect1>
+    <sect1 id="sect-Sasl_Guide-SASL-security-layers">
+        <title>Security Layers</title>
+        <para>
+            para
+        </para>
+
+    </sect1>
+    <sect1 id="sect-Sasl_Guide-SASL-channel-binding">
+        <title>Channel Binding</title>
+        <para>
+            para
+        </para>
+
+    </sect1>
+    <sect1 id="sect-Sasl_Guide-SASL-realms">
+        <title>Realms</title>
+        <para>
+            para
+        </para>
+
+    </sect1>
+    <sect1 id="sect-Sasl_Guide-SASL-protocols">
+        <title>Protocols</title>
+        <para>
+            para
+        </para>
+
+    </sect1>
+    <sect1 id="sect-Sasl_Guide-Cyrus-SASL">
+        <title>Cyrus SASL</title>
+        <para>
+            para
+        </para>
+<para>i
+COPYING - Copyright statement
+Where to get it
+doc/install.html - Requirements (gnu make, etc.)
+doc/windows.html
+doc/macosx.html
+doc/install.html - "Supported platforms"
+Configure options
+doc/advanced.html - "Cyrus SASL supports the option to compile all of the supported mechanisms and glue code into a single static library"
+doc/readme.html - "thread safe"
+Discuss how --prefix and --with-plugindir and --with-configdir=DIR need to match during configure stage, or things aren't going to work very well after install - e.g. pluginviewer will segfault.
+Directory layout and files
+(acting as) username versus authentication/admin user
+INSTALL - 
+INSTALL and doc/install.html
+doc/programming.html - "Application writers, instead of having to support every mechanism for every protocol, only need to support SASL for every protocol."
+doc/programming.html - "Before SASL, when a new protocol was written which required authentication..."
+doc/components.html - "The first thing to realize is that there is a difference between SASL, the protocol, and Cyrus SASL, the library."
+doc/sysadmin.html - "SASL is only a framework: specific SASL mechanisms govern the exact protocol exchange."
+doc/components.html - "The Cyrus SASL architechure is very modular, using loadable modules for things such as the mechanism profiles and the database access done by the auxillary property plugins."
+doc/programming.html - "What does the Cyrus SASL library do?"
+doc/programming.html - "What doesn't the Cyrus SASL library do?"
+Security Layers
+doc/programming.html - "All is well and good to securely authenticate, but if you don't have some sort of integrity or privacy layer, anyone can hijack your TCP session after authentication."
+General Discussion
+doc/components.html - "The application is a client of the SASL library."
+doc/sysadmin.html - Authc and Authz concepts
+doc/readme.html "There are two main ways to configure the SASL library for a given application. The first (and typically easiest) is to make use of the application's configuration files."
+doc/readme.html "Alternatively, Cyrus SASL looks for configuration files in /usr/lib/sasl/Appname.conf where Appname is settable by the application"
+doc/plugprog.html - Client Send First / Server Send Last
+Discuss authentication and authorization.
+doc/components.html - "The first component of the SASL library is affectionately called the glue layer."
+Discuss Java JNI interface.
+doc/install.html - "For Kerberos support, you'll need the kerberos libraries."
+List the version of Cyrus SASL used in preparing the book
+mech_list
+doc/sysadmin.html - "Some notable applications that use the Cyrus SASL library include Sendmail, Cyrus imapd, and OpenLDAP."
+doc/options.html
+Password Verification Services
+doc/install.html - "Not building them can also add performance improvements as it does take system resources to load a given plugin, even if that plugin is otherwise unused"
+doc/programming.html
+prop.h
+reauth_timeout
+Discuss SASL RFCs
+Runtime configuration options
+doc/sysadmin.html - "libsasl reads from /dev/random as part of its initialization."
+saslutil.h
+doc/sysadmin.html
+doc/sysadmin.html - "Finally, system administrators should think if they want to enable "auto_transition."
+name of calling application (for lower level logging)
+
+local-ip-port: client IPv4/IPv6 domain literal string with port. if NULL, then mechanisms requiring IPaddr are disabled. The format is:
+IP/port syntax:
+ a.b.c.d;p              where a-d are 0-255 and p is 0-65535 port number.
+ e:f:g:h:i:j:k:l;p      where e-l are 0000-ffff lower-case hexidecimal
+ e:f:g:h:i:j:a.b.c.d;p  alternate syntax for previous
+
+ Note that one or more "0" fields in f-k can be replaced with "::"
+ Thus:                 e:f:0000:0000:0000:j:k:l;p
+ can be abbreviated:   e:f::j:k:l;p
+
+A buffer of size 52 is adequate for the longest format with NUL terminator.
+
+remote-ip-port: server IPv4/IPv6 domain literal string with port. if NULL, then mechanisms requiring IPaddr are disabled.
+
+Maximum security layer receive buffer size. 0=security layer not supported
+min_ssf
+max_ssf
+property_names
+property_values
+SASL_CONF_PATH (sasl.h)
+serverFQDN passwd to sasl_*_new. the fully qualified domain name of the server. NULL means use gethostname() or equivalent. Useful for multi-homed servers.
+The service name passed to sasl_*_new. registered name of the service using SASL (e.g. "imap")
+Security Considerations, including active attack versus passive attack.
+forwardsec
+maximum
+mutual_auth
+noactive
+noanonymous
+nodict
+noplain
+passcred
+security_flags - valid on server and client side.
+0 bits = no protection
+112 bits = triple DES
+128 bits = 128-bit RC2/RC4/BLOWFISH
+1 bit = integrity protection only
+256 bits = AES
+40 bits = 40-bit DES or 40-bit RC2/RC4
+56 bits = DES
+infinite bits = Domain Socket? Is this true? Need to test.
+Be sure to process the sasl man pages!!!
+GS2-SCRAM: http://www.project-moonshot.org/gitweb/?p=cyrus-sasl.git;a=blob;f=plugins/gs2.c
+Discuss the error: Failure: realm changed: authentication aborted
+Realms.
+defaultuserrealm
+permits multiple user realms on server, NULL = default (server side - sasl_server_new
+</para>
+
+    </sect1>
+    <sect1 id="sect-Sasl_Guide-glue-library">
+        <title>The Glue Library</title>
+        <para>
+            para
+        </para>
+
+    </sect1>
+    <sect1 id="sect-Sasl_Guide-Auxiliary-Properties">
+        <title>Auxiliary Properties</title>
+        <para>
+            para
+        </para>
+
+    </sect1>
+    <sect1 id="sect-Sasl_Guide-Plugins">
+        <title>Plugins</title>
+        <para>
+            para
+        </para>
+
+    </sect1>
+
+</chapter>
+

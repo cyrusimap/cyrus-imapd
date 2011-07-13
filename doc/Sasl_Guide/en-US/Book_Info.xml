@@ -1,0 +1,34 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<!DOCTYPE bookinfo PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
+<!ENTITY % BOOK_ENTITIES SYSTEM "Sasl_Guide.ent">
+%BOOK_ENTITIES;
+]>
+<bookinfo id="book-Sasl_Guide-Sasl_Guide">
+    <title>Cyrus SASL Guide</title>
+    <subtitle>short description</subtitle>
+    <productname>Cyrus SASL</productname>
+    <productnumber>2.1.24</productnumber>
+    <edition>1</edition>
+    <pubsnumber>0</pubsnumber>
+    <abstract>
+        <para>
+            A short overview and summary of the book's subject and purpose, traditionally no more than one paragraph long. Note: the abstract will appear in the front matter of your book and will also be placed in the description field of the book's RPM spec file.
+        </para>
+
+    </abstract>
+    <corpauthor>
+        <inlinemediaobject>
+            <imageobject>
+                <imagedata fileref="images/title_logo.svg" format="SVG" />
+            </imageobject>
+            <textobject>
+                <phrase>Logo</phrase>
+            </textobject>
+
+        </inlinemediaobject>
+
+    </corpauthor>
+    <xi:include href="Common_Content/Legal_Notice.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="auth-Sasl_Author_Group.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+</bookinfo>
+

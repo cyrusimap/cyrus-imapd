@@ -1,0 +1,118 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
+<!ENTITY % BOOK_ENTITIES SYSTEM "Sasl_Guide.ent">
+%BOOK_ENTITIES;
+]>
+<chapter id="chap-Sasl_Guide-Authentication_Mechanisms">
+    <title>Authentication Mechanisms</title>
+    <para>
+        para
+    </para>
+    <sect1 id="sect-Sasl_Guide-external">
+        <title>EXTERNAL</title>
+        <para>
+            para
+        </para>
+
+    </sect1>
+    <sect1 id="sect-Sasl_Guide-anonymous">
+        <title>ANONYMOUS</title>
+        <para>
+            para
+        </para>
+
+    </sect1>
+    <sect1 id="sect-Sasl_Guide-plain">
+        <title>PLAIN</title>
+        <para>
+            para
+        </para>
+
+    </sect1>
+    <sect1 id="sect-Sasl_Guide-login">
+        <title>LOGIN</title>
+        <para>
+            para
+        </para>
+
+    </sect1>
+    <sect1 id="sect-Sasl_Guide-cram_md5">
+        <title>CRAM-MD5</title>
+        <para>
+            para
+        </para>
+
+    </sect1>
+    <sect1 id="sect-Sasl_Guide-digest_md5">
+        <title>DIGEST-MD5</title>
+        <para>
+            para
+        </para>
+
+    </sect1>
+    <sect1 id="sect-Sasl_Guide-scram">
+        <title>SCRAM</title>
+        <para>
+            para
+        </para>
+
+    </sect1>
+    <sect1 id="sect-Sasl_Guide-gssapi">
+        <title>GSSAPI</title>
+        <para>
+            para
+        </para>
+
+    </sect1>
+    <sect1 id="sect-Sasl_Guide-gs2-krb5">
+        <title>GS2-KRB5</title>
+        <para>
+            para
+        </para>
+
+    </sect1>
+    <sect1 id="sect-Sasl_Guide-gs2-iakerb">
+        <title>GS2-IAKERB</title>
+        <para>
+            para
+        </para>
+
+    </sect1>
+    <sect1 id="sect-Sasl_Guide-ntlm">
+        <title>NTLM</title>
+        <para>
+            para
+        </para>
+
+    </sect1>
+    <sect1 id="sect-Sasl_Guide-srp">
+        <title>SRP</title>
+        <para>
+            para
+        </para>
+
+    </sect1>
+    <sect1 id="sect-Sasl_Guide-pssdss">
+        <title>PSSDSS</title>
+        <para>
+            para
+        </para>
+
+    </sect1>
+    <sect1 id="sect-Sasl_Guide-otp">
+        <title>OTP</title>
+        <para>
+            para
+        </para>
+
+    </sect1>
+    <sect1 id="sect-Sasl_Guide-non_sasl_auth">
+        <title>Non-SASL Authentication</title>
+        <para>
+            para
+        </para>
+
+    </sect1>
+
+</chapter>
+

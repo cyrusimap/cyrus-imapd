@@ -1,0 +1,55 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
+<!ENTITY % BOOK_ENTITIES SYSTEM "Sasl_Guide.ent">
+%BOOK_ENTITIES;
+]>
+<chapter id="chap-Sasl_Guide-Auxiliary_Properties">
+    <title>Auxiliary Properties</title>
+    <para>
+        para
+    </para>
+    <sect1 id="sect-Sasl_Guide-Auxiliary_Properties_and_Glue">
+        <title>Auxiliary Properties and the Glue Layer</title>
+        <para>
+            para
+        </para>
+
+    </sect1>
+    <sect1 id="sect-Sasl_Guide-userPassword-and-others">
+        <title>Passwords and other Data</title>
+        <para>
+            para
+        </para>
+
+    </sect1>
+    <sect1 id="sect-Sasl_Guide-sasldb">
+        <title>sasldb</title>
+        <para>
+            para
+        </para>
+
+    </sect1>
+    <sect1 id="sect-Sasl_Guide-ldapdb">
+        <title>ldapdb</title>
+        <para>
+            para
+        </para>
+
+    </sect1>
+    <sect1 id="sect-Sasl_Guide-sql">
+        <title>sql</title>
+        <para>
+            para
+        </para>
+
+    </sect1>
+    <sect1 id="sect-Sasl_Guide-user-canonicalization">
+        <title>User Canonicalization</title>
+        <para>
+            para
+        </para>
+
+    </sect1>
+
+</chapter>
+
