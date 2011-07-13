@@ -207,26 +207,19 @@ static void *_pgsql_open(char *host, char *port, int usessl,
 			 const char *database)
 {
     PGconn *conn = NULL;
-    char *conninfo, *p;
+    struct buf conninfo = BUF_INITIALIZER;
 
     /* create the connection info string */
-    /* The 64 represents the number of characters taken by
-     * the keyword tokens, plus a small pad
-     */
-    p = conninfo = xzmalloc(64 + sql_len(host) + sql_len(port)
-			   + sql_len(user) + sql_len(password)
-			   + sql_len(database));
-
     /* add each term that exists */
-    if (sql_exists(host)) p += sprintf(p, " host='%s'", host);
-    if (sql_exists(port)) p += sprintf(p, " port='%s'", port);
-    if (sql_exists(user)) p += sprintf(p, " user='%s'", user);
-    if (sql_exists(password)) p += sprintf(p, " password='%s'", password);
-    if (sql_exists(database)) p += sprintf(p, " dbname='%s'", database);
-    p += sprintf(p, " requiressl='%d'", usessl);
+    if (sql_exists(host)) buf_printf(&conninfo, " host='%s'", host);
+    if (sql_exists(port)) buf_printf(&conninfo, " port='%s'", port);
+    if (sql_exists(user)) buf_printf(&conninfo, " user='%s'", user);
+    if (sql_exists(password)) buf_printf(&conninfo, " password='%s'", password);
+    if (sql_exists(database)) buf_printf(&conninfo, " dbname='%s'", database);
+    buf_printf(&conninfo, " requiressl='%d'", usessl);
 
-    conn = PQconnectdb(conninfo);
-    free(conninfo);
+    conn = PQconnectdb(buf_cstring(&conninfo));
+    buf_free(&conninfo);
 
     if ((PQstatus(conn) != CONNECTION_OK)) {
 	syslog(LOG_ERR, "DBERROR: SQL backend: %s", PQerrorMessage(conn));
