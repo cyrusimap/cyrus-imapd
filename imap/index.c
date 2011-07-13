@@ -4430,7 +4430,7 @@ static char *index_extract_subject(const char *subj, size_t len, int *is_refwd)
 }
 
 /*
- * Guts if subject extraction.
+ * Guts of subject extraction.
  *
  * Takes a subject string and returns a pointer to the base.
  */
