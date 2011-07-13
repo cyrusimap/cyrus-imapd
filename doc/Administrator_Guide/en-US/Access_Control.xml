@@ -70,6 +70,9 @@ S: A777 OK LIST completed
                     <para>
                         The ACI subject can read the contents of this folder, meaning that the ACI subject is allowed to <command>SELECT</command> or <command>EXAMINE</command> the folder, query its <command>STATUS</command>, <command>FETCH</command> data, <command>SEARCH</command> the contents, and <command>COPY</command> contents from the folder.
                     </para>
+                    <para>
+                        The <literal>r</literal> right also allows the user to <command>GETMETADATA</command> when used in conjunction with the <literal>l</literal> right, as defined in <ulink url="http://tools.ietf.org/html/rfc5464">RFC 5464</ulink>.
+                    </para>
 
                 </listitem>
 
@@ -95,6 +98,9 @@ S: A777 OK LIST completed
                     </para>
                     <para>
                         The ACI subject is permitted to <emphasis>write</emphasis> to the folder, actually meaning the ACI subject is permitted to maintain flags and keywords other then <emphasis>\Seen</emphasis> and <emphasis>\Deleted</emphasis>, which are controlled using the <literal>s</literal> and <literal>t</literal> rights respectively.
+                    </para>
+                    <para>
+                        The <literal>w</literal> right also allows the user to <command>SETMETADATA</command> when used in conjunction with the <literal>l</literal> and <literal>r</literal> rights, as defined in <ulink url="http://tools.ietf.org/html/rfc5464">RFC 5464</ulink>.
                     </para>
                     <note>
                         <title>IMAP Clients</title>
