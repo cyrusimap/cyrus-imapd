@@ -636,7 +636,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
   clientinstr = initial_challenge;
   if (clientinstr!=NULL)
   {
-      clientin=(char *) malloc(clientinstr->len*2);
+      clientin = xmalloc(clientinstr->len*2);
       
       if (clientinstr->len) {
 	  sasl_result=sasl_decode64(string_DATAPTR(clientinstr), 
@@ -685,7 +685,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
     if (token1==STRING)
     {
       free(clientin);
-      clientin=(char *) malloc(str->len*2);
+      clientin = xmalloc(str->len*2);
 
       if (str->len) {
 	  sasl_result=sasl_decode64(string_DATAPTR(str), str->len,
