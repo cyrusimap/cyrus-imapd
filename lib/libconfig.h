@@ -50,6 +50,7 @@
 
 /* these will assert() if they're called on the wrong type of
    option (imapopts.c) */
+extern void config_reset(void);
 extern void config_read(const char *alt_config);
 extern const char *config_getstring(enum imapopt opt);
 extern int config_getint(enum imapopt opt);
