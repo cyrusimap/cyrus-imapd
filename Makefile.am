@@ -1112,7 +1112,6 @@ perl_libcyrus_min_la_LIBADD = $(lib_libcyrus_min_la_LIBADD)
 perl_sieve_lib_libisieve_a_SOURCES = \
 	perl/sieve/lib/isieve.c \
 	perl/sieve/lib/lex.c \
-	perl/sieve/lib/mystring.c \
 	perl/sieve/lib/request.c
 
 ptclient_ptdump_SOURCES = imap/cli_fatal.c imap/mutex_fake.c ptclient/ptdump.c

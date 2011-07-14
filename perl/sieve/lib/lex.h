@@ -48,10 +48,10 @@
 #ifndef _LEX_H_
 #define _LEX_H_
 
-#include "mystring.h"
+#include "util.h"
 
 typedef struct lexstate_s {
-  mystring_t *str;
+  char *str;
   int number;
 
 } lexstate_t;

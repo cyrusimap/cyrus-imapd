@@ -47,7 +47,7 @@
 #ifndef _REQUEST_H_
 #define _REQUEST_H_
 
-#include "mystring.h"
+#include "util.h"
 #include "isieve.h"
 
 /* old and new versions of the protocol */
@@ -56,10 +56,10 @@
 #define ACAP_VERSION 6
 
 int handle_response(int res,int version,struct protstream *pin,
-		    char **refer_to, mystring_t **errstr);
+		    char **refer_to, char **errstr);
 
 int deleteascript(int version,struct protstream *pout, struct protstream *pin,
-		  char *name, char **refer_to, char **errstr);
+		  const char *name, char **refer_to, char **errstr);
 
 int installafile(int version,struct protstream *pout, struct protstream *pin,
 		 char *filename, char *destname,
@@ -84,10 +84,10 @@ int setscriptactive(int version, struct protstream *pout,
  */
 
 //int getscript(int version, struct protstream *pout, struct protstream *pin,
-//	      char *name, int save, char **refer_to, char **errstr);
+//	      const char *name, int save, char **refer_to, char **errstr);
 
 int getscriptvalue(int version,struct protstream *pout, struct protstream *pin,
-		   char *name, mystring_t **data, char **refer_to, 
+		   char *name, char **data, char **refer_to,
 		   char **errstr);
 
 void parseerror(const char *str);

@@ -54,6 +54,7 @@
 #include <string.h>
 
 #include "prot.h"
+#include "xmalloc.h"
 
 #include "lex.h"
 
@@ -134,10 +135,7 @@ int yylex(lexstate_t * lvalp, void * client)
     case LEXER_STATE_QSTR:
       if (ch == '\"') {
 	/* End of the string */
-	lvalp->str = NULL;
-	result = string_allocate(buff_ptr - buffer, buffer, &lvalp->str);
-	if (result != SIEVE_OK)
-	    ERR_PUSHBACK();
+	lvalp->str = xstrndup(buffer, buff_ptr - buffer);
 	lexer_state=LEXER_STATE_NORMAL;
 	return STRING;
       }
@@ -181,14 +179,10 @@ int yylex(lexstate_t * lvalp, void * client)
       if (ch != '\n')
 	ERR_PUSHBACK();
 
-      lvalp->str = NULL;
-      result = string_allocate(count, NULL, &lvalp->str);
-      if (result != SIEVE_OK)
-	ERR_PUSHBACK();
-
+      lvalp->str = (char *)xmalloc(count+1);
       /* there is a literal string on the wire. let's read it */
       {
-	char           *it = string_DATAPTR(lvalp->str),
+	char           *it = lvalp->str,
 	               *end = it + count;
 
 	while (it < end) {
