@@ -48,7 +48,7 @@
 #define _LEX_H_
 
 #include "prot.h"
-#include "mystring.h"
+#include "util.h"
 
 #define LEXER_STATE_RECOVER     61
 #define LEXER_STATE_RECOVER_CR  62
@@ -87,7 +87,7 @@
 
 int lex_init(void);
 
-int timlex(mystring_t **outstr, unsigned long *outnum,  struct protstream *stream);
+int timlex(struct buf *outstr, unsigned long *outnum,  struct protstream *stream);
 
 void lex_setrecovering(void);
 

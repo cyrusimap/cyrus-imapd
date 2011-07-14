@@ -160,15 +160,15 @@ int actions_setuser(const char *userid)
  *
  */
 
-static int scriptname_valid(mystring_t *name)
+static int scriptname_valid(const struct buf *name)
 {
-  int lup;
+  unsigned int lup;
   char *ptr;
 
   /* must be at least one character long */
   if (name->len < 1) return TIMSIEVE_FAIL;
 
-  ptr=string_DATAPTR(name);
+  ptr = name->s;
 
   for (lup=0;lup<name->len;lup++)
   {
@@ -213,7 +213,7 @@ int capabilities(struct protstream *conn, sasl_conn_t *saslconn,
     return TIMSIEVE_OK;
 }
 
-int getscript(struct protstream *conn, mystring_t *name)
+int getscript(struct protstream *conn, const struct buf *name)
 {
   FILE *stream;
   struct stat filestats;	/* returned by stat */
@@ -231,7 +231,7 @@ int getscript(struct protstream *conn, mystring_t *name)
   }
 
 
-  snprintf(path, 1023, "%s.script", string_DATAPTR(name));
+  snprintf(path, 1023, "%s.script", name->s);
 
   result = stat(path, &filestats);
   if (result != 0) {
@@ -312,13 +312,13 @@ static int countscripts(char *name)
 
 
 /* save name as a sieve script */
-int putscript(struct protstream *conn, mystring_t *name, mystring_t *data,
-	      int verify_only)
+int putscript(struct protstream *conn, const struct buf *name,
+	      const struct buf *data, int verify_only)
 {
   FILE *stream;
-  char *dataptr;
+  const char *dataptr;
   char *errstr;
-  int i;
+  unsigned int i;
   int last_was_r = 0;
   int result;
   char path[1024], p2[1024];
@@ -340,7 +340,7 @@ int putscript(struct protstream *conn, mystring_t *name, mystring_t *data,
       /* see if this would put the user over quota */
       maxscripts = config_getint(IMAPOPT_SIEVE_MAXSCRIPTS);
 
-      if (countscripts(string_DATAPTR(name))+1 > maxscripts)
+      if (countscripts(name->s)+1 > maxscripts)
       {
 	  prot_printf(conn,
 		      "NO (QUOTA/MAXSCRIPTS) \"You are only allowed %d scripts on this server\"\r\n",
@@ -348,7 +348,7 @@ int putscript(struct protstream *conn, mystring_t *name, mystring_t *data,
 	  return TIMSIEVE_FAIL;
       }
 
-      snprintf(path, 1023, "%s.script.NEW", string_DATAPTR(name));
+      snprintf(path, 1023, "%s.script.NEW", name->s);
 
       stream = fopen(path, "w+");
   }
@@ -360,7 +360,7 @@ int putscript(struct protstream *conn, mystring_t *name, mystring_t *data,
       return TIMSIEVE_NOEXIST;
   }
 
-  dataptr = string_DATAPTR(data);
+  dataptr = data->s;
 
   /* copy data to file - replacing any lone \r or \n with the
    * \r\n pair so notify messages are SMTP compatible */ 
@@ -415,7 +415,7 @@ int putscript(struct protstream *conn, mystring_t *name, mystring_t *data,
       }
 
       /* Now, open the new file */
-      snprintf(bc_path, 1023, "%s.bc.NEW", string_DATAPTR(name));
+      snprintf(bc_path, 1023, "%s.bc.NEW", name->s);
       fd = open(bc_path, O_CREAT | O_TRUNC | O_WRONLY, 0600);
       if(fd < 0) {
 	  unlink(path);
@@ -442,8 +442,8 @@ int putscript(struct protstream *conn, mystring_t *name, mystring_t *data,
       close(fd);
 
       /* Now, rename! */
-      snprintf(p2, 1023, "%s.script", string_DATAPTR(name));
-      snprintf(bc_p2, 1023, "%s.bc", string_DATAPTR(name));
+      snprintf(p2, 1023, "%s.script", name->s);
+      snprintf(bc_p2, 1023, "%s.bc", name->s);
       rename(path, p2);
       rename(bc_path, bc_p2);
 
@@ -503,7 +503,7 @@ static int isactive(char *name)
 }
 
 /* delete a sieve script */
-int deletescript(struct protstream *conn, mystring_t *name)
+int deletescript(struct protstream *conn, const struct buf *name)
 {
   int result;
   char path[1024];
@@ -515,9 +515,9 @@ int deletescript(struct protstream *conn, mystring_t *name)
       return result;
   }
 
-  snprintf(path, 1023, "%s.script", string_DATAPTR(name));
+  snprintf(path, 1023, "%s.script", name->s);
 
-  if (isactive(string_DATAPTR(name))) {
+  if (isactive(name->s)) {
     prot_printf(conn, "NO (ACTIVE) \"Active script cannot be deleted\"\r\n");
     return TIMSIEVE_FAIL;
   }
@@ -526,13 +526,13 @@ int deletescript(struct protstream *conn, mystring_t *name)
 
   if (result != 0) {
       if (result == ENOENT)
-          prot_printf(conn, "NO (NONEXISTENT) \"Script %s does not exist.\"\r\n", string_DATAPTR(name));
+	  prot_printf(conn, "NO (NONEXISTENT) \"Script %s does not exist.\"\r\n", name->s);
       else
           prot_printf(conn,"NO \"Error deleting script\"\r\n");
       return TIMSIEVE_FAIL;
   }
 
-  snprintf(path, 1023, "%s.bc", string_DATAPTR(name));
+  snprintf(path, 1023, "%s.bc", name->s);
 
   result = unlink(path);
 
@@ -612,13 +612,13 @@ static int exists(char *str)
 
 /* set the sieve script 'name' to be the active script */
 
-int setactive(struct protstream *conn, mystring_t *name)
+int setactive(struct protstream *conn, const struct buf *name)
 {
     int result;
     char filename[1024];
 
     /* if string name is empty, disable active script */
-    if (!strlen(string_DATAPTR(name))) {
+    if (!name->len) {
 	if (deleteactive(conn) != TIMSIEVE_OK)
 	    return TIMSIEVE_FAIL;
 
@@ -633,20 +633,20 @@ int setactive(struct protstream *conn, mystring_t *name)
 	return result;
     }
 
-    if (exists(string_DATAPTR(name))==FALSE)
+    if (exists(name->s)==FALSE)
     {
 	prot_printf(conn,"NO (NONEXISTENT) \"Script does not exist\"\r\n");
 	return TIMSIEVE_NOEXIST;
     }
 
     /* if script already is the active one just say ok */
-    if (isactive(string_DATAPTR(name))==TRUE) {
+    if (isactive(name->s)==TRUE) {
 	prot_printf(conn,"OK\r\n");
 	return TIMSIEVE_OK;
     }
 
     /* get the name of the active sieve script */
-    snprintf(filename, sizeof(filename), "%s.bc", string_DATAPTR(name));
+    snprintf(filename, sizeof(filename), "%s.bc", name->s);
 
     /* ok we want to do this atomically so let's
        - make <activesieve>.NEW as a hard link
@@ -672,7 +672,7 @@ int setactive(struct protstream *conn, mystring_t *name)
     return TIMSIEVE_OK;
 }
 
-int cmd_havespace(struct protstream *conn, mystring_t *sieve_name, unsigned long num)
+int cmd_havespace(struct protstream *conn, const struct buf *sieve_name, unsigned long num)
 {
     int result;
     int maxscripts;
@@ -701,7 +701,7 @@ int cmd_havespace(struct protstream *conn, mystring_t *sieve_name, unsigned long
     /* see if this would put the user over quota */
     maxscripts = config_getint(IMAPOPT_SIEVE_MAXSCRIPTS);
 
-    if (countscripts(string_DATAPTR(sieve_name))+1 > maxscripts)
+    if (countscripts(sieve_name->s)+1 > maxscripts)
     {
 	prot_printf(conn,
 		    "NO (QUOTA/MAXSCRIPTS) \"You are only allowed %d scripts on this server\"\r\n",

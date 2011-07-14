@@ -60,6 +60,7 @@
 #include <sasl/saslutil.h>
 
 
+#include "assert.h"
 #include "libconfig.h"
 #include "imap/global.h"
 #include "auth.h"
@@ -103,7 +104,7 @@ extern struct backend *backend;
 static void cmd_logout(struct protstream *sieved_out,
 		       struct protstream *sieved_in);
 static int cmd_authenticate(struct protstream *sieved_out, struct protstream *sieved_in,
-			    mystring_t *mechanism_name, mystring_t *initial_challenge, const char **errmsg);
+			    const char *mech, const struct buf *initial_challenge, const char **errmsg);
 static void cmd_unauthenticate(struct protstream *sieved_out,
 			       struct protstream *sieved_in);
 static int cmd_starttls(struct protstream *sieved_out, struct protstream *sieved_in);
@@ -145,10 +146,10 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
   int token = EOL;
   const char *error_msg = "Generic Error";
 
-  mystring_t *mechanism_name = NULL;
-  mystring_t *initial_challenge = NULL;
-  mystring_t *sieve_name = NULL;
-  mystring_t *sieve_data = NULL;
+  struct buf mechanism_name = BUF_INITIALIZER;
+  struct buf initial_challenge = BUF_INITIALIZER;
+  struct buf sieve_name = BUF_INITIALIZER;
+  struct buf sieve_data = BUF_INITIALIZER;
   unsigned long num;
   int ret = FALSE;
 
@@ -228,8 +229,8 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
 
     if (authenticated)
 	prot_printf(sieved_out, "NO \"Already authenticated\"\r\n");
-    else if (cmd_authenticate(sieved_out, sieved_in, mechanism_name,
-			      initial_challenge, &error_msg)==FALSE)
+    else if (cmd_authenticate(sieved_out, sieved_in, mechanism_name.s,
+			      &initial_challenge, &error_msg)==FALSE)
     {
 	error_msg = "Authentication Error";
 	goto error;
@@ -276,8 +277,9 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
       }
 
       /* f stands for "f"aked name, it could be any valid script name */
-      string_allocate(1, "f", &sieve_name);
-      putscript(sieved_out, sieve_name, sieve_data, /* verify_only */ 1);
+      buf_reset(&sieve_name);
+      buf_appendcstr(&sieve_name, "f");
+      putscript(sieved_out, &sieve_name, &sieve_data, /* verify_only */ 1);
       break;
 
   case HAVESPACE:
@@ -314,7 +316,7 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
       if(referral_host)
 	  goto do_referral;
 
-      cmd_havespace(sieved_out, sieve_name, num);
+      cmd_havespace(sieved_out, &sieve_name, num);
 
       break;
 
@@ -358,7 +360,7 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
     if(referral_host)
 	goto do_referral;
 
-    getscript(sieved_out, sieve_name);
+    getscript(sieved_out, &sieve_name);
     
     break;
 
@@ -397,7 +399,7 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
     if(referral_host)
 	goto do_referral;
 
-    putscript(sieved_out, sieve_name, sieve_data, verify_only);
+    putscript(sieved_out, &sieve_name, &sieve_data, verify_only);
     
     break;
 
@@ -423,7 +425,7 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
     if(referral_host)
 	goto do_referral;
 
-    setactive(sieved_out, sieve_name);
+    setactive(sieved_out, &sieve_name);
     
     break;
 
@@ -449,7 +451,7 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
     if(referral_host)
 	goto do_referral;
 
-    deletescript(sieved_out, sieve_name);
+    deletescript(sieved_out, &sieve_name);
     
     break;
 
@@ -489,7 +491,6 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
   case NOOP:
 
     token = timlex(NULL, NULL, sieved_in);
-    mystring_t *noop_param = NULL;
     if (token != EOL)
     {
       /* optional string parameter */
@@ -499,10 +500,9 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
 	goto error;
       }
 
-      if (timlex(&noop_param, NULL, sieved_in)!=STRING)
+      if (timlex(&sieve_name, NULL, sieved_in)!=STRING)
       {
 	error_msg = "Expected string";
-	free(noop_param);
 	goto error;
       }
 
@@ -512,18 +512,13 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
     if (token != EOL)
     {
       error_msg = "Expected EOL";
-      free(noop_param);
       goto error;
     }
 
-    if (noop_param != NULL) {
-      int temp;
-      char* dataptr = string_DATAPTR(noop_param);
-      prot_printf(sieved_out, "OK (TAG {%d}\r\n", noop_param->len);
-      for (temp = 0; temp < noop_param->len; temp++)
-      prot_putc(dataptr[temp], sieved_out);
+    if (sieve_name.len) {
+      prot_printf(sieved_out, "OK (TAG ");
+      prot_printliteral(sieved_out, sieve_name.s, sieve_name.len);
       prot_printf(sieved_out, ") \"Done\"\r\n");
-      free(noop_param);
     } else
       prot_printf(sieved_out, "OK \"Done\"\r\n");
     break;
@@ -546,10 +541,10 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
 
  done: 
   /* free memory */
-  free(mechanism_name);
-  free(initial_challenge);
-  free(sieve_name);
-  free(sieve_data);
+  buf_free(&mechanism_name);
+  buf_free(&initial_challenge);
+  buf_free(&sieve_name);
+  buf_free(&sieve_data);
  
   prot_flush(sieved_out);
 
@@ -558,10 +553,10 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
  error:
 
   /* free memory */
-  free(mechanism_name);
-  free(initial_challenge);
-  free(sieve_name);
-  free(sieve_data);
+  buf_free(&mechanism_name);
+  buf_free(&initial_challenge);
+  buf_free(&sieve_name);
+  buf_free(&sieve_data);
 
   prot_printf(sieved_out, "NO \"%s\"\r\n",error_msg);
   prot_flush(sieved_out);
@@ -613,16 +608,12 @@ static void cmd_unauthenticate(struct protstream *sieved_out,
 
 static int cmd_authenticate(struct protstream *sieved_out,
 			    struct protstream *sieved_in,
-			    mystring_t *mechanism_name,
-			    mystring_t *initial_challenge, 
+			    const char *mech,
+			    const struct buf *initial_challenge,
 			    const char **errmsg)
 {
 
   int sasl_result;
-
-  char *mech = string_DATAPTR(mechanism_name);
-
-  mystring_t *clientinstr=NULL;
   char *clientin = NULL;
   unsigned int clientinlen = 0;
 
@@ -633,15 +624,16 @@ static int cmd_authenticate(struct protstream *sieved_out,
   int ret = TRUE;
   struct mboxlist_entry *mbentry = NULL;
 
-  clientinstr = initial_challenge;
-  if (clientinstr!=NULL)
+  assert(initial_challenge);
+  if (initial_challenge->s)
   {
-      clientin = xmalloc(clientinstr->len*2);
+      /* a value was provided on the wire, possibly of zero length */
+      clientin = xmalloc(initial_challenge->len*2);
       
-      if (clientinstr->len) {
-	  sasl_result=sasl_decode64(string_DATAPTR(clientinstr), 
-				    clientinstr->len,
-				    clientin, clientinstr->len*2,
+      if (initial_challenge->len) {
+	  sasl_result=sasl_decode64(initial_challenge->s,
+				    initial_challenge->len,
+				    clientin, initial_challenge->len*2,
 				    &clientinlen);
       } else {
 	  clientinlen = 0;
@@ -665,7 +657,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
   {
     int token1;
     int token2;
-    mystring_t *str, *blahstr;
+    struct buf str = BUF_INITIALIZER, blahstr = BUF_INITIALIZER;
     char *inbase64;
     unsigned int inbase64len;
 
@@ -685,16 +677,16 @@ static int cmd_authenticate(struct protstream *sieved_out,
     if (token1==STRING)
     {
       free(clientin);
-      clientin = xmalloc(str->len*2);
+      clientin = xmalloc(str.len*2);
 
-      if (str->len) {
-	  sasl_result=sasl_decode64(string_DATAPTR(str), str->len,
-				    clientin, str->len*2, &clientinlen);
+      if (str.len) {
+	  sasl_result=sasl_decode64(str.s, str.len,
+				    clientin, str.len*2, &clientinlen);
       } else {
 	  clientinlen = 0;
 	  sasl_result = SASL_OK;
       }
-      string_free(&str);
+      buf_free(&str);
 
       if (sasl_result!=SASL_OK)
       {

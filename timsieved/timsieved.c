@@ -80,7 +80,6 @@
 #include "actions.h"
 #include "parser.h"
 #include "lex.h"
-#include "mystring.h"
 
 #include "auth.h"
 #include "acl.h"

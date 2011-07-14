@@ -1190,8 +1190,6 @@ timsieved_timsieved_SOURCES = \
 	timsieved/exitcodes.h \
 	timsieved/lex.c \
 	timsieved/lex.h \
-	timsieved/mystring.c \
-	timsieved/mystring.h \
 	timsieved/parser.c \
 	timsieved/parser.h \
 	timsieved/scripttest.c \
