@@ -573,7 +573,7 @@ static void output_entryatt(const char *mboxname, const char *entry,
     if (hash_lookup(key, &(fdata->entry_table))) return;
     hash_insert(key, (void *)0xDEADBEEF, &(fdata->entry_table));
 
-    vallen = attrib->value ? strlen(attrib->value) : 0;
+    vallen = attrib->size;
     if (fdata->sizeptr && fdata->maxsize < vallen) {
 	/* too big - track the size of the largest */
 	int *sp = fdata->sizeptr;
@@ -582,9 +582,8 @@ static void output_entryatt(const char *mboxname, const char *entry,
     }
 
     if (!userid[0]) { /* shared annotation */
-	if ((fdata->attribs & ATTRIB_VALUE_SHARED)) {
+	if ((fdata->attribs & ATTRIB_VALUE_SHARED))
 	    appendattvalue(&attvalues, "value.shared", attrib->value);
-	}
 
 	/* Base the return of the size attribute on whether or not there is
 	 * an attribute, not whether size is nonzero. */
@@ -594,9 +593,8 @@ static void output_entryatt(const char *mboxname, const char *entry,
 	}
     }
     else { /* private annotation */
-	if ((fdata->attribs & ATTRIB_VALUE_PRIV)) {
+	if ((fdata->attribs & ATTRIB_VALUE_PRIV))
 	    appendattvalue(&attvalues, "value.priv", attrib->value);
-	}
 
 	/* Base the return of the size attribute on whether or not there is
 	 * an attribute, not whether size is nonzero. */
@@ -1439,7 +1437,7 @@ static int write_entry(const char *mboxname, const char *entry,
 
     keylen = make_key(mboxname, entry, userid, key, sizeof(key));
 
-    if (!strcmp(attrib->value, "NIL")) {
+    if (attrib->value == NULL) {
 	do {
 	    r = DB->delete(anndb, key, keylen, tid, 0);
 	} while (r == CYRUSDB_AGAIN);
@@ -1485,8 +1483,8 @@ int annotatemore_write_entry(const char *mboxname, const char *entry,
 {
     struct annotation_data theentry;
 
-    theentry.size = size;
-    theentry.value = value ? value : "NIL";
+    theentry.size = (value ? size : 0);
+    theentry.value = value;
 
     return write_entry(mboxname, entry, userid, &theentry, tid);
 }
@@ -1540,16 +1538,22 @@ struct annotate_st_entry_list
     const struct annotate_st_entry *entry;
     struct annotation_data shared;
     struct annotation_data priv;
+    int have_shared;
+    int have_priv;
 
     struct annotate_st_entry_list *next;
 };
 
-static const char *annotate_canon_value(const char *value, int type)
+static int annotate_canon_value(const char *value, int type,
+				const char **canon)
 {
     char *p = NULL;
 
-    /* check for "NIL" */
-    if (!strcasecmp(value, "NIL")) return "NIL";
+    *canon = value;
+
+    /* check for NIL */
+    if (value == NULL)
+	return 0;
 
     switch (type) {
     case ATTRIB_TYPE_STRING:
@@ -1558,9 +1562,9 @@ static const char *annotate_canon_value(const char *value, int type)
 
     case ATTRIB_TYPE_BOOLEAN:
 	/* make sure its "true" or "false" */
-	if (!strcasecmp(value, "true")) return "true";
-	else if (!strcasecmp(value, "false")) return "false";
-	else return NULL;
+	if (!strcasecmp(value, "true")) *canon = "true";
+	else if (!strcasecmp(value, "false")) *canon = "false";
+	else return IMAP_ANNOTATION_BADVALUE;
 	break;
 
     case ATTRIB_TYPE_UINT:
@@ -1571,7 +1575,7 @@ static const char *annotate_canon_value(const char *value, int type)
 	    || (*p != '\0')		/* illegal char */
 	    || errno			/* overflow */
 	    || strchr(value, '-')) {	/* negative number */
-	    return NULL;
+	    return IMAP_ANNOTATION_BADVALUE;
 	}
 	break;
 
@@ -1582,17 +1586,16 @@ static const char *annotate_canon_value(const char *value, int type)
 	if ((p == value)		/* no value */
 	    || (*p != '\0')		/* illegal char */
 	    || errno) {			/* underflow/overflow */
-	    return NULL;
+	    return IMAP_ANNOTATION_BADVALUE;
 	}
 	break;
 
     default:
 	/* unknown type */
-	return NULL;
-	break;
+	return IMAP_ANNOTATION_BADVALUE;
     }
 
-    return value;
+    return 0;
 }
 
 static int store_cb(const char *name, int matchlen,
@@ -1712,7 +1715,7 @@ static int annotation_set_tofile(const char *int_mboxname __attribute__((unused)
     snprintf(path, sizeof(path), "%s/msg/%s", config_dir, filename);
 
     /* XXX how do we do this atomically with other annotations? */
-    if (!strcmp(entry->shared.value, "NIL"))
+    if (entry->shared.value == NULL)
 	return unlink(path);
     else if ((f = fopen(path, "w"))) {
 	fprintf(f, "%s\n", entry->shared.value);
@@ -1730,7 +1733,7 @@ static int annotation_set_todb(const char *int_mboxname,
 {
     int r = 0;
 
-    if (entry->shared.value) {
+    if (entry->have_shared) {
 	/* Check ACL
 	 *
 	 * Must be an admin to set shared server annotations and
@@ -1751,7 +1754,7 @@ static int annotation_set_todb(const char *int_mboxname,
 			    &(entry->shared), &(sdata->tid));
 	}
     }
-    if (entry->priv.value) {
+    if (entry->have_priv) {
 	/* Check ACL
 	 *
 	 * XXX We don't actually need to check anything here,
@@ -1798,7 +1801,8 @@ static int annotation_set_mailboxopt(const char *int_mboxname,
 
     newopts = mailbox->i.options;
 
-    if (!strcmp(entry->shared.value, "true")) {
+    if (entry->shared.value &&
+	!strcmp(entry->shared.value, "true")) {
 	newopts |= flag;
     } else {
 	newopts &= ~flag;
@@ -1829,12 +1833,7 @@ static int annotation_set_pop3showafter(const char *int_mboxname,
     if (!annotation_may_store(sdata, mbentry, ACL_LOOKUP|ACL_WRITE))
 	return IMAP_PERMISSION_DENIED;
 
-    /*
-     * Note that at this point we cannot tell the difference
-     * between the cases where the client gave NIL or "NIL"
-     * as the value, because getnstring() collapsed them.
-     */
-    if (!strcmp(entry->shared.value, "NIL")) {
+    if (entry->shared.value == NULL) {
 	/* Effectively removes the annotation */
 	date = 0;
     }
@@ -1883,7 +1882,7 @@ static int annotation_set_specialuse(const char *int_mboxname,
     if (!annotation_may_store(sdata, mbentry, ACL_LOOKUP|ACL_WRITE))
 	return IMAP_PERMISSION_DENIED;
 
-    if (!strcmp(entry->shared.value, "NIL")) {
+    if (entry->shared.value == NULL) {
 	/* Effectively removes the annotation */
 	val = NULL;
     }
@@ -2067,13 +2066,16 @@ int annotatemore_store(const char *mboxname,
 		    r = IMAP_PERMISSION_DENIED;
 		    goto cleanup;
 		}
-		value = annotate_canon_value(av->value,
-					     currententry->entry->type);
-		if (!value) {
-		    r = IMAP_ANNOTATION_BADVALUE;
+		r = annotate_canon_value(av->value,
+					 currententry->entry->type,
+					 &value);
+		if (r)
 		    goto cleanup;
+		if (nentry) {
+		    nentry->shared.value = value;
+		    nentry->shared.size = value ? strlen(value) : 0;
+		    nentry->have_shared = 1;
 		}
-		if (nentry) nentry->shared.value = value;
 	    }
 	    else if (!strcmp(av->attrib, "content-type.shared") ||
 	             !strcmp(av->attrib, "content-type.priv")) {
@@ -2086,13 +2088,16 @@ int annotatemore_store(const char *mboxname,
 		    r = IMAP_PERMISSION_DENIED;
 		    goto cleanup;
 		}
-		value = annotate_canon_value(av->value,
-					     currententry->entry->type);
-		if (!value) {
-		    r = IMAP_ANNOTATION_BADVALUE;
+		r = annotate_canon_value(av->value,
+					 currententry->entry->type,
+					 &value);
+		if (r)
 		    goto cleanup;
+		if (nentry) {
+		    nentry->priv.value = value;
+		    nentry->priv.size = value ? strlen(value) : 0;
+		    nentry->have_priv = 1;
 		}
-		if (nentry) nentry->priv.value = value;
 	    }
 	    else {
 		r = IMAP_PERMISSION_DENIED;
@@ -2216,8 +2221,8 @@ static int rename_cb(const char *mailbox, const char *entry,
 
     if (!r) {
 	/* delete existing entry */
-	attrib->value = "NIL";
-	r = write_entry(mailbox, entry, userid, attrib, &rrock->tid);
+	struct annotation_data dattrib = { NULL, 0 };
+	r = write_entry(mailbox, entry, userid, &dattrib, &rrock->tid);
     }
 
     return r;

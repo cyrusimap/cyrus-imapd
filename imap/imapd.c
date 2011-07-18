@@ -7612,8 +7612,13 @@ static int parse_annotate_store_data(const char *tag,
 	    }
 
 	    /* get value */
-	    if (c != ' ' ||
-		(c = getnstring(imapd_in, imapd_out, &value)) == EOF) {
+	    if (c != ' ') {
+		prot_printf(imapd_out,
+			    "%s BAD Missing annotation value\r\n", tag);
+		goto baddata;
+	    }
+	    c = getnstring(imapd_in, imapd_out, &value);
+	    if (c == EOF) {
 		prot_printf(imapd_out,
 			    "%s BAD Missing annotation value\r\n", tag);
 		goto baddata;
