@@ -1446,17 +1446,15 @@ static int write_entry(const char *mboxname, const char *entry,
 	} while (r == CYRUSDB_AGAIN);
     }
     else {
-	char data[MAX_MAILBOX_PATH+1];
-	int datalen = 0;
+	struct buf data = BUF_INITIALIZER;
 	unsigned long l;
 	static const char contenttype[] = "text/plain"; /* fake */
 
-	l = htonl(strlen(attrib->value));
-	memcpy(data+datalen, &l, sizeof(l));
-	datalen += sizeof(l);
+	l = htonl(attrib->size);
+	buf_appendmap(&data, (const char *)&l, sizeof(l));
 
-	strlcpy(data+datalen, attrib->value, sizeof(data)-datalen);
-	datalen += strlen(attrib->value) + 1;
+	buf_appendmap(&data, attrib->value, attrib->size);
+	buf_putc(&data, '\0');
 
 	/*
 	 * Older versions of Cyrus expected content-type and
@@ -1464,17 +1462,17 @@ static int write_entry(const char *mboxname, const char *entry,
 	 * but we write out default values just in case the database
 	 * needs to be read by older versions of Cyrus
 	 */
-	strlcpy(data+datalen, contenttype, sizeof(data)-datalen);
-	datalen += strlen(contenttype) + 1;
+	buf_appendcstr(&data, contenttype);
+	buf_putc(&data, '\0');
 
 	l = 0;	/* fake modifiedsince */
-	memcpy(data+datalen, &l, sizeof(l));
-	datalen += sizeof(l);
+	buf_appendmap(&data, (const char *)&l, sizeof(l));
 
 	do {
-	    r = DB->store(anndb, key, keylen, data, datalen, tid);
+	    r = DB->store(anndb, key, keylen, data.s, data.len, tid);
 	} while (r == CYRUSDB_AGAIN);
 	sync_log_annotation(mboxname);
+	buf_free(&data);
     }
 
     return r;
