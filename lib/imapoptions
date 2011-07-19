@@ -1158,6 +1158,13 @@ product version in the capabilities */
    successfully authenticate.  Otherwise lmtpd returns permanent failures
    (causing the mail to bounce immediately). */
 
+{ "specialuse_extra", NULL, STRING }
+/* Whitespace separated list of extra special-use attributes
+   that can be set on a mailbox. RFC 6154 currently lists
+   what special-use attributes can be set. This allows
+   extending that list in the future or adding your own
+   if needed. */
+
 { "sql_database", NULL, STRING }
 /* Name of the database which contains the cyrusdb table(s). */
 

@@ -1925,6 +1925,7 @@ static int annotation_set_specialuse(const char *int_mboxname,
     int r = 0;
     const char *val;
     int i;
+    strarray_t * specialuse_extra = 0;
 
     /* Check ACL */
     if (!annotation_may_store(sdata, mbentry, ACL_LOOKUP|ACL_WRITE))
@@ -1943,11 +1944,34 @@ static int annotation_set_specialuse(const char *int_mboxname,
 		break;
 	}
 	val = valid_specialuse[i];
-	if (!val) return IMAP_ANNOTATION_BADVALUE;
+
+	/* If not a built in one, check specialuse_extra option */
+	if (!val) {
+	    const char * specialuse_extra_opt = config_getstring(IMAPOPT_SPECIALUSE_EXTRA);
+	    if (specialuse_extra_opt) {
+		specialuse_extra = strarray_split(specialuse_extra_opt, NULL);
+
+		for (i = 0; i < specialuse_extra->count; i++) {
+		    const char * extra_val = strarray_nth(specialuse_extra, i);
+		    if (!strcasecmp(extra_val, entry->shared.value)) {
+			/* strarray owns string, keep specialuse_extra until after set call */
+			val = extra_val;
+			break;
+		    }
+		}
+	    }
+	}
+
+	if (!val) {
+	    r = IMAP_ANNOTATION_BADVALUE;
+	    goto done;
+	}
     }
 
-
     r = mboxlist_setspecialuse(int_mboxname, val);
+
+done:
+    strarray_free(specialuse_extra);
 
     return r;
 }
