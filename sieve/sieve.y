@@ -751,6 +751,8 @@ static char *check_reqs(strarray_t *sa)
 	}
 	free(s);
     }
+    strarray_free(sa);
+
     res = buf_release(&errs);
     if (!res[0]) {
 	free(res);
