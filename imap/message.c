@@ -1727,7 +1727,7 @@ int message_write_cache(struct index_record *record, const struct body *body)
     /* append the records to the buffer */
     for (i = 0; i < NUM_CACHE_FIELDS; i++) {
 	record->crec.item[i].len = buf_len(&ib[i]);
-	record->crec.item[i].offset = buf_len(&cacheitem_buffer);
+	record->crec.item[i].offset = buf_len(&cacheitem_buffer) + sizeof(uint32_t);
 	message_write_xdrstring(&cacheitem_buffer, &ib[i]);
 	buf_free(&ib[i]);
     }
