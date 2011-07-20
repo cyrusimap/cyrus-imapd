@@ -145,16 +145,11 @@ sasl_callback_t *mysasl_callbacks(const char *username,
     if (password) {
 	sasl_secret_t *secret;
 	size_t len = strlen(password);
-	
-	secret = (sasl_secret_t *)xmalloc(sizeof(sasl_secret_t) + len);
-	if(!secret) {
-	    free(ret);
-	    return NULL;
-	}
 
+	secret = (sasl_secret_t *)xmalloc(sizeof(sasl_secret_t) + len);
 	strcpy((char *) secret->data, password);
 	secret->len = len;
-		
+
 	/* password */
 	ret[n].id = SASL_CB_PASS;
 	ret[n].proc = &mysasl_getsecret_cb;
