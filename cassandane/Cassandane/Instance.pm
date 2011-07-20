@@ -48,13 +48,14 @@ use POSIX qw(geteuid :signal_h :sys_wait_h);
 use Time::HiRes qw(sleep gettimeofday tv_interval);
 use DateTime;
 use BSD::Resource;
+use Cwd qw(abs_path);
 use Cassandane::Util::DateTime qw(to_iso8601);
 use Cassandane::Util::Log;
 use Cassandane::Config;
 use Cassandane::Service;
 use Cassandane::ServiceFactory;
 
-my $rootdir = '/var/tmp/cassandane';
+my $rootdir = '/var/tmp/cass';
 my $stamp;
 my $next_unique = 1;
 my %defaults =
@@ -97,13 +98,20 @@ sub new
     $self->{persistent} = $params{persistent}
 	if defined $params{persistent};
 
-    $stamp = to_iso8601(DateTime->now)
-	unless defined $stamp;
+    if (!defined $stamp)
+    {
+	$stamp = to_iso8601(DateTime->now);
+	$stamp =~ s/.*T(\d+)Z/\1/;
+    }
 
     if (!defined $self->{name})
     {
-	$self->{name} = 'cass' . $stamp . $next_unique;
-	$next_unique++;
+	for (;;)
+	{
+	    $self->{name} = $stamp . $next_unique;
+	    $next_unique++;
+	    last unless -d "$rootdir/$self->{name}";
+	}
     }
     $self->{basedir} = $rootdir . '/' . $self->{name}
 	unless defined $self->{basedir};
@@ -154,13 +162,15 @@ sub _binary
 
     if ($self->{valgrind})
     {
-	my $valgrind_logdir = $self->{basedir} . '/valgrind-logs';
+	my $valgrind_logdir = $self->{basedir} . '/vglogs';
+	my $valgrind_suppressions = abs_path('vg.supp');
 	mkpath $valgrind_logdir
 	    unless ( -d $valgrind_logdir );
 	push(@cmd,
 	    '/usr/bin/valgrind',
-	    '--quiet',
+	    '-q',
 	    "--log-file=$valgrind_logdir/$name.%p",
+	    "--suppressions=$valgrind_suppressions",
 	    '--tool=memcheck',
 	    '--leak-check=full'
 	);
