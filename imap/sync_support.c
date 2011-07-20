@@ -1696,7 +1696,7 @@ int apply_annotations(const struct mailbox *mailbox,
     const struct sync_annot *chosen;
     static const struct buf novalue = BUF_INITIALIZER;
     const struct buf *value;
-    int r;
+    int r = 0;
     int diff;
     int started_txn = 0;
 
