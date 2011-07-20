@@ -3506,7 +3506,13 @@ void cmd_append(char *tag, char *name, const char *cur_name)
 				     &curstage->flags, 0,
 				     curstage->annotations);
 	    }
-	    if (body) message_free_body(body);
+	    if (body) {
+		/* Note: either the calls to message_parse_binary_file()
+		 * or append_fromstage() above, may create a body.  */
+		message_free_body(body);
+		free(body);
+		body = NULL;
+	    }
 	}
 
 	if (!r) {
