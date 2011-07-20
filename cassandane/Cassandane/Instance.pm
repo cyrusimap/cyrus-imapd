@@ -55,9 +55,12 @@ use Cassandane::Service;
 use Cassandane::ServiceFactory;
 
 my $rootdir = '/var/tmp/cassandane';
-my $valgrind_logdir = '/var/tmp/valgrind-logs';
 my $stamp;
 my $next_unique = 1;
+my %defaults =
+(
+    valgrind => 0,
+);
 
 sub new
 {
@@ -72,7 +75,7 @@ sub new
 	re_use_dir => 0,
 	setup_mailbox => 1,
 	persistent => 0,
-	valgrind => 0,
+	valgrind => $defaults{valgrind},
 	_children => {},
 	_stopped => 0,
     };
@@ -114,6 +117,17 @@ sub new
     return $self;
 }
 
+sub set_defaults
+{
+    my ($class, %params) = @_;
+
+    foreach my $p (qw(valgrind))
+    {
+	$defaults{$p} = $params{$p}
+	    if defined $params{$p};
+    }
+}
+
 sub add_service
 {
     my ($self, $name, %params) = @_;
@@ -140,6 +154,7 @@ sub _binary
 
     if ($self->{valgrind})
     {
+	my $valgrind_logdir = $self->{basedir} . '/valgrind-logs';
 	mkpath $valgrind_logdir
 	    unless ( -d $valgrind_logdir );
 	push(@cmd,

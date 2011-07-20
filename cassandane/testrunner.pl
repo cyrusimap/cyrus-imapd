@@ -43,6 +43,7 @@ use strict;
 use warnings;
 use Cassandane::Unit::Runner;
 use Cassandane::Util::Log;
+use Cassandane::Instance;
 
 my $format = 'tap';
 my $output_dir = 'reports';
@@ -106,6 +107,10 @@ while (my $a = shift)
     elsif ($a eq '-v' || $a eq '--verbose')
     {
 	set_verbose(1);
+    }
+    elsif ($a eq '--valgrind')
+    {
+	Cassandane::Instance->set_defaults(valgrind => 1);
     }
     elsif ($a eq '-l' || $a eq '--list')
     {
