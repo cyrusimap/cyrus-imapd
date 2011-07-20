@@ -2312,6 +2312,13 @@ void parse_cached_envelope(char *env, char *tokens[], int tokens_size)
     char *c;
     int i = 0, ncom = 0, len;
 
+    /*
+     * We have no way of indicating that we parsed less than
+     * the requested number of tokens, but we can at least
+     * ensure that the array is correctly initialised to NULL.
+     */
+    memset(tokens, 0, tokens_size*sizeof(char*));
+
     c = env;
     while (*c != '\0') {
 	switch (*c) {
