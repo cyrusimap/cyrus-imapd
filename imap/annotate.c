@@ -2250,13 +2250,15 @@ static int annotate_canon_value(struct buf *value, int type)
 
     case ATTRIB_TYPE_BOOLEAN:
 	/* make sure its "true" or "false" */
-	if (!strcasecmp(value->s, "true")) {
+	if (value->len == 4 && !strncasecmp(value->s, "true", 4)) {
 	    buf_reset(value);
 	    buf_appendcstr(value, "true");
+	    buf_cstring(value);
 	}
-	else if (!strcasecmp(value->s, "false")) {
+	else if (value->len == 5 && !strncasecmp(value->s, "false", 5)) {
 	    buf_reset(value);
 	    buf_appendcstr(value, "false");
+	    buf_cstring(value);
 	}
 	else return IMAP_ANNOTATION_BADVALUE;
 	break;
