@@ -101,7 +101,7 @@ sub new
     if (!defined $stamp)
     {
 	$stamp = to_iso8601(DateTime->now);
-	$stamp =~ s/.*T(\d+)Z/\1/;
+	$stamp =~ s/.*T(\d+)Z/$1/;
     }
 
     if (!defined $self->{name})
