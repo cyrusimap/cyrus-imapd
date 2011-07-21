@@ -41,11 +41,8 @@
 
 hash_table *construct_hash_table(hash_table *table, size_t size, int use_mpool)
 {
-      if(!table)
-	  fatal("construct_hash_table called without a starting table",
-		EC_TEMPFAIL);
-      if(!size)
-	  fatal("construct_hash_table called without a size", EC_TEMPFAIL);
+      assert(table);
+      assert(size);
 
       table->size  = size;
 
