@@ -1203,9 +1203,8 @@ static void annotation_get_size(const annotate_cursor_t *cursor,
     struct mailbox *mailbox = NULL;
     struct buf value = BUF_INITIALIZER;
 
-    if (!fdata || !cursor->mbentry)
-	fatal("annotation_get_size called with bad parameters",
-	      EC_TEMPFAIL);
+    assert(fdata);
+    assert(cursor->mbentry);
 
     if (mailbox_open_irl(cursor->int_mboxname, &mailbox))
 	goto out;
@@ -1229,9 +1228,8 @@ static void annotation_get_lastupdate(const annotate_cursor_t *cursor,
     struct buf value = BUF_INITIALIZER;
     char *fname;
 
-    if(!fdata || !cursor->mbentry)
-	fatal("annotation_get_lastupdate called with bad parameters",
-	      EC_TEMPFAIL);
+    assert(fdata);
+    assert(cursor->mbentry);
 
     fname = mboxname_metapath(cursor->mbentry->partition,
 			      cursor->int_mboxname, META_INDEX, 0);
@@ -1257,9 +1255,8 @@ static void annotation_get_lastpop(const annotate_cursor_t *cursor,
     char valuebuf[RFC3501_DATETIME_MAX+1];
     struct buf value = BUF_INITIALIZER;
 
-    if(!fdata || !cursor->mbentry)
-      fatal("annotation_get_lastpop called with bad parameters",
-              EC_TEMPFAIL);
+    assert(fdata);
+    assert(cursor->mbentry);
 
     if (mailbox_open_irl(cursor->int_mboxname, &mailbox) != 0)
 	goto out;
@@ -1286,9 +1283,10 @@ static void annotation_get_mailboxopt(const annotate_cursor_t *cursor,
     uint32_t flag = (unsigned long)rock;
     struct buf value = BUF_INITIALIZER;
 
-    if (!cursor->int_mboxname || !entry || !fdata || !cursor->mbentry)
-	fatal("annotation_get_mailboxopt called with bad parameters",
-	      EC_TEMPFAIL);
+    assert(fdata);
+    assert(cursor->mbentry);
+    assert(entry);
+    assert(cursor->int_mboxname);
 
     if (mailbox_open_irl(cursor->int_mboxname, &mailbox) != 0)
 	goto out;
@@ -1312,9 +1310,10 @@ static void annotation_get_pop3showafter(const annotate_cursor_t *cursor,
     char valuebuf[RFC3501_DATETIME_MAX+1];
     struct buf value = BUF_INITIALIZER;
 
-    if(!cursor->int_mboxname || !entry || !fdata || !cursor->mbentry)
-      fatal("annotation_get_pop3showafter called with bad parameters",
-              EC_TEMPFAIL);
+    assert(fdata);
+    assert(cursor->mbentry);
+    assert(entry);
+    assert(cursor->int_mboxname);
 
     if (mailbox_open_irl(cursor->int_mboxname, &mailbox) != 0)
 	goto out;
@@ -1339,9 +1338,9 @@ static void annotation_get_specialuse(const annotate_cursor_t *cursor,
 {
     struct buf value = BUF_INITIALIZER;
 
-    if (!cursor->int_mboxname || !fdata || !cursor->mbentry)
-	fatal("annotation_get_lastupdate called with bad parameters",
-	      EC_TEMPFAIL);
+    assert(fdata);
+    assert(cursor->mbentry);
+    assert(cursor->int_mboxname);
 
     if (cursor->mbentry->specialuse)
 	buf_appendcstr(&value, cursor->mbentry->specialuse);
