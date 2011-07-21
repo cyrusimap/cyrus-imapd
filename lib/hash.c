@@ -177,7 +177,7 @@ void *hash_lookup(const char *key, hash_table *table)
 */
 /* Warning: use this function judiciously if you are using memory pools,
  * since it will leak memory until you get rid of the entire hash table */
-void *hash_del(char *key, hash_table *table)
+void *hash_del(const char *key, hash_table *table)
 {
       unsigned val = strhash(key) % table->size;
       void *data;
@@ -293,7 +293,7 @@ void free_hash_table(hash_table *table, void (*func)(void *))
 ** node in the table, passing it the key, the associated data and 'rock'.
 */
 
-void hash_enumerate(hash_table *table, void (*func)(char *, void *, void *),
+void hash_enumerate(hash_table *table, void (*func)(const char *, void *, void *),
 		    void *rock)
 {
       unsigned i;
