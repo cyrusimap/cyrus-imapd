@@ -305,7 +305,7 @@ struct capa_struct base_capabilities[] = {
     { "SORT=UID",              2 },  /* not standard */
     { "THREAD=ORDEREDSUBJECT", 2 },
     { "THREAD=REFERENCES",     2 },
-    { "ANNOTATEMORE",          2 },
+    { "ANNOTATE-EXPERIMENT-1", 2 },
     { "METADATA",              2 },
     { "LIST-EXTENDED",         2 },
     { "LIST-STATUS",           2 },
