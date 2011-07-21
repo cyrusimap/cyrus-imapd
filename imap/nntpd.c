@@ -2485,7 +2485,7 @@ struct enum_rock {
 /*
  * hash_enumerate() callback function to LIST (proxy)
  */
-void list_proxy(char *server, void *data __attribute__((unused)), void *rock)
+void list_proxy(const char *server, void *data __attribute__((unused)), void *rock)
 {
     struct enum_rock *erock = (struct enum_rock *) rock;
     struct backend *be;

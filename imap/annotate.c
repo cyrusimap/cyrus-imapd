@@ -1697,7 +1697,7 @@ struct proxy_rock {
     struct entryattlist *entryatts;
 };
 
-static void store_proxy(char *server, void *data __attribute__((unused)),
+static void store_proxy(const char *server, void *data __attribute__((unused)),
 			void *rock)
 {
     struct proxy_rock *prock = (struct proxy_rock *) rock;

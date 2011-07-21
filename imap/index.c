@@ -4373,10 +4373,12 @@ static void ref_link_messages(MsgData *msgdata, Thread **newnode,
 /*
  * Gather orphan messages under the root node.
  */
-static void ref_gather_orphans(char *key __attribute__((unused)),
-			       Thread *node,
-			       struct rootset *rootset)
+static void ref_gather_orphans(const char *key __attribute__((unused)),
+			       void *data, void *rock)
 {
+    Thread *node = (Thread *)data;
+    struct rootset *rootset = (struct rootset *)rock;
+
     /* we only care about nodes without parents */
     if (!node->parent) {
 	if (node->next) {
@@ -4775,8 +4777,7 @@ static void _index_thread_ref(struct index_state *state, unsigned *msgno_list, i
 
     /* Step 2: find the root set (gather all of the orphan messages) */
     rootset.nroot = 0;
-    hash_enumerate(&id_table, (void (*)(char*,void*,void*)) ref_gather_orphans,
-		   &rootset);
+    hash_enumerate(&id_table, ref_gather_orphans, &rootset);
 
     /* discard id_table */
     free_hash_table(&id_table, NULL);

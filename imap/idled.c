@@ -232,7 +232,7 @@ void process_msg(idle_data_t *idledata)
     }
 }
 
-void idle_alert(char *key __attribute__((unused)),
+void idle_alert(const char *key __attribute__((unused)),
 		void *data,
 		void *rock __attribute__((unused)))
 {

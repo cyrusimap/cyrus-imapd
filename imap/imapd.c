@@ -252,7 +252,7 @@ struct list_rock {
 
 /* Information about one mailbox name that LIST returns */
 struct list_entry {
-    char *name;
+    const char *name;
     int attributes; /* bitmap of MBOX_ATTRIBUTE_* */
 };
 
@@ -440,7 +440,7 @@ static void freesortcrit(struct sortcrit *s);
 
 static int set_haschildren(char *name, int matchlen, int maycreate,
 			   int *attributes);
-static void list_response(char *name, int attributes,
+static void list_response(const char *name, int attributes,
 			  struct listargs *listargs);
 static int set_subscribed(char *name, int matchlen, int maycreate,
 			  void *rock);
@@ -10072,7 +10072,7 @@ static void specialuse_flags(struct mboxlist_entry *mbentry, const char *sep,
 }
 
 /* Print LIST or LSUB untagged response */
-static void list_response(char *name, int attributes,
+static void list_response(const char *name, int attributes,
 			  struct listargs *listargs)
 {
     const struct mbox_name_attribute *attr;
@@ -10506,7 +10506,8 @@ static int recursivematch_cb(char *name, int matchlen, int maycreate,
 }
 
 /* callback for hash_enumerate */
-void copy_to_array(char *key, void *data, void *void_rock) {
+void copy_to_array(const char *key, void *data, void *void_rock)
+{
     int *attributes = (int *)data;
     struct list_rock_recursivematch *rock =
 	(struct list_rock_recursivematch *)void_rock;

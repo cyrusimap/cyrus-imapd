@@ -113,7 +113,7 @@ struct subtxn {
 struct txn {
     hash_table table;	/* hash table of sub-transactions */
 
-    int (*proc)(char *, struct subtxn *);  /* commit/abort procedure */
+    int (*proc)(const char *, struct subtxn *);  /* commit/abort procedure */
 
     int result;		/* final result of the commit/abort */
 };
@@ -196,7 +196,7 @@ static void hash_quota(char *buf, size_t size, const char *qr, char *path)
 }
 
 /* other routines call this one when they fail */
-static int abort_subtxn(char *fname, struct subtxn *tid)
+static int abort_subtxn(const char *fname, struct subtxn *tid)
 {
     int r = CYRUSDB_OK;
 
@@ -233,7 +233,7 @@ static int abort_subtxn(char *fname, struct subtxn *tid)
     return r;
 }
 
-static int commit_subtxn(char *fname, struct subtxn *tid)
+static int commit_subtxn(const char *fname, struct subtxn *tid)
 {
     int writefd;
     int r = 0;
@@ -846,7 +846,7 @@ static int delete(struct db *db,
     return mystore(db, key, keylen, NULL, 0, mytid, 1);
 }
 
-static void txn_proc(char *fname, void *data, void *rock)
+static void txn_proc(const char *fname, void *data, void *rock)
 {
     struct txn *tid = (struct txn *) rock;
     int r;

@@ -176,7 +176,7 @@ void config_foreachoverflowstring(void (*func)(const char *, const char *, void 
 {
     if (!config_filename) return;
 
-    hash_enumerate(&confighash, (void (*)(char *, void *, void *)) func, rock);
+    hash_enumerate(&confighash, (void (*)(const char *, void *, void *)) func, rock);
 }
 
 const char *config_partitiondir(const char *partition)
