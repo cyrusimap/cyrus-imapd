@@ -111,7 +111,7 @@ static struct namespace arb_namespace;
 /* forward declarations */
 static void usage(void);
 static void run_users(void);
-static void make_report(char *key, void *data, void *rock);
+static void make_report(const char *key, void *data, void *rock);
 static void process_seen(const char *path, const char *user);
 static void process_subs(const char *path, const char *user);
 static int do_mailbox(const char *name, int matchlen, int maycreate, void *rock);
@@ -514,15 +514,18 @@ void long_report_users(struct user_list *u, const char *mbox, char type)
     }
 }
 
-static void make_report(char *key, void *data, void *rock __attribute__((unused)))
+static void make_report(const char *key, void *data, void *rock __attribute__((unused)))
 {
     struct arb_mailbox_data *mbox = (struct arb_mailbox_data *)data;
+    char *extkey;
 
     /* Skip underread user mailboxes */
     if(!strncasecmp(key, "user.", 5) && mbox->nreaders <= 1)
 	return;    
 
-    mboxname_hiersep_toexternal(&arb_namespace, key, 0);
+    extkey = xstrdup(key);
+    mboxname_hiersep_toexternal(&arb_namespace, extkey, 0);
+    key = extkey;
 
     if (long_report) {
 	long_report_users(mbox->readers, key, 'r');
@@ -537,4 +540,5 @@ static void make_report(char *key, void *data, void *rock __attribute__((unused)
 	}
 	printf("\n");
     }
+    free(extkey);
 }
