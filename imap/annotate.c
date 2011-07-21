@@ -199,9 +199,9 @@ static int _annotate_may_store(const struct storedata *sdata,
 
 /* String List Management */
 /*
- * Append 's' to the strlist 'l'.  Possibly include metadata.
+ * Append 's' to the strlist 'l'.
  */
-void appendstrlist_withdata(struct strlist **l, char *s, void *d, size_t size)
+void appendstrlist(struct strlist **l, char *s)
 {
     struct strlist **tail = l;
 
@@ -210,21 +210,7 @@ void appendstrlist_withdata(struct strlist **l, char *s, void *d, size_t size)
     *tail = (struct strlist *)xmalloc(sizeof(struct strlist));
     (*tail)->s = xstrdup(s);
     (*tail)->p = 0;
-    if(d && size) {
-	(*tail)->rock = xmalloc(size);
-	memcpy((*tail)->rock, d, size);
-    } else {
-	(*tail)->rock = NULL;
-    }
     (*tail)->next = 0;
-}
-
-/*
- * Append 's' to the strlist 'l'.
- */
-void appendstrlist(struct strlist **l, char *s) 
-{
-    appendstrlist_withdata(l, s, NULL, 0);
 }
 
 /*
@@ -239,7 +225,6 @@ void appendstrlistpat(struct strlist **l, char *s)
 
     *tail = (struct strlist *)xmalloc(sizeof(struct strlist));
     (*tail)->s = s;
-    (*tail)->rock = NULL;
     (*tail)->p = charset_compilepat(s);
     (*tail)->next = 0;
 }
@@ -255,7 +240,6 @@ void freestrlist(struct strlist *l)
 	n = l->next;
 	free(l->s);
 	if (l->p) charset_freepat(l->p);
-	if (l->rock) free(l->rock);
 	free((char *)l);
 	l = n;
     }

@@ -56,7 +56,6 @@
 struct strlist {
     char *s;                   /* String */
     comp_pat *p;               /* Compiled pattern, for search */
-    void *rock;                /* Associated metadata */
     struct strlist *next;
 };
 
@@ -113,7 +112,6 @@ struct annotate_scope
 /* String List Management */
 void appendstrlist(struct strlist **l, char *s);
 void appendstrlistpat(struct strlist **l, char *s);
-void appendstrlist_withdata(struct strlist **l, char *s, void *d, size_t size);
 void freestrlist(struct strlist *l);
 
 /* Attribute Management (also used by ID) */
