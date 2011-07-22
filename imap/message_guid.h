@@ -92,8 +92,8 @@ void message_guid_export(const struct message_guid *guid, unsigned char *buf);
 /* Import Message GUID from packed sequence (MESSAGE_GUID_SIZE)
  * (Wrapper for memcpy() with current implementation)
  */
-struct message_guid *message_guid_import(struct message_guid *guid,
-					 const unsigned char *buf);
+void message_guid_import(struct message_guid *guid,
+			 const unsigned char *buf);
 
 
 /* Routines for manipulating text value */

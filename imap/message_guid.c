@@ -203,17 +203,12 @@ void message_guid_export(const struct message_guid *guid, unsigned char *buf)
  *
  ************************************************************************/
 
-struct message_guid *message_guid_import(struct message_guid *guid,
-					 const unsigned char *buf)
+void message_guid_import(struct message_guid *guid,
+			 const unsigned char *buf)
 {
-    static struct message_guid tmp;
-
-    if (!guid) guid = &tmp;
-
+    assert(guid);
     guid->status = GUID_UNKNOWN;
     memcpy(guid->value, buf, MESSAGE_GUID_SIZE);
-
-    return(guid);
 }
 
 
