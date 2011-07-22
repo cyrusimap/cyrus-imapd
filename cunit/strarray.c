@@ -2,6 +2,14 @@
 #include "xmalloc.h"
 #include "strarray.h"
 
+static void test_fini_null(void)
+{
+    /* _fini(NULL) is harmless */
+    strarray_fini(NULL);
+    /* _free(NULL) is harmless */
+    strarray_free(NULL);
+}
+
 static void test_auto(void)
 {
     strarray_t sa = STRARRAY_INITIALIZER;
@@ -327,6 +335,75 @@ static void test_insertm(void)
 #undef WORD2
 #undef WORD3
 #undef WORD4
+}
+
+/* test that _set(), _setm(), _insert() and _insertm() of a bad
+ * index will fail silently and leave no side effects including
+ * memory leaks */
+static void test_bad_index(void)
+{
+    strarray_t sa = STRARRAY_INITIALIZER;
+#define WORD0	"lorem"
+#define WORD1	"ipsum"
+#define WORD2	"dolor"
+    char *s = xstrdup(WORD0);
+
+    CU_ASSERT_EQUAL(sa.count, 0);
+    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_PTR_NULL(strarray_nth(&sa, 0));
+    CU_ASSERT_PTR_NULL(strarray_nth(&sa, -1));
+
+    /* when the strarray is empty, -1 is a bad index */
+
+    strarray_setm(&sa, -1, s);
+    CU_ASSERT_EQUAL(sa.count, 0);
+    CU_ASSERT_PTR_NULL(strarray_nth(&sa, 0));
+    CU_ASSERT_PTR_NULL(strarray_nth(&sa, -1));
+
+    strarray_set(&sa, -1, WORD0);
+    CU_ASSERT_EQUAL(sa.count, 0);
+    CU_ASSERT_PTR_NULL(strarray_nth(&sa, 0));
+    CU_ASSERT_PTR_NULL(strarray_nth(&sa, -1));
+
+    strarray_insertm(&sa, -1, s);
+    CU_ASSERT_EQUAL(sa.count, 0);
+    CU_ASSERT_PTR_NULL(strarray_nth(&sa, 0));
+    CU_ASSERT_PTR_NULL(strarray_nth(&sa, -1));
+
+    strarray_insert(&sa, -1, WORD0);
+    CU_ASSERT_EQUAL(sa.count, 0);
+    CU_ASSERT_PTR_NULL(strarray_nth(&sa, 0));
+    CU_ASSERT_PTR_NULL(strarray_nth(&sa, -1));
+
+    /* a negative number larger than the (non-zero) count is a bad index */
+    strarray_append(&sa, WORD1);
+    strarray_append(&sa, WORD2);
+
+    strarray_setm(&sa, -4, s);
+    CU_ASSERT_EQUAL(sa.count, 2);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD1);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, -1), WORD2);
+
+    strarray_set(&sa, -4, WORD0);
+    CU_ASSERT_EQUAL(sa.count, 2);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD1);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, -1), WORD2);
+
+    strarray_insertm(&sa, -4, s);
+    CU_ASSERT_EQUAL(sa.count, 2);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD1);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, -1), WORD2);
+
+    strarray_insert(&sa, -4, WORD0);
+    CU_ASSERT_EQUAL(sa.count, 2);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD1);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, -1), WORD2);
+
+    free(s);
+    strarray_fini(&sa);
+#undef WORD0
+#undef WORD1
+#undef WORD2
 }
 
 static void test_join(void)
@@ -979,3 +1056,57 @@ static void test_pop(void)
 #undef WORD3
 #undef WORD4
 }
+
+static void test_add(void)
+{
+    strarray_t sa = STRARRAY_INITIALIZER;
+#define WORD0	"lorem"
+#define WORD1	"ipsum"
+
+    CU_ASSERT_EQUAL(sa.count, 0);
+    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_PTR_NULL(strarray_nth(&sa, 0));
+    CU_ASSERT_PTR_NULL(strarray_nth(&sa, -1));
+
+    /* _add() on an empty array appends */
+    strarray_add(&sa, WORD0);
+    CU_ASSERT_EQUAL(sa.count, 1);
+    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_PTR_NOT_NULL(sa.data);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
+
+    /* _add() of an item already present is a no-op */
+    strarray_add(&sa, WORD0);
+    CU_ASSERT_EQUAL(sa.count, 1);
+    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_PTR_NOT_NULL(sa.data);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
+
+    /* _add() of an item not already present appends */
+    strarray_add(&sa, WORD1);
+    CU_ASSERT_EQUAL(sa.count, 2);
+    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_PTR_NOT_NULL(sa.data);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
+
+    /* _add() of an item already present is a no-op */
+    strarray_add(&sa, WORD0);
+    CU_ASSERT_EQUAL(sa.count, 2);
+    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_PTR_NOT_NULL(sa.data);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
+
+    strarray_add(&sa, WORD1);
+    CU_ASSERT_EQUAL(sa.count, 2);
+    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_PTR_NOT_NULL(sa.data);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
+
+    strarray_fini(&sa);
+#undef WORD0
+#undef WORD1
+}
+
