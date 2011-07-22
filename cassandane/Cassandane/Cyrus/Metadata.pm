@@ -505,6 +505,7 @@ sub set_msg_annotation
 {
     my ($self, $store, $uid, $entry, $attrib, $value) = @_;
 
+    $store ||= $self->{store};
     $store->_connect();
     $store->_select();
     my $talk = $store->get_client();
@@ -1143,6 +1144,103 @@ sub test_msg_replication_exp_bot
     xlog "After second replication, the message is still missing on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 }
+
+sub test_msg_sort_order
+{
+    my ($self) = @_;
+
+    xlog "testing RFC5257 SORT command ANNOTATION order criterion";
+
+    my $entry = '/comment';
+    my $attrib = 'value.priv';
+    # 20 random dictionary words
+    my @values = ( qw(gradual flips tempe cud flaunt nina crackle congo),
+		   qw(buttons coating byrd arise ayyubid badgers argosy),
+		   qw(sutton dallied belled fondues mimi) );
+    # the expected result of sorting those words alphabetically
+    my @exp_order = ( 15, 12, 13, 14, 18, 9, 11, 10, 8,
+		      7, 4, 17, 5, 2, 19, 1, 20, 6, 16, 3 );
+
+    $self->{store}->set_fetch_attributes('uid', "annotation ($entry $attrib)");
+
+    xlog "Append some messages and store annotations";
+    my %exp;
+    for (my $i = 0 ; $i < 20 ; $i++)
+    {
+	my $letter = chr(ord('A')+$i);
+	my $uid = $i+1;
+	my $value = $values[$i];
+
+	$exp{$letter} = $self->make_message("Message $letter");
+	$self->set_msg_annotation(undef, $uid, $entry, $attrib, $value);
+	$exp{$letter}->set_attribute('uid', $uid);
+	$exp{$letter}->set_annotation($entry, $attrib, $value);
+    }
+    $self->check_messages(\%exp);
+
+    my $talk = $self->{store}->get_client();
+
+    xlog "run the SORT command with an ANNOTATION order criterion";
+    my $res = $talk->sort("(ANNOTATION $entry $attrib)", 'utf-8', 'all');
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_not_null($res);
+    $self->assert_deep_equals(\@exp_order, $res);
+}
+
+sub test_msg_sort_search
+{
+    my ($self) = @_;
+
+    xlog "testing RFC5257 SORT command ANNOTATION search criterion";
+
+    my $entry = '/comment';
+    my $attrib = 'value.priv';
+    # 10 random dictionary words, and 10 carefully chosen ones
+    my @values = ( qw(deirdre agreed feedback cuspids breeds decreed greedily),
+		   qw(gibbers eakins flash needful yules linseed equine hangman),
+		   qw(hatters ragweed pureed cloaked heedless) );
+    # the expected result of sorting the words with 'eed' alphabetically
+    my @exp_order = ( 2, 5, 6, 3, 7, 20, 13, 11, 18, 17 );
+    # the expected result of search for words with 'eed' and uid order
+    my @exp_search = ( 2, 3, 5, 6, 7, 11, 13, 17, 18, 20 );
+
+    $self->{store}->set_fetch_attributes('uid', "annotation ($entry $attrib)");
+
+    xlog "Append some messages and store annotations";
+    my %exp;
+    my $now = DateTime->now->epoch;
+    for (my $i = 0 ; $i < 20 ; $i++)
+    {
+	my $letter = chr(ord('A')+$i);
+	my $uid = $i+1;
+	my $value = $values[$i];
+	my $date = DateTime->from_epoch(epoch => $now - (20-$i)*60);
+
+	$exp{$letter} = $self->make_message("Message $letter",
+					    date => $date);
+	$self->set_msg_annotation(undef, $uid, $entry, $attrib, $value);
+	$exp{$letter}->set_attribute('uid', $uid);
+	$exp{$letter}->set_annotation($entry, $attrib, $value);
+    }
+    $self->check_messages(\%exp);
+
+    my $talk = $self->{store}->get_client();
+
+    xlog "run the SORT command with an ANNOTATION search criterion";
+    my $res = $talk->sort("(DATE)", 'utf-8',
+		          'ANNOTATION', $entry, $attrib, { Quote => "eed" });
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_not_null($res);
+    $self->assert_deep_equals(\@exp_search, $res);
+
+    xlog "run the SORT command with both ANNOTATION search & order criteria";
+    my $res = $talk->sort("(ANNOTATION $entry $attrib)", 'utf-8',
+		          'ANNOTATION', $entry, $attrib, { Quote => "eed" });
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_not_null($res);
+    $self->assert_deep_equals(\@exp_order, $res);
+}
+
 
 
 
