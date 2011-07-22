@@ -15,6 +15,14 @@
 
 #define PTRNOTHERE  ((void *)0xdefaced0)
 
+static void test_fini_null(void)
+{
+    /* _fini(NULL) is harmless */
+    ptrarray_fini(NULL);
+    /* _free(NULL) is harmless */
+    ptrarray_free(NULL);
+}
+
 static void test_auto(void)
 {
     ptrarray_t pa = PTRARRAY_INITIALIZER;
@@ -186,6 +194,46 @@ static void test_insert(void)
     ptrarray_fini(&pa);
 }
 
+/* test that _set() and _insert() of a bad
+ * index will fail silently and leave no side effects */
+static void test_bad_index(void)
+{
+    ptrarray_t pa = PTRARRAY_INITIALIZER;
+
+    CU_ASSERT_EQUAL(pa.count, 0);
+    CU_ASSERT(pa.alloc >= pa.count);
+    CU_ASSERT_PTR_NULL(ptrarray_nth(&pa, 0));
+    CU_ASSERT_PTR_NULL(ptrarray_nth(&pa, -1));
+
+    /* when the ptrarray is empty, -1 is a bad index */
+
+    ptrarray_set(&pa, -1, PTR0);
+    CU_ASSERT_EQUAL(pa.count, 0);
+    CU_ASSERT_PTR_NULL(ptrarray_nth(&pa, 0));
+    CU_ASSERT_PTR_NULL(ptrarray_nth(&pa, -1));
+
+    ptrarray_insert(&pa, -1, PTR0);
+    CU_ASSERT_EQUAL(pa.count, 0);
+    CU_ASSERT_PTR_NULL(ptrarray_nth(&pa, 0));
+    CU_ASSERT_PTR_NULL(ptrarray_nth(&pa, -1));
+
+    /* a negative number larger than the (non-zero) count is a bad index */
+    ptrarray_append(&pa, PTR1);
+    ptrarray_append(&pa, PTR2);
+
+    ptrarray_set(&pa, -4, PTR0);
+    CU_ASSERT_EQUAL(pa.count, 2);
+    CU_ASSERT_PTR_EQUAL(ptrarray_nth(&pa, 0), PTR1);
+    CU_ASSERT_PTR_EQUAL(ptrarray_nth(&pa, -1), PTR2);
+
+    ptrarray_insert(&pa, -4, PTR0);
+    CU_ASSERT_EQUAL(pa.count, 2);
+    CU_ASSERT_PTR_EQUAL(ptrarray_nth(&pa, 0), PTR1);
+    CU_ASSERT_PTR_EQUAL(ptrarray_nth(&pa, -1), PTR2);
+
+    ptrarray_fini(&pa);
+}
+
 static void test_remove(void)
 {
     ptrarray_t pa = PTRARRAY_INITIALIZER;
@@ -327,6 +375,19 @@ static void test_truncate(void)
     CU_ASSERT_PTR_NULL(ptrarray_nth(&pa, 5));
     CU_ASSERT_PTR_NULL(ptrarray_nth(&pa, 6));
 
+    /* truncate to the existing size is a no-op */
+    ptrarray_truncate(&pa, 7);
+    CU_ASSERT_EQUAL(pa.count, 7);
+    CU_ASSERT(pa.alloc >= pa.count);
+    CU_ASSERT_PTR_NOT_NULL(pa.data);
+    CU_ASSERT_PTR_EQUAL(ptrarray_nth(&pa, 0), PTR0);
+    CU_ASSERT_PTR_EQUAL(ptrarray_nth(&pa, 1), PTR1);
+    CU_ASSERT_PTR_EQUAL(ptrarray_nth(&pa, 2), PTR2);
+    CU_ASSERT_PTR_EQUAL(ptrarray_nth(&pa, 3), PTR3);
+    CU_ASSERT_PTR_EQUAL(ptrarray_nth(&pa, 4), PTR4);
+    CU_ASSERT_PTR_NULL(ptrarray_nth(&pa, 5));
+    CU_ASSERT_PTR_NULL(ptrarray_nth(&pa, 6));
+
     /* shrink the array */
     ptrarray_truncate(&pa, 4);
     CU_ASSERT_EQUAL(pa.count, 4);
@@ -408,6 +469,55 @@ static void test_find(void)
     CU_ASSERT_EQUAL(i, 4);
     i = ptrarray_find(&pa, PTR0, i+1);
     CU_ASSERT_EQUAL(i, -1);
+
+    ptrarray_fini(&pa);
+}
+
+static void test_add(void)
+{
+    ptrarray_t pa = PTRARRAY_INITIALIZER;
+
+    CU_ASSERT_EQUAL(pa.count, 0);
+    CU_ASSERT(pa.alloc >= pa.count);
+    CU_ASSERT_PTR_NULL(ptrarray_nth(&pa, 0));
+    CU_ASSERT_PTR_NULL(ptrarray_nth(&pa, -1));
+
+    /* _add() on an empty array appends */
+    ptrarray_add(&pa, PTR0);
+    CU_ASSERT_EQUAL(pa.count, 1);
+    CU_ASSERT(pa.alloc >= pa.count);
+    CU_ASSERT_PTR_NOT_NULL(pa.data);
+    CU_ASSERT_PTR_EQUAL(ptrarray_nth(&pa, 0), PTR0);
+
+    /* _add() of an item already present is a no-op */
+    ptrarray_add(&pa, PTR0);
+    CU_ASSERT_EQUAL(pa.count, 1);
+    CU_ASSERT(pa.alloc >= pa.count);
+    CU_ASSERT_PTR_NOT_NULL(pa.data);
+    CU_ASSERT_PTR_EQUAL(ptrarray_nth(&pa, 0), PTR0);
+
+    /* _add() of an item not already present appends */
+    ptrarray_add(&pa, PTR1);
+    CU_ASSERT_EQUAL(pa.count, 2);
+    CU_ASSERT(pa.alloc >= pa.count);
+    CU_ASSERT_PTR_NOT_NULL(pa.data);
+    CU_ASSERT_PTR_EQUAL(ptrarray_nth(&pa, 0), PTR0);
+    CU_ASSERT_PTR_EQUAL(ptrarray_nth(&pa, 1), PTR1);
+
+    /* _add() of an item already present is a no-op */
+    ptrarray_add(&pa, PTR0);
+    CU_ASSERT_EQUAL(pa.count, 2);
+    CU_ASSERT(pa.alloc >= pa.count);
+    CU_ASSERT_PTR_NOT_NULL(pa.data);
+    CU_ASSERT_PTR_EQUAL(ptrarray_nth(&pa, 0), PTR0);
+    CU_ASSERT_PTR_EQUAL(ptrarray_nth(&pa, 1), PTR1);
+
+    ptrarray_add(&pa, PTR1);
+    CU_ASSERT_EQUAL(pa.count, 2);
+    CU_ASSERT(pa.alloc >= pa.count);
+    CU_ASSERT_PTR_NOT_NULL(pa.data);
+    CU_ASSERT_PTR_EQUAL(ptrarray_nth(&pa, 0), PTR0);
+    CU_ASSERT_PTR_EQUAL(ptrarray_nth(&pa, 1), PTR1);
 
     ptrarray_fini(&pa);
 }
