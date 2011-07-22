@@ -61,7 +61,7 @@ sub store_params
     $params{type} = 'imap';
     $params{host} = $self->{host};
     $params{port} = $self->{port};
-    $params{folder} = 'inbox.CassandaneTestFolder'
+    $params{folder} = 'inbox'
 	unless defined $params{folder};
     $params{username} = 'cassandane'
 	unless defined $params{username};
