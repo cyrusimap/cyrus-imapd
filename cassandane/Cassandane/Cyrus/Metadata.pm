@@ -209,6 +209,21 @@ sub check_messages
     return $actual;
 }
 
+#
+# Test the capabilities
+#
+sub test_capabilities
+{
+    my ($self) = @_;
+    my $imaptalk = $self->{store}->get_client();
+
+    my $caps = $imaptalk->capability();
+    xlog "RFC5257 defines capability ANNOTATE-EXPERIMENT-1";
+    $self->assert_not_null($caps->{"annotate-experiment-1"});
+    xlog "RFC5464 defines capability METADATA";
+    $self->assert_not_null($caps->{"metadata"});
+}
+
 
 #
 # Test the cyrus annotations
