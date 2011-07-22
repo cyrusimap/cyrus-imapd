@@ -67,8 +67,8 @@ hash_table *construct_hash_table(hash_table *table, size_t size, int use_mpool)
 
 /*
 ** Insert 'key' into hash table.
-** Returns pointer to old data associated with the key, if any, or
-** NULL if the key wasn't in the table previously.
+** Returns a non-NULL pointer which is either the passed @data pointer
+** or, if there was already an entry for @key, the old data pointer.
 */
 
 void *hash_insert(const char *key, void *data, hash_table *table)
