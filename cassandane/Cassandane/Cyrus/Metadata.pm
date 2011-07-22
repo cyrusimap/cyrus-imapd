@@ -458,6 +458,49 @@ sub test_permessage_getset
 	    $res);
 }
 
+sub test_permessage_unknown
+{
+    my ($self) = @_;
+
+    xlog "testing getting and setting unknown annotations on a message";
+
+    xlog "Append a message";
+    my %msg;
+    $msg{A} = $self->make_message('Message A');
+
+    my $entry = '/thereisnosuchentry';
+    my $attrib = 'value.priv';
+    my $value1 = "Hello World";
+
+    xlog "fetch annotation - should be no values";
+    my $talk = $self->{store}->get_client();
+    my $res = $talk->fetch('1:*',
+			   ['annotation', [$entry, $attrib]]);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_not_null($res);
+    $self->assert_deep_equals(
+	    {
+		1 => { annotation => [ $entry, [ $attrib, undef ] ] },
+	    },
+	    $res);
+
+    xlog "store annotation - should fail";
+    $talk->store('1', 'annotation',
+	         [$entry, [$attrib, $value1]]);
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+
+    xlog "fetch the annotation again, should see nothing";
+    $res = $talk->fetch('1:*',
+		        ['annotation', [$entry, $attrib]]);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_not_null($res);
+    $self->assert_deep_equals(
+	    {
+		1 => { annotation => [ $entry, [ $attrib, undef ] ] },
+	    },
+	    $res);
+}
+
 sub set_msg_annotation
 {
     my ($self, $store, $uid, $entry, $attrib, $value) = @_;
