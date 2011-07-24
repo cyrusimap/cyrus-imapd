@@ -6916,10 +6916,10 @@ static int parse_statusitems(unsigned *statusitemsp, const char **errstr)
     int c;
 
     c = prot_getc(imapd_in);
-    if (c != '(') goto err;
+    if (c != '(') return EOF;
 
     c = getword(imapd_in, &arg);
-    if (arg.s[0] == '\0') goto err;
+    if (arg.s[0] == '\0') return EOF;
     for (;;) {
 	lcase(arg.s);
 	if (!strcmp(arg.s, "messages")) {
@@ -6960,10 +6960,6 @@ static int parse_statusitems(unsigned *statusitemsp, const char **errstr)
     /* success */
     *statusitemsp = statusitems;
     return c;
-
- err:
-    *errstr = "Bad status string";
-    return EOF;
 }
 
 static int print_statusline(const char *extname, unsigned statusitems,
@@ -7026,7 +7022,7 @@ void cmd_status(char *tag, char *name)
     int c;
     unsigned statusitems = 0;
     char mailboxname[MAX_MAILBOX_BUFFER];
-    const char *errstr;
+    const char *errstr = "Bad status string";
     struct mboxlist_entry *mbentry = NULL;
     struct statusdata sdata;
     int r = 0;
@@ -9862,7 +9858,7 @@ int getlistretopts(char *tag, struct listargs *args)
 	else if (!strcmp(buf.s, "special-use"))
 	    args->ret |= LIST_RET_SPECIALUSE;
 	else if (!strcmp(buf.s, "status")) {
-	    const char *errstr;
+	    const char *errstr = "Bad status string";
 	    args->ret |= LIST_RET_STATUS;
 	    c = parse_statusitems(&args->statusitems, &errstr);
 	    if (c == EOF) {
