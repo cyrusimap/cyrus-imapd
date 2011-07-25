@@ -261,6 +261,147 @@ sub test_shared
     $self->assert_str_equals('true', $dup->{INBOX}{"/shared/vendor/cmu/cyrus-imapd/duplicatedeliver"});
 }
 
+#
+# Test the /private/specialuse annotation defined by RFC6154.
+#
+sub test_specialuse
+{
+    my ($self) = @_;
+
+    xlog "testing /private/specialuse";
+
+    my $imaptalk = $self->{store}->get_client();
+    my $res;
+#
+#     Cyrus incorrectly implements /shared semantics for
+#     the specialuse annotation, which is not correct for
+#     the final RFC.
+#
+#     my $entry = '/private/specialuse';
+    my $entry = '/shared/specialuse';
+    my @testcases = (
+	# Cyrus has no virtual folders, so cannot do \All
+	{
+	    folder => 'a',
+	    specialuse => '\All',
+	    result => 'no'
+	},
+	{
+	    folder => 'b',
+	    specialuse => '\Archive',
+	    result => 'ok'
+	},
+	{
+	    folder => 'c',
+	    specialuse => '\Drafts',
+	    result => 'ok'
+	},
+	# Cyrus has no virtual folders, so cannot do \Flagged
+	{
+	    folder => 'd',
+	    specialuse => '\Flagged',
+	    result => 'no'
+	},
+	{
+	    folder => 'e',
+	    specialuse => '\Junk',
+	    result => 'ok'
+	},
+	{
+	    folder => 'f',
+	    specialuse => '\Sent',
+	    result => 'ok'
+	},
+	{
+	    folder => 'g',
+	    specialuse => '\Trash',
+	    result => 'ok'
+	},
+	# Tokens not defined in the RFC are rejected
+	{
+	    folder => 'h',
+	    specialuse => '\Nonesuch',
+	    result => 'no'
+	},
+	# Cyrus doesn't support more than a single special use
+	# token per folder.
+	{
+	    folder => 'i',
+	    specialuse => '\Sent \Trash',
+	    result => 'no'
+	},
+    );
+
+    xlog "First create all the folders";
+    foreach my $tc (@testcases)
+    {
+	$imaptalk->create("INBOX.$tc->{folder}")
+	    or die "Cannot create mailbox INBOX.$tc->{folder}: $@";
+    }
+
+    foreach my $tc (@testcases)
+    {
+	my $folder = "INBOX.$tc->{folder}";
+
+	xlog "initial value for $folder is NIL";
+	$res = $imaptalk->getmetadata($folder, $entry);
+	$self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+	$self->assert_not_null($res);
+	$self->assert_deep_equals({
+	    $folder => { $entry => undef }
+	}, $res);
+
+	xlog "can set $folder to $tc->{specialuse}";
+	$imaptalk->setmetadata($folder, $entry, $tc->{specialuse});
+	$self->assert_str_equals($tc->{result}, $imaptalk->get_last_completion_response());
+
+	xlog "can get the set value back";
+	$res = $imaptalk->getmetadata($folder, $entry);
+	$self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+	$self->assert_not_null($res);
+	my $expected = {
+		$folder => { $entry => ($tc->{result} eq 'ok' ?  $tc->{specialuse} : undef) }
+	    };
+	$self->assert_deep_equals($expected, $res);
+    }
+
+    xlog "can get same values in a new connection";
+    $self->{store}->disconnect();
+    $imaptalk = $self->{store}->get_client();
+
+    foreach my $tc (@testcases)
+    {
+	my $folder = "INBOX.$tc->{folder}";
+
+	$res = $imaptalk->getmetadata($folder, $entry);
+	$self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+	$self->assert_not_null($res);
+	my $expected = {
+		$folder => { $entry => ($tc->{result} eq 'ok' ?  $tc->{specialuse} : undef) }
+	    };
+	$self->assert_deep_equals($expected, $res);
+    }
+
+    xlog "can delete values";
+    foreach my $tc (@testcases)
+    {
+	next unless ($tc->{result} eq 'ok');
+	my $folder = "INBOX.$tc->{folder}";
+
+	$imaptalk->setmetadata($folder, $entry, undef);
+	$self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+	$res = $imaptalk->getmetadata($folder, $entry);
+	$self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+	$self->assert_not_null($res);
+	my $expected = {
+		$folder => { $entry => undef }
+	    };
+	$self->assert_deep_equals($expected, $res);
+    }
+
+}
+
 sub test_private
 {
     my ($self) = @_;
