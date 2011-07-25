@@ -1234,8 +1234,8 @@ sub test_msg_sort_search
     $self->assert_deep_equals(\@exp_search, $res);
 
     xlog "run the SORT command with both ANNOTATION search & order criteria";
-    my $res = $talk->sort("(ANNOTATION $entry $attrib)", 'utf-8',
-		          'ANNOTATION', $entry, $attrib, { Quote => "eed" });
+    $res = $talk->sort("(ANNOTATION $entry $attrib)", 'utf-8',
+		       'ANNOTATION', $entry, $attrib, { Quote => "eed" });
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $self->assert_not_null($res);
     $self->assert_deep_equals(\@exp_order, $res);
