@@ -1260,6 +1260,9 @@ int mailbox_user_flag(struct mailbox *mailbox, const char *flag,
     int userflag;
     int emptyflag = -1;
 
+    if (!imparse_isatom(flag))
+	return IMAP_INVALID_IDENTIFIER;
+
     for (userflag = 0; userflag < MAX_USER_FLAGS; userflag++) {
 	if (mailbox->flagname[userflag]) {
 	    if (!strcasecmp(flag, mailbox->flagname[userflag]))
@@ -1290,6 +1293,41 @@ int mailbox_user_flag(struct mailbox *mailbox, const char *flag,
     *flagnum = userflag;
 
     return 0;
+}
+
+int mailbox_record_hasflag(struct mailbox *mailbox,
+			   struct index_record *record,
+			   const char *flag)
+{
+    int userflag;
+
+    if (!mailbox) return 0;
+    if (!flag) return 0;
+    if (!record) return 0;
+
+    if (flag[0] == '\\') {
+	if (!strcasecmp(flag, "\\answered"))
+	    return ((record->system_flags & FLAG_ANSWERED) ? 1 : 0);
+	if (!strcasecmp(flag, "\\deleted"))
+	    return ((record->system_flags & FLAG_DELETED) ? 1 : 0);
+	if (!strcasecmp(flag, "\\draft"))
+	    return ((record->system_flags & FLAG_DRAFT) ? 1 : 0);
+	if (!strcasecmp(flag, "\\flagged"))
+	    return ((record->system_flags & FLAG_FLAGGED) ? 1 : 0);
+	if (!strcasecmp(flag, "\\seen")) {
+	    /* NOTE: this is a special case because it depends
+	     * who the userid is.  We will only return the user
+	     * or global seen value */
+	    return ((record->system_flags & FLAG_SEEN) ? 1 : 0);
+	}
+	/* unknown system flag is never present */
+	return 0;
+    }
+
+    if (mailbox_user_flag(mailbox, flag, &userflag, 0))
+	return 0;
+
+    return ((record->user_flags[userflag/32] | 1<<(userflag&31)) ? 1 : 0);
 }
 
 int mailbox_buf_to_index_header(const char *buf, struct index_header *i)
