@@ -402,6 +402,74 @@ sub test_specialuse
 
 }
 
+#
+# Test the /shared/motd server annotation, not defined by any final RFC.
+#
+sub test_motd
+{
+    my ($self) = @_;
+
+    xlog "testing /shared/motd";
+
+    my $imaptalk = $self->{store}->get_client();
+    my $res;
+    my $entry = '/shared/motd';
+    my $value1 = "Hello World this is a value";
+
+    xlog "initial value is NIL";
+    $res = $imaptalk->getmetadata("", $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    $self->assert_deep_equals({
+	"" => { $entry => undef }
+    }, $res);
+
+    xlog "cannot set the value as ordinary user";
+    $imaptalk->setmetadata("", $entry, $value1);
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+    $self->assert($imaptalk->get_last_error() =~ m/permission denied/i);
+
+    xlog "can set the value as admin";
+    $imaptalk = $self->{adminstore}->get_client();
+    $imaptalk->setmetadata("", $entry, $value1);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    xlog "can get the set value back";
+    $res = $imaptalk->getmetadata("", $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    my $expected = {
+	    "" => { $entry => $value1 }
+    };
+    $self->assert_deep_equals($expected, $res);
+
+    xlog "can get same value in a new connection";
+    $self->{adminstore}->disconnect();
+    $imaptalk = $self->{adminstore}->get_client();
+
+    $res = $imaptalk->getmetadata("", $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    my $expected = {
+	    "" => { $entry => $value1 }
+    };
+    $self->assert_deep_equals($expected, $res);
+
+    xlog "can delete value";
+    $imaptalk->setmetadata("", $entry, undef);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+
+    $res = $imaptalk->getmetadata("", $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_not_null($res);
+    my $expected = {
+	    "" => { $entry => undef }
+    };
+    $self->assert_deep_equals($expected, $res);
+
+}
+
+
 sub test_private
 {
     my ($self) = @_;
