@@ -1123,10 +1123,9 @@ static void annotation_get_fromfile(const annotate_cursor_t *cursor,
 	/* TODO: we need a buf_chomp() */
 	if (value.s[value.len-1] == '\r')
 	    buf_truncate(&value, value.len-1);
-
-	output_entryatt(cursor, entry, "", &value, fdata);
     }
     if (f) fclose(f);
+    output_entryatt(cursor, entry, "", &value, fdata);
     buf_free(&value);
 }
 
@@ -2448,6 +2447,7 @@ static int annotation_set_tofile(const annotate_cursor_t *cursor
 {
     const char *filename = (const char *) rock;
     char path[MAX_MAILBOX_PATH+1];
+    int r;
     FILE *f;
 
     snprintf(path, sizeof(path), "%s/msg/%s", config_dir, filename);
@@ -2455,7 +2455,15 @@ static int annotation_set_tofile(const annotate_cursor_t *cursor
     /* XXX how do we do this atomically with other annotations? */
     if (entry->shared.s == NULL)
 	return unlink(path);
-    else if ((f = fopen(path, "w"))) {
+    else {
+	r = cyrus_mkdir(path, 0755);
+	if (r)
+	    return r;
+	f = fopen(path, "w");
+	if (!f) {
+	    syslog(LOG_ERR, "cannot open %s for writing: %m", path);
+	    return IMAP_IOERROR;
+	}
 	fwrite(entry->shared.s, 1, entry->shared.len, f);
 	fputc('\n', f);
 	return fclose(f);
