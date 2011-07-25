@@ -3803,10 +3803,10 @@ static void news2mail(message_data_t *msg)
 
 	/* add the email address to our argv[] and to our To: header */
 	if (attrib.s) {
-	    strarray_append(&smbuf, attrib.s);
+	    strarray_append(&smbuf, buf_cstring(&attrib));
 
 	    if (to[0]) strlcat(to, ", ", sizeof(to));
-	    strlcat(to, attrib.s, sizeof(to));
+	    strlcat(to, buf_cstring(&attrib), sizeof(to));
 	}
     }
     buf_free(&attrib);

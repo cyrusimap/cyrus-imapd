@@ -2532,7 +2532,7 @@ static int annotation_set_pop3showafter(const annotate_cursor_t *cursor,
 	date = 0;
     }
     else {
-	r = time_from_rfc3501(entry->shared.s, &date);
+	r = time_from_rfc3501(buf_cstring(&entry->shared), &date);
 	if (r < 0)
 	    return IMAP_PROTOCOL_BAD_PARAMETERS;
     }
@@ -2577,10 +2577,10 @@ static int annotation_set_specialuse(const annotate_cursor_t *cursor,
     }
     else {
 	for (i = 0; valid_specialuse[i]; i++) {
-	    if (!strcasecmp(valid_specialuse[i], entry->shared.s))
+	    if (!strcasecmp(valid_specialuse[i], buf_cstring(&entry->shared)))
 		break;
 	    /* or without the leading '\' */
-	    if (!strcasecmp(valid_specialuse[i]+1, entry->shared.s))
+	    if (!strcasecmp(valid_specialuse[i]+1, buf_cstring(&entry->shared)))
 		break;
 	}
 	val = valid_specialuse[i];
@@ -2593,7 +2593,7 @@ static int annotation_set_specialuse(const annotate_cursor_t *cursor,
 
 		for (i = 0; i < specialuse_extra->count; i++) {
 		    const char * extra_val = strarray_nth(specialuse_extra, i);
-		    if (!strcasecmp(extra_val, entry->shared.s)) {
+		    if (!strcasecmp(extra_val, buf_cstring(&entry->shared))) {
 			/* strarray owns string, keep specialuse_extra until after set call */
 			val = extra_val;
 			break;

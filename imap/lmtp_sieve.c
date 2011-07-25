@@ -892,7 +892,7 @@ int run_sieve(const char *user, const char *domain, const char *mailbox,
 	    return 1; /* do normal delivery actions */
 	}
 
-	script = attrib.s;
+	script = buf_cstring(&attrib);
     }
 
     if (sieve_find_script(user, domain, script, fname, sizeof(fname)) != 0 ||
