@@ -435,53 +435,43 @@ sub _read_args
     return $Data;
 }
 
-sub _print_string
+sub _format_string
 {
     my ($s) = @_;
 
-    if (!defined $s)
-    {
-	print "NIL";
-    }
-    elsif ($s =~ m/[\\"\012\015\200-\377]/)
-    {
+    return "NIL" unless defined $s;
+
+    my $len = length($s);
+
+    if ($len > 1024 || $s =~ m/[\\"\012\015\200-\377]/) {
 	# don't try to quote this, use a literal
-	printf "{%u}\r\n%s", length($s), $s;
+	return "{$len}\r\n$s";
     }
-    else
-    {
-	printf "\"%s\"", $s;
+    else {
+	return "\"$s\"";
     }
 }
 
 sub _emit_results
 {
     my ($self) = @_;
+    my @results;
     my $sep = '';
-
-    print "(";
 
     foreach my $a (@{$self->{annotations}})
     {
-	print $sep;
-	printf "ANNOTATION (%s (%s ",
-		$a->{entry},
-		($a->{shared} ? "value.shared" : "value.priv");
-	_print_string($a->{value});
-	print "))";
-	$sep = " ";
+	my $type = $a->{shared} ? "value.shared" : "value.priv";
+	my $value = _format_string($a->{value});
+	push @results, "ANNOTATION ($a->{entry} ($type $value))";
     }
 
     foreach my $f (@{$self->{flags}})
     {
-	print $sep;
-	printf "%s %s",
-		($f->{set} ? "+FLAGS" : "-FLAGS"),
-		$f->{flag};
-	$sep = " ";
+	my $op = $f->{set} ? "+FLAGS" : "-FLAGS";
+	push @results, "$op $f->{flag}";
     }
 
-    print ")\n";
+    print "(" . join(' ', @results) . ")\n";
 }
 
 sub process_request
