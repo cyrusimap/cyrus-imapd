@@ -637,10 +637,10 @@ static void callout_decode_results(const char *callout,
 		struct dlist *dflag;
 		for (dflag = dd->head ; dflag ; dflag = dflag->next)
 		    if ((val = dlist_cstring(dflag)))
-			strarray_add(flags, lcase((char *)val));
+			strarray_add_case(flags, val);
 	    }
 	    else if ((val = dlist_cstring(dd))) {
-		strarray_add(flags, lcase((char *)val));
+		strarray_add_case(flags, val);
 	    }
 	}
 	else if (!strcasecmp(key, "-FLAGS")) {
@@ -648,11 +648,11 @@ static void callout_decode_results(const char *callout,
 		struct dlist *dflag;
 		for (dflag = dd->head ; dflag ; dflag = dflag->next) {
 		    if ((val = dlist_cstring(dflag)))
-			strarray_remove_all(flags, lcase((char *)val));
+			strarray_remove_all_case(flags, val);
 		}
 	    }
 	    else if ((val = dlist_cstring(dd))) {
-		strarray_remove_all(flags, lcase((char *)val));
+		strarray_remove_all_case(flags, val);
 	    }
 	}
 	else if (!strcasecmp(key, "ANNOTATION")) {
