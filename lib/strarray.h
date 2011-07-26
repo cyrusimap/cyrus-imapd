@@ -65,6 +65,7 @@ void strarray_free(strarray_t *);
 
 void strarray_append(strarray_t *, const char *);
 void strarray_add(strarray_t *, const char *);
+void strarray_add_case(strarray_t *, const char *);
 void strarray_appendm(strarray_t *, char *);
 void strarray_set(strarray_t *, int idx, const char *);
 void strarray_setm(strarray_t *, int idx, char *);
@@ -72,6 +73,7 @@ void strarray_insert(strarray_t *, int idx, const char *);
 void strarray_insertm(strarray_t *, int idx, char *);
 char *strarray_remove(strarray_t *, int idx);
 void strarray_remove_all(strarray_t *sa, const char *s);
+void strarray_remove_all_case(strarray_t *sa, const char *s);
 const char *strarray_nth(const strarray_t *sa, int idx);
 void strarray_truncate(strarray_t *sa, int newlen);
 strarray_t *strarray_dup(const strarray_t *);
@@ -95,5 +97,7 @@ char **strarray_takevf(strarray_t *sa);
 
 int strarray_find(const strarray_t *sa, const char *match,
 		  int starting);
+int strarray_find_case(const strarray_t *sa, const char *match,
+		       int starting);
 
 #endif /* __CYRUS_STRARRAY_H__ */
