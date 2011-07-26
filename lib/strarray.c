@@ -45,6 +45,7 @@
 
 #include "strarray.h"
 #include <memory.h>
+#include "util.h"   /* for strcmpsafe et al */
 #include "xmalloc.h"
 
 strarray_t *strarray_new(void)
@@ -141,6 +142,12 @@ void strarray_add(strarray_t *sa, const char *s)
 	strarray_append(sa, s);
 }
 
+void strarray_add_case(strarray_t *sa, const char *s)
+{
+    if (strarray_find_case(sa, s, 0) < 0)
+	strarray_append(sa, s);
+}
+
 void strarray_appendm(strarray_t *sa, char *s)
 {
     ensure_alloc(sa, sa->count+1);
@@ -205,6 +212,18 @@ void strarray_remove_all(strarray_t *sa, const char *s)
 
     for (;;) {
 	i = strarray_find(sa, s, i);
+	if (i < 0)
+	    break;
+	free(strarray_remove(sa, i));
+    }
+}
+
+void strarray_remove_all_case(strarray_t *sa, const char *s)
+{
+    int i = 0;
+
+    for (;;) {
+	i = strarray_find_case(sa, s, i);
 	if (i < 0)
 	    break;
 	free(strarray_remove(sa, i));
@@ -309,7 +328,7 @@ static int cmpstringp(const void *p1, const void *p2)
     pointers to char", but strcmp(3) arguments are "pointers
    to char", hence the following cast plus dereference */
 
-   return strcmp(* (char * const *) p1, * (char * const *) p2);
+   return strcmpsafe(* (char * const *) p1, * (char * const *) p2);
 }
 
 void strarray_sort(strarray_t *sa)
@@ -317,12 +336,24 @@ void strarray_sort(strarray_t *sa)
     qsort(sa->data, sa->count, sizeof(char *), cmpstringp);
 }
 
-int strarray_find(const strarray_t *sa, const char *match, int starting)
+/* common generic routine for the _find family */
+static int strarray_findg(const strarray_t *sa, const char *match, int starting,
+			  int (*compare)(const char *, const char *))
 {
     int i;
 
     for (i = starting ; i < sa->count ; i++)
-	if (!strcmp(match, sa->data[i]))
+	if (!compare(match, sa->data[i]))
 	    return i;
     return -1;
+}
+
+int strarray_find(const strarray_t *sa, const char *match, int starting)
+{
+    return strarray_findg(sa, match, starting, strcmpsafe);
+}
+
+int strarray_find_case(const strarray_t *sa, const char *match, int starting)
+{
+    return strarray_findg(sa, match, starting, strcasecmpsafe);
 }
