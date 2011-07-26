@@ -599,6 +599,7 @@ static void callout_encode_args(struct buf *args,
     buf_appendcstr(args, " BODY ");
     message_write_body(args, body, 2);
 
+    buf_printf(args, " GUID %s", message_guid_encode(&body->guid));
     buf_putc(args, ')');
     buf_cstring(args);
 }
