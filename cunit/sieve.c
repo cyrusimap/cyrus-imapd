@@ -484,6 +484,7 @@ static void config_read_string(const char *s)
     char *fname = xstrdup("/tmp/cyrus-cunit-configXXXXXX");
     int fd = mkstemp(fname);
     retry_write(fd, s, strlen(s));
+    config_reset();
     config_read(fname);
     unlink(fname);
     free(fname);
