@@ -945,8 +945,8 @@ int index_store(struct index_state *state, char *sequence, int usinguid,
     seq = _parse_sequence(state, sequence, usinguid);
 
     for (i = 0; i < flags->count ; i++) {
-	r = mailbox_user_flag(mailbox, flags->data[i], &userflag);
-	if (r) goto fail;
+	r = mailbox_user_flag(mailbox, flags->data[i], &userflag, 1);
+	if (r) goto out;
 	storeargs->user_flags[userflag/32] |= 1<<(userflag&31);
     }
 
@@ -959,10 +959,10 @@ int index_store(struct index_state *state, char *sequence, int usinguid,
 	if (!seqset_ismember(seq, checkval))
 	    continue;
 	r = index_storeflag(state, msgno, storeargs);
-	if (r) goto fail;
+	if (r) goto out;
     }
 
-fail:
+out:
     seqset_free(seq);
     index_unlock(state);
     index_tellchanges(state, usinguid, usinguid);

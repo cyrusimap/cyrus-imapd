@@ -458,13 +458,15 @@ int append_fromstage(struct appendstate *as, struct body **body,
 	}
 	else if (as->myrights & ACL_WRITE) {
 	    /* User flag */
-	    r = mailbox_user_flag(mailbox, flag, &userflag);
-	    if (!r) 
-		record.user_flags[userflag/32] |= 1<<(userflag&31);
+	    r = mailbox_user_flag(mailbox, flag, &userflag, 1);
+	    if (r) goto out;
+	    record.user_flags[userflag/32] |= 1<<(userflag&31);
 	}
     }
     /* Write out index file entry */
     r = mailbox_append_index_record(mailbox, &record);
+
+out:
     if (r) {
 	append_abort(as);
 	return r;
@@ -535,8 +537,8 @@ int append_fromstream(struct appendstate *as, struct body **body,
     destfile = fopen(fname, "w+");
     if (!destfile) {
 	syslog(LOG_ERR, "IOERROR: creating message file %s: %m", fname);
-	append_abort(as);
-	return IMAP_IOERROR;
+	r = IMAP_IOERROR;
+	goto out;
     }
 
     /* Copy and parse message */
@@ -547,10 +549,7 @@ int append_fromstream(struct appendstate *as, struct body **body,
 	if (!r) r = message_create_record(&record, *body);
     }
     fclose(destfile);
-    if (r) {
-	append_abort(as);
-	return r;
-    }
+    if (r) goto out;
 
     /* Handle flags the user wants to set in the message */
     for (i = 0; i < nflags; i++) {
@@ -578,15 +577,17 @@ int append_fromstream(struct appendstate *as, struct body **body,
 	    }
 	}
 	else if (as->myrights & ACL_WRITE) {
-	    r = mailbox_user_flag(mailbox, flag[i], &userflag);
-	    if (!r)
-		record.user_flags[userflag/32] |= 1<<(userflag&31);
+	    r = mailbox_user_flag(mailbox, flag[i], &userflag, 1);
+	    if (r) goto out;
+	    record.user_flags[userflag/32] |= 1<<(userflag&31);
 	}
     }
 
     /* Write out index file entry; if we abort later, it's not
        important */
     r = mailbox_append_index_record(mailbox, &record);
+
+out:
     if (r) {
 	append_abort(as);
 	return r;
@@ -637,9 +638,9 @@ int append_copy(struct mailbox *mailbox,
 
 	    for (flag = 0; copymsg[msg].flag[flag]; flag++) {
 		r = mailbox_user_flag(as->mailbox, 
-				      copymsg[msg].flag[flag], &userflag);
-		if (!r)
-		    record.user_flags[userflag/32] |= 1<<(userflag&31);
+				      copymsg[msg].flag[flag], &userflag, 1);
+		if (r) goto out;
+		record.user_flags[userflag/32] |= 1<<(userflag&31);
 	    }
 	}
 	/* deleted flag copy as well */
@@ -658,7 +659,7 @@ int append_copy(struct mailbox *mailbox,
 	r = mailbox_copyfile(srcfname, destfname, nolink);
 	free(srcfname);
 	free(destfname);
-	if (r) goto fail;
+	if (r) goto out;
 
 	/* Write out cache info, copy other info */
 	record.sentdate = copymsg[msg].sentdate;
@@ -672,10 +673,10 @@ int append_copy(struct mailbox *mailbox,
 
 	/* Write out index file entry */
 	r = mailbox_append_index_record(as->mailbox, &record);
-	if (r) goto fail;
+	if (r) goto out;
     }
 
- fail:
+out:
     if (r) append_abort(as);
 
     return r;

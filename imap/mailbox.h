@@ -462,7 +462,7 @@ extern int mailbox_set_acl(struct mailbox *mailbox, const char *acl,
 extern int mailbox_set_quotaroot(struct mailbox *mailbox, const char *quotaroot);
 extern int mailbox_set_specialuse(struct mailbox *mailbox, const char *specialuse);
 extern int mailbox_user_flag(struct mailbox *mailbox, const char *flag,
-			     int *flagnum);
+			     int *flagnum, int create);
 extern int mailbox_commit(struct mailbox *mailbox);
 
 /* seen state check */

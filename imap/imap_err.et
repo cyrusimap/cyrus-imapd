@@ -49,6 +49,9 @@ ec IMAP_INTERNAL,
 ec IMAP_IOERROR,
    "System I/O error"
 
+ec IMAP_NOTFOUND,
+   "Item does not exist"
+
 ec IMAP_SYS_ERROR,
    "Operating System Error"
 
