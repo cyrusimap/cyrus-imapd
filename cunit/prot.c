@@ -10,8 +10,11 @@
     char *_fname = xstrdup("/tmp/cyrus-protXXXXXX"); \
     int _fd = mkstemp(_fname)
 #define BEGIN \
-    ftruncate(_fd, 0); \
-    lseek(_fd, (off_t)0, SEEK_SET)
+    { \
+	int r = ftruncate(_fd, 0); \
+	CU_ASSERT_EQUAL_FATAL(r, 0); \
+	lseek(_fd, (off_t)0, SEEK_SET); \
+    }
 #define END(b, n) \
     { \
 	struct stat _sb; \

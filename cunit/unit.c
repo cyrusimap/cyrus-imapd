@@ -39,6 +39,7 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+#include <config.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -87,7 +88,8 @@ static void vlog(int prio, const char *fmt, va_list args)
 #if defined(__GLIBC__)
 /* Under some but not all combinations of options, glibc
  * defines syslog() as an inline that calls this function */
-void __syslog_chk(int prio, int whatever, const char *fmt, ...)
+void __syslog_chk(int prio, int whatever __attribute__((unused)),
+		  const char *fmt, ...)
 {
     va_list args;
 
@@ -138,6 +140,8 @@ static enum { IDLE, INTEST, INFIXTURE } running = IDLE;
 void exit(int status)
 {
     switch (running) {
+    case IDLE:
+	break;
     case INTEST:
 	fprintf(stderr, "unit: code under test (%s) exited with status %d\n",
 			code, status);

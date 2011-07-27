@@ -35,7 +35,6 @@ static void test_lookupname(void)
 static void test_to_utf8(void)
 {
     int cs;
-    int encoding;
     char *s;
     static const char ASCII_1[] = "Hello World";
     static const char ASCII_2[] = "Hello W\370rld";

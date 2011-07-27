@@ -187,7 +187,7 @@ static void test_getmodseq(void)
     static const modseq_t VAL2 = 1234567890;
     static const char STR3[] = "12345678901234567890 ";
     static const modseq_t VAL3 = 12345678901234567890ULL;
-    static const char STR3a[] = "123456789012345678901234567890 ";
+//     static const char STR3a[] = "123456789012345678901234567890 ";
     static const char STR4[] = "123)";
     static const modseq_t VAL4 = 123;
     static const char STR5[] = "y&+123 ";

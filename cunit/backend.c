@@ -1217,12 +1217,17 @@ static char *old_tls_key_file;
 static int set_up(void)
 {
     int rend_sock, port = 0;
+    char *sr;
     static char cwd[PATH_MAX];
 
     if (verbose > 1)
 	fprintf(stderr, "Starting server!\n");
 
-    getcwd(cwd, sizeof(cwd));
+    sr = getcwd(cwd, sizeof(cwd));
+    if (!sr) {
+	fprintf(stderr, "getcwd() failed: %s\n", strerror(errno));
+	return -1;
+    }
 
     old_config_dir = (char *)config_dir;
     config_dir = xstrdup(cwd);
