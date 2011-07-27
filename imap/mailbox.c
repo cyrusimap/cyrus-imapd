@@ -3506,8 +3506,10 @@ static int mailbox_reconstruct_create(const char *name, struct mailbox **mbptr)
 	/* no cyrus.index file at all - well, we're in a pickle!
          * no point trying to rescue anything else... */
 	mailbox_close(&mailbox);
-	return mailbox_create(name, mbentry->partition, mbentry->acl,
-			      mbentry->specialuse, NULL, options, 0, mbptr);
+	r = mailbox_create(name, mbentry->partition, mbentry->acl,
+			   mbentry->specialuse, NULL, options, 0, mbptr);
+	mboxlist_entry_free(&mbentry);
+	return r;
     }
 
     mboxlist_entry_free(&mbentry);
