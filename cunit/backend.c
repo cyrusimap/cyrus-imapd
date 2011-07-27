@@ -1209,12 +1209,12 @@ static char *old_tls_cert_file;
 static char *old_tls_key_file;
 
 /*
- * Test suite initialisation function.  Sets up the global
+ * Test suite setup function.  Sets up the global
  * server_state page.  Forks a server process which listens
  * on a TCP port, and writes the port number into default_service[]
  * so that the client code can connect to it.
  */
-static int init(void)
+static int set_up(void)
 {
     int rend_sock, port = 0;
     static char cwd[PATH_MAX];
@@ -1278,10 +1278,10 @@ static int init(void)
 }
 
 /*
- * Test suite cleanup function.  Shuts down the server and
+ * Test suite teardown function.  Shuts down the server and
  * removes the global server_state page.
  */
-static int cleanup(void)
+static int tear_down(void)
 {
     if (verbose > 1)
 	fprintf(stderr, "Cleaning up server! NOT.\n");

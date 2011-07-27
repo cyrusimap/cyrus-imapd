@@ -97,7 +97,7 @@ static void pop_tz(void)
     free(old);
 }
 
-static int init(void)
+static int set_up(void)
 {
     /*
      * Ensure that libc's idea of which timezone we're in is
@@ -109,7 +109,7 @@ static int init(void)
     return 0;
 }
 
-static int cleanup(void)
+static int tear_down(void)
 {
     pop_tz();
     if (n_tz_stack != 1)
