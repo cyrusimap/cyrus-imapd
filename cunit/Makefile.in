@@ -100,7 +100,7 @@ TESTSOURCES = times.c glob.c md5.c parseaddr.c message.c \
 	    strconcat.c crc32.c binhex.c guid.c imapurl.c \
 	    @SIEVE_TESTSOURCES@ strarray.c spool.c buf.c \
 	    charset.c msgid.c mboxname.c ptrarray.c prot.c \
-	    getxstring.c backend.c parse.c
+	    getxstring.c backend.c parse.c hash.c
 TESTLIBS = @SIEVE_LIBS@ \
 	@top_srcdir@/imap/mutex_fake.o @top_srcdir@/imap/libimap.a \
 	@top_srcdir@/imap/spool.o \

@@ -1,0 +1,293 @@
+#include "cunit/cunit.h"
+#include "strarray.h"
+#include "util.h"
+#include "hash.h"
+
+static void count_cb(const char *key __attribute__((unused)),
+	             void *data __attribute__((unused)),
+		     void *rock)
+{
+    unsigned int *countp = (unsigned int *)rock;
+    (*countp)++;
+}
+
+static void printer_cb(const char *key,
+	               void *data,
+		       void *rock)
+{
+    strarray_t *sa = (strarray_t *)rock;
+    struct buf buf = BUF_INITIALIZER;
+    buf_printf(&buf, "%s=%s", key, (char *)data);
+    strarray_appendm(sa, buf_release(&buf));
+}
+
+
+#define KEY0	"Yale"
+#define KEY1	"Lockwood"
+#define KEY2	"Skeleton"
+static const char * const values[] = {
+    "Paper", "Glass", "Wood", "Diamond"
+};
+#define VALUE0	    ((void *)values[0])
+#define VALUE1	    ((void *)values[1])
+#define VALUE2	    ((void *)values[2])
+#define VALUE3	    ((void *)values[3])
+
+static void test_old(void)
+{
+    /* this is the old test code in lib/hash.c converted to CUnit */
+    hash_table table;
+
+    static const char * const strings[] = {
+	"1","2","3","4","5","A decently long string",
+	NULL
+    };
+
+    static const char * const junk[] = {
+	"The first data",
+	"The second data",
+	"The third data",
+	"The fourth data",
+	"The fifth datum",
+	"The sixth piece of data"
+    };
+
+    int i;
+    void *j;
+    strarray_t sa = STRARRAY_INITIALIZER;
+
+    construct_hash_table(&table, 200, 1);
+
+    for (i = 0 ; NULL != strings[i] ; i++ ) {
+	j = hash_insert(strings[i], (void *)junk[i], &table);
+	CU_ASSERT_PTR_EQUAL((void *)junk[i], j);
+    }
+
+    for (i = 0 ; NULL != strings[i] ; i++) {
+	j = hash_lookup(strings[i], &table);
+	CU_ASSERT_PTR_NOT_NULL(j);
+	CU_ASSERT_PTR_EQUAL((void *)junk[i], j);
+    }
+
+    for (i = 0 ; NULL != strings[i] ; i++) {
+	strarray_truncate(&sa, 0);
+	hash_enumerate(&table, printer_cb, &sa);
+	CU_ASSERT_EQUAL(6-i, sa.count);
+	if (i < 1) CU_ASSERT(strarray_find(&sa, "1=The first data", 0) >= 0);
+	if (i < 2) CU_ASSERT(strarray_find(&sa, "2=The second data", 0) >= 0);
+	if (i < 3) CU_ASSERT(strarray_find(&sa, "3=The third data", 0) >= 0);
+	if (i < 4) CU_ASSERT(strarray_find(&sa, "4=The fourth data", 0) >= 0);
+	if (i < 5) CU_ASSERT(strarray_find(&sa, "5=The fifth datum", 0) >= 0);
+	if (i < 6) CU_ASSERT(strarray_find(&sa, "A decently long string=The sixth piece of data", 0) >= 0);
+	strarray_fini(&sa);
+
+	j = hash_del((char *)strings[i], &table);
+	CU_ASSERT_PTR_EQUAL((void *)junk[i], j);
+    }
+
+    for (i = 0 ; NULL != strings[i] ; i++) {
+	j = hash_lookup(strings[i], &table);
+	CU_ASSERT_PTR_NULL(j);
+    }
+
+    free_hash_table(&table, NULL);
+}
+
+static void test_empty(void)
+{
+    hash_table ht;
+    hash_table *h;
+    void *d;
+    unsigned int count;
+
+    /* construct an empty hash table */
+    h = construct_hash_table(&ht, 1024, 0);
+    CU_ASSERT_PTR_EQUAL(&ht, h);
+
+    /* lookup the empty hash table */
+    d = hash_lookup(KEY0, &ht);
+    CU_ASSERT_PTR_NULL(d);
+
+    /* delete from the empty hash table */
+    d = hash_del(KEY0, &ht);
+    CU_ASSERT_PTR_NULL(d);
+
+    /* enumerate the empty hash table */
+    count = 0;
+    hash_enumerate(&ht, count_cb, &count);
+    CU_ASSERT_EQUAL(0, count);
+
+    /* free the hash table */
+    free_hash_table(&ht, NULL);
+}
+
+static void test_reinsert(void)
+{
+    hash_table ht;
+    hash_table *h;
+    void *d;
+    unsigned int count;
+
+    /* construct an empty hash table */
+    h = construct_hash_table(&ht, 1024, 0);
+    CU_ASSERT_PTR_EQUAL(&ht, h);
+
+    /* insert into the table */
+    d = hash_insert(KEY0, VALUE0, &ht);
+    /* no old data so hash_insert() returns the new data pointer */
+    CU_ASSERT_PTR_EQUAL(VALUE0, d);
+
+    /* lookup the hash table */
+    d = hash_lookup(KEY0, &ht);
+    CU_ASSERT_PTR_EQUAL(VALUE0, d);
+
+    /* enumerate the hash table */
+    count = 0;
+    hash_enumerate(&ht, count_cb, &count);
+    CU_ASSERT_EQUAL(1, count);
+
+    /* re-insert into the hash table */
+    d = hash_insert(KEY0, VALUE1, &ht);
+    /* get the old value back */
+    CU_ASSERT_PTR_EQUAL(VALUE0, d);
+
+    /* lookup the hash table */
+    d = hash_lookup(KEY0, &ht);
+    CU_ASSERT_PTR_EQUAL(VALUE1, d);
+
+    /* enumerate the hash table */
+    count = 0;
+    hash_enumerate(&ht, count_cb, &count);
+    CU_ASSERT_EQUAL(1, count);
+
+    /* delete from the hash table */
+    d = hash_del(KEY0, &ht);
+    CU_ASSERT_PTR_EQUAL(VALUE1, d);
+
+    /* lookup the hash table */
+    d = hash_lookup(KEY0, &ht);
+    CU_ASSERT_PTR_NULL(d);
+
+    /* enumerate the hash table */
+    count = 0;
+    hash_enumerate(&ht, count_cb, &count);
+    CU_ASSERT_EQUAL(0, count);
+
+    /* free the hash table */
+    free_hash_table(&ht, NULL);
+}
+
+static const char *key(unsigned int i)
+{
+    static char buf[32];
+    snprintf(buf, sizeof(buf), "%u", i);
+    return buf;
+}
+
+static void *value(unsigned int i)
+{
+    return (void *)(unsigned long)(0xdead0000 + i);
+}
+
+static unsigned int freed_count = 0;
+static void lincoln(void *x __attribute__((unused)))
+{
+    ++freed_count;
+}
+
+/* test overloading a hash table with more
+ * entries than the configured number of buckets */
+static void test_many(void)
+{
+    hash_table ht;
+    hash_table *h;
+    void *d;
+    unsigned int count;
+#define N 2048
+    unsigned int i;
+
+    /* construct an empty hash table */
+    h = construct_hash_table(&ht, N/8, 0);
+    CU_ASSERT_PTR_EQUAL(&ht, h);
+
+    /* insert lots of entries into the table */
+    for (i = 0 ; i < N ; i++) {
+	d = hash_insert(key(i), value(i), &ht);
+	CU_ASSERT_PTR_EQUAL(value(i), d);
+    }
+
+    /* lookup all the entries in the hash table */
+    for (i = 0 ; i < N ; i++) {
+	d = hash_lookup(key(i), &ht);
+	CU_ASSERT_PTR_EQUAL(value(i), d);
+    }
+
+    /* lookup and delete entries that aren't there */
+    for (i = N ; i < 2*N ; i++) {
+	d = hash_lookup(key(i), &ht);
+	CU_ASSERT_PTR_NULL(d);
+	d = hash_del(key(i), &ht);
+	CU_ASSERT_PTR_NULL(d);
+    }
+    d = hash_del("Not here please stop looking", &ht);
+    CU_ASSERT_PTR_NULL(d);
+    d = hash_lookup("Not here please stop looking", &ht);
+    CU_ASSERT_PTR_NULL(d);
+
+    /* enumerate the hash table */
+    count = 0;
+    hash_enumerate(&ht, count_cb, &count);
+    CU_ASSERT_EQUAL(N, count);
+
+    /* delete from the hash table */
+    for (i = 0 ; i < N ; i++) {
+	d = hash_del(key(i), &ht);
+	CU_ASSERT_PTR_EQUAL(value(i), d);
+    }
+
+    /* all the entries should be gone */
+    for (i = 0 ; i < N ; i++) {
+	d = hash_lookup(key(i), &ht);
+	CU_ASSERT_PTR_NULL(d);
+    }
+
+    /* enumerate the hash table: should be empty now */
+    count = 0;
+    hash_enumerate(&ht, count_cb, &count);
+    CU_ASSERT_EQUAL(0, count);
+
+    /* free the hash table */
+    freed_count = 0;
+    free_hash_table(&ht, lincoln);
+    CU_ASSERT_EQUAL(0, freed_count);
+}
+
+static void test_freeing_nonempty(void)
+{
+    hash_table ht;
+    hash_table *h;
+    void *d;
+    unsigned int count;
+#define N 2048
+    unsigned int i;
+
+    /* construct an empty hash table */
+    h = construct_hash_table(&ht, N/8, 0);
+    CU_ASSERT_PTR_EQUAL(&ht, h);
+
+    /* insert lots of entries into the table */
+    for (i = 0 ; i < N ; i++) {
+	d = hash_insert(key(i), value(i), &ht);
+	CU_ASSERT_PTR_EQUAL(value(i), d);
+    }
+
+    /* enumerate the hash table */
+    count = 0;
+    hash_enumerate(&ht, count_cb, &count);
+    CU_ASSERT_EQUAL(N, count);
+
+    /* free the hash table */
+    freed_count = 0;
+    free_hash_table(&ht, lincoln);
+    CU_ASSERT_EQUAL(N, freed_count);
+}
