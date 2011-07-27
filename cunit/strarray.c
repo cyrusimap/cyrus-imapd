@@ -764,7 +764,10 @@ static void test_find(void)
     strarray_t sa = STRARRAY_INITIALIZER;
     int i;
 #define WORD0	"lorem"
+#define WORD0	"lorem"
 #define WORD1	"ipsum"
+#define WORD1u	"IPSUM"
+#define WORD1c	"Ipsum"
 #define WORD2	"dolor"
 #define WORD3	"sit"
 #define WORD4	"amet"
@@ -804,6 +807,12 @@ static void test_find(void)
     i = strarray_find(&sa, WORD1, i+1);
     CU_ASSERT_EQUAL(i, -1);
 
+    /* search for something which isn't there but whose case analogue is */
+    i = strarray_find(&sa, WORD1u, 0);
+    CU_ASSERT_EQUAL(i, -1);
+    i = strarray_find(&sa, WORD1c, 0);
+    CU_ASSERT_EQUAL(i, -1);
+
     /* search for something which is there, starting off the end */
     i = strarray_find(&sa, WORD1, 7);
     CU_ASSERT_EQUAL(i, -1);
@@ -819,10 +828,146 @@ static void test_find(void)
     strarray_fini(&sa);
 #undef WORD0
 #undef WORD1
+#undef WORD1u
+#undef WORD1c
 #undef WORD2
 #undef WORD3
 #undef WORD4
 }
+
+static void test_find_case(void)
+{
+    strarray_t sa = STRARRAY_INITIALIZER;
+    int i;
+#define WORD0	"Lorem"
+#define WORD0u	"LOREM"
+#define WORD0l	"lorem"
+#define WORD0i	"lOREM"
+#define WORD1	"iPSum"
+#define WORD1u	"IPSUM"
+#define WORD1l	"ipsum"
+#define WORD1i	"IpsUM"
+#define WORD2	"DOLOR"
+#define WORD3	"sit"
+#define WORD4	"ameT"
+
+    CU_ASSERT_EQUAL(sa.count, 0);
+    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_PTR_NULL(strarray_nth(&sa, 0));
+    CU_ASSERT_PTR_NULL(strarray_nth(&sa, -1));
+
+    strarray_append(&sa, WORD0);
+    strarray_append(&sa, WORD1);
+    strarray_append(&sa, WORD2);
+    strarray_append(&sa, WORD3);
+    strarray_append(&sa, WORD0);
+    strarray_append(&sa, WORD4);
+    CU_ASSERT_EQUAL(sa.count, 6);
+    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_PTR_NOT_NULL(sa.data);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 2), WORD2);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 3), WORD3);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 4), WORD0);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 5), WORD4);
+
+    /* search for something which isn't there */
+    i = strarray_find_case(&sa, "NotHere", 0);
+    CU_ASSERT_EQUAL(i, -1);
+
+    /* search for something which isn't there, starting off the end */
+    i = strarray_find_case(&sa, "NotHere", 7);
+    CU_ASSERT_EQUAL(i, -1);
+
+    /* search for something which is there ... */
+
+    /* ... original capitalisation */
+    i = strarray_find_case(&sa, WORD1, 0);
+    CU_ASSERT_EQUAL(i, 1);
+    i = strarray_find_case(&sa, WORD1, i+1);
+    CU_ASSERT_EQUAL(i, -1);
+
+    /* ... lowercase key */
+    i = strarray_find_case(&sa, WORD1l, 0);
+    CU_ASSERT_EQUAL(i, 1);
+    i = strarray_find_case(&sa, WORD1l, i+1);
+    CU_ASSERT_EQUAL(i, -1);
+
+    /* ... uppercase key */
+    i = strarray_find_case(&sa, WORD1u, 0);
+    CU_ASSERT_EQUAL(i, 1);
+    i = strarray_find_case(&sa, WORD1u, i+1);
+    CU_ASSERT_EQUAL(i, -1);
+
+    /* ... inverted case key */
+    i = strarray_find_case(&sa, WORD1i, 0);
+    CU_ASSERT_EQUAL(i, 1);
+    i = strarray_find_case(&sa, WORD1i, i+1);
+    CU_ASSERT_EQUAL(i, -1);
+
+    /* search for something which is there, starting off the end ... */
+    /* ... original capitalisation */
+    i = strarray_find_case(&sa, WORD1, 7);
+    CU_ASSERT_EQUAL(i, -1);
+    /* ... lowercase key */
+    i = strarray_find_case(&sa, WORD1u, 7);
+    CU_ASSERT_EQUAL(i, -1);
+    /* ... uppercase key */
+    i = strarray_find_case(&sa, WORD1l, 7);
+    CU_ASSERT_EQUAL(i, -1);
+    /* ... inverted case key */
+    i = strarray_find_case(&sa, WORD1i, 7);
+    CU_ASSERT_EQUAL(i, -1);
+
+    /* search for something which is there multiple times ... */
+
+    /* ... original capitalisation */
+    i = strarray_find_case(&sa, WORD0, 0);
+    CU_ASSERT_EQUAL(i, 0);
+    i = strarray_find_case(&sa, WORD0, i+1);
+    CU_ASSERT_EQUAL(i, 4);
+    i = strarray_find_case(&sa, WORD0, i+1);
+    CU_ASSERT_EQUAL(i, -1);
+
+    /* ... lowercase key */
+    i = strarray_find_case(&sa, WORD0u, 0);
+    CU_ASSERT_EQUAL(i, 0);
+    i = strarray_find_case(&sa, WORD0u, i+1);
+    CU_ASSERT_EQUAL(i, 4);
+    i = strarray_find_case(&sa, WORD0u, i+1);
+    CU_ASSERT_EQUAL(i, -1);
+
+    /* ... uppercase key */
+    i = strarray_find_case(&sa, WORD0l, 0);
+    CU_ASSERT_EQUAL(i, 0);
+    i = strarray_find_case(&sa, WORD0l, i+1);
+    CU_ASSERT_EQUAL(i, 4);
+    i = strarray_find_case(&sa, WORD0l, i+1);
+    CU_ASSERT_EQUAL(i, -1);
+
+    /* ... inverted case key */
+    i = strarray_find_case(&sa, WORD0i, 0);
+    CU_ASSERT_EQUAL(i, 0);
+    i = strarray_find_case(&sa, WORD0i, i+1);
+    CU_ASSERT_EQUAL(i, 4);
+    i = strarray_find_case(&sa, WORD0i, i+1);
+    CU_ASSERT_EQUAL(i, -1);
+
+    strarray_fini(&sa);
+#undef WORD0
+#undef WORD0u
+#undef WORD0l
+#undef WORD0i
+#undef WORD1
+#undef WORD1u
+#undef WORD1l
+#undef WORD1i
+#undef WORD2
+#undef WORD3
+#undef WORD4
+}
+
 
 static void test_dup(void)
 {
@@ -1061,6 +1206,7 @@ static void test_add(void)
 {
     strarray_t sa = STRARRAY_INITIALIZER;
 #define WORD0	"lorem"
+#define WORD0u	"LOREM"
 #define WORD1	"ipsum"
 
     CU_ASSERT_EQUAL(sa.count, 0);
@@ -1082,23 +1228,113 @@ static void test_add(void)
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
 
-    /* _add() of an item not already present appends */
-    strarray_add(&sa, WORD1);
+    /* _add() of an item not already present (but whose case
+     * analogue is present) appends */
+    strarray_add(&sa, WORD0u);
     CU_ASSERT_EQUAL(sa.count, 2);
     CU_ASSERT(sa.alloc >= sa.count);
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
-    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD0u);
+
+    /* _add() of an item not already present appends */
+    strarray_add(&sa, WORD1);
+    CU_ASSERT_EQUAL(sa.count, 3);
+    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_PTR_NOT_NULL(sa.data);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD0u);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 2), WORD1);
 
     /* _add() of an item already present is a no-op */
     strarray_add(&sa, WORD0);
+    CU_ASSERT_EQUAL(sa.count, 3);
+    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_PTR_NOT_NULL(sa.data);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD0u);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 2), WORD1);
+
+    strarray_add(&sa, WORD0u);
+    CU_ASSERT_EQUAL(sa.count, 3);
+    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_PTR_NOT_NULL(sa.data);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD0u);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 2), WORD1);
+
+    strarray_add(&sa, WORD1);
+    CU_ASSERT_EQUAL(sa.count, 3);
+    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_PTR_NOT_NULL(sa.data);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD0u);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 2), WORD1);
+
+    strarray_fini(&sa);
+#undef WORD0
+#undef WORD0u
+#undef WORD1
+}
+
+static void test_add_case(void)
+{
+    strarray_t sa = STRARRAY_INITIALIZER;
+#define WORD0	"lorem"
+#define WORD0u	"LOREM"
+#define WORD1	"ipsum"
+
+    CU_ASSERT_EQUAL(sa.count, 0);
+    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_PTR_NULL(strarray_nth(&sa, 0));
+    CU_ASSERT_PTR_NULL(strarray_nth(&sa, -1));
+
+    /* _add_case() on an empty array appends */
+    strarray_add_case(&sa, WORD0);
+    CU_ASSERT_EQUAL(sa.count, 1);
+    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_PTR_NOT_NULL(sa.data);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
+
+    /* _add_case() of an item already present is a no-op */
+    strarray_add_case(&sa, WORD0);
+    CU_ASSERT_EQUAL(sa.count, 1);
+    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_PTR_NOT_NULL(sa.data);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
+
+    /* _add_case() of an item not already present (but whose case
+     * analogue is present) is a no-op */
+    strarray_add_case(&sa, WORD0u);
+    CU_ASSERT_EQUAL(sa.count, 1);
+    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_PTR_NOT_NULL(sa.data);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
+
+    /* _add_case() of an item not already present appends */
+    strarray_add_case(&sa, WORD1);
     CU_ASSERT_EQUAL(sa.count, 2);
     CU_ASSERT(sa.alloc >= sa.count);
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
 
-    strarray_add(&sa, WORD1);
+    /* _add_case() of an item already present is a no-op */
+    strarray_add_case(&sa, WORD0);
+    CU_ASSERT_EQUAL(sa.count, 2);
+    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_PTR_NOT_NULL(sa.data);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
+
+    strarray_add_case(&sa, WORD0u);
+    CU_ASSERT_EQUAL(sa.count, 2);
+    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_PTR_NOT_NULL(sa.data);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
+
+    strarray_add_case(&sa, WORD1);
     CU_ASSERT_EQUAL(sa.count, 2);
     CU_ASSERT(sa.alloc >= sa.count);
     CU_ASSERT_PTR_NOT_NULL(sa.data);
@@ -1107,6 +1343,7 @@ static void test_add(void)
 
     strarray_fini(&sa);
 #undef WORD0
+#undef WORD0u
 #undef WORD1
 }
 
