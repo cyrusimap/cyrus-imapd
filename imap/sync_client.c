@@ -510,12 +510,17 @@ static int user_reset(const char *userid)
 {
     const char *cmd = "UNUSER";
     struct dlist *kl;
+    int r;
 
     kl = dlist_setatom(NULL, cmd, userid);
     sync_send_apply(kl, sync_out);
     dlist_free(&kl);
 
-    return sync_parse_response(cmd, sync_in, NULL);
+    r = sync_parse_response(cmd, sync_in, NULL);
+    if (r == IMAP_MAILBOX_NONEXISTENT)
+	r = 0;
+
+    return r;
 }
 
 static int folder_rename(char *oldname, char *newname, char *partition)
@@ -537,12 +542,17 @@ static int folder_delete(char *mboxname)
 {
     const char *cmd = "UNMAILBOX";
     struct dlist *kl;
+    int r;
 
     kl = dlist_setatom(NULL, cmd, mboxname);
     sync_send_apply(kl, sync_out);
     dlist_free(&kl);
 
-    return sync_parse_response(cmd, sync_in, NULL);
+    r = sync_parse_response(cmd, sync_in, NULL);
+    if (r == IMAP_MAILBOX_NONEXISTENT)
+	r = 0;
+
+    return r;
 }
 
 static int set_sub(const char *userid, const char *mboxname, int add)
