@@ -1082,7 +1082,7 @@ void reserve_folder(const char *part, const char *mboxname,
 
 static int do_reserve(struct dlist *kl, struct sync_reserve_list *reserve_list)
 {
-    struct message_guid tmp_guid;
+    struct message_guid *tmpguid;
     struct sync_name_list *missing = sync_name_list_create();
     struct sync_name_list *folder_names = sync_name_list_create();
     struct sync_msgid_list *part_list;
@@ -1101,9 +1101,9 @@ static int do_reserve(struct dlist *kl, struct sync_reserve_list *reserve_list)
 
     part_list = sync_reserve_partlist(reserve_list, partition);
     for (i = gl->head; i; i = i->next) {
-	if (!i->sval || !message_guid_decode(&tmp_guid, i->sval))
+	if (!dlist_toguid(i, &tmpguid))
 	    goto parse_err;
-	sync_msgid_add(part_list, &tmp_guid);
+	sync_msgid_add(part_list, tmpguid);
     }
 
     /* need a list so we can mark items */
@@ -1131,13 +1131,13 @@ static int do_reserve(struct dlist *kl, struct sync_reserve_list *reserve_list)
     }
 
     /* check if we missed any */
-    kout = dlist_list(NULL, "MISSING");
+    kout = dlist_newlist(NULL, "MISSING");
     for (i = gl->head; i; i = i->next) {
-	if (!message_guid_decode(&tmp_guid, i->sval))
-	    continue;
-	item = sync_msgid_lookup(part_list, &tmp_guid);
+	if (!dlist_toguid(i, &tmpguid))
+	    goto parse_err;
+	item = sync_msgid_lookup(part_list, tmpguid);
 	if (item && !item->mark)
-	    dlist_atom(kout, "GUID", i->sval);
+	    dlist_setguid(kout, "GUID", tmpguid);
     }
     if (kout->head)
 	sync_send_response(kout, sync_out);
@@ -1171,7 +1171,7 @@ static int do_quota(struct dlist *kin)
 
     if (!dlist_getatom(kin, "ROOT", &root))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
-    if (!dlist_getnum(kin, "LIMIT", &limit))
+    if (!dlist_getnum32(kin, "LIMIT", &limit))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
 
     return mboxlist_setquota(root, limit, 1);
@@ -1306,7 +1306,6 @@ static int do_mailbox(struct dlist *kin)
     const char *specialuse = NULL;
 
     struct mailbox *mailbox = NULL;
-    uint32_t newcrc;
     struct dlist *kr;
     int r;
 
@@ -1316,11 +1315,11 @@ static int do_mailbox(struct dlist *kin)
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getatom(kin, "MBOXNAME", &mboxname))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
-    if (!dlist_getnum(kin, "LAST_UID", &last_uid))
+    if (!dlist_getnum32(kin, "LAST_UID", &last_uid))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
-    if (!dlist_getmodseq(kin, "HIGHESTMODSEQ", &highestmodseq))
+    if (!dlist_getnum64(kin, "HIGHESTMODSEQ", &highestmodseq))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
-    if (!dlist_getnum(kin, "RECENTUID", &recentuid))
+    if (!dlist_getnum32(kin, "RECENTUID", &recentuid))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getdate(kin, "RECENTTIME", &recenttime))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
@@ -1328,7 +1327,7 @@ static int do_mailbox(struct dlist *kin)
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getdate(kin, "POP3_LAST_LOGIN", &pop3_last_login))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
-    if (!dlist_getnum(kin, "UIDVALIDITY", &uidvalidity))
+    if (!dlist_getnum32(kin, "UIDVALIDITY", &uidvalidity))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getatom(kin, "ACL", &acl))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
@@ -1453,11 +1452,11 @@ static int getannotation_cb(const char *mailbox __attribute__((unused)),
     const char *mboxname = (char *)rock;
     struct dlist *kl;
 
-    kl = dlist_new("ANNOTATION");
-    dlist_atom(kl, "MBOXNAME", mboxname);
-    dlist_atom(kl, "ENTRY", entry);
-    dlist_atom(kl, "USERID", userid);
-    dlist_atom(kl, "VALUE", attrib->value);
+    kl = dlist_newkvlist(NULL, "ANNOTATION");
+    dlist_setatom(kl, "MBOXNAME", mboxname);
+    dlist_setatom(kl, "ENTRY", entry);
+    dlist_setatom(kl, "USERID", userid);
+    dlist_setatom(kl, "VALUE", attrib->value);
     sync_send_response(kl, sync_out);
     dlist_free(&kl);
 
@@ -1475,9 +1474,9 @@ static void print_quota(struct quota *q)
 {
     struct dlist *kl;
 
-    kl = dlist_new("QUOTA");
-    dlist_atom(kl, "ROOT", q->root);
-    dlist_num(kl, "LIMIT", q->limit);
+    kl = dlist_newkvlist(NULL, "QUOTA");
+    dlist_setatom(kl, "ROOT", q->root);
+    dlist_setnum32(kl, "LIMIT", q->limit);
     sync_send_response(kl, sync_out);
     dlist_free(&kl);
 }
@@ -1505,7 +1504,7 @@ static int mailbox_cb(char *name,
 {
     struct sync_name_list *qrl = (struct sync_name_list *)rock;
     struct mailbox *mailbox = NULL;
-    struct dlist *kl = dlist_kvlist(NULL, "MAILBOX");
+    struct dlist *kl = dlist_newkvlist(NULL, "MAILBOX");
     int r;
 
     r = mailbox_open_irl(name, &mailbox);
@@ -1529,7 +1528,7 @@ static int mailbox_cb(char *name,
 static int do_getfullmailbox(struct dlist *kin)
 {
     struct mailbox *mailbox = NULL;
-    struct dlist *kl = dlist_kvlist(NULL, "MAILBOX");
+    struct dlist *kl = dlist_newkvlist(NULL, "MAILBOX");
     int r;
 
     r = mailbox_open_irl(kin->sval, &mailbox);
@@ -1560,12 +1559,12 @@ static int print_seen(const char *uniqueid, struct seendata *sd,
 {
     struct dlist *kl;
 
-    kl = dlist_new("SEEN");
-    dlist_atom(kl, "UNIQUEID", uniqueid);
-    dlist_date(kl, "LASTREAD", sd->lastread);
-    dlist_num(kl, "LASTUID", sd->lastuid);
-    dlist_date(kl, "LASTCHANGE", sd->lastchange);
-    dlist_atom(kl, "SEENUIDS", sd->seenuids);
+    kl = dlist_newkvlist(NULL, "SEEN");
+    dlist_setatom(kl, "UNIQUEID", uniqueid);
+    dlist_setdate(kl, "LASTREAD", sd->lastread);
+    dlist_setnum32(kl, "LASTUID", sd->lastuid);
+    dlist_setdate(kl, "LASTCHANGE", sd->lastchange);
+    dlist_setatom(kl, "SEENUIDS", sd->seenuids);
     sync_send_response(kl, sync_out);
     dlist_free(&kl);
 
@@ -1595,9 +1594,9 @@ static int user_sub(const char *userid)
 
     mboxlist_allsubs(userid, addmbox_sub, list);
 
-    kl = dlist_list(NULL, "LSUB");
+    kl = dlist_newlist(NULL, "LSUB");
     for (item = list->head; item; item = item->next) {
-	dlist_atom(kl, "MBOXNAME", item->name);
+	dlist_setatom(kl, "MBOXNAME", item->name);
     }
     if (kl->head)
 	sync_send_response(kl, sync_out);
@@ -1619,11 +1618,11 @@ static int user_sieve(const char *userid)
     if (!sieve_list) return 0;
 
     for (sieve = sieve_list->head; sieve; sieve = sieve->next) {
-	kl = dlist_new("SIEVE");
-	dlist_atom(kl, "FILENAME", sieve->name);
-	dlist_date(kl, "LAST_UPDATE", sieve->last_update);
-	dlist_atom(kl, "GUID", message_guid_encode(&sieve->guid));
-	dlist_num(kl, "ISACTIVE", sieve->active ? 1 : 0);
+	kl = dlist_newkvlist(NULL, "SIEVE");
+	dlist_setatom(kl, "FILENAME", sieve->name);
+	dlist_setdate(kl, "LAST_UPDATE", sieve->last_update);
+	dlist_setatom(kl, "GUID", message_guid_encode(&sieve->guid));
+	dlist_setnum32(kl, "ISACTIVE", sieve->active ? 1 : 0);
 	sync_send_response(kl, sync_out);
 	dlist_free(&kl);
     }
@@ -1827,7 +1826,7 @@ static int do_sieve(struct dlist *kin)
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getdate(kin, "LAST_UPDATE", &last_update))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
-    if (!dlist_getbuf(kin, "CONTENT", &content, &len))
+    if (!dlist_getmap(kin, "CONTENT", &content, &len))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
 
     return sync_sieve_upload(userid, filename, last_update, content, len);
@@ -1883,7 +1882,7 @@ static int do_seen(struct dlist *kin)
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getdate(kin, "LASTREAD", &sd.lastread))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
-    if (!dlist_getnum(kin, "LASTUID", &sd.lastuid))
+    if (!dlist_getnum32(kin, "LASTUID", &sd.lastuid))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getdate(kin, "LASTCHANGE", &sd.lastchange))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
@@ -1968,10 +1967,10 @@ static int do_fetchsieve(struct dlist *kin)
     if (!sieve)
 	return IMAP_MAILBOX_NONEXISTENT;
 
-    kl = dlist_new("SIEVE");
-    dlist_atom(kl, "USERID", userid);
-    dlist_atom(kl, "FILENAME", filename);
-    dlist_buf(kl, "CONTENT", sieve, size);
+    kl = dlist_newkvlist(NULL, "SIEVE");
+    dlist_setatom(kl, "USERID", userid);
+    dlist_setatom(kl, "FILENAME", filename);
+    dlist_setmap(kl, "CONTENT", sieve, size);
     sync_send_response(kl, sync_out);
     dlist_free(&kl);
 
@@ -1997,7 +1996,7 @@ static int do_fetch(struct dlist *kin)
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getatom(kin, "GUID", &guid))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
-    if (!dlist_getnum(kin, "UID", &uid))
+    if (!dlist_getnum32(kin, "UID", &uid))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!message_guid_decode(&tmp_guid, guid))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
@@ -2006,7 +2005,7 @@ static int do_fetch(struct dlist *kin)
     if (stat(fname, &sbuf) == -1)
 	return IMAP_MAILBOX_NONEXISTENT;
 
-    kl = dlist_file(NULL, "MESSAGE", partition, &tmp_guid, sbuf.st_size, fname);
+    kl = dlist_setfile(NULL, "MESSAGE", partition, &tmp_guid, sbuf.st_size, fname);
     sync_send_response(kl, sync_out);
     dlist_free(&kl);
 
@@ -2046,9 +2045,9 @@ static int do_expunge(struct dlist *kin)
 	r = mailbox_read_index_record(mailbox, recno, &record);
 	if (r) goto done;
 	if (record.system_flags & FLAG_EXPUNGED) continue;
-	while (ui && dlist_nval(ui) < record.uid) ui = ui->next;
+	while (ui && dlist_num(ui) < record.uid) ui = ui->next;
 	if (!ui) break; /* no point continuing */
-	if (record.uid == dlist_nval(ui)) {
+	if (record.uid == dlist_num(ui)) {
 	    record.system_flags |= FLAG_EXPUNGED;
 	    record.silent = 1; /* so the next sync will succeed */
 	    r = mailbox_rewrite_index_record(mailbox, &record);
@@ -2068,13 +2067,15 @@ static int do_upload(struct dlist *kin, struct sync_reserve_list *reserve_list)
     struct sync_msgid *msgid;
 
     for (ki = kin->head; ki; ki = ki->next) {
-	if (ki->type != DL_FILE)
+	struct message_guid *guid;
+	const char *part;
+	if (!dlist_tofile(ki, &part, &guid, NULL, NULL))
 	    continue;
 
-	part_list = sync_reserve_partlist(reserve_list, ki->part);
-	msgid = sync_msgid_lookup(part_list, &ki->gval);
+	part_list = sync_reserve_partlist(reserve_list, part);
+	msgid = sync_msgid_lookup(part_list, guid);
 	if (!msgid) 
-	    msgid = sync_msgid_add(part_list, &ki->gval);
+	    msgid = sync_msgid_add(part_list, guid);
 	if (!msgid->mark) {
 	    msgid->mark = 1;
 	    part_list->marked++;

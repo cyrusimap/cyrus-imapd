@@ -333,16 +333,16 @@ static int reserve_partition(char *partition,
     if (!replica_folders->head)
 	return 0; /* nowhere to reserve */
 
-    kl = dlist_new(cmd);
-    dlist_atom(kl, "PARTITION", partition);
+    kl = dlist_newkvlist(NULL, cmd);
+    dlist_setatom(kl, "PARTITION", partition);
 
-    ki = dlist_list(kl, "MBOXNAME");
+    ki = dlist_newlist(kl, "MBOXNAME");
     for (folder = replica_folders->head; folder; folder = folder->next)
-	dlist_atom(ki, "MBOXNAME", folder->name);
+	dlist_setatom(ki, "MBOXNAME", folder->name);
 
-    ki = dlist_list(kl, "GUID");
+    ki = dlist_newlist(kl, "GUID");
     for (msgid = part_list->head; msgid; msgid = msgid->next) {
-	dlist_atom(ki, "GUID", message_guid_encode(&msgid->guid));
+	dlist_setatom(ki, "GUID", message_guid_encode(&msgid->guid));
 	msgid->mark = 1;
 	part_list->marked++;
     }
@@ -417,7 +417,7 @@ static int response_parse(const char *cmd,
 	    else {
 		message_guid_set_null(&guid);
 	    }
-	    dlist_getnum(kl, "ISACTIVE", &active); /* optional */
+	    dlist_getnum32(kl, "ISACTIVE", &active); /* optional */
 	    sync_sieve_list_add(sieve_list, filename, modtime, &guid, active);
 	}
 
@@ -426,7 +426,7 @@ static int response_parse(const char *cmd,
 	    uint32_t limit = 0;
 	    if (!quota_list) goto parse_err;
 	    if (!dlist_getatom(kl, "ROOT", &root)) goto parse_err;
-	    if (!dlist_getnum(kl, "LIMIT", &limit)) goto parse_err;
+	    if (!dlist_getnum32(kl, "LIMIT", &limit)) goto parse_err;
 	    sync_quota_list_add(quota_list, root, limit);
 	}
 
@@ -447,7 +447,7 @@ static int response_parse(const char *cmd,
 	    if (!seen_list) goto parse_err;
 	    if (!dlist_getatom(kl, "UNIQUEID", &uniqueid)) goto parse_err;
 	    if (!dlist_getdate(kl, "LASTREAD", &lastread)) goto parse_err;
-	    if (!dlist_getnum(kl, "LASTUID", &lastuid)) goto parse_err;
+	    if (!dlist_getnum32(kl, "LASTUID", &lastuid)) goto parse_err;
 	    if (!dlist_getdate(kl, "LASTCHANGE", &lastchange)) goto parse_err;
 	    if (!dlist_getatom(kl, "SEENUIDS", &seenuids)) goto parse_err;
 	    sync_seen_list_add(seen_list, uniqueid, lastread,
@@ -474,11 +474,11 @@ static int response_parse(const char *cmd,
 	    if (!dlist_getatom(kl, "PARTITION", &part)) goto parse_err;
 	    if (!dlist_getatom(kl, "ACL", &acl)) goto parse_err;
 	    if (!dlist_getatom(kl, "OPTIONS", &options)) goto parse_err;
-	    if (!dlist_getmodseq(kl, "HIGHESTMODSEQ", &highestmodseq)) goto parse_err;
-	    if (!dlist_getnum(kl, "UIDVALIDITY", &uidvalidity)) goto parse_err;
-	    if (!dlist_getnum(kl, "LAST_UID", &last_uid)) goto parse_err;
+	    if (!dlist_getnum64(kl, "HIGHESTMODSEQ", &highestmodseq)) goto parse_err;
+	    if (!dlist_getnum32(kl, "UIDVALIDITY", &uidvalidity)) goto parse_err;
+	    if (!dlist_getnum32(kl, "LAST_UID", &last_uid)) goto parse_err;
 	    if (!dlist_getatom(kl, "SYNC_CRC", &sync_crc)) goto parse_err;
-	    if (!dlist_getnum(kl, "RECENTUID", &recentuid)) goto parse_err;
+	    if (!dlist_getnum32(kl, "RECENTUID", &recentuid)) goto parse_err;
 	    if (!dlist_getdate(kl, "RECENTTIME", &recenttime)) goto parse_err;
 	    if (!dlist_getdate(kl, "POP3_LAST_LOGIN", &pop3_last_login)) goto parse_err;
 	    /* optional */
@@ -511,7 +511,7 @@ static int user_reset(const char *userid)
     const char *cmd = "UNUSER";
     struct dlist *kl;
 
-    kl = dlist_atom(NULL, cmd, userid);
+    kl = dlist_setatom(NULL, cmd, userid);
     sync_send_apply(kl, sync_out);
     dlist_free(&kl);
 
@@ -523,10 +523,10 @@ static int folder_rename(char *oldname, char *newname, char *partition)
     const char *cmd = "RENAME";
     struct dlist *kl;
 
-    kl = dlist_new(cmd);
-    dlist_atom(kl, "OLDMBOXNAME", oldname);
-    dlist_atom(kl, "NEWMBOXNAME", newname);
-    dlist_atom(kl, "PARTITION", partition);
+    kl = dlist_newkvlist(NULL, cmd);
+    dlist_setatom(kl, "OLDMBOXNAME", oldname);
+    dlist_setatom(kl, "NEWMBOXNAME", newname);
+    dlist_setatom(kl, "PARTITION", partition);
     sync_send_apply(kl, sync_out);
     dlist_free(&kl);
 
@@ -538,7 +538,7 @@ static int folder_delete(char *mboxname)
     const char *cmd = "UNMAILBOX";
     struct dlist *kl;
 
-    kl = dlist_atom(NULL, cmd, mboxname);
+    kl = dlist_setatom(NULL, cmd, mboxname);
     sync_send_apply(kl, sync_out);
     dlist_free(&kl);
 
@@ -556,9 +556,9 @@ static int set_sub(const char *userid, const char *mboxname, int add)
     if (verbose_logging)
         syslog(LOG_INFO, "%s %s %s", cmd, userid, mboxname);
 
-    kl = dlist_new(cmd);
-    dlist_atom(kl, "USERID", userid);
-    dlist_atom(kl, "MBOXNAME", mboxname);
+    kl = dlist_newkvlist(NULL, cmd);
+    dlist_setatom(kl, "USERID", userid);
+    dlist_setatom(kl, "MBOXNAME", mboxname);
     sync_send_apply(kl, sync_out);
     dlist_free(&kl);
 
@@ -571,11 +571,11 @@ static int folder_setannotation(const char *mboxname, const char *entry,
     const char *cmd = "ANNOTATION";
     struct dlist *kl;
 
-    kl = dlist_new(cmd);
-    dlist_atom(kl, "MBOXNAME", mboxname);
-    dlist_atom(kl, "ENTRY", entry);
-    dlist_atom(kl, "USERID", userid);
-    dlist_atom(kl, "VALUE", value);
+    kl = dlist_newkvlist(NULL, cmd);
+    dlist_setatom(kl, "MBOXNAME", mboxname);
+    dlist_setatom(kl, "ENTRY", entry);
+    dlist_setatom(kl, "USERID", userid);
+    dlist_setatom(kl, "VALUE", value);
     sync_send_apply(kl, sync_out);
     dlist_free(&kl);
 
@@ -588,10 +588,10 @@ static int folder_unannotation(const char *mboxname, const char *entry,
     const char *cmd = "UNANNOTATION";
     struct dlist *kl;
 
-    kl = dlist_new(cmd);
-    dlist_atom(kl, "MBOXNAME", mboxname);
-    dlist_atom(kl, "ENTRY", entry);
-    dlist_atom(kl, "USERID", userid);
+    kl = dlist_newkvlist(NULL, cmd);
+    dlist_setatom(kl, "MBOXNAME", mboxname);
+    dlist_setatom(kl, "ENTRY", entry);
+    dlist_setatom(kl, "USERID", userid);
     sync_send_apply(kl, sync_out);
     dlist_free(&kl);
 
@@ -611,11 +611,11 @@ static int sieve_upload(const char *userid, const char *filename,
     sieve = sync_sieve_read(userid, filename, &size);
     if (!sieve) return IMAP_IOERROR;
 
-    kl = dlist_new(cmd);
-    dlist_atom(kl, "USERID", userid);
-    dlist_atom(kl, "FILENAME", filename);
-    dlist_date(kl, "LAST_UPDATE", last_update);
-    dlist_buf(kl, "CONTENT", sieve, size);
+    kl = dlist_newkvlist(NULL, cmd);
+    dlist_setatom(kl, "USERID", userid);
+    dlist_setatom(kl, "FILENAME", filename);
+    dlist_setdate(kl, "LAST_UPDATE", last_update);
+    dlist_setmap(kl, "CONTENT", sieve, size);
     sync_send_apply(kl, sync_out);
     dlist_free(&kl);
     free(sieve);
@@ -628,9 +628,9 @@ static int sieve_delete(const char *userid, const char *filename)
     const char *cmd = "UNSIEVE";
     struct dlist *kl;
 
-    kl = dlist_new(cmd);
-    dlist_atom(kl, "USERID", userid);
-    dlist_atom(kl, "FILENAME", filename);
+    kl = dlist_newkvlist(NULL, cmd);
+    dlist_setatom(kl, "USERID", userid);
+    dlist_setatom(kl, "FILENAME", filename);
     sync_send_apply(kl, sync_out);
     dlist_free(&kl);
 
@@ -642,9 +642,9 @@ static int sieve_activate(const char *userid, const char *filename)
     const char *cmd = "ACTIVATE_SIEVE";
     struct dlist *kl;
 
-    kl = dlist_new(cmd);
-    dlist_atom(kl, "USERID", userid);
-    dlist_atom(kl, "FILENAME", filename);
+    kl = dlist_newkvlist(NULL, cmd);
+    dlist_setatom(kl, "USERID", userid);
+    dlist_setatom(kl, "FILENAME", filename);
     sync_send_apply(kl, sync_out);
     dlist_free(&kl);
 
@@ -656,8 +656,8 @@ static int sieve_deactivate(const char *userid)
     const char *cmd = "UNACTIVATE_SIEVE";
     struct dlist *kl;
 
-    kl = dlist_new(cmd);
-    dlist_atom(kl, "USERID", userid);
+    kl = dlist_newkvlist(NULL, cmd);
+    dlist_setatom(kl, "USERID", userid);
     sync_send_apply(kl, sync_out);
     dlist_free(&kl);
 
@@ -671,7 +671,7 @@ static int delete_quota(const char *root)
     const char *cmd = "UNQUOTA";
     struct dlist *kl;
 
-    kl = dlist_atom(NULL, cmd, root);
+    kl = dlist_setatom(NULL, cmd, root);
     sync_send_apply(kl, sync_out);
     dlist_free(&kl);
 
@@ -700,9 +700,9 @@ static int update_quota_work(struct quota *client,
     if (server && (client->limit == server->limit))
         return(0);
 
-    kl = dlist_new(cmd);
-    dlist_atom(kl, "ROOT", client->root);
-    dlist_num(kl, "LIMIT", client->limit);
+    kl = dlist_newkvlist(NULL, cmd);
+    dlist_setatom(kl, "ROOT", client->root);
+    dlist_setnum32(kl, "LIMIT", client->limit);
     sync_send_apply(kl, sync_out);
     dlist_free(&kl);
 
@@ -773,30 +773,30 @@ static int fetch_file(struct mailbox *mailbox, unsigned long uid,
     struct dlist *kl;
     int r = 0;
     const char *fname = dlist_reserve_path(mailbox->part, &rp->guid);
+    struct message_guid *guid = NULL;
     struct stat sbuf;
 
     /* already reserved? great */
     if (stat(fname, &sbuf) == 0)
 	return 0;
 
-    kl = dlist_new(cmd);
-    dlist_atom(kl, "MBOXNAME", mailbox->name);
-    dlist_atom(kl, "PARTITION", mailbox->part);
-    dlist_atom(kl, "GUID", message_guid_encode(&rp->guid));
-    dlist_num(kl, "UID", uid);
+    kl = dlist_newkvlist(NULL, cmd);
+    dlist_setatom(kl, "MBOXNAME", mailbox->name);
+    dlist_setatom(kl, "PARTITION", mailbox->part);
+    dlist_setguid(kl, "GUID", &rp->guid);
+    dlist_setnum32(kl, "UID", uid);
     sync_send_lookup(kl, sync_out);
     dlist_free(&kl);
 
     r = sync_parse_response(cmd, sync_in, &kin);
     if (r) return r;
 
-    kl = kin->head;
-    if (!kl) {
+    if (!dlist_tofile(kin->head, NULL, &guid, NULL, NULL)) {
 	r = IMAP_MAILBOX_NONEXISTENT;
 	goto done;
     }
 
-    if (!message_guid_equal(&kl->gval, &rp->guid))
+    if (!message_guid_equal(guid, &rp->guid))
 	r = IMAP_IOERROR;
 
 done:
@@ -849,13 +849,13 @@ static int copyback_one_record(struct mailbox *mailbox,
 	 * we remove from the replica */
 	if (rp->modseq < mailbox->i.deletedmodseq) {
 	    if (kaction)
-		dlist_num(kaction, "EXPUNGE", rp->uid);
+		dlist_setnum32(kaction, "EXPUNGE", rp->uid);
 	}
 	else {
 	    r = fetch_file(mailbox, rp->uid, rp);
 	    if (r) return r;
 	    if (kaction)
-		dlist_num(kaction, "COPYBACK", rp->uid);
+		dlist_setnum32(kaction, "COPYBACK", rp->uid);
 	}
     }
 
@@ -884,7 +884,7 @@ static int renumber_one_record(struct index_record *mp,
 	return 0;
 
     if (kaction)
-	dlist_num(kaction, "RENUMBER", mp->uid);
+	dlist_setnum32(kaction, "RENUMBER", mp->uid);
 
     return 0;
 }
@@ -1162,7 +1162,7 @@ static int mailbox_full_update(const char *mboxname)
     uint32_t uidvalidity;
     uint32_t last_uid;
 
-    kl = dlist_atom(NULL, cmd, mboxname);
+    kl = dlist_setatom(NULL, cmd, mboxname);
     sync_send_lookup(kl, sync_out);
     dlist_free(&kl);
 
@@ -1184,17 +1184,17 @@ static int mailbox_full_update(const char *mboxname)
      * doesn't really matter too much, because we'll blat the replica's
      * values anyway! */
 
-    if (!dlist_getmodseq(kl, "HIGHESTMODSEQ", &highestmodseq)) {
+    if (!dlist_getnum64(kl, "HIGHESTMODSEQ", &highestmodseq)) {
 	r = IMAP_PROTOCOL_BAD_PARAMETERS;
 	goto done;
     }
 
-    if (!dlist_getnum(kl, "UIDVALIDITY", &uidvalidity)) {
+    if (!dlist_getnum32(kl, "UIDVALIDITY", &uidvalidity)) {
 	r = IMAP_PROTOCOL_BAD_PARAMETERS;
 	goto done;
     }
 
-    if (!dlist_getnum(kl, "LAST_UID", &last_uid)) {
+    if (!dlist_getnum32(kl, "LAST_UID", &last_uid)) {
 	r = IMAP_PROTOCOL_BAD_PARAMETERS;
 	goto done;
     }
@@ -1242,7 +1242,7 @@ static int mailbox_full_update(const char *mboxname)
 
     /* OK - now we're committed to make changes! */
 
-    kaction = dlist_list(NULL, "ACTION");
+    kaction = dlist_newlist(NULL, "ACTION");
     r = mailbox_update_loop(mailbox, kr->head, last_uid,
 			    highestmodseq, kaction);
     if (r) goto cleanup;
@@ -1253,21 +1253,21 @@ static int mailbox_full_update(const char *mboxname)
         mailbox->i.last_uid = last_uid;
 
     /* blatant reuse 'r' us */
-    kexpunge = dlist_new("EXPUNGE");
-    dlist_atom(kexpunge, "MBOXNAME", mailbox->name);
-    dlist_atom(kexpunge, "UNIQUEID", mailbox->uniqueid); /* just for safety */
-    kuids = dlist_list(kexpunge, "UID");
+    kexpunge = dlist_newkvlist(NULL, "EXPUNGE");
+    dlist_setatom(kexpunge, "MBOXNAME", mailbox->name);
+    dlist_setatom(kexpunge, "UNIQUEID", mailbox->uniqueid); /* just for safety */
+    kuids = dlist_newlist(kexpunge, "UID");
     for (ka = kaction->head; ka; ka = ka->next) {
 	if (!strcmp(ka->name, "EXPUNGE")) {
-	    dlist_num(kuids, "UID", dlist_nval(ka));
+	    dlist_setnum32(kuids, "UID", dlist_num(ka));
 	}
 	else if (!strcmp(ka->name, "COPYBACK")) {
-	    r = copy_remote(mailbox, dlist_nval(ka), kr);
+	    r = copy_remote(mailbox, dlist_num(ka), kr);
 	    if (r) goto cleanup;
-	    dlist_num(kuids, "UID", dlist_nval(ka));
+	    dlist_setnum32(kuids, "UID", dlist_num(ka));
 	}
 	else if (!strcmp(ka->name, "RENUMBER")) {
-	    r = copy_local(mailbox, dlist_nval(ka));
+	    r = copy_local(mailbox, dlist_num(ka));
 	    if (r) goto cleanup;
 	}
     }
@@ -1336,8 +1336,8 @@ static int update_mailbox_once(struct sync_folder *local,
     struct sync_msgid_list *part_list;
     struct mailbox *mailbox = NULL;
     int r = 0;
-    struct dlist *kl = dlist_new("MAILBOX");
-    struct dlist *kupload = dlist_list(NULL, "MESSAGE");
+    struct dlist *kl = dlist_newkvlist(NULL, "MAILBOX");
+    struct dlist *kupload = dlist_newlist(NULL, "MESSAGE");
 
     r = mailbox_open_irl(local->name, &mailbox);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
@@ -1394,9 +1394,12 @@ static int update_mailbox_once(struct sync_folder *local,
 	    struct dlist *ki;
 	    struct sync_msgid *msgid;
 	    for (ki = kupload->head; ki; ki = ki->next) {
-		msgid = sync_msgid_lookup(part_list, &ki->gval);
+		struct message_guid *guid = NULL;
+		if (!dlist_toguid(ki, &guid))
+		    continue;
+		msgid = sync_msgid_lookup(part_list, guid);
 		if (!msgid)
-		    msgid = sync_msgid_add(part_list, &ki->gval);
+		    msgid = sync_msgid_add(part_list, guid);
 		msgid->mark = 1;
 		part_list->marked++; 
 	    }
@@ -1447,13 +1450,13 @@ static int update_seen_work(const char *user, const char *uniqueid,
     struct dlist *kl;
 
     /* Update seen list */
-    kl = dlist_new(cmd);
-    dlist_atom(kl, "USERID", user);
-    dlist_atom(kl, "UNIQUEID", uniqueid);
-    dlist_date(kl, "LASTREAD", sd->lastread);
-    dlist_num(kl, "LASTUID", sd->lastuid);
-    dlist_date(kl, "LASTCHANGE", sd->lastchange);
-    dlist_atom(kl, "SEENUIDS", sd->seenuids);
+    kl = dlist_newkvlist(NULL, cmd);
+    dlist_setatom(kl, "USERID", user);
+    dlist_setatom(kl, "UNIQUEID", uniqueid);
+    dlist_setdate(kl, "LASTREAD", sd->lastread);
+    dlist_setnum32(kl, "LASTUID", sd->lastuid);
+    dlist_setdate(kl, "LASTCHANGE", sd->lastchange);
+    dlist_setatom(kl, "SEENUIDS", sd->seenuids);
     sync_send_apply(kl, sync_out);
     dlist_free(&kl);
 
@@ -1546,7 +1549,7 @@ static int do_getannotation(const char *mboxname,
     int r;
 
     /* Update seen list */
-    kl = dlist_atom(NULL, cmd, mboxname);
+    kl = dlist_setatom(NULL, cmd, mboxname);
     sync_send_lookup(kl, sync_out);
     dlist_free(&kl);
 
@@ -1730,9 +1733,9 @@ static int do_mailboxes(struct sync_name_list *mboxname_list)
 	    syslog(LOG_INFO, "MAILBOX %s", mbox->name);
     }
 
-    kl = dlist_list(NULL, "MAILBOXES");
+    kl = dlist_newlist(NULL, "MAILBOXES");
     for (mbox = mboxname_list->head; mbox; mbox = mbox->next)
-	dlist_atom(kl, "MBOXNAME", mbox->name);
+	dlist_setatom(kl, "MBOXNAME", mbox->name);
     sync_send_lookup(kl, sync_out);
     dlist_free(&kl);
 
@@ -2023,7 +2026,7 @@ static int do_user(const char *userid)
     if (verbose_logging)
         syslog(LOG_INFO, "USER %s", userid);
 
-    kl = dlist_atom(NULL, "USER", userid);
+    kl = dlist_setatom(NULL, "USER", userid);
     sync_send_lookup(kl, sync_out);
     dlist_free(&kl);
 
@@ -2081,7 +2084,7 @@ static int do_meta(char *userid)
     if (verbose_logging)
 	syslog(LOG_INFO, "META %s", userid);
 
-    kl = dlist_atom(NULL, "META", userid);
+    kl = dlist_setatom(NULL, "META", userid);
     sync_send_lookup(kl, sync_out);
     dlist_free(&kl);
 
@@ -2758,9 +2761,9 @@ negfailed:
 	if (algorithm && covers) {
 	    /* server advertised the caps, presumably it knows
 	     * how to handle a SET */
-	    kl = dlist_new("OPTIONS");
-	    dlist_atom(kl, "SYNC_CRC_ALGORITHM", sync_crc_get_algorithm());
-	    dlist_atom(kl, "SYNC_CRC_COVERS", sync_crc_get_covers());
+	    kl = dlist_newkvlist(NULL, "OPTIONS");
+	    dlist_setatom(kl, "SYNC_CRC_ALGORITHM", sync_crc_get_algorithm());
+	    dlist_setatom(kl, "SYNC_CRC_COVERS", sync_crc_get_covers());
 	    sync_send_set(kl, sync_out);
 	    dlist_free(&kl);
 

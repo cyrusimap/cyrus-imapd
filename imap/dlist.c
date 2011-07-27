@@ -96,6 +96,8 @@ static void printfile(struct protstream *out, const struct dlist *dl)
     FILE *f;
     unsigned long size;
 
+    assert(dlist_isfile(dl));
+
     f = fopen(dl->sval, "r");
     if (!f) {
 	syslog(LOG_ERR, "IOERROR: Failed to read file %s", dl->sval);
@@ -120,7 +122,7 @@ static void printfile(struct protstream *out, const struct dlist *dl)
     prot_printf(out, "%%{");
     prot_printastring(out, dl->part);
     prot_printf(out, " ");
-    prot_printastring(out, message_guid_encode(&dl->gval));
+    prot_printastring(out, message_guid_encode(dl->gval));
     prot_printf(out, " %lu}\r\n", size);
     while (size) {
 	int n = fread(buf, 1, (size > 4096 ? 4096 : size), f);
@@ -207,12 +209,38 @@ error:
 
 /* DLIST STUFF */
 
-void dlist_stitch(struct dlist *dl, struct dlist *child)
+void dlist_stitch(struct dlist *parent, struct dlist *child)
 {
-    if (dl->tail)
-	dl->tail = dl->tail->next = child;
-    else
-	dl->head = dl->tail = child;
+    assert(!child->next);
+
+    if (parent->tail) {
+	parent->tail->next = child;
+	parent->tail = child;
+    }
+    else {
+	parent->head = parent->tail = child;
+    }
+}
+
+void dlist_unstitch(struct dlist *parent, struct dlist *child)
+{
+    struct dlist *prev = NULL;
+    struct dlist *replace = NULL;
+
+    /* find old record */
+    for (replace = parent->head; replace; replace = replace->next) {
+	if (replace == child) break;
+	prev = replace;
+    }
+
+    assert(replace);
+
+    if (prev) prev->next = child->next;
+    else (parent->head) = child->next;
+
+    if (parent->tail == child) parent->tail = prev;
+
+    child->next = NULL;
 }
 
 static struct dlist *dlist_child(struct dlist *dl, const char *name)
@@ -225,129 +253,324 @@ static struct dlist *dlist_child(struct dlist *dl, const char *name)
     return i;
 }
 
-struct dlist *dlist_atom(struct dlist *dl, const char *name, const char *val)
+static void _dlist_free_children(struct dlist *dl)
 {
-    struct dlist *i = dlist_child(dl, name);
-    i->type = DL_ATOM;
-    i->sval = xstrdup(val);
-    return i;
+    struct dlist *next;
+    struct dlist *i;
+
+    if (!dl) return;
+
+    i = dl->head;
+    while (i) {
+	next = i->next;
+	dlist_free(&i);
+	i = next;
+    }
+
+    dl->head = dl->tail = NULL;
 }
 
-struct dlist *dlist_flag(struct dlist *dl, const char *name, const char *val)
+static void _dlist_clean(struct dlist *dl)
 {
-    struct dlist *i = dlist_child(dl, name);
-    i->type = DL_FLAG;
-    i->sval = xstrdup(val);
-    return i;
+    if (!dl) return;
+
+    /* remove any children */
+    _dlist_free_children(dl);
+
+    /* clean out values */
+    free(dl->part);
+    dl->part = NULL;
+    free(dl->sval);
+    dl->sval = NULL;
+    free(dl->gval);
+    dl->gval = NULL;
+    dl->nval = 0;
 }
 
-struct dlist *dlist_num(struct dlist *dl, const char *name, unsigned long val)
+
+void dlist_makeatom(struct dlist *dl, const char *val)
 {
-    struct dlist *i = dlist_child(dl, name);
-    i->type = DL_NUM;
-    i->nval = (modseq_t)val;
-    return i;
+    if (!dl) return;
+    _dlist_clean(dl);
+    if (val) {
+	dl->type = DL_ATOM;
+	dl->sval = xstrdup(val);
+	dl->nval = strlen(val);
+    }
+    else
+	dl->type = DL_NIL;
 }
 
-struct dlist *dlist_date(struct dlist *dl, const char *name, time_t val)
+void dlist_makeflag(struct dlist *dl, const char *val)
 {
-    struct dlist *i = dlist_child(dl, name);
-    i->type = DL_DATE;
-    i->nval = (modseq_t)val;
-    return i;
+    if (!dl) return;
+    _dlist_clean(dl);
+    if (val) {
+	dl->type = DL_FLAG;
+	dl->sval = xstrdup(val);
+	dl->nval = strlen(val);
+    }
+    else
+	dl->type = DL_NIL;
 }
 
-struct dlist *dlist_modseq(struct dlist *dl, const char *name, modseq_t val)
+void dlist_makenum32(struct dlist *dl, uint32_t val)
 {
-    struct dlist *i = dlist_child(dl, name);
-    i->type = DL_MODSEQ;
-    i->nval = val;
-    return i;
+    if (!dl) return;
+    _dlist_clean(dl);
+    dl->type = DL_NUM;
+    dl->nval = val;
 }
 
-struct dlist *dlist_hex64(struct dlist *dl, const char *name, modseq_t val)
+void dlist_makenum64(struct dlist *dl, bit64 val)
 {
-    struct dlist *i = dlist_child(dl, name);
-    i->type = DL_HEX64;
-    i->nval = val;
-    return i;
+    if (!dl) return;
+    _dlist_clean(dl);
+    dl->type = DL_NUM;
+    dl->nval = val;
 }
 
-struct dlist *dlist_guid(struct dlist *dl, const char *name,
-			   struct message_guid *guid)
+void dlist_makedate(struct dlist *dl, time_t val)
 {
-    struct dlist *i = dlist_child(dl, name);
-    i->type = DL_GUID,
-    message_guid_copy(&i->gval, guid);
-    return i;
+    if (!dl) return;
+    _dlist_clean(dl);
+    dl->type = DL_DATE;
+    dl->nval = val;
 }
 
-struct dlist *dlist_file(struct dlist *dl, const char *name,
-			   const char *part,
-			   struct message_guid *guid,
-			   unsigned long size,
-			   const char *fname)
+void dlist_makehex64(struct dlist *dl, bit64 val)
 {
-    struct dlist *i = dlist_child(dl, name);
-    i->type = DL_FILE;
-    message_guid_copy(&i->gval, guid);
-    i->sval = xstrdup(fname);
-    i->nval = size;
-    i->part = xstrdup(part);
-    return i;
+    if (!dl) return;
+    _dlist_clean(dl);
+    dl->type = DL_HEX;
+    dl->nval = val;
 }
 
-struct dlist *dlist_buf(struct dlist *dl, const char *name,
-		        const char *val, size_t len)
+void dlist_makeguid(struct dlist *dl, struct message_guid *guid)
 {
-    struct dlist *i = dlist_child(dl, name);
-    i->type = DL_BUF;
-    /* WARNING - DO NOT replace this with xstrndup - the
-     * data may be binary, and xstrndup does not copy
-     * binary data correctly */
-    i->sval = xmalloc(len+1);
-    memcpy(i->sval, val, len);
-    i->sval[len] = '\0'; /* make it string safe too */
-    i->nval = len;
-    return i;
+    if (!dl) return;
+    _dlist_clean(dl);
+    if (guid) {
+	dl->type = DL_GUID,
+	dl->gval = xzmalloc(sizeof(struct message_guid));
+	message_guid_copy(dl->gval, guid);
+    }
+    else
+	dl->type = DL_NIL;
 }
 
-struct dlist *dlist_kvlist(struct dlist *dl, const char *name)
+void dlist_makefile(struct dlist *dl,
+		    const char *part, struct message_guid *guid,
+		    unsigned long size, const char *fname)
 {
-    struct dlist *i = dlist_child(dl, name);
-    i->type = DL_KVLIST;
-    return i;
+    if (!dl) return;
+    _dlist_clean(dl);
+    if (part && guid && fname) {
+	dl->type = DL_FILE;
+	dl->gval = xzmalloc(sizeof(struct message_guid));
+	message_guid_copy(dl->gval, guid);
+	dl->sval = xstrdup(fname);
+	dl->nval = size;
+	dl->part = xstrdup(part);
+    }
+    else
+	dl->type = DL_NIL;
 }
 
-struct dlist *dlist_list(struct dlist *dl, const char *name)
+void dlist_makemap(struct dlist *dl, const char *val, size_t len)
 {
-    struct dlist *i = dlist_child(dl, name);
-    i->type = DL_ATOMLIST;
-    return i;
+    if (!dl) return;
+    _dlist_clean(dl);
+    if (val) {
+	dl->type = DL_BUF;
+	/* WARNING - DO NOT replace this with xstrndup - the
+	 * data may be binary, and xstrndup does not copy
+	 * binary data correctly - but we still want to NULL
+	 * terminate for non-binary data */
+	dl->sval = xmalloc(len+1);
+	memcpy(dl->sval, val, len);
+	dl->sval[len] = '\0'; /* make it string safe too */
+	dl->nval = len;
+    }
+    else
+	dl->type = DL_NIL;
 }
 
-struct dlist *dlist_new(const char *name)
+struct dlist *dlist_newkvlist(struct dlist *parent, const char *name)
 {
-    return dlist_kvlist(NULL, name);
+    struct dlist *dl = dlist_child(parent, name);
+    dl->type = DL_KVLIST;
+    return dl;
 }
 
-static int nextlevel(const struct dlist *dl, int level)
+struct dlist *dlist_newlist(struct dlist *parent, const char *name)
 {
-    if (level == -1) return -1;
-    if (dl->type == DL_KVLIST) return level + 1;
-    return level;
+    struct dlist *dl = dlist_child(parent, name);
+    dl->type = DL_ATOMLIST;
+    return dl;
 }
 
-static void dlist_print_helper(const struct dlist *dl, int printkeys,
-			       struct protstream *out, int level)
+struct dlist *dlist_newpklist(struct dlist *parent, const char *name)
+{
+    struct dlist *dl = dlist_child(parent, name);
+    dl->type = DL_ATOMLIST;
+    dl->nval = 1;
+    return dl;
+}
+
+struct dlist *dlist_setatom(struct dlist *parent, const char *name, const char *val)
+{
+    struct dlist *dl = dlist_child(parent, name);
+    dlist_makeatom(dl, val);
+    return dl;
+}
+
+struct dlist *dlist_setflag(struct dlist *parent, const char *name, const char *val)
+{
+    struct dlist *dl = dlist_child(parent, name);
+    dlist_makeflag(dl, val);
+    return dl;
+}
+
+struct dlist *dlist_setnum64(struct dlist *parent, const char *name, bit64 val)
+{
+    struct dlist *dl = dlist_child(parent, name);
+    dlist_makenum64(dl, val);
+    return dl;
+}
+
+struct dlist *dlist_setnum32(struct dlist *parent, const char *name, uint32_t val)
+{
+    struct dlist *dl = dlist_child(parent, name);
+    dlist_makenum32(dl, val);
+    return dl;
+}
+
+struct dlist *dlist_setdate(struct dlist *parent, const char *name, time_t val)
+{
+    struct dlist *dl = dlist_child(parent, name);
+    dlist_makedate(dl, val);
+    return dl;
+}
+
+struct dlist *dlist_sethex64(struct dlist *parent, const char *name, bit64 val)
+{
+    struct dlist *dl = dlist_child(parent, name);
+    dlist_makehex64(dl, val);
+    return dl;
+}
+
+struct dlist *dlist_setmap(struct dlist *parent, const char *name,
+			   const char *val, size_t len)
+{
+    struct dlist *dl = dlist_child(parent, name);
+    dlist_makemap(dl, val, len);
+    return dl;
+}
+
+struct dlist *dlist_setguid(struct dlist *parent, const char *name,
+			    struct message_guid *guid)
+{
+    struct dlist *dl = dlist_child(parent, name);
+    dlist_makeguid(dl, guid);
+    return dl;
+}
+
+struct dlist *dlist_setfile(struct dlist *parent, const char *name,
+			    const char *part, struct message_guid *guid,
+			    size_t size, const char *fname)
+{
+    struct dlist *dl = dlist_child(parent, name);
+    dlist_makefile(dl, part, guid, size, fname);
+    return dl;
+}
+
+struct dlist *dlist_updatechild(struct dlist *parent, const char *name)
+{
+    struct dlist *dl = dlist_getchild(parent, name);
+    if (!dl) dl = dlist_child(parent, name);
+    return dl;
+}
+
+struct dlist *dlist_updateatom(struct dlist *parent, const char *name, const char *val)
+{
+    struct dlist *dl = dlist_updatechild(parent, name);
+    dlist_makeatom(dl, val);
+    return dl;
+}
+
+struct dlist *dlist_updateflag(struct dlist *parent, const char *name, const char *val)
+{
+    struct dlist *dl = dlist_updatechild(parent, name);
+    dlist_makeflag(dl, val);
+    return dl;
+}
+
+struct dlist *dlist_updatenum64(struct dlist *parent, const char *name, bit64 val)
+{
+    struct dlist *dl = dlist_updatechild(parent, name);
+    dlist_makenum64(dl, val);
+    return dl;
+}
+
+struct dlist *dlist_updatenum32(struct dlist *parent, const char *name, uint32_t val)
+{
+    struct dlist *dl = dlist_updatechild(parent, name);
+    dlist_makenum32(dl, val);
+    return dl;
+}
+
+struct dlist *dlist_updatedate(struct dlist *parent, const char *name, time_t val)
+{
+    struct dlist *dl = dlist_updatechild(parent, name);
+    dlist_makedate(dl, val);
+    return dl;
+}
+
+struct dlist *dlist_updatehex64(struct dlist *parent, const char *name, bit64 val)
+{
+    struct dlist *dl = dlist_updatechild(parent, name);
+    dlist_makehex64(dl, val);
+    return dl;
+}
+
+struct dlist *dlist_updatemap(struct dlist *parent, const char *name,
+			   const char *val, size_t len)
+{
+    struct dlist *dl = dlist_updatechild(parent, name);
+    dlist_makemap(dl, val, len);
+    return dl;
+}
+
+struct dlist *dlist_updateguid(struct dlist *parent, const char *name,
+			    struct message_guid *guid)
+{
+    struct dlist *dl = dlist_updatechild(parent, name);
+    dlist_makeguid(dl, guid);
+    return dl;
+}
+
+struct dlist *dlist_updatefile(struct dlist *parent, const char *name,
+			    const char *part, struct message_guid *guid,
+			    size_t size, const char *fname)
+{
+    struct dlist *dl = dlist_updatechild(parent, name);
+    dlist_makefile(dl, part, guid, size, fname);
+    return dl;
+}
+
+void dlist_print(const struct dlist *dl, int printkeys,
+		 struct protstream *out)
 {
     struct dlist *di;
-    int i;
 
     if (printkeys)
 	prot_printf(out, "%s ", dl->name);
 
     switch (dl->type) {
+    case DL_NIL:
+	prot_printf(out, "NIL");
+	break;
     case DL_ATOM:
 	prot_printastring(out, dl->sval);
 	break;
@@ -356,8 +579,7 @@ static void dlist_print_helper(const struct dlist *dl, int printkeys,
 	break;
     case DL_NUM:
     case DL_DATE: /* for now, we will format it later */
-    case DL_MODSEQ:
-	prot_printf(out, MODSEQ_FMT, dl->nval);
+	prot_printf(out, "%llu", dl->nval);
 	break;
     case DL_FILE:
 	printfile(out, dl);
@@ -365,7 +587,10 @@ static void dlist_print_helper(const struct dlist *dl, int printkeys,
     case DL_BUF:
 	prot_printliteral(out, dl->sval, dl->nval);
 	break;
-    case DL_HEX64:
+    case DL_GUID: 
+	prot_printf(out, "%s", message_guid_encode(dl->gval));
+	break;
+    case DL_HEX:
 	{
 	    char buf[17];
 	    snprintf(buf, 17, "%016llx", dl->nval);
@@ -373,14 +598,9 @@ static void dlist_print_helper(const struct dlist *dl, int printkeys,
 	}
 	break;
     case DL_KVLIST:
-	if (level > 0) {
-	    prot_printf(out, "\r\n");
-	    for (i = 0; i <= level; i++)
-		prot_printf(out, " ");
-	}
 	prot_printf(out, "%%(");
 	for (di = dl->head; di; di = di->next) {
-	    dlist_print_helper(di, 1, out, level);
+	    dlist_print(di, 1, out);
 	    if (di->next) {
 		prot_printf(out, " ");
 	    }
@@ -390,7 +610,7 @@ static void dlist_print_helper(const struct dlist *dl, int printkeys,
     case DL_ATOMLIST:
 	prot_printf(out, "(");
 	for (di = dl->head; di; di = di->next) {
-	    dlist_print_helper(di, 0, out, nextlevel(di, level));
+	    dlist_print(di, dl->nval, out);
 	    if (di->next)
 		prot_printf(out, " ");
 	}
@@ -399,52 +619,28 @@ static void dlist_print_helper(const struct dlist *dl, int printkeys,
     }
 }
 
-void dlist_print(const struct dlist *dl, int printkeys, struct protstream *out)
-{
-    dlist_print_helper(dl, printkeys, out, 0);
-}
-
 void dlist_printbuf(const struct dlist *dl, int printkeys, struct buf *outbuf)
 {
     struct protstream *outstream;
 
     outstream = prot_writebuf(outbuf);
-    dlist_print_helper(dl, printkeys, outstream, -1);
+    dlist_print(dl, printkeys, outstream);
     prot_flush(outstream);
     prot_free(outstream);
 }
 
 void dlist_free(struct dlist **dlp)
 {
-    struct dlist *i, *next;
     if (!*dlp) return;
-    i = (*dlp)->head;
-    while (i) {
-	free(i->name);
-	next = i->next;
-	switch (i->type) {
-	case DL_KVLIST:
-	case DL_ATOMLIST:
-	    dlist_free(&i);
-	    break;
-	case DL_FILE:
-	    free(i->part);
-	    /* drop through */
-	default:
-	    free(i->sval);
-	}
-	free(i);
-	i = next;
-    }
+    _dlist_clean(*dlp);
+    free((*dlp)->name);
     free(*dlp);
     *dlp = NULL;
 }
 
 static char next_nonspace(struct protstream *in, char c)
 {
-    while (Uisspace(c)) {
-	c = prot_getc(in);
-    }
+    if (c == ' ') c = prot_getc(in);
     return c;
 }
 
@@ -470,7 +666,7 @@ char dlist_parse(struct dlist **dlp, int parsekey, struct protstream *in)
 
     /* check what sort of value we have */
     if (c == '(') {
-	dl = dlist_list(NULL, kbuf.s);
+	dl = dlist_newlist(NULL, kbuf.s);
 	c = next_nonspace(in, ' ');
 	while (c != ')') {
 	    struct dlist *di = NULL;
@@ -486,7 +682,7 @@ char dlist_parse(struct dlist **dlp, int parsekey, struct protstream *in)
 	/* no whitespace allowed here */
 	c = prot_getc(in);
 	if (c == '(') {
-	    dl = dlist_kvlist(NULL, kbuf.s);
+	    dl = dlist_newkvlist(NULL, kbuf.s);
 	    c = next_nonspace(in, ' ');
 	    while (c != ')') {
 		struct dlist *di = NULL;
@@ -513,7 +709,7 @@ char dlist_parse(struct dlist **dlp, int parsekey, struct protstream *in)
 	    if (c != '\n') goto fail;
 	    if (!message_guid_decode(&tmp_guid, gbuf.s)) goto fail;
 	    if (reservefile(in, pbuf.s, &tmp_guid, size, &fname)) goto fail;
-	    dl = dlist_file(NULL, kbuf.s, pbuf.s, &tmp_guid, size, fname);
+	    dl = dlist_setfile(NULL, kbuf.s, pbuf.s, &tmp_guid, size, fname);
 	    /* file literal */
 	}
 	else {
@@ -526,17 +722,17 @@ char dlist_parse(struct dlist **dlp, int parsekey, struct protstream *in)
 	prot_ungetc(c, in);
 	/* could be binary in a literal */
 	c = getbastring(in, NULL, &vbuf);
-	dl = dlist_buf(NULL, kbuf.s, vbuf.s, vbuf.len);
+	dl = dlist_setmap(NULL, kbuf.s, vbuf.s, vbuf.len);
     }
     else if (c == '\\') { /* special case for flags */
 	prot_ungetc(c, in);
 	c = getastring(in, NULL, &vbuf);
-	dl = dlist_flag(NULL, kbuf.s, vbuf.s);
+	dl = dlist_setflag(NULL, kbuf.s, vbuf.s);
     }
     else {
 	prot_ungetc(c, in);
 	c = getastring(in, NULL, &vbuf);
-	dl = dlist_atom(NULL, kbuf.s, vbuf.s);
+	dl = dlist_setatom(NULL, kbuf.s, vbuf.s);
     }
 
     /* success */
@@ -556,6 +752,7 @@ int dlist_parsemap(struct dlist **dlp, int parsekey,
     struct dlist *dl = NULL;
 
     stream = prot_readmap(base, len);
+    prot_setisclient(stream, 1); /* don't sync literals */
     c = dlist_parse(&dl, parsekey, stream);
     prot_free(stream);
 
@@ -583,175 +780,365 @@ struct dlist *dlist_getchild(struct dlist *dl, const char *name)
     return NULL;
 }
 
-/* XXX - type coercion logic here */
-
-int dlist_getatom(struct dlist *dl, const char *name, const char **val)
+struct dlist *dlist_getchildn(struct dlist *dl, int num)
 {
-    struct dlist *i = dlist_getchild(dl, name);
-    if (!i) return 0;
-    *val = i->sval;
+    struct dlist *i;
+
+    if (!dl) return NULL;
+
+    for (i = dl->head; i && num; i = i->next)
+	num--;
+
+    return i;
+}
+
+struct dlist *dlist_getkvchild_bykey(struct dlist *dl,
+				     const char *key, const char *val)
+{
+    struct dlist *i;
+    struct dlist *tmp;
+
+    if (!dl) return NULL;
+
+    for (i = dl->head; i; i = i->next) {
+	tmp = dlist_getchild(i, key);
+	if (tmp && !strcmp(tmp->sval, val))
+	    return i;
+    }
+
+    return NULL;
+}
+
+int dlist_toatom(struct dlist *dl, const char **valp)
+{
+    const char *str;
+    size_t len;
+
+    /* tomap always adds a trailing \0 */
+    if (!dlist_tomap(dl, &str, &len))
+	return 0;
+
+    /* got NULLs? */
+    if (dl->type == DL_BUF && strlen(str) != len)
+	return 0;
+
+    if (valp) *valp = str;
+
     return 1;
 }
 
-static int dlist_bufval(struct dlist *dl, const char **val, size_t *len)
+int dlist_tomap(struct dlist *dl, const char **valp, size_t *lenp)
 {
-    *val = dl->sval;
-    if (dl->type == DL_BUF)
-	*len = (size_t)dl->nval;
-    else
-	*len = strlen(*val);
-    return 1;
-}
+    char tmp[30];
 
-int dlist_getbuf(struct dlist *dl, const char *name, const char **val, size_t *len)
-{
-    struct dlist *i = dlist_getchild(dl, name);
-    if (!i) return 0;
-    return dlist_bufval(i, val, len);
+    if (!dl) return 0;
+
+    switch (dl->type) {
+    case DL_NUM:
+    case DL_DATE:
+	snprintf(tmp, 30, "%llu", dl->nval);
+	dlist_makeatom(dl, tmp);
+	break;
+
+    case DL_HEX:
+	snprintf(tmp, 30, "%016llx", dl->nval);
+	dlist_makeatom(dl, tmp);
+	break;
+
+    case DL_GUID:
+	dlist_makeatom(dl, message_guid_encode(dl->gval));
+	break;
+
+    case DL_ATOM:
+    case DL_FLAG:
+    case DL_BUF:
+	break;
+
+    default:
+	return 0;
+    }
+
+    if (valp) *valp = dl->sval;
+    if (lenp) *lenp = dl->nval;
+
+    return 1;
 }
 
 /* ensure value is exactly one number */
-static int _getn(struct dlist *dl, bit64 *val)
+int dlist_tonum64(struct dlist *dl, bit64 *valp)
 {
-    const char *str;
-    size_t strlen;
     const char *end;
+    bit64 newval;
 
-    switch(dl->type) {
+    if (!dl) return 0;
+
+    switch (dl->type) {
     case DL_ATOM:
     case DL_BUF:
-	assert(dlist_bufval(dl, &str, &strlen));
-	assert(!parsenum(str, &end, strlen, val));
-	assert(end - str == (int)strlen);
-	return 1;
+	if (parsenum(dl->sval, &end, dl->nval, &newval))
+	    return 0;
+	if (end - dl->sval != (int)dl->nval)
+	    return 0;
+	/* successfully parsed - switch to a numeric value */
+	dlist_makenum64(dl, newval);
+	break;
+
     case DL_NUM:
-    case DL_MODSEQ:
-	*val = dl->nval;
-	return 1;
+    case DL_HEX:
+    case DL_DATE:
+	break;
+
     default:
-	fatal("INVALID TYPE FOR NVAL", EC_SOFTWARE);
+	return 0;
     }
 
-    /* shut GCC up - unreachable */
+    if (valp) *valp = dl->nval;
+
+    return 1;
+}
+
+int dlist_tonum32(struct dlist *dl, uint32_t *valp)
+{
+    bit64 v;
+
+    if (dlist_tonum64(dl, &v)) {
+	if (valp) *valp = (uint32_t)v;
+	return 1;
+    }
+
+    return 0;
+}
+
+int dlist_todate(struct dlist *dl, time_t *valp)
+{
+    bit64 v;
+
+    if (dlist_tonum64(dl, &v)) {
+	if (valp) *valp = (time_t)v;
+	dl->type = DL_DATE;
+	return 1;
+    }
+
+    return 0;
+}
+
+int dlist_tohex64(struct dlist *dl, bit64 *valp)
+{
+    const char *end = NULL;
+    bit64 newval;
+
+    if (!dl) return 0;
+
+    switch (dl->type) {
+    case DL_ATOM:
+    case DL_BUF:
+	if (parsehex(dl->sval, &end, dl->nval, &newval))
+	    return 0;
+	if (end - dl->sval != (int)dl->nval)
+	    return 0;
+	/* successfully parsed - switch to a numeric value */
+	dlist_makehex64(dl, newval);
+	break;
+
+    case DL_NUM:
+    case DL_HEX:
+    case DL_DATE:
+	dl->type = DL_HEX;
+	break;
+
+    default:
+	return 0;
+    }
+
+    if (valp) *valp = dl->nval;
+
+    return 1;
+}
+
+int dlist_toguid(struct dlist *dl, struct message_guid **valp)
+{
+    struct message_guid tmpguid;
+
+    if (!dl) return 0;
+
+    switch (dl->type) {
+    case DL_ATOM:
+    case DL_BUF:
+	if (dl->nval != 40)
+	    return 0;
+	if (!message_guid_decode(&tmpguid, dl->sval))
+	    return 0;
+	/* successfully parsed - switch to guid value */
+	dlist_makeguid(dl, &tmpguid);
+	break;
+
+    case DL_GUID:
+	break;
+
+    default:
+	return 0;
+    }
+
+    if (valp) *valp = dl->gval;
+
+    return 1;
+}
+
+int dlist_tofile(struct dlist *dl,
+		 const char **partp, struct message_guid **guidp,
+		 unsigned long *sizep, const char **fnamep)
+{
+    if (!dlist_isfile(dl)) return 0;
+
+    if (guidp) *guidp = dl->gval;
+    if (sizep) *sizep = dl->nval;
+    if (fnamep) *fnamep = dl->sval;
+    if (partp) *partp = dl->part;
+
+    return 1;
+}
+
+int dlist_isatomlist(const struct dlist *dl)
+{
+    if (!dl) return 0;
+    return (dl->type == DL_ATOMLIST);
+}
+
+int dlist_iskvlist(const struct dlist *dl)
+{
+    if (!dl) return 0;
+
+    return (dl->type == DL_KVLIST);
+}
+
+int dlist_isfile(const struct dlist *dl)
+{
+    if (!dl) return 0;
+
+    return (dl->type == DL_FILE);
+}
+
+/* XXX - these ones aren't const, because they can change
+ * things... */
+int dlist_isnum(struct dlist *dl)
+{
+    bit64 tmp;
+
+    if (!dl) return 0;
+
+    /* see if it can be parsed as a number */
+    return dlist_tonum64(dl, &tmp);
+}
+
+/* XXX - these ones aren't const, because they can change
+ * things... */
+int dlist_ishex64(struct dlist *dl)
+{
+    bit64 tmp;
+
+    if (!dl) return 0;
+
+    /* see if it can be parsed as a number */
+    return dlist_tohex64(dl, &tmp);
+}
+
+/* XXX - these ones aren't const, because they can change
+ * things... */
+int dlist_isguid(struct dlist *dl)
+{
+    struct message_guid *tmp = NULL;
+
+    if (!dl) return 0;
+
+    return dlist_toguid(dl, &tmp);
+}
+
+/* XXX - this stuff is all shitty, rationalise later */
+bit64 dlist_num(struct dlist *dl)
+{
+    bit64 v;
+
+    if (!dl) return 0;
+
+    if (dlist_tonum64(dl, &v))
+	return v;
+
     return 0;
 }
 
 /* XXX - this stuff is all shitty, rationalise later */
-uint32_t dlist_nval(struct dlist *dl)
+const char *dlist_cstring(struct dlist *dl)
 {
-    bit64 v;
+    static char zerochar = '\0';
 
-    if (!dl) fatal("NO DL", EC_SOFTWARE);
+    if (dl) {
+	const char *res = NULL;
+	dlist_toatom(dl, &res);
+	if (res) return res;
+    }
 
-    if (_getn(dl, &v))
-	return (uint32_t)v;
-
-    return 0;
+    return &zerochar;
 }
 
-modseq_t dlist_modseqval(struct dlist *dl)
+int dlist_getatom(struct dlist *parent, const char *name, const char **valp)
 {
-    bit64 v;
-
-    if (!dl) fatal("NO DL", EC_SOFTWARE);
-
-    if (_getn(dl, &v))
-	return (modseq_t)v;
-
-    return 0;
+    struct dlist *child = dlist_getchild(parent, name);
+    return dlist_toatom(child, valp);
 }
 
-int dlist_getnum(struct dlist *dl, const char *name, uint32_t *val)
+int dlist_getnum32(struct dlist *parent, const char *name, uint32_t *valp)
 {
-    struct dlist *child = dlist_getchild(dl, name);
-    bit64 v;
-
-    if (!child) return 0;
-
-    if (!_getn(child, &v))
-	return 0;
-    *val = (uint32_t)v;
-
-    return 1;
+    struct dlist *child = dlist_getchild(parent, name);
+    return dlist_tonum32(child, valp);
 }
 
-int dlist_getdate(struct dlist *dl, const char *name, time_t *val)
+int dlist_getnum64(struct dlist *parent, const char *name, bit64 *valp)
 {
-    struct dlist *child = dlist_getchild(dl, name);
-    bit64 v;
-
-    if (!child) return 0;
-
-    if (!_getn(child, &v))
-	return 0;
-    *val = (time_t)v;
-
-    return 1;
+    struct dlist *child = dlist_getchild(parent, name);
+    return dlist_tonum64(child, valp);
 }
 
-int dlist_getmodseq(struct dlist *dl, const char *name, modseq_t *val)
+int dlist_getdate(struct dlist *parent, const char *name, time_t *valp)
 {
-    struct dlist *child = dlist_getchild(dl, name);
-    bit64 v;
-
-    if (!child) return 0;
-
-    if (!_getn(child, &v))
-	return 0;
-    *val = (modseq_t)v;
-
-    return 1;
+    struct dlist *child = dlist_getchild(parent, name);
+    return dlist_todate(child, valp);
 }
 
-int dlist_gethex64(struct dlist *dl, const char *name, bit64 *val)
+int dlist_gethex64(struct dlist *parent, const char *name, bit64 *valp)
 {
-    const char *str;
-    size_t strlen;
-    const char *end;
-
-    if (dlist_getbuf(dl, name, &str, &strlen))
-	return 0;
-
-    if (parsehex(str, &end, strlen, val))
-	return 0;
-
-    if (end - str != (int)strlen)
-	return 0;
-
-    return 1;
+    struct dlist *child = dlist_getchild(parent, name);
+    return dlist_tohex64(child, valp);
 }
 
-int dlist_getguid(struct dlist *dl, const char *name, struct message_guid **val)
+int dlist_getguid(struct dlist *parent, const char *name,
+		  struct message_guid **valp)
+{
+    struct dlist *child = dlist_getchild(parent, name);
+    return dlist_toguid(child, valp);
+}
+
+int dlist_getmap(struct dlist *parent, const char *name,
+		 const char **valp, size_t *lenp)
+{
+    struct dlist *child = dlist_getchild(parent, name);
+    return dlist_tomap(child, valp, lenp);
+}
+
+int dlist_getfile(struct dlist *parent, const char *name,
+		  const char **partp,
+		  struct message_guid **guidp,
+		  unsigned long *sizep,
+		  const char **fnamep)
+{
+    struct dlist *child = dlist_getchild(parent, name);
+    return dlist_tofile(child, partp, guidp, sizep, fnamep);
+}
+
+int dlist_getlist(struct dlist *dl, const char *name, struct dlist **valp)
 {
     struct dlist *i = dlist_getchild(dl, name);
     if (!i) return 0;
-    /* XXX - maybe malloc like strings? would save some in the general case */
-    if (!message_guid_decode(&i->gval, i->sval)) return 0;
-    *val = &i->gval;
-    return 1;
-}
-
-int dlist_getfile(struct dlist *dl, const char *name,
-		   const char **part,
-		   struct message_guid **guid,
-		   unsigned long *size,
-		   const char **fname)
-{
-    struct dlist *i = dlist_getchild(dl, name);
-    if (!i) return 0;
-    if (!message_guid_decode(&i->gval, i->sval)) return 0;
-    *guid = &i->gval;
-    *size = i->nval;
-    *fname = i->sval;
-    *part = i->part;
-    return 1;
-}
-
-int dlist_getlist(struct dlist *dl, const char *name, struct dlist **val)
-{
-    struct dlist *i = dlist_getchild(dl, name);
-    if (!i) return 0;
-    *val = i;
+    *valp = i;
     return 1;
 }
 

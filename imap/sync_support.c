@@ -200,20 +200,20 @@ void sync_print_flags(struct dlist *kl,
 		      struct index_record *record)
 {
     int flag;
-    struct dlist *fl = dlist_list(kl, "FLAGS");
+    struct dlist *fl = dlist_newlist(kl, "FLAGS");
 
     if (record->system_flags & FLAG_DELETED)
-	dlist_flag(fl, "FLAG", "\\Deleted");
+	dlist_setflag(fl, "FLAG", "\\Deleted");
     if (record->system_flags & FLAG_ANSWERED)
-	dlist_flag(fl, "FLAG", "\\Answered");
+	dlist_setflag(fl, "FLAG", "\\Answered");
     if (record->system_flags & FLAG_FLAGGED)
-	dlist_flag(fl, "FLAG", "\\Flagged");
+	dlist_setflag(fl, "FLAG", "\\Flagged");
     if (record->system_flags & FLAG_DRAFT)
-	dlist_flag(fl, "FLAG", "\\Draft");
+	dlist_setflag(fl, "FLAG", "\\Draft");
     if (record->system_flags & FLAG_EXPUNGED)
-	dlist_flag(fl, "FLAG", "\\Expunged");
+	dlist_setflag(fl, "FLAG", "\\Expunged");
     if (record->system_flags & FLAG_SEEN)
-	dlist_flag(fl, "FLAG", "\\Seen");
+	dlist_setflag(fl, "FLAG", "\\Seen");
         
     /* print user flags in mailbox order */
     for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
@@ -221,7 +221,7 @@ void sync_print_flags(struct dlist *kl,
 	    continue;
 	if (!(record->user_flags[flag/32] & (1<<(flag&31))))
 	    continue;
-	dlist_flag(fl, "FLAG", mailbox->flagname[flag]);
+	dlist_setflag(fl, "FLAG", mailbox->flagname[flag]);
     }
 }
 
@@ -272,14 +272,14 @@ int parse_upload(struct dlist *kr, struct mailbox *mailbox,
 			struct index_record *record)
 {
     struct dlist *fl;
-    const char *guid;
+    struct message_guid *tmpguid;
     int r;
 
     memset(record, 0, sizeof(struct index_record));
 
-    if (!dlist_getnum(kr, "UID", &record->uid))
+    if (!dlist_getnum32(kr, "UID", &record->uid))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
-    if (!dlist_getmodseq(kr, "MODSEQ", &record->modseq))
+    if (!dlist_getnum64(kr, "MODSEQ", &record->modseq))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getdate(kr, "LAST_UPDATED", &record->last_updated))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
@@ -287,18 +287,16 @@ int parse_upload(struct dlist *kr, struct mailbox *mailbox,
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getdate(kr, "INTERNALDATE", &record->internaldate))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
-    if (!dlist_getnum(kr, "SIZE", &record->size))
+    if (!dlist_getnum32(kr, "SIZE", &record->size))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
-    if (!dlist_getatom(kr, "GUID", &guid))
+    if (!dlist_getguid(kr, "GUID", &tmpguid))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
+
+    record->guid = *tmpguid;
 
     /* parse the flags */
     r = sync_getflags(fl, mailbox, record);
     if (r) return r;
-
-    /* check the GUID format */
-    if (!message_guid_decode(&record->guid, guid))
-	return IMAP_PROTOCOL_BAD_PARAMETERS;
 
     return 0;
 }
@@ -1393,8 +1391,8 @@ static int sync_send_file(struct mailbox *mailbox,
 	return IMAP_IOERROR;
     }
 
-    dlist_file(kupload, "MESSAGE", mailbox->part,
-	       &record->guid, record->size, fname);
+    dlist_setfile(kupload, "MESSAGE", mailbox->part,
+		  &record->guid, record->size, fname);
 
     return 0;
 }
@@ -1412,28 +1410,28 @@ int sync_mailbox(struct mailbox *mailbox,
     if (r)
 	return r;
 
-    dlist_atom(kl, "UNIQUEID", mailbox->uniqueid);
-    dlist_atom(kl, "MBOXNAME", mailbox->name);
-    dlist_num(kl, "LAST_UID", mailbox->i.last_uid);
-    dlist_modseq(kl, "HIGHESTMODSEQ", mailbox->i.highestmodseq);
-    dlist_num(kl, "RECENTUID", mailbox->i.recentuid);
-    dlist_date(kl, "RECENTTIME", mailbox->i.recenttime);
-    dlist_date(kl, "LAST_APPENDDATE", mailbox->i.last_appenddate);
-    dlist_date(kl, "POP3_LAST_LOGIN", mailbox->i.pop3_last_login);
-    dlist_num(kl, "UIDVALIDITY", mailbox->i.uidvalidity);
-    dlist_atom(kl, "PARTITION", mailbox->part);
-    dlist_atom(kl, "ACL", mailbox->acl);
-    dlist_atom(kl, "OPTIONS", sync_encode_options(mailbox->i.options));
-    dlist_atom(kl, "SYNC_CRC", sync_crc);
+    dlist_setatom(kl, "UNIQUEID", mailbox->uniqueid);
+    dlist_setatom(kl, "MBOXNAME", mailbox->name);
+    dlist_setnum32(kl, "LAST_UID", mailbox->i.last_uid);
+    dlist_setnum64(kl, "HIGHESTMODSEQ", mailbox->i.highestmodseq);
+    dlist_setnum32(kl, "RECENTUID", mailbox->i.recentuid);
+    dlist_setdate(kl, "RECENTTIME", mailbox->i.recenttime);
+    dlist_setdate(kl, "LAST_APPENDDATE", mailbox->i.last_appenddate);
+    dlist_setdate(kl, "POP3_LAST_LOGIN", mailbox->i.pop3_last_login);
+    dlist_setnum32(kl, "UIDVALIDITY", mailbox->i.uidvalidity);
+    dlist_setatom(kl, "PARTITION", mailbox->part);
+    dlist_setatom(kl, "ACL", mailbox->acl);
+    dlist_setatom(kl, "OPTIONS", sync_encode_options(mailbox->i.options));
+    dlist_setatom(kl, "SYNC_CRC", sync_crc);
     if (mailbox->quotaroot) 
-	dlist_atom(kl, "QUOTAROOT", mailbox->quotaroot);
+	dlist_setatom(kl, "QUOTAROOT", mailbox->quotaroot);
     if (mailbox->specialuse)
-	dlist_atom(kl, "SPECIALUSE", mailbox->specialuse);
+	dlist_setatom(kl, "SPECIALUSE", mailbox->specialuse);
 
     if (printrecords) {
 	struct index_record record;
 	struct dlist *il;
-	struct dlist *rl = dlist_list(kl, "RECORD");
+	struct dlist *rl = dlist_newlist(kl, "RECORD");
 	uint32_t recno;
 	int send_file;
 	uint32_t prevuid = 0;
@@ -1477,14 +1475,14 @@ int sync_mailbox(struct mailbox *mailbox,
 		if (r) return r;
 	    }
 
-	    il = dlist_kvlist(rl, "RECORD");
-	    dlist_num(il, "UID", record.uid);
-	    dlist_modseq(il, "MODSEQ", record.modseq);
-	    dlist_date(il, "LAST_UPDATED", record.last_updated);
+	    il = dlist_newkvlist(rl, "RECORD");
+	    dlist_setnum32(il, "UID", record.uid);
+	    dlist_setnum64(il, "MODSEQ", record.modseq);
+	    dlist_setdate(il, "LAST_UPDATED", record.last_updated);
 	    sync_print_flags(il, mailbox, &record);
-	    dlist_date(il, "INTERNALDATE", record.internaldate);
-	    dlist_num(il, "SIZE", record.size);
-	    dlist_atom(il, "GUID", message_guid_encode(&record.guid));
+	    dlist_setdate(il, "INTERNALDATE", record.internaldate);
+	    dlist_setnum32(il, "SIZE", record.size);
+	    dlist_setatom(il, "GUID", message_guid_encode(&record.guid));
 	}
     }
 
@@ -1504,7 +1502,7 @@ int sync_parse_response(const char *cmd, struct protstream *in,
 
     if (c != ' ') goto parse_err;
 
-    kl = dlist_new(cmd);
+    kl = dlist_newlist(NULL, cmd);
     while (!strcmp(response.s, "*")) {
 	struct dlist *item = sync_parseline(in);
 	if (!item) goto parse_err;

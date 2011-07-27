@@ -7237,7 +7237,7 @@ int parsecreateargs(struct dlist **extargs)
     char *p;
     const char *name;
 
-    res = dlist_kvlist(NULL, "CREATE");
+    res = dlist_newkvlist(NULL, "CREATE");
 
     c = prot_getc(imapd_in);
     if (c == '(') {
@@ -7249,10 +7249,10 @@ int parsecreateargs(struct dlist **extargs)
 	    c = prot_getc(imapd_in);
 	    if (c == '(') {
 		/* fun - more lists! */
-		sub = dlist_list(res, name);
+		sub = dlist_newlist(res, name);
 		do {
 		    c = getword(imapd_in, &val);
-		    dlist_atom(sub, name, val.s);
+		    dlist_setatom(sub, name, val.s);
 		} while (c == ' ');
 		if (c != ')') goto fail;
 		c = prot_getc(imapd_in);
@@ -7260,7 +7260,7 @@ int parsecreateargs(struct dlist **extargs)
 	    else {
 		prot_ungetc(c, imapd_in);
 		c = getword(imapd_in, &val);
-		dlist_atom(res, name, val.s);
+		dlist_setatom(res, name, val.s);
 	    }
 	} while (c == ' ');
 	if (c != ')') goto fail;
@@ -7274,11 +7274,11 @@ int parsecreateargs(struct dlist **extargs)
 	if (p) {
 	    /* with a server */
 	    *p = '\0';
-	    dlist_atom(res, "SERVER", arg.s);
-	    dlist_atom(res, "PARTITION", p+1);
+	    dlist_setatom(res, "SERVER", arg.s);
+	    dlist_setatom(res, "PARTITION", p+1);
 	}
 	else {
-	    dlist_atom(res, "PARTITION", arg.s);
+	    dlist_setatom(res, "PARTITION", arg.s);
 	}
     }
 
