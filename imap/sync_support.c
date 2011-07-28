@@ -1634,6 +1634,7 @@ static const char *sync_record_representation(
 	int cflags)
 {
     strarray_t lcflags = STRARRAY_INITIALIZER;
+    char *flags;
     int i;
 
     /* expunged flags have no sync CRC */
@@ -1671,21 +1672,15 @@ static const char *sync_record_representation(
     }
 
     strarray_sort(&lcflags);
+    flags = strarray_join(&lcflags, ' ');
+    strarray_fini(&lcflags);
 
     buf_reset(&sync_crc32_buf);
-    buf_printf(&sync_crc32_buf, "%u %llu %lu (",
-	       record->uid, record->modseq, record->last_updated);
+    buf_printf(&sync_crc32_buf, "%u %llu %lu (%s) %lu %s",
+	       record->uid, record->modseq, record->last_updated, flags,
+	       record->internaldate, message_guid_encode(&record->guid));
 
-    for (i = 0; i < lcflags.count; i++) {
-	if (i) buf_putc(&sync_crc32_buf, ' ');
-	buf_printf(&sync_crc32_buf, "%s", strarray_nth(&lcflags, i));
-    }
-
-    buf_printf(&sync_crc32_buf, ") %lu %s",
-	       record->internaldate,
-	       message_guid_encode(&record->guid));
-
-    strarray_fini(&lcflags);
+    free(flags);
 
     /* test cflags for additional items to add here... */
 
