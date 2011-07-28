@@ -1672,7 +1672,7 @@ static const char *sync_record_representation(
     }
 
     strarray_sort(&lcflags);
-    flags = strarray_join(&lcflags, ' ');
+    flags = strarray_join(&lcflags, " ");
     strarray_fini(&lcflags);
 
     buf_reset(&sync_crc32_buf);
