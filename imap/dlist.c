@@ -640,7 +640,7 @@ void dlist_free(struct dlist **dlp)
 
 static char next_nonspace(struct protstream *in, char c)
 {
-    if (c == ' ') c = prot_getc(in);
+    while (Uisspace(c)) c = prot_getc(in);
     return c;
 }
 
