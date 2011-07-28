@@ -1573,6 +1573,7 @@ struct sync_crc_algorithm {
 
 
 static bit32 sync_crc32;
+static struct buf sync_crc32_buf;
 
 static int sync_crc32_setup(int cflags __attribute__((unused)))
 {
@@ -1584,9 +1585,9 @@ static void sync_crc32_begin(void)
     sync_crc32 = 0;
 }
 
-static void sync_crc32_update(const struct mailbox *mailbox,
-			      const struct index_record *record,
-			      int cflags __attribute__((unused)))
+static const char *basic_representation(
+	const struct mailbox *mailbox,
+	const struct index_record *record)
 {
     char buf[4096];
     bit32 flagcrc = 0;
@@ -1617,13 +1618,88 @@ static void sync_crc32_update(const struct mailbox *mailbox,
 	flagcrc ^= crc32_cstring(buf);
     }
 
-    snprintf(buf, 4096, "%u " MODSEQ_FMT " %lu (%u) %lu %s",
+    buf_reset(&sync_crc32_buf);
+    buf_printf(&sync_crc32_buf, "%u " MODSEQ_FMT " %lu (%u) %lu %s",
 	    record->uid, record->modseq, record->last_updated,
 	    flagcrc,
 	    record->internaldate,
 	    message_guid_encode(&record->guid));
 
-    sync_crc32 ^= crc32_cstring(buf);
+    return buf_cstring(&sync_crc32_buf);
+}
+
+static const char *sync_record_representation(
+	const struct mailbox *mailbox,
+	const struct index_record *record,
+	int cflags)
+{
+    strarray_t lcflags = STRARRAY_INITIALIZER;
+    int i;
+
+    /* expunged flags have no sync CRC */
+    if (record->system_flags & FLAG_EXPUNGED)
+        return NULL;
+
+    /* oldschool backwards compatible */
+    if (!cflags)
+	return basic_representation(mailbox, record);
+
+    /* system flags */
+    if (record->system_flags & FLAG_ANSWERED)
+	strarray_append(&lcflags, "\\answered");
+    if (record->system_flags & FLAG_DELETED)
+	strarray_append(&lcflags, "\\deleted");
+    if (record->system_flags & FLAG_DRAFT)
+	strarray_append(&lcflags, "\\draft");
+    if (record->system_flags & FLAG_FLAGGED)
+	strarray_append(&lcflags, "\\flagged");
+    if (record->system_flags & FLAG_SEEN)
+	strarray_append(&lcflags, "\\seen");
+
+    /* user flags */
+    for (i = 0; i < MAX_USER_FLAGS; i++) {
+	char *f;
+	if (!mailbox->flagname[i])
+	    continue;
+	if (!(record->user_flags[i/32] & (1<<(i&31))))
+	    continue;
+	/* need to compare without case being significant, so
+	 * we dup here and force lowercase first */
+	f = xstrdup(mailbox->flagname[i]);
+	lcase(f);
+	strarray_appendm(&lcflags, f);
+    }
+
+    strarray_sort(&lcflags);
+
+    buf_reset(&sync_crc32_buf);
+    buf_printf(&sync_crc32_buf, "%u %llu %lu (",
+	       record->uid, record->modseq, record->last_updated);
+
+    for (i = 0; i < lcflags.count; i++) {
+	if (i) buf_putc(&sync_crc32_buf, ' ');
+	buf_printf(&sync_crc32_buf, "%s", strarray_nth(&lcflags, i));
+    }
+
+    buf_printf(&sync_crc32_buf, ") %lu %s",
+	       record->internaldate,
+	       message_guid_encode(&record->guid));
+
+    strarray_fini(&lcflags);
+
+    /* test cflags for additional items to add here... */
+
+    return buf_cstring(&sync_crc32_buf);
+}
+
+static void sync_crc32_update(const struct mailbox *mailbox,
+			      const struct index_record *record,
+			      int cflags)
+{
+    const char *rep = sync_record_representation(mailbox, record, cflags);
+
+    if (rep)
+	sync_crc32 ^= crc32_cstring(rep);
 }
 
 static int sync_crc32_end(char *buf, int maxlen)
@@ -1743,9 +1819,9 @@ int sync_crc_setup(const char *algorithm, const char *covers,
     }
 
     if (!covers || !*covers) {
-	/* default is BASIC only: the sync_client must
-	 * explicitly request anything more */
-	cflags = SYNC_CRC_BASIC;
+	/* default is zero, which means use the original CRC32
+	 * algorithm shipped with 2.4.0 */
+	cflags = 0;
     } else {
 	cflags = covers_from_string(covers, strict_covers);
 	if (cflags < 0)
@@ -1787,10 +1863,6 @@ int sync_crc_calc(struct mailbox *mailbox, char *buf, int maxlen)
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	/* we can't send bogus records, just skip them! */
 	if (mailbox_read_index_record(mailbox, recno, &record))
-	    continue;
-
-	/* expunged flags have no sync CRC */
-	if (record.system_flags & FLAG_EXPUNGED)
 	    continue;
 
 	sync_crc_algorithm->update(mailbox, &record, sync_crc_covers);
