@@ -120,6 +120,9 @@ extern char *beautify_string (const char *src);
 /* Same semantics as strcmp() but gracefully handles
  * either or both it's arguments being NULL */
 int strcmpsafe(const char *a, const char *b);
+/* Same semantics as strcasecmp() but gracefully handles
+ * either or both it's arguments being NULL */
+int strcasecmpsafe(const char *a, const char *b);
 
 /* do a binary search in a keyvalue array
  *  nelem is the number of keyvalue elements in the kv array
