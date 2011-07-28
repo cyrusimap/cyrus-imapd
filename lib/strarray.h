@@ -89,6 +89,8 @@ strarray_t *strarray_splitm(char *buf, const char *sep);
 strarray_t *strarray_split(const char *buf, const char *sep);
 strarray_t *strarray_nsplit(const char *buf, size_t len, const char *sep);
 
+void strarray_sort(strarray_t *);
+
 char **strarray_takevf(strarray_t *sa);
 
 int strarray_find(const strarray_t *sa, const char *match,

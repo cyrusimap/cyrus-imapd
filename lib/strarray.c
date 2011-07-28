@@ -302,6 +302,21 @@ char **strarray_takevf(strarray_t *sa)
     return d;
 }
 
+/* direct from the qsort manpage */
+static int cmpstringp(const void *p1, const void *p2) 
+{
+    /* The actual arguments to this function are "pointers to
+    pointers to char", but strcmp(3) arguments are "pointers
+   to char", hence the following cast plus dereference */
+
+   return strcmp(* (char * const *) p1, * (char * const *) p2);
+}
+
+void strarray_sort(strarray_t *sa)
+{
+    qsort(sa->data, sa->count, sizeof(char *), cmpstringp);
+}
+
 int strarray_find(const strarray_t *sa, const char *match, int starting)
 {
     int i;
