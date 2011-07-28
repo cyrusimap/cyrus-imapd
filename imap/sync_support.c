@@ -1814,8 +1814,11 @@ int sync_crc_setup(const char *algorithm, const char *covers,
 	alg = &sync_crc_algorithms[0];
     } else {
 	alg = find_algorithm(algorithm);
-	if (!alg)
-	    return IMAP_INVALID_IDENTIFIER;
+	if (!alg) {
+	    syslog(LOG_NOTICE, "unknown sync algorithm %s, using default",
+		   algorithm);
+	    alg = &sync_crc_algorithms[0];
+	}
     }
 
     if (!covers || !*covers) {
@@ -1824,8 +1827,11 @@ int sync_crc_setup(const char *algorithm, const char *covers,
 	cflags = 0;
     } else {
 	cflags = covers_from_string(covers, strict_covers);
-	if (cflags < 0)
-	    return cflags;
+	if (cflags < 0) {
+	    syslog(LOG_NOTICE, "unknown sync covers %s, using default",
+		   covers);
+	    cflags = 0;
+	} 
     }
 
     r = alg->setup(cflags);
