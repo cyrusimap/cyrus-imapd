@@ -49,10 +49,15 @@ static void set_annotation_definitions(const char *s)
     static const char *fname = DBDIR"/conf/annotations.def";
     int fd;
 
-    fd = open(fname, O_WRONLY|O_CREAT|O_TRUNC, 0666);
-    assert(fd >= 0);
-    retry_write(fd, s, strlen(s));
-    close(fd);
+    if (s) {
+	fd = open(fname, O_WRONLY|O_CREAT|O_TRUNC, 0666);
+	assert(fd >= 0);
+	retry_write(fd, s, strlen(s));
+	close(fd);
+    }
+    else {
+	unlink(fname);
+    }
 
     imapopts[IMAPOPT_ANNOTATION_DEFINITIONS].val.s = fname;
 }
@@ -1236,16 +1241,149 @@ static void test_msg_copy(void)
     buf_free(&val2);
 }
 
-// static void test_missing_definitions_file(void)
-// {
-//     char *old;
-// 
-//     old = imapopts[IMAPOPT_ANNOTATION_DEFINITIONS].val.s;
-//     imapopts[IMAPOPT_ANNOTATION_DEFINITIONS].val.s = "/no/such/file";
-// 
-//     annotatemore_init(NULL, NULL);
-//     imapopts[IMAPOPT_ANNOTATION_DEFINITIONS].val.s = old;
-// }
+static void test_missing_definitions_file(void)
+{
+    set_annotation_definitions(NULL);
+    CU_SYSLOG_MATCH("annotations\\.def: could not open.*No such file");
+
+    annotatemore_init(NULL, NULL);
+    /* if we got here, we didn't fatal() */
+
+    /* but we did complain to syslog */
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+}
+
+static void test_broken_definitions_file_1(void)
+{
+    set_annotation_definitions(
+	EXENTRY",sXerver,string,backend,value.shared,\n");
+    CU_SYSLOG_MATCH("invalid annotation scope.*'sXerver'");
+
+    annotatemore_init(NULL, NULL);
+    /* if we got here, we didn't fatal() */
+
+    /* but we did complain to syslog */
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+}
+
+static void test_broken_definitions_file_2(void)
+{
+    set_annotation_definitions(
+	EXENTRY",server,stXring,backend,value.shared,\n");
+    CU_SYSLOG_MATCH("invalid annotation type.*'stXring'");
+
+    annotatemore_init(NULL, NULL);
+    /* if we got here, we didn't fatal() */
+
+    /* but we did complain to syslog */
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+}
+
+static void test_broken_definitions_file_3(void)
+{
+    set_annotation_definitions(
+	EXENTRY",server,string,bacXkend,value.shared,\n");
+    CU_SYSLOG_MATCH("invalid annotation proxy type.*'bacXkend'");
+
+    annotatemore_init(NULL, NULL);
+    /* if we got here, we didn't fatal() */
+
+    /* but we did complain to syslog */
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+}
+
+static void test_broken_definitions_file_4(void)
+{
+    set_annotation_definitions(
+	EXENTRY",server,string,backend,valuXe.shared,\n");
+    CU_SYSLOG_MATCH("invalid annotation attributes.*'valuXe.shared'");
+
+    annotatemore_init(NULL, NULL);
+    /* if we got here, we didn't fatal() */
+
+    /* but we did complain to syslog */
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+}
+
+static void test_broken_definitions_file_5(void)
+{
+    set_annotation_definitions(
+	"/flags/foobar,message,string,backend,value.shared,\n");
+    CU_SYSLOG_MATCH("message entry under /flags/");
+
+    annotatemore_init(NULL, NULL);
+    /* if we got here, we didn't fatal() */
+
+    /* but we did complain to syslog */
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+}
+
+static void test_broken_definitions_file_6(void)
+{
+    set_annotation_definitions(
+	"/vendor/cmu/cyrus-imapd/foobar,server,string,backend,value.shared,\n");
+    CU_SYSLOG_MATCH("annotation under /vendor/cmu/cyrus-imapd/");
+
+    annotatemore_init(NULL, NULL);
+    /* if we got here, we didn't fatal() */
+
+    /* but we did complain to syslog */
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+}
+
+static void test_broken_definitions_file_7(void)
+{
+    set_annotation_definitions(
+	EXENTRY",server,string,backend,value.shared,,,,\n");
+    CU_SYSLOG_MATCH("junk at end of line");
+
+    annotatemore_init(NULL, NULL);
+    /* if we got here, we didn't fatal() */
+
+    /* but we did complain to syslog */
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+}
+
+static void test_broken_definitions_file_8(void)
+{
+    set_annotation_definitions(
+	EXENTRY",server,string,\n");
+    CU_SYSLOG_MATCH("short line");
+
+    annotatemore_init(NULL, NULL);
+    /* if we got here, we didn't fatal() */
+
+    /* but we did complain to syslog */
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+}
+
+static void test_broken_definitions_file_9(void)
+{
+    /* test that when parsing a bitfield, only the first
+     * invalid name is reported in the error context */
+    set_annotation_definitions(
+	EXENTRY",server,string,backend,value valXue valYue,\n");
+    CU_SYSLOG_MATCH("invalid annotation attributes.*'valXue'");
+
+    annotatemore_init(NULL, NULL);
+    /* if we got here, we didn't fatal() */
+
+    /* but we did complain to syslog */
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+}
+
+static void test_broken_definitions_file_10(void)
+{
+    set_annotation_definitions(
+	EXENTRY",ser@ver,string,backend,value.shared,\n");
+    CU_SYSLOG_MATCH("invalid character.*'@");
+
+    annotatemore_init(NULL, NULL);
+    /* if we got here, we didn't fatal() */
+
+    /* but we did complain to syslog */
+    CU_ASSERT_SYSLOG(/*all*/0, 1);
+}
 
 static void test_getset_server_undefined(void)
 {
