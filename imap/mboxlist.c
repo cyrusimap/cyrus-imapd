@@ -1923,7 +1923,7 @@ int mboxlist_findall(struct namespace *namespace __attribute__((unused)),
 			NULL);
     }
 
-    if(!r) {
+    if(!r && (isadmin || ( ( namespace != 0 ) && (namespace->accessible[NAMESPACE_USER]) ))) {
 	cbrock.find_namespace = NAMESPACE_USER;
 	/* switch to pattern with domain prepended */
 	glob_free(&cbrock.g);
@@ -2067,33 +2067,35 @@ int mboxlist_findall_alt(struct namespace *namespace,
      *
      * If "Other Users*" can match pattern, search for those mailboxes next
      */
-    len = strlen(namespace->prefix[NAMESPACE_USER]);
-    if(len>0) len--;
+    if(isadmin || ( ( namespace != 0 ) && (namespace->accessible[NAMESPACE_USER]) )) {
+        len = strlen(namespace->prefix[NAMESPACE_USER]);
+        if(len>0) len--;
 
-    if (!strncmp(namespace->prefix[NAMESPACE_USER], pattern,
+	if (!strncmp(namespace->prefix[NAMESPACE_USER], pattern,
 		 prefixlen < len ? prefixlen : len)) {
 
-	if (prefixlen < len) {
-	    strlcpy(domainpat+domainlen, pattern+prefixlen,
+	    if (prefixlen < len) {
+	        strlcpy(domainpat+domainlen, pattern+prefixlen,
 		    sizeof(domainpat)-domainlen);
-	    cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
-	}
-	else {
-	    strlcpy(domainpat+domainlen, "user", sizeof(domainpat)-domainlen);
-	    strlcat(domainpat, pattern+len, sizeof(domainpat));
-	    cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
-	}
-	cbrock.find_namespace = NAMESPACE_USER;
-	cbrock.inboxoffset = 0;
+	        cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
+	    }
+	    else {
+	        strlcpy(domainpat+domainlen, "user", sizeof(domainpat)-domainlen);
+	        strlcat(domainpat, pattern+len, sizeof(domainpat));
+	        cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
+	    }
+	    cbrock.find_namespace = NAMESPACE_USER;
+	    cbrock.inboxoffset = 0;
 	
-	/* iterate through prefixes matching usermboxname */
-	strlcpy(domainpat+domainlen, "user", sizeof(domainpat)-domainlen);
-	DB->foreach(mbdb,
-		    domainpat, strlen(domainpat),
-		    &find_p, &find_cb, &cbrock,
-		    NULL);
+	    /* iterate through prefixes matching usermboxname */
+	    strlcpy(domainpat+domainlen, "user", sizeof(domainpat)-domainlen);
+	    DB->foreach(mbdb,
+			domainpat, strlen(domainpat),
+			&find_p, &find_cb, &cbrock,
+			NULL);
 
-	glob_free(&cbrock.g);
+	    glob_free(&cbrock.g);
+        }
     }
 
     /*
@@ -2102,55 +2104,57 @@ int mboxlist_findall_alt(struct namespace *namespace,
      * search for all remaining mailboxes.
      * just bother looking at the ones that have the same pattern prefix.
      */
-    len = strlen(namespace->prefix[NAMESPACE_SHARED]);
-    if(len>0) len--;
-    if (!strncmp(namespace->prefix[NAMESPACE_SHARED], pattern,
-		 prefixlen < len ? prefixlen : len)) {
+    if(isadmin || ( ( namespace != 0 ) && (namespace->accessible[NAMESPACE_USER]) )) {
+	len = strlen(namespace->prefix[NAMESPACE_SHARED]);
+	if(len>0) len--;
+	if (!strncmp(namespace->prefix[NAMESPACE_SHARED], pattern,
+		prefixlen < len ? prefixlen : len)) {
 
-	cbrock.find_namespace = NAMESPACE_SHARED;
-	cbrock.inboxoffset = 0;
+	    cbrock.find_namespace = NAMESPACE_SHARED;
+	    cbrock.inboxoffset = 0;
 
-	if (prefixlen <= len) {
-	    /* Skip pattern which matches shared namespace prefix */
-	    for (p = pat+prefixlen; *p; p++) {
-		if (*p == '%') continue;
-		else if (*p == '.') p++;
-		break;
-	    }
+	    if (prefixlen <= len) {
+		/* Skip pattern which matches shared namespace prefix */
+		for (p = pat+prefixlen; *p; p++) {
+		    if (*p == '%') continue;
+		    else if (*p == '.') p++;
+		    break;
+		}
 
-	    if (*pattern && !strchr(pattern, '.') &&
+		if (*pattern && !strchr(pattern, '.') &&
 		pattern[strlen(pattern)-1] == '%') {
 		/* special case:  LIST "" *% -- output prefix */
-  		cbrock.checkshared = 1;
-  	    }
+		cbrock.checkshared = 1;
+		}
 
-	    if ((cbrock.checkshared || prefixlen == len) && !*p) {
-		/* special case:  LIST "" % -- output prefix
- 		   (if we have a shared mbox) and quit */
-		strlcpy(domainpat+domainlen, "*", sizeof(domainpat)-domainlen);
-		cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
-		cbrock.checkshared = 2;
-	    }
-	    else {
-		strlcpy(domainpat+domainlen, p, sizeof(domainpat)-domainlen);
-		cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
-	    }
-		
-	    domainpat[domainlen] = '\0';
-	    DB->foreach(mbdb,
-			domainpat, domainlen,
-			&find_p, &find_cb, &cbrock,
-			NULL);
-	}
-	else if (pattern[len] == '.') {
-	    strlcpy(domainpat+domainlen, pattern+len+1,
-		    sizeof(domainpat)-domainlen);
-	    cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
+		if ((cbrock.checkshared || prefixlen == len) && !*p) {
+		    /* special case:  LIST "" % -- output prefix
+		       (if we have a shared mbox) and quit */
+		    strlcpy(domainpat+domainlen, "*", sizeof(domainpat)-domainlen);
+		    cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
+		    cbrock.checkshared = 2;
+		}
+		else {
+		    strlcpy(domainpat+domainlen, p, sizeof(domainpat)-domainlen);
+		    cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
+		}
 
-	    DB->foreach(mbdb,
-			domainpat, domainlen+prefixlen-(len+1),
-			&find_p, &find_cb, &cbrock,
+		domainpat[domainlen] = '\0';
+		DB->foreach(mbdb,
+			    domainpat, domainlen,
+			    &find_p, &find_cb, &cbrock,
+			    NULL);
+	    }
+	    else if (pattern[len] == '.') {
+		strlcpy(domainpat+domainlen, pattern+len+1,
+			sizeof(domainpat)-domainlen);
+		cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
+
+		DB->foreach(mbdb,
+			    domainpat, domainlen+prefixlen-(len+1),
+			    &find_p, &find_cb, &cbrock,
 			NULL);
+	    }
 	}
     }
 
@@ -2673,20 +2677,22 @@ int mboxlist_findsub(struct namespace *namespace __attribute__((unused)),
 	cbrock.usermboxnamelen = 0;
     }
 
-    cbrock.find_namespace = NAMESPACE_USER;
-    /* switch to pattern with domain prepended */
-    glob_free(&cbrock.g);
-    cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
-    cbrock.inboxoffset = 0;
-    if (usermboxnamelen) {
-	usermboxname[--usermboxnamelen] = '\0';
-	cbrock.usermboxname = usermboxname;
-	cbrock.usermboxnamelen = usermboxnamelen;
-    }
-    /* search for all remaining mailboxes.
-       just bother looking at the ones that have the same pattern prefix. */
-    SUBDB->foreach(subs, domainpat, domainlen + prefixlen, 
-		   &find_p, &find_cb, &cbrock, NULL);
+    if ( isadmin || ( ( namespace != 0 ) && (namespace->accessible[NAMESPACE_USER]) ) ) {
+	cbrock.find_namespace = NAMESPACE_USER;
+	/* switch to pattern with domain prepended */
+	glob_free(&cbrock.g);
+	cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
+	cbrock.inboxoffset = 0;
+	if (usermboxnamelen) {
+	    usermboxname[--usermboxnamelen] = '\0';
+	    cbrock.usermboxname = usermboxname;
+	    cbrock.usermboxnamelen = usermboxnamelen;
+	}
+	/* search for all remaining mailboxes.
+	   just bother looking at the ones that have the same pattern prefix. */
+	SUBDB->foreach(subs, domainpat, domainlen + prefixlen,
+		       &find_p, &find_cb, &cbrock, NULL);
+   }
 
   done:
     if (subs) mboxlist_closesubs(subs);
@@ -2837,33 +2843,36 @@ int mboxlist_findsub_alt(struct namespace *namespace,
      *
      * If "Other Users*" can match pattern, search for those subscriptions next
      */
-    len = strlen(namespace->prefix[NAMESPACE_USER]);
-    if (len>0) len--; /* Remove Separator */
-    if (!strncmp(namespace->prefix[NAMESPACE_USER], pattern,
-		 prefixlen < len ? prefixlen : len)) {
 
-	if (prefixlen < len) {
-	    strlcpy(domainpat+domainlen, pattern+prefixlen,
-		    sizeof(domainpat)-domainlen);
-	    cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
+    if ( isadmin || ( ( namespace != 0 ) && (namespace->accessible[NAMESPACE_USER]) ) ) {
+	len = strlen(namespace->prefix[NAMESPACE_USER]);
+	if(len>0) len--; /* Remove Separator */
+	if (!strncmp(namespace->prefix[NAMESPACE_USER], pattern,
+		     prefixlen < len ? prefixlen : len)) {
+
+	    if (prefixlen < len) {
+		strlcpy(domainpat+domainlen, pattern+prefixlen,
+			sizeof(domainpat)-domainlen);
+		cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
+	    }
+	    else {
+		strlcpy(domainpat+domainlen, "user",
+			sizeof(domainpat)-domainlen);
+		strlcat(domainpat, pattern+len, sizeof(domainpat));
+		cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
+	    }
+	    cbrock.find_namespace = NAMESPACE_USER;
+	    cbrock.inboxoffset = 0;
+	
+	    /* iterate through prefixes matching usermboxname */
+	    strlcpy(domainpat+domainlen, "user", sizeof(domainpat)-domainlen);
+	    SUBDB->foreach(subs,
+			   domainpat, strlen(domainpat),
+			   &find_p, &find_cb, &cbrock,
+			   NULL);
+
+	    glob_free(&cbrock.g);
 	}
-	else {
-	    strlcpy(domainpat+domainlen, "user",
-		    sizeof(domainpat)-domainlen);
-	    strlcat(domainpat, pattern+len, sizeof(domainpat));
-	    cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
-	}
-	cbrock.find_namespace = NAMESPACE_USER;
-	cbrock.inboxoffset = 0;
-
-	/* iterate through prefixes matching usermboxname */
-	strlcpy(domainpat+domainlen, "user", sizeof(domainpat)-domainlen);
-	SUBDB->foreach(subs,
-		       domainpat, strlen(domainpat),
-		       &find_p, &find_cb, &cbrock,
-		       NULL);
-
-	glob_free(&cbrock.g);
     }
 
     /*
@@ -2872,55 +2881,57 @@ int mboxlist_findsub_alt(struct namespace *namespace,
      * search for all remaining subscriptions.
      * just bother looking at the ones that have the same pattern prefix.
      */
-    len = strlen(namespace->prefix[NAMESPACE_SHARED]);
-    if(len>0) len--; /* Remove Separator */
-    if (!strncmp(namespace->prefix[NAMESPACE_SHARED], pattern,
-		 prefixlen < len ? prefixlen : len)) {
+    if ( isadmin || ( ( namespace != 0 ) && (namespace->accessible[NAMESPACE_SHARED]) ) ) {
+	len = strlen(namespace->prefix[NAMESPACE_SHARED]);
+	if(len>0) len--; /* Remove Separator */
+	if (!strncmp(namespace->prefix[NAMESPACE_SHARED], pattern,
+		     prefixlen < len ? prefixlen : len)) {
 
-	cbrock.find_namespace = NAMESPACE_SHARED;
-	cbrock.inboxoffset = 0;
+	    cbrock.find_namespace = NAMESPACE_SHARED;
+	    cbrock.inboxoffset = 0;
 
-	if (prefixlen <= len) {
-	    /* Skip pattern which matches shared namespace prefix */
-	    for (p = pat+prefixlen; *p; p++) {
-		if (*p == '%') continue;
-		else if (*p == '.') p++;
-		break;
+	    if (prefixlen <= len) {
+		/* Skip pattern which matches shared namespace prefix */
+		for (p = pat+prefixlen; *p; p++) {
+		    if (*p == '%') continue;
+		    else if (*p == '.') p++;
+		    break;
+		}
+
+		if (*pattern && !strchr(pattern, '.') &&
+		    pattern[strlen(pattern)-1] == '%') {
+		    /* special case:  LSUB "" *% -- output prefix */
+		    cbrock.checkshared = 1;
+		}
+
+		if ((cbrock.checkshared || prefixlen == len) && !*p) {
+		    /* special case:  LSUB "" % -- output prefix
+		       (if we have a shared mbox) and quit */
+		    strlcpy(domainpat+domainlen, "*", sizeof(domainpat)-domainlen);
+		    cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
+		    cbrock.checkshared = 2;
+		}
+		else {
+		    strlcpy(domainpat+domainlen, p, sizeof(domainpat)-domainlen);
+		    cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
+		}
+
+		domainpat[domainlen] = '\0';
+		SUBDB->foreach(subs,
+			       domainpat, domainlen,
+			       &find_p, &find_cb, &cbrock,
+			       NULL);
 	    }
-
-	    if (*pattern && !strchr(pattern, '.') &&
-		pattern[strlen(pattern)-1] == '%') {
-		/* special case:  LSUB "" *% -- output prefix */
-  		cbrock.checkshared = 1;
-	    }
-
-	    if ((cbrock.checkshared || prefixlen == len) && !*p) {
-		/* special case:  LSUB "" % -- output prefix
-		   (if we have a shared mbox) and quit */
-		strlcpy(domainpat+domainlen, "*", sizeof(domainpat)-domainlen);
+	    else if (pattern[len] == '.') {
+		strlcpy(domainpat+domainlen, pattern+len+1,
+		        sizeof(domainpat)-domainlen);
 		cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
-		cbrock.checkshared = 2;
-	    }
-	    else {
-		strlcpy(domainpat+domainlen, p, sizeof(domainpat)-domainlen);
-		cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
-	    }
 
-	    domainpat[domainlen] = '\0';
-	    SUBDB->foreach(subs,
-			   domainpat, domainlen,
-			   &find_p, &find_cb, &cbrock,
-			   NULL);
-	}
-	else if (pattern[len] == '.') {
-	    strlcpy(domainpat+domainlen, pattern+len+1,
-		    sizeof(domainpat)-domainlen);
-	    cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
-
-	    SUBDB->foreach(subs,
-			   domainpat, domainlen+prefixlen-(len+1),
-			   &find_p, &find_cb, &cbrock,
-			   NULL);
+		SUBDB->foreach(subs,
+			       domainpat, domainlen+prefixlen-(len+1),
+			       &find_p, &find_cb, &cbrock,
+			       NULL);
+	    }
 	}
     }
 

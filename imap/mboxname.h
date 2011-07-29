@@ -63,6 +63,7 @@ struct namespace {
     int isalt;  /* are we using the alternate namespace? */
     int isadmin; /* current user is an admin */
     char prefix[3][MAX_NAMESPACE_PREFIX+1];
+    int accessible[3];
     /* Convert the external mailbox 'name' to an internal name. */
     int (*mboxname_tointernal)(struct namespace *namespace, const char *name,
 			       const char *userid, char *result);
@@ -78,6 +79,11 @@ struct namespace {
 			    struct auth_state *auth_state, int (*proc)(),
 			    void *rock, int force);
 };
+
+#define NAMESPACE_INITIALIZER { '.', 0, 0, \
+				{ "INBOX.", "user.", "" }, \
+				{ 0, 0, 0, }, \
+				NULL, NULL, NULL, NULL }
 
 struct mboxlock {
     char *name;
