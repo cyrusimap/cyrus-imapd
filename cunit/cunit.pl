@@ -642,6 +642,7 @@ sub suite_generate_wrap($)
 	my $fn = $test->{func};
 	print WRAP "static void __cunit_$fn(void)\n";
 	print WRAP "{\n";
+	print WRAP "     CU_syslogMatchReset();\n";
 	print WRAP "    if (__cunit_wrap_fixture(" .
 		   "\"$cfile:$setupfn\", $setupfn)) " .
 		   "CU_FAIL_FATAL(\"$setupfn failed\");\n"

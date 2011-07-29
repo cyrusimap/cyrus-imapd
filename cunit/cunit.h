@@ -46,6 +46,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <CUnit/CUnit.h>
+#include "cunit-syslog.h"
 
 extern int verbose;
 
@@ -163,5 +164,20 @@ static CU_BOOL CU_assertFormatImplementation(
     CU_assertFormatImplementation(!!strcmp(_a?_a:"",_e?_e:""), __LINE__, \
      __FILE__, "", CU_TRUE, \
     "CU_ASSERT_STRING_NOT_EQUAL_FATAL(" #actual "=\"%s\"," #expected "=\"%s\")", _a, _e); }
+
+#define CU_SYSLOG_MATCH(re) \
+    CU_syslogMatchBegin((re), __FILE__, __LINE__)
+#define CU_ASSERT_SYSLOG(match, expected) \
+  { const char *_s = NULL; unsigned int _e = (expected), \
+    _a = CU_syslogMatchEnd((match), &_s); \
+    CU_assertFormatImplementation((_a == _e), __LINE__, \
+     __FILE__, "", CU_FALSE, \
+    "CU_ASSERT_SYSLOG(/%s/=%u, " #expected "=%u)", _s, _a, _e); }
+#define CU_ASSERT_SYSLOG_FATAL(match, expected) \
+  { const char *_s = NULL; unsigned int _e = (expected), \
+    _a = CU_syslogMatchEnd((match), &_s); \
+    CU_assertFormatImplementation((_a == _e), __LINE__, \
+     __FILE__, "", CU_TRUE, \
+    "CU_ASSERT_SYSLOG_FATAL(/%s/=%u, " #expected "=%u)", _s, _a, _e); }
 
 #endif /* INCLUDED_CUNIT_H */
