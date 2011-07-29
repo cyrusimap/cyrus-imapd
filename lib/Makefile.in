@@ -90,7 +90,7 @@ LIBCYR_HDRS = $(srcdir)/acl.h $(srcdir)/assert.h $(srcdir)/auth.h \
 	$(srcdir)/libcyr_cfg.h $(srcdir)/byteorder64.h \
 	$(srcdir)/md5.h $(srcdir)/crc32.h
 
-LIBCYR_OBJS = acl.o bsearch.o charset.o glob.o retry.o util.o \
+LIBCYR_OBJS = acl.o bsearch.o charset.o glob.o retry.o util.o tok.o \
 	libcyr_cfg.o mkgmtime.o prot.o parseaddr.o imclient.o imparse.o \
 	lsort.o stristr.o rfc822date.o signals.o cyrusdb.o strhash.o \
 	chartable.o imapurl.o nonblock_@WITH_NONBLOCK@.o lock_@WITH_LOCK@.o \
