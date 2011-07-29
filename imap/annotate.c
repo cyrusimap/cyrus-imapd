@@ -1442,7 +1442,7 @@ static const annotate_entrydesc_t message_db_entry =
 	ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV,
 	0,
 	annotation_get_fromdb,
-	/*set*/NULL,		    /* ??? */
+	annotation_set_todb,
 	NULL
     };
 
@@ -1632,7 +1632,7 @@ static const annotate_entrydesc_t mailbox_db_entry =
 	ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV,
 	0,
 	annotation_get_fromdb,
-	/*set*/NULL,		    /* ??? */
+	annotation_set_todb,
 	NULL
     };
 
@@ -1713,7 +1713,7 @@ static const annotate_entrydesc_t server_db_entry =
 	ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV,
 	0,
 	annotation_get_fromdb,
-	/*set*/NULL,
+	annotation_set_todb,
 	NULL
     };
 
@@ -2210,6 +2210,7 @@ struct storedata {
 struct annotate_st_entry_list
 {
     const annotate_entrydesc_t *entry;
+    char *name;
     struct buf shared;
     struct buf priv;
     int have_shared;
@@ -2482,11 +2483,11 @@ static int annotation_set_todb(const annotate_cursor_t *cursor,
 
     if (entry->have_shared)
 	r = write_entry(cursor->int_mboxname, cursor->uid,
-			entry->entry->name, "",
+			entry->name, "",
 			&entry->shared);
     if (!r && entry->have_priv)
 	r = write_entry(cursor->int_mboxname, cursor->uid,
-			entry->entry->name, sdata->userid,
+			entry->name, sdata->userid,
 			&entry->priv);
 
     return r;
@@ -2630,15 +2631,22 @@ static int find_desc_store(const annotate_scope_t *scope,
 			   const annotate_entrydesc_t **descp)
 {
     const ptrarray_t *descs;
-    const annotate_entrydesc_t *desc;
+    const annotate_entrydesc_t *db_entry;
+    annotate_entrydesc_t *desc;
     int i;
 
-    if (scope->which == ANNOTATION_SCOPE_SERVER)
+    if (scope->which == ANNOTATION_SCOPE_SERVER) {
 	descs = &server_entries;
-    else if (scope->which == ANNOTATION_SCOPE_MAILBOX)
+	db_entry = &server_db_entry;
+    }
+    else if (scope->which == ANNOTATION_SCOPE_MAILBOX) {
 	descs = &mailbox_entries;
-    else if (scope->which == ANNOTATION_SCOPE_MESSAGE)
+	db_entry = &mailbox_db_entry;
+    }
+    else if (scope->which == ANNOTATION_SCOPE_MESSAGE) {
 	descs = &message_entries;
+	db_entry = &message_db_entry;
+    }
     else
 	return IMAP_INTERNAL;
 
@@ -2655,7 +2663,19 @@ static int find_desc_store(const annotate_scope_t *scope,
     }
 
     /* unknown annotation */
-    return IMAP_PERMISSION_DENIED;
+    if (!config_getswitch(IMAPOPT_ANNOTATION_ALLOW_UNDEFINED))
+	return IMAP_PERMISSION_DENIED;
+
+    /* check for /flags and /vendor/cyrus */
+    if (scope->which == ANNOTATION_SCOPE_MESSAGE &&
+	!strncmp(name, "/flags/", 7))
+	return IMAP_PERMISSION_DENIED;
+
+    if (!strncmp(name, "/vendor/cmu/cyrus-imapd/", 24))
+	return IMAP_PERMISSION_DENIED;
+
+    *descp = db_entry;
+    return 0;
 }
 
 int annotatemore_store(const annotate_scope_t *scope,
@@ -2693,6 +2713,7 @@ int annotatemore_store(const annotate_scope_t *scope,
 	    || proxy_store_func) {
 	    nentry = xzmalloc(sizeof(struct annotate_st_entry_list));
 	    nentry->next = sdata.entry_list;
+	    nentry->name = xstrdup(e->entry);
 	    nentry->entry = desc;
 	    sdata.entry_list = nentry;
 	}
@@ -2831,6 +2852,7 @@ int annotatemore_store(const annotate_scope_t *scope,
     while (sdata.entry_list) {
 	struct annotate_st_entry_list *freeme = sdata.entry_list;
 	sdata.entry_list = sdata.entry_list->next;
+	free(freeme->name);
 	free(freeme);
     }
 

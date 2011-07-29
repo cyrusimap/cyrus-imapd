@@ -177,6 +177,11 @@ are listed with ``<none>''.
    user on their mailboxes?  In a large organization this can cause
    support problems, but it's enabled by default. */
 
+{ "annotation_allow_undefined", 0, SWITCH }
+/* Allow clients to store values for entries which are not
+ * defined either by Cyrus or in the annotations_definitions
+ * file. */
+
 { "annotation_definitions", NULL, STRING }
 /* File containing external (third-party) annotation definitions.
 .PP
