@@ -1318,6 +1318,7 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
     if (!remote) return 0;
     if (remote->last_uid != mailbox->i.last_uid) return 0;
     if (remote->highestmodseq != mailbox->i.highestmodseq) return 0;
+    if (remote->uidvalidity != mailbox->i.uidvalidity) return 0;
     if (remote->recentuid != mailbox->i.recentuid) return 0;
     if (remote->recenttime != mailbox->i.recenttime) return 0;
     if (remote->pop3_last_login != mailbox->i.pop3_last_login) return 0;
