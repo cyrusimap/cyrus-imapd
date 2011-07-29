@@ -648,6 +648,10 @@ int mboxname_init_namespace(struct namespace *namespace, int isadmin)
 	config_getswitch(IMAPOPT_UNIXHIERARCHYSEP) ? '/' : '.';
     namespace->isalt = !isadmin && config_getswitch(IMAPOPT_ALTNAMESPACE);
 
+    namespace->accessible[NAMESPACE_INBOX] = 1;
+    namespace->accessible[NAMESPACE_USER] = config_getswitch(IMAPOPT_LIST_ON_USER_SPACE);
+    namespace->accessible[NAMESPACE_SHARED] = config_getswitch(IMAPOPT_LIST_ON_SHARED_SPACE);
+
     if (namespace->isalt) {
 	/* alternate namespace */
 	strcpy(namespace->prefix[NAMESPACE_INBOX], "");
@@ -749,7 +753,7 @@ char *mboxname_hiersep_toexternal(struct namespace *namespace, char *name,
  */
 int mboxname_userownsmailbox(const char *userid, const char *name)
 {
-    struct namespace internal = { '.', 0, 0, { "INBOX.", "user.", "" },
+    struct namespace internal = { '.', 0, 0, { "INBOX.", "user.", "" }, 0, 0, 0,
 				  NULL, NULL, NULL, NULL };
     char inboxname[MAX_MAILBOX_BUFFER];
 

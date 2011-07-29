@@ -7352,8 +7352,8 @@ void cmd_namespace(char* tag)
 	    sawone[NAMESPACE_INBOX] = 
 		!mboxlist_lookup(inboxname, NULL, NULL);
 	}
-	sawone[NAMESPACE_USER] = 1;
-	sawone[NAMESPACE_SHARED] = 1;
+	sawone[NAMESPACE_USER] = imapd_userisadmin ? 1 : imapd_namespace.accessible[NAMESPACE_USER];
+	sawone[NAMESPACE_SHARED] = imapd_userisadmin ? 1 : imapd_namespace.accessible[NAMESPACE_SHARED];
     } else {
 	pattern = xstrdup("%");
 	/* now find all the exciting toplevel namespaces -
