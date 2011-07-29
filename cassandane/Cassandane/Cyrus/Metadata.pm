@@ -85,6 +85,24 @@ sub tear_down
     $self->{instance}->stop();
 }
 
+# TODO: provide a way to do this in the same instance
+# which would be more efficient
+sub restart_with_config
+{
+    my ($self, %nv) = @_;
+
+    my $conf = $self->{instance}->{config}->clone();
+    $conf->set(%nv);
+
+    $self->tear_down();
+
+    $self->{instance} = Cassandane::Instance->new(config => $conf);
+    my $svc = $self->{instance}->add_service('imap');
+    $self->{instance}->start();
+    $self->{store} = $svc->create_store();
+    $self->{adminstore} = $svc->create_store(username => 'admin');
+}
+
 sub _save_message
 {
     my ($self, $msg, $store) = @_;
@@ -450,7 +468,7 @@ sub test_motd
     $res = $imaptalk->getmetadata("", $entry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
-    my $expected = {
+    $expected = {
 	    "" => { $entry => $value1 }
     };
     $self->assert_deep_equals($expected, $res);
@@ -462,7 +480,7 @@ sub test_motd
     $res = $imaptalk->getmetadata("", $entry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
-    my $expected = {
+    $expected = {
 	    "" => { $entry => undef }
     };
     $self->assert_deep_equals($expected, $res);
@@ -672,12 +690,13 @@ sub test_permessage_unknown
     my ($self) = @_;
 
     xlog "testing getting and setting unknown annotations on a message";
+    xlog "where this is forbidden by the default config";
 
     xlog "Append a message";
     my %msg;
     $msg{A} = $self->make_message('Message A');
 
-    my $entry = '/thereisnosuchentry';
+    my $entry = '/thisentryisnotdefined';
     my $attrib = 'value.priv';
     my $value1 = "Hello World";
 
@@ -706,6 +725,53 @@ sub test_permessage_unknown
     $self->assert_deep_equals(
 	    {
 		1 => { annotation => [ $entry, [ $attrib, undef ] ] },
+	    },
+	    $res);
+}
+
+sub test_permessage_unknown_allowed
+{
+    my ($self) = @_;
+
+    xlog "testing getting and setting unknown annotations on a message";
+    xlog "with config allowing this";
+
+    xlog "Start a new instance with a changed config";
+    $self->restart_with_config(annotation_allow_undefined => 1);
+
+    xlog "Append a message";
+    my %msg;
+    $msg{A} = $self->make_message('Message A');
+
+    my $entry = '/thisentryisnotdefined';
+    my $attrib = 'value.priv';
+    my $value1 = "Hello World";
+
+    xlog "fetch annotation - should be no values";
+    my $talk = $self->{store}->get_client();
+    my $res = $talk->fetch('1:*',
+			   ['annotation', [$entry, $attrib]]);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_not_null($res);
+    $self->assert_deep_equals(
+	    {
+		1 => { annotation => [ $entry, [ $attrib, undef ] ] },
+	    },
+	    $res);
+
+    xlog "store annotation - should succeed";
+    $talk->store('1', 'annotation',
+	         [$entry, [$attrib, $value1]]);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog "fetch the annotation again, should see the value";
+    $res = $talk->fetch('1:*',
+		        ['annotation', [$entry, $attrib]]);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_not_null($res);
+    $self->assert_deep_equals(
+	    {
+		1 => { annotation => [ $entry, [ $attrib, $value1 ] ] },
 	    },
 	    $res);
 }
