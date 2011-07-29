@@ -74,6 +74,7 @@
 #include "ptrarray.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
+#include "tok.h"
 
 #include "annotate.h"
 #include "sync_log.h"
@@ -3035,45 +3036,85 @@ const struct annotate_attrib attribute_type_names[] =
 };
 
 #define ANNOT_DEF_MAXLINELEN 1024
+#define ANNOT_MAX_ERRORS    64
 
-/* Search in table for the value given by name and namelen
- * (name is null-terminated, but possibly more than just the key).
- * errmsg is used to hint the user where we failed
- */
-int table_lookup(const struct annotate_attrib *table,
-		 const char *name, size_t namelen, const char *errmsg)
+struct parse_state
 {
-    char errbuf[ANNOT_DEF_MAXLINELEN*2];
-    int entry;
+    const char *filename;
+    const char *context;
+    unsigned int lineno;
+    unsigned int nerrors;
+    tok_t tok;
+};
 
-    for (entry = 0; table[entry].name &&
-	     (strncasecmp(table[entry].name, name, namelen)
-	      || table[entry].name[namelen] != '\0'); entry++);
+static void parse_error(struct parse_state *state, const char *err)
+{
+    if (++state->nerrors < ANNOT_MAX_ERRORS)
+    {
+	struct buf msg = BUF_INITIALIZER;
 
-    if (! table[entry].name) {
-	sprintf(errbuf, "invalid %s at '%s'", errmsg, name);
-	fatal(errbuf, EC_CONFIG);
+	buf_printf(&msg, "%s:%u:%u:error: %s",
+		   state->filename, state->lineno,
+		   tok_offset(&state->tok), err);
+	if (state->context && *state->context)
+	    buf_printf(&msg, ", at or near '%s'", state->context);
+	syslog(LOG_ERR, "%s", buf_cstring(&msg));
+	buf_free(&msg);
     }
-    return table[entry].entry;
+
+    state->context = NULL;
 }
 
-/* Advance beyond the next ',', skipping whitespace,
- * fail if next non-space is no comma.
+/* Search in table for the value given by @name and return
+ * the corresponding enum value, or -1 on error.
+ * @state and @errmsg is used to hint the user where we failed.
  */
-char *consume_comma(char* p)
+static int table_lookup(const struct annotate_attrib *table,
+		        const char *name)
 {
-    char errbuf[ANNOT_DEF_MAXLINELEN*2];
-
-    for (; *p && isspace(*p); p++);  
-    if (*p != ',') {
-	sprintf(errbuf,
-		"',' expected, '%s' found parsing annotation definition", p);
-	fatal(errbuf, EC_CONFIG);
+    for ( ; table->name ; table++) {
+	 if (!strcasecmp(table->name, name))
+	    return table->entry;
     }
-    p++;
-    for (; *p && isspace(*p); p++);  
+    return -1;
+}
 
-    return p;
+
+/*
+ * Parse and return the next token from the line buffer.  Tokens are
+ * separated by comma ',' characters but leading and trailing whitespace
+ * is trimmed.  Tokens are made up of alphanumeric characters (as
+ * defined by libc's isalnum()) plus additional allowable characters
+ * defined by @extra.
+ *
+ * At start *@state points into the buffer, and will be adjusted to
+ * point further along in the buffer.  Returns the beginning of the
+ * token or NULL (and whines to syslog) if an error was encountered.
+ */
+static char *get_token(struct parse_state *state, const char *extra)
+{
+    char *token;
+    char *p;
+
+    token = tok_next(&state->tok);
+    if (!token) {
+	parse_error(state, "short line");
+	return NULL;
+    }
+
+    /* check the token */
+    if (extra == NULL)
+	extra = "";
+    for (p = token ; *p && (isalnum(*p) || strchr(extra, *p)) ; p++)
+	;
+    if (*p) {
+	state->context = p;
+	parse_error(state, "invalid character");
+	return NULL;
+    }
+
+    state->context = token;
+    return token;
 }
 
 /* Parses strings of the form value1 [ value2 [ ... ]].
@@ -3083,26 +3124,31 @@ char *consume_comma(char* p)
  * s is advanced to '\0' or ','.
  * On error errmsg is used to identify item to be parsed.
  */
-int parse_table_lookup_bitmask(const struct annotate_attrib *table,
-                               char** s, const char* errmsg) 
+static int parse_table_lookup_bitmask(const struct annotate_attrib *table,
+                                      struct parse_state *state)
 {
+    char *token = get_token(state, ".-_/ ");
+    char *p;
+    int i;
     int result = 0;
-    char *p, *p2;
+    tok_t tok;
 
-    p = *s;
-    do {
-	p2 = p;
-	for (; *p && (isalnum(*p) || *p=='.' || *p=='-' || *p=='_' || *p=='/');
-	     p++);
-	result |= table_lookup(table, p2, p-p2, errmsg);
-	for (; *p && isspace(*p); p++);
-    } while (*p && *p != ',');
+    if (!token)
+	return -1;
+    tok_initm(&tok, token, NULL, 0);
 
-    *s = p;
+    while ((p = tok_next(&tok))) {
+	state->context = p;
+	i = table_lookup(table, p);
+	if (i < 0)
+	    return i;
+	result |= i;
+    }
+
     return result;
 }
 
-static int normalise_attribs(int attribs)
+static int normalise_attribs(struct parse_state *state, int attribs)
 {
     int nattribs = 0;
     static int deprecated_warnings = 0;
@@ -3119,9 +3165,8 @@ static int normalise_attribs(int attribs)
 
     if ((attribs & ATTRIB_DEPRECATED)) {
 	if (!deprecated_warnings++)
-	    syslog(LOG_WARNING, "annotation definitions file contains "
-				"deprecated attribute names such as "
-				"content-type or modified-since, ignoring");
+	    parse_error(state, "deprecated attribute names such as "
+				"content-type or modified-since (ignoring)");
     }
 
     return nattribs;
@@ -3130,13 +3175,13 @@ static int normalise_attribs(int attribs)
 /* Create array of allowed annotations, both internally & externally defined */
 static void init_annotation_definitions(void)
 {
-    char *p, *p2, *tmp;
-    const char *filename;
+    char *p;
     char aline[ANNOT_DEF_MAXLINELEN];
-    char errbuf[ANNOT_DEF_MAXLINELEN*2];
     annotate_entrydesc_t *ae;
     int i;
     FILE* f;
+    struct parse_state state;
+    ptrarray_t *entries;
 
     /* copy static entries into list */
     for (i = 0 ; server_builtin_entries[i].name ; i++)
@@ -3150,106 +3195,113 @@ static void init_annotation_definitions(void)
     for (i = 0 ; message_builtin_entries[i].name ; i++)
 	ptrarray_append(&message_entries, (void *)&message_builtin_entries[i]);
 
-    /* parse config file */
-    filename = config_getstring(IMAPOPT_ANNOTATION_DEFINITIONS);
+    memset(&state, 0, sizeof(state));
 
-    if (!filename)
+    /* parse config file */
+    state.filename = config_getstring(IMAPOPT_ANNOTATION_DEFINITIONS);
+
+    if (!state.filename)
 	return;
-  
-    f = fopen(filename,"r");
-    if (! f) {
-	sprintf(errbuf, "could not open annotation definition %s", filename);
-	fatal(errbuf, EC_CONFIG);
+
+    f = fopen(state.filename,"r");
+    if (!f) {
+	syslog(LOG_ERR, "%s: could not open annotation definition file: %m",
+	       state.filename);
+	return;
     }
-  
+
     while (fgets(aline, sizeof(aline), f)) {
 	/* remove leading space, skip blank lines and comments */
+	state.lineno++;
 	for (p = aline; *p && isspace(*p); p++);
 	if (!*p || *p == '#') continue;
+	tok_initm(&state.tok, aline, ",", TOK_TRIMLEFT|TOK_TRIMRIGHT|TOK_EMPTY);
 
 	/* note, we only do the most basic validity checking and may
 	   be more restrictive than neccessary */
 
 	ae = xzmalloc(sizeof(*ae));
 
-	p2 = p;
-	for (; *p && (isalnum(*p) ||
-		      *p=='.' || *p=='-' || *p=='_' || *p=='/' || *p==':');
-	     p++);
+	if (!(p = get_token(&state, ".-_/:"))) goto bad;
 	/* TV-TODO: should test for empty */
-	ae->name = xstrndup(p2, p-p2);
 
-	if (!strncmp(ae->name, "/vendor/cmu/cyrus-imapd/", 24)) {
-	    syslog(LOG_WARNING, "annotation definitions file contains an "
-				"annotation in /vendor/cmu/cyrus-imapd/, ignoring");
-	    free((char *)ae->name);
-	    free(ae);
-	    continue;
+	if (!strncmp(p, "/vendor/cmu/cyrus-imapd/", 24)) {
+	    parse_error(&state, "annotation under /vendor/cmu/cyrus-imapd/");
+	    goto bad;
 	}
+	ae->name = xstrdup(p);
 
-	p = consume_comma(p);
-  
-	p2 = p;
-	for (; *p && (isalnum(*p) || *p=='.' || *p=='-' || *p=='_' || *p=='/');
-	     p++);
-
-	switch (table_lookup(annotation_scope_names, p2, p-p2,
-			 "annotation scope")) {
+	if (!(p = get_token(&state, ".-_/"))) goto bad;
+	switch (table_lookup(annotation_scope_names, p)) {
 	case ANNOTATION_SCOPE_SERVER:
-	    ptrarray_append(&server_entries, ae);
+	    entries = &server_entries;
 	    break;
 	case ANNOTATION_SCOPE_MAILBOX:
-	    ptrarray_append(&mailbox_entries, ae);
+	    entries = &mailbox_entries;
 	    break;
 	case ANNOTATION_SCOPE_MESSAGE:
 	    if (!strncmp(ae->name, "/flags/", 7)) {
 		/* RFC5257 reserves the /flags/ hierarchy for future use */
-		syslog(LOG_WARNING, "annotation definitions file contains "
-				    "a message annotation in /flags/, ignoring");
-		free((char *)ae->name);
-		free(ae);
-		continue;
+		state.context = ae->name;
+		parse_error(&state, "message entry under /flags/");
+		goto bad;
 	    }
-	    ptrarray_append(&message_entries, ae);
+	    entries = &message_entries;
 	    break;
+	case -1:
+	    parse_error(&state, "invalid annotation scope");
+	    goto bad;
 	}
 
-	p = consume_comma(p);
-	p2 = p;
-	for (; *p && (isalnum(*p) || *p=='.' || *p=='-' || *p=='_' || *p=='/');
-	     p++);
-	ae->type = table_lookup(attribute_type_names, p2, p-p2,
-				"attribute type");
+	if (!(p = get_token(&state, NULL))) goto bad;
+	i = table_lookup(attribute_type_names, p);
+	if (i < 0) {
+	    parse_error(&state, "invalid annotation type");
+	    goto bad;
+	}
+	ae->type = i;
 
-	p = consume_comma(p);
-	ae->proxytype = parse_table_lookup_bitmask(annotation_proxy_type_names,
-						   &p,
-						   "annotation proxy type");
+	i = parse_table_lookup_bitmask(annotation_proxy_type_names, &state);
+	if (i < 0) {
+	    parse_error(&state, "invalid annotation proxy type");
+	    goto bad;
+	}
+	ae->proxytype = i;
 
-	p = consume_comma(p);
-	ae->attribs = parse_table_lookup_bitmask(annotation_attributes,
-						 &p,
-						 "annotation attributes");
-	ae->attribs = normalise_attribs(ae->attribs);
+	i = parse_table_lookup_bitmask(annotation_attributes, &state);
+	if (i < 0) {
+	    parse_error(&state, "invalid annotation attributes");
+	    goto bad;
+	}
+	ae->attribs = normalise_attribs(&state, i);
 
-	p = consume_comma(p);
-	p2 = p;
-	for (; *p && (isalnum(*p) || *p=='.' || *p=='-' || *p=='_' || *p=='/');
-	     p++);
-	tmp = xstrndup(p2, p-p2);
-	ae->extra_rights = cyrus_acl_strtomask(tmp);
-	free(tmp);
+	if (!(p = get_token(&state, NULL))) goto bad;
+	ae->extra_rights = cyrus_acl_strtomask(p);
 
-	for (; *p && isspace(*p); p++);
-	if (*p) {
-	    sprintf(errbuf, "junk at end of line: '%s'", p);
-	    fatal(errbuf, EC_CONFIG);
+	p = tok_next(&state.tok);
+	if (p) {
+	    parse_error(&state, "junk at end of line");
+	    goto bad;
 	}
 
 	ae->get = annotation_get_fromdb;
 	ae->set = annotation_set_todb;
 	ae->rock = NULL;
+	ptrarray_append(entries, ae);
+	continue;
+
+bad:
+	free((char *)ae->name);
+	free(ae);
+	tok_fini(&state.tok);
+	continue;
     }
+
+    if (state.nerrors)
+	syslog(LOG_ERR, "%s: encountered %u errors.  Struggling on, but "
+			"some of your annotation definitions may be "
+			"ignored.  Please fix this file!",
+			state.filename, state.nerrors);
 
     fclose(f);
 }
