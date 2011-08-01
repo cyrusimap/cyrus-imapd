@@ -526,4 +526,7 @@ extern int mailbox_repack_add(struct mailbox_repack *repack,
 extern void mailbox_repack_abort(struct mailbox_repack **repackptr);
 extern int mailbox_repack_commit(struct mailbox_repack **repackptr);
 
+int mailbox_quota_check(struct mailbox *mailbox,
+			quota_t delta, int wrlock);
+
 #endif /* INCLUDED_MAILBOX_H */

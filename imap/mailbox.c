@@ -3160,19 +3160,12 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
     /* Check quota if necessary */
     if (!ignorequota && newmailbox->quotaroot && (!oldmailbox->quotaroot || 
 	strcmp(oldmailbox->quotaroot, newmailbox->quotaroot))) {
-	struct quota q;
 
-	q.root = newmailbox->quotaroot;
-	r = quota_read(&q, NULL, 1);
-
-	/* check if the limit is exceeded */
-	if (!r && q.limit >= 0 && q.used + oldmailbox->i.quota_mailbox_used >
-	    (uquota_t) q.limit * QUOTA_UNITS) {
-		r = IMAP_QUOTA_EXCEEDED;
-	}
-
+	r = mailbox_quota_check(newmailbox,
+				oldmailbox->i.quota_mailbox_used,
+				/*wrlock*/1);
 	/* then we abort - no space to rename */
-	if (r && r != IMAP_QUOTAROOT_NONEXISTENT)
+	if (r)
 	    goto fail;
     }
     if (newmailbox->quotaroot) newquotaroot = xstrdup(newmailbox->quotaroot);
@@ -4164,3 +4157,36 @@ close:
     return r;
 }
 
+/*
+ * Check whether we can add @delta bytes to the mailbox
+ * without exceeding the quota limit.
+ * Returns: 0 if allowed, or IMAP error code.
+ */
+int mailbox_quota_check(struct mailbox *mailbox,
+			quota_t delta, int wrlock)
+{
+    int r;
+    struct quota q;
+
+    /*
+     * We are always allowed to *reduce* usage even if it doesn't get us
+     * below the quota.  As a side effect this allows our caller to pass
+     * delta = -1 meaning "don't care about quota checks".
+     */
+    if (delta < 0)
+	return 0;
+
+    q.root = mailbox->quotaroot;
+    r = quota_read(&q, NULL, wrlock);
+
+    if (r == IMAP_QUOTAROOT_NONEXISTENT)
+	return 0;
+    if (r)
+	return r;
+
+    if (q.limit >= 0 && delta >= 0 &&
+	q.used + delta > ((uquota_t) q.limit * QUOTA_UNITS))
+	return IMAP_QUOTA_EXCEEDED;
+
+    return 0;
+}
