@@ -109,7 +109,6 @@ extern int append_setup(struct appendstate *as, const char *name,
 			struct namespace *, int isadmin);
 
 extern int append_commit(struct appendstate *as,
-			 quota_t quotacheck,
 			 unsigned long *uidvalidity, 
 			 unsigned long *startuid, 
 			 unsigned long *num,

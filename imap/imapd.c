@@ -3517,7 +3517,7 @@ void cmd_append(char *tag, char *name, const char *cur_name)
 	}
 
 	if (!r) {
-	    r = append_commit(&appendstate, totalsize, &uidvalidity, &firstuid, &num, NULL);
+	    r = append_commit(&appendstate, &uidvalidity, &firstuid, &num, NULL);
 	} else {
 	    append_abort(&appendstate);
 	}

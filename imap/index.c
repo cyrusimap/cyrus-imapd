@@ -1524,7 +1524,7 @@ index_copy(struct index_state *state,
     r = append_copy(mailbox, &appendstate, copyargs.nummsg,
 		    copyargs.copymsg, nolink);
     if (!r) {
-	r = append_commit(&appendstate, totalsize,
+	r = append_commit(&appendstate,
 		      &uidvalidity, &startuid, &num, &destmailbox);
     }
 

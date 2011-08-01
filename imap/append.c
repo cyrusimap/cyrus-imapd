@@ -217,7 +217,6 @@ int append_setup(struct appendstate *as, const char *name,
 /* may return non-zero, indicating that the entire append has failed
  and the mailbox is probably in an inconsistent state. */
 int append_commit(struct appendstate *as, 
-		  quota_t quotacheck __attribute__((unused)),
 		  unsigned long *uidvalidity, 
 		  unsigned long *start,
 		  unsigned long *num,

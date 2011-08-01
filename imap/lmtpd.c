@@ -536,7 +536,7 @@ int deliver_mailbox(FILE *f,
 	} else {
 	    struct mailbox *mailbox = NULL;
 	    /* hold the mailbox open until the duplicate mark is done */
-	    r = append_commit(&as, quotaoverride ? -1 : 0, NULL, &uid,
+	    r = append_commit(&as, NULL, &uid,
 			      NULL, &mailbox);
 	    if (!r) {
 		syslog(LOG_INFO, "Delivered: %s to mailbox: %s",
