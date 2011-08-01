@@ -421,7 +421,10 @@ sub test_specialuse
 }
 
 #
-# Test the /shared/motd server annotation, not defined by any final RFC.
+# Test the /shared/motd server annotation.
+#
+# Note: this needs the Mail::IMAPTalk install to have commit
+# "Alert reponse is remainder of line, put that in the response code"
 #
 sub test_motd
 {
@@ -433,6 +436,10 @@ sub test_motd
     my $res;
     my $entry = '/shared/motd';
     my $value1 = "Hello World this is a value";
+
+    xlog "No ALERT was received when we connected";
+    $self->assert($imaptalk->state() == Mail::IMAPTalk::Authenticated);
+    $self->assert_null($imaptalk->get_response_code('alert'));
 
     xlog "initial value is NIL";
     $res = $imaptalk->getmetadata("", $entry);
@@ -461,10 +468,15 @@ sub test_motd
     };
     $self->assert_deep_equals($expected, $res);
 
-    xlog "can get same value in a new connection";
+    xlog "a new connection will get an ALERT with the motd value";
     $self->{adminstore}->disconnect();
     $imaptalk = $self->{adminstore}->get_client();
+    $self->assert($imaptalk->state() == Mail::IMAPTalk::Authenticated);
+    my $alert = $imaptalk->get_response_code('alert');
+    $self->assert_not_null($alert);
+    $self->assert_str_equals($value1, $alert);
 
+    xlog "the annot gives the same value in the new connection";
     $res = $imaptalk->getmetadata("", $entry);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_not_null($res);
@@ -485,6 +497,11 @@ sub test_motd
     };
     $self->assert_deep_equals($expected, $res);
 
+    xlog "a new connection no longer gets an ALERT";
+    $self->{adminstore}->disconnect();
+    $imaptalk = $self->{adminstore}->get_client();
+    $self->assert($imaptalk->state() == Mail::IMAPTalk::Authenticated);
+    $self->assert_null($imaptalk->get_response_code('alert'));
 }
 
 
