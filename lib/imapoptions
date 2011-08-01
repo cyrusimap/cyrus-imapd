@@ -625,10 +625,10 @@ Blank lines and lines beginning with ``#'' are ignored.
    ldap_use_sasl are enabled, ldap_version will be automatically
    set to 3. */
 
-{ "list_on_user_space", 0, SWITCH }
+{ "list_on_user_space", 1, SWITCH }
 /* ME_PATCH_NAMESPACE - Permit list command on user space */
 
-{ "list_on_shared_space", 0, SWITCH }
+{ "list_on_shared_space", 1, SWITCH }
 /* ME_PATCH_NAMESPACE - Permit list command on shared space *
 
 { "lmtp_downcase_rcpt", 1, SWITCH }
