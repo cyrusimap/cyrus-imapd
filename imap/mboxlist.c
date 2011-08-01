@@ -2338,7 +2338,7 @@ int mboxlist_findall_alt(struct namespace *namespace,
         len = strlen(namespace->prefix[NAMESPACE_USER]);
         if(len>0) len--;
 
-        if (!strncmp(namespace->prefix[NAMESPACE_USER], pattern,
+	if (!strncmp(namespace->prefix[NAMESPACE_USER], pattern,
 		 prefixlen < len ? prefixlen : len)) {
 
 	    if (prefixlen < len) {
