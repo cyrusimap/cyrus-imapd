@@ -335,7 +335,7 @@ enum {
 };
 
 
-void motd_file(int fd);
+static void motd_file(void);
 void shut_down(int code);
 void fatal(const char *s, int code);
 
@@ -976,13 +976,20 @@ void service_abort(int error)
 }
 
 /*
- * found a motd file; spit out message and return
+ * Try to find a motd file; if found spit out message as an [ALERT]
  */
-void motd_file(int fd)
+static void motd_file(void)
 {
-    struct protstream *motd_in;
+    char *filename = NULL;
+    int fd = -1;
+    struct protstream *motd_in = NULL;
     char buf[MAX_MAILBOX_PATH+1];
     char *p;
+
+    filename = strconcat(config_dir, "/msg/motd", (char *)NULL);
+    fd = open(filename, O_RDONLY, 0);
+    if (fd < 0)
+	goto out;
 
     motd_in = prot_new(fd, 0);
 
@@ -990,8 +997,15 @@ void motd_file(int fd)
     if ((p = strchr(buf, '\r'))!=NULL) *p = 0;
     if ((p = strchr(buf, '\n'))!=NULL) *p = 0;
 
-    for(p = buf; *p == '['; p++); /* can't have [ be first char, sigh */
+    for (p = buf; *p == '['; p++); /* can't have [ be first char, sigh */
     prot_printf(imapd_out, "* OK [ALERT] %s\r\n", p);
+
+out:
+    if (motd_in)
+	prot_free(motd_in);
+    if (fd >= 0)
+	close(fd);
+    free(filename);
 }
 
 /*
@@ -1136,10 +1150,7 @@ static void imapd_check(struct backend *be, int usinguid)
  */
 void cmdloop(void)
 {
-    int fd;
-    char motdfilename[MAX_MAILBOX_PATH+1];
     int c;
-    int ret;
     int usinguid, havepartition, havenamespace, recursive;
     static struct buf tag, cmd, arg1, arg2, arg3;
     char *p, shut[MAX_MAILBOX_PATH+1], cmdname[100];
@@ -1157,18 +1168,7 @@ void cmdloop(void)
     }
     prot_printf(imapd_out, " server ready\r\n");
 
-    ret = snprintf(motdfilename, sizeof(motdfilename), "%s/msg/motd",
-		   config_dir);
-    
-    if(ret < 0 || ret >= (int) sizeof(motdfilename)) {
-       fatal("motdfilename buffer too small (configdirectory too long)",
-	     EC_CONFIG);
-    }
-    
-    if ((fd = open(motdfilename, O_RDONLY, 0)) != -1) {
-	motd_file(fd);
-	close(fd);
-    }
+    motd_file();
 
     /* Get command timer logging paramater. This string
      * is a time in seconds. Any command that takes >=
