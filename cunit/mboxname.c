@@ -102,6 +102,19 @@ static void test_same_userid_domain(void)
     CU_ASSERT_EQUAL(mboxname_same_userid(JANE_SENT, JANEAT_SENT), 0);
 }
 
+static void test_contains(void)
+{
+    static const char FOO[] = "bloggs.com!user.foo";
+    static const char FOOBAR[] = "bloggs.com!user.foobar";
+    static const char FOODRAFT[] = "bloggs.com!user.foo.Drafts";
+
+    CU_ASSERT_EQUAL(mboxname_contains(FOO, FOOBAR), 0);
+    CU_ASSERT_EQUAL(mboxname_contains(FOOBAR, FOO), 0);
+    CU_ASSERT_EQUAL(mboxname_contains(FOO, FOODRAFT), 0);
+    CU_ASSERT_EQUAL(mboxname_contains(FOODRAFT, FOO), 1);
+    CU_ASSERT_EQUAL(mboxname_contains(FOOBAR, FOOBAR), 1);
+}
+
 static enum enum_value old_config_virtdomains;
 
 static int set_up(void)
