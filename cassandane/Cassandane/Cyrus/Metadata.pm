@@ -254,13 +254,33 @@ sub test_shared
 
     xlog "reading read_only Cyrus annotations";
     my $res = $imaptalk->getmetadata('INBOX', {depth => 'infinity'}, '/shared');
+    my $r = $res->{INBOX};
+    $self->assert_not_null($r);
 
-    # size should be zero
-    $self->assert_not_null($res->{INBOX}{"/shared/vendor/cmu/cyrus-imapd/size"});
-    $self->assert_num_equals(0, $res->{INBOX}{"/shared/vendor/cmu/cyrus-imapd/size"});
-
-    # parition should be default
-    $self->assert_str_equals('default', $res->{INBOX}{"/shared/vendor/cmu/cyrus-imapd/partition"});
+    xlog "checking specific entries";
+    # Note: lastupdate will be a time string close within the
+    # last second, but I'm too lazy to check that properly
+    $self->assert_not_null($r->{'/shared/vendor/cmu/cyrus-imapd/lastupdate'});
+    delete $r->{'/shared/vendor/cmu/cyrus-imapd/lastupdate'};
+    $self->assert_deep_equals({
+	    '/shared/vendor/cmu/cyrus-imapd/squat' => undef,
+	    '/shared/vendor/cmu/cyrus-imapd/size' => '0',
+	    '/shared/vendor/cmu/cyrus-imapd/sieve' => undef,
+	    '/shared/vendor/cmu/cyrus-imapd/sharedseen' => 'false',
+	    '/shared/vendor/cmu/cyrus-imapd/pop3showafter' => undef,
+	    '/shared/vendor/cmu/cyrus-imapd/pop3newuidl' => 'true',
+	    '/shared/vendor/cmu/cyrus-imapd/partition' => 'default',
+	    '/shared/vendor/cmu/cyrus-imapd/news2mail' => undef,
+	    '/shared/vendor/cmu/cyrus-imapd/lastpop' => undef,
+	    '/shared/vendor/cmu/cyrus-imapd/expire' => undef,
+	    '/shared/vendor/cmu/cyrus-imapd/duplicatedeliver' => 'false',
+	    '/shared/thread' => undef,
+	    '/shared/specialuse' => undef,
+	    '/shared/sort' => undef,
+	    '/shared/comment' => undef,
+	    '/shared/checkperiod' => undef,
+	    '/shared/check' => undef,
+	}, $r);
 
     # individual item fetch:
     my $part = $imaptalk->getmetadata('INBOX', "/shared/vendor/cmu/cyrus-imapd/partition");
