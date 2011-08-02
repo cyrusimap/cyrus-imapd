@@ -504,6 +504,65 @@ sub test_motd
     $self->assert_null($imaptalk->get_response_code('alert'));
 }
 
+#
+# Test the /shared/vendor/cmu/cyrus-imapd/size annotation
+# which reports the total byte count of the RFC822 message
+# sizes in the mailbox.
+#
+sub test_size
+{
+    my ($self) = @_;
+
+    xlog "testing /shared/vendor/cmu/cyrus-imapd/size";
+
+    my $imaptalk = $self->{store}->get_client();
+    my $res;
+    my $folder = $self->{store}->{folder};
+    my $entry = '/shared/vendor/cmu/cyrus-imapd/size';
+
+    xlog "initial value is numeric zero";
+    $res = $imaptalk->getmetadata($folder, $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_deep_equals({
+	$folder => { $entry => "0" }
+    }, $res);
+
+    xlog "cannot set the value as ordinary user";
+    $imaptalk->setmetadata($folder, $entry, '123');
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+    $self->assert($imaptalk->get_last_error() =~ m/permission denied/i);
+
+    xlog "cannot set the value as admin either";
+    my $admintalk = $self->{adminstore}->get_client();
+    $admintalk->setmetadata($folder, $entry, '123');
+    $self->assert_str_equals('no', $admintalk->get_last_completion_response());
+    $self->assert($admintalk->get_last_error() =~ m/permission denied/i);
+
+    xlog "adding a message bumps the value by the message's size";
+    my $expected = 0;
+    my %msg;
+    $msg{A} = $self->make_message('Message A');
+    $expected += length($msg{A}->as_string());
+
+    $res = $imaptalk->getmetadata($folder, $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_deep_equals({
+	$folder => { $entry => "" . $expected }
+    }, $res);
+
+    xlog "adding a 2nd message bumps the value by the message's size";
+    $msg{B} = $self->make_message('Message B');
+    $expected += length($msg{B}->as_string());
+
+    $res = $imaptalk->getmetadata($folder, $entry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_deep_equals({
+	$folder => { $entry => "" . $expected }
+    }, $res);
+
+    # TODO: removing a message doesn't reduce the value until (possibly delayed) expunge
+}
+
 
 sub test_private
 {
