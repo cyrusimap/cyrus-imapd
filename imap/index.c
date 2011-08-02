@@ -3795,7 +3795,7 @@ static MsgData *index_msgdata_load(struct index_state *state,
 
 		/* buf_release() never returns NULL, so if the lookup
 		 * fails for any reason we just get an empty string here */
-		strarray_append(&cur->annot, buf_release(&value));
+		strarray_appendm(&cur->annot, buf_release(&value));
  		break;
 	    }
 	    case LOAD_IDS:
