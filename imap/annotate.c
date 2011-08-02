@@ -1058,6 +1058,105 @@ void annotate_state_set_message(annotate_state_t *state,
     state->acl = mailbox->acl;
 }
 
+/*
+ * Common code used to apply a function to every mailbox which matches
+ * a mailbox pattern, with an annotate_state_t* set up to point to the
+ * mailbox (specifically, the .mbentry, .int_mboxname and .ext_mboxname
+ * fields will all be set correctly).
+ */
+
+struct apply_rock {
+    annotate_state_t *state;
+    int (*proc)(annotate_state_t *);
+    char lastname[MAX_MAILBOX_PATH+1];
+    int sawuser;
+};
+
+static int apply_cb(char *name, int matchlen,
+		    int maycreate __attribute__((unused)), void* rock)
+{
+    struct apply_rock *arock = (struct apply_rock *)rock;
+    annotate_state_t *state = arock->state;
+    struct mboxlist_entry *mbentry = NULL;
+    int c;
+    char int_mboxname[MAX_MAILBOX_BUFFER];
+    char ext_mboxname[MAX_MAILBOX_BUFFER];
+    int r;
+
+    /* Suppress any output of a partial match */
+    if (name[matchlen] && strncmp(arock->lastname, name, matchlen) == 0)
+	return 0;
+
+    /*
+     * We can get a partial match for "user" multiple times with
+     * other matches inbetween.  Handle it as a special case
+     */
+    if (matchlen == 4 && strncasecmp(name, "user", 4) == 0) {
+	if (arock->sawuser)
+	    return 0;
+	arock->sawuser = 1;
+    }
+
+    strlcpy(arock->lastname, name, sizeof(arock->lastname));
+    arock->lastname[matchlen] = '\0';
+
+    if (!strncasecmp(arock->lastname, "INBOX", 5)) {
+	state->namespace->mboxname_tointernal(state->namespace, "INBOX",
+					      state->userid, int_mboxname);
+	strlcat(int_mboxname, arock->lastname+5, sizeof(int_mboxname));
+    }
+    else
+	strlcpy(int_mboxname, arock->lastname, sizeof(int_mboxname));
+
+    c = name[matchlen];
+    if (c) name[matchlen] = '\0';
+    state->namespace->mboxname_toexternal(state->namespace, name,
+					  state->userid, ext_mboxname);
+    if (c) name[matchlen] = c;
+
+    if (mboxlist_lookup(int_mboxname, &mbentry, NULL))
+	return 0;
+
+    state->int_mboxname = int_mboxname;
+    state->ext_mboxname = ext_mboxname;
+    state->mbentry = mbentry;
+
+    r = arock->proc(state);
+
+    state->int_mboxname = NULL;
+    state->ext_mboxname = NULL;
+    state->mbentry = NULL;
+
+    mboxlist_entry_free(&mbentry);
+
+    return r;
+}
+
+static int annotate_apply_mailboxes(annotate_state_t *state,
+				    int (*proc)(annotate_state_t *))
+{
+    struct apply_rock arock;
+    char mboxpat[MAX_MAILBOX_BUFFER];
+    int r = 0;
+
+    memset(&arock, 0, sizeof(arock));
+    arock.state = state;
+    arock.proc = proc;
+
+    /* copy the pattern so we can change hiersep */
+    strlcpy(mboxpat, state->mboxpat, sizeof(mboxpat));
+    mboxname_hiersep_tointernal(state->namespace, mboxpat,
+				config_virtdomains ?
+				strcspn(mboxpat, "@") : 0);
+
+    r = state->namespace->mboxlist_findall(state->namespace, mboxpat,
+					   state->isadmin, state->userid,
+					   state->auth_state,
+					   apply_cb, &arock);
+
+    return r;
+}
+
 /***************************  Annotation Fetching  ***************************/
 
 static void flush_entryatt(annotate_state_t *state)
@@ -1892,61 +1991,9 @@ static void _annotate_fetch_entries(annotate_state_t *state,
     }
 }
 
-static int fetch_cb(char *name, int matchlen,
-		    int maycreate __attribute__((unused)), void* rock)
+static int fetch_cb(annotate_state_t *state)
 {
-    annotate_state_t *state = (annotate_state_t *)rock;
-    static char lastname[MAX_MAILBOX_BUFFER];
-    static int sawuser = 0;
-    int c;
-    char int_mboxname[MAX_MAILBOX_BUFFER], ext_mboxname[MAX_MAILBOX_BUFFER];
-    struct mboxlist_entry *mbentry = NULL;
-
-    /* We have to reset the sawuser flag before each fetch command.
-     * Handle it as a dirty hack.
-     */
-    if (name == NULL) {
-	sawuser = 0;
-	lastname[0] = '\0';
-	return 0;
-    }
-    /* Suppress any output of a partial match */
-    if (name[matchlen] && strncmp(lastname, name, matchlen) == 0) {
-	return 0;
-    }
-
-    /*
-     * We can get a partial match for "user" multiple times with
-     * other matches inbetween.  Handle it as a special case
-     */
-    if (matchlen == 4 && strncasecmp(name, "user", 4) == 0) {
-	if (sawuser) return 0;
-	sawuser = 1;
-    }
-
-    strlcpy(lastname, name, sizeof(lastname));
-    lastname[matchlen] = '\0';
-
-    if (!strncasecmp(lastname, "INBOX", 5)) {
-	state->namespace->mboxname_tointernal(state->namespace, "INBOX",
-					      state->userid, int_mboxname);
-	strlcat(int_mboxname, lastname+5, sizeof(int_mboxname));
-    }
-    else
-	strlcpy(int_mboxname, lastname, sizeof(int_mboxname));
-
-    c = name[matchlen];
-    if (c) name[matchlen] = '\0';
-    state->namespace->mboxname_toexternal(state->namespace, name,
-					  state->userid, ext_mboxname);
-    if (c) name[matchlen] = c;
-
-    if (mboxlist_lookup(int_mboxname, &mbentry, NULL))
-	return 0;
-
-    state->int_mboxname = int_mboxname;
-    state->ext_mboxname = ext_mboxname;
-    state->mbentry = mbentry;
+    struct mboxlist_entry *mbentry = state->mbentry;
 
     _annotate_fetch_entries(state, /*proxy_check*/0);
 
@@ -1957,12 +2004,6 @@ static int fetch_cb(char *name, int matchlen,
 			 state->orig_entry, state->orig_attribute);
 	hash_insert(mbentry->server, (void *)0xDEADBEEF, &state->server_table);
     }
-
-    mboxlist_entry_free(&mbentry);
-
-    state->int_mboxname = NULL;
-    state->ext_mboxname = NULL;
-    state->mbentry = NULL;
 
     return 0;
 }
@@ -2094,26 +2135,13 @@ int annotate_state_fetch(annotate_state_t *state,
     else if (state->which == ANNOTATION_SCOPE_MAILBOX) {
 
 	if (state->entry_list || proxy_fetch_func) {
-	    char mboxpat[MAX_MAILBOX_BUFFER];
-
-	    /* Reset state in fetch_cb */
-	    fetch_cb(NULL, 0, 0, (void *)state);
 
 	    if (proxy_fetch_func && state->orig_entry) {
 		state->orig_mailbox = state->mboxpat;
 		state->orig_attribute = attribs;
 	    }
 
-	    /* copy the pattern so we can change hiersep */
-	    strlcpy(mboxpat, state->mboxpat, sizeof(mboxpat));
-	    mboxname_hiersep_tointernal(state->namespace, mboxpat,
-					config_virtdomains ?
-					strcspn(mboxpat, "@") : 0);
-
-	    (*state->namespace->mboxlist_findall)(state->namespace, mboxpat,
-					          state->isadmin, state->userid,
-					          state->auth_state, fetch_cb,
-					          state);
+	    annotate_apply_mailboxes(state, fetch_cb);
 	}
     }
     else if (state->which == ANNOTATION_SCOPE_MESSAGE) {
@@ -2334,61 +2362,16 @@ static int _annotate_store_entries(annotate_state_t *state)
     return 0;
 }
 
-static int store_cb(const char *name, int matchlen,
-		    int maycreate __attribute__((unused)), void *rock)
+static int store_cb(annotate_state_t *state)
 {
-    annotate_state_t *state = (annotate_state_t *)rock;
-    static char lastname[MAX_MAILBOX_PATH+1];
-    static int sawuser = 0;
-    char int_mboxname[MAX_MAILBOX_BUFFER];
-    struct mboxlist_entry *mbentry = NULL;
+    struct mboxlist_entry *mbentry = state->mbentry;
     int r = 0;
-
-    /* We have to reset the sawuser flag before each fetch command.
-     * Handle it as a dirty hack.
-     */
-    if (name == NULL) {
-	sawuser = 0;
-	lastname[0] = '\0';
-	return 0;
-    }
-    /* Suppress any output of a partial match */
-    if (name[matchlen] && strncmp(lastname, name, matchlen) == 0) {
-	return 0;
-    }
-
-    /*
-     * We can get a partial match for "user" multiple times with
-     * other matches inbetween.  Handle it as a special case
-     */
-    if (matchlen == 4 && strncasecmp(name, "user", 4) == 0) {
-	if (sawuser) return 0;
-	sawuser = 1;
-    }
-
-    strlcpy(lastname, name, sizeof(lastname));
-    lastname[matchlen] = '\0';
-
-    if (!strncasecmp(lastname, "INBOX", 5)) {
-	(*state->namespace->mboxname_tointernal)(state->namespace, "INBOX",
-						 state->userid, int_mboxname);
-	strlcat(int_mboxname, lastname+5, sizeof(int_mboxname));
-    }
-    else
-	strlcpy(int_mboxname, lastname, sizeof(int_mboxname));
-
-    if (mboxlist_lookup(int_mboxname, &mbentry, NULL))
-	return 0;
-
-    state->ext_mboxname = name;
-    state->int_mboxname = int_mboxname;
-    state->mbentry = mbentry;
 
     r = _annotate_store_entries(state);
     if (r)
 	goto cleanup;
 
-    sync_log_annotation(int_mboxname);
+    sync_log_annotation(state->int_mboxname);
 
     state->count++;
 
@@ -2398,11 +2381,6 @@ static int store_cb(const char *name, int matchlen,
     }
 
  cleanup:
-    state->ext_mboxname = NULL;
-    state->int_mboxname = NULL;
-    mboxlist_entry_free(&mbentry);
-    state->mbentry = NULL;
-
     return r;
 }
 
@@ -2787,24 +2765,7 @@ int annotate_state_store(annotate_state_t *state, struct entryattlist *l)
 
     else if (state->which == ANNOTATION_SCOPE_MAILBOX) {
 
-	char mboxpat[MAX_MAILBOX_BUFFER];
-
-	/* Reset state in store_cb */
-	store_cb(NULL, 0, 0, (void *)state);
-
-	/* copy the pattern so we can change hiersep */
-	strlcpy(mboxpat, state->mboxpat, sizeof(mboxpat));
-	mboxname_hiersep_tointernal(state->namespace, mboxpat,
-				    config_virtdomains ?
-				    strcspn(mboxpat, "@") : 0);
-
-	r = (*state->namespace->mboxlist_findall)(state->namespace,
-						  mboxpat,
-						  state->isadmin,
-						  state->userid,
-						  state->auth_state,
-						  store_cb,
-						  state);
+	r = annotate_apply_mailboxes(state, store_cb);
 
 	if (!r && !state->count) r = IMAP_MAILBOX_NONEXISTENT;
 
