@@ -125,6 +125,9 @@ char *mboxname_isusermailbox(const char *name, int isinbox);
  */
 int mboxname_isdeletedmailbox(const char *name);
 
+/* check if one mboxname is a parent or same as the other */
+int mboxname_contains(const char *longstr, const char *shortstr);
+
 /*
  * Translate (internal) inboxname into corresponding userid.
  */

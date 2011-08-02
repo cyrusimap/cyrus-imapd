@@ -995,6 +995,28 @@ int mboxname_policycheck(const char *name)
     return 0;
 }
 
+int mboxname_contains(const char *longstr, const char *shortstr)
+{
+    int longlen = strlen(longstr);
+    int shortlen = strlen(shortstr);
+
+    /* can't be a child */
+    if (longlen < shortlen)
+	return 0;
+
+    /* don't match along same length */
+    if (strncmp(longstr, shortstr, shortlen))
+	return 0;
+
+    /* longer, and not a separator */
+    if (longlen > shortlen && longstr[shortlen] != '.')
+	return 0;
+
+    /* it's a match! */
+    return 1;
+}
+
+
 void mboxname_hash(char *buf, size_t buf_len,
 		   const char *root,
 		   const char *name)
