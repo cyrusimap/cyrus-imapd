@@ -148,6 +148,9 @@ void mboxname_init_parts(struct mboxname_parts *parts);
 void mboxname_free_parts(struct mboxname_parts *parts);
 
 
+/* check if one mboxname is a parent or same as the other */
+int mboxname_contains(const char *longstr, const char *shortstr);
+
 /*
  * Translate (internal) inboxname into corresponding userid,
  * and vice-versa.
