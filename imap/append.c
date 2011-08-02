@@ -857,15 +857,11 @@ int append_fromstage(struct appendstate *as, struct body **body,
 	annotations = newannotations;
     }
     if (!r && annotations) {
-	annotate_scope_t scope;
-	annotate_scope_init_message(&scope, as->mailbox, record.uid);
-
-	r = annotatemore_store(&scope,
-			       annotations,
-			       as->namespace,
-			       as->isadmin,
-			       as->userid,
-			       as->auth_state);
+	annotate_state_t *astate = annotate_state_new();
+	annotate_state_set_auth(astate, as->namespace, as->isadmin,
+			        as->userid, as->auth_state);
+	annotate_state_set_message(astate, as->mailbox, record.uid);
+	r = annotate_state_store(astate, annotations);
 
 	if (r && !origannotations) {
 	    /* Nasty hack to log & ignore failed annotations from callout */
@@ -873,6 +869,7 @@ int append_fromstage(struct appendstate *as, struct body **body,
 			    "ignoring\n", error_message(r));
 	    r = 0;
 	}
+	annotate_state_free(&astate);
     }
     if (r)
 	goto out;

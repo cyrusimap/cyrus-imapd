@@ -2411,26 +2411,24 @@ static int index_fetchannotations(struct index_state *state,
 				  uint32_t msgno,
 				  const struct fetchargs *fetchargs)
 {
-    annotate_scope_t scope;
+    annotate_state_t *astate = annotate_state_new();
     struct fetch_annotation_rock rock;
     int r = 0;
 
-    annotate_scope_init_message(&scope, state->mailbox,
-				state->map[msgno-1].record.uid);
+    annotate_state_set_auth(astate, fetchargs->namespace, fetchargs->isadmin,
+			    fetchargs->userid, fetchargs->authstate);
+    annotate_state_set_message(astate, state->mailbox,
+			       state->map[msgno-1].record.uid);
 
     memset(&rock, 0, sizeof(rock));
     rock.pout = state->out;
     rock.sep = "";
 
-    r = annotatemore_fetch(&scope,
-			   &fetchargs->entries,
-			   &fetchargs->attribs,
-			   fetchargs->namespace,
-			   fetchargs->isadmin,
-			   fetchargs->userid,
-			   fetchargs->authstate,
-			   fetch_annotation_response, &rock,
-			   0);
+    r = annotate_state_fetch(astate,
+			     &fetchargs->entries, &fetchargs->attribs,
+			     fetch_annotation_response, &rock,
+			     0);
+    annotate_state_free(&astate);
 
     return r;
 }
@@ -3073,34 +3071,31 @@ static int index_store_annotation(struct index_state *state,
     modseq_t oldmodseq;
     struct mailbox *mailbox = state->mailbox;
     struct index_map *im = &state->map[msgno-1];
-    annotate_scope_t scope;
+    annotate_state_t *astate = annotate_state_new();
     int r;
 
     oldmodseq = im->record.modseq;
 
-    annotate_scope_init_message(&scope, state->mailbox,
-				im->record.uid);
-
-    r = annotatemore_store(&scope,
-			   storeargs->entryatts,
-			   storeargs->namespace,
-			   storeargs->isadmin,
-			   storeargs->userid,
-			   storeargs->authstate);
-    if (r) return r;
+    annotate_state_set_auth(astate, storeargs->namespace, storeargs->isadmin,
+			    storeargs->userid, storeargs->authstate);
+    annotate_state_set_message(astate, state->mailbox, im->record.uid);
+    r = annotate_state_store(astate, storeargs->entryatts);
+    if (r) goto out;
 
     /* It would be nice if the annotate layer told us whether it
      * actually made a change to the database, but it doesn't, so
      * we have to assume the message is dirty */
 
     r = mailbox_rewrite_index_record(mailbox, &im->record);
-    if (r) return r;
+    if (r) goto out;
 
     /* if it's silent and unchanged, update the seen value */
     if (storeargs->silent && im->told_modseq == oldmodseq)
 	im->told_modseq = im->record.modseq;
 
-    return 0;
+out:
+    annotate_state_free(&astate);
+    return r;
 }
 
 
@@ -3163,28 +3158,29 @@ static int _search_annotation(struct index_state *state,
 {
     strarray_t entries = STRARRAY_INITIALIZER;
     strarray_t attribs = STRARRAY_INITIALIZER;
-    annotate_scope_t scope;
+    annotate_state_t *astate = annotate_state_new();
     struct search_annot_rock rock;
     int r;
 
     strarray_append(&entries, sa->entry);
     strarray_append(&attribs, sa->attrib);
 
-    annotate_scope_init_message(&scope, state->mailbox,
-				state->map[msgno-1].record.uid);
+    annotate_state_set_auth(astate, sa->namespace, sa->isadmin,
+			    sa->userid, sa->auth_state);
+    annotate_state_set_message(astate, state->mailbox,
+			       state->map[msgno-1].record.uid);
 
     memset(&rock, 0, sizeof(rock));
     rock.match = &sa->value;
 
-    r = annotatemore_fetch(&scope,
-			    &entries, &attribs,
-			    sa->namespace, sa->isadmin,
-			    sa->userid, sa->auth_state,
-			    _search_annot_callback, &rock,
-			    0);
+    r = annotate_state_fetch(astate,
+			     &entries, &attribs,
+			     _search_annot_callback, &rock,
+			     0);
     if (r >= 0)
 	r = rock.result;
 
+    annotate_state_free(&astate);
     strarray_fini(&entries);
     strarray_fini(&attribs);
     return r;

@@ -1809,7 +1809,7 @@ static int do_annotation(struct dlist *kin)
     struct buf value = BUF_INITIALIZER;
     const char *userid = NULL;
     char *name = NULL;
-    annotate_scope_t scope;
+    annotate_state_t *astate = NULL;
     int r;
 
     if (!dlist_getatom(kin, "MBOXNAME", &mboxname))
@@ -1822,7 +1822,7 @@ static int do_annotation(struct dlist *kin)
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
     buf_init_ro(&value, mapval, maplen);
 
-    /* annotatemore_store() expects external mailbox names,
+    /* annotate_state_store() expects external mailbox names,
        so translate the separator character */
     name = xstrdup(mboxname);
     mboxname_hiersep_toexternal(sync_namespacep, name, 0);
@@ -1831,17 +1831,20 @@ static int do_annotation(struct dlist *kin)
 		   *userid ? "value.priv" : "value.shared",
 		   &value);
     appendentryatt(&entryatts, entry, attvalues);
-    annotate_scope_init_mailbox(&scope, name);
+    astate = annotate_state_new();
+    annotate_state_set_auth(astate, sync_namespacep,
+			    sync_userisadmin, userid, sync_authstate);
+    annotate_state_set_mailbox(astate, name);
 
     r = annotatemore_begin();
     if (!r)
-	r = annotatemore_store(&scope, entryatts, sync_namespacep,
-			       sync_userisadmin, userid, sync_authstate);
+	r = annotate_state_store(astate, entryatts);
     if (!r)
 	annotatemore_commit();
 
     freeentryatts(entryatts);
     free(name);
+    annotate_state_free(&astate);
 
     return r;
 }
@@ -1855,7 +1858,7 @@ static int do_unannotation(struct dlist *kin)
     const char *userid = NULL;
     struct buf empty = BUF_INITIALIZER;
     char *name = NULL;
-    annotate_scope_t scope;
+    annotate_state_t *astate = NULL;
     int r;
 
     if (!dlist_getatom(kin, "MBOXNAME", &mboxname))
@@ -1874,12 +1877,14 @@ static int do_unannotation(struct dlist *kin)
 		   *userid ? "value.priv" : "value.shared",
 		   &empty);
     appendentryatt(&entryatts, entry, attvalues);
-    annotate_scope_init_mailbox(&scope, name);
+    astate = annotate_state_new();
+    annotate_state_set_auth(astate, sync_namespacep,
+			    sync_userisadmin, userid, sync_authstate);
+    annotate_state_set_mailbox(astate, name);
 
     r = annotatemore_begin();
     if (!r)
-	r = annotatemore_store(&scope, entryatts, sync_namespacep,
-			       sync_userisadmin, userid, sync_authstate);
+	r = annotate_state_store(astate, entryatts);
     if (!r)
 	annotatemore_commit();
 

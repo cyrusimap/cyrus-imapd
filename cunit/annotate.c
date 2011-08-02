@@ -133,7 +133,7 @@ static void test_commit_without_begin(void)
 static void test_store_without_begin(void)
 {
     int r;
-    annotate_scope_t scope;
+    annotate_state_t *astate = NULL;
     strarray_t entries = STRARRAY_INITIALIZER;
     strarray_t attribs = STRARRAY_INITIALIZER;
     struct entryattlist *ealist = NULL;
@@ -144,7 +144,11 @@ static void test_store_without_begin(void)
 
     annotatemore_open();
 
-    annotate_scope_init_server(&scope);
+    astate = annotate_state_new();
+    annotate_state_set_mailbox(astate, "");
+    isadmin = 1;	/* pretend to be admin */
+    annotate_state_set_auth(astate, &namespace, isadmin, userid, auth_state);
+    isadmin = 0;
 
     strarray_append(&entries, COMMENT);
     strarray_append(&attribs, VALUE_SHARED);
@@ -153,10 +157,7 @@ static void test_store_without_begin(void)
 
     buf_appendcstr(&val, VALUE0);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    isadmin = 1;	/* pretend to be admin */
-    r = annotatemore_store(&scope, ealist,
-		           &namespace, isadmin, userid, auth_state);
-    isadmin = 0;
+    r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, IMAP_INTERNAL);
 
     /* commit should fail as we're not in a txn */
@@ -175,12 +176,13 @@ static void test_store_without_begin(void)
     buf_free(&val);
     buf_free(&val2);
     freeentryatts(ealist);
+    annotate_state_free(&astate);
 }
 
 static void test_getset_server_shared(void)
 {
     int r;
-    annotate_scope_t scope;
+    annotate_state_t *astate = NULL;
     strarray_t entries = STRARRAY_INITIALIZER;
     strarray_t attribs = STRARRAY_INITIALIZER;
     strarray_t results = STRARRAY_INITIALIZER;
@@ -192,18 +194,19 @@ static void test_getset_server_shared(void)
 
     annotatemore_open();
 
-    annotate_scope_init_server(&scope);
+    astate = annotate_state_new();
+    annotate_state_set_mailbox(astate, "");
+    annotate_state_set_auth(astate, &namespace, isadmin, userid, auth_state);
 
     strarray_append(&entries, COMMENT);
     strarray_append(&attribs, VALUE_SHARED);
 
     /* check that there is no value initially */
 
-    r = annotatemore_fetch(&scope,
-		           &entries, &attribs,
-		           &namespace, isadmin, userid, auth_state,
-		           fetch_cb, &results,
-		           NULL);
+    r = annotate_state_fetch(astate,
+		             &entries, &attribs,
+		             fetch_cb, &results,
+		             NULL);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -224,22 +227,20 @@ static void test_getset_server_shared(void)
 
     /* set a value */
 
+    /* pretend to be admin */
+    annotate_state_set_auth(astate, &namespace, /*isadmin*/1, userid, auth_state);
+
     buf_appendcstr(&val, VALUE0);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    isadmin = 1;	/* pretend to be admin */
-    r = annotatemore_store(&scope, ealist,
-		           &namespace, isadmin, userid, auth_state);
-    isadmin = 0;
+    r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
     ealist = NULL;
 
     /* check that we can fetch the value back in the same txn */
-    r = annotatemore_fetch(&scope,
-		           &entries, &attribs,
-		           &namespace, isadmin, userid, auth_state,
-		           fetch_cb, &results,
-		           NULL);
+    r = annotate_state_fetch(astate, &entries, &attribs,
+		             fetch_cb, &results,
+		             NULL);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -261,11 +262,12 @@ static void test_getset_server_shared(void)
     CU_ASSERT_EQUAL(r, 0);
 
     /* check that we can fetch the value back in a new txn */
-    r = annotatemore_fetch(&scope,
-		           &entries, &attribs,
-		           &namespace, isadmin, userid, auth_state,
-		           fetch_cb, &results,
-		           NULL);
+    annotate_state_set_auth(astate, &namespace, /*isadmin*/0, userid, auth_state);
+
+    r = annotate_state_fetch(astate,
+		             &entries, &attribs,
+		             fetch_cb, &results,
+		             NULL);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -289,11 +291,10 @@ static void test_getset_server_shared(void)
 
     annotatemore_open();
 
-    r = annotatemore_fetch(&scope,
-		           &entries, &attribs,
-		           &namespace, isadmin, userid, auth_state,
-		           fetch_cb, &results,
-		           NULL);
+    r = annotate_state_fetch(astate,
+		             &entries, &attribs,
+		             fetch_cb, &results,
+		             NULL);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -318,10 +319,9 @@ static void test_getset_server_shared(void)
 
     buf_free(&val);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    isadmin = 1;	/* pretend to be admin */
-    r = annotatemore_store(&scope, ealist,
-		           &namespace, isadmin, userid, auth_state);
-    isadmin = 0;
+    /* pretend to be admin */
+    annotate_state_set_auth(astate, &namespace, /*isadmin*/1, userid, auth_state);
+    r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
     ealist = NULL;
@@ -331,11 +331,11 @@ static void test_getset_server_shared(void)
 
     /* check that there is no value any more */
 
-    r = annotatemore_fetch(&scope,
-		           &entries, &attribs,
-		           &namespace, isadmin, userid, auth_state,
-		           fetch_cb, &results,
-		           NULL);
+    annotate_state_set_auth(astate, &namespace, isadmin, userid, auth_state);
+    r = annotate_state_fetch(astate,
+		             &entries, &attribs,
+		             fetch_cb, &results,
+		             NULL);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -358,13 +358,14 @@ static void test_getset_server_shared(void)
     strarray_fini(&attribs);
     strarray_fini(&results);
     buf_free(&val);
+    annotate_state_free(&astate);
 }
 
 
 static void test_getset_mailbox_shared(void)
 {
     int r;
-    annotate_scope_t scope;
+    annotate_state_t *astate = NULL;
     strarray_t entries = STRARRAY_INITIALIZER;
     strarray_t attribs = STRARRAY_INITIALIZER;
     strarray_t results = STRARRAY_INITIALIZER;
@@ -376,18 +377,19 @@ static void test_getset_mailbox_shared(void)
 
     annotatemore_open();
 
-    annotate_scope_init_mailbox(&scope, MBOXNAME1_INT);
+    astate = annotate_state_new();
+    annotate_state_set_mailbox(astate, MBOXNAME1_INT);
+    annotate_state_set_auth(astate, &namespace, isadmin, userid, auth_state);
 
     strarray_append(&entries, COMMENT);
     strarray_append(&attribs, VALUE_SHARED);
 
     /* check that there is no value initially */
 
-    r = annotatemore_fetch(&scope,
-		           &entries, &attribs,
-		           &namespace, isadmin, userid, auth_state,
-		           fetch_cb, &results,
-		           NULL);
+    r = annotate_state_fetch(astate,
+		             &entries, &attribs,
+		             fetch_cb, &results,
+		             NULL);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -407,21 +409,18 @@ static void test_getset_mailbox_shared(void)
     CU_ASSERT_EQUAL(r, 0);
 
     /* set a value */
-
     buf_appendcstr(&val, VALUE0);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    r = annotatemore_store(&scope, ealist,
-		           &namespace, isadmin, userid, auth_state);
+    r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
     ealist = NULL;
 
     /* check that we can fetch the value back in the same txn */
-    r = annotatemore_fetch(&scope,
-		           &entries, &attribs,
-		           &namespace, isadmin, userid, auth_state,
-		           fetch_cb, &results,
-		           NULL);
+    r = annotate_state_fetch(astate,
+		             &entries, &attribs,
+		             fetch_cb, &results,
+		             NULL);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -443,11 +442,10 @@ static void test_getset_mailbox_shared(void)
     CU_ASSERT_EQUAL(r, 0);
 
     /* check that we can fetch the value back in a new txn */
-    r = annotatemore_fetch(&scope,
-		           &entries, &attribs,
-		           &namespace, isadmin, userid, auth_state,
-		           fetch_cb, &results,
-		           NULL);
+    r = annotate_state_fetch(astate,
+		             &entries, &attribs,
+		             fetch_cb, &results,
+		             NULL);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -471,11 +469,10 @@ static void test_getset_mailbox_shared(void)
 
     annotatemore_open();
 
-    r = annotatemore_fetch(&scope,
-		           &entries, &attribs,
-		           &namespace, isadmin, userid, auth_state,
-		           fetch_cb, &results,
-		           NULL);
+    r = annotate_state_fetch(astate,
+		             &entries, &attribs,
+		             fetch_cb, &results,
+		             NULL);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -500,8 +497,7 @@ static void test_getset_mailbox_shared(void)
 
     buf_free(&val);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    r = annotatemore_store(&scope, ealist,
-		           &namespace, isadmin, userid, auth_state);
+    r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
     ealist = NULL;
@@ -511,11 +507,10 @@ static void test_getset_mailbox_shared(void)
 
     /* check that there is no value any more */
 
-    r = annotatemore_fetch(&scope,
-		           &entries, &attribs,
-		           &namespace, isadmin, userid, auth_state,
-		           fetch_cb, &results,
-		           NULL);
+    r = annotate_state_fetch(astate,
+		             &entries, &attribs,
+		             fetch_cb, &results,
+		             NULL);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -538,13 +533,14 @@ static void test_getset_mailbox_shared(void)
     strarray_fini(&attribs);
     strarray_fini(&results);
     buf_free(&val);
+    annotate_state_free(&astate);
 }
 
 
 static void test_getset_message_shared(void)
 {
     int r;
-    annotate_scope_t scope;
+    annotate_state_t *astate = NULL;
     struct mailbox mailbox;
     strarray_t entries = STRARRAY_INITIALIZER;
     strarray_t attribs = STRARRAY_INITIALIZER;
@@ -560,18 +556,19 @@ static void test_getset_message_shared(void)
     memset(&mailbox, 0, sizeof(mailbox));
     mailbox.name = MBOXNAME1_INT;
     mailbox.acl = ACL;
-    annotate_scope_init_message(&scope, &mailbox, 42);
+    astate = annotate_state_new();
+    annotate_state_set_message(astate, &mailbox, 42);
+    annotate_state_set_auth(astate, &namespace, isadmin, userid, auth_state);
 
     strarray_append(&entries, COMMENT);
     strarray_append(&attribs, VALUE_SHARED);
 
     /* check that there is no value initially */
 
-    r = annotatemore_fetch(&scope,
-		           &entries, &attribs,
-		           &namespace, isadmin, userid, auth_state,
-		           fetch_cb, &results,
-		           NULL);
+    r = annotate_state_fetch(astate,
+		             &entries, &attribs,
+		             fetch_cb, &results,
+		             NULL);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -594,18 +591,16 @@ static void test_getset_message_shared(void)
 
     buf_appendcstr(&val, VALUE0);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    r = annotatemore_store(&scope, ealist,
-		           &namespace, isadmin, userid, auth_state);
+    r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
     ealist = NULL;
 
     /* check that we can fetch the value back in the same txn */
-    r = annotatemore_fetch(&scope,
-		           &entries, &attribs,
-		           &namespace, isadmin, userid, auth_state,
-		           fetch_cb, &results,
-		           NULL);
+    r = annotate_state_fetch(astate,
+		             &entries, &attribs,
+		             fetch_cb, &results,
+		             NULL);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -627,11 +622,10 @@ static void test_getset_message_shared(void)
     CU_ASSERT_EQUAL(r, 0);
 
     /* check that we can fetch the value back in a new txn */
-    r = annotatemore_fetch(&scope,
-		           &entries, &attribs,
-		           &namespace, isadmin, userid, auth_state,
-		           fetch_cb, &results,
-		           NULL);
+    r = annotate_state_fetch(astate,
+		             &entries, &attribs,
+		             fetch_cb, &results,
+		             NULL);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -655,11 +649,10 @@ static void test_getset_message_shared(void)
 
     annotatemore_open();
 
-    r = annotatemore_fetch(&scope,
-		           &entries, &attribs,
-		           &namespace, isadmin, userid, auth_state,
-		           fetch_cb, &results,
-		           NULL);
+    r = annotate_state_fetch(astate,
+		             &entries, &attribs,
+		             fetch_cb, &results,
+		             NULL);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -684,8 +677,7 @@ static void test_getset_message_shared(void)
 
     buf_free(&val);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    r = annotatemore_store(&scope, ealist,
-		           &namespace, isadmin, userid, auth_state);
+    r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
     ealist = NULL;
@@ -695,11 +687,10 @@ static void test_getset_message_shared(void)
 
     /* check that there is no value any more */
 
-    r = annotatemore_fetch(&scope,
-		           &entries, &attribs,
-		           &namespace, isadmin, userid, auth_state,
-		           fetch_cb, &results,
-		           NULL);
+    r = annotate_state_fetch(astate,
+		             &entries, &attribs,
+		             fetch_cb, &results,
+		             NULL);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -723,13 +714,14 @@ static void test_getset_message_shared(void)
     strarray_fini(&attribs);
     strarray_fini(&results);
     buf_free(&val);
+    annotate_state_free(&astate);
 }
 
 
 static void test_delete(void)
 {
     int r;
-    annotate_scope_t scope;
+    annotate_state_t *astate = NULL;
     struct mailbox mailbox;
     struct mboxlist_entry mbentry;
     strarray_t entries = STRARRAY_INITIALIZER;
@@ -763,9 +755,10 @@ static void test_delete(void)
 
     buf_appendcstr(&val, VALUE0);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    annotate_scope_init_mailbox(&scope, MBOXNAME1_INT);
-    r = annotatemore_store(&scope, ealist,
-		           &namespace, isadmin, userid, auth_state);
+    astate = annotate_state_new();
+    annotate_state_set_auth(astate, &namespace, isadmin, userid, auth_state);
+    annotate_state_set_mailbox(astate, MBOXNAME1_INT);
+    r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
     ealist = NULL;
@@ -773,9 +766,8 @@ static void test_delete(void)
     buf_reset(&val);
     buf_appendcstr(&val, VALUE1);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    annotate_scope_init_message(&scope, &mailbox, 42);
-    r = annotatemore_store(&scope, ealist,
-		           &namespace, isadmin, userid, auth_state);
+    annotate_state_set_message(astate, &mailbox, 42);
+    r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
     ealist = NULL;
@@ -783,9 +775,8 @@ static void test_delete(void)
     buf_reset(&val);
     buf_appendcstr(&val, VALUE2);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    annotate_scope_init_message(&scope, &mailbox, 127);
-    r = annotatemore_store(&scope, ealist,
-		           &namespace, isadmin, userid, auth_state);
+    annotate_state_set_message(astate, &mailbox, 127);
+    r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
     ealist = NULL;
@@ -846,12 +837,13 @@ static void test_delete(void)
     strarray_fini(&entries);
     strarray_fini(&attribs);
     buf_free(&val);
+    annotate_state_free(&astate);
 }
 
 static void test_rename(void)
 {
     int r;
-    annotate_scope_t scope;
+    annotate_state_t *astate = NULL;
     struct mailbox mailbox;
     strarray_t entries = STRARRAY_INITIALIZER;
     strarray_t attribs = STRARRAY_INITIALIZER;
@@ -880,9 +872,10 @@ static void test_rename(void)
 
     buf_appendcstr(&val, VALUE0);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    annotate_scope_init_mailbox(&scope, MBOXNAME1_INT);
-    r = annotatemore_store(&scope, ealist,
-		           &namespace, isadmin, userid, auth_state);
+    astate = annotate_state_new();
+    annotate_state_set_auth(astate, &namespace, isadmin, userid, auth_state);
+    annotate_state_set_mailbox(astate, MBOXNAME1_INT);
+    r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
     ealist = NULL;
@@ -890,9 +883,8 @@ static void test_rename(void)
     buf_reset(&val);
     buf_appendcstr(&val, VALUE1);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    annotate_scope_init_message(&scope, &mailbox, 42);
-    r = annotatemore_store(&scope, ealist,
-		           &namespace, isadmin, userid, auth_state);
+    annotate_state_set_message(astate, &mailbox, 42);
+    r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
     ealist = NULL;
@@ -900,9 +892,8 @@ static void test_rename(void)
     buf_reset(&val);
     buf_appendcstr(&val, VALUE2);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    annotate_scope_init_message(&scope, &mailbox, 127);
-    r = annotatemore_store(&scope, ealist,
-		           &namespace, isadmin, userid, auth_state);
+    annotate_state_set_message(astate, &mailbox, 127);
+    r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
     ealist = NULL;
@@ -987,12 +978,13 @@ static void test_rename(void)
     strarray_fini(&entries);
     strarray_fini(&attribs);
     buf_free(&val);
+    annotate_state_free(&astate);
 }
 
 static void test_abort(void)
 {
     int r;
-    annotate_scope_t scope;
+    annotate_state_t *astate = NULL;
     struct mailbox mailbox;
     strarray_t entries = STRARRAY_INITIALIZER;
     strarray_t attribs = STRARRAY_INITIALIZER;
@@ -1035,20 +1027,19 @@ static void test_abort(void)
 
     buf_appendcstr(&val, VALUE0);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    annotate_scope_init_server(&scope);
-    isadmin = 1;
-    r = annotatemore_store(&scope, ealist,
-		           &namespace, isadmin, userid, auth_state);
-    isadmin = 0;
+    astate = annotate_state_new();
+    annotate_state_set_server(astate);
+    annotate_state_set_auth(astate, &namespace, /*isadmin*/1, userid, auth_state);
+    r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
     ealist = NULL;
 
     buf_appendcstr(&val, VALUE0);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    annotate_scope_init_mailbox(&scope, MBOXNAME1_INT);
-    r = annotatemore_store(&scope, ealist,
-		           &namespace, isadmin, userid, auth_state);
+    annotate_state_set_mailbox(astate, MBOXNAME1_INT);
+    annotate_state_set_auth(astate, &namespace, /*isadmin*/0, userid, auth_state);
+    r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
     ealist = NULL;
@@ -1056,9 +1047,8 @@ static void test_abort(void)
     buf_reset(&val);
     buf_appendcstr(&val, VALUE1);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    annotate_scope_init_message(&scope, &mailbox, 42);
-    r = annotatemore_store(&scope, ealist,
-		           &namespace, isadmin, userid, auth_state);
+    annotate_state_set_message(astate, &mailbox, 42);
+    r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
     ealist = NULL;
@@ -1090,13 +1080,14 @@ static void test_abort(void)
     strarray_fini(&attribs);
     buf_free(&val);
     buf_free(&val2);
+    annotate_state_free(&astate);
 }
 
 
 static void test_msg_copy(void)
 {
     int r;
-    annotate_scope_t scope;
+    annotate_state_t *astate = NULL;
     struct mailbox mailbox;
     strarray_t entries = STRARRAY_INITIALIZER;
     strarray_t attribs = STRARRAY_INITIALIZER;
@@ -1125,9 +1116,10 @@ static void test_msg_copy(void)
 
     buf_appendcstr(&val, VALUE0);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    annotate_scope_init_message(&scope, &mailbox, 17);
-    r = annotatemore_store(&scope, ealist,
-		           &namespace, isadmin, userid, auth_state);
+    astate = annotate_state_new();
+    annotate_state_set_auth(astate, &namespace, isadmin, userid, auth_state);
+    annotate_state_set_message(astate, &mailbox, 17);
+    r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
     ealist = NULL;
@@ -1135,9 +1127,8 @@ static void test_msg_copy(void)
     buf_reset(&val);
     buf_appendcstr(&val, VALUE1);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    annotate_scope_init_message(&scope, &mailbox, 42);
-    r = annotatemore_store(&scope, ealist,
-		           &namespace, isadmin, userid, auth_state);
+    annotate_state_set_message(astate, &mailbox, 42);
+    r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
     ealist = NULL;
@@ -1145,9 +1136,8 @@ static void test_msg_copy(void)
     buf_reset(&val);
     buf_appendcstr(&val, VALUE2);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    annotate_scope_init_message(&scope, &mailbox, 127);
-    r = annotatemore_store(&scope, ealist,
-		           &namespace, isadmin, userid, auth_state);
+    annotate_state_set_message(astate, &mailbox, 127);
+    r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
     ealist = NULL;
@@ -1245,6 +1235,7 @@ static void test_msg_copy(void)
     strarray_fini(&attribs);
     buf_free(&val);
     buf_free(&val2);
+    annotate_state_free(&astate);
 }
 
 static void test_missing_definitions_file(void)
@@ -1394,7 +1385,7 @@ static void test_broken_definitions_file_10(void)
 static void test_getset_server_undefined(void)
 {
     int r;
-    annotate_scope_t scope;
+    annotate_state_t *astate = NULL;
     strarray_t entries = STRARRAY_INITIALIZER;
     strarray_t attribs = STRARRAY_INITIALIZER;
     strarray_t results = STRARRAY_INITIALIZER;
@@ -1406,18 +1397,19 @@ static void test_getset_server_undefined(void)
 
     annotatemore_open();
 
-    annotate_scope_init_server(&scope);
+    astate = annotate_state_new();
+    annotate_state_set_server(astate);
+    annotate_state_set_auth(astate, &namespace, isadmin, userid, auth_state);
 
     strarray_append(&entries, EXENTRY);
     strarray_append(&attribs, VALUE_SHARED);
 
     /* check that there is no value initially */
 
-    r = annotatemore_fetch(&scope,
-		           &entries, &attribs,
-		           &namespace, isadmin, userid, auth_state,
-		           fetch_cb, &results,
-		           NULL);
+    r = annotate_state_fetch(astate,
+		             &entries, &attribs,
+		             fetch_cb, &results,
+		             NULL);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -1440,10 +1432,9 @@ static void test_getset_server_undefined(void)
 
     buf_appendcstr(&val, VALUE0);
     setentryatt(&ealist, EXENTRY, VALUE_SHARED, &val);
-    isadmin = 1;	/* pretend to be admin */
-    r = annotatemore_store(&scope, ealist,
-		           &namespace, isadmin, userid, auth_state);
-    isadmin = 0;
+    annotate_state_set_auth(astate, &namespace, /*isadmin*/1, userid, auth_state);
+    r = annotate_state_store(astate, ealist);
+    annotate_state_set_auth(astate, &namespace, /*isadmin*/0, userid, auth_state);
     CU_ASSERT_EQUAL(r, IMAP_PERMISSION_DENIED);
     freeentryatts(ealist);
     ealist = NULL;
@@ -1453,11 +1444,10 @@ static void test_getset_server_undefined(void)
 
     /* check that there is no value */
 
-    r = annotatemore_fetch(&scope,
-		           &entries, &attribs,
-		           &namespace, isadmin, userid, auth_state,
-		           fetch_cb, &results,
-		           NULL);
+    r = annotate_state_fetch(astate,
+		             &entries, &attribs,
+		             fetch_cb, &results,
+		             NULL);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -1481,13 +1471,14 @@ static void test_getset_server_undefined(void)
     strarray_fini(&results);
     buf_free(&val);
     buf_free(&val2);
+    annotate_state_free(&astate);
 }
 
 
 static void test_getset_server_defined(void)
 {
     int r;
-    annotate_scope_t scope;
+    annotate_state_t *astate = NULL;
     strarray_t entries = STRARRAY_INITIALIZER;
     strarray_t attribs = STRARRAY_INITIALIZER;
     strarray_t results = STRARRAY_INITIALIZER;
@@ -1501,7 +1492,9 @@ static void test_getset_server_defined(void)
 
     annotatemore_open();
 
-    annotate_scope_init_server(&scope);
+    astate = annotate_state_new();
+    annotate_state_set_server(astate);
+    annotate_state_set_auth(astate, &namespace, isadmin, userid, auth_state);
 
     strarray_append(&entries, EXENTRY);
     strarray_append(&attribs, VALUE_SHARED);
@@ -1509,11 +1502,10 @@ static void test_getset_server_defined(void)
 
     /* check that there is no value initially */
 
-    r = annotatemore_fetch(&scope,
-		           &entries, &attribs,
-		           &namespace, isadmin, userid, auth_state,
-		           fetch_cb, &results,
-		           NULL);
+    r = annotate_state_fetch(astate,
+		             &entries, &attribs,
+		             fetch_cb, &results,
+		             NULL);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -1537,20 +1529,18 @@ static void test_getset_server_defined(void)
 
     buf_appendcstr(&val, VALUE0);
     setentryatt(&ealist, EXENTRY, VALUE_SHARED, &val);
-    isadmin = 1;	/* pretend to be admin */
-    r = annotatemore_store(&scope, ealist,
-		           &namespace, isadmin, userid, auth_state);
-    isadmin = 0;
+    annotate_state_set_auth(astate, &namespace, /*isadmin*/1, userid, auth_state);
+    r = annotate_state_store(astate, ealist);
+    annotate_state_set_auth(astate, &namespace, /*isadmin*/0, userid, auth_state);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
     ealist = NULL;
 
     /* check that we can fetch the value back in the same txn */
-    r = annotatemore_fetch(&scope,
-		           &entries, &attribs,
-		           &namespace, isadmin, userid, auth_state,
-		           fetch_cb, &results,
-		           NULL);
+    r = annotate_state_fetch(astate,
+		             &entries, &attribs,
+		             fetch_cb, &results,
+		             NULL);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -1573,11 +1563,10 @@ static void test_getset_server_defined(void)
     CU_ASSERT_EQUAL(r, 0);
 
     /* check that we can fetch the value back in a new txn */
-    r = annotatemore_fetch(&scope,
-		           &entries, &attribs,
-		           &namespace, isadmin, userid, auth_state,
-		           fetch_cb, &results,
-		           NULL);
+    r = annotate_state_fetch(astate,
+		             &entries, &attribs,
+		             fetch_cb, &results,
+		             NULL);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -1602,11 +1591,10 @@ static void test_getset_server_defined(void)
 
     annotatemore_open();
 
-    r = annotatemore_fetch(&scope,
-		           &entries, &attribs,
-		           &namespace, isadmin, userid, auth_state,
-		           fetch_cb, &results,
-		           NULL);
+    r = annotate_state_fetch(astate,
+		             &entries, &attribs,
+		             fetch_cb, &results,
+		             NULL);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -1632,10 +1620,9 @@ static void test_getset_server_defined(void)
 
     buf_free(&val);
     setentryatt(&ealist, EXENTRY, VALUE_SHARED, &val);
-    isadmin = 1;	/* pretend to be admin */
-    r = annotatemore_store(&scope, ealist,
-		           &namespace, isadmin, userid, auth_state);
-    isadmin = 0;
+    annotate_state_set_auth(astate, &namespace, /*isadmin*/1, userid, auth_state);
+    r = annotate_state_store(astate, ealist);
+    annotate_state_set_auth(astate, &namespace, /*isadmin*/0, userid, auth_state);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
     ealist = NULL;
@@ -1645,11 +1632,10 @@ static void test_getset_server_defined(void)
 
     /* check that there is no value any more */
 
-    r = annotatemore_fetch(&scope,
-		           &entries, &attribs,
-		           &namespace, isadmin, userid, auth_state,
-		           fetch_cb, &results,
-		           NULL);
+    r = annotate_state_fetch(astate,
+		             &entries, &attribs,
+		             fetch_cb, &results,
+		             NULL);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
@@ -1673,6 +1659,7 @@ static void test_getset_server_defined(void)
     strarray_fini(&attribs);
     strarray_fini(&results);
     buf_free(&val);
+    annotate_state_free(&astate);
 }
 
 

@@ -47,6 +47,7 @@
 
 #include "charset.h" /* for comp_pat */
 #include "imapd.h"
+#include "mailbox.h"
 #include "mboxname.h"
 #include "mboxlist.h"
 #include "prot.h"
@@ -76,41 +77,20 @@ struct entryattlist {
     struct entryattlist *next;
 };
 
-enum {
-  ANNOTATION_SCOPE_SERVER = 1,
-  ANNOTATION_SCOPE_MAILBOX = 2,
-  ANNOTATION_SCOPE_MESSAGE = 3
-};
+typedef struct annotate_state annotate_state_t;
 
-typedef struct annotate_scope annotate_scope_t;
-struct annotate_scope
-{
-    int which;			/* ANNOTATION_SCOPE_* */
-    const char *mailbox;	/* external mailbox pattern if _MAILBOX
-				 * or external mailbox name if _MESSAGE */
-    unsigned int uid;		/* for _MESSAGE */
-    const char *acl;		/* for _MESSAGE */
-};
-
-#define annotate_scope_init_server(_scope) \
-    do { \
-	memset((_scope), 0, sizeof(annotate_scope_t)); \
-	(_scope)->which = ANNOTATION_SCOPE_SERVER; \
-    } while(0)
-#define annotate_scope_init_mailbox(_scope, _mboxnamepatt) \
-    do { \
-	memset((_scope), 0, sizeof(annotate_scope_t)); \
-	(_scope)->which = ANNOTATION_SCOPE_MAILBOX; \
-	(_scope)->mailbox = (_mboxnamepatt); \
-    } while(0)
-#define annotate_scope_init_message(_scope, _mailbox, _uid) \
-    do { \
-	memset((_scope), 0, sizeof(annotate_scope_t)); \
-	(_scope)->which = ANNOTATION_SCOPE_MESSAGE; \
-	(_scope)->mailbox = (_mailbox)->name; \
-	(_scope)->acl = (_mailbox)->acl; \
-	(_scope)->uid = (_uid); \
-    } while(0)
+annotate_state_t *annotate_state_new(void);
+void annotate_state_free(annotate_state_t **statep);
+void annotate_state_set_auth(annotate_state_t *state,
+			     struct namespace *namespace,
+		             int isadmin, const char *userid,
+		             struct auth_state *auth_state);
+void annotate_state_set_server(annotate_state_t *state);
+void annotate_state_set_mailbox(annotate_state_t *state,
+				const char *mboxpatt);
+void annotate_state_set_message(annotate_state_t *state,
+				struct mailbox *mailbox,
+				unsigned int uid);
 
 /* String List Management */
 void appendstrlist(struct strlist **l, char *s);
@@ -158,12 +138,10 @@ typedef void (*annotate_fetch_cb_t)(const char *mboxname,
 				    const char *entry,
 				    struct attvaluelist *,
 				    void *rock);
-int annotatemore_fetch(const annotate_scope_t *,
-		       const strarray_t *entries, const strarray_t *attribs,
-		       struct namespace *namespace, int isadmin, const char *userid,
-		       struct auth_state *auth_state,
-		       annotate_fetch_cb_t callback, void *rock,
-		       int *maxsize);
+int annotate_state_fetch(annotate_state_t *state,
+		         const strarray_t *entries, const strarray_t *attribs,
+		         annotate_fetch_cb_t callback, void *rock,
+		         int *maxsizeptr);
 
 /* lookup a single annotation and return result */
 int annotatemore_lookup(const char *mboxname, const char *entry,
@@ -173,10 +151,7 @@ int annotatemore_msg_lookup(const char *mboxname, uint32_t uid, const char *entr
 			    const char *userid, struct buf *value);
 
 /* store annotations.  Requires an open transaction */
-int annotatemore_store(const annotate_scope_t *,
-		       struct entryattlist *l, struct namespace *namespace,
-		       int isadmin, const char *userid,
-		       struct auth_state *auth_state);
+int annotate_state_store(annotate_state_t *state, struct entryattlist *l);
 
 /* low-level interface for use by mbdump routines.
  * Requires an open transaction. */
