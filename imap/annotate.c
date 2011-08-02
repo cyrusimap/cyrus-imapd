@@ -2100,7 +2100,7 @@ int annotate_state_fetch(annotate_state_t *state,
 		   applies to our particular server type */
 		if ((desc->proxytype != PROXY_ONLY)
 		    || proxy_fetch_func)
-		    _annotate_state_add_entry(state, desc, s);
+		    _annotate_state_add_entry(state, desc, desc->name);
 	    }
 
 	    if (!strcmp(s, desc->name)) {
