@@ -6809,7 +6809,6 @@ void cmd_getquotaroot(const char *tag, const char *name)
 void cmd_setquota(const char *tag, const char *quotaroot)
 {
     int newquota = -1;
-    int badresource = 0;
     int c;
     int force = 0;
     static struct buf arg;
@@ -6818,26 +6817,92 @@ void cmd_setquota(const char *tag, const char *quotaroot)
     char mailboxname[MAX_MAILBOX_BUFFER];
     struct mboxlist_entry *mbentry = NULL;
 
+    if (!imapd_userisadmin && !imapd_userisproxyadmin) {
+	/* need to allow proxies so that mailbox moves can set initial quota
+	 * roots */
+	r = IMAP_PERMISSION_DENIED;
+	goto out;
+    }
+
+    /* are we forcing the creation of a quotaroot by having a leading +? */
+    if (quotaroot[0] == '+') {
+	force = 1;
+	quotaroot++;
+    }
+    
+    r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, quotaroot,
+					       imapd_userid, mailboxname);
+    if (r)
+	goto out;
+
+    r = mlookup(NULL, NULL, mailboxname, &mbentry);
+    if (r == IMAP_MAILBOX_NONEXISTENT)
+	r = 0;	    /* will create a quotaroot anyway */
+    if (r)
+	goto out;
+
+    if (mbentry && (mbentry->mbtype & MBTYPE_REMOTE)) {
+	/* remote mailbox */
+	struct backend *s;
+	char quotarootbuf[MAX_MAILBOX_BUFFER];
+
+	snprintf(quotarootbuf, sizeof(quotarootbuf), "%s.*", mailboxname);
+
+	r = mboxlist_findall(&imapd_namespace, quotarootbuf,
+			     imapd_userisadmin, imapd_userid,
+			     imapd_authstate, quota_cb, (void *)mbentry->server);
+	if (r)
+	    goto out;
+
+	imapd_check(NULL, 0);
+
+	s = proxy_findserver(mbentry->server, &imap_protocol,
+			     proxy_userid, &backend_cached,
+			     &backend_current, &backend_inbox, imapd_in);
+	if (!s) {
+	    r = IMAP_SERVER_UNAVAILABLE;
+	    goto out;
+	}
+
+	imapd_check(s, 0);
+
+	prot_printf(s->out, "%s Setquota ", tag);
+	prot_printliteral(s->out, quotaroot, strlen(quotaroot));
+	prot_putc(' ', s->out);
+	pipe_including_tag(s, tag, 0);
+
+	if (r)
+	    prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+	return;
+    }
+    /* local mailbox */
+
+    /* Now parse the arguments as a setquota_list */
     c = prot_getc(imapd_in);
     if (c != '(') goto badlist;
 
     c = getword(imapd_in, &arg);
     if (c != ')' || arg.s[0] != '\0') {
 	for (;;) {
+	    int v = -1;
 	    if (c != ' ') goto badlist;
-	    if (strcasecmp(arg.s, "storage") != 0) badresource = 1;
+	    if (strcasecmp(arg.s, "STORAGE")) {
+		r = IMAP_UNSUPPORTED_QUOTA;
+		goto out;
+	    }
 	    c = getword(imapd_in, &arg);
 	    if (c != ' ' && c != ')') goto badlist;
 	    if (arg.s[0] == '\0') goto badlist;
 	    /* accept "(storage -1)" as "()" to make move from unpatched cyrus possible */
 	    if (strcmp(arg.s, "-1") != 0) {
-		newquota = 0;
+		v = 0;
 		for (p = arg.s; *p; p++) {
 		    if (!Uisdigit(*p)) goto badlist;
-		    newquota = newquota * 10 + *p - '0';
-                    if (newquota < 0) goto badlist; /* overflow */
+		    v = v * 10 + *p - '0';
+		    if (v < 0) goto badlist; /* overflow */
 		}
 	    }
+	    newquota = v;
 	    if (c == ')') break;
 	}
     }
@@ -6849,71 +6914,11 @@ void cmd_setquota(const char *tag, const char *quotaroot)
 	return;
     }
 
-    if (badresource) r = IMAP_UNSUPPORTED_QUOTA;
-    else if (!imapd_userisadmin && !imapd_userisproxyadmin) {
-	/* need to allow proxies so that mailbox moves can set initial quota
-	 * roots */
-	r = IMAP_PERMISSION_DENIED;
-    } else {
-	/* are we forcing the creation of a quotaroot by having a leading +? */
-	if (quotaroot[0] == '+') {
-	    force = 1;
-	    quotaroot++;
-	}
-	
-	r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, quotaroot,
-						   imapd_userid, mailboxname);
-    }
-
-    if (!r) {
-	r = mlookup(NULL, NULL, mailboxname, &mbentry);
-    }
-
-    if (!r && (mbentry->mbtype & MBTYPE_REMOTE)) {
-	/* remote mailbox */
-	char quotarootbuf[MAX_MAILBOX_BUFFER];
-
-	snprintf(quotarootbuf, sizeof(quotarootbuf), "%s.*", mailboxname);
-
-	r = mboxlist_findall(&imapd_namespace, quotarootbuf,
-			     imapd_userisadmin, imapd_userid,
-			     imapd_authstate, quota_cb, (void *)mbentry->server);
-
-	imapd_check(NULL, 0);
-
-	if (!r) {
-	    struct backend *s;
-
-	    s = proxy_findserver(mbentry->server, &imap_protocol,
-				 proxy_userid, &backend_cached,
-				 &backend_current, &backend_inbox, imapd_in);
-	    if (!s) r = IMAP_SERVER_UNAVAILABLE;
-
-	    imapd_check(s, 0);
-
-	    if (!r) {
-		prot_printf(s->out, "%s Setquota {" SIZE_T_FMT "+}\r\n%s"
-			    " (Storage %d)\r\n",
-			    tag, strlen(quotaroot), quotaroot, newquota);
-		pipe_including_tag(s, tag, 0);
-	    }
-	}
-
-	if (r) prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
-
-	mboxlist_entry_free(&mbentry);
-
-	return;
-    }
-
-    mboxlist_entry_free(&mbentry);
-
-    /* local mailbox */
-    if (!r || (r == IMAP_MAILBOX_NONEXISTENT)) {
-	r = mboxlist_setquota(mailboxname, newquota, force);
-    }
+    r = mboxlist_setquota(mailboxname, newquota, force);
 
     imapd_check(NULL, 0);
+out:
+    mboxlist_entry_free(&mbentry);
 
     if (r) {
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
