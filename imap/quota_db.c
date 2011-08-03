@@ -64,6 +64,7 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
+#include "strarray.h"
 
 #define QDB config_quota_db
 
@@ -71,12 +72,52 @@ struct db *qdb;
 
 static int quota_dbopen = 0;
 
+/*
+ * Initialise a struct quota, except that we preserve the original value
+ * of the .root field which is presumed to have been passed in by the
+ * caller.
+ */
+static void quota_init(struct quota *q)
+{
+    const char *root = q->root;	    /* save this, it was passed in */
+
+    memset(q, 0, sizeof(*q));
+    q->root = root;
+}
+
+/*
+ * Parse a quota database entry, which is formatted as a string
+ * containing multiple space-separated fields, into a struct quota.
+ * Returns: 0 on success or an IMAP error code.
+ */
 static int quota_parseval(const char *data, struct quota *quota)
 {
-    if (sscanf(data, UQUOTA_T_FMT " %d",
-	       &quota->used, &quota->limit) != 2)
-	return 0;
-    return 1;
+    strarray_t *fields = strarray_split(data, NULL);
+    int r = 0;
+    int i = 0;
+
+    quota_init(quota);
+
+    if (fields->count != 2)
+	goto out;
+    for (;;) {
+	r = IMAP_MAILBOX_BADFORMAT;
+	if (i+2 > fields->count)
+	    goto out;	/* need at least 2 more fields */
+	if (sscanf(fields->data[i++], UQUOTA_T_FMT, &quota->used) != 1)
+	    goto out;
+	if (sscanf(fields->data[i++], "%d", &quota->limit) != 1)
+	    goto out;
+	if (i == fields->count)
+	    break;	/* successfully parsed whole line */
+
+	i++;
+    }
+
+    r = 0;
+out:
+    strarray_free(fields);
+    return r;
 }
 
 /*
@@ -103,21 +144,20 @@ int quota_read(struct quota *quota, struct txn **tid, int wrlock)
     switch (r) {
     case CYRUSDB_OK:
 	if (!*data) return IMAP_QUOTAROOT_NONEXISTENT;
-	if (!quota_parseval(data, quota)) {
+	r = quota_parseval(data, quota);
+	if (r) {
 	    syslog(LOG_ERR, "DBERROR: error fetching quota "
 			    "root=<%s> value=<%s>",
 		   quota->root, data);
-	    return CYRUSDB_IOERROR;
+	    return r;
 	}
 	break;
 
     case CYRUSDB_AGAIN:
 	return IMAP_AGAIN;
-	break;
 
     case CYRUSDB_NOTFOUND:
 	return IMAP_QUOTAROOT_NONEXISTENT;
-	break;
     }
 
     if (r) {
@@ -146,7 +186,7 @@ static int do_onequota(void *rock,
     quota.root = root;
 
     /* XXX - error if not parsable? */
-    if (datalen && quota_parseval(data, &quota)) {
+    if (datalen && !quota_parseval(data, &quota)) {
 	r = fd->proc(&quota, fd->rock);
     }
 
