@@ -202,34 +202,37 @@ void quota_abort(struct txn **tid)
 int quota_write(struct quota *quota, struct txn **tid)
 {
     int r;
-    int qrlen, len;
-    char buf[1024];
+    int qrlen;
+    struct buf buf = BUF_INITIALIZER;
 
     if (!quota->root) return 0;
 
     qrlen = strlen(quota->root);
     if (!qrlen) return IMAP_QUOTAROOT_NONEXISTENT;
 
-    len = snprintf(buf, sizeof(buf) - 1,
-		   UQUOTA_T_FMT " %d", quota->used, quota->limit);
-    r = QDB->store(qdb, quota->root, qrlen, buf, len, tid);
-    
+    buf_printf(&buf, UQUOTA_T_FMT " %d",
+	quota->used, quota->limit);
+
+    r = QDB->store(qdb, quota->root, qrlen, buf_cstring(&buf), buf.len, tid);
+
     switch (r) {
     case CYRUSDB_OK:
+	r = 0;
 	break;
 
     case CYRUSDB_AGAIN:
-	return IMAP_AGAIN;
+	r = IMAP_AGAIN;
 	break;
 
     default:
 	syslog(LOG_ERR, "DBERROR: error storing %s: %s",
 	       quota->root, cyrusdb_strerror(r));
-	return IMAP_IOERROR;
+	r = IMAP_IOERROR;
 	break;
     }
 
-    return 0;
+    buf_free(&buf);
+    return r;
 }
 
 int quota_update_used(const char *quotaroot, quota_t diff)
