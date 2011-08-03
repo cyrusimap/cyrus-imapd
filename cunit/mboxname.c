@@ -108,11 +108,11 @@ static void test_contains(void)
     static const char FOOBAR[] = "bloggs.com!user.foobar";
     static const char FOODRAFT[] = "bloggs.com!user.foo.Drafts";
 
-    CU_ASSERT_EQUAL(mboxname_contains(FOO, FOOBAR), 0);
-    CU_ASSERT_EQUAL(mboxname_contains(FOOBAR, FOO), 0);
-    CU_ASSERT_EQUAL(mboxname_contains(FOO, FOODRAFT), 0);
-    CU_ASSERT_EQUAL(mboxname_contains(FOODRAFT, FOO), 1);
-    CU_ASSERT_EQUAL(mboxname_contains(FOOBAR, FOOBAR), 1);
+    CU_ASSERT_EQUAL(mboxname_is_prefix(FOO, FOOBAR), 0);
+    CU_ASSERT_EQUAL(mboxname_is_prefix(FOOBAR, FOO), 0);
+    CU_ASSERT_EQUAL(mboxname_is_prefix(FOO, FOODRAFT), 0);
+    CU_ASSERT_EQUAL(mboxname_is_prefix(FOODRAFT, FOO), 1);
+    CU_ASSERT_EQUAL(mboxname_is_prefix(FOOBAR, FOOBAR), 1);
 }
 
 static enum enum_value old_config_virtdomains;
