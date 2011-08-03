@@ -314,7 +314,7 @@ static int findroot(const char *name, int *thisquota)
 	    return 0;
 
 	/* is the mailbox within this root? */
-	if (mboxname_contains(name, root)) {
+	if (mboxname_is_prefix(name, root)) {
 	    /* fantastic, but don't return yet, we may find
 	     * a more exact match */
 	    quota[i].refcount++;

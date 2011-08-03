@@ -995,7 +995,7 @@ int mboxname_policycheck(const char *name)
     return 0;
 }
 
-int mboxname_contains(const char *longstr, const char *shortstr)
+int mboxname_is_prefix(const char *longstr, const char *shortstr)
 {
     int longlen = strlen(longstr);
     int shortlen = strlen(shortstr);
