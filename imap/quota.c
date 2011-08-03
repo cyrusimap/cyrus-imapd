@@ -288,15 +288,9 @@ int buildquotalist(char *domain, char **roots, int nroots)
      * with the matching prefixes.
      */
     for (i = 0; i < nroots; i++) {
-	/* Translate separator in quotaroot.
-	 *
-	 * We do this directly instead of using the mboxname_tointernal()
-	 * function pointer because we know that we are using the internal
-	 * namespace and so we don't have to allocate a buffer for the
-	 * translated name.
-	 */
-	mboxname_hiersep_tointernal(&quota_namespace, roots[i], 0);
 	strlcpy(tail, roots[i], sizeof(buf) - domainlen);
+	/* change the separator to internal namespace */
+	mboxname_hiersep_tointernal(&quota_namespace, tail, 0);
 
 	r = quota_foreach(buf, fixquota_addroot, NULL);
 	if (r) {
@@ -488,15 +482,9 @@ int fixquotas(char *domain, char **roots, int nroots)
      * with the matching prefixes.
      */
     for (i = 0; i < nroots; i++) {
-	/* Translate separator in quotaroot.
-	 *
-	 * We do this directly instead of using the mboxname_tointernal()
-	 * function pointer because we know that we are using the internal
-	 * namespace and so we don't have to allocate a buffer for the
-	 * translated name.
-	 */
-	mboxname_hiersep_tointernal(&quota_namespace, roots[i], 0);
 	strlcpy(tail, roots[i], sizeof(buf) - domainlen);
+	/* change the separator to internal namespace */
+	mboxname_hiersep_tointernal(&quota_namespace, tail, 0);
 
 	r = mboxlist_allmbox(buf, fixquota_mailbox, NULL);
 	if (r) {
