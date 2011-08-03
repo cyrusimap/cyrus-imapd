@@ -2658,8 +2658,6 @@ static int mboxlist_changequota(const char *name,
     int r = 0;
     struct mailbox *mailbox = NULL;
     const char *root = (const char *) rock;
-    struct quota q;
-    struct txn *tid = NULL;
 
     assert(root);
 
@@ -2667,29 +2665,15 @@ static int mboxlist_changequota(const char *name,
     if (r) goto done;
 
     if (mailbox->quotaroot) {
-	struct txn *oldtid = NULL;
-	struct quota oldq;
-
 	if (strlen(mailbox->quotaroot) >= strlen(root)) {
 	    /* Part of a child quota root - skip */
 	    goto done;
 	}
 
 	/* remove usage from the old quotaroot */
-	oldq.root = mailbox->quotaroot;
-	r = quota_read(&oldq, &oldtid, 1);
-	if (!r) {
-	    if (oldq.used >= mailbox->i.quota_mailbox_used) {
-		oldq.used -= mailbox->i.quota_mailbox_used;
-	    }
-	    else {
-		oldq.used = 0;
-	    }
-	    r = quota_write(&oldq, &oldtid);
-	}
-	if (!r) quota_commit(&oldtid);
-	else {
-	    quota_abort(&oldtid);
+	r = quota_update_used(mailbox->quotaroot,
+			 -mailbox->i.quota_mailbox_used);
+	if (r) {
 	    syslog(LOG_ERR,
 		   "LOSTQUOTA: unable to record free of " UQUOTA_T_FMT " bytes in quota %s",
 		   mailbox->i.quota_mailbox_used, mailbox->quotaroot);
@@ -2700,20 +2684,9 @@ static int mboxlist_changequota(const char *name,
     r = mailbox_set_quotaroot(mailbox, root);
     if (r) goto done;
 
-    /* read the new quota root */
-    tid = NULL;
-    q.root = root;
-    r = quota_read(&q, &tid, 1);
-
-    if (!r) {
-	/* track this mailbox's usage */
-	q.used += mailbox->i.quota_mailbox_used;
-	r = quota_write(&q, &tid);
-    }
-
-    /* and commit the new quota */
-    if (!r) quota_commit( &tid);
-    else quota_abort(&tid);
+    /* update the new quota root */
+    r = quota_update_used(root,
+		     mailbox->i.quota_mailbox_used);
 
  done:
     mailbox_close(&mailbox);

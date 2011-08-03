@@ -1863,9 +1863,7 @@ bit32 mailbox_index_header_to_buf(struct index_header *i, unsigned char *buf)
 
 int mailbox_commit_quota(struct mailbox *mailbox)
 {
-    struct txn *tid = NULL;
     int r;
-    struct quota q;
     quota_t qdiff;
 
     /* not dirty */
@@ -1885,20 +1883,8 @@ int mailbox_commit_quota(struct mailbox *mailbox)
 
     assert(mailbox_index_islocked(mailbox, 1));
 
-    q.root = mailbox->quotaroot;
-    r = quota_read(&q, &tid, 1);
-    if (!r) {
-	/* check we won't underflow */
-	if ((quota_t)-qdiff > (quota_t)q.used)
-	    q.used = 0;
-	else
-	    q.used += qdiff;
-	r = quota_write(&q, &tid);
-    }
-
-    if (!r) quota_commit(&tid);
-    else {
-	quota_abort(&tid);
+    r = quota_update_used(mailbox->quotaroot, qdiff);
+    if (r) {
 	/* XXX - fail here?  It's tempting */
 	syslog(LOG_ERR, "LOSTQUOTA: unable to record quota file %s",
 	       mailbox->quotaroot);

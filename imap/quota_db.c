@@ -232,6 +232,34 @@ int quota_write(struct quota *quota, struct txn **tid)
     return 0;
 }
 
+int quota_update_used(const char *quotaroot, quota_t diff)
+{
+    struct quota q;
+    struct txn *tid = NULL;
+    int r = 0;
+
+    if (!*quotaroot)
+	return IMAP_QUOTAROOT_NONEXISTENT;
+
+    q.root = quotaroot;
+    r = quota_read(&q, &tid, 1);
+
+    if (!r) {
+	quota_t used = (quota_t)q.used + diff;
+	if (used < 0)
+	    used = 0;	    /* prevent underflow */
+	q.used = used;
+	r = quota_write(&q, &tid);
+    }
+
+    if (r) {
+	quota_abort(&tid);
+	return r;
+    }
+    quota_commit(&tid);
+    return 0;
+}
+
 /*
  * Remove the quota root 'quota'
  */

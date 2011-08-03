@@ -82,6 +82,8 @@ extern void quota_abort(struct txn **tid);
 
 extern int quota_write(struct quota *quota, struct txn **tid);
 
+extern int quota_update_used(const char *quotaroot, quota_t diff);
+
 extern int quota_deleteroot(const char *quotaroot);
 
 extern int quota_findroot(char *ret, size_t retlen, const char *name);

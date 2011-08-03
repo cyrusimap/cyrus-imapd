@@ -1144,18 +1144,9 @@ int undump_mailbox(const char *mbname,
 	/* update the quota if necessary */
 	if (mailbox->quotaroot &&
 	    old_quota_used != mailbox->i.quota_mailbox_used) {
-	    struct txn *tid = NULL;
-	    struct quota q;
-
-	    q.root = mailbox->quotaroot;
-	    r = quota_read(&q, &tid, 1);
-	    if (!r) {
-		q.used += mailbox->i.quota_mailbox_used - old_quota_used;
-		r = quota_write(&q, &tid);
-	    }
-	    if (!r) quota_commit(&tid);
-	    else {
-		quota_abort(&tid);
+	    r = quota_update_used(mailbox->quotaroot,
+			     mailbox->i.quota_mailbox_used - old_quota_used);
+	    if (r) {
 		syslog(LOG_ERR, "LOSTQUOTA: unable to record add of " 
 		       UQUOTA_T_FMT " bytes in quota %s",
 		       mailbox->i.quota_mailbox_used - old_quota_used,
