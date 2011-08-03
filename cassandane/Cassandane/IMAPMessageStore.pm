@@ -177,7 +177,8 @@ sub write_message
     }
 
     $self->{client}->append($self->{folder}, @extra,
-			    { Literal => $msg->as_string() } );
+			    { Literal => $msg->as_string() } )
+			    || die "$@";
 }
 
 sub write_end

@@ -73,9 +73,6 @@ sub set_up
     $self->{adminstore} = $self->{instance}->get_service('imap')->create_store(username => 'admin');
 
     my $admintalk = $self->{adminstore}->get_client();
-
-    # Right - let's set ourselves a basic usage quota
-    $admintalk->setquota("user.cassandane", "(storage 100000)") || die "Failed $@";
 }
 
 sub tear_down
@@ -103,6 +100,158 @@ sub make_message
     return $msg;
 }
 
+sub check_messages
+{
+    my ($self, $expected, %params) = @_;
+    my $actual = {};
+    my $store = $params{store} || $self->{store};
+
+    xlog "check_messages: " . join(' ',%params);
+
+    $store->read_begin();
+    while (my $msg = $store->read_message())
+    {
+	my $subj = $msg->get_header('subject');
+	$self->assert(!defined $actual->{$subj});
+	$actual->{$subj} = $msg;
+    }
+    $store->read_end();
+
+    $self->assert(scalar keys %$actual == scalar keys %$expected);
+
+    foreach my $expmsg (values %$expected)
+    {
+	my $subj = $expmsg->get_header('subject');
+	my $actmsg = $actual->{$subj};
+
+	$self->assert_not_null($actmsg);
+
+	xlog "checking guid";
+	$self->assert_str_equals($expmsg->get_guid(),
+				 $actmsg->get_guid());
+
+	xlog "checking x-cassandane-unique";
+	$self->assert_not_null($actmsg->get_header('x-cassandane-unique'));
+	$self->assert_str_equals($expmsg->get_header('x-cassandane-unique'),
+			         $actmsg->get_header('x-cassandane-unique'));
+
+	if (defined $expmsg->get_attribute('uid'))
+	{
+	    xlog "checking uid";
+	    $self->assert_num_equals($expmsg->get_attribute('uid'),
+				     $actmsg->get_attribute('uid'));
+	}
+
+	if (defined $expmsg->get_attribute('cid'))
+	{
+	    xlog "checking cid";
+	    $self->assert_not_null($actmsg->get_attribute('cid'));
+	    $self->assert_str_equals($expmsg->get_attribute('cid'),
+				     $actmsg->get_attribute('cid'));
+	}
+
+	foreach my $ea ($expmsg->list_annotations())
+	{
+	    xlog "checking annotation ($ea->{entry} $ea->{attrib})";
+	    $self->assert_not_null($actmsg->get_annotation($ea));
+	    $self->assert_str_equals($expmsg->get_annotation($ea),
+				     $actmsg->get_annotation($ea));
+	}
+    }
+
+    return $actual;
+}
+
+sub test_using_storage
+{
+    my ($self) = @_;
+
+    xlog "test increasing usage of the STORAGE quota resource as messages are added";
+
+    my $admintalk = $self->{adminstore}->get_client();
+
+    # Right - let's set ourselves a basic usage quota
+    $admintalk->setquota("user.cassandane", "(storage 100000)");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    my @res = $admintalk->getquota("user.cassandane");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $self->assert_num_equals(3, scalar @res);
+    $self->assert_str_equals('STORAGE', $res[0]);
+    $self->assert_num_equals(0, $res[1]);
+
+    my $expected = 0;
+    for (1..10) {
+
+	my $msg = $self->make_message($self->{store}, "Message $_",
+				      extra_lines => 10 + rand(5000));
+	my $len = length($msg->as_string());
+	$expected += $len;
+	xlog "added $len bytes of message";
+
+	@res = $admintalk->getquota("user.cassandane");
+	$self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+	$self->assert_num_equals(3, scalar @res);
+	$self->assert_str_equals('STORAGE', $res[0]);
+	$self->assert_num_equals(int($expected/1024), $res[1]);
+    }
+}
+
+sub test_exceeding_storage
+{
+    my ($self) = @_;
+
+    xlog "test exceeding the STORAGE quota limit";
+
+    my $admintalk = $self->{adminstore}->get_client();
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog "set a low limit";
+    $admintalk->setquota("user.cassandane", "(storage 210)");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    my @res = $admintalk->getquota("user.cassandane");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $self->assert_num_equals(3, scalar @res);
+    $self->assert_str_equals('STORAGE', $res[0]);
+    $self->assert_num_equals(0, $res[1]);
+
+    xlog "adding messages to get just below the limit";
+    my %msgs;
+    my $slack = 200 * 1024;
+    my $n = 1;
+    while ($slack > 1000)
+    {
+	my $nlines = int(($slack - 640) / 23);
+	$nlines = 1000 if ($nlines > 1000);
+
+	my $msg = $self->make_message($self->{store}, "Message $n",
+				      extra_lines => $nlines);
+	my $len = length($msg->as_string());
+	$slack -= $len;
+	xlog "added $len bytes of message";
+	$msgs{$n} = $msg;
+	$n++;
+    }
+    xlog "check that the messages are all in the mailbox";
+    $self->check_messages(\%msgs);
+
+    xlog "add a message that exceeds the limit";
+    my $nlines = int(($slack - 640) / 23) * 2;
+    $nlines = 500 if ($nlines < 500);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    eval
+    {
+	my $msg = $self->make_message($self->{store}, "Message $n",
+				      extra_lines => $nlines);
+    };
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+    $self->assert($imaptalk->get_last_error() =~ m/over quota/i);
+
+    xlog "check that the exceeding message is not in the mailbox";
+    $self->check_messages(\%msgs);
+}
+
 #
 # Test renames
 #
@@ -112,6 +261,10 @@ sub test_quotarename
 
     my $admintalk = $self->{adminstore}->get_client();
     my $imaptalk = $self->{store}->get_client();
+
+    # Right - let's set ourselves a basic usage quota
+    $admintalk->setquota("user.cassandane", "(storage 100000)");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
 
     my @res = $admintalk->getquota("user.cassandane");
     $self->assert_num_equals(3, scalar @res);
@@ -150,10 +303,15 @@ sub test_quotarename
     $self->assert_num_equals($base_usage, $res[1], "Usage should drop back after a delete ($base_usage, $res[1])");
 }
 
-sub test_quota_f {
+sub test_quota_f
+{
     my ($self) = @_;
 
     my $admintalk = $self->{adminstore}->get_client();
+
+    # Right - let's set ourselves a basic usage quota
+    $admintalk->setquota("user.cassandane", "(storage 100000)");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
 
     $admintalk->create("user.quotafuser");
     $admintalk->setacl("user.quotafuser", "admin", 'lrswipkxtecda');
