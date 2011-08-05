@@ -203,5 +203,20 @@ Key: &lt;Mailbox Name&gt;
 Data: &lt;Version (2 bytes)&gt;&lt;Access Key (multi-byte)&gt;
 </pre>
 
+
+<h2>CalDAV Index (cyrus.caldav)</h2>
+
+<p>This database is a per-mailbox database and contains a mapping of
+  client-supplied resource names (URLs) and the corresponding message
+  UIDs.  The database is indexed by resource name and each data record
+  contains the database version number and the associated message UID.
+  The format of each record is as follows:</p>
+
+<pre>
+Key: &lt;Resource Name&gt;
+
+Data: &lt;Version&gt;SP&lt;Message UID&gt;
+</pre>
+
 </body>
 </html>

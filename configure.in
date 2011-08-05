@@ -990,6 +990,19 @@ AC_ARG_ENABLE(nntp,
         fi) 
 
 dnl
+dnl see if we're compiling with CalDAV support
+dnl
+dnl XXX  Need to check for libxml2 and libical
+dnl
+ENABLE_CALDAV=no
+AC_ARG_ENABLE(caldav,
+        [  --enable-caldav         enable CalDAV support],
+	ENABLE_CALDAV=$enableval
+        if test "$ENABLE_CALDAV" != no; then
+	  IMAP_PROGS="$IMAP_PROGS httpd"
+        fi) 
+
+dnl
 dnl see if we're compiling the Murder support programs
 dnl
 ENABLE_MURDER=no

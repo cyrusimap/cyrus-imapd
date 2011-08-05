@@ -59,7 +59,7 @@ CYRUS_USER=@cyrus_user@
 CYRUS_GROUP=@cyrus_group@
 
 DEFS = @DEFS@ @LOCALDEFS@
-CPPFLAGS = -I.. -I$(srcdir)/../lib @COM_ERR_CPPFLAGS@ @SIEVE_CPPFLAGS@ @CPPFLAGS@ @SASLFLAGS@
+CPPFLAGS = -I.. -I$(srcdir)/../lib @COM_ERR_CPPFLAGS@ @SIEVE_CPPFLAGS@ @CPPFLAGS@ @SASLFLAGS@ -I/usr/include/libxml2
 IMAP_LIBS = @IMAP_LIBS@ @LIB_RT@
 SIEVE_OBJS = @SIEVE_OBJS@
 SIEVE_LIBS = @SIEVE_LIBS@
@@ -122,7 +122,7 @@ PROGS = imapd lmtpd pop3d \
 
 BUILTSOURCES = imap_err.c imap_err.h pushstats.c pushstats.h \
 	lmtpstats.c lmtpstats.h mupdate_err.c mupdate_err.h \
-	nntp_err.c nntp_err.h
+	nntp_err.c nntp_err.h http_err.c http_err.h
 
 all: $(BUILTSOURCES) $(PROGS) $(SUIDPROGS)
 
@@ -178,6 +178,11 @@ mupdate_err.c: mupdate_err.et
 	$(COMPILE_ET) $(srcdir)/mupdate_err.et
 
 mupdate_err.h: mupdate_err.c
+
+http_err.c: http_err.et
+	$(COMPILE_ET) $(srcdir)/http_err.et
+
+http_err.h: http_err.c
 
 ### Services
 idled: idled.o mutex_fake.o libimap.a $(DEPLIBS)
@@ -249,6 +254,12 @@ sync_server: sync_server.o sync_support.o \
 	sync_server sync_server.o sync_support.o \
 	imapparse.o tls.o $(SERVICE) libimap.a mutex_fake.o \
 	$(DEPLIBS) $(LIBS) $(LIB_WRAP)
+
+httpd: httpd.o caldav_db.o dav_prop.o proxy.o backend.o index.o spool.o tls.o \
+	 mutex_fake.o http_err.o libimap.a $(DEPLIBS) $(SERVICE)
+	$(CC) $(LDFLAGS) -o httpd httpd.o caldav_db.o dav_prop.o proxy.o \
+	 backend.o index.o spool.o tls.o $(SERVICE) mutex_fake.o http_err.o \
+	 libimap.a $(DEPLIBS) $(LIBS) $(LIB_WRAP) -lxml2 -lical
 
 ### Command Line Utilities
 arbitron: arbitron.o $(CLIOBJS) libimap.a $(DEPLIBS)
