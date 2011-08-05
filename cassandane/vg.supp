@@ -52,7 +52,7 @@
    getpwnam_leak
    Memcheck:Leak
    fun:malloc
-   fun:nss_parse_service_list
+   ...
    fun:__nss_database_lookup
    ...
    fun:getpwnam
@@ -62,7 +62,7 @@
    getgrouplist_leak
    Memcheck:Leak
    fun:malloc
-   fun:nss_parse_service_list
+   ...
    fun:__nss_database_lookup
    ...
    fun:getgrouplist
@@ -72,7 +72,7 @@
    getpwuid_leak
    Memcheck:Leak
    fun:malloc
-   fun:nss_parse_service_list
+   ...
    fun:__nss_database_lookup
    ...
    fun:gwtpwuid
