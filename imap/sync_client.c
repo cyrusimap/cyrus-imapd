@@ -423,11 +423,11 @@ static int response_parse(const char *cmd,
 
 	else if (!strcmp(kl->name, "QUOTA")) {
 	    const char *root = NULL;
-	    uint32_t limit = 0;
+	    struct sync_quota *sq;
 	    if (!quota_list) goto parse_err;
 	    if (!dlist_getatom(kl, "ROOT", &root)) goto parse_err;
-	    if (!dlist_getnum32(kl, "LIMIT", &limit)) goto parse_err;
-	    sync_quota_list_add(quota_list, root, limit);
+	    sq = sync_quota_list_add(quota_list, root);
+	    sync_decode_quota_limits(kl, sq->limits);
 	}
 
 	else if (!strcmp(kl->name, "LSUB")) {
@@ -688,6 +688,7 @@ static int delete_quota(const char *root)
     return sync_parse_response(cmd, sync_in, NULL);
 }
 
+
 static int update_quota_work(struct quota *client,
 			     struct sync_quota *server)
 {
@@ -707,12 +708,20 @@ static int update_quota_work(struct quota *client,
         return r;
     }
 
-    if (server && (client->limit == server->limit))
-        return(0);
+    if (server) {
+	int changed = 0;
+	int res;
+	for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++) {
+	    if (client->limits[res] != server->limits[res])
+		changed++;
+	}
+	if (!changed)
+	    return 0;
+    }
 
     kl = dlist_newkvlist(NULL, cmd);
     dlist_setatom(kl, "ROOT", client->root);
-    dlist_setnum32(kl, "LIMIT", client->limit);
+    sync_encode_quota_limits(kl, client->limits);
     sync_send_apply(kl, sync_out);
     dlist_free(&kl);
 

@@ -510,7 +510,7 @@ int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid_start,
 	r = quota_read(&q, NULL, 0);
 
 	if (!r) {
-	    prot_printf(pout, "%d", q.limit);
+	    prot_printf(pout, "%d", q.limits[QUOTA_STORAGE]);
 	} else {
 	    prot_printf(pout, "NIL");
 	    if (r == IMAP_QUOTAROOT_NONEXISTENT) r = 0;
@@ -809,7 +809,14 @@ int undump_mailbox(const char *mbname,
 	mboxlist_unsetquota(mbname);
     } else if (sscanf(data.s, "%d", &quotalimit) == 1) {
 	/* Set a Quota (may be -1 for "unlimited") */ 
-	mboxlist_setquota(mbname, quotalimit, 0);
+	int res;
+	int newquotas[QUOTA_NUMRESOURCES];
+
+	for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++)
+	    newquotas[res] = QUOTA_UNLIMITED;
+	newquotas[QUOTA_STORAGE] = quotalimit;
+
+	mboxlist_setquotas(mbname, newquotas, 0);
     } else {
 	/* Huh? */
 	buf_free(&data);
@@ -1144,7 +1151,7 @@ int undump_mailbox(const char *mbname,
 	/* update the quota if necessary */
 	if (mailbox->quotaroot &&
 	    old_quota_used != mailbox->i.quota_mailbox_used) {
-	    r = quota_update_used(mailbox->quotaroot,
+	    r = quota_update_used(mailbox->quotaroot, QUOTA_STORAGE,
 			     mailbox->i.quota_mailbox_used - old_quota_used);
 	    if (r) {
 		syslog(LOG_ERR, "LOSTQUOTA: unable to record add of " 

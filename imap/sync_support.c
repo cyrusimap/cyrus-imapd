@@ -619,10 +619,11 @@ struct sync_quota_list *sync_quota_list_create(void)
 }
 
 struct sync_quota *sync_quota_list_add(struct sync_quota_list *l,
-					    const char *root, int limit)
+				       const char *root)
 {
     struct sync_quota *result
         = xzmalloc(sizeof(struct sync_quota));
+    int res;
 
     if (l->tail)
         l->tail = l->tail->next = result;
@@ -633,7 +634,8 @@ struct sync_quota *sync_quota_list_add(struct sync_quota_list *l,
 
     result->next = NULL;
     result->root = xstrdup(root);
-    result->limit = limit;
+    for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++)
+	result->limits[res] = QUOTA_UNLIMITED;
     result->done = 0;
 
     return result;
@@ -668,6 +670,43 @@ void sync_quota_list_free(struct sync_quota_list **lp)
     }
     free(l);
     *lp = NULL;
+}
+
+void sync_encode_quota_limits(struct dlist *kl, const int limits[QUOTA_NUMRESOURCES])
+{
+    int res;
+
+    /*
+     * For backwards compatibility, we encode the STORAGE limit as LIMIT
+     * and we always report it even if it's QUOTA_UNLIMITED.  This is
+     * kinda screwed up but should work.  For QUOTA_UNLIMITED < 0, we
+     * send a very large unsigned number across the wire, and parse it
+     * back as QUOTA_UNLIMITED at the other end.  Spit and string.
+     */
+    dlist_setnum32(kl, "LIMIT", limits[QUOTA_STORAGE]);
+
+    for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++) {
+	if (limits[res] >= 0)
+	    dlist_setnum32(kl, quota_names[res], limits[res]);
+    }
+}
+
+void sync_decode_quota_limits(/*const*/ struct dlist *kl, int limits[QUOTA_NUMRESOURCES])
+{
+    uint32_t limit = 0;
+    int res;
+
+    for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++)
+	limits[res] = QUOTA_UNLIMITED;
+
+    /* For backwards compatibility */
+    if (dlist_getnum32(kl, "LIMIT", &limit))
+	limits[QUOTA_STORAGE] = limit;
+
+    for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++) {
+	if (dlist_getnum32(kl, quota_names[res], &limit))
+	    limits[res] = limit;
+    }
 }
 
 /* ====================================================================== */

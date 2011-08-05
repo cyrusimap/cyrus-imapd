@@ -64,13 +64,24 @@ typedef long long int quota_t;
 
 extern struct db *qdb;
 
+enum quota_resource {
+    QUOTA_STORAGE	=0,
+#define QUOTA_NUMRESOURCES  (QUOTA_STORAGE+1)
+};
+
 struct quota {
     const char *root;
 
     /* Information in quota entry */
-    uquota_t used;
-    int limit;			/* in QUOTA_UNITS */
+    uquota_t useds[QUOTA_NUMRESOURCES];
+    int limits[QUOTA_NUMRESOURCES];		/* in QUOTA_UNITS */
 };
+
+/* special value to indicate no limit applies */
+#define QUOTA_UNLIMITED	    (-1)
+
+extern const char * const quota_names[QUOTA_NUMRESOURCES];
+int quota_name_to_resource(const char *str);
 
 typedef int quotaproc_t(struct quota *quota, void *rock);
 
@@ -82,7 +93,7 @@ extern void quota_abort(struct txn **tid);
 
 extern int quota_write(struct quota *quota, struct txn **tid);
 
-extern int quota_update_used(const char *quotaroot, quota_t diff);
+extern int quota_update_used(const char *quotaroot, enum quota_resource, quota_t diff);
 
 extern int quota_deleteroot(const char *quotaroot);
 

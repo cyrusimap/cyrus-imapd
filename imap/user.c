@@ -420,7 +420,8 @@ int user_copyquotaroot(char *oldname, char *newname)
 
     q.root = oldname;
     r = quota_read(&q, NULL, 0);
-    if (!r) mboxlist_setquota(newname, q.limit, 0);
+    if (!r)
+	mboxlist_setquotas(newname, q.limits, 0);
 
     return r;
 }

@@ -1883,7 +1883,7 @@ int mailbox_commit_quota(struct mailbox *mailbox)
 
     assert(mailbox_index_islocked(mailbox, 1));
 
-    r = quota_update_used(mailbox->quotaroot, qdiff);
+    r = quota_update_used(mailbox->quotaroot, QUOTA_STORAGE, qdiff);
     if (r) {
 	/* XXX - fail here?  It's tempting */
 	syslog(LOG_ERR, "LOSTQUOTA: unable to record quota file %s",
@@ -4153,6 +4153,7 @@ int mailbox_quota_check(struct mailbox *mailbox,
 {
     int r;
     struct quota q;
+    int res = QUOTA_STORAGE;
 
     /*
      * We are always allowed to *reduce* usage even if it doesn't get us
@@ -4170,8 +4171,8 @@ int mailbox_quota_check(struct mailbox *mailbox,
     if (r)
 	return r;
 
-    if (q.limit >= 0 && delta >= 0 &&
-	q.used + delta > ((uquota_t) q.limit * QUOTA_UNITS))
+    if (q.limits[res] >= 0 && delta >= 0 &&
+	q.useds[res] + delta > ((uquota_t) q.limits[res] * QUOTA_UNITS))
 	return IMAP_QUOTA_EXCEEDED;
 
     return 0;

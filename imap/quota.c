@@ -251,9 +251,8 @@ static int fixquota_addroot(struct quota *q,
 
     /* copy this quota */
     quota[quota_num].allocname   = xstrdup(q->root);
+    memcpy(&quota[quota_num].quota, q, sizeof(*q));
     quota[quota_num].quota.root  = quota[quota_num].allocname;
-    quota[quota_num].quota.limit = q->limit;
-    quota[quota_num].quota.used  = q->used;
     quota_num++;
 
     return 0;
@@ -422,7 +421,7 @@ int fixquota_finish(int thisquota)
     }
 
     /* nothing changed, all good */
-    if (quota[thisquota].quota.used == quota[thisquota].newused)
+    if (quota[thisquota].quota.useds[QUOTA_STORAGE] == quota[thisquota].newused)
 	return 0;
 
     /* re-read the quota with the record locked */
@@ -434,11 +433,11 @@ int fixquota_finish(int thisquota)
     }
 
     /* is it still different? */
-    if (quota[thisquota].quota.used != quota[thisquota].newused) {
+    if (quota[thisquota].quota.useds[QUOTA_STORAGE] != quota[thisquota].newused) {
 	printf("%s: usage was " UQUOTA_T_FMT ", now " UQUOTA_T_FMT "\n",
 	       quota[thisquota].quota.root,
-	       quota[thisquota].quota.used, quota[thisquota].newused);
-	quota[thisquota].quota.used = quota[thisquota].newused;
+	       quota[thisquota].quota.useds[QUOTA_STORAGE], quota[thisquota].newused);
+	quota[thisquota].quota.useds[QUOTA_STORAGE] = quota[thisquota].newused;
 	r = quota_write(&quota[thisquota].quota, &tid);
 	if (r) {
 	    errmsg("failed writing quotaroot '%s'",
@@ -513,11 +512,13 @@ void reportquota(void)
 
     for (i = 0; i < quota_num; i++) {
 	if (quota[i].deleted) continue;
-	if (quota[i].quota.limit > 0) {
-	    printf(" %7d " QUOTA_REPORT_FMT , quota[i].quota.limit,
-		   ((quota[i].quota.used / QUOTA_UNITS) * 100) / quota[i].quota.limit);
+	if (quota[i].quota.limits[QUOTA_STORAGE] > 0) {
+	    printf(" %7d " QUOTA_REPORT_FMT ,
+		    quota[i].quota.limits[QUOTA_STORAGE],
+		   ((quota[i].quota.useds[QUOTA_STORAGE] / QUOTA_UNITS)
+		   * 100) / quota[i].quota.limits[QUOTA_STORAGE]);
 	}
-	else if (quota[i].quota.limit == 0) {
+	else if (quota[i].quota.limits[QUOTA_STORAGE] == 0) {
 	    printf("       0        ");
 	}
 	else {
@@ -528,6 +529,6 @@ void reportquota(void)
 					       quota[i].quota.root,
 					       "cyrus", buf);
 	printf(" " QUOTA_REPORT_FMT " %s\n",
-	       quota[i].quota.used / QUOTA_UNITS, buf);
+	       quota[i].quota.useds[QUOTA_STORAGE] / QUOTA_UNITS, buf);
     }
 }

@@ -2462,14 +2462,16 @@ static int child_cb(char *name,
 }
 
 /*
- * Set the quota on or create a quota root
+ * Set all the resource quotas on, or create a quota root.
  */
-int mboxlist_setquota(const char *root, int newquota, int force)
+int mboxlist_setquotas(const char *root,
+		       int newquotas[QUOTA_NUMRESOURCES], int force)
 {
     char pattern[MAX_MAILBOX_PATH+1];
     struct quota q;
     int have_mailbox = 1;
     int r;
+    int res;
     struct txn *tid = NULL;
 
     if (!root[0] || root[0] == '.' || strchr(root, '/')
@@ -2481,11 +2483,17 @@ int mboxlist_setquota(const char *root, int newquota, int force)
     r = quota_read(&q, &tid, 1);
 
     if (!r) {
+	int changed = 0;
+
 	/* has it changed? */
-	if (q.limit != newquota) {
-	    q.limit = newquota;
-	    r = quota_write(&q, &tid);
+	for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++) {
+	    if (q.limits[res] != newquotas[res]) {
+		q.limits[res] = newquotas[res];
+		changed++;
+	    }
 	}
+	if (changed)
+	    r = quota_write(&q, &tid);
 	if (!r)
 	    quota_commit(&tid);
 	goto done;
@@ -2531,8 +2539,9 @@ int mboxlist_setquota(const char *root, int newquota, int force)
     }
 
     /* initialise the quota */
-    q.used = 0;
-    q.limit = newquota;
+    for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++)
+	q.useds[res] = 0;
+    memcpy(q.limits, newquotas, sizeof(q.limits));
     r = quota_write(&q, &tid);
     if (r) goto done;
 
@@ -2548,7 +2557,7 @@ int mboxlist_setquota(const char *root, int newquota, int force)
     mboxlist_findall(NULL, pattern, 1, 0, 0, mboxlist_changequota, (void *)root);
 
 done:
-    if (tid) quota_abort(&tid);
+    if (r && tid) quota_abort(&tid);
     if (!r) sync_log_quota(root);
 
     return r;
@@ -2671,7 +2680,7 @@ static int mboxlist_changequota(const char *name,
 	}
 
 	/* remove usage from the old quotaroot */
-	r = quota_update_used(mailbox->quotaroot,
+	r = quota_update_used(mailbox->quotaroot, QUOTA_STORAGE,
 			 -mailbox->i.quota_mailbox_used);
 	if (r) {
 	    syslog(LOG_ERR,
@@ -2685,7 +2694,7 @@ static int mboxlist_changequota(const char *name,
     if (r) goto done;
 
     /* update the new quota root */
-    r = quota_update_used(root,
+    r = quota_update_used(root, QUOTA_STORAGE,
 		     mailbox->i.quota_mailbox_used);
 
  done:

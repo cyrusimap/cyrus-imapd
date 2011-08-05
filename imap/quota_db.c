@@ -72,6 +72,27 @@ struct db *qdb;
 
 static int quota_dbopen = 0;
 
+/* keywords used when storing fields in the new quota db format */
+static const char * const quota_db_names[QUOTA_NUMRESOURCES] = {
+    NULL,	/* QUOTA_STORAGE */
+};
+
+/* IMAP atoms for various quota resources */
+const char * const quota_names[QUOTA_NUMRESOURCES] = {
+    "STORAGE",		/* QUOTA_STORAGE -- RFC2087 */
+};
+
+int quota_name_to_resource(const char *str)
+{
+    int res;
+
+    for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++) {
+	if (!strcasecmp(str, quota_names[res]))
+	    return res;
+    }
+    return -1;
+}
+
 /*
  * Initialise a struct quota, except that we preserve the original value
  * of the .root field which is presumed to have been passed in by the
@@ -80,8 +101,11 @@ static int quota_dbopen = 0;
 static void quota_init(struct quota *q)
 {
     const char *root = q->root;	    /* save this, it was passed in */
+    int res;
 
     memset(q, 0, sizeof(*q));
+    for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++)
+	q->limits[res] = QUOTA_UNLIMITED;
     q->root = root;
 }
 
@@ -95,21 +119,27 @@ static int quota_parseval(const char *data, struct quota *quota)
     strarray_t *fields = strarray_split(data, NULL);
     int r = 0;
     int i = 0;
+    int res = QUOTA_STORAGE;
 
     quota_init(quota);
 
-    if (fields->count != 2)
-	goto out;
     for (;;) {
 	r = IMAP_MAILBOX_BADFORMAT;
 	if (i+2 > fields->count)
 	    goto out;	/* need at least 2 more fields */
-	if (sscanf(fields->data[i++], UQUOTA_T_FMT, &quota->used) != 1)
+	if (sscanf(fields->data[i++], UQUOTA_T_FMT, &quota->useds[res]) != 1)
 	    goto out;
-	if (sscanf(fields->data[i++], "%d", &quota->limit) != 1)
+	if (sscanf(fields->data[i++], "%d", &quota->limits[res]) != 1)
 	    goto out;
 	if (i == fields->count)
 	    break;	/* successfully parsed whole line */
+
+	for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++) {
+	    if (quota_db_names[res] && !strcasecmp(fields->data[i], quota_db_names[res]))
+		break;
+	}
+	if (res == QUOTA_NUMRESOURCES)
+	    goto out;
 
 	i++;
     }
@@ -243,6 +273,7 @@ int quota_write(struct quota *quota, struct txn **tid)
 {
     int r;
     int qrlen;
+    int res;
     struct buf buf = BUF_INITIALIZER;
 
     if (!quota->root) return 0;
@@ -250,8 +281,13 @@ int quota_write(struct quota *quota, struct txn **tid)
     qrlen = strlen(quota->root);
     if (!qrlen) return IMAP_QUOTAROOT_NONEXISTENT;
 
-    buf_printf(&buf, UQUOTA_T_FMT " %d",
-	quota->used, quota->limit);
+    for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++)
+    {
+	if (quota_db_names[res])
+	    buf_printf(&buf, " %s ", quota_db_names[res]);
+	buf_printf(&buf, UQUOTA_T_FMT " %d",
+		   quota->useds[res], quota->limits[res]);
+    }
 
     r = QDB->store(qdb, quota->root, qrlen, buf_cstring(&buf), buf.len, tid);
 
@@ -275,7 +311,7 @@ int quota_write(struct quota *quota, struct txn **tid)
     return r;
 }
 
-int quota_update_used(const char *quotaroot, quota_t diff)
+int quota_update_used(const char *quotaroot, enum quota_resource res, quota_t diff)
 {
     struct quota q;
     struct txn *tid = NULL;
@@ -288,10 +324,10 @@ int quota_update_used(const char *quotaroot, quota_t diff)
     r = quota_read(&q, &tid, 1);
 
     if (!r) {
-	quota_t used = (quota_t)q.used + diff;
+	quota_t used = (quota_t)q.useds[res] + diff;
 	if (used < 0)
 	    used = 0;	    /* prevent underflow */
-	q.used = used;
+	q.useds[res] = used;
 	r = quota_write(&q, &tid);
     }
 

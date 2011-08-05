@@ -1135,14 +1135,12 @@ static int do_unquota(struct dlist *kin)
 static int do_quota(struct dlist *kin)
 {
     const char *root;
-    uint32_t limit;
+    int limits[QUOTA_NUMRESOURCES];
 
     if (!dlist_getatom(kin, "ROOT", &root))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
-    if (!dlist_getnum32(kin, "LIMIT", &limit))
-	return IMAP_PROTOCOL_BAD_PARAMETERS;
-
-    return mboxlist_setquota(root, limit, 1);
+    sync_decode_quota_limits(kin, limits);
+    return mboxlist_setquotas(root, limits, 1);
 }
 
 /* ====================================================================== */
@@ -1510,7 +1508,7 @@ static void print_quota(struct quota *q)
 
     kl = dlist_newkvlist(NULL, "QUOTA");
     dlist_setatom(kl, "ROOT", q->root);
-    dlist_setnum32(kl, "LIMIT", q->limit);
+    sync_encode_quota_limits(kl, q->limits);
     sync_send_response(kl, sync_out);
     dlist_free(&kl);
 }

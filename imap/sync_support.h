@@ -219,7 +219,7 @@ void sync_rename_list_free(struct sync_rename_list **lp);
 struct sync_quota {
     struct sync_quota *next;
     char *root;
-    int limit;
+    int limits[QUOTA_NUMRESOURCES];
     int done;
 };
 
@@ -232,12 +232,15 @@ struct sync_quota_list {
 struct sync_quota_list *sync_quota_list_create(void);
 
 struct sync_quota *sync_quota_list_add(struct sync_quota_list *l,
-					    const char *root, int limit);
+				       const char *root);
 
 struct sync_quota *sync_quota_lookup(struct sync_quota_list *l,
 					  const char *name);
 
 void sync_quota_list_free(struct sync_quota_list **lp);
+
+void sync_encode_quota_limits(struct dlist *kl, const int limits[QUOTA_NUMRESOURCES]);
+void sync_decode_quota_limits(/*const*/ struct dlist *kl, int limits[QUOTA_NUMRESOURCES]);
 
 /* ====================================================================== */
 
