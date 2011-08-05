@@ -2281,7 +2281,7 @@ static int meth_mkcol(struct transaction_t *txn)
 	pctx.ret = &r;
 
 	/* Execute the property patch instructions */
-	ret = do_proppatch(&pctx, instr, propstat, txn->errstr);
+	ret = do_proppatch(&pctx, instr, propstat);
 
 	if (ret || r) {
 	    /* Something failed.  Abort the txn and change the OK status */
@@ -2524,7 +2524,7 @@ static int meth_proppatch(struct transaction_t *txn)
     pctx.ret = &r;
 
     /* Execute the property patch instructions */
-    ret = do_proppatch(&pctx, instr, propstat, txn->errstr);
+    ret = do_proppatch(&pctx, instr, propstat);
 
     if (ret || r) {
 	/* Something failed.  Abort the txn and change the OK status */

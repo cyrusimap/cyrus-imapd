@@ -146,6 +146,6 @@ int find_collection_props(char *mboxname,
 
 /* Execute given property patch instructions */
 int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr,
-		 xmlNodePtr *propstat, const char **errstr);
+		 xmlNodePtr *propstat);
 
 #endif /* DAV_PROP_H */

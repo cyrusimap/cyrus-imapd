@@ -774,7 +774,7 @@ int preload_proplist(xmlNodePtr proplist, xmlNsPtr ns[],
 
 /* Execute given property patch instructions */
 int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr,
-		 xmlNodePtr *propstat, const char **errstr)
+		 xmlNodePtr *propstat)
 {
     /* Iterate through propertyupdate children */
     for (; instr; instr = instr->next) {
@@ -787,7 +787,7 @@ int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr,
 		     !xmlStrcmp(instr->name, BAD_CAST "remove")) set = 0;
 	    else {
 		syslog(LOG_INFO, "Unknown PROPPATCH instruction");
-		*errstr = "Unknown PROPPATCH instruction";
+		*pctx->errstr = "Unknown PROPPATCH instruction";
 		return HTTP_BAD_REQUEST;
 	    }
 
@@ -795,7 +795,7 @@ int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr,
 	    for (prop = instr->children;
 		 prop && prop->type != XML_ELEMENT_NODE; prop = prop->next);
 	    if (!prop || xmlStrcmp(prop->name, BAD_CAST "prop")) {
-		*errstr = "Missing prop element";
+		*pctx->errstr = "Missing prop element";
 		return HTTP_BAD_REQUEST;
 	    }
 
