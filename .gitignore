@@ -43,6 +43,9 @@ imap/deliver
 imap/fetchnews
 imap/fud
 imap/hammer_skiplist
+imap/http_err.c
+imap/http_err.h
+imap/httpd
 imap/idled
 imap/imap_err.c
 imap/imap_err.h
