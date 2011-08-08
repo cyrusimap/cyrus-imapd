@@ -703,10 +703,10 @@ sub describe
 
 sub start_replicated_pair
 {
-    my ($class, $conf, %params) = @_;
+    my ($class, %params) = @_;
 
     my $port = Cassandane::Service->alloc_port();
-    $conf ||= Cassandane::Config->default();
+    my $conf = $params{config} || Cassandane::Config->default();
     $conf = $conf->clone();
     $conf->set(
 	# sync_client will find the port in the config
@@ -743,8 +743,10 @@ sub start_replicated_pair
     # mismatched mailbox uniqueids.
     $class->run_replication($master, $replica);
 
-    # Use INBOX because we know it exists at both ends.
-    my %store_params = ( folder => 'INBOX' );
+    my %store_params;
+    $store_params{username} = $params{username}
+	if defined $params{username};
+
     my $master_store;
     $master_store = $master->get_service('imap')->create_store(%store_params)
 	if $has_imap;

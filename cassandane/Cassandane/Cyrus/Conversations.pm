@@ -317,7 +317,7 @@ sub test_replication_clash
     xlog "set up a master and replica pair";
     my $conf = $self->{instance}->{config};
     my ($master, $replica, $master_store, $replica_store) =
-	Cassandane::Instance->start_replicated_pair($conf);
+	Cassandane::Instance->start_replicated_pair(config => $conf);
 
     $master_store->set_fetch_attributes('uid', 'cid');
     $replica_store->set_fetch_attributes('uid', 'cid');
