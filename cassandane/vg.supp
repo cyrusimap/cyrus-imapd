@@ -87,3 +87,31 @@
    fun:prot_setcompress
    ...
 }
+{
+    zlib_deflate_cond
+    Memcheck:Cond
+    fun:memcpy
+    ...
+    fun:deflate
+    fun:prot_flush_encode
+    ...
+}
+{
+    zlib_deflate_data4
+    Memcheck:Value4
+    fun:memcpy
+    ...
+    fun:deflate
+    fun:prot_flush_encode
+    ...
+}
+{
+    zlib_deflate_data8
+    Memcheck:Value8
+    fun:memcpy
+    ...
+    fun:deflate
+    fun:prot_flush_encode
+    ...
+}
+
