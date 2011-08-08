@@ -114,6 +114,9 @@ sub _connect
 			)
 	or die "Cannot connect to server \"$self->{host}:$self->{port}\": $@";
 
+    $client->set_tracing(1)
+	if $self->{verbose};
+
     my $banner = $client->get_response_code('remainder');
     $client->login($self->{username}, $self->{password})
 	or die "Cannot login to server \"$self->{host}:$self->{port}\": $@";
@@ -121,8 +124,6 @@ sub _connect
     # Make Mail::IMAPTalk just stfu
     $client->set_unicode_folders(1);
 
-    $client->set_tracing(1)
-	if $self->{verbose};
     $client->parse_mode(Envelope => 1);
 
     $self->{client} = $client;
