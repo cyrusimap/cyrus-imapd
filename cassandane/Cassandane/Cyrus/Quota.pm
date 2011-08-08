@@ -376,7 +376,8 @@ sub test_quota_f
 		  "zlateuser (0:$origzres[1], 1:$zres[1], 2:$zres2[1])");
 }
 
-sub test_prefix_mboxexists {
+sub test_prefix_mboxexists
+{
     my ($self) = @_;
 
     my $admintalk = $self->{adminstore}->get_client();
@@ -420,6 +421,221 @@ sub test_prefix_mboxexists {
     # usage should be unchanged
     $self->assert($origplus[1] == $nextplus[1],
 		  "usage of subdir (1: $origplus[1], 2: $nextplus[1])");
+}
+
+sub test_replication_storage
+{
+    my ($self) = @_;
+
+    xlog "testing replication of STORAGE quota";
+
+    xlog "set up a master and replica pair";
+    # we need to do everything as admin, so set up the default
+    # username for new stores to be 'admin'
+    my ($master, $replica, $master_store, $replica_store) =
+	Cassandane::Instance->start_replicated_pair(username => 'admin');
+    my $mastertalk = $master_store->get_client();
+    my $replicatalk = $replica_store->get_client();
+
+    my $folder = "user.cassandane";
+    my @res;
+
+    xlog "checking there are no initial quotas";
+    @res = $mastertalk->getquota($folder);
+    $self->assert_str_equals('no', $mastertalk->get_last_completion_response());
+    $self->assert($mastertalk->get_last_error() =~ m/Quota root does not exist/i);
+    @res = $replicatalk->getquota($folder);
+    $self->assert_str_equals('no', $replicatalk->get_last_completion_response());
+    $self->assert($replicatalk->get_last_error() =~ m/Quota root does not exist/i);
+
+    xlog "set a STORAGE quota on the master";
+    $mastertalk->setquota($folder, "(storage 12345)");
+    $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
+
+    xlog "run replication";
+    Cassandane::Instance->run_replication($master, $replica,
+					  $master_store, $replica_store);
+    $mastertalk = $master_store->get_client();
+    $replicatalk = $replica_store->get_client();
+
+    xlog "check that the new quota is at both ends";
+    @res = $mastertalk->getquota($folder);
+    $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
+    $self->assert_deep_equals(['STORAGE', 0, 12345], \@res);
+    @res = $replicatalk->getquota($folder);
+    $self->assert_str_equals('ok', $replicatalk->get_last_completion_response());
+    $self->assert_deep_equals(['STORAGE', 0, 12345], \@res);
+
+    xlog "change the STORAGE quota on the master";
+    $mastertalk->setquota($folder, "(storage 67890)");
+    $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
+
+    xlog "run replication";
+    Cassandane::Instance->run_replication($master, $replica,
+					  $master_store, $replica_store);
+    $mastertalk = $master_store->get_client();
+    $replicatalk = $replica_store->get_client();
+
+    xlog "check that the new quota is at both ends";
+    @res = $mastertalk->getquota($folder);
+    $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
+    $self->assert_deep_equals(['STORAGE', 0, 67890], \@res);
+    @res = $replicatalk->getquota($folder);
+    $self->assert_str_equals('ok', $replicatalk->get_last_completion_response());
+    $self->assert_deep_equals(['STORAGE', 0, 67890], \@res);
+
+    xlog "clear the STORAGE quota on the master";
+    $mastertalk->setquota($folder, "()");
+    $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
+
+    xlog "run replication";
+    Cassandane::Instance->run_replication($master, $replica,
+					  $master_store, $replica_store);
+    $mastertalk = $master_store->get_client();
+    $replicatalk = $replica_store->get_client();
+
+    xlog "check that the new quota is at both ends";
+    @res = $mastertalk->getquota($folder);
+    $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
+    $self->assert_deep_equals([], \@res);
+    @res = $replicatalk->getquota($folder);
+    $self->assert_str_equals('ok', $replicatalk->get_last_completion_response());
+    $self->assert_deep_equals([], \@res);
+}
+
+sub Xtest_getset_multiple
+{
+    my ($self) = @_;
+
+    xlog "testing getting and setting multiple quota resources";
+
+    my $admintalk = $self->{adminstore}->get_client();
+    my $folder = "user.cassandane";
+    my @res;
+
+    xlog "checking there are no initial quotas";
+    @res = $admintalk->getquota($folder);
+    $self->assert_str_equals('no', $admintalk->get_last_completion_response());
+    $self->assert($admintalk->get_last_error() =~ m/Quota root does not exist/i);
+
+    xlog "set both X-ANNOT-COUNT and X-ANNOT-SIZE quotas";
+    $admintalk->setquota($folder, "(x-annot-count 20 x-annot-size 16384)");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    xlog "get both resources back, and not STORAGE";
+    @res = $admintalk->getquota($folder);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $self->assert_deep_equals(['X-ANNOT-COUNT', 0, 20, 'X-ANNOT-SIZE', 0, 16384], \@res);
+
+    xlog "set the X-ANNOT-SIZE resource only";
+    $admintalk->setquota($folder, "(x-annot-size 32768)");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    xlog "get new -SIZE only and neither STORAGE nor -COUNT";
+    @res = $admintalk->getquota($folder);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $self->assert_deep_equals(['X-ANNOT-SIZE', 0, 32768], \@res);
+
+    xlog "set all of -COUNT -SIZE and STORAGE";
+    $admintalk->setquota($folder, "(x-annot-count 123 storage 123456 x-annot-size 65536)");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    xlog "get back all three new values";
+    @res = $admintalk->getquota($folder);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $self->assert_deep_equals(['STORAGE', 0, 123456, 'X-ANNOT-COUNT', 0, 123, 'X-ANNOT-SIZE', 0, 65536], \@res);
+
+    xlog "clear all quotas";
+    $admintalk->setquota($folder, "()");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    # Note: the RFC does not define what happens if you remove all the
+    # quotas from a quotaroot.  Cyrus leaves the quotaroot around until
+    # quota -f is run to clean it up.
+    xlog "get back an empty set of quotas, but the quota root still exists";
+    @res = $admintalk->getquota($folder);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $self->assert_deep_equals([], \@res);
+}
+
+sub test_replication_multiple
+{
+    my ($self) = @_;
+
+    xlog "testing replication of multiple quotas";
+
+    xlog "set up a master and replica pair";
+    # we need to do everything as admin, so set up the default
+    # username for new stores to be 'admin'
+    my ($master, $replica, $master_store, $replica_store) =
+	Cassandane::Instance->start_replicated_pair(username => 'admin');
+    my $mastertalk = $master_store->get_client();
+    my $replicatalk = $replica_store->get_client();
+
+    my $folder = "user.cassandane";
+    my @res;
+
+    xlog "checking there are no initial quotas";
+    @res = $mastertalk->getquota($folder);
+    $self->assert_str_equals('no', $mastertalk->get_last_completion_response());
+    $self->assert($mastertalk->get_last_error() =~ m/Quota root does not exist/i);
+    @res = $replicatalk->getquota($folder);
+    $self->assert_str_equals('no', $replicatalk->get_last_completion_response());
+    $self->assert($replicatalk->get_last_error() =~ m/Quota root does not exist/i);
+
+    xlog "set a X-ANNOT-COUNT and X-ANNOT-SIZE quotas on the master";
+    $mastertalk->setquota($folder, "(x-annot-count 20 x-annot-size 16384)");
+    $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
+
+    xlog "run replication";
+    Cassandane::Instance->run_replication($master, $replica,
+					  $master_store, $replica_store);
+    $mastertalk = $master_store->get_client();
+    $replicatalk = $replica_store->get_client();
+
+    xlog "check that the new quota is at both ends";
+    @res = $mastertalk->getquota($folder);
+    $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
+    $self->assert_deep_equals(['X-ANNOT-COUNT', 0, 20, 'X-ANNOT-SIZE', 0, 16384], \@res);
+    @res = $replicatalk->getquota($folder);
+    $self->assert_str_equals('ok', $replicatalk->get_last_completion_response());
+    $self->assert_deep_equals(['X-ANNOT-COUNT', 0, 20, 'X-ANNOT-SIZE', 0, 16384], \@res);
+
+    xlog "set the X-ANNOT-SIZE quota on the master";
+    $mastertalk->setquota($folder, "(x-annot-size 32768)");
+    $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
+
+    xlog "run replication";
+    Cassandane::Instance->run_replication($master, $replica,
+					  $master_store, $replica_store);
+    $mastertalk = $master_store->get_client();
+    $replicatalk = $replica_store->get_client();
+
+    xlog "check that the new quota is at both ends";
+    @res = $mastertalk->getquota($folder);
+    $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
+    $self->assert_deep_equals(['X-ANNOT-SIZE', 0, 32768], \@res);
+    @res = $replicatalk->getquota($folder);
+    $self->assert_str_equals('ok', $replicatalk->get_last_completion_response());
+    $self->assert_deep_equals(['X-ANNOT-SIZE', 0, 32768], \@res);
+
+    xlog "clear all the quotas";
+    $mastertalk->setquota($folder, "()");
+    $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
+
+    xlog "run replication";
+    Cassandane::Instance->run_replication($master, $replica,
+					  $master_store, $replica_store);
+    $mastertalk = $master_store->get_client();
+    $replicatalk = $replica_store->get_client();
+
+    xlog "check that the new quota is at both ends";
+    @res = $mastertalk->getquota($folder);
+    $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
+    $self->assert_deep_equals([], \@res);
+    @res = $replicatalk->getquota($folder);
+    $self->assert_str_equals('ok', $replicatalk->get_last_completion_response());
+    $self->assert_deep_equals([], \@res);
 }
 
 1;
