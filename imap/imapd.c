@@ -346,6 +346,9 @@ void cmd_capability(char *tag);
 void cmd_append(char *tag, char *name, const char *cur_name);
 void cmd_select(char *tag, char *cmd, char *name);
 void cmd_close(char *tag, char *cmd);
+static int parse_fetch_args(const char *tag, const char *cmd,
+			    int allow_vanished,
+			    struct fetchargs *fa);
 void cmd_fetch(char *tag, char *sequence, int usinguid);
 void cmd_store(char *tag, char *sequence, int usinguid);
 void cmd_search(char *tag, int usinguid);
@@ -3763,6 +3766,8 @@ void cmd_select(char *tag, char *cmd, char *name)
 
     if (r) {
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+	if (init.vanishedlist) seqset_free(init.vanishedlist);
+	init.vanishedlist = NULL;
 	if (doclose) index_close(&imapd_index);
 	return;
     }
@@ -3801,6 +3806,11 @@ void cmd_select(char *tag, char *cmd, char *name)
 	    nextalert = now + 600; /* ALERT every 10 min regardless */
 	}
     }
+
+    index_select(imapd_index, &init);
+
+    if (init.vanishedlist) seqset_free(init.vanishedlist);
+    init.vanishedlist = NULL;
 
     prot_printf(imapd_out, "%s OK [READ-%s] %s\r\n", tag,
 		(imapd_index->myrights & ACL_READ_WRITE) ?
@@ -3924,34 +3934,18 @@ void section_list_free(struct section *l)
 	p++;								\
     }
 
-/*
- * Parse and perform a FETCH/UID FETCH command
- * The command has been parsed up to and including
- * the sequence
- */
-void cmd_fetch(char *tag, char *sequence, int usinguid)
+static int parse_fetch_args(const char *tag, const char *cmd,
+			    int allow_vanished,
+			    struct fetchargs *fa)
 {
-    const char *cmd = usinguid ? "UID Fetch" : "Fetch";
     static struct buf fetchatt, fieldname;
     int c;
     int inlist = 0;
     int fetchitems = 0;
+    char *p, *section;
     struct fetchargs fetchargs;
     struct octetinfo oi;
     strarray_t *newfields = strarray_new();
-    char *p, *section;
-    int fetchedsomething, r;
-    clock_t start = clock();
-    char mytime[100];
-
-    if (backend_current) {
-	/* remote mailbox */
-	prot_printf(backend_current->out, "%s %s %s ", tag, cmd, sequence);
-	if (!pipe_command(backend_current, 65536)) {
-	    pipe_including_tag(backend_current, tag, 0);
-	}
-	return;
-    }
 
     /* local mailbox */
     memset(&fetchargs, 0, sizeof(struct fetchargs));
@@ -4103,6 +4097,7 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
 		    if (*p) {
 			prot_printf(imapd_out, "%s BAD Junk after body section\r\n", tag);
 			eatline(imapd_in, c);
+			strarray_free(newfields);
 			goto freeargs;
 		    }
 		    appendfieldlist(&fetchargs.fsections,
@@ -4312,7 +4307,7 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
 		}
 		fetchitems |= FETCH_MODSEQ;
 	    }
-	    else if (usinguid && (imapd_client_capa & CAPA_QRESYNC) &&
+	    else if (allow_vanished &&
 		     !strcmp(fetchatt.s, "VANISHED")) {
 		fetchargs.vanished = 1;
 	    }
@@ -4359,10 +4354,47 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
 	}
     }
 
-    if (usinguid)
-	fetchitems |= FETCH_UID;
+    *fa = fetchargs;
+    fa->fetchitems = fetchitems;
+    strarray_free(newfields);
+    return 0;
 
-    fetchargs.fetchitems = fetchitems;
+freeargs:
+    strarray_free(newfields);
+    return IMAP_PROTOCOL_BAD_PARAMETERS;
+}
+
+/*
+ * Parse and perform a FETCH/UID FETCH command
+ * The command has been parsed up to and including
+ * the sequence
+ */
+void cmd_fetch(char *tag, char *sequence, int usinguid)
+{
+    const char *cmd = usinguid ? "UID Fetch" : "Fetch";
+    struct fetchargs fetchargs;
+    int fetchedsomething, r;
+    clock_t start = clock();
+    char mytime[100];
+
+    if (backend_current) {
+	/* remote mailbox */
+	prot_printf(backend_current->out, "%s %s %s ", tag, cmd, sequence);
+	if (!pipe_command(backend_current, 65536)) {
+	    pipe_including_tag(backend_current, tag, 0);
+	}
+	return;
+    }
+
+    r = parse_fetch_args(tag, cmd,
+			 (usinguid && (imapd_client_capa & CAPA_QRESYNC)),
+			 &fetchargs);
+    if (r)
+	goto freeargs;
+
+    if (usinguid)
+	fetchargs.fetchitems |= FETCH_UID;
+
     r = index_fetch(imapd_index, sequence, usinguid, &fetchargs,
 		&fetchedsomething);
 
@@ -4382,7 +4414,6 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
     }
 
  freeargs:
-    strarray_free(newfields);
     section_list_free(fetchargs.bodysections);
     freefieldlist(fetchargs.fsections);
     strarray_fini(&fetchargs.headers);

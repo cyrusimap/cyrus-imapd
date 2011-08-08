@@ -90,6 +90,7 @@ static void index_refresh(struct index_state *state);
 static void index_tellexists(struct index_state *state);
 static int index_lock(struct index_state *state);
 static void index_unlock(struct index_state *state);
+// extern struct namespace imapd_namespace;
 
 int index_writeseen(struct index_state *state);
 void index_fetchmsg(struct index_state *state,
@@ -150,6 +151,8 @@ static void index_get_ids(MsgData *msgdata,
 			  char *envtokens[], const char *headers, unsigned size);
 static MsgData *index_msgdata_load(struct index_state *state, unsigned *msgno_list, int n,
 				   struct sortcrit *sortcrit);
+static struct seqset *_index_vanished(struct index_state *state,
+				      struct vanished_params *params);
 
 static void *index_sort_getnext(MsgData *node);
 static void index_sort_setnext(MsgData *node, MsgData *next);
@@ -170,9 +173,6 @@ static void index_thread_print(struct index_state *state,
 static void index_thread_ref(struct index_state *state,
 			     unsigned *msgno_list, int nmsg, int usinguid);
 
-static void index_select(struct index_state *state);
-static struct seqset *_index_vanished(struct index_state *state,
-				      struct vanished_params *params);
 static struct seqset *_parse_sequence(struct index_state *state,
 				      const char *sequence, int usinguid);
 
@@ -213,7 +213,6 @@ int index_open(const char *name, struct index_init *init,
 {
     int r;
     struct index_state *state = xzmalloc(sizeof(struct index_state));
-    struct seqset *vanishedlist = NULL;
 
     if (init) {
 	if (init->examine_mode) {
@@ -249,44 +248,10 @@ int index_open(const char *name, struct index_init *init,
 
     /* have to get the vanished list while we're still locked */
     if (init && init->vanished.uidvalidity == state->mailbox->i.uidvalidity) {
-	vanishedlist = _index_vanished(state, &init->vanished);
+	init->vanishedlist = _index_vanished(state, &init->vanished);
     }
 
     index_unlock(state);
-
-    if (init && init->select && state->myrights & ACL_READ) {
-	index_select(state);
-
-	if (init->vanished.uidvalidity == state->mailbox->i.uidvalidity) {
-	    const char *sequence = init->vanished.sequence;
-	    struct index_map *im;
-	    uint32_t msgno;
-	    struct seqset *seq = _parse_sequence(state, sequence, 1);
-
-	    /* QRESYNC response:
-	     * UID FETCH seq FLAGS (CHANGEDSINCE modseq VANISHED)
-	     */
-
-	    if (vanishedlist && vanishedlist->len) {
-		char *vanished = seqset_cstring(vanishedlist);
-		prot_printf(state->out, "* VANISHED (EARLIER) %s\r\n", vanished);
-		free(vanished);
-	    }
-
-	    for (msgno = 1; msgno <= state->exists; msgno++) {
-		im = &state->map[msgno-1];
-		if (sequence && !seqset_ismember(seq, im->record.uid))
-		    continue;
-		if (im->record.modseq <= init->vanished.modseq)
-		    continue;
-		index_printflags(state, msgno, 1);
-	    }
-
-	    seqset_free(seq);
-	}
-    }
-
-    seqset_free(vanishedlist);
 
     *stateptr = state;
 
@@ -612,7 +577,7 @@ modseq_t index_highestmodseq(struct index_state *state)
     return state->highestmodseq;
 }
 
-static void index_select(struct index_state *state)
+void index_select(struct index_state *state, struct index_init *init)
 {
     index_tellexists(state);
 
@@ -629,6 +594,36 @@ static void index_select(struct index_state *state)
     prot_printf(state->out, "* OK [HIGHESTMODSEQ " MODSEQ_FMT "] Ok\r\n",
 		state->highestmodseq);
     prot_printf(state->out, "* OK [URLMECH INTERNAL] Ok\r\n");
+
+    if (init->vanishedlist) {
+	char *vanished;
+	const char *sequence = NULL;
+	struct seqset *seq = NULL;
+	struct index_map *im;
+	uint32_t msgno;
+
+	/* QRESYNC response:
+	 * UID FETCH seq FLAGS (CHANGEDSINCE modseq VANISHED)
+	  */
+
+	vanished = seqset_cstring(init->vanishedlist);
+	if (vanished) {
+	    prot_printf(state->out, "* VANISHED (EARLIER) %s\r\n", vanished);
+	    free(vanished);
+	}
+
+	sequence = init->vanished.sequence;
+	if (sequence) seq = _parse_sequence(state, sequence, 1);
+	for (msgno = 1; msgno <= state->exists; msgno++) {
+	    im = &state->map[msgno-1];
+	    if (sequence && !seqset_ismember(seq, im->record.uid))
+		continue;
+	    if (im->record.modseq <= init->vanished.modseq)
+		continue;
+	    index_printflags(state, msgno, 1);
+	}
+	seqset_free(seq);
+    }
 }
 
 /*
@@ -858,7 +853,7 @@ void index_fetchresponses(struct index_state *state,
 int index_fetch(struct index_state *state,
 		const char *sequence,
 		int usinguid,
-		struct fetchargs *fetchargs,
+		const struct fetchargs *fetchargs,
 		int *fetchedsomething)
 {
     struct seqset *seq;
