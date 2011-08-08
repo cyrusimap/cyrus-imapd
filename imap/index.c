@@ -3039,7 +3039,6 @@ static int index_store_annotation(struct index_state *state,
 				  uint32_t msgno,
 				  struct storeargs *storeargs)
 {
-    int dirty = 0;
     modseq_t oldmodseq;
     struct mailbox *mailbox = state->mailbox;
     struct index_map *im = &state->map[msgno-1];
@@ -3062,7 +3061,6 @@ static int index_store_annotation(struct index_state *state,
     /* It would be nice if the annotate layer told us whether it
      * actually made a change to the database, but it doesn't, so
      * we have to assume the message is dirty */
-    dirty = 1;
 
     r = mailbox_rewrite_index_record(mailbox, &im->record);
     if (r) return r;
