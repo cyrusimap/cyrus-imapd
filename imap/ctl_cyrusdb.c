@@ -98,7 +98,7 @@ struct cyrusdb {
 } dblist[] = {
     { FNAME_MBOXLIST,		&config_mboxlist_db,	1 },
     { FNAME_QUOTADB,		&config_quota_db,	1 },
-    { FNAME_ANNOTATIONS,	&config_annotation_db,	1 },
+    { FNAME_GLOBALANNOTATIONS,	&config_annotation_db,	1 },
     { FNAME_DELIVERDB,		&config_duplicate_db,	0 },
     { FNAME_TLSSESSIONS,	&config_tlscache_db,	0 },
     { FNAME_PTSDB,		&config_ptscache_db,	0 },

@@ -737,7 +737,7 @@ static void test_delete(void)
     struct buf val = BUF_INITIALIZER;
     struct buf val2 = BUF_INITIALIZER;
 
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/annotations.db"), -ENOENT);
+    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/cyrus.annotations"), -ENOENT);
 
     annotatemore_init(NULL, NULL);
 
@@ -807,14 +807,14 @@ static void test_delete(void)
     CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE2);
     buf_free(&val2);
 
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/annotations.db"), 0);
+    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/cyrus.annotations"), 0);
 
     /* delete all the entries associated with the mailbox */
 
     r = annotatemore_delete(MBOXNAME1_INT);
     CU_ASSERT_EQUAL(r, 0);
 
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/annotations.db"), -ENOENT);
+    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/cyrus.annotations"), -ENOENT);
 
     /* check that the values are gone */
 
@@ -835,7 +835,7 @@ static void test_delete(void)
 
     annotatemore_close();
 
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/annotations.db"), -ENOENT);
+    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/cyrus.annotations"), -ENOENT);
 
     strarray_fini(&entries);
     strarray_fini(&attribs);
@@ -857,8 +857,8 @@ static void test_rename(void)
 
     annotatemore_open();
 
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/annotations.db"), -ENOENT);
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurfette/annotations.db"), -ENOENT);
+    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/cyrus.annotations"), -ENOENT);
+    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurfette/cyrus.annotations"), -ENOENT);
 
     memset(&mailbox, 0, sizeof(mailbox));
     mailbox.name = MBOXNAME1_INT;
@@ -924,8 +924,8 @@ static void test_rename(void)
     CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE2);
     buf_free(&val2);
 
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/annotations.db"), 0);
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurfette/annotations.db"), -ENOENT);
+    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/cyrus.annotations"), 0);
+    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurfette/cyrus.annotations"), -ENOENT);
 
     /* rename MBOXNAME1 -> MBOXNAME2 */
 
@@ -933,8 +933,8 @@ static void test_rename(void)
 			    "smurf", "smurfette");
     CU_ASSERT_EQUAL(r, 0);
 
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/annotations.db"), -ENOENT);
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurfette/annotations.db"), 0);
+    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/cyrus.annotations"), -ENOENT);
+    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurfette/cyrus.annotations"), 0);
 
     /* check that the values are gone under the old name */
 
@@ -973,8 +973,8 @@ static void test_rename(void)
     CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE2);
     buf_free(&val2);
 
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/annotations.db"), -ENOENT);
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurfette/annotations.db"), 0);
+    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/cyrus.annotations"), -ENOENT);
+    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurfette/cyrus.annotations"), 0);
 
     annotatemore_close();
 
@@ -1102,8 +1102,8 @@ static void test_msg_copy(void)
 
     annotatemore_open();
 
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/annotations.db"), -ENOENT);
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurfette/annotations.db"), -ENOENT);
+    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/cyrus.annotations"), -ENOENT);
+    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurfette/cyrus.annotations"), -ENOENT);
 
     memset(&mailbox, 0, sizeof(mailbox));
     mailbox.name = MBOXNAME1_INT;
@@ -1174,8 +1174,8 @@ static void test_msg_copy(void)
     CU_ASSERT_EQUAL_FATAL(r, 0);
     CU_ASSERT_PTR_NULL_FATAL(val2.s);
 
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/annotations.db"), 0);
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurfette/annotations.db"), -ENOENT);
+    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/cyrus.annotations"), 0);
+    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurfette/cyrus.annotations"), -ENOENT);
 
     /* copy MBOXNAME1,17 -> MBOXNAME2,35 */
 
@@ -1188,8 +1188,8 @@ static void test_msg_copy(void)
     r = annotatemore_commit();
     CU_ASSERT_EQUAL(r, 0);
 
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/annotations.db"), 0);
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurfette/annotations.db"), 0);
+    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/cyrus.annotations"), 0);
+    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurfette/cyrus.annotations"), 0);
 
     /* check that the values copied are present for both mailboxes */
 
@@ -1230,8 +1230,8 @@ static void test_msg_copy(void)
     CU_ASSERT_EQUAL_FATAL(r, 0);
     CU_ASSERT_PTR_NULL(val2.s);
 
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/annotations.db"), 0);
-    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurfette/annotations.db"), 0);
+    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/cyrus.annotations"), 0);
+    CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurfette/cyrus.annotations"), 0);
 
     annotatemore_close();
 

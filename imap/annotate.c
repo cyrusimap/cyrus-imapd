@@ -427,7 +427,7 @@ static int annotate_dbname_mbentry(const struct mboxlist_entry *mbentry,
 	if (conf_fname)
 	    *fnamep = xstrdup(conf_fname);
 	else
-	    *fnamep = strconcat(config_dir, FNAME_ANNOTATIONS, (char *)NULL);
+	    *fnamep = strconcat(config_dir, FNAME_GLOBALANNOTATIONS, (char *)NULL);
     }
 
     return 0;

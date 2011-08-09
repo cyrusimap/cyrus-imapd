@@ -76,7 +76,7 @@
 #define FNAME_CACHE "/cyrus.cache"
 #define FNAME_SQUAT "/cyrus.squat"
 #define FNAME_EXPUNGE "/cyrus.expunge"
-#define FNAME_ANNOTATIONS "/annotations.db"
+#define FNAME_ANNOTATIONS "/cyrus.annotations"
 
 enum meta_filename {
   META_HEADER = 1,

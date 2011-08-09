@@ -52,6 +52,8 @@
 #include "util.h"
 #include "strarray.h"
 
+#define FNAME_GLOBALANNOTATIONS "/annotations.db"
+
 /* List of strings, for fetch and search argument blocks */
 struct strlist {
     char *s;                   /* String */
