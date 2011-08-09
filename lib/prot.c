@@ -268,7 +268,7 @@ sasl_conn_t *conn;
  * Turn off SASL for this connection
  */
 
-int prot_unsetsasl(struct protstream *s)
+void prot_unsetsasl(struct protstream *s)
 {
     s->conn = NULL;
     s->maxplain = PROT_BUFSIZE;
