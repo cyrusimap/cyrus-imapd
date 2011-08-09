@@ -407,36 +407,46 @@ static void append_db(annotate_db_t *d)
  * @mboxname is NULL).  Returns the new string in
  * *@fnamep.  Returns an error code.
  */
-static int annotate_dbname(const char *mboxname, char **fnamep)
+static int annotate_dbname_mbentry(const struct mboxlist_entry *mbentry,
+				   char **fnamep)
 {
-    char *fname;
-    int r = 0;
+    const char *conf_fname;
 
-    if (mboxname) {
+    if (mbentry) {
 	/* per-mbox database */
-	struct mboxlist_entry *mbentry = NULL;
-
-	r = mboxlist_lookup(mboxname, &mbentry, NULL);
-	if (r)
-	    return r;
-	fname = mboxname_metapath(mbentry->partition, mboxname,
-			          META_ANNOTATIONS, /*isnew*/0);
-	mboxlist_entry_free(&mbentry);
-	if (!fname)
+	conf_fname = mboxname_metapath(mbentry->partition, mbentry->name,
+				       META_ANNOTATIONS, /*isnew*/0);
+	if (!conf_fname)
 	    return IMAP_MAILBOX_BADNAME;
-	fname = xstrdup(fname);
+	*fnamep = xstrdup(conf_fname);
     }
     else {
 	/* global database */
-	const char *conf_fname = config_getstring(IMAPOPT_ANNOTATION_DB_PATH);
+	conf_fname = config_getstring(IMAPOPT_ANNOTATION_DB_PATH);
 
 	if (conf_fname)
-	    fname = xstrdup(conf_fname);
+	    *fnamep = xstrdup(conf_fname);
 	else
-	    fname = strconcat(config_dir, FNAME_ANNOTATIONS, (char *)NULL);
+	    *fnamep = strconcat(config_dir, FNAME_ANNOTATIONS, (char *)NULL);
     }
 
-    *fnamep = fname;
+    return 0;
+}
+
+static int annotate_dbname(const char *mboxname, char **fnamep)
+{
+    int r = 0;
+    struct mboxlist_entry *mbentry = NULL;
+
+    if (mboxname) {
+	r = mboxlist_lookup(mboxname, &mbentry, NULL);
+	if (r) goto out;
+    }
+
+    r = annotate_dbname_mbentry(mbentry, fnamep);
+
+out:
+    mboxlist_entry_free(&mbentry);
     return r;
 }
 
