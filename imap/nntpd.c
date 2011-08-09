@@ -2004,10 +2004,9 @@ static void cmd_authinfo_pass(char *pass)
     int failedloginpause;
     /* Conceal password in telemetry log */
     if (nntp_logfd != -1 && pass) {
-	int r; /* avoid warnings */
-	r = ftruncate(nntp_logfd,
+	(void)ftruncate(nntp_logfd,
 		  lseek(nntp_logfd, -2, SEEK_CUR) - strlen(pass));
-	r = write(nntp_logfd, "...\r\n", 5);
+	(void)write(nntp_logfd, "...\r\n", 5);
     }
 
     if (nntp_authstate) {
@@ -2078,10 +2077,9 @@ static void cmd_authinfo_sasl(char *cmd, char *mech, char *resp)
 
     /* Conceal initial response in telemetry log */
     if (nntp_logfd != -1 && resp) {
-	int r; /* avoid warnings */
-	r = ftruncate(nntp_logfd,
+	(void)ftruncate(nntp_logfd,
 		  lseek(nntp_logfd, -2, SEEK_CUR) - strlen(resp));
-	r = write(nntp_logfd, "...\r\n", 5);
+	(void)write(nntp_logfd, "...\r\n", 5);
     }
 
     if (nntp_userid) {
@@ -2995,7 +2993,6 @@ static int savemsg(message_data_t *m, FILE *f)
 	"Reply-To",	/* need to add "post" email addresses */
 	NULL
     };
-    int addlen;
 
     m->f = f;
 
@@ -3012,7 +3009,6 @@ static int savemsg(message_data_t *m, FILE *f)
     /* now, using our header cache, fill in the data that we want */
 
     /* get path */
-    addlen = strlen(config_servername) + 1;
     if ((body = spool_getheader(m->hdrcache, "path")) != NULL) {
 	/* prepend to the cached path */
 	m->path = strconcat(config_servername, "!", body[0], (char *)NULL);
@@ -3261,7 +3257,7 @@ static int deliver_remote(message_data_t *msg, struct dest *dlist)
 static int deliver(message_data_t *msg)
 {
     int n, r = 0, myrights;
-    char *rcpt = NULL, *local_rcpt = NULL;
+    char *rcpt = NULL;
     unsigned long uid;
     struct body *body = NULL;
     struct dest *dlist = NULL;
@@ -3334,8 +3330,6 @@ static int deliver(message_data_t *msg)
 		mboxlist_entry_free(&mbentry);
 		return r;
 	    }
-
-	    local_rcpt = rcpt;
 	}
 	mboxlist_entry_free(&mbentry);
     }

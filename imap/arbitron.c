@@ -383,6 +383,7 @@ static int process_user_p(void *rockp,
 
     /* remember that 'data' may not be null terminated ! */
     version = strtol(data, &p, 10); data = p;
+    if (version < 0) abort();
     /* xxx not checking version */
     lastread = strtol(data, &p, 10); data = p;
     

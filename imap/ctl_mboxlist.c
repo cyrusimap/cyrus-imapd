@@ -797,6 +797,9 @@ static int verify_cb(void *rockp,
 
     /* Get mailbox type */
     mbtype = strtol(data, &p, 10);
+    if (mbtype < 0) { /* impossible, but keeps the compiler happy */
+	abort();
+    }
 
     p = strchr(data, ' ');
     if (p == NULL) {
