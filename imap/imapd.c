@@ -3641,7 +3641,7 @@ void cmd_select(char *tag, char *cmd, char *name)
 		}
 		if (c != ')') goto badqresync;
 		c = prot_getc(imapd_in);
- 	    }
+	    }
 	    else if (!strcmp(arg.s, "ANNOTATE")) {
 		/*
 		 * RFC5257 requires us to parse this keyword, which
@@ -3657,7 +3657,7 @@ void cmd_select(char *tag, char *cmd, char *name)
 		eatline(imapd_in, c);
 		return;
 	    }
-	    
+
 	    if (c == ' ') c = getword(imapd_in, &arg);
 	    else break;
 	}
@@ -3996,14 +3996,9 @@ static int parse_fetch_args(const char *tag, const char *cmd,
     static struct buf fetchatt, fieldname;
     int c;
     int inlist = 0;
-    int fetchitems = 0;
     char *p, *section;
-    struct fetchargs fetchargs;
     struct octetinfo oi;
     strarray_t *newfields = strarray_new();
-
-    /* local mailbox */
-    memset(&fetchargs, 0, sizeof(struct fetchargs));
 
     c = getword(imapd_in, &fetchatt);
     if (c == '(' && !fetchatt.s[0]) {
@@ -4015,10 +4010,10 @@ static int parse_fetch_args(const char *tag, const char *cmd,
 	switch (fetchatt.s[0]) {
 	case 'A':
 	    if (!inlist && !strcmp(fetchatt.s, "ALL")) {
-		fetchitems |= FETCH_ALL;
+		fa->fetchitems |= FETCH_ALL;
 	    }
 	    else if (!strcmp(fetchatt.s, "ANNOTATION")) {
-		fetchitems |= FETCH_ANNOTATION;
+		fa->fetchitems |= FETCH_ANNOTATION;
 		if (c != ' ')
 		    goto badannotation;
 		c = prot_getc(imapd_in);
@@ -4026,8 +4021,8 @@ static int parse_fetch_args(const char *tag, const char *cmd,
 		    goto badannotation;
 		c = parse_annotate_fetch_data(tag,
 					      /*permessage_flag*/1,
-					      &fetchargs.entries,
-					      &fetchargs.attribs);
+					      &fa->entries,
+					      &fa->attribs);
 		if (c == EOF) {
 		    eatline(imapd_in, c);
 		    goto freeargs;
@@ -4058,7 +4053,7 @@ badannotation:
 		    binsize = 1;
 		}
 		else {
-		    fetchitems |= FETCH_SETSEEN;
+		    fa->fetchitems |= FETCH_SETSEEN;
 		}
 		while (Uisdigit(*p) || *p == '.') {
 		    if (*p == '.' && !Uisdigit(p[-1])) break;
@@ -4082,15 +4077,15 @@ badannotation:
 		    goto freeargs;
 		}
 		if (binsize)
-		    section_list_append(&fetchargs.sizesections, section, &oi);
+		    section_list_append(&fa->sizesections, section, &oi);
 		else
-		    section_list_append(&fetchargs.binsections, section, &oi);
+		    section_list_append(&fa->binsections, section, &oi);
 	    }
 	    else if (!strcmp(fetchatt.s, "BODY")) {
-		fetchitems |= FETCH_BODY;
+		fa->fetchitems |= FETCH_BODY;
 	    }
 	    else if (!strcmp(fetchatt.s, "BODYSTRUCTURE")) {
-		fetchitems |= FETCH_BODYSTRUCTURE;
+		fa->fetchitems |= FETCH_BODYSTRUCTURE;
 	    }
 	    else if (!strncmp(fetchatt.s, "BODY[", 5) ||
 		     !strncmp(fetchatt.s, "BODY.PEEK[", 10)) {
@@ -4099,7 +4094,7 @@ badannotation:
 		    p = section += 5;
 		}
 		else {
-		    fetchitems |= FETCH_SETSEEN;
+		    fa->fetchitems |= FETCH_SETSEEN;
 		}
 		while (Uisdigit(*p) || *p == '.') {
 		    if (*p == '.' && !Uisdigit(p[-1])) break;
@@ -4117,7 +4112,7 @@ badannotation:
 		     * the headers out of the cache.
 		     */
 		    if (p != section || p[13] != '\0') {
-			fetchargs.cache_atleast = BIT32_MAX;
+			fa->cache_atleast = BIT32_MAX;
 		    }
 
 		    if (c != ' ') {
@@ -4146,11 +4141,11 @@ badannotation:
 			    goto freeargs;
 			}
 			strarray_append(newfields, fieldname.s);
-			if (fetchargs.cache_atleast < BIT32_MAX) {
+			if (fa->cache_atleast < BIT32_MAX) {
 			    bit32 this_ver =
 				mailbox_cached_header(fieldname.s);
-			    if(this_ver > fetchargs.cache_atleast)
-				fetchargs.cache_atleast = this_ver;
+			    if(this_ver > fa->cache_atleast)
+				fa->cache_atleast = this_ver;
 			}
 		    } while (c == ' ');
 		    if (c != ')') {
@@ -4178,7 +4173,7 @@ badannotation:
 			strarray_free(newfields);
 			goto freeargs;
 		    }
-		    appendfieldlist(&fetchargs.fsections,
+		    appendfieldlist(&fa->fsections,
 				    section, newfields, fieldname.s,
 				    &oi, sizeof(oi));
 		    newfields = strarray_new();
@@ -4215,62 +4210,62 @@ badannotation:
 		    eatline(imapd_in, c);
 		    goto freeargs;
 		}
-		section_list_append(&fetchargs.bodysections, section, &oi);
+		section_list_append(&fa->bodysections, section, &oi);
 	    }
 	    else goto badatt;
 	    break;
 
 	case 'E':
 	    if (!strcmp(fetchatt.s, "ENVELOPE")) {
-		fetchitems |= FETCH_ENVELOPE;
+		fa->fetchitems |= FETCH_ENVELOPE;
 	    }
 	    else goto badatt;
 	    break;
 
 	case 'F':
 	    if (!inlist && !strcmp(fetchatt.s, "FAST")) {
-		fetchitems |= FETCH_FAST;
+		fa->fetchitems |= FETCH_FAST;
 	    }
 	    else if (!inlist && !strcmp(fetchatt.s, "FULL")) {
-		fetchitems |= FETCH_FULL;
+		fa->fetchitems |= FETCH_FULL;
 	    }
 	    else if (!strcmp(fetchatt.s, "FLAGS")) {
-		fetchitems |= FETCH_FLAGS;
+		fa->fetchitems |= FETCH_FLAGS;
 	    }
 	    else goto badatt;
 	    break;
 
 	case 'I':
 	    if (!strcmp(fetchatt.s, "INTERNALDATE")) {
-		fetchitems |= FETCH_INTERNALDATE;
+		fa->fetchitems |= FETCH_INTERNALDATE;
 	    }
 	    else goto badatt;
 	    break;
 
 	case 'M':
 	    if (!strcmp(fetchatt.s, "MODSEQ")) {
-		fetchitems |= FETCH_MODSEQ;
+		fa->fetchitems |= FETCH_MODSEQ;
 	    }
 	    else goto badatt;
 	    break;
 	case 'R':
 	    if (!strcmp(fetchatt.s, "RFC822")) {
-		fetchitems |= FETCH_RFC822|FETCH_SETSEEN;
+		fa->fetchitems |= FETCH_RFC822|FETCH_SETSEEN;
 	    }
 	    else if (!strcmp(fetchatt.s, "RFC822.HEADER")) {
-		fetchitems |= FETCH_HEADER;
+		fa->fetchitems |= FETCH_HEADER;
 	    }
 	    else if (!strcmp(fetchatt.s, "RFC822.PEEK")) {
-		fetchitems |= FETCH_RFC822;
+		fa->fetchitems |= FETCH_RFC822;
 	    }
 	    else if (!strcmp(fetchatt.s, "RFC822.SIZE")) {
-		fetchitems |= FETCH_SIZE;
+		fa->fetchitems |= FETCH_SIZE;
 	    }
 	    else if (!strcmp(fetchatt.s, "RFC822.TEXT")) {
-		fetchitems |= FETCH_TEXT|FETCH_SETSEEN;
+		fa->fetchitems |= FETCH_TEXT|FETCH_SETSEEN;
 	    }
 	    else if (!strcmp(fetchatt.s, "RFC822.TEXT.PEEK")) {
-		fetchitems |= FETCH_TEXT;
+		fa->fetchitems |= FETCH_TEXT;
 	    }
 	    else if (!strcmp(fetchatt.s, "RFC822.HEADER.LINES") ||
 		     !strcmp(fetchatt.s, "RFC822.HEADER.LINES.NOT")) {
@@ -4302,16 +4297,16 @@ badannotation:
 		    /* 19 is magic number -- length of 
 		     * "RFC822.HEADERS.NOT" */
 		    strarray_append(strlen(fetchatt.s) == 19 ?
-				  &fetchargs.headers : &fetchargs.headers_not,
+				  &fa->headers : &fa->headers_not,
 				  fieldname.s);
 		    if (strlen(fetchatt.s) != 19) {
-			fetchargs.cache_atleast = BIT32_MAX;
+			fa->cache_atleast = BIT32_MAX;
 		    }
-		    if (fetchargs.cache_atleast < BIT32_MAX) {
+		    if (fa->cache_atleast < BIT32_MAX) {
 			bit32 this_ver =
 			    mailbox_cached_header(fieldname.s);
-			if(this_ver > fetchargs.cache_atleast)
-			    fetchargs.cache_atleast = this_ver;
+			if(this_ver > fa->cache_atleast)
+			    fa->cache_atleast = this_ver;
 		   }
 		} while (c == ' ');
 		if (c != ')') {
@@ -4327,7 +4322,7 @@ badannotation:
 
 	case 'U':
 	    if (!strcmp(fetchatt.s, "UID")) {
-		fetchitems |= FETCH_UID;
+		fa->fetchitems |= FETCH_UID;
 	    }
 	    else goto badatt;
 	    break;
@@ -4375,7 +4370,7 @@ badannotation:
 		    eatline(imapd_in, c);
 		    goto freeargs;
 		}
-		c = getmodseq(imapd_in, &fetchargs.changedsince);
+		c = getmodseq(imapd_in, &fa->changedsince);
 		if (c == EOF) {
 		    prot_printf(imapd_out,
 				"%s BAD Invalid argument to %s %s\r\n",
@@ -4383,11 +4378,11 @@ badannotation:
 		    eatline(imapd_in, c);
 		    goto freeargs;
 		}
-		fetchitems |= FETCH_MODSEQ;
+		fa->fetchitems |= FETCH_MODSEQ;
 	    }
 	    else if (allow_vanished &&
 		     !strcmp(fetchatt.s, "VANISHED")) {
-		fetchargs.vanished = 1;
+		fa->vanished = 1;
 	    }
 	    else {
 		prot_printf(imapd_out, "%s BAD Invalid %s modifier %s\r\n",
@@ -4412,19 +4407,19 @@ badannotation:
 	goto freeargs;
     }
 
-    if (!fetchitems && !fetchargs.bodysections && !fetchargs.fsections &&
-	!fetchargs.binsections && !fetchargs.sizesections &&
-	!fetchargs.headers.count && !fetchargs.headers_not.count) {
+    if (!fa->fetchitems && !fa->bodysections && !fa->fsections &&
+	!fa->binsections && !fa->sizesections &&
+	!fa->headers.count && !fa->headers_not.count) {
 	prot_printf(imapd_out, "%s BAD Missing required argument to %s\r\n", tag, cmd);
 	goto freeargs;
     }
 
-    if (fetchargs.vanished && !fetchargs.changedsince) {
+    if (fa->vanished && !fa->changedsince) {
 	prot_printf(imapd_out, "%s BAD Missing required argument to %s\r\n", tag, cmd);
 	goto freeargs;
     }
 
-    if (fetchitems & FETCH_MODSEQ) {
+    if (fa->fetchitems & FETCH_MODSEQ) {
 	if (!(imapd_client_capa & CAPA_CONDSTORE)) {
 	    imapd_client_capa |= CAPA_CONDSTORE;
 	    prot_printf(imapd_out, "* OK [HIGHESTMODSEQ " MODSEQ_FMT "]  \r\n",
@@ -4432,21 +4427,33 @@ badannotation:
 	}
     }
 
-    if (fetchitems & FETCH_ANNOTATION) {
-	fetchargs.namespace = &imapd_namespace;
-	fetchargs.userid = imapd_userid;
-	fetchargs.isadmin = imapd_userisadmin || imapd_userisproxyadmin;
-	fetchargs.authstate = imapd_authstate;
+    if (fa->fetchitems & FETCH_ANNOTATION) {
+	fa->namespace = &imapd_namespace;
+	fa->userid = imapd_userid;
+	fa->isadmin = imapd_userisadmin || imapd_userisproxyadmin;
+	fa->authstate = imapd_authstate;
     }
 
-    *fa = fetchargs;
-    fa->fetchitems = fetchitems;
     strarray_free(newfields);
     return 0;
 
 freeargs:
     strarray_free(newfields);
     return IMAP_PROTOCOL_BAD_PARAMETERS;
+}
+
+static void fetchargs_fini (struct fetchargs *fa)
+{
+    section_list_free(fa->binsections);
+    section_list_free(fa->sizesections);
+    section_list_free(fa->bodysections);
+    freefieldlist(fa->fsections);
+    strarray_fini(&fa->headers);
+    strarray_fini(&fa->headers_not);
+    strarray_fini(&fa->entries);
+    strarray_fini(&fa->attribs);
+
+    memset(fa, 0, sizeof(struct fetchargs));
 }
 
 /*
@@ -4470,6 +4477,9 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
 	}
 	return;
     }
+
+    /* local mailbox */
+    memset(&fetchargs, 0, sizeof(struct fetchargs));
 
     r = parse_fetch_args(tag, cmd,
 			 (usinguid && (imapd_client_capa & CAPA_QRESYNC)),
@@ -4499,12 +4509,7 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
     }
 
  freeargs:
-    section_list_free(fetchargs.bodysections);
-    freefieldlist(fetchargs.fsections);
-    strarray_fini(&fetchargs.headers);
-    strarray_fini(&fetchargs.headers_not);
-    strarray_fini(&fetchargs.entries);
-    strarray_fini(&fetchargs.attribs);
+    fetchargs_fini(&fetchargs);
 }
 
 #undef PARSE_PARTIAL /* cleanup */
