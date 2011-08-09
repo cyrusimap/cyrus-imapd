@@ -83,7 +83,7 @@
    directory! */
 
 extern int sieved_userisadmin;
-char *sieve_dir = NULL;
+static char *sieve_dir_config = NULL;
 
 static const char *sieved_userid = NULL;
 
@@ -94,7 +94,7 @@ int actions_init(void)
   sieve_usehomedir = config_getswitch(IMAPOPT_SIEVEUSEHOMEDIR);
   
   if (!sieve_usehomedir) {
-      sieve_dir = (char *) config_getstring(IMAPOPT_SIEVEDIR);
+      sieve_dir_config = (char *) config_getstring(IMAPOPT_SIEVEDIR);
   } else {
       /* can't use home directories with timsieved */
       syslog(LOG_ERR, "can't use home directories");
@@ -108,11 +108,10 @@ int actions_init(void)
 int actions_setuser(const char *userid)
 {
   char userbuf[1024], *user, *domain = NULL;
-  char *foo = sieve_dir;
   size_t size = 1024, len;
   int result;  
 
-  sieve_dir = (char *) xzmalloc(size+1);
+  char *sieve_dir = (char *) xzmalloc(size+1);
   
   sieved_userid = xstrdup(userid);
   user = (char *) userid;
@@ -123,7 +122,7 @@ int actions_setuser(const char *userid)
       if ((domain = strrchr(user, '@'))) *domain++ = '\0';
   }
 
-  len = strlcpy(sieve_dir, foo, size);
+  len = strlcpy(sieve_dir, sieve_dir_config, size);
 
   if (domain) {
       char dhash = (char) dir_hash_c(domain, config_fulldirhash);
@@ -146,10 +145,12 @@ int actions_setuser(const char *userid)
       if (!result) result = chdir(sieve_dir);
       if (result) {
 	  syslog(LOG_ERR, "mkdir %s: %m", sieve_dir);
+	  free(sieve_dir);
 	  return TIMSIEVE_FAIL;
       }
   }
 
+  free(sieve_dir);
   return TIMSIEVE_OK;
 }
 
@@ -205,6 +206,7 @@ int capabilities(struct protstream *conn, sasl_conn_t *saslconn,
     if (tls_enabled() && !starttls_done && !authenticated) {
 	prot_printf(conn, "\"STARTTLS\"\r\n");
     }
+    prot_printf(conn, "\"UNAUTHENTICATE\"\r\n");
 
     prot_printf(conn,"OK\r\n");
 

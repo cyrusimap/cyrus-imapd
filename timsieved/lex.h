@@ -80,6 +80,8 @@
 #define CAPABILITY   407
 #define HAVESPACE    408
 #define STARTTLS     409
+#define NOOP         410
+#define UNAUTHENTICATE 411
 
 
 int lex_init(void);

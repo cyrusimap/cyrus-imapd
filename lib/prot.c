@@ -264,6 +264,17 @@ sasl_conn_t *conn;
     return 0;
 }
 
+/*
+ * Turn off SASL for this connection
+ */
+
+int prot_unsetsasl(struct protstream *s)
+{
+    s->conn = NULL;
+    s->maxplain = PROT_BUFSIZE;
+    s->saslssf = 0;
+}
+
 #ifdef HAVE_ZLIB
 
 #define ZLARGE_DIFF_CHUNK (5120) /* 5K */
