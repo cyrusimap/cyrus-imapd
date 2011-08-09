@@ -9089,7 +9089,7 @@ static int trashacl(struct protstream *pin, struct protstream *pout,
 }
 
 static int dumpacl(struct protstream *pin, struct protstream *pout,
-		   char *mailbox, char *acl_in) 
+		   const char *mboxname, const char *acl_in) 
 {
     int r = 0;
     int c;		/* getword() returns an int */
@@ -9116,7 +9116,7 @@ static int dumpacl(struct protstream *pin, struct protstream *pout,
 	prot_printf(pout, "%s SETACL {" SIZE_T_FMT "+}\r\n%s"
 		    " {" SIZE_T_FMT "+}\r\n%s {" SIZE_T_FMT "+}\r\n%s\r\n",
 		    tag,
-		    strlen(mailbox), mailbox,
+		    strlen(mboxname), mboxname,
 		    strlen(acl), acl,
 		    strlen(rights), rights);
 
@@ -9160,10 +9160,7 @@ static int dumpacl(struct protstream *pin, struct protstream *pout,
 }
 
 struct xfer_item {
-    char *name;
-    char *part;
-    char *acl;
-    int mbtype;
+    struct mboxlist_entry *mbentry;
     int remote_created;
     int done;
     struct xfer_item *next;
@@ -9216,23 +9213,22 @@ static void xfer_done(struct xfer_header **xferptr)
 {
     struct xfer_header *xfer = *xferptr;
     struct xfer_item *item, *next;
-    struct mboxlist_entry *mbentry = NULL;
     int r;
     char extname[MAX_MAILBOX_NAME];
 
     for (item = xfer->items; item; item = item->next) {
-	(*imapd_namespace.mboxname_toexternal)(&imapd_namespace, item->name,
+	(*imapd_namespace.mboxname_toexternal)(&imapd_namespace, item->mbentry->name,
 					       imapd_userid, extname);
 	/* done! */
 	if (item->done)
 	    continue;
 	/* tell murder it's back here and active */
-	r = xfer_mupdate(xfer, 1, item->name, item->part,
-			 config_servername, item->acl);
+	r = xfer_mupdate(xfer, 1, item->mbentry->name, item->mbentry->partition,
+			 config_servername, item->mbentry->acl);
 	if (r) {
 	    syslog(LOG_ERR,
 		   "Could not back out mupdate during move of %s (%s)",
-		   item->name, error_message(r));
+		   item->mbentry->name, error_message(r));
 	}
 
 	/* delete remote if created */
@@ -9243,22 +9239,17 @@ static void xfer_done(struct xfer_header **xferptr)
 	    if (r) {
 		syslog(LOG_ERR,
 		       "Could not back out remote mailbox during move of %s (%s)",
-		       item->name, error_message(r));
+		       item->mbentry->name, error_message(r));
 	    }
 	}
 
 	/* remove remote flag from local mailbox */
-	r = mboxlist_lookup(item->name, &mbentry, NULL);
-	if (!r) {
-	    mbentry->mbtype = item->mbtype;
-	    r = mboxlist_update(mbentry, 1);
-	}
-	mboxlist_entry_free(&mbentry);
+	r = mboxlist_update(item->mbentry, 1);
 
 	if (r) {
 	    syslog(LOG_ERR,
 		   "Could not unset remote flag on mailbox: %s",
-		   item->name);
+		   item->mbentry->name);
 	}
     }
 
@@ -9266,9 +9257,7 @@ static void xfer_done(struct xfer_header **xferptr)
     item = xfer->items;
     while (item) {
 	next = item->next;
-	free(item->name);
-	free(item->part);
-	free(item->acl);
+	mboxlist_entry_free(&item->mbentry);
 	free(item);
 	item = next;
     }
@@ -9366,16 +9355,11 @@ fail:
 }
 
 static void xfer_addmbox(struct xfer_header *xfer,
-			const char *mboxname, struct mboxlist_entry *entry)
+			 struct mboxlist_entry *mbentry)
 {
     struct xfer_item *item = xzmalloc(sizeof(struct xfer_item));
 
-    /* make a local copy of all the interesting fields */
-    item->name = xstrdup(mboxname);
-    item->part = xstrdup(entry->partition);
-    item->acl = xstrdup(entry->acl);
-    item->mbtype = entry->mbtype;
-    item->done = 0;
+    item->mbentry = mbentry;
 
     /* and link on to the list (reverse order) */
     item->next = xfer->items;
@@ -9389,7 +9373,7 @@ static int xfer_localcreate(struct xfer_header *xfer)
     char extname[MAX_MAILBOX_NAME];
 
     for (item = xfer->items; item; item = item->next) {
-	(*imapd_namespace.mboxname_toexternal)(&imapd_namespace, item->name,
+	(*imapd_namespace.mboxname_toexternal)(&imapd_namespace, item->mbentry->name,
 					       imapd_userid, extname);
 	if (xfer->topart) {
 	    /* need to send partition as an atom */
@@ -9402,7 +9386,7 @@ static int xfer_localcreate(struct xfer_header *xfer)
 	r = getresult(xfer->be->in, "LC1");
 	if (r) {
 	    syslog(LOG_ERR, "Could not move mailbox: %s, LOCALCREATE failed",
-		   item->name);
+		   item->mbentry->name);
 	    return r;
 	}
 	item->remote_created = 1;
@@ -9421,7 +9405,8 @@ static int xfer_backport_seen_item(struct xfer_item *item,
     unsigned recno;
     int r;
 
-    r = mailbox_open_irl(item->name, &mailbox);
+    /* XXX - entry version of open */
+    r = mailbox_open_irl(item->mbentry->name, &mailbox);
     if (r) return r;
 
     outlist = seqset_init(mailbox->i.last_uid, SEQ_MERGE);
@@ -9478,12 +9463,12 @@ static int xfer_deactivate(struct xfer_header *xfer)
 
     /* Step 3: mupdate.DEACTIVATE(mailbox, newserver) */
     for (item = xfer->items; item; item = item->next) {
-	r = xfer_mupdate(xfer, 0, item->name, item->part,
-			 config_servername, item->acl);
+	r = xfer_mupdate(xfer, 0, item->mbentry->name, item->mbentry->partition,
+			 config_servername, item->mbentry->acl);
 	if (r) {
 	    syslog(LOG_ERR,
 		   "Could not move mailbox: %s, MUPDATE DEACTIVATE failed",
-		   item->name);
+		   item->mbentry->name);
 	    return r;
 	}
     }
@@ -9499,13 +9484,13 @@ static int xfer_undump(struct xfer_header *xfer)
     char extname[MAX_MAILBOX_NAME];
 
     for (item = xfer->items; item; item = item->next) {
-	(*imapd_namespace.mboxname_toexternal)(&imapd_namespace, item->name,
+	(*imapd_namespace.mboxname_toexternal)(&imapd_namespace, item->mbentry->name,
 					       imapd_userid, extname);
-	r = mailbox_open_irl(item->name, &mailbox);
+	r = mailbox_open_irl(item->mbentry->name, &mailbox);
 	if (r) {
 	    syslog(LOG_ERR,
 		   "Failed to open mailbox %s for dump_mailbox() %s",
-		   item->name, error_message(r));
+		   item->mbentry->name, error_message(r));
 	}
 
 	/* Step 4: Dump local -> remote */
@@ -9520,14 +9505,14 @@ static int xfer_undump(struct xfer_header *xfer)
 	if (r) {
 	    syslog(LOG_ERR,
 		   "Could not move mailbox: %s, dump_mailbox() failed %s",
-		   item->name, error_message(r));
+		   item->mbentry->name, error_message(r));
 	    return r;
 	}
 
 	r = getresult(xfer->be->in, "D01");
 	if (r) {
 	    syslog(LOG_ERR, "Could not move mailbox: %s, UNDUMP failed %s",
-		   item->name, error_message(r));
+		   item->mbentry->name, error_message(r));
 	    return r;
 	}
     
@@ -9536,15 +9521,15 @@ static int xfer_undump(struct xfer_header *xfer)
 		     extname);
 	if (r) {
 	    syslog(LOG_ERR, "Could not clear remote acl on %s",
-		   item->name);
+		   item->mbentry->name);
 	    return r;
 	}
 
 	r = dumpacl(xfer->be->in, xfer->be->out,
-		    extname, item->acl);
+		    extname, item->mbentry->acl);
 	if (r) {
 	    syslog(LOG_ERR, "Could not set remote acl on %s",
-		   item->name);
+		   item->mbentry->name);
 	    return r;
 	}
 
@@ -9557,7 +9542,7 @@ static int xfer_undump(struct xfer_header *xfer)
 	    if (r) {
 		syslog(LOG_ERR,
 		       "Could not trigger remote push to mupdate server "
-		       "during move of %s", item->name);
+		       "during move of %s", item->mbentry->name);
 	    }
 	}
     }
@@ -9583,11 +9568,11 @@ static int xfer_reactivate(struct xfer_header *xfer)
 	 * much for making recovery easier!
 	 */
 	if (!topart) topart = "MOVED";
-	r = xfer_mupdate(xfer, 1, item->name, topart,
-			 xfer->toserver, item->acl);
+	r = xfer_mupdate(xfer, 1, item->mbentry->name, topart,
+			 xfer->toserver, item->mbentry->acl);
 	if (r) {
 	    syslog(LOG_ERR, "MUPDATE: can't activate mailbox entry '%s'",
-		   item->name);
+		   item->mbentry->name);
 	    return r;
 	}
     }
@@ -9606,13 +9591,13 @@ static int xfer_delete(struct xfer_header *xfer)
 	if (config_mupdate_config != IMAP_ENUM_MUPDATE_CONFIG_UNIFIED) {
 	    /* Note that we do not check the ACL, and we don't update MUPDATE */
 	    /* note also that we need to remember to let proxyadmins do this */
-	    r = mboxlist_deletemailbox(item->name,
+	    r = mboxlist_deletemailbox(item->mbentry->name,
 				       imapd_userisadmin || imapd_userisproxyadmin,
 				       imapd_userid, imapd_authstate, 0, 1, 0);
 	    if (r) {
 		syslog(LOG_ERR,
 		       "Could not delete local mailbox during move of %s",
-		       item->name);
+		       item->mbentry->name);
 		/* can't abort now! */
 	    }
 	} else {
@@ -9621,19 +9606,20 @@ static int xfer_delete(struct xfer_header *xfer)
 	     * function because we've already got the right value for
 	     * the new server in the mboxlist */
 	    /* note: delete closes mailbox */
-	    r = mailbox_open_iwl(item->name, &mailbox);
+	    /* XXX - really should be using the 'entry' here, not name */
+	    r = mailbox_open_iwl(item->mbentry->name, &mailbox);
 	    if (!r) r = mailbox_delete(&mailbox);
 	    if (r) {
 		syslog(LOG_ERR,
 		       "Could not delete local mailbox during move of %s",
-		       item->name);
+		       item->mbentry->name);
 		/* can't abort now! */
 	    }
 	    /* XXX - quota root? */
-	}
 
-	/* Delete mailbox annotations */
-	annotatemore_delete(item->name);
+	    /* Delete mailbox annotations */
+	    annotatemore_delete(item->mbentry);
+	}
 
 	/* mark this item done so the cleanup doesn't revert it! */
 	item->done = 1;
@@ -9656,10 +9642,10 @@ static int xfer_user_cb(char *name,
     if (r) return r;
     
     /* Skip remote mailbox */
-    if (!(mbentry->mbtype & MBTYPE_REMOTE))
-	xfer_addmbox(xfer, name, mbentry);
-
-    mboxlist_entry_free(&mbentry);
+    if (mbentry->mbtype & MBTYPE_REMOTE)
+	mboxlist_entry_free(&mbentry);
+    else
+	xfer_addmbox(xfer, mbentry);
 
     return 0;
 }
@@ -9792,7 +9778,8 @@ void cmd_xfer(const char *tag, const char *name,
     if (r) goto done;
 
     /* we're always moving this mailbox */
-    xfer_addmbox(xfer, mailboxname, mbentry);
+    xfer_addmbox(xfer, mbentry);
+    mbentry = NULL;
 
     /* if we are not moving a user, just move the one mailbox */
     if (!moving_user) {

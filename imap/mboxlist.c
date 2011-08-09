@@ -1082,7 +1082,7 @@ int mboxlist_deletemailbox(const char *name, int isadmin,
     if (r) goto done;
 
     /* Clean up annotations */
-    r = annotatemore_delete(name);
+    r = annotatemore_delete(mbentry);
     if (r) {
 	syslog(LOG_ERR,
 	       "Failed to delete annotations with mailbox '%s': %s",

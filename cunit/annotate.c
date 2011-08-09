@@ -731,6 +731,7 @@ static void test_delete(void)
     int r;
     annotate_scope_t scope;
     struct mailbox mailbox;
+    struct mboxlist_entry mbentry;
     strarray_t entries = STRARRAY_INITIALIZER;
     strarray_t attribs = STRARRAY_INITIALIZER;
     struct entryattlist *ealist = NULL;
@@ -747,6 +748,11 @@ static void test_delete(void)
     mailbox.name = MBOXNAME1_INT;
     mailbox.acl = ACL;
 
+    memset(&mbentry, 0, sizeof(mbentry));
+    mbentry.name = MBOXNAME1_INT;
+    mbentry.mbtype = 0;
+    mbentry.partition = PARTITION;
+    mbentry.acl = ACL;
     strarray_append(&entries, COMMENT);
     strarray_append(&attribs, VALUE_SHARED);
 
@@ -811,7 +817,7 @@ static void test_delete(void)
 
     /* delete all the entries associated with the mailbox */
 
-    r = annotatemore_delete(MBOXNAME1_INT);
+    r = annotatemore_delete(&mbentry);
     CU_ASSERT_EQUAL(r, 0);
 
     CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/cyrus.annotations"), -ENOENT);

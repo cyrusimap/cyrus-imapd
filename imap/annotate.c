@@ -2982,34 +2982,31 @@ static int _annotate_rewrite(const char *oldmboxname,
     return r;
 }
 
-int annotatemore_delete(const char *mboxname)
+int annotatemore_delete(const struct mboxlist_entry *mbentry)
 {
     int r;
     char *fname = NULL;
 
-    assert(mboxname);
+    assert(mbentry);
 
     /* remove any per-folder annotations from the global db */
     r = annotatemore_begin();
     if (r)
 	goto out;
 
-    r = _annotate_rewrite(mboxname, /*olduid*/0, /*olduserid*/NULL,
+    r = _annotate_rewrite(mbentry->name, /*olduid*/0, /*olduserid*/NULL,
 			 /*newmboxname*/NULL, /*newuid*/0, /*newuserid*/NULL,
 			 /*copy*/0);
     if (r)
 	goto out;
 
     /* remove the entire per-folder database */
-    r = annotate_dbname(mboxname, &fname);
+    r = annotate_dbname_mbentry(mbentry, &fname);
     if (r)
 	goto out;
 
-    r = unlink(fname);
-    if (r < 0) {
+    if (unlink(fname) < 0 && errno != ENOENT) {
 	syslog(LOG_ERR, "cannot unlink %s: %m", fname);
-	r = IMAP_IOERROR;
-	goto out;
     }
 
     r = annotatemore_commit();

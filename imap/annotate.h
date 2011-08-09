@@ -48,6 +48,7 @@
 #include "charset.h" /* for comp_pat */
 #include "imapd.h"
 #include "mboxname.h"
+#include "mboxlist.h"
 #include "prot.h"
 #include "util.h"
 #include "strarray.h"
@@ -197,9 +198,9 @@ int annotate_msg_copy(const char *oldmboxname, uint32_t olduid,
 		      const char *newmboxname, uint32_t newuid,
 		      const char *userid);
 
-/* delete the annotations for 'mboxname'
+/* delete the annotations for 'mbentry'
  * Uses its own transaction. */
-int annotatemore_delete(const char *mboxname);
+int annotatemore_delete(const struct mboxlist_entry *mbentry);
 
 /* Open a new transaction. Any currently open transaction
  * is aborted. */
