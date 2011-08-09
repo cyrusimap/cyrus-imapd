@@ -1498,7 +1498,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
 	"/specialuse",
 	ATTRIB_TYPE_STRING,
 	BACKEND_ONLY,
-	ATTRIB_VALUE_SHARED,
+	ATTRIB_VALUE_PRIV,
 	0,
 	annotation_get_specialuse,
 	annotation_set_specialuse,
@@ -2591,16 +2591,20 @@ static int annotation_set_specialuse(const annotate_cursor_t *cursor,
       NULL
     };
 
-    if (entry->shared.s == NULL) {
+    /* can only set specialuse on your own mailboxes */
+    if (!mboxname_userownsmailbox(sdata->userid, cursor->int_mboxname))
+	return IMAP_PERMISSION_DENIED;
+
+    if (entry->priv.s == NULL) {
 	/* Effectively removes the annotation */
 	val = NULL;
     }
     else {
 	for (i = 0; valid_specialuse[i]; i++) {
-	    if (!strcasecmp(valid_specialuse[i], buf_cstring(&entry->shared)))
+	    if (!strcasecmp(valid_specialuse[i], buf_cstring(&entry->priv)))
 		break;
 	    /* or without the leading '\' */
-	    if (!strcasecmp(valid_specialuse[i]+1, buf_cstring(&entry->shared)))
+	    if (!strcasecmp(valid_specialuse[i]+1, buf_cstring(&entry->priv)))
 		break;
 	}
 	val = valid_specialuse[i];
@@ -2613,7 +2617,7 @@ static int annotation_set_specialuse(const annotate_cursor_t *cursor,
 
 		for (i = 0; i < specialuse_extra->count; i++) {
 		    const char * extra_val = strarray_nth(specialuse_extra, i);
-		    if (!strcasecmp(extra_val, buf_cstring(&entry->shared))) {
+		    if (!strcasecmp(extra_val, buf_cstring(&entry->priv))) {
 			/* strarray owns string, keep specialuse_extra until after set call */
 			val = extra_val;
 			break;
