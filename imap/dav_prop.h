@@ -125,12 +125,11 @@ enum {
 
 
 /* Parse the requested properties and create a linked list of fetch callbacks */
-int preload_proplist(xmlNodePtr proplist, xmlNsPtr ns[],
-		     struct propfind_entry_list **list);
+int preload_proplist(xmlNodePtr proplist, struct propfind_entry_list **list);
 
 /* Initialize an XML tree for a property response */
-xmlDocPtr init_prop_response(const char *resp,
-			     xmlNodePtr *root, xmlNsPtr *ns);
+xmlDocPtr init_prop_response(const char *resp, xmlNodePtr *root,
+			     xmlNsPtr reqNs, xmlNsPtr *respNs);
 
 /* Add a response tree to 'root' for the specified href and property list */
 void add_prop_response(struct propfind_ctx *fctx);

@@ -2268,7 +2268,7 @@ static int meth_mkcol(struct transaction_t *txn)
 	/* Start construction of our mkcol/mkcalendar response */
 	outdoc = init_prop_response(txn->meth[3] == 'A' ?
 				    "mkcalendar-response" : "mkcol-response",
-				    &root, ns);
+				    &root, root->nsDef, ns);
 
 	/* Populate our proppatch context */
 	pctx.req_tgt = &txn->req_tgt;
@@ -2402,10 +2402,10 @@ static int meth_propfind(struct transaction_t *txn)
     }
 
     /* Start construction of our multistatus response */
-    outdoc = init_prop_response("multistatus", &root, ns);
+    outdoc = init_prop_response("multistatus", &root, root->nsDef, ns);
 
     /* Parse the list of properties and build a list of callbacks */
-    preload_proplist(cur->children, ns, &elist);
+    preload_proplist(cur->children, &elist);
 
     /* Populate our propfind context */
     fctx.req_tgt = &txn->req_tgt;
@@ -2503,7 +2503,7 @@ static int meth_proppatch(struct transaction_t *txn)
     instr = root->children;
 
     /* Start construction of our multistatus response */
-    outdoc = init_prop_response("multistatus", &root, ns);
+    outdoc = init_prop_response("multistatus", &root, root->nsDef, ns);
 
     /* Add a response tree to 'root' for the specified href */
     resp = xmlNewChild(root, NULL, BAD_CAST "response", NULL);
@@ -2895,10 +2895,10 @@ static int meth_report(struct transaction_t *txn)
     }
 
     /* Start construction of our multistatus response */
-    outdoc = init_prop_response("multistatus", &root, ns);
+    outdoc = init_prop_response("multistatus", &root, root->nsDef, ns);
 
     /* Parse the list of properties and build a list of callbacks */
-    preload_proplist(cur->children, ns, &elist);
+    preload_proplist(cur->children, &elist);
 
     /* Construct mailbox name corresponding to request target URI */
     (void) target_to_mboxname(&txn->req_tgt, mailboxname);

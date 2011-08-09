@@ -51,8 +51,8 @@
 
 
 /* Initialize an XML tree for a property response */
-xmlDocPtr init_prop_response(const char *resp,
-			     xmlNodePtr *root, xmlNsPtr *ns)
+xmlDocPtr init_prop_response(const char *resp, xmlNodePtr *root,
+			     xmlNsPtr reqNs, xmlNsPtr *respNs)
 {
     /* Start construction of our XML response tree */
     xmlDocPtr outdoc = xmlNewDoc(BAD_CAST "1.0");
@@ -60,12 +60,25 @@ xmlDocPtr init_prop_response(const char *resp,
     *root = xmlNewNode(NULL, BAD_CAST resp);
     xmlDocSetRootElement(outdoc, *root);
 
-    /* Add namespaces */
-    ns[NS_DAV] = xmlNewNs(*root, BAD_CAST NS_URL_DAV, BAD_CAST "D");
-    ns[NS_CAL] = xmlNewNs(*root, BAD_CAST NS_URL_CAL, BAD_CAST "C");
-    ns[NS_CS] = xmlNewNs(*root, BAD_CAST NS_URL_CS, BAD_CAST "CS");
-    ns[NS_APPLE] = xmlNewNs(*root, BAD_CAST NS_URL_APPLE, BAD_CAST "A");
-    xmlSetNs(*root, ns[NS_DAV]);
+    /* Add namespaces from request to our response,
+     * creating array of known namespaces that we can reference later.
+     */
+    memset(respNs, 0, NUM_NAMESPACE * sizeof(xmlNsPtr));
+    for (; reqNs; reqNs = reqNs->next) {
+	if (!xmlStrcmp(reqNs->href, BAD_CAST NS_URL_DAV))
+	    respNs[NS_DAV] = xmlNewNs(*root, reqNs->href, reqNs->prefix);
+	else if (!xmlStrcmp(reqNs->href, BAD_CAST NS_URL_CAL))
+	    respNs[NS_CAL] = xmlNewNs(*root, reqNs->href, reqNs->prefix);
+	else if (!xmlStrcmp(reqNs->href, BAD_CAST NS_URL_CS))
+	    respNs[NS_CS] = xmlNewNs(*root, reqNs->href, reqNs->prefix);
+	else if (!xmlStrcmp(reqNs->href, BAD_CAST NS_URL_APPLE))
+	    respNs[NS_APPLE] = xmlNewNs(*root, reqNs->href, reqNs->prefix);
+	else
+	    xmlNewNs(*root, reqNs->href, reqNs->prefix);
+    }
+
+    /* Set namespace of root node */
+    xmlSetNs(*root, respNs[NS_DAV]);
 
     return outdoc;
 }
@@ -316,8 +329,6 @@ static int proppatch_todb(xmlNodePtr prop, unsigned set,
 	*pctx->ret = r;
     }
 
-    if (!ns_prefix) xmlNewNs(node, ns->href, ns->prefix);
-
     if (freeme) xmlFree(freeme);
 
     return 0;
@@ -363,8 +374,6 @@ static int propfind_fromdb(const xmlChar *propname, xmlNsPtr ns,
 	node = add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND], ns,
 			BAD_CAST propname, NULL, NULL);
     }
-
-    if (!ns_prefix) xmlNewNs(node, ns->href, ns->prefix);
 
     return 0;
 }
@@ -732,9 +741,10 @@ static const struct prop_entry prop_entries[] =
 };
 
 
-/* Parse the requested properties and create a linked list of fetch callbacks */
-int preload_proplist(xmlNodePtr proplist, xmlNsPtr ns[],
-		     struct propfind_entry_list **list)
+/* Parse the requested properties and create a linked list of fetch callbacks.
+ * The list gets reused for each href if Depth > 0
+ */
+int preload_proplist(xmlNodePtr proplist, struct propfind_entry_list **list)
 {
     xmlNodePtr prop;
     const struct prop_entry *entry;
@@ -751,15 +761,14 @@ int preload_proplist(xmlNodePtr proplist, xmlNsPtr ns[],
 		 entry++);
 
 	    nentry->name = prop->name;
+	    nentry->ns = prop->ns;
 	    if (entry->name) {
 		/* Found a match */
-		nentry->ns = ns[entry->namespace];
 		nentry->get = entry->get;
 		nentry->rock = entry->rock;
 	    }
 	    else {
 		/* No match, treat as a dead property */
-		nentry->ns = prop->ns;
 		nentry->get = propfind_fromdb;
 		nentry->rock = NULL;
 	    }
@@ -772,7 +781,7 @@ int preload_proplist(xmlNodePtr proplist, xmlNsPtr ns[],
 }
 
 
-/* Execute given property patch instructions */
+/* Execute the given property patch instructions */
 int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr,
 		 xmlNodePtr *propstat)
 {
@@ -815,7 +824,7 @@ int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr,
 			    /* Protected property */
 			    add_prop(HTTP_FORBIDDEN, pctx->root,
 				     &propstat[PROPSTAT_FORBID],
-				     pctx->ns[entry->namespace],
+				     prop->ns,
 				     prop->name, NULL,
 				     BAD_CAST "cannot-modify-protected-property");
 			    *pctx->ret = HTTP_FORBIDDEN;
@@ -823,7 +832,7 @@ int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr,
 			else {
 			    /* Write "live" property */
 			    entry->put(prop, set,
-				       pctx->ns[entry->namespace],
+				       prop->ns,
 				       pctx, propstat,
 				       entry->rock);
 			}
