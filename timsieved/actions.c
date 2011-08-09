@@ -235,7 +235,7 @@ int getscript(struct protstream *conn, mystring_t *name)
 
   result = stat(path, &filestats);
   if (result != 0) {
-    prot_printf(conn,"NO \"Script doesn't exist\"\r\n");
+    prot_printf(conn,"NO (NONEXISTENT) \"Script doesn't exist\"\r\n");
     return TIMSIEVE_NOEXIST;
   }
   size = filestats.st_size;
@@ -343,7 +343,7 @@ int putscript(struct protstream *conn, mystring_t *name, mystring_t *data,
       if (countscripts(string_DATAPTR(name))+1 > maxscripts)
       {
 	  prot_printf(conn,
-		      "NO (\"QUOTA\") \"You are only allowed %d scripts on this server\"\r\n",
+		      "NO (QUOTA/MAXSCRIPTS) \"You are only allowed %d scripts on this server\"\r\n",
 		      maxscripts);
 	  return TIMSIEVE_FAIL;
       }
@@ -506,14 +506,18 @@ int deletescript(struct protstream *conn, mystring_t *name)
 
   snprintf(path, 1023, "%s.script", string_DATAPTR(name));
 
-  if (isactive(string_DATAPTR(name)) && (deleteactive(conn)!=TIMSIEVE_OK)) {
-      return TIMSIEVE_FAIL;
+  if (isactive(string_DATAPTR(name))) {
+    prot_printf(conn, "NO (ACTIVE) \"Active script cannot be deleted\"\r\n");
+    return TIMSIEVE_FAIL;
   }
 
   result = unlink(path);
 
   if (result != 0) {
-      prot_printf(conn,"NO \"Error deleting script\"\r\n");
+      if (result == ENOENT)
+          prot_printf(conn, "NO (NONEXISTENT) \"Script %s does not exist.\"\r\n", string_DATAPTR(name));
+      else
+          prot_printf(conn,"NO \"Error deleting script\"\r\n");
       return TIMSIEVE_FAIL;
   }
 
@@ -620,7 +624,7 @@ int setactive(struct protstream *conn, mystring_t *name)
 
     if (exists(string_DATAPTR(name))==FALSE)
     {
-	prot_printf(conn,"NO \"Script does not exist\"\r\n");
+	prot_printf(conn,"NO (NONEXISTENT) \"Script does not exist\"\r\n");
 	return TIMSIEVE_NOEXIST;
     }
 
@@ -677,7 +681,7 @@ int cmd_havespace(struct protstream *conn, mystring_t *sieve_name, unsigned long
     if (num > maxscriptsize)
     {
 	prot_printf(conn,
-		    "NO (\"QUOTA\") \"Script size is too large. "
+		    "NO (QUOTA/MAXSIZE) \"Script size is too large. "
 		    "Max script size is %ld bytes\"\r\n",
 		    maxscriptsize);
 	return TIMSIEVE_FAIL;
@@ -689,7 +693,7 @@ int cmd_havespace(struct protstream *conn, mystring_t *sieve_name, unsigned long
     if (countscripts(string_DATAPTR(sieve_name))+1 > maxscripts)
     {
 	prot_printf(conn,
-		    "NO (\"QUOTA\") \"You are only allowed %d scripts on this server\"\r\n",
+		    "NO (QUOTA/MAXSCRIPTS) \"You are only allowed %d scripts on this server\"\r\n",
 		    maxscripts);
 	return TIMSIEVE_FAIL;
     }
