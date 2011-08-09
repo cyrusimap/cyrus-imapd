@@ -515,7 +515,7 @@ void reportquota(void)
 	if (quota[i].quota.limits[QUOTA_STORAGE] > 0) {
 	    printf(" %7d " QUOTA_REPORT_FMT ,
 		    quota[i].quota.limits[QUOTA_STORAGE],
-		   ((quota[i].quota.useds[QUOTA_STORAGE] / QUOTA_UNITS)
+		   ((quota[i].quota.useds[QUOTA_STORAGE] / quota_units[QUOTA_STORAGE])
 		   * 100) / quota[i].quota.limits[QUOTA_STORAGE]);
 	}
 	else if (quota[i].quota.limits[QUOTA_STORAGE] == 0) {
@@ -529,6 +529,6 @@ void reportquota(void)
 					       quota[i].quota.root,
 					       "cyrus", buf);
 	printf(" " QUOTA_REPORT_FMT " %s\n",
-	       quota[i].quota.useds[QUOTA_STORAGE] / QUOTA_UNITS, buf);
+	       quota[i].quota.useds[QUOTA_STORAGE] / quota_units[QUOTA_STORAGE], buf);
     }
 }

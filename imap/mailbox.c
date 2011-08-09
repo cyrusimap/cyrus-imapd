@@ -4153,7 +4153,6 @@ int mailbox_quota_check(struct mailbox *mailbox,
 {
     int r;
     struct quota q;
-    int res = QUOTA_STORAGE;
 
     /*
      * We are always allowed to *reduce* usage even if it doesn't get us
@@ -4171,9 +4170,5 @@ int mailbox_quota_check(struct mailbox *mailbox,
     if (r)
 	return r;
 
-    if (q.limits[res] >= 0 && delta >= 0 &&
-	q.useds[res] + delta > ((uquota_t) q.limits[res] * QUOTA_UNITS))
-	return IMAP_QUOTA_EXCEEDED;
-
-    return 0;
+    return quota_check(&q, QUOTA_STORAGE, delta);
 }

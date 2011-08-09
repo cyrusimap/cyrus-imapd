@@ -82,6 +82,10 @@ const char * const quota_names[QUOTA_NUMRESOURCES] = {
     "STORAGE",		/* QUOTA_STORAGE -- RFC2087 */
 };
 
+const int quota_units[QUOTA_NUMRESOURCES] = {
+    1024,		/* QUOTA_STORAGE -- RFC2087 */
+};
+
 int quota_name_to_resource(const char *str)
 {
     int res;
@@ -197,6 +201,34 @@ int quota_read(struct quota *quota, struct txn **tid, int wrlock)
     }
 
     return 0;
+}
+
+int quota_check(const struct quota *q,
+		enum quota_resource res, quota_t delta)
+{
+    uquota_t lim;
+
+    if (q->limits[res] < 0)
+	return 0;	    /* unlimited */
+
+    /*
+     * We are always allowed to *reduce* usage even if it doesn't get us
+     * below the quota.  As a side effect this allows our caller to pass
+     * delta = -1 meaning "don't care about quota checks".
+     */
+    if (delta < 0)
+	return 0;
+
+    lim = (uquota_t)(q->limits[res] * quota_units[res]);
+    if (q->useds[res] + delta > lim)
+	return IMAP_QUOTA_EXCEEDED;
+    return 0;
+}
+
+void quota_use(struct quota *q,
+	       enum quota_resource res, quota_t delta)
+{
+    q->useds[res] += delta;
 }
 
 struct quota_foreach_t {

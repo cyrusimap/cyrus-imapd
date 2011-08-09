@@ -50,8 +50,6 @@
 
 #define FNAME_QUOTADB "/quotas.db"
 
-#define QUOTA_UNITS (1024)
-
 /* Define the proper quota type, it should either be a
  * long or a long long int depending upon what the
  * the compiler supports.
@@ -81,11 +79,17 @@ struct quota {
 #define QUOTA_UNLIMITED	    (-1)
 
 extern const char * const quota_names[QUOTA_NUMRESOURCES];
+extern const int quota_units[QUOTA_NUMRESOURCES];
 int quota_name_to_resource(const char *str);
 
 typedef int quotaproc_t(struct quota *quota, void *rock);
 
 extern int quota_read(struct quota *quota, struct txn **tid, int wrlock);
+
+extern int quota_check(const struct quota *quota,
+		       enum quota_resource res, quota_t delta);
+extern void quota_use(struct quota *quota,
+		      enum quota_resource res, quota_t delta);
 
 extern void quota_commit(struct txn **tid);
 
