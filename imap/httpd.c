@@ -273,8 +273,8 @@ extern int saslserver(sasl_conn_t *conn, const char *mech,
 static int reset_saslconn(sasl_conn_t **conn);
 
 static void cmdloop(void);
-static int parse_target(const char *uri, struct request_target_t *tgt,
-			const char **errstr);
+static int parse_target(const char *meth, const char *uri,
+			struct request_target_t *tgt, const char **errstr);
 static int read_body(struct transaction_t *txn, int dump, const char **errstr);
 static void response_header(long code, struct transaction_t *txn);
 static void error_response(long code, struct transaction_t *txn,
@@ -1002,7 +1002,7 @@ static void cmdloop(void)
 	}
 
 	/* Parse request-target URL */
-	if (!ret && (r = parse_target(uristr, &txn.req_tgt, &errstr))) {
+	if (!ret && (r = parse_target(txn.meth, uristr, &txn.req_tgt, &errstr))) {
 	    ret = r;
 	}
 
@@ -1160,8 +1160,8 @@ static void cmdloop(void)
 
 
 /* Parse request-target into dissected path */
-static int parse_target(const char *uri, struct request_target_t *tgt,
-			const char **errstr)
+static int parse_target(const char *meth, const char *uri,
+			struct request_target_t *tgt, const char **errstr)
 {
     xmlURIPtr p_uri;  /* parsed URI */
     char *p;
@@ -1199,7 +1199,8 @@ static int parse_target(const char *uri, struct request_target_t *tgt,
     p = strcpy(tgt->path, p_uri->path);
     xmlFreeURI(p_uri);
 
-    if (!strcmp(p, "*")) {
+    if ((meth[0] == 'O') && !strcmp(p, "*")) {
+	/* Special URI for OPTIONS only */
 	tgt->allow = ALLOW_ALL;
 	return 0;
     }
@@ -1210,7 +1211,11 @@ static int parse_target(const char *uri, struct request_target_t *tgt,
     }
 
     /* Break down path into interesting segments */
-    if (!*++p) return 0;
+    if (!*++p) {
+	/* root */
+	tgt->allow |= (ALLOW_DAV | ALLOW_CAL | ALLOW_CARD);
+	return 0;
+    }
 
     /* Check namespace */
     len = strcspn(p, "/");
@@ -1946,6 +1951,9 @@ static int meth_copy(struct transaction_t *txn)
 {
     int ret = 0;
 
+    /* Make sure its a DAV resource */
+    if (!(txn->req_tgt.allow & ALLOW_DAV)) return HTTP_NOT_ALLOWED; 
+
     return ret;
 }
 
@@ -1961,6 +1969,9 @@ static int meth_delete(struct transaction_t *txn)
     struct index_record record;
     const char *etag = NULL;
     time_t lastmod = 0;
+
+    /* Make sure its a DAV resource */
+    if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
 
     /* Construct mailbox name corresponding to request target URI */
     (void) target_to_mboxname(&txn->req_tgt, mailboxname);
@@ -2223,6 +2234,10 @@ static int meth_mkcol(struct transaction_t *txn)
     /* Response should not be cached */
     txn->flags |= HTTP_NOCACHE;
 
+    /* Make sure its a DAV resource */
+    if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
+
+    /* Make sure its a home-set collection */
     if (!txn->req_tgt.collection || txn->req_tgt.resource) {
 	*txn->errstr = "Calendars can only be created under a home-set collection";
 	return HTTP_FORBIDDEN;
@@ -2361,6 +2376,9 @@ static int meth_propfind(struct transaction_t *txn)
     struct propfind_ctx fctx;
     struct propfind_entry_list *elist = NULL;
 
+    /* Make sure its a DAV resource */
+    if (!(txn->req_tgt.allow & ALLOW_DAV)) return HTTP_NOT_ALLOWED;
+
     /* Check Depth */
     hdr = spool_getheader(txn->req_hdrs, "Depth");
     if (!hdr || !strcmp(hdr[0], "infinity")) {
@@ -2482,6 +2500,10 @@ static int meth_proppatch(struct transaction_t *txn)
     /* Response should not be cached */
     txn->flags |= HTTP_NOCACHE;
 
+    /* Make sure its a DAV resource */
+    if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED;
+
+    /* Make sure its a calendar collection */
     if (!txn->req_tgt.collection || txn->req_tgt.resource) {
 	*txn->errstr = "Properties can only be updated on calendar collections";
 	return HTTP_FORBIDDEN;
@@ -2589,7 +2611,10 @@ static int meth_put(struct transaction_t *txn)
     struct appendstate appendstate;
     icalcomponent *ical, *comp;
 
-    /* We don't handle POST/PUT on non-calendar collections */
+    /* Make sure its a DAV resource */
+    if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
+
+   /* We don't handle POST/PUT on non-calendar collections */
     if (!txn->req_tgt.collection) return HTTP_NOT_ALLOWED;
 
     /* We don't handle PUT on calendar collections */
@@ -2851,6 +2876,9 @@ static int meth_report(struct transaction_t *txn)
     struct caldav_db *caldavdb = NULL;
     struct propfind_ctx fctx;
     struct propfind_entry_list *elist = NULL;
+
+    /* Make sure its a DAV resource */
+    if (!(txn->req_tgt.allow & ALLOW_DAV)) return HTTP_NOT_ALLOWED; 
 
     /* Check Depth */
     if ((hdr = spool_getheader(txn->req_hdrs, "Depth"))) {
