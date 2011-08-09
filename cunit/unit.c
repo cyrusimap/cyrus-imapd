@@ -208,9 +208,11 @@ static void run_tests(void)
 
     if (num_testspecs == 0) {
 	/* not specified: run all tests in order listed */
-	CU_basic_run_tests();
+	err = CU_basic_run_tests();
 	if (timeouts_flag)
 	    timeout_fini();
+	if (err != CUE_SUCCESS || CU_get_run_summary()->nAssertsFailed)
+	    exit(1);
 	return;
     }
 
