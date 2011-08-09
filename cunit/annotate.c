@@ -1668,6 +1668,7 @@ static int set_up(void)
 {
     int r;
     struct mboxlist_entry mbentry;
+    struct mailbox *mailbox;
     const char * const *d;
     static const char * const dirs[] = {
 	DBDIR,
@@ -1706,11 +1707,15 @@ static int set_up(void)
     cyrusdb_init();
     config_mboxlist_db = cyrusdb_fromname("skiplist");
     config_annotation_db = cyrusdb_fromname("skiplist");
+    config_quota_db = cyrusdb_fromname("skiplist");
 
     userid = "smurf";
     isadmin = 0;
     auth_state = auth_newstate(userid);
     mboxname_init_namespace(&namespace, isadmin);
+
+    quotadb_init(0);
+    quotadb_open(NULL);
 
     mboxlist_init(0);
     mboxlist_open(NULL);
@@ -1721,6 +1726,16 @@ static int set_up(void)
     mbentry.partition = PARTITION;
     mbentry.acl = ACL;
     r = mboxlist_update(&mbentry, /*localonly*/1);
+    if (r)
+	return r;
+
+    r = mailbox_create(MBOXNAME1_INT, PARTITION, ACL,
+		       /*uniqueid*/NULL, /*specialuse*/NULL,
+		       /*options*/0, /*uidvalidity*/0,
+		       &mailbox);
+    if (r)
+	return r;
+    mailbox_close(&mailbox);
 
     memset(&mbentry, 0, sizeof(mbentry));
     mbentry.name = MBOXNAME2_INT;
@@ -1728,6 +1743,16 @@ static int set_up(void)
     mbentry.partition = PARTITION;
     mbentry.acl = ACL;
     r = mboxlist_update(&mbentry, /*localonly*/1);
+    if (r)
+	return r;
+
+    r = mailbox_create(MBOXNAME2_INT, PARTITION, ACL,
+		       /*uniqueid*/NULL, /*specialuse*/NULL,
+		       /*options*/0, /*uidvalidity*/0,
+		       &mailbox);
+    if (r)
+	return r;
+    mailbox_close(&mailbox);
 
     old_annotation_definitions =
 	imapopts[IMAPOPT_ANNOTATION_DEFINITIONS].val.s;
@@ -1741,6 +1766,9 @@ static int tear_down(void)
 
     mboxlist_close();
     mboxlist_done();
+
+    quotadb_close();
+    quotadb_done();
 
     annotatemore_done();
 

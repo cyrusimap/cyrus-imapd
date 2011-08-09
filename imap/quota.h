@@ -64,7 +64,8 @@ extern struct db *qdb;
 
 enum quota_resource {
     QUOTA_STORAGE	=0,
-#define QUOTA_NUMRESOURCES  (QUOTA_STORAGE+1)
+    QUOTA_ANNOTSTORAGE	=1,
+#define QUOTA_NUMRESOURCES  (QUOTA_ANNOTSTORAGE+1)
 };
 
 struct quota {

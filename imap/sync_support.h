@@ -420,7 +420,7 @@ void encode_annotations(struct dlist *parent,
 			const struct sync_annot_list *);
 int decode_annotations(/*const*/struct dlist *,
 		       struct sync_annot_list **);
-int apply_annotations(const struct mailbox *mailbox,
+int apply_annotations(struct mailbox *mailbox,
 		      const struct index_record *record,
 		      const struct sync_annot_list *local_annots,
 		      const struct sync_annot_list *remote_annots,

@@ -75,15 +75,18 @@ static int quota_dbopen = 0;
 /* keywords used when storing fields in the new quota db format */
 static const char * const quota_db_names[QUOTA_NUMRESOURCES] = {
     NULL,	/* QUOTA_STORAGE */
+    "AS"	/* QUOTA_ANNOTSTORAGE */
 };
 
 /* IMAP atoms for various quota resources */
 const char * const quota_names[QUOTA_NUMRESOURCES] = {
-    "STORAGE",		/* QUOTA_STORAGE -- RFC2087 */
+    "STORAGE",			/* QUOTA_STORAGE -- RFC2087 */
+    "X-ANNOTATION-STORAGE"	/* QUOTA_ANNOTSTORAGE */
 };
 
 const int quota_units[QUOTA_NUMRESOURCES] = {
     1024,		/* QUOTA_STORAGE -- RFC2087 */
+    1024		/* QUOTA_ANNOTSTORAGE */
 };
 
 int quota_name_to_resource(const char *str)

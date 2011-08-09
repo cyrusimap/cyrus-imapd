@@ -782,6 +782,7 @@ int undump_mailbox(const char *mbname,
     char *mboxkey_file = NULL;
     uquota_t old_quota_used = 0;
     int quotalimit = -1;
+    annotate_state_t *astate = NULL;
 
     memset(&file, 0, sizeof(file));
     memset(&data, 0, sizeof(data));
@@ -845,6 +846,10 @@ int undump_mailbox(const char *mbname,
     /* track quota use */
     old_quota_used = mailbox->i.quota_mailbox_used;
 
+    astate = annotate_state_new();
+    annotate_state_set_mailbox(astate, mbname);
+    r = annotate_state_write_start(astate);
+    if (r) goto done;
     r = annotatemore_begin();
     if (r) goto done;
 
@@ -916,7 +921,7 @@ int undump_mailbox(const char *mbname,
 		goto done;
 	    }
 
-	    annotatemore_write_entry(mbname, 0, annotation, tmpuserid,
+	    annotate_state_write(astate, annotation, tmpuserid,
 				     &content);
     
 	    free(tmpuserid);
@@ -1127,6 +1132,8 @@ int undump_mailbox(const char *mbname,
     buf_free(&data);
 
     if (!r)
+	r = annotate_state_write_finish(astate);
+    if (!r)
 	annotatemore_commit();
 
     if (curfile >= 0) close(curfile);
@@ -1179,7 +1186,7 @@ int undump_mailbox(const char *mbname,
  done2:
     /* just in case we failed during the modifications, close again */
     mailbox_close(&mailbox);
-    
+    annotate_state_free(&astate);
     free(annotation);
     buf_free(&content);
     free(seen_file);

@@ -1780,7 +1780,7 @@ int diff_annotations(const struct sync_annot_list *local_annots,
     return 0;
 }
 
-int apply_annotations(const struct mailbox *mailbox,
+int apply_annotations(struct mailbox *mailbox,
 		      const struct index_record *record,
 		      const struct sync_annot_list *local_annots,
 		      const struct sync_annot_list *remote_annots,
@@ -1794,6 +1794,9 @@ int apply_annotations(const struct mailbox *mailbox,
     int r = 0;
     int diff;
     int started_txn = 0;
+    annotate_state_t *astate = annotate_state_new();
+
+    annotate_state_set_message(astate, mailbox, record ? record->uid : 0);
 
     /*
      * We rely here on the database scan order resulting in lists
@@ -1830,14 +1833,19 @@ int apply_annotations(const struct mailbox *mailbox,
 	    if (r)
 		break;
 	    started_txn = 1;
+	    r = annotate_state_write_start(astate);
+	    if (r)
+		break;
 	}
 
-	r = annotatemore_write_entry(mailbox->name, record ? record->uid : 0,
-				     chosen->entry, chosen->userid,
-				     value);
+	r = annotate_state_write(astate, chosen->entry,
+				 chosen->userid, value);
 	if (r)
 	    break;
     }
+
+    if (!r)
+	r = annotate_state_write_finish(astate);
 
     if (started_txn) {
 	if (r)
@@ -1846,6 +1854,7 @@ int apply_annotations(const struct mailbox *mailbox,
 	    r = annotatemore_commit();
     }
 
+    annotate_state_free(&astate);
     return r;
 }
 

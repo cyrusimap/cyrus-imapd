@@ -169,10 +169,10 @@ int annotate_state_store(annotate_state_t *state, struct entryattlist *l);
 
 /* low-level interface for use by mbdump routines.
  * Requires an open transaction. */
-int annotatemore_write_entry(const char *mboxname, uint32_t uid,
-			     const char *entry,
-			     const char *userid,
-			     const struct buf *value);
+int annotate_state_write_start(annotate_state_t *state);
+int annotate_state_write(annotate_state_t *, const char *entry,
+			 const char *userid, const struct buf *value);
+int annotate_state_write_finish(annotate_state_t *state);
 
 /* rename the annotations for 'oldmboxname' to 'newmboxname'
  * if 'olduserid' is non-NULL then the private annotations

@@ -75,6 +75,7 @@
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 #include "tok.h"
+#include "quota.h"
 
 #include "annotate.h"
 #include "sync_log.h"
@@ -154,6 +155,8 @@ struct annotate_state
     /*
      * Storing.
      */
+    struct quota quota;
+    struct quota oldquota;
 
     /* number of mailboxes matching the pattern */
     unsigned count;
@@ -204,6 +207,7 @@ struct annotate_entrydesc
 static annotate_db_t *all_dbs_head = NULL;
 static annotate_db_t *all_dbs_tail = NULL;
 static int in_txn = 0;
+static struct txn *quota_txn = NULL;
 #define tid(d)	(in_txn ? &(d)->txn : NULL)
 int (*proxy_fetch_func)(const char *server, const char *mbox_pat,
 			const strarray_t *entry_pat,
@@ -701,6 +705,10 @@ void annotatemore_abort(void)
 	}
 	d->txn = NULL;
     }
+
+    if (quota_txn)
+	quota_abort(&quota_txn);
+
     annotatemore_end();
 }
 
@@ -730,6 +738,9 @@ int annotatemore_commit(void)
 	    return r;
 	}
     }
+
+    if (quota_txn)
+	quota_commit(&quota_txn);
 
     annotatemore_end();
     return r;
@@ -1011,6 +1022,35 @@ static void annotate_state_finish(annotate_state_t *state)
     free_hash_table(&state->server_table, NULL);
 }
 
+int annotate_state_write_start(annotate_state_t *state)
+{
+    int r;
+
+    r = quota_read(&state->quota, &quota_txn, 1);
+    if (r == IMAP_QUOTAROOT_NONEXISTENT) {
+	/* ensure we don't try to update it */
+	state->quota.root = NULL;
+	return 0;
+    }
+    if (r)
+	return r;
+
+    state->oldquota = state->quota;
+    return 0;
+}
+
+int annotate_state_write_finish(annotate_state_t *state)
+{
+    if (!state->quota.root)
+	return 0;   /* no quota applies */
+
+    if (state->quota.useds[QUOTA_ANNOTSTORAGE] ==
+        state->oldquota.useds[QUOTA_ANNOTSTORAGE])
+	return 0;   /* no change */
+
+    return quota_write(&state->quota, &quota_txn);
+}
+
 void annotate_state_free(annotate_state_t **statep)
 {
     annotate_state_t *state = *statep;
@@ -1063,11 +1103,13 @@ void annotate_state_set_mailbox(annotate_state_t *state,
 	state->which = ANNOTATION_SCOPE_SERVER;
 	state->mboxpat = "";
 	state->int_mboxname = "";
+	state->quota.root = NULL;	/* no quota for server annots */
     }
     else {
 	state->which = ANNOTATION_SCOPE_MAILBOX;
 	state->mboxpat = mboxpat;
 	state->int_mboxname = NULL;
+	state->quota.root = NULL;	/* will be set later */
     }
     state->uid = 0;
     state->mbentry = NULL;
@@ -1091,6 +1133,7 @@ void annotate_state_set_message(annotate_state_t *state,
 
     state->mboxpat = mailbox->name;
     state->int_mboxname = mailbox->name;
+    state->quota.root = mailbox->quotaroot;
     state->uid = uid;
     state->mbentry = NULL;
     state->acl = mailbox->acl;
@@ -1115,7 +1158,6 @@ static int apply_cb(char *name, int matchlen,
 {
     struct apply_rock *arock = (struct apply_rock *)rock;
     annotate_state_t *state = arock->state;
-    struct mboxlist_entry *mbentry = NULL;
     int c;
     char int_mboxname[MAX_MAILBOX_BUFFER];
     char ext_mboxname[MAX_MAILBOX_BUFFER];
@@ -1152,20 +1194,21 @@ static int apply_cb(char *name, int matchlen,
 					  state->userid, ext_mboxname);
     if (c) name[matchlen] = c;
 
-    if (mboxlist_lookup(int_mboxname, &mbentry, NULL))
-	return 0;
-
     state->int_mboxname = int_mboxname;
     state->ext_mboxname = ext_mboxname;
-    state->mbentry = mbentry;
+    state->mbentry = NULL;
+
+    r = 0;
+    if (mboxlist_lookup(int_mboxname, &state->mbentry, NULL))
+	goto out;
 
     r = arock->proc(state);
 
+out:
     state->int_mboxname = NULL;
     state->ext_mboxname = NULL;
-    state->mbentry = NULL;
-
-    mboxlist_entry_free(&mbentry);
+    state->quota.root = NULL;
+    mboxlist_entry_free(&state->mbentry);
 
     return r;
 }
@@ -2234,15 +2277,48 @@ int annotatemore_msg_lookup(const char *mboxname, uint32_t uid, const char *entr
     return r;
 }
 
+static int count_old_storage(annotate_db_t *d,
+			     const char *key, int keylen,
+			     uquota_t *oldlenp)
+{
+    int r;
+    int datalen;
+    const char *data;
+    struct buf val = BUF_INITIALIZER;
+
+    *oldlenp = 0;
+    do {
+	r = DB->fetch(d->db, key, keylen, &data, &datalen, tid(d));
+    } while (r == CYRUSDB_AGAIN);
+
+    if (r == CYRUSDB_NOTFOUND) {
+	r = 0;
+	goto out;
+    }
+    if (r || !data)
+	goto out;
+
+    r = split_attribs(data, datalen, &val);
+    if (r)
+	goto out;
+    *oldlenp = val.len;
+
+out:
+    buf_free(&val);
+    return r;
+}
+
 static int write_entry(const char *mboxname,
 		       unsigned int uid,
 		       const char *entry,
 		       const char *userid,
-		       const struct buf *value)
+		       const struct buf *value,
+		       struct quota *quota)
 {
     char key[MAX_MAILBOX_PATH+1];
     int keylen, r;
     annotate_db_t *d = NULL;
+    uquota_t oldlen = 0;
 
     /* must be in a transaction to modify the db */
     if (!in_txn)
@@ -2253,6 +2329,15 @@ static int write_entry(const char *mboxname,
 	return r;
 
     keylen = make_key(mboxname, uid, entry, userid, key, sizeof(key));
+
+    if (quota && quota->root) {
+	r = count_old_storage(d, key, keylen, &oldlen);
+	if (r)
+	    goto out;
+	r = quota_check(quota, QUOTA_ANNOTSTORAGE, value->len - oldlen);
+	if (r)
+	    goto out;
+    }
 
     if (value->s == NULL) {
 
@@ -2304,18 +2389,22 @@ static int write_entry(const char *mboxname,
     else
 	sync_log_annotation(mboxname);
 
+    if (quota && quota->root)
+	quota_use(quota, QUOTA_ANNOTSTORAGE, value->len - oldlen);
+
+out:
     annotate_putdb(&d);
 
     return r;
 }
 
-int annotatemore_write_entry(const char *mboxname,
-			     uint32_t uid,
-			     const char *entry,
-			     const char *userid,
-			     const struct buf *value)
+int annotate_state_write(annotate_state_t *state,
+			 const char *entry,
+			 const char *userid,
+			 const struct buf *value)
 {
-    return write_entry(mboxname, uid, entry, userid, value);
+    return write_entry(state->int_mboxname, state->uid,
+		       entry, userid, value, &state->quota);
 }
 
 static int annotate_canon_value(struct buf *value, int type)
@@ -2407,7 +2496,26 @@ static int _annotate_store_entries(annotate_state_t *state)
 static int store_cb(annotate_state_t *state)
 {
     struct mboxlist_entry *mbentry = state->mbentry;
+    char *quotaroot = NULL;
     int r = 0;
+
+    state->quota.root = NULL;
+    if (!mbentry->server) {
+	/* local mailbox, so lookup the quotaroot */
+	struct mailbox *mailbox = NULL;
+
+	r = mailbox_open_irl(state->int_mboxname, &mailbox);
+	if (r)
+	    goto cleanup;
+	if (mailbox->quotaroot)
+	    quotaroot = xstrdup(mailbox->quotaroot);
+	mailbox_close(&mailbox);
+
+	state->quota.root = quotaroot;
+	r = annotate_state_write_start(state);
+	if (r)
+	    goto cleanup;
+    }
 
     r = _annotate_store_entries(state);
     if (r)
@@ -2420,7 +2528,10 @@ static int store_cb(annotate_state_t *state)
 	hash_insert(mbentry->server, (void *)0xDEADBEEF, &state->server_table);
     }
 
+    r = annotate_state_write_finish(state);
+
  cleanup:
+    free(quotaroot);
     return r;
 }
 
@@ -2531,11 +2642,13 @@ static int annotation_set_todb(annotate_state_t *state,
     if (entry->have_shared)
 	r = write_entry(state->int_mboxname, state->uid,
 			entry->name, "",
-			&entry->shared);
+			&entry->shared,
+			&state->quota);
     if (!r && entry->have_priv)
 	r = write_entry(state->int_mboxname, state->uid,
 			entry->name, state->userid,
-			&entry->priv);
+			&entry->priv,
+			&state->quota);
 
     return r;
 }
@@ -2815,7 +2928,20 @@ int annotate_state_store(annotate_state_t *state, struct entryattlist *l)
 	}
     }
     else if (state->which == ANNOTATION_SCOPE_MESSAGE) {
+
+	r = annotate_state_write_start(state);
+	if (r)
+	    goto cleanup;
+
 	r = _annotate_store_entries(state);
+	if (r)
+	    goto cleanup;
+
+	r = annotate_state_write_finish(state);
+	if (r)
+	    goto cleanup;
+
+	sync_log_annotation("");
     }
 
     if (r)
@@ -2854,13 +2980,13 @@ static int rename_cb(const char *mailbox,
 	    /* renaming a user, so change the userid for priv annots */
 	    newuserid = rrock->newuserid;
 	}
-	r = write_entry(rrock->newmboxname, rrock->newuid, entry, newuserid, value);
+	r = write_entry(rrock->newmboxname, rrock->newuid, entry, newuserid, value, NULL);
     }
 
     if (!rrock->copy && !r) {
 	/* delete existing entry */
 	struct buf dattrib = BUF_INITIALIZER;
-	r = write_entry(mailbox, uid, entry, userid, &dattrib);
+	r = write_entry(mailbox, uid, entry, userid, &dattrib, NULL);
     }
 
     return r;
