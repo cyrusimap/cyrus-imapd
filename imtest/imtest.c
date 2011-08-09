@@ -644,7 +644,7 @@ static long bio_dump_cb(BIO * bio, int cmd, const char *argp, int argi,
 int tls_start_clienttls(unsigned *layer, char **authid)
 {
     int     sts;
-    SSL_CIPHER *cipher;
+    const SSL_CIPHER *cipher;
     X509   *peer;
     
     if (verbose==1)
