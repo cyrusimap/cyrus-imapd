@@ -82,6 +82,7 @@ int token_lookup (char *str, int len __attribute__((unused)))
     case 'g':
 	if (strcmp(str, "getscript")==0) return GETSCRIPT;
 	break;
+
     case 'h':
 	if (strcmp(str, "havespace")==0) return HAVESPACE;
 	break;
@@ -89,6 +90,10 @@ int token_lookup (char *str, int len __attribute__((unused)))
     case 'l':
 	if (strcmp(str, "listscripts")==0) return LISTSCRIPTS;
 	if (strcmp(str, "logout")==0) return LOGOUT;
+	break;
+
+    case 'n':
+	if (strcmp(str, "noop")==0) return NOOP;
 	break;
 
     case 'p':
@@ -99,6 +104,10 @@ int token_lookup (char *str, int len __attribute__((unused)))
 	if (strcmp(str, "setactive")==0) return SETACTIVE;
 	if (strcmp(str, "starttls")==0 && tls_enabled())
 	    return STARTTLS;
+	break;
+
+    case 'u':
+	if (strcmp(str, "unauthenticate")==0) return UNAUTHENTICATE;
 	break;
     }
 

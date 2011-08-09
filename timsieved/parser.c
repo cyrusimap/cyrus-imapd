@@ -101,6 +101,8 @@ static void cmd_logout(struct protstream *sieved_out,
 		       struct protstream *sieved_in);
 static int cmd_authenticate(struct protstream *sieved_out, struct protstream *sieved_in,
 			    mystring_t *mechanism_name, mystring_t *initial_challenge, const char **errmsg);
+static int cmd_unauthenticate(struct protstream *sieved_out,
+			      struct protstream *sieved_in);
 static int cmd_starttls(struct protstream *sieved_out, struct protstream *sieved_in);
 
 static char *sieve_parsesuccess(char *str, const char **status)
@@ -153,6 +155,7 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
 
   if (!authenticated && (token > 255) && (token!=AUTHENTICATE) &&
       (token!=LOGOUT) && (token!=CAPABILITY) &&
+      (token!=NOOP) &&
       (!tls_enabled() || (token!=STARTTLS)))
   {
     error_msg = "Authenticate first";
@@ -455,6 +458,57 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
     
     break;
 
+  case NOOP:
+
+    token = timlex(NULL, NULL, sieved_in);
+    mystring_t *noop_param = NULL;
+    if (token != EOL)
+    {
+      /* optional string parameter */
+      if (token!=SPACE)
+      {
+	error_msg = "Expected SPACE";
+	goto error;
+      }
+
+      if (timlex(&noop_param, NULL, sieved_in)!=STRING)
+      {
+	error_msg = "Expected string";
+	free(noop_param);
+	goto error;
+      }
+
+      token = timlex(NULL, NULL, sieved_in);      
+    }
+
+    if (token != EOL)
+    {
+      error_msg = "Expected EOL";
+      free(noop_param);
+      goto error;
+    }
+
+    if (noop_param != NULL) {
+      int temp;
+      char* dataptr = string_DATAPTR(noop_param);
+      prot_printf(sieved_out, "OK (TAG {%d}\r\n", noop_param->len);
+      for (temp = 0; temp < noop_param->len; temp++)
+      prot_putc(dataptr[temp], sieved_out);
+      prot_printf(sieved_out, ") \"Done\"\r\n");
+      free(noop_param);
+    } else
+      prot_printf(sieved_out, "OK \"Done\"\r\n");
+    break;
+
+  case UNAUTHENTICATE:
+      if (timlex(NULL, NULL, sieved_in)!=EOL)
+      {
+	  error_msg = "Expected EOL";
+	  goto error;
+      }
+      cmd_unauthenticate(sieved_out, sieved_in);
+      break;
+
   default:
     error_msg="Expected a command. Got something else.";
     goto error;
@@ -516,6 +570,18 @@ static sasl_ssf_t ssf = 0;
 static char *authid = NULL;
 
 extern int reset_saslconn(sasl_conn_t **conn, sasl_ssf_t ssf, char *authid);
+
+static int cmd_unauthenticate(struct protstream *sieved_out,
+			      struct protstream *sieved_in)
+{
+    if (chdir("/tmp/"))
+	syslog(LOG_ERR, "Failed to chdir to /tmp/");
+    reset_saslconn(&sieved_saslconn, sieved_in->saslssf, authid);
+    prot_unsetsasl(sieved_out);
+    prot_unsetsasl(sieved_in);
+    prot_printf(sieved_out, "OK\r\n");
+    authenticated = 0;
+}
 
 static int cmd_authenticate(struct protstream *sieved_out,
 			    struct protstream *sieved_in,

@@ -201,6 +201,7 @@ extern int prot_bytes_out(struct protstream *s);
 /* Set the SASL options for a protstream (requires authentication to
  * be complete for the given sasl_conn_t */
 extern int prot_setsasl(struct protstream *s, sasl_conn_t *conn);
+extern int prot_unsetsasl(struct protstream *s);
 
 #ifdef HAVE_SSL
 /* Set TLS options for a given protstream (requires a completed tls
