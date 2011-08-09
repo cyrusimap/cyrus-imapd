@@ -79,7 +79,7 @@
 #include "annotate.h"
 #include "sync_log.h"
 
-#define DEBUG 1
+#define DEBUG 0
 
 /* Encapsulates all the state involved in providing the scope
  * for setting or getting a single annotation */
