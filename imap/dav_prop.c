@@ -411,20 +411,23 @@ static int propfind_restype(const xmlChar *propname, xmlNsPtr ns,
     xmlNodePtr node = add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK], ns,
 			       BAD_CAST propname, NULL, NULL);
 
-    if ((fctx->req_tgt->namespace == URL_NS_PRINCIPAL) ||
-	(fctx->mailbox && !fctx->record)) {
+    if ((fctx->req_tgt->namespace != URL_NS_DEFAULT) && !fctx->record) {
 	xmlNewChild(node, fctx->ns[NS_DAV], BAD_CAST "collection", NULL);
+
 	switch (fctx->req_tgt->namespace) {
 	case URL_NS_PRINCIPAL:
-	    xmlNewChild(node, fctx->ns[NS_DAV], BAD_CAST "principal", NULL);
+	    if (fctx->req_tgt->user)
+		xmlNewChild(node, fctx->ns[NS_DAV], BAD_CAST "principal", NULL);
 	    break;
 
 	case URL_NS_CALENDAR:
-	    xmlNewChild(node, fctx->ns[NS_CAL], BAD_CAST "calendar", NULL);
+	    if (fctx->mailbox)
+		xmlNewChild(node, fctx->ns[NS_CAL], BAD_CAST "calendar", NULL);
 	    break;
 
 	case URL_NS_ADDRESSBOOK:
-	    xmlNewChild(node, fctx->ns[NS_CAL], BAD_CAST "addressbook", NULL);
+	    if (fctx->mailbox)
+		xmlNewChild(node, fctx->ns[NS_CAL], BAD_CAST "addressbook", NULL);
 	    break;
 	}
     }
