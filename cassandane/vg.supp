@@ -76,13 +76,13 @@
    ...
    fun:__nss_database_lookup
    ...
-   fun:gwtpwuid
+   fun:getpwuid
    ...
 }
 {
    zlib_inflateInit2_cond
    Memcheck:Cond
-   fun:inflateReset2_
+   fun:inflateReset2
    fun:inflateInit2_
    fun:prot_setcompress
    ...
