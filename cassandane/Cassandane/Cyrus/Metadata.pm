@@ -592,9 +592,21 @@ sub test_private
 
     xlog "testing private metadata operations";
 
-    # nothing present
+    xlog "testing specific entries";
     my $res = $imaptalk->getmetadata('INBOX', {depth => 'infinity'}, '/private');
-    $self->assert_num_equals(0, scalar keys %$res);
+    my $r = $res->{INBOX};
+    $self->assert_not_null($r);
+    $self->assert_deep_equals({
+	    '/private/vendor/cmu/cyrus-imapd/squat' => undef,
+	    '/private/vendor/cmu/cyrus-imapd/sieve' => undef,
+	    '/private/vendor/cmu/cyrus-imapd/news2mail' => undef,
+	    '/private/vendor/cmu/cyrus-imapd/expire' => undef,
+	    '/private/thread' => undef,
+	    '/private/sort' => undef,
+	    '/private/comment' => undef,
+	    '/private/checkperiod' => undef,
+	    '/private/check' => undef,
+	}, $r);
 
     $imaptalk->setmetadata('INBOX', "/private/comment", "This is a comment");
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
@@ -604,9 +616,8 @@ sub test_private
     # remove it again
     $imaptalk->setmetadata('INBOX', "/private/comment", undef);
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-
-    my $meta = $imaptalk->getmetadata('INBOX', {depth => 'infinity'}, '/private');
-    $self->assert_num_equals(0, scalar keys %$meta);
+    my $com = $imaptalk->getmetadata('INBOX', "/private/comment");
+    $self->assert_null($com->{INBOX}{"/private/comment"});
 }
 
 sub test_embedded_nuls
