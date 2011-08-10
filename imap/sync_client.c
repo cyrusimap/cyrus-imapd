@@ -700,33 +700,37 @@ static int user_sub(const char *userid, const char *mboxname)
 static int copy_local(struct mailbox *mailbox, unsigned long uid)
 {
     uint32_t recno;
-    struct index_record record;
-    char *oldfname, *newfname;
+    struct index_record oldrecord;
     int r;
 
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
-	r = mailbox_read_index_record(mailbox, recno, &record);
+	r = mailbox_read_index_record(mailbox, recno, &oldrecord);
 	if (r) return r;
-	if (record.uid == uid) {
-	    /* store the old record, expunged */
-	    record.system_flags |= FLAG_EXPUNGED;
-	    r = mailbox_rewrite_index_record(mailbox, &record);
-	    if (r) return r;
 
-	    /* create the new record */
-	    record.system_flags &= ~FLAG_EXPUNGED;
-	    record.uid = mailbox->i.last_uid + 1;
+	/* found the record, renumber it */
+	if (oldrecord.uid == uid) {
+	    char *oldfname, *newfname;
+	    struct index_record newrecord;
+
+	    /* create the new record as a clone of the old record */
+	    newrecord = oldrecord;
+	    newrecord.uid = mailbox->i.last_uid + 1;
 
 	    /* copy the file in to place */
-	    oldfname = xstrdup(mailbox_message_fname(mailbox, uid));
-	    newfname = xstrdup(mailbox_message_fname(mailbox, record.uid));
+	    oldfname = xstrdup(mailbox_message_fname(mailbox, oldrecord.uid));
+	    newfname = xstrdup(mailbox_message_fname(mailbox, newrecord.uid));
 	    r = mailbox_copyfile(oldfname, newfname, 0);
 	    free(oldfname);
 	    free(newfname);
 	    if (r) return r;
 
-	    /* and append the new record (a clone apart from the EXPUNGED flag) */
-	    r = mailbox_append_index_record(mailbox, &record);
+	    /* append the new record */
+	    r = mailbox_append_index_record(mailbox, &newrecord);
+	    if (r) return r;
+
+	    /* and expunge the old record */
+	    oldrecord.system_flags |= FLAG_EXPUNGED;
+	    r = mailbox_rewrite_index_record(mailbox, &oldrecord);
 
 	    /* done - return */
 	    return r;
