@@ -746,6 +746,8 @@ sub start_replicated_pair
     my %store_params;
     $store_params{username} = $params{username}
 	if defined $params{username};
+    $store_params{folder} = $params{folder}
+	if defined $params{folder};
 
     my $master_store;
     $master_store = $master->get_service('imap')->create_store(%store_params)
