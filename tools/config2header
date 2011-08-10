@@ -71,7 +71,7 @@ my $CC;
 # Look for CC=xxx "assigments" in the argument list.
 #
 while ($#ARGV >= 0) {
-	last unless ($ARGV[0] =~ m/^(\S+)=(\S+)$/);
+	last unless ($ARGV[0] =~ m/^(\S+)=(.*)$/);
 	eval "\$$1='$2';";
 	die "$@" if ($@);
 	shift @ARGV;
