@@ -2661,6 +2661,11 @@ void replica_connect(const char *channel)
     /* links to sockets */
     sync_in = sync_backend->in;
     sync_out = sync_backend->out;
+
+    /* Force use of LITERAL+ so we don't need two way communications */
+    prot_setisclient(sync_in, 1);
+    prot_setisclient(sync_out, 1);
+
 }
 
 static void replica_disconnect()
