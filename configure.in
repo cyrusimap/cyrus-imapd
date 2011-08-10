@@ -1171,7 +1171,7 @@ dnl add perl cccdlflags when building libraries -- this ensures that the
 dnl libraries will be compiled as PIC if perl requires PIC objects
 dnl -- this is needed on NetBSD and Linux, but seems to cause problems on atleast Solaris --
     case "${target_os}" in
-        linux*|netbsd*)
+        linux*|netbsd*|freebsd*|dragonfly*)
             AC_MSG_CHECKING(for perl cccdlflags needed on "${target_os}")
             eval `${PERL} -V:cccdlflags`
             PERL_CCCDLFLAGS="$cccdlflags"
