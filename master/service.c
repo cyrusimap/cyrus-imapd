@@ -509,6 +509,7 @@ int main(int argc, char **argv, char **envp)
 		int r;
 		int optval = 1;
 		socklen_t optlen = sizeof(optval);
+		struct protoent *proto = getprotobyname("TCP");
 
 		r = setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &optval, optlen);
 		if (r < 0) {
@@ -517,7 +518,7 @@ int main(int argc, char **argv, char **envp)
 #ifdef TCP_KEEPCNT
 		optval = config_getint(IMAPOPT_TCP_KEEPALIVE_CNT);
 		if (optval) {
-		    r = setsockopt(fd, SOL_TCP, TCP_KEEPCNT, &optval, optlen);
+		    r = setsockopt(fd, proto->p_proto, TCP_KEEPCNT, &optval, optlen);
 		    if (r < 0) {
 			syslog(LOG_ERR, "unable to setsocketopt(TCP_KEEPCNT): %m");
 		    }
@@ -526,7 +527,7 @@ int main(int argc, char **argv, char **envp)
 #ifdef TCP_KEEPIDLE
 		optval = config_getint(IMAPOPT_TCP_KEEPALIVE_IDLE);
 		if (optval) {
-		    r = setsockopt(fd, SOL_TCP, TCP_KEEPIDLE, &optval, optlen);
+		    r = setsockopt(fd, proto->p_proto, TCP_KEEPIDLE, &optval, optlen);
 		    if (r < 0) {
 			syslog(LOG_ERR, "unable to setsocketopt(TCP_KEEPIDLE): %m");
 		    }
@@ -535,7 +536,7 @@ int main(int argc, char **argv, char **envp)
 #ifdef TCP_KEEPINTVL
 		optval = config_getint(IMAPOPT_TCP_KEEPALIVE_INTVL);
 		if (optval) {
-		    r = setsockopt(fd, SOL_TCP, TCP_KEEPINTVL, &optval, optlen);
+		    r = setsockopt(fd, proto->p_proto, TCP_KEEPINTVL, &optval, optlen);
 		    if (r < 0) {
 			syslog(LOG_ERR, "unable to setsocketopt(TCP_KEEPINTVL): %m");
 		    }
