@@ -459,4 +459,40 @@ sub test_xconvfetch
     }
 }
 
+#
+# Test APPEND of a new composed draft message to the Drafts folder by
+# the Fastmail webui, which sets the X-ME-Message-ID header to thread
+# conversations but not any of Message-ID, References, or In-Reply-To.
+#
+sub test_fm_webui_draft
+{
+    my ($self) = @_;
+    my %exp;
+
+    # check IMAP server has the XCONVERSATIONS capability
+    $self->assert($self->{store}->get_client()->capability()->{xconversations});
+
+    xlog "generating message A";
+    $exp{A} = $self->{gen}->generate(subject => 'Draft message A');
+    $exp{A}->remove_headers('Message-ID');
+#     $exp{A}->add_header('X-ME-Message-ID', '<fake.header@i.am.a.draft>');
+    $exp{A}->add_header('X-ME-Message-ID', '<fake1700@fastmail.fm>');
+    $exp{A}->set_attribute(cid => calc_cid($exp{A}));
+
+    $self->{store}->write_begin();
+    $self->{store}->write_message($exp{A});
+    $self->{store}->write_end();
+    $self->check_messages(\%exp);
+
+    xlog "generating message B";
+    $exp{B} = $exp{A}->clone();
+    $exp{B}->set_headers('Subject', 'Draft message B');
+    $exp{B}->set_body('Completely different text here');
+
+    $self->{store}->write_begin();
+    $self->{store}->write_message($exp{B});
+    $self->{store}->write_end();
+    $self->check_messages(\%exp);
+}
+
 1;
