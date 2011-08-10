@@ -342,6 +342,16 @@ Blank lines and lines beginning with ``#'' are ignored.
    grant the user the ability to delete a mailbox.  If a user has this
    right, they will automatically be given the new 'x' right. */
 
+{ "disable_user_namespace", 0, SWITCH }
+/* Preclude list command on user namespace.  If set to 'yes', the 
+   LIST response will never include any other user's mailbox.  Admin
+   users will always see all mailboxes.  The default is 'no' */
+
+{ "disable_shared_namespace", 0, SWITCH }
+/* Preclude list command on user namespace.  If set to 'yes', the 
+   LIST response will never include any non-user mailboxes.  Admin
+   users will always see all mailboxes.  The default is 'no' */
+
 { "disconnect_on_vanished_mailbox", 0, SWITCH }
 /* If enabled, IMAP/POP3/NNTP clients will be disconnected by the
    server if the currently selected mailbox is (re)moved by another
@@ -624,12 +634,6 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Specify the LDAP protocol version.  If ldap_start_tls and/or
    ldap_use_sasl are enabled, ldap_version will be automatically
    set to 3. */
-
-{ "disable_user_namespace", 0, SWITCH }
-/* Preclude list command on user namespace. */
-
-{ "disable_shared_namespace", 0, SWITCH }
-/* Preclude list command on shared namespace. */
 
 { "lmtp_downcase_rcpt", 1, SWITCH }
 /* If enabled, lmtpd will convert the recipient addresses to lowercase
