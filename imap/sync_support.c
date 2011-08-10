@@ -1892,14 +1892,24 @@ static const char *sync_record_representation(
     return buf_cstring(&sync_crc32_buf);
 }
 
-static void sync_crc32_update(const struct mailbox *mailbox,
-			      const struct index_record *record,
-			      int cflags)
+static void sync_crc32_update_xor(const struct mailbox *mailbox,
+				  const struct index_record *record,
+				  int cflags)
 {
     const char *rep = sync_record_representation(mailbox, record, cflags);
 
     if (rep)
 	sync_crc32 ^= crc32_cstring(rep);
+}
+
+static void sync_crc32_update_plus(const struct mailbox *mailbox,
+				   const struct index_record *record,
+				   int cflags)
+{
+    const char *rep = sync_record_representation(mailbox, record, cflags);
+
+    if (rep)
+	sync_crc32 += crc32_cstring(rep);
 }
 
 static int sync_crc32_end(char *buf, int maxlen)
@@ -1912,7 +1922,12 @@ static const struct sync_crc_algorithm sync_crc_algorithms[] = {
     { "CRC32",
 	sync_crc32_setup,
 	sync_crc32_begin,
-	sync_crc32_update,
+	sync_crc32_update_xor,
+	sync_crc32_end },
+    { "CRC32M", /* modulo arithmetic */
+	sync_crc32_setup,
+	sync_crc32_begin,
+	sync_crc32_update_plus,
 	sync_crc32_end },
     { NULL, NULL, NULL, NULL, NULL }
 };
