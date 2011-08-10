@@ -1483,7 +1483,6 @@ void add_service(const char *name, struct entry *e, void *rock)
     proto = NULL; /* avoid freeing it */
 
     Services[i].exec = tokenize(cmd);
-    cmd = NULL; /* avoid freeing it */
     if (!Services[i].exec) fatal("out of memory", EX_UNAVAILABLE);
 
     /* is this service actually there? */
@@ -1536,6 +1535,8 @@ void add_service(const char *name, struct entry *e, void *rock)
 	       Services[i].desired_workers,
 	       Services[i].max_workers,
 	       (int) Services[i].maxfds);
+    
+    cmd = NULL; /* avoid freeing it */
 
 done:
     free(cmd);
