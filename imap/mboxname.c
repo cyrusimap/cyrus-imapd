@@ -753,8 +753,7 @@ char *mboxname_hiersep_toexternal(struct namespace *namespace, char *name,
  */
 int mboxname_userownsmailbox(const char *userid, const char *name)
 {
-    struct namespace internal = { '.', 0, 0, { "INBOX.", "user.", "" }, 0, 0, 0,
-				  NULL, NULL, NULL, NULL };
+    struct namespace internal = NAMESPACE_INITIALIZER;
     char inboxname[MAX_MAILBOX_BUFFER];
 
     if (!mboxname_tointernal(&internal, "INBOX", userid, inboxname) &&

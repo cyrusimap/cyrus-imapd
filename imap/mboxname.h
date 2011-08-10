@@ -80,6 +80,11 @@ struct namespace {
 			    void *rock, int force);
 };
 
+#define NAMESPACE_INITIALIZER { '.', 0, 0, \
+				{ "INBOX.", "user.", "" }, \
+				{ 0, 0, 0, }, \
+				NULL, NULL, NULL, NULL }
+
 struct mboxlock {
     char *name;
     int lock_fd;
