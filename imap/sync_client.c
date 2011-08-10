@@ -2836,6 +2836,10 @@ negfailed:
 	free(algorithm);
 	free(covers);
     }
+
+    /* Force use of LITERAL+ so we don't need two way communications */
+    prot_setisclient(sync_in, 1);
+    prot_setisclient(sync_out, 1);
 }
 
 static void replica_disconnect(void)
