@@ -1460,6 +1460,14 @@ int sync_mailbox(struct mailbox *mailbox,
 
 	    sync_annot_list_free(&annots);
 	}
+
+	r = read_annotations(mailbox, NULL, &annots);
+	if (r)
+	    return r;
+	if (annots) {
+	    encode_annotations(kl, annots);
+	    sync_annot_list_free(&annots);
+	}
     }
 
     return 0;

@@ -1339,6 +1339,7 @@ static int do_mailbox(struct dlist *kin)
 
     struct mailbox *mailbox = NULL;
     struct dlist *kr;
+    struct dlist *ka = NULL;
     int r;
 
     if (!dlist_getatom(kin, "UNIQUEID", &uniqueid))
@@ -1373,6 +1374,7 @@ static int do_mailbox(struct dlist *kin)
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
 
     /* optional */
+    dlist_getlist(kin, "ANNOTATIONS", &ka);
     dlist_getatom(kin, "SPECIALUSE", &specialuse);
 
     options = sync_parse_options(options_str);
@@ -1440,6 +1442,20 @@ static int do_mailbox(struct dlist *kin)
     }
 
     /* now we're committed to writing something no matter what happens! */
+    if (ka) {
+	struct sync_annot_list *mannots = NULL;
+	struct sync_annot_list *rannots = NULL;
+
+	decode_annotations(ka, &mannots);
+
+	r = read_annotations(mailbox, NULL, &rannots);
+	if (r) {
+	    mailbox_close(&mailbox);
+	    return r;
+	}
+
+	r = apply_annotations(mailbox, NULL, rannots, mannots, 0);
+    }
 
     r = mailbox_compare_update(mailbox, kr, 1);
     if (r) {
