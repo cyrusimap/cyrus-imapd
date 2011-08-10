@@ -131,7 +131,7 @@ while (my $a = shift)
 }
 
 @names = @default_names
-    unless scalar @names;
+    if $do_list || !scalar @names;
 
 foreach my $name (@names)
 {
@@ -169,9 +169,13 @@ foreach my $name (@names)
 
 if ($do_list)
 {
-    foreach my $item (sort @schedule)
+    foreach my $item (sort { $a->{suite} cmp $b->{suite} } @schedule)
     {
-	print $item->{suite} . "\n";
+	my @tests = @{Test::Unit::Loader::load($item->{suite})->names()};
+	map {
+	    $_ =~ s/^test_//;
+	    print $item->{suite} . ".$_\n";
+	} sort @tests;
     }
     exit 0;
 }
