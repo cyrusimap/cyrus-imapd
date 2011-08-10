@@ -42,7 +42,7 @@
 use strict;
 use warnings;
 package Cassandane::Cyrus::Sieve;
-use base qw(Test::Unit::TestCase);
+use base qw(Cassandane::Unit::TestCase);
 use IO::File;
 use DateTime;
 use Cassandane::Util::Log;

@@ -42,7 +42,7 @@
 use strict;
 use warnings;
 package Cassandane::Test::Instance;
-use base qw(Test::Unit::TestCase);
+use base qw(Cassandane::Unit::TestCase);
 use Cassandane::Instance;
 
 sub new

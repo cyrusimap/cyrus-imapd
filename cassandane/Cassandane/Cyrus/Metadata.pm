@@ -42,7 +42,7 @@
 use strict;
 use warnings;
 package Cassandane::Cyrus::Metadata;
-use base qw(Test::Unit::TestCase);
+use base qw(Cassandane::Unit::TestCase);
 use DateTime;
 use Cassandane::Util::Log;
 use Cassandane::Generator;

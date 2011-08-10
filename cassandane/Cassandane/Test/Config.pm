@@ -42,7 +42,7 @@
 use strict;
 use warnings;
 package Cassandane::Test::Config;
-use base qw(Test::Unit::TestCase);
+use base qw(Cassandane::Unit::TestCase);
 use File::Temp qw(tempfile);
 use Cassandane::Config;
 

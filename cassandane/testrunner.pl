@@ -42,6 +42,7 @@
 use strict;
 use warnings;
 use Cassandane::Unit::Runner;
+use Cassandane::Unit::TestCase;
 use Cassandane::Util::Log;
 use Cassandane::Instance;
 
@@ -53,19 +54,20 @@ my @default_names = (
     'Cassandane::Cyrus',
 );
 my @names;
+my @schedule;
 
 my %runners =
 (
     tap => sub
     {
-	my (@suites) = @_;
-
 	my $runner = Cassandane::Unit::Runner->new();
 	my $passed = 1;
-	foreach my $suite (@suites)
+	$runner->filter('x');
+	foreach my $item (@schedule)
 	{
+	    Cassandane::Unit::TestCase->enable_test($item->{test});
 	    $passed = 0
-		unless $runner->start($suite);
+		unless $runner->start($item->{suite});
 	}
 	return $passed;
     }
@@ -81,9 +83,11 @@ eval
 
 	mkdir($output_dir);
 	my $runner = Test::Unit::Runner::XML->new($output_dir);
-	foreach my $suite (@suites)
+	$runner->filter('x');
+	foreach my $item (@schedule)
 	{
-	    $runner->start(Test::Unit::Loader::load($suite));
+	    Cassandane::Unit::TestCase->enable_test($item->{test});
+	    $runner->start(Test::Unit::Loader::load($item->{suite}));
 	}
 	return $runner->all_tests_passed();
     };
@@ -129,15 +133,18 @@ while (my $a = shift)
 @names = @default_names
     unless scalar @names;
 
-my @suites;
 foreach my $name (@names)
 {
-    my $dir = $name;
+    my ($sname, $tname) = ($name =~ m/^([^.]+)(\.[^.]+)?$/);
+    $tname =~ s/^\.// if defined $tname;
+
+    my $dir = $sname;
     $dir =~ s/::/\//g;
     my $file = "$dir.pm";
 
     if ( -d $dir )
     {
+	die "Cannot specify directory.testname" if defined $tname;
 	opendir DIR, $dir
 	    or die "Cannot open directory $dir for reading: $!";
 	while ($_ = readdir DIR)
@@ -146,26 +153,27 @@ foreach my $name (@names)
 	    $_ = "$dir/$_";
 	    s/\.pm$//;
 	    s/\//::/g;
-	    push(@suites, $_);
+	    push(@schedule, { suite => $_, test => undef });
 	}
 	closedir DIR;
     }
     elsif ( -f $file )
     {
-	push(@suites, $name);
+	push(@schedule, { suite => $sname, test => $tname });
     }
     elsif ( -f "Cassandane/Cyrus/$file" )
     {
-	push(@suites, "Cassandane::Cyrus::$name");
+	push(@schedule, { suite => "Cassandane::Cyrus::$sname", test => $tname });
     }
 }
 
-if ($do_list) {
-    foreach my $item (sort @suites)
+if ($do_list)
+{
+    foreach my $item (sort @schedule)
     {
-	print "$item\n";
+	print $item->{suite} . "\n";
     }
     exit 0;
 }
 
-exit(! $runners{$format}->(@suites));
+exit(! $runners{$format}->());

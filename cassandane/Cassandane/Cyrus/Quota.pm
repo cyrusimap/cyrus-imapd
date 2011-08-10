@@ -42,13 +42,14 @@
 use strict;
 use warnings;
 package Cassandane::Cyrus::Quota;
-use base qw(Test::Unit::TestCase);
+use base qw(Cassandane::Unit::TestCase);
 use IO::File;
 use DateTime;
 use Cassandane::Util::Log;
 use Cassandane::Generator;
 use Cassandane::MessageStoreFactory;
 use Cassandane::Instance;
+use Cassandane::Util::Words;
 use Data::Dumper;
 
 sub new
@@ -250,6 +251,111 @@ sub test_exceeding_storage
 
     xlog "check that the exceeding message is not in the mailbox";
     $self->check_messages(\%msgs);
+}
+
+sub make_random_data
+{
+    my $word = random_word();
+    my $count = 10 + rand(90);
+    my $data = '';
+    while ($count > 0)
+    {
+	$data .= " $word";
+	$count--;
+    }
+    return $data;
+}
+
+sub test_using_annotstorage_msg
+{
+    my ($self) = @_;
+
+    xlog "test increasing usage of the X-ANNOTATION-STORAGE quota";
+    xlog "resource as per-message annotations are added";
+
+    my $talk = $self->{store}->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+
+    # Right - let's set ourselves a basic usage quota
+    $admintalk->setquota("user.cassandane", "(x-annotation-storage 100000)");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    my @res = $admintalk->getquota("user.cassandane");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $self->assert_num_equals(3, scalar @res);
+    $self->assert_str_equals('X-ANNOTATION-STORAGE', $res[0]);
+    $self->assert_num_equals(0, $res[1]);
+
+    xlog "make some messages to hang annotations on";
+    my $expected = 0;
+    my @msgs;
+    my @annots;
+    my $uid = 1;
+    while ($expected <= 110*1024)
+    {
+	push(@msgs, $self->make_message($self->{store}, "Message $uid"));
+	my $data = make_random_data();
+	push(@annots, $data);
+	$expected += length($data);
+    }
+
+    xlog "store annotations";
+    $expected = 0;
+    $uid = 1;
+    while (my $msg = shift @msgs)
+    {
+	my $data = shift @annots;
+
+	$talk->store('' . $uid, 'annotation', ['/comment', ['value.priv', { Quote => $data }]]);
+	$self->assert_str_equals('ok', $talk->get_last_completion_response());
+	$uid++;
+	$expected += length($data);
+
+	@res = $admintalk->getquota("user.cassandane");
+	$self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+	$self->assert_num_equals(3, scalar @res);
+	$self->assert_str_equals('X-ANNOTATION-STORAGE', $res[0]);
+	$self->assert_num_equals(int($expected/1024), $res[1]);
+    }
+}
+
+sub test_using_annotstorage_mbox
+{
+    my ($self) = @_;
+
+    xlog "test increasing usage of the X-ANNOTATION-STORAGE quota";
+    xlog "resource as per-mailbox annotations are added";
+
+    my $talk = $self->{store}->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+
+    # Right - let's set ourselves a basic usage quota
+    $admintalk->setquota("user.cassandane", "(x-annotation-storage 100000)");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+
+    my @res = $admintalk->getquota("user.cassandane");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $self->assert_num_equals(3, scalar @res);
+    $self->assert_str_equals('X-ANNOTATION-STORAGE', $res[0]);
+    $self->assert_num_equals(0, $res[1]);
+
+    xlog "store annotations";
+    my $expected = 0;
+    my $data = '';
+    while ($expected <= 60*1024)
+    {
+	$data .= make_random_data();
+	$expected = length($data);
+
+	$talk->setmetadata($self->{store}->{folder}, '/private/comment', { Quote => $data });
+	$self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+	@res = $admintalk->getquota("user.cassandane");
+	$self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+	$self->assert_num_equals(3, scalar @res);
+	$self->assert_str_equals('X-ANNOTATION-STORAGE', $res[0]);
+	$self->assert_num_equals(int($expected/1024), $res[1]);
+    }
 }
 
 #
@@ -503,7 +609,7 @@ sub test_replication_storage
     $self->assert_deep_equals([], \@res);
 }
 
-sub Xtest_getset_multiple
+sub XXtest_getset_multiple
 {
     my ($self) = @_;
 
@@ -558,7 +664,7 @@ sub Xtest_getset_multiple
     $self->assert_deep_equals([], \@res);
 }
 
-sub test_replication_multiple
+sub XXtest_replication_multiple
 {
     my ($self) = @_;
 

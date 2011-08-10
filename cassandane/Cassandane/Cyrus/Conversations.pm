@@ -42,7 +42,7 @@
 use strict;
 use warnings;
 package Cassandane::Cyrus::Conversations;
-use base qw(Test::Unit::TestCase);
+use base qw(Cassandane::Unit::TestCase);
 use DateTime;
 use URI::Escape;
 use Digest::SHA1 qw(sha1_hex);

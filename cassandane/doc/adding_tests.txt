@@ -17,7 +17,7 @@ Cassandane/Cyrus/
 
 Cassandane uses the Perl Test::Unit framework.  For more detailed
 information consult the Test::Unit documentation.  Each Cassandane test
-module derives from the Test::Unit::TestCase class, and is logically a
+module derives from the Cassandane::Unit::TestCase class, and is logically a
 group of related tests.  The module can define the following methods.
 
 new

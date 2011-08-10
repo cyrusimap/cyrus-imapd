@@ -41,75 +41,37 @@
 
 use strict;
 use warnings;
-package Cassandane::Test::Clone;
-use base qw(Cassandane::Unit::TestCase);
-use Clone qw(clone);
+package Cassandane::Unit::TestCase;
+use base qw(Test::Unit::TestCase);
+
+my $enabled;
 
 sub new
 {
     my $class = shift;
-    my $self = $class->SUPER::new(@_);
-    return $self;
+    return $class->SUPER::new(@_);
 }
 
-sub test_undef
+sub enable_test
 {
-    my ($self) = @_;
-    my $a = undef;
-    my $b = clone($a);
-    $self->assert_null($a);
-    $self->assert_null($b);
+    my $class = shift;
+    $enabled = shift;
 }
 
-sub test_string
+sub filter
 {
     my ($self) = @_;
-    my $a = "Hello World";
-    my $b = clone($a);
-    $self->assert_str_equals("Hello World", $a);
-    $self->assert_str_equals("Hello World", $b);
-    $b = "Jeepers";
-    $self->assert_str_equals("Hello World", $a);
-    $self->assert_str_equals("Jeepers", $b);
-}
-
-sub test_hash
-{
-    my ($self) = @_;
-    my $a = { foo => 42 };
-    my $b = clone($a);
-    $self->assert_deep_equals({ foo => 42 }, $a);
-    $self->assert_deep_equals({ foo => 42 }, $b);
-    $b->{bar} = 123;
-    $self->assert_deep_equals({ foo => 42 }, $a);
-    $self->assert_deep_equals({ foo => 42, bar => 123 }, $b);
-    delete $b->{foo};
-    $self->assert_deep_equals({ foo => 42 }, $a);
-    $self->assert_deep_equals({ bar => 123 }, $b);
-}
-
-sub test_array
-{
-    my ($self) = @_;
-    my $a = [ 42 ];
-    my $b = clone($a);
-    $self->assert_deep_equals([ 42 ], $a);
-    $self->assert_deep_equals([ 42 ], $b);
-    push(@$b, 123);
-    $self->assert_deep_equals([ 42 ], $a);
-    $self->assert_deep_equals([ 42, 123 ], $b);
-    shift @$b;
-    $self->assert_deep_equals([ 42 ], $a);
-    $self->assert_deep_equals([ 123 ], $b);
-}
-
-sub test_complex
-{
-    my ($self) = @_;
-    my $a = { foo => [ { x => 42, y => 123 } ],
-	      bar => { quux => 37, foonly => 475 } };
-    my $b = clone($a);
-    $self->assert_deep_equals($a, $b);
+    return
+    {
+	x => sub
+	{
+	    my $method = shift;
+	    $method =~ s/^test_//;
+	    return undef if !defined $enabled;
+	    return undef if $enabled eq $method;
+	    return 1;
+	}
+    };
 }
 
 1;

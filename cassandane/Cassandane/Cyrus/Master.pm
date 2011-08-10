@@ -42,7 +42,7 @@
 use strict;
 use warnings;
 package Cassandane::Cyrus::Master;
-use base qw(Test::Unit::TestCase);
+use base qw(Cassandane::Unit::TestCase);
 use POSIX qw(getcwd);
 use DateTime;
 use Cassandane::Util::Log;
