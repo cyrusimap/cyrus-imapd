@@ -1943,19 +1943,14 @@ const char *sync_crc_list_algorithms(void)
     static char *buf;
 
     if (!buf) {
-	/* TODO: we really need an expanding string class */
 	const struct sync_crc_algorithm *alg;
-	int len = 0;
+	strarray_t algos = STRARRAY_INITIALIZER;
 
 	for (alg = sync_crc_algorithms ; alg->name ; alg++)
-	    len += 1 + strlen(alg->name);
-	buf = xmalloc(len);
-	buf[0] = '\0';
-	for (alg = sync_crc_algorithms ; alg->name ; alg++) {
-	    if (buf[0])
-		strcat(buf, " ");
-	    strcat(buf, alg->name);
-	}
+	    strarray_append(&algos, alg->name);
+
+	buf = strarray_join(&algos, " ");
+	strarray_fini(&algos);
     }
 
     return buf;
