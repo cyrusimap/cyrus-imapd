@@ -649,8 +649,8 @@ int mboxname_init_namespace(struct namespace *namespace, int isadmin)
     namespace->isalt = !isadmin && config_getswitch(IMAPOPT_ALTNAMESPACE);
 
     namespace->accessible[NAMESPACE_INBOX] = 1;
-    namespace->accessible[NAMESPACE_USER] = config_getswitch(IMAPOPT_LIST_ON_USER_SPACE);
-    namespace->accessible[NAMESPACE_SHARED] = config_getswitch(IMAPOPT_LIST_ON_SHARED_SPACE);
+    namespace->accessible[NAMESPACE_USER] = !config_getswitch(IMAPOPT_DISABLE_USER_NAMESPACE);
+    namespace->accessible[NAMESPACE_SHARED] = !config_getswitch(IMAPOPT_DISABLE_SHARED_NAMESPACE);
 
     if (namespace->isalt) {
 	/* alternate namespace */
