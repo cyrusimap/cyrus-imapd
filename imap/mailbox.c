@@ -1530,7 +1530,7 @@ static int rec_compar(const void *key, const void *mem)
 int mailbox_find_index_record(struct mailbox *mailbox, uint32_t uid,
 			      struct index_record *record)
 {
-    const void *mem, *base = mailbox->index_base + mailbox->i.start_offset;
+    const char *mem, *base = mailbox->index_base + mailbox->i.start_offset;
     size_t num_records = mailbox->i.num_records;
     size_t size = mailbox->i.record_size;
     int r;
