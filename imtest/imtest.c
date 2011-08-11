@@ -2076,7 +2076,7 @@ static int nntp_do_auth(struct sasl_cmd_t *sasl_cmd,
 		printf("[Server did not advertise AUTHINFO USER]\n");
 		result = IMTEST_FAIL;
 	    } else {
-		result = auth_nntp(user_enabled);
+		result = auth_nntp();
 	    }
 	} else if (!mechlist || !stristr(mechlist, mech)) {
 	    printf("[Server did not advertise SASL %s]\n", ucase(mech));
