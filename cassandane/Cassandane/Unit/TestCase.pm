@@ -44,7 +44,8 @@ use warnings;
 package Cassandane::Unit::TestCase;
 use base qw(Test::Unit::TestCase);
 
-my $enabled;
+my %enabled;
+my $default;
 
 sub new
 {
@@ -52,10 +53,13 @@ sub new
     return $class->SUPER::new(@_);
 }
 
-sub enable_test
+sub enable_tests
 {
-    my $class = shift;
-    $enabled = shift;
+    my ($class, @tests) = @_;
+    %enabled = map { $_ => 1 } @tests;
+    # default is to deny if anything is explicitly
+    # enabled, otherwise allow
+    $default = (scalar(grep { m/^[^!]/ } @tests) ? 1 : undef);
 }
 
 sub filter
@@ -67,9 +71,13 @@ sub filter
 	{
 	    my $method = shift;
 	    $method =~ s/^test_//;
-	    return undef if !defined $enabled;
-	    return undef if $enabled eq $method;
-	    return 1;
+
+	    # deny if method has been explicitly disabled
+	    return 1 if defined $enabled{"!$method"};
+	    # allow if method has been explicitly enabled
+	    return undef if defined $enabled{$method};
+	    # otherwise return the default
+	    return $default;
 	}
     };
 }

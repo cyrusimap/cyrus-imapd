@@ -54,7 +54,89 @@ my @default_names = (
     'Cassandane::Cyrus',
 );
 my @names;
-my @schedule;
+my %schedule;
+
+sub schedulex
+{
+    my ($neg, $suite, $test) = @_;
+    if ($neg eq '!')
+    {
+	if (defined $test)
+	{
+	    # disable a specific test
+	    $schedule{$suite} ||= { suite => $suite, tests => {} };
+	    $schedule{$suite}->{tests}->{"!$test"} = 1;
+	}
+	else
+	{
+	    # remove entire suite
+	    delete $schedule{$suite};
+	}
+    }
+    else
+    {
+	# add to the schedule
+	$schedule{$suite} ||= { suite => $suite, tests => {} };
+	if (defined $test)
+	{
+	    $schedule{$suite}->{tests}->{$test} = 1;
+	}
+	else
+	{
+	    $schedule{$suite}->{tests} = {};
+	}
+    }
+}
+
+sub schedule
+{
+    my (@names) = @_;
+
+    @names = @default_names
+	if !scalar @names;
+
+    foreach my $name (@names)
+    {
+	my ($neg, $sname, $tname) = ($name =~ m/^(!?)([^.]+)(\.[^.]+)?$/);
+	$tname =~ s/^\.// if defined $tname;
+
+	schedule(@default_names)
+	    if $neg eq '!' && !scalar %schedule;
+
+	my $dir = $sname;
+	$dir =~ s/::/\//g;
+	my $file = "$dir.pm";
+
+	if ( -d $dir )
+	{
+	    die "Cannot specify directory.testname" if defined $tname;
+	    opendir DIR, $dir
+		or die "Cannot open directory $dir for reading: $!";
+	    while ($_ = readdir DIR)
+	    {
+		next unless m/\.pm$/;
+		$_ = "$dir/$_";
+		s/\.pm$//;
+		s/\//::/g;
+		schedulex($neg, $_, undef);
+	    }
+	    closedir DIR;
+	}
+	elsif ( -f $file )
+	{
+	    schedulex($neg, $sname, $tname);
+	}
+	elsif ( -f "Cassandane/Cyrus/$file" )
+	{
+	    schedulex($neg, "Cassandane::Cyrus::$sname", $tname);
+	}
+    }
+}
+
+sub get_schedule
+{
+    return sort { $a->{suite} cmp $b->{suite} } values %schedule;
+}
 
 my %runners =
 (
@@ -63,9 +145,9 @@ my %runners =
 	my $runner = Cassandane::Unit::Runner->new();
 	my $passed = 1;
 	$runner->filter('x');
-	foreach my $item (@schedule)
+	foreach my $item (get_schedule())
 	{
-	    Cassandane::Unit::TestCase->enable_test($item->{test});
+	    Cassandane::Unit::TestCase->enable_tests(keys %{$item->{tests}});
 	    $passed = 0
 		unless $runner->start($item->{suite});
 	}
@@ -84,9 +166,9 @@ eval
 	mkdir($output_dir);
 	my $runner = Test::Unit::Runner::XML->new($output_dir);
 	$runner->filter('x');
-	foreach my $item (@schedule)
+	foreach my $item (get_schedule())
 	{
-	    Cassandane::Unit::TestCase->enable_test($item->{test});
+	    Cassandane::Unit::TestCase->enable_tests(keys %{$item->{tests}});
 	    $runner->start(Test::Unit::Loader::load($item->{suite}));
 	}
 	return $runner->all_tests_passed();
@@ -130,46 +212,12 @@ while (my $a = shift)
     }
 }
 
-@names = @default_names
-    if $do_list || !scalar @names;
-
-foreach my $name (@names)
-{
-    my ($sname, $tname) = ($name =~ m/^([^.]+)(\.[^.]+)?$/);
-    $tname =~ s/^\.// if defined $tname;
-
-    my $dir = $sname;
-    $dir =~ s/::/\//g;
-    my $file = "$dir.pm";
-
-    if ( -d $dir )
-    {
-	die "Cannot specify directory.testname" if defined $tname;
-	opendir DIR, $dir
-	    or die "Cannot open directory $dir for reading: $!";
-	while ($_ = readdir DIR)
-	{
-	    next unless m/\.pm$/;
-	    $_ = "$dir/$_";
-	    s/\.pm$//;
-	    s/\//::/g;
-	    push(@schedule, { suite => $_, test => undef });
-	}
-	closedir DIR;
-    }
-    elsif ( -f $file )
-    {
-	push(@schedule, { suite => $sname, test => $tname });
-    }
-    elsif ( -f "Cassandane/Cyrus/$file" )
-    {
-	push(@schedule, { suite => "Cassandane::Cyrus::$sname", test => $tname });
-    }
-}
-
 if ($do_list)
 {
-    foreach my $item (sort { $a->{suite} cmp $b->{suite} } @schedule)
+    # Build a schedule comprising all tests
+    schedule();
+    # Sort and dump the schedule
+    foreach my $item (get_schedule())
     {
 	my @tests = @{Test::Unit::Loader::load($item->{suite})->names()};
 	map {
@@ -179,5 +227,11 @@ if ($do_list)
     }
     exit 0;
 }
+else
+{
+    # Build the schedule
+    schedule(@names);
+    # Run the schedule
+    exit(! $runners{$format}->());
+}
 
-exit(! $runners{$format}->());

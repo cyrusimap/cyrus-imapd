@@ -144,6 +144,18 @@ The argument can be
 
     root@testbox# ./testrunner.pl Quota.quotarename
 
+Arguments can be negated by using a leading exclamation mark (!)
+character, e.g.
+
+    root@testbox# ./testrunner.pl \!Quota
+
+will run all the tests from all the suites except the Quota suite.
+Arguments accumulate from left to right, so e.g.
+
+    root@testbox# ./testrunner.pl Quota \!Quota.quotarename
+
+will run all the tests in the Quota suite except the quoterename test.
+
 The -v (or --verbose) option to testrunner.pl causes both Cassandane and
 several Cyrus programs run by Cassandane, to emit a lot of information
 to stderr.  The output from Cassandane is prefixed by "=====>".
