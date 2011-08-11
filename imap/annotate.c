@@ -1046,11 +1046,16 @@ void annotate_state_set_message(annotate_state_t *state,
 				unsigned int uid)
 {
     if (!uid) {
-	annotate_state_set_mailbox(state,
-				   mailbox ? mailbox->name : NULL);
-	return;
+	if (!mailbox) {
+	    annotate_state_set_server(state);
+	    return;
+	}
+	state->which = ANNOTATION_SCOPE_MAILBOX;
     }
-    state->which = ANNOTATION_SCOPE_MESSAGE;
+    else {
+	state->which = ANNOTATION_SCOPE_MESSAGE;
+    }
+
     state->mboxpat = mailbox->name;
     state->int_mboxname = mailbox->name;
     state->uid = uid;
