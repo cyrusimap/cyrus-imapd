@@ -875,14 +875,14 @@ struct method_t {
 /* List of HTTP methods that we support */
 static struct method_t methods[] = {
 /*    { "ACL", meth_acl },*/
-/*    { "COPY", meth_copy },*/
+    { "COPY", meth_copy },
     { "DELETE", meth_delete },
     { "GET", meth_get },
     { "HEAD", meth_get },
 /*    { "LOCK", meth_lock },*/
     { "MKCALENDAR", meth_mkcol },
     { "MKCOL", meth_mkcol },
-/*    { "MOVE", meth_copy },*/
+    { "MOVE", meth_copy },
     { "OPTIONS", meth_options },
     { "POST", meth_put },
     { "PROPFIND", meth_propfind },
@@ -992,7 +992,7 @@ static void cmdloop(void)
 	/* Check Method */
 	if (!ret) {
 	    /* Quick filter based on first letter */
-	    if (!strchr("DGHMOPR", txn.meth[0])) ret = HTTP_NOT_ALLOWED;
+	    if (!strchr("CDGHMOPR", txn.meth[0])) ret = HTTP_NOT_ALLOWED;
 	    else {
 		/* Check our list of supported methods */
 		for (method = methods;
@@ -1188,6 +1188,8 @@ static int parse_target(const char *meth, const char *uri,
 	    return HTTP_BAD_REQUEST;
 	}
     }
+
+    /* XXX  Probably need to grab server part for remote COPY/MOVE */
 
     if (!p_uri->path || strlen(p_uri->path) > MAX_MAILBOX_PATH) {
 	xmlFreeURI(p_uri);
@@ -1488,7 +1490,7 @@ static void response_header(long code, struct transaction_t *txn)
 	if (txn->req_tgt.allow & ALLOW_DAV) {
 	    prot_printf(httpd_out, ", REPORT, PROPFIND");
 	    if (txn->req_tgt.allow & ALLOW_WRITE) {  /* LOCK, UNLOCK, ACL */
-		prot_printf(httpd_out, ", PROPPATCH, MOVE, MKCOL");  /* COPY */
+		prot_printf(httpd_out, ", PROPPATCH, COPY, MOVE, MKCOL");
 		if (txn->req_tgt.allow & ALLOW_CAL) {
 		    prot_printf(httpd_out, ", MKCALENDAR");
 		}
@@ -1877,11 +1879,20 @@ static int etagcmp(const char *hdr, const char *etag) {
  * any other interaction is undefined.
  */
 static int check_precond(const char *meth, const char *etag, time_t lastmod,
-			 hdrcache_t hdrcache)
+			 uint32_t dest, hdrcache_t hdrcache)
 {
     unsigned ret = HTTP_OK;
     const char **hdr;
     time_t since;
+
+    if (dest &&
+	(hdr = spool_getheader(hdrcache, "Overwrite"))) {
+	if (!strcmp(hdr[0], "F")) {
+	    /* Don't overwrite the destination resource */
+	    return HTTP_PRECOND_FAILED;
+	}
+	/* Fall through and check preconditions on source resource */
+    }
 
     if ((hdr = spool_getheader(hdrcache, "If-Match"))) {
 	if (!etagcmp(hdr[0], etag)) {
@@ -1949,10 +1960,270 @@ static int check_precond(const char *meth, const char *etag, time_t lastmod,
  */
 static int meth_copy(struct transaction_t *txn)
 {
-    int ret = 0;
+    int ret = HTTP_CREATED, r, precond;
+    const char **hdr;
+    struct request_target_t dest;  /* Parsed destination URL */
+    char src_mboxname[MAX_MAILBOX_BUFFER], dest_mboxname[MAX_MAILBOX_BUFFER];
+    struct mailbox *src_mbox = NULL, *dest_mbox = NULL;
+    struct caldav_db *src_caldb = NULL, *dest_caldb = NULL;
+    uint32_t src_uid = 0, olduid = 0;
+    struct index_record src_rec;
+    const char *etag = NULL;
+    time_t lastmod = 0;
+    struct appendstate appendstate;
 
-    /* Make sure its a DAV resource */
-    if (!(txn->req_tgt.allow & ALLOW_DAV)) return HTTP_NOT_ALLOWED; 
+    /* Response should not be cached */
+    txn->flags |= HTTP_NOCACHE;
+
+    /* We don't accept a body for this method */
+    if (buf_len(&txn->req_body)) return HTTP_BAD_MEDIATYPE;
+
+    /* Make sure source is a DAV resource */
+    if (!(txn->req_tgt.allow & ALLOW_DAV)) return HTTP_NOT_ALLOWED;
+
+    /* We don't yet handle COPY/MOVE on collections */
+    if (!txn->req_tgt.resource) return HTTP_NOT_ALLOWED;
+
+    /* Check for mandatory Destination header */
+    if (!(hdr = spool_getheader(txn->req_hdrs, "Destination"))) {
+	*txn->errstr = "Missing Destination header";
+	return HTTP_BAD_REQUEST;
+    }
+
+    /* Parse destination URL */
+    if ((r = parse_target(txn->meth, hdr[0], &dest, txn->errstr))) {
+	return r;
+    }
+
+    /* Make sure dest resource is in same namespace as source */
+    if (txn->req_tgt.namespace != dest.namespace) return HTTP_FORBIDDEN;
+
+    /* Make sure source and dest resources are NOT the same */
+    if (!strcmp(txn->req_tgt.path, dest.path)) {
+	*txn->errstr = "Source and destination resources are the same";
+	return HTTP_FORBIDDEN;
+    }
+
+    /* Construct source mailbox name corresponding to request target URI */
+    (void) target_to_mboxname(&txn->req_tgt, src_mboxname);
+
+    /* Open source mailbox for reading */
+    if ((r = mailbox_open_irl(src_mboxname, &src_mbox))) {
+	syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
+	       src_mboxname, error_message(r));
+	*txn->errstr = error_message(r);
+	ret = HTTP_SERVER_ERROR;
+	goto done;
+    }
+
+    /* Open the associated CalDAV database */
+    if ((r = caldav_open(src_mbox, 0, &src_caldb))) {
+	syslog(LOG_ERR, "caldav_open(%s) failed: %s",
+	       src_mboxname, error_message(r));
+	*txn->errstr = error_message(r);
+	ret = HTTP_SERVER_ERROR;
+	goto done;
+    }
+
+    /* Find message UID for the source resource */
+    caldav_read(src_caldb, txn->req_tgt.resource, &src_uid);
+    /* XXX  Check errors */
+
+    /* Fetch index record for the source resource */
+    if (!src_uid || mailbox_find_index_record(src_mbox, src_uid, &src_rec)) {
+	ret = HTTP_NOT_FOUND;
+	goto done;
+    }
+
+    /* Fetch cache record for the source resource (so we can copy it) */
+    if ((r = mailbox_cacherecord(src_mbox, &src_rec))) {
+	syslog(LOG_ERR, "mailbox_cacherecord(%s) failed: %s",
+	       src_mboxname, error_message(r));
+	*txn->errstr = error_message(r);
+	ret = HTTP_SERVER_ERROR;
+	goto done;
+    }
+
+    /* Finished our initial read of source mailbox */
+    mailbox_unlock_index(src_mbox, NULL);
+
+    /* Construct dest mailbox name corresponding to destination URI */
+    (void) target_to_mboxname(&dest, dest_mboxname);
+
+    /* Open dest mailbox for reading */
+    if ((r = mailbox_open_irl(dest_mboxname, &dest_mbox))) {
+	syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
+	       dest_mboxname, error_message(r));
+	*txn->errstr = error_message(r);
+	ret = HTTP_SERVER_ERROR;
+	goto done;
+    }
+
+    /* Open the associated CalDAV database */
+    if ((r = caldav_open(dest_mbox, CALDAV_CREATE, &dest_caldb))) {
+	syslog(LOG_ERR, "caldav_open(%s) failed: %s",
+	       dest_mboxname, error_message(r));
+	*txn->errstr = error_message(r);
+	ret = HTTP_SERVER_ERROR;
+	goto done;
+    }
+
+    /* Find message UID for the dest resource, if exists */
+    caldav_read(dest_caldb, dest.resource, &olduid);
+    /* XXX  Check errors */
+
+    /* Finished our initial read of dest mailbox */
+    mailbox_unlock_index(dest_mbox, NULL);
+
+    /* Check any preconditions */
+    etag = message_guid_encode(&src_rec.guid);
+    lastmod = src_rec.internaldate;
+    precond = check_precond(txn->meth, etag, lastmod, olduid, txn->req_hdrs);
+
+    if (precond != HTTP_OK) {
+	/* We failed a precondition - don't perform the request */
+	ret = precond;
+	goto done;
+    }
+
+    /* Prepare to append source resource to destination mailbox */
+    if ((r = append_setup(&appendstate, dest_mboxname, 
+			  httpd_userid, httpd_authstate, ACL_INSERT,
+			  (txn->meth[0]) == 'C' ? (long) src_rec.size : -1))) {
+	syslog(LOG_ERR, "append_setup(%s) failed: %s",
+	       dest_mboxname, error_message(r));
+	ret = HTTP_SERVER_ERROR;
+	*txn->errstr = "append_setup() failed";
+    }
+    else {
+	struct copymsg copymsg;
+	int flag = 0, userflag;
+	bit32 flagmask = 0;
+
+	/* Copy the resource */
+	copymsg.uid = src_rec.uid;
+	copymsg.internaldate = src_rec.internaldate;
+	copymsg.sentdate = src_rec.sentdate;
+	copymsg.gmtime = src_rec.gmtime;
+	copymsg.size = src_rec.size;
+	copymsg.header_size = src_rec.header_size;
+	copymsg.content_lines = src_rec.content_lines;
+	copymsg.cache_version = src_rec.cache_version;
+	copymsg.cache_crc = src_rec.cache_crc;
+	copymsg.crec = src_rec.crec;
+	message_guid_copy(&copymsg.guid, &src_rec.guid);
+	copymsg.system_flags = src_rec.system_flags;
+
+	for (userflag = 0; userflag < MAX_USER_FLAGS; userflag++) {
+	    if ((userflag & 31) == 0) {
+		flagmask = src_rec.user_flags[userflag/32];
+	    }
+	    if (src_mbox->flagname[userflag] && (flagmask & (1<<(userflag&31)))) {
+		copymsg.flag[flag++] = src_mbox->flagname[userflag];
+	    }
+	}
+	copymsg.flag[flag] = 0;
+	copymsg.seen = 0;  /* XXX */
+
+	if ((r = append_copy(src_mbox, &appendstate, 1, &copymsg, 0))) {
+	    syslog(LOG_ERR, "append_copy(%s->%s) failed: %s",
+		   src_mboxname, dest_mboxname, error_message(r));
+	    ret = HTTP_SERVER_ERROR;
+	    *txn->errstr = "append_copy() failed";
+	}
+
+	if (!r) {
+	    /* Commit the append to the destination mailbox */
+	    if ((r = append_commit(&appendstate, -1,
+				   NULL, NULL, NULL, &dest_mbox))) {
+		syslog(LOG_ERR, "append_commit(%s) failed: %s",
+		       dest_mboxname, error_message(r));
+		ret = HTTP_SERVER_ERROR;
+		*txn->errstr = "append_commit() failed";
+	    }
+	    else {
+		/* append_commit() returns a write-locked index */
+		struct index_record newrecord, oldrecord;
+
+		/* Read index record for new message (always the last one) */
+		mailbox_read_index_record(dest_mbox, dest_mbox->i.num_records,
+					  &newrecord);
+
+		/* Find message UID for the dest resource, if exists */
+		caldav_lockread(dest_caldb, dest.resource, &olduid);
+		/* XXX  check for errors */
+
+		if (olduid) {
+		    /* Now that we have the replacement message in place
+		       and the mailbox locked, re-read the old record
+		       and expunge it.
+		    */
+		    ret = HTTP_NO_CONTENT;
+
+		    /* Fetch index record for the old message */
+		    r = mailbox_find_index_record(dest_mbox, olduid, &oldrecord);
+
+		    /* Expunge the old message */
+		    oldrecord.system_flags |= FLAG_EXPUNGED;
+		    if ((r = mailbox_rewrite_index_record(dest_mbox, &oldrecord))) {
+			syslog(LOG_ERR, "rewrite_index_rec(%s) failed: %s",
+			       dest_mboxname, error_message(r));
+			*txn->errstr = error_message(r);
+			ret = HTTP_SERVER_ERROR;
+			goto done;
+		    }
+		}
+
+		/* Create mapping entry from dest resource name to UID */
+		caldav_write(dest_caldb, dest.resource, newrecord.uid);
+		/* XXX  check for errors, if this fails, backout changes */
+
+		/* Tell client about the new resource */
+		txn->etag = message_guid_encode(&newrecord.guid);
+		txn->loc = dest.path;
+
+		mailbox_unlock_index(dest_mbox, NULL);
+
+
+		/* For MOVE, we need to delete the source resource */
+		if (txn->meth[0] == 'M') {
+		    /* Lock source mailbox */
+		    mailbox_lock_index(src_mbox, LOCK_EXCLUSIVE);
+
+		    /* Find message UID for the source resource */
+		    caldav_lockread(src_caldb, txn->req_tgt.resource, &src_uid);
+		    /* XXX  Check errors */
+
+		    /* Fetch index record for the source resource */
+		    if (src_uid &&
+			!mailbox_find_index_record(src_mbox, src_uid, &src_rec)) {
+
+			/* Expunge the source message */
+			src_rec.system_flags |= FLAG_EXPUNGED;
+			if ((r = mailbox_rewrite_index_record(src_mbox, &src_rec))) {
+			    syslog(LOG_ERR, "rewrite_index_rec(%s) failed: %s",
+				   src_mboxname, error_message(r));
+			    *txn->errstr = error_message(r);
+			    ret = HTTP_SERVER_ERROR;
+			    goto done;
+			}
+		    }
+
+		    /* Delete mapping entry for source resource name */
+		    caldav_delete(src_caldb, txn->req_tgt.resource);
+		}
+	    }
+	}
+	else {
+	    append_abort(&appendstate);
+	}
+    }
+
+  done:
+    if (dest_caldb) caldav_close(dest_caldb);
+    if (dest_mbox) mailbox_close(&dest_mbox);
+    if (src_caldb) caldav_close(src_caldb);
+    if (src_mbox) mailbox_close(&src_mbox);
 
     return ret;
 }
@@ -2022,7 +2293,7 @@ static int meth_delete(struct transaction_t *txn)
     lastmod = record.internaldate;
 
     /* Check any preconditions */
-    precond = check_precond(txn->meth, etag, lastmod, txn->req_hdrs);
+    precond = check_precond(txn->meth, etag, lastmod, 0, txn->req_hdrs);
 
     /* We failed a precondition - don't perform the request */
     if (precond != HTTP_OK) {
@@ -2106,7 +2377,7 @@ static int meth_get(struct transaction_t *txn)
 	lastmod = record.internaldate;
 
 	/* Check any preconditions */
-	precond = check_precond(txn->meth, etag, lastmod, txn->req_hdrs);
+	precond = check_precond(txn->meth, etag, lastmod, 0, txn->req_hdrs);
 
 	if (precond != HTTP_OK) {
 	    /* We failed a precondition - don't perform the request */
@@ -2169,7 +2440,7 @@ static int meth_get(struct transaction_t *txn)
 
 	/* Check any preconditions */
 	precond = check_precond(txn->meth, txn->etag,
-				resp_body->lastmod, txn->req_hdrs);
+				resp_body->lastmod, 0, txn->req_hdrs);
 
 	/* We failed a precondition - don't perform the request */
 	if (precond != HTTP_OK) {
@@ -2674,7 +2945,7 @@ static int meth_put(struct transaction_t *txn)
 	txn->req_tgt.reslen = strlen(p);
     }
 
-    /* Find message UID for the resource */
+    /* Find message UID for the resource, if exists */
     caldav_read(caldavdb, txn->req_tgt.resource, &olduid);
     /* XXX  Check errors */
 
@@ -2695,7 +2966,7 @@ static int meth_put(struct transaction_t *txn)
     }
 
     /* Check any preconditions */
-    precond = check_precond(txn->meth, etag, lastmod, txn->req_hdrs);
+    precond = check_precond(txn->meth, etag, lastmod, 0, txn->req_hdrs);
 
     if (precond != HTTP_OK) {
 	/* We failed a precondition - don't perform the request */
@@ -2784,7 +3055,7 @@ static int meth_put(struct transaction_t *txn)
 		mailbox_read_index_record(mailbox, mailbox->i.num_records,
 					  &newrecord);
 
-		/* Find message UID for the resource */
+		/* Find message UID for the resource, if exists */
 		caldav_lockread(caldavdb, txn->req_tgt.resource, &olduid);
 		/* XXX  check for errors */
 
@@ -2803,7 +3074,8 @@ static int meth_put(struct transaction_t *txn)
 		    lastmod = oldrecord.internaldate;
 
 		    /* Check any preconditions */
-		    precond = check_precond(txn->meth, etag, lastmod, txn->req_hdrs);
+		    precond = check_precond(txn->meth, etag, lastmod, 0,
+					    txn->req_hdrs);
 
 		    if (precond != HTTP_OK) {
 			/* We failed a precondition */
