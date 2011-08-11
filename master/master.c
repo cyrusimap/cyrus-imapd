@@ -1725,7 +1725,6 @@ int main(int argc, char **argv)
     int pidlock_fd = -1;
 
     int i, opt, close_std = 1, daemon_mode = 0;
-    extern int optind;
     extern char *optarg;
 
     char *alt_config = NULL;
