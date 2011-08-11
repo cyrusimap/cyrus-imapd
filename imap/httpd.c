@@ -50,7 +50,6 @@
  *   - calendar-query REPORT filtering (optimize for time range, component type)
  *   - free-busy-query REPORT
  *   - sync-collection REPORT (can probably use MODSEQs -- as CTag too)
- *   - Use UNIX namespace so that '.' can be used in collection names
  *   - Use XML precondition error codes
  *   - Fix handling of dead properties and unknown namespaces
  */
