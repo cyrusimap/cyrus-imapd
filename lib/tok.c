@@ -49,7 +49,7 @@
 
 void tok_init(tok_t *t, const char *str, const char *sep, int flags)
 {
-    return tok_initm(t, str ? xstrdup(str) : NULL, sep, flags|TOK_FREEBUFFER);
+    tok_initm(t, str ? xstrdup(str) : NULL, sep, flags|TOK_FREEBUFFER);
 }
 
 void tok_initm(tok_t *t, char *str, const char *sep, int flags)
