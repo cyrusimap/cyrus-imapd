@@ -101,8 +101,8 @@ static void cmd_logout(struct protstream *sieved_out,
 		       struct protstream *sieved_in);
 static int cmd_authenticate(struct protstream *sieved_out, struct protstream *sieved_in,
 			    mystring_t *mechanism_name, mystring_t *initial_challenge, const char **errmsg);
-static int cmd_unauthenticate(struct protstream *sieved_out,
-			      struct protstream *sieved_in);
+static void cmd_unauthenticate(struct protstream *sieved_out,
+			       struct protstream *sieved_in);
 static int cmd_starttls(struct protstream *sieved_out, struct protstream *sieved_in);
 
 static char *sieve_parsesuccess(char *str, const char **status)
@@ -570,7 +570,7 @@ static char *authid = NULL;
 
 extern int reset_saslconn(sasl_conn_t **conn, sasl_ssf_t ssf, char *authid);
 
-static int cmd_unauthenticate(struct protstream *sieved_out,
+static void cmd_unauthenticate(struct protstream *sieved_out,
 			      struct protstream *sieved_in)
 {
     if (chdir("/tmp/"))
