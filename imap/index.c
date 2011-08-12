@@ -179,6 +179,7 @@ static void index_thread_ref(struct index_state *state,
 
 static struct seqset *_parse_sequence(struct index_state *state,
 				      const char *sequence, int usinguid);
+static void massage_header(char *hdr);
 
 /* NOTE: Make sure these are listed in CAPABILITY_STRING */
 static const struct thread_algorithm thread_algs[] = {
@@ -4085,6 +4086,7 @@ void index_get_ids(MsgData *msgdata, char *envtokens[], const char *headers,
 	/* allocate some space for refs */
 	/* find references */
 	refstr = buf.s;
+	massage_header(refstr);
 	while ((ref = find_msgid(refstr, &refstr)) != NULL)
 	    strarray_appendm(&msgdata->ref, ref);
     }
