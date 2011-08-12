@@ -8,6 +8,36 @@
 </head>
 <body>
 
+<h1>Changes to the Cyrus IMAP Server since 2.4.10</h1>
+<ul>
+<li>fixed replication recovery from different messages
+    at the each end</li>
+<li>Bug #3489 - fixed quotalegacy handling of prefixes so
+    only exact subfolders match</li>
+<li>Bug #3491 - NOOP and AUTHENTICATE for timsieved,
+    thanks Dilyan Palauzov</li>
+<li>Bug #3492 - better response codes for timsieved,
+    thanks Dilyan Palauzov</li>
+<li>Bug #3497 - fix cmd syslog from master,
+    thanks Kristof Katus</li>
+<li>Bug #3503 - compilation of perl libraries on
+    dragonfly and freebsd, thanks OBATA Akio</li>
+<li>Bug #3451 - allow CC to have spaces</li>
+<li>Bug #3505 - fix sync_reset,
+    thanks David Carter</li>
+<li>Bug #3506 - use literal+ for sync_(client|server),
+    thanks David Carter</li>
+<li>Bug #3300 - use portable function for TCP constants,
+    thanks OBATA Akio</li>
+<li>Bug #3507 - fix replication recovery with non-delayed
+    expunge, thanks Julien Coloos</li>
+<li>Bug #3495 - improved duplicate suppression,
+    thanks Kristof Katus</li>
+<li>Bug #2772/3463 - fixed crashes in THREAD by correcting
+    folding of references headers</li>
+<li>Bug #3439 - fix ugly syslog message for vacation</li>
+</ul>
+
 <h1>Changes to the Cyrus IMAP Server since 2.4.9</h1>
 <ul>
 <li>fixed handling of unparsable emails during append (which
