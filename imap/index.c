@@ -175,6 +175,7 @@ static struct seqset *_index_vanished(struct index_state *state,
 				      struct vanished_params *params);
 static struct seqset *_parse_sequence(struct index_state *state,
 				      const char *sequence, int usinguid);
+static void massage_header(char *hdr);
 
 /* NOTE: Make sure these are listed in CAPABILITY_STRING */
 static const struct thread_algorithm thread_algs[] = {
@@ -3962,6 +3963,7 @@ void index_get_ids(MsgData *msgdata, char *envtokens[], const char *headers,
 	/* allocate some space for refs */
 	msgdata->ref = (char **) xmalloc(refsize * sizeof(char *));
 	/* find references */
+	massage_header(buf);
 	refstr = buf;
 	while ((ref = find_msgid(refstr, &refstr)) != NULL) {
 	    /* reallocate space for this msgid if necessary */
