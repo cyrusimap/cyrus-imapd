@@ -43,15 +43,19 @@
 /*
  * TODO:
  *
- *   - FIX PROPFIND depth logic
+ *   - Fix PROPFIND depth logic?  (need to confirm that its broken)
  *   - Add more required properties
  *   - GET/HEAD on collections (iCalendar stream of resources)
- *   - MOVE method (Apple will use it)
  *   - calendar-query REPORT filtering (optimize for time range, component type)
  *   - free-busy-query REPORT
  *   - sync-collection REPORT (can probably use MODSEQs -- as CTag too)
  *   - Use XML precondition error codes
- *   - Fix handling of dead properties and unknown namespaces
+ *   - Add replication bits
+ *   - Add WebDAV LOCKing?  Does anybody use it?
+ *   - Add WebDAV ACL support?
+ *   - Add WebDAV Quotas?
+ *   - Should we have a linked-list/hash of open mailboxes,
+ *     rather than open/close for every method?
  */
 
 #include <config.h>
