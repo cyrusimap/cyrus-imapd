@@ -50,10 +50,12 @@
 #define FNAME_DELIVERDB "/deliver.db"
 
 typedef struct duplicate_key {
-    char *id;
-    char *to;
-    char *date;
+    const char *id;
+    const char *to;
+    const char *date;
 } duplicate_key_t;
+
+#define DUPLICATE_INITIALIZER { NULL, NULL, NULL }
 
 int duplicate_init(const char *fname, int myflags);
 
