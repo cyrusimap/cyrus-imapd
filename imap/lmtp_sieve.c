@@ -563,6 +563,8 @@ static int sieve_notify(void *ac,
     return SIEVE_OK;
 }
 
+static const char hex[] = "0123456789ABCDEF";
+
 static int autorespond(void *ac, 
 		       void *ic __attribute__((unused)), 
 		       void *sc,
@@ -573,6 +575,7 @@ static int autorespond(void *ac,
     script_data_t *sd = (script_data_t *) sc;
     time_t t, now;
     int ret;
+    int i;
     duplicate_key_t dkey = DUPLICATE_INITIALIZER;
     char *id;
 
@@ -581,9 +584,12 @@ static int autorespond(void *ac,
     now = time(NULL);
 
     /* ok, let's see if we've responded before */
-    id = xmalloc(SIEVE_HASHLEN + 1);
-    memcpy(id, (char *) arc->hash, SIEVE_HASHLEN);
-    id[SIEVE_HASHLEN] = '\0';
+    id = xmalloc(SIEVE_HASHLEN*2 + 1);
+    for (i = 0; i < SIEVE_HASHLEN; i++) {
+	id[i*2+0] = hex[arc->hash[i] / 16];
+	id[i*2+1] = hex[arc->hash[i] % 16];
+    }
+    id[SIEVE_HASHLEN*2] = '\0';
     dkey.id = id;
     dkey.to = sd->username;
     dkey.date = "";  /* no date on these, ID is custom */
