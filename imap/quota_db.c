@@ -158,7 +158,7 @@ static int do_onequota(void *rock,
 int quota_foreach(const char *prefix, quotaproc_t *proc, void *rock)
 {
     int r;
-    const char *search = prefix ? prefix : "";
+    char *search = prefix ? (char *)prefix : "";
     struct quota_foreach_t foreach_d;
 
     foreach_d.proc = proc;
