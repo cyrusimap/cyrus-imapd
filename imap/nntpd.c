@@ -2898,8 +2898,8 @@ struct message_data {
     char *path;			/* path */
     char *control;		/* control message */
     unsigned long size;		/* size of message in bytes */
-
     strarray_t rcpt;		/* mailboxes to post message */
+    char *date;			/* date field of header */ 
 
     hdrcache_t hdrcache;
 };
@@ -2916,6 +2916,7 @@ int msg_new(message_data_t **m)
     ret->control = NULL;
     ret->size = 0;
     strarray_init(&ret->rcpt);
+    ret->date = NULL;
 
     ret->hdrcache = spool_new_hdrcache();
 
@@ -2925,21 +2926,14 @@ int msg_new(message_data_t **m)
 
 void msg_free(message_data_t *m)
 {
-    if (m->data) {
+    if (m->data)
 	prot_free(m->data);
-    }
-    if (m->f) {
+    if (m->f)
 	fclose(m->f);
-    }
-    if (m->id) {
-	free(m->id);
-    }
-    if (m->path) {
-	free(m->path);
-    }
-    if (m->control) {
-	free(m->control);
-    }
+    free(m->id);
+    free(m->path);
+    free(m->control);
+    free(m->date);
 
     strarray_fini(&m->rcpt);
 
@@ -3042,8 +3036,12 @@ static int savemsg(message_data_t *m, FILE *f)
 	char datestr[RFC822_DATETIME_MAX+1];
 
 	time_to_rfc822(now, datestr, sizeof(datestr));
+	m->date = xstrdup(datestr);
 	fprintf(f, "Date: %s\r\n", datestr);
 	spool_cache_header(xstrdup("Date"), xstrdup(datestr), m->hdrcache);
+    }
+    else {
+	m->date = xstrdup(body[0]);
     }
 
     /* get control */
@@ -3261,11 +3259,13 @@ static int deliver(message_data_t *msg)
     unsigned long uid;
     struct body *body = NULL;
     struct dest *dlist = NULL;
+    duplicate_key_t dkey = {msg->id, NULL, msg->date};
 
     /* check ACLs of all mailboxes */
     for (n = 0; n < msg->rcpt.count; n++) {
 	struct mboxlist_entry *mbentry = NULL;
 	rcpt = msg->rcpt.data[n];
+	dkey.to = rcpt;
 
 	/* look it up */
 	r = mlookup(rcpt, &mbentry);
@@ -3286,9 +3286,9 @@ static int deliver(message_data_t *msg)
 	    struct appendstate as;
 
 	    if (msg->id && 
-		duplicate_check(msg->id, strlen(msg->id), rcpt, strlen(rcpt))) {
+		duplicate_check(&dkey)) {
 		/* duplicate message */
-		duplicate_log(msg->id, rcpt, "nntp delivery");
+		duplicate_log(&dkey, "nntp delivery");
 		continue;
 	    }
 
@@ -3306,14 +3306,12 @@ static int deliver(message_data_t *msg)
 		    r = append_fromstream(&as, &body, msg->data, msg->size, 0,
 					  (const char **) NULL, 0);
 		}
-		if (r || (msg->id &&   
-			  duplicate_check(msg->id, strlen(msg->id),
-					  rcpt, strlen(rcpt)))) {  
+		if (r || ( msg->id && duplicate_check(&dkey) ) ) {    
 		    append_abort(&as);
                    
 		    if (!r) {
 			/* duplicate message */
-			duplicate_log(msg->id, rcpt, "nntp delivery");
+			duplicate_log(&dkey, "nntp delivery");
 			continue;
 		    }            
 		}                
@@ -3323,8 +3321,7 @@ static int deliver(message_data_t *msg)
 	    }
 
 	    if (!r && msg->id)
-		duplicate_mark(msg->id, strlen(msg->id), rcpt, strlen(rcpt),
-			       time(NULL), uid);
+		duplicate_mark(&dkey, time(NULL), uid);
 
 	    if (r) {
 		mboxlist_entry_free(&mbentry);
@@ -3498,7 +3495,8 @@ static int cancel(message_data_t *msg)
     /* store msgid of cancelled message for IHAVE/CHECK/TAKETHIS
      * (in case we haven't received the message yet)
      */
-    duplicate_mark(msgid, strlen(msgid), "", 0, 0, time(NULL));
+    duplicate_key_t dkey = {msgid, "", ""};
+    duplicate_mark(&dkey, 0, time(NULL));
 
     return r;
 }

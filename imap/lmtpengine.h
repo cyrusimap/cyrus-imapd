@@ -65,6 +65,7 @@ struct message_data {
     char *return_path;		/* where to return message */
     address_data_t **rcpt;	/* to recipients of this message */
     int rcpt_num;		/* number of recipients */
+    char *date; 		/* date field of header */
 
     /* auth state */
     char *authuser;

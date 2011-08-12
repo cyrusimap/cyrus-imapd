@@ -49,14 +49,17 @@
 /* name of the duplicate delivery database */
 #define FNAME_DELIVERDB "/deliver.db"
 
-int duplicate_init(const char*, int);
+typedef struct duplicate_key {
+    char *id;
+    char *to;
+    char *date;
+} duplicate_key_t;
 
-time_t duplicate_check(const char *id, int idlen, const char *to, int tolen);
-void duplicate_log(const char *msgid, const char *name, char *action);
-void duplicate_mark(const char *id, int idlen,
-		    const char *to, int tolen,
-		    time_t mark, unsigned long uid);
+int duplicate_init(const char *fname, int myflags);
 
+time_t duplicate_check(duplicate_key_t *dkey);
+void duplicate_log(duplicate_key_t *dkey, char *action);
+void duplicate_mark(duplicate_key_t *dkey, time_t mark, unsigned long uid);
 typedef int (*duplicate_find_proc_t)(const char *, const char *, time_t,
 				     unsigned long, void *);
 int duplicate_find(const char *msgid, duplicate_find_proc_t, void *rock);

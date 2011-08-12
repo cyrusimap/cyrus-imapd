@@ -87,6 +87,7 @@ extern int deliver_mailbox(FILE *f,
 			   const char *user,
 			   char *notifyheader,
 			   const char *mailboxname,
+			   char *date,
 			   int quotaoverride,
 			   int acloverride);
 

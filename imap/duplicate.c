@@ -119,9 +119,12 @@ int duplicate_init(const char *fname, int myflags __attribute__((unused)))
     return r;
 }
 
-time_t duplicate_check(const char *id, int idlen, const char *to, int tolen)
+time_t duplicate_check(duplicate_key_t *dkey)
 {
     char buf[1024];
+    int idlen = strlen(dkey->id);
+    int tolen = strlen(dkey->to);
+    int datelen = strlen(dkey->date); 
     int r;
     const char *data = NULL;
     int len = 0;
@@ -129,16 +132,18 @@ time_t duplicate_check(const char *id, int idlen, const char *to, int tolen)
 
     if (!duplicate_dbopen) return 0;
 
-    if (idlen + tolen > (int) sizeof(buf) - 30) return 0;
-    memcpy(buf, id, idlen);
+    if (idlen + tolen + datelen > (int) sizeof(buf) - 30) return 0;
+    memcpy(buf, dkey->id, idlen);
     buf[idlen] = '\0';
-    memcpy(buf + idlen + 1, to, tolen);
+    memcpy(buf + idlen + 1, dkey->to, tolen);
     buf[idlen + tolen + 1] = '\0';
+    assert(dkey->date != NULL);
+    memcpy(buf + idlen + tolen + 2, dkey->date, datelen);
+    buf[idlen + tolen + datelen + 2] = '\0';
 
     do {
 	r = DB->fetch(dupdb, buf,
-		      idlen + tolen + 2, /* +2 b/c 1 for the center null;
-					    +1 for the terminating null */
+		      idlen + tolen + datelen + 3, /* We have three concatenated values now, all parts ending with '\0' */
 		      &data, &len, NULL);
     } while (r == CYRUSDB_AGAIN);
 
@@ -150,55 +155,59 @@ time_t duplicate_check(const char *id, int idlen, const char *to, int tolen)
 	memcpy(&mark, data, sizeof(time_t));
     } else if (r != CYRUSDB_OK) {
 	if (r != CYRUSDB_NOTFOUND) {
-	    syslog(LOG_ERR, "duplicate_check: error looking up %s/%s: %s",
-		   id, to,
-		   cyrusdb_strerror(r));
+	    syslog(LOG_ERR, "duplicate_check: error looking up %s/%s/%s: %s",
+		   dkey->id, dkey->to, dkey->date, 
+		   cyrusdb_strerror(r)); 
 	}
 	mark = 0;
     }
 
-    syslog(LOG_DEBUG, "duplicate_check: %-40s %-20s %ld",
-	   buf, buf+idlen+1, mark);
+    syslog(LOG_DEBUG, "duplicate_check: %-40s %-20s %-40s %ld",
+	   buf, buf+idlen+1, buf+idlen+tolen+2, mark); 
 
     return mark;
 }
 
-void duplicate_log(const char *msgid, const char *name, char *action)
+void duplicate_log(duplicate_key_t *dkey, char *action) 
 {
-    syslog(LOG_INFO, "dupelim: eliminated duplicate message to %s id %s (%s)",
-	   name, msgid, action);
+    assert(dkey->date != NULL);
+    syslog(LOG_INFO, "dupelim: eliminated duplicate message to %s id %s date %s (%s)",
+      dkey->to, dkey->id, dkey->date, action);    
     if (config_auditlog)
-	syslog(LOG_NOTICE, "auditlog: duplicate sessionid=<%s> action=<%s> message-id=%s user=<%s>",
-	       session_id(), action, msgid, name); 
+	syslog(LOG_NOTICE, "auditlog: duplicate sessionid=<%s> action=<%s> message-id=%s user=<%s> date=<%s>",
+	       session_id(), action, dkey->id, dkey->to, dkey->date); 
 }
 
-void duplicate_mark(const char *id, int idlen,
-		    const char *to, int tolen,
-		    time_t mark, unsigned long uid)
+void duplicate_mark(duplicate_key_t *dkey, time_t mark, unsigned long uid)
 {
     char buf[1024], data[100];
+    int idlen = strlen(dkey->id);
+    int tolen = strlen(dkey->to);
+    int datelen = strlen(dkey->date); 
     int r;
 
     if (!duplicate_dbopen) return;
 
-    if (idlen + tolen > (int) sizeof(buf) - 30) return;
-    memcpy(buf, id, idlen);
+    if (idlen + tolen + datelen > (int) sizeof(buf) - 30) return; 
+    memcpy(buf, dkey->id, idlen);
     buf[idlen] = '\0';
-    memcpy(buf + idlen + 1, to, tolen);
+    memcpy(buf + idlen + 1, dkey->to, tolen);
     buf[idlen + tolen + 1] = '\0';
+    assert(dkey->date != NULL);
+    memcpy(buf + idlen + tolen + 2, dkey->date, datelen);
+    buf[idlen + tolen + datelen + 2] = '\0';
 
     memcpy(data, &mark, sizeof(mark));
     memcpy(data + sizeof(mark), &uid, sizeof(uid));
 
     do {
 	r = DB->store(dupdb, buf,
-		      idlen + tolen + 2, /* +2 b/c 1 for the center null;
-					    +1 for the terminating null */
+		      idlen + tolen + datelen + 3, /* We have three concatenated values now, all parts ending with '\0' */
 		      data, sizeof(mark)+sizeof(uid), NULL);
     } while (r == CYRUSDB_AGAIN);
 
-    syslog(LOG_DEBUG, "duplicate_mark: %-40s %-20s %ld %lu",
-	   buf, buf+idlen+1, mark, uid);
+    syslog(LOG_DEBUG, "duplicate_mark: %-40s %-20s %-40s %ld %lu",
+	   buf, buf+idlen+1, buf+idlen+tolen+2, mark, uid); 
 
     return;
 }
