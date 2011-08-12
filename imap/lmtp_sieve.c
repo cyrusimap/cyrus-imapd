@@ -225,7 +225,7 @@ static int send_rejection(const char *origid,
     time_t t;
     char datestr[RFC822_DATETIME_MAX+1];
     pid_t sm_pid, p;
-    duplicate_key_t dkey = {NULL, NULL, NULL};
+    duplicate_key_t dkey = DUPLICATE_INITIALIZER;
 
     smbuf[0] = "sendmail";
     smbuf[1] = "-i";		/* ignore dots */
@@ -374,7 +374,7 @@ static int sieve_redirect(void *ac,
     script_data_t *sd = (script_data_t *) sc;
     message_data_t *m = ((deliver_data_t *) mc)->m;
     char buf[8192], *sievedb = NULL;
-    duplicate_key_t dkey = {NULL, NULL, NULL};
+    duplicate_key_t dkey = DUPLICATE_INITIALIZER;
     int res;
 
     /* if we have a msgid, we can track our redirects */
@@ -573,17 +573,20 @@ static int autorespond(void *ac,
     script_data_t *sd = (script_data_t *) sc;
     time_t t, now;
     int ret;
-    duplicate_key_t dkey = {NULL, NULL, ""};
+    duplicate_key_t dkey = DUPLICATE_INITIALIZER;
+    char *id;
 
     snmp_increment(SIEVE_VACATION_TOTAL, 1);
 
     now = time(NULL);
 
     /* ok, let's see if we've responded before */
-    dkey.id = xmalloc(SIEVE_HASHLEN + 1);
-    memcpy(dkey.id, (char *) arc->hash, SIEVE_HASHLEN);
-    dkey.id[SIEVE_HASHLEN] = '\0';
+    id = xmalloc(SIEVE_HASHLEN + 1);
+    memcpy(id, (char *) arc->hash, SIEVE_HASHLEN);
+    id[SIEVE_HASHLEN] = '\0';
+    dkey.id = id;
     dkey.to = sd->username;
+    dkey.date = "";  /* no date on these, ID is custom */
     t = duplicate_check(&dkey);
     if (t) {
 	if (now >= t) {
@@ -601,7 +604,8 @@ static int autorespond(void *ac,
 	duplicate_mark(&dkey, now + arc->days * (24 * 60 * 60), 0);
     }
 
-    if (dkey.id != NULL) free(dkey.id);
+    free(id);
+
     return ret;
 }
 
@@ -619,7 +623,7 @@ static int send_response(void *ac,
     sieve_send_response_context_t *src = (sieve_send_response_context_t *) ac;
     message_data_t *md = ((deliver_data_t *) mc)->m;
     script_data_t *sdata = (script_data_t *) sc;
-    duplicate_key_t dkey = {NULL, NULL, NULL};
+    duplicate_key_t dkey = DUPLICATE_INITIALIZER;
 
     smbuf[0] = "sendmail";
     smbuf[1] = "-i";		/* ignore dots */
@@ -894,7 +898,7 @@ int run_sieve(const char *user, const char *domain, const char *mailbox,
     char userbuf[MAX_MAILBOX_BUFFER] = "";
     char authuserbuf[MAX_MAILBOX_BUFFER];
     int r = 0;
-    duplicate_key_t dkey = {NULL, NULL, NULL};
+    duplicate_key_t dkey = DUPLICATE_INITIALIZER;
 
     if (!user) {
 	/* shared mailbox, check for annotation */
