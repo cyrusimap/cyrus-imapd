@@ -2874,6 +2874,7 @@ struct message_data {
 
     char **rcpt;		/* mailboxes to post message */
     int rcpt_num;		/* number of groups */
+    char *date;		/* date field of header */ 
 
     hdrcache_t hdrcache;
 };
@@ -2891,6 +2892,7 @@ int msg_new(message_data_t **m)
     ret->size = 0;
     ret->rcpt = NULL;
     ret->rcpt_num = 0;
+    ret->date = NULL;
 
     ret->hdrcache = spool_new_hdrcache();
 
@@ -2923,6 +2925,9 @@ void msg_free(message_data_t *m)
 	    free(m->rcpt[i]);
 	}
 	free(m->rcpt);
+    }
+    if (m->date) {
+	free(m->date);
     }
 
     spool_free_hdrcache(m->hdrcache);
@@ -3047,8 +3052,12 @@ static int savemsg(message_data_t *m, FILE *f)
 	char datestr[80];
 
 	rfc822date_gen(datestr, sizeof(datestr), now);
+	m->date = xstrdup(datestr);
 	fprintf(f, "Date: %s\r\n", datestr);
 	spool_cache_header(xstrdup("Date"), xstrdup(datestr), m->hdrcache);
+    }
+    else {
+	m->date = xstrdup(body[0]);
     }
 
     /* get control */
@@ -3279,6 +3288,7 @@ static int deliver(message_data_t *msg)
     unsigned long uid;
     struct body *body = NULL;
     struct dest *dlist = NULL;
+    duplicate_key_t dkey = {msg->id, NULL, msg->date};
 
     /* check ACLs of all mailboxes */
     for (n = 0; n < msg->rcpt_num; n++) {
@@ -3286,6 +3296,7 @@ static int deliver(message_data_t *msg)
 
 	/* look it up */
 	r = mlookup(rcpt, &server, &acl, NULL);
+	dkey.to = rcpt;
 	if (r) return IMAP_MAILBOX_NONEXISTENT;
 
 	if (!(acl && (myrights = cyrus_acl_myrights(nntp_authstate, acl)) &&
@@ -3301,9 +3312,9 @@ static int deliver(message_data_t *msg)
 	    struct appendstate as;
 
 	    if (msg->id && 
-		duplicate_check(msg->id, strlen(msg->id), rcpt, strlen(rcpt))) {
+		duplicate_check(&dkey)) {
 		/* duplicate message */
-		duplicate_log(msg->id, rcpt, "nntp delivery");
+		duplicate_log(&dkey, "nntp delivery");
 		continue;
 	    }
 
@@ -3319,14 +3330,12 @@ static int deliver(message_data_t *msg)
 		    r = append_fromstream(&as, &body, msg->data, msg->size, 0,
 					  (const char **) NULL, 0);
 		}
-		if (r || (msg->id &&   
-			  duplicate_check(msg->id, strlen(msg->id),
-					  rcpt, strlen(rcpt)))) {  
+		if (r || ( msg->id && duplicate_check(&dkey) ) ) {    
 		    append_abort(&as);
                    
 		    if (!r) {
 			/* duplicate message */
-			duplicate_log(msg->id, rcpt, "nntp delivery");
+			duplicate_log(&dkey, "nntp delivery");
 			continue;
 		    }            
 		}                
@@ -3336,8 +3345,7 @@ static int deliver(message_data_t *msg)
 	    }
 
 	    if (!r && msg->id)
-		duplicate_mark(msg->id, strlen(msg->id), rcpt, strlen(rcpt),
-			       time(NULL), uid);
+		duplicate_mark(&dkey, time(NULL), uid);
 
 	    if (r) return r;
 
@@ -3509,7 +3517,8 @@ static int cancel(message_data_t *msg)
     /* store msgid of cancelled message for IHAVE/CHECK/TAKETHIS
      * (in case we haven't received the message yet)
      */
-    duplicate_mark(msgid, strlen(msgid), "", 0, 0, time(NULL));
+    duplicate_key_t dkey = {msgid, "", ""};
+    duplicate_mark(&dkey, 0, time(NULL));
 
     return r;
 }

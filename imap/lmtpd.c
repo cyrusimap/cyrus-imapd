@@ -496,6 +496,7 @@ int deliver_mailbox(FILE *f,
 		    const char *user,
 		    char *notifyheader,
 		    const char *mailboxname,
+		    char *date,
 		    int quotaoverride,
 		    int acloverride)
 {
@@ -503,6 +504,7 @@ int deliver_mailbox(FILE *f,
     struct appendstate as;
     unsigned long uid;
     const char *notifier;
+    duplicate_key_t dkey = {NULL, NULL, NULL};
 
     r = append_setup(&as, mailboxname,
 		     authuser, authstate, acloverride ? 0 : ACL_POST, 
@@ -511,9 +513,12 @@ int deliver_mailbox(FILE *f,
 		     (long) size : 0);
 
     /* check for duplicate message */
+    dkey.id = id;
+    dkey.to = mailboxname;
+    dkey.date = date;
     if (!r && id && dupelim && !(as.mailbox->i.options & OPT_IMAP_DUPDELIVER) &&
-	duplicate_check(id, strlen(id), mailboxname, strlen(mailboxname))) {
-	duplicate_log(id, mailboxname, "delivery");
+	duplicate_check(&dkey)) {
+	duplicate_log(&dkey, "delivery");
 	append_abort(&as);
 	return 0;
     }
@@ -539,8 +544,7 @@ int deliver_mailbox(FILE *f,
 		syslog(LOG_INFO, "Delivered: %s to mailbox: %s",
 		       id, mailboxname);
 		if (dupelim && id) {
-		    duplicate_mark(id, strlen(id), mailboxname, 
-				   strlen(mailboxname), time(NULL), uid);
+		    duplicate_mark(&dkey, time(NULL), uid);
 		}
 		mailbox_close(&mailbox);
 	    }
@@ -690,7 +694,7 @@ int deliver_local(deliver_data_t *mydata, char **flag, int nflags,
 			       md->size, flag, nflags,
 			       mydata->authuser, mydata->authstate, md->id,
 			       NULL, mydata->notifyheader,
-			       namebuf, quotaoverride, 0);
+			       namebuf, md->date, quotaoverride, 0);
     }
 
     /* case 2: ordinary user */
@@ -710,7 +714,7 @@ int deliver_local(deliver_data_t *mydata, char **flag, int nflags,
 				   md->size, flag, nflags,
 				   mydata->authuser, mydata->authstate, md->id,
 				   username, mydata->notifyheader,
-				   namebuf, quotaoverride, 0);
+				   namebuf, md->date, quotaoverride, 0);
 	}
 	if (ret2 == IMAP_MAILBOX_NONEXISTENT && mailboxname &&
 	    config_getswitch(IMAPOPT_LMTP_FUZZY_MAILBOX_MATCH) &&
@@ -720,7 +724,7 @@ int deliver_local(deliver_data_t *mydata, char **flag, int nflags,
 				   md->size, flag, nflags,
 				   mydata->authuser, mydata->authstate, md->id,
 				   username, mydata->notifyheader,
-				   namebuf, quotaoverride, 0);
+				   namebuf, md->date, quotaoverride, 0);
 	}
 	if (ret2) {
 	    /* normal delivery to INBOX */
@@ -732,7 +736,7 @@ int deliver_local(deliver_data_t *mydata, char **flag, int nflags,
 				  md->size, flag, nflags,
 				  (char *) username, authstate, md->id,
 				  username, mydata->notifyheader,
-				  namebuf, quotaoverride, 1);
+				  namebuf, md->date, quotaoverride, 1);
 
 	    if (authstate) auth_freestate(authstate);
 	}

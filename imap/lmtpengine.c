@@ -282,6 +282,7 @@ int msg_new(message_data_t **m)
     ret->return_path = NULL;
     ret->rcpt = NULL;
     ret->rcpt_num = 0;
+    ret->date = NULL;
 
     ret->authuser = NULL;
     ret->authstate = NULL;
@@ -319,6 +320,9 @@ void msg_free(message_data_t *m)
 	}
 	free(m->rcpt);
     }
+    if (m->date) {
+      free(m->date);
+     }
 
     if (m->authuser) {
 	free(m->authuser);
@@ -741,11 +745,15 @@ static int savemsg(struct clientdata *cd,
     }
 
     /* get date */
-    if (!spool_getheader(m->hdrcache, "date")) {
+    if (!(body = spool_getheader(m->hdrcache, "date"))) {
 	/* no date, create one */
 	addbody = xstrdup(datestr);
+	m->date = xstrdup(datestr);
 	fprintf(f, "Date: %s\r\n", addbody);
 	spool_cache_header(xstrdup("Date"), addbody, m->hdrcache);
+    }
+    else {
+	m->date = xstrdup(body[0]);
     }
 
     if (!m->return_path &&
