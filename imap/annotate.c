@@ -2940,8 +2940,6 @@ int annotate_state_store(annotate_state_t *state, struct entryattlist *l)
 	r = annotate_state_write_finish(state);
 	if (r)
 	    goto cleanup;
-
-	sync_log_annotation("");
     }
 
     if (r)
