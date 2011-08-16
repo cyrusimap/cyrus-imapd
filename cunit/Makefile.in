@@ -84,7 +84,7 @@ PUREOPT= -best-effort -logfile=/tmp/pure/%v.%p.log -always_use_cache_dir -cached
 QUANTIFY=/usr/local/bin/quantify
 QUANTOPT=-windows=no -filename-prefix=/tmp/quant/%v.%p -write-summary-file= -logfile=/tmp/quant/%v.%p.log
 
-VALGRIND_yes = valgrind --tool=memcheck --leak-check=full
+VALGRIND_yes = valgrind --tool=memcheck --leak-check=full --suppressions=vg.supp
 
 prefix = @prefix@
 exec_prefix = @exec_prefix@
