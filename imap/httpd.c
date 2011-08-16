@@ -155,8 +155,7 @@ static int https = 0;
 int httpd_tls_done = 0;
 int httpd_tls_required = 0;
 
-#define SERVERINFO_LEN	1024
-static char serverinfo[SERVERINFO_LEN];
+static struct buf serverinfo = BUF_INITIALIZER;
 
 struct auth_scheme_t {
     const char *name;		/* HTTP auth scheme name */
@@ -465,32 +464,23 @@ int service_init(int argc __attribute__((unused)),
 
     /* Construct serverinfo string */
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
-	size_t len;
-
-	len = snprintf(serverinfo, SERVERINFO_LEN,
-		       "Cyrus/%s Cyrus-SASL/%u.%u.%u", cyrus_version(),
-		       SASL_VERSION_MAJOR, SASL_VERSION_MINOR, SASL_VERSION_STEP);
+	buf_printf(&serverinfo, "Cyrus/%s Cyrus-SASL/%u.%u.%u"
 #ifdef HAVE_SSL
-	len += snprintf(serverinfo + len, SERVERINFO_LEN - len,
-#if 1
-			" OpenSSL/%s", SHLIB_VERSION_NUMBER);
-#else
-			" OpenSSL/%u.%u.%u%c",
-			(unsigned) (OPENSSL_VERSION_NUMBER >> 28) & 0xF,
-			(unsigned) (OPENSSL_VERSION_NUMBER >> 20) & 0xFF,
-			(unsigned) (OPENSSL_VERSION_NUMBER >> 12) & 0xFF,
-			(char) ((OPENSSL_VERSION_NUMBER >> 4) & 0xFF) + 'a' - 1);
-#endif
+		   " OpenSSL/%s"
 #endif
 #ifdef HAVE_ZLIB
-	len += snprintf(serverinfo + len, SERVERINFO_LEN - len,
-			" zlib/%s", ZLIB_VERSION);
+		   " zlib/%s"
 #endif
-	len += snprintf(serverinfo + len, SERVERINFO_LEN - len,
-			" libxml/%s", LIBXML_DOTTED_VERSION);
-
-	len += snprintf(serverinfo + len, SERVERINFO_LEN - len,
-			" libical/%s", ICAL_VERSION);
+		   " libxml/%s libical/%s",
+		   cyrus_version(),
+		   SASL_VERSION_MAJOR, SASL_VERSION_MINOR, SASL_VERSION_STEP,
+#ifdef HAVE_SSL
+		   SHLIB_VERSION_NUMBER,
+#endif
+#ifdef HAVE_ZLIB
+		   ZLIB_VERSION,
+#endif
+		   LIBXML_DOTTED_VERSION, ICAL_VERSION);
     }
 
     return 0;
@@ -1463,7 +1453,7 @@ static void response_header(long code, struct transaction_t *txn)
 
     /* Response Header Fields */
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
-	prot_printf(httpd_out, "Server: %s\r\n", serverinfo);
+	prot_printf(httpd_out, "Server: %s\r\n", buf_cstring(&serverinfo));
     }
 
     prot_printf(httpd_out, "Accept-Ranges: none\r\n");
