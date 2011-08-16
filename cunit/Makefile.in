@@ -96,12 +96,34 @@ UNITOBJS = unit.o timeout.o syslog.o
 
 PROGS = unit
 
-TESTSOURCES = times.c glob.c md5.c parseaddr.c message.c \
-	    strconcat.c crc32.c binhex.c guid.c imapurl.c \
-	    @SIEVE_TESTSOURCES@ strarray.c spool.c buf.c \
-	    charset.c msgid.c mboxname.c ptrarray.c prot.c \
-	    getxstring.c backend.c parse.c hash.c tok.c \
-	    annotate.c
+TESTSOURCES = \
+	annotate.c \
+	backend.c \
+	binhex.c \
+	buf.c \
+	charset.c \
+	crc32.c \
+	getxstring.c \
+	glob.c \
+	guid.c \
+	hash.c \
+	imapurl.c \
+	mboxname.c \
+	md5.c \
+	message.c \
+	msgid.c \
+	parseaddr.c \
+	parse.c \
+	prot.c \
+	ptrarray.c \
+	@SIEVE_TESTSOURCES@ \
+	spool.c \
+	strarray.c \
+	strconcat.c \
+	times.c \
+	tok.c \
+
+
 TESTLIBS = @SIEVE_LIBS@ \
 	@top_srcdir@/imap/mutex_fake.o @top_srcdir@/imap/libimap.a \
 	@top_srcdir@/imap/spool.o \
