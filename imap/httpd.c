@@ -982,16 +982,11 @@ static void cmdloop(void)
 	    errstr = buf;
 	}
 
-	/* Check Method */
+	/* Check Method against our list of supported methods */
 	if (!ret) {
-	    /* Quick filter based on first letter */
-	    if (!strchr("CDGHMOPR", txn.meth[0])) ret = HTTP_NOT_ALLOWED;
-	    else {
-		/* Check our list of supported methods */
-		for (method = methods;
-		     method->name && strcmp(method->name, txn.meth); method++);
-		if (!method->name) ret = HTTP_NOT_ALLOWED;
-	    }
+	    for (method = methods;
+		 method->name && strcmp(method->name, txn.meth); method++);
+	    if (!method->name) ret = HTTP_NOT_ALLOWED;
 	}
 
 	/* Parse request-target URL */
