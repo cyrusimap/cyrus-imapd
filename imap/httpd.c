@@ -866,7 +866,7 @@ struct method_t {
 };
 
 /* List of HTTP methods that we support */
-static struct method_t methods[] = {
+static const struct method_t methods[] = {
 /*    { "ACL", meth_acl },*/
     { "COPY", meth_copy },
     { "DELETE", meth_delete },
@@ -898,7 +898,7 @@ static void cmdloop(void)
     const char **hdr, *errstr;
     struct transaction_t txn;
     sasl_http_request_t sasl_http_req;
-    struct method_t *method = NULL;
+    const struct method_t *method = NULL;
 
     /* Start with an empty (clean) transaction */
     memset(&txn, 0, sizeof(struct transaction_t));
@@ -986,7 +986,7 @@ static void cmdloop(void)
 	if (!ret) {
 	    for (method = methods;
 		 method->name && strcmp(method->name, txn.meth); method++);
-	    if (!method->name) ret = HTTP_NOT_ALLOWED;
+	    if (!method->name) ret = HTTP_NOT_IMPLEMENTED;
 	}
 
 	/* Parse request-target URL */
