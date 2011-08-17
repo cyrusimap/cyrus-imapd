@@ -1404,15 +1404,20 @@ static int parse_xml_body(struct transaction_t *txn,
 
 
 /* Create an HTTP Status-Line given response code */
-char *http_statusline(long code)
+const char *http_statusline(long code)
 {
-    static char statline[100] = HTTP_VERSION " ";
-    static char *tail = NULL;
+    static struct buf statline = BUF_INITIALIZER;
+    static unsigned tail = 0;
 
-    if (!tail) tail = statline + strlen(statline);
+    if (!tail) {
+	buf_setcstr(&statline, HTTP_VERSION);
+	buf_putc(&statline, ' ');
+	tail = buf_len(&statline);
+    }
 
-    strcpy(tail, error_message(code));
-    return statline;
+    buf_truncate(&statline, tail);
+    buf_appendcstr(&statline, error_message(code));
+    return buf_cstring(&statline);
 }
 
 

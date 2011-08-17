@@ -73,6 +73,6 @@ struct request_target_t {
     unsigned long allow;	/* bitmask of allowed features/methods */
 };
 
-extern char *http_statusline(long code);
+extern const char *http_statusline(long code);
 
 #endif /* HTTPD_H */
