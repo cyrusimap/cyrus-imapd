@@ -171,4 +171,7 @@ extern int message_create_record P((struct index_record *message_index,
 				    const struct body *body));
 extern void message_free_body P((struct body *body));
 
+/* NOTE - scribbles on its input */
+extern void message_parse_env_address(char *str, struct address *addr);
+
 #endif /* INCLUDED_MESSAGE_H */

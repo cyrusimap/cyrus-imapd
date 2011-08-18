@@ -5088,39 +5088,6 @@ static void massage_header(char *hdr)
     hdr[n] = '\0';
 }
 
-static char *parse_nstring(char **str)
-{
-    char *cp = *str, *val;
-
-    if (*cp == '"') { /* quoted string */
-	val = ++cp; /* skip " */
-	do {
-	    cp = strchr(cp, '"');
-	    if (!cp) return NULL; /* whole thing is broken */
-	} while (*(cp-1) == '\\'); /* skip escaped " */
-	*cp++ = '\0';
-    }
-    else { /* NIL */
-	val = NULL;
-	cp += 3;
-    }
-
-    *str = cp;
-    return val;
-}
-
-static void parse_env_address(char *str, struct address *addr)
-{
-    str++; /* skip ( */
-    addr->name = parse_nstring(&str);
-    str++; /* skip SP */
-    addr->route = parse_nstring(&str);
-    str++; /* skip SP */
-    addr->mailbox = parse_nstring(&str);
-    str++; /* skip SP */
-    addr->domain = parse_nstring(&str);
-}
-
 extern struct nntp_overview *index_overview(struct index_state *state,
 					    uint32_t msgno)
 {
@@ -5174,7 +5141,7 @@ extern struct nntp_overview *index_overview(struct index_state *state,
 
     /* build original From: header */
     if (envtokens[ENV_FROM]) /* paranoia */
-	parse_env_address(envtokens[ENV_FROM], &addr);
+	message_parse_env_address(envtokens[ENV_FROM], &addr);
 
     if (addr.mailbox && addr.domain) { /* paranoia */
 	/* +3 -> add space for quotes and space */

@@ -2401,3 +2401,37 @@ void parse_cached_envelope(char *env, char *tokens[], int tokens_size)
 	}
     }
 }
+
+static char *parse_nstring(char **str)
+{
+    char *cp = *str, *val;
+
+    if (*cp == '"') { /* quoted string */
+	val = ++cp; /* skip " */
+	do {
+	    cp = strchr(cp, '"');
+	    if (!cp) return NULL; /* whole thing is broken */
+	} while (*(cp-1) == '\\'); /* skip escaped " */
+	*cp++ = '\0';
+    }
+    else { /* NIL */
+	val = NULL;
+	cp += 3;
+    }
+
+    *str = cp;
+    return val;
+}
+
+void message_parse_env_address(char *str, struct address *addr)
+{
+    str++; /* skip ( */
+    addr->name = parse_nstring(&str);
+    str++; /* skip SP */
+    addr->route = parse_nstring(&str);
+    str++; /* skip SP */
+    addr->mailbox = parse_nstring(&str);
+    str++; /* skip SP */
+    addr->domain = parse_nstring(&str);
+}
+
