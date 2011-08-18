@@ -744,6 +744,21 @@ fail:
     return EOF;
 }
 
+char dlist_parse_asatomlist(struct dlist **dlp, int parsekey,
+			    struct protstream *in)
+{
+    char c = dlist_parse(dlp, parsekey, in);
+
+    /* make a list with one item */
+    if (*dlp && !dlist_isatomlist(*dlp)) {
+	struct dlist *tmp = dlist_newlist(NULL, "");
+	dlist_stitch(tmp, *dlp);
+	*dlp = tmp;
+    }
+
+    return c;
+}
+
 int dlist_parsemap(struct dlist **dlp, int parsekey,
 		   const char *base, unsigned len)
 {
