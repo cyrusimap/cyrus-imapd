@@ -137,6 +137,17 @@ our @rfc822_months = (
     'Dec'
     );
 
+our @rfc822_days = (
+    'Sun',
+    'Mon',
+    'Tue',
+    'Wed',
+    'Thu',
+    'Fri',
+    'Sat',
+    'Sun'
+    );
+
 #
 # Construct and return a DateTime object using a string in the
 # format defined in RFC822 and its successors, which define
@@ -179,7 +190,18 @@ sub from_rfc822($)
 sub to_rfc822($)
 {
     my ($dt) = @_;
-    return strftime("%a, %d %b %Y %T %z", localtime($dt->epoch));
+
+    # We can't mix DateTime methods and strftime, because other parts of
+    # Cassandane foolishly construct DateTime using the 'from_epoch' but
+    # not the 'time_zone' parameters, resulting in a DT object in the
+    # UTC timezone instead of local.  But conversely strftime() doesn't
+    # have a portable way to emit the fixed (non-local-specific) strings
+    # that the RFC expects.
+    my @lt = localtime($dt->epoch);
+    return strftime($rfc822_days[$lt[6]] .
+		    ", %d " .
+		    $rfc822_months[$lt[4]] .
+		    " %Y %T %z", @lt);
 }
 
 
