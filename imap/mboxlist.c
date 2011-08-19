@@ -1343,15 +1343,26 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
 static int mboxlist_is_owner(const char *name, int domainlen,
 			     const char *user, int userlen)
 {
-    char *cp = NULL;
+    char *dot_position = NULL;
 
-    int enough_length = !strncmp(name+domainlen, "user.", 5);
-    int user_complete = (!(cp = strchr(user, '.')) || (cp - user) > userlen);
-    int match_strings = !strncmp(name+domainlen+5, user, userlen);
-    int match_length = (name[domainlen+5+userlen] == '\0' ||
-			name[domainlen+5+userlen] == '.');
+    /* is_user_mbox */
+    if(strncmp(name+domainlen, "user.", 5))
+      return 0;
 
-    return (enough_length && user_complete && match_strings && match_length);
+    dot_position = strchr(user, '.');
+    if (dot_position && (dot_position - user) <= userlen)
+      return 0;
+
+    /* starts_with_user */
+    if(strncmp(name+domainlen+5, user, userlen))
+      return 0;
+
+    /* is_exactly_user */
+    if (!(name[domainlen+5+userlen] == '\0' ||
+	  name[domainlen+5+userlen] == '.'))
+      return 0;
+
+    return 1;
 }
 
 /*
@@ -1415,6 +1426,7 @@ int mboxlist_setacl(const char *name, const char *identifier,
 	   except for "anonymous", "anyone", the global admin
 	   and users in the default domain */
 	if ((cp = strchr(identifier, '@'))) {
+	    identifierlen = cp - identifier;
 	    if (rights &&
 		((domain && strncasecmp(cp+1, domain, strlen(cp+1))) ||
 		 (!domain && (!config_defdomain ||
