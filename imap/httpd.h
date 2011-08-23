@@ -74,5 +74,6 @@ struct request_target_t {
 };
 
 extern const char *http_statusline(long code);
+extern int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname);
 
 #endif /* HTTPD_H */

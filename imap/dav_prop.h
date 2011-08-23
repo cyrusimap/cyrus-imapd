@@ -46,6 +46,7 @@
 
 #include "httpd.h"
 #include "spool.h"
+#include "quota.h"
 #include <libxml/tree.h>
 
 
@@ -67,6 +68,7 @@ struct propfind_ctx {
     unsigned depth;	    		/* 0 = root, 1 = calendar, 2 = resrc */
     const char *userid;			/* authenticated user */
     struct mailbox *mailbox;		/* mailbox correspondng to collection */
+    struct quota quota;			/* quota info for collection */
     struct index_record *record;	/* cyrus.index record for resource */
     hdrcache_t hdrcache;		/* Parsed headers from cyrus.cache */
     struct propfind_entry_list *elist;	/* List of props to fetch w/callbacks */

@@ -911,6 +911,7 @@ static void cmdloop(void)
 	txn.auth_chal.param = NULL;
 	txn.loc = txn.etag = NULL;
 	txn.errstr = NULL;
+	txn.req_hdrs = NULL;
 	memset(&txn.resp_body, 0, sizeof(struct resp_body_t));
 
 	/* Flush any buffered output */
@@ -2692,6 +2693,7 @@ static int meth_propfind(struct transaction_t *txn)
     preload_proplist(cur->children, &elist);
 
     /* Populate our propfind context */
+    memset(&fctx, 0, sizeof(struct propfind_ctx));
     fctx.req_tgt = &txn->req_tgt;
     fctx.depth = depth;
     fctx.userid = httpd_userid;

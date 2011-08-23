@@ -639,6 +639,76 @@ static int propfind_getctag(const xmlChar *propname, xmlNsPtr ns,
 }
 
 
+/* Callback to fetch DAV:quota-available-bytes and DAV:quota-used-bytes */
+static int propfind_quota(const xmlChar *propname, xmlNsPtr ns,
+			  struct propfind_ctx *fctx, xmlNodePtr resp,
+			  xmlNodePtr *propstat,
+			  void *rock __attribute__((unused)))
+{
+    static char prevroot[MAX_MAILBOX_BUFFER];
+    char foundroot[MAX_MAILBOX_BUFFER], *qr = NULL;
+
+    if (fctx->mailbox) {
+	/* Use the quotaroot as specified in mailbox header */
+	qr = fctx->mailbox->quotaroot;
+    }
+    else {
+	/* Find the quotaroot governing this hierarchy */
+	char mboxname[MAX_MAILBOX_BUFFER];
+	
+	(void) target_to_mboxname(fctx->req_tgt, mboxname);
+	if (quota_findroot(foundroot, sizeof(foundroot), mboxname)) {
+	    qr = foundroot;
+	}
+    }
+
+    if (qr) {
+	char bytes[21]; /* ULLONG_MAX is 20 digits */
+
+	if (!fctx->quota.root ||
+	    strcmp(fctx->quota.root, qr)) {
+	    /* Different quotaroot - read it */
+
+	    syslog(LOG_DEBUG, "reading quota for '%s'", qr);
+
+	    fctx->quota.root = strcpy(prevroot, qr);
+
+	    quota_read(&fctx->quota, NULL, 0);
+	}
+
+	if (!xmlStrcmp(propname, BAD_CAST "quota-available-bytes")) {
+	    /* Calculate limit in bytes and subtract usage */
+	    uquota_t limit = fctx->quota.limit * QUOTA_UNITS;
+
+	    snprintf(bytes, sizeof(bytes),
+		     UQUOTA_T_FMT, limit - fctx->quota.used);
+	}
+	else if (fctx->record) {
+	    /* Bytes used by resource */
+	    snprintf(bytes, sizeof(bytes), "%u", fctx->record->size);
+	}
+	else if (fctx->mailbox) {
+	    /* Bytes used by calendar collection */
+	    snprintf(bytes, sizeof(bytes), UQUOTA_T_FMT,
+		     fctx->mailbox->i.quota_mailbox_used);
+	}
+	else {
+	    /* Bytes used by entire hierarchy */
+	    snprintf(bytes, sizeof(bytes), UQUOTA_T_FMT, fctx->quota.used);
+	}
+
+	add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK], ns,
+		 BAD_CAST propname, BAD_CAST bytes, NULL);
+    }
+    else {
+	add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND], ns,
+		 BAD_CAST propname, NULL, NULL);
+    }
+
+    return 0;
+}
+
+
 /* Callback to fetch properties from resource header */
 static int propfind_fromhdr(const xmlChar *propname, xmlNsPtr ns,
 			    struct propfind_ctx *fctx, xmlNodePtr resp,
@@ -711,8 +781,8 @@ static const struct prop_entry prop_entries[] =
     { "principal-collection-set", NS_DAV, 0, propfind_princolset, NULL, NULL },
 
     /* WebDAV Quota (RFC 4331) properties */
-    { "quota-available-bytes", NS_DAV, 0, NULL, NULL, NULL },
-    { "quota-used-bytes", NS_DAV, 0, NULL, NULL, NULL },
+    { "quota-available-bytes", NS_DAV, 0, propfind_quota, NULL, NULL },
+    { "quota-used-bytes", NS_DAV, 0, propfind_quota, NULL, NULL },
 
     /* CalDAV (RFC 4791) properties */
     { "calendar-data", NS_CAL, 0, propfind_caldata, NULL, NULL },
