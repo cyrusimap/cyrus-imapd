@@ -253,149 +253,53 @@ int find_collection_props(char *mboxname,
 }
 
 
-/* Callback to "write" resourcetype property */
-static int proppatch_restype(xmlNodePtr prop, unsigned set,
-			     xmlNsPtr ns, struct proppatch_ctx *pctx,
-			     xmlNodePtr *propstat,
-			     void *rock __attribute__((unused)))
-{
-    if (set && pctx->meth[0] == 'M') {
-	/* "Writeable" for MKCOL/MKCALENDAR only */
-	xmlNodePtr cur;
-
-	for (cur = prop->children; cur; cur = cur->next) {
-	    if (cur->type != XML_ELEMENT_NODE) continue;
-	    /* Make sure we have valid resourcetypes for the collection */
-	    if (xmlStrcmp(cur->name, BAD_CAST "collection") &&
-		(xmlStrcmp(cur->name, BAD_CAST "calendar") ||
-		 (pctx->req_tgt->namespace != URL_NS_CALENDAR))) break;
-	}
-
-	if (!cur) {
-	    /* All resourcetypes are valid */
-	    add_prop(HTTP_OK, pctx->root, &propstat[PROPSTAT_OK],
-		     ns, prop->name, NULL, NULL);
-
-	    return 0;
-	}
-    }
-
-    /* Protected property / Invalid resourcetype */
-    add_prop(HTTP_FORBIDDEN, pctx->root, &propstat[PROPSTAT_FORBID],
-	     ns, prop->name, NULL,
-	     (set && pctx->meth[0] == 'M') ? BAD_CAST "valid-resourcetype":
-	     BAD_CAST "cannot-modify-protected-property");
-	     
-    *pctx->ret = HTTP_FORBIDDEN;
-
-    return 0;
-}
-
-
-/* Callback to write a property to annotation DB */
-static int proppatch_todb(xmlNodePtr prop, unsigned set,
-			  xmlNsPtr ns, struct proppatch_ctx *pctx,
-			  xmlNodePtr *propstat, void *ns_prefix)
-{
-    char prop_annot[MAX_MAILBOX_PATH+1];
-    xmlChar *freeme = NULL;
-    const char *value;
-    xmlNodePtr node;
-    int r;
-
-    if (ns_prefix) {
-	sprintf(prop_annot, "/vendor/cmu/cyrus-imapd/%s:%s",
-		(const char *) ns_prefix, BAD_CAST prop->name);
-    }
-    else {
-	/* "dead" property - use hash of the namespace href as prefix */
-	sprintf(prop_annot, "/vendor/cmu/cyrus-imapd/%08X:%s",
-		strhash((const char *) ns->href), BAD_CAST prop->name);
-    }
-
-    if (set) freeme = xmlNodeGetContent(prop);
-    value = freeme ? (const char *) freeme : "";
-
-    if (!(r = annotatemore_write_entry(pctx->mailboxname, prop_annot, "",
-				       value, NULL, strlen(value), 0,
-				       &pctx->tid))) {
-	node = add_prop(HTTP_OK, pctx->root, &propstat[PROPSTAT_OK],
-			ns, prop->name, NULL, NULL);
-    }
-    else {
-	/* XXX  Is this the correct code for a write failure? */
-	node = add_prop(HTTP_FORBIDDEN, pctx->root, &propstat[PROPSTAT_FORBID],
-			ns, prop->name, NULL, NULL);
-	*pctx->ret = r;
-    }
-
-    if (freeme) xmlFree(freeme);
-
-    return 0;
-}
-
-
-/* Callback to read a property from annotation DB */
-static int propfind_fromdb(const xmlChar *propname, xmlNsPtr ns,
-			   struct propfind_ctx *fctx, xmlNodePtr resp,
-			   xmlNodePtr *propstat, void *ns_prefix)
-{
-    char prop_annot[MAX_MAILBOX_PATH+1];
-    struct annotation_data attrib;
-    xmlNodePtr node;
-    const char *value = NULL;
-
-    if (ns_prefix) {
-	sprintf(prop_annot, "/vendor/cmu/cyrus-imapd/%s:%s",
-		(const char *) ns_prefix, BAD_CAST propname);
-    }
-    else {
-	/* "dead" property - use hash of the namespace href as prefix */
-	sprintf(prop_annot, "/vendor/cmu/cyrus-imapd/%08X:%s",
-		strhash((const char *) ns->href), BAD_CAST propname);
-    }
-
-    if (fctx->mailbox && !fctx->record) {
-	if (!annotatemore_lookup(fctx->mailbox->name, prop_annot, "", &attrib)
-	    && attrib.value) {
-	    value = attrib.value;
-	}
-	else if (!xmlStrcmp(propname, BAD_CAST "displayname")) {
-	    /* Special case empty displayname -- use last segment of path */
-	    value = strrchr(fctx->mailbox->name, '.') + 1;
-	}
-    }
-
-    if (value) {
-	node = add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK], ns,
-			BAD_CAST propname, BAD_CAST value, NULL);
-    }
-    else {
-	node = add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND], ns,
-			BAD_CAST propname, NULL, NULL);
-    }
-
-    return 0;
-}
-
-
-/* Callback to fetch DAV:supported-report-set */
-static int propfind_reportset(const xmlChar *propname, xmlNsPtr ns,
+/* Callback to fetch DAV:add-member */
+static int propfind_addmember(const xmlChar *propname, xmlNsPtr ns,
 			      struct propfind_ctx *fctx, xmlNodePtr resp,
 			      xmlNodePtr *propstat,
 			      void *rock __attribute__((unused)))
 {
-    xmlNodePtr s, r, top = add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK], ns,
-				    BAD_CAST propname, NULL, NULL);
+    if (fctx->req_tgt->collection) {
+	xmlNodePtr node;
+	size_t len;
+	char uri[MAX_MAILBOX_PATH+1];
 
-    if (fctx->req_tgt->namespace == URL_NS_CALENDAR) {
-	s = xmlNewChild(top, fctx->ns[NS_DAV], BAD_CAST "supported-report", NULL);
-	r = xmlNewChild(s, fctx->ns[NS_DAV], BAD_CAST "report", NULL);
-	xmlNewChild(r, fctx->ns[NS_CAL], BAD_CAST "calendar-query", NULL);
+	node = add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK], ns,
+			BAD_CAST propname, NULL, NULL);
 
-	s = xmlNewChild(top, fctx->ns[NS_DAV], BAD_CAST "supported-report", NULL);
-	r = xmlNewChild(s, fctx->ns[NS_DAV], BAD_CAST "report", NULL);
-	xmlNewChild(r, fctx->ns[NS_CAL], BAD_CAST "calendar-multiget", NULL);
+	len = fctx->req_tgt->resource ?
+	    (size_t) (fctx->req_tgt->resource - fctx->req_tgt->path) :
+	    strlen(fctx->req_tgt->path);
+	snprintf(uri, sizeof(uri), "%.*s", len, fctx->req_tgt->path);
+	xmlNewChild(node, fctx->ns[NS_DAV], BAD_CAST "href", BAD_CAST uri);
+    }
+    else {
+	add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND], ns,
+		 BAD_CAST propname, NULL, NULL);
+    }
+
+    return 0;
+}
+
+
+/* Callback to fetch DAV:getetag */
+static int propfind_getetag(const xmlChar *propname, xmlNsPtr ns,
+			    struct propfind_ctx *fctx, xmlNodePtr resp,
+			    xmlNodePtr *propstat,
+			    void *rock __attribute__((unused)))
+{
+    if (fctx->record) {
+	char etag[2*MESSAGE_GUID_SIZE+3];
+
+	/* add DQUOTEs */
+	sprintf(etag, "\"%s\"", message_guid_encode(&fctx->record->guid));
+
+	add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK], ns,
+		 BAD_CAST propname, BAD_CAST etag, NULL);
+    }
+    else {
+	add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND], ns,
+		 BAD_CAST propname, NULL, NULL);
     }
 
     return 0;
@@ -436,6 +340,68 @@ static int propfind_restype(const xmlChar *propname, xmlNsPtr ns,
 }
 
 
+/* Callback to "write" resourcetype property */
+static int proppatch_restype(xmlNodePtr prop, unsigned set,
+			     xmlNsPtr ns, struct proppatch_ctx *pctx,
+			     xmlNodePtr *propstat,
+			     void *rock __attribute__((unused)))
+{
+    if (set && pctx->meth[0] == 'M') {
+	/* "Writeable" for MKCOL/MKCALENDAR only */
+	xmlNodePtr cur;
+
+	for (cur = prop->children; cur; cur = cur->next) {
+	    if (cur->type != XML_ELEMENT_NODE) continue;
+	    /* Make sure we have valid resourcetypes for the collection */
+	    if (xmlStrcmp(cur->name, BAD_CAST "collection") &&
+		(xmlStrcmp(cur->name, BAD_CAST "calendar") ||
+		 (pctx->req_tgt->namespace != URL_NS_CALENDAR))) break;
+	}
+
+	if (!cur) {
+	    /* All resourcetypes are valid */
+	    add_prop(HTTP_OK, pctx->root, &propstat[PROPSTAT_OK],
+		     ns, prop->name, NULL, NULL);
+
+	    return 0;
+	}
+    }
+
+    /* Protected property / Invalid resourcetype */
+    add_prop(HTTP_FORBIDDEN, pctx->root, &propstat[PROPSTAT_FORBID],
+	     ns, prop->name, NULL,
+	     (set && pctx->meth[0] == 'M') ? BAD_CAST "valid-resourcetype":
+	     BAD_CAST "cannot-modify-protected-property");
+	     
+    *pctx->ret = HTTP_FORBIDDEN;
+
+    return 0;
+}
+
+
+/* Callback to fetch DAV:supported-report-set */
+static int propfind_reportset(const xmlChar *propname, xmlNsPtr ns,
+			      struct propfind_ctx *fctx, xmlNodePtr resp,
+			      xmlNodePtr *propstat,
+			      void *rock __attribute__((unused)))
+{
+    xmlNodePtr s, r, top = add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK], ns,
+				    BAD_CAST propname, NULL, NULL);
+
+    if (fctx->req_tgt->namespace == URL_NS_CALENDAR) {
+	s = xmlNewChild(top, fctx->ns[NS_DAV], BAD_CAST "supported-report", NULL);
+	r = xmlNewChild(s, fctx->ns[NS_DAV], BAD_CAST "report", NULL);
+	xmlNewChild(r, fctx->ns[NS_CAL], BAD_CAST "calendar-query", NULL);
+
+	s = xmlNewChild(top, fctx->ns[NS_DAV], BAD_CAST "supported-report", NULL);
+	r = xmlNewChild(s, fctx->ns[NS_DAV], BAD_CAST "report", NULL);
+	xmlNewChild(r, fctx->ns[NS_CAL], BAD_CAST "calendar-multiget", NULL);
+    }
+
+    return 0;
+}
+
+
 /* Callback to fetch DAV:owner */
 static int propfind_owner(const xmlChar *propname, xmlNsPtr ns,
 			  struct propfind_ctx *fctx, xmlNodePtr resp,
@@ -463,27 +429,6 @@ static int propfind_owner(const xmlChar *propname, xmlNsPtr ns,
 
 	xmlNewChild(node, fctx->ns[NS_DAV], BAD_CAST "href", BAD_CAST uri);
     }
-
-    return 0;
-}
-
-
-/* Callback to fetch CALDAV:calendar-home-set */
-static int propfind_calhomeset(const xmlChar *propname, xmlNsPtr ns,
-			       struct propfind_ctx *fctx,
-			       xmlNodePtr resp,
-			       xmlNodePtr *propstat,
-			       void *rock __attribute__((unused)))
-{
-    xmlNodePtr node;
-    char uri[MAX_MAILBOX_PATH+1];
-
-    node = add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK], ns,
-		    BAD_CAST propname, NULL, NULL);
-
-    snprintf(uri, sizeof(uri), "/calendars/user/%s/", fctx->userid);
-
-    xmlNewChild(node, fctx->ns[NS_DAV], BAD_CAST "href", BAD_CAST uri);
 
     return 0;
 }
@@ -529,111 +474,6 @@ static int propfind_princolset(const xmlChar *propname, xmlNsPtr ns,
 
     snprintf(uri, sizeof(uri), "/principals/");
     xmlNewChild(node, fctx->ns[NS_DAV], BAD_CAST "href", BAD_CAST uri);
-
-    return 0;
-}
-
-
-/* Callback to fetch CALDAV:calendar-data */
-static int propfind_caldata(const xmlChar *propname, xmlNsPtr ns,
-			    struct propfind_ctx *fctx, xmlNodePtr resp,
-			    xmlNodePtr *propstat,
-			    void *rock __attribute__((unused)))
-{
-    if (fctx->record) {
-	const char *msg_base = NULL;
-	unsigned long msg_size = 0;
-
-	mailbox_map_message(fctx->mailbox, fctx->record->uid,
-			    &msg_base, &msg_size);
-
-	add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK], ns, BAD_CAST propname,
-		 BAD_CAST msg_base + fctx->record->header_size, NULL);
-
-	mailbox_unmap_message(fctx->mailbox, fctx->record->uid,
-			      &msg_base, &msg_size);
-    }
-    else {
-	add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND], ns,
-		 BAD_CAST propname, NULL, NULL);
-    }
-
-    return 0;
-}
-
-
-/* Callback to fetch DAV:getetag */
-static int propfind_getetag(const xmlChar *propname, xmlNsPtr ns,
-			    struct propfind_ctx *fctx, xmlNodePtr resp,
-			    xmlNodePtr *propstat,
-			    void *rock __attribute__((unused)))
-{
-    if (fctx->record) {
-	char etag[2*MESSAGE_GUID_SIZE+3];
-
-	/* add DQUOTEs */
-	sprintf(etag, "\"%s\"", message_guid_encode(&fctx->record->guid));
-
-	add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK], ns,
-		 BAD_CAST propname, BAD_CAST etag, NULL);
-    }
-    else {
-	add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND], ns,
-		 BAD_CAST propname, NULL, NULL);
-    }
-
-    return 0;
-}
-
-
-/* Callback to fetch DAV:add-member */
-static int propfind_addmember(const xmlChar *propname, xmlNsPtr ns,
-			      struct propfind_ctx *fctx, xmlNodePtr resp,
-			      xmlNodePtr *propstat,
-			      void *rock __attribute__((unused)))
-{
-    if (fctx->req_tgt->collection) {
-	xmlNodePtr node;
-	size_t len;
-	char uri[MAX_MAILBOX_PATH+1];
-
-	node = add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK], ns,
-			BAD_CAST propname, NULL, NULL);
-
-	len = fctx->req_tgt->resource ?
-	    (size_t) (fctx->req_tgt->resource - fctx->req_tgt->path) :
-	    strlen(fctx->req_tgt->path);
-	snprintf(uri, sizeof(uri), "%.*s", len, fctx->req_tgt->path);
-	xmlNewChild(node, fctx->ns[NS_DAV], BAD_CAST "href", BAD_CAST uri);
-    }
-    else {
-	add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND], ns,
-		 BAD_CAST propname, NULL, NULL);
-    }
-
-    return 0;
-}
-
-
-/* Callback to fetch CS:getctag */
-static int propfind_getctag(const xmlChar *propname, xmlNsPtr ns,
-			    struct propfind_ctx *fctx, xmlNodePtr resp,
-			    xmlNodePtr *propstat,
-			    void *rock __attribute__((unused)))
-{
-    if (fctx->mailbox && !fctx->record) {
-	char ctag[33]; /* UIDVALIDITY-EXISTS-LAST_UID */
-
-	sprintf(ctag, "%u-%u-%u", fctx->mailbox->i.uidvalidity,
-		fctx->mailbox->i.exists, fctx->mailbox->i.last_uid);
-
-	add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK], ns,
-		 BAD_CAST propname, BAD_CAST ctag, NULL);
-    }
-    else {
-	add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND], ns,
-		 BAD_CAST propname, NULL, NULL);
-    }
 
     return 0;
 }
@@ -709,6 +549,79 @@ static int propfind_quota(const xmlChar *propname, xmlNsPtr ns,
 }
 
 
+/* Callback to fetch CALDAV:calendar-data */
+static int propfind_caldata(const xmlChar *propname, xmlNsPtr ns,
+			    struct propfind_ctx *fctx, xmlNodePtr resp,
+			    xmlNodePtr *propstat,
+			    void *rock __attribute__((unused)))
+{
+    if (fctx->record) {
+	const char *msg_base = NULL;
+	unsigned long msg_size = 0;
+
+	mailbox_map_message(fctx->mailbox, fctx->record->uid,
+			    &msg_base, &msg_size);
+
+	add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK], ns, BAD_CAST propname,
+		 BAD_CAST msg_base + fctx->record->header_size, NULL);
+
+	mailbox_unmap_message(fctx->mailbox, fctx->record->uid,
+			      &msg_base, &msg_size);
+    }
+    else {
+	add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND], ns,
+		 BAD_CAST propname, NULL, NULL);
+    }
+
+    return 0;
+}
+
+
+/* Callback to fetch CALDAV:calendar-home-set */
+static int propfind_calhomeset(const xmlChar *propname, xmlNsPtr ns,
+			       struct propfind_ctx *fctx,
+			       xmlNodePtr resp,
+			       xmlNodePtr *propstat,
+			       void *rock __attribute__((unused)))
+{
+    xmlNodePtr node;
+    char uri[MAX_MAILBOX_PATH+1];
+
+    node = add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK], ns,
+		    BAD_CAST propname, NULL, NULL);
+
+    snprintf(uri, sizeof(uri), "/calendars/user/%s/", fctx->userid);
+
+    xmlNewChild(node, fctx->ns[NS_DAV], BAD_CAST "href", BAD_CAST uri);
+
+    return 0;
+}
+
+
+/* Callback to fetch CS:getctag */
+static int propfind_getctag(const xmlChar *propname, xmlNsPtr ns,
+			    struct propfind_ctx *fctx, xmlNodePtr resp,
+			    xmlNodePtr *propstat,
+			    void *rock __attribute__((unused)))
+{
+    if (fctx->mailbox && !fctx->record) {
+	char ctag[33]; /* UIDVALIDITY-EXISTS-LAST_UID */
+
+	sprintf(ctag, "%u-%u-%u", fctx->mailbox->i.uidvalidity,
+		fctx->mailbox->i.exists, fctx->mailbox->i.last_uid);
+
+	add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK], ns,
+		 BAD_CAST propname, BAD_CAST ctag, NULL);
+    }
+    else {
+	add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND], ns,
+		 BAD_CAST propname, NULL, NULL);
+    }
+
+    return 0;
+}
+
+
 /* Callback to fetch properties from resource header */
 static int propfind_fromhdr(const xmlChar *propname, xmlNsPtr ns,
 			    struct propfind_ctx *fctx, xmlNodePtr resp,
@@ -742,6 +655,95 @@ static int propfind_fromhdr(const xmlChar *propname, xmlNsPtr ns,
 
     add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND], ns,
 	     BAD_CAST propname, NULL, NULL);
+
+    return 0;
+}
+
+
+/* Callback to read a property from annotation DB */
+static int propfind_fromdb(const xmlChar *propname, xmlNsPtr ns,
+			   struct propfind_ctx *fctx, xmlNodePtr resp,
+			   xmlNodePtr *propstat, void *ns_prefix)
+{
+    char prop_annot[MAX_MAILBOX_PATH+1];
+    struct annotation_data attrib;
+    xmlNodePtr node;
+    const char *value = NULL;
+
+    if (ns_prefix) {
+	sprintf(prop_annot, "/vendor/cmu/cyrus-imapd/%s:%s",
+		(const char *) ns_prefix, BAD_CAST propname);
+    }
+    else {
+	/* "dead" property - use hash of the namespace href as prefix */
+	sprintf(prop_annot, "/vendor/cmu/cyrus-imapd/%08X:%s",
+		strhash((const char *) ns->href), BAD_CAST propname);
+    }
+
+    if (fctx->mailbox && !fctx->record) {
+	if (!annotatemore_lookup(fctx->mailbox->name, prop_annot,
+				 /* shared */ "", &attrib)
+	    && attrib.value) {
+	    value = attrib.value;
+	}
+	else if (!xmlStrcmp(propname, BAD_CAST "displayname")) {
+	    /* Special case empty displayname -- use last segment of path */
+	    value = strrchr(fctx->mailbox->name, '.') + 1;
+	}
+    }
+
+    if (value) {
+	node = add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK], ns,
+			BAD_CAST propname, BAD_CAST value, NULL);
+    }
+    else {
+	node = add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND], ns,
+			BAD_CAST propname, NULL, NULL);
+    }
+
+    return 0;
+}
+
+
+/* Callback to write a property to annotation DB */
+static int proppatch_todb(xmlNodePtr prop, unsigned set,
+			  xmlNsPtr ns, struct proppatch_ctx *pctx,
+			  xmlNodePtr *propstat, void *ns_prefix)
+{
+    char prop_annot[MAX_MAILBOX_PATH+1];
+    xmlChar *freeme = NULL;
+    const char *value;
+    xmlNodePtr node;
+    int r;
+
+    if (ns_prefix) {
+	sprintf(prop_annot, "/vendor/cmu/cyrus-imapd/%s:%s",
+		(const char *) ns_prefix, BAD_CAST prop->name);
+    }
+    else {
+	/* "dead" property - use hash of the namespace href as prefix */
+	sprintf(prop_annot, "/vendor/cmu/cyrus-imapd/%08X:%s",
+		strhash((const char *) ns->href), BAD_CAST prop->name);
+    }
+
+    if (set) freeme = xmlNodeGetContent(prop);
+    value = freeme ? (const char *) freeme : "";
+
+    if (!(r = annotatemore_write_entry(pctx->mailboxname,
+				       prop_annot, /* shared */ "",
+				       value, NULL, strlen(value), 0,
+				       &pctx->tid))) {
+	node = add_prop(HTTP_OK, pctx->root, &propstat[PROPSTAT_OK],
+			ns, prop->name, NULL, NULL);
+    }
+    else {
+	/* XXX  Is this the correct code for a write failure? */
+	node = add_prop(HTTP_FORBIDDEN, pctx->root, &propstat[PROPSTAT_FORBID],
+			ns, prop->name, NULL, NULL);
+	*pctx->ret = r;
+    }
+
+    if (freeme) xmlFree(freeme);
 
     return 0;
 }
