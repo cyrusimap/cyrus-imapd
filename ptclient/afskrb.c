@@ -481,7 +481,7 @@ static struct auth_state *myauthstate(const char *identifier,
     if ((rc = pr_ListMembers(canon_id_tmp, &groups))) {
 	/* Failure may indicate that we need new tokens */
 	pr_End();
-	rc = pr_Initialize (1L, AFSCONF_CLIENTNAME, 0);
+	rc = pr_Initialize (1L, AFSCONF_CLIENTNAME, config_getstring(IMAPOPT_AFSPTS_MYCELL));
         if (rc) {
 	    syslog(LOG_DEBUG, "pr_Initialize failed: %d", rc);
 	    fatal("pr_Initialize failed", EC_TEMPFAIL);
