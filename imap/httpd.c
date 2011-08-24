@@ -44,13 +44,13 @@
  * TODO:
  *
  *   - Fix PROPFIND depth logic?  (need to confirm that its broken)
+ *   - Support COPY/MOVE on collections
  *   - Add more required properties
  *   - GET/HEAD on collections (iCalendar stream of resources)
  *   - calendar-query REPORT filtering (optimize for time range, component type)
  *   - free-busy-query REPORT
  *   - sync-collection REPORT (can probably use MODSEQs -- as CTag too)
  *   - Use XML precondition error codes
- *   - Add replication bits
  *   - Add WebDAV LOCKing?  Does anybody use it?
  *   - Add WebDAV ACL support?
  *   - Should we have a linked-list/hash of open mailboxes,
@@ -103,6 +103,7 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
+#include "sync_log.h"
 #include "telemetry.h"
 #include "backend.h"
 #include "proxy.h"
@@ -500,6 +501,8 @@ int service_main(int argc __attribute__((unused)),
 
     signals_poll();
 
+    sync_log_init();
+
     httpd_in = prot_new(0, 0);
     httpd_out = prot_new(1, 1);
     protgroup_insert(protin, httpd_in);
@@ -639,6 +642,8 @@ void shut_down(int code)
 	backend_disconnect(backend_current);
 	free(backend_current);
     }
+
+    sync_log_done();
 
     mboxlist_close();
     mboxlist_done();
