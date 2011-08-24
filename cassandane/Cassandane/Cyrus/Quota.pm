@@ -42,125 +42,29 @@
 use strict;
 use warnings;
 package Cassandane::Cyrus::Quota;
-use base qw(Cassandane::Unit::TestCase);
+use base qw(Cassandane::Cyrus::TestCase);
 use IO::File;
 use DateTime;
 use Cassandane::Util::Log;
-use Cassandane::Generator;
-use Cassandane::MessageStoreFactory;
-use Cassandane::Instance;
 use Cassandane::Util::Words;
 use Data::Dumper;
 
 sub new
 {
     my $class = shift;
-    my $self = $class->SUPER::new(@_);
-
-    $self->{instance} = Cassandane::Instance->new();
-    $self->{instance}->add_service('imap');
-
-    $self->{gen} = Cassandane::Generator->new();
-
-    return $self;
+    return $class->SUPER::new({ adminstore => 1 }, @_);
 }
 
 sub set_up
 {
     my ($self) = @_;
-
-    $self->{instance}->start();
-    $self->{store} = $self->{instance}->get_service('imap')->create_store();
-    $self->{adminstore} = $self->{instance}->get_service('imap')->create_store(username => 'admin');
-
-    my $admintalk = $self->{adminstore}->get_client();
+    $self->SUPER::set_up();
 }
 
 sub tear_down
 {
     my ($self) = @_;
-
-    $self->{store}->disconnect()
-	if defined $self->{store};
-    $self->{store} = undef;
-    $self->{adminstore}->disconnect()
-	if defined $self->{adminstore};
-    $self->{adminstore} = undef;
-    $self->{instance}->stop();
-}
-
-sub make_message
-{
-    my ($self, $store, $subject, @attrs) = @_;
-
-    $store->write_begin();
-    my $msg = $self->{gen}->generate(subject => $subject, @attrs);
-    $store->write_message($msg);
-    $store->write_end();
-
-    return $msg;
-}
-
-sub check_messages
-{
-    my ($self, $expected, %params) = @_;
-    my $actual = {};
-    my $store = $params{store} || $self->{store};
-
-    xlog "check_messages: " . join(' ',%params);
-
-    $store->read_begin();
-    while (my $msg = $store->read_message())
-    {
-	my $subj = $msg->get_header('subject');
-	$self->assert(!defined $actual->{$subj});
-	$actual->{$subj} = $msg;
-    }
-    $store->read_end();
-
-    $self->assert(scalar keys %$actual == scalar keys %$expected);
-
-    foreach my $expmsg (values %$expected)
-    {
-	my $subj = $expmsg->get_header('subject');
-	my $actmsg = $actual->{$subj};
-
-	$self->assert_not_null($actmsg);
-
-	xlog "checking guid";
-	$self->assert_str_equals($expmsg->get_guid(),
-				 $actmsg->get_guid());
-
-	xlog "checking x-cassandane-unique";
-	$self->assert_not_null($actmsg->get_header('x-cassandane-unique'));
-	$self->assert_str_equals($expmsg->get_header('x-cassandane-unique'),
-			         $actmsg->get_header('x-cassandane-unique'));
-
-	if (defined $expmsg->get_attribute('uid'))
-	{
-	    xlog "checking uid";
-	    $self->assert_num_equals($expmsg->get_attribute('uid'),
-				     $actmsg->get_attribute('uid'));
-	}
-
-	if (defined $expmsg->get_attribute('cid'))
-	{
-	    xlog "checking cid";
-	    $self->assert_not_null($actmsg->get_attribute('cid'));
-	    $self->assert_str_equals($expmsg->get_attribute('cid'),
-				     $actmsg->get_attribute('cid'));
-	}
-
-	foreach my $ea ($expmsg->list_annotations())
-	{
-	    xlog "checking annotation ($ea->{entry} $ea->{attrib})";
-	    $self->assert_not_null($actmsg->get_annotation($ea));
-	    $self->assert_str_equals($expmsg->get_annotation($ea),
-				     $actmsg->get_annotation($ea));
-	}
-    }
-
-    return $actual;
+    $self->SUPER::tear_down();
 }
 
 sub test_using_storage
@@ -184,7 +88,7 @@ sub test_using_storage
     my $expected = 0;
     for (1..10) {
 
-	my $msg = $self->make_message($self->{store}, "Message $_",
+	my $msg = $self->make_message("Message $_",
 				      extra_lines => 10 + rand(5000));
 	my $len = length($msg->as_string());
 	$expected += $len;
@@ -226,7 +130,7 @@ sub test_exceeding_storage
 	my $nlines = int(($slack - 640) / 23);
 	$nlines = 1000 if ($nlines > 1000);
 
-	my $msg = $self->make_message($self->{store}, "Message $n",
+	my $msg = $self->make_message("Message $n",
 				      extra_lines => $nlines);
 	my $len = length($msg->as_string());
 	$slack -= $len;
@@ -243,7 +147,7 @@ sub test_exceeding_storage
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     eval
     {
-	my $msg = $self->make_message($self->{store}, "Message $n",
+	my $msg = $self->make_message("Message $n",
 				      extra_lines => $nlines);
     };
     $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
@@ -298,7 +202,7 @@ sub test_using_annotstorage_msg
     my $uid = 1;
     while ($expected <= 110*1024)
     {
-	push(@msgs, $self->make_message($self->{store}, "Message $uid"));
+	push(@msgs, $self->make_message("Message $uid"));
 	my $data = make_random_data();
 	push(@annots, $data);
 	$expected += length($data);
@@ -382,7 +286,7 @@ sub test_quotarename
     $self->assert_num_equals(0, $res[1]);
 
     for (1..10) {
-	$self->make_message($self->{store}, "Message $_", extra_lines => 5000);
+	$self->make_message("Message $_", extra_lines => 5000);
     }
 
     @res = $admintalk->getquota("user.cassandane");
@@ -428,17 +332,17 @@ sub test_quota_f
     $admintalk->setacl("user.quotafuser", "admin", 'lrswipkxtecda');
     $self->{adminstore}->set_folder("user.quotafuser");
     for (1..3) {
-	$self->make_message($self->{adminstore}, "QuotaFUser $_", extra_lines => 17000);
+	$self->make_message("QuotaFUser $_", store => $self->{adminstore}, extra_lines => 17000);
     }
     for (1..10) {
-	$self->make_message($self->{store}, "Cassandane $_", extra_lines => 5000);
+	$self->make_message("Cassandane $_", extra_lines => 5000);
     }
 
     $admintalk->create("user.zlateuser");
     $admintalk->setacl("user.zlateuser", "admin", 'lrswipkxtecda');
     $self->{adminstore}->set_folder("user.zlateuser");
     for (1..7) {
-	$self->make_message($self->{adminstore}, "Lateuser $_", extra_lines => 1200);
+	$self->make_message("Lateuser $_", store => $self->{adminstore}, extra_lines => 1200);
     }
     $admintalk->setquota("user.zlateuser", "(storage 750000)") || die "Failed $@";
 
@@ -500,11 +404,11 @@ sub test_prefix_mboxexists
     $admintalk->setacl("user.base.subdir2", "admin", 'lrswipkxtecda');
     $self->{adminstore}->set_folder("user.base");
     for (1..3) {
-	$self->make_message($self->{adminstore}, "base $_", extra_lines => 12345);
+	$self->make_message("base $_", store => $self->{adminstore}, extra_lines => 12345);
     }
     $self->{adminstore}->set_folder("user.base.subdir2");
     for (1..3) {
-	$self->make_message($self->{adminstore}, "base $_", extra_lines => 12345);
+	$self->make_message("base $_", store => $self->{adminstore}, extra_lines => 12345);
     }
 
     $admintalk->create("user.baseplus");
@@ -514,11 +418,11 @@ sub test_prefix_mboxexists
     $admintalk->setquota("user.baseplus", "(storage 1000000)");
     $self->{adminstore}->set_folder("user.baseplus");
     for (1..3) {
-	$self->make_message($self->{adminstore}, "baseplus $_", extra_lines => 31419);
+	$self->make_message("baseplus $_", store => $self->{adminstore}, extra_lines => 31419);
     }
     $self->{adminstore}->set_folder("user.baseplus.subdir");
     for (1..3) {
-	$self->make_message($self->{adminstore}, "baseplus $_", extra_lines => 31419);
+	$self->make_message("baseplus $_", store => $self->{adminstore}, extra_lines => 31419);
     }
 
     my @origplus = $admintalk->getquota("user.baseplus");
@@ -678,7 +582,7 @@ sub test_replication_annotstorage
 
     xlog "add an annotation to use some quota";
     my $data = make_random_data(13);
-    my $msg = $self->make_message($master_store, "Message A");
+    my $msg = $self->make_message("Message A", store => $master_store);
     $mastertalk->store('1', 'annotation', ['/comment', ['value.priv', { Quote => $data }]]);
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
 ## This doesn't work because per-mailbox annots are not

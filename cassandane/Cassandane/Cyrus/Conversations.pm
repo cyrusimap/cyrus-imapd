@@ -42,52 +42,35 @@
 use strict;
 use warnings;
 package Cassandane::Cyrus::Conversations;
-use base qw(Cassandane::Unit::TestCase);
+use base qw(Cassandane::Cyrus::TestCase);
 use DateTime;
 use URI::Escape;
 use Digest::SHA1 qw(sha1_hex);
-use Cassandane::Generator;
 use Cassandane::ThreadedGenerator;
 use Cassandane::Util::Log;
 use Cassandane::Util::DateTime qw(to_iso8601 from_iso8601
 				  from_rfc822
 				  to_rfc3501 from_rfc3501);
-use Cassandane::MessageStoreFactory;
-use Cassandane::Instance;
 
 sub new
 {
-    my $class = shift;
-    my $self = $class->SUPER::new(@_);
-
+    my ($class, @args) = @_;
     my $config = Cassandane::Config->default()->clone();
     $config->set(conversations => 'on');
-    $self->{instance} = Cassandane::Instance->new(config => $config);
-    $self->{instance}->add_service('imap');
-
-    $self->{gen} = Cassandane::Generator->new();
-
-    return $self;
+    return $class->SUPER::new({ config => $config }, @args);
 }
 
 sub set_up
 {
     my ($self) = @_;
-
-    $self->{instance}->start();
-    $self->{store} =
-	$self->{instance}->get_service('imap')->create_store();
+    $self->SUPER::set_up();
     $self->{store}->set_fetch_attributes('uid', 'cid');
 }
 
 sub tear_down
 {
     my ($self) = @_;
-
-    $self->{store}->disconnect()
-	if defined $self->{store};
-    $self->{store} = undef;
-    $self->{instance}->stop();
+    $self->SUPER::tear_down();
 }
 
 # Calculate a CID from a message - this is the CID that the
@@ -109,69 +92,6 @@ sub choose_cid
     return $cids[0];
 }
 
-sub make_message
-{
-    my ($self, $subject, %attrs) = @_;
-
-    my $store = $attrs{store} || $self->{store};
-    delete $attrs{store};
-
-    $store->write_begin();
-    my $msg = $self->{gen}->generate(subject => $subject, %attrs);
-    $store->write_message($msg);
-    $store->write_end();
-
-    return $msg;
-}
-
-sub check_messages
-{
-    my ($self, $expected, %params) = @_;
-    my $actual = {};
-    my $store = $params{store} || $self->{store};
-
-    xlog "check_messages: " . join(' ',%params);
-
-    $store->read_begin();
-    while (my $msg = $store->read_message())
-    {
-	my $subj = $msg->get_header('subject');
-	$self->assert(!defined $actual->{$subj});
-	$actual->{$subj} = $msg;
-    }
-    $store->read_end();
-
-    $self->assert(scalar keys %$actual == scalar keys %$expected);
-
-    foreach my $expmsg (values %$expected)
-    {
-	my $subj = $expmsg->get_header('subject');
-	my $actmsg = $actual->{$subj};
-
-	$self->assert_not_null($actmsg);
-
-	xlog "checking cid";
-	$self->assert_not_null($actmsg->get_attribute('cid'));
-	my $cid = $expmsg->get_attribute('cid') || calc_cid($actmsg);
-	$self->assert_str_equals($cid, $actmsg->get_attribute('cid'));
-
-	xlog "checking x-cassandane-unique";
-	$self->assert_not_null($actmsg->get_header('x-cassandane-unique'));
-
-	$self->assert_str_equals($actmsg->get_header('x-cassandane-unique'),
-			         $expmsg->get_header('x-cassandane-unique'));
-
-	if (defined $expmsg->get_attribute('uid'))
-	{
-	    xlog "checking uid";
-	    $self->assert_num_equals($expmsg->get_attribute('uid'),
-				     $actmsg->get_attribute('uid'));
-	}
-    }
-
-    return $actual;
-}
-
 #
 # Test APPEND of messages to IMAP
 #
@@ -185,22 +105,22 @@ sub test_append
 
     xlog "generating message A";
     $exp{A} = $self->make_message("Message A");
-    $exp{A}->set_attribute(uid => 1);
+    $exp{A}->set_attributes(uid => 1, cid => calc_cid($exp{A}));
     $self->check_messages(\%exp);
 
     xlog "generating message B";
     $exp{B} = $self->make_message("Message B");
-    $exp{B}->set_attribute(uid => 2);
+    $exp{B}->set_attributes(uid => 2, cid => calc_cid($exp{B}));
     $self->check_messages(\%exp);
 
     xlog "generating message C";
     $exp{C} = $self->make_message("Message C");
-    $exp{C}->set_attribute(uid => 3);
+    $exp{C}->set_attributes(uid => 3, cid => calc_cid($exp{C}));
     my $actual = $self->check_messages(\%exp);
 
     xlog "generating message D";
     $exp{D} = $self->make_message("Message D");
-    $exp{D}->set_attribute(uid => 4);
+    $exp{D}->set_attributes(uid => 4, cid => calc_cid($exp{D}));
     $self->check_messages(\%exp);
 }
 
@@ -218,17 +138,17 @@ sub test_append_clash
 
     xlog "generating message A";
     $exp{A} = $self->make_message("Message A");
-    $exp{A}->set_attribute(uid => 1);
+    $exp{A}->set_attributes(uid => 1, cid => calc_cid($exp{A}));
     $self->check_messages(\%exp);
 
     xlog "generating message B";
     $exp{B} = $self->make_message("Message B");
-    $exp{B}->set_attribute(uid => 2);
+    $exp{B}->set_attributes(uid => 2, cid => calc_cid($exp{B}));
     my $actual = $self->check_messages(\%exp);
 
     xlog "generating message C";
-    my $ElCid = choose_cid(calc_cid($actual->{'Message A'}),
-			   calc_cid($actual->{'Message B'}));
+    my $ElCid = choose_cid($exp{A}->get_attribute('cid'),
+			   $exp{B}->get_attribute('cid'));
     $exp{C} = $self->make_message("Message C",
 				  references =>
 				       $exp{A}->get_header('message-id') .  ", " .
@@ -265,23 +185,23 @@ sub test_double_clash
 
     xlog "generating message A";
     $exp{A} = $self->make_message("Message A");
-    $exp{A}->set_attribute(uid => 1);
+    $exp{A}->set_attributes(uid => 1, cid => calc_cid($exp{A}));
     $self->check_messages(\%exp);
 
     xlog "generating message B";
     $exp{B} = $self->make_message("Message B");
-    $exp{B}->set_attribute(uid => 2);
+    $exp{B}->set_attributes(uid => 2, cid => calc_cid($exp{B}));
     $self->check_messages(\%exp);
 
     xlog "generating message C";
     $exp{C} = $self->make_message("Message C");
-    $exp{C}->set_attribute(uid => 3);
+    $exp{C}->set_attributes(uid => 3, cid => calc_cid($exp{C}));
     my $actual = $self->check_messages(\%exp);
 
     xlog "generating message D";
-    my $ElCid = choose_cid(calc_cid($actual->{'Message A'}),
-			   calc_cid($actual->{'Message B'}),
-			   calc_cid($actual->{'Message C'}));
+    my $ElCid = choose_cid($exp{A}->get_attribute('cid'),
+			   $exp{B}->get_attribute('cid'),
+			   $exp{C}->get_attribute('cid'));
     $exp{D} = $self->make_message("Message D",
 				  references =>
 				       $exp{A}->get_header('message-id') .  ", " .
@@ -333,7 +253,7 @@ sub test_replication_clash
 
     xlog "generating message A";
     $exp{A} = $self->make_message("Message A", store => $master_store);
-    $exp{A}->set_attribute(uid => 1);
+    $exp{A}->set_attributes(uid => 1, cid => calc_cid($exp{A}));
     Cassandane::Instance->run_replication($master, $replica,
 					  $master_store, $replica_store);
     $self->check_messages(\%exp, store => $master_store);
@@ -341,7 +261,7 @@ sub test_replication_clash
 
     xlog "generating message B";
     $exp{B} = $self->make_message("Message B", store => $master_store);
-    $exp{B}->set_attribute(uid => 2);
+    $exp{B}->set_attributes(uid => 2, cid => calc_cid($exp{B}));
     Cassandane::Instance->run_replication($master, $replica,
 					  $master_store, $replica_store);
     $self->check_messages(\%exp, store => $master_store);
@@ -349,18 +269,16 @@ sub test_replication_clash
 
     xlog "generating message C";
     $exp{C} = $self->make_message("Message C", store => $master_store);
-    $exp{C}->set_attribute(uid => 3);
+    $exp{C}->set_attributes(uid => 3, cid => calc_cid($exp{C}));
     Cassandane::Instance->run_replication($master, $replica,
 					  $master_store, $replica_store);
     my $actual = $self->check_messages(\%exp, store => $master_store);
     $self->check_messages(\%exp, store => $replica_store);
 
     xlog "generating message D";
-    my $ElCid = choose_cid(
-		    calc_cid($actual->{'Message A'}),
-		    calc_cid($actual->{'Message B'}),
-		    calc_cid($actual->{'Message C'})
-		);
+    my $ElCid = choose_cid($exp{A}->get_attribute('cid'),
+			   $exp{B}->get_attribute('cid'),
+			   $exp{C}->get_attribute('cid'));
     $exp{D} = $self->make_message("Message D",
 				  store => $master_store,
 				  references =>
@@ -487,7 +405,7 @@ sub test_fm_webui_draft
     xlog "generating message B";
     $exp{B} = $exp{A}->clone();
     $exp{B}->set_headers('Subject', 'Draft message B');
-    $exp{B}->set_body('Completely different text here');
+    $exp{B}->set_body("Completely different text here\r\n");
 
     $self->{store}->write_begin();
     $self->{store}->write_message($exp{B});

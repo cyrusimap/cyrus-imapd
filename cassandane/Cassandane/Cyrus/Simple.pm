@@ -42,93 +42,26 @@
 use strict;
 use warnings;
 package Cassandane::Cyrus::Simple;
-use base qw(Cassandane::Unit::TestCase);
+use base qw(Cassandane::Cyrus::TestCase);
 use DateTime;
 use Cassandane::Util::Log;
-use Cassandane::Generator;
-use Cassandane::MessageStoreFactory;
-use Cassandane::Instance;
 
 sub new
 {
     my $class = shift;
-    my $self = $class->SUPER::new(@_);
-
-    $self->{instance} = Cassandane::Instance->new();
-    $self->{instance}->add_service('imap');
-
-    $self->{gen} = Cassandane::Generator->new();
-
-    return $self;
+    return $class->SUPER::new({}, @_);
 }
 
 sub set_up
 {
     my ($self) = @_;
-
-    $self->{instance}->start();
-    $self->{store} =
-	$self->{instance}->get_service('imap')->create_store();
-
-    $self->{expected} = {};
+    $self->SUPER::set_up();
 }
 
 sub tear_down
 {
     my ($self) = @_;
-
-    $self->{store}->disconnect()
-	if defined $self->{store};
-    $self->{store} = undef;
-    $self->{instance}->stop();
-}
-
-sub make_message
-{
-    my ($self, $subject, @attrs) = @_;
-
-    $self->{store}->write_begin();
-    my $msg = $self->{gen}->generate(subject => $subject, @attrs);
-    $self->{store}->write_message($msg);
-    $self->{store}->write_end();
-
-    return $msg;
-}
-
-sub check_messages
-{
-    my ($self, %params) = @_;
-    my $actual = {};
-    my $expected = $self->{expected};
-    my $store = $params{store} || $self->{store};
-
-    xlog "check_messages: " . join(' ',%params);
-
-    $store->read_begin();
-    while (my $msg = $store->read_message())
-    {
-	my $subj = $msg->get_header('subject');
-	$self->assert(!defined $actual->{$subj});
-	$actual->{$subj} = $msg;
-    }
-    $store->read_end();
-
-    $self->assert(scalar keys %$actual == scalar keys %$expected);
-
-    foreach my $expmsg (values %$expected)
-    {
-	my $subj = $expmsg->get_header('subject');
-	my $actmsg = $actual->{$subj};
-
-	$self->assert(defined $actmsg);
-
-	$self->assert(defined $actmsg->get_header('x-cassandane-unique'));
-
-	$self->assert($actmsg->get_header('x-cassandane-unique') eq
-		      $expmsg->get_header('x-cassandane-unique'));
-    }
-
-    return $actual;
+    $self->SUPER::tear_down();
 }
 
 #
@@ -138,21 +71,23 @@ sub test_append
 {
     my ($self) = @_;
 
+    my %exp;
+
     xlog "generating message A";
-    $self->{expected}->{A} = $self->make_message("Message A");
-    $self->check_messages();
+    $exp{A} = $self->make_message("Message A");
+    $self->check_messages(\%exp);
 
     xlog "generating message B";
-    $self->{expected}->{B} = $self->make_message("Message B");
-    $self->check_messages();
+    $exp{B} = $self->make_message("Message B");
+    $self->check_messages(\%exp);
 
     xlog "generating message C";
-    $self->{expected}->{C} = $self->make_message("Message C");
-    $self->check_messages();
+    $exp{C} = $self->make_message("Message C");
+    $self->check_messages(\%exp);
 
     xlog "generating message D";
-    $self->{expected}->{D} = $self->make_message("Message D");
-    $self->check_messages();
+    $exp{D} = $self->make_message("Message D");
+    $self->check_messages(\%exp);
 }
 
 1;

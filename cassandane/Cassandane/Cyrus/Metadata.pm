@@ -42,89 +42,26 @@
 use strict;
 use warnings;
 package Cassandane::Cyrus::Metadata;
-use base qw(Cassandane::Unit::TestCase);
+use base qw(Cassandane::Cyrus::TestCase);
 use DateTime;
 use Cassandane::Util::Log;
-use Cassandane::Generator;
-use Cassandane::MessageStoreFactory;
-use Cassandane::Instance;
 
 sub new
 {
-    my $class = shift;
-    my $self = $class->SUPER::new(@_);
-
-    $self->{instance} = Cassandane::Instance->new();
-    $self->{instance}->add_service('imap');
-
-    $self->{gen} = Cassandane::Generator->new();
-
-    return $self;
+    my ($class, @args) = @_;
+    return $class->SUPER::new({ adminstore => 1 }, @args);
 }
 
 sub set_up
 {
     my ($self) = @_;
-
-    $self->{instance}->start();
-    my $svc = $self->{instance}->get_service('imap');
-    $self->{store} = $svc->create_store();
-    $self->{adminstore} = $svc->create_store(username => 'admin');
+    $self->SUPER::set_up();
 }
 
 sub tear_down
 {
     my ($self) = @_;
-
-    $self->{store}->disconnect()
-	if defined $self->{store};
-    $self->{store} = undef;
-    $self->{adminstore}->disconnect()
-	if defined $self->{adminstore};
-    $self->{adminstore} = undef;
-    $self->{instance}->stop();
-}
-
-# TODO: provide a way to do this in the same instance
-# which would be more efficient
-sub restart_with_config
-{
-    my ($self, %nv) = @_;
-
-    my $conf = $self->{instance}->{config}->clone();
-    $conf->set(%nv);
-
-    $self->tear_down();
-
-    $self->{instance} = Cassandane::Instance->new(config => $conf);
-    my $svc = $self->{instance}->add_service('imap');
-    $self->{instance}->start();
-    $self->{store} = $svc->create_store();
-    $self->{adminstore} = $svc->create_store(username => 'admin');
-}
-
-sub _save_message
-{
-    my ($self, $msg, $store) = @_;
-
-    $store ||= $self->{store};
-
-    $store->write_begin();
-    $store->write_message($msg);
-    $store->write_end();
-}
-
-sub make_message
-{
-    my ($self, $subject, %attrs) = @_;
-
-    my $store = $attrs{store};	# may be undef
-    delete $attrs{store};
-
-    my $msg = $self->{gen}->generate(subject => $subject, %attrs);
-    $self->_save_message($msg, $store);
-
-    return $msg;
+    $self->SUPER::tear_down();
 }
 
 #
@@ -163,68 +100,6 @@ sub make_message_pair
     $self->_save_message($msg0, $store0);
     $self->_save_message($msg1, $store1);
     return ($msg0, $msg1);
-}
-
-sub check_messages
-{
-    my ($self, $expected, %params) = @_;
-    my $actual = {};
-    my $store = $params{store} || $self->{store};
-
-    xlog "check_messages: " . join(' ',%params);
-
-    $store->read_begin();
-    while (my $msg = $store->read_message())
-    {
-	my $subj = $msg->get_header('subject');
-	$self->assert(!defined $actual->{$subj});
-	$actual->{$subj} = $msg;
-    }
-    $store->read_end();
-
-    $self->assert(scalar keys %$actual == scalar keys %$expected);
-
-    foreach my $expmsg (values %$expected)
-    {
-	my $subj = $expmsg->get_header('subject');
-	my $actmsg = $actual->{$subj};
-
-	$self->assert_not_null($actmsg);
-
-	xlog "checking guid";
-	$self->assert_str_equals($expmsg->get_guid(),
-				 $actmsg->get_guid());
-
-	xlog "checking x-cassandane-unique";
-	$self->assert_not_null($actmsg->get_header('x-cassandane-unique'));
-	$self->assert_str_equals($expmsg->get_header('x-cassandane-unique'),
-			         $actmsg->get_header('x-cassandane-unique'));
-
-	if (defined $expmsg->get_attribute('uid'))
-	{
-	    xlog "checking uid";
-	    $self->assert_num_equals($expmsg->get_attribute('uid'),
-				     $actmsg->get_attribute('uid'));
-	}
-
-	if (defined $expmsg->get_attribute('cid'))
-	{
-	    xlog "checking cid";
-	    $self->assert_not_null($actmsg->get_attribute('cid'));
-	    $self->assert_str_equals($expmsg->get_attribute('cid'),
-				     $actmsg->get_attribute('cid'));
-	}
-
-	foreach my $ea ($expmsg->list_annotations())
-	{
-	    xlog "checking annotation ($ea->{entry} $ea->{attrib})";
-	    $self->assert_not_null($actmsg->get_annotation($ea));
-	    $self->assert_str_equals($expmsg->get_annotation($ea),
-				     $actmsg->get_annotation($ea));
-	}
-    }
-
-    return $actual;
 }
 
 #

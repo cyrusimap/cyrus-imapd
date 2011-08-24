@@ -42,55 +42,26 @@
 use strict;
 use warnings;
 package Cassandane::Cyrus::Bug3072;
-use base qw(Test::Unit::TestCase);
+use base qw(Cassandane::Cyrus::TestCase);
 use DateTime;
 use Cassandane::Util::Log;
-use Cassandane::Generator;
-use Cassandane::MessageStoreFactory;
-use Cassandane::Instance;
-use Data::Dumper;
 
 sub new
 {
     my $class = shift;
-    my $self = $class->SUPER::new(@_);
-
-    $self->{instance} = Cassandane::Instance->new();
-    $self->{instance}->add_service('imap');
-
-    $self->{gen} = Cassandane::Generator->new();
-
-    return $self;
+    return $class->SUPER::new({}, @_);
 }
 
 sub set_up
 {
     my ($self) = @_;
-
-    $self->{instance}->start();
-    $self->{store} = $self->{instance}->get_service('imap')->create_store();
+    $self->SUPER::set_up();
 }
 
 sub tear_down
 {
     my ($self) = @_;
-
-    $self->{store}->disconnect()
-	if defined $self->{store};
-    $self->{store} = undef;
-    $self->{instance}->stop();
-}
-
-sub make_message
-{
-    my ($self, $subject, @attrs) = @_;
-
-    $self->{store}->write_begin();
-    my $msg = $self->{gen}->generate(subject => $subject, @attrs);
-    $self->{store}->write_message($msg);
-    $self->{store}->write_end();
-
-    return $msg;
+    $self->SUPER::tear_down();
 }
 
 #

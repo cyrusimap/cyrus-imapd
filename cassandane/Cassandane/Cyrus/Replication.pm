@@ -42,99 +42,61 @@
 use strict;
 use warnings;
 package Cassandane::Cyrus::Replication;
-use base qw(Cassandane::Unit::TestCase);
+use base qw(Cassandane::Cyrus::TestCase);
 use DateTime;
 use Cassandane::Util::Log;
-use Cassandane::Generator;
-use Cassandane::Instance;
 use Cassandane::Service;
 use Cassandane::Config;
 
 sub new
 {
     my $class = shift;
-    my $self = $class->SUPER::new(@_);
-
-    $self->{gen} = Cassandane::Generator->new();
-
-    return $self;
+    return $class->SUPER::new({ instance => 0 }, @_);
 }
 
 sub set_up
 {
     my ($self) = @_;
+    $self->SUPER::set_up();
 
+    # TODO: push replicated-pair guff into Cassandane::Cyrus::TestCase
     my ($master, $replica, $master_store, $replica_store) =
 	Cassandane::Instance->start_replicated_pair();
     $self->{master} = $master;
     $self->{master_store} = $master_store;
     $self->{replica} = $replica;
     $self->{replica_store} = $replica_store;
-
-    $self->{expected} = {};
 }
 
 sub tear_down
 {
     my ($self) = @_;
 
-    $self->{master_store}->disconnect()
-	if defined $self->{master_store};
-    $self->{master_store} = undef;
-
-    $self->{replica_store}->disconnect()
-	if defined $self->{replica_store};
-    $self->{replica_store} = undef;
-
-    $self->{master}->stop();
-    $self->{replica}->stop();
-}
-
-sub make_message
-{
-    my ($self, $subject, %params) = @_;
-
-    my $store = $params{store} || $self->{master_store};
-    delete $params{store};
-
-    $store->write_begin();
-    my $msg = $self->{gen}->generate(subject => $subject, %params);
-    $store->write_message($msg);
-    $store->write_end();
-
-    return $msg;
-}
-
-sub check_messages
-{
-    my ($self, $store, $expected) = @_;
-    my $actual = {};
-
-    $store->read_begin();
-    while (my $msg = $store->read_message())
+    if (defined $self->{master_store})
     {
-	my $subj = $msg->get_header('subject');
-	$self->assert(!defined $actual->{$subj});
-	$actual->{$subj} = $msg;
-    }
-    $store->read_end();
-
-    $self->assert(scalar keys %$actual == scalar keys %$expected);
-
-    foreach my $expmsg (values %$expected)
-    {
-	my $subj = $expmsg->get_header('subject');
-	my $actmsg = $actual->{$subj};
-
-	$self->assert(defined $actmsg);
-
-	$self->assert(defined $actmsg->get_header('x-cassandane-unique'));
-
-	$self->assert($actmsg->get_header('x-cassandane-unique') eq
-		      $expmsg->get_header('x-cassandane-unique'));
+	$self->{master_store}->disconnect();
+	$self->{master_store} = undef;
     }
 
-    return $actual;
+    if (defined $self->{replica_store})
+    {
+	$self->{replica_store}->disconnect();
+	$self->{replica_store} = undef;
+    }
+
+    if (defined $self->{master})
+    {
+	$self->{master}->stop();
+	$self->{master} = undef;
+    }
+
+    if (defined $self->{replica})
+    {
+	$self->{replica}->stop();
+	$self->{replica} = undef;
+    }
+
+    $self->SUPER::tear_down();
 }
 
 sub run_replication
@@ -154,24 +116,27 @@ sub test_append
 {
     my ($self) = @_;
 
+    my $master_store = $self->{master_store};
+    my $replica_store = $self->{replica_store};
+
     xlog "generating messages A..D";
-    my $expected;
-    $expected->{A} = $self->make_message("Message A");
-    $expected->{B} = $self->make_message("Message B");
-    $expected->{C} = $self->make_message("Message C");
-    $expected->{D} = $self->make_message("Message D");
+    my %exp;
+    $exp{A} = $self->make_message("Message A", store => $master_store);
+    $exp{B} = $self->make_message("Message B", store => $master_store);
+    $exp{C} = $self->make_message("Message C", store => $master_store);
+    $exp{D} = $self->make_message("Message D", store => $master_store);
 
     xlog "Before replication, the master should have all four messages";
-    $self->check_messages($self->{master_store}, $expected);
+    $self->check_messages(\%exp, store => $master_store);
     xlog "Before replication, the replica should have no messages";
-    $self->check_messages($self->{replica_store}, {});
+    $self->check_messages({}, store => $replica_store);
 
     $self->run_replication();
 
     xlog "After replication, the master should still have all four messages";
-    $self->check_messages($self->{master_store}, $expected);
+    $self->check_messages(\%exp, store => $master_store);
     xlog "After replication, the replica should now have all four messages";
-    $self->check_messages($self->{replica_store}, $expected);
+    $self->check_messages(\%exp, store => $replica_store);
 }
 
 1;

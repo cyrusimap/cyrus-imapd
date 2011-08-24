@@ -42,133 +42,29 @@
 use strict;
 use warnings;
 package Cassandane::Cyrus::Flags;
-use base qw(Cassandane::Unit::TestCase);
+use base qw(Cassandane::Cyrus::TestCase);
 use DateTime;
 use Cassandane::Util::Log;
 use Cassandane::Util::Words;
-use Cassandane::Generator;
-use Cassandane::MessageStoreFactory;
-use Cassandane::Instance;
 use Data::Dumper;
 
 sub new
 {
     my $class = shift;
-    my $self = $class->SUPER::new(@_);
-
-    $self->{instance} = Cassandane::Instance->new();
-    $self->{instance}->add_service('imap');
-
-    $self->{gen} = Cassandane::Generator->new();
-
-    return $self;
+    return $class->SUPER::new({}, @_);
 }
 
 sub set_up
 {
     my ($self) = @_;
-
-    $self->{instance}->start();
-    my $imapsvc = $self->{instance}->get_service('imap');
-    $self->{store} = $imapsvc->create_store();
-#     $self->{adminstore} = $imapsvc->create_store(username => 'admin');
-
-#     my $admintalk = $self->{adminstore}->get_client();
+    $self->SUPER::set_up();
 }
 
 sub tear_down
 {
     my ($self) = @_;
-
-    $self->{store}->disconnect()
-	if defined $self->{store};
-    $self->{store} = undef;
-#     $self->{adminstore}->disconnect()
-# 	if defined $self->{adminstore};
-#     $self->{adminstore} = undef;
-    $self->{instance}->stop();
+    $self->SUPER::tear_down();
 }
-
-sub make_message
-{
-    my ($self, $subject, @attrs) = @_;
-
-    $self->{store}->write_begin();
-    my $msg = $self->{gen}->generate(subject => $subject, @attrs);
-    $self->{store}->write_message($msg);
-    $self->{store}->write_end();
-
-    return $msg;
-}
-
-sub check_messages
-{
-    my ($self, %params) = @_;
-    my $actual = {};
-    my $expected = $params{expected} || $self->{expected};
-    my $store = $params{store} || $self->{store};
-    my $checkl = $params{check} || [];
-    my %checkh;
-
-    map { $checkh{$_} = 1; } @$checkl;
-
-    xlog "check_messages";
-
-    $store->read_begin();
-    while (my $msg = $store->read_message())
-    {
-	my $subj = $msg->get_header('subject');
-	$self->assert(!defined $actual->{$subj});
-	$actual->{$subj} = $msg;
-    }
-    $store->read_end();
-
-    $self->assert(scalar keys %$actual == scalar keys %$expected);
-
-    foreach my $expmsg (values %$expected)
-    {
-	my $subj = $expmsg->get_header('subject');
-	my $actmsg = $actual->{$subj};
-
-	xlog "checking subject \"$subj\"";
-	$self->assert_not_null($actmsg);
-
-	if ($checkh{id})
-	{
-	    xlog "checking id";
-	    $self->assert_not_null($expmsg->get_attribute('id'));
-	    $self->assert_not_null($actmsg->get_attribute('id'));
-	    $self->assert_num_equals($expmsg->get_attribute('id'),
-				     $actmsg->get_attribute('id'));
-	}
-
-	if ($checkh{uid})
-	{
-	    xlog "checking uid";
-	    $self->assert_not_null($expmsg->get_attribute('uid'));
-	    $self->assert_not_null($actmsg->get_attribute('uid'));
-	    $self->assert_num_equals($expmsg->get_attribute('uid'),
-				     $actmsg->get_attribute('uid'));
-	}
-
-	if ($checkh{flags})
-	{
-	    xlog "checking flags";
-	    $self->assert_not_null($expmsg->get_attribute('flags'));
-	    $self->assert_not_null($actmsg->get_attribute('flags'));
-	    $self->assert_deep_equals($expmsg->get_attribute('flags'),
-				      $actmsg->get_attribute('flags'));
-	}
-
-	xlog "checking x-cassandane-unique";
-	$self->assert_not_null($actmsg->get_header('x-cassandane-unique'));
-	$self->assert_str_equals($actmsg->get_header('x-cassandane-unique'),
-			         $expmsg->get_header('x-cassandane-unique'));
-    }
-
-    return $actual;
-}
-
 
 #
 # Test that
@@ -202,22 +98,19 @@ sub test_deleted
     $msg{C}->set_attributes(id => 3,
 			    uid => 3,
 			    flags => []);
-    $self->check_messages(expected => \%msg,
-			  check => [qw(id uid flags)]);
+    $self->check_messages(\%msg);
 
     xlog "Mark the middle message \\Deleted";
     $talk->store('2', '+flags', '(\\Deleted)');
     $msg{B}->set_attribute(flags => ['\\Deleted']);
-    $self->check_messages(expected => \%msg,
-			  check => [qw(id uid flags)]);
+    $self->check_messages(\%msg);
 
     xlog "Expunge the middle message";
     $talk->expunge();
     delete $msg{B};
     $msg{A}->set_attribute(id => 1);
     $msg{C}->set_attribute(id => 2);
-    $self->check_messages(expected => \%msg,
-			  check => [qw(id uid flags)]);
+    $self->check_messages(\%msg);
 #
 #     $talk->store($seq', '+flags', '(\\flagged)') or die $@;
 }
@@ -254,33 +147,28 @@ sub test_seen
     $msg{B}->set_attributes(id => 2,
 			    uid => 2,
 			    flags => []);
-    $self->check_messages(expected => \%msg,
-			  check => [qw(id uid flags)]);
+    $self->check_messages(\%msg);
 
     xlog "Set \\Seen on message A";
     $talk->store('1', '+flags', '(\\Seen)');
     $msg{A}->set_attribute(flags => ['\\Seen']);
-    $self->check_messages(expected => \%msg,
-			  check => [qw(id uid flags)]);
+    $self->check_messages(\%msg);
 
     xlog "Clear \\Seen on message A";
     $talk->store('1', '-flags', '(\\Seen)');
     $msg{A}->set_attribute(flags => []);
-    $self->check_messages(expected => \%msg,
-			  check => [qw(id uid flags)]);
+    $self->check_messages(\%msg);
 
     xlog "Set \\Seen on message A again";
     $talk->store('1', '+flags', '(\\Seen)');
     $msg{A}->set_attribute(flags => ['\\Seen']);
-    $self->check_messages(expected => \%msg,
-			  check => [qw(id uid flags)]);
+    $self->check_messages(\%msg);
 
     xlog "Reconnect, \\Seen should still be on message A";
     $self->{store}->disconnect();
     $self->{store}->_connect();
     $self->{store}->_select();
-    $self->check_messages(expected => \%msg,
-			  check => [qw(id uid flags)]);
+    $self->check_messages(\%msg);
 }
 
 #
@@ -309,33 +197,28 @@ sub test_flagged
     $msg{B}->set_attributes(id => 2,
 			    uid => 2,
 			    flags => []);
-    $self->check_messages(expected => \%msg,
-			  check => [qw(id uid flags)]);
+    $self->check_messages(\%msg);
 
     xlog "Set \\Flagged on message A";
     $talk->store('1', '+flags', '(\\Flagged)');
     $msg{A}->set_attribute(flags => ['\\Flagged']);
-    $self->check_messages(expected => \%msg,
-			  check => [qw(id uid flags)]);
+    $self->check_messages(\%msg);
 
     xlog "Clear \\Flagged on message A";
     $talk->store('1', '-flags', '(\\Flagged)');
     $msg{A}->set_attribute(flags => []);
-    $self->check_messages(expected => \%msg,
-			  check => [qw(id uid flags)]);
+    $self->check_messages(\%msg);
 
     xlog "Set \\Flagged on message A again";
     $talk->store('1', '+flags', '(\\Flagged)');
     $msg{A}->set_attribute(flags => ['\\Flagged']);
-    $self->check_messages(expected => \%msg,
-			  check => [qw(id uid flags)]);
+    $self->check_messages(\%msg);
 
     xlog "Reconnect, \\Flagged should still be on message A";
     $self->{store}->disconnect();
     $self->{store}->_connect();
     $self->{store}->_select();
-    $self->check_messages(expected => \%msg,
-			  check => [qw(id uid flags)]);
+    $self->check_messages(\%msg);
 }
 
 #
@@ -367,33 +250,28 @@ sub test_userflag
     $msg{B}->set_attributes(id => 2,
 			    uid => 2,
 			    flags => []);
-    $self->check_messages(expected => \%msg,
-			  check => [qw(id uid flags)]);
+    $self->check_messages(\%msg);
 
     xlog "Set \$Foobar on message A";
     $talk->store('1', '+flags', '($Foobar)');
     $msg{A}->set_attribute(flags => ['$Foobar']);
-    $self->check_messages(expected => \%msg,
-			  check => [qw(id uid flags)]);
+    $self->check_messages(\%msg);
 
     xlog "Clear \$Foobar on message A";
     $talk->store('1', '-flags', '($Foobar)');
     $msg{A}->set_attribute(flags => []);
-    $self->check_messages(expected => \%msg,
-			  check => [qw(id uid flags)]);
+    $self->check_messages(\%msg);
 
     xlog "Set \$Foobar on message A again";
     $talk->store('1', '+flags', '($Foobar)');
     $msg{A}->set_attribute(flags => ['$Foobar']);
-    $self->check_messages(expected => \%msg,
-			  check => [qw(id uid flags)]);
+    $self->check_messages(\%msg);
 
     xlog "Reconnect, \$Foobar should still be on message A";
     $self->{store}->disconnect();
     $self->{store}->_connect();
     $self->{store}->_select();
-    $self->check_messages(expected => \%msg,
-			  check => [qw(id uid flags)]);
+    $self->check_messages(\%msg);
 }
 
 #
@@ -421,8 +299,7 @@ sub test_max_userflags
     $msg{B}->set_attributes(id => 2,
 			    uid => 2,
 			    flags => []);
-    $self->check_messages(expected => \%msg,
-			  check => [qw(id uid flags)]);
+    $self->check_messages(\%msg);
 
     my %allflags;
     for (my $i = 0 ; $i < MAX_USER_FLAGS ; $i++)
@@ -442,14 +319,12 @@ sub test_max_userflags
 	xlog "Set $flag on message A";
 	$talk->store('1', '+flags', "($flag)");
 	$msg{A}->set_attribute(flags => [$flag]);
-	$self->check_messages(expected => \%msg,
-			      check => [qw(id uid flags)]);
+	$self->check_messages(\%msg);
 
 	xlog "Clear $flag on message A";
 	$talk->store('1', '-flags', "($flag)");
 	$msg{A}->set_attribute(flags => []);
-	$self->check_messages(expected => \%msg,
-			      check => [qw(id uid flags)]);
+	$self->check_messages(\%msg);
     }
 
     xlog "Cannot set one more wafer-thin user flag";
@@ -465,15 +340,13 @@ sub test_max_userflags
     xlog "Set all the user flags on message A";
     $talk->store('1', '+flags', '(' . join(' ',@flags) . ')');
     $msg{A}->set_attribute(flags => [@flags]);
-    $self->check_messages(expected => \%msg,
-			  check => [qw(id uid flags)]);
+    $self->check_messages(\%msg);
 
     xlog "Reconnect, all the flags should still be on message A";
     $self->{store}->disconnect();
     $self->{store}->_connect();
     $self->{store}->_select();
-    $self->check_messages(expected => \%msg,
-			  check => [qw(id uid flags)]);
+    $self->check_messages(\%msg);
 }
 
 #
@@ -502,38 +375,32 @@ sub test_multi_flags
     $msg{B}->set_attributes(id => 2,
 			    uid => 2,
 			    flags => []);
-    $self->check_messages(expected => \%msg,
-			  check => [qw(id uid flags)]);
+    $self->check_messages(\%msg);
 
     xlog "Set many flags on message A";
     $talk->store('1', '+flags', '(\\Answered \\Flagged \\Draft \\Deleted \\Seen)');
     $msg{A}->set_attribute(flags => [qw(\\Answered \\Flagged \\Draft \\Deleted \\Seen)]);
-    $self->check_messages(expected => \%msg,
-			  check => [qw(id uid flags)]);
+    $self->check_messages(\%msg);
 
     xlog "Clear \\Flagged on message A";
     $talk->store('1', '-flags', '(\\Flagged)');
     $msg{A}->set_attribute(flags => [qw(\\Answered \\Draft \\Deleted \\Seen)]);
-    $self->check_messages(expected => \%msg,
-			  check => [qw(id uid flags)]);
+    $self->check_messages(\%msg);
 
     xlog "Clear \\Draft and \\Deleted on message A";
     $talk->store('1', '-flags', '(\\Draft \\Deleted)');
     $msg{A}->set_attribute(flags => [qw(\\Answered \\Seen)]);
-    $self->check_messages(expected => \%msg,
-			  check => [qw(id uid flags)]);
+    $self->check_messages(\%msg);
 
     xlog "Set \\Draft and \\Flagged on message A";
     $talk->store('1', '+flags', '(\\Draft \\Flagged)');
     $msg{A}->set_attribute(flags => [qw(\\Answered \\Flagged \\Draft \\Seen)]);
-    $self->check_messages(expected => \%msg,
-			  check => [qw(id uid flags)]);
+    $self->check_messages(\%msg);
 
     xlog "Set to just \\Answered and \\Seen on message A";
     $talk->store('1', 'flags', '(\\Answered \\Seen)');
     $msg{A}->set_attribute(flags => [qw(\\Answered \\Seen)]);
-    $self->check_messages(expected => \%msg,
-			  check => [qw(id uid flags)]);
+    $self->check_messages(\%msg);
 
     xlog "Walk through every combination of flags";
     my %rev_map = (
@@ -553,16 +420,14 @@ sub test_multi_flags
 	xlog "Setting " . join(',',@flags) . " on message A";
 	$talk->store('1', 'flags', '(' . join(' ',@flags) . ')');
 	$msg{A}->set_attribute(flags => \@flags);
-	$self->check_messages(expected => \%msg,
-			      check => [qw(id uid flags)]);
+	$self->check_messages(\%msg);
     }
 
     xlog "Reconnect, all the flags should still be on message A";
     $self->{store}->disconnect();
     $self->{store}->_connect();
     $self->{store}->_select();
-    $self->check_messages(expected => \%msg,
-			  check => [qw(id uid flags)]);
+    $self->check_messages(\%msg);
 }
 
 # Get the modseq of a given returned message
@@ -637,15 +502,13 @@ sub test_modseq
     $msg{B}->set_attributes(id => 2,
 			    uid => 2,
 			    flags => []);
-    my $act0 = $self->check_messages(expected => \%msg,
-				     check => [qw(id uid flags)]);
+    my $act0 = $self->check_messages(\%msg);
     my $hms0 = $self->get_highestmodseq();
 
     xlog "Set \\Flagged on message A";
     $talk->store('1', '+flags', '(\\Flagged)');
     $msg{A}->set_attribute(flags => ['\\Flagged']);
-    my $act1 = $self->check_messages(expected => \%msg,
-				     check => [qw(id uid flags)]);
+    my $act1 = $self->check_messages(\%msg);
     my $hms1 = $self->get_highestmodseq();
     xlog "A should have a new modseq higher than any other message";
     $self->assert(get_modseq($act1, 'A') > get_modseq($act0, 'A'));
@@ -657,8 +520,7 @@ sub test_modseq
     xlog "Set \\Flagged on message A while already set";
     $talk->store('1', '+flags', '(\\Flagged)');
     $msg{A}->set_attribute(flags => ['\\Flagged']);
-    my $act2 = $self->check_messages(expected => \%msg,
-				     check => [qw(id uid flags)]);
+    my $act2 = $self->check_messages(\%msg);
     my $hms2 = $self->get_highestmodseq();
     xlog "A should have not changed modseq";
     $self->assert(get_modseq($act2, 'A') == get_modseq($act1, 'A'));
@@ -669,8 +531,7 @@ sub test_modseq
     xlog "Clear \\Flagged on message A";
     $talk->store('1', '-flags', '(\\Flagged)');
     $msg{A}->set_attribute(flags => []);
-    my $act3 = $self->check_messages(expected => \%msg,
-				     check => [qw(id uid flags)]);
+    my $act3 = $self->check_messages(\%msg);
     my $hms3 = $self->get_highestmodseq();
     xlog "A should have a new modseq higher than any other message";
     $self->assert(get_modseq($act3, 'A') > get_modseq($act2, 'A'));
@@ -682,8 +543,7 @@ sub test_modseq
     xlog "Clear \\Flagged on message A while already clear";
     $talk->store('1', '-flags', '(\\Flagged)');
     $msg{A}->set_attribute(flags => []);
-    my $act4 = $self->check_messages(expected => \%msg,
-				     check => [qw(id uid flags)]);
+    my $act4 = $self->check_messages(\%msg);
     my $hms4 = $self->get_highestmodseq();
     xlog "A should have not changed modseq";
     $self->assert(get_modseq($act4, 'A') == get_modseq($act3, 'A'));
@@ -730,8 +590,7 @@ sub test_unchangedsince
     $msg{B}->set_attributes(id => 2,
 			    uid => 2,
 			    flags => []);
-    my $act0 = $self->check_messages(expected => \%msg,
-				     check => [qw(id uid flags)]);
+    my $act0 = $self->check_messages(\%msg);
 
     my %fetched;
     my $modified;
@@ -769,8 +628,7 @@ sub test_unchangedsince
     my $res1 = $talk->get_last_completion_response();
     #	- updates the flag
     $msg{A}->set_attribute(flags => ['\\Flagged']);
-    my $act1 = $self->check_messages(expected => \%msg,
-				     check => [qw(id uid flags)]);
+    my $act1 = $self->check_messages(\%msg);
     xlog "returns an OK response?";
     $self->assert_str_equals('ok', $res1);
     xlog "updated modseq?";
@@ -793,8 +651,7 @@ sub test_unchangedsince
     my $res2 = $talk->get_last_completion_response();
     #	- updates the flag
     $msg{A}->set_attribute(flags => []);
-    my $act2 = $self->check_messages(expected => \%msg,
-				     check => [qw(id uid flags)]);
+    my $act2 = $self->check_messages(\%msg);
     xlog "returns an OK response?";
     $self->assert_str_equals('ok', $res2);
     xlog "updated modseq?";
@@ -817,8 +674,7 @@ sub test_unchangedsince
     my $res3 = $talk->get_last_completion_response();
     #	- doesn't update the flag
     $msg{A}->set_attribute(flags => []);
-    my $act3 = $self->check_messages(expected => \%msg,
-				     check => [qw(id uid flags)]);
+    my $act3 = $self->check_messages(\%msg);
     xlog "returns an OK response?";
     $self->assert_str_equals('ok', $res3);
     xlog "didn't update modseq?";
@@ -878,8 +734,7 @@ sub test_unchangedsince_multi
     $msg{N}->set_attribute(flags => ['\\Draft']);
     $msg{O}->set_attribute(flags => ['\\Draft']);
 
-    my $act0 = $self->check_messages(expected => \%msg,
-				     check => [qw(id uid flags)]);
+    my $act0 = $self->check_messages(\%msg);
 
     {
 	my $store2 = $self->{instance}->get_service('imap')->create_store();
@@ -965,8 +820,7 @@ sub test_unchangedsince_multi
 	my $letter = chr(64 + $i);  # G ... Z
 	$msg{$letter}->set_attribute(id => $i-3);
     }
-    my $act1 = $self->check_messages(expected => \%msg,
-				     check => [qw(id uid flags)]);
+    my $act1 = $self->check_messages(\%msg);
 
 # TODO: this fails with current Cyrus code
 #     xlog "returns a NO response?";
