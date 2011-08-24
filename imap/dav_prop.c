@@ -73,6 +73,8 @@ xmlDocPtr init_prop_response(const char *resp, xmlNodePtr *root,
 	    respNs[NS_CS] = xmlNewNs(*root, reqNs->href, reqNs->prefix);
 	else if (!xmlStrcmp(reqNs->href, BAD_CAST NS_URL_APPLE))
 	    respNs[NS_APPLE] = xmlNewNs(*root, reqNs->href, reqNs->prefix);
+	else if (!xmlStrcmp(reqNs->href, BAD_CAST NS_URL_CYRUS))
+	    respNs[NS_CYRUS] = xmlNewNs(*root, reqNs->href, reqNs->prefix);
 	else
 	    xmlNewNs(*root, reqNs->href, reqNs->prefix);
     }
@@ -129,6 +131,40 @@ void add_prop_response(struct propfind_ctx *fctx)
     }
 
     return;
+}
+
+
+/* Add possibly 'abstract' supported-privilege 'priv_name', of namespace 'ns',
+ * with description 'desc_str' to node 'root'.  For now, we alssume all
+ * descriptions are English.
+ */
+static xmlNodePtr add_suppriv(xmlNodePtr root, const char *priv_name,
+			      xmlNsPtr ns, int abstract, const char *desc_str)
+{
+    xmlNodePtr supp, priv, desc;
+
+    supp = xmlNewChild(root, NULL, BAD_CAST "supported-privilege", NULL);
+    priv = xmlNewChild(supp, NULL, BAD_CAST "privilege", NULL);
+    xmlNewChild(priv, ns, BAD_CAST priv_name, NULL);
+    if (abstract) xmlNewChild(supp, NULL, BAD_CAST "abstract", NULL);
+    desc = xmlNewChild(supp, NULL, BAD_CAST "description", BAD_CAST desc_str);
+    xmlNodeSetLang(desc, BAD_CAST "en");
+
+    return priv;
+}
+
+
+/* Ensure that we have a given namespace.  If it doesn't exist in what we
+ * parsed in the request, create it and attach to 'node'.
+ */
+static int ensure_ns(xmlNsPtr *respNs, int ns, xmlNodePtr node,
+		      const char *url, const char *prefix)
+{
+    if (!respNs[ns])
+	respNs[ns] = xmlNewNs(node, BAD_CAST url, BAD_CAST prefix);
+
+    /* XXX  check for errors */
+    return 0;
 }
 
 
@@ -271,7 +307,7 @@ static int propfind_addmember(const xmlChar *propname, xmlNsPtr ns,
 	    (size_t) (fctx->req_tgt->resource - fctx->req_tgt->path) :
 	    strlen(fctx->req_tgt->path);
 	snprintf(uri, sizeof(uri), "%.*s", len, fctx->req_tgt->path);
-	xmlNewChild(node, fctx->ns[NS_DAV], BAD_CAST "href", BAD_CAST uri);
+	xmlNewChild(node, NULL, BAD_CAST "href", BAD_CAST uri);
     }
     else {
 	add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND], ns,
@@ -316,22 +352,26 @@ static int propfind_restype(const xmlChar *propname, xmlNsPtr ns,
 			       BAD_CAST propname, NULL, NULL);
 
     if ((fctx->req_tgt->namespace != URL_NS_DEFAULT) && !fctx->record) {
-	xmlNewChild(node, fctx->ns[NS_DAV], BAD_CAST "collection", NULL);
+	xmlNewChild(node, NULL, BAD_CAST "collection", NULL);
 
 	switch (fctx->req_tgt->namespace) {
 	case URL_NS_PRINCIPAL:
 	    if (fctx->req_tgt->user)
-		xmlNewChild(node, fctx->ns[NS_DAV], BAD_CAST "principal", NULL);
+		xmlNewChild(node, NULL, BAD_CAST "principal", NULL);
 	    break;
 
 	case URL_NS_CALENDAR:
-	    if (fctx->mailbox)
+	    if (fctx->mailbox) {
+		ensure_ns(fctx->ns, NS_CAL, resp->parent, NS_URL_CAL, "C");
 		xmlNewChild(node, fctx->ns[NS_CAL], BAD_CAST "calendar", NULL);
+	    }
 	    break;
 
 	case URL_NS_ADDRESSBOOK:
-	    if (fctx->mailbox)
+	    if (fctx->mailbox) {
+		ensure_ns(fctx->ns, NS_CAL, resp->parent, NS_URL_CAL, "C");
 		xmlNewChild(node, fctx->ns[NS_CAL], BAD_CAST "addressbook", NULL);
+	    }
 	    break;
 	}
     }
@@ -389,12 +429,14 @@ static int propfind_reportset(const xmlChar *propname, xmlNsPtr ns,
 				    BAD_CAST propname, NULL, NULL);
 
     if (fctx->req_tgt->namespace == URL_NS_CALENDAR) {
-	s = xmlNewChild(top, fctx->ns[NS_DAV], BAD_CAST "supported-report", NULL);
-	r = xmlNewChild(s, fctx->ns[NS_DAV], BAD_CAST "report", NULL);
+	s = xmlNewChild(top, NULL, BAD_CAST "supported-report", NULL);
+	r = xmlNewChild(s, NULL, BAD_CAST "report", NULL);
+	ensure_ns(fctx->ns, NS_CAL, resp->parent, NS_URL_CAL, "C");
 	xmlNewChild(r, fctx->ns[NS_CAL], BAD_CAST "calendar-query", NULL);
 
-	s = xmlNewChild(top, fctx->ns[NS_DAV], BAD_CAST "supported-report", NULL);
-	r = xmlNewChild(s, fctx->ns[NS_DAV], BAD_CAST "report", NULL);
+	s = xmlNewChild(top, NULL, BAD_CAST "supported-report", NULL);
+	r = xmlNewChild(s, NULL, BAD_CAST "report", NULL);
+	ensure_ns(fctx->ns, NS_CAL, resp->parent, NS_URL_CAL, "C");
 	xmlNewChild(r, fctx->ns[NS_CAL], BAD_CAST "calendar-multiget", NULL);
     }
 
@@ -427,7 +469,7 @@ static int propfind_owner(const xmlChar *propname, xmlNsPtr ns,
 		     fctx->req_tgt->userlen, fctx->req_tgt->user);
 	}
 
-	xmlNewChild(node, fctx->ns[NS_DAV], BAD_CAST "href", BAD_CAST uri);
+	xmlNewChild(node, NULL, BAD_CAST "href", BAD_CAST uri);
     }
 
     return 0;
@@ -435,27 +477,12 @@ static int propfind_owner(const xmlChar *propname, xmlNsPtr ns,
 
 
 /* Callback to fetch DAV:supported-privilege-set */
-static xmlNodePtr add_suppriv(xmlNodePtr root, const char *priv_name,
-			      xmlNsPtr ns, int abstract, const char *desc_str)
-{
-    xmlNodePtr supp, priv, desc;
-
-    supp = xmlNewChild(root, NULL, BAD_CAST "supported-privilege", NULL);
-    priv = xmlNewChild(supp, NULL, BAD_CAST "privilege", NULL);
-    xmlNewChild(priv, ns, BAD_CAST priv_name, NULL);
-    if (abstract) xmlNewChild(supp, NULL, BAD_CAST "abstract", NULL);
-    desc = xmlNewChild(supp, NULL, BAD_CAST "description", BAD_CAST desc_str);
-    xmlNodeSetLang(desc, BAD_CAST "en");
-
-    return priv;
-}
-
 static int propfind_supprivset(const xmlChar *propname, xmlNsPtr ns,
 			       struct propfind_ctx *fctx, xmlNodePtr resp,
 			       xmlNodePtr *propstat,
 			       void *rock __attribute__((unused)))
 {
-    xmlNodePtr set, all, read, write;
+    xmlNodePtr set, all, read, write, admin;
 
     set = add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK], ns,
 		    BAD_CAST propname, NULL, NULL);
@@ -465,6 +492,8 @@ static int propfind_supprivset(const xmlChar *propname, xmlNsPtr ns,
     read = add_suppriv(all, "read", NULL, 0, "Read any object");
     add_suppriv(read, "read-current-user-privilege-set", NULL, 1,
 		"Read current user privilege set property");
+
+    ensure_ns(fctx->ns, NS_CAL, resp->parent, NS_URL_CAL, "C");
     add_suppriv(read, "read-free-busy", fctx->ns[NS_CAL], 0,
 		"Read free/busy time");
 
@@ -474,9 +503,12 @@ static int propfind_supprivset(const xmlChar *propname, xmlNsPtr ns,
     add_suppriv(write, "write-properties", NULL, 0, "Write properties");
     add_suppriv(write, "write-content", NULL, 0, "Write resource content");
 
-    add_suppriv(all, "read-acl", NULL, 0, "Read ACL");
-    add_suppriv(all, "write-acl", NULL, 0, "Write ACL");
-    add_suppriv(all, "unlock", NULL, 0, "Unlock resource");
+    ensure_ns(fctx->ns, NS_CYRUS, resp->parent, NS_URL_CYRUS, "CY");
+    admin = add_suppriv(all, "admin", fctx->ns[NS_CYRUS], 0,
+			"Perform administrative operations");
+    add_suppriv(admin, "read-acl", NULL, 1, "Read ACL");
+    add_suppriv(admin, "write-acl", NULL, 1, "Write ACL");
+    add_suppriv(admin, "unlock", NULL, 1, "Unlock resource");
 
     return 0;
 }
@@ -497,10 +529,10 @@ static int propfind_curprin(const xmlChar *propname, xmlNsPtr ns,
 
     if (fctx->userid) {
 	snprintf(uri, sizeof(uri), "/principals/user/%s/", fctx->userid);
-	xmlNewChild(node, fctx->ns[NS_DAV], BAD_CAST "href", BAD_CAST uri);
+	xmlNewChild(node, NULL, BAD_CAST "href", BAD_CAST uri);
     }
     else {
-	xmlNewChild(node, fctx->ns[NS_DAV], BAD_CAST "unauthenticated", NULL);
+	xmlNewChild(node, NULL, BAD_CAST "unauthenticated", NULL);
     }
 
     return 0;
@@ -521,7 +553,7 @@ static int propfind_princolset(const xmlChar *propname, xmlNsPtr ns,
 		    BAD_CAST propname, NULL, NULL);
 
     snprintf(uri, sizeof(uri), "/principals/");
-    xmlNewChild(node, fctx->ns[NS_DAV], BAD_CAST "href", BAD_CAST uri);
+    xmlNewChild(node, NULL, BAD_CAST "href", BAD_CAST uri);
 
     return 0;
 }
@@ -640,7 +672,7 @@ static int propfind_calhomeset(const xmlChar *propname, xmlNsPtr ns,
 
     snprintf(uri, sizeof(uri), "/calendars/user/%s/", fctx->userid);
 
-    xmlNewChild(node, fctx->ns[NS_DAV], BAD_CAST "href", BAD_CAST uri);
+    xmlNewChild(node, NULL, BAD_CAST "href", BAD_CAST uri);
 
     return 0;
 }

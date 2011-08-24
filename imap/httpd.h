@@ -51,6 +51,7 @@
 #define NS_URL_CAL	"urn:ietf:params:xml:ns:caldav"
 #define NS_URL_CS	"http://calendarserver.org/ns/"
 #define NS_URL_APPLE	"http://apple.com/ns/ical/"
+#define NS_URL_CYRUS	"http://cyrusimap.org/ns/"
 
 /* Path namespaces */
 enum {
