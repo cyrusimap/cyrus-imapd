@@ -2383,7 +2383,7 @@ int mboxlist_findall_alt(struct namespace *namespace,
      * search for all remaining mailboxes.
      * just bother looking at the ones that have the same pattern prefix.
      */
-    if(isadmin || ( ( namespace != 0 ) && (namespace->accessible[NAMESPACE_USER]) )) {
+    if(isadmin || ( ( namespace != 0 ) && (namespace->accessible[NAMESPACE_SHARED]) )) {
 	len = strlen(namespace->prefix[NAMESPACE_SHARED]);
 	if(len>0) len--;
 	if (!strncmp(namespace->prefix[NAMESPACE_SHARED], pattern,
