@@ -53,7 +53,6 @@
  *   - Add replication bits
  *   - Add WebDAV LOCKing?  Does anybody use it?
  *   - Add WebDAV ACL support?
- *   - Add WebDAV Quotas?
  *   - Should we have a linked-list/hash of open mailboxes,
  *     rather than open/close for every method?
  */
@@ -464,22 +463,15 @@ int service_init(int argc __attribute__((unused)),
 
     /* Construct serverinfo string */
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
-	buf_printf(&serverinfo, "Cyrus/%s Cyrus-SASL/%u.%u.%u"
+	buf_printf(&serverinfo, "Cyrus/%s Cyrus-SASL/%u.%u.%u", cyrus_version(),
+		   SASL_VERSION_MAJOR, SASL_VERSION_MINOR, SASL_VERSION_STEP);
 #ifdef HAVE_SSL
-		   " OpenSSL/%s"
+	buf_printf(&serverinfo, " OpenSSL/%s", SHLIB_VERSION_NUMBER);
 #endif
 #ifdef HAVE_ZLIB
-		   " zlib/%s"
+	buf_printf(&serverinfo, " zlib/%s", ZLIB_VERSION);
 #endif
-		   " libxml/%s libical/%s",
-		   cyrus_version(),
-		   SASL_VERSION_MAJOR, SASL_VERSION_MINOR, SASL_VERSION_STEP,
-#ifdef HAVE_SSL
-		   SHLIB_VERSION_NUMBER,
-#endif
-#ifdef HAVE_ZLIB
-		   ZLIB_VERSION,
-#endif
+	buf_printf(&serverinfo, " libxml/%s libical/%s",
 		   LIBXML_DOTTED_VERSION, ICAL_VERSION);
     }
 
