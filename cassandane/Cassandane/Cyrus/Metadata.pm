@@ -310,13 +310,7 @@ sub test_specialuse
 
     my $imaptalk = $self->{store}->get_client();
     my $res;
-#
-#     Cyrus incorrectly implements /shared semantics for
-#     the specialuse annotation, which is not correct for
-#     the final RFC.
-#
-#     my $entry = '/private/specialuse';
-    my $entry = '/shared/specialuse';
+    my $entry = '/private/specialuse';
     my @testcases = (
 	# Cyrus has no virtual folders, so cannot do \All
 	{
