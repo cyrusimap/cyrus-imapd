@@ -434,6 +434,54 @@ static int propfind_owner(const xmlChar *propname, xmlNsPtr ns,
 }
 
 
+/* Callback to fetch DAV:supported-privilege-set */
+static xmlNodePtr add_suppriv(xmlNodePtr root, const char *priv_name,
+			      xmlNsPtr ns, int abstract, const char *desc_str)
+{
+    xmlNodePtr supp, priv, desc;
+
+    supp = xmlNewChild(root, NULL, BAD_CAST "supported-privilege", NULL);
+    priv = xmlNewChild(supp, NULL, BAD_CAST "privilege", NULL);
+    xmlNewChild(priv, ns, BAD_CAST priv_name, NULL);
+    if (abstract) xmlNewChild(supp, NULL, BAD_CAST "abstract", NULL);
+    desc = xmlNewChild(supp, NULL, BAD_CAST "description", BAD_CAST desc_str);
+    xmlNodeSetLang(desc, BAD_CAST "en");
+
+    return priv;
+}
+
+static int propfind_supprivset(const xmlChar *propname, xmlNsPtr ns,
+			       struct propfind_ctx *fctx, xmlNodePtr resp,
+			       xmlNodePtr *propstat,
+			       void *rock __attribute__((unused)))
+{
+    xmlNodePtr set, all, read, write;
+
+    set = add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK], ns,
+		    BAD_CAST propname, NULL, NULL);
+
+    all = add_suppriv(set, "all", NULL, 1, "Any operation");
+
+    read = add_suppriv(all, "read", NULL, 0, "Read any object");
+    add_suppriv(read, "read-current-user-privilege-set", NULL, 1,
+		"Read current user privilege set property");
+    add_suppriv(read, "read-free-busy", fctx->ns[NS_CAL], 0,
+		"Read free/busy time");
+
+    write = add_suppriv(all, "write", NULL, 0, "Write any object");
+    add_suppriv(write, "bind", NULL, 0, "Add new member to collection");
+    add_suppriv(write, "unbind", NULL, 0, "Remove member from collection");
+    add_suppriv(write, "write-properties", NULL, 0, "Write properties");
+    add_suppriv(write, "write-content", NULL, 0, "Write resource content");
+
+    add_suppriv(all, "read-acl", NULL, 0, "Read ACL");
+    add_suppriv(all, "write-acl", NULL, 0, "Write ACL");
+    add_suppriv(all, "unlock", NULL, 0, "Unlock resource");
+
+    return 0;
+}
+
+
 /* Callback to fetch DAV:current-user-principal */
 static int propfind_curprin(const xmlChar *propname, xmlNsPtr ns,
 			     struct propfind_ctx *fctx,
@@ -774,7 +822,7 @@ static const struct prop_entry prop_entries[] =
     { "group-membership", NS_DAV, 0, NULL, NULL, NULL },
     { "owner", NS_DAV, 0, NULL/*propfind_owner*/, NULL, NULL },
     { "group", NS_DAV, 0, NULL, NULL, NULL },
-    { "supported-privilege-set", NS_DAV, 0, NULL, NULL, NULL },
+    { "supported-privilege-set", NS_DAV, 0, propfind_supprivset, NULL, NULL },
     { "current-user-principal", NS_DAV, 0, propfind_curprin, NULL, NULL },
     { "current-user-privilege-set", NS_DAV, 0, NULL, NULL, NULL },
     { "acl", NS_DAV, 0, NULL, NULL, NULL },
