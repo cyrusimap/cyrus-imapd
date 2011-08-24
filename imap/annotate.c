@@ -1446,7 +1446,7 @@ static void annotation_get_specialuse(annotate_state_t *state,
     if (state->mbentry->specialuse)
 	buf_appendcstr(&value, state->mbentry->specialuse);
 
-    output_entryatt(state, entry->name, "", &value);
+    output_entryatt(state, entry->name, state->userid, &value);
     buf_free(&value);
 }
 
