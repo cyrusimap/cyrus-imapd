@@ -150,7 +150,7 @@ static xmlNodePtr add_suppriv(xmlNodePtr root, const char *priv_name,
     desc = xmlNewChild(supp, NULL, BAD_CAST "description", BAD_CAST desc_str);
     xmlNodeSetLang(desc, BAD_CAST "en");
 
-    return priv;
+    return supp;
 }
 
 
@@ -516,10 +516,10 @@ static int propfind_supprivset(const xmlChar *propname, xmlNsPtr ns,
 
 /* Callback to fetch DAV:current-user-principal */
 static int propfind_curprin(const xmlChar *propname, xmlNsPtr ns,
-			     struct propfind_ctx *fctx,
-			     xmlNodePtr resp,
-			     xmlNodePtr *propstat,
-			     void *rock __attribute__((unused)))
+			    struct propfind_ctx *fctx,
+			    xmlNodePtr resp,
+			    xmlNodePtr *propstat,
+			    void *rock __attribute__((unused)))
 {
     xmlNodePtr node;
     char uri[MAX_MAILBOX_PATH+1];
@@ -541,10 +541,10 @@ static int propfind_curprin(const xmlChar *propname, xmlNsPtr ns,
 
 /* Callback to fetch DAV:principal-collection-set */
 static int propfind_princolset(const xmlChar *propname, xmlNsPtr ns,
-			     struct propfind_ctx *fctx,
-			     xmlNodePtr resp,
-			     xmlNodePtr *propstat,
-			     void *rock __attribute__((unused)))
+			       struct propfind_ctx *fctx  __attribute__((unused)),
+			       xmlNodePtr resp,
+			       xmlNodePtr *propstat,
+			       void *rock __attribute__((unused)))
 {
     xmlNodePtr node;
     char uri[MAX_MAILBOX_PATH+1];
