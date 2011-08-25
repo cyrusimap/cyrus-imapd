@@ -482,33 +482,44 @@ static int propfind_supprivset(const xmlChar *propname, xmlNsPtr ns,
 			       xmlNodePtr *propstat,
 			       void *rock __attribute__((unused)))
 {
-    xmlNodePtr set, all, read, write, admin;
+    xmlNodePtr set, all, agg, write;
 
     set = add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK], ns,
 		    BAD_CAST propname, NULL, NULL);
 
-    all = add_suppriv(set, "all", NULL, 1, "Any operation");
+    all = add_suppriv(set, "all", NULL, 0, "Any operation");
 
-    read = add_suppriv(all, "read", NULL, 0, "Read any object");
-    add_suppriv(read, "read-current-user-privilege-set", NULL, 1,
-		"Read current user privilege set property");
+    agg = add_suppriv(all, "read", NULL, 0, "Read any object");
+    add_suppriv(agg, "read-current-user-privilege-set", NULL, 1,
+		"Read current user privilege set");
 
     ensure_ns(fctx->ns, NS_CAL, resp->parent, NS_URL_CAL, "C");
-    add_suppriv(read, "read-free-busy", fctx->ns[NS_CAL], 0,
+    add_suppriv(agg, "read-free-busy", fctx->ns[NS_CAL], 0,
 		"Read free/busy time");
 
     write = add_suppriv(all, "write", NULL, 0, "Write any object");
-    add_suppriv(write, "bind", NULL, 0, "Add new member to collection");
-    add_suppriv(write, "unbind", NULL, 0, "Remove member from collection");
-    add_suppriv(write, "write-properties", NULL, 0, "Write properties");
     add_suppriv(write, "write-content", NULL, 0, "Write resource content");
+    add_suppriv(write, "write-properties", NULL, 0, "Write properties");
 
+    agg = add_suppriv(write, "bind", NULL, 0, "Add new member to collection");
     ensure_ns(fctx->ns, NS_CYRUS, resp->parent, NS_URL_CYRUS, "CY");
-    admin = add_suppriv(all, "admin", fctx->ns[NS_CYRUS], 0,
+    add_suppriv(agg, "make-collection", fctx->ns[NS_CYRUS], 0,
+		"Make new collection");
+    add_suppriv(agg, "add-resource", fctx->ns[NS_CYRUS], 0,
+		"Add new resource");
+
+    agg = add_suppriv(write, "unbind", NULL, 0,
+			 "Remove member from collection");
+    add_suppriv(agg, "remove-collection", fctx->ns[NS_CYRUS], 0,
+		"Remove collection");
+    add_suppriv(agg, "remove-resource", fctx->ns[NS_CYRUS], 0,
+		"Remove resource");
+
+    agg = add_suppriv(all, "admin", fctx->ns[NS_CYRUS], 0,
 			"Perform administrative operations");
-    add_suppriv(admin, "read-acl", NULL, 1, "Read ACL");
-    add_suppriv(admin, "write-acl", NULL, 1, "Write ACL");
-    add_suppriv(admin, "unlock", NULL, 1, "Unlock resource");
+    add_suppriv(agg, "read-acl", NULL, 1, "Read ACL");
+    add_suppriv(agg, "write-acl", NULL, 1, "Write ACL");
+    add_suppriv(agg, "unlock", NULL, 1, "Unlock resource");
 
     return 0;
 }
