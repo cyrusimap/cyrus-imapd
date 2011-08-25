@@ -51,62 +51,19 @@ use Cassandane::Config;
 sub new
 {
     my $class = shift;
-    return $class->SUPER::new({ instance => 0 }, @_);
+    return $class->SUPER::new({ replica => 1 }, @_);
 }
 
 sub set_up
 {
     my ($self) = @_;
     $self->SUPER::set_up();
-
-    # TODO: push replicated-pair guff into Cassandane::Cyrus::TestCase
-    my ($master, $replica, $master_store, $replica_store) =
-	Cassandane::Instance->start_replicated_pair();
-    $self->{master} = $master;
-    $self->{master_store} = $master_store;
-    $self->{replica} = $replica;
-    $self->{replica_store} = $replica_store;
 }
 
 sub tear_down
 {
     my ($self) = @_;
-
-    if (defined $self->{master_store})
-    {
-	$self->{master_store}->disconnect();
-	$self->{master_store} = undef;
-    }
-
-    if (defined $self->{replica_store})
-    {
-	$self->{replica_store}->disconnect();
-	$self->{replica_store} = undef;
-    }
-
-    if (defined $self->{master})
-    {
-	$self->{master}->stop();
-	$self->{master} = undef;
-    }
-
-    if (defined $self->{replica})
-    {
-	$self->{replica}->stop();
-	$self->{replica} = undef;
-    }
-
     $self->SUPER::tear_down();
-}
-
-sub run_replication
-{
-    my ($self) = @_;
-
-    Cassandane::Instance->run_replication($self->{master},
-					  $self->{replica},
-					  $self->{master_store},
-					  $self->{replica_store});
 }
 
 #

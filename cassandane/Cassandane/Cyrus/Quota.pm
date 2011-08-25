@@ -438,19 +438,15 @@ sub test_prefix_mboxexists
 		  "usage of subdir (1: $origplus[1], 2: $nextplus[1])");
 }
 
+# Magic: the word 'replication' in the name enables a replica
 sub test_replication_storage
 {
     my ($self) = @_;
 
     xlog "testing replication of STORAGE quota";
 
-    xlog "set up a master and replica pair";
-    # we need to do everything as admin, so set up the default
-    # username for new stores to be 'admin'
-    my ($master, $replica, $master_store, $replica_store) =
-	Cassandane::Instance->start_replicated_pair(username => 'admin');
-    my $mastertalk = $master_store->get_client();
-    my $replicatalk = $replica_store->get_client();
+    my $mastertalk = $self->{master_adminstore}->get_client();
+    my $replicatalk = $self->{replica_adminstore}->get_client();
 
     my $folder = "user.cassandane";
     my @res;
@@ -468,10 +464,9 @@ sub test_replication_storage
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
 
     xlog "run replication";
-    Cassandane::Instance->run_replication($master, $replica,
-					  $master_store, $replica_store);
-    $mastertalk = $master_store->get_client();
-    $replicatalk = $replica_store->get_client();
+    $self->run_replication();
+    $mastertalk = $self->{master_adminstore}->get_client();
+    $replicatalk = $self->{replica_adminstore}->get_client();
 
     xlog "check that the new quota is at both ends";
     @res = $mastertalk->getquota($folder);
@@ -486,10 +481,9 @@ sub test_replication_storage
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
 
     xlog "run replication";
-    Cassandane::Instance->run_replication($master, $replica,
-					  $master_store, $replica_store);
-    $mastertalk = $master_store->get_client();
-    $replicatalk = $replica_store->get_client();
+    $self->run_replication();
+    $mastertalk = $self->{master_adminstore}->get_client();
+    $replicatalk = $self->{replica_adminstore}->get_client();
 
     xlog "check that the new quota is at both ends";
     @res = $mastertalk->getquota($folder);
@@ -504,10 +498,9 @@ sub test_replication_storage
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
 
     xlog "run replication";
-    Cassandane::Instance->run_replication($master, $replica,
-					  $master_store, $replica_store);
-    $mastertalk = $master_store->get_client();
-    $replicatalk = $replica_store->get_client();
+    $self->run_replication();
+    $mastertalk = $self->{master_adminstore}->get_client();
+    $replicatalk = $self->{replica_adminstore}->get_client();
 
     xlog "check that the new quota is at both ends";
     @res = $mastertalk->getquota($folder);
@@ -518,21 +511,16 @@ sub test_replication_storage
     $self->assert_deep_equals([], \@res);
 }
 
+# Magic: the word 'replication' in the name enables a replica
 sub test_replication_annotstorage
 {
     my ($self) = @_;
 
     xlog "testing replication of X-ANNOTATION-STORAGE quota";
 
-    xlog "set up a master and replica pair";
-    # we need to do everything as admin, so set up the default
-    # username for new stores to be 'admin'
     my $folder = "user.cassandane";
-    my ($master, $replica, $master_store, $replica_store) =
-	Cassandane::Instance->start_replicated_pair(username => 'admin',
-						    folder => $folder);
-    my $mastertalk = $master_store->get_client();
-    my $replicatalk = $replica_store->get_client();
+    my $mastertalk = $self->{master_adminstore}->get_client();
+    my $replicatalk = $self->{replica_adminstore}->get_client();
 
     my @res;
 
@@ -549,10 +537,9 @@ sub test_replication_annotstorage
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
 
     xlog "run replication";
-    Cassandane::Instance->run_replication($master, $replica,
-					  $master_store, $replica_store);
-    $mastertalk = $master_store->get_client();
-    $replicatalk = $replica_store->get_client();
+    $self->run_replication();
+    $mastertalk = $self->{master_adminstore}->get_client();
+    $replicatalk = $self->{replica_adminstore}->get_client();
 
     xlog "check that the new quota is at both ends";
     @res = $mastertalk->getquota($folder);
@@ -567,10 +554,9 @@ sub test_replication_annotstorage
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
 
     xlog "run replication";
-    Cassandane::Instance->run_replication($master, $replica,
-					  $master_store, $replica_store);
-    $mastertalk = $master_store->get_client();
-    $replicatalk = $replica_store->get_client();
+    $self->run_replication();
+    $mastertalk = $self->{master_adminstore}->get_client();
+    $replicatalk = $self->{replica_adminstore}->get_client();
 
     xlog "check that the new quota is at both ends";
     @res = $mastertalk->getquota($folder);
@@ -582,7 +568,7 @@ sub test_replication_annotstorage
 
     xlog "add an annotation to use some quota";
     my $data = make_random_data(13);
-    my $msg = $self->make_message("Message A", store => $master_store);
+    my $msg = $self->make_message("Message A", store => $self->{master_store});
     $mastertalk->store('1', 'annotation', ['/comment', ['value.priv', { Quote => $data }]]);
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
 ## This doesn't work because per-mailbox annots are not
@@ -592,10 +578,9 @@ sub test_replication_annotstorage
     my $used = int(length($data)/1024);
 
     xlog "run replication";
-    Cassandane::Instance->run_replication($master, $replica,
-					  $master_store, $replica_store);
-    $mastertalk = $master_store->get_client();
-    $replicatalk = $replica_store->get_client();
+    $self->run_replication();
+    $mastertalk = $self->{master_adminstore}->get_client();
+    $replicatalk = $self->{replica_adminstore}->get_client();
 
     xlog "check the annotation used some quota on the master";
     @res = $mastertalk->getquota($folder);
@@ -616,10 +601,9 @@ sub test_replication_annotstorage
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
 
     xlog "run replication";
-    Cassandane::Instance->run_replication($master, $replica,
-					  $master_store, $replica_store);
-    $mastertalk = $master_store->get_client();
-    $replicatalk = $replica_store->get_client();
+    $self->run_replication();
+    $mastertalk = $self->{master_adminstore}->get_client();
+    $replicatalk = $self->{replica_adminstore}->get_client();
 
     xlog "check that the new quota is at both ends";
     @res = $mastertalk->getquota($folder);
@@ -686,19 +670,15 @@ sub XXtest_getset_multiple
     $self->assert_deep_equals([], \@res);
 }
 
+# Magic: the word 'replication' in the name enables a replica
 sub XXtest_replication_multiple
 {
     my ($self) = @_;
 
     xlog "testing replication of multiple quotas";
 
-    xlog "set up a master and replica pair";
-    # we need to do everything as admin, so set up the default
-    # username for new stores to be 'admin'
-    my ($master, $replica, $master_store, $replica_store) =
-	Cassandane::Instance->start_replicated_pair(username => 'admin');
-    my $mastertalk = $master_store->get_client();
-    my $replicatalk = $replica_store->get_client();
+    my $mastertalk = $self->{master_adminstore}->get_client();
+    my $replicatalk = $self->{replica_adminstore}->get_client();
 
     my $folder = "user.cassandane";
     my @res;
@@ -716,10 +696,9 @@ sub XXtest_replication_multiple
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
 
     xlog "run replication";
-    Cassandane::Instance->run_replication($master, $replica,
-					  $master_store, $replica_store);
-    $mastertalk = $master_store->get_client();
-    $replicatalk = $replica_store->get_client();
+    $self->run_replication();
+    $mastertalk = $self->{master_adminstore}->get_client();
+    $replicatalk = $self->{replica_adminstore}->get_client();
 
     xlog "check that the new quota is at both ends";
     @res = $mastertalk->getquota($folder);
@@ -734,10 +713,9 @@ sub XXtest_replication_multiple
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
 
     xlog "run replication";
-    Cassandane::Instance->run_replication($master, $replica,
-					  $master_store, $replica_store);
-    $mastertalk = $master_store->get_client();
-    $replicatalk = $replica_store->get_client();
+    $self->run_replication();
+    $mastertalk = $self->{master_adminstore}->get_client();
+    $replicatalk = $self->{replica_adminstore}->get_client();
 
     xlog "check that the new quota is at both ends";
     @res = $mastertalk->getquota($folder);
@@ -752,10 +730,9 @@ sub XXtest_replication_multiple
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
 
     xlog "run replication";
-    Cassandane::Instance->run_replication($master, $replica,
-					  $master_store, $replica_store);
-    $mastertalk = $master_store->get_client();
-    $replicatalk = $replica_store->get_client();
+    $self->run_replication();
+    $mastertalk = $self->{master_adminstore}->get_client();
+    $replicatalk = $self->{replica_adminstore}->get_client();
 
     xlog "check that the new quota is at both ends";
     @res = $mastertalk->getquota($folder);

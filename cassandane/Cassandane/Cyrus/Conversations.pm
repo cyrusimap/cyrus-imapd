@@ -234,10 +234,10 @@ sub test_replication_clash
     my ($self) = @_;
     my %exp;
 
-    xlog "set up a master and replica pair";
-    my $conf = $self->{instance}->{config};
-    my ($master, $replica, $master_store, $replica_store) =
-	Cassandane::Instance->start_replicated_pair(config => $conf);
+    xlog "need a master and replica pair";
+    $self->assert_not_null($self->{replica});
+    my $master_store = $self->{master_store};
+    my $replica_store = $self->{replica_store};
 
     $master_store->set_fetch_attributes('uid', 'cid');
     $replica_store->set_fetch_attributes('uid', 'cid');
@@ -254,24 +254,21 @@ sub test_replication_clash
     xlog "generating message A";
     $exp{A} = $self->make_message("Message A", store => $master_store);
     $exp{A}->set_attributes(uid => 1, cid => calc_cid($exp{A}));
-    Cassandane::Instance->run_replication($master, $replica,
-					  $master_store, $replica_store);
+    $self->run_replication();
     $self->check_messages(\%exp, store => $master_store);
     $self->check_messages(\%exp, store => $replica_store);
 
     xlog "generating message B";
     $exp{B} = $self->make_message("Message B", store => $master_store);
     $exp{B}->set_attributes(uid => 2, cid => calc_cid($exp{B}));
-    Cassandane::Instance->run_replication($master, $replica,
-					  $master_store, $replica_store);
+    $self->run_replication();
     $self->check_messages(\%exp, store => $master_store);
     $self->check_messages(\%exp, store => $replica_store);
 
     xlog "generating message C";
     $exp{C} = $self->make_message("Message C", store => $master_store);
     $exp{C}->set_attributes(uid => 3, cid => calc_cid($exp{C}));
-    Cassandane::Instance->run_replication($master, $replica,
-					  $master_store, $replica_store);
+    $self->run_replication();
     my $actual = $self->check_messages(\%exp, store => $master_store);
     $self->check_messages(\%exp, store => $replica_store);
 
@@ -301,8 +298,7 @@ sub test_replication_clash
 	}
     }
 
-    Cassandane::Instance->run_replication($master, $replica,
-					  $master_store, $replica_store);
+    $self->run_replication();
     $self->check_messages(\%exp, store => $master_store);
     $self->check_messages(\%exp, store => $replica_store);
 }

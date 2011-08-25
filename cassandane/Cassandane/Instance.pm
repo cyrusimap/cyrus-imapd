@@ -148,6 +148,15 @@ sub add_service
     return $srv;
 }
 
+sub add_services
+{
+    my ($self, @names) = @_;
+    foreach my $n (@names)
+    {
+	$self->add_service($n);
+    }
+}
+
 sub get_service
 {
     my ($self, $name) = @_;
@@ -700,102 +709,5 @@ sub describe
 	$srv->describe();
     }
 }
-
-sub start_replicated_pair
-{
-    my ($class, %params) = @_;
-
-    my $port = Cassandane::Service->alloc_port();
-    my $conf = $params{config} || Cassandane::Config->default();
-    $conf = $conf->clone();
-    $conf->set(
-	# sync_client will find the port in the config
-	sync_port => $port,
-	# tell sync_client how to login
-	sync_authname => 'repluser',
-	sync_password => 'replpass',
-	sync_realm => 'internal',
-	sasl_mech_list => 'PLAIN',
-	# Ensure sync_server gives sync_client enough privileges
-	admins => 'admin repluser',
-    );
-
-    my $master = Cassandane::Instance->new(config => $conf);
-
-    my $replica = Cassandane::Instance->new(config => $conf,
-					    setup_mailbox => 0);
-    $replica->add_service('sync', port => $port);
-
-    my $services = $params{'services'} || [ 'imap' ];
-    my $has_imap = 0;
-    foreach my $s (@$services)
-    {
-	$master->add_service($s);
-	$replica->add_service($s);
-	$has_imap = 1 if ($s eq 'imap');
-    }
-
-    $master->start();
-    $replica->start();
-
-    # Run the replication engine to create the user mailbox
-    # in the replica.  Doing it this way avoids issues with
-    # mismatched mailbox uniqueids.
-    $class->run_replication($master, $replica);
-
-    my %store_params;
-    $store_params{username} = $params{username}
-	if defined $params{username};
-    $store_params{folder} = $params{folder}
-	if defined $params{folder};
-
-    my $master_store;
-    $master_store = $master->get_service('imap')->create_store(%store_params)
-	if $has_imap;
-
-    my $replica_store;
-    $replica_store = $replica->get_service('imap')->create_store(%store_params)
-	if $has_imap;
-
-    return ($master, $replica, $master_store, $replica_store);
-}
-
-sub run_replication
-{
-    my ($class, $master, $replica, $master_store, $replica_store) = @_;
-
-    xlog "running replication";
-
-    # Disconnect during replication to ensure no imapd
-    # is locking the mailbox, which gives us a spurious
-    # error which is ignored in real world scenarios.
-    $master_store->disconnect() if defined $master_store;
-    $replica_store->disconnect() if defined $replica_store;
-
-    my $params =
-	$replica->get_service('sync')->store_params();
-
-    # TODO: need a timeout!!
-
-    $master->run_utility('sync_client',
-	'-v',			# verbose
-	'-v',			# even more verbose
-	'-S', $params->{host},	# hostname to connect to
-	'-u', 'cassandane',	# replicate the Cassandane user
-	);
-
-
-    if (defined $master_store)
-    {
-	$master_store->_connect();
-	$master_store->_select();
-    }
-    if (defined $replica_store)
-    {
-	$replica_store->_connect();
-	$replica_store->_select();
-    }
-}
-
 
 1;

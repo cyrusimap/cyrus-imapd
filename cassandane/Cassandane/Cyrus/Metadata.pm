@@ -773,9 +773,10 @@ sub test_msg_replication_new_mas
     xlog "testing replication of message scope annotations";
     xlog "case new_mas: new message appears, on master only";
 
-    xlog "set up a master and replica pair";
-    my ($master, $replica, $master_store, $replica_store) =
-	Cassandane::Instance->start_replicated_pair();
+    xlog "need a master and replica pair";
+    $self->assert_not_null($self->{replica});
+    my $master_store = $self->{master_store};
+    my $replica_store = $self->{replica_store};
 
     my $entry = '/comment';
     my $attrib = 'value.priv';
@@ -797,8 +798,7 @@ sub test_msg_replication_new_mas
     xlog "Before replication, message is missing from the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
-    Cassandane::Instance->run_replication($master, $replica,
-					  $master_store, $replica_store);
+    $self->run_replication();
 
     $replica_exp{A} = $master_exp{A}->clone();
     xlog "After replication, message is still present on the master";
@@ -814,9 +814,10 @@ sub test_msg_replication_new_rep
     xlog "testing replication of message scope annotations";
     xlog "case new_rep: new message appears, on replica only";
 
-    xlog "set up a master and replica pair";
-    my ($master, $replica, $master_store, $replica_store) =
-	Cassandane::Instance->start_replicated_pair();
+    xlog "need a master and replica pair";
+    $self->assert_not_null($self->{replica});
+    my $master_store = $self->{master_store};
+    my $replica_store = $self->{replica_store};
 
     my $entry = '/comment';
     my $attrib = 'value.priv';
@@ -838,8 +839,7 @@ sub test_msg_replication_new_rep
     xlog "Before replication, message is present on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
-    Cassandane::Instance->run_replication($master, $replica,
-					  $master_store, $replica_store);
+    $self->run_replication();
 
     $master_exp{A} = $replica_exp{A}->clone();
     xlog "After replication, message is now present on the master";
@@ -856,9 +856,10 @@ sub test_msg_replication_new_bot_mse_gul
     xlog "case new_bot_mse_gul: new messages appear, on both master " .
 	 "and replica, with equal modseqs, lower GUID on master.";
 
-    xlog "set up a master and replica pair";
-    my ($master, $replica, $master_store, $replica_store) =
-	Cassandane::Instance->start_replicated_pair();
+    xlog "need a master and replica pair";
+    $self->assert_not_null($self->{replica});
+    my $master_store = $self->{master_store};
+    my $replica_store = $self->{replica_store};
 
     my $entry = '/comment';
     my $attrib = 'value.priv';
@@ -884,8 +885,7 @@ sub test_msg_replication_new_bot_mse_gul
     xlog "Before replication, only message B is present on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
-    Cassandane::Instance->run_replication($master, $replica,
-					  $master_store, $replica_store);
+    $self->run_replication();
 
     xlog "After replication, both messages are now present and renumbered on the master";
     $master_exp{B} = $replica_exp{B}->clone();
@@ -907,9 +907,10 @@ sub test_msg_replication_new_bot_mse_guh
     xlog "case new_bot_mse_guh: new messages appear, on both master " .
 	 "and replica, with equal modseqs, higher GUID on master.";
 
-    xlog "set up a master and replica pair";
-    my ($master, $replica, $master_store, $replica_store) =
-	Cassandane::Instance->start_replicated_pair();
+    xlog "need a master and replica pair";
+    $self->assert_not_null($self->{replica});
+    my $master_store = $self->{master_store};
+    my $replica_store = $self->{replica_store};
 
     my $entry = '/comment';
     my $attrib = 'value.priv';
@@ -935,8 +936,7 @@ sub test_msg_replication_new_bot_mse_guh
     xlog "Before replication, only message B is present on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
-    Cassandane::Instance->run_replication($master, $replica,
-					  $master_store, $replica_store);
+    $self->run_replication();
 
     xlog "After replication, both messages are now present and renumbered on the master";
     $master_exp{B} = $replica_exp{B}->clone();
@@ -958,9 +958,10 @@ sub test_msg_replication_mod_mas
     xlog "testing replication of message scope annotations";
     xlog "case mod_mas: message is modified, on master only";
 
-    xlog "set up a master and replica pair";
-    my ($master, $replica, $master_store, $replica_store) =
-	Cassandane::Instance->start_replicated_pair();
+    xlog "need a master and replica pair";
+    $self->assert_not_null($self->{replica});
+    my $master_store = $self->{master_store};
+    my $replica_store = $self->{replica_store};
 
     my $entry = '/comment';
     my $attrib = 'value.priv';
@@ -981,8 +982,7 @@ sub test_msg_replication_mod_mas
     $self->check_messages(\%replica_exp, store => $replica_store);
 
     xlog "Replicate the message";
-    Cassandane::Instance->run_replication($master, $replica,
-					  $master_store, $replica_store);
+    $self->run_replication();
 
     $replica_exp{A} = $master_exp{A}->clone();
     xlog "After first replication, message is still present on the master";
@@ -999,8 +999,7 @@ sub test_msg_replication_mod_mas
     xlog "Before second replication, the message annotation is missing on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
-    Cassandane::Instance->run_replication($master, $replica,
-					  $master_store, $replica_store);
+    $self->run_replication();
 
     $replica_exp{A} = $master_exp{A}->clone();
     xlog "After second replication, the message annotation is still present on the master";
@@ -1017,9 +1016,10 @@ sub test_msg_replication_mod_rep
     xlog "testing replication of message scope annotations";
     xlog "case mod_rep: message is modified, on replica only";
 
-    xlog "set up a master and replica pair";
-    my ($master, $replica, $master_store, $replica_store) =
-	Cassandane::Instance->start_replicated_pair();
+    xlog "need a master and replica pair";
+    $self->assert_not_null($self->{replica});
+    my $master_store = $self->{master_store};
+    my $replica_store = $self->{replica_store};
 
     my $entry = '/comment';
     my $attrib = 'value.priv';
@@ -1040,8 +1040,7 @@ sub test_msg_replication_mod_rep
     $self->check_messages(\%replica_exp, store => $replica_store);
 
     xlog "Replicate the message";
-    Cassandane::Instance->run_replication($master, $replica,
-					  $master_store, $replica_store);
+    $self->run_replication();
 
     $replica_exp{A} = $master_exp{A}->clone();
     xlog "After first replication, message is still present on the master";
@@ -1058,8 +1057,7 @@ sub test_msg_replication_mod_rep
     xlog "Before second replication, the message annotation is missing on the replica";
     $self->check_messages(\%replica_exp, store => $replica_store);
 
-    Cassandane::Instance->run_replication($master, $replica,
-					  $master_store, $replica_store);
+    $self->run_replication();
 
     $replica_exp{A} = $master_exp{A}->clone();
     xlog "After second replication, the message annotation is still present on the master";
@@ -1076,9 +1074,10 @@ sub test_msg_replication_mod_bot_msl
     xlog "case mod_bot_msl: message is modified, on both ends, " .
 	 "modseq lower on master";
 
-    xlog "set up a master and replica pair";
-    my ($master, $replica, $master_store, $replica_store) =
-	Cassandane::Instance->start_replicated_pair();
+    xlog "need a master and replica pair";
+    $self->assert_not_null($self->{replica});
+    my $master_store = $self->{master_store};
+    my $replica_store = $self->{replica_store};
 
     my $entry = '/comment';
     my $attrib = 'value.priv';
@@ -1101,8 +1100,7 @@ sub test_msg_replication_mod_bot_msl
     $self->check_messages(\%replica_exp, store => $replica_store);
 
     xlog "Replicate the message";
-    Cassandane::Instance->run_replication($master, $replica,
-					  $master_store, $replica_store);
+    $self->run_replication();
 
     $replica_exp{A} = $master_exp{A}->clone();
     xlog "After first replication, message is still present on the master";
@@ -1123,8 +1121,7 @@ sub test_msg_replication_mod_bot_msl
     $self->check_messages(\%replica_exp, store => $replica_store);
 
     xlog "Replicate the annotation change";
-    Cassandane::Instance->run_replication($master, $replica,
-					  $master_store, $replica_store);
+    $self->run_replication();
 
     $master_exp{A}->set_annotation($entry, $attrib, $valueB2);
     xlog "After second replication, the message annotation is updated on the master";
@@ -1141,9 +1138,10 @@ sub test_msg_replication_mod_bot_msh
     xlog "case mod_bot_msh: message is modified, on both ends, " .
 	 "modseq higher on master";
 
-    xlog "set up a master and replica pair";
-    my ($master, $replica, $master_store, $replica_store) =
-	Cassandane::Instance->start_replicated_pair();
+    xlog "need a master and replica pair";
+    $self->assert_not_null($self->{replica});
+    my $master_store = $self->{master_store};
+    my $replica_store = $self->{replica_store};
 
     my $entry = '/comment';
     my $attrib = 'value.priv';
@@ -1166,8 +1164,7 @@ sub test_msg_replication_mod_bot_msh
     $self->check_messages(\%replica_exp, store => $replica_store);
 
     xlog "Replicate the message";
-    Cassandane::Instance->run_replication($master, $replica,
-					  $master_store, $replica_store);
+    $self->run_replication();
 
     $replica_exp{A} = $master_exp{A}->clone();
     xlog "After first replication, message is still present on the master";
@@ -1188,8 +1185,7 @@ sub test_msg_replication_mod_bot_msh
     $self->check_messages(\%replica_exp, store => $replica_store);
 
     xlog "Replicate the annotation change";
-    Cassandane::Instance->run_replication($master, $replica,
-					  $master_store, $replica_store);
+    $self->run_replication();
 
     $replica_exp{A}->set_annotation($entry, $attrib, $valueA2);
     xlog "After second replication, the message annotation is still present on the master";
@@ -1205,9 +1201,10 @@ sub test_msg_replication_exp_mas
     xlog "testing replication of message scope annotations";
     xlog "case exp_mas: message is expunged, on master only";
 
-    xlog "set up a master and replica pair";
-    my ($master, $replica, $master_store, $replica_store) =
-	Cassandane::Instance->start_replicated_pair();
+    xlog "need a master and replica pair";
+    $self->assert_not_null($self->{replica});
+    my $master_store = $self->{master_store};
+    my $replica_store = $self->{replica_store};
 
     my $entry = '/comment';
     my $attrib = 'value.priv';
@@ -1230,8 +1227,7 @@ sub test_msg_replication_exp_mas
     $self->check_messages(\%replica_exp, store => $replica_store);
 
     xlog "Replicate the message";
-    Cassandane::Instance->run_replication($master, $replica,
-					  $master_store, $replica_store);
+    $self->run_replication();
 
     $replica_exp{A} = $master_exp{A}->clone();
     xlog "After first replication, message is still present on the master";
@@ -1252,8 +1248,7 @@ sub test_msg_replication_exp_mas
     $self->check_messages(\%replica_exp, store => $replica_store);
 
     xlog "Replicate the expunge";
-    Cassandane::Instance->run_replication($master, $replica,
-					  $master_store, $replica_store);
+    $self->run_replication();
 
     delete $replica_exp{A};
     xlog "After second replication, the message is still missing on the master";
@@ -1269,9 +1264,10 @@ sub test_msg_replication_exp_rep
     xlog "testing replication of message scope annotations";
     xlog "case exp_rep: message is expunged, on replica only";
 
-    xlog "set up a master and replica pair";
-    my ($master, $replica, $master_store, $replica_store) =
-	Cassandane::Instance->start_replicated_pair();
+    xlog "need a master and replica pair";
+    $self->assert_not_null($self->{replica});
+    my $master_store = $self->{master_store};
+    my $replica_store = $self->{replica_store};
 
     my $entry = '/comment';
     my $attrib = 'value.priv';
@@ -1294,8 +1290,7 @@ sub test_msg_replication_exp_rep
     $self->check_messages(\%replica_exp, store => $replica_store);
 
     xlog "Replicate the message";
-    Cassandane::Instance->run_replication($master, $replica,
-					  $master_store, $replica_store);
+    $self->run_replication();
 
     $replica_exp{A} = $master_exp{A}->clone();
     xlog "After first replication, message is still present on the master";
@@ -1316,8 +1311,7 @@ sub test_msg_replication_exp_rep
     $self->check_messages(\%replica_exp, store => $replica_store);
 
     xlog "Replicate the expunge";
-    Cassandane::Instance->run_replication($master, $replica,
-					  $master_store, $replica_store);
+    $self->run_replication();
 
     delete $master_exp{A};
     xlog "After second replication, the message is now missing on the master";
@@ -1333,9 +1327,10 @@ sub test_msg_replication_exp_bot
     xlog "testing replication of message scope annotations";
     xlog "case exp_bot: message is expunged, on both ends";
 
-    xlog "set up a master and replica pair";
-    my ($master, $replica, $master_store, $replica_store) =
-	Cassandane::Instance->start_replicated_pair();
+    xlog "need a master and replica pair";
+    $self->assert_not_null($self->{replica});
+    my $master_store = $self->{master_store};
+    my $replica_store = $self->{replica_store};
 
     my $entry = '/comment';
     my $attrib = 'value.priv';
@@ -1358,8 +1353,7 @@ sub test_msg_replication_exp_bot
     $self->check_messages(\%replica_exp, store => $replica_store);
 
     xlog "Replicate the message";
-    Cassandane::Instance->run_replication($master, $replica,
-					  $master_store, $replica_store);
+    $self->run_replication();
 
     $replica_exp{A} = $master_exp{A}->clone();
     xlog "After first replication, message is still present on the master";
@@ -1387,8 +1381,7 @@ sub test_msg_replication_exp_bot
     $self->check_messages(\%replica_exp, store => $replica_store);
 
     xlog "Replicate the expunge";
-    Cassandane::Instance->run_replication($master, $replica,
-					  $master_store, $replica_store);
+    $self->run_replication();
 
     xlog "After second replication, the message is still missing on the master";
     $self->check_messages(\%master_exp, store => $master_store);
@@ -1800,9 +1793,10 @@ sub test_mbox_replication_new_mas
     xlog "testing replication of mailbox scope annotations";
     xlog "case new_mas: new message appears, on master only";
 
-    xlog "set up a master and replica pair";
-    my ($master, $replica, $master_store, $replica_store) =
-	Cassandane::Instance->start_replicated_pair();
+    xlog "need a master and replica pair";
+    $self->assert_not_null($self->{replica});
+    my $master_store = $self->{master_store};
+    my $replica_store = $self->{replica_store};
     my $master_talk = $master_store->get_client();
     my $replica_talk = $replica_store->get_client();
 
@@ -1826,8 +1820,7 @@ sub test_mbox_replication_new_mas
     $self->assert_deep_equals({ $folder => { $entry => undef } }, $res);
 
     xlog "run replication";
-    Cassandane::Instance->run_replication($master, $replica,
-					  $master_store, $replica_store);
+    $self->run_replication();
     $master_talk = $master_store->get_client();
     $replica_talk = $replica_store->get_client();
 

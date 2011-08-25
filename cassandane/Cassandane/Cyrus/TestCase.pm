@@ -48,21 +48,34 @@ use Cassandane::Generator;
 use Cassandane::MessageStoreFactory;
 use Cassandane::Instance;
 
+my @stores = qw(store adminstore replica_store replica_adminstore);
+
 sub new
 {
     my ($class, $params, @args) = @_;
+    my $port;
 
     my $want = {
 	instance => 1,
-	imapd => 1,
+	replica => 0,
+	services => [ 'imap' ],
 	store => 1,
 	adminstore => 0,
 	gen => 1,
     };
+    # This is a downright dirty hack; if the test name contains the word
+    # 'replication' then enable the replica unless requested otherwise
+    if (defined $args[0] && grep { m/^replication$/ } split(/_/,$args[0]))
+    {
+	xlog "magically enabling replica because test name contains 'replication'";
+	$want->{replica} = 1;
+    }
     map {
 	$want->{$_} = $params->{$_}
 	    if defined $params->{$_};
     } keys %$want;
+    $want->{folder} = $params->{folder}
+	if defined $params->{folder};
 
     my %instance_params;
     foreach my $p (qw(config))
@@ -76,9 +89,35 @@ sub new
 
     if ($want->{instance})
     {
+	if ($want->{replica})
+	{
+	    $port = Cassandane::Service->alloc_port();
+	    my $conf = $instance_params{config} || Cassandane::Config->default();
+	    $conf = $conf->clone();
+	    $conf->set(
+		# sync_client will find the port in the config
+		sync_port => $port,
+		# tell sync_client how to login
+		sync_authname => 'repluser',
+		sync_password => 'replpass',
+		sync_realm => 'internal',
+		sasl_mech_list => 'PLAIN',
+		# Ensure sync_server gives sync_client enough privileges
+		admins => 'admin repluser',
+	    );
+	    $instance_params{config} = $conf;
+	}
+
 	$self->{instance} = Cassandane::Instance->new(%instance_params);
-	$self->{instance}->add_service('imap')
-	    if ($want->{imapd});
+	$self->{instance}->add_services(@{$want->{services}});
+
+	if ($want->{replica})
+	{
+	    $self->{replica} = Cassandane::Instance->new(%instance_params,
+						         setup_mailbox => 0);
+	    $self->{replica}->add_service('sync', port => $port);
+	    $self->{replica}->add_services(@{$want->{services}});
+	}
     }
 
     if ($want->{gen})
@@ -93,37 +132,88 @@ sub set_up
 {
     my ($self) = @_;
 
-    my $inst = $self->{instance};
-    return unless defined $inst;
-    $inst->start();
+    $self->{instance}->start()
+	if (defined $self->{instance});
+    $self->{replica}->start()
+	if (defined $self->{replica});
 
-    my $svc = $inst->get_service('imap');
-    return unless defined $svc;
+    $self->{store} = undef;
+    $self->{adminstore} = undef;
+    $self->{master_store} = undef;
+    $self->{master_adminstore} = undef;
+    $self->{replica_store} = undef;
+    $self->{replica_adminstore} = undef;
 
-    $self->{store} = $svc->create_store()
-	if ($self->{_want}->{store});
-    $self->{adminstore} = $svc->create_store(username => 'admin')
-	if ($self->{_want}->{adminstore});
+    # Run the replication engine to create the user mailbox
+    # in the replica.  Doing it this way avoids issues with
+    # mismatched mailbox uniqueids.
+    $self->run_replication()
+	if (defined $self->{replica});
+
+    my %store_params;
+    $store_params{folder} = $self->{_want}->{folder}
+	if defined $self->{_want}->{folder};
+
+    my %adminstore_params = ( %store_params, username => 'admin' );
+    # The admin stores need an extra parameter to force their
+    # default folder because otherwise they will default to 'INBOX'
+    # which refers to user.admin not user.cassandane
+    $adminstore_params{folder} ||= 'INBOX';
+    $adminstore_params{folder} = 'user.cassandane'
+	if ($adminstore_params{folder} =~ m/^inbox$/i);
+
+    if (defined $self->{instance})
+    {
+	my $svc = $self->{instance}->get_service('imap');
+	if (defined $svc)
+	{
+	    $self->{store} = $svc->create_store(%store_params)
+		if ($self->{_want}->{store});
+	    $self->{adminstore} = $svc->create_store(%adminstore_params)
+		if ($self->{_want}->{adminstore});
+	}
+    }
+    if (defined $self->{replica})
+    {
+	# aliases for the master's store(s)
+	$self->{master_store} = $self->{store};
+	$self->{master_adminstore} = $self->{adminstore};
+
+	my $svc = $self->{replica}->get_service('imap');
+	if (defined $svc)
+	{
+	    $self->{replica_store} = $svc->create_store(%store_params)
+		if ($self->{_want}->{store});
+	    $self->{replica_adminstore} = $svc->create_store(%adminstore_params)
+		if ($self->{_want}->{adminstore});
+	}
+    }
 }
 
 sub tear_down
 {
     my ($self) = @_;
 
-    if (defined $self->{store})
+    foreach my $s (@stores)
     {
-	$self->{store}->disconnect();
-	$self->{store} = undef;
+	if (defined $self->{$s})
+	{
+	    $self->{$s}->disconnect();
+	    $self->{$s} = undef;
+	}
     }
-    if (defined $self->{adminstore})
-    {
-	$self->{adminstore}->disconnect();
-	$self->{adminstore} = undef;
-    }
+    $self->{master_store} = undef;
+    $self->{master_adminstore} = undef;
+
     if (defined $self->{instance})
     {
 	$self->{instance}->stop();
 	$self->{instance} = undef;
+    }
+    if (defined $self->{replica})
+    {
+	$self->{replica}->stop();
+	$self->{replica} = undef;
     }
 }
 
@@ -237,5 +327,44 @@ sub check_messages
 
     return $actual;
 }
+
+sub run_replication
+{
+    my ($self) = @_;
+
+    xlog "running replication";
+
+    # Disconnect during replication to ensure no imapd
+    # is locking the mailbox, which gives us a spurious
+    # error which is ignored in real world scenarios.
+    foreach my $s (@stores)
+    {
+	$self->{$s}->disconnect()
+	    if defined $self->{$s};
+    }
+
+    my $params =
+	$self->{replica}->get_service('sync')->store_params();
+
+    # TODO: need a timeout!!
+
+    $self->{instance}->run_utility('sync_client',
+	'-v',			# verbose
+	'-v',			# even more verbose
+	'-S', $params->{host},	# hostname to connect to
+	'-u', 'cassandane',	# replicate the Cassandane user
+	);
+
+
+    foreach my $s (@stores)
+    {
+	if (defined $self->{$s})
+	{
+	    $self->{$s}->_connect();
+	    $self->{$s}->_select();
+	}
+    }
+}
+
 
 1;
