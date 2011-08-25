@@ -1,0 +1,37 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
+<!ENTITY % BOOK_ENTITIES SYSTEM "Administrator_Guide.ent">
+%BOOK_ENTITIES;
+]>
+<chapter id="chap-Administrator_Guide-Setting_Up_Replication">
+    <title>Setting Up Replication</title>
+    <para>
+        para
+    </para>
+    <section id="sect-Administrator_Guide-Setting_Up_Replication-Initially_Synchronizing_Mailboxes">
+        <title>Initially Synchronizing Mailboxes</title>
+        <para>
+
+<screen>
+[root@cyrus-master ~]# /usr/lib/cyrus-imapd/sync_client -S cyrus-replica.example.org -v -u john.doe@example.org
+USER john^doe@example.org</screen>
+
+        </para>
+        <para>
+            <itemizedlist>
+                <listitem>
+                    <para>
+                        unix hierarchy separator
+                    </para>
+
+                </listitem>
+
+            </itemizedlist>
+
+        </para>
+
+    </section>
+
+
+</chapter>
+
