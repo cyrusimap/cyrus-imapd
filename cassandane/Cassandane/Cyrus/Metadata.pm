@@ -150,7 +150,6 @@ sub test_shared
 	    '/shared/vendor/cmu/cyrus-imapd/expire' => undef,
 	    '/shared/vendor/cmu/cyrus-imapd/duplicatedeliver' => 'false',
 	    '/shared/thread' => undef,
-	    '/shared/specialuse' => undef,
 	    '/shared/sort' => undef,
 	    '/shared/comment' => undef,
 	    '/shared/checkperiod' => undef,
@@ -475,6 +474,7 @@ sub test_private
 	    '/private/comment' => undef,
 	    '/private/checkperiod' => undef,
 	    '/private/check' => undef,
+	    '/private/specialuse' => undef,
 	}, $r);
 
     $imaptalk->setmetadata('INBOX', "/private/comment", "This is a comment");
