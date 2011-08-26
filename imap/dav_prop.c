@@ -664,7 +664,10 @@ static int propfind_princolset(const xmlChar *propname, xmlNsPtr ns,
     node = add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK], ns,
 		    BAD_CAST propname, NULL, NULL);
 
-    snprintf(uri, sizeof(uri), "/principals/");
+    snprintf(uri, sizeof(uri), "/principals/user/");
+    xmlNewChild(node, NULL, BAD_CAST "href", BAD_CAST uri);
+
+    snprintf(uri, sizeof(uri), "/principals/group/");
     xmlNewChild(node, NULL, BAD_CAST "href", BAD_CAST uri);
 
     return 0;
