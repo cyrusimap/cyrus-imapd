@@ -67,7 +67,9 @@ struct propfind_entry_list;
 struct propfind_ctx {
     struct request_target_t *req_tgt;	/* parsed request target URL */
     unsigned depth;	    		/* 0 = root, 1 = calendar, 2 = resrc */
-    const char *userid;			/* authenticated user */
+    const char *userid;			/* userid client has logged in as */
+    int userisadmin;			/* is userid an admin */
+    struct auth_state *authstate;	/* authorization state for userid */
     struct mailbox *mailbox;		/* mailbox correspondng to collection */
     struct quota quota;			/* quota info for collection */
     struct index_record *record;	/* cyrus.index record for resource */
@@ -121,10 +123,11 @@ struct propfind_entry_list {
 /* Index into propstat array */
 enum {
     PROPSTAT_OK = 0,
+    PROPSTAT_UNAUTH,
     PROPSTAT_FORBID,
     PROPSTAT_NOTFOUND
 };
-#define NUM_PROPSTAT 3
+#define NUM_PROPSTAT 4
 
 
 /* Parse the requested properties and create a linked list of fetch callbacks */

@@ -140,7 +140,7 @@ sasl_conn_t *httpd_saslconn; /* the sasl connection context */
 int httpd_timeout;
 char *httpd_userid = 0;
 struct auth_state *httpd_authstate = 0;
-static int httpd_userisadmin = 0;
+int httpd_userisadmin = 0;
 static int httpd_userisproxyadmin = 0;
 struct sockaddr_storage httpd_localaddr, httpd_remoteaddr;
 int httpd_haveaddr = 0;
@@ -2694,6 +2694,8 @@ static int meth_propfind(struct transaction_t *txn)
     fctx.req_tgt = &txn->req_tgt;
     fctx.depth = depth;
     fctx.userid = httpd_userid;
+    fctx.userisadmin = httpd_userisadmin;
+    fctx.authstate = httpd_authstate;
     fctx.mailbox = NULL;
     fctx.record = NULL;
     fctx.elist = elist;
@@ -3218,6 +3220,8 @@ static int meth_report(struct transaction_t *txn)
     fctx.req_tgt = &txn->req_tgt;
     fctx.depth = depth;
     fctx.userid = httpd_userid;
+    fctx.userisadmin = httpd_userisadmin;
+    fctx.authstate = httpd_authstate;
     fctx.mailbox = mailbox;
     fctx.record = NULL;
     fctx.elist = elist;

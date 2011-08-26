@@ -46,12 +46,34 @@
 
 #include "mailbox.h"
 
+/* Supported HTTP version */
 #define HTTP_VERSION	"HTTP/1.1"
+
+/* XML namespace URIs */
 #define NS_URL_DAV	"DAV:"
 #define NS_URL_CAL	"urn:ietf:params:xml:ns:caldav"
 #define NS_URL_CS	"http://calendarserver.org/ns/"
 #define NS_URL_APPLE	"http://apple.com/ns/ical/"
 #define NS_URL_CYRUS	"http://cyrusimap.org/ns/"
+
+/* WebDAV (RFC 3744) privileges */
+#define DACL_READ	ACL_READ
+#define DACL_WRITECONT	ACL_INSERT
+#define DACL_WRITEPROPS	ACL_WRITE
+#define DACL_MKCOL	ACL_CREATE
+#define DACL_ADDRSRC	ACL_POST
+#define DACL_BIND	(DACL_MKCOL|DACL_ADDRSRC)
+#define DACL_RMCOL	ACL_DELETEMBOX
+#define DACL_RMRSRC	ACL_DELETEMSG
+#define DACL_UNBIND	(DACL_RMCOL|DACL_RMRSRC)
+#define DACL_WRITE	(DACL_WRITECONT|DACL_WRITEPROPS|DACL_BIND|DACL_UNBIND)
+#define DACL_ADMIN	ACL_ADMIN
+
+/* CalDAV (RFC 4791) privileges */
+#define DACL_READFB	ACL_USER9  /* implicit if user has DACL_READ */
+
+/* ALL: all privileges */
+#define DACL_ALL	(DACL_READ|DACL_WRITE|DACL_ADMIN)
 
 /* Path namespaces */
 enum {
