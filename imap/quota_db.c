@@ -231,7 +231,13 @@ int quota_check(const struct quota *q,
 void quota_use(struct quota *q,
 	       enum quota_resource res, quota_t delta)
 {
-    q->useds[res] += delta;
+    /* prevent underflow */
+    if ((delta < 0) && ((uquota_t)-delta > q->useds[res])) {
+	q->useds[res] = 0;
+    }
+    else {
+	q->useds[res] += delta;
+    }
 }
 
 struct quota_foreach_t {
@@ -359,10 +365,7 @@ int quota_update_used(const char *quotaroot, enum quota_resource res, quota_t di
     r = quota_read(&q, &tid, 1);
 
     if (!r) {
-	quota_t used = (quota_t)q.useds[res] + diff;
-	if (used < 0)
-	    used = 0;	    /* prevent underflow */
-	q.useds[res] = used;
+	quota_use(&q, res, diff);
 	r = quota_write(&q, &tid);
     }
 
