@@ -117,6 +117,7 @@ TESTSOURCES = \
 	parse.c \
 	prot.c \
 	ptrarray.c \
+	quota.c \
 	@SIEVE_TESTSOURCES@ \
 	spool.c \
 	squat.c \
