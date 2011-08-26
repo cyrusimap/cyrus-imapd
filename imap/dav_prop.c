@@ -553,6 +553,74 @@ static int propfind_curprin(const xmlChar *propname, xmlNsPtr ns,
 }
 
 
+static int add_privs(int rights,
+		     xmlNodePtr parent, xmlNodePtr root, xmlNsPtr *ns)
+{
+    xmlNodePtr priv;
+
+    if ((rights & DACL_ALL) == DACL_ALL) {
+	priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
+	xmlNewChild(priv, NULL, BAD_CAST "all", NULL);
+    }
+    if (rights & DACL_READ) {
+	priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
+	xmlNewChild(priv, NULL, BAD_CAST "read", NULL);
+    }
+    if (rights & (DACL_READ|DACL_READFB)) {
+	priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
+	ensure_ns(ns, NS_CAL, root, NS_URL_CAL, "C");
+	xmlNewChild(priv, ns[NS_CAL], BAD_CAST  "read-free-busy", NULL);
+    }
+    if ((rights & DACL_WRITE) == DACL_WRITE) {
+	priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
+	xmlNewChild(priv, NULL, BAD_CAST "write", NULL);
+    }
+    if (rights & DACL_WRITECONT) {
+	priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
+	xmlNewChild(priv, NULL, BAD_CAST "write-content", NULL);
+    }
+    if (rights & DACL_WRITEPROPS) {
+	priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
+	xmlNewChild(priv, NULL, BAD_CAST "write-properties", NULL);
+    }
+
+    if (rights & (DACL_BIND|DACL_UNBIND|DACL_ADMIN)) {
+	ensure_ns(ns, NS_CYRUS, root, NS_URL_CYRUS, "CY");
+    }
+
+    if ((rights & DACL_BIND) == DACL_BIND) {
+	priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
+	xmlNewChild(priv, NULL, BAD_CAST "bind", NULL);
+    }
+    if (rights & DACL_MKCOL) {
+	priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
+	xmlNewChild(priv, ns[NS_CYRUS], BAD_CAST "make-collection", NULL);
+    }
+    if (rights & DACL_ADDRSRC) {
+	priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
+	xmlNewChild(priv, ns[NS_CYRUS], BAD_CAST "add-resource", NULL);
+    }
+    if ((rights & DACL_UNBIND) == DACL_UNBIND) {
+	priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
+	xmlNewChild(priv, NULL, BAD_CAST "unbind", NULL);
+    }
+    if (rights & DACL_RMCOL) {
+	priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
+	xmlNewChild(priv, ns[NS_CYRUS], BAD_CAST "remove-collection", NULL);
+    }
+    if (rights & DACL_RMRSRC) {
+	priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
+	xmlNewChild(priv, ns[NS_CYRUS], BAD_CAST "remove-resource", NULL);
+    }
+    if (rights & DACL_ADMIN) {
+	priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
+	xmlNewChild(priv, ns[NS_CYRUS], BAD_CAST  "admin", NULL);
+    }
+
+    return 0;
+}
+
+
 /* Callback to fetch DAV:current-user-privilege-set */
 static int propfind_curprivset(const xmlChar *propname, xmlNsPtr ns,
 			       struct propfind_ctx *fctx,
@@ -573,7 +641,7 @@ static int propfind_curprivset(const xmlChar *propname, xmlNsPtr ns,
 		 BAD_CAST propname, NULL, NULL);
     }
     else {
-	xmlNodePtr set, priv;
+	xmlNodePtr set;
 
 	/* Add in implicit rights */
 	if (fctx->userisadmin) {
@@ -587,64 +655,83 @@ static int propfind_curprivset(const xmlChar *propname, xmlNsPtr ns,
 	set = add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK], ns,
 		       BAD_CAST propname, NULL, NULL);
 
-	if ((rights & DACL_ALL) == DACL_ALL) {
-	    priv = xmlNewChild(set, NULL, BAD_CAST "privilege", NULL);
-	    xmlNewChild(priv, NULL, BAD_CAST "all", NULL);
-	}
-	if (rights & DACL_READ) {
-	    priv = xmlNewChild(set, NULL, BAD_CAST "privilege", NULL);
-	    xmlNewChild(priv, NULL, BAD_CAST "read", NULL);
-	}
-	if (rights & (DACL_READ|DACL_READFB)) {
-	    priv = xmlNewChild(set, NULL, BAD_CAST "privilege", NULL);
-	    ensure_ns(fctx->ns, NS_CAL, resp->parent, NS_URL_CAL, "C");
-	    xmlNewChild(priv, fctx->ns[NS_CAL], BAD_CAST  "read-free-busy", NULL);
-	}
-	if ((rights & DACL_WRITE) == DACL_WRITE) {
-	    priv = xmlNewChild(set, NULL, BAD_CAST "privilege", NULL);
-	    xmlNewChild(priv, NULL, BAD_CAST "write", NULL);
-	}
-	if (rights & DACL_WRITECONT) {
-	    priv = xmlNewChild(set, NULL, BAD_CAST "privilege", NULL);
-	    xmlNewChild(priv, NULL, BAD_CAST "write-content", NULL);
-	}
-	if (rights & DACL_WRITEPROPS) {
-	    priv = xmlNewChild(set, NULL, BAD_CAST "privilege", NULL);
-	    xmlNewChild(priv, NULL, BAD_CAST "write-properties", NULL);
+	add_privs(rights, set, resp->parent, fctx->ns);
+    }
+
+    return 0;
+}
+
+
+/* Callback to fetch DAV:acl */
+static int propfind_acl(const xmlChar *propname, xmlNsPtr ns,
+			struct propfind_ctx *fctx,
+			xmlNodePtr resp,
+			xmlNodePtr *propstat,
+			void *rock __attribute__((unused)))
+{
+    int rights;
+
+    if (!fctx->mailbox) {
+	add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND], ns,
+		 BAD_CAST propname, NULL, NULL);
+    }
+    else if (!((rights =
+		cyrus_acl_myrights(fctx->authstate, fctx->mailbox->acl))
+	       & DACL_ADMIN)) {
+	add_prop(HTTP_UNAUTHORIZED, resp, &propstat[PROPSTAT_UNAUTH], ns,
+		 BAD_CAST propname, NULL, NULL);
+    }
+    else {
+	xmlNodePtr acl;
+	char *aclstr, *userid;
+
+	/* Start the acl XML response */
+	acl = add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK], ns,
+		       BAD_CAST propname, NULL, NULL);
+
+	/* Parse the ACL string (userid/rights pairs) */
+	userid = aclstr = xstrdup(fctx->mailbox->acl);
+
+	while (userid) {
+	    char *rightstr, *nextid;
+	    xmlNodePtr ace, prin, privs;
+	    char uri[MAX_MAILBOX_PATH+1];
+	    int deny = 0;
+
+	    rightstr = strchr(userid, '\t');
+	    if (!rightstr) break;
+	    *rightstr++ = '\0';
+	
+	    nextid = strchr(rightstr, '\t');
+	    if (!nextid) break;
+	    *nextid++ = '\0';
+
+	    /* Check for negative rights */
+	    /* XXX  Does this correspond to DAV:deny? */
+	    if (*userid == '-') {
+		deny = 1;
+		userid++;
+	    }
+
+	    rights = cyrus_acl_strtomask(rightstr);
+
+	    /* XXX  Need to check for groups and special principals */
+
+	    /* Add ace XML element for this userid/right pair */
+	    ace = xmlNewChild(acl, NULL, BAD_CAST "ace", NULL);
+
+	    prin = xmlNewChild(ace, NULL, BAD_CAST "principal", NULL);
+	    snprintf(uri, sizeof(uri), "/principals/user/%s/", userid);
+	    xmlNewChild(prin, NULL, BAD_CAST "href", BAD_CAST uri);
+
+	    privs = xmlNewChild(ace, NULL,
+				BAD_CAST (deny ? "deny" : "grant"), NULL);
+	    add_privs(rights, privs, resp->parent, fctx->ns);
+
+	    userid = nextid;
 	}
 
-	if (rights & (DACL_BIND|DACL_UNBIND|DACL_ADMIN)) {
-	    ensure_ns(fctx->ns, NS_CYRUS, resp->parent, NS_URL_CYRUS, "CY");
-	}
-
-	if ((rights & DACL_BIND) == DACL_BIND) {
-	    priv = xmlNewChild(set, NULL, BAD_CAST "privilege", NULL);
-	    xmlNewChild(priv, NULL, BAD_CAST "bind", NULL);
-	}
-	if (rights & DACL_MKCOL) {
-	    priv = xmlNewChild(set, NULL, BAD_CAST "privilege", NULL);
-	    xmlNewChild(priv, fctx->ns[NS_CYRUS], BAD_CAST "make-collection", NULL);
-	}
-	if (rights & DACL_ADDRSRC) {
-	    priv = xmlNewChild(set, NULL, BAD_CAST "privilege", NULL);
-	    xmlNewChild(priv, fctx->ns[NS_CYRUS], BAD_CAST "add-resource", NULL);
-	}
-	if ((rights & DACL_UNBIND) == DACL_UNBIND) {
-	    priv = xmlNewChild(set, NULL, BAD_CAST "privilege", NULL);
-	    xmlNewChild(priv, NULL, BAD_CAST "unbind", NULL);
-	}
-	if (rights & DACL_RMCOL) {
-	    priv = xmlNewChild(set, NULL, BAD_CAST "privilege", NULL);
-	    xmlNewChild(priv, fctx->ns[NS_CYRUS], BAD_CAST "remove-collection", NULL);
-	}
-	if (rights & DACL_RMRSRC) {
-	    priv = xmlNewChild(set, NULL, BAD_CAST "privilege", NULL);
-	    xmlNewChild(priv, fctx->ns[NS_CYRUS], BAD_CAST "remove-resource", NULL);
-	}
-	if (rights & DACL_ADMIN) {
-	    priv = xmlNewChild(set, NULL, BAD_CAST "privilege", NULL);
-	    xmlNewChild(priv, fctx->ns[NS_CYRUS], BAD_CAST  "admin", NULL);
-	}
+	if (aclstr) free(aclstr);
     }
 
     return 0;
@@ -972,7 +1059,7 @@ static const struct prop_entry prop_entries[] =
     { "supported-privilege-set", NS_DAV, 0, propfind_supprivset, NULL, NULL },
     { "current-user-principal", NS_DAV, 0, propfind_curprin, NULL, NULL },
     { "current-user-privilege-set", NS_DAV, 0, propfind_curprivset, NULL, NULL },
-    { "acl", NS_DAV, 0, NULL, NULL, NULL },
+    { "acl", NS_DAV, 0, propfind_acl, NULL, NULL },
     { "acl-restrictions", NS_DAV, 0, NULL, NULL, NULL },
     { "inherited-acl-set", NS_DAV, 0, NULL, NULL, NULL },
     { "principal-collection-set", NS_DAV, 0, propfind_princolset, NULL, NULL },
