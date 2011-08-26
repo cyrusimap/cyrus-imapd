@@ -379,12 +379,26 @@ int quota_update_used(const char *quotaroot, enum quota_resource res, quota_t di
  */
 int quota_deleteroot(const char *quotaroot)
 {
-    int qrlen;
+    int r;
 
-    qrlen = strlen(quotaroot);
-    if (!qrlen) return IMAP_QUOTAROOT_NONEXISTENT;
+    if (!quotaroot || !*quotaroot)
+	return IMAP_QUOTAROOT_NONEXISTENT;
 
-    return QDB->delete(qdb, quotaroot, qrlen, NULL, 0);
+    r = QDB->delete(qdb, quotaroot, strlen(quotaroot), NULL, 0);
+
+    switch (r) {
+    case CYRUSDB_OK:
+    case CYRUSDB_NOTFOUND:  /* shouldn't happen anyway */
+	return 0;
+
+    case CYRUSDB_AGAIN:
+	return IMAP_AGAIN;
+
+    default:
+	syslog(LOG_ERR, "DBERROR: error deleting quotaroot %s: %s",
+	       quotaroot, cyrusdb_strerror(r));
+	return IMAP_IOERROR;
+    }
 }
 
 /*
