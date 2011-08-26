@@ -575,7 +575,6 @@ static int propfind_curprivset(const xmlChar *propname, xmlNsPtr ns,
     else {
 	xmlNodePtr set, priv;
 
-	rights = cyrus_acl_myrights(fctx->authstate, fctx->mailbox->acl);
 	/* Add in implicit rights */
 	if (fctx->userisadmin) {
 	    rights |= DACL_ADMIN;
@@ -584,6 +583,7 @@ static int propfind_curprivset(const xmlChar *propname, xmlNsPtr ns,
 	    rights |= config_implicitrights;
 	}
 
+	/* Build the rest of the XML response */
 	set = add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK], ns,
 		       BAD_CAST propname, NULL, NULL);
 
