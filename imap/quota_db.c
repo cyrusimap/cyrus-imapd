@@ -317,7 +317,7 @@ int quota_write(struct quota *quota, struct txn **tid)
     int res;
     struct buf buf = BUF_INITIALIZER;
 
-    if (!quota->root) return 0;
+    if (!quota->root) return IMAP_QUOTAROOT_NONEXISTENT;
 
     qrlen = strlen(quota->root);
     if (!qrlen) return IMAP_QUOTAROOT_NONEXISTENT;
@@ -358,7 +358,7 @@ int quota_update_used(const char *quotaroot, enum quota_resource res, quota_t di
     struct txn *tid = NULL;
     int r = 0;
 
-    if (!*quotaroot)
+    if (!quotaroot || !*quotaroot)
 	return IMAP_QUOTAROOT_NONEXISTENT;
 
     q.root = quotaroot;
