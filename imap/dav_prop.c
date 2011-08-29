@@ -694,7 +694,7 @@ static int propfind_acl(const xmlChar *propname, xmlNsPtr ns,
 
 	while (userid) {
 	    char *rightstr, *nextid;
-	    xmlNodePtr ace, prin, privs;
+	    xmlNodePtr ace, node;
 	    char uri[MAX_MAILBOX_PATH+1];
 	    int deny = 0;
 
@@ -720,13 +720,21 @@ static int propfind_acl(const xmlChar *propname, xmlNsPtr ns,
 	    /* Add ace XML element for this userid/right pair */
 	    ace = xmlNewChild(acl, NULL, BAD_CAST "ace", NULL);
 
-	    prin = xmlNewChild(ace, NULL, BAD_CAST "principal", NULL);
+	    node = xmlNewChild(ace, NULL, BAD_CAST "principal", NULL);
 	    snprintf(uri, sizeof(uri), "/principals/user/%s/", userid);
-	    xmlNewChild(prin, NULL, BAD_CAST "href", BAD_CAST uri);
+	    xmlNewChild(node, NULL, BAD_CAST "href", BAD_CAST uri);
 
-	    privs = xmlNewChild(ace, NULL,
-				BAD_CAST (deny ? "deny" : "grant"), NULL);
-	    add_privs(rights, privs, resp->parent, fctx->ns);
+	    node = xmlNewChild(ace, NULL,
+			       BAD_CAST (deny ? "deny" : "grant"), NULL);
+	    add_privs(rights, node, resp->parent, fctx->ns);
+
+	    if (fctx->req_tgt->resource) {
+		node = xmlNewChild(ace, NULL, BAD_CAST "inherited", NULL);
+		snprintf(uri, sizeof(uri), "%.*s",
+			 fctx->req_tgt->resource - fctx->req_tgt->path,
+		    fctx->req_tgt->path);
+		xmlNewChild(node, NULL, BAD_CAST "href", BAD_CAST uri);
+	    }
 
 	    userid = nextid;
 	}
