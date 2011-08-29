@@ -72,12 +72,13 @@ char* squat_encode_32(char* s, SquatInt32 v) {
   return s + 4;
 }
 
-SquatInt64 squat_decode_64(char const* s) {
-  unsigned char* v = (unsigned char*)s;
-  return ((SquatInt64)v[0] << 56) | ((SquatInt64)v[1] << 48)
-       | ((SquatInt64)v[2] << 40) | ((SquatInt64)v[3] << 32)
-       | (((SquatInt32)v[4] << 24) | ((SquatInt32)v[5] << 16)
-       | ((SquatInt32)v[6] << 8) | (SquatInt32)v[7]);
+SquatInt64 squat_decode_64(char const *s)
+{
+    unsigned char* v = (unsigned char*)s;
+    return ((SquatInt64)v[0] << 56) | ((SquatInt64)v[1] << 48) |
+	   ((SquatInt64)v[2] << 40) | ((SquatInt64)v[3] << 32) |
+	   ((SquatInt64)v[4] << 24) | ((SquatInt64)v[5] << 16) |
+	   ((SquatInt64)v[6] << 8) | (SquatInt64)v[7];
 }
 
 char* squat_encode_64(char* s, SquatInt64 v) {
