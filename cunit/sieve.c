@@ -409,7 +409,7 @@ static int notify(void *ac, void *ic, void *sc __attribute__((unused)),
 }
 
 static int mysieve_error(int lineno, const char *msg,
-			 void *ic __attribute__((unused)),
+			 void *ic,
 		         void *sc __attribute__((unused)))
 {
     sieve_test_context_t *ctx = (sieve_test_context_t *)ic;
@@ -423,7 +423,7 @@ static int mysieve_error(int lineno, const char *msg,
 }
 
 static int mysieve_execute_error(const char *msg,
-				 void *ic __attribute__((unused)),
+				 void *ic,
 			         void *sc __attribute__((unused)),
 			         void *mc __attribute__((unused)))
 {
