@@ -119,6 +119,7 @@ TESTSOURCES = \
 	ptrarray.c \
 	@SIEVE_TESTSOURCES@ \
 	spool.c \
+	squat.c \
 	strarray.c \
 	strconcat.c \
 	times.c \
