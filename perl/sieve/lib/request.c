@@ -547,9 +547,7 @@ static int writefile(mystring_t *data, char *name, char **errstrp)
 
   char *scrname;
 
-  scrname=malloc(strlen(name)+10);
-  strcpy(scrname, name);
-  strcat(scrname, ".script");
+  scrname = strconcat(name, ".script", (char *)NULL);
 
   stream=fopen(scrname,"w");
 
