@@ -715,14 +715,26 @@ static int propfind_acl(const xmlChar *propname, xmlNsPtr ns,
 
 	    rights = cyrus_acl_strtomask(rightstr);
 
-	    /* XXX  Need to check for groups and special principals */
-
 	    /* Add ace XML element for this userid/right pair */
 	    ace = xmlNewChild(acl, NULL, BAD_CAST "ace", NULL);
 
+	    /* XXX  Need to check for groups.
+	     * Is there any IMAP equivalent to "unauthenticated"?
+	     * Is there any DAV equivalent to "anonymous"?
+	     */
+
 	    node = xmlNewChild(ace, NULL, BAD_CAST "principal", NULL);
-	    snprintf(uri, sizeof(uri), "/principals/user/%s/", userid);
-	    xmlNewChild(node, NULL, BAD_CAST "href", BAD_CAST uri);
+	    if (!strcmp(userid, fctx->userid))
+		xmlNewChild(node, NULL, BAD_CAST "self", NULL);
+	    else if ((strlen(userid) == fctx->req_tgt->userlen) &&
+		     !strncmp(userid, fctx->req_tgt->user, fctx->req_tgt->userlen))
+		xmlNewChild(node, NULL, BAD_CAST "owner", NULL);
+	    else if (!strcmp(userid, "anyone"))
+		xmlNewChild(node, NULL, BAD_CAST "authenticated", NULL);
+	    else {
+		snprintf(uri, sizeof(uri), "/principals/user/%s/", userid);
+		xmlNewChild(node, NULL, BAD_CAST "href", BAD_CAST uri);
+	    }
 
 	    node = xmlNewChild(ace, NULL,
 			       BAD_CAST (deny ? "deny" : "grant"), NULL);
