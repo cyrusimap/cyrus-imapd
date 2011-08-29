@@ -447,21 +447,18 @@ static int propfind_reportset(const xmlChar *propname, xmlNsPtr ns,
 }
 
 
-/* Callback to fetch DAV:owner */
-static int propfind_owner(const xmlChar *propname, xmlNsPtr ns,
-			  struct propfind_ctx *fctx, xmlNodePtr resp,
-			  xmlNodePtr *propstat,
-			  void *rock __attribute__((unused)))
+/* Callback to fetch DAV:principalurl */
+static int propfind_principalurl(const xmlChar *propname, xmlNsPtr ns,
+				 struct propfind_ctx *fctx, xmlNodePtr resp,
+				 xmlNodePtr *propstat,
+				 void *rock __attribute__((unused)))
 {
     xmlNodePtr node;
     char uri[MAX_MAILBOX_PATH+1] = "";
 
-    if (((propname[0] == 'o') &&
-	 (fctx->req_tgt->namespace == URL_NS_PRINCIPAL)) ||
-	((propname[0] == 'p') &&
-	 (fctx->req_tgt->namespace != URL_NS_PRINCIPAL))) {
-	node = add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND], ns,
-			BAD_CAST propname, NULL, NULL);
+    if (fctx->req_tgt->namespace != URL_NS_PRINCIPAL) {
+	add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND], ns,
+		 BAD_CAST propname, NULL, NULL);
     }
     else {
 	node = add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK], ns,
@@ -473,6 +470,30 @@ static int propfind_owner(const xmlChar *propname, xmlNsPtr ns,
 	}
 
 	xmlNewChild(node, NULL, BAD_CAST "href", BAD_CAST uri);
+    }
+
+    return 0;
+}
+
+
+/* Callback to fetch DAV:owner */
+static int propfind_owner(const xmlChar *propname, xmlNsPtr ns,
+			  struct propfind_ctx *fctx, xmlNodePtr resp,
+			  xmlNodePtr *propstat,
+			  void *rock __attribute__((unused)))
+{
+    xmlNodePtr node;
+    char uri[MAX_MAILBOX_PATH+1] = "";
+
+    node = add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK], ns,
+		    BAD_CAST propname, NULL, NULL);
+
+    if ((fctx->req_tgt->namespace == URL_NS_CALENDAR) &&
+	fctx->req_tgt->user) {
+	    snprintf(uri, sizeof(uri), "/principals/user/%.*s/",
+		     fctx->req_tgt->userlen, fctx->req_tgt->user);
+
+	    xmlNewChild(node, NULL, BAD_CAST "href", BAD_CAST uri);
     }
 
     return 0;
@@ -1071,10 +1092,10 @@ static const struct prop_entry prop_entries[] =
 
     /* WebDAV ACL (RFC 3744) properties */
     { "alternate-URI-set", NS_DAV, 0, NULL, NULL, NULL },
-    { "principal-URL", NS_DAV, 0, propfind_owner, NULL, NULL },
+    { "principal-URL", NS_DAV, 0, propfind_principalurl, NULL, NULL },
     { "group-member-set", NS_DAV, 0, NULL, NULL, NULL },
     { "group-membership", NS_DAV, 0, NULL, NULL, NULL },
-    { "owner", NS_DAV, 0, NULL/*propfind_owner*/, NULL, NULL },
+    { "owner", NS_DAV, 0, propfind_owner, NULL, NULL },
     { "group", NS_DAV, 0, NULL, NULL, NULL },
     { "supported-privilege-set", NS_DAV, 0, propfind_supprivset, NULL, NULL },
     { "current-user-principal", NS_DAV, 0, propfind_curprin, NULL, NULL },
