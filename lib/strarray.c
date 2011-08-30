@@ -89,7 +89,7 @@ void strarray_free(strarray_t *sa)
 static void ensure_alloc(strarray_t *sa, int newalloc)
 {
     if (newalloc)
-	newalloc++;
+	newalloc++;	/* allow for the NULL terminator */
     if (newalloc <= sa->alloc)
 	return;
     newalloc = ((newalloc + QUANTUM-1) / QUANTUM) * QUANTUM;
@@ -98,6 +98,17 @@ static void ensure_alloc(strarray_t *sa, int newalloc)
     sa->alloc = newalloc;
 }
 
+/*
+ * Normalise the index passed by a caller, to a value in the range
+ * 0..count-1, or < 0 for invalid, assuming the function we're
+ * performing does not have the side effect of expanding the array.
+ * Note that doesn't necessarily mean the array is read-only, e.g.
+ * strarray_remove() modifies the array but does not expand the array if
+ * given an index outside the array's current bounds.  In Perl style,
+ * negative indexes whose absolute value is less than the length of the
+ * array are treated as counting back from the end, e.g.  idx=-1 means
+ * the final element.
+ */
 static inline int adjust_index_ro(const strarray_t *sa, int idx)
 {
     if (idx >= sa->count)
@@ -107,16 +118,26 @@ static inline int adjust_index_ro(const strarray_t *sa, int idx)
     return idx;
 }
 
-static inline int adjust_index_rw(strarray_t *sa, int idx, int len)
+/*
+ * Like adjust_index_ro(), with extra complication that the function
+ * we're performing will expand the array if either the adjusted index
+ * points outside the current bounds of the array, or @grow tells us
+ * that we're about to need more space in the array.
+ */
+static inline int adjust_index_rw(strarray_t *sa, int idx, int grow)
 {
     if (idx >= sa->count) {
-	ensure_alloc(sa, idx+len);
+	/* expanding the array as a side effect @idx pointing
+	 * outside the current bounds, plus perhaps @grow */
+	ensure_alloc(sa, idx+grow);
     } else if (idx < 0) {
+	/* adjust Perl-style negative indeces */
 	idx += sa->count;
-	if (idx >= 0 && len)
-	    ensure_alloc(sa, sa->count+len);
-    } else if (len) {
-	ensure_alloc(sa, sa->count+len);
+	if (idx >= 0 && grow)
+	    ensure_alloc(sa, sa->count+grow);
+    } else if (grow) {
+	/* expanding the array due to an insert or append */
+	ensure_alloc(sa, sa->count+grow);
     }
     return idx;
 }
@@ -159,20 +180,27 @@ int strarray_appendm(strarray_t *sa, char *s)
     return pos;
 }
 
+static void _strarray_set(strarray_t *sa, int idx, char *s)
+{
+    free(sa->data[idx]);
+    sa->data[idx] = s;
+    /* adjust the count if we just sparsely expanded the array */
+    if (s && idx >= sa->count)
+	sa->count = idx+1;
+}
+
 void strarray_set(strarray_t *sa, int idx, const char *s)
 {
     if ((idx = adjust_index_rw(sa, idx, 0)) < 0)
 	return;
-    free(sa->data[idx]);
-    sa->data[idx] = xstrdup(s);
+    _strarray_set(sa, idx, xstrdup(s));
 }
 
 void strarray_setm(strarray_t *sa, int idx, char *s)
 {
     if ((idx = adjust_index_rw(sa, idx, 0)) < 0)
 	return;
-    free(sa->data[idx]);
-    sa->data[idx] = s;
+    _strarray_set(sa, idx, s);
 }
 
 static inline void _strarray_insert(strarray_t *sa, int idx, char *s)

@@ -407,6 +407,34 @@ static void test_bad_index(void)
 #undef WORD2
 }
 
+/* test building a sparse array with _set() and _setm() */
+static void test_sparse_set(void)
+{
+    strarray_t sa = STRARRAY_INITIALIZER;
+#define WORD0	"lorem"
+#define WORD1	"ipsum"
+#define WORD2	"dolor"
+
+    CU_ASSERT_EQUAL(sa.count, 0);
+    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_PTR_NULL(strarray_nth(&sa, 0));
+    CU_ASSERT_PTR_NULL(strarray_nth(&sa, -1));
+
+    strarray_set(&sa, 3, WORD0);
+    CU_ASSERT_EQUAL(sa.count, 4);
+    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_PTR_NULL(strarray_nth(&sa, 0));
+    CU_ASSERT_PTR_NULL(strarray_nth(&sa, 1));
+    CU_ASSERT_PTR_NULL(strarray_nth(&sa, 2));
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 3), WORD0);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, -1), WORD0);
+
+    strarray_fini(&sa);
+#undef WORD0
+#undef WORD1
+#undef WORD2
+}
+
 static void test_join(void)
 {
     strarray_t sa = STRARRAY_INITIALIZER;
