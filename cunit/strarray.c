@@ -500,6 +500,55 @@ static void test_join(void)
 #undef WORD4
 }
 
+/* regression test for a bug discovered while reading the
+ * strarray source when triaging Coverity defects. */
+static void test_join_initial_null(void)
+{
+    strarray_t sa = STRARRAY_INITIALIZER;
+    char *s;
+#define WORD0	"lorem"
+#define WORD1	"ipsum"
+
+    CU_ASSERT_EQUAL(sa.count, 0);
+    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_PTR_NULL(strarray_nth(&sa, 0));
+    CU_ASSERT_PTR_NULL(strarray_nth(&sa, -1));
+
+    /* [0] element is NULL */
+    strarray_set(&sa, 1, WORD0);
+    strarray_set(&sa, 2, WORD1);
+    CU_ASSERT_EQUAL(sa.count, 3);
+    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_PTR_NOT_NULL(sa.data);
+    CU_ASSERT_PTR_NULL(strarray_nth(&sa, 0));
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD0);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 2), WORD1);
+
+    s = strarray_join(&sa, NULL);
+    CU_ASSERT_STRING_EQUAL(s, WORD0""WORD1);
+    free(s);
+
+    s = strarray_join(&sa, " ");
+    CU_ASSERT_STRING_EQUAL(s, WORD0" "WORD1);
+    free(s);
+
+    s = strarray_join(&sa, "-X-");
+    CU_ASSERT_STRING_EQUAL(s, WORD0"-X-"WORD1);
+    free(s);
+
+    /* check that sa is unharmed by the join */
+    CU_ASSERT_EQUAL(sa.count, 3);
+    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_PTR_NOT_NULL(sa.data);
+    CU_ASSERT_PTR_NULL(strarray_nth(&sa, 0));
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD0);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 2), WORD1);
+
+    strarray_fini(&sa);
+#undef WORD0
+#undef WORD1
+}
+
 static void test_split(void)
 {
     strarray_t *sa;

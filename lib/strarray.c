@@ -292,13 +292,14 @@ char *strarray_join(const strarray_t *sa, const char *sep)
 {
     int seplen = (sep ? strlen(sep) : 0);
     int len = 0;
-    int i;
-    int first;
+    int i;  /* array index */
+    int j;  /* index into non-sparse logical subset of the array
+	     * i.e. doesn't count NULLs */
     char *buf, *p;
 
-    for (i = 0, first = 1 ; i < sa->count ; i++, first = 0) {
+    for (i = 0, j = 0 ; i < sa->count ; i++) {
 	if (sa->data[i])
-	    len += strlen(sa->data[i]) + (first ? 0 : seplen);
+	    len += strlen(sa->data[i]) + (j++ ? seplen : 0);
     }
 
     if (!len)
@@ -306,9 +307,9 @@ char *strarray_join(const strarray_t *sa, const char *sep)
     len++;	/* room for NUL terminator */
     p = buf = xmalloc(len);
 
-    for (i = 0, first = 1 ; i < sa->count ; i++, first = 0) {
+    for (i = 0, j = 0 ; i < sa->count ; i++) {
 	if (sa->data[i]) {
-	    if (!first && sep) {
+	    if (j++ && sep) {
 		strcpy(p, sep);
 		p += strlen(p);
 	    }
