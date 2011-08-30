@@ -1183,6 +1183,8 @@ int preload_proplist(xmlNodePtr proplist, struct propfind_entry_list **list)
 int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr,
 		 xmlNodePtr *propstat)
 {
+    memset(propstat, 0, NUM_PROPSTAT * sizeof(xmlNodePtr));
+
     /* Iterate through propertyupdate children */
     for (; instr; instr = instr->next) {
 	if (instr->type == XML_ELEMENT_NODE) {

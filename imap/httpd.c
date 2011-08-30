@@ -2490,7 +2490,7 @@ static int meth_mkcol(struct transaction_t *txn)
     int ret = 0, r = 0;
     xmlDocPtr indoc = NULL, outdoc = NULL;
     xmlNodePtr root = NULL, instr = NULL;
-    xmlNodePtr propstat[NUM_PROPSTAT] = { NULL, NULL, NULL };
+    xmlNodePtr propstat[NUM_PROPSTAT];
     xmlNsPtr ns[NUM_NAMESPACE];
     char mailboxname[MAX_MAILBOX_BUFFER], *partition = NULL;
     struct proppatch_ctx pctx;
@@ -2759,7 +2759,7 @@ static int meth_proppatch(struct transaction_t *txn)
     int ret = 0, r = 0;
     xmlDocPtr indoc = NULL, outdoc = NULL;
     xmlNodePtr root, instr;
-    xmlNodePtr resp, propstat[NUM_PROPSTAT] = { NULL, NULL, NULL };
+    xmlNodePtr resp, propstat[NUM_PROPSTAT];
     xmlNsPtr ns[NUM_NAMESPACE];
     char mailboxname[MAX_MAILBOX_BUFFER];
     struct proppatch_ctx pctx;
