@@ -270,6 +270,10 @@ Blank lines and lines beginning with ``#'' are ignored.
    creating the mailbox INBOX.  The user's quota is set to the value
    if it is positive, otherwise the user has unlimited quota. */
 
+{ "autocreatequotamsg", -1, INT }
+/* When users create their own IMAP accounts by creating the mailbox INBOX,
+   their message quota is set to this value. Default value (-1) is unlimited. */
+
 { "berkeley_cachesize", 512, INT }
 /* Size (in kilobytes) of the shared memory buffer pool (cache) used
    by the berkeley environment.  The minimum allowed value is 20.  The
@@ -1075,7 +1079,12 @@ And the notification message will be available on \fIstdin\fR.
 { "quotawarnkb", 0, INT }
 /* The maximum amount of free space (in kB) at which to give a quota
    warning (if this value is 0, or if the quota is smaller than this
-   amount, than warnings are always given). */
+   amount, then warnings are always given). */
+
+{ "quotawarnmsg", 0, INT }
+/* The maximum amount of messages at which to give a quota warning
+   (if this value is 0, or if the quota is smaller than this
+   amount, then warnings are always given). */
 
 { "reject8bit", 0, SWITCH }
 /* If enabled, lmtpd rejects messages with 8-bit characters in the

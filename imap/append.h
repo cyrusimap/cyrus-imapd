@@ -100,12 +100,12 @@ struct stagemsg;
 
 extern int append_check(const char *name,
 			struct auth_state *auth_state,
-			long aclcheck, quota_t quotacheck);
+			long aclcheck, quota_t quotastorage_check, quota_t quotamessage_check);
 
 /* appendstate must be allocated by client */
 extern int append_setup(struct appendstate *as, const char *name,
 			const char *userid, struct auth_state *auth_state,
-			long aclcheck, quota_t quotacheck,
+			long aclcheck, quota_t quotastorage_check, quota_t quotamessage_check,
 			struct namespace *, int isadmin);
 
 extern int append_commit(struct appendstate *as,

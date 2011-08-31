@@ -1864,7 +1864,7 @@ bit32 mailbox_index_header_to_buf(struct index_header *i, unsigned char *buf)
 int mailbox_commit_quota(struct mailbox *mailbox)
 {
     int r;
-    quota_t qdiff;
+    quota_t quota_diff[QUOTA_NUMRESOURCES];
 
     /* not dirty */
     if (!mailbox->quota_dirty)
@@ -1872,9 +1872,12 @@ int mailbox_commit_quota(struct mailbox *mailbox)
 
     mailbox->quota_dirty = 0;
 
+    memset(quota_diff, 0, sizeof(quota_diff));
+
     /* unchanged */
-    qdiff = mailbox->i.quota_mailbox_used - mailbox->quota_previously_used;
-    if (!qdiff)
+    quota_diff[QUOTA_STORAGE] = mailbox->i.quota_mailbox_used - mailbox->quotastorage_previously_used;
+    quota_diff[QUOTA_MESSAGE] = mailbox->i.exists - mailbox->quotamessage_previously_used;
+    if (!quota_diff[QUOTA_STORAGE] && !quota_diff[QUOTA_MESSAGE])
 	return 0;
 
     /* no quota root means we don't track quota.  That's OK */
@@ -1883,13 +1886,9 @@ int mailbox_commit_quota(struct mailbox *mailbox)
 
     assert(mailbox_index_islocked(mailbox, 1));
 
-    r = quota_update_used(mailbox->quotaroot, QUOTA_STORAGE, qdiff,
-			  (mailbox->i.options & OPT_MAILBOX_QUOTA_SCANNED));
-    if (r) {
-	/* XXX - fail here?  It's tempting */
-	syslog(LOG_ERR, "LOSTQUOTA: unable to record quota file %s",
-	       mailbox->quotaroot);
-    }
+    r = quota_update_useds(mailbox->quotaroot, quota_diff,
+			   (mailbox->i.options & OPT_MAILBOX_QUOTA_SCANNED));
+    /* XXX - fail upon issue?  It's tempting */
 
     return 0;
 }
@@ -1983,7 +1982,8 @@ static void mailbox_quota_dirty(struct mailbox *mailbox)
     /* track quota use */
     if (!mailbox->quota_dirty) {
 	mailbox->quota_dirty = 1;
-	mailbox->quota_previously_used = mailbox->i.quota_mailbox_used;
+	mailbox->quotastorage_previously_used = mailbox->i.quota_mailbox_used;
+	mailbox->quotamessage_previously_used = mailbox->i.exists;
     }
 }
 
@@ -2949,6 +2949,7 @@ int mailbox_delete(struct mailbox **mailboxptr)
     /* mark the quota removed */
     mailbox_quota_dirty(mailbox);
     mailbox->i.quota_mailbox_used = 0;
+    mailbox->i.exists = 0;
 
     /* commit the changes */
     r = mailbox_commit(mailbox);
@@ -3150,6 +3151,7 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
 
 	r = mailbox_quota_check(newmailbox,
 				oldmailbox->i.quota_mailbox_used,
+				oldmailbox->i.exists,
 				/*wrlock*/1);
 	/* then we abort - no space to rename */
 	if (r)
@@ -3184,7 +3186,8 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
     /* mark the "used" back to zero, so it updates the new quota! */
     mailbox_set_quotaroot(newmailbox, newquotaroot);
     mailbox_quota_dirty(newmailbox);
-    newmailbox->quota_previously_used = 0;
+    newmailbox->quotastorage_previously_used = 0;
+    newmailbox->quotamessage_previously_used = 0;
 
     /* commit the index changes */
     r = mailbox_commit(newmailbox);
@@ -4150,7 +4153,7 @@ close:
  * Returns: 0 if allowed, or IMAP error code.
  */
 int mailbox_quota_check(struct mailbox *mailbox,
-			quota_t delta, int wrlock)
+			quota_t deltastorage, quota_t deltamessage, int wrlock)
 {
     int r;
     struct quota q;
@@ -4160,7 +4163,7 @@ int mailbox_quota_check(struct mailbox *mailbox,
      * below the quota.  As a side effect this allows our caller to pass
      * delta = -1 meaning "don't care about quota checks".
      */
-    if (delta < 0)
+    if ((deltastorage < 0) && (deltamessage < 0))
 	return 0;
 
     q.root = mailbox->quotaroot;
@@ -4171,5 +4174,8 @@ int mailbox_quota_check(struct mailbox *mailbox,
     if (r)
 	return r;
 
-    return quota_check(&q, QUOTA_STORAGE, delta);
+    r = quota_check(&q, QUOTA_STORAGE, deltastorage);
+    if (r)
+	return r;
+    return quota_check(&q, QUOTA_MESSAGE, deltamessage);
 }

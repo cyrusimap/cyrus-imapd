@@ -668,7 +668,7 @@ void reportquota(void)
     for (i = 0; i < quota_num; i++) {
 	if (quota[i].deleted) continue;
 	if (quota[i].quota.limits[QUOTA_STORAGE] > 0) {
-	    printf(" %7d " QUOTA_REPORT_FMT ,
+	    printf(" %7d %8lld" ,
 		    quota[i].quota.limits[QUOTA_STORAGE],
 		   ((quota[i].quota.useds[QUOTA_STORAGE] / quota_units[QUOTA_STORAGE])
 		   * 100) / quota[i].quota.limits[QUOTA_STORAGE]);
@@ -683,7 +683,7 @@ void reportquota(void)
 	(*quota_namespace.mboxname_toexternal)(&quota_namespace,
 					       quota[i].quota.root,
 					       "cyrus", buf);
-	printf(" " QUOTA_REPORT_FMT " %s\n",
+	printf(" %8lld %s\n",
 	       quota[i].quota.useds[QUOTA_STORAGE] / quota_units[QUOTA_STORAGE], buf);
     }
 }

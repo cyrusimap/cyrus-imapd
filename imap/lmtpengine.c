@@ -815,7 +815,7 @@ static int savemsg(struct clientdata *cd,
 static int process_recipient(char *addr, struct namespace *namespace,
 			     int ignorequota,
 			     int (*verify_user)(const char *, const char *,
-						char *, quota_t,
+						char *, quota_t, quota_t,
 						struct auth_state *),
 			     message_data_t *msg)
 {
@@ -904,7 +904,8 @@ static int process_recipient(char *addr, struct namespace *namespace,
 	ret->user = NULL;
 
     r = verify_user(ret->user, ret->domain, ret->mailbox,
-		    (quota_t) (ignorequota ? -1 : msg->size), msg->authstate);
+		    (quota_t) (ignorequota ? -1 : msg->size),
+		    ignorequota ? -1 : 1, msg->authstate);
     if (r) {
 	const char *catchall = NULL;
 	if (r == IMAP_MAILBOX_NONEXISTENT) {
@@ -912,7 +913,7 @@ static int process_recipient(char *addr, struct namespace *namespace,
 	    if (catchall) {
 		if (!verify_user(catchall, NULL, NULL,
 				ignorequota ? -1 : msg->size,
-				msg->authstate)) {
+				ignorequota ? -1 : 1, msg->authstate)) {
 		    ret->user = xstrdup(catchall);
 		} else {
 		    catchall = NULL;

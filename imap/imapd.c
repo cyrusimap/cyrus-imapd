@@ -3299,7 +3299,7 @@ void cmd_append(char *tag, char *name, const char *cur_name)
 
     /* local mailbox */
     if (!r) {
-	r = append_check(mailboxname, imapd_authstate, ACL_INSERT, totalsize);
+	r = append_check(mailboxname, imapd_authstate, ACL_INSERT, totalsize, 1);
     }
     if (r) {
 	eatline(imapd_in, ' ');
@@ -3451,7 +3451,7 @@ void cmd_append(char *tag, char *name, const char *cur_name)
     if (!r) {
 	r = append_setup(&appendstate, mailboxname, 
 			 imapd_userid, imapd_authstate, ACL_INSERT, totalsize,
-			 &imapd_namespace,
+			 stages.count, &imapd_namespace,
 			 (imapd_userisadmin || imapd_userisproxyadmin));
     }
     if (!r) {
@@ -3800,18 +3800,26 @@ void cmd_select(char *tag, char *cmd, char *name)
 	/* Warn if mailbox is close to or over quota */
 	q.root = imapd_index->mailbox->quotaroot;
 	r = quota_read(&q, NULL, 0);
-	if (!r && q.limits[QUOTA_STORAGE] >= 0 && (strcmp(q.root, lastqr) || now > nextalert)) {
- 	    /* Warn if the following possibilities occur:
- 	     * - quotawarnkb not set + quotawarn hit
+	if (!r && ((q.limits[QUOTA_STORAGE] >= 0) || (q.limits[QUOTA_MESSAGE] >= 0))
+	    && (strcmp(q.root, lastqr) || now > nextalert)) {
+	    /* Warn if the following possibilities occur:
+	     * - quotawarnkb not set + quotawarn hit
 	     * - quotawarnkb set larger than mailbox + quotawarn hit
- 	     * - quotawarnkb set + hit + quotawarn hit
- 	     */
+	     * - quotawarnkb set + hit + quotawarn hit
+	     * - quotawarnmsg not set + quotawarn hit
+	     * - quotawarnmsg set larger than mailbox + quotawarn hit
+	     * - quotawarnmsg set + hit + quotawarn hit
+	     */
+	    int overquota = 0;
  	    int warnsize = config_getint(IMAPOPT_QUOTAWARNKB);
+	    int warncount = config_getint(IMAPOPT_QUOTAWARNMSG);
+
 	    if (warnsize <= 0 || warnsize >= q.limits[QUOTA_STORAGE] ||
 		((quota_t) (q.limits[QUOTA_STORAGE] - warnsize)) * quota_units[QUOTA_STORAGE] < q.useds[QUOTA_STORAGE]) {
 		usage = ((double) q.useds[QUOTA_STORAGE] * 100.0) /
 			(double) ((quota_t) q.limits[QUOTA_STORAGE] * quota_units[QUOTA_STORAGE]);
 		if (usage >= 100.0) {
+		    overquota = 1;
 		    prot_printf(imapd_out, "* NO [ALERT] %s\r\n",
 				error_message(IMAP_NO_OVERQUOTA));
 		}
@@ -3819,10 +3827,31 @@ void cmd_select(char *tag, char *cmd, char *name)
 		    int usageint = (int) usage;
 		    prot_printf(imapd_out, "* NO [ALERT] ");
 		    prot_printf(imapd_out, error_message(IMAP_NO_CLOSEQUOTA),
-				usageint);
+				usageint, quota_names[QUOTA_STORAGE]);
 		    prot_printf(imapd_out, "\r\n");
 		}
 	    }
+
+	    if ((warncount <= 0) || (warncount >= q.limits[QUOTA_MESSAGE]) ||
+		((quota_t) (q.limits[QUOTA_MESSAGE] - warnsize)) * quota_units[QUOTA_MESSAGE] < q.useds[QUOTA_MESSAGE]) {
+		usage = ((double) q.useds[QUOTA_MESSAGE] * 100.0) /
+			(double) ((quota_t) q.limits[QUOTA_MESSAGE] * quota_units[QUOTA_MESSAGE]);
+		if (usage >= 100.0) {
+		    if (!overquota) {
+			prot_printf(imapd_out, "* NO [ALERT] %s\r\n",
+				    error_message(IMAP_NO_OVERQUOTA));
+		    }
+		    /* else: over quota already notified */
+		}
+		else if (usage > config_getint(IMAPOPT_QUOTAWARN)) {
+		    int usageint = (int) usage;
+		    prot_printf(imapd_out, "* NO [ALERT] ");
+		    prot_printf(imapd_out, error_message(IMAP_NO_CLOSEQUOTA),
+				usageint, quota_names[QUOTA_MESSAGE]);
+		    prot_printf(imapd_out, "\r\n");
+		}
+	    }
+
 	    strlcpy(lastqr, q.root, sizeof(lastqr));
 	    nextalert = now + 600; /* ALERT every 10 min regardless */
 	}
@@ -5147,7 +5176,7 @@ void cmd_create(char *tag, char *name, struct dlist *extargs, int localonly)
 {
     int r = 0;
     char mailboxname[MAX_MAILBOX_BUFFER];
-    int autocreatequota;
+    int autocreatequotastorage;
     const char *partition = NULL;
     const char *server = NULL;
 
@@ -5280,20 +5309,22 @@ void cmd_create(char *tag, char *name, struct dlist *extargs, int localonly)
 				   localonly, localonly, 0, extargs);
 
 	if (r == IMAP_PERMISSION_DENIED && !strcasecmp(name, "INBOX") &&
-	    (autocreatequota = config_getint(IMAPOPT_AUTOCREATEQUOTA))) {
+	    (autocreatequotastorage = config_getint(IMAPOPT_AUTOCREATEQUOTA))) {
 
 	    /* Auto create */
 	    r = mboxlist_createmailbox(mailboxname, 0, partition, 
 				       1, imapd_userid, imapd_authstate,
 				       0, 0, 0, extargs);
 	    
-	    if (!r && autocreatequota > 0) {
+	    int autocreatequotamessage = config_getint(IMAPOPT_AUTOCREATEQUOTAMSG);
+	    if (!r && ((autocreatequotastorage > 0) || (autocreatequotamessage > 0))) {
 		int res;
 		int newquotas[QUOTA_NUMRESOURCES];
 
 		for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++)
 		    newquotas[res] = QUOTA_UNLIMITED;
-		newquotas[QUOTA_STORAGE] = autocreatequota;
+		newquotas[QUOTA_STORAGE] = autocreatequotastorage;
+		newquotas[QUOTA_MESSAGE] = autocreatequotamessage;
 
 		(void) mboxlist_setquotas(mailboxname, newquotas, 0);
 	    }
@@ -6838,7 +6869,6 @@ void cmd_setquota(const char *tag, const char *quotaroot)
     int c;
     int force = 0;
     static struct buf arg;
-    char *p;
     int r;
     char mailboxname[MAX_MAILBOX_BUFFER];
     struct mboxlist_entry *mbentry = NULL;
@@ -6910,32 +6940,26 @@ void cmd_setquota(const char *tag, const char *quotaroot)
     for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++)
 	newquotas[res] = QUOTA_UNLIMITED;
 
-    c = getword(imapd_in, &arg);
-    if (c != ')' || arg.s[0] != '\0') {
-	for (;;) {
-	    int v = -1;
-	    if (c != ' ') goto badlist;
-	    res = quota_name_to_resource(arg.s);
-	    if (res < 0) {
-		r = IMAP_UNSUPPORTED_QUOTA;
-		goto out;
-	    }
-	    c = getword(imapd_in, &arg);
-	    if (c != ' ' && c != ')') goto badlist;
-	    if (arg.s[0] == '\0') goto badlist;
-	    /* accept "(storage -1)" as "()" to make move from unpatched cyrus possible */
-	    if (strcmp(arg.s, "-1") != 0) {
-		v = 0;
-		for (p = arg.s; *p; p++) {
-		    if (!Uisdigit(*p)) goto badlist;
-		    v = v * 10 + *p - '0';
-		    if (v < 0) goto badlist; /* overflow */
-		}
-	    }
-	    newquotas[res] = v;
-	    if (c == ')') break;
-	    c = getword(imapd_in, &arg);
+    for (;;) {
+	/* XXX - limit is actually stored in an int value */
+	int32_t limit = 0;
+
+	c = getword(imapd_in, &arg);
+	if ((c == ')') && !arg.s[0]) break;
+	if (c != ' ') goto badlist;
+	res = quota_name_to_resource(arg.s);
+	if (res < 0) {
+	    r = IMAP_UNSUPPORTED_QUOTA;
+	    goto out;
 	}
+
+	c = getsint32(imapd_in, &limit);
+	/* note: we accept >= 0 according to rfc2087,
+	 * and also -1 to fix Bug #3559 */
+	if (limit < -1) goto badlist;
+	newquotas[res] = limit;
+	if (c == ')') break;
+	else if (c != ' ') goto badlist;
     }
     c = prot_getc(imapd_in);
     if (c == '\r') c = prot_getc(imapd_in);
@@ -9669,6 +9693,8 @@ static int xfer_setquotaroot(struct xfer_header *xfer, const char *mboxname)
 {
     struct quota quota;
     int r;
+    int res;
+    int count = 0;
     char extname[MAX_MAILBOX_NAME];
 
     (*imapd_namespace.mboxname_toexternal)(&imapd_namespace, mboxname,
@@ -9679,20 +9705,22 @@ static int xfer_setquotaroot(struct xfer_header *xfer, const char *mboxname)
     if (r == IMAP_QUOTAROOT_NONEXISTENT) return 0;
     if (r) return r;
     
-    /* gnb:TODO ... also pass the non-STORAGE limits?? */
     /* note use of + to force the setting of a nonexistant
      * quotaroot */
-    if (quota.limits[QUOTA_STORAGE] == -1) {
-	prot_printf(xfer->be->out, "Q01 SETQUOTA {" SIZE_T_FMT "+}\r\n" \
-		    "+%s ()\r\n",
-		    strlen(extname)+1, extname);
+    prot_printf(xfer->be->out, "Q01 SETQUOTA {" SIZE_T_FMT "+}\r\n+%s (",
+		strlen(extname)+1, extname);
+    for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
+	if (quota.limits[res] == QUOTA_UNLIMITED) {
+	    continue;
+	}
+
+	if (count++) {
+	    prot_putc(' ', xfer->be->out);
+	}
+	prot_printf(xfer->be->out, "%s %d", quota_names[res], quota.limits[res]);
     }
-    else {
-	prot_printf(xfer->be->out, "Q01 SETQUOTA {" SIZE_T_FMT "+}\r\n" \
-		    "+%s (%s %d)\r\n",
-		    strlen(extname)+1, extname,
-		    quota_names[QUOTA_STORAGE], quota.limits[QUOTA_STORAGE]);
-    }
+    prot_printf(xfer->be->out, ")\r\n");
+
     r = getresult(xfer->be->in, "Q01");
     if (r) syslog(LOG_ERR,
 		  "Could not move mailbox: %s, " \

@@ -226,7 +226,8 @@ struct mailbox {
     int quota_dirty;
     int has_changed;
     time_t last_updated; /* for appends*/
-    quota_t quota_previously_used; /* for quota change */
+    quota_t quotastorage_previously_used; /* for quota change */
+    quota_t quotamessage_previously_used; /* for quota change */
 };
 
 /* Offsets of index/expunge header fields
@@ -529,6 +530,6 @@ extern void mailbox_repack_abort(struct mailbox_repack **repackptr);
 extern int mailbox_repack_commit(struct mailbox_repack **repackptr);
 
 int mailbox_quota_check(struct mailbox *mailbox,
-			quota_t delta, int wrlock);
+			quota_t deltastorage, quota_t deltamessage, int wrlock);
 
 #endif /* INCLUDED_MAILBOX_H */

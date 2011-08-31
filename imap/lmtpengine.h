@@ -111,7 +111,9 @@ struct lmtp_func {
     int (*deliver)(message_data_t *m, 
 		   char *authuser, struct auth_state *authstate);
     int (*verify_user)(const char *user, const char *domain, char *mailbox,
-		       quota_t quotacheck, /* user must have this much quota left
+		       quota_t quotastorage_check, /* user must have this much storage quota left
+					   (-1 means don't care about quota) */
+		       quota_t quotamessage_check, /* user must have this much message quota left
 					   (-1 means don't care about quota) */
 		       struct auth_state *authstate);
     void (*shutdown)(int code);

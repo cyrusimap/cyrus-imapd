@@ -201,7 +201,7 @@ ec IMAP_NO_OVERQUOTA,
    "Mailbox is over quota"
 
 ec IMAP_NO_CLOSEQUOTA,
-   "Mailbox is at %d%% of quota"
+   "Mailbox is at %d%% of %s quota"
 
 ec IMAP_NO_MSGGONE,
    "Message %d no longer exists"

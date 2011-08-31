@@ -503,6 +503,7 @@ int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid_start,
 
     /* The first member is either a number (if it is a quota root), or NIL
      * (if it isn't) */
+    /* XXX - what about message quota ? */
     {
 	struct quota q;
 
@@ -780,7 +781,8 @@ int undump_mailbox(const char *mbname,
     struct buf content = BUF_INITIALIZER;
     char *seen_file = NULL;
     char *mboxkey_file = NULL;
-    quota_t old_quota_used = 0;
+    quota_t old_quotastorage_used = 0;
+    quota_t old_quotamessage_used = 0;
     int quotalimit = -1;
     annotate_state_t *astate = NULL;
 
@@ -844,7 +846,8 @@ int undump_mailbox(const char *mbname,
     if(r) goto done;
 
     /* track quota use */
-    old_quota_used = mailbox->i.quota_mailbox_used;
+    old_quotastorage_used = mailbox->i.quota_mailbox_used;
+    old_quotamessage_used = mailbox->i.exists;
 
     astate = annotate_state_new();
     annotate_state_set_mailbox(astate, mbname);
@@ -1157,16 +1160,15 @@ int undump_mailbox(const char *mbname,
 
 	/* update the quota if necessary */
 	if (mailbox->quotaroot &&
-	    old_quota_used != mailbox->i.quota_mailbox_used) {
-	    r = quota_update_used(mailbox->quotaroot, QUOTA_STORAGE,
-			     mailbox->i.quota_mailbox_used - old_quota_used,
-			     0);
-	    if (r) {
-		syslog(LOG_ERR, "LOSTQUOTA: unable to record add of " 
-		       QUOTA_T_FMT " bytes in quota %s",
-		       mailbox->i.quota_mailbox_used - old_quota_used,
-		       mailbox->quotaroot);
-	    }
+	    ((old_quotastorage_used != mailbox->i.quota_mailbox_used) ||
+	     (old_quotamessage_used != mailbox->i.exists))) {
+	    quota_t quota_diff[QUOTA_NUMRESOURCES];
+
+	    memset(quota_diff, 0, sizeof(quota_diff));
+	    quota_diff[QUOTA_STORAGE] = mailbox->i.quota_mailbox_used - old_quotastorage_used;
+	    quota_diff[QUOTA_MESSAGE] = mailbox->i.exists - old_quotamessage_used;
+
+	    r = quota_update_useds(mailbox->quotaroot, quota_diff, 0);
 	}
 
 	for (recno = 1; recno <= mailbox->i.num_records; recno++) {

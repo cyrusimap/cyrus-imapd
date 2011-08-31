@@ -111,7 +111,8 @@ static sieve_interp_t *sieve_interp = NULL;
 static int deliver(message_data_t *msgdata, char *authuser,
 		   struct auth_state *authstate);
 static int verify_user(const char *user, const char *domain, char *mailbox,
-		       quota_t quotacheck, struct auth_state *authstate);
+		       quota_t quotastorage_check, quota_t quotamessage_check,
+		       struct auth_state *authstate);
 static char *generate_notify(message_data_t *m);
 
 void shut_down(int code);
@@ -506,7 +507,8 @@ int deliver_mailbox(FILE *f,
 		     authuser, authstate, acloverride ? 0 : ACL_POST, 
 		     quotaoverride ? (long) -1 :
 		     config_getswitch(IMAPOPT_LMTP_STRICT_QUOTA) ?
-		     (long) size : 0,
+		     (long) size : 0, quotaoverride ? -1 :
+		     config_getswitch(IMAPOPT_LMTP_STRICT_QUOTA) ? 1 : 0,
 		     NULL, 0);
 
     /* check for duplicate message */
@@ -984,7 +986,8 @@ void shut_down(int code)
 }
 
 static int verify_user(const char *user, const char *domain, char *mailbox,
-		       quota_t quotacheck, struct auth_state *authstate)
+		       quota_t quotastorage_check, quota_t quotamessage_check,
+		       struct auth_state *authstate)
 {
     char namebuf[MAX_MAILBOX_BUFFER] = "";
     int r = 0;
@@ -1050,9 +1053,11 @@ static int verify_user(const char *user, const char *domain, char *mailbox,
 	    }
 	} else if (!r) {
 	    r = append_check(namebuf, authstate,
-			     aclcheck, (quotacheck < 0)
+			     aclcheck, (quotastorage_check < 0)
 			     || config_getswitch(IMAPOPT_LMTP_STRICT_QUOTA) ?
-			     quotacheck : 0);
+			     quotastorage_check : 0, (quotamessage_check < 0)
+			     || config_getswitch(IMAPOPT_LMTP_STRICT_QUOTA) ?
+			     quotamessage_check : 0);
 	}
 
 	mboxlist_entry_free(&mbentry);

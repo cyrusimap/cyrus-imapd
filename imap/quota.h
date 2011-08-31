@@ -45,6 +45,12 @@
 #ifndef INCLUDED_QUOTA_H
 #define INCLUDED_QUOTA_H
 
+#ifdef HAVE_INTTYPES_H
+# include <inttypes.h>
+#elif defined(HAVE_STDINT_H)
+# include <stdint.h>
+#endif
+
 #include "cyrusdb.h"
 #include <config.h>
 
@@ -53,13 +59,13 @@
 /* Define the proper quota type, which is 64 bit and signed */
 typedef long long int quota_t;
 #define QUOTA_T_FMT      "%lld"
-#define QUOTA_REPORT_FMT "%8llu"
 
 extern struct db *qdb;
 
 enum quota_resource {
     QUOTA_STORAGE	=0,
-    QUOTA_ANNOTSTORAGE	=1,
+    QUOTA_MESSAGE	=1,
+    QUOTA_ANNOTSTORAGE	=2,
 #define QUOTA_NUMRESOURCES  (QUOTA_ANNOTSTORAGE+1)
 };
 
@@ -99,8 +105,8 @@ extern void quota_abort(struct txn **tid);
 
 extern int quota_write(struct quota *quota, struct txn **tid);
 
-extern int quota_update_used(const char *quotaroot, enum quota_resource,
-			     quota_t diff, int is_scanned);
+extern int quota_update_useds(const char *quotaroot, quota_t diff[QUOTA_NUMRESOURCES],
+			      int is_scanned);
 
 extern int quota_deleteroot(const char *quotaroot);
 

@@ -2666,6 +2666,9 @@ static int mboxlist_changequota(const char *name,
     int r = 0;
     struct mailbox *mailbox = NULL;
     const char *root = (const char *) rock;
+    int res;
+    quota_t quota_usage[QUOTA_NUMRESOURCES];
+    quota_t quota_diff[QUOTA_NUMRESOURCES];
     int is_scanned;
 
     assert(root);
@@ -2673,6 +2676,13 @@ static int mboxlist_changequota(const char *name,
     r = mailbox_open_iwl(name, &mailbox);
     if (r) goto done;
     is_scanned = (mailbox->i.options & OPT_MAILBOX_QUOTA_SCANNED);
+
+    memset(quota_usage, 0, sizeof(quota_usage));
+    memset(quota_diff, 0, sizeof(quota_diff));
+
+    quota_usage[QUOTA_STORAGE] = mailbox->i.quota_mailbox_used;
+    quota_usage[QUOTA_MESSAGE] = mailbox->i.exists;
+    /* XXX - annotation usage */
 
     if (mailbox->quotaroot) {
 
@@ -2682,13 +2692,10 @@ static int mboxlist_changequota(const char *name,
 	}
 
 	/* remove usage from the old quotaroot */
-	r = quota_update_used(mailbox->quotaroot, QUOTA_STORAGE,
-			 -mailbox->i.quota_mailbox_used, is_scanned);
-	if (r) {
-	    syslog(LOG_ERR,
-		   "LOSTQUOTA: unable to record free of " QUOTA_T_FMT " bytes in quota %s",
-		   mailbox->i.quota_mailbox_used, mailbox->quotaroot);
+	for (res = 0; res < QUOTA_NUMRESOURCES ; res++) {
+	    quota_diff[res] = -quota_usage[res];
 	}
+	r = quota_update_useds(mailbox->quotaroot, quota_diff, is_scanned);
     }
 
     /* update (or set) the quotaroot */
@@ -2696,8 +2703,10 @@ static int mboxlist_changequota(const char *name,
     if (r) goto done;
 
     /* update the new quota root */
-    r = quota_update_used(root, QUOTA_STORAGE,
-		     mailbox->i.quota_mailbox_used, is_scanned);
+    for (res = 0; res < QUOTA_NUMRESOURCES ; res++) {
+	quota_diff[res] = quota_usage[res];
+    }
+    r = quota_update_useds(root, quota_diff, is_scanned);
 
  done:
     mailbox_close(&mailbox);

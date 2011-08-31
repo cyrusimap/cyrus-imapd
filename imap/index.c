@@ -1498,7 +1498,7 @@ index_copy(struct index_state *state,
 
     r = append_setup(&appendstate, name, state->userid,
 		     state->authstate, ACL_INSERT, totalsize,
-		     namespace, isadmin);
+		     copyargs.nummsg, namespace, isadmin);
     if (r) return r;
 
     docopyuid = (appendstate.myrights & ACL_READ);

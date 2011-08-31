@@ -75,17 +75,20 @@ static int quota_dbopen = 0;
 /* keywords used when storing fields in the new quota db format */
 static const char * const quota_db_names[QUOTA_NUMRESOURCES] = {
     NULL,	/* QUOTA_STORAGE */
+    "M",	/* QUOTA_MESSAGE */
     "AS"	/* QUOTA_ANNOTSTORAGE */
 };
 
 /* IMAP atoms for various quota resources */
 const char * const quota_names[QUOTA_NUMRESOURCES] = {
     "STORAGE",			/* QUOTA_STORAGE -- RFC2087 */
+    "MESSAGE",			/* QUOTA_MESSAGE -- RFC2087 */
     "X-ANNOTATION-STORAGE"	/* QUOTA_ANNOTSTORAGE */
 };
 
 const int quota_units[QUOTA_NUMRESOURCES] = {
     1024,		/* QUOTA_STORAGE -- RFC2087 */
+    1,			/* QUOTA_MESSAGE -- RFC2087 */
     1024		/* QUOTA_ANNOTSTORAGE */
 };
 
@@ -367,8 +370,8 @@ int quota_write(struct quota *quota, struct txn **tid)
     return r;
 }
 
-int quota_update_used(const char *quotaroot, enum quota_resource res,
-		      quota_t diff, int is_scanned)
+int quota_update_useds(const char *quotaroot, quota_t diff[QUOTA_NUMRESOURCES],
+		       int is_scanned)
 {
     struct quota q;
     struct txn *tid = NULL;
@@ -381,23 +384,35 @@ int quota_update_used(const char *quotaroot, enum quota_resource res,
     r = quota_read(&q, &tid, 1);
 
     if (!r) {
+	int res;
 
-	/* Note: usedBs[] is a cumulative delta, not an absolute
-	 * number; so it can go negative and must be updated
-	 * without clamping. */
-	if (is_scanned && q.usedBs[res] != QUOTA_INVALID)
-	    q.usedBs[res] += diff;
+	for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
+	    /* Note: usedBs[] is a cumulative delta, not an absolute
+	     * number; so it can go negative and must be updated
+	     * without clamping. */
+	    if (is_scanned && q.usedBs[res] != QUOTA_INVALID)
+		q.usedBs[res] += diff[res];
 
-	quota_use(&q, res, diff);
+	    quota_use(&q, res, diff[res]);
+	}
 	r = quota_write(&q, &tid);
     }
 
     if (r) {
 	quota_abort(&tid);
-	return r;
+	goto out;
     }
     quota_commit(&tid);
-    return 0;
+
+out:
+    if (r) {
+	syslog(LOG_ERR, "LOSTQUOTA: unable to record change of "
+	       QUOTA_T_FMT " bytes and " QUOTA_T_FMT " messages in quota %s",
+	       diff[QUOTA_STORAGE], diff[QUOTA_MESSAGE],
+	       quotaroot);
+    }
+
+    return r;
 }
 
 /*

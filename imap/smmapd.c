@@ -225,7 +225,7 @@ int service_main(int argc __attribute__((unused)),
     return 0;
 }
 
-int verify_user(const char *key, long quotacheck,
+int verify_user(const char *key,
 		struct auth_state *authstate)
 {
     char rcpt[MAX_MAILBOX_BUFFER], namebuf[MAX_MAILBOX_BUFFER] = "";
@@ -298,7 +298,7 @@ int verify_user(const char *key, long quotacheck,
 	 *
 	 * - must have posting privileges on shared folders
 	 * - don't care about ACL on INBOX (always allow post)
-	 * - don't care about message size (1 msg over quota allowed)
+	 * - must not be overquota
 	 */
 	r = mboxlist_lookup(namebuf, &mbentry, NULL);
 	if (r == IMAP_MAILBOX_NONEXISTENT && config_mupdate_server) {
@@ -378,9 +378,7 @@ int verify_user(const char *key, long quotacheck,
 
 	} else if (!r) {
 	    r = append_check(namebuf, authstate,
-			     aclcheck, (quotacheck < 0 )
-			     || config_getswitch(IMAPOPT_LMTP_STRICT_QUOTA) ?
-			     quotacheck : 0);
+			     aclcheck, 0, 0);
 	}
 
 	mboxlist_entry_free(&mbentry);
@@ -403,7 +401,7 @@ int begin_handling(void)
     int c;
 
     while ((c = prot_getc(map_in)) != EOF) {
-	int r = 0, len = 0, size = 0;
+	int r = 0, len = 0;
 	struct auth_state *authstate = NULL;
 	char request[MAXREQUEST+1];
 	char *key = NULL;
@@ -444,7 +442,7 @@ int begin_handling(void)
 	if (!r) {
 	    *key++ = '\0';
 
-	    r = verify_user(key, size, authstate);
+	    r = verify_user(key, authstate);
 	}
 
 	switch (r) {

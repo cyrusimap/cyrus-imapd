@@ -110,6 +110,7 @@ static void test_read_write(void)
     struct quota q2;
     struct txn *txn = NULL;
     struct txn *oldtxn = NULL;
+    int res;
     int r;
 
     memset(&q, 0, sizeof(q));
@@ -122,6 +123,10 @@ static void test_read_write(void)
 
     q.useds[QUOTA_STORAGE] = 12345;
     q.limits[QUOTA_STORAGE] = 678;
+    q.useds[QUOTA_MESSAGE] = 2345;
+    q.limits[QUOTA_MESSAGE] = 78;
+    q.useds[QUOTA_ANNOTSTORAGE] = 345;
+    q.limits[QUOTA_ANNOTSTORAGE] = 8;
 
     oldtxn = txn;
     r = quota_write(&q, &txn);
@@ -134,8 +139,10 @@ static void test_read_write(void)
     q2.root = QUOTAROOT;
     r = quota_read(&q2, &txn, 0);
     CU_ASSERT_EQUAL(r, 0);
-    CU_ASSERT_EQUAL(q2.useds[QUOTA_STORAGE], q.useds[QUOTA_STORAGE]);
-    CU_ASSERT_EQUAL(q2.limits[QUOTA_STORAGE], q.limits[QUOTA_STORAGE]);
+    for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
+	CU_ASSERT_EQUAL(q2.useds[res], q.useds[res]);
+	CU_ASSERT_EQUAL(q2.limits[res], q.limits[res]);
+    }
 
     /* commit the txn */
     quota_commit(&txn);
@@ -147,8 +154,10 @@ static void test_read_write(void)
     r = quota_read(&q2, &txn, 0);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_PTR_NOT_NULL(txn);
-    CU_ASSERT_EQUAL(q2.useds[QUOTA_STORAGE], q.useds[QUOTA_STORAGE]);
-    CU_ASSERT_EQUAL(q2.limits[QUOTA_STORAGE], q.limits[QUOTA_STORAGE]);
+    for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
+	CU_ASSERT_EQUAL(q2.useds[res], q.useds[res]);
+	CU_ASSERT_EQUAL(q2.limits[res], q.limits[res]);
+    }
 
     quota_commit(&txn);
     CU_ASSERT_PTR_NULL(txn);
@@ -370,28 +379,38 @@ static void test_check_use(void)
     CU_ASSERT_SYSLOG(/*all*/0, 1);		/* whined */
 }
 
-static void test_update_used(void)
+static void test_update_useds(void)
 {
     struct quota q;
     struct quota q2;
     struct txn *txn = NULL;
+    int res;
+    quota_t quota_diff[QUOTA_NUMRESOURCES];
+    quota_t usage_expected[QUOTA_NUMRESOURCES];
     int r;
 
     memset(&q, 0, sizeof(q));
     q.root = QUOTAROOT;
+    memset(quota_diff, 0, sizeof(quota_diff));
+    memset(usage_expected, 0, sizeof(usage_expected));
 
     /* updating a NULL or empty or non-existant root returns the error */
-    r = quota_update_used(NULL, QUOTA_STORAGE, 10*1024, 0);
+    quota_diff[QUOTA_STORAGE] = 10*1024;
+    quota_diff[QUOTA_MESSAGE] = 2;
+    quota_diff[QUOTA_ANNOTSTORAGE] = 1*1024;
+    r = quota_update_useds(NULL, quota_diff, 0);
     CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
 
-    r = quota_update_used("", QUOTA_STORAGE, 10*1024, 0);
+    r = quota_update_useds("", quota_diff, 0);
     CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
 
-    r = quota_update_used(QUOTAROOT_NONEXISTANT, QUOTA_STORAGE, 10*1024, 0);
+    r = quota_update_useds(QUOTAROOT_NONEXISTANT, quota_diff, 0);
     CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
 
-    /* set a limit */
-    q.limits[QUOTA_STORAGE] = 100;  /* limit 100 KiB */
+    /* set limits */
+    q.limits[QUOTA_STORAGE] = 100;  /* limit storage to 100 KiB */
+    q.limits[QUOTA_MESSAGE] = 20;  /* limit messages to 20 */
+    q.limits[QUOTA_ANNOTSTORAGE] = 10;  /* limit annotations storage to 10 KiB */
     r = quota_write(&q, &txn);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_PTR_NOT_NULL(txn);
@@ -399,32 +418,67 @@ static void test_update_used(void)
     CU_ASSERT_PTR_NULL(txn);
 
 #define TESTCASE(diff, expused) \
-    r = quota_update_used(QUOTAROOT, QUOTA_STORAGE, diff, 0); \
+    r = quota_update_useds(QUOTAROOT, diff, 0); \
     CU_ASSERT_EQUAL(r, 0); \
     memset(&q2, 0, sizeof(q2)); \
     q2.root = QUOTAROOT; \
     r = quota_read(&q2, NULL, 0); \
     CU_ASSERT_EQUAL(r, 0); \
-    CU_ASSERT_EQUAL(q2.useds[QUOTA_STORAGE], expused); \
-    CU_ASSERT_EQUAL(q2.limits[QUOTA_STORAGE], 100)
+    for (res = 0; res < QUOTA_NUMRESOURCES; res++) { \
+        CU_ASSERT_EQUAL(q2.useds[res], expused[res]); \
+        CU_ASSERT_EQUAL(q2.limits[res], q.limits[res]) \
+    }
 
     /* updating a root which has a record, succeeds */
-    TESTCASE(10*1024, 10*1024);
+    quota_diff[QUOTA_STORAGE] = 10*1024;
+    quota_diff[QUOTA_MESSAGE] = 2;
+    quota_diff[QUOTA_ANNOTSTORAGE] = 1*1024;
+    usage_expected[QUOTA_STORAGE] = 10*1024;
+    usage_expected[QUOTA_MESSAGE] = 2;
+    usage_expected[QUOTA_ANNOTSTORAGE] = 1*1024;
+    TESTCASE(quota_diff, usage_expected);
 
     /* updating some more adds to the used value */
-    TESTCASE(80*1024, 90*1024);
+    quota_diff[QUOTA_STORAGE] = 80*1024;
+    quota_diff[QUOTA_MESSAGE] = 16;
+    quota_diff[QUOTA_ANNOTSTORAGE] = 8*1024;
+    usage_expected[QUOTA_STORAGE] = 90*1024;
+    usage_expected[QUOTA_MESSAGE] = 18;
+    usage_expected[QUOTA_ANNOTSTORAGE] = 9*1024;
+    TESTCASE(quota_diff, usage_expected);
 
     /* updating with a zero diff does not change the used value */
-    TESTCASE(0, 90*1024);
+    quota_diff[QUOTA_STORAGE] = 0;
+    quota_diff[QUOTA_MESSAGE] = 0;
+    quota_diff[QUOTA_ANNOTSTORAGE] = 0;
+    TESTCASE(quota_diff, usage_expected);
 
-    /* quota_update_used() does not enforce the limit */
-    TESTCASE(20*1024, 110*1024);    /* used 110 KiB limit 100 KiB */
+    /* quota_update_useds() does not enforce the limit */
+    quota_diff[QUOTA_STORAGE] = 20*1024;
+    quota_diff[QUOTA_MESSAGE] = 4;
+    quota_diff[QUOTA_ANNOTSTORAGE] = 2*1024;
+    usage_expected[QUOTA_STORAGE] = 110*1024;     /* used 110 KiB limit 100 KiB */
+    usage_expected[QUOTA_MESSAGE] = 22;           /* used 22 limit 20 */
+    usage_expected[QUOTA_ANNOTSTORAGE] = 11*1024; /* used 11 KiB limit 10 KiB */
+    TESTCASE(quota_diff, usage_expected);
 
     /* updating with a negative value */
-    TESTCASE(-70*1024, 40*1024);
+    quota_diff[QUOTA_STORAGE] = -70*1024;
+    quota_diff[QUOTA_MESSAGE] = -14;
+    quota_diff[QUOTA_ANNOTSTORAGE] = -7*1024;
+    usage_expected[QUOTA_STORAGE] = 40*1024;
+    usage_expected[QUOTA_MESSAGE] = 8;
+    usage_expected[QUOTA_ANNOTSTORAGE] = 4*1024;
+    TESTCASE(quota_diff, usage_expected);
 
     /* underflow is prevented */
-    TESTCASE(-50*1024, 0);
+    quota_diff[QUOTA_STORAGE] = -50*1024;
+    quota_diff[QUOTA_MESSAGE] = -10;
+    quota_diff[QUOTA_ANNOTSTORAGE] = -5*1024;
+    usage_expected[QUOTA_STORAGE] = 0;
+    usage_expected[QUOTA_MESSAGE] = 0;
+    usage_expected[QUOTA_ANNOTSTORAGE] = 0;
+    TESTCASE(quota_diff, usage_expected);
 
 #undef TESTCASE
 }
