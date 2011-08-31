@@ -175,9 +175,12 @@ static int mboxlist_mylookup(const char *name, struct mboxlist_entry *entry,
     /* copy out interesting parts */
     mbtype = strtol(data, &p, 10);
 
-    if (*p == ' ') p++;
+    if (!p)
+	return IMAP_IOERROR;
+
+    if (*p == ' ' && (p - data) < datalen) p++;
     q = partition;
-    while (*p != ' ') { /* copy out partition name */
+    while (*p != ' ' && (p - data) < datalen) { /* copy out partition name */
 	*q++ = *p++;
     }
     *q = '\0';
