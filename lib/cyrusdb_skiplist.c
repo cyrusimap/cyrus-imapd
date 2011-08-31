@@ -1808,12 +1808,14 @@ static int mycheckpoint(struct db *db, int locked)
 	db->fd = oldfd;
 	unlink(fname);
     }
-
-    /* release old write lock */
-    close(oldfd);
-
-    {
+    else {
 	struct stat sbuf;
+
+	/* remove content of old file so it doesn't sit around using disk */
+	ftruncate(oldfd, 0);
+
+	/* release old write lock */
+	close(oldfd);
 
 	/* let's make sure we're up to date */
 	map_free(&db->map_base, &db->map_len);
