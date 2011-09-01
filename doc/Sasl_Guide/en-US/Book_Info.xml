@@ -1,18 +1,18 @@
 <?xml version='1.0' encoding='utf-8' ?>
 <!DOCTYPE bookinfo PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
-<!ENTITY % BOOK_ENTITIES SYSTEM "Deployment_Guide.ent">
+<!ENTITY % BOOK_ENTITIES SYSTEM "Cyrus_SASL_Guide.ent">
 %BOOK_ENTITIES;
 ]>
-<bookinfo id="book-Deployment_Guide-Deployment_Guide">
-    <title>Deployment Guide</title>
-    <subtitle>A Guide to Planning a Cyrus IMAP Deployment</subtitle>
-    <productname>Cyrus IMAP</productname>
-    <productnumber>2.4</productnumber>
+<bookinfo id="book-Cyrus_SASL_Guide-Cyrus_SASL_Guide">
+    <title>Cyrus SASL Guide</title>
+    <subtitle>short description</subtitle>
+    <productname>Cyrus SASL</productname>
+    <productnumber>2.1.24</productnumber>
     <edition>1</edition>
     <pubsnumber>0</pubsnumber>
     <abstract>
         <para>
-            A number of considerations need to be made prior to deploying Cyrus IMAP in an existing infrastructure, especially larger ones. This guide addresses these considerations, to aid in planning the successful deployment of Cyrus IMAP.
+            A short overview and summary of the book's subject and purpose, traditionally no more than one paragraph long. Note: the abstract will appear in the front matter of your book and will also be placed in the description field of the book's RPM spec file.
         </para>
 
     </abstract>
@@ -29,6 +29,6 @@
 
     </corpauthor>
     <xi:include href="Common_Content/Legal_Notice.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <xi:include href="auth-Author_Group.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="auth-Sasl_Author_Group.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
 </bookinfo>
 

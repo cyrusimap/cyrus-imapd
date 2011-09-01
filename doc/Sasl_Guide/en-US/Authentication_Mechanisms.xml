@@ -1,0 +1,133 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
+<!ENTITY % BOOK_ENTITIES SYSTEM "Cyrus_SASL_Guide.ent">
+%BOOK_ENTITIES;
+]>
+<chapter id="chap-Cyrus_SASL_Guide-Authentication_Mechanisms">
+    <title>Authentication Mechanisms</title>
+    <para>
+        para
+    </para>
+    <section id="sect-Cyrus_SASL_Guide-Authentication_Mechanisms-EXTERNAL">
+        <title>EXTERNAL</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Cyrus_SASL_Guide-Authentication_Mechanisms-ANONYMOUS">
+        <title>ANONYMOUS</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Cyrus_SASL_Guide-Authentication_Mechanisms-PLAIN">
+        <title>PLAIN</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Cyrus_SASL_Guide-Authentication_Mechanisms-LOGIN">
+        <title>LOGIN</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Cyrus_SASL_Guide-Authentication_Mechanisms-CRAM_MD5">
+        <title>CRAM-MD5</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Cyrus_SASL_Guide-Authentication_Mechanisms-DIGEST_MD5">
+        <title>DIGEST-MD5</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Cyrus_SASL_Guide-Authentication_Mechanisms-SCRAM">
+        <title>SCRAM</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Cyrus_SASL_Guide-Authentication_Mechanisms-GSSAPI">
+        <title>GSSAPI</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Cyrus_SASL_Guide-Authentication_Mechanisms-GS2_KRB5">
+        <title>GS2-KRB5</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Cyrus_SASL_Guide-Authentication_Mechanisms-GS2_IAKERB">
+        <title>GS2-IAKERB</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Cyrus_SASL_Guide-Authentication_Mechanisms-NTLM">
+        <title>NTLM</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Cyrus_SASL_Guide-Authentication_Mechanisms-SRP">
+        <title>SRP</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Cyrus_SASL_Guide-Authentication_Mechanisms-PSSDSS">
+        <title>PSSDSS</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Cyrus_SASL_Guide-Authentication_Mechanisms-OTP">
+        <title>OTP</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Cyrus_SASL_Guide-Authentication_Mechanisms-Non_SASL_Authentication">
+        <title>Non-SASL Authentication</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+
+</chapter>
+

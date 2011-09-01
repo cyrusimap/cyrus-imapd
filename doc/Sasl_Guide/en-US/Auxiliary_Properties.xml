@@ -1,0 +1,61 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
+<!ENTITY % BOOK_ENTITIES SYSTEM "Cyrus_SASL_Guide.ent">
+%BOOK_ENTITIES;
+]>
+<chapter id="chap-Cyrus_SASL_Guide-Auxiliary_Properties">
+    <title>Auxiliary Properties</title>
+    <para>
+        para
+    </para>
+    <section id="sect-Cyrus_SASL_Guide-Auxiliary_Properties-Auxiliary_Properties_and_the_Glue_Layer">
+        <title>Auxiliary Properties and the Glue Layer</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Cyrus_SASL_Guide-Auxiliary_Properties-Passwords_and_other_Data">
+        <title>Passwords and other Data</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Cyrus_SASL_Guide-Auxiliary_Properties-sasldb">
+        <title>sasldb</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Cyrus_SASL_Guide-Auxiliary_Properties-ldapdb">
+        <title>ldapdb</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Cyrus_SASL_Guide-Auxiliary_Properties-sql">
+        <title>sql</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Cyrus_SASL_Guide-Auxiliary_Properties-User_Canonicalization">
+        <title>User Canonicalization</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+
+</chapter>
+

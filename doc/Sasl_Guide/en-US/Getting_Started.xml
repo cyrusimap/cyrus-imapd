@@ -1,0 +1,93 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
+<!ENTITY % BOOK_ENTITIES SYSTEM "Cyrus_SASL_Guide.ent">
+%BOOK_ENTITIES;
+]>
+<chapter id="chap-Cyrus_SASL_Guide-Getting_Started">
+    <title>Getting Started</title>
+    <para>
+        para
+    </para>
+    <section id="sect-Cyrus_SASL_Guide-Getting_Started-SASL">
+        <title>SASL</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Cyrus_SASL_Guide-Getting_Started-SASL_Authentication_Mechanisms">
+        <title>SASL Authentication Mechanisms</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Cyrus_SASL_Guide-Getting_Started-Security_Layers">
+        <title>Security Layers</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Cyrus_SASL_Guide-Getting_Started-Channel_Binding">
+        <title>Channel Binding</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Cyrus_SASL_Guide-Getting_Started-Realms">
+        <title>Realms</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Cyrus_SASL_Guide-Getting_Started-Protocols">
+        <title>Protocols</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Cyrus_SASL_Guide-Getting_Started-Cyrus_SASL">
+        <title>Cyrus SASL</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Cyrus_SASL_Guide-Getting_Started-The_Glue_Library">
+        <title>The Glue Library</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Cyrus_SASL_Guide-Getting_Started-Auxiliary_Properties">
+        <title>Auxiliary Properties</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+    <section id="sect-Cyrus_SASL_Guide-Getting_Started-Plugins">
+        <title>Plugins</title>
+        <para>
+            para
+        </para>
+
+    </section>
+
+
+</chapter>
+
