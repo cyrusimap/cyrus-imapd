@@ -546,7 +546,7 @@ static int init_write_buffer_to_temp(SquatIndex* index, SquatWriteBuffer* b) {
   return SQUAT_OK;
 
 cleanup_fd:
-  close(b->fd);
+  close(fd);
   return SQUAT_ERR;
 }
 
