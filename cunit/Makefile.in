@@ -103,6 +103,7 @@ TESTSOURCES = \
 	buf.c \
 	charset.c \
 	crc32.c \
+	db.c \
 	getxstring.c \
 	glob.c \
 	guid.c \
