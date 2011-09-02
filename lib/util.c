@@ -373,9 +373,10 @@ int create_tempfile(const char *path)
 /* Create all parent directories for the given path,
  * up to but not including the basename.
  */
-int cyrus_mkdir(const char *path, mode_t mode __attribute__((unused)))
+int cyrus_mkdir(const char *pathname, mode_t mode __attribute__((unused)))
 {
-    char *p = (char *) path;
+    char *path = xstrdup(pathname);    /* make a copy to write into */
+    char *p = path;
     int save_errno;
     struct stat sbuf;
 
@@ -386,12 +387,14 @@ int cyrus_mkdir(const char *path, mode_t mode __attribute__((unused)))
 	    if (stat(path, &sbuf) == -1) {
 		errno = save_errno;
 		syslog(LOG_ERR, "IOERROR: creating directory %s: %m", path);
+		free(path);
 		return -1;
 	    }
 	}
 	*p = '/';
     }
 
+    free(path);
     return 0;
 }
 
