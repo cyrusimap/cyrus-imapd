@@ -2894,6 +2894,9 @@ void capa_response(int flags)
     }
 #endif
 
+    for (i = 0 ; i < QUOTA_NUMRESOURCES ; i++)
+	prot_printf(imapd_out, " X-QUOTA=%s", quota_names[i]);
+
     if (idle_enabled()) {
 	prot_printf(imapd_out, " IDLE");
     }
