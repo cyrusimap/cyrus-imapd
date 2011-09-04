@@ -215,144 +215,134 @@ static char* look_for_me(char *myaddr, int numaddresses,
     return found;
 }
 
-static char *list_fields[] = {
-    "list-id",
-    "list-help",
-    "list-subscribe",
-    "list-unsubscribe",
-    "list-post",
-    "list-owner",
-    "list-archive",
-    NULL
-};
- 
 /* Determine if we should respond to a vacation message */
 static int shouldRespond(void * m, sieve_interp_t *interp,
 			 int numaddresses, bytecode_input_t* bc,
 			 int i, char **from, char **to)
 {
     const char **body;
-    char buf[128];
     char *myaddr = NULL;
-    int l = SIEVE_OK, j;
+    int l = SIEVE_DONE, j;
     int curra, x;
     char *found = NULL;
     char *reply_to = NULL;
-  
+    static const char * const list_fields[] = {
+	"list-id",
+	"list-help",
+	"list-subscribe",
+	"list-unsubscribe",
+	"list-post",
+	"list-owner",
+	"list-archive",
+	NULL
+    };
+
     /* Implementations SHOULD NOT respond to any message that contains a
        "List-Id" [RFC2919], "List-Help", "List-Subscribe", "List-
        Unsubscribe", "List-Post", "List-Owner" or "List-Archive" [RFC2369]
        header field. */
     for (j = 0; list_fields[j]; j++) {
-	strcpy(buf, list_fields[j]);
-	if (interp->getheader(m, buf, &body) == SIEVE_OK) {
-	    l = SIEVE_DONE;
-	    break;
-	}
+	if (interp->getheader(m, list_fields[j], &body) == SIEVE_OK)
+	    goto out;
     }
 
     /* Implementations SHOULD NOT respond to any message that has an
        "Auto-submitted" header field with a value other than "no".
        This header field is described in [RFC3834]. */
-    strcpy(buf, "auto-submitted");
-    if (interp->getheader(m, buf, &body) == SIEVE_OK) {
+    if (interp->getheader(m, "auto-submitted", &body) == SIEVE_OK) {
 	/* we don't deal with comments, etc. here */
 	/* skip leading white-space */
 	while (*body[0] && Uisspace(*body[0])) body[0]++;
-	if (strcasecmp(body[0], "no")) l = SIEVE_DONE;
+	if (strcasecmp(body[0], "no"))
+	    goto out;
     }
 
     /* is there a Precedence keyword of "junk | bulk | list"? */
     /* XXX  non-standard header, but worth checking */
-    strcpy(buf, "precedence");
-    if (interp->getheader(m, buf, &body) == SIEVE_OK) {
+    if (interp->getheader(m, "precedence", &body) == SIEVE_OK) {
 	/* we don't deal with comments, etc. here */
 	/* skip leading white-space */
 	while (*body[0] && Uisspace(*body[0])) body[0]++;
 	if (!strcasecmp(body[0], "junk") ||
 	    !strcasecmp(body[0], "bulk") ||
 	    !strcasecmp(body[0], "list"))
-	    l = SIEVE_DONE;
+	    goto out;
     }
 
     /* Note: the domain-part of all addresses are canonicalized */
     /* grab my address from the envelope */
-    if (l == SIEVE_OK) {
-	strcpy(buf, "to");
-	l = interp->getenvelope(m, buf, &body);
-	
-	if (body[0])
-	    myaddr = address_canonicalise(body[0]);
-    }  
-  
-    if (l == SIEVE_OK) {
-	strcpy(buf, "from");
-	l = interp->getenvelope(m, buf, &body);
-    }
-    if (l == SIEVE_OK && body[0]) {
-	/* we have to parse this address & decide whether we
-	   want to respond to it */
-	reply_to = address_canonicalise(body[0]);
+    l = interp->getenvelope(m, "to", &body);
+    if (l != SIEVE_OK)
+	goto out;
+    l = SIEVE_DONE;
+    if (!body[0])
+	goto out;
+    myaddr = address_canonicalise(body[0]);
 
-	/* first, is there a reply-to address? */
-	if (reply_to == NULL) {
-	    l = SIEVE_DONE;
-	}
-    
-	/* first, is it from me? */
-	if (l == SIEVE_OK && myaddr && !strcmp(myaddr, reply_to)) {
-	    l = SIEVE_DONE;
-	}
-   
-	/* ok, is it any of the other addresses i've
-	   specified? */
-	if (l == SIEVE_OK)
-	{
-	    curra=i;
-	    for(x=0; x<numaddresses; x++) {
-		const char *address;
+    l = interp->getenvelope(m, "from", &body);
+    if (l != SIEVE_OK)
+	goto out;
+    l = SIEVE_DONE;
+    if (!body[0])
+	goto out;
+    /* we have to parse this address & decide whether we
+       want to respond to it */
+    reply_to = address_canonicalise(body[0]);
 
-		curra = unwrap_string(bc, curra, &address, NULL);
-		
-		if (!strcmp(address, reply_to))
-		    l = SIEVE_DONE;
-	    }
-	}
-   
-	/* ok, is it a system address? */
-	if (l == SIEVE_OK && sysaddr(reply_to)) {
-	    l = SIEVE_DONE;
-	}
+    /* first, is there a reply-to address? */
+    if (reply_to == NULL)
+	goto out;
+
+    /* is it from me? */
+    if (myaddr && !strcmp(myaddr, reply_to))
+	goto out;
+
+    /* ok, is it any of the other addresses i've
+       specified? */
+    curra=i;
+    for(x=0; x<numaddresses; x++) {
+	const char *address;
+
+	curra = unwrap_string(bc, curra, &address, NULL);
+
+	if (!strcmp(address, reply_to))
+	    goto out;
     }
-    if (l == SIEVE_OK) {
-	/* ok, we're willing to respond to the sender.
-	   but is this message to me?  that is, is my address
-	   in the [Resent]-To, [Resent]-Cc or [Resent]-Bcc fields? */
-	if (strcpy(buf, "to"), 
-	    interp->getheader(m, buf, &body) == SIEVE_OK)
-	    found = look_for_me(myaddr, numaddresses ,bc, i, body);
-	if (!found && (strcpy(buf, "cc"),
-		       (interp->getheader(m, buf, &body) == SIEVE_OK)))
-	    found = look_for_me(myaddr, numaddresses, bc, i, body);
-	if (!found && (strcpy(buf, "bcc"),
-		       (interp->getheader(m, buf, &body) == SIEVE_OK)))
-	    found = look_for_me(myaddr, numaddresses, bc, i, body);
-	if (!found && (strcpy(buf, "resent-to"), 
-		       (interp->getheader(m, buf, &body) == SIEVE_OK)))
-	    found = look_for_me(myaddr, numaddresses ,bc, i, body);
-	if (!found && (strcpy(buf, "resent-cc"),
-		       (interp->getheader(m, buf, &body) == SIEVE_OK)))
-	    found = look_for_me(myaddr, numaddresses, bc, i, body);
-	if (!found && (strcpy(buf, "resent-bcc"),
-		       (interp->getheader(m, buf, &body) == SIEVE_OK)))
-	    found = look_for_me(myaddr, numaddresses, bc, i, body);
-	if (!found)
-	    l = SIEVE_DONE;
-    }
+
+    /* ok, is it a system address? */
+    if (sysaddr(reply_to))
+	goto out;
+
+    /* ok, we're willing to respond to the sender.
+       but is this message to me?  that is, is my address
+       in the [Resent]-To, [Resent]-Cc or [Resent]-Bcc fields? */
+    if (interp->getheader(m, "to", &body) == SIEVE_OK)
+	found = look_for_me(myaddr, numaddresses, bc, i, body);
+    if (!found && interp->getheader(m, "cc", &body) == SIEVE_OK)
+	found = look_for_me(myaddr, numaddresses, bc, i, body);
+    if (!found && interp->getheader(m, "bcc", &body) == SIEVE_OK)
+	found = look_for_me(myaddr, numaddresses, bc, i, body);
+    if (!found && interp->getheader(m, "resent-to", &body) == SIEVE_OK)
+	found = look_for_me(myaddr, numaddresses ,bc, i, body);
+    if (!found && interp->getheader(m, "resent-cc", &body) == SIEVE_OK)
+	found = look_for_me(myaddr, numaddresses, bc, i, body);
+    if (!found && interp->getheader(m, "resent-bcc", &body) == SIEVE_OK)
+	found = look_for_me(myaddr, numaddresses, bc, i, body);
+    if (found)
+	l = SIEVE_OK;
+
     /* ok, ok, if we got here maybe we should reply */
-    if (myaddr) free(myaddr);
-    *from = found;
-    *to = reply_to;
+out:
+    free(myaddr);
+    if (l == SIEVE_OK) {
+	*from = found;
+	*to = reply_to;
+    }
+    else {
+	free(found);
+	free(reply_to);
+    }
+
     return l;
 }
 
