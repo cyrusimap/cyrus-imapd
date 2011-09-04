@@ -222,7 +222,7 @@ int main(int argc, char *argv[])
     char *alt_config = NULL;
     int reserve_flag = 1;
     enum { RECOVER, CHECKPOINT, NONE } op = NONE;
-    char dirname[1024], backup1[1024], backup2[1024];
+    char *dirname = NULL, *backup1 = NULL, *backup2 = NULL;
     strarray_t files = STRARRAY_INITIALIZER;
     char *msg = "";
     int i, rotated = 0;
@@ -270,14 +270,11 @@ int main(int argc, char *argv[])
 
     /* create the name of the db directory */
     /* (used by backup directory names) */
-    strcpy(dirname, config_dir);
-    strcat(dirname, FNAME_DBDIR);
+    dirname = strconcat(config_dir, FNAME_DBDIR, (char *)NULL);
 
     /* create the names of the backup directories */
-    strcpy(backup1, dirname);
-    strcat(backup1, ".backup1");
-    strcpy(backup2, dirname);
-    strcat(backup2, ".backup2");
+    backup1 = strconcat(dirname, ".backup1", (char *)NULL);
+    backup2 = strconcat(dirname, ".backup2", (char *)NULL);
 
     syslog(LOG_NOTICE, "%s", msg);
 
@@ -381,6 +378,9 @@ int main(int argc, char *argv[])
     if(op == RECOVER && reserve_flag)
 	recover_reserved();
 
+    free(dirname);
+    free(backup1);
+    free(backup2);
     cyrus_done();
 
     syslog(LOG_NOTICE, "done %s", msg);
