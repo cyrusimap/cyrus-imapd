@@ -71,8 +71,8 @@ char* notify_mailto(const char *class,
 		    const char *message)
 {
     FILE *sm;
-    const char *smbuf[10];
-    char outmsgid[8192];
+    const char *smbuf[7];
+    char outmsgid[256];
     int sm_stat;
     time_t t;
     char datestr[RFC822_DATETIME_MAX+1];
