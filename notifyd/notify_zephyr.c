@@ -61,9 +61,14 @@
 #include <syslog.h>
 
 #include "xmalloc.h"
+#include "util.h"
 
 #ifndef MAIL_CLASS
 #define MAIL_CLASS "MAIL"
+#endif
+
+#ifndef HOST_NAME_MAX
+#define HOST_NAME_MAX 256
 #endif
 
 #include "notify_zephyr.h"
@@ -75,21 +80,21 @@ char* notify_zephyr(const char *class, const char *priority,
 {
     ZNotice_t notice;
     int retval;
-    char myhost[256],mysender[BUFSIZ];
-    char *msgbody;
+    char myhost[HOST_NAME_MAX], *mysender = NULL;
+    struct buf msgbody = BUF_INITIALIZER;
     char *lines[2];
-    char *mykrbhost = 0;
+    char *mykrbhost = NULL;
 
-    if (!*user) return strdup("NO zephyr recipient not specified");
+    if (!*user) return xstrdup("NO zephyr recipient not specified");
 
     if ((retval = ZInitialize()) != ZERR_NONE) {
 	syslog(LOG_ERR, "IOERROR: cannot initialize zephyr: %m");
-	return strdup("NO cannot initialize zephyr");
+	return xstrdup("NO cannot initialize zephyr");
     }
   
     if (gethostname(myhost,sizeof(myhost)) == -1) {
 	syslog(LOG_ERR, "IOERROR: cannot get hostname: %m");
-	return strdup("NO zephyr cannot get hostname");
+	return xstrdup("NO zephyr cannot get hostname");
     }
     myhost[sizeof(myhost)-1] = '\0';
   
@@ -97,25 +102,24 @@ char* notify_zephyr(const char *class, const char *priority,
     mykrbhost = krb_get_phost(myhost);
 #endif
   
-    lines[0] = myhost;
-    msgbody = xmalloc(1000 + strlen(message));
-    lines[1] = msgbody;
-
-    strcpy(msgbody,"");
-
     if (*mailbox) {
-	snprintf(msgbody,900, "You have new mail in %s.\n\n", mailbox);
+	buf_printf(&msgbody, "You have new mail in %s.\n\n", mailbox);
     }
 
     if (*message) {
-	strcat(msgbody, message);
-	strcat(msgbody, "\n");
+	buf_appendcstr(&msgbody, message);
+	buf_putc(&msgbody, '\n');
     }
 
-    (void) snprintf(mysender, sizeof(mysender), "imap%s%s@%s",
-		   mykrbhost ? "." : "",
-		   mykrbhost ? mykrbhost : "",
-		   ZGetRealm());
+    lines[0] = myhost;
+    lines[1] = (char *)buf_cstring(&msgbody);
+
+    mysender = strconcat("imap",
+			 mykrbhost ? "." : "",
+			 mykrbhost ? mykrbhost : "",
+			 "@",
+			 ZGetRealm(),
+			 (char *)NULL);
 
     memset((char *)&notice, 0, sizeof(notice));
     notice.z_kind = UNSAFE;
@@ -138,12 +142,13 @@ char* notify_zephyr(const char *class, const char *priority,
 	retval = ZSendList(&notice,lines,2,ZNOAUTH);
     }
 
-    free(msgbody);
+    buf_free(&msgbody);
+    free(mysender);
 
     if (retval != ZERR_NONE) {
 	syslog(LOG_ERR, "IOERROR: cannot send zephyr notice: %m");
-	return strdup("NO cannot send zephyr notice");
+	return xstrdup("NO cannot send zephyr notice");
     } 
 
-    return strdup("OK zephyr notification successful");
+    return xstrdup("OK zephyr notification successful");
 }
