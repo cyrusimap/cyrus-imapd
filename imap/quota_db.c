@@ -233,6 +233,9 @@ void quota_use(struct quota *q,
 {
     /* prevent underflow */
     if ((delta < 0) && (-delta > q->useds[res])) {
+	syslog(LOG_INFO, "Quota underflow for root %s, resource %s,"
+			 " you may wish to run \"quota -f\"",
+			 q->root, quota_names[res]);
 	q->useds[res] = 0;
     }
     else {

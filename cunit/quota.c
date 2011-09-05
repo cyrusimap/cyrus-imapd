@@ -363,9 +363,11 @@ static void test_check_use(void)
     CU_ASSERT_EQUAL(q.useds[QUOTA_STORAGE], 0);
 
     /* test underflow in quota_use */
+    CU_SYSLOG_MATCH("Quota underflow");
     q.useds[QUOTA_STORAGE] = 80*1024;	/* used 80 KiB */
     quota_use(&q, QUOTA_STORAGE, -1000*1024);
-    CU_ASSERT_EQUAL(q.useds[QUOTA_STORAGE], 0);
+    CU_ASSERT_EQUAL(q.useds[QUOTA_STORAGE], 0);	/* clamped */
+    CU_ASSERT_SYSLOG(/*all*/0, 1);		/* whined */
 }
 
 static void test_update_used(void)
