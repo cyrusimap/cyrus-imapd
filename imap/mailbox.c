@@ -1875,8 +1875,13 @@ int mailbox_commit_quota(struct mailbox *mailbox)
     memset(quota_diff, 0, sizeof(quota_diff));
 
     /* unchanged */
-    quota_diff[QUOTA_STORAGE] = mailbox->i.quota_mailbox_used - mailbox->quotastorage_previously_used;
-    quota_diff[QUOTA_MESSAGE] = mailbox->i.exists - mailbox->quotamessage_previously_used;
+    if (!(mailbox->i.options & OPT_MAILBOX_DELETED)) {
+	quota_diff[QUOTA_STORAGE] = mailbox->i.quota_mailbox_used;
+	quota_diff[QUOTA_MESSAGE] = mailbox->i.exists;
+    }
+    /* else: mailbox is being deleted, thus its new usage is 0 */
+    quota_diff[QUOTA_STORAGE] -= mailbox->quotastorage_previously_used;
+    quota_diff[QUOTA_MESSAGE] -= mailbox->quotamessage_previously_used;
     if (!quota_diff[QUOTA_STORAGE] && !quota_diff[QUOTA_MESSAGE])
 	return 0;
 
@@ -2948,8 +2953,6 @@ int mailbox_delete(struct mailbox **mailboxptr)
 
     /* mark the quota removed */
     mailbox_quota_dirty(mailbox);
-    mailbox->i.quota_mailbox_used = 0;
-    mailbox->i.exists = 0;
 
     /* commit the changes */
     r = mailbox_commit(mailbox);
