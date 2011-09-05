@@ -781,8 +781,7 @@ int undump_mailbox(const char *mbname,
     struct buf content = BUF_INITIALIZER;
     char *seen_file = NULL;
     char *mboxkey_file = NULL;
-    quota_t old_quotastorage_used = 0;
-    quota_t old_quotamessage_used = 0;
+    quota_t old_quota_usage[QUOTA_NUMRESOURCES];
     int quotalimit = -1;
     annotate_state_t *astate = NULL;
 
@@ -846,8 +845,7 @@ int undump_mailbox(const char *mbname,
     if(r) goto done;
 
     /* track quota use */
-    old_quotastorage_used = mailbox->i.quota_mailbox_used;
-    old_quotamessage_used = mailbox->i.exists;
+    mailbox_get_usage(mailbox, old_quota_usage);
 
     astate = annotate_state_new();
     annotate_state_set_mailbox(astate, mbname);
@@ -1159,16 +1157,22 @@ int undump_mailbox(const char *mbname,
 	}
 
 	/* update the quota if necessary */
-	if (mailbox->quotaroot &&
-	    ((old_quotastorage_used != mailbox->i.quota_mailbox_used) ||
-	     (old_quotamessage_used != mailbox->i.exists))) {
-	    quota_t quota_diff[QUOTA_NUMRESOURCES];
+	if (mailbox->quotaroot) {
+	    quota_t quota_usage[QUOTA_NUMRESOURCES];
+	    int res;
+	    int changed = 0;
 
-	    memset(quota_diff, 0, sizeof(quota_diff));
-	    quota_diff[QUOTA_STORAGE] = mailbox->i.quota_mailbox_used - old_quotastorage_used;
-	    quota_diff[QUOTA_MESSAGE] = mailbox->i.exists - old_quotamessage_used;
+	    mailbox_get_usage(mailbox, quota_usage);
+	    for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
+		quota_usage[res] -= old_quota_usage[res];
+		if (quota_usage[res] != 0) {
+		    changed++;
+		}
+	    }
 
-	    r = quota_update_useds(mailbox->quotaroot, quota_diff, 0);
+	    if (changed) {
+		r = quota_update_useds(mailbox->quotaroot, quota_usage, 0);
+	    }
 	}
 
 	for (recno = 1; recno <= mailbox->i.num_records; recno++) {

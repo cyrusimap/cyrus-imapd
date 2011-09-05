@@ -2668,7 +2668,6 @@ static int mboxlist_changequota(const char *name,
     const char *root = (const char *) rock;
     int res;
     quota_t quota_usage[QUOTA_NUMRESOURCES];
-    quota_t quota_diff[QUOTA_NUMRESOURCES];
     int is_scanned;
 
     assert(root);
@@ -2677,14 +2676,10 @@ static int mboxlist_changequota(const char *name,
     if (r) goto done;
     is_scanned = (mailbox->i.options & OPT_MAILBOX_QUOTA_SCANNED);
 
-    memset(quota_usage, 0, sizeof(quota_usage));
-    memset(quota_diff, 0, sizeof(quota_diff));
-
-    quota_usage[QUOTA_STORAGE] = mailbox->i.quota_mailbox_used;
-    quota_usage[QUOTA_MESSAGE] = mailbox->i.exists;
-    /* XXX - annotation usage */
+    mailbox_get_usage(mailbox, quota_usage);
 
     if (mailbox->quotaroot) {
+	quota_t quota_diff[QUOTA_NUMRESOURCES];
 
 	if (strlen(mailbox->quotaroot) >= strlen(root)) {
 	    /* Part of a child quota root - skip */
@@ -2703,10 +2698,7 @@ static int mboxlist_changequota(const char *name,
     if (r) goto done;
 
     /* update the new quota root */
-    for (res = 0; res < QUOTA_NUMRESOURCES ; res++) {
-	quota_diff[res] = quota_usage[res];
-    }
-    r = quota_update_useds(root, quota_diff, is_scanned);
+    r = quota_update_useds(root, quota_usage, is_scanned);
 
  done:
     mailbox_close(&mailbox);

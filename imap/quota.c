@@ -508,9 +508,14 @@ static int fixquota_pass2(void *rock __attribute__((unused)),
 
 	/* and track the total usage inside this root */
 	if (!r) {
-	    quota[thisquota].newused[QUOTA_STORAGE] += mailbox->i.quota_mailbox_used;
-	    quota[thisquota].newused[QUOTA_MESSAGE] += mailbox->i.exists;
-	    /* XXX - annotation usage */
+	    quota_t usage[QUOTA_NUMRESOURCES];
+	    int res;
+
+	    mailbox_get_usage(mailbox, usage);
+	    for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
+		quota[thisquota].newused[res] += usage[res];
+	    }
+
 	    /* Set the 'scanned' flag in the mailbox */
 	    mailbox_index_dirty(mailbox);
 	    mailbox->i.options |= OPT_MAILBOX_QUOTA_SCANNED;
