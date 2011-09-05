@@ -3223,7 +3223,7 @@ void cmd_append(char *tag, char *name, const char *cur_name)
     int c;
     static struct buf arg;
     time_t now = time(NULL);
-    uquota_t totalsize = 0;
+    quota_t totalsize = 0;
     unsigned size;
     int sync_seen = 0;
     int r;
@@ -3808,9 +3808,9 @@ void cmd_select(char *tag, char *cmd, char *name)
  	     */
  	    int warnsize = config_getint(IMAPOPT_QUOTAWARNKB);
 	    if (warnsize <= 0 || warnsize >= q.limits[QUOTA_STORAGE] ||
-		((uquota_t) (q.limits[QUOTA_STORAGE] - warnsize)) * quota_units[QUOTA_STORAGE] < q.useds[QUOTA_STORAGE]) {
+		((quota_t) (q.limits[QUOTA_STORAGE] - warnsize)) * quota_units[QUOTA_STORAGE] < q.useds[QUOTA_STORAGE]) {
 		usage = ((double) q.useds[QUOTA_STORAGE] * 100.0) /
-			(double) ((uquota_t) q.limits[QUOTA_STORAGE] * quota_units[QUOTA_STORAGE]);
+			(double) ((quota_t) q.limits[QUOTA_STORAGE] * quota_units[QUOTA_STORAGE]);
 		if (usage >= 100.0) {
 		    prot_printf(imapd_out, "* NO [ALERT] %s\r\n",
 				error_message(IMAP_NO_OVERQUOTA));
@@ -6707,7 +6707,7 @@ void cmd_getquota(const char *tag, const char *name)
     sep = "";
     for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++) {
 	if (q.limits[res] >= 0) {
-	    prot_printf(imapd_out, "%s%s " UQUOTA_T_FMT " %d",
+	    prot_printf(imapd_out, "%s%s " QUOTA_T_FMT " %d",
 			sep, quota_names[res],
 			q.useds[res]/quota_units[res],
 			q.limits[res]);
@@ -6801,7 +6801,7 @@ void cmd_getquotaroot(const char *tag, const char *name)
 		prot_printf(imapd_out, " (");
 		for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++) {
 		    if (q.limits[res] >= 0) {
-			prot_printf(imapd_out, "%s%s " UQUOTA_T_FMT " %d",
+			prot_printf(imapd_out, "%s%s " QUOTA_T_FMT " %d",
 				    sep, quota_names[res],
 				    q.useds[res]/quota_units[res],
 				    q.limits[res]);

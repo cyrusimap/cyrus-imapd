@@ -104,7 +104,7 @@ struct quotaentry {
     char *allocname;
     int refcount;
     int deleted;
-    uquota_t newused;
+    quota_t newused;
 };
 
 /* forward declarations */
@@ -434,7 +434,7 @@ int fixquota_finish(int thisquota)
 
     /* is it still different? */
     if (quota[thisquota].quota.useds[QUOTA_STORAGE] != quota[thisquota].newused) {
-	printf("%s: usage was " UQUOTA_T_FMT ", now " UQUOTA_T_FMT "\n",
+	printf("%s: usage was " QUOTA_T_FMT ", now " QUOTA_T_FMT "\n",
 	       quota[thisquota].quota.root,
 	       quota[thisquota].quota.useds[QUOTA_STORAGE], quota[thisquota].newused);
 	quota[thisquota].quota.useds[QUOTA_STORAGE] = quota[thisquota].newused;

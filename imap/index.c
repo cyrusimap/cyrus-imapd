@@ -1459,7 +1459,7 @@ index_copy(struct index_state *state,
 {
     static struct copyargs copyargs;
     int i;
-    uquota_t totalsize = 0;
+    quota_t totalsize = 0;
     int r;
     struct appendstate appendstate;
     uint32_t msgno, checkval;

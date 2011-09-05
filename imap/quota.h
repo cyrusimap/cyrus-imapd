@@ -50,13 +50,8 @@
 
 #define FNAME_QUOTADB "/quotas.db"
 
-/* Define the proper quota type, it should either be a
- * long or a long long int depending upon what the
- * the compiler supports.
- */
-typedef unsigned long long int uquota_t;
+/* Define the proper quota type, which is 64 bit and signed */
 typedef long long int quota_t;
-#define UQUOTA_T_FMT     "%llu"
 #define QUOTA_T_FMT      "%lld"
 #define QUOTA_REPORT_FMT "%8llu"
 
@@ -72,7 +67,7 @@ struct quota {
     const char *root;
 
     /* Information in quota entry */
-    uquota_t useds[QUOTA_NUMRESOURCES];
+    quota_t useds[QUOTA_NUMRESOURCES];
     int limits[QUOTA_NUMRESOURCES];		/* in QUOTA_UNITS */
 };
 

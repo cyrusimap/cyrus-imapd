@@ -2684,7 +2684,7 @@ static int mboxlist_changequota(const char *name,
 			 -mailbox->i.quota_mailbox_used);
 	if (r) {
 	    syslog(LOG_ERR,
-		   "LOSTQUOTA: unable to record free of " UQUOTA_T_FMT " bytes in quota %s",
+		   "LOSTQUOTA: unable to record free of " QUOTA_T_FMT " bytes in quota %s",
 		   mailbox->i.quota_mailbox_used, mailbox->quotaroot);
 	}
     }

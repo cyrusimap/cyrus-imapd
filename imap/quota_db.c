@@ -134,7 +134,7 @@ static int quota_parseval(const char *data, struct quota *quota)
 	r = IMAP_MAILBOX_BADFORMAT;
 	if (i+2 > fields->count)
 	    goto out;	/* need at least 2 more fields */
-	if (sscanf(fields->data[i++], UQUOTA_T_FMT, &quota->useds[res]) != 1)
+	if (sscanf(fields->data[i++], QUOTA_T_FMT, &quota->useds[res]) != 1)
 	    goto out;
 	if (sscanf(fields->data[i++], "%d", &quota->limits[res]) != 1)
 	    goto out;
@@ -209,7 +209,7 @@ int quota_read(struct quota *quota, struct txn **tid, int wrlock)
 int quota_check(const struct quota *q,
 		enum quota_resource res, quota_t delta)
 {
-    uquota_t lim;
+    quota_t lim;
 
     if (q->limits[res] < 0)
 	return 0;	    /* unlimited */
@@ -222,7 +222,7 @@ int quota_check(const struct quota *q,
     if (delta < 0)
 	return 0;
 
-    lim = (uquota_t)(q->limits[res] * quota_units[res]);
+    lim = (quota_t)q->limits[res] * quota_units[res];
     if (q->useds[res] + delta > lim)
 	return IMAP_QUOTA_EXCEEDED;
     return 0;
@@ -232,7 +232,7 @@ void quota_use(struct quota *q,
 	       enum quota_resource res, quota_t delta)
 {
     /* prevent underflow */
-    if ((delta < 0) && ((uquota_t)-delta > q->useds[res])) {
+    if ((delta < 0) && (-delta > q->useds[res])) {
 	q->useds[res] = 0;
     }
     else {
@@ -326,7 +326,7 @@ int quota_write(struct quota *quota, struct txn **tid)
     {
 	if (quota_db_names[res])
 	    buf_printf(&buf, " %s ", quota_db_names[res]);
-	buf_printf(&buf, UQUOTA_T_FMT " %d",
+	buf_printf(&buf, QUOTA_T_FMT " %d",
 		   quota->useds[res], quota->limits[res]);
     }
 

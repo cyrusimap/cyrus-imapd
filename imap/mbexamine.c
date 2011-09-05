@@ -260,7 +260,7 @@ static int do_examine(char *name,
     printf("  Minor Version: %d\n", mailbox->i.minor_version);
     printf("  Header Size: %u bytes  Record Size: %u bytes\n",
 	   mailbox->i.start_offset, mailbox->i.record_size);
-    printf("  Number of Messages: %u  Mailbox Size: " UQUOTA_T_FMT " bytes\n",
+    printf("  Number of Messages: %u  Mailbox Size: " QUOTA_T_FMT " bytes\n",
 	   mailbox->i.exists, mailbox->i.quota_mailbox_used);
     printf("  Last Append Date: (%lu) %s",
 	   mailbox->i.last_appenddate, ctime(&mailbox->i.last_appenddate));
@@ -373,7 +373,7 @@ static int do_quota(char *name,
     char ext_name_buf[MAX_MAILBOX_PATH+1];
     struct mailbox *mailbox = NULL;
     struct index_record record;
-    uquota_t total = 0;
+    quota_t total = 0;
     char *fname;
     struct stat sbuf;
     

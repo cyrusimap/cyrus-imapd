@@ -2279,7 +2279,7 @@ int annotatemore_msg_lookup(const char *mboxname, uint32_t uid, const char *entr
 
 static int count_old_storage(annotate_db_t *d,
 			     const char *key, int keylen,
-			     uquota_t *oldlenp)
+			     quota_t *oldlenp)
 {
     int r;
     int datalen;
@@ -2318,7 +2318,7 @@ static int write_entry(const char *mboxname,
     char key[MAX_MAILBOX_PATH+1];
     int keylen, r;
     annotate_db_t *d = NULL;
-    uquota_t oldlen = 0;
+    quota_t oldlen = 0;
 
     /* must be in a transaction to modify the db */
     if (!in_txn)

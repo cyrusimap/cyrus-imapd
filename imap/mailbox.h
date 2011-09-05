@@ -158,7 +158,7 @@ struct index_header {
     uint32_t num_records;
     time_t last_appenddate;
     uint32_t last_uid;
-    uquota_t quota_mailbox_used;
+    quota_t quota_mailbox_used;
     time_t pop3_last_login;
     uint32_t uidvalidity;
 

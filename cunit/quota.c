@@ -527,9 +527,9 @@ static const char *nth_quotaroot(unsigned int n)
     return buf;
 }
 
-static uquota_t nth_used(unsigned int n)
+static quota_t nth_used(unsigned int n)
 {
-    uquota_t u = n;
+    quota_t u = n;
 
     if (n % 7 == 0)
 	u *= 1023;
