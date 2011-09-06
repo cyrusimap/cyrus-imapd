@@ -44,6 +44,7 @@ use strict;
 use warnings;
 use File::Path qw(mkpath rmtree);
 use File::Find qw(find);
+use File::Basename;
 use POSIX qw(geteuid :signal_h :sys_wait_h);
 use Time::HiRes qw(sleep gettimeofday tv_interval);
 use DateTime;
@@ -733,6 +734,36 @@ sub describe
 	printf "        ";
 	$srv->describe();
     }
+}
+
+sub _quota_Z_file
+{
+    my ($self, $mboxname) = @_;
+    return $self->{basedir} . '/conf/quota-sync/' . $mboxname;
+}
+
+sub quota_Z_go
+{
+    my ($self, $mboxname) = @_;
+    my $filename = $self->_quota_Z_file($mboxname);
+
+    xlog "Allowing quota -Z to proceed for $mboxname";
+
+    my $dir = dirname($filename);
+    mkpath $dir
+	unless ( -d $dir );
+
+    my $fd = POSIX::creat($filename, 0600);
+    POSIX::close($fd);
+}
+
+sub quota_Z_wait
+{
+    my ($self, $mboxname) = @_;
+    my $filename = $self->_quota_Z_file($mboxname);
+
+    _timed_wait(sub { return (! -f $filename); },
+	        description => "quota -Z to be finished with $mboxname");
 }
 
 1;

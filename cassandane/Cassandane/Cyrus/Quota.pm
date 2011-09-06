@@ -391,6 +391,83 @@ sub test_quota_f
 		  "zlateuser (0:$origzres[1], 1:$zres[1], 2:$zres2[1])");
 }
 
+# Test races between quota -f and updates to mailboxes
+sub test_quota_f_vs_update
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+    my $basefolder = "user.cassandane";
+    my @folders = qw(a b c d e);
+    my @res;
+    my $msg;
+    my $expected;
+
+    xlog "Set up a large but limited quota";
+    $admintalk->setquota($basefolder, "(storage 1000000)");
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    @res = $admintalk->getquota($basefolder);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $self->assert_deep_equals(['STORAGE', 0, 1000000], \@res);
+
+    xlog "Create some sub folders";
+    for my $f (@folders)
+    {
+	$imaptalk->create("$basefolder.$f") || die "Failed $@";
+	$self->{store}->set_folder("$basefolder.$f");
+	$msg = $self->make_message("Cassandane $f",
+				      extra_lines => 2000+rand(5000));
+	$expected += length($msg->as_string());
+    }
+    # unselect so quota -f can lock the mailboxes
+    $imaptalk->unselect();
+
+    xlog "Check that we have some quota usage";
+    @res = $admintalk->getquota($basefolder);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $self->assert_deep_equals(['STORAGE', int($expected/1024), 1000000], \@res);
+    my @origres = (@res);
+
+    xlog "Start a quota -f scan";
+    $self->{instance}->quota_Z_go($basefolder);
+    $self->{instance}->quota_Z_go("$basefolder.a");
+    $self->{instance}->quota_Z_go("$basefolder.b");
+    my (@bits) = $self->{instance}->start_utility_bg('quota', '-Z', '-f', $basefolder);
+
+    # waiting for quota -f to ensure that
+    # a) the -Z mechanism is working and
+    # b) quota -f has at least initialised and started scanning.
+    $self->{instance}->quota_Z_wait("$basefolder.b");
+
+    # quota -f is now waiting to be allowed to proceed to "c"
+
+    xlog "Mailbox update behind the scan";
+    $self->{store}->set_folder("$basefolder.b");
+    $msg = $self->make_message("Cassandane b UPDATE",
+				  extra_lines => 2000+rand(3000));
+    $expected += length($msg->as_string());
+
+    xlog "Mailbox update in front of the scan";
+    $self->{store}->set_folder("$basefolder.d");
+    $msg = $self->make_message("Cassandane d UPDATE",
+				  extra_lines => 2000+rand(3000));
+    $expected += length($msg->as_string());
+
+    xlog "Let quota -f continue and finish";
+    $self->{instance}->quota_Z_go("$basefolder.c");
+    $self->{instance}->quota_Z_go("$basefolder.d");
+    $self->{instance}->quota_Z_go("$basefolder.e");
+    $self->{instance}->quota_Z_wait("$basefolder.e");
+    $self->{instance}->reap_utility_bg(@bits);
+
+    xlog "Check that we have the correct quota usage";
+    @res = $admintalk->getquota($basefolder);
+    $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
+    $self->assert_deep_equals(['STORAGE', int($expected/1024), 1000000], \@res);
+    $self->assert($res[1] != $origres[1]);
+}
+
 sub test_prefix_mboxexists
 {
     my ($self) = @_;
