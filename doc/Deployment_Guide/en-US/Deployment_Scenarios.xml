@@ -207,6 +207,42 @@
 
     </section>
 
+    <section id="sect-Deployment_Guide-Deployment_Scenarios-Mailbox_Creation_Distribution">
+        <title>Mailbox Creation Distribution</title>
+        <para>
+            By default, when creating a mailbox in Cyrus IMAP:
+        </para>
+        <para>
+            <itemizedlist>
+                <listitem>
+                    <para>
+                        the backend with the most free disk space is selected on the Murder frontend
+                    </para>
+
+                </listitem>
+                <listitem>
+                    <para>
+                        the partition with the most free disk space is selected on the backend
+                    </para>
+
+                </listitem>
+
+            </itemizedlist>
+
+        </para>
+        <para>
+            This may not be the most appropriate backend or partition to create the new mailbox on, and Cyrus IMAP therefor allows for a variety of additional modes of calculating and selecting the most appropriate backend and partition. The exact mode for the selection is controlled with the <filename>imapd.conf</filename> setting <literal>serverlist_select_mode</literal> on the frontend and <literal>partition_select_mode</literal> on the backend.
+        </para>
+        <para>
+            Alternatively, a default backend can be configured with the <literal>defaultserver</literal> setting on a frontend, and a default partition can be configured with the <literal>defaultpartition</literal> on a backend.
+        </para>
+        <para>
+            As usual, details and guidelines are available in the Administrator Guide and the Configuration Reference.
+        </para>
+        <remark>Make the remark above a general one, and provide a link to the administrator guide and configuration reference ? (how ?) </remark>
+
+    </section>
+
 
 </chapter>
 

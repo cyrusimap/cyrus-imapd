@@ -1,0 +1,33 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
+<!ENTITY % BOOK_ENTITIES SYSTEM "Administrator_Guide.ent">
+%BOOK_ENTITIES;
+]>
+<chapter id="chap-Administrator_Guide-Mailbox_Creation_Distribution">
+    <title>Mailbox Creation Distribution</title>
+    <para>
+        The location where mailboxes are created by default is fully configurable, and can be changed at any time without impacting existing mailboxes.
+    </para>
+    <section id="sect-Administrator_Guide-Mailbox_Creation_Distribution-Guidelines">
+        <title>Guidelines</title>
+        <para>
+            Depending on the situation, some modes will fit your needs more than the others. It mainly depends on whether you are building the platform from scratch, or adding new servers and partitions, and if you plan to create a lot of empty mailboxes in a short period of time.
+        </para>
+        <para>
+            Of course if the situation change you should also adapt the selection mode.
+        </para>
+        <para>
+            If you plan to create a lot of empty mailboxes in a short period of time, the best selection mode is <literal>random</literal>. The other modes rely on the amount of freespace on backends and partitions, and thus would create most - if not all - the mailboxes at the same place, which will become an issue later with those mailboxes growth.
+        </para>
+        <para>
+            If you only care about the amount of free space, you can use the default mode (<literal>freespace-most</literal>) or <literal>freespace-percent-most</literal>.
+        </para>
+        <para>
+            Otherwise you should use <literal>freespace-percent-weighted-delta</literal>, which is generally good enough for situations where mailbox creation pace is slow, or <literal>freespace-percent-weighted</literal>.
+        </para>
+
+    </section>
+
+
+</chapter>
+
