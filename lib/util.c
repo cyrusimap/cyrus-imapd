@@ -585,6 +585,21 @@ void cmdtime_netend(void)
     nettime += timesub(&nettime_start, &nettime_end);
 }
 
+/*
+ * Like the system clock() but works in system time
+ * rather than process virtual time.  Would be more
+ * useful and sensible if it worked in system monotonic
+ * time using clock_gettime(CLOCK_MONOTONIC) but that
+ * would require linking with -lrt.
+ */
+clock_t sclock(void)
+{
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    return now.tv_sec * CLOCKS_PER_SEC +
+           (now.tv_usec * CLOCKS_PER_SEC) / 1000000;
+}
+
 int parseint32(const char *p, const char **ptr, int32_t *res)
 {
     int32_t result = 0;

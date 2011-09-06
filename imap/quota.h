@@ -68,17 +68,23 @@ struct quota {
 
     /* Information in quota entry */
     quota_t useds[QUOTA_NUMRESOURCES];
+    quota_t usedBs[QUOTA_NUMRESOURCES];		/* for quota -f */
     int limits[QUOTA_NUMRESOURCES];		/* in QUOTA_UNITS */
 };
 
 /* special value to indicate no limit applies */
 #define QUOTA_UNLIMITED	    (-1)
+/* Special value to indicate no usedB[] value.  Note that usedB[]
+ * can validly go negative, so we can't just use ~0. */
+#define QUOTA_INVALID	    ((quota_t)((~0ULL)>>1))
 
 extern const char * const quota_names[QUOTA_NUMRESOURCES];
 extern const int quota_units[QUOTA_NUMRESOURCES];
 int quota_name_to_resource(const char *str);
 
 typedef int quotaproc_t(struct quota *quota, void *rock);
+
+extern void quota_init(struct quota *);
 
 extern int quota_read(struct quota *quota, struct txn **tid, int wrlock);
 
@@ -93,13 +99,15 @@ extern void quota_abort(struct txn **tid);
 
 extern int quota_write(struct quota *quota, struct txn **tid);
 
-extern int quota_update_used(const char *quotaroot, enum quota_resource, quota_t diff);
+extern int quota_update_used(const char *quotaroot, enum quota_resource,
+			     quota_t diff, int is_scanned);
 
 extern int quota_deleteroot(const char *quotaroot);
 
 extern int quota_findroot(char *ret, size_t retlen, const char *name);
 
-extern int quota_foreach(const char *prefix, quotaproc_t *proc, void *rock);
+extern int quota_foreach(const char *prefix, quotaproc_t *proc,
+			 void *rock, struct txn **);
 
 /* open the quotas db */
 void quotadb_open(const char *fname);

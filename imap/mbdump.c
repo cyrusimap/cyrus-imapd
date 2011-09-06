@@ -1159,7 +1159,8 @@ int undump_mailbox(const char *mbname,
 	if (mailbox->quotaroot &&
 	    old_quota_used != mailbox->i.quota_mailbox_used) {
 	    r = quota_update_used(mailbox->quotaroot, QUOTA_STORAGE,
-			     mailbox->i.quota_mailbox_used - old_quota_used);
+			     mailbox->i.quota_mailbox_used - old_quota_used,
+			     0);
 	    if (r) {
 		syslog(LOG_ERR, "LOSTQUOTA: unable to record add of " 
 		       QUOTA_T_FMT " bytes in quota %s",

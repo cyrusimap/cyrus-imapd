@@ -381,13 +381,13 @@ static void test_update_used(void)
     q.root = QUOTAROOT;
 
     /* updating a NULL or empty or non-existant root returns the error */
-    r = quota_update_used(NULL, QUOTA_STORAGE, 10*1024);
+    r = quota_update_used(NULL, QUOTA_STORAGE, 10*1024, 0);
     CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
 
-    r = quota_update_used("", QUOTA_STORAGE, 10*1024);
+    r = quota_update_used("", QUOTA_STORAGE, 10*1024, 0);
     CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
 
-    r = quota_update_used(QUOTAROOT_NONEXISTANT, QUOTA_STORAGE, 10*1024);
+    r = quota_update_used(QUOTAROOT_NONEXISTANT, QUOTA_STORAGE, 10*1024, 0);
     CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
 
     /* set a limit */
@@ -399,7 +399,7 @@ static void test_update_used(void)
     CU_ASSERT_PTR_NULL(txn);
 
 #define TESTCASE(diff, expused) \
-    r = quota_update_used(QUOTAROOT, QUOTA_STORAGE, diff); \
+    r = quota_update_used(QUOTAROOT, QUOTA_STORAGE, diff, 0); \
     CU_ASSERT_EQUAL(r, 0); \
     memset(&q2, 0, sizeof(q2)); \
     q2.root = QUOTAROOT; \
@@ -581,7 +581,7 @@ static int found_cb(struct quota *q, void *rock)
 
 #define FOREACH_TEST(prefix, condition, expcount) \
     FOREACH_PRECONDITION(condition, expcount); \
-    r = quota_foreach(prefix, found_cb, &exphash); \
+    r = quota_foreach(prefix, found_cb, &exphash, NULL); \
     FOREACH_POSTCONDITION()
 
 static void notest_foreach(void)

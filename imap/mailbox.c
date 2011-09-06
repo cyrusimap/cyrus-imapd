@@ -1883,7 +1883,8 @@ int mailbox_commit_quota(struct mailbox *mailbox)
 
     assert(mailbox_index_islocked(mailbox, 1));
 
-    r = quota_update_used(mailbox->quotaroot, QUOTA_STORAGE, qdiff);
+    r = quota_update_used(mailbox->quotaroot, QUOTA_STORAGE, qdiff,
+			  (mailbox->i.options & OPT_MAILBOX_QUOTA_SCANNED));
     if (r) {
 	/* XXX - fail here?  It's tempting */
 	syslog(LOG_ERR, "LOSTQUOTA: unable to record quota file %s",

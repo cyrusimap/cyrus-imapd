@@ -188,6 +188,7 @@ extern void cmdtime_endtimer(double * cmdtime, double * nettime);
 extern void cmdtime_netstart(void);
 extern void cmdtime_netend(void);
 
+extern clock_t sclock(void);
 
 #define BUF_CSTRING 1
 

@@ -56,6 +56,7 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <sys/stat.h>
+#include <sys/poll.h>
 
 #if HAVE_DIRENT_H
 # include <dirent.h>
@@ -112,8 +113,12 @@ void usage(void);
 void reportquota(void);
 static int buildquotalist(char *domain, char **roots, int nroots);
 static int fixquotas(char *domain, char **roots, int nroots);
-static int fixquota_mailbox(void *rock, const char *name, int namelen,
-			    const char *val, int vallen);
+static int fixquota_dopass(char *domain, char **roots, int nroots,
+			   foreach_cb *pass);
+static int fixquota_pass1(void *rock, const char *name, int namelen,
+			  const char *val, int vallen);
+static int fixquota_pass2(void *rock, const char *name, int namelen,
+			  const char *val, int vallen);
 static int fixquota_fixroot(struct mailbox *mailbox, const char *root);
 static int fixquota_finish(int thisquota);
 static int (*compar)(const char *s1, const char *s2);
@@ -125,6 +130,7 @@ int quota_num = 0, quota_alloc = 0;
 
 int firstquota = 0;
 int redofix = 0;
+int test_sync_mode = 0;
 
 int main(int argc,char **argv)
 {
@@ -139,7 +145,7 @@ int main(int argc,char **argv)
 	fatal("must run as the Cyrus user", EC_USAGE);
     }
 
-    while ((opt = getopt(argc, argv, "C:d:fq")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:d:fqZ")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
@@ -155,6 +161,11 @@ int main(int argc,char **argv)
 
 	case 'f':
 	    fflag = 1;
+	    break;
+
+	/* deliberately undocumented option for testing */
+	case 'Z':
+	    test_sync_mode = 1;
 	    break;
 
 	default:
@@ -189,7 +200,11 @@ int main(int argc,char **argv)
     quotadb_init(0);
     quotadb_open(NULL);
 
-    r = buildquotalist(domain, argv+optind, argc-optind);
+    if (fflag)
+	r = fixquota_dopass(domain, argv+optind, argc-optind, fixquota_pass1);
+
+    if (!r)
+	r = buildquotalist(domain, argv+optind, argc-optind);
 
     if (!r && fflag)
 	r = fixquotas(domain, argv+optind, argc-optind);
@@ -235,6 +250,67 @@ void errmsg(const char *fmt, const char *arg, int err)
     fprintf(stderr, "%s\n", buf);
 }
 
+static void test_sync_wait(const char *mboxname)
+{
+    char *filename;
+    struct stat sb;
+    clock_t start;
+    int status = 0;
+    int r;
+#define TIMEOUT	    (30 * CLOCKS_PER_SEC)
+
+    if (!test_sync_mode)
+	return;
+    /* aha, we're in test synchronisation mode */
+
+    syslog(LOG_ERR, "quota -Z waiting for signal to do %s", mboxname);
+
+    filename = strconcat(config_dir, "/quota-sync/", mboxname, (char *)NULL);
+    start = sclock();
+
+    while ((r = stat(filename, &sb)) < 0 && errno == ENOENT) {
+	if (sclock() - start > TIMEOUT) {
+	    status = 2;
+	    break;
+	}
+	status = 1;
+	poll(NULL, 0, 20);  /* try again in 20 millisec */
+    }
+
+    switch (status)
+    {
+    case 0:
+	syslog(LOG_ERR, "quota -Z did not wait");
+	break;
+    case 1:
+	syslog(LOG_ERR, "quota -Z waited %2.3f sec",
+			 (sclock() - start) / (double) CLOCKS_PER_SEC);
+	break;
+    case 2:
+	syslog(LOG_ERR, "quota -Z timed out");
+	break;
+    }
+
+    free(filename);
+#undef TIMEOUT
+}
+
+static void test_sync_done(const char *mboxname)
+{
+    char *filename;
+
+    if (!test_sync_mode)
+	return;
+    /* aha, we're in test synchronisation mode */
+
+    syslog(LOG_ERR, "quota -Z done with %s", mboxname);
+
+    filename = strconcat(config_dir, "/quota-sync/", mboxname, (char *)NULL);
+    unlink(filename);
+    free(filename);
+}
+
+
 /*
  * A quotaroot was found, add it to our list
  */
@@ -266,6 +342,7 @@ int buildquotalist(char *domain, char **roots, int nroots)
     int i, r;
     char buf[MAX_MAILBOX_BUFFER], *tail;
     size_t domainlen = 0;
+    struct txn *tid = NULL;
 
     buf[0] = '\0';
     tail = buf;
@@ -276,7 +353,7 @@ int buildquotalist(char *domain, char **roots, int nroots)
 
     /* basic case - everything (potentially limited by domain still) */
     if (!nroots) {
-	r = quota_foreach(buf, fixquota_addroot, NULL);
+	r = quota_foreach(buf, fixquota_addroot, NULL, &tid);
 	if (r) {
 	    errmsg("failed building quota list for '%s'", buf, IMAP_IOERROR);
 	}
@@ -291,12 +368,32 @@ int buildquotalist(char *domain, char **roots, int nroots)
 	/* change the separator to internal namespace */
 	mboxname_hiersep_tointernal(&quota_namespace, tail, 0);
 
-	r = quota_foreach(buf, fixquota_addroot, NULL);
+	r = quota_foreach(buf, fixquota_addroot, NULL, &tid);
 	if (r) {
 	    errmsg("failed building quota list for '%s'", buf, IMAP_IOERROR);
 	    break;
 	}
     }
+
+    /*
+     * Mark the quotaroots in the db to non-invalid to indicate
+     * that a scan is in progress.  Other processes doing quota
+     * updates for mailboxes will now start to update usedBs[].
+     */
+    for (i = 0; i < quota_num; i++) {
+	quota[i].quota.usedBs[QUOTA_STORAGE] = 0;
+	r = quota_write(&quota[i].quota, &tid);
+	if (r) {
+	    errmsg("failed writing quota record for '%s'",
+		   quota[i].quota.root, r);
+	    break;
+	}
+    }
+
+    if (r)
+	quota_abort(&tid);
+    else
+	quota_commit(&tid);
 
     return r;
 }
@@ -336,17 +433,51 @@ static int findroot(const char *name, int *thisquota)
 }
 
 /*
- * Account for mailbox 'name' when fixing the quota roots
+ * Pass 1: reset the 'scanned' flag on each mailbox.
  */
-static int fixquota_mailbox(void *rock __attribute__((unused)),
-			    const char *name, int namelen,
-			    const char *val __attribute__((unused)),
-			    int vallen __attribute__((unused)))
+static int fixquota_pass1(void *rock __attribute__((unused)),
+			  const char *name, int namelen,
+			  const char *val __attribute__((unused)),
+			  int vallen __attribute__((unused)))
+{
+    int r = 0;
+    struct mailbox *mailbox = NULL;
+    char *mboxname = xstrndup(name, namelen);
+
+    r = mailbox_open_iwl(mboxname, &mailbox);
+    if (r) {
+	errmsg("failed opening header for mailbox '%s'", name, r);
+	goto done;
+    }
+
+    if ((mailbox->i.options & OPT_MAILBOX_QUOTA_SCANNED)) {
+	mailbox_index_dirty(mailbox);
+	mailbox->i.options &= ~OPT_MAILBOX_QUOTA_SCANNED;
+    }
+
+done:
+    mailbox_close(&mailbox);
+    free(mboxname);
+
+    return r;
+}
+
+/*
+ * Pass 2: account for mailbox 'name' when fixing the quota roots
+ *         and set the 'scanned' flag so that mailbox updates racing
+ *         with us will start updating the usedBs[].
+ */
+static int fixquota_pass2(void *rock __attribute__((unused)),
+			  const char *name, int namelen,
+			  const char *val __attribute__((unused)),
+			  int vallen __attribute__((unused)))
 {
     int r = 0;
     struct mailbox *mailbox = NULL;
     int thisquota = -1;
     char *mboxname = xstrndup(name, namelen);
+
+    test_sync_wait(mboxname);
 
     r = findroot(mboxname, &thisquota);
     if (r) {
@@ -376,12 +507,17 @@ static int fixquota_mailbox(void *rock __attribute__((unused)),
 	}
 
 	/* and track the total usage inside this root */
-	if (!r)
+	if (!r) {
 	    quota[thisquota].newused += mailbox->i.quota_mailbox_used;
+	    /* Set the 'scanned' flag in the mailbox */
+	    mailbox_index_dirty(mailbox);
+	    mailbox->i.options |= OPT_MAILBOX_QUOTA_SCANNED;
+	}
     }
 
 done:
     mailbox_close(&mailbox);
+    test_sync_done(mboxname);
     free(mboxname);
 
     return r;
@@ -403,7 +539,7 @@ int fixquota_fixroot(struct mailbox *mailbox,
 }
 
 /*
- * Finish fixing up a quota root
+ * Pass 3: finish fixing up a quota root
  */
 int fixquota_finish(int thisquota)
 {
@@ -420,10 +556,6 @@ int fixquota_finish(int thisquota)
 	return r;
     }
 
-    /* nothing changed, all good */
-    if (quota[thisquota].quota.useds[QUOTA_STORAGE] == quota[thisquota].newused)
-	return 0;
-
     /* re-read the quota with the record locked */
     r = quota_read(&quota[thisquota].quota, &tid, 1);
     if (r) {
@@ -432,19 +564,29 @@ int fixquota_finish(int thisquota)
 	return r;
     }
 
+    if (quota[thisquota].quota.usedBs[QUOTA_STORAGE] != QUOTA_INVALID) {
+	/* adjust the newused figure for accumulated mailbox
+	 * updates which lost the race against the scan */
+	quota[thisquota].newused += quota[thisquota].quota.usedBs[QUOTA_STORAGE];
+	/* reset usedBs to record that the scan is complete */
+	quota[thisquota].quota.usedBs[QUOTA_STORAGE] = QUOTA_INVALID;
+    }
+
     /* is it still different? */
     if (quota[thisquota].quota.useds[QUOTA_STORAGE] != quota[thisquota].newused) {
 	printf("%s: usage was " QUOTA_T_FMT ", now " QUOTA_T_FMT "\n",
 	       quota[thisquota].quota.root,
 	       quota[thisquota].quota.useds[QUOTA_STORAGE], quota[thisquota].newused);
 	quota[thisquota].quota.useds[QUOTA_STORAGE] = quota[thisquota].newused;
-	r = quota_write(&quota[thisquota].quota, &tid);
-	if (r) {
-	    errmsg("failed writing quotaroot '%s'",
-		   quota[thisquota].quota.root, r);
-	    quota_abort(&tid);
-	    return r;
-	}
+    }
+
+    /* always write out the record, we should have just reset usedBs */
+    r = quota_write(&quota[thisquota].quota, &tid);
+    if (r) {
+	errmsg("failed writing quotaroot '%s'",
+	       quota[thisquota].quota.root, r);
+	quota_abort(&tid);
+	return r;
     }
 
     quota_commit(&tid);
@@ -453,9 +595,10 @@ int fixquota_finish(int thisquota)
 }
 
 /*
- * Fix all the quota roots
+ * Run a pass over all the quota roots
  */
-int fixquotas(char *domain, char **roots, int nroots)
+int fixquota_dopass(char *domain, char **roots, int nroots,
+		    foreach_cb *pass)
 {
     int i, r;
     char buf[MAX_MAILBOX_BUFFER], *tail;
@@ -470,7 +613,7 @@ int fixquotas(char *domain, char **roots, int nroots)
 
     /* basic case - everything (potentially limited by domain still) */
     if (!nroots) {
-	r = mboxlist_allmbox(buf, fixquota_mailbox, NULL);
+	r = mboxlist_allmbox(buf, pass, NULL);
 	if (r) {
 	    errmsg("processing mbox list for '%s'", buf, IMAP_IOERROR);
 	}
@@ -485,12 +628,24 @@ int fixquotas(char *domain, char **roots, int nroots)
 	/* change the separator to internal namespace */
 	mboxname_hiersep_tointernal(&quota_namespace, tail, 0);
 
-	r = mboxlist_allmbox(buf, fixquota_mailbox, NULL);
+	r = mboxlist_allmbox(buf, pass, NULL);
 	if (r) {
 	    errmsg("processing mbox list for '%s'", buf, IMAP_IOERROR);
 	    break;
 	}
     }
+
+    return r;
+}
+
+/*
+ * Fix all the quota roots
+ */
+int fixquotas(char *domain, char **roots, int nroots)
+{
+    int r;
+
+    r = fixquota_dopass(domain, roots, nroots, fixquota_pass2);
 
     while (!r && firstquota < quota_num) {
 	r = fixquota_finish(firstquota);

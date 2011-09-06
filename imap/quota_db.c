@@ -105,14 +105,16 @@ int quota_name_to_resource(const char *str)
  * of the .root field which is presumed to have been passed in by the
  * caller.
  */
-static void quota_init(struct quota *q)
+void quota_init(struct quota *q)
 {
     const char *root = q->root;	    /* save this, it was passed in */
     int res;
 
     memset(q, 0, sizeof(*q));
-    for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++)
+    for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++) {
 	q->limits[res] = QUOTA_UNLIMITED;
+	q->usedBs[res] = QUOTA_INVALID;
+    }
     q->root = root;
 }
 
@@ -127,6 +129,7 @@ static int quota_parseval(const char *data, struct quota *quota)
     int r = 0;
     int i = 0;
     int res = QUOTA_STORAGE;
+    quota_t usedB;
 
     quota_init(quota);
 
@@ -138,6 +141,11 @@ static int quota_parseval(const char *data, struct quota *quota)
 	    goto out;
 	if (sscanf(fields->data[i++], "%d", &quota->limits[res]) != 1)
 	    goto out;
+	if (i < fields->count &&
+	    sscanf(fields->data[i], QUOTA_T_FMT, &usedB) == 1) {
+	    quota->usedBs[res] = usedB;
+	    i++;
+	}
 	if (i == fields->count)
 	    break;	/* successfully parsed whole line */
 
@@ -269,7 +277,8 @@ static int do_onequota(void *rock,
     return r;
 }
 
-int quota_foreach(const char *prefix, quotaproc_t *proc, void *rock)
+int quota_foreach(const char *prefix, quotaproc_t *proc,
+		  void *rock, struct txn **tid)
 {
     int r;
     char *search = prefix ? (char *)prefix : "";
@@ -279,7 +288,7 @@ int quota_foreach(const char *prefix, quotaproc_t *proc, void *rock)
     foreach_d.rock = rock;
 
     r = QDB->foreach(qdb, search, strlen(search), NULL,
-		     do_onequota, &foreach_d, NULL);
+		     do_onequota, &foreach_d, tid);
 
     return r;
 }
@@ -331,6 +340,9 @@ int quota_write(struct quota *quota, struct txn **tid)
 	    buf_printf(&buf, " %s ", quota_db_names[res]);
 	buf_printf(&buf, QUOTA_T_FMT " %d",
 		   quota->useds[res], quota->limits[res]);
+	if (quota->usedBs[res] != QUOTA_INVALID)
+	    buf_printf(&buf, " "QUOTA_T_FMT,
+		       quota->usedBs[res]);
     }
 
     r = QDB->store(qdb, quota->root, qrlen, buf_cstring(&buf), buf.len, tid);
@@ -355,7 +367,8 @@ int quota_write(struct quota *quota, struct txn **tid)
     return r;
 }
 
-int quota_update_used(const char *quotaroot, enum quota_resource res, quota_t diff)
+int quota_update_used(const char *quotaroot, enum quota_resource res,
+		      quota_t diff, int is_scanned)
 {
     struct quota q;
     struct txn *tid = NULL;
@@ -368,6 +381,13 @@ int quota_update_used(const char *quotaroot, enum quota_resource res, quota_t di
     r = quota_read(&q, &tid, 1);
 
     if (!r) {
+
+	/* Note: usedBs[] is a cumulative delta, not an absolute
+	 * number; so it can go negative and must be updated
+	 * without clamping. */
+	if (is_scanned && q.usedBs[res] != QUOTA_INVALID)
+	    q.usedBs[res] += diff;
+
 	quota_use(&q, res, diff);
 	r = quota_write(&q, &tid);
     }

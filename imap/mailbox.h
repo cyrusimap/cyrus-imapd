@@ -309,6 +309,7 @@ struct mailbox {
  * struct annotate_mailbox_flags */
 #define OPT_IMAP_SHAREDSEEN (1<<2)	/* added for shared \Seen flag */
 #define OPT_IMAP_DUPDELIVER (1<<3)	/* added to allow duplicate delivery */
+#define OPT_MAILBOX_QUOTA_SCANNED (1<<28)	/* for quota -f scanning */
 #define OPT_MAILBOX_NEEDS_UNLINK (1<<29)	/* files to be unlinked */
 #define OPT_MAILBOX_NEEDS_REPACK (1<<30)	/* repacking to do */
 #define OPT_MAILBOX_DELETED (1U<<31)	/* mailbox is deleted an awaiting cleanup */
@@ -320,7 +321,8 @@ struct mailbox {
 			      OPT_MAILBOX_NEEDS_REPACK | \
 			      OPT_MAILBOX_DELETED)
 #define MAILBOX_OPT_VALID (MAILBOX_OPTIONS_MASK | \
-			   MAILBOX_CLEANUP_MASK)
+			   MAILBOX_CLEANUP_MASK | \
+			   OPT_MAILBOX_QUOTA_SCANNED)
 
 /* reconstruct flags */
 #define RECONSTRUCT_QUIET           (1<<1)
