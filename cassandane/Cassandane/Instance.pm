@@ -535,6 +535,31 @@ sub run_utility
     return undef;
 }
 
+sub start_utility_bg
+{
+    my ($self, @args) = @_;
+    return $self->_fork_utility(@args);
+}
+
+sub reap_utility_bg
+{
+    my ($self, $pid, $fh) = @_;
+
+    if (defined $fh)
+    {
+	# aha, close does a waitpid
+	close $fh;
+    }
+    else
+    {
+	# parent process...wait for child
+	my $child = waitpid($pid, 0);
+	# and deal with it's exit status
+	return $self->_handle_wait_status($pid)
+	    if $child == $pid;
+    }
+}
+
 #
 # Starts a new process to run a Cyrus utility program.  Obeys
 # the "mode" argument like run_utility().
