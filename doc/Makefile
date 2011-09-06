@@ -16,3 +16,6 @@ upload:
 		cp -a Common_Content/en-US/*.xml $$dir/en-US/.; \
 		make -C $$dir upload; \
 	done
+
+dist:
+	@git archive HEAD --prefix=cyrus-imapd-docs-2.5/ | gzip -c > cyrus-imapd-docs-2.5.tar.gz

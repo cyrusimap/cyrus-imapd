@@ -46,16 +46,148 @@
     <section id="sect-Deployment_Guide-Deployment_Scenarios-Multi_Server_Deployments">
         <title>Multi Server Deployments</title>
         <para>
-            This is a test paragraph in a section
+            A variety of options are available to scale up the deployment of Cyrus IMAP beyond a single server. Each of them has their own set of features, advantages, disadvantages and consequences on day-to-day administration, migration- and capacity planning and support. Please consider a deployment that requires scaling up carefully.
+        </para>
+        <formalpara id="form-Deployment_Guide-Multi_Server_Deployments-Cyrus_IMAP_Murder">
+            <title>Cyrus IMAP Murder</title>
+            <para>
+                A Cyrus IMAP Murder groups Cyrus IMAP servers together, allowing the addition and removal of individual Cyrus IMAP servers to and from the group. Functionally, a Cyrus IMAP Murder consists of the following three components;
+            </para>
+
+        </formalpara>
+        <para>
+            <itemizedlist>
+                <listitem>
+                    <para>
+                        one or more frontends, receiving the connections from the clients, authenticating them and depending on the type of Cyrus IMAP Murder, referring the client to the correct backend server, or proxying the connection.
+                    </para>
+
+                </listitem>
+                <listitem>
+                    <para>
+                        one or more backends, holding the actual mailbox spool(s).
+                    </para>
+
+                </listitem>
+                <listitem>
+                    <para>
+                        a master update server, where the information on the location and Access Control of the mailboxes is kept.
+                    </para>
+
+                </listitem>
+
+            </itemizedlist>
+
+        </para>
+        <para>
+            In a Cyrus IMAP Murder, access to mailboxes, regardless of which backend they reside on, is transparent to the user. As such, this particular type of deployment would be recommended for organizations that;
+        </para>
+        <para>
+            <itemizedlist>
+                <listitem>
+                    <para>
+                        (are likely to) grow a single Cyrus IMAP server beyond the capacity of said server,
+                    </para>
+
+                </listitem>
+                <listitem>
+                    <para>
+                        require shared mailboxes and user mailboxes to be shared regardless of any limitations to whether or not they reside on the same backend server,
+                    </para>
+
+                </listitem>
+
+            </itemizedlist>
+
+        </para>
+        <para>
+            Different types of Cyrus IMAP Murder deployments exist. Please see <xref linkend="sect-Deployment_Guide-Deployment_Scenarios-Cyrus_IMAP_Murder" /> for a review of your options.
+        </para>
+        <formalpara id="form-Deployment_Guide-Multi_Server_Deployments-IMAP_Proxy">
+            <title>IMAP Proxy</title>
+            <para>
+                An IMAP proxy like NGINX could sit in front of a number of stand-alone Cyrus IMAP servers, proxying client connections through to the correct stand-alone Cyrus IMAP server for a user.
+            </para>
+
+        </formalpara>
+        <para>
+            Note that in this type of setup, it is the user authentication that directs the proxy to the correct stand-alone Cyrus IMAP server. As such, shared mailboxes can only exist on the stand-alone Cyrus IMAP server to which the user is proxied &ndash;in other words, on which the user's own mailbox is supposed to exist.
         </para>
 
     </section>
 
-    <section id="sect-Deployment_Guide-Deployment_Scenarios-Cyrus_Murder">
-        <title>Cyrus Murder</title>
-        <para>
-            This is a test paragraph in a section
-        </para>
+    <section id="sect-Deployment_Guide-Deployment_Scenarios-Cyrus_IMAP_Murder">
+        <title>Cyrus IMAP Murder</title>
+        <section id="sect-Deployment_Guide-Cyrus_IMAP_Murder-The_Discrete_Murder">
+            <title>The Discrete Murder</title>
+            <para>
+                A <emphasis>discrete</emphasis> murder &ndash;also known as a standard murder&ndash; characteristically uses separate frontend and backend servers. At the time of this writing, this is the recommended type of Cyrus IMAP Murder for deployments that require;
+            </para>
+            <para>
+                <itemizedlist>
+                    <listitem>
+                        <para>
+                            load-balancing and/or high availability of their Cyrus IMAP deployments,
+                        </para>
+
+                    </listitem>
+                    <listitem>
+                        <para>
+                            the ability to take frontends out of rotation, and bring frontends (back) in to rotation without impact on the availability of mailbox spools.
+                        </para>
+
+                    </listitem>
+                    <listitem>
+                        <para>
+                            Authentication to take place before a connection is created or proxied to servers with data, such as would be the case of a perimeter network proxy,
+                        </para>
+
+                    </listitem>
+                    <listitem>
+                        <para>
+                            Have very large numbers of mailboxes,
+                        </para>
+                        <remark>This one's because of the mupdate RAM consumption</remark>
+
+                    </listitem>
+
+                </itemizedlist>
+
+            </para>
+            <para>
+                It is worth noting that in a <emphasis>discrete</emphasis> murder, backends only know of the mailboxes that reside in their local mailbox spool(s). Since the user's subscription database is kept on the backend server that hosts their mailbox, should the deployment require that all users can subscribe to all mailboxes that they have permission to in the murder, the setting <literal>allowallsubscribe</literal> needs to be set to <literal>true</literal> (1). This, however, allows users to subscribe to non-existent mailboxes.
+            </para>
+            <para>
+                VERIFY AFOREMENTIONED
+            </para>
+
+        </section>
+
+        <section id="sect-Deployment_Guide-Cyrus_IMAP_Murder-The_Unified_Murder">
+            <title>The Unified Murder</title>
+            <para>
+                A <emphasis>unified</emphasis> murder characteristically joins the functional aspects of a server being frontend and backend together onto one single Cyrus IMAP server. A Cyrus IMAP server in a unified murder can thus perform both as a frontend as well as a backend. All backends would thus have all information on all mailboxes on all other backends.
+            </para>
+            <para>
+                At the time of this writing, but subject to change in the near future, a participating node in a Cyrus IMAP Unified Murder cannot be made a dedicated frontend. This creates a disadvantage over a <emphasis>discrete</emphasis> murder, as the frontend function cannot be taken out of rotation without also loosing the backend function.
+            </para>
+            <para>
+                Because in using mailbox creation and transfer routines a participating node cannot be excluded from selection for or availability of the (new) location of the (new) mailbox, no guarantee can exists the participating node does not hold any mailboxes. Short of a deployment specific interface to creating and transferring mailboxes that provides such guarantee, as a logical consequence, to shoot a participating node in a Cyrus IMAP Unified Murder in the head, all mailboxes must be transferred to other backends prior to service shutdown, or the availability of the mailboxes is impacted.
+            </para>
+            <para>
+                The unified murder also has some great advantages. Since all backends know about all mailboxes in the murder, administrators can choose to not permit subscriptions to non-existent folders. In a discrete murder, where backends know only of the mailboxes in the local mailbox spool(s), such permission is (often) required.
+            </para>
+
+        </section>
+
+        <section id="sect-Deployment_Guide-Cyrus_IMAP_Murder-The_Shared_Murder">
+            <title>The Shared Murder</title>
+            <para>
+                todo
+            </para>
+
+        </section>
+
 
     </section>
 

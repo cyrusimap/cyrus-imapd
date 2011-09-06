@@ -5,6 +5,7 @@
 ]>
 <part id="part-Administrator_Guide-Cyrus_IMAP_Administration">
     <title>Cyrus IMAP Administration</title>
+    <xi:include href="Running_Cyrus_IMAP_Services_on_Non-Standard_Ports.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
     <xi:include href="Access_Control.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
     <xi:include href="cyradm.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
     <xi:include href="Tools_and_Utilities.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
