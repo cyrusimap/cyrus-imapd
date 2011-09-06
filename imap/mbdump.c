@@ -360,6 +360,7 @@ static int dump_annotations(const char *mailbox __attribute__((unused)),
     /* Transfer all attributes for this annotation, don't transfer size
      * separately since that can be implicitly determined */
 
+    prot_putc(' ', ctx->pout);
     ename = strconcat("A-", userid, entry, (char *)NULL);
     prot_printliteral(ctx->pout, ename, strlen(ename));
     free(ename);
@@ -368,6 +369,7 @@ static int dump_annotations(const char *mailbox __attribute__((unused)),
     prot_printliteral(ctx->pout, value->s, value->len);
     prot_putc(' ', ctx->pout);
     prot_printliteral(ctx->pout, contenttype, strlen(contenttype));
+    prot_putc(')', ctx->pout);
 
     return 0;
 }
@@ -481,6 +483,7 @@ int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid_start,
     const char *fname;
     int first = 1;
     int i;
+    struct quota q;
     struct data_file *df;
     struct seqset *expunged_seq = NULL;
 
@@ -503,10 +506,7 @@ int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid_start,
 
     /* The first member is either a number (if it is a quota root), or NIL
      * (if it isn't) */
-    /* XXX - what about message quota ? */
     {
-	struct quota q;
-
 	q.root = mailbox->name;
 	r = quota_read(&q, NULL, 0);
 
@@ -515,6 +515,8 @@ int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid_start,
 	} else {
 	    prot_printf(pout, "NIL");
 	    if (r == IMAP_QUOTAROOT_NONEXISTENT) r = 0;
+	    /* do not send other quota data later */
+	    q.root = NULL;
 	}
     }
 
@@ -682,6 +684,41 @@ int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid_start,
 	    
     } /* end if user INBOX */
 
+    /* Dump quota data */
+    if (q.root) {
+	const char *ename = "X-QUOTA";
+	int res;
+
+	/* ensure there is data to transmit */
+	for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
+	    /* STORAGE quota was already sent */
+	    if ((res != QUOTA_STORAGE) && (q.limits[res] >= 0)) {
+		break;
+	    }
+	}
+
+	if (res < QUOTA_NUMRESOURCES) {
+	    int sent = 0;
+
+	    prot_putc(' ', pout);
+	    prot_printliteral(pout, ename, strlen(ename));
+	    prot_printf(pout, " (");
+
+	    for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
+		if (q.limits[res] < 0) {
+		    continue;
+		}
+		if (sent++) {
+		    prot_putc(' ', pout);
+		}
+		prot_printliteral(pout, quota_names[res], strlen(quota_names[res]));
+		prot_putc(' ', pout);
+		prot_printf(pout, "%d", q.limits[res]);
+	    }
+	    prot_putc(')', pout);
+	}
+    }
+
  done:
 
     prot_printf(pout,")\r\n");
@@ -782,6 +819,8 @@ int undump_mailbox(const char *mbname,
     char *seen_file = NULL;
     char *mboxkey_file = NULL;
     quota_t old_quota_usage[QUOTA_NUMRESOURCES];
+    int res;
+    int newquotas[QUOTA_NUMRESOURCES];
     int quotalimit = -1;
     annotate_state_t *astate = NULL;
 
@@ -810,15 +849,12 @@ int undump_mailbox(const char *mbname,
 	/* Remove any existing quotaroot */
 	mboxlist_unsetquota(mbname);
     } else if (sscanf(data.s, "%d", &quotalimit) == 1) {
-	/* Set a Quota (may be -1 for "unlimited") */ 
-	int res;
-	int newquotas[QUOTA_NUMRESOURCES];
-
-	for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++)
+	/* Set a Quota (may be -1 for "unlimited") */
+	for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
 	    newquotas[res] = QUOTA_UNLIMITED;
+	}
 	newquotas[QUOTA_STORAGE] = quotalimit;
-
-	mboxlist_setquotas(mbname, newquotas, 0);
+	/* quota will actually be applied later */
     } else {
 	/* Huh? */
 	buf_free(&data);
@@ -933,6 +969,50 @@ int undump_mailbox(const char *mbname,
 	    c = prot_getc(pin);
 	    if(c == ')') break; /* that was the last item */
 	    else if(c != ' ') {
+		r = IMAP_PROTOCOL_ERROR;
+		goto done;
+	    }
+
+	    continue;
+	}
+	else if (!strcmp(file.s, "X-QUOTA")) {
+	    /* Quota */
+	    if (prot_getc(pin) != '(') {
+		r = IMAP_PROTOCOL_ERROR;
+		goto done;
+	    }
+
+	    for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
+		newquotas[res] = QUOTA_UNLIMITED;
+	    }
+
+	    for (;;) {
+		/* XXX - limit is actually stored in an int value */
+		int32_t limit = 0;
+
+		c = getastring(pin, pout, &content);
+		if (c != ' ') {
+		    r = IMAP_PROTOCOL_ERROR;
+		    goto done;
+		}
+		/* ignore unknown resources */
+		res = quota_name_to_resource(content.s);
+
+		c = getint32(pin, &limit);
+		if (res >= 0) {
+		    newquotas[res] = limit;
+		}
+
+		if (c == ')') break;
+		else if (c != ' ') {
+		    r = IMAP_PROTOCOL_ERROR;
+		    goto done;
+		}
+	    }
+
+	    c = prot_getc(pin);
+	    if (c == ')') break; /* that was the last item */
+	    else if (c != ' ') {
 		r = IMAP_PROTOCOL_ERROR;
 		goto done;
 	    }
@@ -1141,6 +1221,18 @@ int undump_mailbox(const char *mbname,
     /* we fiddled the files under the hood, so we can't do anything
      * BUT close it */
     mailbox_close(&mailbox);
+
+    /* time to apply quota (mailbox must be unlocked) */
+    if (!r) {
+	for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
+	    if (newquotas[res] != QUOTA_UNLIMITED) {
+		break;
+	    }
+	}
+	if (res < QUOTA_NUMRESOURCES) {
+	    mboxlist_setquotas(mbname, newquotas, 0);
+	}
+    }
 
     /* let's make sure the modification times are right */
     if (!r) {
