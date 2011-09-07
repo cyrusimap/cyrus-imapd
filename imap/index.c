@@ -1036,7 +1036,6 @@ int index_scan(struct index_state *state, const char *contents)
 {
     unsigned *msgno_list;
     uint32_t msgno;
-    struct mapfile msgfile;
     int n = 0;
     int listindex;
     int listcount;
@@ -1068,20 +1067,18 @@ int index_scan(struct index_state *state, const char *contents)
     listcount = search_prefilter_messages(msgno_list, state, &searchargs);
 
     for (listindex = 0; !n && listindex < listcount; listindex++) {
-        msgno = msgno_list[listindex];
+	struct mapfile msgfile = MAPFILE_INITIALIZER;
+	msgno = msgno_list[listindex];
 	im = &state->map[msgno-1];
 
-	msgfile.base = 0;
-	msgfile.size = 0;
+	if (mailbox_map_message(mailbox, im->record.uid,
+				&msgfile.base, &msgfile.size))
+	    continue;
 
-        if (mailbox_map_message(mailbox, im->record.uid,
-                                &msgfile.base, &msgfile.size))
-            continue;
+	n += index_scan_work(msgfile.base, msgfile.size, contents, length);
 
-        n += index_scan_work(msgfile.base, msgfile.size, contents, length);
-
-        mailbox_unmap_message(mailbox, im->record.uid,
-                              &msgfile.base, &msgfile.size);
+	mailbox_unmap_message(mailbox, im->record.uid,
+			      &msgfile.base, &msgfile.size);
     }
 
     free(strlist.s);
@@ -1102,11 +1099,9 @@ static int _index_search(unsigned **msgno_list, struct index_state *state,
 			 modseq_t *highestmodseq)
 {
     uint32_t msgno;
-    struct mapfile msgfile;
     int n = 0;
     int listindex, min;
     int listcount;
-    struct mailbox *mailbox = state->mailbox;
     struct index_map *im;
 
     if (state->exists <= 0) return 0;
@@ -1135,14 +1130,12 @@ static int _index_search(unsigned **msgno_list, struct index_state *state,
     for (; listindex < listcount; listindex++) {
 	msgno = (*msgno_list)[listindex];
 	im = &state->map[msgno-1];
-	msgfile.base = 0;
-	msgfile.size = 0;
 
 	/* expunged messages never match */
 	if (im->record.system_flags & FLAG_EXPUNGED)
 	    continue;
 
-	if (index_search_evaluate(state, searchargs, msgno, &msgfile)) {
+	if (index_search_evaluate(state, searchargs, msgno, NULL)) {
 	    (*msgno_list)[n++] = msgno;
 	    if (highestmodseq && im->record.modseq > *highestmodseq) {
 		*highestmodseq = im->record.modseq;
@@ -1164,34 +1157,24 @@ static int _index_search(unsigned **msgno_list, struct index_state *state,
 		    *highestmodseq = im->record.modseq;
 	    }
 	}
-	if (msgfile.base) {
-	    mailbox_unmap_message(mailbox, im->record.uid,
-				  &msgfile.base, &msgfile.size);
-	}
     }
 
     /* Reverse search.  Stops at previously found MIN (if any) */
     for (listindex = listcount; listindex > min; listindex--) {
 	msgno = (*msgno_list)[listindex-1];
 	im = &state->map[msgno-1];
-	msgfile.base = 0;
-	msgfile.size = 0;
 
 	/* expunged messages never match */
 	if (im->record.system_flags & FLAG_EXPUNGED)
 	    continue;
 
-	if (index_search_evaluate(state, searchargs, msgno, &msgfile)) {
+	if (index_search_evaluate(state, searchargs, msgno, NULL)) {
 	    (*msgno_list)[n++] = msgno;
 	    if (highestmodseq && im->record.modseq > *highestmodseq) {
 		*highestmodseq = im->record.modseq;
 	    }
 	    /* We only care about MAX, so we're done on first match */
 	    listindex = 0;
-	}
-	if (msgfile.base) {
-	    mailbox_unmap_message(mailbox, im->record.uid,
-				  &msgfile.base, &msgfile.size);
 	}
     }
 
@@ -3203,57 +3186,61 @@ static int index_search_evaluate(struct index_state *state,
     struct mailbox *mailbox = state->mailbox;
     struct index_map *im = &state->map[msgno-1];
     struct searchannot *sa;
+    struct mapfile localmap = MAPFILE_INITIALIZER;
+    int retval = 0;
+
+    if (!msgfile) msgfile = &localmap;
 
     if ((searchargs->flags & SEARCH_RECENT_SET) && !im->isrecent)
-	return 0;
+	goto zero;
     if ((searchargs->flags & SEARCH_RECENT_UNSET) && im->isrecent)
-	return 0;
+	goto zero;
     if ((searchargs->flags & SEARCH_SEEN_SET) && !im->isseen)
-	return 0;
+	goto zero;
     if ((searchargs->flags & SEARCH_SEEN_UNSET) && im->isseen)
-	return 0;
+	goto zero;
 
     if (searchargs->smaller && im->record.size >= searchargs->smaller)
-	return 0;
+	goto zero;
     if (searchargs->larger && im->record.size <= searchargs->larger)
-	return 0;
+	goto zero;
 
     if (searchargs->after && im->record.internaldate < searchargs->after)
-	return 0;
+	goto zero;
     if (searchargs->before && im->record.internaldate >= searchargs->before)
-	return 0;
+	goto zero;
     if (searchargs->sentafter && im->record.sentdate < searchargs->sentafter)
-	return 0;
+	goto zero;
     if (searchargs->sentbefore && im->record.sentdate >= searchargs->sentbefore)
-	return 0;
+	goto zero;
 
     if (searchargs->modseq && im->record.modseq < searchargs->modseq)
-	return 0;
+	goto zero;
 
     if (~im->record.system_flags & searchargs->system_flags_set)
-	return 0;
+	goto zero;
     if (im->record.system_flags & searchargs->system_flags_unset)
-	return 0;
+	goto zero;
 
     for (i = 0; i < (MAX_USER_FLAGS/32); i++) {
 	if (~im->record.user_flags[i] & searchargs->user_flags_set[i])
-	    return 0;
+	    goto zero;
 	if (im->record.user_flags[i] & searchargs->user_flags_unset[i])
-	    return 0;
+	    goto zero;
     }
 
     for (seq = searchargs->sequence; seq; seq = seq->nextseq) {
-	if (!seqset_ismember(seq, msgno)) return 0;
+	if (!seqset_ismember(seq, msgno)) goto zero;
     }
     for (seq = searchargs->uidsequence; seq; seq = seq->nextseq) {
-	if (!seqset_ismember(seq, im->record.uid)) return 0;
+	if (!seqset_ismember(seq, im->record.uid)) goto zero;
     }
 
     if (searchargs->from || searchargs->to || searchargs->cc ||
 	searchargs->bcc || searchargs->subject || searchargs->messageid) {
 
 	if (mailbox_cacherecord(mailbox, &im->record))
-	    return 0;
+	    goto zero;
 
 	if (searchargs->messageid) {
 	    char *tmpenv;
@@ -3263,7 +3250,7 @@ static int index_search_evaluate(struct index_state *state,
 
 	    /* must be long enough to actually HAVE some contents */
 	    if (cacheitem_size(&im->record, CACHE_ENVELOPE) <= 2)
-		return 0;
+		goto zero;
 
 	    /* get msgid out of the envelope */
 
@@ -3277,7 +3264,7 @@ static int index_search_evaluate(struct index_state *state,
 	    if (!envtokens[ENV_MSGID]) {
 		/* free stuff */
 		free(tmpenv);
-		return 0;
+		goto zero;
 	    }
 
 	    msgid = lcase(envtokens[ENV_MSGID]);
@@ -3290,50 +3277,50 @@ static int index_search_evaluate(struct index_state *state,
 	    /* free stuff */
 	    free(tmpenv);
 
-	    if (l) return 0;
+	    if (l) goto zero;
 	}
 
 	for (l = searchargs->from; l; l = l->next) {
 	    if (!_search_searchbuf(l->s, l->p, cacheitem_buf(&im->record, CACHE_FROM)))
-		return 0;
+		goto zero;
 	}
 
 	for (l = searchargs->to; l; l = l->next) {
 	    if (!_search_searchbuf(l->s, l->p, cacheitem_buf(&im->record, CACHE_TO)))
-		return 0;
+		goto zero;
 	}
 
 	for (l = searchargs->cc; l; l = l->next) {
 	    if (!_search_searchbuf(l->s, l->p, cacheitem_buf(&im->record, CACHE_CC)))
-		return 0;
+		goto zero;
 	}
 
 	for (l = searchargs->bcc; l; l = l->next) {
 	    if (!_search_searchbuf(l->s, l->p, cacheitem_buf(&im->record, CACHE_BCC)))
-		return 0;
+		goto zero;
 	}
 
 	for (l = searchargs->subject; l; l = l->next) {
 	    if ((cacheitem_size(&im->record, CACHE_SUBJECT) == 3 && 
 		!strncmp(cacheitem_base(&im->record, CACHE_SUBJECT), "NIL", 3)) ||
 		!_search_searchbuf(l->s, l->p, cacheitem_buf(&im->record, CACHE_SUBJECT)))
-		return 0;
+		goto zero;
 	}
     }
 
     for (sa = searchargs->annotations ; sa ; sa = sa->next) {
 	if (!_search_annotation(state, msgno, sa))
-	    return 0;
+	    goto zero;
     }
 
     for (s = searchargs->sublist; s; s = s->next) {
 	if (index_search_evaluate(state, s->sub1, msgno, msgfile)) {
-	    if (!s->sub2) return 0;
+	    if (!s->sub2) goto zero;
 	}
 	else {
 	    if (s->sub2 &&
 		!index_search_evaluate(state, s->sub2, msgno, msgfile))
-	      return 0;
+	      goto zero;
 	}
     }
 
@@ -3342,37 +3329,47 @@ static int index_search_evaluate(struct index_state *state,
 	if (!msgfile->size) { /* Map the message in if we haven't before */
 	    if (mailbox_map_message(mailbox, im->record.uid,
 				    &msgfile->base, &msgfile->size)) {
-		return 0;
+		goto zero;
 	    }
 	}
 
 	h = searchargs->header_name;
 	for (l = searchargs->header; l; (l = l->next), (h = h->next)) {
 	    if (!index_searchheader(h->s, l->s, l->p, msgfile,
-				    im->record.header_size)) return 0;
+				    im->record.header_size)) goto zero;
 	}
 
 	if (mailbox_cacherecord(mailbox, &im->record))
-	    return 0;
+	    goto zero;
 
 	for (l = searchargs->body; l; l = l->next) {
 	    if (!index_searchmsg(l->s, l->p, msgfile, 1,
-				 cacheitem_base(&im->record, CACHE_SECTION))) return 0;
+				 cacheitem_base(&im->record, CACHE_SECTION))) goto zero;
 	}
 	for (l = searchargs->text; l; l = l->next) {
 	    if (!index_searchmsg(l->s, l->p, msgfile, 0,
-				 cacheitem_base(&im->record, CACHE_SECTION))) return 0;
+				 cacheitem_base(&im->record, CACHE_SECTION))) goto zero;
 	}
     }
     else if (searchargs->header_name) {
 	h = searchargs->header_name;
 	for (l = searchargs->header; l; (l = l->next), (h = h->next)) {
 	    if (!index_searchcacheheader(state, msgno, h->s, l->s, l->p))
-		return 0;
+		goto zero;
 	}
     }
 
-    return 1;
+    retval = 1;
+
+zero:
+
+    /* unmap if we mapped it */
+    if (localmap.size) {
+	mailbox_unmap_message(mailbox, im->record.uid,
+			      &localmap.base, &localmap.size);
+    }
+
+    return retval;
 }
 
 /*
@@ -3520,7 +3517,7 @@ static void index_getsearchtextmsg(struct index_state *state,
 				   index_search_text_receiver_t receiver,
 				   void *rock,
 				   char const *cachestr) {
-    struct mapfile msgfile;
+    struct mapfile msgfile = MAPFILE_INITIALIZER;
     int partsleft = 1;
     int subparts;
     unsigned long start;

@@ -134,6 +134,8 @@ struct mapfile {
     unsigned long size;
 };
 
+#define MAPFILE_INITIALIZER { NULL, 0 }
+
 typedef struct msgdata {
     bit32 uid;                  /* UID for output purposes */
     uint32_t msgno;		/* message number */
