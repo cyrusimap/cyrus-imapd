@@ -5042,6 +5042,9 @@ extern struct nntp_overview *index_overview(struct index_state *state,
     struct mailbox *mailbox = state->mailbox;
     struct index_map *im = &state->map[msgno-1];
 
+    /* flush any previous data */
+    memset(&over, 0, sizeof(struct nntp_overview));
+
     if (mailbox_cacherecord(mailbox, &im->record))
 	return NULL; /* upper layers can cope! */
 
@@ -5097,8 +5100,6 @@ extern struct nntp_overview *index_overview(struct index_state *state,
 
 	over.from = from;
     }
-    else
-	over.from = NULL;
 
     /* massage references */
     refhdr.s = "references";
