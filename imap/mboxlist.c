@@ -2054,7 +2054,7 @@ int mboxlist_allmbox(const char *prefix, foreach_cb *proc, void *rock)
  * case it wants some persistant storage or extra data.
  */
 /* Find all mailboxes that match 'pattern'. */
-int mboxlist_findall(struct namespace *namespace __attribute__((unused)),
+int mboxlist_findall(struct namespace *namespace,
 		     const char *pattern, int isadmin, const char *userid, 
 		     struct auth_state *auth_state, int (*proc)(), void *rock)
 {
@@ -2069,6 +2069,8 @@ int mboxlist_findall(struct namespace *namespace __attribute__((unused)),
     int userlen = userid ? strlen(userid) : 0, domainlen = 0;
     char domainpat[MAX_MAILBOX_BUFFER] = ""; /* do intra-domain fetches only */
     char *pat = NULL;
+
+    if (!namespace) namespace = mboxname_get_adminnamespace();
 
     if (config_virtdomains) {
 	char *domain;
@@ -2202,7 +2204,7 @@ int mboxlist_findall(struct namespace *namespace __attribute__((unused)),
 			NULL);
     }
 
-    if(!r && (isadmin || ( ( namespace != 0 ) && (namespace->accessible[NAMESPACE_USER]) ))) {
+    if (!r && (isadmin || namespace->accessible[NAMESPACE_USER])) {
 	cbrock.find_namespace = NAMESPACE_USER;
 	/* switch to pattern with domain prepended */
 	glob_free(&cbrock.g);
@@ -2246,6 +2248,8 @@ int mboxlist_findall_alt(struct namespace *namespace,
     int userlen = userid ? strlen(userid) : 0, domainlen = 0;
     char domainpat[MAX_MAILBOX_BUFFER]; /* do intra-domain fetches only */
     char *pat = NULL;
+
+    if (!namespace) namespace = mboxname_get_adminnamespace();
 
     if (config_virtdomains && userid && (p = strchr(userid, '@'))) {
 	userlen = p - userid;
@@ -2346,7 +2350,7 @@ int mboxlist_findall_alt(struct namespace *namespace,
      *
      * If "Other Users*" can match pattern, search for those mailboxes next
      */
-    if(isadmin || ( ( namespace != 0 ) && (namespace->accessible[NAMESPACE_USER]) )) {
+    if (isadmin || namespace->accessible[NAMESPACE_USER]) {
         len = strlen(namespace->prefix[NAMESPACE_USER]);
         if(len>0) len--;
 
@@ -2383,7 +2387,7 @@ int mboxlist_findall_alt(struct namespace *namespace,
      * search for all remaining mailboxes.
      * just bother looking at the ones that have the same pattern prefix.
      */
-    if(isadmin || ( ( namespace != 0 ) && (namespace->accessible[NAMESPACE_SHARED]) )) {
+    if (isadmin || namespace->accessible[NAMESPACE_SHARED]) {
 	len = strlen(namespace->prefix[NAMESPACE_SHARED]);
 	if(len>0) len--;
 	if (!strncmp(namespace->prefix[NAMESPACE_SHARED], pattern,
@@ -2824,7 +2828,7 @@ static void mboxlist_closesubs(struct db *sub)
  * is the user's login id.  For each matching mailbox, calls
  * 'proc' with the name of the mailbox.
  */
-int mboxlist_findsub(struct namespace *namespace __attribute__((unused)),
+int mboxlist_findsub(struct namespace *namespace,
 		     const char *pattern, int isadmin __attribute__((unused)),
 		     const char *userid, struct auth_state *auth_state, 
 		     int (*proc)(), void *rock, int force)
@@ -2841,6 +2845,8 @@ int mboxlist_findsub(struct namespace *namespace __attribute__((unused)),
     int userlen = userid ? strlen(userid) : 0, domainlen = 0;
     char domainpat[MAX_MAILBOX_BUFFER]; /* do intra-domain fetches only */
     char *pat = NULL;
+
+    if (!namespace) namespace = mboxname_get_adminnamespace();
 
     if (config_virtdomains && userid && (p = strchr(userid, '@'))) {
 	userlen = p - userid;
@@ -2952,7 +2958,7 @@ int mboxlist_findsub(struct namespace *namespace __attribute__((unused)),
 	cbrock.usermboxnamelen = 0;
     }
 
-    if ( isadmin || ( ( namespace != 0 ) && (namespace->accessible[NAMESPACE_USER]) ) ) {
+    if (isadmin || namespace->accessible[NAMESPACE_USER]) {
 	cbrock.find_namespace = NAMESPACE_USER;
 	/* switch to pattern with domain prepended */
 	glob_free(&cbrock.g);
@@ -3010,6 +3016,8 @@ int mboxlist_findsub_alt(struct namespace *namespace,
     int userlen = userid ? strlen(userid) : 0, domainlen = 0;
     char domainpat[MAX_MAILBOX_BUFFER]; /* do intra-domain fetches only */
     char *pat = NULL;
+
+    if (!namespace) namespace = mboxname_get_adminnamespace();
 
     if (config_virtdomains && userid && (p = strchr(userid, '@'))) {
 	userlen = p - userid;
@@ -3119,7 +3127,7 @@ int mboxlist_findsub_alt(struct namespace *namespace,
      * If "Other Users*" can match pattern, search for those subscriptions next
      */
 
-    if ( isadmin || ( ( namespace != 0 ) && (namespace->accessible[NAMESPACE_USER]) ) ) {
+    if (isadmin || namespace->accessible[NAMESPACE_USER]) {
 	len = strlen(namespace->prefix[NAMESPACE_USER]);
 	if(len>0) len--; /* Remove Separator */
 	if (!strncmp(namespace->prefix[NAMESPACE_USER], pattern,
@@ -3156,7 +3164,7 @@ int mboxlist_findsub_alt(struct namespace *namespace,
      * search for all remaining subscriptions.
      * just bother looking at the ones that have the same pattern prefix.
      */
-    if ( isadmin || ( ( namespace != 0 ) && (namespace->accessible[NAMESPACE_SHARED]) ) ) {
+    if (isadmin || namespace->accessible[NAMESPACE_SHARED]) {
 	len = strlen(namespace->prefix[NAMESPACE_SHARED]);
 	if(len>0) len--; /* Remove Separator */
 	if (!strncmp(namespace->prefix[NAMESPACE_SHARED], pattern,
