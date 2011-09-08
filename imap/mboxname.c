@@ -73,6 +73,8 @@ struct mboxlocklist {
 
 static struct mboxlocklist *open_mboxlocks = NULL;
 
+static struct namespace *admin_namespace;
+
 /* Mailbox patterns which the design of the server prohibits */
 static char *badmboxpatterns[] = {
     "",
@@ -690,6 +692,16 @@ int mboxname_init_namespace(struct namespace *namespace, int isadmin)
     }
 
     return 0;
+}
+
+struct namespace *mboxname_get_adminnamespace()
+{
+    static struct namespace ns;
+    if (!admin_namespace) {
+	mboxname_init_namespace(&ns, /*isadmin*/1);
+	admin_namespace = &ns;
+    }
+    return admin_namespace;
 }
 
 /*

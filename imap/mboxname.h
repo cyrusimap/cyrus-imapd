@@ -98,6 +98,8 @@ void mboxname_release(struct mboxlock **mboxlockptr);
 /* Create namespace based on config options. */
 int mboxname_init_namespace(struct namespace *namespace, int isadmin);
 
+struct namespace *mboxname_get_adminnamespace();
+
 /*
  * Translate separator charactors in a mailboxname from its external
  * representation to its internal representation '.'.
