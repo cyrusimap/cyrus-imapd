@@ -1327,7 +1327,7 @@ int mailbox_record_hasflag(struct mailbox *mailbox,
     if (mailbox_user_flag(mailbox, flag, &userflag, 0))
 	return 0;
 
-    return ((record->user_flags[userflag/32] | 1<<(userflag&31)) ? 1 : 0);
+    return ((record->user_flags[userflag/32] & (1<<(userflag&31))) ? 1 : 0);
 }
 
 int mailbox_buf_to_index_header(const char *buf, struct index_header *i)
