@@ -214,6 +214,7 @@ static void free_wildmats(struct wildmat *wild);
 static void cmdloop(void);
 static int open_group(char *name, int has_prefix,
 		      struct backend **ret, int *postable);
+static int getuserpass(struct protstream *in, struct buf *buf);
 static int parserange(char *str, uint32_t *uid, uint32_t *last,
 		      char **msgid, struct backend **be);
 static time_t parse_datetime(char *datestr, char *timestr, char *gmt);
@@ -909,36 +910,47 @@ static void cmdloop(void)
 	switch (cmd.s[0]) {
 	case 'A':
 	    if (!strcmp(cmd.s, "Authinfo")) {
-		arg2.len = arg3.len = 0;
 		if (c != ' ') goto missingargs;
 		c = getword(nntp_in, &arg1); /* subcommand */
 		if (c == EOF) goto missingargs;
 
 		lcase(arg1.s);
 
-		if (strcmp(arg1.s, "generic") && c != ' ') {
-		    /* arg2 is required for all subcommands except generic */
-		    goto missingargs;
-		}
-		if (c == ' ') {
-		    c = getword(nntp_in, &arg2); /* argument/sasl mech */
+		if (!strcmp(arg1.s, "user") || !strcmp(arg1.s, "pass")) {
+		    if (c != ' ') goto missingargs;
+		    c = getuserpass(nntp_in, &arg2); /* user/pass */
 		    if (c == EOF) goto missingargs;
-		}
 
-		if (!strcmp(arg1.s, "sasl") && c == ' ') {
-		    c = getword(nntp_in, &arg3); /* init response (optional) */
-		    if (c == EOF) goto missingargs;
-		}
-		if (c == '\r') c = prot_getc(nntp_in);
-		if (c != '\n') goto extraargs;
+		    if (c == '\r') c = prot_getc(nntp_in);
+		    if (c != '\n') goto extraargs;
 
-		if (!strcmp(arg1.s, "user"))
-		    cmd_authinfo_user(arg2.s);
-		else if (!strcmp(arg1.s, "pass"))
-		    cmd_authinfo_pass(arg2.s);
-		else if (!strcmp(arg1.s, "sasl") || !strcmp(arg1.s, "generic"))
+		    if (arg1.s[0] == 'u')
+			cmd_authinfo_user(arg2.s);
+		    else
+			cmd_authinfo_pass(arg2.s);
+		}
+		else if (!strcmp(arg1.s, "sasl") || !strcmp(arg1.s, "generic")) {
+		    arg2.len = arg3.len = 0;
+
+		    /* mech name required for SASL but not GENERIC */
+		    if ((arg1.s[0] == 's') && (c != ' ')) goto missingargs;
+
+		    if (c == ' ') {
+			c = getword(nntp_in, &arg2); /* mech name */
+			if (c == EOF) goto missingargs;
+
+			if (c == ' ') {
+			    c = getword(nntp_in, &arg3); /* init response */
+			    if (c == EOF) goto missingargs;
+			}
+		    }
+
+		    if (c == '\r') c = prot_getc(nntp_in);
+		    if (c != '\n') goto extraargs;
+
 		    cmd_authinfo_sasl(arg1.s, arg2.len ? arg2.s : NULL,
 				      arg3.len ? arg3.s : NULL);
+		}
 		else
 		    prot_printf(nntp_out,
 				"501 Unrecognized AUTHINFO command\r\n");
@@ -1587,6 +1599,28 @@ static int find_msgid(char *msgid, char **mailbox, uint32_t *uid)
     }
 
     return 1;
+}
+
+/*
+ * Parse a username or password (token which may contain SP or TAB)
+ */
+#define MAX_NNTP_ARG 497
+static int getuserpass(struct protstream *in, struct buf *buf)
+{
+    int c;
+
+    buf_reset(buf);
+    for (;;) {
+	c = prot_getc(in);
+	if (c == EOF || c == '\r' || c == '\n') {
+	    buf_cstring(buf); /* appends a '\0' */
+	    return c;
+	}
+	buf_putc(buf, c);
+	if (buf_len(buf) > MAX_NNTP_ARG) {
+	    fatal("argument too long", EC_IOERR);
+	}
+    }
 }
 
 static int parserange(char *str, uint32_t *uid, uint32_t *last,
