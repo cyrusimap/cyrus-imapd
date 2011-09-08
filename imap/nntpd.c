@@ -4164,7 +4164,9 @@ static struct wildmat *split_wildmats(char *str)
 	else if (*c == '@') wild[n].not = -1;	/* absolute not (feeding) */
 	else wild[n].not = 0;
 
-	strcpy(p, wild[n].not ? c + 1 : c);
+	strncpy(p, wild[n].not ? c + 1 : c, pattern+sizeof(pattern) - p);
+	pattern[sizeof(pattern)-1] = '\0';
+
 	wild[n++].pat = xstrdup(pattern);
     } while (c != str);
     wild[n].pat = NULL;
