@@ -10,7 +10,10 @@ at all.  This section documents those steps.
     allows Cyrus to be started as the Cyrus user instead of being
     started as root and changing to the Cyrus user.
 
-    https://github.com/gnb/cyrus-imapd/commit/a430440bc9d4f0a6b0761660c07438cc22d4a026
+    http://git.cyrusimap.org/cyrus-imapd/commit/?id=a5caf503c7060b4f1ec546e4dc6fe75e5b9c4029
+
+    This patch has been in the CMU master development branch for
+    some time, but not in any of the release branches.
 
 2.  The passwd and group maps need valid entries for user "cyrus"
     and group "mail".  An easy way is to manually add this line
