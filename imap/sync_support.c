@@ -1370,12 +1370,16 @@ int sync_mailbox(struct mailbox *mailbox,
 		 struct dlist *kl, struct dlist *kupload,
 		 int printrecords)
 {
-    int r;
+    int r = 0;
     char sync_crc[128];
+    annotate_db_t *user_annot_db = NULL;
+    int userannot = 0;
+
+    if (!annotate_getmailboxdb(mailbox->name, /*flags*/0, &user_annot_db))
+	userannot = 1;
 
     r = sync_crc_calc(mailbox, sync_crc, sizeof(sync_crc));
-    if (r)
-	return r;
+    if (r) goto done;
 
     dlist_setatom(kl, "UNIQUEID", mailbox->uniqueid);
     dlist_setatom(kl, "MBOXNAME", mailbox->name);
@@ -1402,8 +1406,7 @@ int sync_mailbox(struct mailbox *mailbox,
 	uint32_t recno;
 	int send_file;
 	uint32_t prevuid = 0;
-	struct sync_annot_list *annots;
-	int r;
+	struct sync_annot_list *annots = NULL;
 
 	for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	    /* we can't send bogus records */
@@ -1441,12 +1444,8 @@ int sync_mailbox(struct mailbox *mailbox,
 
 	    if (send_file) {
 		r = sync_send_file(mailbox, &record, part_list, kupload);
-		if (r) return r;
+		if (r) goto done;
 	    }
-
-	    r = read_annotations(mailbox, &record, &annots);
-	    if (r)
-		return r;
 
 	    il = dlist_newkvlist(rl, "RECORD");
 	    dlist_setnum32(il, "UID", record.uid);
@@ -1456,21 +1455,29 @@ int sync_mailbox(struct mailbox *mailbox,
 	    dlist_setdate(il, "INTERNALDATE", record.internaldate);
 	    dlist_setnum32(il, "SIZE", record.size);
 	    dlist_setatom(il, "GUID", message_guid_encode(&record.guid));
-	    encode_annotations(il, annots);
+
+	    if (userannot) {
+		r = read_annotations(mailbox, &record, &annots);
+		if (r) goto done;
+		encode_annotations(il, annots);
+	    }
 
 	    sync_annot_list_free(&annots);
 	}
 
 	r = read_annotations(mailbox, NULL, &annots);
-	if (r)
-	    return r;
+	if (r) goto done;
+
 	if (annots) {
 	    encode_annotations(kl, annots);
 	    sync_annot_list_free(&annots);
 	}
     }
 
-    return 0;
+done:
+    annotate_putdb(&user_annot_db);
+
+    return r;
 }
 
 int sync_parse_response(const char *cmd, struct protstream *in,
@@ -2131,9 +2138,14 @@ int sync_crc_calc(struct mailbox *mailbox, char *buf, int maxlen)
     struct index_record record;
     uint32_t recno;
     struct sync_annot_list *annots = NULL;
-    int r;
+    int userannot = 0;
+    int r = 0;
+    annotate_db_t *user_annot_db = NULL;
 
     sync_crc_algorithm->begin();
+
+    if (!annotate_getmailboxdb(mailbox->name, /*flags*/0, &user_annot_db))
+	userannot = 1;
 
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	/* we can't send bogus records, just skip them! */
@@ -2141,9 +2153,9 @@ int sync_crc_calc(struct mailbox *mailbox, char *buf, int maxlen)
 	    continue;
 
 	sync_crc_algorithm->addrecord(mailbox, &record, sync_crc_covers);
-	if ((sync_crc_covers & SYNC_CRC_ANNOTATIONS)) {
+	if ((sync_crc_covers & SYNC_CRC_ANNOTATIONS) && userannot) {
 	    r = read_annotations(mailbox, &record, &annots);
-	    if (r) return r;
+	    if (r) continue;
 	    calc_annots(annots);
 	    sync_annot_list_free(&annots);
 	}
@@ -2151,10 +2163,13 @@ int sync_crc_calc(struct mailbox *mailbox, char *buf, int maxlen)
 
     if ((sync_crc_covers & SYNC_CRC_ANNOTATIONS)) {
 	r = read_annotations(mailbox, NULL, &annots);
-	if (r) return r;
-	calc_annots(annots);
-	sync_annot_list_free(&annots);
+	if (!r) {
+	    calc_annots(annots);
+	    sync_annot_list_free(&annots);
+	}
     }
+
+    annotate_putdb(&user_annot_db);
 
     return sync_crc_algorithm->end(buf, maxlen);
 }
