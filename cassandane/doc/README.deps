@@ -54,6 +54,11 @@ Cassandane needs the following software to work:
     CPAN package http://search.cpan.org/dist/Clone/
     Ubuntu package libclone-perl
 
+ * Config::IniFiles
+    Read simple .INI style config files.
+    CPAN package http://search.cpan.org/~shlomif/Config-IniFiles-2.68/
+    Ubuntu package libconfig-inifiles-perl.
+
 Debian/Ubuntu copypasta:
   sudo apt-get -y install liburi-perl libdigest-sha1-perl \
        libdatetime-perl libbsd-resource-perl libtest-unit-perl \

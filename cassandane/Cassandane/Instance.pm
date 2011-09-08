@@ -55,8 +55,9 @@ use Cassandane::Util::Log;
 use Cassandane::Config;
 use Cassandane::Service;
 use Cassandane::ServiceFactory;
+use Cassandane::Cassini;
 
-my $rootdir = '/var/tmp/cass';
+my $rootdir;
 my $stamp;
 my $next_unique = 1;
 my %defaults =
@@ -68,10 +69,15 @@ sub new
 {
     my $class = shift;
     my %params = @_;
+
+    $rootdir = cassini('cassandane', 'rootdir', '/var/tmp/cass')
+	unless defined $rootdir;
+
     my $self = {
 	name => undef,
 	basedir => undef,
-	cyrus_prefix => '/usr/cyrus',
+	installation => 'default',
+	cyrus_prefix => undef,
 	config => Cassandane::Config->default()->clone(),
 	services => {},
 	re_use_dir => 0,
@@ -86,6 +92,10 @@ sub new
 	if defined $params{name};
     $self->{basedir} = $params{basedir}
 	if defined $params{basedir};
+    $self->{installation} = $params{installation}
+	if defined $params{installation};
+    $self->{cyrus_prefix} = cassini("cyrus $self->{installation}",
+				    'prefix', '/usr/cyrus');
     $self->{cyrus_prefix} = $params{cyrus_prefix}
 	if defined $params{cyrus_prefix};
     $self->{config} = $params{config}->clone()

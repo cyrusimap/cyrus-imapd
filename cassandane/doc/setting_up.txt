@@ -46,6 +46,20 @@ at all.  This section documents those steps.
     gnb> cd ~/my/cyrus/workarea
     gnb> make DESTDIR=/var/tmp/cassandane-cyrus install
 
+    Alternatively, you could set up a cassandane.ini file in the
+    Cassandane directory (copy the cassandane.ini.example file) and set
+    'prefix' in the 'cyrus default' section to indicate your Cyrus
+    install directory.
+
+    gnb> cd ~/my/cassandane/workarea
+    gnb> cp cassandane.ini.example cassandane.ini
+    gnb> vi cassandane.ini
+    [cyrus default]
+    prefix = /var/tmp/cassandane-cyrus
+
+    gnb> cd ~/my/cyrus/workarea
+    gnb> make DESTDIR=/var/tmp/cassandane-cyrus install
+
 5.  It's also a good idea to set some kernel tunables.
 
     When dumping core files, use the PID of the dumping process
