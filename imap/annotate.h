@@ -63,6 +63,18 @@ struct strlist {
     struct strlist *next;
 };
 
+typedef struct annotate_db annotate_db_t;
+struct annotate_db
+{
+    annotate_db_t *next;
+    int refcount;
+    char *mboxname;
+    char *filename;
+    struct db *db;
+    struct txn *txn;
+};
+
+
 /* List of attrib-value pairs */
 struct attvaluelist {
     char *attrib;
@@ -190,5 +202,11 @@ void annotatemore_close(void);
 
 /* done with database stuff */
 void annotatemore_done(void);
+
+/* per use DBs */
+int annotate_getmailboxdb(const char *mboxname,
+			  int dbflags,
+			  annotate_db_t **dbp);
+void annotate_putdb(annotate_db_t **dbp);
 
 #endif /* ANNOTATE_H */

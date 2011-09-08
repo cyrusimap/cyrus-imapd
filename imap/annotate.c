@@ -199,17 +199,6 @@ struct annotate_entrydesc
     void *rock;			/* rock passed to get() function */
 };
 
-typedef struct annotate_db annotate_db_t;
-struct annotate_db
-{
-    annotate_db_t *next;
-    int refcount;
-    char *mboxname;
-    char *filename;
-    struct db *db;
-    struct txn *txn;
-};
-
 #define DB config_annotation_db
 
 static annotate_db_t *all_dbs_head = NULL;
@@ -499,7 +488,7 @@ out:
 static int annotate_getdb(const char *mboxname,
 			  unsigned int uid,
 			  int dbflags,
-		          annotate_db_t **dbp)
+			  annotate_db_t **dbp)
 {
     annotate_db_t *d, *prev = NULL;
     char *fname = NULL;
@@ -573,6 +562,14 @@ error:
     return r;
 }
 
+int annotate_getmailboxdb(const char *mboxname,
+			  int dbflags,
+			  annotate_db_t **dbp)
+{
+    /* synthetic UID '1' forces per-mailbox mode */
+    return annotate_getdb(mboxname, 1, dbflags, dbp);
+}
+
 static void annotate_closedb(annotate_db_t *d)
 {
     annotate_db_t *dx, *prev = NULL;
@@ -600,7 +597,7 @@ static void annotate_closedb(annotate_db_t *d)
     free(d);
 }
 
-static void annotate_putdb(annotate_db_t **dbp)
+void annotate_putdb(annotate_db_t **dbp)
 {
     annotate_db_t *d;
 
