@@ -1758,16 +1758,15 @@ mboxlist_sync_setacls(const char *name, const char *newacl)
 
 /* set the XLIST flag for a mailbox.  Note: no mupdate changes required
  * yet because mupdate protocol doesn't support xlist flags */
-int mboxlist_setspecialuse(const char *name, const char *specialuse)
+int mboxlist_setspecialuse(struct mailbox *mailbox, const char *specialuse)
 {
-    struct mailbox *mailbox = NULL;
+    const char *name = mailbox->name;
     struct mboxlist_entry *mbentry = NULL;
     struct txn *tid = NULL;
     char *mboxent = NULL;
     int r;
 
-    r = mailbox_open_iwl(name, &mailbox);
-    if (r) goto done;
+    assert(mailbox->index_locktype == LOCK_EXCLUSIVE);
 
     /* 1. Start Transaction */
     /* lookup the mailbox to make sure it exists and get its acl */
@@ -1831,7 +1830,6 @@ int mboxlist_setspecialuse(const char *name, const char *specialuse)
 		   name, cyrusdb_strerror(r2));
 	}
     }
-    mailbox_close(&mailbox);
     mboxlist_entry_free(&mbentry);
     free(mboxent);
 

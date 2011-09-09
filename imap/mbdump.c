@@ -884,7 +884,7 @@ int undump_mailbox(const char *mbname,
     mailbox_get_usage(mailbox, old_quota_usage);
 
     astate = annotate_state_new();
-    annotate_state_set_mailbox(astate, mbname);
+    annotate_state_set_mailbox(astate, mailbox);
     r = annotatemore_begin();
     if (r) goto done;
 

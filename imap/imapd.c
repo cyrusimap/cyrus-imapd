@@ -7957,6 +7957,32 @@ static void getannotation_response(const char *mboxname,
     prot_printf(imapd_out, ")\r\n");
 }
 
+struct annot_fetch_rock
+{
+    strarray_t *entries;
+    strarray_t *attribs;
+    annotate_fetch_cb_t callback;
+    int *sizeptr;
+};
+
+static int annot_fetch_cb(annotate_state_t *astate, void *rock)
+{
+    struct annot_fetch_rock *arock = rock;
+    return annotate_state_fetch(astate, arock->entries, arock->attribs,
+			        arock->callback, NULL, arock->sizeptr);
+}
+
+struct annot_store_rock
+{
+    struct entryattlist *entryatts;
+};
+
+static int annot_store_cb(annotate_state_t *astate, void *rock)
+{
+    struct annot_store_rock *arock = rock;
+    return annotate_state_store(astate, arock->entryatts);
+}
+
 /*
  * Perform a GETANNOTATION command
  *
@@ -7988,10 +8014,19 @@ static void cmd_getannotation(const char *tag, char *mboxpat)
     annotate_state_set_auth(astate, &imapd_namespace,
 			    imapd_userisadmin || imapd_userisproxyadmin,
 			    imapd_userid, imapd_authstate);
-    annotate_state_set_mailbox(astate, mboxpat);
-
-    r = annotate_state_fetch(astate, &entries, &attribs,
-			     getannotation_response, NULL, 0);
+    if (!*mboxpat) {
+	annotate_state_set_server(astate);
+	r = annotate_state_fetch(astate, &entries, &attribs,
+				 getannotation_response, NULL, 0);
+    }
+    else {
+	struct annot_fetch_rock arock;
+	arock.entries = &entries;
+	arock.attribs = &attribs;
+	arock.callback = getannotation_response;
+	arock.sizeptr = NULL;
+	r = annotate_apply_mailboxes(astate, mboxpat, annot_fetch_cb, &arock);
+    }
 
     imapd_check(NULL, 0);
 
@@ -8161,12 +8196,20 @@ static void cmd_getmetadata(const char *tag, char *mboxpat)
     annotate_state_set_auth(astate, &imapd_namespace,
 			    imapd_userisadmin || imapd_userisproxyadmin,
 			    imapd_userid, imapd_authstate);
-    annotate_state_set_mailbox(astate, mboxpat);
-
     basesize = maxsize;
-    r = annotate_state_fetch(astate, &newe, &newa,
-			     getmetadata_response, NULL,
-			     sizeptr);
+    if (!*mboxpat) {
+	annotate_state_set_server(astate);
+	r = annotate_state_fetch(astate, &newe, &newa,
+				 getmetadata_response, NULL, sizeptr);
+    }
+    else {
+	struct annot_fetch_rock arock;
+	arock.entries = &newe;
+	arock.attribs = &newa;
+	arock.callback = getmetadata_response;
+	arock.sizeptr = sizeptr;
+	r = annotate_apply_mailboxes(astate, mboxpat, annot_fetch_cb, &arock);
+    }
 
     imapd_check(NULL, 0);
 
@@ -8217,11 +8260,18 @@ static void cmd_setannotation(const char *tag, char *mboxpat)
 
     annotate_state_set_auth(astate, &imapd_namespace, imapd_userisadmin,
 			    imapd_userid, imapd_authstate);
-    annotate_state_set_mailbox(astate, mboxpat);
-
     r = annotatemore_begin();
-    if (!r)
-	r = annotate_state_store(astate, entryatts);
+    if (!r) {
+	if (!*mboxpat) {
+	    annotate_state_set_server(astate);
+	    r = annotate_state_store(astate, entryatts);
+	}
+	else {
+	    struct annot_store_rock arock;
+	    arock.entryatts = entryatts;
+	    r = annotate_apply_mailboxes(astate, mboxpat, annot_store_cb, &arock);
+	}
+    }
     if (!r)
 	annotatemore_commit();
 
@@ -8268,11 +8318,18 @@ static void cmd_setmetadata(const char *tag, char *mboxpat)
 
     annotate_state_set_auth(astate, &imapd_namespace, imapd_userisadmin,
 			    imapd_userid, imapd_authstate);
-    annotate_state_set_mailbox(astate, mboxpat);
-
     r = annotatemore_begin();
-    if (!r)
-	r = annotate_state_store(astate, entryatts);
+    if (!r) {
+	if (!*mboxpat) {
+	    annotate_state_set_server(astate);
+	    r = annotate_state_store(astate, entryatts);
+	}
+	else {
+	    struct annot_store_rock arock;
+	    arock.entryatts = entryatts;
+	    r = annotate_apply_mailboxes(astate, mboxpat, annot_store_cb, &arock);
+	}
+    }
     if (!r)
 	annotatemore_commit();
 

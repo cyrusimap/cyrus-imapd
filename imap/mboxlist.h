@@ -167,7 +167,8 @@ int mboxlist_setacl(const char *name, const char *identifier,
 int mboxlist_sync_setacls(const char *name, const char *acl);
 
 /* Set specialuse on a mailbox */
-int mboxlist_setspecialuse(const char *name, const char *specialuse);
+/* TODO: this takes a mailbox* so it doesn't really belong here */
+int mboxlist_setspecialuse(struct mailbox *, const char *specialuse);
 
 /* Find all mailboxes that match 'pattern'. */
 int mboxlist_findall(struct namespace *namespace,

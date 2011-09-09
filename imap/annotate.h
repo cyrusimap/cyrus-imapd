@@ -99,7 +99,7 @@ void annotate_state_set_auth(annotate_state_t *state,
 		             struct auth_state *auth_state);
 void annotate_state_set_server(annotate_state_t *state);
 void annotate_state_set_mailbox(annotate_state_t *state,
-				const char *mboxpatt);
+				struct mailbox *mailbox);
 void annotate_state_set_message(annotate_state_t *state,
 				struct mailbox *mailbox,
 				unsigned int uid);
@@ -163,6 +163,14 @@ int annotatemore_lookup(const char *mboxname, const char *entry,
 /* lookup a single per-message annotation and return result */
 int annotatemore_msg_lookup(const char *mboxname, uint32_t uid, const char *entry,
 			    const char *userid, struct buf *value);
+
+/* helper function which sets up an annotate_state_t to be
+ * scoped to several different mailboxes in order; useful for
+ * handling mailbox patterns at the IMAP command level.  */
+int annotate_apply_mailboxes(annotate_state_t *state,
+			     const char *mailbox_pattern,
+			     int (*proc)(annotate_state_t *, void *),
+			     void *data);
 
 /* store annotations.  Requires an open transaction */
 int annotate_state_store(annotate_state_t *state, struct entryattlist *l);

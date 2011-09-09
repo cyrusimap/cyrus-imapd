@@ -145,7 +145,7 @@ static void test_store_without_begin(void)
     annotatemore_open();
 
     astate = annotate_state_new();
-    annotate_state_set_mailbox(astate, "");
+    annotate_state_set_server(astate);
     isadmin = 1;	/* pretend to be admin */
     annotate_state_set_auth(astate, &namespace, isadmin, userid, auth_state);
     isadmin = 0;
@@ -195,7 +195,7 @@ static void test_getset_server_shared(void)
     annotatemore_open();
 
     astate = annotate_state_new();
-    annotate_state_set_mailbox(astate, "");
+    annotate_state_set_server(astate);
     annotate_state_set_auth(astate, &namespace, isadmin, userid, auth_state);
 
     strarray_append(&entries, COMMENT);
@@ -372,13 +372,17 @@ static void test_getset_mailbox_shared(void)
     struct entryattlist *ealist = NULL;
     struct buf val = BUF_INITIALIZER;
     struct buf val2 = BUF_INITIALIZER;
+    struct mailbox *mailbox = NULL;
 
     annotatemore_init(NULL, NULL);
 
     annotatemore_open();
 
+    r = mailbox_open_iwl(MBOXNAME1_INT, &mailbox);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+
     astate = annotate_state_new();
-    annotate_state_set_mailbox(astate, MBOXNAME1_INT);
+    annotate_state_set_mailbox(astate, mailbox);
     annotate_state_set_auth(astate, &namespace, isadmin, userid, auth_state);
 
     strarray_append(&entries, COMMENT);
@@ -534,6 +538,7 @@ static void test_getset_mailbox_shared(void)
     strarray_fini(&results);
     buf_free(&val);
     annotate_state_free(&astate);
+    mailbox_close(&mailbox);
 }
 
 
@@ -541,23 +546,23 @@ static void test_getset_message_shared(void)
 {
     int r;
     annotate_state_t *astate = NULL;
-    struct mailbox mailbox;
     strarray_t entries = STRARRAY_INITIALIZER;
     strarray_t attribs = STRARRAY_INITIALIZER;
     strarray_t results = STRARRAY_INITIALIZER;
     struct entryattlist *ealist = NULL;
     struct buf val = BUF_INITIALIZER;
     struct buf val2 = BUF_INITIALIZER;
+    struct mailbox *mailbox = NULL;
 
     annotatemore_init(NULL, NULL);
 
     annotatemore_open();
 
-    memset(&mailbox, 0, sizeof(mailbox));
-    mailbox.name = MBOXNAME1_INT;
-    mailbox.acl = ACL;
+    r = mailbox_open_iwl(MBOXNAME1_INT, &mailbox);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+
     astate = annotate_state_new();
-    annotate_state_set_message(astate, &mailbox, 42);
+    annotate_state_set_message(astate, mailbox, 42);
     annotate_state_set_auth(astate, &namespace, isadmin, userid, auth_state);
 
     strarray_append(&entries, COMMENT);
@@ -715,6 +720,7 @@ static void test_getset_message_shared(void)
     strarray_fini(&results);
     buf_free(&val);
     annotate_state_free(&astate);
+    mailbox_close(&mailbox);
 }
 
 
@@ -756,7 +762,7 @@ static void test_delete(void)
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
     astate = annotate_state_new();
     annotate_state_set_auth(astate, &namespace, isadmin, userid, auth_state);
-    annotate_state_set_mailbox(astate, MBOXNAME1_INT);
+    annotate_state_set_mailbox(astate, mailbox);
     r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
@@ -844,20 +850,19 @@ static void test_abort(void)
 {
     int r;
     annotate_state_t *astate = NULL;
-    struct mailbox mailbox;
     strarray_t entries = STRARRAY_INITIALIZER;
     strarray_t attribs = STRARRAY_INITIALIZER;
     struct entryattlist *ealist = NULL;
     struct buf val = BUF_INITIALIZER;
     struct buf val2 = BUF_INITIALIZER;
+    struct mailbox *mailbox = NULL;
 
     annotatemore_init(NULL, NULL);
 
     annotatemore_open();
 
-    memset(&mailbox, 0, sizeof(mailbox));
-    mailbox.name = MBOXNAME1_INT;
-    mailbox.acl = ACL;
+    r = mailbox_open_iwl(MBOXNAME1_INT, &mailbox);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
 
     strarray_append(&entries, COMMENT);
     strarray_append(&attribs, VALUE_SHARED);
@@ -896,7 +901,7 @@ static void test_abort(void)
 
     buf_appendcstr(&val, VALUE0);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    annotate_state_set_mailbox(astate, MBOXNAME1_INT);
+    annotate_state_set_mailbox(astate, mailbox);
     annotate_state_set_auth(astate, &namespace, /*isadmin*/0, userid, auth_state);
     r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
@@ -906,7 +911,7 @@ static void test_abort(void)
     buf_reset(&val);
     buf_appendcstr(&val, VALUE1);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    annotate_state_set_message(astate, &mailbox, 42);
+    annotate_state_set_message(astate, mailbox, 42);
     r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
@@ -940,6 +945,7 @@ static void test_abort(void)
     buf_free(&val);
     buf_free(&val2);
     annotate_state_free(&astate);
+    mailbox_close(&mailbox);
 }
 
 
