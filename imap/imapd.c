@@ -2691,15 +2691,16 @@ void cmd_id(char *tag)
 	struct attvaluelist *pptr;
 
 	for (pptr = params; pptr; pptr = pptr->next) {
+	    const char *val = buf_cstring(&pptr->value);
 	    /* should we check for and format literals here ??? */
 	    snprintf(logbuf + strlen(logbuf), MAXIDLOGLEN - strlen(logbuf),
 		     " \"%s\" ", pptr->attrib);
-	    if (pptr->value.s == NULL || !strcmp(pptr->value.s, "NIL"))
+	    if (!val || !strcmp(val, "NIL"))
 		snprintf(logbuf + strlen(logbuf), MAXIDLOGLEN - strlen(logbuf),
 			 "NIL");
 	    else
 		snprintf(logbuf + strlen(logbuf), MAXIDLOGLEN - strlen(logbuf),
-			"\"%s\"", pptr->value.s);
+			"\"%s\"", val);
 	}
 
 	syslog(LOG_INFO, "client id:%s", logbuf);
