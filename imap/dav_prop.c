@@ -779,6 +779,24 @@ static int propfind_acl(const xmlChar *propname, xmlNsPtr ns,
 }
 
 
+/* Callback to fetch DAV:acl-restrictions */
+static int propfind_aclrestrict(const xmlChar *propname, xmlNsPtr ns,
+				struct propfind_ctx *fctx  __attribute__((unused)),
+				xmlNodePtr resp,
+				xmlNodePtr *propstat,
+				void *rock __attribute__((unused)))
+{
+    xmlNodePtr node;
+
+    node = add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK], ns,
+		    BAD_CAST propname, NULL, NULL);
+
+    xmlNewChild(node, NULL, BAD_CAST "no-invert", NULL);
+
+    return 0;
+}
+
+
 /* Callback to fetch DAV:principal-collection-set */
 static int propfind_princolset(const xmlChar *propname, xmlNsPtr ns,
 			       struct propfind_ctx *fctx  __attribute__((unused)),
@@ -1101,7 +1119,7 @@ static const struct prop_entry prop_entries[] =
     { "current-user-principal", NS_DAV, 0, propfind_curprin, NULL, NULL },
     { "current-user-privilege-set", NS_DAV, 0, propfind_curprivset, NULL, NULL },
     { "acl", NS_DAV, 0, propfind_acl, NULL, NULL },
-    { "acl-restrictions", NS_DAV, 0, NULL, NULL, NULL },
+    { "acl-restrictions", NS_DAV, 0, propfind_aclrestrict, NULL, NULL },
     { "inherited-acl-set", NS_DAV, 0, NULL, NULL, NULL },
     { "principal-collection-set", NS_DAV, 0, propfind_princolset, NULL, NULL },
 
