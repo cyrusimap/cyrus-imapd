@@ -778,8 +778,8 @@ static int copy_local(struct mailbox *mailbox, unsigned long uid)
 	    /* Copy across any per-message annotations */
 	    r = annotatemore_begin();
 	    if (r) return r;
-	    r = annotate_msg_copy(mailbox->name, oldrecord.uid,
-				  mailbox->name, newrecord.uid,
+	    r = annotate_msg_copy(mailbox, oldrecord.uid,
+				  mailbox, newrecord.uid,
 				  NULL);
 	    if (r)
 		annotatemore_abort();

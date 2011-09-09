@@ -1130,8 +1130,8 @@ int append_copy(struct mailbox *mailbox,
 	r = mailbox_append_index_record(as->mailbox, &record);
 	if (r) goto out;
 
-	r = annotate_msg_copy(mailbox->name, copymsg[msg].uid,
-			      as->mailbox->name, record.uid,
+	r = annotate_msg_copy(mailbox, copymsg[msg].uid,
+			      as->mailbox, record.uid,
 			      as->userid);
 	if (r) goto out;
     }

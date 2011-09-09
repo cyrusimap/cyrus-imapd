@@ -1082,17 +1082,17 @@ int mboxlist_deletemailbox(const char *name, int isadmin,
 
     /* delete underlying mailbox */
     if (!isremote && mailbox) {
+	/* Clean up annotations */
+	r = annotate_delete(mbentry, mailbox);
+	if (r) {
+	    syslog(LOG_ERR,
+		   "Failed to delete annotations with mailbox '%s': %s",
+		   name, error_message(r));
+	}
 	r = mailbox_delete(&mailbox);
     }
     if (r) goto done;
 
-    /* Clean up annotations */
-    r = annotatemore_delete(mbentry);
-    if (r) {
-	syslog(LOG_ERR,
-	       "Failed to delete annotations with mailbox '%s': %s",
-	       name, error_message(r));
-    }
 
  done:
     mailbox_close(&mailbox);

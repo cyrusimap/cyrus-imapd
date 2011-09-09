@@ -181,13 +181,14 @@ int annotatemore_rename(const char *oldmboxname, const char *newmboxname,
 			const char *olduserid, const char *newuserid);
 /* Handle a message COPY, by copying all the appropriate
  * per-message annotations. Requires an open transaction. */
-int annotate_msg_copy(const char *oldmboxname, uint32_t olduid,
-		      const char *newmboxname, uint32_t newuid,
+int annotate_msg_copy(struct mailbox *oldmailbox, uint32_t olduid,
+		      struct mailbox *newmailbox, uint32_t newuid,
 		      const char *userid);
 
 /* delete the annotations for 'mbentry'
  * Uses its own transaction. */
-int annotatemore_delete(const struct mboxlist_entry *mbentry);
+int annotate_delete(const struct mboxlist_entry *mbentry,
+		    struct mailbox *);
 
 /* Open a new transaction. Any currently open transaction
  * is aborted. */

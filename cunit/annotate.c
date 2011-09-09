@@ -722,13 +722,13 @@ static void test_delete(void)
 {
     int r;
     annotate_state_t *astate = NULL;
-    struct mailbox mailbox;
     struct mboxlist_entry mbentry;
     strarray_t entries = STRARRAY_INITIALIZER;
     strarray_t attribs = STRARRAY_INITIALIZER;
     struct entryattlist *ealist = NULL;
     struct buf val = BUF_INITIALIZER;
     struct buf val2 = BUF_INITIALIZER;
+    struct mailbox *mailbox = NULL;
 
     CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/cyrus.annotations"), -ENOENT);
 
@@ -736,9 +736,8 @@ static void test_delete(void)
 
     annotatemore_open();
 
-    memset(&mailbox, 0, sizeof(mailbox));
-    mailbox.name = MBOXNAME1_INT;
-    mailbox.acl = ACL;
+    r = mailbox_open_iwl(MBOXNAME1_INT, &mailbox);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
 
     memset(&mbentry, 0, sizeof(mbentry));
     mbentry.name = MBOXNAME1_INT;
@@ -766,7 +765,7 @@ static void test_delete(void)
     buf_reset(&val);
     buf_appendcstr(&val, VALUE1);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    annotate_state_set_message(astate, &mailbox, 42);
+    annotate_state_set_message(astate, mailbox, 42);
     r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
@@ -775,7 +774,7 @@ static void test_delete(void)
     buf_reset(&val);
     buf_appendcstr(&val, VALUE2);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    annotate_state_set_message(astate, &mailbox, 127);
+    annotate_state_set_message(astate, mailbox, 127);
     r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
@@ -808,7 +807,7 @@ static void test_delete(void)
 
     /* delete all the entries associated with the mailbox */
 
-    r = annotatemore_delete(&mbentry);
+    r = annotate_delete(&mbentry, mailbox);
     CU_ASSERT_EQUAL(r, 0);
 
     CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/cyrus.annotations"), -ENOENT);
@@ -838,6 +837,7 @@ static void test_delete(void)
     strarray_fini(&attribs);
     buf_free(&val);
     annotate_state_free(&astate);
+    mailbox_close(&mailbox);
 }
 
 static void test_abort(void)
@@ -947,12 +947,13 @@ static void test_msg_copy(void)
 {
     int r;
     annotate_state_t *astate = NULL;
-    struct mailbox mailbox;
     strarray_t entries = STRARRAY_INITIALIZER;
     strarray_t attribs = STRARRAY_INITIALIZER;
     struct entryattlist *ealist = NULL;
     struct buf val = BUF_INITIALIZER;
     struct buf val2 = BUF_INITIALIZER;
+    struct mailbox *mailbox1 = NULL;
+    struct mailbox *mailbox2 = NULL;
 
     annotatemore_init(NULL, NULL);
 
@@ -961,9 +962,10 @@ static void test_msg_copy(void)
     CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/cyrus.annotations"), -ENOENT);
     CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurfette/cyrus.annotations"), -ENOENT);
 
-    memset(&mailbox, 0, sizeof(mailbox));
-    mailbox.name = MBOXNAME1_INT;
-    mailbox.acl = ACL;
+    r = mailbox_open_iwl(MBOXNAME1_INT, &mailbox1);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    r = mailbox_open_iwl(MBOXNAME2_INT, &mailbox2);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
 
     strarray_append(&entries, COMMENT);
     strarray_append(&attribs, VALUE_SHARED);
@@ -977,7 +979,7 @@ static void test_msg_copy(void)
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
     astate = annotate_state_new();
     annotate_state_set_auth(astate, &namespace, isadmin, userid, auth_state);
-    annotate_state_set_message(astate, &mailbox, 17);
+    annotate_state_set_message(astate, mailbox1, 17);
     r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
@@ -986,7 +988,7 @@ static void test_msg_copy(void)
     buf_reset(&val);
     buf_appendcstr(&val, VALUE1);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    annotate_state_set_message(astate, &mailbox, 42);
+    annotate_state_set_message(astate, mailbox1, 42);
     r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
@@ -995,7 +997,7 @@ static void test_msg_copy(void)
     buf_reset(&val);
     buf_appendcstr(&val, VALUE2);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    annotate_state_set_message(astate, &mailbox, 127);
+    annotate_state_set_message(astate, mailbox1, 127);
     r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
@@ -1037,7 +1039,7 @@ static void test_msg_copy(void)
     r = annotatemore_begin();
     CU_ASSERT_EQUAL(r, 0);
 
-    r = annotate_msg_copy(MBOXNAME1_INT, 17, MBOXNAME2_INT, 35, "smurf");
+    r = annotate_msg_copy(mailbox1, 17, mailbox2, 35, "smurf");
     CU_ASSERT_EQUAL(r, 0);
 
     r = annotatemore_commit();
@@ -1095,6 +1097,8 @@ static void test_msg_copy(void)
     buf_free(&val);
     buf_free(&val2);
     annotate_state_free(&astate);
+    mailbox_close(&mailbox1);
+    mailbox_close(&mailbox2);
 }
 
 static void test_missing_definitions_file(void)

@@ -9634,6 +9634,8 @@ static int xfer_delete(struct xfer_header *xfer)
 	    /* note: delete closes mailbox */
 	    /* XXX - really should be using the 'entry' here, not name */
 	    r = mailbox_open_iwl(item->mbentry->name, &mailbox);
+	    /* Delete mailbox annotations */
+	    if (!r) annotate_delete(item->mbentry, mailbox);
 	    if (!r) r = mailbox_delete(&mailbox);
 	    if (r) {
 		syslog(LOG_ERR,
@@ -9642,9 +9644,6 @@ static int xfer_delete(struct xfer_header *xfer)
 		/* can't abort now! */
 	    }
 	    /* XXX - quota root? */
-
-	    /* Delete mailbox annotations */
-	    annotatemore_delete(item->mbentry);
 	}
 
 	/* mark this item done so the cleanup doesn't revert it! */
