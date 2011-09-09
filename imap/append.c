@@ -106,7 +106,8 @@ static void append_setseen(struct appendstate *as, struct index_record *record);
  */
 int append_check(const char *name,
 		 struct auth_state *auth_state,
-		 long aclcheck, quota_t quotastorage_check, quota_t quotamessage_check)
+		 long aclcheck,
+		 const quota_t quotacheck[QUOTA_NUMRESOURCES])
 {
     struct mailbox *mailbox = NULL;
     int myrights;
@@ -123,7 +124,8 @@ int append_check(const char *name,
 	goto done;
     }
 
-    r = mailbox_quota_check(mailbox, quotastorage_check, quotamessage_check, /*wrlock*/0);
+    if (quotacheck)
+	r = mailbox_quota_check(mailbox, quotacheck, /*wrlock*/0);
 
 done:
     mailbox_close(&mailbox);
@@ -147,7 +149,7 @@ done:
  */
 int append_setup(struct appendstate *as, const char *name,
 		 const char *userid, struct auth_state *auth_state,
-		 long aclcheck, quota_t quotastorage_check, quota_t quotamessage_check,
+		 long aclcheck, const quota_t quotacheck[QUOTA_NUMRESOURCES],
 		 struct namespace *namespace, int isadmin)
 {
     int r;
@@ -165,10 +167,12 @@ int append_setup(struct appendstate *as, const char *name,
 	return r;
     }
 
-    r = mailbox_quota_check(as->mailbox, quotastorage_check, quotamessage_check, /*wrlock*/0);
-    if (r) {
-	mailbox_close(&as->mailbox);
-	return r;
+    if (quotacheck) {
+	r = mailbox_quota_check(as->mailbox, quotacheck, /*wrlock*/0);
+	if (r) {
+	    mailbox_close(&as->mailbox);
+	    return r;
+	}
     }
 
     if (userid) {

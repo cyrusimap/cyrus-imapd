@@ -1459,7 +1459,7 @@ index_copy(struct index_state *state,
 {
     static struct copyargs copyargs;
     int i;
-    quota_t totalsize = 0;
+    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_INITIALIZER;
     int r;
     struct appendstate appendstate;
     uint32_t msgno, checkval;
@@ -1494,11 +1494,12 @@ index_copy(struct index_state *state,
     if (copyargs.nummsg == 0) return IMAP_NO_NOSUCHMSG;
 
     for (i = 0; i < copyargs.nummsg; i++)
-	totalsize += copyargs.copymsg[i].size;
+	qdiffs[QUOTA_STORAGE] += copyargs.copymsg[i].size;
+    qdiffs[QUOTA_MESSAGE] = copyargs.nummsg;
 
     r = append_setup(&appendstate, name, state->userid,
-		     state->authstate, ACL_INSERT, totalsize,
-		     copyargs.nummsg, namespace, isadmin);
+		     state->authstate, ACL_INSERT, qdiffs,
+		     namespace, isadmin);
     if (r) return r;
 
     docopyuid = (appendstate.myrights & ACL_READ);

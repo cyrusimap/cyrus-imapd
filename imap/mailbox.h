@@ -529,7 +529,7 @@ extern void mailbox_repack_abort(struct mailbox_repack **repackptr);
 extern int mailbox_repack_commit(struct mailbox_repack **repackptr);
 
 int mailbox_quota_check(struct mailbox *mailbox,
-			quota_t deltastorage, quota_t deltamessage, int wrlock);
+			const quota_t delta[QUOTA_NUMRESOURCES], int wrlock);
 void mailbox_get_usage(struct mailbox *mailbox,
 			quota_t usage[QUOTA_NUMRESOURCES]);
 

@@ -370,7 +370,8 @@ int quota_write(struct quota *quota, struct txn **tid)
     return r;
 }
 
-int quota_update_useds(const char *quotaroot, quota_t diff[QUOTA_NUMRESOURCES],
+int quota_update_useds(const char *quotaroot,
+		       const quota_t diff[QUOTA_NUMRESOURCES],
 		       int is_scanned)
 {
     struct quota q;

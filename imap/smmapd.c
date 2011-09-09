@@ -377,8 +377,9 @@ int verify_user(const char *key,
             return -1;   /* tell calling function we already replied */
 
 	} else if (!r) {
-	    r = append_check(namebuf, authstate,
-			     aclcheck, 0, 0);
+	    static const quota_t qdiffs[QUOTA_NUMRESOURCES] =
+				    QUOTA_DIFFS_INITIALIZER;
+	    r = append_check(namebuf, authstate, aclcheck, qdiffs);
 	}
 
 	mboxlist_entry_free(&mbentry);

@@ -502,14 +502,20 @@ int deliver_mailbox(FILE *f,
     unsigned long uid;
     const char *notifier;
     duplicate_key_t dkey = {NULL, NULL, NULL};
+    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_INITIALIZER;
+
+    if (quotaoverride)
+	qdiffs[QUOTA_STORAGE] = -1;
+    else if (config_getswitch(IMAPOPT_LMTP_STRICT_QUOTA))
+	qdiffs[QUOTA_STORAGE] = size;
+    if (quotaoverride)
+	qdiffs[QUOTA_MESSAGE] = -1;
+    else if (config_getswitch(IMAPOPT_LMTP_STRICT_QUOTA))
+	qdiffs[QUOTA_MESSAGE] = 1;
 
     r = append_setup(&as, mailboxname,
 		     authuser, authstate, acloverride ? 0 : ACL_POST, 
-		     quotaoverride ? (long) -1 :
-		     config_getswitch(IMAPOPT_LMTP_STRICT_QUOTA) ?
-		     (long) size : 0, quotaoverride ? -1 :
-		     config_getswitch(IMAPOPT_LMTP_STRICT_QUOTA) ? 1 : 0,
-		     NULL, 0);
+		     qdiffs, NULL, 0);
 
     /* check for duplicate message */
     dkey.id = id;
@@ -1052,12 +1058,14 @@ static int verify_user(const char *user, const char *domain, char *mailbox,
 		    IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
 	    }
 	} else if (!r) {
-	    r = append_check(namebuf, authstate,
-			     aclcheck, (quotastorage_check < 0)
-			     || config_getswitch(IMAPOPT_LMTP_STRICT_QUOTA) ?
-			     quotastorage_check : 0, (quotamessage_check < 0)
-			     || config_getswitch(IMAPOPT_LMTP_STRICT_QUOTA) ?
-			     quotamessage_check : 0);
+	    int strict = config_getswitch(IMAPOPT_LMTP_STRICT_QUOTA);
+	    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_INITIALIZER;
+	    if (quotastorage_check < 0 || strict)
+		qdiffs[QUOTA_STORAGE] = quotastorage_check;
+	    if (quotamessage_check < 0 || strict)
+		qdiffs[QUOTA_MESSAGE] = quotamessage_check;
+
+	    r = append_check(namebuf, authstate, aclcheck, qdiffs);
 	}
 
 	mboxlist_entry_free(&mbentry);

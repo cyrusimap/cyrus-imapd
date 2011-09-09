@@ -3292,6 +3292,8 @@ static int deliver(message_data_t *msg)
 	else {
 	    /* local group */
 	    struct appendstate as;
+	    static const quota_t qdiffs[QUOTA_NUMRESOURCES] =
+				    QUOTA_DIFFS_INITIALIZER;
 
 	    if (msg->id && 
 		duplicate_check(&dkey)) {
@@ -3302,7 +3304,7 @@ static int deliver(message_data_t *msg)
 
 	    r = append_setup(&as, rcpt,
 			     nntp_authstate ? nntp_userid : NULL,
-			     nntp_authstate, ACL_POST, 0, 0, NULL, 0);
+			     nntp_authstate, ACL_POST, qdiffs, NULL, 0);
 
 	    if (!r) {
 		prot_rewind(msg->data);

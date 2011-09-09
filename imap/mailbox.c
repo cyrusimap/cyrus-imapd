@@ -3151,9 +3151,10 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
     if (!ignorequota && newmailbox->quotaroot && (!oldmailbox->quotaroot || 
 	strcmp(oldmailbox->quotaroot, newmailbox->quotaroot))) {
 
+	quota_t usage[QUOTA_NUMRESOURCES];
+	mailbox_get_usage(oldmailbox, usage);
 	r = mailbox_quota_check(newmailbox,
-				oldmailbox->i.quota_mailbox_used,
-				oldmailbox->i.exists,
+				usage,
 				/*wrlock*/1);
 	/* then we abort - no space to rename */
 	if (r)
@@ -4154,18 +4155,23 @@ close:
  * Returns: 0 if allowed, or IMAP error code.
  */
 int mailbox_quota_check(struct mailbox *mailbox,
-			quota_t deltastorage, quota_t deltamessage, int wrlock)
+			const quota_t delta[QUOTA_NUMRESOURCES], int wrlock)
 {
     int r;
     struct quota q;
+    int res;
 
     /*
      * We are always allowed to *reduce* usage even if it doesn't get us
      * below the quota.  As a side effect this allows our caller to pass
      * delta = -1 meaning "don't care about quota checks".
      */
-    if ((deltastorage < 0) && (deltamessage < 0))
-	return 0;
+    for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++) {
+	if (delta[res] > 0)
+	    break;
+    }
+    if (res == QUOTA_NUMRESOURCES)
+	return 0;	    /* all -ve or zero */
 
     q.root = mailbox->quotaroot;
     r = quota_read(&q, NULL, wrlock);
@@ -4175,10 +4181,12 @@ int mailbox_quota_check(struct mailbox *mailbox,
     if (r)
 	return r;
 
-    r = quota_check(&q, QUOTA_STORAGE, deltastorage);
-    if (r)
-	return r;
-    return quota_check(&q, QUOTA_MESSAGE, deltamessage);
+    for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++) {
+	r = quota_check(&q, res, delta[res]);
+	if (r)
+	    return r;
+    }
+    return 0;
 }
 
 /*

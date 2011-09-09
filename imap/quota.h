@@ -69,6 +69,9 @@ enum quota_resource {
 #define QUOTA_NUMRESOURCES  (QUOTA_ANNOTSTORAGE+1)
 };
 
+#define QUOTA_DIFFS_INITIALIZER \
+	{ 0, 0, 0 }
+
 struct quota {
     const char *root;
 
@@ -105,7 +108,8 @@ extern void quota_abort(struct txn **tid);
 
 extern int quota_write(struct quota *quota, struct txn **tid);
 
-extern int quota_update_useds(const char *quotaroot, quota_t diff[QUOTA_NUMRESOURCES],
+extern int quota_update_useds(const char *quotaroot,
+			      const quota_t diff[QUOTA_NUMRESOURCES],
 			      int is_scanned);
 
 extern int quota_deleteroot(const char *quotaroot);

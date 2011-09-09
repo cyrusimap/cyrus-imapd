@@ -3223,7 +3223,7 @@ void cmd_append(char *tag, char *name, const char *cur_name)
     int c;
     static struct buf arg;
     time_t now = time(NULL);
-    quota_t totalsize = 0;
+    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_INITIALIZER;
     unsigned size;
     int sync_seen = 0;
     int r;
@@ -3299,7 +3299,8 @@ void cmd_append(char *tag, char *name, const char *cur_name)
 
     /* local mailbox */
     if (!r) {
-	r = append_check(mailboxname, imapd_authstate, ACL_INSERT, totalsize, 1);
+	qdiffs[QUOTA_MESSAGE] = 1;
+	r = append_check(mailboxname, imapd_authstate, ACL_INSERT, qdiffs);
     }
     if (r) {
 	eatline(imapd_in, ' ');
@@ -3416,7 +3417,7 @@ void cmd_append(char *tag, char *name, const char *cur_name)
 	    /* Copy message to stage */
 	    r = message_copy_strict(imapd_in, curstage->f, size, curstage->binary);
 	}
-	totalsize += size;
+	qdiffs[QUOTA_STORAGE] += size;
 	/* If this is a non-BINARY message, close the stage file.
 	 * Otherwise, leave it open so we can encode the binary parts.
 	 *
@@ -3449,9 +3450,10 @@ void cmd_append(char *tag, char *name, const char *cur_name)
 
     /* Append from the stage(s) */
     if (!r) {
+	qdiffs[QUOTA_MESSAGE] = stages.count;
 	r = append_setup(&appendstate, mailboxname, 
-			 imapd_userid, imapd_authstate, ACL_INSERT, totalsize,
-			 stages.count, &imapd_namespace,
+			 imapd_userid, imapd_authstate, ACL_INSERT,
+			 qdiffs, &imapd_namespace,
 			 (imapd_userisadmin || imapd_userisproxyadmin));
     }
     if (!r) {
