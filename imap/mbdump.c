@@ -885,8 +885,6 @@ int undump_mailbox(const char *mbname,
 
     astate = annotate_state_new();
     annotate_state_set_mailbox(astate, mbname);
-    r = annotate_state_write_start(astate);
-    if (r) goto done;
     r = annotatemore_begin();
     if (r) goto done;
 
@@ -1212,8 +1210,6 @@ int undump_mailbox(const char *mbname,
     buf_free(&file);
     buf_free(&data);
 
-    if (!r)
-	r = annotate_state_write_finish(astate);
     if (!r)
 	annotatemore_commit();
 

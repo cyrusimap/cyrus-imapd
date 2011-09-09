@@ -1022,34 +1022,6 @@ static void annotate_state_finish(annotate_state_t *state)
     free_hash_table(&state->server_table, NULL);
 }
 
-int annotate_state_write_start(annotate_state_t *state)
-{
-    int r;
-
-    r = quota_read(&state->quota, &quota_txn, 1);
-    if (r == IMAP_QUOTAROOT_NONEXISTENT) {
-	/* ensure we don't try to update it */
-	state->quota.root = NULL;
-	return 0;
-    }
-    if (r)
-	return r;
-
-    state->oldquota = state->quota;
-    return 0;
-}
-
-int annotate_state_write_finish(annotate_state_t *state)
-{
-    if (!state->quota.root)
-	return 0;   /* no quota applies */
-
-    if (state->quota.useds[QUOTA_ANNOTSTORAGE] ==
-        state->oldquota.useds[QUOTA_ANNOTSTORAGE])
-	return 0;   /* no change */
-
-    return quota_write(&state->quota, &quota_txn);
-}
 
 void annotate_state_free(annotate_state_t **statep)
 {
@@ -2512,9 +2484,6 @@ static int store_cb(annotate_state_t *state)
 	mailbox_close(&mailbox);
 
 	state->quota.root = quotaroot;
-	r = annotate_state_write_start(state);
-	if (r)
-	    goto cleanup;
     }
 
     r = _annotate_store_entries(state);
@@ -2527,8 +2496,6 @@ static int store_cb(annotate_state_t *state)
 	!hash_lookup(mbentry->server, &state->server_table)) {
 	hash_insert(mbentry->server, (void *)0xDEADBEEF, &state->server_table);
     }
-
-    r = annotate_state_write_finish(state);
 
  cleanup:
     free(quotaroot);
@@ -2928,16 +2895,7 @@ int annotate_state_store(annotate_state_t *state, struct entryattlist *l)
 	}
     }
     else if (state->which == ANNOTATION_SCOPE_MESSAGE) {
-
-	r = annotate_state_write_start(state);
-	if (r)
-	    goto cleanup;
-
 	r = _annotate_store_entries(state);
-	if (r)
-	    goto cleanup;
-
-	r = annotate_state_write_finish(state);
 	if (r)
 	    goto cleanup;
     }
