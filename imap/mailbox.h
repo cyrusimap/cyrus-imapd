@@ -181,6 +181,7 @@ struct index_header {
 
     uint32_t header_crc;
     time_t pop3_show_after;
+    quota_t quota_annot_used;
 };
 
 struct mailbox {
@@ -261,8 +262,10 @@ struct mailbox {
 #define OFFSET_RECENTTIME 108      /* last timestamp for seen data */
 #define OFFSET_POP3_SHOW_AFTER 112 /* time after which to show messages
 				    * to POP3 */
+#define OFFSET_QUOTA_ANNOT_USED 116 /* bytes of per-mailbox and per-message 
+				     * annotations for this mailbox */
 			  /* Spares - only use these if the index */
-#define OFFSET_SPARE1 116 /*  record size remains the same */
+			  /*  record size remains the same */
 #define OFFSET_SPARE2 120 /*  (see note above about spares) */
 #define OFFSET_HEADER_CRC 124 /* includes all zero for the spares! */
 
@@ -532,5 +535,6 @@ int mailbox_quota_check(struct mailbox *mailbox,
 			const quota_t delta[QUOTA_NUMRESOURCES], int wrlock);
 void mailbox_get_usage(struct mailbox *mailbox,
 			quota_t usage[QUOTA_NUMRESOURCES]);
+void mailbox_use_annot_quota(struct mailbox *mailbox, quota_t diff);
 
 #endif /* INCLUDED_MAILBOX_H */

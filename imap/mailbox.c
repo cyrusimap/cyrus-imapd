@@ -1334,6 +1334,7 @@ int mailbox_record_hasflag(struct mailbox *mailbox,
 int mailbox_buf_to_index_header(const char *buf, struct index_header *i)
 {
     uint32_t crc;
+    bit32 qannot;
 
     i->dirty = 0;
 
@@ -1364,6 +1365,10 @@ int mailbox_buf_to_index_header(const char *buf, struct index_header *i)
     i->recenttime = ntohl(*((bit32 *)(buf+OFFSET_RECENTTIME)));
     i->header_crc = ntohl(*((bit32 *)(buf+OFFSET_HEADER_CRC)));
     i->pop3_show_after = ntohl(*((bit32 *)(buf+OFFSET_POP3_SHOW_AFTER)));
+    qannot = ntohl(*((bit32 *)(buf+OFFSET_QUOTA_ANNOT_USED)));
+    /* this field is stored as a 32b unsigned on disk but 64b signed
+     * in memory, so we need to be careful about sign extension */
+    i->quota_annot_used = (quota_t)((unsigned long long)qannot);
 
     if (!i->exists)
 	i->options |= OPT_POP3_NEW_UIDL;
@@ -1851,7 +1856,10 @@ bit32 mailbox_index_header_to_buf(struct index_header *i, unsigned char *buf)
     *((bit32 *)(buf+OFFSET_RECENTUID)) = htonl(i->recentuid);
     *((bit32 *)(buf+OFFSET_RECENTTIME)) = htonl(i->recenttime);
     *((bit32 *)(buf+OFFSET_POP3_SHOW_AFTER)) = htonl(i->pop3_show_after);
-    *((bit32 *)(buf+OFFSET_SPARE1)) = htonl(0); /* RESERVED */
+    /* this field is 64b in memory but 32b on disk - as it counts
+     * bytes stored in dbs and the dbs are 32b anyway there should
+     * be no problem */
+    *((bit32 *)(buf+OFFSET_QUOTA_ANNOT_USED)) = htonl((bit32)i->quota_annot_used);
     *((bit32 *)(buf+OFFSET_SPARE2)) = htonl(0); /* RESERVED */
 
     /* Update checksum */
@@ -4204,7 +4212,13 @@ void mailbox_get_usage(struct mailbox *mailbox,
     if (!(mailbox->i.options & OPT_MAILBOX_DELETED)) {
 	usage[QUOTA_STORAGE] = mailbox->i.quota_mailbox_used;
 	usage[QUOTA_MESSAGE] = mailbox->i.exists;
-	/* XXX - annotation usage */
+	usage[QUOTA_ANNOTSTORAGE] = mailbox->i.quota_annot_used;
     }
     /* else: mailbox is being deleted, thus its new usage is 0 */
+}
+
+void mailbox_use_annot_quota(struct mailbox *mailbox, quota_t diff)
+{
+    mailbox_quota_dirty(mailbox);
+    mailbox->i.quota_annot_used += diff;
 }

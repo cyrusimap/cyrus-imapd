@@ -155,9 +155,6 @@ struct annotate_state
     /*
      * Storing.
      */
-    struct quota quota;
-    struct quota oldquota;
-
     /* number of mailboxes matching the pattern */
     unsigned count;
 };
@@ -2301,7 +2298,7 @@ static int write_entry(const char *mboxname,
 		       const char *entry,
 		       const char *userid,
 		       const struct buf *value,
-		       struct quota *quota)
+		       struct mailbox *mailbox)
 {
     char key[MAX_MAILBOX_PATH+1];
     int keylen, r;
@@ -2318,11 +2315,15 @@ static int write_entry(const char *mboxname,
 
     keylen = make_key(mboxname, uid, entry, userid, key, sizeof(key));
 
-    if (quota && quota->root) {
+    if (mailbox) {
+	quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_INITIALIZER;
+
 	r = count_old_storage(d, key, keylen, &oldlen);
 	if (r)
 	    goto out;
-	r = quota_check(quota, QUOTA_ANNOTSTORAGE, value->len - oldlen);
+
+	qdiffs[QUOTA_ANNOTSTORAGE] = value->len - oldlen;
+	r = mailbox_quota_check(mailbox, qdiffs, /*wrlock*/0);
 	if (r)
 	    goto out;
     }
@@ -2377,8 +2378,8 @@ static int write_entry(const char *mboxname,
     else
 	sync_log_annotation(mboxname);
 
-    if (quota && quota->root)
-	quota_use(quota, QUOTA_ANNOTSTORAGE, value->len - oldlen);
+    if (mailbox)
+	mailbox_use_annot_quota(mailbox, value->len - oldlen);
 
 out:
     annotate_putdb(&d);
@@ -2393,7 +2394,7 @@ int annotate_state_write(annotate_state_t *state,
 {
     const char *mboxname = (state->mailbox ? state->mailbox->name : "");
     return write_entry(mboxname, state->uid,
-		       entry, userid, value, &state->quota);
+		       entry, userid, value, state->mailbox);
 }
 
 static int annotate_canon_value(struct buf *value, int type)
@@ -2592,12 +2593,12 @@ static int annotation_set_todb(annotate_state_t *state,
 	r = write_entry(mboxname, state->uid,
 			entry->name, "",
 			&entry->shared,
-			&state->quota);
+			state->mailbox);
     if (!r && entry->have_priv)
 	r = write_entry(mboxname, state->uid,
 			entry->name, state->userid,
 			&entry->priv,
-			&state->quota);
+			state->mailbox);
 
     return r;
 }
@@ -2931,13 +2932,13 @@ static int rename_cb(const char *mailbox,
 	    /* renaming a user, so change the userid for priv annots */
 	    newuserid = rrock->newuserid;
 	}
-	r = write_entry(rrock->newmboxname, rrock->newuid, entry, newuserid, value, NULL);
+	r = write_entry(rrock->newmboxname, rrock->newuid, entry, newuserid, value, rrock->newmailbox);
     }
 
     if (!rrock->copy && !r) {
 	/* delete existing entry */
 	struct buf dattrib = BUF_INITIALIZER;
-	r = write_entry(mailbox, uid, entry, userid, &dattrib, NULL);
+	r = write_entry(mailbox, uid, entry, userid, &dattrib, rrock->oldmailbox);
     }
 
     return r;
