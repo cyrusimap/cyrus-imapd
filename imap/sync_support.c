@@ -1763,7 +1763,7 @@ int apply_annotations(const struct mailbox *mailbox,
 	    started_txn = 1;
 	}
 
-	r = annotatemore_write_entry(mailbox->name, record->uid,
+	r = annotatemore_write_entry(mailbox->name, record ? record->uid : 0,
 				     chosen->entry, chosen->userid,
 				     value);
 	if (r)
