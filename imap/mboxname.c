@@ -919,10 +919,12 @@ int mboxname_policycheck(const char *name)
      * A thorough fix might remove the prefix and timestamp
      * then continue with the check
      */
-    if (!mboxname_isdeletedmailbox(name)) {
-	if (strlen(name) > MAX_MAILBOX_NAME)
-	    return IMAP_MAILBOX_BADNAME;
-    }
+    if (mboxname_isdeletedmailbox(name))
+	return 0;
+
+    if (strlen(name) > MAX_MAILBOX_NAME)
+	return IMAP_MAILBOX_BADNAME;
+
     for (i = 0; i < NUM_BADMBOXPATTERNS; i++) {
 	g = glob_init(badmboxpatterns[i], GLOB_ICASE);
 	if (GLOB_TEST(g, name) != -1) {
