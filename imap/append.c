@@ -616,11 +616,17 @@ static void callout_encode_args(struct buf *args,
  * (ANNOTATION (/comment (value.shared "Hello World")))
  * (+FLAGS \Flagged ANNOTATION (/comment (value.shared "Hello")))
  *
- * The result is merged into @annotations and @flags.
+ * The result is merged into @user_annots, @system_annots, and @flags.
+ * User-set annotations are kept separate from system-set annotations
+ * for two reasons: a) system-set annotations need to bypass the ACL
+ * check to allow them to work during local delivery, and b) failure
+ * to set system-set annotations needs to be logged but must not cause
+ * the append to fail.
  */
 static void callout_decode_results(const char *callout,
 				   const struct dlist *results,
-			           struct entryattlist **annotations,
+			           struct entryattlist **user_annots,
+			           struct entryattlist **system_annots,
 				   strarray_t *flags)
 {
     struct dlist *dd;
@@ -681,7 +687,8 @@ static void callout_decode_results(const char *callout,
 		if (!dlist_tomap(dx->head->next, &valmap, &vallen))
 		    goto error;
 		buf_init_ro(&value, valmap, vallen);
-		setentryatt(annotations, entry, attrib, &value);
+		clearentryatt(user_annots, entry, attrib);
+		setentryatt(system_annots, entry, attrib, &value);
 		buf_free(&value);
 	    }
 	}
@@ -698,7 +705,8 @@ error:
 
 static int callout_run(const char *fname,
 		       const struct body *body,
-		       struct entryattlist **annotations,
+		       struct entryattlist **user_annots,
+		       struct entryattlist **system_annots,
 		       strarray_t *flags)
 {
     const char *callout;
@@ -711,7 +719,7 @@ static int callout_run(const char *fname,
     assert(callout);
     assert(flags);
 
-    callout_encode_args(&args, fname, body, *annotations, flags);
+    callout_encode_args(&args, fname, body, *user_annots, flags);
 
     if (stat(callout, &sb) < 0) {
 	syslog(LOG_ERR, "cannot stat annotation_callout %s: %m", callout);
@@ -740,7 +748,8 @@ static int callout_run(const char *fname,
     if (results) {
 	/* We have some results, parse them and merge them back into
 	 * the annotations and flags we were given */
-	callout_decode_results(callout, results, annotations, flags);
+	callout_decode_results(callout, results,
+			       user_annots, system_annots, flags);
     }
 
 out:
@@ -752,11 +761,14 @@ out:
 /*
  * staging, to allow for single-instance store.  the complication here
  * is multiple partitions.
+ *
+ * Note: @user_annots needs to be freed by the caller but
+ * may be modified during processing of callout responses.
  */
 int append_fromstage(struct appendstate *as, struct body **body,
 		     struct stagemsg *stage, time_t internaldate,
 		     const strarray_t *flags, int nolink,
-		     struct entryattlist *annotations)
+		     struct entryattlist *user_annots)
 {
     struct mailbox *mailbox = as->mailbox;
     struct index_record record;
@@ -765,8 +777,7 @@ int append_fromstage(struct appendstate *as, struct body **body,
     int i, r;
     int userflag;
     strarray_t *newflags = NULL;
-    struct entryattlist *origannotations = annotations;
-    struct entryattlist *newannotations = NULL;
+    struct entryattlist *system_annots = NULL;
 
     /* for staging */
     char stagefile[MAX_MAILBOX_PATH+1];
@@ -848,27 +859,32 @@ int append_fromstage(struct appendstate *as, struct body **body,
 	    newflags = strarray_dup(flags);
 	else
 	    newflags = strarray_new();
-	dupentryatt(&newannotations, annotations);
-	r = callout_run(fname, *body, &newannotations, newflags);
+	r = callout_run(fname, *body, &user_annots, &system_annots, newflags);
 	if (r) {
 	    syslog(LOG_ERR, "Annotation callout failed, ignoring\n");
 	    r = 0;
 	}
 	flags = newflags;
-	annotations = newannotations;
     }
-    if (!r && annotations) {
+    if (!r && (user_annots || system_annots)) {
 	annotate_state_t *astate = annotate_state_new();
-	annotate_state_set_auth(astate, as->namespace, as->isadmin,
-			        as->userid, as->auth_state);
 	annotate_state_set_message(astate, as->mailbox, record.uid);
-	r = annotate_state_store(astate, annotations);
-
-	if (r && !origannotations) {
-	    /* Nasty hack to log & ignore failed annotations from callout */
-	    syslog(LOG_ERR, "Setting annnotations failed (%s), "
-			    "ignoring\n", error_message(r));
-	    r = 0;
+	if (user_annots) {
+	    annotate_state_set_auth(astate, as->namespace, as->isadmin,
+				    as->userid, as->auth_state);
+	    r = annotate_state_store(astate, user_annots);
+	}
+	if (!r && system_annots) {
+	    /* pretend to be admin to avoid ACL checks */
+	    annotate_state_set_auth(astate, as->namespace, /*isadmin*/1,
+				    as->userid, as->auth_state);
+	    r = annotate_state_store(astate, system_annots);
+	    if (r) {
+		syslog(LOG_ERR, "Setting annnotations from annotator "
+				"callout failed (%s), ignoring\n",
+				error_message(r));
+		r = 0;
+	    }
 	}
 	annotate_state_free(&astate);
     }
@@ -914,7 +930,7 @@ int append_fromstage(struct appendstate *as, struct body **body,
 out:
     if (newflags)
 	strarray_free(newflags);
-    freeentryatts(newannotations);
+    freeentryatts(system_annots);
     if (r) {
 	append_abort(as);
 	return r;
