@@ -42,55 +42,28 @@
 use strict;
 use warnings;
 package Cassandane::Cyrus::Sieve;
-use base qw(Cassandane::Unit::TestCase);
+use base qw(Cassandane::Cyrus::TestCase);
 use IO::File;
-use DateTime;
 use Cassandane::Util::Log;
-use Cassandane::Generator;
-use Cassandane::MessageStoreFactory;
-use Cassandane::Instance;
-use Data::Dumper;
 
 sub new
 {
     my $class = shift;
-    my $self = $class->SUPER::new(@_);
-
-    $self->{instance} = Cassandane::Instance->new();
-    $self->{instance}->add_service('imap');
-    $self->{instance}->add_service('lmtp', argv => ['lmtpd', '-a'],
-				   port => "$self->{instance}->{basedir}/conf/socket/lmtp");
-
-    $self->{gen} = Cassandane::Generator->new();
-
-    return $self;
+    return $class->SUPER::new({ deliver => 1 }, @_);
 }
 
 sub set_up
 {
     my ($self) = @_;
-
-    $self->{instance}->start();
-    $self->{store} = $self->{instance}->get_service('imap')->create_store();
-    $self->{adminstore} = $self->{instance}->get_service('imap')->create_store(username => 'admin');
+    $self->SUPER::set_up();
 }
 
 sub tear_down
 {
     my ($self) = @_;
-
-    $self->{store}->disconnect()
-	if defined $self->{store};
-    $self->{store} = undef;
-    $self->{adminstore}->disconnect()
-	if defined $self->{adminstore};
-    $self->{adminstore} = undef;
-    $self->{instance}->stop();
+    $self->SUPER::tear_down();
 }
 
-#
-# Test renames
-#
 sub test_deliver
 {
     my ($self) = @_;

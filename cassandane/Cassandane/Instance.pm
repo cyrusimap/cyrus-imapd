@@ -497,6 +497,15 @@ sub DESTROY
     }
 }
 
+sub _setup_for_deliver
+{
+    my ($self) = @_;
+
+    $self->add_service('lmtp',
+		       argv => ['lmtpd', '-a'],
+		       port => $self->{basedir} . '/conf/socket/lmtp');
+}
+
 sub deliver
 {
     my ($self, $msg) = @_;

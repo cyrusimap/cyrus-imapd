@@ -62,6 +62,7 @@ sub new
 	store => 1,
 	adminstore => 0,
 	gen => 1,
+	deliver => 0,
     };
     # This is a downright dirty hack; if the test name contains the word
     # 'replication' then enable the replica unless requested otherwise
@@ -110,6 +111,8 @@ sub new
 
 	$self->{instance} = Cassandane::Instance->new(%instance_params);
 	$self->{instance}->add_services(@{$want->{services}});
+	$self->{instance}->_setup_for_deliver()
+	    if ($want->{deliver});
 
 	if ($want->{replica})
 	{
@@ -117,6 +120,8 @@ sub new
 						         setup_mailbox => 0);
 	    $self->{replica}->add_service('sync', port => $port);
 	    $self->{replica}->add_services(@{$want->{services}});
+	    $self->{replica}->_setup_for_deliver()
+		if ($want->{deliver});
 	}
     }
 
