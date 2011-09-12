@@ -1522,6 +1522,147 @@ static void test_getset_server_defined(void)
 }
 
 
+static const char *stringifyea(const struct entryattlist *ea)
+{
+    const struct attvaluelist *av;
+    static struct buf buf;
+    buf_reset(&buf);
+
+    for ( ; ea ; ea = ea->next) {
+	buf_printf(&buf, "(%s", ea->entry);
+	for (av = ea->attvalues ; av ; av = av->next) {
+	    buf_printf(&buf, "(%s\"", av->attrib);
+	    buf_appendmap(&buf, av->value.s, av->value.len);
+	    buf_appendcstr(&buf, "\")");
+	}
+	buf_putc(&buf, ')');
+    }
+
+    return buf_cstring(&buf);
+}
+
+static void test_setentryatt(void)
+{
+    struct entryattlist *eal = NULL;
+    struct buf val = BUF_INITIALIZER;
+
+    CU_ASSERT_PTR_NULL(eal);
+    CU_ASSERT_STRING_EQUAL(stringifyea(eal), "");
+
+    /* Test data courtesy http://hipsteripsum.me */
+
+    /* append an ea and av */
+    buf_init_ro(&val, "coffee", 6);
+    setentryatt(&eal, "letterpress", "single-origin", &val);
+    CU_ASSERT_PTR_NOT_NULL(eal);
+    CU_ASSERT_STRING_EQUAL(stringifyea(eal),
+			   "(letterpress(single-origin\"coffee\"))");
+
+    /* append another ea and av */
+    buf_init_ro(&val, "mustache", 8);
+    setentryatt(&eal, "cosby", "sweater", &val);
+    CU_ASSERT_PTR_NOT_NULL(eal);
+    CU_ASSERT_STRING_EQUAL(stringifyea(eal),
+			   "(letterpress(single-origin\"coffee\"))"
+			   "(cosby(sweater\"mustache\"))");
+
+    /* append a third ea and av */
+    buf_init_ro(&val, "portland", 8);
+    setentryatt(&eal, "cred", "artisan", &val);
+    CU_ASSERT_PTR_NOT_NULL(eal);
+    CU_ASSERT_STRING_EQUAL(stringifyea(eal),
+			   "(letterpress(single-origin\"coffee\"))"
+			   "(cosby(sweater\"mustache\"))"
+			   "(cred(artisan\"portland\"))");
+
+    /* replace the value in an av */
+    buf_init_ro(&val, "shoreditch", 10);
+    setentryatt(&eal, "cosby", "sweater", &val);
+    CU_ASSERT_PTR_NOT_NULL(eal);
+    CU_ASSERT_STRING_EQUAL(stringifyea(eal),
+			   "(letterpress(single-origin\"coffee\"))"
+			   "(cosby(sweater\"shoreditch\"))"
+			   "(cred(artisan\"portland\"))");
+
+    /* add an av to an existing ea */
+    buf_init_ro(&val, "gluten-free", 11);
+    setentryatt(&eal, "letterpress", "biodiesel", &val);
+    CU_ASSERT_PTR_NOT_NULL(eal);
+    CU_ASSERT_STRING_EQUAL(stringifyea(eal),
+			   "(letterpress(single-origin\"coffee\")"
+			   "(biodiesel\"gluten-free\"))"
+			   "(cosby(sweater\"shoreditch\"))"
+			   "(cred(artisan\"portland\"))");
+
+    freeentryatts(eal);
+    buf_free(&val);
+}
+
+static void test_clearentryatt(void)
+{
+    struct entryattlist *eal = NULL;
+    struct buf val = BUF_INITIALIZER;
+
+    /* Test data courtesy http://hipsteripsum.me */
+
+    /* append an ea and av */
+    buf_init_ro(&val, "coffee", 6);
+    setentryatt(&eal, "letterpress", "single-origin", &val);
+    /* add an av to an existing ea */
+    buf_init_ro(&val, "gluten-free", 11);
+    setentryatt(&eal, "letterpress", "biodiesel", &val);
+    /* add another av to an existing ea */
+    buf_init_ro(&val, "organic", 7);
+    setentryatt(&eal, "letterpress", "keffiyeh", &val);
+    /* append another ea and av */
+    buf_init_ro(&val, "shoreditch", 10);
+    setentryatt(&eal, "cosby", "sweater", &val);
+    /* append a third ea and av */
+    buf_init_ro(&val, "portland", 8);
+    setentryatt(&eal, "cred", "artisan", &val);
+    CU_ASSERT_PTR_NOT_NULL(eal);
+    CU_ASSERT_STRING_EQUAL(stringifyea(eal),
+			   "(letterpress(single-origin\"coffee\")"
+			   "(biodiesel\"gluten-free\")"
+			   "(keffiyeh\"organic\"))"
+			   "(cosby(sweater\"shoreditch\"))"
+			   "(cred(artisan\"portland\"))");
+
+    clearentryatt(&eal, "cosby", "sweater");
+    CU_ASSERT_PTR_NOT_NULL(eal);
+    CU_ASSERT_STRING_EQUAL(stringifyea(eal),
+			   "(letterpress(single-origin\"coffee\")"
+			   "(biodiesel\"gluten-free\")"
+			   "(keffiyeh\"organic\"))"
+			   "(cred(artisan\"portland\"))");
+
+    clearentryatt(&eal, "letterpress", "biodiesel");
+    CU_ASSERT_PTR_NOT_NULL(eal);
+    CU_ASSERT_STRING_EQUAL(stringifyea(eal),
+			   "(letterpress(single-origin\"coffee\")"
+			   "(keffiyeh\"organic\"))"
+			   "(cred(artisan\"portland\"))");
+
+    clearentryatt(&eal, "letterpress", "single-origin");
+    CU_ASSERT_PTR_NOT_NULL(eal);
+    CU_ASSERT_STRING_EQUAL(stringifyea(eal),
+			   "(letterpress"
+			   "(keffiyeh\"organic\"))"
+			   "(cred(artisan\"portland\"))");
+
+    clearentryatt(&eal, "letterpress", "keffiyeh");
+    CU_ASSERT_PTR_NOT_NULL(eal);
+    CU_ASSERT_STRING_EQUAL(stringifyea(eal),
+			   "(cred(artisan\"portland\"))");
+
+    clearentryatt(&eal, "cred", "artisan");
+    CU_ASSERT_PTR_NULL(eal);
+    CU_ASSERT_STRING_EQUAL(stringifyea(eal), "");
+
+    freeentryatts(eal);
+    buf_free(&val);
+}
+
 
 static int set_up(void)
 {

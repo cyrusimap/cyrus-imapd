@@ -121,6 +121,8 @@ void appendentryatt(struct entryattlist **l, const char *entry,
 		    struct attvaluelist *attvalues);
 void setentryatt(struct entryattlist **l, const char *entry,
 		 const char *attrib, const struct buf *value);
+void clearentryatt(struct entryattlist **l, const char *entry,
+		   const char *attrib);
 void dupentryatt(struct entryattlist **l,
 		 const struct entryattlist *);
 void freeentryatts(struct entryattlist *l);
