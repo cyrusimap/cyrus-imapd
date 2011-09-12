@@ -38,10 +38,17 @@
 <li>Bug #2772/3463 - fixed crashes in THREAD by correcting
     folding of references headers</li>
 <li>Bug #3439 - fix ugly syslog message for vacation</li>
-<li>Bug #3499 - option to disable user and shared namespaces
-    to speed up LIST command on big servers, thanks
-    Christophe Zbierski, Olivier ROLAND and Sébastien Michel
-    (and apologies for losing the patch first time around!)</li>
+<li>Bug #3499 - options to disable namespaces to reduce
+    load on big servers with no shared folders.  Thanks
+    Olivier ROLAND</li>
+<li>Changed skiplist to truncate old files after checkpoint,
+    which can save disk space on tmpfs or small ssds when
+    old copies were held open by other processes</li>
+<li>Made Cyrus more robust against corruption in
+    mailboxes.db data, so it will return an error rather
+    than crashing on invalid entries</li>
+<li>Fix for CVE-2011-3208, a remotely exploitable buffer
+    overflow in nntpd - thanks Coverity</li>
 </ul>
 
 <h1>Changes to the Cyrus IMAP Server since 2.4.9</h1>
