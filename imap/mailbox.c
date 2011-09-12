@@ -4175,11 +4175,11 @@ int mailbox_quota_check(struct mailbox *mailbox,
      * delta = -1 meaning "don't care about quota checks".
      */
     for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++) {
-	if (delta[res] > 0)
+	if (delta[res] >= 0)
 	    break;
     }
     if (res == QUOTA_NUMRESOURCES)
-	return 0;	    /* all -ve or zero */
+	return 0;	    /* all negative */
 
     q.root = mailbox->quotaroot;
     r = quota_read(&q, NULL, wrlock);
@@ -4219,6 +4219,8 @@ void mailbox_get_usage(struct mailbox *mailbox,
 
 void mailbox_use_annot_quota(struct mailbox *mailbox, quota_t diff)
 {
+    /* we are dirtying both index and quota */
+    mailbox_index_dirty(mailbox);
     mailbox_quota_dirty(mailbox);
     mailbox->i.quota_annot_used += diff;
 }
