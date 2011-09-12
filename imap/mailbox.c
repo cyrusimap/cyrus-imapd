@@ -89,6 +89,7 @@
 #include "util.h"
 #include "sequence.h"
 #include "statuscache.h"
+#include "strarray.h"
 #include "sync_log.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
@@ -2725,6 +2726,7 @@ int mailbox_create(const char *name,
     uint32_t generation_buf;
     int createfnames[] = { META_INDEX, META_CACHE, META_HEADER, 0 };
     struct mailboxlist *listitem;
+    strarray_t *initial_flags = NULL;
 
     /* if we already have this name open then that's an error too */
     listitem = find_listitem(name);
@@ -2831,6 +2833,20 @@ int mailbox_create(const char *name,
 	mailbox->uniqueid = xstrdup(uniqueid);
     }
 
+    /* pre-set any required permanent flags */
+    if (config_getstring(IMAPOPT_MAILBOX_INITIAL_FLAGS)) {
+	const char *val = config_getstring(IMAPOPT_MAILBOX_INITIAL_FLAGS);
+	int i;
+
+	initial_flags = strarray_split(val, NULL);
+
+	for (i = 0; i < initial_flags->count; i++) {
+	    const char *flag = strarray_nth(initial_flags, i);
+	    r = mailbox_user_flag(mailbox, flag, NULL, /*create*/1);
+	    if (r) goto done;
+	}
+    }
+
     /* write out the initial generation number to the cache file */
     generation_buf = htonl(mailbox->i.generation_no);
     n = retry_write(mailbox->cache_fd, (char *)&generation_buf, 4);
@@ -2857,6 +2873,8 @@ done:
 	*mailboxptr = mailbox;
     else
 	mailbox_close(&mailbox);
+
+    strarray_free(initial_flags);
 
     return r;
 }

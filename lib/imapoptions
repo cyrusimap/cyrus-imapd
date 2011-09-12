@@ -692,6 +692,13 @@ Blank lines and lines beginning with ``#'' are ignored.
    what you're doing before setting this, but it can apply some default
    annotations like duplicate supression */
 
+{ "mailbox_initial_flags", NULL, STRING }
+/* space-separated list of permanent flags which will be pre-set in every
+   newly created mailbox.  If you know you will require particular
+   flag names then this avoids a possible race condition against a client
+   that fills the entire 128 available slots.  Default is NULL, which is
+   no flags.  Example: $Label1 $Label2 $Label3 NotSpam Spam */
+
 { "mailnotifier", NULL, STRING }
 /* Notifyd(8) method to use for "MAIL" notifications.  If not set, "MAIL"
    notifications are disabled. */
