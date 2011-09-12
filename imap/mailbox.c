@@ -1290,7 +1290,7 @@ int mailbox_user_flag(struct mailbox *mailbox, const char *flag,
 	mailbox->header_dirty = 1;
     }
 
-    *flagnum = userflag;
+    if (flagnum) *flagnum = userflag;
 
     return 0;
 }
