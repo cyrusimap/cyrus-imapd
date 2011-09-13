@@ -549,10 +549,6 @@ is a structure closely based on the IMAP BODYSTRUCTURE, decoded into a
 hash, including recursively all MIME sections.  In general, the
 following items are defined for all body structures:
 
-=item I<GUID>
-
-is the hex encoded (40 character) sha1 of the spool file.
-
 =over 4
 
 =item * MIME-Type
@@ -600,6 +596,10 @@ For body structures B<except> those that have a MIME-Type of
 =item * HeaderSize
 
 =back
+
+=item I<GUID>
+
+is the hex encoded (40 character) sha1 of the spool file.
 
 =back
 
