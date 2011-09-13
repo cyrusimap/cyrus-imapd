@@ -266,6 +266,8 @@ sub check_messages
     my ($self, $expected, %params) = @_;
     my $actual = {};
     my $store = $params{store} || $self->{store};
+    my $check_guid = $params{check_guid};
+    $check_guid = 1 unless defined $check_guid;
 
     xlog "check_messages: " . join(' ', %params);
 
@@ -287,9 +289,12 @@ sub check_messages
 
 	$self->assert_not_null($actmsg);
 
-	xlog "checking guid";
-	$self->assert_str_equals($expmsg->get_guid(),
-			         $actmsg->get_guid());
+	if ($check_guid)
+	{
+	    xlog "checking guid";
+	    $self->assert_str_equals($expmsg->get_guid(),
+				     $actmsg->get_guid());
+	}
 
 	# Check required headers
 	foreach my $h (qw(x-cassandane-unique))
