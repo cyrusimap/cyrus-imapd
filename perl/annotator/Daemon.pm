@@ -132,7 +132,7 @@ my @default_args = (
 sub new
 {
     my ($class, @args) = @_;
-    my $self = $class->SUPER::new(@default_args, @args);
+    my $self = $class->SUPER::new(@args);
 
     $self->{annotations} = [];
     $self->{flags} = [];
@@ -172,8 +172,8 @@ socket bound to I</var/run/annotatord.socket>.
 sub run
 {
     my ($class, @args) = @_;
-
-    return $class->SUPER::run(@default_args, @args);
+    my %aa = (@default_args, @args);
+    return $class->SUPER::run(%aa);
 }
 
 
