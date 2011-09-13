@@ -83,7 +83,7 @@ Cyrus::Annotator::Daemon - framework for writing annotator daemons for Cyrus
       my ($self, $args) = @_;
 
       $self->set_flag('\Flagged');
-      $self->set_annotation('/comment', SHARED, 'Hello!!');
+      $self->add_annotation('/comment', SHARED, 'Hello!!');
   }
 
   MyAnnotatorDaemon->run();
