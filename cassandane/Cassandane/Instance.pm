@@ -49,7 +49,7 @@ use POSIX qw(geteuid :signal_h :sys_wait_h);
 use Time::HiRes qw(sleep gettimeofday tv_interval);
 use DateTime;
 use BSD::Resource;
-use Cwd qw(abs_path);
+use Cwd qw(abs_path getcwd);
 use Cassandane::Util::DateTime qw(to_iso8601);
 use Cassandane::Util::Log;
 use Cassandane::Config;
@@ -683,6 +683,10 @@ sub _fork_utility
     }
 
     # child process
+
+    $ENV{CASSANDANE_CYRUS_PREFIX} = $self->{cyrus_prefix};
+    $ENV{CASSANDANE_PREFIX} = getcwd();
+    $ENV{CASSANDANE_BASEDIR} = $self->{basedir};
 
     my $cd = $self->{basedir} . '/conf/cores';
     chdir($cd)
