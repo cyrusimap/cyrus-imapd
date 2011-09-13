@@ -210,7 +210,9 @@ int append_setup(struct appendstate *as, const char *name,
     as->nummsg = 0;
     as->baseuid = as->mailbox->i.last_uid + 1;
     as->s = APPEND_READY;
-    
+
+    annotatemore_begin();
+
     return 0;
 }
 
