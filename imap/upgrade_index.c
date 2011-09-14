@@ -342,6 +342,24 @@ int upgrade_index(struct mailbox *mailbox)
     }
 no_expunge:
 
+    if (oldminor_version < 13) {
+	/* update quota resources usage */
+	if (mailbox->quotaroot && *mailbox->quotaroot) {
+	    quota_t usage[QUOTA_NUMRESOURCES];
+
+	    /* XXX - compute annotation storage usage, and dirty the mailbox
+	     * index with the value */
+
+	    mailbox_get_usage(mailbox, usage);
+	    /* storage usage is already taken into account */
+	    usage[QUOTA_STORAGE] = 0;
+
+	    quota_update_useds(mailbox->quotaroot, usage,
+		(mailbox->i.options & OPT_MAILBOX_QUOTA_SCANNED));
+	    /* XXX - shall we fail upon issue ? */
+	}
+    }
+
     mailbox_repack_setup(mailbox, &repack);
 
     /* Write the rest of new index */
