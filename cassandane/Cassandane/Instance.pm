@@ -765,4 +765,48 @@ sub quota_Z_wait
 	        description => "quota -Z to be finished with $mboxname");
 }
 
+#
+# Unpacks file.  Handles tar, gz, and bz2.
+#
+sub unpack
+{
+    my ($self, $src, $dst) = @_;
+
+    if (!defined($dst)) {
+	# unpack in base directory
+	$dst = $self->{basedir};
+    }
+    elsif ($dst !~ /^\//) {
+	# unpack relatively to base directory
+	$dst = $self->{basedir} . '/' . $dst;
+    }
+    # else: absolute path given
+
+    my $options = {};
+    my @cmd = ();
+
+    my $file = [split(/\./, (split(/\//, $src))[-1])];
+    if (grep { $_ eq 'tar' } @$file) {
+	push(@cmd, 'tar', '-x', '-f', $src, '-C', $dst);
+    }
+    elsif ($file->[-1] eq 'gz') {
+	$options->{redirects} = {
+	    stdout => "$dst/" . join('.', splice(@$file, 0, -1))
+	};
+	push(@cmd, 'gunzip', '-c', $src);
+    }
+    elsif ($file->[-1] eq 'bz2') {
+	$options->{redirects} = {
+	    stdout => "$dst/" . join('.', splice(@$file, 0, -1))
+	};
+	push(@cmd, 'bunzip2', '-c', $src);
+    }
+    else {
+	# we don't handle this combination
+	die "Unhandled packed file $src";
+    }
+
+    return $self->run_command($options, @cmd);
+}
+
 1;
