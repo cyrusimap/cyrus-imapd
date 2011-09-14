@@ -381,7 +381,7 @@ int buildquotalist(char *domain, char **roots, int nroots)
      * updates for mailboxes will now start to update usedBs[].
      */
     for (i = 0; i < quota_num; i++) {
-	quota[i].quota.usedBs[QUOTA_STORAGE] = 0;
+	memset(quota[i].quota.usedBs, 0, sizeof(quota[i].quota.usedBs));
 	r = quota_write(&quota[i].quota, &tid);
 	if (r) {
 	    errmsg("failed writing quota record for '%s'",
