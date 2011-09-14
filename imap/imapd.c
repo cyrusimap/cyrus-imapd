@@ -10996,8 +10996,7 @@ void cmd_enable(char *tag)
 {
     static struct buf arg;
     int c;
-
-    prot_printf(imapd_out, "* ENABLED");
+    unsigned new_capa = imapd_client_capa;
 
     do {
 	c = getword(imapd_in, &arg);
@@ -11008,19 +11007,11 @@ void cmd_enable(char *tag)
 	    eatline(imapd_in, c);
 	    return;
 	}
-	lcase(arg.s);
-	if (!strcmp(arg.s, "condstore")) {
-	    imapd_client_capa |= CAPA_CONDSTORE;
-	    prot_printf(imapd_out, " CONDSTORE");
-	}
-	else if (!strcmp(arg.s, "qresync")) {
-	    imapd_client_capa |= CAPA_QRESYNC | CAPA_CONDSTORE;
-	    if (imapd_index) imapd_index->qresync = 1;
-	    prot_printf(imapd_out, " QRESYNC CONDSTORE");
-	}
+	if (!strcasecmp(arg.s, "condstore"))
+	    new_capa |= CAPA_CONDSTORE;
+	else if (!strcasecmp(arg.s, "qresync"))
+	    new_capa |= CAPA_QRESYNC | CAPA_CONDSTORE;
     } while (c == ' ');
-
-    prot_printf(imapd_out, "\r\n");
 
     /* check for CRLF */
     if (c == '\r') c = prot_getc(imapd_in);
@@ -11030,6 +11021,23 @@ void cmd_enable(char *tag)
 	eatline(imapd_in, c);
 	return;
     }
+
+    prot_printf(imapd_out, "* ENABLED");
+    if (!(imapd_client_capa & CAPA_CONDSTORE) &&
+	 (new_capa & CAPA_CONDSTORE)) {
+	prot_printf(imapd_out, " CONDSTORE");
+    }
+    if (!(imapd_client_capa & CAPA_QRESYNC) &&
+	 (new_capa & CAPA_QRESYNC)) {
+	prot_printf(imapd_out, " QRESYNC");
+	/* RFC5161 says that enable while selected is actually bogus,
+	 * but it's no skin off our nose to support it */
+	if (imapd_index) imapd_index->qresync = 1;
+    }
+    prot_printf(imapd_out, "\r\n");
+
+    /* track the new capabilities */
+    imapd_client_capa = new_capa;
 
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
