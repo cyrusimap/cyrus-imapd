@@ -1692,6 +1692,7 @@ static int http_auth(const char *creds, struct auth_challenge_t *chal)
 	    snprintf(base64, BASE64_BUF_SIZE,
 		     "realm=\"%s\"", config_servername);
 	    chal->param = base64;
+	    chal->scheme = NULL;  /* make sure we don't reset the SASL ctx */
 	    return status;
 	}
 
