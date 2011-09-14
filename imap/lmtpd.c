@@ -512,6 +512,10 @@ int deliver_mailbox(FILE *f,
 	qdiffs[QUOTA_MESSAGE] = -1;
     else if (config_getswitch(IMAPOPT_LMTP_STRICT_QUOTA))
 	qdiffs[QUOTA_MESSAGE] = 1;
+    if (quotaoverride)
+	qdiffs[QUOTA_ANNOTSTORAGE] = -1;
+    else if (config_getswitch(IMAPOPT_LMTP_STRICT_QUOTA))
+	qdiffs[QUOTA_ANNOTSTORAGE] = 0;
 
     r = append_setup(&as, mailboxname,
 		     authuser, authstate, acloverride ? 0 : ACL_POST, 
