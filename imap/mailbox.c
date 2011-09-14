@@ -3352,7 +3352,7 @@ static int find_files(struct mailbox *mailbox, struct found_files *files,
 	if (r) {
 	    /* check if it's a directory */
 	    snprintf(buf, MAX_MAILBOX_PATH, "%s/%s", dirpath, dirent->d_name);
-	    if (stat(buf, &sbuf) == -1) continue; /* ignore emepheral */
+	    if (stat(buf, &sbuf) == -1) continue; /* ignore ephemeral */
 	    if (!S_ISDIR(sbuf.st_mode)) {
 		if (!(flags & RECONSTRUCT_IGNORE_ODDFILES)) {
 		    printf("%s odd file %s\n", mailbox->name, buf);
