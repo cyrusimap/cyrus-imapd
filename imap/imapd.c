@@ -3380,6 +3380,7 @@ void cmd_append(char *tag, char *name, const char *cur_name)
 		    eatline(imapd_in, c);
 		    goto cleanup;
 		}
+		qdiffs[QUOTA_ANNOTSTORAGE] += sizeentryatts(curstage->annotations);
 		c = getword(imapd_in, &arg);
 	    }
 	    else
