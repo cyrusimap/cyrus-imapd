@@ -390,7 +390,7 @@ sub _start_master
     my @cmd =
     (
 	'master',
-	# The following is added automatically by _fork_utility:
+	# The following is added automatically by _fork_command:
 	# '-C', $self->_imapd_conf(),
 	'-l', '255',
 	'-p', $self->_pid_file(),
@@ -398,9 +398,9 @@ sub _start_master
 	'-M', $self->_master_conf(),
     );
     unlink $self->_pid_file();
-    # _fork_utility() returns a pid, but that doesn't help
+    # _fork_command() returns a pid, but that doesn't help
     # because master will fork again to background itself.
-    $self->_fork_utility(@cmd);
+    $self->_fork_command({ cyrus => 1 }, @cmd);
 
     # wait until the pidfile exists and contains a PID
     # that we can verify is still alive.
@@ -520,161 +520,126 @@ sub deliver
 {
     my ($self, $msg) = @_;
     my $str = $msg->as_string();
-    my $fh = $self->run_utility('|-', 'deliver', 'cassandane');
-    print $fh $str;
-    close($fh);
+    $self->run_command({ cyrus => 1, redirects => { stdin => \$str } },
+	'deliver', 'cassandane');
 }
 
-# Run a Cyrus utility program with the given arguments.  The first
-# argument may optionally be a mode string, either '-|' or '|-' which
-# affects how the utility's stdin and stdout are treated thus:
+# Runs a command with the given arguments.  The first argument is an
+# options hash:
 #
-# -|	    stdin is redirected from /dev/null,
-#	    stdout is captured in the returned file handle,
-#	    stderr is redirected to /dev/null (or is unmolested
-#		is xlog is in verbose mode).
-#	    returns a new file handle from the running process
+# background  whether to start the command in the background; you need
+#           to give returned arguments to reap_command afterwards
 #
-# |-	    stdin is fed from the returned file handle
-#	    stdout is redirected to /dev/null (or is unmolested
-#		is xlog is in verbose mode).
-#	    stderr likewise
-#	    returns a new file handle to the running process
+# cyrus     whether it is a cyrus utility; if so, instance path is
+#           automatically prepended to the given command name
 #
-# (none)    stdin is redirected from /dev/null,
-#	    stdout is redirected to /dev/null (or is unmolested
-#		is xlog is in verbose mode).
-#	    stderr likewise
-#	    returns UNIX exit code to the finished process
-#	    and dies if the process failed
+# redirects  hash for I/O redirections
+#     stdin     feed stdin from; handles SCALAR data or filename,
+#		    /dev/null by default
+#     stdout    feed stdout to; /dev/null by default (or is unmolested
+#		    if xlog is in verbose mode)
+#     stderr    feed stderr to; /dev/null by default (or is unmolested
+#		    if xlog is in verbose mode)
 #
-sub run_utility
+# workingdir  path to launch the command from
+#
+sub run_command
 {
     my ($self, @args) = @_;
 
-    my ($pid, $fh) = $self->_fork_utility(@args);
+    my $options = {};
+    if (ref($args[0]) eq 'HASH') {
+	$options = shift(@args);
+    }
 
-    return $fh
-	if defined $fh;
+    my $pid = $self->_fork_command($options, @args);
+
+    return $pid
+	if ($options->{background});
+
+    return $self->reap_command($pid);
+}
+
+sub reap_command
+{
+    my ($self, $pid) = @_;
 
     # parent process...wait for child
-    my $child = waitpid($pid,0);
+    my $child = waitpid($pid, 0);
     # and deal with it's exit status
     return $self->_handle_wait_status($pid)
 	if $child == $pid;
     return undef;
 }
 
-sub start_utility_bg
+sub stop_command
 {
-    my ($self, @args) = @_;
-    return $self->_fork_utility(@args);
-}
-
-sub reap_utility_bg
-{
-    my ($self, $pid, $fh) = @_;
-
-    if (defined $fh)
-    {
-	# aha, close does a waitpid
-	close $fh;
-    }
-    else
-    {
-	# parent process...wait for child
-	my $child = waitpid($pid, 0);
-	# and deal with it's exit status
-	return $self->_handle_wait_status($pid)
-	    if $child == $pid;
-    }
-}
-
-sub stop_utility_bg
-{
-    my ($self, $pid, $fh) = @_;
+    my ($self, $pid) = @_;
     _stop_pid($pid);
-    $self->reap_utility_bg($pid, $fh);
+    $self->reap_command($pid);
 }
 
-sub stop_utility_bg_pidfile
+sub stop_command_pidfile
 {
     my ($self, $pidfile) = @_;
     my $pid = $self->_read_pid_file($pidfile);
-    if (defined $pid)
-    {
-	_stop_pid($pid);
-	$self->reap_utility_bg($pid, undef);
-    }
+    $self->stop_command($pid)
+	if (defined $pid);
 }
 
 #
-# Starts a new process to run a Cyrus utility program.  Obeys
-# the "mode" argument like run_utility().
+# Starts a new process to run a program.
 #
-# Returns: ($pid, $fh, $desc) where $fh is the file handle of the
-#	   pipe to the captured input or output, or undef if
-#	   no capturing.  close()ing the filehandle does a
-#	   waitpid(); you must call _handle_wait_status() to
+# Returns launched $pid; you must call _handle_wait_status() to
 #	   decode $?.  Dies on errors.
 #
-sub _fork_utility
+sub _fork_command
 {
-    my ($self, $mode, @argv) = @_;
-    my $binary;
+    my ($self, $options, $binary, @argv) = @_;
 
-    die "No mode or binary specified"
-	unless defined $mode;
-
-    my %redirects;
-    if ($mode eq '-|')
-    {
-	# stdin is null, capture stdout
-	$redirects{stdin} = '/dev/null';
-	$binary = shift @argv;
-    }
-    elsif ($mode eq '|-')
-    {
-	# feed stdin, stdout is null or unmolested
-	$redirects{stdout} = '/dev/null'
-	    unless get_verbose;
-	$binary = shift @argv;
-    }
-    else
-    {
-	# stdin is null, stdout is null or unmolested
-	$redirects{stdin} = '/dev/null';
-	$redirects{stdout} = '/dev/null'
-	    unless get_verbose;
-	$binary = $mode;
-	$mode = undef;
-    }
-    $redirects{stderr} = '/dev/null'
-	unless get_verbose;
     die "No binary specified"
 	unless defined $binary;
 
-    my @cmd =
-    (
-	$self->_binary($binary),
-	'-C', $self->_imapd_conf(),
-	@argv,
-    );
+    my %redirects;
+    if (defined($options->{redirects})) {
+	%redirects = %{$options->{redirects}};
+    }
+    # stdin is null, stdout is null or unmolested
+    $redirects{stdin} = '/dev/null'
+	unless(defined($redirects{stdin}));
+    $redirects{stdout} = '/dev/null'
+	unless(get_verbose || defined($redirects{stdout}));
+    $redirects{stderr} = '/dev/null'
+	unless(get_verbose || defined($redirects{stderr}));
+
+    my @cmd = ();
+    if ($options->{cyrus})
+    {
+	push(@cmd, $self->_binary($binary), '-C', $self->_imapd_conf());
+    }
+    else {
+	push(@cmd, $binary);
+    }
+    push(@cmd, @argv);
 
     xlog "Running: " . join(' ', map { "\"$_\"" } @cmd);
 
-    if (defined $mode)
+    if (defined($redirects{stdin}) && (ref($redirects{stdin}) eq 'SCALAR'))
     {
 	my $fh;
+	my $data = $redirects{stdin};
+	$redirects{stdin} = undef;
 	# Use the fork()ing form of open()
-	my $pid = open $fh,$mode;
+	my $pid = open $fh,'|-';
 	die "Cannot fork: $!"
 	    if !defined $pid;
 	if ($pid)
 	{
 	    # parent process
 	    $self->{_children}->{$fh} = "(binary $binary pid $pid)";
-	    return ($pid, $fh);
+	    print $fh ${$data};
+	    close ($fh);
+	    return $pid;
 	}
     }
     else
@@ -687,10 +652,8 @@ sub _fork_utility
 	{
 	    # parent process
 	    $self->{_children}->{$pid} = "(binary $binary pid $pid)";
-	    return ($pid, undef);
+	    return $pid;
 	}
-	return ($pid, undef, "$binary (pid $pid)")
-	    if ($pid);	    # parent process
     }
 
     # child process
@@ -699,7 +662,9 @@ sub _fork_utility
     $ENV{CASSANDANE_PREFIX} = getcwd();
     $ENV{CASSANDANE_BASEDIR} = $self->{basedir};
 
-    my $cd = $self->{basedir} . '/conf/cores';
+    my $cd = $options->{workingdir};
+    $cd = $self->{basedir} . '/conf/cores'
+	unless defined($cd);
     chdir($cd)
 	or die "Cannot cd to $cd: $!";
 

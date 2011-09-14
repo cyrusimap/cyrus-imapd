@@ -788,7 +788,7 @@ sub test_quota_f
     $self->{instance}->_fix_ownership("$self->{instance}{basedir}/conf/quota");
 
     # find and add the quota
-    $self->{instance}->run_utility('quota', '-f');
+    $self->{instance}->run_command({ cyrus => 1 }, 'quota', '-f');
 
     my @res = $admintalk->getquota("user.quotafuser");
     $self->assert_num_equals(9, scalar @res);
@@ -796,7 +796,7 @@ sub test_quota_f
     $self->assert_num_equals(9, scalar @casres);
 
     # re-run the quota utility
-    $self->{instance}->run_utility('quota', '-f');
+    $self->{instance}->run_command({ cyrus => 1 }, 'quota', '-f');
 
     my @res2 = $admintalk->getquota("user.quotafuser");
     $self->assert_num_equals(9, scalar @res2);
@@ -851,7 +851,7 @@ sub test_quota_f_vs_update
     $self->{instance}->quota_Z_go($basefolder);
     $self->{instance}->quota_Z_go("$basefolder.a");
     $self->{instance}->quota_Z_go("$basefolder.b");
-    my (@bits) = $self->{instance}->start_utility_bg('quota', '-Z', '-f', $basefolder);
+    my (@bits) = $self->{instance}->run_command({ cyrus => 1, background => 1 }, 'quota', '-Z', '-f', $basefolder);
 
     # waiting for quota -f to ensure that
     # a) the -Z mechanism is working and
@@ -877,7 +877,7 @@ sub test_quota_f_vs_update
     $self->{instance}->quota_Z_go("$basefolder.d");
     $self->{instance}->quota_Z_go("$basefolder.e");
     $self->{instance}->quota_Z_wait("$basefolder.e");
-    $self->{instance}->reap_utility_bg(@bits);
+    $self->{instance}->reap_command(@bits);
 
     xlog "Check that we have the correct quota usage";
     $self->_check_usage(int($expected/1024), $limit);
@@ -920,7 +920,7 @@ sub test_prefix_mboxexists
     my @origplus = $admintalk->getquota("user.baseplus");
     $self->assert_num_equals(3, scalar @origplus);
 
-    $self->{instance}->run_utility('quota', '-f', "user.base");
+    $self->{instance}->run_command({ cyrus => 1 }, 'quota', '-f', "user.base");
 
     my @nextplus = $admintalk->getquota("user.baseplus");
     $self->assert_num_equals(3, scalar @nextplus);

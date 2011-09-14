@@ -77,7 +77,7 @@ require ["fileinto"];
 fileinto "INBOX.target";
 EOF
     close(FH);
-    $self->{instance}->run_utility("sievec", "$sieved/testsieve.script" => "$sieved/testsieve.bc");
+    $self->{instance}->run_command({ cyrus => 1 }, "sievec", "$sieved/testsieve.script" => "$sieved/testsieve.bc");
     system('ln', '-s', "testsieve.bc" => "$sieved/defaultbc");
 
     my $msg1 = $self->{gen}->generate(subject => "Message 1");

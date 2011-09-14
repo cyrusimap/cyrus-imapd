@@ -358,7 +358,8 @@ sub run_replication
 
     # TODO: need a timeout!!
 
-    $self->{instance}->run_utility('sync_client',
+    $self->{instance}->run_command({ cyrus => 1 },
+	'sync_client',
 	'-v',			# verbose
 	'-v',			# even more verbose
 	'-S', $params->{host},	# hostname to connect to
