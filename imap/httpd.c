@@ -135,6 +135,14 @@ extern int opterr;
 static SSL *tls_conn;
 #endif /* HAVE_SSL */
 
+#ifdef SASL_NEED_HTTP
+  #define HTTP_DIGEST_MECH "DIGEST-MD5"
+  #define SASL_SERVER_FLAGS (SASL_NEED_HTTP | SASL_SUCCESS_DATA)
+#else
+  #define HTTP_DIGEST_MECH NULL  /* not supported by our SASL version */
+  #define SASL_SERVER_FLAGS SASL_SUCCESS_DATA
+#endif
+
 sasl_conn_t *httpd_saslconn; /* the sasl connection context */
 
 int httpd_timeout;
@@ -168,8 +176,8 @@ struct auth_scheme_t {
 		    const char *data);	/* Default is to use WWW-Auth header */
 };
 
-void digest_success(const char *name __attribute__((unused)),
-		    const char *data)
+static void digest_success(const char *name __attribute__((unused)),
+			   const char *data)
 {
     prot_printf(httpd_out, "Authentication-Info: %s\r\n", data);
 }
@@ -177,8 +185,8 @@ void digest_success(const char *name __attribute__((unused)),
 /* List of HTTP auth schemes that we support */
 static struct auth_scheme_t auth_schemes[] = {
     { "Basic", NULL, 0, 0, 1, 1, NULL },
-    { "Digest", "DIGEST-MD5", 0, 0, 1, 0, &digest_success },
-/*  { "Negotiate", "GSS-SPNEGO", 0, 0, 0, 1, NULL }, */
+    { "Digest", HTTP_DIGEST_MECH, 0, 0, 1, 0, &digest_success },
+    { "Negotiate", NULL /* not implemented yet */, 0, 0, 0, 1, NULL },
     { "NTLM", "NTLM", 0, 1, 0, 1, NULL },
     { NULL, NULL, 0, 0, 0, 0, NULL }
 };
@@ -187,7 +195,7 @@ static struct auth_scheme_t auth_schemes[] = {
 enum {
     AUTH_BASIC = 0,
     AUTH_DIGEST,
-/*  AUTH_NEGOTIATE, */
+    AUTH_NEGOTIATE,
     AUTH_NTLM
 };
 
@@ -542,8 +550,7 @@ int service_main(int argc __attribute__((unused)),
 
     /* other params should be filled in */
     if (sasl_server_new("http", config_servername, NULL, NULL, NULL, NULL,
-			SASL_NEED_HTTP | SASL_SUCCESS_DATA,
-			&httpd_saslconn) != SASL_OK)
+			SASL_SERVER_FLAGS, &httpd_saslconn) != SASL_OK)
 	fatal("SASL failed initializing: sasl_server_new()",EC_TEMPFAIL); 
 
     /* will always return something valid */
@@ -818,7 +825,7 @@ static int reset_saslconn(sasl_conn_t **conn)
     sasl_dispose(conn);
     /* do initialization typical of service_main */
     ret = sasl_server_new("http", config_servername, NULL, NULL, NULL, NULL,
-			  SASL_NEED_HTTP | SASL_SUCCESS_DATA, conn);
+			  SASL_SERVER_FLAGS, conn);
     if(ret != SASL_OK) return ret;
 
     if(saslprops.ipremoteport)
@@ -895,8 +902,10 @@ static void cmdloop(void)
     char reqline[4096], buf[1024], *uristr, *p;
     const char **hdr, *errstr;
     struct transaction_t txn;
-    sasl_http_request_t sasl_http_req;
     const struct method_t *method = NULL;
+#ifdef SASL_HTTP_REQUEST
+    sasl_http_request_t sasl_http_req;
+#endif
 
     /* Start with an empty (clean) transaction */
     memset(&txn, 0, sizeof(struct transaction_t));
@@ -1057,12 +1066,14 @@ static void cmdloop(void)
 
 	if (ret) goto error;
 
+#ifdef SASL_HTTP_REQUEST
 	/* Setup SASL HTTP request in case we need it */
 	sasl_http_req.method = txn.meth;
 	sasl_http_req.uri = uristr;
 	sasl_http_req.entity = (u_char *) buf_cstring(&txn.req_body);
 	sasl_http_req.elen = buf_len(&txn.req_body);
 	sasl_http_req.non_persist = (txn.flags & HTTP_CLOSE);
+#endif
 
 	if (!httpd_userid && !allowanonymous) {
 	    /* Perform authentication, if necessary */
@@ -1081,7 +1092,9 @@ static void cmdloop(void)
 		}
 #endif
 		/* Check the auth credentials */
+#ifdef SASL_HTTP_REQUEST
 		sasl_setprop(httpd_saslconn, SASL_HTTP_REQUEST, &sasl_http_req);
+#endif
 		if (http_auth(hdr[0], &txn.auth_chal) < 0) {
 		    /* Auth failed - reinitialize */
 		    syslog(LOG_DEBUG, "auth failed - reinit");
@@ -1113,7 +1126,9 @@ static void cmdloop(void)
 	    }
 	    else {
 		/* Tell client to authenticate */
+#ifdef SASL_HTTP_REQUEST
 		sasl_setprop(httpd_saslconn, SASL_HTTP_REQUEST, &sasl_http_req);
+#endif
 		ret = HTTP_UNAUTHORIZED;
 		errstr = "Must authenticate to access the specified target";
 	    }
