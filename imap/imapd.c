@@ -3536,6 +3536,75 @@ cleanup:
 }
 
 /*
+ * Warn if mailbox is close to or over any quota resource.
+ *
+ * Warn if the following possibilities occur:
+ * - quotawarnkb not set + quotawarn hit
+ * - quotawarnkb set larger than mailbox + quotawarn hit
+ * - quotawarnkb set + hit + quotawarn hit
+ * - quotawarnmsg not set + quotawarn hit
+ * - quotawarnmsg set larger than mailbox + quotawarn hit
+ * - quotawarnmsg set + hit + quotawarn hit
+ */
+static void warn_about_quota(const char *quotaroot)
+{
+    time_t now = time(NULL);
+    struct quota q;
+    int res;
+    int r;
+    int thresholds[QUOTA_NUMRESOURCES];
+    int pc_threshold = config_getint(IMAPOPT_QUOTAWARN);
+    int pc_usage;
+    struct buf msg = BUF_INITIALIZER;
+    static char lastqr[MAX_MAILBOX_PATH+1] = "";
+    static time_t nextalert = 0;
+
+    if (!quotaroot || !*quotaroot)
+	return;	    /* no quota, nothing to do */
+
+    /* rate limit checks and warnings to every 10 min */
+    if (!strcmp(quotaroot, lastqr) && now < nextalert)
+	return;
+    strlcpy(lastqr, quotaroot, sizeof(lastqr));
+    nextalert = now + 600;
+
+    q.root = quotaroot;
+    r = quota_read(&q, NULL, 0);
+    if (r)
+	return;	    /* failed to read */
+
+    memset(thresholds, 0, sizeof(thresholds));
+    thresholds[QUOTA_STORAGE] = config_getint(IMAPOPT_QUOTAWARNKB);
+    thresholds[QUOTA_MESSAGE] = config_getint(IMAPOPT_QUOTAWARNMSG);
+    thresholds[QUOTA_ANNOTSTORAGE] = config_getint(IMAPOPT_QUOTAWARNKB);
+
+    for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++) {
+	if (q.limits[res] < 0)
+	    continue;	    /* this resource is unlimited */
+	buf_reset(&msg);
+
+	if (thresholds[res] <= 0 ||
+	    thresholds[res] >= q.limits[res] ||
+	    q.useds[res] > ((quota_t) (q.limits[res] - thresholds[res])) * quota_units[res]) {
+
+	    pc_usage = (int)(((double) q.useds[res] * 100.0) /
+		             (double) ((quota_t) q.limits[res] * quota_units[res]));
+
+	    if (q.useds[res] > (quota_t) q.limits[res] * quota_units[res])
+		buf_printf(&msg, error_message(IMAP_NO_OVERQUOTA),
+			   quota_names[res]);
+	    else if (pc_usage > pc_threshold)
+		buf_printf(&msg, error_message(IMAP_NO_CLOSEQUOTA),
+			   pc_usage, quota_names[res]);
+	}
+
+	if (msg.len)
+	    prot_printf(imapd_out, "* NO [ALERT] %s\r\n", buf_cstring(&msg));
+    }
+}
+
+
+/*
  * Perform a SELECT/EXAMINE/BBOARD command
  */
 void cmd_select(char *tag, char *cmd, char *name)
@@ -3543,12 +3612,9 @@ void cmd_select(char *tag, char *cmd, char *name)
     int c;
     char mailboxname[MAX_MAILBOX_BUFFER];
     int r = 0;
-    double usage;
     int doclose = 0;
     struct mboxlist_entry *mbentry = NULL;
     struct backend *backend_next = NULL;
-    static char lastqr[MAX_MAILBOX_PATH+1] = "";
-    static time_t nextalert = 0;
     struct index_init init;
     int wasopen = 0;
     struct vanished_params *v = &init.vanished;
@@ -3796,69 +3862,8 @@ void cmd_select(char *tag, char *cmd, char *name)
 	return;
     }
 
-    if (imapd_index->myrights & ACL_EXPUNGE) {
-	time_t now = time(NULL);
-	struct quota q;
-
-	/* Warn if mailbox is close to or over quota */
-	q.root = imapd_index->mailbox->quotaroot;
-	r = quota_read(&q, NULL, 0);
-	if (!r && ((q.limits[QUOTA_STORAGE] >= 0) || (q.limits[QUOTA_MESSAGE] >= 0))
-	    && (strcmp(q.root, lastqr) || now > nextalert)) {
-	    /* Warn if the following possibilities occur:
-	     * - quotawarnkb not set + quotawarn hit
-	     * - quotawarnkb set larger than mailbox + quotawarn hit
-	     * - quotawarnkb set + hit + quotawarn hit
-	     * - quotawarnmsg not set + quotawarn hit
-	     * - quotawarnmsg set larger than mailbox + quotawarn hit
-	     * - quotawarnmsg set + hit + quotawarn hit
-	     */
-	    int overquota = 0;
- 	    int warnsize = config_getint(IMAPOPT_QUOTAWARNKB);
-	    int warncount = config_getint(IMAPOPT_QUOTAWARNMSG);
-
-	    if (warnsize <= 0 || warnsize >= q.limits[QUOTA_STORAGE] ||
-		((quota_t) (q.limits[QUOTA_STORAGE] - warnsize)) * quota_units[QUOTA_STORAGE] < q.useds[QUOTA_STORAGE]) {
-		usage = ((double) q.useds[QUOTA_STORAGE] * 100.0) /
-			(double) ((quota_t) q.limits[QUOTA_STORAGE] * quota_units[QUOTA_STORAGE]);
-		if (usage >= 100.0) {
-		    overquota = 1;
-		    prot_printf(imapd_out, "* NO [ALERT] %s\r\n",
-				error_message(IMAP_NO_OVERQUOTA));
-		}
-		else if (usage > config_getint(IMAPOPT_QUOTAWARN)) {
-		    int usageint = (int) usage;
-		    prot_printf(imapd_out, "* NO [ALERT] ");
-		    prot_printf(imapd_out, error_message(IMAP_NO_CLOSEQUOTA),
-				usageint, quota_names[QUOTA_STORAGE]);
-		    prot_printf(imapd_out, "\r\n");
-		}
-	    }
-
-	    if ((warncount <= 0) || (warncount >= q.limits[QUOTA_MESSAGE]) ||
-		((quota_t) (q.limits[QUOTA_MESSAGE] - warnsize)) * quota_units[QUOTA_MESSAGE] < q.useds[QUOTA_MESSAGE]) {
-		usage = ((double) q.useds[QUOTA_MESSAGE] * 100.0) /
-			(double) ((quota_t) q.limits[QUOTA_MESSAGE] * quota_units[QUOTA_MESSAGE]);
-		if (usage >= 100.0) {
-		    if (!overquota) {
-			prot_printf(imapd_out, "* NO [ALERT] %s\r\n",
-				    error_message(IMAP_NO_OVERQUOTA));
-		    }
-		    /* else: over quota already notified */
-		}
-		else if (usage > config_getint(IMAPOPT_QUOTAWARN)) {
-		    int usageint = (int) usage;
-		    prot_printf(imapd_out, "* NO [ALERT] ");
-		    prot_printf(imapd_out, error_message(IMAP_NO_CLOSEQUOTA),
-				usageint, quota_names[QUOTA_MESSAGE]);
-		    prot_printf(imapd_out, "\r\n");
-		}
-	    }
-
-	    strlcpy(lastqr, q.root, sizeof(lastqr));
-	    nextalert = now + 600; /* ALERT every 10 min regardless */
-	}
-    }
+    if (imapd_index->myrights & ACL_EXPUNGE)
+	warn_about_quota(imapd_index->mailbox->quotaroot);
 
     index_select(imapd_index, &init);
 

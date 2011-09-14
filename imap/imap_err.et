@@ -198,7 +198,7 @@ ec IMAP_SASL_PROTERR,
 # Following used for internationalization of untagged OK/NO responses
 
 ec IMAP_NO_OVERQUOTA,
-   "Mailbox is over quota"
+   "Mailbox is over %s quota"
 
 ec IMAP_NO_CLOSEQUOTA,
    "Mailbox is at %d%% of %s quota"
