@@ -3339,17 +3339,12 @@ struct found_files {
     unsigned nalloc;
     unsigned nused;
 };
+#define FOUND_FILES_INITIALIZER \
+    { NULL, 0, 0 }
 
 static int sort_uid(const void *a, const void *b)
 {
     return *(unsigned long *)a - *(unsigned long *)b;
-}
-
-static void init_files(struct found_files *ff)
-{
-    ff->uids = NULL;
-    ff->nused = 0;
-    ff->nalloc = 0;
 }
 
 static void add_files(struct found_files *ff, unsigned long uid)
@@ -3364,9 +3359,10 @@ static void add_files(struct found_files *ff, unsigned long uid)
 
 static void free_files(struct found_files *ff)
 {
-    if (ff->nalloc)
-	free(ff->uids);
-    init_files(ff);
+    free(ff->uids);
+    ff->uids = NULL;
+    ff->nalloc = 0;
+    ff->nused = 0;
 }
 
 static int parse_datafilename(const char *name, uint32_t *uidp)
@@ -3397,8 +3393,6 @@ static int find_files(struct mailbox *mailbox, struct found_files *files,
     char buf[MAX_MAILBOX_PATH];
     struct stat sbuf;
     int r;
-
-    init_files(files);
 
     dirpath = mailbox_datapath(mailbox);
     if (!dirpath) return IMAP_MAILBOX_BADNAME;
@@ -4046,8 +4040,8 @@ int mailbox_reconstruct(const char *name, int flags)
     int i, flag;
     struct index_record record;
     struct mailbox *mailbox = NULL;
-    struct found_files files;
-    struct found_files discovered;
+    struct found_files files = FOUND_FILES_INITIALIZER;
+    struct found_files discovered = FOUND_FILES_INITIALIZER;
     struct index_header old_header;
     int have_file;
     uint32_t recno;
@@ -4120,7 +4114,6 @@ int mailbox_reconstruct(const char *name, int flags)
 
     r = find_files(mailbox, &files, flags);
     if (r) goto close;
-    init_files(&discovered);
     msg = 0;
 
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
