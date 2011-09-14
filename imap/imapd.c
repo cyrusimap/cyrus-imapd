@@ -3658,7 +3658,7 @@ void cmd_select(char *tag, char *cmd, char *name)
 	prot_printf(backend_current->out, "%s %s {" SIZE_T_FMT "+}\r\n%s",
 		    tag, cmd, strlen(name), name);
 	if (v->uidvalidity) {
-	    prot_printf(backend_current->out, " (QRESYNC %lu " MODSEQ_FMT,
+	    prot_printf(backend_current->out, " (QRESYNC (%lu " MODSEQ_FMT,
 			v->uidvalidity, v->modseq);
 	    if (v->sequence) {
 		prot_printf(backend_current->out, " %s", v->sequence);
@@ -3667,7 +3667,7 @@ void cmd_select(char *tag, char *cmd, char *name)
 		prot_printf(backend_current->out, " (%s %s)",
 			    v->match_seq, v->match_uid);
 	    }
-	    prot_printf(backend_current->out, ")");
+	    prot_printf(backend_current->out, "))");
 	}
 	prot_printf(backend_current->out, "\r\n");
 
