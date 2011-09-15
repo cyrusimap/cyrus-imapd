@@ -1873,7 +1873,7 @@ int mailbox_commit_quota(struct mailbox *mailbox)
 {
     int r;
     int res;
-    int changed;
+    int changed = 0;
     quota_t quota_usage[QUOTA_NUMRESOURCES];
 
     /* not dirty */
