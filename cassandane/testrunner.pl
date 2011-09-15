@@ -115,6 +115,7 @@ sub schedule
 	    while ($_ = readdir DIR)
 	    {
 		next unless m/\.pm$/;
+		next if m/^TestCase\.pm$/;
 		$_ = "$dir/$_";
 		s/\.pm$//;
 		s/\//::/g;
