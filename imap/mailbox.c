@@ -2044,7 +2044,7 @@ static void mailbox_index_update_counts(struct mailbox *mailbox,
     header_update_counts(&mailbox->i, record, is_add);
 }
 
-int mailbox_index_recalc(struct mailbox *mailbox)
+static int mailbox_index_recalc(struct mailbox *mailbox)
 {
     struct index_record record;
     int r = 0;

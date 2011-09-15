@@ -1269,10 +1269,6 @@ static int mailbox_full_update(const char *mboxname)
     r = mailbox_open_iwl(mboxname, &mailbox);
     if (r) goto done;
 
-    /* re-calculate our local CRC just in case it's out of sync */
-    r = mailbox_index_recalc(mailbox);
-    if (r) goto done;
-
     /* if local UIDVALIDITY is lower, copy from remote, otherwise
      * remote will copy ours when we sync */
     if (mailbox->i.uidvalidity < uidvalidity) {
