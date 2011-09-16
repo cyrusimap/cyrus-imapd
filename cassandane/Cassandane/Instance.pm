@@ -398,9 +398,8 @@ sub _start_master
 	'-M', $self->_master_conf(),
     );
     unlink $self->_pid_file();
-    # _fork_command() returns a pid, but that doesn't help
-    # because master will fork again to background itself.
-    $self->_fork_command({ cyrus => 1 }, @cmd);
+    # Start master daemon
+    $self->run_command({ cyrus => 1 }, @cmd);
 
     # wait until the pidfile exists and contains a PID
     # that we can verify is still alive.
@@ -487,6 +486,7 @@ sub stop
 
     my $pid = $self->_read_pid_file($self->_pid_file());
     _stop_pid($pid) if defined $pid;
+    # Note: no need to reap this daemon which is not our child anymore
 
 #     rmtree $self->{basedir};
 }

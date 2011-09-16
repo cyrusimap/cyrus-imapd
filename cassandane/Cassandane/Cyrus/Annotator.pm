@@ -64,7 +64,8 @@ sub set_up
     my $daemon = abs_path('utils/annotator.pl');
     my $sock = $self->{instance}->{basedir} . '/conf/socket/annotator.sock';
     my $pidfile = $self->{instance}->{basedir} . '/conf/socket/annotator.pid';
-    $self->{instance}->run_command({ cyrus => 1, background => 1 }, $daemon);
+    # Start daemon
+    $self->{instance}->run_command({ cyrus => 1 }, $daemon);
     Cassandane::Instance::_timed_wait(sub { return ( -e $sock ); },
 				      description => 'annotator daemon to be ready');
     $self->{annotator_pidfile} = $pidfile;
@@ -76,6 +77,7 @@ sub tear_down
 
     if (defined $self->{annotator_pidfile})
     {
+	# Stop daemon
 	$self->{instance}->stop_command_pidfile($self->{annotator_pidfile});
 	$self->{annotator_pidfile} = undef;
     }
