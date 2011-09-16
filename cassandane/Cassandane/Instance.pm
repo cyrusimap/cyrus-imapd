@@ -129,6 +129,8 @@ sub new
     $self->{config}->set_variables(
 		name => $self->{name},
 		basedir => $self->{basedir},
+		cyrus_prefix => $self->{cyrus_prefix},
+		prefix => getcwd(),
 	    );
 
     bless $self, $class;
@@ -179,8 +181,9 @@ sub _binary
     my ($self, $name) = @_;
 
     my @cmd;
+    my $valground = 0;
 
-    if ($self->{valgrind})
+    if ($self->{valgrind} && !($name =~ m/\.pl$/))
     {
 	my $valgrind_logdir = $self->{basedir} . '/vglogs';
 	my $valgrind_suppressions = abs_path('vg.supp');
@@ -194,12 +197,20 @@ sub _binary
 	    '--tool=memcheck',
 	    '--leak-check=full'
 	);
+	$valground = 1;
     }
 
     my $bin = $name;
     $bin = $self->{cyrus_prefix} . '/bin/' . $bin
 	unless $bin =~ m/^\//;
     push(@cmd, $bin);
+
+    if (!$valground && cassini('gdb', $name, 'no') =~ m/^yes$/i)
+    {
+	xlog "Will run binary $name under gdb due to cassandane.ini";
+	xlog "Look in syslog for helpful instructions from gdbtramp";
+	push(@cmd, '-D');
+    }
 
     return @cmd;
 }
@@ -629,11 +640,6 @@ sub _fork_utility
 	    unless get_verbose;
 	$binary = shift @argv;
     }
-    elsif ($mode eq 'gdb')
-    {
-	# stdin, stdout unmolested
-	$binary = shift @argv;
-    }
     else
     {
 	# stdin is null, stdout is null or unmolested
@@ -654,18 +660,6 @@ sub _fork_utility
 	'-C', $self->_imapd_conf(),
 	@argv,
     );
-
-    if (defined $mode && $mode eq 'gdb')
-    {
-	my $gdbx = '/var/tmp/gdb.x';
-	open GDBX, '>', $gdbx
-	    or die "Cannot open $gdbx for writing: $!";
-	print GDBX "file " . shift(@cmd) . "\n";
-	print GDBX "set args " . join(' ', @cmd) . "\n";
-	close GDBX;
-	@cmd = ( 'gdb', '-x', $gdbx );
-	$mode = undef;
-    }
 
     xlog "Running: " . join(' ', map { "\"$_\"" } @cmd);
 

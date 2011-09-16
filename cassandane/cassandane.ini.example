@@ -52,3 +52,12 @@
 # Prefix of the installation.  In particular, binaries
 # will be found in prefix/bin/
 ##prefix = /usr/cyrus
+
+# This section enables GDB debugging of services run from Cyrus master
+# on a per-service basis.  To debug, enable one of these, run
+# Cassandane, and look in syslog for helpful instructions from gdbtramp.
+[gdb]
+##imapd = yes
+##sync_server = yes
+##lmtpd = yes
+##timsieved = yes
