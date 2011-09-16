@@ -63,20 +63,21 @@ sub set_up
 
     my $daemon = abs_path('utils/annotator.pl');
     my $sock = $self->{instance}->{basedir} . '/conf/socket/annotator.sock';
-    my (@bits) = $self->{instance}->start_utility_bg($daemon);
+    my $pidfile = $self->{instance}->{basedir} . '/conf/socket/annotator.pid';
+    $self->{instance}->start_utility_bg($daemon);
     Cassandane::Instance::_timed_wait(sub { return ( -e $sock ); },
 				      description => 'annotator daemon to be ready');
-    $self->{daemon_bits} = \@bits;
+    $self->{annotator_pidfile} = $pidfile;
 }
 
 sub tear_down
 {
     my ($self) = @_;
 
-    if (defined $self->{daemon_bits})
+    if (defined $self->{annotator_pidfile})
     {
-	$self->{instance}->reap_utility_bg(@{$self->{daemon_bits}});
-	$self->{daemon_bits} = undef;
+	$self->{instance}->stop_utility_bg_pidfile($self->{annotator_pidfile});
+	$self->{annotator_pidfile} = undef;
     }
 
     $self->SUPER::tear_down();

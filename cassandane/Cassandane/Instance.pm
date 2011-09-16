@@ -338,8 +338,7 @@ sub _timed_wait
 
 sub _read_pid_file
 {
-    my ($self) = @_;
-    my $file = $self->_pid_file();
+    my ($self, $file) = @_;
     my $pid;
 
     return undef if ( ! -f $file );
@@ -395,7 +394,7 @@ sub _start_master
     # wait until the pidfile exists and contains a PID
     # that we can verify is still alive.
     xlog "_start_master: waiting for PID file";
-    _timed_wait(sub { $self->_read_pid_file() },
+    _timed_wait(sub { $self->_read_pid_file($self->_pid_file()) },
 	        description => "the master PID file to exist");
     xlog "_start_master: PID file present and correct";
 
@@ -475,7 +474,7 @@ sub stop
 
     xlog "stop";
 
-    my $pid = $self->_read_pid_file();
+    my $pid = $self->_read_pid_file($self->_pid_file());
     _stop_pid($pid) if defined $pid;
 
 #     rmtree $self->{basedir};
@@ -577,6 +576,24 @@ sub reap_utility_bg
 	# and deal with it's exit status
 	return $self->_handle_wait_status($pid)
 	    if $child == $pid;
+    }
+}
+
+sub stop_utility_bg
+{
+    my ($self, $pid, $fh) = @_;
+    _stop_pid($pid);
+    $self->reap_utility_bg($pid, $fh);
+}
+
+sub stop_utility_bg_pidfile
+{
+    my ($self, $pidfile) = @_;
+    my $pid = $self->_read_pid_file($pidfile);
+    if (defined $pid)
+    {
+	_stop_pid($pid);
+	$self->reap_utility_bg($pid, undef);
     }
 }
 

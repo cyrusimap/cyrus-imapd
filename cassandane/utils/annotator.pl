@@ -117,7 +117,6 @@ sub annotate_message
 
 xlog "annotator starting";
 Cassandane::AnnotatorDaemon->run(
-	background => 0,
 	pid_file => "$ENV{CASSANDANE_BASEDIR}/conf/socket/annotator.pid",
 	port => "$ENV{CASSANDANE_BASEDIR}/conf/socket/annotator.sock|SOCK_STREAM|unix",
     );
