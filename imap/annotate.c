@@ -1191,6 +1191,7 @@ struct apply_rock {
     void *data;
     char lastname[MAX_MAILBOX_PATH+1];
     int sawuser;
+    unsigned int nseen;
 };
 
 static int apply_cb(char *name, int matchlen,
@@ -1236,6 +1237,7 @@ static int apply_cb(char *name, int matchlen,
 	goto out;
 
     r = arock->proc(state, arock->data);
+    arock->nseen++;
 
 out:
     annotate_state_unset_scope(state);
@@ -1267,6 +1269,9 @@ int annotate_apply_mailboxes(annotate_state_t *state,
 					   state->isadmin, state->userid,
 					   state->auth_state,
 					   apply_cb, &arock);
+
+    if (!r && !arock.nseen)
+	r = IMAP_MAILBOX_NONEXISTENT;
 
     return r;
 }
