@@ -1376,6 +1376,13 @@ static int read_body(struct transaction_t *txn, int dump, const char **errstr)
     return 0;
 }
 
+static int is_mediatype(const char *hdr, const char *type)
+{
+    size_t len = strlen(type);
+
+    return (!strncasecmp(hdr, type, len) && strchr("; \t\r\n\0", hdr[len]));
+}
+
 
 /* Parse an XML body into a tree */
 static int parse_xml_body(struct transaction_t *txn,
@@ -1389,9 +1396,9 @@ static int parse_xml_body(struct transaction_t *txn,
     if (!buf_len(&txn->req_body)) return 0;
 
     /* Check Content-Type */
-    if ((hdr = spool_getheader(txn->req_hdrs, "Content-Type")) &&
-	strncmp(hdr[0], "text/xml", 8) &&
-	strncmp(hdr[0], "application/xml", 15)) {
+    if (!(hdr = spool_getheader(txn->req_hdrs, "Content-Type")) ||
+	(!is_mediatype(hdr[0], "text/xml") &&
+	 !is_mediatype(hdr[0], "application/xml"))) {
 	*errstr = "This method requires an XML body";
 	return HTTP_BAD_MEDIATYPE;
     }
