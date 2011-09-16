@@ -244,7 +244,7 @@ struct transaction_t {
     struct auth_challenge_t auth_chal;	/* Authentication challenge */
     const char *loc;	    		/* Location: of resp representation */
     const char *etag;			/* ETag: of response representation */
-    const char **errstr;		/* Error string */
+    const char *errstr;			/* Error string */
     struct resp_body_t resp_body;	/* Response body meta-data */
 };
 
@@ -287,8 +287,7 @@ static int parse_target(const char *meth, const char *uri,
 			struct request_target_t *tgt, const char **errstr);
 static int read_body(struct transaction_t *txn, int dump, const char **errstr);
 static void response_header(long code, struct transaction_t *txn);
-static void error_response(long code, struct transaction_t *txn,
-			   const char *errstr);
+static void error_response(long code, struct transaction_t *txn);
 static void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml);
 static int http_auth(const char *creds, struct auth_challenge_t *chal);
 
@@ -900,7 +899,7 @@ static void cmdloop(void)
     int c, ret, r;
     int allowanonymous = config_getswitch(IMAPOPT_ALLOWANONYMOUSLOGIN);
     char reqline[4096], buf[1024], *uristr, *p;
-    const char **hdr, *errstr;
+    const char **hdr;
     struct transaction_t txn;
     const struct method_t *method = NULL;
 #ifdef SASL_HTTP_REQUEST
@@ -913,7 +912,6 @@ static void cmdloop(void)
     for (;;) {
 	/* Reset state */
 	ret = 0;
-	errstr = NULL;
 	txn.flags = 0;
 	txn.auth_chal.param = NULL;
 	txn.loc = txn.etag = NULL;
@@ -929,8 +927,9 @@ static void cmdloop(void)
 	if (shutdown_file(buf, sizeof(buf)) ||
 	    (httpd_userid &&
 	     userdeny(httpd_userid, config_ident, buf, sizeof(buf)))) {
+	    txn.errstr = buf;
 	    txn.flags |= HTTP_CLOSE;
-	    error_response(HTTP_UNAVAILABLE, &txn, buf);
+	    error_response(HTTP_UNAVAILABLE, &txn);
 	    shut_down(0);
 	}
 
@@ -946,9 +945,9 @@ static void cmdloop(void)
 	/* Read Request-Line */
 	syslog(LOG_DEBUG, "read Request-Line");
 	if (!prot_fgets(reqline, sizeof(reqline), httpd_in)) {
-	    errstr = prot_error(httpd_in);
-	    if (errstr && strcmp(errstr, PROT_EOF_STRING)) {
-		syslog(LOG_WARNING, "%s, closing connection", errstr);
+	    txn.errstr = prot_error(httpd_in);
+	    if (txn.errstr && strcmp(txn.errstr, PROT_EOF_STRING)) {
+		syslog(LOG_WARNING, "%s, closing connection", txn.errstr);
 		ret = HTTP_BAD_REQUEST;
 		txn.flags |= HTTP_CLOSE;
 		goto error;
@@ -978,8 +977,8 @@ static void cmdloop(void)
 	if (!*p) {
 	    /* Missing request-target or HTTP-Version */
 	    ret = HTTP_BAD_REQUEST;
-	    if (!uristr) errstr = "Missing request-target";
-	    else errstr = "Missing HTTP-Version";
+	    if (!uristr) txn.errstr = "Missing request-target";
+	    else txn.errstr = "Missing HTTP-Version";
 	}
 
 	/* Check HTTP-Version */
@@ -987,7 +986,7 @@ static void cmdloop(void)
 	    ret = HTTP_BAD_VERSION;
 	    snprintf(buf, sizeof(buf),
 		     "This server only speaks %s", HTTP_VERSION);
-	    errstr = buf;
+	    txn.errstr = buf;
 	}
 
 	/* Check Method against our list of supported methods */
@@ -998,7 +997,7 @@ static void cmdloop(void)
 	}
 
 	/* Parse request-target URL */
-	if (!ret && (r = parse_target(txn.meth, uristr, &txn.req_tgt, &errstr))) {
+	if (!ret && (r = parse_target(txn.meth, uristr, &txn.req_tgt, &txn.errstr))) {
 	    ret = r;
 	}
 
@@ -1007,12 +1006,12 @@ static void cmdloop(void)
 	if (!(txn.req_hdrs = spool_new_hdrcache())) {
 	    ret = HTTP_SERVER_ERROR;
 	    txn.flags |= HTTP_CLOSE;
-	    errstr = "Unable to create header cache";
+	    txn.errstr = "Unable to create header cache";
 	    goto error;
 	}
 	if ((r = spool_fill_hdrcache(httpd_in, NULL, txn.req_hdrs, NULL))) {
 	    ret = HTTP_BAD_REQUEST;
-	    errstr = "Request contains invalid header";
+	    txn.errstr = "Request contains invalid header";
 	}
 
 	/* Read CRLF separating headers and body */
@@ -1021,7 +1020,7 @@ static void cmdloop(void)
 	if (c != '\n') {
 	    ret = HTTP_BAD_REQUEST;
 	    txn.flags |= HTTP_CLOSE;
-	    errstr = "Missing separator between headers and body";
+	    txn.errstr = "Missing separator between headers and body";
 	    goto error;
 	}
 
@@ -1038,19 +1037,19 @@ static void cmdloop(void)
 		txn.flags |= HTTP_100CONTINUE;
 	    else {
 		ret = HTTP_EXPECT_FAILED;
-		errstr = "Unsupported Expect";
+		txn.errstr = "Unsupported Expect";
 	    }
 	}
 
 	/* Check for mandatory Host header */
 	if (!ret && !(hdr = spool_getheader(txn.req_hdrs, "Host"))) {
 	    ret = HTTP_BAD_REQUEST;
-	    errstr = "Missing Host header";
+	    txn.errstr = "Missing Host header";
 	}
 
 	/* Read the body, if present */
 	syslog(LOG_DEBUG, "read body: %d", ret);
-	if ((r = read_body(&txn, ret, &errstr))) {
+	if ((r = read_body(&txn, ret, &txn.errstr))) {
 	    ret = r;
 	    txn.flags |= HTTP_CLOSE;
 	}
@@ -1117,7 +1116,7 @@ static void cmdloop(void)
 	    if (httpd_tls_required) {
 		/* Redirect the client to https (we only support TLS+Basic) */
 		ret = HTTP_TEMP_REDIRECT;
-		errstr = "SSL/TLS required to use Basic authentication";
+		txn.errstr = "SSL/TLS required to use Basic authentication";
 
 		hdr = spool_getheader(txn.req_hdrs, "Host");
 		snprintf(buf, sizeof(buf),
@@ -1130,21 +1129,18 @@ static void cmdloop(void)
 		sasl_setprop(httpd_saslconn, SASL_HTTP_REQUEST, &sasl_http_req);
 #endif
 		ret = HTTP_UNAUTHORIZED;
-		errstr = "Must authenticate to access the specified target";
+		txn.errstr = "Must authenticate to access the specified target";
 	    }
 	}
 
 	/* Process the requested method */
-	if (!ret) {
-	    txn.errstr = &errstr;
-	    ret = method->proc(&txn);
-	}
+	if (!ret) ret = method->proc(&txn);
 
 	/* Handle errors (success responses handled by method functions */
       error:
 	if (ret) {
 	    syslog(LOG_DEBUG, "error: %s", error_message(ret));
-	    error_response(ret, &txn, errstr);
+	    error_response(ret, &txn);
 	}
 
 	/* Memory cleanup */
@@ -1385,8 +1381,7 @@ static int is_mediatype(const char *hdr, const char *type)
 
 
 /* Parse an XML body into a tree */
-static int parse_xml_body(struct transaction_t *txn,
-			  xmlNodePtr *root, const char **errstr)
+static int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root)
 {
     const char **hdr;
     xmlDocPtr doc;
@@ -1399,7 +1394,7 @@ static int parse_xml_body(struct transaction_t *txn,
     if (!(hdr = spool_getheader(txn->req_hdrs, "Content-Type")) ||
 	(!is_mediatype(hdr[0], "text/xml") &&
 	 !is_mediatype(hdr[0], "application/xml"))) {
-	*errstr = "This method requires an XML body";
+	txn->errstr = "This method requires an XML body";
 	return HTTP_BAD_MEDIATYPE;
     }
 
@@ -1407,13 +1402,13 @@ static int parse_xml_body(struct transaction_t *txn,
     doc = xmlParseMemory(buf_cstring(&txn->req_body), buf_len(&txn->req_body));
     xmlCleanupParser();
     if (!doc) {
-	*errstr = "Unable to parse XML body";
+	txn->errstr = "Unable to parse XML body";
 	return HTTP_BAD_REQUEST;
     }
 
     /* Get the root element of the XML request */
     if (!(*root = xmlDocGetRootElement(doc))) {
-	*errstr = "Missing root element in request";
+	txn->errstr = "Missing root element in request";
 	return HTTP_BAD_REQUEST;
     }
 
@@ -1595,17 +1590,16 @@ static void response_header(long code, struct transaction_t *txn)
 
 
 /* Output an HTTP error response with optional text/plain body */
-static void error_response(long code, struct transaction_t *txn,
-			   const char *errstr)
+static void error_response(long code, struct transaction_t *txn)
 {
     struct resp_body_t *resp_body = &txn->resp_body;
 
-    if (errstr) {
-	resp_body->len = strlen(errstr)+2;
+    if (txn->errstr) {
+	resp_body->len = strlen(txn->errstr)+2;
 	resp_body->type = "text/plain";
     }
     response_header(code, txn);
-    if (errstr) prot_printf(httpd_out, "%s\r\n", errstr);
+    if (txn->errstr) prot_printf(httpd_out, "%s\r\n", txn->errstr);
 }
 
 
@@ -1991,7 +1985,7 @@ static int meth_acl(struct transaction_t *txn)
 
     /* Make sure its a calendar collection */
     if (!txn->req_tgt.collection || txn->req_tgt.resource) {
-	*txn->errstr = "ACLs can only be set on calendar collections";
+	txn->errstr = "ACLs can only be set on calendar collections";
 	syslog(LOG_DEBUG, "Tried to set ACL on non-calendar collection");
 	return HTTP_NOT_ALLOWED;
     }
@@ -2003,7 +1997,7 @@ static int meth_acl(struct transaction_t *txn)
     if ((r = mailbox_open_iwl(mailboxname, &mailbox))) {
 	syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
 	       mailboxname, error_message(r));
-	*txn->errstr = error_message(r);
+	txn->errstr = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
@@ -2016,9 +2010,9 @@ static int meth_acl(struct transaction_t *txn)
     }
 
     /* Parse the ACL body */
-    ret = parse_xml_body(txn, &root, txn->errstr);
+    ret = parse_xml_body(txn, &root);
     if (!root) {
-	*txn->errstr = "Missing request body";
+	txn->errstr = "Missing request body";
 	ret = HTTP_BAD_REQUEST;
     }
     if (ret) goto done;
@@ -2027,7 +2021,7 @@ static int meth_acl(struct transaction_t *txn)
 
     /* Make sure its an DAV:acl element */
     if (xmlStrcmp(root->name, BAD_CAST "acl")) {
-	*txn->errstr = "Missing acl element in ACL request";
+	txn->errstr = "Missing acl element in ACL request";
 	ret = HTTP_BAD_REQUEST;
 	goto done;
     }
@@ -2044,7 +2038,7 @@ static int meth_acl(struct transaction_t *txn)
 		if (child->type == XML_ELEMENT_NODE) {
 		    if (!xmlStrcmp(child->name, BAD_CAST "principal")) {
 			if (prin) {
-			    *txn->errstr = "Multiple principals in ACE";
+			    txn->errstr = "Multiple principals in ACE";
 			    ret = HTTP_BAD_REQUEST;
 			    goto done;
 			}
@@ -2053,7 +2047,7 @@ static int meth_acl(struct transaction_t *txn)
 		    }
 		    else if (!xmlStrcmp(child->name, BAD_CAST "grant")) {
 			if (privs) {
-			    *txn->errstr = "Multiple grant|deny in ACE";
+			    txn->errstr = "Multiple grant|deny in ACE";
 			    ret = HTTP_BAD_REQUEST;
 			    goto done;
 			}
@@ -2062,7 +2056,7 @@ static int meth_acl(struct transaction_t *txn)
 		    }
 		    else if (!xmlStrcmp(child->name, BAD_CAST "deny")) {
 			if (privs) {
-			    *txn->errstr = "Multiple grant|deny in ACE";
+			    txn->errstr = "Multiple grant|deny in ACE";
 			    ret = HTTP_BAD_REQUEST;
 			    goto done;
 			}
@@ -2076,7 +2070,7 @@ static int meth_acl(struct transaction_t *txn)
 			goto done;
 		    }
 		    else {
-			*txn->errstr = "Unknown element in ACE";
+			txn->errstr = "Unknown element in ACE";
 			ret = HTTP_BAD_REQUEST;
 			goto done;
 		    }
@@ -2206,7 +2200,7 @@ static int meth_acl(struct transaction_t *txn)
     if ((r = mboxlist_sync_setacls(mailboxname, buf_cstring(&acl)))) {
 	syslog(LOG_ERR, "mboxlist_sync_setacls(%s) failed: %s",
 	       mailboxname, error_message(r));
-	*txn->errstr = error_message(r);
+	txn->errstr = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
@@ -2266,12 +2260,12 @@ static int meth_copy(struct transaction_t *txn)
 
     /* Check for mandatory Destination header */
     if (!(hdr = spool_getheader(txn->req_hdrs, "Destination"))) {
-	*txn->errstr = "Missing Destination header";
+	txn->errstr = "Missing Destination header";
 	return HTTP_BAD_REQUEST;
     }
 
     /* Parse destination URL */
-    if ((r = parse_target(txn->meth, hdr[0], &dest, txn->errstr))) {
+    if ((r = parse_target(txn->meth, hdr[0], &dest, &txn->errstr))) {
 	return r;
     }
 
@@ -2280,7 +2274,7 @@ static int meth_copy(struct transaction_t *txn)
 
     /* Make sure source and dest resources are NOT the same */
     if (!strcmp(txn->req_tgt.path, dest.path)) {
-	*txn->errstr = "Source and destination resources are the same";
+	txn->errstr = "Source and destination resources are the same";
 	return HTTP_FORBIDDEN;
     }
 
@@ -2291,7 +2285,7 @@ static int meth_copy(struct transaction_t *txn)
     if ((r = mailbox_open_irl(src_mboxname, &src_mbox))) {
 	syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
 	       src_mboxname, error_message(r));
-	*txn->errstr = error_message(r);
+	txn->errstr = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
@@ -2300,7 +2294,7 @@ static int meth_copy(struct transaction_t *txn)
     if ((r = caldav_open(src_mbox, 0, &src_caldb))) {
 	syslog(LOG_ERR, "caldav_open(%s) failed: %s",
 	       src_mboxname, error_message(r));
-	*txn->errstr = error_message(r);
+	txn->errstr = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
@@ -2319,7 +2313,7 @@ static int meth_copy(struct transaction_t *txn)
     if ((r = mailbox_cacherecord(src_mbox, &src_rec))) {
 	syslog(LOG_ERR, "mailbox_cacherecord(%s) failed: %s",
 	       src_mboxname, error_message(r));
-	*txn->errstr = error_message(r);
+	txn->errstr = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
@@ -2334,7 +2328,7 @@ static int meth_copy(struct transaction_t *txn)
     if ((r = mailbox_open_irl(dest_mboxname, &dest_mbox))) {
 	syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
 	       dest_mboxname, error_message(r));
-	*txn->errstr = error_message(r);
+	txn->errstr = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
@@ -2343,7 +2337,7 @@ static int meth_copy(struct transaction_t *txn)
     if ((r = caldav_open(dest_mbox, CALDAV_CREATE, &dest_caldb))) {
 	syslog(LOG_ERR, "caldav_open(%s) failed: %s",
 	       dest_mboxname, error_message(r));
-	*txn->errstr = error_message(r);
+	txn->errstr = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
@@ -2373,7 +2367,7 @@ static int meth_copy(struct transaction_t *txn)
 	syslog(LOG_ERR, "append_setup(%s) failed: %s",
 	       dest_mboxname, error_message(r));
 	ret = HTTP_SERVER_ERROR;
-	*txn->errstr = "append_setup() failed";
+	txn->errstr = "append_setup() failed";
     }
     else {
 	struct copymsg copymsg;
@@ -2409,7 +2403,7 @@ static int meth_copy(struct transaction_t *txn)
 	    syslog(LOG_ERR, "append_copy(%s->%s) failed: %s",
 		   src_mboxname, dest_mboxname, error_message(r));
 	    ret = HTTP_SERVER_ERROR;
-	    *txn->errstr = "append_copy() failed";
+	    txn->errstr = "append_copy() failed";
 	}
 
 	if (!r) {
@@ -2419,7 +2413,7 @@ static int meth_copy(struct transaction_t *txn)
 		syslog(LOG_ERR, "append_commit(%s) failed: %s",
 		       dest_mboxname, error_message(r));
 		ret = HTTP_SERVER_ERROR;
-		*txn->errstr = "append_commit() failed";
+		txn->errstr = "append_commit() failed";
 	    }
 	    else {
 		/* append_commit() returns a write-locked index */
@@ -2448,7 +2442,7 @@ static int meth_copy(struct transaction_t *txn)
 		    if ((r = mailbox_rewrite_index_record(dest_mbox, &oldrecord))) {
 			syslog(LOG_ERR, "rewrite_index_rec(%s) failed: %s",
 			       dest_mboxname, error_message(r));
-			*txn->errstr = error_message(r);
+			txn->errstr = error_message(r);
 			ret = HTTP_SERVER_ERROR;
 			goto done;
 		    }
@@ -2483,7 +2477,7 @@ static int meth_copy(struct transaction_t *txn)
 			if ((r = mailbox_rewrite_index_record(src_mbox, &src_rec))) {
 			    syslog(LOG_ERR, "rewrite_index_rec(%s) failed: %s",
 				   src_mboxname, error_message(r));
-			    *txn->errstr = error_message(r);
+			    txn->errstr = error_message(r);
 			    ret = HTTP_SERVER_ERROR;
 			    goto done;
 			}
@@ -2548,14 +2542,14 @@ static int meth_delete(struct transaction_t *txn)
     if ((r = mailbox_open_iwl(mailboxname, &mailbox))) {
 	syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
 	       mailboxname, error_message(r));
-	*txn->errstr = error_message(r);
+	txn->errstr = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
 
     /* Open the associated CalDAV database */
     if ((r = caldav_open(mailbox, CALDAV_CREATE, &caldavdb))) {
-	*txn->errstr = error_message(r);
+	txn->errstr = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
@@ -2588,7 +2582,7 @@ static int meth_delete(struct transaction_t *txn)
     if ((r = mailbox_rewrite_index_record(mailbox, &record))) {
 	syslog(LOG_ERR, "rewrite_index_rec(%s) failed: %s",
 	       mailboxname, error_message(r));
-	*txn->errstr = error_message(r);
+	txn->errstr = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
@@ -2635,14 +2629,14 @@ static int meth_get(struct transaction_t *txn)
 	if ((r = mailbox_open_irl(mailboxname, &mailbox))) {
 	    syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
 		   mailboxname, error_message(r));
-	    *txn->errstr = error_message(r);
+	    txn->errstr = error_message(r);
 	    ret = HTTP_SERVER_ERROR;
 	    goto done;
 	}
 
 	/* Open the associated CalDAV database */
 	if ((r = caldav_open(mailbox, CALDAV_CREATE, &caldavdb))) {
-	    *txn->errstr = error_message(r);
+	    txn->errstr = error_message(r);
 	    ret = HTTP_SERVER_ERROR;
 	    goto done;
 	}
@@ -2792,12 +2786,12 @@ static int meth_mkcol(struct transaction_t *txn)
 
     /* Make sure its a home-set collection */
     if (!txn->req_tgt.collection || txn->req_tgt.resource) {
-	*txn->errstr = "Calendars can only be created under a home-set collection";
+	txn->errstr = "Calendars can only be created under a home-set collection";
 	return HTTP_FORBIDDEN;
     }
 
     /* Parse the MKCOL/MKCALENDAR body, if exists */
-    ret = parse_xml_body(txn, &root, txn->errstr);
+    ret = parse_xml_body(txn, &root);
     if (ret) goto done;
 
     if (root) {
@@ -2806,13 +2800,13 @@ static int meth_mkcol(struct transaction_t *txn)
 	if ((txn->meth[3] == 'O') &&
 	    /* Make sure its a mkcol element */
 	    xmlStrcmp(root->name, BAD_CAST "mkcol")) {
-	    *txn->errstr = "Missing mkcol element in MKCOL request";
+	    txn->errstr = "Missing mkcol element in MKCOL request";
 	    return HTTP_BAD_MEDIATYPE;
 	}
 	else if ((txn->meth[3] == 'A') &&
 		 /* Make sure its a mkcalendar element */
 		 xmlStrcmp(root->name, BAD_CAST "mkcalendar")) {
-	    *txn->errstr = "Missing mkcalendar element in MKCALENDAR request";
+	    txn->errstr = "Missing mkcalendar element in MKCALENDAR request";
 	    return HTTP_BAD_MEDIATYPE;
 	}
 
@@ -2841,7 +2835,7 @@ static int meth_mkcol(struct transaction_t *txn)
 					"mkcol-response",
 					root->nsDef, ns))) {
 	    ret = HTTP_SERVER_ERROR;
-	    *txn->errstr = "Unable to create XML response";
+	    txn->errstr = "Unable to create XML response";
 	    goto done;
 	}
 
@@ -2854,7 +2848,7 @@ static int meth_mkcol(struct transaction_t *txn)
 	pctx.root = root;
 	pctx.ns = ns;
 	pctx.tid = NULL;
-	pctx.errstr = txn->errstr;
+	pctx.errstr = &txn->errstr;
 	pctx.ret = &r;
 
 	/* Execute the property patch instructions */
@@ -2916,7 +2910,7 @@ static int meth_options(struct transaction_t *txn)
     txn->flags |= HTTP_NOCACHE;
 
     if (buf_len(&txn->req_body)) {
-	*txn->errstr = "A body is not expected for this method";
+	txn->errstr = "A body is not expected for this method";
         return HTTP_BAD_MEDIATYPE;
     }
 
@@ -2947,7 +2941,7 @@ static int meth_propfind(struct transaction_t *txn)
 	depth = 2;
     }
     if (hdr && ((sscanf(hdr[0], "%u", &depth) != 1) || (depth > 1))) {
-	*txn->errstr = "Illegal Depth value";
+	txn->errstr = "Illegal Depth value";
 	return HTTP_BAD_REQUEST;
     }
 
@@ -2958,7 +2952,7 @@ static int meth_propfind(struct transaction_t *txn)
     if (txn->req_tgt.resource) depth++;
 
     /* Parse the PROPFIND body, if exists */
-    ret = parse_xml_body(txn, &root, txn->errstr);
+    ret = parse_xml_body(txn, &root);
     if (ret) goto done;
 
     if (!root) {
@@ -2971,7 +2965,7 @@ static int meth_propfind(struct transaction_t *txn)
 
 	/* Make sure its a propfind element */
 	if (xmlStrcmp(root->name, BAD_CAST "propfind")) {
-	    *txn->errstr = "Missing propfind element in PROFIND request";
+	    txn->errstr = "Missing propfind element in PROFIND request";
 	    return HTTP_BAD_REQUEST;
 	}
 
@@ -2989,7 +2983,7 @@ static int meth_propfind(struct transaction_t *txn)
     /* Start construction of our multistatus response */
     if (!(root = init_prop_response("multistatus", root->nsDef, ns))) {
 	ret = HTTP_SERVER_ERROR;
-	*txn->errstr = "Unable to create XML response";
+	txn->errstr = "Unable to create XML response";
 	goto done;
     }
 
@@ -3010,7 +3004,7 @@ static int meth_propfind(struct transaction_t *txn)
     fctx.elist = elist;
     fctx.root = root;
     fctx.ns = ns;
-    fctx.errstr = txn->errstr;
+    fctx.errstr = &txn->errstr;
     fctx.ret = &ret;
 
     if (!txn->req_tgt.collection) {
@@ -3081,14 +3075,14 @@ static int meth_proppatch(struct transaction_t *txn)
 
     /* Make sure its a calendar collection */
     if (!txn->req_tgt.collection || txn->req_tgt.resource) {
-	*txn->errstr = "Properties can only be updated on calendar collections";
+	txn->errstr = "Properties can only be updated on calendar collections";
 	return HTTP_FORBIDDEN;
     }
 
     /* Parse the PROPPATCH body */
-    ret = parse_xml_body(txn, &root, txn->errstr);
+    ret = parse_xml_body(txn, &root);
     if (!root) {
-	*txn->errstr = "Missing request body";
+	txn->errstr = "Missing request body";
 	return HTTP_BAD_REQUEST;
     }
     if (ret) goto done;
@@ -3097,7 +3091,7 @@ static int meth_proppatch(struct transaction_t *txn)
 
     /* Make sure its a propertyupdate element */
     if (xmlStrcmp(root->name, BAD_CAST "propertyupdate")) {
-	*txn->errstr = "Missing propertyupdate element in PROPPATCH request";
+	txn->errstr = "Missing propertyupdate element in PROPPATCH request";
 	return HTTP_BAD_REQUEST;
     }
     instr = root->children;
@@ -3105,7 +3099,7 @@ static int meth_proppatch(struct transaction_t *txn)
     /* Start construction of our multistatus response */
     if (!(root = init_prop_response("multistatus", root->nsDef, ns))) {
 	ret = HTTP_SERVER_ERROR;
-	*txn->errstr = "Unable to create XML response";
+	txn->errstr = "Unable to create XML response";
 	goto done;
     }
 
@@ -3126,7 +3120,7 @@ static int meth_proppatch(struct transaction_t *txn)
     pctx.root = resp;
     pctx.ns = ns;
     pctx.tid = NULL;
-    pctx.errstr = txn->errstr;
+    pctx.errstr = &txn->errstr;
     pctx.ret = &r;
 
     /* Execute the property patch instructions */
@@ -3206,21 +3200,21 @@ static int meth_put(struct transaction_t *txn)
 
     /* Make sure we have a body */
     if (!buf_len(&txn->req_body)) {
-	*txn->errstr = "Missing request body";
+	txn->errstr = "Missing request body";
 	return HTTP_BAD_REQUEST;
     }
 
     /* Check Content-Type */
     if ((hdr = spool_getheader(txn->req_hdrs, "Content-Type")) &&
 	strncmp(hdr[0], "text/calendar", 13)) {
-	*txn->errstr = "This collection only supports text/calendar data";
+	txn->errstr = "This collection only supports text/calendar data";
 	return HTTP_BAD_MEDIATYPE;
     }
 
     /* Parse the iCal data for important properties */
     ical = icalparser_parse_string(buf_cstring(&txn->req_body));
     if (!ical) {
-	*txn->errstr = "Invalid calendar data";
+	txn->errstr = "Invalid calendar data";
 	return HTTP_BAD_MEDIATYPE;
     }
     comp = icalcomponent_get_first_real_component(ical);
@@ -3232,14 +3226,14 @@ static int meth_put(struct transaction_t *txn)
     if ((r = mailbox_open_irl(mailboxname, &mailbox))) {
 	syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
 	       mailboxname, error_message(r));
-	*txn->errstr = error_message(r);
+	txn->errstr = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
 
     /* Open the associated CalDAV database */
     if ((r = caldav_open(mailbox, CALDAV_CREATE, &caldavdb))) {
-	*txn->errstr = error_message(r);
+	txn->errstr = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
@@ -3293,14 +3287,14 @@ static int meth_put(struct transaction_t *txn)
 
     /* Check if we can append a new iMIP message to calendar mailbox */
     if ((r = append_check(mailboxname, httpd_authstate, ACL_INSERT, size))) {
-	*txn->errstr = error_message(r);
+	txn->errstr = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
 
     /* Prepare to stage the message */
     if (!(f = append_newstage(mailboxname, now, 0, &stage))) {
-	*txn->errstr = error_message(r);
+	txn->errstr = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
@@ -3343,7 +3337,7 @@ static int meth_put(struct transaction_t *txn)
     if ((r = append_setup(&appendstate, mailboxname, 
 			  httpd_userid, httpd_authstate, ACL_INSERT, size))) {
 	ret = HTTP_SERVER_ERROR;
-	*txn->errstr = "append_setup() failed";
+	txn->errstr = "append_setup() failed";
     }
     else {
 	struct body *body = NULL;
@@ -3351,7 +3345,7 @@ static int meth_put(struct transaction_t *txn)
 	/* Append the iMIP file to the calendar mailbox */
 	if ((r = append_fromstage(&appendstate, &body, stage, now, NULL, 0, 0))) {
 	    ret = HTTP_SERVER_ERROR;
-	    *txn->errstr = "append_fromstage() failed";
+	    txn->errstr = "append_fromstage() failed";
 	}
 	if (body) message_free_body(body);
 
@@ -3360,7 +3354,7 @@ static int meth_put(struct transaction_t *txn)
 	    if ((r = append_commit(&appendstate, size,
 				   NULL, NULL, NULL, &mailbox))) {
 		ret = HTTP_SERVER_ERROR;
-		*txn->errstr = "append_commit() failed";
+		txn->errstr = "append_commit() failed";
 	    }
 	    else {
 		struct index_record newrecord, *expunge;
@@ -3408,7 +3402,7 @@ static int meth_put(struct transaction_t *txn)
 		    if ((r = mailbox_rewrite_index_record(mailbox, expunge))) {
 			syslog(LOG_ERR, "rewrite_index_rec(%s) failed: %s",
 			       mailboxname, error_message(r));
-			*txn->errstr = error_message(r);
+			txn->errstr = error_message(r);
 			ret = HTTP_SERVER_ERROR;
 			goto done;
 		    }
@@ -3469,19 +3463,19 @@ static int meth_report(struct transaction_t *txn)
     /* Check Depth */
     if ((hdr = spool_getheader(txn->req_hdrs, "Depth"))) {
 	if (!strcmp(hdr[0], "infinity")) {
-	    *txn->errstr = "This server DOES NOT support infinite depth requests";
+	    txn->errstr = "This server DOES NOT support infinite depth requests";
 	    return HTTP_SERVER_ERROR;
 	}
 	else if ((sscanf(hdr[0], "%u", &depth) != 1) || (depth > 1)) {
-	    *txn->errstr = "Illegal Depth value";
+	    txn->errstr = "Illegal Depth value";
 	    return HTTP_BAD_REQUEST;
 	}
     }
 
     /* Parse the REPORT body */
-    ret = parse_xml_body(txn, &root, txn->errstr);
+    ret = parse_xml_body(txn, &root);
     if (!root) {
-	*txn->errstr = "Missing request body";
+	txn->errstr = "Missing request body";
 	return HTTP_BAD_REQUEST;
     }
     if (ret) goto done;
@@ -3496,7 +3490,7 @@ static int meth_report(struct transaction_t *txn)
 	type = REPORT_CAL_MULTIGET;
     }
     else {
-	*txn->errstr = "Unsupported REPORT type";
+	txn->errstr = "Unsupported REPORT type";
 	return HTTP_NOT_IMPLEMENTED;
     }
 
@@ -3506,14 +3500,14 @@ static int meth_report(struct transaction_t *txn)
 
     /* Make sure its a prop element */
     if (!cur || xmlStrcmp(cur->name, BAD_CAST "prop")) {
-	*txn->errstr = "MIssing prop element";
+	txn->errstr = "MIssing prop element";
 	return HTTP_BAD_REQUEST;
     }
 
     /* Start construction of our multistatus response */
     if (!(root = init_prop_response("multistatus", root->nsDef, ns))) {
 	ret = HTTP_SERVER_ERROR;
-	*txn->errstr = "Unable to create XML response";
+	txn->errstr = "Unable to create XML response";
 	goto done;
     }
 
@@ -3529,14 +3523,14 @@ static int meth_report(struct transaction_t *txn)
     if ((r = mailbox_open_irl(mailboxname, &mailbox))) {
 	syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
 	       mailboxname, error_message(r));
-	*txn->errstr = error_message(r);
+	txn->errstr = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
 
     /* Open the associated CalDAV database */
     if ((r = caldav_open(mailbox, CALDAV_CREATE, &caldavdb))) {
-	*txn->errstr = error_message(r);
+	txn->errstr = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
@@ -3552,7 +3546,7 @@ static int meth_report(struct transaction_t *txn)
     fctx.elist = elist;
     fctx.root = root;
     fctx.ns = ns;
-    fctx.errstr = txn->errstr;
+    fctx.errstr = &txn->errstr;
     fctx.ret = &ret;
 
     switch (type) {
