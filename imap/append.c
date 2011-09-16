@@ -885,25 +885,25 @@ int append_fromstage(struct appendstate *as, struct body **body,
     /* Handle flags the user wants to set in the message */
     for (i = 0; flags && i < flags->count ; i++) {
 	const char *flag = strarray_nth(flags, i);
-	if (!strcmp(flag, "\\seen")) {
+	if (!strcasecmp(flag, "\\seen")) {
 	    append_setseen(as, &record);
 	}
-	else if (!strcmp(flag, "\\deleted")) {
+	else if (!strcasecmp(flag, "\\deleted")) {
 	    if (as->myrights & ACL_DELETEMSG) {
 		record.system_flags |= FLAG_DELETED;
 	    }
 	}
-	else if (!strcmp(flag, "\\draft")) {
+	else if (!strcasecmp(flag, "\\draft")) {
 	    if (as->myrights & ACL_WRITE) {
 		record.system_flags |= FLAG_DRAFT;
 	    }
 	}
-	else if (!strcmp(flag, "\\flagged")) {
+	else if (!strcasecmp(flag, "\\flagged")) {
 	    if (as->myrights & ACL_WRITE) {
 		record.system_flags |= FLAG_FLAGGED;
 	    }
 	}
-	else if (!strcmp(flag, "\\answered")) {
+	else if (!strcasecmp(flag, "\\answered")) {
 	    if (as->myrights & ACL_WRITE) {
 		record.system_flags |= FLAG_ANSWERED;
 	    }
