@@ -1379,11 +1379,11 @@ static int read_body(struct transaction_t *txn, int dump, const char **errstr)
 
 /* Parse an XML body into a tree */
 static int parse_xml_body(struct transaction_t *txn,
-			  xmlDocPtr *doc, xmlNodePtr *root, const char **errstr)
+			  xmlNodePtr *root, const char **errstr)
 {
     const char **hdr;
+    xmlDocPtr doc;
 
-    *doc = NULL;
     *root = NULL;
 
     if (!buf_len(&txn->req_body)) return 0;
@@ -1397,15 +1397,15 @@ static int parse_xml_body(struct transaction_t *txn,
     }
 
     /* Parse the XML request */
-    *doc = xmlParseMemory(buf_cstring(&txn->req_body), buf_len(&txn->req_body));
+    doc = xmlParseMemory(buf_cstring(&txn->req_body), buf_len(&txn->req_body));
     xmlCleanupParser();
-    if (!*doc) {
+    if (!doc) {
 	*errstr = "Unable to parse XML body";
 	return HTTP_BAD_REQUEST;
     }
 
     /* Get the root element of the XML request */
-    if (!(*root = xmlDocGetRootElement(*doc))) {
+    if (!(*root = xmlDocGetRootElement(doc))) {
 	*errstr = "Missing root element in request";
 	return HTTP_BAD_REQUEST;
     }
@@ -2009,12 +2009,14 @@ static int meth_acl(struct transaction_t *txn)
     }
 
     /* Parse the ACL body */
-    ret = parse_xml_body(txn, &indoc, &root, txn->errstr);
+    ret = parse_xml_body(txn, &root, txn->errstr);
     if (!root) {
 	*txn->errstr = "Missing request body";
 	ret = HTTP_BAD_REQUEST;
     }
     if (ret) goto done;
+
+    indoc = root->doc;
 
     /* Make sure its an DAV:acl element */
     if (xmlStrcmp(root->name, BAD_CAST "acl")) {
@@ -2788,10 +2790,12 @@ static int meth_mkcol(struct transaction_t *txn)
     }
 
     /* Parse the MKCOL/MKCALENDAR body, if exists */
-    ret = parse_xml_body(txn, &indoc, &root, txn->errstr);
+    ret = parse_xml_body(txn, &root, txn->errstr);
     if (ret) goto done;
 
     if (root) {
+	indoc = root->doc;
+
 	if ((txn->meth[3] == 'O') &&
 	    /* Make sure its a mkcol element */
 	    xmlStrcmp(root->name, BAD_CAST "mkcol")) {
@@ -2940,27 +2944,32 @@ static int meth_propfind(struct transaction_t *txn)
     if (txn->req_tgt.resource) depth++;
 
     /* Parse the PROPFIND body, if exists */
-    ret = parse_xml_body(txn, &indoc, &root, txn->errstr);
+    ret = parse_xml_body(txn, &root, txn->errstr);
     if (ret) goto done;
 
     if (!root) {
 	/* XXX allprop request */
     }
+    else {
+	indoc = root->doc;
 
-    /* Make sure its a propfind element */
-    if (xmlStrcmp(root->name, BAD_CAST "propfind")) {
-	*txn->errstr = "Missing propfind element in PROFIND request";
-	return HTTP_BAD_REQUEST;
-    }
+	/* XXX  Need to support propname request too! */
 
-    /* Find child element of propfind */
-    for (cur = root->children;
-	 cur && cur->type != XML_ELEMENT_NODE; cur = cur->next);
+	/* Make sure its a propfind element */
+	if (xmlStrcmp(root->name, BAD_CAST "propfind")) {
+	    *txn->errstr = "Missing propfind element in PROFIND request";
+	    return HTTP_BAD_REQUEST;
+	}
 
-    /* Make sure its a prop element */
-    /* XXX  TODO: Check for allprop and propname too */
-    if (!cur || xmlStrcmp(cur->name, BAD_CAST "prop")) {
-	return HTTP_BAD_REQUEST;
+	/* Find child element of propfind */
+	for (cur = root->children;
+	     cur && cur->type != XML_ELEMENT_NODE; cur = cur->next);
+
+	/* Make sure its a prop element */
+	/* XXX  TODO: Check for allprop and propname too */
+	if (!cur || xmlStrcmp(cur->name, BAD_CAST "prop")) {
+	    return HTTP_BAD_REQUEST;
+	}
     }
 
     /* Start construction of our multistatus response */
@@ -3057,12 +3066,14 @@ static int meth_proppatch(struct transaction_t *txn)
     }
 
     /* Parse the PROPPATCH body */
-    ret = parse_xml_body(txn, &indoc, &root, txn->errstr);
+    ret = parse_xml_body(txn, &root, txn->errstr);
     if (!root) {
 	*txn->errstr = "Missing request body";
 	return HTTP_BAD_REQUEST;
     }
     if (ret) goto done;
+
+    indoc = root->doc;
 
     /* Make sure its a propertyupdate element */
     if (xmlStrcmp(root->name, BAD_CAST "propertyupdate")) {
@@ -3442,12 +3453,14 @@ static int meth_report(struct transaction_t *txn)
     }
 
     /* Parse the REPORT body */
-    ret = parse_xml_body(txn, &indoc, &root, txn->errstr);
+    ret = parse_xml_body(txn, &root, txn->errstr);
     if (!root) {
 	*txn->errstr = "Missing request body";
 	return HTTP_BAD_REQUEST;
     }
     if (ret) goto done;
+
+    indoc = root->doc;
 
     /* Make sure its a calendar element */
     if (!xmlStrcmp(root->name, BAD_CAST "calendar-query")) {
