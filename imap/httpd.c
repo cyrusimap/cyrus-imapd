@@ -126,6 +126,9 @@
 #endif /* HAVE_ZLIB */
 
 
+#define DEBUG 1
+
+
 extern int optind;
 extern char *optarg;
 extern int opterr;
@@ -1610,7 +1613,7 @@ static void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
     int bufsiz;
 
     /* Dump XML response tree into a text buffer */
-    xmlDocDumpFormatMemoryEnc(xml, &buf, &bufsiz, "utf-8", 1);
+    xmlDocDumpFormatMemoryEnc(xml, &buf, &bufsiz, "utf-8", DEBUG ? 1 : 0);
 
     /* Output the XML response */
     txn->resp_body.len = bufsiz;
