@@ -1615,15 +1615,21 @@ static void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
     /* Dump XML response tree into a text buffer */
     xmlDocDumpFormatMemoryEnc(xml, &buf, &bufsiz, "utf-8", DEBUG ? 1 : 0);
 
-    /* Output the XML response */
-    txn->resp_body.len = bufsiz;
-    txn->resp_body.type = "application/xml; charset=utf-8";
+    if (buf) {
+	/* Output the XML response */
+	txn->resp_body.len = bufsiz;
+	txn->resp_body.type = "application/xml; charset=utf-8";
 
-    response_header(code, txn);
-    prot_write(httpd_out, (char *) buf, bufsiz);
+	response_header(code, txn);
+	prot_write(httpd_out, (char *) buf, bufsiz);
 
-    /* Cleanup */
-    xmlFree(buf);
+	/* Cleanup */
+	xmlFree(buf);
+    }
+    else {
+	txn->errstr = "Error dumping XML tree";
+	error_response(HTTP_SERVER_ERROR, txn);
+    }
 }
 
 
