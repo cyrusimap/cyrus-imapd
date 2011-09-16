@@ -901,7 +901,8 @@ static void cmdloop(void)
 {
     int c, ret, r;
     int allowanonymous = config_getswitch(IMAPOPT_ALLOWANONYMOUSLOGIN);
-    char reqline[4096], buf[1024], *uristr, *p;
+    static struct buf meth, uri, ver;
+    char buf[1024];
     const char **hdr;
     struct transaction_t txn;
     const struct method_t *method = NULL;
@@ -945,9 +946,16 @@ static void cmdloop(void)
 	    continue;
 	}
 
-	/* Read Request-Line */
-	syslog(LOG_DEBUG, "read Request-Line");
-	if (!prot_fgets(reqline, sizeof(reqline), httpd_in)) {
+	/* Read Request-Line = Method SP request-target SP HTTP-Version CRLF */
+	c = getword(httpd_in, &meth);
+	if (c == ' ') {
+	    c = getword(httpd_in, &uri);
+	    if (c == ' ') {
+		c = getword(httpd_in, &ver);
+		if (c == '\r') c = prot_getc(httpd_in);
+	    }
+	}
+	if (c == EOF) {
 	    txn.errstr = prot_error(httpd_in);
 	    if (txn.errstr && strcmp(txn.errstr, PROT_EOF_STRING)) {
 		syslog(LOG_WARNING, "%s, closing connection", txn.errstr);
@@ -957,35 +965,18 @@ static void cmdloop(void)
 	    }
 	    return;  /* client closed connection */
 	}
-	syslog(LOG_DEBUG, "%s", reqline);
-
-	/* XXX  TODO: Check for over-length Request-Line */
-
-	/* Trim CRLF */
-	p = reqline + strlen(reqline);
-	if (p > reqline && p[-1] == '\n') *--p = '\0';
-	if (p > reqline && p[-1] == '\r') *--p = '\0';
-
-	/* Parse request into Method SP request-target SP HTTP-Version */
-	txn.meth = reqline;
-	uristr = NULL;
-	for (p = reqline; *p && !Uisspace(*p); p++);  /* find end of method */
-	if (*p) {
-	    *p++ = '\0';
-	    uristr = p;
-
-	    for (; *p && !Uisspace(*p); p++);  /* find end of URL */
-	    if (*p) *p++ = '\0';
-	}
-	if (!*p) {
-	    /* Missing request-target or HTTP-Version */
+	if (!buf_len(&meth) || !buf_len(&uri) || !buf_len(&ver)) {
 	    ret = HTTP_BAD_REQUEST;
-	    if (!uristr) txn.errstr = "Missing request-target";
-	    else txn.errstr = "Missing HTTP-Version";
+	    txn.errstr = "Missing arguments in Request-Line";
 	}
+	else if (c != '\n') {
+	    ret = HTTP_BAD_REQUEST;
+	    txn.errstr = "Unexpected extra arguments in Request-Line";
+	}
+	if (ret) eatline(httpd_in, c);
 
 	/* Check HTTP-Version */
-	if (!ret && strcmp(p, HTTP_VERSION)) {
+	if (!ret && strcmp(buf_cstring(&ver), HTTP_VERSION)) {
 	    ret = HTTP_BAD_VERSION;
 	    snprintf(buf, sizeof(buf),
 		     "This server only speaks %s", HTTP_VERSION);
@@ -994,13 +985,16 @@ static void cmdloop(void)
 
 	/* Check Method against our list of supported methods */
 	if (!ret) {
+	    txn.meth = buf_cstring(&meth);
 	    for (method = methods;
 		 method->name && strcmp(method->name, txn.meth); method++);
 	    if (!method->name) ret = HTTP_NOT_IMPLEMENTED;
 	}
 
 	/* Parse request-target URL */
-	if (!ret && (r = parse_target(txn.meth, uristr, &txn.req_tgt, &txn.errstr))) {
+	if (!ret &&
+	    (r = parse_target(txn.meth, buf_cstring(&uri),
+			      &txn.req_tgt, &txn.errstr))) {
 	    ret = r;
 	}
 
@@ -1071,7 +1065,7 @@ static void cmdloop(void)
 #ifdef SASL_HTTP_REQUEST
 	/* Setup SASL HTTP request in case we need it */
 	sasl_http_req.method = txn.meth;
-	sasl_http_req.uri = uristr;
+	sasl_http_req.uri = buf_cstring(&uri);
 	sasl_http_req.entity = (u_char *) buf_cstring(&txn.req_body);
 	sasl_http_req.elen = buf_len(&txn.req_body);
 	sasl_http_req.non_persist = (txn.flags & HTTP_CLOSE);
