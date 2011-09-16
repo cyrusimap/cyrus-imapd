@@ -928,12 +928,18 @@ static int propfind_calhomeset(const xmlChar *propname, xmlNsPtr ns,
     xmlNodePtr node;
     char uri[MAX_MAILBOX_PATH+1];
 
-    node = add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK], ns,
-		    BAD_CAST propname, NULL, NULL);
+    if (fctx->userid) {
+	node = add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK], ns,
+			BAD_CAST propname, NULL, NULL);
 
-    snprintf(uri, sizeof(uri), "/calendars/user/%s/", fctx->userid);
+	snprintf(uri, sizeof(uri), "/calendars/user/%s/", fctx->userid);
 
-    xmlNewChild(node, NULL, BAD_CAST "href", BAD_CAST uri);
+	xmlNewChild(node, NULL, BAD_CAST "href", BAD_CAST uri);
+    }
+    else {
+	add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND], ns,
+		 BAD_CAST propname, NULL, NULL);
+    }
 
     return 0;
 }
