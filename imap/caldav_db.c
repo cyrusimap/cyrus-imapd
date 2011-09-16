@@ -164,7 +164,7 @@ static int parse_data(const char *data, int datalen, uint32_t *uid) {
     version = strtol(data, &p, 10);
     assert(version == CALDAV_VERSION);
 
-    *uid = strtol(p, &p, 10);
+    *uid = strtoul(p, &p, 10);
     /* XXX  may not work for berkeley, skiplist */
     if (p > (data + datalen)) return IMAP_IOERROR;
 
