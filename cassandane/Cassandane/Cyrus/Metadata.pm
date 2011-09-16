@@ -131,7 +131,7 @@ sub test_nonexistant_mailbox
     $self->assert($imaptalk->get_last_error() =~ m/does not exist/i);
     $self->assert_null($res);
 
-    my $res = $imaptalk->setmetadata($folder, $entry, $value1);
+    $res = $imaptalk->setmetadata($folder, $entry, $value1);
     $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
     $self->assert($imaptalk->get_last_error() =~ m/does not exist/i);
     $self->assert_null($res);

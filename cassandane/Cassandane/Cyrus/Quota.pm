@@ -389,7 +389,7 @@ sub test_exceeding_message
     xlog "add a message that exceeds the limit";
     eval
     {
-	my $msg = $self->make_message("Message $_");
+	my $msg = $self->make_message("Message 11");
     };
     # As opposed to storage checking, which is currently done after receiving the
     # (LITERAL) mail, message count checking is performed right away. This early
