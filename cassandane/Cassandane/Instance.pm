@@ -497,7 +497,7 @@ sub DESTROY
 
     if (!$self->{persistent} && !$self->{_stopped})
     {
-	my $pid = $self->_read_pid_file();
+	my $pid = $self->_read_pid_file($self->_pid_file());
 	if (defined $pid)
 	{
 	    # clean up any dangling master process
