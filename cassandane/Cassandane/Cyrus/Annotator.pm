@@ -136,7 +136,7 @@ sub test_set_user_flag_deliver
     $exp{A} = $self->{gen}->generate(subject => "Message A");
     $exp{A}->set_body("set_flag $flag\r\n");
     $self->{instance}->deliver($exp{A});
-    $exp{A}->set_attributes(flags => [$flag]);
+    $exp{A}->set_attributes(flags => ['\\Recent', $flag]);
 
     # Local delivery adds headers we can't predict or control,
     # which change the SHA1 of delivered messages, so we can't
