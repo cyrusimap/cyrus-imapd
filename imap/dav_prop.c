@@ -53,14 +53,17 @@
 
 
 /* Initialize an XML tree for a property response */
-xmlDocPtr init_prop_response(const char *resp, xmlNodePtr *root,
+xmlNodePtr init_prop_response(const char *resp,
 			     xmlNsPtr reqNs, xmlNsPtr *respNs)
 {
     /* Start construction of our XML response tree */
-    xmlDocPtr outdoc = xmlNewDoc(BAD_CAST "1.0");
+    xmlDocPtr doc = xmlNewDoc(BAD_CAST "1.0");
+    xmlNodePtr root = NULL;
 
-    *root = xmlNewNode(NULL, BAD_CAST resp);
-    xmlDocSetRootElement(outdoc, *root);
+    if (!doc) return NULL;
+    if (!(root = xmlNewNode(NULL, BAD_CAST resp))) return NULL;
+
+    xmlDocSetRootElement(doc, root);
 
     /* Add namespaces from request to our response,
      * creating array of known namespaces that we can reference later.
@@ -68,23 +71,23 @@ xmlDocPtr init_prop_response(const char *resp, xmlNodePtr *root,
     memset(respNs, 0, NUM_NAMESPACE * sizeof(xmlNsPtr));
     for (; reqNs; reqNs = reqNs->next) {
 	if (!xmlStrcmp(reqNs->href, BAD_CAST NS_URL_DAV))
-	    respNs[NS_DAV] = xmlNewNs(*root, reqNs->href, reqNs->prefix);
+	    respNs[NS_DAV] = xmlNewNs(root, reqNs->href, reqNs->prefix);
 	else if (!xmlStrcmp(reqNs->href, BAD_CAST NS_URL_CAL))
-	    respNs[NS_CAL] = xmlNewNs(*root, reqNs->href, reqNs->prefix);
+	    respNs[NS_CAL] = xmlNewNs(root, reqNs->href, reqNs->prefix);
 	else if (!xmlStrcmp(reqNs->href, BAD_CAST NS_URL_CS))
-	    respNs[NS_CS] = xmlNewNs(*root, reqNs->href, reqNs->prefix);
+	    respNs[NS_CS] = xmlNewNs(root, reqNs->href, reqNs->prefix);
 	else if (!xmlStrcmp(reqNs->href, BAD_CAST NS_URL_APPLE))
-	    respNs[NS_APPLE] = xmlNewNs(*root, reqNs->href, reqNs->prefix);
+	    respNs[NS_APPLE] = xmlNewNs(root, reqNs->href, reqNs->prefix);
 	else if (!xmlStrcmp(reqNs->href, BAD_CAST NS_URL_CYRUS))
-	    respNs[NS_CYRUS] = xmlNewNs(*root, reqNs->href, reqNs->prefix);
+	    respNs[NS_CYRUS] = xmlNewNs(root, reqNs->href, reqNs->prefix);
 	else
-	    xmlNewNs(*root, reqNs->href, reqNs->prefix);
+	    xmlNewNs(root, reqNs->href, reqNs->prefix);
     }
 
     /* Set namespace of root node */
-    xmlSetNs(*root, respNs[NS_DAV]);
+    xmlSetNs(root, respNs[NS_DAV]);
 
-    return outdoc;
+    return root;
 }
 
 
