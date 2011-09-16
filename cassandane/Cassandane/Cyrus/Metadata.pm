@@ -117,6 +117,26 @@ sub test_capabilities
     $self->assert_not_null($caps->{"metadata"});
 }
 
+sub test_nonexistant_mailbox
+{
+    my ($self) = @_;
+    my $imaptalk = $self->{store}->get_client();
+    my $entry = '/shared/comment';
+    my $folder = 'INBOX.nonesuch';
+    # data thanks to hipsteripsum.me
+    my $value1 = "Farm-to-table";
+
+    my $res = $imaptalk->getmetadata($folder, $entry);
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+    $self->assert($imaptalk->get_last_error() =~ m/does not exist/i);
+    $self->assert_null($res);
+
+    my $res = $imaptalk->setmetadata($folder, $entry, $value1);
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+    $self->assert($imaptalk->get_last_error() =~ m/does not exist/i);
+    $self->assert_null($res);
+}
+
 
 #
 # Test the cyrus annotations
