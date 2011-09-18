@@ -65,6 +65,7 @@
 #include "gmtoff.h"
 #include "hash.h"
 #include "imap_err.h"
+#include "iptostring.h"
 #include "global.h"
 #include "libconfig.h"
 #include "libcyr_cfg.h"
@@ -917,3 +918,63 @@ char *find_msgid(char *str, char **rem)
     return NULL;
 }
 
+/*
+ * Get name of client host on socket 's'.
+ * Also returns local IP port and remote IP port on inet connections.
+ */
+const char *get_clienthost(int s, const char **localip, const char **remoteip)
+{
+#define IPBUF_SIZE (NI_MAXHOST+NI_MAXSERV+2)
+    socklen_t salen;
+    struct sockaddr_storage localaddr, remoteaddr;
+    static struct buf clientbuf = BUF_INITIALIZER;
+    static char lipbuf[IPBUF_SIZE], ripbuf[IPBUF_SIZE];
+    char hbuf[NI_MAXHOST];
+    int niflags;
+
+    buf_reset(&clientbuf);
+    *localip = *remoteip = NULL;
+
+    /* determine who we're talking to */
+    salen = sizeof(remoteaddr);
+    if (getpeername(s, (struct sockaddr *)&remoteaddr, &salen) == 0 &&
+	(remoteaddr.ss_family == AF_INET ||
+	 remoteaddr.ss_family == AF_INET6)) {
+	/* connected to an internet socket */
+	if (getnameinfo((struct sockaddr *)&remoteaddr, salen,
+			hbuf, sizeof(hbuf), NULL, 0, NI_NAMEREQD) == 0) {
+	    buf_printf(&clientbuf, "%s ", hbuf);
+	}
+
+	niflags = NI_NUMERICHOST;
+#ifdef NI_WITHSCOPEID
+	if (((struct sockaddr *)&remoteaddr)->sa_family == AF_INET6)
+	    niflags |= NI_WITHSCOPEID;
+#endif
+	if (getnameinfo((struct sockaddr *)&remoteaddr, salen,
+			hbuf, sizeof(hbuf), NULL, 0, niflags) != 0) {
+	    strlcpy(hbuf, "unknown", sizeof(hbuf));
+	}
+	buf_printf(&clientbuf, "[%s]", hbuf);
+
+	salen = sizeof(localaddr);
+	if (getsockname(s, (struct sockaddr *)&localaddr, &salen) == 0) {
+	    /* set the ip addresses here */
+	    if (iptostring((struct sockaddr *)&localaddr, salen,
+			  lipbuf, sizeof(lipbuf)) == 0) {
+		*localip = lipbuf;
+            }
+            if (iptostring((struct sockaddr *)&remoteaddr, salen,
+			  ripbuf, sizeof(ripbuf)) == 0) {
+		*remoteip = ripbuf;
+            }
+	} else {
+	    fatal("can't get local addr", EC_SOFTWARE);
+	}
+    } else {
+	/* we're not connected to a internet socket! */
+	buf_setcstr(&clientbuf, UNIX_SOCKET);
+    }
+
+    return buf_cstring(&clientbuf);
+}

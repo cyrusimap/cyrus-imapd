@@ -80,7 +80,6 @@
 #include "exitcodes.h"
 #include "global.h"
 #include "imap_err.h"
-#include "iptostring.h"
 #include "mailbox.h"
 #include "mboxlist.h"
 #include "mpool.h"
@@ -245,12 +244,8 @@ const int config_need_data = 0;
 static struct conn *conn_new(int fd)
 {
     struct conn *C = xzmalloc(sizeof(struct conn));
-    struct sockaddr_storage localaddr, remoteaddr;
+    const char *clienthost, *localip, *remoteip;
     int r;    
-    int haveaddr = 0;
-    socklen_t salen;
-    char hbuf[NI_MAXHOST];
-    int niflags;
 
     C->fd = fd;
     C->logfd = -1;
@@ -273,45 +268,15 @@ static struct conn *conn_new(int fd)
     pthread_mutex_unlock(&connection_count_mutex); /* UNLOCK */
 
     /* Find out name of client host */
-    salen = sizeof(remoteaddr);
-    if (getpeername(C->fd, (struct sockaddr *)&remoteaddr, &salen) == 0 &&
-	(remoteaddr.ss_family == AF_INET ||
-	 remoteaddr.ss_family == AF_INET6)) {
-	niflags = 0;
-#ifdef NI_WITHSCOPEID
-	if (remoteaddr.ss_family == AF_INET6)
-	    niflags |= NI_WITHSCOPEID;
-#endif
-	if (getnameinfo((struct sockaddr *)&remoteaddr, salen,
-			hbuf, sizeof(hbuf), NULL, 0, niflags) == 0)
-	    strlcpy(C->clienthost, hbuf, sizeof(C->clienthost)-30);
-	else
-	    strlcpy(C->clienthost, "Unknown", sizeof(C->clienthost)-30);
-	niflags = NI_NUMERICHOST;
-#ifdef NI_WITHSCOPEID
-	if (((struct sockaddr *)&remoteaddr)->sa_family == AF_INET6)
-	    niflags |= NI_WITHSCOPEID;
-#endif
-	if (getnameinfo((struct sockaddr *)&remoteaddr, salen,
-			hbuf, sizeof(hbuf), NULL, 0, niflags) != 0)
-	    strlcpy(hbuf, "unknown", sizeof(hbuf));
-	strlcat(C->clienthost, " [", sizeof(C->clienthost));
-	strlcat(C->clienthost, hbuf, sizeof(C->clienthost));
-	strlcat(C->clienthost, "]", sizeof(C->clienthost));
-	salen = sizeof(localaddr);
-	if (getsockname(C->fd, (struct sockaddr *)&localaddr, &salen) == 0
-	    && iptostring((struct sockaddr *)&remoteaddr, salen,
-			  C->saslprops.ipremoteport_buf,
-			  sizeof(C->saslprops.ipremoteport_buf)) == 0
-	    && iptostring((struct sockaddr *)&localaddr, salen,
-			  C->saslprops.iplocalport_buf,
-			  sizeof(C->saslprops.iplocalport_buf)) == 0) {
-	    haveaddr = 1;
-	}
-    }
+    clienthost = get_clienthost(C->fd, &localip, &remoteip);
+    strlcpy(C->clienthost, clienthost, sizeof(C->clienthost));
 
-    if(haveaddr) {
+    if (localip && remoteip) {
+	strlcpy(C->saslprops.ipremoteport_buf, remoteip,
+		sizeof(C->saslprops.ipremoteport_buf));
 	C->saslprops.ipremoteport = C->saslprops.ipremoteport_buf;
+	strlcpy(C->saslprops.iplocalport_buf, remoteip,
+		sizeof(C->saslprops.iplocalport_buf));
 	C->saslprops.iplocalport = C->saslprops.iplocalport_buf;
     }
 

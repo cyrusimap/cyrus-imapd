@@ -74,7 +74,6 @@
 #include "libconfig.h"
 #include "xmalloc.h"
 #include "exitcodes.h"
-#include "iptostring.h"
 #include "global.h"
 #include "codes.h"
 #include "actions.h"
@@ -119,8 +118,7 @@ struct protstream *sieved_in;
 
 int sieved_logfd = -1;
 
-int sieved_haveaddr = 0;
-char sieved_clienthost[NI_MAXHOST*2+1] = "[local]";
+const char *sieved_clienthost = "[local]";
 
 int sieved_userisadmin;
 int sieved_domainfromip = 0;
@@ -264,11 +262,8 @@ int service_main(int argc __attribute__((unused)),
 		 char **argv __attribute__((unused)),
 		 char **envp __attribute__((unused)))
 {
-    socklen_t salen;
-    char remoteip[60], localip[60];
+    const char *remoteip, *localip;
     sasl_security_properties_t *secprops = NULL;
-    char hbuf[NI_MAXHOST];
-    int niflags;
 
     sync_log_init();
 
@@ -287,32 +282,7 @@ int service_main(int argc __attribute__((unused)),
     if (geteuid() == 0) fatal("must run as the Cyrus user", -6);
 
     /* Find out name of client host */
-    salen = sizeof(sieved_remoteaddr);
-    if (getpeername(0, (struct sockaddr *)&sieved_remoteaddr, &salen) == 0 &&
-	(sieved_remoteaddr.ss_family == AF_INET ||
-	 sieved_remoteaddr.ss_family == AF_INET6)) {
-	if (getnameinfo((struct sockaddr *)&sieved_remoteaddr, salen,
-			hbuf, sizeof(hbuf), NULL, 0, NI_NAMEREQD) == 0) {
-	    strncpy(sieved_clienthost, hbuf, sizeof(hbuf));
-	} else {
-	    sieved_clienthost[0] = '\0';
-	}
-	niflags = NI_NUMERICHOST;
-#ifdef NI_WITHSCOPEID
-	if (((struct sockaddr *)&sieved_remoteaddr)->sa_family == AF_INET6)
-	    niflags |= NI_WITHSCOPEID;
-#endif
-	if (getnameinfo((struct sockaddr *)&sieved_remoteaddr, salen, hbuf,
-			sizeof(hbuf), NULL, 0, niflags) != 0)
-	    strlcpy(hbuf, "unknown", sizeof(hbuf));
-	strlcat(sieved_clienthost, "[", sizeof(sieved_clienthost));
-	strlcat(sieved_clienthost, hbuf, sizeof(sieved_clienthost));
-	strlcat(sieved_clienthost, "]", sizeof(sieved_clienthost));
-	salen = sizeof(sieved_localaddr);
-	if(getsockname(0, (struct sockaddr *)&sieved_localaddr, &salen) == 0) {
-	    sieved_haveaddr = 1;
-	}
-    }
+    sieved_clienthost = get_clienthost(0, &localip, &remoteip);
 
     /* other params should be filled in */
     if (sasl_server_new(SIEVE_SERVICE_NAME, config_servername, NULL,
@@ -320,13 +290,11 @@ int service_main(int argc __attribute__((unused)),
 			&sieved_saslconn) != SASL_OK)
 	fatal("SASL failed initializing: sasl_server_new()", -1); 
 
-    if(iptostring((struct sockaddr *)&sieved_remoteaddr,
-		  salen, remoteip, 60) == 0) {
+    if (remoteip) {
 	sasl_setprop(sieved_saslconn, SASL_IPREMOTEPORT, remoteip);
 	saslprops.ipremoteport = xstrdup(remoteip);
     }
-    if(iptostring((struct sockaddr *)&sieved_localaddr,
-		  salen, localip, 60) == 0) {
+    if (localip) {
 	sasl_setprop(sieved_saslconn, SASL_IPLOCALPORT, localip);
 	saslprops.iplocalport = xstrdup(localip);
     }

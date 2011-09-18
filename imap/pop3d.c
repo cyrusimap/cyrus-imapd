@@ -70,7 +70,6 @@
 #include "acl.h"
 #include "util.h"
 #include "auth.h"
-#include "iptostring.h"
 #include "global.h"
 #include "tls.h"
 
@@ -122,9 +121,8 @@ char *popd_userid = 0, *popd_subfolder = 0;
 struct mailbox *popd_mailbox = NULL;
 struct auth_state *popd_authstate = 0;
 int config_popuseacl, config_popuseimapflags;
-struct sockaddr_storage popd_localaddr, popd_remoteaddr;
 int popd_haveaddr = 0;
-char popd_clienthost[NI_MAXHOST*2+1] = "[local]";
+const char *popd_clienthost = "[local]";
 struct protstream *popd_out = NULL;
 struct protstream *popd_in = NULL;
 static int popd_logfd = -1;
@@ -372,7 +370,7 @@ static void popd_reset(void)
 
     cyrus_reset_stdio();
 
-    strcpy(popd_clienthost, "[local]");
+    popd_clienthost = "[local]";
     if (popd_logfd != -1) {
 	close(popd_logfd);
 	popd_logfd = -1;
@@ -493,10 +491,7 @@ int service_main(int argc __attribute__((unused)),
 		 char **argv __attribute__((unused)),
 		 char **envp __attribute__((unused)))
 {
-    socklen_t salen;
-    char hbuf[NI_MAXHOST];
-    char localip[60], remoteip[60];
-    int niflags;
+    const char *localip, *remoteip;
     sasl_security_properties_t *secprops=NULL;
 
     session_new_id();
@@ -513,33 +508,7 @@ int service_main(int argc __attribute__((unused)),
     count_dele = 0;
 
     /* Find out name of client host */
-    salen = sizeof(popd_remoteaddr);
-    if (getpeername(0, (struct sockaddr *)&popd_remoteaddr, &salen) == 0 &&
-	(popd_remoteaddr.ss_family == AF_INET ||
-	 popd_remoteaddr.ss_family == AF_INET6)) {
-	if (getnameinfo((struct sockaddr *)&popd_remoteaddr, salen,
-			hbuf, sizeof(hbuf), NULL, 0, NI_NAMEREQD) == 0) {
-    	    strncpy(popd_clienthost, hbuf, sizeof(hbuf));
-	    strlcat(popd_clienthost, " ", sizeof(popd_clienthost));
-	} else {
-	    popd_clienthost[0] = '\0';
-	}
-	niflags = NI_NUMERICHOST;
-#ifdef NI_WITHSCOPEID
-	if (((struct sockaddr *)&popd_remoteaddr)->sa_family == AF_INET6)
-	    niflags |= NI_WITHSCOPEID;
-#endif
-	if (getnameinfo((struct sockaddr *)&popd_remoteaddr, salen, hbuf,
-			sizeof(hbuf), NULL, 0, niflags) != 0)
-	    strlcpy(hbuf, "unknown", sizeof(hbuf));
-	strlcat(popd_clienthost, "[", sizeof(popd_clienthost));
-	strlcat(popd_clienthost, hbuf, sizeof(popd_clienthost));
-	strlcat(popd_clienthost, "]", sizeof(popd_clienthost));
-	salen = sizeof(popd_localaddr);
-	if (getsockname(0, (struct sockaddr *)&popd_localaddr, &salen) == 0) {
-	    popd_haveaddr = 1;
-	}
-    }
+    popd_clienthost = get_clienthost(0, &localip, &remoteip);
 
     /* other params should be filled in */
     if (sasl_server_new("pop", config_servername, NULL, NULL, NULL,
@@ -553,14 +522,13 @@ int service_main(int argc __attribute__((unused)),
     if (sasl_setprop(popd_saslconn, SASL_SSF_EXTERNAL, &extprops_ssf) != SASL_OK)
 	fatal("Failed to set SASL property", EC_TEMPFAIL);
     
-    if(iptostring((struct sockaddr *)&popd_localaddr,
-		  salen, localip, 60) == 0) {
+    if (localip) {
+	popd_haveaddr = 1;
 	sasl_setprop(popd_saslconn, SASL_IPLOCALPORT, localip);
 	saslprops.iplocalport = xstrdup(localip);
     }
     
-    if(iptostring((struct sockaddr *)&popd_remoteaddr,
-		  salen, remoteip, 60) == 0) {
+    if (remoteip) {
 	sasl_setprop(popd_saslconn, SASL_IPREMOTEPORT, remoteip);  
 	saslprops.ipremoteport = xstrdup(remoteip);
     }

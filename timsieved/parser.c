@@ -72,7 +72,7 @@
 #include "exitcodes.h"
 #include "telemetry.h"
 
-extern char sieved_clienthost[250];
+extern const char *sieved_clienthost;
 extern int sieved_domainfromip;
 extern int sieved_userisadmin;
 

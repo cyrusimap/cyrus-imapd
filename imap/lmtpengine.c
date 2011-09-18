@@ -78,7 +78,6 @@
 #include "prot.h"
 #include "times.h"
 #include "global.h"
-#include "iptostring.h"
 #include "exitcodes.h"
 #include "imap_err.h"
 #include "mupdate_err.h"
@@ -110,7 +109,7 @@ struct clientdata {
     struct protstream *pout;
     int fd;
 
-    char clienthost[NI_MAXHOST*2+1];
+    const char *clienthost;
     char lhlo_param[250];
 
     sasl_conn_t *conn;
@@ -1017,12 +1016,7 @@ void lmtpmode(struct lmtp_func *func,
     int r;
     struct clientdata cd;
 
-    struct sockaddr_storage localaddr, remoteaddr;
-    int havelocal = 0, haveremote = 0;
-    char localip[60], remoteip[60];
-    socklen_t salen;
-    char hbuf[NI_MAXHOST];
-    int niflags = 0;
+    const char *localip, *remoteip;
 
     sasl_ssf_t ssf;
     char *auth_id;
@@ -1033,7 +1027,7 @@ void lmtpmode(struct lmtp_func *func,
     cd.pin = pin;
     cd.pout = pout;
     cd.fd = fd;
-    cd.clienthost[0] = '\0';
+    cd.clienthost = "";
     cd.lhlo_param[0] = '\0';
     cd.authenticated =  NOAUTH;
 #ifdef HAVE_SSL
@@ -1059,57 +1053,15 @@ void lmtpmode(struct lmtp_func *func,
     }
 
     /* determine who we're talking to */
-    salen = sizeof(remoteaddr);
-    r = getpeername(fd, (struct sockaddr *)&remoteaddr, &salen);
-    if (!r &&
-	(remoteaddr.ss_family == AF_INET ||
-	 remoteaddr.ss_family == AF_INET6)) {
-	/* connected to an internet socket */
-	if (getnameinfo((struct sockaddr *)&remoteaddr, salen,
-			hbuf, sizeof(hbuf), NULL, 0, NI_NAMEREQD) == 0) {
-	    strncpy(cd.clienthost, hbuf, sizeof(hbuf));
-	    strlcat(cd.clienthost, " ", sizeof(cd.clienthost));
-	    cd.clienthost[sizeof(cd.clienthost)-30] = '\0';
-	} else {
-	    cd.clienthost[0] = '\0';
-	}
-	niflags = NI_NUMERICHOST;
-#ifdef NI_WITHSCOPEID
-	if (((struct sockaddr *)&remoteaddr)->sa_family == AF_INET6)
-	    niflags |= NI_WITHSCOPEID;
-#endif
-	if (getnameinfo((struct sockaddr *)&remoteaddr, salen,
-			hbuf, sizeof(hbuf), NULL, 0, niflags) != 0)
-	    strlcpy(hbuf, "unknown", sizeof(hbuf));
-	strlcat(cd.clienthost, "[", sizeof(cd.clienthost));
-	strlcat(cd.clienthost, hbuf, sizeof(cd.clienthost));
-	strlcat(cd.clienthost, "]", sizeof(cd.clienthost));
-	salen = sizeof(localaddr);
-	if (!getsockname(fd, (struct sockaddr *)&localaddr, &salen)) {
-	    /* set the ip addresses here */
-	    if(iptostring((struct sockaddr *)&localaddr, salen,
-			  localip, sizeof(localip)) == 0) {
-		havelocal = 1;
-                saslprops.iplocalport = xstrdup(localip);
-            }
-            if(iptostring((struct sockaddr *)&remoteaddr, salen,
-			  remoteip, sizeof(remoteip)) == 0) {
-		haveremote = 1;
-                saslprops.ipremoteport = xstrdup(remoteip);
-            }
-	} else {
-	    fatal("can't get local addr", EC_SOFTWARE);
-	}
-
-	syslog(LOG_DEBUG, "connection from %s%s", 
-	       cd.clienthost, 
-	       func->preauth ? " preauth'd as postman" : "");
-    } else {
+    cd.clienthost = get_clienthost(fd, &localip, &remoteip);
+    if (!strcmp(cd.clienthost, UNIX_SOCKET)) {
 	/* we're not connected to a internet socket! */
 	func->preauth = 1;
-	strcpy(cd.clienthost, "[unix socket]");
-	syslog(LOG_DEBUG, "lmtp connection preauth'd as postman");
     }
+
+    syslog(LOG_DEBUG, "connection from %s%s", 
+	   cd.clienthost, 
+	   func->preauth ? " preauth'd as postman" : "");
 
     /* Setup SASL to go.  We need to do this *after* we decide if
      *  we are preauthed or not. */
@@ -1137,8 +1089,8 @@ void lmtpmode(struct lmtp_func *func,
 
 	deliver_logfd = telemetry_log(auth_id, pin, pout, 0);
     } else {
-	if(havelocal) sasl_setprop(cd.conn, SASL_IPLOCALPORT,  &localip );
-	if(haveremote) sasl_setprop(cd.conn, SASL_IPREMOTEPORT, &remoteip);  
+	if(localip) sasl_setprop(cd.conn, SASL_IPLOCALPORT,  &localip );
+	if(remoteip) sasl_setprop(cd.conn, SASL_IPREMOTEPORT, &remoteip);  
     }
 
     prot_printf(pout, "220 %s", config_servername);
@@ -1233,6 +1185,11 @@ void lmtpmode(struct lmtp_func *func,
 			  continue;
 		      }
 		      else {
+			  struct sockaddr_storage remoteaddr;
+			  socklen_t salen = sizeof(remoteaddr);
+			  char hbuf[NI_MAXHOST];
+			  int niflags = 0;
+
 			  sleep(3);
 
 			  if (remoteaddr.ss_family == AF_INET ||
@@ -1248,7 +1205,7 @@ void lmtpmode(struct lmtp_func *func,
 				  strlcpy(hbuf, "[unknown]", sizeof(hbuf));
 			  }
 			  else
-			      strlcpy(hbuf, "[unix socket]", sizeof(hbuf));		  
+			      strlcpy(hbuf, UNIX_SOCKET, sizeof(hbuf));		  
 			  syslog(LOG_ERR, "badlogin: %s %s %s",
 				 hbuf, mech, sasl_errdetail(cd.conn));
 		  

@@ -85,7 +85,6 @@
 #include "hash.h"
 #include "imap_err.h"
 #include "imparse.h"
-#include "iptostring.h"
 #include "mailbox.h"
 #include "map.h"
 #include "mboxlist.h"
@@ -131,8 +130,7 @@ struct namespace *sync_namespacep = &sync_namespace;
 struct auth_state *sync_authstate = 0;
 int sync_userisadmin = 0;
 struct sockaddr_storage sync_localaddr, sync_remoteaddr;
-int sync_haveaddr = 0;
-char sync_clienthost[NI_MAXHOST*2+1] = "[local]";
+const char *sync_clienthost = "[local]";
 struct protstream *sync_out = NULL;
 struct protstream *sync_in = NULL;
 static int sync_logfd = -1;
@@ -208,7 +206,7 @@ static void sync_reset(void)
 
     cyrus_reset_stdio();
 
-    strcpy(sync_clienthost, "[local]");
+    sync_clienthost = "[local]";
     if (sync_logfd != -1) {
 	close(sync_logfd);
 	sync_logfd = -1;
@@ -345,10 +343,7 @@ int service_main(int argc __attribute__((unused)),
 		 char **envp __attribute__((unused)))
 {
     struct protoent *proto;
-    socklen_t salen;
-    char localip[60], remoteip[60];
-    char hbuf[NI_MAXHOST];
-    int niflags;
+    const char *localip, *remoteip;
     sasl_security_properties_t *secprops = NULL;
 
     signals_poll();
@@ -361,34 +356,13 @@ int service_main(int argc __attribute__((unused)),
     prot_setisclient(sync_out, 1);
 
     /* Find out name of client host */
-    salen = sizeof(sync_remoteaddr);
-    if (getpeername(0, (struct sockaddr *)&sync_remoteaddr, &salen) == 0 &&
-	(sync_remoteaddr.ss_family == AF_INET ||
-	 sync_remoteaddr.ss_family == AF_INET6)) {
-	if (getnameinfo((struct sockaddr *)&sync_remoteaddr, salen,
-			hbuf, sizeof(hbuf), NULL, 0, NI_NAMEREQD) == 0) {
-	    strncpy(sync_clienthost, hbuf, sizeof(hbuf));
-	    strlcat(sync_clienthost, " ", sizeof(sync_clienthost));
-	    sync_clienthost[sizeof(sync_clienthost)-30] = '\0';
-	} else {
-	    sync_clienthost[0] = '\0';
-	}
-	niflags = NI_NUMERICHOST;
-#ifdef NI_WITHSCOPEID
-	if (((struct sockaddr *)&sync_remoteaddr)->sa_family == AF_INET6)
-	    niflags |= NI_WITHSCOPEID;
-#endif
-	if (getnameinfo((struct sockaddr *)&sync_remoteaddr, salen, hbuf,
-			sizeof(hbuf), NULL, 0, niflags) != 0)
-	    strlcpy(hbuf, "unknown", sizeof(hbuf));
-	strlcat(sync_clienthost, "[", sizeof(sync_clienthost));
-	strlcat(sync_clienthost, hbuf, sizeof(sync_clienthost));
-	strlcat(sync_clienthost, "]", sizeof(sync_clienthost));
-	salen = sizeof(sync_localaddr);
-	if (getsockname(0, (struct sockaddr *)&sync_localaddr, &salen) == 0) {
-	    sync_haveaddr = 1;
-	}
-
+    sync_clienthost = get_clienthost(0, &localip, &remoteip);
+    if (!strcmp(sync_clienthost, UNIX_SOCKET)) {
+	/* we're not connected to an internet socket! */
+	sync_userid = xstrdup("cyrus");
+	sync_userisadmin = 1;
+    }
+    else {
 	/* other params should be filled in */
 	if (sasl_server_new("csync", config_servername, NULL, NULL, NULL,
 			    NULL, 0, &sync_saslconn) != SASL_OK)
@@ -402,14 +376,12 @@ int service_main(int argc __attribute__((unused)),
 	if (sasl_setprop(sync_saslconn, SASL_SSF_EXTERNAL, &extprops_ssf) != SASL_OK)
 	    fatal("Failed to set SASL property", EC_TEMPFAIL);
     
-	if(iptostring((struct sockaddr *)&sync_localaddr, salen,
-		      localip, 60) == 0) {
+	if (localip) {
 	    sasl_setprop(sync_saslconn, SASL_IPLOCALPORT, localip);
 	    saslprops.iplocalport = xstrdup(localip);
 	}
     
-	if(iptostring((struct sockaddr *)&sync_remoteaddr, salen,
-		      remoteip, 60) == 0) {
+	if (remoteip) {
 	    if (sasl_setprop(sync_saslconn, SASL_IPREMOTEPORT, remoteip) != SASL_OK)
 		fatal("failed to set sasl property", EC_TEMPFAIL);
 	    saslprops.ipremoteport = xstrdup(remoteip);
@@ -429,11 +401,6 @@ int service_main(int argc __attribute__((unused)),
 	} else {
 	    syslog(LOG_ERR, "unable to getprotobyname(\"tcp\"): %m");
 	}
-    } else {
-	/* we're not connected to an internet socket! */
-	strcpy(sync_clienthost, "[unix socket]");
-	sync_userid = xstrdup("cyrus");
-	sync_userisadmin = 1;
     }
 
     proc_register("sync_server", sync_clienthost, NULL, NULL);

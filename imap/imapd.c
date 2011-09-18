@@ -89,7 +89,6 @@
 #include "imapurl.h"
 #include "imparse.h"
 #include "index.h"
-#include "iptostring.h"
 #include "mailbox.h"
 #include "message.h"
 #include "mboxkey.h"
@@ -160,7 +159,7 @@ int imapd_timeout;
 struct protstream *imapd_out = NULL;
 struct protstream *imapd_in = NULL;
 struct protgroup *protin = NULL;
-static char imapd_clienthost[NI_MAXHOST*2+1] = "[local]";
+static const char *imapd_clienthost = "[local]";
 static int imapd_logfd = -1;
 char *imapd_userid = NULL, *proxy_userid = NULL;
 static char *imapd_magicplus = NULL;
@@ -718,7 +717,7 @@ static void imapd_reset(void)
 
     cyrus_reset_stdio();
 
-    strcpy(imapd_clienthost, "[local]");
+    imapd_clienthost = "[local]";
     if (imapd_logfd != -1) {
 	close(imapd_logfd);
 	imapd_logfd = -1;
@@ -863,13 +862,8 @@ int service_main(int argc __attribute__((unused)),
 		 char **envp __attribute__((unused)))
 #endif
 {
-    socklen_t salen;
     sasl_security_properties_t *secprops = NULL;
-    struct sockaddr_storage imapd_localaddr, imapd_remoteaddr;
-    char localip[60], remoteip[60];
-    char hbuf[NI_MAXHOST];
-    int niflags;
-    int imapd_haveaddr = 0;
+    const char *localip, *remoteip;
 
     session_new_id();
 
@@ -887,39 +881,7 @@ int service_main(int argc __attribute__((unused)),
     protgroup_insert(protin, imapd_in);
 
     /* Find out name of client host */
-    salen = sizeof(imapd_remoteaddr);
-    if (getpeername(0, (struct sockaddr *)&imapd_remoteaddr, &salen) == 0 &&
-	(imapd_remoteaddr.ss_family == AF_INET ||
-	 imapd_remoteaddr.ss_family == AF_INET6)) {
-	if (getnameinfo((struct sockaddr *)&imapd_remoteaddr, salen,
-			hbuf, sizeof(hbuf), NULL, 0, NI_NAMEREQD) == 0) {
-	    strncpy(imapd_clienthost, hbuf, sizeof(hbuf));
-	    strlcat(imapd_clienthost, " ", sizeof(imapd_clienthost));
-	    imapd_clienthost[sizeof(imapd_clienthost)-30] = '\0';
-	} else {
-	    imapd_clienthost[0] = '\0';
-	}
-	niflags = NI_NUMERICHOST;
-#ifdef NI_WITHSCOPEID
-	if (((struct sockaddr *)&imapd_remoteaddr)->sa_family == AF_INET6)
-	    niflags |= NI_WITHSCOPEID;
-#endif
-	if (getnameinfo((struct sockaddr *)&imapd_remoteaddr, salen, hbuf,
-			sizeof(hbuf), NULL, 0, niflags) != 0)
-	    strlcpy(hbuf, "unknown", sizeof(hbuf));
-	strlcat(imapd_clienthost, "[", sizeof(imapd_clienthost));
-	strlcat(imapd_clienthost, hbuf, sizeof(imapd_clienthost));
-	strlcat(imapd_clienthost, "]", sizeof(imapd_clienthost));
-	salen = sizeof(imapd_localaddr);
-	if (getsockname(0, (struct sockaddr *)&imapd_localaddr, &salen) == 0) {
-	    if(iptostring((struct sockaddr *)&imapd_remoteaddr, salen,
-			  remoteip, sizeof(remoteip)) == 0
-	       && iptostring((struct sockaddr *)&imapd_localaddr, salen,
-			     localip, sizeof(localip)) == 0) {
-		imapd_haveaddr = 1;
-	    }
-	}
-    }
+    imapd_clienthost = get_clienthost(0, &localip, &remoteip);
 
     /* create the SASL connection */
     if (sasl_server_new("imap", config_servername, 
@@ -934,7 +896,7 @@ int service_main(int argc __attribute__((unused)),
     if (sasl_setprop(imapd_saslconn, SASL_SSF_EXTERNAL, &extprops_ssf) != SASL_OK)
 	fatal("Failed to set SASL property", EC_TEMPFAIL);
 
-    if (imapd_haveaddr) {
+    if (localip && remoteip) {
 	sasl_setprop(imapd_saslconn, SASL_IPREMOTEPORT, remoteip);
 	saslprops.ipremoteport = xstrdup(remoteip);
 	sasl_setprop(imapd_saslconn, SASL_IPLOCALPORT, localip);

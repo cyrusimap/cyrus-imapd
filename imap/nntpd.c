@@ -90,7 +90,6 @@
 #include "idle.h"
 #include "imap_err.h"
 #include "index.h"
-#include "iptostring.h"
 #include "mailbox.h"
 #include "map.h"
 #include "mboxlist.h"
@@ -142,8 +141,7 @@ char *nntp_userid = 0, *newsmaster;
 struct auth_state *nntp_authstate = 0, *newsmaster_authstate;
 struct index_state *group_state;
 struct sockaddr_storage nntp_localaddr, nntp_remoteaddr;
-int nntp_haveaddr = 0;
-char nntp_clienthost[NI_MAXHOST*2+1] = "[local]";
+const char *nntp_clienthost = "[local]";
 struct protstream *nntp_out = NULL;
 struct protstream *nntp_in = NULL;
 struct protgroup *protin = NULL;
@@ -392,7 +390,7 @@ static void nntp_reset(void)
 
     cyrus_reset_stdio();
 
-    strcpy(nntp_clienthost, "[local]");
+    nntp_clienthost = "[local]";
     if (nntp_logfd != -1) {
 	close(nntp_logfd);
 	nntp_logfd = -1;
@@ -530,10 +528,7 @@ int service_main(int argc __attribute__((unused)),
 		 char **argv __attribute__((unused)),
 		 char **envp __attribute__((unused)))
 {
-    socklen_t salen;
-    char localip[60], remoteip[60];
-    char hbuf[NI_MAXHOST];
-    int niflags;
+    const char *localip, *remoteip;
     sasl_security_properties_t *secprops=NULL;
     int shutdown;
     char unavail[1024];
@@ -547,37 +542,7 @@ int service_main(int argc __attribute__((unused)),
     protgroup_insert(protin, nntp_in);
 
     /* Find out name of client host */
-    salen = sizeof(nntp_remoteaddr);
-    if (getpeername(0, (struct sockaddr *)&nntp_remoteaddr, &salen) == 0 &&
-	(nntp_remoteaddr.ss_family == AF_INET ||
-	 nntp_remoteaddr.ss_family == AF_INET6)) {
-	if (getnameinfo((struct sockaddr *)&nntp_remoteaddr, salen,
-			hbuf, sizeof(hbuf), NULL, 0, NI_NAMEREQD) == 0) {
-	    strncpy(nntp_clienthost, hbuf, sizeof(hbuf));
-	    strlcat(nntp_clienthost, " ", sizeof(nntp_clienthost));
-	    nntp_clienthost[sizeof(nntp_clienthost)-30] = '\0';
-	} else {
-	    nntp_clienthost[0] = '\0';
-	}
-	niflags = NI_NUMERICHOST;
-#ifdef NI_WITHSCOPEID
-	if (((struct sockaddr *)&nntp_remoteaddr)->sa_family == AF_INET6)
-	    niflags |= NI_WITHSCOPEID;
-#endif
-	if (getnameinfo((struct sockaddr *)&nntp_remoteaddr, salen, hbuf,
-			sizeof(hbuf), NULL, 0, niflags) != 0)
-	    strlcpy(hbuf, "unknown", sizeof(hbuf));
-	strlcat(nntp_clienthost, "[", sizeof(nntp_clienthost));
-	strlcat(nntp_clienthost, hbuf, sizeof(nntp_clienthost));
-	strlcat(nntp_clienthost, "]", sizeof(nntp_clienthost));
-	salen = sizeof(nntp_localaddr);
-	if (getsockname(0, (struct sockaddr *)&nntp_localaddr, &salen) == 0) {
-	    nntp_haveaddr = 1;
-	}
-
-	/* Create pre-authentication telemetry log based on client IP */
-	nntp_logfd = telemetry_log(hbuf, nntp_in, nntp_out, 0);
-    }
+    nntp_clienthost = get_clienthost(0, &localip, &remoteip);
 
     /* other params should be filled in */
     if (sasl_server_new("nntp", config_servername, NULL, NULL, NULL,
@@ -589,16 +554,21 @@ int service_main(int argc __attribute__((unused)),
     sasl_setprop(nntp_saslconn, SASL_SEC_PROPS, secprops);
     sasl_setprop(nntp_saslconn, SASL_SSF_EXTERNAL, &extprops_ssf);
     
-    if(iptostring((struct sockaddr *)&nntp_localaddr, salen,
-		  localip, 60) == 0) {
+    if (localip) {
 	sasl_setprop(nntp_saslconn, SASL_IPLOCALPORT, localip);
 	saslprops.iplocalport = xstrdup(localip);
     }
     
-    if(iptostring((struct sockaddr *)&nntp_remoteaddr, salen,
-		  remoteip, 60) == 0) {
+    if (remoteip) {
+	char hbuf[NI_MAXHOST], *p;
+
 	sasl_setprop(nntp_saslconn, SASL_IPREMOTEPORT, remoteip);  
 	saslprops.ipremoteport = xstrdup(remoteip);
+
+	/* Create pre-authentication telemetry log based on client IP */
+	strlcpy(hbuf, remoteip, NI_MAXHOST);
+	if ((p = strchr(hbuf, ';'))) *p = '\0';
+	nntp_logfd = telemetry_log(hbuf, nntp_in, nntp_out, 0);
     }
 
     proc_register("nntpd", nntp_clienthost, NULL, NULL);
