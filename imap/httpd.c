@@ -106,11 +106,11 @@
 #include "proxy.h"
 #include "spool.h"
 #include "userdeny.h"
-#include "times.h"
 #include "message.h"
 #include "message_guid.h"
 #include "index.h"
 #include "idle.h"
+#include "rfc822date.h"
 
 #include <libical/ical.h>
 
@@ -1431,7 +1431,7 @@ char *http_statusline(long code)
 
 static void response_header(long code, struct transaction_t *txn)
 {
-    char datestr[RFC822_DATETIME_MAX+1];
+    char datestr[80];
     struct auth_challenge_t *auth_chal = &txn->auth_chal;
     struct resp_body_t *resp_body = &txn->resp_body;
 
@@ -1440,7 +1440,7 @@ static void response_header(long code, struct transaction_t *txn)
 
 
     /* General Header Fields */
-    time_to_rfc822(time(0), datestr, sizeof(datestr));
+    rfc822date_gen(datestr, sizeof(datestr), time(0));
     prot_printf(httpd_out, "Date: %s\r\n", datestr);
 
     if (txn->flags & HTTP_CLOSE) {
@@ -1560,7 +1560,7 @@ static void response_header(long code, struct transaction_t *txn)
 	prot_printf(httpd_out, "Content-Type: %s\r\n", resp_body->type);
     }
     if (resp_body->lastmod) {
-	time_to_rfc822(resp_body->lastmod, datestr, sizeof(datestr));
+	rfc822date_gen(datestr, sizeof(datestr), resp_body->lastmod);
 	prot_printf(httpd_out, "Last-Modified: %s\r\n", datestr);
     }
 
@@ -1883,7 +1883,11 @@ static int check_precond(const char *meth, const char *etag, time_t lastmod,
     }
 
     if ((hdr = spool_getheader(hdrcache, "If-Unmodified-Since"))) {
-	if (time_from_rfc822((char *) hdr[0], &since) < 0) since = lastmod;
+	if (!(since = message_parse_date((char *) hdr[0],
+					 PARSE_DATE|PARSE_TIME|PARSE_ZONE|
+					 PARSE_GMT|PARSE_NOCREATE))) {
+	    since = lastmod;
+	}
 
 	if (lastmod <= since) {
 	    /* Precond success - ignore remaining conditional headers */
@@ -1905,7 +1909,9 @@ static int check_precond(const char *meth, const char *etag, time_t lastmod,
     }
 
     if ((hdr = spool_getheader(hdrcache, "If-Modified-Since"))) {
-	if (time_from_rfc822((char *) hdr[0], &since) < 0) since = 0;
+	since = message_parse_date((char *) hdr[0],
+				   PARSE_DATE|PARSE_TIME|PARSE_ZONE|
+				   PARSE_GMT|PARSE_NOCREATE);
 
 	if (lastmod > since) {
 	    /* Precond success - this trumps an If-None-Match 304 response */
@@ -2297,7 +2303,7 @@ static int meth_mkcol(struct transaction_t *txn, const char **errstr)
     r = mboxlist_createmailbox(mailboxname, 0, partition, 
 			       httpd_userisadmin || httpd_userisproxyadmin,
 			       httpd_userid, httpd_authstate,
-			       0, 0, 0, NULL);
+			       0, 0, 0);
 
     if (!r) ret = HTTP_CREATED;
     else if (r == IMAP_PERMISSION_DENIED) ret = HTTP_FORBIDDEN;
@@ -2576,7 +2582,7 @@ static int meth_put(struct transaction_t *txn, const char **errstr)
     uquota_t size = 0;
     time_t now = time(NULL);
     pid_t p;
-    char datestr[RFC822_DATETIME_MAX+1], msgid[8192];
+    char datestr[80], msgid[8192];
     struct appendstate appendstate;
     icalcomponent *ical, *comp;
 
@@ -2692,7 +2698,7 @@ static int meth_put(struct transaction_t *txn, const char **errstr)
 
     fprintf(f, "Subject: %s\r\n", icalcomponent_get_summary(comp));
 
-    time_to_rfc822(now, datestr, sizeof(datestr));
+    rfc822date_gen(datestr, sizeof(datestr), now);
     fprintf(f, "Date: %s\r\n", datestr);
 
     p = getpid();
@@ -2730,7 +2736,7 @@ static int meth_put(struct transaction_t *txn, const char **errstr)
 	struct body *body = NULL;
 
 	/* Append the iMIP file to the calendar mailbox */
-	if ((r = append_fromstage(&appendstate, &body, stage, now, NULL, 0))) {
+	if ((r = append_fromstage(&appendstate, &body, stage, now, NULL, 0, 0))) {
 	    ret = HTTP_SERVER_ERROR;
 	    *errstr = "append_fromstage() failed";
 	}
