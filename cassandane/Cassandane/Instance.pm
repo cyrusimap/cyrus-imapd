@@ -86,6 +86,7 @@ sub new
 	valgrind => $defaults{valgrind},
 	_children => {},
 	_stopped => 0,
+	description => 'unknown',
     };
 
     $self->{name} = $params{name}
@@ -108,6 +109,8 @@ sub new
 	if defined $params{valgrind};
     $self->{persistent} = $params{persistent}
 	if defined $params{persistent};
+    $self->{description} = $params{description}
+	if defined $params{description};
 
     if (!defined $stamp)
     {
@@ -134,7 +137,7 @@ sub new
 	    );
 
     bless $self, $class;
-    xlog "basedir $self->{basedir}";
+    xlog "$self->{description}: basedir $self->{basedir}";
     return $self;
 }
 

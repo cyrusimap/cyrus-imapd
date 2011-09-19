@@ -53,7 +53,6 @@ my @stores = qw(store adminstore replica_store replica_adminstore);
 sub new
 {
     my ($class, $params, @args) = @_;
-    my $port;
 
     my $want = {
 	instance => 1,
@@ -64,29 +63,49 @@ sub new
 	gen => 1,
 	deliver => 0,
     };
+    map {
+	$want->{$_} = delete $params->{$_}
+	    if defined $params->{$_};
+
+    } keys %$want;
+    $want->{folder} = delete $params->{folder}
+	if defined $params->{folder};
+
+    my $instance_params = {};
+    foreach my $p (qw(config))
+    {
+	$instance_params->{$p} = delete $params->{$p}
+	    if defined $params->{$p};
+    }
+
+    # should have consumed all of the $params hash; if
+    # not something is awry.
+    my $leftovers = join(' ', keys %$params);
+    die "Unexpected configuration parameters: $leftovers"
+	if length($leftovers);
+
+    my $self = $class->SUPER::new(@args);
+    $self->{_name} = $args[0] || 'unknown';
+    $self->{_want} = $want;
+    $self->{_instance_params} = $instance_params;
+
+    return $self;
+}
+
+sub _create_instances
+{
+    my ($self) = @_;
+    my $port;
+    my $want = $self->{_want};
+    my %instance_params = %{$self->{_instance_params}};
+
     # This is a downright dirty hack; if the test name contains the word
     # 'replication' then enable the replica unless requested otherwise
-    if (defined $args[0] && grep { m/^replication$/ } split(/_/,$args[0]))
+    if (grep { m/^replication$/ } split(/_/,$self->{_name}))
     {
 	xlog "magically enabling replica because test name contains 'replication'";
 	$want->{replica} = 1;
     }
-    map {
-	$want->{$_} = $params->{$_}
-	    if defined $params->{$_};
-    } keys %$want;
-    $want->{folder} = $params->{folder}
-	if defined $params->{folder};
-
-    my %instance_params;
-    foreach my $p (qw(config))
-    {
-	$instance_params{$p} = $params->{$p}
-	    if defined $params->{$p};
-    }
-
-    my $self = $class->SUPER::new(@args);
-    $self->{_want} = $want;
 
     if ($want->{instance})
     {
@@ -109,6 +128,7 @@ sub new
 	    $instance_params{config} = $conf;
 	}
 
+	$instance_params{description} = "main instance for test $self->{_name}";
 	$self->{instance} = Cassandane::Instance->new(%instance_params);
 	$self->{instance}->add_services(@{$want->{services}});
 	$self->{instance}->_setup_for_deliver()
@@ -116,6 +136,7 @@ sub new
 
 	if ($want->{replica})
 	{
+	    $instance_params{description} = "replica instance for test $self->{_name}";
 	    $self->{replica} = Cassandane::Instance->new(%instance_params,
 						         setup_mailbox => 0);
 	    $self->{replica}->add_service('sync', port => $port);
@@ -129,13 +150,13 @@ sub new
     {
 	$self->{gen} = Cassandane::Generator->new();
     }
-
-    return $self;
 }
 
 sub set_up
 {
     my ($self) = @_;
+
+    $self->_create_instances();
 
     $self->{instance}->start()
 	if (defined $self->{instance});
