@@ -87,6 +87,7 @@
 #include "seen.h"
 #include "upgrade_index.h"
 #include "util.h"
+#include "annotate.h"
 #include "sequence.h"
 #include "statuscache.h"
 #include "strarray.h"
@@ -2165,6 +2166,10 @@ int mailbox_rewrite_index_record(struct mailbox *mailbox,
     /* expunged tracking */
     if ((record->system_flags & FLAG_EXPUNGED) && 
 	!(oldrecord.system_flags & FLAG_EXPUNGED)) {
+
+	if (expunge_mode == IMAP_ENUM_EXPUNGE_MODE_IMMEDIATE)
+	    r = annotate_msg_expunge(mailbox, record->uid);
+
 	if (!mailbox->i.first_expunged ||
 	    mailbox->i.first_expunged > record->last_updated)
 	    mailbox->i.first_expunged = record->last_updated;
@@ -2643,6 +2648,9 @@ int mailbox_expunge_cleanup(struct mailbox *mailbox, time_t expunge_mark,
     time_t first_expunged = 0;
     int r = 0;
 
+    r = annotatemore_begin();
+    if (r) return r;
+
     /* run the actual expunge phase */
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	if (mailbox_read_index_record(mailbox, recno, &record))
@@ -2677,6 +2685,11 @@ int mailbox_expunge_cleanup(struct mailbox *mailbox, time_t expunge_mark,
 		   mailbox->name, recno);
 	    break;
 	}
+
+	r = annotate_msg_expunge(mailbox, record.uid);
+	if (r)
+	    syslog(LOG_ERR, "failed to expunge annotations for %s uid %d",
+		   mailbox->name, record.uid);
     }
 
     if (dirty) {
@@ -2684,6 +2697,11 @@ int mailbox_expunge_cleanup(struct mailbox *mailbox, time_t expunge_mark,
 	mailbox->i.options |= OPT_MAILBOX_NEEDS_REPACK;
 	mailbox->i.first_expunged = first_expunged;
     }
+
+    if (r)
+	annotatemore_abort();
+    else
+	r = annotatemore_commit();
 
     if (ndeleted) *ndeleted = numdeleted;
 

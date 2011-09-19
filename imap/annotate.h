@@ -193,6 +193,8 @@ int annotatemore_rename(const char *oldmboxname, const char *newmboxname,
 int annotate_msg_copy(struct mailbox *oldmailbox, uint32_t olduid,
 		      struct mailbox *newmailbox, uint32_t newuid,
 		      const char *userid);
+/* delete the annotations for the given message */
+int annotate_msg_expunge(struct mailbox *, uint32_t uid);
 
 /* delete the annotations for 'mbentry'
  * Uses its own transaction. */

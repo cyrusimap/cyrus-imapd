@@ -3082,6 +3082,14 @@ int annotate_msg_copy(struct mailbox *oldmailbox, uint32_t olduid,
 			     /*copy*/1);
 }
 
+int annotate_msg_expunge(struct mailbox *mailbox, uint32_t uid)
+{
+    return _annotate_rewrite(mailbox->name, mailbox, uid, /*userid*/NULL,
+			     /*newname*/NULL, /*newmbox*/NULL,
+			     /*newuid*/0, /*newuserid*/NULL,
+			     /*copy*/0);
+}
+
 /*************************  Annotation Initialization  ************************/
 
 /* The following code is courtesy of Thomas Viehmann <tv@beamnet.de> */
