@@ -1027,8 +1027,9 @@ static int propfind_fromdb(const xmlChar *propname, xmlNsPtr ns,
     }
     else {
 	/* "dead" property - use hash of the namespace href as prefix */
-	sprintf(prop_annot, "/vendor/cmu/cyrus-imapd/%08X:%s",
-		strhash((const char *) ns->href), BAD_CAST propname);
+	snprintf(prop_annot, sizeof(prop_annot),
+		 "/vendor/cmu/cyrus-imapd/%08X:%s",
+		 strhash((const char *) ns->href), BAD_CAST propname);
     }
 
     if (fctx->mailbox && !fctx->record) {
@@ -1074,8 +1075,9 @@ static int proppatch_todb(xmlNodePtr prop, unsigned set,
     }
     else {
 	/* "dead" property - use hash of the namespace href as prefix */
-	sprintf(prop_annot, "/vendor/cmu/cyrus-imapd/%08X:%s",
-		strhash((const char *) ns->href), BAD_CAST prop->name);
+	snprintf(prop_annot, sizeof(prop_annot),
+		 "/vendor/cmu/cyrus-imapd/%08X:%s",
+		 strhash((const char *) ns->href), BAD_CAST prop->name);
     }
 
     if (set) freeme = xmlNodeGetContent(prop);
