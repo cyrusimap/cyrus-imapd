@@ -1870,4 +1870,86 @@ sub test_mbox_replication_new_mas
 # sub test_mbox_replication_del_rep
 # sub test_mbox_replication_del_bot
 
+sub test_copy_messages
+{
+    my ($self) = @_;
+
+    xlog "testing COPY with message scope annotations (BZ3528)";
+
+    my $entry = '/comment';
+    my $attrib = 'value.priv';
+    my $from_folder = 'INBOX.from';
+    my $to_folder = 'INBOX.to';
+
+    $self->{store}->set_fetch_attributes('uid', "annotation ($entry $attrib)");
+
+    xlog "Create subfolders to copy from and to";
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    $talk->create($from_folder)
+	or die "Cannot create mailbox $from_folder: $@";
+    $talk->create($to_folder)
+	or die "Cannot create mailbox $to_folder: $@";
+
+    $store->set_folder($from_folder);
+
+    my @data_by_uid = (
+	undef,
+	# data thanks to hipsteripsum.me
+	"american apparel",
+	"mixtape aesthetic",
+	"organic quinoa"
+    );
+
+    xlog "Append some messages and store annotations";
+    my %exp;
+    my $uid = 1;
+    while (defined $data_by_uid[$uid])
+    {
+	my $data = $data_by_uid[$uid];
+	my $msg = $self->make_message("Message $uid");
+	$msg->set_attribute('uid', $uid);
+	$msg->set_annotation($entry, $attrib, $data);
+	$exp{$uid} = $msg;
+	$self->set_msg_annotation(undef, $uid, $entry, $attrib, $data);
+	$uid++;
+    }
+
+    xlog "Check the annotations are there";
+    $self->check_messages(\%exp);
+
+    xlog "COPY the messages";
+    $talk = $store->get_client();
+    $talk->copy('1:*', $to_folder);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog "Messages are now in the destination folder";
+    $store->set_folder($to_folder);
+    $store->_select();
+    $self->check_messages(\%exp);
+
+    xlog "Messages are still in the origin folder";
+    $store->set_folder($from_folder);
+    $store->_select();
+    $self->check_messages(\%exp);
+
+    xlog "Delete the messages from the origin folder";
+    $store->set_folder($from_folder);
+    $store->_select();
+    $talk = $store->get_client();
+    $talk->store('1:*', '+flags', '(\\Deleted)');
+    $talk->expunge();
+
+    xlog "Messages are gone from the origin folder";
+    $store->set_folder($from_folder);
+    $store->_select();
+    $self->check_messages({});
+
+    xlog "Messages are still in the destination folder";
+    $store->set_folder($to_folder);
+    $store->_select();
+    $self->check_messages(\%exp);
+
+}
+
 1;
