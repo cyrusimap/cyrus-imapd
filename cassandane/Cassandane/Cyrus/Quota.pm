@@ -975,6 +975,49 @@ sub test_upgrade_v2_4
     ]);
 }
 
+sub test_bz3529
+{
+    my ($self) = @_;
+
+    xlog "testing annot storage quota when setting annots on multiple";
+    xlog "messages in a single STORE command, using quotalegacy backend.";
+
+    # double check that some other part of Cassandane didn't
+    # accidentally futz with the expected quota db backend
+    my $backend = $self->{instance}->{config}->get('quota_db');
+    $self->assert_str_equals('quotalegacy', $backend)
+	if defined $backend;	    # the default value is also ok
+
+    $self->_set_quotaroot('user.cassandane');
+    my $talk = $self->{store}->get_client();
+
+    xlog "set ourselves a basic limit";
+    $self->_set_limits([['x-annotation-storage', 0, 100000]]);
+
+    xlog "make some messages to hang annotations on";
+# 	$self->{store}->set_folder($folder);
+    my $uid = 1;
+    my %msgs;
+    for (1..20)
+    {
+	$msgs{$uid} = $self->make_message("Message $uid");
+	$msgs{$uid}->set_attribute('uid', $uid);
+	$uid++;
+    }
+
+    my $data = make_random_data(30);
+    $talk->store('1:*', 'annotation', ['/comment', ['value.priv', { Quote => $data }]]);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    my $expected = ($uid-1) * length($data);
+    $self->_check_usages([int($expected/1024)]);
+
+    # delete annotations
+    $talk->store('1:*', 'annotation', ['/comment', ['value.priv', undef]]);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->_check_usages([0]);
+}
+
 # Magic: the word 'replication' in the name enables a replica
 sub test_replication_storage
 {
