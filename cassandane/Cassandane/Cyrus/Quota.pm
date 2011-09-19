@@ -1396,4 +1396,407 @@ sub XXtest_replication_multiple
     $self->assert_deep_equals([], \@res);
 }
 
+sub test_using_annotstorage_msg_copy_exdel
+{
+    my ($self) = @_;
+
+    xlog "testing X-ANNOTATION-STORAGE quota usage as messages are COPYd";
+    xlog "and original messages are deleted, expunge_mode=delayed version";
+    xlog "(BZ3527)";
+
+    my $entry = '/comment';
+    my $attrib = 'value.priv';
+    my $from_folder = 'INBOX.from';
+    my $to_folder = 'INBOX.to';
+
+    xlog "Check the expunge mode is \"delayed\"";
+    my $expunge_mode = $self->{instance}->{config}->get('expunge_mode');
+    $self->assert_str_equals('delayed', $expunge_mode);
+
+    $self->_set_quotaroot('user.cassandane');
+    xlog "set ourselves a basic limit";
+    $self->_set_limits([['x-annotation-storage', 0, 100000]]);
+    my $talk = $self->{store}->get_client();
+
+    my $store = $self->{store};
+    $store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
+
+    xlog "Create subfolders to copy from and to";
+    $talk = $store->get_client();
+    $talk->create($from_folder)
+	or die "Cannot create mailbox $from_folder: $@";
+    $talk->create($to_folder)
+	or die "Cannot create mailbox $to_folder: $@";
+
+    $store->set_folder($from_folder);
+
+    xlog "Append some messages and store annotations";
+    my %exp;
+    my $expected = 0;
+    my $uid = 1;
+    for (1..20)
+    {
+	my $data = make_random_data(10);
+	my $msg = $self->make_message("Message $uid");
+	$msg->set_attribute('uid', $uid);
+	$msg->set_annotation($entry, $attrib, $data);
+	$exp{$uid} = $msg;
+	$talk->store('' . $uid, 'annotation', [$entry, [$attrib, { Quote => $data }]]);
+	$expected += length($data);
+	$uid++;
+    }
+
+    xlog "Check the annotations are there";
+    $self->check_messages(\%exp);
+    xlog "Check the quota usage is correct";
+    $self->_check_usages([int($expected/1024)]);
+
+    xlog "COPY the messages";
+    $talk = $store->get_client();
+    $talk->copy('1:*', $to_folder);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog "Messages are now in the destination folder";
+    $store->set_folder($to_folder);
+    $store->_select();
+    $self->check_messages(\%exp);
+
+    xlog "Check the quota usage is now doubled";
+    $self->_check_usages([int(2*$expected/1024)]);
+
+    xlog "Messages are still in the origin folder";
+    $store->set_folder($from_folder);
+    $store->_select();
+    $self->check_messages(\%exp);
+
+    xlog "Delete the messages from the origin folder";
+    $store->set_folder($from_folder);
+    $store->_select();
+    $talk = $store->get_client();
+    $talk->store('1:*', '+flags', '(\\Deleted)');
+    $talk->expunge();
+
+    xlog "Messages are gone from the origin folder";
+    $store->set_folder($from_folder);
+    $store->_select();
+    $self->check_messages({});
+
+    xlog "Messages are still in the destination folder";
+    $store->set_folder($to_folder);
+    $store->_select();
+    $self->check_messages(\%exp);
+
+    xlog "Check the quota usage is still doubled";
+    $self->_check_usages([int(2*$expected/1024)]);
+
+    xlog "Performing delayed expunge";
+    $store->disconnect();
+    my @cmd = ( 'cyr_expire', '-E', '1', '-X', '0', '-D', '0' );
+    push(@cmd, '-v')
+	if get_verbose;
+    $self->{instance}->run_command({ cyrus => 1 }, @cmd);
+
+    xlog "Check the quota usage is back to single";
+    $self->_check_usages([int($expected/1024)]);
+}
+
+sub config_using_annotstorage_msg_copy_eximm
+{
+    my ($self, $conf) = @_;
+    xlog "Setting expunge_mode=immediate";
+    $conf->set(expunge_mode => 'immediate');
+}
+
+sub test_using_annotstorage_msg_copy_eximm
+{
+    my ($self) = @_;
+
+    xlog "testing X-ANNOTATION-STORAGE quota usage as messages are COPYd";
+    xlog "and original messages are deleted, expunge_mode=immediate version";
+    xlog "(BZ3527)";
+
+    my $entry = '/comment';
+    my $attrib = 'value.priv';
+    my $from_folder = 'INBOX.from';
+    my $to_folder = 'INBOX.to';
+
+    xlog "Check the expunge mode is \"immediate\"";
+    my $expunge_mode = $self->{instance}->{config}->get('expunge_mode');
+    $self->assert_str_equals('immediate', $expunge_mode);
+
+    $self->_set_quotaroot('user.cassandane');
+    xlog "set ourselves a basic limit";
+    $self->_set_limits([['x-annotation-storage', 0, 100000]]);
+    my $talk = $self->{store}->get_client();
+
+    my $store = $self->{store};
+    $store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
+
+    xlog "Create subfolders to copy from and to";
+    $talk = $store->get_client();
+    $talk->create($from_folder)
+	or die "Cannot create mailbox $from_folder: $@";
+    $talk->create($to_folder)
+	or die "Cannot create mailbox $to_folder: $@";
+
+    $store->set_folder($from_folder);
+
+    xlog "Append some messages and store annotations";
+    my %exp;
+    my $expected = 0;
+    my $uid = 1;
+    for (1..20)
+    {
+	my $data = make_random_data(10);
+	my $msg = $self->make_message("Message $uid");
+	$msg->set_attribute('uid', $uid);
+	$msg->set_annotation($entry, $attrib, $data);
+	$exp{$uid} = $msg;
+	$talk->store('' . $uid, 'annotation', [$entry, [$attrib, { Quote => $data }]]);
+	$expected += length($data);
+	$uid++;
+    }
+
+    xlog "Check the annotations are there";
+    $self->check_messages(\%exp);
+    xlog "Check the quota usage is correct";
+    $self->_check_usages([int($expected/1024)]);
+
+    xlog "COPY the messages";
+    $talk = $store->get_client();
+    $talk->copy('1:*', $to_folder);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog "Messages are now in the destination folder";
+    $store->set_folder($to_folder);
+    $store->_select();
+    $self->check_messages(\%exp);
+
+    xlog "Check the quota usage is now doubled";
+    $self->_check_usages([int(2*$expected/1024)]);
+
+    xlog "Messages are still in the origin folder";
+    $store->set_folder($from_folder);
+    $store->_select();
+    $self->check_messages(\%exp);
+
+    xlog "Delete the messages from the origin folder";
+    $store->set_folder($from_folder);
+    $store->_select();
+    $talk = $store->get_client();
+    $talk->store('1:*', '+flags', '(\\Deleted)');
+    $talk->expunge();
+
+    xlog "Messages are gone from the origin folder";
+    $store->set_folder($from_folder);
+    $store->_select();
+    $self->check_messages({});
+
+    xlog "Messages are still in the destination folder";
+    $store->set_folder($to_folder);
+    $store->_select();
+    $self->check_messages(\%exp);
+
+    xlog "Check the quota usage is back to single";
+    $self->_check_usages([int($expected/1024)]);
+}
+
+sub test_using_annotstorage_msg_copy_dedel
+{
+    my ($self) = @_;
+
+    xlog "testing X-ANNOTATION-STORAGE quota usage as messages are COPYd";
+    xlog "and original folder is deleted, delete_mode=delayed version";
+    xlog "(BZ3527)";
+
+    my $entry = '/comment';
+    my $attrib = 'value.priv';
+    my $from_folder = 'INBOX.from';
+    my $to_folder = 'INBOX.to';
+
+    xlog "Check the delete mode is \"delayed\"";
+    my $delete_mode = $self->{instance}->{config}->get('delete_mode');
+    $self->assert_str_equals('delayed', $delete_mode);
+
+    $self->_set_quotaroot('user.cassandane');
+    xlog "set ourselves a basic limit";
+    $self->_set_limits([['x-annotation-storage', 0, 100000]]);
+    my $talk = $self->{store}->get_client();
+
+    my $store = $self->{store};
+    $store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
+
+    xlog "Create subfolders to copy from and to";
+    $talk = $store->get_client();
+    $talk->create($from_folder)
+	or die "Cannot create mailbox $from_folder: $@";
+    $talk->create($to_folder)
+	or die "Cannot create mailbox $to_folder: $@";
+
+    $store->set_folder($from_folder);
+
+    xlog "Append some messages and store annotations";
+    my %exp;
+    my $expected = 0;
+    my $uid = 1;
+    for (1..20)
+    {
+	my $data = make_random_data(10);
+	my $msg = $self->make_message("Message $uid");
+	$msg->set_attribute('uid', $uid);
+	$msg->set_annotation($entry, $attrib, $data);
+	$exp{$uid} = $msg;
+	$talk->store('' . $uid, 'annotation', [$entry, [$attrib, { Quote => $data }]]);
+	$expected += length($data);
+	$uid++;
+    }
+
+    xlog "Check the annotations are there";
+    $self->check_messages(\%exp);
+    xlog "Check the quota usage is correct";
+    $self->_check_usages([int($expected/1024)]);
+
+    xlog "COPY the messages";
+    $talk = $store->get_client();
+    $talk->copy('1:*', $to_folder);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog "Messages are now in the destination folder";
+    $store->set_folder($to_folder);
+    $store->_select();
+    $self->check_messages(\%exp);
+
+    xlog "Check the quota usage is now doubled";
+    $self->_check_usages([int(2*$expected/1024)]);
+
+    xlog "Messages are still in the origin folder";
+    $store->set_folder($from_folder);
+    $store->_select();
+    $self->check_messages(\%exp);
+
+    xlog "Delete the origin folder";
+    $talk = $store->get_client();
+    $talk->unselect();
+    $talk->delete($from_folder)
+	or die "Cannot delete folder $from_folder: $@";
+
+    xlog "Messages are still in the destination folder";
+    $store->set_folder($to_folder);
+    $store->_select();
+    $self->check_messages(\%exp);
+
+    # Note that, unlike with delayed expunge, with delayed delete the
+    # annotations are deleted immediately and so the negative delta to
+    # quota is applied immediately.  Whether this is sensible is a
+    # different question.
+
+    xlog "Check the quota usage is back to single";
+    $self->_check_usages([int($expected/1024)]);
+
+    xlog "Performing delayed expunge";
+    $store->disconnect();
+    my @cmd = ( 'cyr_expire', '-E', '1', '-X', '0', '-D', '0' );
+    push(@cmd, '-v')
+	if get_verbose;
+    $self->{instance}->run_command({ cyrus => 1 }, @cmd);
+
+    xlog "Check the quota usage is still back to single";
+    $self->_check_usages([int($expected/1024)]);
+}
+
+sub config_using_annotstorage_msg_copy_deimm
+{
+    my ($self, $conf) = @_;
+    xlog "Setting delete_mode=immediate";
+    $conf->set(delete_mode => 'immediate');
+}
+
+sub test_using_annotstorage_msg_copy_deimm
+{
+    my ($self) = @_;
+
+    xlog "testing X-ANNOTATION-STORAGE quota usage as messages are COPYd";
+    xlog "and original folder is deleted, delete_mode=immediate version";
+    xlog "(BZ3527)";
+
+    my $entry = '/comment';
+    my $attrib = 'value.priv';
+    my $from_folder = 'INBOX.from';
+    my $to_folder = 'INBOX.to';
+
+    xlog "Check the delete mode is \"immediate\"";
+    my $delete_mode = $self->{instance}->{config}->get('delete_mode');
+    $self->assert_str_equals('immediate', $delete_mode);
+
+    $self->_set_quotaroot('user.cassandane');
+    xlog "set ourselves a basic limit";
+    $self->_set_limits([['x-annotation-storage', 0, 100000]]);
+    my $talk = $self->{store}->get_client();
+
+    my $store = $self->{store};
+    $store->set_fetch_attributes('uid', "annotation ($entry $attrib)");
+
+    xlog "Create subfolders to copy from and to";
+    $talk = $store->get_client();
+    $talk->create($from_folder)
+	or die "Cannot create mailbox $from_folder: $@";
+    $talk->create($to_folder)
+	or die "Cannot create mailbox $to_folder: $@";
+
+    $store->set_folder($from_folder);
+
+    xlog "Append some messages and store annotations";
+    my %exp;
+    my $expected = 0;
+    my $uid = 1;
+    for (1..20)
+    {
+	my $data = make_random_data(10);
+	my $msg = $self->make_message("Message $uid");
+	$msg->set_attribute('uid', $uid);
+	$msg->set_annotation($entry, $attrib, $data);
+	$exp{$uid} = $msg;
+	$talk->store('' . $uid, 'annotation', [$entry, [$attrib, { Quote => $data }]]);
+	$expected += length($data);
+	$uid++;
+    }
+
+    xlog "Check the annotations are there";
+    $self->check_messages(\%exp);
+    xlog "Check the quota usage is correct";
+    $self->_check_usages([int($expected/1024)]);
+
+    xlog "COPY the messages";
+    $talk = $store->get_client();
+    $talk->copy('1:*', $to_folder);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog "Messages are now in the destination folder";
+    $store->set_folder($to_folder);
+    $store->_select();
+    $self->check_messages(\%exp);
+
+    xlog "Check the quota usage is now doubled";
+    $self->_check_usages([int(2*$expected/1024)]);
+
+    xlog "Messages are still in the origin folder";
+    $store->set_folder($from_folder);
+    $store->_select();
+    $self->check_messages(\%exp);
+
+    xlog "Delete the origin folder";
+    $talk = $store->get_client();
+    $talk->unselect();
+    $talk->delete($from_folder)
+	or die "Cannot delete folder $from_folder: $@";
+
+    xlog "Messages are still in the destination folder";
+    $store->set_folder($to_folder);
+    $store->_select();
+    $self->check_messages(\%exp);
+
+    xlog "Check the quota usage is back to single";
+    $self->_check_usages([int($expected/1024)]);
+}
+
 1;
