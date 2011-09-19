@@ -109,11 +109,12 @@ sub _create_instances
 
     if ($want->{instance})
     {
+	my $conf = $instance_params{config} || Cassandane::Config->default();
+	$conf = $conf->clone();
+
 	if ($want->{replica})
 	{
 	    $port = Cassandane::Service->alloc_port();
-	    my $conf = $instance_params{config} || Cassandane::Config->default();
-	    $conf = $conf->clone();
 	    $conf->set(
 		# sync_client will find the port in the config
 		sync_port => $port,
@@ -125,8 +126,18 @@ sub _create_instances
 		# Ensure sync_server gives sync_client enough privileges
 		admins => 'admin repluser',
 	    );
-	    $instance_params{config} = $conf;
 	}
+
+	eval
+	{
+	    # Allow the individual test to futz with the config
+	    my $sub = $self->{_name};
+	    if ($sub =~ s/^test_/config_/)
+	    {
+		$self->$sub($conf);
+	    }
+	};
+	$instance_params{config} = $conf;
 
 	$instance_params{description} = "main instance for test $self->{_name}";
 	$self->{instance} = Cassandane::Instance->new(%instance_params);
@@ -241,21 +252,6 @@ sub tear_down
 	$self->{replica}->stop();
 	$self->{replica} = undef;
     }
-}
-
-# TODO: provide a way to do this in the same instance
-# which would be more efficient
-sub restart_with_config
-{
-    my ($self, %nv) = @_;
-
-    my $conf = $self->{instance}->{config}->clone();
-    $conf->set(%nv);
-
-    $self->tear_down();
-    $self->{instance} = Cassandane::Instance->new(config => $conf);
-    $self->{instance}->add_service('imap');
-    $self->set_up();
 }
 
 sub _save_message

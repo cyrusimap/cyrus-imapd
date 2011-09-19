@@ -727,15 +727,19 @@ sub test_permessage_unknown
 	    $res);
 }
 
+sub config_permessage_unknown_allowed
+{
+    my ($self, $conf) = @_;
+    xlog "Setting annotation_allow_undefined";
+    $conf->set(annotation_allow_undefined => 1);
+}
+
 sub test_permessage_unknown_allowed
 {
     my ($self) = @_;
 
     xlog "testing getting and setting unknown annotations on a message";
     xlog "with config allowing this";
-
-    xlog "Start a new instance with a changed config";
-    $self->restart_with_config(annotation_allow_undefined => 1);
 
     xlog "Append a message";
     my %msg;
