@@ -3386,7 +3386,7 @@ static int index_searchmsg(char *substr,
     int subparts;
     unsigned long start;
     int len, charset, encoding;
-    char *p, *q;
+    char *p;
     
     /* Won't find anything in a truncated file */
     if (msgfile->size == 0) return 0;
@@ -3407,12 +3407,8 @@ static int index_searchmsg(char *substr,
 					 CACHE_ITEM_BIT32(cachestr),
 					 len);
 		    if (p) {
-			q = charset_decode_mimeheader(p);
-			if (charset_searchstring(substr, pat, q, strlen(q))) {
-			    free(q);
+			if (charset_search_mimeheader(substr, pat, p))
 			    return 1;
-			}
-			free(q);
 		    }
 		}
 	    }
@@ -3447,8 +3443,7 @@ static int index_searchheader(char *name,
 			      struct mapfile *msgfile,
 			      int size)
 {
-    char *p, *q;
-    int r;
+    char *p;
     strarray_t header = STRARRAY_INITIALIZER;
 
     strarray_append(&header, name);
@@ -3459,10 +3454,8 @@ static int index_searchheader(char *name,
 
     if (!*p) return 0;		/* Header not present, fail */
     if (!*substr) return 1;	/* Only checking existence, succeed */
-    q = charset_decode_mimeheader(strchr(p, ':') + 1);
-    r = charset_searchstring(substr, pat, q, strlen(q));
-    free(q);
-    return r;
+
+    return charset_search_mimeheader(substr, pat, strchr(p, ':') + 1);
 }
 
 /*
@@ -3471,7 +3464,6 @@ static int index_searchheader(char *name,
 static int index_searchcacheheader(struct index_state *state, uint32_t msgno,
 				   char *name, char *substr, comp_pat *pat)
 {
-    char *q;
     strarray_t header = STRARRAY_INITIALIZER;
     static char *buf;
     static unsigned bufsize;
@@ -3501,11 +3493,8 @@ static int index_searchcacheheader(struct index_state *state, uint32_t msgno,
 
     if (!*buf) return 0;	/* Header not present, fail */
     if (!*substr) return 1;	/* Only checking existence, succeed */
-    /* XXX - we could do this in one pass maybe? charset_search_mimeheader */
-    q = charset_decode_mimeheader(strchr(buf, ':') + 1);
-    r = charset_searchstring(substr, pat, q, strlen(q));
-    free(q);
-    return r;
+
+    return charset_search_mimeheader(substr, pat, strchr(buf, ':') + 1);
 }
 
 
@@ -3545,6 +3534,7 @@ static void index_getsearchtextmsg(struct index_state *state,
 					 CACHE_ITEM_BIT32(cachestr),
 					 len);
 		    if (p) {
+			/* push search normalised here */
 			q = charset_decode_mimeheader(p);
 			if (partcount == 1) {
 			    receiver(uid, SEARCHINDEX_PART_HEADERS,

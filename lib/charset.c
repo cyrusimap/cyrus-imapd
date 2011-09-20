@@ -1024,6 +1024,8 @@ int charset_searchstring(const char *substr, comp_pat *pat,
     const char *s, size_t len)
 {
     struct convert_rock *tosearch;
+    struct convert_rock *input;
+    int charset = charset_lookupname("utf-8");
     int res;
 
     if (!substr[0])
@@ -1032,9 +1034,14 @@ int charset_searchstring(const char *substr, comp_pat *pat,
     /* set up the search handler */
     tosearch = search_init(substr, pat);
 
+    /* and the input stream */
+    input = uni_init(tosearch);
+    input = canon_init(1, input);
+    input = table_init(charset, input);
+
     /* feed the handler */
     while (len-- > 0) {
-	convert_putc(tosearch, (unsigned char)*s++);
+	convert_putc(input, (unsigned char)*s++);
 	if (search_havematch(tosearch)) break; /* shortcut if there's a match */
     }
 
@@ -1042,7 +1049,7 @@ int charset_searchstring(const char *substr, comp_pat *pat,
     res = search_havematch(tosearch);
 
     /* clean up */
-    search_free(tosearch);
+    search_free(input);
 
     return res;
 }

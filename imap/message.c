@@ -1715,7 +1715,7 @@ int message_write_cache(struct index_record *record, const struct body *body)
      * toplevel.subpart as const in message_write_section(). */
     toplevel.subpart = (struct body *)body;
 
-    subject = charset_decode_mimeheader(body->subject);
+    subject = charset_parse_mimeheader(body->subject);
 
     /* copy into bufs */
     message_write_envelope(&ib[CACHE_ENVELOPE], body);
@@ -2207,7 +2207,7 @@ static void message_write_searchaddr(struct buf *buf,
 	    if (addrlist->mailbox) {
 		if (prevaddr) buf_putc(buf, ',');
 		
-		tmp = charset_decode_mimeheader(addrlist->mailbox);
+		tmp = charset_parse_mimeheader(addrlist->mailbox);
 		buf_appendcstr(buf, tmp);
 		free(tmp);
 		tmp = NULL;
@@ -2225,7 +2225,7 @@ static void message_write_searchaddr(struct buf *buf,
 	    if (prevaddr) buf_putc(buf, ',');
 
 	    if (addrlist->name) {
-		tmp = charset_decode_mimeheader(addrlist->name);
+		tmp = charset_parse_mimeheader(addrlist->name);
 		buf_appendcstr(buf, tmp);
 		free(tmp); tmp = NULL;
 		buf_putc(buf, ' ');
