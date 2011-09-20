@@ -91,8 +91,8 @@ int main(int argc, char *argv[])
 	    break;
 	}
     }
-	
-    if((argc - optind) != 4) {
+
+    if ((argc - optind) != 4) {
 	fprintf(stderr, "Usage: %s [-C altconfig] <old db> <old db backend> <new db> <new db backend>\n", argv[0]);
 	fprintf(stderr, "Usable Backends:  ");
 
@@ -105,9 +105,9 @@ int main(int argc, char *argv[])
 	*/
 
 	fprintf(stderr, "%s", cyrusdb_backends[0]->name);
-	for(i=1; cyrusdb_backends[i]; i++)
+	for (i=1; cyrusdb_backends[i]; i++)
 	    fprintf(stderr, ", %s", cyrusdb_backends[i]->name);
-	
+
 	fprintf(stderr, "\n");
 	exit(-1);
     }
@@ -115,7 +115,7 @@ int main(int argc, char *argv[])
     old_db = argv[optind];
     new_db = argv[optind+2];
 
-    if(old_db[0] != '/' || new_db[0] != '/') {
+    if (old_db[0] != '/' || new_db[0] != '/') {
 	printf("\nSorry, you cannot use this tool with relative path names.\n"
 	       "This is because some database backends (mainly berkeley) do not\n"
 	       "always do what you would expect with them.\n"
@@ -123,25 +123,27 @@ int main(int argc, char *argv[])
 	exit(EC_OSERR);
     }
 
-    for(i=0; cyrusdb_backends[i]; i++) {
-	if(!strcmp(cyrusdb_backends[i]->name, argv[optind+1])) {
-	    DB_OLD = cyrusdb_backends[i]; break;
+    for (i=0; cyrusdb_backends[i]; i++) {
+	if (!strcmp(cyrusdb_backends[i]->name, argv[optind+1])) {
+	    DB_OLD = cyrusdb_backends[i];
+	    break;
 	}
     }
-    if(!cyrusdb_backends[i]) {
+    if (!cyrusdb_backends[i]) {
 	fatal("unknown old backend", EC_TEMPFAIL);
-    }   
+    }
 
-    for(i=0; cyrusdb_backends[i]; i++) {
-	if(!strcmp(cyrusdb_backends[i]->name, argv[optind+3])) {
-	    DB_NEW = cyrusdb_backends[i]; break;
+    for (i=0; cyrusdb_backends[i]; i++) {
+	if (!strcmp(cyrusdb_backends[i]->name, argv[optind+3])) {
+	    DB_NEW = cyrusdb_backends[i];
+	    break;
 	}
     }
-    if(!cyrusdb_backends[i]) {
+    if (!cyrusdb_backends[i]) {
 	fatal("unknown new backend", EC_TEMPFAIL);
     }
 
-    if(DB_NEW == DB_OLD) {
+    if (DB_NEW == DB_OLD) {
 	fatal("no conversion required", EC_TEMPFAIL);
     }
 
