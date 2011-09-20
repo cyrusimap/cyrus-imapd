@@ -123,25 +123,8 @@ int main(int argc, char *argv[])
 	exit(EC_OSERR);
     }
 
-    for (i=0; cyrusdb_backends[i]; i++) {
-	if (!strcmp(cyrusdb_backends[i]->name, argv[optind+1])) {
-	    DB_OLD = cyrusdb_backends[i];
-	    break;
-	}
-    }
-    if (!cyrusdb_backends[i]) {
-	fatal("unknown old backend", EC_TEMPFAIL);
-    }
-
-    for (i=0; cyrusdb_backends[i]; i++) {
-	if (!strcmp(cyrusdb_backends[i]->name, argv[optind+3])) {
-	    DB_NEW = cyrusdb_backends[i];
-	    break;
-	}
-    }
-    if (!cyrusdb_backends[i]) {
-	fatal("unknown new backend", EC_TEMPFAIL);
-    }
+    DB_OLD = cyrusdb_fromname(argv[optind+1]);
+    DB_NEW = cyrusdb_fromname(argv[optind+3]);
 
     if (DB_NEW == DB_OLD) {
 	fatal("no conversion required", EC_TEMPFAIL);
