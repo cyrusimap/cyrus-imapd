@@ -80,6 +80,12 @@ sub create
 				argv => ['timsieved'],
 				%params);
     }
+    elsif ($name =~ m/nntp/)
+    {
+	return Cassandane::Service->new($name,
+				argv => ['nntpd'],
+				%params);
+    }
     else
     {
 	die "No command specified and cannot guess a default"
