@@ -1,0 +1,64 @@
+# funky names for UTF charsets
+utf8                utf-8
+utf7                utf-7
+unicode-1-1-utf-8   utf8
+
+# Yes, the world does contain a lot of rubbish
+# ways of saying iso-8859-1
+ISO_8859_1          iso-8859-1
+ISO_8859            iso-8859-1
+ISO-8859            iso-8859-1
+8859_1              iso-8859-1
+so-8859-1           iso-8859-1
+x-mac-roman         iso-8859-1
+macintosh           iso-8859-1
+mac                 iso-8859-1
+en_GB               iso-8859-1
+auto                iso-8859-1
+unknown             iso-8859-1
+unknown-8bit        iso-8859-1
+x-unknown           iso-8859-1
+x-user-defined      iso-8859-1
+none                iso-8859-1
+# sort-of - see Filter::Trigraph
+646                 iso-8859-1
+
+# other aliases
+8859_2              iso-8859-2
+x-mac-turkish       iso-8859-9
+greek-ccitt         iso-8859-7
+iso-8859-8-i        iso-8859-8
+ISO8859_15_FDIS     iso-8859-15
+tis-620             iso-8859-11
+ASMO-708            iso-8859-6
+WIN-KOI8            koi8-r
+
+# windows codepages - these are the ones we have
+1250                windows-1250
+cp1250              windows-1250
+win-1250            windows-1250
+
+1251                windows-1251
+cp1251              windows-1251
+win-1251            windows-1251
+
+1252                windows-1252
+cp1252              windows-1252
+win-1252            windows-1252
+
+1255                windows-1255
+cp1255              windows-1255
+win-1255            windows-1255
+
+1256                windows-1256
+cp1256              windows-1256
+win-1256            windows-1256
+
+# stuff from the FastMail Perl mapping that we
+# don't have support for in Cyrus
+#x-gbk               gbk
+#UTS-16              UCS-2BE
+#gb2312              gbk
+#SHIFT_JIS           shiftjis
+#ksc5601             ksc5601-raw
+#ks_c_5601           ksc5601-raw
