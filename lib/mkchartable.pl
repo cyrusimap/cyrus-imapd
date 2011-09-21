@@ -101,16 +101,22 @@ sub readmapfile {
 
 	my ($hexcode, $name, $category, $combiningclass, $bidicat, 
 	    $decomposition, $decimal, $digit, $numeric, $mirroredchar,
-	    $uni1name, $comment, $upper, $lower, @rest) = split ';', $line;
+	    $uni1name, $comment, $upper, $lower, $title, @rest) = split ';', $line;
 	my $code = hex($hexcode);
 
+	# This is not RFC5051
 	if ($code != 32 and $category =~ m/^Z/) {
 	   $codemap->{$code}{chars} = [32]; # space
 	   next;
 	}
 
+	# has a mapping to titlecase
+	$codemap->{$code}{title} = hex($title)
+	    if $title;
+
 	# Compatability mapping, skip over the <type> 
 	while ($decomposition ne '') {
+	    # This is not RFC5051
 	    if ($decomposition =~ s/^<[^>]*>\s+//) {
 		# Ignore compat mappings to SP followed by combining char 
 		$decomposition = '' if $decomposition =~ m/^0020 /
@@ -121,10 +127,7 @@ sub readmapfile {
 	    }
 	}
 
-	# Lower case equivalent mapping
-	if ($lower) {
-	    $codemap->{$code}{chars} = [hex($lower)];
-	}
+	$codemap->{$code}{chars} ||= [$code];
     }
 }
 
@@ -133,23 +136,21 @@ sub readmapfile {
 sub mungemap {
     my ($codemap) = @_;
 
-    my $didchange = 1;
+    my $total = keys %$codemap;
+    my $changed;
     
     # Keep scanning the table until no changes are made
-    while ($didchange) {
-	warn "mkchartable: expanding unicode mappings...\n";
+    do {
+	$changed = 0;
 
-	$didchange = 0;
-
-        foreach my $code (sort { $a <=> $b } keys %$codemap) {
+	foreach my $code (sort { $a <=> $b } keys %$codemap) {
 	    my @new;
 	    my $chars = $codemap->{$code}{chars};
 
 	    # check if there are any translations for the mapped chars
 	    foreach my $char (@$chars) {
 		if ($codemap->{$char}) {
-		    $didchange = 1;
-	            my $newchars = $codemap->{$char}{chars};
+		    my $newchars = $codemap->{$char}{chars};
 		    push @new, @$newchars;
 		}
 		else {
@@ -163,9 +164,16 @@ sub mungemap {
 		@new = (32) unless @new;
 	    }
 
+	    # no change
+	    next if ("@new" eq "@$chars");
+
+	    $changed++;
 	    $codemap->{$code}{chars} = \@new;
 	}
-    };
+
+	warn "mkchartable: expanded unicode mappings... ($changed/$total)\n"
+	    if $changed;
+    } while ($changed);
 
     warn "mkchartable: building expansion table...\n";
 
@@ -283,14 +291,15 @@ EOF
     	    print " { /* Mapping for unicode chars in block $block16 $block8 */\n ";
 	    foreach my $i (0..255) {
 		my $codepoint = ($block16 << 16) + ($block8 << 8) + $i;
-		if (not $codemap->{$codepoint}) {
-		    printf " 0x%04x,", $codepoint;
+		my $titlepoint = $codemap->{$codepoint}{title} || $codepoint;
+		if (not $codemap->{$titlepoint} or not keys %{$codemap->{$titlepoint}}) {
+		    printf " 0x%04x,", $titlepoint;
 		}
-		elsif ($codemap->{$codepoint}{trans}) {
-		    printf " - %4d,", $codemap->{$codepoint}{trans};
+		elsif ($codemap->{$titlepoint}{trans}) {
+		    printf " - %4d,", $codemap->{$titlepoint}{trans};
 		}
 		else {
-		    printf " 0x%04x,", $codemap->{$codepoint}{chars}[0];
+		    printf " 0x%04x,", $codemap->{$titlepoint}{chars}[0];
 		}
  		print "\n " if ($i % 8 == 7);
 	    }

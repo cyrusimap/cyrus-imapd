@@ -93,12 +93,12 @@ static void test_decode_mimeheader(void)
 {
     char *s;
     static const char ASCII_1[] = "Lorem IPSUM dolor \t \t  sit amet";
-    static const char SEARCH_1[] = "lorem ipsum dolor sit amet";
+    static const char SEARCH_1[] = "LOREM IPSUM DOLOR SIT AMET";
     static const char ASCII_B64_2[] = "Lorem =?us-ascii?q?ipsum?= dolor "
 				      "=?US-ASCII?Q?sit amet?=";
     static const char ASCII_B64_3[] = "Lorem =?iso-8859-1?q?ips=fcm?= \t"
 				      "DOLOR =?iso-8859-1?Q?s=eft am=ebt?=";
-    static const char SEARCH_3[] = "lorem ipsum dolor sit amet";
+    static const char SEARCH_3[] = "LOREM IPSUM DOLOR SIT AMET";
 
     s = charset_decode_mimeheader(NULL);
     CU_ASSERT_PTR_NULL(s);
