@@ -965,14 +965,14 @@ char *charset_parse_mimeheader(const char *s)
 }
 
 int charset_search_mimeheader(const char *substr, comp_pat *pat,
-    const char *s, int searchform)
+    const char *s)
 {
     struct convert_rock *input, *tosearch;
     int res;
 
     tosearch = search_init(substr, pat);
     input = uni_init(tosearch);
-    if (searchform) input = canon_init(1, input);
+    input = canon_init(1, input);
 
     mimeheader_cat(input, s);
  

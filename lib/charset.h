@@ -74,7 +74,7 @@ extern char *charset_encode_mimebody(const char *msg_base, size_t len,
 				     char *retval, size_t *outlen, 
 				     int *outlines);
 extern char *charset_to_utf8(const char *msg_base, size_t len, charset_index charset, int encoding);
-extern int charset_search_mimeheader(const char *substr, comp_pat *pat, const char *s, int searchform);
+extern int charset_search_mimeheader(const char *substr, comp_pat *pat, const char *s);
 
 /* Definitions for charset_extractfile */
 
