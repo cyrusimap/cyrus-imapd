@@ -1045,7 +1045,7 @@ static void cmdloop(void)
 	}
 
 	/* Read the body, if present */
-	syslog(LOG_DEBUG, "read body: %d", ret);
+	syslog(LOG_DEBUG, "read body(%d)", ret);
 	if ((r = read_body(&txn, ret, &txn.errstr))) {
 	    ret = r;
 	    txn.flags |= HTTP_CLOSE;
