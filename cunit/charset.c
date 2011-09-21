@@ -124,3 +124,17 @@ static void test_decode_mimeheader(void)
     CU_ASSERT_STRING_EQUAL(s, SEARCH_3);
     free(s);
 }
+
+static void test_search_mimeheader(void)
+{
+    char *s;
+    comp_pat *pat;
+    static const char SUBJECT_CP1252[] = "=?Cp1252?Q?Herzlichen_Gl=FCckwunsch,_der_Artikel_Canon_Ob?= "
+				         "=?Cp1252?Q?jektiv_EF-S_18-55_mm_1:3,5-5,6_geh=F6rt_Ihnen!?=";
+    static const char SEARCH_CP1252[] = "Herzlichen";
+
+    s = charset_convert(SEARCH_CP1252, 0);
+    pat = charset_compilepat(s);
+    CU_ASSERT(charset_search_mimeheader(s, pat, SUBJECT_CP1252));
+    free(s);
+}
