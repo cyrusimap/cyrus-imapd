@@ -98,7 +98,7 @@ static void test_decode_mimeheader(void)
 				      "=?US-ASCII?Q?sit amet?=";
     static const char ASCII_B64_3[] = "Lorem =?iso-8859-1?q?ips=fcm?= \t"
 				      "DOLOR =?iso-8859-1?Q?s=eft am=ebt?=";
-    static const char SEARCH_3[] = "LOREM IPSUM DOLOR SIT AMET";
+    static const char SEARCH_3[] = "LOREM IPSÜM DOLOR SÏT AMËT";
 
     s = charset_decode_mimeheader(NULL);
     CU_ASSERT_PTR_NULL(s);
