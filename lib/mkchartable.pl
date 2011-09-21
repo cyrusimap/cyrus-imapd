@@ -50,8 +50,9 @@ use IO::File;
 use Getopt::Long;
 
 my @maps;
+my $aliasfile;
 my %codemap;
-GetOptions( 'map|m=s' => \@maps );
+GetOptions( 'map|m=s' => \@maps, 'alias|a=s' => \$aliasfile );
 
 printheader(\@maps, \@ARGV);
 
@@ -66,7 +67,7 @@ foreach my $map (@maps) {
 mungemap(\%codemap);
 
 # then print out the translation tables
-printmap(\%codemap);
+printmap(\%codemap, $aliasfile);
 
 # XXX - should probably require all files that are
 # mentioned in the lookup table to be specified,
@@ -517,6 +518,28 @@ const struct charset chartables_charset_table[] = {
     { "iso-8859-16", chartables_iso_8859_16 },
     /* New character sets should only be added to end so that
      * cache files stay with valid information */
+};
+
+const struct charset_alias charset_aliases[] = {
+EOF
+
+    my %aliases;
+    if ($aliasfile and -f $aliasfile) {
+	open(FH, "<$aliasfile") || die "can't read alias file $aliasfile";
+	while (<FH>) {
+	    next if m/^#/;
+	    next unless m/(\S+)\s+(\S+)/;
+	    $aliases{$1} = $2;
+	}
+	close(FH);
+    }
+
+    foreach my $alias (sort keys %aliases) {
+	print qq[    { "$alias", "$aliases{$alias}" },\n];
+    }
+
+    print <<EOF;
+    { 0, 0 }
 };
 
 const int chartables_num_charsets = (sizeof(chartables_charset_table)/sizeof(*chartables_charset_table));

@@ -53,16 +53,6 @@
 #include "chartable.h"
 #include "util.h"
 
-/* unicode canon translations */
-extern const int chartables_translation_multichar[];
-extern const unsigned char chartables_translation_block16[256];
-extern const unsigned char chartables_translation_block8[][256];
-extern const int chartables_translation[][256];
-
-/* named character sets */
-extern const struct charset chartables_charset_table[];
-extern const int chartables_num_charsets;
-
 struct qp_state {
     int isheader;
     int bytesleft;
@@ -731,6 +721,15 @@ int charset_lookupname(const char *name)
 {
     int i;
 
+    /* translate to canonical name */
+    for (i = 0; charset_aliases[i].name; i++) {
+	if (!strcasecmp(name, charset_aliases[i].name)) {
+	    name = charset_aliases[i].canon_name;
+	    break;
+	}
+    }
+
+    /* look up canonical name */
     for (i = 0; i < chartables_num_charsets; i++) {
 	if (!strcasecmp(name, chartables_charset_table[i].name)) 
 	    return i;
