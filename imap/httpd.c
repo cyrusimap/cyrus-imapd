@@ -2112,7 +2112,7 @@ static int meth_acl(struct transaction_t *txn)
 	    for (; privs; privs = privs->next) {
 		if (privs->type == XML_ELEMENT_NODE) {
 		    if (!xmlStrcmp(privs->children->ns->href,
-				   BAD_CAST NS_URL_DAV)) {
+				   BAD_CAST XML_NS_DAV)) {
 			/* WebDAV privileges */
 			if (!xmlStrcmp(privs->children->name,
 				       BAD_CAST "all"))
@@ -2155,7 +2155,7 @@ static int meth_acl(struct transaction_t *txn)
 		    }
 
 		    else if (!xmlStrcmp(privs->children->ns->href,
-				   BAD_CAST NS_URL_CAL)
+				   BAD_CAST XML_NS_CAL)
 			     /* CalDAV privileges */
 			     && !xmlStrcmp(privs->children->name,
 				   BAD_CAST "read-free-busy")) {
@@ -2163,7 +2163,7 @@ static int meth_acl(struct transaction_t *txn)
 		    }
 
 		    else if (!xmlStrcmp(privs->children->ns->href,
-				   BAD_CAST NS_URL_CYRUS)) {
+				   BAD_CAST XML_NS_CYRUS)) {
 			/* Cyrus-specific privileges */
 			if (!xmlStrcmp(privs->children->name,
 				       BAD_CAST "make-collection"))

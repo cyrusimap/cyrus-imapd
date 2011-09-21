@@ -70,15 +70,15 @@ xmlNodePtr init_prop_response(const char *resp,
      */
     memset(respNs, 0, NUM_NAMESPACE * sizeof(xmlNsPtr));
     for (; reqNs; reqNs = reqNs->next) {
-	if (!xmlStrcmp(reqNs->href, BAD_CAST NS_URL_DAV))
+	if (!xmlStrcmp(reqNs->href, BAD_CAST XML_NS_DAV))
 	    respNs[NS_DAV] = xmlNewNs(root, reqNs->href, reqNs->prefix);
-	else if (!xmlStrcmp(reqNs->href, BAD_CAST NS_URL_CAL))
+	else if (!xmlStrcmp(reqNs->href, BAD_CAST XML_NS_CAL))
 	    respNs[NS_CAL] = xmlNewNs(root, reqNs->href, reqNs->prefix);
-	else if (!xmlStrcmp(reqNs->href, BAD_CAST NS_URL_CS))
+	else if (!xmlStrcmp(reqNs->href, BAD_CAST XML_NS_CS))
 	    respNs[NS_CS] = xmlNewNs(root, reqNs->href, reqNs->prefix);
-	else if (!xmlStrcmp(reqNs->href, BAD_CAST NS_URL_APPLE))
+	else if (!xmlStrcmp(reqNs->href, BAD_CAST XML_NS_APPLE))
 	    respNs[NS_APPLE] = xmlNewNs(root, reqNs->href, reqNs->prefix);
-	else if (!xmlStrcmp(reqNs->href, BAD_CAST NS_URL_CYRUS))
+	else if (!xmlStrcmp(reqNs->href, BAD_CAST XML_NS_CYRUS))
 	    respNs[NS_CYRUS] = xmlNewNs(root, reqNs->href, reqNs->prefix);
 	else
 	    xmlNewNs(root, reqNs->href, reqNs->prefix);
@@ -368,14 +368,14 @@ static int propfind_restype(const xmlChar *propname, xmlNsPtr ns,
 
 	case URL_NS_CALENDAR:
 	    if (fctx->mailbox) {
-		ensure_ns(fctx->ns, NS_CAL, resp->parent, NS_URL_CAL, "C");
+		ensure_ns(fctx->ns, NS_CAL, resp->parent, XML_NS_CAL, "C");
 		xmlNewChild(node, fctx->ns[NS_CAL], BAD_CAST "calendar", NULL);
 	    }
 	    break;
 
 	case URL_NS_ADDRESSBOOK:
 	    if (fctx->mailbox) {
-		ensure_ns(fctx->ns, NS_CAL, resp->parent, NS_URL_CAL, "C");
+		ensure_ns(fctx->ns, NS_CAL, resp->parent, XML_NS_CAL, "C");
 		xmlNewChild(node, fctx->ns[NS_CAL], BAD_CAST "addressbook", NULL);
 	    }
 	    break;
@@ -437,12 +437,12 @@ static int propfind_reportset(const xmlChar *propname, xmlNsPtr ns,
     if (fctx->req_tgt->namespace == URL_NS_CALENDAR) {
 	s = xmlNewChild(top, NULL, BAD_CAST "supported-report", NULL);
 	r = xmlNewChild(s, NULL, BAD_CAST "report", NULL);
-	ensure_ns(fctx->ns, NS_CAL, resp->parent, NS_URL_CAL, "C");
+	ensure_ns(fctx->ns, NS_CAL, resp->parent, XML_NS_CAL, "C");
 	xmlNewChild(r, fctx->ns[NS_CAL], BAD_CAST "calendar-query", NULL);
 
 	s = xmlNewChild(top, NULL, BAD_CAST "supported-report", NULL);
 	r = xmlNewChild(s, NULL, BAD_CAST "report", NULL);
-	ensure_ns(fctx->ns, NS_CAL, resp->parent, NS_URL_CAL, "C");
+	ensure_ns(fctx->ns, NS_CAL, resp->parent, XML_NS_CAL, "C");
 	xmlNewChild(r, fctx->ns[NS_CAL], BAD_CAST "calendar-multiget", NULL);
     }
 
@@ -520,7 +520,7 @@ static int propfind_supprivset(const xmlChar *propname, xmlNsPtr ns,
     add_suppriv(agg, "read-current-user-privilege-set", NULL, 1,
 		"Read current user privilege set");
 
-    ensure_ns(fctx->ns, NS_CAL, resp->parent, NS_URL_CAL, "C");
+    ensure_ns(fctx->ns, NS_CAL, resp->parent, XML_NS_CAL, "C");
     add_suppriv(agg, "read-free-busy", fctx->ns[NS_CAL], 0,
 		"Read free/busy time");
 
@@ -529,7 +529,7 @@ static int propfind_supprivset(const xmlChar *propname, xmlNsPtr ns,
     add_suppriv(write, "write-properties", NULL, 0, "Write properties");
 
     agg = add_suppriv(write, "bind", NULL, 0, "Add new member to collection");
-    ensure_ns(fctx->ns, NS_CYRUS, resp->parent, NS_URL_CYRUS, "CY");
+    ensure_ns(fctx->ns, NS_CYRUS, resp->parent, XML_NS_CYRUS, "CY");
     add_suppriv(agg, "make-collection", fctx->ns[NS_CYRUS], 0,
 		"Make new collection");
     add_suppriv(agg, "add-resource", fctx->ns[NS_CYRUS], 0,
@@ -592,7 +592,7 @@ static int add_privs(int rights,
     }
     if (rights & (DACL_READ|DACL_READFB)) {
 	priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
-	ensure_ns(ns, NS_CAL, root, NS_URL_CAL, "C");
+	ensure_ns(ns, NS_CAL, root, XML_NS_CAL, "C");
 	xmlNewChild(priv, ns[NS_CAL], BAD_CAST  "read-free-busy", NULL);
     }
     if ((rights & DACL_WRITE) == DACL_WRITE) {
@@ -609,7 +609,7 @@ static int add_privs(int rights,
     }
 
     if (rights & (DACL_BIND|DACL_UNBIND|DACL_ADMIN)) {
-	ensure_ns(ns, NS_CYRUS, root, NS_URL_CYRUS, "CY");
+	ensure_ns(ns, NS_CYRUS, root, XML_NS_CYRUS, "CY");
     }
 
     if ((rights & DACL_BIND) == DACL_BIND) {

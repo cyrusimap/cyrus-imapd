@@ -50,11 +50,11 @@
 #define HTTP_VERSION	"HTTP/1.1"
 
 /* XML namespace URIs */
-#define NS_URL_DAV	"DAV:"
-#define NS_URL_CAL	"urn:ietf:params:xml:ns:caldav"
-#define NS_URL_CS	"http://calendarserver.org/ns/"
-#define NS_URL_APPLE	"http://apple.com/ns/ical/"
-#define NS_URL_CYRUS	"http://cyrusimap.org/ns/"
+#define XML_NS_DAV	"DAV:"
+#define XML_NS_CAL	"urn:ietf:params:xml:ns:caldav"
+#define XML_NS_CS	"http://calendarserver.org/ns/"
+#define XML_NS_APPLE	"http://apple.com/ns/ical/"
+#define XML_NS_CYRUS	"http://cyrusimap.org/ns/"
 
 /* Cyrus-specific privileges */
 #define DACL_MKCOL	ACL_CREATE	/* CY:make-collection */
