@@ -139,3 +139,22 @@ static void test_search_mimeheader(void)
     charset_freepat(pat);
     free(s);
 }
+
+static void test_rfc5051(void)
+{
+    /* Example: codepoint U+01C4 (LATIN CAPITAL LETTER DZ WITH CARON)
+     * has a titlecase property of U+01C5 (LATIN CAPITAL LETTER D
+     * WITH SMALL LETTER Z WITH CARON).  Codepoint U+01C5 has a
+     * decomposition property of U+0044 (LATIN CAPITAL LETTER D)
+     * U+017E (LATIN SMALL LETTER Z WITH CARON).  U+017E has a
+     * decomposition property of U+007A (LATIN SMALL LETTER Z) U+030c
+     */
+    char *s;
+    static const char STR_RFC5051[] = {0xc7, 0x84, 0};
+    static const char RES_RFC5051[] = {'D', 'z', 0xcc, 0x8c, 0};
+
+    s = charset_convert(STR_RFC5051, charset_lookupname("utf-8"));
+    CU_ASSERT_PTR_NOT_NULL(s);
+    CU_ASSERT_STRING_EQUAL(s, RES_RFC5051);
+    free(s);
+}
