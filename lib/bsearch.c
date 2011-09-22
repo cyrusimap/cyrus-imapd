@@ -46,7 +46,6 @@
 #include <string.h>
 
 #include "bsearch.h"
-#include "util.h"		/* TOLOWER and convert_to_lowercase */
 
 /* Case-dependent comparison converter.
  * Treats \r and \t as end-of-string and treats '.' lower than
@@ -89,10 +88,9 @@ static unsigned char convert_to_compare[256] = {
 };
 
 /*
- * Search for a line starting with 'word'.  The search ignores case if
- * 'caseSensitive' is nonzero.  The search is performed in 'base',
- * which is of length 'len'.  'hint' gives a idea of where to start
- * looking.
+ * Search for a line starting with 'word'.  The search respects case.
+ * The search is performed in 'base', which is of length 'len'.
+ * 'hint' gives a idea of where to start looking.
  *
  * On success, the offset in 'base' of the found line is returned and
  * the length of the found line is put in the unsigned long pointed to
@@ -101,7 +99,6 @@ static unsigned char convert_to_compare[256] = {
  * by 'linelenp'.
  */
 int bsearch_mem(const char *word,
-		int caseSensitive,
 		const char *base,
 		unsigned long len,
 		unsigned long hint,
@@ -148,29 +145,15 @@ int bsearch_mem(const char *word,
 	wordp = word;
 	p = base+offset;
 
-	if (caseSensitive) {
-	    while (n-- > 0 && (cmp = TOCOMPARE(*wordp) - TOCOMPARE(*p)) == 0) {
-		wordp++;
-		p++;
-	    }
-	    if (n >= 0 && !*wordp) {
-		cmp = TOCOMPARE('\t') - TOCOMPARE(*p);
-	    }
-	    else if (!cmp) {
-		cmp = 1;
-	    }
+	while (n-- > 0 && (cmp = TOCOMPARE(*wordp) - TOCOMPARE(*p)) == 0) {
+	    wordp++;
+	    p++;
 	}
-	else {
-	    while (n-- > 0 && (cmp = TOLOWER(*wordp) - TOLOWER(*p)) == 0) {
-		wordp++;
-		p++;
-	    }
-	    if (n >= 0 && !*wordp) {
-		cmp = TOLOWER('\t') - TOLOWER(*p);
-	    }
-	    else if (!cmp) {
-		cmp = 1;
-	    }
+	if (n >= 0 && !*wordp) {
+	    cmp = TOCOMPARE('\t') - TOCOMPARE(*p);
+	}
+	else if (!cmp) {
+	    cmp = 1;
 	}
 
 	if (!cmp) {

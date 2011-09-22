@@ -45,7 +45,7 @@
 #ifndef INCLUDED_BSEARCH_H
 #define INCLUDED_BSEARCH_H
 
-extern int bsearch_mem(const char *word, int caseSensitive,
+extern int bsearch_mem(const char *word,
 		       const char *base, unsigned long len,
 		       unsigned long hint,
 		       unsigned long *linelenp);

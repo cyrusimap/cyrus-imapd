@@ -319,7 +319,7 @@ static int myfetch(struct db *db,
     r = starttxn_or_refetch(db, mytid);
     if (r) return r;
 
-    offset = bsearch_mem(key, 1, db->base, db->size, 0, &len);
+    offset = bsearch_mem(key, db->base, db->size, 0, &len);
     if (len) {
 	if (data) *data = db->base + offset + keylen + 1;
 	/* subtract one for \t, and one for the \n */
@@ -427,7 +427,7 @@ static int foreach(struct db *db,
 	} else {
 	    realprefix = xstrdup(prefix);
 	}
-	offset = bsearch_mem(realprefix, 1, dbbase, db->size, 0, &len);
+	offset = bsearch_mem(realprefix, dbbase, db->size, 0, &len);
 
 	free(realprefix);
     } else {
@@ -473,7 +473,7 @@ static int foreach(struct db *db,
 		/* reposition? (we made a change) */
 		if (!(ino == db->ino && sz == db->size)) {
 		    /* something changed in the file; reseek */
-		    offset = bsearch_mem(savebuf, 1, db->base, db->size,
+		    offset = bsearch_mem(savebuf, db->base, db->size,
 					 0, &len);
 		    p = db->base + offset;
 		    
@@ -556,7 +556,7 @@ static int mystore(struct db *db,
     }
 
     /* find entry, if it exists */
-    offset = bsearch_mem(key, 1, db->base, db->size, 0, &len);
+    offset = bsearch_mem(key, db->base, db->size, 0, &len);
 
     /* overwrite? */
     if (len && !overwrite) {
