@@ -213,11 +213,12 @@ enum {
 
 /* Bitmask of features/methods to allow, based on URL */
 enum {
-    ALLOW_DAV =		(1<<0),
-    ALLOW_CAL =		(1<<1),
-    ALLOW_CARD =	(1<<2),
-    ALLOW_WRITE =	(1<<3),
-    ALLOW_ALL =		0x1f
+    ALLOW_READ =	(1<<0),
+    ALLOW_WRITE =	(1<<1),
+    ALLOW_DAV =		(1<<2),
+    ALLOW_CAL =		(1<<3),
+    ALLOW_CARD =	(1<<4),
+    ALLOW_ALL =		0xff
 };
 
 
@@ -286,8 +287,10 @@ extern int saslserver(sasl_conn_t *conn, const char *mech,
 static int reset_saslconn(sasl_conn_t **conn);
 
 static void cmdloop(void);
-static int parse_target(const char *meth, const char *uri,
-			struct request_target_t *tgt, const char **errstr);
+static int parse_uri(const char *uri,
+		     struct request_target_t *tgt, const char **errstr);
+static int parse_path(const char *meth,
+		      struct request_target_t *tgt, const char **errstr);
 static int read_body(struct transaction_t *txn, int dump, const char **errstr);
 static void response_header(long code, struct transaction_t *txn);
 static void error_response(long code, struct transaction_t *txn);
@@ -297,7 +300,8 @@ static int http_auth(const char *creds, struct auth_challenge_t *chal);
 static int meth_acl(struct transaction_t *txn);
 static int meth_copy(struct transaction_t *txn);
 static int meth_delete(struct transaction_t *txn);
-static int meth_get(struct transaction_t *txn);
+static int meth_get_cal(struct transaction_t *txn);
+static int meth_get_doc(struct transaction_t *txn);
 static int meth_mkcol(struct transaction_t *txn);
 static int meth_options(struct transaction_t *txn);
 static int meth_propfind(struct transaction_t *txn);
@@ -867,30 +871,119 @@ static int reset_saslconn(sasl_conn_t **conn)
 }
 
 
-struct method_t {
-    const char *name;				/* Method name */
-    int (*proc)(struct transaction_t *txn);	/* Function to perform method */
+/* Array of HTTP methods known by our server. */
+const char *http_methods[] = {
+    "ACL",
+    "COPY",
+    "DELETE",
+    "GET",
+    "HEAD",
+    "LOCK",
+    "MKCALENDAR",
+    "MKCOL",
+    "MOVE",
+    "OPTIONS",
+    "POST",
+    "PROPFIND",
+    "PROPPATCH",
+    "PUT",
+    "REPORT",
+    "UNLOCK",
+    NULL
 };
 
-/* List of HTTP methods that we support */
-static const struct method_t methods[] = {
-    { "ACL", meth_acl },
-    { "COPY", meth_copy },
-    { "DELETE", meth_delete },
-    { "GET", meth_get },
-    { "HEAD", meth_get },
-/*    { "LOCK", meth_lock },*/
-    { "MKCALENDAR", meth_mkcol },
-    { "MKCOL", meth_mkcol },
-    { "MOVE", meth_copy },
-    { "OPTIONS", meth_options },
-    { "POST", meth_put },
-    { "PROPFIND", meth_propfind },
-    { "PROPPATCH", meth_proppatch },
-    { "PUT", meth_put },
-    { "REPORT", meth_report },
-/*    { "UNLOCK", meth_unlock }*/
-    { NULL, NULL }
+typedef int (*method_proc_t)(struct transaction_t *txn);
+
+struct namespace_t {
+    unsigned id;		/* Namespace identifier */
+    const char *prefix;		/* Prefix of URL path denoting namespace */
+    unsigned need_auth;		/* Do we need to auth for this namespace? */
+    unsigned long allow;	/* Bitmask of allowed features/methods */
+    method_proc_t proc[];	/* Functions to perform HTTP methods.
+				 * MUST be a function pointer for EACH method
+				 * (or NULL if method not supported)
+				 * listed in, and in the SAME ORDER in which
+				 * they appear in, the http_methods[] array.
+				 */
+};
+
+/* Namespace for CalDAV collections */
+const struct namespace_t namespace_calendar = {
+    URL_NS_CALENDAR, "/calendars/", 1 /* auth */,
+    (ALLOW_READ | ALLOW_WRITE | ALLOW_DAV | ALLOW_CAL),
+    { 
+	&meth_acl,		/* ACL		*/
+	&meth_copy,		/* COPY		*/
+	&meth_delete,		/* DELETE	*/
+	&meth_get_cal,		/* GET		*/
+	&meth_get_cal,		/* HEAD		*/
+	NULL,			/* LOCK		*/
+	&meth_mkcol,		/* MKCALENDAR	*/
+	&meth_mkcol,		/* MKCOL	*/
+	&meth_copy,		/* MOVE		*/
+	&meth_options,		/* OPTIONS	*/
+	&meth_put,		/* POST		*/
+	&meth_propfind,		/* PROPFIND	*/
+	&meth_proppatch,	/* PROPPATCH	*/
+	&meth_put,		/* PUT		*/
+	&meth_report,		/* REPORT	*/
+	NULL			/* UNLOCK	*/
+    }
+};
+
+/* Namespace for WebDAV principals */
+const struct namespace_t namespace_principal = {
+    URL_NS_PRINCIPAL, "/principals/", 1 /* auth */,
+    (ALLOW_DAV | ALLOW_CAL | ALLOW_CARD),
+    {
+	NULL,			/* ACL		*/
+	NULL,			/* COPY		*/
+	NULL,			/* DELETE	*/
+	NULL,			/* GET		*/
+	NULL,			/* HEAD		*/
+	NULL,			/* LOCK		*/
+	NULL,			/* MKCALENDAR	*/
+	NULL,			/* MKCOL	*/
+	NULL,			/* MOVE		*/
+	&meth_options,		/* OPTIONS	*/
+	NULL,			/* POST		*/
+	&meth_propfind,		/* PROPFIND	*/
+	NULL,			/* PROPPATCH	*/
+	NULL,			/* PUT		*/
+	&meth_report,		/* REPORT	*/
+	NULL			/* UNLOCK	*/
+    }
+};
+
+/* Namespace to fetch static content from filesystem */
+const struct namespace_t namespace_default = {
+    URL_NS_DEFAULT, "", 0 /* no auth */, ALLOW_READ,
+    {
+	NULL,			/* ACL		*/
+	NULL,			/* COPY		*/
+	NULL,			/* DELETE	*/
+	&meth_get_doc,		/* GET		*/
+	&meth_get_doc,		/* HEAD		*/
+	NULL,			/* LOCK		*/
+	NULL,			/* MKCALENDAR	*/
+	NULL,			/* MKCOL	*/
+	NULL,			/* MOVE		*/
+	&meth_options,		/* OPTIONS	*/
+	NULL,			/* POST		*/
+	&meth_propfind,		/* PROPFIND	*/
+	NULL,			/* PROPPATCH	*/
+	NULL,			/* PUT		*/
+	NULL,			/* REPORT	*/
+	NULL			/* UNLOCK	*/
+    }
+};
+
+/* Array of different namespaces and features supported by the server */
+const struct namespace_t *namespaces[] = {
+    &namespace_calendar,
+    &namespace_principal,
+    &namespace_default,		/* MUST be present and be last!! */
+    NULL,
 };
 
 
@@ -899,13 +992,14 @@ static const struct method_t methods[] = {
  */
 static void cmdloop(void)
 {
-    int c, ret, r;
+    int c, ret, r, i;
     int allowanonymous = config_getswitch(IMAPOPT_ALLOWANONYMOUSLOGIN);
     static struct buf meth, uri, ver;
     char buf[1024];
     const char **hdr;
     struct transaction_t txn;
-    const struct method_t *method = NULL;
+    const struct namespace_t *namespace;
+    method_proc_t meth_proc;
 #ifdef SASL_HTTP_REQUEST
     sasl_http_request_t sasl_http_req;
 #endif
@@ -983,18 +1077,41 @@ static void cmdloop(void)
 	    txn.errstr = buf;
 	}
 
-	/* Check Method against our list of supported methods */
-	if (!ret) {
-	    txn.meth = buf_cstring(&meth);
-	    for (method = methods;
-		 method->name && strcmp(method->name, txn.meth); method++);
-	    if (!method->name) ret = HTTP_NOT_IMPLEMENTED;
+	/* Parse request-target URI */
+	if (!ret &&
+	    (r = parse_uri(buf_cstring(&uri), &txn.req_tgt, &txn.errstr))) {
+	    ret = r;
 	}
 
-	/* Parse request-target URL */
+	/* Find the namespace of the requested resource */
+	if (!ret) {
+	    for (i = 0;
+		 namespaces[i] &&
+		     strncmp(namespaces[i]->prefix,
+			     txn.req_tgt.path, strlen(namespaces[i]->prefix));
+		 i++);
+	    if ((namespace = namespaces[i])) {
+		txn.req_tgt.namespace = namespace->id;
+		txn.req_tgt.allow = namespace->allow;
+	    } else {
+		/* XXX  Should never get here */
+		ret = HTTP_SERVER_ERROR;
+	    }
+	}
+
+	/* Check Method against list of supported methods in the namespace */
+	if (!ret) {
+	    txn.meth = buf_cstring(&meth);
+	    for (i = 0;
+		 http_methods[i] && strcmp(http_methods[i], txn.meth); i++);
+
+	    if (!http_methods[i]) ret = HTTP_NOT_IMPLEMENTED;
+	    else if (!(meth_proc = namespace->proc[i])) ret = HTTP_NOT_ALLOWED;
+	}
+
+	/* Parse request-target path */
 	if (!ret &&
-	    (r = parse_target(txn.meth, buf_cstring(&uri),
-			      &txn.req_tgt, &txn.errstr))) {
+	    (r = parse_path(txn.meth, &txn.req_tgt, &txn.errstr))) {
 	    ret = r;
 	}
 
@@ -1107,7 +1224,7 @@ static void cmdloop(void)
 	}
 
 	/* Request authentication, if necessary */
-	if (!httpd_userid && !allowanonymous) {
+	if (namespace->need_auth && !httpd_userid && !allowanonymous) {
 	    /* User must authenticate */
 
 	    if (httpd_tls_required) {
@@ -1131,7 +1248,7 @@ static void cmdloop(void)
 	}
 
 	/* Process the requested method */
-	if (!ret) ret = method->proc(&txn);
+	if (!ret) ret = (*meth_proc)(&txn);
 
 	/* Handle errors (success responses handled by method functions */
       error:
@@ -1153,17 +1270,13 @@ static void cmdloop(void)
 
 /****************************  Parsing Routines  ******************************/
 
-
-/* Parse request-target into dissected path */
-static int parse_target(const char *meth, const char *uri,
-			struct request_target_t *tgt, const char **errstr)
+/* Parse URI, returning the path */
+static int parse_uri(const char *uri,
+		     struct request_target_t *tgt, const char **errstr)
 {
     xmlURIPtr p_uri;  /* parsed URI */
-    char *p;
-    size_t len;
 
     memset(tgt, 0, sizeof(struct request_target_t));
-    tgt->namespace = URL_NS_DEFAULT;
 
     /* Parse entire URI */
     if ((p_uri = xmlParseURI(uri)) == NULL) {
@@ -1173,11 +1286,9 @@ static int parse_target(const char *meth, const char *uri,
 
     if (p_uri->scheme) {
 	/* Check sanity of scheme */
-	size_t slen = strlen(p_uri->scheme);
 
-	if ((slen > 5) ||  /* too long */
-	    strncasecmp(p_uri->scheme, "http", 4) ||
-	    ((slen > 4) && strcasecmp(p_uri->scheme+4, "s"))) {
+	if (strcasecmp(p_uri->scheme, "http") &&
+	    strcasecmp(p_uri->scheme, "https")) {
 	    xmlFreeURI(p_uri);
 	    *errstr = "Unsupported URI scheme";
 	    return HTTP_BAD_REQUEST;
@@ -1186,15 +1297,31 @@ static int parse_target(const char *meth, const char *uri,
 
     /* XXX  Probably need to grab server part for remote COPY/MOVE */
 
-    if (!p_uri->path || strlen(p_uri->path) > MAX_MAILBOX_PATH) {
+    /* Check sanity of path */
+    if (!p_uri->path || !*p_uri->path) {
 	xmlFreeURI(p_uri);
-	*errstr = "Illegal request target URI";
+	*errstr = "Empty path in target URI";
 	return HTTP_BAD_REQUEST;
     }
 
+    if (strlen(p_uri->path) > MAX_MAILBOX_PATH) {
+	xmlFreeURI(p_uri);
+	return HTTP_TOO_LONG;
+    }
+
     /* Make a working copy of the path and free the parsed struct */
-    p = strcpy(tgt->path, p_uri->path);
+    strcpy(tgt->path, p_uri->path);
     xmlFreeURI(p_uri);
+
+    return 0;
+}
+
+/* Parse request-target path */
+static int parse_path(const char *meth,
+		      struct request_target_t *tgt, const char **errstr)
+{
+    char *p = tgt->path;
+    size_t len;
 
     if (meth && (meth[0] == 'O') && !strcmp(p, "*")) {
 	/* Special URI for OPTIONS only */
@@ -1216,19 +1343,11 @@ static int parse_target(const char *meth, const char *uri,
 
     /* Check namespace */
     len = strcspn(p, "/");
-    if (!strncmp(p, "principals", len)) {
-	tgt->namespace = URL_NS_PRINCIPAL;
-	tgt->allow |= (ALLOW_DAV | ALLOW_CAL | ALLOW_CARD);
+    if ((tgt->namespace != URL_NS_PRINCIPAL) &&
+	(tgt->namespace != URL_NS_CALENDAR) &&
+	(tgt->namespace != URL_NS_ADDRESSBOOK)) {
+	return 0;
     }
-    else if (!strncmp(p, "calendars", len)) {
-	tgt->namespace = URL_NS_CALENDAR;
-	tgt->allow |= (ALLOW_DAV | ALLOW_CAL | ALLOW_WRITE);
-    }
-    else if (!strncmp(p, "addressbooks", len)) {
-	tgt->namespace = URL_NS_ADDRESSBOOK;
-	tgt->allow |= (ALLOW_DAV | ALLOW_CARD | ALLOW_WRITE);
-    }
-    else return 0;
 
     p += len;
     if (!*p || !*++p) return 0;
@@ -1489,7 +1608,10 @@ static void response_header(long code, struct transaction_t *txn)
 	    prot_printf(httpd_out, "\r\n");
 	}
 
-	prot_printf(httpd_out, "Allow: OPTIONS, GET, HEAD");
+	prot_printf(httpd_out, "Allow: OPTIONS");
+	if (txn->req_tgt.allow & ALLOW_READ) {
+	    prot_printf(httpd_out, ", GET, HEAD");
+	}
 	if (txn->req_tgt.allow & ALLOW_WRITE) {
 	    prot_printf(httpd_out, ", POST, PUT, DELETE");
 	}
@@ -2096,9 +2218,12 @@ static int meth_acl(struct transaction_t *txn)
 		struct request_target_t uri;
 		const char *errstr = NULL;
 
-		r = parse_target(NULL, (const char *) href, &uri, &errstr);
-		if (!r && (uri.namespace == URL_NS_PRINCIPAL) && uri.user) {
-		    userid = uri.user;
+		r = parse_uri((const char *) href, &uri, &errstr);
+		if (!r &&
+		    !strncmp("/principals/", uri.path, strlen("/principals/"))) {
+		    uri.namespace = URL_NS_PRINCIPAL;
+		    r = parse_path(NULL, &uri, &errstr);
+		    if (!r && uri.user) userid = uri.user;
 		}
 		xmlFree(href);
 	    }
@@ -2267,10 +2392,15 @@ static int meth_copy(struct transaction_t *txn)
 	return HTTP_BAD_REQUEST;
     }
 
-    /* Parse destination URL */
-    if ((r = parse_target(txn->meth, hdr[0], &dest, &txn->errstr))) {
-	return r;
-    }
+    /* Parse destination URI */
+    if ((r = parse_uri(hdr[0], &dest, &txn->errstr))) return r;
+
+    /* Check namespace */
+    if (strncmp("/calendars/", dest.path, strlen("/calendars/")))
+	return HTTP_FORBIDDEN;
+
+    dest.namespace = URL_NS_CALENDAR;
+    if ((r = parse_path(NULL, &dest, &txn->errstr))) return r;
 
     /* Make sure dest resource is in same namespace as source */
     if (txn->req_tgt.namespace != dest.namespace) return HTTP_FORBIDDEN;
@@ -2602,161 +2732,177 @@ static int meth_delete(struct transaction_t *txn)
 
 
 /* Perform a GET/HEAD request */
-static int meth_get(struct transaction_t *txn)
+static int meth_get_cal(struct transaction_t *txn)
 {
     int ret = 0, r, precond;
     const char *msg_base = NULL;
     unsigned long msg_size = 0;
     struct resp_body_t *resp_body = &txn->resp_body;
+    char mailboxname[MAX_MAILBOX_BUFFER];
+    struct mailbox *mailbox = NULL;
+    struct caldav_db *caldavdb = NULL;
+    uint32_t uid = 0;
+    struct index_record record;
+    const char *etag = NULL;
+    time_t lastmod = 0;
 
     /* We don't accept a body for this method */
     if (buf_len(&txn->req_body)) return HTTP_BAD_MEDIATYPE;
 
-    if (txn->req_tgt.namespace == URL_NS_CALENDAR) {
-	/* In calendar namespace */ 
-	char mailboxname[MAX_MAILBOX_BUFFER];
-	struct mailbox *mailbox = NULL;
-	struct caldav_db *caldavdb = NULL;
-	uint32_t uid = 0;
-	struct index_record record;
-	const char *etag = NULL;
-	time_t lastmod = 0;
+    /* We don't handle GET on a calendar collection (yet) */
+    if (!txn->req_tgt.resource) return HTTP_NO_CONTENT;
 
-	/* We don't handle GET on a calendar collection */
-	if (!txn->req_tgt.resource) return HTTP_NO_CONTENT;
+    /* Construct mailbox name corresponding to request target URI */
+    (void) target_to_mboxname(&txn->req_tgt, mailboxname);
 
-	/* Construct mailbox name corresponding to request target URI */
-	(void) target_to_mboxname(&txn->req_tgt, mailboxname);
-
-	/* Open mailbox for reading */
-	if ((r = mailbox_open_irl(mailboxname, &mailbox))) {
-	    syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
-		   mailboxname, error_message(r));
-	    txn->errstr = error_message(r);
-	    ret = HTTP_SERVER_ERROR;
-	    goto done;
-	}
-
-	/* Open the associated CalDAV database */
-	if ((r = caldav_open(mailbox, CALDAV_CREATE, &caldavdb))) {
-	    txn->errstr = error_message(r);
-	    ret = HTTP_SERVER_ERROR;
-	    goto done;
-	}
-
-	/* Find message UID for the resource */
-	caldav_read(caldavdb, txn->req_tgt.resource, &uid);
-	/* XXX  Check errors */
-
-	/* Fetch index record for the resource */
-	r = mailbox_find_index_record(mailbox, uid, &record);
-	/* XXX  check for errors */
-
-	etag = message_guid_encode(&record.guid);
-	lastmod = record.internaldate;
-
-	/* Check any preconditions */
-	precond = check_precond(txn->meth, etag, lastmod, 0, txn->req_hdrs);
-
-	if (precond != HTTP_OK) {
-	    /* We failed a precondition - don't perform the request */
-	    ret = precond;
-	    goto done;
-	}
-
-	/* Fill in Etag, Last-Modified, and Content-Length */
-	txn->etag = etag;
-	resp_body->lastmod = lastmod;
-	resp_body->len = record.size - record.header_size;  /* skip msg hdr */
-	resp_body->type = "text/calendar; charset=utf-8";
-
-	response_header(HTTP_OK, txn);
-
-	if (txn->meth[0] == 'G') {
-	    /* Load message containing the resource */
-	    mailbox_map_message(mailbox, record.uid, &msg_base, &msg_size);
-
-	    prot_write(httpd_out,
-		       msg_base + record.header_size,  /* skip message header */
-		       resp_body->len);
-
-	    mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
-	}
-
-      done:
-	if (caldavdb) caldav_close(caldavdb);
-	if (mailbox) mailbox_close(&mailbox);
+    /* Open mailbox for reading */
+    if ((r = mailbox_open_irl(mailboxname, &mailbox))) {
+	syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
+	       mailboxname, error_message(r));
+	txn->errstr = error_message(r);
+	ret = HTTP_SERVER_ERROR;
+	goto done;
     }
 
-    else if (txn->req_tgt.namespace == URL_NS_DEFAULT) {
-	/* Serve up static pages */
-	char path[1024] = "/tmp/doc";   /* XXX  make this configurable */
-	struct stat sbuf;
-	int fd;
-	struct message_guid guid;
-	char *outbuf;
+    /* Open the associated CalDAV database */
+    if ((r = caldav_open(mailbox, CALDAV_CREATE, &caldavdb))) {
+	txn->errstr = error_message(r);
+	ret = HTTP_SERVER_ERROR;
+	goto done;
+    }
 
-	if (!txn->req_tgt.path || !*txn->req_tgt.path ||
-	    (txn->req_tgt.path[0] == '/' && txn->req_tgt.path[1] == '\0'))
-	    strcat(path, "/index.html");
-	else
-	    strcat(path, txn->req_tgt.path);
+    /* Find message UID for the resource */
+    caldav_read(caldavdb, txn->req_tgt.resource, &uid);
+    /* XXX  Check errors */
 
-	/* See if file exists and get Content-Length & Last-Modified time */
-	if (stat(path, &sbuf)) return HTTP_NOT_FOUND;
+    /* Fetch index record for the resource */
+    r = mailbox_find_index_record(mailbox, uid, &record);
+    /* XXX  check for errors */
 
-	/* Open the file */
-	fd = open(path, O_RDONLY);
-	if (fd == -1) return HTTP_NOT_FOUND;
+    etag = message_guid_encode(&record.guid);
+    lastmod = record.internaldate;
 
-	map_refresh(fd, 1, &msg_base, &msg_size, sbuf.st_size, path, NULL);
+    /* Check any preconditions */
+    precond = check_precond(txn->meth, etag, lastmod, 0, txn->req_hdrs);
 
-	/* Fill in Etag, Last-Modified, and Content-Length */
-	message_guid_generate(&guid, msg_base, msg_size);
-	txn->etag = message_guid_encode(&guid);
-	resp_body->lastmod = sbuf.st_mtime;
-	resp_body->len = msg_size;
-
-	/* Check any preconditions */
-	precond = check_precond(txn->meth, txn->etag,
-				resp_body->lastmod, 0, txn->req_hdrs);
-
+    if (precond != HTTP_OK) {
 	/* We failed a precondition - don't perform the request */
-	if (precond != HTTP_OK) {
-	    map_free(&msg_base, &msg_size);
-	    close(fd);
+	ret = precond;
+	goto done;
+    }
 
-	    return precond;
-	}
+    /* Fill in Etag, Last-Modified, and Content-Length */
+    txn->etag = etag;
+    resp_body->lastmod = lastmod;
+    resp_body->len = record.size - record.header_size;  /* skip msg hdr */
+    resp_body->type = "text/calendar; charset=utf-8";
 
-	/* Assume identity encoding */
-	outbuf = (char *) msg_base;
+    response_header(HTTP_OK, txn);
 
-	/* Look for filetype signatures in the data */
-	if (msg_size >= 8 &&
-	    !memcmp(msg_base, "\x89\x50\x4E\x47\x0D\x0A\x1A\x0A", 8)) {
-	    resp_body->type = "image/png";
-	} else if (msg_size >= 4 &&
-		   !memcmp(msg_base, "\xFF\xD8\xFF\xE0", 4)) {
-	    resp_body->type = "image/jpeg";
-	} else {
-	    resp_body->type = "text/html";
-	}
-#if 0
-	/* deflate encoding */
-	resp_body->enc = "deflate";
-	resp_body->len = compressBound(msg_size);
-	outbuf = xmalloc(resp_body->len);
-	compress(outbuf, &resp_body->len, msg_base, msg_len);
-#endif
-	response_header(HTTP_OK, txn);
+    if (txn->meth[0] == 'G') {
+	/* Load message containing the resource */
+	mailbox_map_message(mailbox, record.uid, &msg_base, &msg_size);
 
-	if (txn->meth[0] == 'G') prot_write(httpd_out, outbuf, resp_body->len);
+	prot_write(httpd_out,
+		   msg_base + record.header_size,  /* skip message header */
+		   resp_body->len);
 
-	if (outbuf != msg_base) free(outbuf);
+	mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
+    }
+
+  done:
+    if (caldavdb) caldav_close(caldavdb);
+    if (mailbox) mailbox_close(&mailbox);
+
+    return ret;
+}
+
+
+/* Perform a GET/HEAD request */
+static int meth_get_doc(struct transaction_t *txn)
+{
+    int ret = 0, fd, precond;
+    const char *prefix, *path;
+    static struct buf pathbuf = BUF_INITIALIZER;
+    struct stat sbuf;
+    const char *msg_base = NULL;
+    unsigned long msg_size = 0;
+    struct message_guid guid;
+    char *outbuf;
+    struct resp_body_t *resp_body = &txn->resp_body;
+
+    /* We don't accept a body for this method */
+    if (buf_len(&txn->req_body)) return HTTP_BAD_MEDIATYPE;
+
+    /* Serve up static pages */
+    prefix = config_getstring(IMAPOPT_HTTP_DOCROOT);
+    if (!prefix) return HTTP_NOT_FOUND;
+
+    buf_setcstr(&pathbuf, prefix);
+    if (!txn->req_tgt.path || !*txn->req_tgt.path ||
+	(txn->req_tgt.path[0] == '/' && txn->req_tgt.path[1] == '\0'))
+	buf_appendcstr(&pathbuf, "/index.html");
+    else
+	buf_appendcstr(&pathbuf, txn->req_tgt.path);
+    path = buf_cstring(&pathbuf);
+    syslog(LOG_INFO, "path: '%s'", path);
+
+    /* See if file exists and get Content-Length & Last-Modified time */
+    if (stat(path, &sbuf)) return HTTP_NOT_FOUND;
+
+    /* Open the file */
+    fd = open(path, O_RDONLY);
+    if (fd == -1) return HTTP_NOT_FOUND;
+
+    map_refresh(fd, 1, &msg_base, &msg_size, sbuf.st_size, path, NULL);
+
+    /* Fill in Etag, Last-Modified, and Content-Length */
+    message_guid_generate(&guid, msg_base, msg_size);
+    txn->etag = message_guid_encode(&guid);
+    resp_body->lastmod = sbuf.st_mtime;
+    resp_body->len = msg_size;
+
+    /* Check any preconditions */
+    precond = check_precond(txn->meth, txn->etag,
+			    resp_body->lastmod, 0, txn->req_hdrs);
+
+    /* We failed a precondition - don't perform the request */
+    if (precond != HTTP_OK) {
 	map_free(&msg_base, &msg_size);
 	close(fd);
+
+	return precond;
     }
+
+    /* Assume identity encoding */
+    outbuf = (char *) msg_base;
+
+    /* XXX  Use filename extensions? */
+
+    /* Look for filetype signatures in the data */
+    if (msg_size >= 8 &&
+	!memcmp(msg_base, "\x89\x50\x4E\x47\x0D\x0A\x1A\x0A", 8)) {
+	resp_body->type = "image/png";
+    } else if (msg_size >= 4 &&
+	       !memcmp(msg_base, "\xFF\xD8\xFF\xE0", 4)) {
+	resp_body->type = "image/jpeg";
+    } else {
+	resp_body->type = "text/html";
+    }
+#if 0
+    /* deflate encoding */
+    resp_body->enc = "deflate";
+    resp_body->len = compressBound(msg_size);
+    outbuf = xmalloc(resp_body->len);
+    compress(outbuf, &resp_body->len, msg_base, msg_len);
+#endif
+    response_header(HTTP_OK, txn);
+
+    if (txn->meth[0] == 'G') prot_write(httpd_out, outbuf, resp_body->len);
+
+    if (outbuf != msg_base) free(outbuf);
+    map_free(&msg_base, &msg_size);
+    close(fd);
 
     return ret;
 }
@@ -2936,7 +3082,10 @@ static int meth_propfind(struct transaction_t *txn)
     struct propfind_entry_list *elist = NULL;
 
     /* Make sure its a DAV resource */
-    if (!(txn->req_tgt.allow & ALLOW_DAV)) return HTTP_NOT_ALLOWED;
+    if (!(txn->req_tgt.allow & ALLOW_DAV) && 
+	strcmp(txn->req_tgt.path, "/")) {  /* Apple iCal checks "/" */
+	return HTTP_NOT_ALLOWED;
+    }
 
     /* Check Depth */
     hdr = spool_getheader(txn->req_hdrs, "Depth");

@@ -98,6 +98,9 @@ ec HTTP_PRECOND_FAILED,
 ec HTTP_TOO_LARGE,
    "413 Request Representation Too Large"
 
+ec HTTP_TOO_LONG,
+   "414 URI Too Long"
+
 ec HTTP_BAD_MEDIATYPE,
    "415 Unsupported Media Type"
 
