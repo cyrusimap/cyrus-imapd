@@ -848,7 +848,7 @@ const char *http_methods[] = {
 
 /* Namespace for CalDAV collections */
 const struct namespace_t namespace_calendar = {
-    URL_NS_CALENDAR, "/calendars/", 1 /* auth */,
+    URL_NS_CALENDAR, "/calendars", 1 /* auth */,
     (ALLOW_READ | ALLOW_WRITE | ALLOW_DAV | ALLOW_CAL),
     { 
 	&meth_acl,		/* ACL		*/
@@ -872,7 +872,7 @@ const struct namespace_t namespace_calendar = {
 
 /* Namespace for WebDAV principals */
 const struct namespace_t namespace_principal = {
-    URL_NS_PRINCIPAL, "/principals/", 1 /* auth */,
+    URL_NS_PRINCIPAL, "/principals", 1 /* auth */,
     (ALLOW_DAV | ALLOW_CAL | ALLOW_CARD),
     {
 	NULL,			/* ACL		*/
@@ -1026,11 +1026,14 @@ static void cmdloop(void)
 
 	/* Find the namespace of the requested resource */
 	if (!ret) {
-	    for (i = 0;
-		 namespaces[i] &&
-		     strncmp(namespaces[i]->prefix,
-			     txn.req_tgt.path, strlen(namespaces[i]->prefix));
-		 i++);
+	    for (i = 0; namespaces[i]; i++) {
+		size_t len = strlen(namespaces[i]->prefix);
+
+		/* See if the prefix matches - terminated with NUL or '/' */
+		if (!strncmp(namespaces[i]->prefix, txn.req_tgt.path, len) &&
+		    (!namespaces[i]->prefix[len] ||
+		     (namespaces[i]->prefix[len] == '/'))) break;
+	    }
 	    if ((namespace = namespaces[i])) {
 		txn.req_tgt.namespace = namespace->id;
 		txn.req_tgt.allow = namespace->allow;

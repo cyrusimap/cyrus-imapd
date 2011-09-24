@@ -291,7 +291,7 @@ static int meth_get(struct transaction_t *txn)
 
 /* Namespace for RSS feeds of mailboxes */
 const struct namespace_t namespace_rss = {
-    URL_NS_RSS, "/rss/", 1 /* auth */, ALLOW_READ,
+    URL_NS_RSS, "/rss", 1 /* auth */, ALLOW_READ,
     {
 	NULL,			/* ACL		*/
 	NULL,			/* COPY		*/
