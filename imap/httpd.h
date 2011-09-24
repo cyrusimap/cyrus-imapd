@@ -172,12 +172,17 @@ extern const struct namespace_t namespace_rss;
 extern const struct namespace_t namespace_default;
 
 
+/* XXX  These should be included in struct transaction_t */
+extern char *httpd_userid;
+extern int httpd_userisadmin;
+extern struct auth_state *httpd_authstate;
 extern struct namespace httpd_namespace;
 
 extern const char *http_statusline(long code);
 extern int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname);
 extern void response_header(long code, struct transaction_t *txn);
 extern void error_response(long code, struct transaction_t *txn);
+extern void html_response(long code, struct transaction_t *txn, xmlDocPtr html);
 extern void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml);
 extern int meth_options(struct transaction_t *txn);
 

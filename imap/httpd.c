@@ -1645,6 +1645,34 @@ void error_response(long code, struct transaction_t *txn)
 }
 
 
+/* Output an HTTP response with text/xml body */
+void html_response(long code, struct transaction_t *txn, xmlDocPtr html)
+{
+    xmlChar *buf;
+    int bufsiz;
+
+    /* Dump HTML response tree into a text buffer */
+    htmlDocDumpMemoryFormat(html, &buf, &bufsiz, DEBUG ? 1 : 0);
+
+    if (buf) {
+	/* Output the XML response */
+	txn->resp_body.len = bufsiz;
+	txn->resp_body.type = "text/html; charset=utf-8";
+
+	response_header(code, txn);
+
+	if (txn->meth[0] != 'H') prot_write(httpd_out, (char *) buf, bufsiz);
+
+	/* Cleanup */
+	xmlFree(buf);
+    }
+    else {
+	txn->errstr = "Error dumping HTML tree";
+	error_response(HTTP_SERVER_ERROR, txn);
+    }
+}
+
+
 /* Output an HTTP response with application/xml body */
 void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
 {

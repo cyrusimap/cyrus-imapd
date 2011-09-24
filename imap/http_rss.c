@@ -49,14 +49,17 @@
 #include <ctype.h>
 #include <syslog.h>
 
+#include <libxml/HTMLtree.h>
 #include <libxml/tree.h>
 
+#include "acl.h"
 #include "global.h"
 #include "httpd.h"
 #include "http_err.h"
 #include "imap_err.h"
 #include "mailbox.h"
 #include "map.h"
+#include "mboxlist.h"
 #include "message.h"
 #include "parseaddr.h"
 #include "rfc822date.h"
@@ -99,6 +102,74 @@ static int rss_to_mboxname(struct request_target_t *req_tgt,
     return 0;
 }
 
+/*
+ * mboxlist_findall() callback function to list RSS feeds
+ */
+int list_cb(char *name, int matchlen, int maycreate __attribute__((unused)),
+	    void *rock)
+{
+    static char lastname[MAX_MAILBOX_BUFFER];
+    char href[MAX_MAILBOX_PATH+1];
+    struct mboxlist_entry entry;
+    xmlNodePtr list = (xmlNodePtr) rock, item, link;
+
+    /* We have to reset the initial state.
+     * Handle it as a dirty hack.
+     */
+    if (!name) {
+	lastname[0] = '\0';
+	return 0;
+    }
+
+    /* don't repeat */
+    if (matchlen == (int) strlen(lastname) &&
+	!strncmp(name, lastname, matchlen)) return 0;
+
+    strncpy(lastname, name, matchlen);
+    lastname[matchlen] = '\0';
+
+    /* Lookup the mailbox and make sure its readable */
+    mboxlist_lookup(name, &entry, NULL);
+    if (!entry.acl ||
+	!(cyrus_acl_myrights(httpd_authstate, entry.acl) & ACL_READ))
+	return 0;
+
+    /* Add mailbox to our HTML list */
+    item = xmlNewChild(list, NULL, BAD_CAST "li", NULL);
+    link = xmlNewChild(item, NULL, BAD_CAST "a", BAD_CAST name);
+
+    snprintf(href, sizeof(href), ".rss.%s.", name);
+    mboxname_hiersep_toexternal(&httpd_namespace, href, 0);
+    xmlNewProp(link, BAD_CAST "href", BAD_CAST href);
+
+    return 0;
+}
+
+/* Create a HTML document listing all RSS feeds available to the user */
+static void list_rss_feeds(struct transaction_t *txn)
+{
+    int r;
+    htmlDocPtr doc;
+    xmlNodePtr root, head, body, list;
+
+    /* XXX  Need to check for errors */
+    doc = htmlNewDoc(NULL, NULL);
+    root = xmlNewNode(NULL, BAD_CAST "html");
+    xmlDocSetRootElement(doc, root);
+    head = xmlNewChild(root, NULL, BAD_CAST "head", NULL);
+    xmlNewChild(head, NULL, BAD_CAST "title", BAD_CAST "Cyrus RSS Feeds");
+
+    body = xmlNewChild(root, NULL, BAD_CAST "body", NULL);
+    xmlNewChild(body, NULL, BAD_CAST "h2", BAD_CAST "Cyrus RSS Feeds");
+    list = xmlNewChild(body, NULL, BAD_CAST "ul", NULL);
+
+    list_cb(NULL, 0, 0, NULL);
+    r = mboxlist_findall(NULL, "*", httpd_userisadmin, NULL, httpd_authstate,
+			 list_cb, list);
+
+    html_response(HTTP_OK, txn, doc);
+}
+
 /* Perform a GET/HEAD request */
 static int meth_get(struct transaction_t *txn)
 {
@@ -119,7 +190,11 @@ static int meth_get(struct transaction_t *txn)
 	goto done;
     }
 
-    /* XXX  If no mailboxname, LIST all available feeds */
+    /* If no mailboxname, list all available feeds */
+    if (!*mailboxname) {
+	list_rss_feeds(txn);
+	return 0;
+    }
 
     /* Open mailbox for reading */
     if ((r = mailbox_open_irl(mailboxname, &mailbox))) {
