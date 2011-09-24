@@ -118,7 +118,8 @@ PROGS = imapd lmtpd pop3d \
 	fud smmapd reconstruct quota mbpath ipurge cyr_dbtool cyr_synclog \
 	cyrdump chk_cyrus cvt_cyrusdb deliver ctl_mboxlist \
 	ctl_deliver ctl_cyrusdb squatter mbexamine cyr_expire arbitron \
-	unexpunge cyr_df cyr_sequence cyr_userseen @IMAP_PROGS@
+	unexpunge cyr_df cyr_sequence cyr_userseen \
+	@IMAP_PROGS@
 
 BUILTSOURCES = imap_err.c imap_err.h pushstats.c pushstats.h \
 	lmtpstats.c lmtpstats.h mupdate_err.c mupdate_err.h \
@@ -255,11 +256,11 @@ sync_server: sync_server.o sync_support.o \
 	imapparse.o tls.o $(SERVICE) libimap.a mutex_fake.o \
 	$(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
-httpd: httpd.o caldav_db.o dav_prop.o proxy.o backend.o index.o spool.o tls.o \
-	 mutex_fake.o http_err.o libimap.a $(DEPLIBS) $(SERVICE)
-	$(CC) $(LDFLAGS) -o httpd httpd.o caldav_db.o dav_prop.o proxy.o \
-	 backend.o index.o spool.o tls.o $(SERVICE) mutex_fake.o http_err.o \
-	 libimap.a $(DEPLIBS) $(LIBS) $(LIB_WRAP) -lxml2 -lical
+httpd: httpd.o http_err.o http_rss.o dav_prop.o caldav_db.o proxy.o backend.o \
+	 index.o spool.o tls.o mutex_fake.o libimap.a $(DEPLIBS) $(SERVICE)
+	$(CC) $(LDFLAGS) -o httpd httpd.o http_err.o http_rss.o dav_prop.o \
+	 caldav_db.o proxy.o backend.o index.o spool.o tls.o mutex_fake.o \
+	 libimap.a $(SERVICE) $(DEPLIBS) $(LIBS) $(LIB_WRAP) -lxml2 -lical
 
 ### Command Line Utilities
 arbitron: arbitron.o $(CLIOBJS) libimap.a $(DEPLIBS)

@@ -211,47 +211,6 @@ enum {
 };
 
 
-/* Bitmask of features/methods to allow, based on URL */
-enum {
-    ALLOW_READ =	(1<<0),
-    ALLOW_WRITE =	(1<<1),
-    ALLOW_DAV =		(1<<2),
-    ALLOW_CAL =		(1<<3),
-    ALLOW_CARD =	(1<<4),
-    ALLOW_ALL =		0xff
-};
-
-
-/* Auth challenge context */
-struct auth_challenge_t {
-    struct auth_scheme_t *scheme;	/* Selected AUTH scheme */
-    const char *param;	 		/* Server challenge */
-};
-
-/* Meta-data for response body (payload & representation headers) */
-struct resp_body_t {
-    ulong len; 		/* Content-Length   */
-    const char *enc;	/* Content-Encoding */
-    const char *lang;	/* Content-Language */
-    const char *loc;	/* Content-Location */
-    const char *type;	/* Content-Type     */
-    time_t lastmod;	/* Last-Modified    */
-};
-
-/* Transaction context */
-struct transaction_t {
-    const char *meth;			/* Method to be performed */
-    unsigned flags;			/* Flags for this txn */
-    struct request_target_t req_tgt;	/* Parsed target URL */
-    hdrcache_t req_hdrs;    		/* Cached HTTP headers */
-    struct buf req_body;		/* Buffered request body */
-    struct auth_challenge_t auth_chal;	/* Authentication challenge */
-    const char *loc;	    		/* Location: of resp representation */
-    const char *etag;			/* ETag: of response representation */
-    const char *errstr;			/* Error string */
-    struct resp_body_t resp_body;	/* Response body meta-data */
-};
-
 /* the sasl proxy policy context */
 static struct proxy_context httpd_proxyctx = {
     0, 1, &httpd_authstate, &httpd_userisadmin, &httpd_userisproxyadmin
@@ -291,9 +250,6 @@ static int parse_uri(const char *meth, const char *uri,
 		     struct request_target_t *tgt, const char **errstr);
 static int parse_path(struct request_target_t *tgt, const char **errstr);
 static int read_body(struct transaction_t *txn, int dump, const char **errstr);
-static void response_header(long code, struct transaction_t *txn);
-static void error_response(long code, struct transaction_t *txn);
-static void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml);
 static int http_auth(const char *creds, struct auth_challenge_t *chal);
 
 static int meth_acl(struct transaction_t *txn);
@@ -302,7 +258,6 @@ static int meth_delete(struct transaction_t *txn);
 static int meth_get_cal(struct transaction_t *txn);
 static int meth_get_doc(struct transaction_t *txn);
 static int meth_mkcol(struct transaction_t *txn);
-static int meth_options(struct transaction_t *txn);
 static int meth_propfind(struct transaction_t *txn);
 static int meth_proppatch(struct transaction_t *txn);
 static int meth_put(struct transaction_t *txn);
@@ -891,21 +846,6 @@ const char *http_methods[] = {
     NULL
 };
 
-typedef int (*method_proc_t)(struct transaction_t *txn);
-
-struct namespace_t {
-    unsigned id;		/* Namespace identifier */
-    const char *prefix;		/* Prefix of URL path denoting namespace */
-    unsigned need_auth;		/* Do we need to auth for this namespace? */
-    unsigned long allow;	/* Bitmask of allowed features/methods */
-    method_proc_t proc[];	/* Functions to perform HTTP methods.
-				 * MUST be a function pointer for EACH method
-				 * (or NULL if method not supported)
-				 * listed in, and in the SAME ORDER in which
-				 * they appear in, the http_methods[] array.
-				 */
-};
-
 /* Namespace for CalDAV collections */
 const struct namespace_t namespace_calendar = {
     URL_NS_CALENDAR, "/calendars/", 1 /* auth */,
@@ -981,6 +921,7 @@ const struct namespace_t namespace_default = {
 const struct namespace_t *namespaces[] = {
     &namespace_calendar,
     &namespace_principal,
+    &namespace_rss,
     &namespace_default,		/* MUST be present and be last!! */
     NULL,
 };
@@ -1543,7 +1484,7 @@ const char *http_statusline(long code)
     prot_printf(httpd_out, "\r\n")
 
 
-static void response_header(long code, struct transaction_t *txn)
+void response_header(long code, struct transaction_t *txn)
 {
     char datestr[80];
     struct auth_challenge_t *auth_chal = &txn->auth_chal;
@@ -1688,7 +1629,7 @@ static void response_header(long code, struct transaction_t *txn)
 
 
 /* Output an HTTP error response with optional text/plain body */
-static void error_response(long code, struct transaction_t *txn)
+void error_response(long code, struct transaction_t *txn)
 {
     struct resp_body_t *resp_body = &txn->resp_body;
 
@@ -1702,7 +1643,7 @@ static void error_response(long code, struct transaction_t *txn)
 
 
 /* Output an HTTP response with application/xml body */
-static void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
+void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
 {
     xmlChar *buf;
     int bufsiz;
@@ -3047,7 +2988,7 @@ static int meth_mkcol(struct transaction_t *txn)
 
 
 /* Perform an OPTIONS request */
-static int meth_options(struct transaction_t *txn)
+int meth_options(struct transaction_t *txn)
 {
     /* Response should not be cached */
     txn->flags |= HTTP_NOCACHE;

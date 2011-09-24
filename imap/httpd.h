@@ -44,7 +44,10 @@
 #ifndef HTTPD_H
 #define HTTPD_H
 
+#include <libxml/tree.h>
+
 #include "mailbox.h"
+#include "spool.h"
 
 /* Supported HTTP version */
 #define HTTP_VERSION	"HTTP/1.1"
@@ -91,7 +94,18 @@ enum {
     URL_NS_DEFAULT = 0,
     URL_NS_PRINCIPAL,
     URL_NS_CALENDAR,
-    URL_NS_ADDRESSBOOK
+    URL_NS_ADDRESSBOOK,
+    URL_NS_RSS
+};
+
+/* Bitmask of features/methods to allow, based on URL */
+enum {
+    ALLOW_READ =	(1<<0),
+    ALLOW_WRITE =	(1<<1),
+    ALLOW_DAV =		(1<<2),
+    ALLOW_CAL =		(1<<3),
+    ALLOW_CARD =	(1<<4),
+    ALLOW_ALL =		0xff
 };
 
 /* Request target context */
@@ -107,7 +121,64 @@ struct request_target_t {
     unsigned long allow;	/* bitmask of allowed features/methods */
 };
 
+/* Auth challenge context */
+struct auth_challenge_t {
+    struct auth_scheme_t *scheme;	/* Selected AUTH scheme */
+    const char *param;	 		/* Server challenge */
+};
+
+/* Meta-data for response body (payload & representation headers) */
+struct resp_body_t {
+    ulong len; 		/* Content-Length   */
+    const char *enc;	/* Content-Encoding */
+    const char *lang;	/* Content-Language */
+    const char *loc;	/* Content-Location */
+    const char *type;	/* Content-Type     */
+    time_t lastmod;	/* Last-Modified    */
+};
+
+/* Transaction context */
+struct transaction_t {
+    const char *meth;			/* Method to be performed */
+    unsigned flags;			/* Flags for this txn */
+    struct request_target_t req_tgt;	/* Parsed target URL */
+    hdrcache_t req_hdrs;    		/* Cached HTTP headers */
+    struct buf req_body;		/* Buffered request body */
+    struct auth_challenge_t auth_chal;	/* Authentication challenge */
+    const char *loc;	    		/* Location: of resp representation */
+    const char *etag;			/* ETag: of response representation */
+    const char *errstr;			/* Error string */
+    struct resp_body_t resp_body;	/* Response body meta-data */
+};
+
+typedef int (*method_proc_t)(struct transaction_t *txn);
+
+struct namespace_t {
+    unsigned id;		/* Namespace identifier */
+    const char *prefix;		/* Prefix of URL path denoting namespace */
+    unsigned need_auth;		/* Do we need to auth for this namespace? */
+    unsigned long allow;	/* Bitmask of allowed features/methods */
+    method_proc_t proc[];	/* Functions to perform HTTP methods.
+				 * MUST be a function pointer for EACH method
+				 * (or NULL if method not supported)
+				 * listed in, and in the SAME ORDER in which
+				 * they appear in, the http_methods[] array.
+				 */
+};
+
+extern const struct namespace_t namespace_calendar;
+extern const struct namespace_t namespace_principal;
+extern const struct namespace_t namespace_rss;
+extern const struct namespace_t namespace_default;
+
+
+extern struct namespace httpd_namespace;
+
 extern const char *http_statusline(long code);
 extern int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname);
+extern void response_header(long code, struct transaction_t *txn);
+extern void error_response(long code, struct transaction_t *txn);
+extern void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml);
+extern int meth_options(struct transaction_t *txn);
 
 #endif /* HTTPD_H */
