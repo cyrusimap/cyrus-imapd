@@ -287,10 +287,9 @@ extern int saslserver(sasl_conn_t *conn, const char *mech,
 static int reset_saslconn(sasl_conn_t **conn);
 
 static void cmdloop(void);
-static int parse_uri(const char *uri,
+static int parse_uri(const char *meth, const char *uri,
 		     struct request_target_t *tgt, const char **errstr);
-static int parse_path(const char *meth,
-		      struct request_target_t *tgt, const char **errstr);
+static int parse_path(struct request_target_t *tgt, const char **errstr);
 static int read_body(struct transaction_t *txn, int dump, const char **errstr);
 static void response_header(long code, struct transaction_t *txn);
 static void error_response(long code, struct transaction_t *txn);
@@ -1079,7 +1078,8 @@ static void cmdloop(void)
 
 	/* Parse request-target URI */
 	if (!ret &&
-	    (r = parse_uri(buf_cstring(&uri), &txn.req_tgt, &txn.errstr))) {
+	    (r = parse_uri(buf_cstring(&meth), buf_cstring(&uri),
+			   &txn.req_tgt, &txn.errstr))) {
 	    ret = r;
 	}
 
@@ -1107,12 +1107,6 @@ static void cmdloop(void)
 
 	    if (!http_methods[i]) ret = HTTP_NOT_IMPLEMENTED;
 	    else if (!(meth_proc = namespace->proc[i])) ret = HTTP_NOT_ALLOWED;
-	}
-
-	/* Parse request-target path */
-	if (!ret &&
-	    (r = parse_path(txn.meth, &txn.req_tgt, &txn.errstr))) {
-	    ret = r;
 	}
 
 	/* Read and parse headers */
@@ -1271,7 +1265,7 @@ static void cmdloop(void)
 /****************************  Parsing Routines  ******************************/
 
 /* Parse URI, returning the path */
-static int parse_uri(const char *uri,
+static int parse_uri(const char *meth, const char *uri,
 		     struct request_target_t *tgt, const char **errstr)
 {
     xmlURIPtr p_uri;  /* parsed URI */
@@ -1309,6 +1303,12 @@ static int parse_uri(const char *uri,
 	return HTTP_TOO_LONG;
     }
 
+    if ((p_uri->path[0] != '/') &&
+	(strcmp(p_uri->path, "*") || !meth || (meth[0] != 'O'))) {
+	*errstr = "Illegal request target URI";
+	return HTTP_BAD_REQUEST;
+    }
+
     /* Make a working copy of the path and free the parsed struct */
     strcpy(tgt->path, p_uri->path);
     xmlFreeURI(p_uri);
@@ -1317,38 +1317,17 @@ static int parse_uri(const char *uri,
 }
 
 /* Parse request-target path */
-static int parse_path(const char *meth,
-		      struct request_target_t *tgt, const char **errstr)
+/* XXX  THIS NEEDS TO BE COMPLETELY REWRITTEN
+   AND MAYBE COMBINED WITH target_to_mboxname() */
+static int parse_path(struct request_target_t *tgt, const char **errstr)
 {
     char *p = tgt->path;
     size_t len;
 
-    if (meth && (meth[0] == 'O') && !strcmp(p, "*")) {
-	/* Special URI for OPTIONS only */
-	tgt->allow = ALLOW_ALL;
-	return 0;
-    }
+    if (!*p || !*++p) return 0;
 
-    if (*p != '/') {
-	*errstr = "Illegal request target URI";
-	return HTTP_BAD_REQUEST;
-    }
-
-    /* Break down path into interesting segments */
-    if (!*++p) {
-	/* root */
-	tgt->allow |= (ALLOW_DAV | ALLOW_CAL | ALLOW_CARD);
-	return 0;
-    }
-
-    /* Check namespace */
+    /* Skip namespace */
     len = strcspn(p, "/");
-    if ((tgt->namespace != URL_NS_PRINCIPAL) &&
-	(tgt->namespace != URL_NS_CALENDAR) &&
-	(tgt->namespace != URL_NS_ADDRESSBOOK)) {
-	return 0;
-    }
-
     p += len;
     if (!*p || !*++p) return 0;
 
@@ -2108,6 +2087,9 @@ static int meth_acl(struct transaction_t *txn)
     /* Make sure its a DAV resource */
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED;
 
+    /* Parse the path */
+    if ((r = parse_path(&txn->req_tgt, &txn->errstr))) return r;
+
     /* Make sure its a calendar collection */
     if (!txn->req_tgt.collection || txn->req_tgt.resource) {
 	txn->errstr = "ACLs can only be set on calendar collections";
@@ -2218,11 +2200,11 @@ static int meth_acl(struct transaction_t *txn)
 		struct request_target_t uri;
 		const char *errstr = NULL;
 
-		r = parse_uri((const char *) href, &uri, &errstr);
+		r = parse_uri(NULL, (const char *) href, &uri, &errstr);
 		if (!r &&
 		    !strncmp("/principals/", uri.path, strlen("/principals/"))) {
 		    uri.namespace = URL_NS_PRINCIPAL;
-		    r = parse_path(NULL, &uri, &errstr);
+		    r = parse_path(&uri, &errstr);
 		    if (!r && uri.user) userid = uri.user;
 		}
 		xmlFree(href);
@@ -2383,6 +2365,9 @@ static int meth_copy(struct transaction_t *txn)
     /* Make sure source is a DAV resource */
     if (!(txn->req_tgt.allow & ALLOW_DAV)) return HTTP_NOT_ALLOWED;
 
+    /* Parse the path */
+    if ((r = parse_path(&txn->req_tgt, &txn->errstr))) return r;
+
     /* We don't yet handle COPY/MOVE on collections */
     if (!txn->req_tgt.resource) return HTTP_NOT_ALLOWED;
 
@@ -2393,14 +2378,14 @@ static int meth_copy(struct transaction_t *txn)
     }
 
     /* Parse destination URI */
-    if ((r = parse_uri(hdr[0], &dest, &txn->errstr))) return r;
+    if ((r = parse_uri(NULL, hdr[0], &dest, &txn->errstr))) return r;
 
     /* Check namespace */
     if (strncmp("/calendars/", dest.path, strlen("/calendars/")))
 	return HTTP_FORBIDDEN;
 
     dest.namespace = URL_NS_CALENDAR;
-    if ((r = parse_path(NULL, &dest, &txn->errstr))) return r;
+    if ((r = parse_path(&dest, &txn->errstr))) return r;
 
     /* Make sure dest resource is in same namespace as source */
     if (txn->req_tgt.namespace != dest.namespace) return HTTP_FORBIDDEN;
@@ -2651,6 +2636,9 @@ static int meth_delete(struct transaction_t *txn)
     /* Make sure its a DAV resource */
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
 
+    /* Parse the path */
+    if ((r = parse_path(&txn->req_tgt, &txn->errstr))) return r;
+
     /* Construct mailbox name corresponding to request target URI */
     (void) target_to_mboxname(&txn->req_tgt, mailboxname);
 
@@ -2748,6 +2736,9 @@ static int meth_get_cal(struct transaction_t *txn)
 
     /* We don't accept a body for this method */
     if (buf_len(&txn->req_body)) return HTTP_BAD_MEDIATYPE;
+
+    /* Parse the path */
+    if ((r = parse_path(&txn->req_tgt, &txn->errstr))) return r;
 
     /* We don't handle GET on a calendar collection (yet) */
     if (!txn->req_tgt.resource) return HTTP_NO_CONTENT;
@@ -2933,6 +2924,9 @@ static int meth_mkcol(struct transaction_t *txn)
     /* Make sure its a DAV resource */
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
 
+    /* Parse the path */
+    if ((r = parse_path(&txn->req_tgt, &txn->errstr))) return r;
+
     /* Make sure its a home-set collection */
     if (!txn->req_tgt.collection || txn->req_tgt.resource) {
 	txn->errstr = "Calendars can only be created under a home-set collection";
@@ -3063,6 +3057,9 @@ static int meth_options(struct transaction_t *txn)
         return HTTP_BAD_MEDIATYPE;
     }
 
+    /* Special case "*" - show all features/methods available on server */
+    if (!strcmp(txn->req_tgt.path, "*")) txn->req_tgt.allow = ALLOW_ALL;
+
     response_header(HTTP_OK, txn);
     return 0;
 }
@@ -3086,6 +3083,9 @@ static int meth_propfind(struct transaction_t *txn)
 	strcmp(txn->req_tgt.path, "/")) {  /* Apple iCal checks "/" */
 	return HTTP_NOT_ALLOWED;
     }
+
+    /* Parse the path */
+    if ((r = parse_path(&txn->req_tgt, &txn->errstr))) return r;
 
     /* Check Depth */
     hdr = spool_getheader(txn->req_hdrs, "Depth");
@@ -3225,6 +3225,9 @@ static int meth_proppatch(struct transaction_t *txn)
     /* Make sure its a DAV resource */
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED;
 
+    /* Parse the path */
+    if ((r = parse_path(&txn->req_tgt, &txn->errstr))) return r;
+
     /* Make sure its a calendar collection */
     if (!txn->req_tgt.collection || txn->req_tgt.resource) {
 	txn->errstr = "Properties can only be updated on calendar collections";
@@ -3343,6 +3346,9 @@ static int meth_put(struct transaction_t *txn)
 
     /* Make sure its a DAV resource */
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
+
+    /* Parse the path */
+    if ((r = parse_path(&txn->req_tgt, &txn->errstr))) return r;
 
    /* We don't handle POST/PUT on non-calendar collections */
     if (!txn->req_tgt.collection) return HTTP_NOT_ALLOWED;
@@ -3611,6 +3617,9 @@ static int meth_report(struct transaction_t *txn)
 
     /* Make sure its a DAV resource */
     if (!(txn->req_tgt.allow & ALLOW_DAV)) return HTTP_NOT_ALLOWED; 
+
+    /* Parse the path */
+    if ((r = parse_path(&txn->req_tgt, &txn->errstr))) return r;
 
     /* Check Depth */
     if ((hdr = spool_getheader(txn->req_hdrs, "Depth"))) {
