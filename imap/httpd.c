@@ -2781,7 +2781,6 @@ static int meth_get_doc(struct transaction_t *txn)
     else
 	buf_appendcstr(&pathbuf, txn->req_tgt.path);
     path = buf_cstring(&pathbuf);
-    syslog(LOG_INFO, "path: '%s'", path);
 
     /* See if file exists and get Content-Length & Last-Modified time */
     if (stat(path, &sbuf)) return HTTP_NOT_FOUND;
