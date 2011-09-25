@@ -1177,6 +1177,18 @@ sub _sc_deleteacl {
       my $name = $mbx->[0];
       my $flags = $mbx->[1];
       next if($flags =~ /(\\noselect|\\nonexistent|\\placeholder)/i);
+      # If id of '*' is passed then delete all existing acls
+      if ($nargv[1] eq '*') {
+        my %acl = $$cyrref->listaclmailbox($name);
+        if (defined $$cyrref->error) {
+          print($$cyrref->error, "\n");
+          next;
+        }
+        pop(@nargv);
+        foreach my $acl (keys %acl) {
+          push(@nargv, $acl, $acl{$acl});
+        }
+      }
       print "Deleting acl on $name...";
       $nargv[0] = $name;
       my $rc = $$cyrref->deleteacl(@nargv);
@@ -1188,6 +1200,18 @@ sub _sc_deleteacl {
       }
     }
   } else {
+    # If id of '*' is passed then delete all existing acls
+    if ($nargv[1] eq '*') {
+      my %acl = $$cyrref->listaclmailbox($nargv[0]);
+      if (defined $$cyrref->error) {
+        print($$cyrref->error, "\n");
+        next;
+      }
+      pop(@nargv);
+      foreach my $acl (keys %acl) {
+        push(@nargv, $acl, $acl{$acl});
+      }
+    }
     $$cyrref->deleteacl(@nargv) ||
       die "deleteaclmailbox: " . $$cyrref->error . "\n";
   }
