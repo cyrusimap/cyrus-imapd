@@ -135,7 +135,7 @@ main(int argc, char **argv)
 
     if ((rc = mboxlist_lookup(buf, &mbentry, NULL)) == 0) {
       if (mbentry.mbtype & MBTYPE_REMOTE) {
-	fprintf(stderr, "Remote mailbox: %s\n", argv[i]);
+	printf("%s\n", mbentry.partition);
       } else {
 	char *path = mboxname_metapath(mbentry.partition, mbentry.name, 0, 0);
 	printf("%s\n", path);
