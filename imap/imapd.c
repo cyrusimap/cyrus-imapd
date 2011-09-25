@@ -6828,11 +6828,14 @@ void cmd_setquota(const char *tag, const char *quotaroot)
 	    c = getword(imapd_in, &arg);
 	    if (c != ' ' && c != ')') goto badlist;
 	    if (arg.s[0] == '\0') goto badlist;
-	    newquota = 0;
-	    for (p = arg.s; *p; p++) {
-		if (!Uisdigit(*p)) goto badlist;
-		newquota = newquota * 10 + *p - '0';
-                if (newquota < 0) goto badlist; /* overflow */
+	    /* accept "(storage -1)" as "()" to make move from unpatched cyrus possible */
+	    if (strcmp(arg.s, "-1") != 0) {
+		newquota = 0;
+		for (p = arg.s; *p; p++) {
+		    if (!Uisdigit(*p)) goto badlist;
+		    newquota = newquota * 10 + *p - '0';
+                    if (newquota < 0) goto badlist; /* overflow */
+		}
 	    }
 	    if (c == ')') break;
 	}
@@ -9642,9 +9645,16 @@ static int xfer_setquotaroot(struct xfer_header *xfer, const char *mboxname)
     
     /* note use of + to force the setting of a nonexistant
      * quotaroot */
-    prot_printf(xfer->be->out, "Q01 SETQUOTA {" SIZE_T_FMT "+}\r\n" \
-		"+%s (STORAGE %d)\r\n",
-		strlen(extname)+1, extname, quota.limit);
+    if (quota.limit == -1) {
+	prot_printf(xfer->be->out, "Q01 SETQUOTA {" SIZE_T_FMT "+}\r\n" \
+		    "+%s ()\r\n",
+		    strlen(extname)+1, extname);
+    }
+    else {
+	prot_printf(xfer->be->out, "Q01 SETQUOTA {" SIZE_T_FMT "+}\r\n" \
+		    "+%s (STORAGE %d)\r\n",
+		    strlen(extname)+1, extname, quota.limit);
+    }
     r = getresult(xfer->be->in, "Q01");
     if (r) syslog(LOG_ERR,
 		  "Could not move mailbox: %s, " \
