@@ -1162,6 +1162,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	    {
 	    case B_LOW:
 		priority="low";
+		break;
 	    case B_NORMAL:
 		priority="normal";
 		break;
@@ -1211,6 +1212,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	    {
 	    case B_LOW:
 		priority="low";		
+		break;
 	    case B_NORMAL:
 		priority="normal";
 		break;
