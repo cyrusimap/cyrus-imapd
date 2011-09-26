@@ -452,7 +452,8 @@ sub shell {
 	     'password|w=s' => \$pw,
   	     'tlskey|t:s' => \$tlskey,
   	     'notls' => \$notls,
-	     'help|h' => sub { cyradm_usage(); exit(0); }
+	     'help|h' => sub { cyradm_usage(); exit(0); },
+	     'version|v' => sub { cyradm_version(); exit(0); }
 	    );
   if ($server ne '' && @ARGV) {
     die "cyradm: may not specify server both with --server and bare arg\n";
@@ -500,10 +501,17 @@ Usage: cyradm [args] server
   --userrc <file>       Use user configuration <file>
   --port <port>         Connect to server on <port>
   --auth <mechanism>    Authenticate with <mechanism>
+  --help                This help message
+  --version             The version of Cyrus IMAP this utility is a part of
 
 Defaults to interactive mode. Please see man cyradm(1) and the 'help' command
 in the cyradm-shell for details.
 END_OF_HELP
+}
+
+# show cyradm version
+sub cyradm_version {
+  print "version: Cyrus IMAP $VERSION\n";
 }
 
 # help display
