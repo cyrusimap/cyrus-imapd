@@ -84,6 +84,8 @@
 
 #define FNAME_SUBSSUFFIX "sub"
 
+static char *user_hash_meta(const char *userid, const char *suffix);
+
 #if 0
 static int user_deleteacl(char *name, int matchlen, int maycreate, void* rock)
 {
@@ -203,6 +205,26 @@ EXPORTED int user_deletedata(const char *userid, int wipe_user)
 
     /* delete sieve scripts */
     user_deletesieve(userid);
+
+    /* NOTE: even if conversations aren't enabled, we want to clean up */
+
+    /* delete conversations file */
+    fname = conversations_getuserpath(userid);
+    (void) unlink(fname);
+    free(fname);
+
+    /* delete highestmodseq file */
+    fname = user_hash_meta(userid, "modseq");
+    (void) unlink(fname);
+    free(fname);
+
+    /* XXX: one could make an argument for keeping the UIDVALIDITY
+     * file forever, so that UIDVALIDITY never gets reused. */
+
+    /* delete uidvalidity file */
+    fname = user_hash_meta(userid, "uidvalidity");
+    (void) unlink(fname);
+    free(fname);
 
     proc_killuser(userid);
 
@@ -366,7 +388,7 @@ EXPORTED int user_renamedata(char *olduser, char *newuser,
 	/* move sieve scripts */
 	user_renamesieve(olduser, newuser);
     }
-    
+
     return r;
 }
 

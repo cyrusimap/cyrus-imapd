@@ -71,6 +71,7 @@ struct vanished_params {
     const char *match_seq;
     const char *match_uid;
     const char *sequence;
+    int uidvalidity_is_max;
 };
 
 struct index_init {
@@ -121,6 +122,8 @@ struct index_state {
     struct protstream *out;
     int qresync;
     struct auth_state *authstate;
+    int want_expunged;
+    unsigned num_expunged;
 };
 
 struct copyargs {
@@ -149,7 +152,11 @@ typedef struct msgdata {
     int is_refwd;		/* is message a reply or forward? */
     strarray_t annot;		/* array of annotation attribute values
 				   (stored in order of sortcrit) */
-    struct msgdata *next;
+    modseq_t convmodseq;	/* modseq of conversation */
+    uint32_t convexists;	/* exists count of conversation */
+    uint32_t convsize;		/* total size of messages in conversation */
+    bit32 hasflag;		/* hasflag values (up to 32 of them) */
+    bit32 hasconvflag;		/* hasconvflag values (up to 32 of them) */
 } MsgData;
 
 typedef struct thread {
@@ -166,7 +173,8 @@ struct rootset {
 
 struct thread_algorithm {
     const char *alg_name;
-    void (*threader)(struct index_state *state, unsigned *msgno_list, int nmsg, int usinguid);
+    void (*threader)(struct index_state *state, unsigned *msgno_list,
+		     unsigned int nmsg, int usinguid);
 };
 
 struct nntp_overview {
@@ -200,6 +208,12 @@ extern int index_run_annotator(struct index_state *state,
 			       struct namespace *namespace, int isadmin);
 extern int index_sort(struct index_state *state, const struct sortcrit *sortcrit,
 		      struct searchargs *searchargs, int usinguid);
+extern int index_convsort(struct index_state *state, struct sortcrit *sortcrit,
+		      struct searchargs *searchargs,
+		      const struct windowargs * windowargs);
+extern int index_convupdates(struct index_state *state, struct sortcrit *sortcrit,
+		      struct searchargs *searchargs,
+		      const struct windowargs * windowargs);
 extern int index_thread(struct index_state *state, int algorithm,
 			struct searchargs *searchargs, int usinguid);
 extern int index_search(struct index_state *state,
@@ -221,6 +235,7 @@ extern int find_thread_algorithm(char *arg);
 
 extern int index_open(const char *name, struct index_init *init,
 		      struct index_state **stateptr);
+extern void index_checkflags(struct index_state *state, int print, int dirty);
 extern void index_select(struct index_state *state, struct index_init *init);
 extern int index_status(struct index_state *state, struct statusdata *sdata);
 extern void index_release(struct index_state *state);
@@ -231,6 +246,8 @@ extern void index_tellchanges(struct index_state *state, int canexpunge,
 			      int printuid, int printmodseq);
 extern modseq_t index_highestmodseq(struct index_state *state);
 extern int index_check(struct index_state *state, int usinguid, int printuid);
+extern struct seqset *index_vanished(struct index_state *state,
+				    struct vanished_params *params);
 extern int index_urlfetch(struct index_state *state, uint32_t msgno,
 			  unsigned params, const char *section,
 			  unsigned long start_octet, unsigned long octet_count,

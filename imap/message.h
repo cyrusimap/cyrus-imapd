@@ -103,6 +103,7 @@ struct body {
     struct address *bcc;
     char *in_reply_to;
     char *message_id;
+    char *x_me_message_id;
     char *references;
     char *received_date;
 
@@ -129,9 +130,7 @@ struct param {
 extern int message_copy_strict P((struct protstream *from, FILE *to,
 				  unsigned size, int allow_null));
 
-extern int message_parse2(const char *fname, struct index_record *record,
-			  struct body **bodyp);
-#define message_parse(fname, record) message_parse2((fname), (record), NULL)
+extern int message_parse(const char *fname, struct index_record *record);
 
 struct message_content {
     const char *base;  /* memory mapped file */
@@ -154,6 +153,8 @@ extern int message_parse_binary_file P((FILE *infile, struct body **body));
 extern int message_parse_file P((FILE *infile,
 				 const char **msg_base, size_t *msg_len,
 				 struct body **body));
+extern void message_pruneheader(char *buf, const strarray_t *headers,
+				const strarray_t *headers_not);
 extern void message_fetch_part P((struct message_content *msg,
 				  const char **content_types,
 				  struct bodypart ***parts));
@@ -175,5 +176,7 @@ extern char *parse_nstring(char **str);
 
 extern void message_read_bodystructure(struct index_record *record,
 				       struct body **body);
+
+extern int message_update_conversations(struct conversations_state *, struct index_record *, conversation_t **);
 
 #endif /* INCLUDED_MESSAGE_H */

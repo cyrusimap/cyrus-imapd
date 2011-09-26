@@ -647,6 +647,33 @@ static void test_references(void)
     message_free_body(&body);
 }
 
+static void test_x_me_message_id(void)
+{
+    static const char msg[] =
+"From: Fred Bloggs <fbloggs@fastmail.fm>\r\n"
+"To: Sarah Jane Smith <sjsmith@gmail.com>\r\n"
+"Date: Wed, 27 Oct 2010 18:37:26 +1100\r\n"
+"Subject: Trivial testing email\r\n"
+"X-ME-Message-ID: <fake1700@fastmail.fm>\r\n"
+"\r\n"
+"Hello, World\n";
+    int r;
+    struct body body;
+
+    memset(&body, 0x45, sizeof(body));
+    r = message_parse_mapped(msg, sizeof(msg)-1, &body);
+
+    CU_ASSERT_EQUAL(r, 0);
+
+    /* Message-ID: <fake1700@fastmail.fm> */
+    CU_ASSERT_PTR_NULL(body.message_id);
+    CU_ASSERT_STRING_EQUAL(body.x_me_message_id, "<fake1700@fastmail.fm>");
+    CU_ASSERT_PTR_NULL(body.in_reply_to);
+    CU_ASSERT_PTR_NULL(body.references);
+
+    message_free_body(&body);
+}
+
 #undef TESTCASE
 #define TESTCASE(input, explen, expout) \
     buf_reset(&b); \

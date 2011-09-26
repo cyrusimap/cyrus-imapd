@@ -105,6 +105,7 @@ EXPORTED const char *config_ptscache_db;
 EXPORTED const char *config_statuscache_db;
 HIDDEN const char *config_userdeny_db;
 EXPORTED const char *config_zoneinfo_db;
+EXPORTED const char *config_conversations_db;
 EXPORTED int charset_flags;
 
 static char session_id_buf[MAX_SESSIONID_SIZE];
@@ -265,6 +266,7 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
 	config_statuscache_db = config_getstring(IMAPOPT_STATUSCACHE_DB);
 	config_userdeny_db = config_getstring(IMAPOPT_USERDENY_DB);
 	config_zoneinfo_db = config_getstring(IMAPOPT_ZONEINFO_DB);
+	config_conversations_db = config_getstring(IMAPOPT_CONVERSATIONS_DB);
 
 	/* configure libcyrus as needed */
 	libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, config_dir);

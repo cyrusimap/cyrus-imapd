@@ -64,6 +64,7 @@
 #include "libcyr_cfg.h"
 #include "mboxevent.h"
 #include "mboxlist.h"
+#include "conversations.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "strarray.h"
@@ -94,6 +95,14 @@ struct expire_rock {
     bit32 userflags[MAX_USER_FLAGS/32];
     int do_userflags;
     unsigned long userflags_expunged;
+};
+
+struct conversations_rock {
+    struct hash_table seen;
+    time_t expire_mark;
+    unsigned long databases_seen;
+    unsigned long msgids_seen;
+    unsigned long msgids_expired;
 };
 
 struct delete_rock {
@@ -367,6 +376,39 @@ done:
     return 0;
 }
 
+static int expire_conversations(char *name,
+				int matchlen __attribute__((unused)),
+				int maycreate __attribute__((unused)),
+				void *rock)
+{
+    struct conversations_rock *crock = (struct conversations_rock *)rock;
+    char *filename = conversations_getmboxpath(name);
+    struct conversations_state *state = NULL;
+    unsigned int nseen = 0, ndeleted = 0;
+
+    if (!filename) goto out;
+
+    if (hash_lookup(filename, &crock->seen))
+	goto out;
+    hash_insert(filename, (void *)1, &crock->seen);
+
+    if (verbose)
+	fprintf(stderr, "Pruning conversations from db %s\n", filename);
+
+    if (!conversations_open_path(filename, &state)) {
+	conversations_prune(state, crock->expire_mark, &nseen, &ndeleted);
+	conversations_commit(&state);
+    }
+
+    crock->databases_seen++;
+    crock->msgids_seen += nseen;
+    crock->msgids_expired += ndeleted;
+
+out:
+    free(filename);
+    return 0;
+}
+
 static void sighandler (int sig __attribute((unused)))
 {
     sigquit = 1;
@@ -381,11 +423,14 @@ int main(int argc, char *argv[])
     int expunge_seconds = -1;
     int delete_seconds = -1;
     int expire_seconds = 0;
+    int cid_expire_seconds;
+    int do_cid_expire = -1;
     char *alt_config = NULL;
     const char *find_prefix = "";
     const char *do_user = NULL;
     struct expire_rock erock;
     struct delete_rock drock;
+    struct conversations_rock crock;
     struct sigaction action;
 
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
@@ -397,8 +442,10 @@ int main(int argc, char *argv[])
     construct_hash_table(&erock.table, 10000, 1);
     memset(&drock, 0, sizeof(drock));
     strarray_init(&drock.to_delete);
+    memset(&crock, 0, sizeof(crock));
+    construct_hash_table(&crock.seen, 100, 1);
 
-    while ((opt = getopt(argc, argv, "C:D:E:X:p:u:vaxt")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:D:E:X:p:u:vaxtc")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
@@ -444,6 +491,11 @@ int main(int argc, char *argv[])
 	    erock.do_userflags = 1;
 	    break;
 
+	case 'c':
+	    if (!do_cid_expire) usage();
+	    do_cid_expire = 0;
+	    break;
+
 	default:
 	    usage();
 	    break;
@@ -468,6 +520,9 @@ int main(int argc, char *argv[])
 
     cyrus_init(alt_config, "cyr_expire", 0, 0);
     global_sasl_init(1, 0, NULL);
+
+    if (do_cid_expire < 0)
+	do_cid_expire = config_getswitch(IMAPOPT_CONVERSATIONS);
 
     annotate_init(NULL, NULL);
     annotatemore_open();
@@ -545,6 +600,35 @@ int main(int argc, char *argv[])
 	goto finish;
     }
 
+    if (do_cid_expire) {
+	cid_expire_seconds = config_getint(IMAPOPT_CONVERSATIONS_EXPIRE_DAYS) * 86400;
+	crock.expire_mark = time(0) - cid_expire_seconds;
+
+	if (verbose)
+	    fprintf(stderr,
+		    "Removing conversation entries older than %0.2f days\n",
+		    (double)(cid_expire_seconds/86400));
+
+	mboxlist_findall(NULL, find_prefix, 1, 0, 0,
+			 expire_conversations, &crock);
+
+	syslog(LOG_NOTICE, "Expired %lu entries of %lu entries seen "
+			    "in %lu conversation databases",
+			    crock.msgids_expired,
+			    crock.msgids_seen,
+			    crock.databases_seen);
+	if (verbose)
+	    fprintf(stderr, "Expired %lu entries of %lu entries seen "
+			    "in %lu conversation databases\n",
+			    crock.msgids_expired,
+			    crock.msgids_seen,
+			    crock.databases_seen);
+    }
+
+    if (sigquit) {
+	goto finish;
+    }
+
     if ((delete_seconds >= 0) && mboxlist_delayed_delete_isenabled() &&
 	config_getstring(IMAPOPT_DELETEDPREFIX)) {
 	int count = 0;
@@ -595,6 +679,7 @@ int main(int argc, char *argv[])
 
 finish:
     free_hash_table(&erock.table, free);
+    free_hash_table(&crock.seen, NULL);
     strarray_fini(&drock.to_delete);
 
     quotadb_close();

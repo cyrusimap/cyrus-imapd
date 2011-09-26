@@ -48,6 +48,7 @@
 #include "mailbox.h"
 #include "prot.h"
 #include "strarray.h"
+#include "conversations.h"
 
 /* Userid client has logged in as */
 extern char *imapd_userid;
@@ -103,6 +104,7 @@ struct fetchargs {
     strarray_t attribs;
     int isadmin;
     struct auth_state *authstate;
+    hash_table *cidhash;          /* for XCONVFETCH */
 };
 
 /* Bitmasks for fetchitems */
@@ -124,7 +126,10 @@ enum {
     FETCH_ANNOTATION =		(1<<14),
     FETCH_GUID   =		(1<<15),
     FETCH_SHA1   =		(1<<16),
-    FETCH_FILESIZE =		(1<<17)
+    FETCH_FILESIZE =		(1<<17),
+    FETCH_CID =			(1<<18),
+    FETCH_FOLDER =		(1<<19),
+    FETCH_UIDVALIDITY =		(1<<20)
 };
 
 enum {
@@ -195,9 +200,18 @@ enum {
     SEARCH_RECENT_SET =         (1<<0),
     SEARCH_RECENT_UNSET	=       (1<<1),
     SEARCH_SEEN_SET =           (1<<2),
-    SEARCH_SEEN_UNSET =	        (1<<3)
-/*    SEARCH_UNCACHEDHEADER =	(1<<4) -- obsolete */
+    SEARCH_SEEN_UNSET =	        (1<<3),
+    SEARCH_CONVSEEN_SET =       (1<<4),
+    SEARCH_CONVSEEN_UNSET =     (1<<5)
 };
+
+#define SEARCH_MUTABLEFLAGS (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET|\
+			     SEARCH_SEEN_SET|SEARCH_SEEN_UNSET|\
+			     SEARCH_CONVSEEN_SET|SEARCH_CONVSEEN_UNSET)
+#define SEARCH_COUNTEDFLAGS (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET|\
+			     SEARCH_SEEN_SET|SEARCH_SEEN_UNSET|\
+			     SEARCH_CONVSEEN_SET|SEARCH_CONVSEEN_UNSET)
+
 
 /* Bitmasks for search return options */
 enum {
@@ -209,7 +223,7 @@ enum {
 
 /* Things that may be searched for */
 struct searchargs {
-    int flags;
+    bit32 flags;
     unsigned smaller, larger;
     time_t before, after;
     time_t sentbefore, sentafter;
@@ -231,6 +245,8 @@ struct searchargs {
     struct searchsub *sublist;
     modseq_t modseq;
     struct searchannot *annotations;
+    struct strlist *convflags;
+    modseq_t convmodseq;
 
     bit32 cache_atleast;
 
@@ -248,6 +264,9 @@ struct sortcrit {
 	    char *entry;
 	    char *userid;
 	} annot;
+	struct {
+	    char *name;
+	} flag;
     } args;
 };
 
@@ -265,21 +284,58 @@ enum {
     SORT_TO,
     SORT_ANNOTATION,
     SORT_MODSEQ,
-    SORT_UID
+    SORT_UID,
+    SORT_HASFLAG,
+    SORT_CONVMODSEQ,
+    SORT_CONVEXISTS,
+    SORT_CONVSIZE,
+    SORT_HASCONVFLAG
     /* values > 255 are reserved for internal use */
 };
 
 /* Sort key modifier flag bits */
 #define SORT_REVERSE		(1<<0)
 
+/* Windowing arguments for the XCONVSORT command */
+struct windowargs {
+    int conversations;		/* whether to limit the results by
+				   conversation id */
+    uint32_t limit;		/* limit on how many messages to return,
+				 * 0 means unlimited. */
+    uint32_t position;		/* 1-based index into results of first
+				 * message to return.  0 means not
+				 * specified which is the same as 1.
+				 * Mutually exclusive with @anchor */
+    uint32_t anchor;		/* UID of a message used to locate the
+				 * start of the window; 0 means not
+				 * specified.  If the anchor is found,
+				 * the first message reported will be
+				 * the largest of 1 and the anchor minus
+				 * @offset.  If specified but not found,
+				 * an error will be returned.  Mutually
+				 * exclusive with @position.*/
+    uint32_t offset;
+    int changedsince;		/* if 1, show messages a) added since @uidnext,
+				 * b) removed since @modseq, or c) modified
+				 * since @modseq */
+    modseq_t modseq;
+    uint32_t uidnext;
+    uint32_t upto;		/* UID of a message used to terminate an
+				 * XCONVUPDATES early, 0 means not
+				 * specified.  */
+};
+
 /* Bitmask for status queries */
 enum {
-    STATUS_MESSAGES =	        (1<<0),
+    STATUS_MESSAGES =		(1<<0),
     STATUS_RECENT =		(1<<1),
     STATUS_UIDNEXT =		(1<<2),
     STATUS_UIDVALIDITY =	(1<<3),
     STATUS_UNSEEN =		(1<<4),
-    STATUS_HIGHESTMODSEQ =	(1<<5)
+    STATUS_HIGHESTMODSEQ =	(1<<5),
+    STATUS_XCONVEXISTS =	(1<<6),
+    STATUS_XCONVUNSEEN =	(1<<7),
+    STATUS_XCONVMODSEQ =	(1<<8)
 };
 
 /* Arguments to List functions */
@@ -291,7 +347,7 @@ struct listargs {
     strarray_t pat;		/* Mailbox pattern(s) */
     const char *scan;		/* SCAN content */
     hash_table server_table;	/* for proxying SCAN */
-    unsigned statusitems;       /* for RETURN STATUS */
+    unsigned statusitems;	/* for RETURN STATUS */
 };
 
 /* Value for List command variant */

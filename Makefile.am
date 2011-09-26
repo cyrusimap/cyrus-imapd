@@ -142,6 +142,7 @@ service_PROGRAMS += \
 user_PROGRAMS += \
 	imap/arbitron \
 	imap/chk_cyrus \
+	imap/ctl_conversationsdb \
 	imap/ctl_cyrusdb \
 	imap/ctl_deliver \
 	imap/ctl_mboxlist \
@@ -730,6 +731,9 @@ imap_arbitron_LDADD = $(LD_UTILITY_ADD)
 imap_chk_cyrus_SOURCES = imap/chk_cyrus.c imap/cli_fatal.c imap/mutex_fake.c
 imap_chk_cyrus_LDADD = $(LD_UTILITY_ADD)
 
+imap_ctl_conversationsdb_SOURCES = imap/ctl_conversationsdb.c imap/mutex_fake.c
+imap_ctl_conversationsdb_LDADD = $(LD_UTILITY_ADD)
+
 imap_ctl_cyrusdb_SOURCES = imap/cli_fatal.c imap/ctl_cyrusdb.c imap/mutex_fake.c
 imap_ctl_cyrusdb_LDADD = $(LD_UTILITY_ADD)
 
@@ -852,6 +856,7 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/append.h \
 	imap/backend.c \
 	imap/backend.h \
+	imap/conversations.c \
 	imap/convert_code.c \
 	imap/convert_code.h \
 	imap/dlist.c \

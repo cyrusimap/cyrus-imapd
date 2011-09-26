@@ -74,6 +74,7 @@
 #include "annotate.h"
 #include "message_guid.h"
 #include "strarray.h"
+#include "conversations.h"
 
 struct stagemsg {
     char fname[1024];
@@ -953,6 +954,7 @@ EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
 	fsync(fileno(destfile));
 	fclose(destfile);
     }
+
     if (!r && config_getstring(IMAPOPT_ANNOTATION_CALLOUT)) {
 	if (flags)
 	    newflags = strarray_dup(flags);
@@ -1297,6 +1299,7 @@ EXPORTED int append_copy(struct mailbox *mailbox,
 	record.content_lines = copymsg[msg].content_lines;
 	record.cache_version = copymsg[msg].cache_version;
 	record.cache_crc = copymsg[msg].cache_crc;
+	record.cid = copymsg[msg].cid;
 	record.crec = copymsg[msg].crec;
 
 	/* Write out index file entry */

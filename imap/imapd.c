@@ -375,7 +375,7 @@ static void cmd_delete(char *tag, char *name, int localonly, int force);
 static void cmd_dump(char *tag, char *name, int uid_start);
 static void cmd_undump(char *tag, char *name);
 static void cmd_xfer(const char *tag, const char *name,
-	      const char *toserver, const char *topart);
+		     const char *toserver, const char *topart);
 static void cmd_rename(char *tag, char *oldname, char *newname, char *partition);
 static void cmd_reconstruct(const char *tag, const char *name, int recursive);
 static void getlistargs(char *tag, struct listargs *listargs);
@@ -397,6 +397,13 @@ static void cmd_id(char* tag);
 static void cmd_idle(char* tag);
 
 static void cmd_starttls(char *tag, int imaps);
+
+static void cmd_xconvsort(char *tag, int updates);
+static void cmd_xconvmeta(const char *tag);
+static void cmd_xconvfetch(const char *tag);
+static int do_xconvfetch(struct dlist *cidlist,
+			 modseq_t ifchangedsince,
+			 struct fetchargs *fetchargs);
 
 #ifdef HAVE_SSL
 static void cmd_urlfetch(char *tag);
@@ -448,6 +455,8 @@ static int getsearchdate(time_t *start, time_t *end);
 static int getsortcriteria(char *tag, struct sortcrit **sortcrit);
 static char *sortcrit_as_string(const struct sortcrit *sortcrit);
 static int getdatetime(time_t *date);
+static int parse_windowargs(const char *tag, struct buf *, struct windowargs **, int);
+static void free_windowargs(struct windowargs *wa);
 
 static void appendfieldlist(struct fieldlist **l, char *section,
 		     strarray_t *fields, char *trail,
@@ -2158,7 +2167,26 @@ static void cmdloop(void)
 	    break;
 
 	case 'X':
-	    if (!strcmp(cmd.s, "Xfer")) {
+	    if (!strcmp(cmd.s, "Xconvfetch")) {
+		cmd_xconvfetch(tag.s);
+
+// 		snmp_increment(XCONVFETCH_COUNT, 1);
+	    }
+	    else if (!strcmp(cmd.s, "Xconvsort")) {
+		if (c != ' ') goto missingargs;
+		if (!imapd_index && !backend_current) goto nomailbox;
+		cmd_xconvsort(tag.s, 0);
+
+// 		snmp_increment(XCONVSORT_COUNT, 1);
+	    }
+	    else if (!strcmp(cmd.s, "Xconvupdates")) {
+		if (c != ' ') goto missingargs;
+		if (!imapd_index && !backend_current) goto nomailbox;
+		cmd_xconvsort(tag.s, 1);
+
+// 		snmp_increment(XCONVUPDATES_COUNT, 1);
+	    }
+	    else if (!strcmp(cmd.s, "Xfer")) {
 		int havepartition = 0;
 		
 		/* Mailbox */
@@ -2182,6 +2210,9 @@ static void cmdloop(void)
 		cmd_xfer(tag.s, arg1.s, arg2.s,
 			 (havepartition ? arg3.s : NULL));
 	    /*	snmp_increment(XFER_COUNT, 1);*/
+	    }
+	    else if (!strcmp(cmd.s, "Xconvmeta")) {
+		cmd_xconvmeta(tag.s);
 	    }
 	    else if (!strcmp(cmd.s, "Xlist")) {
 		struct listargs listargs;
@@ -3051,6 +3082,9 @@ static void capa_response(int flags)
     }
 
     if (!(flags & CAPA_POSTAUTH)) return;
+
+    if (config_getswitch(IMAPOPT_CONVERSATIONS))
+	prot_printf(imapd_out, " XCONVERSATIONS");
 
 #ifdef HAVE_ZLIB
     if (!imapd_compress_done && !imapd_tls_comp) {
@@ -4387,6 +4421,14 @@ badannotation:
 	    else goto badatt;
 	    break;
 
+	case 'C':
+	    if (!strcmp(fetchatt.s, "CID") &&
+	        config_getswitch(IMAPOPT_CONVERSATIONS)) {
+		fa->fetchitems |= FETCH_CID;
+	    }
+	    else goto badatt;
+	    break;
+
 	case 'D':
 	    if (!strcmp(fetchatt.s, "DIGEST.SHA1")) {
 		fa->fetchitems |= FETCH_GUID;
@@ -4410,6 +4452,9 @@ badannotation:
 	    }
 	    else if (!strcmp(fetchatt.s, "FLAGS")) {
 		fa->fetchitems |= FETCH_FLAGS;
+	    }
+	    else if (!strcmp(fetchatt.s, "FOLDER")) {
+		fa->fetchitems |= FETCH_FOLDER;
 	    }
 	    else goto badatt;
 	    break;
@@ -4510,6 +4555,9 @@ badannotation:
 	    if (!strcmp(fetchatt.s, "UID")) {
 		fa->fetchitems |= FETCH_UID;
 	    }
+	    else if (!strcmp(fetchatt.s, "UIDVALIDITY")) {
+		fa->fetchitems |= FETCH_UIDVALIDITY;
+	    }
 	    else goto badatt;
 	    break;
 
@@ -4608,14 +4656,17 @@ badannotation:
     if (fa->fetchitems & FETCH_MODSEQ) {
 	if (!(imapd_client_capa & CAPA_CONDSTORE)) {
 	    imapd_client_capa |= CAPA_CONDSTORE;
-	    prot_printf(imapd_out, "* OK [HIGHESTMODSEQ " MODSEQ_FMT "]  \r\n",
+	    if (imapd_index)
+		prot_printf(imapd_out, "* OK [HIGHESTMODSEQ " MODSEQ_FMT "]  \r\n",
 			index_highestmodseq(imapd_index));
 	}
     }
 
-    if (fa->fetchitems & FETCH_ANNOTATION) {
+    if (fa->fetchitems & (FETCH_ANNOTATION|FETCH_FOLDER)) {
 	fa->namespace = &imapd_namespace;
 	fa->userid = imapd_userid;
+    }
+    if (fa->fetchitems & FETCH_ANNOTATION) {
 	fa->isadmin = imapd_userisadmin || imapd_userisproxyadmin;
 	fa->authstate = imapd_authstate;
     }
@@ -4696,6 +4747,373 @@ static void cmd_fetch(char *tag, char *sequence, int usinguid)
 
  freeargs:
     fetchargs_fini(&fetchargs);
+}
+
+static void do_one_xconvmeta(struct conversations_state *state,
+			     conversation_id_t cid,
+			     conversation_t *conv,
+			     struct dlist *itemlist)
+{
+    struct dlist *item = dlist_newpklist(NULL, "");
+    struct dlist *fl;
+
+    assert(conv);
+    assert(itemlist);
+
+    for (fl = itemlist->head; fl; fl = fl->next) {
+	const char *key = dlist_cstring(fl);
+
+	/* xxx - parse to a fetchitems? */
+	if (!strcasecmp(key, "MODSEQ"))
+	    dlist_setnum64(item, "MODSEQ", conv->modseq);
+	else if (!strcasecmp(key, "EXISTS"))
+	    dlist_setnum32(item, "EXISTS", conv->exists);
+	else if (!strcasecmp(key, "UNSEEN"))
+	    dlist_setnum32(item, "UNSEEN", conv->unseen);
+	else if (!strcasecmp(key, "SIZE"))
+	    dlist_setnum32(item, "SIZE", conv->size);
+	else if (!strcasecmp(key, "COUNT")) {
+	    struct dlist *flist = dlist_newlist(item, "COUNT");
+	    fl = fl->next;
+	    if (dlist_isatomlist(fl)) {
+		struct dlist *tmp;
+		for (tmp = fl->head; tmp; tmp = tmp->next) {
+		    const char *lookup = dlist_cstring(tmp);
+		    int i = strarray_find_case(state->counted_flags, lookup, 0);
+		    if (i >= 0) {
+			dlist_setflag(flist, "FLAG", lookup);
+			dlist_setnum32(flist, "COUNT", conv->counts[i]);
+		    }
+		}
+	    }
+	}
+	else if (!strcasecmp(key, "SENDERS")) {
+	    conv_sender_t *sender;
+	    struct dlist *slist = dlist_newlist(item, "SENDERS");
+	    for (sender = conv->senders; sender; sender = sender->next) {
+		struct dlist *sli = dlist_newlist(slist, "");
+		dlist_setatom(sli, "NAME", sender->name);
+		dlist_setatom(sli, "ROUTE", sender->route);
+		dlist_setatom(sli, "MAILBOX", sender->mailbox);
+		dlist_setatom(sli, "DOMAIN", sender->domain);
+	    }
+	}
+	else if (!strcasecmp(key, "FOLDEREXISTS")) {
+	    struct dlist *flist = dlist_newlist(item, "FOLDEREXISTS");
+	    conv_folder_t *folder;
+	    fl = fl->next;
+	    if (dlist_isatomlist(fl)) {
+		struct dlist *tmp;
+		for (tmp = fl->head; tmp; tmp = tmp->next) {
+		    const char *fname = dlist_cstring(tmp);
+		    char intname[MAX_MAILBOX_NAME];
+		    /* ugly city */
+		    if ((*imapd_namespace.mboxname_tointernal)(&imapd_namespace, fname,
+							       imapd_userid, intname))
+			continue;
+		    folder = conversation_find_folder(state, conv, intname);
+		    dlist_setatom(flist, "MBOXNAME", fname);
+		    /* ok if it's not there */
+		    dlist_setnum32(flist, "EXISTS", folder ? folder->exists : 0);
+		}
+	    }
+	}
+	else {
+	    dlist_setatom(item, key, NULL); /* add a NIL response */
+	}
+    }
+
+    prot_printf(imapd_out, "* XCONVMETA %s ", conversation_id_encode(cid));
+    dlist_print(item, 0, imapd_out);
+    prot_printf(imapd_out, "\r\n");
+
+    dlist_free(&item);
+}
+
+static void do_xconvmeta(const char *tag,
+			 struct conversations_state *state,
+			 struct dlist *cidlist,
+			 struct dlist *itemlist)
+{
+    conversation_id_t cid;
+    struct dlist *dl;
+    int r;
+
+    for (dl = cidlist->head; dl; dl = dl->next) {
+	const char *cidstr = dlist_cstring(dl);
+	conversation_t *conv = NULL;
+
+	if (!conversation_id_decode(&cid, cidstr) || !cid) {
+	    prot_printf(imapd_out, "%s BAD Invalid CID %s\r\n", tag, cidstr);
+	    return;
+	}
+
+	r = conversation_load(state, cid, &conv);
+	if (r) {
+	    prot_printf(imapd_out, "%s BAD Failed to read %s\r\n", tag, cidstr);
+	    conversation_free(conv);
+	    return;
+	}
+
+	if (conv && conv->exists)
+	    do_one_xconvmeta(state, cid, conv, itemlist);
+
+	conversation_free(conv);
+    }
+
+    prot_printf(imapd_out, "%s OK Completed\r\n", tag);
+}
+
+/*
+ * Parse and perform a XCONVMETA command.
+ */
+void cmd_xconvmeta(const char *tag)
+{
+    int r;
+    char c = ' ';
+    struct conversations_state *state = NULL;
+    struct dlist *cidlist = NULL;
+    struct dlist *itemlist = NULL;
+
+    if (backend_current) {
+	/* remote mailbox */
+	prot_printf(backend_current->out, "%s XCONVMETA ", tag);
+	if (!pipe_command(backend_current, 65536)) {
+	    pipe_including_tag(backend_current, tag, 0);
+	}
+	return;
+    }
+
+    if (!config_getswitch(IMAPOPT_CONVERSATIONS)) {
+	prot_printf(imapd_out, "%s BAD Unrecognized command\r\n", tag);
+	eatline(imapd_in, c);
+	goto done;
+    }
+
+    c = dlist_parse_asatomlist(&cidlist, 0, imapd_in);
+    if (c != ' ') {
+	prot_printf(imapd_out, "%s BAD Failed to parse CID list\r\n", tag);
+	eatline(imapd_in, c);
+	goto done;
+    }
+
+    c = dlist_parse_asatomlist(&itemlist, 0, imapd_in);
+    if (c == '\r') c = prot_getc(imapd_in);
+    if (c != '\n') {
+	prot_printf(imapd_out, "%s BAD Failed to parse item list\r\n", tag);
+	eatline(imapd_in, c);
+	goto done;
+    }
+
+    r = conversations_open_user(imapd_userid, &state);
+    if (r) {
+	prot_printf(imapd_out, "%s BAD failed to open db: %s\r\n",
+		    tag, error_message(r));
+	goto done;
+    }
+
+    do_xconvmeta(tag, state, cidlist, itemlist);
+
+ done:
+
+    dlist_free(&itemlist);
+    dlist_free(&cidlist);
+    conversations_commit(&state);
+}
+
+/*
+ * Parse and perform a XCONVFETCH command.
+ */
+void cmd_xconvfetch(const char *tag)
+{
+    int c = ' ';
+    struct fetchargs fetchargs;
+    int r;
+    clock_t start = clock();
+    modseq_t ifchangedsince = 0;
+    char mytime[100];
+    struct dlist *cidlist = NULL;
+    struct dlist *item;
+
+    if (backend_current) {
+	/* remote mailbox */
+	prot_printf(backend_current->out, "%s XCONVFETCH ", tag);
+	if (!pipe_command(backend_current, 65536)) {
+	    pipe_including_tag(backend_current, tag, 0);
+	}
+	return;
+    }
+
+    if (!config_getswitch(IMAPOPT_CONVERSATIONS)) {
+	prot_printf(imapd_out, "%s BAD Unrecognized command\r\n", tag);
+	eatline(imapd_in, c);
+	return;
+    }
+
+    /* local mailbox */
+    memset(&fetchargs, 0, sizeof(struct fetchargs));
+
+    c = dlist_parse_asatomlist(&cidlist, 0, imapd_in);
+    if (c != ' ')
+	goto syntax_error;
+
+    /* check CIDs */
+    for (item = cidlist->head; item; item = item->next) {
+	if (!dlist_ishex64(item)) {
+	    prot_printf(imapd_out, "%s BAD Invalid CID\r\n", tag);
+	    eatline(imapd_in, c);
+	    goto freeargs;
+	}
+    }
+
+    c = getmodseq(imapd_in, &ifchangedsince);
+    if (c != ' ')
+	goto syntax_error;
+
+    r = parse_fetch_args(tag, "Xconvfetch", 0, &fetchargs);
+    if (r)
+	goto freeargs;
+    fetchargs.fetchitems |= (FETCH_UIDVALIDITY|FETCH_FOLDER);
+    fetchargs.namespace = &imapd_namespace;
+    fetchargs.userid = imapd_userid;
+
+    r = do_xconvfetch(cidlist, ifchangedsince, &fetchargs);
+
+    snprintf(mytime, sizeof(mytime), "%2.3f",
+	     (clock() - start) / (double) CLOCKS_PER_SEC);
+
+    if (r) {
+	prot_printf(imapd_out, "%s NO %s (%s sec)\r\n", tag,
+		    error_message(r), mytime);
+    } else {
+	prot_printf(imapd_out, "%s OK Completed (%s sec)\r\n",
+		    tag, mytime);
+    }
+
+freeargs:
+    dlist_free(&cidlist);
+    fetchargs_fini(&fetchargs);
+    return;
+
+syntax_error:
+    prot_printf(imapd_out, "%s BAD Syntax error\r\n", tag);
+    eatline(imapd_in, c);
+    dlist_free(&cidlist);
+    fetchargs_fini(&fetchargs);
+}
+
+static int xconvfetch_lookup(struct conversations_state *statep,
+			     conversation_id_t cid,
+			     modseq_t ifchangedsince,
+			     hash_table *wanted_cids,
+			     strarray_t *folder_list)
+{
+    const char *key = conversation_id_encode(cid);
+    conversation_t *conv = NULL;
+    conv_folder_t *folder;
+    int r;
+
+    r = conversation_load(statep, cid, &conv);
+    if (r) return r;
+
+    if (!conv)
+	goto out;
+
+    if (!conv->exists)
+	goto out;
+
+    /* output the metadata for this conversation */
+    {
+	struct dlist *dl = dlist_newlist(NULL, "");
+	dlist_setatom(dl, "", "MODSEQ");
+	do_one_xconvmeta(statep, cid, conv, dl);
+	dlist_free(&dl);
+    }
+
+    if (ifchangedsince >= conv->modseq)
+	goto out;
+
+    hash_insert(key, (void *)1, wanted_cids);
+
+    for (folder = conv->folders; folder; folder = folder->next) {
+	/* no contents */
+	if (!folder->exists)
+	    continue;
+
+	/* finally, something worth looking at */
+	strarray_add(folder_list, strarray_nth(statep->folder_names, folder->number));
+    }
+
+out:
+    conversation_free(conv);
+    return 0;
+}
+
+static int do_xconvfetch(struct dlist *cidlist,
+			 modseq_t ifchangedsince,
+			 struct fetchargs *fetchargs)
+{
+    struct conversations_state *state = NULL;
+    int r = 0;
+    struct index_state *index_state = NULL;
+    struct dlist *dl;
+    hash_table wanted_cids = HASH_TABLE_INITIALIZER;
+    strarray_t folder_list = STRARRAY_INITIALIZER;
+    struct index_init init;
+    int i;
+
+    r = conversations_open_user(imapd_userid, &state);
+    if (r) goto out;
+
+    construct_hash_table(&wanted_cids, 1024, 0);
+
+    for (dl = cidlist->head; dl; dl = dl->next) {
+	r = xconvfetch_lookup(state, dlist_num(dl), ifchangedsince,
+			      &wanted_cids, &folder_list);
+	if (r) goto out;
+    }
+
+    /* unchanged, woot */
+    if (!folder_list.count)
+	goto out;
+
+    fetchargs->cidhash = &wanted_cids;
+
+    memset(&init, 0, sizeof(struct index_init));
+    init.userid = imapd_userid;
+    init.authstate = imapd_authstate;
+    init.out = imapd_out;
+
+    for (i = 0; i < folder_list.count; i++) {
+	const char *mboxname = folder_list.data[i];
+
+	r = index_open(mboxname, &init, &index_state);
+	if (r == IMAP_MAILBOX_NONEXISTENT)
+	    continue;
+	if (r)
+	    goto out;
+
+	index_checkflags(index_state, 0, 0);
+
+	/* make sure \Deleted messages are expunged.  Will also lock the
+	 * mailbox state and read any new information */
+	r = index_expunge(index_state, NULL, 1);
+	if (r) goto out;
+
+	index_fetchresponses(index_state, NULL, /*usinguid*/1,
+			     fetchargs, NULL);
+
+	index_close(&index_state);
+    }
+
+    r = 0;
+
+out:
+    index_close(&index_state);
+    conversations_commit(&state);
+    free_hash_table(&wanted_cids, NULL);
+    strarray_fini(&folder_list);
+    return r;
 }
 
 #undef PARSE_PARTIAL /* cleanup */
@@ -5069,6 +5487,147 @@ error:
     eatline(imapd_in, (c == EOF ? ' ' : c));
     freesortcrit(sortcrit);
     freesearchargs(searchargs);
+}
+
+/*
+ * Perform a XCONVSORT or XCONVUPDATES command
+ */
+void cmd_xconvsort(char *tag, int updates)
+{
+    int c;
+    struct sortcrit *sortcrit = NULL;
+    static struct buf arg;
+    int charset = 0;
+    struct searchargs *searchargs = NULL;
+    struct windowargs *windowargs = NULL;
+    struct index_init init;
+    struct index_state *oldstate = NULL;
+    struct conversations_state *cstate = NULL;
+    clock_t start = clock();
+    char mytime[100];
+    int r;
+
+    if (backend_current) {
+	/* remote mailbox */
+	const char *cmd = "Xconvsort";
+
+	prot_printf(backend_current->out, "%s %s ", tag, cmd);
+	if (!pipe_command(backend_current, 65536)) {
+	    pipe_including_tag(backend_current, tag, 0);
+	}
+	return;
+    }
+    assert(imapd_index);
+
+    if (!config_getswitch(IMAPOPT_CONVERSATIONS)) {
+	prot_printf(imapd_out, "%s BAD Unrecognized command\r\n", tag);
+	eatline(imapd_in, ' ');
+	return;
+    }
+
+    c = getsortcriteria(tag, &sortcrit);
+    if (c == EOF) goto error;
+
+    if (c != ' ') {
+	prot_printf(imapd_out, "%s BAD Missing window args in XConvSort\r\n",
+		    tag);
+	goto error;
+    }
+
+    c = parse_windowargs(tag, &arg, &windowargs, updates);
+    if (c != ' ')
+	goto error;
+
+    /* arg contains the charset */
+    lcase(arg.s);
+    charset = charset_lookupname(arg.s);
+
+    if (charset == -1) {
+	prot_printf(imapd_out, "%s NO %s\r\n", tag,
+	       error_message(IMAP_UNRECOGNIZED_CHARSET));
+	goto error;
+    }
+
+    /* open the conversations state first - we don't care if it fails,
+     * because that probably just means it's already open */
+    conversations_open_mbox(imapd_index->mailbox->name, &cstate);
+
+    if (updates) {
+	/* in XCONVUPDATES, need to force a re-read from scratch into
+	 * a new index, because we ask for deleted messages */
+
+	oldstate = imapd_index;
+	imapd_index = NULL;
+
+	memset(&init, 0, sizeof(struct index_init));
+	init.userid = imapd_userid;
+	init.authstate = imapd_authstate;
+	init.out = imapd_out;
+	init.want_expunged = 1;
+
+	r = index_open(oldstate->mailbox->name, &init, &imapd_index);
+	if (r) {
+	    prot_printf(imapd_out, "%s NO %s\r\n", tag,
+			error_message(r));
+	    goto error;
+	}
+    }
+
+    /* need index loaded to even parse searchargs! */
+    searchargs = (struct searchargs *)xzmalloc(sizeof(struct searchargs));
+
+    c = getsearchprogram(tag, searchargs, &charset, 0);
+    if (c == EOF) goto error;
+
+    if (c == '\r') c = prot_getc(imapd_in);
+    if (c != '\n') {
+	prot_printf(imapd_out, 
+		    "%s BAD Unexpected extra arguments to Xconvsort\r\n", tag);
+	goto error;
+    }
+
+    if (updates)
+	r = index_convupdates(imapd_index, sortcrit, searchargs, windowargs);
+    else
+	r = index_convsort(imapd_index, sortcrit, searchargs, windowargs);
+
+    if (oldstate) {
+	index_close(&imapd_index);
+	imapd_index = oldstate;
+    }
+
+    if (r < 0) {
+	prot_printf(imapd_out, "%s NO %s\r\n", tag,
+		    error_message(r));
+	goto error;
+    }
+
+    snprintf(mytime, sizeof(mytime), "%2.3f",
+	     (clock() - start) / (double) CLOCKS_PER_SEC);
+    if (CONFIG_TIMING_VERBOSE) {
+	char *s = sortcrit_as_string(sortcrit);
+	syslog(LOG_DEBUG, "XCONVSORT (%s) processing time %s sec",
+	       s, mytime);
+	free(s);
+    }
+    prot_printf(imapd_out, "%s OK %s (in %s secs)\r\n", tag,
+		error_message(IMAP_OK_COMPLETED), mytime);
+
+out:
+    if (cstate) conversations_commit(&cstate);
+    freesortcrit(sortcrit);
+    freesearchargs(searchargs);
+    free_windowargs(windowargs);
+    return;
+
+error:
+    if (cstate) conversations_commit(&cstate);
+    if (oldstate) {
+	if (imapd_index) index_close(&imapd_index);
+	imapd_index = oldstate;
+    }
+    eatline(imapd_in, (c == EOF ? ' ' : c));
+    goto out;
 }
 
 /*
@@ -7574,6 +8133,7 @@ static int parse_statusitems(unsigned *statusitemsp, const char **errstr)
     static struct buf arg;
     unsigned statusitems = 0;
     int c;
+    int hasconv = config_getswitch(IMAPOPT_CONVERSATIONS);
 
     c = prot_getc(imapd_in);
     if (c != '(') return EOF;
@@ -7599,6 +8159,15 @@ static int parse_statusitems(unsigned *statusitemsp, const char **errstr)
 	}
 	else if (!strcmp(arg.s, "highestmodseq")) {
 	    statusitems |= STATUS_HIGHESTMODSEQ;
+	}
+	else if (hasconv && !strcmp(arg.s, "xconvexists")) {
+	    statusitems |= STATUS_XCONVEXISTS;
+	}
+	else if (hasconv && !strcmp(arg.s, "xconvunseen")) {
+	    statusitems |= STATUS_XCONVUNSEEN;
+	}
+	else if (hasconv && !strcmp(arg.s, "xconvmodseq")) {
+	    statusitems |= STATUS_XCONVMODSEQ;
 	}
 	else {
 	    static char buf[200];
@@ -7657,6 +8226,19 @@ static int print_statusline(const char *extname, unsigned statusitems,
 		    sepchar, sd->highestmodseq);
 	sepchar = ' ';
     }
+    if (statusitems & STATUS_XCONVEXISTS) {
+	prot_printf(imapd_out, "%cXCONVEXISTS %u", sepchar, sd->xconvexists);
+	sepchar = ' ';
+    }
+    if (statusitems & STATUS_XCONVUNSEEN) {
+	prot_printf(imapd_out, "%cXCONVUNSEEN %u", sepchar, sd->xconvunseen);
+	sepchar = ' ';
+    }
+    if (statusitems & STATUS_XCONVMODSEQ) {
+	prot_printf(imapd_out, "%cXCONVMODSEQ " MODSEQ_FMT, sepchar, sd->xconvmodseq);
+	sepchar = ' ';
+    }
+
     prot_printf(imapd_out, ")\r\n");
 
     return 0;
@@ -7665,12 +8247,32 @@ static int print_statusline(const char *extname, unsigned statusitems,
 static int imapd_statusdata(const char *mailboxname, unsigned statusitems,
 			    struct statusdata *sd)
 {
+    int r;
+
     /* use the index status if we can so we get the 'alive' Recent count */
     if (!strcmpsafe(mailboxname, index_mboxname(imapd_index)))
-	return index_status(imapd_index, sd);
-
+	r = index_status(imapd_index, sd);
     /* fall back to generic lookup */
-    return status_lookup(mailboxname, imapd_userid, statusitems, sd);
+    else
+	r = status_lookup(mailboxname, imapd_userid, statusitems, sd);
+
+    if (r) goto out;
+
+    if (statusitems & (STATUS_XCONVEXISTS | STATUS_XCONVUNSEEN
+		    | STATUS_XCONVMODSEQ)) {
+	/* can only get for ourselves for now */
+	struct conversations_state *state = NULL;
+
+	r = conversations_open_mbox(mailboxname, &state);
+	if (r) goto out;
+
+	r = conversation_getstatus(state, mailboxname, &sd->xconvmodseq,
+				   &sd->xconvexists, &sd->xconvunseen);
+	conversations_commit(&state);
+    }
+
+out:
+    return r;
 }
 
 /*
@@ -9246,6 +9848,7 @@ static int getsearchcriteria(const char *tag, struct searchargs *searchargs,
     unsigned size;
     time_t start, end, now = time(0);
     int keep_charset = 0;
+    int hasconv = config_getswitch(IMAPOPT_CONVERSATIONS);
 
     c = getword(imapd_in, &criteria);
     lcase(criteria.s);
@@ -9323,6 +9926,30 @@ static int getsearchcriteria(const char *tag, struct searchargs *searchargs,
 	    str = charset_convert(arg.s, *charsetp, charset_flags);
 	    if (str) appendstrlistpat(&searchargs->cc, str);
 	    else searchargs->flags = (SEARCH_RECENT_SET|SEARCH_RECENT_UNSET);
+	}
+	else if (hasconv && !strcmp(criteria.s, "convflag")) {
+	    if (c != ' ') goto missingarg;
+	    c = getword(imapd_in, &arg);
+	    if (!imparse_isatom(arg.s)) goto badflag;
+	    lcase(arg.s);
+	    appendstrlist(&searchargs->convflags, arg.s);
+	}
+	else if (hasconv && !strcmp(criteria.s, "convread")) {
+	    searchargs->flags |= SEARCH_CONVSEEN_SET;
+	}
+	else if (hasconv && !strcmp(criteria.s, "convunread")) {
+	    searchargs->flags |= SEARCH_CONVSEEN_UNSET;
+	}
+	else if (hasconv && !strcmp(criteria.s, "convseen")) {
+	    searchargs->flags |= SEARCH_CONVSEEN_SET;
+	}
+	else if (hasconv && !strcmp(criteria.s, "convunseen")) {
+	    searchargs->flags |= SEARCH_CONVSEEN_UNSET;
+	}
+	else if (hasconv && !strcmp(criteria.s, "convmodseq")) {
+	    if (c != ' ') goto missingarg;
+	    c = getmodseq(imapd_in, &searchargs->convmodseq);
+	    if (c == EOF) goto badnumber;
 	}
 	else if ((*searchstatep & GETSEARCH_CHARSET)
 	      && !strcmp(criteria.s, "charset")) {
@@ -10746,6 +11373,7 @@ static int getsortcriteria(char *tag, struct sortcrit **sortcrit)
     int c;
     static struct buf criteria;
     int nsort, n;
+    int hasconv = config_getswitch(IMAPOPT_CONVERSATIONS);
 
     *sortcrit = NULL;
 
@@ -10813,6 +11441,26 @@ static int getsortcriteria(char *tag, struct sortcrit **sortcrit)
 	    (*sortcrit)[n].key = SORT_MODSEQ;
 	else if (!strcmp(criteria.s, "uid"))
 	    (*sortcrit)[n].key = SORT_UID;
+	else if (!strcmp(criteria.s, "hasflag")) {
+	    (*sortcrit)[n].key = SORT_HASFLAG;
+	    if (c != ' ') goto missingarg;
+	    c = getastring(imapd_in, imapd_out, &criteria);
+	    if (c == EOF) goto missingarg;
+	    (*sortcrit)[n].args.flag.name = xstrdup(criteria.s);
+	}
+	else if (hasconv && !strcmp(criteria.s, "convmodseq"))
+	    (*sortcrit)[n].key = SORT_CONVMODSEQ;
+	else if (hasconv && !strcmp(criteria.s, "convexists"))
+	    (*sortcrit)[n].key = SORT_CONVEXISTS;
+	else if (hasconv && !strcmp(criteria.s, "convsize"))
+	    (*sortcrit)[n].key = SORT_CONVSIZE;
+	else if (hasconv && !strcmp(criteria.s, "hasconvflag")) {
+	    (*sortcrit)[n].key = SORT_HASCONVFLAG;
+	    if (c != ' ') goto missingarg;
+	    c = getastring(imapd_in, imapd_out, &criteria);
+	    if (c == EOF) goto missingarg;
+	    (*sortcrit)[n].args.flag.name = xstrdup(criteria.s);
+	}
 	else {
 	    prot_printf(imapd_out, "%s BAD Invalid Sort criterion %s\r\n",
 			tag, criteria.s);
@@ -10890,6 +11538,148 @@ static char *sortcrit_as_string(const struct sortcrit *sortcrit)
 	}
     }
     return buf_release(&b);
+}
+
+static int parse_windowargs(const char *tag,
+			    struct buf *arg,
+			    struct windowargs **wa,
+			    int updates)
+{
+    struct windowargs windowargs;
+    int c;
+
+    memset(&windowargs, 0, sizeof(windowargs));
+
+    c = prot_getc(imapd_in);
+    if (c == EOF)
+	goto out;
+    if (c != '(') {
+	prot_ungetc(c, imapd_in);
+	c = getcharset(imapd_in, imapd_out, arg);
+	goto out;
+    }
+
+    for (;;)
+    {
+	c = getword(imapd_in, arg);
+	if (!arg->len) {
+	    if (c == ')')
+		break;
+	    goto syntax_error;
+	}
+
+	if (!strcasecmp(arg->s, "CONVERSATIONS"))
+	    windowargs.conversations = 1;
+	else if (!strcasecmp(arg->s, "POSITION")) {
+	    if (updates)
+		goto syntax_error;
+	    if (c != ' ')
+		goto syntax_error;
+	    c = prot_getc(imapd_in);
+	    if (c != '(')
+		goto syntax_error;
+	    c = getuint32(imapd_in, &windowargs.position);
+	    if (c != ' ')
+		goto syntax_error;
+	    c = getuint32(imapd_in, &windowargs.limit);
+	    if (c != ')')
+		goto syntax_error;
+	    c = prot_getc(imapd_in);
+	    if (windowargs.position == 0)
+		goto syntax_error;
+	}
+	else if (!strcasecmp(arg->s, "ANCHOR")) {
+	    if (updates)
+		goto syntax_error;
+	    if (c != ' ')
+		goto syntax_error;
+	    c = prot_getc(imapd_in);
+	    if (c != '(')
+		goto syntax_error;
+	    c = getuint32(imapd_in, &windowargs.anchor);
+	    if (c != ' ')
+		goto syntax_error;
+	    c = getuint32(imapd_in, &windowargs.offset);
+	    if (c != ' ')
+		goto syntax_error;
+	    c = getuint32(imapd_in, &windowargs.limit);
+	    if (c != ')')
+		goto syntax_error;
+	    c = prot_getc(imapd_in);
+	    if (windowargs.anchor == 0)
+		goto syntax_error;
+	}
+	else if (!strcasecmp(arg->s, "CHANGEDSINCE")) {
+	    if (!updates)
+		goto syntax_error;
+	    windowargs.changedsince = 1;
+	    if (c != ' ')
+		goto syntax_error;
+	    c = prot_getc(imapd_in);
+	    if (c != '(')
+		goto syntax_error;
+	    c = getmodseq(imapd_in, &windowargs.modseq);
+	    if (c != ' ')
+		goto syntax_error;
+	    c = getuint32(imapd_in, &windowargs.uidnext);
+	    if (c != ')')
+		goto syntax_error;
+	    c = prot_getc(imapd_in);
+	} else if (!strcasecmp(arg->s, "UPTO")) {
+	    if (!updates)
+		goto syntax_error;
+	    if (c != ' ')
+		goto syntax_error;
+	    c = prot_getc(imapd_in);
+	    if (c != '(')
+		goto syntax_error;
+	    c = getuint32(imapd_in, &windowargs.upto);
+	    if (c != ')')
+		goto syntax_error;
+	    c = prot_getc(imapd_in);
+
+	    if (windowargs.upto == 0)
+		goto syntax_error;
+	}
+	else
+	    goto syntax_error;
+
+	if (c == ')')
+	    break;
+	if (c != ' ')
+	    goto syntax_error;
+    }
+
+    c = prot_getc(imapd_in);
+    if (c != ' ')
+	goto syntax_error;
+
+    c = getcharset(imapd_in, imapd_out, arg);
+    if (c != ' ')
+	goto syntax_error;
+
+out:
+    /* these two are mutually exclusive */
+    if (windowargs.anchor && windowargs.position)
+	goto syntax_error;
+    /* changedsince is mandatory for XCONVUPDATES
+     * and illegal for XCONVSORT */
+    if (!!updates != windowargs.changedsince)
+	goto syntax_error;
+
+    *wa = xmemdup(&windowargs, sizeof(windowargs));
+    return c;
+
+syntax_error:
+    prot_printf(imapd_out, "%s BAD Syntax error in window arguments\r\n", tag);
+    return EOF;
+}
+
+static void free_windowargs(struct windowargs *wa)
+{
+    if (!wa)
+	return;
+    free(wa);
 }
 
 /*

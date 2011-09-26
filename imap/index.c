@@ -57,9 +57,12 @@
 #include "append.h"
 #include "assert.h"
 #include "charset.h"
+#include "conversations.h"
+#include "dlist.h"
 #include "exitcodes.h"
 #include "hash.h"
-#include "imap/imap_err.h"
+#include "hashu64.h"
+#include "imap_err.h"
 #include "global.h"
 #include "times.h"
 #include "imapd.h"
@@ -73,6 +76,7 @@
 #include "statuscache.h"
 #include "strhash.h"
 #include "util.h"
+#include "ptrarray.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 
@@ -95,8 +99,6 @@ struct index_modified_flags {
     bit32 removed_user_flags[MAX_USER_FLAGS/32];
 };
 
-static void index_checkflags(struct index_state *state, int dirty);
-
 static int index_writeseen(struct index_state *state);
 static void index_fetchmsg(struct index_state *state,
 		    const char *msg_base, unsigned long msg_size,
@@ -114,8 +116,6 @@ static void index_fetchfsection(struct index_state *state,
 				unsigned start_octet, unsigned octet_count);
 static char *index_readheader(const char *msg_base, unsigned long msg_size,
 			      unsigned offset, unsigned size);
-static void index_pruneheader(char *buf, const strarray_t *headers,
-			      const strarray_t *headers_not);
 static void index_fetchheader(struct index_state *state,
 			      const char *msg_base, unsigned long msg_size,
 			      unsigned size,
@@ -141,7 +141,8 @@ static int _index_search(unsigned **msgno_list, struct index_state *state,
 			 const struct searchargs *searchargs,
 			 modseq_t *highestmodseq);
 
-static int index_copysetup(struct index_state *state, uint32_t msgno, struct copyargs *copyargs);
+static int index_copysetup(struct index_state *state, uint32_t msgno,
+			   struct copyargs *copyargs, int is_same_user);
 static int index_storeflag(struct index_state *state,
 			   struct index_modified_flags *modified_flags,
 			   uint32_t msgno, struct index_record *record,
@@ -158,29 +159,29 @@ static char *index_extract_subject(const char *subj, size_t len, int *is_refwd);
 static char *_index_extract_subject(char *s, int *is_refwd);
 static void index_get_ids(MsgData *msgdata,
 			  char *envtokens[], const char *headers, unsigned size);
-static MsgData *index_msgdata_load(struct index_state *state, unsigned *msgno_list, int n,
-				   const struct sortcrit *sortcrit);
-static struct seqset *_index_vanished(struct index_state *state,
-				      struct vanished_params *params);
+static MsgData **index_msgdata_load(struct index_state *state, unsigned *msgno_list, int n,
+				    const struct sortcrit *sortcrit,
+				    unsigned int anchor, int *found_anchor);
+static void index_msgdata_free(MsgData **, unsigned int);
 
-static void *index_sort_getnext(MsgData *node);
-static void index_sort_setnext(MsgData *node, MsgData *next);
 static int index_sort_compare(MsgData *md1, MsgData *md2,
 			      const struct sortcrit *call_data);
 static void index_msgdata_free(MsgData *md);
+static int index_sort_compare_qsort(const void *v1, const void *v2);
 
 static void *index_thread_getnext(Thread *thread);
 static void index_thread_setnext(Thread *thread, Thread *next);
 static int index_thread_compare(Thread *t1, Thread *t2,
 				const struct sortcrit *call_data);
 static void index_thread_orderedsubj(struct index_state *state,
-				     unsigned *msgno_list, int nmsg,
+				     unsigned *msgno_list, unsigned int nmsg,
 				     int usinguid);
 static void index_thread_sort(Thread *root, const struct sortcrit *sortcrit);
 static void index_thread_print(struct index_state *state,
 			       Thread *threads, int usinguid);
 static void index_thread_ref(struct index_state *state,
-			     unsigned *msgno_list, int nmsg, int usinguid);
+			     unsigned *msgno_list, unsigned int nmsg,
+			     int usinguid);
 
 static struct seqset *_parse_sequence(struct index_state *state,
 				      const char *sequence, int usinguid);
@@ -267,6 +268,7 @@ EXPORTED void index_release(struct index_state *state)
 	state->mailbox = NULL; /* should be done by close anyway */
     }
 }
+static struct sortcrit *the_sortcrit;
 
 /*
  * A mailbox is about to be closed.
@@ -307,6 +309,7 @@ EXPORTED int index_open(const char *name, struct index_init *init,
 	state->out = init->out;
 	state->qresync = init->qresync;
 	state->userid = xstrdupnull(init->userid);
+	state->want_expunged = init->want_expunged;
 
 	if (state->examining) {
 	    r = mailbox_open_irl(state->mboxname, &state->mailbox);
@@ -338,9 +341,8 @@ EXPORTED int index_open(const char *name, struct index_init *init,
     index_refresh(state);
 
     /* have to get the vanished list while we're still locked */
-    if (init && init->vanished.uidvalidity == state->mailbox->i.uidvalidity) {
-	init->vanishedlist = _index_vanished(state, &init->vanished);
-    }
+    if (init)
+	init->vanishedlist = index_vanished(state, &init->vanished);
 
     index_unlock(state);
 
@@ -407,6 +409,9 @@ EXPORTED int index_expunge(struct index_state *state, char *sequence,
 	    state->numrecent--;
 	    im->isrecent = 0;
 	}
+
+	if (state->want_expunged)
+	    state->num_expunged++;
 
 	/* set the flags */
 	record.system_flags |= FLAG_DELETED | FLAG_EXPUNGED;
@@ -612,6 +617,10 @@ void index_refresh(struct index_state *state)
     if (state->last_uid) {
 	need_records = state->exists + (mailbox->i.last_uid - state->last_uid);
     }
+    else if (state->want_expunged) {
+	/* could need the lot! */
+	need_records = mailbox->i.num_records;
+    }
     else {
 	/* init case */
 	need_records = mailbox->i.exists;
@@ -662,7 +671,8 @@ void index_refresh(struct index_state *state)
 	/* expunged record not in map, can skip immediately.  It's
 	 * never been told to this connection, so it doesn't need to
 	 * get its own msgno */
-	if ((msgno > state->exists || record.uid < im->uid)
+	if (!state->want_expunged
+	    && (msgno > state->exists || record.uid < im->uid)
 	    && (record.system_flags & FLAG_EXPUNGED))
 	    continue;
 
@@ -682,7 +692,7 @@ void index_refresh(struct index_state *state)
 	    im->user_flags[i] = record.user_flags[i];
 
 	/* for expunged records, just track the modseq */
-	if (im->system_flags & FLAG_EXPUNGED) {
+	if (!state->want_expunged && (im->system_flags & FLAG_EXPUNGED)) {
 	    /* http://www.rfc-editor.org/errata_search.php?rfc=5162
 	     * Errata ID: 1809 - if there are expunged records we
 	     * aren't telling about, need to make the highestmodseq
@@ -778,7 +788,7 @@ EXPORTED void index_select(struct index_state *state, struct index_init *init)
     index_tellexists(state);
 
     /* always print flags */
-    index_checkflags(state, 1);
+    index_checkflags(state, 1, 1);
 
     if (state->firstnotseen)
 	prot_printf(state->out, "* OK [UNSEEN %u] Ok\r\n", 
@@ -888,14 +898,22 @@ EXPORTED int index_check(struct index_state *state, int usinguid, int printuid)
 /*
  * Perform UID FETCH (VANISHED) on a sequence.
  */
-static struct seqset *_index_vanished(struct index_state *state,
-				      struct vanished_params *params)
+struct seqset *index_vanished(struct index_state *state,
+			      struct vanished_params *params)
 {
     struct mailbox *mailbox = state->mailbox;
     struct index_record record;
     struct seqset *outlist;
     struct seqset *seq;
     uint32_t recno;
+
+    /* check uidvalidity match */
+    if (params->uidvalidity_is_max) {
+	if (params->uidvalidity < mailbox->i.uidvalidity) return NULL;
+    }
+    else {
+	if (params->uidvalidity != mailbox->i.uidvalidity) return NULL;
+    }
 
     /* No recently expunged messages */
     if (params->modseq >= state->highestmodseq) return NULL;
@@ -1030,7 +1048,7 @@ static int _fetch_setseen(struct index_state *state,
 }
 
 /* seq can be NULL - means "ALL" */
-void index_fetchresponses(struct index_state *state,
+EXPORTED void index_fetchresponses(struct index_state *state,
 			  struct seqset *seq,
 			  int usinguid,
 			  const struct fetchargs *fetchargs,
@@ -1129,12 +1147,13 @@ EXPORTED int index_fetch(struct index_state *state,
 
     if (fetchargs->vanished) {
 	struct vanished_params v;
-	v.sequence = sequence;
+	v.sequence = sequence;;
+	v.uidvalidity = state->mailbox->i.uidvalidity;
 	v.modseq = fetchargs->changedsince;
 	v.match_seq = fetchargs->match_seq;
 	v.match_uid = fetchargs->match_uid;
 	/* XXX - return error unless usinguid? */
-	vanishedlist = _index_vanished(state, &v);
+	vanishedlist = index_vanished(state, &v);
     }
 
     index_unlock(state);
@@ -1143,7 +1162,7 @@ EXPORTED int index_fetch(struct index_state *state,
     mboxevent_notify(mboxevent);
     mboxevent_free(&mboxevent);
 
-    index_checkflags(state, 0);
+    index_checkflags(state, 1, 0);
 
     if (vanishedlist && vanishedlist->len) {
 	char *vanished = seqset_cstring(vanishedlist);
@@ -1509,8 +1528,8 @@ static int _index_search(unsigned **msgno_list, struct index_state *state,
 	msgno = (*msgno_list)[listindex];
 	im = &state->map[msgno-1];
 
-	/* expunged messages never match */
-	if (im->system_flags & FLAG_EXPUNGED)
+	/* expunged messages hardly ever match */
+	if (!state->want_expunged && (im->system_flags & FLAG_EXPUNGED))
 	    continue;
 
 	if (index_search_evaluate(state, searchargs, msgno, NULL)) {
@@ -1542,8 +1561,8 @@ static int _index_search(unsigned **msgno_list, struct index_state *state,
 	msgno = (*msgno_list)[listindex-1];
 	im = &state->map[msgno-1];
 
-	/* expunged messages never match */
-	if (im->system_flags & FLAG_EXPUNGED)
+	/* expunged messages hardly ever match */
+	if (!state->want_expunged && (im->system_flags & FLAG_EXPUNGED))
 	    continue;
 
 	if (index_search_evaluate(state, searchargs, msgno, NULL)) {
@@ -1743,7 +1762,8 @@ EXPORTED int index_sort(struct index_state *state,
 	       struct searchargs *searchargs, int usinguid)
 {
     unsigned *msgno_list;
-    MsgData *msgdata = NULL, *freeme = NULL;
+    MsgData **msgdata = NULL;
+    int mi;
     int nmsg;
     modseq_t highestmodseq = 0;
     int i, modseq = 0;
@@ -1770,30 +1790,23 @@ EXPORTED int index_sort(struct index_state *state,
 
     if (nmsg) {
 	/* Create/load the msgdata array */
-	freeme = msgdata = index_msgdata_load(state, msgno_list, nmsg, sortcrit);
+	msgdata = index_msgdata_load(state, msgno_list, nmsg, sortcrit, 0, NULL);
 	free(msgno_list);
 
 	/* Sort the messages based on the given criteria */
-	msgdata = lsort(msgdata,
-			(void * (*)(void*)) index_sort_getnext,
-			(void (*)(void*,void*)) index_sort_setnext,
-			(int (*)(void*,void*,void*)) index_sort_compare,
-			(void *)sortcrit);
+	the_sortcrit = sortcrit;
+	qsort(msgdata, nmsg, sizeof(MsgData *), index_sort_compare_qsort);
 
-	/* Output the sorted messages */ 
-	while (msgdata) {
-	    unsigned no = usinguid ? state->map[msgdata->msgno-1].uid
-				   : msgdata->msgno;
+	/* Output the sorted messages */
+	for (mi = 0 ; mi < nmsg ; mi++) {
+	    MsgData *msg = msgdata[mi];
+	    unsigned no = usinguid ? state->map[msg->msgno-1].uid
+				   : msg->msgno;
 	    prot_printf(state->out, " %u", no);
-
-	    /* free contents of the current node */
-	    index_msgdata_free(msgdata);
-
-	    msgdata = msgdata->next;
 	}
 
 	/* free the msgdata array */
-	free(freeme);
+	index_msgdata_free(msgdata, nmsg);
     }
 
     if (highestmodseq)
@@ -1802,6 +1815,622 @@ EXPORTED int index_sort(struct index_state *state,
     prot_printf(state->out, "\r\n");
 
     return nmsg;
+}
+
+static int is_mutable_sort(struct sortcrit *sortcrit)
+{
+    int i;
+
+    if (!sortcrit) return 0;
+
+    for (i = 0; sortcrit[i].key; i++) {
+	switch (sortcrit[i].key) {
+	    /* these are the mutable fields */
+	    case SORT_ANNOTATION:
+	    case SORT_MODSEQ:
+	    case SORT_HASFLAG:
+	    case SORT_CONVMODSEQ:
+	    case SORT_CONVEXISTS:
+	    case SORT_CONVSIZE:
+	    case SORT_HASCONVFLAG:
+		return 1;
+	    default:
+		break;
+	}
+    }
+
+    return 0;
+}
+
+static int is_mutable_search(struct searchargs *searchargs)
+{
+    int i;
+    struct searchsub *sub;
+
+    if (!searchargs) return 0;
+
+    /* flags are mutable */
+    if (searchargs->system_flags_set)
+	return 1;
+    if (searchargs->system_flags_unset)
+	return 1;
+    for (i = 0; i < MAX_USER_FLAGS/32; i++) {
+	if (searchargs->user_flags_set[i])
+	    return 1;
+	if (searchargs->user_flags_unset[i])
+	    return 1;
+    }
+    if (searchargs->convflags)
+	return 1;
+
+    /* searches by per-user fields are mutable */
+    if (searchargs->flags & SEARCH_MUTABLEFLAGS)
+	return 1;
+
+    /* modseq is mutable */
+    if (searchargs->modseq)
+	return 1;
+    if (searchargs->convmodseq)
+	return 1;
+
+    /* annotations are mutable */
+    if (searchargs->annotations)
+	return 1;
+
+    /* if any sub expression is mutable, this is mutable */
+    for (sub = searchargs->sublist; sub; sub = sub->next) {
+	if (is_mutable_search(sub->sub1))
+	    return 1;
+	if (is_mutable_search(sub->sub2))
+	    return 1;
+    }
+
+    /* NOTE: older than 'N' days will be a mutable search of course,
+     * but that fact isn't available down here - we only know the
+     * date range itself, and that isn't mutable.  So if you need
+     * immutable results, you'll need to maintain a fixed date range
+     * up in the higher level */
+
+    return 0;
+}
+
+/* This function will return a TRUE value if anything in the
+ * sort or search criteria returns a MUTABLE ordering, i.e.
+ * the user can take actions which will change the order in
+ * which the results are returned.  For example, the base
+ * case of UID sort and all messages is NOT mutable */
+static int is_mutable_ordering(struct sortcrit *sortcrit,
+			       struct searchargs *searchargs)
+{
+    if (is_mutable_sort(sortcrit))
+	return 1;
+    if (is_mutable_search(searchargs))
+	return 1;
+    return 0;
+}
+
+/*
+ * Analyse @searchargs to discover how countable the results are
+ * going to be.  By "countable" we mean "predictable from stored
+ * state, without searching every message".  Currently that means
+ *
+ * in message mode:
+ *    - total number of messages
+ *    - number unseen messages
+ *    - number seen messages (by inference)
+ *    - number recent messages
+ *    - number unrecent messages (by inference)
+ * in conversation mode:
+ *    - total number of conversations
+ *    - number of conversations with unseen messages
+ *    - number of conversations with no unseen messages (by inference)
+ *
+ * Returns a mask of SEARCH_* constants (e.g. SEARCH_SEEN_SET)
+ * describing which countable attributes are specified by @searchargs.
+ * The special value SEARCH_UNCOUNTED means that at least one uncounted
+ * attribute was found.  Mask values with more than one bit set are
+ * effectively uncountable.  A mask value of zero means that the search
+ * program is empty, which is countable.
+ */
+
+#define SEARCH_NOT		(1<<29)
+#define SEARCH_UNCOUNTED	(1<<30)
+static unsigned int search_countability(const struct searchargs *searchargs)
+{
+    int i;
+    unsigned int mask = 0;
+    const struct searchsub *sub;
+
+    if (!searchargs)
+	return 0;
+
+    /*
+     * TODO: for SEARCH_SEEN_SET, SEARCH_SEEN_UNSET this is only correct
+     * if the user is looking at his own mailbox.
+     */
+    mask |= (searchargs->flags & SEARCH_COUNTEDFLAGS);
+    if ((searchargs->flags & ~SEARCH_COUNTEDFLAGS))
+	mask |= SEARCH_UNCOUNTED;
+
+    /* time and size based searches are not counted */
+    if (searchargs->smaller || searchargs->larger)
+	mask |= SEARCH_UNCOUNTED;
+    if (searchargs->before || searchargs->after)
+	mask |= SEARCH_UNCOUNTED;
+    if (searchargs->sentbefore || searchargs->sentafter)
+	mask |= SEARCH_UNCOUNTED;
+
+    /* flags are not counted */
+    if (searchargs->system_flags_set)
+	mask |= SEARCH_UNCOUNTED;
+    if (searchargs->system_flags_unset)
+	mask |= SEARCH_UNCOUNTED;
+    for (i = 0; i < MAX_USER_FLAGS/32; i++) {
+	if (searchargs->user_flags_set[i])
+	    mask |= SEARCH_UNCOUNTED;
+	if (searchargs->user_flags_unset[i])
+	    mask |= SEARCH_UNCOUNTED;
+    }
+    if (searchargs->convflags)
+	mask |= SEARCH_UNCOUNTED;
+
+    /* sequences are not counted, because the sequence might
+     * run off the end of the mailbox or might include expunged
+     * messages */
+    if (searchargs->sequence || searchargs->uidsequence)
+	mask |= SEARCH_UNCOUNTED;
+
+    /* searches on body or headers are not counted */
+    if (searchargs->from ||
+        searchargs->to ||
+        searchargs->cc ||
+        searchargs->bcc ||
+        searchargs->subject ||
+        searchargs->messageid ||
+        searchargs->body ||
+        searchargs->text ||
+        searchargs->header_name ||
+        searchargs->header)
+	mask |= SEARCH_UNCOUNTED;
+
+    /* classify sub expressions too */
+    for (sub = searchargs->sublist; sub; sub = sub->next) {
+	mask |= search_countability(sub->sub1);
+	mask |= search_countability(sub->sub2);
+	if (!sub->sub2)
+	    mask ^= SEARCH_NOT;
+    }
+
+    /* modseq is not counted */
+    if (searchargs->modseq)
+	mask |= SEARCH_UNCOUNTED;
+    if (searchargs->convmodseq)
+	mask |= SEARCH_UNCOUNTED;
+
+    /* annotations are not counted */
+    if (searchargs->annotations)
+	mask |= SEARCH_UNCOUNTED;
+
+    return mask;
+}
+
+#define UNPREDICTABLE	    (-1)
+static int search_predict_total(struct index_state *state,
+				struct conversations_state *cstate,
+			        const struct searchargs *searchargs,
+				int conversations,
+				modseq_t *xconvmodseqp)
+{
+    uint32_t convexists = 0;
+    uint32_t convunseen = 0;
+
+    /* always grab xconvmodseq, so we report a growing
+     * highestmodseq to all callers */
+    if (conversations)
+	conversation_getstatus(cstate, state->mailbox->name,
+			       xconvmodseqp, &convexists, &convunseen);
+
+    switch (search_countability(searchargs)) {
+    case 0:
+	return (conversations ?
+		    convexists :
+		    state->exists - state->num_expunged);
+    /* we don't try to optimise searches on \Recent */
+    case SEARCH_SEEN_SET:
+    case SEARCH_SEEN_UNSET|SEARCH_NOT:
+	assert(state->exists >= state->numunseen);
+	return state->exists - state->numunseen;
+    case SEARCH_SEEN_UNSET:
+    case SEARCH_SEEN_SET|SEARCH_NOT:
+	return state->numunseen;
+    case SEARCH_CONVSEEN_SET:
+    case SEARCH_CONVSEEN_UNSET|SEARCH_NOT:
+	assert(convexists >= convunseen);
+	return convexists - convunseen;
+    case SEARCH_CONVSEEN_UNSET:
+    case SEARCH_CONVSEEN_SET|SEARCH_NOT:
+	return convunseen;
+    default:
+	return UNPREDICTABLE;
+    }
+}
+
+/*
+ * Performs a XCONVSORT command
+ */
+EXPORTED int index_convsort(struct index_state *state,
+		   struct sortcrit *sortcrit,
+		   struct searchargs *searchargs,
+		   const struct windowargs *windowargs)
+{
+    MsgData **msgdata = NULL;
+    unsigned int mi;
+    modseq_t xconvmodseq = 0;
+    int i;
+    hashu64_table seen_cids = HASHU64_TABLE_INITIALIZER;
+    uint32_t pos = 0;
+    int found_anchor = 0;
+    uint32_t anchor_pos = 0;
+    uint32_t first_pos = 0;
+    unsigned int ninwindow = 0;
+    ptrarray_t results = PTRARRAY_INITIALIZER;
+    int total = 0;
+    int r = 0;
+    struct conversations_state *cstate = NULL;
+
+    assert(windowargs);
+    assert(!windowargs->changedsince);
+    assert(!windowargs->upto);
+
+    /* make sure \Deleted messages are expunged.  Will also lock the
+     * mailbox state and read any new information */
+    r = index_expunge(state, NULL, 1);
+    if (r) return r;
+
+    if (windowargs->conversations) {
+	cstate = conversations_get_mbox(state->mailbox->name);
+	if (!cstate)
+	    return IMAP_INTERNAL;
+    }
+
+    total = search_predict_total(state, cstate, searchargs,
+				windowargs->conversations,
+				&xconvmodseq);
+    if (!total)
+	goto out;
+
+    construct_hashu64_table(&seen_cids, state->exists/4+4, 0);
+
+    /* Create/load the msgdata array.
+     * load data for ALL messages always */
+    msgdata = index_msgdata_load(state, NULL, state->exists, sortcrit,
+			         windowargs->anchor, &found_anchor);
+    if (windowargs->anchor && !found_anchor) {
+	r = IMAP_ANCHOR_NOT_FOUND;
+	goto out;
+    }
+
+    /* Sort the messages based on the given criteria */
+    the_sortcrit = sortcrit;
+    qsort(msgdata, state->exists, sizeof(MsgData *), index_sort_compare_qsort);
+
+    /* One pass through the message list */
+    for (mi = 0 ; mi < state->exists ; mi++) {
+	MsgData *msg = msgdata[mi];
+	struct index_record *record = &state->map[msg->msgno-1].record;
+
+	/* can happen if we didn't "tellchanges" yet */
+	if (record->system_flags & FLAG_EXPUNGED)
+	    continue;
+
+	/* run the search program against all messages */
+	if (!index_search_evaluate(state, searchargs, msg->msgno, NULL))
+	    continue;
+
+	/* figure out whether this message is an exemplar */
+	if (windowargs->conversations) {
+	    /* in conversations mode => only the first message seen
+	     * with each unique CID is an exemplar */
+	    if (hashu64_lookup(record->cid, &seen_cids))
+		continue;
+	    hashu64_insert(record->cid, (void *)1, &seen_cids);
+	}
+	/* else not in conversations mode => all messages are exemplars */
+
+	pos++;
+
+	if (!anchor_pos &&
+	    windowargs->anchor == record->uid) {
+	    /* we've found the anchor's position, rejoice! */
+	    anchor_pos = pos;
+	}
+
+	if (windowargs->anchor) {
+	    if (!anchor_pos)
+		continue;
+	    if (pos < anchor_pos + windowargs->offset)
+		continue;
+	}
+	else if (windowargs->position) {
+	    if (pos < windowargs->position)
+		continue;
+	}
+	if (windowargs->limit &&
+	    ++ninwindow > windowargs->limit) {
+	    if (total == UNPREDICTABLE) {
+		/* the total was not predictable, so we need to keep
+		 * going over the whole list to count it */
+		continue;
+	    }
+	    break;
+	}
+
+	if (!first_pos)
+	    first_pos = pos;
+	ptrarray_push(&results, record);
+    }
+
+    if (total == UNPREDICTABLE) {
+	/* the total was not predictable prima facie */
+	total = pos;
+    }
+
+    if (windowargs->anchor && !anchor_pos) {
+	/* the anchor was present but not an exemplar */
+	assert(results.count == 0);
+	r = IMAP_ANCHOR_NOT_FOUND;
+	goto out;
+    }
+
+    /* Print the resulting list */
+
+    /* Yes, we could use a seqset here, but apparently the most common
+     * sort order seen in the field is reverse date, which is basically
+     * the worst case for seqset.  So we don't bother */
+    if (results.count) {
+	prot_printf(state->out, "* SORT");  /* uids */
+	for (i = 0 ; i < results.count ; i++) {
+	    struct index_record *record = results.data[i];
+	    prot_printf(state->out, " %u", record->uid);
+	}
+	prot_printf(state->out, "\r\n");
+    }
+
+out:
+    if (!r) {
+	if (first_pos)
+	    prot_printf(state->out, "* OK [POSITION %u]\r\n", first_pos);
+
+	prot_printf(state->out, "* OK [HIGHESTMODSEQ " MODSEQ_FMT "]\r\n",
+		    MAX(xconvmodseq, state->mailbox->i.highestmodseq));
+	prot_printf(state->out, "* OK [UIDVALIDITY %u]\r\n",
+		    state->mailbox->i.uidvalidity);
+	prot_printf(state->out, "* OK [UIDNEXT %u]\r\n",
+		    state->mailbox->i.last_uid + 1);
+	prot_printf(state->out, "* OK [TOTAL %u]\r\n",
+		    total);
+    }
+
+    /* free all our temporary data */
+    index_msgdata_free(msgdata, state->exists);
+    ptrarray_fini(&results);
+    free_hashu64_table(&seen_cids, NULL);
+
+    return r;
+}
+
+static modseq_t get_modseq_of(struct index_record *record,
+			      struct conversations_state *cstate)
+{
+    modseq_t modseq = 0;
+
+    if (cstate) {
+	conversation_get_modseq(cstate, record->cid, &modseq);
+	/* TODO: error handling dammit */
+    } else {
+	modseq = record->modseq;
+    }
+    return modseq;
+}
+
+/*
+ * Performs a XCONVUPDATES command
+ */
+EXPORTED int index_convupdates(struct index_state *state,
+		      struct sortcrit *sortcrit,
+		      struct searchargs *searchargs,
+		      const struct windowargs *windowargs)
+{
+    MsgData **msgdata = NULL;
+    modseq_t xconvmodseq = 0;
+    unsigned int mi;
+    int i;
+    hashu64_table seen_cids = HASHU64_TABLE_INITIALIZER;
+    hashu64_table old_seen_cids = HASHU64_TABLE_INITIALIZER;
+    int32_t pos = 0;
+    uint32_t upto_pos = 0;
+    ptrarray_t added = PTRARRAY_INITIALIZER;
+    ptrarray_t removed = PTRARRAY_INITIALIZER;
+    ptrarray_t changed = PTRARRAY_INITIALIZER;
+    int total = 0;
+    struct conversations_state *cstate = NULL;
+    int search_is_mutable = is_mutable_ordering(sortcrit, searchargs);
+    int r = 0;
+
+    assert(windowargs);
+    assert(windowargs->changedsince);
+    assert(windowargs->offset == 0);
+    assert(!windowargs->position);
+
+    /* make sure \Deleted messages are expunged.  Will also lock the
+     * mailbox state and read any new information */
+    r = index_expunge(state, NULL, 1);
+    if (r) return r;
+
+    cstate = conversations_get_mbox(state->mailbox->name);
+    if (!cstate)
+	return IMAP_INTERNAL;
+
+    total = search_predict_total(state, cstate, searchargs,
+				windowargs->conversations,
+				&xconvmodseq);
+    /* If there are no current and no expunged messages, we won't
+     * have any results at all and can short circuit the main loop;
+     * note that is a righter criterion than for XCONVSORT. */
+    if (!total && !state->exists)
+	goto out;
+
+    construct_hashu64_table(&seen_cids, state->exists/4+4, 0);
+    construct_hashu64_table(&old_seen_cids, state->exists/4+4, 0);
+
+    /* Create/load the msgdata array
+     * initial list - load data for ALL messages always */
+    msgdata = index_msgdata_load(state, NULL, state->exists, sortcrit, 0, NULL);
+
+    /* Sort the messages based on the given criteria */
+    the_sortcrit = sortcrit;
+    qsort(msgdata, state->exists, sizeof(MsgData *), index_sort_compare_qsort);
+
+    /* Discover exemplars */
+    for (mi = 0 ; mi < state->exists ; mi++) {
+	MsgData *msg = msgdata[mi];
+	struct index_record *record = &state->map[msg->msgno-1].record;
+	int was_old_exemplar = 0;
+	int is_new_exemplar = 0;
+	int is_deleted = 0;
+	int is_new = 0;
+	int was_deleted = 0;
+	int is_changed = 0;
+	int in_search = 0;
+
+	in_search = index_search_evaluate(state, searchargs, msg->msgno, NULL);
+	is_deleted = !!(record->system_flags & FLAG_EXPUNGED);
+	is_new = (record->uid >= windowargs->uidnext);
+	is_changed = (record->modseq > windowargs->modseq);
+	was_deleted = is_deleted && !is_changed;
+
+	/* is this message a current exemplar? */
+	if (!is_deleted &&
+	    in_search &&
+	    (!windowargs->conversations || !hashu64_lookup(record->cid, &seen_cids))) {
+	    is_new_exemplar = 1;
+	    pos++;
+	    if (windowargs->conversations)
+		hashu64_insert(record->cid, (void *)1, &seen_cids);
+	}
+
+	/* optimisation for when the total is
+	 * not known but we've hit 'upto' */
+	if (upto_pos)
+	    continue;
+
+	/* was this message an old exemplar, or in the case of mutable
+	 * searches, possible an old exemplar? */
+	if (!is_new &&
+	    !was_deleted &&
+	    (in_search || search_is_mutable) &&
+	    (!windowargs->conversations || !hashu64_lookup(record->cid, &old_seen_cids))) {
+	    was_old_exemplar = 1;
+	    if (windowargs->conversations)
+		hashu64_insert(record->cid, (void *)1, &old_seen_cids);
+	}
+
+	if (was_old_exemplar && !is_new_exemplar) {
+	    ptrarray_push(&removed, record);
+	} else if (!was_old_exemplar && is_new_exemplar) {
+	    msg->msgno = pos;   /* hacky: reuse ->msgno for pos */
+	    ptrarray_push(&added, msg);
+	} else if (was_old_exemplar && is_new_exemplar) {
+	    modseq_t modseq = get_modseq_of(record,
+				windowargs->conversations ? cstate : NULL);
+	    if (modseq > windowargs->modseq) {
+		ptrarray_push(&changed, record);
+		if (search_is_mutable) {
+		    /* is the search is mutable, we're in a whole world of
+		     * uncertainty about the client's state, so we just
+		     * report the exemplar in all three lists and let the
+		     * client sort it out. */
+		    ptrarray_push(&removed, record);
+		    msg->msgno = pos;   /* hacky: reuse ->msgno for pos */
+		    ptrarray_push(&added, msg);
+		}
+	    }
+	}
+
+	/* if this is the last message the client cares about ('upto')
+	 * then we can break early...unless its a mutable search or
+	 * we need to keep going to calculate an accurate total */
+	if (!search_is_mutable &&
+	    !upto_pos &&
+	    msg->uid == windowargs->upto) {
+	    if (total != UNPREDICTABLE)
+		break;
+	    upto_pos = pos;
+	}
+    }
+
+    /* unlike 'anchor', the case of not finding 'upto' is not an error */
+
+    if (total == UNPREDICTABLE) {
+	/* the total was not predictable prima facie */
+	total = pos;
+    }
+
+    /* Print the resulting lists */
+
+    if (added.count) {
+	prot_printf(state->out, "* ADDED"); /* (uid pos) tuples */
+	for (i = 0 ; i < added.count ; i++) {
+	    MsgData *msg = added.data[i];
+	    prot_printf(state->out, " (%u %u)",
+			msg->uid, msg->msgno);
+	}
+	prot_printf(state->out, "\r\n");
+    }
+
+    if (removed.count) {
+	prot_printf(state->out, "* REMOVED");	/* uids */
+	for (i = 0 ; i < removed.count ; i++) {
+	    struct index_record *record = removed.data[i];
+	    prot_printf(state->out, " %u", record->uid);
+	}
+	prot_printf(state->out, "\r\n");
+    }
+
+    if (changed.count) {
+	prot_printf(state->out, "* CHANGED");	/* cids or uids */
+	for (i = 0 ; i < changed.count ; i++) {
+	    struct index_record *record = changed.data[i];
+	    if (windowargs->conversations)
+		prot_printf(state->out, " %s",
+			conversation_id_encode(record->cid));
+	    else
+		prot_printf(state->out, " %u", record->uid);
+	}
+	prot_printf(state->out, "\r\n");
+    }
+
+out:
+    if (!r) {
+	prot_printf(state->out, "* OK [HIGHESTMODSEQ " MODSEQ_FMT "]\r\n",
+		    MAX(xconvmodseq, state->mailbox->i.highestmodseq));
+	prot_printf(state->out, "* OK [UIDVALIDITY %u]\r\n",
+		    state->mailbox->i.uidvalidity);
+	prot_printf(state->out, "* OK [UIDNEXT %u]\r\n",
+		    state->mailbox->i.last_uid + 1);
+	prot_printf(state->out, "* OK [TOTAL %u]\r\n",
+		    total);
+    }
+
+    /* free all our temporary data */
+    index_msgdata_free(msgdata, state->exists);
+    ptrarray_fini(&added);
+    ptrarray_fini(&removed);
+    ptrarray_fini(&changed);
+    free_hashu64_table(&seen_cids, NULL);
+    free_hashu64_table(&old_seen_cids, NULL);
+
+    return r;
 }
 
 /*
@@ -1879,10 +2508,15 @@ index_copy(struct index_state *state,
     struct mailbox *mailbox;
     struct mailbox *destmailbox = NULL;
     struct index_map *im;
+    int is_same_user;
 
     *copyuidp = NULL;
 
     copyargs.nummsg = 0;
+
+    is_same_user = mboxname_same_userid(mailbox->name, name);
+    if (is_same_user < 0)
+	return is_same_user;
 
     r = index_check(state, usinguid, usinguid);
     if (r) return r;
@@ -1896,7 +2530,7 @@ index_copy(struct index_state *state,
 	checkval = usinguid ? im->uid : msgno;
 	if (!seqset_ismember(seq, checkval))
 	    continue;
-	index_copysetup(state, msgno, &copyargs);
+	index_copysetup(state, msgno, &copyargs, is_same_user);
     }
 
     seqset_free(seq);
@@ -2398,10 +3032,10 @@ static void index_fetchfsection(struct index_state *state,
 			   CACHE_ITEM_BIT32(cachestr+CACHE_ITEM_SIZE_SKIP));
 
     if (fields_not) {
-	index_pruneheader(buf, 0, fsection->fields);
+	message_pruneheader(buf, 0, fsection->fields);
     }
     else {
-	index_pruneheader(buf, fsection->fields, 0);
+	message_pruneheader(buf, fsection->fields, 0);
     }
     size = strlen(buf);
 
@@ -2574,7 +3208,7 @@ static void index_fetchheader(struct index_state *state,
 
     buf = index_readheader(msg_base, msg_size, 0, size);
 
-    index_pruneheader(buf, headers, headers_not);
+    message_pruneheader(buf, headers, headers_not);
 
     size = strlen(buf);
     prot_printf(state->out, "{%u}\r\n%s\r\n", size+2, buf);
@@ -2611,7 +3245,7 @@ index_fetchcacheheader(struct index_state *state, struct index_record *record,
     memcpy(buf, cacheitem_base(record, CACHE_HEADERS), size);
     buf[size] = '\0';
 
-    index_pruneheader(buf, headers, 0);
+    message_pruneheader(buf, headers, 0);
     size = strlen(buf);
 
     /* partial fetch: adjust 'size' */
@@ -2694,7 +3328,7 @@ static void index_listflags(struct index_state *state)
     prot_printf(state->out, ")] Ok\r\n");
 }
 
-static void index_checkflags(struct index_state *state, int dirty)
+EXPORTED void index_checkflags(struct index_state *state, int print, int dirty)
 {
     struct mailbox *mailbox = state->mailbox;
     unsigned i;
@@ -2720,7 +3354,7 @@ static void index_checkflags(struct index_state *state, int dirty)
 	dirty = 1;
     }
 
-    if (dirty)
+    if (dirty && print)
 	index_listflags(state);
 }
 
@@ -2787,7 +3421,7 @@ EXPORTED void index_tellchanges(struct index_state *state, int canexpunge,
 
     if (state->oldexists != state->exists) index_tellexists(state);
 
-    index_checkflags(state, 0);
+    index_checkflags(state, 1, 0);
 
     /* print any changed message flags */
     for (msgno = 1; msgno <= state->exists; msgno++) {
@@ -2952,6 +3586,13 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
     struct index_map *im = &state->map[msgno-1];
     struct index_record record;
 
+    /* Check against the CID list filter */
+    if (fetchargs->cidhash) {
+	const char *key = conversation_id_encode(im->record.cid);
+	if (!hash_lookup(key, fetchargs->cidhash))
+	    return 0;
+    }
+
     /* Check the modseq against changedsince */
     if (fetchargs->changedsince && im->modseq <= fetchargs->changedsince)
 	return 0;
@@ -3047,6 +3688,34 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
 	struct message_guid tmpguid;
 	message_guid_generate(&tmpguid, msg_base, msg_size);
 	prot_printf(state->out, "%cRFC822.SHA1 %s", sepchar, message_guid_encode(&tmpguid));
+	sepchar = ' ';
+    }
+    if ((fetchitems & FETCH_CID) &&
+	config_getswitch(IMAPOPT_CONVERSATIONS)) {
+	struct buf buf = BUF_INITIALIZER;
+	if (!im->record.cid)
+	    buf_appendcstr(&buf, "NIL");
+	else
+	    buf_printf(&buf, CONV_FMT, im->record.cid);
+	prot_printf(state->out, "%cCID %s", sepchar, buf_cstring(&buf));
+	buf_free(&buf);
+	sepchar = ' ';
+    }
+    if ((fetchitems & FETCH_FOLDER)) {
+	struct namespace *ns = fetchargs->namespace;
+	char mboxname[MAX_MAILBOX_PATH+1];
+	r = ns->mboxname_toexternal(ns, state->mailbox->name,
+				    fetchargs->userid, mboxname);
+	if (!r) {
+	    prot_printf(state->out, "%cFOLDER ", sepchar);
+	    prot_printastring(state->out, mboxname);
+	    sepchar = ' ';
+	}
+	r = 0;
+    }
+    if ((fetchitems & FETCH_UIDVALIDITY)) {
+	prot_printf(state->out, "%cUIDVALIDITY %u", sepchar,
+		    state->mailbox->i.uidvalidity);
 	sepchar = ' ';
     }
     if (fetchitems & FETCH_ENVELOPE) {
@@ -3729,6 +4398,7 @@ static int index_search_evaluate(struct index_state *state,
     struct seqset *seq;
     struct index_map *im = &state->map[msgno-1];
     struct index_record record;
+    conversation_t *conv = NULL;
     struct searchannot *sa;
     struct buf localbuf = BUF_INITIALIZER;
     int retval = 0;
@@ -3904,9 +4574,39 @@ static int index_search_evaluate(struct index_state *state,
 	}
     }
 
+    if (searchargs->convmodseq || searchargs->convflags ||
+	searchargs->flags & (SEARCH_CONVSEEN_SET | SEARCH_CONVSEEN_UNSET)) {
+	struct conversations_state *cstate = conversations_get_mbox(state->mailbox->name);
+	if (!cstate) goto zero;
+	if (conversation_load(cstate, im->record.cid, &conv))
+	    goto zero;
+	if (!conv) conv = conversation_new(cstate);
+
+	/* got a conversation, let's check it */
+	if (searchargs->convmodseq && conv->modseq < searchargs->convmodseq)
+	    goto zero;
+
+	if ((searchargs->flags & SEARCH_CONVSEEN_SET) && conv->unseen)
+	    goto zero;
+
+	if ((searchargs->flags & SEARCH_CONVSEEN_UNSET) && !conv->unseen)
+	    goto zero;
+
+	for (l = searchargs->convflags; l; l = l->next) {
+	    int idx = strarray_find_case(cstate->counted_flags, l->s, 0);
+	    if (idx < 0)
+		goto zero;
+	    if (!conv->counts[idx])
+		goto zero;
+	}
+    }
+
     retval = 1;
 
 zero:
+    /* free conversation data */
+    conversation_free(conv);
+
     /* unmap if we mapped it */
     buf_free(&localbuf);
 
@@ -3990,7 +4690,7 @@ static int index_searchheader(char *name,
     strarray_append(&header, name);
 
     p = index_readheader(buf->s, buf->len, 0, size);
-    index_pruneheader(p, &header, 0);
+    message_pruneheader(p, &header, 0);
     strarray_fini(&header);
 
     if (!*p) return 0;		/* Header not present, fail */
@@ -4032,7 +4732,7 @@ static int index_searchcacheheader(struct index_state *state, uint32_t msgno,
     buf[size] = '\0';
 
     strarray_append(&header, name);
-    index_pruneheader(buf, &header, 0);
+    message_pruneheader(buf, &header, 0);
     strarray_fini(&header);
 
     if (!*buf) return 0;	/* Header not present, fail */
@@ -4178,7 +4878,7 @@ EXPORTED void index_getsearchtext_single(struct index_state *state, uint32_t msg
  */
 #define COPYARGSGROW 30
 static int index_copysetup(struct index_state *state, uint32_t msgno,
-			   struct copyargs *copyargs)
+			   struct copyargs *copyargs, int is_same_user)
 {
     int flag = 0;
     int userflag;
@@ -4230,22 +4930,29 @@ static int index_copysetup(struct index_state *state, uint32_t msgno,
     /* grab seen from our state - it's different for different users */
     copyargs->copymsg[copyargs->nummsg].seen = im->isseen;
 
+    /* CIDs are per-user, so we can reuse the cid if we're copying
+     * between mailboxes owned by the same user.  Otherwise we need
+     * to zap the cid and let append_copy() recalculate it. */
+    copyargs->copymsg[copyargs->nummsg].cid =
+		    (is_same_user ? im->record.cid : NULLCONVERSATION);
+
     copyargs->nummsg++;
 
     return 0;
 }
 
 /*
- * Creates a list of msgdata.
+ * Creates a list, and optionally also an array of pointers to, of msgdata.
  *
  * We fill these structs with the processed info that will be needed
  * by the specified sort criteria.
  */
-static MsgData *index_msgdata_load(struct index_state *state,
-				   unsigned *msgno_list, int n,
-				   const struct sortcrit *sortcrit)
+static MsgData **index_msgdata_load(struct index_state *state,
+				    unsigned *msgno_list, int n,
+				    const struct sortcrit *sortcrit,
+				    unsigned int anchor, int *found_anchor)
 {
-    MsgData *md, *cur;
+    MsgData **ptrs, *md, *cur;
     int i, j;
     char *tmpenv;
     char *envtokens[NUMENVTOKENS];
@@ -4253,29 +4960,38 @@ static MsgData *index_msgdata_load(struct index_state *state,
     int label;
     struct mailbox *mailbox = state->mailbox;
     struct index_record record;
+    struct index_map *im;
+    struct conversations_state *cstate = NULL;
+    conversation_t *conv = NULL;
 
     if (!n) return NULL;
 
-    /* create an array of MsgData to use as nodes of linked list */
-    md = (MsgData *) xzmalloc(n * sizeof(MsgData));
+    /* create an array of MsgData */
+    ptrs = (MsgData **) xzmalloc(n * sizeof(MsgData *) + n * sizeof(MsgData));
+    md = (MsgData *)(ptrs + n);
 
-    for (i = 0, cur = md; i < n; i++, cur = cur->next) {
-	/* set pointer to next node */
-	cur->next = (i+1 < n ? cur+1 : NULL);
+    if (found_anchor)
+	*found_anchor = 0;
 
+    for (i = 0 ; i < n ; i++) {
+	cur = &md[i];
+	ptrs[i] = cur;
 	/* set msgno */
-	cur->msgno = msgno_list[i];
+	cur->msgno = (msgno_list ? msgno_list[i] : (unsigned)(i+1));
+	im = &state->map[cur->msgno-1];
+	cur->uid = im->record.uid;
+	if (found_anchor && im->uid == anchor)
+	    *found_anchor = 1;
 
 	if (index_reload_record(state, cur->msgno, &record))
 	    continue;
 
-	cur->uid = record.uid;
-
 	/* useful for convupdates */
-	cur->modseq = record.modseq;
+	cur->modseq = im->record.modseq;
 
 	did_cache = did_env = did_conv = 0;
 	tmpenv = NULL;
+	conv = NULL; /* XXX: use a hash to avoid re-reading? */
 
 	for (j = 0; sortcrit[j].key; j++) {
 	    label = sortcrit[j].key;
@@ -4309,6 +5025,16 @@ static MsgData *index_msgdata_load(struct index_state *state,
 				      VECTOR_SIZE(envtokens));
 
 		did_env++;
+	    }
+
+	    if ((label == SORT_HASCONVFLAG || label == SORT_CONVMODSEQ ||
+		label == SORT_CONVEXISTS || label == SORT_CONVSIZE) && !did_conv) {
+		if (!cstate) cstate = conversations_get_mbox(state->mailbox->name);
+		assert(cstate);
+		if (conversation_load(cstate, im->record.cid, &conv))
+		    continue;
+		if (!conv) conv = conversation_new(cstate);
+		did_conv++;
 	    }
 
 	    switch (label) {
@@ -4365,13 +5091,37 @@ static MsgData *index_msgdata_load(struct index_state *state,
 		cur->displayto = get_displayname(
 				 cacheitem_base(&record, CACHE_TO));
 		break;
+	    case SORT_HASFLAG: {
+		const char *name = sortcrit[j].args.flag.name;
+		if (mailbox_record_hasflag(mailbox, &im->record, name))
+		    cur->hasflag |= (1<<j);
+		break;
+	    }
+	    case SORT_HASCONVFLAG: {
+		const char *name = sortcrit[j].args.flag.name;
+		int idx = strarray_find_case(cstate->counted_flags, name, 0);
+		/* flag exists in the conversation at all */
+		if (idx >= 0 && conv->counts[idx] > 0 && j < 31)
+		    cur->hasconvflag |= (1<<j);
+		break;
+	    }
+	    case SORT_CONVEXISTS:
+		cur->convexists = conv->exists;
+		break;
+	    case SORT_CONVSIZE:
+		cur->convsize = conv->size;
+		break;
+	    case SORT_CONVMODSEQ:
+		cur->convmodseq = conv->modseq;
+		break;
 	    }
 	}
 
 	free(tmpenv);
+	conversation_free(conv);
     }
 
-    return md;
+    return ptrs;
 }
 
 static char *get_localpart_addr(const char *header)
@@ -4629,7 +5379,7 @@ void index_get_ids(MsgData *msgdata, char *envtokens[], const char *headers,
 
     /* grab the References header */
     strarray_append(&refhdr, "references");
-    index_pruneheader(buf.s, &refhdr, 0);
+    message_pruneheader(buf.s, &refhdr, 0);
     strarray_fini(&refhdr);
 
     if (buf.s) {
@@ -4649,22 +5399,6 @@ void index_get_ids(MsgData *msgdata, char *envtokens[], const char *headers,
 	if (in_reply_to)
 	    strarray_appendm(&msgdata->ref, in_reply_to);
     }
-}
-
-/*
- * Getnext function for sorting message lists.
- */
-static void *index_sort_getnext(MsgData *node)
-{
-    return node->next;
-}
-
-/*
- * Setnext function for sorting message lists.
- */
-static void index_sort_setnext(MsgData *node, MsgData *next)
-{
-    node->next = next;
 }
 
 /*
@@ -4731,29 +5465,62 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
 	case SORT_UID:
 	    ret = numcmp(md1->uid, md2->uid);
 	    break;
+	case SORT_CONVMODSEQ:
+	    ret = numcmp(md1->convmodseq, md2->convmodseq);
+	    break;
+	case SORT_CONVEXISTS:
+	    ret = numcmp(md1->convexists, md2->convexists);
+	    break;
+	case SORT_CONVSIZE:
+	    ret = numcmp(md1->size, md2->convsize);
+	    break;
+	case SORT_HASFLAG:
+	    if (i < 31)
+		ret = numcmp(md1->hasflag & (1<<i),
+			     md2->hasflag & (1<<i));
+	    break;
+	case SORT_HASCONVFLAG:
+	    if (i < 31)
+		ret = numcmp(md1->hasconvflag & (1<<i),
+			     md2->hasconvflag & (1<<i));
+	    break;
 	}
     } while (!ret && sortcrit[i++].key != SORT_SEQUENCE);
 
     return (reverse ? -ret : ret);
 }
 
-/*
- * Free a msgdata node.
- */
-static void index_msgdata_free(MsgData *md)
+static int index_sort_compare_qsort(const void *v1, const void *v2)
 {
-#define FREE(x)	if (x) free(x)
-    if (!md)
+    MsgData *md1 = *(MsgData **)v1;
+    MsgData *md2 = *(MsgData **)v2;
+
+    return index_sort_compare(md1, md2, the_sortcrit);
+}
+
+/*
+ * Free an array of MsgData* as built by index_msgdata_load()
+ */
+static void index_msgdata_free(MsgData **msgdata, unsigned int n)
+{
+    unsigned int i;
+
+    if (!msgdata)
 	return;
-    FREE(md->cc);
-    FREE(md->from);
-    FREE(md->to);
-    FREE(md->displayfrom);
-    FREE(md->displayto);
-    FREE(md->xsubj);
-    FREE(md->msgid);
-    strarray_fini(&md->ref);
-    strarray_fini(&md->annot);
+    for (i = 0 ; i < n ; i++) {
+	MsgData *md = msgdata[i];
+
+	free(md->cc);
+	free(md->from);
+	free(md->to);
+	free(md->displayfrom);
+	free(md->displayto);
+	free(md->xsubj);
+	free(md->msgid);
+	strarray_fini(&md->ref);
+	strarray_fini(&md->annot);
+    }
+    free(msgdata);
 }
 
 /*
@@ -4814,11 +5581,12 @@ static void index_thread_sort(Thread *root,
 /*
  * Thread a list of messages using the ORDEREDSUBJECT algorithm.
  */
-static void index_thread_orderedsubj(struct index_state *state, 
-				     unsigned *msgno_list, int nmsg,
+static void index_thread_orderedsubj(struct index_state *state,
+				     unsigned *msgno_list, unsigned int nmsg,
 				     int usinguid)
 {
-    MsgData *msgdata, *freeme;
+    MsgData **msgdata;
+    unsigned int mi;
     static const struct sortcrit sortcrit[] =
 				 {{ SORT_SUBJECT,  0, {{NULL, NULL}} },
 				  { SORT_DATE,     0, {{NULL, NULL}} },
@@ -4828,14 +5596,11 @@ static void index_thread_orderedsubj(struct index_state *state,
     Thread *head, *newnode, *cur, *parent, *last;
 
     /* Create/load the msgdata array */
-    freeme = msgdata = index_msgdata_load(state, msgno_list, nmsg, sortcrit);
+    msgdata = index_msgdata_load(state, msgno_list, nmsg, sortcrit, 0, NULL);
 
     /* Sort messages by subject and date */
-    msgdata = lsort(msgdata,
-		    (void * (*)(void*)) index_sort_getnext,
-		    (void (*)(void*,void*)) index_sort_setnext,
-		    (int (*)(void*,void*,void*)) index_sort_compare,
-		    (void *)sortcrit);
+    the_sortcrit = sortcrit;
+    qsort(msgdata, nmsg, sizeof(MsgData *), index_sort_compare_qsort);
 
     /* create an array of Thread to use as nodes of thread tree
      *
@@ -4851,15 +5616,16 @@ static void index_thread_orderedsubj(struct index_state *state,
     cur = NULL;		/* no current thread */
     last = NULL;	/* no last child */
 
-    while (msgdata) {
-	newnode->msgdata = msgdata;
+    for (mi = 0 ; mi < nmsg ; mi++) {
+	MsgData *msg = msgdata[mi];
+	newnode->msgdata = msg;
 
 	/* if no previous subj, or
 	   current subj = prev subj (subjs have same hash, and
 	   the strings are equal), then add message to current thread */
 	if (!psubj ||
-	    (msgdata->xsubj_hash == psubj_hash &&
-	     !strcmp(msgdata->xsubj, psubj))) {
+	    (msg->xsubj_hash == psubj_hash &&
+	     !strcmp(msg->xsubj, psubj))) {
 	    /* if no children, create first child */
 	    if (!parent->child) {
 		last = parent->child = newnode;
@@ -4878,9 +5644,8 @@ static void index_thread_orderedsubj(struct index_state *state,
 	    parent = cur = cur->next;	/* now work with the new thread */
 	}
 
-	psubj_hash = msgdata->xsubj_hash;
-	psubj = msgdata->xsubj;
-	msgdata = msgdata->next;
+	psubj_hash = msg->xsubj_hash;
+	psubj = msg->xsubj;
 	newnode++;
     }
 
@@ -4894,7 +5659,7 @@ static void index_thread_orderedsubj(struct index_state *state,
     free(head);
 
     /* free the msgdata array */
-    free(freeme);
+    index_msgdata_free(msgdata, nmsg);
 }
 
 /*
@@ -4922,9 +5687,6 @@ static void _index_thread_print(struct index_state *state,
 
 	    /* if we have a child, print the parent-child separator */
 	    if (thread->child) prot_printf(state->out, " ");
-
-	    /* free contents of the current node */
-	    index_msgdata_free(thread->msgdata);
 	}
 
 	/* for each child, grandchild, etc... */
@@ -4943,9 +5705,6 @@ static void _index_thread_print(struct index_state *state,
 
 		/* if we have a child, print the parent-child separator */
 		if (child->child) prot_printf(state->out, " ");
-
-		/* free contents of the child node */
-		index_msgdata_free(child->msgdata);
 
 		child = child->child;
 	    }
@@ -5058,54 +5817,57 @@ static void thread_orphan_child(Thread *child)
 /*
  * Link messages together using message-id and references.
  */
-static void ref_link_messages(MsgData *msgdata, Thread **newnode,
-		       struct hash_table *id_table)
+static void ref_link_messages(MsgData **msgdata, unsigned int nmsg,
+			      Thread **newnode, struct hash_table *id_table)
 {
     Thread *cur, *parent, *ref;
+    unsigned int mi;
     int dup_count = 0;
     char buf[100];
     int i;
 
     /* for each message... */
-    while (msgdata) {
+    for (mi = 0 ; mi < nmsg ; mi++) {
+	MsgData *msg = msgdata[mi];
+
 	/* fill the containers with msgdata
 	 *
 	 * if we already have a container, use it
 	 */
-	if ((cur = (Thread *) hash_lookup(msgdata->msgid, id_table))) {
+	if ((cur = (Thread *) hash_lookup(msg->msgid, id_table))) {
 	    /* If this container is not empty, then we have a duplicate
 	     * Message-ID.  Make this one unique so that we don't stomp
 	     * on the old one.
 	     */
 	    if (cur->msgdata) {
 		snprintf(buf, sizeof(buf), "-dup%d", dup_count++);
-		msgdata->msgid =
-		    (char *) xrealloc(msgdata->msgid,
-				      strlen(msgdata->msgid) + strlen(buf) + 1);
-		strcat(msgdata->msgid, buf);
+		msg->msgid =
+		    (char *) xrealloc(msg->msgid,
+				      strlen(msg->msgid) + strlen(buf) + 1);
+		strcat(msg->msgid, buf);
 		/* clear cur so that we create a new container */
 		cur = NULL;
 	    }
 	    else
-		cur->msgdata = msgdata;
+		cur->msgdata = msg;
 	}
 
 	/* otherwise, make and index a new container */
 	if (!cur) {
 	    cur = *newnode;
-	    cur->msgdata = msgdata;
-	    hash_insert(msgdata->msgid, cur, id_table);
+	    cur->msgdata = msg;
+	    hash_insert(msg->msgid, cur, id_table);
 	    (*newnode)++;
 	}
 
 	/* Step 1.A */
-	for (i = 0, parent = NULL; i < msgdata->ref.count; i++) {
+	for (i = 0, parent = NULL; i < msg->ref.count; i++) {
 	    /* if we don't already have a container for the reference,
 	     * make and index a new (empty) container
 	     */
-	    if (!(ref = (Thread *) hash_lookup(msgdata->ref.data[i], id_table))) {
+	    if (!(ref = (Thread *) hash_lookup(msg->ref.data[i], id_table))) {
 		ref = *newnode;
-		hash_insert(msgdata->ref.data[i], ref, id_table);
+		hash_insert(msg->ref.data[i], ref, id_table);
 		(*newnode)++;
 	    }
 
@@ -5134,8 +5896,6 @@ static void ref_link_messages(MsgData *msgdata, Thread **newnode,
 	 */
 	if (parent && !thread_is_descendent(cur, parent))
 	    thread_adopt_child(parent, cur);
-
-	msgdata = msgdata->next;
     }
 }
 
@@ -5427,24 +6187,6 @@ static void ref_group_subjects(Thread *root, unsigned nroot, Thread **newnode)
 }
 
 /*
- * Free an entire thread.
- */
-static void index_thread_free(Thread *thread)
-{
-    Thread *child;
-
-    /* free the head node */
-    if (thread->msgdata) index_msgdata_free(thread->msgdata);
-
-    /* free the children recursively */
-    child = thread->child;
-    while (child) {
-	index_thread_free(child);
-	child = child->next;
-    }
-}
-
-/*
  * Guts of thread searching.  Recurses over children when necessary.
  */
 static int _index_thread_search(struct index_state *state,
@@ -5487,9 +6229,6 @@ static void index_thread_search(struct index_state *state,
 	    else
 		prev->next = cur->next;
 
-	    /* free all nodes in the thread */
-	    index_thread_free(cur);
-
 	    /* we just removed cur from our list,
 	     * so we need to keep the same prev for the next pass
 	     */
@@ -5502,23 +6241,25 @@ static void index_thread_search(struct index_state *state,
  * Guts of the REFERENCES algorithms.  Behavior is tweaked with loadcrit[],
  * searchproc() and sortcrit[].
  */
-static void _index_thread_ref(struct index_state *state, unsigned *msgno_list, int nmsg,
+static void _index_thread_ref(struct index_state *state, unsigned *msgno_list,
+			      unsigned int nmsg,
 			      const struct sortcrit loadcrit[],
 			      int (*searchproc) (MsgData *),
 			      const struct sortcrit sortcrit[], int usinguid)
 {
-    MsgData *msgdata, *freeme, *md;
+    MsgData **msgdata;
+    unsigned int mi;
     int tref, nnode;
     Thread *newnode;
     struct hash_table id_table;
     struct rootset rootset;
 
     /* Create/load the msgdata array */
-    freeme = msgdata = index_msgdata_load(state, msgno_list, nmsg, loadcrit);
+    msgdata = index_msgdata_load(state, msgno_list, nmsg, loadcrit, 0, NULL);
 
     /* calculate the sum of the number of references for all messages */
-    for (md = msgdata, tref = 0; md; md = md->next)
-	tref += md->ref.count;
+    for (mi = 0, tref = 0 ; mi < nmsg ; mi++)
+	tref += msgdata[mi]->ref.count;
 
     /* create an array of Thread to use as nodes of thread tree (including
      * empty containers)
@@ -5550,7 +6291,7 @@ static void _index_thread_ref(struct index_state *state, unsigned *msgno_list, i
     construct_hash_table(&id_table, nmsg + tref, 1);
 
     /* Step 1: link messages together */
-    ref_link_messages(msgdata, &newnode, &id_table);
+    ref_link_messages(msgdata, nmsg, &newnode, &id_table);
 
     /* Step 2: find the root set (gather all of the orphan messages) */
     rootset.nroot = 0;
@@ -5581,13 +6322,15 @@ static void _index_thread_ref(struct index_state *state, unsigned *msgno_list, i
     free(rootset.root);
 
     /* free the msgdata array */
-    free(freeme);
+    index_msgdata_free(msgdata, nmsg);
 }
 
 /*
  * Thread a list of messages using the REFERENCES algorithm.
  */
-static void index_thread_ref(struct index_state *state, unsigned *msgno_list, int nmsg, int usinguid)
+static void index_thread_ref(struct index_state *state,
+			     unsigned *msgno_list, unsigned int nmsg,
+			     int usinguid)
 {
     static const struct sortcrit loadcrit[] =
 				 {{ LOAD_IDS,      0, {{NULL,NULL}} },
@@ -5723,7 +6466,7 @@ EXPORTED extern struct nntp_overview *index_overview(struct index_state *state,
 
     /* massage references */
     strarray_append(&refhdr, "references");
-    index_pruneheader(hdr, &refhdr, 0);
+    message_pruneheader(hdr, &refhdr, 0);
     strarray_fini(&refhdr);
 
     if (*hdr) {
@@ -5761,7 +6504,7 @@ EXPORTED extern char *index_getheader(struct index_state *state,
     }
 
     strarray_append(&headers, hdr);
-    index_pruneheader(staticbuf.s, &headers, NULL);
+    message_pruneheader(staticbuf.s, &headers, NULL);
     strarray_fini(&headers);
 
     buf = staticbuf.s;

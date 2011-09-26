@@ -49,6 +49,7 @@
 #include <config.h>
 
 #include "byteorder64.h"
+#include "conversations.h"
 #include "message_guid.h"
 #include "quota.h"
 #include "sequence.h"
@@ -117,12 +118,15 @@ struct statusdata {
     const char *userid;
     unsigned statusitems;
 
-    unsigned messages;
-    unsigned recent;
-    unsigned uidnext;
-    unsigned uidvalidity;
-    unsigned unseen;
+    uint32_t messages;
+    uint32_t recent;
+    uint32_t uidnext;
+    uint32_t uidvalidity;
+    uint32_t unseen;
     modseq_t highestmodseq;
+    uint32_t xconvexists;
+    uint32_t xconvunseen;
+    modseq_t xconvmodseq;
 };
 
 struct index_record {
@@ -231,6 +235,9 @@ struct mailbox {
 
     /* annotations */
     struct annotate_state *annot_state;
+
+    /* conversations */
+    struct conversations_state *local_cstate;
 
     /* change management */
     int modseq_dirty;
@@ -553,5 +560,17 @@ struct synccrcs mailbox_synccrcs(struct mailbox *mailbox, int recalc);
 unsigned mailbox_best_crcvers(unsigned minvers, unsigned maxvers);
 
 extern int mailbox_add_dav(struct mailbox *mailbox);
+
+/* Rename a CID.  Note - this is just one mailbox! */
+extern int mailbox_cid_rename(struct mailbox *mailbox,
+			      conversation_id_t from_cid,
+			      conversation_id_t to_cid);
+extern int mailbox_update_conversations(struct mailbox *mailbox,
+					struct index_record *old,
+					struct index_record *new);
+extern int mailbox_add_conversations(struct mailbox *mailbox);
+extern int mailbox_get_xconvmodseq(struct mailbox *mailbox, modseq_t *);
+extern int mailbox_update_xconvmodseq(struct mailbox *mailbox, modseq_t);
+extern int mailbox_has_conversations(struct mailbox *mailbox);
 
 #endif /* INCLUDED_MAILBOX_H */

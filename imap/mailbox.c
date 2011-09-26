@@ -96,6 +96,7 @@
 #include "map.h"
 #include "mboxevent.h"
 #include "mboxlist.h"
+#include "parseaddr.h"
 #include "proc.h"
 #include "retry.h"
 #include "seen.h"
@@ -266,6 +267,9 @@ const struct mailbox_header_cache mailbox_cache_headers[] = {
     { "x-delivered-to", 3 },
     { "x-mail-from", 3 },
     { "x-truedomain-domain", 3 },
+
+    /* for conversations */
+    { "x-me-message-id", 4 },
 
     /* things to never cache */
     { "bcc", BIT32_MAX },
@@ -933,8 +937,10 @@ lockindex:
     }
 
     /* oops, a race, it got deleted meanwhile.  That's OK */
-    if (mailbox->i.options & OPT_MAILBOX_DELETED)
+    if (mailbox->i.options & OPT_MAILBOX_DELETED) {
 	r = IMAP_MAILBOX_NONEXISTENT;
+	goto done;
+    }
 
     /* we always nuke expunged if the version is less than 12 */
     if (mailbox->i.minor_version < 12)
@@ -1614,6 +1620,38 @@ EXPORTED int mailbox_read_index_record(struct mailbox *mailbox,
     return r;
 }
 
+EXPORTED int mailbox_has_conversations(struct mailbox *mailbox)
+{
+    char *path;
+
+    /* not needed */
+    if (!config_getswitch(IMAPOPT_CONVERSATIONS))
+	return 0;
+
+    /* we never store data about deleted mailboxes */
+    if (mboxname_isdeletedmailbox(mailbox->name, NULL))
+	return 0;
+
+    path = conversations_getmboxpath(mailbox->name);
+    if (!path) return 0;
+    free(path);
+
+    return 1;
+}
+
+static int mailbox_lock_conversations(struct mailbox *mailbox)
+{
+    /* does this mailbox have conversations? */
+    if (!mailbox_has_conversations(mailbox))
+	return 0;
+
+    /* already locked */
+    if (conversations_get_mbox(mailbox->name))
+	return 0;
+
+    return conversations_open_mbox(mailbox->name, &mailbox->local_cstate);
+}
+
 /*
  * bsearch() function to compare two index record buffers by UID
  */
@@ -1660,12 +1698,18 @@ static int mailbox_lock_index_internal(struct mailbox *mailbox, int locktype)
     assert(mailbox->index_fd != -1);
     assert(!mailbox->index_locktype);
 
+restart:
+    r = 0;
+
     if (locktype == LOCK_EXCLUSIVE) {
 	/* handle read-only case cleanly - we need to re-open read-write first! */
 	if (mailbox->is_readonly) {
 	    mailbox->is_readonly = 0;
 	    r = mailbox_open_index(mailbox);
 	}
+	/* XXX - this could be handled out a layer, but we always
+	 * need to have a locked conversations DB */
+	if (!r) r = mailbox_lock_conversations(mailbox);
 	if (!r) r = lock_blocking(mailbox->index_fd, index_fname);
     }
     else if (locktype == LOCK_SHARED) {
@@ -1792,11 +1836,19 @@ EXPORTED void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *s
 		mailbox->name);
 	mailbox->index_locktype = 0;
     }
+
     gettimeofday(&endtime, 0);
     timediff = timesub(&mailbox->starttime, &endtime);
     if (timediff > 1.0) {
 	syslog(LOG_NOTICE, "mailbox: longlock %s for %0.1f seconds",
 	       mailbox->name, timediff);
+    }
+
+    if (mailbox->local_cstate) {
+	int r = conversations_commit(&mailbox->local_cstate);
+	if (r)
+	    syslog(LOG_ERR, "Error committing to conversations database for mailbox %s: %s",
+		   mailbox->name, error_message(r));
     }
 }
 
@@ -1995,6 +2047,8 @@ HIDDEN int mailbox_commit_quota(struct mailbox *mailbox)
 
     return 0;
 }
+
+
 
 /*
  * Write the index header for 'mailbox'
@@ -2634,6 +2688,200 @@ static int mailbox_update_dav(struct mailbox *mailbox,
 }
 #endif // WITH_DAV
 
+EXPORTED int mailbox_update_conversations(struct mailbox *mailbox,
+				 struct index_record *old,
+				 struct index_record *new)
+{
+    int r = 0;
+    conversation_t *conv = NULL;
+    int delta_num_records = 0;
+    int delta_exists = 0;
+    int delta_unseen = 0;
+    int delta_size = 0;
+    int *delta_counts = NULL;
+    int i;
+    modseq_t modseq = 0;
+    struct index_record *record = NULL;
+    struct conversations_state *cstate = NULL;
+
+    if (!mailbox_has_conversations(mailbox))
+	return 0;
+
+    cstate = conversations_get_mbox(mailbox->name);
+    if (!cstate)
+	return IMAP_CONVERSATIONS_NOT_OPEN;
+
+    /* handle unlinked items as if they didn't exist */
+    if (old && (old->system_flags & FLAG_UNLINKED)) old = NULL;
+    if (new && (new->system_flags & FLAG_UNLINKED)) new = NULL;
+
+    if (!old && !new)
+	return 0;
+
+    if (old && new) {
+	assert(old->uid == new->uid);
+	assert(old->modseq <= new->modseq);
+	/* this flag cannot go away */
+	if ((old->system_flags & FLAG_EXPUNGED))
+	    assert((new->system_flags & FLAG_EXPUNGED));
+
+	if (old->cid != new->cid) {
+	    /* handle CID being renamed, by calling ourselves */
+	    r = mailbox_update_conversations(mailbox, NULL, new);
+	    if (!r)
+		r = mailbox_update_conversations(mailbox, old, NULL);
+	    return r;
+	}
+    }
+
+    if (!old && new) {
+	/* add the conversation */
+	mailbox_cacherecord(mailbox, new); /* make sure it's loaded */
+	r = message_update_conversations(cstate, new, &conv);
+	if (r) return r;
+	record = new;
+    }
+    else {
+	record = new ? new : old;
+	/* skip out on non-CIDed records */
+	if (!record->cid) return 0;
+
+	r = conversation_load(cstate, record->cid, &conv);
+	if (r)
+	    return r;
+	if (!conv) {
+	    if (!new) {
+		/* We're trying to delete a conversation that's already
+		 * gone...don't try to hard */
+		syslog(LOG_NOTICE, "conversation "CONV_FMT" already "
+				   "deleted, ignoring", record->cid);
+		return 0;
+	    }
+	    conv = conversation_new(cstate);
+	}
+    }
+
+    if (cstate->counted_flags)
+	delta_counts = xzmalloc(sizeof(int) * cstate->counted_flags->count);
+
+    /* calculate the changes */
+    if (old) {
+	/* decrease any relevent counts */
+	if (!(old->system_flags & FLAG_EXPUNGED)) {
+	    delta_exists--;
+	    delta_size -= old->size;
+	    /* drafts are never unseen */
+	    if (!(old->system_flags & (FLAG_SEEN|FLAG_DRAFT)))
+		delta_unseen--;
+	    if (cstate->counted_flags) {
+		for (i = 0; i < cstate->counted_flags->count; i++) {
+		    const char *flag = strarray_nth(cstate->counted_flags, i);
+		    if (mailbox_record_hasflag(mailbox, old, flag))
+			delta_counts[i]--;
+		}
+	    }
+	}
+	delta_num_records--;
+	modseq = MAX(modseq, old->modseq);
+    }
+    if (new) {
+	/* add any counts */
+	if (!(new->system_flags & FLAG_EXPUNGED)) {
+	    delta_exists++;
+	    delta_size += new->size;
+	    /* drafts are never unseen */
+	    if (!(new->system_flags & (FLAG_SEEN|FLAG_DRAFT)))
+		delta_unseen++;
+	    if (cstate->counted_flags) {
+		for (i = 0; i < cstate->counted_flags->count; i++) {
+		    const char *flag = strarray_nth(cstate->counted_flags, i);
+		    if (mailbox_record_hasflag(mailbox, new, flag))
+			delta_counts[i]++;
+		}
+	    }
+	}
+	delta_num_records++;
+	modseq = MAX(modseq, new->modseq);
+    }
+
+    /* XXX - combine this with the earlier cache parsing */
+    if (!mailbox_cacherecord(mailbox, record)) {
+	char *env = NULL;
+	char *envtokens[NUMENVTOKENS];
+	struct address addr = { NULL, NULL, NULL, NULL, NULL, NULL };
+
+	/* Need to find the sender */
+
+	/* +1 -> skip the leading paren */
+	env = xstrndup(cacheitem_base(record, CACHE_ENVELOPE) + 1,
+		       cacheitem_size(record, CACHE_ENVELOPE) - 1);
+
+	parse_cached_envelope(env, envtokens, VECTOR_SIZE(envtokens));
+
+	if (envtokens[ENV_FROM])
+	    message_parse_env_address(envtokens[ENV_FROM], &addr);
+
+	/* XXX - internaldate vs gmtime? */
+	conversation_update_sender(conv,
+				   addr.name, addr.route,
+				   addr.mailbox, addr.domain,
+				   record->gmtime, delta_exists);
+	free(env);
+    }
+
+    conversation_update(cstate, conv, mailbox->name,
+			delta_num_records,
+			delta_exists, delta_unseen,
+			delta_size, delta_counts, modseq);
+
+    r = conversation_save(cstate, record->cid, conv);
+
+    conversation_free(conv);
+    return r;
+}
+
+EXPORTED int mailbox_get_xconvmodseq(struct mailbox *mailbox, modseq_t *modseqp)
+{
+    if (modseqp)
+	*modseqp = 0;
+
+    if (!config_getswitch(IMAPOPT_CONVERSATIONS))
+	return 0;
+
+    if (!mailbox->local_cstate)
+	return IMAP_INTERNAL;
+
+    return conversation_getstatus(mailbox->local_cstate,
+				  mailbox->name,
+				  modseqp, NULL, NULL);
+}
+
+/* Used in replication */
+EXPORTED int mailbox_update_xconvmodseq(struct mailbox *mailbox, modseq_t newmodseq)
+{
+    modseq_t modseq;
+    uint32_t exists;
+    uint32_t unseen;
+    int r;
+
+    if (!config_getswitch(IMAPOPT_CONVERSATIONS))
+	return 0;
+
+    if (!mailbox->local_cstate)
+	return IMAP_INTERNAL;
+
+    r = conversation_getstatus(mailbox->local_cstate,
+			       mailbox->name,
+			       &modseq, &exists, &unseen);
+    if (r) return r;
+
+    if (newmodseq > modseq)
+	r = conversation_setstatus(mailbox->local_cstate,
+				   mailbox->name,
+				   newmodseq, exists, unseen);
+    return r;
+}
+
 /* NOTE: maybe make this able to return error codes if we have
  * support for transactional mailbox updates later.  For now,
  * we expect callers to have already done all sanity checking */
@@ -2641,11 +2889,14 @@ static int mailbox_update_indexes(struct mailbox *mailbox,
 				  struct index_record *old,
 				  struct index_record *new)
 {
-#ifdef WITH_DAV
     int r = 0;
+#ifdef WITH_DAV
     r = mailbox_update_dav(mailbox, old, new);
     if (r) return r;
 #endif
+
+    r = mailbox_update_conversations(mailbox, old, new);
+    if (r) return r;
 
     /* NOTE - we do these last */
 
@@ -2730,9 +2981,6 @@ EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
 	r = mailbox_append_cache(mailbox, record);
 	if (r) return r;
     }
-
-    /* remove the counts for the old copy, and add them for
-     * the new copy */
 
     r = mailbox_update_indexes(mailbox, &oldrecord, record);
     if (r) return r;
@@ -2827,6 +3075,16 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
 	record->sentdate = mktime(tm);
     }
 
+    /* update the highestmodseq if needed */
+    if (record->silent) {
+	mailbox_index_dirty(mailbox);
+    }
+    else {
+	mailbox_modseq_dirty(mailbox);
+	record->modseq = mailbox->i.highestmodseq;
+	record->last_updated = mailbox->last_updated;
+    }
+
     if (!(record->system_flags & FLAG_UNLINKED)) {
 	/* make the file timestamp correct */
 	settime.actime = settime.modtime = record->internaldate;
@@ -2837,16 +3095,6 @@ EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
 	 * will set the cache_offset field. */
 	r = mailbox_append_cache(mailbox, record);
 	if (r) return r;
-    }
-
-    /* update the highestmodseq if needed */
-    if (record->silent) {
-	mailbox_index_dirty(mailbox);
-    }
-    else {
-	mailbox_modseq_dirty(mailbox);
-	record->modseq = mailbox->i.highestmodseq;
-	record->last_updated = mailbox->last_updated;
     }
 
     r = mailbox_update_indexes(mailbox, NULL, record);
@@ -3591,6 +3839,13 @@ EXPORTED int mailbox_create(const char *name,
 	goto done;
     }
     mailbox->index_locktype = LOCK_EXCLUSIVE;
+    r = mailbox_lock_conversations(mailbox);
+    if (r) {
+	syslog(LOG_ERR, "IOERROR: locking conversations %s %s",
+	       mailbox->name, error_message(r));
+	r = IMAP_IOERROR;
+	goto done;
+    }
 
     fname = mailbox_meta_fname(mailbox, META_CACHE);
     if (!fname) {
@@ -3616,11 +3871,13 @@ EXPORTED int mailbox_create(const char *name,
 	uidvalidity = mboxname_nextuidvalidity(name, time(0));
     else
 	mboxname_setuidvalidity(mailbox->name, uidvalidity);
+
     /* and highest modseq */
-    if (!highestmodseq) 
+    if (!highestmodseq)
 	highestmodseq = mboxname_nextmodseq(mailbox->name, 0);
     else
 	mboxname_setmodseq(mailbox->name, highestmodseq);
+
     /* init non-zero fields */
     mailbox_index_dirty(mailbox);
     mailbox->i.minor_version = MAILBOX_MINOR_VERSION;
@@ -3763,7 +4020,7 @@ EXPORTED int mailbox_add_dav(struct mailbox *mailbox)
     uint32_t recno;
     int r = 0;
 
-    if (!(mailbox->mbtype & (MBTYPE_ADDRESSBOOK|MBTYPE_CALENDAR)))
+    if (!(mailbox->mbtype & (MBTYPES_DAV)))
 	return 0;
 
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
@@ -3773,12 +4030,71 @@ EXPORTED int mailbox_add_dav(struct mailbox *mailbox)
 	r = mailbox_update_dav(mailbox, NULL, &record);
 	if (r) return r;
     }
+}
+
+EXPORTED int mailbox_add_conversations(struct mailbox *mailbox)
+{
+    struct index_record record;
+    uint32_t recno;
+    int r = 0;
+
+    if (!mailbox_has_conversations(mailbox))
+	return 0;
+
+    for (recno = 1; recno <= mailbox->i.num_records; recno++) {
+	r = mailbox_read_index_record(mailbox, recno, &record);
+	if (r) return r;
+
+	/* not assigned, skip */
+	if (!record.cid)
+	    continue;
+
+	/* unlinked, skip */
+	if (record.system_flags & FLAG_UNLINKED)
+	    continue;
+
+	r = mailbox_update_conversations(mailbox, NULL, &record);
+	if (r) return r;
+    }
 
     return 0;
 }
 #endif
 
-EXPORTED int mailbox_delete(struct mailbox **mailboxptr)
+static int mailbox_delete_conversations(struct mailbox *mailbox)
+{
+    struct conversations_state *cstate;
+    struct index_record record;
+    uint32_t recno;
+    int r;
+
+    if (!mailbox_has_conversations(mailbox))
+	return 0;
+
+    cstate = conversations_get_mbox(mailbox->name);
+    if (!cstate)
+	return IMAP_CONVERSATIONS_NOT_OPEN;
+
+    for (recno = 1; recno <= mailbox->i.num_records; recno++) {
+	r = mailbox_read_index_record(mailbox, recno, &record);
+	if (r) return r;
+
+	/* not assigned, skip */
+	if (!record.cid)
+	    continue;
+
+	/* unlinked, skip */
+	if (record.system_flags & FLAG_UNLINKED)
+	    continue;
+
+	r = mailbox_update_conversations(mailbox, &record, NULL);
+	if (r) return r;
+    }
+
+    return conversations_rename_folder(cstate, mailbox->name, NULL);
+}
+
+static int mailbox_delete_internal(struct mailbox **mailboxptr)
 {
     int r = 0;
     struct mailbox *mailbox = *mailboxptr;
@@ -3820,6 +4136,21 @@ EXPORTED int mailbox_delete(struct mailbox **mailboxptr)
     mailbox_close(mailboxptr);
 
     return 0;
+}
+
+/*
+ * Delete and close the mailbox 'mailbox'.  Closes 'mailbox' whether
+ * or not the deletion was successful.  Requires a locked mailbox.
+ */
+EXPORTED int mailbox_delete(struct mailbox **mailboxptr)
+{
+    struct mailbox *mailbox = *mailboxptr;
+    int r;
+
+    r = mailbox_delete_conversations(mailbox);
+    if (r) return r;
+
+    return mailbox_delete_internal(mailboxptr);
 }
 
 /* XXX - move this part of cleanup into mboxlist.  Really
@@ -3981,13 +4312,23 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
 {
     int r;
     struct mailbox *newmailbox = NULL;
+    struct conversations_state *oldcstate = NULL;
+    struct conversations_state *newcstate = NULL;
     char *newquotaroot = NULL;
 
     assert(mailbox_index_islocked(oldmailbox, 1));
 
+    /* we can't rename back from a deleted mailbox, because the conversations
+     * information will be wrong.  Ideally we might re-calculate, but for now
+     * we just throw a big fat error */
+    if (mboxname_isdeletedmailbox(oldmailbox->name, NULL)) {
+	syslog(LOG_ERR, "can't rename a deleted mailbox %s", oldmailbox->name);
+	return IMAP_MAILBOX_BADNAME;
+    }
+
     /* create uidvalidity if not explicitly requested */
     if (!uidvalidity)
-	uidvalidity = mboxname_nextuidvalidity(newname, time(0));
+	uidvalidity = mboxname_nextuidvalidity(newname, oldmailbox->i.uidvalidity);
 
     /* Create new mailbox */
     r = mailbox_create(newname, oldmailbox->mbtype, newpartition,
@@ -4046,6 +4387,33 @@ HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
     /* and bump the modseq too */
     mailbox_modseq_dirty(newmailbox);
 
+    /* NOTE: in the case of renaming a user to another user, we
+     * don't rename the conversations DB - instead we re-create
+     * the records in the target user.  Sorry, was too complex
+     * otherwise handling all the special cases */
+    if (mailbox_has_conversations(oldmailbox)) {
+	oldcstate = conversations_get_mbox(oldmailbox->name);
+	assert(oldcstate);
+    }
+
+    if (mailbox_has_conversations(newmailbox)) {
+	newcstate = conversations_get_mbox(newmailbox->name);
+	assert(newcstate);
+    }
+
+    if (oldcstate && newcstate && !strcmp(oldcstate->path, newcstate->path)) {
+	/* we can just rename within the same user */
+	r = conversations_rename_folder(oldcstate, oldmailbox->name, newname);
+    }
+    else {
+	/* have to handle each one separately */
+	if (oldcstate)
+	    r = mailbox_delete_conversations(oldmailbox);
+	if (newcstate)
+	    r = mailbox_add_conversations(newmailbox);
+    }
+    if (r) goto fail;
+
     /* commit the index changes */
     r = mailbox_commit(newmailbox);
     if (r) goto fail;
@@ -4086,7 +4454,7 @@ EXPORTED int mailbox_rename_cleanup(struct mailbox **mailboxptr, int isinbox)
 	if (!r) r = mailbox_commit(oldmailbox);
 	mailbox_close(mailboxptr);
     } else {
-	r = mailbox_delete(mailboxptr);
+	r = mailbox_delete_internal(mailboxptr);
     }
 
     if (r) {
@@ -5205,6 +5573,51 @@ EXPORTED int mailbox_get_annotate_state(struct mailbox *mailbox,
 	annotate_state_begin(mailbox->annot_state);
 
     if (statep) *statep = mailbox->annot_state;
+
+    return 0;
+}
+
+int mailbox_cid_rename(struct mailbox *mailbox,
+		       conversation_id_t from_cid,
+		       conversation_id_t to_cid)
+{
+    uint32_t recno, num_records;
+    struct index_record record;
+    int r;
+
+    if (!config_getswitch(IMAPOPT_CONVERSATIONS))
+	return 0;
+
+    num_records = mailbox->i.num_records;
+    for (recno = 1; recno <= num_records; recno++) {
+	r = mailbox_read_index_record(mailbox, recno, &record);
+	if (r) {
+	    syslog(LOG_ERR, "mailbox_cid_rename: error "
+			    "reading record %u, mailbox %s: %s",
+			    recno, mailbox->name, error_message(r));
+	    return r;
+	}
+
+	if (record.system_flags & FLAG_EXPUNGED)
+	    continue;
+	if (record.cid != from_cid)
+	    continue;
+
+	/*
+	 * Just rename the CID in place - injecting a copy at the end
+	 * messes with clients that just use UID ordering, like Apple's
+	 * IOS email client */
+
+	record.cid = to_cid;
+	r = mailbox_rewrite_index_record(mailbox, &record);
+
+	if (r) {
+	    syslog(LOG_ERR, "mailbox_cid_rename: error "
+			    "rewriting record %u, mailbox %s: %s from %llu to %llu",
+			    recno, mailbox->name, error_message(r), from_cid, to_cid);
+	    return r;
+	}
+    }
 
     return 0;
 }

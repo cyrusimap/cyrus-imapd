@@ -452,6 +452,25 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "createonpost", 0, SWITCH }
 /* Deprecated in favor of \fIautocreate_post\fR. */
 
+{ "conversations", 0, SWITCH }
+/* Enable the XCONVERSATIONS extensions.  Extract conversation
+   tracking information from incoming messages and track them
+   in per-user databases. */
+
+{ "conversations_counted_flags", NULL, STRING }
+/* space-separated list of flags for which per-conversation counts
+   will be kept.  Note that you need to reconstruct the conversations
+   database with ctl_conversationsdb if you change this option on a
+   running server, or the counts will be wrong.  */
+
+{ "conversations_db", "skiplist", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist", "sql", "twoskip")}
+/* The cyrusdb backend to use for the per-user conversations database. */
+
+{ "conversations_expire_days", 90, INT }
+/* How long the conversations database keeps the message tracking
+   information needed for receiving new messages in existing
+   conversations, in days. */
+
 { "dav_realm", NULL, STRING }
 /* The realm to present for HTTP authentication of generic DAV
    resources (principals).  If not set (the default), the value of the

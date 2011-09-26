@@ -204,6 +204,7 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
     struct sync_folder *rfolder;
     struct sync_msgid_list *part_list;
     struct mailbox *mailbox = NULL;
+    modseq_t xconvmodseq;
     int r = 0;
 
     /* Find messages we want to upload that are available on server */
@@ -227,6 +228,16 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
 	    goto bail;
 	}
 
+	xconvmodseq = 0;
+	if (mailbox_has_conversations(mailbox)) {
+	    r = mailbox_get_xconvmodseq(mailbox, &xconvmodseq);
+	    if (r) {
+		syslog(LOG_ERR, "IOERROR: Failed to get xconvmodseq %s: %s",
+		       mbox->name, error_message(r));
+		goto bail;
+	    }
+	}
+
 	/* mailbox is open from here, no exiting without closing it! */
 
 	part_list = sync_reserve_partlist(reserve_guids, mailbox->part);
@@ -238,7 +249,7 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
 			     mailbox->i.highestmodseq, mailbox->i.synccrcs,
 			     mailbox->i.recentuid, mailbox->i.recenttime,
 			     mailbox->i.pop3_last_login,
-			     mailbox->i.pop3_show_after, NULL);
+			     mailbox->i.pop3_show_after, NULL, xconvmodseq);
 
 	rfolder = sync_folder_lookup(replica_folders, mailbox->uniqueid);
 	if (rfolder)
@@ -459,6 +470,8 @@ static int response_parse(const char *cmd,
 	    time_t pop3_show_after = 0;
 	    struct dlist *al = NULL;
 	    struct sync_annot_list *annots = NULL;
+	    modseq_t xconvmodseq = 0;
+
 	    if (!folder_list) goto parse_err;
 	    if (!dlist_getatom(kl, "UNIQUEID", &uniqueid)) goto parse_err;
 	    if (!dlist_getatom(kl, "MBOXNAME", &mboxname)) goto parse_err;
@@ -476,9 +489,11 @@ static int response_parse(const char *cmd,
 	    dlist_getdate(kl, "POP3_SHOW_AFTER", &pop3_show_after);
 	    dlist_getatom(kl, "MBOXTYPE", &mboxtype);
 	    dlist_getnum32(kl, "SYNC_CRC_ANNOT", &synccrcs.annot);
+	    dlist_getnum64(kl, "XCONVMODSEQ", &xconvmodseq);
 
 	    if (dlist_getlist(kl, "ANNOTATIONS", &al))
 		decode_annotations(al, &annots, NULL);
+
 
 	    sync_folder_list_add(folder_list, uniqueid, mboxname,
 				 mboxlist_string_to_mbtype(mboxtype),
@@ -488,7 +503,8 @@ static int response_parse(const char *cmd,
 				 highestmodseq, synccrcs,
 				 recentuid, recenttime,
 				 pop3_last_login,
-				 pop3_show_after, annots);
+				 pop3_show_after, annots,
+				 xconvmodseq);
 	}
 	else
 	    goto parse_err;
@@ -990,10 +1006,10 @@ static void log_record(const char *name, struct mailbox *mailbox,
 		       struct index_record *record)
 {
     syslog(LOG_NOTICE, "SYNCNOTICE: %s uid:%u modseq:" MODSEQ_FMT " "
-	  "last_updated:%lu internaldate:%lu flags:(%s)",
+	  "last_updated:%lu internaldate:%lu flags:(%s) cid:" CONV_FMT,
 	   name, record->uid, record->modseq,
 	   record->last_updated, record->internaldate,
-	   make_flags(mailbox, record));
+	   make_flags(mailbox, record), record->cid);
 }
 
 static void log_mismatch(const char *reason, struct mailbox *mailbox,
@@ -1247,6 +1263,7 @@ static int mailbox_full_update(const char *mboxname)
     struct sync_annot_list *mannots = NULL;
     struct sync_annot_list *rannots = NULL;
     int remote_modseq_was_higher = 0;
+    modseq_t xconvmodseq = 0;
 
     kl = dlist_setatom(NULL, cmd, mboxname);
     sync_send_lookup(kl, sync_out);
@@ -1290,6 +1307,9 @@ static int mailbox_full_update(const char *mboxname)
 	goto done;
     }
 
+    /* optional */
+    dlist_getnum64(kl, "XCONVMODSEQ", &xconvmodseq);
+
     /* we'll be updating it! */
     r = mailbox_open_iwl(mboxname, &mailbox);
     if (r) goto done;
@@ -1326,6 +1346,13 @@ static int mailbox_full_update(const char *mboxname)
     }
 
     /* OK - now we're committed to make changes! */
+
+    /* this is safe because "larger than" logic is embedded
+     * inside update_xconvmodseq */
+    if (mailbox_has_conversations(mailbox)) {
+	r = mailbox_update_xconvmodseq(mailbox, xconvmodseq);
+	if (r) goto done;
+    }
 
     kaction = dlist_newlist(NULL, "ACTION");
     r = mailbox_update_loop(mailbox, kr->head, last_uid,
@@ -1413,6 +1440,7 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
 {
     /* look for any mismatches */
     unsigned options = mailbox->i.options & MAILBOX_OPTIONS_MASK;
+    modseq_t xconvmodseq = 0;
 
     if (!remote) return 0;
     if (remote->mbtype != mailbox->mbtype) return 0;
@@ -1425,6 +1453,13 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
     if (remote->pop3_show_after != mailbox->i.pop3_show_after) return 0;
     if (remote->options != options) return 0;
     if (strcmp(remote->acl, mailbox->acl)) return 0;
+
+    if (mailbox_has_conversations(mailbox)) {
+	int r = mailbox_get_xconvmodseq(mailbox, &xconvmodseq);
+	if (r) return 0;
+
+	if (remote->xconvmodseq != xconvmodseq) return 0;
+    }
 
     /* compare annotations */
     {

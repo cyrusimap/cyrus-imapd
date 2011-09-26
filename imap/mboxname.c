@@ -170,7 +170,7 @@ static void remove_lockitem(struct mboxlocklist *remitem)
 
 /* name locking support */
 
-HIDDEN int mboxname_lock(const char *mboxname, struct mboxlock **mboxlockptr,
+EXPORTED int mboxname_lock(const char *mboxname, struct mboxlock **mboxlockptr,
 		  int locktype)
 {
     const char *fname;
@@ -238,7 +238,7 @@ done:
     return r;
 }
 
-HIDDEN void mboxname_release(struct mboxlock **mboxlockptr)
+EXPORTED void mboxname_release(struct mboxlock **mboxlockptr)
 {
     struct mboxlocklist *lockitem;
     struct mboxlock *lock = *mboxlockptr;
@@ -754,7 +754,7 @@ EXPORTED int mboxname_init_namespace(struct namespace *namespace, int isadmin)
     return 0;
 }
 
-HIDDEN struct namespace *mboxname_get_adminnamespace()
+EXPORTED struct namespace *mboxname_get_adminnamespace()
 {
     static struct namespace ns;
     if (!admin_namespace) {
@@ -1552,7 +1552,7 @@ EXPORTED int mboxname_make_parent(char *name)
 
 /* NOTE: caller must free, which is different from almost every
  * other interface in the whole codebase.  Grr */
-HIDDEN char *mboxname_conf_getpath(struct mboxname_parts *parts, const char *suffix)
+EXPORTED char *mboxname_conf_getpath(struct mboxname_parts *parts, const char *suffix)
 {
     char *fname = NULL;
     char c[2], d[2];
@@ -1736,40 +1736,40 @@ static bit64 mboxname_setval(const char *mboxname, const char *metaname,
     return retval;
 }
 
-modseq_t mboxname_readmodseq(const char *mboxname)
+EXPORTED modseq_t mboxname_readmodseq(const char *mboxname)
 {
     if (!config_getswitch(IMAPOPT_CONVERSATIONS))
 	return 0;
     return (modseq_t)mboxname_readval(mboxname, "modseq");
 }
 
-modseq_t mboxname_nextmodseq(const char *mboxname, modseq_t last)
+EXPORTED modseq_t mboxname_nextmodseq(const char *mboxname, modseq_t last)
 {
     if (!config_getswitch(IMAPOPT_CONVERSATIONS))
 	return last + 1;
     return (modseq_t)mboxname_setval(mboxname, "modseq", (bit64)last, 1);
 }
 
-modseq_t mboxname_setmodseq(const char *mboxname, modseq_t val)
+EXPORTED modseq_t mboxname_setmodseq(const char *mboxname, modseq_t val)
 {
     return (modseq_t)mboxname_setval(mboxname, "modseq", (bit64)val, 0);
 }
 
-uint32_t mboxname_readuidvalidity(const char *mboxname)
+EXPORTED uint32_t mboxname_readuidvalidity(const char *mboxname)
 {
     if (!config_getswitch(IMAPOPT_CONVERSATIONS))
 	return 0;
     return (uint32_t)mboxname_readval(mboxname, "uidvalidity");
 }
 
-uint32_t mboxname_nextuidvalidity(const char *mboxname, uint32_t last)
+EXPORTED uint32_t mboxname_nextuidvalidity(const char *mboxname, uint32_t last)
 {
     if (!config_getswitch(IMAPOPT_CONVERSATIONS))
 	return last + 1;
     return (uint32_t)mboxname_setval(mboxname, "uidvalidity", (bit64)last, 1);
 }
 
-uint32_t mboxname_setuidvalidity(const char *mboxname, uint32_t val)
+EXPORTED uint32_t mboxname_setuidvalidity(const char *mboxname, uint32_t val)
 {
     return (uint32_t)mboxname_setval(mboxname, "uidvalidity", (bit64)val, 0);
 }

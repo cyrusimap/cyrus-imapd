@@ -65,4 +65,5 @@ ent RFC822_SUBJECT "Subject"
 ent RFC822_SENDER "Sender"
 ent RFC822_TO "To"
 ent RFC822_X_DELIVEREDINTERNALDATE "X-Deliveredinternaldate"
+ent RFC822_X_ME_MESSAGE_ID "X-ME-Message-ID"
 

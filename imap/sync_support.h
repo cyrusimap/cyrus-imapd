@@ -148,6 +148,7 @@ struct sync_folder {
     time_t pop3_last_login;
     time_t pop3_show_after;
     struct sync_annot_list *annots;
+    modseq_t xconvmodseq;
     struct quota quota;
     int   mark;
     int   reserve;  /* Folder has been processed by reserve operation */
@@ -173,7 +174,8 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
 					 time_t recenttime,
 					 time_t pop3_last_login,
 					 time_t pop3_show_after,
-					 struct sync_annot_list *annots);
+					 struct sync_annot_list *annot,
+					 modseq_t xconvmodseq);
 
 struct sync_folder *sync_folder_lookup(struct sync_folder_list *l,
 				       const char *uniqueid);
@@ -431,6 +433,12 @@ int apply_annotations(struct mailbox *mailbox,
 		      int local_wins);
 int diff_annotations(const struct sync_annot_list *local_annots,
 		     const struct sync_annot_list *remote_annots);
+
+/* ====================================================================== */
+
+int sync_rename_cid(struct mailbox *mailbox,
+                    struct index_record *mrecord,
+                    struct index_record *rrecord);
 
 /* ====================================================================== */
 
