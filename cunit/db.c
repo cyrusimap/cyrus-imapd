@@ -9,12 +9,11 @@
 #include "strarray.h"
 #include "hash.h"
 
-#define BACKEND	    "skiplist"
 #define DBDIR	    "test-mb-dbdir"
-#define FNAME	    DBDIR"/cyrus."BACKEND"-test"
-#define FNAME2	    DBDIR"/cyrus."BACKEND"-testB"
 
 static struct cyrusdb_backend *DB;
+static char *filename;
+static char *filename2;
 
 static void config_read_string(const char *s)
 {
@@ -78,7 +77,7 @@ static int fexists(const char *fname)
     r = DB->close(db); \
     db = NULL; \
     CU_ASSERT_EQUAL(r, CYRUSDB_OK); \
-    r = DB->open(FNAME, 0, &db); \
+    r = DB->open(filename, 0, &db); \
     CU_ASSERT_EQUAL(r, CYRUSDB_OK); \
     CU_ASSERT_PTR_NOT_NULL(db);
 
@@ -87,25 +86,25 @@ static void test_openclose(void)
     struct db *db = NULL;
     int r;
 
-    CU_ASSERT_EQUAL(fexists(FNAME), -ENOENT);
+    CU_ASSERT_EQUAL(fexists(filename), -ENOENT);
 
     /* open() without _CREATE fails with NOTFOUND
      * and doesn't create the db */
-    r = DB->open(FNAME, 0, &db);
+    r = DB->open(filename, 0, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_NOTFOUND);
     CU_ASSERT_PTR_NULL(db);
-    CU_ASSERT_EQUAL(fexists(FNAME), -ENOENT);
+    CU_ASSERT_EQUAL(fexists(filename), -ENOENT);
 
     /* open() with _CREATE succeeds and creates the db */
-    r = DB->open(FNAME, CYRUSDB_CREATE, &db);
+    r = DB->open(filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_PTR_NOT_NULL(db);
-    CU_ASSERT_EQUAL(fexists(FNAME), 0);
+    CU_ASSERT_EQUAL(fexists(filename), 0);
 
     /* closing succeeds and leaves the file in place */
     r = DB->close(db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
-    CU_ASSERT_EQUAL(fexists(FNAME), 0);
+    CU_ASSERT_EQUAL(fexists(filename), 0);
 }
 
 static void test_multiopen(void)
@@ -114,17 +113,17 @@ static void test_multiopen(void)
     struct db *db2 = NULL;
     int r;
 
-    CU_ASSERT_EQUAL(fexists(FNAME), -ENOENT);
+    CU_ASSERT_EQUAL(fexists(filename), -ENOENT);
 
     /* open() with _CREATE succeeds and creates the db */
-    r = DB->open(FNAME, CYRUSDB_CREATE, &db1);
+    r = DB->open(filename, CYRUSDB_CREATE, &db1);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_PTR_NOT_NULL(db1);
-    CU_ASSERT_EQUAL(fexists(FNAME), 0);
+    CU_ASSERT_EQUAL(fexists(filename), 0);
 
     /* a second open() with the same filename returns
      * another reference to the same db */
-    r = DB->open(FNAME, 0, &db2);
+    r = DB->open(filename, 0, &db2);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_PTR_NOT_NULL(db2);
     CU_ASSERT_PTR_EQUAL(db1, db2);
@@ -132,12 +131,12 @@ static void test_multiopen(void)
     /* closing succeeds and leaves the file in place */
     r = DB->close(db1);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
-    CU_ASSERT_EQUAL(fexists(FNAME), 0);
+    CU_ASSERT_EQUAL(fexists(filename), 0);
 
     /* closing the other reference succeeds and leaves the file in place */
     r = DB->close(db2);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
-    CU_ASSERT_EQUAL(fexists(FNAME), 0);
+    CU_ASSERT_EQUAL(fexists(filename), 0);
 }
 
 static void test_opentwo(void)
@@ -146,23 +145,23 @@ static void test_opentwo(void)
     struct db *db2 = NULL;
     int r;
 
-    CU_ASSERT_EQUAL(fexists(FNAME), -ENOENT);
-    CU_ASSERT_EQUAL(fexists(FNAME2), -ENOENT);
+    CU_ASSERT_EQUAL(fexists(filename), -ENOENT);
+    CU_ASSERT_EQUAL(fexists(filename2), -ENOENT);
 
     /* open() with _CREATE succeeds and creates the db */
-    r = DB->open(FNAME, CYRUSDB_CREATE, &db1);
+    r = DB->open(filename, CYRUSDB_CREATE, &db1);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_PTR_NOT_NULL(db1);
-    CU_ASSERT_EQUAL(fexists(FNAME), 0);
-    CU_ASSERT_EQUAL(fexists(FNAME2), -ENOENT);
+    CU_ASSERT_EQUAL(fexists(filename), 0);
+    CU_ASSERT_EQUAL(fexists(filename2), -ENOENT);
 
     /* open() of the 2nd filename with _CREATE
      * succeeds and creates another separate db */
-    r = DB->open(FNAME2, CYRUSDB_CREATE, &db2);
+    r = DB->open(filename2, CYRUSDB_CREATE, &db2);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_PTR_NOT_NULL(db2);
-    CU_ASSERT_EQUAL(fexists(FNAME), 0);
-    CU_ASSERT_EQUAL(fexists(FNAME2), 0);
+    CU_ASSERT_EQUAL(fexists(filename), 0);
+    CU_ASSERT_EQUAL(fexists(filename2), 0);
     CU_ASSERT_PTR_NOT_EQUAL(db1, db2);
 
     /* closing succeeds and leaves the file in place */
@@ -173,8 +172,8 @@ static void test_opentwo(void)
     r = DB->close(db2);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
 
-    CU_ASSERT_EQUAL(fexists(FNAME), 0);
-    CU_ASSERT_EQUAL(fexists(FNAME2), 0);
+    CU_ASSERT_EQUAL(fexists(filename), 0);
+    CU_ASSERT_EQUAL(fexists(filename2), 0);
 }
 
 static void test_readwrite(void)
@@ -185,7 +184,7 @@ static void test_readwrite(void)
     static const char DATA[] = "dem bones dem bones dem thighbones";
     int r;
 
-    r = DB->open(FNAME, CYRUSDB_CREATE, &db);
+    r = DB->open(filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_PTR_NOT_NULL(db);
 
@@ -230,7 +229,7 @@ static void test_multirw(void)
     static const char DATA2[] = "Dem KneeBones";
     int r;
 
-    r = DB->open(FNAME, CYRUSDB_CREATE, &db);
+    r = DB->open(filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_PTR_NOT_NULL(db);
 
@@ -280,7 +279,7 @@ static void test_abort(void)
     static const char DATA[] = "standford mit harvard";
     int r;
 
-    r = DB->open(FNAME, CYRUSDB_CREATE, &db);
+    r = DB->open(filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_PTR_NOT_NULL(db);
 
@@ -332,7 +331,7 @@ static void test_delete(void)
     static const char DATA3[] = "flax corm naipaul enable herrera fating";
     int r;
 
-    r = DB->open(FNAME, CYRUSDB_CREATE, &db);
+    r = DB->open(filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_PTR_NOT_NULL(db);
 
@@ -427,7 +426,7 @@ static void test_foreach(void)
     static const char DATA3[] = "aleut stoic muscovy adonis moe docent";
     int r;
 
-    r = DB->open(FNAME, CYRUSDB_CREATE, &db);
+    r = DB->open(filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_PTR_NOT_NULL(db);
 
@@ -615,7 +614,7 @@ static void test_many(void)
 
     construct_hash_table(&exphash, (MAXN+1)*4, 0);
 
-    r = DB->open(FNAME, CYRUSDB_CREATE, &db);
+    r = DB->open(filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_PTR_NOT_NULL(db);
 
@@ -673,8 +672,7 @@ static void test_many(void)
 #undef MAXN
 }
 
-
-
+static char *backend = CUNIT_PARAM("skiplist");
 
 static int set_up(void)
 {
@@ -708,9 +706,10 @@ static int set_up(void)
     );
 
     cyrusdb_init();
-    DB = cyrusdb_fromname(BACKEND);
-    if (!DB)
-	return -1;
+    DB = cyrusdb_fromname(backend);
+
+    filename = strconcat(DBDIR, "/cyrus.", backend, "-test", (char *)NULL);
+    filename2 = strconcat(DBDIR, "/cyrus.", backend, "-testB", (char *)NULL);
 
     return 0;
 }
@@ -724,5 +723,11 @@ static int tear_down(void)
     r = system("rm -rf " DBDIR);
     /* I'm ignoring you */
 
+    free(filename);
+    filename = NULL;
+    free(filename2);
+    filename2 = NULL;
+
     return 0;
 }
+
