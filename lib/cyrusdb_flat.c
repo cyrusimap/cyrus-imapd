@@ -89,6 +89,76 @@ struct txn {
     int fd;
 };
 
+/*
+ * We choose an escape character which is an invalid UTF-8 encoding and
+ * thus unlikely to appear in the key or data unless they are completely
+ * non-textual.
+ */
+#define ESCAPE	    0xff
+
+static void encode(const char *ps, int len, struct buf *buf)
+{
+    const unsigned char *p = (const unsigned char *)ps;
+
+    buf_reset(buf);
+    /* allocate enough space plus a little slop to cover
+     * escaping a few characters */
+    buf_ensure(buf, len+10);
+
+    for ( ; len > 0 ; len--, p++) {
+	switch (*p) {
+	case '\0':
+	case '\t':
+	case '\r':
+	case '\n':
+	    buf_putc(buf, ESCAPE);
+	    buf_putc(buf, 0x80|(*p));
+	    break;
+	case ESCAPE:
+	    buf_putc(buf, ESCAPE);
+	    buf_putc(buf, ESCAPE);
+	    break;
+	default:
+	    buf_putc(buf, *p);
+	    break;
+	}
+    }
+
+    /* ensure the buf is NUL-terminated */
+    buf_cstring(buf);
+}
+
+static void decode(const char *ps, int len, struct buf *buf)
+{
+    const unsigned char *p = (const unsigned char *)ps;
+
+    buf_reset(buf);
+    /* allocate enough space; we don't need slop because
+     * decoding can only shrink the result */
+    buf_ensure(buf, len);
+
+    for ( ; len > 0 ; len--, p++) {
+	if (*p == ESCAPE) {
+	    if (len < 2) {
+		/* invalid encoding, silently ignore */
+		continue;
+	    }
+	    len--;
+	    p++;
+	    if (*p == ESCAPE)
+		buf_putc(buf, ESCAPE);
+	    else
+		buf_putc(buf, (*p) & ~0x80);
+	}
+	else
+	    buf_putc(buf, *p);
+    }
+
+    /* buf is binary and might not be NUL-terminated, but we're going
+     * to be passing it out to callers so NUL-terminate Just In Case. */
+    buf_cstring(buf);
+}
+
 /* other routines call this one when they fail */
 static int abort_txn(struct db *db, struct txn *tid)
 {
@@ -313,6 +383,7 @@ static int myfetch(struct db *db,
     int r = 0;
     int offset;
     unsigned long len;
+    struct buf keybuf = BUF_INITIALIZER;
 
     assert(db);
 
@@ -322,15 +393,15 @@ static int myfetch(struct db *db,
     r = starttxn_or_refetch(db, mytid);
     if (r) return r;
 
-    offset = bsearch_mem(key, db->base, db->size, 0, &len);
+    encode(key, keylen, &keybuf);
+
+    offset = bsearch_mem(keybuf.s, db->base, db->size, 0, &len);
     if (len) {
 	if (data) {
-	    buf_reset(&db->data);
-	    buf_appendmap(&db->data,
-			  db->base + offset + keylen + 1,
-			  /* subtract one for \t, and one for the \n */
-			  len - keylen - 2);
-	    buf_cstring(&db->data);
+	    decode(db->base + offset + keybuf.len + 1,
+		   /* subtract one for \t, and one for the \n */
+		   len - keybuf.len - 2,
+		   &db->data);
 	    if (data) *data = db->data.s;
 	    if (datalen) *datalen = db->data.len;
 	}
@@ -338,6 +409,7 @@ static int myfetch(struct db *db,
 	r = CYRUSDB_NOTFOUND;
     }
 
+    buf_free(&keybuf);
     return r;
 }
 
@@ -381,12 +453,8 @@ static int getentry(struct db *db, const char *p,
     }
     datalen = dataend - data;
 
-    buf_reset(&db->data);
-    buf_appendmap(&db->data, data, datalen);
-    buf_cstring(&db->data);
-    buf_reset(keybuf);
-    buf_appendmap(keybuf, key, keylen);
-    buf_cstring(keybuf);
+    decode(data, datalen, &db->data);
+    decode(key, keylen, keybuf);
     *dataendp = dataend;
 
     return 0;
@@ -446,9 +514,7 @@ static int foreach(struct db *db,
     }
 
     if (prefix) {
-	buf_reset(&prefixbuf);
-	buf_appendmap(&prefixbuf, prefix, prefixlen);
-	buf_cstring(&prefixbuf);
+	encode(prefix, prefixlen, &prefixbuf);
 	offset = bsearch_mem(prefixbuf.s, dbbase, db->size, 0, &len);
     } else {
 	offset = 0;
@@ -536,6 +602,7 @@ static int mystore(struct db *db,
     int niov;
     struct stat sbuf;
     struct buf keybuf = BUF_INITIALIZER;
+    struct buf databuf = BUF_INITIALIZER;
 
     /* lock file, if needed */
     if (!mytid || !*mytid) {
@@ -558,8 +625,7 @@ static int mystore(struct db *db,
 	}
     }
 
-    buf_appendmap(&keybuf, key, keylen);
-    buf_cstring(&keybuf);
+    encode(key, keylen, &keybuf);
 
     /* find entry, if it exists */
     offset = bsearch_mem(keybuf.s, db->base, db->size, 0, &len);
@@ -568,6 +634,7 @@ static int mystore(struct db *db,
     if (len && !overwrite) {
 	if (mytid) abort_txn(db, *mytid);
 	buf_free(&keybuf);
+	buf_free(&databuf);
 	return CYRUSDB_EXISTS;
     }
 
@@ -585,6 +652,7 @@ static int mystore(struct db *db,
         syslog(LOG_ERR, "opening %s for writing failed: %m", fnamebuf);
 	if (mytid) abort_txn(db, *mytid);
 	buf_free(&keybuf);
+	buf_free(&databuf);
 	return CYRUSDB_IOERROR;
     }
 
@@ -595,9 +663,10 @@ static int mystore(struct db *db,
 
     if (data) {
 	/* new entry */
+	encode(data, datalen, &databuf);
 	WRITEV_ADD_TO_IOVEC(iov, niov, keybuf.s, keybuf.len);
 	WRITEV_ADD_TO_IOVEC(iov, niov, "\t", 1);
-	WRITEV_ADD_TO_IOVEC(iov, niov, (char *) data, datalen);
+	WRITEV_ADD_TO_IOVEC(iov, niov, databuf.s, databuf.len);
 	WRITEV_ADD_TO_IOVEC(iov, niov, "\n", 1);
     }
 
@@ -613,6 +682,7 @@ static int mystore(struct db *db,
 	close(writefd);
 	if (mytid) abort_txn(db, *mytid);
 	buf_free(&keybuf);
+	buf_free(&databuf);
         return CYRUSDB_IOERROR;
     }
     r = 0;
@@ -638,6 +708,7 @@ static int mystore(struct db *db,
 	    syslog(LOG_ERR, "IOERROR: writing %s: %m", fnamebuf);
 	    close(writefd);
 	    buf_free(&keybuf);
+	    buf_free(&databuf);
 	    return CYRUSDB_IOERROR;
 	}
 
@@ -659,6 +730,7 @@ static int mystore(struct db *db,
     }
 
     buf_free(&keybuf);
+    buf_free(&databuf);
 
     return r;
 }
