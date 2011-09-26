@@ -56,27 +56,12 @@ extern int verbose;
  * which makes it rather hard to see why an assertion failed.  So we
  * replace the macros with improved ones, keeping the same API.
  */
-static CU_BOOL CU_assertFormatImplementation(
-    CU_BOOL bValue,
-    unsigned int uiLine,
-    char strFile[],
-    char strFunction[],
-    CU_BOOL bFatal,
-    char strConditionFormat[],
-    ...)
-{
-    va_list args;
-    char buf[1024];
-
-    va_start(args, strConditionFormat);
-    vsnprintf(buf, sizeof(buf), strConditionFormat, args);
-    va_end(args);
-
-    if (verbose > 1 && bValue)
-	fprintf(stderr, "    %s:%u %s\n", strFile, uiLine, buf);
-
-    return CU_assertImplementation(bValue, uiLine, buf, strFile, strFunction, bFatal);
-}
+extern CU_BOOL CU_assertFormatImplementation(CU_BOOL bValue, unsigned int uiLine,
+					     char strFile[], char strFunction[],
+					     CU_BOOL bFatal,
+					     char strConditionFormat[], ...);
+extern void __cunit_wrap_test(const char *name, void (*fn)(void));
+extern int __cunit_wrap_fixture(const char *name, int (*fn)(void));
 
 #undef CU_ASSERT_EQUAL
 #define CU_ASSERT_EQUAL(actual,expected) \
@@ -179,5 +164,29 @@ static CU_BOOL CU_assertFormatImplementation(
     CU_assertFormatImplementation((_a == _e), __LINE__, \
      __FILE__, "", CU_TRUE, \
     "CU_ASSERT_SYSLOG_FATAL(/%s/=%u, " #expected "=%u)", _s, _a, _e); }
+
+/* for parametrised tests */
+
+#define CUNIT_PARAM(x)	    (x)
+
+struct cunit_param
+{
+    /* initialisation state */
+    const char *name;
+    char **variable;
+    /* iteration state */
+    int nvalues;
+    char **values;
+    int idx;
+    char *freeme1;
+};
+#define __CUNIT_DECLARE_PARAM(nm) \
+    { #nm, &nm, 0, NULL, 0, NULL }
+#define __CUNIT_LAST_PARAM \
+    { NULL, NULL, 0, NULL, 0, NULL }
+
+extern void __cunit_params_begin(struct cunit_param *);
+extern int __cunit_params_next(struct cunit_param *);
+extern void __cunit_params_end(struct cunit_param *);
 
 #endif /* INCLUDED_CUNIT_H */

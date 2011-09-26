@@ -325,6 +325,7 @@ sub suite_new($$)
 	object => suite_path_to_object($relpath),
 	setupfn => undef,
 	teardownfn => undef,
+	params => [],
 	tests => []
     };
     $suite->{suitevar} = suite_name_to_var($suite->{name});
@@ -371,6 +372,62 @@ my %teardown_names = (
 );
 
 #
+# Helper for suite_scan_for_tests
+#
+sub suite_found_function
+{
+    my ($suite, $rtype, $fn) = @_;
+
+    if (defined $teardown_names{lc($fn)} && (!defined($rtype) || $rtype eq 'int'))
+    {
+	vmsg("Found teardown function");
+	die "$suite->{abspath}: Too many teardown functions: " .
+	    "both \"$fn\" and \"$suite->{teardownfn}\" found"
+	    if defined($suite->{teardownfn});
+	$suite->{teardownfn} = $fn;
+    }
+    elsif (defined $setup_names{lc($fn)} && (!defined($rtype) || $rtype eq 'int'))
+    {
+	vmsg("Found setup function");
+	die "$suite->{abspath}: too many setup functions: both " .
+	    "\"$fn\" and \"$suite->{setupfn}\" found"
+	    if defined($suite->{setupfn});
+	$suite->{setupfn} = $fn;
+    }
+    else
+    {
+	my ($name) = ($fn =~ m/^test_*(\w+)/);
+	if (defined $name && (!defined($rtype) || $rtype eq 'void'))
+	{
+	    vmsg("Found test function \"$fn\" -> name \"$name\"");
+	    push(@{$suite->{tests}},
+		    {
+			name => $name,
+			func => $fn
+		    });
+	}
+    }
+}
+
+#
+# Helper for suite_scan_for_tests
+#
+sub suite_found_param
+{
+    my ($suite, $param) = @_;
+
+    die "$suite->{abspath}: parameter \"$param\" declared " .
+        "more than once"
+	if grep { $_ eq $param } @{$suite->{params}};
+    vmsg("Found parameter \"$param\"");
+
+    # Note: we preserve the order of discovery in the
+    # source file to provide a predictable order of
+    # walking the parameter space at runtime.
+    push (@{$suite->{params}}, $param);
+}
+
+#
 # Scan the C source file of the given suite for function
 # definitions of one of the signatures:
 #
@@ -386,12 +443,21 @@ my %teardown_names = (
 # The names of any such functions found are added to the
 # suite hash, using {setupfn}, {teardownfn} and {tests}.
 #
+# Also scan for variable declarations of the form
+#
+# [static] char * foo = CUNIT_PARAM("stringliteral");
+#
+# and make them a parameter for the containing test suite.
+#
 # Args: ref to suite hash
 # Returns: number of tests found
 #
 sub suite_scan_for_tests($)
 {
     my ($suite) = @_;
+    my $state = 0;
+    my $fn;
+    my $rtype;
 
     open FH,'<',$suite->{abspath}
 	or die "Can't open $suite->{abspath} for reading: $!";
@@ -399,47 +465,54 @@ sub suite_scan_for_tests($)
     {
 	chomp;
 
-	# Detect definitions of functions with the signature
-	# void func(void), static void func(void), int func(void),
-	# and static int func(void).
-	my $fn;
-	my $rtype;
-	($rtype, $fn) = m/^static\s+(int|void)\s+(\w+)\s*\(\s*void\s*\)\s*$/;
-	($rtype, $fn) = m/^(int|void)\s+(\w+)\s*\(\s*void\s*\)\s*$/
-	    unless defined $fn;
-	($fn) = m/^(\w+)\s*\(\s*void\s*\)\s*$/
-	    unless defined $fn;
-	next
-	    unless defined $fn;
-
-	if (defined $teardown_names{lc($fn)} && (!defined($rtype) || $rtype eq 'int'))
+	if ($state == 0)
 	{
-	    vmsg("Found teardown function");
-	    die "$suite->{abspath}: Too many teardown functions: " .
-		"both \"$fn\" and \"$suite->{teardownfn}\" found"
-		if defined($suite->{teardownfn});
-	    $suite->{teardownfn} = $fn;
-	}
-	elsif (defined $setup_names{lc($fn)} && (!defined($rtype) || $rtype eq 'int'))
-	{
-	    vmsg("Found setup function");
-	    die "$suite->{abspath}: too many setup functions: both " .
-		"\"$fn\" and \"$suite->{setupfn}\" found"
-		if defined($suite->{setupfn});
-	    $suite->{setupfn} = $fn;
-	}
-	else
-	{
-	    my ($name) = ($fn =~ m/^test_*(\w+)/);
-	    if (defined $name && (!defined($rtype) || $rtype eq 'void'))
+	    # Detect definitions of functions with the signature
+	    # void func(void), static void func(void), int func(void),
+	    # and static int func(void).
+	    ($rtype, $fn) = m/^(?:static\s+)(int|void)\s+(\w+)\s*\(\s*void\s*\)\s*$/;
+	    if (defined $fn)
 	    {
-		vmsg("Found test function \"$fn\" -> name \"$name\"");
-		push(@{$suite->{tests}},
-			{
-			    name => $name,
-			    func => $fn
-			});
+		suite_found_function($suite, $rtype, $fn);
+		next;
 	    }
+
+	    ($fn) = m/^(\w+)\s*\(\s*void\s*\)\s*$/;
+	    if (defined $fn)
+	    {
+		# old fashioned function declarations with no return type
+		suite_found_function($suite, undef, $fn);
+		next;
+	    }
+
+	    ($rtype) = m/^(?:static\s+)(int|void)\s*$/;
+	    if (defined $rtype)
+	    {
+		$state = 1;
+		next;
+	    }
+
+	    my ($param) = m/^(?:static\s+)char\s*\*\s*(\w+)\s*=\s*CUNIT_PARAM\s*\(/;
+	    if (defined $param)
+	    {
+		suite_found_param($suite, $param);
+		next;
+	    }
+
+	}
+	elsif ($state == 1)
+	{
+	    # $rtype is left over from previous line
+	    ($fn) = m/^(\w+)\s*\(\s*void\s*\)\s*$/;
+	    if (defined $fn)
+	    {
+		# split-line declaration of the form:
+		# static void
+		# test_foo(void)
+		suite_found_function($suite, $rtype, $fn);
+		next;
+	    }
+	    $state = 0;
 	}
     }
     close FH;
@@ -631,8 +704,16 @@ sub suite_generate_wrap($)
 	or die "Cannot open $file for writing: $!";
     print WRAP "/* Automatically generated by cunit.pl, do not edit */\n";
     print WRAP "#include \"$suite->{relpath}\"\n";
-    print WRAP "extern void __cunit_wrap_test(const char *name, void (*fn)(void));\n";
-    print WRAP "extern int __cunit_wrap_fixture(const char *name, int (*fn)(void));\n";
+
+    if (scalar @{$suite->{params}})
+    {
+	print WRAP "static struct cunit_param params[] = {\n";
+	map
+	{
+	    print WRAP "__CUNIT_DECLARE_PARAM($_),\n";
+	} @{$suite->{params}};
+	print WRAP "__CUNIT_LAST_PARAM };\n";
+    }
 
     my $setupfn = $suite->{setupfn};
     my $teardownfn = $suite->{teardownfn};
@@ -642,6 +723,10 @@ sub suite_generate_wrap($)
 	my $fn = $test->{func};
 	print WRAP "static void __cunit_$fn(void)\n";
 	print WRAP "{\n";
+
+	print WRAP "__cunit_params_begin(params);\ndo {\n"
+	    if (scalar @{$suite->{params}});
+
 	print WRAP "     CU_syslogMatchReset();\n";
 	print WRAP "    if (__cunit_wrap_fixture(" .
 		   "\"$cfile:$setupfn\", $setupfn)) " .
@@ -652,6 +737,8 @@ sub suite_generate_wrap($)
 		   "\"$cfile:$teardownfn\", $teardownfn)) " .
 		   "CU_FAIL_FATAL(\"$teardownfn failed\");\n"
 	    if defined $teardownfn;
+	print WRAP "} while (__cunit_params_next(params));\n__cunit_params_end(params);\n"
+	    if (scalar @{$suite->{params}});
 	print WRAP "}\n";
     }
 

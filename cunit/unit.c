@@ -50,6 +50,7 @@
 #include <CUnit/Automated.h>
 #include <setjmp.h>
 #include "timeout.h"
+#include "cunit.h"
 
 #include "registers.h"
 
@@ -99,6 +100,7 @@ static void accumulate_summary(CU_RunSummary *summp)
 static jmp_buf jbuf;
 static const char *code;
 static enum { IDLE, INTEST, INFIXTURE } running = IDLE;
+static struct cunit_params *current_params;
 
 void exit(int status)
 {
@@ -170,6 +172,131 @@ int __cunit_wrap_fixture(const char *name, int (*fn)(void))
 	exit(1);
     running = IDLE;
     return r;
+}
+
+static void describe_params(const struct cunit_param *params,
+			    char *buf, int maxlen)
+{
+    const struct cunit_param *p;
+    int n;
+
+    if (maxlen <= 4)
+	return;
+    if (!params || !params->name)
+	return;
+
+    for (p = params ; p->name ; p++) {
+	n = snprintf(buf, maxlen, "%s%s=%s",
+		     (p == params ? "" : ","),
+		     p->name, p->values[p->idx]);
+	if (n >= maxlen) {
+	    /* truncated */
+	    strcpy(buf+maxlen-4, "...");
+	    return;
+	}
+	buf += n;
+	maxlen -= n;
+    }
+}
+
+static void params_assign(struct cunit_param *params)
+{
+    struct cunit_param *p;
+
+    for (p = params ; p->name ; p++)
+	*(p->variable) = p->values[p->idx];
+
+    if (verbose) {
+	char buf[1024];
+	buf[0] = '\0';
+	describe_params(params, buf, sizeof(buf));
+	fprintf(stderr, "[%s] ", buf);
+	fflush(stderr);
+    }
+}
+
+void __cunit_params_begin(struct cunit_param *params)
+{
+    int i;
+    struct cunit_param *p;
+
+    if (!params || !params[0].name)
+	return;
+
+    if (!params[0].values) {
+	/* first call: split the original value of the
+	 * variable up into the ->values[] array */
+	for (p = params ; p->name ; p++) {
+	    char *v;
+	    static const char sep[] = ",";
+	    p->freeme1 = xstrdup(*(p->variable));
+	    for (v = strtok(p->freeme1, sep) ;
+		 v ;
+		 v = strtok(NULL, sep)) {
+		p->values = (p->nvalues ?
+			     xrealloc(p->values, sizeof(char*) * (p->nvalues+1)) :
+			     xmalloc(sizeof(char *)));
+		p->values[p->nvalues++] = v;
+	    }
+	}
+    }
+    for (p = params ; p->name ; p++)
+	p->idx = 0;
+    params_assign(params);
+    current_params = params;
+}
+
+int __cunit_params_next(struct cunit_param *params)
+{
+    struct cunit_param *p;
+
+    if (!params || !params[0].name)
+	return 0;
+
+    for (p = params ; p->name ; p++) {
+	if (++p->idx < p->nvalues)
+	    break;
+	p->idx = 0;
+    }
+    if (!p->name)
+	return 0;	/* incremented off the end */
+    params_assign(params);
+    return 1;
+}
+
+void __cunit_params_end(struct cunit_param *params)
+{
+    current_params = NULL;
+}
+
+
+CU_BOOL CU_assertFormatImplementation(
+    CU_BOOL bValue,
+    unsigned int uiLine,
+    char strFile[],
+    char strFunction[],
+    CU_BOOL bFatal,
+    char strConditionFormat[],
+    ...)
+{
+    va_list args;
+    char buf[1024];
+
+    va_start(args, strConditionFormat);
+    vsnprintf(buf, sizeof(buf), strConditionFormat, args);
+    va_end(args);
+
+    if (current_params) {
+	strncat(buf, " [", sizeof(buf)-strlen(buf)-1);
+	describe_params(current_params, buf+strlen(buf), sizeof(buf)-strlen(buf)-1);
+	strncat(buf, "]", sizeof(buf)-strlen(buf)-1);
+	buf[sizeof(buf)-1] = '\0';
+    }
+
+    if (verbose > 1 && bValue)
+	fprintf(stderr, "    %s:%u %s\n", strFile, uiLine, buf);
+
+    return CU_assertImplementation(bValue, uiLine, buf, strFile, strFunction, bFatal);
 }
 
 static void run_tests(void)
