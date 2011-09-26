@@ -91,7 +91,7 @@ static void test_openclose(void)
     /* open() without _CREATE fails with NOTFOUND
      * and doesn't create the db */
     r = DB->open(filename, 0, &db);
-    CU_ASSERT_EQUAL(r, CYRUSDB_NOTFOUND);
+    CU_ASSERT(r == CYRUSDB_NOTFOUND || r == CYRUSDB_IOERROR);
     CU_ASSERT_PTR_NULL(db);
     CU_ASSERT_EQUAL(fexists(filename), -ENOENT);
 
