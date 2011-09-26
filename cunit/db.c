@@ -6,10 +6,18 @@
 #include "cyrusdb.h"
 #include "libcyr_cfg.h"
 #include "util.h"
-#include "strarray.h"
 #include "hash.h"
 
 #define DBDIR	    "test-mb-dbdir"
+
+struct binary_result
+{
+    struct binary_result *next;
+    char *key;
+    int keylen;
+    char *data;
+    int datalen;
+};
 
 static struct cyrusdb_backend *DB;
 static char *filename;
@@ -80,6 +88,24 @@ static int fexists(const char *fname)
     r = DB->open(filename, 0, &db); \
     CU_ASSERT_EQUAL(r, CYRUSDB_OK); \
     CU_ASSERT_PTR_NOT_NULL(db);
+
+#define GOTRESULT(expkey, expkeylen, expdata, expdatalen) \
+{ \
+    const char *_key = (expkey); \
+    int _keylen = (expkeylen); \
+    const char *_data = (expdata); \
+    int _datalen = (expdatalen); \
+    struct binary_result *actual = results; \
+    CU_ASSERT_PTR_NOT_NULL_FATAL(results); \
+    results = results->next; \
+    CU_ASSERT_EQUAL(_keylen, actual->keylen); \
+    CU_ASSERT_EQUAL(0, memcmp(_data, actual->data, _datalen)); \
+    CU_ASSERT_EQUAL(_datalen, actual->datalen); \
+    CU_ASSERT_EQUAL(0, memcmp(_key, actual->key, _keylen)); \
+    free(actual->key); \
+    free(actual->data); \
+    free(actual); \
+}
 
 static void test_openclose(void)
 {
@@ -392,22 +418,29 @@ static int foreacher(void *rock,
 		     const char *key, int keylen,
 		     const char *data, int datalen)
 {
-    strarray_t *resultsp = (strarray_t *)rock;
+    struct binary_result **head = (struct binary_result **)rock;
+    struct binary_result **tail;
+    struct binary_result *res;
 
     /* check that key and data are correct and NUL-terminated */
     CU_ASSERT_PTR_NOT_NULL(key);
     CU_ASSERT(keylen > 0);
     CU_ASSERT(key[keylen] == '\0');
-    CU_ASSERT_EQUAL(keylen, strlen(key));
 
     CU_ASSERT_PTR_NOT_NULL(data);
     CU_ASSERT(datalen > 0);
     CU_ASSERT(data[datalen] == '\0');
-    CU_ASSERT_EQUAL(datalen, strlen(data));
 
     /* remember them for later perusal */
-    strarray_append(resultsp, key);
-    strarray_append(resultsp, data);
+    res = xzmalloc(sizeof(*res));
+    res->key = xmemdup(key, keylen+1);
+    res->keylen = keylen;
+    res->data = xmemdup(data, datalen+1);
+    res->datalen = datalen;
+    /* append to the list.  yes, it's inefficient. */
+    for (tail = head ; *tail ; tail = &(*tail)->next)
+	;
+    *tail = res;
 
     return 0;
 }
@@ -416,7 +449,7 @@ static void test_foreach(void)
 {
     struct db *db = NULL;
     struct txn *txn = NULL;
-    strarray_t results = STRARRAY_INITIALIZER;
+    struct binary_result *results = NULL;
     /* random word generator to the rescue! */
     static const char KEY1[] = "carib";
     static const char DATA1[] = "delays maj bullish packard ronald";
@@ -450,20 +483,12 @@ static void test_foreach(void)
     r = DB->foreach(db, NULL, 0, NULL, foreacher, &results, &txn);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
 
+    /* got the expected keys in the expected order */
+    GOTRESULT(KEY1, strlen(KEY1), DATA1, strlen(DATA1));
+    GOTRESULT(KEY2, strlen(KEY2), DATA2, strlen(DATA2));
+    GOTRESULT(KEY3, strlen(KEY3), DATA3, strlen(DATA3));
     /* foreach iterated over exactly all the keys */
-    CU_ASSERT_EQUAL(results.count, 6);
-
-    r = strarray_find(&results, KEY1, 0);
-    CU_ASSERT(r >= 0 && r < 6 && r % 2 == 0);
-    CU_ASSERT_STRING_EQUAL(results.data[r+1], DATA1);
-
-    r = strarray_find(&results, KEY2, 0);
-    CU_ASSERT(r >= 0 && r < 6 && r % 2 == 0);
-    CU_ASSERT_STRING_EQUAL(results.data[r+1], DATA2);
-
-    r = strarray_find(&results, KEY3, 0);
-    CU_ASSERT(r >= 0 && r < 6 && r % 2 == 0);
-    CU_ASSERT_STRING_EQUAL(results.data[r+1], DATA3);
+    CU_ASSERT_PTR_NULL(results);
 
     /* close the txn - it doesn't matter here if we commit or abort */
     CANCOMMIT();
@@ -471,9 +496,219 @@ static void test_foreach(void)
     /* closing succeeds */
     r = DB->close(db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
-
-    strarray_fini(&results);
 }
+
+static void test_binary_keys(void)
+{
+    struct db *db = NULL;
+    struct txn *txn = NULL;
+    /* data from hipsteripsum.me */
+    static const char KEY1[] = "master\0cleanse";
+    static const char DATA1[] = "ethical";
+    static const char KEY2[] = "cardigan\tdreamcatcher";
+    static const char DATA2[] = "shoreditch";
+    static const char KEY3[] = "pitchfork\rcarles";
+    static const char DATA3[] = "tumble";
+    static const char KEY4[] = "seitan\nraw\ndenim";
+    static const char DATA4[] = "fap";
+    static const char KEY5[] = { 0x01, 0x02, 0x04, 0x08,
+			         0x10, 0x20, 0x40, 0x80,
+				 0x00/*unused*/};
+    static const char DATA5[] = "farm-to-table";
+    struct binary_result *results = NULL;
+    int r;
+
+    r = DB->open(filename, CYRUSDB_CREATE, &db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    CU_ASSERT_PTR_NOT_NULL(db);
+
+    /* the database is initially empty, so fetch will fail */
+    CANNOTFETCH(KEY1, sizeof(KEY1)-1, CYRUSDB_NOTFOUND);
+    CANNOTFETCH(KEY2, sizeof(KEY2)-1, CYRUSDB_NOTFOUND);
+    CANNOTFETCH(KEY3, sizeof(KEY3)-1, CYRUSDB_NOTFOUND);
+    CANNOTFETCH(KEY4, sizeof(KEY4)-1, CYRUSDB_NOTFOUND);
+    CANNOTFETCH(KEY5, sizeof(KEY5)-1, CYRUSDB_NOTFOUND);
+
+    /* store()ing a record succeeds */
+    CANSTORE(KEY1, sizeof(KEY1)-1, DATA1, sizeof(DATA1)-1);
+    CANSTORE(KEY2, sizeof(KEY2)-1, DATA2, sizeof(DATA2)-1);
+    CANSTORE(KEY3, sizeof(KEY3)-1, DATA3, sizeof(DATA3)-1);
+    CANSTORE(KEY4, sizeof(KEY4)-1, DATA4, sizeof(DATA4)-1);
+    CANSTORE(KEY5, sizeof(KEY5)-1, DATA5, sizeof(DATA5)-1);
+
+    /* the record can be fetched back */
+    CANFETCH(KEY1, sizeof(KEY1)-1, DATA1, sizeof(DATA1)-1);
+    CANFETCH(KEY2, sizeof(KEY2)-1, DATA2, sizeof(DATA2)-1);
+    CANFETCH(KEY3, sizeof(KEY3)-1, DATA3, sizeof(DATA3)-1);
+    CANFETCH(KEY4, sizeof(KEY4)-1, DATA4, sizeof(DATA4)-1);
+    CANFETCH(KEY5, sizeof(KEY5)-1, DATA5, sizeof(DATA5)-1);
+
+    /* commit succeeds */
+    CANCOMMIT();
+
+    /* data can be read back in a new transaction */
+    CANFETCH(KEY1, sizeof(KEY1)-1, DATA1, sizeof(DATA1)-1);
+    CANFETCH(KEY2, sizeof(KEY2)-1, DATA2, sizeof(DATA2)-1);
+    CANFETCH(KEY3, sizeof(KEY3)-1, DATA3, sizeof(DATA3)-1);
+    CANFETCH(KEY4, sizeof(KEY4)-1, DATA4, sizeof(DATA4)-1);
+    CANFETCH(KEY5, sizeof(KEY5)-1, DATA5, sizeof(DATA5)-1);
+
+    /* close the txn - it doesn't matter here if we commit or abort */
+    CANCOMMIT();
+
+    /* foreach succeeds */
+    r = DB->foreach(db, NULL, 0, NULL, foreacher, &results, &txn);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+
+    /* got the expected keys in the expected order */
+    GOTRESULT(KEY5, sizeof(KEY5)-1, DATA5, sizeof(DATA5)-1);
+    GOTRESULT(KEY2, sizeof(KEY2)-1, DATA2, sizeof(DATA2)-1);
+    GOTRESULT(KEY1, sizeof(KEY1)-1, DATA1, sizeof(DATA1)-1);
+    GOTRESULT(KEY3, sizeof(KEY3)-1, DATA3, sizeof(DATA3)-1);
+    GOTRESULT(KEY4, sizeof(KEY4)-1, DATA4, sizeof(DATA4)-1);
+    /* foreach iterated over exactly all the keys */
+    CU_ASSERT_PTR_NULL(results);
+
+    /* close the txn - it doesn't matter here if we commit or abort */
+    CANCOMMIT();
+
+    /* close and re-open the database */
+    CANREOPEN();
+
+    /* data can still be read back */
+    CANFETCH(KEY1, sizeof(KEY1)-1, DATA1, sizeof(DATA1)-1);
+    CANFETCH(KEY2, sizeof(KEY2)-1, DATA2, sizeof(DATA2)-1);
+    CANFETCH(KEY3, sizeof(KEY3)-1, DATA3, sizeof(DATA3)-1);
+    CANFETCH(KEY4, sizeof(KEY4)-1, DATA4, sizeof(DATA4)-1);
+    CANFETCH(KEY5, sizeof(KEY5)-1, DATA5, sizeof(DATA5)-1);
+
+    /* foreach still succeeds */
+    r = DB->foreach(db, NULL, 0, NULL, foreacher, &results, &txn);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+
+    /* got the expected keys in the expected order */
+    GOTRESULT(KEY5, sizeof(KEY5)-1, DATA5, sizeof(DATA5)-1);
+    GOTRESULT(KEY2, sizeof(KEY2)-1, DATA2, sizeof(DATA2)-1);
+    GOTRESULT(KEY1, sizeof(KEY1)-1, DATA1, sizeof(DATA1)-1);
+    GOTRESULT(KEY3, sizeof(KEY3)-1, DATA3, sizeof(DATA3)-1);
+    GOTRESULT(KEY4, sizeof(KEY4)-1, DATA4, sizeof(DATA4)-1);
+    /* foreach iterated over exactly all the keys */
+    CU_ASSERT_PTR_NULL(results);
+
+    /* close the txn - it doesn't matter here if we commit or abort */
+    CANCOMMIT();
+
+    /* closing succeeds */
+    r = DB->close(db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+}
+
+
+static void test_binary_data(void)
+{
+    struct db *db = NULL;
+    struct txn *txn = NULL;
+    /* data from hipsteripsum.me */
+    static const char KEY1[] = "vinyl";
+    static const char DATA1[] = "cosby\0sweater";
+    static const char KEY2[] = "blog";
+    static const char DATA2[] = "next\tlevel";
+    static const char KEY3[] = "chambray";
+    static const char DATA3[] = "mcsweeneys\rletterpress";
+    static const char KEY4[] = "synth";
+    static const char DATA4[] = "readymade\ncliche\nterry\nrichardson";
+    static const char KEY5[] = "fixie";
+    static const char DATA5[] = { 0x01, 0x02, 0x04, 0x08,
+			          0x10, 0x20, 0x40, 0x80,
+				  0x00/*unused*/};
+    struct binary_result *results = NULL;
+    int r;
+
+    r = DB->open(filename, CYRUSDB_CREATE, &db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    CU_ASSERT_PTR_NOT_NULL(db);
+
+    /* the database is initially empty, so fetch will fail */
+    CANNOTFETCH(KEY1, sizeof(KEY1)-1, CYRUSDB_NOTFOUND);
+    CANNOTFETCH(KEY2, sizeof(KEY2)-1, CYRUSDB_NOTFOUND);
+    CANNOTFETCH(KEY3, sizeof(KEY3)-1, CYRUSDB_NOTFOUND);
+    CANNOTFETCH(KEY4, sizeof(KEY4)-1, CYRUSDB_NOTFOUND);
+    CANNOTFETCH(KEY5, sizeof(KEY5)-1, CYRUSDB_NOTFOUND);
+
+    /* store()ing a record succeeds */
+    CANSTORE(KEY1, sizeof(KEY1)-1, DATA1, sizeof(DATA1)-1);
+    CANSTORE(KEY2, sizeof(KEY2)-1, DATA2, sizeof(DATA2)-1);
+    CANSTORE(KEY3, sizeof(KEY3)-1, DATA3, sizeof(DATA3)-1);
+    CANSTORE(KEY4, sizeof(KEY4)-1, DATA4, sizeof(DATA4)-1);
+    CANSTORE(KEY5, sizeof(KEY5)-1, DATA5, sizeof(DATA5)-1);
+
+    /* the record can be fetched back */
+    CANFETCH(KEY1, sizeof(KEY1)-1, DATA1, sizeof(DATA1)-1);
+    CANFETCH(KEY2, sizeof(KEY2)-1, DATA2, sizeof(DATA2)-1);
+    CANFETCH(KEY3, sizeof(KEY3)-1, DATA3, sizeof(DATA3)-1);
+    CANFETCH(KEY4, sizeof(KEY4)-1, DATA4, sizeof(DATA4)-1);
+    CANFETCH(KEY5, sizeof(KEY5)-1, DATA5, sizeof(DATA5)-1);
+
+    /* commit succeeds */
+    CANCOMMIT();
+
+    /* data can be read back in a new transaction */
+    CANFETCH(KEY1, sizeof(KEY1)-1, DATA1, sizeof(DATA1)-1);
+    CANFETCH(KEY2, sizeof(KEY2)-1, DATA2, sizeof(DATA2)-1);
+    CANFETCH(KEY3, sizeof(KEY3)-1, DATA3, sizeof(DATA3)-1);
+    CANFETCH(KEY4, sizeof(KEY4)-1, DATA4, sizeof(DATA4)-1);
+    CANFETCH(KEY5, sizeof(KEY5)-1, DATA5, sizeof(DATA5)-1);
+
+    /* close the txn - it doesn't matter here if we commit or abort */
+    CANCOMMIT();
+
+    /* foreach succeeds */
+    r = DB->foreach(db, NULL, 0, NULL, foreacher, &results, &txn);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+
+    /* got the expected keys in the expected order */
+    GOTRESULT(KEY2, sizeof(KEY2)-1, DATA2, sizeof(DATA2)-1);
+    GOTRESULT(KEY3, sizeof(KEY3)-1, DATA3, sizeof(DATA3)-1);
+    GOTRESULT(KEY5, sizeof(KEY5)-1, DATA5, sizeof(DATA5)-1);
+    GOTRESULT(KEY4, sizeof(KEY4)-1, DATA4, sizeof(DATA4)-1);
+    GOTRESULT(KEY1, sizeof(KEY1)-1, DATA1, sizeof(DATA1)-1);
+    /* foreach iterated over exactly all the keys */
+    CU_ASSERT_PTR_NULL(results);
+
+    /* close the txn - it doesn't matter here if we commit or abort */
+    CANCOMMIT();
+
+    /* close and re-open the database */
+    CANREOPEN();
+
+    /* data can still be read back */
+    CANFETCH(KEY1, sizeof(KEY1)-1, DATA1, sizeof(DATA1)-1);
+    CANFETCH(KEY2, sizeof(KEY2)-1, DATA2, sizeof(DATA2)-1);
+    CANFETCH(KEY3, sizeof(KEY3)-1, DATA3, sizeof(DATA3)-1);
+    CANFETCH(KEY4, sizeof(KEY4)-1, DATA4, sizeof(DATA4)-1);
+    CANFETCH(KEY5, sizeof(KEY5)-1, DATA5, sizeof(DATA5)-1);
+
+    /* foreach still succeeds */
+    r = DB->foreach(db, NULL, 0, NULL, foreacher, &results, &txn);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+
+    /* got the expected keys in the expected order */
+    GOTRESULT(KEY2, sizeof(KEY2)-1, DATA2, sizeof(DATA2)-1);
+    GOTRESULT(KEY3, sizeof(KEY3)-1, DATA3, sizeof(DATA3)-1);
+    GOTRESULT(KEY5, sizeof(KEY5)-1, DATA5, sizeof(DATA5)-1);
+    GOTRESULT(KEY4, sizeof(KEY4)-1, DATA4, sizeof(DATA4)-1);
+    GOTRESULT(KEY1, sizeof(KEY1)-1, DATA1, sizeof(DATA1)-1);
+    /* foreach iterated over exactly all the keys */
+    CU_ASSERT_PTR_NULL(results);
+
+    /* close the txn - it doesn't matter here if we commit or abort */
+    CANCOMMIT();
+
+    /* closing succeeds */
+    r = DB->close(db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+}
+
 
 const char *nth_compound(unsigned int n,
 			 const char * const * words /*[37]*/,
