@@ -105,7 +105,6 @@ static char *make_basedir(const char * const *reldirs)
     CU_ASSERT_PTR_NOT_EQUAL((void *)_data, (void *)expdata); \
     CU_ASSERT_EQUAL(_datalen, expdatalen); \
     CU_ASSERT(!memcmp(_data, expdata, _datalen)); \
-    CU_ASSERT(_data[_datalen] == '\0'); \
 }
 
 #define CANNOTFETCH(key, keylen, experror) \
@@ -522,20 +521,18 @@ static int foreacher(void *rock,
     struct binary_result **tail;
     struct binary_result *res;
 
-    /* check that key and data are correct and NUL-terminated */
+    /* check that key and data are correct */
     CU_ASSERT_PTR_NOT_NULL(key);
     CU_ASSERT(keylen > 0);
-    CU_ASSERT(key[keylen] == '\0');
 
     CU_ASSERT_PTR_NOT_NULL(data);
     CU_ASSERT(datalen > 0);
-    CU_ASSERT(data[datalen] == '\0');
 
     /* remember them for later perusal */
     res = xzmalloc(sizeof(*res));
-    res->key = xmemdup(key, keylen+1);
+    res->key = xmemdup(key, keylen);
     res->keylen = keylen;
-    res->data = xmemdup(data, datalen+1);
+    res->data = xmemdup(data, datalen);
     res->datalen = datalen;
     /* append to the list.  yes, it's inefficient. */
     for (tail = head ; *tail ; tail = &(*tail)->next)
@@ -878,22 +875,24 @@ static int finder(void *rock,
 {
     hash_table *exphash = (hash_table *)rock;
     char *expected;
+    struct buf kbuf = BUF_INITIALIZER;
 
-    /* check that key and data are correct and NUL-terminated */
+    /* check that key and data are correct */
     CU_ASSERT_PTR_NOT_NULL(key);
     CU_ASSERT(keylen > 0);
-    CU_ASSERT(key[keylen] == '\0');
-    CU_ASSERT_EQUAL(keylen, strlen(key));
 
     CU_ASSERT_PTR_NOT_NULL(data);
     CU_ASSERT(datalen > 0);
-    CU_ASSERT(data[datalen] == '\0');
-    CU_ASSERT_EQUAL(datalen, strlen(data));
 
-    expected = hash_lookup(key, exphash);
-    CU_ASSERT_STRING_EQUAL(data, expected);
-    hash_del(key, exphash);
+    buf_appendmap(&kbuf, key, keylen);
+    buf_cstring(&kbuf);
+
+    expected = hash_lookup(kbuf.s, exphash);
+    CU_ASSERT_EQUAL(datalen, strlen(expected));
+    CU_ASSERT_EQUAL(0, memcmp(data, expected, datalen));
+    hash_del(kbuf.s, exphash);
     free(expected);
+    buf_free(&kbuf);
 
     return 0;
 }
