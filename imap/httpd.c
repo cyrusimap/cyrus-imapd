@@ -119,6 +119,7 @@
 
 #include <libxml/parser.h>
 #include <libxml/tree.h>
+#include <libxml/HTMLtree.h>
 #include <libxml/uri.h>
 
 #ifdef HAVE_ZLIB
