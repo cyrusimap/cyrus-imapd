@@ -46,6 +46,49 @@ static int fexists(const char *fname)
     return r;
 }
 
+static char *make_basedir(const char * const *reldirs)
+{
+    int r;
+    int unique = 0;
+    const char *tmpdir;
+    char *basedir;
+    char path[PATH_MAX];
+    const char * const *d;
+
+    tmpdir = getenv("TMPDIR");
+    if (!tmpdir)
+	tmpdir = "/tmp";
+
+    for (;;) {
+	if (unique)
+	    snprintf(path, sizeof(path), "%s/cunit-db-test.%d.%d", tmpdir, getpid(), unique);
+	else
+	    snprintf(path, sizeof(path), "%s/cunit-db-test.%d", tmpdir, getpid());
+
+	r = mkdir(path, 0700);
+	if (!r)
+	    break;	/* success! */
+	if (errno != EEXIST) {
+	    perror(path);
+	    return NULL;
+	}
+	unique++;
+    }
+    basedir = xstrdup(path);
+
+    for (d = reldirs ; *d ; d++) {
+	snprintf(path, sizeof(path), "%s/%s", basedir, *d);
+	r = mkdir(path, 0700);
+	if (r < 0) {
+	    perror(path);
+	    free(basedir);
+	    return NULL;
+	}
+    }
+
+    return basedir;
+}
+
 #define CANSTORE(key, keylen, data, datalen) \
     r = DB->store(db, key, keylen, data, datalen, &txn); \
     CU_ASSERT_EQUAL(r, CYRUSDB_OK); \
@@ -966,42 +1009,33 @@ static void test_many(void)
 
 static char *backend = CUNIT_PARAM("skiplist,flat");
 
+static char *basedir;
+
 static int set_up(void)
 {
-    int r;
-    const char * const *d;
-    static const char * const dirs[] = {
-	DBDIR,
-	DBDIR"/db",
-	DBDIR"/conf",
-	DBDIR"/conf/lock/",
-	DBDIR"/conf/lock/user",
+    char buf[PATH_MAX];
+    static const char * const reldirs[] = {
+	"db",
+	"conf",
+	"conf/lock/",
+	"conf/lock/user",
+	"stuff",
 	NULL
     };
 
-    r = system("rm -rf " DBDIR);
-    if (r)
-	return r;
+    basedir = make_basedir(reldirs);
+    if (!basedir)
+	return -1;
 
-    for (d = dirs ; *d ; d++) {
-	r = mkdir(*d, 0777);
-	if (r < 0) {
-	    int e = errno;
-	    perror(*d);
-	    return e;
-	}
-    }
-
-    libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, DBDIR);
-    config_read_string(
-	"configdirectory: "DBDIR"/conf\n"
-    );
+    libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, basedir);
+    snprintf(buf, sizeof(buf), "configdirectory: %s/conf\n", basedir);
+    config_read_string(buf);
 
     cyrusdb_init();
     DB = cyrusdb_fromname(backend);
 
-    filename = strconcat(DBDIR, "/cyrus.", backend, "-test", (char *)NULL);
-    filename2 = strconcat(DBDIR, "/cyrus.", backend, "-testB", (char *)NULL);
+    filename = strconcat(basedir, "/stuff/cyrus.", backend, "-test", (char *)NULL);
+    filename2 = strconcat(basedir, "/stuff/cyrus.", backend, "-testB", (char *)NULL);
 
     return 0;
 }
@@ -1012,13 +1046,19 @@ static int tear_down(void)
 
     cyrusdb_done();
 
-    r = system("rm -rf " DBDIR);
-    /* I'm ignoring you */
+    if (basedir) {
+	char buf[PATH_MAX];
+	snprintf(buf, sizeof(buf), "rm -rf \"%s\"", basedir);
+	r = system(buf);
+	/* I'm ignoring you */
+    }
 
     free(filename);
     filename = NULL;
     free(filename2);
     filename2 = NULL;
+    free(basedir);
+    basedir = NULL;
 
     return 0;
 }
