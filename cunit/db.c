@@ -136,31 +136,88 @@ static void test_openclose(void)
 static void test_multiopen(void)
 {
     struct db *db1 = NULL;
-    struct db *db2 = NULL;
+    struct db *db = NULL;
+    struct txn *txn = NULL;
     int r;
+    /* data courtesy hipsteripsum.me */
+    static const char KEY1[] = "mustache";
+    static const char DATA1[] = "blog lomo";
+    static const char KEY2[] = "cred";
+    static const char DATA2[] = "beard ethical";
+    static const char KEY3[] = "leggings";
+    static const char DATA3[] = "tumblr salvia";
 
     CU_ASSERT_EQUAL(fexists(filename), -ENOENT);
 
     /* open() with _CREATE succeeds and creates the db */
-    r = DB->open(filename, CYRUSDB_CREATE, &db1);
+    r = DB->open(filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
-    CU_ASSERT_PTR_NOT_NULL(db1);
+    CU_ASSERT_PTR_NOT_NULL(db);
     CU_ASSERT_EQUAL(fexists(filename), 0);
 
-    /* a second open() with the same filename returns
-     * another reference to the same db */
-    r = DB->open(filename, 0, &db2);
-    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
-    CU_ASSERT_PTR_NOT_NULL(db2);
-    CU_ASSERT_PTR_EQUAL(db1, db2);
+    /* 1st txn starts */
+    CANSTORE(KEY1, strlen(KEY1), DATA1, strlen(DATA1));
+    CANCOMMIT();
+    /* 1st txn ends */
 
-    /* closing succeeds and leaves the file in place */
-    r = DB->close(db1);
-    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
-    CU_ASSERT_EQUAL(fexists(filename), 0);
+    /*
+     * Note: the transaction started on the first db reference is
+     * carefully *not* left open when starting a transaction on the
+     * second db reference.  Supported nested transactions is actually
+     * quite a challenge for some backends, and is NOT part of the Cyrus
+     * DB semantics.  All we're testing here is that both db references
+     * work fine as long as the transactions do not overlap.
+     */
+
+    db1 = db;
+    {
+	struct db *db = NULL;
+	struct txn *txn = NULL;
+
+	/* a second open() with the same filename returns
+	 * another reference to the same db */
+	r = DB->open(filename, 0, &db);
+	CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+	CU_ASSERT_PTR_NOT_NULL(db);
+	CU_ASSERT_PTR_EQUAL_FATAL(db, db1);
+
+	/* 2nd txn starts */
+	CANSTORE(KEY2, strlen(KEY2), DATA2, strlen(DATA2));
+	CANCOMMIT();
+	/* 2nd txn ends */
+
+	/* closing succeeds and leaves the file in place */
+	r = DB->close(db);
+	CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+	CU_ASSERT_EQUAL(fexists(filename), 0);
+    }
+
+    /* the 1st db ref still works */
+    /* 3rd txn starts */
+    CANSTORE(KEY3, strlen(KEY3), DATA3, strlen(DATA3));
+    CANCOMMIT();
+    /* 3rd txn ends */
 
     /* closing the other reference succeeds and leaves the file in place */
-    r = DB->close(db2);
+    r = DB->close(db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    CU_ASSERT_EQUAL(fexists(filename), 0);
+
+    /* re-opening works */
+    r = DB->open(filename, 0, &db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    CU_ASSERT_PTR_NOT_NULL(db);
+    CU_ASSERT_EQUAL(fexists(filename), 0);
+
+    /* all the records are present in the file */
+    /* 4th txn starts */
+    CANFETCH(KEY1, strlen(KEY1), DATA1, strlen(DATA1));
+    CANFETCH(KEY2, strlen(KEY2), DATA2, strlen(DATA2));
+    CANFETCH(KEY3, strlen(KEY3), DATA3, strlen(DATA3));
+    CANCOMMIT();
+    /* 4th txn ends */
+
+    r = DB->close(db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_EQUAL(fexists(filename), 0);
 }
