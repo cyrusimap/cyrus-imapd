@@ -128,7 +128,8 @@ static void encode(const char *ps, int len, struct buf *buf)
 	}
     }
 
-    /* ensure the buf is NUL-terminated */
+    /* ensure the buf is NUL-terminated; we pass the buf's data to
+     * bsearch_mem(), which expects a C string, several times */
     buf_cstring(buf);
 }
 
@@ -157,10 +158,9 @@ static void decode(const char *ps, int len, struct buf *buf)
 	else
 	    buf_putc(buf, *p);
     }
-
-    /* buf is binary and might not be NUL-terminated, but we're going
-     * to be passing it out to callers so NUL-terminate Just In Case. */
-    buf_cstring(buf);
+    /* Note: buf is not NUL-terminated.  It happens that neither
+     * skiplist nor berkeley backends guarantee any such thing,
+     * and so code that depends on it is quite broken anyway */
 }
 
 /* other routines call this one when they fail */
@@ -593,6 +593,7 @@ static int foreach(struct db *db,
 		/* reposition? (we made a change) */
 		if (!(ino == db->ino && sz == db->size)) {
 		    /* something changed in the file; reseek */
+		    buf_cstring(&savebuf);
 		    offset = bsearch_mem(savebuf.s, db->base, db->size,
 					 0, &len);
 		    p = db->base + offset;
