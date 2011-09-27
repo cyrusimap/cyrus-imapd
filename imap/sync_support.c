@@ -1702,6 +1702,45 @@ int decode_annotations(/*const*/struct dlist *annots,
  * transaction.
  * Record may be null, to process mailbox annotations.
  */
+
+static int diff_annotation(const struct sync_annot *a,
+			   const struct sync_annot *b,
+			   int diff_value)
+{
+    int diff = 0;
+
+    if (!a && !b) return 0;
+
+    if (a)
+	diff--;
+    if (b)
+	diff++;
+
+    if (!diff)
+	diff = strcmp(a->entry, b->entry);
+    if (!diff)
+	diff = strcmp(a->userid, b->userid);
+    if (!diff && diff_value)
+	diff = buf_cmp(&a->value, &b->value);
+
+    return diff;
+}
+
+int diff_annotations(const struct sync_annot_list *local_annots,
+		     const struct sync_annot_list *remote_annots)
+{
+    const struct sync_annot *local = (local_annots ? local_annots->head : NULL);
+    const struct sync_annot *remote = (remote_annots ? remote_annots->head : NULL);
+    while (local || remote) {
+	int r = diff_annotation(local, remote, 1);
+	if (r) return r;
+	if (local) local = local->next;
+	if (remote) remote = remote->next;
+    }
+
+    return 0;
+}
+
 int apply_annotations(const struct mailbox *mailbox,
 		      const struct index_record *record,
 		      const struct sync_annot_list *local_annots,
@@ -1725,16 +1764,7 @@ int apply_annotations(const struct mailbox *mailbox,
      * (diff > 0), or both lists (diff == 0).
      */
     while (local || remote) {
-	diff = 0;
-	if (local)
-	    diff--;
-	if (remote)
-	    diff++;
-	if (!diff)
-	    diff = strcmp(local->entry, remote->entry);
-	if (!diff)
-	    diff = strcmp(local->userid, remote->userid);
-
+	diff = diff_annotation(local, remote, 0);
 	chosen = 0;
 	if (diff < 0) {
 	    chosen = local;

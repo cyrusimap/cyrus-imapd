@@ -1006,6 +1006,10 @@ static int compare_one_record(struct mailbox *mailbox,
 	diff = 1;
     else if (!message_guid_equal(&mp->guid, &rp->guid))
 	diff = 1;
+    else if (mp->cid != rp->cid)
+	diff = 1;
+    else if (diff_annotations(mannots, rannots))
+	diff = 1;
     else {
 	for (i = 0; i < MAX_USER_FLAGS/32; i++) {
 	    if (mp->user_flags[i] != rp->user_flags[i])

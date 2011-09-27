@@ -422,6 +422,8 @@ int apply_annotations(const struct mailbox *mailbox,
 		      const struct sync_annot_list *local_annots,
 		      const struct sync_annot_list *remote_annots,
 		      int local_wins);
+int diff_annotations(const struct sync_annot_list *local_annots,
+		     const struct sync_annot_list *remote_annots);
 
 /* ====================================================================== */
 
