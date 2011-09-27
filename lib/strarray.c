@@ -296,6 +296,8 @@ strarray_t *strarray_splitm(char *buf, const char *sep)
     strarray_t *sa = strarray_new();
     char *p;
 
+    if (!buf) return sa;
+
     if (!sep)
 	sep = " \t\r\n";
 
@@ -308,11 +310,15 @@ strarray_t *strarray_splitm(char *buf, const char *sep)
 
 strarray_t *strarray_split(const char *line, const char *sep)
 {
+    if (!line)
+	return strarray_new();
     return strarray_splitm(xstrdup(line), sep);
 }
 
 strarray_t *strarray_nsplit(const char *buf, size_t len, const char *sep)
 {
+    if (!len)
+	return strarray_new();
     return strarray_splitm(xstrndup(buf, len), sep);
 }
 
