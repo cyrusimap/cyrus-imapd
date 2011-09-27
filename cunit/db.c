@@ -964,7 +964,7 @@ static void test_many(void)
 #undef MAXN
 }
 
-static char *backend = CUNIT_PARAM("skiplist");
+static char *backend = CUNIT_PARAM("skiplist,flat");
 
 static int set_up(void)
 {
