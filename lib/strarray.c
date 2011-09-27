@@ -131,27 +131,31 @@ strarray_t *strarray_dup(const strarray_t *sa)
     return new;
 }
 
-void strarray_append(strarray_t *sa, const char *s)
+int strarray_append(strarray_t *sa, const char *s)
 {
-    strarray_appendm(sa, xstrdup(s));
+    return strarray_appendm(sa, xstrdup(s));
 }
 
-void strarray_add(strarray_t *sa, const char *s)
+int strarray_add(strarray_t *sa, const char *s)
 {
-    if (strarray_find(sa, s, 0) < 0)
-	strarray_append(sa, s);
+    int pos = strarray_find(sa, s, 0);
+    if (pos < 0) pos = strarray_append(sa, s);
+    return pos;
 }
 
-void strarray_add_case(strarray_t *sa, const char *s)
+int strarray_add_case(strarray_t *sa, const char *s)
 {
-    if (strarray_find_case(sa, s, 0) < 0)
-	strarray_append(sa, s);
+    int pos = strarray_find_case(sa, s, 0);
+    if (pos < 0) pos = strarray_append(sa, s);
+    return pos;
 }
 
-void strarray_appendm(strarray_t *sa, char *s)
+int strarray_appendm(strarray_t *sa, char *s)
 {
-    ensure_alloc(sa, sa->count+1);
-    sa->data[sa->count++] = s;
+    int pos = sa->count++;
+    ensure_alloc(sa, sa->count);
+    sa->data[pos] = s;
+    return pos;
 }
 
 void strarray_set(strarray_t *sa, int idx, const char *s)
