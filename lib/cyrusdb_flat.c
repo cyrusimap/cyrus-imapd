@@ -73,6 +73,8 @@
 
 struct db {
     char *fname;
+    struct db *next;
+    int refcount;
 
     int fd;			/* current file open */
     ino_t ino;
@@ -88,6 +90,8 @@ struct txn {
     char *fnamenew;
     int fd;
 };
+
+static struct db *alldbs;
 
 /*
  * We choose an escape character which is an invalid UTF-8 encoding and
@@ -210,6 +214,19 @@ static void free_db(struct db *db)
     }
 }
 
+static struct db *find_db(const char *fname)
+{
+    struct db *db;
+
+    for (db = alldbs ; db ; db = db->next) {
+	if (!strcmp(fname, db->fname)) {
+	    db->refcount++;
+	    return db;
+	}
+    }
+    return NULL;
+}
+
 static struct txn *new_txn(void)
 {
     struct txn *ret = (struct txn *) xmalloc(sizeof(struct txn));
@@ -262,10 +279,16 @@ static int myarchive(const char **fnames, const char *dirname)
 
 static int myopen(const char *fname, int flags, struct db **ret)
 {
-    struct db *db = (struct db *) xzmalloc(sizeof(struct db));
+    struct db *db;
     struct stat sbuf;
 
     assert(fname && ret);
+
+    db = find_db(fname);
+    if (db)
+	goto out;   /* new reference to existing db */
+
+    db = (struct db *) xzmalloc(sizeof(struct db));
 
     db->fd = open(fname, O_RDWR, 0644);
     if (db->fd == -1 && errno == ENOENT && (flags & CYRUSDB_CREATE)) {
@@ -294,15 +317,35 @@ static int myopen(const char *fname, int flags, struct db **ret)
     db->size = sbuf.st_size;
 
     db->fname = xstrdup(fname);
+    db->refcount = 1;
 
+    /* prepend to the list */
+    db->next = alldbs;
+    alldbs = db;
+
+out:
     *ret = db;
     return 0;
 }
 
 static int myclose(struct db *db)
 {
-    assert(db);
+    struct db **prevp;
 
+    assert(db);
+    if (--db->refcount > 0)
+	return 0;
+    /* now we are dropping the last reference */
+
+    /* detach from the list of all dbs */
+    for (prevp = &alldbs ;
+	 *prevp && *prevp != db ;
+	 prevp = &(*prevp)->next)
+	;
+    assert(*prevp == db); /* this struct must be in the list */
+    *prevp = db->next;
+
+    /* clean up the internals */
     map_free(&db->base, &db->len);
     close(db->fd);
     free_db(db);
