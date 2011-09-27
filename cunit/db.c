@@ -19,6 +19,7 @@ struct binary_result
     int datalen;
 };
 
+static char *backend = CUNIT_PARAM("skiplist,flat,berkeley");
 static struct cyrusdb_backend *DB;
 static char *filename;
 static char *filename2;
@@ -221,7 +222,9 @@ static void test_multiopen(void)
 	r = DB->open(filename, 0, &db);
 	CU_ASSERT_EQUAL(r, CYRUSDB_OK);
 	CU_ASSERT_PTR_NOT_NULL(db);
-	CU_ASSERT_PTR_EQUAL_FATAL(db, db1);
+	if (strcmp(backend, "berkeley")) {
+	    CU_ASSERT_PTR_EQUAL_FATAL(db, db1);
+	}
 
 	/* 2nd txn starts */
 	CANSTORE(KEY2, strlen(KEY2), DATA2, strlen(DATA2));
@@ -1005,8 +1008,6 @@ static void test_many(void)
     free_hash_table(&exphash, free);
 #undef MAXN
 }
-
-static char *backend = CUNIT_PARAM("skiplist,flat");
 
 static char *basedir;
 
