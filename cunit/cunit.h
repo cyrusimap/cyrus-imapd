@@ -187,6 +187,6 @@ struct cunit_param
 
 extern void __cunit_params_begin(struct cunit_param *);
 extern int __cunit_params_next(struct cunit_param *);
-extern void __cunit_params_end(struct cunit_param *);
+extern void __cunit_params_end(void);
 
 #endif /* INCLUDED_CUNIT_H */

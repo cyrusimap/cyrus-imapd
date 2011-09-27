@@ -737,7 +737,7 @@ sub suite_generate_wrap($)
 		   "\"$cfile:$teardownfn\", $teardownfn)) " .
 		   "CU_FAIL_FATAL(\"$teardownfn failed\");\n"
 	    if defined $teardownfn;
-	print WRAP "} while (__cunit_params_next(params));\n__cunit_params_end(params);\n"
+	print WRAP "} while (__cunit_params_next(params));\n__cunit_params_end();\n"
 	    if (scalar @{$suite->{params}});
 	print WRAP "}\n";
     }

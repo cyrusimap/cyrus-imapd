@@ -51,6 +51,7 @@
 #include <setjmp.h>
 #include "timeout.h"
 #include "cunit.h"
+#include "xmalloc.h"
 
 #include "registers.h"
 
@@ -66,7 +67,7 @@ int xml_flag = 0;
 int timeouts_flag = 1;
 const int config_need_data = 0;
 
-void fatal(char *s)
+void fatal(const char *s, int code __attribute__((unused)))
 {
     fprintf(stderr, "\nunit: %s\n", s);
     exit(1);
@@ -100,7 +101,7 @@ static void accumulate_summary(CU_RunSummary *summp)
 static jmp_buf jbuf;
 static const char *code;
 static enum { IDLE, INTEST, INFIXTURE } running = IDLE;
-static struct cunit_params *current_params;
+static struct cunit_param *current_params;
 
 void exit(int status)
 {
@@ -217,7 +218,6 @@ static void params_assign(struct cunit_param *params)
 
 void __cunit_params_begin(struct cunit_param *params)
 {
-    int i;
     struct cunit_param *p;
 
     if (!params || !params[0].name)
@@ -264,7 +264,7 @@ int __cunit_params_next(struct cunit_param *params)
     return 1;
 }
 
-void __cunit_params_end(struct cunit_param *params)
+void __cunit_params_end(void)
 {
     current_params = NULL;
 }
