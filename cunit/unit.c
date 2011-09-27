@@ -48,6 +48,9 @@
 #include <CUnit/CUnit.h>
 #include <CUnit/Basic.h>
 #include <CUnit/Automated.h>
+#if HAVE_VALGRIND_VALGRIND_H
+#include <valgrind/valgrind.h>
+#endif
 #include <setjmp.h>
 #include "timeout.h"
 #include "cunit.h"
@@ -67,9 +70,21 @@ int xml_flag = 0;
 int timeouts_flag = 1;
 const int config_need_data = 0;
 
+#if HAVE_VALGRIND_VALGRIND_H
+#define log1(fmt, a1) \
+    VALGRIND_PRINTF_BACKTRACE(fmt"\n", (a1))
+#define log2(fmt, a1, a2) \
+    VALGRIND_PRINTF_BACKTRACE(fmt"\n", (a1), (a2))
+#else
+#define log1(fmt, a1) \
+    fprintf(stderr, "\nunit: "fmt"\n", (a1))
+#define log2(fmt, a1, a2) \
+    fprintf(stderr, "\nunit: "fmt"\n", (a1), (a2))
+#endif
+
 void fatal(const char *s, int code __attribute__((unused)))
 {
-    fprintf(stderr, "\nunit: %s\n", s);
+    log1("fatal(%s)", s);
     exit(1);
 }
 
@@ -109,14 +124,12 @@ void exit(int status)
     case IDLE:
 	break;
     case INTEST:
-	fprintf(stderr, "unit: code under test (%s) exited with status %d\n",
-			code, status);
+	log2("code under test (%s) exited with status %d", code, status);
 	running = IDLE;
 	CU_FAIL_FATAL("Code under test exited");
 	break;
     case INFIXTURE:
-	fprintf(stderr, "unit: fixture code (%s) exited with status %d\n",
-			code, status);
+	log2("fixture code (%s) exited with status %d", code, status);
 	running = IDLE;
 	longjmp(jbuf, status);
 	break;
@@ -129,20 +142,17 @@ static void handle_timeout(void)
 {
     switch (running) {
     case INTEST:
-	fprintf(stderr, "unit: code under test (%s) timed out\n",
-			code);
+	log1("code under test (%s) timed out", code);
 	running = IDLE;
 	CU_FAIL_FATAL("Code under test timed out");
 	break;
     case INFIXTURE:
-	fprintf(stderr, "unit: fixture code (%s) timed out\n",
-			code);
+	log1("fixture code (%s) timed out", code);
 	running = IDLE;
 	longjmp(jbuf, -1);
 	break;
     default:
-	fprintf(stderr, "unit: unexpected timeout running=%d\n",
-			running);
+	log1("unexpected timeout running=%d", running);
 	_exit(1);
     }
 }

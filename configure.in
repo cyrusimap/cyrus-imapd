@@ -1285,6 +1285,18 @@ if test "$enable_unit_tests" != "no" ; then
 	enable_unit_tests=no
     fi
 fi
+if test "$enable_unit_tests" != "no" ; then
+    dnl Valgrind is an amazingly useful tool for running tests.  It doesn't
+    dnl need the program under test to be modified in any way, but it we can
+    dnl optionally use some magic in it's header file to compensate for some
+    dnl of the shortcomings of a C development environment by giving error
+    dnl messages with backtraces.  This is so enormously useful for the unit
+    dnl tests that want to enable it if possible, but we can struggle on
+    dnl without it.  Besides, on many platforms the header file is in a
+    dnl different package to the main valgrind binary, and so might not be
+    dnl installed.
+    AC_CHECK_HEADERS([valgrind/valgrind.h])
+fi
 
 CUNIT_SUBDIRS=
 if test "$enable_unit_tests" != "no" ; then
