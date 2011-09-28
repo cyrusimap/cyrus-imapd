@@ -1412,10 +1412,8 @@ int sync_mailbox(struct mailbox *mailbox,
     int r = 0;
     char sync_crc[128];
     annotate_db_t *user_annot_db = NULL;
-    int userannot = 0;
 
-    if (!annotate_getmailboxdb(mailbox->name, /*flags*/0, &user_annot_db))
-	userannot = 1;
+    annotate_getdb(mailbox->name, &user_annot_db);
 
     r = sync_crc_calc(mailbox, sync_crc, sizeof(sync_crc));
     if (r) goto done;
@@ -1495,7 +1493,7 @@ int sync_mailbox(struct mailbox *mailbox,
 	    dlist_setnum32(il, "SIZE", record.size);
 	    dlist_setatom(il, "GUID", message_guid_encode(&record.guid));
 
-	    if (userannot) {
+	    if (user_annot_db) {
 		r = read_annotations(mailbox, &record, &annots);
 		if (r) goto done;
 		encode_annotations(il, annots);
@@ -2210,14 +2208,12 @@ int sync_crc_calc(struct mailbox *mailbox, char *buf, int maxlen)
     struct index_record record;
     uint32_t recno;
     struct sync_annot_list *annots = NULL;
-    int userannot = 0;
     int r = 0;
     annotate_db_t *user_annot_db = NULL;
 
     sync_crc_algorithm->begin();
 
-    if (!annotate_getmailboxdb(mailbox->name, /*flags*/0, &user_annot_db))
-	userannot = 1;
+    annotate_getdb(mailbox->name, &user_annot_db);
 
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	/* we can't send bogus records, just skip them! */
@@ -2225,7 +2221,7 @@ int sync_crc_calc(struct mailbox *mailbox, char *buf, int maxlen)
 	    continue;
 
 	sync_crc_algorithm->addrecord(mailbox, &record, sync_crc_covers);
-	if ((sync_crc_covers & SYNC_CRC_ANNOTATIONS) && userannot) {
+	if ((sync_crc_covers & SYNC_CRC_ANNOTATIONS) && user_annot_db) {
 	    r = read_annotations(mailbox, &record, &annots);
 	    if (r) continue;
 	    calc_annots(annots);

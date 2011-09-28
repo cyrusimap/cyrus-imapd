@@ -64,16 +64,6 @@ struct strlist {
 };
 
 typedef struct annotate_db annotate_db_t;
-struct annotate_db
-{
-    annotate_db_t *next;
-    int refcount;
-    char *mboxname;
-    char *filename;
-    struct db *db;
-    struct txn *txn;
-};
-
 
 /* List of attrib-value pairs */
 struct attvaluelist {
@@ -215,10 +205,16 @@ void annotatemore_close(void);
 /* done with database stuff */
 void annotatemore_done(void);
 
-/* per use DBs */
-int annotate_getmailboxdb(const char *mboxname,
-			  int dbflags,
-			  annotate_db_t **dbp);
+/* These APIs allow calling code to hold an extra reference to a
+ * per-message database for an extended period of time, which can be a
+ * useful performance optimisation when doing lots of annotate
+ * operations that might otherwise spend a lot of time opening and
+ * closing databases. Also, if annotate_getdb() does not returns zero
+ * (success) then calling code can assume there are no per-message
+ * annotations at all on the mailbox. These APIs are for performance
+ * optimisations only; the other annotate APIs will manage their own
+ * references internally. */
+int annotate_getdb(const char *mboxname, annotate_db_t **dbp);
 void annotate_putdb(annotate_db_t **dbp);
 
 #endif /* ANNOTATE_H */

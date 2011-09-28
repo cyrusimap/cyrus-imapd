@@ -199,6 +199,16 @@ struct annotate_entrydesc
     void *rock;			/* rock passed to get() function */
 };
 
+struct annotate_db
+{
+    annotate_db_t *next;
+    int refcount;
+    char *mboxname;
+    char *filename;
+    struct db *db;
+    struct txn *txn;
+};
+
 #define DB config_annotation_db
 
 static annotate_db_t *all_dbs_head = NULL;
@@ -546,10 +556,10 @@ out:
     return r;
 }
 
-static int annotate_getdb(const char *mboxname,
-			  unsigned int uid,
-			  int dbflags,
-			  annotate_db_t **dbp)
+static int _annotate_getdb(const char *mboxname,
+			   unsigned int uid,
+			   int dbflags,
+			   annotate_db_t **dbp)
 {
     annotate_db_t *d, *prev = NULL;
     char *fname = NULL;
@@ -623,12 +633,12 @@ error:
     return r;
 }
 
-int annotate_getmailboxdb(const char *mboxname,
-			  int dbflags,
-			  annotate_db_t **dbp)
+int annotate_getdb(const char *mboxname, annotate_db_t **dbp)
 {
+    if (!mboxname || !*mboxname)
+	return IMAP_INTERNAL;	/* we don't return the global db */
     /* synthetic UID '1' forces per-mailbox mode */
-    return annotate_getdb(mboxname, 1, dbflags, dbp);
+    return _annotate_getdb(mboxname, 1, /*flags*/0, dbp);
 }
 
 static void annotate_closedb(annotate_db_t *d)
@@ -676,7 +686,7 @@ void annotatemore_open(void)
     annotate_db_t *d = NULL;
 
     /* force opening the global annotations db */
-    r = annotate_getdb(NULL, 0, CYRUSDB_CREATE, &d);
+    r = _annotate_getdb(NULL, 0, CYRUSDB_CREATE, &d);
     if (r)
 	fatal("can't open global annotations database", EC_TEMPFAIL);
 }
@@ -981,7 +991,7 @@ int annotatemore_findall(const char *mboxname,	/* internal */
     frock.uid = uid;
     frock.proc = proc;
     frock.rock = rock;
-    r = annotate_getdb(mboxname, uid, 0, &frock.d);
+    r = _annotate_getdb(mboxname, uid, 0, &frock.d);
     if (r) {
 	if (r == CYRUSDB_NOTFOUND)
 	    r = 0;
@@ -2257,7 +2267,7 @@ int annotatemore_msg_lookup(const char *mboxname, uint32_t uid, const char *entr
     const char *data;
     annotate_db_t *d = NULL;
 
-    r = annotate_getdb(mboxname, uid, 0, &d);
+    r = _annotate_getdb(mboxname, uid, 0, &d);
     if (r)
 	return (r == CYRUSDB_NOTFOUND ? 0 : r);
 
@@ -2328,7 +2338,7 @@ static int write_entry(const char *mboxname,
     if (!in_txn)
 	return IMAP_INTERNAL;
 
-    r = annotate_getdb(mboxname, uid, CYRUSDB_CREATE, &d);
+    r = _annotate_getdb(mboxname, uid, CYRUSDB_CREATE, &d);
     if (r)
 	return r;
 
