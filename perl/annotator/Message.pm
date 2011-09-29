@@ -124,7 +124,7 @@ sub new {
     }
 
     my $self = bless {
-	filename => $args{FILE},
+	filename => $args{FILENAME},
 	bodystructure => $args{BODYSTRUCTURE},
 	guid => $args{GUID},
 	header => $args{HEADER},
@@ -247,6 +247,11 @@ For example:
   $message->set_flag("\\Flagged");
 
 =cut
+
+sub bodystructure {
+   my $self = shift;
+   return $self->{bodystructure};
+}
 
 
 sub get_flag {

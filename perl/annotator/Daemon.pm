@@ -46,6 +46,7 @@ package Cyrus::Annotator::Daemon;
 use base qw(Net::Server);
 # use Data::Dumper;
 use Unix::Syslog qw(:macros);
+use Cyrus::Annotator::Message;
 use File::Path;
 
 our $VERSION = '1.00';
@@ -446,12 +447,12 @@ sub _emit_results
     my @results;
     my $sep = '';
 
-    my ($flags, $annots) = $message->get_changes();
+    my ($flags, $annots) = $message->get_changed();
 
     foreach my $a (@$annots) {
 	my ($entry, $type, $value) = @$a;
 	my $format_val = _format_string($value);
-	push @results, "ANNOTATION ($entry ($type $value))";
+	push @results, "ANNOTATION ($entry ($type $format_val))";
     }
 
     foreach my $f (@$flags) {
