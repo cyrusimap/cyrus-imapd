@@ -44,13 +44,11 @@ use warnings;
 use strict;
 package Cyrus::Annotator::Daemon;
 use base qw(Net::Server);
-use Exporter qw(import);
 # use Data::Dumper;
 use Unix::Syslog qw(:macros);
 use File::Path;
 
 our $VERSION = '1.00';
-our @EXPORT = qw(PRIVATE SHARED);
 
 use constant USER  => 'cyrus';
 use constant GROUP => 'mail';
@@ -61,10 +59,6 @@ use constant SOCKPATH => RUNPREFIX . '.socket';
 
 # Levels are: LOG_DEBUG (7), LOG_INFO (6), *LOG_NOTICE (5), LOG_WARNING (4), LOG_ERR (3)
 use constant LOG_LEVEL => LOG_INFO;
-
-# Exported constants
-use constant PRIVATE => 0;
-use constant SHARED => 1;
 
 =head1 NAME
 
@@ -80,10 +74,10 @@ Cyrus::Annotator::Daemon - framework for writing annotator daemons for Cyrus
 
   sub annotate_message
   {
-      my ($self, $args) = @_;
+      my ($self, $message) = @_;
 
-      $self->set_flag('\Flagged');
-      $self->add_annotation('/comment', SHARED, 'Hello!!');
+      $message->set_flag('\Flagged');
+      $message->set_shared_annotation('/comment', 'Hello!!');
   }
 
   MyAnnotatorDaemon->run();
@@ -133,9 +127,6 @@ sub new
 {
     my ($class, @args) = @_;
     my $self = $class->SUPER::new(@args);
-
-    $self->{annotations} = [];
-    $self->{flags} = [];
 
     return $self;
 }
@@ -451,21 +442,22 @@ sub _format_string
 
 sub _emit_results
 {
-    my ($self) = @_;
+    my ($self, $message) = @_;
     my @results;
     my $sep = '';
 
-    foreach my $a (@{$self->{annotations}})
-    {
-	my $type = $a->{shared} ? "value.shared" : "value.priv";
-	my $value = _format_string($a->{value});
-	push @results, "ANNOTATION ($a->{entry} ($type $value))";
+    my ($flags, $annots) = $message->get_changes();
+
+    foreach my $a (@$annots) {
+	my ($entry, $type, $value) = @$a;
+	my $format_val = _format_string($value);
+	push @results, "ANNOTATION ($entry ($type $value))";
     }
 
-    foreach my $f (@{$self->{flags}})
-    {
-	my $op = $f->{set} ? "+FLAGS" : "-FLAGS";
-	push @results, "$op $f->{flag}";
+    foreach my $f (@$flags) {
+	my ($name, $set) = @$f;
+	my $op = $set ? "+FLAGS" : "-FLAGS";
+	push @results, "$op $name";
     }
 
     print "(" . join(' ', @results) . ")\n";
@@ -476,9 +468,6 @@ sub process_request
     my ($self) = @_;
 
     eval {
-	$self->{annotations} = [];
-	$self->{flags} = [];
-
 	$self->log(2, "Reading request");
 	my $ArgsString = _read_args();
 	die "Failed to read args" unless $ArgsString;
@@ -488,31 +477,22 @@ sub process_request
 
 	my %ArgsHash = @$ArgsList;
 
-	my $fh = IO::File->new("<$ArgsHash{FILENAME}")
-	    || die "Failed to read file $ArgsHash{FILENAME}";
+	# parse the argshash out here
+	$ArgsHash{BODYSTRUCTURE} = _parse_bodystructure(delete $ArgsHash{BODY});
 
-	my $body = _parse_bodystructure($ArgsHash{BODY}, 1, 1)
-	    || die "Failed to parse bodystructure $ArgsHash{BODY}";
+	my $message = Cyrus::Annotator::Message->new(%ArgsHash);
 
-	$self->annotate_message({
-	    FH => $fh,
-	    BODY => $body,
-	    ANNOTATIONS => $ArgsHash{ANNOTATIONS},
-	    FLAGS => $ArgsHash{FLAGS},
-	    GUID => $ArgsHash{GUID},
-	});
-
-	$fh->close();
+	$self->annotate_message($message);
 
 	$self->log(2, "Emitting result");
-	$self->_emit_results();
+	$self->_emit_results($message);
     };
     if ($@) {
 	$self->log(2, "Caught and ignored error: $@");
     }
 }
 
-=item I<annotate_message($args)>
+=item I<annotate_message($message)>
 
 You need to provide a method of this name.  It will be called whenever
 Cyrus notifies the annotator daemon that a new message is available, and
@@ -521,90 +501,14 @@ that to set any annotations which aren't builtin to Cyrus, you will
 first need to configure them using I<annotation_definitions> option in
 the I<imapd.conf> file.
 
-The I<$args> hash contains the following information from Cyrus.
-
-=over 4
-
-=item I<FH>
-
-is a read-only IO:File handle to the spool file.  You can not change
-the content of the spool file.
-
-=item I<FLAGS>
-
-is an array containing any system or user flags already proposed for
-the message (e.g. if specified by the user when APPENDing a message).
-
-=item I<ANNOTATIONS>
-
-is an array containing any annotations already proposed for the message
-(e.g. if specified by the user when APPENDing a message).
-
-=item I<BODY>
-
-is a structure closely based on the IMAP BODYSTRUCTURE, decoded into a
-hash, including recursively all MIME sections.  In general, the
-following items are defined for all body structures:
-
-=over 4
-
-=item * MIME-Type
-
-=item * MIME-Subtype
-
-=item * Content-Type
-
-=item * Content-Description
-
-=item * Content-Dispositon
-
-=item * Content-Language
-
-=back
-
-Body structures which have a MIME-Type of 'multipart' contain the
-following items:
-
-=over 4
-
-=item * MIME-Subparts
-
-=back
-
-For body structures B<except> those that have a MIME-Type of
-'multipart', the following are defined:
-
-=over 4
-
-=item * Content-ID
-
-=item * Content-Description
-
-=item * Content-Transfer-Encoding
-
-=item * Content-MD5
-
-=item * Size
-
-=item * Lines
-
-=item * Offset
-
-=item * HeaderSize
-
-=back
-
-=item I<GUID>
-
-is the hex encoded (40 character) sha1 of the spool file.
-
-=back
+The I<$message> object is a Cyrus::Annotator::Message which can be
+examined, and on which flags and annotations can be set.
 
 =cut
 
 sub annotate_message
 {
-    my ($self, $args) = @_;
+    my ($self, $message) = @_;
 
     die "Please define an annotate_message() sub";
 }
@@ -616,133 +520,6 @@ sub post_configure
     unlink(SOCKPATH);
 
     $self->SUPER::post_configure();
-}
-
-sub _get_annotation
-{
-    my ($self, $entry, $shared) = @_;
-
-    my @res = grep
-	{ $_->{entry} eq $entry && $_->{shared} == $shared }
-	@{$self->{annotations}};
-    my $a = shift @res;
-    if (!defined $a)
-    {
-	$a = {
-	    entry => $entry,
-	    shared => $shared,
-	    value => undef
-	};
-	push(@{$self->{annotations}}, $a);
-    }
-    return $a;
-}
-
-=item I<add_annotation($entry, $sharedflag, $value)>
-
-When called from the I<annotate_message> method, arranges for the IMAP
-per-message annotation named by I<$entry> and I<$sharedflag> to be set
-on the current message.  The arguments are:
-
-=over 4
-
-=item I<$entry>
-
-is the name of an annotation, for example I</comment>.
-
-=item I<$sharedflag>
-
-is one of the constants I<SHARED> or I<PRIVATE>.
-
-=item I<$value>
-
-is a scalar containing the new value for the annotation.  Note that
-I<$value> is a binary blob, not a string.  Passing I<undef> is
-equivalent to calling I<remove_annotation>.
-
-=back
-
-For example:
-
-  $self->add_annotation('/comment', SHARED, 'Hello World');
-
-=cut
-
-sub add_annotation
-{
-    my ($self, $entry, $shared, $value) = @_;
-    my $a = $self->_get_annotation($entry, $shared);
-    $a->{value} = $value;
-}
-
-=item I<remove_annotation($entry, $sharedflag)>
-
-When called from the I<annotate_message> method, arranges for the IMAP
-per-message annotation named by I<$entry> and I<$sharedflag> to be
-removed from the current message.  The arguments I<$entry> and
-I<$sharedflag> are as for I<add_annotation>.  For example:
-
-  $self->remove_annotation('/comment', PRIVATE);
-
-=cut
-
-sub remove_annotation
-{
-    my ($self, $entry, $shared) = @_;
-    my $a = $self->_get_annotation($entry, $shared);
-    $a->{value} = undef;
-}
-
-sub _get_flag
-{
-    my ($self, $flag) = @_;
-
-    my @res = grep
-	{ $_->{flag} eq $flag }
-	@{$self->{flags}};
-    my $f = shift @res;
-    if (!defined $f)
-    {
-	$f = {
-	    flag => $flag,
-	    set => 0,
-	};
-	push(@{$self->{flags}}, $f);
-    }
-    return $f;
-}
-
-=item I<set_flag($flag)>
-
-When called from the I<annotate_message> method, arranges for the IMAP
-flag named by I<$flag> to be set on the current message.  For example:
-
-  $self->set_flag('\Flagged');
-
-=cut
-
-sub set_flag
-{
-    my ($self, $flag) = @_;
-    my $a = $self->_get_flag($flag);
-    $a->{set} = 1;
-}
-
-=item I<clear_flag($flag)>
-
-When called from the I<annotate_message> method, arranges for the IMAP
-flag named by I<$flag> to be cleared on the current message.  For
-example:
-
-  $self->clear_flag('\Seen');
-
-=cut
-
-sub clear_flag
-{
-    my ($self, $flag) = @_;
-    my $a = $self->_get_flag($flag);
-    $a->{set} = 0;
 }
 
 =back
