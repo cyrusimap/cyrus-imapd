@@ -585,26 +585,13 @@ int fixquota_finish(int thisquota)
     /* is it different? */
     for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
 	if (quota[thisquota].quota.useds[res] != quota[thisquota].newused[res]) {
-	    break;
-	}
-    }
-    if (res < QUOTA_NUMRESOURCES) {
-	int count = 0;
-
-	printf("%s: ", quota[thisquota].quota.root);
-	for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
-	    if (quota[thisquota].quota.useds[res] == quota[thisquota].newused[res]) {
-		continue;
-	    }
-
-	    if (count++) {
-		printf("; ");
-	    }
-	    printf("%s usage was " QUOTA_T_FMT ", now " QUOTA_T_FMT, quota_names[res],
-		quota[thisquota].quota.useds[res], quota[thisquota].newused[res]);
+	    printf("%s: %s usage was " QUOTA_T_FMT ", now " QUOTA_T_FMT "\n",
+		quota[thisquota].quota.root,
+		quota_names[res],
+		quota[thisquota].quota.useds[res],
+		quota[thisquota].newused[res]);
 	    quota[thisquota].quota.useds[res] = quota[thisquota].newused[res];
 	}
-	printf("\n");
     }
 
     /* always write out the record, we should have just reset usedBs */
