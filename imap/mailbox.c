@@ -3179,9 +3179,7 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
 
 	quota_t usage[QUOTA_NUMRESOURCES];
 	mailbox_get_usage(oldmailbox, usage);
-	r = mailbox_quota_check(newmailbox,
-				usage,
-				/*wrlock*/1);
+	r = mailbox_quota_check(newmailbox, usage);
 	/* then we abort - no space to rename */
 	if (r)
 	    goto fail;
@@ -4181,7 +4179,7 @@ close:
  * Returns: 0 if allowed, or IMAP error code.
  */
 int mailbox_quota_check(struct mailbox *mailbox,
-			const quota_t delta[QUOTA_NUMRESOURCES], int wrlock)
+			const quota_t delta[QUOTA_NUMRESOURCES])
 {
     int r;
     struct quota q;
@@ -4200,7 +4198,7 @@ int mailbox_quota_check(struct mailbox *mailbox,
 	return 0;	    /* all negative */
 
     q.root = mailbox->quotaroot;
-    r = quota_read(&q, NULL, wrlock);
+    r = quota_read(&q, NULL, /*wrlock*/0);
 
     if (r == IMAP_QUOTAROOT_NONEXISTENT)
 	return 0;

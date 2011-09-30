@@ -125,7 +125,7 @@ int append_check(const char *name,
     }
 
     if (quotacheck)
-	r = mailbox_quota_check(mailbox, quotacheck, /*wrlock*/0);
+	r = mailbox_quota_check(mailbox, quotacheck);
 
 done:
     mailbox_close(&mailbox);
@@ -168,7 +168,7 @@ int append_setup(struct appendstate *as, const char *name,
     }
 
     if (quotacheck) {
-	r = mailbox_quota_check(as->mailbox, quotacheck, /*wrlock*/0);
+	r = mailbox_quota_check(as->mailbox, quotacheck);
 	if (r) {
 	    mailbox_close(&as->mailbox);
 	    return r;

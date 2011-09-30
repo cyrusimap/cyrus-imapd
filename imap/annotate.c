@@ -2352,7 +2352,7 @@ static int write_entry(const char *mboxname,
 	    goto out;
 
 	qdiffs[QUOTA_ANNOTSTORAGE] = value->len - oldlen;
-	r = mailbox_quota_check(mailbox, qdiffs, /*wrlock*/0);
+	r = mailbox_quota_check(mailbox, qdiffs);
 	if (r)
 	    goto out;
     }
