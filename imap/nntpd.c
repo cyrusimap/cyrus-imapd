@@ -1676,6 +1676,8 @@ static time_t parse_datetime(char *datestr, char *timestr, char *gmt)
     char *p;
     struct tm tm;
 
+    memset(&tm, 0, sizeof(tm));
+
     /* check format of strings */
     if ((datelen != 6 && datelen != 8) ||
 	strlen(timestr) != 6 || (gmt && strcasecmp(gmt, "GMT")))
