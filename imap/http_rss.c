@@ -292,8 +292,13 @@ static int meth_get(struct transaction_t *txn)
 		   host[0], txn->req_tgt.path, record.uid);
 	xmlNewChild(item, NULL, BAD_CAST "link", BAD_CAST buf_cstring(&buf));
 
-	if (body->from) {
-	    struct address *addr = body->from;
+	if (body->reply_to || body->from || body->sender) {
+	    struct address *addr;
+
+	    if (body->reply_to) addr = body->reply_to;
+	    else if (body->from) addr = body->from;
+	    else addr = body->sender;
+
 	    buf_reset(&buf);
 	    buf_printf(&buf, "%s@%s",
 		       addr->mailbox ? addr->mailbox : "unknown-user",
