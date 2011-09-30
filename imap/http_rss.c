@@ -308,7 +308,7 @@ static int meth_get(struct transaction_t *txn)
 			BAD_CAST buf_cstring(&buf));
 	}
 
-	rfc822date_gen(datestr, sizeof(datestr), record.internaldate);
+	rfc822date_gen(datestr, sizeof(datestr), record.gmtime);
 	xmlNewChild(item, NULL, BAD_CAST "pubDate", BAD_CAST datestr);
 
 	/* Find and use the first text/ part as the <description> */
