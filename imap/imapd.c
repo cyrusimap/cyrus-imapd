@@ -6643,6 +6643,41 @@ void cmd_setacl(char *tag, const char *name,
     }
 }
 
+static void print_quota_used(struct protstream *o, const struct quota *q)
+{
+    int res;
+    const char *sep = "";
+
+    prot_putc('(', o);
+    for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++) {
+	if (q->limits[res] >= 0) {
+	    prot_printf(o, "%s%s " QUOTA_T_FMT " %d",
+			sep, quota_names[res],
+			q->useds[res]/quota_units[res],
+			q->limits[res]);
+	    sep = " ";
+	}
+    }
+    prot_putc(')', o);
+}
+
+static void print_quota_limits(struct protstream *o, const struct quota *q)
+{
+    int res;
+    const char *sep = "";
+
+    prot_putc('(', o);
+    for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++) {
+	if (q->limits[res] >= 0) {
+	    prot_printf(o, "%s%s %d",
+			sep, quota_names[res],
+			q->limits[res]);
+	    sep = " ";
+	}
+    }
+    prot_putc(')', o);
+}
+
 /*
  * Callback for (get|set)quota, to ensure that all of the
  * submailboxes are on the same server.
@@ -6680,8 +6715,6 @@ void cmd_getquota(const char *tag, const char *name)
     char internalname[MAX_MAILBOX_BUFFER];
     struct mboxlist_entry *mbentry = NULL;
     struct quota q;
-    int res;
-    const char *sep;
 
     imapd_check(NULL, 0);
 
@@ -6742,18 +6775,9 @@ void cmd_getquota(const char *tag, const char *name)
 
     prot_printf(imapd_out, "* QUOTA ");
     prot_printastring(imapd_out, name);
-    prot_printf(imapd_out, " (");
-    sep = "";
-    for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++) {
-	if (q.limits[res] >= 0) {
-	    prot_printf(imapd_out, "%s%s " QUOTA_T_FMT " %d",
-			sep, quota_names[res],
-			q.useds[res]/quota_units[res],
-			q.limits[res]);
-	    sep = " ";
-	}
-    }
-    prot_printf(imapd_out, ")\r\n");
+    prot_printf(imapd_out, " ");
+    print_quota_used(imapd_out, &q);
+    prot_printf(imapd_out, "\r\n");
 
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
@@ -6825,8 +6849,6 @@ void cmd_getquotaroot(const char *tag, const char *name)
 	prot_printastring(imapd_out, name);
 	if (mailbox->quotaroot) {
 	    struct quota q;
-	    int res;
-	    const char *sep = "";
 	    (*imapd_namespace.mboxname_toexternal)(&imapd_namespace,
 						   mailbox->quotaroot,
 						   imapd_userid, mailboxname);
@@ -6837,17 +6859,8 @@ void cmd_getquotaroot(const char *tag, const char *name)
 	    if (!r) {
 		prot_printf(imapd_out, "\r\n* QUOTA ");
 		prot_printastring(imapd_out, mailboxname);
-		prot_printf(imapd_out, " (");
-		for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++) {
-		    if (q.limits[res] >= 0) {
-			prot_printf(imapd_out, "%s%s " QUOTA_T_FMT " %d",
-				    sep, quota_names[res],
-				    q.useds[res]/quota_units[res],
-				    q.limits[res]);
-			sep = " ";
-		    }
-		}
-		(void)prot_putc(')', imapd_out);
+		prot_putc(' ', imapd_out);
+		print_quota_used(imapd_out, &q);
 	    }
 	}
 	prot_printf(imapd_out, "\r\n");
@@ -9757,8 +9770,6 @@ static int xfer_setquotaroot(struct xfer_header *xfer, const char *mboxname)
 {
     struct quota quota;
     int r;
-    int res;
-    int count = 0;
     char extname[MAX_MAILBOX_NAME];
 
     (*imapd_namespace.mboxname_toexternal)(&imapd_namespace, mboxname,
@@ -9771,19 +9782,10 @@ static int xfer_setquotaroot(struct xfer_header *xfer, const char *mboxname)
     
     /* note use of + to force the setting of a nonexistant
      * quotaroot */
-    prot_printf(xfer->be->out, "Q01 SETQUOTA {" SIZE_T_FMT "+}\r\n+%s (",
+    prot_printf(xfer->be->out, "Q01 SETQUOTA {" SIZE_T_FMT "+}\r\n+%s ",
 		strlen(extname)+1, extname);
-    for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
-	if (quota.limits[res] == QUOTA_UNLIMITED) {
-	    continue;
-	}
-
-	if (count++) {
-	    prot_putc(' ', xfer->be->out);
-	}
-	prot_printf(xfer->be->out, "%s %d", quota_names[res], quota.limits[res]);
-    }
-    prot_printf(xfer->be->out, ")\r\n");
+    print_quota_limits(xfer->be->out, &quota);
+    prot_printf(xfer->be->out, "\r\n");
 
     r = getresult(xfer->be->in, "Q01");
     if (r) syslog(LOG_ERR,
