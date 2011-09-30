@@ -133,6 +133,8 @@ typedef int (*annotatemore_find_proc_t)(const char *mailbox,
 		    const char *entry, const char *userid,
 		    const struct buf *value, void *rock);
 
+/* For findall(), matches any non-zero uid */
+#define ANNOTATE_ANY_UID    ((unsigned int)~0)
 /* 'proc'ess all annotations matching 'mailbox' and 'entry' */
 int annotatemore_findall(const char *mailbox, uint32_t uid, const char *entry,
 			 annotatemore_find_proc_t proc, void *rock);

@@ -794,6 +794,10 @@ static int make_key(const char *mboxname,
 	strlcpy(key+keylen, mboxname, keysize-keylen);
 	keylen += strlen(mboxname) + 1;
     }
+    else if (uid == ANNOTATE_ANY_UID) {
+	strlcpy(key+keylen, "*", keysize-keylen);
+	keylen += strlen(key+keylen) + 1;
+    }
     else {
 	snprintf(key+keylen, keysize-keylen, "%u", uid);
 	keylen += strlen(key+keylen) + 1;
@@ -938,7 +942,9 @@ static int find_p(void *rock, const char *key, int keylen,
     if (r < 0)
 	return 0;
 
-    if (frock->uid && frock->uid != uid)
+    if (frock->uid &&
+	frock->uid != ANNOTATE_ANY_UID &&
+	frock->uid != uid)
 	return 0;
     if (GLOB_TEST(frock->mglob, mboxname) == -1)
 	return 0;
