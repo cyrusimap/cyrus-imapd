@@ -63,6 +63,7 @@
 #include "message.h"
 #include "parseaddr.h"
 #include "rfc822date.h"
+#include "seen.h"
 #include "util.h"
 #include "version.h"
 #include "xstrlcat.h"
@@ -170,6 +171,8 @@ static void list_rss_feeds(struct transaction_t *txn)
     html_response(HTTP_OK, txn, doc);
 }
 
+#define MAX_FEED 100
+
 /* Perform a GET/HEAD request */
 static int meth_get(struct transaction_t *txn)
 {
@@ -180,7 +183,7 @@ static int meth_get(struct transaction_t *txn)
     xmlDocPtr outdoc;
     xmlNodePtr root, chan, item;
     const char **host;
-    unsigned recno;
+    unsigned recno, recentuid = 0, feed = MAX_FEED;
     struct buf buf = BUF_INITIALIZER;
 
     /* Construct mailbox name corresponding to request target URI */
@@ -219,7 +222,34 @@ static int meth_get(struct transaction_t *txn)
 	}
 	goto done;
     }
+#if 0
+    /* Obtain recentuid */
+    if (mailbox_internal_seen(mailbox, httpd_userid)) {
+	recentuid = mailbox->i.recentuid;
+    }
+    else if (httpd_userid) {
+	struct seen *seendb = NULL;
+	struct seendata sd;
 
+	r = seen_open(httpd_userid, SEEN_CREATE, &seendb);
+	if (!r) r = seen_read(seendb, mailbox->uniqueid, &sd);
+	seen_close(&seendb);
+
+	/* handle no seen DB gracefully */
+	if (r) {
+	    recentuid = mailbox->i.last_uid;
+	    syslog(LOG_ERR, "Could not open seen state for %s (%s)",
+		   httpd_userid, error_message(r));
+	}
+	else {
+	    recentuid = sd.lastuid;
+	    free(sd.seenuids);
+	}
+    }
+    else {
+	recentuid = mailbox->i.last_uid; /* nothing is recent! */
+    }
+#endif
     /* Set up the RSS <channel> response for the mailbox */
     outdoc = xmlNewDoc(BAD_CAST "1.0");
     root = xmlNewNode(NULL, BAD_CAST "rss");
@@ -249,7 +279,7 @@ static int meth_get(struct transaction_t *txn)
     }
 
     /* Add an <item> for each message */
-    for (recno = 1; recno <= mailbox->i.num_records; recno++) {
+    for (recno = mailbox->i.num_records; feed && recno >= 1; recno--) {
 	struct index_record record;
 	const char *msg_base;
 	unsigned long msg_size;
@@ -264,12 +294,18 @@ static int meth_get(struct transaction_t *txn)
 	parts = NULL;
 
 	if (mailbox_read_index_record(mailbox, recno, &record)) {
-	    syslog(LOG_ERR, "read index %d failed", recno);
+	    syslog(LOG_ERR, "read index %u failed", recno);
+	    continue;
+	}
+
+	if (record.uid <= recentuid) {
+	    syslog(LOG_DEBUG, "recno %u not recent (%u/%u)",
+		   recno, record.uid, recentuid);
 	    continue;
 	}
 
 	if (record.system_flags & (FLAG_DELETED|FLAG_EXPUNGED)) {
-	    syslog(LOG_DEBUG, "recno %d deleted", recno);
+	    syslog(LOG_DEBUG, "recno %u deleted", recno);
 	    continue;
 	}
 
@@ -278,7 +314,8 @@ static int meth_get(struct transaction_t *txn)
 	    continue;
 	}
 
-	/* XXX  Need to check \Recent flag */
+	/* Feeding this message, decrement counter */
+	feed--;
 
 	/* Read message bodystructure */
 	message_read_bodystructure(&record, &body);
