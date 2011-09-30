@@ -531,8 +531,8 @@ extern int mailbox_repack_add(struct mailbox_repack *repack,
 extern void mailbox_repack_abort(struct mailbox_repack **repackptr);
 extern int mailbox_repack_commit(struct mailbox_repack **repackptr);
 
-int mailbox_quota_check(struct mailbox *mailbox,
-			const quota_t delta[QUOTA_NUMRESOURCES]);
+#define mailbox_quota_check(mailbox, delta) \
+	quota_check_useds((mailbox)->quotaroot, delta)
 void mailbox_get_usage(struct mailbox *mailbox,
 			quota_t usage[QUOTA_NUMRESOURCES]);
 void mailbox_use_annot_quota(struct mailbox *mailbox, quota_t diff);

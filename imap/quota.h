@@ -111,6 +111,8 @@ extern int quota_write(struct quota *quota, struct txn **tid);
 extern int quota_update_useds(const char *quotaroot,
 			      const quota_t diff[QUOTA_NUMRESOURCES],
 			      int is_scanned);
+extern int quota_check_useds(const char *quotaroot,
+			     const quota_t diff[QUOTA_NUMRESOURCES]);
 
 extern int quota_deleteroot(const char *quotaroot);
 

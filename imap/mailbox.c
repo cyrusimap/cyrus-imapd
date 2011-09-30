@@ -4174,46 +4174,6 @@ close:
 }
 
 /*
- * Check whether we can add @delta bytes to the mailbox
- * without exceeding the quota limit.
- * Returns: 0 if allowed, or IMAP error code.
- */
-int mailbox_quota_check(struct mailbox *mailbox,
-			const quota_t delta[QUOTA_NUMRESOURCES])
-{
-    int r;
-    struct quota q;
-    int res;
-
-    /*
-     * We are always allowed to *reduce* usage even if it doesn't get us
-     * below the quota.  As a side effect this allows our caller to pass
-     * delta = -1 meaning "don't care about quota checks".
-     */
-    for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++) {
-	if (delta[res] >= 0)
-	    break;
-    }
-    if (res == QUOTA_NUMRESOURCES)
-	return 0;	    /* all negative */
-
-    q.root = mailbox->quotaroot;
-    r = quota_read(&q, NULL, /*wrlock*/0);
-
-    if (r == IMAP_QUOTAROOT_NONEXISTENT)
-	return 0;
-    if (r)
-	return r;
-
-    for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++) {
-	r = quota_check(&q, res, delta[res]);
-	if (r)
-	    return r;
-    }
-    return 0;
-}
-
-/*
  * Gets messages usage.
  */
 void mailbox_get_usage(struct mailbox *mailbox,
