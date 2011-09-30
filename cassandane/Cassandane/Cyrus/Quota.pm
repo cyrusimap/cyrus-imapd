@@ -1799,4 +1799,250 @@ sub test_using_annotstorage_msg_copy_deimm
     $self->_check_usages([int($expected/1024)]);
 }
 
+sub test_reconstruct
+{
+    my ($self) = @_;
+
+    xlog "test resources usage calculated when reconstructing an index";
+
+    $self->_set_quotaroot('user.cassandane');
+    my $folder = 'INBOX';
+    my $fentry = '/private/comment';
+    my $mentry1 = '/comment';
+    my $mentry2 = '/altsubject';
+    my $mattrib = 'value.priv';
+
+    my $store = $self->{store};
+    $store->set_fetch_attributes('uid',
+				 "annotation ($mentry1 $mattrib)",
+				 "annotation ($mentry2 $mattrib)");
+    my $talk = $store->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog "set ourselves a basic limit";
+    $self->_set_limits([
+	["storage", 0, 100000],
+	["message", 0, 50000],
+	['x-annotation-storage', 0, 100000]
+    ]);
+    my $expected_annotation_storage = 0;
+    my $expected_storage = 0;
+    my $expected_message = 0;
+
+    xlog "store annotations";
+    my $data = make_random_data(10);
+    $expected_annotation_storage += length($data);
+    $talk->setmetadata($folder, $fentry, { Quote => $data });
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog "add some messages";
+    my $uid = 1;
+    my %exp;
+    for (1..10)
+    {
+	my $msg = $self->make_message("Message $_",
+				      extra_lines => 10 + rand(5000));
+	$exp{$uid} = $msg;
+	my $data1 = make_random_data(7);
+	my $data2 = make_random_data(3);
+	$msg->set_attribute('uid', $uid);
+	$msg->set_annotation($mentry1, $mattrib, $data1);
+	$msg->set_annotation($mentry2, $mattrib, $data2);
+	$talk->store('' . $uid, 'annotation',
+		    [$mentry1, [$mattrib, { Quote => $data1 }],
+		     $mentry2, [$mattrib, { Quote => $data2 }]]);
+	$self->assert_str_equals('ok', $talk->get_last_completion_response());
+	$expected_annotation_storage += (length($data1) + length($data2));
+	$expected_storage += length($msg->as_string());
+	$expected_message++;
+	$uid++;
+    }
+
+    xlog "Check the messages are all there";
+    $self->check_messages(\%exp);
+
+    xlog "Check the mailbox annotation is still there";
+    my $res = $talk->getmetadata($folder, $fentry);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_deep_equals({
+	$folder => { $fentry => $data }
+    }, $res);
+
+    xlog "Check the quota usage is as expected";
+    $self->_check_usages([
+	int($expected_storage/1024),
+	$expected_message,
+	int($expected_annotation_storage/1024)
+    ]);
+
+    $self->{store}->disconnect();
+    $self->{adminstore}->disconnect();
+    $talk = undef;
+    $admintalk = undef;
+
+    xlog "Moving the cyrus.index file out of the way";
+    my $mbdir = $self->{instance}->{basedir} . '/data/user/cassandane';
+    my $cyrus_index = "$mbdir/cyrus.index";
+    $self->assert(( -f $cyrus_index ));
+    rename($cyrus_index, $cyrus_index . '.NOT')
+	or die "Cannot rename $cyrus_index: $!";
+
+    xlog "Running reconstruct";
+    $self->{instance}->run_command({ cyrus => 1 },
+				   'reconstruct', 'user.cassandane');
+    xlog "Running quota -f";
+    $self->{instance}->run_command({ cyrus => 1 },
+				   'quota', '-f', "user.cassandane");
+
+    $talk = $store->get_client();
+
+    xlog "Check the messages are still all there";
+    $self->check_messages(\%exp);
+
+    xlog "Check the mailbox annotation is still there";
+    $res = $talk->getmetadata($folder, $fentry);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_deep_equals({
+	$folder => { $fentry => $data }
+    }, $res);
+
+    xlog "Check the quota usage is still as expected";
+    $self->_check_usages([
+	int($expected_storage/1024),
+	$expected_message,
+	int($expected_annotation_storage/1024)
+    ]);
+}
+
+sub test_reconstruct_orphans
+{
+    my ($self) = @_;
+
+    xlog "test resources usage calculated when reconstructing an index";
+    xlog "with messages disappearing, resulting in orphan annotations";
+
+    $self->_set_quotaroot('user.cassandane');
+    my $folder = 'INBOX';
+    my $fentry = '/private/comment';
+    my $mentry1 = '/comment';
+    my $mentry2 = '/altsubject';
+    my $mattrib = 'value.priv';
+
+    my $store = $self->{store};
+    $store->set_fetch_attributes('uid',
+				 "annotation ($mentry1 $mattrib)",
+				 "annotation ($mentry2 $mattrib)");
+    my $talk = $store->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog "set ourselves a basic limit";
+    $self->_set_limits([
+	["storage", 0, 100000],
+	["message", 0, 50000],
+	['x-annotation-storage', 0, 100000]
+    ]);
+    my $expected_annotation_storage = 0;
+    my $expected_storage = 0;
+    my $expected_message = 0;
+
+    xlog "store annotations";
+    my $data = make_random_data(10);
+    $expected_annotation_storage += length($data);
+    $talk->setmetadata($folder, $fentry, { Quote => $data });
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog "add some messages";
+    my $uid = 1;
+    my %exp;
+    for (1..10)
+    {
+	my $msg = $self->make_message("Message $_",
+				      extra_lines => 10 + rand(5000));
+	$exp{$uid} = $msg;
+	my $data1 = make_random_data(7);
+	my $data2 = make_random_data(3);
+	$msg->set_attribute('uid', $uid);
+	$msg->set_annotation($mentry1, $mattrib, $data1);
+	$msg->set_annotation($mentry2, $mattrib, $data2);
+	$talk->store('' . $uid, 'annotation',
+		    [$mentry1, [$mattrib, { Quote => $data1 }],
+		     $mentry2, [$mattrib, { Quote => $data2 }]]);
+	$self->assert_str_equals('ok', $talk->get_last_completion_response());
+	$expected_annotation_storage += (length($data1) + length($data2));
+	$expected_storage += length($msg->as_string());
+	$expected_message++;
+	$uid++;
+    }
+
+    xlog "Check the messages are all there";
+    $self->check_messages(\%exp);
+
+    xlog "Check the mailbox annotation is still there";
+    my $res = $talk->getmetadata($folder, $fentry);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_deep_equals({
+	$folder => { $fentry => $data }
+    }, $res);
+
+    xlog "Check the quota usage is as expected";
+    $self->_check_usages([
+	int($expected_storage/1024),
+	$expected_message,
+	int($expected_annotation_storage/1024)
+    ]);
+
+    $self->{store}->disconnect();
+    $self->{adminstore}->disconnect();
+    $talk = undef;
+    $admintalk = undef;
+
+    xlog "Moving the cyrus.index file out of the way";
+    my $mbdir = $self->{instance}->{basedir} . '/data/user/cassandane';
+    my $cyrus_index = "$mbdir/cyrus.index";
+    $self->assert(( -f $cyrus_index ));
+    rename($cyrus_index, $cyrus_index . '.NOT')
+	or die "Cannot rename $cyrus_index: $!";
+
+    xlog "Delete a couple of messages";
+    foreach $uid (2, 7)
+    {
+	xlog "Deleting uid $uid";
+	unlink("$mbdir/$uid.");
+
+	my $msg = delete $exp{$uid};
+	my $data1 = $msg->get_annotation($mentry1, $mattrib);
+	my $data2 = $msg->get_annotation($mentry2, $mattrib);
+
+	$expected_annotation_storage -= (length($data1) + length($data2));
+	$expected_storage -= length($msg->as_string());
+	$expected_message--;
+    }
+
+    xlog "Running reconstruct";
+    $self->{instance}->run_command({ cyrus => 1 },
+				   'reconstruct', 'user.cassandane');
+    xlog "Running quota -f";
+    $self->{instance}->run_command({ cyrus => 1 },
+				   'quota', '-f', "user.cassandane");
+
+    $talk = $store->get_client();
+
+    xlog "Check the messages are still all there";
+    $self->check_messages(\%exp);
+
+    xlog "Check the mailbox annotation is still there";
+    $res = $talk->getmetadata($folder, $fentry);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_deep_equals({
+	$folder => { $fentry => $data }
+    }, $res);
+
+    xlog "Check the quota usage is still as expected";
+    $self->_check_usages([
+	int($expected_storage/1024),
+	$expected_message,
+	int($expected_annotation_storage/1024)
+    ]);
+}
+
 1;
