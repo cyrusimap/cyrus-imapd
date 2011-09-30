@@ -209,6 +209,14 @@ struct annotate_db
     struct txn *txn;
 };
 
+struct annotate_reconstruct_state
+{
+    struct mailbox *mailbox;
+    annotate_db_t *d;		    /* reference to per-mailbox db */
+    unsigned int num_uids;
+    hash_table counts_by_uid;
+};
+
 #define DB config_annotation_db
 
 static annotate_db_t *all_dbs_head = NULL;
@@ -3104,6 +3112,206 @@ int annotate_msg_expunge(struct mailbox *mailbox, uint32_t uid)
 			     /*newname*/NULL, /*newmbox*/NULL,
 			     /*newuid*/0, /*newuserid*/NULL,
 			     /*copy*/0);
+}
+
+/*************************  Annotation Reconstruction  ************************/
+
+
+static int calc_usage_cb(const char *mailbox __attribute__((unused)),
+			 uint32_t uid,
+			 const char *entry __attribute__((unused)),
+			 const char *userid __attribute__((unused)),
+			 const struct buf *value,
+			 void *rock)
+{
+    annotate_reconstruct_state_t *ars = (annotate_reconstruct_state_t *)rock;
+    uint32_t *cp;
+    char uidkey[32];
+
+    snprintf(uidkey, sizeof(uidkey), "%u", uid);
+    cp = hash_lookup(uidkey, &ars->counts_by_uid);
+    if (!cp) {
+	cp = xzmalloc(sizeof(uint32_t));
+	hash_insert(uidkey, cp, &ars->counts_by_uid);
+	ars->num_uids++;
+    }
+    *cp += value->len;
+
+    return 0;
+}
+
+/*
+ * Begin scanning the annotations dbs for per-message and
+ * per-mailbox annotations for this mailbox, to calculate
+ * mailbox->i.quota_annot_used.
+ */
+int annotate_reconstruct_begin(struct mailbox *mailbox,
+			       annotate_reconstruct_state_t **arsp)
+{
+    int r;
+    annotate_reconstruct_state_t *ars;
+
+    assert(arsp);
+    ars = xzmalloc(sizeof(*ars));
+    ars->mailbox = mailbox;
+    construct_hash_table(&ars->counts_by_uid, 1024, 0);
+
+    /* scan for per-mailbox annotations */
+    r = annotatemore_findall(mailbox->name, 0, "*",
+			     calc_usage_cb, ars);
+    if (r) {
+	syslog(LOG_ERR, "reconstruct: cannot scan for "
+			"per-mailbox annotations: %s",
+			error_message(r));
+    }
+
+    /* grab a reference to the per-mailbox db, to avoid
+     * multiple closes and opens of the db */
+    r = annotate_getdb(mailbox->name, &ars->d);
+    if (r == CYRUSDB_NOTFOUND)
+	r = 0;		/* no db, not a problem, nothing to scan */
+    else if (r)
+	r = IMAP_IOERROR;
+    else {
+	/* scan for per-message annotations */
+	r = annotatemore_findall(mailbox->name, ANNOTATE_ANY_UID, "*",
+			         calc_usage_cb, ars);
+    }
+    if (r) {
+	syslog(LOG_ERR, "reconstruct: cannot scan for "
+			"per-message annotations: %s",
+			error_message(r));
+    }
+
+    /* account for per-mailbox annotations */
+    annotate_reconstruct_add(ars, 0);
+
+    /* there may have been errors above but it doesn't
+     * matter for our purposes */
+    *arsp = ars;
+    return 0;
+}
+
+static void annotate_reconstruct_end(annotate_reconstruct_state_t *ars)
+{
+    assert(ars);
+    annotate_putdb(&ars->d);
+    free_hash_table(&ars->counts_by_uid, free);
+    free(ars);
+}
+
+
+void annotate_reconstruct_add(annotate_reconstruct_state_t *ars,
+			      uint32_t uid)
+{
+    uint32_t *cp;
+    char uidkey[32];
+
+    if (!ars)
+	return;
+
+    /* account for per-message annotations for this uid
+     * (or zero for per-mailbox annotations) */
+    snprintf(uidkey, sizeof(uidkey), "%u", uid);
+    cp = hash_del(uidkey, &ars->counts_by_uid);
+    if (cp) {
+	mailbox_use_annot_quota(ars->mailbox, *cp);
+	ars->num_uids--;
+	free(cp);
+    }
+}
+
+static int reconstruct_prune_cb(void *rock, const char *key, int keylen,
+			        const char *data __attribute__((unused)),
+				int datalen __attribute__((unused)))
+{
+    annotate_reconstruct_state_t *ars = (annotate_reconstruct_state_t *)rock;
+    int r;
+    const char *entry = NULL;
+    const char *userid = NULL;
+    unsigned int uid;
+
+    r = split_key(ars->d, key, keylen,
+		  /*mboxnamep*/NULL, &uid, &entry, &userid);
+    if (r) {
+	printf("%s: deleting annotation with bad key\n",
+	       ars->mailbox->name);
+	syslog(LOG_ERR, "%s: deleting annotation with bad key",
+			ars->mailbox->name);
+    }
+    else {
+	char uidkey[32];
+	snprintf(uidkey, sizeof(uidkey), "%u", uid);
+	if (!hash_lookup(uidkey, &ars->counts_by_uid))
+	    return 0;
+	/* this annotation is for a leftover uid */
+	if (!userid)
+	    userid = "";
+	if (!entry)
+	    entry = "";
+	printf("%s: deleting orphan annotation "
+	       "entry=\"%s\", uid=%u, userid=\"%s\"\n",
+	       ars->mailbox->name, entry, uid, userid);
+	syslog(LOG_ERR, "%s: deleting orphan annotation "
+			"entry=\"%s\", uid=%u, userid=\"%s\"",
+			ars->mailbox->name, entry, uid, userid);
+    }
+
+    /* delete this entry */
+    do {
+	r = DB->delete(ars->d->db, key, keylen, tid(ars->d), 0);
+    } while (r == CYRUSDB_AGAIN);
+
+    return r;
+}
+
+int annotate_reconstruct_commit(annotate_reconstruct_state_t *ars)
+{
+    int r = 0;
+
+    if (!ars)
+	return 0;
+
+    /*
+     * We got to the end of the mailbox uid scan, and have
+     * seen all the valid uids, so any leftover entries in
+     * counts_by_uid are for expunged or bogus messages, and
+     * need to be removed from the annotations db.
+     */
+    if (!ars->num_uids)
+	goto out;	    /* easy case: no leftovers */
+
+    /*
+     * Start a transaction, and make a pass through the
+     * database deleting any annotations for leftover uids.
+     */
+    r = annotatemore_begin();
+    if (r)
+	goto out;
+
+    r = DB->foreach(ars->d->db, NULL, 0, NULL,
+		    reconstruct_prune_cb, ars, tid(ars->d));
+
+    if (r)
+	annotatemore_abort();
+    else
+	r = annotatemore_commit();
+
+    if (r) {
+	syslog(LOG_ERR, "reconstruct: could not prune "
+			"orphan annotations: %s",
+			error_message(r));
+    }
+
+out:
+    annotate_reconstruct_end(ars);
+    return r;
+}
+
+void annotate_reconstruct_abort(annotate_reconstruct_state_t *ars)
+{
+    if (ars)
+	annotate_reconstruct_end(ars);
 }
 
 /*************************  Annotation Initialization  ************************/

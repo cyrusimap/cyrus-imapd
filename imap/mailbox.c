@@ -83,6 +83,7 @@
 #include "message.h"
 #include "map.h"
 #include "mboxlist.h"
+#include "annotate.h"
 #include "retry.h"
 #include "seen.h"
 #include "upgrade_index.h"
@@ -2049,6 +2050,7 @@ static int mailbox_index_recalc(struct mailbox *mailbox)
     struct index_record record;
     int r = 0;
     uint32_t recno;
+    annotate_reconstruct_state_t *ars = NULL;
 
     assert(mailbox_index_islocked(mailbox, 1));
 
@@ -2061,14 +2063,24 @@ static int mailbox_index_recalc(struct mailbox *mailbox)
     mailbox->i.deleted = 0;
     mailbox->i.exists = 0;
     mailbox->i.quota_mailbox_used = 0;
+    mailbox->i.quota_annot_used = 0;
+
+    annotate_reconstruct_begin(mailbox, &ars);
 
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	r = mailbox_read_index_record(mailbox, recno, &record);
-	if (r) return r;
+	if (r) goto out;
 	mailbox_index_update_counts(mailbox, &record, 1);
+	if (!(record.system_flags & FLAG_EXPUNGED))
+	    annotate_reconstruct_add(ars, record.uid);
     }
 
-    return 0;
+out:
+    if (r)
+	annotate_reconstruct_abort(ars);
+    else
+	annotate_reconstruct_commit(ars);
+    return r;
 }
 
 /*
@@ -3904,6 +3916,15 @@ static void reconstruct_compare_headers(struct mailbox *mailbox,
 	syslog(LOG_ERR, "%s updating quota_mailbox_used: "
 	       QUOTA_T_FMT " => " QUOTA_T_FMT, mailbox->name,
 	       old->quota_mailbox_used, new->quota_mailbox_used);
+    }
+
+    if (old->quota_annot_used != new->quota_annot_used) {
+	printf("%s updating quota_annot_used: "
+	       QUOTA_T_FMT " => " QUOTA_T_FMT "\n", mailbox->name,
+	       old->quota_annot_used, new->quota_annot_used);
+	syslog(LOG_ERR, "%s updating quota_annot_used: "
+	       QUOTA_T_FMT " => " QUOTA_T_FMT, mailbox->name,
+	       old->quota_annot_used, new->quota_annot_used);
     }
 
     if (old->answered != new->answered) {
