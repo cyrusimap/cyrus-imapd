@@ -178,5 +178,7 @@ extern int message_write_cache P((struct index_record *record, struct body *body
 extern int message_create_record P((struct index_record *message_index,
 				    struct body *body));
 extern void message_free_body P((struct body *body));
+extern void message_read_bodystructure(struct index_record *record,
+				       struct body **body);
 
 #endif /* INCLUDED_MESSAGE_H */

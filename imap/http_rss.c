@@ -196,6 +196,12 @@ static int meth_get(struct transaction_t *txn)
 	return 0;
     }
 
+    /* If UID specified, display entire message */
+    if (uid) {
+	txn->errstr = "Full message display not yet implemented";
+	return HTTP_NOT_IMPLEMENTED;
+    }
+
     /* Open mailbox for reading */
     if ((r = mailbox_open_irl(mailboxname, &mailbox))) {
 	syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
@@ -213,8 +219,6 @@ static int meth_get(struct transaction_t *txn)
 	}
 	goto done;
     }
-
-    /* XXX  If UID specified, display entire message */
 
     /* Set up the RSS <channel> response for the mailbox */
     outdoc = xmlNewDoc(BAD_CAST "1.0");
@@ -247,9 +251,6 @@ static int meth_get(struct transaction_t *txn)
     /* Add an <item> for each message */
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	struct index_record record;
-	struct address *addr = NULL;
-	char *fname;
-	FILE *f;
 	const char *msg_base;
 	unsigned long msg_size;
 	struct body *body;
@@ -258,7 +259,6 @@ static int meth_get(struct transaction_t *txn)
 	struct message_content content;
 	struct bodypart **parts;
 
-	f = NULL;
 	msg_base = NULL;
 	body = NULL;
 	parts = NULL;
@@ -280,18 +280,20 @@ static int meth_get(struct transaction_t *txn)
 
 	/* XXX  Need to check \Recent flag */
 
+	/* Read message bodystructure */
+	message_read_bodystructure(&record, &body);
+
 	item = xmlNewChild(chan, NULL, BAD_CAST "item", NULL);
 
-	xmlNewTextChild(item, NULL, BAD_CAST "title",
-			BAD_CAST cacheitem_base(&record, CACHE_SUBJECT));
+	xmlNewTextChild(item, NULL, BAD_CAST "title", BAD_CAST body->subject);
 
 	buf_reset(&buf);
 	buf_printf(&buf, "http://%s%s%u.",
 		   host[0], txn->req_tgt.path, record.uid);
 	xmlNewChild(item, NULL, BAD_CAST "link", BAD_CAST buf_cstring(&buf));
 
-	parseaddr_list(cacheitem_base(&record, CACHE_FROM), &addr);
-	if (addr) {
+	if (body->from) {
+	    struct address *addr = body->from;
 	    buf_reset(&buf);
 	    buf_printf(&buf, "%s@%s",
 		       addr->mailbox ? addr->mailbox : "unknown-user",
@@ -305,19 +307,7 @@ static int meth_get(struct transaction_t *txn)
 	xmlNewChild(item, NULL, BAD_CAST "pubDate", BAD_CAST datestr);
 
 	/* Find and use the first text/ part as the <description> */
-	fname = mailbox_message_fname(mailbox, record.uid);
-	if (!(f = fopen(fname, "r"))) {
-	    syslog(LOG_ERR, "fopen %s failed", fname);
-	    goto next;
-	}
-
-	/* XXX  This is a hack - should use binary bodystructure in cache */
-	body = NULL;
-	r = message_parse_file(f, &msg_base, &msg_size, &body);
-	if (r) {
-	    syslog(LOG_ERR, "parse file failed: %s", error_message(r));
-	    goto next;
-	}
+	mailbox_map_message(mailbox, record.uid, &msg_base, &msg_size);
 
 	content.base = msg_base;
 	content.len = msg_size;
@@ -338,7 +328,6 @@ static int meth_get(struct transaction_t *txn)
 			    BAD_CAST buf_cstring(&buf));
 	}
 
-      next:
 	/* free the results */
 	if (parts) {
 	    struct bodypart **p;
@@ -346,10 +335,13 @@ static int meth_get(struct transaction_t *txn)
 	    for (p = parts; *p; p++) free(*p);
 	    free(parts);
 	}
-	if (body) message_free_body(body);
 
-	map_free(&msg_base, &msg_size);
-	if (f) fclose(f);
+	mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
+
+	if (body) {
+	    message_free_body(body);
+	    free(body);
+	}
     }
 
     buf_free(&buf);
