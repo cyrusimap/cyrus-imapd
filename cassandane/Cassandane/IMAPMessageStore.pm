@@ -195,7 +195,7 @@ sub set_fetch_attributes
     foreach my $attr (@attrs)
     {
 	$attr = lc($attr);
-	next
+	die "Bad fetch attribute \"$attr\""
 	    unless ($attr =~ m/^annotation\s+\(\S+\s+value\.(shared|priv)\)$/i ||
 		    $attr =~ m/^[a-z0-9.\[\]<>]+$/);
 	next
