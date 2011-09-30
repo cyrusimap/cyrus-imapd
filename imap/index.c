@@ -849,6 +849,12 @@ void index_fetchresponses(struct index_state *state,
     uint32_t checkval;
     struct index_map *im;
     int fetched = 0;
+    annotate_db_t *annot_db = NULL;
+
+    /* Keep an open reference on the per-mailbox db to avoid
+     * doing too many slow database opens during the fetch */
+    if ((fetchargs->fetchitems & FETCH_ANNOTATION))
+	annotate_getdb(state->mailbox->name, &annot_db);
 
     for (msgno = 1; msgno <= state->exists; msgno++) {
 	im = &state->map[msgno-1];
@@ -861,6 +867,7 @@ void index_fetchresponses(struct index_state *state,
     }
 
     if (fetchedsomething) *fetchedsomething = fetched;
+    annotate_putdb(&annot_db);
 }
 
 /*
