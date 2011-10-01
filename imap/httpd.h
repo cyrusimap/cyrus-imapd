@@ -53,8 +53,9 @@
 #define HTTP_VERSION	"HTTP/1.1"
 
 /* Supported HTML DOCTYPE */
-#define HTML_DOCTYPE	"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\"" \
-    " \"http://www.w3.org/TR/html4/strict.dtd\">"
+#define HTML_DOCTYPE	"<!DOCTYPE HTML PUBLIC "  \
+    "\"-//W3C//DTD HTML 4.01 Transitional//EN\" " \
+    "\"http://www.w3.org/TR/html4/loose.dtd\">"
 
 /* XML namespace URIs */
 #define XML_NS_DAV	"DAV:"
