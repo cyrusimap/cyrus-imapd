@@ -203,14 +203,6 @@ enum {
     AUTH_NTLM
 };
 
-/* Transaction flags */
-enum {
-    HTTP_CLOSE =	(1<<0),
-    HTTP_100CONTINUE =	(1<<1),
-    HTTP_CHUNKED =	(1<<2),
-    HTTP_NOCACHE =	(1<<3)
-};
-
 
 /* the sasl proxy policy context */
 static struct proxy_context httpd_proxyctx = {
@@ -1646,7 +1638,7 @@ void error_response(long code, struct transaction_t *txn)
 }
 
 
-/* Output an HTTP response with text/xml body */
+/* Output an HTTP response with text/html body */
 void html_response(long code, struct transaction_t *txn, xmlDocPtr html)
 {
     xmlChar *buf;
@@ -1699,6 +1691,20 @@ void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
 	txn->errstr = "Error dumping XML tree";
 	error_response(HTTP_SERVER_ERROR, txn);
     }
+}
+
+
+/* Output a chunk of body data.  A length of zero ends the chunked body. */
+void body_chunk(struct transaction_t *txn __attribute__((unused)),
+		const char *buf, unsigned len)
+{
+    if (!len) {
+	struct buf trailers = BUF_INITIALIZER;
+	/* we currently don't use an trailing headers */
+	buf = buf_cstring(&trailers);
+    }
+
+    prot_printf(httpd_out, "%x\r\n%s\r\n", len, buf);
 }
 
 

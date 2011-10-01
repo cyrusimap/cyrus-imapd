@@ -88,6 +88,7 @@ static int rss_to_mboxname(struct request_target_t *req_tgt,
 	if ((*p == '/') && (p > start)) {
 	    end = p;
 	    *uid = strtoul(p+1, NULL, 0);
+	    if (!*uid) *uid = -1;
 	}
     }
     if ((end > start) && (end[-1] == '/')) end--;
@@ -171,6 +172,104 @@ static void list_rss_feeds(struct transaction_t *txn)
     html_response(HTTP_OK, txn, doc);
 }
 
+static int display_message(struct transaction_t *txn,
+			   struct mailbox *mailbox, uint32_t uid)
+{
+    int r;
+    struct index_record record;
+    const char *msg_base;
+    unsigned long msg_size;
+    struct body *body = NULL;
+    struct buf buf = BUF_INITIALIZER;
+    const char *content_types[] = { "text", NULL };
+    struct message_content content;
+    struct bodypart **parts = NULL;
+
+    /* Fetch index record for the message */
+    if (uid > mailbox->i.last_uid) {
+	txn->errstr = "Message does not exist";
+	return HTTP_NOT_FOUND;
+    }
+
+    r = mailbox_find_index_record(mailbox, uid, &record);
+    if ((r == CYRUSDB_NOTFOUND) ||
+	(record.system_flags & (FLAG_DELETED|FLAG_EXPUNGED))) {
+	txn->errstr = "Message has been removed";
+	return HTTP_GONE;
+    }
+    else if (r) {
+	syslog(LOG_ERR, "find index record failed");
+	txn->errstr = error_message(r);
+	return HTTP_SERVER_ERROR;
+    }
+
+    if (mailbox_cacherecord(mailbox, &record)) {
+	syslog(LOG_ERR, "read cache failed");
+	txn->errstr = "Unable to read cache record";
+	return HTTP_SERVER_ERROR;
+    }
+
+    /* Read message bodystructure */
+    message_read_bodystructure(&record, &body);
+
+    /* Find and use the first text/ part */
+    mailbox_map_message(mailbox, record.uid, &msg_base, &msg_size);
+
+    content.base = msg_base;
+    content.len = msg_size;
+    content.body = body;
+    message_fetch_part(&content, content_types, &parts);
+
+    if (parts && *parts) {
+	/* Output body as preformmated text */
+	txn->flags |= HTTP_CHUNKED;
+	txn->resp_body.type = "text/html; charset=utf-8";
+
+	response_header(HTTP_OK, txn);
+
+	if (txn->meth[0] != 'H') {
+	    /* Start HTML */
+	    buf_printf(&buf, HTML_DOCTYPE "\n");
+	    buf_printf(&buf, "<html><head><title>%s:%u</title></head>\n",
+		       mailbox->name, uid);
+	    buf_printf(&buf, "<body><pre>\n");
+	    body_chunk(txn, buf.s, buf.len);
+
+	    /* Message body text */
+	    body_chunk(txn, parts[0]->decoded_body,
+		       strlen(parts[0]->decoded_body));
+
+	    /* End of HTML */
+	    buf_reset(&buf);
+	    buf_printf(&buf, "</pre></body></html>\n");
+	    body_chunk(txn, buf.s, buf.len);
+
+	    /* End of output */
+	    body_chunk(txn, NULL, 0);
+	}
+    }
+    else response_header(HTTP_NO_CONTENT, txn);
+
+    /* free the results */
+    if (parts) {
+	struct bodypart **p;
+
+	for (p = parts; *p; p++) free(*p);
+	free(parts);
+    }
+
+    mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
+
+    buf_free(&buf);
+
+    if (body) {
+	message_free_body(body);
+	free(body);
+    }
+
+    return 0;
+}
+
 #define MAX_FEED 100
 
 /* Perform a GET/HEAD request */
@@ -199,12 +298,6 @@ static int meth_get(struct transaction_t *txn)
 	return 0;
     }
 
-    /* If UID specified, display entire message */
-    if (uid) {
-	txn->errstr = "Full message display not yet implemented";
-	return HTTP_NOT_IMPLEMENTED;
-    }
-
     /* Open mailbox for reading */
     if ((r = mailbox_open_irl(mailboxname, &mailbox))) {
 	syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
@@ -220,6 +313,12 @@ static int meth_get(struct transaction_t *txn)
 	default: 
 	    ret = HTTP_SERVER_ERROR;
 	}
+	goto done;
+    }
+
+    /* If UID specified, display entire message */
+    if (uid) {
+	ret = display_message(txn, mailbox, uid);
 	goto done;
     }
 #if 0

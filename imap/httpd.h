@@ -52,6 +52,10 @@
 /* Supported HTTP version */
 #define HTTP_VERSION	"HTTP/1.1"
 
+/* Supported HTML DOCTYPE */
+#define HTML_DOCTYPE	"<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01//EN\"" \
+    " \"http://www.w3.org/TR/html4/strict.dtd\">"
+
 /* XML namespace URIs */
 #define XML_NS_DAV	"DAV:"
 #define XML_NS_CAL	"urn:ietf:params:xml:ns:caldav"
@@ -151,6 +155,14 @@ struct transaction_t {
     struct resp_body_t resp_body;	/* Response body meta-data */
 };
 
+/* Transaction flags */
+enum {
+    HTTP_CLOSE =	(1<<0),
+    HTTP_100CONTINUE =	(1<<1),
+    HTTP_CHUNKED =	(1<<2),
+    HTTP_NOCACHE =	(1<<3)
+};
+
 typedef int (*method_proc_t)(struct transaction_t *txn);
 
 struct namespace_t {
@@ -184,6 +196,8 @@ extern void response_header(long code, struct transaction_t *txn);
 extern void error_response(long code, struct transaction_t *txn);
 extern void html_response(long code, struct transaction_t *txn, xmlDocPtr html);
 extern void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml);
+extern void body_chunk(struct transaction_t *txn,
+		       const char *buf, unsigned len);
 extern int meth_options(struct transaction_t *txn);
 
 #endif /* HTTPD_H */

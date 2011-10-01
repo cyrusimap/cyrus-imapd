@@ -89,6 +89,9 @@ ec HTTP_TIMEOUT,
 ec HTTP_CONFLICT,
    "409 Conflict"
 
+ec HTTP_GONE,
+   "410 Gone"
+
 ec HTTP_LENGTH_REQUIRED,
    "411 Length Required"
 
