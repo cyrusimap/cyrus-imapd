@@ -1940,7 +1940,7 @@ static int myconsistent(struct db *db, struct txn *tid, int locked)
 	    offset = FORWARD(ptr, i);
 
 	    if (offset > db->map_size) {
-		fprintf(stdout, 
+		syslog(LOG_ERR,
 			"skiplist inconsistent: %04X: ptr %d is %04X; "
 			"eof is %04X\n", 
 			(unsigned int) (ptr - db->map_base),
@@ -1956,7 +1956,7 @@ static int myconsistent(struct db *db, struct txn *tid, int locked)
 
 		cmp = db->compar(KEY(ptr), KEYLEN(ptr), KEY(q), KEYLEN(q));
 		if (cmp >= 0) {
-		    fprintf(stdout, 
+		    syslog(LOG_ERR,
 			    "skiplist inconsistent: %04X: ptr %d is %04X; "
 			    "db->compar() = %d\n", 
 			    (unsigned int) (ptr - db->map_base),
