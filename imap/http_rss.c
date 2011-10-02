@@ -53,6 +53,7 @@
 #include <libxml/tree.h>
 
 #include "acl.h"
+#include "charset.h"
 #include "global.h"
 #include "httpd.h"
 #include "http_err.h"
@@ -172,6 +173,127 @@ static void list_rss_feeds(struct transaction_t *txn)
     html_response(HTTP_OK, txn, doc);
 }
 
+static void display_address(struct buf *buf, struct address *addr,
+			    const char *sep)
+{
+    buf_printf(buf, "%s", sep);
+    if (addr->name) buf_printf(buf, "%s ", addr->name);
+    buf_printf(buf, "<a href=\"mailto:%s@%s\">&lt;%s@%s&gt;</a>",
+	       addr->mailbox, addr->domain, addr->mailbox, addr->domain);
+}
+
+static void display_part(struct transaction_t *txn,
+			 struct body *body, const char *msg_base)
+{
+    static struct buf buf = BUF_INITIALIZER;
+
+    if (!strcmp(body->type, "MULTIPART")) {
+	int i;
+
+	if (!strcmp(body->subtype, "ALTERNATIVE") &&
+	    !strcmp(body->subpart[0].type, "TEXT")) {
+	    /* Display a text/html subpart, otherwise display first subpart */
+	    for (i = 0; (i < body->numparts) &&
+		     strcmp(body->subpart[i].subtype, "HTML"); i++);
+	    if (i == body->numparts) i = 0;
+	    display_part(txn, &body->subpart[i], msg_base);
+	}
+	else {
+	    /* Display all subparts */
+	    for (i = 0; i < body->numparts; i++) {
+		display_part(txn, &body->subpart[i], msg_base);
+	    }
+	}
+    }
+    else if (!strcmp(body->type, "MESSAGE") &&
+	     !strcmp(body->subtype, "RFC822")) {
+	struct address *addr;
+	char *sep;
+
+	/* Display message header as a shaded table */
+	buf_reset(&buf);
+	buf_printf(&buf, "<table width=\"100%%\" bgcolor=\"#CCCCCC\">\n");
+	/* Subject header field */
+	buf_printf(&buf, "<tr><td align=right><b>Subject: </b>");
+	buf_printf(&buf, "<td width=\"100%%\">%s\n", body->subpart->subject);
+	/* From header field */
+	if (body->subpart->from) {
+	    buf_printf(&buf, "<tr><td align=right><b>From: </b><td>");
+	    display_address(&buf, body->subpart->from, "");
+	}
+	/* Sender header field (if different than From */
+	if (body->subpart->sender &&
+	    (!body->subpart->from ||
+	     strcmp(body->subpart->sender->mailbox,
+		    body->subpart->from->mailbox) ||
+	     strcmp(body->subpart->sender->domain,
+		    body->subpart->from->domain))) {
+	    buf_printf(&buf, "<tr><td align=right><b>Sender: </b><td>");
+	    display_address(&buf, body->subpart->sender, "");
+	}
+	/* Reply-To header field (if different than From */
+	if (body->subpart->reply_to &&
+	    (!body->subpart->from ||
+	     strcmp(body->subpart->reply_to->mailbox,
+		    body->subpart->from->mailbox) ||
+	     strcmp(body->subpart->reply_to->domain,
+		    body->subpart->from->domain))) {
+	    buf_printf(&buf, "<tr><td align=right><b>Reply-To: </b><td>");
+	    display_address(&buf, body->subpart->reply_to, "");
+	}
+	/* Date header field */
+	buf_printf(&buf, "<tr><td align=right><b>Date: </b>");
+	buf_printf(&buf, "<td>%s\n", body->subpart->date);
+	/* To header field (possibly multiple addresses) */
+	if (body->subpart->to) {
+	    buf_printf(&buf, "<tr><td align=right valign=top><b>To: </b><td>");
+	    for (sep = "", addr = body->subpart->to; addr; addr = addr->next) {
+		display_address(&buf, addr, sep);
+		sep = ", ";
+	    }
+	}
+	/* Cc header field (possibly multiple addresses) */
+	if (body->subpart->cc) {
+	    buf_printf(&buf, "<tr><td align=right valign=top><b>Cc: </b><td>");
+	    for (sep = "", addr = body->subpart->cc; addr; addr = addr->next) {
+		display_address(&buf, addr, sep);
+		sep = ", ";
+	    }
+	}
+	buf_printf(&buf, "</table><br>\n");
+	body_chunk(txn, buf.s, buf.len);
+
+	/* Display supbart */
+	display_part(txn, body->subpart, msg_base);
+    }
+    else {
+	int charset = body->charset_cte >> 16;
+	int encoding = body->charset_cte & 0xff;
+
+	if (!strcmp(body->type, "TEXT")) {
+	    /* Display text part */
+	    int ishtml = !strcmp(body->subtype, "HTML");
+
+	    if (charset < 0) charset = 0; /* unknown, try ASCII */
+	    body->decoded_body =
+		charset_to_utf8(msg_base + body->content_offset,
+				body->content_size, charset, encoding);
+	    if (!ishtml) body_chunk(txn, "<pre>", strlen("<pre>"));
+	    body_chunk(txn, body->decoded_body, strlen(body->decoded_body));
+	    if (!ishtml) body_chunk(txn, "</pre>", strlen("</pre>"));
+	}
+	else {
+	    /* Anything else is shown as an attachment */
+	    buf_reset(&buf);
+	    buf_printf(&buf, "<b>[attachment: %s/%s %lu bytes]</b>",
+		       body->type, body->subtype, body->content_size);
+	    body_chunk(txn, buf.s, buf.len);
+	}
+
+	body_chunk(txn, "\n<hr>\n", strlen("\n<hr>\n"));
+    }
+}
+
 static int display_message(struct transaction_t *txn,
 			   struct mailbox *mailbox, uint32_t uid)
 {
@@ -179,11 +301,8 @@ static int display_message(struct transaction_t *txn,
     struct index_record record;
     const char *msg_base;
     unsigned long msg_size;
-    struct body *body = NULL;
+    struct body toplevel, *body = NULL;
     struct buf buf = BUF_INITIALIZER;
-    const char *content_types[] = { "text", NULL };
-    struct message_content content;
-    struct bodypart **parts = NULL;
 
     /* Fetch index record for the message */
     if (uid > mailbox->i.last_uid) {
@@ -212,51 +331,36 @@ static int display_message(struct transaction_t *txn,
     /* Read message bodystructure */
     message_read_bodystructure(&record, &body);
 
-    /* Find and use the first text/ part */
+    /* Map the message into memory */
     mailbox_map_message(mailbox, record.uid, &msg_base, &msg_size);
 
-    content.base = msg_base;
-    content.len = msg_size;
-    content.body = body;
-    message_fetch_part(&content, content_types, &parts);
+    /* Setup for chunked response */
+    txn->flags |= HTTP_CHUNKED;
+    txn->resp_body.type = "text/html; charset=utf-8";
 
-    if (parts && *parts) {
-	/* Output body as preformmated text */
-	txn->flags |= HTTP_CHUNKED;
-	txn->resp_body.type = "text/html; charset=utf-8";
+    response_header(HTTP_OK, txn);
 
-	response_header(HTTP_OK, txn);
+    /* Start HTML */
+    buf_printf(&buf, HTML_DOCTYPE "\n");
+    buf_printf(&buf, "<html><head><title>%s:%u</title></head><body>\n",
+	       mailbox->name, uid);
+    body_chunk(txn, buf.s, buf.len);
 
-	if (txn->meth[0] != 'H') {
-	    /* Start HTML */
-	    buf_printf(&buf, HTML_DOCTYPE "\n");
-	    buf_printf(&buf, "<html><head><title>%s:%u</title></head>\n",
-		       mailbox->name, uid);
-	    buf_printf(&buf, "<body><pre>\n");
-	    body_chunk(txn, buf.s, buf.len);
+    /* Encapsulate our body in a mssage/rfc822 to display toplevel headers */
+    memset(&toplevel, 0, sizeof(struct body));
+    toplevel.type = "MESSAGE";
+    toplevel.subtype = "RFC822";
+    toplevel.subpart = body;
 
-	    /* Message body text */
-	    body_chunk(txn, parts[0]->decoded_body,
-		       strlen(parts[0]->decoded_body));
+    display_part(txn, &toplevel, msg_base);
 
-	    /* End of HTML */
-	    buf_reset(&buf);
-	    buf_printf(&buf, "</pre></body></html>\n");
-	    body_chunk(txn, buf.s, buf.len);
+    /* End of HTML */
+    buf_reset(&buf);
+    buf_printf(&buf, "</body></html>");
+    body_chunk(txn, buf.s, buf.len);
 
-	    /* End of output */
-	    body_chunk(txn, NULL, 0);
-	}
-    }
-    else response_header(HTTP_NO_CONTENT, txn);
-
-    /* free the results */
-    if (parts) {
-	struct bodypart **p;
-
-	for (p = parts; *p; p++) free(*p);
-	free(parts);
-    }
+    /* End of output */
+    body_chunk(txn, NULL, 0);
 
     mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
 
