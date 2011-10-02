@@ -921,7 +921,7 @@ static int myopen(const char *fname, int flags, struct db **ret)
     return 0;
 }
 
-int myclose(struct db *db)
+static int myclose(struct db *db)
 {
     struct db_list *list_ent = open_db;
     struct db_list *prev = NULL;
@@ -987,10 +987,10 @@ static const char *find_node(struct db *db,
     return ptr;
 }
 
-int myfetch(struct db *db,
-	    const char *key, int keylen,
-	    const char **data, int *datalen,
-	    struct txn **tidptr)
+static int myfetch(struct db *db,
+		   const char *key, int keylen,
+		   const char **data, int *datalen,
+		   struct txn **tidptr)
 {
     const char *ptr;
     int r = 0;
@@ -1042,14 +1042,14 @@ int myfetch(struct db *db,
     return r;
 }
 
-static int fetch(struct db *mydb, 
+static int fetch(struct db *mydb,
 		 const char *key, int keylen,
 		 const char **data, int *datalen,
 		 struct txn **tidptr)
 {
     return myfetch(mydb, key, keylen, data, datalen, tidptr);
 }
-static int fetchlock(struct db *db, 
+static int fetchlock(struct db *db,
 		     const char *key, int keylen,
 		     const char **data, int *datalen,
 		     struct txn **tidptr)
@@ -1060,11 +1060,11 @@ static int fetchlock(struct db *db,
 /* foreach allows for subsidary mailbox operations in 'cb'.
    if there is a txn, 'cb' must make use of it.
 */
-int myforeach(struct db *db,
-	      const char *prefix, int prefixlen,
-	      foreach_p *goodp,
-	      foreach_cb *cb, void *rock, 
-	      struct txn **tidptr)
+static int myforeach(struct db *db,
+		     const char *prefix, int prefixlen,
+		     foreach_p *goodp,
+		     foreach_cb *cb, void *rock,
+		     struct txn **tidptr)
 {
     const char *ptr;
     char *savebuf = NULL;
@@ -1179,7 +1179,7 @@ int myforeach(struct db *db,
     return r ? r : cb_r;
 }
 
-unsigned int randlvl(struct db *db)
+static unsigned int randlvl(struct db *db)
 {
     unsigned int lvl = 1;
     
@@ -1192,10 +1192,10 @@ unsigned int randlvl(struct db *db)
     return lvl;
 }
 
-int mystore(struct db *db, 
-	    const char *key, int keylen,
-	    const char *data, int datalen,
-	    struct txn **tidptr, int overwrite)
+static int mystore(struct db *db, 
+		   const char *key, int keylen,
+		   const char *data, int datalen,
+		   struct txn **tidptr, int overwrite)
 {
     const char *ptr;
     uint32_t klen;
@@ -1363,9 +1363,9 @@ static int store(struct db *db,
     return mystore(db, key, keylen, data, datalen, tid, 1);
 }
 
-int mydelete(struct db *db, 
-	     const char *key, int keylen,
-	     struct txn **tidptr, int force __attribute__((unused)))
+static int mydelete(struct db *db, 
+		    const char *key, int keylen,
+		    struct txn **tidptr, int force __attribute__((unused)))
 {
     const char *ptr;
     uint32_t delrectype = htonl(DELETE);
@@ -1442,7 +1442,7 @@ int mydelete(struct db *db,
     return 0;
 }
 
-int mycommit(struct db *db, struct txn *tid)
+static int mycommit(struct db *db, struct txn *tid)
 {
     uint32_t commitrectype = htonl(COMMIT);
     int r = 0;
@@ -1526,7 +1526,7 @@ int mycommit(struct db *db, struct txn *tid)
     return r;
 }
 
-int myabort(struct db *db, struct txn *tid)
+static int myabort(struct db *db, struct txn *tid)
 {
     const char *ptr;
     unsigned updateoffsets[SKIPLIST_MAXLEVEL+1];
