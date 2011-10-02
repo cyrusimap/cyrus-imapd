@@ -471,7 +471,8 @@ static int meth_get(struct transaction_t *txn)
     }
 
     buf_reset(&buf);
-    buf_printf(&buf, "http://%s%s", host[0], txn->req_tgt.path);
+    buf_printf(&buf, "%s://%s%s", httpd_tls_done ? "https" : "http",
+	       host[0], txn->req_tgt.path);
     xmlNewChild(chan, NULL, BAD_CAST "link", BAD_CAST buf_cstring(&buf));
 
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
@@ -528,7 +529,8 @@ static int meth_get(struct transaction_t *txn)
 	xmlNewTextChild(item, NULL, BAD_CAST "title", BAD_CAST body->subject);
 
 	buf_reset(&buf);
-	buf_printf(&buf, "http://%s%s%u.",
+	buf_printf(&buf, "%s://%s%s%u.",
+		   httpd_tls_done ? "https" : "http",
 		   host[0], txn->req_tgt.path, record.uid);
 	xmlNewChild(item, NULL, BAD_CAST "link", BAD_CAST buf_cstring(&buf));
 

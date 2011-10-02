@@ -186,6 +186,7 @@ extern const struct namespace_t namespace_default;
 
 
 /* XXX  These should be included in struct transaction_t */
+extern int httpd_tls_done;
 extern char *httpd_userid;
 extern int httpd_userisadmin;
 extern struct auth_state *httpd_authstate;

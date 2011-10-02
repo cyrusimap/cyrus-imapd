@@ -1104,7 +1104,8 @@ static void cmdloop(void)
 	    ret = HTTP_TEMP_REDIRECT;
 
 	    hdr = spool_getheader(txn.req_hdrs, "Host");
-	    snprintf(buf, sizeof(buf), "http://%s/calendars/", hdr[0]);
+	    snprintf(buf, sizeof(buf), "%s://%s/calendars/",
+		     httpd_tls_done ? "https" : "http", hdr[0]);
 	    txn.loc = buf;
 	}
 
