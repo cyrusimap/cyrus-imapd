@@ -177,8 +177,8 @@ static void display_address(struct buf *buf, struct address *addr,
 			    const char *sep)
 {
     buf_printf(buf, "%s", sep);
-    if (addr->name) buf_printf(buf, "%s ", addr->name);
-    buf_printf(buf, "<a href=\"mailto:%s@%s\">&lt;%s@%s&gt;</a>",
+    if (addr->name) buf_printf(buf, "\"%s\" ", addr->name);
+    buf_printf(buf, "<a href=\"mailto:%s@%s\">&lt;%s@%s&gt;</a>\n",
 	       addr->mailbox, addr->domain, addr->mailbox, addr->domain);
 }
 
@@ -214,8 +214,10 @@ static void display_part(struct transaction_t *txn,
 	buf_reset(&buf);
 	buf_printf(&buf, "<table width=\"100%%\" bgcolor=\"#CCCCCC\">\n");
 	/* Subject header field */
-	buf_printf(&buf, "<tr><td align=right><b>Subject: </b>");
-	buf_printf(&buf, "<td width=\"100%%\">%s\n", body->subpart->subject);
+	if (body->subpart->subject) {
+	    buf_printf(&buf, "<tr><td align=right><b>Subject: </b>");
+	    buf_printf(&buf, "<td>%s\n", body->subpart->subject);
+	}
 	/* From header field */
 	if (body->subpart->from) {
 	    buf_printf(&buf, "<tr><td align=right><b>From: </b><td>");
@@ -243,7 +245,7 @@ static void display_part(struct transaction_t *txn,
 	}
 	/* Date header field */
 	buf_printf(&buf, "<tr><td align=right><b>Date: </b>");
-	buf_printf(&buf, "<td>%s\n", body->subpart->date);
+	buf_printf(&buf, "<td width=\"100%%\">%s\n", body->subpart->date);
 	/* To header field (possibly multiple addresses) */
 	if (body->subpart->to) {
 	    buf_printf(&buf, "<tr><td align=right valign=top><b>To: </b><td>");
