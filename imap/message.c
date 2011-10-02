@@ -3219,7 +3219,7 @@ static void message_read_binarybody(struct body *body, const char **sect)
 	p += CACHE_ITEM_SIZE_SKIP;
 	body->content_size = CACHE_ITEM_BIT32(p);
 	p += CACHE_ITEM_SIZE_SKIP;
-	/* don't care about encoding */
+	body->charset_cte = CACHE_ITEM_BIT32(p);
 	p += CACHE_ITEM_SIZE_SKIP;
     }
 
@@ -3233,7 +3233,7 @@ static void message_read_binarybody(struct body *body, const char **sect)
 	p += CACHE_ITEM_SIZE_SKIP;
 	subpart[i].content_size = CACHE_ITEM_BIT32(p);
 	p += CACHE_ITEM_SIZE_SKIP;
-	/* don't care about encoding */
+	subpart[i].charset_cte = CACHE_ITEM_BIT32(p);
 	p += CACHE_ITEM_SIZE_SKIP;
     }
 

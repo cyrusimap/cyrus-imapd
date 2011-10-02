@@ -79,6 +79,7 @@ struct body {
     struct param *disposition_params;
     struct param *language;
     char *location;
+    int charset_cte;		/* charset/encoding in binary bodystructure */
 
     /* Location/size information */
     long header_offset;
