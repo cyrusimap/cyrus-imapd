@@ -967,7 +967,12 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
     r = mboxlist_renamemailbox((char *)name, newname, mbentry->partition,
                                1 /* isadmin */, userid,
                                auth_state, force, 1);
+    if (r) goto out;
 
+    /* Rename mailbox annotations */
+    r = annotatemore_rename(name, newname, NULL, NULL);
+
+out:
     mboxlist_entry_free(&mbentry);
 
     return r;
