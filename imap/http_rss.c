@@ -68,30 +68,26 @@
 #include "util.h"
 #include "version.h"
 #include "xstrlcat.h"
+#include "xstrlcpy.h"
+
+#define MAX_SECTION_LEN 128
 
 /* Create a mailbox name from the request URL */ 
 static int rss_to_mboxname(struct request_target_t *req_tgt,
-			   char *mboxname, uint32_t *uid)
+			   char *mboxname, uint32_t *uid,
+			   char *section)
 {
-    char *start, *p, *end;
+    char *start, *end;
     size_t len;
 
     *uid = 0;
+    *section = 0;
 
     /* Clip off RSS prefix */
     start = req_tgt->path + strlen("/rss");
     if (*start == '/') start++;
     end = start + strlen(start);
 
-    if ((end > start) && (end[-1] == '.')) {
-	/* Possible UID */
-	for (p = end-1; (p > start) && isdigit(*--p););
-	if ((*p == '/') && (p > start)) {
-	    end = p;
-	    *uid = strtoul(p+1, NULL, 0);
-	    if (!*uid) *uid = -1;
-	}
-    }
     if ((end > start) && (end[-1] == '/')) end--;
 
     len = end - start;
@@ -101,6 +97,17 @@ static int rss_to_mboxname(struct request_target_t *req_tgt,
     mboxname[len] = '\0';
 
     mboxname_hiersep_tointernal(&httpd_namespace, mboxname, len);
+
+    if (!strncasecmp(req_tgt->query, "uid=", 4)) {
+	/* UID */
+	*uid = strtoul(req_tgt->query+4, &end, 10);
+	if (!*uid) *uid = -1;
+
+	if (!strncasecmp(end, ";section=", 9)) {
+	    /* SECTION */
+	    strlcpy(section, end+9, MAX_SECTION_LEN);
+	}
+    }
 
     return 0;
 }
@@ -143,7 +150,7 @@ int list_cb(char *name, int matchlen, int maycreate __attribute__((unused)),
 	return 0;
 
     /* Add mailbox to our HTML list */
-    snprintf(href, sizeof(href), ".rss.%s.", name);
+    snprintf(href, sizeof(href), ".rss.%s", name);
     mboxname_hiersep_toexternal(&httpd_namespace, href, 0);
 
     buf_reset(lrock->buf);
@@ -200,8 +207,11 @@ static void display_address(struct buf *buf, struct address *addr,
 }
 
 static void display_part(struct transaction_t *txn, struct buf *buf,
-			 struct body *body, const char *msg_base)
+			 struct body *body, uint32_t uid,
+			 const char *mysection, const char *msg_base)
 {
+    char nextsection[MAX_SECTION_LEN+1];
+
     if (!strcmp(body->type, "MULTIPART")) {
 	int i;
 
@@ -211,12 +221,18 @@ static void display_part(struct transaction_t *txn, struct buf *buf,
 	    for (i = 0; (i < body->numparts) &&
 		     strcmp(body->subpart[i].subtype, "HTML"); i++);
 	    if (i == body->numparts) i = 0;
-	    display_part(txn, buf, &body->subpart[i], msg_base);
+	    snprintf(nextsection, sizeof(nextsection), "%s%s%d",
+		     mysection, *mysection ? "." : "", i+1);
+	    display_part(txn, buf, &body->subpart[i],
+			 uid, nextsection, msg_base);
 	}
 	else {
 	    /* Display all subparts */
 	    for (i = 0; i < body->numparts; i++) {
-		display_part(txn, buf, &body->subpart[i], msg_base);
+		snprintf(nextsection, sizeof(nextsection), "%s%s%d",
+			 mysection, *mysection ? "." : "", i+1);
+		display_part(txn, buf, &body->subpart[i],
+			     uid, nextsection, msg_base);
 	    }
 	}
     }
@@ -281,7 +297,9 @@ static void display_part(struct transaction_t *txn, struct buf *buf,
 	body_chunk(txn, buf->s, buf->len);
 
 	/* Display supbart */
-	display_part(txn, buf, body->subpart, msg_base);
+	snprintf(nextsection, sizeof(nextsection), "%s%s%d",
+		 mysection, *mysection ? "." : "", 1);
+	display_part(txn, buf, body->subpart, uid, nextsection, msg_base);
     }
     else {
 	int charset = body->charset_cte >> 16;
@@ -299,11 +317,39 @@ static void display_part(struct transaction_t *txn, struct buf *buf,
 	    body_chunk(txn, body->decoded_body, strlen(body->decoded_body));
 	    if (!ishtml) body_chunk(txn, "</pre>", strlen("</pre>"));
 	}
+#if 0  /* XXX  Always display inline, always display as attachment,
+	  or check Content-Disposition? */
+	else if (!strcmp(body->type, "IMAGE") &&
+		 (!strcmp(body->subtype, "GIF") ||
+		  !strcmp(body->subtype, "JPEG"))) {
+	    buf_reset(buf);
+	    buf_printf(buf, "<img src=\"%s?uid=%u;section=%s\"",
+		       txn->req_tgt.path, uid, mysection);
+	    buf_printf(buf, " alt=\"%s/%s %lu bytes\">",
+		       body->type, body->subtype, body->content_size);
+	    body_chunk(txn, buf->s, buf->len);
+	}
+#endif
 	else {
+	    struct param *param = NULL;
+
 	    /* Anything else is shown as an attachment */
 	    buf_reset(buf);
-	    buf_printf(buf, "<b>[attachment: %s/%s %lu bytes]</b>",
-		       body->type, body->subtype, body->content_size);
+	    buf_printf(buf, "<a href=\"%s?uid=%u;section=%s\" type=\"%s/%s\">",
+		       txn->req_tgt.path, uid, mysection,
+		       body->type, body->subtype);
+	    if (body->params) {
+		for (param = body->params;
+		     param && strcmp(param->attribute, "NAME");
+		     param = param->next);
+	    }
+	    if (param) {
+		buf_printf(buf, "<b>%s</b></a>", param->value);
+	    }
+	    else {
+		buf_printf(buf, "<b>[%s/%s %lu bytes]</b></a>",
+			   body->type, body->subtype, body->content_size);
+	    }
 	    body_chunk(txn, buf->s, buf->len);
 	}
 
@@ -311,15 +357,72 @@ static void display_part(struct transaction_t *txn, struct buf *buf,
     }
 }
 
+/* Traverse message body until we find the requested section */
+static void fetch_part(struct transaction_t *txn, struct body *body,
+		       const char *findsection, const char *mysection,
+		       const char *msg_base)
+{
+    char nextsection[MAX_SECTION_LEN+1];
+
+    if (!strcmp(body->type, "MULTIPART")) {
+	int i;
+
+	/* Recurse through all subparts */
+	for (i = 0; i < body->numparts; i++) {
+	    snprintf(nextsection, sizeof(nextsection), "%s%s%d",
+		     mysection, *mysection ? "." : "", i+1);
+	    fetch_part(txn, &body->subpart[i],
+		       findsection, nextsection, msg_base);
+	}
+    }
+    else if (!strcmp(body->type, "MESSAGE") &&
+	     !strcmp(body->subtype, "RFC822")) {
+	/* Recurse into supbart */
+	snprintf(nextsection, sizeof(nextsection), "%s%s%d",
+		 mysection, *mysection ? "." : "", 1);
+	fetch_part(txn, body->subpart, findsection, nextsection, msg_base);
+    }
+    else if (!strcmp(findsection, mysection)) {
+	int encoding = body->charset_cte & 0xff;
+	const char *outbuf;
+	size_t outsize;
+	struct buf buf = BUF_INITIALIZER;
+
+	syslog(LOG_INFO, "enc: %d", encoding);
+	outbuf = charset_decode_mimebody(msg_base + body->content_offset,
+					 body->content_size, encoding,
+					 &body->decoded_body, 0, &outsize);
+
+	if (!outbuf) {
+	    txn->errstr = "Unknown MIME encoding";
+	    response_header(HTTP_SERVER_ERROR, txn);
+	    return;
+
+	}
+	txn->resp_body.len = outsize;
+
+	buf_printf(&buf, "%s/%s", body->type, body->subtype);
+	txn->resp_body.type = buf.s;
+
+	response_header(HTTP_OK, txn);
+
+	if (txn->meth[0] != 'H')
+	    prot_write(httpd_out, outbuf, outsize);
+
+	buf_free(&buf);
+    }
+}
+
+/* Display the requested message or message part (attachment) */
 static int display_message(struct transaction_t *txn,
-			   struct mailbox *mailbox, uint32_t uid)
+			   struct mailbox *mailbox, uint32_t uid,
+			   const char *section)
 {
     int r;
     struct index_record record;
     const char *msg_base;
     unsigned long msg_size;
-    struct body toplevel, *body = NULL;
-    struct buf buf = BUF_INITIALIZER;
+    struct body *body = NULL;
 
     /* Fetch index record for the message */
     if (uid > mailbox->i.last_uid) {
@@ -351,37 +454,47 @@ static int display_message(struct transaction_t *txn,
     /* Map the message into memory */
     mailbox_map_message(mailbox, record.uid, &msg_base, &msg_size);
 
-    /* Setup for chunked response */
-    txn->flags |= HTTP_CHUNKED;
-    txn->resp_body.type = "text/html; charset=utf-8";
+    if (*section) {
+	/* Fetch single message part */
+	fetch_part(txn, body, section, "1", msg_base);
+    }
+    else {
+	/* Display entire message */
+	struct body toplevel;
+	struct buf buf = BUF_INITIALIZER;
 
-    response_header(HTTP_OK, txn);
+	/* Setup for chunked response */
+	txn->flags |= HTTP_CHUNKED;
+	txn->resp_body.type = "text/html; charset=utf-8";
 
-    /* Start HTML */
-    buf_printf(&buf, HTML_DOCTYPE "\n");
-    buf_printf(&buf, "<html><head><title>%s:%u</title></head><body>\n",
-	       mailbox->name, uid);
-    body_chunk(txn, buf.s, buf.len);
+	response_header(HTTP_OK, txn);
 
-    /* Encapsulate our body in a mssage/rfc822 to display toplevel headers */
-    memset(&toplevel, 0, sizeof(struct body));
-    toplevel.type = "MESSAGE";
-    toplevel.subtype = "RFC822";
-    toplevel.subpart = body;
+	/* Start HTML */
+	buf_printf(&buf, HTML_DOCTYPE "\n");
+	buf_printf(&buf, "<html><head><title>%s:%u</title></head><body>\n",
+		   mailbox->name, record.uid);
+	body_chunk(txn, buf.s, buf.len);
 
-    display_part(txn, &buf, &toplevel, msg_base);
+	/* Encapsulate our body in a message/rfc822 to display toplevel hdrs */
+	memset(&toplevel, 0, sizeof(struct body));
+	toplevel.type = "MESSAGE";
+	toplevel.subtype = "RFC822";
+	toplevel.subpart = body;
 
-    /* End of HTML */
-    buf_reset(&buf);
-    buf_printf(&buf, "</body></html>");
-    body_chunk(txn, buf.s, buf.len);
+	display_part(txn, &buf, &toplevel, record.uid, "", msg_base);
 
-    /* End of output */
-    body_chunk(txn, NULL, 0);
+	/* End of HTML */
+	buf_reset(&buf);
+	buf_printf(&buf, "</body></html>");
+	body_chunk(txn, buf.s, buf.len);
+
+	/* End of output */
+	body_chunk(txn, NULL, 0);
+
+	buf_free(&buf);
+    }
 
     mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
-
-    buf_free(&buf);
 
     if (body) {
 	message_free_body(body);
@@ -397,7 +510,7 @@ static int display_message(struct transaction_t *txn,
 static int meth_get(struct transaction_t *txn)
 {
     int ret = 0, r;
-    char mailboxname[MAX_MAILBOX_BUFFER];
+    char mailboxname[MAX_MAILBOX_BUFFER+1], section[MAX_SECTION_LEN+1];
     uint32_t uid;
     struct mailbox *mailbox = NULL;
     xmlDocPtr outdoc;
@@ -407,7 +520,7 @@ static int meth_get(struct transaction_t *txn)
     struct buf buf = BUF_INITIALIZER;
 
     /* Construct mailbox name corresponding to request target URI */
-    if ((r = rss_to_mboxname(&txn->req_tgt, mailboxname, &uid))) {
+    if ((r = rss_to_mboxname(&txn->req_tgt, mailboxname, &uid, section))) {
 	txn->errstr = error_message(r);
 	ret = HTTP_NOT_FOUND;
 	goto done;
@@ -439,7 +552,7 @@ static int meth_get(struct transaction_t *txn)
 
     /* If UID specified, display entire message */
     if (uid) {
-	ret = display_message(txn, mailbox, uid);
+	ret = display_message(txn, mailbox, uid, section);
 	goto done;
     }
 #if 0
@@ -483,9 +596,6 @@ static int meth_get(struct transaction_t *txn)
     /* XXX  Add <description> if we have a /comment annotation? */
 
     host = spool_getheader(txn->req_hdrs, "Host");
-    if (txn->req_tgt.path[strlen(txn->req_tgt.path)-1] != '/') {
-	strlcat(txn->req_tgt.path, "/", MAX_MAILBOX_PATH);
-    }
 
     buf_reset(&buf);
     buf_printf(&buf, "%s://%s%s", httpd_tls_done ? "https" : "http",
@@ -546,7 +656,7 @@ static int meth_get(struct transaction_t *txn)
 	xmlNewTextChild(item, NULL, BAD_CAST "title", BAD_CAST body->subject);
 
 	buf_reset(&buf);
-	buf_printf(&buf, "%s://%s%s%u.",
+	buf_printf(&buf, "%s://%s%s?uid=%u",
 		   httpd_tls_done ? "https" : "http",
 		   host[0], txn->req_tgt.path, record.uid);
 	xmlNewChild(item, NULL, BAD_CAST "link", BAD_CAST buf_cstring(&buf));

@@ -1236,7 +1236,8 @@ static int parse_uri(const char *meth, const char *uri,
 	return HTTP_BAD_REQUEST;
     }
 
-    if (strlen(p_uri->path) > MAX_MAILBOX_PATH) {
+    if ((strlen(p_uri->path) > MAX_MAILBOX_PATH) ||
+	(p_uri->query_raw && (strlen(p_uri->query_raw) > MAX_QUERY_LEN))) {
 	xmlFreeURI(p_uri);
 	return HTTP_TOO_LONG;
     }
@@ -1247,8 +1248,9 @@ static int parse_uri(const char *meth, const char *uri,
 	return HTTP_BAD_REQUEST;
     }
 
-    /* Make a working copy of the path and free the parsed struct */
+    /* Make a working copy of the path and query,  and free the parsed struct */
     strcpy(tgt->path, p_uri->path);
+    if (p_uri->query_raw) strcpy(tgt->query, p_uri->query_raw);
     xmlFreeURI(p_uri);
 
     return 0;

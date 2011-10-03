@@ -113,9 +113,12 @@ enum {
     ALLOW_ALL =		0xff
 };
 
+#define MAX_QUERY_LEN	100
+
 /* Request target context */
 struct request_target_t {
     char path[MAX_MAILBOX_PATH+1]; /* working copy of URL path */
+    char query[MAX_QUERY_LEN+1]; /* working copy of URL query */
     unsigned namespace;		/* namespace of path */
     char *user;			/* ptr to owner of collection (NULL = shared) */
     size_t userlen;
@@ -186,6 +189,7 @@ extern const struct namespace_t namespace_default;
 
 
 /* XXX  These should be included in struct transaction_t */
+extern struct protstream *httpd_out;
 extern int httpd_tls_done;
 extern char *httpd_userid;
 extern int httpd_userisadmin;
