@@ -199,11 +199,9 @@ static void display_address(struct buf *buf, struct address *addr,
 	       addr->mailbox, addr->domain, addr->mailbox, addr->domain);
 }
 
-static void display_part(struct transaction_t *txn,
+static void display_part(struct transaction_t *txn, struct buf *buf,
 			 struct body *body, const char *msg_base)
 {
-    static struct buf buf = BUF_INITIALIZER;
-
     if (!strcmp(body->type, "MULTIPART")) {
 	int i;
 
@@ -213,12 +211,12 @@ static void display_part(struct transaction_t *txn,
 	    for (i = 0; (i < body->numparts) &&
 		     strcmp(body->subpart[i].subtype, "HTML"); i++);
 	    if (i == body->numparts) i = 0;
-	    display_part(txn, &body->subpart[i], msg_base);
+	    display_part(txn, buf, &body->subpart[i], msg_base);
 	}
 	else {
 	    /* Display all subparts */
 	    for (i = 0; i < body->numparts; i++) {
-		display_part(txn, &body->subpart[i], msg_base);
+		display_part(txn, buf, &body->subpart[i], msg_base);
 	    }
 	}
     }
@@ -228,17 +226,17 @@ static void display_part(struct transaction_t *txn,
 	char *sep;
 
 	/* Display message header as a shaded table */
-	buf_reset(&buf);
-	buf_printf(&buf, "<table width=\"100%%\" bgcolor=\"#CCCCCC\">\n");
+	buf_reset(buf);
+	buf_printf(buf, "<table width=\"100%%\" bgcolor=\"#CCCCCC\">\n");
 	/* Subject header field */
 	if (body->subpart->subject) {
-	    buf_printf(&buf, "<tr><td align=right><b>Subject: </b>");
-	    buf_printf(&buf, "<td>%s\n", body->subpart->subject);
+	    buf_printf(buf, "<tr><td align=right><b>Subject: </b>");
+	    buf_printf(buf, "<td>%s\n", body->subpart->subject);
 	}
 	/* From header field */
 	if (body->subpart->from) {
-	    buf_printf(&buf, "<tr><td align=right><b>From: </b><td>");
-	    display_address(&buf, body->subpart->from, "");
+	    buf_printf(buf, "<tr><td align=right><b>From: </b><td>");
+	    display_address(buf, body->subpart->from, "");
 	}
 	/* Sender header field (if different than From */
 	if (body->subpart->sender &&
@@ -247,8 +245,8 @@ static void display_part(struct transaction_t *txn,
 		    body->subpart->from->mailbox) ||
 	     strcmp(body->subpart->sender->domain,
 		    body->subpart->from->domain))) {
-	    buf_printf(&buf, "<tr><td align=right><b>Sender: </b><td>");
-	    display_address(&buf, body->subpart->sender, "");
+	    buf_printf(buf, "<tr><td align=right><b>Sender: </b><td>");
+	    display_address(buf, body->subpart->sender, "");
 	}
 	/* Reply-To header field (if different than From */
 	if (body->subpart->reply_to &&
@@ -257,33 +255,33 @@ static void display_part(struct transaction_t *txn,
 		    body->subpart->from->mailbox) ||
 	     strcmp(body->subpart->reply_to->domain,
 		    body->subpart->from->domain))) {
-	    buf_printf(&buf, "<tr><td align=right><b>Reply-To: </b><td>");
-	    display_address(&buf, body->subpart->reply_to, "");
+	    buf_printf(buf, "<tr><td align=right><b>Reply-To: </b><td>");
+	    display_address(buf, body->subpart->reply_to, "");
 	}
 	/* Date header field */
-	buf_printf(&buf, "<tr><td align=right><b>Date: </b>");
-	buf_printf(&buf, "<td width=\"100%%\">%s\n", body->subpart->date);
+	buf_printf(buf, "<tr><td align=right><b>Date: </b>");
+	buf_printf(buf, "<td width=\"100%%\">%s\n", body->subpart->date);
 	/* To header field (possibly multiple addresses) */
 	if (body->subpart->to) {
-	    buf_printf(&buf, "<tr><td align=right valign=top><b>To: </b><td>");
+	    buf_printf(buf, "<tr><td align=right valign=top><b>To: </b><td>");
 	    for (sep = "", addr = body->subpart->to; addr; addr = addr->next) {
-		display_address(&buf, addr, sep);
+		display_address(buf, addr, sep);
 		sep = ", ";
 	    }
 	}
 	/* Cc header field (possibly multiple addresses) */
 	if (body->subpart->cc) {
-	    buf_printf(&buf, "<tr><td align=right valign=top><b>Cc: </b><td>");
+	    buf_printf(buf, "<tr><td align=right valign=top><b>Cc: </b><td>");
 	    for (sep = "", addr = body->subpart->cc; addr; addr = addr->next) {
-		display_address(&buf, addr, sep);
+		display_address(buf, addr, sep);
 		sep = ", ";
 	    }
 	}
-	buf_printf(&buf, "</table><br>\n");
-	body_chunk(txn, buf.s, buf.len);
+	buf_printf(buf, "</table><br>\n");
+	body_chunk(txn, buf->s, buf->len);
 
 	/* Display supbart */
-	display_part(txn, body->subpart, msg_base);
+	display_part(txn, buf, body->subpart, msg_base);
     }
     else {
 	int charset = body->charset_cte >> 16;
@@ -303,10 +301,10 @@ static void display_part(struct transaction_t *txn,
 	}
 	else {
 	    /* Anything else is shown as an attachment */
-	    buf_reset(&buf);
-	    buf_printf(&buf, "<b>[attachment: %s/%s %lu bytes]</b>",
+	    buf_reset(buf);
+	    buf_printf(buf, "<b>[attachment: %s/%s %lu bytes]</b>",
 		       body->type, body->subtype, body->content_size);
-	    body_chunk(txn, buf.s, buf.len);
+	    body_chunk(txn, buf->s, buf->len);
 	}
 
 	body_chunk(txn, "\n<hr>\n", strlen("\n<hr>\n"));
@@ -371,7 +369,7 @@ static int display_message(struct transaction_t *txn,
     toplevel.subtype = "RFC822";
     toplevel.subpart = body;
 
-    display_part(txn, &toplevel, msg_base);
+    display_part(txn, &buf, &toplevel, msg_base);
 
     /* End of HTML */
     buf_reset(&buf);
