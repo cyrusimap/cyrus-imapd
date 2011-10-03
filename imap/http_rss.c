@@ -696,9 +696,7 @@ static int meth_get(struct transaction_t *txn)
 	    else addr = body->sender;
 
 	    buf_reset(&buf);
-	    buf_printf(&buf, "%s@%s",
-		       addr->mailbox ? addr->mailbox : "unknown-user",
-		       addr->domain ? addr->domain : "unspecified-domain");
+	    buf_printf(&buf, "%s@%s", addr->mailbox, addr->domain);
 	    if (addr->name) buf_printf(&buf, " (%s)", addr->name);
 	    xmlNewChild(item, NULL, BAD_CAST "author",
 			BAD_CAST buf_cstring(&buf));
