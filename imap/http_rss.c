@@ -108,13 +108,18 @@ static int rss_to_mboxname(struct request_target_t *req_tgt,
 /*
  * mboxlist_findall() callback function to list RSS feeds
  */
+struct list_rock {
+    struct transaction_t *txn;
+    struct buf *buf;
+};
+
 int list_cb(char *name, int matchlen, int maycreate __attribute__((unused)),
 	    void *rock)
 {
     static char lastname[MAX_MAILBOX_BUFFER];
     char href[MAX_MAILBOX_PATH+1];
     struct mboxlist_entry entry;
-    xmlNodePtr list = (xmlNodePtr) rock, item, link;
+    struct list_rock *lrock = (struct list_rock *) rock;
 
     /* We have to reset the initial state.
      * Handle it as a dirty hack.
@@ -138,39 +143,51 @@ int list_cb(char *name, int matchlen, int maycreate __attribute__((unused)),
 	return 0;
 
     /* Add mailbox to our HTML list */
-    item = xmlNewChild(list, NULL, BAD_CAST "li", NULL);
-    link = xmlNewChild(item, NULL, BAD_CAST "a", BAD_CAST name);
-
     snprintf(href, sizeof(href), ".rss.%s.", name);
     mboxname_hiersep_toexternal(&httpd_namespace, href, 0);
-    xmlNewProp(link, BAD_CAST "href", BAD_CAST href);
+
+    buf_reset(lrock->buf);
+    buf_printf(lrock->buf, "<li><a href=\"%s\">%s</a></li>\n", href, name);
+    body_chunk(lrock->txn, lrock->buf->s, lrock->buf->len);
 
     return 0;
 }
 
 /* Create a HTML document listing all RSS feeds available to the user */
-static void list_rss_feeds(struct transaction_t *txn)
+static void list_feeds(struct transaction_t *txn)
 {
     int r;
-    htmlDocPtr doc;
-    xmlNodePtr root, head, body, list;
+    struct buf buf = BUF_INITIALIZER;
+    struct list_rock lrock;
 
-    /* XXX  Need to check for errors */
-    doc = htmlNewDoc(NULL, NULL);
-    root = xmlNewNode(NULL, BAD_CAST "html");
-    xmlDocSetRootElement(doc, root);
-    head = xmlNewChild(root, NULL, BAD_CAST "head", NULL);
-    xmlNewChild(head, NULL, BAD_CAST "title", BAD_CAST "Cyrus RSS Feeds");
+    /* Setup for chunked response */
+    txn->flags |= HTTP_CHUNKED;
+    txn->resp_body.type = "text/html; charset=utf-8";
 
-    body = xmlNewChild(root, NULL, BAD_CAST "body", NULL);
-    xmlNewChild(body, NULL, BAD_CAST "h2", BAD_CAST "Cyrus RSS Feeds");
-    list = xmlNewChild(body, NULL, BAD_CAST "ul", NULL);
+    response_header(HTTP_OK, txn);
 
+    /* Start HTML */
+    buf_printf(&buf, HTML_DOCTYPE "\n");
+    buf_printf(&buf, "<html><head><title>Cyrus RSS Feeds</title></head>\n");
+    buf_printf(&buf, "<body><h2>Cyrus RSS Feeds</h2><ul>\n");
+
+    body_chunk(txn, buf.s, buf.len);
+
+    lrock.txn = txn;
+    lrock.buf = &buf;
     list_cb(NULL, 0, 0, NULL);
     r = mboxlist_findall(NULL, "*", httpd_userisadmin, NULL, httpd_authstate,
-			 list_cb, list);
+			 list_cb, &lrock);
 
-    html_response(HTTP_OK, txn, doc);
+    /* End of HTML */
+    buf_reset(&buf);
+    buf_printf(&buf, "</ul></body></html>");
+    body_chunk(txn, buf.s, buf.len);
+
+    /* End of output */
+    body_chunk(txn, NULL, 0);
+
+    buf_free(&buf);
 }
 
 static void display_address(struct buf *buf, struct address *addr,
@@ -400,7 +417,7 @@ static int meth_get(struct transaction_t *txn)
 
     /* If no mailboxname, list all available feeds */
     if (!*mailboxname) {
-	list_rss_feeds(txn);
+	list_feeds(txn);
 	return 0;
     }
 
