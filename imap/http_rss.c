@@ -369,7 +369,16 @@ static void fetch_part(struct transaction_t *txn, struct body *body,
 {
     char nextsection[MAX_SECTION_LEN+1];
 
-    if (!strcmp(body->type, "MULTIPART")) {
+    if (!strcmp(findsection, "0")) {
+	txn->resp_body.type = "text/plain";
+	txn->resp_body.len = body->header_size + body->content_size;
+
+	response_header(HTTP_OK, txn);
+
+	if (txn->meth[0] != 'H')
+	    prot_write(httpd_out, msg_base, txn->resp_body.len);
+    }
+    else if (!strcmp(body->type, "MULTIPART")) {
 	int i;
 
 	/* Recurse through all subparts */
@@ -477,6 +486,14 @@ static int display_message(struct transaction_t *txn,
 	buf_printf(&buf, HTML_DOCTYPE "\n");
 	buf_printf(&buf, "<html><head><title>%s:%u</title></head><body>\n",
 		   mailbox->name, record.uid);
+
+	/* Create link to message source */
+	buf_printf(&buf, "<div align=center>");
+
+	buf_printf(&buf, "<a href=\"%s?uid=%u;section=0\" type=\"plain/text\">",
+		   txn->req_tgt.path, record.uid);
+	buf_printf(&buf, "[View message source]</a></div><hr>\n");
+
 	body_chunk(txn, buf.s, buf.len);
 
 	/* Encapsulate our body in a message/rfc822 to display toplevel hdrs */
