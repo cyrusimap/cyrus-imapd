@@ -1952,4 +1952,119 @@ sub test_copy_messages
 
 }
 
+sub test_cvt_cyrusdb
+{
+    my ($self) = @_;
+
+    xlog "test cvt_cyrusdb between annotation db and flat files (BZ2686)";
+
+    my $folder = 'INBOX';
+    my $fentry = '/private/comment';
+    my $mentry = '/comment';
+    my $mattrib = 'value.priv';
+    my $evilchars = " \t\r\n\0\001";
+
+    my $store = $self->{store};
+    $store->set_fetch_attributes('uid', "annotation ($mentry $mattrib)");
+    my $talk = $store->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+
+    xlog "store annotations";
+    my $data = $self->make_random_data(2, maxreps => 20, separators => $evilchars);
+    $talk->setmetadata($folder, $fentry, $data);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog "add some messages";
+    my $uid = 1;
+    my %exp;
+    for (1..10)
+    {
+	my $msg = $self->make_message("Message $_");
+	$exp{$uid} = $msg;
+	$msg->set_attribute('uid', $uid);
+	my $data = $self->make_random_data(7, maxreps => 20, separators => $evilchars);
+	$msg->set_annotation($mentry, $mattrib, $data);
+	$talk->store('' . $uid, 'annotation',
+		    [$mentry, [$mattrib, $data]]);
+	$self->assert_str_equals('ok', $talk->get_last_completion_response());
+	$uid++;
+    }
+
+    xlog "Check the messages are all there";
+    $self->check_messages(\%exp);
+
+    xlog "Check the mailbox annotation is still there";
+    my $res = $talk->getmetadata($folder, $fentry);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_deep_equals({
+	$folder => { $fentry => $data }
+    }, $res);
+
+    xlog "Shut down the instance";
+    $self->{store}->disconnect();
+    $self->{adminstore}->disconnect();
+    $talk = undef;
+    $admintalk = undef;
+    $self->{instance}->stop();
+    $self->{instance}->{re_use_dir} = 1;
+
+    xlog "Convert the global annotation db to flat";
+    my $basedir = $self->{instance}->{basedir};
+    my $global_db = "$basedir/conf/annotations.db";
+    my $global_flat = "$basedir/xann.txt";
+
+    $self->assert(( ! -f $global_flat ));
+    $self->{instance}->run_command({ cyrus => 1 },
+				   'cvt_cyrusdb',
+				   $global_db, 'skiplist',
+				   $global_flat, 'flat');
+    $self->assert(( -f $global_flat ));
+
+    xlog "Convert the mailbox annotation db to flat";
+    my $mailbox_db = "$basedir/data/user/cassandane/cyrus.annotations";
+    my $mailbox_flat = "$basedir/xcassann.txt";
+    $self->assert(( ! -f $mailbox_flat ));
+    $self->{instance}->run_command({ cyrus => 1 },
+				   'cvt_cyrusdb',
+				   $mailbox_db, 'skiplist',
+				   $mailbox_flat, 'flat');
+    $self->assert(( -f $mailbox_flat ));
+
+    xlog "Move aside the original annotation dbs";
+    rename($global_db, "$global_db.NOT")
+	or die "Cannot rename $global_db to $global_db.NOT: $!";
+    rename($mailbox_db, "$mailbox_db.NOT")
+	or die "Cannot rename $mailbox_db to $mailbox_db.NOT: $!";
+    $self->assert(( ! -f $global_db ));
+    $self->assert(( ! -f $mailbox_db ));
+
+    xlog "restore the global annotation db from flat";
+    $self->{instance}->run_command({ cyrus => 1 },
+				   'cvt_cyrusdb',
+				   $global_flat, 'flat',
+				   $global_db, 'skiplist');
+    $self->assert(( -f $global_db ));
+
+    xlog "restore the mailbox annotation db from flat";
+    $self->{instance}->run_command({ cyrus => 1 },
+				   'cvt_cyrusdb',
+				   $mailbox_flat, 'flat',
+				   $mailbox_db, 'skiplist');
+    $self->assert(( -f $mailbox_db ));
+
+    xlog "Start the instance up again and reconnect";
+    $self->{instance}->start();
+    $talk = $store->get_client();
+
+    xlog "Check the messages are still all there";
+    $self->check_messages(\%exp);
+
+    xlog "Check the mailbox annotation is still there";
+    $res = $talk->getmetadata($folder, $fentry);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+    $self->assert_deep_equals({
+	$folder => { $fentry => $data }
+    }, $res);
+}
+
 1;
