@@ -302,12 +302,11 @@ static void display_part(struct transaction_t *txn, struct buf *buf,
 	display_part(txn, buf, body->subpart, uid, nextsection, msg_base);
     }
     else {
-	int charset = body->charset_cte >> 16;
-	int encoding = body->charset_cte & 0xff;
-
 	if (!strcmp(body->type, "TEXT")) {
 	    /* Display text part */
 	    int ishtml = !strcmp(body->subtype, "HTML");
+	    int charset = body->charset_cte >> 16;
+	    int encoding = body->charset_cte & 0xff;
 
 	    if (charset < 0) charset = 0; /* unknown, try ASCII */
 	    body->decoded_body =
@@ -318,34 +317,42 @@ static void display_part(struct transaction_t *txn, struct buf *buf,
 	    if (!ishtml) body_chunk(txn, "</pre>", strlen("</pre>"));
 	}
 	else {
-	    struct param *param = NULL;
 	    int is_image = !strcmp(body->type, "IMAGE");
+	    struct param *param = body->params;
+	    const char *file_attr = "NAME";
 
 	    /* Anything else is shown as an attachment.
 	     * Show images inline, using name/description as alternative text.
 	     */
 	    buf_reset(buf);
 	    buf_printf(buf, "<div align=center>");
+
+	    /* Create link */
 	    buf_printf(buf, "<a href=\"%s?uid=%u;section=%s\" type=\"%s/%s\">",
 		       txn->req_tgt.path, uid, mysection,
 		       body->type, body->subtype);
 
+	    /* Add image */
 	    if (is_image) {
 		buf_printf(buf, "<img src=\"%s?uid=%u;section=%s\" alt=\"",
 			   txn->req_tgt.path, uid, mysection);
 	    }
-	    if (body->params) {
-		for (param = body->params;
-		     param && strcmp(param->attribute, "NAME");
-		     param = param->next);
+
+	    /* Look for a filename in parameters */
+	    if (body->disposition) {
+		param = body->disposition_params;
+		file_attr = "FILENAME";
 	    }
-	    if (param) {
-		buf_printf(buf, "%s", param->value);
-	    }
+	    for (; param && strcmp(param->attribute, file_attr);
+		 param = param->next);
+
+	    /* Create text for link or alternative text for image */
+	    if (param) buf_printf(buf, "%s", param->value);
 	    else {
 		buf_printf(buf, "[%s/%s %lu bytes]",
 			   body->type, body->subtype, body->content_size);
 	    }
+
 	    if (is_image) buf_printf(buf, "\">");
 	    buf_printf(buf, "</a></div>");
 	    body_chunk(txn, buf->s, buf->len);
