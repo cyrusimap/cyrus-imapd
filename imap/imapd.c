@@ -5535,7 +5535,7 @@ static int renmbox(char *name,
 	/* Rename mailbox annotations */
 	annotatemore_rename(name, text->newmailboxname,
 			    text->rename_user ? text->olduser : NULL,
-			    text->newuser);
+			    text->rename_user ? text->newuser : NULL);
 	
 	prot_printf(imapd_out, "* OK rename %s %s\r\n",
 		    oldextname, newextname);
@@ -5837,7 +5837,7 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	/* Rename mailbox annotations */
 	annotatemore_rename(oldmailboxname, newmailboxname,
 			    rename_user ? olduser : NULL,
-			    newuser);
+			    rename_user ? newuser : NULL);
     }
 
     /* rename all mailboxes matching this */
