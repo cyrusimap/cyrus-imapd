@@ -3083,6 +3083,7 @@ static struct meta_file meta_files[] = {
     { META_INDEX,  0, 1 },
     { META_CACHE,  0, 1 },
     { META_SQUAT,  1, 0 },
+    { META_ANNOTATIONS,  1, 0 },
     { 0, 0, 0 }
 };
 

@@ -2834,42 +2834,25 @@ int annotatemore_rename(const char *oldmboxname, const char *newmboxname,
 			const char *olduserid, const char *newuserid)
 {
     int r;
-    char *oldfname = NULL, *newfname = NULL;
 
     /* rewrite any per-folder annotations from the global db */
     r = annotatemore_begin();
     if (r)
-	goto out;
+	return r;
 
     r = _annotate_rewrite(oldmboxname, 0, olduserid,
 			  newmboxname, 0, newuserid,
 			  /*copy*/0);
-    if (r)
-	goto out;
 
-    /* rename the per-folder database */
-    r = annotate_dbname(oldmboxname, &oldfname);
-    if (r)
-	goto out;
-    r = annotate_dbname(newmboxname, &newfname);
-    if (r)
-	goto out;
+    /*
+     * The per-folder database got moved or linked by mailbox_copy_files().
+     */
 
-    r = rename(oldfname, newfname);
-    if (r < 0) {
-	syslog(LOG_ERR, "DBERROR: error renaming %s to %s: %m",
-	       oldfname, newfname);
-	r = IMAP_IOERROR;
-	goto out;
-    }
-
-    r = annotatemore_commit();
-
-out:
-    free(oldfname);
-    free(newfname);
     if (r)
 	annotatemore_abort();
+    else
+	r = annotatemore_commit();
+
     return r;
 }
 
