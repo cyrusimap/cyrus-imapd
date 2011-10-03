@@ -386,7 +386,6 @@ static void fetch_part(struct transaction_t *txn, struct body *body,
 	size_t outsize;
 	struct buf buf = BUF_INITIALIZER;
 
-	syslog(LOG_INFO, "enc: %d", encoding);
 	outbuf = charset_decode_mimebody(msg_base + body->content_offset,
 					 body->content_size, encoding,
 					 &body->decoded_body, 0, &outsize);
