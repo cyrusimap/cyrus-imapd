@@ -246,8 +246,12 @@ static void display_part(struct transaction_t *txn, struct buf *buf,
 	buf_printf(buf, "<table width=\"100%%\" bgcolor=\"#CCCCCC\">\n");
 	/* Subject header field */
 	if (body->subpart->subject) {
-	    buf_printf(buf, "<tr><td align=right><b>Subject: </b>");
-	    buf_printf(buf, "<td>%s\n", body->subpart->subject);
+	    char *subj;
+
+	    subj = charset_parse_mimeheader(body->subpart->subject);
+	    buf_printf(buf, "<tr><td align=right valign=top><b>Subject: </b>");
+	    buf_printf(buf, "<td>%s\n", subj);
+	    free(subj);
 	}
 	/* From header field */
 	if (body->subpart->from) {
@@ -636,7 +640,7 @@ static int meth_get(struct transaction_t *txn)
 	const char *msg_base;
 	unsigned long msg_size;
 	struct body *body;
-	char datestr[80];
+	char datestr[80], *subj;
 	const char *content_types[] = { "text", NULL };
 	struct message_content content;
 	struct bodypart **parts;
@@ -674,7 +678,9 @@ static int meth_get(struct transaction_t *txn)
 
 	item = xmlNewChild(chan, NULL, BAD_CAST "item", NULL);
 
-	xmlNewTextChild(item, NULL, BAD_CAST "title", BAD_CAST body->subject);
+	subj = charset_parse_mimeheader(body->subject);
+	xmlNewTextChild(item, NULL, BAD_CAST "title", BAD_CAST subj);
+	free(subj);
 
 	buf_reset(&buf);
 	buf_printf(&buf, "%s://%s%s?uid=%u",
