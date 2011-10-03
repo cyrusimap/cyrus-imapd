@@ -47,7 +47,6 @@ use Cwd qw(abs_path);
 use IO::File;
 use DateTime;
 use Cassandane::Util::Log;
-use Cassandane::Util::Words;
 use Data::Dumper;
 
 sub new
@@ -410,24 +409,6 @@ sub test_exceeding_message
     $self->check_messages(\%msgs);
 }
 
-sub make_random_data
-{
-    my $kb = shift;
-    my $data = '';
-    while (!defined $kb || length($data) < 1028*$kb)
-    {
-	my $word = random_word();
-	my $count = 10 + rand(90);
-	while ($count > 0)
-	{
-	    $data .= " $word";
-	    $count--;
-	}
-	last unless defined $kb;
-    }
-    return $data;
-}
-
 sub test_using_annotstorage_msg
 {
     my ($self) = @_;
@@ -456,7 +437,7 @@ sub test_using_annotstorage_msg
 	{
 	    $self->make_message("Message $uid");
 
-            my $data = make_random_data(10);
+            my $data = $self->make_random_data(10);
 	    $talk->store('' . $uid, 'annotation', ['/comment', ['value.priv', { Quote => $data }]]);
 	    $self->assert_str_equals('ok', $talk->get_last_completion_response());
 	    $uid++;
@@ -517,7 +498,7 @@ sub test_using_annotstorage_msg_late
 	{
 	    $self->make_message("Message $uid");
 
-            my $data = make_random_data(10);
+            my $data = $self->make_random_data(10);
 	    $talk->store('' . $uid, 'annotation', ['/comment', ['value.priv', { Quote => $data }]]);
 	    $self->assert_str_equals('ok', $talk->get_last_completion_response());
 	    $uid++;
@@ -576,7 +557,7 @@ sub test_using_annotstorage_mbox
 	my $data = '';
 	while ($expecteds{$folder} <= 60*1024)
 	{
-	    my $moredata = make_random_data(5);
+	    my $moredata = $self->make_random_data(5);
 	    $data .= $moredata;
 	    $talk->setmetadata($self->{store}->{folder}, '/private/comment', { Quote => $data });
 	    $self->assert_str_equals('ok', $talk->get_last_completion_response());
@@ -624,7 +605,7 @@ sub test_using_annotstorage_mbox_late
 	my $data = '';
 	while ($expecteds{$folder} <= 60*1024)
 	{
-	    my $moredata = make_random_data(5);
+	    my $moredata = $self->make_random_data(5);
 	    $data .= $moredata;
 	    $talk->setmetadata($self->{store}->{folder}, '/private/comment', { Quote => $data });
 	    $self->assert_str_equals('ok', $talk->get_last_completion_response());
@@ -676,7 +657,7 @@ sub test_quotarename
 	$expected_storage += length($msg->as_string());
 	$expected_message++;
 
-	my $annotation = make_random_data(1);
+	my $annotation = $self->make_random_data(1);
 	$expected_annotation_storage += length($annotation);
 	$imaptalk->store('' . $uid, 'annotation', ['/comment', ['value.priv', { Quote => $annotation }]]);
 	$self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
@@ -703,7 +684,7 @@ sub test_quotarename
 	$expected_storage_more += length($msg->as_string());
 	$expected_message_more++;
 
-	my $annotation = make_random_data(1);
+	my $annotation = $self->make_random_data(1);
 	$expected_annotation_storage_more += length($annotation);
 	$imaptalk->store('' . $uid, 'annotation', ['/comment', ['value.priv', { Quote => $annotation }]]);
 	$self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
@@ -766,7 +747,7 @@ sub test_quota_f
 	$self->make_message("Cassandane $_", extra_lines => 5000);
     }
 
-    my $annotation = make_random_data(10);
+    my $annotation = $self->make_random_data(10);
     $admintalk->setmetadata($self->{adminstore}->{folder}, '/private/comment', { Quote => $annotation });
     $quotafuser_expected_annotation_storage = length($annotation);
     $admintalk->setmetadata($self->{store}->{folder}, '/private/comment', { Quote => $annotation });
@@ -938,7 +919,7 @@ sub test_upgrade_v2_4
     $self->_set_limits([['x-annotation-storage', 0, 100000]]);
 
     xlog "store annotations";
-    my $data = make_random_data(10);
+    my $data = $self->make_random_data(10);
     my $expected_annotation_storage = length($data);
     $talk->setmetadata($self->{store}->{folder}, '/private/comment', { Quote => $data });
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
@@ -1005,7 +986,7 @@ sub test_bz3529
 	$uid++;
     }
 
-    my $data = make_random_data(30);
+    my $data = $self->make_random_data(30);
     $talk->store('1:*', 'annotation', ['/comment', ['value.priv', { Quote => $data }]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
@@ -1220,7 +1201,7 @@ sub test_replication_annotstorage
     $self->assert_deep_equals(['X-ANNOTATION-STORAGE', 0, 67890], \@res);
 
     xlog "add an annotation to use some quota";
-    my $data = make_random_data(13);
+    my $data = $self->make_random_data(13);
     my $msg = $self->make_message("Message A", store => $self->{master_store});
     $mastertalk->store('1', 'annotation', ['/comment', ['value.priv', { Quote => $data }]]);
     $self->assert_str_equals('ok', $mastertalk->get_last_completion_response());
@@ -1436,7 +1417,7 @@ sub test_using_annotstorage_msg_copy_exdel
     my $uid = 1;
     for (1..20)
     {
-	my $data = make_random_data(10);
+	my $data = $self->make_random_data(10);
 	my $msg = $self->make_message("Message $uid");
 	$msg->set_attribute('uid', $uid);
 	$msg->set_annotation($entry, $attrib, $data);
@@ -1547,7 +1528,7 @@ sub test_using_annotstorage_msg_copy_eximm
     my $uid = 1;
     for (1..20)
     {
-	my $data = make_random_data(10);
+	my $data = $self->make_random_data(10);
 	my $msg = $self->make_message("Message $uid");
 	$msg->set_attribute('uid', $uid);
 	$msg->set_annotation($entry, $attrib, $data);
@@ -1641,7 +1622,7 @@ sub test_using_annotstorage_msg_copy_dedel
     my $uid = 1;
     for (1..20)
     {
-	my $data = make_random_data(10);
+	my $data = $self->make_random_data(10);
 	my $msg = $self->make_message("Message $uid");
 	$msg->set_attribute('uid', $uid);
 	$msg->set_annotation($entry, $attrib, $data);
@@ -1751,7 +1732,7 @@ sub test_using_annotstorage_msg_copy_deimm
     my $uid = 1;
     for (1..20)
     {
-	my $data = make_random_data(10);
+	my $data = $self->make_random_data(10);
 	my $msg = $self->make_message("Message $uid");
 	$msg->set_attribute('uid', $uid);
 	$msg->set_annotation($entry, $attrib, $data);
@@ -1830,7 +1811,7 @@ sub test_reconstruct
     my $expected_message = 0;
 
     xlog "store annotations";
-    my $data = make_random_data(10);
+    my $data = $self->make_random_data(10);
     $expected_annotation_storage += length($data);
     $talk->setmetadata($folder, $fentry, { Quote => $data });
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
@@ -1843,8 +1824,8 @@ sub test_reconstruct
 	my $msg = $self->make_message("Message $_",
 				      extra_lines => 10 + rand(5000));
 	$exp{$uid} = $msg;
-	my $data1 = make_random_data(7);
-	my $data2 = make_random_data(3);
+	my $data1 = $self->make_random_data(7);
+	my $data2 = $self->make_random_data(3);
 	$msg->set_attribute('uid', $uid);
 	$msg->set_annotation($mentry1, $mattrib, $data1);
 	$msg->set_annotation($mentry2, $mattrib, $data2);
@@ -1946,7 +1927,7 @@ sub test_reconstruct_orphans
     my $expected_message = 0;
 
     xlog "store annotations";
-    my $data = make_random_data(10);
+    my $data = $self->make_random_data(10);
     $expected_annotation_storage += length($data);
     $talk->setmetadata($folder, $fentry, { Quote => $data });
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
@@ -1959,8 +1940,8 @@ sub test_reconstruct_orphans
 	my $msg = $self->make_message("Message $_",
 				      extra_lines => 10 + rand(5000));
 	$exp{$uid} = $msg;
-	my $data1 = make_random_data(7);
-	my $data2 = make_random_data(3);
+	my $data1 = $self->make_random_data(7);
+	my $data2 = $self->make_random_data(3);
 	$msg->set_attribute('uid', $uid);
 	$msg->set_annotation($mentry1, $mattrib, $data1);
 	$msg->set_annotation($mentry2, $mattrib, $data2);

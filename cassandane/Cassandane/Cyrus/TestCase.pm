@@ -44,6 +44,7 @@ use warnings;
 package Cassandane::Cyrus::TestCase;
 use base qw(Cassandane::Unit::TestCase);
 use Cassandane::Util::Log;
+use Cassandane::Util::Words;
 use Cassandane::Generator;
 use Cassandane::MessageStoreFactory;
 use Cassandane::Instance;
@@ -276,6 +277,35 @@ sub make_message
     $self->_save_message($msg, $store);
 
     return $msg;
+}
+
+sub make_random_data
+{
+    my ($self, $kb, %params) = @_;
+    my $data = '';
+    $params{minreps} = 10
+	unless defined $params{minreps};
+    $params{maxreps} = 100
+	unless defined $params{maxreps};
+    $params{separators} = ' '
+	unless defined $params{separators};
+    my $sepidx = 0;
+    while (!defined $kb || length($data) < 1024*$kb)
+    {
+	my $word = random_word();
+	my $count = $params{minreps} +
+		    rand($params{maxreps} - $params{minreps});
+	while ($count > 0)
+	{
+	    my $sep = substr($params{separators},
+			     $sepidx % length($params{separators}), 1);
+	    $sepidx++;
+	    $data .= $sep . $word;
+	    $count--;
+	}
+	last unless defined $kb;
+    }
+    return $data;
 }
 
 sub check_messages
