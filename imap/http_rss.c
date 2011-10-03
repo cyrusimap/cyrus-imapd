@@ -317,39 +317,37 @@ static void display_part(struct transaction_t *txn, struct buf *buf,
 	    body_chunk(txn, body->decoded_body, strlen(body->decoded_body));
 	    if (!ishtml) body_chunk(txn, "</pre>", strlen("</pre>"));
 	}
-#if 0  /* XXX  Always display inline, always display as attachment,
-	  or check Content-Disposition? */
-	else if (!strcmp(body->type, "IMAGE") &&
-		 (!strcmp(body->subtype, "GIF") ||
-		  !strcmp(body->subtype, "JPEG"))) {
-	    buf_reset(buf);
-	    buf_printf(buf, "<img src=\"%s?uid=%u;section=%s\"",
-		       txn->req_tgt.path, uid, mysection);
-	    buf_printf(buf, " alt=\"%s/%s %lu bytes\">",
-		       body->type, body->subtype, body->content_size);
-	    body_chunk(txn, buf->s, buf->len);
-	}
-#endif
 	else {
 	    struct param *param = NULL;
+	    int is_image = !strcmp(body->type, "IMAGE");
 
-	    /* Anything else is shown as an attachment */
+	    /* Anything else is shown as an attachment.
+	     * Show images inline, using name/description as alternative text.
+	     */
 	    buf_reset(buf);
+	    buf_printf(buf, "<div align=center>");
 	    buf_printf(buf, "<a href=\"%s?uid=%u;section=%s\" type=\"%s/%s\">",
 		       txn->req_tgt.path, uid, mysection,
 		       body->type, body->subtype);
+
+	    if (is_image) {
+		buf_printf(buf, "<img src=\"%s?uid=%u;section=%s\" alt=\"",
+			   txn->req_tgt.path, uid, mysection);
+	    }
 	    if (body->params) {
 		for (param = body->params;
 		     param && strcmp(param->attribute, "NAME");
 		     param = param->next);
 	    }
 	    if (param) {
-		buf_printf(buf, "<b>%s</b></a>", param->value);
+		buf_printf(buf, "%s", param->value);
 	    }
 	    else {
-		buf_printf(buf, "<b>[%s/%s %lu bytes]</b></a>",
+		buf_printf(buf, "[%s/%s %lu bytes]",
 			   body->type, body->subtype, body->content_size);
 	    }
+	    if (is_image) buf_printf(buf, "\">");
+	    buf_printf(buf, "</a></div>");
 	    body_chunk(txn, buf->s, buf->len);
 	}
 
