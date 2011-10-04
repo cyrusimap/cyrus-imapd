@@ -43,6 +43,7 @@ use strict;
 use warnings;
 package Cassandane::Cyrus::Sieve;
 use base qw(Cassandane::Cyrus::TestCase);
+use File::Path qw(mkpath);
 use IO::File;
 use Cassandane::Util::Log;
 
@@ -64,31 +65,75 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
+sub install_sieve_script
+{
+    my ($self, $script, %params) = @_;
+
+    my $user = $params{username} || 'cassandane';
+    my $uhash = substr($user, 0, 1);
+    my $name = $params{name} || 'test1';
+    my $basedir = $self->{instance}->{basedir};
+    my $sieved = "$basedir/conf/sieve/$uhash/$user";
+
+    xlog "Installing sieve script $name for user $user";
+
+    mkpath $sieved
+	or die "Cannot make path $sieved: $!";
+    $self->assert(( -d $sieved ));
+
+    open(FH, '>', "$sieved/$name.script")
+	or die "Cannot open $sieved/$name.script for writing: $!";
+    print FH $script;
+    close(FH);
+
+    $self->{instance}->run_command({ cyrus => 1 },
+				   "sievec",
+				   "$sieved/$name.script",
+				   "$sieved/$name.bc");
+    $self->assert(( -f "$sieved/$name.bc" ));
+
+    symlink("$name.bc", "$sieved/defaultbc")
+	or die "Cannot symlink testsieve.bc to $sieved/defaultbc";
+    $self->assert(( -l "$sieved/defaultbc" ));
+
+    xlog "Sieve script installed successfully";
+}
+
 sub test_deliver
 {
     my ($self) = @_;
 
-    my $sieved = "$self->{instance}{basedir}/conf/sieve/c/cassandane";
-    system('mkdir', '-p', $sieved);
+    my $target = "INBOX.target";
 
-    open(FH, ">$sieved/testsieve.script");
-    print FH <<EOF;
+    xlog "Install a sieve script filing all mail into a nonexistant folder";
+    $self->install_sieve_script(<<EOF
 require ["fileinto"];
-fileinto "INBOX.target";
+fileinto "$target";
 EOF
-    close(FH);
-    $self->{instance}->run_command({ cyrus => 1 }, "sievec", "$sieved/testsieve.script" => "$sieved/testsieve.bc");
-    system('ln', '-s', "testsieve.bc" => "$sieved/defaultbc");
+    );
 
+    xlog "Deliver a message";
     my $msg1 = $self->{gen}->generate(subject => "Message 1");
     $self->{instance}->deliver($msg1);
 
+    xlog "Actually create the target folder";
     my $imaptalk = $self->{store}->get_client();
 
-    $imaptalk->create("INBOX.target");
+    $imaptalk->create($target);
+    $self->{store}->set_fetch_attributes('uid');
 
+    xlog "Deliver another message";
     my $msg2 = $self->{gen}->generate(subject => "Message 2");
     $self->{instance}->deliver($msg2);
+    $msg2->set_attribute(uid => 1);
+
+    xlog "Check that only the 1st message made it to INBOX";
+    $self->{store}->set_folder('INBOX');
+    $self->check_messages({ 1 => $msg1 }, check_guid => 0);
+
+    xlog "Check that only the 2nd message made it to the target";
+    $self->{store}->set_folder($target);
+    $self->check_messages({ 1 => $msg2 }, check_guid => 0);
 }
 
 1;
