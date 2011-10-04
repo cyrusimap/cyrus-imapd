@@ -347,12 +347,6 @@ unexpunge: unexpunge.o $(CLIOBJS) libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o $@ unexpunge.o $(CLIOBJS) \
 	libimap.a $(DEPLIBS) $(LIBS)
 
-make_md5: make_md5.o libimap.a mutex_fake.o $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o make_md5 make_md5.o libimap.a mutex_fake.o $(DEPLIBS) $(LIBS)
-
-make_sha1: make_sha1.o libimap.a mutex_fake.o $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o make_sha1 make_sha1.o libimap.a mutex_fake.o $(DEPLIBS) $(LIBS)
-
 sync_client: sync_client.o sync_support.o \
 	backend.o tls.o imapparse.o libimap.a mutex_fake.o $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o \
