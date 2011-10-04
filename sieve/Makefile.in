@@ -116,11 +116,11 @@ addr-lex.c: addr-lex.l addr.h
 
 addr.c: addr.y
 	t=y.$$$$ ;\
-	$(YACC) $(YFLAGS) -p addr -b $$t $(srcdir)/addr.y && mv $$t.tab.c $@ ;\
+	$(YACC) $(YFLAGS) -b $$t $(srcdir)/addr.y && mv $$t.tab.c $@ ;\
 	rm -f $$t.tab.c $$t.tab.h
 addr.h: addr.y
 	t=y.$$$$ ;\
-	$(YACC) $(YFLAGS) -p addr -b $$t $(srcdir)/addr.y && mv $$t.tab.h $@ ;\
+	$(YACC) $(YFLAGS) -b $$t $(srcdir)/addr.y && mv $$t.tab.h $@ ;\
 	rm -f $$t.tab.c $$t.tab.h
 
 addr.o addr-lex.o: addr.h

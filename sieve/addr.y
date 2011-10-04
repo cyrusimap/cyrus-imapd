@@ -70,7 +70,7 @@ extern int yylex(void);
 %}
 
 %token ATOM QTEXT DTEXT
-
+%name-prefix "addr"
 %%
 sieve_address: addrspec			/* simple address */
 	| phrase '<' addrspec '>'	/* name & addr-spec */
