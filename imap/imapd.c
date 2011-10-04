@@ -439,7 +439,7 @@ static int list_cb(char *name, int matchlen, int maycreate,
 static int subscribed_cb(const char *name, int matchlen, int maycreate,
 			 struct list_rock *rock);
 static void list_data(struct listargs *listargs);
-static void list_data_remote(char *tag, struct listargs *listargs);
+static int list_data_remote(char *tag, struct listargs *listargs);
 
 extern int saslserver(sasl_conn_t *conn, const char *mech,
 		      const char *init_resp, const char *resp_prefix,
@@ -5997,7 +5997,8 @@ void cmd_list(char *tag, struct listargs *listargs)
 	   mailboxes locally (frontend) and the subscriptions remotely
 	   (INBOX backend).  We can only pass the buck to the INBOX backend
 	   if its running a unified config */
-	list_data_remote(tag, listargs);
+	if (list_data_remote(tag, listargs))
+	    return;
     } else {
 	list_data(listargs);
     }
@@ -10328,16 +10329,16 @@ static void list_data(struct listargs *listargs)
  * Retrieves the data and prints the untagged responses for a LIST command in
  * the case of a remote inbox.
  */
-static void list_data_remote(char *tag, struct listargs *listargs)
+static int list_data_remote(char *tag, struct listargs *listargs)
 {
     if ((listargs->cmd & LIST_CMD_EXTENDED) &&
 	!CAPA(backend_inbox, CAPA_LISTEXTENDED)) {
 	/* client wants to use extended list command but backend doesn't
 	 * support it */
-	prot_printf(backend_inbox->out,
+	prot_printf(imapd_out,
 		    "%s NO Backend server does not support LIST-EXTENDED\r\n",
 		    tag);
-	return;
+	return IMAP_MAILBOX_NOTSUPPORTED;
     }
 
     /* print tag, command and list selection options */
@@ -10393,6 +10394,8 @@ static void list_data_remote(char *tag, struct listargs *listargs)
     prot_printf(backend_inbox->out, "\r\n");
     pipe_lsub(backend_inbox, imapd_userid, tag, 0,
 	      (listargs->cmd & LIST_CMD_LSUB) ? "LSUB" : "LIST");
+
+    return 0;
 }
 
 /* Reset the given sasl_conn_t to a sane state */
