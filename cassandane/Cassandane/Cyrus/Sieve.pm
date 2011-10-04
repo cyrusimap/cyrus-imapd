@@ -99,6 +99,90 @@ sub install_sieve_script
     xlog "Sieve script installed successfully";
 }
 
+sub compile_sieve_script
+{
+    my ($self, $script, %params) = @_;
+
+    my $name = $params{name} || 'test1';
+    my $expect = $params{expect} || 'success';
+    my $basedir = $self->{instance}->{basedir};
+    my $experr = $params{expect_error};
+
+    xlog "Checking preconditions for compiling sieve script $name";
+
+    $self->assert(( ! -f "$basedir/$name.script" ));
+    $self->assert(( ! -f "$basedir/$name.bc" ));
+    $self->assert(( ! -f "$basedir/$name.errors" ));
+
+    open(FH, '>', "$basedir/$name.script")
+	or die "Cannot open $basedir/$name.script for writing: $!";
+    print FH $script;
+    close(FH);
+
+    xlog "Running sievec on script $name";
+    my $result = 'success';
+    eval
+    {
+	$self->{instance}->run_command(
+	    {
+		cyrus => 1,
+		redirects => { stderr => "$basedir/$name.errors" },
+	    },
+	    "sievec", "$basedir/$name.script", "$basedir/$name.bc");
+    };
+    if ($@)
+    {
+	$result = $@;
+	chomp $result;
+	$result =~ s/.*exited with code.*/failure/;
+    }
+
+    # Read the errors file in @errors
+    my @errors;
+    if ( -f "$basedir/$name.errors" )
+    {
+	open FH, '<', "$basedir/$name.errors"
+	    or die "Cannot open $basedir/$name.errors for reading: $!";
+	@errors = readline(FH);
+	close FH;
+	if (get_verbose)
+	{
+	    xlog "sievec errors: ";
+	    map { xlog $_ } @errors;
+	}
+    }
+
+    xlog "Checking that sievec gave the expected result";
+    $self->assert_str_equals($expect, $result);
+
+    if ($expect eq 'success')
+    {
+	xlog "Checking that sievec wrote the output .bc file";
+	$self->assert(( -f "$basedir/$name.bc" ));
+	xlog "Checking that sievec didn't write anything to stderr";
+	$self->assert_equals(0, scalar(@errors));
+    }
+    elsif ($expect eq 'failure')
+    {
+	xlog "Checking that sievec didn't write the output .bc file";
+	$self->assert(( ! -f "$basedir/$name.bc" ));
+
+	if (defined $experr)
+	{
+	    xlog "Checking that sievec emitted an error matching \"$experr\"";
+	    grep { $_ =~ $experr } @errors
+		or die "Couldn't find expected error \"$experr\" " .
+		       "in $basedir/$name.errors";
+	}
+    }
+    else
+    {
+	die "Bad value for parameter: expect => \"$expect\", " .
+	    "should be one of \"success\", or \"failure\"";
+    }
+}
+
+
 sub test_deliver
 {
     my ($self) = @_;
@@ -134,6 +218,87 @@ EOF
     xlog "Check that only the 2nd message made it to the target";
     $self->{store}->set_folder($target);
     $self->check_messages({ 1 => $msg2 }, check_guid => 0);
+}
+
+sub test_badscript
+{
+    my ($self) = @_;
+
+    xlog "Testing sieve script compile failures";
+
+    $self->compile_sieve_script(
+	"require [\"nonesuch\"];\n",
+	name => 'badrequire',
+	expect => 'failure',
+	expect_error => 'Unsupported feature.*nonesuch');
+
+    $self->compile_sieve_script(
+	"reject \"foo\"\n",
+	name => 'badreject1',
+	expect => 'failure',
+	expect_error => 'line 1: reject MUST be enabled');
+
+    $self->compile_sieve_script(
+	"require [\"reject\"];\nreject\n",
+	name => 'badreject2',
+	expect => 'failure',
+	expect_error => 'line 3: syntax error.*expecting STRING');
+
+    $self->compile_sieve_script(
+	"require [\"reject\"];\nreject 42\n",
+	name => 'badreject3',
+	expect => 'failure',
+	expect_error => 'line 2: syntax error.*expecting STRING');
+
+    # TODO: test UTF-8 verification of the string parameter
+
+    $self->compile_sieve_script(
+	"fileinto \"foo\"\n",
+	name => 'badfileinto1',
+	expect => 'failure',
+	expect_error => 'line 1: fileinto MUST be enabled');
+
+    $self->compile_sieve_script(
+	"require [\"fileinto\"];\nfileinto\n",
+	name => 'badfileinto2',
+	expect => 'failure',
+	expect_error => 'line 3: syntax error.*expecting STRING');
+
+    $self->compile_sieve_script(
+	"require [\"fileinto\"];\nfileinto 42\n",
+	name => 'badfileinto3',
+	expect => 'failure',
+	expect_error => 'line 2: syntax error.*expecting STRING');
+
+    $self->compile_sieve_script(
+	"require [\"fileinto\"];\nfileinto :copy \"foo\"\n",
+	name => 'badfileinto4',
+	expect => 'failure',
+	expect_error => 'line 2: copy MUST be enabled');
+
+    $self->compile_sieve_script(
+	"require [\"fileinto\",\"copy\"];\nfileinto \"foo\"\n",
+	name => 'badfileinto5',
+	expect => 'failure',
+	expect_error => 'line 3: syntax error.*expecting.*;');
+
+    $self->compile_sieve_script(
+	"require [\"fileinto\",\"copy\"];\nfileinto :copy \"foo\"\n",
+	name => 'badfileinto6',
+	expect => 'failure',
+	expect_error => 'line 3: syntax error.*expecting.*;');
+
+    $self->compile_sieve_script(
+	"require [\"fileinto\",\"copy\"];\nfileinto \"foo\";\n",
+	name => 'goodfileinto7',
+	expect => 'success');
+
+    $self->compile_sieve_script(
+	"require [\"fileinto\",\"copy\"];\nfileinto :copy \"foo\";\n",
+	name => 'goodfileinto8',
+	expect => 'success');
+
+    # TODO: test UTF-8 verification of the string parameter
 }
 
 1;
