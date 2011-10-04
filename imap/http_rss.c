@@ -1,4 +1,4 @@
-/* rss.c -- Routines for handling RSS feeds of mailboxes in httpd
+/* http_rss.c -- Routines for handling RSS feeds of mailboxes in httpd
  *
  * Copyright (c) 1994-2011 Carnegie Mellon University.  All rights reserved.
  *
@@ -70,7 +70,132 @@
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
 
-#define MAX_SECTION_LEN 128
+#define MAX_FEED	100
+#define MAX_SECTION_LEN	128
+
+static int meth_get(struct transaction_t *txn);
+static int rss_to_mboxname(struct request_target_t *req_tgt,
+			   char *mboxname, uint32_t *uid,
+			   char *section);
+static void list_feeds(struct transaction_t *txn);
+static int fetch_message(struct transaction_t *txn, struct mailbox *mailbox,
+			 unsigned recno, uint32_t uid,
+			 struct index_record *record, struct body **body,
+			 const char **msg_base, unsigned long *msg_size);
+static void list_messages(struct transaction_t *txn, struct mailbox *mailbox);
+static void display_message(struct transaction_t *txn,
+			    const char *mboxname, uint32_t uid,
+			    struct body *body, const char *msg_base);
+static void fetch_part(struct transaction_t *txn, struct body *body,
+		       const char *findsection, const char *cursection,
+		       const char *msg_base);
+
+
+/* Namespace for RSS feeds of mailboxes */
+const struct namespace_t namespace_rss = {
+    URL_NS_RSS, "/rss", 1 /* auth */, ALLOW_READ,
+    {
+	NULL,			/* ACL		*/
+	NULL,			/* COPY		*/
+	NULL,			/* DELETE	*/
+	&meth_get,		/* GET		*/
+	&meth_get,		/* HEAD		*/
+	NULL,			/* LOCK		*/
+	NULL,			/* MKCALENDAR	*/
+	NULL,			/* MKCOL	*/
+	NULL,			/* MOVE		*/
+	&meth_options,		/* OPTIONS	*/
+	NULL,			/* POST		*/
+	NULL,			/* PROPFIND	*/
+	NULL,			/* PROPPATCH	*/
+	NULL,			/* PUT		*/
+	NULL,			/* REPORT	*/
+	NULL			/* UNLOCK	*/
+    }
+};
+
+/* Perform a GET/HEAD request */
+static int meth_get(struct transaction_t *txn)
+{
+    int ret = 0, r;
+    char mailboxname[MAX_MAILBOX_BUFFER+1], section[MAX_SECTION_LEN+1];
+    uint32_t uid;
+    struct mailbox *mailbox = NULL;
+
+    /* Construct mailbox name corresponding to request target URI */
+    if ((r = rss_to_mboxname(&txn->req_tgt, mailboxname, &uid, section))) {
+	txn->errstr = error_message(r);
+	return HTTP_NOT_FOUND;
+    }
+
+    /* If no mailboxname, list all available feeds */
+    if (!*mailboxname) {
+	list_feeds(txn);
+	return 0;
+    }
+
+    /* Open mailbox for reading */
+    if ((r = mailbox_open_irl(mailboxname, &mailbox))) {
+	syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
+	       mailboxname, error_message(r));
+	txn->errstr = error_message(r);
+
+	switch (r) {
+	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
+	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
+	default: return HTTP_SERVER_ERROR;
+	}
+    }
+
+    /* If no UID specified, list messages as an RSS feed */
+    if (!uid) list_messages(txn, mailbox);
+    else if (uid > mailbox->i.last_uid) {
+	txn->errstr = "Message does not exist";
+	ret = HTTP_NOT_FOUND;
+    }
+    else {
+	struct index_record record;
+	const char *msg_base;
+	unsigned long msg_size;
+	struct body *body;
+
+	/* Fetch the message */
+	if (!(ret = fetch_message(txn, mailbox, 0, uid,
+				  &record, &body, &msg_base, &msg_size))) {
+	    if (!*section) {
+		/* Return entire message formatted as text/html */
+		display_message(txn, mailbox->name, record.uid, body, msg_base);
+	    }
+	    else if (!strcmp(section, "0")) {
+		/* Return entire message as text/plain */
+		txn->resp_body.type = "text/plain";
+		txn->resp_body.len = msg_size;
+
+		response_header(HTTP_OK, txn);
+
+		if (txn->meth[0] != 'H')
+		    prot_write(httpd_out, msg_base, msg_size);
+	    }
+	    else {
+		/* Fetch, decode, and return the specified MIME message part */
+		fetch_part(txn, body, section, "1", msg_base);
+	    }
+
+	    mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
+
+	    if (body) {
+		message_free_body(body);
+		free(body);
+	    }
+	}
+    }
+
+    if (mailbox) mailbox_close(&mailbox);
+
+    return ret;
+
+}
+
 
 /* Create a mailbox name from the request URL */ 
 static int rss_to_mboxname(struct request_target_t *req_tgt,
@@ -111,6 +236,7 @@ static int rss_to_mboxname(struct request_target_t *req_tgt,
 
     return 0;
 }
+
 
 /*
  * mboxlist_findall() callback function to list RSS feeds
@@ -160,6 +286,7 @@ int list_cb(char *name, int matchlen, int maycreate __attribute__((unused)),
     return 0;
 }
 
+
 /* Create a HTML document listing all RSS feeds available to the user */
 static void list_feeds(struct transaction_t *txn)
 {
@@ -197,259 +324,23 @@ static void list_feeds(struct transaction_t *txn)
     buf_free(&buf);
 }
 
-static void display_address(struct buf *buf, struct address *addr,
-			    const char *sep)
-{
-    buf_printf(buf, "%s", sep);
-    if (addr->name) buf_printf(buf, "\"%s\" ", addr->name);
-    buf_printf(buf, "<a href=\"mailto:%s@%s\">&lt;%s@%s&gt;</a>\n",
-	       addr->mailbox, addr->domain, addr->mailbox, addr->domain);
-}
 
-static void display_part(struct transaction_t *txn, struct buf *buf,
-			 struct body *body, uint32_t uid,
-			 const char *mysection, const char *msg_base)
-{
-    char nextsection[MAX_SECTION_LEN+1];
-
-    if (!strcmp(body->type, "MULTIPART")) {
-	int i;
-
-	if (!strcmp(body->subtype, "ALTERNATIVE") &&
-	    !strcmp(body->subpart[0].type, "TEXT")) {
-	    /* Display a text/html subpart, otherwise display first subpart */
-	    for (i = 0; (i < body->numparts) &&
-		     strcmp(body->subpart[i].subtype, "HTML"); i++);
-	    if (i == body->numparts) i = 0;
-	    snprintf(nextsection, sizeof(nextsection), "%s%s%d",
-		     mysection, *mysection ? "." : "", i+1);
-	    display_part(txn, buf, &body->subpart[i],
-			 uid, nextsection, msg_base);
-	}
-	else {
-	    /* Display all subparts */
-	    for (i = 0; i < body->numparts; i++) {
-		snprintf(nextsection, sizeof(nextsection), "%s%s%d",
-			 mysection, *mysection ? "." : "", i+1);
-		display_part(txn, buf, &body->subpart[i],
-			     uid, nextsection, msg_base);
-	    }
-	}
-    }
-    else if (!strcmp(body->type, "MESSAGE") &&
-	     !strcmp(body->subtype, "RFC822")) {
-	struct address *addr;
-	char *sep;
-
-	/* Display message header as a shaded table */
-	buf_reset(buf);
-	buf_printf(buf, "<table width=\"100%%\" bgcolor=\"#CCCCCC\">\n");
-	/* Subject header field */
-	if (body->subpart->subject) {
-	    char *subj;
-
-	    subj = charset_parse_mimeheader(body->subpart->subject);
-	    buf_printf(buf, "<tr><td align=right valign=top><b>Subject: </b>");
-	    buf_printf(buf, "<td>%s\n", subj);
-	    free(subj);
-	}
-	/* From header field */
-	if (body->subpart->from) {
-	    buf_printf(buf, "<tr><td align=right><b>From: </b><td>");
-	    display_address(buf, body->subpart->from, "");
-	}
-	/* Sender header field (if different than From */
-	if (body->subpart->sender &&
-	    (!body->subpart->from ||
-	     strcmp(body->subpart->sender->mailbox,
-		    body->subpart->from->mailbox) ||
-	     strcmp(body->subpart->sender->domain,
-		    body->subpart->from->domain))) {
-	    buf_printf(buf, "<tr><td align=right><b>Sender: </b><td>");
-	    display_address(buf, body->subpart->sender, "");
-	}
-	/* Reply-To header field (if different than From */
-	if (body->subpart->reply_to &&
-	    (!body->subpart->from ||
-	     strcmp(body->subpart->reply_to->mailbox,
-		    body->subpart->from->mailbox) ||
-	     strcmp(body->subpart->reply_to->domain,
-		    body->subpart->from->domain))) {
-	    buf_printf(buf, "<tr><td align=right><b>Reply-To: </b><td>");
-	    display_address(buf, body->subpart->reply_to, "");
-	}
-	/* Date header field */
-	buf_printf(buf, "<tr><td align=right><b>Date: </b>");
-	buf_printf(buf, "<td width=\"100%%\">%s\n", body->subpart->date);
-	/* To header field (possibly multiple addresses) */
-	if (body->subpart->to) {
-	    buf_printf(buf, "<tr><td align=right valign=top><b>To: </b><td>");
-	    for (sep = "", addr = body->subpart->to; addr; addr = addr->next) {
-		display_address(buf, addr, sep);
-		sep = ", ";
-	    }
-	}
-	/* Cc header field (possibly multiple addresses) */
-	if (body->subpart->cc) {
-	    buf_printf(buf, "<tr><td align=right valign=top><b>Cc: </b><td>");
-	    for (sep = "", addr = body->subpart->cc; addr; addr = addr->next) {
-		display_address(buf, addr, sep);
-		sep = ", ";
-	    }
-	}
-	buf_printf(buf, "</table><br>\n");
-	body_chunk(txn, buf->s, buf->len);
-
-	/* Display supbart */
-	snprintf(nextsection, sizeof(nextsection), "%s%s%d",
-		 mysection, *mysection ? "." : "", 1);
-	display_part(txn, buf, body->subpart, uid, nextsection, msg_base);
-    }
-    else {
-	if (!strcmp(body->type, "TEXT")) {
-	    /* Display text part */
-	    int ishtml = !strcmp(body->subtype, "HTML");
-	    int charset = body->charset_cte >> 16;
-	    int encoding = body->charset_cte & 0xff;
-
-	    if (charset < 0) charset = 0; /* unknown, try ASCII */
-	    body->decoded_body =
-		charset_to_utf8(msg_base + body->content_offset,
-				body->content_size, charset, encoding);
-	    if (!ishtml) body_chunk(txn, "<pre>", strlen("<pre>"));
-	    body_chunk(txn, body->decoded_body, strlen(body->decoded_body));
-	    if (!ishtml) body_chunk(txn, "</pre>", strlen("</pre>"));
-	}
-	else {
-	    int is_image = !strcmp(body->type, "IMAGE");
-	    struct param *param = body->params;
-	    const char *file_attr = "NAME";
-
-	    /* Anything else is shown as an attachment.
-	     * Show images inline, using name/description as alternative text.
-	     */
-	    buf_reset(buf);
-	    buf_printf(buf, "<div align=center>");
-
-	    /* Create link */
-	    buf_printf(buf, "<a href=\"%s?uid=%u;section=%s\" type=\"%s/%s\">",
-		       txn->req_tgt.path, uid, mysection,
-		       body->type, body->subtype);
-
-	    /* Add image */
-	    if (is_image) {
-		buf_printf(buf, "<img src=\"%s?uid=%u;section=%s\" alt=\"",
-			   txn->req_tgt.path, uid, mysection);
-	    }
-
-	    /* Look for a filename in parameters */
-	    if (body->disposition) {
-		param = body->disposition_params;
-		file_attr = "FILENAME";
-	    }
-	    for (; param && strcmp(param->attribute, file_attr);
-		 param = param->next);
-
-	    /* Create text for link or alternative text for image */
-	    if (param) buf_printf(buf, "%s", param->value);
-	    else {
-		buf_printf(buf, "[%s/%s %lu bytes]",
-			   body->type, body->subtype, body->content_size);
-	    }
-
-	    if (is_image) buf_printf(buf, "\">");
-	    buf_printf(buf, "</a></div>");
-	    body_chunk(txn, buf->s, buf->len);
-	}
-
-	body_chunk(txn, "\n<hr>\n", strlen("\n<hr>\n"));
-    }
-}
-
-/* Traverse message body until we find the requested section */
-static void fetch_part(struct transaction_t *txn, struct body *body,
-		       const char *findsection, const char *mysection,
-		       const char *msg_base)
-{
-    char nextsection[MAX_SECTION_LEN+1];
-
-    if (!strcmp(findsection, "0")) {
-	txn->resp_body.type = "text/plain";
-	txn->resp_body.len = body->header_size + body->content_size;
-
-	response_header(HTTP_OK, txn);
-
-	if (txn->meth[0] != 'H')
-	    prot_write(httpd_out, msg_base, txn->resp_body.len);
-    }
-    else if (!strcmp(body->type, "MULTIPART")) {
-	int i;
-
-	/* Recurse through all subparts */
-	for (i = 0; i < body->numparts; i++) {
-	    snprintf(nextsection, sizeof(nextsection), "%s%s%d",
-		     mysection, *mysection ? "." : "", i+1);
-	    fetch_part(txn, &body->subpart[i],
-		       findsection, nextsection, msg_base);
-	}
-    }
-    else if (!strcmp(body->type, "MESSAGE") &&
-	     !strcmp(body->subtype, "RFC822")) {
-	/* Recurse into supbart */
-	snprintf(nextsection, sizeof(nextsection), "%s%s%d",
-		 mysection, *mysection ? "." : "", 1);
-	fetch_part(txn, body->subpart, findsection, nextsection, msg_base);
-    }
-    else if (!strcmp(findsection, mysection)) {
-	int encoding = body->charset_cte & 0xff;
-	const char *outbuf;
-	size_t outsize;
-	struct buf buf = BUF_INITIALIZER;
-
-	outbuf = charset_decode_mimebody(msg_base + body->content_offset,
-					 body->content_size, encoding,
-					 &body->decoded_body, 0, &outsize);
-
-	if (!outbuf) {
-	    txn->errstr = "Unknown MIME encoding";
-	    response_header(HTTP_SERVER_ERROR, txn);
-	    return;
-
-	}
-	txn->resp_body.len = outsize;
-
-	buf_printf(&buf, "%s/%s", body->type, body->subtype);
-	txn->resp_body.type = buf.s;
-
-	response_header(HTTP_OK, txn);
-
-	if (txn->meth[0] != 'H')
-	    prot_write(httpd_out, outbuf, outsize);
-
-	buf_free(&buf);
-    }
-}
-
-/* Display the requested message or message part (attachment) */
-static int display_message(struct transaction_t *txn,
-			   struct mailbox *mailbox, uint32_t uid,
-			   const char *section)
+/* Fetch the index record & bodystructure, and mmap the message */
+static int fetch_message(struct transaction_t *txn, struct mailbox *mailbox,
+			 unsigned recno, uint32_t uid,
+			 struct index_record *record, struct body **body,
+			 const char **msg_base, unsigned long *msg_size)
 {
     int r;
-    struct index_record record;
-    const char *msg_base;
-    unsigned long msg_size;
-    struct body *body = NULL;
+
+    *body = NULL;
+    *msg_base = NULL;
 
     /* Fetch index record for the message */
-    if (uid > mailbox->i.last_uid) {
-	txn->errstr = "Message does not exist";
-	return HTTP_NOT_FOUND;
-    }
-
-    r = mailbox_find_index_record(mailbox, uid, &record);
+    if (uid) r = mailbox_find_index_record(mailbox, uid, record);
+    else r = mailbox_read_index_record(mailbox, recno, record);
     if ((r == CYRUSDB_NOTFOUND) ||
-	(record.system_flags & (FLAG_DELETED|FLAG_EXPUNGED))) {
+	(record->system_flags & (FLAG_DELETED|FLAG_EXPUNGED))) {
 	txn->errstr = "Message has been removed";
 	return HTTP_GONE;
     }
@@ -459,127 +350,32 @@ static int display_message(struct transaction_t *txn,
 	return HTTP_SERVER_ERROR;
     }
 
-    if (mailbox_cacherecord(mailbox, &record)) {
+    /* Fetch cache record for the message */
+    if ((r = mailbox_cacherecord(mailbox, record))) {
 	syslog(LOG_ERR, "read cache failed");
-	txn->errstr = "Unable to read cache record";
+	txn->errstr = error_message(r);
 	return HTTP_SERVER_ERROR;
     }
 
     /* Read message bodystructure */
-    message_read_bodystructure(&record, &body);
+    message_read_bodystructure(record, body);
 
     /* Map the message into memory */
-    mailbox_map_message(mailbox, record.uid, &msg_base, &msg_size);
-
-    if (*section) {
-	/* Fetch single message part */
-	fetch_part(txn, body, section, "1", msg_base);
-    }
-    else {
-	/* Display entire message */
-	struct body toplevel;
-	struct buf buf = BUF_INITIALIZER;
-
-	/* Setup for chunked response */
-	txn->flags |= HTTP_CHUNKED;
-	txn->resp_body.type = "text/html; charset=utf-8";
-
-	response_header(HTTP_OK, txn);
-
-	/* Start HTML */
-	buf_printf(&buf, HTML_DOCTYPE "\n");
-	buf_printf(&buf, "<html><head><title>%s:%u</title></head><body>\n",
-		   mailbox->name, record.uid);
-
-	/* Create link to message source */
-	buf_printf(&buf, "<div align=center>");
-
-	buf_printf(&buf, "<a href=\"%s?uid=%u;section=0\" type=\"plain/text\">",
-		   txn->req_tgt.path, record.uid);
-	buf_printf(&buf, "[View message source]</a></div><hr>\n");
-
-	body_chunk(txn, buf.s, buf.len);
-
-	/* Encapsulate our body in a message/rfc822 to display toplevel hdrs */
-	memset(&toplevel, 0, sizeof(struct body));
-	toplevel.type = "MESSAGE";
-	toplevel.subtype = "RFC822";
-	toplevel.subpart = body;
-
-	display_part(txn, &buf, &toplevel, record.uid, "", msg_base);
-
-	/* End of HTML */
-	buf_reset(&buf);
-	buf_printf(&buf, "</body></html>");
-	body_chunk(txn, buf.s, buf.len);
-
-	/* End of output */
-	body_chunk(txn, NULL, 0);
-
-	buf_free(&buf);
-    }
-
-    mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
-
-    if (body) {
-	message_free_body(body);
-	free(body);
-    }
+    mailbox_map_message(mailbox, record->uid, msg_base, msg_size);
 
     return 0;
 }
+			 
 
-#define MAX_FEED 100
 
-/* Perform a GET/HEAD request */
-static int meth_get(struct transaction_t *txn)
+/* List messages as an RSS feed */
+static void list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 {
-    int ret = 0, r;
-    char mailboxname[MAX_MAILBOX_BUFFER+1], section[MAX_SECTION_LEN+1];
-    uint32_t uid;
-    struct mailbox *mailbox = NULL;
     xmlDocPtr outdoc;
     xmlNodePtr root, chan, item;
     const char **host;
     unsigned recno, recentuid = 0, feed = MAX_FEED;
     struct buf buf = BUF_INITIALIZER;
-
-    /* Construct mailbox name corresponding to request target URI */
-    if ((r = rss_to_mboxname(&txn->req_tgt, mailboxname, &uid, section))) {
-	txn->errstr = error_message(r);
-	ret = HTTP_NOT_FOUND;
-	goto done;
-    }
-
-    /* If no mailboxname, list all available feeds */
-    if (!*mailboxname) {
-	list_feeds(txn);
-	return 0;
-    }
-
-    /* Open mailbox for reading */
-    if ((r = mailbox_open_irl(mailboxname, &mailbox))) {
-	syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
-	       mailboxname, error_message(r));
-	txn->errstr = error_message(r);
-	switch (r) {
-	case IMAP_PERMISSION_DENIED:
-	    ret = HTTP_FORBIDDEN;
-	    break;
-	case IMAP_MAILBOX_NONEXISTENT:
-	    ret = HTTP_NOT_FOUND;
-	    break;
-	default: 
-	    ret = HTTP_SERVER_ERROR;
-	}
-	goto done;
-    }
-
-    /* If UID specified, display entire message */
-    if (uid) {
-	ret = display_message(txn, mailbox, uid, section);
-	goto done;
-    }
 #if 0
     /* Obtain recentuid */
     if (mailbox_internal_seen(mailbox, httpd_userid)) {
@@ -616,7 +412,7 @@ static int meth_get(struct transaction_t *txn)
 
     chan = xmlNewChild(root, NULL, BAD_CAST "channel", NULL);
 
-    xmlNewChild(chan, NULL, BAD_CAST "title", BAD_CAST mailboxname);
+    xmlNewChild(chan, NULL, BAD_CAST "title", BAD_CAST mailbox->name);
 
     /* XXX  Add <description> if we have a /comment annotation? */
 
@@ -645,12 +441,9 @@ static int meth_get(struct transaction_t *txn)
 	struct message_content content;
 	struct bodypart **parts;
 
-	msg_base = NULL;
-	body = NULL;
-	parts = NULL;
-
-	if (mailbox_read_index_record(mailbox, recno, &record)) {
-	    syslog(LOG_ERR, "read index %u failed", recno);
+	/* Fetch the message */
+	if (fetch_message(txn, mailbox, recno, 0,
+			  &record, &body, &msg_base, &msg_size)) {
 	    continue;
 	}
 
@@ -660,21 +453,8 @@ static int meth_get(struct transaction_t *txn)
 	    continue;
 	}
 
-	if (record.system_flags & (FLAG_DELETED|FLAG_EXPUNGED)) {
-	    syslog(LOG_DEBUG, "recno %u deleted", recno);
-	    continue;
-	}
-
-	if (mailbox_cacherecord(mailbox, &record)) {
-	    syslog(LOG_ERR, "read cache failed");
-	    continue;
-	}
-
 	/* Feeding this message, decrement counter */
 	feed--;
-
-	/* Read message bodystructure */
-	message_read_bodystructure(&record, &body);
 
 	item = xmlNewChild(chan, NULL, BAD_CAST "item", NULL);
 
@@ -706,8 +486,6 @@ static int meth_get(struct transaction_t *txn)
 	xmlNewChild(item, NULL, BAD_CAST "pubDate", BAD_CAST datestr);
 
 	/* Find and use the first text/ part as the <description> */
-	mailbox_map_message(mailbox, record.uid, &msg_base, &msg_size);
-
 	content.base = msg_base;
 	content.len = msg_size;
 	content.body = body;
@@ -747,33 +525,277 @@ static int meth_get(struct transaction_t *txn)
 
     /* Output the XML response */
     xml_response(HTTP_OK, txn, outdoc);
-
-  done:
-    if (mailbox) mailbox_close(&mailbox);
-
-    return ret;
-
 }
 
-/* Namespace for RSS feeds of mailboxes */
-const struct namespace_t namespace_rss = {
-    URL_NS_RSS, "/rss", 1 /* auth */, ALLOW_READ,
-    {
-	NULL,			/* ACL		*/
-	NULL,			/* COPY		*/
-	NULL,			/* DELETE	*/
-	&meth_get,		/* GET		*/
-	&meth_get,		/* HEAD		*/
-	NULL,			/* LOCK		*/
-	NULL,			/* MKCALENDAR	*/
-	NULL,			/* MKCOL	*/
-	NULL,			/* MOVE		*/
-	&meth_options,		/* OPTIONS	*/
-	NULL,			/* POST		*/
-	NULL,			/* PROPFIND	*/
-	NULL,			/* PROPPATCH	*/
-	NULL,			/* PUT		*/
-	NULL,			/* REPORT	*/
-	NULL			/* UNLOCK	*/
+
+static void display_address(struct buf *buf, struct address *addr,
+			    const char *sep)
+{
+    buf_printf(buf, "%s", sep);
+    if (addr->name) buf_printf(buf, "\"%s\" ", addr->name);
+    buf_printf(buf, "<a href=\"mailto:%s@%s\">&lt;%s@%s&gt;</a>\n",
+	       addr->mailbox, addr->domain, addr->mailbox, addr->domain);
+}
+
+
+static void display_part(struct transaction_t *txn, struct buf *buf,
+			 struct body *body, uint32_t uid,
+			 const char *cursection, const char *msg_base)
+{
+    char nextsection[MAX_SECTION_LEN+1];
+
+    if (!strcmp(body->type, "MULTIPART")) {
+	int i;
+
+	if (!strcmp(body->subtype, "ALTERNATIVE") &&
+	    !strcmp(body->subpart[0].type, "TEXT")) {
+	    /* Display a text/html subpart, otherwise display first subpart */
+	    for (i = 0; (i < body->numparts) &&
+		     strcmp(body->subpart[i].subtype, "HTML"); i++);
+	    if (i == body->numparts) i = 0;
+	    snprintf(nextsection, sizeof(nextsection), "%s%s%d",
+		     cursection, *cursection ? "." : "", i+1);
+	    display_part(txn, buf, &body->subpart[i],
+			 uid, nextsection, msg_base);
+	}
+	else {
+	    /* Display all subparts */
+	    for (i = 0; i < body->numparts; i++) {
+		snprintf(nextsection, sizeof(nextsection), "%s%s%d",
+			 cursection, *cursection ? "." : "", i+1);
+		display_part(txn, buf, &body->subpart[i],
+			     uid, nextsection, msg_base);
+	    }
+	}
     }
-};
+    else if (!strcmp(body->type, "MESSAGE") &&
+	     !strcmp(body->subtype, "RFC822")) {
+	struct body *subpart = body->subpart;
+	struct address *addr;
+	char *sep;
+
+	/* Display enclosed message header as a shaded table */
+	buf_reset(buf);
+	buf_printf(buf, "<table width=\"100%%\" bgcolor=\"#CCCCCC\">\n");
+	/* Subject header field */
+	if (subpart->subject) {
+	    char *subj;
+
+	    subj = charset_parse_mimeheader(subpart->subject);
+	    buf_printf(buf, "<tr><td align=right valign=top><b>Subject: </b>");
+	    buf_printf(buf, "<td>%s\n", subj);
+	    free(subj);
+	}
+	/* From header field */
+	if (subpart->from) {
+	    buf_printf(buf, "<tr><td align=right><b>From: </b><td>");
+	    display_address(buf, subpart->from, "");
+	}
+	/* Sender header field (if different than From */
+	if (subpart->sender &&
+	    (!subpart->from ||
+	     strcmp(subpart->sender->mailbox, subpart->from->mailbox) ||
+	     strcmp(subpart->sender->domain, subpart->from->domain))) {
+	    buf_printf(buf, "<tr><td align=right><b>Sender: </b><td>");
+	    display_address(buf, subpart->sender, "");
+	}
+	/* Reply-To header field (if different than From */
+	if (subpart->reply_to &&
+	    (!subpart->from ||
+	     strcmp(subpart->reply_to->mailbox, subpart->from->mailbox) ||
+	     strcmp(subpart->reply_to->domain, subpart->from->domain))) {
+	    buf_printf(buf, "<tr><td align=right><b>Reply-To: </b><td>");
+	    display_address(buf, subpart->reply_to, "");
+	}
+	/* Date header field */
+	buf_printf(buf, "<tr><td align=right><b>Date: </b>");
+	buf_printf(buf, "<td width=\"100%%\">%s\n", subpart->date);
+	/* To header field (possibly multiple addresses) */
+	if (subpart->to) {
+	    buf_printf(buf, "<tr><td align=right valign=top><b>To: </b><td>");
+	    for (sep = "", addr = subpart->to; addr; addr = addr->next) {
+		display_address(buf, addr, sep);
+		sep = ", ";
+	    }
+	}
+	/* Cc header field (possibly multiple addresses) */
+	if (subpart->cc) {
+	    buf_printf(buf, "<tr><td align=right valign=top><b>Cc: </b><td>");
+	    for (sep = "", addr = subpart->cc; addr; addr = addr->next) {
+		display_address(buf, addr, sep);
+		sep = ", ";
+	    }
+	}
+	buf_printf(buf, "</table><br>\n");
+	body_chunk(txn, buf->s, buf->len);
+
+	/* Display subpart */
+	snprintf(nextsection, sizeof(nextsection), "%s%s%d",
+		 cursection, *cursection ? "." : "", 1);
+	display_part(txn, buf, subpart, uid, nextsection, msg_base);
+    }
+    else {
+	/* Leaf part - display something */
+
+	if (!strcmp(body->type, "TEXT")) {
+	    /* Display text part */
+	    int ishtml = !strcmp(body->subtype, "HTML");
+	    int charset = body->charset_cte >> 16;
+	    int encoding = body->charset_cte & 0xff;
+
+	    if (charset < 0) charset = 0; /* unknown, try ASCII */
+	    body->decoded_body =
+		charset_to_utf8(msg_base + body->content_offset,
+				body->content_size, charset, encoding);
+	    if (!ishtml) body_chunk(txn, "<pre>", strlen("<pre>"));
+	    body_chunk(txn, body->decoded_body, strlen(body->decoded_body));
+	    if (!ishtml) body_chunk(txn, "</pre>", strlen("</pre>"));
+	}
+	else {
+	    int is_image = !strcmp(body->type, "IMAGE");
+	    struct param *param = body->params;
+	    const char *file_attr = "NAME";
+
+	    /* Anything else is shown as an attachment.
+	     * Show images inline, using name/description as alternative text.
+	     */
+	    buf_reset(buf);
+	    buf_printf(buf, "<div align=center>");
+
+	    /* Create link */
+	    buf_printf(buf, "<a href=\"%s?uid=%u;section=%s\" type=\"%s/%s\">",
+		       txn->req_tgt.path, uid, cursection,
+		       body->type, body->subtype);
+
+	    /* Add image */
+	    if (is_image) {
+		buf_printf(buf, "<img src=\"%s?uid=%u;section=%s\" alt=\"",
+			   txn->req_tgt.path, uid, cursection);
+	    }
+
+	    /* Look for a filename in parameters */
+	    if (body->disposition) {
+		param = body->disposition_params;
+		file_attr = "FILENAME";
+	    }
+	    for (; param && strcmp(param->attribute, file_attr);
+		 param = param->next);
+
+	    /* Create text for link or alternative text for image */
+	    if (param) buf_printf(buf, "%s", param->value);
+	    else {
+		buf_printf(buf, "[%s/%s %lu bytes]",
+			   body->type, body->subtype, body->content_size);
+	    }
+
+	    if (is_image) buf_printf(buf, "\">");
+	    buf_printf(buf, "</a></div>");
+	    body_chunk(txn, buf->s, buf->len);
+	}
+
+	body_chunk(txn, "\n<hr>\n", strlen("\n<hr>\n"));
+    }
+}
+
+
+/* Return entire message formatted as text/html */
+static void display_message(struct transaction_t *txn,
+			    const char *mboxname, uint32_t uid,
+			    struct body *body, const char *msg_base)
+{
+    struct body toplevel;
+    struct buf buf = BUF_INITIALIZER;
+
+    /* Setup for chunked response */
+    txn->flags |= HTTP_CHUNKED;
+    txn->resp_body.type = "text/html; charset=utf-8";
+
+    response_header(HTTP_OK, txn);
+
+    /* Start HTML */
+    buf_printf(&buf, HTML_DOCTYPE "\n");
+    buf_printf(&buf, "<html><head><title>%s:%u</title></head><body>\n",
+	       mboxname, uid);
+
+    /* Create link to message source */
+    buf_printf(&buf, "<div align=center>");
+    buf_printf(&buf, "<a href=\"%s?uid=%u;section=0\" type=\"plain/text\">",
+	       txn->req_tgt.path, uid);
+    buf_printf(&buf, "[View message source]</a></div><hr>\n");
+
+    body_chunk(txn, buf.s, buf.len);
+
+    /* Encapsulate our body in a message/rfc822 to display toplevel hdrs */
+    memset(&toplevel, 0, sizeof(struct body));
+    toplevel.type = "MESSAGE";
+    toplevel.subtype = "RFC822";
+    toplevel.subpart = body;
+
+    display_part(txn, &buf, &toplevel, uid, "", msg_base);
+
+    /* End of HTML */
+    buf_reset(&buf);
+    buf_printf(&buf, "</body></html>");
+    body_chunk(txn, buf.s, buf.len);
+
+    /* End of output */
+    body_chunk(txn, NULL, 0);
+
+    buf_free(&buf);
+}
+
+
+/* Fetch, decode, and return the specified MIME message part */
+static void fetch_part(struct transaction_t *txn, struct body *body,
+		       const char *findsection, const char *cursection,
+		       const char *msg_base)
+{
+    char nextsection[MAX_SECTION_LEN+1];
+
+    if (!strcmp(body->type, "MULTIPART")) {
+	int i;
+
+	/* Recurse through all subparts */
+	for (i = 0; i < body->numparts; i++) {
+	    snprintf(nextsection, sizeof(nextsection), "%s%s%d",
+		     cursection, *cursection ? "." : "", i+1);
+	    fetch_part(txn, &body->subpart[i],
+		       findsection, nextsection, msg_base);
+	}
+    }
+    else if (!strcmp(body->type, "MESSAGE") &&
+	     !strcmp(body->subtype, "RFC822")) {
+	/* Recurse into supbart */
+	snprintf(nextsection, sizeof(nextsection), "%s%s%d",
+		 cursection, *cursection ? "." : "", 1);
+	fetch_part(txn, body->subpart, findsection, nextsection, msg_base);
+    }
+    else if (!strcmp(findsection, cursection)) {
+	int encoding = body->charset_cte & 0xff;
+	const char *outbuf;
+	size_t outsize;
+	struct buf buf = BUF_INITIALIZER;
+
+	outbuf = charset_decode_mimebody(msg_base + body->content_offset,
+					 body->content_size, encoding,
+					 &body->decoded_body, 0, &outsize);
+
+	if (!outbuf) {
+	    txn->errstr = "Unknown MIME encoding";
+	    response_header(HTTP_SERVER_ERROR, txn);
+	    return;
+
+	}
+	txn->resp_body.len = outsize;
+
+	buf_printf(&buf, "%s/%s", body->type, body->subtype);
+	txn->resp_body.type = buf.s;
+
+	response_header(HTTP_OK, txn);
+
+	if (txn->meth[0] != 'H')
+	    prot_write(httpd_out, outbuf, outsize);
+
+	buf_free(&buf);
+    }
+}
