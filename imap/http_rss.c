@@ -485,11 +485,13 @@ static void list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 	    else if (body->from) addr = body->from;
 	    else addr = body->sender;
 
-	    buf_reset(&buf);
-	    buf_printf(&buf, "%s@%s", addr->mailbox, addr->domain);
-	    if (addr->name) buf_printf(&buf, " (%s)", addr->name);
-	    xmlNewChild(item, NULL, BAD_CAST "author",
-			BAD_CAST buf_cstring(&buf));
+	    if (*addr->mailbox) {
+		buf_reset(&buf);
+		buf_printf(&buf, "%s@%s", addr->mailbox, addr->domain);
+		if (addr->name) buf_printf(&buf, " (%s)", addr->name);
+		xmlNewChild(item, NULL, BAD_CAST "author",
+			    BAD_CAST buf_cstring(&buf));
+	    }
 	}
 
 	rfc822date_gen(datestr, sizeof(datestr), record.gmtime);
@@ -597,12 +599,12 @@ static void display_part(struct transaction_t *txn, struct buf *buf,
 	    free(subj);
 	}
 	/* From header field */
-	if (subpart->from) {
+	if (subpart->from && *subpart->from->mailbox) {
 	    buf_printf(buf, "<tr><td align=right><b>From: </b><td>");
 	    display_address(buf, subpart->from, "");
 	}
 	/* Sender header field (if different than From */
-	if (subpart->sender &&
+	if (subpart->sender && *subpart->sender->mailbox &&
 	    (!subpart->from ||
 	     strcmp(subpart->sender->mailbox, subpart->from->mailbox) ||
 	     strcmp(subpart->sender->domain, subpart->from->domain))) {
@@ -610,7 +612,7 @@ static void display_part(struct transaction_t *txn, struct buf *buf,
 	    display_address(buf, subpart->sender, "");
 	}
 	/* Reply-To header field (if different than From */
-	if (subpart->reply_to &&
+	if (subpart->reply_to && *subpart->reply_to->mailbox &&
 	    (!subpart->from ||
 	     strcmp(subpart->reply_to->mailbox, subpart->from->mailbox) ||
 	     strcmp(subpart->reply_to->domain, subpart->from->domain))) {
