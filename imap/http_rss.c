@@ -49,7 +49,6 @@
 #include <ctype.h>
 #include <syslog.h>
 
-#include <libxml/HTMLtree.h>
 #include <libxml/tree.h>
 
 #include "acl.h"
