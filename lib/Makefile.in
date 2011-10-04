@@ -102,9 +102,9 @@ LIBCYR_OBJS = acl.o bsearch.o charset.o glob.o retry.o util.o \
 LIBCYRM_HDRS = $(srcdir)/hash.h $(srcdir)/mpool.h $(srcdir)/xmalloc.h \
 	$(srcdir)/xstrlcat.h $(srcdir)/xstrlcpy.h $(srcdir)/util.h \
 	$(srcdir)/strhash.h $(srcdir)/libconfig.h $(srcdir)/assert.h \
-	imapopts.h $(srcdir)/crc32.h
+	imapopts.h
 LIBCYRM_OBJS = libconfig.o imapopts.o hash.o mpool.o xmalloc.o strhash.o \
-	xstrlcat.o xstrlcpy.o assert.o util.o signals.o crc32.o @IPV6_OBJS@
+	xstrlcat.o xstrlcpy.o assert.o util.o signals.o @IPV6_OBJS@
 
 all: $(BUILTSOURCES) libcyrus_min.a libcyrus.a
 
