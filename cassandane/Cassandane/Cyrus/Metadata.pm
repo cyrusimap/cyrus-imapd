@@ -2082,22 +2082,24 @@ sub folder_delete_mbox_common
 	or die "Cannot create mailbox $folder: $@";
 
     xlog "set and then get the same back again";
-    $imaptalk->setmetadata($folder, $fentry, $data);
+    $imaptalk->setmetadata($folder, $fentry, $data)
+	or die "Cannot setmetadata: $@";
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
 
-    my $res = $imaptalk->getmetadata($folder, $fentry);
+    my $res = $imaptalk->getmetadata($folder, $fentry)
+	or die "Cannot getmetadata: $@";
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_deep_equals({
 	$folder => { $fentry => $data }
     }, $res);
 
     xlog "delete the mailbox";
-    $imaptalk->unselect();
     $imaptalk->delete($folder)
 	or die "Cannot delete mailbox $folder: $@";
 
     xlog "cannot get metadata for deleted mailbox";
-    $res = $imaptalk->getmetadata($folder, $fentry);
+    $res = $imaptalk->getmetadata($folder, $fentry)
+	or die "Cannot getmetadata: $@";
     $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
     $self->assert($imaptalk->get_last_error() =~ m/does not exist/i);
 
@@ -2106,7 +2108,8 @@ sub folder_delete_mbox_common
 	or die "Cannot create mailbox $folder: $@";
 
     xlog "new mailbox reports NIL for the per-mailbox metadata";
-    $res = $imaptalk->getmetadata($folder, $fentry);
+    $res = $imaptalk->getmetadata($folder, $fentry)
+	or die "Cannot getmetadata: $@";
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
     $self->assert_deep_equals({
 	$folder => { $fentry => undef }
