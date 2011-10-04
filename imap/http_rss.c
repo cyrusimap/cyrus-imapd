@@ -70,6 +70,7 @@
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
 
+#define XML_NS_ATOM	"http://www.w3.org/2005/Atom"
 #define MAX_FEED	100
 #define MAX_SECTION_LEN	128
 
@@ -372,7 +373,8 @@ static int fetch_message(struct transaction_t *txn, struct mailbox *mailbox,
 static void list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 {
     xmlDocPtr outdoc;
-    xmlNodePtr root, chan, item;
+    xmlNodePtr root, chan, item, link;
+    xmlNsPtr atom;
     const char **host;
     unsigned recno, recentuid = 0, feed = MAX_FEED;
     struct buf buf = BUF_INITIALIZER;
@@ -407,14 +409,16 @@ static void list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     /* Set up the RSS <channel> response for the mailbox */
     outdoc = xmlNewDoc(BAD_CAST "1.0");
     root = xmlNewNode(NULL, BAD_CAST "rss");
-    xmlNewProp(root, BAD_CAST "version", BAD_CAST "2.0");
     xmlDocSetRootElement(outdoc, root);
+    xmlNewProp(root, BAD_CAST "version", BAD_CAST "2.0");
+    atom = xmlNewNs(root, BAD_CAST XML_NS_ATOM, BAD_CAST "atom");
 
     chan = xmlNewChild(root, NULL, BAD_CAST "channel", NULL);
 
     xmlNewChild(chan, NULL, BAD_CAST "title", BAD_CAST mailbox->name);
 
-    /* XXX  Add <description> if we have a /comment annotation? */
+    /* XXX  Use /comment annotation as description? */
+    xmlNewChild(chan, NULL, BAD_CAST "description", NULL);
 
     host = spool_getheader(txn->req_hdrs, "Host");
 
@@ -422,6 +426,11 @@ static void list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     buf_printf(&buf, "%s://%s%s", httpd_tls_done ? "https" : "http",
 	       host[0], txn->req_tgt.path);
     xmlNewChild(chan, NULL, BAD_CAST "link", BAD_CAST buf_cstring(&buf));
+
+    link = xmlNewChild(chan, atom, BAD_CAST "link", NULL);
+    xmlNewProp(link, BAD_CAST "href", BAD_CAST buf_cstring(&buf));
+    xmlNewProp(link, BAD_CAST "rel", BAD_CAST "self");
+    xmlNewProp(link, BAD_CAST "type", BAD_CAST "application/rss+xml");
 
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
 	buf_reset(&buf);
@@ -459,7 +468,8 @@ static void list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 	item = xmlNewChild(chan, NULL, BAD_CAST "item", NULL);
 
 	subj = charset_parse_mimeheader(body->subject);
-	xmlNewTextChild(item, NULL, BAD_CAST "title", BAD_CAST subj);
+	xmlNewTextChild(item, NULL, BAD_CAST "title",
+			BAD_CAST (subj && *subj ? subj : "[Untitled]"));
 	free(subj);
 
 	buf_reset(&buf);
@@ -467,6 +477,7 @@ static void list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 		   httpd_tls_done ? "https" : "http",
 		   host[0], txn->req_tgt.path, record.uid);
 	xmlNewChild(item, NULL, BAD_CAST "link", BAD_CAST buf_cstring(&buf));
+	xmlNewChild(item, NULL, BAD_CAST "guid", BAD_CAST buf_cstring(&buf));
 
 	if (body->reply_to || body->from || body->sender) {
 	    struct address *addr;
