@@ -59,7 +59,7 @@
 
 #define ADDRERR_SIZE 500
     
-int yyerror(char *msg);
+int yyerror(const char *msg);
 extern int yylex(void);
 
 #define YYERROR_VERBOSE /* i want better error messages! */
@@ -111,7 +111,7 @@ qstring: '"' QTEXT '"'
 %%
 
 /* copy address error message into buffer provided by sieve parser */
-int yyerror(char *s)
+int yyerror(const char *s)
 {
     extern char addrerr[ADDRERR_SIZE];
     
