@@ -1883,7 +1883,7 @@ int tls_start_clienttls(struct imclient *imclient,
 {
     int     sts;
     SSL_SESSION *session;
-    SSL_CIPHER *cipher;
+    const SSL_CIPHER *cipher;
     X509   *peer;
     int tls_cipher_usebits = 0;
     int tls_cipher_algbits = 0;
