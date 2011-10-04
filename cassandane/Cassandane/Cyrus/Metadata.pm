@@ -2067,7 +2067,7 @@ sub test_cvt_cyrusdb
     }, $res);
 }
 
-sub folder_delete_common
+sub folder_delete_mbox_common
 {
     my ($self) = @_;
 
@@ -2075,11 +2075,7 @@ sub folder_delete_common
     # data thanks to hipsteripsum.me
     my $folder = 'INBOX.williamsburg';
     my $fentry = '/private/comment';
-    my $mentry = '/comment';
-    my $mattrib = 'value.priv';
     my $data = $self->make_random_data(0.3, maxreps => 15);
-    $self->{store}->set_fetch_attributes('uid', "annotation ($mentry $mattrib)");
-    $self->{store}->set_folder($folder);
 
     xlog "create a mailbox";
     $imaptalk->create($folder)
@@ -2094,6 +2090,44 @@ sub folder_delete_common
     $self->assert_deep_equals({
 	$folder => { $fentry => $data }
     }, $res);
+
+    xlog "delete the mailbox";
+    $imaptalk->unselect();
+    $imaptalk->delete($folder)
+	or die "Cannot delete mailbox $folder: $@";
+
+    xlog "cannot get metadata for deleted mailbox";
+    $res = $imaptalk->getmetadata($folder, $fentry);
+    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
+    $self->assert($imaptalk->get_last_error() =~ m/does not exist/i);
+
+    xlog "create a new mailbox with the same name";
+    $imaptalk->create($folder)
+	or die "Cannot create mailbox $folder: $@";
+
+    xlog "new mailbox reports NIL for the per-mailbox metadata";
+    $res = $imaptalk->getmetadata($folder, $fentry);
+    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+    $self->assert_deep_equals({
+	$folder => { $fentry => undef }
+    }, $res);
+}
+
+sub folder_delete_msg_common
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+    # data thanks to hipsteripsum.me
+    my $folder = 'INBOX.williamsburg';
+    my $mentry = '/comment';
+    my $mattrib = 'value.priv';
+    $self->{store}->set_fetch_attributes('uid', "annotation ($mentry $mattrib)");
+    $self->{store}->set_folder($folder);
+
+    xlog "create a mailbox";
+    $imaptalk->create($folder)
+	or die "Cannot create mailbox $folder: $@";
 
     xlog "add some messages";
     my $uid = 1;
@@ -2119,11 +2153,6 @@ sub folder_delete_common
     $imaptalk->delete($folder)
 	or die "Cannot delete mailbox $folder: $@";
 
-    xlog "cannot get metadata for deleted mailbox";
-    $res = $imaptalk->getmetadata($folder, $fentry);
-    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
-    $self->assert($imaptalk->get_last_error() =~ m/does not exist/i);
-
     xlog "create a new mailbox with the same name";
     $imaptalk->create($folder)
 	or die "Cannot create mailbox $folder: $@";
@@ -2140,48 +2169,74 @@ sub folder_delete_common
 	$uid++;
     }
 
-    xlog "new mailbox reports NIL for the per-mailbox metadata";
-    $res = $imaptalk->getmetadata($folder, $fentry);
-    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_deep_equals({
-	$folder => { $fentry => undef }
-    }, $res);
-
     xlog "new mailbox reports NIL for the per-message metadata";
     $self->check_messages(\%exp);
 }
 
-sub config_folder_delete_dmimm
+sub config_folder_delete_mbox_dmimm
 {
     my ($self, $conf) = @_;
     xlog "Setting delete_mode = immediate";
     $conf->set(delete_mode => 'immediate');
 }
 
-sub test_folder_delete_dmimm
+sub test_folder_delete_mbox_dmimm
 {
     my ($self) = @_;
 
-    xlog "test that per-mailbox and per-message annotations are";
+    xlog "test that per-mailbox annotations are";
     xlog "deleted with the mailbox; delete_mode = immediate (BZ2685)";
 
     $self->assert_str_equals('immediate',
 		    $self->{instance}->{config}->get('delete_mode'));
 
-    $self->folder_delete_common();
+    $self->folder_delete_mbox_common();
 }
 
-sub test_folder_delete_dmdel
+sub test_folder_delete_mbox_dmdel
 {
     my ($self) = @_;
 
-    xlog "test that per-mailbox and per-message annotations are";
+    xlog "test that per-mailbox annotations are";
     xlog "deleted with the mailbox; delete_mode = delayed (BZ2685)";
 
     $self->assert_str_equals('delayed',
 		    $self->{instance}->{config}->get('delete_mode'));
 
-    $self->folder_delete_common();
+    $self->folder_delete_mbox_common();
+}
+
+sub config_folder_delete_msg_dmimm
+{
+    my ($self, $conf) = @_;
+    xlog "Setting delete_mode = immediate";
+    $conf->set(delete_mode => 'immediate');
+}
+
+sub test_folder_delete_msg_dmimm
+{
+    my ($self) = @_;
+
+    xlog "test that per-message annotations are";
+    xlog "deleted with the mailbox; delete_mode = immediate (BZ2685)";
+
+    $self->assert_str_equals('immediate',
+		    $self->{instance}->{config}->get('delete_mode'));
+
+    $self->folder_delete_msg_common();
+}
+
+sub test_folder_delete_msg_dmdel
+{
+    my ($self) = @_;
+
+    xlog "test that per-message annotations are";
+    xlog "deleted with the mailbox; delete_mode = delayed (BZ2685)";
+
+    $self->assert_str_equals('delayed',
+		    $self->{instance}->{config}->get('delete_mode'));
+
+    $self->folder_delete_msg_common();
 }
 
 1;
