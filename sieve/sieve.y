@@ -162,7 +162,7 @@ static int verify_regexs(stringlist_t *sl, char *comp);
 #endif
 static int verify_utf8(char *s);
 
-int yyerror(char *msg);
+int yyerror(const char *msg);
 extern int yylex(void);
 extern void yyrestart(FILE *f);
 
@@ -713,7 +713,7 @@ commandlist_t *sieve_parse(sieve_script_t *script, FILE *f)
     return t;
 }
 
-int yyerror(char *msg)
+int yyerror(const char *msg)
 {
     extern int yylineno;
     int ret;
