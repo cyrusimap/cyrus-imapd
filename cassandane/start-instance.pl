@@ -50,6 +50,7 @@ my $config = Cassandane::Config->default()->clone();
 my $start_flag = 0;
 my $re_use_dir = 1;
 my $valgrind = 0;
+my @services = ( 'imap' );
 $start_flag = 1 if $0 =~ m/start-instance/;
 
 sub usage
@@ -69,8 +70,7 @@ while (my $a = shift)
 {
     if ($a eq '-O' || $a eq '--option')
     {
-	my $vv = shift;
-	usage() unless defined $vv;
+	my $vv = shift || usage;
 	my ($name, $value) = ($vv =~ m/^([a-z][a-z0-9-]+)=(.*)$/);
 	usage() unless defined $value;
 	$config->set($name, $value);
@@ -86,6 +86,11 @@ while (my $a = shift)
     elsif ($a eq '--valgrind')
     {
 	$valgrind = 1;
+    }
+    elsif ($a eq '--service')
+    {
+	my $vv = shift || usage;
+	push(@services, $vv);
     }
     elsif ($a =~ m/^-/)
     {
@@ -107,7 +112,7 @@ my $instance = Cassandane::Instance->new(
 		valgrind => $valgrind,
 		persistent => 1,
 	       );
-$instance->add_service('imap');
+$instance->add_services(@services);
 
 if ($start_flag)
 {
