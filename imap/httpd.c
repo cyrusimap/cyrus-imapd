@@ -1092,7 +1092,7 @@ static void cmdloop(void)
 	}
 
 	/* Read the body, if present */
-	syslog(LOG_DEBUG, "read body(%d)", ret);
+	syslog(LOG_DEBUG, "read body(dump = %d)", ret);
 	if ((r = read_body(&txn, ret, &txn.errstr))) {
 	    ret = r;
 	    txn.flags |= HTTP_CLOSE;
@@ -1124,7 +1124,6 @@ static void cmdloop(void)
 	    if ((hdr = spool_getheader(txn.req_hdrs, "Authorization"))) {
 
 		/* Client is trying to authenticate */
-		syslog(LOG_DEBUG, "http_auth(%s)", hdr[0]);
 #if 0
 		if (httpd_userid) {
 		    /* Reauthentication - reinitialize */
@@ -1727,14 +1726,15 @@ static int http_auth(const char *creds, struct auth_challenge_t *chal)
     static char base64[BASE64_BUF_SIZE+1];
     const void *canon_user;
 
-    syslog(LOG_DEBUG, "http_auth: status=%d   creds='%s'   scheme='%s'",
-	   status, creds, chal->scheme ? chal->scheme->name : "");
-
     chal->param = NULL;
 
     /* Split credentials into auth scheme and response */
     slen = strcspn(creds, " \0");
     if ((clientin = strchr(creds, ' '))) clientinlen = strlen(++clientin);
+
+    syslog(LOG_DEBUG, "http_auth: status=%d   creds='%.*s%s'   scheme='%s'",
+	   status, slen, creds, clientin ? " <response>" : "",
+	   chal->scheme ? chal->scheme->name : "");
 
     if (chal->scheme) {
 	/* Use current scheme, if possible */
