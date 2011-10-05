@@ -94,7 +94,8 @@ all::
 install::
 	for s in $(SCRIPTS); \
 	do \
-		$(INSTALL) -m 755 scripts/$$s.pl $(DESTDIR)$(exec_prefix)/bin/$$s ; \
+		$(PERL) -pne 's|\@prefix\@|$(prefix)|g;' < scripts/$$s.pl > scripts/$$s ;\
+		$(INSTALL) -m 755 scripts/$$s $(DESTDIR)$(exec_prefix)/bin/$$s ; \
 	done
 #xxx install scripts/*
 	@for d in  $(SUBDIRS); \
