@@ -56,6 +56,7 @@
 #include "mystring.h"
 
 #include "xmalloc.h"
+#include "util.h"
 #include <string.h>
 #include <stdlib.h>
 
@@ -86,14 +87,8 @@ static int sieve_notify(void *ac __attribute__((unused)),
 int mysieve_error(int lineno, const char *msg,
 		  void *i __attribute__((unused)), void *s)
 {
-    char buf[1024];
-    char **errstr = (char **) s;
-
-    snprintf(buf, 80, "line %d: %s\r\n", lineno, msg);
-    *errstr = xrealloc(*errstr, strlen(*errstr) + strlen(buf) + 30);
-    syslog(LOG_DEBUG, "%s", buf);
-    strcat(*errstr, buf);
-
+    struct buf *errors = (struct buf *)s;
+    buf_printf(errors, "line %d: %s\r\n", lineno, msg);
     return SIEVE_OK;
 }
 
@@ -196,13 +191,14 @@ int is_script_parsable(FILE *stream, char **errstr, sieve_script_t **ret)
 {
     sieve_script_t *s;
     int res;
-  
+    struct buf errors = BUF_INITIALIZER;
+
     rewind(stream);
 
-    *errstr = (char *) xmalloc(20 * sizeof(char));
-    strcpy(*errstr, "script errors:\r\n");
+    buf_appendcstr(&errors, "script errors:\r\n");
+    *errstr = NULL;
 
-    res = sieve_script_parse(interp, stream, errstr, &s);
+    res = sieve_script_parse(interp, stream, &errors, &s);
 
     if (res == SIEVE_OK) {
 	if(ret) {
@@ -210,9 +206,10 @@ int is_script_parsable(FILE *stream, char **errstr, sieve_script_t **ret)
 	} else {
 	    sieve_script_free(&s);
 	}
-	free(*errstr);
-	*errstr = NULL;
     }
-
+    else {
+	*errstr = buf_release(&errors);
+    }
+    buf_free(&errors);
     return (res == SIEVE_OK) ? TIMSIEVE_OK : TIMSIEVE_FAIL;
 }
