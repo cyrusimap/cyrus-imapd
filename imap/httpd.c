@@ -926,7 +926,6 @@ const struct namespace_t *namespaces[] = {
 static void cmdloop(void)
 {
     int c, ret, r, i;
-    int allowanonymous = config_getswitch(IMAPOPT_ALLOWANONYMOUSLOGIN);
     static struct buf meth, uri, ver;
     char buf[1024];
     const char **hdr;
@@ -1120,7 +1119,7 @@ static void cmdloop(void)
 	sasl_http_req.non_persist = (txn.flags & HTTP_CLOSE);
 #endif
 
-	if (!httpd_userid && !allowanonymous) {
+	if (!httpd_userid) {
 	    /* Perform authentication, if necessary */
 	    if ((hdr = spool_getheader(txn.req_hdrs, "Authorization"))) {
 
@@ -1148,7 +1147,7 @@ static void cmdloop(void)
 		}
 	    }
 	}
-	else if (!httpd_userid && !allowanonymous && txn.auth_chal.scheme) {
+	else if (!httpd_userid && txn.auth_chal.scheme) {
 	    /* Started auth exchange, but client didn't engage - reinit */
 	    syslog(LOG_DEBUG, "client didn't complete auth - reinit");
 	    reset_saslconn(&httpd_saslconn);
@@ -1156,7 +1155,7 @@ static void cmdloop(void)
 	}
 
 	/* Request authentication, if necessary */
-	if (namespace->need_auth && !httpd_userid && !allowanonymous) {
+	if (namespace->need_auth && !httpd_userid) {
 	    /* User must authenticate */
 
 	    if (httpd_tls_required) {
