@@ -275,6 +275,9 @@ int list_cb(char *name, int matchlen, int maycreate __attribute__((unused)),
 	!(cyrus_acl_myrights(httpd_authstate, entry.acl) & ACL_READ))
 	return 0;
 
+    /* Don't list deleted mailboxes */
+    if (mboxname_isdeletedmailbox(name)) return 0;
+
     /* Add mailbox to our HTML list */
     snprintf(href, sizeof(href), ".rss.%s", name);
     mboxname_hiersep_toexternal(&httpd_namespace, href, 0);
@@ -671,6 +674,15 @@ static void display_part(struct transaction_t *txn, struct buf *buf,
 	    /* Anything else is shown as an attachment.
 	     * Show images inline, using name/description as alternative text.
 	     */
+	    /* Look for a filename in parameters */
+	    if (body->disposition) {
+		if (!strcmp(body->disposition, "ATTACHMENT")) is_image = 0;
+		param = body->disposition_params;
+		file_attr = "FILENAME";
+	    }
+	    for (; param && strcmp(param->attribute, file_attr);
+		 param = param->next);
+
 	    buf_reset(buf);
 	    buf_printf(buf, "<div align=center>");
 
@@ -684,14 +696,6 @@ static void display_part(struct transaction_t *txn, struct buf *buf,
 		buf_printf(buf, "<img src=\"%s?uid=%u;section=%s\" alt=\"",
 			   txn->req_tgt.path, uid, cursection);
 	    }
-
-	    /* Look for a filename in parameters */
-	    if (body->disposition) {
-		param = body->disposition_params;
-		file_attr = "FILENAME";
-	    }
-	    for (; param && strcmp(param->attribute, file_attr);
-		 param = param->next);
 
 	    /* Create text for link or alternative text for image */
 	    if (param) buf_printf(buf, "%s", param->value);
