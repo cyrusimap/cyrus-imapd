@@ -99,6 +99,8 @@ perl/imap/Makefile.old
 perl/imap/blib/
 perl/imap/cyradm
 perl/imap/pm_to_blib
+perl/sieve/scripts/installsieve
+perl/sieve/scripts/sieveshell
 timsieved/timsieved
 sieve/Makefile
 sieve/addr-lex.c
