@@ -101,12 +101,9 @@ sub install_sieve_script
 
 sub compile_sieve_script
 {
-    my ($self, $script, %params) = @_;
+    my ($self, $name, $script) = @_;
 
-    my $name = $params{name} || 'test1';
-    my $expect = $params{expect} || 'success';
     my $basedir = $self->{instance}->{basedir};
-    my $experr = $params{expect_error};
 
     xlog "Checking preconditions for compiling sieve script $name";
 
@@ -152,36 +149,21 @@ sub compile_sieve_script
 	}
     }
 
-    xlog "Checking that sievec gave the expected result";
-    $self->assert_str_equals($expect, $result);
-
-    if ($expect eq 'success')
+    if ($result eq 'success')
     {
 	xlog "Checking that sievec wrote the output .bc file";
 	$self->assert(( -f "$basedir/$name.bc" ));
 	xlog "Checking that sievec didn't write anything to stderr";
 	$self->assert_equals(0, scalar(@errors));
     }
-    elsif ($expect eq 'failure')
+    elsif ($result eq 'failure')
     {
 	xlog "Checking that sievec didn't write the output .bc file";
 	$self->assert(( ! -f "$basedir/$name.bc" ));
+    }
 
-	if (defined $experr)
-	{
-	    xlog "Checking that sievec emitted an error matching \"$experr\"";
-	    grep { $_ =~ $experr } @errors
-		or die "Couldn't find expected error \"$experr\" " .
-		       "in $basedir/$name.errors";
-	}
-    }
-    else
-    {
-	die "Bad value for parameter: expect => \"$expect\", " .
-	    "should be one of \"success\", or \"failure\"";
-    }
+    return ($result, @errors);
 }
-
 
 sub test_deliver
 {
@@ -225,78 +207,68 @@ sub test_badscript
     my ($self) = @_;
 
     xlog "Testing sieve script compile failures";
+    my $res;
+    my @errs;
 
-    $self->compile_sieve_script(
-	"require [\"nonesuch\"];\n",
-	name => 'badrequire',
-	expect => 'failure',
-	expect_error => 'Unsupported feature.*nonesuch');
+    ($res, @errs) = $self->compile_sieve_script('badrequire',
+	"require [\"nonesuch\"];\n");
+    $self->assert_str_equals('failure', $res);
+    $self->assert(grep m/Unsupported feature.*nonesuch/, @errs);
 
-    $self->compile_sieve_script(
-	"reject \"foo\"\n",
-	name => 'badreject1',
-	expect => 'failure',
-	expect_error => 'line 1: reject MUST be enabled');
+    ($res, @errs) = $self->compile_sieve_script('badreject1',
+	"reject \"foo\"\n");
+    $self->assert_str_equals('failure', $res);
+    $self->assert(grep m/line 1: reject MUST be enabled/, @errs);
 
-    $self->compile_sieve_script(
-	"require [\"reject\"];\nreject\n",
-	name => 'badreject2',
-	expect => 'failure',
-	expect_error => 'line 3: syntax error.*expecting STRING');
+    ($res, @errs) = $self->compile_sieve_script('badreject2',
+	"require [\"reject\"];\nreject\n");
+    $self->assert_str_equals('failure', $res);
+    $self->assert(grep m/line 3: syntax error.*expecting STRING/, @errs);
 
-    $self->compile_sieve_script(
-	"require [\"reject\"];\nreject 42\n",
-	name => 'badreject3',
-	expect => 'failure',
-	expect_error => 'line 2: syntax error.*expecting STRING');
+    ($res, @errs) = $self->compile_sieve_script('badreject3',
+	"require [\"reject\"];\nreject 42\n");
+    $self->assert_str_equals('failure', $res);
+    $self->assert(grep m/line 2: syntax error.*expecting STRING/, @errs);
 
     # TODO: test UTF-8 verification of the string parameter
 
-    $self->compile_sieve_script(
-	"fileinto \"foo\"\n",
-	name => 'badfileinto1',
-	expect => 'failure',
-	expect_error => 'line 1: fileinto MUST be enabled');
+    ($res, @errs) = $self->compile_sieve_script('badfileinto1',
+	"fileinto \"foo\"\n");
+    $self->assert_str_equals('failure', $res);
+    $self->assert(grep m/line 1: fileinto MUST be enabled/, @errs);
 
-    $self->compile_sieve_script(
-	"require [\"fileinto\"];\nfileinto\n",
-	name => 'badfileinto2',
-	expect => 'failure',
-	expect_error => 'line 3: syntax error.*expecting STRING');
+    ($res, @errs) = $self->compile_sieve_script('badfileinto2',
+	"require [\"fileinto\"];\nfileinto\n");
+    $self->assert_str_equals('failure', $res);
+    $self->assert(grep m/line 3: syntax error.*expecting STRING/, @errs);
 
-    $self->compile_sieve_script(
-	"require [\"fileinto\"];\nfileinto 42\n",
-	name => 'badfileinto3',
-	expect => 'failure',
-	expect_error => 'line 2: syntax error.*expecting STRING');
+    ($res, @errs) = $self->compile_sieve_script('badfileinto3',
+	"require [\"fileinto\"];\nfileinto 42\n");
+    $self->assert_str_equals('failure', $res);
+    $self->assert(grep m/line 2: syntax error.*expecting STRING/, @errs);
 
-    $self->compile_sieve_script(
-	"require [\"fileinto\"];\nfileinto :copy \"foo\"\n",
-	name => 'badfileinto4',
-	expect => 'failure',
-	expect_error => 'line 2: copy MUST be enabled');
+    ($res, @errs) = $self->compile_sieve_script('badfileinto4',
+	"require [\"fileinto\"];\nfileinto :copy \"foo\"\n");
+    $self->assert_str_equals('failure', $res);
+    $self->assert(grep m/line 2: copy MUST be enabled/, @errs);
 
-    $self->compile_sieve_script(
-	"require [\"fileinto\",\"copy\"];\nfileinto \"foo\"\n",
-	name => 'badfileinto5',
-	expect => 'failure',
-	expect_error => 'line 3: syntax error.*expecting.*;');
+    ($res, @errs) = $self->compile_sieve_script('badfileinto5',
+	"require [\"fileinto\",\"copy\"];\nfileinto \"foo\"\n");
+    $self->assert_str_equals('failure', $res);
+    $self->assert(grep m/line 3: syntax error.*expecting.*;/, @errs);
 
-    $self->compile_sieve_script(
-	"require [\"fileinto\",\"copy\"];\nfileinto :copy \"foo\"\n",
-	name => 'badfileinto6',
-	expect => 'failure',
-	expect_error => 'line 3: syntax error.*expecting.*;');
+    ($res, @errs) = $self->compile_sieve_script('badfileinto6',
+	"require [\"fileinto\",\"copy\"];\nfileinto :copy \"foo\"\n");
+    $self->assert_str_equals('failure', $res);
+    $self->assert(grep m/line 3: syntax error.*expecting.*;/, @errs);
 
-    $self->compile_sieve_script(
-	"require [\"fileinto\",\"copy\"];\nfileinto \"foo\";\n",
-	name => 'goodfileinto7',
-	expect => 'success');
+    ($res, @errs) = $self->compile_sieve_script('goodfileinto7',
+	"require [\"fileinto\",\"copy\"];\nfileinto \"foo\";\n");
+    $self->assert_str_equals('success', $res);
 
-    $self->compile_sieve_script(
-	"require [\"fileinto\",\"copy\"];\nfileinto :copy \"foo\";\n",
-	name => 'goodfileinto8',
-	expect => 'success');
+    ($res, @errs) = $self->compile_sieve_script('goodfileinto8',
+	"require [\"fileinto\",\"copy\"];\nfileinto :copy \"foo\";\n");
+    $self->assert_str_equals('success', $res);
 
     # TODO: test UTF-8 verification of the string parameter
 }
