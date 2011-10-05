@@ -120,6 +120,13 @@ sub show_help {
   print "\n";
 }
 
+sub error {
+    my ($obj, $msg) = @_;
+    my $errstr = sieve_get_error($obj);
+    print STDERR "$msg\n$errstr";
+    exit(1);
+}
+
 #main code
 my $obj = sieve_get_handle($acapserver,"prompt","prompt","prompt","prompt");
 
@@ -129,24 +136,24 @@ if (!defined $obj) {
 
 if (defined $installs) {
   $ret = sieve_put_file($obj, $installs);
-  if ($ret != 0) { print "upload failed\n"; }
+  if ($ret != 0) { error($obj, "upload failed"); }
 }
 
 if (defined $deletes) {
   $ret = sieve_delete($obj, $deletes);
-  if ($ret != 0) { print "delete failed\n"; }
+  if ($ret != 0) { error($obj, "delete failed"); }
 }
 
 if (defined $activates) {
   $ret = sieve_activate($obj, $activates);
-  if ($ret != 0) { print "activate failed\n"; }
+  if ($ret != 0) { error($obj, "activate failed"); }
 }
 
 if (defined $gets) {
     $str = "";
     $ret = sieve_get($obj, $gets, $str);
     if ($ret != 0) { 
-	print "get failed\n"; 
+	error($obj, "get failed");
     } else {
 	open (OUTPUT,">$gets") || die "Unable to open $gets";
 	print OUTPUT $str;
@@ -157,7 +164,7 @@ if (defined $views) {
     $str = "";
     $ret = sieve_get($obj, $views, $str);
     if ($ret != 0) { 
-	print "get failed\n"; 
+	error($obj, "get failed");
     } else {
 	# view
 	print $str;
@@ -166,5 +173,5 @@ if (defined $views) {
 
 if (defined $list) {
   $ret = sieve_list($obj, "list_cb");  
-  if ($ret != 0) { print "List command failed\n"; }
+  if ($ret != 0) { error("List command failed"); }
 }
