@@ -189,10 +189,10 @@ configure: configure.in
 	cd $(srcdir); rm -f config.cache; autoconf
 
 coverage_all:
-	$(MAKE) EXTRACFLAGS="--coverage" EXTRALDFLAGS="--coverage" all
+	$(MAKE) COVERAGE="--coverage" EXTRACFLAGS="--coverage" EXTRALDFLAGS="--coverage" all
 
 coverage_check:
-	$(MAKE) EXTRACFLAGS="--coverage" EXTRALDFLAGS="--coverage" check
+	$(MAKE) COVERAGE="--coverage" EXTRACFLAGS="--coverage" EXTRALDFLAGS="--coverage" check
 
 tags cscope:
 	find $(SUBDIRS) -type f -name '*.[ch]' > cs.files

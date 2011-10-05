@@ -59,10 +59,11 @@ $libs = "-lcyrus";
 # the contents of the Makefile that is written.
 WriteMakefile(
     'NAME'	=> 'Cyrus::SIEVE::managesieve',
-    'ABSTRACT'  => 'Cyurs Sieve management interface',
+    'ABSTRACT'  => 'Cyrus Sieve management interface',
     'VERSION_FROM' => 'managesieve.pm', # finds $VERSION
     'MYEXTLIB'  => '../lib/isieve.o ../lib/lex.o ../lib/mystring.o ../lib/request.o ../../../lib/libcyrus.a ../../../lib/libcyrus_min.a',
     'LIBS'	=> ["$BDB_LIB $SASL_LIB $OPENSSL_LIB $LIB_RT $ZLIB -lssl -lcrypto"], 
-    'DEFINE'	=> '-DPERL_POLLUTE',     # e.g., '-DHAVE_SOMETHING' 
+    'DEFINE'	=> '-DPERL_POLLUTE $(COVERAGE)',     # e.g., '-DHAVE_SOMETHING' 
     'INC'	=> "-I../lib/ -I../../../lib/ $SASL_INC $OPENSSL_INC",
+    'LD'	=> $Config{ld} . ' $(COVERAGE)',
 );
