@@ -50,7 +50,10 @@ use Cassandane::Util::Log;
 sub new
 {
     my $class = shift;
-    return $class->SUPER::new({ deliver => 1 }, @_);
+    return $class->SUPER::new({
+	    deliver => 1,
+	    services => [ 'imap', 'sieve' ],
+    }, @_);
 }
 
 sub set_up
@@ -99,7 +102,30 @@ sub install_sieve_script
     xlog "Sieve script installed successfully";
 }
 
-sub compile_sieve_script
+sub read_errors
+{
+    my ($filename) = @_;
+
+    my @errors;
+    if ( -f $filename )
+    {
+	open FH, '<', $filename
+	    or die "Cannot open $filename for reading: $!";
+	@errors = readline(FH);
+	close FH;
+	if (get_verbose)
+	{
+	    xlog "errors: ";
+	    map { xlog $_ } @errors;
+	}
+	# Hack to remove spurious junk generated when
+	# running coveraged code under ggcov-run
+	@errors = grep { ! m/libggcov:/ } @errors;
+    }
+    return @errors;
+}
+
+sub compile_sievec
 {
     my ($self, $name, $script) = @_;
 
@@ -135,19 +161,7 @@ sub compile_sieve_script
     }
 
     # Read the errors file in @errors
-    my @errors;
-    if ( -f "$basedir/$name.errors" )
-    {
-	open FH, '<', "$basedir/$name.errors"
-	    or die "Cannot open $basedir/$name.errors for reading: $!";
-	@errors = readline(FH);
-	close FH;
-	if (get_verbose)
-	{
-	    xlog "sievec errors: ";
-	    map { xlog $_ } @errors;
-	}
-    }
+    my (@errors) = read_errors("$basedir/$name.errors");
 
     if ($result eq 'success')
     {
@@ -163,6 +177,77 @@ sub compile_sieve_script
     }
 
     return ($result, @errors);
+}
+
+sub compile_timsieved
+{
+    my ($self, $name, $script) = @_;
+
+    my $basedir = $self->{instance}->{basedir};
+    my $bindir = $self->{instance}->{cyrus_prefix} . '/bin';
+    my $srv = $self->{instance}->get_service('sieve');
+
+    xlog "Checking preconditions for compiling sieve script $name";
+
+    $self->assert(( ! -f "$basedir/$name.script" ));
+    $self->assert(( ! -f "$basedir/$name.errors" ));
+
+    open(FH, '>', "$basedir/$name.script")
+	or die "Cannot open $basedir/$name.script for writing: $!";
+    print FH $script;
+    close(FH);
+
+    if (! -f "$basedir/sieve.passwd" )
+    {
+	open(FH, '>', "$basedir/sieve.passwd")
+	    or die "Cannot open $basedir/sieve.passwd for writing: $!";
+	print FH "foo!\nfoo!\n";
+	close(FH);
+    }
+
+    xlog "Running installsieve on script $name";
+    my $result = 'success';
+    eval
+    {
+	$self->{instance}->run_command({
+		redirects => {
+		    # No cyrus => 1 as installsieve is a Perl
+		    # script which doesn't need Valgrind and
+		    # doesn't understand the Cyrus -C option
+		    stdin => "$basedir/sieve.passwd",
+		    stderr => "$basedir/$name.errors"
+		},
+	    },
+	    "$bindir/installsieve",
+	    "-i", "$basedir/$name.script",
+	    "-u", "anonymous",
+	    "$srv->{host}:$srv->{port}");
+    };
+    if ($@)
+    {
+	$result = $@;
+	chomp $result;
+	$result =~ s/.*exited with code.*/failure/;
+    }
+
+    # Read the errors file in @errors
+    my (@errors) = read_errors("$basedir/$name.errors");
+
+    if ($result eq 'success')
+    {
+	xlog "Checking that installsieve didn't write anything to stderr";
+	$self->assert_equals(0, scalar(@errors));
+    }
+
+    return ($result, @errors);
+}
+
+sub compile_sieve_script
+{
+    my ($self, $name, $script) = @_;
+
+    my $meth = 'compile_' . $self->{compile_method};
+    return $self->$meth($name, $script);
 }
 
 sub test_deliver
@@ -202,11 +287,10 @@ EOF
     $self->check_messages({ 1 => $msg2 }, check_guid => 0);
 }
 
-sub test_badscript
+sub badscript_common
 {
     my ($self) = @_;
 
-    xlog "Testing sieve script compile failures";
     my $res;
     my @errs;
 
@@ -271,6 +355,24 @@ sub test_badscript
     $self->assert_str_equals('success', $res);
 
     # TODO: test UTF-8 verification of the string parameter
+}
+
+sub test_badscript_sievec
+{
+    my ($self) = @_;
+
+    xlog "Testing sieve script compile failures, via sievec";
+    $self->{compile_method} = 'sievec';
+    $self->badscript_common();
+}
+
+sub test_badscript_timsieved
+{
+    my ($self) = @_;
+
+    xlog "Testing sieve script compile failures, via timsieved";
+    $self->{compile_method} = 'timsieved';
+    $self->badscript_common();
 }
 
 1;
