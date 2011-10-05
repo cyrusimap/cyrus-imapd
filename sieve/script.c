@@ -577,7 +577,7 @@ static int do_sieve_error(int ret,
       
       }
     
-    if ((ret != SIEVE_OK) && interp->err) {
+    if ((ret != SIEVE_OK) && interp->execute_err) {
 	char buf[ERR_BUF_SIZE];
 	if (lastaction == -1) /* we never executed an action */
 	    snprintf(buf, ERR_BUF_SIZE,
