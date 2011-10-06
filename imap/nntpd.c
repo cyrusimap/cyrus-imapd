@@ -3144,7 +3144,9 @@ static int savemsg(message_data_t *m, FILE *f)
 
 			/* estimate size of post addresses */
 			addlen = strlen(postto[0]) +
-			    n * (strlen(newspostuser) + 3);
+			    n * (strlen(newspostuser) + 3 +
+				 (config_defdomain ?
+				  strlen(config_defdomain) + 1 : 0));
 
 			if (body) {
 			    /* append to the cached header */
@@ -3172,6 +3174,8 @@ static int savemsg(message_data_t *m, FILE *f)
 			    /* add the post address */
 			    r += sprintf(r, "%s%s+%.*s",
 					 sep, newspostuser, (int) n, p);
+			    if (config_defdomain)
+				r += sprintf(r, "@%s", config_defdomain);
 
 			    sep = ", ";
 			}
