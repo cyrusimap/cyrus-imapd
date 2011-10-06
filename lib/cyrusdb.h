@@ -109,10 +109,9 @@ struct cyrusdb_backend {
 
     /* what are the overall specifications? */
     /* 'mydb': the database to act on
-       'key': the key to fetch.  cyrusdb currently requires this to not have
-              any of [\t\n\0] in keys
+       'key': the key to fetch.
        'keylen': length of the key
-       'data': where to put the data (generally won't have [\n\0])
+       'data': where to put the data
        'datalen': how big is the data?
        'mytid': may be NULL, in which case the fetch is not txn protected.
                 if mytid != NULL && *mytid == NULL, begins a new txn
@@ -124,6 +123,20 @@ struct cyrusdb_backend {
        fetchlock() is identical to fetch() except gives a hint to the
        underlying database that the key/data being fetched will be modified
        soon. it is useless to use fetchlock() without a non-NULL mytid
+
+       If fetch returns successfully, 'data' will be filled in with a
+       non-NULL pointer to an internal buffer.  The buffer is not in
+       general terminated with a \0, so you cannot use C string
+       operations on it without first making a copy (xstrndup(), or
+       buf_init_ro() plus buf_cstring(), are easy ways to do this).
+       For a zero length record 'data' will point to a zero length
+       buffer, and will *not* be NULL.
+
+       Both keys and data are binary-safe.  In particular the characters
+       \0 \t \r and \n may be used in either keys or data.  For flat
+       files this is achieved with an escaping mechanism.  The
+       "quotalegacy" backend is designed for special legacy use only
+       and breaks this rule.
     */
     int (*fetch)(struct db *mydb, 
 		 const char *key, int keylen,
@@ -146,15 +159,20 @@ struct cyrusdb_backend {
        to call other db routines inside of 'cb'.  however, the "flat"
        backend is currently are not reentrant in this way
        unless you're using transactions and pass the same transaction
-       to all db calls during the life of foreach() */
+       to all db calls during the life of foreach()
+
+	The callbacks will never be called with data=NULL.  For a zero
+	length record, data will point to a zero length buffer.  */
     int (*foreach)(struct db *mydb,
 		   const char *prefix, int prefixlen,
 		   foreach_p *p,
 		   foreach_cb *cb, void *rock, 
 		   struct txn **tid);
 
-    /* Place entries in database create will not overwrite existing
-     * entries */
+    /* Place entries in database.  create will not overwrite existing
+     * entries.
+     * Passing data=NULL or datalen=0 places a zero-length record in
+     * the database, which can be fetched back again.  */
     int (*create)(struct db *db, 
 		  const char *key, int keylen,
 		  const char *data, int datalen,
