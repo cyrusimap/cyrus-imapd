@@ -153,6 +153,53 @@ sub fh {
     return $self->{fh};
 }
 
+=item I<read_part_content($Part, $nbytes)>
+
+returns the first n bytes of the bodypart passed.  This is a section of the
+bodystructure (hashref).  If no part is passed, it's the raw message.
+
+If no 'nbytes' is passed, read the entire part.
+
+=cut
+
+sub read_part_content {
+    my $self = shift;
+    my ($Part, $nbytes) = @_;
+
+    unless ($Part) {
+	$Part = $self->bodystructure();
+    }
+
+    my $fh = $self->fh();
+
+    die "No Offset for part"
+	unless defined $Part->{Offset};
+    die "No Size for part"
+	unless defined $Part->{Size};
+
+    unless (defined $nbytes and $nbytes > $Part->{Size}) {
+	$nbytes = $Part->{Size};
+    }
+
+    seek $fh, $Part->{Offset}, 0
+	or die "Cannot seek: $!";
+
+    my $Content = '';
+    read $fh, $Content, $nbytes
+	or die "Cannot read: $!";
+
+    if ($Part->{'Content-Transfer-Encoding'} eq 'base64') {
+	$Content = decode_base64($Content);
+    }
+    elsif ($Part->{'Content-Transfer-Encoding'} eq 'quoted-printable') {
+	$Content = decode_qp($Content);
+    }
+
+    my $charset = $Part->{'Content-Type'}{charset} || 'iso-8859-1';
+
+    return Encode::decode($charset, $Content);
+}
+
 =item I<header()>
 
 returns a Mail::Header object containing all the headers of the message.
