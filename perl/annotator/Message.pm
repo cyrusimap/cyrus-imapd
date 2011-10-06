@@ -45,6 +45,10 @@ use strict;
 
 package Cyrus::Annotator::Message;
 
+use MIME::Base64 qw(decode_base64);
+use MIME::QuotedPrint qw(decode_qp);
+use Encode qw(decode);
+
 our $VERSION = '1.00';
 
 =head1 NAME
@@ -153,6 +157,38 @@ sub fh {
     return $self->{fh};
 }
 
+=item I<decode_part($Part, $Content)>
+
+Given some content, decode it from the part's content
+encoding and charset.
+
+=cut
+
+sub decode_part {
+    my $self = shift;
+    my ($Part, $Content) = @_;
+
+    if (lc $Part->{'Content-Transfer-Encoding'} eq 'base64') {
+	# remove trailing partial value
+	$Content =~ tr{[A-Za-z0-9+/=]}{}cd;
+	my $extra = length($Content) % 4;
+	if ($extra) {
+	    warn "stripping $extra chars " . length($Content);
+	    $Content = substr($Content, 0, -$extra);
+	}
+	$Content = decode_base64($Content);
+    }
+    elsif (lc $Part->{'Content-Transfer-Encoding'} eq 'quoted-printable') {
+	# remove trailing partial value
+	$Content =~ s/=.?$//;
+	$Content = decode_qp($Content);
+    }
+
+    my $charset = $Part->{'Content-Type'}{charset} || 'iso-8859-1';
+
+    return eval { decode($charset, $Content) } || decode('iso-8859-1', $Content);
+}
+
 =item I<read_part_content($Part, $nbytes)>
 
 returns the first n bytes of the bodypart passed.  This is a section of the
@@ -188,16 +224,7 @@ sub read_part_content {
     read $fh, $Content, $nbytes
 	or die "Cannot read: $!";
 
-    if ($Part->{'Content-Transfer-Encoding'} eq 'base64') {
-	$Content = decode_base64($Content);
-    }
-    elsif ($Part->{'Content-Transfer-Encoding'} eq 'quoted-printable') {
-	$Content = decode_qp($Content);
-    }
-
-    my $charset = $Part->{'Content-Type'}{charset} || 'iso-8859-1';
-
-    return Encode::decode($charset, $Content);
+    return $self->decode_part($Part, $Content);
 }
 
 =item I<header()>
