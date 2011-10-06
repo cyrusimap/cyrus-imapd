@@ -3011,6 +3011,86 @@ static int parse_groups(const char *groups, message_data_t *msg)
     /* never reached */
 }
 
+static void add_header(const char *destname, const char **dest,
+		       const char **src, const char *newspostuser,
+		       hdrcache_t hdrcache, FILE *f)
+{
+    char *newdest = NULL, *fold = NULL, *d;
+
+    if (src) {
+	const char *s;
+	size_t n, addlen;
+	char  *sep = "";
+
+	/* count the number of source addresses */
+	for (n = 0, s = src[0]; s; n++) {
+	    s = strchr(s, ',');
+	    if (s) s++;
+	}
+
+	/* estimate size of new addresses */
+	addlen = strlen(src[0]) + n*1;			    /* add 1 for SP */
+	if (newspostuser) {
+	    addlen += n * (strlen(newspostuser)+1);	    /* add 1 for '+' */
+	    if (config_defdomain)
+		addlen += n * (strlen(config_defdomain)+1); /* add 1 for '@' */
+	}
+
+	if (dest) {
+	    /* append to the cached header */
+	    addlen += strlen(dest[0]);
+	    dest[0] = xrealloc((char *) dest[0], addlen + 1);
+	    newdest = (char *) dest[0];
+	    fold = newdest + strlen(newdest) + 1;
+	    sep = ", ";
+	}
+	else {
+	    /* create a new header body */
+	    newdest = xzmalloc(addlen + 1);
+	}
+
+	d = newdest + strlen(newdest);
+	for (s = src[0];; s += n) {
+	    /* skip whitespace */
+	    while (s && *s &&
+		   (Uisspace(*s) || *s == ',')) s++;
+	    if (!s || !*s) break;
+
+	    /* find end of source address/group */
+	    n = strcspn(s, ", \t");
+
+	    /* append the new (translated) address */
+	    if (newspostuser) {
+		d += sprintf(d, "%s%s+%.*s",
+			     sep, newspostuser, (int) n, s);
+		if (config_defdomain) d += sprintf(d, "@%s", config_defdomain);
+	    }
+	    else d += sprintf(d, "%s%.*s", sep, (int) n, s);
+
+	    sep = ", ";
+	}
+
+	if (!dest) {
+	    /* add the new header to the cache */
+	    spool_cache_header(xstrdup("destname"), newdest, hdrcache);
+	}
+    } else if (dest) {
+	/* no source header, use original dest header */
+	newdest = (char *) dest[0];
+    }
+
+    if (newdest) {
+	/* add the new dest header to the file */
+	fprintf(f, "%s: ", destname);
+	d = newdest;
+	if (fold) {
+	    fprintf(f, "%.*s\r\n\t", (int) (fold - d), d);
+	    d = fold;
+	}
+	fprintf(f, "%s\r\n", d);
+    }
+}
+
 /*
  * file in the message structure 'm' from 'pin', assuming a dot-stuffed
  * stream a la nntp.
@@ -3028,6 +3108,7 @@ static int savemsg(message_data_t *m, FILE *f)
     const char *skipheaders[] = {
 	"Path",		/* need to prepend our servername */
 	"Xref",		/* need to remove (generated on the fly) */
+	"To",		/* need to add "post" email addresses */
 	"Reply-To",	/* need to add "post" email addresses */
 	NULL
     };
@@ -3120,85 +3201,32 @@ static int savemsg(message_data_t *m, FILE *f)
 	    }
 	    if (!r) {
 		const char *newspostuser = config_getstring(IMAPOPT_NEWSPOSTUSER);
-		/* get reply-to */
+		const char **to = NULL, **replyto = NULL;
+
+		/* add To: header to spooled message file,
+		   optionally adding "post" email addr based on newsgroup */
+		body = spool_getheader(m->hdrcache, "to");
+		if (newspostuser) to = groups;
+		add_header("To", body, to, newspostuser, m->hdrcache, f);
+
+		/* add Reply-To: header to spooled message file,
+		   optionally adding "post" email addr based on newsgroup */
 		body = spool_getheader(m->hdrcache, "reply-to");
+		if (newspostuser) {
+		    /* determine which groups header to use for reply-to */
+		    replyto = spool_getheader(m->hdrcache, "followup-to");
+		    if (!replyto) replyto = groups;
+		    else if (!strncasecmp(replyto[0], "poster",
+					  strcspn(replyto[0], " \t"))) {
+			/* reply doesn't go to group */
+			newspostuser = NULL;
 
-		/* add Reply-To: header */
-		if (body || newspostuser) {
-		    const char **postto, *p;
-		    char *replyto, *r, *fold = NULL, *sep = "";
-		    size_t n;
-
-		    if (newspostuser) {
-			/* add "post" email addresses based on newsgroup */
-
-			/* determine which groups header to use */
-			postto = spool_getheader(m->hdrcache, "followup-to");
-			if (!postto) postto = groups;
-
-			/* count the number of groups */
-			for (n = 0, p = postto[0]; p; n++) {
-			    p = strchr(p, ',');
-			    if (p) p++;
-			}
-
-			/* estimate size of post addresses */
-			addlen = strlen(postto[0]) +
-			    n * (strlen(newspostuser) + 3 +
-				 (config_defdomain ?
-				  strlen(config_defdomain) + 1 : 0));
-
-			if (body) {
-			    /* append to the cached header */
-			    addlen += strlen(body[0]);
-			    body[0] = xrealloc((char *) body[0], addlen + 1);
-			    replyto = (char *) body[0];
-			    fold = replyto + strlen(replyto) + 1;
-			    sep = ", ";
-			}
-			else {
-			    /* create a new header body */
-			    replyto = xzmalloc(addlen + 1);
-			}
-
-			r = replyto + strlen(replyto);
-			for (p = postto[0];; p += n) {
-			    /* skip whitespace */
-			    while (p && *p &&
-				   (Uisspace(*p) || *p == ',')) p++;
-			    if (!p || !*p) break;
-
-			    /* find end of group name */
-			    n = strcspn(p, ", \t");
-
-			    /* add the post address */
-			    r += sprintf(r, "%s%s+%.*s",
-					 sep, newspostuser, (int) n, p);
-			    if (config_defdomain)
-				r += sprintf(r, "@%s", config_defdomain);
-
-			    sep = ", ";
-			}
-
-			if (!body) {
-			    /* add the new header to the cache */
-			    spool_cache_header(xstrdup("Reply-To"), replyto,
-					       m->hdrcache);
-			}
-		    } else {
-			/* no newspostuser, use original replyto */
-			replyto = (char *) body[0];
+			if (body) replyto = NULL;
+			else replyto = spool_getheader(m->hdrcache, "from");
 		    }
-
-		    /* add the header to the file */
-		    fprintf(f, "Reply-To: ");
-		    r = replyto;
-		    if (fold) {
-			fprintf(f, "%.*s\r\n\t", (int) (fold - r), r);
-			r = fold;
-		    }
-		    fprintf(f, "%s\r\n", r);
 		}
+		add_header("Reply-To", body, replyto, newspostuser,
+			   m->hdrcache, f);
 	    }
 	} else {
 	    r = NNTP_NO_NEWSGROUPS;		/* no newsgroups header */
