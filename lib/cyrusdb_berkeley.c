@@ -740,6 +740,8 @@ static int mystore(struct db *mydb,
 
     assert(dbinit && db);
     assert(key && keylen);
+    if (!data)
+	datalen = 0;
 
     r = gettid(mytid, &tid, "mystore");
     if (r) return r;

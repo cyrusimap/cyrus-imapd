@@ -1209,6 +1209,8 @@ int mystore(struct db *db,
 
     assert(db != NULL);
     assert(key && keylen);
+    if (!data)
+	datalen = 0;
 
     /* not keeping the transaction, just create one local to
      * this function */
@@ -1291,7 +1293,9 @@ int mystore(struct db *db,
 			    ROUNDUP(keylen) - keylen);
     }
     WRITEV_ADD_TO_IOVEC(iov, num_iov, (char *) &dlen, 4);
-    WRITEV_ADD_TO_IOVEC(iov, num_iov, (char *) data, datalen);
+    if (datalen) {
+	WRITEV_ADD_TO_IOVEC(iov, num_iov, (char *) data, datalen);
+    }
     if (ROUNDUP(datalen) - datalen > 0) {
 	WRITEV_ADD_TO_IOVEC(iov, num_iov, (char *) zeropadding,
 			    ROUNDUP(datalen) - datalen);
