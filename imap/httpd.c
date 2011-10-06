@@ -220,7 +220,7 @@ struct backend *backend_current = NULL;
 
 /* end PROXY stuff */
 
-static void starttls(int https);
+static void starttls(struct transaction_t *txn, int https);
 void usage(void);
 void shut_down(int code) __attribute__ ((noreturn));
 
@@ -557,7 +557,7 @@ int service_main(int argc __attribute__((unused)),
 
     /* we were connected on https port so we should do 
        TLS negotiation immediatly */
-    if (https == 1) starttls(1);
+    if (https == 1) starttls(NULL, 1);
 
     cmdloop();
 
@@ -672,7 +672,7 @@ void fatal(const char* s, int code)
 
 #ifdef HAVE_SSL
 /*  XXX  Needs clean up if we are going to support TLS upgrade (RFC 2817) */
-static void starttls(int https)
+static void starttls(struct transaction_t *txn, int https)
 {
     int result;
     int *layerp;
@@ -682,35 +682,18 @@ static void starttls(int https)
     /* SASL and openssl have different ideas about whether ssf is signed */
     layerp = (int *) &ssf;
 
-    if (httpd_tls_done == 1)
-    {
-	prot_printf(httpd_out, "-ERR %s\r\n", 
-		    "Already successfully executed STLS");
-	return;
-    }
-
     result=tls_init_serverengine("http",
 				 5,        /* depth to verify */
 				 !https,   /* can client auth? */
 				 !https);  /* TLS only? */
 
     if (result == -1) {
-
 	syslog(LOG_ERR, "[httpd] error initializing TLS");
-
-	if (https == 0)
-	    prot_printf(httpd_out, "%s: %s\r\n",
-			error_message(HTTP_SERVER_ERROR),
-			"Error initializing TLS");
-	else
-	    fatal("tls_init() failed",EC_TEMPFAIL);
-
-	return;
+	fatal("tls_init() failed",EC_TEMPFAIL);
     }
 
-    if (https == 0)
-    {
-	prot_printf(httpd_out, "+OK %s\r\n", "Begin TLS negotiation now");
+    if (!https) {
+	response_header(HTTP_SWITCH_PROT, txn);
 	/* must flush our buffers before starting tls */
 	prot_flush(httpd_out);
     }
@@ -723,15 +706,9 @@ static void starttls(int https)
 			       &tls_conn);
 
     /* if error */
-    if (result==-1) {
-	if (https == 0) {
-	    prot_printf(httpd_out, "-ERR [SYS/PERM] TLS failed\r\n");
-	    syslog(LOG_NOTICE, "[httpd] TLS failed: %s", httpd_clienthost);
-	} else {
-	    syslog(LOG_NOTICE, "https failed: %s", httpd_clienthost);
-	    fatal("tls_start_servertls() failed", EC_TEMPFAIL);
-	}
-	return;
+    if (result == -1) {
+	syslog(LOG_NOTICE, "https failed: %s", httpd_clienthost);
+	fatal("tls_start_servertls() failed", EC_TEMPFAIL);
     }
 
     /* tell SASL about the negotiated layer */
@@ -745,12 +722,11 @@ static void starttls(int https)
     if (result != SASL_OK) {
         fatal("sasl_setprop() failed: starttls()", EC_TEMPFAIL);
     }
-    if(saslprops.authid) {
+    if (saslprops.authid) {
 	free(saslprops.authid);
 	saslprops.authid = NULL;
     }
-    if(auth_id)
-	saslprops.authid = xstrdup(auth_id);
+    if (auth_id) saslprops.authid = xstrdup(auth_id);
 
     /* tell the prot layer about our new layers */
     prot_settls(httpd_in, tls_conn);
@@ -762,7 +738,8 @@ static void starttls(int https)
     auth_schemes[AUTH_BASIC].is_avail++;
 }
 #else
-static void starttls(int https __attribute__((unused)))
+static void starttls(struct transaction_t *txn  __attribute__((unused)),
+		     int https __attribute__((unused)))
 {
     fatal("starttls() called, but no OpenSSL", EC_SOFTWARE);
 }
@@ -1069,10 +1046,21 @@ static void cmdloop(void)
 	}
 
 	/* Check if this is a non-persistent connection */
-	if ((hdr = spool_getheader(txn.req_hdrs, "Connection")) &&
-	    !strcmp(hdr[0], "close")) {
-	    syslog(LOG_DEBUG, "non-persistent connection");
-	    txn.flags |= HTTP_CLOSE;
+	if ((hdr = spool_getheader(txn.req_hdrs, "Connection"))) {
+	    if (!strcmp(hdr[0], "close")) {
+		syslog(LOG_DEBUG, "non-persistent connection");
+		txn.flags |= HTTP_CLOSE;
+	    }
+	    else if (!httpd_tls_done && tls_enabled() &&
+		     !strcmp(hdr[0], "Upgrade")) {
+		const char **upgd;
+
+		if ((upgd = spool_getheader(txn.req_hdrs, "Upgrade")) &&
+		    !strcmp(upgd[0], "TLS/1.0")) {
+		    syslog(LOG_DEBUG, "client requested TLS");
+		    txn.flags |= HTTP_STARTTLS;
+		}
+	    }
 	}
 
 	/* Check client expectations */
@@ -1109,6 +1097,9 @@ static void cmdloop(void)
 	}
 
 	if (ret) goto error;
+
+	/* Start TLS if requested */
+	if (txn.flags & HTTP_STARTTLS) starttls(&txn, 0);
 
 #ifdef SASL_HTTP_REQUEST
 	/* Setup SASL HTTP request in case we need it */
@@ -1158,14 +1149,12 @@ static void cmdloop(void)
 	    /* User must authenticate */
 
 	    if (httpd_tls_required) {
-		/* Redirect the client to https (we only support TLS+Basic) */
-		ret = HTTP_TEMP_REDIRECT;
-		txn.errstr = "SSL/TLS required to use Basic authentication";
-
+		ret = HTTP_UPGRADE;
 		hdr = spool_getheader(txn.req_hdrs, "Host");
 		snprintf(buf, sizeof(buf),
-			 "https://%s%s", hdr[0], txn.req_tgt.path);
-		txn.loc = buf;
+			 "SSL/TLS required to use Basic authentication\r\n\r\n"
+			 "Try: https://%s%s", hdr[0], txn.req_tgt.path);
+		txn.errstr = buf;
 	    }
 	    else {
 		/* Tell client to authenticate */
@@ -1498,9 +1487,16 @@ void response_header(long code, struct transaction_t *txn)
     if (txn->flags & HTTP_CLOSE) {
 	prot_printf(httpd_out, "Connection: close\r\n");
     }
+    else if ((code == HTTP_SWITCH_PROT) || (code == HTTP_UPGRADE)) {
+	prot_printf(httpd_out, "Connection: Upgrade\r\n");
+    }
 
 
     /* Response Header Fields */
+    if (!httpd_tls_done && tls_enabled()) {
+	prot_printf(httpd_out, "Upgrade: TLS/1.0\r\n");
+    }
+
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
 	prot_printf(httpd_out, "Server: %s\r\n", buf_cstring(&serverinfo));
     }

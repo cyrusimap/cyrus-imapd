@@ -53,6 +53,9 @@ error_table http
 ec HTTP_CONTINUE,
    "100 Continue"
 
+ec HTTP_SWITCH_PROT,
+   "101 Switching Protocols"
+
 ec HTTP_OK,
    "200 OK"
 
@@ -109,6 +112,9 @@ ec HTTP_BAD_MEDIATYPE,
 
 ec HTTP_EXPECT_FAILED,
    "417 Expectation Failed"
+
+ec HTTP_UPGRADE,
+   "426 Upgrade Required"
 
 ec HTTP_SERVER_ERROR,
    "500 Internal Server Error"
