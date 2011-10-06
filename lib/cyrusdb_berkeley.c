@@ -60,6 +60,9 @@
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 
+#define DATA(d)	    ((d)->data ? (d)->data : "")
+#define DATALEN(d)  ((d)->size)
+
 extern void fatal(const char *, int);
 
 /* --- cut here --- */
@@ -515,8 +518,8 @@ static int myfetch(struct db *mydb,
     r = db->get(db, tid, &k, &d, flags);
     switch (r) {
     case 0:
-	if (data) *data = d.data;
-	if (datalen) *datalen = d.size;
+	if (data) *data = DATA(&d);
+	if (datalen) *datalen = DATALEN(&d);
 	break;
     case DB_NOTFOUND:
 	r = CYRUSDB_NOTFOUND;
@@ -626,14 +629,14 @@ static int foreach(struct db *mydb,
 	/* does this match our prefix? */
 	if (prefixlen && memcmp(k.data, prefix, prefixlen)) break;
 
-	if (!goodp || goodp(rock, k.data, k.size, d.data, d.size)) {
+	if (!goodp || goodp(rock, k.data, k.size, DATA(&d), DATALEN(&d))) {
 	    /* we have a winner! */
 
 	    /* close the cursor, so we're not holding locks 
 	       during a callback */
 	    CLOSECURSOR(); cursor = NULL;
 
-	    r = cb(rock, k.data, k.size, d.data, d.size);
+	    r = cb(rock, k.data, k.size, DATA(&d), DATALEN(&d));
             if (r != 0) {
                 if (r < 0) {
                     syslog(LOG_ERR, "DBERROR: foreach cb() failed");

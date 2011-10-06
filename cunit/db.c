@@ -399,6 +399,100 @@ static void test_multirw(void)
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
 }
 
+/* read-write of a non-NULL zero length datum */
+static void test_readwrite_zerolen(void)
+{
+    struct db *db = NULL;
+    struct txn *txn = NULL;
+    /* test data thanks to hipsteripsum.me */
+    static const char KEY[] = "keffiyeh";
+    static const char DATA[] = "";
+    int r;
+
+    r = DB->open(filename, CYRUSDB_CREATE, &db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    CU_ASSERT_PTR_NOT_NULL(db);
+
+    /* the database is initially empty, so fetch will fail */
+    CANNOTFETCH(KEY, strlen(KEY), CYRUSDB_NOTFOUND);
+
+    /* store()ing a record succeeds */
+    CANSTORE(KEY, strlen(KEY), DATA, 0);
+
+    /* the records can be fetched back; we get non-NULL
+     * zero-length data */
+    CANFETCH(KEY, strlen(KEY), DATA, 0);
+
+    /* commit succeeds */
+    CANCOMMIT();
+
+    /* data can be read back in a new transaction */
+    CANFETCH(KEY, strlen(KEY), DATA, 0);
+
+    /* close the txn - it doesn't matter here if we commit or abort */
+    CANCOMMIT();
+
+    /* close and re-open the database */
+    CANREOPEN();
+
+    /* data can still be read back */
+    CANFETCH(KEY, strlen(KEY), DATA, 0);
+
+    /* close the txn - it doesn't matter here if we commit or abort */
+    CANCOMMIT();
+
+    /* closing succeeds */
+    r = DB->close(db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+}
+
+/* read-write of a NULL zero length datum */
+static void test_readwrite_null(void)
+{
+    struct db *db = NULL;
+    struct txn *txn = NULL;
+    /* test data thanks to hipsteripsum.me */
+    static const char KEY[] = "skateboard";
+    static const char EMPTY[] = "";
+    int r;
+
+    r = DB->open(filename, CYRUSDB_CREATE, &db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    CU_ASSERT_PTR_NOT_NULL(db);
+
+    /* the database is initially empty, so fetch will fail */
+    CANNOTFETCH(KEY, strlen(KEY), CYRUSDB_NOTFOUND);
+
+    /* store()ing a record succeeds */
+    CANSTORE(KEY, strlen(KEY), NULL, 0);
+
+    /* the records can be fetched back; we get non-NULL
+     * zero-length data */
+    CANFETCH(KEY, strlen(KEY), EMPTY, 0);
+
+    /* commit succeeds */
+    CANCOMMIT();
+
+    /* data can be read back in a new transaction */
+    CANFETCH(KEY, strlen(KEY), EMPTY, 0);
+
+    /* close the txn - it doesn't matter here if we commit or abort */
+    CANCOMMIT();
+
+    /* close and re-open the database */
+    CANREOPEN();
+
+    /* data can still be read back */
+    CANFETCH(KEY, strlen(KEY), EMPTY, 0);
+
+    /* close the txn - it doesn't matter here if we commit or abort */
+    CANCOMMIT();
+
+    /* closing succeeds */
+    r = DB->close(db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+}
+
 static void test_abort(void)
 {
     struct db *db = NULL;

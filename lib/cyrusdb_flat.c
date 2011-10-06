@@ -85,6 +85,8 @@ struct db {
 
     struct buf data;		/* returned storage for fetch */
 };
+#define DATA(db)	((db)->data.s ? (db)->data.s : "")
+#define DATALEN(db)	((db)->data.len)
 
 struct txn {
     char *fnamenew;
@@ -445,8 +447,8 @@ static int myfetch(struct db *db,
 		   /* subtract one for \t, and one for the \n */
 		   len - keybuf.len - 2,
 		   &db->data);
-	    if (data) *data = db->data.s;
-	    if (datalen) *datalen = db->data.len;
+	    if (data) *data = DATA(db);
+	    if (datalen) *datalen = DATALEN(db);
 	}
     } else {
 	r = CYRUSDB_NOTFOUND;
@@ -576,7 +578,7 @@ static int foreach(struct db *db,
 	if (keybuf.len < (size_t) prefixbuf.len) break;
 	if (prefixbuf.len && memcmp(keybuf.s, prefixbuf.s, prefixbuf.len)) break;
 
-	if (!goodp || goodp(rock, keybuf.s, keybuf.len, db->data.s, db->data.len)) {
+	if (!goodp || goodp(rock, keybuf.s, keybuf.len, DATA(db), DATALEN(db))) {
 	    unsigned long ino = db->ino;
  	    unsigned long sz = db->size;
 
@@ -586,7 +588,7 @@ static int foreach(struct db *db,
 	    }
 
 	    /* make callback */
-	    r = cb(rock, keybuf.s, keybuf.len, db->data.s, db->data.len);
+	    r = cb(rock, keybuf.s, keybuf.len, DATA(db), DATALEN(db));
 	    if (r) break;
 
 	    if(mytid) {
@@ -784,6 +786,10 @@ static int create(struct db *db,
 		  const char *data, int datalen,
 		  struct txn **tid)
 {
+    if (!data) {
+	data = "";
+	datalen = 0;
+    }
     return mystore(db, key, keylen, data, datalen, tid, 0);
 }
 
@@ -792,6 +798,10 @@ static int store(struct db *db,
 		 const char *data, int datalen,
 		 struct txn **tid)
 {
+    if (!data) {
+	data = "";
+	datalen = 0;
+    }
     return mystore(db, key, keylen, data, datalen, tid, 1);
 }
 
