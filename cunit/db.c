@@ -95,28 +95,35 @@ static char *make_basedir(const char * const *reldirs)
     CU_ASSERT_EQUAL(r, CYRUSDB_OK); \
     CU_ASSERT_PTR_NOT_NULL(txn);
 
+#define BADDATA		((const char *)0xdeadbeef)
+#define BADLEN		((int)0xcafebabe)
+
 #define CANFETCH(key, keylen, expdata, expdatalen) \
 { \
-    const char *_data = NULL; \
-    int _datalen = 0; \
+    const char *_data = BADDATA; \
+    int _datalen = BADLEN; \
     r = DB->fetch(db, key, keylen, &_data, &_datalen, &txn); \
     CU_ASSERT_EQUAL(r, CYRUSDB_OK); \
     CU_ASSERT_PTR_NOT_NULL(txn); \
     CU_ASSERT_PTR_NOT_NULL(_data); \
-    CU_ASSERT_PTR_NOT_EQUAL((void *)_data, (void *)expdata); \
+    CU_ASSERT_PTR_NOT_EQUAL(_data, BADDATA); \
+    CU_ASSERT_PTR_NOT_EQUAL(_data, expdata); \
+    CU_ASSERT_NOT_EQUAL(_datalen, BADLEN); \
     CU_ASSERT_EQUAL(_datalen, expdatalen); \
     CU_ASSERT(!memcmp(_data, expdata, _datalen)); \
 }
 
 #define CANNOTFETCH(key, keylen, experror) \
 { \
-    const char *_data = NULL; \
-    int _datalen = 0; \
+    const char *_data = BADDATA; \
+    int _datalen = BADLEN; \
     r = DB->fetch(db, key, keylen, &_data, &_datalen, &txn); \
     CU_ASSERT_EQUAL(r, experror); \
     CU_ASSERT_PTR_NOT_NULL(txn); \
     CU_ASSERT_PTR_NULL(_data); \
+    CU_ASSERT_PTR_NOT_EQUAL(_data, BADDATA); \
     CU_ASSERT_EQUAL(_datalen, 0); \
+    CU_ASSERT_NOT_EQUAL(_datalen, BADLEN); \
 }
 
 #define CANCOMMIT() \
