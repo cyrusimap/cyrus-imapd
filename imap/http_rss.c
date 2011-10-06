@@ -70,7 +70,8 @@
 #include "xstrlcpy.h"
 
 #define XML_NS_ATOM	"http://www.w3.org/2005/Atom"
-#define MAX_FEED	100
+#define RSS_MAX_ITEMS	100	/* only display 100 most recent messages */
+#define RSS_TTL		30	/* refresh every 30min */
 #define MAX_SECTION_LEN	128
 
 static int meth_get(struct transaction_t *txn);
@@ -378,7 +379,7 @@ static void list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     xmlNodePtr root, chan, item, link;
     xmlNsPtr atom;
     const char **host;
-    unsigned recno, recentuid = 0, feed = MAX_FEED;
+    unsigned recno, recentuid = 0, num_items = RSS_MAX_ITEMS;
     struct buf buf = BUF_INITIALIZER;
 #if 0
     /* Obtain recentuid */
@@ -434,6 +435,10 @@ static void list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     xmlNewProp(link, BAD_CAST "rel", BAD_CAST "self");
     xmlNewProp(link, BAD_CAST "type", BAD_CAST "application/rss+xml");
 
+    buf_reset(&buf);
+    buf_printf(&buf, "%u", RSS_TTL);
+    xmlNewChild(chan, NULL, BAD_CAST "ttl", BAD_CAST buf_cstring(&buf));
+
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
 	buf_reset(&buf);
 	buf_printf(&buf, "Cyrus HTTP %s", cyrus_version());
@@ -442,7 +447,7 @@ static void list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     }
 
     /* Add an <item> for each message */
-    for (recno = mailbox->i.num_records; feed && recno >= 1; recno--) {
+    for (recno = mailbox->i.num_records; num_items && recno >= 1; recno--) {
 	struct index_record record;
 	const char *msg_base;
 	unsigned long msg_size;
@@ -465,7 +470,7 @@ static void list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 	}
 
 	/* Feeding this message, decrement counter */
-	feed--;
+	num_items--;
 
 	item = xmlNewChild(chan, NULL, BAD_CAST "item", NULL);
 
