@@ -2973,35 +2973,38 @@ static void add_header(const char *destname, const char **dest,
     int fold = 0;
 
     if (src) {
-	const char *s;
-	size_t n;
-	char  *sep = "";
-
-	if (dest) {
-	    /* append to the cached header */
-	    buf_appendcstr(&buf, dest[0]);
-	    fold = buf.len + 1;
-	    sep = ", ";
+	if (!newspostuser) {
+	    /* new header body is copy of source */
+	    buf_appendcstr(&buf, src[0]);
 	}
+	else {
+	    const char *s;
+	    size_t n;
+	    char  *sep = "";
 
-	for (s = src[0];; s += n) {
-	    /* skip whitespace */
-	    while (s && *s &&
-		   (Uisspace(*s) || *s == ',')) s++;
-	    if (!s || !*s) break;
+	    if (dest) {
+		/* append to the cached header */
+		buf_appendcstr(&buf, dest[0]);
+		fold = buf.len + 1;
+		sep = ", ";
+	    }
 
-	    /* find end of source address/group */
-	    n = strcspn(s, ", \t");
+	    for (s = src[0];; s += n) {
+		/* skip whitespace */
+		while (s && *s &&
+		       (Uisspace(*s) || *s == ',')) s++;
+		if (!s || !*s) break;
 
-	    /* append the new (translated) address */
-	    if (newspostuser) {
+		/* find end of source address/group */
+		n = strcspn(s, ", \t");
+
+		/* append the new (translated) address */
 		buf_printf(&buf, "%s%s+%.*s",
 			   sep, newspostuser, (int) n, s);
 		if (config_defdomain) buf_printf(&buf, "@%s", config_defdomain);
-	    }
-	    else buf_printf(&buf, "%s%.*s", sep, (int) n, s);
 
-	    sep = ", ";
+		sep = ", ";
+	    }
 	}
 	newdest = buf_release(&buf);
 
