@@ -3103,6 +3103,8 @@ static int savemsg(message_data_t *m, FILE *f)
 			    /* add the post address */
 			    buf_printf(&buf, "%s%s+%.*s",
 					 sep, newspostuser, (int) n, p);
+			    if (config_defdomain)
+				buf_printf(&buf, "@%s", config_defdomain);
 
 			    sep = ", ";
 			}
