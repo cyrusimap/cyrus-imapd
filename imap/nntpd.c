@@ -3018,56 +3018,57 @@ static void add_header(const char *destname, const char **dest,
     char *newdest = NULL, *fold = NULL, *d;
 
     if (src) {
-	const char *s;
-	size_t n, addlen;
-	char  *sep = "";
-
-	/* count the number of source addresses */
-	for (n = 0, s = src[0]; s; n++) {
-	    s = strchr(s, ',');
-	    if (s) s++;
-	}
-
-	/* estimate size of new addresses */
-	addlen = strlen(src[0]) + n*1;			    /* add 1 for SP */
-	if (newspostuser) {
-	    addlen += n * (strlen(newspostuser)+1);	    /* add 1 for '+' */
-	    if (config_defdomain)
-		addlen += n * (strlen(config_defdomain)+1); /* add 1 for '@' */
-	}
-
-	if (dest) {
-	    /* append to the cached header */
-	    addlen += strlen(dest[0]);
-	    dest[0] = xrealloc((char *) dest[0], addlen + 1);
-	    newdest = (char *) dest[0];
-	    fold = newdest + strlen(newdest) + 1;
-	    sep = ", ";
+	if (!newspostuser) {
+	    /* new header body is copy of source */
+	    newdest = xstrdup(src[0]);
 	}
 	else {
-	    /* create a new header body */
-	    newdest = xzmalloc(addlen + 1);
-	}
+	    const char *s;
+	    size_t n, addlen;
+	    char  *sep = "";
 
-	d = newdest + strlen(newdest);
-	for (s = src[0];; s += n) {
-	    /* skip whitespace */
-	    while (s && *s &&
-		   (Uisspace(*s) || *s == ',')) s++;
-	    if (!s || !*s) break;
+	    /* count the number of source addresses */
+	    for (n = 0, s = src[0]; s; n++) {
+		s = strchr(s, ',');
+		if (s) s++;
+	    }
 
-	    /* find end of source address/group */
-	    n = strcspn(s, ", \t");
+	    /* estimate size of new addresses */
+	    addlen = strlen(src[0]) + n*1;			/* +1 for SP  */
+	    addlen += n * (strlen(newspostuser)+1);		/* +1 for '+' */
+	    if (config_defdomain)
+		addlen += n * (strlen(config_defdomain)+1);	/* +1 for '@' */
 
-	    /* append the new (translated) address */
-	    if (newspostuser) {
+	    if (dest) {
+		/* append to the cached header */
+		addlen += strlen(dest[0]);
+		dest[0] = xrealloc((char *) dest[0], addlen + 1);
+		newdest = (char *) dest[0];
+		fold = newdest + strlen(newdest) + 1;
+		sep = ", ";
+	    }
+	    else {
+		/* create a new header body */
+		newdest = xzmalloc(addlen + 1);
+	    }
+
+	    d = newdest + strlen(newdest);
+	    for (s = src[0];; s += n) {
+		/* skip whitespace */
+		while (s && *s &&
+		       (Uisspace(*s) || *s == ',')) s++;
+		if (!s || !*s) break;
+
+		/* find end of source address/group */
+		n = strcspn(s, ", \t");
+
+		/* append the new (translated) address */
 		d += sprintf(d, "%s%s+%.*s",
 			     sep, newspostuser, (int) n, s);
 		if (config_defdomain) d += sprintf(d, "@%s", config_defdomain);
-	    }
-	    else d += sprintf(d, "%s%.*s", sep, (int) n, s);
 
-	    sep = ", ";
+		sep = ", ";
+	    }
 	}
 
 	if (!dest) {
