@@ -595,7 +595,6 @@ static void display_part(struct transaction_t *txn, struct buf *buf,
 	char *sep;
 
 	/* Display enclosed message header as a shaded table */
-	buf_reset(buf);
 	buf_printf(buf, "<table width=\"100%%\" bgcolor=\"#CCCCCC\">\n");
 	/* Subject header field */
 	if (subpart->subject) {
@@ -647,7 +646,6 @@ static void display_part(struct transaction_t *txn, struct buf *buf,
 	    }
 	}
 	buf_printf(buf, "</table><br>\n");
-	body_chunk(txn, buf->s, buf->len);
 
 	/* Display subpart */
 	snprintf(nextsection, sizeof(nextsection), "%s%s%d",
@@ -667,9 +665,12 @@ static void display_part(struct transaction_t *txn, struct buf *buf,
 	    body->decoded_body =
 		charset_to_utf8(msg_base + body->content_offset,
 				body->content_size, charset, encoding);
-	    if (!ishtml) body_chunk(txn, "<pre>", strlen("<pre>"));
+	    if (!ishtml) buf_printf(buf, "<pre>");
+	    body_chunk(txn, buf->s, buf->len);
+	    buf_reset(buf);
+
 	    body_chunk(txn, body->decoded_body, strlen(body->decoded_body));
-	    if (!ishtml) body_chunk(txn, "</pre>", strlen("</pre>"));
+	    if (!ishtml) buf_printf(buf, "</pre>");
 	}
 	else {
 	    int is_image = !strcmp(body->type, "IMAGE");
@@ -688,7 +689,6 @@ static void display_part(struct transaction_t *txn, struct buf *buf,
 	    for (; param && strcmp(param->attribute, file_attr);
 		 param = param->next);
 
-	    buf_reset(buf);
 	    buf_printf(buf, "<div align=center>");
 
 	    /* Create link */
@@ -711,10 +711,9 @@ static void display_part(struct transaction_t *txn, struct buf *buf,
 
 	    if (is_image) buf_printf(buf, "\">");
 	    buf_printf(buf, "</a></div>");
-	    body_chunk(txn, buf->s, buf->len);
 	}
 
-	body_chunk(txn, "\n<hr>\n", strlen("\n<hr>\n"));
+	buf_printf(buf, "\n<hr>\n");
     }
 }
 
@@ -744,8 +743,6 @@ static void display_message(struct transaction_t *txn,
 	       txn->req_tgt.path, uid);
     buf_printf(&buf, "[View message source]</a></div><hr>\n");
 
-    body_chunk(txn, buf.s, buf.len);
-
     /* Encapsulate our body in a message/rfc822 to display toplevel hdrs */
     memset(&toplevel, 0, sizeof(struct body));
     toplevel.type = "MESSAGE";
@@ -755,7 +752,6 @@ static void display_message(struct transaction_t *txn,
     display_part(txn, &buf, &toplevel, uid, "", msg_base);
 
     /* End of HTML */
-    buf_reset(&buf);
     buf_printf(&buf, "</body></html>");
     body_chunk(txn, buf.s, buf.len);
 
