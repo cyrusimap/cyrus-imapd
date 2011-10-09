@@ -783,5 +783,27 @@ static void test_bufprint(void)
     buf_free(&b);
 }
 
+#ifdef HAVE_ZLIB
+static void test_compress(void)
+{
+    struct buf b = BUF_INITIALIZER;
+    static const char DATA0[] = "LoRem";
+    int r;
+
+    buf_printf(&b, "%s", DATA0);
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&b), DATA0);
+
+    r = buf_deflate(&b);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_STRING_NOT_EQUAL(buf_cstring(&b), DATA0);
+
+    r = buf_inflate(&b);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&b), DATA0);
+
+    buf_free(&b);
+}
+#endif
+
 /* TODO: test the Copy-On-Write feature of buf_ensure()...if anyone
  * actually uses it */
