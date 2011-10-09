@@ -231,4 +231,10 @@ void buf_move(struct buf *dst, struct buf *src);
  */
 char *strconcat(const char *s1, ...);
 
+#ifdef HAVE_ZLIB
+int buf_inflate(struct buf *buf);
+/* XXX - compression level controls? */
+int buf_deflate(struct buf *buf);
+#endif
+
 #endif /* INCLUDED_UTIL_H */
