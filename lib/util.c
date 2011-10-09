@@ -65,6 +65,9 @@
 #include "exitcodes.h"
 #include "util.h"
 #include "xmalloc.h"
+#ifdef HAVE_ZLIB
+#include "zlib.h"
+#endif
 
 #define BEAUTYBUFSIZE 4096
 
@@ -957,3 +960,107 @@ int hex_to_bin(const char *hex, size_t hexlen, void *bin)
     return (unsigned char *)v - (unsigned char *)bin;
 }
 
+#ifdef HAVE_ZLIB
+
+/* Wrappers for our memory management functions */
+static voidpf zalloc(voidpf opaque __attribute__((unused)),
+		     uInt items, uInt size)
+{
+    return (voidpf) xmalloc(items * size);
+}
+
+static void zfree(voidpf opaque __attribute__((unused)),
+		  voidpf address)
+{
+    free(address);
+}
+
+int buf_inflate(struct buf *src)
+{
+    struct buf localbuf = BUF_INITIALIZER;
+    int zr = Z_OK;
+    z_stream *zstrm = (z_stream *) xmalloc(sizeof(z_stream));
+
+    zstrm->zalloc = zalloc;
+    zstrm->zfree = zfree;
+    zstrm->opaque = Z_NULL;
+
+    zstrm->next_in = Z_NULL;
+    zstrm->avail_in = 0;
+    zr = inflateInit2(zstrm, -MAX_WBITS);	/* raw inflate */
+    if (zr != Z_OK) goto err;
+
+    /* set up the source */
+    zstrm->next_in = (unsigned char *)src->s;
+    zstrm->avail_in = src->len;
+
+    /* prepare the destination */
+    do {
+	buf_ensure(&localbuf, 4096);
+	/* find the buffer */
+	zstrm->next_out = (unsigned char *)localbuf.s + localbuf.len;
+	zstrm->avail_out = localbuf.alloc - localbuf.len;
+	zr = inflate(zstrm, Z_SYNC_FLUSH);
+	if (!(zr == Z_OK || zr == Z_STREAM_END || zr == Z_BUF_ERROR))
+	   goto err;
+	localbuf.len = localbuf.alloc - zstrm->avail_out;
+    } while (zstrm->avail_out == 0);
+
+    inflateEnd(zstrm);
+    free(zstrm);
+
+    buf_free(src); /* dispose of current buffer */
+    *src = localbuf; /* in place replace */
+    return 0;
+
+ err:
+    free(zstrm);
+    buf_free(&localbuf);
+    return -1;
+}
+
+int buf_deflate(struct buf *src)
+{
+    struct buf localbuf = BUF_INITIALIZER;
+    int zr = Z_OK;
+    z_stream *zstrm = (z_stream *) xmalloc(sizeof(z_stream));
+
+    zstrm->zalloc = zalloc;
+    zstrm->zfree = zfree;
+    zstrm->opaque = Z_NULL;
+
+    zr = deflateInit2(zstrm, Z_DEFAULT_COMPRESSION, Z_DEFLATED,
+		      -MAX_WBITS,		/* raw deflate */
+		      MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY);
+    if (zr != Z_OK) goto err;
+
+    /* set up the source */
+    zstrm->next_in = (unsigned char *)src->s;
+    zstrm->avail_in = src->len;
+
+    /* prepare the destination */
+    do {
+	buf_ensure(&localbuf, 4096);
+	/* find the buffer */
+	zstrm->next_out = (unsigned char *)localbuf.s + localbuf.len;
+	zstrm->avail_out = localbuf.alloc - localbuf.len;
+	zr = deflate(zstrm, Z_SYNC_FLUSH);
+	if (!(zr == Z_OK || zr == Z_STREAM_END || zr == Z_BUF_ERROR))
+	   goto err;
+	localbuf.len = localbuf.alloc - zstrm->avail_out;
+    } while (zstrm->avail_out == 0);
+
+    deflateEnd(zstrm);
+    free(zstrm);
+
+    buf_free(src); /* dispose of current buffer */
+    *src = localbuf; /* in place replace */
+    return 0;
+
+ err:
+    free(zstrm);
+    buf_free(&localbuf);
+    return -1;
+}
+
+#endif

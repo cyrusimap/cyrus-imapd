@@ -243,4 +243,10 @@ int hex_to_bin(const char *hex, size_t hexlen, void *bin);
 #define cyrus_getpass getpass
 #endif
 
+#ifdef HAVE_ZLIB
+int buf_inflate(struct buf *buf);
+/* XXX - compression level controls? */
+int buf_deflate(struct buf *buf);
+#endif
+
 #endif /* INCLUDED_UTIL_H */
