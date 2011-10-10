@@ -46,6 +46,10 @@
 
 #include <libxml/tree.h>
 
+#ifdef HAVE_ZLIB
+#include <zlib.h>
+#endif /* HAVE_ZLIB */
+
 #include "mailbox.h"
 #include "spool.h"
 
@@ -157,6 +161,9 @@ struct transaction_t {
     const char *etag;			/* ETag: of response representation */
     const char *errstr;			/* Error string */
     struct resp_body_t resp_body;	/* Response body meta-data */
+#ifdef HAVE_ZLIB
+    z_stream zstrm;			/* Compression context */
+#endif
 };
 
 /* Transaction flags */
@@ -164,8 +171,9 @@ enum {
     HTTP_CLOSE =	(1<<0),
     HTTP_STARTTLS =	(1<<1),
     HTTP_100CONTINUE =	(1<<2),
-    HTTP_CHUNKED =	(1<<3),
-    HTTP_NOCACHE =	(1<<4)
+    HTTP_GZIP =	  	(1<<3),
+    HTTP_CHUNKED =	(1<<4),
+    HTTP_NOCACHE =	(1<<5)
 };
 
 typedef int (*method_proc_t)(struct transaction_t *txn);
@@ -203,7 +211,7 @@ extern void response_header(long code, struct transaction_t *txn);
 extern void error_response(long code, struct transaction_t *txn);
 extern void html_response(long code, struct transaction_t *txn, xmlDocPtr html);
 extern void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml);
-extern void body_chunk(struct transaction_t *txn,
+extern void write_body(long code, struct transaction_t *txn,
 		       const char *buf, unsigned len);
 extern int meth_options(struct transaction_t *txn);
 

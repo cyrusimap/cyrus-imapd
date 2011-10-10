@@ -170,12 +170,8 @@ static int meth_get(struct transaction_t *txn)
 	    else if (!strcmp(section, "0")) {
 		/* Return entire message as text/plain */
 		txn->resp_body.type = "text/plain";
-		txn->resp_body.len = msg_size;
 
-		response_header(HTTP_OK, txn);
-
-		if (txn->meth[0] != 'H')
-		    prot_write(httpd_out, msg_base, msg_size);
+		write_body(HTTP_OK, txn, msg_base, msg_size);
 	    }
 	    else {
 		/* Fetch, decode, and return the specified MIME message part */
@@ -285,7 +281,7 @@ int list_cb(char *name, int matchlen, int maycreate __attribute__((unused)),
 
     buf_reset(lrock->buf);
     buf_printf(lrock->buf, "<li><a href=\"%s\">%s</a></li>\n", href, name);
-    body_chunk(lrock->txn, lrock->buf->s, lrock->buf->len);
+    write_body(0, lrock->txn, lrock->buf->s, lrock->buf->len);
 
     return 0;
 }
@@ -302,14 +298,11 @@ static void list_feeds(struct transaction_t *txn)
     txn->flags |= HTTP_CHUNKED;
     txn->resp_body.type = "text/html; charset=utf-8";
 
-    response_header(HTTP_OK, txn);
-
     /* Start HTML */
     buf_printf(&buf, HTML_DOCTYPE "\n");
     buf_printf(&buf, "<html><head><title>Cyrus RSS Feeds</title></head>\n");
     buf_printf(&buf, "<body><h2>Cyrus RSS Feeds</h2><ul>\n");
-
-    body_chunk(txn, buf.s, buf.len);
+    write_body(HTTP_OK, txn, buf.s, buf.len);
 
     lrock.txn = txn;
     lrock.buf = &buf;
@@ -320,10 +313,10 @@ static void list_feeds(struct transaction_t *txn)
     /* End of HTML */
     buf_reset(&buf);
     buf_printf(&buf, "</ul></body></html>");
-    body_chunk(txn, buf.s, buf.len);
+    write_body(0, txn, buf.s, buf.len);
 
     /* End of output */
-    body_chunk(txn, NULL, 0);
+    write_body(0, txn, NULL, 0);
 
     buf_free(&buf);
 }
@@ -665,10 +658,10 @@ static void display_part(struct transaction_t *txn, struct buf *buf,
 		charset_to_utf8(msg_base + body->content_offset,
 				body->content_size, charset, encoding);
 	    if (!ishtml) buf_printf(buf, "<pre>");
-	    body_chunk(txn, buf->s, buf->len);
+	    write_body(0, txn, buf->s, buf->len);
 	    buf_reset(buf);
 
-	    body_chunk(txn, body->decoded_body, strlen(body->decoded_body));
+	    write_body(0, txn, body->decoded_body, strlen(body->decoded_body));
 	    if (!ishtml) buf_printf(buf, "</pre>");
 	}
 	else {
@@ -729,8 +722,6 @@ static void display_message(struct transaction_t *txn,
     txn->flags |= HTTP_CHUNKED;
     txn->resp_body.type = "text/html; charset=utf-8";
 
-    response_header(HTTP_OK, txn);
-
     /* Start HTML */
     buf_printf(&buf, HTML_DOCTYPE "\n");
     buf_printf(&buf, "<html><head><title>%s:%u</title></head><body>\n",
@@ -742,6 +733,9 @@ static void display_message(struct transaction_t *txn,
 	       txn->req_tgt.path, uid);
     buf_printf(&buf, "[View message source]</a></div><hr>\n");
 
+    write_body(HTTP_OK, txn, buf.s, buf.len);
+    buf_reset(&buf);
+
     /* Encapsulate our body in a message/rfc822 to display toplevel hdrs */
     memset(&toplevel, 0, sizeof(struct body));
     toplevel.type = "MESSAGE";
@@ -752,10 +746,10 @@ static void display_message(struct transaction_t *txn,
 
     /* End of HTML */
     buf_printf(&buf, "</body></html>");
-    body_chunk(txn, buf.s, buf.len);
+    write_body(0, txn, buf.s, buf.len);
 
     /* End of output */
-    body_chunk(txn, NULL, 0);
+    write_body(0, txn, NULL, 0);
 
     buf_free(&buf);
 }
@@ -802,15 +796,11 @@ static void fetch_part(struct transaction_t *txn, struct body *body,
 	    return;
 
 	}
-	txn->resp_body.len = outsize;
 
 	buf_printf(&buf, "%s/%s", body->type, body->subtype);
 	txn->resp_body.type = buf.s;
 
-	response_header(HTTP_OK, txn);
-
-	if (txn->meth[0] != 'H')
-	    prot_write(httpd_out, outbuf, outsize);
+	write_body(HTTP_OK, txn, outbuf, outsize);
 
 	buf_free(&buf);
     }

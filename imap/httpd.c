@@ -114,6 +114,7 @@
 #include "index.h"
 #include "idle.h"
 #include "rfc822date.h"
+#include "tok.h"
 
 #include <libical/ical.h>
 
@@ -242,6 +243,7 @@ static void cmdloop(void);
 static int parse_uri(const char *meth, const char *uri,
 		     struct request_target_t *tgt, const char **errstr);
 static int parse_path(struct request_target_t *tgt, const char **errstr);
+static struct accept *parse_accept(const char *hdr);
 static int read_body(struct transaction_t *txn, int dump, const char **errstr);
 static int http_auth(const char *creds, struct auth_challenge_t *chal);
 
@@ -270,6 +272,12 @@ static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_PROXY_POLICY, &mysasl_proxy_policy, (void*) &httpd_proxyctx },
     { SASL_CB_CANON_USER, &mysasl_canon_user, NULL },
     { SASL_CB_LIST_END, NULL, NULL }
+};
+
+struct accept {
+    char *token;
+    float qual;
+    struct accept *next;
 };
 
 static void httpd_reset(void)
@@ -925,6 +933,9 @@ static void cmdloop(void)
 	txn.errstr = NULL;
 	txn.req_hdrs = NULL;
 	memset(&txn.resp_body, 0, sizeof(struct resp_body_t));
+#ifdef HAVE_ZLIB
+	deflateReset(&txn.zstrm);
+#endif
 
 	/* Flush any buffered output */
 	prot_flush(httpd_out);
@@ -1045,12 +1056,15 @@ static void cmdloop(void)
 	    goto error;
 	}
 
-	/* Check if this is a non-persistent connection */
+	/* Check for connection directives */
 	if ((hdr = spool_getheader(txn.req_hdrs, "Connection"))) {
+	    /* Check if this is a non-persistent connection */
 	    if (!strcmp(hdr[0], "close")) {
 		syslog(LOG_DEBUG, "non-persistent connection");
 		txn.flags |= HTTP_CLOSE;
 	    }
+
+	    /* Check if we need to start TLS */
 	    else if (!httpd_tls_done && tls_enabled() &&
 		     !strcmp(hdr[0], "Upgrade")) {
 		const char **upgd;
@@ -1097,6 +1111,26 @@ static void cmdloop(void)
 	}
 
 	if (ret) goto error;
+
+#ifdef HAVE_ZLIB
+	/* Check if we should compress response body */
+	if ((hdr = spool_getheader(txn.req_hdrs, "Accept-Encoding"))) {
+	    struct accept *e, *enc = parse_accept(hdr[0]);
+
+	    for (e = enc; e && e->token; e++) {
+		if (!strcmp(e->token, "gzip") || !strcmp(e->token, "x-gzip")) {
+		    txn.flags |= HTTP_GZIP;
+		    deflateInit2(&txn.zstrm, Z_DEFAULT_COMPRESSION, Z_DEFLATED,
+				 31, 8, Z_DEFAULT_STRATEGY);
+		}
+		/* XXX  Do we want to support deflate even though M$
+		   doesn't implement it correctly (raw deflate vs. zlib)? */
+
+		free(e->token);
+	    }
+	    if (enc) free(enc);
+	}
+#endif
 
 	/* Start TLS if requested */
 	if (txn.flags & HTTP_STARTTLS) starttls(&txn, 0);
@@ -1180,6 +1214,9 @@ static void cmdloop(void)
 	if (txn.req_hdrs) spool_free_hdrcache(txn.req_hdrs);
 	if (txn.flags & HTTP_CLOSE) {
 	    buf_free(&txn.req_body);
+#ifdef HAVE_ZLIB
+	    deflateEnd(&txn.zstrm);
+#endif
 	    return;
 	}
 
@@ -1394,6 +1431,45 @@ static int read_body(struct transaction_t *txn, int dump, const char **errstr)
     return 0;
 }
 
+/* Compare accept quality values so that they sort in descending order */
+static int compare_accept(const struct accept *a1, const struct accept *a2)
+{
+    if (a2->qual < a1->qual) return -1;
+    if (a2->qual > a1->qual) return 1;
+    return 0;
+}
+
+static struct accept *parse_accept(const char *hdr)
+{
+    tok_t tok = TOK_INITIALIZER(hdr, ";,\r\n", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+    char *token;
+    int n = 0, alloc = 0;
+    struct accept *ret = NULL;
+#define GROW_ACCEPT 10;
+
+    while ((token = tok_next(&tok))) {
+	if (!strncmp(token, "q=", 2)) {
+	    if (!ret) break;
+	    ret[n-1].qual = strtof(token+2, NULL);
+	}
+	else {
+	    if (n + 1 >= alloc)  {
+		alloc += GROW_ACCEPT;
+		ret = xrealloc(ret, alloc * sizeof(struct accept));
+	    }
+	    ret[n].token = xstrdup(token);
+	    ret[n].qual = 1.0;
+	    ret[++n].token = NULL;
+	}
+    }
+    tok_fini(&tok);
+
+    qsort(ret, n, sizeof(struct accept),
+	  (int (*)(const void *, const void *)) &compare_accept);
+
+    return ret;
+}
+
 static int is_mediatype(const char *hdr, const char *type)
 {
     size_t len = strlen(type);
@@ -1566,8 +1642,7 @@ void response_header(long code, struct transaction_t *txn)
 	    /* Continue with current authentication exchange */ 
 	    WWW_Authenticate(auth_chal->scheme->name, auth_chal->param);
 	}
-    }
-    else if (auth_chal->param) {
+    }    else if (auth_chal->param) {
 	/* Authentication completed with success data */
 	if (auth_chal->scheme->success) {
 	    /* Special handling of success data for this scheme */
@@ -1621,6 +1696,98 @@ void response_header(long code, struct transaction_t *txn)
 }
 
 
+/* List of incompressible MIME types */
+static const char *comp_mime[] = {
+    "image/gif",
+    "image/jpeg",
+    "image/png",
+    NULL
+};
+
+
+/* Determine if a MIME type is incompressible */
+static int is_incompressible(const char *type)
+{
+    const char **m;
+
+    for (m = comp_mime; *m && strcasecmp(*m, type); m++);
+    return (*m != NULL);
+}
+
+
+/*
+ * Output an HTTP response with body data, compressed as necessary.
+ *
+ * For chunked body data, an initial call with 'code' != 0 will output
+ * a response header and the first body chunk.
+ * All subsequent calls should have 'code' = 0 to output just the body chunk.
+ * A final call with 'len' = 0 ends the chunked body.
+ */
+void write_body(long code, struct transaction_t *txn,
+		const char *buf, unsigned len)
+{
+    unsigned is_chunked = (txn->flags & HTTP_CHUNKED);
+
+    if (code) {
+	if (is_incompressible(txn->resp_body.type)) txn->flags &= ~HTTP_GZIP;
+
+	if (txn->flags & HTTP_GZIP) {
+	    txn->resp_body.enc = "gzip";
+	    txn->flags |= HTTP_CHUNKED;  /* always chunk gzipped output */
+	}
+	else if (!is_chunked) txn->resp_body.len = len;
+
+	response_header(code, txn);
+    }
+
+    if (txn->meth[0] == 'H') return;
+
+#ifdef HAVE_ZLIB
+    if (txn->flags & HTTP_GZIP) {
+	char zbuf[PROT_BUFSIZE];
+	unsigned flush, out;
+
+	/* don't flush until last chunk */
+	flush = (is_chunked && len) ? Z_NO_FLUSH : Z_FINISH;
+
+	txn->zstrm.next_in = (Bytef *) buf;
+	txn->zstrm.avail_in = len;
+
+	do {
+	    txn->zstrm.next_out = (Bytef *) zbuf;
+	    txn->zstrm.avail_out = PROT_BUFSIZE;
+
+	    deflate(&txn->zstrm, flush);
+	    out = PROT_BUFSIZE - txn->zstrm.avail_out;
+
+	    if (out) {
+		/* we have a chunk of compressed output */
+		prot_printf(httpd_out, "%x\r\n", out);
+		prot_write(httpd_out, zbuf, out);
+		prot_printf(httpd_out, "\r\n");
+	    }
+
+	} while (!txn->zstrm.avail_out);
+
+	if (flush == Z_FINISH) prot_printf(httpd_out, "0\r\n\r\n");
+
+	return;
+    }
+#endif /* HAVE_ZLIB */
+
+    if (is_chunked) {
+	/* chunk */
+	prot_printf(httpd_out, "%x\r\n", len);
+	prot_write(httpd_out, buf, len);
+	prot_printf(httpd_out, "\r\n");
+    }
+    else {
+	/* full body */
+	prot_write(httpd_out, buf, len);
+    }
+}
+
+
 /* Output an HTTP error response with optional text/plain body */
 void error_response(long code, struct transaction_t *txn)
 {
@@ -1646,12 +1813,9 @@ void html_response(long code, struct transaction_t *txn, xmlDocPtr html)
 
     if (buf) {
 	/* Output the XML response */
-	txn->resp_body.len = bufsiz;
 	txn->resp_body.type = "text/html; charset=utf-8";
 
-	response_header(code, txn);
-
-	if (txn->meth[0] != 'H') prot_write(httpd_out, (char *) buf, bufsiz);
+	write_body(code, txn, (char *) buf, bufsiz);
 
 	/* Cleanup */
 	xmlFree(buf);
@@ -1674,12 +1838,9 @@ void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
 
     if (buf) {
 	/* Output the XML response */
-	txn->resp_body.len = bufsiz;
 	txn->resp_body.type = "application/xml; charset=utf-8";
 
-	response_header(code, txn);
-
-	if (txn->meth[0] != 'H') prot_write(httpd_out, (char *) buf, bufsiz);
+	write_body(code, txn, (char *) buf, bufsiz);
 
 	/* Cleanup */
 	xmlFree(buf);
@@ -1688,20 +1849,6 @@ void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
 	txn->errstr = "Error dumping XML tree";
 	error_response(HTTP_SERVER_ERROR, txn);
     }
-}
-
-
-/* Output a chunk of body data.  A length of zero ends the chunked body. */
-void body_chunk(struct transaction_t *txn __attribute__((unused)),
-		const char *buf, unsigned len)
-{
-    if (!len) {
-	struct buf trailers = BUF_INITIALIZER;
-	/* we currently don't use an trailing headers */
-	buf = buf_cstring(&trailers);
-    }
-
-    prot_printf(httpd_out, "%x\r\n%s\r\n", len, buf);
 }
 
 
@@ -2763,21 +2910,18 @@ static int meth_get_cal(struct transaction_t *txn)
     /* Fill in Etag, Last-Modified, and Content-Length */
     txn->etag = etag;
     resp_body->lastmod = lastmod;
-    resp_body->len = record.size - record.header_size;  /* skip msg hdr */
     resp_body->type = "text/calendar; charset=utf-8";
-
-    response_header(HTTP_OK, txn);
 
     if (txn->meth[0] == 'G') {
 	/* Load message containing the resource */
 	mailbox_map_message(mailbox, record.uid, &msg_base, &msg_size);
-
-	prot_write(httpd_out,
-		   msg_base + record.header_size,  /* skip message header */
-		   resp_body->len);
-
-	mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
     }
+
+    write_body(HTTP_OK, txn,
+	       /* skip message header */
+	       msg_base + record.header_size, record.size - record.header_size);
+
+    if (msg_base) mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
 
   done:
     if (caldavdb) caldav_close(caldavdb);
@@ -2797,7 +2941,6 @@ static int meth_get_doc(struct transaction_t *txn)
     const char *msg_base = NULL;
     unsigned long msg_size = 0;
     struct message_guid guid;
-    char *outbuf;
     struct resp_body_t *resp_body = &txn->resp_body;
 
     /* We don't accept a body for this method */
@@ -2842,9 +2985,6 @@ static int meth_get_doc(struct transaction_t *txn)
 	return precond;
     }
 
-    /* Assume identity encoding */
-    outbuf = (char *) msg_base;
-
     /* XXX  Use filename extensions? */
 
     /* Look for filetype signatures in the data */
@@ -2857,18 +2997,9 @@ static int meth_get_doc(struct transaction_t *txn)
     } else {
 	resp_body->type = "text/html";
     }
-#if 0
-    /* deflate encoding */
-    resp_body->enc = "deflate";
-    resp_body->len = compressBound(msg_size);
-    outbuf = xmalloc(resp_body->len);
-    compress(outbuf, &resp_body->len, msg_base, msg_len);
-#endif
-    response_header(HTTP_OK, txn);
 
-    if (txn->meth[0] == 'G') prot_write(httpd_out, outbuf, resp_body->len);
+    write_body(HTTP_OK, txn, msg_base, msg_size);
 
-    if (outbuf != msg_base) free(outbuf);
     map_free(&msg_base, &msg_size);
     close(fd);
 
