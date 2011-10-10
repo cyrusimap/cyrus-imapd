@@ -486,11 +486,10 @@ static void list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 	xmlNewChild(item, NULL, BAD_CAST "link", BAD_CAST buf_cstring(&buf));
 	xmlNewChild(item, NULL, BAD_CAST "guid", BAD_CAST buf_cstring(&buf));
 
-	if (body->reply_to || body->from || body->sender) {
+	if (body->from || body->sender) {
 	    struct address *addr;
 
-	    if (body->reply_to) addr = body->reply_to;
-	    else if (body->from) addr = body->from;
+	    if (body->from) addr = body->from;
 	    else addr = body->sender;
 
 	    if (*addr->mailbox) {
