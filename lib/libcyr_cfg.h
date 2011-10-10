@@ -104,7 +104,7 @@ enum cyrus_opt {
     CYRUSOPT_DELETERIGHT,
     /* SQL database */
     CYRUSOPT_SQL_DATABASE,
-    /* SQL engine ("mysql") */
+    /* SQL engine */
     CYRUSOPT_SQL_ENGINE,
     /* SQL hostname(s) ("") */
     CYRUSOPT_SQL_HOSTNAMES,

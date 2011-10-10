@@ -135,7 +135,7 @@ struct cyrusopt_s cyrus_options[] = {
       CYRUS_OPT_STRING },
 
     { CYRUSOPT_SQL_ENGINE,
-      CFGVAL(const char *, "mysql"),
+      CFGVAL(const char *, NULL),
       CYRUS_OPT_STRING },
 
     { CYRUSOPT_SQL_HOSTNAMES,
