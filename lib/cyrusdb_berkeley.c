@@ -492,8 +492,8 @@ static int gettid(struct txn **mytid, DB_TXN **tid, const char *where)
 }
 
 static int myfetch(struct db *mydb, 
-		   const char *key, int keylen,
-		   const char **data, int *datalen,
+		   const char *key, size_t keylen,
+		   const char **data, size_t *datalen,
 		   struct txn **mytid, int flags)
 {
     int r = 0;
@@ -542,16 +542,16 @@ static int myfetch(struct db *mydb,
 }
 
 static int fetch(struct db *mydb, 
-		 const char *key, int keylen,
-		 const char **data, int *datalen,
+		 const char *key, size_t keylen,
+		 const char **data, size_t *datalen,
 		 struct txn **mytid)
 {
     return myfetch(mydb, key, keylen, data, datalen, mytid, 0);
 }
 
 static int fetchlock(struct db *mydb, 
-		     const char *key, int keylen,
-		     const char **data, int *datalen,
+		     const char *key, size_t keylen,
+		     const char **data, size_t *datalen,
 		     struct txn **mytid)
 {
     return myfetch(mydb, key, keylen, data, datalen, mytid, DB_RMW);
@@ -581,7 +581,7 @@ static int fetchlock(struct db *mydb,
 /* instead of "DB_DBT_REALLOC", we might want DB_DBT_USERMEM and allocate
    this to the maximum length at the beginning. */
 static int foreach(struct db *mydb,
-		   const char *prefix, int prefixlen,
+		   const char *prefix, size_t prefixlen,
 		   foreach_p *goodp,
 		   foreach_cb *cb, void *rock, 
 		   struct txn **mytid)
@@ -729,8 +729,8 @@ static int foreach(struct db *mydb,
 }
 
 static int mystore(struct db *mydb, 
-		   const char *key, int keylen,
-		   const char *data, int datalen,
+		   const char *key, size_t keylen,
+		   const char *data, size_t datalen,
 		   struct txn **mytid, int putflags, int txnflags)
 {
     int r = 0;
@@ -812,24 +812,24 @@ static int mystore(struct db *mydb,
 }
 
 static int create(struct db *db, 
-		  const char *key, int keylen,
-		  const char *data, int datalen,
+		  const char *key, size_t keylen,
+		  const char *data, size_t datalen,
 		  struct txn **tid)
 {
     return mystore(db, key, keylen, data, datalen, tid, DB_NOOVERWRITE, 0);
 }
 
 static int store(struct db *db, 
-		 const char *key, int keylen,
-		 const char *data, int datalen,
+		 const char *key, size_t keylen,
+		 const char *data, size_t datalen,
 		 struct txn **tid)
 {
     return mystore(db, key, keylen, data, datalen, tid, 0, 0);
 }
 
 static int create_nosync(struct db *db, 
-			 const char *key, int keylen,
-			 const char *data, int datalen,
+			 const char *key, size_t keylen,
+			 const char *data, size_t datalen,
 			 struct txn **tid)
 {
     return mystore(db, key, keylen, data, datalen, tid, DB_NOOVERWRITE,
@@ -837,15 +837,15 @@ static int create_nosync(struct db *db,
 }
 
 static int store_nosync(struct db *db, 
-			const char *key, int keylen,
-			const char *data, int datalen,
+			const char *key, size_t keylen,
+			const char *data, size_t datalen,
 			struct txn **tid)
 {
     return mystore(db, key, keylen, data, datalen, tid, 0, DB_TXN_NOSYNC);
 }
 
 static int mydelete(struct db *mydb, 
-		    const char *key, int keylen,
+		    const char *key, size_t keylen,
 		    struct txn **mytid, int txnflags, int force)
 {
     int r = 0;
@@ -923,14 +923,14 @@ static int mydelete(struct db *mydb,
 }
 
 static int delete(struct db *db, 
-		  const char *key, int keylen,
+		  const char *key, size_t keylen,
 		  struct txn **tid, int force)
 {
     return mydelete(db, key, keylen, tid, 0, force);
 }
 
 static int delete_nosync(struct db *db, 
-			 const char *key, int keylen,
+			 const char *key, size_t keylen,
 			 struct txn **tid, int force)
 {
     return mydelete(db, key, keylen, tid, DB_TXN_NOSYNC, force);

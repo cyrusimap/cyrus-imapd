@@ -336,7 +336,7 @@ static int ptload(const char *identifier, struct auth_state **state)
     struct auth_state *fetched = NULL;
     size_t id_len;
     const char *data = NULL;
-    int dsize;
+    size_t dsize;
     const char *fname = NULL;
     char *tofree = NULL;
     struct db *ptdb;

@@ -355,9 +355,9 @@ static void run_users(void)
 }
 
 static int process_user_cb(void *rockp,
-			   const char *key, int keylen,
+			   const char *key, size_t keylen,
 			   const char *tmpdata __attribute__((unused)),
-			   int tmpdatalen __attribute__((unused))) 
+			   size_t tmpdatalen __attribute__((unused))) 
 {
     /* Only called to do deletes */
 /*    printf("pruning entry\n"); */
@@ -370,9 +370,9 @@ static int process_user_cb(void *rockp,
 /* We can cheat and do all we need to in this function */
 static int process_user_p(void *rockp,
 			  const char *key,
-			  int keylen,
+			  size_t keylen,
 			  const char *data,
-			  int datalen __attribute__((unused))) 
+			  size_t datalen __attribute__((unused))) 
 {
     int ret = 0;    
     long version, lastread;
@@ -432,17 +432,17 @@ static void process_seen(const char *path, const char *user)
 
 static int process_subs_cb(void *rockp __attribute__((unused)),
 			   const char *key __attribute__((unused)),
-			   int keylen __attribute__((unused)),
+			   size_t keylen __attribute__((unused)),
 			   const char *tmpdata __attribute__((unused)),
-			   int tmpdatalen __attribute__((unused))) 
+			   size_t tmpdatalen __attribute__((unused))) 
 {
     return 0;
 }
 
 static int process_subs_p(void *rockp,
-			  const char *key, int keylen,
+			  const char *key, size_t keylen,
 			  const char *tmpdata __attribute__((unused)),
-			  int tmpdatalen __attribute__((unused))) 
+			  size_t tmpdatalen __attribute__((unused))) 
 {
     struct arb_mailbox_data *mbox;
     char buf[MAX_MAILBOX_BUFFER];

@@ -166,7 +166,7 @@ time_t duplicate_check(const duplicate_key_t *dkey)
     struct buf key = BUF_INITIALIZER;
     int r;
     const char *data = NULL;
-    int len = 0;
+    size_t len = 0;
     time_t mark = 0;
 
     if (!duplicate_dbopen) return 0;
@@ -244,8 +244,8 @@ struct findrock {
     void *rock;
 };
 
-static int find_cb(void *rock, const char *key, int keylen,
-		   const char *data, int datalen)
+static int find_cb(void *rock, const char *key, size_t keylen,
+		   const char *data, size_t datalen)
 {
     struct findrock *frock = (struct findrock *) rock;
     duplicate_key_t dkey = DUPLICATE_INITIALIZER;
@@ -295,8 +295,8 @@ struct prunerock {
 };
 
 static int prune_p(void *rock,
-		   const char *key, int keylen,
-		   const char *data, int datalen __attribute__((unused)))
+		   const char *key, size_t keylen,
+		   const char *data, size_t datalen __attribute__((unused)))
 {
     struct prunerock *prock = (struct prunerock *) rock;
     time_t mark, *expmark = NULL;
@@ -320,9 +320,9 @@ static int prune_p(void *rock,
     return (mark < (expmark ? *expmark : prock->expmark));
 }
 
-static int prune_cb(void *rock, const char *id, int idlen,
+static int prune_cb(void *rock, const char *id, size_t idlen,
 		    const char *data __attribute__((unused)),
-		    int datalen __attribute__((unused)))
+		    size_t datalen __attribute__((unused)))
 {
     struct prunerock *prock = (struct prunerock *) rock;
     int r;
@@ -365,8 +365,8 @@ struct dumprock {
 };
 
 static int dump_cb(void *rock,
-		   const char *key, int keylen,
-		   const char *data, int datalen)
+		   const char *key, size_t keylen,
+		   const char *data, size_t datalen)
 {
     struct dumprock *drock = (struct dumprock *) rock;
     time_t mark;

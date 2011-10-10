@@ -115,10 +115,10 @@ static int buildquotalist(char *domain, char **roots, int nroots);
 static int fixquotas(char *domain, char **roots, int nroots);
 static int fixquota_dopass(char *domain, char **roots, int nroots,
 			   foreach_cb *pass);
-static int fixquota_pass1(void *rock, const char *name, int namelen,
-			  const char *val, int vallen);
-static int fixquota_pass2(void *rock, const char *name, int namelen,
-			  const char *val, int vallen);
+static int fixquota_pass1(void *rock, const char *name, size_t namelen,
+			  const char *val, size_t vallen);
+static int fixquota_pass2(void *rock, const char *name, size_t namelen,
+			  const char *val, size_t vallen);
 static int fixquota_fixroot(struct mailbox *mailbox, const char *root);
 static int fixquota_finish(int thisquota);
 static int (*compar)(const char *s1, const char *s2);
@@ -448,9 +448,9 @@ static int findroot(const char *name, int *thisquota)
  * Pass 1: reset the 'scanned' flag on each mailbox.
  */
 static int fixquota_pass1(void *rock __attribute__((unused)),
-			  const char *name, int namelen,
+			  const char *name, size_t namelen,
 			  const char *val __attribute__((unused)),
-			  int vallen __attribute__((unused)))
+			  size_t vallen __attribute__((unused)))
 {
     int r = 0;
     struct mailbox *mailbox = NULL;
@@ -480,9 +480,9 @@ done:
  *         with us will start updating the usedBs[].
  */
 static int fixquota_pass2(void *rock __attribute__((unused)),
-			  const char *name, int namelen,
+			  const char *name, size_t namelen,
 			  const char *val __attribute__((unused)),
-			  int vallen __attribute__((unused)))
+			  size_t vallen __attribute__((unused)))
 {
     int r = 0;
     struct mailbox *mailbox = NULL;

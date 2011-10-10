@@ -421,8 +421,8 @@ static int starttxn_or_refetch(struct db *db, struct txn **mytid)
 }
 
 static int myfetch(struct db *db, 
-		   const char *key, int keylen,
-		   const char **data, int *datalen,
+		   const char *key, size_t keylen,
+		   const char **data, size_t *datalen,
 		   struct txn **mytid)
 {
     int r = 0;
@@ -459,16 +459,16 @@ static int myfetch(struct db *db,
 }
 
 static int fetch(struct db *mydb, 
-		 const char *key, int keylen,
-		 const char **data, int *datalen,
+		 const char *key, size_t keylen,
+		 const char **data, size_t *datalen,
 		 struct txn **mytid)
 {
     return myfetch(mydb, key, keylen, data, datalen, mytid);
 }
 
 static int fetchlock(struct db *db, 
-		     const char *key, int keylen,
-		     const char **data, int *datalen,
+		     const char *key, size_t keylen,
+		     const char **data, size_t *datalen,
 		     struct txn **mytid)
 {
     return myfetch(db, key, keylen, data, datalen, mytid);
@@ -510,7 +510,7 @@ static int getentry(struct db *db, const char *p,
     if (r) break;
 
 static int foreach(struct db *db,
-		   const char *prefix, int prefixlen,
+		   const char *prefix, size_t prefixlen,
 		   foreach_p *goodp,
 		   foreach_cb *cb, void *rock, 
 		   struct txn **mytid)
@@ -634,8 +634,8 @@ static int foreach(struct db *db,
 #undef GETENTRY
 
 static int mystore(struct db *db, 
-		   const char *key, int keylen,
-		   const char *data, int datalen,
+		   const char *key, size_t keylen,
+		   const char *data, size_t datalen,
 		   struct txn **mytid, int overwrite)
 {
     int r = 0;
@@ -782,8 +782,8 @@ static int mystore(struct db *db,
 }
 
 static int create(struct db *db, 
-		  const char *key, int keylen,
-		  const char *data, int datalen,
+		  const char *key, size_t keylen,
+		  const char *data, size_t datalen,
 		  struct txn **tid)
 {
     if (!data) {
@@ -794,8 +794,8 @@ static int create(struct db *db,
 }
 
 static int store(struct db *db, 
-		 const char *key, int keylen,
-		 const char *data, int datalen,
+		 const char *key, size_t keylen,
+		 const char *data, size_t datalen,
 		 struct txn **tid)
 {
     if (!data) {
@@ -806,7 +806,7 @@ static int store(struct db *db,
 }
 
 static int delete(struct db *db, 
-		  const char *key, int keylen,
+		  const char *key, size_t keylen,
 		  struct txn **mytid, int force __attribute__((unused)))
 {
     return mystore(db, key, keylen, NULL, 0, mytid, 1);

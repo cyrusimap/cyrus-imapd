@@ -180,8 +180,8 @@ static int mupdate_list_cb(struct mupdate_mailboxdata *mdata,
 }
 
 static int dump_cb(void *rockp,
-		   const char *key, int keylen,
-		   const char *data, int datalen)
+		   const char *key, size_t keylen,
+		   const char *data, size_t datalen)
 {
     struct dumprock *d = (struct dumprock *) rockp;
     int r = 0;
@@ -783,8 +783,8 @@ int compar_mbox(const void *v1, const void *v2)
 }
 
 static int verify_cb(void *rockp,
-		     const char *key, int keylen,
-		     const char *data, int datalen __attribute__((unused)))
+		     const char *key, size_t keylen,
+		     const char *data, size_t datalen __attribute__((unused)))
 {
     struct found_list *found = (struct found_list *) rockp;
     int r;

@@ -373,7 +373,7 @@ static int myclose(struct db *db)
 }
 
 static int myfetch(struct db *db, char *quota_path,
-		   const char **data, int *datalen,
+		   const char **data, size_t *datalen,
 		   struct txn **tid)
 {
     struct subtxn *mytid = NULL;
@@ -475,8 +475,8 @@ static int myfetch(struct db *db, char *quota_path,
 }
 
 static int fetch(struct db *db, 
-		 const char *key, int keylen,
-		 const char **data, int *datalen,
+		 const char *key, size_t keylen,
+		 const char **data, size_t *datalen,
 		 struct txn **tid)
 {
     char quota_path[MAX_QUOTA_PATH+1], *tmpkey = NULL;
@@ -587,7 +587,7 @@ static void scan_qr_dir(char *quota_path, const char *prefix,
 }
 
 static int foreach(struct db *db,
-		   const char *prefix, int prefixlen,
+		   const char *prefix, size_t prefixlen,
 		   foreach_p *goodp,
 		   foreach_cb *cb, void *rock, 
 		   struct txn **tid)
@@ -659,7 +659,7 @@ static int foreach(struct db *db,
 
     for (i = 0; i < pathbuf.count; i++) {
 	const char *data, *key;
-	int keylen, datalen;
+	size_t keylen, datalen;
 
 	r = myfetch(db, pathbuf.data[i], &data, &datalen, tid);
 	if (r) break;
@@ -680,8 +680,8 @@ static int foreach(struct db *db,
 }
 
 static int mystore(struct db *db, 
-		   const char *key, int keylen,
-		   const char *data, int datalen,
+		   const char *key, size_t keylen,
+		   const char *data, size_t datalen,
 		   struct txn **tid, int overwrite)
 {
     char quota_path[MAX_QUOTA_PATH+1], *tmpkey = NULL;
@@ -793,17 +793,17 @@ static int mystore(struct db *db,
 
 	lseek(mytid->fdnew, 0, SEEK_SET);
 	n = write(mytid->fdnew, buf, datalen+1);
-	if (n == datalen+1) r1 = ftruncate(mytid->fdnew, datalen+1);
+	if (n == (ssize_t)datalen+1) r1 = ftruncate(mytid->fdnew, datalen+1);
 	free(buf);
 
-	if (n != datalen+1 || r1 == -1) {
+	if (n != (ssize_t)datalen+1 || r1 == -1) {
 	    if (n == -1 || r1 == -1)
 		syslog(LOG_ERR, "IOERROR: writing quota file %s: %m",
 		       new_quota_path);
 	    else
 		syslog(LOG_ERR,
 		       "IOERROR: writing quota file %s: failed to write %d bytes",
-		       new_quota_path, datalen+1);
+		       new_quota_path, (int)datalen+1);
 	    if (tid)
 		abort_txn(db, *tid);
 	    else
@@ -824,23 +824,23 @@ static int mystore(struct db *db,
 }
 
 static int create(struct db *db, 
-		  const char *key, int keylen,
-		  const char *data, int datalen,
+		  const char *key, size_t keylen,
+		  const char *data, size_t datalen,
 		  struct txn **tid)
 {
     return mystore(db, key, keylen, data, datalen, tid, 0);
 }
 
 static int store(struct db *db, 
-		 const char *key, int keylen,
-		 const char *data, int datalen,
+		 const char *key, size_t keylen,
+		 const char *data, size_t datalen,
 		 struct txn **tid)
 {
     return mystore(db, key, keylen, data, datalen, tid, 1);
 }
 
 static int delete(struct db *db, 
-		  const char *key, int keylen,
+		  const char *key, size_t keylen,
 		  struct txn **mytid, int force __attribute__((unused)))
 {
     return mystore(db, key, keylen, NULL, 0, mytid, 1);

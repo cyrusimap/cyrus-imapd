@@ -939,9 +939,9 @@ struct find_rock {
     void *rock;
 };
 
-static int find_p(void *rock, const char *key, int keylen,
+static int find_p(void *rock, const char *key, size_t keylen,
 		const char *data __attribute__((unused)),
-		int datalen __attribute__((unused)))
+		size_t datalen __attribute__((unused)))
 {
     struct find_rock *frock = (struct find_rock *) rock;
     const char *mboxname, *entry, *userid;
@@ -964,8 +964,8 @@ static int find_p(void *rock, const char *key, int keylen,
     return 1;
 }
 
-static int find_cb(void *rock, const char *key, int keylen,
-		   const char *data, int datalen)
+static int find_cb(void *rock, const char *key, size_t keylen,
+		   const char *data, size_t datalen)
 {
     struct find_rock *frock = (struct find_rock *) rock;
     const char *mboxname, *entry, *userid;
@@ -1004,7 +1004,8 @@ int annotatemore_findall(const char *mboxname,	/* internal */
 			 void *rock)
 {
     char key[MAX_MAILBOX_PATH+1], *p;
-    int keylen, r;
+    size_t keylen;
+    int r;
     struct find_rock frock;
 
     assert(mboxname);
@@ -2311,7 +2312,8 @@ int annotatemore_msg_lookup(const char *mboxname, uint32_t uid, const char *entr
 			    const char *userid, struct buf *value)
 {
     char key[MAX_MAILBOX_PATH+1];
-    int keylen, datalen, r;
+    size_t keylen, datalen;
+    int r;
     const char *data;
     annotate_db_t *d = NULL;
 
@@ -2344,7 +2346,7 @@ static int count_old_storage(annotate_db_t *d,
 			     quota_t *oldlenp)
 {
     int r;
-    int datalen;
+    size_t datalen;
     const char *data;
     struct buf val = BUF_INITIALIZER;
 
@@ -3254,9 +3256,9 @@ void annotate_reconstruct_add(annotate_reconstruct_state_t *ars,
     }
 }
 
-static int reconstruct_prune_cb(void *rock, const char *key, int keylen,
+static int reconstruct_prune_cb(void *rock, const char *key, size_t keylen,
 			        const char *data __attribute__((unused)),
-				int datalen __attribute__((unused)))
+				size_t datalen __attribute__((unused)))
 {
     annotate_reconstruct_state_t *ars = (annotate_reconstruct_state_t *)rock;
     int r;

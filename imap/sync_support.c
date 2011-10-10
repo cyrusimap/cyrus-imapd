@@ -1293,9 +1293,9 @@ int addmbox(char *name,
     return 0;
 }
 
-int addmbox_sub(void *rock, const char *key, int keylen,
+int addmbox_sub(void *rock, const char *key, size_t keylen,
 		const char *data __attribute__((unused)),
-		int datalen __attribute__((unused)))
+		size_t datalen __attribute__((unused)))
 {
     struct sync_name_list *list = (struct sync_name_list *) rock;
 

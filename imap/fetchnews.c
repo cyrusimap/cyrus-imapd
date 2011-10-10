@@ -509,7 +509,7 @@ int main(int argc, char *argv[])
 	const char *data;
 	unsigned long low, high, last, cur;
 	int start;
-	int datalen;
+	size_t datalen;
 	struct txn *tid = NULL;
 
 	newsrc_init(NULL, 0);

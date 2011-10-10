@@ -102,9 +102,9 @@ void fatal(const char *msg, int err)
 
 static int mbox_count_cb(void *rockp,
 			 const char *key __attribute__((unused)),
-			 int keylen __attribute__((unused)),
+			 size_t keylen __attribute__((unused)),
 			 const char *data __attribute__((unused)),
-			 int datalen __attribute__((unused)))
+			 size_t datalen __attribute__((unused)))
 {
     int *ip = (int *) rockp;
     (*ip)++;

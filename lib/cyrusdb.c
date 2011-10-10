@@ -118,22 +118,22 @@ struct db_rock {
 };
 
 static int delete_cb(void *rock,
-		     const char *key, int keylen,
+		     const char *key, size_t keylen,
 		     const char *data __attribute__((unused)), 
-		     int datalen __attribute__((unused))) 
+		     size_t datalen __attribute__((unused))) 
 {
     struct db_rock *cr = (struct db_rock *)rock;
     return (cr->backend->delete)(cr->db, key, keylen, cr->tid, 1);
 }
 
 static int print_cb(void *rock,
-		    const char *key, int keylen,
-		    const char *data, int datalen) 
+		    const char *key, size_t keylen,
+		    const char *data, size_t datalen) 
 {
     FILE *f = (FILE *)rock;
 
     /* XXX: improve binary safety */
-    fprintf(f, "%.*s\t%.*s\n", keylen, key, datalen, data);
+    fprintf(f, "%.*s\t%.*s\n", (int)keylen, key, (int)datalen, data);
 
     return 0;
 }
@@ -141,7 +141,7 @@ static int print_cb(void *rock,
 
 int cyrusdb_dump(struct cyrusdb_backend *backend,
 		 struct db *db,
-		 const char *prefix, int prefixlen,
+		 const char *prefix, size_t prefixlen,
 		 FILE *f,
 		 struct txn **tid)
 {
@@ -201,8 +201,8 @@ int cyrusdb_undump(struct cyrusdb_backend *backend,
 }
 
 static int converter_cb(void *rock,
-			const char *key, int keylen,
-			const char *data, int datalen) 
+			const char *key, size_t keylen,
+			const char *data, size_t datalen) 
 {
     struct db_rock *cr = (struct db_rock *)rock;
     return (cr->backend->store)(cr->db, key, keylen, data, datalen, cr->tid);

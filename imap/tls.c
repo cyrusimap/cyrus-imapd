@@ -540,7 +540,7 @@ static SSL_SESSION *get_session_cb(SSL *ssl __attribute__((unused)),
 {
     int ret;
     const char *data = NULL;
-    int len = 0;
+    size_t len = 0;
     time_t expire = 0, now = time(0);
     SSL_SESSION *sess = NULL;
 
@@ -1068,8 +1068,8 @@ struct prunerock {
     int deletions;
 };
 
-static int prune_p(void *rock, const char *id, int idlen,
-		   const char *data, int datalen)
+static int prune_p(void *rock, const char *id, size_t idlen,
+		   const char *data, size_t datalen)
 {
     struct prunerock *prock = (struct prunerock *) rock;
     time_t expire;
@@ -1083,7 +1083,7 @@ static int prune_p(void *rock, const char *id, int idlen,
 
     /* log this transaction */
     if (var_imapd_tls_loglevel > 0) {
-	int i;
+	size_t i;
 	char idstr[SSL_MAX_SSL_SESSION_ID_LENGTH*2 + 1];
 
 	assert(idlen <= SSL_MAX_SSL_SESSION_ID_LENGTH);
@@ -1100,9 +1100,9 @@ static int prune_p(void *rock, const char *id, int idlen,
     return (expire < time(0));
 }
 
-static int prune_cb(void *rock, const char *id, int idlen,
+static int prune_cb(void *rock, const char *id, size_t idlen,
 		    const char *data __attribute__((unused)), 
-                    int datalen __attribute__((unused)))
+                    size_t datalen __attribute__((unused)))
 {
     struct prunerock *prock = (struct prunerock *) rock;
 

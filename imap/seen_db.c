@@ -192,9 +192,9 @@ static void parse_data(const char *data, int datalen, struct seendata *sd)
 
 int foreach_proc(void *rock,
 		 const char *key,
-		 int keylen,
+		 size_t keylen,
 		 const char *data,
-		 int datalen)
+		 size_t datalen)
 {
     struct seendata sd;
     struct seendata_rock *sr = (struct seendata_rock *)rock;
@@ -224,7 +224,7 @@ static int seen_readit(struct seen *seendb, const char *uniqueid,
 {
     int r;
     const char *data;
-    int datalen;
+    size_t datalen;
 
     assert(seendb && uniqueid);
     if (rw || seendb->tid) {
@@ -502,8 +502,8 @@ int seen_compare(struct seendata *a, struct seendata *b)
  * last change times, and ensure that the database uses the newer of
  * the two */
 static int seen_merge_cb(void *rockp,
-			 const char *key, int keylen,
-			 const char *newdata, int newlen) 
+			 const char *key, size_t keylen,
+			 const char *newdata, size_t newlen) 
 {
     int r = 0;
     struct seen *seendb = (struct seen *)rockp;

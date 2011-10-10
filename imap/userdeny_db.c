@@ -76,7 +76,7 @@ int userdeny(const char *user, const char *service, char *msgbuf, size_t bufsiz)
 {
     int r, ret = 0; /* allow access by default */
     const char *data = NULL;
-    int datalen;
+    size_t datalen;
 
     if (!deny_dbopen) return 0;
 

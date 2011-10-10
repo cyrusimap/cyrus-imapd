@@ -83,7 +83,7 @@ struct cyrusdb_backend *DB_OLD = NULL;
 
 struct db *odb = NULL;
 
-int read_key_value(char **keyptr, int *keylen, char **valptr, int *vallen) {
+int read_key_value(char **keyptr, size_t *keylen, char **valptr, size_t *vallen) {
   int c,res,inkey;
   res = 0;
   inkey = 1;
@@ -118,10 +118,10 @@ int read_key_value(char **keyptr, int *keylen, char **valptr, int *vallen) {
 }
 
 int printer_cb(void *rock __attribute__((unused)),
-    const char *key, int keylen,
-    const char *data, int datalen)
+    const char *key, size_t keylen,
+    const char *data, size_t datalen)
 {
-    printf("%.*s\t%.*s\n", keylen, key, datalen, data);
+    printf("%.*s\t%.*s\n", (int)keylen, key, (int)datalen, data);
     return 0;
 }
 
@@ -131,7 +131,8 @@ int main(int argc, char *argv[])
     const char *action;
     char *key;
     char *value;
-    int i,r,keylen,vallen,reslen;
+    int i,r;
+    size_t keylen,vallen,reslen;
     int opt,loop;
     char *alt_config = NULL;
     const char *res = NULL;
@@ -221,7 +222,7 @@ int main(int argc, char *argv[])
         while ( loop ) {
           if (is_get) {
             DB_OLD->fetch(odb, key, keylen, &res, &reslen, &tid);
-            printf("%.*s\n", reslen, res);
+            printf("%.*s\n", (int)reslen, res);
           } else if (is_set) {
             DB_OLD->store(odb, key, keylen, value, vallen, &tid);
           } else if (is_delete) {

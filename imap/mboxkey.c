@@ -192,7 +192,7 @@ static int mboxkey_readit(struct mboxkey *mboxkeydb, const char *mailbox,
 {
     int r;
     const char *data;
-    int datalen;
+    size_t datalen;
     unsigned short version, s;
 
     assert(mboxkeydb && mailbox);
@@ -435,14 +435,14 @@ struct mboxkey_merge_rock
  * XXX  We currently have nothing to compare against.
  */
 static int mboxkey_merge_cb(void *rockp,
-			 const char *key, int keylen,
-			 const char *tmpdata, int tmpdatalen) 
+			 const char *key, size_t keylen,
+			 const char *tmpdata, size_t tmpdatalen) 
 {
     int r;
     struct mboxkey_merge_rock *rockdata = (struct mboxkey_merge_rock *)rockp;
     struct db *tgtdb = rockdata->db;
     const char *tgtdata;
-    int tgtdatalen;
+    size_t tgtdatalen;
 
     if (!tgtdb) return IMAP_INTERNAL;
 

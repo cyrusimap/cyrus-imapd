@@ -75,12 +75,12 @@ enum cyrusdb_openflags {
 };
 
 typedef int foreach_p(void *rock,
-		      const char *key, int keylen,
-		      const char *data, int datalen);
+		      const char *key, size_t keylen,
+		      const char *data, size_t datalen);
 
 typedef int foreach_cb(void *rock,
-		       const char *key, int keylen,
-		       const char *data, int datalen);
+		       const char *key, size_t keylen,
+		       const char *data, size_t datalen);
 
 struct cyrusdb_backend {
     const char *name;
@@ -139,12 +139,12 @@ struct cyrusdb_backend {
        and breaks this rule.
     */
     int (*fetch)(struct db *mydb, 
-		 const char *key, int keylen,
-		 const char **data, int *datalen,
+		 const char *key, size_t keylen,
+		 const char **data, size_t *datalen,
 		 struct txn **mytid);
     int (*fetchlock)(struct db *mydb, 
-		     const char *key, int keylen,
- 		     const char **data, int *datalen,
+		     const char *key, size_t keylen,
+ 		     const char **data, size_t *datalen,
 		     struct txn **mytid);
 
     /* foreach: iterate through entries that start with 'prefix'
@@ -164,7 +164,7 @@ struct cyrusdb_backend {
 	The callbacks will never be called with data=NULL.  For a zero
 	length record, data will point to a zero length buffer.  */
     int (*foreach)(struct db *mydb,
-		   const char *prefix, int prefixlen,
+		   const char *prefix, size_t prefixlen,
 		   foreach_p *p,
 		   foreach_cb *cb, void *rock, 
 		   struct txn **tid);
@@ -174,17 +174,17 @@ struct cyrusdb_backend {
      * Passing data=NULL or datalen=0 places a zero-length record in
      * the database, which can be fetched back again.  */
     int (*create)(struct db *db, 
-		  const char *key, int keylen,
-		  const char *data, int datalen,
+		  const char *key, size_t keylen,
+		  const char *data, size_t datalen,
 		  struct txn **tid);
     int (*store)(struct db *db, 
-		 const char *key, int keylen,
-		 const char *data, int datalen,
+		 const char *key, size_t keylen,
+		 const char *data, size_t datalen,
 		 struct txn **tid);
 
     /* Remove entrys from the database */
     int (*delete)(struct db *db, 
-		  const char *key, int keylen,
+		  const char *key, size_t keylen,
 		  struct txn **tid,
 		  int force); /* 1 = ignore not found errors */
     
@@ -220,7 +220,7 @@ extern void cyrusdb_convert(const char *fromfname, const char *tofname,
 
 int cyrusdb_dump(struct cyrusdb_backend *backend,
 		 struct db *db,
-		 const char *prefix, int prefixlen,
+		 const char *prefix, size_t prefixlen,
 		 FILE *f,
 		 struct txn **tid);
 int cyrusdb_truncate(struct cyrusdb_backend *backend,

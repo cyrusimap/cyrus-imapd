@@ -174,9 +174,9 @@ out:
 int quota_read(struct quota *quota, struct txn **tid, int wrlock)
 {
     int r;
-    int qrlen;
+    size_t qrlen;
     const char *data;
-    int datalen;
+    size_t datalen;
 
     if (!quota->root || !(qrlen = strlen(quota->root)))
 	return IMAP_QUOTAROOT_NONEXISTENT;
@@ -260,8 +260,8 @@ struct quota_foreach_t {
 };
 
 static int do_onequota(void *rock,
-		       const char *key, int keylen,
-		       const char *data, int datalen)
+		       const char *key, size_t keylen,
+		       const char *data, size_t datalen)
 {
     int r = 0;
     struct quota quota;

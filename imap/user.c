@@ -427,21 +427,21 @@ int user_copyquotaroot(char *oldname, char *newname)
 }
 
 static int find_p(void *rockp,
-		  const char *key, int keylen,
+		  const char *key, size_t keylen,
 		  const char *data __attribute__((unused)),
-		  int datalen __attribute__((unused)))
+		  size_t datalen __attribute__((unused)))
 {
     char *inboxname = (char *)rockp;
-    int inboxlen = strlen(inboxname);
+    size_t inboxlen = strlen(inboxname);
 
     return (!strncmp(key, inboxname, inboxlen) &&
 	    (keylen == inboxlen || key[inboxlen] == '.'));
 }
 
 static int find_cb(void *rockp __attribute__((unused)),
-		   const char *key, int keylen,
+		   const char *key, size_t keylen,
 		   const char *data __attribute__((unused)),
-		   int datalen __attribute__((unused)))
+		   size_t datalen __attribute__((unused)))
 {
     char *root;
     int r;

@@ -177,7 +177,7 @@ char *mboxlist_entry_cstring(struct mboxlist_entry *mbentry)
  * is placed in the char * pointed to by it.  If 'acl' is non-nil, a pointer
  * to the mailbox ACL is placed in the char * pointed to by it.
  */
-static int mboxlist_read(const char *name, const char **dataptr, int *datalenptr,
+static int mboxlist_read(const char *name, const char **dataptr, size_t *datalenptr,
 			 struct txn **tid, int wrlock)
 {
     int namelen = strlen(name);
@@ -218,7 +218,7 @@ static int mboxlist_read(const char *name, const char **dataptr, int *datalenptr
 
 static int mboxlist_parse_entry(struct mboxlist_entry **mbentryptr,
 				const char *name,
-				const char *data, int datalen)
+				const char *data, size_t datalen)
 {
     char *p, *q;
     const char **target;
@@ -289,7 +289,7 @@ static int mboxlist_mylookup(const char *name,
 {
     int r;
     const char *data;
-    int datalen;
+    size_t datalen;
 
     r = mboxlist_read(name, &data, &datalen, tid, wrlock);
     if (r) return r;
@@ -1844,7 +1844,7 @@ struct find_rock {
     int inboxoffset;
     const char *inboxcase;
     const char *usermboxname;
-    int usermboxnamelen;
+    size_t usermboxnamelen;
     int checkmboxlist;
     int checkshared;
     int isadmin;
@@ -1855,8 +1855,8 @@ struct find_rock {
 
 /* return non-zero if we like this one */
 static int find_p(void *rockp, 
-		  const char *key, int keylen,
-		  const char *data, int datalen)
+		  const char *key, size_t keylen,
+		  const char *data, size_t datalen)
 {
     struct find_rock *rock = (struct find_rock *) rockp;
     long minmatch;
@@ -1947,9 +1947,9 @@ static int find_p(void *rockp,
 }
 
 static int find_cb(void *rockp, 
-		   const char *key, int keylen,
+		   const char *key, size_t keylen,
 		   const char *data __attribute__((unused)),
-		   int datalen __attribute__((unused)))
+		   size_t datalen __attribute__((unused)))
 {
     char namebuf[MAX_MAILBOX_BUFFER];
     struct find_rock *rock = (struct find_rock *) rockp;
@@ -2065,12 +2065,12 @@ int mboxlist_findall(struct namespace *namespace,
 {
     struct find_rock cbrock;
     char usermboxname[MAX_MAILBOX_BUFFER];
-    int usermboxnamelen = 0;
+    size_t usermboxnamelen = 0;
     const char *data;
-    int datalen;
+    size_t datalen;
     int r = 0;
     char *p;
-    int prefixlen;
+    size_t prefixlen;
     int userlen = userid ? strlen(userid) : 0, domainlen = 0;
     char domainpat[MAX_MAILBOX_BUFFER] = ""; /* do intra-domain fetches only */
     char *pat = NULL;
@@ -2242,13 +2242,13 @@ int mboxlist_findall_alt(struct namespace *namespace,
 {
     struct find_rock cbrock;
     char usermboxname[MAX_MAILBOX_BUFFER], patbuf[MAX_MAILBOX_BUFFER];
-    int usermboxnamelen = 0;
+    size_t usermboxnamelen = 0;
     const char *data;
-    int datalen;
+    size_t datalen;
     int r = 0;
     char *p;
-    int prefixlen, len;
-    int userlen = userid ? strlen(userid) : 0, domainlen = 0;
+    size_t prefixlen, len;
+    size_t userlen = userid ? strlen(userid) : 0, domainlen = 0;
     char domainpat[MAX_MAILBOX_BUFFER]; /* do intra-domain fetches only */
     char *pat = NULL;
 
@@ -2274,13 +2274,13 @@ int mboxlist_findall_alt(struct namespace *namespace,
     cbrock.procrock = rock;
 
     /* Build usermboxname */
-    if (userid && (!(p = strchr(userid, '.')) || ((p - userid) > userlen)) &&
+    if (userid && (!(p = strchr(userid, '.')) || ((p - userid) > (int)userlen)) &&
 	strlen(userid)+5 < MAX_MAILBOX_BUFFER) {
 	if (domainlen)
 	    snprintf(usermboxname, sizeof(usermboxname),
 		     "%s!", userid+userlen+1);
 	snprintf(usermboxname+domainlen, sizeof(usermboxname)-domainlen,
-		 "user.%.*s", userlen, userid);
+		 "user.%.*s", (int)userlen, userid);
 	usermboxnamelen = strlen(usermboxname);
     }
     else {
@@ -2823,13 +2823,13 @@ int mboxlist_findsub(struct namespace *namespace,
     struct db *subs = NULL;
     struct find_rock cbrock;
     char usermboxname[MAX_MAILBOX_BUFFER];
-    int usermboxnamelen = 0;
+    size_t usermboxnamelen = 0;
     const char *data;
-    int datalen;
+    size_t datalen;
     int r = 0;
     char *p;
-    int prefixlen;
-    int userlen = userid ? strlen(userid) : 0, domainlen = 0;
+    size_t prefixlen;
+    size_t userlen = userid ? strlen(userid) : 0, domainlen = 0;
     char domainpat[MAX_MAILBOX_BUFFER]; /* do intra-domain fetches only */
     char *pat = NULL;
 
@@ -2861,13 +2861,13 @@ int mboxlist_findsub(struct namespace *namespace,
     }
 
     /* Build usermboxname */
-    if (userid && (!(p = strchr(userid, '.')) || ((p - userid) > userlen)) &&
+    if (userid && (!(p = strchr(userid, '.')) || ((p - userid) > (int)userlen)) &&
 	strlen(userid)+5 < MAX_MAILBOX_BUFFER) {
 	if (domainlen)
 	    snprintf(usermboxname, sizeof(usermboxname),
 		     "%s!", userid+userlen+1);
 	snprintf(usermboxname+domainlen, sizeof(usermboxname)-domainlen,
-		 "user.%.*s", userlen, userid);
+		 "user.%.*s", (int)userlen, userid);
 	usermboxnamelen = strlen(usermboxname);
     }
     else {
@@ -2992,13 +2992,13 @@ int mboxlist_findsub_alt(struct namespace *namespace,
     struct db *subs = NULL;
     struct find_rock cbrock;
     char usermboxname[MAX_MAILBOX_BUFFER], patbuf[MAX_MAILBOX_BUFFER];
-    int usermboxnamelen = 0;
+    size_t usermboxnamelen = 0;
     const char *data;
-    int datalen;
+    size_t datalen;
     int r = 0;
     char *p;
-    int prefixlen, len;
-    int userlen = userid ? strlen(userid) : 0, domainlen = 0;
+    size_t prefixlen, len;
+    size_t userlen = userid ? strlen(userid) : 0, domainlen = 0;
     char domainpat[MAX_MAILBOX_BUFFER]; /* do intra-domain fetches only */
     char *pat = NULL;
 
@@ -3030,13 +3030,13 @@ int mboxlist_findsub_alt(struct namespace *namespace,
     }
 
     /* Build usermboxname */
-    if (userid && (!(p = strchr(userid, '.')) || ((p - userid) > userlen)) &&
+    if (userid && (!(p = strchr(userid, '.')) || ((p - userid) > (int)userlen)) &&
 	strlen(userid)+5 < MAX_MAILBOX_BUFFER) {
 	if (domainlen)
 	    snprintf(usermboxname, sizeof(usermboxname),
 		     "%s!", userid+userlen+1);
 	snprintf(usermboxname+domainlen, sizeof(usermboxname)-domainlen,
-		 "user.%.*s", userlen, userid);
+		 "user.%.*s", (int)userlen, userid);
 	usermboxnamelen = strlen(usermboxname);
     }
     else {
@@ -3216,7 +3216,7 @@ int mboxlist_checksub(const char *name, const char *userid)
     int r;
     struct db *subs;
     const char *val;
-    int vallen;
+    size_t vallen;
 
     r = mboxlist_opensubs(userid, &subs);
 

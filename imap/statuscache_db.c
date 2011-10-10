@@ -143,10 +143,10 @@ void statuscache_done(void)
 }
 
 static char *statuscache_buildkey(const char *mailboxname, const char *userid,
-				  int *keylen)
+				  size_t *keylen)
 {
     static char key[MAX_MAILBOX_BUFFER];
-    int len;
+    size_t len;
 
     /* Build statuscache key */
     len = strlcpy(key, mailboxname, sizeof(key));
@@ -264,7 +264,8 @@ int status_lookup(const char *mboxname, const char *userid,
 int statuscache_lookup(const char *mboxname, const char *userid,
 		       unsigned statusitems, struct statusdata *sdata)
 {
-    int keylen, datalen, r = 0;
+    size_t keylen, datalen;
+    int r = 0;
     const char *data = NULL, *dend;
     char *p, *key = statuscache_buildkey(mboxname, userid, &keylen);
     unsigned version;
@@ -318,7 +319,7 @@ static int statuscache_update_txn(const char *mboxname,
 				  struct txn **tidptr)
 {
     char data[250];  /* enough room for 11*(UULONG + SP) */
-    int keylen, datalen;
+    size_t keylen, datalen;
     char *key = statuscache_buildkey(mboxname, sdata->userid, &keylen);
     int r;
 
@@ -360,9 +361,9 @@ struct statuscache_deleterock {
 };
 
 static int delete_cb(void *rockp,
-                     const char *key, int keylen,
+                     const char *key, size_t keylen,
                      const char *data __attribute__((unused)),
-                     int datalen __attribute__((unused))) 
+                     size_t datalen __attribute__((unused))) 
 {
     int r;
     char buf[4096];
@@ -388,8 +389,9 @@ static int delete_cb(void *rockp,
 
 int statuscache_invalidate(const char *mboxname, struct statusdata *sdata)
 {
-    int keylen, r;
+    size_t keylen;
     char *key;
+    int r;
     int doclose = 0;
     struct statuscache_deleterock drock;
 

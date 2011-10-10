@@ -14,9 +14,9 @@ struct binary_result
 {
     struct binary_result *next;
     char *key;
-    int keylen;
+    size_t keylen;
     char *data;
-    int datalen;
+    size_t datalen;
 };
 
 static char *backend = CUNIT_PARAM("skiplist,flat,berkeley");
@@ -101,7 +101,7 @@ static char *make_basedir(const char * const *reldirs)
 #define CANFETCH(key, keylen, expdata, expdatalen) \
 { \
     const char *_data = BADDATA; \
-    int _datalen = BADLEN; \
+    size_t _datalen = BADLEN; \
     r = DB->fetch(db, key, keylen, &_data, &_datalen, &txn); \
     CU_ASSERT_EQUAL(r, CYRUSDB_OK); \
     CU_ASSERT_PTR_NOT_NULL(txn); \
@@ -116,7 +116,7 @@ static char *make_basedir(const char * const *reldirs)
 #define CANNOTFETCH(key, keylen, experror) \
 { \
     const char *_data = BADDATA; \
-    int _datalen = BADLEN; \
+    size_t _datalen = BADLEN; \
     r = DB->fetch(db, key, keylen, &_data, &_datalen, &txn); \
     CU_ASSERT_EQUAL(r, experror); \
     CU_ASSERT_PTR_NOT_NULL(txn); \
@@ -142,9 +142,9 @@ static char *make_basedir(const char * const *reldirs)
 #define GOTRESULT(expkey, expkeylen, expdata, expdatalen) \
 { \
     const char *_key = (expkey); \
-    int _keylen = (expkeylen); \
+    size_t _keylen = (expkeylen); \
     const char *_data = (expdata); \
-    int _datalen = (expdatalen); \
+    size_t _datalen = (expdatalen); \
     struct binary_result *actual = results; \
     CU_ASSERT_PTR_NOT_NULL_FATAL(results); \
     results = results->next; \
@@ -666,8 +666,8 @@ static void test_delete(void)
 }
 
 static int foreacher(void *rock,
-		     const char *key, int keylen,
-		     const char *data, int datalen)
+		     const char *key, size_t keylen,
+		     const char *data, size_t datalen)
 {
     struct binary_result **head = (struct binary_result **)rock;
     struct binary_result **tail;
@@ -1022,8 +1022,8 @@ static const char *nth_data(unsigned int n)
 }
 
 static int finder(void *rock,
-		  const char *key, int keylen,
-		  const char *data, int datalen)
+		  const char *key, size_t keylen,
+		  const char *data, size_t datalen)
 {
     hash_table *exphash = (hash_table *)rock;
     char *expected;
