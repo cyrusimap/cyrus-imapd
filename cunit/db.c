@@ -95,6 +95,11 @@ static char *make_basedir(const char * const *reldirs)
     CU_ASSERT_EQUAL(r, CYRUSDB_OK); \
     CU_ASSERT_PTR_NOT_NULL(txn);
 
+#define CANNOTSTORE(key, keylen, data, datalen) \
+    r = DB->store(db, key, keylen, data, datalen, &txn); \
+    CU_ASSERT_EQUAL(r, CYRUSDB_BADPARAM); \
+    CU_ASSERT_PTR_NOT_NULL(txn);
+
 #define BADDATA		((const char *)0xdeadbeef)
 #define BADLEN		((int)0xcafebabe)
 
@@ -508,7 +513,6 @@ static void test_readwrite_null_nonzerolen(void)
     struct txn *txn = NULL;
     /* test data thanks to hipsteripsum.me */
     static const char KEY[] = "viral";
-    static const char EMPTY[] = "";
     int r;
 
     r = DB->open(filename, CYRUSDB_CREATE, &db);
@@ -518,30 +522,13 @@ static void test_readwrite_null_nonzerolen(void)
     /* the database is initially empty, so fetch will fail */
     CANNOTFETCH(KEY, strlen(KEY), CYRUSDB_NOTFOUND);
 
-    /* store()ing a record succeeds */
-    CANSTORE(KEY, strlen(KEY), NULL, 23);
+    /* store()ing a record fails due to the length */
+    CANNOTSTORE(KEY, strlen(KEY), NULL, 23);
 
-    /* the records can be fetched back; we get non-NULL
-     * zero-length data */
-    CANFETCH(KEY, strlen(KEY), EMPTY, 0);
-
-    /* commit succeeds */
-    CANCOMMIT();
-
-    /* data can be read back in a new transaction */
-    CANFETCH(KEY, strlen(KEY), EMPTY, 0);
-
-    /* close the txn - it doesn't matter here if we commit or abort */
-    CANCOMMIT();
-
-    /* close and re-open the database */
-    CANREOPEN();
-
-    /* data can still be read back */
-    CANFETCH(KEY, strlen(KEY), EMPTY, 0);
-
-    /* close the txn - it doesn't matter here if we commit or abort */
-    CANCOMMIT();
+    /* abort succeeds */
+    r = DB->abort(db, txn);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    txn = NULL;
 
     /* closing succeeds */
     r = DB->close(db);

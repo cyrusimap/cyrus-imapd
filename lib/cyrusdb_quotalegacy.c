@@ -200,7 +200,7 @@ static int abort_subtxn(const char *fname, struct subtxn *tid)
 {
     int r = CYRUSDB_OK;
 
-    assert(fname && tid);
+    if (!fname || !tid) return CYRUSDB_BADPARAM;
 
     /* cleanup done while lock is held */
     if (tid->fnamenew) {
@@ -239,7 +239,7 @@ static int commit_subtxn(const char *fname, struct subtxn *tid)
     int r = 0;
     struct stat sbuf;
 
-    assert(fname && tid);
+    if (!fname || !tid) return CYRUSDB_BADPARAM;
 
     if ((writefd = tid->fdnew) != -1) {
 	/* we wrote something */
@@ -335,7 +335,7 @@ static int myopen(const char *fname, int flags, struct db **ret)
     char *p;
     int r;
 
-    assert(fname && ret);
+    if (!fname || !ret) return CYRUSDB_BADPARAM;
 
     db->path = xstrdup(fname);
     construct_hash_table(&db->txn.table, 200, 0);
@@ -365,7 +365,7 @@ static int myopen(const char *fname, int flags, struct db **ret)
 
 static int myclose(struct db *db)
 {
-    assert(db);
+    if (!db) return CYRUSDB_BADPARAM;
 
     free_db(db);
 
@@ -381,7 +381,8 @@ static int myfetch(struct db *db, char *quota_path,
     const char *quota_base = 0;
     unsigned long quota_len = 0;
 
-    assert(db);
+    if (!db || !quota_path) return CYRUSDB_BADPARAM;
+    if (data || !datalen) return CYRUSDB_BADPARAM;
 
     if (data) *data = NULL;
     if (datalen) *datalen = 0;
@@ -465,8 +466,9 @@ static int myfetch(struct db *db, char *quota_path,
     else {
 	db->data = xstrdup("");
     }
-    *data = db->data;
-    *datalen = strlen(db->data);
+
+    if (data) *data = db->data;
+    if (datalen) *datalen = strlen(db->data);
 
     map_free(&quota_base, &quota_len);
     if (!tid) close(quota_fd);
@@ -480,6 +482,8 @@ static int fetch(struct db *db,
 		 struct txn **tid)
 {
     char quota_path[MAX_QUOTA_PATH+1], *tmpkey = NULL;
+
+    if (!db || !key || !keylen) return CYRUSDB_BADPARAM;
 
     /* if we need to truncate the key, do so */
     if (key[keylen] != '\0') {
@@ -600,6 +604,9 @@ static int foreach(struct db *db,
     int i;
     char *tmpprefix = NULL, *p = NULL;
 
+    if (!db || !cb) return CYRUSDB_BADPARAM;
+    if (prefixlen && !prefix) return CYRUSDB_BADPARAM;
+
     /* if we need to truncate the prefix, do so */
     if (prefix[prefixlen] != '\0') {
 	tmpprefix = xmalloc(prefixlen + 1);
@@ -682,11 +689,18 @@ static int foreach(struct db *db,
 static int mystore(struct db *db, 
 		   const char *key, size_t keylen,
 		   const char *data, size_t datalen,
-		   struct txn **tid, int overwrite)
+		   struct txn **tid, int overwrite,
+		   int isdelete)
 {
     char quota_path[MAX_QUOTA_PATH+1], *tmpkey = NULL;
     struct subtxn *mytid = NULL;
+    const char dummy = 0;
     int r = 0;
+
+    if (!db || !key || !keylen) return CYRUSDB_BADPARAM;
+    if (datalen && !data) return CYRUSDB_BADPARAM;
+
+    if (!data) data = &dummy;
 
     /* if we need to truncate the key, do so */
     tmpkey = xmalloc(keylen + 1);
@@ -734,7 +748,7 @@ static int mystore(struct db *db,
 	if (tid) hash_insert(quota_path, mytid, &db->txn.table);
     }
 
-    if (!data) {
+    if (isdelete) {
 	mytid->delete = 1;
     }
     else {
@@ -828,7 +842,7 @@ static int create(struct db *db,
 		  const char *data, size_t datalen,
 		  struct txn **tid)
 {
-    return mystore(db, key, keylen, data, datalen, tid, 0);
+    return mystore(db, key, keylen, data, datalen, tid, 0, 0);
 }
 
 static int store(struct db *db, 
@@ -836,14 +850,14 @@ static int store(struct db *db,
 		 const char *data, size_t datalen,
 		 struct txn **tid)
 {
-    return mystore(db, key, keylen, data, datalen, tid, 1);
+    return mystore(db, key, keylen, data, datalen, tid, 1, 0);
 }
 
 static int delete(struct db *db, 
 		  const char *key, size_t keylen,
 		  struct txn **mytid, int force __attribute__((unused)))
 {
-    return mystore(db, key, keylen, NULL, 0, mytid, 1);
+    return mystore(db, key, keylen, NULL, 0, mytid, 1, 1);
 }
 
 static void txn_proc(const char *fname, void *data, void *rock)

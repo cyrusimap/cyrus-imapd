@@ -732,14 +732,14 @@ static int lock_or_refresh(struct db *db, struct txn **tidptr)
 
     if (*tidptr) {
 	/* check that the DB agrees that we're in this transaction */
-	assert(db->current_txn == *tidptr);
+	if (db->current_txn != *tidptr) return CYRUSDB_LOCKED;
 
      	/* just update the active transaction */
 	update_lock(db, *tidptr);
 
     } else {
 	/* check that the DB isn't in a transaction */
-	assert(db->current_txn == NULL);
+	if (db->current_txn != NULL) return CYRUSDB_LOCKED;
 
 	/* grab a r/w lock */
 	if ((r = write_lock(db, NULL)) < 0) {
@@ -783,6 +783,8 @@ static int myopen(const char *fname, int flags, struct db **ret)
     struct db *db;
     struct db_list *list_ent = open_db;
     int r;
+
+    if (!fname || !ret) return CYRUSDB_BADPARAM;
 
     while (list_ent && strcmp(list_ent->db->fname, fname)) {
 	list_ent = list_ent->next;
@@ -926,6 +928,8 @@ static int myclose(struct db *db)
     struct db_list *list_ent = open_db;
     struct db_list *prev = NULL;
 
+    if (!db) return CYRUSDB_BADPARAM;
+
     /* remove this DB from the open list */
     while (list_ent && list_ent->db != db) {
 	prev = list_ent;
@@ -995,7 +999,8 @@ static int myfetch(struct db *db,
     const char *ptr;
     int r = 0;
 
-    assert(db != NULL && key != NULL);
+    if (!db || !key || !keylen) return CYRUSDB_BADPARAM;
+    if (datalen && !data) return CYRUSDB_BADPARAM;
 
     if (data) *data = NULL;
     if (datalen) *datalen = 0;
@@ -1072,6 +1077,9 @@ static int myforeach(struct db *db,
     size_t savebufsize;
     int r = 0, cb_r = 0;
     int need_unlock = 0;
+
+    if (!db || !cb) return CYRUSDB_BADPARAM;
+    if (prefixlen && !prefix) return CYRUSDB_BADPARAM;
 
     assert(db != NULL);
 
@@ -1200,6 +1208,7 @@ static int mystore(struct db *db,
     uint32_t klen;
     uint32_t dlen;
     struct iovec iov[50];
+    const char dummy = 0;
     unsigned lvl;
     unsigned i;
     unsigned num_iov;
@@ -1216,10 +1225,10 @@ static int mystore(struct db *db,
     uint32_t netnewoffset;
     int r;
 
-    assert(db != NULL);
-    assert(key && keylen);
-    if (!data)
-	datalen = 0;
+    if (!db || !key || !keylen) return CYRUSDB_BADPARAM;
+    if (datalen && !data) return CYRUSDB_BADPARAM;
+
+    if (!data) data = &dummy;
 
     /* not keeping the transaction, just create one local to
      * this function */
@@ -1375,6 +1384,8 @@ static int mydelete(struct db *db,
     unsigned i;
     int r;
 
+    if (!db || !key || !keylen) return CYRUSDB_BADPARAM;
+
     /* not keeping the transaction, just create one local to
      * this function */
     if (!tidptr) {
@@ -1446,9 +1457,9 @@ static int mycommit(struct db *db, struct txn *tid)
     uint32_t commitrectype = htonl(COMMIT);
     int r = 0;
 
-    assert(db && tid);
+    if (!db || !tid) return CYRUSDB_BADPARAM;
 
-    assert(db->current_txn == tid);
+    if (db->current_txn != tid) return CYRUSDB_LOCKED;
 
     update_lock(db, tid);
 
@@ -1533,9 +1544,9 @@ static int myabort(struct db *db, struct txn *tid)
     unsigned i;
     int r = 0;
 
-    assert(db && tid);
+    if (!db || !tid) return CYRUSDB_BADPARAM;
 
-    assert(db->current_txn == tid);
+    if (db->current_txn != tid) return CYRUSDB_LOCKED;
 
     /* update the mmap so we can see the log entries we need to remove */
     update_lock(db, tid);
