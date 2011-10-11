@@ -310,6 +310,7 @@ static int list_cb(char *name, int matchlen, int maycreate, void *rock)
 	else shortname = node->name;
 
 	if (href) {
+	    /* Add selectable feed with link */
 	    snprintf(path, sizeof(path), ".rss.%s", node->name);
 	    mboxname_hiersep_toexternal(&httpd_namespace, href, 0);
 	    buf_printf(lrock->buf, "<li><a href=\"%s\">%s</a>\n",
