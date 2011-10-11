@@ -66,7 +66,7 @@
 #include "seen.h"
 #include "util.h"
 #include "version.h"
-#include "xstrlcat.h"
+#include "xmalloc.h"
 #include "xstrlcpy.h"
 
 #define XML_NS_ATOM	"http://www.w3.org/2005/Atom"
@@ -236,52 +236,106 @@ static int rss_to_mboxname(struct request_target_t *req_tgt,
 
 
 /*
- * mboxlist_findall() callback function to list RSS feeds
+ * mboxlist_findall() callback function to list RSS feeds as a tree
  */
+struct node {
+    char name[MAX_MAILBOX_BUFFER];
+    size_t len;
+    struct node *parent;
+    struct node *child;
+};
+
 struct list_rock {
     struct transaction_t *txn;
     struct buf *buf;
+    struct node *last;
 };
 
-int list_cb(char *name, int matchlen, int maycreate __attribute__((unused)),
-	    void *rock)
+static int list_cb(char *name, int matchlen, int maycreate, void *rock)
 {
-    static char lastname[MAX_MAILBOX_BUFFER];
-    char href[MAX_MAILBOX_PATH+1];
-    struct mboxlist_entry entry;
     struct list_rock *lrock = (struct list_rock *) rock;
+    struct node *last = lrock->last;
 
-    /* We have to reset the initial state.
-     * Handle it as a dirty hack.
-     */
-    if (!name) {
-	lastname[0] = '\0';
-	return 0;
+    if (name) {
+	/* Lookup the mailbox and make sure its readable */
+	struct mboxlist_entry entry;
+
+	mboxlist_lookup(name, &entry, NULL);
+	if (!entry.acl ||
+	    !(cyrus_acl_myrights(httpd_authstate, entry.acl) & ACL_READ))
+	    return 0;
+	
+	/* Don't list deleted mailboxes */
+	if (mboxname_isdeletedmailbox(name)) return 0;
     }
 
-    /* don't repeat */
-    if (matchlen == (int) strlen(lastname) &&
-	!strncmp(name, lastname, matchlen)) return 0;
+    if (name &&
+	!strncmp(name, last->name, last->len) &&
+	(!last->len || (name[last->len] == '.'))) {
+	/* Found closest ancestor of 'name' */
+	struct node *node;
+	size_t len = matchlen;
+	char *cp, *shortname, path[MAX_MAILBOX_PATH+1], *href = NULL;
 
-    strncpy(lastname, name, matchlen);
-    lastname[matchlen] = '\0';
+	/* Send a body chunk once in a while */
+	if (lrock->buf->len > PROT_BUFSIZE) {
+	    write_body(0, lrock->txn, lrock->buf->s, lrock->buf->len);
+	    buf_reset(lrock->buf);
+	}
 
-    /* Lookup the mailbox and make sure its readable */
-    mboxlist_lookup(name, &entry, NULL);
-    if (!entry.acl ||
-	!(cyrus_acl_myrights(httpd_authstate, entry.acl) & ACL_READ))
-	return 0;
+	if (last->child) {
+	    /* Reuse our sibling */
+	    node = last->child;
+	}
+	else {
+	    /* Create first child */
+	    buf_printf(lrock->buf, "<ul>\n");
+	    node = xmalloc(sizeof(struct node));
+	}
 
-    /* Don't list deleted mailboxes */
-    if (mboxname_isdeletedmailbox(name)) return 0;
+	/* See if we have a missing ancestor in the tree */
+	if ((cp = strchr(&name[last->len+1], '.'))) len = cp - name;
+	else href = path;
 
-    /* Add mailbox to our HTML list */
-    snprintf(href, sizeof(href), ".rss.%s", name);
-    mboxname_hiersep_toexternal(&httpd_namespace, href, 0);
+	/* Populate new/updated node */
+	strncpy(node->name, name, len);
+	node->name[len] = '\0';
+	node->len = len;
+	node->parent = last;
+	node->child = NULL;
+	lrock->last = last->child = node;
 
-    buf_reset(lrock->buf);
-    buf_printf(lrock->buf, "<li><a href=\"%s\">%s</a></li>\n", href, name);
-    write_body(0, lrock->txn, lrock->buf->s, lrock->buf->len);
+	/* Get last segment of mailbox name */
+	if ((shortname = strrchr(node->name, '.'))) shortname++;
+	else shortname = node->name;
+
+	if (href) {
+	    snprintf(path, sizeof(path), ".rss.%s", node->name);
+	    mboxname_hiersep_toexternal(&httpd_namespace, href, 0);
+	    buf_printf(lrock->buf, "<li><a href=\"%s\">%s</a>\n",
+		       href, shortname);
+	}
+	else {
+	    /* Add missing ancestor and recurse down the tree */
+	    buf_printf(lrock->buf, "<li>%s\n", shortname);
+
+	    list_cb(name, matchlen, maycreate, rock);
+	}
+    }
+    else {
+	/* Remove child */
+	if (last->child) {
+	    buf_printf(lrock->buf, "</ul>\n");
+	    free(last->child);
+	    last->child = NULL;
+	}
+
+	if (last->parent) {
+	    /* Recurse back up the tree */
+	    lrock->last = last->parent;
+	    list_cb(name, matchlen, maycreate, rock);
+	}
+    }
 
     return 0;
 }
@@ -293,6 +347,7 @@ static void list_feeds(struct transaction_t *txn)
     int r;
     struct buf buf = BUF_INITIALIZER;
     struct list_rock lrock;
+    struct node root = { "", 0, NULL, NULL };
 
     /* Setup for chunked response */
     txn->flags |= HTTP_CHUNKED;
@@ -300,19 +355,24 @@ static void list_feeds(struct transaction_t *txn)
 
     /* Start HTML */
     buf_printf(&buf, HTML_DOCTYPE "\n");
-    buf_printf(&buf, "<html><head><title>Cyrus RSS Feeds</title></head>\n");
-    buf_printf(&buf, "<body><h2>Cyrus RSS Feeds</h2><ul>\n");
+    buf_printf(&buf, "<html>\n<head>\n<title>Cyrus RSS Feeds</title></head>\n");
+    buf_printf(&buf, "<body>\n<h2>Cyrus RSS Feeds</h2>\n");
     write_body(HTTP_OK, txn, buf.s, buf.len);
+    buf_reset(&buf);
 
     lrock.txn = txn;
     lrock.buf = &buf;
-    list_cb(NULL, 0, 0, NULL);
+    lrock.last = &root;
+
+    /* generate tree view of feeds */
     r = mboxlist_findall(NULL, "*", httpd_userisadmin, NULL, httpd_authstate,
 			 list_cb, &lrock);
 
+    /* close out the tree */
+    list_cb(NULL, 0, 0, &lrock);
+
     /* End of HTML */
-    buf_reset(&buf);
-    buf_printf(&buf, "</ul></body></html>");
+    buf_printf(&buf, "</body>\n</html>\n");
     write_body(0, txn, buf.s, buf.len);
 
     /* End of output */
