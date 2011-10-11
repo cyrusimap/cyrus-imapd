@@ -61,3 +61,15 @@
 ##sync_server = yes
 ##lmtpd = yes
 ##timsieved = yes
+
+# This section describes the common configuration parameters to set
+# for each test. This overrides the bare hardcoded configuration, and is
+# overridden by the test case configuration.
+# Some variables of the form @varname@ are available:
+#  name: instance name
+#  basedir: instance directory
+#  cyrus_prefix: cyrus path
+#  prefix: working directory
+[config]
+##sasl_mech_list = PLAIN LOGIN DIGEST-MD5
+##debug_command = @prefix@/utils/gdbtramp %s %d

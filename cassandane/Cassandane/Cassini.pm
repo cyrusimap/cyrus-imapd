@@ -47,40 +47,72 @@ use warnings;
 use Config::IniFiles;
 use Cassandane::Util::Log;
 
-use Exporter ();
-our @ISA = qw(Exporter);
-our @EXPORT = qw(&cassini);
+my $instance;
 
-my $filename = 'cassandane.ini';
-my $inifile;
-
-sub cassini
+sub new
 {
-    # Args are: section, name, default
-    # see the Config::IniFiles documentation for ->val()
-    my (@args) = @_;
+    my $class = shift;
+    my %params = @_;
 
-    if (!defined $inifile)
+    my $filename = 'cassandane.ini';
+    $filename = $params{filename}
+	if defined $params{filename};
+
+    my $inifile = new Config::IniFiles();
+    if ( -f $filename)
     {
-	$inifile = new Config::IniFiles();
-	if ( -f $filename)
+	xlog "Reading $filename";
+	$inifile->SetFileName($filename);
+	if (!$inifile->ReadConfig())
 	{
-	    xlog "Reading $filename";
-	    $inifile->SetFileName($filename);
-	    if (!$inifile->ReadConfig())
-	    {
-		# Config::IniFiles seems to include the filename in
-		# error messages, so we don't.  However it tends to
-		# emit multiline-messages which confuses our logs.
-		my $_;
-		set_verbose(1);
-		map { s/[\n\r]\s*/ /g; xlog $_; } @Config::IniFiles::errors;
-		die "Failed reading $filename";
-	    }
+	    # Config::IniFiles seems to include the filename in
+	    # error messages, so we don't.  However it tends to
+	    # emit multiline-messages which confuses our logs.
+	    my $_;
+	    set_verbose(1);
+	    map { s/[\n\r]\s*/ /g; xlog $_; } @Config::IniFiles::errors;
+	    die "Failed reading $filename";
 	}
     }
 
-    return $inifile->val(@args);
+    my $self = {
+	filename => $filename,
+	inifile => $inifile
+    };
+
+    bless $self, $class;
+    return $self;
+}
+
+sub instance
+{
+    my ($class, @args) = @_;
+
+    $instance = Cassandane::Cassini->new(@args)
+	unless defined $instance;
+    return $instance;
+}
+
+sub val
+{
+    # Args are: section, name, default
+    # see the Config::IniFiles documentation for ->val()
+    my ($self, @args) = @_;
+    return $self->{inifile}->val(@args);
+}
+
+sub apply_config
+{
+    my ($self, $config, $member) = @_;
+    my $inifile = $self->{inifile};
+
+    my $section = defined($member) ? "config $member" : 'config';
+    if ($inifile->SectionExists($section)) {
+	$config->set(map { $_ => $inifile->val($section, $_) } $inifile->Parameters($section));
+    }
+    # XXX - member parent hierarchy too ?
+
+    return $config;
 }
 
 1;

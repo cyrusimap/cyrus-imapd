@@ -41,6 +41,7 @@
 package Cassandane::Config;
 use strict;
 use warnings;
+use Cassandane::Cassini;
 use Cassandane::Util::Log;
 
 my $default;
@@ -60,7 +61,8 @@ sub new
 
 sub default
 {
-    $default = Cassandane::Config->new(
+    if (!defined($default)) {
+	$default = Cassandane::Config->new(
 	    admins => 'admin',
 	    configdirectory => '@basedir@/conf',
 	    syslog_prefix => '@name@',
@@ -75,8 +77,10 @@ sub default
 	    delete_mode => 'delayed',
 	    # for debugging - see cassandane.ini.example
 	    debug_command => '@prefix@/utils/gdbtramp %s %d'
-	)
-	unless defined $default;
+	);
+	Cassandane::Cassini->instance()->apply_config($default);
+    }
+
     return $default;
 }
 

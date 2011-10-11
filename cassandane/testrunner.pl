@@ -44,6 +44,7 @@ use warnings;
 use Cassandane::Unit::Runner;
 use Cassandane::Unit::TestCase;
 use Cassandane::Util::Log;
+use Cassandane::Cassini;
 use Cassandane::Instance;
 
 my $format = 'tap';
@@ -186,7 +187,12 @@ sub usage
 
 while (my $a = shift)
 {
-    if ($a eq '-f')
+    if ($a eq '--config')
+    {
+	my $filename = shift;
+	Cassandane::Cassini->instance(filename => $filename);
+    }
+    elsif ($a eq '-f')
     {
 	$format = shift;
 	usage unless defined $runners{$format};

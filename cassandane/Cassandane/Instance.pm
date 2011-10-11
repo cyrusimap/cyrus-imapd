@@ -70,11 +70,13 @@ sub new
     my $class = shift;
     my %params = @_;
 
-    $rootdir = cassini('cassandane', 'rootdir', '/var/tmp/cass')
+    my $cassini = Cassandane::Cassini->instance();
+    $rootdir = $cassini->val('cassandane', 'rootdir', '/var/tmp/cass')
 	unless defined $rootdir;
 
     my $self = {
 	name => undef,
+	cassini => $cassini,
 	basedir => undef,
 	installation => 'default',
 	cyrus_prefix => undef,
@@ -95,8 +97,8 @@ sub new
 	if defined $params{basedir};
     $self->{installation} = $params{installation}
 	if defined $params{installation};
-    $self->{cyrus_prefix} = cassini("cyrus $self->{installation}",
-				    'prefix', '/usr/cyrus');
+    $self->{cyrus_prefix} = $cassini->val("cyrus $self->{installation}",
+					  'prefix', '/usr/cyrus');
     $self->{cyrus_prefix} = $params{cyrus_prefix}
 	if defined $params{cyrus_prefix};
     $self->{config} = $params{config}->clone()
@@ -111,6 +113,9 @@ sub new
 	if defined $params{persistent};
     $self->{description} = $params{description}
 	if defined $params{description};
+
+    # XXX - get testcase name from caller, to apply even finer
+    # configuration from cassini ?
 
     if (!defined $stamp)
     {
@@ -208,7 +213,7 @@ sub _binary
 	unless $bin =~ m/^\//;
     push(@cmd, $bin);
 
-    if (!$valground && cassini('gdb', $name, 'no') =~ m/^yes$/i)
+    if (!$valground && $self->{cassini}->val('gdb', $name, 'no') =~ m/^yes$/i)
     {
 	xlog "Will run binary $name under gdb due to cassandane.ini";
 	xlog "Look in syslog for helpful instructions from gdbtramp";
