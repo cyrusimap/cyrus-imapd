@@ -233,6 +233,11 @@ sub generate
 	if defined $params->{references};
     $msg->add_header("Date", $datestr);
     $msg->add_header("To", $to);
+    if (defined($params->{extra_headers})) {
+	foreach my $extra_header (@{$params->{extra_headers}}) {
+	    $msg->add_header(@{$extra_header});
+	}
+    }
     $msg->add_header('X-Cassandane-Unique', _generate_unique());
     $msg->set_body("This is a generated test email.  If received, please notify $admin\r\n$extra");
 
