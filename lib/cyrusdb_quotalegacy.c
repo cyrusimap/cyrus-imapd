@@ -905,6 +905,8 @@ struct cyrusdb_backend cyrusdb_quotalegacy =
 
     &fetch,
     &fetch,
+    NULL,
+
     &foreach,
     &create,
     &store,

@@ -873,6 +873,8 @@ struct cyrusdb_backend cyrusdb_flat =
 
     &fetch,
     &fetchlock,
+    NULL,
+
     &foreach,
     &create,
     &store,

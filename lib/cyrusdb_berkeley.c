@@ -1028,6 +1028,8 @@ struct cyrusdb_backend cyrusdb_berkeley =
 
     &fetch,
     &fetchlock,
+    NULL,
+
     &foreach,
     &create,
     &store,
@@ -1054,6 +1056,8 @@ struct cyrusdb_backend cyrusdb_berkeley_nosync =
 
     &fetch,
     &fetchlock,
+    NULL,
+
     &foreach,
     &create_nosync,
     &store_nosync,
@@ -1080,6 +1084,8 @@ struct cyrusdb_backend cyrusdb_berkeley_hash =
 
     &fetch,
     &fetchlock,
+    NULL,
+
     &foreach,
     &create,
     &store,
@@ -1106,6 +1112,8 @@ struct cyrusdb_backend cyrusdb_berkeley_hash_nosync =
 
     &fetch,
     &fetchlock,
+    NULL,
+
     &foreach,
     &create_nosync,
     &store_nosync,

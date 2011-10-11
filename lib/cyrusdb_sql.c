@@ -902,6 +902,8 @@ struct cyrusdb_backend cyrusdb_sql =
 
     &fetch,
     &fetch,
+    NULL,
+
     &foreach,
     &create,
     &store,

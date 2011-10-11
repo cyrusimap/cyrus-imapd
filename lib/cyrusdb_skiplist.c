@@ -2420,6 +2420,8 @@ struct cyrusdb_backend cyrusdb_skiplist =
 
     &fetch,
     &fetchlock,
+    NULL,
+
     &myforeach,
     &create,
     &store,
