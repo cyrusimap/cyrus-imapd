@@ -2934,6 +2934,11 @@ static int meth_get_cal(struct transaction_t *txn)
 /* Perform a GET/HEAD request */
 static int meth_get_doc(struct transaction_t *txn)
 {
+    return get_doc(txn, NULL);
+}
+
+int get_doc(struct transaction_t *txn, filter_proc_t filter)
+{
     int ret = 0, fd, precond;
     const char *prefix, *path;
     static struct buf pathbuf = BUF_INITIALIZER;
@@ -2998,7 +3003,8 @@ static int meth_get_doc(struct transaction_t *txn)
 	resp_body->type = "text/html";
     }
 
-    write_body(HTTP_OK, txn, msg_base, msg_size);
+    if (filter) ret = (*filter)(txn, msg_base, msg_size);
+    else write_body(HTTP_OK, txn, msg_base, msg_size);
 
     map_free(&msg_base, &msg_size);
     close(fd);

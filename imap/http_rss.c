@@ -78,7 +78,7 @@ static int meth_get(struct transaction_t *txn);
 static int rss_to_mboxname(struct request_target_t *req_tgt,
 			   char *mboxname, uint32_t *uid,
 			   char *section);
-static void list_feeds(struct transaction_t *txn);
+static int list_feeds(struct transaction_t *txn);
 static int fetch_message(struct transaction_t *txn, struct mailbox *mailbox,
 			 unsigned recno, uint32_t uid,
 			 struct index_record *record, struct body **body,
@@ -131,8 +131,7 @@ static int meth_get(struct transaction_t *txn)
 
     /* If no mailboxname, list all available feeds */
     if (!*mailboxname) {
-	list_feeds(txn);
-	return 0;
+	return list_feeds(txn);
     }
 
     /* Open mailbox for reading */
@@ -289,7 +288,7 @@ static int list_cb(char *name, int matchlen, int maycreate, void *rock)
 	}
 	else {
 	    /* Create first child */
-	    buf_printf(lrock->buf, "<ul>\n");
+	    buf_printf(lrock->buf, "<ul id='feed'>\n");
 	    node = xmalloc(sizeof(struct node));
 	}
 
@@ -342,44 +341,101 @@ static int list_cb(char *name, int matchlen, int maycreate, void *rock)
 }
 
 
-/* Create a HTML document listing all RSS feeds available to the user */
-static void list_feeds(struct transaction_t *txn)
+static int feedlist_template(struct transaction_t *txn,
+			     const char *base, unsigned len)
 {
-    int r;
-    struct buf buf = BUF_INITIALIZER;
-    struct list_rock lrock;
-    struct node root = { "", 0, NULL, NULL };
+#define FEEDLIST_VAR "%RSS_FEEDLIST%"
+    size_t varlen = strlen(FEEDLIST_VAR);
+    const char *var = memmem(base, len, FEEDLIST_VAR, varlen);
 
-    /* Setup for chunked response */
-    txn->flags |= HTTP_CHUNKED;
-    txn->resp_body.type = "text/html; charset=utf-8";
+    txn->etag = NULL;
+    txn->resp_body.lastmod = 0;
 
-    /* Start HTML */
-    buf_printf(&buf, HTML_DOCTYPE "\n");
-    buf_printf(&buf, "<html>\n<head>\n<title>Cyrus RSS Feeds</title></head>\n");
-    buf_printf(&buf, "<body>\n<h2>Cyrus RSS Feeds</h2>\n");
-    write_body(HTTP_OK, txn, buf.s, buf.len);
-    buf_reset(&buf);
+    if (!var) {
+	write_body(HTTP_OK, txn, base, len);
+    }
+    else {
+	int r;
+	struct buf buf = BUF_INITIALIZER;
+	struct list_rock lrock;
+	struct node root = { "", 0, NULL, NULL };
 
-    lrock.txn = txn;
-    lrock.buf = &buf;
-    lrock.last = &root;
+	write_body(HTTP_OK, txn, base, var - base);
+	lrock.txn = txn;
+	lrock.buf = &buf;
+	lrock.last = &root;
 
-    /* generate tree view of feeds */
-    r = mboxlist_findall(NULL, "*", httpd_userisadmin, NULL, httpd_authstate,
-			 list_cb, &lrock);
+	/* generate tree view of feeds */
+	r = mboxlist_findall(NULL, "*", httpd_userisadmin, NULL, httpd_authstate,
+			     list_cb, &lrock);
 
-    /* close out the tree */
-    list_cb(NULL, 0, 0, &lrock);
+	/* close out the tree */
+	list_cb(NULL, 0, 0, &lrock);
+	if (buf.len) write_body(0, txn, buf.s, buf.len);
 
-    /* End of HTML */
-    buf_printf(&buf, "</body>\n</html>\n");
-    write_body(0, txn, buf.s, buf.len);
+	write_body(0, txn, var+varlen, len - varlen - (var - base));
+
+	buf_free(&buf);
+    }
 
     /* End of output */
     write_body(0, txn, NULL, 0);
 
-    buf_free(&buf);
+    return 0;
+}
+
+
+/* Create a HTML document listing all RSS feeds available to the user */
+static int list_feeds(struct transaction_t *txn)
+{
+    int ret;
+    const char *template = config_getstring(IMAPOPT_RSS_FEEDLIST_TEMPLATE);
+
+    /* Setup for chunked response */
+    txn->flags |= (HTTP_CHUNKED | HTTP_NOCACHE);
+    txn->resp_body.type = "text/html; charset=utf-8";
+
+    if (template) {
+	snprintf(txn->req_tgt.path, sizeof(txn->req_tgt.path), "/%s", template);
+	ret = get_doc(txn, &feedlist_template);
+    }
+    else {
+	int r;
+	struct buf buf = BUF_INITIALIZER;
+	struct list_rock lrock;
+	struct node root = { "", 0, NULL, NULL };
+
+	/* Start HTML */
+	buf_printf(&buf, HTML_DOCTYPE "\n");
+	buf_printf(&buf, "<html>\n<head>\n<title>Cyrus RSS Feeds</title>\n");
+	buf_printf(&buf, "</head>\n<body>\n<h2>Cyrus RSS Feeds</h2>\n");
+	write_body(HTTP_OK, txn, buf.s, buf.len);
+	buf_reset(&buf);
+
+	lrock.txn = txn;
+	lrock.buf = &buf;
+	lrock.last = &root;
+
+	/* generate tree view of feeds */
+	r = mboxlist_findall(NULL, "*", httpd_userisadmin, NULL, httpd_authstate,
+			     list_cb, &lrock);
+
+	/* close out the tree */
+	list_cb(NULL, 0, 0, &lrock);
+
+	/* End of HTML */
+	buf_printf(&buf, "</body>\n</html>\n");
+	write_body(0, txn, buf.s, buf.len);
+
+	/* End of output */
+	write_body(0, txn, NULL, 0);
+
+	buf_free(&buf);
+
+	ret = 0;
+    }
+
+    return ret;
 }
 
 

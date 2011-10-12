@@ -1050,6 +1050,13 @@ And the notification message will be available on \fIstdin\fR.
    allowed in envelope tests.  When disabled, ANY grammatically correct header
    will be allowed. */
 
+{ "rss_feedlist_template", NULL, STRING }
+/* Path to HTML file (rooted at "http_docroot") used as a template for
+   displaying the list of available RSS feeds.  A single instance of
+   the variable %RSS_FEEDLIST% should appear in the file, which will
+   be replaced by a nested unordered list of feeds.  This file will be
+   accessible at the "/rss" URL on the server. */
+
 # Commented out - used by libsasl
 # { "sasl_auto_transition", 0, SWITCH }
 /* If enabled, the SASL library will automatically create authentication

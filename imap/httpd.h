@@ -177,6 +177,8 @@ enum {
 };
 
 typedef int (*method_proc_t)(struct transaction_t *txn);
+typedef int (*filter_proc_t)(struct transaction_t *txn,
+			     const char *base, unsigned len);
 
 struct namespace_t {
     unsigned id;		/* Namespace identifier */
@@ -214,5 +216,6 @@ extern void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml);
 extern void write_body(long code, struct transaction_t *txn,
 		       const char *buf, unsigned len);
 extern int meth_options(struct transaction_t *txn);
+extern int get_doc(struct transaction_t *txn, filter_proc_t filter);
 
 #endif /* HTTPD_H */
