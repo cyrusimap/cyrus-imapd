@@ -449,6 +449,7 @@ sub start
 	$self->_fix_ownership();
     }
     $self->_start_master();
+    $self->{_stopped} = 0;
 
     if ($created && $self->{setup_mailbox} && defined $self->get_service('imap'))
     {
