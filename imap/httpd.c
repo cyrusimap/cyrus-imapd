@@ -1903,7 +1903,7 @@ static int http_auth(const char *creds, struct auth_challenge_t *chal)
 		break;
 	    }
 	}
-	if (!scheme->name) {
+	if (!scheme || !scheme->name) {
 	    /* Didn't find a matching scheme that is available */
 	    syslog(LOG_WARNING, "Unknown auth scheme '%.*s'", slen, creds);
 	    return SASL_NOMECH;
