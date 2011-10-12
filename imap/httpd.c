@@ -1163,23 +1163,23 @@ static void cmdloop(void)
 #ifdef SASL_HTTP_REQUEST
 		sasl_setprop(httpd_saslconn, SASL_HTTP_REQUEST, &sasl_http_req);
 #endif
-		if (http_auth(hdr[0], &txn.auth_chal) < 0) {
+		if ((r = http_auth(hdr[0], &txn.auth_chal)) < 0) {
 		    /* Auth failed - reinitialize */
 		    syslog(LOG_DEBUG, "auth failed - reinit");
 		    reset_saslconn(&httpd_saslconn);
 		    txn.auth_chal.scheme = NULL;
 		}
 	    }
-	}
-	else if (!httpd_userid && txn.auth_chal.scheme) {
-	    /* Started auth exchange, but client didn't engage - reinit */
-	    syslog(LOG_DEBUG, "client didn't complete auth - reinit");
-	    reset_saslconn(&httpd_saslconn);
-	    txn.auth_chal.scheme = NULL;
+	    else if (txn.auth_chal.scheme) {
+		/* Started auth exchange, but client didn't engage - reinit */
+		syslog(LOG_DEBUG, "client didn't complete auth - reinit");
+		reset_saslconn(&httpd_saslconn);
+		txn.auth_chal.scheme = NULL;
+	    }
 	}
 
 	/* Request authentication, if necessary */
-	if (namespace->need_auth && !httpd_userid) {
+	if (!httpd_userid && (r || namespace->need_auth)) {
 	    /* User must authenticate */
 
 	    if (httpd_tls_required) {
@@ -1196,7 +1196,8 @@ static void cmdloop(void)
 		sasl_setprop(httpd_saslconn, SASL_HTTP_REQUEST, &sasl_http_req);
 #endif
 		ret = HTTP_UNAUTHORIZED;
-		txn.errstr = "Must authenticate to access the specified target";
+		if (r) txn.errstr = "Authentication failed";
+		else txn.errstr = "Must authenticate to access the specified target";
 	    }
 	}
 
@@ -1642,7 +1643,7 @@ void response_header(long code, struct transaction_t *txn)
 	    /* Continue with current authentication exchange */ 
 	    WWW_Authenticate(auth_chal->scheme->name, auth_chal->param);
 	}
-    }    else if (auth_chal->param) {
+    } else if (auth_chal->param) {
 	/* Authentication completed with success data */
 	if (auth_chal->scheme->success) {
 	    /* Special handling of success data for this scheme */
@@ -1896,20 +1897,19 @@ static int http_auth(const char *creds, struct auth_challenge_t *chal)
 	/* Find the client-specified auth scheme */
 	syslog(LOG_DEBUG, "http_auth: find client scheme");
 	for (scheme = auth_schemes; scheme->name; scheme++) {
-	    if (!strncasecmp(scheme->name, creds, slen)) {
+	    if (slen && !strncasecmp(scheme->name, creds, slen)) {
 		/* Found a supported scheme, see if its available */
 		if (!scheme->is_avail) scheme = NULL;
 		break;
 	    }
 	}
-	if (!scheme) {
+	if (!scheme->name) {
 	    /* Didn't find a matching scheme that is available */
 	    syslog(LOG_WARNING, "Unknown auth scheme '%.*s'", slen, creds);
 	    return SASL_NOMECH;
 	}
-
 	/* We found it! */
-	syslog(LOG_DEBUG, "http_auth: found matching scheme");
+	syslog(LOG_DEBUG, "http_auth: found matching scheme: %s", scheme->name);
 	chal->scheme = scheme;
 	status = SASL_OK;
     }
