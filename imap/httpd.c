@@ -1011,8 +1011,8 @@ static void cmdloop(void)
 
 		/* See if the prefix matches - terminated with NUL or '/' */
 		if (!strncmp(namespaces[i]->prefix, txn.req_tgt.path, len) &&
-		    (!namespaces[i]->prefix[len] ||
-		     (namespaces[i]->prefix[len] == '/'))) break;
+		    (!txn.req_tgt.path[len] ||
+		     (txn.req_tgt.path[len] == '/'))) break;
 	    }
 	    if ((namespace = namespaces[i])) {
 		txn.req_tgt.namespace = namespace->id;
