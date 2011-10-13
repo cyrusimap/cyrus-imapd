@@ -304,7 +304,8 @@ static int list_cb(char *name, int matchlen, int maycreate, void *rock)
 	}
 	else {
 	    /* Create first child */
-	    buf_printf(lrock->buf, "<ul id='feed'>\n");
+	    if (!last->parent) buf_printf(lrock->buf, "<ul id='feed'>\n");
+	    else buf_printf(lrock->buf, "<ul>\n");
 	    node = xmalloc(sizeof(struct node));
 	}
 
