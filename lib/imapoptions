@@ -1051,11 +1051,14 @@ And the notification message will be available on \fIstdin\fR.
    will be allowed. */
 
 { "rss_feedlist_template", NULL, STRING }
-/* Path to HTML file (rooted at "http_docroot") used as a template for
-   displaying the list of available RSS feeds.  A single instance of
-   the variable %RSS_FEEDLIST% should appear in the file, which will
-   be replaced by a nested unordered list of feeds.  This file will be
-   accessible at the "/rss" URL on the server. */
+/* Path to the HTML file (rooted at "http_docroot") that will be used
+   as a template for displaying the list of available RSS feeds.  A
+   single instance of the variable %RSS_FEEDLIST% should appear in the
+   file, which will be replaced by a nested unordered list of feeds.
+   The toplevel unordered list will be tagged with an id of "feed"
+   (<ul id='feed'>) which can be used by stylesheet(s) in your
+   template.  The dynamically created list of feeds based on the
+   HTML template will be accessible at the "/rss" URL on the server. */ 
 
 # Commented out - used by libsasl
 # { "sasl_auto_transition", 0, SWITCH }
