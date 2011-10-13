@@ -300,12 +300,13 @@ static int list_cb(char *name, int matchlen, int maycreate, void *rock)
 
 	if (last->child) {
 	    /* Reuse our sibling */
+	    buf_printf(lrock->buf, "</li>\n");
 	    node = last->child;
 	}
 	else {
 	    /* Create first child */
-	    if (!last->parent) buf_printf(lrock->buf, "<ul id='feed'>\n");
-	    else buf_printf(lrock->buf, "<ul>\n");
+	    buf_printf(lrock->buf, "\n<ul%s>\n",
+		       last->parent ? "" : " id='feed'"); /* needed by CSS */
 	    node = xmalloc(sizeof(struct node));
 	}
 
@@ -329,12 +330,12 @@ static int list_cb(char *name, int matchlen, int maycreate, void *rock)
 	    /* Add selectable feed with link */
 	    snprintf(path, sizeof(path), ".rss.%s", node->name);
 	    mboxname_hiersep_toexternal(&httpd_namespace, href, 0);
-	    buf_printf(lrock->buf, "<li><a href=\"%s\">%s</a>\n",
+	    buf_printf(lrock->buf, "<li><a href=\"%s\">%s</a>",
 		       href, shortname);
 	}
 	else {
 	    /* Add missing ancestor and recurse down the tree */
-	    buf_printf(lrock->buf, "<li>%s\n", shortname);
+	    buf_printf(lrock->buf, "<li>%s", shortname);
 
 	    list_cb(name, matchlen, maycreate, rock);
 	}
@@ -342,7 +343,7 @@ static int list_cb(char *name, int matchlen, int maycreate, void *rock)
     else {
 	/* Remove child */
 	if (last->child) {
-	    buf_printf(lrock->buf, "</ul>\n");
+	    buf_printf(lrock->buf, "</li>\n</ul>\n");
 	    free(last->child);
 	    last->child = NULL;
 	}
