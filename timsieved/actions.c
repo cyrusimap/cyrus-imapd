@@ -474,15 +474,20 @@ static int isactive(char *name)
 {
     char filename[1024];
     char activelink[1024];
+    ssize_t link_len;
 
     snprintf(filename, 1023, "%s.bc", name);
     memset(activelink, 0, sizeof(activelink));
-    if ((readlink("defaultbc", activelink, sizeof(activelink)-1) < 0) && 
-	(errno != ENOENT)) 
+
+    link_len = readlink("defaultbc", activelink, sizeof(activelink)-1);
+    if (link_len == -1)
     {
-	syslog(LOG_ERR, "readlink(defaultbc): %m");
+	if (errno != ENOENT)
+	    syslog(LOG_ERR, "readlink(defaultbc): %m");
+
 	return FALSE;
     }
+    activelink[link_len] = '\0';
 
     if (!strcmp(filename, activelink)) {
 	return TRUE;
