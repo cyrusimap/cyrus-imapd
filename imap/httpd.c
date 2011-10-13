@@ -2940,7 +2940,7 @@ static int meth_get_doc(struct transaction_t *txn)
 int get_doc(struct transaction_t *txn, filter_proc_t filter)
 {
     int ret = 0, fd, precond;
-    const char *prefix, *path;
+    const char *prefix, *path, *ext;
     static struct buf pathbuf = BUF_INITIALIZER;
     struct stat sbuf;
     const char *msg_base = NULL;
@@ -2990,21 +2990,40 @@ int get_doc(struct transaction_t *txn, filter_proc_t filter)
 	return precond;
     }
 
-    /* XXX  Use filename extensions? */
-
-    /* Look for filetype signatures in the data */
-    if (msg_size >= 8 &&
-	!memcmp(msg_base, "\x89\x50\x4E\x47\x0D\x0A\x1A\x0A", 8)) {
-	resp_body->type = "image/png";
-    } else if (msg_size >= 4 &&
-	       !memcmp(msg_base, "\xFF\xD8\xFF\xE0", 4)) {
-	resp_body->type = "image/jpeg";
-    } else if (msg_size >= 6 &&
-	       (!memcmp(msg_base, "GIF87a", 6) ||
-		!memcmp(msg_base, "GIF89a", 6))) {
-	resp_body->type = "image/gif";
-    } else {
-	resp_body->type = "text/html";
+    if ((ext = strrchr(txn->req_tgt.path, '.'))) {
+	/* Try to use filename extension to identity Content-Type */
+	if (!strcmp(ext, ".text") || !strcmp(ext, ".txt"))
+	    resp_body->type = "text/plain";
+	else if (!strcmp(ext, ".html") || !strcmp(ext, ".htm"))
+	    resp_body->type = "text/html";
+	else if (!strcmp(ext, ".css"))
+	    resp_body->type = "text/css";
+	else if (!strcmp(ext, ".js"))
+	    resp_body->type = "text/javascript";
+	else if (!strcmp(ext, ".jpeg") || !strcmp(ext, ".jpg"))
+	    resp_body->type = "image/jpeg";
+	else if (!strcmp(ext, ".gif"))
+	    resp_body->type = "image/gif";
+	else if (!strcmp(ext, ".png"))
+	    resp_body->type = "image/png";
+	else
+	    resp_body->type = "application/octet-stream";
+    }
+    else {
+	/* Try to usr filetype signatures to identity Content-Type */
+	if (msg_size >= 8 &&
+	    !memcmp(msg_base, "\x89\x50\x4E\x47\x0D\x0A\x1A\x0A", 8)) {
+	    resp_body->type = "image/png";
+	} else if (msg_size >= 4 &&
+		   !memcmp(msg_base, "\xFF\xD8\xFF\xE0", 4)) {
+	    resp_body->type = "image/jpeg";
+	} else if (msg_size >= 6 &&
+		   (!memcmp(msg_base, "GIF87a", 6) ||
+		    !memcmp(msg_base, "GIF89a", 6))) {
+	    resp_body->type = "image/gif";
+	} else {
+	    resp_body->type = "application/octet-stream";
+	}
     }
 
     if (filter) ret = (*filter)(txn, msg_base, msg_size);
