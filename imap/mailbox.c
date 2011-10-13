@@ -2439,7 +2439,7 @@ int mailbox_repack_commit(struct mailbox_repack **repackptr)
     unsigned char *buf = ibuf.buf;
     struct mailbox_repack *repack = *repackptr;
     int n;
-    int r;
+    int r = 0;
 
     assert(repack);
 
