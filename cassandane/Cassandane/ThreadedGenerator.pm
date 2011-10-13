@@ -52,6 +52,7 @@ my $NTHREADS = 5;
 my $NMESSAGES = 20 * $NTHREADS;
 my $DELTAT = 300;   # seconds
 my $FINISH_CHANCE = 0.08;
+my $FOLLOW_CHANCE = 0.30;
 
 sub new
 {
@@ -86,6 +87,7 @@ sub new
 
     $self->{next_date} = DateTime->now->epoch -
 		    $self->{deltat} * ($self->{nmessages}+1);
+    $self->{last_thread} = undef;
 
     return $self;
 }
@@ -94,14 +96,31 @@ sub _choose_thread
 {
     my ($self) = @_;
 
-    my $i = int(rand(scalar(@{$self->{threads}})));
-    my $thread = $self->{threads}->[$i];
-
     my $dice = rand;
+    my $thread;
+    if ($dice <= $FINISH_CHANCE)
+    {
+	# follow-up on the last thread
+	$thread = $self->{last_thread};
+    }
+    if (!defined $thread)
+    {
+	my $i = int(rand(scalar(@{$self->{threads}})));
+	$thread = $self->{threads}->[$i];
+    }
+
+    $dice = rand;
     if ($dice <= $FINISH_CHANCE)
     {
 	# detach from the generator...we won't find it again
-	splice(@{$self->{threads}}, $i, 1);
+	my @tt = grep { $thread != $_ } @{$self->{threads}};
+	$self->{threads} = \@tt;
+	$self->{last_thread} = undef
+	    if defined $self->{last_thread} && $thread == $self->{last_thread};
+    }
+    else
+    {
+	$self->{last_thread} = $thread;
     }
 
     return $thread;
