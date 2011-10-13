@@ -398,6 +398,16 @@ sub get_guid
     return sha1_hex($self->as_string());
 }
 
+# Handy accessors
+
+sub uid { return shift->get_attribute('uid'); }
+sub cid { return shift->get_attribute('cid'); }
+sub guid { return shift->get_guid(); }
+sub from { return shift->get_header('from'); }
+sub to { return shift->get_header('to'); }
+sub subject { return shift->get_header('subject'); }
+sub size { return length(shift->as_string); }
+
 # Utility functions
 
 # Given a subject string, return the "base subject"
