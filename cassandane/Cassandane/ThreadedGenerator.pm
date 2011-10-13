@@ -55,14 +55,25 @@ my $FINISH_CHANCE = 0.08;
 
 sub new
 {
-    my $class = shift;
-    my $self = $class->SUPER::new(@_);
+    my ($class, %params) = @_;
 
-    $self->{nmessages} = $NMESSAGES;
-    $self->{deltat} = $DELTAT;
+    my $nmessages = $NMESSAGES;
+    $nmessages = delete $params{nmessages}
+	if defined $params{nmessages};
+    my $deltat = $DELTAT;
+    $deltat = delete $params{deltat}
+	if defined $params{deltat};
+    my $nthreads = $NTHREADS;
+    $nthreads = delete $params{nthreads}
+	if defined $params{nthreads};
+
+    my $self = $class->SUPER::new(%params);
+
+    $self->{nmessages} = $nmessages;
+    $self->{deltat} = $deltat;
 
     $self->{threads} = [];
-    for (my $i = 1 ; $i <= $NTHREADS ; $i++)
+    for (my $i = 1 ; $i <= $nthreads ; $i++)
     {
 	my $thread =
 	{
