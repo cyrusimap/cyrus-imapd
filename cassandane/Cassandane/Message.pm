@@ -49,6 +49,10 @@ use Digest::SHA1 qw(sha1_hex);
 use base qw(Clone);
 use overload qw("") => \&as_string;
 
+use Exporter ();
+our @ISA = qw(Exporter);
+our @EXPORT = qw(base_subject);
+
 sub new
 {
     my $class = shift;
@@ -392,6 +396,52 @@ sub get_guid
     my ($self) = @_;
 
     return sha1_hex($self->as_string());
+}
+
+# Utility functions
+
+# Given a subject string, return the "base subject"
+# as defined by RFC5256.  Used for SORT & THREAD.
+sub base_subject
+{
+    my ($_) = @_;
+
+    # (1) [ ignoring the RFC2047 decoding ]
+    # Convert all tabs and continuations to space.
+    # Convert all multiple spaces to a single space.
+    s/\s+/ /g;
+
+    # (2) Remove all trailing text of the subject that
+    # matches the subj-trailer ABNF; repeat until no
+    # more matches are possible.
+    while (s/(\s|\(fwd\))$//i) { }
+
+    for (;;)
+    {
+	# (3) Remove all prefix text of the subject that
+	# matches the subj-leader ABNF.
+	my $n = 0;
+	while (s/^\s+// ||
+	       s/^\[[^][]*\]\s*// ||
+	       s/^re\s*(\[[^][]*\])?://i ||
+	       s/^fw\s*(\[[^][]*\])?://i ||
+	       s/^fwd\s*(\[[^][]*\])?://i)
+	{
+	    $n++;
+	}
+	last if !$n;
+
+	# (4) If there is prefix text of the subject that
+	# matches the subj-blob ABNF, and removing that
+	# prefix leaves a non-empty subj-base, then remove
+	# the prefix text.
+	my ($prefix, $base) = m/^\[[^][]*\]\s*(.*)$/;
+	last if !defined $prefix;
+	$_ = $base if ($base ne '');
+    }
+    # (5) Repeat (3) and (4) until no matches remain.
+
+    return $_;
 }
 
 1;

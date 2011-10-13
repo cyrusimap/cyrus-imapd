@@ -45,6 +45,7 @@ package Cassandane::Test::Message;
 use base qw(Cassandane::Unit::TestCase);
 use Cassandane::Message;
 use Cassandane::Address;
+use Cassandane::Util::Log;
 
 sub new
 {
@@ -424,6 +425,70 @@ EOF
     $exp2 =~ s/\n/\r\n/g;
     $self->assert_str_equals($exp2, $m->as_string);
     $self->assert_str_equals($exp, $m2->as_string);
+}
+
+# Test base_subject()
+sub test_base_subject
+{
+    my ($self) = @_;
+
+    my @testcases = (
+	'Hello World' => 'Hello World',
+	'  Hello World' => 'Hello World',
+	'Hello World   ' => 'Hello World',
+	'    Hello World   ' => 'Hello World',
+	'    Hello   World   ' => 'Hello World',
+	" \t\t  Hello \t\t World \t\t " => 'Hello World',
+	're: Hello World' => 'Hello World',
+	'Re: Hello World' => 'Hello World',
+	'RE: Hello World' => 'Hello World',
+	're : Hello World' => 'Hello World',
+	'Re : Hello World' => 'Hello World',
+	'RE : Hello World' => 'Hello World',
+	"re \t : Hello World" => 'Hello World',
+	"Re \t : Hello World" => 'Hello World',
+	"RE \t : Hello World" => 'Hello World',
+	'fw: Hello World' => 'Hello World',
+	'Fw: Hello World' => 'Hello World',
+	'FW: Hello World' => 'Hello World',
+	'fw : Hello World' => 'Hello World',
+	'Fw : Hello World' => 'Hello World',
+	'FW : Hello World' => 'Hello World',
+	"fw \t : Hello World" => 'Hello World',
+	"Fw \t : Hello World" => 'Hello World',
+	"FW \t : Hello World" => 'Hello World',
+	'fwd: Hello World' => 'Hello World',
+	'Fwd: Hello World' => 'Hello World',
+	'FWD: Hello World' => 'Hello World',
+	'fwd : Hello World' => 'Hello World',
+	'Fwd : Hello World' => 'Hello World',
+	'FWD : Hello World' => 'Hello World',
+	"fwd \t : Hello World" => 'Hello World',
+	"Fwd \t : Hello World" => 'Hello World',
+	"FWD \t : Hello World" => 'Hello World',
+	"Hello World (fwd)" => 'Hello World',
+	"Hello World (fwd) \t " => 'Hello World',
+	"Hello World \t  \t (fwd)" => 'Hello World',
+	"Hello World (FWD) \t" => 'Hello World',
+	"Hello World \t\t  (FWD)" => 'Hello World',
+	"Hello World (FWD)   " => 'Hello World',
+	" \t\t     Hello World" => "Hello World",
+	"[PATCH]Hello World" => "Hello World",
+	"[PATCH] Hello World" => "Hello World",
+	"\t [PATCH] \t Hello World" => "Hello World",
+	"[RFC][PATCH][WTF]Hello World" => "Hello World",
+	"  [RFC] [PATCH]   [WTF]    Hello World" => "Hello World",
+    );
+
+    while (@testcases)
+    {
+	my $in = shift @testcases;
+	my $exp = shift @testcases;
+	my $out = base_subject($in);
+	xlog "base_subject(\"$in\") = \"$out\"";
+	$self->assert_str_equals($exp, $out);
+    }
+
 }
 
 1;
