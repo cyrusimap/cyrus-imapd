@@ -67,6 +67,7 @@
 #include "util.h"
 #include "version.h"
 #include "xmalloc.h"
+#include "xmemmem.h"
 #include "xstrlcpy.h"
 
 #define XML_NS_ATOM	"http://www.w3.org/2005/Atom"
