@@ -51,6 +51,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <syslog.h>
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
 
 #include <string.h>
 #include <sasl/sasl.h>
