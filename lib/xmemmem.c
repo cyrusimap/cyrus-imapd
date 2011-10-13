@@ -51,12 +51,12 @@ void *memmem(const void *haystack, size_t haystacklen,
     const char *n = (const char *) needle;
     const char *end = h + haystacklen - needlelen;
 
-    if (!needlelen) return haystack;
+    if (!needlelen) return (void *) haystack;
 
     if (haystacklen < needlelen) return NULL;
 
     for (; h <= end; h++) {
-	if ((*h == *n) && !memcmp(h+1, n+1, meedlelen-1)) return (void *) h;
+	if ((*h == *n) && !memcmp(h+1, n+1, needlelen-1)) return (void *) h;
     }
 
     return NULL;
