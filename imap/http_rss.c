@@ -73,12 +73,21 @@
 #define RSS_MAX_ITEMS	100	/* only display 100 most recent messages */
 #define RSS_TTL		30	/* refresh every 30min */
 #define MAX_SECTION_LEN	128
+#define FEEDLIST_VAR	"%RSS_FEEDLIST%"
+
+static const char def_template[] =
+    HTML_DOCTYPE "\n"
+    "<html>\n<head>\n<title>Cyrus RSS Feeds</title>\n</head>\n"
+    "<body>\n<h2>Cyrus RSS Feeds</h2>\n"
+    FEEDLIST_VAR
+    "</body>\n</html>\n";
 
 static int meth_get(struct transaction_t *txn);
 static int rss_to_mboxname(struct request_target_t *req_tgt,
 			   char *mboxname, uint32_t *uid,
 			   char *section);
-static int list_feeds(struct transaction_t *txn);
+static int list_feeds(struct transaction_t *txn,
+		      const char *base, unsigned long len);
 static int fetch_message(struct transaction_t *txn, struct mailbox *mailbox,
 			 unsigned recno, uint32_t uid,
 			 struct index_record *record, struct body **body,
@@ -131,7 +140,14 @@ static int meth_get(struct transaction_t *txn)
 
     /* If no mailboxname, list all available feeds */
     if (!*mailboxname) {
-	return list_feeds(txn);
+	const char *template = config_getstring(IMAPOPT_RSS_FEEDLIST_TEMPLATE);
+
+	if (template) {
+	    snprintf(txn->req_tgt.path, sizeof(txn->req_tgt.path), "%s%s",
+		     (*template == '/') ? "" : "/", template);
+	    return get_doc(txn, &list_feeds);
+	}
+	else return list_feeds(txn, def_template, strlen(def_template));
     }
 
     /* Open mailbox for reading */
@@ -341,19 +357,23 @@ static int list_cb(char *name, int matchlen, int maycreate, void *rock)
 }
 
 
-static int feedlist_template(struct transaction_t *txn,
-			     const char *base, unsigned len)
+/* Create a HTML document listing all RSS feeds available to the user */
+static int list_feeds(struct transaction_t *txn,
+		      const char *base, unsigned long len)
 {
-#define FEEDLIST_VAR "%RSS_FEEDLIST%"
     size_t varlen = strlen(FEEDLIST_VAR);
-    const char *var = memmem(base, len, FEEDLIST_VAR, varlen);
+    const char *var = (const char *) memmem(base, len, FEEDLIST_VAR, varlen);
 
+    /* Dynamic response should not be cached */
+    txn->flags |= HTTP_NOCACHE;
     txn->etag = NULL;
     txn->resp_body.lastmod = 0;
 
-    if (!var) {
-	write_body(HTTP_OK, txn, base, len);
-    }
+    /* Setup for chunked response */
+    txn->flags |= HTTP_CHUNKED;
+    txn->resp_body.type = "text/html; charset=utf-8";
+
+    if (!var) write_body(HTTP_OK, txn, base, len);
     else {
 	int r;
 	struct buf buf = BUF_INITIALIZER;
@@ -382,60 +402,6 @@ static int feedlist_template(struct transaction_t *txn,
     write_body(0, txn, NULL, 0);
 
     return 0;
-}
-
-
-/* Create a HTML document listing all RSS feeds available to the user */
-static int list_feeds(struct transaction_t *txn)
-{
-    int ret;
-    const char *template = config_getstring(IMAPOPT_RSS_FEEDLIST_TEMPLATE);
-
-    /* Setup for chunked response */
-    txn->flags |= (HTTP_CHUNKED | HTTP_NOCACHE);
-    txn->resp_body.type = "text/html; charset=utf-8";
-
-    if (template) {
-	snprintf(txn->req_tgt.path, sizeof(txn->req_tgt.path), "/%s", template);
-	ret = get_doc(txn, &feedlist_template);
-    }
-    else {
-	int r;
-	struct buf buf = BUF_INITIALIZER;
-	struct list_rock lrock;
-	struct node root = { "", 0, NULL, NULL };
-
-	/* Start HTML */
-	buf_printf(&buf, HTML_DOCTYPE "\n");
-	buf_printf(&buf, "<html>\n<head>\n<title>Cyrus RSS Feeds</title>\n");
-	buf_printf(&buf, "</head>\n<body>\n<h2>Cyrus RSS Feeds</h2>\n");
-	write_body(HTTP_OK, txn, buf.s, buf.len);
-	buf_reset(&buf);
-
-	lrock.txn = txn;
-	lrock.buf = &buf;
-	lrock.last = &root;
-
-	/* generate tree view of feeds */
-	r = mboxlist_findall(NULL, "*", httpd_userisadmin, NULL, httpd_authstate,
-			     list_cb, &lrock);
-
-	/* close out the tree */
-	list_cb(NULL, 0, 0, &lrock);
-
-	/* End of HTML */
-	buf_printf(&buf, "</body>\n</html>\n");
-	write_body(0, txn, buf.s, buf.len);
-
-	/* End of output */
-	write_body(0, txn, NULL, 0);
-
-	buf_free(&buf);
-
-	ret = 0;
-    }
-
-    return ret;
 }
 
 

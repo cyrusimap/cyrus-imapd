@@ -178,7 +178,7 @@ enum {
 
 typedef int (*method_proc_t)(struct transaction_t *txn);
 typedef int (*filter_proc_t)(struct transaction_t *txn,
-			     const char *base, unsigned len);
+			     const char *base, unsigned long len);
 
 struct namespace_t {
     unsigned id;		/* Namespace identifier */
