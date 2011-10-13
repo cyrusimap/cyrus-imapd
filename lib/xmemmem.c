@@ -43,7 +43,6 @@
 
 #include "xmemmem.h"
 
-#ifndef HAVE_MEMMEM
 void *memmem(const void *haystack, size_t haystacklen,
 	     const void *needle, size_t needlelen)
 {
@@ -61,4 +60,3 @@ void *memmem(const void *haystack, size_t haystacklen,
 
     return NULL;
 }
-#endif

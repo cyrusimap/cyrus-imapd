@@ -44,13 +44,9 @@
 #ifndef INCLUDED_XMEMMEM_H
 #define INCLUDED_XMEMMEM_H
 
-#include <config.h>
-
 #include <string.h>
 
-#ifndef HAVE_MEMMEM
 extern void *memmem(const void *haystack, size_t haystacklen,
                     const void *needle, size_t needlelen);
-#endif
 
 #endif /* INCLUDED_MEMMEM_H */
