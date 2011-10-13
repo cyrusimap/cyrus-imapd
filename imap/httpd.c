@@ -2999,6 +2999,10 @@ int get_doc(struct transaction_t *txn, filter_proc_t filter)
     } else if (msg_size >= 4 &&
 	       !memcmp(msg_base, "\xFF\xD8\xFF\xE0", 4)) {
 	resp_body->type = "image/jpeg";
+    } else if (msg_size >= 6 &&
+	       (!memcmp(msg_base, "GIF87a", 6) ||
+		!memcmp(msg_base, "GIF89a", 6))) {
+	resp_body->type = "image/gif";
     } else {
 	resp_body->type = "text/html";
     }
