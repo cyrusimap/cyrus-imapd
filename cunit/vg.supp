@@ -90,6 +90,14 @@
    ...
 }
 {
+   zlib_inflateInit2_cond
+   Memcheck:Cond
+   fun:inflateReset2
+   fun:inflateInit2_
+   fun:buf_inflate
+   ...
+}
+{
     zlib_deflate_cond
     Memcheck:Cond
     fun:memcpy
@@ -149,5 +157,15 @@
     Memcheck:Cond
     ...
     fun:RSA_setup_blinding
+    ...
+}
+{
+    libcrypto_bugs_6
+    Memcheck:Leak
+    fun:malloc
+    ...
+    fun:get_dh1024
+    ...
+    fun:tls_init_serverengine
     ...
 }
