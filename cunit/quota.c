@@ -582,7 +582,7 @@ static int found_cb(struct quota *q, void *rock)
     r = quota_foreach(prefix, found_cb, &exphash); \
     FOREACH_POSTCONDITION()
 
-static void test_foreach(void)
+static void notest_foreach(void)
 {
     struct quota q;
     struct quota q2;
