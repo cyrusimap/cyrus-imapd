@@ -136,5 +136,6 @@ static void test_search_mimeheader(void)
     s = charset_convert(SEARCH_CP1252, 0);
     pat = charset_compilepat(s);
     CU_ASSERT(charset_search_mimeheader(s, pat, SUBJECT_CP1252));
+    charset_freepat(pat);
     free(s);
 }
