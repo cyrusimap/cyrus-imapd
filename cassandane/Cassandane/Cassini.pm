@@ -51,8 +51,7 @@ my $instance;
 
 sub new
 {
-    my $class = shift;
-    my %params = @_;
+    my ($class, %params) = @_;
 
     my $filename = 'cassandane.ini';
     $filename = $params{filename}
@@ -81,15 +80,21 @@ sub new
     };
 
     bless $self, $class;
+    $instance = $self
+	unless defined $instance;
     return $self;
 }
 
 sub instance
 {
-    my ($class, @args) = @_;
+    my ($class) = @_;
 
-    $instance = Cassandane::Cassini->new(@args)
-	unless defined $instance;
+    if (!defined $instance)
+    {
+	Cassandane::Cassini->new();
+	die "Singleton broken in Cassini ctor!"
+	    unless defined $instance;
+    }
     return $instance;
 }
 

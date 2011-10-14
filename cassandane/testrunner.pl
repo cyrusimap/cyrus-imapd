@@ -190,7 +190,7 @@ while (my $a = shift)
     if ($a eq '--config')
     {
 	my $filename = shift;
-	Cassandane::Cassini->instance(filename => $filename);
+	Cassandane::Cassini->new(filename => $filename);
     }
     elsif ($a eq '-f')
     {
