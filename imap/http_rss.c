@@ -647,10 +647,12 @@ static void display_part(struct transaction_t *txn, struct buf *buf,
 
 	if (!strcmp(body->subtype, "ALTERNATIVE") &&
 	    !strcmp(body->subpart[0].type, "TEXT")) {
-	    /* Display a text/html subpart, otherwise display first subpart */
-	    for (i = 0; (i < body->numparts) &&
-		     strcmp(body->subpart[i].subtype, "HTML"); i++);
-	    if (i == body->numparts) i = 0;
+	    /* Display a multpart/ or text/html subpart,
+	       otherwise display first subpart */
+	    for (i = body->numparts; --i;) {
+		if (!strcmp(body->subpart[i].type, "MULTIPART") ||
+		    !strcmp(body->subpart[i].subtype, "HTML")) break;
+	    }
 	    snprintf(nextsection, sizeof(nextsection), "%s%s%d",
 		     cursection, *cursection ? "." : "", i+1);
 	    display_part(txn, buf, &body->subpart[i],
