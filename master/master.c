@@ -1088,8 +1088,8 @@ static void sighandler_setup(void)
     sigaddset(&siglist, SIGCHLD);
     sigprocmask(SIG_UNBLOCK, &siglist, NULL);
 
+    memset(&action, 0, sizeof(action));
     sigemptyset(&action.sa_mask);
-    action.sa_flags = 0;
 
     action.sa_handler = sighup_handler;
 #ifdef SA_RESTART
