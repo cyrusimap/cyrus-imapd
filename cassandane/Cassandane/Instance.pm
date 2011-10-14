@@ -76,7 +76,6 @@ sub new
 
     my $self = {
 	name => undef,
-	cassini => $cassini,
 	basedir => undef,
 	installation => 'default',
 	cyrus_prefix => undef,
@@ -213,7 +212,8 @@ sub _binary
 	unless $bin =~ m/^\//;
     push(@cmd, $bin);
 
-    if (!$valground && $self->{cassini}->val('gdb', $name, 'no') =~ m/^yes$/i)
+    my $cassini = Cassandane::Cassini->instance();
+    if (!$valground && $cassini->val('gdb', $name, 'no') =~ m/^yes$/i)
     {
 	xlog "Will run binary $name under gdb due to cassandane.ini";
 	xlog "Look in syslog for helpful instructions from gdbtramp";
