@@ -1076,10 +1076,17 @@ static void sigalrm_handler(int sig __attribute__((unused)))
 static void sighandler_setup(void)
 {
     struct sigaction action;
-    sigset_t all_signals;
+    sigset_t siglist;
 
-    sigfillset(&all_signals);
-    sigprocmask(SIG_UNBLOCK, &all_signals, NULL);
+    memset(&siglist, 0, sizeof(siglist));
+    sigemptyset(&siglist);
+    sigaddset(&siglist, SIGHUP);
+    sigaddset(&siglist, SIGALRM);
+    sigaddset(&siglist, SIGQUIT);
+    sigaddset(&siglist, SIGTERM);
+    sigaddset(&siglist, SIGINT);
+    sigaddset(&siglist, SIGCHLD);
+    sigprocmask(SIG_UNBLOCK, &siglist, NULL);
 
     sigemptyset(&action.sa_mask);
     action.sa_flags = 0;
