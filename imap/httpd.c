@@ -1626,7 +1626,7 @@ void response_header(long code, struct transaction_t *txn)
 		/* Only advertise what is available and
 		   can work with the type of connection */
 		if (scheme->is_avail &&
-		    ((!txn->flags & HTTP_CLOSE) || !scheme->need_persist)) {
+		    (!(txn->flags & HTTP_CLOSE) || !scheme->need_persist)) {
 		    auth_chal->param = NULL;
 
 		    if (scheme->is_server_first) {
