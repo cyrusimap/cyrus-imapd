@@ -1606,16 +1606,17 @@ void response_header(long code, struct transaction_t *txn)
 	if (txn->req_tgt.allow & ALLOW_WRITE) {
 	    prot_printf(httpd_out, ", POST, PUT, DELETE");
 	}
+	prot_printf(httpd_out, "\r\n");
 	if (txn->req_tgt.allow & ALLOW_DAV) {
-	    prot_printf(httpd_out, ", REPORT, PROPFIND");
+	    prot_printf(httpd_out, "Allow: REPORT, PROPFIND");
 	    if (txn->req_tgt.allow & ALLOW_WRITE) {  /* LOCK, UNLOCK */
 		prot_printf(httpd_out, ", PROPPATCH, COPY, MOVE, ACL, MKCOL");
 		if (txn->req_tgt.allow & ALLOW_CAL) {
 		    prot_printf(httpd_out, ", MKCALENDAR");
 		}
 	    }
+	    prot_printf(httpd_out, "\r\n");
 	}
-	prot_printf(httpd_out, "\r\n");
     }
 
     if (code == HTTP_UNAUTHORIZED) {
