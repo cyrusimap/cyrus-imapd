@@ -1122,7 +1122,7 @@ static void cmdloop(void)
 		if (!strcmp(e->token, "gzip") || !strcmp(e->token, "x-gzip")) {
 		    txn.flags |= HTTP_GZIP;
 		    deflateInit2(&txn.zstrm, Z_DEFAULT_COMPRESSION, Z_DEFLATED,
-				 31, 8, Z_DEFAULT_STRATEGY);
+				 16+MAX_WBITS, MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY);
 		}
 		/* XXX  Do we want to support deflate even though M$
 		   doesn't implement it correctly (raw deflate vs. zlib)? */
