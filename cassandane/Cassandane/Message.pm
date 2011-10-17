@@ -44,13 +44,10 @@ use strict;
 use warnings;
 use Cassandane::Util::Log;
 use Cassandane::Util::DateTime qw(from_rfc3501);
-use Clone;
 use Digest::SHA1 qw(sha1_hex);
-use base qw(Clone);
+use base qw(Clone Exporter);
 use overload qw("") => \&as_string;
 
-use Exporter ();
-our @ISA = qw(Exporter);
 our @EXPORT = qw(base_subject);
 
 sub new
