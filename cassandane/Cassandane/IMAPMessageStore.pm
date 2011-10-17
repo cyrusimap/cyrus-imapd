@@ -110,7 +110,8 @@ sub _connect
 
     my $client = Mail::IMAPTalk->new(
 			    Server => $self->{host},
-			    Port => $self->{port}
+			    Port => $self->{port},
+			    Pedantic => 1
 			)
 	or die "Cannot connect to server \"$self->{host}:$self->{port}\": $@";
 
@@ -134,8 +135,12 @@ sub disconnect
 {
     my ($self) = @_;
 
-    $self->{client}->logout()
-	if defined $self->{client};
+    # We don't care if the LOGOUT fails.  Really.
+    eval
+    {
+	$self->{client}->logout()
+	    if defined $self->{client};
+    };
     $self->{client} = undef;
 }
 
