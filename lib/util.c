@@ -63,6 +63,8 @@
 #include <errno.h>
 
 #include "exitcodes.h"
+#include "map.h"
+#include "retry.h"
 #include "util.h"
 #include "xmalloc.h"
 #ifdef HAVE_ZLIB
@@ -396,6 +398,94 @@ int cyrus_mkdir(const char *pathname, mode_t mode __attribute__((unused)))
 
     free(path);
     return 0;
+}
+
+static int _copyfile_helper(const char *from, const char *to, int flags)
+{
+    int srcfd = -1;
+    int destfd = -1;
+    const char *src_base = 0;
+    unsigned long src_size = 0;
+    struct stat sbuf;
+    int n;
+    int r = 0;
+    int nolink = flags & COPYFILE_NOLINK;
+
+    /* try to hard link, but don't fail - fall back to regular copy */
+    if (!nolink) {
+	if (link(from, to) == 0) return 0;
+	if (errno == EEXIST) {
+	    if (unlink(to) == -1) {
+		syslog(LOG_ERR, "IOERROR: unlinking to recreate %s: %m", to);
+		return -1;
+	    }
+	    if (link(from, to) == 0) return 0;
+	}
+    }
+
+    destfd = open(to, O_RDWR|O_TRUNC|O_CREAT, 0666);
+    if (destfd == -1) {
+	if (!(flags & COPYFILE_MKDIR))
+	    syslog(LOG_ERR, "IOERROR: creating %s: %m", to);
+	r = -1;
+	goto done;
+    }
+
+    srcfd = open(from, O_RDONLY, 0666);
+    if (srcfd == -1) {
+	syslog(LOG_ERR, "IOERROR: opening %s: %m", from);
+	r = -1;
+	goto done;
+    }
+
+    if (fstat(srcfd, &sbuf) == -1) {
+	syslog(LOG_ERR, "IOERROR: fstat on %s: %m", from);
+	r = -1;
+	goto done;
+    }
+
+    map_refresh(srcfd, 1, &src_base, &src_size, sbuf.st_size, from, 0);
+
+    n = retry_write(destfd, src_base, src_size);
+
+    if (n == -1 || fsync(destfd)) {
+	syslog(LOG_ERR, "IOERROR: writing %s: %m", to);
+	r = -1;
+	unlink(to);  /* remove any rubbish we created */
+	goto done;
+    }
+
+done:
+    map_free(&src_base, &src_size);
+
+    if (srcfd != -1) close(srcfd);
+    if (destfd != -1) close(destfd);
+
+    return r;
+}
+
+int cyrus_copyfile(const char *from, const char *to, int flags)
+{
+    int r;
+
+    /* copy over self is an error */
+    if (!strcmp(from, to))
+	return -1;
+
+    r = _copyfile_helper(from, to, flags);
+
+    /* try creating the target directory if requested */
+    if (r && (flags & COPYFILE_MKDIR)) {
+	r = cyrus_mkdir(to, 0755);
+	if (!r) r = _copyfile_helper(from, to, flags & ~COPYFILE_MKDIR);
+    }
+
+    if (!r && (flags & COPYFILE_RENAME)) {
+	/* remove the original file if the copy succeeded */
+	unlink(from);
+    }
+
+    return r;
 }
 
 int become_cyrus(void)

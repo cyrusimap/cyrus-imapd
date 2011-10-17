@@ -3261,71 +3261,11 @@ int mailbox_rename_cleanup(struct mailbox **mailboxptr, int isinbox)
 /*
  * Copy (or link) the file 'from' to the file 'to'
  */
-static int mailbox_copyfile_core(const char *from, const char *to,
-				 int nolink)
-{
-    int srcfd, destfd;
-    struct stat sbuf;
-    const char *src_base = 0;
-    unsigned long src_size = 0;
-    int n;
-
-    if (!nolink) {
-	if (link(from, to) == 0) return 0;
-	if (errno == EEXIST) {
-	    if (unlink(to) == -1) {
-		syslog(LOG_ERR, "IOERROR: unlinking to recreate %s: %m", to);
-		return IMAP_IOERROR;
-	    }
-	    if (link(from, to) == 0) return 0;
-	}
-    }
-
-    destfd = open(to, O_RDWR|O_TRUNC|O_CREAT, 0666);
-    if (destfd == -1) {
-	syslog(LOG_ERR, "IOERROR: creating %s: %m", to);
-	return IMAP_IOERROR;
-    }
-
-    srcfd = open(from, O_RDONLY, 0666);
-    if (srcfd == -1) {
-	syslog(LOG_ERR, "IOERROR: opening %s: %m", from);
-	close(destfd);
-	return IMAP_IOERROR;
-    }
-
-
-    if (fstat(srcfd, &sbuf) == -1) {
-	syslog(LOG_ERR, "IOERROR: fstat on %s: %m", from);
-	close(srcfd);
-	close(destfd);
-	return IMAP_IOERROR;
-    }
-    map_refresh(srcfd, 1, &src_base, &src_size, sbuf.st_size, from, 0);
-
-    n = retry_write(destfd, src_base, src_size);
-
-    if (n == -1 || fsync(destfd)) {
-	map_free(&src_base, &src_size);
-	close(srcfd);
-	close(destfd);
-	syslog(LOG_ERR, "IOERROR: writing %s: %m", to);
-	return IMAP_IOERROR;
-    }
-    map_free(&src_base, &src_size);
-    close(srcfd);
-    close(destfd);
-    return 0;
-}
-
 int mailbox_copyfile(const char *from, const char *to, int nolink)
 {
-    /* try to make the target dir if initial copy fails */
-    if (mailbox_copyfile_core(from, to, nolink)) {
-	cyrus_mkdir(to, 0755);
-	return mailbox_copyfile_core(from, to, nolink);
-    }
-    return 0;
+    int flags = 0;
+    if (nolink) flags |= COPYFILE_NOLINK;
+    return cyrus_copyfile(from, to, flags);
 }
 
 /* ---------------------------------------------------------------------- */

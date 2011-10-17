@@ -161,6 +161,14 @@ extern void cyrus_reset_stdio(void);
  */
 extern int cyrus_mkdir(const char *path, mode_t mode);
 
+enum {
+    COPYFILE_NOLINK = (1<<0),
+    COPYFILE_MKDIR  = (1<<1),
+    COPYFILE_RENAME = (1<<2)
+};
+
+extern int cyrus_copyfile(const char *from, const char *to, int flags);
+
 extern int become_cyrus(void);
 
 /* Some systems have very inefficient implementations of isdigit,

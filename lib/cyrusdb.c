@@ -108,58 +108,7 @@ void cyrusdb_done(void)
 
 int cyrusdb_copyfile(const char *srcname, const char *dstname)
 {
-    int srcfd, dstfd;
-    struct stat sbuf;
-    char buf[4096];
-    int n;
-
-    if ((srcfd = open(srcname, O_RDONLY)) < 0) {
-	syslog(LOG_DEBUG, "error opening %s for reading", srcname);
-	return -1;
-    }
-
-    if (fstat(srcfd, &sbuf) < 0) {
-	syslog(LOG_DEBUG, "error fstating %s", srcname);
-	close(srcfd);
-	return -1;
-    }
-
-    if ((dstfd = open(dstname, O_WRONLY | O_CREAT, sbuf.st_mode)) < 0) {
-	syslog(LOG_DEBUG, "error opening %s for writing (%d)",
-	       dstname, sbuf.st_mode);
-	close(srcfd);
-	return -1;
-    }
-
-    for (;;) {
-	n = read(srcfd, buf, 4096);
-
-	if (n < 0) {
-	    if (errno == EINTR)
-		continue;
-
-	    syslog(LOG_DEBUG, "error reading buf");
-	    close(srcfd);
-	    close(dstfd);
-	    unlink(dstname);
-	    return -1;
-	}
-
-	if (n == 0)
-	    break;
-
-	if (retry_write(dstfd, buf, n) != n) {
-	    syslog(LOG_DEBUG, "error writing buf (%d)", n);
-	    close(srcfd);
-	    close(dstfd);
-	    unlink(dstname);
-	    return -1;
-	}
-    }
-
-    close(srcfd);
-    close(dstfd);
-    return 0;
+    return cyrus_copyfile(srcname, dstname, COPYFILE_NOLINK);
 }
 
 struct db_rock {
