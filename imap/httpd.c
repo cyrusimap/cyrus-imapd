@@ -146,7 +146,7 @@ static SSL *tls_conn;
 #else
   #define HTTP_DIGEST_MECH NULL  /* not supported by our SASL version */
   #define SASL_SERVER_FLAGS SASL_SUCCESS_DATA
-#endif
+#endif /* SASL_NEED_HTTP */
 
 sasl_conn_t *httpd_saslconn; /* the sasl connection context */
 
@@ -1131,7 +1131,7 @@ static void cmdloop(void)
 	    }
 	    if (enc) free(enc);
 	}
-#endif
+#endif /* HAVE_ZLIB */
 
 	/* Start TLS if requested */
 	if (txn.flags & HTTP_STARTTLS) starttls(&txn, 0);
@@ -1143,14 +1143,14 @@ static void cmdloop(void)
 	sasl_http_req.entity = (u_char *) buf_cstring(&txn.req_body);
 	sasl_http_req.elen = buf_len(&txn.req_body);
 	sasl_http_req.non_persist = (txn.flags & HTTP_CLOSE);
-#endif
+#endif /* SASL_HTTP_REQUEST */
 
 	if (!httpd_userid) {
 	    /* Perform authentication, if necessary */
 	    if ((hdr = spool_getheader(txn.req_hdrs, "Authorization"))) {
 
 		/* Client is trying to authenticate */
-#if 0
+#if 0 /* XXX Do we want to support reauth? */
 		if (httpd_userid) {
 		    /* Reauthentication - reinitialize */
 		    syslog(LOG_DEBUG, "reauth - reinit");
@@ -3926,20 +3926,3 @@ static int meth_report(struct transaction_t *txn)
 
     return ret;
 }
-
-
-#if 0  /* XXX  for debugging */
-static void print_element_names(xmlNode * a_node)
-{
-    xmlNode *cur_node = NULL;
-
-    for (cur_node = a_node; cur_node; cur_node = cur_node->next) {
-        if (cur_node->type == XML_ELEMENT_NODE) {
-            syslog(LOG_INFO, "node type: Element, name: %s, ns %s:%s",
-		   cur_node->name, cur_node->ns->prefix, cur_node->ns->href);
-        }
-
-        print_element_names(cur_node->children);
-    }
-}
-#endif
