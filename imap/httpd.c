@@ -2150,8 +2150,8 @@ static int etagcmp(const char *hdr, const char *etag) {
  * the If-None-Match and If-Modified-Since headers can be used together, but
  * any other interaction is undefined.
  */
-static int check_precond(const char *meth, const char *etag, time_t lastmod,
-			 uint32_t dest, hdrcache_t hdrcache)
+int check_precond(const char *meth, const char *etag, time_t lastmod,
+		  uint32_t dest, hdrcache_t hdrcache)
 {
     unsigned ret = HTTP_OK;
     const char **hdr;

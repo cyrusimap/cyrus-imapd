@@ -93,7 +93,7 @@ static int fetch_message(struct transaction_t *txn, struct mailbox *mailbox,
 			 unsigned recno, uint32_t uid,
 			 struct index_record *record, struct body **body,
 			 const char **msg_base, unsigned long *msg_size);
-static void list_messages(struct transaction_t *txn, struct mailbox *mailbox);
+static int list_messages(struct transaction_t *txn, struct mailbox *mailbox);
 static void display_message(struct transaction_t *txn,
 			    const char *mboxname, uint32_t uid,
 			    struct body *body, const char *msg_base);
@@ -165,7 +165,7 @@ static int meth_get(struct transaction_t *txn)
     }
 
     /* If no UID specified, list messages as an RSS feed */
-    if (!uid) list_messages(txn, mailbox);
+    if (!uid) ret = list_messages(txn, mailbox);
     else if (uid > mailbox->i.last_uid) {
 	txn->errstr = "Message does not exist";
 	ret = HTTP_NOT_FOUND;
@@ -179,6 +179,28 @@ static int meth_get(struct transaction_t *txn)
 	/* Fetch the message */
 	if (!(ret = fetch_message(txn, mailbox, 0, uid,
 				  &record, &body, &msg_base, &msg_size))) {
+	    int precond;
+	    time_t lastmod = 0;
+	    static struct buf etag = BUF_INITIALIZER;
+
+	    /* Check any preconditions */
+	    buf_reset(&etag);
+	    buf_printf(&etag, "%s-%s",
+		       message_guid_encode(&record.guid),
+		       *section ? section : "html");
+	    lastmod = record.internaldate;
+	    precond = check_precond(txn->meth, etag.s, lastmod, 0, txn->req_hdrs);
+
+	    if (precond != HTTP_OK) {
+		/* We failed a precondition - don't perform the request */
+		ret = precond;
+		goto done;
+	    }
+
+	    /* Fill in Etag, Last-Modified */
+	    txn->etag = etag.s;
+	    txn->resp_body.lastmod = lastmod;
+	    
 	    if (!*section) {
 		/* Return entire message formatted as text/html */
 		display_message(txn, mailbox->name, record.uid, body, msg_base);
@@ -194,6 +216,7 @@ static int meth_get(struct transaction_t *txn)
 		fetch_part(txn, body, section, "1", msg_base);
 	    }
 
+	  done:
 	    mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
 
 	    if (body) {
@@ -452,7 +475,7 @@ static int fetch_message(struct transaction_t *txn, struct mailbox *mailbox,
 
 
 /* List messages as an RSS feed */
-static void list_messages(struct transaction_t *txn, struct mailbox *mailbox)
+static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 {
     xmlDocPtr outdoc;
     xmlNodePtr root, chan, item, link;
@@ -460,6 +483,19 @@ static void list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     const char **host;
     unsigned recno, recentuid = 0, num_items = RSS_MAX_ITEMS;
     struct buf buf = BUF_INITIALIZER;
+
+    /* Check any preconditions */
+    time_t lastmod = mailbox->i.last_appenddate;
+    int precond = check_precond(txn->meth, NULL, lastmod, 0, txn->req_hdrs);
+
+    if (precond != HTTP_OK) {
+	/* We failed a precondition - don't perform the request */
+	return precond;
+    }
+
+    /* Fill in Last-Modified */
+    txn->resp_body.lastmod = lastmod;
+
 #if 0
     /* Obtain recentuid */
     if (mailbox_internal_seen(mailbox, httpd_userid)) {
@@ -513,6 +549,9 @@ static void list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     xmlNewProp(link, BAD_CAST "href", BAD_CAST buf_cstring(&buf));
     xmlNewProp(link, BAD_CAST "rel", BAD_CAST "self");
     xmlNewProp(link, BAD_CAST "type", BAD_CAST "application/rss+xml");
+
+    rfc822date_gen(datestr, sizeof(datestr), lastmod);
+    xmlNewChild(item, NULL, BAD_CAST "lastBuildDate", BAD_CAST datestr);
 
     buf_reset(&buf);
     buf_printf(&buf, "%u", RSS_TTL);
@@ -623,6 +662,8 @@ static void list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 
     /* Output the XML response */
     xml_response(HTTP_OK, txn, outdoc);
+
+    return 0;
 }
 
 

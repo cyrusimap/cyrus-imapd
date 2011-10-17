@@ -217,5 +217,7 @@ extern void write_body(long code, struct transaction_t *txn,
 		       const char *buf, unsigned len);
 extern int meth_options(struct transaction_t *txn);
 extern int get_doc(struct transaction_t *txn, filter_proc_t filter);
+extern int check_precond(const char *meth, const char *etag, time_t lastmod,
+			 uint32_t dest, hdrcache_t hdrcache);
 
 #endif /* HTTPD_H */
