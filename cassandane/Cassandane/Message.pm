@@ -395,6 +395,15 @@ sub get_guid
     return sha1_hex($self->as_string());
 }
 
+# Calculate a CID from a message - this is the CID that the
+# first message in a new conversation will be assigned.
+sub make_cid
+{
+    my ($self) = @_;
+
+    return substr(sha1_hex($self->as_string()), 0, 16);
+}
+
 # Handy accessors
 
 sub uid { return shift->get_attribute('uid'); }
