@@ -482,6 +482,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     xmlNsPtr atom;
     const char **host;
     unsigned recno, recentuid = 0, num_items = RSS_MAX_ITEMS;
+    char datestr[80];
     struct buf buf = BUF_INITIALIZER;
 
     /* Check any preconditions */
@@ -551,7 +552,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     xmlNewProp(link, BAD_CAST "type", BAD_CAST "application/rss+xml");
 
     rfc822date_gen(datestr, sizeof(datestr), lastmod);
-    xmlNewChild(item, NULL, BAD_CAST "lastBuildDate", BAD_CAST datestr);
+    xmlNewChild(chan, NULL, BAD_CAST "lastBuildDate", BAD_CAST datestr);
 
     buf_reset(&buf);
     buf_printf(&buf, "%u", RSS_TTL);
@@ -570,7 +571,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 	const char *msg_base;
 	unsigned long msg_size;
 	struct body *body;
-	char datestr[80], *subj;
+	char *subj;
 	const char *content_types[] = { "text", NULL };
 	struct message_content content;
 	struct bodypart **parts;
