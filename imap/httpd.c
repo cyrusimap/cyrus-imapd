@@ -1928,9 +1928,7 @@ static int http_auth(const char *creds, struct auth_challenge_t *chal)
 
     if (scheme->name[0] == 'B') {
 	/* Basic (plaintext) authentication */
-	const char *user;
-	char *pass, userbuf[MAX_MAILBOX_BUFFER];
-	unsigned userlen;
+	char *authzid = NULL, *authid, *pass;
 
 	if (!clientin) {
 	    /* Create initial challenge (base64 buffer is static) */
@@ -1941,41 +1939,75 @@ static int http_auth(const char *creds, struct auth_challenge_t *chal)
 	    return status;
 	}
 
-	/* Split credentials into <user> ':' <pass>.
+	/* Split credentials into [ <authzid ':' ] <authid> ':' <pass>.
 	 * We are working with base64 buffer, so we can modify it.
 	 */
-	user = (char *) clientin;
-	pass = strchr(user, ':');
+	pass = strrchr(base64, ':');
 	if (!pass) {
 	    syslog(LOG_ERR, "Basic auth: Missing password");
 	    return SASL_BADPARAM;
 	}
 	*pass++ = '\0';
 
-	/* Canonify the userid */
-	status = mysasl_canon_user(httpd_saslconn, NULL, user, strlen(user),
-				   SASL_CU_AUTHID | SASL_CU_AUTHZID, NULL,
-				   userbuf, sizeof(userbuf), &userlen);
-	if (status) {
-	    syslog(LOG_NOTICE, "badlogin: %s Basic %s invalid user",
-		   httpd_clienthost, beautify_string(user));
-	    memset(pass, 0, strlen(pass));	/* erase plaintext password */
-	    return status;
+	if ((authid = strrchr(base64, ':'))) {
+	    *authid++ = '\0';
+	    authzid = base64;
 	}
-	user = userbuf;
-
+	else authid = base64;
+	
 	/* Verify the password */
-	status = sasl_checkpass(httpd_saslconn, user, userlen,
+	status = sasl_checkpass(httpd_saslconn, authid, strlen(authid),
 				pass, strlen(pass));
 	memset(pass, 0, strlen(pass));		/* erase plaintext password */
 
 	if (status) {
 	    syslog(LOG_NOTICE, "badlogin: %s Basic %s %s",
-		   httpd_clienthost, user, sasl_errdetail(httpd_saslconn));
+		   httpd_clienthost, authid, sasl_errdetail(httpd_saslconn));
 
 	    /* Don't allow user probing */
 	    if (status == SASL_NOUSER) status = SASL_BADAUTH;
 	    return status;
+	}
+
+	/* Get the canonicalized authid from SASL */
+	status = sasl_getprop(httpd_saslconn, SASL_USERNAME, &canon_user);
+	if (status != SASL_OK) {
+	    syslog(LOG_ERR, "weird SASL error %d getting SASL_USERNAME", status);
+	    return status;
+	}
+
+	if (authzid && *authzid) {
+	    /* Trying to proxy as another user */
+	    char userbuf[MAX_MAILBOX_BUFFER];
+	    unsigned userlen;
+
+	    /* Canonify the authzid */
+	    status = mysasl_canon_user(httpd_saslconn, NULL,
+				       authzid, strlen(authzid),
+				       SASL_CU_AUTHZID, NULL,
+				       userbuf, sizeof(userbuf), &userlen);
+	    if (status) {
+		syslog(LOG_NOTICE, "badlogin: %s Basic %s invalid user",
+		       httpd_clienthost, beautify_string(authzid));
+		return status;
+	    }
+	    authzid = userbuf;
+	    authid = (char *) canon_user;
+
+	    /* See if authid is allowed to proxy */
+	    status = mysasl_proxy_policy(httpd_saslconn,
+					 &httpd_proxyctx,
+					 authzid, strlen(authzid),
+					 authid, strlen(authid),
+					 NULL, 0, NULL);
+
+	    if (status) {
+		syslog(LOG_NOTICE, "badlogin: %s Basic %s %s",
+		       httpd_clienthost, authid, sasl_errdetail(httpd_saslconn));
+		return status;
+	    }
+
+	    canon_user = authzid;
 	}
 
 	/* Successful authentication - fall through */
@@ -2025,18 +2057,18 @@ static int http_auth(const char *creds, struct auth_challenge_t *chal)
 	    return status;
 	}
 
+	/* Get the userid from SASL - already canonicalized */
+	status = sasl_getprop(httpd_saslconn, SASL_USERNAME, &canon_user);
+	if (status != SASL_OK) {
+	    syslog(LOG_ERR, "weird SASL error %d getting SASL_USERNAME", status);
+	    return status;
+	}
+
 	/* Successful authentication
 	 *
 	 * HTTP doesn't support security layers,
 	 * so don't attach SASL context to prot layer.
 	 */
-    }
-
-    /* Get the userid from SASL - already canonicalized */
-    status = sasl_getprop(httpd_saslconn, SASL_USERNAME, &canon_user);
-    if (status != SASL_OK) {
-	syslog(LOG_ERR, "weird SASL error %d getting SASL_USERNAME", status);
-	return status;
     }
 
     httpd_userid = xstrdup((const char *) canon_user);
