@@ -73,16 +73,17 @@
 #endif
 
 #include "global.h"
-#include "user.h"
+#include "imap_err.h"
+#include "mailbox.h"
 #include "mboxkey.h"
 #include "mboxlist.h"
 #include "mboxname.h"
-#include "mailbox.h"
-#include "util.h"
-#include "seen.h"
 #include "quota.h"
-#include "xmalloc.h"
+#include "seen.h"
 #include "sync_log.h"
+#include "user.h"
+#include "util.h"
+#include "xmalloc.h"
 
 #define FNAME_SUBSSUFFIX "sub"
 
