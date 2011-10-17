@@ -105,9 +105,12 @@ our @localpart_styles = (
 
 sub new
 {
-    my $class = shift;
+    my ($class, %params) = @_;
+
     my $self = {
 	next_uid => 1,
+	min_extra_lines => $params{min_extra_lines} || 0,
+	max_extra_lines => $params{max_extra_lines} || 0,
     };
 
     bless $self, $class;
@@ -208,6 +211,11 @@ sub _params_defaults
 
     $params->{uid} = $self->_generate_uid()
 	unless defined $params->{uid};
+
+    $params->{extra_lines} = int($self->{min_extra_lines} +
+				 rand($self->{max_extra_lines} -
+				      $self->{min_extra_lines}))
+	unless defined $params->{extra_lines};
 
     return $params;
 }
