@@ -2112,7 +2112,9 @@ sub folder_delete_mboxa_common
     $res = $imaptalk->getannotation($folder, $fentry, $fattrib)
 	or die "Cannot getannotation: $@";
     $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    $self->assert_deep_equals({}, $res);
+    $self->assert_deep_equals({
+	$folder => { $fentry => { $fattrib => undef }}
+    }, $res);
 }
 
 sub folder_delete_mboxm_common
@@ -2146,8 +2148,7 @@ sub folder_delete_mboxm_common
 	or die "Cannot delete mailbox $folder: $@";
 
     xlog "cannot get metadata for deleted mailbox";
-    $res = $imaptalk->getmetadata($folder, $fentry)
-	or die "Cannot getmetadata: $@";
+    $res = $imaptalk->getmetadata($folder, $fentry);
     $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
     $self->assert($imaptalk->get_last_error() =~ m/does not exist/i);
 
