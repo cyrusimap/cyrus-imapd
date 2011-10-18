@@ -57,6 +57,7 @@ sub usage
 }
 
 my $mode = 'sequence';
+my $maxmessages;
 my %params = (
 	type => 'imap',
 	host => 'storet1m.internal',
@@ -106,6 +107,11 @@ while (my $a = shift)
     {
 	$mode = 'threaded';
     }
+    elsif ($a eq '-m' || $a eq '--max-messages')
+    {
+	$maxmessages = shift || usage;
+	$maxmessages = int(0+$maxmessages);
+    }
     elsif ($a =~ m/^-/)
     {
 	usage();
@@ -132,6 +138,7 @@ elsif ($mode eq 'threaded')
 $store->write_begin();
 while (my $msg = $gen->generate())
 {
+    last if (defined $maxmessages && $maxmessages-- == 0);
     $store->write_message($msg);
 }
 $store->write_end();
