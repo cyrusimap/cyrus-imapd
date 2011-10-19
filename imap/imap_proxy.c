@@ -76,7 +76,7 @@ extern int mlookup(const char *tag, const char *ext_name,
 		   const char *name, int *flags,
 		   char **partp, char **aclp, struct txn **tid) ;
 
-static char *imap_parsemechlist(const char *str, struct protocol_t *prot)
+static char *imap_parsemechlist(const char *str, struct stdprot_t *std)
 {
     char *ret = xzmalloc(strlen(str)+1);
     char *tmp;
@@ -84,7 +84,7 @@ static char *imap_parsemechlist(const char *str, struct protocol_t *prot)
     
     if (strstr(str, " SASL-IR")) {
 	/* server supports initial response in AUTHENTICATE command */
-	prot->sasl_cmd.maxlen = USHRT_MAX;
+	std->sasl_cmd.maxlen = USHRT_MAX;
     }
     
     while ((tmp = strstr(str, " AUTH="))) {
@@ -104,24 +104,24 @@ static char *imap_parsemechlist(const char *str, struct protocol_t *prot)
 }
 
 struct protocol_t imap_protocol =
-{ "imap", "imap",
-  { 1, NULL },
-  { "C01 CAPABILITY", NULL, "C01 ", &imap_parsemechlist,
-    { { " AUTH=", CAPA_AUTH },
-      { " STARTTLS", CAPA_STARTTLS },
-      { " COMPRESS=DEFLATE", CAPA_COMPRESS },
-      { " IDLE", CAPA_IDLE },
-      { " MUPDATE", CAPA_MUPDATE },
-      { " MULTIAPPEND", CAPA_MULTIAPPEND },
-      { " RIGHTS=kxte", CAPA_ACLRIGHTS },
-      { " LIST-EXTENDED", CAPA_LISTEXTENDED },
-      { NULL, 0 } } },
-  { "S01 STARTTLS", "S01 OK", "S01 NO", 0 },
-  { "A01 AUTHENTICATE", 0, 0, "A01 OK", "A01 NO", "+ ", "*",
-    NULL, AUTO_CAPA_AUTH_OK },
-  { "Z01 COMPRESS DEFLATE", "* ", "Z01 OK" },
-  { "N01 NOOP", "* ", "N01 OK" },
-  { "Q01 LOGOUT", "* ", "Q01 " }
+{ "imap", "imap", TYPE_STD,
+  { { { 1, NULL },
+      { "C01 CAPABILITY", NULL, "C01 ", &imap_parsemechlist,
+	{ { " AUTH=", CAPA_AUTH },
+	  { " STARTTLS", CAPA_STARTTLS },
+	  { " COMPRESS=DEFLATE", CAPA_COMPRESS },
+	  { " IDLE", CAPA_IDLE },
+	  { " MUPDATE", CAPA_MUPDATE },
+	  { " MULTIAPPEND", CAPA_MULTIAPPEND },
+	  { " RIGHTS=kxte", CAPA_ACLRIGHTS },
+	  { " LIST-EXTENDED", CAPA_LISTEXTENDED },
+	  { NULL, 0 } } },
+      { "S01 STARTTLS", "S01 OK", "S01 NO", 0 },
+      { "A01 AUTHENTICATE", 0, 0, "A01 OK", "A01 NO", "+ ", "*",
+	NULL, AUTO_CAPA_AUTH_OK },
+      { "Z01 COMPRESS DEFLATE", "* ", "Z01 OK" },
+      { "N01 NOOP", "* ", "N01 OK" },
+      { "Q01 LOGOUT", "* ", "Q01 " } } }
 };
 
 void proxy_gentag(char *tag, size_t len)

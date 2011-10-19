@@ -61,7 +61,14 @@ enum {
     */
 };
 
-struct protocol_t;
+enum {
+    /* protocol types */
+    TYPE_STD		= 0,	/* protocol fits standard template */
+    TYPE_SPEC		= 1	/* non-standard needs special functions */
+};
+
+struct stdprot_t;
+struct backend;
 
 struct banner_t {
     u_char auto_capa;		/* capability response sent automatically
@@ -78,7 +85,7 @@ struct capa_cmd_t {
     const char *cmd;		/* [OPTIONAL] capability command string */
     const char *arg;		/* [OPTIONAL] capability command argument */
     const char *resp;		/* end of capability response */
-    char *(*parse_mechlist)(const char *str, struct protocol_t *prot);
+    char *(*parse_mechlist)(const char *str, struct stdprot_t *std);
 				/* [OPTIONAL] parse capability string,
 				   returns space-separated list of mechs */
     struct capa_t capa[MAX_CAPA+1];/* list of capabilities to parse for
@@ -99,9 +106,8 @@ struct simple_cmd_t {
     const char *ok;		/* success response */
 };
 
-struct protocol_t {
-    const char *service;	/* INET service name */
-    const char *sasl_service;	/* SASL service name */
+struct stdprot_t {
+    /* standard protocol that fits template */
     struct banner_t banner;
     struct capa_cmd_t capa_cmd;
     struct tls_cmd_t tls_cmd;
@@ -109,6 +115,23 @@ struct protocol_t {
     struct simple_cmd_t compress_cmd;
     struct simple_cmd_t ping_cmd;
     struct simple_cmd_t logout_cmd;
+};
+
+struct protocol_t {
+    const char *service;	/* INET service name */
+    const char *sasl_service;	/* SASL service name */
+    unsigned type;
+    union {
+	struct stdprot_t std;
+	struct {
+	    /* special protocol */
+	    int (*login)(struct backend *s, const char *server,
+			 struct protocol_t *prot, const char *userid,
+			 sasl_callback_t *cb, const char **status);
+	    int (*ping)(struct backend *s);
+	    int (*logout)(struct backend *s);
+	} spec;
+    } u;
 };
 
 #endif /* _INCLUDED_PROTOCOL_H */

@@ -270,17 +270,17 @@ static char *nntp_parsesuccess(char *str, const char **status)
 }
 
 static struct protocol_t nntp_protocol =
-{ "nntp", "nntp",
-  { 0, "20" },
-  { "CAPABILITIES", NULL, ".", NULL,
-    { { "SASL ", CAPA_AUTH },
-      { "STARTTLS", CAPA_STARTTLS },
-      { NULL, 0 } } },
-  { "STARTTLS", "382", "580", 0 },
-  { "AUTHINFO SASL", 512, 0, "28", "48", "383 ", "*", &nntp_parsesuccess, 0 },
-  { NULL, NULL, NULL },
-  { "DATE", NULL, "111" },
-  { "QUIT", NULL, "205" }
+{ "nntp", "nntp", TYPE_STD,
+  { { { 0, "20" },
+      { "CAPABILITIES", NULL, ".", NULL,
+	{ { "SASL ", CAPA_AUTH },
+	  { "STARTTLS", CAPA_STARTTLS },
+	  { NULL, 0 } } },
+      { "STARTTLS", "382", "580", 0 },
+      { "AUTHINFO SASL", 512, 0, "28", "48", "383 ", "*", &nntp_parsesuccess, 0 },
+      { NULL, NULL, NULL },
+      { "DATE", NULL, "111" },
+      { "QUIT", NULL, "205" } } }
 };
 
 /* proxy mboxlist_lookup; on misses, it asks the listener for this

@@ -117,17 +117,17 @@ static int background      = 0;
 static int do_compress     = 0;
 
 static struct protocol_t csync_protocol =
-{ "csync", "csync",
-  { 1, "* OK" },
-  { NULL, NULL, "* OK", NULL,
-    { { "* SASL ", CAPA_AUTH },
-      { "* STARTTLS", CAPA_STARTTLS },
-      { NULL, 0 } } },
-  { "STARTTLS", "OK", "NO", 1 },
-  { "AUTHENTICATE", USHRT_MAX, 0, "OK", "NO", "+ ", "*", NULL, 0 },
-  { NULL, NULL, NULL },
-  { "NOOP", NULL, "OK" },
-  { "EXIT", NULL, "OK" }
+{ "csync", "csync", TYPE_STD,
+  { { { 1, "* OK" },
+      { NULL, NULL, "* OK", NULL,
+	{ { "* SASL ", CAPA_AUTH },
+	  { "* STARTTLS", CAPA_STARTTLS },
+	  { NULL, 0 } } },
+      { "STARTTLS", "OK", "NO", 1 },
+      { "AUTHENTICATE", USHRT_MAX, 0, "OK", "NO", "+ ", "*", NULL, 0 },
+      { NULL, NULL, NULL },
+      { "NOOP", NULL, "OK" },
+      { "EXIT", NULL, "OK" } } }
 };
 
 static int do_meta(char *user);

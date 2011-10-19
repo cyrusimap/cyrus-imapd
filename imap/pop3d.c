@@ -162,17 +162,17 @@ static struct namespace popd_namespace;
 struct backend *backend = NULL;
 
 static struct protocol_t pop3_protocol =
-{ "pop3", "pop",
-  { 0, "+OK " },
-  { "CAPA", NULL, ".", NULL,
-    { { "SASL ", CAPA_AUTH },
-      { "STLS", CAPA_STARTTLS },
-      { NULL, 0 } } },
-  { "STLS", "+OK", "-ERR", 0 },
-  { "AUTH", 255, 0, "+OK", "-ERR", "+ ", "*", NULL, 0 },
-  { NULL, NULL, NULL },
-  { "NOOP", NULL, "+OK" },
-  { "QUIT", NULL, "+OK" }
+{ "pop3", "pop", TYPE_STD,
+  { { { 0, "+OK " },
+      { "CAPA", NULL, ".", NULL,
+	{ { "SASL ", CAPA_AUTH },
+	  { "STLS", CAPA_STARTTLS },
+	  { NULL, 0 } } },
+      { "STLS", "+OK", "-ERR", 0 },
+      { "AUTH", 255, 0, "+OK", "-ERR", "+ ", "*", NULL, 0 },
+      { NULL, NULL, NULL },
+      { "NOOP", NULL, "+OK" },
+      { "QUIT", NULL, "+OK" } } }
 };
 
 static void bitpipe(void);
