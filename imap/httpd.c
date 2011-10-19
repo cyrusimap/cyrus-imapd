@@ -244,7 +244,7 @@ static int parse_uri(const char *meth, const char *uri,
 		     struct request_target_t *tgt, const char **errstr);
 static int parse_path(struct request_target_t *tgt, const char **errstr);
 static struct accept *parse_accept(const char *hdr);
-static int read_body(struct transaction_t *txn, int dump, const char **errstr);
+static int read_body(hdrcache_t hdrs, struct buf *body, const char **errstr);
 static int http_auth(const char *creds, struct auth_challenge_t *chal);
 
 static int meth_acl(struct transaction_t *txn);
@@ -1078,16 +1078,6 @@ static void cmdloop(void)
 	    }
 	}
 
-	/* Check client expectations */
-	if ((hdr = spool_getheader(txn.req_hdrs, "Expect"))) {
-	    if (!strcasecmp(hdr[0], "100-continue"))
-		txn.flags |= HTTP_100CONTINUE;
-	    else {
-		ret = HTTP_EXPECT_FAILED;
-		txn.errstr = "Unsupported Expect";
-	    }
-	}
-
 	/* Check for mandatory Host header */
 	if (!ret && !(hdr = spool_getheader(txn.req_hdrs, "Host"))) {
 	    ret = HTTP_BAD_REQUEST;
@@ -1096,7 +1086,8 @@ static void cmdloop(void)
 
 	/* Read the body, if present */
 	syslog(LOG_DEBUG, "read body(dump = %d)", ret);
-	if ((r = read_body(&txn, ret, &txn.errstr))) {
+	if ((r = read_body(txn.req_hdrs,
+			   ret ? NULL : &txn.req_body, &txn.errstr))) {
 	    ret = r;
 	    txn.flags |= HTTP_CLOSE;
 	}
@@ -1343,29 +1334,40 @@ static int parse_path(struct request_target_t *tgt, const char **errstr)
 }
 
 
-/* Read the body of a request.  Handles identity and chunked encoding */
-static int read_body(struct transaction_t *txn, int dump, const char **errstr)
+/*
+ * Read the body of a request or response.
+ * Handles identity and chunked encoding only.
+ */
+static int read_body(hdrcache_t hdrs, struct buf *body, const char **errstr)
 {
-    hdrcache_t req_hdrs = txn->req_hdrs;
-    struct buf *req_body = &txn->req_body;
     const char **hdr;
     unsigned long len = 0, chunk;
-    unsigned is_chunked;
+    unsigned need_cont = 0, is_chunked;
 
-    buf_reset(req_body);
+    /* Check if client expects 100 (Continue) status before sending body */
+    if ((hdr = spool_getheader(hdrs, "Expect"))) {
+	if (!strcasecmp(hdr[0], "100-continue"))
+	    need_cont = 1;
+	else {
+	    *errstr = "Unsupported Expect";
+	    return HTTP_EXPECT_FAILED;
+	}
+    }
 
-    /* If we don't care about the body, and client hasn't sent it, we're done */
-    if (dump && (txn->flags & HTTP_100CONTINUE)) return 0;
+    if (body) buf_reset(body);
+    else if (need_cont) {
+	/* Don't care about the body and client hasn't sent it, we're done */
+	return 0;
+    }
 
     /* Check for Transfer-Encoding */
-    if ((hdr = spool_getheader(req_hdrs, "Transfer-Encoding"))) {
+    if ((hdr = spool_getheader(hdrs, "Transfer-Encoding"))) {
 	if (!strcasecmp(hdr[0], "chunked")) {
 	    /* "chunked" encoding */
 	    is_chunked = 1;
 	}
 	/* XXX  Should we handle compress/deflate/gzip? */
 	else {
-	    txn->flags |= HTTP_CLOSE;
 	    *errstr = "Specified Transfer-Encoding not implemented";
 	    return HTTP_NOT_IMPLEMENTED;
 	}
@@ -1376,14 +1378,16 @@ static int read_body(struct transaction_t *txn, int dump, const char **errstr)
 	len = chunk = 0;
 
 	/* Check for Content-Length */
-	if ((hdr = spool_getheader(req_hdrs, "Content-Length"))) {
+	if ((hdr = spool_getheader(hdrs, "Content-Length"))) {
 	    len = strtoul(hdr[0], NULL, 10);
 	    /* XXX  Should we sanity check and/or limit the body len? */
 	}
     }
 
-    /* Tell client to send the body, if necessary */
-    if (txn->flags & HTTP_100CONTINUE) response_header(HTTP_CONTINUE, txn);
+    if (need_cont) {
+	/* Tell client to send the body */
+	prot_printf(httpd_out, "%s\r\n\r\n", http_statusline(HTTP_CONTINUE));
+    }
 
     /* Read and buffer the body */
     do {
@@ -1409,14 +1413,14 @@ static int read_body(struct transaction_t *txn, int dump, const char **errstr)
 		return HTTP_BAD_REQUEST;
 	    }
 
-	    if (!dump) buf_appendmap(req_body, buf, n);
+	    if (body) buf_appendmap(body, buf, n);
 	    len -= n;
 	}
 
 	if (is_chunked) {
 	    if (!chunk) {
 		/* last-chunk: Read/parse any trailing headers */
-		spool_fill_hdrcache(httpd_in, NULL, req_hdrs, NULL);
+		spool_fill_hdrcache(httpd_in, NULL, hdrs, NULL);
 	    }
 
 	    /* Read CRLF terminating the chunk */

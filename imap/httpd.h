@@ -170,10 +170,9 @@ struct transaction_t {
 enum {
     HTTP_CLOSE =	(1<<0),
     HTTP_STARTTLS =	(1<<1),
-    HTTP_100CONTINUE =	(1<<2),
-    HTTP_GZIP =	  	(1<<3),
-    HTTP_CHUNKED =	(1<<4),
-    HTTP_NOCACHE =	(1<<5)
+    HTTP_GZIP =	  	(1<<2),
+    HTTP_CHUNKED =	(1<<3),
+    HTTP_NOCACHE =	(1<<4)
 };
 
 typedef int (*method_proc_t)(struct transaction_t *txn);
