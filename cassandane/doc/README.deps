@@ -62,6 +62,6 @@ Cassandane needs the following software to work:
 Debian/Ubuntu copypasta:
   sudo apt-get -y install liburi-perl libdigest-sha1-perl \
        libdatetime-perl libbsd-resource-perl libtest-unit-perl \
-       libxml-generator-perl libxml-xpath-perl \
-       libencode-imaputf7-perl
+       libxml-generator-perl libxml-xpath-perl libclone-perl \
+       libencode-imaputf7-perl libconfig-inifiles-perl
   sudo cpan Test::Unit::Runner::XML
