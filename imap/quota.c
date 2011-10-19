@@ -317,6 +317,10 @@ static void test_sync_done(const char *mboxname)
 static int fixquota_addroot(struct quota *q,
 			    void *rock __attribute__((unused)))
 {
+    struct quota lquota;
+    struct txn *tid = NULL;
+    int r;
+
     if (quota_num == quota_alloc) {
 	/* Create new qr list entry */
 	quota_alloc += QUOTAGROW;
@@ -325,13 +329,43 @@ static int fixquota_addroot(struct quota *q,
 	memset(&quota[quota_num], 0, QUOTAGROW * sizeof(struct quotaentry));
     }
 
-    /* copy this quota */
     quota[quota_num].allocname   = xstrdup(q->root);
-    memcpy(&quota[quota_num].quota, q, sizeof(*q));
     quota[quota_num].quota.root  = quota[quota_num].allocname;
+
+    /* we can't use the already-read value, because we need a safe
+     * locked read */
+    r = quota_read(&quota[quota_num].quota, &tid, 1);
+    if (r) {
+	errmsg("failed reading quota record for '%s'",
+	       q->root, r);
+	goto done;
+    }
+
+    /*
+     * Mark the quotaroots in the db to non-invalid to indicate
+     * that a scan is in progress.  Other processes doing quota
+     * updates for mailboxes will now start to update usedBs[].
+     */
+    memset(quota[quota_num].quota.usedBs, 0, sizeof(quota[quota_num].quota.usedBs));
+
+    r = quota_write(&quota[quota_num].quota, &tid);
+    if (r) {
+	errmsg("failed writing quota record for '%s'",
+	       q->root, r);
+	goto done;
+    }
+
     quota_num++;
 
-    return 0;
+done:
+    if (r) {
+	free(quota[quota_num].allocname);
+	quota_abort(&tid);
+    }
+    else
+	quota_commit(&tid);
+
+    return r;
 }
 
 /*
@@ -342,7 +376,6 @@ int buildquotalist(char *domain, char **roots, int nroots)
     int i, r;
     char buf[MAX_MAILBOX_BUFFER], *tail;
     size_t domainlen = 0;
-    struct txn *tid = NULL;
 
     buf[0] = '\0';
     tail = buf;
@@ -353,7 +386,7 @@ int buildquotalist(char *domain, char **roots, int nroots)
 
     /* basic case - everything (potentially limited by domain still) */
     if (!nroots) {
-	r = quota_foreach(buf, fixquota_addroot, NULL, &tid);
+	r = quota_foreach(buf, fixquota_addroot, NULL, NULL);
 	if (r) {
 	    errmsg("failed building quota list for '%s'", buf, IMAP_IOERROR);
 	}
@@ -368,32 +401,12 @@ int buildquotalist(char *domain, char **roots, int nroots)
 	/* change the separator to internal namespace */
 	mboxname_hiersep_tointernal(&quota_namespace, tail, 0);
 
-	r = quota_foreach(buf, fixquota_addroot, NULL, &tid);
+	r = quota_foreach(buf, fixquota_addroot, NULL, NULL);
 	if (r) {
 	    errmsg("failed building quota list for '%s'", buf, IMAP_IOERROR);
 	    break;
 	}
     }
-
-    /*
-     * Mark the quotaroots in the db to non-invalid to indicate
-     * that a scan is in progress.  Other processes doing quota
-     * updates for mailboxes will now start to update usedBs[].
-     */
-    for (i = 0; i < quota_num; i++) {
-	memset(quota[i].quota.usedBs, 0, sizeof(quota[i].quota.usedBs));
-	r = quota_write(&quota[i].quota, &tid);
-	if (r) {
-	    errmsg("failed writing quota record for '%s'",
-		   quota[i].quota.root, r);
-	    break;
-	}
-    }
-
-    if (r)
-	quota_abort(&tid);
-    else
-	quota_commit(&tid);
 
     return r;
 }
