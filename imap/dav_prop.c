@@ -989,7 +989,7 @@ static int propfind_fromhdr(const xmlChar *propname, xmlNsPtr ns,
 	    spool_fill_hdrcache(stream, NULL, hdrs, NULL);
 	    prot_free(stream);
 
-	    if ((hdr = spool_getheader(hdrs, "Content-Type"))) {
+	    if ((hdr = spool_getheader(hdrs, (const char *) hdrname))) {
 		add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK], NULL,
  			 BAD_CAST propname, BAD_CAST hdr[0], NULL);
 	    }
