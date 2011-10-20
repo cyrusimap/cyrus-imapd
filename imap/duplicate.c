@@ -86,7 +86,7 @@ static struct db *dupdb = NULL;
 static int duplicate_dbopen = 0;
 
 /* must be called after cyrus_init */
-int duplicate_init(const char *fname, int myflags __attribute__((unused)))
+int duplicate_init(const char *fname)
 {
     char buf[1024];
     int r = 0;

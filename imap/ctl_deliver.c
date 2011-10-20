@@ -82,7 +82,6 @@ int main(int argc, char *argv[])
     char *alt_file = NULL;
     char *alt_config = NULL;
     char *days = NULL;
-    int flag = 0;
     enum { DUMP, PRUNE, NONE } op = NONE;
 
     if ((geteuid()) == 0 && (become_cyrus() != 0)) {
@@ -141,7 +140,7 @@ int main(int argc, char *argv[])
     case DUMP:
 	cyrus_init(alt_config, "ctl_deliver", 0);
 
-	if (duplicate_init(alt_file, flag) != 0) {
+	if (duplicate_init(alt_file) != 0) {
 	    fprintf(stderr, 
 		    "ctl_deliver: unable to init duplicate delivery database\n");
 	    exit(1);

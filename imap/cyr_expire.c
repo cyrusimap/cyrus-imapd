@@ -406,7 +406,7 @@ int main(int argc, char *argv[])
     quotadb_init(0);
     quotadb_open(NULL);
 
-    if (duplicate_init(NULL, 0) != 0) {
+    if (duplicate_init(NULL) != 0) {
 	fprintf(stderr, 
 		"cyr_expire: unable to init duplicate delivery database\n");
 	exit(1);

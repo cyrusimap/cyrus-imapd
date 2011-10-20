@@ -57,7 +57,7 @@ typedef struct duplicate_key {
 
 #define DUPLICATE_INITIALIZER { NULL, NULL, NULL }
 
-int duplicate_init(const char *fname, int myflags);
+int duplicate_init(const char *fname);
 
 time_t duplicate_check(const duplicate_key_t *dkey);
 void duplicate_log(const duplicate_key_t *dkey, const char *action);

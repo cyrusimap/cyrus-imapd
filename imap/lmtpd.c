@@ -214,7 +214,7 @@ int service_init(int argc __attribute__((unused)),
 #endif
 	{
 	    /* initialize duplicate delivery database */
-	    if (duplicate_init(NULL, 0) != 0) {
+	    if (duplicate_init(NULL) != 0) {
 		fatal("lmtpd: unable to init duplicate delivery database",
 		      EC_SOFTWARE);
 	    }
