@@ -524,6 +524,9 @@ int deliver_mailbox(FILE *f,
     /* check for duplicate message */
     dkey.id = id;
     dkey.to = mailboxname;
+    if (config_getenum(IMAPOPT_DUPLICATE_MAILBOX_MODE) ==
+	    IMAP_ENUM_DUPLICATE_MAILBOX_MODE_UNIQUEID)
+	dkey.to = as.mailbox->uniqueid;
     dkey.date = date;
     if (!r && id && dupelim && !(as.mailbox->i.options & OPT_IMAP_DUPDELIVER) &&
 	duplicate_check(&dkey)) {

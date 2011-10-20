@@ -370,6 +370,14 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* The absolute path to the duplicate db file.  If not specified,
    will be confdir/deliver.db */
 
+{ "duplicate_mailbox_mode", "name", ENUM("name", "uniqueid") }
+/* The way in which the mailbox is recorded in the duplicate
+   database by lmtpd.  "name" mode is the historical default
+   and stores the mailbox name.  "uniqueid" stores the mailbox
+   uniqueid, which is more robust when mailboxes are renamed, or
+   when a mailbox is deleted and a new one created with the
+   same name.  */
+
 { "duplicatesuppression", 1, SWITCH }
 /* If enabled, lmtpd will suppress delivery of a message to a mailbox if
    a message with the same message-id (or resent-message-id) is recorded
