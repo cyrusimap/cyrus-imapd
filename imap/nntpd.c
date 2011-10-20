@@ -1857,21 +1857,15 @@ static void cmd_capabilities(char *keyword __attribute__((unused)))
 /*
  * duplicate_find() callback function to build Xref content
  */
-struct xref_rock {
-    char *buf;
-    size_t size;
-};
-
 static int xref_cb(const duplicate_key_t *dkey,
 		   time_t mark __attribute__((unused)),
 		   unsigned long uid, void *rock)
 {
-    struct xref_rock *xrock = (struct xref_rock *) rock;
-    size_t len = strlen(xrock->buf);
+    struct buf *buf = (struct buf *)rock;
 
     /* skip mailboxes that we don't serve as newsgroups */
     if (is_newsgroup(dkey->to)) {
-	snprintf(xrock->buf + len, xrock->size - len,
+	buf_printf(buf,
 		 " %s:%lu", dkey->to + strlen(newsprefix), uid);
     }
 
@@ -1882,12 +1876,12 @@ static int xref_cb(const duplicate_key_t *dkey,
  * Build an Xref header.  We have to do this on the fly because there is
  * no way to store it in the article at delivery time.
  */
-static void build_xref(char *msgid, char *buf, size_t size, int body_only)
+static void build_xref(const char *msgid, struct buf *buf, int body_only)
 {
-    struct xref_rock xrock = { buf, size };
-
-    snprintf(buf, size, "%s%s", body_only ? "" : "Xref: ", config_servername);
-    duplicate_find(msgid, xref_cb, &xrock);
+    if (!body_only)
+	buf_appendcstr(buf, "Xref: ");
+    buf_appendcstr(buf, config_servername);
+    duplicate_find(msgid, xref_cb, buf);
 }
 
 static void cmd_article(int part, char *msgid, unsigned long uid)
@@ -1929,10 +1923,11 @@ static void cmd_article(int part, char *msgid, unsigned long uid)
 		body = 1;
 		if (output) {
 		    /* add the Xref header */
-		    char xref[8192];
+		    struct buf xref = BUF_INITIALIZER;
 
-		    build_xref(msgid, xref, sizeof(xref), 0);
-		    prot_printf(nntp_out, "%s\r\n", xref);
+		    build_xref(msgid, &xref, 0);
+		    prot_printf(nntp_out, "%s\r\n", buf_cstring(&xref));
+		    buf_free(&xref);
 		}
 		if (part == ARTICLE_HEAD) {
 		    /* we're done */
@@ -2300,15 +2295,16 @@ static void cmd_hdr(char *cmd, char *hdr, char *pat, char *msgid,
 	/* see if we're looking for metadata */
 	if (hdr[0] == ':') {
 	    if (!strcasecmp(":bytes", hdr)) {
-		char xref[8192];
+		struct buf xref = BUF_INITIALIZER;
 		unsigned long size = index_getsize(group_state, msgno);
 
 		if (!by_msgid) msgid = index_get_msgid(group_state, msgno);
-		build_xref(msgid, xref, sizeof(xref), 0);
+		build_xref(msgid, &xref, 0);
 		if (!by_msgid) free(msgid);
 
 		prot_printf(nntp_out, "%lu %lu\r\n", by_msgid ? 0 : uid,
-			    size + strlen(xref) + 2); /* +2 for \r\n */
+			    size + xref.len + 2); /* +2 for \r\n */
+		buf_free(&xref);
 	    }
 	    else if (!strcasecmp(":lines", hdr))
 		prot_printf(nntp_out, "%u %lu\r\n",
@@ -2319,14 +2315,16 @@ static void cmd_hdr(char *cmd, char *hdr, char *pat, char *msgid,
 			    by_msgid ? 0 : index_getuid(group_state, msgno));
 	}
 	else if (!strcmp(hdr, "xref") && !pat /* [X]HDR only */) {
-	    char xref[8192];
+	    struct buf xref = BUF_INITIALIZER;
 
 	    if (!by_msgid) msgid = index_get_msgid(group_state, msgno);
-	    build_xref(msgid, xref, sizeof(xref), 1);
+	    build_xref(msgid, &xref, 1);
 	    if (!by_msgid) free(msgid);
 
 	    prot_printf(nntp_out, "%u %s\r\n",
-			by_msgid ? 0 : index_getuid(group_state, msgno), xref);
+			by_msgid ? 0 : index_getuid(group_state, msgno),
+			buf_cstring(&xref));
+	    buf_free(&xref);
 	}
 	else if ((body = index_getheader(group_state, msgno, hdr)) &&
 		 (!pat ||			/* [X]HDR */
@@ -2861,9 +2859,9 @@ static void cmd_over(char *msgid, unsigned long uid, unsigned long last)
 	    prot_printf(nntp_out, "224 Overview information follows:\r\n");
 
 	if ((over = index_overview(group_state, msgno))) {
-	    char xref[8192];
+	    struct buf xref = BUF_INITIALIZER;
 
-	    build_xref(over->msgid, xref, sizeof(xref), 0);
+	    build_xref(over->msgid, &xref, 0);
 
 	    prot_printf(nntp_out, "%lu\t%s\t%s\t%s\t%s\t%s\t%lu\t%lu\t%s\r\n",
 			msgid ? 0 : over->uid,
@@ -2872,8 +2870,9 @@ static void cmd_over(char *msgid, unsigned long uid, unsigned long last)
 			over->date ? over->date : "",
 			over->msgid ? over->msgid : "",
 			over->ref ? over->ref : "",
-			over->bytes + strlen(xref) + 2, /* +2 for \r\n */
-			over->lines, xref);
+			over->bytes + xref.len + 2, /* +2 for \r\n */
+			over->lines, buf_cstring(&xref));
+	    buf_free(&xref);
 	}
     }
 
