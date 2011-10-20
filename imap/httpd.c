@@ -558,7 +558,6 @@ int service_main(int argc __attribute__((unused)),
 
     /* Set inactivity timer */
     httpd_timeout = config_getint(IMAPOPT_HTTPTIMEOUT);
-syslog(LOG_INFO, "timeout: %d", httpd_timeout);
     if (httpd_timeout < 0) httpd_timeout = 0;
     httpd_timeout *= 60;
     prot_settimeout(httpd_in, httpd_timeout);
