@@ -244,7 +244,8 @@ static int parse_uri(const char *meth, const char *uri,
 		     struct request_target_t *tgt, const char **errstr);
 static int parse_path(struct request_target_t *tgt, const char **errstr);
 static struct accept *parse_accept(const char *hdr);
-static int read_body(hdrcache_t hdrs, struct buf *body, const char **errstr);
+static int read_body(struct prottream *pin,
+		     hdrcache_t hdrs, struct buf *body, const char **errstr);
 static int http_auth(const char *creds, struct auth_challenge_t *chal);
 
 static int meth_acl(struct transaction_t *txn);
@@ -1082,7 +1083,7 @@ static void cmdloop(void)
 
 	/* Read the body, if present */
 	syslog(LOG_DEBUG, "read body(dump = %d)", ret != 0);
-	if ((r = read_body(txn.req_hdrs,
+	if ((r = read_body(httpd_in, txn.req_hdrs,
 			   ret ? NULL : &txn.req_body, &txn.errstr))) {
 	    ret = r;
 	    txn.flags |= HTTP_CLOSE;
@@ -1340,7 +1341,8 @@ static int parse_path(struct request_target_t *tgt, const char **errstr)
  * Read the body of a request or response.
  * Handles identity and chunked encoding only.
  */
-static int read_body(hdrcache_t hdrs, struct buf *body, const char **errstr)
+static int read_body(struct protstream *pin,
+		     hdrcache_t hdrs, struct buf *body, const char **errstr)
 {
     const char **hdr;
     unsigned long len = 0, chunk;
@@ -1398,7 +1400,7 @@ static int read_body(hdrcache_t hdrs, struct buf *body, const char **errstr)
 
 	if (is_chunked) {
 	    /* Read chunk-size and any chunk-ext */
-	    prot_fgets(buf, PROT_BUFSIZE-2, httpd_in);
+	    prot_fgets(buf, PROT_BUFSIZE-2, pin);
 	    if (sscanf(buf, "%lx", &chunk) != 1) {
 		*errstr = "Unable to read chunk size";
 		return HTTP_BAD_REQUEST;
@@ -1408,7 +1410,7 @@ static int read_body(hdrcache_t hdrs, struct buf *body, const char **errstr)
 
 	/* Read chunk-data */ 
 	while (len) {
-	    if (!(n = prot_read(httpd_in, buf,
+	    if (!(n = prot_read(pin, buf,
 				len > PROT_BUFSIZE ? PROT_BUFSIZE : len))) {
 		syslog(LOG_ERR, "prot_read() error");
 		*errstr = "Unable to read body data";
@@ -1422,12 +1424,12 @@ static int read_body(hdrcache_t hdrs, struct buf *body, const char **errstr)
 	if (is_chunked) {
 	    if (!chunk) {
 		/* last-chunk: Read/parse any trailing headers */
-		spool_fill_hdrcache(httpd_in, NULL, hdrs, NULL);
+		spool_fill_hdrcache(pin, NULL, hdrs, NULL);
 	    }
 
 	    /* Read CRLF terminating the chunk */
-	    *buf = prot_getc(httpd_in);
-	    if (*buf == '\r') *buf = prot_getc(httpd_in);
+	    *buf = prot_getc(pin);
+	    if (*buf == '\r') *buf = prot_getc(pin);
 	    if (*buf != '\n') {
 		*errstr = "Missing CRLF in body";
 		return HTTP_BAD_REQUEST;
