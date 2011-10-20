@@ -935,7 +935,7 @@ static void cmdloop(void)
     for (;;) {
 	/* Reset state */
 	ret = 0;
-	txn.flags |= !httpd_timeout ? HTTP_CLOSE : 0;
+	txn.flags = !httpd_timeout ? HTTP_CLOSE : 0;
 	txn.auth_chal.param = NULL;
 	txn.loc = txn.etag = NULL;
 	txn.errstr = NULL;
