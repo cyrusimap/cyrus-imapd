@@ -80,6 +80,8 @@
 
 #include "duplicate.h"
 
+#define DEBUG 0
+
 #define DB (config_duplicate_db)
 
 static struct db *dupdb = NULL;
@@ -164,8 +166,10 @@ time_t duplicate_check(duplicate_key_t *dkey)
 	mark = 0;
     }
 
+#if DEBUG
     syslog(LOG_DEBUG, "duplicate_check: %-40s %-20s %-40s %ld",
-	   buf, buf+idlen+1, buf+idlen+tolen+2, mark); 
+	   buf, buf+idlen+1, buf+idlen+tolen+2, mark);
+#endif
 
     return mark;
 }
@@ -208,10 +212,10 @@ void duplicate_mark(duplicate_key_t *dkey, time_t mark, unsigned long uid)
 		      data, sizeof(mark)+sizeof(uid), NULL);
     } while (r == CYRUSDB_AGAIN);
 
+#if DEBUG
     syslog(LOG_DEBUG, "duplicate_mark: %-40s %-20s %-40s %ld %lu",
 	   buf, buf+idlen+1, buf+idlen+tolen+2, mark, uid); 
-
-    return;
+#endif
 }
 
 struct findrock {
