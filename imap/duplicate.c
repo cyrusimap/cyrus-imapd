@@ -88,33 +88,28 @@ static int duplicate_dbopen = 0;
 /* must be called after cyrus_init */
 int duplicate_init(const char *fname)
 {
-    char buf[1024];
     int r = 0;
+    char *tofree = NULL;
 
-    if (r != 0)
-	syslog(LOG_ERR, "DBERROR: init %s: %s", buf,
-	       cyrusdb_strerror(r));
-    else {
-	char *tofree = NULL;
+    if (!fname)
+	fname = config_getstring(IMAPOPT_DUPLICATE_DB_PATH);
 
-	if (!fname)
-	    fname = config_getstring(IMAPOPT_DUPLICATE_DB_PATH);
-
-	/* create db file name */
-	if (!fname) {
-	    tofree = strconcat(config_dir, FNAME_DELIVERDB, (char *)NULL);
-	    fname = tofree;
-	}
-
-	r = (DB->open)(fname, CYRUSDB_CREATE, &dupdb);
-	if (r != 0)
-	    syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
-		   cyrusdb_strerror(r));
-	else
-	    duplicate_dbopen = 1;
-
-	free(tofree);
+    /* create db file name */
+    if (!fname) {
+	tofree = strconcat(config_dir, FNAME_DELIVERDB, (char *)NULL);
+	fname = tofree;
     }
+
+    r = (DB->open)(fname, CYRUSDB_CREATE, &dupdb);
+    if (r != 0) {
+	syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
+	       cyrusdb_strerror(r));
+	goto out;
+    }
+    duplicate_dbopen = 1;
+
+out:
+    free(tofree);
 
     return r;
 }
@@ -208,8 +203,6 @@ void duplicate_mark(const duplicate_key_t *dkey, time_t mark, unsigned long uid)
 
     syslog(LOG_DEBUG, "duplicate_mark: %-40s %-20s %-40s %ld %lu",
 	   buf, buf+idlen+1, buf+idlen+tolen+2, mark, uid);
-
-    return;
 }
 
 struct findrock {
