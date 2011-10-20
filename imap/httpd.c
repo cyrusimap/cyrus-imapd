@@ -910,7 +910,7 @@ const struct namespace_t *namespaces[] = {
  */
 static void cmdloop(void)
 {
-    int c, ret, r, i;
+    int c, ret, r, i, gzip_enabled = 0;
     static struct buf meth, uri, ver;
     char buf[1024];
     const char **hdr;
@@ -923,6 +923,13 @@ static void cmdloop(void)
 
     /* Start with an empty (clean) transaction */
     memset(&txn, 0, sizeof(struct transaction_t));
+
+#ifdef HAVE_ZLIB
+    if (deflateInit2(&txn.zstrm, Z_DEFAULT_COMPRESSION, Z_DEFLATED,
+		     16+MAX_WBITS, MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY) == Z_OK) {
+	gzip_enabled = 1;
+    }
+#endif
 
     for (;;) {
 	/* Reset state */
@@ -1004,6 +1011,16 @@ static void cmdloop(void)
 	    ret = r;
 	}
 
+	/* Handle CalDAV bootstrapping */
+	if (!ret && !strcmp(txn.req_tgt.path, "/.well-known/caldav")) {
+	    ret = HTTP_TEMP_REDIRECT;
+
+	    hdr = spool_getheader(txn.req_hdrs, "Host");
+	    snprintf(buf, sizeof(buf), "%s://%s/calendars/",
+		     httpd_tls_done ? "https" : "http", hdr[0]);
+	    txn.loc = buf;
+	}
+
 	/* Find the namespace of the requested resource */
 	if (!ret) {
 	    for (i = 0; namespaces[i]; i++) {
@@ -1057,6 +1074,20 @@ static void cmdloop(void)
 	    goto error;
 	}
 
+	/* Check for mandatory Host header */
+	if (!ret && !(hdr = spool_getheader(txn.req_hdrs, "Host"))) {
+	    ret = HTTP_BAD_REQUEST;
+	    txn.errstr = "Missing Host header";
+	}
+
+	/* Read the body, if present */
+	syslog(LOG_DEBUG, "read body(dump = %d)", ret != 0);
+	if ((r = read_body(txn.req_hdrs,
+			   ret ? NULL : &txn.req_body, &txn.errstr))) {
+	    ret = r;
+	    txn.flags |= HTTP_CLOSE;
+	}
+
 	/* Check for connection directives */
 	if ((hdr = spool_getheader(txn.req_hdrs, "Connection"))) {
 	    /* Check if this is a non-persistent connection */
@@ -1066,66 +1097,19 @@ static void cmdloop(void)
 	    }
 
 	    /* Check if we need to start TLS */
-	    else if (!httpd_tls_done && tls_enabled() &&
+	    else if (!ret && !httpd_tls_done && tls_enabled() &&
 		     !strcmp(hdr[0], "Upgrade")) {
 		const char **upgd;
 
 		if ((upgd = spool_getheader(txn.req_hdrs, "Upgrade")) &&
 		    !strcmp(upgd[0], "TLS/1.0")) {
 		    syslog(LOG_DEBUG, "client requested TLS");
-		    txn.flags |= HTTP_STARTTLS;
+		    starttls(&txn, 0);
 		}
 	    }
-	}
-
-	/* Check for mandatory Host header */
-	if (!ret && !(hdr = spool_getheader(txn.req_hdrs, "Host"))) {
-	    ret = HTTP_BAD_REQUEST;
-	    txn.errstr = "Missing Host header";
-	}
-
-	/* Read the body, if present */
-	syslog(LOG_DEBUG, "read body(dump = %d)", ret);
-	if ((r = read_body(txn.req_hdrs,
-			   ret ? NULL : &txn.req_body, &txn.errstr))) {
-	    ret = r;
-	    txn.flags |= HTTP_CLOSE;
-	}
-
-	/* Handle CalDAV bootstrapping */
-	if (!strcmp(txn.req_tgt.path, "/.well-known/caldav")) {
-	    ret = HTTP_TEMP_REDIRECT;
-
-	    hdr = spool_getheader(txn.req_hdrs, "Host");
-	    snprintf(buf, sizeof(buf), "%s://%s/calendars/",
-		     httpd_tls_done ? "https" : "http", hdr[0]);
-	    txn.loc = buf;
 	}
 
 	if (ret) goto error;
-
-#ifdef HAVE_ZLIB
-	/* Check if we should compress response body */
-	if ((hdr = spool_getheader(txn.req_hdrs, "Accept-Encoding"))) {
-	    struct accept *e, *enc = parse_accept(hdr[0]);
-
-	    for (e = enc; e && e->token; e++) {
-		if (!strcmp(e->token, "gzip") || !strcmp(e->token, "x-gzip")) {
-		    txn.flags |= HTTP_GZIP;
-		    deflateInit2(&txn.zstrm, Z_DEFAULT_COMPRESSION, Z_DEFLATED,
-				 16+MAX_WBITS, MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY);
-		}
-		/* XXX  Do we want to support deflate even though M$
-		   doesn't implement it correctly (raw deflate vs. zlib)? */
-
-		free(e->token);
-	    }
-	    if (enc) free(enc);
-	}
-#endif /* HAVE_ZLIB */
-
-	/* Start TLS if requested */
-	if (txn.flags & HTTP_STARTTLS) starttls(&txn, 0);
 
 #ifdef SASL_HTTP_REQUEST
 	/* Setup SASL HTTP request in case we need it */
@@ -1193,6 +1177,23 @@ static void cmdloop(void)
 	    }
 	}
 
+	/* Check if we should compress response body */
+	if (!ret && gzip_enabled &&
+	    (hdr = spool_getheader(txn.req_hdrs, "Accept-Encoding"))) {
+	    struct accept *e, *enc = parse_accept(hdr[0]);
+
+	    for (e = enc; e && e->token; e++) {
+		if (!strcmp(e->token, "gzip") || !strcmp(e->token, "x-gzip")) {
+		    txn.flags |= HTTP_GZIP;
+		}
+		/* XXX  Do we want to support deflate even though M$
+		   doesn't implement it correctly (raw deflate vs. zlib)? */
+
+		free(e->token);
+	    }
+	    if (enc) free(enc);
+	}
+
 	/* Process the requested method */
 	if (!ret) ret = (*meth_proc)(&txn);
 
@@ -1205,6 +1206,7 @@ static void cmdloop(void)
 
 	/* Memory cleanup */
 	if (txn.req_hdrs) spool_free_hdrcache(txn.req_hdrs);
+
 	if (txn.flags & HTTP_CLOSE) {
 	    buf_free(&txn.req_body);
 #ifdef HAVE_ZLIB
