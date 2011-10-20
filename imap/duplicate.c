@@ -133,6 +133,34 @@ static int make_key(struct buf *key, const duplicate_key_t *dkey)
     return 0;
 }
 
+static int split_key(const char *key, int keylen, duplicate_key_t *dkey)
+{
+#define MAXFIELDS 3
+    const char *fields[MAXFIELDS];
+    int n = 0;
+    const char *p;
+
+    /* check the key as a whole is nul-terminated */
+    if (key[keylen-1] != '\0')
+	return IMAP_INTERNAL;
+
+    /* find the \0 field boundaries */
+    for (p = key ; p < (key+keylen) ; p += strlen(p)) {
+	if (n == MAXFIELDS)
+	    return IMAP_INTERNAL;
+	fields[n++] = p;
+    }
+
+    if (n != 3)
+	return IMAP_INTERNAL;
+    dkey->id = fields[0];
+    dkey->to = fields[1];
+    dkey->date = fields[2];
+
+    return 0;
+#undef MAXFIELDS
+}
+
 time_t duplicate_check(const duplicate_key_t *dkey)
 {
     struct buf key = BUF_INITIALIZER;
@@ -217,37 +245,38 @@ struct findrock {
 };
 
 static int find_p(void *rock __attribute__((unused)),
-		  const char *id,
-		  int idlen __attribute__((unused)),
+		  const char *key, int keylen,
 		  const char *data __attribute__((unused)),
 		  int datalen __attribute__((unused)))
 {
-    const char *rcpt;
+    duplicate_key_t dkey = DUPLICATE_INITIALIZER;
+    int r;
+
+    r = split_key(key, keylen, &dkey);
+    if (r) return 0;	    /* ignore broken records */
 
     /* grab the rcpt and make sure its a mailbox */
-    rcpt = id + strlen(id) + 1;
-    return (rcpt[0] != '.');
+    return (dkey.to[0] != '.');
 }
 
-static int find_cb(void *rock, const char *id,
-		   int idlen __attribute__((unused)),
+static int find_cb(void *rock, const char *key, int keylen,
 		   const char *data, int datalen)
 {
     struct findrock *frock = (struct findrock *) rock;
-    const char *rcpt;
+    duplicate_key_t dkey = DUPLICATE_INITIALIZER;
     time_t mark;
     unsigned long uid = 0;
     int r;
 
-    /* grab the rcpt */
-    rcpt = id + strlen(id) + 1;
+    r = split_key(key, keylen, &dkey);
+    if (r) return 0;	/* ignore broken records */
 
     /* grab the mark and uid */
     memcpy(&mark, data, sizeof(time_t));
     if (datalen > (int) sizeof(mark))
 	memcpy(&uid, data + sizeof(mark), sizeof(unsigned long));
 
-    r = (*frock->proc)(id, rcpt, mark, uid, frock->rock);
+    r = (*frock->proc)(dkey.id, dkey.to, mark, uid, frock->rock);
 
     return r;
 }
@@ -278,19 +307,22 @@ struct prunerock {
 };
 
 static int prune_p(void *rock,
-		   const char *id, int idlen __attribute__((unused)),
+		   const char *key, int keylen,
 		   const char *data, int datalen __attribute__((unused)))
 {
     struct prunerock *prock = (struct prunerock *) rock;
-    const char *rcpt;
     time_t mark, *expmark = NULL;
+    duplicate_key_t dkey = DUPLICATE_INITIALIZER;
+    int r;
 
     prock->count++;
 
+    r = split_key(key, keylen, &dkey);
+    if (r) return 1;	/* broken record, want to prune it */
+
     /* grab the rcpt, make sure its a mailbox and lookup its expire time */
-    rcpt = id + strlen(id) + 1;
-    if (prock->expire_table && rcpt[0] && rcpt[0] != '.') {
-	expmark = (time_t *) hash_lookup(rcpt, prock->expire_table);
+    if (prock->expire_table && dkey.to[0] && dkey.to[0] != '.') {
+	expmark = (time_t *) hash_lookup(dkey.to, prock->expire_table);
     }
 
     /* grab the mark */
@@ -345,12 +377,14 @@ struct dumprock {
 };
 
 static int dump_cb(void *rock,
-		   const char *key, int keylen __attribute__((unused)),
+		   const char *key, int keylen,
 		   const char *data, int datalen)
 {
     struct dumprock *drock = (struct dumprock *) rock;
     time_t mark;
-    char *id, *to, *freeme;
+    duplicate_key_t dkey = DUPLICATE_INITIALIZER;
+    char *freeme = NULL;
+    int r;
     int idlen, i;
     unsigned long uid = 0;
 
@@ -362,26 +396,26 @@ static int dump_cb(void *rock,
     memcpy(&mark, data, sizeof(time_t));
     if (datalen > (int) sizeof(mark))
 	memcpy(&uid, data + sizeof(mark), sizeof(unsigned long));
-    to = (char*) key + strlen(key) + 1;
-    id = (char *) key;
-    idlen = strlen(id);
+
+    r = split_key(key, keylen, &dkey);
+    if (r) goto out;
+    idlen = strlen(dkey.id);
 
     for (i = 0; i < idlen; i++) {
-	if (!isprint((unsigned char) id[i])) break;
+	if (!isprint((unsigned char) dkey.id[i])) break;
     }
 
     if (i != idlen) {
 	/* change to hexadecimal */
 	freeme = xmalloc(idlen * 2 + 1);
-	bin_to_hex(id, idlen, freeme, BH_UPPER);
-	id = freeme;
-    } else {
-	freeme = NULL;
+	bin_to_hex(dkey.id, idlen, freeme, BH_UPPER);
+	dkey.id = freeme;
     }
 
     fprintf(drock->f, "id: %-40s\tto: %-20s\tat: %ld\tuid: %lu\n",
-	    id, to, (long) mark, uid);
+	    dkey.id, dkey.to, (long) mark, uid);
 
+out:
     if (freeme) free(freeme);
 
     return 0;
