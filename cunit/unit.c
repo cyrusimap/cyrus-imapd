@@ -346,6 +346,7 @@ static void run_tests(void)
     if (num_testspecs == 0) {
 	/* not specified: run all tests in order listed */
 	err = CU_basic_run_tests();
+	running = IDLE;	/* Just In Case */
 	if (timeouts_flag)
 	    timeout_fini();
 	if (err != CUE_SUCCESS || CU_get_run_summary()->nAssertsFailed)
@@ -393,6 +394,7 @@ static void run_tests(void)
 	    /* Run each test */
 	    for (test = suite->pTest ; test != NULL ; test = test->pNext) {
 		err = CU_run_test(suite, test);
+		running = IDLE;	/* Just In Case */
 		accumulate_summary(&summ);
 		if (err != CUE_SUCCESS)
 		    failed++;
@@ -406,6 +408,7 @@ static void run_tests(void)
 		err = CUE_NOTEST;
 	    } else {
 		err = CU_run_test(suite, test);
+		running = IDLE;	/* Just In Case */
 		accumulate_summary(&summ);
 	    }
 	    if (err != CUE_SUCCESS)
