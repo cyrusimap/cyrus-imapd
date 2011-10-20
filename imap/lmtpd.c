@@ -501,7 +501,7 @@ int deliver_mailbox(FILE *f,
     struct appendstate as;
     unsigned long uid;
     const char *notifier;
-    duplicate_key_t dkey = {NULL, NULL, NULL};
+    duplicate_key_t dkey = DUPLICATE_INITIALIZER;
     quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_INITIALIZER;
 
     if (quotaoverride)
