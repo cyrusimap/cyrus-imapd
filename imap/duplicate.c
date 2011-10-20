@@ -116,12 +116,26 @@ out:
     return r;
 }
 
+static int make_key(struct buf *key, const duplicate_key_t *dkey)
+{
+    if (!dkey ||
+        !dkey->id ||
+	!dkey->to ||
+	!dkey->date)
+	return IMAP_INTERNAL;
+
+    buf_reset(key);
+    buf_appendmap(key, dkey->id, strlen(dkey->id)+1);
+    buf_appendmap(key, dkey->to, strlen(dkey->to)+1);
+    buf_appendmap(key, dkey->date, strlen(dkey->date)+1);
+    /* We have three concatenated values now, all parts ending with '\0' */
+
+    return 0;
+}
+
 time_t duplicate_check(const duplicate_key_t *dkey)
 {
-    char buf[1024];
-    int idlen = strlen(dkey->id);
-    int tolen = strlen(dkey->to);
-    int datelen = strlen(dkey->date);
+    struct buf key = BUF_INITIALIZER;
     int r;
     const char *data = NULL;
     int len = 0;
@@ -129,18 +143,11 @@ time_t duplicate_check(const duplicate_key_t *dkey)
 
     if (!duplicate_dbopen) return 0;
 
-    if (idlen + tolen + datelen > (int) sizeof(buf) - 30) return 0;
-    memcpy(buf, dkey->id, idlen);
-    buf[idlen] = '\0';
-    memcpy(buf + idlen + 1, dkey->to, tolen);
-    buf[idlen + tolen + 1] = '\0';
-    assert(dkey->date != NULL);
-    memcpy(buf + idlen + tolen + 2, dkey->date, datelen);
-    buf[idlen + tolen + datelen + 2] = '\0';
+    r = make_key(&key, dkey);
+    if (r) return 0;
 
     do {
-	r = DB->fetch(dupdb, buf,
-		      idlen + tolen + datelen + 3, /* We have three concatenated values now, all parts ending with '\0' */
+	r = DB->fetch(dupdb, key.s, key.len,
 		      &data, &len, NULL);
     } while (r == CYRUSDB_AGAIN);
 
@@ -161,9 +168,10 @@ time_t duplicate_check(const duplicate_key_t *dkey)
 
 #if DEBUG
     syslog(LOG_DEBUG, "duplicate_check: %-40s %-20s %-40s %ld",
-	   buf, buf+idlen+1, buf+idlen+tolen+2, mark);
+	   dkey->id, dkey->to, dkey->date, mark);
 #endif
 
+    buf_free(&key);
     return mark;
 }
 
@@ -179,36 +187,28 @@ void duplicate_log(const duplicate_key_t *dkey, const char *action)
 
 void duplicate_mark(const duplicate_key_t *dkey, time_t mark, unsigned long uid)
 {
-    char buf[1024], data[100];
-    int idlen = strlen(dkey->id);
-    int tolen = strlen(dkey->to);
-    int datelen = strlen(dkey->date);
+    struct buf key = BUF_INITIALIZER;
+    char data[100];
     int r;
 
     if (!duplicate_dbopen) return;
 
-    if (idlen + tolen + datelen > (int) sizeof(buf) - 30) return;
-    memcpy(buf, dkey->id, idlen);
-    buf[idlen] = '\0';
-    memcpy(buf + idlen + 1, dkey->to, tolen);
-    buf[idlen + tolen + 1] = '\0';
-    assert(dkey->date != NULL);
-    memcpy(buf + idlen + tolen + 2, dkey->date, datelen);
-    buf[idlen + tolen + datelen + 2] = '\0';
+    r = make_key(&key, dkey);
+    if (r) return;
 
     memcpy(data, &mark, sizeof(mark));
     memcpy(data + sizeof(mark), &uid, sizeof(uid));
 
     do {
-	r = DB->store(dupdb, buf,
-		      idlen + tolen + datelen + 3, /* We have three concatenated values now, all parts ending with '\0' */
+	r = DB->store(dupdb, key.s, key.len,
 		      data, sizeof(mark)+sizeof(uid), NULL);
     } while (r == CYRUSDB_AGAIN);
 
 #if DEBUG
     syslog(LOG_DEBUG, "duplicate_mark: %-40s %-20s %-40s %ld %lu",
-	   buf, buf+idlen+1, buf+idlen+tolen+2, mark, uid);
+	   dkey->id, dkey->to, dkey->date, mark, uid);
 #endif
+    buf_free(&key);
 }
 
 struct findrock {
