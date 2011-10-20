@@ -52,7 +52,6 @@
  *   - sync-collection REPORT (can probably use MODSEQs -- as CTag too)
  *   - Use XML precondition error codes
  *   - Add WebDAV LOCKing?  Does anybody use it?
- *   - Add WebDAV ACL support?
  *   - Should we have a linked-list/hash of open mailboxes,
  *     rather than open/close for every method?
  */
@@ -229,12 +228,6 @@ extern void setproctitle_init(int argc, char **argv, char **envp);
 extern int proc_register(const char *progname, const char *clienthost, 
 			 const char *userid, const char *mailbox);
 extern void proc_cleanup(void);
-
-extern int saslserver(sasl_conn_t *conn, const char *mech,
-		      const char *init_resp, const char *resp_prefix,
-		      const char *continuation, const char *empty_chal,
-		      struct protstream *pin, struct protstream *pout,
-		      int *sasl_result, char **success_data);
 
 /* Enable the resetting of a sasl_conn_t */
 static int reset_saslconn(sasl_conn_t **conn);
