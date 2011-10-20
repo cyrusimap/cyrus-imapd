@@ -145,7 +145,7 @@ static int split_key(const char *key, int keylen, duplicate_key_t *dkey)
 	return IMAP_INTERNAL;
 
     /* find the \0 field boundaries */
-    for (p = key ; p < (key+keylen) ; p += strlen(p)) {
+    for (p = key ; p < (key+keylen) ; p += strlen(p)+1) {
 	if (n == MAXFIELDS)
 	    return IMAP_INTERNAL;
 	fields[n++] = p;
