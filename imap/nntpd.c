@@ -2800,27 +2800,19 @@ static void cmd_newgroups(time_t tstamp __attribute__((unused)))
 struct newrock {
     time_t tstamp;
     struct wildmat *wild;
+    char lastid[1024];
 };
 
 static int newnews_cb(const duplicate_key_t *dkey, time_t mark,
 		      unsigned long uid, void *rock)
 {
-    static char lastid[1024];
     struct newrock *nrock = (struct newrock *) rock;
-
-    /* We have to reset the initial state.
-     * Handle it as a dirty hack.
-     */
-    if (!dkey) {
-	lastid[0] = '\0';
-	return 0;
-    }
 
     /* Make sure we don't return duplicate msgids,
      * the message is newer than the tstamp, and
      * the message is in mailbox we serve as a newsgroup..
      */
-    if (strcmp(dkey->id, lastid) && mark >= nrock->tstamp &&
+    if (strcmp(dkey->id, nrock->lastid) && mark >= nrock->tstamp &&
 	uid && is_newsgroup(dkey->to)) {
 	struct wildmat *wild = nrock->wild;
 
@@ -2830,7 +2822,7 @@ static int newnews_cb(const duplicate_key_t *dkey, time_t mark,
 	/* we have a match, and its not a negative match */
 	if (wild->pat && !wild->not) {
 	    prot_printf(nntp_out, "%s\r\n", dkey->id);
-	    strlcpy(lastid, dkey->id, sizeof(lastid));
+	    strlcpy(nrock->lastid, dkey->id, sizeof(nrock->lastid));
 	}
     }
 
@@ -2841,12 +2833,12 @@ static void cmd_newnews(char *wild, time_t tstamp)
 {
     struct newrock nrock;
 
+    memset(&nrock, 0, sizeof(nrock));
     nrock.tstamp = tstamp;
     nrock.wild = split_wildmats(wild);
 
     prot_printf(nntp_out, "230 List of new articles follows:\r\n");
 
-    newnews_cb(NULL, 0, 0, NULL);
     duplicate_find("", newnews_cb, &nrock);
 
     prot_printf(nntp_out, ".\r\n");
