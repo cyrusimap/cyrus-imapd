@@ -1528,17 +1528,16 @@ struct findrock {
     unsigned long uid;
 };
 
-static int find_cb(const char *msgid __attribute__((unused)),
-		   const char *mailbox,
+static int find_cb(const duplicate_key_t *dkey,
 		   time_t mark __attribute__((unused)),
 		   unsigned long uid, void *rock)
 {
     struct findrock *frock = (struct findrock *) rock;
 
     /* skip mailboxes that we don't serve as newsgroups */
-    if (!is_newsgroup(mailbox)) return 0;
+    if (!is_newsgroup(dkey->to)) return 0;
 
-    frock->mailbox = mailbox;
+    frock->mailbox = dkey->to;
     frock->uid = uid;
 
     return CYRUSDB_DONE;
@@ -1548,7 +1547,7 @@ static int my_find_msgid(char *msgid, char **mailbox, uint32_t *uid)
 {
     struct findrock frock = { NULL, 0 };
 
-    duplicate_find(msgid, &find_cb, &frock);
+    duplicate_find(msgid, find_cb, &frock);
 
     if (!frock.mailbox) return 0;
 
@@ -1863,8 +1862,7 @@ struct xref_rock {
     size_t size;
 };
 
-static int xref_cb(const char *msgid __attribute__((unused)),
-		   const char *mailbox,
+static int xref_cb(const duplicate_key_t *dkey,
 		   time_t mark __attribute__((unused)),
 		   unsigned long uid, void *rock)
 {
@@ -1872,9 +1870,9 @@ static int xref_cb(const char *msgid __attribute__((unused)),
     size_t len = strlen(xrock->buf);
 
     /* skip mailboxes that we don't serve as newsgroups */
-    if (is_newsgroup(mailbox)) {
+    if (is_newsgroup(dkey->to)) {
 	snprintf(xrock->buf + len, xrock->size - len,
-		 " %s:%lu", mailbox + strlen(newsprefix), uid);
+		 " %s:%lu", dkey->to + strlen(newsprefix), uid);
     }
 
     return 0;
@@ -1889,7 +1887,7 @@ static void build_xref(char *msgid, char *buf, size_t size, int body_only)
     struct xref_rock xrock = { buf, size };
 
     snprintf(buf, size, "%s%s", body_only ? "" : "Xref: ", config_servername);
-    duplicate_find(msgid, &xref_cb, &xrock);
+    duplicate_find(msgid, xref_cb, &xrock);
 }
 
 static void cmd_article(int part, char *msgid, unsigned long uid)
@@ -2804,7 +2802,7 @@ struct newrock {
     struct wildmat *wild;
 };
 
-static int newnews_cb(const char *msgid, const char *rcpt, time_t mark,
+static int newnews_cb(const duplicate_key_t *dkey, time_t mark,
 		      unsigned long uid, void *rock)
 {
     static char lastid[1024];
@@ -2813,7 +2811,7 @@ static int newnews_cb(const char *msgid, const char *rcpt, time_t mark,
     /* We have to reset the initial state.
      * Handle it as a dirty hack.
      */
-    if (!msgid) {
+    if (!dkey) {
 	lastid[0] = '\0';
 	return 0;
     }
@@ -2822,17 +2820,17 @@ static int newnews_cb(const char *msgid, const char *rcpt, time_t mark,
      * the message is newer than the tstamp, and
      * the message is in mailbox we serve as a newsgroup..
      */
-    if (strcmp(msgid, lastid) && mark >= nrock->tstamp &&
-	uid && is_newsgroup(rcpt)) {
+    if (strcmp(dkey->id, lastid) && mark >= nrock->tstamp &&
+	uid && is_newsgroup(dkey->to)) {
 	struct wildmat *wild = nrock->wild;
 
 	/* see if the mailbox matches one of our specified wildmats */
-	while (wild->pat && wildmat(rcpt, wild->pat) != 1) wild++;
+	while (wild->pat && wildmat(dkey->to, wild->pat) != 1) wild++;
 
 	/* we have a match, and its not a negative match */
 	if (wild->pat && !wild->not) {
-	    prot_printf(nntp_out, "%s\r\n", msgid);
-	    strlcpy(lastid, msgid, sizeof(lastid));
+	    prot_printf(nntp_out, "%s\r\n", dkey->id);
+	    strlcpy(lastid, dkey->id, sizeof(lastid));
 	}
     }
 
@@ -2848,8 +2846,8 @@ static void cmd_newnews(char *wild, time_t tstamp)
 
     prot_printf(nntp_out, "230 List of new articles follows:\r\n");
 
-    newnews_cb(NULL, NULL, 0, 0, NULL);
-    duplicate_find("", &newnews_cb, &nrock);
+    newnews_cb(NULL, 0, 0, NULL);
+    duplicate_find("", newnews_cb, &nrock);
 
     prot_printf(nntp_out, ".\r\n");
 
@@ -3462,8 +3460,7 @@ static unsigned expunge_cancelled(struct mailbox *mailbox __attribute__((unused)
 /*
  * duplicate_find() callback function to cancel articles
  */
-static int cancel_cb(const char *msgid __attribute__((unused)),
-		     const char *name,
+static int cancel_cb(const duplicate_t *dkey,
 		     time_t mark __attribute__((unused)),
 		     unsigned long uid,
 		     void *rock)
@@ -3471,10 +3468,10 @@ static int cancel_cb(const char *msgid __attribute__((unused)),
     struct mailbox *mailbox = NULL;
 
     /* make sure its a message in a mailbox that we're serving via NNTP */
-    if (is_newsgroup(name)) {
+    if (is_newsgroup(dkey->to)) {
 	int r;
 
-	r = mailbox_open_iwl(name, &mailbox);
+	r = mailbox_open_iwl(dkey->to, &mailbox);
 
 	if (!r &&
 	    !(cyrus_acl_myrights(newsmaster_authstate, mailbox->acl) & ACL_DELETEMSG))
@@ -3501,7 +3498,7 @@ static int cancel(message_data_t *msg)
     *p = '\0';
 
     /* find and expunge the message from all mailboxes */
-    duplicate_find(msgid, &cancel_cb, &r);
+    duplicate_find(msgid, cancel_cb, &r);
 
     /* store msgid of cancelled message for IHAVE/CHECK/TAKETHIS
      * (in case we haven't received the message yet)

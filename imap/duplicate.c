@@ -244,21 +244,6 @@ struct findrock {
     void *rock;
 };
 
-static int find_p(void *rock __attribute__((unused)),
-		  const char *key, int keylen,
-		  const char *data __attribute__((unused)),
-		  int datalen __attribute__((unused)))
-{
-    duplicate_key_t dkey = DUPLICATE_INITIALIZER;
-    int r;
-
-    r = split_key(key, keylen, &dkey);
-    if (r) return 0;	    /* ignore broken records */
-
-    /* grab the rcpt and make sure its a mailbox */
-    return (dkey.to[0] != '.');
-}
-
 static int find_cb(void *rock, const char *key, int keylen,
 		   const char *data, int datalen)
 {
@@ -271,12 +256,15 @@ static int find_cb(void *rock, const char *key, int keylen,
     r = split_key(key, keylen, &dkey);
     if (r) return 0;	/* ignore broken records */
 
+    /* make sure its a mailbox */
+    if (dkey.to[0] == '.') return 0;
+
     /* grab the mark and uid */
     memcpy(&mark, data, sizeof(time_t));
     if (datalen > (int) sizeof(mark))
 	memcpy(&uid, data + sizeof(mark), sizeof(unsigned long));
 
-    r = (*frock->proc)(dkey.id, dkey.to, mark, uid, frock->rock);
+    r = (*frock->proc)(&dkey, mark, uid, frock->rock);
 
     return r;
 }
@@ -293,7 +281,7 @@ int duplicate_find(const char *msgid,
     frock.rock = rock;
 
     /* check each entry in our database */
-    DB->foreach(dupdb, msgid, strlen(msgid), &find_p, &find_cb, &frock, NULL);
+    DB->foreach(dupdb, msgid, strlen(msgid), NULL, find_cb, &frock, NULL);
 
     return 0;
 }
