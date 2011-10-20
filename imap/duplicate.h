@@ -59,9 +59,9 @@ typedef struct duplicate_key {
 
 int duplicate_init(const char *fname, int myflags);
 
-time_t duplicate_check(duplicate_key_t *dkey);
-void duplicate_log(duplicate_key_t *dkey, char *action);
-void duplicate_mark(duplicate_key_t *dkey, time_t mark, unsigned long uid);
+time_t duplicate_check(const duplicate_key_t *dkey);
+void duplicate_log(const duplicate_key_t *dkey, const char *action);
+void duplicate_mark(const duplicate_key_t *dkey, time_t mark, unsigned long uid);
 typedef int (*duplicate_find_proc_t)(const char *, const char *, time_t,
 				     unsigned long, void *);
 int duplicate_find(const char *msgid, duplicate_find_proc_t, void *rock);

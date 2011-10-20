@@ -119,7 +119,7 @@ int duplicate_init(const char *fname, int myflags __attribute__((unused)))
     return r;
 }
 
-time_t duplicate_check(duplicate_key_t *dkey)
+time_t duplicate_check(const duplicate_key_t *dkey)
 {
     char buf[1024];
     int idlen = strlen(dkey->id);
@@ -168,7 +168,7 @@ time_t duplicate_check(duplicate_key_t *dkey)
     return mark;
 }
 
-void duplicate_log(duplicate_key_t *dkey, char *action)
+void duplicate_log(const duplicate_key_t *dkey, const char *action)
 {
     assert(dkey->date != NULL);
     syslog(LOG_INFO, "dupelim: eliminated duplicate message to %s id %s date %s (%s)",
@@ -178,7 +178,7 @@ void duplicate_log(duplicate_key_t *dkey, char *action)
 	       session_id(), action, dkey->id, dkey->to, dkey->date);
 }
 
-void duplicate_mark(duplicate_key_t *dkey, time_t mark, unsigned long uid)
+void duplicate_mark(const duplicate_key_t *dkey, time_t mark, unsigned long uid)
 {
     char buf[1024], data[100];
     int idlen = strlen(dkey->id);
