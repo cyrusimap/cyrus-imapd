@@ -1011,16 +1011,6 @@ static void cmdloop(void)
 	    ret = r;
 	}
 
-	/* Handle CalDAV bootstrapping */
-	if (!ret && !strcmp(txn.req_tgt.path, "/.well-known/caldav")) {
-	    ret = HTTP_TEMP_REDIRECT;
-
-	    hdr = spool_getheader(txn.req_hdrs, "Host");
-	    snprintf(buf, sizeof(buf), "%s://%s/calendars/",
-		     httpd_tls_done ? "https" : "http", hdr[0]);
-	    txn.loc = buf;
-	}
-
 	/* Find the namespace of the requested resource */
 	if (!ret) {
 	    for (i = 0; namespaces[i]; i++) {
@@ -1078,6 +1068,16 @@ static void cmdloop(void)
 	if (!ret && !(hdr = spool_getheader(txn.req_hdrs, "Host"))) {
 	    ret = HTTP_BAD_REQUEST;
 	    txn.errstr = "Missing Host header";
+	}
+
+	/* Handle CalDAV bootstrapping */
+	if (!ret && !strcmp(txn.req_tgt.path, "/.well-known/caldav")) {
+	    ret = HTTP_TEMP_REDIRECT;
+
+	    hdr = spool_getheader(txn.req_hdrs, "Host");
+	    snprintf(buf, sizeof(buf), "%s://%s/calendars/",
+		     httpd_tls_done ? "https" : "http", hdr[0]);
+	    txn.loc = buf;
 	}
 
 	/* Read the body, if present */
