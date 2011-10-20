@@ -557,8 +557,9 @@ int service_main(int argc __attribute__((unused)),
     proc_register("httpd", httpd_clienthost, NULL, NULL);
 
     /* Set inactivity timer */
-    httpd_timeout = config_getint(IMAPOPT_POPTIMEOUT);
-    if (httpd_timeout < 10) httpd_timeout = 10;
+    httpd_timeout = config_getint(IMAPOPT_HTTPTIMEOUT);
+syslog(LOG_INFO, "timeout: %d", httpd_timeout);
+    if (httpd_timeout < 0) httpd_timeout = 0;
     httpd_timeout *= 60;
     prot_settimeout(httpd_in, httpd_timeout);
     prot_setflushonread(httpd_in, httpd_out);
@@ -934,7 +935,7 @@ static void cmdloop(void)
     for (;;) {
 	/* Reset state */
 	ret = 0;
-	txn.flags = 0;
+	txn.flags |= !httpd_timeout ? HTTP_CLOSE : 0;
 	txn.auth_chal.param = NULL;
 	txn.loc = txn.etag = NULL;
 	txn.errstr = NULL;
@@ -1568,15 +1569,17 @@ void response_header(long code, struct transaction_t *txn)
     rfc822date_gen(datestr, sizeof(datestr), time(0));
     prot_printf(httpd_out, "Date: %s\r\n", datestr);
 
-    if (txn->flags & HTTP_CLOSE) {
-	prot_printf(httpd_out, "Connection: close\r\n");
-    }
-    else if ((code == HTTP_SWITCH_PROT) || (code == HTTP_UPGRADE)) {
-	prot_printf(httpd_out, "Connection: Upgrade\r\n");
-    }
+    prot_printf(httpd_out, "Connection: %s%s\r\n",
+		(txn->flags & HTTP_CLOSE) ? "close" : "Keep-Alive",
+		((code == HTTP_SWITCH_PROT) || (code == HTTP_UPGRADE)) ?
+		", Upgrade" : "");
 
 
     /* Response Header Fields */
+    if (!(txn->flags & HTTP_CLOSE)) {
+	prot_printf(httpd_out, "Keep-Alive: timeout=%d\r\n", httpd_timeout);
+    }
+
     if (!httpd_tls_done && tls_enabled()) {
 	prot_printf(httpd_out, "Upgrade: TLS/1.0\r\n");
     }
@@ -2992,7 +2995,7 @@ int get_doc(struct transaction_t *txn, filter_proc_t filter)
     if (buf_len(&txn->req_body)) return HTTP_BAD_MEDIATYPE;
 
     /* Serve up static pages */
-    prefix = config_getstring(IMAPOPT_HTTP_DOCROOT);
+    prefix = config_getstring(IMAPOPT_HTTPDOCROOT);
     if (!prefix) return HTTP_NOT_FOUND;
 
     buf_setcstr(&pathbuf, prefix);
