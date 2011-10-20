@@ -124,7 +124,7 @@ time_t duplicate_check(duplicate_key_t *dkey)
     char buf[1024];
     int idlen = strlen(dkey->id);
     int tolen = strlen(dkey->to);
-    int datelen = strlen(dkey->date); 
+    int datelen = strlen(dkey->date);
     int r;
     const char *data = NULL;
     int len = 0;
@@ -156,26 +156,26 @@ time_t duplicate_check(duplicate_key_t *dkey)
     } else if (r != CYRUSDB_OK) {
 	if (r != CYRUSDB_NOTFOUND) {
 	    syslog(LOG_ERR, "duplicate_check: error looking up %s/%s/%s: %s",
-		   dkey->id, dkey->to, dkey->date, 
-		   cyrusdb_strerror(r)); 
+		   dkey->id, dkey->to, dkey->date,
+		   cyrusdb_strerror(r));
 	}
 	mark = 0;
     }
 
     syslog(LOG_DEBUG, "duplicate_check: %-40s %-20s %-40s %ld",
-	   buf, buf+idlen+1, buf+idlen+tolen+2, mark); 
+	   buf, buf+idlen+1, buf+idlen+tolen+2, mark);
 
     return mark;
 }
 
-void duplicate_log(duplicate_key_t *dkey, char *action) 
+void duplicate_log(duplicate_key_t *dkey, char *action)
 {
     assert(dkey->date != NULL);
     syslog(LOG_INFO, "dupelim: eliminated duplicate message to %s id %s date %s (%s)",
-      dkey->to, dkey->id, dkey->date, action);    
+      dkey->to, dkey->id, dkey->date, action);
     if (config_auditlog)
 	syslog(LOG_NOTICE, "auditlog: duplicate sessionid=<%s> action=<%s> message-id=%s user=<%s> date=<%s>",
-	       session_id(), action, dkey->id, dkey->to, dkey->date); 
+	       session_id(), action, dkey->id, dkey->to, dkey->date);
 }
 
 void duplicate_mark(duplicate_key_t *dkey, time_t mark, unsigned long uid)
@@ -183,12 +183,12 @@ void duplicate_mark(duplicate_key_t *dkey, time_t mark, unsigned long uid)
     char buf[1024], data[100];
     int idlen = strlen(dkey->id);
     int tolen = strlen(dkey->to);
-    int datelen = strlen(dkey->date); 
+    int datelen = strlen(dkey->date);
     int r;
 
     if (!duplicate_dbopen) return;
 
-    if (idlen + tolen + datelen > (int) sizeof(buf) - 30) return; 
+    if (idlen + tolen + datelen > (int) sizeof(buf) - 30) return;
     memcpy(buf, dkey->id, idlen);
     buf[idlen] = '\0';
     memcpy(buf + idlen + 1, dkey->to, tolen);
@@ -207,7 +207,7 @@ void duplicate_mark(duplicate_key_t *dkey, time_t mark, unsigned long uid)
     } while (r == CYRUSDB_AGAIN);
 
     syslog(LOG_DEBUG, "duplicate_mark: %-40s %-20s %-40s %ld %lu",
-	   buf, buf+idlen+1, buf+idlen+tolen+2, mark, uid); 
+	   buf, buf+idlen+1, buf+idlen+tolen+2, mark, uid);
 
     return;
 }
