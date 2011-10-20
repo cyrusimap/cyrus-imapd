@@ -166,13 +166,14 @@ static sasl_ssf_t extprops_ssf = 0;
 static int https = 0;
 int httpd_tls_done = 0;
 int httpd_tls_required = 0;
+unsigned avail_auth_schemes = 0; /* bitmask of available aith schemes */
 
 static struct buf serverinfo = BUF_INITIALIZER;
 
 struct auth_scheme_t {
+    unsigned idx;		/* Index value of the scheme */
     const char *name;		/* HTTP auth scheme name */
     const char *saslmech;	/* Corresponding SASL mech name */
-    unsigned is_avail;		/* Is scheme available for use? */
     unsigned need_persist;	/* Need persistent connection? */
     unsigned is_server_first;	/* Is SASL mech server-first? */
     unsigned do_base64;		/* Base64 encode/decode auth data? */
@@ -186,21 +187,21 @@ static void digest_success(const char *name __attribute__((unused)),
     prot_printf(httpd_out, "Authentication-Info: %s\r\n", data);
 }
 
-/* List of HTTP auth schemes that we support */
-static struct auth_scheme_t auth_schemes[] = {
-    { "Basic", NULL, 0, 0, 1, 1, NULL },
-    { "Digest", HTTP_DIGEST_MECH, 0, 0, 1, 0, &digest_success },
-    { "Negotiate", NULL /* not implemented yet */, 0, 0, 0, 1, NULL },
-    { "NTLM", "NTLM", 0, 1, 0, 1, NULL },
-    { NULL, NULL, 0, 0, 0, 0, NULL }
-};
-
 /* Index into available schemes */
 enum {
     AUTH_BASIC = 0,
     AUTH_DIGEST,
     AUTH_NEGOTIATE,
     AUTH_NTLM
+};
+
+/* List of HTTP auth schemes that we support */
+static struct auth_scheme_t auth_schemes[] = {
+    { AUTH_BASIC, "Basic", NULL, 0, 1, 1, NULL },
+    { AUTH_DIGEST, "Digest", HTTP_DIGEST_MECH, 0, 1, 0, &digest_success },
+    { AUTH_NEGOTIATE, "Negotiate", NULL /* not impl yet */, 0, 0, 1, NULL },
+    { AUTH_NTLM, "NTLM", "NTLM", 1, 0, 1, NULL },
+    { -1, NULL, NULL, -1, -1, -1, NULL }
 };
 
 
@@ -237,7 +238,7 @@ static int parse_uri(const char *meth, const char *uri,
 		     struct request_target_t *tgt, const char **errstr);
 static int parse_path(struct request_target_t *tgt, const char **errstr);
 static struct accept *parse_accept(const char *hdr);
-static int read_body(struct prottream *pin,
+static int read_body(struct protstream *pin,
 		     hdrcache_t hdrs, struct buf *body, const char **errstr);
 static int http_auth(const char *creds, struct auth_challenge_t *chal);
 
@@ -457,7 +458,7 @@ int service_main(int argc __attribute__((unused)),
     int niflags;
     sasl_security_properties_t *secprops=NULL;
     const char *mechlist, *mech;
-    int mechcount = 0, schemecount;;
+    int mechcount = 0;
     size_t mechlen;
     struct auth_scheme_t *scheme;
 
@@ -532,21 +533,21 @@ int service_main(int argc __attribute__((unused)),
     }
 
     /* See which auth schemes are available to us */
-    schemecount = auth_schemes[AUTH_BASIC].is_avail =
-	(extprops_ssf >= 2) || config_getswitch(IMAPOPT_ALLOWPLAINTEXT);
+    if ((extprops_ssf >= 2) || config_getswitch(IMAPOPT_ALLOWPLAINTEXT)) {
+	avail_auth_schemes |= (1 << AUTH_BASIC);
+    }
     sasl_listmech(httpd_saslconn, NULL, NULL, " ", NULL,
 		  &mechlist, NULL, &mechcount);
     for (mech = mechlist; mechcount--; mech += ++mechlen) {
 	mechlen = strcspn(mech, " \0");
 	for (scheme = auth_schemes; scheme->name; scheme++) {
 	    if (scheme->saslmech && !strncmp(mech, scheme->saslmech, mechlen)) {
-		scheme->is_avail++;
-		schemecount++;
+		avail_auth_schemes |= (1 << scheme->idx);
 		break;
 	    }
 	}
     }
-    httpd_tls_required = !schemecount;
+    httpd_tls_required = !avail_auth_schemes;
 
     proc_register("httpd", httpd_clienthost, NULL, NULL);
 
@@ -737,7 +738,7 @@ static void starttls(struct transaction_t *txn, int https)
     httpd_tls_done = 1;
     httpd_tls_required = 0;
 
-    auth_schemes[AUTH_BASIC].is_avail++;
+    avail_auth_schemes |= (1 << AUTH_BASIC);
 }
 #else
 static void starttls(struct transaction_t *txn  __attribute__((unused)),
@@ -1630,7 +1631,7 @@ void response_header(long code, struct transaction_t *txn)
 	    for (scheme = auth_schemes; scheme->name; scheme++) {
 		/* Only advertise what is available and
 		   can work with the type of connection */
-		if (scheme->is_avail &&
+		if ((avail_auth_schemes & (1 << scheme->idx)) &&
 		    (!(txn->flags & HTTP_CLOSE) || !scheme->need_persist)) {
 		    auth_chal->param = NULL;
 
@@ -1904,7 +1905,7 @@ static int http_auth(const char *creds, struct auth_challenge_t *chal)
 	for (scheme = auth_schemes; scheme->name; scheme++) {
 	    if (slen && !strncasecmp(scheme->name, creds, slen)) {
 		/* Found a supported scheme, see if its available */
-		if (!scheme->is_avail) scheme = NULL;
+		if (!(avail_auth_schemes & (1 << scheme->idx))) scheme = NULL;
 		break;
 	    }
 	}
