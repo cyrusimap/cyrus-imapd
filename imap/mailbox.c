@@ -2071,7 +2071,7 @@ static int mailbox_index_recalc(struct mailbox *mailbox)
 	r = mailbox_read_index_record(mailbox, recno, &record);
 	if (r) goto out;
 	mailbox_index_update_counts(mailbox, &record, 1);
-	if (!(record.system_flags & FLAG_EXPUNGED))
+	if (!(record.system_flags & FLAG_UNLINKED))
 	    annotate_reconstruct_add(ars, record.uid);
     }
 
