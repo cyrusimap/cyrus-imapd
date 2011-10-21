@@ -526,11 +526,17 @@ static int mboxname_toexternal(struct namespace *namespace, const char *mboxname
     mboxname_userid_to_parts(userid, &userparts);
 
     if (mbparts.userid) {
-	if (!namespace->isadmin &&
-	    mboxname_parts_same_userid(&mbparts, &userparts))
+	if (!namespace->isadmin && !mbparts.is_deleted &&
+	    mboxname_parts_same_userid(&mbparts, &userparts)) {
 	    strcpy(result, "INBOX");
-	else
+	}
+	else if (mbparts.is_deleted) {
+	    const char *dp = config_getstring(IMAPOPT_DELETEDPREFIX);
+	    sprintf(result, "%s.user.%s", dp, mbparts.userid);
+	}
+	else {
 	    sprintf(result, "user.%s", mbparts.userid);
+	}
 
 	if (mbparts.box)
 	    strcat(result, ".");
