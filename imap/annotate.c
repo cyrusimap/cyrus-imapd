@@ -2348,7 +2348,8 @@ static int write_entry(const char *mboxname,
 		       const char *entry,
 		       const char *userid,
 		       const struct buf *value,
-		       struct mailbox *mailbox)
+		       struct mailbox *mailbox,
+		       int ignorequota)
 {
     char key[MAX_MAILBOX_PATH+1];
     int keylen, r;
@@ -2366,12 +2367,13 @@ static int write_entry(const char *mboxname,
     keylen = make_key(mboxname, uid, entry, userid, key, sizeof(key));
 
     if (mailbox) {
-	quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_INITIALIZER;
-
 	r = count_old_storage(d, key, keylen, &oldlen);
 	if (r)
 	    goto out;
+    }
 
+    if (!ignorequota && mailbox) {
+	quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_INITIALIZER;
 	qdiffs[QUOTA_ANNOTSTORAGE] = value->len - oldlen;
 	r = mailbox_quota_check(mailbox, qdiffs);
 	if (r)
@@ -2444,7 +2446,8 @@ int annotate_state_write(annotate_state_t *state,
 {
     const char *mboxname = (state->mailbox ? state->mailbox->name : "");
     return write_entry(mboxname, state->uid,
-		       entry, userid, value, state->mailbox);
+		       entry, userid, value, state->mailbox,
+		       /*ignorequota*/1);
 }
 
 static int annotate_canon_value(struct buf *value, int type)
@@ -2643,12 +2646,12 @@ static int annotation_set_todb(annotate_state_t *state,
 	r = write_entry(mboxname, state->uid,
 			entry->name, "",
 			&entry->shared,
-			state->mailbox);
+			state->mailbox, 0);
     if (!r && entry->have_priv)
 	r = write_entry(mboxname, state->uid,
 			entry->name, state->userid,
 			&entry->priv,
-			state->mailbox);
+			state->mailbox, 0);
 
     return r;
 }
@@ -2982,13 +2985,13 @@ static int rename_cb(const char *mailbox,
 	    /* renaming a user, so change the userid for priv annots */
 	    newuserid = rrock->newuserid;
 	}
-	r = write_entry(rrock->newmboxname, rrock->newuid, entry, newuserid, value, rrock->newmailbox);
+	r = write_entry(rrock->newmboxname, rrock->newuid, entry, newuserid, value, rrock->newmailbox, 0);
     }
 
     if (!rrock->copy && !r) {
 	/* delete existing entry */
 	struct buf dattrib = BUF_INITIALIZER;
-	r = write_entry(mailbox, uid, entry, userid, &dattrib, rrock->oldmailbox);
+	r = write_entry(mailbox, uid, entry, userid, &dattrib, rrock->oldmailbox, 0);
     }
 
     return r;
