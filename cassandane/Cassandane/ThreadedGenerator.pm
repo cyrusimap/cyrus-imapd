@@ -89,7 +89,6 @@ sub new
     $self->{next_date} = DateTime->now->epoch -
 		    $self->{deltat} * ($self->{nmessages}+1);
     $self->{last_thread} = undef;
-    $self->{next_uid} = 1;
 
     return $self;
 }
@@ -163,19 +162,12 @@ sub generate
     my $cid = $thread->{cid};
     $cid = $thread->{cid} = $msg->make_cid()
 	unless defined $cid;
-    $msg->set_attributes(uid => $self->{next_uid}, cid => $cid);
-    $self->{next_uid}++;
+    $msg->set_attributes(cid => $cid);
 
     $thread->{last_message} = $msg;
     $self->{nmessages}--;
 
     return $msg;
-}
-
-sub set_next_uid
-{
-    my ($self, $uid) = @_;
-    $self->{next_uid} = 0+$uid;
 }
 
 # TODO: test that both References: and In-Reply-To: are tracked in the server

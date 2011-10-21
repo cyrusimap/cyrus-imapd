@@ -107,10 +107,24 @@ sub new
 {
     my $class = shift;
     my $self = {
+	next_uid => 1,
     };
 
     bless $self, $class;
     return $self;
+}
+
+sub _generate_uid
+{
+    my ($self) = @_;
+    my $uid = $self->{next_uid}++;
+    return $uid;
+}
+
+sub set_next_uid
+{
+    my ($self, $uid) = @_;
+    $self->{next_uid} = 0+$uid;
 }
 
 sub _make_random_address
@@ -192,6 +206,9 @@ sub _params_defaults
     $params->{messageid} = $self->_generate_messageid($params)
 	unless defined $params->{messageid};
 
+    $params->{uid} = $self->_generate_uid()
+	unless defined $params->{uid};
+
     return $params;
 }
 
@@ -240,6 +257,7 @@ sub generate
     }
     $msg->add_header('X-Cassandane-Unique', _generate_unique());
     $msg->set_body("This is a generated test email.  If received, please notify $admin\r\n$extra");
+    $msg->set_attributes(uid => $params->{uid});
 
     return $msg;
 }
