@@ -315,15 +315,16 @@ sub check_messages
     my $store = $params{store} || $self->{store};
     my $check_guid = $params{check_guid};
     $check_guid = 1 unless defined $check_guid;
+    my $keyed_on = $params{keyed_on} || 'subject';
 
     xlog "check_messages: " . join(' ', %params);
 
     $store->read_begin();
     while (my $msg = $store->read_message())
     {
-	my $subj = $msg->get_header('subject');
-	$self->assert(!defined $actual->{$subj});
-	$actual->{$subj} = $msg;
+	my $key = $msg->$keyed_on();
+	$self->assert(!defined $actual->{$key});
+	$actual->{$key} = $msg;
     }
     $store->read_end();
 
@@ -331,8 +332,8 @@ sub check_messages
 
     foreach my $expmsg (values %$expected)
     {
-	my $subj = $expmsg->get_header('subject');
-	my $actmsg = $actual->{$subj};
+	my $key = $expmsg->$keyed_on();
+	my $actmsg = $actual->{$key};
 
 	$self->assert_not_null($actmsg);
 
