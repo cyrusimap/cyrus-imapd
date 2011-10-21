@@ -2220,6 +2220,10 @@ int sync_crc_calc(struct mailbox *mailbox, char *buf, int maxlen)
 	if (mailbox_read_index_record(mailbox, recno, &record))
 	    continue;
 
+	/* always skip EXPUNGED flags, so we don't count the annots */
+	if (record.system_flags & FLAG_EXPUNGED)
+	    continue;
+
 	sync_crc_algorithm->addrecord(mailbox, &record, sync_crc_covers);
 	if ((sync_crc_covers & SYNC_CRC_ANNOTATIONS) && user_annot_db) {
 	    r = read_annotations(mailbox, &record, &annots);
