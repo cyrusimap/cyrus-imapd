@@ -3213,7 +3213,7 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
     newmailbox->i.uidvalidity = time(0);
 
     /* INBOX rename - change uniqueid */
-    if (!userid) mailbox_make_uniqueid(newmailbox);
+    if (userid) mailbox_make_uniqueid(newmailbox);
 
     r = seen_copy(userid, oldmailbox, newmailbox);
     if (r) goto fail;
