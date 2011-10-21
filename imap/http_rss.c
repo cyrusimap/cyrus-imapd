@@ -615,8 +615,8 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 		buf_reset(&buf);
 		buf_printf(&buf, "%s@%s", addr->mailbox, addr->domain);
 		if (addr->name) buf_printf(&buf, " (%s)", addr->name);
-		xmlNewChild(item, NULL, BAD_CAST "author",
-			    BAD_CAST buf_cstring(&buf));
+		xmlNewTextChild(item, NULL, BAD_CAST "author",
+				BAD_CAST buf_cstring(&buf));
 	    }
 	}
 
