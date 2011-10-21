@@ -527,10 +527,29 @@ sub _setup_for_deliver
 
 sub deliver
 {
-    my ($self, $msg) = @_;
+    my ($self, $msg, %params) = @_;
     my $str = $msg->as_string();
-    $self->run_command({ cyrus => 1, redirects => { stdin => \$str } },
-	'deliver', 'cassandane');
+    my @cmd = ( 'deliver' );
+
+    my $folder = $params{folder};
+    if (defined $folder)
+    {
+	$folder =~ s/^inbox.//i;
+	push(@cmd, '-m', $folder);
+    }
+
+    my @users;
+    push(@users, @{$params{users}}) if (defined $params{users});
+    push(@users, $params{user}) if (defined $params{user});
+    push(@users, 'cassandane') if !scalar(@users);
+    push(@cmd, @users);
+
+    $self->run_command({
+	cyrus => 1,
+	redirects => {
+	    stdin => \$str
+	}
+    }, @cmd);
 }
 
 # Runs a command with the given arguments.  The first argument is an
