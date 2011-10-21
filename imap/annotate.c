@@ -1670,6 +1670,20 @@ static void annotation_get_specialuse(annotate_state_t *state,
     buf_free(&value);
 }
 
+static void annotation_get_uniqueid(annotate_state_t *state,
+				    struct annotate_entry_list *entry)
+{
+    struct buf value = BUF_INITIALIZER;
+
+    assert(state->mailbox);
+
+    if (state->mailbox->uniqueid)
+	buf_appendcstr(&value, state->mailbox->uniqueid);
+
+    output_entryatt(state, entry->name, "", &value);
+    buf_free(&value);
+}
+
 static int rw_cb(const char *mailbox __attribute__((unused)),
 		 uint32_t uid __attribute__((unused)),
 		 const char *entry, const char *userid,
@@ -1954,6 +1968,15 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
 	ACL_ADMIN,
 	annotation_get_fromdb,
 	annotation_set_todb,
+	NULL
+    },{
+	"/vendor/cmu/cyrus-imapd/uniqueid",
+	ATTRIB_TYPE_STRING,
+	BACKEND_ONLY,
+	ATTRIB_VALUE_SHARED,
+	0,
+	annotation_get_uniqueid,
+	NULL,
 	NULL
     },{ NULL, 0, ANNOTATION_PROXY_T_INVALID, 0, 0, NULL, NULL, NULL }
 };
