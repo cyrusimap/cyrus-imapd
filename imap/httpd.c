@@ -221,7 +221,7 @@ struct backend *backend_current = NULL;
 
 /* end PROXY stuff */
 
-static void starttls(struct transaction_t *txn, int https);
+static void starttls(int https);
 void usage(void);
 void shut_down(int code) __attribute__ ((noreturn));
 
@@ -560,7 +560,7 @@ int service_main(int argc __attribute__((unused)),
 
     /* we were connected on https port so we should do 
        TLS negotiation immediatly */
-    if (https == 1) starttls(NULL, 1);
+    if (https == 1) starttls(1);
 
     cmdloop();
 
@@ -675,7 +675,7 @@ void fatal(const char* s, int code)
 
 #ifdef HAVE_SSL
 /*  XXX  Needs clean up if we are going to support TLS upgrade (RFC 2817) */
-static void starttls(struct transaction_t *txn, int https)
+static void starttls(int https)
 {
     int result;
     int *layerp;
@@ -696,7 +696,7 @@ static void starttls(struct transaction_t *txn, int https)
     }
 
     if (!https) {
-	response_header(HTTP_SWITCH_PROT, txn);
+	response_header(HTTP_SWITCH_PROT, NULL);
 	/* must flush our buffers before starting tls */
 	prot_flush(httpd_out);
     }
@@ -741,8 +741,7 @@ static void starttls(struct transaction_t *txn, int https)
     avail_auth_schemes |= (1 << AUTH_BASIC);
 }
 #else
-static void starttls(struct transaction_t *txn  __attribute__((unused)),
-		     int https __attribute__((unused)))
+static void starttls(int https __attribute__((unused)))
 {
     fatal("starttls() called, but no OpenSSL", EC_SOFTWARE);
 }
@@ -1099,7 +1098,7 @@ static void cmdloop(void)
 		if ((upgd = spool_getheader(txn.req_hdrs, "Upgrade")) &&
 		    !strcmp(upgd[0], "TLS/1.0")) {
 		    syslog(LOG_DEBUG, "client requested TLS");
-		    starttls(&txn, 0);
+		    starttls(0);
 		}
 	    }
 	}
@@ -1384,7 +1383,7 @@ static int read_body(struct protstream *pin,
 
     if (need_cont) {
 	/* Tell client to send the body */
-	prot_printf(httpd_out, "%s\r\n\r\n", http_statusline(HTTP_CONTINUE));
+	response_header(HTTP_CONTINUE, NULL);
     }
 
     /* Read and buffer the body */
@@ -1553,8 +1552,8 @@ const char *http_statusline(long code)
 void response_header(long code, struct transaction_t *txn)
 {
     char datestr[80];
-    struct auth_challenge_t *auth_chal = &txn->auth_chal;
-    struct resp_body_t *resp_body = &txn->resp_body;
+    struct auth_challenge_t *auth_chal;
+    struct resp_body_t *resp_body;
 
     /* Status-Line */
     prot_printf(httpd_out, "%s\r\n", http_statusline(code));
@@ -1564,21 +1563,33 @@ void response_header(long code, struct transaction_t *txn)
     rfc822date_gen(datestr, sizeof(datestr), time(0));
     prot_printf(httpd_out, "Date: %s\r\n", datestr);
 
-    prot_printf(httpd_out, "Connection: %s%s\r\n",
-		(txn->flags & HTTP_CLOSE) ? "close" : "Keep-Alive",
-		((code == HTTP_SWITCH_PROT) || (code == HTTP_UPGRADE)) ?
-		", Upgrade" : "");
-
-
-    /* Response Header Fields */
-    if (!(txn->flags & HTTP_CLOSE)) {
-	prot_printf(httpd_out, "Keep-Alive: timeout=%d\r\n", httpd_timeout);
-    }
-
     if (!httpd_tls_done && tls_enabled()) {
 	prot_printf(httpd_out, "Upgrade: TLS/1.0\r\n");
     }
 
+    if (code == HTTP_SWITCH_PROT) {
+	prot_printf(httpd_out, "Connection: Upgrade\r\n");
+    }
+
+    if (!txn) {
+	/* Provisional response - nothing else needed */
+
+	/* Blank line terminating the header */
+	prot_printf(httpd_out, "\r\n");
+	return;
+    }
+
+    if (txn->flags & HTTP_CLOSE)
+	prot_printf(httpd_out, "Connection: close");
+    else {
+	prot_printf(httpd_out, "Keep-Alive: timeout=%d\r\n", httpd_timeout);
+	prot_printf(httpd_out, "Connection: Keep-Alive");
+    }
+    prot_printf(httpd_out, "%s\r\n",
+		(code == HTTP_UPGRADE) ? ", Upgrade" : "");
+
+
+    /* Response Header Fields */
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
 	prot_printf(httpd_out, "Server: %s\r\n", buf_cstring(&serverinfo));
     }
@@ -1623,6 +1634,7 @@ void response_header(long code, struct transaction_t *txn)
 	}
     }
 
+    auth_chal = &txn->auth_chal;
     if (code == HTTP_UNAUTHORIZED) {
 	if (!auth_chal->scheme) {
 	    /* Require authentication by advertising all possible schemes */
@@ -1671,6 +1683,7 @@ void response_header(long code, struct transaction_t *txn)
 
 
     /* Payload Header Fields */
+    resp_body = &txn->resp_body;
     if (txn->flags & HTTP_CHUNKED) {
 	prot_printf(httpd_out, "Transfer-Encoding: chunked\r\n");
     }
