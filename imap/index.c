@@ -2071,6 +2071,8 @@ static void index_pruneheader(char *buf, const strarray_t *headers,
     int goodheader;
     char *endlastgood = buf;
     char **l;
+    int count = 0;
+    int maxlines = config_getint(IMAPOPT_MAXHEADERLINES);
 
     p = buf;
     while (*p && *p != '\r') {
@@ -2114,8 +2116,14 @@ static void index_pruneheader(char *buf, const strarray_t *headers,
 	    endlastgood = nextheader;
 	}
 	p = nextheader;
+
+	/* stop giant headers causing massive loops */
+	if (maxlines) {
+	    count++;
+	    if (count > maxlines) break;
+	}
     }
-	    
+
     *endlastgood = '\0';
 }
 
