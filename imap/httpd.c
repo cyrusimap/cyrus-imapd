@@ -1133,11 +1133,13 @@ static void cmdloop(void)
 #ifdef SASL_HTTP_REQUEST
 		sasl_setprop(httpd_saslconn, SASL_HTTP_REQUEST, &sasl_http_req);
 #endif
-		if ((r = http_auth(hdr[0], &txn.auth_chal)) < 0) {
+		if (((r = http_auth(hdr[0], &txn.auth_chal)) < 0) ||
+		    !txn.auth_chal.scheme) {
 		    /* Auth failed - reinitialize */
 		    syslog(LOG_DEBUG, "auth failed - reinit");
 		    reset_saslconn(&httpd_saslconn);
 		    txn.auth_chal.scheme = NULL;
+		    r = SASL_FAIL;
 		}
 	    }
 	    else if (txn.auth_chal.scheme) {
