@@ -113,6 +113,29 @@ static char *make_basedir(const char * const *reldirs)
     CU_ASSERT(!memcmp(_data, expdata, _datalen)); \
 }
 
+#define CANFETCHNEXT(key, keylen, expkey, expkeylen, expdata, expdatalen) \
+{ \
+    const char *_data = BADDATA; \
+    size_t _datalen = BADLEN; \
+    const char *_key = BADDATA; \
+    size_t _keylen = BADLEN; \
+    r = DB->fetchnext(db, key, keylen, &_key, &_keylen, &_data, &_datalen, &txn); \
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK); \
+    CU_ASSERT_PTR_NOT_NULL(txn); \
+    CU_ASSERT_PTR_NOT_NULL(_data); \
+    CU_ASSERT_PTR_NOT_NULL(_key); \
+    CU_ASSERT_PTR_NOT_EQUAL(_data, BADDATA); \
+    CU_ASSERT_PTR_NOT_EQUAL(_data, expdata); \
+    CU_ASSERT_PTR_NOT_EQUAL(_key, BADDATA); \
+    CU_ASSERT_PTR_NOT_EQUAL(_key, expdata); \
+    CU_ASSERT_NOT_EQUAL(_datalen, BADLEN); \
+    CU_ASSERT_NOT_EQUAL(_keylen, BADLEN); \
+    CU_ASSERT_EQUAL(_datalen, expdatalen); \
+    CU_ASSERT(!memcmp(_data, expdata, _datalen)); \
+    CU_ASSERT_EQUAL(_keylen, expkeylen); \
+    CU_ASSERT(!memcmp(_key, expkey, _keylen)); \
+}
+
 #define CANNOTFETCH(key, keylen, experror) \
 { \
     const char *_data = BADDATA; \
@@ -124,6 +147,13 @@ static char *make_basedir(const char * const *reldirs)
     CU_ASSERT_PTR_NOT_EQUAL(_data, BADDATA); \
     CU_ASSERT_EQUAL(_datalen, 0); \
     CU_ASSERT_NOT_EQUAL(_datalen, BADLEN); \
+}
+
+#define CANNOTFETCHNEXT(key, keylen, experror) \
+{ \
+    r = DB->fetchnext(db, key, keylen, NULL, 0, NULL, 0, &txn); \
+    CU_ASSERT_EQUAL(r, experror); \
+    CU_ASSERT_PTR_NOT_NULL(txn); \
 }
 
 #define CANCOMMIT() \
@@ -738,6 +768,14 @@ static void test_foreach(void)
     GOTRESULT(KEY3, strlen(KEY3), DATA3, strlen(DATA3));
     /* foreach iterated over exactly all the keys */
     CU_ASSERT_PTR_NULL(results);
+
+    /* only check "fetchnext" iteration if it's defined for this backend */
+    if (DB->fetchnext) {
+	CANFETCHNEXT(NULL, 0, KEY1, strlen(KEY1), DATA1, strlen(DATA1));
+	CANFETCHNEXT(KEY1, strlen(KEY1), KEY2, strlen(KEY2), DATA2, strlen(DATA2));
+	CANFETCHNEXT(KEY2, strlen(KEY2), KEY3, strlen(KEY3), DATA3, strlen(DATA3));
+	CANNOTFETCHNEXT(KEY3, strlen(KEY3), CYRUSDB_NOTFOUND);
+    }
 
     /* close the txn - it doesn't matter here if we commit or abort */
     CANCOMMIT();
