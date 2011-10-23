@@ -1,0 +1,583 @@
+/* http_proxy.c - HTTP proxy support functions
+ *
+ * Copyright (c) 1994-2011 Carnegie Mellon University.  All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in
+ *    the documentation and/or other materials provided with the
+ *    distribution.
+ *
+ * 3. The name "Carnegie Mellon University" must not be used to
+ *    endorse or promote products derived from this software without
+ *    prior written permission. For permission or any legal
+ *    details, please contact
+ *      Carnegie Mellon University
+ *      Center for Technology Transfer and Enterprise Creation
+ *      4615 Forbes Avenue
+ *      Suite 302
+ *      Pittsburgh, PA  15213
+ *      (412) 268-7393, fax: (412) 268-7395
+ *      innovation@andrew.cmu.edu
+ *
+ * 4. Redistributions of any form whatsoever must retain the following
+ *    acknowledgment:
+ *    "This product includes software developed by Computing Services
+ *     at Carnegie Mellon University (http://www.cmu.edu/computing/)."
+ *
+ * CARNEGIE MELLON UNIVERSITY DISCLAIMS ALL WARRANTIES WITH REGARD TO
+ * THIS SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+ * AND FITNESS, IN NO EVENT SHALL CARNEGIE MELLON UNIVERSITY BE LIABLE
+ * FOR ANY SPECIAL, INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
+ * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
+ * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+ *
+ */
+
+#include <config.h>
+
+#include <syslog.h>
+#include <sasl/sasl.h>
+#include <sasl/saslutil.h>
+
+#include "httpd.h"
+#include "http_err.h"
+#include "http_proxy.h"
+#include "imap_err.h"
+#include "iptostring.h"
+#include "mupdate-client.h"
+#include "prot.h"
+#include "proxy.h"
+#include "spool.h"
+#include "tls.h"
+#include "xmalloc.h"
+#include "xstrlcat.h"
+#include "xstrlcpy.h"
+
+
+static int login(struct backend *s, const char *server __attribute__((unused)),
+		 struct protocol_t *prot, const char *userid,
+		 sasl_callback_t *cb, const char **status);
+static int ping(struct backend *s);
+static int logout(struct backend *s __attribute__((unused)));
+static int starttls(struct backend *s);
+
+
+struct protocol_t http_protocol =
+{ "http", "http", TYPE_SPEC,
+  { .spec = { &login, &ping, &logout } }
+};
+
+
+const char *digest_recv_success(hdrcache_t hdrs)
+{
+    const char **hdr = spool_getheader(hdrs, "Authentication-Info");
+
+    return (hdr ? hdr[0]: NULL);
+}
+
+
+static const char *callback_getdata(sasl_conn_t *conn,
+				    sasl_callback_t *callbacks,
+				    unsigned long callbackid)
+{
+    sasl_callback_t *cb;
+    const char *result = NULL;
+
+    for (cb = callbacks; cb->id != SASL_CB_LIST_END; cb++) {
+	if (cb->id == callbackid) {
+	    switch (cb->id) {
+	    case SASL_CB_USER:
+	    case SASL_CB_AUTHNAME: {
+		sasl_getsimple_t *simple_cb = (sasl_getsimple_t *) cb->proc;
+		simple_cb(cb->context, cb->id, &result, NULL);
+		break;
+	    }
+
+	    case SASL_CB_PASS: {
+		sasl_secret_t *pass;
+		sasl_getsecret_t *pass_cb = (sasl_getsecret_t *) cb->proc;
+		pass_cb(conn, cb->context, cb->id, &pass);
+		result = (const char *) pass->data;
+		break;
+	    }
+	    }
+	}
+    }
+
+    return result;
+}
+
+
+#define BASE64_BUF_SIZE	21848	/* per RFC 2222bis: ((16K / 3) + 1) * 4  */
+
+static int login(struct backend *s, const char *server __attribute__((unused)),
+		 struct protocol_t *prot, const char *userid,
+		 sasl_callback_t *cb, const char **status)
+{
+    int r = 0, local_cb = 0;
+    socklen_t addrsize;
+    struct sockaddr_storage saddr_l, saddr_r;
+    char remoteip[60], localip[60], *p;
+    struct buf buf = BUF_INITIALIZER;
+    sasl_security_properties_t secprops =
+	{ 0, 0xFF, PROT_BUFSIZE, 0, NULL, NULL }; /* default secprops */
+    const char *mech_conf, *pass, *clientout = NULL;
+    struct auth_scheme_t *scheme = NULL;
+    unsigned need_tls = 0, tls_done = 0;
+
+    if (status) *status = NULL;
+
+    /* set the IP addresses */
+    addrsize = sizeof(struct sockaddr_storage);
+    if (getpeername(s->sock, (struct sockaddr *) &saddr_r, &addrsize) ||
+	iptostring((struct sockaddr *) &saddr_r, addrsize, remoteip, 60)) {
+	if (status) *status = "Failed to get remote IP address";
+	return SASL_FAIL;
+    }
+  
+    addrsize = sizeof(struct sockaddr_storage);
+    if (getsockname(s->sock, (struct sockaddr *) &saddr_l, &addrsize) ||
+	iptostring((struct sockaddr *) &saddr_l, addrsize, localip, 60)) {
+	if (status) *status = "Failed to get local IP address";
+	return SASL_FAIL;
+    }
+
+    /* Create callbacks, if necessary */
+    if (!cb) {
+	local_cb = 1;
+	buf_setmap(&buf, s->hostname, strcspn(s->hostname, "."));
+	buf_appendcstr(&buf, "_password");
+	pass = config_getoverflowstring(buf_cstring(&buf), NULL);
+	if (!pass) pass = config_getstring(IMAPOPT_PROXY_PASSWORD);
+	cb = mysasl_callbacks(userid, 
+			      config_getstring(IMAPOPT_PROXY_AUTHNAME),
+			      config_getstring(IMAPOPT_PROXY_REALM),
+			      pass);
+    }
+
+    /* Require proxying if we have an "interesting" userid (authzid) */
+    r = sasl_client_new(prot->sasl_service, s->hostname, localip, remoteip, cb,
+			(userid  && *userid ? SASL_NEED_PROXY : 0) |
+			SASL_USAGE_FLAGS, &s->saslconn);
+    if (r != SASL_OK) goto done;
+
+    r = sasl_setprop(s->saslconn, SASL_SEC_PROPS, &secprops);
+    if (r != SASL_OK) goto done;
+
+    /* Get SASL mechanism list.  We can force a particular
+       mechanism using a <shorthost>_mechs option */
+    buf_setmap(&buf, s->hostname, strcspn(s->hostname, "."));
+    buf_appendcstr(&buf, "_mechs");
+    if (!(mech_conf = config_getoverflowstring(buf_cstring(&buf), NULL))) {
+	mech_conf = config_getstring(IMAPOPT_FORCE_SASL_CLIENT_MECH);
+    }
+
+    do {
+	int c;
+	uint32_t code;
+	hdrcache_t hdrs = NULL;
+	const char **hdr, *errstr, *serverin;
+	char base64[BASE64_BUF_SIZE+1];
+	unsigned int serverinlen, clientoutlen, non_persist;
+	sasl_http_request_t httpreq = { "OPTIONS",	/* Method */
+					"*",		/* URI */
+					(u_char *) "",	/* Empty body */
+					0,		/* Zero-length body */
+					0 };		/* Persistent cxn? */
+
+	/* Base64 encode any client response, if necessary */
+	if (clientout && scheme && scheme->do_base64) {
+	    r = sasl_encode64(clientout, clientoutlen,
+			      base64, BASE64_BUF_SIZE, &clientoutlen);
+	    if (r != SASL_OK) goto cleanup;
+
+	    clientout = base64;
+	}
+
+	/* Send Authorization and/or Upgrade request to server */
+	prot_printf(s->out, "%s %s HTTP/1.1\r\n", httpreq.method, httpreq.uri);
+	prot_printf(s->out, "Host: %s\r\n", s->hostname);
+	if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
+	    prot_printf(s->out, "User-Agent: %s\r\n", buf_cstring(&serverinfo));
+	}
+	if (need_tls) {
+	    prot_printf(s->out, "Connection: Upgrade\r\n");
+	    prot_printf(s->out, "Upgrade: TLS/1.0\r\n");
+	    need_tls = 0;
+	}
+	prot_printf(s->out, "Authorization: %s %s\r\n",
+		    scheme ? scheme->name : "", clientout ? clientout : "");
+	prot_printf(s->out, "Content-Length: %lu\r\n", httpreq.elen);
+	prot_write(s->out, (const char *) httpreq.entity, httpreq.elen);
+	prot_printf(s->out, "\r\n");
+	prot_flush(s->out);
+
+	serverin = clientout = NULL;
+	serverinlen = clientoutlen = 0;
+
+      response:
+	/* Status-Line = HTTP-Version SP Status-Code SP Reason-Phrase CRLF */
+	buf_reset(&buf);
+	c = getword(s->in, &buf);
+	if ((c != ' ') || strcmp(buf_cstring(&buf), HTTP_VERSION)) {
+	    r = HTTP_UNAVAILABLE;
+	    if (status) *status = "Invalid/unsupported HTTP-Version";
+	    goto cleanup;
+	}	    
+	c = getuint32(s->in, &code);
+	if ((c != ' ') || (code < 100) || (code > 599)) {
+	    r = HTTP_UNAVAILABLE;
+	    if (status) *status = "Invalid/unsupported Status-Code";
+	    goto cleanup;
+	}	    
+	eatline(s->in, c);  /* Ignore Reason-Phrase, just use Status-Code */
+
+	/* Read headers */
+	if (!(hdrs = spool_new_hdrcache()) ||
+	    spool_fill_hdrcache(s->in, NULL, hdrs, NULL)) {
+	    r = HTTP_SERVER_ERROR;
+	    if (status) *status = "Failed to read response headers";
+	    goto cleanup;
+	}
+
+	/* Read CRLF separating headers and body */
+	c = prot_getc(s->in);
+	if (c == '\r') c = prot_getc(s->in);
+	if (c != '\n') {
+	    r = HTTP_UNAVAILABLE;
+	    if (status) *status = "Missing header/body separator";
+	    goto cleanup;
+	}
+
+	/* Read body */
+	if (read_body(s->in, hdrs, NULL, &errstr)) {
+	    r = HTTP_UNAVAILABLE;
+	    if (status) *status = errstr;
+	    goto cleanup;
+	}
+
+	/* Check if this is a non-persistent connection */
+	non_persist = 0;
+	if ((hdr = spool_getheader(hdrs, "Connection")) &&
+	    !strcmp(hdr[0], "close")) {
+	    non_persist = 1;
+	}
+
+	switch (code) {
+	case 101: /* Switching Protocols */
+	    if (starttls(s)) {
+		r = HTTP_UNAVAILABLE;
+		break;
+	    }
+	    else tls_done = 1;
+	    /* Fall through as 100-Continue */
+
+	case 100: /* Continue */
+	    if (hdrs) spool_free_hdrcache(hdrs);
+	    goto response;
+
+	case 200: /* OK */
+	    if (scheme->recv_success &&
+		(serverin = scheme->recv_success(hdrs))) {
+		serverinlen = strlen(serverin);
+	    }
+	    /* Fall through and check for any other success data */
+
+	case 401: /* Unauthorized */
+	    if (!serverin) {
+		int i = 0;
+		
+		hdr = spool_getheader(hdrs, "WWW-Authenticate");
+
+		if (!scheme) {
+		    unsigned avail_auth_schemes = 0;
+		    const char *mech = NULL;
+		    size_t len;
+
+		    /* Compare authentication schemes offered in
+		     * WWW-Authenticate header(s) to what we support */
+		    buf_reset(&buf);
+		    for (i = 0; hdr && hdr[i]; i++) {
+			len = strcspn(hdr[i], " ");
+
+			for (scheme = auth_schemes; scheme->name; scheme++) {
+			    if (!strncmp(scheme->name, hdr[i], len) &&
+				!(scheme->need_persist && non_persist)) {
+				/* Tag the scheme as available */
+				avail_auth_schemes |= (1 << scheme->idx);
+
+				/* Add SASL-based schemes to SASL mech list */
+				if (scheme->saslmech) {
+				    if (buf_len(&buf)) buf_putc(&buf, ' ');
+				    buf_appendcstr(&buf, scheme->saslmech);
+				}
+				break;
+			    }
+			}
+		    }
+
+		    /* If we have a mech_conf, use it */
+		    if (mech_conf && buf_len(&buf)) {
+			char *conf = xstrdup(mech_conf);
+			char *newmechlist =
+			    intersect_mechlists(conf,
+						(char *) buf_cstring(&buf));
+
+			if (newmechlist) {
+			    buf_setcstr(&buf, newmechlist);
+			    free(newmechlist);
+			}
+			else {
+			    syslog(LOG_INFO, "%s did not offer %s",
+				   s->hostname, mech_conf);
+			    buf_reset(&buf);
+			}
+			free(conf);
+		    }
+
+		    /* Set HTTP request as specified above (REQUIRED) */
+		    httpreq.non_persist = non_persist;
+		    sasl_setprop(s->saslconn, SASL_HTTP_REQUEST, &httpreq);
+
+		    /* Try to start SASL exchange using available mechs */
+		    r = sasl_client_start(s->saslconn, buf_cstring(&buf),
+					  NULL,		/* no prompts */
+					  NULL, NULL, 	/* no initial resp */
+					  &mech);
+
+		    if (((r == SASL_OK) || (r == SASL_CONTINUE)) && mech) {
+			/* Find auth scheme associated with chosen SASL mech */
+			for (scheme = auth_schemes; scheme->name; scheme++) {
+			    if (scheme->saslmech &&
+				!strcmp(scheme->saslmech, mech)) break;
+			}
+		    }
+		    else {
+			/* No matching SASL mechs - try Basic */
+			scheme = &auth_schemes[AUTH_BASIC];
+			if (!(avail_auth_schemes & (1 << scheme->idx))) {
+			    need_tls = !tls_done;
+			    break;  /* case 401 */
+			}
+		    }
+
+		    /* Find the associated WWW-Authenticate header */
+		    for (i = 0; hdr && hdr[i]; i++) {
+			len = strcspn(hdr[i], " ");
+			if (!strncmp(scheme->name, hdr[i], len)) break;
+		    }
+		}
+
+		/* Get server challenge */
+		if (hdr && (p = strchr(hdr[i], ' '))) {
+		    serverin = ++p;
+		    serverinlen = strlen(serverin);
+		}
+	    }
+
+	    if ((r == SASL_CONTINUE) || serverin) {
+		/* Perform the next step in the auth exchange */
+
+		if (scheme->idx == AUTH_BASIC) {
+		    /* Don't care about "realm" in server challenge */
+		    const char *authid =
+			callback_getdata(s->saslconn, cb, SASL_CB_AUTHNAME);
+		    userid = callback_getdata(s->saslconn, cb, SASL_CB_USER);
+		    pass = callback_getdata(s->saslconn, cb, SASL_CB_PASS);
+
+		    buf_reset(&buf);
+		    buf_printf(&buf, "%s:%s:%s",
+			       userid ? userid : "", authid, pass);
+		    clientout = buf_cstring(&buf);
+		    clientoutlen = buf_len(&buf);
+		    r = SASL_OK;
+		}
+		else {
+		    /* Base64 decode any server challenge, if necessary */
+		    if (serverin && scheme->do_base64) {
+			r = sasl_decode64(serverin, serverinlen,
+					  base64, BASE64_BUF_SIZE, &serverinlen);
+			if (r != SASL_OK) break;
+
+			serverin = base64;
+		    }
+
+		    /* SASL mech (Digest, Negotiate, NTLM) */
+		    r = sasl_client_step(s->saslconn, serverin, serverinlen,
+					 NULL,		/* no prompts */
+					 &clientout, &clientoutlen);
+		}
+	    }
+	    break;  /* case 401 */
+
+	case 426: /* Upgrade Required */
+	    if (tls_done) {
+		r = HTTP_UNAVAILABLE;
+		if (status) *status = "TLS already active";
+	    }
+	    else need_tls = 1;
+	    break;
+
+	default:
+	    r = HTTP_UNAVAILABLE;
+	    if (status) *status = "Unknown backend server error";
+	    break;
+	}
+
+      cleanup:
+	if (hdrs) spool_free_hdrcache(hdrs);
+
+    } while (need_tls || (r == SASL_CONTINUE) || ((r == SASL_OK) && clientout));
+
+  done:
+    buf_free(&buf);
+    if (local_cb) free_callbacks(cb);
+
+    if (r && status && !*status) *status = sasl_errstring(r, NULL, NULL);
+
+    return r;
+}
+
+
+static int ping(struct backend *s)
+{
+    int r = 0, c;
+    uint32_t code;
+    static struct buf ver = BUF_INITIALIZER;
+    hdrcache_t hdrs = NULL;
+    const char **hdr, *errstr;
+
+    /* Send request to server */
+    prot_printf(s->out, "OPTIONS * HTTP/1.1\r\n");
+    prot_printf(s->out, "Host: %s\r\n", s->hostname);
+    if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
+	prot_printf(s->out, "User-Agent: %s\r\n", buf_cstring(&serverinfo));
+    }
+    prot_printf(s->out, "Content-Length: 0\r\n");
+    prot_printf(s->out, "\r\n");
+    prot_flush(s->out);
+
+    /* Status-Line = HTTP-Version SP Status-Code SP Reason-Phrase CRLF */
+    buf_reset(&ver);
+    c = getword(s->in, &ver);
+    if ((c != ' ') || strcmp(buf_cstring(&ver), HTTP_VERSION)) {
+	return HTTP_UNAVAILABLE;
+    }	    
+    c = getuint32(s->in, &code);
+    if ((c != ' ') || (code != 200)) {
+	return HTTP_UNAVAILABLE;
+    }	    
+    eatline(s->in, c);  /* Ignore Reason-Phrase, just use Status-Code */
+
+    /* Read headers */
+    if (!(hdrs = spool_new_hdrcache()) ||
+	spool_fill_hdrcache(s->in, NULL, hdrs, NULL)) {
+	r = HTTP_SERVER_ERROR;
+	goto cleanup;
+    }
+
+    /* Check if this is a non-persistent connection */
+    if ((hdr = spool_getheader(hdrs, "Connection")) &&
+	!strcmp(hdr[0], "close")) {
+	r = HTTP_SERVER_ERROR;
+	goto cleanup;
+    }
+
+    /* Read CRLF separating headers and body */
+    c = prot_getc(s->in);
+    if (c == '\r') c = prot_getc(s->in);
+    if (c != '\n') {
+	r = HTTP_UNAVAILABLE;
+	goto cleanup;
+    }
+
+    /* Read body */
+    if (read_body(s->in, hdrs, NULL, &errstr)) {
+	r = HTTP_UNAVAILABLE;
+	goto cleanup;
+    }
+
+  cleanup:
+    if (hdrs) spool_free_hdrcache(hdrs);
+
+    return r;
+}
+
+
+static int logout(struct backend *s __attribute__((unused)))
+{
+    /* Nothing to send, client just closes connection */
+    return 0;
+}
+
+
+static int starttls(struct backend *s)
+{
+#ifndef HAVE_SSL
+    return -1;
+#else
+    int r;
+    int *layerp;
+    char *auth_id;
+    sasl_ssf_t ssf;
+
+    r = tls_init_clientengine(5, "", "");
+    if (r == -1) return -1;
+
+    /* SASL and openssl have different ideas about whether ssf is signed */
+    layerp = (int *) &ssf;
+    r = tls_start_clienttls(s->in->fd, s->out->fd, layerp, &auth_id,
+			    &s->tlsconn, &s->tlssess);
+    if (r == -1) return -1;
+
+    r = sasl_setprop(s->saslconn, SASL_SSF_EXTERNAL, &ssf);
+    if (r == SASL_OK)
+	r = sasl_setprop(s->saslconn, SASL_AUTH_EXTERNAL, auth_id);
+    if (auth_id) free(auth_id);
+    if (r != SASL_OK) return -1;
+
+    prot_settls(s->in,  s->tlsconn);
+    prot_settls(s->out, s->tlsconn);
+
+    return 0;
+#endif /* HAVE_SSL */
+}
+
+
+/* proxy mboxlist_lookup; on misses, it asks the listener for this
+ * machine to make a roundtrip to the master mailbox server to make
+ * sure it's up to date
+ */
+int mlookup(const char *name, char **server, char **aclp, void *tid)
+{
+    struct mboxlist_entry mbentry;
+    int r;
+
+    r = mboxlist_lookup(name, &mbentry, tid);
+    if (r == IMAP_MAILBOX_NONEXISTENT && config_mupdate_server) {
+	kick_mupdate();
+	r = mboxlist_lookup(name, &mbentry, tid);
+    }
+
+    if (aclp) *aclp = mbentry.acl;
+    if (server) {
+	*server = NULL;
+	if (mbentry.mbtype & MBTYPE_REMOTE) {
+	    /* xxx hide the fact that we are storing partitions */
+	    char *c;
+	    *server = mbentry.partition;
+	    c = strchr(*server, '!');
+	    if (c) *c = '\0';
+	}
+    }
+
+    return r;
+}
