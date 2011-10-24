@@ -190,7 +190,9 @@ sub _binary
     my @cmd;
     my $valground = 0;
 
-    if ($self->{valgrind} && !($name =~ m/\.pl$/))
+    if ($self->{valgrind} &&
+        !($name =~ m/\.pl$/) &&
+	!($name =~ m/^\//))
     {
 	my $valgrind_logdir = $self->{basedir} . '/vglogs';
 	my $valgrind_suppressions = abs_path('vg.supp');
