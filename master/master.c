@@ -1318,6 +1318,7 @@ static void process_msg(const int si, struct notify_message *msg)
 	    c->service_state = SERVICE_STATE_BUSY;
 	    s->nconnections++;
 	    s->ready_workers--;
+	    break;
 
 	case SERVICE_STATE_DEAD:
 	    /* echoes from the past... do the accounting */
