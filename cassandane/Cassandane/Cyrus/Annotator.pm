@@ -45,6 +45,7 @@ package Cassandane::Cyrus::Annotator;
 use base qw(Cassandane::Cyrus::TestCase);
 use Cwd qw(abs_path);
 use Cassandane::Util::Log;
+use Cassandane::Util::Wait;
 
 sub new
 {
@@ -66,8 +67,8 @@ sub set_up
     my $pidfile = $self->{instance}->{basedir} . '/conf/socket/annotator.pid';
     # Start daemon
     $self->{instance}->run_command({ cyrus => 1 }, $daemon);
-    Cassandane::Instance::_timed_wait(sub { return ( -e $sock ); },
-				      description => 'annotator daemon to be ready');
+    timed_wait(sub { return ( -e $sock ); },
+	       description => 'annotator daemon to be ready');
     $self->{annotator_pidfile} = $pidfile;
 }
 

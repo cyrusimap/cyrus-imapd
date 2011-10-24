@@ -46,12 +46,12 @@ use File::Path qw(mkpath rmtree);
 use File::Find qw(find);
 use File::Basename;
 use POSIX qw(geteuid :signal_h :sys_wait_h);
-use Time::HiRes qw(sleep gettimeofday tv_interval);
 use DateTime;
 use BSD::Resource;
 use Cwd qw(abs_path getcwd);
 use Cassandane::Util::DateTime qw(to_iso8601);
 use Cassandane::Util::Log;
+use Cassandane::Util::Wait;
 use Cassandane::Config;
 use Cassandane::Service;
 use Cassandane::ServiceFactory;
@@ -329,34 +329,6 @@ sub _fix_ownership
     find(sub { chown($uid, $gid, $File::Find::name) }, $path);
 }
 
-sub _timed_wait
-{
-    my ($condition, %p) = @_;
-    $p{delay} = 0.010		# 10 millisec
-	unless defined $p{delay};
-    $p{maxwait} = 20.0
-	unless defined $p{maxwait};
-    $p{description} = 'unknown condition'
-	unless defined $p{description};
-
-    my $start = [gettimeofday()];
-    my $delayed = 0;
-    while ( ! $condition->() )
-    {
-	die "Timed out waiting for " . $p{description}
-	    if (tv_interval($start, [gettimeofday()]) > $p{maxwait});
-	sleep($p{delay});
-	$delayed = 1;
-	$p{delay} *= 1.5;	# backoff
-    }
-
-    xlog "_timed_wait: waited " .
-	tv_interval($start, [gettimeofday()]) .
-	" sec for " .
-	$p{description}
-	if ($delayed);
-}
-
 sub _read_pid_file
 {
     my ($self, $file) = @_;
@@ -414,7 +386,7 @@ sub _start_master
     # wait until the pidfile exists and contains a PID
     # that we can verify is still alive.
     xlog "_start_master: waiting for PID file";
-    _timed_wait(sub { $self->_read_pid_file($self->_pid_file()) },
+    timed_wait(sub { $self->_read_pid_file($self->_pid_file()) },
 	        description => "the master PID file to exist");
     xlog "_start_master: PID file present and correct";
 
@@ -426,7 +398,7 @@ sub _start_master
     foreach my $srv (values %{$self->{services}})
     {
 	next unless $srv->{port} =~ m/^\d+$/;
-	_timed_wait(sub { $srv->is_listening() },
+	timed_wait(sub { $srv->is_listening() },
 	        description => $srv->address() . " to be in LISTEN state");
     }
     xlog "_start_master: all services listening";
@@ -475,7 +447,7 @@ sub _stop_pid
     xlog "_stop_pid: sending SIGQUIT to $pid";
     kill(SIGQUIT, $pid);
     eval {
-	_timed_wait(sub { kill(0, $pid) == 0 });
+	timed_wait(sub { kill(0, $pid) == 0 });
     };
     if ($@)
     {
@@ -791,7 +763,7 @@ sub quota_Z_wait
     my ($self, $mboxname) = @_;
     my $filename = $self->_quota_Z_file($mboxname);
 
-    _timed_wait(sub { return (! -f $filename); },
+    timed_wait(sub { return (! -f $filename); },
 	        description => "quota -Z to be finished with $mboxname");
 }
 

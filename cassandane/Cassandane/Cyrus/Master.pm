@@ -42,15 +42,18 @@
 use strict;
 use warnings;
 package Cassandane::Cyrus::Master;
+# Note, we deliberately don't use Cassandane::Cyrus::TestCase
+# because we need to do strange and interesting things to the
+# Instance we manage.
 use base qw(Cassandane::Unit::TestCase);
 use POSIX qw(getcwd);
 use DateTime;
 use Cassandane::Util::Log;
+use Cassandane::Util::Wait;
 use Cassandane::Instance;
 use Cassandane::Service;
 use Cassandane::Config;
 use IO::Socket::INET;
-use Time::HiRes qw(usleep);
 
 my $lemming_bin = getcwd() . '/utils/lemming';
 
@@ -100,9 +103,8 @@ sub lemming_push
     $lemming->{sock}->close();
 
     # Wait for the master process to wake up and reap the lemming.
-    Cassandane::Instance::_timed_wait(
-	sub { kill(0, $lemming->{pid}) == 0 },
-	description => "master to reap lemming $lemming->{pid}");
+    timed_wait(sub { kill(0, $lemming->{pid}) == 0 },
+	       description => "master to reap lemming $lemming->{pid}");
 }
 
 sub lemming_census
@@ -319,7 +321,7 @@ sub test_multi_prefork
     $inst->start();
 
     # wait for lemmings to be preforked
-    Cassandane::Instance::_timed_wait(
+    timed_wait(
 	sub
 	{
 	    my $census = lemming_census($inst);
