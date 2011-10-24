@@ -1838,7 +1838,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
 	ATTRIB_TYPE_BOOLEAN,
 	BACKEND_ONLY,
 	ATTRIB_VALUE_SHARED,
-	ACL_ADMIN,
+	0,
 	annotation_get_mailboxopt,
 	annotation_set_mailboxopt,
 	(void *)OPT_IMAP_DUPDELIVER
@@ -1893,7 +1893,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
 	ATTRIB_TYPE_BOOLEAN,
 	BACKEND_ONLY,
 	ATTRIB_VALUE_SHARED,
-	ACL_ADMIN,
+	0,
 	annotation_get_mailboxopt,
 	annotation_set_mailboxopt,
 	(void *)OPT_POP3_NEW_UIDL
@@ -1902,7 +1902,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
 	ATTRIB_TYPE_STRING,
 	BACKEND_ONLY,
 	ATTRIB_VALUE_SHARED,
-	ACL_ADMIN,
+	0,
 	annotation_get_pop3showafter,
 	annotation_set_pop3showafter,
 	NULL
@@ -1921,7 +1921,7 @@ static const annotate_entrydesc_t mailbox_builtin_entries[] =
 	ATTRIB_TYPE_BOOLEAN,
 	BACKEND_ONLY,
 	ATTRIB_VALUE_SHARED,
-	ACL_ADMIN,
+	0,
 	annotation_get_mailboxopt,
 	annotation_set_mailboxopt,
         (void *)OPT_IMAP_SHAREDSEEN
@@ -2000,7 +2000,7 @@ static const annotate_entrydesc_t server_builtin_entries[] =
 	ATTRIB_TYPE_STRING,
 	PROXY_AND_BACKEND,
 	ATTRIB_VALUE_SHARED,
-	ACL_ADMIN,
+	0,
 	annotation_get_fromfile,
 	annotation_set_tofile,
 	(void *)"motd"
@@ -2027,7 +2027,7 @@ static const annotate_entrydesc_t server_builtin_entries[] =
 	ATTRIB_TYPE_STRING,
 	PROXY_AND_BACKEND,
 	ATTRIB_VALUE_SHARED,
-	ACL_ADMIN,
+	0,
 	annotation_get_fromfile,
 	annotation_set_tofile,
 	(void *)"shutdown"
