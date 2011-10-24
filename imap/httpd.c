@@ -139,14 +139,6 @@ extern int opterr;
 static SSL *tls_conn;
 #endif /* HAVE_SSL */
 
-#ifdef SASL_NEED_HTTP
-  #define HTTP_DIGEST_MECH "DIGEST-MD5"
-  #define SASL_SERVER_FLAGS (SASL_NEED_HTTP | SASL_SUCCESS_DATA)
-#else
-  #define HTTP_DIGEST_MECH NULL  /* not supported by our SASL version */
-  #define SASL_SERVER_FLAGS SASL_SUCCESS_DATA
-#endif /* SASL_NEED_HTTP */
-
 sasl_conn_t *httpd_saslconn; /* the sasl connection context */
 
 int httpd_timeout;
@@ -168,40 +160,22 @@ int httpd_tls_done = 0;
 int httpd_tls_required = 0;
 unsigned avail_auth_schemes = 0; /* bitmask of available aith schemes */
 
-static struct buf serverinfo = BUF_INITIALIZER;
+struct buf serverinfo = BUF_INITIALIZER;
 
-struct auth_scheme_t {
-    unsigned idx;		/* Index value of the scheme */
-    const char *name;		/* HTTP auth scheme name */
-    const char *saslmech;	/* Corresponding SASL mech name */
-    unsigned need_persist;	/* Need persistent connection? */
-    unsigned is_server_first;	/* Is SASL mech server-first? */
-    unsigned do_base64;		/* Base64 encode/decode auth data? */
-    void (*success)(const char *name,	/* Optional fn to handle success data */
-		    const char *data);	/* Default is to use WWW-Auth header */
-};
-
-static void digest_success(const char *name __attribute__((unused)),
-			   const char *data)
+static void digest_send_success(const char *name __attribute__((unused)),
+				const char *data)
 {
     prot_printf(httpd_out, "Authentication-Info: %s\r\n", data);
 }
 
-/* Index into available schemes */
-enum {
-    AUTH_BASIC = 0,
-    AUTH_DIGEST,
-    AUTH_NEGOTIATE,
-    AUTH_NTLM
-};
-
 /* List of HTTP auth schemes that we support */
-static struct auth_scheme_t auth_schemes[] = {
-    { AUTH_BASIC, "Basic", NULL, 0, 1, 1, NULL },
-    { AUTH_DIGEST, "Digest", HTTP_DIGEST_MECH, 0, 1, 0, &digest_success },
-    { AUTH_NEGOTIATE, "Negotiate", NULL /* not impl yet */, 0, 0, 1, NULL },
-    { AUTH_NTLM, "NTLM", "NTLM", 1, 0, 1, NULL },
-    { -1, NULL, NULL, -1, -1, -1, NULL }
+struct auth_scheme_t auth_schemes[] = {
+    { AUTH_BASIC, "Basic", NULL, 0, 1, 1, NULL, NULL },
+    { AUTH_DIGEST, "Digest", HTTP_DIGEST_MECH, 0, 1, 0,
+      &digest_send_success, digest_recv_success },
+    { AUTH_SPNEGO, "Negotiate", NULL /* not impl yet */, 0, 0, 1, NULL, NULL },
+    { AUTH_NTLM, "NTLM", "NTLM", 1, 0, 1, NULL, NULL },
+    { -1, NULL, NULL, -1, -1, -1, NULL, NULL }
 };
 
 
@@ -216,8 +190,15 @@ const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 /* current namespace */
 struct namespace httpd_namespace;
 
-/* PROXY stuff */
+/* PROXY STUFF */
+/* we want a list of our outgoing connections here and which one we're
+   currently piping */
+
+/* the current server most commands go to */
 struct backend *backend_current = NULL;
+
+/* our cached connections */
+struct backend **backend_cached = NULL;
 
 /* end PROXY stuff */
 
@@ -238,8 +219,6 @@ static int parse_uri(const char *meth, const char *uri,
 		     struct request_target_t *tgt, const char **errstr);
 static int parse_path(struct request_target_t *tgt, const char **errstr);
 static struct accept *parse_accept(const char *hdr);
-static int read_body(struct protstream *pin,
-		     hdrcache_t hdrs, struct buf *body, const char **errstr);
 static int http_auth(const char *creds, struct auth_challenge_t *chal);
 
 static int meth_acl(struct transaction_t *txn);
@@ -254,8 +233,7 @@ static int meth_put(struct transaction_t *txn);
 static int meth_report(struct transaction_t *txn);
 
 
-static struct 
-{
+static struct {
     char *ipremoteport;
     char *iplocalport;
     sasl_ssf_t ssf;
@@ -277,17 +255,23 @@ struct accept {
 
 static void httpd_reset(void)
 {
+    int i;
     int bytes_in = 0;
     int bytes_out = 0;
 
     proc_cleanup();
 
-    /* close backend connection */
-    if (backend_current) {
-	backend_disconnect(backend_current);
-	free(backend_current);
-	backend_current = NULL;
+    /* close backend connections */
+    i = 0;
+    while (backend_cached && backend_cached[i]) {
+	proxy_downserver(backend_cached[i]);
+	free(backend_cached[i]->context);
+	free(backend_cached[i]);
+	i++;
     }
+    if (backend_cached) free(backend_cached);
+    backend_cached = NULL;
+    backend_current = NULL;
 
     if (httpd_in) {
 	prot_NONBLOCK(httpd_in);
@@ -429,7 +413,8 @@ int service_init(int argc __attribute__((unused)),
 
     /* Construct serverinfo string */
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
-	buf_printf(&serverinfo, "Cyrus/%s Cyrus-SASL/%u.%u.%u", cyrus_version(),
+	buf_printf(&serverinfo, "Cyrus%s/%s Cyrus-SASL/%u.%u.%u",
+		   config_mupdate_server ? "-Murder" : "", cyrus_version(),
 		   SASL_VERSION_MAJOR, SASL_VERSION_MINOR, SASL_VERSION_STEP);
 #ifdef HAVE_SSL
 	buf_printf(&serverinfo, " OpenSSL/%s", SHLIB_VERSION_NUMBER);
@@ -506,7 +491,7 @@ int service_main(int argc __attribute__((unused)),
 
     /* other params should be filled in */
     if (sasl_server_new("http", config_servername, NULL, NULL, NULL, NULL,
-			SASL_SERVER_FLAGS, &httpd_saslconn) != SASL_OK)
+			SASL_USAGE_FLAGS, &httpd_saslconn) != SASL_OK)
 	fatal("SASL failed initializing: sasl_server_new()",EC_TEMPFAIL); 
 
     /* will always return something valid */
@@ -594,6 +579,7 @@ void usage(void)
  */
 void shut_down(int code)
 {
+    int i;
     int bytes_in = 0;
     int bytes_out = 0;
 
@@ -601,11 +587,15 @@ void shut_down(int code)
 
     proc_cleanup();
 
-    /* close backend connection */
-    if (backend_current) {
-	backend_disconnect(backend_current);
-	free(backend_current);
+    /* close backend connections */
+    i = 0;
+    while (backend_cached && backend_cached[i]) {
+	proxy_downserver(backend_cached[i]);
+	free(backend_cached[i]->context);
+	free(backend_cached[i]);
+	i++;
     }
+    if (backend_cached) free(backend_cached);
 
     sync_log_done();
 
@@ -757,7 +747,7 @@ static int reset_saslconn(sasl_conn_t **conn)
     sasl_dispose(conn);
     /* do initialization typical of service_main */
     ret = sasl_server_new("http", config_servername, NULL, NULL, NULL, NULL,
-			  SASL_SERVER_FLAGS, conn);
+			  SASL_USAGE_FLAGS, conn);
     if(ret != SASL_OK) return ret;
 
     if(saslprops.ipremoteport)
@@ -948,7 +938,7 @@ static void cmdloop(void)
 	     userdeny(httpd_userid, config_ident, buf, sizeof(buf)))) {
 	    txn.errstr = buf;
 	    txn.flags |= HTTP_CLOSE;
-	    error_response(HTTP_UNAVAILABLE, &txn);
+	    response_header(HTTP_UNAVAILABLE, &txn);
 	    shut_down(0);
 	}
 
@@ -1336,8 +1326,8 @@ static int parse_path(struct request_target_t *tgt, const char **errstr)
  * Read the body of a request or response.
  * Handles identity and chunked encoding only.
  */
-static int read_body(struct protstream *pin,
-		     hdrcache_t hdrs, struct buf *body, const char **errstr)
+int read_body(struct protstream *pin,
+	      hdrcache_t hdrs, struct buf *body, const char **errstr)
 {
     const char **hdr;
     unsigned long len = 0, chunk;
@@ -1665,9 +1655,10 @@ void response_header(long code, struct transaction_t *txn)
 	}
     } else if (auth_chal->param) {
 	/* Authentication completed with success data */
-	if (auth_chal->scheme->success) {
+	if (auth_chal->scheme->send_success) {
 	    /* Special handling of success data for this scheme */
-	    auth_chal->scheme->success(auth_chal->scheme->name, auth_chal->param);
+	    auth_chal->scheme->send_success(auth_chal->scheme->name,
+					    auth_chal->param);
 	}
 	else {
 	    /* Default handling of success data */
@@ -1926,7 +1917,7 @@ static int http_auth(const char *creds, struct auth_challenge_t *chal)
 	}
 	if (!scheme || !scheme->name) {
 	    /* Didn't find a matching scheme that is available */
-	    syslog(LOG_WARNING, "Unknown auth scheme '%.*s'", slen, creds);
+	    syslog(LOG_DEBUG, "Unknown auth scheme '%.*s'", slen, creds);
 	    return SASL_NOMECH;
 	}
 	/* We found it! */
@@ -1947,7 +1938,7 @@ static int http_auth(const char *creds, struct auth_challenge_t *chal)
 	clientin = base64;
     }
 
-    if (scheme->name[0] == 'B') {
+    if (scheme->idx == AUTH_BASIC) {
 	/* Basic (plaintext) authentication */
 	char *authzid = NULL, *authid, *pass;
 

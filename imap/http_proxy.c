@@ -556,7 +556,7 @@ static int starttls(struct backend *s)
  * machine to make a roundtrip to the master mailbox server to make
  * sure it's up to date
  */
-int mlookup(const char *name, char **server, char **aclp, void *tid)
+int http_mlookup(const char *name, char **server, char **aclp, void *tid)
 {
     struct mboxlist_entry mbentry;
     int r;
@@ -578,6 +578,102 @@ int mlookup(const char *name, char **server, char **aclp, void *tid)
 	    if (c) *c = '\0';
 	}
     }
+
+    return r;
+}
+
+/* Write end-to-end header (ignoring hop-by-hop) from cache to protstream. */
+static void write_cachehdr(const char *name, const char *contents, void *rock)
+{
+    struct protstream *pout = (struct protstream *) rock;
+    const char **hdr, *hop_by_hop[] =
+	{ "authorization", "connection", "content-length",
+	  "keep-alive", "server", "transfer-encoding", "upgrade", NULL };
+
+    for (hdr = hop_by_hop; *hdr && strcmp(name, *hdr); hdr++);
+
+    if (!*hdr) prot_printf(pout, "%s: %s\r\n", name, contents);
+
+}
+
+/*
+ * Proxy (pipe) a client-request/server-response to/from a backend.
+ *
+ * XXX  This function currently buffers the response headers and body.
+ *      Should work on sending them to the client on-the-fly.
+ */
+int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
+{
+    char statline[2048];
+    int r = 0, c = EOF;
+    hdrcache_t resp_hdrs = NULL;
+    struct buf resp_body = BUF_INITIALIZER;
+
+    /*
+     * Send client request to backend:
+     *
+     * - Piece the Request_line back together
+     * - Use all cached end-to-end headers from client
+     * - Body is buffered, so send use "identity" TE
+     */
+    prot_printf(be->out, "%s %s", txn->meth, txn->req_tgt.path);
+    if (*txn->req_tgt.query) {
+	prot_printf(be->out, "?%s", txn->req_tgt.query);
+    }
+    prot_printf(be->out, " %s\r\n", HTTP_VERSION);
+    spool_enum_hdrcache(txn->req_hdrs, &write_cachehdr, be->out);
+    prot_printf(be->out, "Content-Length: %u\r\n\r\n",
+		buf_len(&txn->req_body));
+    prot_putbuf(be->out, &txn->req_body);
+    prot_flush(be->out);
+
+    /* Read response from backend */
+    if (!(resp_hdrs = spool_new_hdrcache())) {
+	r = HTTP_SERVER_ERROR;
+	txn->flags |= HTTP_CLOSE;
+	txn->errstr = "Unable to create header cache for backend response";
+	goto cleanup;
+    }
+    if (!prot_fgets(statline, sizeof(statline), be->in) ||
+	spool_fill_hdrcache(be->in, NULL, resp_hdrs, NULL)) {
+	r = HTTP_UNAVAILABLE;
+	txn->errstr = "Unable to read status-line/headers from backend";
+    }
+    eatline(be->in, c); /* CRLF separating headers & body */
+    if ((r = read_body(be->in, resp_hdrs, &resp_body, &txn->errstr))) {
+	r = HTTP_UNAVAILABLE;
+	goto cleanup;
+    }
+
+    /*
+     * Send response to client:
+     *
+     * - Use Status-Line from backend
+     * - Add our own hop-by-hop headers
+     * - Use all cached end-to-end headers from backend
+     * - Body is buffered, so send use "identity" TE
+     */
+    prot_printf(httpd_out, "%s", statline);
+    if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
+	prot_printf(httpd_out, "Server: %s\r\n", buf_cstring(&serverinfo));
+    }
+    if (!httpd_tls_done && tls_enabled()) {
+	prot_printf(httpd_out, "Upgrade: TLS/1.0\r\n");
+    }
+    if (txn->flags & HTTP_CLOSE)
+	prot_printf(httpd_out, "Connection: close\r\n");
+    else {
+	prot_printf(httpd_out, "Keep-Alive: timeout=%d\r\n", httpd_timeout);
+	prot_printf(httpd_out, "Connection: Keep-Alive\r\n");
+    }
+    spool_enum_hdrcache(resp_hdrs, &write_cachehdr, httpd_out);
+    prot_printf(httpd_out, "Content-Length: %u\r\n\r\n",
+		buf_len(&resp_body));
+    prot_putbuf(httpd_out, &resp_body);
+
+  cleanup:
+    buf_free(&resp_body);
+    if (resp_hdrs) spool_free_hdrcache(resp_hdrs);
 
     return r;
 }

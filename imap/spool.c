@@ -414,6 +414,23 @@ void spool_free_hdrcache(hdrcache_t cache)
     free(cache);
 }
 
+void spool_enum_hdrcache(hdrcache_t cache,
+			 void (*proc)(const char *, const char *, void *),
+			 void *rock)
+{
+    int i, j;
+
+    if (!cache) return;
+
+    for (i = 0; i < HEADERCACHESIZE; i++) {
+	if (cache[i]) {
+	    for (j = 0; j < cache[i]->ncontents; j++) {
+		(*proc)(cache[i]->name, cache[i]->contents[j], rock);
+	    }
+	}
+    }
+}
+
 /* copies the message from fin to fout, massaging accordingly: 
    . newlines are fiddled to \r\n
    . "." terminates 

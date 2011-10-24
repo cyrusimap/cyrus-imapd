@@ -217,7 +217,7 @@ static int do_starttls(struct backend *s, struct tls_cmd_t *tls_cmd)
 #endif /* HAVE_SSL */
 }
 
-static char *intersect_mechlists( char *config, char *server )
+char *intersect_mechlists( char *config, char *server )
 {
     char *newmechlist = xzmalloc( strlen( config ) + 1 );
     char *cmech = NULL, *smech = NULL, *s;

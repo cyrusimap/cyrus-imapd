@@ -56,12 +56,14 @@
 #include "global.h"
 #include "httpd.h"
 #include "http_err.h"
+#include "http_proxy.h"
 #include "imap_err.h"
 #include "mailbox.h"
 #include "map.h"
 #include "mboxlist.h"
 #include "message.h"
 #include "parseaddr.h"
+#include "proxy.h"
 #include "rfc822date.h"
 #include "seen.h"
 #include "util.h"
@@ -129,7 +131,7 @@ const struct namespace_t namespace_rss = {
 static int meth_get(struct transaction_t *txn)
 {
     int ret = 0, r;
-    char mailboxname[MAX_MAILBOX_BUFFER+1], section[MAX_SECTION_LEN+1];
+    char *server, mailboxname[MAX_MAILBOX_BUFFER+1], section[MAX_SECTION_LEN+1];
     uint32_t uid;
     struct mailbox *mailbox = NULL;
 
@@ -150,6 +152,32 @@ static int meth_get(struct transaction_t *txn)
 	}
 	else return list_feeds(txn, def_template, strlen(def_template));
     }
+
+    /* Locate the mailbox */
+    if ((r = http_mlookup(mailboxname, &server, NULL, NULL))) {
+	syslog(LOG_ERR, "mlookup(%s) failed: %s",
+	       mailboxname, error_message(r));
+	txn->errstr = error_message(r);
+
+	switch (r) {
+	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
+	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
+	default: return HTTP_SERVER_ERROR;
+	}
+    }
+
+    if (server) {
+	/* Remote mailbox */
+	struct backend *be;
+
+	be = proxy_findserver(server, &http_protocol, httpd_userid,
+			      &backend_cached, NULL, NULL, httpd_in);
+	if (!be) return HTTP_UNAVAILABLE;
+
+	return http_pipe_req_resp(be, txn);
+    }
+
+    /* Local Mailbox */
 
     /* Open mailbox for reading */
     if ((r = mailbox_open_irl(mailboxname, &mailbox))) {
@@ -296,16 +324,15 @@ static int list_cb(char *name, int matchlen, int maycreate, void *rock)
     struct node *last = lrock->last;
 
     if (name) {
-	/* Lookup the mailbox and make sure its readable */
-	struct mboxlist_entry entry;
+	char *acl;
 
-	mboxlist_lookup(name, &entry, NULL);
-	if (!entry.acl ||
-	    !(cyrus_acl_myrights(httpd_authstate, entry.acl) & ACL_READ))
-	    return 0;
-	
 	/* Don't list deleted mailboxes */
 	if (mboxname_isdeletedmailbox(name)) return 0;
+
+	/* Lookup the mailbox and make sure its readable */
+	http_mlookup(name, NULL, &acl, NULL);
+	if (!acl || !(cyrus_acl_myrights(httpd_authstate, acl) & ACL_READ))
+	    return 0;
     }
 
     if (name &&

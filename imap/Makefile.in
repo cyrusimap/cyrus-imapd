@@ -256,11 +256,13 @@ sync_server: sync_server.o sync_support.o \
 	imapparse.o tls.o $(SERVICE) libimap.a mutex_fake.o \
 	$(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
-httpd: httpd.o http_err.o http_rss.o dav_prop.o caldav_db.o proxy.o backend.o \
-	 index.o spool.o tls.o mutex_fake.o libimap.a $(DEPLIBS) $(SERVICE)
+httpd: httpd.o http_err.o http_rss.o dav_prop.o caldav_db.o http_proxy.o \
+	 proxy.o backend.o index.o spool.o tls.o mutex_fake.o libimap.a \
+	 $(DEPLIBS) $(SERVICE)
 	$(CC) $(LDFLAGS) -o httpd httpd.o http_err.o http_rss.o dav_prop.o \
-	 caldav_db.o proxy.o backend.o index.o spool.o tls.o mutex_fake.o \
-	 libimap.a $(SERVICE) $(DEPLIBS) $(LIBS) $(LIB_WRAP) -lxml2 -lical
+	 caldav_db.o http_proxy.o proxy.o backend.o index.o spool.o tls.o \
+	 mutex_fake.o libimap.a $(SERVICE) $(DEPLIBS) $(LIBS) $(LIB_WRAP) \
+	 -lxml2 -lical
 
 ### Command Line Utilities
 arbitron: arbitron.o $(CLIOBJS) libimap.a $(DEPLIBS)

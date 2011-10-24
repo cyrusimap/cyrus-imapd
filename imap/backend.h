@@ -90,6 +90,7 @@ struct backend *backend_connect(struct backend *cache, const char *server,
 				sasl_callback_t *cb, const char **auth_status);
 int backend_ping(struct backend *s);
 void backend_disconnect(struct backend *s);
+char *intersect_mechlists(char *config, char *server);
 
 #define CAPA(s, c) ((s)->capability & (c))
 
