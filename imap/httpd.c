@@ -192,7 +192,7 @@ static void cmdloop(void);
 static struct accept *parse_accept(const char *hdr);
 static int http_auth(const char *creds, struct auth_challenge_t *chal);
 
-static int meth_get_doc(struct transaction_t *txn);
+static int meth_get(struct transaction_t *txn);
 
 
 static struct {
@@ -777,8 +777,8 @@ const struct namespace_t namespace_default = {
 	NULL,			/* ACL		*/
 	NULL,			/* COPY		*/
 	NULL,			/* DELETE	*/
-	&meth_get_doc,		/* GET		*/
-	&meth_get_doc,		/* HEAD		*/
+	&meth_get,		/* GET		*/
+	&meth_get,		/* HEAD		*/
 	NULL,			/* LOCK		*/
 	NULL,			/* MKCALENDAR	*/
 	NULL,			/* MKCOL	*/
@@ -2037,7 +2037,7 @@ int check_precond(const char *meth, const char *etag, time_t lastmod,
 
 
 /* Perform a GET/HEAD request */
-static int meth_get_doc(struct transaction_t *txn)
+static int meth_get(struct transaction_t *txn)
 {
     return get_doc(txn, NULL);
 }
