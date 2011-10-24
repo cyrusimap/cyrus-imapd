@@ -1873,7 +1873,6 @@ bit32 mailbox_index_header_to_buf(struct index_header *i, unsigned char *buf)
 
 int mailbox_commit_quota(struct mailbox *mailbox)
 {
-    int r;
     int res;
     int changed = 0;
     quota_t quota_usage[QUOTA_NUMRESOURCES];
@@ -1901,8 +1900,8 @@ int mailbox_commit_quota(struct mailbox *mailbox)
 
     assert(mailbox_index_islocked(mailbox, 1));
 
-    r = quota_update_useds(mailbox->quotaroot, quota_usage,
-			   (mailbox->i.options & OPT_MAILBOX_QUOTA_SCANNED));
+    quota_update_useds(mailbox->quotaroot, quota_usage,
+		       (mailbox->i.options & OPT_MAILBOX_QUOTA_SCANNED));
     /* XXX - fail upon issue?  It's tempting */
 
     return 0;
