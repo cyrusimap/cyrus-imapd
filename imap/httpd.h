@@ -242,12 +242,15 @@ extern struct protstream *httpd_out;
 extern int httpd_tls_done;
 extern int httpd_timeout;
 extern int httpd_userisadmin;
+extern int httpd_userisproxyadmin;
 extern char *httpd_userid;
 extern struct auth_state *httpd_authstate;
 extern struct namespace httpd_namespace;
 
-extern const char *http_statusline(long code);
+extern int parse_uri(const char *meth, const char *uri,
+		     struct request_target_t *tgt, const char **errstr);
 extern int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname);
+extern const char *http_statusline(long code);
 extern void response_header(long code, struct transaction_t *txn);
 extern void error_response(long code, struct transaction_t *txn);
 extern void html_response(long code, struct transaction_t *txn, xmlDocPtr html);
@@ -256,6 +259,7 @@ extern void write_body(long code, struct transaction_t *txn,
 		       const char *buf, unsigned len);
 extern int meth_options(struct transaction_t *txn);
 extern int get_doc(struct transaction_t *txn, filter_proc_t filter);
+extern int meth_propfind(struct transaction_t *txn);
 extern int check_precond(const char *meth, const char *etag, time_t lastmod,
 			 uint32_t dest, hdrcache_t hdrcache);
 extern int read_body(struct protstream *pin,
