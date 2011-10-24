@@ -1413,7 +1413,8 @@ int sync_mailbox(struct mailbox *mailbox,
     char sync_crc[128];
     annotate_db_t *user_annot_db = NULL;
 
-    annotate_getdb(mailbox->name, &user_annot_db);
+    r = annotate_getdb(mailbox->name, &user_annot_db);
+    if (r) goto done;
 
     r = sync_crc_calc(mailbox, sync_crc, sizeof(sync_crc));
     if (r) goto done;

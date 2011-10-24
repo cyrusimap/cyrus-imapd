@@ -1220,6 +1220,7 @@ static int mailbox_full_update(const char *mboxname)
 {
     const char *cmd = "FULLMAILBOX";
     struct mailbox *mailbox = NULL;
+    annotate_db_t *user_annot_db = NULL;
     int r;
     struct dlist *kin = NULL;
     struct dlist *kr = NULL;
@@ -1276,6 +1277,11 @@ static int mailbox_full_update(const char *mboxname)
 
     /* we'll be updating it! */
     r = mailbox_open_iwl(mboxname, &mailbox);
+    if (r) goto done;
+
+    /* grab a lock on the annotations too, so we don't open them
+     * many times */
+    r = annotate_getdb(mailbox->name, &user_annot_db);
     if (r) goto done;
 
     /* if local UIDVALIDITY is lower, copy from remote, otherwise
@@ -1357,7 +1363,8 @@ static int mailbox_full_update(const char *mboxname)
     }
 
 done:
-    if (mailbox) mailbox_close(&mailbox);
+    annotate_putdb(&user_annot_db);
+    mailbox_close(&mailbox);
     dlist_free(&kin);
     dlist_free(&kaction);
     dlist_free(&kexpunge);
