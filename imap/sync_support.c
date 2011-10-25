@@ -485,7 +485,7 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
     result->last_uid = last_uid;
     result->highestmodseq = highestmodseq;
     result->options = options;
-    result->sync_crc = xstrdup(crc);
+    result->sync_crc = (crc) ? xstrdup(crc) : NULL;
     result->recentuid = recentuid;
     result->recenttime = recenttime;
     result->pop3_last_login = pop3_last_login;
@@ -1413,9 +1413,6 @@ int sync_mailbox(struct mailbox *mailbox,
     char sync_crc[128];
     annotate_db_t *user_annot_db = NULL;
 
-    r = annotate_getdb(mailbox->name, &user_annot_db);
-    if (r) goto done;
-
     r = sync_crc_calc(mailbox, sync_crc, sizeof(sync_crc));
     if (r) goto done;
 
@@ -1513,8 +1510,6 @@ int sync_mailbox(struct mailbox *mailbox,
     }
 
 done:
-    annotate_putdb(&user_annot_db);
-
     return r;
 }
 
@@ -1792,7 +1787,6 @@ int apply_annotations(struct mailbox *mailbox,
     const struct buf *value;
     int r = 0;
     int diff;
-    int started_txn = 0;
     annotate_state_t *astate = annotate_state_new();
 
     annotate_state_set_message(astate, mailbox, record ? record->uid : 0);
@@ -1827,24 +1821,10 @@ int apply_annotations(struct mailbox *mailbox,
 		continue;   /* same value, skip */
 	}
 
-	if (!started_txn) {
-	    r = annotatemore_begin();
-	    if (r)
-		break;
-	    started_txn = 1;
-	}
-
 	r = annotate_state_write(astate, chosen->entry,
 				 chosen->userid, value);
 	if (r)
 	    break;
-    }
-
-    if (started_txn) {
-	if (r)
-	    annotatemore_abort();
-	else
-	    r = annotatemore_commit();
     }
 
     annotate_state_free(&astate);
@@ -2214,9 +2194,6 @@ int sync_crc_calc(struct mailbox *mailbox, char *buf, int maxlen)
 
     sync_crc_algorithm->begin();
 
-    /* we can't check error code here, there's no way to abort! */
-    annotate_getdb(mailbox->name, &user_annot_db);
-
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	/* we can't send bogus records, just skip them! */
 	if (mailbox_read_index_record(mailbox, recno, &record))
@@ -2242,8 +2219,6 @@ int sync_crc_calc(struct mailbox *mailbox, char *buf, int maxlen)
 	    sync_annot_list_free(&annots);
 	}
     }
-
-    annotate_putdb(&user_annot_db);
 
     return sync_crc_algorithm->end(buf, maxlen);
 }

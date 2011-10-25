@@ -1307,6 +1307,8 @@ static int do_mailbox(struct dlist *kin)
     struct dlist *ka = NULL;
     int r;
 
+    annotate_db_t *user_annot_db = NULL;
+
     if (!dlist_getatom(kin, "UNIQUEID", &uniqueid))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getatom(kin, "PARTITION", &partition))
@@ -1356,13 +1358,20 @@ static int do_mailbox(struct dlist *kin)
     }
     if (r) {
 	syslog(LOG_ERR, "Failed to open mailbox %s to update", mboxname);
-	return r;
+	goto done;
     }
 
     if (strcmp(mailbox->uniqueid, uniqueid)) {
 	syslog(LOG_ERR, "Mailbox uniqueid changed %s - retry", mboxname);
-	mailbox_close(&mailbox);
-	return IMAP_MAILBOX_MOVED;
+	r = IMAP_MAILBOX_MOVED;
+	goto done;
+    }
+
+    r = annotatemore_begin();
+    if (!r) r = annotate_getdb(mailbox->name, &user_annot_db);
+    if (r) {
+	syslog(LOG_ERR, "Failed to open annotations %s to update", mboxname);
+	goto done;
     }
 
     /* skip out now, it's going to mismatch for sure! */
@@ -1370,41 +1379,35 @@ static int do_mailbox(struct dlist *kin)
 	syslog(LOG_ERR, "higher modseq on replica %s - "
 	       MODSEQ_FMT " < " MODSEQ_FMT,
 	       mboxname, highestmodseq, mailbox->i.highestmodseq);
-	mailbox_close(&mailbox);
-	return IMAP_SYNC_CHECKSUM;
+	r = IMAP_SYNC_CHECKSUM;
+	goto done;
     }
 
     /* skip out now, it's going to mismatch for sure! */
     if (uidvalidity < mailbox->i.uidvalidity) {
 	syslog(LOG_ERR, "higher uidvalidity on replica %s - %u < %u",
 	       mboxname, uidvalidity, mailbox->i.uidvalidity);
-	mailbox_close(&mailbox);
-	return IMAP_SYNC_CHECKSUM;
+	r = IMAP_SYNC_CHECKSUM;
+	goto done;
     }
 
     /* skip out now, it's going to mismatch for sure! */
     if (last_uid < mailbox->i.last_uid) {
 	syslog(LOG_ERR, "higher last_uid on replica %s - %u < %u",
 	       mboxname, last_uid, mailbox->i.last_uid);
-	mailbox_close(&mailbox);
-	return IMAP_SYNC_CHECKSUM;
+	r = IMAP_SYNC_CHECKSUM;
+	goto done;
     }
 
     /* always take the ACL from the master, it's not versioned */
     if (strcmp(mailbox->acl, acl)) {
 	mailbox_set_acl(mailbox, acl, 0);
 	r = mboxlist_sync_setacls(mboxname, acl);
-	if (r) {
-	    mailbox_close(&mailbox);
-	    return r;
-	}
+	if (r) goto done;
     }
 
     r = mailbox_compare_update(mailbox, kr, 0);
-    if (r) {
-	mailbox_close(&mailbox);
-	return r;
-    }
+    if (r) goto done;
 
     /* now we're committed to writing something no matter what happens! */
     if (ka) {
@@ -1416,8 +1419,7 @@ static int do_mailbox(struct dlist *kin)
 	r = read_annotations(mailbox, NULL, &rannots);
 	if (r) {
 	    sync_annot_list_free(&mannots);
-	    mailbox_close(&mailbox);
-	    return r;
+	    goto done;
 	}
 
 	r = apply_annotations(mailbox, NULL, rannots, mannots, 0);
@@ -1463,6 +1465,10 @@ static int do_mailbox(struct dlist *kin)
 	strcmp(specialuse, mailbox->specialuse)) {
 	r = mboxlist_setspecialuse(mailbox, specialuse);
     }
+
+done:
+    annotate_putdb(&user_annot_db);
+    annotatemore_commit();
 
     mailbox_close(&mailbox);
 
@@ -1548,6 +1554,9 @@ static int mailbox_cb(char *name,
     }
     if (r) goto out;
 
+    r = annotatemore_begin();
+    if (r) goto out;
+
     if (qrl && mailbox->quotaroot &&
 	 !sync_name_lookup(qrl, mailbox->quotaroot))
 	sync_name_list_add(qrl, mailbox->quotaroot);
@@ -1555,7 +1564,10 @@ static int mailbox_cb(char *name,
     r = sync_mailbox(mailbox, NULL, NULL, kl, NULL, 0);
     if (!r) sync_send_response(kl, sync_out);
     mailbox_close(&mailbox);
+
 out:
+    /* we didn't write anything */
+    annotatemore_abort();
     dlist_free(&kl);
 
     return r;
@@ -1567,6 +1579,9 @@ static int do_getfullmailbox(struct dlist *kin)
     struct dlist *kl = dlist_newkvlist(NULL, "MAILBOX");
     int r;
 
+    r = annotatemore_begin();
+    if (r) return r;
+
     r = mailbox_open_irl(kin->sval, &mailbox);
     if (r) return r;
 
@@ -1574,6 +1589,9 @@ static int do_getfullmailbox(struct dlist *kin)
     if (!r) sync_send_response(kl, sync_out);
     dlist_free(&kl);
     mailbox_close(&mailbox);
+
+    /* we didn't write anything */
+    annotatemore_abort();
 
     return r;
 }
@@ -1829,6 +1847,7 @@ static int do_annotation(struct dlist *kin)
 	annotatemore_commit();
 
 done:
+    if (r) annotatemore_abort();
     mailbox_close(&mailbox);
     freeentryatts(entryatts);
     free(name);
@@ -1882,6 +1901,7 @@ static int do_unannotation(struct dlist *kin)
 	annotatemore_commit();
 
 done:
+    if (r) annotatemore_abort();
     mailbox_close(&mailbox);
     freeentryatts(entryatts);
     free(name);

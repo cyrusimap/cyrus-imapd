@@ -734,6 +734,9 @@ void annotatemore_abort(void)
 {
     annotate_db_t *d;
 
+    /* don't double-abort */
+    if (!in_txn) return;
+
     /* abort all open db-transactions */
     for (d = all_dbs_head ; d ; d = d->next) {
 	if (d->txn) {
