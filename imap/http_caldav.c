@@ -679,7 +679,8 @@ static int meth_copy(struct transaction_t *txn)
 	    txn->errstr = "append_copy() failed";
 	}
 
-	if (!r) {
+	if (r) append_abort(&appendstate);
+	else {
 	    /* Commit the append to the destination mailbox */
 	    if ((r = append_commit(&appendstate, -1,
 				   NULL, NULL, NULL, &dest_mbox))) {
@@ -730,40 +731,37 @@ static int meth_copy(struct transaction_t *txn)
 		txn->loc = dest.path;
 
 		mailbox_unlock_index(dest_mbox, NULL);
-
-
-		/* For MOVE, we need to delete the source resource */
-		if (txn->meth[0] == 'M') {
-		    /* Lock source mailbox */
-		    mailbox_lock_index(src_mbox, LOCK_EXCLUSIVE);
-
-		    /* Find message UID for the source resource */
-		    caldav_lockread(src_caldb, txn->req_tgt.resource, &src_uid);
-		    /* XXX  Check errors */
-
-		    /* Fetch index record for the source resource */
-		    if (src_uid &&
-			!mailbox_find_index_record(src_mbox, src_uid, &src_rec)) {
-
-			/* Expunge the source message */
-			src_rec.system_flags |= FLAG_EXPUNGED;
-			if ((r = mailbox_rewrite_index_record(src_mbox, &src_rec))) {
-			    syslog(LOG_ERR, "rewrite_index_rec(%s) failed: %s",
-				   src_mboxname, error_message(r));
-			    txn->errstr = error_message(r);
-			    ret = HTTP_SERVER_ERROR;
-			    goto done;
-			}
-		    }
-
-		    /* Delete mapping entry for source resource name */
-		    caldav_delete(src_caldb, txn->req_tgt.resource);
-		}
 	    }
 	}
-	else {
-	    append_abort(&appendstate);
+    }
+
+
+    /* For MOVE, we need to delete the source resource */
+    if (!r && (txn->meth[0] == 'M')) {
+	/* Lock source mailbox */
+	mailbox_lock_index(src_mbox, LOCK_EXCLUSIVE);
+
+	/* Find message UID for the source resource */
+	caldav_lockread(src_caldb, txn->req_tgt.resource, &src_uid);
+	/* XXX  Check errors */
+
+	/* Fetch index record for the source resource */
+	if (src_uid &&
+	    !mailbox_find_index_record(src_mbox, src_uid, &src_rec)) {
+
+	    /* Expunge the source message */
+	    src_rec.system_flags |= FLAG_EXPUNGED;
+	    if ((r = mailbox_rewrite_index_record(src_mbox, &src_rec))) {
+		syslog(LOG_ERR, "rewrite_index_rec(%s) failed: %s",
+		       src_mboxname, error_message(r));
+		txn->errstr = error_message(r);
+		ret = HTTP_SERVER_ERROR;
+		goto done;
+	    }
 	}
+
+	/* Delete mapping entry for source resource name */
+	caldav_delete(src_caldb, txn->req_tgt.resource);
     }
 
   done:
