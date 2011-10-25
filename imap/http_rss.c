@@ -217,7 +217,7 @@ static int meth_get(struct transaction_t *txn)
 		       message_guid_encode(&record.guid),
 		       *section ? section : "html");
 	    lastmod = record.internaldate;
-	    precond = check_precond(txn->meth, etag.s, lastmod, 0, txn->req_hdrs);
+	    precond = check_precond(txn->meth, etag.s, lastmod, txn->req_hdrs);
 
 	    if (precond != HTTP_OK) {
 		/* We failed a precondition - don't perform the request */
@@ -514,7 +514,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 
     /* Check any preconditions */
     time_t lastmod = mailbox->i.last_appenddate;
-    int precond = check_precond(txn->meth, NULL, lastmod, 0, txn->req_hdrs);
+    int precond = check_precond(txn->meth, NULL, lastmod, txn->req_hdrs);
 
     if (precond != HTTP_OK) {
 	/* We failed a precondition - don't perform the request */

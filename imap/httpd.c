@@ -1972,20 +1972,11 @@ static int etagcmp(const char *hdr, const char *etag) {
  * any other interaction is undefined.
  */
 int check_precond(const char *meth, const char *etag, time_t lastmod,
-		  uint32_t dest, hdrcache_t hdrcache)
+		  hdrcache_t hdrcache)
 {
     unsigned ret = HTTP_OK;
     const char **hdr;
     time_t since;
-
-    if (dest &&
-	(hdr = spool_getheader(hdrcache, "Overwrite"))) {
-	if (!strcmp(hdr[0], "F")) {
-	    /* Don't overwrite the destination resource */
-	    return HTTP_PRECOND_FAILED;
-	}
-	/* Fall through and check preconditions on source resource */
-    }
 
     if ((hdr = spool_getheader(hdrcache, "If-Match"))) {
 	if (!etagcmp(hdr[0], etag)) {
@@ -2085,7 +2076,7 @@ int get_doc(struct transaction_t *txn, filter_proc_t filter)
 
     /* Check any preconditions */
     precond = check_precond(txn->meth, txn->etag,
-			    resp_body->lastmod, 0, txn->req_hdrs);
+			    resp_body->lastmod, txn->req_hdrs);
 
     /* We failed a precondition - don't perform the request */
     if (precond != HTTP_OK) {

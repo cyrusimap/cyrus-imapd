@@ -572,6 +572,17 @@ static int meth_copy(struct transaction_t *txn)
 	goto done;
     }
 
+    /* Check any preconditions on source */
+    etag = message_guid_encode(&src_rec.guid);
+    lastmod = src_rec.internaldate;
+    precond = check_precond(txn->meth, etag, lastmod, txn->req_hdrs);
+
+    if (precond != HTTP_OK) {
+	/* We failed a precondition - don't perform the request */
+	ret = precond;
+	goto done;
+    }
+
     /* Fetch cache record for the source resource (so we can copy it) */
     if ((r = mailbox_cacherecord(src_mbox, &src_rec))) {
 	syslog(LOG_ERR, "mailbox_cacherecord(%s) failed: %s",
@@ -614,14 +625,11 @@ static int meth_copy(struct transaction_t *txn)
     /* Finished our initial read of dest mailbox */
     mailbox_unlock_index(dest_mbox, NULL);
 
-    /* Check any preconditions */
-    etag = message_guid_encode(&src_rec.guid);
-    lastmod = src_rec.internaldate;
-    precond = check_precond(txn->meth, etag, lastmod, olduid, txn->req_hdrs);
-
-    if (precond != HTTP_OK) {
-	/* We failed a precondition - don't perform the request */
-	ret = precond;
+    /* Check any preconditions on destination */
+    if (olduid && (hdr = spool_getheader(txn->req_hdrs, "Overwrite")) &&
+	!strcmp(hdr[0], "F")) {
+	/* Don't overwrite the destination resource */
+	ret = HTTP_PRECOND_FAILED;
 	goto done;
     }
 
@@ -862,7 +870,7 @@ static int meth_delete(struct transaction_t *txn)
     lastmod = record.internaldate;
 
     /* Check any preconditions */
-    precond = check_precond(txn->meth, etag, lastmod, 0, txn->req_hdrs);
+    precond = check_precond(txn->meth, etag, lastmod, txn->req_hdrs);
 
     /* We failed a precondition - don't perform the request */
     if (precond != HTTP_OK) {
@@ -973,7 +981,7 @@ static int meth_get(struct transaction_t *txn)
     lastmod = record.internaldate;
 
     /* Check any preconditions */
-    precond = check_precond(txn->meth, etag, lastmod, 0, txn->req_hdrs);
+    precond = check_precond(txn->meth, etag, lastmod, txn->req_hdrs);
 
     if (precond != HTTP_OK) {
 	/* We failed a precondition - don't perform the request */
@@ -1637,7 +1645,7 @@ static int meth_put(struct transaction_t *txn)
     }
 
     /* Check any preconditions */
-    precond = check_precond(txn->meth, etag, lastmod, 0, txn->req_hdrs);
+    precond = check_precond(txn->meth, etag, lastmod, txn->req_hdrs);
 
     if (precond != HTTP_OK) {
 	/* We failed a precondition - don't perform the request */
@@ -1745,7 +1753,7 @@ static int meth_put(struct transaction_t *txn)
 		    lastmod = oldrecord.internaldate;
 
 		    /* Check any preconditions */
-		    precond = check_precond(txn->meth, etag, lastmod, 0,
+		    precond = check_precond(txn->meth, etag, lastmod,
 					    txn->req_hdrs);
 
 		    if (precond != HTTP_OK) {
