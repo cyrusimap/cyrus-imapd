@@ -43,6 +43,11 @@
 /*
  * TODO:
  *
+ *   - Make proxying more robust.  Currently depends on calendar collections
+ *     residing on same server as user's INBOX.  Doesn't handle global/shared
+ *     calendars.  COPY/MOVE doesn't handle remote destination.
+ *   - Check meth_acl() to make sure we have logic correct
+ *     (iCal seems to blow up existing ACLs).
  *   - Fix PROPFIND depth logic?  (need to confirm that its broken)
  *   - Support COPY/MOVE on collections
  *   - Add more required properties
@@ -164,7 +169,7 @@ static int meth_acl(struct transaction_t *txn)
     int ret = 0, r;
     xmlDocPtr indoc = NULL;
     xmlNodePtr root, ace;
-    char mailboxname[MAX_MAILBOX_BUFFER];
+    char *server, mailboxname[MAX_MAILBOX_BUFFER];
     struct mailbox *mailbox = NULL;
     struct buf acl = BUF_INITIALIZER;
 
@@ -186,6 +191,32 @@ static int meth_acl(struct transaction_t *txn)
 
     /* Construct mailbox name corresponding to request target URI */
     (void) target_to_mboxname(&txn->req_tgt, mailboxname);
+
+    /* Locate the mailbox */
+    if ((r = http_mlookup(mailboxname, &server, NULL, NULL))) {
+	syslog(LOG_ERR, "mlookup(%s) failed: %s",
+	       mailboxname, error_message(r));
+	txn->errstr = error_message(r);
+
+	switch (r) {
+	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
+	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
+	default: return HTTP_SERVER_ERROR;
+	}
+    }
+
+    if (server) {
+	/* Remote mailbox */
+	struct backend *be;
+
+	be = proxy_findserver(server, &http_protocol, httpd_userid,
+			      &backend_cached, NULL, NULL, httpd_in);
+	if (!be) return HTTP_UNAVAILABLE;
+
+	return http_pipe_req_resp(be, txn);
+    }
+
+    /* Local Mailbox */
 
     /* Open mailbox for writing */
     if ((r = mailbox_open_iwl(mailboxname, &mailbox))) {
@@ -435,6 +466,7 @@ static int meth_copy(struct transaction_t *txn)
     const char **hdr;
     struct request_target_t dest;  /* Parsed destination URL */
     char src_mboxname[MAX_MAILBOX_BUFFER], dest_mboxname[MAX_MAILBOX_BUFFER];
+    char *server;
     struct mailbox *src_mbox = NULL, *dest_mbox = NULL;
     struct caldav_db *src_caldb = NULL, *dest_caldb = NULL;
     uint32_t src_uid = 0, olduid = 0;
@@ -486,6 +518,32 @@ static int meth_copy(struct transaction_t *txn)
     /* Construct source mailbox name corresponding to request target URI */
     (void) target_to_mboxname(&txn->req_tgt, src_mboxname);
 
+    /* Locate the mailbox */
+    if ((r = http_mlookup(src_mboxname, &server, NULL, NULL))) {
+	syslog(LOG_ERR, "mlookup(%s) failed: %s",
+	       src_mboxname, error_message(r));
+	txn->errstr = error_message(r);
+
+	switch (r) {
+	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
+	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
+	default: return HTTP_SERVER_ERROR;
+	}
+    }
+
+    if (server) {
+	/* Remote mailbox */
+	struct backend *be;
+
+	be = proxy_findserver(server, &http_protocol, httpd_userid,
+			      &backend_cached, NULL, NULL, httpd_in);
+	if (!be) return HTTP_UNAVAILABLE;
+
+	return http_pipe_req_resp(be, txn);
+    }
+
+    /* Local Mailbox */
+
     /* Open source mailbox for reading */
     if ((r = mailbox_open_irl(src_mboxname, &src_mbox))) {
 	syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
@@ -528,6 +586,8 @@ static int meth_copy(struct transaction_t *txn)
 
     /* Construct dest mailbox name corresponding to destination URI */
     (void) target_to_mboxname(&dest, dest_mboxname);
+
+    /* XXX  Need to check for remote dest mailbox and use PUT */
 
     /* Open dest mailbox for reading */
     if ((r = mailbox_open_irl(dest_mboxname, &dest_mbox))) {
@@ -712,7 +772,7 @@ static int meth_copy(struct transaction_t *txn)
 static int meth_delete(struct transaction_t *txn)
 {
     int ret = HTTP_NO_CONTENT, r, precond;
-    char mailboxname[MAX_MAILBOX_BUFFER];
+    char *server, mailboxname[MAX_MAILBOX_BUFFER];
     struct mailbox *mailbox = NULL;
     struct caldav_db *caldavdb = NULL;
     uint32_t uid = 0;
@@ -728,6 +788,32 @@ static int meth_delete(struct transaction_t *txn)
 
     /* Construct mailbox name corresponding to request target URI */
     (void) target_to_mboxname(&txn->req_tgt, mailboxname);
+
+    /* Locate the mailbox */
+    if ((r = http_mlookup(mailboxname, &server, NULL, NULL))) {
+	syslog(LOG_ERR, "mlookup(%s) failed: %s",
+	       mailboxname, error_message(r));
+	txn->errstr = error_message(r);
+
+	switch (r) {
+	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
+	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
+	default: return HTTP_SERVER_ERROR;
+	}
+    }
+
+    if (server) {
+	/* Remote mailbox */
+	struct backend *be;
+
+	be = proxy_findserver(server, &http_protocol, httpd_userid,
+			      &backend_cached, NULL, NULL, httpd_in);
+	if (!be) return HTTP_UNAVAILABLE;
+
+	return http_pipe_req_resp(be, txn);
+    }
+
+    /* Local Mailbox */
 
     if (!txn->req_tgt.resource) {
 	/* DELETE collection */
@@ -813,7 +899,7 @@ static int meth_get(struct transaction_t *txn)
     const char *msg_base = NULL;
     unsigned long msg_size = 0;
     struct resp_body_t *resp_body = &txn->resp_body;
-    char mailboxname[MAX_MAILBOX_BUFFER];
+    char *server, mailboxname[MAX_MAILBOX_BUFFER];
     struct mailbox *mailbox = NULL;
     struct caldav_db *caldavdb = NULL;
     uint32_t uid = 0;
@@ -832,6 +918,32 @@ static int meth_get(struct transaction_t *txn)
 
     /* Construct mailbox name corresponding to request target URI */
     (void) target_to_mboxname(&txn->req_tgt, mailboxname);
+
+    /* Locate the mailbox */
+    if ((r = http_mlookup(mailboxname, &server, NULL, NULL))) {
+	syslog(LOG_ERR, "mlookup(%s) failed: %s",
+	       mailboxname, error_message(r));
+	txn->errstr = error_message(r);
+
+	switch (r) {
+	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
+	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
+	default: return HTTP_SERVER_ERROR;
+	}
+    }
+
+    if (server) {
+	/* Remote mailbox */
+	struct backend *be;
+
+	be = proxy_findserver(server, &http_protocol, httpd_userid,
+			      &backend_cached, NULL, NULL, httpd_in);
+	if (!be) return HTTP_UNAVAILABLE;
+
+	return http_pipe_req_resp(be, txn);
+    }
+
+    /* Local Mailbox */
 
     /* Open mailbox for reading */
     if ((r = mailbox_open_irl(mailboxname, &mailbox))) {
@@ -909,7 +1021,7 @@ static int meth_mkcol(struct transaction_t *txn)
     xmlNodePtr root = NULL, instr = NULL;
     xmlNodePtr propstat[NUM_PROPSTAT];
     xmlNsPtr ns[NUM_NAMESPACE];
-    char mailboxname[MAX_MAILBOX_BUFFER], *partition = NULL;
+    char *server, mailboxname[MAX_MAILBOX_BUFFER], *partition = NULL;
     struct proppatch_ctx pctx;
 
     /* Response should not be cached */
@@ -949,6 +1061,36 @@ static int meth_mkcol(struct transaction_t *txn)
 
 	instr = root->children;
     }
+
+    /* Construct mailbox name corresponding to calendar-home-set */
+    r = (*httpd_namespace.mboxname_tointernal)(&httpd_namespace, "INBOX",
+					       httpd_userid, mailboxname);
+
+    /* Locate the mailbox */
+    if ((r = http_mlookup(mailboxname, &server, NULL, NULL))) {
+	syslog(LOG_ERR, "mlookup(%s) failed: %s",
+	       mailboxname, error_message(r));
+	txn->errstr = error_message(r);
+
+	switch (r) {
+	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
+	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
+	default: return HTTP_SERVER_ERROR;
+	}
+    }
+
+    if (server) {
+	/* Remote mailbox */
+	struct backend *be;
+
+	be = proxy_findserver(server, &http_protocol, httpd_userid,
+			      &backend_cached, NULL, NULL, httpd_in);
+	if (!be) return HTTP_UNAVAILABLE;
+
+	return http_pipe_req_resp(be, txn);
+    }
+
+    /* Local Mailbox */
 
     /* Construct mailbox name corresponding to request target URI */
     (void) target_to_mboxname(&txn->req_tgt, mailboxname);
@@ -1107,6 +1249,42 @@ int meth_propfind(struct transaction_t *txn)
 	}
     }
 
+    if ((txn->req_tgt.namespace == URL_NS_CALENDAR) && txn->req_tgt.user) {
+	char *server;
+
+	/* Construct mailbox name corresponding to calendar-home-set */
+	r = (*httpd_namespace.mboxname_tointernal)(&httpd_namespace, "INBOX",
+						   httpd_userid, mailboxname);
+
+	/* Locate the mailbox */
+	if ((r = http_mlookup(mailboxname, &server, NULL, NULL))) {
+	    syslog(LOG_ERR, "mlookup(%s) failed: %s",
+		   mailboxname, error_message(r));
+	    txn->errstr = error_message(r);
+
+	    switch (r) {
+	    case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
+	    case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
+	    default: return HTTP_SERVER_ERROR;
+	    }
+	}
+
+	if (server) {
+	    /* Remote mailbox */
+	    struct backend *be;
+
+	    be = proxy_findserver(server, &http_protocol, httpd_userid,
+				  &backend_cached, NULL, NULL, httpd_in);
+	    if (!be) return HTTP_UNAVAILABLE;
+
+	    return http_pipe_req_resp(be, txn);
+	}
+
+	/* Local Mailbox */
+    }
+
+    /* Principal or Local Mailbox */
+
     /* Start construction of our multistatus response */
     if (!(root = init_prop_response("multistatus", root->nsDef, ns))) {
 	ret = HTTP_SERVER_ERROR;
@@ -1191,7 +1369,7 @@ static int meth_proppatch(struct transaction_t *txn)
     xmlNodePtr root, instr;
     xmlNodePtr resp, propstat[NUM_PROPSTAT];
     xmlNsPtr ns[NUM_NAMESPACE];
-    char mailboxname[MAX_MAILBOX_BUFFER];
+    char *server, mailboxname[MAX_MAILBOX_BUFFER];
     struct proppatch_ctx pctx;
 
     /* Response should not be cached */
@@ -1226,6 +1404,35 @@ static int meth_proppatch(struct transaction_t *txn)
     }
     instr = root->children;
 
+    /* Construct mailbox name corresponding to request target URI */
+    (void) target_to_mboxname(&txn->req_tgt, mailboxname);
+
+    /* Locate the mailbox */
+    if ((r = http_mlookup(mailboxname, &server, NULL, NULL))) {
+	syslog(LOG_ERR, "mlookup(%s) failed: %s",
+	       mailboxname, error_message(r));
+	txn->errstr = error_message(r);
+
+	switch (r) {
+	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
+	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
+	default: return HTTP_SERVER_ERROR;
+	}
+    }
+
+    if (server) {
+	/* Remote mailbox */
+	struct backend *be;
+
+	be = proxy_findserver(server, &http_protocol, httpd_userid,
+			      &backend_cached, NULL, NULL, httpd_in);
+	if (!be) return HTTP_UNAVAILABLE;
+
+	return http_pipe_req_resp(be, txn);
+    }
+
+    /* Local Mailbox */
+
     /* Start construction of our multistatus response */
     if (!(root = init_prop_response("multistatus", root->nsDef, ns))) {
 	ret = HTTP_SERVER_ERROR;
@@ -1239,9 +1446,6 @@ static int meth_proppatch(struct transaction_t *txn)
     resp = xmlNewChild(root, NULL, BAD_CAST "response", NULL);
     if (!resp) syslog(LOG_ERR, "new child response failed");
     xmlNewChild(resp, NULL, BAD_CAST "href", BAD_CAST txn->req_tgt.path);
-
-    /* Construct mailbox name corresponding to request target URI */
-    (void) target_to_mboxname(&txn->req_tgt, mailboxname);
 
     /* Populate our proppatch context */
     pctx.req_tgt = &txn->req_tgt;
@@ -1302,7 +1506,7 @@ static int global_put_count = 0;
 static int meth_put(struct transaction_t *txn)
 {
     int ret = HTTP_CREATED, r, precond;
-    char mailboxname[MAX_MAILBOX_BUFFER];
+    char *server, mailboxname[MAX_MAILBOX_BUFFER];
     struct mailbox *mailbox = NULL;
     struct caldav_db *caldavdb = NULL;
     uint32_t olduid = 0;
@@ -1354,6 +1558,32 @@ static int meth_put(struct transaction_t *txn)
 
     /* Construct mailbox name corresponding to request target URI */
     (void) target_to_mboxname(&txn->req_tgt, mailboxname);
+
+    /* Locate the mailbox */
+    if ((r = http_mlookup(mailboxname, &server, NULL, NULL))) {
+	syslog(LOG_ERR, "mlookup(%s) failed: %s",
+	       mailboxname, error_message(r));
+	txn->errstr = error_message(r);
+
+	switch (r) {
+	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
+	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
+	default: return HTTP_SERVER_ERROR;
+	}
+    }
+
+    if (server) {
+	/* Remote mailbox */
+	struct backend *be;
+
+	be = proxy_findserver(server, &http_protocol, httpd_userid,
+			      &backend_cached, NULL, NULL, httpd_in);
+	if (!be) return HTTP_UNAVAILABLE;
+
+	return http_pipe_req_resp(be, txn);
+    }
+
+    /* Local Mailbox */
 
     /* Open mailbox for reading */
     if ((r = mailbox_open_irl(mailboxname, &mailbox))) {
@@ -1584,7 +1814,7 @@ static int meth_report(struct transaction_t *txn)
     xmlDocPtr indoc = NULL, outdoc = NULL;
     xmlNodePtr root, cur;
     xmlNsPtr ns[NUM_NAMESPACE];
-    char mailboxname[MAX_MAILBOX_BUFFER];
+    char *server, mailboxname[MAX_MAILBOX_BUFFER];
     struct mailbox *mailbox = NULL;
     struct caldav_db *caldavdb = NULL;
     struct propfind_ctx fctx;
@@ -1640,6 +1870,35 @@ static int meth_report(struct transaction_t *txn)
 	return HTTP_BAD_REQUEST;
     }
 
+    /* Construct mailbox name corresponding to request target URI */
+    (void) target_to_mboxname(&txn->req_tgt, mailboxname);
+
+    /* Locate the mailbox */
+    if ((r = http_mlookup(mailboxname, &server, NULL, NULL))) {
+	syslog(LOG_ERR, "mlookup(%s) failed: %s",
+	       mailboxname, error_message(r));
+	txn->errstr = error_message(r);
+
+	switch (r) {
+	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
+	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
+	default: return HTTP_SERVER_ERROR;
+	}
+    }
+
+    if (server) {
+	/* Remote mailbox */
+	struct backend *be;
+
+	be = proxy_findserver(server, &http_protocol, httpd_userid,
+			      &backend_cached, NULL, NULL, httpd_in);
+	if (!be) return HTTP_UNAVAILABLE;
+
+	return http_pipe_req_resp(be, txn);
+    }
+
+    /* Local Mailbox */
+
     /* Start construction of our multistatus response */
     if (!(root = init_prop_response("multistatus", root->nsDef, ns))) {
 	ret = HTTP_SERVER_ERROR;
@@ -1651,9 +1910,6 @@ static int meth_report(struct transaction_t *txn)
 
     /* Parse the list of properties and build a list of callbacks */
     preload_proplist(cur->children, &elist);
-
-    /* Construct mailbox name corresponding to request target URI */
-    (void) target_to_mboxname(&txn->req_tgt, mailboxname);
 
     /* Open mailbox for reading */
     if ((r = mailbox_open_irl(mailboxname, &mailbox))) {
