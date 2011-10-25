@@ -2218,17 +2218,15 @@ static int do_sync_mailboxes(struct sync_name_list *mboxname_list,
 	    /* promote failed personal mailboxes to USER */
 	    int nonuser = 0;
 	    struct sync_name *mbox;
-	    char *userid, *p, *useridp;
+	    const char *userid;
 
 	    for (mbox = mboxname_list->head; mbox; mbox = mbox->next) {
 		/* done OK?  Good :) */
 		if (mbox->mark)
 		    continue;
 
-		useridp = mboxname_isusermailbox(mbox->name, 0);
-		if (useridp) {
-		    userid = xstrdup(useridp);
-		    if ((p = strchr(userid, '.'))) *p = '\0';
+		userid = mboxname_to_userid(mbox->name);
+		if (userid) {
 		    mbox->mark = 1;
 
 		    sync_action_list_add(user_list, NULL, userid);
@@ -2240,7 +2238,6 @@ static int do_sync_mailboxes(struct sync_name_list *mboxname_list,
 			syslog(LOG_INFO, "  Promoting: MAILBOX %s -> USER %s",
 			       mbox->name, userid);
 		    }
-		    free(userid);
 		}
 		else
 		    nonuser = 1; /* there was a non-user mailbox */
