@@ -2214,6 +2214,7 @@ int sync_crc_calc(struct mailbox *mailbox, char *buf, int maxlen)
 
     sync_crc_algorithm->begin();
 
+    /* we can't check error code here, there's no way to abort! */
     annotate_getdb(mailbox->name, &user_annot_db);
 
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
