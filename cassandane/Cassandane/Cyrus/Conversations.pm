@@ -401,4 +401,60 @@ sub test_fm_webui_draft
     $self->check_messages(\%exp);
 }
 
+#
+# Test a COPY between folders owned by different users
+#
+sub test_cross_user_copy
+{
+    my ($self) = @_;
+    my $bobuser = "bob";
+    my $bobfolder = "user.$bobuser";
+
+    xlog "Testing COPY between folders owned by different users [IRIS-893]";
+
+    # check IMAP server has the XCONVERSATIONS capability
+    $self->assert($self->{store}->get_client()->capability()->{xconversations});
+
+    my $srv = $self->{instance}->get_service('imap');
+    my $adminstore = $srv->create_store(username => 'admin');
+    my $adminclient = $adminstore->get_client();
+    $adminclient->create($bobfolder)
+	or die "Cannot create $bobfolder: $@";
+    $adminclient->setacl('user.cassandane', $bobuser => 'lrswipkxtecda')
+	or die "Cannot setacl on user.cassandane: $@";
+
+    xlog "generating two messages";
+    my %exp;
+    $exp{A} = $self->{gen}->generate(subject => 'Message A');
+    my $cid = $exp{A}->make_cid();
+    $exp{A}->set_attribute(cid => $cid);
+    $exp{B} = $self->{gen}->generate(subject => 'Message B',
+				     references =>
+					$exp{A}->get_header('message-id'));
+    $exp{B}->set_attribute(cid => $cid);
+
+    xlog "Writing messaged to user.cassandane";
+    $self->{store}->write_begin();
+    $self->{store}->write_message($exp{A});
+    $self->{store}->write_message($exp{B});
+    $self->{store}->write_end();
+    xlog "Check that the messages made it";
+    $self->check_messages(\%exp);
+
+    my $bobstore = $srv->create_store(username => $bobuser);
+    $bobstore->set_fetch_attributes('uid', 'cid');
+    my $bobclient = $bobstore->get_client();
+    $bobstore->set_folder('user.cassandane');
+    $bobstore->_select();
+    $bobclient->copy(2, $bobfolder)
+	or die "Cannot COPY message to $bobfolder";
+
+    xlog "Check that the message made it to $bobfolder";
+    my %bobexp;
+    $bobexp{B} = $exp{B}->clone();
+    $bobexp{B}->set_attributes(uid => 1, cid => $exp{B}->make_cid());
+    $bobstore->set_folder($bobfolder);
+    $self->check_messages(\%bobexp, store => $bobstore);
+}
+
 1;
