@@ -154,6 +154,9 @@ sub fh {
 	$self->{fh} = IO::File->new($self->{filename}, 'r');
     }
 
+    # Move back to start of message
+    seek $self->{fh}, 0, 0;
+
     return $self->{fh};
 }
 
