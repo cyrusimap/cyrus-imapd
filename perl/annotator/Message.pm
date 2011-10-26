@@ -224,8 +224,9 @@ sub read_part_content {
 	or die "Cannot seek: $!";
 
     my $Content = '';
-    read $fh, $Content, $nbytes
-	or die "Cannot read: $!";
+
+    # Could be 0 length body, only die on undef (real error)
+    read($fh, $Content, $nbytes) // die "Cannot read: $!";
 
     return $self->decode_part($Part, $Content);
 }
