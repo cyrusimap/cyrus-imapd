@@ -57,6 +57,7 @@
 #include "proxy.h"
 #include "spool.h"
 #include "tls.h"
+#include "version.h"
 #include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
@@ -588,7 +589,7 @@ static void write_cachehdr(const char *name, const char *contents, void *rock)
     struct protstream *pout = (struct protstream *) rock;
     const char **hdr, *hop_by_hop[] =
 	{ "authorization", "connection", "content-length",
-	  "keep-alive", "server", "transfer-encoding", "upgrade", NULL };
+	  "keep-alive", "transfer-encoding", "upgrade", "via", NULL };
 
     for (hdr = hop_by_hop; *hdr && strcmp(name, *hdr); hdr++);
 
@@ -613,6 +614,7 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
      * Send client request to backend:
      *
      * - Piece the Request_line back together
+     * - Add/append-to Via: header
      * - Use all cached end-to-end headers from client
      * - Body is buffered, so send use "identity" TE
      */
@@ -621,6 +623,15 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 	prot_printf(be->out, "?%s", txn->req_tgt.query);
     }
     prot_printf(be->out, " %s\r\n", HTTP_VERSION);
+    if (config_serverinfo >= IMAP_ENUM_SERVERINFO_MIN) {
+	const char **hdr = spool_getheader(txn->req_hdrs, "Via");
+	prot_printf(be->out, "%s %s %s", (hdr && hdr[0]) ? "," : "Via:",
+		    HTTP_VERSION, config_servername);
+	if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
+	    prot_printf(be->out, " (Cyrus-Murder/%s)", cyrus_version());
+	}
+	prot_printf(be->out, "\r\n");
+    }
     spool_enum_hdrcache(txn->req_hdrs, &write_cachehdr, be->out);
     prot_printf(be->out, "Content-Length: %u\r\n\r\n",
 		buf_len(&txn->req_body));
@@ -649,13 +660,20 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
      * Send response to client:
      *
      * - Use Status-Line from backend
+     * - Add/append-to Via: header
      * - Add our own hop-by-hop headers
      * - Use all cached end-to-end headers from backend
      * - Body is buffered, so send use "identity" TE
      */
     prot_printf(httpd_out, "%s", statline);
-    if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
-	prot_printf(httpd_out, "Server: %s\r\n", buf_cstring(&serverinfo));
+    if (config_serverinfo >= IMAP_ENUM_SERVERINFO_MIN) {
+	const char **hdr = spool_getheader(txn->req_hdrs, "Via");
+	prot_printf(httpd_out, "%s %s %s", (hdr && hdr[0]) ? "," : "Via:",
+		    HTTP_VERSION, config_servername);
+	if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
+	    prot_printf(httpd_out, " (Cyrus-Murder/%s)", cyrus_version());
+	}
+	prot_printf(httpd_out, "\r\n");
     }
     if (!httpd_tls_done && tls_enabled()) {
 	prot_printf(httpd_out, "Upgrade: TLS/1.0\r\n");
