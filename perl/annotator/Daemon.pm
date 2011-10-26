@@ -261,19 +261,16 @@ sub _dlist_parse {
       my $Bytes = $1;
       $CurAtom = undef;
 
-      # Literal ends with \r\n, and possible space
+      # Literal is next $Bytes of data, and possible space
       if (ref($Input)) {
         read($Input, $CurAtom, $Bytes) || die "No input data";
-        $Line = <$Input>;
-        $Line =~ /^\r\n$/ || die "No expected EOL at end of literal";
         $Line = <$Input>;
       } else {
         $CurAtom = substr($Line, pos($Line), $Bytes);
         pos($Line) += length($CurAtom);
-        $Line =~ /\G\r\n/gc || die "No expected EOL at end of literal";
       }
       $Line =~ m/\G ?/gc;
-        
+
       # Add to current atom. If there's a stack, must be within a bracket
       if (scalar @AtomStack) {
         push @$AtomRef, $CurAtom;
