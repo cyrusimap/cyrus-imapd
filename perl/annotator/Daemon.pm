@@ -48,6 +48,7 @@ use base qw(Net::Server);
 use Unix::Syslog qw(:macros);
 use Cyrus::Annotator::Message;
 use File::Path;
+use Encode qw(decode);
 
 our $VERSION = '1.00';
 
@@ -404,6 +405,97 @@ sub _parse_bodystructure {
   $Res{'MIME-TxtType'} = $Res{'MIME-Type'} . '/' . $Res{'MIME-Subtype'};
 
   return \%Res;
+}
+
+# Regexps used to determine if header is MIME encoded (we remove . from
+#  especials because of dumb ANSI_X3.4-1968 encoding)
+my $RFC1522Token = qr/[^\x00-\x1f\(\)\<\>\@\,\;\:\"\/\[\]\?\=\ ]+/;
+my $NeedDecodeUTF8Regexp = qr/=\?$RFC1522Token\?$RFC1522Token\?[^\?]*\?=/;
+
+sub _parse_envelope {
+  my ($Env, $IncludeRaw, $DecodeUTF8) = @_;
+
+  # Check envelope assumption
+  scalar(@$Env) == 10
+    || die "IMAPTalk: Wrong number of fields in envelope structure " . Dumper($Env);
+
+  _decode_utf8($Env->[1]) if $DecodeUTF8 && defined($Env->[1]) && $Env->[1] =~ $NeedDecodeUTF8Regexp;
+
+  # Setup hash directly from envelope structure
+  my %Res = (
+    'Date',        $Env->[0],
+    'Subject',     $Env->[1],
+    'From',        _parse_email_address($Env->[2], $DecodeUTF8),
+    'Sender',      _parse_email_address($Env->[3], $DecodeUTF8),
+    'Reply-To',    _parse_email_address($Env->[4], $DecodeUTF8),
+    'To',          _parse_email_address($Env->[5], $DecodeUTF8),
+    'Cc',          _parse_email_address($Env->[6], $DecodeUTF8),
+    'Bcc',         _parse_email_address($Env->[7], $DecodeUTF8),
+    ($IncludeRaw ? (
+      'From-Raw',    $Env->[2],
+      'Sender-Raw',  $Env->[3],
+      'Reply-To-Raw',$Env->[4],
+      'To-Raw',      $Env->[5],
+      'Cc-Raw',      $Env->[6],
+      'Bcc-Raw',     $Env->[7],
+    ) : ()),
+    'In-Reply-To', $Env->[8],
+    'Message-ID',  $Env->[9]
+  );
+
+  return \%Res;
+}
+
+sub _parse_email_address {
+  my $EmailAddressList = shift || [];
+  my $DecodeUTF8 = shift;
+
+  # Email addresses always come as a list of addresses (possibly in groups)
+  my @EmailGroups = ([ undef ]);
+  foreach my $Adr (@$EmailAddressList) {
+
+    # Check address assumption
+    scalar(@$Adr) == 4
+      || die "IMAPTalk: Wrong number of fields in email address structure " . Dumper($Adr);
+
+    # No hostname is start/end of group
+    if (!defined $Adr->[0] && !defined $Adr->[3]) {
+      push @EmailGroups, [ $Adr->[2] ];
+      next;
+    }
+
+    # Build 'ename@ecorp.com' part
+    my $EmailStr = (defined $Adr->[2] ? $Adr->[2] : '')
+                 . '@' 
+                 . (defined $Adr->[3] ? $Adr->[3] : '');
+    # If the email address has a name, add it at the start and put <> around address
+    if (defined $Adr->[0] and $Adr->[0] ne '') {
+      _decode_utf8($Adr->[0]) if $DecodeUTF8 && $Adr->[0] =~ $NeedDecodeUTF8Regexp;
+      # Strip any existing \"'s
+      $Adr->[0] =~ s/\"//g;
+      $EmailStr = '"' . $Adr->[0] . '" <' . $EmailStr . '>';
+    }
+
+    push @{$EmailGroups[-1]}, $EmailStr;
+  }
+
+  # Join the results with commas between each address, and "groupname: adrs ;" for groups
+  for (@EmailGroups) {
+    my $GroupName = shift @$_;
+    ($_ = undef), next if !defined $GroupName && !@$_;
+    my $EmailAdrs = join ", ", @$_;
+    $_ = defined($GroupName) ? $GroupName . ': ' . $EmailAdrs . ';' : $EmailAdrs;
+  }
+
+  return join " ", grep { defined $_ } @EmailGroups;
+}
+
+sub _decode_utf8 {
+  # Fix dumb, dumb ANSI_X3.4-1968 encoding. It's not actually a valid
+  #  charset according to RFC2047, "." is an especial, so Encode ignores it
+  # See http://en.wikipedia.org/wiki/ASCII for other aliases
+  $_[0] =~ s/=\?ANSI_X3\.4-(?:1968|1986)\?/=?US-ASCII?/gi;
+  eval { $_[0] = decode('MIME-Header', $_[0]); };
 }
 
 sub _read_args
