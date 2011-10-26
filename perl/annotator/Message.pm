@@ -176,7 +176,7 @@ sub decode_part {
 	$Content =~ tr{[A-Za-z0-9+/=]}{}cd;
 	my $extra = length($Content) % 4;
 	if ($extra) {
-	    warn "stripping $extra chars " . length($Content);
+	    # warn "stripping $extra chars " . length($Content);
 	    $Content = substr($Content, 0, -$extra);
 	}
 	$Content = decode_base64($Content);

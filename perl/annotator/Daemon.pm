@@ -469,7 +469,7 @@ sub process_request
     my ($self) = @_;
 
     eval {
-	$self->log(2, "Reading request");
+	$self->log(3, "Reading request");
 	my $ArgsString = _read_args();
 	die "Failed to read args" unless $ArgsString;
 
@@ -485,7 +485,7 @@ sub process_request
 
 	$self->annotate_message($message);
 
-	$self->log(2, "Emitting result");
+	$self->log(3, "Emitting result");
 	$self->_emit_results($message);
     };
     if ($@) {
