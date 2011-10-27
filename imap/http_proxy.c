@@ -337,7 +337,7 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 			    free(newmechlist);
 			}
 			else {
-			    syslog(LOG_INFO, "%s did not offer %s",
+			    syslog(LOG_DEBUG, "%s did not offer %s",
 				   s->hostname, mech_conf);
 			    buf_reset(&buf);
 			}
@@ -567,6 +567,7 @@ int http_mlookup(const char *name, char **server, char **aclp, void *tid)
 	kick_mupdate();
 	r = mboxlist_lookup(name, &mbentry, tid);
     }
+    if (r) return r;
 
     if (aclp) *aclp = mbentry.acl;
     if (server) {
@@ -583,6 +584,23 @@ int http_mlookup(const char *name, char **server, char **aclp, void *tid)
     return r;
 }
 
+
+/* Construct and write Via header to protstream. */
+static void write_via_hdr(struct protstream *pout, hdrcache_t hdrs)
+{
+    if (config_serverinfo >= IMAP_ENUM_SERVERINFO_MIN) {
+	const char **hdr = spool_getheader(hdrs, "Via");
+
+	prot_printf(pout, "%s %s %s", (hdr && hdr[0]) ? "," : "Via:",
+		    HTTP_VERSION, config_servername);
+	if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
+	    prot_printf(pout, " (Cyrus-Murder/%s)", cyrus_version());
+	}
+	prot_printf(pout, "\r\n");
+    }
+}
+
+
 /* Write end-to-end header (ignoring hop-by-hop) from cache to protstream. */
 static void write_cachehdr(const char *name, const char *contents, void *rock)
 {
@@ -597,6 +615,75 @@ static void write_cachehdr(const char *name, const char *contents, void *rock)
 
 }
 
+
+/* Read a response from backend */
+static int read_response(struct backend *be, struct transaction_t *txn,
+			 unsigned *code, const char **statline,
+			 hdrcache_t *resp_hdrs, struct buf *resp_body)
+{
+    static char statbuf[2048];
+    int c = EOF;
+
+    *statline = statbuf;
+
+    if (*resp_hdrs) spool_free_hdrcache(*resp_hdrs);
+    if (!(*resp_hdrs = spool_new_hdrcache())) {
+	txn->flags |= HTTP_CLOSE;
+	txn->errstr = "Unable to create header cache for backend response";
+	return HTTP_SERVER_ERROR;
+    }
+    if (!prot_fgets(statbuf, sizeof(statbuf), be->in) ||
+	(sscanf(statbuf, HTTP_VERSION " %u ", code) != 1) ||
+	spool_fill_hdrcache(be->in, NULL, *resp_hdrs, NULL)) {
+	txn->errstr = "Unable to read status-line/headers from backend";
+	return HTTP_UNAVAILABLE;
+    }
+    eatline(be->in, c); /* CRLF separating headers & body */
+
+    if (!resp_body) return 0;  /* Not expecting a body */
+
+    if (*code < 200) resp_body = NULL; /* Disregard body of provisional resp */
+
+    if (read_body(be->in, *resp_hdrs, resp_body, &txn->errstr)) {
+	return HTTP_UNAVAILABLE;
+    }
+
+    return 0;
+}
+
+
+/* Send a cached response to the client */
+static void send_response(struct protstream *pout, struct transaction_t *txn,
+			  const char *statline, hdrcache_t hdrs,
+			  struct buf *body)
+{
+    /*
+     * - Use cached Status-Line
+     * - Add/append-to Via: header
+     * - Add our own hop-by-hop headers
+     * - Use all cached end-to-end headers
+     * - Body is buffered, so send using "identity" TE
+     */
+    prot_printf(pout, "%s", statline);
+    write_via_hdr(pout, hdrs);
+    if (!httpd_tls_done && tls_enabled()) {
+	prot_printf(pout, "Upgrade: TLS/1.0\r\n");
+    }
+    if (txn->flags & HTTP_CLOSE)
+	prot_printf(pout, "Connection: close\r\n");
+    else {
+	prot_printf(pout, "Keep-Alive: timeout=%d\r\n", httpd_timeout);
+	prot_printf(pout, "Connection: Keep-Alive\r\n");
+    }
+    if (txn->flags & HTTP_NOCACHE) {
+	prot_printf(pout, "Cache-Control: no-cache\r\n");
+    }
+    spool_enum_hdrcache(hdrs, &write_cachehdr, pout);
+    prot_printf(httpd_out, "Content-Length: %u\r\n\r\n", buf_len(body));
+    prot_putbuf(httpd_out, body);
+}
+
+
 /*
  * Proxy (pipe) a client-request/server-response to/from a backend.
  *
@@ -605,8 +692,9 @@ static void write_cachehdr(const char *name, const char *contents, void *rock)
  */
 int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 {
-    char statline[2048];
-    int r = 0, c = EOF;
+    int r = 0;
+    unsigned code;
+    const char *statline;
     hdrcache_t resp_hdrs = NULL;
     struct buf resp_body = BUF_INITIALIZER;
 
@@ -616,22 +704,14 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
      * - Piece the Request_line back together
      * - Add/append-to Via: header
      * - Use all cached end-to-end headers from client
-     * - Body is buffered, so send use "identity" TE
+     * - Body is buffered, so send using "identity" TE
      */
     prot_printf(be->out, "%s %s", txn->meth, txn->req_tgt.path);
     if (*txn->req_tgt.query) {
 	prot_printf(be->out, "?%s", txn->req_tgt.query);
     }
     prot_printf(be->out, " %s\r\n", HTTP_VERSION);
-    if (config_serverinfo >= IMAP_ENUM_SERVERINFO_MIN) {
-	const char **hdr = spool_getheader(txn->req_hdrs, "Via");
-	prot_printf(be->out, "%s %s %s", (hdr && hdr[0]) ? "," : "Via:",
-		    HTTP_VERSION, config_servername);
-	if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
-	    prot_printf(be->out, " (Cyrus-Murder/%s)", cyrus_version());
-	}
-	prot_printf(be->out, "\r\n");
-    }
+    write_via_hdr(be->out, txn->req_hdrs);
     spool_enum_hdrcache(txn->req_hdrs, &write_cachehdr, be->out);
     prot_printf(be->out, "Content-Length: %u\r\n\r\n",
 		buf_len(&txn->req_body));
@@ -639,59 +719,176 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
     prot_flush(be->out);
 
     /* Read response from backend */
-    if (!(resp_hdrs = spool_new_hdrcache())) {
-	r = HTTP_SERVER_ERROR;
-	txn->flags |= HTTP_CLOSE;
-	txn->errstr = "Unable to create header cache for backend response";
-	goto cleanup;
+    r = read_response(be, txn, &code, &statline, &resp_hdrs, &resp_body);
+    if (!r) {
+	/* Send response to client */
+	send_response(httpd_out, txn, statline, resp_hdrs, &resp_body);
     }
-    if (!prot_fgets(statline, sizeof(statline), be->in) ||
-	spool_fill_hdrcache(be->in, NULL, resp_hdrs, NULL)) {
-	r = HTTP_UNAVAILABLE;
-	txn->errstr = "Unable to read status-line/headers from backend";
-    }
-    eatline(be->in, c); /* CRLF separating headers & body */
-    if ((r = read_body(be->in, resp_hdrs, &resp_body, &txn->errstr))) {
-	r = HTTP_UNAVAILABLE;
-	goto cleanup;
-    }
+
+    if (resp_hdrs) spool_free_hdrcache(resp_hdrs);
+    buf_free(&resp_body);
+
+    return r;
+}
+
+
+/*
+ * Proxy a COPY/MOVE client-request when the source and destination are
+ * on different backends.  This is handled as a GET from the source and
+ * PUT on the destination, while obeying any Overwrite header.
+ *
+ * XXX  This function currently buffers the response headers and body.
+ *      Should work on sending them to the client on-the-fly.
+ */
+int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
+		    struct transaction_t *txn)
+{
+    int r = 0;
+    unsigned code;
+    char *etag = NULL;
+    const char **hdr, *statline;
+    hdrcache_t resp_hdrs = NULL;
+    struct buf resp_body = BUF_INITIALIZER;
 
     /*
-     * Send response to client:
+     * Send a HEAD request to source backend to test conditionals:
      *
-     * - Use Status-Line from backend
-     * - Add/append-to Via: header
-     * - Add our own hop-by-hop headers
-     * - Use all cached end-to-end headers from backend
-     * - Body is buffered, so send use "identity" TE
+     * - Use any conditional headers specified by client
      */
-    prot_printf(httpd_out, "%s", statline);
-    if (config_serverinfo >= IMAP_ENUM_SERVERINFO_MIN) {
-	const char **hdr = spool_getheader(txn->req_hdrs, "Via");
-	prot_printf(httpd_out, "%s %s %s", (hdr && hdr[0]) ? "," : "Via:",
-		    HTTP_VERSION, config_servername);
+    prot_printf(src_be->out, "HEAD %s %s\r\n", txn->req_tgt.path, HTTP_VERSION);
+    prot_printf(src_be->out, "Host: %s\r\n", src_be->hostname);
+    if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
+	prot_printf(src_be->out, "User-Agent: %s\r\n",
+		    buf_cstring(&serverinfo));
+    }
+    if ((hdr = spool_getheader(txn->req_hdrs, "If")))
+	prot_printf(src_be->out, "If: %s\r\n", hdr[0]);
+    if ((hdr = spool_getheader(txn->req_hdrs, "If-Match")))
+	prot_printf(src_be->out, "If-Match: %s\r\n", hdr[0]);
+    if ((hdr = spool_getheader(txn->req_hdrs, "If-Modified-Since")))
+	prot_printf(src_be->out, "If-Modified-Since: %s\r\n", hdr[0]);
+    if ((hdr = spool_getheader(txn->req_hdrs, "If-None-Match")))
+	prot_printf(src_be->out, "If-None-Match: %s\r\n", hdr[0]);
+    if ((hdr = spool_getheader(txn->req_hdrs, "If-Unmodified-Since")))
+	prot_printf(src_be->out, "If-Unmodified-Since: %s\r\n", hdr[0]);
+    if ((hdr = spool_getheader(txn->req_hdrs, "If-Range")))
+	prot_printf(src_be->out, "If-Range: %s\r\n", hdr[0]);
+    prot_printf(src_be->out, "Content-Length: 0\r\n\r\n");
+    prot_flush(src_be->out);
+
+    /* Read response from source backend */
+    r = read_response(src_be, txn, &code, &statline, &resp_hdrs, NULL);
+    if (r) goto cleanup;
+
+    if (code == 200) {  /* OK */
+	/* Make a copy of the Etag for later use */
+	if ((hdr = spool_getheader(resp_hdrs, "Etag"))) etag = xstrdup(hdr[0]);
+
+	/*
+	 * Send a synchonizing PUT request to dest backend to test conditionals:
+	 *
+	 * - Add Expect:100-continue header (for synchonicity)
+	 * - Obey Overwrite:F by adding If-None-Match:* header
+	 * - Use Content-Type, -Language and -Type from HEAD response
+	 * - Body will be sent using "chunked" TE
+	 */
+	hdr = spool_getheader(txn->req_hdrs, "Destination");
+	prot_printf(dest_be->out, "PUT %s %s\r\n", hdr[0], HTTP_VERSION);
+	prot_printf(dest_be->out, "Host: %s\r\n", dest_be->hostname);
 	if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
-	    prot_printf(httpd_out, " (Cyrus-Murder/%s)", cyrus_version());
+	    prot_printf(dest_be->out, "User-Agent: %s\r\n",
+			buf_cstring(&serverinfo));
 	}
-	prot_printf(httpd_out, "\r\n");
+	prot_printf(dest_be->out, "Expect: 100-continue\r\n");
+	if ((hdr = spool_getheader(txn->req_hdrs, "Overwrite")) &&
+	    !strcmp(hdr[0], "F")) {
+	    prot_printf(dest_be->out, "If-None-Match: *\r\n");
+	}
+	hdr = spool_getheader(resp_hdrs, "Content-Type");
+	prot_printf(dest_be->out, "Content-Type: %s\r\n", hdr[0]);
+	if ((hdr = spool_getheader(resp_hdrs, "Content-Language")))
+	    prot_printf(dest_be->out, "Content-Language: %s\r\n", hdr[0]);
+	prot_printf(dest_be->out, "Transfer-Encoding: chunked\r\n\r\n");
+	prot_flush(dest_be->out);
+
+	/* Read response from dest backend */
+	r = read_response(dest_be, txn,
+			  &code, &statline, &resp_hdrs, &resp_body);
+	if (r) goto cleanup;
+
+	if (code == 100) {  /* Continue */
+	    /*
+	     * Send a GET request to source backend to fetch body:
+	     *
+	     * - Add If-Match header with ETag from HEAD
+	     */
+	    prot_printf(src_be->out, "GET %s %s\r\n",
+			txn->req_tgt.path, HTTP_VERSION);
+	    prot_printf(src_be->out, "Host: %s\r\n", src_be->hostname);
+	    if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
+		prot_printf(src_be->out, "User-Agent: %s\r\n",
+			    buf_cstring(&serverinfo));
+	    }
+	    if (etag) prot_printf(src_be->out, "If-Match: %s\r\n", etag);
+	    prot_printf(src_be->out, "Content-Length: 0\r\n\r\n");
+	    prot_flush(src_be->out);
+
+	    /* Read response from source backend */
+	    r = read_response(src_be, txn,
+			      &code, &statline, &resp_hdrs, &resp_body);
+	    if (r) goto cleanup;
+
+	    if (code == 200) {  /* OK */
+		/* Send single-chunk body to dest backend to complete the PUT */
+		prot_printf(dest_be->out, "%x\r\n", buf_len(&resp_body));
+		prot_putbuf(dest_be->out, &resp_body);
+		prot_printf(dest_be->out, "\r\n0\r\n\r\n");
+		prot_flush(dest_be->out);
+
+		/* Read final response from dest backend */
+		r = read_response(dest_be, txn,
+				  &code, &statline, &resp_hdrs, &resp_body);
+		if (r) goto cleanup;
+	    }
+	    else {
+		/* Couldn't get the body and can't finish PUT */
+		proxy_downserver(dest_be);
+	    }
+	}
     }
-    if (!httpd_tls_done && tls_enabled()) {
-	prot_printf(httpd_out, "Upgrade: TLS/1.0\r\n");
+
+    /* Send response to client */
+    send_response(httpd_out, txn, statline, resp_hdrs, &resp_body);
+
+    if ((txn->meth[0] == 'M') && (code < 300)) {
+	/*
+	 * Send a DELETE request to source backend:
+	 *
+	 * - Add If-Match header with ETag from HEAD
+	 *
+	 * XXX  This clearly isn't and atomic MOVE.
+	 *      Either try to fix this, or don't allow MOVE
+	 */
+	prot_printf(src_be->out, "DELETE %s %s\r\n",
+		    txn->req_tgt.path, HTTP_VERSION);
+	prot_printf(src_be->out, "Host: %s\r\n", src_be->hostname);
+	if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
+	    prot_printf(src_be->out, "User-Agent: %s\r\n",
+			buf_cstring(&serverinfo));
+	}
+	if (etag) prot_printf(src_be->out, "If-Match: %s\r\n", etag);
+	prot_printf(src_be->out, "Content-Length: 0\r\n\r\n");
+	prot_flush(src_be->out);
+
+	/* Read response from source backend */
+	read_response(src_be, txn,
+		      &code, &statline, &resp_hdrs, &resp_body);
     }
-    if (txn->flags & HTTP_CLOSE)
-	prot_printf(httpd_out, "Connection: close\r\n");
-    else {
-	prot_printf(httpd_out, "Keep-Alive: timeout=%d\r\n", httpd_timeout);
-	prot_printf(httpd_out, "Connection: Keep-Alive\r\n");
-    }
-    spool_enum_hdrcache(resp_hdrs, &write_cachehdr, httpd_out);
-    prot_printf(httpd_out, "Content-Length: %u\r\n\r\n",
-		buf_len(&resp_body));
-    prot_putbuf(httpd_out, &resp_body);
 
   cleanup:
-    buf_free(&resp_body);
     if (resp_hdrs) spool_free_hdrcache(resp_hdrs);
+    if (etag) free(etag);
+    buf_free(&resp_body);
 
     return r;
 }
