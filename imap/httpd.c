@@ -1617,6 +1617,7 @@ void error_response(long code, struct transaction_t *txn)
 {
     struct resp_body_t *resp_body = &txn->resp_body;
 
+    if (txn->meth[0] == 'H') txn->errstr = NULL;
     if (txn->errstr) {
 	resp_body->len = strlen(txn->errstr)+2;
 	resp_body->type = "text/plain";
