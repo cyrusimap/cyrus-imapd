@@ -173,9 +173,6 @@ static int meth_acl(struct transaction_t *txn)
     struct mailbox *mailbox = NULL;
     struct buf acl = BUF_INITIALIZER;
 
-    /* Response should not be cached */
-    txn->flags |= HTTP_NOCACHE;
-
     /* Make sure its a DAV resource */
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED;
 
@@ -224,6 +221,9 @@ static int meth_acl(struct transaction_t *txn)
     }
 
     /* Local Mailbox */
+
+    /* Response should not be cached */
+    txn->flags |= HTTP_NOCACHE;
 
     /* Open mailbox for writing */
     if ((r = mailbox_open_iwl(mailboxname, &mailbox))) {
@@ -466,7 +466,8 @@ static int meth_copy(struct transaction_t *txn)
     const char **hdr;
     struct request_target_t dest;  /* Parsed destination URL */
     char src_mboxname[MAX_MAILBOX_BUFFER], dest_mboxname[MAX_MAILBOX_BUFFER];
-    char *src_server, *dest_server, *src_acl, *dest_acl;
+    char *server, *acl;
+    struct backend *src_be = NULL, *dest_be = NULL;
     struct mailbox *src_mbox = NULL, *dest_mbox = NULL;
     struct caldav_db *src_caldb = NULL, *dest_caldb = NULL;
     uint32_t src_uid = 0, olduid = 0;
@@ -519,7 +520,7 @@ static int meth_copy(struct transaction_t *txn)
     (void) target_to_mboxname(&txn->req_tgt, src_mboxname);
 
     /* Locate the source mailbox */
-    if ((r = http_mlookup(src_mboxname, &src_server, &src_acl, NULL))) {
+    if ((r = http_mlookup(src_mboxname, &server, &acl, NULL))) {
 	syslog(LOG_ERR, "mlookup(%s) failed: %s",
 	       src_mboxname, error_message(r));
 	txn->errstr = error_message(r);
@@ -532,19 +533,26 @@ static int meth_copy(struct transaction_t *txn)
     }
 
     /* Check ACL for current user on source mailbox */
-    if (!src_acl ||
-	!(cyrus_acl_myrights(httpd_authstate, src_acl) & DACL_READ) ||
+    if (!acl ||
+	!(cyrus_acl_myrights(httpd_authstate, acl) & DACL_READ) ||
 	((txn->meth[0] == 'M') &&
-	 !(cyrus_acl_myrights(httpd_authstate, src_acl) & DACL_RMRSRC))) {
+	 !(cyrus_acl_myrights(httpd_authstate, acl) & DACL_RMRSRC))) {
 	/* DAV:need-privilege */
 	return HTTP_FORBIDDEN;
+    }
+
+    if (server) {
+	/* Remote source mailbox */
+	src_be = proxy_findserver(server, &http_protocol, httpd_userid,
+				  &backend_cached, NULL, NULL, httpd_in);
+	if (!src_be) return HTTP_UNAVAILABLE;
     }
 
     /* Construct dest mailbox name corresponding to destination URI */
     (void) target_to_mboxname(&dest, dest_mboxname);
 
     /* Locate the destination mailbox */
-    if ((r = http_mlookup(dest_mboxname, &dest_server, &dest_acl, NULL))) {
+    if ((r = http_mlookup(dest_mboxname, &server, &acl, NULL))) {
 	syslog(LOG_ERR, "mlookup(%s) failed: %s",
 	       dest_mboxname, error_message(r));
 	txn->errstr = error_message(r);
@@ -557,22 +565,37 @@ static int meth_copy(struct transaction_t *txn)
     }
 
     /* Check ACL for current user on destination */
-    if (!dest_acl ||
-	!((cyrus_acl_myrights(httpd_authstate, dest_acl) & DACL_WRITECONT) ||
-	  !(cyrus_acl_myrights(httpd_authstate, dest_acl) & DACL_ADDRSRC))) {
+    if (!acl ||
+	!((cyrus_acl_myrights(httpd_authstate, acl) & DACL_WRITECONT) ||
+	  !(cyrus_acl_myrights(httpd_authstate, acl) & DACL_ADDRSRC))) {
 	/* DAV:need-privilege */
 	return HTTP_FORBIDDEN;
     }
 
-    if (src_server) {
+    if (server) {
+	/* Remote destination mailbox */
+	dest_be = proxy_findserver(server, &http_protocol, httpd_userid,
+				   &backend_cached, NULL, NULL, httpd_in);
+	if (!dest_be) return HTTP_UNAVAILABLE;
+    }
+
+    if (src_be) {
 	/* Remote source mailbox */
-	struct backend *be;
+	/* XXX  Currently only supports standard Murder */
 
-	be = proxy_findserver(src_server, &http_protocol, httpd_userid,
-			      &backend_cached, NULL, NULL, httpd_in);
-	if (!be) return HTTP_UNAVAILABLE;
+	if (!dest_be) return HTTP_NOT_ALLOWED;
 
-	return http_pipe_req_resp(be, txn);
+	/* Replace cached Destination header with just the absolute path */
+	hdr = spool_getheader(txn->req_hdrs, "Destination");
+	strcpy((char *) hdr[0], dest.path);
+
+	if (src_be == dest_be) {
+	    /* Simply send the COPY to the backend */
+	    return http_pipe_req_resp(src_be, txn);
+	}
+
+	/* This is the harder case: GET from source and PUT on destination */
+	return http_proxy_copy(src_be, dest_be, txn);
     }
 
     /* Local Mailbox */
@@ -597,7 +620,6 @@ static int meth_copy(struct transaction_t *txn)
 
     /* Find message UID for the source resource */
     caldav_read(src_caldb, txn->req_tgt.resource, &src_uid);
-    /* XXX  Check errors */
 
     /* Fetch index record for the source resource */
     if (!src_uid || mailbox_find_index_record(src_mbox, src_uid, &src_rec)) {
@@ -616,6 +638,8 @@ static int meth_copy(struct transaction_t *txn)
 	goto done;
     }
 
+    /* Local Mailbox */
+
     /* Fetch cache record for the source resource (so we can copy it) */
     if ((r = mailbox_cacherecord(src_mbox, &src_rec))) {
 	syslog(LOG_ERR, "mailbox_cacherecord(%s) failed: %s",
@@ -627,23 +651,6 @@ static int meth_copy(struct transaction_t *txn)
 
     /* Finished our initial read of source mailbox */
     mailbox_unlock_index(src_mbox, NULL);
-
-    if (dest_server) {
-	/* Remote destination mailbox */
-	struct backend *be;
-
-	be = proxy_findserver(src_server, &http_protocol, httpd_userid,
-			      &backend_cached, NULL, NULL, httpd_in);
-	if (!be) {
-	    ret = HTTP_UNAVAILABLE;
-	    goto done;
-	}
-
-	ret = HTTP_NOT_ALLOWED;
-	goto done;
-    }
-
-    /* Local Mailbox */
 
     /* Open dest mailbox for reading */
     if ((r = mailbox_open_irl(dest_mboxname, &dest_mbox))) {
@@ -909,7 +916,6 @@ static int meth_delete(struct transaction_t *txn)
 
     /* Find message UID for the resource */
     caldav_lockread(caldavdb, txn->req_tgt.resource, &uid);
-    /* XXX  Check errors */
 
     /* Fetch index record for the resource */
     if (!uid || mailbox_find_index_record(mailbox, uid, &record)) {
@@ -1028,16 +1034,16 @@ static int meth_get(struct transaction_t *txn)
 
     /* Find message UID for the resource */
     caldav_read(caldavdb, txn->req_tgt.resource, &uid);
-    /* XXX  Check errors */
 
     /* Fetch index record for the resource */
-    r = mailbox_find_index_record(mailbox, uid, &record);
-    /* XXX  check for errors */
-
-    etag = message_guid_encode(&record.guid);
-    lastmod = record.internaldate;
+    if (!uid || mailbox_find_index_record(mailbox, uid, &record)) {
+	ret = HTTP_NOT_FOUND;
+	goto done;
+    }
 
     /* Check any preconditions */
+    etag = message_guid_encode(&record.guid);
+    lastmod = record.internaldate;
     precond = check_precond(txn->meth, etag, lastmod, txn->req_hdrs);
 
     if (precond != HTTP_OK) {
@@ -1089,9 +1095,6 @@ static int meth_mkcol(struct transaction_t *txn)
     char *server, mailboxname[MAX_MAILBOX_BUFFER], *partition = NULL;
     struct proppatch_ctx pctx;
 
-    /* Response should not be cached */
-    txn->flags |= HTTP_NOCACHE;
-
     /* Make sure its a DAV resource */
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
 
@@ -1133,6 +1136,9 @@ static int meth_mkcol(struct transaction_t *txn)
     }
 
     /* Local Mailbox */
+
+    /* Response should not be cached */
+    txn->flags |= HTTP_NOCACHE;
 
     /* Parse the MKCOL/MKCALENDAR body, if exists */
     ret = parse_xml_body(txn, &root);
@@ -1437,9 +1443,6 @@ static int meth_proppatch(struct transaction_t *txn)
     char *server, *acl, mailboxname[MAX_MAILBOX_BUFFER];
     struct proppatch_ctx pctx;
 
-    /* Response should not be cached */
-    txn->flags |= HTTP_NOCACHE;
-
     /* Make sure its a DAV resource */
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED;
 
@@ -1486,6 +1489,9 @@ static int meth_proppatch(struct transaction_t *txn)
     }
 
     /* Local Mailbox */
+
+    /* Response should not be cached */
+    txn->flags |= HTTP_NOCACHE;
 
     /* Parse the PROPPATCH body */
     ret = parse_xml_body(txn, &root);
@@ -1697,7 +1703,6 @@ static int meth_put(struct transaction_t *txn)
 
     /* Find message UID for the resource, if exists */
     caldav_read(caldavdb, txn->req_tgt.resource, &olduid);
-    /* XXX  Check errors */
 
     if (olduid) {
 	/* Overwriting existing resource */
