@@ -866,7 +866,7 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 	 *
 	 * - Add If-Match header with ETag from HEAD
 	 *
-	 * XXX  This clearly isn't and atomic MOVE.
+	 * XXX  This clearly isn't an atomic MOVE.
 	 *      Either try to fix this, or don't allow MOVE
 	 */
 	prot_printf(src_be->out, "DELETE %s %s\r\n",
