@@ -91,10 +91,12 @@ const char *lastkey = NULL;
 
 static void printfile(struct protstream *out, const struct dlist *dl)
 {
-    char buf[4096];
     struct stat sbuf;
     FILE *f;
     unsigned long size;
+    struct message_guid guid2;
+    const char *msg_base = NULL;
+    unsigned long msg_len = 0;
 
     f = fopen(dl->sval, "r");
     if (!f) {
@@ -117,20 +119,28 @@ static void printfile(struct protstream *out, const struct dlist *dl)
 	return;
     }
 
+    map_refresh(fileno(f), 1, &msg_base, &msg_len, sbuf.st_size,
+		"new message", 0);
+
+    message_guid_generate(&guid2, msg_base, msg_len);
+
+    if (!message_guid_equal(&guid2, (struct message_guid *) &dl->gval)) {
+	syslog(LOG_ERR, "IOERROR: GUID mismatch %s",
+	       dl->sval);
+	prot_printf(out, "NIL");
+	fclose(f);
+	map_free(&msg_base, &msg_len);
+	return;
+    }
+
     prot_printf(out, "%%{");
     prot_printastring(out, dl->part);
     prot_printf(out, " ");
     prot_printastring(out, message_guid_encode(&dl->gval));
     prot_printf(out, " %lu}\r\n", size);
-    while (size) {
-	int n = fread(buf, 1, (size > 4096 ? 4096 : size), f);
-	if (n <= 0) break;
-	prot_write(out, buf, n);
-	size -= n;
-    }
+    prot_write(out, msg_base, msg_len);
     fclose(f);
-
-    if (size) fatal("failed to finish reading file!", EC_IOERR);
+    map_free(&msg_base, &msg_len);
 }
 
 /* XXX - these two functions should be out in append.c or reserve.c
@@ -138,7 +148,7 @@ static void printfile(struct protstream *out, const struct dlist *dl)
 const char *dlist_reserve_path(const char *part, struct message_guid *guid)
 {
     static char buf[MAX_MAILBOX_PATH];
-    snprintf(buf, MAX_MAILBOX_PATH, "%s/sync./%lu/%s", 
+    snprintf(buf, MAX_MAILBOX_PATH, "%s/sync./%lu/%s",
 		  config_partitiondir(part), (unsigned long)getpid(),
 		  message_guid_encode(guid));
     cyrus_mkdir(buf, 0755);
