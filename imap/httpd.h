@@ -250,6 +250,8 @@ extern struct namespace httpd_namespace;
 extern int parse_uri(const char *meth, const char *uri,
 		     struct request_target_t *tgt, const char **errstr);
 extern int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname);
+extern int http_mailbox_open(const char *name, struct mailbox **mailbox,
+			     int locktype);
 extern const char *http_statusline(long code);
 extern void response_header(long code, struct transaction_t *txn);
 extern void error_response(long code, struct transaction_t *txn);

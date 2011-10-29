@@ -180,8 +180,8 @@ static int meth_get(struct transaction_t *txn)
     /* Local Mailbox */
 
     /* Open mailbox for reading */
-    if ((r = mailbox_open_irl(mailboxname, &mailbox))) {
-	syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
+    if ((r = http_mailbox_open(mailboxname, &mailbox, LOCK_SHARED))) {
+	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
 	       mailboxname, error_message(r));
 	txn->errstr = error_message(r);
 
@@ -254,7 +254,7 @@ static int meth_get(struct transaction_t *txn)
 	}
     }
 
-    if (mailbox) mailbox_close(&mailbox);
+    if (mailbox) mailbox_unlock_index(mailbox, NULL);
 
     return ret;
 

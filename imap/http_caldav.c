@@ -226,8 +226,8 @@ static int meth_acl(struct transaction_t *txn)
     txn->flags |= HTTP_NOCACHE;
 
     /* Open mailbox for writing */
-    if ((r = mailbox_open_iwl(mailboxname, &mailbox))) {
-	syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
+    if ((r = http_mailbox_open(mailboxname, &mailbox, LOCK_EXCLUSIVE))) {
+	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
 	       mailboxname, error_message(r));
 	txn->errstr = error_message(r);
 	ret = HTTP_SERVER_ERROR;
@@ -439,7 +439,7 @@ static int meth_acl(struct transaction_t *txn)
   done:
     buf_free(&acl);
     if (indoc) xmlFreeDoc(indoc);
-    if (mailbox) mailbox_close(&mailbox);
+    if (mailbox) mailbox_unlock_index(mailbox, NULL);
 
     return ret;
 }
@@ -601,8 +601,8 @@ static int meth_copy(struct transaction_t *txn)
     /* Local Mailbox */
 
     /* Open source mailbox for reading */
-    if ((r = mailbox_open_irl(src_mboxname, &src_mbox))) {
-	syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
+    if ((r = http_mailbox_open(src_mboxname, &src_mbox, LOCK_SHARED))) {
+	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
 	       src_mboxname, error_message(r));
 	txn->errstr = error_message(r);
 	ret = HTTP_SERVER_ERROR;
@@ -819,7 +819,7 @@ static int meth_copy(struct transaction_t *txn)
     if (dest_caldb) caldav_close(dest_caldb);
     if (dest_mbox) mailbox_close(&dest_mbox);
     if (src_caldb) caldav_close(src_caldb);
-    if (src_mbox) mailbox_close(&src_mbox);
+    if (src_mbox) mailbox_unlock_index(src_mbox, NULL);
 
     return ret;
 }
@@ -899,8 +899,8 @@ static int meth_delete(struct transaction_t *txn)
     /* DELETE resource */
 
     /* Open mailbox for writing */
-    if ((r = mailbox_open_iwl(mailboxname, &mailbox))) {
-	syslog(LOG_ERR, "mailbox_open_iwl(%s) failed: %s",
+    if ((r = http_mailbox_open(mailboxname, &mailbox, LOCK_EXCLUSIVE))) {
+	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
 	       mailboxname, error_message(r));
 	txn->errstr = error_message(r);
 	ret = HTTP_SERVER_ERROR;
@@ -951,7 +951,7 @@ static int meth_delete(struct transaction_t *txn)
 
   done:
     if (caldavdb) caldav_close(caldavdb);
-    if (mailbox) mailbox_close(&mailbox);
+    if (mailbox) mailbox_unlock_index(mailbox, NULL);
 
     return ret;
 }
@@ -1017,8 +1017,8 @@ static int meth_get(struct transaction_t *txn)
     /* Local Mailbox */
 
     /* Open mailbox for reading */
-    if ((r = mailbox_open_irl(mailboxname, &mailbox))) {
-	syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
+    if ((r = http_mailbox_open(mailboxname, &mailbox, LOCK_SHARED))) {
+	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
 	       mailboxname, error_message(r));
 	txn->errstr = error_message(r);
 	ret = HTTP_SERVER_ERROR;
@@ -1070,7 +1070,7 @@ static int meth_get(struct transaction_t *txn)
 
   done:
     if (caldavdb) caldav_close(caldavdb);
-    if (mailbox) mailbox_close(&mailbox);
+    if (mailbox) mailbox_unlock_index(mailbox, NULL);
 
     return ret;
 }
@@ -1671,8 +1671,8 @@ static int meth_put(struct transaction_t *txn)
     comp = icalcomponent_get_first_real_component(ical);
 
     /* Open mailbox for reading */
-    if ((r = mailbox_open_irl(mailboxname, &mailbox))) {
-	syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
+    if ((r = http_mailbox_open(mailboxname, &mailbox, LOCK_SHARED))) {
+	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
 	       mailboxname, error_message(r));
 	txn->errstr = error_message(r);
 	ret = HTTP_SERVER_ERROR;
@@ -1851,28 +1851,33 @@ static int meth_put(struct transaction_t *txn)
 			       mailboxname, error_message(r));
 			txn->errstr = error_message(r);
 			ret = HTTP_SERVER_ERROR;
-			goto done;
 		    }
 		}
 
-		/* Create mapping entry from resource name and UID */
-		caldav_write(caldavdb, txn->req_tgt.resource, newrecord.uid);
-		/* XXX  check for errors, if this fails, backout changes */
+		if (!r) {
+		    /* Create mapping entry from resource name and UID */
+		    caldav_write(caldavdb, txn->req_tgt.resource, newrecord.uid);
+		    /* XXX  check for errors, if this fails, backout changes */
 
-		/* Tell client about the new resource */
-		txn->etag = message_guid_encode(&newrecord.guid);
-		txn->loc = txn->req_tgt.path;
+		    /* Tell client about the new resource */
+		    txn->etag = message_guid_encode(&newrecord.guid);
+		    txn->loc = txn->req_tgt.path;
+		}
 	    }
 	}
 	else {
 	    append_abort(&appendstate);
 	}
+
+	/* append_setup() opened mailbox again,
+	   we need to close it to decrement reference count */
+	if (mailbox) mailbox_close(&mailbox);
     }
 
   done:
     if (stage) append_removestage(stage);
     if (caldavdb) caldav_close(caldavdb);
-    if (mailbox) mailbox_close(&mailbox);
+    if (mailbox) mailbox_unlock_index(mailbox, NULL);
 
     return ret;
 }
@@ -2002,8 +2007,8 @@ static int meth_report(struct transaction_t *txn)
     preload_proplist(cur->children, &elist);
 
     /* Open mailbox for reading */
-    if ((r = mailbox_open_irl(mailboxname, &mailbox))) {
-	syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
+    if ((r = http_mailbox_open(mailboxname, &mailbox, LOCK_SHARED))) {
+	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
 	       mailboxname, error_message(r));
 	txn->errstr = error_message(r);
 	ret = HTTP_SERVER_ERROR;
@@ -2062,7 +2067,7 @@ static int meth_report(struct transaction_t *txn)
 
   done:
     if (caldavdb) caldav_close(caldavdb);
-    if (mailbox) mailbox_close(&mailbox);
+    if (mailbox) mailbox_unlock_index(mailbox, NULL);
 
     /* Free the entry list */
     while (elist) {
