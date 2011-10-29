@@ -57,8 +57,6 @@
  *   - sync-collection REPORT (can probably use MODSEQs -- as CTag too)
  *   - Use XML precondition error codes
  *   - Add WebDAV LOCKing?  Does anybody use it?
- *   - Should we have a linked-list/hash of open mailboxes,
- *     rather than open/close for every method?
  */
 
 #include <config.h>
