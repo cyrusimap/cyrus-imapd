@@ -2425,7 +2425,7 @@ static char *parse_nstring(char **str)
 
 void message_parse_env_address(char *str, struct address *addr)
 {
-    str++; /* skip ( */
+    if (*str == '(') str++; /* skip ( */
     addr->name = parse_nstring(&str);
     str++; /* skip SP */
     addr->route = parse_nstring(&str);
