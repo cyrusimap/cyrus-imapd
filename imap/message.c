@@ -2407,12 +2407,25 @@ static char *parse_nstring(char **str)
     char *cp = *str, *val;
 
     if (*cp == '"') { /* quoted string */
-	val = ++cp; /* skip " */
+	val = cp+1; /* skip " */
 	do {
-	    cp = strchr(cp, '"');
+	    cp = strchr(cp+1, '"');
 	    if (!cp) return NULL; /* whole thing is broken */
 	} while (*(cp-1) == '\\'); /* skip escaped " */
 	*cp++ = '\0';
+    }
+    else if (*cp == '{') {
+	int len = 0;
+	/* yeah, it may be a literal too */
+	cp++;
+	while (cyrus_isdigit((int) *cp)) {
+	    len = len*10 + *cp - '0';
+	    cp++;
+	}
+	cp += 3;		/* skip close brace & CRLF */
+	val = cp;
+	val[len] = '\0';
+	cp += len;
     }
     else { /* NIL */
 	val = NULL;
