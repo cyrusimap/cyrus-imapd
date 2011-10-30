@@ -717,6 +717,56 @@ static void test_write_nstring(void)
     buf_free(&b);
 }
 
+#undef TESTPARSE
+#define TESTPARSE(expout, explen, input) \
+    buf_setcstr(&b, input); \
+    buf_putc(&b, ')'); \
+    ptr = b.s; \
+    output = parse_nstring(&ptr); \
+    CU_ASSERT(!memcmp(output, expout, explen))
+
+static void test_parse_nstring(void)
+{
+    struct buf b = BUF_INITIALIZER;
+    char *output;
+    char *ptr;
+
+    /* NULL string */
+    buf_setcstr(&b, "NIL)");
+    ptr = b.s;
+    output = parse_nstring(&ptr);
+    CU_ASSERT_PTR_NULL(output);
+
+    /* Zero length string */
+    TESTPARSE("", 0, "\"\"");
+
+    /* Boring string */
+    TESTPARSE("Hello", 5, "\"Hello\"");
+
+    /* String with non-dangerous whitespace */
+    TESTPARSE("Hello World\tagain", 17, "\"Hello World\tagain\"");
+
+    /* String with dangerous whitespace */
+    TESTPARSE("Good\rBye\nEarth", 14, "{14}\r\nGood\rBye\nEarth");
+
+    /* String with embedded dquote */
+    TESTPARSE("Quot\"able", 9, "{9}\r\nQuot\"able");
+
+    /* String with embedded percent */
+    TESTPARSE("per%ent", 7, "{7}\r\nper%ent");
+
+    /* String with embedded backslash */
+    TESTPARSE("slash\\dot", 9, "{9}\r\nslash\\dot");
+
+    /* String with embedded 8-bit chars */
+    TESTPARSE("Hi I'm \330l\345f", 11, "{11}\r\nHi I'm \330l\345f");
+
+    /* And some stuff seen in the wild */
+    TESTPARSE("Lloyd Burns\\\"", 13, "\"Lloyd Burns\\\"\" NIL \"MariogenoaRobertson\" \"fiftyfoureleven.com\")");
+
+    buf_free(&b);
+}
+
 #undef TESTCASE
 
 #define TESTCASE(input, expout) \

@@ -174,4 +174,6 @@ extern void message_free_body P((struct body *body));
 /* NOTE - scribbles on its input */
 extern void message_parse_env_address(char *str, struct address *addr);
 
+extern char *parse_nstring(char **str);
+
 #endif /* INCLUDED_MESSAGE_H */

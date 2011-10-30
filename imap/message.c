@@ -2402,7 +2402,7 @@ void parse_cached_envelope(char *env, char *tokens[], int tokens_size)
     }
 }
 
-static char *parse_nstring(char **str)
+char *parse_nstring(char **str)
 {
     char *cp = *str, *val;
 
