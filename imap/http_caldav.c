@@ -45,7 +45,7 @@
  *
  *   - Make proxying more robust.  Currently depends on calendar collections
  *     residing on same server as user's INBOX.  Doesn't handle global/shared
- *     calendars.  COPY/MOVE doesn't handle remote destination.
+ *     calendars.
  *   - Check meth_acl() to make sure we have logic correct
  *     (iCal seems to blow up existing ACLs).
  *   - Fix PROPFIND depth logic?  (need to confirm that its broken)
