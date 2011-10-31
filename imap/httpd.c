@@ -984,14 +984,6 @@ static void cmdloop(void)
 	    txn.loc = buf;
 	}
 
-	/* Read the body, if present */
-	syslog(LOG_DEBUG, "read body(dump = %d)", ret != 0);
-	if ((r = read_body(httpd_in, txn.req_hdrs,
-			   ret ? NULL : &txn.req_body, &txn.errstr))) {
-	    ret = r;
-	    txn.flags |= HTTP_CLOSE;
-	}
-
 	/* Check for connection directives */
 	if ((hdr = spool_getheader(txn.req_hdrs, "Connection"))) {
 	    /* Check if this is a non-persistent connection */
@@ -1111,7 +1103,15 @@ static void cmdloop(void)
 	}
 
 	/* Memory cleanup */
-	if (txn.req_hdrs) spool_free_hdrcache(txn.req_hdrs);
+	if (txn.req_hdrs) {
+	    /* If we haven't the read body, read and discard it */
+	    if (!(txn.flags & HTTP_READBODY) &&
+		read_body(httpd_in, txn.req_hdrs, NULL, &txn.errstr)) {
+		txn.flags |= HTTP_CLOSE;
+	    }
+
+	    spool_free_hdrcache(txn.req_hdrs);
+	}
 
 	if (txn.flags & HTTP_CLOSE) {
 	    buf_free(&txn.req_body);
@@ -1192,6 +1192,8 @@ int read_body(struct protstream *pin,
     const char **hdr;
     unsigned long len = 0, chunk;
     unsigned need_cont = 0, is_chunked;
+
+    syslog(LOG_DEBUG, "read body(dump = %d)", body != NULL);
 
     /* Check if client expects 100 (Continue) status before sending body */
     if ((hdr = spool_getheader(hdrs, "Expect"))) {
@@ -2077,9 +2079,6 @@ int get_doc(struct transaction_t *txn, filter_proc_t filter)
     struct message_guid guid;
     struct resp_body_t *resp_body = &txn->resp_body;
 
-    /* We don't accept a body for this method */
-    if (buf_len(&txn->req_body)) return HTTP_BAD_MEDIATYPE;
-
     /* Serve up static pages */
     prefix = config_getstring(IMAPOPT_HTTPDOCROOT);
     if (!prefix) return HTTP_NOT_FOUND;
@@ -2170,11 +2169,6 @@ int meth_options(struct transaction_t *txn)
 {
     /* Response should not be cached */
     txn->flags |= HTTP_NOCACHE;
-
-    if (buf_len(&txn->req_body)) {
-	txn->errstr = "A body is not expected for this method";
-        return HTTP_BAD_MEDIATYPE;
-    }
 
     /* Special case "*" - show all features/methods available on server */
     if (!strcmp(txn->req_tgt.path, "*")) txn->req_tgt.allow = ALLOW_ALL;

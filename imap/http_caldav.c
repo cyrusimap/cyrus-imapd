@@ -95,6 +95,7 @@ static int meth_proppatch(struct transaction_t *txn);
 static int meth_put(struct transaction_t *txn);
 static int meth_report(struct transaction_t *txn);
 static int parse_path(struct request_target_t *tgt, const char **errstr);
+static int is_mediatype(const char *hdr, const char *type);
 static int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root);
 
 /* Namespace for CalDAV collections */
@@ -476,9 +477,6 @@ static int meth_copy(struct transaction_t *txn)
 
     /* Response should not be cached */
     txn->flags |= HTTP_NOCACHE;
-
-    /* We don't accept a body for this method */
-    if (buf_len(&txn->req_body)) return HTTP_BAD_MEDIATYPE;
 
     /* Make sure source is a DAV resource */
     if (!(txn->req_tgt.allow & ALLOW_DAV)) return HTTP_NOT_ALLOWED;
@@ -970,9 +968,6 @@ static int meth_get(struct transaction_t *txn)
     const char *etag = NULL;
     time_t lastmod = 0;
 
-    /* We don't accept a body for this method */
-    if (buf_len(&txn->req_body)) return HTTP_BAD_MEDIATYPE;
-
     /* Parse the path */
     if ((r = parse_path(&txn->req_tgt, &txn->errstr))) return r;
 
@@ -1138,6 +1133,19 @@ static int meth_mkcol(struct transaction_t *txn)
     /* Response should not be cached */
     txn->flags |= HTTP_NOCACHE;
 
+    /* Construct mailbox name corresponding to request target URI */
+    (void) target_to_mboxname(&txn->req_tgt, mailboxname);
+
+    /* Check if we are allowed to create the mailbox */
+    r = mboxlist_createmailboxcheck(mailboxname, 0, NULL,
+				    httpd_userisadmin || httpd_userisproxyadmin,
+				    httpd_userid, httpd_authstate,
+				    NULL, &partition, 0);
+
+    if (r == IMAP_PERMISSION_DENIED) return HTTP_FORBIDDEN;
+    else if (r == IMAP_MAILBOX_EXISTS) return HTTP_FORBIDDEN;
+    else if (r) return HTTP_SERVER_ERROR;
+
     /* Parse the MKCOL/MKCALENDAR body, if exists */
     ret = parse_xml_body(txn, &root);
     if (ret) goto done;
@@ -1160,21 +1168,6 @@ static int meth_mkcol(struct transaction_t *txn)
 
 	instr = root->children;
     }
-
-    /* Construct mailbox name corresponding to request target URI */
-    (void) target_to_mboxname(&txn->req_tgt, mailboxname);
-
-    /* Check if we are allowed to create the mailbox */
-    r = mboxlist_createmailboxcheck(mailboxname, 0, NULL,
-				    httpd_userisadmin || httpd_userisproxyadmin,
-				    httpd_userid, httpd_authstate,
-				    NULL, &partition, 0);
-
-    if (r == IMAP_PERMISSION_DENIED) ret = HTTP_FORBIDDEN;
-    else if (r == IMAP_MAILBOX_EXISTS) ret = HTTP_FORBIDDEN;
-    else if (r) ret = HTTP_SERVER_ERROR;
-
-    if (ret) goto done;
 
     if (instr) {
 	/* Start construction of our mkcol/mkcalendar response */
@@ -1340,7 +1333,8 @@ int meth_propfind(struct transaction_t *txn)
 	/* Make sure its a propfind element */
 	if (xmlStrcmp(root->name, BAD_CAST "propfind")) {
 	    txn->errstr = "Missing propfind element in PROFIND request";
-	    return HTTP_BAD_REQUEST;
+	    ret = HTTP_BAD_REQUEST;
+	    goto done;
 	}
 
 	/* Find child element of propfind */
@@ -1350,7 +1344,8 @@ int meth_propfind(struct transaction_t *txn)
 	/* Make sure its a prop element */
 	/* XXX  TODO: Check for allprop and propname too */
 	if (!cur || xmlStrcmp(cur->name, BAD_CAST "prop")) {
-	    return HTTP_BAD_REQUEST;
+	    ret = HTTP_BAD_REQUEST;
+	    goto done;
 	}
     }
 
@@ -1593,7 +1588,7 @@ static int meth_put(struct transaction_t *txn)
     const char **hdr;
     uquota_t size = 0;
     time_t now = time(NULL);
-    pid_t p;
+    pid_t pid = getpid();
     char datestr[80], msgid[8192];
     struct appendstate appendstate;
     icalcomponent *ical, *comp;
@@ -1609,6 +1604,13 @@ static int meth_put(struct transaction_t *txn)
 
     /* We don't handle PUT on calendar collections */
     if (!txn->req_tgt.resource && (txn->meth[1] != 'O')) return HTTP_NOT_ALLOWED;
+
+    /* Check Content-Type */
+    if (!(hdr = spool_getheader(txn->req_hdrs, "Content-Type")) ||
+	!is_mediatype(hdr[0], "text/calendar")) {
+	txn->errstr = "This collection only supports text/calendar data";
+	return HTTP_BAD_MEDIATYPE;
+    }
 
     /* Construct mailbox name corresponding to request target URI */
     (void) target_to_mboxname(&txn->req_tgt, mailboxname);
@@ -1647,27 +1649,6 @@ static int meth_put(struct transaction_t *txn)
 
     /* Local Mailbox */
 
-    /* Make sure we have a body */
-    if (!buf_len(&txn->req_body)) {
-	txn->errstr = "Missing request body";
-	return HTTP_BAD_REQUEST;
-    }
-
-    /* Check Content-Type */
-    if ((hdr = spool_getheader(txn->req_hdrs, "Content-Type")) &&
-	strncmp(hdr[0], "text/calendar", 13)) {
-	txn->errstr = "This collection only supports text/calendar data";
-	return HTTP_BAD_MEDIATYPE;
-    }
-
-    /* Parse the iCal data for important properties */
-    ical = icalparser_parse_string(buf_cstring(&txn->req_body));
-    if (!ical) {
-	txn->errstr = "Invalid calendar data";
-	return HTTP_BAD_MEDIATYPE;
-    }
-    comp = icalcomponent_get_first_real_component(ical);
-
     /* Open mailbox for reading */
     if ((r = http_mailbox_open(mailboxname, &mailbox, LOCK_SHARED))) {
 	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
@@ -1693,8 +1674,8 @@ static int meth_put(struct transaction_t *txn)
 	    *p++ = '/';
 	    len++;
 	}
-	snprintf(p, MAX_MAILBOX_PATH - len, "%08X-%s.ics",
-		 strhash(mailboxname), icalcomponent_get_uid(comp));
+	snprintf(p, MAX_MAILBOX_PATH - len, "%d-%d-%s-%u.ics",
+		 pid, (int) now, mailbox->uniqueid, mailbox->i.last_uid+1);
 	txn->req_tgt.resource = p;
 	txn->req_tgt.reslen = strlen(p);
     }
@@ -1737,6 +1718,31 @@ static int meth_put(struct transaction_t *txn)
 	goto done;
     }
 
+    /* Read body */
+    txn->flags |= HTTP_READBODY;
+    r = read_body(httpd_in, txn->req_hdrs, &txn->req_body, &txn->errstr);
+    if (r) {
+	txn->flags |= HTTP_CLOSE;
+	ret = r;
+	goto done;
+    }
+
+    /* Make sure we have a body */
+    if (!buf_len(&txn->req_body)) {
+	txn->errstr = "Missing request body";
+	ret = HTTP_BAD_REQUEST;
+	goto done;
+    }
+
+    /* Parse the iCal data for important properties */
+    ical = icalparser_parse_string(buf_cstring(&txn->req_body));
+    if (!ical) {
+	txn->errstr = "Invalid calendar data";
+	ret = HTTP_BAD_MEDIATYPE;
+	goto done;
+    }
+    comp = icalcomponent_get_first_real_component(ical);
+
     /* Prepare to stage the message */
     if (!(f = append_newstage(mailboxname, now, 0, &stage))) {
 	txn->errstr = error_message(r);
@@ -1753,9 +1759,8 @@ static int meth_put(struct transaction_t *txn)
     rfc822date_gen(datestr, sizeof(datestr), now);
     fprintf(f, "Date: %s\r\n", datestr);
 
-    p = getpid();
     snprintf(msgid, sizeof(msgid), "<cmu-http-%d-%d-%d@%s>", 
-	     (int) p, (int) now, global_put_count++, config_servername);
+	     pid, (int) now, global_put_count++, config_servername);
     fprintf(f, "Message-ID: %s\r\n", msgid);
 
     hdr = spool_getheader(txn->req_hdrs, "Content-Type");
@@ -2155,10 +2160,9 @@ static int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root)
 {
     const char **hdr;
     xmlDocPtr doc;
+    int r = 0;
 
     *root = NULL;
-
-    if (!buf_len(&txn->req_body)) return 0;
 
     /* Check Content-Type */
     if (!(hdr = spool_getheader(txn->req_hdrs, "Content-Type")) ||
@@ -2167,6 +2171,15 @@ static int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root)
 	txn->errstr = "This method requires an XML body";
 	return HTTP_BAD_MEDIATYPE;
     }
+
+    /* Read body */
+    txn->flags |= HTTP_READBODY;
+    if ((r = read_body(httpd_in, txn->req_hdrs, &txn->req_body, &txn->errstr))) {
+	txn->flags |= HTTP_CLOSE;
+	return r;
+    }
+
+    if (!buf_len(&txn->req_body)) return 0;
 
     /* Parse the XML request */
     doc = xmlParseMemory(buf_cstring(&txn->req_body), buf_len(&txn->req_body));

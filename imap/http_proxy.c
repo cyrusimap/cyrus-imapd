@@ -606,7 +606,7 @@ static void write_cachehdr(const char *name, const char *contents, void *rock)
 {
     struct protstream *pout = (struct protstream *) rock;
     const char **hdr, *hop_by_hop[] =
-	{ "authorization", "connection", "content-length",
+	{ "authorization", "connection", "content-length", "expect",
 	  "keep-alive", "transfer-encoding", "upgrade", "via", NULL };
 
     for (hdr = hop_by_hop; *hdr && strcmp(name, *hdr); hdr++);
@@ -703,8 +703,9 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
      *
      * - Piece the Request_line back together
      * - Add/append-to Via: header
+     * - Add Expect:100-continue header (for synchonicity)
      * - Use all cached end-to-end headers from client
-     * - Body is buffered, so send using "identity" TE
+     * - Body will be sent using "chunked" TE
      */
     prot_printf(be->out, "%s %s", txn->meth, txn->req_tgt.path);
     if (*txn->req_tgt.query) {
@@ -712,17 +713,39 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
     }
     prot_printf(be->out, " %s\r\n", HTTP_VERSION);
     write_via_hdr(be->out, txn->req_hdrs);
+    prot_printf(be->out, "Expect: 100-continue\r\n");
     spool_enum_hdrcache(txn->req_hdrs, &write_cachehdr, be->out);
-    prot_printf(be->out, "Content-Length: %u\r\n\r\n",
-		buf_len(&txn->req_body));
-    prot_putbuf(be->out, &txn->req_body);
+    prot_printf(be->out, "Transfer-Encoding: chunked\r\n\r\n");
     prot_flush(be->out);
 
     /* Read response from backend */
     r = read_response(be, txn, &code, &statline, &resp_hdrs, &resp_body);
     if (!r) {
+	if (code == 100) { /* Continue */
+	    /* Read body */
+	    txn->flags |= HTTP_READBODY;
+	    r = read_body(httpd_in, txn->req_hdrs,
+			  &txn->req_body, &txn->errstr);
+	    if (r) {
+		/* Couldn't get the body and can't finish request */
+		txn->flags |= HTTP_CLOSE;
+		proxy_downserver(be);
+	    }
+	    else {
+		/* Send single-chunk body to backend to complete the request */
+		prot_printf(be->out, "%x\r\n", buf_len(&txn->req_body));
+		prot_putbuf(be->out, &txn->req_body);
+		prot_printf(be->out, "\r\n0\r\n\r\n");
+		prot_flush(be->out);
+
+		/* Read final response from backend */
+		r = read_response(be, txn,
+				  &code, &statline, &resp_hdrs, &resp_body);
+	    }
+	}
+
 	/* Send response to client */
-	send_response(httpd_out, txn, statline, resp_hdrs, &resp_body);
+	if (!r) send_response(httpd_out, txn, statline, resp_hdrs, &resp_body);
     }
 
     if (resp_hdrs) spool_free_hdrcache(resp_hdrs);
