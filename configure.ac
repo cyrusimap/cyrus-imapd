@@ -47,7 +47,7 @@ dnl
 
 
 AC_INIT(imap/imapd.c)
-AC_PREREQ([2.54])
+AC_PREREQ([2.68])
 AC_CONFIG_HEADER(config.h)
 AC_CANONICAL_SYSTEM
 
