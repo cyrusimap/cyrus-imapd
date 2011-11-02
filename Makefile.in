@@ -185,7 +185,7 @@ Makefile: Makefile.in config.status
 	$(SHELL) config.status
 config.status: configure
 	$(SHELL) config.status --recheck
-configure: configure.in
+configure: configure.ac
 	cd $(srcdir); rm -f config.cache; autoconf
 
 coverage_all:

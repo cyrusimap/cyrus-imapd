@@ -45,7 +45,7 @@ export NEW_AUTOTOOLS
 
 if test ! -x configure; then
 # -nt deeply upsets normal sh.
-#        -o configure.in -nt configure
+#        -o configure.ac -nt configure
 #        -o acconfig.h -nt configure -o SMakefile -nt configure; then
   echo aclocal -I cmulocal
   aclocal -I cmulocal

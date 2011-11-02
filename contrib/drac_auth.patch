@@ -64,10 +64,10 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
 
 
 
-diff --git a/configure.in b/configure.in
+diff --git a/configure.ac b/configure.ac
 index e0e8cf4..7d237c0 100644
---- a/configure.in
-+++ b/configure.in
+--- a/configure.ac
++++ b/configure.ac
 @@ -1171,6 +1171,19 @@ dnl (agentx was depricated, but SNMP_SUBDIRS is conveinent as a placeholder)
  SNMP_SUBDIRS=""
  AC_SUBST(SNMP_SUBDIRS)

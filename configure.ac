@@ -40,9 +40,9 @@ dnl WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
 dnl AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 dnl OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 dnl
-dnl $Id: configure.in,v 1.316 2010/01/06 17:01:26 murch Exp $
+dnl $Id: configure.ac,v 1.316 2010/01/06 17:01:26 murch Exp $
 dnl
-dnl configure.in for the Cyrus imapd
+dnl configure.ac for the Cyrus imapd
 dnl
 
 
@@ -1363,7 +1363,7 @@ AH_TOP([
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: configure.in,v 1.316 2010/01/06 17:01:26 murch Exp $
+ * $Id: configure.ac,v 1.316 2010/01/06 17:01:26 murch Exp $
  */
 
 #ifndef _CYRUS_IMAPD_CONFIG_H_

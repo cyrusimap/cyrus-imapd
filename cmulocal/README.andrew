@@ -1,7 +1,7 @@
 This is a collection of autoconf macros which've been written by
 various people at CMU.  To use it, use "aclocal -I cmulocal" (after
 the first time, automake should automatically use the -I cmulocal, if
-you've called CMU_INIT_AUTOMAKE in configure.in).
+you've called CMU_INIT_AUTOMAKE in configure.ac).
 
 CMU_INIT_AUTOMAKE
   If you use automake, you should call this after AM_INIT_AUTOMAKE.

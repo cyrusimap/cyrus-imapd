@@ -13,7 +13,7 @@ smake -d init mf checkdepend all install
 exit 0
 
 "configure" is no longer in the repository because it's built from
-"configure.in", and it's really annoying to keep checking it in only
+"configure.ac", and it's really annoying to keep checking it in only
 to realize that you don't understand the changes because they're all
 autoconf spew.
 
