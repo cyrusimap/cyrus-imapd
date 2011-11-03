@@ -45,8 +45,6 @@
 #ifndef INCLUDED_LIBCYR_CFG_H
 #define INCLUDED_LIBCYR_CFG_H
 
-#include <config.h>
-
 #include <stdio.h>
 #include <ctype.h>
 #include <string.h>
