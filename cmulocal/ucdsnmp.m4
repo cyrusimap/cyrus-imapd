@@ -5,7 +5,7 @@ AC_DEFUN([CMU_UCDSNMP], [
 AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
   AC_REQUIRE([CMU_SOCKETS])
   AC_ARG_WITH(snmp, 
-              [  --with-snmp=DIR         use ucd|net snmp (rooted in DIR) [yes] ],
+              [AS_HELP_STRING([--with-snmp=DIR], [use ucd|net snmp (rooted in DIR) [yes]])],
               with_snmp=$withval, with_snmp=yes)
 
   dnl

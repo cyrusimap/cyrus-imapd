@@ -52,17 +52,17 @@ AC_DEFUN([CMU_PCAP_LIB_WHERE], [
 AC_DEFUN([CMU_PCAP], [
 AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
 AC_ARG_WITH(pcap,
-	[  --with-pcap=PREFIX      Compile with PCAP support],
+	[AS_HELP_STRING([--with-pcap=PREFIX], [Compile with PCAP support])],
 	[if test "X$with_pcap" = "X"; then
 		with_pcap=yes
 	fi])
 AC_ARG_WITH(pcap-lib,
-	[  --with-pcap-lib=dir     use pcap libraries in dir],
+	[AS_HELP_STRING([--with-pcap-lib=DIR], [use pcap libraries in DIR])],
 	[if test "$withval" = "yes" -o "$withval" = "no"; then
 		AC_MSG_ERROR([No argument for --with-pcap-lib])
 	fi])
 AC_ARG_WITH(pcap-include,
-	[  --with-pcap-include=dir use pcap headers in dir],
+	[AS_HELP_STRING([--with-pcap-include=DIR], [use pcap headers in DIR])],
 	[if test "$withval" = "yes" -o "$withval" = "no"; then
 		AC_MSG_ERROR([No argument for --with-pcap-include])
 	fi])

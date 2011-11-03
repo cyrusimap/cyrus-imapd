@@ -59,17 +59,17 @@ AC_DEFUN([CMU_ARX_LIB_WHERE], [
 AC_DEFUN([CMU_USE_ARX], [
 AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
 AC_ARG_WITH(arx,
-	[  --with-arx=PREFIX      Compile with arx support],
+	[AS_HELP_STRING([--with-arx=PREFIX], [Compile with arx support])],
 	[if test "X$with_arx" = "X"; then
 		with_arx=yes
 	fi])
 AC_ARG_WITH(arx-lib,
-	[  --with-arx-lib=dir     use arx libraries in dir],
+	[AS_HELP_STRING([--with-arx-lib=dir], [use arx libraries in dir])],
 	[if test "$withval" = "yes" -o "$withval" = "no"; then
 		AC_MSG_ERROR([No argument for --with-arx-lib])
 	fi])
 AC_ARG_WITH(arx-include,
-	[  --with-arx-include=dir use arx headers in dir],
+	[AS_HELP_STRING([--with-arx-include=dir], [use arx headers in dir])],
 	[if test "$withval" = "yes" -o "$withval" = "no"; then
 		AC_MSG_ERROR([No argument for --with-arx-include])
 	fi])

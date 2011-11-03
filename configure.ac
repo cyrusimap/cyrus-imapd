@@ -52,7 +52,8 @@ AC_CONFIG_HEADER(config.h)
 AC_CANONICAL_SYSTEM
 
 dnl Useful hook for distributions
-AC_ARG_WITH(extraident,[  --with-extraident=STRING   use STRING as extra version information],
+AC_ARG_WITH(extraident,
+        [AS_HELP_STRING([--with-extraident=STRING],[use STRING as extra version information])],
 	[AC_DEFINE_UNQUOTED(EXTRA_IDENT,"$withval", [Extra version information for imap/version.h])])
 
 srctoolsdir=`cd ${srcdir};pwd`/tools
@@ -67,19 +68,23 @@ CMU_MAINTAINER_MODE
 AC_ARG_WITH(login,,AC_ERROR([--with-login is no longer supported.
 Configure SASL appropriately instead.]))
 
-AC_ARG_WITH(cyrus-prefix,[  --with-cyrus-prefix=DIR    use DIR as cyrus server install directory],
-	cyrus_prefix="$withval",cyrus_prefix="/usr/cyrus")
+AC_ARG_WITH(cyrus-prefix,
+	[AS_HELP_STRING([--with-cyrus-prefix=DIR], [use DIR as cyrus server install directory [PREFIX/cyrus]])],
+	cyrus_prefix="$withval",cyrus_prefix="$prefix/cyrus")
 AC_SUBST(cyrus_prefix)
 AC_DEFINE_UNQUOTED(CYRUS_PATH,"$cyrus_prefix",[Where will we be installed?])
-AC_ARG_WITH(service-path,[  --with-service-path=DIR    use DIR as service install directory],
+AC_ARG_WITH(service-path,
+	[AS_HELP_STRING([--with-service-path=DIR], [use DIR as service install directory [PREFIX/cyrus/bin]])],
 	service_path="$withval",service_path="$cyrus_prefix/bin")
 AC_SUBST(service_path)
 AC_DEFINE_UNQUOTED(SERVICE_PATH,"$service_path",[Directory to use for service binaries])
-AC_ARG_WITH(cyrus-user,[  --with-cyrus-user=USERID   use USERID cyrus userid],
+AC_ARG_WITH(cyrus-user,
+	[AS_HELP_STRING([--with-cyrus-user=USERID], [use USERID cyrus userid])],
 	cyrus_user="$withval",cyrus_user="cyrus")
 AC_SUBST(cyrus_user)
 AC_DEFINE_UNQUOTED(CYRUS_USER, "$cyrus_user",[What user will we run as?])
-AC_ARG_WITH(cyrus-group,[  --with-cyrus-group=GROUPID use GROUPID cyrus group],
+AC_ARG_WITH(cyrus-group,
+	[AS_HELP_STRING([--with-cyrus-group=GROUPID], [use GROUPID cyrus group])],
 	cyrus_group="$withval",cyrus_group="mail")
 AC_SUBST(cyrus_group)
 
@@ -184,7 +189,8 @@ CYRUSDB_OBJS="cyrusdb_flat.o cyrusdb_skiplist.o cyrusdb_quotalegacy.o cyrusdb_tw
 
 dnl Berkeley DB Detection
 
-AC_ARG_WITH(bdb, [  --with-bdb=DIR          use Berkeley DB (in DIR) [[yes]] ],
+AC_ARG_WITH(bdb,
+	[AS_HELP_STRING([--with-bdb=DIR], [use Berkeley DB (in DIR) [yes]])],
 	with_bdb=$withval, with_bdb="yes")
 
 dnl support old-style
@@ -199,7 +205,6 @@ case "$with_bdb" in
 	with_bdb_lib=none
 	with_bdb_inc=none
 	;;
-  
   *)
 	use_berkeley="yes"
 	with_bdb_lib="$with_bdb/lib"
@@ -239,8 +244,9 @@ dnl SQL DB Detection
 HAVE_SQL=0
 
 dnl MySQL Detection
-AC_ARG_WITH(mysql,  [  --with-mysql=DIR          use MySQL (in DIR) [[no]] ],
-  with_mysql=$withval, with_mysql="no")
+AC_ARG_WITH(mysql,
+	[AS_HELP_STRING([--with-mysql=DIR], [use MySQL (in DIR) [no]])],
+	with_mysql=$withval, with_mysql="no")
 
 case "$with_mysql" in
   no)
@@ -251,7 +257,6 @@ case "$with_mysql" in
 	with_mysql_lib=none
 	with_mysql_inc=none
 	;;
-  
   *)
 	use_mysql="yes"
 	with_mysql_lib="$with_mysql/lib"
@@ -283,8 +288,9 @@ dnl End MySQL Detection
 
 
 dnl PgSQL Detection
-AC_ARG_WITH(pgsql,  [  --with-pgsql=DIR          use PostgreSQL (in DIR) [[no]] ],
-  with_pgsql=$withval, with_pgsql="no")
+AC_ARG_WITH(pgsql,
+	[AS_HELP_STRING([--with-pgsql=DIR], [use PostgreSQL (in DIR) [no]])],
+	with_pgsql=$withval, with_pgsql="no")
 
 case "$with_pgsql" in
   no)
@@ -295,7 +301,6 @@ case "$with_pgsql" in
 	with_pgsql_lib=none
 	with_pgsql_inc=none
 	;;
-  
   *)
 	use_pgsql="yes"
 	with_pgsql_lib="$with_pgsql/lib"
@@ -327,8 +332,9 @@ dnl End PgSQL Detection
 
 
 dnl SQLite Detection
-AC_ARG_WITH(sqlite,  [  --with-sqlite=DIR          use SQLite (in DIR) [[no]] ],
-  with_sqlite=$withval, with_sqlite=no)
+AC_ARG_WITH(sqlite,
+	[AS_HELP_STRING([--with-sqlite=DIR], [use SQLite (in DIR) [no]])],
+	with_sqlite=$withval, with_sqlite=no)
 
 case "$with_sqlite" in
   no)
@@ -339,7 +345,6 @@ case "$with_sqlite" in
 	with_sqlite_lib=none
 	with_sqlite_inc=none
 	;;
-  
   *)
 	use_sqlite="yes"
 	with_sqlite_lib="$with_sqlite/lib"
@@ -381,14 +386,14 @@ AC_SUBST(CYRUSDB_OBJS)
 SIEVE_SUBDIRS=""
 sievedir="sieve"
 AC_ARG_ENABLE(sieve,
-        [  --disable-sieve         disable Sieve support],
+        [AS_HELP_STRING([--disable-sieve], [disable Sieve support])],
 	if test "$enableval" = no; then
 		sievedir="no"
 	fi)
 
 testpcre="yes"
 AC_ARG_ENABLE(pcre,
-		[  --disable-pcre      disable PCRE library],
+	[AS_HELP_STRING([--disable-pcre], [disable PCRE library])],
 	if test "$enableval" = no; then
 		testpcre="no"
 	fi)
@@ -608,12 +613,13 @@ else
 fi
 fi
 
-AC_ARG_WITH(mmap,[  --with-mmap=TYPE    force shared/stupidshared/nommap - JUST FOR TESTING],
+AC_ARG_WITH(mmap,
+	[AS_HELP_STRING([--with-mmap=TYPE], [force shared/stupidshared/nommap - JUST FOR TESTING])],
 	WITH_MAP="$withval",WITH_MAP="$found_map")
 
 AC_SUBST(WITH_MAP)
 AC_ARG_WITH(lock,
-  [  --with-lock=METHOD      force use of METHOD for locking (flock or fcntl)],
+  [AS_HELP_STRING([--with-lock=METHOD], [force use of METHOD for locking (flock or fcntl)])],
   WITH_LOCK="$withval", [
   AC_CHECK_FUNC(fcntl,WITH_LOCK="fcntl",[
 		AC_CHECK_FUNC(flock,WITH_LOCK="flock",[
@@ -664,19 +670,24 @@ AC_SUBST(cyrus_cv_sigveclib)
 
 # ok, we still look for this stuff because of checking groups, but
 # all authentication goes through SASL
-AC_ARG_ENABLE([afs],[  --enable-afs            Enable AFS with ptloader])
+AC_ARG_ENABLE([afs],
+	[AS_HELP_STRING([--enable-afs], [Enable AFS with ptloader])])
 
-AC_ARG_WITH(afs-libdir,[  --with-afs-libdir=PATH  use AFS libraries from PATH [[/usr/lib]]],
-	    afs_libdir="${withval}", afs_libdir="/usr/lib")
+AC_ARG_WITH(afs-libdir,
+	[AS_HELP_STRING([--with-afs-libdir=DIR], [use AFS libraries from DIR [/usr/lib]])],
+	afs_libdir="${withval}", afs_libdir="/usr/lib")
  
-AC_ARG_WITH(afs-incdir,[  --with-afs-incdir=PATH  use AFS headers from PATH [[/usr/include]]],
-            afs_incdir="${withval}", afs_incdir="/usr/include")
+AC_ARG_WITH(afs-incdir,
+	[AS_HELP_STRING([--with-afs-incdir=DIR], [use AFS headers from DIR [/usr/include]])],
+	afs_incdir="${withval}", afs_incdir="/usr/include")
 
-AC_ARG_WITH(ldap, [  --with-ldap=DIR         use LDAP (in DIR) (experimental) [/usr/local] ],
-	    with_ldap="${withval}", with_ldap="no")
+AC_ARG_WITH(ldap,
+	[AS_HELP_STRING([--with-ldap=DIR], [use LDAP (in DIR) (experimental) [/usr/local]])],
+	with_ldap="${withval}", with_ldap="no")
   
 dnl select mode of afspts
-AC_ARG_ENABLE(krb5afspts,[  --enable-krb5afspts     compile afskrb PTS module with krb5 support])
+AC_ARG_ENABLE(krb5afspts,
+	[AS_HELP_STRING([--enable-krb5afspts], [compile afskrb PTS module with krb5 support])])
 
 if test "x$enable_afs" = "xyes"; then
 # krb5afspts is only valid if AFS is enabled, so check inside here.
@@ -785,7 +796,7 @@ fi
 
 SERVER_SUBDIRS="master imap"
 AC_ARG_ENABLE(server,
-	[  --disable-server        disable compiling servers],
+	[AS_HELP_STRING([--disable-server], [disable compiling servers])],
 	if test "$enableval" = no; then
         	SERVER_SUBDIRS=""
 	fi)
@@ -794,14 +805,16 @@ AC_SUBST(SERVER_SUBDIRS)
 
 dnl this is the new simple check for kerberos; since the person had to
 dnl compile SASL, we might as well use the same checks.
-AC_ARG_WITH(krb,[  --with-krb=PATH         use Kerberos from PATH],
+AC_ARG_WITH(krb,
+	[AS_HELP_STRING([--with-krb=DIR], [use Kerberos from DIR])],
 	with_krb="$withval", with_krb="no")
 
-AC_ARG_WITH(krbimpl,[  --with-krbimpl=\[kth|mit\]         assume Kerberos 4 from KTH or MIT],
+AC_ARG_WITH(krbimpl,
+	[AS_HELP_STRING([--with-krbimpl=kth|mit], [assume Kerberos 4 from KTH or MIT])],
 	with_krbimpl="$withval", with_krbimpl="kth")
 
 AC_ARG_ENABLE(statickrb,
-		[  --enable-statickrb      link Kerberos statically],
+	[AS_HELP_STRING([--enable-statickrb], [link Kerberos statically])],
 	with_statickrb="yes", with_statickrb="no")
 
 dnl In order to compile kerberos4, we need libkrb and libdes.
@@ -815,8 +828,9 @@ fi
 
 if test "$with_krb" != "no"; then
 dnl Do we need DES for kerberos?
-AC_ARG_WITH(krbdes,[  --with-krbdes           use Kerberos DES implementation [[yes]]],
-      with_krbdes="$withval", with_krbdes="yes")
+AC_ARG_WITH(krbdes,
+	[AS_HELP_STRING([--with-krbdes], [use Kerberos DES implementation [yes]])],
+	with_krbdes="$withval", with_krbdes="yes")
 if test "$with_krbdes" = "yes"; then
   AC_CHECK_LIB(des,des_ecb_encrypt,
       if test "$with_statickrb" = "yes"; then
@@ -881,7 +895,8 @@ dnl
 dnl Test for OpenSSL
 dnl
 IMAP_PROGS=""
-AC_ARG_WITH(openssl,[  --with-openssl=PATH     use OpenSSL from PATH],
+AC_ARG_WITH(openssl,
+	[AS_HELP_STRING([--with-openssl=DIR], [use OpenSSL from DIR])],
 	with_openssl="${withval}")
 
 OPENSSL_INC=
@@ -931,8 +946,7 @@ dnl
 dnl Allow for setting EGD socket file on systems without /dev/*random.
 dnl
 AC_ARG_WITH(egd-socket,
-      [  --with-egd-socket=FILE  Entropy Gathering Daemon socket pathname
-                          for systems without /dev/urandom],
+      [AC_HELP_STRING([--with-egd-socket=FILE], [Entropy Gathering Daemon socket pathname for systems without /dev/urandom])],
               [ EGD_SOCKET="$withval" ]
       )
 if test -n "$EGD_SOCKET" ; then
@@ -950,7 +964,8 @@ AC_SUBST(ZLIB)
 dnl
 dnl Test for Zephyr
 dnl
-AC_ARG_WITH(zephyr,[  --with-zephyr[=PATH]    enable Zephyr notification (installed on PATH)],
+AC_ARG_WITH(zephyr,
+	[AS_HELP_STRING([--with-zephyr=DIR], [enable Zephyr notification (installed on DIR)])],
 	with_zephyr="${withval}")
 if test -z "$with_zephyr"; then
      if test -f /usr/local/lib/libzephyr.a; then
@@ -981,7 +996,8 @@ fi
 dnl
 dnl Set pidfile location
 dnl
-AC_ARG_WITH(pidfile,[  --with-pidfile[=PATH]   pidfile in PATH (/var/run/cyrus-master.pid)],
+AC_ARG_WITH(pidfile,
+	[AS_HELP_STRING([--with-pidfile=DIR], [pidfile in DIR [/var/run/cyrus-master.pid]])],
 	[MASTERPIDFILE="$withval"],
 	[MASTERPIDFILE="/var/run/cyrus-master.pid"])
 MASTERPIDFILE="\"$MASTERPIDFILE\""
@@ -991,7 +1007,7 @@ dnl
 dnl see if we're compiling with IMAP idled support
 dnl
 AC_ARG_ENABLE(idled,
-        [  --enable-idled          enable IMAP idled support],
+        [AS_HELP_STRING([--enable-idled], [enable IMAP idled support])],
         if test "$enable_val" != no; then
 	  IMAP_PROGS="$IMAP_PROGS idled"
         fi) 
@@ -1001,7 +1017,7 @@ dnl see if we're compiling with NNTP support
 dnl
 ENABLE_NNTP=no
 AC_ARG_ENABLE(nntp,
-        [  --enable-nntp           enable NNTP support],
+        [AS_HELP_STRING([--enable-nntp], [enable NNTP support])],
 	ENABLE_NNTP=$enableval
         if test "$ENABLE_NNTP" != no; then
 	  IMAP_PROGS="$IMAP_PROGS nntpd fetchnews"
@@ -1012,7 +1028,7 @@ dnl see if we're compiling the Murder support programs
 dnl
 ENABLE_MURDER=no
 AC_ARG_ENABLE(murder,
-        [  --enable-murder         enable IMAP Murder support],
+        [AS_HELP_STRING([--enable-murder], [enable IMAP Murder support])],
 	ENABLE_MURDER=$enableval)
 
 if test "$ENABLE_MURDER" != no; then
@@ -1026,7 +1042,7 @@ dnl see if we're compiling replication support programs
 dnl
 ENABLE_REPLICATION=no
 AC_ARG_ENABLE(replication,
-        [  --enable-replication    enable replication support (experimental)],
+        [AS_HELP_STRING([--enable-replication], [enable replication support (experimental)])],
 	ENABLE_REPLICATION=$enableval
         if test "$ENABLE_REPLICATION" != no; then
 	  IMAP_PROGS="$IMAP_PROGS sync_client sync_server sync_reset"
@@ -1040,8 +1056,7 @@ dnl If we see something that looks a little wacky, ignore it (there are many
 dnl deficient installs of com_err, unfortunately, which leave out compile_et)
 dnl
 AC_ARG_WITH(com_err,
-[  --with-com_err=PATH     use com_err from path -- includes in PATH/include,
-                          libs in PATH/lib, and compile_et in PATH/bin])
+	[AS_HELP_STRING([--with-com_err=DIR], [use com_err from path -- includes in DIR/include, libs in DIR/lib, and compile_et in DIR/bin])])
 if test -z "$with_com_err"; then
 	# no value supplied
 	AC_CHECK_LIB(com_err, com_err, [
@@ -1132,7 +1147,8 @@ AC_MSG_RESULT($cyrus_cv_lib_syslog)
 
 AC_MSG_CHECKING(which syslog facility to use)
 SYSLOG_FACILITY=LOG_LOCAL6
-AC_ARG_WITH(syslogfacility,[  --with-syslogfacility=FACILITY set the syslog facility to use (default LOCAL6)],
+AC_ARG_WITH(syslogfacility,
+	[AS_HELP_STRING([--with-syslogfacility=FACILITY], [set the syslog facility to use (default LOCAL6)])],
                [ if test "$withval" != "yes" -a "$withval" != "no" ; then
                        SYSLOG_FACILITY=LOG_$withval
                fi; ])
@@ -1142,7 +1158,7 @@ AC_MSG_RESULT($SYSLOG_FACILITY)
 dnl Have to check getdtabalesize after adding ossup, as some ossups define it
 AC_REPLACE_FUNCS(getdtablesize)
 AC_ARG_ENABLE(cmulocal,
-	[  --enable-cmulocal       enable CMU-specific local support],
+	[AS_HELP_STRING([--enable-cmulocal], [enable CMU-specific local support])],
 	if test "$enableval" = yes; then
 		EXTRA_SUBDIRS="${EXTRA_SUBDIRS} netnews depot"
 		EXTRA_OUTPUT="${EXTRA_OUTPUT} depot/Makefile"
@@ -1150,7 +1166,7 @@ AC_ARG_ENABLE(cmulocal,
 
 AC_MSG_CHECKING(to use old sieve service name)
 AC_ARG_ENABLE(oldsievename,
-	[  --enable-oldsievename   enable the use of 'imap' as the sieve service name],
+	[AS_HELP_STRING([--enable-oldsievename], [enable the use of 'imap' as the sieve service name])],
 	if test "$enableval" = yes; then
 		AC_MSG_RESULT(yes)
 		AC_DEFINE(OLD_SIEVE_SERVICE_NAME,[],[Use "imap" as sieve service name?])
@@ -1160,8 +1176,7 @@ AC_ARG_ENABLE(oldsievename,
 	AC_MSG_RESULT(no))
 
 AC_ARG_ENABLE(netscapehack,
-	[  --enable-netscapehack   enable Netscape hack for the menu option
-                          in Communicator to Administrate Mail],
+	[AS_HELP_STRING([--enable-netscapehack], [enable Netscape hack for the menu option in Communicator to Administrate Mail])],
 	if test "$enableval" = yes; then
 		AC_DEFINE(ENABLE_X_NETSCAPE_HACK,[],[Enable Netscape Menu Option Hack?])
 	fi)
@@ -1170,7 +1185,8 @@ AC_CHECK_FUNC(dlopen,,[AC_CHECK_LIB(dl, dlopen)])
 CMU_SASL2_REQUIRE_VER(2,1,7)
 CMU_SASL2_CHECKAPOP_REQUIRED
 
-AC_ARG_WITH(perl,       [  --with-perl=PERL        use PERL for perl],
+AC_ARG_WITH(perl,
+	[AS_HELP_STRING([--with-perl=PERL], [use PERL for perl])],
 	with_perl="$withval", with_perl="perl")
 
 if test "${with_perl}" = yes; then
@@ -1287,8 +1303,7 @@ dnl Enable/disable unit tests.  These are disabled by default, as
 dnl they require an additional library (the CUnit library).
 dnl
 AC_ARG_ENABLE(unit-tests,
-[  --enable-unit-tests     enable CUnit-based unit regression tests],,
-enable_unit_tests=no)
+        [AS_HELP_STRING([--enable-unit-tests], [enable CUnit-based unit regression tests])])
 
 dnl Unit tests need the CUnit library, so check if we
 dnl have both the header and the library.

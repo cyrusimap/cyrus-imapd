@@ -4,7 +4,7 @@ dnl tests for various db libraries
 dnl
 AC_DEFUN([rk_DB],[berkeley_db=db
 AC_ARG_WITH(berkeley-db,
-[  --without-berkeley-db   if you don't want berkeley db],[
+[AS_HELP_STRING([--without-berkeley-db], [if you don't want berkeley db])],[
 if test "$withval" = no; then
 	berkeley_db=""
 fi

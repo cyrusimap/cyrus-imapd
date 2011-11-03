@@ -6,7 +6,7 @@ dnl $Id: mips-abi.m4,v 1.5 2003/10/08 20:35:25 rjs3 Exp $
 
 AC_DEFUN([AC_MIPS_ABI], [
 AC_ARG_WITH(mips_abi,
-[  --with-mips-abi=abi     ABI to use for IRIX (32, n32, or 64)])
+    [AS_HELP_STRING([--with-mips-abi=abi], [ABI to use for IRIX (32, n32, or 64)])])
 
 case "$host_os" in
 irix*)

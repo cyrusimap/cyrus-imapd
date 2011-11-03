@@ -5,7 +5,8 @@ dnl
 
 AC_DEFUN([CMU_CLAMAV], [
 AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
-AC_ARG_WITH(clamav,[  --with-clamav=PATH	use ClamAV - PATH to clamav-config (yes)],
+AC_ARG_WITH(clamav,
+	[AS_HELP_STRING([--with-clamav=DIR], [use ClamAV - DIR to clamav-config (yes)])],
 	with_clamav=$withval, with_clamav=yes)
   have_clamav=no
   if test "$with_clamav" != no; then

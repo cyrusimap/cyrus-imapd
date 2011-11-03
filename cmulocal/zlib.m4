@@ -5,7 +5,7 @@ dnl
 
 AC_DEFUN([CMU_HAVE_ZLIB], [
 AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
-AC_ARG_WITH(zlib,[  --with-zlib=PATH        use zlib from PATH],
+AC_ARG_WITH(zlib, [AS_HELP_STRING([--with-zlib=DIR],[use zlib from DIR])],
 	with_zlib=$withval, with_zlib="yes")
 
 	save_CPPFLAGS=$CPPFLAGS

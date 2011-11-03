@@ -4,7 +4,9 @@ dnl $Id: nana.m4,v 1.5 2003/10/08 20:35:25 rjs3 Exp $
 
 AC_DEFUN([CMU_NANA], [
   AC_REQUIRE([AC_PROG_CC])
-  AC_ARG_WITH(nana, [[  --with-nana             use NANA [yes] ]],,with_nana=yes)
+  AC_ARG_WITH(nana,
+	[AS_HELP_STRING([--with-nana], [use NANA [yes]])],,
+	with_nana=yes)
   if test "$GCC" != yes; then
     with_nana=no
   elif test "$with_nana" = yes; then

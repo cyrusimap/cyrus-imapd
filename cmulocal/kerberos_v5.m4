@@ -62,23 +62,22 @@ AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
 AC_REQUIRE([CMU_SOCKETS])
 AC_REQUIRE([CMU_USE_COMERR])
 AC_ARG_WITH(krb5,
-	[  --with-krb5=PREFIX      Compile with Kerberos 5 support],
+	[AS_HELP_STRING([--with-krb5=PREFIX], [Compile with Kerberos 5 support])],
 	[if test "X$with_krb5" = "X"; then
 		with_krb5=yes
 	fi])
 AC_ARG_WITH(krb5-lib,
-	[  --with-krb5-lib=dir     use kerberos 5 libraries in dir],
+	[AS_HELP_STRING([--with-krb5-lib=DIR], [use kerberos 5 libraries in DIR])],
 	[if test "$withval" = "yes" -o "$withval" = "no"; then
 		AC_MSG_ERROR([No argument for --with-krb5-lib])
 	fi])
 AC_ARG_WITH(krb5-include,
-	[  --with-krb5-include=dir use kerberos 5 headers in dir],
+	[AS_HELP_STRING([--with-krb5-include=DIR], [use kerberos 5 headers in DIR])],
 	[if test "$withval" = "yes" -o "$withval" = "no"; then
 		AC_MSG_ERROR([No argument for --with-krb5-include])
 	fi])
 AC_ARG_WITH(krb5-impl,
-	[  --with-krb5-impl=heimdal use heimdal kerberos 5 libraries
-  --with-krb5-impl=mit     use MIT kerberos 5 libraries],
+	[AS_HELP_STRING([--with-krb5-impl=heimdal/mit], [use heimdal/MIT kerberos 5 libraries])],
 	[if test "$withval" != "heimdal" -a "$withval" != "mit"; then
 		AC_MSG_ERROR([Invalid argument for --with-krb5-impl])
 	fi])

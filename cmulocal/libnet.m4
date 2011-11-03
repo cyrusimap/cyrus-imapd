@@ -80,22 +80,22 @@ AC_DEFUN([CMU_LIBNET_LIB_WHERE], [
 AC_DEFUN([CMU_LIBNET], [
 AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
 AC_ARG_WITH(libnet,
-	[  --with-libnet=PREFIX      Compile with LIBNET support],
+	[AS_HELP_STRING([--with-libnet=PREFIX], [Compile with LIBNET support])],
 	[if test "X$with_libnet" = "X"; then
 		with_libnet=yes
 	fi])
 AC_ARG_WITH(libnet-config,
-	[  --with-libnet-config=dir  use libnet config program in dir],
+	[AS_HELP_STRING([--with-libnet-config=DIR], [use libnet config program in DIR])],
 	[if test "$withval" = "yes" -o "$withval" = "no"; then
 		AC_MSG_ERROR([No argument for --with-libnet-config])
 	fi])
 AC_ARG_WITH(libnet-lib,
-	[  --with-libnet-lib=dir     use libnet libraries in dir],
+	[AS_HELP_STRING([--with-libnet-lib=DIR], [use libnet libraries in DIR])],
 	[if test "$withval" = "yes" -o "$withval" = "no"; then
 		AC_MSG_ERROR([No argument for --with-libnet-lib])
 	fi])
 AC_ARG_WITH(libnet-include,
-	[  --with-libnet-include=dir use libnet headers in dir],
+	[AS_HELP_STRING([--with-libnet-include=DIR], [use libnet headers in DIR])],
 	[if test "$withval" = "yes" -o "$withval" = "no"; then
 		AC_MSG_ERROR([No argument for --with-libnet-include])
 	fi])

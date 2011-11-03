@@ -9,7 +9,9 @@ AC_DEFUN([CMU_AGENTX], [
 	dnl CMU AgentX
 	dnl
 	AC_MSG_CHECKING([for AgentX])
-	AC_ARG_WITH(agentx, [  --with-agentx              CMU AgentX libraries located in (val)], AGENTX_DIR="$withval", AGENTX_DIR=no)
+	AC_ARG_WITH(agentx,
+		[AS_HELP_STRING([--with-agentx], [CMU AgentX libraries located in (val)])], 
+		AGENTX_DIR="$withval", AGENTX_DIR=no)
 
 	found_agentx="no"
 
@@ -38,9 +40,7 @@ AC_DEFUN([CMU_AGENTX], [
   	  AC_SUBST(LIB_AGENTX)
 	  AGENTXFLAGS="-I$AGENTX_DIR/include"
           AC_SUBST(AGENTXFLAGS)   
-	  AC_MSG_RESULT([found $AGENTX_DIR/lib${ABILIBDIR}/libagentx.a])	
+	  AC_MSG_RESULT([found $AGENTX_DIR/lib${ABILIBDIR}/libagentx.a])
 	fi
-
-
 
 ])

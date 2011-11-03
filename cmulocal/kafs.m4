@@ -75,17 +75,17 @@ AC_REQUIRE([CMU_SOCKETS])
 AC_REQUIRE([CMU_KRB4])
 AC_REQUIRE([CMU_KRB5])
 AC_ARG_WITH(kafs,
-	[  --with-kafs=PREFIX      Compile with Kafs support],
+	[AS_HELP_STRING([--with-kafs=PREFIX], [Compile with Kafs support])],
 	[if test "X$with_kafs" = "X"; then
 		with_kafs=yes
 	fi])
 AC_ARG_WITH(kafs-lib,
-	[  --with-kafs-lib=dir     use kafs libraries in dir],
+	[AS_HELP_STRING([--with-kafs-lib=DIR], [use kafs libraries in DIR])],
 	[if test "$withval" = "yes" -o "$withval" = "no"; then
 		AC_MSG_ERROR([No argument for --with-kafs-lib])
 	fi])
 AC_ARG_WITH(kafs-include,
-	[  --with-kafs-include=dir use kafs headers in dir],
+	[AS_HELP_STRING([--with-kafs-include=DIR], [use kafs headers in DIR])],
 	[if test "$withval" = "yes" -o "$withval" = "no"; then
 		AC_MSG_ERROR([No argument for --with-kafs-include])
 	fi])

@@ -62,17 +62,17 @@ AC_DEFUN([CMU_COMERR_LIB_WHERE], [
 AC_DEFUN([CMU_USE_COMERR], [
 AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
 AC_ARG_WITH(comerr,
-	[  --with-comerr=PREFIX      Compile with com_err support],
+	[AS_HELP_STRING([--with-comerr=PREFIX], [Compile with com_err support])],
 	[if test "X$with_comerr" = "X"; then
 		with_comerr=yes
 	fi])
 AC_ARG_WITH(comerr-lib,
-	[  --with-comerr-lib=dir     use com_err libraries in dir],
+	[AS_HELP_STRING([--with-comerr-lib=DIR], [use com_err libraries in DIR])],
 	[if test "$withval" = "yes" -o "$withval" = "no"; then
 		AC_MSG_ERROR([No argument for --with-comerr-lib])
 	fi])
 AC_ARG_WITH(comerr-include,
-	[  --with-comerr-include=dir use com_err headers in dir],
+	[AS_HELP_STRING([--with-comerr-include=DIR], [use com_err headers in DIR])],
 	[if test "$withval" = "yes" -o "$withval" = "no"; then
 		AC_MSG_ERROR([No argument for --with-comerr-include])
 	fi])

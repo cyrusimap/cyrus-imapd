@@ -147,17 +147,17 @@ AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
 AC_REQUIRE([CMU_SOCKETS])
 AC_REQUIRE([CMU_LIBSSL])
 AC_ARG_WITH(krb4,
-	[  --with-krb4=PREFIX      Compile with Kerberos 4 support],
+	[AS_HELP_STRING([--with-krb4=PREFIX], [Compile with Kerberos 4 support])],
 	[if test "X$with_krb4" = "X"; then
 		with_krb4=yes
 	fi])
 AC_ARG_WITH(krb4-lib,
-	[  --with-krb4-lib=dir     use kerberos 4 libraries in dir],
+	[AS_HELP_STRING([--with-krb4-lib=DIR], [use kerberos 4 libraries in DIR])],
 	[if test "$withval" = "yes" -o "$withval" = "no"; then
 		AC_MSG_ERROR([No argument for --with-krb4-lib])
 	fi])
 AC_ARG_WITH(krb4-include,
-	[  --with-krb4-include=dir use kerberos 4 headers in dir],
+	[AS_HELP_STRING([--with-krb4-include=DIR], [use kerberos 4 headers in DIR])],
 	[if test "$withval" = "yes" -o "$withval" = "no"; then
 		AC_MSG_ERROR([No argument for --with-krb4-include])
 	fi])

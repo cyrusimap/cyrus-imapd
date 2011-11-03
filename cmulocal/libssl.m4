@@ -57,7 +57,7 @@ AC_DEFUN([CMU_LIBSSL], [
 AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
 AC_REQUIRE([CMU_SOCKETS])
 AC_ARG_WITH(libssl,
-	[  --with-libssl=PREFIX      Compile with Libssl support],
+	[AS_HELP_STRING([--with-libssl=PREFIX], [Compile with Libssl support])],
 	[if test "X$with_libssl" = "X"; then
 		with_libssl=yes
 	fi])

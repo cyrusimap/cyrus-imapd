@@ -62,17 +62,17 @@ AC_DEFUN([CMU_NADINE_LIB_WHERE], [
 AC_DEFUN([CMU_NADINE], [
 AC_REQUIRE([CMU_SOCKETS])
 AC_ARG_WITH(nadine,
-	[  --with-nadine=PREFIX      Compile with nadine libevent support],
+	[AS_HELP_STRING([--with-nadine=PREFIX], [Compile with nadine libevent support])],
 	[if test "X$with_nadine" = "X"; then
 		with_nadine=yes
 	fi])
 AC_ARG_WITH(nadine-lib,
-	[  --with-nadine-lib=dir     use nadine libraries in dir],
+	[AS_HELP_STRING([--with-nadine-lib=DIR], [use nadine libraries in DIR])],
 	[if test "$withval" = "yes" -o "$withval" = "no"; then
 		AC_MSG_ERROR([No argument for --with-nadine-lib])
 	fi])
 AC_ARG_WITH(nadine-include,
-	[  --with-nadine-include=dir use nadine headers in dir],
+	[AS_HELP_STRING([--with-nadine-include=DIR], [use nadine headers in DIR])],
 	[if test "$withval" = "yes" -o "$withval" = "no"; then
 		AC_MSG_ERROR([No argument for --with-nadine-include])
 	fi])

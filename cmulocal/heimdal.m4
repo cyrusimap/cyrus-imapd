@@ -102,17 +102,17 @@ AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
 AC_REQUIRE([CMU_SOCKETS])
 AC_REQUIRE([CMU_USE_COMERR])
 AC_ARG_WITH(LIBHEIMDAL,
-	[  --with-libheimdal=PREFIX      Compile with Heimdal support],
+	[AS_HELP_STRING([--with-libheimdal=PREFIX], [Compile with Heimdal support])],
 	[if test "X$with_libheimdal" = "X"; then
 		with_libheimdal=yes
 	fi])
 AC_ARG_WITH(libheimdal-lib,
-	[  --with-libheimdal-lib=dir     use heimdal libraries in dir],
+	[AS_HELP_STRING([--with-libheimdal-lib=DIR], [use heimdal libraries in DIR])],
 	[if test "$withval" = "yes" -o "$withval" = "no"; then
 		AC_MSG_ERROR([No argument for --with-libheimdal-lib])
 	fi])
 AC_ARG_WITH(libheimdal-include,
-	[  --with-libheimdal-include=dir use heimdal headers in dir],
+	[AS_HELP_STRING([--with-libheimdal-include=DIR], [use heimdal headers in DIR])],
 	[if test "$withval" = "yes" -o "$withval" = "no"; then
 		AC_MSG_ERROR([No argument for --with-libheimdal-include])
 	fi])
