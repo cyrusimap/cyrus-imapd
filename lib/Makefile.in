@@ -106,11 +106,7 @@ install:
 	$(INSTALL) -m 644 libcyrus.a $(DESTDIR)$(libdir)
 	$(INSTALL) -m 644 libcyrus_min.a $(DESTDIR)$(libdir)
 	 $(RANLIB) $(DESTDIR)$(libdir)/libcyrus.a
-	for file in $(LIBCYR_HDRS); \
-	do \
-		$(INSTALL) -m 644 $$file $(DESTDIR)$(prefix)/include/cyrus || exit 1; \
-	done
-	for file in $(LIBCYRM_HDRS); \
+	for file in $(LIBCYR_HDRS) $(LIBCYRM_HDRS); \
 	do \
 		$(INSTALL) -m 644 $$file $(DESTDIR)$(prefix)/include/cyrus || exit 1; \
 	done
