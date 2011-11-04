@@ -70,8 +70,8 @@ MAKEDEPEND = @MAKEDEPEND@
 IMAP_LIBS = @IMAP_LIBS@
 IMAP_LIBS = @IMAP_LIBS@ @LIB_RT@ @LIB_UUID@
 LIBS = libsieve.a $(IMAP_LIBS) @COM_ERR_LIBS@
-DEPLIBS=../lib/libcyrus.a ../lib/libcyrus_min.a @DEPLIBS@
-LIBIMAP = ../imap/mutex_fake.o ../imap/libimap.a
+DEPLIBS=$(top_builddir)/lib/libcyrus.a $(top_builddir)/lib/libcyrus_min.a @DEPLIBS@
+LIBIMAP = $(top_builddir)/imap/mutex_fake.o $(top_builddir)/imap/libimap.a
 
 BUILT_SOURCES = addr.c addr.h addr-lex.c \
 	sieve.c sieve.h sieve-lex.c \

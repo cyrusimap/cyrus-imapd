@@ -61,7 +61,7 @@ MAKEDEPEND = @MAKEDEPEND@
 
 IMAP_LIBS = @IMAP_LIBS@
 LIBS = 
-DEPLIBS= ../lib/libcyrus.a @DEPLIBS@
+DEPLIBS= $(top_builddir)/lib/libcyrus.a @DEPLIBS@
 
 prefix = @prefix@
 exec_prefix = @exec_prefix@

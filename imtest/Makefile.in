@@ -56,8 +56,7 @@ DEFS = @DEFS@ @LOCALDEFS@
 CPPFLAGS = -I.. -I$(srcdir)/../lib @COM_ERR_CPPFLAGS@ @CPPFLAGS@  @SASLFLAGS@
 LIBS = @LIBS@ 
 IMAP_LIBS = @IMAP_LIBS@ @LIB_RT@ @LIB_UUID@
-DEPLIBS = ../lib/libcyrus.a ../lib/libcyrus_min.a @DEPLIBS@
-
+DEPLIBS = $(top_builddir)/lib/libcyrus.a $(top_builddir)/lib/libcyrus_min.a @DEPLIBS@
 CFLAGS = @CFLAGS@ $(EXTRACFLAGS)
 LDFLAGS = @LDFLAGS@ @COM_ERR_LDFLAGS@ $(EXTRALDFLAGS)
 

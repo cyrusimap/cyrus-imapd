@@ -55,7 +55,7 @@ RANLIB = @RANLIB@
 DEFS = @DEFS@
 CPPFLAGS = -I.. -I$(srcdir) -I$(srcdir)/../lib -I$(srcdir)/../com_err/et @CPPFLAGS@
 LIBS =  @IMAP_LIBS@ @LIB_RT@ @LIB_UUID@
-DEPLIBS = ../lib/libcyrus.a ../lib/libcyrus_min.a @DEPLIBS@ 
+DEPLIBS = $(top_builddir)/lib/libcyrus.a $(top_builddir)/lib/libcyrus_min.a @DEPLIBS@ 
 
 CFLAGS = @CFLAGS@ $(EXTRACFLAGS)
 LDFLAGS = @LDFLAGS@ $(EXTRALDFLAGS)

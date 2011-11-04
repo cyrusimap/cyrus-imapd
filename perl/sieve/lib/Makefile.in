@@ -56,7 +56,7 @@ DEFS = @DEFS@ @LOCALDEFS@ -Dbool=char -DHAS_BOOL
 CPPFLAGS = -I. -I../../.. -I$(srcdir) -I$(srcdir)/../../../lib @CPPFLAGS@ @DYNSASLFLAGS@ @COM_ERR_CPPFLAGS@
 LIBS = ../../../lib/libcyrus.a ../../../lib/libcyrus_min.a @LIB_DYN_SASL@ @LIBS@
 IMAP_LIBS = @IMAP_LIBS@
-DEPLIBS = ../../../lib/libcyrus.a ../../../lib/libcyrus_min.a @DEPLIBS@
+DEPLIBS = $(top_builddir)/lib/libcyrus.a $(top_builddir)/lib/libcyrus_min.a @DEPLIBS@
 
 MAKEDEPEND_CFLAGS = @CFLAGS@
 CFLAGS = @CFLAGS@ @PERL_CCCDLFLAGS@
