@@ -1113,6 +1113,9 @@ void annotate_state_set_auth(annotate_state_t *state,
 		             int isadmin, const char *userid,
 		             struct auth_state *auth_state)
 {
+    /* Note: lmtpd calls through the append code with
+     * namespace=NULL and sometimes with auth_state=NULL,
+     * so we cannot rely on either of those being non-NULL */
     state->namespace = namespace;
     state->userid = userid;
     state->isadmin = isadmin;
@@ -1255,6 +1258,7 @@ static int apply_cb(char *name, int matchlen,
     arock->lastname[matchlen] = '\0';
 
     if (!strncasecmp(arock->lastname, "INBOX", 5)) {
+	assert(state->namespace != NULL);
 	state->namespace->mboxname_tointernal(state->namespace, "INBOX",
 					      state->userid, int_mboxname);
 	strlcat(int_mboxname, arock->lastname+5, sizeof(int_mboxname));
@@ -1295,6 +1299,7 @@ int annotate_apply_mailboxes(annotate_state_t *state,
 
     /* copy the pattern so we can change hiersep */
     strlcpy(mboxpat, pattern, sizeof(mboxpat));
+    assert(state->namespace != NULL);
     mboxname_hiersep_tointernal(state->namespace, mboxpat,
 				config_virtdomains ?
 				strcspn(mboxpat, "@") : 0);
@@ -1350,6 +1355,7 @@ static void output_entryatt(annotate_state_t *state, const char *entry,
     assert(value);
 
     if (state->mailbox) {
+	assert(state->namespace != NULL);
 	state->namespace->mboxname_toexternal(state->namespace,
 					      state->mailbox->name,
 					      state->userid,
@@ -1429,11 +1435,6 @@ static int _annotate_may_fetch(annotate_state_t *state,
     unsigned int my_rights;
     unsigned int needed = 0;
     const char *acl = NULL;
-
-    /* If we got here without calling _set_auth() we're *NOT*
-     * authorised! */
-    if (!state->auth_state)
-	return 0;
 
     /* Admins can do anything */
     if (state->isadmin)
@@ -2583,11 +2584,6 @@ static int _annotate_may_store(annotate_state_t *state,
     unsigned int my_rights;
     unsigned int needed = 0;
     const char *acl = NULL;
-
-    /* If we got here without calling _set_auth() we're *NOT*
-     * authorised! */
-    if (!state->auth_state)
-	return 0;
 
     /* Admins can do anything */
     if (state->isadmin)
