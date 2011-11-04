@@ -109,6 +109,38 @@ sub test_add_annot_deliver
     $self->check_messages(\%exp, check_guid => 0);
 }
 
+sub test_add_annot_deliver_tomailbox
+{
+    my ($self) = @_;
+
+    xlog "Testing adding an annotation from the Annotator";
+    xlog "when delivering to a non-INBOX mailbox [IRIS-955]";
+
+    my $entry = '/comment';
+    my $attrib = 'value.shared';
+    my $shared = 'shared';
+    # Data thanks to http://hipsteripsum.me
+    my $value1 = 'before_they_sold_out';
+
+    my $subfolder = 'target';
+    my $talk = $self->{store}->get_client();
+    $talk->create("INBOX.$subfolder")
+	or die "Failed to create INBOX.$subfolder";
+
+    my %exp;
+    $exp{A} = $self->{gen}->generate(subject => "Message A");
+    $exp{A}->set_body("add_annotation $entry $shared $value1\r\n");
+    $self->{instance}->deliver($exp{A}, folder => $subfolder);
+    $exp{A}->set_annotation($entry, $attrib, $value1);
+
+    # Local delivery adds headers we can't predict or control,
+    # which change the SHA1 of delivered messages, so we can't
+    # be checking the GUIDs here.
+    $self->{store}->set_folder("INBOX.$subfolder");
+    $self->{store}->set_fetch_attributes('uid', "annotation ($entry $attrib)");
+    $self->check_messages(\%exp, check_guid => 0);
+}
+
 sub test_set_system_flag_deliver
 {
     my ($self) = @_;
