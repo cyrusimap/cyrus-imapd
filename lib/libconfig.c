@@ -56,7 +56,6 @@
 #include "assert.h"
 #include "hash.h"
 #include "libconfig.h"
-#include "imapopts.h"
 #include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
