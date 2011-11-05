@@ -92,10 +92,7 @@ test: $(DEPLIBS) libsieve.a test.o $(LIBIMAP)
 	$(CC) $(LDFLAGS) -o test test.o \
 	libsieve.a $(LIBIMAP) $(DEPLIBS) $(LIBS)
 
-OBJS = sieve_err.o \
-       sieve.o sieve-lex.o comparator.o interp.o message.o \
-       bc_generate.o bc_dump.o bc_emit.o bc_eval.o \
-       script.o tree.o addr.o addr-lex.o
+OBJS = addr.o addr-lex.o comparator.o bc_dump.o bc_emit.o bc_eval.o bc_generate.o interp.o message.o script.o sieve_err.o sieve.o sieve-lex.o tree.o 
 
 sieve-lex.c: sieve-lex.l sieve.h
 
