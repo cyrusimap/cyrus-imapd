@@ -46,11 +46,13 @@ dnl configure.ac for the Cyrus imapd
 dnl
 
 
-AC_INIT(imap/imapd.c)
+AC_INIT([cyrus-imapd], [2.5], [http://bugzilla.cyrusimap.org],,[http://www.cyrusimap.org])
 AC_PREREQ([2.68])
+AC_CONFIG_SRCDIR([imap/imapd.c])
 AC_CONFIG_HEADER(config.h)
 AC_CANONICAL_SYSTEM
 
+AC_CONFIG_LIBOBJ_DIR([lib])
 dnl Useful hook for distributions
 AC_ARG_WITH(extraident,
         [AS_HELP_STRING([--with-extraident=STRING],[use STRING as extra version information])],
@@ -1550,4 +1552,5 @@ enum {
 ])
 
 dnl make sure that Makefile is the last thing output
-AC_OUTPUT(man/Makefile master/Makefile lib/Makefile imap/Makefile imtest/Makefile netnews/Makefile perl/Makefile cunit/Makefile $EXTRA_OUTPUT Makefile)
+AC_CONFIG_FILES([cunit/Makefile imap/Makefile imtest/Makefile lib/Makefile man/Makefile master/Makefile netnews/Makefile perl/Makefile $EXTRA_OUTPUT Makefile])
+AC_OUTPUT

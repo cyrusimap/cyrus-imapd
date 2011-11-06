@@ -63,9 +63,9 @@ YACC = @YACC@
 LEX = @LEX@
 COMPILE_ET = @COMPILE_ET@
 
-PACKAGE = cyrus-imapd
-VERSION = 2.5
-GIT_VERSION = $(VERSION).git$(shell date +'%Y%m%d%H%M')
+PACKAGE_NAME = @PACKAGE_NAME@
+PACKAGE_VERSION = @PACKAGE_VERSION@
+GIT_VERSION = $(PACKAGE_VERSION).git$(shell date +'%Y%m%d%H%M')
 
 all:: xversion
 	@for d in  $(SUBDIRS); \
@@ -77,15 +77,15 @@ all:: xversion
 snapshot::
 	@echo "creating snapshot $(GIT_VERSION)"
 	@if [ \! -d snapshot ]; then mkdir snapshot ; fi
-	@git archive --format=tar --prefix=$(PACKAGE)-$(GIT_VERSION)/ HEAD | tar -C snapshot/ -x -f -
-	@echo "/* $(PACKAGE) $(GIT_VERSION) */" > snapshot/$(PACKAGE)-$(GIT_VERSION)/xversion.h
-	@echo "#define _CYRUS_VERSION \"git$(VERSION)+`git log --pretty=oneline $(PACKAGE)-$(VERSION)..HEAD | wc -l`\"" >> snapshot/$(PACKAGE)-$(GIT_VERSION)/xversion.h
-	@echo "#define CYRUS_GITVERSION \"`git log --abbrev=8 --pretty=\"format:%h %ci\" -1 | cut -d\" \" -f1,2`\"" >> snapshot/$(PACKAGE)-$(GIT_VERSION)/xversion.h
-	@touch snapshot/$(PACKAGE)-$(GIT_VERSION)/xversion
-	@cd snapshot/$(PACKAGE)-$(GIT_VERSION) ; sh SMakefile
+	@git archive --format=tar --prefix=$(PACKAGE_NAME)-$(GIT_VERSION)/ HEAD | tar -C snapshot/ -x -f -
+	@echo "/* $(PACKAGE_NAME) $(GIT_VERSION) */" > snapshot/$(PACKAGE_NAME)-$(GIT_VERSION)/xversion.h
+	@echo "#define _CYRUS_VERSION \"git$(PACKAGE_VERSION)+`git log --pretty=oneline $(PACKAGE_NAME)-$(PACKAGE_VERSION)..HEAD | wc -l`\"" >> snapshot/$(PACKAGE_NAME)-$(GIT_VERSION)/xversion.h
+	@echo "#define CYRUS_GITVERSION \"`git log --abbrev=8 --pretty=\"format:%h %ci\" -1 | cut -d\" \" -f1,2`\"" >> snapshot/$(PACKAGE_NAME)-$(GIT_VERSION)/xversion.h
+	@touch snapshot/$(PACKAGE_NAME)-$(GIT_VERSION)/xversion
+	@cd snapshot/$(PACKAGE_NAME)-$(GIT_VERSION) ; sh SMakefile
 	@for d in $(SUBDIRS) $(DISTSUBDIRS); \
 	do \
-	(cd snapshot/$(PACKAGE)-$(GIT_VERSION)/$$d; \
+	(cd snapshot/$(PACKAGE_NAME)-$(GIT_VERSION)/$$d; \
 	if [ -f Makefile.dist ]; then \
 	echo "### Making" snapshot "in" `pwd`; \
 	$(MAKE) $(MFLAGS) YACC='$(YACC)' LEX='$(LEX)' \
@@ -93,15 +93,15 @@ snapshot::
 	fi) || exit 1; \
 	done
 	@echo "creating tarfile"
-	tar -C snapshot -c -f - $(PACKAGE)-$(GIT_VERSION) | gzip -9 > $(PACKAGE)-$(GIT_VERSION).tar.gz
+	tar -C snapshot -c -f - $(PACKAGE_NAME)-$(GIT_VERSION) | gzip -9 > $(PACKAGE_NAME)-$(GIT_VERSION).tar.gz
 	@rm -rf snapshot
 
 dist:: distgit
 	@echo "creating configure"
-	@cd dist/cyrus-imapd-$(VERSION) ; sh SMakefile
+	@cd dist/cyrus-imapd-$(PACKAGE_VERSION) ; sh SMakefile
 	@for d in $(SUBDIRS) $(DISTSUBDIRS); \
 	do \
-	(cd dist/cyrus-imapd-$(VERSION)/$$d; \
+	(cd dist/cyrus-imapd-$(PACKAGE_VERSION)/$$d; \
 	if [ -f Makefile.dist ]; then \
 	echo "### Making" dist "in" `pwd`; \
 	$(MAKE) $(MFLAGS) YACC='$(YACC)' LEX='$(LEX)' \
@@ -109,24 +109,24 @@ dist:: distgit
 	fi) || exit 1; \
 	done
 	@echo "creating tarfile"
-	@cd dist ; tar cf - cyrus-imapd-$(VERSION) | \
-	gzip -9 > ../cyrus-imapd-$(VERSION).tar.gz
+	@cd dist ; tar cf - cyrus-imapd-$(PACKAGE_VERSION) | \
+	gzip -9 > ../cyrus-imapd-$(PACKAGE_VERSION).tar.gz
 	rm -f distgit
 	rm -rf dist
 
 distgit:
 	if [ \! -d dist ]; then mkdir dist ; fi
-	@echo "checking out the distribution from tag $(PACKAGE)-$(VERSION)"
-	git archive --format=tar --prefix=$(PACKAGE)-$(VERSION)/ $(PACKAGE)-$(VERSION) | tar -C dist -x -f -
-	echo "/* Release $(PACKAGE)-$(VERSION) */" > dist/$(PACKAGE)-$(VERSION)/xversion.h
-	echo "#define _CYRUS_VERSION \"v$(VERSION)\"" >> dist/$(PACKAGE)-$(VERSION)/xversion.h
-	echo "#define CYRUS_GITVERSION \"`git log --abbrev=8 --pretty=\"format:%h %ci\" -1 | cut -d\" \" -f1,2`\"" >> dist/$(PACKAGE)-$(VERSION)/xversion.h
-	touch dist/$(PACKAGE)-$(VERSION)/xversion
+	@echo "checking out the distribution from tag $(PACKAGE_NAME)-$(PACKAGE_VERSION)"
+	git archive --format=tar --prefix=$(PACKAGE_NAME)-$(PACKAGE_VERSION)/ $(PACKAGE_NAME)-$(PACKAGE_VERSION) | tar -C dist -x -f -
+	echo "/* Release $(PACKAGE_NAME)-$(PACKAGE_VERSION) */" > dist/$(PACKAGE_NAME)-$(PACKAGE_VERSION)/xversion.h
+	echo "#define _CYRUS_VERSION \"v$(PACKAGE_VERSION)\"" >> dist/$(PACKAGE_NAME)-$(PACKAGE_VERSION)/xversion.h
+	echo "#define CYRUS_GITVERSION \"`git log --abbrev=8 --pretty=\"format:%h %ci\" -1 | cut -d\" \" -f1,2`\"" >> dist/$(PACKAGE_NAME)-$(PACKAGE_VERSION)/xversion.h
+	touch dist/$(PACKAGE_NAME)-$(PACKAGE_VERSION)/xversion
 	touch distgit
 
 xversion xversion.h:
 	@echo "/* Development version */" > xversion.h.tmp
-	@echo "#define _CYRUS_VERSION \"git$(VERSION)+`git log --pretty=oneline $(PACKAGE)-$(VERSION)..HEAD | wc -l`\"" >> xversion.h.tmp
+	@echo "#define _CYRUS_VERSION \"git$(PACKAGE_VERSION)+`git log --pretty=oneline $(PACKAGE_NAME)-$(PACKAGE_VERSION)..HEAD | wc -l`\"" >> xversion.h.tmp
 	@echo "#define CYRUS_GITVERSION \"`git log --abbrev=8 --pretty=\"format:%h %ci\" -1 | cut -d\" \" -f1,2`\"" >> xversion.h.tmp
 	@cmp -s xversion.h.tmp xversion.h || mv xversion.h.tmp xversion.h
 	@rm -f xversion.h.tmp
