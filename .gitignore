@@ -21,10 +21,6 @@ config.log
 config.status
 config.status.lineno
 configure
-cscope.out
-sieve/test
-sieve/tests/
-perl/sieve/managesieve/
 com_err/et/com_err.o
 com_err/et/compile_et
 com_err/et/error_message.o
@@ -32,6 +28,7 @@ com_err/et/et_name.o
 com_err/et/init_et.o
 com_err/et/libcom_err.a
 coverage.xml
+cscope.out
 cunit/cunit.mk
 cunit/.cunit-*.c
 cunit/default.cunit
@@ -100,9 +97,11 @@ perl/imap/Makefile.old
 perl/imap/blib/
 perl/imap/cyradm
 perl/imap/pm_to_blib
-perl/sieve/scripts/installsieve
-perl/sieve/scripts/sieveshell
-timsieved/timsieved
+perl/sieve/managesieve/MYMETA.json
+perl/sieve/managesieve/MYMETA.yml
+perl/sieve/managesieve/blib/
+perl/sieve/managesieve/managesieve.c
+perl/sieve/managesieve/pm_to_blib
 sieve/Makefile
 sieve/addr-lex.c
 sieve/addr.c
@@ -114,4 +113,7 @@ sieve/sieve_err.c
 sieve/sieve_err.h
 sieve/sievec
 sieve/sieved
+sieve/test
+sieve/tests/
+timsieved/timsieved
 xversion.h
