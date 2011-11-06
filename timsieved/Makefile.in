@@ -56,7 +56,7 @@ CYRUS_USER=@cyrus_user@
 CYRUS_GROUP=@cyrus_group@
 
 DEFS = @DEFS@ @LOCALDEFS@
-CPPFLAGS = -I.. -I$(srcdir)/../sieve -I$(srcdir)/../imap -I$(srcdir)/../lib @COM_ERR_CPPFLAGS@ @CPPFLAGS@ @SASLFLAGS@
+CPPFLAGS = -I$(top_srcdir) -I$(top_srcdir)/lib -I$(top_builddir) -I$(top_builddir)/lib @COM_ERR_CPPFLAGS@ @CPPFLAGS@ @SASLFLAGS@
 CFLAGS = @CFLAGS@ $(EXTRACFLAGS)
 LDFLAGS = @LDFLAGS@ $(EXTRALDFLAGS)
 

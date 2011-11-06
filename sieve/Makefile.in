@@ -60,7 +60,7 @@ COMPILE_ET = @COMPILE_ET@
 top_builddir = @top_builddir@
 
 DEFS = @DEFS@ @LOCALDEFS@
-CPPFLAGS = -I.. -I$(srcdir)/../lib @COM_ERR_CPPFLAGS@ @CPPFLAGS@ @SASLFLAGS@
+CPPFLAGS = -I$(top_srcdir) -I$(top_srcdir)/lib -I$(top_builddir) -I$(top_builddir)/lib @COM_ERR_CPPFLAGS@ @CPPFLAGS@ @SASLFLAGS@
 MAKEDEPEND_CFLAGS = @CFLAGS@
 CFLAGS = @CFLAGS@ @PERL_CCCDLFLAGS@ $(EXTRACFLAGS)
 LDFLAGS = @LDFLAGS@ $(EXTRALDFLAGS)

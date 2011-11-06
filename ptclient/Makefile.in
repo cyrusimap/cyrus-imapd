@@ -54,7 +54,7 @@ INSTALL = @INSTALL@
 RANLIB = @RANLIB@
 
 DEFS = @DEFS@
-CPPFLAGS = -I.. -I$(srcdir)/../imap -I$(srcdir)/../lib @COM_ERR_CPPFLAGS@ @CPPFLAGS@ @SASLFLAGS@
+CPPFLAGS = -I$(top_builddir) -I$(top_builddir)/lib -I$(top_srcdir)/lib -I$(top_srcdir) @COM_ERR_CPPFLAGS@ @CPPFLAGS@ @SASLFLAGS@
 AFS_LDFLAGS = @AFS_LDFLAGS@ @COM_ERR_LDFLAGS@
 AFS_LIBS = @AFS_LIBS@
 IMAP_LIBS = @IMAP_LIBS@ @LIB_RT@ @LIB_UUID@

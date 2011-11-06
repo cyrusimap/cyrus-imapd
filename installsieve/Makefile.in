@@ -51,7 +51,7 @@ CC = @CC@
 RANLIB = @RANLIB@
 
 DEFS = @DEFS@
-CPPFLAGS = -I. -I$(srcdir) -I$(srcdir)/../lib @CPPFLAGS@ @SASLFLAGS@
+CPPFLAGS = -I. -I$(srcdir) -I$(top_srcdir) -I$(top_srcdir)/lib -I$(top_builddir) -I$(top_builddir)/lib @CPPFLAGS@ @SASLFLAGS@
 CFLAGS = @CFLAGS@
 LDFLAGS = @LDFLAGS@
 

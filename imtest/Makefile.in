@@ -53,7 +53,7 @@ INSTALL = @INSTALL@
 RANLIB = @RANLIB@
 
 DEFS = @DEFS@ @LOCALDEFS@
-CPPFLAGS = -I.. -I$(srcdir)/../lib @COM_ERR_CPPFLAGS@ @CPPFLAGS@  @SASLFLAGS@
+CPPFLAGS = -I$(top_srcdir) -I$(top_srcdir)/lib -I$(top_builddir) -I$(top_builddir)/lib @COM_ERR_CPPFLAGS@ @CPPFLAGS@ @SASLFLAGS@
 LIBS = @LIBS@ 
 IMAP_LIBS = @IMAP_LIBS@ @LIB_RT@ @LIB_UUID@
 DEPLIBS = $(top_builddir)/lib/libcyrus.a $(top_builddir)/lib/libcyrus_min.a @DEPLIBS@
