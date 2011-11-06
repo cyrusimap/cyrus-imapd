@@ -140,8 +140,7 @@ install:
 	ln -f $(DESTDIR)$(service_path)/lmtpd $(DESTDIR)$(service_path)/lmtpproxyd
 
 .c.o:
-	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) \
-	$<
+	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
 
 ### libimap
 

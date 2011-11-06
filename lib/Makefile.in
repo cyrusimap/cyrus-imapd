@@ -129,8 +129,7 @@ install:
 	done
 
 .c.o:
-	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) \
-	$<
+	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
 
 libcyrus.a: $(LIBCYR_OBJS)
 	rm -f libcyrus.a

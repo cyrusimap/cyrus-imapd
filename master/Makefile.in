@@ -84,8 +84,7 @@ install:
 	done
 
 .c.o:
-	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) \
-	$<
+	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
 
 # This is awful.  We should use libcyrus.a but we also need
 # to grab a lock*.o from it explicitly.

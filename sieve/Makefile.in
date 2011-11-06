@@ -167,7 +167,6 @@ depend:
 	${MAKEDEPEND} $(CPPFLAGS) $(DEFS) -I$(srcdir) $(MAKEDEPEND_CFLAGS) *.c *.y $(srcdir)/*.y $(srcdir)/*.c 1>makedepend.log 2>&1
 
 .c.o:
-	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) \
-	$<
+	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
 
 # DO NOT DELETE THIS LINE -- make depend depends on it.
