@@ -82,7 +82,7 @@
 #include "global.h"
 #include "times.h"
 #include "hash.h"
-#include "imap_err.h"
+#include "imap/imap_err.h"
 #include "proxy.h"
 #include "imap_proxy.h"
 #include "imapd.h"
@@ -112,7 +112,7 @@
 #include "xstrlcpy.h"
 #include "ptrarray.h"
 
-#include "pushstats.h"		/* SNMP interface */
+#include "imap/pushstats.h"		/* SNMP interface */
 
 #include "iostat.h"
 

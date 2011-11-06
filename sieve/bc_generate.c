@@ -52,7 +52,7 @@
 
 #include "script.h"
 #include "tree.h"
-#include "sieve.h"
+#include "sieve/sieve.h"
 
 #include "bytecode.h"
 

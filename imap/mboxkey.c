@@ -66,7 +66,7 @@
 #include "global.h"
 #include "xmalloc.h"
 #include "mailbox.h"
-#include "imap_err.h"
+#include "imap/imap_err.h"
 #include "mboxkey.h"
 
 #define FNAME_MBOXKEYSUFFIX ".mboxkey" /* per user mailbox key extension */

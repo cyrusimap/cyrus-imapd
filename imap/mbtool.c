@@ -82,7 +82,7 @@
 #include "exitcodes.h"
 #include "index.h"
 #include "global.h"
-#include "imap_err.h"
+#include "imap/imap_err.h"
 #include "imparse.h"
 #include "mailbox.h"
 #include "message.h"

@@ -72,7 +72,7 @@
 
 #include "assert.h"
 #include "xmalloc.h"
-#include "imap_err.h"
+#include "imap/imap_err.h"
 #include "global.h"
 #include "exitcodes.h"
 #include "util.h"

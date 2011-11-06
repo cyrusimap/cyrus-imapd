@@ -47,7 +47,7 @@
 #include <config.h>
 #endif
 
-#include "sieve_interface.h"
+#include "sieve/sieve_interface.h"
 #include "scripttest.h"
 #include <syslog.h>
 

@@ -58,7 +58,7 @@
 #include "sysexits.h"
 #include "exitcodes.h"
 #include "append.h"
-#include "imap_err.h"
+#include "imap/imap_err.h"
 #include "index.h"
 #include "mailbox.h"
 #include "xmalloc.h"

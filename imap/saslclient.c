@@ -53,7 +53,7 @@
 
 #include "xmalloc.h"
 #include "prot.h"
-#include "imap_err.h"
+#include "imap/imap_err.h"
 #include "saslclient.h"
 #include "global.h"
 

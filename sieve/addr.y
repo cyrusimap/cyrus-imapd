@@ -52,8 +52,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "addr.h"
-#include "script.h"
+#include "sieve/addr.h"
+#include "sieve/script.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 

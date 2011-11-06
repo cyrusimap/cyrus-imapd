@@ -60,7 +60,7 @@
 
 #include "crc32.h"
 #include "exitcodes.h"
-#include "imap_err.h"
+#include "imap/imap_err.h"
 #include "prot.h"
 #include "map.h"
 #include "mailbox.h"
@@ -77,7 +77,7 @@
 #include "strarray.h"
 #include "global.h"
 #include "retry.h"
-#include "rfc822_header.h"
+#include "imap/rfc822_header.h"
 #include "times.h"
 
 /* Message being parsed */

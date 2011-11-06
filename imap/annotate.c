@@ -67,7 +67,7 @@
 #include "imapd.h"
 #include "global.h"
 #include "times.h"
-#include "imap_err.h"
+#include "imap/imap_err.h"
 #include "mboxlist.h"
 #include "util.h"
 #include "xmalloc.h"

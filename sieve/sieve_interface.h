@@ -52,8 +52,8 @@
 /* error codes */
 #define SIEVE_OK (0)
 
-#include "sieve_err.h"
 #include "strarray.h"
+#include "sieve/sieve_err.h"
 
 /* external sieve types */
 typedef struct sieve_interp sieve_interp_t;

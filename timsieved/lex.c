@@ -54,13 +54,13 @@
 #include <string.h>
 
 #include "prot.h"
-#include "tls.h"
+#include "imap/tls.h"
 #include "lex.h"
 #include "codes.h"
 #include "mystring.h"
 #include "actions.h"
 #include "libconfig.h"
-#include "global.h"
+#include "imap/global.h"
 #include "util.h"
 #include "xmalloc.h"
 

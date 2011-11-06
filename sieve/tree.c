@@ -51,7 +51,7 @@
 #include "xmalloc.h"
 
 #include "tree.h"
-#include "sieve.h"
+#include "sieve/sieve.h"
 
 tag_t *new_tag(int type, char *s)
 {

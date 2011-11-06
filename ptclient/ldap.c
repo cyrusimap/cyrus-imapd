@@ -68,7 +68,7 @@
 #include <lber.h>
 
 /* libimap */
-#include "global.h"
+#include "imap/global.h"
 
 /* libconfig */
 #include "libconfig.h"

@@ -51,8 +51,8 @@
 #include <string.h> /* for strdup */
 #include "xmalloc.h"
 
-#include "tree.h"
-#include "sieve.h"
+#include "sieve/tree.h"
+#include "sieve/sieve.h"
 
 #define YY_NO_INPUT
 

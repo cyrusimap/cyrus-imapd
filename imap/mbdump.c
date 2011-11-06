@@ -66,7 +66,7 @@
 #include "annotate.h"
 #include "exitcodes.h"
 #include "global.h"
-#include "imap_err.h"
+#include "imap/imap_err.h"
 #include "imparse.h"
 #include "map.h"
 #include "mbdump.h"

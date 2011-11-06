@@ -63,7 +63,7 @@
 #include "exitcodes.h"
 #include "global.h"
 #include "hash.h"
-#include "imap_err.h"
+#include "imap/imap_err.h"
 #include "index.h"
 #include "libcyr_cfg.h"
 #include "cyr_lock.h"

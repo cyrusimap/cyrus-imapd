@@ -53,15 +53,15 @@
 #include <string.h>
 #include <ctype.h>
 #include "xmalloc.h"
-#include "comparator.h"
-#include "interp.h"
-#include "script.h"
-#include "tree.h"
+#include "sieve/comparator.h"
+#include "sieve/interp.h"
+#include "sieve/script.h"
+#include "sieve/tree.h"
 
-#include "../lib/imapurl.h"
-#include "../lib/util.h"
-#include "../lib/imparse.h"
-#include "../lib/libconfig.h"
+#include "imapurl.h"
+#include "util.h"
+#include "imparse.h"
+#include "libconfig.h"
 
 #define ERR_BUF_SIZE 1024
 

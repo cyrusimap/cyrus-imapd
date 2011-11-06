@@ -81,7 +81,7 @@
 #include "crc32.h"
 #include "exitcodes.h"
 #include "global.h"
-#include "imap_err.h"
+#include "imap/imap_err.h"
 #include "imparse.h"
 #include "cyr_lock.h"
 #include "mailbox.h"

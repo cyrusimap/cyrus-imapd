@@ -60,7 +60,7 @@
 #include "cyrusdb.h"
 #include "exitcodes.h"
 #include "hash.h"
-#include "global.h"
+#include "imap/global.h"
 #include "libconfig.h"
 #include "cyr_lock.h"
 #include "retry.h"

@@ -75,7 +75,7 @@
 #include "exitcodes.h"
 #include "global.h"
 #include "idle.h"
-#include "imap_err.h"
+#include "imap/imap_err.h"
 #include "imparse.h"
 #include "cyr_lock.h"
 #include "mailbox.h"
@@ -98,7 +98,7 @@
 
 #include "lmtpd.h"
 #include "lmtpengine.h"
-#include "lmtpstats.h"
+#include "imap/lmtpstats.h"
 #ifdef USE_SIEVE
 #include "lmtp_sieve.h"
 

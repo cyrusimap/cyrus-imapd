@@ -49,7 +49,7 @@
 #include <sasl/saslutil.h>
 
 #include "prot.h"
-#include "imap_err.h"
+#include "imap/imap_err.h"
 #include "xmalloc.h"
 
 #define BASE64_BUF_SIZE 21848	/* per RFC 2222bis: ((16K / 3) + 1) * 4  */

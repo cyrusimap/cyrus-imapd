@@ -79,15 +79,15 @@
 #include "times.h"
 #include "global.h"
 #include "exitcodes.h"
-#include "imap_err.h"
-#include "mupdate_err.h"
+#include "imap/imap_err.h"
+#include "imap/mupdate_err.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 #include "version.h"
 
 #include "lmtpengine.h"
-#include "lmtpstats.h"
+#include "imap/lmtpstats.h"
 #include "tls.h"
 #include "telemetry.h"
 

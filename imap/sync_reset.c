@@ -67,7 +67,7 @@
 #include "assert.h"
 #include "mboxlist.h"
 #include "exitcodes.h"
-#include "imap_err.h"
+#include "imap/imap_err.h"
 #include "mailbox.h"
 #include "acl.h"
 #include "seen.h"

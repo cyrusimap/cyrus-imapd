@@ -75,7 +75,7 @@
 
 #include "exitcodes.h"
 #include "imapd.h"
-#include "imap_err.h"
+#include "imap/imap_err.h"
 #include "mailbox.h"
 #include "version.h"
 #include "xmalloc.h"
