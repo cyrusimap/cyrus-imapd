@@ -45,6 +45,7 @@
 
 srcdir = @srcdir@
 top_srcdir = @top_srcdir@
+top_builddir = @top_builddir@
 VPATH = @srcdir@
 PURIFY = /usr/local/bin/purify
 
@@ -84,8 +85,8 @@ PROGS = ptexpire ptloader ptdump $(EXTRA_PROGS)
 LIB_RT = @LIB_RT@
 LIB_UUID = @LIB_UUID@
 
-SERVICE=../master/service.o
-SERVICETHREAD=../master/service-thread.o
+SERVICE=$(top_builddir)/master/service.o
+SERVICETHREAD=$(top_builddir)/master/service-thread.o
 
 all: $(PROGS)
 
@@ -99,11 +100,11 @@ install:
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(LDAP_CPPFLAGS) $(DEFS) $(CFLAGS) $<
 
-ptloader: ptloader.o afskrb.o ldap.o ../imap/mutex_fake.o $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o $@ ptloader.o afskrb.o ldap.o ../imap/mutex_fake.o $(SERVICETHREAD) ${AFS_LDFLAGS} ${LDAP_LDFLAGS} $(AFS_LIBS) ${LDAP_LIBS} $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_WRAP) $(LIB_RT) $(LIB_UUID)
+ptloader: ptloader.o afskrb.o ldap.o $(top_builddir)/imap/mutex_fake.o $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o $@ ptloader.o afskrb.o ldap.o $(top_builddir)/imap/mutex_fake.o $(SERVICETHREAD) ${AFS_LDFLAGS} ${LDAP_LDFLAGS} $(AFS_LIBS) ${LDAP_LIBS} $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_WRAP) $(LIB_RT) $(LIB_UUID)
 
-ptloader.pure: ptloader.o afskrb.o ldap.o ../imap/mutex_fake.o $(DEPLIBS)
-	$(PURIFY) $(PUREARGS) $(CC) $(LDFLAGS) -o $@ ptloader.o afskrb.o ldap.o ../imap/mutex_fake.o $(SERVICETHREAD) ${AFS_LDFLAGS} ${LDAP_LDFLAGS} $(AFS_LIBS) ${LDAP_LIBS} $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_WRAP) $(LIB_RT) $(LIB_UUID)
+ptloader.pure: ptloader.o afskrb.o ldap.o $(top_builddir)/imap/mutex_fake.o $(DEPLIBS)
+	$(PURIFY) $(PUREARGS) $(CC) $(LDFLAGS) -o $@ ptloader.o afskrb.o ldap.o $(top_builddir)/imap/mutex_fake.o $(SERVICETHREAD) ${AFS_LDFLAGS} ${LDAP_LDFLAGS} $(AFS_LIBS) ${LDAP_LIBS} $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_WRAP) $(LIB_RT) $(LIB_UUID)
 
 ptexpire: ptexpire.o $(DEPLIBS) $(UTIL_LIBS)
 	$(CC) $(LDFLAGS) -o $@ ptexpire.o $(UTIL_LIBS) $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_RT) $(LIB_UUID)

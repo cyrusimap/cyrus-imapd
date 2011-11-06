@@ -44,6 +44,7 @@ DEFINES=
 
 srcdir = @srcdir@
 top_srcdir = @top_srcdir@
+top_builddir = @top_builddir@
 VPATH = @srcdir@
 
 CC = @CC@
@@ -130,9 +131,9 @@ TESTSOURCES = \
 
 
 TESTLIBS = @SIEVE_LIBS@ \
-	@top_srcdir@/imap/mutex_fake.o @top_srcdir@/imap/libimap.a \
-	@top_srcdir@/imap/spool.o \
-	@top_srcdir@/lib/libcyrus.a @top_srcdir@/lib/libcyrus_min.a
+	@top_builddir@/imap/mutex_fake.o @top_builddir@/imap/spool.o \
+	@top_builddir@/imap/libimap.a @top_builddir@/lib/libcyrus.a \
+	@top_builddir@/lib/libcyrus_min.a
 
 BUILTSOURCES = registers.h
 

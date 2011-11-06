@@ -45,6 +45,7 @@
 
 srcdir = @srcdir@
 top_srcdir = @top_srcdir@
+top_builddir = @top_builddir@
 VPATH = @srcdir@
 
 CC = @CC@
@@ -124,8 +125,8 @@ libcyrus_min.a: $(LIBCYRM_OBJS)
 	ar cr libcyrus_min.a $(LIBCYRM_OBJS)
 	$(RANLIB) libcyrus_min.a
 
-imapopts.c: imapoptions $(srcdir)/../tools/config2header
-	$(srcdir)/../tools/config2header CC="$(CC)" $(srcdir)/imapopts.c $(srcdir)/imapopts.h < $(srcdir)/imapoptions
+imapopts.c: imapoptions $(top_srcdir)/tools/config2header
+	$(top_srcdir)/tools/config2header CC="$(CC)" $(srcdir)/imapopts.c $(srcdir)/imapopts.h < $(srcdir)/imapoptions
 
 imapopts.h: imapopts.c
 
