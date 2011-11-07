@@ -59,7 +59,7 @@ DEPLIBS = @DEPLIBS@
 
 CFLAGS = @CFLAGS@ $(EXTRACFLAGS)
 LDFLAGS = @LDFLAGS@ @COM_ERR_LDFLAGS@ $(EXTRALDFLAGS)
-LIBS = ../lib/libcyrus_min.a @LIB_UCDSNMP@ @LIBS@ @COM_ERR_LIBS@ -lm
+LIBS = $(top_builddir)/lib/libcyrus_min.a @LIB_UCDSNMP@ @LIBS@ @COM_ERR_LIBS@ -lm
 
 SHELL = /bin/sh
 MAKEDEPEND = @MAKEDEPEND@

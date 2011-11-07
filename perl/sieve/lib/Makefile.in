@@ -54,7 +54,7 @@ RANLIB = @RANLIB@
 
 DEFS = @DEFS@ @LOCALDEFS@ -Dbool=char -DHAS_BOOL
 CPPFLAGS = -I$(top_builddir) -I$(top_builddir)/lib -I$(srcdir) -I$(top_srcdir)/lib -I$(top_srcdir) @CPPFLAGS@ @DYNSASLFLAGS@ @COM_ERR_CPPFLAGS@
-LIBS = ../../../lib/libcyrus.a ../../../lib/libcyrus_min.a @LIB_DYN_SASL@ @LIBS@
+LIBS = $(top_builddir)/lib/libcyrus.a $(top_builddir)/lib/libcyrus_min.a @LIB_DYN_SASL@ @LIBS@
 IMAP_LIBS = @IMAP_LIBS@
 DEPLIBS = $(top_builddir)/lib/libcyrus.a $(top_builddir)/lib/libcyrus_min.a @DEPLIBS@
 
