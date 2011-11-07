@@ -65,7 +65,6 @@ SHELL = /bin/sh
 
 LIBOBJS= error_message.o et_name.o init_et.o com_err.o
 # for et_lex.lex.c include in error_table.y
-LOCALINCLUDE=-I. -I.. -I$(srcdir)
 
 all: compile_et libcom_err.a
 
