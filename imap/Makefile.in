@@ -139,8 +139,13 @@ install:
 	ln -f $(DESTDIR)$(service_path)/imapd $(DESTDIR)$(service_path)/proxyd
 	ln -f $(DESTDIR)$(service_path)/lmtpd $(DESTDIR)$(service_path)/lmtpproxyd
 
+.SUFFIXES: .snmp
+
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
+
+.snmp.c:
+	$(top_srcdir)/snmp/snmpgen $<
 
 ### libimap
 
@@ -153,13 +158,7 @@ libimap.a: $(LOBJS)
 
 version.o: ../xversion.h
 
-pushstats.c: pushstats.snmp $(srcdir)/../snmp/snmpgen
-	$(srcdir)/../snmp/snmpgen $(srcdir)/pushstats.snmp
-
 pushstats.h: pushstats.c
-
-lmtpstats.c: lmtpstats.snmp $(srcdir)/../snmp/snmpgen
-	$(srcdir)/../snmp/snmpgen $(srcdir)/lmtpstats.snmp
 
 lmtpstats.h: lmtpstats.c
 

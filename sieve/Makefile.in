@@ -77,7 +77,7 @@ BUILT_SOURCES = addr.c addr.h addr-lex.c \
 	sieve.c sieve.h sieve-lex.c \
 	sieve_err.h sieve_err.c
 
-all: libsieve.a sievec sieved
+all: $(BUILT_SOURCES) sieved libsieve.a sievec
 
 check:
 
