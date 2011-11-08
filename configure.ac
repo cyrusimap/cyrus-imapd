@@ -1280,12 +1280,10 @@ for flag in ${ldflags} ${default_ldflags}; do
   esac
 done
 
-IMAP_COM_ERR_LIBS="${COM_ERR_LIBS}"
 IMAP_LIBS="${LIB_SASL} ${LIBS} ${SQL_LIBS}"
 
 AC_SUBST(LIB_RT)
 AC_SUBST(LIB_UUID)
-AC_SUBST(IMAP_COM_ERR_LIBS)
 AC_SUBST(IMAP_LIBS)
 
 dnl AC_OUTPUT_COMMANDS([

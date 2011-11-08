@@ -67,9 +67,8 @@ LDFLAGS = @LDFLAGS@ $(EXTRALDFLAGS)
 MAKEDEPEND = @MAKEDEPEND@
 
 IMAP_LIBS = @IMAP_LIBS@
-IMAP_COM_ERR_LIBS = @IMAP_COM_ERR_LIBS@
 IMAP_LIBS = @IMAP_LIBS@ @LIB_RT@ @LIB_UUID@
-LIBS = libsieve.a $(IMAP_LIBS) $(IMAP_COM_ERR_LIBS)
+LIBS = libsieve.a $(IMAP_LIBS) @COM_ERR_LIBS@
 DEPLIBS=../lib/libcyrus.a ../lib/libcyrus_min.a @DEPLIBS@
 LIBIMAP = ../imap/mutex_fake.o ../imap/libimap.a
 
