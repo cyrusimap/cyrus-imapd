@@ -1648,7 +1648,7 @@ static int mycheckpoint(struct db *db, int locked)
     int r = 0;
     uint32_t iorectype = htonl(INORDER);
     unsigned i;
-    time_t start = time(NULL);
+    clock_t start = sclock();
 
     /* grab write lock (could be read but this prevents multiple checkpoints
      simultaneously) */
@@ -1857,13 +1857,10 @@ static int mycheckpoint(struct db *db, int locked)
 	unlock(db);
     }
 
-    {
-	int diff = time(NULL) - start;
-	syslog(LOG_INFO, 
-	       "skiplist: checkpointed %s (%d record%s, %d bytes) in %d second%s",
-	       db->fname, db->listsize, db->listsize == 1 ? "" : "s", 
-	       db->logstart, diff, diff == 1 ? "" : "s"); 
-    }
+    syslog(LOG_INFO,
+	   "skiplist: checkpointed %s (%d record%s, %d bytes) in %2.3f sec",
+	   db->fname, db->listsize, db->listsize == 1 ? "" : "s",
+	   db->logstart, (sclock() - start) / (double) CLOCKS_PER_SEC);
 
     return r;
 }
