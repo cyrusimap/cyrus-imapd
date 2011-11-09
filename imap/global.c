@@ -284,6 +284,8 @@ int cyrus_init(const char *alt_config, const char *ident, unsigned flags)
 				  config_getstring(IMAPOPT_SQL_PASSWD));
 	libcyrus_config_setswitch(CYRUSOPT_SQL_USESSL,
 				  config_getswitch(IMAPOPT_SQL_USESSL));
+	libcyrus_config_setswitch(CYRUSOPT_SKIPLIST_ALWAYS_CHECKPOINT,
+				  config_getswitch(IMAPOPT_SKIPLIST_ALWAYS_CHECKPOINT));
 
 	/* Not until all configuration parameters are set! */
 	libcyrus_init();
