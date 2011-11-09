@@ -158,7 +158,7 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 	buf_appendcstr(&buf, "_password");
 	pass = config_getoverflowstring(buf_cstring(&buf), NULL);
 	if (!pass) pass = config_getstring(IMAPOPT_PROXY_PASSWORD);
-	cb = mysasl_callbacks(userid, 
+	cb = mysasl_callbacks(NULL, /* userid */
 			      config_getstring(IMAPOPT_PROXY_AUTHNAME),
 			      config_getstring(IMAPOPT_PROXY_REALM),
 			      pass);
@@ -166,7 +166,7 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 
     /* Require proxying if we have an "interesting" userid (authzid) */
     r = sasl_client_new(prot->sasl_service, s->hostname, localip, remoteip, cb,
-			(userid  && *userid ? SASL_NEED_PROXY : 0) |
+			/* (userid  && *userid ? SASL_NEED_PROXY : 0) | */
 			SASL_USAGE_FLAGS, &s->saslconn);
     if (r != SASL_OK) goto done;
 
@@ -216,6 +216,9 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 	}
 	prot_printf(s->out, "Authorization: %s %s\r\n",
 		    scheme ? scheme->name : "", clientout ? clientout : "");
+	if (scheme && userid && *userid) {
+	    prot_printf(s->out, "Authorization-Id: %s\r\n", userid);
+	}
 	prot_printf(s->out, "Content-Length: %lu\r\n", httpreq.elen);
 	prot_write(s->out, (const char *) httpreq.entity, httpreq.elen);
 	prot_printf(s->out, "\r\n");
@@ -395,8 +398,7 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 		    pass = callback_getdata(s->saslconn, cb, SASL_CB_PASS);
 
 		    buf_reset(&buf);
-		    buf_printf(&buf, "%s:%s:%s",
-			       userid ? userid : "", authid, pass);
+		    buf_printf(&buf, "%s:%s", authid, pass);
 		    clientout = buf_cstring(&buf);
 		    clientoutlen = buf_len(&buf);
 		    r = SASL_OK;

@@ -191,7 +191,8 @@ static int reset_saslconn(sasl_conn_t **conn);
 
 static void cmdloop(void);
 static struct accept *parse_accept(const char *hdr);
-static int http_auth(const char *creds, struct auth_challenge_t *chal);
+static int http_auth(const char *creds, const char *authzid,
+		     struct auth_challenge_t *chal);
 
 static int meth_get(struct transaction_t *txn);
 
@@ -205,7 +206,7 @@ static struct {
 
 static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, &mysasl_config, NULL },
-    { SASL_CB_PROXY_POLICY, &mysasl_proxy_policy, (void*) &httpd_proxyctx },
+/*    { SASL_CB_PROXY_POLICY, &mysasl_proxy_policy, (void*) &httpd_proxyctx },*/
     { SASL_CB_CANON_USER, &mysasl_canon_user, NULL },
     { SASL_CB_LIST_END, NULL, NULL }
 };
@@ -1017,8 +1018,10 @@ static void cmdloop(void)
 #endif /* SASL_HTTP_REQUEST */
 
 	if (!httpd_userid) {
+	    const char **creds, **authzid;
+
 	    /* Perform authentication, if necessary */
-	    if ((hdr = spool_getheader(txn.req_hdrs, "Authorization"))) {
+	    if ((creds = spool_getheader(txn.req_hdrs, "Authorization"))) {
 
 		/* Client is trying to authenticate */
 #if 0 /* XXX Do we want to support reauth? */
@@ -1035,8 +1038,10 @@ static void cmdloop(void)
 #ifdef SASL_HTTP_REQUEST
 		sasl_setprop(httpd_saslconn, SASL_HTTP_REQUEST, &sasl_http_req);
 #endif
-		if (((r = http_auth(hdr[0], &txn.auth_chal)) < 0) ||
-		    !txn.auth_chal.scheme) {
+		authzid = spool_getheader(txn.req_hdrs, "Authorization-Id");
+		r = http_auth(creds[0],
+			      authzid ? authzid[0] : NULL, &txn.auth_chal);
+		if ((r < 0) || !txn.auth_chal.scheme) {
 		    /* Auth failed - reinitialize */
 		    syslog(LOG_DEBUG, "auth failed - reinit");
 		    reset_saslconn(&httpd_saslconn);
@@ -1460,7 +1465,7 @@ void response_header(long code, struct transaction_t *txn)
 
 		    if (scheme->is_server_first) {
 			/* Generate the initial challenge */
-			http_auth(scheme->name, auth_chal);
+			http_auth(scheme->name, NULL, auth_chal);
 
 			if (!auth_chal->param) continue;  /* If fail, skip it */
 		    }
@@ -1692,11 +1697,12 @@ void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
  */
 #define BASE64_BUF_SIZE 21848	/* per RFC 4422: ((16K / 3) + 1) * 4  */
 
-static int http_auth(const char *creds, struct auth_challenge_t *chal)
+static int http_auth(const char *creds, const char *authzid,
+		     struct auth_challenge_t *chal)
 {
     static int status = SASL_OK;
     size_t slen;
-    const char *clientin = NULL;
+    const char *clientin = NULL, *user;
     unsigned int clientinlen = 0;
     struct auth_scheme_t *scheme;
     static char base64[BASE64_BUF_SIZE+1];
@@ -1708,9 +1714,11 @@ static int http_auth(const char *creds, struct auth_challenge_t *chal)
     slen = strcspn(creds, " \0");
     if ((clientin = strchr(creds, ' '))) clientinlen = strlen(++clientin);
 
-    syslog(LOG_DEBUG, "http_auth: status=%d   creds='%.*s%s'   scheme='%s'",
-	   status, slen, creds, clientin ? " <response>" : "",
-	   chal->scheme ? chal->scheme->name : "");
+    syslog(LOG_DEBUG,
+	   "http_auth: status=%d   scheme='%s'   creds='%.*s%s'   authzid='%s'",
+	   status, chal->scheme ? chal->scheme->name : "",
+	   slen, creds, clientin ? " <response>" : "",
+	   authzid ? authzid : "");
 
     if (chal->scheme) {
 	/* Use current scheme, if possible */
@@ -1760,7 +1768,7 @@ static int http_auth(const char *creds, struct auth_challenge_t *chal)
 
     if (scheme->idx == AUTH_BASIC) {
 	/* Basic (plaintext) authentication */
-	char *authzid = NULL, *authid, *pass;
+	char *pass;
 
 	if (!clientin) {
 	    /* Create initial challenge (base64 buffer is static) */
@@ -1771,75 +1779,29 @@ static int http_auth(const char *creds, struct auth_challenge_t *chal)
 	    return status;
 	}
 
-	/* Split credentials into [ <authzid ':' ] <authid> ':' <pass>.
+	/* Split credentials into <user> ':' <pass>.
 	 * We are working with base64 buffer, so we can modify it.
 	 */
-	pass = strrchr(base64, ':');
+	user = base64;
+	pass = strchr(base64, ':');
 	if (!pass) {
 	    syslog(LOG_ERR, "Basic auth: Missing password");
 	    return SASL_BADPARAM;
 	}
 	*pass++ = '\0';
-
-	if ((authid = strrchr(base64, ':'))) {
-	    *authid++ = '\0';
-	    authzid = base64;
-	}
-	else authid = base64;
 	
 	/* Verify the password */
-	status = sasl_checkpass(httpd_saslconn, authid, strlen(authid),
+	status = sasl_checkpass(httpd_saslconn, user, strlen(user),
 				pass, strlen(pass));
 	memset(pass, 0, strlen(pass));		/* erase plaintext password */
 
 	if (status) {
 	    syslog(LOG_NOTICE, "badlogin: %s Basic %s %s",
-		   httpd_clienthost, authid, sasl_errdetail(httpd_saslconn));
+		   httpd_clienthost, user, sasl_errdetail(httpd_saslconn));
 
 	    /* Don't allow user probing */
 	    if (status == SASL_NOUSER) status = SASL_BADAUTH;
 	    return status;
-	}
-
-	/* Get the canonicalized authid from SASL */
-	status = sasl_getprop(httpd_saslconn, SASL_USERNAME, &canon_user);
-	if (status != SASL_OK) {
-	    syslog(LOG_ERR, "weird SASL error %d getting SASL_USERNAME", status);
-	    return status;
-	}
-
-	if (authzid && *authzid) {
-	    /* Trying to proxy as another user */
-	    char userbuf[MAX_MAILBOX_BUFFER];
-	    unsigned userlen;
-
-	    /* Canonify the authzid */
-	    status = mysasl_canon_user(httpd_saslconn, NULL,
-				       authzid, strlen(authzid),
-				       SASL_CU_AUTHZID, NULL,
-				       userbuf, sizeof(userbuf), &userlen);
-	    if (status) {
-		syslog(LOG_NOTICE, "badlogin: %s Basic %s invalid user",
-		       httpd_clienthost, beautify_string(authzid));
-		return status;
-	    }
-	    authzid = userbuf;
-	    authid = (char *) canon_user;
-
-	    /* See if authid is allowed to proxy */
-	    status = mysasl_proxy_policy(httpd_saslconn,
-					 &httpd_proxyctx,
-					 authzid, strlen(authzid),
-					 authid, strlen(authid),
-					 NULL, 0, NULL);
-
-	    if (status) {
-		syslog(LOG_NOTICE, "badlogin: %s Basic %s %s",
-		       httpd_clienthost, authid, sasl_errdetail(httpd_saslconn));
-		return status;
-	    }
-
-	    canon_user = authzid;
 	}
 
 	/* Successful authentication - fall through */
@@ -1889,18 +1851,52 @@ static int http_auth(const char *creds, struct auth_challenge_t *chal)
 	    return status;
 	}
 
-	/* Get the userid from SASL - already canonicalized */
-	status = sasl_getprop(httpd_saslconn, SASL_USERNAME, &canon_user);
-	if (status != SASL_OK) {
-	    syslog(LOG_ERR, "weird SASL error %d getting SASL_USERNAME", status);
-	    return status;
-	}
-
 	/* Successful authentication
 	 *
 	 * HTTP doesn't support security layers,
 	 * so don't attach SASL context to prot layer.
 	 */
+    }
+
+    /* Get the userid from SASL - already canonicalized */
+    status = sasl_getprop(httpd_saslconn, SASL_USERNAME, &canon_user);
+    if (status != SASL_OK) {
+	syslog(LOG_ERR, "weird SASL error %d getting SASL_USERNAME", status);
+	return status;
+    }
+
+    if (authzid && *authzid) {
+	/* Trying to proxy as another user */
+	char authzbuf[MAX_MAILBOX_BUFFER];
+	unsigned authzlen;
+
+	/* Canonify the authzid */
+	status = mysasl_canon_user(httpd_saslconn, NULL,
+				   authzid, strlen(authzid),
+				   SASL_CU_AUTHZID, NULL,
+				   authzbuf, sizeof(authzbuf), &authzlen);
+	if (status) {
+	    syslog(LOG_NOTICE, "badlogin: %s Basic %s invalid user",
+		   httpd_clienthost, beautify_string(authzid));
+	    return status;
+	}
+	authzid = authzbuf;
+	user = (const char *) canon_user;
+
+	/* See if user is allowed to proxy */
+	status = mysasl_proxy_policy(httpd_saslconn,
+				     &httpd_proxyctx,
+				     authzid, authzlen,
+				     user, strlen(user),
+				     NULL, 0, NULL);
+
+	if (status) {
+	    syslog(LOG_NOTICE, "badlogin: %s Basic %s %s",
+		   httpd_clienthost, user, sasl_errdetail(httpd_saslconn));
+	    return status;
+	}
+
+	canon_user = authzid;
     }
 
     httpd_userid = xstrdup((const char *) canon_user);
