@@ -72,7 +72,7 @@ static int starttls(struct backend *s);
 
 
 struct protocol_t http_protocol =
-{ "http", "http", TYPE_SPEC,
+{ "http", "HTTP", TYPE_SPEC,
   { .spec = { &login, &ping, &logout } }
 };
 

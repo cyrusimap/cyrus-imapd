@@ -148,7 +148,7 @@ struct auth_scheme_t auth_schemes[] = {
     { AUTH_BASIC, "Basic", NULL, 0, 1, 1, NULL, NULL },
     { AUTH_DIGEST, "Digest", HTTP_DIGEST_MECH, 0, 1, 0,
       &digest_send_success, digest_recv_success },
-    { AUTH_SPNEGO, "Negotiate", NULL /* not impl yet */, 0, 0, 1, NULL, NULL },
+    { AUTH_SPNEGO, "Negotiate", "GSS-SPNEGO", 0, 0, 1, NULL, NULL },
     { AUTH_NTLM, "NTLM", "NTLM", 1, 0, 1, NULL, NULL },
     { -1, NULL, NULL, -1, -1, -1, NULL, NULL }
 };
@@ -456,7 +456,7 @@ int service_main(int argc __attribute__((unused)),
     }
 
     /* other params should be filled in */
-    if (sasl_server_new("http", config_servername, NULL, NULL, NULL, NULL,
+    if (sasl_server_new("HTTP", config_servername, NULL, NULL, NULL, NULL,
 			SASL_USAGE_FLAGS, &httpd_saslconn) != SASL_OK)
 	fatal("SASL failed initializing: sasl_server_new()",EC_TEMPFAIL); 
 
@@ -714,7 +714,7 @@ static int reset_saslconn(sasl_conn_t **conn)
 
     sasl_dispose(conn);
     /* do initialization typical of service_main */
-    ret = sasl_server_new("http", config_servername, NULL, NULL, NULL, NULL,
+    ret = sasl_server_new("HTTP", config_servername, NULL, NULL, NULL, NULL,
 			  SASL_USAGE_FLAGS, conn);
     if(ret != SASL_OK) return ret;
 
