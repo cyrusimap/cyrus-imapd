@@ -1102,10 +1102,7 @@ static void cmdloop(void)
 
 	/* Handle errors (success responses handled by method functions */
       error:
-	if (ret) {
-	    syslog(LOG_DEBUG, "error: %s", error_message(ret));
-	    error_response(ret, &txn);
-	}
+	if (ret) error_response(ret, &txn);
 
 	/* Memory cleanup */
 	if (txn.req_hdrs) {
@@ -1370,6 +1367,28 @@ void response_header(long code, struct transaction_t *txn)
     char datestr[80];
     struct auth_challenge_t *auth_chal;
     struct resp_body_t *resp_body;
+    static struct buf log = BUF_INITIALIZER;
+    const char **hdr;
+
+    /* Log the client request and our response */
+    buf_reset(&log);
+    buf_printf(&log, "%s", httpd_clienthost);
+    if (httpd_userid) buf_printf(&log, " as \"%s\"", httpd_userid);
+    if ((hdr = spool_getheader(txn->req_hdrs, "User-Agent"))) {
+	buf_printf(&log, " with \"%s\"", hdr[0]);
+    }
+    buf_printf(&log, "; \"%s %s", txn->meth, txn->req_tgt.path);
+    if (*txn->req_tgt.query) {
+	buf_printf(&log, "?%s", txn->req_tgt.query);
+    }
+    buf_printf(&log, " %s\"", HTTP_VERSION);
+    if ((hdr = spool_getheader(txn->req_hdrs, "Destination"))) {
+	buf_printf(&log, " (%s)", hdr[0]);
+    }
+    buf_printf(&log, " => \"%s\"", error_message(code));
+    if (txn->loc) buf_printf(&log, " (%s)", txn->loc);
+    syslog(LOG_INFO, "%s", buf_cstring(&log));
+
 
     /* Status-Line */
     prot_printf(httpd_out, "%s\r\n", http_statusline(code));
