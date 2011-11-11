@@ -2028,6 +2028,11 @@ int check_precond(const char *meth, const char *etag, time_t lastmod,
     const char **hdr;
     time_t since;
 
+    if ((hdr = spool_getheader(hdrcache, "If"))) {
+	/* XXX  Need to support this for sync-token and possibly lock-token */
+	syslog(LOG_WARNING, "If: %s", hdr[0]);
+    }
+
     if ((hdr = spool_getheader(hdrcache, "If-Match"))) {
 	if (!etagcmp(hdr[0], etag)) {
 	    /* Precond success - fall through and check If-Unmodified-Since */
