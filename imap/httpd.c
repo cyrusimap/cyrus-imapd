@@ -893,11 +893,10 @@ static void cmdloop(void)
 	    txn.errstr = prot_error(httpd_in);
 	    if (txn.errstr && strcmp(txn.errstr, PROT_EOF_STRING)) {
 		syslog(LOG_WARNING, "%s, closing connection", txn.errstr);
-		ret = HTTP_BAD_REQUEST;
-		txn.flags |= HTTP_CLOSE;
-		goto error;
 	    }
-	    return;  /* client closed connection */
+	    /* client closed connection or timed out */
+	    txn.flags |= HTTP_CLOSE;
+	    goto error;
 	}
 	if (!buf_len(&meth) || !buf_len(&uri) || !buf_len(&ver)) {
 	    ret = HTTP_BAD_REQUEST;
