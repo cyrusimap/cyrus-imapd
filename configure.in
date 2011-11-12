@@ -990,20 +990,46 @@ AC_ARG_ENABLE(nntp,
         fi) 
 
 dnl
-dnl see if we're compiling with CalDAV support
+dnl see if we're compiling with CalDAV and/or RSS support
 dnl
-dnl XXX  Need to check for libxml2 and libical
-dnl
+ENABLE_RSS=no
+AC_ARG_ENABLE(rss,
+        [  --enable-rss            enable RSS support],
+	ENABLE_RSS=$enableval)
+
 ENABLE_CALDAV=no
 AC_ARG_ENABLE(caldav,
         [  --enable-caldav         enable CalDAV support],
-	ENABLE_CALDAV=$enableval
-        if test "$ENABLE_CALDAV" != no; then
-	  [PKG_CHECK_MODULES([CALDAV], [libxml-2.0 libical],
-	  			    [IMAP_PROGS="$IMAP_PROGS httpd"])]
-	  AC_SUBST(CALDAV_CFLAGS)
-	  AC_SUBST(CALDAV_LIBS)
-        fi)
+	ENABLE_CALDAV=$enableval)
+
+if test "$ENABLE_RSS" != no -o "$ENABLE_CALDAV" != no; then
+   PKG_CHECK_MODULES([XML], [libxml-2.0],
+   	[ if test "$ENABLE_CALDAV" != no; then
+	  PKG_CHECK_MODULES([ICAL], [libical],, [ ENABLE_CALDAV=no ])
+	  fi ],
+	[ ENABLE_RSS=no
+	  ENABLE_CALDAV=no ])
+fi
+
+HTTP_OBJS=""
+if test "$ENABLE_RSS" != no -o "$ENABLE_CALDAV" != no; then
+   IMAP_PROGS="$IMAP_PROGS httpd"
+   AC_SUBST(XML_CFLAGS)
+   AC_SUBST(XML_LIBS)
+
+   if test "$ENABLE_RSS" != no; then
+      AC_DEFINE(WITH_RSS,[],[Build RSS support into httpd?])
+      HTTP_OBJS="$HTTP_OBJS \$(RSS_OBJS)"
+   fi
+
+   if test "$ENABLE_CALDAV" != no; then
+      AC_DEFINE(WITH_CALDAV,[],[Build CalDAV support into httpd?])
+      HTTP_OBJS="$HTTP_OBJS \$(CALDAV_OBJS)"
+      AC_SUBST(ICAL_CFLAGS)
+      AC_SUBST(ICAL_LIBS)
+   fi
+fi
+AC_SUBST(HTTP_OBJS)
 
 dnl
 dnl see if we're compiling the Murder support programs

@@ -59,9 +59,14 @@ CYRUS_USER=@cyrus_user@
 CYRUS_GROUP=@cyrus_group@
 
 DEFS = @DEFS@ @LOCALDEFS@
-CPPFLAGS = -I.. -I$(srcdir)/../lib @COM_ERR_CPPFLAGS@ @SIEVE_CPPFLAGS@ @CPPFLAGS@ @SASLFLAGS@ @CALDAV_CFLAGS@
+CPPFLAGS = -I.. -I$(srcdir)/../lib @COM_ERR_CPPFLAGS@ @SIEVE_CPPFLAGS@ @CPPFLAGS@ @SASLFLAGS@ @XML_CFLAGS@ @ICAL_CFLAGS@
 IMAP_LIBS = @IMAP_LIBS@ @LIB_RT@
-HTTP_LIBS = @CALDAV_LIBS@
+
+RSS_OBJS = http_rss.o
+CALDAV_OBJS = http_caldav.o dav_prop.o caldav_db.o
+HTTP_OBJS = httpd.o http_err.o http_proxy.o @HTTP_OBJS@
+HTTP_LIBS = @XML_LIBS@ @ICAL_LIBS@
+
 SIEVE_OBJS = @SIEVE_OBJS@
 SIEVE_LIBS = @SIEVE_LIBS@
 IMAP_COM_ERR_LIBS = @IMAP_COM_ERR_LIBS@
@@ -257,13 +262,11 @@ sync_server: sync_server.o sync_support.o \
 	imapparse.o tls.o $(SERVICE) libimap.a mutex_fake.o \
 	$(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
-httpd: httpd.o http_err.o http_rss.o http_caldav.o dav_prop.o caldav_db.o \
-	 http_proxy.o proxy.o backend.o index.o spool.o tls.o mutex_fake.o \
+httpd: $(HTTP_OBJS) proxy.o backend.o index.o spool.o tls.o mutex_fake.o \
 	 libimap.a $(DEPLIBS) $(SERVICE)
-	$(CC) $(LDFLAGS) -o httpd httpd.o http_err.o http_rss.o http_caldav.o \
-	 dav_prop.o caldav_db.o http_proxy.o proxy.o backend.o index.o spool.o \
-	 tls.o mutex_fake.o libimap.a $(SERVICE) $(DEPLIBS) $(LIBS) \
-	 $(LIB_WRAP) $(HTTP_LIBS)
+	$(CC) $(LDFLAGS) -o httpd $(HTTP_OBJS) \
+	 proxy.o backend.o index.o spool.o tls.o mutex_fake.o libimap.a \
+	 $(SERVICE) $(DEPLIBS) $(LIBS) $(LIB_WRAP) $(HTTP_LIBS)
 
 ### Command Line Utilities
 arbitron: arbitron.o $(CLIOBJS) libimap.a $(DEPLIBS)

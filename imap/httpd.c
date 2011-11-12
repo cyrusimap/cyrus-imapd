@@ -792,7 +792,11 @@ const struct namespace_t namespace_default = {
 	NULL,			/* MOVE		*/
 	&meth_options,		/* OPTIONS	*/
 	NULL,			/* POST		*/
+#ifdef WITH_CALDAV
 	&meth_propfind,		/* PROPFIND	*/
+#else
+	NULL,			/* PROPFIND	*/
+#endif
 	NULL,			/* PROPPATCH	*/
 	NULL,			/* PUT		*/
 	NULL,			/* REPORT	*/
@@ -802,9 +806,13 @@ const struct namespace_t namespace_default = {
 
 /* Array of different namespaces and features supported by the server */
 const struct namespace_t *namespaces[] = {
+#ifdef WITH_CALDAV
     &namespace_calendar,
     &namespace_principal,
+#endif
+#ifdef WITH_RSS
     &namespace_rss,
+#endif
     &namespace_default,		/* MUST be present and be last!! */
     NULL,
 };
@@ -2190,8 +2198,10 @@ int meth_options(struct transaction_t *txn)
     /* Response should not be cached */
     txn->flags |= HTTP_NOCACHE;
 
+#ifdef WITH_CALDAV
     /* Special case "*" - show all features/methods available on server */
     if (!strcmp(txn->req_tgt.path, "*")) txn->req_tgt.allow = ALLOW_ALL;
+#endif
 
     response_header(HTTP_OK, txn);
     return 0;
