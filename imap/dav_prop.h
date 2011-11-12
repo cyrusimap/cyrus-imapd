@@ -138,7 +138,7 @@ xmlNodePtr init_prop_response(const char *resp,
 			      xmlNsPtr reqNs, xmlNsPtr *respNs);
 
 /* Add a response tree to 'root' for the specified href and property list */
-void add_prop_response(struct propfind_ctx *fctx);
+int add_prop_response(struct propfind_ctx *fctx);
 
 /* caldav_foreach() callback to find props on a resource */
 int find_resource_props(void *rock, const char *resource, uint32_t uid);

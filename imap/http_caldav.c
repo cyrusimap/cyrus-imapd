@@ -1378,7 +1378,7 @@ int meth_propfind(struct transaction_t *txn)
 
     if (!txn->req_tgt.collection) {
 	/* Add response for home-set collection */
-	add_prop_response(&fctx);
+	if (add_prop_response(&fctx)) goto done;
     }
 
     if (depth > 0) {

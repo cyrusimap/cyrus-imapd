@@ -115,13 +115,17 @@ static xmlNodePtr add_prop(long status, xmlNodePtr resp, xmlNodePtr *stat,
 
 
 /* Add a response tree to 'root' for the specified href and property list */
-void add_prop_response(struct propfind_ctx *fctx)
+int add_prop_response(struct propfind_ctx *fctx)
 {
     xmlNodePtr resp, propstat[NUM_PROPSTAT];
     struct propfind_entry_list *e;
 
     resp = xmlNewChild(fctx->root, NULL, BAD_CAST "response", NULL);
-    if (!resp) syslog(LOG_INFO, "new child response failed");
+    if (!resp) {
+	*fctx->errstr = "Unable to add response XML element";
+	*fctx->ret = HTTP_SERVER_ERROR;
+	return HTTP_SERVER_ERROR;
+    }
     xmlNewChild(resp, NULL, BAD_CAST "href", BAD_CAST fctx->req_tgt->path);
 
     /* Process each property in the linked list */
@@ -136,7 +140,7 @@ void add_prop_response(struct propfind_ctx *fctx)
 	}
     }
 
-    return;
+    return 0;
 }
 
 
@@ -208,9 +212,7 @@ int find_resource_props(void *rock, const char *resource, uint32_t uid)
     fctx->record = r ? NULL : &record;
 
     /* Add response for target */
-    add_prop_response(fctx);
-
-    return 0;
+    return add_prop_response(fctx);
 }
 
 /* mboxlist_findall() callback to find props on a collection */
@@ -266,7 +268,7 @@ int find_collection_props(char *mboxname,
     /* Add response for target collection */
     fctx->mailbox = mailbox;
     fctx->record = NULL;
-    add_prop_response(fctx);
+    if ((r = add_prop_response(fctx))) goto done;
 
     if (fctx->depth > 1) {
 	/* Resource(s) */
