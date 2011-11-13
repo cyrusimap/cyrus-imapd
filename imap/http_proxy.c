@@ -188,11 +188,13 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 	const char **hdr, *errstr, *serverin;
 	char base64[BASE64_BUF_SIZE+1];
 	unsigned int serverinlen, clientoutlen, non_persist;
+#ifdef SASL_HTTP_REQUEST
 	sasl_http_request_t httpreq = { "OPTIONS",	/* Method */
 					"*",		/* URI */
 					(u_char *) "",	/* Empty body */
 					0,		/* Zero-length body */
 					0 };		/* Persistent cxn? */
+#endif
 
 	/* Base64 encode any client response, if necessary */
 	if (clientout && scheme && scheme->do_base64) {
@@ -347,9 +349,11 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 			free(conf);
 		    }
 
+#ifdef SASL_HTTP_REQUEST
 		    /* Set HTTP request as specified above (REQUIRED) */
 		    httpreq.non_persist = non_persist;
 		    sasl_setprop(s->saslconn, SASL_HTTP_REQUEST, &httpreq);
+#endif
 
 		    /* Try to start SASL exchange using available mechs */
 		    r = sasl_client_start(s->saslconn, buf_cstring(&buf),
