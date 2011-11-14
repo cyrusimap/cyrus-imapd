@@ -1138,6 +1138,21 @@ And the notification message will be available on \fIstdin\fR.
 /* The mechanism used by the server to verify plaintext passwords. 
    Possible values include "auxprop", "saslauthd", and "pwcheck". */
 
+{ "search_skipdiacrit", 1, SWITCH }
+/* When searching, should diacriticals be stripped from the search
+   terms.  The default is "true", a search for "hav" will match
+   "Håvard".  This is not RFC5051 complient, but it backwards
+   compatible, and may be preferred by some sites. */
+
+{ "search_whitespace", "merge", ENUM("skip", "merge", "keep") }
+/* When searching, how whitespace should be handled.  Options are:
+   "skip" (default in 2.3 and earlier series) - where a search for
+   "equi" would match "the quick brown fox".  "merge" - the default,
+   where "he  qu" would match "the quick   brownfox", and "keep",
+   where whitespace must match exactly.  The default of "merge" is
+   recommended for most cases - it's a good compromise which
+   keeps words separate. */
+
 { "seenstate_db", "skiplist", STRINGLIST("flat", "berkeley", "berkeley-hash", "skiplist")}
 /* The cyrusdb backend to use for the seen state. */
 

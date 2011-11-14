@@ -98,30 +98,59 @@ static void test_decode_mimeheader(void)
 				      "=?US-ASCII?Q?sit amet?=";
     static const char ASCII_B64_3[] = "Lorem =?iso-8859-1?q?ips=fcm?= \t"
 				      "DOLOR =?iso-8859-1?Q?s=eft am=ebt?=";
-    static const char SEARCH_3[] = "LOREM IPSÜM DOLOR SÏT AMËT";
+    static const char SEARCH_3[] = "LOREM IPSUM DOLOR SIT AMET";
+    static const char SEARCH_3b[] = "LOREM IPSÜM DOLOR SÏT AMËT";
+    static const char SEARCH_3c[] = "LOREMIPSUMDOLORSITAMET";
+    static const char SEARCH_3d[] = "LOREMIPSÜMDOLORSÏTAMËT";
+    static const char SEARCH_3e[] = "LOREM IPSÜM  DOLOR SÏT AMËT";
+    int flags = CHARSET_SKIPDIACRIT | CHARSET_MERGESPACE; /* default */
 
-    s = charset_decode_mimeheader(NULL);
+    s = charset_decode_mimeheader(NULL, flags);
     CU_ASSERT_PTR_NULL(s);
     free(s);
 
-    s = charset_decode_mimeheader("");
+    s = charset_decode_mimeheader("", flags);
     CU_ASSERT_PTR_NOT_NULL(s);
     CU_ASSERT_STRING_EQUAL(s, "");
     free(s);
 
-    s = charset_decode_mimeheader(ASCII_1);
+    s = charset_decode_mimeheader(ASCII_1, flags);
     CU_ASSERT_PTR_NOT_NULL(s);
     CU_ASSERT_STRING_EQUAL(s, SEARCH_1);
     free(s);
 
-    s = charset_decode_mimeheader(ASCII_B64_2);
+    s = charset_decode_mimeheader(ASCII_B64_2, flags);
     CU_ASSERT_PTR_NOT_NULL(s);
     CU_ASSERT_STRING_EQUAL(s, SEARCH_1);
     free(s);
 
-    s = charset_decode_mimeheader(ASCII_B64_3);
+    s = charset_decode_mimeheader(ASCII_B64_3, flags);
     CU_ASSERT_PTR_NOT_NULL(s);
     CU_ASSERT_STRING_EQUAL(s, SEARCH_3);
+    free(s);
+
+    flags = CHARSET_MERGESPACE;
+    s = charset_decode_mimeheader(ASCII_B64_3, flags);
+    CU_ASSERT_PTR_NOT_NULL(s);
+    CU_ASSERT_STRING_EQUAL(s, SEARCH_3b);
+    free(s);
+
+    flags = CHARSET_SKIPSPACE | CHARSET_SKIPDIACRIT;
+    s = charset_decode_mimeheader(ASCII_B64_3, flags);
+    CU_ASSERT_PTR_NOT_NULL(s);
+    CU_ASSERT_STRING_EQUAL(s, SEARCH_3c);
+    free(s);
+
+    flags = CHARSET_SKIPSPACE;
+    s = charset_decode_mimeheader(ASCII_B64_3, flags);
+    CU_ASSERT_PTR_NOT_NULL(s);
+    CU_ASSERT_STRING_EQUAL(s, SEARCH_3d);
+    free(s);
+
+    flags = 0;
+    s = charset_decode_mimeheader(ASCII_B64_3, flags);
+    CU_ASSERT_PTR_NOT_NULL(s);
+    CU_ASSERT_STRING_EQUAL(s, SEARCH_3e);
     free(s);
 }
 
@@ -132,10 +161,11 @@ static void test_search_mimeheader(void)
     static const char SUBJECT_CP1252[] = "=?Cp1252?Q?Herzlichen_Gl=FCckwunsch,_der_Artikel_Canon_Ob?= "
 				         "=?Cp1252?Q?jektiv_EF-S_18-55_mm_1:3,5-5,6_geh=F6rt_Ihnen!?=";
     static const char SEARCH_CP1252[] = "Herzlichen";
+    int flags = CHARSET_SKIPDIACRIT | CHARSET_MERGESPACE; /* default */
 
-    s = charset_convert(SEARCH_CP1252, 0);
+    s = charset_convert(SEARCH_CP1252, 0, flags);
     pat = charset_compilepat(s);
-    CU_ASSERT(charset_search_mimeheader(s, pat, SUBJECT_CP1252));
+    CU_ASSERT(charset_search_mimeheader(s, pat, SUBJECT_CP1252, flags));
     charset_freepat(pat);
     free(s);
 }
@@ -152,8 +182,9 @@ static void test_rfc5051(void)
     char *s;
     static const char STR_RFC5051[] = {0xc7, 0x84, 0};
     static const char RES_RFC5051[] = {'D', 'z', 0xcc, 0x8c, 0};
+    int flags = 0; /* super complient */
 
-    s = charset_convert(STR_RFC5051, charset_lookupname("utf-8"));
+    s = charset_convert(STR_RFC5051, charset_lookupname("utf-8"), flags);
     CU_ASSERT_PTR_NOT_NULL(s);
     CU_ASSERT_STRING_EQUAL(s, RES_RFC5051);
     free(s);

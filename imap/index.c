@@ -1073,7 +1073,8 @@ int index_scan(struct index_state *state, const char *contents)
     searchargs.text = &strlist;
 
     /* Use US-ASCII to emulate fgrep */
-    strlist.s = charset_convert(contents, charset_lookupname("US-ASCII"));
+    strlist.s = charset_convert(contents, charset_lookupname("US-ASCII"),
+				charset_flags);
     strlist.p = charset_compilepat(strlist.s);
     strlist.next = NULL;
 
@@ -3111,7 +3112,7 @@ int _search_searchbuf(char *s, comp_pat *p, struct buf *b)
     if (!b->len)
 	return 0;
 
-    return charset_searchstring(s, p, b->s, b->len);
+    return charset_searchstring(s, p, b->s, b->len, charset_flags);
 }
 
 struct search_annot_rock {
@@ -3294,7 +3295,7 @@ static int index_search_evaluate(struct index_state *state,
 	    msgid = lcase(envtokens[ENV_MSGID]);
 	    msgidlen = strlen(msgid);
 	    for (l = searchargs->messageid; l; l = l->next) {
-		if (!charset_searchstring(l->s, l->p, msgid, msgidlen))
+		if (!charset_searchstring(l->s, l->p, msgid, msgidlen, charset_flags))
 		    break;
 	    }
 
@@ -3431,7 +3432,7 @@ static int index_searchmsg(char *substr,
 					 CACHE_ITEM_BIT32(cachestr),
 					 len);
 		    if (p) {
-			if (charset_search_mimeheader(substr, pat, p))
+			if (charset_search_mimeheader(substr, pat, p, charset_flags))
 			    return 1;
 		    }
 		}
@@ -3448,7 +3449,7 @@ static int index_searchmsg(char *substr,
 		    charset >= 0 && charset < 0xffff) {
 		    if (charset_searchfile(substr, pat,
 					   msgfile->base + start,
-					   len, charset, encoding)) return 1;
+					   len, charset, encoding, charset_flags)) return 1;
 		}
 		cachestr += 5*4;
 	    }
@@ -3479,7 +3480,7 @@ static int index_searchheader(char *name,
     if (!*p) return 0;		/* Header not present, fail */
     if (!*substr) return 1;	/* Only checking existence, succeed */
 
-    return charset_search_mimeheader(substr, pat, strchr(p, ':') + 1);
+    return charset_search_mimeheader(substr, pat, strchr(p, ':') + 1, charset_flags);
 }
 
 /*
@@ -3518,7 +3519,7 @@ static int index_searchcacheheader(struct index_state *state, uint32_t msgno,
     if (!*buf) return 0;	/* Header not present, fail */
     if (!*substr) return 1;	/* Only checking existence, succeed */
 
-    return charset_search_mimeheader(substr, pat, strchr(buf, ':') + 1);
+    return charset_search_mimeheader(substr, pat, strchr(buf, ':') + 1, charset_flags);
 }
 
 
@@ -3559,7 +3560,7 @@ static void index_getsearchtextmsg(struct index_state *state,
 					 len);
 		    if (p) {
 			/* push search normalised here */
-			q = charset_decode_mimeheader(p);
+			q = charset_decode_mimeheader(p, charset_flags);
 			if (partcount == 1) {
 			    receiver(uid, SEARCHINDEX_PART_HEADERS,
 				     SEARCHINDEX_CMD_STUFFPART, q, strlen(q), rock);
@@ -3583,7 +3584,7 @@ static void index_getsearchtextmsg(struct index_state *state,
 		    if (start < msgfile.size && len > 0) {
 		      charset_extractfile(receiver, rock, uid,
 					  msgfile.base + start,
-					  len, charset, encoding);
+					  len, charset, encoding, charset_flags);
 		    }
 		    cachestr += 5*4;
 		}

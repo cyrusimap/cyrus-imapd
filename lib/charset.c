@@ -74,7 +74,7 @@ struct table_state {
 };
 
 struct canon_state {
-    int spacemode;
+    int flags;
     int seenspace;
 };
 
@@ -419,19 +419,14 @@ void uni2searchform(struct convert_rock *rock, int c)
 
     /* special case: whitespace or control characters */
     if (code == ' ' || code == '\r' || code == '\n') {
-	switch (s->spacemode) {
-	case 0:
+	if (s->flags & CHARSET_SKIPSPACE) {
 	    return;
-
-	case 1:
+	}
+	if (s->flags & CHARSET_MERGESPACE) {
 	    if (s->seenspace)
 		return;
 	    s->seenspace = 1;
 	    code = ' '; /* one SPACE char */
-	    break;
-
-	default:
-	    break; /* keep it unchanged */
 	}
     }
     else
@@ -445,8 +440,15 @@ void uni2searchform(struct convert_rock *rock, int c)
 
     /* case - multiple characters */
     for (i = -code; chartables_translation_multichar[i]; i++) {
+	int c = chartables_translation_multichar[i];
+	/* diacritical character range.  This duplicates the
+	 * behaviour of Cyrus versions before 2.5 */
+	if (s->flags & CHARSET_SKIPDIACRIT) {
+	    if ((c & ~0xff) == 0x300)
+		continue;
+	}
 	/* note: whitespace already stripped from multichar sequences... */
-	convert_putc(rock->next, chartables_translation_multichar[i]);
+	convert_putc(rock->next, c);
     }
 }
 
@@ -646,11 +648,11 @@ struct convert_rock *stripnl_init(struct convert_rock *next)
     return rock;
 }
 
-struct convert_rock *canon_init(int spacemode, struct convert_rock *next)
+struct convert_rock *canon_init(int flags, struct convert_rock *next)
 {
     struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
     struct canon_state *s = xzmalloc(sizeof(struct canon_state));
-    s->spacemode = spacemode;
+    s->flags = flags;
     rock->f = uni2searchform;
     rock->state = s;
     rock->next = next;
@@ -751,7 +753,7 @@ static int lookup_buf(const char *buf, int len)
  * into canonical searching form.  Returns a newly allocated string
  * which must be free()d by the caller.
  */
-char *charset_convert(const char *s, int charset)
+char *charset_convert(const char *s, int charset, int flags)
 {
     struct convert_rock *input, *tobuffer;
     char *res;
@@ -764,7 +766,7 @@ char *charset_convert(const char *s, int charset)
     /* set up the conversion path */
     tobuffer = buffer_init();
     input = uni_init(tobuffer);
-    input = canon_init(1, input);
+    input = canon_init(flags, input);
     input = table_init(charset, input);
 
     /* do the conversion */
@@ -923,7 +925,7 @@ void mimeheader_cat(struct convert_rock *target, const char *s)
  * string, contining 's' in canonical searching form, which must be
  * free()d by the caller.
  */
-char *charset_decode_mimeheader(const char *s)
+char *charset_decode_mimeheader(const char *s, int flags)
 {
     struct convert_rock *tobuffer, *input;
     char *res;
@@ -932,7 +934,7 @@ char *charset_decode_mimeheader(const char *s)
 
     tobuffer = buffer_init();
     input = uni_init(tobuffer);
-    input = canon_init(1, input);
+    input = canon_init(flags, input);
 
     mimeheader_cat(input, s);
  
@@ -968,14 +970,14 @@ char *charset_parse_mimeheader(const char *s)
 }
 
 int charset_search_mimeheader(const char *substr, comp_pat *pat,
-    const char *s)
+			      const char *s, int flags)
 {
     struct convert_rock *input, *tosearch;
     int res;
 
     tosearch = search_init(substr, pat);
     input = uni_init(tosearch);
-    input = canon_init(1, input);
+    input = canon_init(flags, input);
 
     mimeheader_cat(input, s);
  
@@ -1021,7 +1023,7 @@ void charset_freepat(comp_pat *pat)
  * in search normal form (i.e. from a cache file)
  */
 int charset_searchstring(const char *substr, comp_pat *pat,
-    const char *s, size_t len)
+			 const char *s, size_t len, int flags)
 {
     struct convert_rock *tosearch;
     struct convert_rock *input;
@@ -1036,7 +1038,7 @@ int charset_searchstring(const char *substr, comp_pat *pat,
 
     /* and the input stream */
     input = uni_init(tosearch);
-    input = canon_init(1, input);
+    input = canon_init(flags, input);
     input = table_init(charset, input);
 
     /* feed the handler */
@@ -1062,8 +1064,8 @@ int charset_searchstring(const char *substr, comp_pat *pat,
  * Returns nonzero iff the string was found.
  */
 int charset_searchfile(const char *substr, comp_pat *pat,
-    const char *msg_base, size_t len, int charset, 
-    int encoding)
+		       const char *msg_base, size_t len,
+		       int charset, int encoding, int flags)
 {
     struct convert_rock *input, *tosearch;
     size_t i;
@@ -1080,7 +1082,7 @@ int charset_searchfile(const char *substr, comp_pat *pat,
     /* set up the conversion path */
     tosearch = search_init(substr, pat);
     input = uni_init(tosearch);
-    input = canon_init(1, input);
+    input = canon_init(flags, input);
     input = table_init(charset, input);
 
     /* choose encoding extraction if needed */
@@ -1119,9 +1121,9 @@ int charset_searchfile(const char *substr, comp_pat *pat,
 }
 
 /* This is based on charset_searchfile above. */
-int charset_extractfile(index_search_text_receiver_t receiver,
-    void* rock, int uid, const char *msg_base, size_t len, 
-    int charset, int encoding)
+int charset_extractfile(index_search_text_receiver_t receiver, void *rock,
+			int uid, const char *msg_base, size_t len, 
+			int charset, int encoding, int flags)
 {
     struct convert_rock *input, *tobuffer;
     struct buf *out;
@@ -1134,7 +1136,7 @@ int charset_extractfile(index_search_text_receiver_t receiver,
     /* set up the conversion path */
     tobuffer = buffer_init();
     input = uni_init(tobuffer);
-    input = canon_init(1, input);
+    input = canon_init(flags, input);
     input = table_init(charset, input);
 
     switch (encoding) {

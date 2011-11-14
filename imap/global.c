@@ -60,6 +60,7 @@
 #include <errno.h>
 
 #include "acl.h"
+#include "charset.h"
 #include "cyrusdb.h"
 #include "exitcodes.h"
 #include "gmtoff.h"
@@ -104,6 +105,7 @@ struct cyrusdb_backend *config_tlscache_db;
 struct cyrusdb_backend *config_ptscache_db;
 struct cyrusdb_backend *config_statuscache_db;
 struct cyrusdb_backend *config_userdeny_db;
+int charset_flags;
 
 #define MAX_SESSIONID_SIZE 256
 char session_id_buf[MAX_SESSIONID_SIZE];
@@ -188,6 +190,20 @@ int cyrus_init(const char *alt_config, const char *ident, unsigned flags)
 	cyrus_acl_strtomask(config_getstring(IMAPOPT_IMPLICIT_OWNER_RIGHTS));
 
     config_metapartition_files = config_getbitfield(IMAPOPT_METAPARTITION_FILES);
+
+    if (config_getswitch(IMAPOPT_SEARCH_SKIPDIACRIT))
+	charset_flags |= CHARSET_SKIPDIACRIT;
+
+    switch (config_getenum(IMAPOPT_SEARCH_WHITESPACE)) {
+	case IMAP_ENUM_SEARCH_WHITESPACE_MERGE:
+	    charset_flags |= CHARSET_MERGESPACE;
+	    break;
+	case IMAP_ENUM_SEARCH_WHITESPACE_SKIP:
+	    charset_flags |= CHARSET_SKIPSPACE;
+	    break;
+	default:
+	    break;
+    }
 
     if (!cyrus_init_nodb) {
 	/* lookup the database backends */

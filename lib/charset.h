@@ -49,24 +49,28 @@
 #define ENCODING_BASE64 2
 #define ENCODING_UNKNOWN 255
 
+#define CHARSET_SKIPDIACRIT (1<<0)
+#define CHARSET_SKIPSPACE (1<<1)
+#define CHARSET_MERGESPACE (1<<2)
+
 #define CHARSET_UNKNOWN_CHARSET (-1)
 
 typedef int comp_pat;
 typedef int charset_index;
 
 /* ensure up to MAXTRANSLATION times expansion into buf */
-extern char *charset_convert(const char *s, charset_index charset);
-extern char *charset_decode_mimeheader(const char *s);
+extern char *charset_convert(const char *s, charset_index charset, int flags);
+extern char *charset_decode_mimeheader(const char *s, int flags);
 extern char *charset_parse_mimeheader(const char *s);
 
 extern charset_index charset_lookupname(const char *name);
 extern comp_pat *charset_compilepat(const char *s);
 extern void charset_freepat(comp_pat *pat);
 extern int charset_searchstring(const char *substr, comp_pat *pat,
-    const char *s, size_t len);
+			        const char *s, size_t len, int flags);
 extern int charset_searchfile(const char *substr, comp_pat *pat,
                               const char *msg_base, size_t len, 
-                              charset_index charset, int encoding);
+                              charset_index charset, int encoding, int flags);
 extern const char *charset_decode_mimebody(const char *msg_base, size_t len,
 					   int encoding, char **retval,
 					   size_t *outlen);
@@ -74,7 +78,7 @@ extern char *charset_encode_mimebody(const char *msg_base, size_t len,
 				     char *retval, size_t *outlen, 
 				     int *outlines);
 extern char *charset_to_utf8(const char *msg_base, size_t len, charset_index charset, int encoding);
-extern int charset_search_mimeheader(const char *substr, comp_pat *pat, const char *s);
+extern int charset_search_mimeheader(const char *substr, comp_pat *pat, const char *s, int flags);
 
 /* Definitions for charset_extractfile */
 
@@ -121,6 +125,6 @@ typedef void index_search_text_receiver_t(int UID, int part, int cmds,
 extern int charset_extractfile(index_search_text_receiver_t receiver,
                                void* rock, int uid, const char *msg_base, 
                                size_t len, charset_index charset,
-                               int encoding);
+                               int encoding, int flags);
 
 #endif /* INCLUDED_CHARSET_H */

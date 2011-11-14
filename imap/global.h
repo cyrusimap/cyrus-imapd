@@ -176,6 +176,7 @@ extern struct cyrusdb_backend *config_tlscache_db;
 extern struct cyrusdb_backend *config_ptscache_db;
 extern struct cyrusdb_backend *config_statuscache_db;
 extern struct cyrusdb_backend *config_userdeny_db;
+extern int charset_flags;
 
 /* Session ID */
 extern void session_new_id(void);
