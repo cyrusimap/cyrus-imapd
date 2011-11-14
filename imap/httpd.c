@@ -847,6 +847,7 @@ static void cmdloop(void)
     for (;;) {
 	/* Reset state */
 	ret = 0;
+	txn.meth = NULL;
 	txn.flags = !httpd_timeout ? HTTP_CLOSE : 0;
 	txn.auth_chal.param = NULL;
 	txn.loc = txn.etag = NULL;
@@ -1377,24 +1378,26 @@ void response_header(long code, struct transaction_t *txn)
     static struct buf log = BUF_INITIALIZER;
     const char **hdr;
 
-    /* Log the client request and our response */
-    buf_reset(&log);
-    buf_printf(&log, "%s", httpd_clienthost);
-    if (httpd_userid) buf_printf(&log, " as \"%s\"", httpd_userid);
-    if ((hdr = spool_getheader(txn->req_hdrs, "User-Agent"))) {
-	buf_printf(&log, " with \"%s\"", hdr[0]);
+    if (txn && txn->meth) {
+	/* Log the client request and our response */
+	buf_reset(&log);
+	buf_printf(&log, "%s", httpd_clienthost);
+	if (httpd_userid) buf_printf(&log, " as \"%s\"", httpd_userid);
+	if ((hdr = spool_getheader(txn->req_hdrs, "User-Agent"))) {
+	    buf_printf(&log, " with \"%s\"", hdr[0]);
+	}
+	buf_printf(&log, "; \"%s %s", txn->meth, txn->req_tgt.path);
+	if (*txn->req_tgt.query) {
+	    buf_printf(&log, "?%s", txn->req_tgt.query);
+	}
+	buf_printf(&log, " %s\"", HTTP_VERSION);
+	if ((hdr = spool_getheader(txn->req_hdrs, "Destination"))) {
+	    buf_printf(&log, " (%s)", hdr[0]);
+	}
+	buf_printf(&log, " => \"%s\"", error_message(code));
+	if (txn->loc) buf_printf(&log, " (%s)", txn->loc);
+	syslog(LOG_INFO, "%s", buf_cstring(&log));
     }
-    buf_printf(&log, "; \"%s %s", txn->meth, txn->req_tgt.path);
-    if (*txn->req_tgt.query) {
-	buf_printf(&log, "?%s", txn->req_tgt.query);
-    }
-    buf_printf(&log, " %s\"", HTTP_VERSION);
-    if ((hdr = spool_getheader(txn->req_hdrs, "Destination"))) {
-	buf_printf(&log, " (%s)", hdr[0]);
-    }
-    buf_printf(&log, " => \"%s\"", error_message(code));
-    if (txn->loc) buf_printf(&log, " (%s)", txn->loc);
-    syslog(LOG_INFO, "%s", buf_cstring(&log));
 
 
     /* Status-Line */
@@ -1439,7 +1442,7 @@ void response_header(long code, struct transaction_t *txn)
     prot_printf(httpd_out, "Accept-Ranges: none\r\n");
 
     if ((code == HTTP_NOT_ALLOWED) ||
-	((code == HTTP_OK) && (txn->meth[0] == 'O'))) {
+	((code == HTTP_OK) && txn->meth && (txn->meth[0] == 'O'))) {
 	if (txn->req_tgt.allow & ALLOW_DAV) {
 	    prot_printf(httpd_out, "DAV: 1, 3");
 	    if (txn->req_tgt.allow & ALLOW_WRITE) {
