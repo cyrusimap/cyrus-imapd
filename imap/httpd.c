@@ -380,8 +380,18 @@ int service_init(int argc __attribute__((unused)),
 
     /* Construct serverinfo string */
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
-	buf_printf(&serverinfo, "Cyrus%s/%s Cyrus-SASL/%u.%u.%u",
-		   config_mupdate_server ? "-Murder" : "", cyrus_version(),
+	char sep = '(';
+	buf_printf(&serverinfo, "Cyrus%s/%s ",
+		   config_mupdate_server ? "-Murder" : "", cyrus_version());
+#ifdef WITH_RSS
+	buf_printf(&serverinfo, "%cRSS", sep);
+	sep = ',';
+#endif
+#ifdef WITH_CALDAV
+	buf_printf(&serverinfo, "%cCalDAV", sep);
+	sep = ',';
+#endif
+	buf_printf(&serverinfo, ") Cyrus-SASL/%u.%u.%u",
 		   SASL_VERSION_MAJOR, SASL_VERSION_MINOR, SASL_VERSION_STEP);
 #ifdef HAVE_SSL
 	buf_printf(&serverinfo, " OpenSSL/%s", SHLIB_VERSION_NUMBER);
