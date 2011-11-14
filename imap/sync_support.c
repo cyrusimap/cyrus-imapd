@@ -1388,7 +1388,6 @@ int sync_mailbox(struct mailbox *mailbox,
 {
     int r = 0;
     char sync_crc[128];
-    annotate_db_t *user_annot_db = NULL;
 
     r = sync_crc_calc(mailbox, sync_crc, sizeof(sync_crc));
     if (r) goto done;
@@ -1468,13 +1467,13 @@ int sync_mailbox(struct mailbox *mailbox,
 	    dlist_setnum32(il, "SIZE", record.size);
 	    dlist_setatom(il, "GUID", message_guid_encode(&record.guid));
 
-	    if (user_annot_db) {
-		r = read_annotations(mailbox, &record, &annots);
-		if (r) goto done;
-		encode_annotations(il, annots);
-	    }
+	    r = read_annotations(mailbox, &record, &annots);
+	    if (r) goto done;
 
-	    sync_annot_list_free(&annots);
+	    if (annots) {
+		encode_annotations(il, annots);
+		sync_annot_list_free(&annots);
+	    }
 	}
 
 	r = read_annotations(mailbox, NULL, &annots);
@@ -2167,7 +2166,6 @@ int sync_crc_calc(struct mailbox *mailbox, char *buf, int maxlen)
     uint32_t recno;
     struct sync_annot_list *annots = NULL;
     int r = 0;
-    annotate_db_t *user_annot_db = NULL;
 
     sync_crc_algorithm->begin();
 
@@ -2181,7 +2179,7 @@ int sync_crc_calc(struct mailbox *mailbox, char *buf, int maxlen)
 	    continue;
 
 	sync_crc_algorithm->addrecord(mailbox, &record, sync_crc_covers);
-	if ((sync_crc_covers & SYNC_CRC_ANNOTATIONS) && user_annot_db) {
+	if (sync_crc_covers & SYNC_CRC_ANNOTATIONS) {
 	    r = read_annotations(mailbox, &record, &annots);
 	    if (r) continue;
 	    calc_annots(annots);
@@ -2189,7 +2187,7 @@ int sync_crc_calc(struct mailbox *mailbox, char *buf, int maxlen)
 	}
     }
 
-    if ((sync_crc_covers & SYNC_CRC_ANNOTATIONS)) {
+    if (sync_crc_covers & SYNC_CRC_ANNOTATIONS) {
 	r = read_annotations(mailbox, NULL, &annots);
 	if (!r) {
 	    calc_annots(annots);
