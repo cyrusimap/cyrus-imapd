@@ -156,7 +156,8 @@ int caldav_open(struct mailbox *mailbox, int flags,
     return r;
 }
 
-static int parse_data(const char *data, int datalen, uint32_t *uid) {
+static int parse_data(const char *data, int datalen, uint32_t *uid)
+{
     char *p;
     unsigned short version;
 
