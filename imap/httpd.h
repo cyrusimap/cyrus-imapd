@@ -56,6 +56,7 @@
 
 /* Supported HTTP version */
 #define HTTP_VERSION	"HTTP/1.1"
+#define HTTPS_VERSION	"HTTPS/1.1"
 
 /* Supported HTML DOCTYPE */
 #define HTML_DOCTYPE	"<!DOCTYPE HTML PUBLIC "  \
@@ -240,6 +241,7 @@ extern struct buf serverinfo;
 extern struct backend **backend_cached;
 extern struct protstream *httpd_in;
 extern struct protstream *httpd_out;
+extern int https;
 extern int httpd_tls_done;
 extern int httpd_timeout;
 extern int httpd_userisadmin;

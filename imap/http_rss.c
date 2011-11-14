@@ -507,10 +507,10 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     xmlDocPtr outdoc;
     xmlNodePtr root, chan, item, link;
     xmlNsPtr atom;
-    const char **host;
-    unsigned recno, recentuid = 0, num_items = RSS_MAX_ITEMS;
+    const char **via, *prot, *host;
+    unsigned url_len, recno, recentuid = 0, num_items = RSS_MAX_ITEMS;
     char datestr[80];
-    struct buf buf = BUF_INITIALIZER;
+    struct buf url = BUF_INITIALIZER, buf = BUF_INITIALIZER;
 
     /* Check any preconditions */
     time_t lastmod = mailbox->i.last_appenddate;
@@ -566,15 +566,31 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     /* XXX  Use /comment annotation as description? */
     xmlNewChild(chan, NULL, BAD_CAST "description", NULL);
 
-    host = spool_getheader(txn->req_hdrs, "Host");
+    /* Construct base URL */
+    if ((via = spool_getheader(txn->req_hdrs, "Via"))) {
+	/* Proxied request - parse tail of Via header for protocol and host */
+	const char *p;
 
-    buf_reset(&buf);
-    buf_printf(&buf, "%s://%s%s", httpd_tls_done ? "https" : "http",
-	       host[0], txn->req_tgt.path);
-    xmlNewChild(chan, NULL, BAD_CAST "link", BAD_CAST buf_cstring(&buf));
+	if (!(p = strrchr(via[0], ','))) p = via[0];
+	while (*p == ' ') p++;  /* skip leading whitespace */
+	prot = !strncasecmp(p, "https", 5) ? "https" : "http",
+
+	host = strchr(p, ' ');
+	while (*host == ' ') host++;  /* skip leading whitespace */
+    }
+    else {
+	/* Use our protocol and host */
+	prot = https ? "https" : "http";
+	host = *spool_getheader(txn->req_hdrs, "Host");
+    }
+    buf_printf(&url, "%s://%.*s%s",
+	       prot, strcspn(host, " \r\n"), host, txn->req_tgt.path);
+    url_len = buf_len(&url);
+
+    xmlNewChild(chan, NULL, BAD_CAST "link", BAD_CAST buf_cstring(&url));
 
     link = xmlNewChild(chan, atom, BAD_CAST "link", NULL);
-    xmlNewProp(link, BAD_CAST "href", BAD_CAST buf_cstring(&buf));
+    xmlNewProp(link, BAD_CAST "href", BAD_CAST buf_cstring(&url));
     xmlNewProp(link, BAD_CAST "rel", BAD_CAST "self");
     xmlNewProp(link, BAD_CAST "type", BAD_CAST "application/rss+xml");
 
@@ -625,12 +641,10 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 			BAD_CAST (subj && *subj ? subj : "[Untitled]"));
 	free(subj);
 
-	buf_reset(&buf);
-	buf_printf(&buf, "%s://%s%s?uid=%u",
-		   httpd_tls_done ? "https" : "http",
-		   host[0], txn->req_tgt.path, record.uid);
-	xmlNewChild(item, NULL, BAD_CAST "link", BAD_CAST buf_cstring(&buf));
-	xmlNewChild(item, NULL, BAD_CAST "guid", BAD_CAST buf_cstring(&buf));
+	buf_truncate(&url, url_len);
+	buf_printf(&url, "?uid=%u", record.uid);
+	xmlNewChild(item, NULL, BAD_CAST "link", BAD_CAST buf_cstring(&url));
+	xmlNewChild(item, NULL, BAD_CAST "guid", BAD_CAST buf_cstring(&url));
 
 	if (body->from || body->sender) {
 	    struct address *addr;

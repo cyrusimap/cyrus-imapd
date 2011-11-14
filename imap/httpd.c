@@ -130,7 +130,7 @@ struct protgroup *protin = NULL;
 static int httpd_logfd = -1;
 
 static sasl_ssf_t extprops_ssf = 0;
-static int https = 0;
+int https = 0;
 int httpd_tls_done = 0;
 int httpd_tls_required = 0;
 unsigned avail_auth_schemes = 0; /* bitmask of available aith schemes */
