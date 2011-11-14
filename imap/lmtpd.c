@@ -497,7 +497,7 @@ int deliver_mailbox(FILE *f,
 		    int quotaoverride,
 		    int acloverride)
 {
-    int r;
+    int r = 0;
     struct appendstate as;
     unsigned long uid;
     const char *notifier;
@@ -520,6 +520,7 @@ int deliver_mailbox(FILE *f,
     r = append_setup(&as, mailboxname,
 		     authuser, authstate, acloverride ? 0 : ACL_POST, 
 		     qdiffs, NULL, 0);
+    if (r) return r;
 
     /* check for duplicate message */
     dkey.id = id;
@@ -528,7 +529,7 @@ int deliver_mailbox(FILE *f,
 	    IMAP_ENUM_DUPLICATE_MAILBOX_MODE_UNIQUEID)
 	dkey.to = as.mailbox->uniqueid;
     dkey.date = date;
-    if (!r && id && dupelim && !(as.mailbox->i.options & OPT_IMAP_DUPDELIVER) &&
+    if (id && dupelim && !(as.mailbox->i.options & OPT_IMAP_DUPDELIVER) &&
 	duplicate_check(&dkey)) {
 	duplicate_log(&dkey, "delivery");
 	append_abort(&as);
