@@ -945,19 +945,14 @@ int myclose(struct db *db)
 static int compare(const char *s1, int l1, const char *s2, int l2)
 {
     int min = l1 < l2 ? l1 : l2;
-    int cmp = 0;
-
-    while (min-- > 0 && (cmp = *s1 - *s2) == 0) {
-	s1++;
-	s2++;
+    int r = memcmp(s1, s2, min);
+    if (!r) {
+	if (l1 > l2)
+	    r = 1;
+	else if (l2 > l1)
+	    r = -1;
     }
-    if (min >= 0) {
-	return cmp;
-    } else {
-	if (l1 > l2) return 1;
-	else if (l2 > l1) return -1;
-	else return 0;
-    }
+    return r;
 }
 
 /* returns the offset to the node asked for, or the node after it
