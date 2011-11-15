@@ -749,6 +749,51 @@ out:
     return r;
 }
 
+static int append_apply_flags(struct appendstate *as,
+			      struct index_record *record,
+			      const strarray_t *flags)
+{
+    int userflag;
+    int i, r = 0;
+
+    assert(flags);
+
+    for (i = 0; i < flags->count; i++) {
+	const char *flag = strarray_nth(flags, i);
+	if (!strcasecmp(flag, "\\seen")) {
+	    append_setseen(as, record);
+	}
+	else if (!strcasecmp(flag, "\\deleted")) {
+	    if (as->myrights & ACL_DELETEMSG) {
+		record->system_flags |= FLAG_DELETED;
+	    }
+	}
+	else if (!strcasecmp(flag, "\\draft")) {
+	    if (as->myrights & ACL_WRITE) {
+		record->system_flags |= FLAG_DRAFT;
+	    }
+	}
+	else if (!strcasecmp(flag, "\\flagged")) {
+	    if (as->myrights & ACL_WRITE) {
+		record->system_flags |= FLAG_FLAGGED;
+	    }
+	}
+	else if (!strcasecmp(flag, "\\answered")) {
+	    if (as->myrights & ACL_WRITE) {
+		record->system_flags |= FLAG_ANSWERED;
+	    }
+	}
+	else if (as->myrights & ACL_WRITE) {
+	    r = mailbox_user_flag(as->mailbox, flag, &userflag, 1);
+	    if (r) goto out;
+	    record->user_flags[userflag/32] |= 1<<(userflag&31);
+	}
+    }
+
+out:
+    return r;
+}
+
 /*
  * staging, to allow for single-instance store.  the complication here
  * is multiple partitions.
@@ -766,7 +811,6 @@ int append_fromstage(struct appendstate *as, struct body **body,
     char *fname;
     FILE *destfile;
     int i, r;
-    int userflag;
     strarray_t *newflags = NULL;
     struct entryattlist *system_annots = NULL;
 
@@ -883,37 +927,9 @@ int append_fromstage(struct appendstate *as, struct body **body,
 	goto out;
 
     /* Handle flags the user wants to set in the message */
-    for (i = 0; flags && i < flags->count ; i++) {
-	const char *flag = strarray_nth(flags, i);
-	if (!strcasecmp(flag, "\\seen")) {
-	    append_setseen(as, &record);
-	}
-	else if (!strcasecmp(flag, "\\deleted")) {
-	    if (as->myrights & ACL_DELETEMSG) {
-		record.system_flags |= FLAG_DELETED;
-	    }
-	}
-	else if (!strcasecmp(flag, "\\draft")) {
-	    if (as->myrights & ACL_WRITE) {
-		record.system_flags |= FLAG_DRAFT;
-	    }
-	}
-	else if (!strcasecmp(flag, "\\flagged")) {
-	    if (as->myrights & ACL_WRITE) {
-		record.system_flags |= FLAG_FLAGGED;
-	    }
-	}
-	else if (!strcasecmp(flag, "\\answered")) {
-	    if (as->myrights & ACL_WRITE) {
-		record.system_flags |= FLAG_ANSWERED;
-	    }
-	}
-	else if (as->myrights & ACL_WRITE) {
-	    /* User flag */
-	    r = mailbox_user_flag(mailbox, flag, &userflag, 1);
-	    if (r) goto out;
-	    record.user_flags[userflag/32] |= 1<<(userflag&31);
-	}
+    if (flags) {
+	r = append_apply_flags(as, &record, flags);
+	if (r) goto out;
     }
     /* Write out index file entry */
     r = mailbox_append_index_record(mailbox, &record);
@@ -973,8 +989,7 @@ int append_fromstream(struct appendstate *as, struct body **body,
     struct index_record record;
     char *fname;
     FILE *destfile;
-    int i, r;
-    int userflag;
+    int r;
 
     assert(size != 0);
 
@@ -1006,35 +1021,9 @@ int append_fromstream(struct appendstate *as, struct body **body,
     if (r) goto out;
 
     /* Handle flags the user wants to set in the message */
-    for (i = 0; flags && i < flags->count; i++) {
-	if (!strcmp(flags->data[i], "\\seen")) {
-	    append_setseen(as, &record);
-	}
-	else if (!strcmp(flags->data[i], "\\deleted")) {
-	    if (as->myrights & ACL_DELETEMSG) {
-		record.system_flags |= FLAG_DELETED;
-	    }
-	}
-	else if (!strcmp(flags->data[i], "\\draft")) {
-	    if (as->myrights & ACL_WRITE) {
-		record.system_flags |= FLAG_DRAFT;
-	    }
-	}
-	else if (!strcmp(flags->data[i], "\\flagged")) {
-	    if (as->myrights & ACL_WRITE) {
-		record.system_flags |= FLAG_FLAGGED;
-	    }
-	}
-	else if (!strcmp(flags->data[i], "\\answered")) {
-	    if (as->myrights & ACL_WRITE) {
-		record.system_flags |= FLAG_ANSWERED;
-	    }
-	}
-	else if (as->myrights & ACL_WRITE) {
-	    r = mailbox_user_flag(mailbox, flags->data[i], &userflag, 1);
-	    if (r) goto out;
-	    record.user_flags[userflag/32] |= 1<<(userflag&31);
-	}
+    if (flags) {
+	r = append_apply_flags(as, &record, flags);
+	if (r) goto out;
     }
 
     /* Write out index file entry; if we abort later, it's not
