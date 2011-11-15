@@ -967,8 +967,7 @@ int append_fromstream(struct appendstate *as, struct body **body,
 		      struct protstream *messagefile,
 		      unsigned long size,
 		      time_t internaldate,
-		      const char **flag,
-		      int nflags)
+		      const strarray_t *flags)
 {
     struct mailbox *mailbox = as->mailbox;
     struct index_record record;
@@ -1007,32 +1006,32 @@ int append_fromstream(struct appendstate *as, struct body **body,
     if (r) goto out;
 
     /* Handle flags the user wants to set in the message */
-    for (i = 0; i < nflags; i++) {
-	if (!strcmp(flag[i], "\\seen")) {
+    for (i = 0; flags && i < flags->count; i++) {
+	if (!strcmp(flags->data[i], "\\seen")) {
 	    append_setseen(as, &record);
 	}
-	else if (!strcmp(flag[i], "\\deleted")) {
+	else if (!strcmp(flags->data[i], "\\deleted")) {
 	    if (as->myrights & ACL_DELETEMSG) {
 		record.system_flags |= FLAG_DELETED;
 	    }
 	}
-	else if (!strcmp(flag[i], "\\draft")) {
+	else if (!strcmp(flags->data[i], "\\draft")) {
 	    if (as->myrights & ACL_WRITE) {
 		record.system_flags |= FLAG_DRAFT;
 	    }
 	}
-	else if (!strcmp(flag[i], "\\flagged")) {
+	else if (!strcmp(flags->data[i], "\\flagged")) {
 	    if (as->myrights & ACL_WRITE) {
 		record.system_flags |= FLAG_FLAGGED;
 	    }
 	}
-	else if (!strcmp(flag[i], "\\answered")) {
+	else if (!strcmp(flags->data[i], "\\answered")) {
 	    if (as->myrights & ACL_WRITE) {
 		record.system_flags |= FLAG_ANSWERED;
 	    }
 	}
 	else if (as->myrights & ACL_WRITE) {
-	    r = mailbox_user_flag(mailbox, flag[i], &userflag, 1);
+	    r = mailbox_user_flag(mailbox, flags->data[i], &userflag, 1);
 	    if (r) goto out;
 	    record.user_flags[userflag/32] |= 1<<(userflag&31);
 	}

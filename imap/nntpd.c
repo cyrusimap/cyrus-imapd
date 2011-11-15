@@ -3303,8 +3303,7 @@ static int deliver(message_data_t *msg)
 					 /*annotations*/NULL);
 		} else {
 		    /* XXX should never get here */
-		    r = append_fromstream(&as, &body, msg->data, msg->size, 0,
-					  (const char **) NULL, 0);
+		    r = append_fromstream(&as, &body, msg->data, msg->size, 0, NULL);
 		}
 		if (r || ( msg->id && duplicate_check(&dkey) ) ) {    
 		    append_abort(&as);

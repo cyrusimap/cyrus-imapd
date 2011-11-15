@@ -133,7 +133,7 @@ extern int append_removestage(struct stagemsg *stage);
 extern int append_fromstream(struct appendstate *as, struct body **body,
 			     struct protstream *messagefile,
 			     unsigned long size, time_t internaldate,
-			     const char **flag, int nflags);
+			     const strarray_t *flags);
 
 extern int append_copy(struct mailbox *mailbox,
 		       struct appendstate *append_mailbox,

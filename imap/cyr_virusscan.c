@@ -509,7 +509,7 @@ void append_notifications()
 	    append_setup(&as, i_mbox->owner, NULL, NULL, 0, NULL, NULL, 0);
 	    pout = prot_new(fd, 0);
 	    prot_rewind(pout);
-	    append_fromstream(&as, &body, pout, msgsize, t, NULL, 0);
+	    append_fromstream(&as, &body, pout, msgsize, t, NULL);
 	    append_commit(&as, NULL, NULL, NULL);
 
 	    if (body) {
