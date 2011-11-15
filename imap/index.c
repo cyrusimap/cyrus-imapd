@@ -3854,21 +3854,16 @@ static char *get_displayname(const char *header)
 {
     struct address *addr = NULL;
     char *ret;
+    char *p;
 
     parseaddr_list(header, &addr);
     if (!addr) return xstrdup("");
 
     if (addr->name && addr->name[0]) {
-	char *p;
 	ret = xstrdup(addr->name);
-	for (p = ret; *p; p++)
-	    *p = toupper(*p);
     }
     else if (addr->domain && addr->mailbox) {
-	/* mailbox@domain */
-	int len = strlen(addr->mailbox) + strlen(addr->domain) + 2;
-	ret = xmalloc(len);
-	snprintf(ret, len, "%s@%s", addr->mailbox, addr->domain);
+	ret = strconcat(addr->mailbox, "@", addr->domain, (char *)NULL);
     }
     else if (addr->mailbox) {
 	ret = xstrdup(addr->mailbox);
@@ -3878,6 +3873,10 @@ static char *get_displayname(const char *header)
     }
 
     parseaddr_free(addr);
+
+    /* XXX - this should really be a "CANONICALISE RFC5255" */
+    for (p = ret; *p; p++)
+	*p = toupper(*p);
 
     return ret;
 }
