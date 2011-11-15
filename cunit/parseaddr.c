@@ -17,6 +17,42 @@ static void test_single(void)
     parseaddr_free(a);
 }
 
+static void test_noname(void)
+{
+    struct address *a;
+
+    a = NULL;
+    parseaddr_list("fbloggs@fastmail.fm", &a);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(a);
+    CU_ASSERT_PTR_NULL(a->name);
+    CU_ASSERT_STRING_EQUAL(a->mailbox, "fbloggs");
+    CU_ASSERT_STRING_EQUAL(a->domain, "fastmail.fm");
+    CU_ASSERT_PTR_NULL(a->next);
+
+    parseaddr_free(a);
+
+    a = NULL;
+    parseaddr_list("<fbloggs@fastmail.fm>", &a);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(a);
+    CU_ASSERT_PTR_NULL(a->name);
+    CU_ASSERT_STRING_EQUAL(a->mailbox, "fbloggs");
+    CU_ASSERT_STRING_EQUAL(a->domain, "fastmail.fm");
+    CU_ASSERT_PTR_NULL(a->next);
+
+    parseaddr_free(a);
+
+    a = NULL;
+    parseaddr_list(" <fbloggs@fastmail.fm>", &a);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(a);
+    CU_ASSERT_PTR_NULL(a->name);
+    CU_ASSERT_STRING_EQUAL(a->mailbox, "fbloggs");
+    CU_ASSERT_STRING_EQUAL(a->domain, "fastmail.fm");
+    CU_ASSERT_PTR_NULL(a->next);
+
+    parseaddr_free(a);
+
+}
+
 static void test_single_append(void)
 {
     struct address *a;
