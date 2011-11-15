@@ -777,6 +777,18 @@ connections. */
    Netscape asks the server where the mail administration HTTP server
    is.  Administrators should set this to a local resource. */
 
+{ "newsaddheaders", "to", BITFIELD("to", "replyto") }
+/* Space-separated list of headers to be added to incoming usenet
+   articles.  Added \fITo:\fR headers will contain email
+   delivery addresses corresponding to each newsgroup in the
+   \fINewsgroups:\fR header.  Added \fIReply-To:\fR headers will
+   contain email delivery addresses corresponding to each newsgroup in
+   the \fIFollowup-To:\fR or \fINewsgroups:\fR header.
+.br
+.sp
+   This option applies if and only if the \fBnewspostuser\fR option is
+   set. */
+
 { "newsgroups", "*", STRING }
 /* A wildmat pattern specifying which mailbox hierarchies should be
    treated as newsgroups.  Only mailboxes matching the wildmat will
@@ -823,11 +835,11 @@ connections. */
    folder.
 .br
 .sp
-   When set, the Cyrus NNTP server will add a \fITo:\fR header to each
-   incoming usenet article.  This \fITo:\fR header will contain email
-   delivery addresses corresponding to each newsgroup in the
-   \fINewsgroups:\fR header.  By default, a \fITo:\fR header is not
-   added to usenet articles. */
+   When set, the Cyrus NNTP server will add the header(s) specified in
+   the \fBnewsaddheaders\fR option to each incoming usenet article.
+   The added header(s) will contain email delivery addresses
+   corresponding to each relevent newsgroup.  If not set, no headers
+   are added to usenet articles. */
 
 { "newsprefix", NULL, STRING }
 /* Prefix to be prepended to newsgroup names to make the corresponding
