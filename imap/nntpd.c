@@ -3202,18 +3202,24 @@ static int savemsg(message_data_t *m, FILE *f)
 	    }
 	    if (!r) {
 		const char *newspostuser = config_getstring(IMAPOPT_NEWSPOSTUSER);
+		unsigned long newsaddheaders =
+		    config_getbitfield(IMAPOPT_NEWSADDHEADERS);
 		const char **to = NULL, **replyto = NULL;
 
 		/* add To: header to spooled message file,
 		   optionally adding "post" email addr based on newsgroup */
 		body = spool_getheader(m->hdrcache, "to");
-		if (newspostuser) to = groups;
+		if (newspostuser &&
+		    (newsaddheaders & IMAP_ENUM_NEWSADDHEADERS_TO)) {
+		    to = groups;
+		}
 		add_header("To", body, to, newspostuser, m->hdrcache, f);
 
 		/* add Reply-To: header to spooled message file,
 		   optionally adding "post" email addr based on newsgroup */
 		body = spool_getheader(m->hdrcache, "reply-to");
-		if (newspostuser) {
+		if (newspostuser &&
+		    (newsaddheaders & IMAP_ENUM_NEWSADDHEADERS_REPLYTO)) {
 		    /* determine which groups header to use for reply-to */
 		    replyto = spool_getheader(m->hdrcache, "followup-to");
 		    if (!replyto) replyto = groups;
