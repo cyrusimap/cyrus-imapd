@@ -2736,7 +2736,13 @@ int main(int argc, char **argv)
 	} else {
 	    const char *s = sasl_errstring(result, NULL, NULL);
 	    
-	    printf("Authentication failed. %s\n", s);
+	    fprintf(stderr, "Authentication failed. %s\n", s);
+
+	    if (output_socket) {
+		/* send LOGOUT and exit */
+		logout(&protocol->logout_cmd, 0);
+		exit(1);
+	    }
 	}
 	
 	result = sasl_getprop(conn, SASL_SSF, &ssfp);
