@@ -280,4 +280,50 @@ sub test_duplicate_suppression_on_uniqueid_delete
     $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
 }
 
+sub config_duplicate_suppression_on_uniqueid_badmbox
+{
+    my ($self, $conf) = @_;
+    xlog "Setting duplicatesuppression";
+    $conf->set(duplicatesuppression => 1);
+    xlog "Setting duplicate_mailbox_mode=uniqueid";
+    $conf->set(duplicate_mailbox_mode => 'uniqueid');
+}
+
+sub test_duplicate_suppression_on_uniqueid_badmbox
+{
+    my ($self) = @_;
+
+    xlog "Testing behaviour with duplicate suppression on";
+    xlog "and duplicate_mailbox_mode = uniqueid and";
+    xlog "interaction with attempted delivery to a";
+    xlog "non-existant mailbox";
+
+    my $folder = "INBOX.nonesuch";
+    # DO NOT create the target folder
+
+    $self->{store}->set_fetch_attributes('uid');
+
+    xlog "Deliver a message";
+    my %msgs;
+    $msgs{1} = $self->{gen}->generate(subject => "Message 1");
+    $msgs{1}->set_attribute(uid => 1);
+    $self->{instance}->deliver($msgs{1}, folder => $folder);
+
+    xlog "Check that the message made it, to INBOX";
+    $self->{store}->set_folder('INBOX');
+    $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
+
+    xlog "Create a folder of the given name";
+    my $imaptalk = $self->{store}->get_client();
+    $imaptalk->create($folder)
+	or die "Cannot create $folder: $@";
+
+    xlog "Try to deliver the same message to the new folder";
+    $self->{instance}->deliver($msgs{1}, folder => $folder);
+
+    xlog "Check that the message made it, to the given folder";
+    $self->{store}->set_folder($folder);
+    $self->check_messages(\%msgs, check_guid => 0, keyed_on => 'uid');
+}
+
 1;
