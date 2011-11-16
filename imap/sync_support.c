@@ -464,7 +464,8 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
 					 uint32_t recentuid,
 					 time_t recenttime,
 					 time_t pop3_last_login,
-					 const char *specialuse)
+					 const char *specialuse,
+					 time_t pop3_show_after)
 {
     struct sync_folder *result = xzmalloc(sizeof(struct sync_folder));
 
@@ -490,6 +491,7 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
     result->recenttime = recenttime;
     result->pop3_last_login = pop3_last_login;
     result->specialuse = (specialuse) ? xstrdup(specialuse) : NULL;
+    result->pop3_show_after = pop3_show_after;
 
     result->mark     = 0;
     result->reserve  = 0;
@@ -1400,6 +1402,7 @@ int sync_mailbox(struct mailbox *mailbox,
     dlist_setdate(kl, "RECENTTIME", mailbox->i.recenttime);
     dlist_setdate(kl, "LAST_APPENDDATE", mailbox->i.last_appenddate);
     dlist_setdate(kl, "POP3_LAST_LOGIN", mailbox->i.pop3_last_login);
+    dlist_setdate(kl, "POP3_SHOW_AFTER", mailbox->i.pop3_show_after);
     dlist_setnum32(kl, "UIDVALIDITY", mailbox->i.uidvalidity);
     dlist_setatom(kl, "PARTITION", mailbox->part);
     dlist_setatom(kl, "ACL", mailbox->acl);

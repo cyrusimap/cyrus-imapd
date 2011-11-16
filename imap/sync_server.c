@@ -1289,6 +1289,7 @@ static int do_mailbox(struct dlist *kin)
     time_t recenttime;
     time_t last_appenddate;
     time_t pop3_last_login;
+    time_t pop3_show_after = 0; /* optional */
     uint32_t uidvalidity;
     const char *acl;
     const char *options_str;
@@ -1343,6 +1344,7 @@ static int do_mailbox(struct dlist *kin)
     /* optional */
     dlist_getlist(kin, "ANNOTATIONS", &ka);
     dlist_getatom(kin, "SPECIALUSE", &specialuse);
+    dlist_getdate(kin, "POP3_SHOW_AFTER", &pop3_show_after);
 
     options = sync_parse_options(options_str);
  
@@ -1438,6 +1440,7 @@ static int do_mailbox(struct dlist *kin)
     mailbox->i.recenttime = recenttime;
     mailbox->i.last_appenddate = last_appenddate;
     mailbox->i.pop3_last_login = pop3_last_login;
+    mailbox->i.pop3_show_after = pop3_show_after;
     /* mailbox->i.options = options; ... not really, there's unsyncable stuff in here */
 
     /* this happens all the time! */

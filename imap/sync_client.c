@@ -253,7 +253,8 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
 			     mailbox->i.uidvalidity, mailbox->i.last_uid,
 			     mailbox->i.highestmodseq, NULL,
 			     mailbox->i.recentuid, mailbox->i.recenttime,
-			     mailbox->i.pop3_last_login, mailbox->specialuse);
+			     mailbox->i.pop3_last_login, mailbox->specialuse,
+			     mailbox->i.pop3_show_after);
 
 	rfolder = sync_folder_lookup(replica_folders, mailbox->uniqueid);
 	if (rfolder)
@@ -458,6 +459,7 @@ static int response_parse(const char *cmd,
 	    uint32_t recentuid = 0;
 	    time_t recenttime = 0;
 	    time_t pop3_last_login = 0;
+	    time_t pop3_show_after = 0;
 	    const char *specialuse = NULL;
 	    if (!folder_list) goto parse_err;
 	    if (!dlist_getatom(kl, "UNIQUEID", &uniqueid)) goto parse_err;
@@ -474,6 +476,7 @@ static int response_parse(const char *cmd,
 	    if (!dlist_getdate(kl, "POP3_LAST_LOGIN", &pop3_last_login)) goto parse_err;
 	    /* optional */
 	    dlist_getatom(kl, "SPECIALUSE", &specialuse);
+	    if (!dlist_getdate(kl, "POP3_SHOW_AFTER", &pop3_show_after)) goto parse_err;
 
 	    sync_folder_list_add(folder_list, uniqueid,
 				 mboxname, part, acl,
@@ -481,7 +484,8 @@ static int response_parse(const char *cmd,
 				 uidvalidity, last_uid, 
 				 highestmodseq, sync_crc,
 				 recentuid, recenttime,
-				 pop3_last_login, specialuse);
+				 pop3_last_login, specialuse,
+				 pop3_show_after);
 	}
 	else
 	    goto parse_err;
@@ -1377,6 +1381,7 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
     if (remote->recentuid != mailbox->i.recentuid) return 0;
     if (remote->recenttime != mailbox->i.recenttime) return 0;
     if (remote->pop3_last_login != mailbox->i.pop3_last_login) return 0;
+    if (remote->pop3_show_after != mailbox->i.pop3_show_after) return 0;
     if (remote->options != options) return 0;
     if (strcmp(remote->acl, mailbox->acl)) return 0;
     if (mailbox->specialuse) {
