@@ -202,6 +202,9 @@ extern int index_fetch(struct index_state *state,
 extern int index_store(struct index_state *state,
 		       char *sequence,
 		       struct storeargs *storeargs);
+extern int index_run_annotator(struct index_state *state,
+			       const char *sequence, int usinguid,
+			       struct namespace *namespace, int isadmin);
 extern int index_sort(struct index_state *state, struct sortcrit *sortcrit,
 		      struct searchargs *searchargs, int usinguid);
 extern int index_thread(struct index_state *state, int algorithm,

@@ -406,6 +406,8 @@ static void cmd_getannotation(const char* tag, char *mboxpat);
 static void cmd_getmetadata(const char* tag, char *mboxpat);
 static void cmd_setannotation(const char* tag, char *mboxpat);
 static void cmd_setmetadata(const char* tag, char *mboxpat);
+static void cmd_xrunannotator(const char *tag, const char *sequence,
+			      int usinguid);
 
 void cmd_enable(char* tag);
 
@@ -1982,6 +1984,9 @@ void cmdloop(void)
 
 		    snmp_increment(EXPUNGE_COUNT, 1);
 		}
+		else if (!strcmp(arg1.s, "xrunannotator")) {
+		    goto xrunannotator;
+		}
 		else {
 		    prot_printf(imapd_out, "%s BAD Unrecognized UID subcommand\r\n", tag.s);
 		    eatline(imapd_in, c);
@@ -2075,6 +2080,16 @@ void cmdloop(void)
 		if (listargs.pat.count) cmd_list(tag.s, &listargs);
 
 		snmp_increment(LIST_COUNT, 1);
+	    }
+	    else if (!strcmp(cmd.s, "Xrunannotator")) {
+		if (!imapd_index && !backend_current) goto nomailbox;
+		usinguid = 0;
+		if (c != ' ') goto missingargs;
+	    xrunannotator:
+		c = getword(imapd_in, &arg1);
+		if (!arg1.len || !imparse_issequence(arg1.s)) goto badsequence;
+		cmd_xrunannotator(tag.s, arg1.s, usinguid);
+// 		snmp_increment(XRUNANNOTATOR_COUNT, 1);
 	    }
 	    else goto badcmd;
 	    break;
@@ -8365,6 +8380,49 @@ static void cmd_setmetadata(const char *tag, char *mboxpat)
     annotate_state_free(&astate);
     if (entryatts) freeentryatts(entryatts);
     return;
+}
+
+
+static void cmd_xrunannotator(const char *tag, const char *sequence,
+			      int usinguid)
+{
+    const char *cmd = usinguid ? "UID Xrunannotator" : "Xrunannotator";
+    clock_t start = clock();
+    char mytime[100];
+    int c, r = 0;
+
+    if (backend_current) {
+	/* remote mailbox */
+	prot_printf(backend_current->out, "%s %s %s ", tag, cmd, sequence);
+	if (!pipe_command(backend_current, 65536)) {
+	    pipe_including_tag(backend_current, tag, 0);
+	}
+	return;
+    }
+
+    /* local mailbox */
+
+    /* we're expecting no more arguments */
+    c = prot_getc(imapd_in);
+    if (c == '\r') c = prot_getc(imapd_in);
+    if (c != '\n') {
+	prot_printf(imapd_out, "%s BAD Unexpected extra arguments to %s\r\n", tag, cmd);
+	eatline(imapd_in, c);
+	return;
+    }
+
+    r = index_run_annotator(imapd_index, sequence, usinguid,
+			    &imapd_namespace, imapd_userisadmin);
+
+    snprintf(mytime, sizeof(mytime), "%2.3f",
+	     (clock() - start) / (double) CLOCKS_PER_SEC);
+
+    if (r)
+	prot_printf(imapd_out, "%s NO %s (%s sec)\r\n", tag,
+		    error_message(r), mytime);
+    else
+	prot_printf(imapd_out, "%s OK %s (%s sec)\r\n", tag,
+		    error_message(IMAP_OK_COMPLETED), mytime);
 }
 
 /*

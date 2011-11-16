@@ -1035,6 +1035,71 @@ out:
     return r;
 }
 
+/*
+ * Perform the XRUNANNOTATOR command which runs the
+ * annotator callout for each message in the given sequence.
+ */
+int index_run_annotator(struct index_state *state,
+			const char *sequence, int usinguid,
+			struct namespace *namespace, int isadmin)
+{
+    struct mailbox *mailbox = state->mailbox;
+    struct seqset *seq = NULL;
+    struct index_map *im;
+    unsigned checkval;
+    uint32_t msgno;
+    struct appendstate as;
+    int r = 0;
+
+    /* We do the acl check here rather than in append_setup_mbox()
+     * to account for the EXAMINE command where state->myrights has
+     * fewer rights than the ACL actually grants */
+    if (!(state->myrights & (ACL_WRITE|ACL_ANNOTATEMSG)))
+	return IMAP_PERMISSION_DENIED;
+
+    if (!config_getstring(IMAPOPT_ANNOTATION_CALLOUT))
+	return 0;
+
+    r = index_lock(state);
+    if (r) return r;
+
+    mailbox_ref(state->mailbox);
+    r = append_setup_mbox(&as, state->mailbox,
+			  state->userid, state->authstate,
+			  0, NULL, namespace, isadmin);
+    if (r) goto out;
+
+    seq = _parse_sequence(state, sequence, usinguid);
+    if (!seq) goto out;
+
+    for (msgno = 1; msgno <= state->exists; msgno++) {
+	im = &state->map[msgno-1];
+	checkval = usinguid ? im->record.uid : msgno;
+	if (!seqset_ismember(seq, checkval))
+	    continue;
+
+	/* if it's expunged already, skip it now */
+	if (im->record.system_flags & FLAG_EXPUNGED)
+	    continue;
+
+	r = append_run_annotator(&as, &im->record);
+	if (r) goto out;
+
+	r = mailbox_rewrite_index_record(mailbox, &im->record);
+	if (r) goto out;
+    }
+
+out:
+    if (!r)
+	append_commit(&as, NULL, NULL, NULL, NULL);
+    else
+	append_abort(&as);
+    seqset_free(seq);
+    index_unlock(state);
+    index_tellchanges(state, usinguid, usinguid, 1);
+    return r;
+}
+
 static int index_scan_work(const char *s, unsigned long len,
 			   const char *match, unsigned long min)
 {

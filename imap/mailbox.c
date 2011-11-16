@@ -991,6 +991,17 @@ void mailbox_modseq_dirty(struct mailbox *mailbox)
     mailbox_index_dirty(mailbox);
 }
 
+void mailbox_ref(struct mailbox *mailbox)
+{
+    struct mailboxlist *listitem;
+
+    if (!mailbox) return;
+
+    listitem = find_listitem(mailbox->name);
+    assert(listitem && &listitem->m == mailbox);
+    listitem->nopen++;
+}
+
 /*
  * Close the mailbox 'mailbox', freeing all associated resources.
  */

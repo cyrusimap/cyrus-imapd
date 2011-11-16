@@ -445,6 +445,7 @@ extern int mailbox_open_irl(const char *name,
 			    struct mailbox **mailboxptr);
 extern int mailbox_open_exclusive(const char *name,
 			          struct mailbox **mailboxptr);
+extern void mailbox_ref(struct mailbox *mailbox);
 extern void mailbox_close(struct mailbox **mailboxptr);
 extern int mailbox_delete(struct mailbox **mailboxptr);
 

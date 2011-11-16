@@ -153,10 +153,24 @@ int append_setup(struct appendstate *as, const char *name,
 		 struct namespace *namespace, int isadmin)
 {
     int r;
+    struct mailbox *mailbox = NULL;
 
-    as->mailbox = NULL;
-    r = mailbox_open_iwl(name, &as->mailbox);
+    r = mailbox_open_iwl(name, &mailbox);
     if (r) return r;
+
+    return append_setup_mbox(as, mailbox, userid, auth_state,
+			     aclcheck, quotacheck, namespace, isadmin);
+}
+
+int append_setup_mbox(struct appendstate *as, struct mailbox *mailbox,
+		 const char *userid, struct auth_state *auth_state,
+		 long aclcheck, const quota_t quotacheck[QUOTA_NUMRESOURCES],
+		 struct namespace *namespace, int isadmin)
+{
+    int r;
+
+    memset(as, 0, sizeof(*as));
+    as->mailbox = mailbox;
 
     as->myrights = cyrus_acl_myrights(auth_state, as->mailbox->acl);
 
@@ -204,6 +218,7 @@ int append_setup(struct appendstate *as, const char *name,
 
     return 0;
 }
+
 
 /* may return non-zero, indicating that the entire append has failed
  and the mailbox is probably in an inconsistent state. */
@@ -794,6 +809,36 @@ out:
     return r;
 }
 
+static void append_make_flags(struct appendstate *as,
+			      struct index_record *record,
+			      strarray_t *flags)
+{
+    int i;
+
+    assert(flags);
+
+    /* Note: we don't handle the external seen db here, on
+     * the grounds that it would add complexity without
+     * actually being useful to annotators */
+    if (as->internalseen && (record->system_flags & FLAG_SEEN))
+	strarray_append(flags, "\\Seen");
+
+    if ((record->system_flags & FLAG_DELETED))
+	strarray_append(flags, "\\Deleted");
+    if ((record->system_flags & FLAG_DRAFT))
+	strarray_append(flags, "\\Draft");
+    if ((record->system_flags & FLAG_FLAGGED))
+	strarray_append(flags, "\\Flagged");
+    if ((record->system_flags & FLAG_ANSWERED))
+	strarray_append(flags, "\\Answered");
+
+    for (i = 0 ; i < MAX_USER_FLAGS ; i++) {
+	if (as->mailbox->flagname[i] &&
+	    (record->user_flags[i/32] & 1<<(i&31)))
+	    strarray_append(flags, as->mailbox->flagname[i]);
+    }
+}
+
 /*
  * staging, to allow for single-instance store.  the complication here
  * is multiple partitions.
@@ -1037,6 +1082,84 @@ out:
     }
     
     return 0;
+}
+
+static int load_annot_cb(const char *mailbox __attribute__((unused)),
+			 uint32_t uid __attribute__((unused)),
+			 const char *entry, const char *userid,
+			 const struct buf *value, void *rock)
+{
+    struct entryattlist **eal = (struct entryattlist **)rock;
+    const char *attrib = (userid[0] ? "value.priv" : "value.shared");
+    setentryatt(eal, entry, attrib, value);
+    return 0;
+}
+
+int append_run_annotator(struct appendstate *as,
+			 struct index_record *record)
+{
+    char *fname;
+    struct entryattlist *user_annots = NULL;
+    struct entryattlist *system_annots = NULL;
+    strarray_t flags = STRARRAY_INITIALIZER;
+    annotate_state_t *astate = NULL;
+    struct body *body = NULL;
+    int r;
+
+    if (!config_getstring(IMAPOPT_ANNOTATION_CALLOUT))
+	return 0;
+
+    append_make_flags(as, record, &flags);
+
+    r = annotatemore_findall(as->mailbox->name, record->uid, "*",
+			     load_annot_cb, &user_annots);
+    if (r) goto out;
+
+    fname = mailbox_message_fname(as->mailbox, record->uid);
+    if (!fname) goto out;
+
+    r = message_parse2(fname, record, &body);
+    if (r) goto out;
+
+    r = callout_run(fname, body, &user_annots, &system_annots, &flags);
+    if (r) goto out;
+
+    record->system_flags &= FLAG_SEEN;
+    memset(&record->user_flags, 0, sizeof(record->user_flags));
+    r = append_apply_flags(as, record, &flags);
+    if (r) goto out;
+
+    astate = annotate_state_new();
+    annotate_state_set_message(astate, as->mailbox, record->uid);
+    if (user_annots) {
+	annotate_state_set_auth(astate, as->namespace, as->isadmin,
+				as->userid, as->auth_state);
+	r = annotate_state_store(astate, user_annots);
+	if (r) goto out;
+    }
+    if (system_annots) {
+	/* pretend to be admin to avoid ACL checks */
+	annotate_state_set_auth(astate, as->namespace, /*isadmin*/1,
+				as->userid, as->auth_state);
+	r = annotate_state_store(astate, system_annots);
+	if (r) {
+	    syslog(LOG_ERR, "Setting annnotations from annotator "
+			    "callout failed (%s)",
+			    error_message(r));
+	    goto out;
+	}
+    }
+
+out:
+    annotate_state_free(&astate);
+    freeentryatts(user_annots);
+    freeentryatts(system_annots);
+    strarray_fini(&flags);
+    if (body) {
+	message_free_body(body);
+	free(body);
+    }
+    return r;
 }
 
 /*

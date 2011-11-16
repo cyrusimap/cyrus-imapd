@@ -109,6 +109,13 @@ extern int append_setup(struct appendstate *as, const char *name,
 			long aclcheck,
 			const quota_t quotacheck[QUOTA_NUMRESOURCES],
 			struct namespace *, int isadmin);
+extern int append_setup_mbox(struct appendstate *as, struct mailbox *mailbox,
+			     const char *userid,
+			     struct auth_state *auth_state,
+			     long aclcheck,
+			     const quota_t quotacheck[QUOTA_NUMRESOURCES],
+			     struct namespace *namespace,
+			     int isadmin);
 
 extern int append_commit(struct appendstate *as,
 			 unsigned long *uidvalidity, 
@@ -144,5 +151,8 @@ extern int append_collectnews(struct appendstate *mailbox,
 
 #define append_getuidvalidity(as) ((as)->m.uidvalidity);
 #define append_getlastuid(as) ((as)->m.last_uid);
+
+extern int append_run_annotator(struct appendstate *as,
+				struct index_record *record);
 
 #endif /* INCLUDED_APPEND_H */
