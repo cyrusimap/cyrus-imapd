@@ -476,7 +476,7 @@ static int response_parse(const char *cmd,
 	    if (!dlist_getdate(kl, "POP3_LAST_LOGIN", &pop3_last_login)) goto parse_err;
 	    /* optional */
 	    dlist_getatom(kl, "SPECIALUSE", &specialuse);
-	    if (!dlist_getdate(kl, "POP3_SHOW_AFTER", &pop3_show_after)) goto parse_err;
+	    dlist_getdate(kl, "POP3_SHOW_AFTER", &pop3_show_after);
 
 	    sync_folder_list_add(folder_list, uniqueid,
 				 mboxname, part, acl,
