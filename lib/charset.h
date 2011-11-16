@@ -62,6 +62,7 @@ typedef int charset_index;
 extern char *charset_convert(const char *s, charset_index charset, int flags);
 extern char *charset_decode_mimeheader(const char *s, int flags);
 extern char *charset_parse_mimeheader(const char *s);
+extern char *charset_utf8_to_searchform(const char *s, int flags);
 
 extern charset_index charset_lookupname(const char *name);
 extern comp_pat *charset_compilepat(const char *s);

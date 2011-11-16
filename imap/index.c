@@ -3860,23 +3860,26 @@ static char *get_displayname(const char *header)
     if (!addr) return xstrdup("");
 
     if (addr->name && addr->name[0]) {
-	ret = xstrdup(addr->name);
+	/* pure RFC5255 compatible "searchform" conversion */
+	ret = charset_utf8_to_searchform(addr->name, /*flags*/0);
     }
     else if (addr->domain && addr->mailbox) {
 	ret = strconcat(addr->mailbox, "@", addr->domain, (char *)NULL);
+	/* gotta uppercase mailbox/domain */
+	for (p = ret; *p; p++)
+	    *p = toupper(*p);
     }
     else if (addr->mailbox) {
 	ret = xstrdup(addr->mailbox);
+	/* gotta uppercase mailbox/domain */
+	for (p = ret; *p; p++)
+	    *p = toupper(*p);
     }
     else {
 	ret = xstrdup("");
     }
 
     parseaddr_free(addr);
-
-    /* XXX - this should really be a "CANONICALISE RFC5255" */
-    for (p = ret; *p; p++)
-	*p = toupper(*p);
 
     return ret;
 }

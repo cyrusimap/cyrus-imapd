@@ -781,6 +781,12 @@ char *charset_convert(const char *s, int charset, int flags)
     return res;
 }
 
+char *charset_utf8_to_searchform(const char *s, int flags)
+{
+    int charset = charset_lookupname("utf-8");
+    return charset_convert(s, charset, flags);
+}
+
 /* Convert from a given charset and encoding into utf8 */
 char *charset_to_utf8(const char *msg_base, size_t len, int charset, int encoding)
 {
