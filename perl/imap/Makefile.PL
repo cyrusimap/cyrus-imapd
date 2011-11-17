@@ -55,6 +55,8 @@ my $LIB_UUID = $ENV{LIB_UUID};
 my $ZLIB = $ENV{ZLIB};
 
 my $PERL_PREINSTALL = $ENV{PERL_PREINSTALL};
+my $SRCDIR = $ENV{srcdir};
+my $TOP_SRCDIR = $ENV{top_srcdir};
 
 # See lib/ExtUtils/MakeMaker.pm for details of how to influence
 # the contents of the Makefile that is written.
@@ -62,7 +64,9 @@ $libs = "-lcyrus";
 
 sub MY::postamble
 {
-    return <<'EOT';
+    return "\nVPATH=$SRCDIR" . <<'EOT';
+
+
 cyradm: cyradm.sh
 	$(PERL_PREINSTALL) < $< > $@
 
@@ -72,7 +76,7 @@ EOT
 WriteMakefile( 
     'NAME'	=> 'Cyrus::IMAP',
     'ABSTRACT'  => 'Cyrus administrative interface',
-    'VERSION_FROM' => 'IMAP.pm', # finds $VERSION
+    'VERSION_FROM' => "$SRCDIR/IMAP.pm", # finds $VERSION
     'macro'	=> {
 		    'IMCLIENT_LIBS' => '',	# hack
 		    'PERL_PREINSTALL' => $PERL_PREINSTALL,
@@ -82,6 +86,6 @@ WriteMakefile(
     'MYEXTLIB'  => '../../lib/libcyrus.a ../../lib/libcyrus_min.a',
     'LIBS'	=> ["$BDB_LIB $SASL_LIB $OPENSSL_LIB $LIB_RT $LIB_UUID $ZLIB -lssl -lcrypto"],
     'DEFINE'	=> '-DPERL_POLLUTE',    # e.g., '-DHAVE_SOMETHING' 
-    'INC'	=> "-I../../lib -I../.. -I../../com_err/et $SASL_INC $OPENSSL_INC", 
+    'INC'	=> "-I$TOP_SRCDIR -I$TOP_SRCDIR/com_err/et $SASL_INC $OPENSSL_INC -I" .$SRCDIR . " ", 
     'EXE_FILES' => [cyradm],
 );

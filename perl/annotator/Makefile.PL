@@ -40,9 +40,11 @@
 
 use ExtUtils::MakeMaker;
 use Config;
+my $SRCDIR = $ENV{srcdir};
 
 WriteMakefile(
     'NAME'	=> 'Cyrus::Annotator::Daemon',
     'ABSTRACT'  => 'Cyrus annotator daemon framework',
-    'VERSION_FROM' => 'Daemon.pm', # finds $VERSION
+    'VERSION_FROM' => "$SRCDIR/Daemon.pm", # finds $VERSION
+    INSTALLDIRS => 'vendor',
 );

@@ -53,10 +53,10 @@
 #include <pwd.h>
 #include <unistd.h>
 
-#include "imclient.h"
-#include "imapurl.h"
-#include "util.h"
-#include "xmalloc.h"
+#include "lib/imclient.h"
+#include "lib/imapurl.h"
+#include "lib/util.h"
+#include "lib/xmalloc.h"
 
 #include "cyrperl.h"
 #include "config.h"

@@ -80,18 +80,21 @@ CC = @CC@
 PLMAKE = imap/Makefile
 
 all::
-	@for d in  $(SUBDIRS); \
+	@for d in $(SUBDIRS); \
 	do \
-		(cd $$d; echo "### Making" all "in" `pwd`;	\
-			if [ -f Makefile.PL -a ! -f Makefile ]; then \
+		(if [ ! -e $$d ]; then mkdir $$d; fi; \
+		 cd $$d; echo "### Making" all "in" `pwd`; \
+			if [ -f ../${srcdir}/$$d/Makefile.PL -a ! -f Makefile ]; then \
 			   LIB_RT="$(LIB_RT)" \
 			   LIB_UUID="$(LIB_UUID)" \
 			   ZLIB="$(ZLIB)" \
+			   srcdir="../${srcdir}/$$d" \
+			   top_srcdir="../$(top_srcdir)" \
 			   BDB_LIB="$(BDB_LIB)" BDB_INC="$(BDB_INC)" \
 			   OPENSSL_LIB="$(OPENSSL_LIB)" OPENSSL_INC="$(OPENSSL_INC)" \
 			   SASL_LIB="$(SASL_LIB)" SASL_INC="$(SASL_INC)" CC="$(CC)" \
 			   COVERAGE="$(COVERAGE)" PERL_PREINSTALL="$(PERL_PREINSTALL)" \
-			     $(PERL) Makefile.PL PREFIX=$(prefix); \
+			     $(PERL) ../${srcdir}/$$d/Makefile.PL PREFIX=$(prefix); \
 			fi; \
 			$(MAKE) $(MFLAGS) DESTDIR=$(DESTDIR) all) || exit 1; \
 	done

@@ -54,6 +54,9 @@ my $LIB_RT = $ENV{LIB_RT};
 my $LIB_UUID = $ENV{LIB_UUID};
 my $ZLIB = $ENV{ZLIB};
 
+my $SRCDIR = $ENV{srcdir};
+my $TOP_SRCDIR = $ENV{top_srcdir};
+
 $libs = "-lcyrus";
 
 # See lib/ExtUtils/MakeMaker.pm for details of how to influence
@@ -61,10 +64,15 @@ $libs = "-lcyrus";
 WriteMakefile(
     'NAME'	=> 'Cyrus::SIEVE::managesieve',
     'ABSTRACT'  => 'Cyrus Sieve management interface',
-    'VERSION_FROM' => 'managesieve.pm', # finds $VERSION
+    'VERSION_FROM' => "$SRCDIR/managesieve.pm", # finds $VERSION
     'MYEXTLIB'  => '../lib/isieve.o ../lib/lex.o ../lib/mystring.o ../lib/request.o ../../../lib/libcyrus.a ../../../lib/libcyrus_min.a',
     'LIBS'	=> ["$BDB_LIB $SASL_LIB $OPENSSL_LIB $LIB_RT $LIB_UUID $ZLIB -lssl -lcrypto"], 
     'DEFINE'	=> '-DPERL_POLLUTE $(COVERAGE)',     # e.g., '-DHAVE_SOMETHING' 
-    'INC'	=> "-I../lib/ -I../../../lib/ $SASL_INC $OPENSSL_INC",
+    'INC'	=> "-I$TOP_SRCDIR/lib -I$SRCDIR/../lib $SASL_INC $OPENSSL_INC",
+    'OBJECT'    => 'managesieve.o',
     'LD'	=> $Config{ld} . ' $(COVERAGE)',
 );
+
+sub MY::postamble {
+    return "VPATH=$SRCDIR\n";
+}
