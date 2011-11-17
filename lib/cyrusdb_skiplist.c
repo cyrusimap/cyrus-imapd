@@ -177,6 +177,7 @@ struct dbengine {
     int lock_status;
     int is_open;
     struct txn *current_txn;
+    struct timeval starttime;
 
     /* comparator function to use for sorting */
     int (*compar) (const char *s1, int l1, const char *s2, int l2);
@@ -599,6 +600,7 @@ static int write_lock(struct dbengine *db, const char *altname)
     db->map_size = sbuf.st_size;
     db->map_ino = sbuf.st_ino;
     db->lock_status = WRITELOCKED;
+    gettimeofday(&db->starttime, 0);
     
     map_refresh(db->fd, 0, &db->map_base, &db->map_len, sbuf.st_size,
 		fname, 0);
@@ -655,6 +657,7 @@ static int read_lock(struct dbengine *db)
     db->map_size = sbuf.st_size;
     db->map_ino = sbuf.st_ino;
     db->lock_status = READLOCKED;
+    gettimeofday(&db->starttime, 0);
     
     /* printf("%d: read lock: %d\n", getpid(), db->map_ino); */
 
@@ -671,6 +674,9 @@ static int read_lock(struct dbengine *db)
 
 static int unlock(struct dbengine *db)
 {
+    struct timeval endtime;
+    double timediff;
+
     if (db->lock_status == UNLOCKED) {
 	syslog(LOG_NOTICE, "skiplist: unlock while not locked");
     }
@@ -679,6 +685,13 @@ static int unlock(struct dbengine *db)
 	return CYRUSDB_IOERROR;
     }
     db->lock_status = UNLOCKED;
+
+    gettimeofday(&endtime, 0);
+    timediff = timesub(&db->starttime, &endtime);
+    if (timediff > 1.0) {
+	syslog(LOG_NOTICE, "skiplist: longlock %s for %0.1f seconds",
+	       db->fname, timediff);
+    }
 
     /* printf("%d: unlock: %d\n", getpid(), db->map_ino); */
 
@@ -689,29 +702,40 @@ static int lock_or_refresh(struct dbengine *db, struct txn **tidptr)
 {
     int r;
 
-    assert(db != NULL && tidptr != NULL);
+    assert(db);
 
-    if (*tidptr) {
+    if (!tidptr) {
+	/* just grab a readlock */
+	r = read_lock(db);
+	if (r) return r;
+
+	/* start tracking the lock time */
+	gettimeofday(&db->starttime, 0);
+
+	return 0;
+    }
+
+    else if (*tidptr) {
 	/* check that the DB agrees that we're in this transaction */
 	assert(db->current_txn == *tidptr);
 
-     	/* just update the active transaction */
-	update_lock(db, *tidptr);
-
-    } else {
-	/* check that the DB isn't in a transaction */
-	assert(db->current_txn == NULL);
-
-	/* grab a r/w lock */
-	if ((r = write_lock(db, NULL)) < 0) {
-	    return r;
-	}
-
-	/* start the transaction */
-	if ((r = newtxn(db, tidptr))) {
-	    return r;
-	}
+	/* just update the active transaction */
+	return update_lock(db, *tidptr);
     }
+
+    /* check that the DB isn't in a transaction */
+    assert(db->current_txn == NULL);
+
+    /* grab a r/w lock */
+    r = write_lock(db, NULL);
+    if (r) return r;
+
+    /* start the transaction */
+    r = newtxn(db, tidptr);
+    if (r) return r;
+
+    /* start tracking the lock time */
+    gettimeofday(&db->starttime, 0);
 
     return 0;
 }
