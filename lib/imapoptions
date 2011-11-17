@@ -1078,6 +1078,24 @@ And the notification message will be available on \fIstdin\fR.
    template.  The dynamically created list of feeds based on the
    HTML template will be accessible at the "/rss" URL on the server. */ 
 
+{ "rss_maxitems", 0, INT }
+/* Maximum number of items to display in an RSS channel.  If non-zero,
+   httpd will display no more than the \fIrss_maxitems\fR most recent
+   items.  If set to 0, all available items will be displayed (the
+   default). */
+
+{ "rss_maxsynopsis", 0, INT }
+/* Maximum RSS item synopsis length.  If non-zero, httpd will display
+   no more than the first \fIrss_maxsynopsis\fR characters of an
+   item's synopsis.  If set to 0, the entire synopsis will be
+   displayed (the default). */
+
+{ "rss_ttl", 30, INT }
+/* RSS channel time to live.  Indicates to the client the number of
+   minutes that a channel can be cached before refreshing from the
+   source.  If set to 0, no indication will be made to the client.
+   The default is 30 minutes. */
+
 # Commented out - used by libsasl
 # { "sasl_auto_transition", 0, SWITCH }
 /* If enabled, the SASL library will automatically create authentication

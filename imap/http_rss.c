@@ -73,8 +73,6 @@
 #include "xstrlcpy.h"
 
 #define XML_NS_ATOM	"http://www.w3.org/2005/Atom"
-#define RSS_MAX_ITEMS	100	/* only display 100 most recent messages */
-#define RSS_TTL		30	/* refresh every 30min */
 #define MAX_SECTION_LEN	128
 #define FEEDLIST_VAR	"%RSS_FEEDLIST%"
 
@@ -508,7 +506,8 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     xmlNodePtr root, chan, item, link;
     xmlNsPtr atom;
     const char **via, *prot, *host;
-    unsigned url_len, recno, recentuid = 0, num_items = RSS_MAX_ITEMS;
+    uint32_t url_len, recno, recentuid = 0;
+    int max_items, max_len, ttl, nitems;
     char datestr[80];
     struct buf url = BUF_INITIALIZER, buf = BUF_INITIALIZER;
 
@@ -520,6 +519,18 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 	/* We failed a precondition - don't perform the request */
 	return precond;
     }
+
+    /* Get number of items to display */
+    max_items = config_getint(IMAPOPT_RSS_MAXITEMS);
+    if (max_items < 0) max_items = 0;
+
+    /* Get length of description to display */
+    max_len = config_getint(IMAPOPT_RSS_MAXSYNOPSIS);
+    if (max_len < 0) max_len = 0;
+
+    /* Get TTL */
+    ttl = config_getint(IMAPOPT_RSS_TTL);
+    if (ttl < 0) ttl = 0;
 
     /* Fill in Last-Modified */
     txn->resp_body.lastmod = lastmod;
@@ -597,9 +608,11 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     rfc822date_gen(datestr, sizeof(datestr), lastmod);
     xmlNewChild(chan, NULL, BAD_CAST "lastBuildDate", BAD_CAST datestr);
 
-    buf_reset(&buf);
-    buf_printf(&buf, "%u", RSS_TTL);
-    xmlNewChild(chan, NULL, BAD_CAST "ttl", BAD_CAST buf_cstring(&buf));
+    if (ttl) {
+	buf_reset(&buf);
+	buf_printf(&buf, "%d", ttl);
+	xmlNewChild(chan, NULL, BAD_CAST "ttl", BAD_CAST buf_cstring(&buf));
+    }
 
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
 	buf_reset(&buf);
@@ -609,7 +622,8 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     }
 
     /* Add an <item> for each message */
-    for (recno = mailbox->i.num_records; num_items && recno >= 1; recno--) {
+    for (recno = mailbox->i.num_records, nitems = 0;
+	 recno >= 1 && (!max_items || nitems < max_items); recno--) {
 	struct index_record record;
 	const char *msg_base;
 	unsigned long msg_size;
@@ -631,8 +645,8 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 	    continue;
 	}
 
-	/* Feeding this message, decrement counter */
-	num_items--;
+	/* Feeding this message, increment counter */
+	nitems++;
 
 	item = xmlNewChild(chan, NULL, BAD_CAST "item", NULL);
 
@@ -672,14 +686,16 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 
 	if (parts && *parts) {
 	    const char *c;
+	    int len;
 
 	    buf_reset(&buf);
 	    /* Translate CR in body text to HTML <br> tag */
-	    for (c = parts[0]->decoded_body; c && *c; c++) {
+	    for (c = parts[0]->decoded_body, len = 0;
+		 c && *c && (!max_len || len < max_len); c++, len++) {
 		if (*c == '\r') buf_appendcstr(&buf, "<br>");
 		else buf_putc(&buf, *c);
 	    }
-	    /* XXX  truncate the message? */
+
 	    xmlNewTextChild(item, NULL, BAD_CAST "description",
 			    BAD_CAST buf_cstring(&buf));
 	}
