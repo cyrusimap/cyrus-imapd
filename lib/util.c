@@ -540,7 +540,7 @@ static int cmdtime_enabled = 0;
 static struct timeval cmdtime_start, cmdtime_end, nettime_start, nettime_end;
 static double totaltime, cmdtime, nettime;
 
-static double timesub(const struct timeval *start, const struct timeval *end)
+double timesub(const struct timeval *start, const struct timeval *end)
 {
     return (double)(end->tv_sec - start->tv_sec) +
 	   (double)(end->tv_usec - start->tv_usec)/1000000.0;
