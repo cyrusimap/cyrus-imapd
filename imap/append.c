@@ -580,6 +580,7 @@ static void callout_encode_args(struct buf *args,
     for (ee = annotations ; ee ; ee = ee->next) {
 	struct attvaluelist *av;
 	message_write_nstring(args, ee->entry);
+	buf_putc(args, ' ');
 	buf_putc(args, '(');
 	for (av = ee->attvalues ; av ; av = av->next) {
 	    message_write_nstring(args, av->attrib);
