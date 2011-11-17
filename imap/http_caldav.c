@@ -83,8 +83,12 @@
 #include "proxy.h"
 #include "rfc822date.h"
 #include "spool.h"
+#include "stristr.h"
 #include "util.h"
+#include "xmalloc.h"
 #include "xstrlcat.h"
+
+#define DFLAG_UNBIND "DAV:unbind"
 
 static int meth_acl(struct transaction_t *txn);
 static int meth_copy(struct transaction_t *txn);
@@ -760,9 +764,16 @@ static int meth_copy(struct transaction_t *txn)
 		    r = mailbox_find_index_record(dest_mbox, olduid, &oldrecord);
 
 		    /* Expunge the old message */
-		    oldrecord.system_flags |= FLAG_EXPUNGED;
-		    if ((r = mailbox_rewrite_index_record(dest_mbox, &oldrecord))) {
-			syslog(LOG_ERR, "rewrite_index_rec(%s) failed: %s",
+		    if (!r) r = mailbox_user_flag(dest_mbox, DFLAG_UNBIND,
+						  &userflag);
+		    if (!r) {
+			oldrecord.user_flags[userflag/32] |= 1<<(userflag&31);
+			oldrecord.system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
+			r = mailbox_rewrite_index_record(dest_mbox, &oldrecord);
+		    }
+		    if (r) {
+			syslog(LOG_ERR,
+			       "expunging old dest record (%s) failed: %s",
 			       dest_mboxname, error_message(r));
 			txn->errstr = error_message(r);
 			ret = HTTP_SERVER_ERROR;
@@ -799,7 +810,7 @@ static int meth_copy(struct transaction_t *txn)
 	    /* Expunge the source message */
 	    src_rec.system_flags |= FLAG_EXPUNGED;
 	    if ((r = mailbox_rewrite_index_record(src_mbox, &src_rec))) {
-		syslog(LOG_ERR, "rewrite_index_rec(%s) failed: %s",
+		syslog(LOG_ERR, "expunging src record (%s) failed: %s",
 		       src_mboxname, error_message(r));
 		txn->errstr = error_message(r);
 		ret = HTTP_SERVER_ERROR;
@@ -935,7 +946,7 @@ static int meth_delete(struct transaction_t *txn)
     record.system_flags |= FLAG_EXPUNGED;
 
     if ((r = mailbox_rewrite_index_record(mailbox, &record))) {
-	syslog(LOG_ERR, "rewrite_index_rec(%s) failed: %s",
+	syslog(LOG_ERR, "expunging record (%s) failed: %s",
 	       mailboxname, error_message(r));
 	txn->errstr = error_message(r);
 	ret = HTTP_SERVER_ERROR;
@@ -1378,7 +1389,7 @@ int meth_propfind(struct transaction_t *txn)
 
     if (!txn->req_tgt.collection) {
 	/* Add response for home-set collection */
-	if (add_prop_response(&fctx)) goto done;
+	if (add_prop_response(&fctx, 0)) goto done;
     }
 
     if (depth > 0) {
@@ -1823,6 +1834,8 @@ static int meth_put(struct transaction_t *txn)
 		       and re-test any preconditions. Either way,
 		       one of our records will have to be expunged.
 		    */
+		    int userflag;
+
 		    ret = HTTP_NO_CONTENT;
 
 		    /* Fetch index record for the resource */
@@ -1848,9 +1861,14 @@ static int meth_put(struct transaction_t *txn)
 		    }
 
 		    /* Perform the actual expunge */
-		    expunge->system_flags |= FLAG_EXPUNGED;
-		    if ((r = mailbox_rewrite_index_record(mailbox, expunge))) {
-			syslog(LOG_ERR, "rewrite_index_rec(%s) failed: %s",
+		    r = mailbox_user_flag(mailbox, DFLAG_UNBIND,  &userflag);
+		    if (!r) {
+			expunge->user_flags[userflag/32] |= 1<<(userflag&31);
+			expunge->system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
+			r = mailbox_rewrite_index_record(mailbox, expunge);
+		    }
+		    if (r) {
+			syslog(LOG_ERR, "expunging record (%s) failed: %s",
 			       mailboxname, error_message(r));
 			txn->errstr = error_message(r);
 			ret = HTTP_SERVER_ERROR;
@@ -1886,25 +1904,233 @@ static int meth_put(struct transaction_t *txn)
 }
 
 
-/* Report types */
+static int report_cal_query(xmlNodePtr inroot, struct propfind_ctx *fctx,
+			    struct caldav_db *caldavdb)
+{
+    int ret = 0;
+    xmlNodePtr node;
+
+    /* Parse children element of report */
+    for (node = inroot->children; node; node = node->next) {
+	if (node->type == XML_ELEMENT_NODE) {
+	    if (!xmlStrcmp(node->name, BAD_CAST "filter")) {
+		syslog(LOG_WARNING, "REPORT calendar-query w/filter");
+	    }
+	}
+    }
+
+    caldav_foreach(caldavdb, find_resource_props, fctx);
+
+    return ret;
+}
+
+
+static int report_cal_multiget(xmlNodePtr inroot, struct propfind_ctx *fctx,
+			       struct caldav_db *caldavdb)
+{
+    int ret = 0;
+    xmlNodePtr node;
+
+    /* Get props for each href */
+    for (node = inroot->children; node; node = node->next) {
+	if ((node->type == XML_ELEMENT_NODE) &&
+	    !xmlStrcmp(node->name, BAD_CAST "href")) {
+	    xmlChar *href = xmlNodeListGetString(inroot->doc, node->children, 1);
+	    const char *resource = strrchr((char *) href, '/') + 1;
+	    uint32_t uid = 0;
+
+	    /* Find message UID for the resource */
+	    caldav_read(caldavdb, resource, &uid);
+	    /* XXX  Check errors */
+
+	    find_resource_props(fctx, resource, uid);
+	}
+    }
+
+    return ret;
+}
+
+static int map_modseq_cmp(const struct index_map *m1,
+			  const struct index_map *m2)
+{
+    if (m1->record.modseq < m2->record.modseq) return -1;
+    if (m1->record.modseq > m2->record.modseq) return 1;
+    return 0;
+}
+
+static int report_sync_col(xmlNodePtr inroot, struct propfind_ctx *fctx,
+			   struct caldav_db *caldavdb __attribute__((unused)))
+{
+    int ret = 0, r, userflag;
+    struct mailbox *mailbox = fctx->mailbox;
+    modseq_t syncmodseq = 0, highestmodseq = mailbox->i.highestmodseq;
+    uint32_t limit = -1, recno, nresp;
+    xmlNodePtr node;
+    struct index_state istate;
+    struct index_record *record;
+    char tokenuri[MAX_MAILBOX_PATH+1];
+
+    /* XXX  Handle Depth (cal-home-set at toplevel) */
+
+    r = mailbox_user_flag(mailbox, DFLAG_UNBIND, &userflag);
+
+    /* Parse children element of report */
+    for (node = inroot->children; node; node = node->next) {
+	xmlNodePtr node2;
+	xmlChar *str;
+	if (node->type == XML_ELEMENT_NODE) {
+	    if (!xmlStrcmp(node->name, BAD_CAST "sync-token") &&
+		(str = xmlNodeListGetString(inroot->doc, node->children, 1))) {
+		if (xmlStrncmp(str, BAD_CAST XML_NS_CYRUS "sync/",
+			       strlen(XML_NS_CYRUS "sync/")) ||
+		    (sscanf(strrchr((char *) str, '/') + 1,
+			    MODSEQ_FMT, &syncmodseq) != 1) ||
+		    !syncmodseq ||
+		    (syncmodseq < mailbox->i.deletedmodseq) ||
+		    (syncmodseq > highestmodseq)) {
+		    /* DAV:valid-sync-token */
+		    *fctx->errstr = "Invalid sync-token";
+		    return HTTP_FORBIDDEN;
+		}
+	    }
+	    if (!xmlStrcmp(node->name, BAD_CAST "limit")) {
+		for (node2 = node->children; node2; node2 = node2->next) {
+		    if ((node2->type == XML_ELEMENT_NODE) &&
+			!xmlStrcmp(node2->name, BAD_CAST "nresults") &&
+			(!(str = xmlNodeListGetString(inroot->doc,
+						      node2->children, 1)) ||
+			 (sscanf((char *) str, "%u", &limit) != 1))) {
+			*fctx->errstr = "Invalid limit";
+			return HTTP_FORBIDDEN;
+		    }
+		}
+	    }
+	}
+    }
+
+    /* Construct array of records for sorting and/or fetching cached header */
+    istate.mailbox = mailbox;
+    istate.map = xzmalloc(mailbox->i.num_records *
+			  sizeof(struct index_map));
+
+    /* Find which resources we need to report */
+    for (nresp = 0, recno = 1; recno <= mailbox->i.num_records; recno++) {
+
+	record = &istate.map[nresp].record;
+	if (mailbox_read_index_record(mailbox, recno, record)) {
+	    /* XXX  Corrupted record?  Should we bail? */
+	    continue;
+	}
+
+	if (record->modseq <= syncmodseq) {
+	    /* Resource not added/removed since last sync */
+	    continue;
+	}
+
+	if (record->user_flags[userflag / 32] & (1 << (userflag & 31))) {
+	    /* Resource replaced by a PUT, COPY, or MOVE - ignore it */
+	    continue;
+	}
+
+	if (!syncmodseq && (record->system_flags & FLAG_EXPUNGED)) {
+	    /* Initial sync - ignore unmapped resources */
+	    continue;
+	}
+
+	nresp++;
+    }
+
+    if (limit < nresp) {
+	/* Need to truncate the responses */
+	struct index_map *map = istate.map;
+
+	/* Sort the response records by modseq */
+	qsort(map, nresp, sizeof(struct index_map),
+	      (int (*)(const void *, const void *)) &map_modseq_cmp);
+
+	/* Our last response MUST be the last record with its modseq */
+	for (nresp = limit;
+	     nresp && map[nresp-1].record.modseq == map[nresp].record.modseq;
+	     nresp--);
+
+	if (!nresp) {
+	    /* DAV:number-of-matches-within-limits */
+	    *fctx->errstr = "Unable to truncate results";
+	    return HTTP_FORBIDDEN;  /* HTTP_NO_STORAGE ? */
+	}
+
+	/* highestmodseq will be modseq of last record we return */
+	highestmodseq = map[nresp-1].record.modseq;
+
+	/* Tell client we truncated the responses */
+	add_prop_response(fctx, HTTP_NO_STORAGE);
+    }
+
+    /* Report the resources within the client requested limit (if any) */
+    for (recno = 1; recno <= nresp; recno++) {
+	char *p, *resource = NULL;
+
+	record = &istate.map[recno-1].record;
+
+	/* Get resource filename from Content-Disposition header */
+	if ((p = index_getheader(&istate, recno, "Content-Disposition"))) {
+	    resource = strstr(p, "filename=") + 9;
+	}
+	if (!resource) continue;  /* No filename */
+	if ((p = strchr(resource, ';'))) *p = '\0';
+
+	if (record->system_flags & FLAG_EXPUNGED) {
+	    /* report as NOT FOUND
+	       find_resource_props() will append our resource name */
+	    find_resource_props(fctx, resource, 0 /* ignore record */);
+	}
+	else {
+	    fctx->record = record;
+	    find_resource_props(fctx, resource, record->uid);
+	}
+    }
+
+    /* Add sync-token element */
+    snprintf(tokenuri, MAX_MAILBOX_PATH,
+	     XML_NS_CYRUS "sync/" MODSEQ_FMT, highestmodseq);
+    xmlNewChild(fctx->root, NULL, BAD_CAST "sync-token", BAD_CAST tokenuri);
+
+    free(istate.map);
+
+    return ret;
+}
+
+
+/* Report types and flags */
 enum {
-    REPORT_CAL_QUERY = 0,
-    REPORT_CAL_MULTIGET,
-    REPORT_FB_QUERY,
-    REPORT_EXPAND_PROP,
-    REPORT_PRIN_PROP_SET,
-    REPORT_PRIN_MATCH,
-    REPORT_PRIN_PROP_SRCH
+    REPORT_NEED_MBOX  = (1<<0),
+    REPORT_NEED_DAVDB = (1<<1),
+    REPORT_NEED_PROPS = (1<<2)
 };
+
+typedef int (*report_proc_t)(xmlNodePtr inroot, struct propfind_ctx *fctx,
+			     struct caldav_db *caldavdb);
+
+static const struct report_type_t {
+    const char *name;
+    unsigned flags;
+    report_proc_t proc;
+} report_types[] = {
+    { "calendar-query", REPORT_NEED_MBOX|REPORT_NEED_DAVDB, &report_cal_query },
+    { "calendar-multiget", REPORT_NEED_MBOX|REPORT_NEED_DAVDB, &report_cal_multiget },
+    { "sync-collection", REPORT_NEED_MBOX|REPORT_NEED_PROPS, &report_sync_col },
+    { NULL, 0, NULL }
+};
+
 
 /* Perform a REPORT request */
 static int meth_report(struct transaction_t *txn)
 {
     int ret = 0, r;
     const char **hdr;
-    unsigned depth = 0, type;
-    xmlDocPtr indoc = NULL, outdoc = NULL;
-    xmlNodePtr root, cur;
+    unsigned depth = 0;
+    xmlNodePtr inroot = NULL, outroot = NULL, cur, prop = NULL;
+    const struct report_type_t *report = NULL;
     xmlNsPtr ns[NUM_NAMESPACE];
     char *server, *acl, mailboxname[MAX_MAILBOX_BUFFER];
     struct mailbox *mailbox = NULL;
@@ -1930,99 +2156,118 @@ static int meth_report(struct transaction_t *txn)
 	}
     }
 
-    /* Construct mailbox name corresponding to request target URI */
-    (void) target_to_mboxname(&txn->req_tgt, mailboxname);
-
-    /* Locate the mailbox */
-    if ((r = http_mlookup(mailboxname, &server, &acl, NULL))) {
-	syslog(LOG_ERR, "mlookup(%s) failed: %s",
-	       mailboxname, error_message(r));
-	txn->errstr = error_message(r);
-
-	switch (r) {
-	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
-	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
-	default: return HTTP_SERVER_ERROR;
-	}
-    }
-
-    /* Check ACL for current user */
-    if (!acl || !(cyrus_acl_myrights(httpd_authstate, acl) & DACL_READ)) {
-	/* DAV:need-privilege */
-	return HTTP_FORBIDDEN;
-    }
-
     /* Parse the REPORT body */
-    ret = parse_xml_body(txn, &root);
-    if (!root) {
+    ret = parse_xml_body(txn, &inroot);
+    if (!inroot) {
 	txn->errstr = "Missing request body";
 	return HTTP_BAD_REQUEST;
     }
     if (ret) goto done;
 
-    indoc = root->doc;
-
-    /* Make sure its a calendar element */
-    if (!xmlStrcmp(root->name, BAD_CAST "calendar-query")) {
-	type = REPORT_CAL_QUERY;
+    /* Check the report type against our supported list */
+    for (report = report_types; report && report->name; report++) {
+	if (!xmlStrcmp(inroot->name, BAD_CAST report->name)) break;
     }
-    else if (!xmlStrcmp(root->name, BAD_CAST "calendar-multiget")) {
-	type = REPORT_CAL_MULTIGET;
-    }
-    else {
+    if (!report || !report->name) {
+	syslog(LOG_WARNING, "REPORT %s", inroot->name);
 	txn->errstr = "Unsupported REPORT type";
-	return HTTP_NOT_IMPLEMENTED;
+	ret = HTTP_NOT_IMPLEMENTED;
+	goto done;
     }
 
-    /* Find child element of report */
-    for (cur = root->children;
-	 cur && cur->type != XML_ELEMENT_NODE; cur = cur->next);
-
-    /* Make sure its a prop element */
-    if (!cur || xmlStrcmp(cur->name, BAD_CAST "prop")) {
-	txn->errstr = "MIssing prop element";
-	return HTTP_BAD_REQUEST;
+    /* Parse children element of report */
+    for (cur = inroot->children; cur; cur = cur->next) {
+	if (cur->type == XML_ELEMENT_NODE) {
+	    if (!xmlStrcmp(cur->name, BAD_CAST "allprop")) {
+		syslog(LOG_WARNING, "REPORT %s w/allprop", report->name);
+		txn->errstr = "Unsupported REPORT option <allprop>";
+		ret = HTTP_NOT_IMPLEMENTED;
+		goto done;
+	    }
+	    else if (!xmlStrcmp(cur->name, BAD_CAST "propname")) {
+		syslog(LOG_WARNING, "REPORT %s w/propname", report->name);
+		txn->errstr = "Unsupported REPORT option <propname>";
+		ret = HTTP_NOT_IMPLEMENTED;
+		goto done;
+	    }
+	    else if (!xmlStrcmp(cur->name, BAD_CAST "prop")) {
+		prop = cur;
+		break;
+	    }
+	}
     }
 
-    if (server) {
-	/* Remote mailbox */
-	struct backend *be;
-
-	be = proxy_findserver(server, &http_protocol, httpd_userid,
-			      &backend_cached, NULL, NULL, httpd_in);
-	if (!be) return HTTP_UNAVAILABLE;
-
-	return http_pipe_req_resp(be, txn);
+    if (!prop && (report->flags & REPORT_NEED_PROPS)) {
+	txn->errstr = "Missing <prop> element in REPORT";
+	ret = HTTP_BAD_REQUEST;
+	goto done;
     }
-
-    /* Local Mailbox */
 
     /* Start construction of our multistatus response */
-    if (!(root = init_prop_response("multistatus", root->nsDef, ns))) {
-	ret = HTTP_SERVER_ERROR;
+    if (!(outroot = init_prop_response("multistatus", inroot->nsDef, ns))) {
 	txn->errstr = "Unable to create XML response";
+	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
-
-    outdoc = root->doc;
 
     /* Parse the list of properties and build a list of callbacks */
-    preload_proplist(cur->children, &elist);
+    if (prop) preload_proplist(prop->children, &elist);
 
-    /* Open mailbox for reading */
-    if ((r = http_mailbox_open(mailboxname, &mailbox, LOCK_SHARED))) {
-	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-	       mailboxname, error_message(r));
-	txn->errstr = error_message(r);
-	ret = HTTP_SERVER_ERROR;
-	goto done;
-    }
+    if (report->flags & REPORT_NEED_MBOX) {
+	/* Construct mailbox name corresponding to request target URI */
+	(void) target_to_mboxname(&txn->req_tgt, mailboxname);
 
-    /* Open the associated CalDAV database */
-    if ((r = caldav_open(mailbox, CALDAV_CREATE, &caldavdb))) {
-	txn->errstr = error_message(r);
-	ret = HTTP_SERVER_ERROR;
-	goto done;
+	/* Locate the mailbox */
+	if ((r = http_mlookup(mailboxname, &server, &acl, NULL))) {
+	    syslog(LOG_ERR, "mlookup(%s) failed: %s",
+		   mailboxname, error_message(r));
+	    txn->errstr = error_message(r);
+
+	    switch (r) {
+	    case IMAP_PERMISSION_DENIED: ret = HTTP_FORBIDDEN;
+	    case IMAP_MAILBOX_NONEXISTENT: ret = HTTP_NOT_FOUND;
+	    default: ret = HTTP_SERVER_ERROR;
+	    }
+	    goto done;
+	}
+
+	/* Check ACL for current user */
+	if (!acl || !(cyrus_acl_myrights(httpd_authstate, acl) & DACL_READ)) {
+	    /* DAV:need-privilege */
+	    ret = HTTP_FORBIDDEN;
+	    goto done;
+	}
+
+	if (server) {
+	    /* Remote mailbox */
+	    struct backend *be;
+
+	    be = proxy_findserver(server, &http_protocol, httpd_userid,
+				  &backend_cached, NULL, NULL, httpd_in);
+	    if (!be) ret = HTTP_UNAVAILABLE;
+	    else ret = http_pipe_req_resp(be, txn);
+	    goto done;
+	}
+
+	/* Local Mailbox */
+
+	/* Open mailbox for reading */
+	if ((r = http_mailbox_open(mailboxname, &mailbox, LOCK_SHARED))) {
+	    syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
+		   mailboxname, error_message(r));
+	    txn->errstr = error_message(r);
+	    ret = HTTP_SERVER_ERROR;
+	    goto done;
+	}
+
+	if (report->flags & REPORT_NEED_DAVDB) {
+	    /* Open the associated CalDAV database */
+	    if ((r = caldav_open(mailbox, CALDAV_CREATE, &caldavdb))) {
+		txn->errstr = error_message(r);
+		ret = HTTP_SERVER_ERROR;
+		goto done;
+	    }
+	}
     }
 
     /* Populate our propfind context */
@@ -2034,39 +2279,16 @@ static int meth_report(struct transaction_t *txn)
     fctx.mailbox = mailbox;
     fctx.record = NULL;
     fctx.elist = elist;
-    fctx.root = root;
+    fctx.root = outroot;
     fctx.ns = ns;
     fctx.errstr = &txn->errstr;
     fctx.ret = &ret;
 
-    switch (type) {
-    case REPORT_CAL_QUERY: {
-
-	/* XXX  TODO: Need to handle the filter */
-	caldav_foreach(caldavdb, find_resource_props, &fctx);
-    }
-	break;
-    case REPORT_CAL_MULTIGET:
-	/* Get props for each href */
-	for (; cur; cur = cur->next) {
-	    if ((cur->type == XML_ELEMENT_NODE) &&
-		!xmlStrcmp(cur->name, BAD_CAST "href")) {
-		xmlChar *href = xmlNodeListGetString(indoc, cur->children, 1);
-		const char *resource = strrchr((char *) href, '/') + 1;
-		uint32_t uid = 0;
-
-		/* Find message UID for the resource */
-		caldav_read(caldavdb, resource, &uid);
-		/* XXX  Check errors */
-
-		find_resource_props(&fctx, resource, uid);
-	    }
-	}
-	break;
-    }
+    /* Process the requested report */
+    ret = (*report->proc)(inroot, &fctx, caldavdb);
 
     /* Output the XML response */
-    xml_response(HTTP_MULTI_STATUS, txn, outdoc);
+    if (!ret) xml_response(HTTP_MULTI_STATUS, txn, outroot->doc);
 
   done:
     if (caldavdb) caldav_close(caldavdb);
@@ -2079,8 +2301,8 @@ static int meth_report(struct transaction_t *txn)
 	free(freeme);
     }
 
-    if (outdoc) xmlFreeDoc(outdoc);
-    if (indoc) xmlFreeDoc(indoc);
+    if (inroot) xmlFreeDoc(inroot->doc);
+    if (outroot) xmlFreeDoc(outroot->doc);
 
     return ret;
 }

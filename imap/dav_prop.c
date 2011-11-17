@@ -114,8 +114,9 @@ static xmlNodePtr add_prop(long status, xmlNodePtr resp, xmlNodePtr *stat,
 }
 
 
-/* Add a response tree to 'root' for the specified href and property list */
-int add_prop_response(struct propfind_ctx *fctx)
+/* Add a response tree to 'root' for the specified href and 
+   either error code or property list */
+int add_prop_response(struct propfind_ctx *fctx, long code)
 {
     xmlNodePtr resp, propstat[NUM_PROPSTAT];
     struct propfind_entry_list *e;
@@ -128,17 +129,25 @@ int add_prop_response(struct propfind_ctx *fctx)
     }
     xmlNewChild(resp, NULL, BAD_CAST "href", BAD_CAST fctx->req_tgt->path);
 
-    /* Process each property in the linked list */
-    memset(propstat, 0, NUM_PROPSTAT * sizeof(xmlNodePtr));
-    for (e = fctx->elist; e; e = e->next) {
-	if (e->get) {
-	    e->get(e->name, e->ns, fctx, resp, propstat, e->rock);
-	}
-	else {
-	    add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND], e->ns,
-		     e->name, NULL, NULL);
+    if (code) {
+	xmlNewChild(resp, NULL, BAD_CAST "status",
+		    BAD_CAST http_statusline(code));
+    }
+    else {
+	/* Process each property in the linked list */
+	memset(propstat, 0, NUM_PROPSTAT * sizeof(xmlNodePtr));
+	for (e = fctx->elist; e; e = e->next) {
+	    if (e->get) {
+		e->get(e->name, e->ns, fctx, resp, propstat, e->rock);
+	    }
+	    else {
+		add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND], e->ns,
+			 e->name, NULL, NULL);
+	    }
 	}
     }
+
+    fctx->record = NULL;
 
     return 0;
 }
@@ -205,14 +214,16 @@ int find_resource_props(void *rock, const char *resource, uint32_t uid)
     fctx->req_tgt->resource = p;
     fctx->req_tgt->reslen = strlen(p);
 
-    /* Fetch index record for the resource */
-    r = mailbox_find_index_record(fctx->mailbox, uid, &record);
-    /* XXX  Check errors */
+    if (uid && !fctx->record) {
+	/* Fetch index record for the resource */
+	r = mailbox_find_index_record(fctx->mailbox, uid, &record);
+	/* XXX  Check errors */
 
-    fctx->record = r ? NULL : &record;
+	fctx->record = r ? NULL : &record;
+    }
 
     /* Add response for target */
-    return add_prop_response(fctx);
+    return add_prop_response(fctx, (!uid || !fctx->record) ? HTTP_NOT_FOUND : 0);
 }
 
 /* mboxlist_findall() callback to find props on a collection */
@@ -268,7 +279,7 @@ int find_collection_props(char *mboxname,
     /* Add response for target collection */
     fctx->mailbox = mailbox;
     fctx->record = NULL;
-    if ((r = add_prop_response(fctx))) goto done;
+    if ((r = add_prop_response(fctx, 0))) goto done;
 
     if (fctx->depth > 1) {
 	/* Resource(s) */
@@ -427,6 +438,30 @@ static int proppatch_restype(xmlNodePtr prop, unsigned set,
 }
 
 
+/* Callback to fetch DAV:sync-token and CS:getctag */
+static int propfind_sync_token(const xmlChar *propname, xmlNsPtr ns,
+			       struct propfind_ctx *fctx, xmlNodePtr resp,
+			       xmlNodePtr *propstat,
+			       void *rock __attribute__((unused)))
+{
+    if (fctx->mailbox && !fctx->record) {
+	char sync[MAX_MAILBOX_PATH+1];
+
+	snprintf(sync, MAX_MAILBOX_PATH, XML_NS_CYRUS "sync/" MODSEQ_FMT,
+		 fctx->mailbox->i.highestmodseq);
+
+	add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK], ns,
+		 BAD_CAST propname, BAD_CAST sync, NULL);
+    }
+    else {
+	add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND], ns,
+		 BAD_CAST propname, NULL, NULL);
+    }
+
+    return 0;
+}
+
+
 /* Callback to fetch DAV:supported-report-set */
 static int propfind_reportset(const xmlChar *propname, xmlNsPtr ns,
 			      struct propfind_ctx *fctx, xmlNodePtr resp,
@@ -435,6 +470,15 @@ static int propfind_reportset(const xmlChar *propname, xmlNsPtr ns,
 {
     xmlNodePtr s, r, top = add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK], ns,
 				    BAD_CAST propname, NULL, NULL);
+
+    if ((fctx->req_tgt->namespace == URL_NS_CALENDAR ||
+	 fctx->req_tgt->namespace == URL_NS_ADDRESSBOOK) &&
+	!fctx->req_tgt->resource) {
+	s = xmlNewChild(top, NULL, BAD_CAST "supported-report", NULL);
+	r = xmlNewChild(s, NULL, BAD_CAST "report", NULL);
+	ensure_ns(fctx->ns, NS_DAV, resp->parent, XML_NS_CAL, "D");
+	xmlNewChild(r, fctx->ns[NS_DAV], BAD_CAST "sync-collection", NULL);
+    }
 
     if (fctx->req_tgt->namespace == URL_NS_CALENDAR) {
 	s = xmlNewChild(top, NULL, BAD_CAST "supported-report", NULL);
@@ -947,30 +991,6 @@ static int propfind_calhomeset(const xmlChar *propname, xmlNsPtr ns,
 }
 
 
-/* Callback to fetch CS:getctag */
-static int propfind_getctag(const xmlChar *propname, xmlNsPtr ns,
-			    struct propfind_ctx *fctx, xmlNodePtr resp,
-			    xmlNodePtr *propstat,
-			    void *rock __attribute__((unused)))
-{
-    if (fctx->mailbox && !fctx->record) {
-	char ctag[33]; /* UIDVALIDITY-EXISTS-LAST_UID */
-
-	sprintf(ctag, "%u-%u-%u", fctx->mailbox->i.uidvalidity,
-		fctx->mailbox->i.exists, fctx->mailbox->i.last_uid);
-
-	add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK], ns,
-		 BAD_CAST propname, BAD_CAST ctag, NULL);
-    }
-    else {
-	add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND], ns,
-		 BAD_CAST propname, NULL, NULL);
-    }
-
-    return 0;
-}
-
-
 /* Callback to fetch properties from resource header */
 static int propfind_fromhdr(const xmlChar *propname, xmlNsPtr ns,
 			    struct propfind_ctx *fctx, xmlNodePtr resp,
@@ -1116,6 +1136,7 @@ static const struct prop_entry prop_entries[] =
     { "lockdiscovery", NS_DAV, 1, NULL, NULL, NULL },
     { "resourcetype", NS_DAV, 1, propfind_restype, proppatch_restype, NULL },
     { "supportedlock", NS_DAV, 1, NULL, NULL, NULL },
+    { "sync-token", NS_DAV, 1, propfind_sync_token, NULL, NULL },
 
     /* WebDAV Versioning (RFC 3253) properties */
     { "supported-report-set", NS_DAV, 0, propfind_reportset, NULL, NULL },
@@ -1159,7 +1180,7 @@ static const struct prop_entry prop_entries[] =
     { "calendar-user-type", NS_CAL, 0, NULL, NULL, NULL },
 
     /* Calendar Server properties */
-    { "getctag", NS_CS, 1, propfind_getctag, NULL, NULL },
+    { "getctag", NS_CS, 1, propfind_sync_token, NULL, NULL },
 
     /* Apple properties */
     { "calendar-color", NS_APPLE, 0, propfind_fromdb, proppatch_todb, "APPLE" },
