@@ -219,6 +219,8 @@ struct mailbox {
     char *quotaroot;
     char *flagname[MAX_USER_FLAGS];
 
+    struct timeval starttime;
+
     /* change management */
     int modseq_dirty;
     int header_dirty;
