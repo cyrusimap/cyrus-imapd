@@ -1035,6 +1035,43 @@ out:
     return r;
 }
 
+
+static void prefetch_messages(struct index_state *state,
+			      const char *sequence, int usinguid)
+{
+    struct mailbox *mailbox = state->mailbox;
+    struct seqset *seq = NULL;
+    struct index_map *im;
+    unsigned checkval;
+    uint32_t msgno;
+    char *fname;
+    int fd;
+
+    syslog(LOG_ERR, "Prefetching initial parts of messages\n");
+
+    seq = _parse_sequence(state, sequence, usinguid);
+    if (!seq) return;
+
+    for (msgno = 1; msgno <= state->exists; msgno++) {
+	im = &state->map[msgno-1];
+	checkval = usinguid ? im->record.uid : msgno;
+	if (!seqset_ismember(seq, checkval))
+	    continue;
+
+	fname = mailbox_message_fname(mailbox, im->record.uid);
+	if (!fname)
+	    continue;
+
+	fd = open(fname, O_RDONLY, 0);
+	if (fd < 0)
+	    continue;
+
+	posix_fadvise(fd, 0, 16384, POSIX_FADV_WILLNEED);
+	close(fd);
+    }
+}
+
+
 /*
  * Perform the XRUNANNOTATOR command which runs the
  * annotator callout for each message in the given sequence.
@@ -1071,6 +1108,8 @@ int index_run_annotator(struct index_state *state,
 
     seq = _parse_sequence(state, sequence, usinguid);
     if (!seq) goto out;
+
+    prefetch_messages(state, sequence, usinguid);
 
     for (msgno = 1; msgno <= state->exists; msgno++) {
 	im = &state->map[msgno-1];
