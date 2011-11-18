@@ -212,6 +212,10 @@ sub _params_defaults
     $params->{uid} = $self->_generate_uid()
 	unless defined $params->{uid};
 
+    $params->{body} = "This is a generated test email.  " .
+		      "If received, please notify $admin\r\n"
+	unless defined $params->{body};
+
     $params->{extra_lines} = int($self->{min_extra_lines} +
 				 rand($self->{max_extra_lines} -
 				      $self->{min_extra_lines}))
@@ -264,7 +268,7 @@ sub generate
 	}
     }
     $msg->add_header('X-Cassandane-Unique', _generate_unique());
-    $msg->set_body("This is a generated test email.  If received, please notify $admin\r\n$extra");
+    $msg->set_body($params->{body} . $extra);
     $msg->set_attributes(uid => $params->{uid});
 
     return $msg;
