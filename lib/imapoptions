@@ -402,6 +402,10 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* The password to use for authentication to the backend server hostname
    (where hostname is the short hostname of the server) - Cyrus Murder */
 
+{ "httpallowcompress", 1, SWITCH }
+/* If enabled, the server will compress responses if the client
+   indicates that it can accept them. */
+
 { "httpdocroot", NULL, STRING }
 /* If set, http will serve the static content (html/text/jpeg/gif
    files, etc) rooted at this directory.  Otherwise, httpd will not
@@ -410,8 +414,7 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "httptimeout", 5, INT }
 /* Set the length of the HTTP server's inactivity autologout timer,    
    in minutes.  The default is 5.  The minimum value is 0, which will
-   disable persistent 
-connections. */
+   disable persistent connections. */
 
 { "idlesocket", "{configdirectory}/socket/idle", STRING }
 /* Unix domain socket that idled listens on. */

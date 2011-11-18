@@ -848,7 +848,8 @@ static void cmdloop(void)
     memset(&txn, 0, sizeof(struct transaction_t));
 
 #ifdef HAVE_ZLIB
-    if (deflateInit2(&txn.zstrm, Z_DEFAULT_COMPRESSION, Z_DEFLATED,
+    if (config_getswitch(IMAPOPT_HTTPALLOWCOMPRESS) &&
+	deflateInit2(&txn.zstrm, Z_DEFAULT_COMPRESSION, Z_DEFLATED,
 		     16+MAX_WBITS, MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY) == Z_OK) {
 	gzip_enabled = 1;
     }
