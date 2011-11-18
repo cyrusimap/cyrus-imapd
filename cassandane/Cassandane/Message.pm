@@ -196,6 +196,12 @@ sub set_attributes
     }
 }
 
+sub has_attribute
+{
+    my ($self, $name) = @_;
+    return exists $self->{attrs}->{lc($name)};
+}
+
 sub get_attribute
 {
     my ($self, $name) = @_;
@@ -213,9 +219,22 @@ sub _validate_ea
     my ($self, $ea) = @_;
 
     die "Bad entry \"$ea->{entry}\""
-	unless $ea->{entry} =~ m/^(\/[a-z0-9]+)*$/i;
+	unless $ea->{entry} =~ m/^(\/[a-z0-9.]+)*$/i;
     die "Bad attrib \"$ea->{attrib}\""
 	unless $ea->{attrib} =~ m/^value.(shared|priv)$/i;
+}
+
+sub has_annotation
+{
+    my $self = shift;
+    my $ea = shift;
+    if (ref $ea ne 'HASH')
+    {
+	$ea = { entry => $ea, attrib => shift };
+    }
+
+    $self->_validate_ea($ea);
+    return $self->has_attribute($self->_annotation_key($ea));
 }
 
 sub get_annotation

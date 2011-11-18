@@ -377,9 +377,18 @@ sub check_messages
 	foreach my $ea ($expmsg->list_annotations())
 	{
 	    xlog "checking annotation ($ea->{entry} $ea->{attrib})";
-	    $self->assert_not_null($actmsg->get_annotation($ea));
-	    $self->assert_str_equals($expmsg->get_annotation($ea),
-				     $actmsg->get_annotation($ea));
+	    $self->assert($actmsg->has_annotation($ea));
+	    my $expval = $expmsg->get_annotation($ea);
+	    my $actval = $actmsg->get_annotation($ea);
+	    if (defined $expval)
+	    {
+		$self->assert_not_null($actval);
+		$self->assert_str_equals($expval, $actval);
+	    }
+	    else
+	    {
+		$self->assert_null($actval);
+	    }
 	}
     }
 
