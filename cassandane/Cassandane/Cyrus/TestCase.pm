@@ -365,7 +365,7 @@ sub check_messages
 	}
 
 	# check optional structured attributes
-	foreach my $a (qw(flags))
+	foreach my $a (qw(flags modseq))
 	{
 	    next unless defined $expmsg->get_attribute($a);
 	    xlog "checking $a";
