@@ -1021,8 +1021,12 @@ int index_store(struct index_state *state, char *sequence,
     }
 
 out:
-    if (storeargs->operation == STORE_ANNOTATION && !r)
-	annotatemore_commit();
+    if (storeargs->operation == STORE_ANNOTATION) {
+	if (r)
+	    annotatemore_abort();
+	else
+	    r = annotatemore_commit();
+    }
     seqset_free(seq);
     index_unlock(state);
     index_tellchanges(state, storeargs->usinguid, storeargs->usinguid,
