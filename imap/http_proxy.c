@@ -730,9 +730,11 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
     if (!r) {
 	if (code == 100) { /* Continue */
 	    /* Read body */
-	    txn->flags |= HTTP_READBODY;
-	    r = read_body(httpd_in, txn->req_hdrs,
-			  &txn->req_body, &txn->errstr);
+	    if (!(txn->flags & HTTP_READBODY)) {
+		txn->flags |= HTTP_READBODY;
+		r = read_body(httpd_in, txn->req_hdrs,
+			      &txn->req_body, &txn->errstr);
+	    }
 	    if (r) {
 		/* Couldn't get the body and can't finish request */
 		txn->flags |= HTTP_CLOSE;
