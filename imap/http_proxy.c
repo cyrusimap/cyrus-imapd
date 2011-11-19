@@ -398,7 +398,6 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 		    /* Don't care about "realm" in server challenge */
 		    const char *authid =
 			callback_getdata(s->saslconn, cb, SASL_CB_AUTHNAME);
-		    userid = callback_getdata(s->saslconn, cb, SASL_CB_USER);
 		    pass = callback_getdata(s->saslconn, cb, SASL_CB_PASS);
 
 		    buf_reset(&buf);
