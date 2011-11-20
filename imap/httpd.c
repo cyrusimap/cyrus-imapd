@@ -91,7 +91,10 @@
 #include "rfc822date.h"
 #include "tok.h"
 
+#ifdef WITH_CALDAV
 #include <libical/ical.h>
+#endif
+
 #include <libxml/tree.h>
 #include <libxml/HTMLtree.h>
 #include <libxml/uri.h>
@@ -399,9 +402,11 @@ int service_init(int argc __attribute__((unused)),
 #ifdef HAVE_ZLIB
 	buf_printf(&serverinfo, " zlib/%s", ZLIB_VERSION);
 #endif
-	buf_printf(&serverinfo, " libxml/%s libical/%s",
-		   LIBXML_DOTTED_VERSION, ICAL_VERSION);
+	buf_printf(&serverinfo, " libxml/%s", LIBXML_DOTTED_VERSION);
+#ifdef WITH_CALDAV
+	buf_printf(&serverinfo, " libical/%s", ICAL_VERSION);
     }
+#endif
 
     return 0;
 }
@@ -1116,10 +1121,12 @@ static void cmdloop(void)
 	    if (enc) free(enc);
 	}
 
+	/* XXX  Check if method expects a body.  If not, return 415 */
+
 	/* Process the requested method */
 	if (!ret) ret = (*meth_proc)(&txn);
 
-	/* Handle errors (success responses handled by method functions */
+	/* Handle errors (success responses handled by method functions) */
       error:
 	if (ret) error_response(ret, &txn);
 
