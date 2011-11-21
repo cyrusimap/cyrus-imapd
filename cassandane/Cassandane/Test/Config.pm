@@ -128,21 +128,14 @@ sub test_clone
     $self->assert(!defined $c2->get('foo'));
 }
 
-sub test_generate
+sub _generate_and_read
 {
-    my ($self) = @_;
-
-    my $c = Cassandane::Config->new();
-    $c->set(foo => 'bar');
-    $c->set(quux => 'foonly');
-    my $c2 = $c->clone();
-    $c2->set(hello => 'world');
-    $c2->set(foo => 'baz');
+    my ($self, $c) = @_;
 
     # Write the file
     my ($fh, $filename) = tempfile()
 	or die "Cannot open temporary file: $!";
-    $c2->generate($filename);
+    $c->generate($filename);
 
     # read it back again to check
     my %nv;
@@ -154,13 +147,29 @@ sub test_generate
 	$nv{$n} = $v;
     }
 
-    $self->assert(scalar(keys(%nv)) == 3);
-    $self->assert($nv{foo} eq 'baz');
-    $self->assert($nv{hello} eq 'world');
-    $self->assert($nv{quux} eq 'foonly');
-
     close $fh;
     unlink $filename;
+
+    return \%nv;
+}
+
+sub test_generate
+{
+    my ($self) = @_;
+
+    my $c = Cassandane::Config->new();
+    $c->set(foo => 'bar');
+    $c->set(quux => 'foonly');
+    my $c2 = $c->clone();
+    $c2->set(hello => 'world');
+    $c2->set(foo => 'baz');
+
+    my $nv = $self->_generate_and_read($c2);
+
+    $self->assert(scalar(keys(%$nv)) == 3);
+    $self->assert($nv->{foo} eq 'baz');
+    $self->assert($nv->{hello} eq 'world');
+    $self->assert($nv->{quux} eq 'foonly');
 }
 
 sub test_variables
@@ -173,30 +182,30 @@ sub test_variables
     my $c2 = $c->clone();
     $c2->set(hello => 'w@grade@rld');
     $c2->set(foo => 'baz');
-    $c2->set_variables('grade' => 'A');
 
-    # Write the file
-    my ($fh, $filename) = tempfile()
-	or die "Cannot open temporary file: $!";
-    $c2->generate($filename);
-
-    # read it back again to check
-    my %nv;
-    while (<$fh>)
+    # missing @grade@ variable throws an exception
+    my $nv;
+    eval
     {
-	chomp;
-	my ($n, $v) = m/^([^:\s]+):\s*(\S+)$/;
-	$self->assert(defined $v);
-	$nv{$n} = $v;
-    }
+	$nv = $self->_generate_and_read($c2);
+    };
+    $self->assert(defined $@ && $@ =~ m/Variable grade not defined/i);
 
-    $self->assert(scalar(keys(%nv)) == 3);
-    $self->assert($nv{foo} eq 'baz');
-    $self->assert($nv{hello} eq 'wArld');
-    $self->assert($nv{quux} eq 'foAnly');
+    # @grade@ on the parent affects all variable expansions
+    $c->set_variables('grade' => 'B');
+    $nv = $self->_generate_and_read($c2);
+    $self->assert_num_equals(3, scalar(keys(%$nv)));
+    $self->assert_str_equals('baz', $nv->{foo});
+    $self->assert_str_equals('wBrld', $nv->{hello});
+    $self->assert_str_equals('foBnly', $nv->{quux});
 
-    close $fh;
-    unlink $filename;
+    # @grade@ on the child overrides @grade@ on the parent
+    $c2->set_variables('grade' => 'A');
+    $nv = $self->_generate_and_read($c2);
+    $self->assert_num_equals(scalar(keys(%$nv)), 3);
+    $self->assert_str_equals('baz', $nv->{foo});
+    $self->assert_str_equals('wArld', $nv->{hello});
+    $self->assert_str_equals('foAnly', $nv->{quux});
 }
 
 
