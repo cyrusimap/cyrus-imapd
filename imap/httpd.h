@@ -51,6 +51,7 @@
 #include <zlib.h>
 #endif /* HAVE_ZLIB */
 
+#include "dav_prop.h"
 #include "mailbox.h"
 #include "spool.h"
 
@@ -198,6 +199,7 @@ struct transaction_t {
     const char *loc;	    		/* Location: of resp representation */
     const char *etag;			/* ETag: of response representation */
     const char *errstr;			/* Error string */
+    const struct precond *precond;	/* [Cal]DAV precondition */
     struct resp_body_t resp_body;	/* Response body meta-data */
 #ifdef HAVE_ZLIB
     z_stream zstrm;			/* Compression context */

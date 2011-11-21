@@ -129,16 +129,45 @@ enum {
 };
 #define NUM_PROPSTAT 4
 
+/* Index into preconditions array */
+enum {
+    DAV_PROT_PROP = 0,
+    DAV_SUPP_REPORT,
+    DAV_NEED_PRIVS,
+    DAV_NO_INVERT,
+    DAV_NO_ABSTRACT,
+    DAV_SUPP_PRIV,
+    DAV_RECOG_PRINC,
+    DAV_OVER_QUOTA,
+    DAV_NO_DISK_SPACE,
+    DAV_VALID_RESTYPE,
+    DAV_SYNC_TOKEN,
+    DAV_OVER_LIMIT,
+    CALDAV_SUPP_DATA,
+    CALDAV_VALID_DATA
+};
+
+/* Structure for precondition/postcondition errors */
+struct precond {
+    const char *name;			/* Property name */
+    unsigned ns;			/* Index into known namespace array */
+};
+
+extern const struct precond preconds[];
+
 
 /* Parse the requested properties and create a linked list of fetch callbacks */
 int preload_proplist(xmlNodePtr proplist, struct propfind_entry_list **list);
 
-/* Initialize an XML tree for a property response */
-xmlNodePtr init_prop_response(const char *resp,
-			      xmlNsPtr reqNs, xmlNsPtr *respNs);
+/* Initialize an XML tree */
+xmlNodePtr init_xml_response(const char *resp,
+			     xmlNsPtr reqNs, xmlNsPtr *respNs);
+
+xmlNodePtr xml_add_error(xmlNodePtr root, const struct precond *precond,
+			 xmlNsPtr *avail_ns);
 
 /* Add a response tree to 'root' for the specified href and property list */
-int add_prop_response(struct propfind_ctx *fctx, long code);
+int xml_add_response(struct propfind_ctx *fctx, long code);
 
 /* caldav_foreach() callback to find props on a resource */
 int find_resource_props(void *rock, const char *resource, uint32_t uid);

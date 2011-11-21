@@ -867,6 +867,7 @@ static void cmdloop(void)
 	txn.flags = !httpd_timeout ? HTTP_CLOSE : 0;
 	txn.auth_chal.param = NULL;
 	txn.loc = txn.etag = NULL;
+	txn.precond = NULL;
 	txn.errstr = NULL;
 	txn.req_hdrs = NULL;
 	memset(&txn.resp_body, 0, sizeof(struct resp_body_t));
@@ -1672,21 +1673,6 @@ void write_body(long code, struct transaction_t *txn,
 }
 
 
-/* Output an HTTP error response with optional text/plain body */
-void error_response(long code, struct transaction_t *txn)
-{
-    struct resp_body_t *resp_body = &txn->resp_body;
-
-    if (txn->meth[0] == 'H') txn->errstr = NULL;
-    if (txn->errstr) {
-	resp_body->len = strlen(txn->errstr)+2;
-	resp_body->type = "text/plain";
-    }
-    response_header(code, txn);
-    if (txn->errstr) prot_printf(httpd_out, "%s\r\n", txn->errstr);
-}
-
-
 /* Output an HTTP response with text/html body */
 void html_response(long code, struct transaction_t *txn, xmlDocPtr html)
 {
@@ -1706,6 +1692,7 @@ void html_response(long code, struct transaction_t *txn, xmlDocPtr html)
 	xmlFree(buf);
     }
     else {
+	txn->precond = NULL;
 	txn->errstr = "Error dumping HTML tree";
 	error_response(HTTP_SERVER_ERROR, txn);
     }
@@ -1731,9 +1718,33 @@ void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
 	xmlFree(buf);
     }
     else {
+	txn->precond = NULL;
 	txn->errstr = "Error dumping XML tree";
 	error_response(HTTP_SERVER_ERROR, txn);
     }
+}
+
+
+/* Output an HTTP error response with optional XML or text body */
+void error_response(long code, struct transaction_t *txn)
+{
+    if (txn->meth[0] == 'H') {
+	txn->precond = NULL;
+	txn->errstr = NULL;
+    }
+
+    if (txn->precond) {
+	xmlNodePtr root = xml_add_error(NULL, txn->precond, NULL);
+
+	if (root) {
+	    xml_response(code, txn, root->doc);
+	    xmlFreeDoc(root->doc);
+	    return;
+	}
+    }
+
+    if (txn->errstr) txn->resp_body.type = "text/plain";
+    write_body(code, txn, txn->errstr, txn->errstr ? strlen(txn->errstr) : 0);
 }
 
 

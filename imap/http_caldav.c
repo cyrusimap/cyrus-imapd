@@ -54,7 +54,7 @@
  *   - GET/HEAD on collections (iCalendar stream of resources)
  *   - calendar-query REPORT filtering (optimize for time range, component type)
  *   - free-busy-query REPORT
- *   - sync-collection REPORT (can probably use MODSEQs -- as CTag too)
+ *   - sync-collection REPORT (need to handle Depth infinity)
  *   - Use XML precondition error codes
  *   - Add WebDAV LOCKing?  Does anybody use it?
  */
@@ -208,7 +208,7 @@ static int meth_acl(struct transaction_t *txn)
     /* Check ACL for current user */
     if (!aclstr ||
 	!(cyrus_acl_myrights(httpd_authstate, aclstr) & DACL_ADMIN)) {
-	/* DAV:need-privilege */
+	/* DAV:need-privileges */
 	return HTTP_FORBIDDEN;
     }
 
@@ -537,7 +537,7 @@ static int meth_copy(struct transaction_t *txn)
 	!(cyrus_acl_myrights(httpd_authstate, acl) & DACL_READ) ||
 	((txn->meth[0] == 'M') &&
 	 !(cyrus_acl_myrights(httpd_authstate, acl) & DACL_RMRSRC))) {
-	/* DAV:need-privilege */
+	/* DAV:need-privileges */
 	return HTTP_FORBIDDEN;
     }
 
@@ -568,7 +568,7 @@ static int meth_copy(struct transaction_t *txn)
     if (!acl ||
 	!((cyrus_acl_myrights(httpd_authstate, acl) & DACL_WRITECONT) ||
 	  !(cyrus_acl_myrights(httpd_authstate, acl) & DACL_ADDRSRC))) {
-	/* DAV:need-privilege */
+	/* DAV:need-privileges */
 	return HTTP_FORBIDDEN;
     }
 
@@ -871,7 +871,7 @@ static int meth_delete(struct transaction_t *txn)
 	(txn->req_tgt.resource &&
 	 !(cyrus_acl_myrights(httpd_authstate, acl) & DACL_RMRSRC)) ||
 	!(cyrus_acl_myrights(httpd_authstate, acl) & DACL_RMCOL)) {
-	/* DAV:need-privilege */
+	/* DAV:need-privileges */
 	return HTTP_FORBIDDEN;
     }
 
@@ -1003,7 +1003,7 @@ static int meth_get(struct transaction_t *txn)
 
     /* Check ACL for current user */
     if (!acl || !(cyrus_acl_myrights(httpd_authstate, acl) & DACL_READ)) {
-	/* DAV:need-privilege */
+	/* DAV:need-privileges */
 	return HTTP_FORBIDDEN;
     }
 
@@ -1084,7 +1084,7 @@ static int meth_get(struct transaction_t *txn)
 /*
  * preconditions:
  *   DAV:resource-must-be-null
- *   DAV:need-privilege
+ *   DAV:need-privileges
  *   DAV:valid-resourcetype
  *   CALDAV:calendar-collection-location-ok
  *   CALDAV:valid-calendar-data (CALDAV:calendar-timezone)
@@ -1182,10 +1182,10 @@ static int meth_mkcol(struct transaction_t *txn)
 
     if (instr) {
 	/* Start construction of our mkcol/mkcalendar response */
-	if (!(root = init_prop_response(txn->meth[3] == 'A' ?
-					"mkcalendar-response" :
-					"mkcol-response",
-					root->nsDef, ns))) {
+	if (!(root = init_xml_response(txn->meth[3] == 'A' ?
+				       "mkcalendar-response" :
+				       "mkcol-response",
+				       root->nsDef, ns))) {
 	    ret = HTTP_SERVER_ERROR;
 	    txn->errstr = "Unable to create XML response";
 	    goto done;
@@ -1361,7 +1361,7 @@ int meth_propfind(struct transaction_t *txn)
     }
 
     /* Start construction of our multistatus response */
-    if (!(root = init_prop_response("multistatus", root->nsDef, ns))) {
+    if (!(root = init_xml_response("multistatus", root->nsDef, ns))) {
 	ret = HTTP_SERVER_ERROR;
 	txn->errstr = "Unable to create XML response";
 	goto done;
@@ -1389,7 +1389,7 @@ int meth_propfind(struct transaction_t *txn)
 
     if (!txn->req_tgt.collection) {
 	/* Add response for home-set collection */
-	if (add_prop_response(&fctx, 0)) goto done;
+	if (xml_add_response(&fctx, 0)) goto done;
     }
 
     if (depth > 0) {
@@ -1477,7 +1477,7 @@ static int meth_proppatch(struct transaction_t *txn)
 
     /* Check ACL for current user */
     if (!acl || !(cyrus_acl_myrights(httpd_authstate, acl) & DACL_WRITEPROPS)) {
-	/* DAV:need-privilege */
+	/* DAV:need-privileges */
 	return HTTP_FORBIDDEN;
     }
 
@@ -1515,7 +1515,7 @@ static int meth_proppatch(struct transaction_t *txn)
     instr = root->children;
 
     /* Start construction of our multistatus response */
-    if (!(root = init_prop_response("multistatus", root->nsDef, ns))) {
+    if (!(root = init_xml_response("multistatus", root->nsDef, ns))) {
 	ret = HTTP_SERVER_ERROR;
 	txn->errstr = "Unable to create XML response";
 	goto done;
@@ -1643,7 +1643,7 @@ static int meth_put(struct transaction_t *txn)
     if (!acl ||
 	!((cyrus_acl_myrights(httpd_authstate, acl) & DACL_WRITECONT) ||
 	  !(cyrus_acl_myrights(httpd_authstate, acl) & DACL_ADDRSRC))) {
-	/* DAV:need-privilege */
+	/* DAV:need-privileges */
 	return HTTP_FORBIDDEN;
     }
 
@@ -2063,7 +2063,7 @@ static int report_sync_col(xmlNodePtr inroot, struct propfind_ctx *fctx,
 	highestmodseq = map[nresp-1].record.modseq;
 
 	/* Tell client we truncated the responses */
-	add_prop_response(fctx, HTTP_NO_STORAGE);
+	xml_add_response(fctx, HTTP_NO_STORAGE);
     }
 
     /* Report the resources within the client requested limit (if any) */
@@ -2170,8 +2170,10 @@ static int meth_report(struct transaction_t *txn)
     }
     if (!report || !report->name) {
 	syslog(LOG_WARNING, "REPORT %s", inroot->name);
+	/* DAV:supported-report */
+	txn->precond = &preconds[DAV_SUPP_REPORT];
 	txn->errstr = "Unsupported REPORT type";
-	ret = HTTP_NOT_IMPLEMENTED;
+	ret = HTTP_FORBIDDEN;
 	goto done;
     }
 
@@ -2204,7 +2206,7 @@ static int meth_report(struct transaction_t *txn)
     }
 
     /* Start construction of our multistatus response */
-    if (!(outroot = init_prop_response("multistatus", inroot->nsDef, ns))) {
+    if (!(outroot = init_xml_response("multistatus", inroot->nsDef, ns))) {
 	txn->errstr = "Unable to create XML response";
 	ret = HTTP_SERVER_ERROR;
 	goto done;
@@ -2233,7 +2235,7 @@ static int meth_report(struct transaction_t *txn)
 
 	/* Check ACL for current user */
 	if (!acl || !(cyrus_acl_myrights(httpd_authstate, acl) & DACL_READ)) {
-	    /* DAV:need-privilege */
+	    /* DAV:need-privileges */
 	    ret = HTTP_FORBIDDEN;
 	    goto done;
 	}
