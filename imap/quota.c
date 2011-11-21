@@ -317,7 +317,6 @@ static void test_sync_done(const char *mboxname)
 static int fixquota_addroot(struct quota *q,
 			    void *rock __attribute__((unused)))
 {
-    struct quota lquota;
     struct txn *tid = NULL;
     int r;
 
