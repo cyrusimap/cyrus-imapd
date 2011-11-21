@@ -387,9 +387,10 @@ void uni2searchform(struct convert_rock *rock, int c)
     int code;
     unsigned char table16, table8;
 
-    /* invalid character becomes a capital X  */
+    /* invalid character becomes an Oxff - that's illegal utf-8,
+     * so it won't match */
     if (c == 0xfffd) {
-	convert_putc(rock->next, 'X');
+	convert_putc(rock->next, 0xff);
 	return;
     }
 
@@ -481,19 +482,19 @@ void byte2search(struct convert_rock *rock, int c)
     unsigned char b = (unsigned char)c;
 
     if (c == 0xfffd) {
-	c = 'X'; /* searchable by invalid character! */
+	c = 0xff; /* searchable by invalid character! */
     }
 
     /* check our "in_progress" matches to see if they're still valid */
     for (i = 0, cur = 0; i < s->max_start; i++) {
 	/* no more active offsets */
-	if (s->starts[i] == -1) 
+	if (s->starts[i] == -1)
 	    break;
 
 	/* if we've passed one that's not ongoing, copy back */
-	if (cur < i) {
+	if (cur < i)
 	    s->starts[cur] = s->starts[i];
-	}
+
 	/* check that the substring is still maching */
 	if (b == s->substr[s->offset - s->starts[i]]) {
 	    if (s->offset - s->starts[i] == s->patlen - 1) {
@@ -502,7 +503,7 @@ void byte2search(struct convert_rock *rock, int c)
 	    }
 	    else {
 		/* keep this one, it's ongoing */
-	    	cur++;
+		cur++;
 	    }
 	}
     }
@@ -511,7 +512,7 @@ void byte2search(struct convert_rock *rock, int c)
 	/* have to treat this one specially! */
 	if (s->patlen == 1)
 	    s->havematch = 1;
-	else 
+	else
 	    s->starts[cur++] = s->offset;
     }
     /* empty out any others that aren't being kept */
