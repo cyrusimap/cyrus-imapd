@@ -857,6 +857,7 @@ static void cmdloop(void)
     memset(&txn, 0, sizeof(struct transaction_t));
 
 #ifdef HAVE_ZLIB
+    /* Always use gzip format because IE incorrectly uses raw deflate */
     if (config_getswitch(IMAPOPT_HTTPALLOWCOMPRESS) &&
 	deflateInit2(&txn.zstrm, Z_DEFAULT_COMPRESSION, Z_DEFLATED,
 		     16+MAX_WBITS, MAX_MEM_LEVEL, Z_DEFAULT_STRATEGY) == Z_OK) {
@@ -1615,10 +1616,13 @@ static int is_incompressible(const char *type)
 void write_body(long code, struct transaction_t *txn,
 		const char *buf, unsigned len)
 {
+#define GZIP_MIN_LEN 300
+
     unsigned is_chunked = (txn->flags & HTTP_CHUNKED);
 
     if (code) {
-	if (is_incompressible(txn->resp_body.type)) txn->flags &= ~HTTP_GZIP;
+	if ((!is_chunked && len < GZIP_MIN_LEN) ||
+	    is_incompressible(txn->resp_body.type)) txn->flags &= ~HTTP_GZIP;
 
 	if (txn->flags & HTTP_GZIP) {
 	    txn->resp_body.enc = "gzip";
