@@ -291,33 +291,109 @@ EOF
     $self->assert("" . $m eq $exp);
 }
 
+# Test setting raw text
+sub test_setting_raw
+{
+    my ($self) = @_;
+    my $m = Cassandane::Message->new();
+
+    my $txt = <<'EOF';
+From: Fred J. Bloggs <fbloggs@fastmail.fm>
+To: Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>
+Subject: Hello World
+Received: from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software);
+	Fri, 29 Oct 2010 13:05:01 +1100
+Received: from mail.bar.com (mail.bar.com [10.0.0.1])
+	by mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100
+Received: from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by
+	mail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100
+
+This is a message to let you know
+that I'm alive and well
+EOF
+    $txt =~ s/\n/\r\n/g;
+
+    my $exp = <<'EOF';
+From: Fred J. Bloggs <fbloggs@fastmail.fm>
+To: Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>
+Subject: Hello World
+Received: from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software); Fri, 29 Oct 2010 13:05:01 +1100
+Received: from mail.bar.com (mail.bar.com [10.0.0.1]) by mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100
+Received: from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by mail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100
+
+This is a message to let you know
+that I'm alive and well
+EOF
+    $exp =~ s/\n/\r\n/g;
+
+    $m->set_raw($txt);
+    $self->assert($m->get_headers('from')->[0] eq 'Fred J. Bloggs <fbloggs@fastmail.fm>');
+    $self->assert($m->get_headers('to')->[0] eq 'Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>');
+    $self->assert($m->get_headers('Subject')->[0] eq 'Hello World');
+    $self->assert($m->get_headers('received')->[0] eq "from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software); Fri, 29 Oct 2010 13:05:01 +1100");
+    $self->assert($m->get_headers("received")->[1] eq "from mail.bar.com (mail.bar.com [10.0.0.1]) by mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100");
+    $self->assert($m->get_headers("received")->[2] eq "from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by mail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100");
+    $self->assert($m->as_string eq $exp);
+    $self->assert("" . $m eq $exp);
+
+    $m = Cassandane::Message->new(raw => $txt);
+    $self->assert($m->get_headers('from')->[0] eq 'Fred J. Bloggs <fbloggs@fastmail.fm>');
+    $self->assert($m->get_headers('to')->[0] eq 'Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>');
+    $self->assert($m->get_headers('Subject')->[0] eq 'Hello World');
+    $self->assert($m->get_headers('received')->[0] eq "from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software); Fri, 29 Oct 2010 13:05:01 +1100");
+    $self->assert($m->get_headers("received")->[1] eq "from mail.bar.com (mail.bar.com [10.0.0.1]) by mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100");
+    $self->assert($m->get_headers("received")->[2] eq "from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by mail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100");
+    $self->assert($m->as_string eq $exp);
+    $self->assert("" . $m eq $exp);
+}
+
 # Test message attributes
 sub test_attributes
 {
     my ($self) = @_;
     my $m = Cassandane::Message->new();
 
+    $self->assert(!$m->has_attribute('uid'));
     $self->assert(!defined $m->get_attribute('uid'));
     $self->assert(!defined $m->get_attribute('UID'));
     $self->assert(!defined $m->get_attribute('uId'));
+    $self->assert(!$m->has_attribute('internaldate'));
     $self->assert(!defined $m->get_attribute('internaldate'));
 
     $m->set_attribute('uid', 123);
+    $self->assert($m->has_attribute('uid'));
     $self->assert($m->get_attribute('uid') == 123);
     $self->assert($m->get_attribute('UID') == 123);
     $self->assert($m->get_attribute('uId') == 123);
+    $self->assert(!$m->has_attribute('internaldate'));
     $self->assert(!defined $m->get_attribute('internaldate'));
 
     $m->set_attribute('uid');
+    $self->assert($m->has_attribute('uid'));
     $self->assert(!defined $m->get_attribute('uid'));
     $self->assert(!defined $m->get_attribute('UID'));
     $self->assert(!defined $m->get_attribute('uId'));
+    $self->assert(!$m->has_attribute('internaldate'));
     $self->assert(!defined $m->get_attribute('internaldate'));
 
+    $m->set_internaldate('15-Oct-2010 03:19:52 +1100');
+    $self->assert($m->has_attribute('internaldate'));
+    $self->assert_str_equals('15-Oct-2010 03:19:52 +1100',
+			     $m->get_attribute('internaldate'));
+    $m->set_internaldate(undef);
+    $self->assert($m->has_attribute('internaldate'));
+    $self->assert_null($m->get_attribute('internaldate'));
+    $m->set_internaldate(DateTime->from_epoch(epoch => 1287073192));
+    $self->assert($m->has_attribute('internaldate'));
+    $self->assert_str_equals('15-Oct-2010 03:19:52 +1100',
+			     $m->get_attribute('internaldate'));
+
     $m = Cassandane::Message->new(attrs => { UID => 456 });
+    $self->assert($m->has_attribute('uid'));
     $self->assert($m->get_attribute('uid') == 456);
     $self->assert($m->get_attribute('UID') == 456);
     $self->assert($m->get_attribute('uId') == 456);
+    $self->assert(!$m->has_attribute('internaldate'));
     $self->assert(!defined $m->get_attribute('internaldate'));
 }
 
@@ -490,5 +566,210 @@ sub test_base_subject
     }
 
 }
+
+sub test_attributes2
+{
+    my ($self) = @_;
+    my $m = Cassandane::Message->new();
+
+    $self->assert(!$m->has_attribute('foo'));
+    $self->assert(!$m->has_attribute('bar'));
+    $self->assert(!$m->has_attribute('baz'));
+
+    # set_attribute() sets an attribute to the given value
+    $m->set_attribute(foo => 'cosby');
+    $self->assert($m->has_attribute('foo'));
+    $self->assert($m->has_attribute('Foo'));
+    $self->assert($m->has_attribute('FOO'));
+    # attribute names are case-insensitive
+    $self->assert_str_equals('cosby', $m->get_attribute('foo'));
+    $self->assert_str_equals('cosby', $m->get_attribute('Foo'));
+    $self->assert_str_equals('cosby', $m->get_attribute('FOO'));
+    # other attributes unchanged
+    $self->assert(!$m->has_attribute('bar'));
+    $self->assert(!$m->has_attribute('baz'));
+
+    # set_attributes() sets a list of attributes from the
+    # given list of attribute,value pairs
+    $m->set_attributes(bar => 'sweater', foo => 'etsy');
+    $self->assert($m->has_attribute('foo'));
+    $self->assert_str_equals('etsy', $m->get_attribute('foo'));
+    $self->assert($m->has_attribute('bar'));
+    $self->assert_str_equals('sweater', $m->get_attribute('bar'));
+    $self->assert(!$m->has_attribute('baz'));
+
+    # set_attribute to an undef value doesn't remove the attribute
+    # but remembers the undef - this is necessary for strict checking
+    # of IMAP server responses in a number of cases.
+    $m->set_attribute(foo => undef);
+    $self->assert($m->has_attribute('foo'));
+    $self->assert_null($m->get_attribute('foo'));
+    $self->assert($m->has_attribute('bar'));
+    $self->assert_str_equals('sweater', $m->get_attribute('bar'));
+    $self->assert(!$m->has_attribute('baz'));
+}
+
+sub test_attributes_from_fetch
+{
+    my ($self) = @_;
+    my $m = Cassandane::Message->new(attrs => {
+				foo => 'ethical',
+				bar => 'pitchfork',
+				});
+
+    $self->assert($m->has_attribute('foo'));
+    $self->assert_str_equals('ethical', $m->get_attribute('foo'));
+    $self->assert($m->has_attribute('bar'));
+    $self->assert_str_equals('pitchfork', $m->get_attribute('bar'));
+    $self->assert(!$m->has_attribute('baz'));
+}
+
+sub test_annotations
+{
+    my ($self) = @_;
+    my $m = Cassandane::Message->new();
+
+    my $e1 = '/comment';
+    my $a1 = 'value.shared';
+    my $e2 = '/vendor/hipsteripsum.me/buzzword';
+    my $a2 = 'value.priv';
+
+    # no annotations on empty message
+    $self->assert(!$m->has_annotation($e1, $a1));
+    $self->assert(!$m->has_annotation($e2, $a2));
+    # alternate syntax for has_annotation
+    $self->assert(!$m->has_annotation({ entry => $e1, attrib => $a1 }));
+    $self->assert(!$m->has_annotation({ entry => $e2, attrib => $a2 }));
+    # get_annotation returns no annotations
+    $self->assert_null($m->get_annotation($e1, $a1));
+    $self->assert_null($m->get_annotation($e2, $a2));
+    # alternate syntax for get_annotation
+    $self->assert_null($m->get_annotation({ entry => $e1, attrib => $a1 }));
+    $self->assert_null($m->get_annotation({ entry => $e2, attrib => $a2 }));
+    # list_annotations returns no annotations
+    my @aa = $m->list_annotations();
+    $self->assert_deep_equals([], \@aa);
+
+    # set_annotation() sets an annotation to the given value
+    $m->set_annotation($e1, $a1, 'wayfarers');
+    $self->assert($m->has_annotation($e1, $a1));
+    $self->assert(!$m->has_annotation($e2, $a2));
+    $self->assert($m->has_annotation({ entry => $e1, attrib => $a1 }));
+    $self->assert(!$m->has_annotation({ entry => $e2, attrib => $a2 }));
+    $self->assert_str_equals('wayfarers', $m->get_annotation($e1, $a1));
+    $self->assert_null($m->get_annotation($e2, $a2));
+    $self->assert_str_equals('wayfarers', $m->get_annotation({ entry => $e1, attrib => $a1 }));
+    $self->assert_null($m->get_annotation({ entry => $e2, attrib => $a2 }));
+    @aa = $m->list_annotations();
+    $self->assert_deep_equals([{entry => $e1, attrib => $a1}], \@aa);
+
+    # set_annotation to an undef value doesn't remove the annotation
+    # but remembers the undef - this is necessary for strict checking
+    # of IMAP server responses in a number of cases.
+    $m->set_annotation($e1, $a1, undef);
+    $self->assert($m->has_annotation($e1, $a1));
+    $self->assert(!$m->has_annotation($e2, $a2));
+    $self->assert($m->has_annotation({ entry => $e1, attrib => $a1 }));
+    $self->assert(!$m->has_annotation({ entry => $e2, attrib => $a2 }));
+    $self->assert_null($m->get_annotation($e1, $a1));
+    $self->assert_null($m->get_annotation($e2, $a2));
+    $self->assert_null($m->get_annotation({ entry => $e1, attrib => $a1 }));
+    $self->assert_null($m->get_annotation({ entry => $e2, attrib => $a2 }));
+    @aa = $m->list_annotations();
+    $self->assert_deep_equals([{entry => $e1, attrib => $a1}], \@aa);
+
+    # Can set two annotations
+    $m->set_annotation($e1, $a1, 'brooklyn');
+    $m->set_annotation($e2, $a2, 'sustainable');
+    $self->assert($m->has_annotation($e1, $a1));
+    $self->assert($m->has_annotation($e2, $a2));
+    $self->assert($m->has_annotation({ entry => $e1, attrib => $a1 }));
+    $self->assert($m->has_annotation({ entry => $e2, attrib => $a2 }));
+    $self->assert_str_equals('brooklyn', $m->get_annotation($e1, $a1));
+    $self->assert_str_equals('sustainable', $m->get_annotation($e2, $a2));
+    $self->assert_str_equals('brooklyn', $m->get_annotation({ entry => $e1, attrib => $a1 }));
+    $self->assert_str_equals('sustainable', $m->get_annotation({ entry => $e2, attrib => $a2 }));
+    @aa = $m->list_annotations();
+    @aa = sort { $a->{entry} cmp $b->{entry} } @aa;
+    $self->assert_deep_equals([
+	    {entry => $e1, attrib => $a1},
+	    {entry => $e2, attrib => $a2},
+	], \@aa);
+}
+
+sub test_annotations_from_fetch
+{
+    my ($self) = @_;
+
+    my $e1 = '/comment';
+    my $a1 = 'value.shared';
+    my $e2 = '/vendor/hipsteripsum.me/buzzword';
+    my $a2 = 'value.priv';
+
+    my $m = Cassandane::Message->new(attrs => {
+			annotation => [
+			    $e1 => [ $a1, 'whatever' ],
+			    $e2 => [ $a2, 'sartorial' ]
+			]});
+
+    $self->assert($m->has_annotation($e1, $a1));
+    $self->assert($m->has_annotation($e2, $a2));
+    $self->assert($m->has_annotation({ entry => $e1, attrib => $a1 }));
+    $self->assert($m->has_annotation({ entry => $e2, attrib => $a2 }));
+    $self->assert_str_equals('whatever', $m->get_annotation($e1, $a1));
+    $self->assert_str_equals('sartorial', $m->get_annotation($e2, $a2));
+    $self->assert_str_equals('whatever', $m->get_annotation({ entry => $e1, attrib => $a1 }));
+    $self->assert_str_equals('sartorial', $m->get_annotation({ entry => $e2, attrib => $a2 }));
+    my @aa = $m->list_annotations();
+    @aa = sort { $a->{entry} cmp $b->{entry} } @aa;
+    $self->assert_deep_equals([
+	    {entry => $e1, attrib => $a1},
+	    {entry => $e2, attrib => $a2},
+	], \@aa);
+
+}
+
+sub test_accessors
+{
+    my ($self) = @_;
+
+    my $txt = <<'EOF';
+From: Fred J. Bloggs <fbloggs@fastmail.fm>
+To: Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>
+Subject: Hello World
+Received: from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software);
+	Fri, 29 Oct 2010 13:05:01 +1100
+Received: from mail.bar.com (mail.bar.com [10.0.0.1])
+	by mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100
+Received: from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by
+	mail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100
+
+This is a message to let you know
+that I'm alive and well
+EOF
+    my @lines = split(/\n/, $txt);
+    map { $_ .= "\r\n" } @lines;
+
+    my $m = Cassandane::Message->new(
+		lines => \@lines,
+		attrs => {
+		    uid => 42
+		});
+
+    $self->assert_str_equals('Fred J. Bloggs <fbloggs@fastmail.fm>', $m->from());
+    $self->assert_str_equals('Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>', $m->to());
+    $self->assert_str_equals('Hello World', $m->subject());
+    $self->assert_num_equals(42, $m->uid());
+    $self->assert_num_equals(557, $m->size());
+    $self->assert_str_equals('7f48d75eaa38e6dda5a173b20f6fb4969472502a', $m->guid());
+    $self->assert_null($m->cid());
+
+    # make_cid() returns a new CID but doesn't set the attribute
+    $self->assert_str_equals('7f48d75eaa38e6dd', $m->make_cid());
+    $self->assert_null($m->cid());
+    $m->set_attribute(cid => $m->make_cid());
+    $self->assert_str_equals('7f48d75eaa38e6dd', $m->cid());
+}
+
 
 1;
