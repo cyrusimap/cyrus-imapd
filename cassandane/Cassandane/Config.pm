@@ -172,9 +172,9 @@ sub _flatten
     my %nv;
     for (my $conf = $self ; defined $conf ; $conf = $conf->{parent})
     {
-	while (my ($n, $v) = each %{$conf->{params}})
+	foreach my $n (keys %{$conf->{params}})
 	{
-	    $nv{$n} = $self->_substitute($v)
+	    $nv{$n} = $self->_substitute($conf->{params}->{$n})
 		unless defined $nv{$n};
 	}
     }
