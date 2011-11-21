@@ -1743,7 +1743,7 @@ void error_response(long code, struct transaction_t *txn)
 	}
     }
 
-    if (txn->errstr) txn->resp_body.type = "text/plain";
+    txn->resp_body.type = "text/plain";
     write_body(code, txn, txn->errstr, txn->errstr ? strlen(txn->errstr) : 0);
 }
 
