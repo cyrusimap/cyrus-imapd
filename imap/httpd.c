@@ -319,6 +319,8 @@ int service_init(int argc __attribute__((unused)),
 {
     int r, opt;
 
+    LIBXML_TEST_VERSION
+
     initialize_http_error_table();
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
@@ -566,6 +568,8 @@ void shut_down(int code)
     int bytes_out = 0;
 
     in_shutdown = 1;
+
+    xmlCleanupParser();
 
     proc_cleanup();
 
