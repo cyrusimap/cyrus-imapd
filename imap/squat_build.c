@@ -144,9 +144,10 @@ static char *prepare_buffered_write(SquatWriteBuffer *b, int len)
    Call this after prepare_buffered_write. */
 static void complete_buffered_write(SquatWriteBuffer *b, char *ptr)
 {
+    int oldbytes = b->buf.len;
     int newbytes = ptr - b->buf.s;
     buf_truncate(&b->buf, newbytes);
-    b->total_output_bytes += newbytes;
+    b->total_output_bytes += newbytes - oldbytes;
 }
 
 /* Flush the output buffer to the file. Reset the file pointer to the start
