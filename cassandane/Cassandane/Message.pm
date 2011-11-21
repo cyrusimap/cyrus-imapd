@@ -43,7 +43,7 @@ package Cassandane::Message;
 use strict;
 use warnings;
 use Cassandane::Util::Log;
-use Cassandane::Util::DateTime qw(from_rfc3501);
+use Cassandane::Util::DateTime qw(to_rfc3501);
 use Digest::SHA1 qw(sha1_hex);
 use base qw(Clone Exporter);
 use overload qw("") => \&as_string;
@@ -398,12 +398,9 @@ sub set_internaldate
 
     if (ref $id eq 'DateTime')
     {
-	$self->{internaldate} = $id;
+	$id = to_rfc3501($id);
     }
-    else
-    {
-	$self->{internaldate} = from_rfc3501($id);
-    }
+    $self->set_attribute(internaldate => $id);
 }
 
 # Calculate and return the GUID of the message
