@@ -2383,7 +2383,8 @@ static int is_mediatype(const char *hdr, const char *type)
 static int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root)
 {
     const char **hdr;
-    xmlDocPtr doc;
+    xmlParserCtxtPtr ctxt;
+    xmlDocPtr doc = NULL;
     int r = 0;
 
     *root = NULL;
@@ -2406,8 +2407,13 @@ static int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root)
     if (!buf_len(&txn->req_body)) return 0;
 
     /* Parse the XML request */
-    doc = xmlParseMemory(buf_cstring(&txn->req_body), buf_len(&txn->req_body));
-    xmlCleanupParser();
+    ctxt = xmlNewParserCtxt();
+    if (ctxt) {
+	doc = xmlCtxtReadMemory(ctxt, buf_cstring(&txn->req_body),
+				buf_len(&txn->req_body), NULL, NULL,
+				XML_PARSE_NOWARNING);
+	xmlFreeParserCtxt(ctxt);
+    }
     if (!doc) {
 	txn->errstr = "Unable to parse XML body";
 	return HTTP_BAD_REQUEST;
