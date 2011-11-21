@@ -3607,27 +3607,50 @@ void index_getsearchtext_single(struct index_state *state, uint32_t msgno,
 				void *rock) {
     struct mailbox *mailbox = state->mailbox;
     struct index_map *im = &state->map[msgno-1];
+    int utf8 = charset_lookupname("utf-8");
+
+    assert(utf8 >= 0);
 
     if (mailbox_cacherecord(mailbox, &im->record))
 	return;
 
     index_getsearchtextmsg(state, im->record.uid, receiver, rock,
 	     cacheitem_base(&im->record, CACHE_SECTION));
-    receiver(im->record.uid, SEARCHINDEX_PART_FROM, SEARCHINDEX_CMD_STUFFPART,
-	     cacheitem_base(&im->record, CACHE_FROM),
-	     cacheitem_size(&im->record, CACHE_FROM), rock);
-    receiver(im->record.uid, SEARCHINDEX_PART_TO, SEARCHINDEX_CMD_STUFFPART,
-	     cacheitem_base(&im->record, CACHE_TO),
-	     cacheitem_size(&im->record, CACHE_TO), rock);
-    receiver(im->record.uid, SEARCHINDEX_PART_CC, SEARCHINDEX_CMD_STUFFPART,
-	     cacheitem_base(&im->record, CACHE_CC),
-	     cacheitem_size(&im->record, CACHE_CC), rock);
-    receiver(im->record.uid, SEARCHINDEX_PART_BCC, SEARCHINDEX_CMD_STUFFPART,
-	     cacheitem_base(&im->record, CACHE_BCC),
-	     cacheitem_size(&im->record, CACHE_BCC), rock);
-    receiver(im->record.uid, SEARCHINDEX_PART_SUBJECT, SEARCHINDEX_CMD_STUFFPART,
-	     cacheitem_base(&im->record, CACHE_SUBJECT),
-	     cacheitem_size(&im->record, CACHE_SUBJECT), rock);
+
+    charset_extractitem(receiver, rock, im->record.uid,
+			cacheitem_base(&im->record, CACHE_FROM),
+			cacheitem_size(&im->record, CACHE_FROM),
+			utf8, ENCODING_NONE, charset_flags,
+			SEARCHINDEX_PART_FROM,
+			SEARCHINDEX_CMD_STUFFPART);
+
+    charset_extractitem(receiver, rock, im->record.uid,
+			cacheitem_base(&im->record, CACHE_TO),
+			cacheitem_size(&im->record, CACHE_TO),
+			utf8, ENCODING_NONE, charset_flags,
+			SEARCHINDEX_PART_TO,
+			SEARCHINDEX_CMD_STUFFPART);
+
+    charset_extractitem(receiver, rock, im->record.uid,
+			cacheitem_base(&im->record, CACHE_CC),
+			cacheitem_size(&im->record, CACHE_CC),
+			utf8, ENCODING_NONE, charset_flags,
+			SEARCHINDEX_PART_CC,
+			SEARCHINDEX_CMD_STUFFPART);
+
+    charset_extractitem(receiver, rock, im->record.uid,
+			cacheitem_base(&im->record, CACHE_BCC),
+			cacheitem_size(&im->record, CACHE_BCC),
+			utf8, ENCODING_NONE, charset_flags,
+			SEARCHINDEX_PART_BCC,
+			SEARCHINDEX_CMD_STUFFPART);
+
+    charset_extractitem(receiver, rock, im->record.uid,
+			cacheitem_base(&im->record, CACHE_SUBJECT),
+			cacheitem_size(&im->record, CACHE_SUBJECT),
+			utf8, ENCODING_NONE, charset_flags,
+			SEARCHINDEX_PART_SUBJECT,
+			SEARCHINDEX_CMD_STUFFPART);
 }
 
 void index_getsearchtext(struct index_state *state,

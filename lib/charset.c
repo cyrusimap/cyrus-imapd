@@ -1127,9 +1127,11 @@ int charset_searchfile(const char *substr, comp_pat *pat,
 }
 
 /* This is based on charset_searchfile above. */
-int charset_extractfile(index_search_text_receiver_t receiver, void *rock,
-			int uid, const char *msg_base, size_t len, 
-			int charset, int encoding, int flags)
+int charset_extractitem(index_search_text_receiver_t receiver,
+			void *rock, int uid,
+			const char *msg_base, size_t len,
+			int charset, int encoding, int flags,
+			int rpart, int rcmd)
 {
     struct convert_rock *input, *tobuffer;
     struct buf *out;
@@ -1174,19 +1176,27 @@ int charset_extractfile(index_search_text_receiver_t receiver, void *rock,
 
 	/* process a block of output every so often */
 	if (buf_len(out) > 4096) {
-	    receiver(uid, SEARCHINDEX_PART_BODY, SEARCHINDEX_CMD_APPENDPART,
-		     out->s, out->len, rock);
+	    receiver(uid, rpart, rcmd, out->s, out->len, rock);
 	    buf_reset(out);
 	}
     }
     if (out->len) { /* finish it */
-	receiver(uid, SEARCHINDEX_PART_BODY, SEARCHINDEX_CMD_APPENDPART,
-		 out->s, out->len, rock);
+	receiver(uid, rpart, rcmd, out->s, out->len, rock);
     }
 
     convert_free(input);
 
     return 1;
+}
+
+int charset_extractfile(index_search_text_receiver_t receiver, void *rock,
+			int uid, const char *msg_base, size_t len, 
+			int charset, int encoding, int flags)
+{
+    return charset_extractitem(receiver, rock, uid, msg_base, len,
+			       charset, encoding, flags,
+			       SEARCHINDEX_PART_BODY,
+			       SEARCHINDEX_CMD_APPENDPART);
 }
 
 /*

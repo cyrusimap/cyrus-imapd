@@ -123,9 +123,15 @@ typedef void index_search_text_receiver_t(int UID, int part, int cmds,
    text down in a series of invocations to the callback function with
    part=SEARCHINDEX_PART_BODY and cmds=CMD_APPENDPART.  This is called
    by index_getsearchtextmsg to extract the MIME body parts. */ 
+extern int charset_extractitem(index_search_text_receiver_t receiver,
+			       void* rock, int uid, const char *msg_base,
+			       size_t len, charset_index charset,
+			       int encoding, int flags,
+			       int rpart, int rcmd);
 extern int charset_extractfile(index_search_text_receiver_t receiver,
-                               void* rock, int uid, const char *msg_base, 
-                               size_t len, charset_index charset,
-                               int encoding, int flags);
+			       void* rock, int uid, const char *msg_base,
+			       size_t len, charset_index charset,
+			       int encoding, int flags);
+
 
 #endif /* INCLUDED_CHARSET_H */
