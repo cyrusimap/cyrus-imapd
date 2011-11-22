@@ -629,6 +629,13 @@ AC_CHECK_FUNC(fdatasync, AC_DEFINE(HAVE_FDATASYNC,[],[Do we have fdatasync()?]),
   ])
 ])
 
+dnl check for libuuid (used when generating mailbox uniqueids)
+LIB_UUID=
+AC_CHECK_LIB(uuid, uuid_generate,[
+    LIB_UUID="-luuid"
+    AC_DEFINE(HAVE_LIBUUID,[],[Do we have the uuid library])
+])
+
 dnl for makedepend and AFS.
 cant_find_sigvec=no
 AC_CACHE_VAL(cyrus_cv_sigveclib,[
@@ -1254,6 +1261,7 @@ IMAP_COM_ERR_LIBS="${COM_ERR_LIBS}"
 IMAP_LIBS="${LIB_SASL} ${LIBS} ${SQL_LIBS}"
 
 AC_SUBST(LIB_RT)
+AC_SUBST(LIB_UUID)
 AC_SUBST(IMAP_COM_ERR_LIBS)
 AC_SUBST(IMAP_LIBS)
 

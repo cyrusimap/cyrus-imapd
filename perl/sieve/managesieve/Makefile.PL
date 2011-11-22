@@ -51,6 +51,7 @@ my $BDB_INC = $ENV{BDB_INC};
 my $BDB_LIB = $ENV{BDB_LIB};
 
 my $LIB_RT = $ENV{LIB_RT};
+my $LIB_UUID = $ENV{LIB_UUID};
 my $ZLIB = $ENV{ZLIB};
 
 $libs = "-lcyrus";
@@ -62,7 +63,7 @@ WriteMakefile(
     'ABSTRACT'  => 'Cyrus Sieve management interface',
     'VERSION_FROM' => 'managesieve.pm', # finds $VERSION
     'MYEXTLIB'  => '../lib/isieve.o ../lib/lex.o ../lib/mystring.o ../lib/request.o ../../../lib/libcyrus.a ../../../lib/libcyrus_min.a',
-    'LIBS'	=> ["$BDB_LIB $SASL_LIB $OPENSSL_LIB $LIB_RT $ZLIB -lssl -lcrypto"], 
+    'LIBS'	=> ["$BDB_LIB $SASL_LIB $OPENSSL_LIB $LIB_RT $LIB_UUID $ZLIB -lssl -lcrypto"], 
     'DEFINE'	=> '-DPERL_POLLUTE $(COVERAGE)',     # e.g., '-DHAVE_SOMETHING' 
     'INC'	=> "-I../lib/ -I../../../lib/ $SASL_INC $OPENSSL_INC",
     'LD'	=> $Config{ld} . ' $(COVERAGE)',

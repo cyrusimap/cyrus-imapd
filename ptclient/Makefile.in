@@ -56,7 +56,7 @@ DEFS = @DEFS@
 CPPFLAGS = -I.. -I$(srcdir)/../imap -I$(srcdir)/../lib @COM_ERR_CPPFLAGS@ @CPPFLAGS@ @SASLFLAGS@
 AFS_LDFLAGS = @AFS_LDFLAGS@ @COM_ERR_LDFLAGS@
 AFS_LIBS = @AFS_LIBS@
-IMAP_LIBS = @IMAP_LIBS@ @LIB_RT@
+IMAP_LIBS = @IMAP_LIBS@ @LIB_RT@ @LIB_UUID@
 LIBS = $(IMAP_LIBS) @COM_ERR_LIBS@
 LIB_SASL = @LIB_SASL@
 LIB_WRAP = @LIB_WRAP@
@@ -82,6 +82,7 @@ EXTRA_PROGS = # ptextract pttest
 PROGS = ptexpire ptloader ptdump $(EXTRA_PROGS)
 
 LIB_RT = @LIB_RT@
+LIB_UUID = @LIB_UUID@
 
 SERVICE=../master/service.o
 SERVICETHREAD=../master/service-thread.o
@@ -99,22 +100,22 @@ install:
 	$(CC) -c $(CPPFLAGS) $(LDAP_CPPFLAGS) $(DEFS) $(CFLAGS) $<
 
 ptloader: ptloader.o afskrb.o ldap.o ../imap/mutex_fake.o $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o $@ ptloader.o afskrb.o ldap.o ../imap/mutex_fake.o $(SERVICETHREAD) ${AFS_LDFLAGS} ${LDAP_LDFLAGS} $(AFS_LIBS) ${LDAP_LIBS} $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_WRAP) $(LIB_RT)
+	$(CC) $(LDFLAGS) -o $@ ptloader.o afskrb.o ldap.o ../imap/mutex_fake.o $(SERVICETHREAD) ${AFS_LDFLAGS} ${LDAP_LDFLAGS} $(AFS_LIBS) ${LDAP_LIBS} $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_WRAP) $(LIB_RT) $(LIB_UUID)
 
 ptloader.pure: ptloader.o afskrb.o ldap.o ../imap/mutex_fake.o $(DEPLIBS)
-	$(PURIFY) $(PUREARGS) $(CC) $(LDFLAGS) -o $@ ptloader.o afskrb.o ldap.o ../imap/mutex_fake.o $(SERVICETHREAD) ${AFS_LDFLAGS} ${LDAP_LDFLAGS} $(AFS_LIBS) ${LDAP_LIBS} $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_WRAP) $(LIB_RT)
+	$(PURIFY) $(PUREARGS) $(CC) $(LDFLAGS) -o $@ ptloader.o afskrb.o ldap.o ../imap/mutex_fake.o $(SERVICETHREAD) ${AFS_LDFLAGS} ${LDAP_LDFLAGS} $(AFS_LIBS) ${LDAP_LIBS} $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_WRAP) $(LIB_RT) $(LIB_UUID)
 
 ptexpire: ptexpire.o $(DEPLIBS) $(UTIL_LIBS)
-	$(CC) $(LDFLAGS) -o $@ ptexpire.o $(UTIL_LIBS) $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_RT)
+	$(CC) $(LDFLAGS) -o $@ ptexpire.o $(UTIL_LIBS) $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_RT) $(LIB_UUID)
 
 ptexpire.pure: ptexpire.o $(DEPLIBS) $(UTIL_LIBS)
-	$(PURIFY) $(PUREARGS) $(CC) $(LDFLAGS) -o $@ ptexpire.o $(UTIL_LIBS) $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_WRAP) $(LIB_RT)
+	$(PURIFY) $(PUREARGS) $(CC) $(LDFLAGS) -o $@ ptexpire.o $(UTIL_LIBS) $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_WRAP) $(LIB_RT) $(LIB_UUID)
 
 ptdump: ptdump.o $(DEPLIBS) $(UTIL_LIBS)
-	$(CC) $(LDFLAGS) -o $@ ptdump.o $(UTIL_LIBS) $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_RT)
+	$(CC) $(LDFLAGS) -o $@ ptdump.o $(UTIL_LIBS) $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_RT) $(LIB_UUID)
 
 ptdump.pure: ptexpire.o $(DEPLIBS) $(UTIL_LIBS)
-	$(PURIFY) $(PUREARGS) $(CC) $(LDFLAGS) -o $@ ptdump.o $(UTIL_LIBS) $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_WRAP) $(LIB_RT)
+	$(PURIFY) $(PUREARGS) $(CC) $(LDFLAGS) -o $@ ptdump.o $(UTIL_LIBS) $(DEPLIBS) $(LIB_SASL) $(LIBS) $(LIB_WRAP) $(LIB_RT) $(LIB_UUID)
 
 ptextract: ptextract.o $(DEPLIBS) $(UTIL_LIBS)
 	$(CC) $(LDFLAGS) -o $@ ptextract.o $(UTIL_LIBS) $(DEPLIBS) $(LIBS)

@@ -51,6 +51,7 @@ my $BDB_INC = $ENV{BDB_INC};
 my $BDB_LIB = $ENV{BDB_LIB};
 
 my $LIB_RT = $ENV{LIB_RT};
+my $LIB_UUID = $ENV{LIB_UUID};
 my $ZLIB = $ENV{ZLIB};
 
 # See lib/ExtUtils/MakeMaker.pm for details of how to influence
@@ -74,7 +75,7 @@ WriteMakefile(
     'clean'	=> {'FILES' => 'libcyrperl.a cyradm'},
     'OBJECT'    => 'IMAP.o',
     'MYEXTLIB'  => '../../lib/libcyrus.a ../../lib/libcyrus_min.a',
-    'LIBS'	=> ["$BDB_LIB $SASL_LIB $OPENSSL_LIB $LIB_RT $ZLIB -lssl -lcrypto"],
+    'LIBS'	=> ["$BDB_LIB $SASL_LIB $OPENSSL_LIB $LIB_RT $LIB_UUID $ZLIB -lssl -lcrypto"],
     'DEFINE'	=> '-DPERL_POLLUTE',    # e.g., '-DHAVE_SOMETHING' 
     'INC'	=> "-I../../lib -I../.. -I../../com_err/et $SASL_INC $OPENSSL_INC", 
     'EXE_FILES' => [cyradm],

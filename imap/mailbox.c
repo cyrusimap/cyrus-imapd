@@ -71,6 +71,10 @@
 # endif
 #endif
 
+#ifdef HAVE_LIBUUID
+#include <uuid/uuid.h>
+#endif
+
 #include "acl.h"
 #include "assert.h"
 #include "crc32.h"
@@ -704,15 +708,27 @@ mailbox_notifyproc_t *mailbox_get_updatenotifier(void)
     return updatenotifier;
 }
 
-/* create the unique identifier for a mailbox named 'name' with
- * uidvalidity 'uidvalidity'.  'uniqueid' should be at least 17 bytes
- * long.  the unique identifier is just the mailbox name hashed to 32
- * bits followed by the uid, both converted to hex. 
+/*
+ * Create the unique identifier for a mailbox named 'name' with
+ * uidvalidity 'uidvalidity'.  We use Ted Ts'o's libuuid if available,
+ * otherwise we fall back to the legacy Cyrus algorithm which uses the
+ * mailbox name hashed to 32 bits followed by the uid, both converted to
+ * hex.
  */
-#define PRIME (2147484043UL)
 
-void mailbox_make_uniqueid(struct mailbox *mailbox)
+static void mailbox_make_uniqueid(struct mailbox *mailbox)
 {
+#ifdef HAVE_LIBUUID
+    uuid_t uu;
+
+    uuid_clear(uu);	/* Just In Case */
+    uuid_generate(uu);
+    free(mailbox->uniqueid);
+    /* 36 bytes of uuid plus \0 */
+    mailbox->uniqueid = xmalloc(37);
+    uuid_unparse_lower(uu, mailbox->uniqueid);
+#else
+#define PRIME (2147484043UL)
     unsigned hash = 0;
     const char *name = mailbox->name;
 
@@ -727,6 +743,7 @@ void mailbox_make_uniqueid(struct mailbox *mailbox)
 
     snprintf(mailbox->uniqueid, 32, "%08x%08x",
 	     hash, mailbox->i.uidvalidity);
+#endif /* !HAVE_LIBUUID */
 
     mailbox->header_dirty = 1;
 }
