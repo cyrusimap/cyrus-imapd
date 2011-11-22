@@ -99,6 +99,10 @@ int masterconf_init(const char *ident, const char *alt_config)
         /* don't free the openlog() string! */
     }
 
+    /* drop debug messages locally */
+    if (!config_debug)
+	setlogmask(~LOG_MASK(LOG_DEBUG));
+
     return 0;
 }
 

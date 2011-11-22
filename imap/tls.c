@@ -252,9 +252,9 @@ static DH *load_dh_param(const char *keyfile, const char *certfile)
 
     if (ret == NULL) {
 	ret = get_dh1024();
-	syslog(LOG_NOTICE, "imapd:Loading hard-coded DH parameters");
+	syslog(LOG_DEBUG, "imapd:Loading hard-coded DH parameters");
     } else {
-	syslog(LOG_NOTICE, "imapd:Loading DH parameters from file");
+	syslog(LOG_DEBUG, "imapd:Loading DH parameters from file");
     }
 
     if (bio != NULL) BIO_free(bio);

@@ -1977,7 +1977,7 @@ int main(int argc, char **argv)
 	if (pidlock_fd != -1) close(pidlock_fd);
     }
 
-    syslog(LOG_NOTICE, "process started");
+    syslog(LOG_DEBUG, "process started");
 
 #if defined(HAVE_UCDSNMP) || defined(HAVE_NETSNMP)
     /* initialize SNMP agent */
@@ -2034,7 +2034,7 @@ int main(int argc, char **argv)
     init_janitor();
     
     /* ok, we're going to start spawning like mad now */
-    syslog(LOG_NOTICE, "ready for work");
+    syslog(LOG_DEBUG, "ready for work");
 
     now = time(NULL);
     for (;;) {

@@ -84,6 +84,7 @@ int config_auditlog;
 unsigned config_maxword;
 unsigned config_maxquoted;
 int config_qosmarking;
+int config_debug;
 
 /* declared in each binary that uses libconfig */
 extern const int config_need_data;
@@ -239,6 +240,7 @@ void config_reset(void)
     config_maxquoted = 0;
     config_maxword = 0;
     config_qosmarking = 0;
+    config_debug = 0;
 
     /* reset all the options */
     for (opt = IMAPOPT_ZERO; opt < IMAPOPT_LAST; opt++) {
@@ -399,6 +401,9 @@ void config_read(const char *alt_config)
 
     ival = config_getenum(IMAPOPT_QOSMARKING);
     config_qosmarking = qos[ival];
+
+    /* allow debug logging */
+    config_debug = config_getswitch(IMAPOPT_DEBUG);
 }
 
 #define GROWSIZE 4096

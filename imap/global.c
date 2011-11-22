@@ -169,6 +169,10 @@ int cyrus_init(const char *alt_config, const char *ident, unsigned flags)
 	/* don't free the openlog() string! */
     }
 
+    /* allow debug logging */
+    if (!config_debug)
+	setlogmask(~LOG_MASK(LOG_DEBUG));
+
     /* Look up default partition */
     config_defpartition = config_getstring(IMAPOPT_DEFAULTPARTITION);
     for (p = (char *)config_defpartition; p && *p; p++) {

@@ -442,6 +442,9 @@ Blank lines and lines beginning with ``#'' are ignored.
    hashing done on configuration directories.  This is recommended if
    one partition has a very bushy mailbox tree. */
 
+{ "debug", 0, SWITCH }
+/* If enabled, allow syslog() to pass LOG_DEBUG messages. */
+
 # Commented out - there's no such thing as "hostname_mechs", but we need
 # this for the man page
 # { "hostname_mechs", NULL, STRING }
