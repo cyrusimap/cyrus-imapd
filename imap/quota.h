@@ -71,6 +71,8 @@ enum quota_resource {
 
 #define QUOTA_DIFFS_INITIALIZER \
 	{ 0, 0, 0 }
+#define QUOTA_DIFFS_DONTCARE_INITIALIZER \
+	{ -1, -1, -1 }
 
 struct quota {
     const char *root;

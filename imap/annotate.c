@@ -2400,7 +2400,8 @@ static int write_entry(const char *mboxname,
     }
 
     if (!ignorequota && mailbox) {
-	quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_INITIALIZER;
+	quota_t qdiffs[QUOTA_NUMRESOURCES] =
+		QUOTA_DIFFS_DONTCARE_INITIALIZER;
 	qdiffs[QUOTA_ANNOTSTORAGE] = value->len - oldlen;
 	r = mailbox_quota_check(mailbox, qdiffs);
 	if (r)
