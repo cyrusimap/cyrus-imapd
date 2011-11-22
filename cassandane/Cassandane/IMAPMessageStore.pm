@@ -70,7 +70,7 @@ sub new
 	last_uid => undef,
 	last_batch_uid => undef,
 	batch => undef,
-	fetch_attrs => { 'body.peek[]' => 1 },
+	fetch_attrs => { uid => 1, 'body.peek[]' => 1 },
 	# state for XCONVFETCH
 	fetched => undef,
     };
@@ -196,7 +196,7 @@ sub set_fetch_attributes
 {
     my ($self, @attrs) = @_;
 
-    $self->{fetch_attrs} = { 'body.peek[]' => 1 };
+    $self->{fetch_attrs} = { uid => 1, 'body.peek[]' => 1 };
     foreach my $attr (@attrs)
     {
 	$attr = lc($attr);
