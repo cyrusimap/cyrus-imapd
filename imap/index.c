@@ -3480,7 +3480,7 @@ static MsgData *index_msgdata_load(struct index_state *state,
     int i, j;
     char *tmpenv;
     char *envtokens[NUMENVTOKENS];
-    int did_cache, did_env;
+    int did_cache, did_env, did_conv;
     int label;
     int annotsize;
     struct mailbox *mailbox = state->mailbox;
@@ -3501,7 +3501,7 @@ static MsgData *index_msgdata_load(struct index_state *state,
 	/* set pointer to next node */
 	cur->next = (i+1 < n ? cur+1 : NULL);
 
-	did_cache = did_env = 0;
+	did_cache = did_env = did_conv = 0;
 	tmpenv = NULL;
 	annotsize = 0;
 
@@ -3517,19 +3517,20 @@ static MsgData *index_msgdata_load(struct index_state *state,
 		/* fetch cached info */
 		if (mailbox_cacherecord(mailbox, &im->record))
 		    continue; /* can't do this with a broken cache */
-		
+
 		did_cache++;
 	    }
 
 	    if ((label == LOAD_IDS) && !did_env) {
+		/* no point if we don't have enough data */
+		if (cacheitem_size(&im->record, CACHE_ENVELOPE) <= 2)
+		    continue;
+
 		/* make a working copy of envelope -- strip outer ()'s */
 		/* +1 -> skip the leading paren */
 		/* -2 -> don't include the size of the outer parens */
-		if (cacheitem_size(&im->record, CACHE_ENVELOPE) > 2)
-		    tmpenv = xstrndup(cacheitem_base(&im->record, CACHE_ENVELOPE) + 1, 
-				      cacheitem_size(&im->record, CACHE_ENVELOPE) - 2);
-		else
-		    tmpenv = xstrdup("");
+		tmpenv = xstrndup(cacheitem_base(&im->record, CACHE_ENVELOPE) + 1, 
+				  cacheitem_size(&im->record, CACHE_ENVELOPE) - 2);
 
 		/* parse envelope into tokens */
 		parse_cached_envelope(tmpenv, envtokens,
@@ -3593,7 +3594,7 @@ static MsgData *index_msgdata_load(struct index_state *state,
 	    }
 	}
 
-	if (tmpenv) free(tmpenv);
+	free(tmpenv);
     }
 
     return md;
@@ -3602,17 +3603,13 @@ static MsgData *index_msgdata_load(struct index_state *state,
 static char *get_localpart_addr(const char *header)
 {
     struct address *addr = NULL;
-    char *ret;
+    char *ret = NULL;
 
     parseaddr_list(header, &addr);
-    if (!addr) return xstrdup("");
+    if (!addr) return NULL;
 
-    if (addr->mailbox) {
+    if (addr->mailbox)
 	ret = xstrdup(addr->mailbox);
-    }
-    else {
-	ret = xstrdup("");
-    }
 
     parseaddr_free(addr);
 
@@ -3625,10 +3622,10 @@ static char *get_localpart_addr(const char *header)
 static char *get_displayname(const char *header)
 {
     struct address *addr = NULL;
-    char *ret;
+    char *ret = NULL;
 
     parseaddr_list(header, &addr);
-    if (!addr) return xstrdup("");
+    if (!addr) return NULL;
 
     if (addr->name && addr->name[0]) {
 	char *p;
@@ -3644,9 +3641,6 @@ static char *get_displayname(const char *header)
     }
     else if (addr->mailbox) {
 	ret = xstrdup(addr->mailbox);
-    }
-    else {
-	ret = xstrdup("");
     }
 
     parseaddr_free(addr);
