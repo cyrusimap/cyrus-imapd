@@ -4033,7 +4033,7 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
 	    ret = numcmp(md1->internaldate, md2->internaldate);
 	    break;
 	case SORT_CC:
-	    ret = strcmp(md1->cc, md2->cc);
+	    ret = strcmpsafe(md1->cc, md2->cc);
 	    break;
 	case SORT_DATE: {
 	    time_t d1 = md1->date ? md1->date : md1->internaldate;
@@ -4042,30 +4042,30 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
 	    break;
 	}
 	case SORT_FROM:
-	    ret = strcmp(md1->from, md2->from);
+	    ret = strcmpsafe(md1->from, md2->from);
 	    break;
 	case SORT_SIZE:
 	    ret = numcmp(md1->size, md2->size);
 	    break;
 	case SORT_SUBJECT:
-	    ret = strcmp(md1->xsubj, md2->xsubj);
+	    ret = strcmpsafe(md1->xsubj, md2->xsubj);
 	    break;
 	case SORT_TO:
-	    ret = strcmp(md1->to, md2->to);
+	    ret = strcmpsafe(md1->to, md2->to);
 	    break;
 	case SORT_ANNOTATION:
-	    ret = strcmp(md1->annot[ann], md2->annot[ann]);
+	    ret = strcmpsafe(md1->annot[ann], md2->annot[ann]);
 	    ann++;
 	    break;
 	case SORT_MODSEQ:
 	    ret = numcmp(md1->modseq, md2->modseq);
 	    break;
-        case SORT_DISPLAYFROM:
-            ret = strcmp(md1->displayfrom, md2->displayfrom);
-            break;
-        case SORT_DISPLAYTO:
-            ret = strcmp(md1->displayto, md2->displayto);
-            break;
+	case SORT_DISPLAYFROM:
+	    ret = strcmpsafe(md1->displayfrom, md2->displayfrom);
+	    break;
+	case SORT_DISPLAYTO:
+	    ret = strcmpsafe(md1->displayto, md2->displayto);
+	    break;
 	}
     } while (!ret && sortcrit[i++].key != SORT_SEQUENCE);
 
