@@ -157,6 +157,10 @@ sub test_shared
     # last second, but I'm too lazy to check that properly
     $self->assert_not_null($r->{'/shared/vendor/cmu/cyrus-imapd/lastupdate'});
     delete $r->{'/shared/vendor/cmu/cyrus-imapd/lastupdate'};
+    # Note: uniqueid will be a hash of some information that
+    # we can't entirely predict
+    $self->assert_not_null($r->{'/shared/vendor/cmu/cyrus-imapd/uniqueid'});
+    delete $r->{'/shared/vendor/cmu/cyrus-imapd/uniqueid'};
     $self->assert_deep_equals({
 	    '/shared/vendor/cmu/cyrus-imapd/squat' => undef,
 	    '/shared/vendor/cmu/cyrus-imapd/size' => '0',
