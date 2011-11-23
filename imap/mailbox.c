@@ -1054,6 +1054,7 @@ void mailbox_close(struct mailbox **mailboxptr)
 	    else if (mailbox->i.options & OPT_MAILBOX_NEEDS_UNLINK)
 		mailbox_index_unlink(mailbox);
 	    /* or we missed out - someone else beat us to it */
+	    mailbox_unlock_index(mailbox, NULL);
 	}
 	/* otherwise someone else has the mailbox locked 
 	 * already, so they can handle the cleanup in
