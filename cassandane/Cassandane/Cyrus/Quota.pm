@@ -401,8 +401,9 @@ sub test_exceeding_message
     # (LITERAL) mail, message count checking is performed right away. This early
     # NO response while writing the LITERAL triggers a die in IMAPTalk, leaving
     # the completion response undefined.
-    #$self->assert_str_equals('no', $talk->get_last_completion_response(), $talk->{LastError});
-    $self->assert($talk->get_last_error() =~ m/over quota/i);
+    my $ex = $@;
+    $self->assert_not_null($ex);
+    $self->assert($ex =~ m/Got - \d+ NO Over quota/);
 
     xlog "check that the exceeding message is not in the mailbox";
     $self->_check_usages([10]);
