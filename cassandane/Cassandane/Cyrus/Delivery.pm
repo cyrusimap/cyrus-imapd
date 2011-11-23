@@ -247,12 +247,10 @@ sub test_duplicate_suppression_on_uniqueid_delete
     my $imaptalk = $self->{store}->get_client();
     $imaptalk->create($folder)
 	or die "Cannot create $folder: $@";
-    $self->{store}->set_fetch_attributes('uid');
 
     xlog "Deliver a message";
     my %msgs;
     $msgs{1} = $self->{gen}->generate(subject => "Message 1");
-    $msgs{1}->set_attribute(uid => 1);
     $self->{instance}->deliver($msgs{1}, folder => $folder);
 
     xlog "Check that the message made it";
