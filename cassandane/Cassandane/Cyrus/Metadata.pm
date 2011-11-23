@@ -477,6 +477,56 @@ sub test_size
     # TODO: removing a message doesn't reduce the value until (possibly delayed) expunge
 }
 
+sub config_uniqueid
+{
+    my ($self, $conf) = @_;
+    xlog "Setting delete_mode = immediate";
+    $conf->set(delete_mode => 'immediate');
+}
+
+sub test_uniqueid
+{
+    my ($self) = @_;
+
+    xlog "testing /shared/vendor/cmu/cyrus-imapd/uniqueid";
+
+    my $imaptalk = $self->{store}->get_client();
+    my $res;
+    # data thanks to hipsteripsum.me
+    my @folders = ( qw(INBOX.etsy INBOX.etsy
+		       INBOX.sartorial
+		       INBOX.dreamcatcher.keffiyeh) );
+    my @uuids;
+    my %uuids_seen;
+    my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';
+
+    xlog "create the folders";
+    foreach my $f (@folders)
+    {
+	$imaptalk->create($f)
+	    or die "Cannot create mailbox $f: $@";
+	$res = $imaptalk->getmetadata($f, $entry);
+	$self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+	$self->assert_not_null($res);
+	my $uuid = $res->{$f}{$entry};
+	$self->assert_not_null($uuid);
+	$self->assert($uuid =~ m/^[0-9a-z-]+$/);
+	$imaptalk->delete($f)
+	    or die "Cannot delete mailbox $f: $@";
+	push(@uuids, $uuid);
+	# all the uniqueids must be unique (duh)
+	$self->assert(!defined $uuids_seen{$uuid});
+	$uuids_seen{$uuid} = 1;
+    }
+
+    # Do the logging in a 2nd pass in the hope of maximising
+    # our chances of getting all the creates in one second
+    for (my $i = 0 ; $i < scalar(@folders) ; $i++)
+    {
+	xlog "uniqueid of " . $folders[$i] . " was \"" . $uuids[$i] .  "\"";
+    }
+}
+
 
 sub test_private
 {
