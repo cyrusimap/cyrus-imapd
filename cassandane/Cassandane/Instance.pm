@@ -286,9 +286,17 @@ sub _generate_master_conf
     my ($self) = @_;
 
     my $filename = $self->_master_conf();
+    my $conf = $self->_imapd_conf();
     open MASTER,'>',$filename
 	or die "Cannot open $filename for writing: $!";
-    print MASTER "SERVICES {\n";
+    print MASTER <<EOF;
+START {
+  # integrity check and setup of databases
+  recover cmd="ctl_cyrusdb -C $conf -r"
+}
+
+SERVICES {
+EOF
 
     foreach my $srv (values %{$self->{services}})
     {
@@ -298,7 +306,7 @@ sub _generate_master_conf
 	my $bin = shift @{$mp->{cmd}};
 	$mp->{cmd} = join(' ',
 	    $self->_binary($bin),
-	    '-C', $self->_imapd_conf(),
+	    '-C', $conf,
 	    @{$mp->{cmd}}
 	);
 
