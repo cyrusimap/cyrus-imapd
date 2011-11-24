@@ -152,8 +152,8 @@ int main(int argc, char *argv[])
 	    break;
 	}
     }
-	
-    if((argc - optind) < 3) {
+
+    if ((argc - optind) < 3) {
 	char sep;
 
 	fprintf(stderr, "Usage: %s [-C altconfig] <old db> <old db backend> <action> [<key>] [<value>]\n", argv[0]);
@@ -163,7 +163,7 @@ int main(int argc, char *argv[])
 	    fprintf(stderr, "%c %s", sep, cyrusdb_backends[i]->name);
 	    sep = ',';
 	}
-	
+
 	fprintf(stderr, "\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "Actions:\n");
@@ -171,6 +171,7 @@ int main(int argc, char *argv[])
 	fprintf(stderr, "* get <key>\n");
 	fprintf(stderr, "* set <key> <value>\n");
 	fprintf(stderr, "* delete <key>\n");
+	fprintf(stderr, "* dump - internal format dump\n");
 	fprintf(stderr, "You may omit key or key/value and specify one per line on stdin\n");
 	fprintf(stderr, "keys are terminated by tab or newline, values are terminated by newline\n");
 	exit(-1);
@@ -194,10 +195,9 @@ int main(int argc, char *argv[])
     }
     if(!cyrusdb_backends[i]) {
 	fatal("unknown backend", EC_TEMPFAIL);
-    }   
+    }
 
     cyrus_init(alt_config, "cyr_dbtool", 0);
-
 
     r = (DB_OLD->open)(old_db, db_flags, &odb);
     if(r != CYRUSDB_OK)
@@ -244,6 +244,11 @@ int main(int argc, char *argv[])
         if (DB_OLD->consistent(odb)) {
             printf("Consistency Error for %s\n", old_db);
         }
+    } else if (!strcmp(action, "dump")) {
+	int level = 1;
+	if ((argc - optind) > 3)
+	    level = atoi(argv[optind+3]);
+	DB_OLD->dump(odb, level);
     } else {
         printf("Unknown action %s\n", action);
     }
@@ -253,7 +258,7 @@ int main(int argc, char *argv[])
     }
 
     (DB_OLD->close)(odb);
-    
+
     cyrus_done();
 
     return 0;
