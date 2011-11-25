@@ -461,7 +461,6 @@ sub stop
 {
     my ($self) = @_;
 
-    return if ($self->{persistent});
     return if ($self->{_stopped});
     $self->{_stopped} = 1;
 
@@ -471,6 +470,7 @@ sub stop
     _stop_pid($pid) if defined $pid;
     # Note: no need to reap this daemon which is not our child anymore
 
+#     return if ($self->{persistent});
 #     rmtree $self->{basedir};
 }
 
