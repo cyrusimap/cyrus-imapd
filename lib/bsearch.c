@@ -98,11 +98,11 @@ static unsigned char convert_to_compare[256] = {
  * be inserted is returned and zero is put in the unsigned long pointed to
  * by 'linelenp'.
  */
-int bsearch_mem(const char *word,
-		const char *base,
-		unsigned long len,
-		unsigned long hint,
-		unsigned long *linelenp)
+int bsearch_mem_mbox(const char *word,
+		     const char *base,
+		     unsigned long len,
+		     unsigned long hint,
+		     unsigned long *linelenp)
 {
     int firstsearch = 1;
     unsigned long start = 0, end = len - 1, mid, offset;
@@ -178,7 +178,7 @@ int bsearch_mem(const char *word,
     return p - base + 1;
 }
 
-int bsearch_compare(const char *s1, const char *s2)
+int bsearch_compare_mbox(const char *s1, const char *s2)
 {
     int cmp;
     char c2;
@@ -197,7 +197,7 @@ int bsearch_compare(const char *s1, const char *s2)
     }
 }
 
-int bsearch_ncompare(const char *s1, int l1, const char *s2, int l2)
+int bsearch_ncompare_mbox(const char *s1, int l1, const char *s2, int l2)
 {
     int min = l1 < l2 ? l1 : l2;
     int cmp = 0;
@@ -213,5 +213,20 @@ int bsearch_ncompare(const char *s1, int l1, const char *s2, int l2)
         else if (l1 > l2) return 1;
         else return 0;
     }
+}
+
+int bsearch_ncompare_raw(const char *s1, int l1, const char *s2, int l2)
+{
+    int min = l1 < l2 ? l1 : l2;
+    int r = memcmp(s1, s2, min);
+
+    if (!r) {
+	if (l1 > l2)
+	    r = 1;
+	else if (l2 > l1)
+	    r = -1;
+    }
+
+    return r;
 }
 

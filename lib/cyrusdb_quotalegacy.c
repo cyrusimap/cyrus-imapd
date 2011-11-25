@@ -531,7 +531,7 @@ static int compar_qr_mbox(const void *v1, const void *v2)
     qr1 = path_to_qr(*((const char **) v1), qrbuf1);
     qr2 = path_to_qr(*((const char **) v2), qrbuf2);
 
-    return bsearch_compare(qr1, qr2);
+    return bsearch_compare_mbox(qr1, qr2);
 }
 
 static void scan_qr_dir(char *quota_path, const char *prefix,

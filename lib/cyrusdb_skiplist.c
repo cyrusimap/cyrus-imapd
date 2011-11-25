@@ -199,8 +199,6 @@ enum {
     use_osync = 0
 };
 
-static int compare(const char *s1, int l1, const char *s2, int l2);
-
 static void getsyncfd(struct db *db, struct txn *t)
 {
     if (!use_osync) {
@@ -799,7 +797,7 @@ static int myopen(const char *fname, int flags, struct db **ret)
     db = (struct db *) xzmalloc(sizeof(struct db));
     db->fd = -1;
     db->fname = xstrdup(fname);
-    db->compar = (flags & CYRUSDB_MBOXSORT) ? bsearch_ncompare : compare;
+    db->compar = (flags & CYRUSDB_MBOXSORT) ? bsearch_ncompare_mbox : bsearch_ncompare_raw;
 
     db->fd = open(fname, O_RDWR, 0644);
     if (db->fd == -1 && errno == ENOENT) {
@@ -940,19 +938,6 @@ static int myclose(struct db *db)
     }
 
     return 0;
-}
-
-static int compare(const char *s1, int l1, const char *s2, int l2)
-{
-    int min = l1 < l2 ? l1 : l2;
-    int r = memcmp(s1, s2, min);
-    if (!r) {
-	if (l1 > l2)
-	    r = 1;
-	else if (l2 > l1)
-	    r = -1;
-    }
-    return r;
 }
 
 /* returns the offset to the node asked for, or the node after it

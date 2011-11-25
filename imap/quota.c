@@ -186,7 +186,7 @@ int main(int argc,char **argv)
     }
 
     if (config_getswitch(IMAPOPT_IMPROVED_MBOXLIST_SORT))
-	compar = bsearch_compare;
+	compar = bsearch_compare_mbox;
     else
 	compar = strcmp;
 

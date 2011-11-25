@@ -393,8 +393,8 @@ static int myarchive(const char **fnames, const char *dirname)
 static int mbox_compar(DB *db __attribute__((unused)),
 		       const DBT *a, const DBT *b)
 {
-    return bsearch_ncompare((const char *) a->data, a->size,
-			    (const char *) b->data, b->size);
+    return bsearch_ncompare_mbox((const char *) a->data, a->size,
+				 (const char *) b->data, b->size);
 }
 
 static int myopen(const char *fname, DBTYPE type, int flags, struct db **ret)

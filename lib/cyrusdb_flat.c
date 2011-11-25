@@ -440,7 +440,8 @@ static int myfetch(struct db *db,
 
     encode(key, keylen, &keybuf);
 
-    offset = bsearch_mem(keybuf.s, db->base, db->size, 0, &len);
+    offset = bsearch_mem_mbox(keybuf.s, db->base, db->size, 0, &len);
+
     if (len) {
 	if (data) {
 	    decode(db->base + offset + keybuf.len + 1,
@@ -560,7 +561,7 @@ static int foreach(struct db *db,
 
     if (prefix) {
 	encode(prefix, prefixlen, &prefixbuf);
-	offset = bsearch_mem(prefixbuf.s, dbbase, db->size, 0, &len);
+	offset = bsearch_mem_mbox(prefixbuf.s, dbbase, db->size, 0, &len);
     } else {
 	offset = 0;
     }
@@ -596,8 +597,8 @@ static int foreach(struct db *db,
 		if (!(ino == db->ino && sz == db->size)) {
 		    /* something changed in the file; reseek */
 		    buf_cstring(&savebuf);
-		    offset = bsearch_mem(savebuf.s, db->base, db->size,
-					 0, &len);
+		    offset = bsearch_mem_mbox(savebuf.s, db->base, db->size,
+					      0, &len);
 		    p = db->base + offset;
 		    
 		    GETENTRY(p);
@@ -674,7 +675,7 @@ static int mystore(struct db *db,
     encode(key, keylen, &keybuf);
 
     /* find entry, if it exists */
-    offset = bsearch_mem(keybuf.s, db->base, db->size, 0, &len);
+    offset = bsearch_mem_mbox(keybuf.s, db->base, db->size, 0, &len);
 
     /* overwrite? */
     if (len && !overwrite) {
