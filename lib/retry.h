@@ -58,7 +58,7 @@
 
 extern int retry_read P((int fd, void *buf, size_t nbyte));
 extern int retry_write P((int fd, const void *buf, size_t nbyte));
-extern int retry_writev P((int fd, struct iovec *iov, int iovcnt));
+extern int retry_writev P((int fd, const struct iovec *iov, int iovcnt));
 
 /* add a buffer 's' of length 'len' to iovec 'iov' */
 #define WRITEV_ADD_TO_IOVEC(iov, num_iov, s, len) \
