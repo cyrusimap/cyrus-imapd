@@ -59,7 +59,6 @@
 #include <sys/uio.h>
 #include "cyrusdb.h"
 #include "map.h"
-#include "bsearch.h"
 #include "util.h"
 
 #include "assert.h"

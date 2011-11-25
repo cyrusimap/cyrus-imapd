@@ -82,7 +82,6 @@
 
 #include "acl.h"
 #include "assert.h"
-#include "bsearch.h"
 #include "crc32.h"
 #include "imparse.h"
 #include "global.h"
