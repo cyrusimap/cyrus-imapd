@@ -1226,7 +1226,7 @@ static int meth_mkcol(struct transaction_t *txn)
     }
 
     /* Create the mailbox */
-    r = mboxlist_createmailbox(mailboxname, 0, partition, 
+    r = mboxlist_createmailbox(mailboxname, MBTYPE_CALENDAR, partition, 
 			       httpd_userisadmin || httpd_userisproxyadmin,
 			       httpd_userid, httpd_authstate,
 			       0, 0, 0);
