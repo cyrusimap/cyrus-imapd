@@ -1057,7 +1057,7 @@ int charset_searchstring(const char *substr, comp_pat *pat,
     res = search_havematch(tosearch);
 
     /* clean up */
-    search_free(input);
+    convert_free(input);
 
     return res;
 }
