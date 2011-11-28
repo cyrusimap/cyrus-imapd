@@ -846,7 +846,7 @@ void index_fetchresponses(struct index_state *state,
 			  const struct fetchargs *fetchargs,
 			  int *fetchedsomething)
 {
-    uint32_t msgno;
+    uint32_t msgno, start, end;
     uint32_t checkval;
     struct index_map *im;
     int fetched = 0;
@@ -857,7 +857,31 @@ void index_fetchresponses(struct index_state *state,
     if ((fetchargs->fetchitems & FETCH_ANNOTATION))
 	annotate_getdb(state->mailbox->name, &annot_db);
 
-    for (msgno = 1; msgno <= state->exists; msgno++) {
+    start = 1;
+    end = state->exists;
+
+    /* compress the search range down if a sequence was given */
+    if (seq) {
+	unsigned first = seqset_first(seq);
+	unsigned last = seqset_last(seq);
+
+	if (usinguid) {
+	    if (first > 1)
+		start = index_finduid(state, first);
+	    if (first == last)
+		end = start;
+	    else if (last < state->last_uid)
+		end = index_finduid(state, last);
+	}
+	else {
+	    if (start < first)
+		start = first;
+	    if (end > last)
+		end = last;
+	}
+    }
+
+    for (msgno = start; msgno <= end; msgno++) {
 	im = &state->map[msgno-1];
 	checkval = usinguid ? im->record.uid : msgno;
 	if (seq && !seqset_ismember(seq, checkval))
