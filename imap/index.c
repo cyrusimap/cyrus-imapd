@@ -681,9 +681,10 @@ int index_check(struct index_state *state, int usinguid, int printuid)
 	return IMAP_MAILBOX_NONEXISTENT;
     }
 
-    index_refresh(state);
+    /* if highestmodseq has changed, read updates */
+    if (state->highestmodseq != mailbox->i.highestmodseq)
+	index_refresh(state);
 
-    /* any updates? */
     index_tellchanges(state, usinguid, printuid, 0);
 
 #if TOIMSP
@@ -1350,8 +1351,13 @@ int index_getuidsequence(struct index_state *state,
 static int index_lock(struct index_state *state)
 {
     int r = mailbox_lock_index(state->mailbox, LOCK_EXCLUSIVE);
-    if (!r) index_refresh(state);
-    return r;
+    if (r) return r;
+
+    /* if highestmodseq has changed, read updates */
+    if (state->highestmodseq != state->mailbox->i.highestmodseq)
+	index_refresh(state);
+
+    return 0;
 }
 
 int index_status(struct index_state *state, struct statusdata *sdata)
