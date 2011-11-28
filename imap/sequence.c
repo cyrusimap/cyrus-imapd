@@ -308,6 +308,16 @@ int seqset_ismember(struct seqset *seq, unsigned num)
     return 0;
 }
 
+unsigned seqset_first(struct seqset *seq)
+{
+    return seq->set[0].low;
+}
+
+unsigned seqset_last(struct seqset *seq)
+{
+    return seq->set[seq->len-1].high;
+}
+
 unsigned seqset_getnext(struct seqset *seq)
 {
     unsigned num;
