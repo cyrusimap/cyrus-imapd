@@ -76,6 +76,7 @@ struct cyrusdb_backend *cyrusdb_backends[] = {
 #if defined HAVE_MYSQL || defined HAVE_PGSQL || defined HAVE_SQLITE
     &cyrusdb_sql,
 #endif
+    &cyrusdb_twoskip,
     NULL };
 
 void cyrusdb_init(void)
@@ -303,6 +304,9 @@ const char *cyrusdb_detect(const char *fname)
     /* only compare first 16 bytes, that's OK */
     if (!strncmp(buf, "\241\002\213\015skiplist file\0\0\0", 16))
 	return "skiplist";
+
+    if (!strncmp(buf, "\241\002\213\015twoskip file\0\0\0\0", 16))
+	return "twoskip";
 
     bdb_magic = *(uint32_t *)(buf+12);
 

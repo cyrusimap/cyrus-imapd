@@ -216,6 +216,7 @@ extern struct cyrusdb_backend cyrusdb_flat;
 extern struct cyrusdb_backend cyrusdb_skiplist;
 extern struct cyrusdb_backend cyrusdb_quotalegacy;
 extern struct cyrusdb_backend cyrusdb_sql;
+extern struct cyrusdb_backend cyrusdb_twoskip;
 
 extern int cyrusdb_copyfile(const char *srcname, const char *dstname);
 

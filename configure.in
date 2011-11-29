@@ -179,7 +179,7 @@ AC_FUNC_VPRINTF
 dnl function for doing each of the database backends
 dnl parameters: backend name, variable to set, withval
 
-CYRUSDB_OBJS="cyrusdb_flat.o cyrusdb_skiplist.o cyrusdb_quotalegacy.o"
+CYRUSDB_OBJS="cyrusdb_flat.o cyrusdb_skiplist.o cyrusdb_quotalegacy.o cyrusdb_twoskip.o"
 
 dnl Berkeley DB Detection
 

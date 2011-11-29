@@ -19,7 +19,7 @@ struct binary_result
     size_t datalen;
 };
 
-static char *backend = CUNIT_PARAM("skiplist,flat,berkeley");
+static char *backend = CUNIT_PARAM("skiplist,flat,berkeley,twoskip");
 static struct cyrusdb_backend *DB;
 static char *filename;
 static char *filename2;
