@@ -1037,10 +1037,10 @@ out:
 
 
 static void prefetch_messages(struct index_state *state,
-			      const char *sequence, int usinguid)
+			      struct seqset *seq,
+			      int usinguid)
 {
     struct mailbox *mailbox = state->mailbox;
-    struct seqset *seq = NULL;
     struct index_map *im;
     unsigned checkval;
     uint32_t msgno;
@@ -1048,9 +1048,6 @@ static void prefetch_messages(struct index_state *state,
     int fd;
 
     syslog(LOG_ERR, "Prefetching initial parts of messages\n");
-
-    seq = _parse_sequence(state, sequence, usinguid);
-    if (!seq) return;
 
     for (msgno = 1; msgno <= state->exists; msgno++) {
 	im = &state->map[msgno-1];
@@ -1109,7 +1106,7 @@ int index_run_annotator(struct index_state *state,
     seq = _parse_sequence(state, sequence, usinguid);
     if (!seq) goto out;
 
-    prefetch_messages(state, sequence, usinguid);
+    prefetch_messages(state, seq, usinguid);
 
     for (msgno = 1; msgno <= state->exists; msgno++) {
 	im = &state->map[msgno-1];
