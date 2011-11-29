@@ -1126,12 +1126,23 @@ int index_run_annotator(struct index_state *state,
     }
 
 out:
-    if (!r)
-	append_commit(&as, NULL, NULL, NULL, NULL);
-    else
+    if (!r) {
+	/* There's a delicate dance involved in shutting all
+	 * this down without double-unlocking the mailbox; the
+	 * trick is to give append_commit() a non-NULL mailbox**
+	 * to avoid it calling mailbox_close() too early. */
+	struct mailbox *mailbox = NULL;
+	append_commit(&as, NULL, NULL, NULL, &mailbox);
+	/* it turns out that index_unlock() really needs to be
+	 * called with a locked mailbox, if the seen data is dirty */
+	index_unlock(state);
+	mailbox_close(&mailbox);
+    }
+    else {
+	/* append abort unlocks the mailbox */
 	append_abort(&as);
+    }
     seqset_free(seq);
-    index_unlock(state);
     index_tellchanges(state, usinguid, usinguid, 1);
     return r;
 }
