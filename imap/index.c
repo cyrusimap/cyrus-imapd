@@ -874,12 +874,14 @@ void index_fetchresponses(struct index_state *state,
 		end = index_finduid(state, last);
 	}
 	else {
-	    if (start < first)
-		start = first;
-	    if (end > last)
-		end = last;
+	    start = first;
+	    end = last;
 	}
     }
+
+    /* make sure we didn't go outside the range! */
+    if (start < 1) start = 1;
+    if (end > state->exists) end = state->exists;
 
     for (msgno = start; msgno <= end; msgno++) {
 	im = &state->map[msgno-1];
