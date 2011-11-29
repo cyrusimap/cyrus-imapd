@@ -437,3 +437,10 @@ size_t mappedfile_size(struct mappedfile *mf)
 
     return mf->map_size;
 }
+
+const char *mappedfile_fname(struct mappedfile *mf)
+{
+    assert(mf);
+
+    return mf->fname;
+}

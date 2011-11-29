@@ -77,5 +77,6 @@ extern int mappedfile_iswritelocked(struct mappedfile *mf);
 
 extern const char *mappedfile_base(struct mappedfile *mf);
 extern size_t mappedfile_size(struct mappedfile *mf);
+extern const char *mappedfile_fname(struct mappedfile *mf);
 
 #endif /* _MAPPEDFILE_H */
