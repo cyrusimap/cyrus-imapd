@@ -423,7 +423,8 @@ int cache_parserecord(struct buf *cachebase, unsigned cache_offset,
     offset = cache_offset;
 
     if (offset >= cachebase->len) {
-	syslog(LOG_ERR, "IOERROR: offset greater than cache size");
+	syslog(LOG_ERR, "IOERROR: offset greater than cache size %u %u",
+	       offset, cachebase->len);
 	return IMAP_IOERROR;
     }
 
@@ -442,7 +443,8 @@ int cache_parserecord(struct buf *cachebase, unsigned cache_offset,
 
 	offset = next - cachebase->s;
 	if (offset > cachebase->len) {
-	    syslog(LOG_ERR, "IOERROR: offset greater than cache size");
+	    syslog(LOG_ERR, "IOERROR: offset greater than cache size %u %u (%d)",
+		   offset, cachebase->len, cache_ent);
 	    return IMAP_IOERROR;
 	}
     }
