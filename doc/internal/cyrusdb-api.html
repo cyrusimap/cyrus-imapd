@@ -22,6 +22,10 @@ different access patterns, while ensuring a consistent interface.</p>
 interface from within parts of Cyrus code, as well as how to implement
 your own backend</p>
 
+<p>If you pass incorrect values to these APIs, you will get an assertion
+failure in most cases.  That's generally considered safer than silenty
+breaking things.  Exceptions are noted below.</p>
+
 <h2>Code Layout</h2>
 
 <p>The implementation of each interface is in <tt>lib/cyrusdb_NAME.c</tt>,
@@ -208,7 +212,6 @@ if you are only interested in the length</p>
 <ul>
  <li>CYRUSDB_IOERROR - if any error occurs reading from the database</li>
  <li>CYRUSDB_LOCKED - if tidptr is incorrect</li>
- <li>CYRUSDB_BADPARAM - if incorrect parameters are passed</li>
  <li>CYRUSDB_NOTFOUND - if there is no record that matches the key</li>
 </ul></p>
 
@@ -245,7 +248,6 @@ current record has changed or been removed.  procp MUST NOT be NULL.</p>
  <li>procp_result - whatever your callback returns</li>
  <li>CYRUSDB_IOERROR - if any error occurs while reading</li>
  <li>CYRUSDB_LOCKED - if tidptr is incorrect</li>
- <li>CYRUSDB_BADPARAM - if any parameters are incorrect</li>
 </ul></p>
 
 <h3>create(struct db *db, const char *key, size_t keylen, const char *data,
@@ -269,7 +271,6 @@ is not legal to pass NULL for key or zero for keylen</li>
 <p>Errors:
 <ul>
  <li>CYRUSDB_IOERROR - any error to write to the database</li>
- <li>CYRUSDB_BADPARAM - any error with parameters</li>
  <li>CYRUSDB_LOCKED - if tidptr is incorrect</li>
  <li>CYRUSDB_EXISTS - if <tt>create</tt> is called on an existing key</li>
  <li>CYRUSDB_AGAIN - if a deadlock is created.  The current transaction has
@@ -287,7 +288,6 @@ succeed even if the record doesn't currently exist.</p>
 <p>Errors:
 <ul>
  <li>CYRUSDB_IOERROR - any error to write to the database</li>
- <li>CYRUSDB_BADPARAM - any error with parameters</li>
  <li>CYRUSDB_LOCKED - if tidptr is incorrect</li>
  <li>CYRUSDB_NOTFOUND - if force is not set and the key doesn't exist</li>
  <li>CYRUSDB_AGAIN - if a deadlock is created.  The current transaction has
@@ -305,7 +305,6 @@ regardless of success</p>
 <p>Errors:
 <ul>
  <li>CYRUSDB_IOERROR - any error to write to the database</li>
- <li>CYRUSDB_BADPARAM - no tid or db passed</li>
  <li>CYRUSDB_LOCKED - if tidptr is incorrect</li>
  <li>CYRUSDB_AGAIN - if a deadlock is created.  The current transaction has
      been aborted, but a retry may succeed</li>
@@ -320,7 +319,6 @@ regardless of success</p>
 
 <p>Errors:
 <ul>
- <li>CYRUSDB_BADPARAM - no tid or db passed</li>
  <li>CYRUSDB_IOERROR - any error to write to the database</li>
  <li>CYRUSDB_LOCKED - if tidptr is incorrect</li>
 </ul></p>
