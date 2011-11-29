@@ -79,9 +79,8 @@ sub set_up
     $admintalk->create("user.cassandane.asub.deeper");
 
     # sub folders of another user - one is subscribable
-    $admintalk->create("user.other") || die "can't create user.other";
-    $admintalk->create("user.other.sub");
-    $admintalk->create("user.other.sub.folder");
+    $self->{instance}->create_user("other",
+				   subdirs => [ qw(sub sub.folder) ]);
     $admintalk->setacl("user.other.sub.folder", "cassandane", "lrs");
 
     my $usertalk = $self->{store}->get_client();

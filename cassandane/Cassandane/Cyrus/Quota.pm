@@ -733,8 +733,7 @@ sub test_quota_f
 	["x-annotation-storage", 0, 10000]
     ]);
 
-    $admintalk->create("user.quotafuser");
-    $admintalk->setacl("user.quotafuser", "admin", 'lrswipkxtecda');
+    $self->{instance}->create_user("quotafuser");
     $self->{adminstore}->set_folder("user.quotafuser");
     my $quotafuser_expected_storage = 0;
     my $quotafuser_expected_message = 0;
@@ -865,11 +864,8 @@ sub test_prefix_mboxexists
 
     my $admintalk = $self->{adminstore}->get_client();
 
-    $admintalk->create("user.base");
-    $admintalk->create("user.base.subdir");
-    $admintalk->create("user.base.subdir2");
-    $admintalk->setacl("user.base", "admin", 'lrswipkxtecda');
-    $admintalk->setacl("user.base.subdir2", "admin", 'lrswipkxtecda');
+    $self->{instance}->create_user("base",
+				   subdirs => [ qw(subdir subdir2) ]);
     $self->{adminstore}->set_folder("user.base");
     for (1..3) {
 	$self->make_message("base $_", store => $self->{adminstore}, extra_lines => 12345);
@@ -879,10 +875,8 @@ sub test_prefix_mboxexists
 	$self->make_message("base $_", store => $self->{adminstore}, extra_lines => 12345);
     }
 
-    $admintalk->create("user.baseplus");
-    $admintalk->create("user.baseplus.subdir");
-    $admintalk->setacl("user.baseplus", "admin", 'lrswipkxtecda');
-    $admintalk->setacl("user.baseplus.subdir", "admin", 'lrswipkxtecda');
+    $self->{instance}->create_user("baseplus",
+				   subdirs => [ qw(subdir) ]);
     $admintalk->setquota("user.baseplus", "(storage 1000000)");
     $self->{adminstore}->set_folder("user.baseplus");
     for (1..3) {

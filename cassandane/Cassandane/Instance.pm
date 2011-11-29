@@ -435,6 +435,35 @@ sub _start_master
     xlog "_start_master: all services listening";
 }
 
+sub create_user
+{
+    my ($self, $user, %params) = @_;
+
+    xlog "create user $user";
+    my $srv = $self->get_service('imap');
+    die "No IMAP service in create_user"
+	unless defined $srv;
+
+    my $adminstore = $srv->create_store(username => 'admin');
+    my $adminclient = $adminstore->get_client();
+
+    my @mboxes = ( "user.$user" );
+    map { push(@mboxes, "user.$user.$_"); } @{$params{subdirs}}
+	if ($params{subdirs});
+
+    foreach my $mb (@mboxes)
+    {
+	$adminclient->create($mb)
+	    or die "Cannot create $mb: $@";
+	$adminclient->setacl($mb, admin => 'lrswipkxtecda')
+	    or die "Cannot setacl for $mb: $@";
+	$adminclient->setacl($mb, $user => 'lrswipkxtecd')
+	    or die "Cannot setacl for $mb: $@";
+	$adminclient->setacl($mb, anyone => 'p')
+	    or die "Cannot setacl for $mb: $@";
+    }
+}
+
 sub start
 {
     my ($self) = @_;
@@ -458,15 +487,7 @@ sub start
 
     if ($created && $self->{setup_mailbox} && defined $self->get_service('imap'))
     {
-	my $owner = "cassandane";
-
-	xlog "create user $owner";
-	my $adminstore = $self->get_service('imap')->create_store(username => 'admin');
-	my $adminclient = $adminstore->get_client();
-	$adminclient->create("user.$owner");
-	$adminclient->setacl("user.$owner", admin => 'lrswipkxtecda');
-	$adminclient->setacl("user.$owner", $owner => 'lrswipkxtecd');
-	$adminclient->setacl("user.$owner", anyone => 'p');
+	$self->create_user("cassandane");
     }
 }
 
