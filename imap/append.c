@@ -236,15 +236,17 @@ int append_commit(struct appendstate *as,
     if (num) *num = as->nummsg;
     if (uidvalidity) *uidvalidity = as->mailbox->i.uidvalidity;
 
-    /* Calculate new index header information */
-    as->mailbox->i.last_appenddate = time(0);
+    if (as->nummsg) {
+	/* Calculate new index header information */
+	as->mailbox->i.last_appenddate = time(0);
 
-    /* the cache will be dirty even if we hand added the records */
-    as->mailbox->cache_dirty = 1;
+	/* the cache will be dirty even if we hand added the records */
+	as->mailbox->cache_dirty = 1;
 
-    /* set seen state */
-    if (as->userid[0])
-	append_addseen(as->mailbox, as->userid, as->seen_seq);
+	/* set seen state */
+	if (as->userid[0])
+	    append_addseen(as->mailbox, as->userid, as->seen_seq);
+    }
     seqset_free(as->seen_seq);
     
     /* We want to commit here to guarantee mailbox on disk vs
