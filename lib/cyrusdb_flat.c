@@ -102,7 +102,7 @@ static struct db *alldbs;
  */
 #define ESCAPE	    0xff
 
-static void encode(const char *ps, size_t len, struct buf *buf)
+static void encode(const char *ps, int len, struct buf *buf)
 {
     const unsigned char *p = (const unsigned char *)ps;
 
@@ -172,7 +172,7 @@ static int abort_txn(struct db *db, struct txn *tid)
     int rw = 0;
     struct stat sbuf;
 
-    if (!db || !tid) return CYRUSDB_BADPARAM;
+    assert(db && tid);
 
     /* cleanup done while lock is held */
     if (tid->fnamenew) {
@@ -259,8 +259,6 @@ static int myarchive(const char **fnames, const char *dirname)
     const char **fname;
     char dstname[1024], *dp;
 
-    if (!fnames || !dirname) return CYRUSDB_BADPARAM;
-
     strlcpy(dstname, dirname, sizeof(dstname));
     d_length = strlen(dstname);
     dp = dstname + d_length;
@@ -286,7 +284,7 @@ static int myopen(const char *fname, int flags, struct db **ret)
     struct db *db;
     struct stat sbuf;
 
-    if (!fname || !ret) return CYRUSDB_BADPARAM;
+    assert(fname && ret);
 
     db = find_db(fname);
     if (db)
@@ -335,8 +333,6 @@ out:
 static int myclose(struct db *db)
 {
     struct db **prevp;
-
-    if (!db) return CYRUSDB_BADPARAM;
 
     assert(db);
     if (--db->refcount > 0)
@@ -434,8 +430,7 @@ static int myfetch(struct db *db,
     unsigned long len;
     struct buf keybuf = BUF_INITIALIZER;
 
-    if (!db || !key || !keylen) return CYRUSDB_BADPARAM;
-    if (data && !datalen) return CYRUSDB_BADPARAM;
+    assert(db);
 
     if (data) *data = NULL;
     if (datalen) *datalen = 0;
@@ -525,9 +520,6 @@ static int foreach(struct db *db,
     unsigned long len;
     const char *p, *pend;
     const char *dataend;
-
-    if (!db || !cb) return CYRUSDB_BADPARAM;
-    if (prefixlen && !prefix) return CYRUSDB_BADPARAM;
 
     /* for use inside the loop, but we need the values to be retained
      * from loop to loop */
@@ -644,13 +636,11 @@ static int foreach(struct db *db,
 static int mystore(struct db *db, 
 		   const char *key, size_t keylen,
 		   const char *data, size_t datalen,
-		   struct txn **mytid, int overwrite,
-		   int isdelete)
+		   struct txn **mytid, int overwrite)
 {
     int r = 0;
     char fnamebuf[1024];
     int offset;
-    const char dummy = 0;
     unsigned long len;
     const char *lockfailaction;
     int writefd;
@@ -659,11 +649,6 @@ static int mystore(struct db *db,
     struct stat sbuf;
     struct buf keybuf = BUF_INITIALIZER;
     struct buf databuf = BUF_INITIALIZER;
-
-    if (!db || !key || !keylen) return CYRUSDB_BADPARAM;
-    if (datalen && !data) return CYRUSDB_BADPARAM;
-
-    if (!data) data = &dummy;
 
     /* lock file, if needed */
     if (!mytid || !*mytid) {
@@ -722,7 +707,7 @@ static int mystore(struct db *db,
 	WRITEV_ADD_TO_IOVEC(iov, niov, (char *) db->base, offset);
     }
 
-    if (!isdelete) {
+    if (data) {
 	/* new entry */
 	encode(data, datalen, &databuf);
 	WRITEV_ADD_TO_IOVEC(iov, niov, keybuf.s, keybuf.len);
@@ -801,7 +786,11 @@ static int create(struct db *db,
 		  const char *data, size_t datalen,
 		  struct txn **tid)
 {
-    return mystore(db, key, keylen, data, datalen, tid, 0, 0);
+    if (!data) {
+	data = "";
+	datalen = 0;
+    }
+    return mystore(db, key, keylen, data, datalen, tid, 0);
 }
 
 static int store(struct db *db, 
@@ -809,14 +798,18 @@ static int store(struct db *db,
 		 const char *data, size_t datalen,
 		 struct txn **tid)
 {
-    return mystore(db, key, keylen, data, datalen, tid, 1, 0);
+    if (!data) {
+	data = "";
+	datalen = 0;
+    }
+    return mystore(db, key, keylen, data, datalen, tid, 1);
 }
 
 static int delete(struct db *db, 
 		  const char *key, size_t keylen,
 		  struct txn **mytid, int force __attribute__((unused)))
 {
-    return mystore(db, key, keylen, NULL, 0, mytid, 1, 1);
+    return mystore(db, key, keylen, NULL, 0, mytid, 1);
 }
 
 static int commit_txn(struct db *db, struct txn *tid)
@@ -825,7 +818,7 @@ static int commit_txn(struct db *db, struct txn *tid)
     int r = 0;
     struct stat sbuf;
 
-    if (!db || !tid) return CYRUSDB_BADPARAM;
+    assert(db && tid);
 
     if (tid->fnamenew) {
 	/* we wrote something */

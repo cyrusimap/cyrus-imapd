@@ -135,7 +135,7 @@ static int init(const char *dbdir, int myflags)
     static char errpfx[10]; /* needs to be static; bdb doesn't copy */
     int opt;
 
-    if (dbinit) return 0;
+    if (dbinit++) return 0;
 
     db_version(&maj, &min, &patch);
     if (maj != DB_VERSION_MAJOR || min != DB_VERSION_MINOR ||
@@ -144,7 +144,7 @@ static int init(const char *dbdir, int myflags)
 	       "compiled against %d.%d.%d, linked against %d.%d.%d",
 	       DB_VERSION_MAJOR, DB_VERSION_MINOR, DB_VERSION_PATCH,
 	       maj, min, patch);
-	return 0;
+	fatal("wrong db version", EC_SOFTWARE);
     }
 
     if (myflags & CYRUSDB_RECOVER) {
@@ -153,7 +153,7 @@ static int init(const char *dbdir, int myflags)
 
     if ((r = db_env_create(&dbenv, 0)) != 0) {
 	syslog(LOG_ERR, "DBERROR: db_appinit failed: %s", db_strerror(r));
-	return 0;
+	return CYRUSDB_IOERROR;
     }
     dbenv->set_paniccall(dbenv, (void (*)(DB_ENV *, int)) &db_panic);
     if (CONFIG_DB_VERBOSE) {
@@ -191,7 +191,7 @@ static int init(const char *dbdir, int myflags)
 	if (r) {
 	    dbenv->err(dbenv, r, "set_lk_max");
 	    syslog(LOG_ERR, "DBERROR: set_lk_max(): %s", db_strerror(r));
-	    return 0;
+	    abort();
 	}
     }
 
@@ -203,7 +203,7 @@ static int init(const char *dbdir, int myflags)
 	if (r) {
 	    dbenv->err(dbenv, r, "set_tx_max");
 	    syslog(LOG_ERR, "DBERROR: set_tx_max(): %s", db_strerror(r));
-	    return 0;
+	    abort();
 	}
     }
 
@@ -217,7 +217,7 @@ static int init(const char *dbdir, int myflags)
 	    dbenv->err(dbenv, r, "set_cachesize");
 	    (dbenv->close)(dbenv, 0);
 	    syslog(LOG_ERR, "DBERROR: set_cachesize(): %s", db_strerror(r));
-	    return 0;
+	    return CYRUSDB_IOERROR;
 	}
     }
 
@@ -253,7 +253,7 @@ static int init(const char *dbdir, int myflags)
 	
 	syslog(LOG_ERR, "DBERROR: dbenv->open '%s' failed: %s", dbdir,
 	       db_strerror(r));
-	return 0;
+	return CYRUSDB_IOERROR;
     }
 
     dbinit = 1;
@@ -265,14 +265,15 @@ static int done(void)
 {
     int r;
 
-    if (!dbinit) return 0;
+    if (--dbinit) return 0;
 
     r = (dbenv->close)(dbenv, 0);
-
-    if (r) syslog(LOG_ERR, "DBERROR: error exiting application: %s",
-	          db_strerror(r));
-
     dbinit = 0;
+    if (r) {
+	syslog(LOG_ERR, "DBERROR: error exiting application: %s",
+	       db_strerror(r));
+	return CYRUSDB_IOERROR;
+    }
 
     return 0;
 }
@@ -310,8 +311,6 @@ static int myarchive(const char **fnames, const char *dirname)
     const char **fname;
     char dstname[1024], *dp;
     int length, rest;
-
-    assert(dbinit);
 
     strlcpy(dstname, dirname, sizeof(dstname));
     length = strlen(dstname);
@@ -404,9 +403,7 @@ static int myopen(const char *fname, DBTYPE type, int flags, struct db **ret)
     int r;
     int dbflags = (flags & CYRUSDB_CREATE) ? DB_CREATE : 0;
 
-    assert(dbinit);
-
-    if (!fname || !ret) return CYRUSDB_BADPARAM;
+    assert(dbinit && fname && ret);
 
     *ret = NULL;
 
@@ -454,9 +451,7 @@ static int myclose(struct db *db)
     int r;
     DB *a = (DB *) db;
 
-    assert(dbinit);
-
-    if (!db) return CYRUSDB_BADPARAM;
+    assert(dbinit && db);
 
     /* since we're using txns, we can supply DB_NOSYNC */
     r = (a->close)(a, DB_NOSYNC);
@@ -506,10 +501,7 @@ static int myfetch(struct db *mydb,
     DB *db = (DB *) mydb;
     DB_TXN *tid = NULL;
 	
-    assert(dbinit);
-
-    if (!db || !key || !keylen) return CYRUSDB_BADPARAM;
-    if (data && !datalen) return CYRUSDB_BADPARAM;
+    assert(dbinit && db);
 
     if (data) *data = NULL;
     if (datalen) *datalen = 0;
@@ -600,10 +592,8 @@ static int foreach(struct db *mydb,
     DB *db = (DB *) mydb;
     DB_TXN *tid = NULL;
 
-    assert(dbinit);
-
-    if (!db || !cb) return CYRUSDB_BADPARAM;
-    if (prefixlen && !prefix) return CYRUSDB_BADPARAM;
+    assert(dbinit && db);
+    assert(cb);
 
     memset(&k, 0, sizeof(k));
     memset(&d, 0, sizeof(d));
@@ -744,17 +734,14 @@ static int mystore(struct db *mydb,
 		   struct txn **mytid, int putflags, int txnflags)
 {
     int r = 0;
-    const char dummy = 0;
     DBT k, d;
     DB_TXN *tid;
     DB *db = (DB *) mydb;
 
-    assert(dbinit);
-
-    if (!db || !key || !keylen) return CYRUSDB_BADPARAM;
-    if (datalen && !data) return CYRUSDB_BADPARAM;
-
-    if (!data) data = &dummy;
+    assert(dbinit && db);
+    assert(key && keylen);
+    if (!data)
+	datalen = 0;
 
     r = gettid(mytid, &tid, "mystore");
     if (r) return r;
@@ -866,10 +853,9 @@ static int mydelete(struct db *mydb,
     DB_TXN *tid;
     DB *db = (DB *) mydb;
 
-    assert(dbinit);
+    assert(dbinit && db);
+    assert(key && keylen);
 
-    if (!db || !key || !keylen) return CYRUSDB_BADPARAM;
- 
     r = gettid(mytid, &tid, "delete");
     if (r) return r;
 
@@ -956,9 +942,7 @@ static int mycommit(struct db *db __attribute__((unused)),
     int r;
     DB_TXN *t = (DB_TXN *) tid;
 
-    assert(dbinit);
-
-    if (!tid) return CYRUSDB_BADPARAM;
+    assert(dbinit && tid);
 
     if (CONFIG_DB_VERBOSE)
 	syslog(LOG_DEBUG, "mycommit: committing txn %lu",
@@ -997,9 +981,7 @@ static int abort_txn(struct db *db __attribute__((unused)),
     int r;
     DB_TXN *t = (DB_TXN *) tid;
 
-    assert(dbinit);
-
-    if (!tid) return CYRUSDB_BADPARAM;
+    assert(dbinit && tid);
 
     if (CONFIG_DB_VERBOSE)
 	syslog(LOG_DEBUG, "abort_txn: aborting txn %lu",
