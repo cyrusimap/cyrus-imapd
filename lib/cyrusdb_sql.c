@@ -489,7 +489,8 @@ static int myopen(const char *fname, int flags, struct db **ret)
     void *conn = NULL;
     char *p, *table, cmd[1024];
 
-    if (!fname || !ret) return CYRUSDB_BADPARAM;
+    assert(fname);
+    assert(ret);
 
     /* make a connection to the database */
     database = libcyrus_config_getstring(CYRUSOPT_SQL_DATABASE);
@@ -579,7 +580,7 @@ static int myopen(const char *fname, int flags, struct db **ret)
 
 static int myclose(struct db *db)
 {
-    if (!db) return CYRUSDB_BADPARAM;
+    assert(db);
 
     dbengine->sql_close(db->conn);
     free(db->table);
@@ -669,8 +670,10 @@ static int fetch(struct db *db,
     struct select_rock srock = { 0, NULL, NULL, &fetch_cb, &frock };
     int r;
 
-    if (!db || !key || !keylen) return CYRUSDB_BADPARAM;
-    if (data && !datalen) return CYRUSDB_BADPARAM;
+    assert(db);
+    assert(key);
+    assert(keylen);
+    if (datalen) assert(data);
 
     if (data) *data = NULL;
     if (datalen) *datalen = 0;
@@ -712,8 +715,9 @@ static int foreach(struct db *db,
     struct select_rock srock = { 0, NULL, goodp, cb, rock };
     int r;
 
-    if (!db || !cb) return CYRUSDB_BADPARAM;
-    if (prefixlen && !prefix) return CYRUSDB_BADPARAM;
+    assert(db);
+    assert(cb);
+    if (prefixlen) assert(prefix);
 
     if (tid) {
 	if (!*tid && !(*tid = start_txn(db))) return CYRUSDB_INTERNAL;
@@ -750,8 +754,10 @@ static int mystore(struct db *db,
     const char dummy = 0;
     int r = 0;
 
-    if (!db || !key || !keylen) return CYRUSDB_BADPARAM;
-    if (datalen && !data) return CYRUSDB_BADPARAM;
+    assert(db);
+    assert(key);
+    assert(keylen);
+    if (datalen) assert(data);
 
     if (!data) data = &dummy;
 
@@ -876,14 +882,16 @@ static int finish_txn(struct db *db, struct txn *tid, int commit)
 
 static int commit_txn(struct db *db, struct txn *tid)
 {
-    if (!db || !tid) return CYRUSDB_BADPARAM;
+    assert(db);
+    assert(tid);
 
     return finish_txn(db, tid, 1);
 }
 
 static int abort_txn(struct db *db, struct txn *tid)
 {
-    if (!db || !tid) return CYRUSDB_BADPARAM;
+    assert(db);
+    assert(tid);
 
     return finish_txn(db, tid, 0);
 }
