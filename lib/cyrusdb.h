@@ -148,7 +148,7 @@ struct cyrusdb_backend {
 		     struct txn **mytid);
     int (*fetchnext)(struct db *mydb, 
 		 const char *key, size_t keylen,
-		 const char *foundkey, size_t foundkeylen,
+		 const char **foundkey, size_t *foundkeylen,
 		 const char **data, size_t *datalen,
 		 struct txn **mytid);
 
