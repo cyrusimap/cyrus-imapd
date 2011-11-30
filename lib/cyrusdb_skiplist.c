@@ -776,6 +776,27 @@ static int dispose_db(struct db *db)
     return 0;
 }
 
+/* NOTE: this function compares with the SIGNED CHAR value of
+ * the individual characters.  This is a pretty bogus sort order,
+ * but for backwards compatibility reasons we're stuck with it
+ * for skiplist files at least */
+static int compare_signed(const char *s1, int l1, const char *s2, int l2)
+{
+    int min = l1 < l2 ? l1 : l2;
+
+    while (min-- > 0 && (cmp = *s1 - *s2) == 0) {
+	s1++;
+	s2++;
+    }
+    if (min >= 0) {
+	return cmp;
+    } else {
+	if (l1 > l2) return 1;
+	else if (l2 > l1) return -1;
+	else return 0;
+    }
+}
+
 static int myopen(const char *fname, int flags, struct db **ret)
 {
     struct db *db;
@@ -797,7 +818,7 @@ static int myopen(const char *fname, int flags, struct db **ret)
     db = (struct db *) xzmalloc(sizeof(struct db));
     db->fd = -1;
     db->fname = xstrdup(fname);
-    db->compar = (flags & CYRUSDB_MBOXSORT) ? bsearch_ncompare_mbox : bsearch_ncompare_raw;
+    db->compar = (flags & CYRUSDB_MBOXSORT) ? bsearch_ncompare_mbox : compare_signed;
 
     db->fd = open(fname, O_RDWR, 0644);
     if (db->fd == -1 && errno == ENOENT) {
