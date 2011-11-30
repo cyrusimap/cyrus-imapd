@@ -314,10 +314,16 @@ static void test_sync_done(const char *mboxname)
  * A quotaroot was found, add it to our list
  */
 static int fixquota_addroot(struct quota *q,
-			    void *rock __attribute__((unused)))
+			    void *rock)
 {
+    const char *prefix = (const char *)rock;
+    int prefixlen = (prefix ? strlen(prefix) : 0);
     struct txn *tid = NULL;
     int r;
+
+    assert(prefixlen <= (int)strlen(q->root));
+    if (prefixlen && q->root[prefixlen] && q->root[prefixlen] != '.')
+	return 0;
 
     if (quota_num == quota_alloc) {
 	/* Create new qr list entry */
@@ -384,7 +390,7 @@ int buildquotalist(char *domain, char **roots, int nroots)
 
     /* basic case - everything (potentially limited by domain still) */
     if (!nroots) {
-	r = quota_foreach(buf, fixquota_addroot, NULL, NULL);
+	r = quota_foreach(buf, fixquota_addroot, buf, NULL);
 	if (r) {
 	    errmsg("failed building quota list for '%s'", buf, IMAP_IOERROR);
 	}
@@ -399,7 +405,7 @@ int buildquotalist(char *domain, char **roots, int nroots)
 	/* change the separator to internal namespace */
 	mboxname_hiersep_tointernal(&quota_namespace, tail, 0);
 
-	r = quota_foreach(buf, fixquota_addroot, NULL, NULL);
+	r = quota_foreach(buf, fixquota_addroot, buf, NULL);
 	if (r) {
 	    errmsg("failed building quota list for '%s'", buf, IMAP_IOERROR);
 	    break;
@@ -440,14 +446,19 @@ static int findroot(const char *name, int *thisquota)
 /*
  * Pass 1: reset the 'scanned' flag on each mailbox.
  */
-static int fixquota_pass1(void *rock __attribute__((unused)),
+static int fixquota_pass1(void *rock,
 			  const char *name, size_t namelen,
 			  const char *val __attribute__((unused)),
 			  size_t vallen __attribute__((unused)))
 {
     int r = 0;
+    const char *prefix = (const char *)rock;
+    int prefixlen = (prefix ? strlen(prefix) : 0);
     struct mailbox *mailbox = NULL;
     char *mboxname = xstrndup(name, namelen);
+
+    assert(prefixlen <= namelen);
+    if (prefixlen && mboxname[prefixlen] && mboxname[prefixlen] != '.') goto done;
 
     r = mailbox_open_iwl(mboxname, &mailbox);
     if (r) {
@@ -472,15 +483,20 @@ done:
  *         and set the 'scanned' flag so that mailbox updates racing
  *         with us will start updating the usedBs[].
  */
-static int fixquota_pass2(void *rock __attribute__((unused)),
+static int fixquota_pass2(void *rock,
 			  const char *name, size_t namelen,
 			  const char *val __attribute__((unused)),
 			  size_t vallen __attribute__((unused)))
 {
     int r = 0;
+    const char *prefix = (const char *)rock;
+    int prefixlen = (prefix ? strlen(prefix) : 0);
     struct mailbox *mailbox = NULL;
     int thisquota = -1;
     char *mboxname = xstrndup(name, namelen);
+
+    assert(prefixlen <= namelen);
+    if (prefixlen && mboxname[prefixlen] && mboxname[prefixlen] != '.') goto done;
 
     test_sync_wait(mboxname);
 
@@ -632,7 +648,7 @@ int fixquota_dopass(char *domain, char **roots, int nroots,
 
     /* basic case - everything (potentially limited by domain still) */
     if (!nroots) {
-	r = mboxlist_allmbox(buf, pass, NULL);
+	r = mboxlist_allmbox(buf, pass, buf);
 	if (r) {
 	    errmsg("processing mbox list for '%s'", buf, IMAP_IOERROR);
 	}
@@ -647,7 +663,7 @@ int fixquota_dopass(char *domain, char **roots, int nroots,
 	/* change the separator to internal namespace */
 	mboxname_hiersep_tointernal(&quota_namespace, tail, 0);
 
-	r = mboxlist_allmbox(buf, pass, NULL);
+	r = mboxlist_allmbox(buf, pass, buf);
 	if (r) {
 	    errmsg("processing mbox list for '%s'", buf, IMAP_IOERROR);
 	    break;
