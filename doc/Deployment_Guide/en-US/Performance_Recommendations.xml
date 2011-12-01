@@ -1,0 +1,60 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
+<!ENTITY % BOOK_ENTITIES SYSTEM "Deployment_Guide.ent">
+%BOOK_ENTITIES;
+]>
+<chapter id="chap-Deployment_Guide-Performance_Recommendations">
+    <title>Performance Recommendations</title>
+    <para>
+        This chapter lists a variety of options to increase the Cyrus IMAP performance.
+    </para>
+    <section id="sect-Deployment_Guide-Performance_Recommendations-Databases_on_Temporary_Filesystems">
+        <title>Databases on Temporary Filesystems</title>
+        <para>
+            Some databases and files and directory trees can be moved into a temporary filesystem, which may be an in-memory filesystem.
+        </para>
+        <para>
+            In-memory filesystems are faster then disk filesystems, but are limited in space and volatile as well. The following list includes configuration settings that could make the corresponding databases, files and directory trees be created and maintained on a temporary filesystem.
+        </para>
+        <para>
+            <itemizedlist>
+                <listitem>
+                    <para>
+                        <literal>proc_path</literal>: /dev/shm/cyrus-imapd/proc
+                    </para>
+
+                </listitem>
+                <listitem>
+                    <para>
+                        <literal>mboxname_lockpath</literal>: /dev/shm/cyrus-imapd/mboxname_lock
+                    </para>
+
+                </listitem>
+                <listitem>
+                    <para>
+                        <literal>duplicate_db_path</literal>: /dev/shm/cyrus-imapd/duplicate_db
+                    </para>
+
+                </listitem>
+                <listitem>
+                    <para>
+                        <literal>statuscache_db_path</literal>: /dev/shm/cyrus-imapd/statuscache_db
+                    </para>
+
+                </listitem>
+
+            </itemizedlist>
+
+        </para>
+        <important>
+            <para>
+                Cyrus IMAP requires the parent directories to exist, and be writeable by the POSIX user account Cyrus IMAP runs under, prior to starting the <command>master</command> process.
+            </para>
+
+        </important>
+
+    </section>
+
+
+</chapter>
+
