@@ -821,6 +821,7 @@ static void mailbox_release_resources(struct mailbox *mailbox)
     }
     if (mailbox->cache_buf.s)
 	map_free((const char **)&mailbox->cache_buf.s, &mailbox->cache_len);
+    mailbox->cache_buf.len = 0;
 }
 
 /*
