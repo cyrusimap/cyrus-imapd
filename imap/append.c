@@ -1102,7 +1102,8 @@ static int load_annot_cb(const char *mailbox __attribute__((unused)),
 int append_run_annotator(struct appendstate *as,
 			 struct index_record *record)
 {
-    char *fname;
+    FILE *f = NULL;
+    const char *fname;
     struct entryattlist *user_annots = NULL;
     struct entryattlist *system_annots = NULL;
     strarray_t flags = STRARRAY_INITIALIZER;
@@ -1122,8 +1123,17 @@ int append_run_annotator(struct appendstate *as,
     fname = mailbox_message_fname(as->mailbox, record->uid);
     if (!fname) goto out;
 
-    r = message_parse2(fname, record, &body);
+    f = fopen(fname, "r");
+    if (!f) {
+	r = IMAP_IOERROR;
+	goto out;
+    }
+
+    r = message_parse_file(f, NULL, NULL, &body);
     if (r) goto out;
+
+    fclose(f);
+    f = NULL;
 
     r = callout_run(fname, body, &user_annots, &system_annots, &flags);
     if (r) goto out;
