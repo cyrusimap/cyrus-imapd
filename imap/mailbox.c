@@ -602,6 +602,19 @@ int mailbox_append_cache(struct mailbox *mailbox,
 
     mailbox->cache_dirty = 1;
 
+    /* and now read it straight back in to ensure we're always
+     * fresh */
+    r = mailbox_ensure_cache(mailbox, record->cache_offset);
+    if (r) return r;
+
+    /* try to parse the cache record */
+    r = cache_parserecord(&mailbox->cache_buf,
+			  record->cache_offset, &record->crec);
+    if (r) return r;
+
+    if (record->cache_crc != crc32_buf(cache_buf(record)))
+	return IMAP_MAILBOX_CHECKSUM;
+
     return 0;
 }
 
