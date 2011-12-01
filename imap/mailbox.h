@@ -204,7 +204,6 @@ struct mailbox {
     time_t index_mtime;
     ino_t index_ino;
     size_t index_size;
-    int need_cache_refresh;
 
     /* Information in mailbox list */
     char *name;
@@ -424,7 +423,7 @@ extern void mailbox_unmap_message(struct mailbox *mailbox,
 				  const char **basep, size_t *lenp);
 
 /* cache record API */
-int mailbox_open_cache(struct mailbox *mailbox);
+int mailbox_ensure_cache(struct mailbox *mailbox, unsigned offset);
 int cache_parserecord(struct buf *cachebase,
 		      unsigned cache_offset, struct cacherecord *crec);
 int mailbox_cacherecord(struct mailbox *mailbox,

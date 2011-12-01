@@ -198,8 +198,9 @@ int append_setup_mbox(struct appendstate *as, struct mailbox *mailbox,
     as->auth_state = auth_state;
     as->isadmin = isadmin;
 
-    /* we'll need the cache file open */
-    r = mailbox_open_cache(as->mailbox);
+    /* make sure we can open the cache file, so we
+     * abort early otherwise */
+    r = mailbox_ensure_cache(as->mailbox, 0);
     if (r) {
 	mailbox_close(&as->mailbox);
 	return r;

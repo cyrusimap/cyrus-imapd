@@ -457,16 +457,12 @@ int cache_parserecord(struct buf *cachebase, unsigned cache_offset,
     return 0;
 }
 
-int mailbox_open_cache(struct mailbox *mailbox)
+int mailbox_ensure_cache(struct mailbox *mailbox, unsigned offset)
 {
     struct stat sbuf;
     unsigned generation;
     int retry = 0;
     int openflags = mailbox->is_readonly ? O_RDONLY : O_RDWR;
-
-    /* already got everything? great */
-    if (mailbox->cache_fd != -1 && !mailbox->need_cache_refresh)
-	return 0;
 
  retry:
     /* open the file */
@@ -483,37 +479,37 @@ int mailbox_open_cache(struct mailbox *mailbox)
 	    goto fail;
     }
 
-    /* get the size and inode */
-    if (fstat(mailbox->cache_fd, &sbuf) == -1) {
-	syslog(LOG_ERR, "IOERROR: fstating cache %s: %m", mailbox->name);
-	goto fail;
-    }
-    mailbox->cache_buf.len = sbuf.st_size;
-    if (mailbox->cache_buf.len < 4)
-	goto fail;
+    if (offset >= mailbox->cache_buf.len) {
+	/* get the size and inode */
+	if (fstat(mailbox->cache_fd, &sbuf) == -1) {
+	    syslog(LOG_ERR, "IOERROR: fstating cache %s: %m", mailbox->name);
+	    goto fail;
+	}
+	mailbox->cache_buf.len = sbuf.st_size;
+	if (mailbox->cache_buf.len < 4)
+	    goto fail;
 
-    map_refresh(mailbox->cache_fd, 0, (const char **)&mailbox->cache_buf.s,
-		&mailbox->cache_len, mailbox->cache_buf.len, "cache",
-		mailbox->name);
+	map_refresh(mailbox->cache_fd, 0, (const char **)&mailbox->cache_buf.s,
+		    &mailbox->cache_len, mailbox->cache_buf.len, "cache",
+		    mailbox->name);
 
-    generation = ntohl(*((bit32 *)(mailbox->cache_buf.s)));
-    if (generation < mailbox->i.generation_no && !retry) {
-	/* try a rename - maybe we got killed between renames in repack */
-	map_free((const char **)&mailbox->cache_buf.s, &mailbox->cache_len);
-	close(mailbox->cache_fd);
-	mailbox->cache_fd = -1;
-	syslog(LOG_NOTICE, "WARNING: trying to rename cache file %s (%d < %d)",
-	       mailbox->name, generation, mailbox->i.generation_no);
-	mailbox_meta_rename(mailbox, META_CACHE);
-	retry = 1;
-	goto retry;
+	generation = ntohl(*((bit32 *)(mailbox->cache_buf.s)));
+	if (generation < mailbox->i.generation_no && !retry) {
+	    /* try a rename - maybe we got killed between renames in repack */
+	    map_free((const char **)&mailbox->cache_buf.s, &mailbox->cache_len);
+	    close(mailbox->cache_fd);
+	    mailbox->cache_fd = -1;
+	    syslog(LOG_NOTICE, "WARNING: trying to rename cache file %s (%d < %d)",
+		   mailbox->name, generation, mailbox->i.generation_no);
+	    mailbox_meta_rename(mailbox, META_CACHE);
+	    retry = 1;
+	    goto retry;
+	}
+	if (generation != mailbox->i.generation_no) {
+	    map_free((const char **)&mailbox->cache_buf.s, &mailbox->cache_len);
+	    goto fail;
+	}
     }
-    if (generation != mailbox->i.generation_no) {
-	map_free((const char **)&mailbox->cache_buf.s, &mailbox->cache_len);
-	goto fail;
-    }
-
-    mailbox->need_cache_refresh = 0;
 
     return 0;
 
@@ -563,7 +559,6 @@ fail:
 		    mailbox->name);
     }
 
-    mailbox->need_cache_refresh = 0;
     return 0;
 }
 
@@ -591,7 +586,7 @@ int mailbox_append_cache(struct mailbox *mailbox,
 	return 0;
 
     /* ensure we have a cache fd */
-    r = mailbox_open_cache(mailbox);
+    r = mailbox_ensure_cache(mailbox, 0);
     if (r) {
 	syslog(LOG_ERR, "Failed to open cache to %s for %u",
 		mailbox->name, record->uid);
@@ -606,7 +601,6 @@ int mailbox_append_cache(struct mailbox *mailbox,
     }
 
     mailbox->cache_dirty = 1;
-    mailbox->need_cache_refresh = 1;
 
     return 0;
 }
@@ -625,7 +619,7 @@ int mailbox_cacherecord(struct mailbox *mailbox,
 	r = IMAP_IOERROR;
     if (r) goto done;
 
-    r = mailbox_open_cache(mailbox);
+    r = mailbox_ensure_cache(mailbox, record->cache_offset);
     if (r) goto done;
 
     /* try to parse the cache record */
@@ -1429,9 +1423,6 @@ static int mailbox_refresh_index_map(struct mailbox *mailbox)
 	map_refresh(mailbox->index_fd, 1, &mailbox->index_base,
 		    &mailbox->index_len, mailbox->index_size,
 		    "index", mailbox->name);
-
-	/* and the cache will be stale too */
-	mailbox->need_cache_refresh = 1;
     }
 
     return 0;
@@ -4087,7 +4078,7 @@ int mailbox_reconstruct(const char *name, int flags)
 	valid_user_flags[flag/32] |= 1<<(flag&31);
     }
 
-    r = mailbox_open_cache(mailbox);
+    r = mailbox_ensure_cache(mailbox, 0);
     if (r) {
 	const char *fname = mailbox_meta_fname(mailbox, META_CACHE);
 	uint32_t buf;
@@ -4108,9 +4099,6 @@ int mailbox_reconstruct(const char *name, int flags)
 	buf = htonl(mailbox->i.generation_no);
 	n = retry_write(mailbox->cache_fd, (char *)&buf, 4);
 	if (n != 4) goto close;
-
-	/* ensure that next user will create the MMAPing */
-	mailbox->need_cache_refresh = 1;
     }
 
     /* find cyrus.expunge file if present */
