@@ -477,6 +477,10 @@ int mailbox_ensure_cache(struct mailbox *mailbox, unsigned offset)
 	mailbox->cache_fd = open(fname, openflags, 0);
 	if (mailbox->cache_fd == -1)
 	    goto fail;
+
+	if (mailbox->cache_buf.s)
+	    map_free((const char **)&mailbox->cache_buf.s, &mailbox->cache_len);
+	mailbox->cache_buf.len = 0;
     }
 
     if (offset >= mailbox->cache_buf.len) {
