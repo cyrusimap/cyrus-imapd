@@ -1728,7 +1728,7 @@ void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
 /* Output an HTTP error response with optional XML or text body */
 void error_response(long code, struct transaction_t *txn)
 {
-    if (txn->meth[0] == 'H') {
+    if (txn->meth && txn->meth[0] == 'H') {
 	txn->precond = NULL;
 	txn->errstr = NULL;
     }
