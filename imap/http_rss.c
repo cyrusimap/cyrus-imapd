@@ -687,17 +687,22 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 	if (parts && *parts) {
 	    const char *c;
 	    int len;
+	    xmlNodePtr desc;
 
 	    buf_reset(&buf);
 	    /* Translate CR in body text to HTML <br> tag */
 	    for (c = parts[0]->decoded_body, len = 0;
 		 c && *c && (!max_len || len < max_len); c++, len++) {
 		if (*c == '\r') buf_appendcstr(&buf, "<br>");
+		else if (*c == '<') buf_printf(&buf, "&lt;");
+		else if (!(isspace(*c) || isprint(*c))) buf_putc(&buf, 'X');
 		else buf_putc(&buf, *c);
 	    }
 
-	    xmlNewTextChild(item, NULL, BAD_CAST "description",
-			    BAD_CAST buf_cstring(&buf));
+	    desc = xmlNewChild(item, NULL, BAD_CAST "description", NULL);
+	    xmlAddChild(desc,
+			xmlNewCDataBlock(outdoc, BAD_CAST buf_cstring(&buf),
+					 buf_len(&buf)));
 	}
 
 	/* free the results */
