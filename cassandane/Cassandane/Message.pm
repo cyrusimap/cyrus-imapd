@@ -109,6 +109,25 @@ sub _canon_name($)
     return join('', @cc);
 }
 
+sub _canon_value
+{
+    my ($value) = @_;
+
+    # Lines in RFC2822 are separated by CR+LF.  Lone CR or LF
+    # is not legal, so we replace them with CR+LF.
+    # Header field continuation lines (the 2nd or subsequent line)
+    # are marked with a leading linear whitespace, so we insert a TAB
+    # character if the input didn't have any.
+    my $res = "";
+    foreach my $l (split(/[\r\n]+/, $value))
+    {
+	$res .= ($res ne "" && !($l =~ m/^[ \t]/) ? "\t" : "");
+	$res .= $l;
+	$res .= "\r\n";
+    }
+    return $res;
+}
+
 sub get_headers
 {
     my ($self, $name) = @_;
@@ -306,7 +325,7 @@ sub as_string
 
     foreach my $h (@{$self->{headers}})
     {
-	$s .= _canon_name($h->{name}) . ": " . $h->{value} . "\r\n";
+	$s .= _canon_name($h->{name}) . ": " .  _canon_value($h->{value});
     }
     $s .= "\r\n";
     $s .= $self->{body}
@@ -318,7 +337,7 @@ sub as_string
 sub set_lines
 {
     my ($self, @lines) = @_;
-    my $pending = '';
+    my @pending;
 
 #     xlog "set_lines";
     $self->_clear();
@@ -334,29 +353,37 @@ sub set_lines
 
 	if ($line =~ m/^\s/)
 	{
-	    # continuation line -- collapse FWS and gather the line
-	    $line =~ s/^\s*/ /;
-	    $pending .= $line;
+	    # continuation line -- gather the line
+	    push(@pending, $line);
 # 	    xlog "    gathering continuation line";
 	    next;
 	}
-#  	xlog "    pending \"$pending\"";
+#  	xlog "    pending \"" . join("CRLF", @pending) . "\"";
 
 	# Not a continuation line; handle the previous pending line
-	if ($pending ne '')
+	if (@pending)
 	{
 # 	    xlog "    finished joined line \"$pending\"";
-	    my ($name, $value) = ($pending =~ m/^([!-9;-~]+):\s*(.*)$/);
+	    my $first = shift @pending;
+	    my ($name, $value) = ($first =~ m/^([!-9;-~]+):(.*)$/);
 
-	    die "Malformed RFC822 header at or near \"$pending\""
+	    die "Malformed RFC822 header at or near \"$b\""
 		unless defined $value;
+
+	    $value = join("\r\n", ($value, @pending));
+
+	    # Lose a single SP after the : which we will be putting
+	    # back when we canonicalise on output.  This is technically
+	    # wrong but does make for prettier output *and* circular
+	    # consistency with most messages in the wild.
+	    $value =~ s/^ //;
 
 # 	    xlog "    saving header $name=$value";
 	    $self->add_header($name, $value);
 	}
 
 	last if ($line eq '');
-	$pending = $line;
+	@pending = ( $line );
     }
 #     xlog "    finished with headers, next line is \"" . $lines[0] . "\"";
 

@@ -265,17 +265,7 @@ EOF
     my @lines = split(/\n/, $txt);
     map { $_ .= "\r\n" } @lines;
 
-    my $exp = <<'EOF';
-From: Fred J. Bloggs <fbloggs@fastmail.fm>
-To: Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>
-Subject: Hello World
-Received: from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software); Fri, 29 Oct 2010 13:05:01 +1100
-Received: from mail.bar.com (mail.bar.com [10.0.0.1]) by mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100
-Received: from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by mail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100
-
-This is a message to let you know
-that I'm alive and well
-EOF
+    my $exp = $txt;
     $exp =~ s/\n/\r\n/g;
 
     $m->set_lines(@lines);
@@ -289,9 +279,9 @@ EOF
 	'Hello World',
 	$m->get_headers('Subject')->[0]);
     $self->assert_deep_equals([
-	"from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software); Fri, 29 Oct 2010 13:05:01 +1100",
-	"from mail.bar.com (mail.bar.com [10.0.0.1]) by mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100",
-	"from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by mail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100",
+	"from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software);\r\n\tFri, 29 Oct 2010 13:05:01 +1100",
+	"from mail.bar.com (mail.bar.com [10.0.0.1])\r\n\tby mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100",
+	"from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by\r\n\tmail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100",
     ], $m->get_headers('received'));
     $self->assert_str_equals($exp, $m->as_string);
     $self->assert_str_equals($exp, "" . $m);
@@ -307,9 +297,9 @@ EOF
 	'Hello World',
 	$m->get_headers('Subject')->[0]);
     $self->assert_deep_equals([
-	"from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software); Fri, 29 Oct 2010 13:05:01 +1100",
-	"from mail.bar.com (mail.bar.com [10.0.0.1]) by mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100",
-	"from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by mail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100",
+	"from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software);\r\n\tFri, 29 Oct 2010 13:05:01 +1100",
+	"from mail.bar.com (mail.bar.com [10.0.0.1])\r\n\tby mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100",
+	"from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by\r\n\tmail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100",
     ], $m->get_headers('received'));
     $self->assert_str_equals($exp, $m->as_string);
     $self->assert_str_equals($exp, "" . $m);
@@ -337,18 +327,7 @@ that I'm alive and well
 EOF
     $txt =~ s/\n/\r\n/g;
 
-    my $exp = <<'EOF';
-From: Fred J. Bloggs <fbloggs@fastmail.fm>
-To: Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>
-Subject: Hello World
-Received: from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software); Fri, 29 Oct 2010 13:05:01 +1100
-Received: from mail.bar.com (mail.bar.com [10.0.0.1]) by mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100
-Received: from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by mail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100
-
-This is a message to let you know
-that I'm alive and well
-EOF
-    $exp =~ s/\n/\r\n/g;
+    my $exp = $txt;
 
     $m->set_raw($txt);
     $self->assert_str_equals(
@@ -361,9 +340,9 @@ EOF
 	'Hello World',
 	$m->get_headers('Subject')->[0]);
     $self->assert_deep_equals([
-	"from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software); Fri, 29 Oct 2010 13:05:01 +1100",
-	"from mail.bar.com (mail.bar.com [10.0.0.1]) by mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100",
-	"from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by mail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100",
+	"from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software);\r\n\tFri, 29 Oct 2010 13:05:01 +1100",
+	"from mail.bar.com (mail.bar.com [10.0.0.1])\r\n\tby mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100",
+	"from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by\r\n\tmail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100",
     ], $m->get_headers('received'));
     $self->assert_str_equals($exp, $m->as_string);
     $self->assert_str_equals($exp, "" . $m);
@@ -379,9 +358,9 @@ EOF
 	'Hello World',
 	$m->get_headers('Subject')->[0]);
     $self->assert_deep_equals([
-	"from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software); Fri, 29 Oct 2010 13:05:01 +1100",
-	"from mail.bar.com (mail.bar.com [10.0.0.1]) by mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100",
-	"from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by mail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100",
+	"from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software);\r\n\tFri, 29 Oct 2010 13:05:01 +1100",
+	"from mail.bar.com (mail.bar.com [10.0.0.1])\r\n\tby mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100",
+	"from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by\r\n\tmail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100",
     ], $m->get_headers('received'));
     $self->assert_str_equals($exp, $m->as_string);
     $self->assert_str_equals($exp, "" . $m);
@@ -461,18 +440,7 @@ EOF
     my @lines = split(/\n/, $txt);
     map { $_ .= "\r\n" } @lines;
 
-    my $exp = <<'EOF';
-From: Fred J. Bloggs <fbloggs@fastmail.fm>
-To: Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>
-X-Foo_Bar.Baz&Quux: Foonly
-Subject: Hello World
-Received: from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software); Fri, 29 Oct 2010 13:05:01 +1100
-Received: from mail.bar.com (mail.bar.com [10.0.0.1]) by mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100
-Received: from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by mail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100
-
-This is a message to let you know
-that I'm alive and well
-EOF
+    my $exp = $txt;
     $exp =~ s/\n/\r\n/g;
 
     $m->set_lines(@lines);
@@ -489,9 +457,9 @@ EOF
 	'Hello World',
 	$m->get_headers('Subject')->[0]);
     $self->assert_deep_equals([
-	"from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software); Fri, 29 Oct 2010 13:05:01 +1100",
-	"from mail.bar.com (mail.bar.com [10.0.0.1]) by mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100",
-	"from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by mail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100",
+	"from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software);\r\n\tFri, 29 Oct 2010 13:05:01 +1100",
+	"from mail.bar.com (mail.bar.com [10.0.0.1])\r\n\tby mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100",
+	"from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by\r\n\tmail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100",
     ], $m->get_headers('received'));
     $self->assert_str_equals($exp, $m->as_string);
     $self->assert_str_equals($exp, "" . $m);
@@ -510,9 +478,9 @@ EOF
 	'Hello World',
 	$m->get_headers('Subject')->[0]);
     $self->assert_deep_equals([
-	"from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software); Fri, 29 Oct 2010 13:05:01 +1100",
-	"from mail.bar.com (mail.bar.com [10.0.0.1]) by mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100",
-	"from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by mail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100",
+	"from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software);\r\n\tFri, 29 Oct 2010 13:05:01 +1100",
+	"from mail.bar.com (mail.bar.com [10.0.0.1])\r\n\tby mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100",
+	"from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by\r\n\tmail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100",
     ], $m->get_headers('received'));
     $self->assert_str_equals($exp, $m->as_string);
     $self->assert_str_equals($exp, "" . $m);
@@ -820,16 +788,54 @@ EOF
     $self->assert_str_equals('Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>', $m->to());
     $self->assert_str_equals('Hello World', $m->subject());
     $self->assert_num_equals(42, $m->uid());
-    $self->assert_num_equals(557, $m->size());
-    $self->assert_str_equals('7f48d75eaa38e6dda5a173b20f6fb4969472502a', $m->guid());
+    $self->assert_num_equals(563, $m->size());
+    $self->assert_str_equals('8de16090fe4dd8abecd8d18cd9ae2c12d2be3d62', $m->guid());
     $self->assert_null($m->cid());
 
     # make_cid() returns a new CID but doesn't set the attribute
-    $self->assert_str_equals('7f48d75eaa38e6dd', $m->make_cid());
+    $self->assert_str_equals('8de16090fe4dd8ab', $m->make_cid());
     $self->assert_null($m->cid());
     $m->set_attribute(cid => $m->make_cid());
-    $self->assert_str_equals('7f48d75eaa38e6dd', $m->cid());
+    $self->assert_str_equals('8de16090fe4dd8ab', $m->cid());
 }
 
+sub test_header_normalisation
+{
+    my ($self) = @_;
+    my $m = Cassandane::Message->new();
+    $m->add_header('subject', 'Hello World');
+
+    # data thanks to hipsteripsum.me
+    $m->add_header('x-cliche', "sartorial");
+    $m->add_header('x-cliche', "mixtape\nfreegan");
+    $m->add_header('x-cliche', "leggings\r\nreadymade quinoa");
+    $m->add_header('x-cliche', "chambray\rdenim");
+
+    $m->set_headers('x-vegan',
+	"helvetica\rwayfarers keytar\nshoreditch\r\n \t portland");
+
+    $m->set_body("This is a message to let you know\r\nthat I'm alive and well\r\n");
+    my $exp = <<'EOF';
+Subject: Hello World
+X-Cliche: sartorial
+X-Cliche: mixtape
+	freegan
+X-Cliche: leggings
+	readymade quinoa
+X-Cliche: chambray
+	denim
+X-Vegan: helvetica
+	wayfarers keytar
+	shoreditch
+ 	 portland
+
+This is a message to let you know
+that I'm alive and well
+EOF
+
+    $exp =~ s/\n/\r\n/g;
+    $self->assert_str_equals($exp, $m->as_string);
+    $self->assert_str_equals($exp, "" . $m);
+}
 
 1;
