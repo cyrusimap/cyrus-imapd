@@ -195,6 +195,7 @@ struct sync_rename {
     char *oldname;
     char *newname;
     char *part;
+    unsigned uidvalidity;
     int   done;
 };
 
@@ -208,8 +209,9 @@ struct sync_rename_list *sync_rename_list_create(void);
 
 
 struct sync_rename *sync_rename_list_add(struct sync_rename_list *l,
-					      const char *id, const char *oldname,
-					      const char *newname, const char *partition);
+					 const char *id, const char *oldname,
+					 const char *newname, const char *partition,
+					 unsigned uidvalidity);
 
 struct sync_rename *sync_rename_lookup(struct sync_rename_list *l,
 					    const char *oldname);

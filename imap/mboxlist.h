@@ -154,8 +154,9 @@ int mboxlist_deletemailbox(const char *name, int isadmin, const char *userid,
 
 /* Rename/move a mailbox (hierarchical) */
 int mboxlist_renamemailbox(const char *oldname, const char *newname,
-			   const char *partition, int isadmin,
-			   const char *userid, struct auth_state *auth_state,
+			   const char *partition, unsigned uidvalidity,
+			   int isadmin, const char *userid,
+			   struct auth_state *auth_state,
 			   int forceuser, int ignorequota);
 
 /* change ACL */

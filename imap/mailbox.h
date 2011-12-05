@@ -501,6 +501,7 @@ extern int mailbox_delete_cleanup(const char *part, const char *name);
 
 extern int mailbox_rename_copy(struct mailbox *oldmailbox, 
 			       const char *newname, const char *newpart,
+			       unsigned uidvalidity,
 			       const char *userid, int ignorequota,
 			       struct mailbox **newmailboxptr);
 extern int mailbox_rename_cleanup(struct mailbox **mailboxptr, int isinbox);

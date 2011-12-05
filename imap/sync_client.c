@@ -518,7 +518,8 @@ static int user_reset(const char *userid)
     return r;
 }
 
-static int folder_rename(char *oldname, char *newname, char *partition)
+static int folder_rename(const char *oldname, const char *newname,
+			 const char *partition, unsigned uidvalidity)
 {
     const char *cmd = "RENAME";
     struct dlist *kl;
@@ -527,6 +528,8 @@ static int folder_rename(char *oldname, char *newname, char *partition)
     dlist_setatom(kl, "OLDMBOXNAME", oldname);
     dlist_setatom(kl, "NEWMBOXNAME", newname);
     dlist_setatom(kl, "PARTITION", partition);
+    dlist_setnum32(kl, "UIDVALIDITY", uidvalidity);
+
     sync_send_apply(kl, sync_out);
     dlist_free(&kl);
 
@@ -1738,7 +1741,7 @@ int do_folders(struct sync_name_list *mboxname_list,
 	/* does it need a rename? */
 	if (strcmp(mfolder->name, rfolder->name) || strcmp(mfolder->part, rfolder->part))
 	    sync_rename_list_add(rename_folders, mfolder->uniqueid, rfolder->name, 
-				 mfolder->name, mfolder->part);
+				 mfolder->name, mfolder->part, mfolder->uidvalidity);
     }
 
     /* Delete folders on server which no longer exist on client */
@@ -1771,7 +1774,8 @@ int do_folders(struct sync_name_list *mboxname_list,
 	    }
 
 	    /* Found unprocessed item which should rename cleanly */
-	    r = folder_rename(item->oldname, item->newname, item->part);
+	    r = folder_rename(item->oldname, item->newname,
+			      item->part, item->uidvalidity);
 	    if (r) {
 		syslog(LOG_ERR, "do_folders(): failed to rename: %s -> %s ",
 		       item->oldname, item->newname);

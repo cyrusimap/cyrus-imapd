@@ -1824,6 +1824,7 @@ static int do_rename(struct dlist *kin)
     const char *oldmboxname;
     const char *newmboxname;
     const char *partition;
+    uint32_t uidvalidity = 0;
 
     if (!dlist_getatom(kin, "OLDMBOXNAME", &oldmboxname))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
@@ -1832,7 +1833,11 @@ static int do_rename(struct dlist *kin)
     if (!dlist_getatom(kin, "PARTITION", &partition))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
 
+    /* optional */
+    dlist_getnum32(kin, "UIDVALIDITY", &uidvalidity);
+
     return mboxlist_renamemailbox(oldmboxname, newmboxname, partition,
+				  uidvalidity,
                                   1, sync_userid, sync_authstate, 1, 1);
 }
 

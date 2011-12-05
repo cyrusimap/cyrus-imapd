@@ -966,6 +966,7 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
 
     /* Get mboxlist_renamemailbox to do the hard work. No ACL checks needed */
     r = mboxlist_renamemailbox((char *)name, newname, mbentry->partition,
+			       0 /* uidvalidity */,
                                1 /* isadmin */, userid,
                                auth_state, force, 1);
 
@@ -1094,8 +1095,9 @@ int mboxlist_deletemailbox(const char *name, int isadmin,
  * mailboxes are handled up in imapd.c
  */
 int mboxlist_renamemailbox(const char *oldname, const char *newname, 
-			   const char *partition, int isadmin, 
-			   const char *userid, struct auth_state *auth_state,
+			   const char *partition, unsigned uidvalidity,
+			   int isadmin, const char *userid,
+			   struct auth_state *auth_state,
 			   int forceuser, int ignorequota)
 {
     int r;
@@ -1225,7 +1227,7 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
     }
 
     /* Rename the actual mailbox */
-    r = mailbox_rename_copy(oldmailbox, newname, newpartition,
+    r = mailbox_rename_copy(oldmailbox, newname, newpartition, uidvalidity,
 			    isusermbox ? userid : NULL, ignorequota,
 			    &newmailbox);
     if (r) goto done;
