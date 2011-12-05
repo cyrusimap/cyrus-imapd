@@ -1226,7 +1226,7 @@ static int meth_mkcol(struct transaction_t *txn)
     }
 
     /* Create the mailbox */
-    r = mboxlist_createmailbox(mailboxname, 0, partition, 
+    r = mboxlist_createmailbox(mailboxname, MBTYPE_CALENDAR, partition, 
 			       httpd_userisadmin || httpd_userisproxyadmin,
 			       httpd_userid, httpd_authstate,
 			       0, 0, 0);
@@ -1596,11 +1596,11 @@ static int meth_put(struct transaction_t *txn)
     time_t lastmod;
     FILE *f = NULL;
     struct stagemsg *stage = NULL;
-    const char **hdr;
+    const char **hdr, *uid, *meth;
     uquota_t size = 0;
     time_t now = time(NULL);
     pid_t pid = getpid();
-    char datestr[80], msgid[8192];
+    char datestr[80];
     struct appendstate appendstate;
     icalcomponent *ical, *comp;
 
@@ -1610,7 +1610,7 @@ static int meth_put(struct transaction_t *txn)
     /* Parse the path */
     if ((r = parse_path(&txn->req_tgt, &txn->errstr))) return r;
 
-   /* We don't handle POST/PUT on non-calendar collections */
+    /* We don't handle POST/PUT on non-calendar collections */
     if (!txn->req_tgt.collection) return HTTP_NOT_ALLOWED;
 
     /* We don't handle PUT on calendar collections */
@@ -1770,12 +1770,18 @@ static int meth_put(struct transaction_t *txn)
     rfc822date_gen(datestr, sizeof(datestr), now);
     fprintf(f, "Date: %s\r\n", datestr);
 
-    snprintf(msgid, sizeof(msgid), "<cmu-http-%d-%d-%d@%s>", 
-	     pid, (int) now, global_put_count++, config_servername);
-    fprintf(f, "Message-ID: %s\r\n", msgid);
+    fprintf(f, "Message-ID: ");
+    if ((uid = icalcomponent_get_uid(comp)) && *uid) fprintf(f, "<%s", uid);
+    else fprintf(f, "<cmu-http-%d-%d-%d", pid, (int) now, global_put_count++);
+    fprintf(f, "@%s>\r\n", config_servername);
 
     hdr = spool_getheader(txn->req_hdrs, "Content-Type");
-    fprintf(f, "Content-Type: %s\r\n", hdr[0]);
+    fprintf(f, "Content-Type: %s", hdr[0]);
+    if ((meth = icalproperty_method_to_string(icalcomponent_get_method(comp)))
+	&& *meth) {
+	fprintf(f, "; method=%s", meth);
+    }
+    fprintf(f, "\r\n");
 
     fprintf(f, "Content-Length: %u\r\n", buf_len(&txn->req_body));
     fprintf(f, "Content-Disposition: inline; filename=%s\r\n",

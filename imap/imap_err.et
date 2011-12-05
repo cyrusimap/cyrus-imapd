@@ -88,6 +88,9 @@ ec IMAP_MAILBOX_EXISTS,
 ec IMAP_MAILBOX_BADNAME,
    "Invalid mailbox name"
 
+ec IMAP_MAILBOX_BADTYPE,
+   "Invalid mailbox type"
+
 ec IMAP_MAILBOX_MOVED,
    "Mailbox has been moved to another server"
 
