@@ -40,6 +40,21 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
+/* Interface to an mmaped file, including locking.
+ *
+ * Many different modules within Cyrus, including most of the
+ * database engines, wrap an mmaped file with locking semantics,
+ * refreshing the map on re-locking, and writing to a location
+ * within the file.
+ *
+ * This module provides handy wrapper interfaces to each of those
+ * items.  NOTE - it doesn't provide a guarantee that the same file
+ * isn't opened twice, stomping all over the locks in the process.
+ * To get that, you need to protect in the caller.
+ *
+ */
+
+
 #include "mappedfile.h"
 
 #include <config.h>
