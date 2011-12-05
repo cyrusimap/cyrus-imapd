@@ -656,10 +656,10 @@ int parsenum(const char *p, const char **ptr, int maxlen, bit64 *res)
      * - and I don't care about those last 5
      */
     for (n = 0; !maxlen || n < maxlen; n++) {
-	if (result > 1844674407370955161ULL)
-	    fatal("num too big", EC_IOERR);
 	if (!cyrus_isdigit(p[n]))
 	    break;
+	if (result > 1844674407370955161ULL)
+	    fatal("num too big", EC_IOERR);
 	cval = p[n] - '0';
 	result = result * 10 + cval;
     }

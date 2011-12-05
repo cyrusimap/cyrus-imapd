@@ -3,9 +3,21 @@
 #include "xmalloc.h"
 #include "prot.h"
 #include "global.h"
+#include "util.h"
 
 #define CANARY		0xdeadbeef
 #define CANARY64	0xdeadbeefcafebabe
+
+static void test_parsenum(void)
+{
+    const char NUM[] = "18338747846901181684 some other stuff";
+    uint64_t val = CANARY64;
+    int r;
+
+    r = parsenum(NUM, NULL, strlen(NUM), &val);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(val, 18338747846901181684LLU);
+}
 
 int wrap_getint32(const char *s, int32_t *valp)
 {
