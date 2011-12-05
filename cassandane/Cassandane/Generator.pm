@@ -250,8 +250,12 @@ sub generate
 
     $msg->add_header("Return-Path", "<" . $from->address() . ">");
     # TODO: two minutes ago
-    $msg->add_header("Received", "from gateway (gateway." . $to->domain() . " [10.0.0.1]) by ahost (ahost." . $to->domain() . "[10.0.0.2]); $datestr");
-    $msg->add_header("Received", "from mail." . $from->domain() . " (mail." . $from->domain() . " [192.168.0.1]) by gateway." . $to->domain() . " (gateway." . $to->domain() . " [10.0.0.1]); $datestr");
+    $msg->add_header("Received",
+		     "from gateway (gateway." . $to->domain() . " [10.0.0.1])\r\n" .
+		     "\tby ahost (ahost." . $to->domain() . "[10.0.0.2]); $datestr");
+    $msg->add_header("Received",
+		     "from mail." . $from->domain() . " (mail." . $from->domain() . " [192.168.0.1])\r\n" .
+		     "\tby gateway." . $to->domain() . " (gateway." . $to->domain() . " [10.0.0.1]); $datestr");
     $msg->add_header("MIME-Version", "1.0");
     $msg->add_header("Content-Type", "text/plain; charset=\"us-ascii\"");
     $msg->add_header("Content-Transfer-Encoding", "7bit");
