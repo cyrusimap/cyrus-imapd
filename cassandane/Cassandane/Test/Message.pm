@@ -765,12 +765,14 @@ sub test_accessors
 From: Fred J. Bloggs <fbloggs@fastmail.fm>
 To: Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>
 Subject: Hello World
+Date: Tue, 06 Dec 2011 13:57:57 +1100
 Received: from mail.quux.com (mail.quux.com [10.0.0.1]) by mail.gmail.com (Software);
 	Fri, 29 Oct 2010 13:05:01 +1100
 Received: from mail.bar.com (mail.bar.com [10.0.0.1])
 	by mail.quux.com (Software); Fri, 29 Oct 2010 13:03:03 +1100
 Received: from mail.fastmail.fm (mail.fastmail.fm [10.0.0.1]) by
 	mail.bar.com (Software); Fri, 29 Oct 2010 13:01:01 +1100
+Message-ID: <fake.1323140278.56086@fastmail.fm>
 
 This is a message to let you know
 that I'm alive and well
@@ -787,16 +789,18 @@ EOF
     $self->assert_str_equals('Fred J. Bloggs <fbloggs@fastmail.fm>', $m->from());
     $self->assert_str_equals('Sarah Jane Smith <sjsmith@tard.is>, Genghis Khan <gkhan@horde.mo>', $m->to());
     $self->assert_str_equals('Hello World', $m->subject());
+    $self->assert_str_equals('Tue, 06 Dec 2011 13:57:57 +1100', $m->date());
+    $self->assert_str_equals('<fake.1323140278.56086@fastmail.fm>', $m->messageid());
     $self->assert_num_equals(42, $m->uid());
-    $self->assert_num_equals(563, $m->size());
-    $self->assert_str_equals('8de16090fe4dd8abecd8d18cd9ae2c12d2be3d62', $m->guid());
+    $self->assert_num_equals(651, $m->size());
+    $self->assert_str_equals('e2f2c19a8097587d54745801621d4bde4fa664b3', $m->guid());
     $self->assert_null($m->cid());
 
     # make_cid() returns a new CID but doesn't set the attribute
-    $self->assert_str_equals('8de16090fe4dd8ab', $m->make_cid());
+    $self->assert_str_equals('e2f2c19a8097587d', $m->make_cid());
     $self->assert_null($m->cid());
     $m->set_attribute(cid => $m->make_cid());
-    $self->assert_str_equals('8de16090fe4dd8ab', $m->cid());
+    $self->assert_str_equals('e2f2c19a8097587d', $m->cid());
 }
 
 sub test_header_normalisation
