@@ -1496,7 +1496,9 @@ static int do_mailbox(struct dlist *kin)
     mailbox->i.last_appenddate = last_appenddate;
     mailbox->i.pop3_last_login = pop3_last_login;
     mailbox->i.pop3_show_after = pop3_show_after;
-    /* mailbox->i.options = options; ... not really, there's unsyncable stuff in here */
+    /* only alter the syncable options */
+    mailbox->i.options = (options & MAILBOX_OPTIONS_MASK) |
+			 (mailbox->i.options & ~MAILBOX_OPTIONS_MASK);
 
     /* this happens all the time! */
     if (mailbox->i.highestmodseq < highestmodseq) {
