@@ -1099,6 +1099,11 @@ And the notification message will be available on \fIstdin\fR.
    source.  If set to 0, no indication will be made to the client.
    The default is 30 minutes. */
 
+{ "rss_webmaster", NULL, STRING }
+/* Email address of the person responsible for technical issues
+   with the RSS feeds.  If not set (the default), no webMaster
+   will be included in the feeds. */
+
 # Commented out - used by libsasl
 # { "sasl_auto_transition", 0, SWITCH }
 /* If enabled, the SASL library will automatically create authentication
