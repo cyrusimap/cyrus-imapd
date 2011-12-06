@@ -1073,8 +1073,6 @@ static int compare_one_record(struct mailbox *mailbox,
 		}
 	    }
 	    else {
-		log_mismatch("more recent on master", mailbox, mp, rp);
-
 		if (kaction) {
 		    r = apply_annotations(mailbox, mp, mannots, rannots, 1);
 		    if (r) return r;
