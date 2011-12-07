@@ -1,6 +1,6 @@
 /* mappedfile - interface to a mmaped, lockable, writable file
  *
- * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2011 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -47,11 +47,6 @@
 #include <sys/types.h>
 #include <sys/uio.h>
 
-/* XXX - use some real errors? Copied and pasted from CyrusDB so
- * they just work[tm] */
-#define MF_IOERROR -1
-#define MF_NOTFOUND -5
-
 struct mappedfile;
 
 extern int mappedfile_open(struct mappedfile **mfp,
@@ -63,20 +58,22 @@ extern int mappedfile_writelock(struct mappedfile *mf);
 extern int mappedfile_unlock(struct mappedfile *mf);
 
 extern int mappedfile_commit(struct mappedfile *mf);
-extern int mappedfile_write(struct mappedfile *mf, size_t *offsetp,
-			    const char *base, size_t len);
-extern int mappedfile_writev(struct mappedfile *mf, size_t *offsetp,
-			     const struct iovec *iov, int nio);
-extern int mappedfile_truncate(struct mappedfile *mf, size_t offset);
+extern ssize_t mappedfile_pwrite(struct mappedfile *mf,
+				 const char *base, size_t len,
+				 off_t offset);
+extern ssize_t mappedfile_pwritev(struct mappedfile *mf,
+				  const struct iovec *iov, int nio,
+				  off_t offset);
+extern int mappedfile_truncate(struct mappedfile *mf, off_t offset);
 
 extern int mappedfile_rename(struct mappedfile *mf, const char *newname);
 
-extern int mappedfile_islocked(struct mappedfile *mf);
-extern int mappedfile_isreadlocked(struct mappedfile *mf);
-extern int mappedfile_iswritelocked(struct mappedfile *mf);
+extern int mappedfile_islocked(const struct mappedfile *mf);
+extern int mappedfile_isreadlocked(const struct mappedfile *mf);
+extern int mappedfile_iswritelocked(const struct mappedfile *mf);
 
-extern const char *mappedfile_base(struct mappedfile *mf);
-extern size_t mappedfile_size(struct mappedfile *mf);
-extern const char *mappedfile_fname(struct mappedfile *mf);
+extern const char *mappedfile_base(const struct mappedfile *mf);
+extern size_t mappedfile_size(const struct mappedfile *mf);
+extern const char *mappedfile_fname(const struct mappedfile *mf);
 
 #endif /* _MAPPEDFILE_H */

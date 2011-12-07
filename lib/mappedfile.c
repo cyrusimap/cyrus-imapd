@@ -1,6 +1,6 @@
 /* mappedfile - interface to a mmaped, lockable, writable file
  *
- * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2011 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -101,7 +101,7 @@ struct mappedfile {
 
 static void _ensure_mapped(struct mappedfile *mf, size_t offset)
 {
-    /* we may be rewriting inside a file, so don't shrink, only extent */
+    /* we may be rewriting inside a file, so don't shrink, only extend */
     if (offset > mf->map_size) {
 	mf->map_size = offset;
 	map_refresh(mf->fd, 0, &mf->map_base, &mf->map_len, mf->map_size,
@@ -127,12 +127,12 @@ int mappedfile_open(struct mappedfile **mfp,
     mf->fd = open(mf->fname, O_RDWR, 0644);
     if (mf->fd < 0 && errno == ENOENT) {
 	if (!create) {
-	    r = MF_NOTFOUND;
+	    r = -errno;
 	    goto err;
 	}
-	if (cyrus_mkdir(mf->fname, 0755) < 0) {
+	r = cyrus_mkdir(mf->fname, 0755);
+	if (r < 0) {
 	    syslog(LOG_ERR, "IOERROR: cyrus_mkdir %s: %m", mf->fname);
-	    r = MF_IOERROR;
 	    goto err;
 	}
 	mf->fd = open(mf->fname, O_RDWR | O_CREAT, 0644);
@@ -140,6 +140,7 @@ int mappedfile_open(struct mappedfile **mfp,
 
     if (mf->fd == -1) {
 	syslog(LOG_ERR, "IOERROR: open %s: %m", mf->fname);
+	r = -errno;
 	goto err;
     }
 
@@ -147,9 +148,9 @@ int mappedfile_open(struct mappedfile **mfp,
     mf->lock_status = MF_UNLOCKED;
     mf->dirty = 0;
 
-    if (fstat(mf->fd, &sbuf) < 0) {
+    r = fstat(mf->fd, &sbuf);
+    if (r < 0) {
 	syslog(LOG_ERR, "IOERROR: fstat %s: %m", mf->fname);
-	r = MF_IOERROR;
 	goto err;
     }
 
@@ -160,34 +161,31 @@ int mappedfile_open(struct mappedfile **mfp,
     return 0;
 
 err:
-    free(mf->fname);
-    free(mf);
+    mappedfile_close(&mf);
     return r;
 }
 
 int mappedfile_close(struct mappedfile **mfp)
 {
     struct mappedfile *mf = *mfp;
-    int r;
+    int r = 0;
 
     /* make this safe to call multiple times */
     if (!mf) return 0;
 
     assert(mf->lock_status == MF_UNLOCKED);
-    assert(mf->fd != -1);
     assert(!mf->dirty);
 
-    r = close(mf->fd);
-    if (r) return MF_IOERROR; /* XXX - scream and shout */
+    if (mf->fd >= 0)
+	r = close(mf->fd);
 
-    free(mf->fname);
     map_free(&mf->map_base, &mf->map_len);
-
+    free(mf->fname);
     free(mf);
 
     *mfp = NULL;
 
-    return 0;
+    return r;
 }
 
 int mappedfile_readlock(struct mappedfile *mf)
@@ -203,19 +201,19 @@ int mappedfile_readlock(struct mappedfile *mf)
     for (;;) {
 	if (lock_shared(mf->fd) < 0) {
 	    syslog(LOG_ERR, "IOERROR: lock_shared %s: %m", mf->fname);
-	    return MF_IOERROR;
+	    return -EIO;
 	}
 
 	if (fstat(mf->fd, &sbuf) == -1) {
 	    syslog(LOG_ERR, "IOERROR: fstat %s: %m", mf->fname);
 	    lock_unlock(mf->fd);
-	    return MF_IOERROR;
+	    return -EIO;
 	}
 
 	if (stat(mf->fname, &sbuffile) == -1) {
 	    syslog(LOG_ERR, "IOERROR: stat %s: %m", mf->fname);
 	    lock_unlock(mf->fd);
-	    return MF_IOERROR;
+	    return -EIO;
 	}
 	if (sbuf.st_ino == sbuffile.st_ino) break;
 
@@ -223,7 +221,7 @@ int mappedfile_readlock(struct mappedfile *mf)
 	if (newfd == -1) {
 	    syslog(LOG_ERR, "IOERROR: open %s: %m", mf->fname);
 	    lock_unlock(mf->fd);
-	    return MF_IOERROR;
+	    return -EIO;
 	}
 
 	dup2(newfd, mf->fd);
@@ -246,6 +244,7 @@ int mappedfile_readlock(struct mappedfile *mf)
 
 int mappedfile_writelock(struct mappedfile *mf)
 {
+    int r;
     struct stat sbuf;
     const char *lockfailaction;
 
@@ -254,9 +253,10 @@ int mappedfile_writelock(struct mappedfile *mf)
     assert(mf->fd != -1);
     assert(!mf->dirty);
 
-    if (lock_reopen(mf->fd, mf->fname, &sbuf, &lockfailaction) < 0) {
+    r = lock_reopen(mf->fd, mf->fname, &sbuf, &lockfailaction);
+    if (r < 0) {
 	syslog(LOG_ERR, "IOERROR: %s %s: %m", lockfailaction, mf->fname);
-	return MF_IOERROR;
+	return r;
     }
     mf->lock_status = MF_WRITELOCKED;
 
@@ -274,6 +274,7 @@ int mappedfile_writelock(struct mappedfile *mf)
 
 int mappedfile_unlock(struct mappedfile *mf)
 {
+    int r;
     assert(mf);
     assert(mf->fd != -1);
     assert(!mf->dirty);
@@ -282,9 +283,10 @@ int mappedfile_unlock(struct mappedfile *mf)
     if (!mf) return 0;
     if (mf->lock_status == MF_UNLOCKED) return 0;
 
-    if (lock_unlock(mf->fd) < 0) {
+    r = lock_unlock(mf->fd);
+    if (r < 0) {
 	syslog(LOG_ERR, "IOERROR: lock_unlock %s: %m", mf->fname);
-	return MF_IOERROR;
+	return r;
     }
 
     mf->lock_status = MF_UNLOCKED;
@@ -302,8 +304,8 @@ int mappedfile_commit(struct mappedfile *mf)
 	return 0; /* nice, nothing to do */
 
     if (fdatasync(mf->fd) < 0) {
-	syslog(LOG_ERR, "IOERROR: %s fsync: %m", mf->fname);
-	return MF_IOERROR;
+	syslog(LOG_ERR, "IOERROR: %s fdatasync: %m", mf->fname);
+	return -EIO;
     }
 
     mf->dirty = 0;
@@ -311,15 +313,15 @@ int mappedfile_commit(struct mappedfile *mf)
     return 0;
 }
 
-int mappedfile_write(struct mappedfile *mf, size_t *offsetp,
-		     const char *base, size_t len)
-{
+ssize_t mappedfile_pwrite(struct mappedfile *mf,
+			  const char *base, size_t len,
+			  off_t offset)
+{    
     int n;
 
     assert(mf);
     assert(mf->lock_status == MF_WRITELOCKED);
     assert(mf->fd != -1);
-    assert(offsetp);
     assert(base);
 
     if (!len) return 0; /* nothing to write! */
@@ -329,29 +331,36 @@ int mappedfile_write(struct mappedfile *mf, size_t *offsetp,
     mf->dirty++;
 
     /* locate the file handle */
-    n = lseek(mf->fd, *offsetp, SEEK_SET);
-    if (n < 0) return MF_IOERROR;
+    n = lseek(mf->fd, offset, SEEK_SET);
+    if (n < 0) {
+	syslog(LOG_ERR, "IOERROR: %s seek to %llX: %m", mf->fname,
+	       (long long unsigned int)offset);
+	return n;
+    }
 
     /* write the buffer */
     n = retry_write(mf->fd, base, len);
-    if (n < 0) return MF_IOERROR;
+    if (n < 0) {
+	syslog(LOG_ERR, "IOERROR: %s write %llu bytes at %llX: %m",
+	       mf->fname, (long long unsigned int)len,
+	       (long long unsigned int)offset);
+	return n;
+    }
 
-    *offsetp += n;
+    _ensure_mapped(mf, offset+n);
 
-    _ensure_mapped(mf, *offsetp);
-
-    return 0;
+    return n;
 }
 
-int mappedfile_writev(struct mappedfile *mf, size_t *offsetp,
-		      const struct iovec *iov, int nio)
+ssize_t mappedfile_pwritev(struct mappedfile *mf,
+			   const struct iovec *iov, int nio,
+			   off_t offset)
 {
     int n;
 
     assert(mf);
     assert(mf->lock_status == MF_WRITELOCKED);
     assert(mf->fd != -1);
-    assert(offsetp);
     assert(iov);
 
     if (!nio) return 0; /* nothing to write! */
@@ -361,21 +370,33 @@ int mappedfile_writev(struct mappedfile *mf, size_t *offsetp,
     mf->dirty++;
 
     /* locate the file handle */
-    n = lseek(mf->fd, *offsetp, SEEK_SET);
-    if (n < 0) return MF_IOERROR;
+    n = lseek(mf->fd, offset, SEEK_SET);
+    if (n < 0) {
+	syslog(LOG_ERR, "IOERROR: %s seek to %llX: %m", mf->fname,
+	       (long long unsigned int)offset);
+	return n;
+    }
 
     /* write the buffer */
     n = retry_writev(mf->fd, iov, nio);
-    if (n < 0) return MF_IOERROR;
+    if (n < 0) {
+	size_t len = 0;
+	int i;
+	for (i = 0; i < nio; i++) {
+	    len += iov[i].iov_len;
+	}
+	syslog(LOG_ERR, "IOERROR: %s write %llu bytes at %llX: %m",
+	       mf->fname, (long long unsigned int)len,
+	       (long long unsigned int)offset);
+	return n;
+    }
 
-    *offsetp += n;
+    _ensure_mapped(mf, offset+n);
 
-    _ensure_mapped(mf, *offsetp);
-
-    return 0;
+    return n;
 }
 
-int mappedfile_truncate(struct mappedfile *mf, size_t offset)
+int mappedfile_truncate(struct mappedfile *mf, off_t offset)
 {
     int r;
 
@@ -385,12 +406,13 @@ int mappedfile_truncate(struct mappedfile *mf, size_t offset)
 
     mf->dirty++;
 
+    /* make sure we don't think the future is valid any more */
     if (offset < mf->map_size) mf->map_size = offset;
 
-    r = ftruncate(mf->fd, mf->map_size);
+    r = ftruncate(mf->fd, offset);
     if (r < 0) {
 	syslog(LOG_ERR, "IOERROR: ftruncate %s: %m", mf->fname);
-	return MF_IOERROR;
+	return r;
     }
 
     _ensure_mapped(mf, offset);
@@ -405,10 +427,8 @@ int mappedfile_rename(struct mappedfile *mf, const char *newname)
     r = rename(mf->fname, newname);
     if (r < 0) {
 	syslog(LOG_ERR, "IOERROR: rename (%s, %s): %m", mf->fname, newname);
-	return MF_IOERROR;
+	return r;
     }
-
-    /* XXX - fsync? */
 
     free(mf->fname);
     mf->fname = xstrdup(newname);
@@ -417,28 +437,28 @@ int mappedfile_rename(struct mappedfile *mf, const char *newname)
 }
 
 
-int mappedfile_islocked(struct mappedfile *mf)
+int mappedfile_islocked(const struct mappedfile *mf)
 {
     assert(mf);
 
     return (mf->lock_status != MF_UNLOCKED);
 }
 
-int mappedfile_isreadlocked(struct mappedfile *mf)
+int mappedfile_isreadlocked(const struct mappedfile *mf)
 {
     assert(mf);
 
     return (mf->lock_status == MF_READLOCKED);
 }
 
-int mappedfile_iswritelocked(struct mappedfile *mf)
+int mappedfile_iswritelocked(const struct mappedfile *mf)
 {
     assert(mf);
 
     return (mf->lock_status == MF_WRITELOCKED);
 }
 
-const char *mappedfile_base(struct mappedfile *mf)
+const char *mappedfile_base(const struct mappedfile *mf)
 {
     assert(mf);
 
@@ -446,14 +466,14 @@ const char *mappedfile_base(struct mappedfile *mf)
     return mf->map_base;
 }
 
-size_t mappedfile_size(struct mappedfile *mf)
+size_t mappedfile_size(const struct mappedfile *mf)
 {
     assert(mf);
 
     return mf->map_size;
 }
 
-const char *mappedfile_fname(struct mappedfile *mf)
+const char *mappedfile_fname(const struct mappedfile *mf)
 {
     assert(mf);
 
