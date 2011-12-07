@@ -165,7 +165,7 @@ are listed with ``<none>''.
    affect LMTP delivery of messages directly to mailboxes via
    plus-addressing. */
 
-{ "annotation_db", "skiplist", STRINGLIST("berkeley", "berkeley-hash", "skiplist")}
+{ "annotation_db", "skiplist", STRINGLIST("berkeley", "berkeley-hash", "skiplist", "twoskip")}
 /* The cyrusdb backend to use for mailbox annotations. */
 
 { "annotation_db_path", NULL, STRING }
@@ -362,7 +362,7 @@ Blank lines and lines beginning with ``#'' are ignored.
    session.  Otherwise, the missing mailbox is treated as empty while
    in use by the client.*/
 
-{ "duplicate_db", "skiplist", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist", "sql")}
+{ "duplicate_db", "skiplist", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist", "sql", "twoskip")}
 /* The cyrusdb backend to use for the duplicate delivery suppression
    and sieve. */
 
@@ -744,10 +744,10 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "maxword", 131072, INT }
 /* Maximum size of a single word for the parser.  Default 128k */
 
-{ "mboxkey_db", "skiplist", STRINGLIST("berkeley", "skiplist") }
+{ "mboxkey_db", "skiplist", STRINGLIST("berkeley", "skiplist", "twoskip") }
 /* The cyrusdb backend to use for mailbox keys. */
 
-{ "mboxlist_db", "skiplist", STRINGLIST("flat", "berkeley", "berkeley-hash", "skiplist")}
+{ "mboxlist_db", "skiplist", STRINGLIST("flat", "berkeley", "berkeley-hash", "skiplist", "twoskip")}
 /* The cyrusdb backend to use for the mailbox list. */
 
 { "mboxlist_db_path", NULL, STRING }
@@ -1050,7 +1050,7 @@ And the notification message will be available on \fIstdin\fR.
 /* Unix domain socket that ptloader listens on.
    (defaults to configdir/ptclient/ptsock) */
 
-{ "ptscache_db", "skiplist", STRINGLIST("berkeley", "berkeley-hash", "skiplist")}
+{ "ptscache_db", "skiplist", STRINGLIST("berkeley", "berkeley-hash", "skiplist", "twoskip")}
 /* The cyrusdb backend to use for the pts cache. */
 
 { "ptscache_db_path", NULL, STRING }
@@ -1075,7 +1075,7 @@ And the notification message will be available on \fIstdin\fR.
 /* This specifies the Class Selector or Differentiated Services Code Point
    designation on IP headers (in the ToS field). */
 
-{ "quota_db", "quotalegacy", STRINGLIST("flat", "berkeley", "berkeley-hash", "skiplist", "sql", "quotalegacy")}
+{ "quota_db", "quotalegacy", STRINGLIST("flat", "berkeley", "berkeley-hash", "skiplist", "sql", "quotalegacy", "twoskip")}
 /* The cyrusdb backend to use for quotas. */
 
 { "quota_db_path", NULL, STRING }
@@ -1156,7 +1156,7 @@ And the notification message will be available on \fIstdin\fR.
    recommended for most cases - it's a good compromise which
    keeps words separate. */
 
-{ "seenstate_db", "skiplist", STRINGLIST("flat", "berkeley", "berkeley-hash", "skiplist")}
+{ "seenstate_db", "skiplist", STRINGLIST("flat", "berkeley", "berkeley-hash", "skiplist", "twoskip")}
 /* The cyrusdb backend to use for the seen state. */
 
 { "sendmail", "/usr/lib/sendmail", STRING }
@@ -1288,7 +1288,7 @@ product version in the capabilities */
    allowed to fetch the contents of any valid "urlauth=submit+" IMAP URL:
    use with caution. */ 
 
-{ "subscription_db", "flat", STRINGLIST("flat", "berkeley", "berkeley-hash", "skiplist")}
+{ "subscription_db", "flat", STRINGLIST("flat", "berkeley", "berkeley-hash", "skiplist", "twoskip")}
 /* The cyrusdb backend to use for the subscriptions list. */
 
 { "suppress_capabilities", NULL, STRING }
@@ -1301,7 +1301,7 @@ product version in the capabilities */
 { "statuscache", 0, SWITCH }
 /* Enable/disable the imap status cache. */
 
-{ "statuscache_db", "skiplist", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist") }
+{ "statuscache_db", "skiplist", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist", "twoskip") }
 /* The cyrusdb backend to use for the imap status cache. */
 
 { "statuscache_db_path", NULL, STRING }
@@ -1390,7 +1390,7 @@ product version in the capabilities */
    have filenames with the hashed value of the certificates (see
    openssl(XXX)). */
 
-{ "tlscache_db", "skiplist", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist", "sql")}
+{ "tlscache_db", "skiplist", STRINGLIST("berkeley", "berkeley-nosync", "berkeley-hash", "berkeley-hash-nosync", "skiplist", "sql", "twoskip")}
 /* The cyrusdb backend to use for the TLS cache. */
 
 { "tlscache_db_path", NULL, STRING }
@@ -1420,7 +1420,7 @@ product version in the capabilities */
 { "umask", "077", STRING }
 /* The umask value used by various Cyrus IMAP programs. */
 
-{ "userdeny_db", "flat", STRINGLIST("flat", "berkeley", "berkeley-hash", "skiplist", "sql")}
+{ "userdeny_db", "flat", STRINGLIST("flat", "berkeley", "berkeley-hash", "skiplist", "sql", "twoskip")}
 /* The cyrusdb backend to use for the user access list. */
 
 { "userdeny_db_path", NULL, STRING }
