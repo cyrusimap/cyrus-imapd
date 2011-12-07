@@ -113,6 +113,20 @@ static char *make_basedir(const char * const *reldirs)
     CU_ASSERT(!memcmp(_data, expdata, _datalen)); \
 }
 
+#define CANFETCH_NOTXN(key, keylen, expdata, expdatalen) \
+{ \
+    const char *_data = BADDATA; \
+    size_t _datalen = BADLEN; \
+    r = DB->fetch(db, key, keylen, &_data, &_datalen, NULL); \
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK); \
+    CU_ASSERT_PTR_NOT_NULL(_data); \
+    CU_ASSERT_PTR_NOT_EQUAL(_data, BADDATA); \
+    CU_ASSERT_PTR_NOT_EQUAL(_data, expdata); \
+    CU_ASSERT_NOT_EQUAL(_datalen, BADLEN); \
+    CU_ASSERT_EQUAL(_datalen, expdatalen); \
+    CU_ASSERT(!memcmp(_data, expdata, _datalen)); \
+}
+
 #define CANFETCHNEXT(key, keylen, expkey, expkeylen, expdata, expdatalen) \
 { \
     const char *_data = BADDATA; \
@@ -299,6 +313,11 @@ static void test_multiopen(void)
     CANCOMMIT();
     /* 4th txn ends */
 
+    /* out of TXN works too */
+    CANFETCH_NOTXN(KEY1, strlen(KEY1), DATA1, strlen(DATA1));
+    CANFETCH_NOTXN(KEY2, strlen(KEY2), DATA2, strlen(DATA2));
+    CANFETCH_NOTXN(KEY3, strlen(KEY3), DATA3, strlen(DATA3));
+
     r = DB->close(db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_EQUAL(fexists(filename), 0);
@@ -430,6 +449,8 @@ static void test_multirw(void)
 
     /* close the txn - it doesn't matter here if we commit or abort */
     CANCOMMIT();
+
+    CANFETCH_NOTXN(KEY, strlen(KEY), DATA2, strlen(DATA2));
 
     /* closing succeeds */
     r = DB->close(db);
@@ -874,8 +895,11 @@ static void test_binary_keys(void)
     CANFETCH(KEY4, sizeof(KEY4)-1, DATA4, sizeof(DATA4)-1);
     CANFETCH(KEY5, sizeof(KEY5)-1, DATA5, sizeof(DATA5)-1);
 
-    /* foreach still succeeds */
-    r = DB->foreach(db, NULL, 0, NULL, foreacher, &results, &txn);
+    /* close the txn - it doesn't matter here if we commit or abort */
+    CANCOMMIT();
+
+    /* foreach still succeeds - out of txn */
+    r = DB->foreach(db, NULL, 0, NULL, foreacher, &results, NULL);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
 
     /* got the expected keys in the expected order */
@@ -886,9 +910,6 @@ static void test_binary_keys(void)
     GOTRESULT(KEY4, sizeof(KEY4)-1, DATA4, sizeof(DATA4)-1);
     /* foreach iterated over exactly all the keys */
     CU_ASSERT_PTR_NULL(results);
-
-    /* close the txn - it doesn't matter here if we commit or abort */
-    CANCOMMIT();
 
     /* closing succeeds */
     r = DB->close(db);
