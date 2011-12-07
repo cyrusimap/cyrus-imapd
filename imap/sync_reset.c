@@ -158,6 +158,19 @@ static int reset_single(const char *userid)
 
     (sync_namespacep->mboxname_tointernal)(sync_namespacep, "INBOX",
 					   userid, buf);
+
+    /* deleted namespace items if enabled */
+    if (mboxlist_delayed_delete_isenabled()) {
+	char deletedname[MAX_MAILBOX_BUFFER];
+	mboxname_todeleted(buf, deletedname, 0);
+	strlcat(deletedname, ".*", sizeof(deletedname));
+	r = (sync_namespace.mboxlist_findall)(&sync_namespace, deletedname, 1,
+					      sync_userid, sync_authstate,
+					      addmbox, (void *)list);
+	if (r) goto fail;
+    }
+
+
     strlcat(buf, ".*", sizeof(buf));
     r = (sync_namespacep->mboxlist_findall)(sync_namespacep, buf, 1,
 					    sync_userid, sync_authstate,
