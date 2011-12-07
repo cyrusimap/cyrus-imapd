@@ -676,11 +676,33 @@ static int foreacher(void *rock,
     return 0;
 }
 
+struct deleteit {
+    struct db *db;
+    struct binary_result **results;
+};
+
+static int deleter(void *rock,
+		   const char *key, size_t keylen,
+		   const char *data, size_t datalen)
+{
+    struct deleteit *dd = rock;
+    int r;
+
+    r = foreacher(dd->results, key, keylen, data, datalen);
+    if (r) return r;
+
+    r = DB->delete(dd->db, key, keylen, NULL, 0/*force*/);
+    if (r) return r;
+
+    return 0;
+}
+
 static void test_foreach(void)
 {
     struct db *db = NULL;
     struct txn *txn = NULL;
     struct binary_result *results = NULL;
+    struct deleteit deldata;
     /* random word generator to the rescue! */
     static const char KEY1[] = "carib";
     static const char DATA1[] = "delays maj bullish packard ronald";
@@ -731,6 +753,37 @@ static void test_foreach(void)
 
     /* close the txn - it doesn't matter here if we commit or abort */
     CANCOMMIT();
+
+    /* check again without TXN */
+
+    /* foreach succeeds without txn */
+    r = DB->foreach(db, NULL, 0, NULL, foreacher, &results, NULL);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+
+    /* got the expected keys in the expected order */
+    GOTRESULT(KEY1, strlen(KEY1), DATA1, strlen(DATA1));
+    GOTRESULT(KEY2, strlen(KEY2), DATA2, strlen(DATA2));
+    GOTRESULT(KEY3, strlen(KEY3), DATA3, strlen(DATA3));
+    /* foreach iterated over exactly all the keys */
+    CU_ASSERT_PTR_NULL(results);
+
+    /* delete all the records after viewing them */
+    deldata.db = db;
+    deldata.results = &results;
+    r = DB->foreach(db, NULL, 0, NULL, deleter, &deldata, NULL);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+
+    /* got the expected keys in the expected order */
+    GOTRESULT(KEY1, strlen(KEY1), DATA1, strlen(DATA1));
+    GOTRESULT(KEY2, strlen(KEY2), DATA2, strlen(DATA2));
+    GOTRESULT(KEY3, strlen(KEY3), DATA3, strlen(DATA3));
+    /* foreach iterated over exactly all the keys */
+    CU_ASSERT_PTR_NULL(results);
+
+    /* nothing left! */
+    r = DB->foreach(db, NULL, 0, NULL, foreacher, &deldata, NULL);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    CU_ASSERT_PTR_NULL(results);
 
     /* closing succeeds */
     r = DB->close(db);
