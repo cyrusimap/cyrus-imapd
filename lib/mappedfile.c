@@ -407,7 +407,7 @@ int mappedfile_truncate(struct mappedfile *mf, off_t offset)
     mf->dirty++;
 
     /* make sure we don't think the future is valid any more */
-    if (offset < mf->map_size) mf->map_size = offset;
+    if (offset < (off_t)mf->map_size) mf->map_size = offset;
 
     r = ftruncate(mf->fd, offset);
     if (r < 0) {
