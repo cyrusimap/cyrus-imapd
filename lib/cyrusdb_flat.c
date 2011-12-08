@@ -293,15 +293,16 @@ static int myopen(const char *fname, int flags, struct db **ret)
     db = (struct db *) xzmalloc(sizeof(struct db));
 
     db->fd = open(fname, O_RDWR, 0644);
-    if (db->fd == -1 && errno == ENOENT && (flags & CYRUSDB_CREATE)) {
-	if (cyrus_mkdir(fname, 0755) == -1) return CYRUSDB_IOERROR;
-
+    if (db->fd == -1 && errno == ENOENT) {
+	if (!(flags & CYRUSDB_CREATE))
+	    return CYRUSDB_NOTFOUND;
+	if (cyrus_mkdir(fname, 0755) == -1)
+	    return CYRUSDB_IOERROR;
 	db->fd = open(fname, O_RDWR | O_CREAT, 0644);
     }
 
     if (db->fd == -1) {
-	int level = (flags & CYRUSDB_CREATE) ? LOG_ERR : LOG_DEBUG;
-	syslog(level, "IOERROR: opening %s: %m", fname);
+	syslog(LOG_ERR, "IOERROR: opening %s: %m", fname);
 	free_db(db);
 	return CYRUSDB_IOERROR;
     }
