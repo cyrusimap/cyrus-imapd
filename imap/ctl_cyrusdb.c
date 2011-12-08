@@ -197,9 +197,9 @@ static void check_convert(struct cyrusdb *db, const char *fname)
     struct cyrusdb_backend *backend = *db->backendptr;
     struct cyrusdb_backend *oldbe;
     const char *detectname = cyrusdb_detect(fname);
-    char newfname[MAX_MAILBOX_PATH];
     char backendbuf[100];
     char *p;
+    int r;
 
     /* unable to detect current type, assume all is good */
     if (!detectname) return;
@@ -218,10 +218,9 @@ static void check_convert(struct cyrusdb *db, const char *fname)
 
     oldbe = cyrusdb_fromname(detectname);
 
-    snprintf(newfname, MAX_MAILBOX_PATH, "%s.NEW", fname);
-    cyrusdb_convert(fname, newfname, oldbe, backend);
-    if (rename(newfname, fname) == -1)
-	syslog(LOG_ERR, "failed to rename upgraded file %s", fname);
+    r = cyrusdb_convert(fname, fname, oldbe, backend);
+    if (r)
+	syslog(LOG_NOTICE, "conversion failed %s", fname);
 }
 
 int main(int argc, char *argv[])

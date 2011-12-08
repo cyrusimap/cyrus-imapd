@@ -219,9 +219,9 @@ extern struct cyrusdb_backend cyrusdb_sql;
 
 extern int cyrusdb_copyfile(const char *srcname, const char *dstname);
 
-extern void cyrusdb_convert(const char *fromfname, const char *tofname,
-			    struct cyrusdb_backend *frombackend,
-			    struct cyrusdb_backend *tobackend);
+extern int cyrusdb_convert(const char *fromfname, const char *tofname,
+			   struct cyrusdb_backend *frombackend,
+			   struct cyrusdb_backend *tobackend);
 
 int cyrusdb_dump(struct cyrusdb_backend *backend,
 		 struct db *db,

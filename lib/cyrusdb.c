@@ -211,39 +211,77 @@ static int converter_cb(void *rock,
 /* convert (just copy every record) from one database to another in possibly
    a different format.  It's up to the surrounding code to copy the
    new database over the original if it wants to */
-void cyrusdb_convert(const char *fromfname, const char *tofname,
-		     struct cyrusdb_backend *frombackend,
-		     struct cyrusdb_backend *tobackend)
+int cyrusdb_convert(const char *fromfname, const char *tofname,
+		    struct cyrusdb_backend *frombackend,
+		    struct cyrusdb_backend *tobackend)
 {
-    struct db *fromdb, *todb;
+    char *newfname = NULL;
+    struct db *fromdb = NULL;
+    struct db *todb = NULL;
     struct db_rock cr;
     struct txn *fromtid = NULL;
     struct txn *totid = NULL;
     int r;
 
-    /* open both databases (create todb) */
+    /* open source database */
     r = (frombackend->open)(fromfname, 0, &fromdb);
-    if (r != CYRUSDB_OK)
-	fatal("can't open old database", EC_TEMPFAIL);
+    if (r) goto err;
+
+    /* use a bogus fetch to lock source DB before touching the destination */
+    r = (frombackend->fetch)(fromdb, "_", 1, NULL, NULL, &fromtid);
+    if (r == CYRUSDB_NOTFOUND) r = 0;
+    if (r) goto err;
+
+    /* same file?  Create with a new name */
+    if (!strcmp(tofname, fromfname))
+	tofname = newfname = strconcat(fromfname, ".NEW", NULL);
+
+    /* remove any rubbish lying around */
+    unlink(tofname);
+
     r = (tobackend->open)(tofname, CYRUSDB_CREATE, &todb);
-    if (r != CYRUSDB_OK)
-	fatal("can't open new database", EC_TEMPFAIL);
+    if (r) goto err;
 
     /* set up the copy rock */
     cr.backend = tobackend;
     cr.db = todb;
     cr.tid = &totid;
 
-    /* copy each record to the destination DB (transactional for speed) */
+    /* copy each record to the destination DB */
     (frombackend->foreach)(fromdb, "", 0, NULL, converter_cb, &cr, &fromtid);
 
-    /* commit both transactions */
-    if (fromtid) (frombackend->commit)(fromdb, fromtid);
+    /* commit destination transaction */
     if (totid) (tobackend->commit)(todb, totid);
+    r = (tobackend->close)(todb);
+    totid = NULL;
+    todb = NULL;
+    if (r) goto err;
 
-    /* and close the DBs */
+    /* created a new filename - so it's a replace-in-place */
+    if (newfname) {
+	r = rename(newfname, fromfname);
+	if (r) goto err;
+    }
+
+    /* and close the source database - nothing should have
+     * written here, so an abort is fine */
+    if (fromtid) (frombackend->abort)(fromdb, fromtid);
     (frombackend->close)(fromdb);
-    (tobackend->close)(todb);
+
+    free(newfname);
+
+    return 0;
+
+err:
+    if (totid) (tobackend->abort)(todb, totid);
+    if (todb) (tobackend->close)(todb);
+    if (fromtid) (frombackend->abort)(fromdb, fromtid);
+    if (fromdb) (frombackend->close)(fromdb);
+
+    unlink(tofname);
+    free(newfname);
+
+    return r;
 }
 
 const char *cyrusdb_detect(const char *fname)
