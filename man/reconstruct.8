@@ -159,6 +159,9 @@ Don't stat underlying files.  This makes reconstruct run faster, at
 the expense of not noticing some issues (like zero byte files or
 size mistmatches).  "reconstruct -s" should be quite fast.
 .TP
+.B \-q
+Emit less verbose information to syslog.
+.TP
 .B \-n
 Don't make any changes.  This gives equivalent behaviour to
 .I chk_cyrus
