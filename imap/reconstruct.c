@@ -180,7 +180,7 @@ int main(int argc, char **argv)
 	    break;
 
 	case 'g':
-	    fprintf(stderr, "deprecated option -g used\n");
+	    fprintf(stderr, "reconstruct: deprecated option -g ignored\n");
 	    break;
 
 	case 'G':
@@ -196,7 +196,7 @@ int main(int argc, char **argv)
 	    break;
 
 	case 'k':
-	    fprintf(stderr, "deprecated option -k used\n");
+	    fprintf(stderr, "reconstruct: deprecated option -k ignored\n");
 	    break;
 
 	case 's':
