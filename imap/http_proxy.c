@@ -206,7 +206,7 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 	}
 
 	/* Send Authorization and/or Upgrade request to server */
-	prot_printf(s->out, "%s %s HTTP/1.1\r\n", httpreq.method, httpreq.uri);
+	prot_printf(s->out, "OPTIONS * HTTP/1.1\r\n");
 	prot_printf(s->out, "Host: %s\r\n", s->hostname);
 	if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
 	    prot_printf(s->out, "User-Agent: %s\r\n", buf_cstring(&serverinfo));
@@ -221,8 +221,7 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 	if (scheme && userid && *userid) {
 	    prot_printf(s->out, "Authorization-Id: %s\r\n", userid);
 	}
-	prot_printf(s->out, "Content-Length: %lu\r\n", httpreq.elen);
-	prot_write(s->out, (const char *) httpreq.entity, httpreq.elen);
+	prot_printf(s->out, "Content-Length: 0\r\n");
 	prot_printf(s->out, "\r\n");
 	prot_flush(s->out);
 
