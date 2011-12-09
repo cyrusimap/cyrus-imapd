@@ -69,6 +69,10 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 static int ping(struct backend *s);
 static int logout(struct backend *s __attribute__((unused)));
 static int starttls(struct backend *s);
+static int read_response(struct backend *be, const char *meth,
+			 unsigned *code, const char **statline,
+			 hdrcache_t *resp_hdrs, struct buf *resp_body,
+			 const char **errstr);
 
 
 struct protocol_t http_protocol =
@@ -182,8 +186,7 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
     }
 
     do {
-	int c;
-	uint32_t code;
+	unsigned code;
 	hdrcache_t hdrs = NULL;
 	const char **hdr, *errstr, *serverin;
 	char base64[BASE64_BUF_SIZE+1];
@@ -229,42 +232,8 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 	serverinlen = clientoutlen = 0;
 
       response:
-	/* Status-Line = HTTP-Version SP Status-Code SP Reason-Phrase CRLF */
-	buf_reset(&buf);
-	c = getword(s->in, &buf);
-	if ((c != ' ') || strcmp(buf_cstring(&buf), HTTP_VERSION)) {
-	    r = HTTP_UNAVAILABLE;
-	    if (status) *status = "Invalid/unsupported HTTP-Version";
-	    goto cleanup;
-	}	    
-	c = getuint32(s->in, &code);
-	if ((c != ' ') || (code < 100) || (code > 599)) {
-	    r = HTTP_UNAVAILABLE;
-	    if (status) *status = "Invalid/unsupported Status-Code";
-	    goto cleanup;
-	}	    
-	eatline(s->in, c);  /* Ignore Reason-Phrase, just use Status-Code */
-
-	/* Read headers */
-	if (!(hdrs = spool_new_hdrcache()) ||
-	    spool_fill_hdrcache(s->in, NULL, hdrs, NULL)) {
-	    r = HTTP_SERVER_ERROR;
-	    if (status) *status = "Failed to read response headers";
-	    goto cleanup;
-	}
-
-	/* Read CRLF separating headers and body */
-	c = prot_getc(s->in);
-	if (c == '\r') c = prot_getc(s->in);
-	if (c != '\n') {
-	    r = HTTP_UNAVAILABLE;
-	    if (status) *status = "Missing header/body separator";
-	    goto cleanup;
-	}
-
-	/* Read body */
-	if (read_body(s->in, hdrs, NULL, &errstr)) {
-	    r = HTTP_UNAVAILABLE;
+	r = read_response(s, "OPTIONS", &code, NULL, &hdrs, NULL, &errstr);
+	if (r) {
 	    if (status) *status = errstr;
 	    goto cleanup;
 	}
@@ -454,9 +423,8 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 
 static int ping(struct backend *s)
 {
-    int r = 0, c;
-    uint32_t code;
-    static struct buf ver = BUF_INITIALIZER;
+    int r = 0;
+    unsigned code;
     hdrcache_t hdrs = NULL;
     const char **hdr, *errstr;
 
@@ -470,47 +438,14 @@ static int ping(struct backend *s)
     prot_printf(s->out, "\r\n");
     prot_flush(s->out);
 
-    /* Status-Line = HTTP-Version SP Status-Code SP Reason-Phrase CRLF */
-    buf_reset(&ver);
-    c = getword(s->in, &ver);
-    if ((c != ' ') || strcmp(buf_cstring(&ver), HTTP_VERSION)) {
-	return HTTP_UNAVAILABLE;
-    }	    
-    c = getuint32(s->in, &code);
-    if ((c != ' ') || (code != 200)) {
-	return HTTP_UNAVAILABLE;
-    }	    
-    eatline(s->in, c);  /* Ignore Reason-Phrase, just use Status-Code */
-
-    /* Read headers */
-    if (!(hdrs = spool_new_hdrcache()) ||
-	spool_fill_hdrcache(s->in, NULL, hdrs, NULL)) {
-	r = HTTP_SERVER_ERROR;
-	goto cleanup;
-    }
+    r = read_response(s, "OPTIONS", &code, NULL, &hdrs, NULL, &errstr);
 
     /* Check if this is a non-persistent connection */
-    if ((hdr = spool_getheader(hdrs, "Connection")) &&
+    if (!r && (hdr = spool_getheader(hdrs, "Connection")) &&
 	!strcmp(hdr[0], "close")) {
 	r = HTTP_SERVER_ERROR;
-	goto cleanup;
     }
 
-    /* Read CRLF separating headers and body */
-    c = prot_getc(s->in);
-    if (c == '\r') c = prot_getc(s->in);
-    if (c != '\n') {
-	r = HTTP_UNAVAILABLE;
-	goto cleanup;
-    }
-
-    /* Read body */
-    if (read_body(s->in, hdrs, NULL, &errstr)) {
-	r = HTTP_UNAVAILABLE;
-	goto cleanup;
-    }
-
-  cleanup:
     if (hdrs) spool_free_hdrcache(hdrs);
 
     return r;
@@ -622,34 +557,39 @@ static void write_cachehdr(const char *name, const char *contents, void *rock)
 
 
 /* Read a response from backend */
-static int read_response(struct backend *be, struct transaction_t *txn,
+static int read_response(struct backend *be, const char *meth,
 			 unsigned *code, const char **statline,
-			 hdrcache_t *resp_hdrs, struct buf *resp_body)
+			 hdrcache_t *resp_hdrs, struct buf *resp_body,
+			 const char **errstr)
 {
     static char statbuf[2048];
     int c = EOF;
 
-    *statline = statbuf;
+    if (statline) *statline = statbuf;
+    *errstr = NULL;
 
     if (*resp_hdrs) spool_free_hdrcache(*resp_hdrs);
     if (!(*resp_hdrs = spool_new_hdrcache())) {
-	txn->flags |= HTTP_CLOSE;
-	txn->errstr = "Unable to create header cache for backend response";
+	*errstr = "Unable to create header cache for backend response";
 	return HTTP_SERVER_ERROR;
     }
     if (!prot_fgets(statbuf, sizeof(statbuf), be->in) ||
 	(sscanf(statbuf, HTTP_VERSION " %u ", code) != 1) ||
 	spool_fill_hdrcache(be->in, NULL, *resp_hdrs, NULL)) {
-	txn->errstr = "Unable to read status-line/headers from backend";
+	*errstr = "Unable to read status-line/headers from backend";
 	return HTTP_UNAVAILABLE;
     }
     eatline(be->in, c); /* CRLF separating headers & body */
 
-    if (!resp_body) return 0;  /* Not expecting a body */
+    if (meth[0] == 'H') {
+	/* Not expecting a body */
+	if (resp_body) buf_reset(resp_body);
+	return 0;
+    }
 
     if (*code < 200) resp_body = NULL; /* Disregard body of provisional resp */
 
-    if (read_body(be->in, *resp_hdrs, resp_body, &txn->errstr)) {
+    if (read_body(be->in, *resp_hdrs, resp_body, errstr)) {
 	return HTTP_UNAVAILABLE;
     }
 
@@ -658,10 +598,12 @@ static int read_response(struct backend *be, struct transaction_t *txn,
 
 
 /* Send a cached response to the client */
-static void send_response(struct protstream *pout, struct transaction_t *txn,
+static void send_response(struct protstream *pout,
 			  const char *statline, hdrcache_t hdrs,
-			  struct buf *body)
+			  struct buf *body, unsigned flags)
 {
+    unsigned long len;
+
     /*
      * - Use cached Status-Line
      * - Add/append-to Via: header
@@ -674,17 +616,29 @@ static void send_response(struct protstream *pout, struct transaction_t *txn,
     if (!httpd_tls_done && tls_enabled()) {
 	prot_printf(pout, "Upgrade: TLS/1.0\r\n");
     }
-    if (txn->flags & HTTP_CLOSE)
+    if (flags & HTTP_CLOSE)
 	prot_printf(pout, "Connection: close\r\n");
     else {
 	prot_printf(pout, "Keep-Alive: timeout=%d\r\n", httpd_timeout);
 	prot_printf(pout, "Connection: Keep-Alive\r\n");
     }
-    if (txn->flags & HTTP_NOCACHE) {
+    if (flags & HTTP_NOCACHE) {
 	prot_printf(pout, "Cache-Control: no-cache\r\n");
     }
     spool_enum_hdrcache(hdrs, &write_cachehdr, pout);
-    prot_printf(httpd_out, "Content-Length: %u\r\n\r\n", buf_len(body));
+
+    if (!(len = buf_len(body))) {
+	const char **hdr;
+
+	if ((hdr = spool_getheader(hdrs, "Transfer-Encoding"))) {
+	    prot_printf(httpd_out, "Transfer-Encoding: %s\r\n\r\n", hdr[0]);
+	    return;
+	}
+	else if ((hdr = spool_getheader(hdrs, "Content-Length"))) {
+	    len = strtoul(hdr[0], NULL, 10);
+	}
+    }
+    prot_printf(httpd_out, "Content-Length: %lu\r\n\r\n", len);
     prot_putbuf(httpd_out, body);
 }
 
@@ -725,7 +679,8 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
     prot_flush(be->out);
 
     /* Read response from backend */
-    r = read_response(be, txn, &code, &statline, &resp_hdrs, &resp_body);
+    r = read_response(be, txn->meth, &code, &statline, &resp_hdrs, &resp_body,
+		      &txn->errstr);
     if (!r) {
 	if (code == 100) { /* Continue */
 	    /* Read body */
@@ -747,13 +702,14 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 		prot_flush(be->out);
 
 		/* Read final response from backend */
-		r = read_response(be, txn,
-				  &code, &statline, &resp_hdrs, &resp_body);
+		r = read_response(be, txn->meth, &code, &statline, &resp_hdrs,
+				  &resp_body, &txn->errstr);
 	    }
 	}
 
 	/* Send response to client */
-	if (!r) send_response(httpd_out, txn, statline, resp_hdrs, &resp_body);
+	if (!r) send_response(httpd_out, statline, resp_hdrs, &resp_body,
+			      txn->flags);
     }
 
     if (resp_hdrs) spool_free_hdrcache(resp_hdrs);
@@ -808,7 +764,8 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
     prot_flush(src_be->out);
 
     /* Read response from source backend */
-    r = read_response(src_be, txn, &code, &statline, &resp_hdrs, NULL);
+    r = read_response(src_be, "HEAD", &code, &statline, &resp_hdrs, NULL,
+		      &txn->errstr);
     if (r) goto cleanup;
 
     if (code == 200) {  /* OK */
@@ -843,8 +800,8 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 	prot_flush(dest_be->out);
 
 	/* Read response from dest backend */
-	r = read_response(dest_be, txn,
-			  &code, &statline, &resp_hdrs, &resp_body);
+	r = read_response(dest_be, "PUT", &code, &statline, &resp_hdrs,
+			  &resp_body, &txn->errstr);
 	if (r) goto cleanup;
 
 	if (code == 100) {  /* Continue */
@@ -865,8 +822,8 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 	    prot_flush(src_be->out);
 
 	    /* Read response from source backend */
-	    r = read_response(src_be, txn,
-			      &code, &statline, &resp_hdrs, &resp_body);
+	    r = read_response(src_be, "GET", &code, &statline, &resp_hdrs,
+			      &resp_body, &txn->errstr);
 	    if (r) goto cleanup;
 
 	    if (code == 200) {  /* OK */
@@ -877,8 +834,8 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 		prot_flush(dest_be->out);
 
 		/* Read final response from dest backend */
-		r = read_response(dest_be, txn,
-				  &code, &statline, &resp_hdrs, &resp_body);
+		r = read_response(dest_be, "PUT", &code, &statline, &resp_hdrs,
+				  &resp_body, &txn->errstr);
 		if (r) goto cleanup;
 	    }
 	    else {
@@ -889,7 +846,7 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
     }
 
     /* Send response to client */
-    send_response(httpd_out, txn, statline, resp_hdrs, &resp_body);
+    send_response(httpd_out, statline, resp_hdrs, &resp_body, txn->flags);
 
     if ((txn->meth[0] == 'M') && (code < 300)) {
 	/*
@@ -912,8 +869,8 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 	prot_flush(src_be->out);
 
 	/* Read response from source backend */
-	read_response(src_be, txn,
-		      &code, &statline, &resp_hdrs, &resp_body);
+	read_response(src_be, "DELETE", &code, &statline, &resp_hdrs,
+		      &resp_body, &txn->errstr);
     }
 
   cleanup:
