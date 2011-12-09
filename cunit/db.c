@@ -273,9 +273,6 @@ static void test_multiopen(void)
 	r = DB->open(filename, 0, &db);
 	CU_ASSERT_EQUAL(r, CYRUSDB_OK);
 	CU_ASSERT_PTR_NOT_NULL(db);
-	if (strcmp(backend, "berkeley")) {
-	    CU_ASSERT_PTR_EQUAL_FATAL(db, db1);
-	}
 
 	/* 2nd txn starts */
 	CANSTORE(KEY2, strlen(KEY2), DATA2, strlen(DATA2));
