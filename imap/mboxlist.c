@@ -1300,7 +1300,7 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
 		r = mupdate_delete(mupdate_h, oldname);
 	    if (!r) r = mupdate_reserve(mupdate_h, newname, buf);
 	}
-	if (!r) r = mupdate_activate(mupdate_h, newname, buf, newmailbox->acl);
+	if (!r) r = mupdate_activate(mupdate_h, newname, buf, newmbentry->acl);
 	if (r) {
 	    syslog(LOG_ERR,
 		   "MUPDATE: can't commit mailbox entry for '%s'",
