@@ -83,20 +83,21 @@
 #define MF_WRITELOCKED 2
 
 struct mappedfile {
-   char *fname;
+    char *fname;
 
-   /* obviously you will need 64 bit size_t for 64 bit files... */
-   const char *map_base;
-   size_t map_size;
-   size_t map_len;
+    /* obviously you will need 64 bit size_t for 64 bit files... */
+    const char *map_base;
+    size_t map_size;
+    size_t map_len;
 
-   /* the file itself */
-   ino_t map_ino;
-   int fd;
+    /* the file itself */
+    ino_t map_ino;
+    int fd;
 
-   /* tracking */
-   int lock_status;
-   int dirty;
+    /* tracking */
+    int lock_status;
+    int dirty;
+    int was_resized;
 };
 
 static void _ensure_mapped(struct mappedfile *mf, size_t offset)
@@ -104,6 +105,7 @@ static void _ensure_mapped(struct mappedfile *mf, size_t offset)
     /* we may be rewriting inside a file, so don't shrink, only extend */
     if (offset > mf->map_size) {
 	mf->map_size = offset;
+	mf->was_resized = 1;
 	map_refresh(mf->fd, 0, &mf->map_base, &mf->map_len, mf->map_size,
 		    mf->fname, 0);
     }
@@ -155,6 +157,7 @@ int mappedfile_open(struct mappedfile **mfp,
     }
 
     _ensure_mapped(mf, sbuf.st_size);
+    mf->was_resized = 0; /* not actually resized */
 
     *mfp = mf;
 
@@ -268,6 +271,7 @@ int mappedfile_writelock(struct mappedfile *mf)
     }
 
     _ensure_mapped(mf, sbuf.st_size);
+    mf->was_resized = 0;
 
     return 0;
 }
@@ -303,12 +307,21 @@ int mappedfile_commit(struct mappedfile *mf)
     if (!mf->dirty)
 	return 0; /* nice, nothing to do */
 
-    if (fdatasync(mf->fd) < 0) {
-	syslog(LOG_ERR, "IOERROR: %s fdatasync: %m", mf->fname);
-	return -EIO;
+    if (mf->was_resized) {
+	if (fsync(mf->fd) < 0) {
+	    syslog(LOG_ERR, "IOERROR: %s fsync: %m", mf->fname);
+	    return -EIO;
+	}
+    }
+    else {
+	if (fdatasync(mf->fd) < 0) {
+	    syslog(LOG_ERR, "IOERROR: %s fdatasync: %m", mf->fname);
+	    return -EIO;
+	}
     }
 
     mf->dirty = 0;
+    mf->was_resized = 0;
 
     return 0;
 }
@@ -316,7 +329,7 @@ int mappedfile_commit(struct mappedfile *mf)
 ssize_t mappedfile_pwrite(struct mappedfile *mf,
 			  const char *base, size_t len,
 			  off_t offset)
-{    
+{
     int n;
 
     assert(mf);
@@ -416,6 +429,7 @@ int mappedfile_truncate(struct mappedfile *mf, off_t offset)
     }
 
     _ensure_mapped(mf, offset);
+    mf->was_resized = 1;
 
     return 0;
 }
