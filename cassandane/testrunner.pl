@@ -51,6 +51,7 @@ use Cassandane::Instance;
 my $format = 'tap';
 my $output_dir = 'reports';
 my $do_list = 0;
+my $do_cleanup = 0;
 my @names;
 
 
@@ -97,6 +98,10 @@ while (my $a = shift)
 	my $filename = shift;
 	Cassandane::Cassini->new(filename => $filename);
     }
+    elsif ($a eq '-c' || $a eq '--cleanup')
+    {
+	$do_cleanup = 1;
+    }
     elsif ($a eq '-f')
     {
 	$format = shift;
@@ -123,6 +128,9 @@ while (my $a = shift)
 	push(@names, $a);
     }
 }
+
+Cassandane::Instance::cleanup_leftovers()
+    if ($do_cleanup);
 
 my $plan = Cassandane::Unit::TestPlan->new();
 

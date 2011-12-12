@@ -156,6 +156,29 @@ sub set_defaults
     }
 }
 
+sub cleanup_leftovers
+{
+    my $cassini = Cassandane::Cassini->instance();
+    $rootdir = $cassini->val('cassandane', 'rootdir', '/var/tmp/cass')
+	unless defined $rootdir;
+
+    return if (!-d $rootdir);
+    opendir ROOT, $rootdir
+	or die "Cannot open directory $rootdir for reading: $!";
+    my @dirs;
+    while (my $_ = readdir(ROOT))
+    {
+	push(@dirs, $_) if m/^[0-9]{7,}$/;
+    }
+    closedir ROOT;
+
+    map
+    {
+	xlog "Cleaning up old basedir $rootdir/$_";
+	rmtree "$rootdir/$_";
+    } @dirs;
+}
+
 sub add_service
 {
     my ($self, $name, %params) = @_;
