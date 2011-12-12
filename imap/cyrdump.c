@@ -234,7 +234,7 @@ static int dump_me(char *name, int matchlen __attribute__((unused)),
 
     for (i = 0; i < numuids; i++) {
 	const char *base;
-	unsigned long len;
+	size_t len;
 
 	if (uids[i] < irec->incruid) {
 	    /* already dumped this message */

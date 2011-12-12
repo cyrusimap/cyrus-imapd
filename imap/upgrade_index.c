@@ -169,7 +169,7 @@ int upgrade_index(struct mailbox *mailbox)
     struct index_record record;
     int expunge_fd = -1;
     const char *expunge_base = NULL;
-    unsigned long expunge_len = 0;   /* mapped size */
+    size_t expunge_len = 0;   /* mapped size */
     unsigned long emapnum;
     bit32 eversion = 0, eoffset = 0, expungerecord_size = 0;
     struct expunge_data *expunge_data = NULL;

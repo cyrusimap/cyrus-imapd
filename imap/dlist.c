@@ -96,7 +96,7 @@ static void printfile(struct protstream *out, const struct dlist *dl)
     unsigned long size;
     struct message_guid guid2;
     const char *msg_base = NULL;
-    unsigned long msg_len = 0;
+    size_t msg_len = 0;
 
     assert(dlist_isfile(dl));
 

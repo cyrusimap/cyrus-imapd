@@ -381,7 +381,7 @@ static int dump_file(int first, int sync,
 {
     int filefd;
     const char *base;
-    unsigned long len;
+    size_t len;
     struct stat sbuf;
     char c;
 
@@ -440,11 +440,11 @@ static int dump_file(int first, int sync,
 	}
 
 	prot_printf(pout, "%s {%lu%s}\r\n",
-		    ftag, len, (sync ? "+" : ""));
+		    ftag, (long unsigned)len, (sync ? "+" : ""));
     } else {
 	prot_printf(pout, " {" SIZE_T_FMT "%s}\r\n%s {%lu%s}\r\n",
 		    strlen(ftag), (sync ? "+" : ""),
-		    ftag, len, (sync ? "+" : ""));
+		    ftag, (long unsigned)len, (sync ? "+" : ""));
     }
     prot_write(pout, base, len);
     if (!fbase) map_free(&base, &len);

@@ -63,12 +63,12 @@ extern const char *map_method_desc;
  * 	of the applicable mailbox (if any), and may be NULL
  */
 extern void map_refresh(int fd, int onceonly, const char **base,
-			unsigned long *len, unsigned long newlen,
+			size_t *len, size_t newlen,
 			const char *name, const char *mboxname);
 
 /* map_free will free a memory map allocated by map_refresh
  *
  * base and len are the same values that were passed to map_refresh */
-extern void map_free(const char **base, unsigned long *len);
+extern void map_free(const char **base, size_t *len);
 
 #endif /* INCLUDED_MAP_H */

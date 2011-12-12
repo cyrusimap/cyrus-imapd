@@ -129,7 +129,7 @@ static int init_write_buffer(SquatWriteBuffer* b, int buf_size, int fd)
 static char *prepare_buffered_write(SquatWriteBuffer *b, int len)
 {
     if (b->buf.len + len >= b->buf.alloc) {
-	if (write(b->fd, b->buf.s, b->buf.len) != b->buf.len) {
+	if (write(b->fd, b->buf.s, b->buf.len) != (long)b->buf.len) {
 	    squat_set_last_error(SQUAT_ERR_SYSERR);
 	    return NULL;
 	}
@@ -155,7 +155,7 @@ static void complete_buffered_write(SquatWriteBuffer *b, char *ptr)
 static int flush_and_reset_buffered_writes(SquatWriteBuffer *b)
 {
     if (b->buf.len) {
-	if (write(b->fd, b->buf.s, b->buf.len) != b->buf.len) {
+	if (write(b->fd, b->buf.s, b->buf.len) != (long)b->buf.len) {
 	    squat_set_last_error(SQUAT_ERR_SYSERR);
 	    return SQUAT_ERR;
 	}

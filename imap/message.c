@@ -300,13 +300,13 @@ int message_parse2(const char *fname, struct index_record *record,
  * and returned to the caller.  The caller MUST unmap the file.
  */
 int message_parse_file(FILE *infile,
-		       const char **msg_base, unsigned long *msg_len,
+		       const char **msg_base, size_t *msg_len,
 		       struct body **body)
 {
     int fd = fileno(infile);
     struct stat sbuf;
     const char *tmp_base;
-    unsigned long tmp_len;
+    size_t tmp_len;
     int unmap = 0, r;
 
     if (!msg_base) {

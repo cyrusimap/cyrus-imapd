@@ -80,8 +80,8 @@ struct dbengine {
     ino_t ino;
 
     const char *base;		/* contents of file */
-    unsigned long size;		/* actual size */
-    unsigned long len;		/* mapped size */
+    size_t size;		/* actual size */
+    size_t len;		/* mapped size */
 
     struct buf data;		/* returned storage for fetch */
 };
@@ -533,7 +533,7 @@ static int foreach(struct dbengine *db,
 
     /* for the local iteration so that the db can change out from under us */
     const char *dbbase = NULL;
-    unsigned long dblen = 0;
+    size_t dblen = 0;
     int dbfd = -1;
 
     struct buf prefixbuf = BUF_INITIALIZER;

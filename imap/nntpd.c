@@ -3157,7 +3157,7 @@ static int savemsg(message_data_t *m, FILE *f)
 
     if (stagef) {
 	const char *base = 0;
-	unsigned long size = 0;
+	size_t size = 0;
 	int n;
 
 	/* copy the header from our tmpfile to the stage */

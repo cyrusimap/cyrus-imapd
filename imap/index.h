@@ -131,7 +131,7 @@ struct copyargs {
 
 struct mapfile {
     const char *base;
-    unsigned long size;
+    size_t size;
 };
 
 #define MAPFILE_INITIALIZER { NULL, 0 }

@@ -753,7 +753,7 @@ static void mailbox_make_uniqueid(struct mailbox *mailbox)
  * Returns map in 'basep' and 'lenp'
  */
 int mailbox_map_message(struct mailbox *mailbox, unsigned long uid,
-			const char **basep, unsigned long *lenp)
+			const char **basep, size_t *lenp)
 {
     int msgfd;
     char *fname;
@@ -781,7 +781,7 @@ int mailbox_map_message(struct mailbox *mailbox, unsigned long uid,
  */
 void mailbox_unmap_message(struct mailbox *mailbox __attribute__((unused)),
 			   unsigned long uid __attribute__((unused)),
-			   const char **basep, unsigned long *lenp)
+			   const char **basep, size_t *lenp)
 {
     map_free(basep, lenp);
 }
@@ -1106,7 +1106,7 @@ int mailbox_read_header(struct mailbox *mailbox, char **aclptr)
     const char *fname;
     struct stat sbuf;
     const char *base = NULL;
-    unsigned long len = 0;
+    size_t len = 0;
     unsigned magic_size = sizeof(MAILBOX_HEADER_MAGIC) - 1;
 
     /* can't be dirty if we're reading it */
@@ -3438,7 +3438,7 @@ static void cleanup_stale_expunged(struct mailbox *mailbox)
     const char *fname;
     int expunge_fd = -1;
     const char *expunge_base = NULL;
-    unsigned long expunge_len = 0;   /* mapped size */
+    size_t expunge_len = 0;   /* mapped size */
     unsigned long expunge_num;
     unsigned long emapnum;
     uint32_t erecno;

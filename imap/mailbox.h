@@ -191,9 +191,9 @@ struct mailbox {
     int header_fd;
 
     const char *index_base;
-    unsigned long index_len;	/* mapped size */
+    size_t index_len;	/* mapped size */
     struct buf cache_buf;
-    unsigned long cache_len;	/* mapped size */
+    size_t cache_len;	/* mapped size */
 
     int index_locktype; /* 0 = none, 1 = shared, 2 = exclusive */
     int is_readonly; /* true = open index and cache files readonly */
@@ -418,10 +418,10 @@ extern char *mailbox_datapath(struct mailbox *mailbox);
 
 /* map individual messages in */
 extern int mailbox_map_message(struct mailbox *mailbox, unsigned long uid,
-				  const char **basep, unsigned long *lenp);
+				  const char **basep, size_t *lenp);
 extern void mailbox_unmap_message(struct mailbox *mailbox,
 				  unsigned long uid,
-				  const char **basep, unsigned long *lenp);
+				  const char **basep, size_t *lenp);
 
 /* cache record API */
 int mailbox_open_cache(struct mailbox *mailbox);

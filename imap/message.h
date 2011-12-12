@@ -136,7 +136,7 @@ extern int message_parse2(const char *fname, struct index_record *record,
 
 struct message_content {
     const char *base;  /* memory mapped file */
-    unsigned long len;
+    size_t len;
     struct body *body; /* parsed body structure */
 };
 
@@ -155,7 +155,7 @@ extern int message_parse_mapped P((const char *msg_base, unsigned long msg_len,
 				   struct body *body));
 extern int message_parse_binary_file P((FILE *infile, struct body **body));
 extern int message_parse_file P((FILE *infile,
-				 const char **msg_base, unsigned long *msg_len,
+				 const char **msg_base, size_t *msg_len,
 				 struct body **body));
 extern void message_fetch_part P((struct message_content *msg,
 				  const char **content_types,

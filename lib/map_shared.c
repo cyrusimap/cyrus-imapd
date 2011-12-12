@@ -61,7 +61,7 @@ const char *map_method_desc = "shared";
  * Create/refresh mapping of file
  */
 void map_refresh(int fd, int onceonly, const char **base,
-		 unsigned long *len, unsigned long newlen,
+		 size_t *len, size_t newlen,
 		 const char *name, const char *mboxname)
 {
     struct stat sbuf;
@@ -106,7 +106,7 @@ void map_refresh(int fd, int onceonly, const char **base,
 /*
  * Destroy mapping of file
  */
-void map_free(const char **base, unsigned long *len)
+void map_free(const char **base, size_t *len)
 {
     if (*len) munmap((char *)*base, *len);
     *base = 0;

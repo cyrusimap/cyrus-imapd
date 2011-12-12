@@ -405,7 +405,7 @@ static int _copyfile_helper(const char *from, const char *to, int flags)
     int srcfd = -1;
     int destfd = -1;
     const char *src_base = 0;
-    unsigned long src_size = 0;
+    size_t src_size = 0;
     struct stat sbuf;
     int n;
     int r = 0;

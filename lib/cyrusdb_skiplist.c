@@ -160,8 +160,8 @@ struct dbengine {
     int fd;
 
     const char *map_base;
-    unsigned long map_len;	/* mapped size */
-    unsigned long map_size;	/* actual size */
+    size_t map_len;	/* mapped size */
+    size_t map_size;	/* actual size */
     ino_t map_ino;
 
     /* header info */
@@ -2388,7 +2388,7 @@ static int recovery(struct dbengine *db, int flags)
 	syslog(LOG_NOTICE, 
 	       "skiplist: recovered %s (%d record%s, %ld bytes) in %d second%s",
 	       db->fname, db->listsize, db->listsize == 1 ? "" : "s", 
-	       db->map_size, diff, diff == 1 ? "" : "s"); 
+	       (long unsigned)db->map_size, diff, diff == 1 ? "" : "s"); 
     }
 
     if (!r && need_checkpoint) {

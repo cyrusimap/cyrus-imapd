@@ -379,7 +379,7 @@ static int myfetch(struct dbengine *db, char *quota_path,
     struct subtxn *mytid = NULL;
     int quota_fd;
     const char *quota_base = 0;
-    unsigned long quota_len = 0;
+    size_t quota_len = 0;
 
     assert(db);
 

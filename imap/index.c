@@ -1716,7 +1716,7 @@ static int index_appendremote(struct index_state *state, uint32_t msgno,
 {
     struct mailbox *mailbox = state->mailbox;
     const char *msg_base = 0;
-    unsigned long msg_size = 0;
+    size_t msg_size = 0;
     unsigned flag, flagmask;
     char datebuf[RFC3501_DATETIME_MAX+1];
     char sepchar = '(';
@@ -2668,7 +2668,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
     struct mailbox *mailbox = state->mailbox;
     int fetchitems = fetchargs->fetchitems;
     const char *msg_base = NULL;
-    unsigned long msg_size = 0;
+    size_t msg_size = 0;
     struct octetinfo *oi = NULL;
     int sepchar = '(';
     int started = 0;
@@ -2928,7 +2928,7 @@ int index_urlfetch(struct index_state *state, uint32_t msgno,
 		   struct protstream *pout, unsigned long *outsize)
 {
     const char *data, *msg_base = 0;
-    unsigned long msg_size = 0;
+    size_t msg_size = 0;
     const char *cacheitem;
     int fetchmime = 0, domain = DOMAIN_7BIT;
     size_t size;
@@ -5369,7 +5369,7 @@ extern char *index_getheader(struct index_state *state, uint32_t msgno,
 			     char *hdr)
 {
     static const char *msg_base = 0;
-    static unsigned long msg_size = 0;
+    static size_t msg_size = 0;
     strarray_t headers = STRARRAY_INITIALIZER;
     static char *alloc = NULL;
     static unsigned allocsize = 0;

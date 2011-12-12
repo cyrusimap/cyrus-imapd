@@ -65,8 +65,8 @@ map_refresh(fd, onceonly, base, len, newlen, name, mboxname)
 int fd;
 int onceonly;
 const char **base;
-unsigned long *len;
-unsigned long newlen;
+size_t *len;
+size_t newlen;
 const char *name;
 const char *mboxname;
 {
@@ -123,7 +123,7 @@ const char *mboxname;
 void
 map_free(base, len)
 const char **base;
-unsigned long *len;
+size_t *len;
 {
     if (*len) free((char *)*base);
     *base = 0;

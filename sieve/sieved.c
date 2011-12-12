@@ -84,7 +84,7 @@ static int load(int fd, bytecode_input_t ** d)
 {  
     const char * data=NULL;
     struct stat sbuf;
-    unsigned long len=0;
+    size_t len=0;
     
     if (fstat(fd, &sbuf) == -1) {
 	fprintf(stderr, "IOERROR: fstating sieve script: %m");

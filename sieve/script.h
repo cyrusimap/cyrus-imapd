@@ -83,7 +83,7 @@ typedef struct sieve_bytecode sieve_bytecode_t;
 struct sieve_bytecode {
     ino_t inode;		/* used to prevent mmapping the same script */
     const char *data;
-    unsigned long len;
+    size_t len;
     int fd;
 
     int is_executing;		/* used to prevent recursive INCLUDEs */

@@ -106,9 +106,9 @@ struct protstream {
 
     /* Big Buffer Information */
     const char *bigbuf_base;  /* Base Pointer */
-    unsigned long bigbuf_siz; /* Overall Size of Buffer */
-    unsigned long bigbuf_len; /* Length of mapped file */
-    unsigned long bigbuf_pos; /* Current Position */
+    size_t bigbuf_siz; /* Overall Size of Buffer */
+    size_t bigbuf_len; /* Length of mapped file */
+    size_t bigbuf_pos; /* Current Position */
 
     /* Status Flags */
     int eof;
