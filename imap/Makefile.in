@@ -93,7 +93,7 @@ QUANTOPT=-windows=no -filename-prefix=/tmp/quant/%v.%p -write-summary-file= -log
 prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
-service_path = @service_path@
+servicedir = @servicedir@
 
 LOBJS= annotate.o append.o backend.o convert_code.o dlist.o duplicate.o \
 	global.o idle.o idlemsg.o imapparse.o imap_err.o mailbox.o mbdump.o \
@@ -129,14 +129,14 @@ pure: imapd.pure lmtpd.pure mupdate.pure
 
 
 install:
-	$(INSTALL) -d ${DESTDIR}$(service_path)
+	$(INSTALL) -d ${DESTDIR}$(servicedir)
 	for file in $(PROGS); \
 	do \
-		$(INSTALL) -m 755 $$file $(DESTDIR)$(service_path) || exit 1; \
+		$(INSTALL) -m 755 $$file $(DESTDIR)$(servicedir) || exit 1; \
 	done
-	ln -f $(DESTDIR)$(service_path)/pop3d $(DESTDIR)$(service_path)/pop3proxyd
-	ln -f $(DESTDIR)$(service_path)/imapd $(DESTDIR)$(service_path)/proxyd
-	ln -f $(DESTDIR)$(service_path)/lmtpd $(DESTDIR)$(service_path)/lmtpproxyd
+	ln -f $(DESTDIR)$(servicedir)/pop3d $(DESTDIR)$(servicedir)/pop3proxyd
+	ln -f $(DESTDIR)$(servicedir)/imapd $(DESTDIR)$(servicedir)/proxyd
+	ln -f $(DESTDIR)$(servicedir)/lmtpd $(DESTDIR)$(servicedir)/lmtpproxyd
 
 .SUFFIXES: .snmp
 

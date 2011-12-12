@@ -63,7 +63,7 @@ LDFLAGS = @LDFLAGS@ $(EXTRALDFLAGS)
 prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
-service_path = @service_path@
+servicedir = @servicedir@
 
 MAKEDEPEND = @MAKEDEPEND@
 
@@ -84,7 +84,7 @@ all: timsieved
 check:
 
 install:
-	$(INSTALL) -m 755 timsieved $(DESTDIR)$(service_path)
+	$(INSTALL) -m 755 timsieved $(DESTDIR)$(servicedir)
 
 OBJS= actions.o lex.o mystring.o parser.o scripttest.o timsieved.o $(top_builddir)/imap/proxy.o
 

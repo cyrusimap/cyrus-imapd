@@ -77,7 +77,7 @@ MAKEDEPEND = @MAKEDEPEND@
 prefix = @prefix@
 exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
-service_path = @service_path@
+servicedir = @servicedir@
 
 EXTRA_PROGS = # ptextract pttest
 PROGS = ptexpire ptloader ptdump $(EXTRA_PROGS)
@@ -93,9 +93,9 @@ all: $(PROGS)
 check:
 
 install:
-	$(INSTALL) -m 755 ptloader $(DESTDIR)$(service_path)
-	$(INSTALL) -m 755 ptexpire $(DESTDIR)$(service_path)
-	$(INSTALL) -m 755 ptdump $(DESTDIR)$(service_path)
+	$(INSTALL) -m 755 ptloader $(DESTDIR)$(servicedir)
+	$(INSTALL) -m 755 ptexpire $(DESTDIR)$(servicedir)
+	$(INSTALL) -m 755 ptdump $(DESTDIR)$(servicedir)
 
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(LDAP_CPPFLAGS) $(DEFS) $(CFLAGS) $<

@@ -48,7 +48,7 @@ VPATH = @srcdir@
 
 prefix = @prefix@
 cyrus_prefix = @cyrus_prefix@
-service_path = @service_path@
+servicedir = @servicedir@
 
 CC = @CC@
 YACC = @YACC@
@@ -84,9 +84,9 @@ check:
 dist: $(BUILT_SOURCES)
 
 install: sievec sieved
-	$(INSTALL) -d ${DESTDIR}$(service_path)
-	$(INSTALL) -m 755 sievec $(DESTDIR)$(service_path) || exit
-	$(INSTALL) -m 755 sieved $(DESTDIR)$(service_path) || exit
+	$(INSTALL) -d ${DESTDIR}$(servicedir)
+	$(INSTALL) -m 755 sievec $(DESTDIR)$(servicedir) || exit
+	$(INSTALL) -m 755 sieved $(DESTDIR)$(servicedir) || exit
 
 test: $(DEPLIBS) libsieve.a test.o $(LIBIMAP)
 	$(CC) $(LDFLAGS) -o test test.o \
