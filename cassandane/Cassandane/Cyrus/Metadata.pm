@@ -2378,4 +2378,50 @@ sub test_folder_delete_msg_dmdel
     $self->folder_delete_msg_common();
 }
 
+sub test_getmetadata_multiple_folders
+{
+    my ($self) = @_;
+
+    xlog "test the Cyrus-specific extension to the GETMETADATA";
+    xlog "syntax which allows specifying a parenthesised list";
+    xlog "of folder names [IRIS-1109]";
+
+    my $imaptalk = $self->{store}->get_client();
+    # data thanks to hipsteripsum.me
+    my @folders = ( qw(INBOX.denim INBOX.sustainable INBOX.biodiesel.vinyl) );
+    my $entry = '/shared/vendor/cmu/cyrus-imapd/uniqueid';
+    my %uuids;
+
+    xlog "Create folders";
+    foreach my $f (@folders)
+    {
+	$imaptalk->create($f)
+	    or die "Cannot create mailbox $f: $@";
+
+	my $res = $imaptalk->getmetadata($f, $entry);
+	$self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+	$self->assert_not_null($res);
+
+	my $uuid = $res->{$f}{$entry};
+	$self->assert_not_null($uuid);
+	$self->assert($uuid =~ m/^[0-9a-z-]+$/);
+	$uuids{$f} = $uuid;
+    }
+
+    xlog "Getting metadata with a list of folder names";
+    my @f2;
+    my %exp;
+    foreach my $f (@folders)
+    {
+	push(@f2, $f);
+	$exp{$f} = { $entry => $uuids{$f} };
+
+	my $res = $imaptalk->getmetadata(\@f2, $entry);
+	$self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+	$self->assert_not_null($res);
+
+	$self->assert_deep_equals(\%exp, $res);
+    }
+}
+
 1;
