@@ -404,7 +404,7 @@ void cmd_netscrape(char* tag);
 #endif
 
 static void cmd_getannotation(const char* tag, char *mboxpat);
-static void cmd_getmetadata(const char* tag, char *mboxpat);
+static void cmd_getmetadata(const char* tag);
 static void cmd_setannotation(const char* tag, char *mboxpat);
 static void cmd_setmetadata(const char* tag, char *mboxpat);
 static void cmd_xrunannotator(const char *tag, const char *sequence,
@@ -1458,10 +1458,8 @@ void cmdloop(void)
 	    }
 	    else if (!strcmp(cmd.s, "Getmetadata")) {
 		if (c != ' ') goto missingargs;
-		c = getastring(imapd_in, imapd_out, &arg1);
-		if (c != ' ') goto missingargs;
 
-		cmd_getmetadata(tag.s, arg1.s);
+		cmd_getmetadata(tag.s);
 
 		snmp_increment(GETANNOTATION_COUNT, 1);
 	    }
@@ -8127,7 +8125,7 @@ static void cmd_getannotation(const char *tag, char *mboxpat)
 	arock.attribs = &attribs;
 	arock.callback = getannotation_response;
 	arock.sizeptr = NULL;
-	r = annotate_apply_mailboxes(astate, mboxpat, annot_fetch_cb, &arock);
+	r = annotate_apply_mailbox_pattern(astate, mboxpat, annot_fetch_cb, &arock);
     }
 
     imapd_check(NULL, 0);
@@ -8184,9 +8182,9 @@ static void getmetadata_response(const char *mboxname,
 /*
  * Perform a GETMETADATA command
  *
- * The command has been parsed up to the entries
+ * The command has been parsed up to the mailbox
  */
-static void cmd_getmetadata(const char *tag, char *mboxpat)
+static void cmd_getmetadata(const char *tag)
 {
     int c, r = 0;
     strarray_t entries = STRARRAY_INITIALIZER;
@@ -8194,6 +8192,9 @@ static void cmd_getmetadata(const char *tag, char *mboxpat)
     strarray_t newe = STRARRAY_INITIALIZER;
     strarray_t newa = STRARRAY_INITIALIZER;
     strarray_t *real_entries;
+    struct buf arg1 = BUF_INITIALIZER;
+    strarray_t mboxes = STRARRAY_INITIALIZER;
+    int mbox_is_pattern = 0;
     int maxsize = -1;
     int basesize = 0;
     int *sizeptr = NULL;
@@ -8202,6 +8203,39 @@ static void cmd_getmetadata(const char *tag, char *mboxpat)
     int have_private = 0;
     int i;
     annotate_state_t *astate = annotate_state_new();
+
+    c = prot_getc(imapd_in);
+    if (c == EOF)
+	goto missingargs;
+    if (c == '(') {
+	/* Non-standard extension to GETMETADATA syntax:
+	 * allow a (list) of folder names instead of a
+	 * single folder or folder pattern */
+	for (;;) {
+	    c = getastring(imapd_in, imapd_out, &arg1);
+	    if (arg1.len)
+		strarray_append(&mboxes, arg1.s);
+	    if (c == ')')
+		break;
+	    if (c != ' ')
+		goto missingargs;
+	}
+	c = prot_getc(imapd_in);
+	if (c != ' ')
+	    goto missingargs;
+	mbox_is_pattern = 0;
+    }
+    else {
+	/* Standard GETMETADATA syntax: 1st argument
+	 * is a folder name/pattern */
+	prot_ungetc(c, imapd_in);
+	c = getastring(imapd_in, imapd_out, &arg1);
+	if (c != ' ')
+	    goto missingargs;
+	if (arg1.len)
+	    strarray_append(&mboxes, arg1.s);
+	mbox_is_pattern = 1;
+    }
 
     c = parse_metadata_fetch_data(tag, &entries, &attribs);
     if (c == EOF) {
@@ -8299,7 +8333,7 @@ static void cmd_getmetadata(const char *tag, char *mboxpat)
 			    imapd_userisadmin || imapd_userisproxyadmin,
 			    imapd_userid, imapd_authstate);
     basesize = maxsize;
-    if (!*mboxpat) {
+    if (!mboxes.count) {
 	annotate_state_set_server(astate);
 	r = annotate_state_fetch(astate, &newe, &newa,
 				 getmetadata_response, NULL, sizeptr);
@@ -8310,7 +8344,10 @@ static void cmd_getmetadata(const char *tag, char *mboxpat)
 	arock.attribs = &newa;
 	arock.callback = getmetadata_response;
 	arock.sizeptr = sizeptr;
-	r = annotate_apply_mailboxes(astate, mboxpat, annot_fetch_cb, &arock);
+	if (mbox_is_pattern)
+	    r = annotate_apply_mailbox_pattern(astate, mboxes.data[0], annot_fetch_cb, &arock);
+	else
+	    r = annotate_apply_mailbox_array(astate, &mboxes, annot_fetch_cb, &arock);
     }
 
     imapd_check(NULL, 0);
@@ -8331,6 +8368,14 @@ static void cmd_getmetadata(const char *tag, char *mboxpat)
     strarray_fini(&attribs);
     strarray_fini(&newe);
     strarray_fini(&newa);
+    strarray_fini(&mboxes);
+    buf_free(&arg1);
+    return;
+
+missingargs:
+    prot_printf(imapd_out, "%s BAD Missing arguments to Getannotation\r\n", tag);
+    eatline(imapd_in, c);
+    goto freeargs;
 }
 
 /*
@@ -8371,7 +8416,7 @@ static void cmd_setannotation(const char *tag, char *mboxpat)
 	else {
 	    struct annot_store_rock arock;
 	    arock.entryatts = entryatts;
-	    r = annotate_apply_mailboxes(astate, mboxpat, annot_store_cb, &arock);
+	    r = annotate_apply_mailbox_pattern(astate, mboxpat, annot_store_cb, &arock);
 	}
     }
     if (!r)
@@ -8429,7 +8474,7 @@ static void cmd_setmetadata(const char *tag, char *mboxpat)
 	else {
 	    struct annot_store_rock arock;
 	    arock.entryatts = entryatts;
-	    r = annotate_apply_mailboxes(astate, mboxpat, annot_store_cb, &arock);
+	    r = annotate_apply_mailbox_pattern(astate, mboxpat, annot_store_cb, &arock);
 	}
     }
     if (!r)

@@ -158,13 +158,18 @@ int annotatemore_lookup(const char *mboxname, const char *entry,
 int annotatemore_msg_lookup(const char *mboxname, uint32_t uid, const char *entry,
 			    const char *userid, struct buf *value);
 
-/* helper function which sets up an annotate_state_t to be
+/* helper functions which set up an annotate_state_t to be
  * scoped to several different mailboxes in order; useful for
  * handling mailbox patterns at the IMAP command level.  */
-int annotate_apply_mailboxes(annotate_state_t *state,
-			     const char *mailbox_pattern,
-			     int (*proc)(annotate_state_t *, void *),
-			     void *data);
+int annotate_apply_mailbox_pattern(annotate_state_t *state,
+				   const char *mailbox_pattern,
+				   int (*proc)(annotate_state_t *, void *),
+				   void *data);
+int annotate_apply_mailbox_array(annotate_state_t *state,
+				 const strarray_t *mailboxes, /* external */
+			         int (*proc)(annotate_state_t *, void *),
+			         void *data);
+
 
 /* store annotations.  Requires an open transaction */
 int annotate_state_store(annotate_state_t *state, struct entryattlist *l);

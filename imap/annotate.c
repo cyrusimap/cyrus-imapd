@@ -1291,10 +1291,10 @@ out:
     return r;
 }
 
-int annotate_apply_mailboxes(annotate_state_t *state,
-			     const char *pattern,
-			     int (*proc)(annotate_state_t *, void *),
-			     void *data)
+int annotate_apply_mailbox_pattern(annotate_state_t *state,
+				   const char *pattern,
+				   int (*proc)(annotate_state_t *, void *),
+				   void *data)
 {
     struct apply_rock arock;
     char mboxpat[MAX_MAILBOX_BUFFER];
@@ -1320,6 +1320,42 @@ int annotate_apply_mailboxes(annotate_state_t *state,
     if (!r && !arock.nseen)
 	r = IMAP_MAILBOX_NONEXISTENT;
 
+    return r;
+}
+
+int annotate_apply_mailbox_array(annotate_state_t *state,
+				 const strarray_t *mboxes,
+			         int (*proc)(annotate_state_t *, void *),
+			         void *data)
+{
+    int i;
+    struct mboxlist_entry *mbentry = NULL;
+    char int_mboxname[MAX_MAILBOX_BUFFER];
+    int r = 0;
+
+    for (i = 0 ; i < mboxes->count ; i++) {
+	state->namespace->mboxname_tointernal(state->namespace,
+					      mboxes->data[i],
+					      state->userid,
+					      int_mboxname);
+	r = mboxlist_lookup(int_mboxname, &mbentry, NULL);
+	if (r)
+	    break;
+
+	r = annotate_state_set_scope(state, mbentry, NULL, 0);
+	if (r)
+	    break;
+
+	r = proc(state, data);
+	if (r)
+	    break;
+
+	annotate_state_unset_scope(state);
+	mboxlist_entry_free(&mbentry);
+    }
+
+    annotate_state_unset_scope(state);
+    mboxlist_entry_free(&mbentry);
     return r;
 }
 
