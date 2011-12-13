@@ -1751,7 +1751,7 @@ void error_response(long code, struct transaction_t *txn)
 	}
     }
 
-    txn->resp_body.type = "text/plain";
+    if (txn->errstr) txn->resp_body.type = "text/plain";
     write_body(code, txn, txn->errstr, txn->errstr ? strlen(txn->errstr) : 0);
 }
 
