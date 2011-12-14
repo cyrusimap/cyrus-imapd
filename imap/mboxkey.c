@@ -90,7 +90,7 @@ static struct mboxkey *lastmboxkey = NULL;
 static void abortcurrent(struct mboxkey *s)
 {
     if (s && s->tid) {
-	int r = DB->abort(s->db, s->tid);
+	int r = cyrusdb_abort(s->db, s->tid);
 	if (r) {
 	    syslog(LOG_ERR, "DBERROR: error aborting txn: %s", 
 		   cyrusdb_strerror(r));
@@ -151,7 +151,7 @@ int mboxkey_open(const char *user,
     /* otherwise, close the existing database */
     if (mboxkeydb) {
 	abortcurrent(mboxkeydb);
-	r = (DB->close)(mboxkeydb->db);
+	r = cyrusdb_close(mboxkeydb->db);
 	if (r) {
 	    syslog(LOG_ERR, "DBERROR: error closing mboxkeydb: %s", 
 		   cyrusdb_strerror(r));
@@ -165,7 +165,7 @@ int mboxkey_open(const char *user,
 
     /* open the mboxkeydb corresponding to user */
     fname = mboxkey_getpath(user);
-    r = (DB->open)(fname, (flags & MBOXKEY_CREATE) ? CYRUSDB_CREATE : 0,
+    r = cyrusdb_open(DB, fname, (flags & MBOXKEY_CREATE) ? CYRUSDB_CREATE : 0,
 		 &mboxkeydb->db);
     if (r != 0) {
 	int level = (flags & MBOXKEY_CREATE) ? LOG_ERR : LOG_DEBUG;
@@ -197,10 +197,10 @@ static int mboxkey_readit(struct mboxkey *mboxkeydb, const char *mailbox,
 
     assert(mboxkeydb && mailbox);
     if (rw || mboxkeydb->tid) {
-	r = DB->fetchlock(mboxkeydb->db, mailbox, strlen(mailbox),
+	r = cyrusdb_fetchlock(mboxkeydb->db, mailbox, strlen(mailbox),
 			  &data, &datalen, &mboxkeydb->tid);
     } else {
-	r = DB->fetch(mboxkeydb->db, mailbox, strlen(mailbox),
+	r = cyrusdb_fetch(mboxkeydb->db, mailbox, strlen(mailbox),
 		      &data, &datalen, NULL);
     }
     switch (r) {
@@ -270,7 +270,7 @@ int mboxkey_write(struct mboxkey *mboxkeydb, const char *mailbox,
     }
 
     if (!mboxkey) {
-	r = DB->delete(mboxkeydb->db, mailbox, strlen(mailbox),
+	r = cyrusdb_delete(mboxkeydb->db, mailbox, strlen(mailbox),
 		       &mboxkeydb->tid, 1);
     }
     else {
@@ -282,7 +282,7 @@ int mboxkey_write(struct mboxkey *mboxkeydb, const char *mailbox,
 	memcpy(data, &s, sizeof(s));
 	memcpy(data+sizeof(s), mboxkey, mboxkeylen);
 
-	r = DB->store(mboxkeydb->db, mailbox, strlen(mailbox),
+	r = cyrusdb_store(mboxkeydb->db, mailbox, strlen(mailbox),
 		      data, datalen, &mboxkeydb->tid);
 	free(data);
     }
@@ -313,7 +313,7 @@ int mboxkey_close(struct mboxkey *mboxkeydb)
     }
 
     if (mboxkeydb->tid) {
-	r = DB->commit(mboxkeydb->db, mboxkeydb->tid);
+	r = cyrusdb_commit(mboxkeydb->db, mboxkeydb->tid);
 	if (r != CYRUSDB_OK) {
 	    syslog(LOG_ERR, "DBERROR: error committing mboxkey txn; "
 		   "mboxkey state lost: %s", cyrusdb_strerror(r));
@@ -326,7 +326,7 @@ int mboxkey_close(struct mboxkey *mboxkeydb)
 
 	/* free the old database hanging around */
 	abortcurrent(lastmboxkey);
-	r = (DB->close)(lastmboxkey->db);
+	r = cyrusdb_close(lastmboxkey->db);
 	if (r != CYRUSDB_OK) {
 	    syslog(LOG_ERR, "DBERROR: error closing lastmboxkey: %s",
 		   cyrusdb_strerror(r));
@@ -390,7 +390,7 @@ int mboxkey_unlock(struct mboxkey *mboxkeydb)
 	       mboxkeydb->user);
     }
 
-    r = DB->commit(mboxkeydb->db, mboxkeydb->tid);
+    r = cyrusdb_commit(mboxkeydb->db, mboxkeydb->tid);
     if (r != CYRUSDB_OK) {
 	syslog(LOG_ERR, "DBERROR: error committing mboxkey txn; "
 	       "mboxkey state lost: %s", cyrusdb_strerror(r));
@@ -410,7 +410,7 @@ int mboxkey_done(void)
 
     if (lastmboxkey) {
 	abortcurrent(lastmboxkey);
-	r = (DB->close)(lastmboxkey->db);
+	r = cyrusdb_close(lastmboxkey->db);
 	if (r) {
 	    syslog(LOG_ERR, "DBERROR: error closing lastmboxkey: %s",
 		   cyrusdb_strerror(r));
@@ -446,7 +446,7 @@ static int mboxkey_merge_cb(void *rockp,
 
     if (!tgtdb) return IMAP_INTERNAL;
 
-    r = DB->fetchlock(tgtdb, key, keylen, &tgtdata, &tgtdatalen,
+    r = cyrusdb_fetchlock(tgtdb, key, keylen, &tgtdata, &tgtdatalen,
 		      &(rockdata->tid));
     if(!r && tgtdata) {
 	unsigned short version, s;
@@ -463,7 +463,7 @@ static int mboxkey_merge_cb(void *rockp,
 	assert(version == MBOXKEY_VERSION);
     }
     
-    return DB->store(tgtdb, key, keylen, tmpdata, tmpdatalen,
+    return cyrusdb_store(tgtdb, key, keylen, tmpdata, tmpdatalen,
 		     &(rockdata->tid));
 }
 
@@ -474,24 +474,24 @@ int mboxkey_merge(const char *tmpfile, const char *tgtfile)
     struct mboxkey_merge_rock rock;
 
     /* xxx does this need to be CYRUSDB_CREATE? */
-    r = (DB->open)(tmpfile, CYRUSDB_CREATE, &tmp);
+    r = cyrusdb_open(DB, tmpfile, CYRUSDB_CREATE, &tmp);
     if(r) goto done;
 	    
-    r = (DB->open)(tgtfile, CYRUSDB_CREATE, &tgt);
+    r = cyrusdb_open(DB, tgtfile, CYRUSDB_CREATE, &tgt);
     if(r) goto done;
 
     rock.db = tgt;
     rock.tid = NULL;
     
-    r = DB->foreach(tmp, "", 0, NULL, mboxkey_merge_cb, &rock, &rock.tid);
+    r = cyrusdb_foreach(tmp, "", 0, NULL, mboxkey_merge_cb, &rock, &rock.tid);
 
-    if(r) DB->abort(rock.db, rock.tid);
-    else DB->commit(rock.db, rock.tid);
+    if(r) cyrusdb_abort(rock.db, rock.tid);
+    else cyrusdb_commit(rock.db, rock.tid);
 
  done:
 
-    if(tgt) (DB->close)(tgt);
-    if(tmp) (DB->close)(tmp);
+    if(tgt) cyrusdb_close(tgt);
+    if(tmp) cyrusdb_close(tmp);
     
     return r;
 }

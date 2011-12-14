@@ -100,8 +100,8 @@ static int dbinit = 0;
 static DB_ENV *dbenv;
 
 /* other routines call this one when they fail */
-static int commit_txn(struct db *db, struct txn *tid);
-static int abort_txn(struct db *db, struct txn *tid);
+static int commit_txn(struct dbengine *db, struct txn *tid);
+static int abort_txn(struct dbengine *db, struct txn *tid);
 
 static void db_panic(DB_ENV *dbenv __attribute__((unused)),
 		     int errno __attribute__((unused)))
@@ -397,7 +397,7 @@ static int mbox_compar(DB *db __attribute__((unused)),
 				 (const char *) b->data, b->size);
 }
 
-static int myopen(const char *fname, DBTYPE type, int flags, struct db **ret)
+static int myopen(const char *fname, DBTYPE type, int flags, struct dbengine **ret)
 {
     DB *db = NULL;
     int r;
@@ -431,22 +431,22 @@ static int myopen(const char *fname, DBTYPE type, int flags, struct db **ret)
 	return CYRUSDB_IOERROR;
     }
 
-    *ret = (struct db *) db;
+    *ret = (struct dbengine *) db;
 
     return r;
 }
 
-static int open_btree(const char *fname, int flags, struct db **ret)
+static int open_btree(const char *fname, int flags, struct dbengine **ret)
 {
     return myopen(fname, DB_BTREE, flags, ret);
 }
 
-static int open_hash(const char *fname, int flags, struct db **ret)
+static int open_hash(const char *fname, int flags, struct dbengine **ret)
 {
     return myopen(fname, DB_HASH, flags, ret);
 }
 
-static int myclose(struct db *db)
+static int myclose(struct dbengine *db)
 {
     int r;
     DB *a = (DB *) db;
@@ -491,7 +491,7 @@ static int gettid(struct txn **mytid, DB_TXN **tid, const char *where)
     return 0;
 }
 
-static int myfetch(struct db *mydb, 
+static int myfetch(struct dbengine *mydb, 
 		   const char *key, size_t keylen,
 		   const char **data, size_t *datalen,
 		   struct txn **mytid, int flags)
@@ -541,7 +541,7 @@ static int myfetch(struct db *mydb,
     return r;
 }
 
-static int fetch(struct db *mydb, 
+static int fetch(struct dbengine *mydb, 
 		 const char *key, size_t keylen,
 		 const char **data, size_t *datalen,
 		 struct txn **mytid)
@@ -549,7 +549,7 @@ static int fetch(struct db *mydb,
     return myfetch(mydb, key, keylen, data, datalen, mytid, 0);
 }
 
-static int fetchlock(struct db *mydb, 
+static int fetchlock(struct dbengine *mydb, 
 		     const char *key, size_t keylen,
 		     const char **data, size_t *datalen,
 		     struct txn **mytid)
@@ -580,7 +580,7 @@ static int fetchlock(struct db *mydb,
 
 /* instead of "DB_DBT_REALLOC", we might want DB_DBT_USERMEM and allocate
    this to the maximum length at the beginning. */
-static int foreach(struct db *mydb,
+static int foreach(struct dbengine *mydb,
 		   const char *prefix, size_t prefixlen,
 		   foreach_p *goodp,
 		   foreach_cb *cb, void *rock, 
@@ -728,7 +728,7 @@ static int foreach(struct db *mydb,
     return r;
 }
 
-static int mystore(struct db *mydb, 
+static int mystore(struct dbengine *mydb, 
 		   const char *key, size_t keylen,
 		   const char *data, size_t datalen,
 		   struct txn **mytid, int putflags, int txnflags)
@@ -811,7 +811,7 @@ static int mystore(struct db *mydb,
     return r;
 }
 
-static int create(struct db *db, 
+static int create(struct dbengine *db, 
 		  const char *key, size_t keylen,
 		  const char *data, size_t datalen,
 		  struct txn **tid)
@@ -819,7 +819,7 @@ static int create(struct db *db,
     return mystore(db, key, keylen, data, datalen, tid, DB_NOOVERWRITE, 0);
 }
 
-static int store(struct db *db, 
+static int store(struct dbengine *db, 
 		 const char *key, size_t keylen,
 		 const char *data, size_t datalen,
 		 struct txn **tid)
@@ -827,7 +827,7 @@ static int store(struct db *db,
     return mystore(db, key, keylen, data, datalen, tid, 0, 0);
 }
 
-static int create_nosync(struct db *db, 
+static int create_nosync(struct dbengine *db, 
 			 const char *key, size_t keylen,
 			 const char *data, size_t datalen,
 			 struct txn **tid)
@@ -836,7 +836,7 @@ static int create_nosync(struct db *db,
 		   DB_TXN_NOSYNC);
 }
 
-static int store_nosync(struct db *db, 
+static int store_nosync(struct dbengine *db, 
 			const char *key, size_t keylen,
 			const char *data, size_t datalen,
 			struct txn **tid)
@@ -844,7 +844,7 @@ static int store_nosync(struct db *db,
     return mystore(db, key, keylen, data, datalen, tid, 0, DB_TXN_NOSYNC);
 }
 
-static int mydelete(struct db *mydb, 
+static int mydelete(struct dbengine *mydb, 
 		    const char *key, size_t keylen,
 		    struct txn **mytid, int txnflags, int force)
 {
@@ -922,21 +922,21 @@ static int mydelete(struct db *mydb,
     return r;
 }
 
-static int delete(struct db *db, 
+static int delete(struct dbengine *db, 
 		  const char *key, size_t keylen,
 		  struct txn **tid, int force)
 {
     return mydelete(db, key, keylen, tid, 0, force);
 }
 
-static int delete_nosync(struct db *db, 
+static int delete_nosync(struct dbengine *db, 
 			 const char *key, size_t keylen,
 			 struct txn **tid, int force)
 {
     return mydelete(db, key, keylen, tid, DB_TXN_NOSYNC, force);
 }
 
-static int mycommit(struct db *db __attribute__((unused)),
+static int mycommit(struct dbengine *db __attribute__((unused)),
 		    struct txn *tid, int txnflags)
 {
     int r;
@@ -965,17 +965,17 @@ static int mycommit(struct db *db __attribute__((unused)),
     return r;
 }
 
-static int commit_txn(struct db *db, struct txn *tid)
+static int commit_txn(struct dbengine *db, struct txn *tid)
 {
     return mycommit(db, tid, 0);
 }
 
-static int commit_nosync(struct db *db, struct txn *tid)
+static int commit_nosync(struct dbengine *db, struct txn *tid)
 {
     return mycommit(db, tid, DB_TXN_NOSYNC);
 }
 
-static int abort_txn(struct db *db __attribute__((unused)),
+static int abort_txn(struct dbengine *db __attribute__((unused)),
 		     struct txn *tid)
 {
     int r;

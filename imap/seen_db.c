@@ -135,7 +135,7 @@ int seen_open(const char *user,
     /* open the seendb corresponding to user */
     fname = seen_getpath(user);
     if (flags & SEEN_CREATE) cyrus_mkdir(fname, 0755);
-    r = (DB->open)(fname, dbflags, &seendb->db);
+    r = cyrusdb_open(DB, fname, dbflags, &seendb->db);
     if (r) {
 	if (!(flags & SEEN_SILENT)) {
 	    int level = (flags & SEEN_CREATE) ? LOG_ERR : LOG_DEBUG;
@@ -216,7 +216,7 @@ int seen_foreach(struct seen *seendb, seenproc_t *f, void *rock)
     struct seendata_rock sdrock;
     sdrock.f = f;
     sdrock.rock = rock;
-    return DB->foreach(seendb->db, "", 0, NULL, foreach_proc, &sdrock, NULL);
+    return cyrusdb_foreach(seendb->db, "", 0, NULL, foreach_proc, &sdrock, NULL);
 }
 
 static int seen_readit(struct seen *seendb, const char *uniqueid,
@@ -228,10 +228,10 @@ static int seen_readit(struct seen *seendb, const char *uniqueid,
 
     assert(seendb && uniqueid);
     if (rw || seendb->tid) {
-	r = DB->fetchlock(seendb->db, uniqueid, strlen(uniqueid),
+	r = cyrusdb_fetchlock(seendb->db, uniqueid, strlen(uniqueid),
 			  &data, &datalen, &seendb->tid);
     } else {
-	r = DB->fetch(seendb->db, uniqueid, strlen(uniqueid),
+	r = cyrusdb_fetch(seendb->db, uniqueid, strlen(uniqueid),
 		      &data, &datalen, NULL);
     }
     switch (r) {
@@ -304,7 +304,7 @@ int seen_write(struct seen *seendb, const char *uniqueid, struct seendata *sd)
 	    sd->lastchange, sd->seenuids);
     datalen = strlen(data);
 
-    r = DB->store(seendb->db, uniqueid, strlen(uniqueid),
+    r = cyrusdb_store(seendb->db, uniqueid, strlen(uniqueid),
 		  data, datalen, &seendb->tid);
     switch (r) {
     case CYRUSDB_OK:
@@ -341,7 +341,7 @@ int seen_close(struct seen **seendbptr)
 	if (SEEN_DEBUG) {
 	    syslog(LOG_DEBUG, "seen_db: committing changes for %s", seendb->user);
 	}
-	r = DB->commit(seendb->db, seendb->tid);
+	r = cyrusdb_commit(seendb->db, seendb->tid);
 	if (r != CYRUSDB_OK) {
 	    syslog(LOG_ERR, "DBERROR: error committing seen txn; "
 		   "seen state lost: %s", cyrusdb_strerror(r));
@@ -349,7 +349,7 @@ int seen_close(struct seen **seendbptr)
 	seendb->tid = NULL;
     }
 
-    r = (DB->close)(seendb->db);
+    r = cyrusdb_close(seendb->db);
     if (r) {
 	syslog(LOG_ERR, "DBERROR: error closing: %s",
 	       cyrusdb_strerror(r));
@@ -390,7 +390,7 @@ int seen_delete_mailbox(const char *userid, struct mailbox *mailbox)
 	return 0;
 
     r = seen_open(userid, SEEN_SILENT, &seendb);
-    if (!r) r = DB->delete(seendb->db, uniqueid, strlen(uniqueid),
+    if (!r) r = cyrusdb_delete(seendb->db, uniqueid, strlen(uniqueid),
 			   &seendb->tid, 1);
     seen_close(&seendb);
 
@@ -540,14 +540,14 @@ int seen_merge(struct seen *seendb, const char *newfile)
     int r = 0;
     struct db *newdb = NULL;
 
-    r = (DB->open)(newfile, 0, &newdb);
+    r = cyrusdb_open(DB, newfile, 0, &newdb);
     /* if it doesn't exist, there's nothing
      * to do, so abort without an error */
     if (r == CYRUSDB_NOTFOUND) return 0;
 
-    if (!r) r = DB->foreach(newdb, "", 0, NULL, seen_merge_cb, seendb, NULL);
+    if (!r) r = cyrusdb_foreach(newdb, "", 0, NULL, seen_merge_cb, seendb, NULL);
 
-    if (newdb) (DB->close)(newdb);
+    if (newdb) cyrusdb_close(newdb);
 
     return r;
 }

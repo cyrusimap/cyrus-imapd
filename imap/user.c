@@ -469,7 +469,7 @@ int user_deletequotaroots(const char *user)
     }
 
     if (!r) {
-	r = config_quota_db->foreach(qdb, inboxname, strlen(inboxname),
+	r = cyrusdb_foreach(qdb, inboxname, strlen(inboxname),
 				     &find_p, &find_cb, inboxname, NULL);
     }
 

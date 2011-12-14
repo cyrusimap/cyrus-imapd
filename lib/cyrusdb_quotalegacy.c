@@ -118,7 +118,7 @@ struct txn {
     int result;		/* final result of the commit/abort */
 };
 
-struct db {
+struct dbengine {
     char *path;
 
     char *data;		/* allocated buffer for fetched data */
@@ -129,7 +129,7 @@ struct db {
     int (*compar) (const void *s1, const void *s2);
 };
 
-static int abort_txn(struct db *db __attribute__((unused)), struct txn *tid);
+static int abort_txn(struct dbengine *db __attribute__((unused)), struct txn *tid);
 static int compar_qr(const void *v1, const void *v2);
 static int compar_qr_mbox(const void *v1, const void *v2);
 
@@ -284,7 +284,7 @@ static int commit_subtxn(const char *fname, struct subtxn *tid)
     return r;
 }
 
-static void free_db(struct db *db)
+static void free_db(struct dbengine *db)
 {
     if (db) {
 	if (db->path) free(db->path);
@@ -328,9 +328,9 @@ static int myarchive(const char **fnames __attribute__((unused)),
     return 0;
 }
 
-static int myopen(const char *fname, int flags, struct db **ret)
+static int myopen(const char *fname, int flags, struct dbengine **ret)
 {
-    struct db *db = (struct db *) xzmalloc(sizeof(struct db));
+    struct dbengine *db = (struct dbengine *) xzmalloc(sizeof(struct dbengine));
     struct stat sbuf;
     char *p;
     int r;
@@ -363,7 +363,7 @@ static int myopen(const char *fname, int flags, struct db **ret)
     return 0;
 }
 
-static int myclose(struct db *db)
+static int myclose(struct dbengine *db)
 {
     assert(db);
 
@@ -372,7 +372,7 @@ static int myclose(struct db *db)
     return 0;
 }
 
-static int myfetch(struct db *db, char *quota_path,
+static int myfetch(struct dbengine *db, char *quota_path,
 		   const char **data, size_t *datalen,
 		   struct txn **tid)
 {
@@ -474,7 +474,7 @@ static int myfetch(struct db *db, char *quota_path,
     return 0;
 }
 
-static int fetch(struct db *db, 
+static int fetch(struct dbengine *db, 
 		 const char *key, size_t keylen,
 		 const char **data, size_t *datalen,
 		 struct txn **tid)
@@ -586,7 +586,7 @@ static void scan_qr_dir(char *quota_path, const char *prefix,
     }
 }
 
-static int foreach(struct db *db,
+static int foreach(struct dbengine *db,
 		   const char *prefix, size_t prefixlen,
 		   foreach_p *goodp,
 		   foreach_cb *cb, void *rock, 
@@ -679,7 +679,7 @@ static int foreach(struct db *db,
     return r;
 }
 
-static int mystore(struct db *db, 
+static int mystore(struct dbengine *db, 
 		   const char *key, size_t keylen,
 		   const char *data, size_t datalen,
 		   struct txn **tid, int overwrite)
@@ -823,7 +823,7 @@ static int mystore(struct db *db,
     return r;
 }
 
-static int create(struct db *db, 
+static int create(struct dbengine *db, 
 		  const char *key, size_t keylen,
 		  const char *data, size_t datalen,
 		  struct txn **tid)
@@ -831,7 +831,7 @@ static int create(struct db *db,
     return mystore(db, key, keylen, data, datalen, tid, 0);
 }
 
-static int store(struct db *db, 
+static int store(struct dbengine *db, 
 		 const char *key, size_t keylen,
 		 const char *data, size_t datalen,
 		 struct txn **tid)
@@ -839,7 +839,7 @@ static int store(struct db *db,
     return mystore(db, key, keylen, data, datalen, tid, 1);
 }
 
-static int delete(struct db *db, 
+static int delete(struct dbengine *db, 
 		  const char *key, size_t keylen,
 		  struct txn **mytid, int force __attribute__((unused)))
 {
@@ -857,7 +857,7 @@ static void txn_proc(const char *fname, void *data, void *rock)
     if (r && !tid->result) tid->result = r;
 }
 
-static int commit_txn(struct db *db __attribute__((unused)), struct txn *tid)
+static int commit_txn(struct dbengine *db __attribute__((unused)), struct txn *tid)
 {
     tid->proc = commit_subtxn;
     tid->result = 0;
@@ -867,7 +867,7 @@ static int commit_txn(struct db *db __attribute__((unused)), struct txn *tid)
     return tid->result;
 }
 
-static int abort_txn(struct db *db __attribute__((unused)), struct txn *tid)
+static int abort_txn(struct dbengine *db __attribute__((unused)), struct txn *tid)
 {
     tid->proc = abort_subtxn;
     tid->result = 0;

@@ -362,7 +362,7 @@ static int process_user_cb(void *rockp,
     /* Only called to do deletes */
 /*    printf("pruning entry\n"); */
     
-    DB->delete((struct db *)rockp, key, keylen, NULL, 0);    
+    cyrusdb_delete((struct db *)rockp, key, keylen, NULL, 0);    
 
     return 0;    
 }
@@ -420,14 +420,14 @@ static void process_seen(const char *path, const char *user)
     int r;    
     struct db *tmp = NULL;
 
-    r = (DB->open)(path, 0, &tmp);
+    r = cyrusdb_open(DB, path, 0, &tmp);
     if(r) goto done;
     
-    DB->foreach(tmp, "", 0, process_user_p, process_user_cb,
+    cyrusdb_foreach(tmp, "", 0, process_user_p, process_user_cb,
 		(void *) user, NULL);
 
  done:
-    if(tmp) (DB->close)(tmp);
+    if(tmp) cyrusdb_close(tmp);
 }
 
 static int process_subs_cb(void *rockp __attribute__((unused)),
@@ -476,14 +476,14 @@ static void process_subs(const char *path, const char *user)
     int r;    
     struct db *tmp = NULL;
 
-    r = (SUBDB->open)(path, 0, &tmp);
+    r = cyrusdb_open(SUBDB, path, 0, &tmp);
     if(r) goto done;
     
-    SUBDB->foreach(tmp, "", 0, process_subs_p, process_subs_cb,
+    cyrusdb_foreach(tmp, "", 0, process_subs_p, process_subs_cb,
 		   (void *) user, NULL);
 
  done:
-    if(tmp) (SUBDB->close)(tmp);
+    if(tmp) cyrusdb_close(tmp);
 }
 
 void report_users(struct user_list *u)

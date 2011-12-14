@@ -133,10 +133,10 @@ int main(int argc, char *argv[])
 	srand(atoi(argv[2]));
     }
 
-    TRY((DB->open)("scratch", &db));
+    TRY(cyrusdb_open(DB, "scratch", &db));
 
-    if (DB->consistent) {
-	TRY(DB->consistent(db));
+    if (cyrusdb_consistent) {
+	TRY(cyrusdb_consistent(db));
     }
 
     if (argc > 3) {
@@ -150,12 +150,12 @@ int main(int argc, char *argv[])
 	/* generate a random value */
 	val = genrand(10 + (rand() % 100));
 	
-	TRY(DB->store(db, key, strlen(key), val, strlen(val), &txn));
+	TRY(cyrusdb_store(db, key, strlen(key), val, strlen(val), &txn));
       }
 
-      TRY(DB->commit(db, txn));
-      if (DB->consistent) {
-	TRY(DB->consistent(db));
+      TRY(cyrusdb_commit(db, txn));
+      if (cyrusdb_consistent) {
+	TRY(cyrusdb_consistent(db));
       }
     }
 
@@ -185,8 +185,8 @@ int main(int argc, char *argv[])
 	    val = genrand(10 + (rand() % 100));
 
 	    txn = NULL;
-	    TRY(DB->store(db, key, strlen(key), val, strlen(val), &txn));
-	    TRY(DB->commit(db, txn));
+	    TRY(cyrusdb_store(db, key, strlen(key), val, strlen(val), &txn));
+	    TRY(cyrusdb_commit(db, txn));
 	    gettimeofday(&t2, NULL);
 
 	    ADDDIFF(t_add, t1, t2);
@@ -206,11 +206,11 @@ int main(int argc, char *argv[])
 	    count = 0;
 	    victim = NULL;
 	    txn = NULL;
-	    TRY(DB->foreach(db, NULL, 0, &countem, NULL, NULL, &txn));
+	    TRY(cyrusdb_foreach(db, NULL, 0, &countem, NULL, NULL, &txn));
 	    
 	    if (count == 0) continue;
 
-	    TRY(DB->foreach(db, NULL, 0, &findvictim, NULL, NULL, &txn));
+	    TRY(cyrusdb_foreach(db, NULL, 0, &findvictim, NULL, NULL, &txn));
 
 	    assert(victim != NULL);
 
@@ -218,10 +218,10 @@ int main(int argc, char *argv[])
 	    val = genrand(10 + (rand() % 100));
 	    
 	    /* do an add */
-	    TRY(DB->store(db, victim, strlen(victim), val, strlen(val), &txn));
+	    TRY(cyrusdb_store(db, victim, strlen(victim), val, strlen(val), &txn));
 	    free(val);
 
-	    TRY(DB->commit(db, txn));
+	    TRY(cyrusdb_commit(db, txn));
 	    free(victim); victim = NULL;
 
 	    gettimeofday(&t2, NULL);
@@ -240,17 +240,17 @@ int main(int argc, char *argv[])
 	    count = 0;
 	    victim = NULL;
 	    txn = NULL;
-	    TRY(DB->foreach(db, NULL, 0, &countem, NULL, NULL, &txn));
+	    TRY(cyrusdb_foreach(db, NULL, 0, &countem, NULL, NULL, &txn));
 	    
 	    if (count == 0) continue;
 
-	    TRY(DB->foreach(db, NULL, 0, &findvictim, NULL, NULL, &txn));
+	    TRY(cyrusdb_foreach(db, NULL, 0, &findvictim, NULL, NULL, &txn));
 	    assert(victim != NULL);
 
 	    /* delete it */
-	    TRY(DB->delete(db, victim, strlen(victim), &txn, 0));
+	    TRY(cyrusdb_delete(db, victim, strlen(victim), &txn, 0));
 
-	    TRY(DB->commit(db, txn));
+	    TRY(cyrusdb_commit(db, txn));
 	    free(victim); victim = NULL;
 
 	    gettimeofday(&t2, NULL);
@@ -270,8 +270,8 @@ int main(int argc, char *argv[])
 	    key = genrand(10 + (rand() % 10));
 
 	    txn = NULL;
-	    TRY(DB->fetch(db, key, strlen(key), &data, &datalen, &txn));
-	    TRY(DB->commit(db, txn));
+	    TRY(cyrusdb_fetch(db, key, strlen(key), &data, &datalen, &txn));
+	    TRY(cyrusdb_commit(db, txn));
 
 	    gettimeofday(&t2, NULL);
 
@@ -285,13 +285,13 @@ int main(int argc, char *argv[])
 
 #if 0
 	/* run the consistency function, if any */
-	if (DB->consistent) {
-	    TRY(DB->consistent(db));
+	if (cyrusdb_consistent) {
+	    TRY(cyrusdb_consistent(db));
 	}
 #endif
     }
 
-    TRY((DB->close)(db));
+    TRY(cyrusdb_close(db));
     TRY(DB->done());
 
     do_report();

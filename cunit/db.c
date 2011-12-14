@@ -91,7 +91,7 @@ static char *make_basedir(const char * const *reldirs)
 }
 
 #define CANSTORE(key, keylen, data, datalen) \
-    r = DB->store(db, key, keylen, data, datalen, &txn); \
+    r = cyrusdb_store(db, key, keylen, data, datalen, &txn); \
     CU_ASSERT_EQUAL(r, CYRUSDB_OK); \
     CU_ASSERT_PTR_NOT_NULL(txn);
 
@@ -102,7 +102,7 @@ static char *make_basedir(const char * const *reldirs)
 { \
     const char *_data = BADDATA; \
     size_t _datalen = BADLEN; \
-    r = DB->fetch(db, key, keylen, &_data, &_datalen, &txn); \
+    r = cyrusdb_fetch(db, key, keylen, &_data, &_datalen, &txn); \
     CU_ASSERT_EQUAL(r, CYRUSDB_OK); \
     CU_ASSERT_PTR_NOT_NULL(txn); \
     CU_ASSERT_PTR_NOT_NULL(_data); \
@@ -117,7 +117,7 @@ static char *make_basedir(const char * const *reldirs)
 { \
     const char *_data = BADDATA; \
     size_t _datalen = BADLEN; \
-    r = DB->fetch(db, key, keylen, &_data, &_datalen, NULL); \
+    r = cyrusdb_fetch(db, key, keylen, &_data, &_datalen, NULL); \
     CU_ASSERT_EQUAL(r, CYRUSDB_OK); \
     CU_ASSERT_PTR_NOT_NULL(_data); \
     CU_ASSERT_PTR_NOT_EQUAL(_data, BADDATA); \
@@ -133,7 +133,7 @@ static char *make_basedir(const char * const *reldirs)
     size_t _datalen = BADLEN; \
     const char *_key = BADDATA; \
     size_t _keylen = BADLEN; \
-    r = DB->fetchnext(db, key, keylen, &_key, &_keylen, &_data, &_datalen, &txn); \
+    r = cyrusdb_fetchnext(db, key, keylen, &_key, &_keylen, &_data, &_datalen, &txn); \
     CU_ASSERT_EQUAL(r, CYRUSDB_OK); \
     CU_ASSERT_PTR_NOT_NULL(txn); \
     CU_ASSERT_PTR_NOT_NULL(_data); \
@@ -154,7 +154,7 @@ static char *make_basedir(const char * const *reldirs)
 { \
     const char *_data = BADDATA; \
     size_t _datalen = BADLEN; \
-    r = DB->fetch(db, key, keylen, &_data, &_datalen, &txn); \
+    r = cyrusdb_fetch(db, key, keylen, &_data, &_datalen, &txn); \
     CU_ASSERT_EQUAL(r, experror); \
     CU_ASSERT_PTR_NOT_NULL(txn); \
     CU_ASSERT_PTR_NULL(_data); \
@@ -165,21 +165,21 @@ static char *make_basedir(const char * const *reldirs)
 
 #define CANNOTFETCHNEXT(key, keylen, experror) \
 { \
-    r = DB->fetchnext(db, key, keylen, NULL, 0, NULL, 0, &txn); \
+    r = cyrusdb_fetchnext(db, key, keylen, NULL, 0, NULL, 0, &txn); \
     CU_ASSERT_EQUAL(r, experror); \
     CU_ASSERT_PTR_NOT_NULL(txn); \
 }
 
 #define CANCOMMIT() \
-    r = DB->commit(db, txn); \
+    r = cyrusdb_commit(db, txn); \
     CU_ASSERT_EQUAL(r, CYRUSDB_OK); \
     txn = NULL;
 
 #define CANREOPEN() \
-    r = DB->close(db); \
+    r = cyrusdb_close(db); \
     db = NULL; \
     CU_ASSERT_EQUAL(r, CYRUSDB_OK); \
-    r = DB->open(filename, 0, &db); \
+    r = cyrusdb_open(DB, filename, 0, &db); \
     CU_ASSERT_EQUAL(r, CYRUSDB_OK); \
     CU_ASSERT_PTR_NOT_NULL(db);
 
@@ -210,19 +210,19 @@ static void test_openclose(void)
 
     /* open() without _CREATE fails with NOTFOUND
      * and doesn't create the db */
-    r = DB->open(filename, 0, &db);
+    r = cyrusdb_open(DB, filename, 0, &db);
     CU_ASSERT(r == CYRUSDB_NOTFOUND || r == CYRUSDB_IOERROR);
     CU_ASSERT_PTR_NULL(db);
     CU_ASSERT_EQUAL(fexists(filename), -ENOENT);
 
     /* open() with _CREATE succeeds and creates the db */
-    r = DB->open(filename, CYRUSDB_CREATE, &db);
+    r = cyrusdb_open(DB, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_PTR_NOT_NULL(db);
     CU_ASSERT_EQUAL(fexists(filename), 0);
 
     /* closing succeeds and leaves the file in place */
-    r = DB->close(db);
+    r = cyrusdb_close(db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_EQUAL(fexists(filename), 0);
 }
@@ -244,7 +244,7 @@ static void test_multiopen(void)
     CU_ASSERT_EQUAL(fexists(filename), -ENOENT);
 
     /* open() with _CREATE succeeds and creates the db */
-    r = DB->open(filename, CYRUSDB_CREATE, &db);
+    r = cyrusdb_open(DB, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_PTR_NOT_NULL(db);
     CU_ASSERT_EQUAL(fexists(filename), 0);
@@ -270,7 +270,7 @@ static void test_multiopen(void)
 
 	/* a second open() with the same filename returns
 	 * another reference to the same db */
-	r = DB->open(filename, 0, &db);
+	r = cyrusdb_open(DB, filename, 0, &db);
 	CU_ASSERT_EQUAL(r, CYRUSDB_OK);
 	CU_ASSERT_PTR_NOT_NULL(db);
 
@@ -280,7 +280,7 @@ static void test_multiopen(void)
 	/* 2nd txn ends */
 
 	/* closing succeeds and leaves the file in place */
-	r = DB->close(db);
+	r = cyrusdb_close(db);
 	CU_ASSERT_EQUAL(r, CYRUSDB_OK);
 	CU_ASSERT_EQUAL(fexists(filename), 0);
     }
@@ -292,12 +292,12 @@ static void test_multiopen(void)
     /* 3rd txn ends */
 
     /* closing the other reference succeeds and leaves the file in place */
-    r = DB->close(db);
+    r = cyrusdb_close(db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_EQUAL(fexists(filename), 0);
 
     /* re-opening works */
-    r = DB->open(filename, 0, &db);
+    r = cyrusdb_open(DB, filename, 0, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_PTR_NOT_NULL(db);
     CU_ASSERT_EQUAL(fexists(filename), 0);
@@ -315,7 +315,7 @@ static void test_multiopen(void)
     CANFETCH_NOTXN(KEY2, strlen(KEY2), DATA2, strlen(DATA2));
     CANFETCH_NOTXN(KEY3, strlen(KEY3), DATA3, strlen(DATA3));
 
-    r = DB->close(db);
+    r = cyrusdb_close(db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_EQUAL(fexists(filename), 0);
 }
@@ -330,7 +330,7 @@ static void test_opentwo(void)
     CU_ASSERT_EQUAL(fexists(filename2), -ENOENT);
 
     /* open() with _CREATE succeeds and creates the db */
-    r = DB->open(filename, CYRUSDB_CREATE, &db1);
+    r = cyrusdb_open(DB, filename, CYRUSDB_CREATE, &db1);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_PTR_NOT_NULL(db1);
     CU_ASSERT_EQUAL(fexists(filename), 0);
@@ -338,7 +338,7 @@ static void test_opentwo(void)
 
     /* open() of the 2nd filename with _CREATE
      * succeeds and creates another separate db */
-    r = DB->open(filename2, CYRUSDB_CREATE, &db2);
+    r = cyrusdb_open(DB, filename2, CYRUSDB_CREATE, &db2);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_PTR_NOT_NULL(db2);
     CU_ASSERT_EQUAL(fexists(filename), 0);
@@ -346,11 +346,11 @@ static void test_opentwo(void)
     CU_ASSERT_PTR_NOT_EQUAL(db1, db2);
 
     /* closing succeeds and leaves the file in place */
-    r = DB->close(db1);
+    r = cyrusdb_close(db1);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
 
     /* closing the other reference succeeds and leaves the file in place */
-    r = DB->close(db2);
+    r = cyrusdb_close(db2);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
 
     CU_ASSERT_EQUAL(fexists(filename), 0);
@@ -365,7 +365,7 @@ static void test_readwrite(void)
     static const char DATA[] = "dem bones dem bones dem thighbones";
     int r;
 
-    r = DB->open(filename, CYRUSDB_CREATE, &db);
+    r = cyrusdb_open(DB, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_PTR_NOT_NULL(db);
 
@@ -397,7 +397,7 @@ static void test_readwrite(void)
     CANCOMMIT();
 
     /* closing succeeds */
-    r = DB->close(db);
+    r = cyrusdb_close(db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
 }
 
@@ -410,7 +410,7 @@ static void test_multirw(void)
     static const char DATA2[] = "Dem KneeBones";
     int r;
 
-    r = DB->open(filename, CYRUSDB_CREATE, &db);
+    r = cyrusdb_open(DB, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_PTR_NOT_NULL(db);
 
@@ -450,7 +450,7 @@ static void test_multirw(void)
     CANFETCH_NOTXN(KEY, strlen(KEY), DATA2, strlen(DATA2));
 
     /* closing succeeds */
-    r = DB->close(db);
+    r = cyrusdb_close(db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
 }
 
@@ -464,7 +464,7 @@ static void test_readwrite_zerolen(void)
     static const char DATA[] = "";
     int r;
 
-    r = DB->open(filename, CYRUSDB_CREATE, &db);
+    r = cyrusdb_open(DB, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_PTR_NOT_NULL(db);
 
@@ -497,7 +497,7 @@ static void test_readwrite_zerolen(void)
     CANCOMMIT();
 
     /* closing succeeds */
-    r = DB->close(db);
+    r = cyrusdb_close(db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
 }
 
@@ -511,7 +511,7 @@ static void test_readwrite_null(void)
     static const char EMPTY[] = "";
     int r;
 
-    r = DB->open(filename, CYRUSDB_CREATE, &db);
+    r = cyrusdb_open(DB, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_PTR_NOT_NULL(db);
 
@@ -544,7 +544,7 @@ static void test_readwrite_null(void)
     CANCOMMIT();
 
     /* closing succeeds */
-    r = DB->close(db);
+    r = cyrusdb_close(db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
 }
 
@@ -556,7 +556,7 @@ static void test_abort(void)
     static const char DATA[] = "standford mit harvard";
     int r;
 
-    r = DB->open(filename, CYRUSDB_CREATE, &db);
+    r = cyrusdb_open(DB, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_PTR_NOT_NULL(db);
 
@@ -570,7 +570,7 @@ static void test_abort(void)
     CANFETCH(KEY, strlen(KEY), DATA, strlen(DATA));
 
     /* abort succeeds */
-    r = DB->abort(db, txn);
+    r = cyrusdb_abort(db, txn);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     txn = NULL;
 
@@ -590,7 +590,7 @@ static void test_abort(void)
     CANCOMMIT();
 
     /* closing succeeds */
-    r = DB->close(db);
+    r = cyrusdb_close(db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
 }
 
@@ -608,7 +608,7 @@ static void test_delete(void)
     static const char DATA3[] = "flax corm naipaul enable herrera fating";
     int r;
 
-    r = DB->open(filename, CYRUSDB_CREATE, &db);
+    r = cyrusdb_open(DB, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_PTR_NOT_NULL(db);
 
@@ -626,7 +626,7 @@ static void test_delete(void)
     CANFETCH(KEY3, strlen(KEY3), DATA3, strlen(DATA3));
 
     /* one of the records can be deleted */
-    r = DB->delete(db, KEY2, strlen(KEY2), &txn, 1);
+    r = cyrusdb_delete(db, KEY2, strlen(KEY2), &txn, 1);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_PTR_NOT_NULL(txn);
 
@@ -661,7 +661,7 @@ static void test_delete(void)
     CANCOMMIT();
 
     /* closing succeeds */
-    r = DB->close(db);
+    r = cyrusdb_close(db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
 }
 
@@ -709,7 +709,7 @@ static int deleter(void *rock,
     r = foreacher(dd->results, key, keylen, data, datalen);
     if (r) return r;
 
-    r = DB->delete(dd->db, key, keylen, NULL, 0/*force*/);
+    r = cyrusdb_delete(dd->db, key, keylen, NULL, 0/*force*/);
     if (r) return r;
 
     return 0;
@@ -730,7 +730,7 @@ static void test_foreach(void)
     static const char DATA3[] = "aleut stoic muscovy adonis moe docent";
     int r;
 
-    r = DB->open(filename, CYRUSDB_CREATE, &db);
+    r = cyrusdb_open(DB, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_PTR_NOT_NULL(db);
 
@@ -751,7 +751,7 @@ static void test_foreach(void)
     CANCOMMIT();
 
     /* foreach succeeds */
-    r = DB->foreach(db, NULL, 0, NULL, foreacher, &results, &txn);
+    r = cyrusdb_foreach(db, NULL, 0, NULL, foreacher, &results, &txn);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
 
     /* got the expected keys in the expected order */
@@ -775,7 +775,7 @@ static void test_foreach(void)
     /* check again without TXN */
 
     /* foreach succeeds without txn */
-    r = DB->foreach(db, NULL, 0, NULL, foreacher, &results, NULL);
+    r = cyrusdb_foreach(db, NULL, 0, NULL, foreacher, &results, NULL);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
 
     /* got the expected keys in the expected order */
@@ -788,7 +788,7 @@ static void test_foreach(void)
     /* delete all the records after viewing them */
     deldata.db = db;
     deldata.results = &results;
-    r = DB->foreach(db, NULL, 0, NULL, deleter, &deldata, NULL);
+    r = cyrusdb_foreach(db, NULL, 0, NULL, deleter, &deldata, NULL);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
 
     /* got the expected keys in the expected order */
@@ -799,12 +799,12 @@ static void test_foreach(void)
     CU_ASSERT_PTR_NULL(results);
 
     /* nothing left! */
-    r = DB->foreach(db, NULL, 0, NULL, foreacher, &deldata, NULL);
+    r = cyrusdb_foreach(db, NULL, 0, NULL, foreacher, &deldata, NULL);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_PTR_NULL(results);
 
     /* closing succeeds */
-    r = DB->close(db);
+    r = cyrusdb_close(db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
 }
 
@@ -828,7 +828,7 @@ static void test_binary_keys(void)
     struct binary_result *results = NULL;
     int r;
 
-    r = DB->open(filename, CYRUSDB_CREATE, &db);
+    r = cyrusdb_open(DB, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_PTR_NOT_NULL(db);
 
@@ -867,7 +867,7 @@ static void test_binary_keys(void)
     CANCOMMIT();
 
     /* foreach succeeds */
-    r = DB->foreach(db, NULL, 0, NULL, foreacher, &results, &txn);
+    r = cyrusdb_foreach(db, NULL, 0, NULL, foreacher, &results, &txn);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
 
     /* got the expected keys in the expected order */
@@ -896,7 +896,7 @@ static void test_binary_keys(void)
     CANCOMMIT();
 
     /* foreach still succeeds - out of txn */
-    r = DB->foreach(db, NULL, 0, NULL, foreacher, &results, NULL);
+    r = cyrusdb_foreach(db, NULL, 0, NULL, foreacher, &results, NULL);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
 
     /* got the expected keys in the expected order */
@@ -909,7 +909,7 @@ static void test_binary_keys(void)
     CU_ASSERT_PTR_NULL(results);
 
     /* closing succeeds */
-    r = DB->close(db);
+    r = cyrusdb_close(db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
 }
 
@@ -934,7 +934,7 @@ static void test_binary_data(void)
     struct binary_result *results = NULL;
     int r;
 
-    r = DB->open(filename, CYRUSDB_CREATE, &db);
+    r = cyrusdb_open(DB, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_PTR_NOT_NULL(db);
 
@@ -973,7 +973,7 @@ static void test_binary_data(void)
     CANCOMMIT();
 
     /* foreach succeeds */
-    r = DB->foreach(db, NULL, 0, NULL, foreacher, &results, &txn);
+    r = cyrusdb_foreach(db, NULL, 0, NULL, foreacher, &results, &txn);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
 
     /* got the expected keys in the expected order */
@@ -999,7 +999,7 @@ static void test_binary_data(void)
     CANFETCH(KEY5, sizeof(KEY5)-1, DATA5, sizeof(DATA5)-1);
 
     /* foreach still succeeds */
-    r = DB->foreach(db, NULL, 0, NULL, foreacher, &results, &txn);
+    r = cyrusdb_foreach(db, NULL, 0, NULL, foreacher, &results, &txn);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
 
     /* got the expected keys in the expected order */
@@ -1015,7 +1015,7 @@ static void test_binary_data(void)
     CANCOMMIT();
 
     /* closing succeeds */
-    r = DB->close(db);
+    r = cyrusdb_close(db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
 }
 
@@ -1147,7 +1147,7 @@ static unsigned int hash_count(hash_table *ht)
 
 #define FOREACH_TEST(prefix, prefixlen, good, condition, expcount) \
     FOREACH_PRECONDITION(condition, expcount); \
-    r = DB->foreach(db, prefix, prefixlen, good, finder, &exphash, &txn); \
+    r = cyrusdb_foreach(db, prefix, prefixlen, good, finder, &exphash, &txn); \
     FOREACH_POSTCONDITION()
 
 static void test_many(void)
@@ -1161,7 +1161,7 @@ static void test_many(void)
 
     construct_hash_table(&exphash, (MAXN+1)*4, 0);
 
-    r = DB->open(filename, CYRUSDB_CREATE, &db);
+    r = cyrusdb_open(DB, filename, CYRUSDB_CREATE, &db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
     CU_ASSERT_PTR_NOT_NULL(db);
 
@@ -1199,7 +1199,7 @@ static void test_many(void)
      * walks over the expected number from time to time */
     for (n = 0 ; n <= MAXN ; n++) {
 	const char *key = nth_key(n);
-	r = DB->delete(db, key, strlen(key), &txn, 1);
+	r = cyrusdb_delete(db, key, strlen(key), &txn, 1);
 	CU_ASSERT_EQUAL(r, CYRUSDB_OK);
 	CU_ASSERT_PTR_NOT_NULL(txn);
 	if (n && n % 301 == 0) {
@@ -1212,7 +1212,7 @@ static void test_many(void)
     CANCOMMIT();
 
     /* closing succeeds */
-    r = DB->close(db);
+    r = cyrusdb_close(db);
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
 
     free_hash_table(&exphash, free);

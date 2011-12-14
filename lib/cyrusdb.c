@@ -79,13 +79,130 @@ struct cyrusdb_backend *cyrusdb_backends[] = {
     &cyrusdb_twoskip,
     NULL };
 
+#define DEFAULT_BACKEND &cyrusdb_twoskip
+
+struct db {
+    struct dbengine *engine;
+    struct cyrusdb_backend *backend;
+};
+
+int cyrusdb_open(struct cyrusdb_backend *backend, const char *fname,
+		 int flags, struct db **ret)
+{
+    const char *realname;
+    struct db *db = xzmalloc(sizeof(struct db));
+    int r;
+
+    if (!backend) backend = DEFAULT_BACKEND; /* not used yet, later */
+    db->backend = backend;
+
+    /* check if it opens normally.  Horray */
+    r = (db->backend->open)(fname, flags, &db->engine);
+
+    if (r) free(db);
+    else *ret = db;
+
+    return r;
+}
+
+int cyrusdb_close(struct db *db)
+{
+    int r = (db->backend->close)(db->engine);
+
+    free(db);
+
+    return r;
+}
+
+int cyrusdb_fetch(struct db *db,
+	     const char *key, size_t keylen,
+	     const char **data, size_t *datalen,
+	     struct txn **mytid)
+{
+    return (db->backend->fetch)(db->engine, key, keylen,
+				    data, datalen, mytid);
+}
+
+int cyrusdb_fetchlock(struct db *db,
+		 const char *key, size_t keylen,
+		 const char **data, size_t *datalen,
+		 struct txn **mytid)
+{
+    return (db->backend->fetchlock)(db->engine, key, keylen,
+				        data, datalen, mytid);
+}
+
+int cyrusdb_fetchnext(struct db *db,
+		 const char *key, size_t keylen,
+		 const char **found, size_t *foundlen,
+		 const char **data, size_t *datalen,
+		 struct txn **mytid)
+{
+    return (db->backend->fetchnext)(db->engine, key, keylen,
+					found, foundlen,
+				        data, datalen, mytid);
+}
+
+int cyrusdb_foreach(struct db *db,
+	       const char *prefix, size_t prefixlen,
+	       foreach_p *p,
+	       foreach_cb *cb, void *rock,
+	       struct txn **tid)
+{
+    return (db->backend->foreach)(db->engine, prefix, prefixlen,
+				      p, cb, rock, tid);
+}
+
+int cyrusdb_create(struct db *db,
+	      const char *key, size_t keylen,
+	      const char *data, size_t datalen,
+	      struct txn **tid)
+{
+    return (db->backend->create)(db->engine, key, keylen, data, datalen, tid);
+}
+
+int cyrusdb_store(struct db *db,
+	     const char *key, size_t keylen,
+	     const char *data, size_t datalen,
+	     struct txn **tid)
+{
+    return (db->backend->store)(db->engine, key, keylen, data, datalen, tid);
+}
+
+int cyrusdb_delete(struct db *db,
+	      const char *key, size_t keylen,
+	      struct txn **tid, int force)
+{
+    return (db->backend->delete)(db->engine, key, keylen, tid, force);
+}
+
+int cyrusdb_commit(struct db *db, struct txn *tid)
+{
+    return (db->backend->commit)(db->engine, tid);
+}
+
+int cyrusdb_abort(struct db *db, struct txn *tid)
+{
+    return (db->backend->abort)(db->engine, tid);
+}
+
+int cyrusdb_dump(struct db *db, int detail)
+{
+    return (db->backend->dump)(db->engine, detail);
+}
+
+int cyrusdb_consistent(struct db *db)
+{
+    return (db->backend->consistent)(db->engine);
+}
+
 void cyrusdb_init(void)
 {
     int i, r;
     char dbdir[1024];
     const char *confdir = libcyrus_config_getstring(CYRUSOPT_CONFIG_DIR);
     int initflags = libcyrus_config_getint(CYRUSOPT_DB_INIT_FLAGS);
-    
+
     strcpy(dbdir, confdir);
     strcat(dbdir, FNAME_DBDIR);
 
@@ -113,7 +230,6 @@ int cyrusdb_copyfile(const char *srcname, const char *dstname)
 }
 
 struct db_rock {
-    struct cyrusdb_backend *backend;
     struct db *db;
     struct txn **tid;
 };
@@ -124,7 +240,7 @@ static int delete_cb(void *rock,
 		     size_t datalen __attribute__((unused))) 
 {
     struct db_rock *cr = (struct db_rock *)rock;
-    return (cr->backend->delete)(cr->db, key, keylen, cr->tid, 1);
+    return cyrusdb_delete(cr->db, key, keylen, cr->tid, 1);
 }
 
 static int print_cb(void *rock,
@@ -140,32 +256,28 @@ static int print_cb(void *rock,
 }
 
 
-int cyrusdb_dump(struct cyrusdb_backend *backend,
-		 struct db *db,
-		 const char *prefix, size_t prefixlen,
-		 FILE *f,
-		 struct txn **tid)
+int cyrusdb_dumpfile(struct db *db,
+		     const char *prefix, size_t prefixlen,
+		     FILE *f,
+		     struct txn **tid)
 {
-    return (backend->foreach)(db, prefix, prefixlen, NULL, print_cb, f, tid);
+    return cyrusdb_foreach(db, prefix, prefixlen, NULL, print_cb, f, tid);
 }
 
-int cyrusdb_truncate(struct cyrusdb_backend *backend,
-		     struct db *db,
+int cyrusdb_truncate(struct db *db,
 		     struct txn **tid)
 {
     struct db_rock tr;
 
-    tr.backend = backend;
     tr.db = db;
     tr.tid = tid;
 
-    return (backend->foreach)(db, "", 0, NULL, delete_cb, &tr, tid);
+    return cyrusdb_foreach(db, "", 0, NULL, delete_cb, &tr, tid);
 }
 
-int cyrusdb_undump(struct cyrusdb_backend *backend,
-		   struct db *db,
-		   FILE *f,
-		   struct txn **tid)
+int cyrusdb_undumpfile(struct db *db,
+		       FILE *f,
+		       struct txn **tid)
 {
     struct buf line = BUF_INITIALIZER;
     const char *tab;
@@ -183,7 +295,7 @@ int cyrusdb_undump(struct cyrusdb_backend *backend,
 
 	/* deletion (no value) */
 	if (!tab) {
-	    r = (backend->delete)(db, str, line.len, tid, 1);
+	    r = cyrusdb_delete(db, str, line.len, tid, 1);
 	    if (r) goto out;
 	}
 
@@ -191,7 +303,7 @@ int cyrusdb_undump(struct cyrusdb_backend *backend,
 	else {
 	    unsigned klen = (tab - str);
 	    unsigned vlen = line.len - klen - 1; /* TAB */
-	    r = (backend->store)(db, str, klen, tab + 1, vlen, tid);
+	    r = cyrusdb_store(db, str, klen, tab + 1, vlen, tid);
 	    if (r) goto out;
 	}
     }
@@ -206,7 +318,7 @@ static int converter_cb(void *rock,
 			const char *data, size_t datalen) 
 {
     struct db_rock *cr = (struct db_rock *)rock;
-    return (cr->backend->store)(cr->db, key, keylen, data, datalen, cr->tid);
+    return cyrusdb_store(cr->db, key, keylen, data, datalen, cr->tid);
 }
 
 /* convert (just copy every record) from one database to another in possibly
@@ -225,11 +337,11 @@ int cyrusdb_convert(const char *fromfname, const char *tofname,
     int r;
 
     /* open source database */
-    r = (frombackend->open)(fromfname, 0, &fromdb);
+    r = cyrusdb_open(frombackend, fromfname, 0, &fromdb);
     if (r) goto err;
 
     /* use a bogus fetch to lock source DB before touching the destination */
-    r = (frombackend->fetch)(fromdb, "_", 1, NULL, NULL, &fromtid);
+    r = cyrusdb_fetch(fromdb, "_", 1, NULL, NULL, &fromtid);
     if (r == CYRUSDB_NOTFOUND) r = 0;
     if (r) goto err;
 
@@ -240,20 +352,19 @@ int cyrusdb_convert(const char *fromfname, const char *tofname,
     /* remove any rubbish lying around */
     unlink(tofname);
 
-    r = (tobackend->open)(tofname, CYRUSDB_CREATE, &todb);
+    r = cyrusdb_open(tobackend, tofname, CYRUSDB_CREATE, &todb);
     if (r) goto err;
 
     /* set up the copy rock */
-    cr.backend = tobackend;
     cr.db = todb;
     cr.tid = &totid;
 
     /* copy each record to the destination DB */
-    (frombackend->foreach)(fromdb, "", 0, NULL, converter_cb, &cr, &fromtid);
+    cyrusdb_foreach(fromdb, "", 0, NULL, converter_cb, &cr, &fromtid);
 
     /* commit destination transaction */
-    if (totid) (tobackend->commit)(todb, totid);
-    r = (tobackend->close)(todb);
+    if (totid) cyrusdb_commit(todb, totid);
+    r = cyrusdb_close(todb);
     totid = NULL;
     todb = NULL;
     if (r) goto err;
@@ -266,18 +377,18 @@ int cyrusdb_convert(const char *fromfname, const char *tofname,
 
     /* and close the source database - nothing should have
      * written here, so an abort is fine */
-    if (fromtid) (frombackend->abort)(fromdb, fromtid);
-    (frombackend->close)(fromdb);
+    if (fromtid) cyrusdb_abort(fromdb, fromtid);
+    cyrusdb_close(fromdb);
 
     free(newfname);
 
     return 0;
 
 err:
-    if (totid) (tobackend->abort)(todb, totid);
-    if (todb) (tobackend->close)(todb);
-    if (fromtid) (frombackend->abort)(fromdb, fromtid);
-    if (fromdb) (frombackend->close)(fromdb);
+    if (totid) cyrusdb_abort(todb, totid);
+    if (todb) cyrusdb_close(todb);
+    if (fromtid) cyrusdb_abort(fromdb, fromtid);
+    if (fromdb) cyrusdb_close(fromdb);
 
     unlink(tofname);
     free(newfname);

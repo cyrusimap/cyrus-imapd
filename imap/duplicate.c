@@ -102,7 +102,7 @@ int duplicate_init(const char *fname)
 	fname = tofree;
     }
 
-    r = (DB->open)(fname, CYRUSDB_CREATE, &dupdb);
+    r = cyrusdb_open(DB, fname, CYRUSDB_CREATE, &dupdb);
     if (r != 0) {
 	syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
 	       cyrusdb_strerror(r));
@@ -175,7 +175,7 @@ time_t duplicate_check(const duplicate_key_t *dkey)
     if (r) return 0;
 
     do {
-	r = DB->fetch(dupdb, key.s, key.len,
+	r = cyrusdb_fetch(dupdb, key.s, key.len,
 		      &data, &len, NULL);
     } while (r == CYRUSDB_AGAIN);
 
@@ -228,7 +228,7 @@ void duplicate_mark(const duplicate_key_t *dkey, time_t mark, unsigned long uid)
     memcpy(data + sizeof(mark), &uid, sizeof(uid));
 
     do {
-	r = DB->store(dupdb, key.s, key.len,
+	r = cyrusdb_store(dupdb, key.s, key.len,
 		      data, sizeof(mark)+sizeof(uid), NULL);
     } while (r == CYRUSDB_AGAIN);
 
@@ -281,7 +281,7 @@ int duplicate_find(const char *msgid,
     frock.rock = rock;
 
     /* check each entry in our database */
-    DB->foreach(dupdb, msgid, strlen(msgid), NULL, find_cb, &frock, NULL);
+    cyrusdb_foreach(dupdb, msgid, strlen(msgid), NULL, find_cb, &frock, NULL);
 
     return 0;
 }
@@ -330,7 +330,7 @@ static int prune_cb(void *rock, const char *id, size_t idlen,
     prock->deletions++;
 
     do {
-	r = DB->delete(prock->db, id, idlen, NULL, 0);
+	r = cyrusdb_delete(prock->db, id, idlen, NULL, 0);
     } while (r == CYRUSDB_AGAIN);
 
 
@@ -351,7 +351,7 @@ int duplicate_prune(int seconds, struct hash_table *expire_table)
 
     /* check each entry in our database */
     prock.db = dupdb;
-    DB->foreach(dupdb, "", 0, &prune_p, &prune_cb, &prock, NULL);
+    cyrusdb_foreach(dupdb, "", 0, &prune_p, &prune_cb, &prock, NULL);
 
     syslog(LOG_NOTICE, "duplicate_prune: purged %d out of %d entries",
 	   prock.deletions, prock.count);
@@ -417,7 +417,7 @@ int duplicate_dump(FILE *f)
     drock.count = 0;
 
     /* check each entry in our database */
-    DB->foreach(dupdb, "", 0, NULL, &dump_cb, &drock, NULL);
+    cyrusdb_foreach(dupdb, "", 0, NULL, &dump_cb, &drock, NULL);
 
     return drock.count;
 }
@@ -427,7 +427,7 @@ int duplicate_done(void)
     int r = 0;
 
     if (duplicate_dbopen) {
-	r = (DB->close)(dupdb);
+	r = cyrusdb_close(dupdb);
 	if (r) {
 	    syslog(LOG_ERR, "DBERROR: error closing deliverdb: %s",
 		   cyrusdb_strerror(r));

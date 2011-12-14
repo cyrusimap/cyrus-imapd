@@ -77,7 +77,7 @@ typedef struct sql_engine {
     void (*sql_close)(void *conn);
 } sql_engine_t;
 
-struct db {
+struct dbengine {
     void *conn;     /* connection to database */
     char *table;    /* table that we are operating on */
     char *esc_key;  /* allocated buffer for escaped key */
@@ -481,7 +481,7 @@ static int myarchive(const char **fnames __attribute__((unused)),
     return 0;
 }
 
-static int myopen(const char *fname, int flags, struct db **ret)
+static int myopen(const char *fname, int flags, struct dbengine **ret)
 {
     const char *database, *hostnames, *user, *passwd;
     char *host_ptr, *host, *cur_host, *cur_port;
@@ -571,14 +571,14 @@ static int myopen(const char *fname, int flags, struct db **ret)
 	}
     }
 
-    *ret = (struct db *) xzmalloc(sizeof(struct db));
+    *ret = (struct dbengine *) xzmalloc(sizeof(struct db));
     (*ret)->conn = conn;
     (*ret)->table = table;
 
     return 0;
 }
 
-static int myclose(struct db *db)
+static int myclose(struct dbengine *db)
 {
     assert(db);
 
@@ -592,7 +592,7 @@ static int myclose(struct db *db)
     return 0;
 }
 
-static struct txn *start_txn(struct db *db)
+static struct txn *start_txn(struct dbengine *db)
 {
     /* start a transaction */
     if (dbengine->sql_begin_txn(db->conn)) {
@@ -659,7 +659,7 @@ static int fetch_cb(void *rock,
     return 0;
 }
 
-static int fetch(struct db *db, 
+static int fetch(struct dbengine *db, 
 		 const char *key, size_t keylen,
 		 const char **data, size_t *datalen,
 		 struct txn **tid)
@@ -705,7 +705,7 @@ static int fetch(struct db *db,
     return 0;
 }
 
-static int foreach(struct db *db,
+static int foreach(struct dbengine *db,
 		   const char *prefix, size_t prefixlen,
 		   foreach_p *goodp,
 		   foreach_cb *cb, void *rock, 
@@ -744,7 +744,7 @@ static int foreach(struct db *db,
     return 0;
 }
 
-static int mystore(struct db *db, 
+static int mystore(struct dbengine *db, 
 		   const char *key, int keylen,
 		   const char *data, int datalen,
 		   struct txn **tid, int overwrite,
@@ -837,7 +837,7 @@ static int mystore(struct db *db,
     return 0;
 }
 
-static int create(struct db *db, 
+static int create(struct dbengine *db, 
 		  const char *key, size_t keylen,
 		  const char *data, size_t datalen,
 		  struct txn **tid)
@@ -845,7 +845,7 @@ static int create(struct db *db,
     return mystore(db, key, keylen, data, datalen, tid, 0, 0);
 }
 
-static int store(struct db *db, 
+static int store(struct dbengine *db, 
 		 const char *key, size_t keylen,
 		 const char *data, size_t datalen,
 		 struct txn **tid)
@@ -853,7 +853,7 @@ static int store(struct db *db,
     return mystore(db, key, keylen, data, datalen, tid, 1, 0);
 }
 
-static int delete(struct db *db, 
+static int delete(struct dbengine *db, 
 		  const char *key, size_t keylen,
 		  struct txn **tid,
 		  int force __attribute__((unused)))
@@ -861,7 +861,7 @@ static int delete(struct db *db,
     return mystore(db, key, keylen, NULL, 0, tid, 1, 1);
 }
 
-static int finish_txn(struct db *db, struct txn *tid, int commit)
+static int finish_txn(struct dbengine *db, struct txn *tid, int commit)
 {
     if (tid) {
 	int rc = commit ? dbengine->sql_commit_txn(db->conn) :
@@ -880,7 +880,7 @@ static int finish_txn(struct db *db, struct txn *tid, int commit)
     return 0;
 }
 
-static int commit_txn(struct db *db, struct txn *tid)
+static int commit_txn(struct dbengine *db, struct txn *tid)
 {
     assert(db);
     assert(tid);
@@ -888,7 +888,7 @@ static int commit_txn(struct db *db, struct txn *tid)
     return finish_txn(db, tid, 1);
 }
 
-static int abort_txn(struct db *db, struct txn *tid)
+static int abort_txn(struct dbengine *db, struct txn *tid)
 {
     assert(db);
     assert(tid);

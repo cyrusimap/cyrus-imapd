@@ -366,7 +366,7 @@ static int ptload(const char *identifier, struct auth_state **state)
 	tofree = strconcat(config_dir, PTS_DBFIL, (char *)NULL);
 	fname = tofree;
     }
-    r = (the_ptscache_db->open)(fname, CYRUSDB_CREATE, &ptdb);
+    r = cyrusdb_open(the_ptscache_db, fname, CYRUSDB_CREATE, &ptdb);
     if (r != 0) {
 	syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
 	       cyrusdb_strerror(ret));
@@ -385,7 +385,7 @@ static int ptload(const char *identifier, struct auth_state **state)
     }
       
     /* fetch the current record for the user */
-    r = the_ptscache_db->fetch(ptdb, identifier, id_len,
+    r = cyrusdb_fetch(ptdb, identifier, id_len,
 			       &data, &dsize, NULL);
     if (r && r != CYRUSDB_NOTFOUND) {
         syslog(LOG_ERR, "auth_newstate: error fetching record: %s",
@@ -483,7 +483,7 @@ static int ptload(const char *identifier, struct auth_state **state)
     }
 
     /* fetch the current record for the user */
-    r = the_ptscache_db->fetch(ptdb, identifier, id_len, 
+    r = cyrusdb_fetch(ptdb, identifier, id_len, 
 			       &data, &dsize, NULL);
     if (r != 0 || !data) {
 	syslog(LOG_ERR, "ptload(): error fetching record: %s"
@@ -511,7 +511,7 @@ static int ptload(const char *identifier, struct auth_state **state)
     }
 
     /* close and unlock the database */
-    (the_ptscache_db->close)(ptdb);
+    (cyrusdb_close)(ptdb);
 
     return rc;
 }

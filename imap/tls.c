@@ -468,7 +468,7 @@ static int new_session_cb(SSL *ssl __attribute__((unused)),
     if (len) {
 	/* store the session in our database */
 	do {
-	    ret = DB->store(sessdb, (const char *) sess->session_id,
+	    ret = cyrusdb_store(sessdb, (const char *) sess->session_id,
 			    sess->session_id_length,
 			    (const char *) data, len + sizeof(time_t), NULL);
 	} while (ret == CYRUSDB_AGAIN);
@@ -503,7 +503,7 @@ static void remove_session(unsigned char *id, int idlen)
     if (!sess_dbopen) return;
 
     do {
-	ret = DB->delete(sessdb, (const char *) id, idlen, NULL, 1);
+	ret = cyrusdb_delete(sessdb, (const char *) id, idlen, NULL, 1);
     } while (ret == CYRUSDB_AGAIN);
 
     /* log this transaction */
@@ -550,7 +550,7 @@ static SSL_SESSION *get_session_cb(SSL *ssl __attribute__((unused)),
     if (!sess_dbopen) return NULL;
 
     do {
-	ret = DB->fetch(sessdb, (const char *) id, idlen, &data, &len, NULL);
+	ret = cyrusdb_fetch(sessdb, (const char *) id, idlen, &data, &len, NULL);
     } while (ret == CYRUSDB_AGAIN);
 
     if (!ret && data) {
@@ -698,7 +698,7 @@ int     tls_init_serverengine(const char *ident,
 	    fname = tofree;
 	}
 
-	r = (DB->open)(fname, CYRUSDB_CREATE, &sessdb);
+	r = cyrusdb_open(DB, fname, CYRUSDB_CREATE, &sessdb);
 	if (r != 0) {
 	    syslog(LOG_ERR, "DBERROR: opening %s: %s",
 		   fname, cyrusdb_strerror(ret));
@@ -1047,7 +1047,7 @@ int tls_shutdown_serverengine(void)
     int r;
 
     if (tls_serverengine && sess_dbopen) {
-	r = (DB->close)(sessdb);
+	r = cyrusdb_close(sessdb);
 	if (r) {
 	    syslog(LOG_ERR, "DBERROR: error closing tlsdb: %s",
 		   cyrusdb_strerror(r));
@@ -1129,7 +1129,7 @@ int tls_prune_sessions(void)
 	fname = tofree;
     }
 
-    ret = (DB->open)(fname, 0, &sessdb);
+    ret = cyrusdb_open(DB, fname, 0, &sessdb);
     if (ret != CYRUSDB_OK) {
 	syslog(LOG_ERR, "DBERROR: opening %s: %s",
 	       fname, cyrusdb_strerror(ret));
@@ -1139,8 +1139,8 @@ int tls_prune_sessions(void)
 	/* check each session in our database */
 	sess_dbopen = 1;
 	prock.count = prock.deletions = 0;
-	DB->foreach(sessdb, "", 0, &prune_p, &prune_cb, &prock, NULL);
-	(DB->close)(sessdb);
+	cyrusdb_foreach(sessdb, "", 0, &prune_p, &prune_cb, &prock, NULL);
+	cyrusdb_close(sessdb);
 	sessdb = NULL;
 	sess_dbopen = 0;
 

@@ -78,7 +78,7 @@ const int config_need_data = 0;
 
 int main(int argc, char *argv[])
 {
-    struct cyrusdb_backend *DB_OLD = NULL, *DB_NEW = NULL;
+    struct cyrusdb_backend *OLDDB = NULL, *NEWDB = NULL;
     const char *old_db, *new_db;
     int i;
     int opt;
@@ -123,19 +123,19 @@ int main(int argc, char *argv[])
 	exit(EC_OSERR);
     }
 
-    DB_OLD = cyrusdb_fromname(argv[optind+1]);
-    DB_NEW = cyrusdb_fromname(argv[optind+3]);
+    OLDDB = cyrusdb_fromname(argv[optind+1]);
+    NEWDB = cyrusdb_fromname(argv[optind+3]);
 
-    if (DB_NEW == DB_OLD) {
+    if (NEWDB == OLDDB) {
 	fatal("no conversion required", EC_TEMPFAIL);
     }
 
     cyrus_init(alt_config, "cvt_cyrusdb", 0);
 
-    printf("Converting from %s (%s) to %s (%s)\n", old_db, DB_OLD->name,
-	   new_db, DB_NEW->name);
+    printf("Converting from %s (%s) to %s (%s)\n", old_db, OLDDB->name,
+	   new_db, NEWDB->name);
 
-    cyrusdb_convert(old_db, new_db, DB_OLD, DB_NEW);
+    cyrusdb_convert(old_db, new_db, OLDDB, NEWDB);
 
     cyrus_done();
 

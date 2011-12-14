@@ -79,7 +79,7 @@ char stack[STACKSIZE+1];
 /* config.c stuff */
 const int config_need_data = 0;
 
-struct cyrusdb_backend *DB_OLD = NULL;
+struct cyrusdb_backend *OLDDB = NULL;
 
 struct db *odb = NULL;
 
@@ -193,7 +193,7 @@ int main(int argc, char *argv[])
 
     for(i=0; cyrusdb_backends[i]; i++) {
 	if(!strcmp(cyrusdb_backends[i]->name, argv[optind+1])) {
-	    DB_OLD = cyrusdb_backends[i]; break;
+	    OLDDB = cyrusdb_backends[i]; break;
 	}
     }
     if(!cyrusdb_backends[i]) {
@@ -202,7 +202,7 @@ int main(int argc, char *argv[])
 
     cyrus_init(alt_config, "cyr_dbtool", 0);
 
-    r = (DB_OLD->open)(old_db, db_flags, &odb);
+    r = cyrusdb_open(OLDDB, old_db, db_flags, &odb);
     if(r != CYRUSDB_OK)
 	fatal("can't open database", EC_TEMPFAIL);
 
@@ -223,12 +223,12 @@ int main(int argc, char *argv[])
         }
         while ( loop ) {
           if (is_get) {
-            DB_OLD->fetch(odb, key, keylen, &res, &reslen, &tid);
+            cyrusdb_fetch(odb, key, keylen, &res, &reslen, &tid);
             printf("%.*s\n", (int)reslen, res);
           } else if (is_set) {
-            DB_OLD->store(odb, key, keylen, value, vallen, &tid);
+            cyrusdb_store(odb, key, keylen, value, vallen, &tid);
           } else if (is_delete) {
-            DB_OLD->delete(odb, key, keylen, &tid, 1);
+            cyrusdb_delete(odb, key, keylen, &tid, 1);
           }
           loop = 0;
           if ( use_stdin ) {
@@ -237,39 +237,39 @@ int main(int argc, char *argv[])
         }
     } else if (!strcmp(action, "show")) {
         if ((argc - optind) < 4) {
-            DB_OLD->foreach(odb, "", 0, NULL, printer_cb, NULL, &tid);
+            cyrusdb_foreach(odb, "", 0, NULL, printer_cb, NULL, &tid);
         } else {
             key = argv[optind+3];
             keylen = strlen(key);
-            DB_OLD->foreach(odb, key, keylen, NULL, printer_cb, NULL, &tid);
+            cyrusdb_foreach(odb, key, keylen, NULL, printer_cb, NULL, &tid);
         }
     } else if (!strcmp(action, "consistency")) {
-        if (DB_OLD->consistent(odb)) {
+        if (cyrusdb_consistent(odb)) {
             printf("Consistency Error for %s\n", old_db);
         }
     } else if (!strcmp(action, "dump")) {
 	int level = 1;
 	if ((argc - optind) > 3)
 	    level = atoi(argv[optind+3]);
-	DB_OLD->dump(odb, level);
+	cyrusdb_dump(odb, level);
     } else if (!strcmp(action, "consistent")) {
-	if (DB_OLD->consistent(odb)) {
+	if (cyrusdb_consistent(odb)) {
 	    printf("No, not consistent\n");
 	} else {
 	    printf("Yes, consistent\n");
 	}
     } else if (!strcmp(action, "damage")) {
-	DB_OLD->store(odb, "INVALID", 7, "CRASHME", 7, &tid);
+	cyrusdb_store(odb, "INVALID", 7, "CRASHME", 7, &tid);
 	assert(!tid);
     } else {
         printf("Unknown action %s\n", action);
     }
     if (tid) {
-      DB_OLD->commit(odb, tid);
+      cyrusdb_commit(odb, tid);
       tid = NULL;
     }
 
-    (DB_OLD->close)(odb);
+    cyrusdb_close(odb);
 
     cyrus_done();
 

@@ -82,6 +82,8 @@ typedef int foreach_cb(void *rock,
 		       const char *key, size_t keylen,
 		       const char *data, size_t datalen);
 
+struct dbengine;
+
 struct cyrusdb_backend {
     const char *name;
 
@@ -102,10 +104,10 @@ struct cyrusdb_backend {
     int (*archive)(const char **fnames, const char *dirname);
 
     /* open the specified database in the global environment */
-    int (*open)(const char *fname, int flags, struct db **ret);
+    int (*open)(const char *fname, int flags, struct dbengine **ret);
 
     /* close the specified database */
-    int (*close)(struct db *db);
+    int (*close)(struct dbengine *db);
 
     /* what are the overall specifications? */
     /* 'mydb': the database to act on
@@ -138,15 +140,15 @@ struct cyrusdb_backend {
        "quotalegacy" backend is designed for special legacy use only
        and breaks this rule.
     */
-    int (*fetch)(struct db *mydb, 
+    int (*fetch)(struct dbengine *mydb, 
 		 const char *key, size_t keylen,
 		 const char **data, size_t *datalen,
 		 struct txn **mytid);
-    int (*fetchlock)(struct db *mydb, 
+    int (*fetchlock)(struct dbengine *mydb, 
 		     const char *key, size_t keylen,
 		     const char **data, size_t *datalen,
 		     struct txn **mytid);
-    int (*fetchnext)(struct db *mydb, 
+    int (*fetchnext)(struct dbengine *mydb, 
 		 const char *key, size_t keylen,
 		 const char **foundkey, size_t *foundkeylen,
 		 const char **data, size_t *datalen,
@@ -168,7 +170,7 @@ struct cyrusdb_backend {
 
 	The callbacks will never be called with data=NULL.  For a zero
 	length record, data will point to a zero length buffer.  */
-    int (*foreach)(struct db *mydb,
+    int (*foreach)(struct dbengine *mydb,
 		   const char *prefix, size_t prefixlen,
 		   foreach_p *p,
 		   foreach_cb *cb, void *rock, 
@@ -178,30 +180,30 @@ struct cyrusdb_backend {
      * entries.
      * Passing data=NULL or datalen=0 places a zero-length record in
      * the database, which can be fetched back again.  */
-    int (*create)(struct db *db, 
+    int (*create)(struct dbengine *db, 
 		  const char *key, size_t keylen,
 		  const char *data, size_t datalen,
 		  struct txn **tid);
-    int (*store)(struct db *db, 
+    int (*store)(struct dbengine *db, 
 		 const char *key, size_t keylen,
 		 const char *data, size_t datalen,
 		 struct txn **tid);
 
     /* Remove entrys from the database */
-    int (*delete)(struct db *db, 
+    int (*delete)(struct dbengine *db, 
 		  const char *key, size_t keylen,
 		  struct txn **tid,
 		  int force); /* 1 = ignore not found errors */
     
     /* Commit the transaction.  When commit() returns, the tid will no longer
      * be valid, regardless of if the commit succeeded or failed */
-    int (*commit)(struct db *db, struct txn *tid);
+    int (*commit)(struct dbengine *db, struct txn *tid);
 
     /* Abort the transaction and invalidate the tid */
-    int (*abort)(struct db *db, struct txn *tid);
+    int (*abort)(struct dbengine *db, struct txn *tid);
 
-    int (*dump)(struct db *db, int detail);
-    int (*consistent)(struct db *db);
+    int (*dump)(struct dbengine *db, int detail);
+    int (*consistent)(struct dbengine *db);
 };
 
 extern struct cyrusdb_backend *cyrusdb_backends[];
@@ -224,18 +226,15 @@ extern int cyrusdb_convert(const char *fromfname, const char *tofname,
 			   struct cyrusdb_backend *frombackend,
 			   struct cyrusdb_backend *tobackend);
 
-int cyrusdb_dump(struct cyrusdb_backend *backend,
-		 struct db *db,
-		 const char *prefix, size_t prefixlen,
-		 FILE *f,
-		 struct txn **tid);
-int cyrusdb_truncate(struct cyrusdb_backend *backend,
-		     struct db *db,
+int cyrusdb_dumpfile(struct db *db,
+		     const char *prefix, size_t prefixlen,
+		     FILE *f,
 		     struct txn **tid);
-int cyrusdb_undump(struct cyrusdb_backend *backend,
-		   struct db *db,
-		   FILE *f,
-		   struct txn **tid);
+int cyrusdb_truncate(struct db *db,
+		     struct txn **tid);
+int cyrusdb_undumpfile(struct db *db,
+		       FILE *f,
+		       struct txn **tid);
 
 
 extern const char *cyrusdb_detect(const char *fname);
@@ -246,5 +245,44 @@ void cyrusdb_done(void);
 
 /* Configuration */
 struct cyrusdb_backend *cyrusdb_fromname(const char *name);
+
+/* direct DB interface */
+extern int cyrusdb_open(struct cyrusdb_backend *backend,
+			const char *fname,
+			int flags, struct db **ret);
+extern int cyrusdb_close(struct db *db);
+extern int cyrusdb_fetch(struct db *db,
+			 const char *key, size_t keylen,
+			 const char **data, size_t *datalen,
+			 struct txn **mytid);
+extern int cyrusdb_fetchlock(struct db *db,
+			     const char *key, size_t keylen,
+			     const char **data, size_t *datalen,
+			     struct txn **mytid);
+extern int cyrusdb_fetchnext(struct db *db,
+			     const char *key, size_t keylen,
+			     const char **found, size_t *foundlen,
+			     const char **data, size_t *datalen,
+			     struct txn **mytid);
+extern int cyrusdb_foreach(struct db *db,
+			   const char *prefix, size_t prefixlen,
+			   foreach_p *p,
+			   foreach_cb *cb, void *rock,
+			   struct txn **tid);
+extern int cyrusdb_create(struct db *db,
+			  const char *key, size_t keylen,
+			  const char *data, size_t datalen,
+			  struct txn **tid);
+extern int cyrusdb_store(struct db *db,
+			 const char *key, size_t keylen,
+			 const char *data, size_t datalen,
+			 struct txn **tid);
+extern int cyrusdb_delete(struct db *db,
+			  const char *key, size_t keylen,
+			  struct txn **tid, int force);
+extern int cyrusdb_commit(struct db *db, struct txn *tid);
+extern int cyrusdb_abort(struct db *db, struct txn *tid);
+extern int cyrusdb_dump(struct db *db, int detail);
+extern int cyrusdb_consistent(struct db *db);
 
 #endif /* INCLUDED_CYRUSDB_H */

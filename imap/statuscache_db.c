@@ -92,7 +92,7 @@ void statuscache_open(const char *fname)
 	fname = tofree;
     }
 
-    ret = DB->open(fname, CYRUSDB_CREATE, &statuscachedb);
+    ret = cyrusdb_open(DB, fname, CYRUSDB_CREATE, &statuscachedb);
     if (ret != 0) {
 	syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
 	       cyrusdb_strerror(ret));
@@ -110,7 +110,7 @@ void statuscache_close(void)
     int r;
 
     if (statuscache_dbopen) {
-	r = DB->close(statuscachedb);
+	r = cyrusdb_close(statuscachedb);
 	if (r) {
 	    syslog(LOG_ERR, "DBERROR: error closing statuscache: %s",
 		   cyrusdb_strerror(r));
@@ -278,7 +278,7 @@ int statuscache_lookup(const char *mboxname, const char *userid,
 
     /* Check if there is an entry in the database */
     do {
-	r = DB->fetch(statuscachedb, key, keylen, &data, &datalen, NULL);
+	r = cyrusdb_fetch(statuscachedb, key, keylen, &data, &datalen, NULL);
     } while (r == CYRUSDB_AGAIN);
 
     if (r || !data || ((size_t) datalen < sizeof(unsigned))) {
@@ -339,7 +339,7 @@ static int statuscache_update_txn(const char *mboxname,
 		       sdata->uidvalidity, sdata->unseen,
 		       sdata->highestmodseq);
 
-    r = DB->store(statuscachedb, key, keylen, data, datalen, tidptr);
+    r = cyrusdb_store(statuscachedb, key, keylen, data, datalen, tidptr);
 
     if (r != CYRUSDB_OK) {
 	syslog(LOG_ERR, "DBERROR: error updating database: %s (%s)",
@@ -378,7 +378,7 @@ static int delete_cb(void *rockp,
     memcpy(buf, key, keylen);
 
     /* Delete db entry */
-    r = DB->delete(rp->db, buf, keylen, &rp->tid, 1);
+    r = cyrusdb_delete(rp->db, buf, keylen, &rp->tid, 1);
     if (r != CYRUSDB_OK) {
 	syslog(LOG_ERR, "DBERROR: error deleting from database: %s", 
 	       cyrusdb_strerror(r));
@@ -412,7 +412,7 @@ int statuscache_invalidate(const char *mboxname, struct statusdata *sdata)
 
     /* strip off the second NULL that buildkey added, so we match 
      * the entires for all users */
-    r = DB->foreach(drock.db, key, keylen - 1, NULL, delete_cb,
+    r = cyrusdb_foreach(drock.db, key, keylen - 1, NULL, delete_cb,
 		    &drock, &drock.tid);
     if (r != CYRUSDB_OK) {
 	syslog(LOG_ERR, "DBERROR: error invalidating: %s (%s)",
@@ -424,10 +424,10 @@ int statuscache_invalidate(const char *mboxname, struct statusdata *sdata)
     }
 
     if (r == CYRUSDB_OK) {
-	DB->commit(drock.db, drock.tid);
+	cyrusdb_commit(drock.db, drock.tid);
     }
     else {
-	if (drock.tid) DB->abort(drock.db, drock.tid);
+	if (drock.tid) cyrusdb_abort(drock.db, drock.tid);
     }
 
     if (doclose)

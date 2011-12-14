@@ -187,9 +187,9 @@ static int mboxlist_read(const char *name, const char **dataptr, size_t *datalen
 	return IMAP_MAILBOX_NONEXISTENT;
     }
     if (wrlock) {
-	r = DB->fetchlock(mbdb, name, namelen, dataptr, datalenptr, tid);
+	r = cyrusdb_fetchlock(mbdb, name, namelen, dataptr, datalenptr, tid);
     } else {
-	r = DB->fetch(mbdb, name, namelen, dataptr, datalenptr, tid);
+	r = cyrusdb_fetch(mbdb, name, namelen, dataptr, datalenptr, tid);
     }
 
     switch (r) {
@@ -361,7 +361,7 @@ int mboxlist_update(struct mboxlist_entry *mbentry, int localonly)
     struct txn *tid = NULL;
 
     mboxent = mboxlist_entry_cstring(mbentry);
-    r = DB->store(mbdb, mbentry->name, strlen(mbentry->name),
+    r = cyrusdb_store(mbdb, mbentry->name, strlen(mbentry->name),
 		  mboxent, strlen(mboxent), &tid);
     free(mboxent);
     mboxent = NULL;
@@ -391,9 +391,9 @@ int mboxlist_update(struct mboxlist_entry *mbentry, int localonly)
 
     if (tid) {
 	if (r) {
-	    r2 = DB->abort(mbdb, tid);
+	    r2 = cyrusdb_abort(mbdb, tid);
 	} else {
-	    r2 = DB->commit(mbdb, tid);
+	    r2 = cyrusdb_commit(mbdb, tid);
 	}
     }
 
@@ -722,7 +722,7 @@ int mboxlist_createmailbox_full(const char *name, int mbtype,
     newmbentry->uniqueid = newmailbox ? newmailbox->uniqueid : uniqueid;
     newmbentry->specialuse = useptr;
     mboxent = mboxlist_entry_cstring(newmbentry);
-    r = DB->store(mbdb, name, strlen(name), mboxent, strlen(mboxent), NULL);
+    r = cyrusdb_store(mbdb, name, strlen(name), mboxent, strlen(mboxent), NULL);
 
     if (r) {
 	syslog(LOG_ERR, "DBERROR: failed to insert to mailboxes list %s: %s", 
@@ -741,7 +741,7 @@ int mboxlist_createmailbox_full(const char *name, int mbtype,
 	if (r) {
 	    syslog(LOG_ERR,
 		   "MUPDATE: can't commit mailbox entry for '%s'", name);
-	    DB->delete(mbdb, name, strlen(name), NULL, 0);
+	    cyrusdb_delete(mbdb, name, strlen(name), NULL, 0);
 	}
 	if (mupdate_h) mupdate_disconnect(&mupdate_h);
     }
@@ -809,7 +809,7 @@ int mboxlist_insertremote(struct mboxlist_entry *mbentry,
     mboxent = mboxlist_entry_cstring(mbentry);
 
     /* database put */
-    r = DB->store(mbdb, mbentry->name, strlen(mbentry->name),
+    r = cyrusdb_store(mbdb, mbentry->name, strlen(mbentry->name),
 		  mboxent, strlen(mboxent), tid);
     switch (r) {
     case CYRUSDB_OK:
@@ -868,7 +868,7 @@ int mboxlist_deleteremote(const char *name, struct txn **in_tid)
 
  retry_del:
     /* delete entry */
-    r = DB->delete(mbdb, name, strlen(name), tid, 0);
+    r = cyrusdb_delete(mbdb, name, strlen(name), tid, 0);
     switch (r) {
     case CYRUSDB_OK: /* success */
 	break;
@@ -882,7 +882,7 @@ int mboxlist_deleteremote(const char *name, struct txn **in_tid)
 
     /* commit db operations, but only if we weren't passed a transaction */
     if (!in_tid) {
-	r = DB->commit(mbdb, *tid);
+	r = cyrusdb_commit(mbdb, *tid);
 	if (r) {
 	    syslog(LOG_ERR, "DBERROR: failed on commit: %s",
 		   cyrusdb_strerror(r));
@@ -894,7 +894,7 @@ int mboxlist_deleteremote(const char *name, struct txn **in_tid)
  done:
     if (r && !in_tid && tid) {
 	/* Abort the transaction if it is still in progress */
-	DB->abort(mbdb, *tid);
+	cyrusdb_abort(mbdb, *tid);
     }
 
     return r;
@@ -1071,7 +1071,7 @@ int mboxlist_deletemailbox(const char *name, int isadmin,
     if (r && !force) goto done;
 
     /* delete entry */
-    r = DB->delete(mbdb, name, strlen(name), NULL, 0);
+    r = cyrusdb_delete(mbdb, name, strlen(name), NULL, 0);
     if (r) {
 	syslog(LOG_ERR, "DBERROR: error deleting %s: %s",
 	       name, cyrusdb_strerror(r));
@@ -1207,7 +1207,7 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
 	newmbentry->partition = newpartition;
 	newmbentry->acl = oldmailbox->acl;
 	mboxent = mboxlist_entry_cstring(newmbentry);
-	r = DB->store(mbdb, newname, strlen(newname), 
+	r = cyrusdb_store(mbdb, newname, strlen(newname), 
 		      mboxent, strlen(mboxent), &tid);
 	mboxlist_entry_free(&newmbentry);
 	if (r) goto done;
@@ -1252,12 +1252,12 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
 
     do {
 	/* 7b. put it into the db */
-	r = DB->store(mbdb, newname, strlen(newname), 
+	r = cyrusdb_store(mbdb, newname, strlen(newname), 
 		      mboxent, strlen(mboxent), &tid);
 
 	if (!r && !isusermbox) {
 	    /* 4. Delete entry from berkeley db */
-	    r = DB->delete(mbdb, oldname, strlen(oldname), &tid, 0);
+	    r = cyrusdb_delete(mbdb, oldname, strlen(oldname), &tid, 0);
 	}
 
 	switch (r) {
@@ -1278,7 +1278,7 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
  dbdone:
 
     /* 3. Commit transaction */
-    r = DB->commit(mbdb, tid);
+    r = cyrusdb_commit(mbdb, tid);
     tid = NULL;
     if (r) {
 	syslog(LOG_ERR, "DBERROR: failed on commit %s %s: %s",
@@ -1499,7 +1499,7 @@ int mboxlist_setacl(const char *name, const char *identifier,
      * lock the mailbox, and re-lock the mailboxes list */
     /* we must do this to obey our locking rules */
     if (!r && !(mbentry->mbtype & MBTYPE_REMOTE)) {
-	DB->abort(mbdb, tid);
+	cyrusdb_abort(mbdb, tid);
 	tid = NULL;
 	mboxlist_entry_free(&mbentry);
 
@@ -1587,7 +1587,7 @@ int mboxlist_setacl(const char *name, const char *identifier,
 	mboxent = mboxlist_entry_cstring(mbentry);
 
 	do {
-	    r = DB->store(mbdb, name, strlen(name),
+	    r = cyrusdb_store(mbdb, name, strlen(name),
 			  mboxent, strlen(mboxent), &tid);
 	} while(r == CYRUSDB_AGAIN);
     
@@ -1608,7 +1608,7 @@ int mboxlist_setacl(const char *name, const char *identifier,
 
     /* 5. Commit transaction */
     if (!r) {
-	if((r = DB->commit(mbdb, tid)) != 0) {
+	if((r = cyrusdb_commit(mbdb, tid)) != 0) {
 	    syslog(LOG_ERR, "DBERROR: failed on commit: %s",
 		   cyrusdb_strerror(r));
 	    r = IMAP_IOERROR;
@@ -1643,7 +1643,7 @@ int mboxlist_setacl(const char *name, const char *identifier,
   done:
     if (r && tid) {
 	/* if we are mid-transaction, abort it! */
-	int r2 = DB->abort(mbdb, tid);
+	int r2 = cyrusdb_abort(mbdb, tid);
 	if (r2) {
 	    syslog(LOG_ERR,
 		   "DBERROR: error aborting txn in mboxlist_setacl: %s",
@@ -1694,7 +1694,7 @@ mboxlist_sync_setacls(const char *name, const char *newacl)
 	char *mboxent = mboxlist_entry_cstring(mbentry);
 
 	do {
-	    r = DB->store(mbdb, name, strlen(name),
+	    r = cyrusdb_store(mbdb, name, strlen(name),
 			  mboxent, strlen(mboxent), &tid);
 	} while (r == CYRUSDB_AGAIN);
     
@@ -1709,7 +1709,7 @@ mboxlist_sync_setacls(const char *name, const char *newacl)
 
     /* 3. Commit transaction */
     if (!r) {
-	r = DB->commit(mbdb, tid);
+	r = cyrusdb_commit(mbdb, tid);
 	if (r) {
 	    syslog(LOG_ERR, "DBERROR: failed on commit %s: %s",
 		   name, cyrusdb_strerror(r));
@@ -1743,7 +1743,7 @@ mboxlist_sync_setacls(const char *name, const char *newacl)
 
     if (r && tid) {
 	/* if we are mid-transaction, abort it! */
-	int r2 = DB->abort(mbdb, tid);
+	int r2 = cyrusdb_abort(mbdb, tid);
 	if (r2) {
 	    syslog(LOG_ERR,
 		   "DBERROR: error aborting txn in sync_setacls %s: %s",
@@ -1793,7 +1793,7 @@ int mboxlist_setspecialuse(struct mailbox *mailbox, const char *specialuse)
     mbentry->specialuse = specialuse;
     mboxent = mboxlist_entry_cstring(mbentry);
     do {
-	r = DB->store(mbdb, name, strlen(name),
+	r = cyrusdb_store(mbdb, name, strlen(name),
 		      mboxent, strlen(mboxent), &tid);
     } while (r == CYRUSDB_AGAIN);
 
@@ -1812,7 +1812,7 @@ int mboxlist_setspecialuse(struct mailbox *mailbox, const char *specialuse)
     if (r) goto done;
 
     /* 3. Commit transaction */
-    r = DB->commit(mbdb, tid);
+    r = cyrusdb_commit(mbdb, tid);
     if (r) {
 	syslog(LOG_ERR, "DBERROR: failed on commit, header inconsistent %s: %s",
 	       name, cyrusdb_strerror(r));
@@ -1824,7 +1824,7 @@ int mboxlist_setspecialuse(struct mailbox *mailbox, const char *specialuse)
 
  done:
     if (tid) {
-	int r2 = DB->abort(mbdb, tid);
+	int r2 = cyrusdb_abort(mbdb, tid);
 	if (r2) {
 	    syslog(LOG_ERR, "DBERROR: failed on abort %s: %s",
 		   name, cyrusdb_strerror(r2));
@@ -2044,7 +2044,7 @@ int mboxlist_allmbox(const char *prefix, foreach_cb *proc, void *rock)
     int r;
     char *search = prefix ? (char *)prefix : "";
 
-    r = DB->foreach(mbdb, search, strlen(search), NULL, proc, rock, 0);
+    r = cyrusdb_foreach(mbdb, search, strlen(search), NULL, proc, rock, 0);
 
     return r;
 }
@@ -2144,7 +2144,7 @@ int mboxlist_findall(struct namespace *namespace,
     /* Check for INBOX first of all */
     if (userid) {
 	if (GLOB_TEST(cbrock.g, "INBOX") != -1) {
-	    r = DB->fetch(mbdb, usermboxname, usermboxnamelen,
+	    r = cyrusdb_fetch(mbdb, usermboxname, usermboxnamelen,
 			  &data, &datalen, NULL);
 	    if (r == CYRUSDB_NOTFOUND) r = 0;
 	    else if (!r)
@@ -2153,7 +2153,7 @@ int mboxlist_findall(struct namespace *namespace,
 	else if (!strncmp(pattern,
 			  usermboxname+domainlen, usermboxnamelen-domainlen) &&
 		 GLOB_TEST(cbrock.g, usermboxname+domainlen) != -1) {
-	    r = DB->fetch(mbdb, usermboxname, usermboxnamelen,
+	    r = cyrusdb_fetch(mbdb, usermboxname, usermboxnamelen,
 			  &data, &datalen, NULL);
 	    if (r == CYRUSDB_NOTFOUND) r = 0;
 	    else if (!r)
@@ -2201,7 +2201,7 @@ int mboxlist_findall(struct namespace *namespace,
 
 	cbrock.find_namespace = NAMESPACE_INBOX;
 	/* iterate through prefixes matching usermboxname */
-	r = DB->foreach(mbdb,
+	r = cyrusdb_foreach(mbdb,
 			usermboxname, usermboxnamelen,
 			&find_p, &find_cb, &cbrock,
 			NULL);
@@ -2221,7 +2221,7 @@ int mboxlist_findall(struct namespace *namespace,
 	/* search for all remaining mailboxes.
 	   just bother looking at the ones that have the same pattern
 	   prefix. */
-	r = DB->foreach(mbdb,
+	r = cyrusdb_foreach(mbdb,
 			domainpat, domainlen + prefixlen,
 			&find_p, &find_cb, &cbrock,
 			NULL);
@@ -2290,7 +2290,7 @@ int mboxlist_findall_alt(struct namespace *namespace,
     /* Check for INBOX first of all */
     if (userid) {
 	if (GLOB_TEST(cbrock.g, "INBOX") != -1) {
-	    r = DB->fetch(mbdb, usermboxname, usermboxnamelen,
+	    r = cyrusdb_fetch(mbdb, usermboxname, usermboxnamelen,
 			  &data, &datalen, NULL);
 	    if (r == CYRUSDB_NOTFOUND) r = 0;
 	    else if (!r)
@@ -2333,7 +2333,7 @@ int mboxlist_findall_alt(struct namespace *namespace,
 	cbrock.find_namespace = NAMESPACE_INBOX;
 
 	/* iterate through prefixes matching usermboxname */
-	DB->foreach(mbdb,
+	cyrusdb_foreach(mbdb,
 		    usermboxname, usermboxnamelen,
 		    &find_p, &find_cb, &cbrock,
 		    NULL);
@@ -2374,7 +2374,7 @@ int mboxlist_findall_alt(struct namespace *namespace,
 	
 	    /* iterate through prefixes matching usermboxname */
 	    strlcpy(domainpat+domainlen, "user", sizeof(domainpat)-domainlen);
-	    DB->foreach(mbdb,
+	    cyrusdb_foreach(mbdb,
 			domainpat, strlen(domainpat),
 			&find_p, &find_cb, &cbrock,
 			NULL);
@@ -2425,7 +2425,7 @@ int mboxlist_findall_alt(struct namespace *namespace,
 		}
 
 		domainpat[domainlen] = '\0';
-		DB->foreach(mbdb,
+		cyrusdb_foreach(mbdb,
 			    domainpat, domainlen,
 			    &find_p, &find_cb, &cbrock,
 			    NULL);
@@ -2435,7 +2435,7 @@ int mboxlist_findall_alt(struct namespace *namespace,
 			sizeof(domainpat)-domainlen);
 		cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
 
-		DB->foreach(mbdb,
+		cyrusdb_foreach(mbdb,
 			    domainpat, domainlen+prefixlen-(len+1),
 			    &find_p, &find_cb, &cbrock,
 			NULL);
@@ -2738,7 +2738,7 @@ void mboxlist_open(const char *fname)
 	flags |= CYRUSDB_MBOXSORT;
     }
 
-    ret = (DB->open)(fname, flags, &mbdb);
+    ret = cyrusdb_open(DB, fname, flags, &mbdb);
     if (ret != 0) {
 	syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
 	       cyrusdb_strerror(ret));
@@ -2757,7 +2757,7 @@ void mboxlist_close(void)
     int r;
 
     if (mboxlist_dbopen) {
-	r = (DB->close)(mbdb);
+	r = cyrusdb_close(mbdb);
 	if (r) {
 	    syslog(LOG_ERR, "DBERROR: error closing mailboxes: %s",
 		   cyrusdb_strerror(r));
@@ -2792,7 +2792,7 @@ mboxlist_opensubs(const char *userid,
 	flags |= CYRUSDB_MBOXSORT;
     }
 
-    r = (SUBDB->open)(subsfname, flags, ret);
+    r = cyrusdb_open(SUBDB, subsfname, flags, ret);
     if (r != CYRUSDB_OK) {
 	r = IMAP_IOERROR;
     }
@@ -2806,7 +2806,7 @@ mboxlist_opensubs(const char *userid,
  */
 static void mboxlist_closesubs(struct db *sub)
 {
-    (SUBDB->close)(sub);
+    cyrusdb_close(sub);
 }
 
 /*
@@ -2877,7 +2877,7 @@ int mboxlist_findsub(struct namespace *namespace,
     /* Check for INBOX first of all */
     if (userid) {
 	if (GLOB_TEST(cbrock.g, "INBOX") != -1) {
-	    r = SUBDB->fetch(subs, usermboxname, usermboxnamelen,
+	    r = cyrusdb_fetch(subs, usermboxname, usermboxnamelen,
 			     &data, &datalen, NULL);
 	    if (r == CYRUSDB_NOTFOUND) r = 0;
 	    else if (!r)
@@ -2886,7 +2886,7 @@ int mboxlist_findsub(struct namespace *namespace,
 	else if (!strncmp(pattern,
 			  usermboxname+domainlen, usermboxnamelen-domainlen) &&
 		 GLOB_TEST(cbrock.g, usermboxname+domainlen) != -1) {
-	    r = SUBDB->fetch(subs, usermboxname, usermboxnamelen,
+	    r = cyrusdb_fetch(subs, usermboxname, usermboxnamelen,
 			     &data, &datalen, NULL);
 	    if (r == CYRUSDB_NOTFOUND) r = 0;
 	    else if (!r)
@@ -2931,7 +2931,7 @@ int mboxlist_findsub(struct namespace *namespace,
 
 	cbrock.find_namespace = NAMESPACE_INBOX;
 	/* iterate through prefixes matching usermboxname */
-	SUBDB->foreach(subs,
+	cyrusdb_foreach(subs,
 		       usermboxname, usermboxnamelen,
 		       &find_p, &find_cb, &cbrock,
 		       NULL);
@@ -2956,7 +2956,7 @@ int mboxlist_findsub(struct namespace *namespace,
 	}
 	/* search for all remaining mailboxes.
 	   just bother looking at the ones that have the same pattern prefix. */
-	SUBDB->foreach(subs, domainpat, domainlen + prefixlen,
+	cyrusdb_foreach(subs, domainpat, domainlen + prefixlen,
 		       &find_p, &find_cb, &cbrock, NULL);
    }
 
@@ -2977,7 +2977,7 @@ int mboxlist_allsubs(const char *userid, foreach_cb *proc, void *rock)
     r = mboxlist_opensubs(userid, &subs);
     if (r) return r;
 
-    r = SUBDB->foreach(subs, "", 0, NULL, proc, rock, 0);
+    r = cyrusdb_foreach(subs, "", 0, NULL, proc, rock, 0);
 
     mboxlist_closesubs(subs);
 
@@ -3046,7 +3046,7 @@ int mboxlist_findsub_alt(struct namespace *namespace,
     /* Check for INBOX first of all */
     if (userid) {
 	if (GLOB_TEST(cbrock.g, "INBOX") != -1) {
-	    r = SUBDB->fetch(subs, usermboxname, usermboxnamelen,
+	    r = cyrusdb_fetch(subs, usermboxname, usermboxnamelen,
 			     &data, &datalen, NULL);
 	    if (r == CYRUSDB_NOTFOUND) r = 0;
 	    else if (!r)
@@ -3085,7 +3085,7 @@ int mboxlist_findsub_alt(struct namespace *namespace,
 	cbrock.find_namespace = NAMESPACE_INBOX;
 
 	/* iterate through prefixes matching usermboxname */
-	SUBDB->foreach(subs,
+	cyrusdb_foreach(subs,
 		       usermboxname, usermboxnamelen,
 		       &find_p, &find_cb, &cbrock,
 		       NULL);
@@ -3133,7 +3133,7 @@ int mboxlist_findsub_alt(struct namespace *namespace,
 	
 	    /* iterate through prefixes matching usermboxname */
 	    strlcpy(domainpat+domainlen, "user", sizeof(domainpat)-domainlen);
-	    SUBDB->foreach(subs,
+	    cyrusdb_foreach(subs,
 			   domainpat, strlen(domainpat),
 			   &find_p, &find_cb, &cbrock,
 			   NULL);
@@ -3184,7 +3184,7 @@ int mboxlist_findsub_alt(struct namespace *namespace,
 		}
 
 		domainpat[domainlen] = '\0';
-		SUBDB->foreach(subs,
+		cyrusdb_foreach(subs,
 			       domainpat, domainlen,
 			       &find_p, &find_cb, &cbrock,
 			       NULL);
@@ -3194,7 +3194,7 @@ int mboxlist_findsub_alt(struct namespace *namespace,
 		        sizeof(domainpat)-domainlen);
 		cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
 
-		SUBDB->foreach(subs,
+		cyrusdb_foreach(subs,
 			       domainpat, domainlen+prefixlen-(len+1),
 			       &find_p, &find_cb, &cbrock,
 			       NULL);
@@ -3220,7 +3220,7 @@ int mboxlist_checksub(const char *name, const char *userid)
 
     r = mboxlist_opensubs(userid, &subs);
 
-    if (!r) r = SUBDB->fetch(subs, name, strlen(name), &val, &vallen, NULL);
+    if (!r) r = cyrusdb_fetch(subs, name, strlen(name), &val, &vallen, NULL);
 
     mboxlist_closesubs(subs);
     return r;
@@ -3257,9 +3257,9 @@ int mboxlist_changesub(const char *name, const char *userid,
     }
 
     if (add) {
-	r = SUBDB->store(subs, name, strlen(name), "", 0, NULL);
+	r = cyrusdb_store(subs, name, strlen(name), "", 0, NULL);
     } else {
-	r = SUBDB->delete(subs, name, strlen(name), NULL, 0);
+	r = cyrusdb_delete(subs, name, strlen(name), NULL, 0);
 	/* if it didn't exist, that's ok */
 	if (r == CYRUSDB_EXISTS) r = CYRUSDB_OK;
     }
@@ -3286,14 +3286,14 @@ int mboxlist_commit(struct txn *tid)
 {
     assert(tid);
     
-    return DB->commit(mbdb, tid);
+    return cyrusdb_commit(mbdb, tid);
 }
 
 int mboxlist_abort(struct txn *tid) 
 {
     assert(tid);
 
-    return DB->abort(mbdb, tid);
+    return cyrusdb_abort(mbdb, tid);
 }
 
 int mboxlist_delayed_delete_isenabled(void)

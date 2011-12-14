@@ -101,7 +101,7 @@ int main(int argc, char *argv[])
     /* open database */
     strcpy(fnamebuf, config_dir);
     strcat(fnamebuf, PTS_DBFIL);
-    r = (config_ptscache_db->open)(fnamebuf, CYRUSDB_CREATE, &ptdb);
+    r = cyrusdb_open(config_ptscache_db, fnamebuf, CYRUSDB_CREATE, &ptdb);
     if(r != CYRUSDB_OK) {
 	fprintf(stderr,"error opening %s (%s)", fnamebuf,
 	       cyrusdb_strerror(r));
@@ -109,9 +109,9 @@ int main(int argc, char *argv[])
     }
 
     /* iterate through db, wiping expired entries */
-    config_ptscache_db->foreach(ptdb, "", 0, NULL, dump_cb, ptdb, NULL);
+    cyrusdb_foreach(ptdb, "", 0, NULL, dump_cb, ptdb, NULL);
 
-    (config_ptscache_db->close)(ptdb);
+    cyrusdb_close(ptdb);
 
     cyrus_done();
 

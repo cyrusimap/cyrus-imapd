@@ -379,7 +379,7 @@ struct db_header {
     size_t current_size;
 };
 
-struct db {
+struct dbengine {
     /* file data */
     struct mappedfile *mf;
 
@@ -398,7 +398,7 @@ struct db {
 };
 
 struct db_list {
-    struct db *db;
+    struct dbengine *db;
     struct db_list *next;
     int refcount;
 };
@@ -429,13 +429,13 @@ union skipwritebuf {
 
 static struct db_list *open_twoskip = NULL;
 
-static int mycommit(struct db *db, struct txn *tid);
-static int myabort(struct db *db, struct txn *tid);
-static int mycheckpoint(struct db *db);
-static int myconsistent(struct db *db, struct txn *tid);
-static int recovery(struct db *db);
-static int recovery1(struct db *db, int *count);
-static int recovery2(struct db *db, int *count);
+static int mycommit(struct dbengine *db, struct txn *tid);
+static int myabort(struct dbengine *db, struct txn *tid);
+static int mycheckpoint(struct dbengine *db);
+static int myconsistent(struct dbengine *db, struct txn *tid);
+static int recovery(struct dbengine *db);
+static int recovery1(struct dbengine *db, int *count);
+static int recovery2(struct dbengine *db, int *count);
 
 /************** HELPER FUNCTIONS ****************/
 
@@ -457,27 +457,27 @@ static uint8_t randlvl(uint8_t lvl, uint8_t maxlvl)
     return lvl;
 }
 
-static const char *_base(struct db *db)
+static const char *_base(struct dbengine *db)
 {
     return mappedfile_base(db->mf);
 }
 
-static const char *_key(struct db *db, struct skiprecord *rec)
+static const char *_key(struct dbengine *db, struct skiprecord *rec)
 {
     return mappedfile_base(db->mf) + rec->keyoffset;
 }
 
-static const char *_val(struct db *db, struct skiprecord *rec)
+static const char *_val(struct dbengine *db, struct skiprecord *rec)
 {
     return mappedfile_base(db->mf) + rec->valoffset;
 }
 
-static size_t _size(struct db *db)
+static size_t _size(struct dbengine *db)
 {
     return mappedfile_size(db->mf);
 }
 
-static const char *_fname(struct db *db)
+static const char *_fname(struct dbengine *db)
 {
     return mappedfile_fname(db->mf);
 }
@@ -485,7 +485,7 @@ static const char *_fname(struct db *db)
 /************** HEADER ****************/
 
 /* given an open, mapped db, read in the header information */
-static int read_header(struct db *db)
+static int read_header(struct dbengine *db)
 {
     uint32_t crc;
 
@@ -540,7 +540,7 @@ static int read_header(struct db *db)
 }
 
 /* given an open, mapped, locked db, write the header information */
-static int write_header(struct db *db)
+static int write_header(struct dbengine *db)
 {
     char *buf = scratchspace.s;
     int n;
@@ -563,7 +563,7 @@ static int write_header(struct db *db)
 }
 
 /* simple wrapper to write with an fsync */
-static int commit_header(struct db *db)
+static int commit_header(struct dbengine *db)
 {
     int r = write_header(db);
     if (!r) r = mappedfile_commit(db->mf);
@@ -572,7 +572,7 @@ static int commit_header(struct db *db)
 
 /******************** RECORD *********************/
 
-static int check_tailcrc(struct db *db, struct skiprecord *record)
+static int check_tailcrc(struct dbengine *db, struct skiprecord *record)
 {
     uint32_t crc;
 
@@ -588,7 +588,7 @@ static int check_tailcrc(struct db *db, struct skiprecord *record)
 }
 
 /* read a single skiprecord at the given offset */
-static int read_record(struct db *db, size_t offset,
+static int read_record(struct dbengine *db, size_t offset,
 		       struct skiprecord *record)
 {
     const char *base;
@@ -708,7 +708,7 @@ static void prepare_record(struct skiprecord *record, char *buf, size_t *sizep)
 }
 
 /* only changing the record head, so only rewrite that much */
-static int rewrite_record(struct db *db, struct skiprecord *record)
+static int rewrite_record(struct dbengine *db, struct skiprecord *record)
 {
     char *buf = scratchspace.s;
     size_t len;
@@ -727,7 +727,7 @@ static int rewrite_record(struct db *db, struct skiprecord *record)
 }
 
 /* you can only write records at the end */
-static int write_record(struct db *db, struct skiprecord *record,
+static int write_record(struct dbengine *db, struct skiprecord *record,
 			const char *key, const char *val)
 {
     char zeros[8] = {0, 0, 0, 0, 0, 0, 0, 0};
@@ -776,7 +776,7 @@ static int write_record(struct db *db, struct skiprecord *record,
 
 /* helper to append a record, starting the transaction by dirtying the
  * header first if required */
-static int append_record(struct db *db, struct skiprecord *record,
+static int append_record(struct dbengine *db, struct skiprecord *record,
 			 const char *key, const char *val)
 {
     int r;
@@ -795,7 +795,7 @@ static int append_record(struct db *db, struct skiprecord *record,
 
 /************************** LOCATION MANAGEMENT ***************************/
 
-static size_t _getzero(struct db *db, struct skiprecord *record)
+static size_t _getzero(struct dbengine *db, struct skiprecord *record)
 {
     /* if one is past, must be the other */
     if (record->nextloc[0] >= db->end)
@@ -812,7 +812,7 @@ static size_t _getzero(struct db *db, struct skiprecord *record)
 
 /* find the next record at a given level, encapsulating the
  * level 0 magic */
-static int _getloc(struct db *db, struct skiprecord *record,
+static int _getloc(struct dbengine *db, struct skiprecord *record,
 		   uint8_t level, size_t *outloc)
 {
     struct skiprecord local;
@@ -845,7 +845,7 @@ static int _getloc(struct db *db, struct skiprecord *record,
 
 /* set the next record at a given level, encapsulating the
  * level 0 magic */
-static void _setloc(struct db *db, struct skiprecord *record,
+static void _setloc(struct dbengine *db, struct skiprecord *record,
 		    uint8_t level, size_t offset)
 {
     if (level) {
@@ -868,7 +868,7 @@ static void _setloc(struct db *db, struct skiprecord *record,
 
 /* finds a record, either an exact match or the record
  * immediately before */
-static int relocate(struct db *db)
+static int relocate(struct dbengine *db)
 {
     struct skiploc *loc = &db->loc;
     struct skiprecord newrecord;
@@ -941,7 +941,7 @@ static int relocate(struct db *db)
 
 /* helper function to find a location, either by using the existing
  * location if it's close enough, or using the full relocate above */
-static int find_loc(struct db *db, const char *key, size_t keylen)
+static int find_loc(struct dbengine *db, const char *key, size_t keylen)
 {
     struct skiprecord newrecord;
     struct skiploc *loc = &db->loc;
@@ -1009,7 +1009,7 @@ static int find_loc(struct db *db, const char *key, size_t keylen)
 
 /* helper function to advance to the "next" record.  Used by foreach,
  * fetchnext, and internal functions */
-static int advance_loc(struct db *db)
+static int advance_loc(struct dbengine *db)
 {
     struct skiploc *loc = &db->loc;
     uint8_t i;
@@ -1056,7 +1056,7 @@ static int advance_loc(struct db *db)
  * after appending a new record, either create or delete.  The
  * caller must set forwardloc[] correctly for each level it has
  * changed */
-static int stitch(struct db *db, uint8_t maxlevel)
+static int stitch(struct dbengine *db, uint8_t maxlevel)
 {
     struct skiploc *loc = &db->loc;
     struct skiprecord oldrecord;
@@ -1082,7 +1082,7 @@ static int stitch(struct db *db, uint8_t maxlevel)
 
 /* overall "store" function - pass NULL val for delete.  This is
  * the place that all changes funnel through */
-static int store_here(struct db *db, const char *val, size_t vallen)
+static int store_here(struct dbengine *db, const char *val, size_t vallen)
 {
     struct skiploc *loc = &db->loc;
     struct skiprecord newrecord;
@@ -1139,7 +1139,7 @@ static int store_here(struct db *db, const char *val, size_t vallen)
 }
 
 /* delete a record */
-static int delete_here(struct db *db)
+static int delete_here(struct dbengine *db)
 {
     struct skiploc *loc = &db->loc;
     struct skiprecord newrecord;
@@ -1184,7 +1184,7 @@ static int delete_here(struct db *db)
 
 /************ DATABASE STRUCT AND TRANSACTION MANAGEMENT **************/
 
-static int db_is_clean(struct db *db)
+static int db_is_clean(struct dbengine *db)
 {
     if (db->header.current_size != _size(db))
 	return 0;
@@ -1195,12 +1195,12 @@ static int db_is_clean(struct db *db)
     return 1;
 }
 
-static int unlock(struct db *db)
+static int unlock(struct dbengine *db)
 {
     return mappedfile_unlock(db->mf);
 }
 
-static int write_lock(struct db *db)
+static int write_lock(struct dbengine *db)
 {
     int r = mappedfile_writelock(db->mf);
     if (r) return r;
@@ -1218,7 +1218,7 @@ static int write_lock(struct db *db)
     return 0;
 }
 
-static int read_lock(struct db *db)
+static int read_lock(struct dbengine *db)
 {
     int r = mappedfile_readlock(db->mf);
     if (r) return r;
@@ -1244,7 +1244,7 @@ static int read_lock(struct db *db)
     return 0;
 }
 
-static int newtxn(struct db *db, struct txn **tidptr)
+static int newtxn(struct dbengine *db, struct txn **tidptr)
 {
     int r;
 
@@ -1266,7 +1266,7 @@ static int newtxn(struct db *db, struct txn **tidptr)
     return 0;
 }
 
-static void dispose_db(struct db *db)
+static void dispose_db(struct dbengine *db)
 {
     if (!db) return;
 
@@ -1326,15 +1326,15 @@ static int myarchive(const char **fnames, const char *dirname)
     return 0;
 }
 
-static int opendb(const char *fname, int flags, struct db **ret)
+static int opendb(const char *fname, int flags, struct dbengine **ret)
 {
-    struct db *db;
+    struct dbengine *db;
     int r;
 
     assert(fname);
     assert(ret);
 
-    db = (struct db *) xzmalloc(sizeof(struct db));
+    db = (struct dbengine *) xzmalloc(sizeof(struct dbengine));
 
     db->open_flags = flags & ~CYRUSDB_CREATE;
     db->compar = (flags & CYRUSDB_MBOXSORT) ? bsearch_ncompare_mbox
@@ -1422,10 +1422,10 @@ done:
     return r;
 }
 
-static int myopen(const char *fname, int flags, struct db **ret)
+static int myopen(const char *fname, int flags, struct dbengine **ret)
 {
     struct db_list *ent;
-    struct db *mydb;
+    struct dbengine *mydb;
     int r;
 
     /* do we already have this DB open? */
@@ -1452,7 +1452,7 @@ static int myopen(const char *fname, int flags, struct db **ret)
     return 0;
 }
 
-static int myclose(struct db *db)
+static int myclose(struct dbengine *db)
 {
     struct db_list *ent = open_twoskip;
     struct db_list *prev = NULL;
@@ -1480,7 +1480,7 @@ static int myclose(struct db *db)
 
 /*************** EXTERNAL APIS ***********************/
 
-static int myfetch(struct db *db,
+static int myfetch(struct dbengine *db,
 	    const char *key, size_t keylen,
 	    const char **foundkey, size_t *foundkeylen,
 	    const char **data, size_t *datalen,
@@ -1548,7 +1548,7 @@ done:
 /* foreach allows for subsidary mailbox operations in 'cb'.
    if there is a txn, 'cb' must make use of it.
 */
-static int myforeach(struct db *db,
+static int myforeach(struct dbengine *db,
 	      const char *prefix, size_t prefixlen,
 	      foreach_p *goodp,
 	      foreach_cb *cb, void *rock,
@@ -1641,7 +1641,7 @@ static int myforeach(struct db *db,
 
 /* helper function for all writes - wraps create and delete and the FORCE
  * logic for each */
-static int skipwrite(struct db *db,
+static int skipwrite(struct dbengine *db,
 		     const char *key, size_t keylen,
 		     const char *data, size_t datalen,
 		     int force)
@@ -1670,7 +1670,7 @@ static int skipwrite(struct db *db,
     return 0;
 }
 
-static int mycommit(struct db *db, struct txn *tid)
+static int mycommit(struct dbengine *db, struct txn *tid)
 {
     struct skiprecord newrecord;
     int r = 0;
@@ -1727,7 +1727,7 @@ static int mycommit(struct db *db, struct txn *tid)
     return r;
 }
 
-static int myabort(struct db *db, struct txn *tid)
+static int myabort(struct dbengine *db, struct txn *tid)
 {
     int r;
 
@@ -1747,7 +1747,7 @@ static int myabort(struct db *db, struct txn *tid)
     return r;
 }
 
-static int mystore(struct db *db,
+static int mystore(struct dbengine *db,
 	    const char *key, size_t keylen,
 	    const char *data, size_t datalen,
 	    struct txn **tidptr, int force)
@@ -1786,7 +1786,7 @@ static int mystore(struct db *db,
  * database, then rewrites over the old one */
 
 struct copy_rock {
-    struct db *db;
+    struct dbengine *db;
     struct txn *tid;
 };
 
@@ -1799,7 +1799,7 @@ static int copy_cb(void *rock,
     return mystore(cr->db, key, keylen, val, vallen, &cr->tid, 0);
 }
 
-static int mycheckpoint(struct db *db)
+static int mycheckpoint(struct dbengine *db)
 {
     size_t old_size = db->header.current_size;
     char newfname[1024];
@@ -1882,7 +1882,7 @@ static int mycheckpoint(struct db *db)
    if detail == 2, also dump pointers for active records.
    if detail == 3, dump all records/all pointers.
 */
-static int dump(struct db *db, int detail __attribute__((unused)))
+static int dump(struct dbengine *db, int detail __attribute__((unused)))
 {
     struct skiprecord record;
     size_t offset = HEADER_SIZE;
@@ -1938,7 +1938,7 @@ static int dump(struct db *db, int detail __attribute__((unused)))
     return r;
 }
 
-static int consistent(struct db *db)
+static int consistent(struct dbengine *db)
 {
     int r;
 
@@ -1953,7 +1953,7 @@ static int consistent(struct db *db)
 }
 
 /* perform some basic consistency checks */
-static int myconsistent(struct db *db, struct txn *tid)
+static int myconsistent(struct dbengine *db, struct txn *tid)
 {
     struct skiprecord oldrecord;
     struct skiprecord record;
@@ -2018,7 +2018,7 @@ static int myconsistent(struct db *db, struct txn *tid)
     return 0;
 }
 
-static int _copy_commit(struct db *db, struct db *newdb,
+static int _copy_commit(struct dbengine *db, struct dbengine *newdb,
 		        struct skiprecord *commit)
 {
     struct txn *tid = NULL;
@@ -2060,11 +2060,11 @@ err:
 /* recovery2 - the file is really screwed.  Basically, we
  * failed to run recovery.  Try reading out records from
  * the top and applying commits to a new file instead */
-static int recovery2(struct db *db, int *count)
+static int recovery2(struct dbengine *db, int *count)
 {
     uint64_t oldcount = db->header.num_records;
     struct skiprecord record;
-    struct db *newdb = NULL;
+    struct dbengine *newdb = NULL;
     char newfname[1024];
     size_t offset;
     int r = 0;
@@ -2129,7 +2129,7 @@ static int recovery2(struct db *db, int *count)
 
 /* run recovery on this file.
  * always called with a write lock. */
-static int recovery1(struct db *db, int *count)
+static int recovery1(struct dbengine *db, int *count)
 {
     size_t prev[MAXLEVEL+1];
     size_t next[MAXLEVEL+1];
@@ -2225,7 +2225,7 @@ static int recovery1(struct db *db, int *count)
     return 0;
 }
 
-static int recovery(struct db *db)
+static int recovery(struct dbengine *db)
 {
     clock_t start = sclock();
     int count = 0;
@@ -2256,7 +2256,7 @@ static int recovery(struct db *db)
     return 0;
 }
 
-static int fetch(struct db *mydb,
+static int fetch(struct dbengine *mydb,
 		 const char *key, size_t keylen,
 		 const char **data, size_t *datalen,
 		 struct txn **tidptr)
@@ -2267,7 +2267,7 @@ static int fetch(struct db *mydb,
 		   data, datalen, tidptr, 0);
 }
 
-static int fetchnext(struct db *mydb,
+static int fetchnext(struct dbengine *mydb,
 		 const char *key, size_t keylen,
 		 const char **foundkey, size_t *fklen,
 		 const char **data, size_t *datalen,
@@ -2277,7 +2277,7 @@ static int fetchnext(struct db *mydb,
 		   data, datalen, tidptr, 1);
 }
 
-static int create(struct db *db,
+static int create(struct dbengine *db,
 		  const char *key, size_t keylen,
 		  const char *data, size_t datalen,
 		  struct txn **tid)
@@ -2286,7 +2286,7 @@ static int create(struct db *db,
     return mystore(db, key, keylen, data ? data : "", datalen, tid, 0);
 }
 
-static int store(struct db *db,
+static int store(struct dbengine *db,
 		 const char *key, size_t keylen,
 		 const char *data, size_t datalen,
 		 struct txn **tid)
@@ -2295,7 +2295,7 @@ static int store(struct db *db,
     return mystore(db, key, keylen, data ? data : "", datalen, tid, 1);
 }
 
-static int delete(struct db *db,
+static int delete(struct dbengine *db,
 		 const char *key, size_t keylen,
 		 struct txn **tid, int force)
 {

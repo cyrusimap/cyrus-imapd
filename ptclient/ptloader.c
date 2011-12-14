@@ -160,7 +160,7 @@ int service_init(int argc, char *argv[], char **envp __attribute__((unused)))
 
     strcpy(fnamebuf, config_dir);
     strcat(fnamebuf, PTS_DBFIL);
-    r = (DB->open)(fnamebuf, CYRUSDB_CREATE, &ptsdb);
+    r = cyrusdb_open(DB, fnamebuf, CYRUSDB_CREATE, &ptsdb);
     if (r != 0) {
 	syslog(LOG_ERR, "DBERROR: opening %s: %s", fnamebuf,
 	       cyrusdb_strerror(ret));
@@ -177,7 +177,7 @@ void service_abort(int error)
 {
     int r;
 
-    r = (DB->close)(ptsdb);
+    r = cyrusdb_close(ptsdb);
     if (r) {
 	syslog(LOG_ERR, "DBERROR: error closing ptsdb: %s",
 	       cyrusdb_strerror(r));
@@ -239,7 +239,7 @@ int service_main_fd(int c, int argc __attribute__((unused)),
 
     if(newstate) {
 	/* Success! */
-	rc = DB->store(ptsdb, user, size, (void *)newstate, dsize, NULL);
+	rc = cyrusdb_store(ptsdb, user, size, (void *)newstate, dsize, NULL);
         free(newstate);
 	
 	/* and we're done */

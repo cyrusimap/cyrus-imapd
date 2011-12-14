@@ -216,7 +216,7 @@ static int dump_cb(void *rockp,
 	if(!d->partition || !strcmp(d->partition, part)) {
 	    printf("%s\t%d %s %s\n", name, mbtype, part, acl);
 	    if(d->purge) {
-		config_mboxlist_db->delete(mbdb, key, keylen, &(d->tid), 0);
+		cyrusdb_delete(mbdb, key, keylen, &(d->tid), 0);
 	    }
 	}
 	break;
@@ -478,10 +478,10 @@ void do_dump(enum mboxop op, const char *part, int purge)
     }
 
     /* Dump Database */
-    config_mboxlist_db->foreach(mbdb, "", 0, NULL, &dump_cb, &d, NULL);
+    cyrusdb_foreach(mbdb, "", 0, NULL, &dump_cb, &d, NULL);
 
     if (d.tid) {
-	config_mboxlist_db->commit(mbdb, d.tid);
+	cyrusdb_commit(mbdb, d.tid);
 	d.tid = NULL;
     }
 
@@ -636,7 +636,7 @@ void do_undump(void)
 
 	tries = 0;
     retry:
-	r = config_mboxlist_db->store(mbdb, key, keylen, data, datalen, &tid);
+	r = cyrusdb_store(mbdb, key, keylen, data, datalen, &tid);
 	switch (r) {
 	case 0:
 	    break;
@@ -656,7 +656,7 @@ void do_undump(void)
 
 	if(--untilCommit == 0) {
 	    /* commit */
-	    r = config_mboxlist_db->commit(mbdb, tid);
+	    r = cyrusdb_commit(mbdb, tid);
 	    if(r) break;
 	    tid = NULL;
 	    untilCommit = PER_COMMIT;
@@ -668,11 +668,11 @@ void do_undump(void)
 
     if(!r && tid) {
 	/* commit the last transaction */
-	r=config_mboxlist_db->commit(mbdb, tid);
+	r=cyrusdb_commit(mbdb, tid);
     }
 
     if (r) {
-	if(tid) config_mboxlist_db->abort(mbdb, tid);
+	if(tid) cyrusdb_abort(mbdb, tid);
 	fprintf(stderr, "db error: %s\n", cyrusdb_strerror(r));
 	if(key) fprintf(stderr, "was processing mailbox: %s\n", key);
 	if(last_commit[0]) fprintf(stderr, "last commit was at: %s\n",
@@ -937,7 +937,7 @@ void do_verify(void)
 
     qsort(found.data, found.size, sizeof(struct found_data), compar_mbox);
 
-    config_mboxlist_db->foreach(mbdb, "", 0, NULL, &verify_cb, &found, NULL);
+    cyrusdb_foreach(mbdb, "", 0, NULL, &verify_cb, &found, NULL);
 }
 
 void usage(void)

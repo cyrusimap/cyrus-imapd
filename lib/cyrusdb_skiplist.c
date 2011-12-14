@@ -154,7 +154,7 @@ struct txn {
     unsigned logend;			/* where to write to continue this txn */
 };
 
-struct db {
+struct dbengine {
     /* file data */
     char *fname;
     int fd;
@@ -183,7 +183,7 @@ struct db {
 };
 
 struct db_list {
-    struct db *db;
+    struct dbengine *db;
     struct db_list *next;
     int refcount;
 };
@@ -199,7 +199,7 @@ enum {
     use_osync = 0
 };
 
-static void getsyncfd(struct db *db, struct txn *t)
+static void getsyncfd(struct dbengine *db, struct txn *t)
 {
     if (!use_osync) {
 	t->syncfd = db->fd;
@@ -209,7 +209,7 @@ static void getsyncfd(struct db *db, struct txn *t)
     }
 }
 
-static void closesyncfd(struct db *db __attribute__((unused)),
+static void closesyncfd(struct dbengine *db __attribute__((unused)),
 			struct txn *t)
 {
     /* if we're using fsync, then we don't want to close the file */
@@ -347,11 +347,11 @@ enum {
     HEADER_SIZE = OFFSET_LASTRECOVERY + 4
 };
 
-static int mycommit(struct db *db, struct txn *tid);
-static int myabort(struct db *db, struct txn *tid);
-static int mycheckpoint(struct db *db, int locked);
-static int myconsistent(struct db *db, struct txn *tid, int locked);
-static int recovery(struct db *db, int flags);
+static int mycommit(struct dbengine *db, struct txn *tid);
+static int myabort(struct dbengine *db, struct txn *tid);
+static int mycheckpoint(struct dbengine *db, int locked);
+static int myconsistent(struct dbengine *db, struct txn *tid, int locked);
+static int recovery(struct dbengine *db, int flags);
 
 enum {
     /* Force recovery regardless of timestamp on database */
@@ -444,7 +444,7 @@ static unsigned RECSIZE(const char *ptr)
  * *or* is this the beginning of the log, in which case we only need
  * the padding from the last INORDER (or DUMMY) record
  */
-static int SAFE_TO_APPEND(struct db *db)
+static int SAFE_TO_APPEND(struct dbengine *db)
 {
     /* check it's a multiple of 4 */
     if (db->map_size % 4) return 1;
@@ -472,7 +472,7 @@ static int SAFE_TO_APPEND(struct db *db)
     return 0;
 }
 
-static int newtxn(struct db *db, struct txn **tidptr)
+static int newtxn(struct dbengine *db, struct txn **tidptr)
 {
     struct txn *tid;
     /* is this file safe to append to?
@@ -501,7 +501,7 @@ static int newtxn(struct db *db, struct txn **tidptr)
 #define PADDING(ptr) (ntohl(*((uint32_t *)((ptr) + RECSIZE(ptr) - 4))))
 
 /* given an open, mapped db, read in the header information */
-static int read_header(struct db *db)
+static int read_header(struct dbengine *db)
 {
     const char *dptr;
     int r;
@@ -580,7 +580,7 @@ static int read_header(struct db *db)
 
 /* given an open, mapped db, locked db,
    write the header information */
-static int write_header(struct db *db)
+static int write_header(struct dbengine *db)
 {
     char buf[HEADER_SIZE];
     int n;
@@ -608,7 +608,7 @@ static int write_header(struct db *db)
 }
 
 /* make sure our mmap() is big enough */
-static int update_lock(struct db *db, struct txn *txn) 
+static int update_lock(struct dbengine *db, struct txn *txn) 
 {
     /* txn->logend is the current size of the file */
     assert (db->is_open && db->lock_status == WRITELOCKED);
@@ -619,7 +619,7 @@ static int update_lock(struct db *db, struct txn *txn)
     return 0;
 }
 
-static int write_lock(struct db *db, const char *altname)
+static int write_lock(struct dbengine *db, const char *altname)
 {
     struct stat sbuf;
     const char *lockfailaction;
@@ -650,7 +650,7 @@ static int write_lock(struct db *db, const char *altname)
     return 0;
 }
 
-static int read_lock(struct db *db)
+static int read_lock(struct dbengine *db)
 {
     struct stat sbuf, sbuffile;
     int newfd = -1;
@@ -706,7 +706,7 @@ static int read_lock(struct db *db)
     return 0;
 }
 
-static int unlock(struct db *db)
+static int unlock(struct dbengine *db)
 {
     if (db->lock_status == UNLOCKED) {
 	syslog(LOG_NOTICE, "skiplist: unlock while not locked");
@@ -722,7 +722,7 @@ static int unlock(struct db *db)
     return 0;
 }
 
-static int lock_or_refresh(struct db *db, struct txn **tidptr)
+static int lock_or_refresh(struct dbengine *db, struct txn **tidptr)
 {
     int r;
 
@@ -753,7 +753,7 @@ static int lock_or_refresh(struct db *db, struct txn **tidptr)
     return 0;
 }
 
-static int dispose_db(struct db *db)
+static int dispose_db(struct dbengine *db)
 {
     if (!db) return 0;
 
@@ -798,9 +798,9 @@ static int compare_signed(const char *s1, int l1, const char *s2, int l2)
     }
 }
 
-static int myopen(const char *fname, int flags, struct db **ret)
+static int myopen(const char *fname, int flags, struct dbengine **ret)
 {
-    struct db *db;
+    struct dbengine *db;
     struct db_list *list_ent = open_db;
     int r;
 
@@ -816,7 +816,7 @@ static int myopen(const char *fname, int flags, struct db **ret)
 	return 0;
     }
 
-    db = (struct db *) xzmalloc(sizeof(struct db));
+    db = (struct dbengine *) xzmalloc(sizeof(struct dbengine));
     db->fd = -1;
     db->fname = xstrdup(fname);
     db->compar = (flags & CYRUSDB_MBOXSORT) ? bsearch_ncompare_mbox : compare_signed;
@@ -941,7 +941,7 @@ static int myopen(const char *fname, int flags, struct db **ret)
     return 0;
 }
 
-static int myclose(struct db *db)
+static int myclose(struct dbengine *db)
 {
     struct db_list *list_ent = open_db;
     struct db_list *prev = NULL;
@@ -965,7 +965,7 @@ static int myclose(struct db *db)
 /* returns the offset to the node asked for, or the node after it
    if it doesn't exist.
    if previous is set, finds the last node < key */
-static const char *find_node(struct db *db, 
+static const char *find_node(struct dbengine *db, 
 			     const char *key, size_t keylen,
 			     unsigned *updateoffsets)
 {
@@ -994,7 +994,7 @@ static const char *find_node(struct db *db,
     return ptr;
 }
 
-static int myfetch(struct db *db,
+static int myfetch(struct dbengine *db,
 		   const char *key, size_t keylen,
 		   const char **data, size_t *datalen,
 		   struct txn **tidptr)
@@ -1049,14 +1049,14 @@ static int myfetch(struct db *db,
     return r;
 }
 
-static int fetch(struct db *mydb,
+static int fetch(struct dbengine *mydb,
 		 const char *key, size_t keylen,
 		 const char **data, size_t *datalen,
 		 struct txn **tidptr)
 {
     return myfetch(mydb, key, keylen, data, datalen, tidptr);
 }
-static int fetchlock(struct db *db,
+static int fetchlock(struct dbengine *db,
 		     const char *key, size_t keylen,
 		     const char **data, size_t *datalen,
 		     struct txn **tidptr)
@@ -1067,7 +1067,7 @@ static int fetchlock(struct db *db,
 /* foreach allows for subsidary mailbox operations in 'cb'.
    if there is a txn, 'cb' must make use of it.
 */
-static int myforeach(struct db *db,
+static int myforeach(struct dbengine *db,
 		     const char *prefix, size_t prefixlen,
 		     foreach_p *goodp,
 		     foreach_cb *cb, void *rock,
@@ -1185,7 +1185,7 @@ static int myforeach(struct db *db,
     return r ? r : cb_r;
 }
 
-static unsigned int randlvl(struct db *db)
+static unsigned int randlvl(struct dbengine *db)
 {
     unsigned int lvl = 1;
     
@@ -1198,7 +1198,7 @@ static unsigned int randlvl(struct db *db)
     return lvl;
 }
 
-static int mystore(struct db *db, 
+static int mystore(struct dbengine *db, 
 		   const char *key, size_t keylen,
 		   const char *data, size_t datalen,
 		   struct txn **tidptr, int overwrite)
@@ -1353,7 +1353,7 @@ static int mystore(struct db *db,
     return 0;
 }
 
-static int create(struct db *db, 
+static int create(struct dbengine *db, 
 		  const char *key, size_t keylen,
 		  const char *data, size_t datalen,
 		  struct txn **tid)
@@ -1361,7 +1361,7 @@ static int create(struct db *db,
     return mystore(db, key, keylen, data, datalen, tid, 0);
 }
 
-static int store(struct db *db, 
+static int store(struct dbengine *db, 
 		 const char *key, size_t keylen,
 		 const char *data, size_t datalen,
 		 struct txn **tid)
@@ -1369,7 +1369,7 @@ static int store(struct db *db,
     return mystore(db, key, keylen, data, datalen, tid, 1);
 }
 
-static int mydelete(struct db *db, 
+static int mydelete(struct dbengine *db, 
 		    const char *key, size_t keylen,
 		    struct txn **tidptr, int force __attribute__((unused)))
 {
@@ -1448,7 +1448,7 @@ static int mydelete(struct db *db,
     return 0;
 }
 
-static int mycommit(struct db *db, struct txn *tid)
+static int mycommit(struct dbengine *db, struct txn *tid)
 {
     uint32_t commitrectype = htonl(COMMIT);
     int r = 0;
@@ -1532,7 +1532,7 @@ static int mycommit(struct db *db, struct txn *tid)
     return r;
 }
 
-static int myabort(struct db *db, struct txn *tid)
+static int myabort(struct dbengine *db, struct txn *tid)
 {
     const char *ptr;
     unsigned updateoffsets[SKIPLIST_MAXLEVEL+1];
@@ -1637,7 +1637,7 @@ static int myabort(struct db *db, struct txn *tid)
 
 /* compress 'db'. if 'locked != 0', the database is already R/W locked and
    will be returned as such. */
-static int mycheckpoint(struct db *db, int locked)
+static int mycheckpoint(struct dbengine *db, int locked)
 {
     char fname[1024];
     int oldfd;
@@ -1871,7 +1871,7 @@ static int mycheckpoint(struct db *db, int locked)
    if detail == 2, also dump pointers for active records.
    if detail == 3, dump all records/all pointers.
 */
-static int dump(struct db *db, int detail __attribute__((unused)))
+static int dump(struct dbengine *db, int detail __attribute__((unused)))
 {
     const char *ptr, *end;
     unsigned i;
@@ -1929,13 +1929,13 @@ static int dump(struct db *db, int detail __attribute__((unused)))
     return 0;
 }
 
-static int consistent(struct db *db)
+static int consistent(struct dbengine *db)
 {
     return myconsistent(db, NULL, 0);
 }
 
 /* perform some basic consistency checks */
-static int myconsistent(struct db *db, struct txn *tid, int locked)
+static int myconsistent(struct dbengine *db, struct txn *tid, int locked)
 {
     const char *ptr;
     uint32_t offset;
@@ -1992,7 +1992,7 @@ static int myconsistent(struct db *db, struct txn *tid, int locked)
 }
 
 /* run recovery on this file */
-static int recovery(struct db *db, int flags)
+static int recovery(struct dbengine *db, int flags)
 {
     const char *ptr, *keyptr;
     unsigned updateoffsets[SKIPLIST_MAXLEVEL+1];

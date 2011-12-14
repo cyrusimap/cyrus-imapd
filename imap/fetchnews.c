@@ -99,7 +99,7 @@ int newsrc_init(const char *fname, int myflags __attribute__((unused)))
 	    fname = tofree;
 	}
 
-	r = (DB->open)(fname, CYRUSDB_CREATE, &newsrc_db);
+	r = cyrusdb_open(DB, fname, CYRUSDB_CREATE, &newsrc_db);
 	if (r != 0)
 	    syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
 		   cyrusdb_strerror(r));
@@ -117,7 +117,7 @@ int newsrc_done(void)
     int r = 0;
 
     if (newsrc_dbopen) {
-	r = (DB->close)(newsrc_db);
+	r = cyrusdb_close(newsrc_db);
 	if (r) {
 	    syslog(LOG_ERR, "DBERROR: error closing fetchnews.db: %s",
 		   cyrusdb_strerror(r));
@@ -523,7 +523,7 @@ int main(int argc, char *argv[])
 	    sscanf(resp.data[i], "%s %lu %lu", group, &high, &low);
 
 	    last = 0;
-	    if (!DB->fetchlock(newsrc_db, group, strlen(group),
+	    if (!cyrusdb_fetchlock(newsrc_db, group, strlen(group),
 			       &data, &datalen, &tid)) {
 		last = strtoul(data, NULL, 10);
 	    }
@@ -572,11 +572,11 @@ int main(int argc, char *argv[])
 	    }
 
 	    snprintf(lastbuf, sizeof(lastbuf), "%lu", cur);
-	    DB->store(newsrc_db, group, strlen(group),
+	    cyrusdb_store(newsrc_db, group, strlen(group),
 		      lastbuf, strlen(lastbuf)+1, &tid);
 	}
 
-	if (tid) DB->commit(newsrc_db, tid);
+	if (tid) cyrusdb_commit(newsrc_db, tid);
 	newsrc_done();
     }
 

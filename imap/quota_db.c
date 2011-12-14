@@ -182,9 +182,9 @@ int quota_read(struct quota *quota, struct txn **tid, int wrlock)
 	return IMAP_QUOTAROOT_NONEXISTENT;
 
     if (wrlock)
-	r = QDB->fetchlock(qdb, quota->root, qrlen, &data, &datalen, tid);
+	r = cyrusdb_fetchlock(qdb, quota->root, qrlen, &data, &datalen, tid);
     else
-	r = QDB->fetch(qdb, quota->root, qrlen, &data, &datalen, tid);
+	r = cyrusdb_fetch(qdb, quota->root, qrlen, &data, &datalen, tid);
 
     if (!datalen) /* zero byte file can cause no data to be mapped */
 	return IMAP_QUOTAROOT_NONEXISTENT;
@@ -290,7 +290,7 @@ int quota_foreach(const char *prefix, quotaproc_t *proc,
     foreach_d.proc = proc;
     foreach_d.rock = rock;
 
-    r = QDB->foreach(qdb, search, strlen(search), NULL,
+    r = cyrusdb_foreach(qdb, search, strlen(search), NULL,
 		     do_onequota, &foreach_d, tid);
 
     return r;
@@ -302,7 +302,7 @@ int quota_foreach(const char *prefix, quotaproc_t *proc,
 void quota_commit(struct txn **tid)
 {
     if (tid && *tid) {
-	if (QDB->commit(qdb, *tid)) {
+	if (cyrusdb_commit(qdb, *tid)) {
 	    syslog(LOG_ERR, "IOERROR: committing quota: %m");
 	}
 	*tid = NULL;
@@ -315,7 +315,7 @@ void quota_commit(struct txn **tid)
 void quota_abort(struct txn **tid)
 {
     if (tid && *tid) {
-	if (QDB->abort(qdb, *tid)) {
+	if (cyrusdb_abort(qdb, *tid)) {
 	    syslog(LOG_ERR, "IOERROR: aborting quota: %m");
 	}
 	*tid = NULL;
@@ -348,7 +348,7 @@ int quota_write(struct quota *quota, struct txn **tid)
 		       quota->usedBs[res]);
     }
 
-    r = QDB->store(qdb, quota->root, qrlen, buf_cstring(&buf), buf.len, tid);
+    r = cyrusdb_store(qdb, quota->root, qrlen, buf_cstring(&buf), buf.len, tid);
 
     switch (r) {
     case CYRUSDB_OK:
@@ -461,7 +461,7 @@ int quota_deleteroot(const char *quotaroot)
     if (!quotaroot || !*quotaroot)
 	return IMAP_QUOTAROOT_NONEXISTENT;
 
-    r = QDB->delete(qdb, quotaroot, strlen(quotaroot), NULL, 0);
+    r = cyrusdb_delete(qdb, quotaroot, strlen(quotaroot), NULL, 0);
 
     switch (r) {
     case CYRUSDB_OK:
@@ -494,7 +494,7 @@ int quota_findroot(char *ret, size_t retlen, const char *name)
     mbox = (config_virtdomains && (p = strchr(ret, '!'))) ? p+1 : ret;
     tail = mbox + strlen(mbox);
 
-    while (QDB->fetch(qdb, ret, strlen(ret), NULL, NULL, NULL)) {
+    while (cyrusdb_fetch(qdb, ret, strlen(ret), NULL, NULL, NULL)) {
 	tail = strrchr(mbox, '.');
 	if (!tail) break;
 	*tail = '\0';
@@ -504,7 +504,7 @@ int quota_findroot(char *ret, size_t retlen, const char *name)
 
     /* check for a domain quota */
     *mbox = '\0';
-    return (QDB->fetch(qdb, ret, strlen(ret), NULL, NULL, NULL) == 0);
+    return (cyrusdb_fetch(qdb, ret, strlen(ret), NULL, NULL, NULL) == 0);
 }
 
 /* must be called after cyrus_init */
@@ -533,7 +533,7 @@ void quotadb_open(const char *fname)
     if (config_getswitch(IMAPOPT_IMPROVED_MBOXLIST_SORT))
 	flags |= CYRUSDB_MBOXSORT;
 
-    ret = (QDB->open)(fname, flags, &qdb);
+    ret = cyrusdb_open(QDB, fname, flags, &qdb);
     if (ret != 0) {
 	syslog(LOG_ERR, "DBERROR: opening %s: %s", fname,
 	       cyrusdb_strerror(ret));
@@ -552,7 +552,7 @@ void quotadb_close(void)
     int r;
 
     if (quota_dbopen) {
-	r = (QDB->close)(qdb);
+	r = cyrusdb_close(qdb);
 	if (r) {
 	    syslog(LOG_ERR, "DBERROR: error closing quotas: %s",
 		   cyrusdb_strerror(r));

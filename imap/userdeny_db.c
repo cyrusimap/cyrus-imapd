@@ -83,7 +83,7 @@ int userdeny(const char *user, const char *service, char *msgbuf, size_t bufsiz)
     /* fetch entry for user */
     syslog(LOG_DEBUG, "fetching user_deny.db entry for '%s'", user);
     do {
-	r = DENYDB->fetch(denydb, user, strlen(user), &data, &datalen, NULL);
+	r = cyrusdb_fetch(denydb, user, strlen(user), &data, &datalen, NULL);
     } while (r == CYRUSDB_AGAIN);
 
     /* XXX  Should we try to reopen the DB if we get IOERROR?
@@ -183,7 +183,7 @@ void denydb_open(const char *fname)
 	fname = tofree;
     }
 
-    ret = (DENYDB->open)(fname, 0, &denydb);
+    ret = cyrusdb_open(DENYDB, fname, 0, &denydb);
     if (ret == CYRUSDB_OK) {
 	deny_dbopen = 1;
     } else if (errno != ENOENT) {
@@ -200,7 +200,7 @@ void denydb_close(void)
     int r;
 
     if (deny_dbopen) {
-	r = (DENYDB->close)(denydb);
+	r = cyrusdb_close(denydb);
 	if (r) {
 	    syslog(LOG_ERR, "DENYDB_ERROR: error closing: %s",
 		   cyrusdb_strerror(r));

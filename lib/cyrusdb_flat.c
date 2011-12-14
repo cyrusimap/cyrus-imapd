@@ -71,9 +71,9 @@
 
 /* we have the file locked iff we have an outstanding transaction */
 
-struct db {
+struct dbengine {
     char *fname;
-    struct db *next;
+    struct dbengine *next;
     int refcount;
 
     int fd;			/* current file open */
@@ -93,7 +93,7 @@ struct txn {
     int fd;
 };
 
-static struct db *alldbs;
+static struct dbengine *alldbs;
 
 /*
  * We choose an escape character which is an invalid UTF-8 encoding and
@@ -166,7 +166,7 @@ static void decode(const char *ps, int len, struct buf *buf)
 }
 
 /* other routines call this one when they fail */
-static int abort_txn(struct db *db, struct txn *tid)
+static int abort_txn(struct dbengine *db, struct txn *tid)
 {
     int r = CYRUSDB_OK;
     int rw = 0;
@@ -207,7 +207,7 @@ static int abort_txn(struct db *db, struct txn *tid)
     return 0;
 }
 
-static void free_db(struct db *db)
+static void free_db(struct dbengine *db)
 {
     if (db) {
 	free(db->fname);
@@ -216,9 +216,9 @@ static void free_db(struct db *db)
     }
 }
 
-static struct db *find_db(const char *fname)
+static struct dbengine *find_db(const char *fname)
 {
-    struct db *db;
+    struct dbengine *db;
 
     for (db = alldbs ; db ; db = db->next) {
 	if (!strcmp(fname, db->fname)) {
@@ -279,9 +279,9 @@ static int myarchive(const char **fnames, const char *dirname)
     return 0;
 }
 
-static int myopen(const char *fname, int flags, struct db **ret)
+static int myopen(const char *fname, int flags, struct dbengine **ret)
 {
-    struct db *db;
+    struct dbengine *db;
     struct stat sbuf;
 
     assert(fname && ret);
@@ -290,7 +290,7 @@ static int myopen(const char *fname, int flags, struct db **ret)
     if (db)
 	goto out;   /* new reference to existing db */
 
-    db = (struct db *) xzmalloc(sizeof(struct db));
+    db = (struct dbengine *) xzmalloc(sizeof(struct dbengine));
 
     db->fd = open(fname, O_RDWR, 0644);
     if (db->fd == -1 && errno == ENOENT) {
@@ -331,9 +331,9 @@ out:
     return 0;
 }
 
-static int myclose(struct db *db)
+static int myclose(struct dbengine *db)
 {
-    struct db **prevp;
+    struct dbengine **prevp;
 
     assert(db);
     if (--db->refcount > 0)
@@ -356,7 +356,7 @@ static int myclose(struct db *db)
     return 0;
 }
 
-static int starttxn_or_refetch(struct db *db, struct txn **mytid)
+static int starttxn_or_refetch(struct dbengine *db, struct txn **mytid)
 {
     int r = 0;
     struct stat sbuf;
@@ -421,7 +421,7 @@ static int starttxn_or_refetch(struct db *db, struct txn **mytid)
     return 0;
 }
 
-static int myfetch(struct db *db, 
+static int myfetch(struct dbengine *db, 
 		   const char *key, size_t keylen,
 		   const char **data, size_t *datalen,
 		   struct txn **mytid)
@@ -460,7 +460,7 @@ static int myfetch(struct db *db,
     return r;
 }
 
-static int fetch(struct db *mydb, 
+static int fetch(struct dbengine *mydb, 
 		 const char *key, size_t keylen,
 		 const char **data, size_t *datalen,
 		 struct txn **mytid)
@@ -468,7 +468,7 @@ static int fetch(struct db *mydb,
     return myfetch(mydb, key, keylen, data, datalen, mytid);
 }
 
-static int fetchlock(struct db *db, 
+static int fetchlock(struct dbengine *db, 
 		     const char *key, size_t keylen,
 		     const char **data, size_t *datalen,
 		     struct txn **mytid)
@@ -476,7 +476,7 @@ static int fetchlock(struct db *db,
     return myfetch(db, key, keylen, data, datalen, mytid);
 }
 
-static int getentry(struct db *db, const char *p,
+static int getentry(struct dbengine *db, const char *p,
 		    struct buf *keybuf, const char **dataendp)
 {
     const char *key;
@@ -511,7 +511,7 @@ static int getentry(struct db *db, const char *p,
     r = getentry(db, p, &keybuf, &dataend);	\
     if (r) break;
 
-static int foreach(struct db *db,
+static int foreach(struct dbengine *db,
 		   const char *prefix, size_t prefixlen,
 		   foreach_p *goodp,
 		   foreach_cb *cb, void *rock, 
@@ -635,7 +635,7 @@ static int foreach(struct db *db,
 
 #undef GETENTRY
 
-static int mystore(struct db *db, 
+static int mystore(struct dbengine *db, 
 		   const char *key, size_t keylen,
 		   const char *data, size_t datalen,
 		   struct txn **mytid, int overwrite)
@@ -783,7 +783,7 @@ static int mystore(struct db *db,
     return r;
 }
 
-static int create(struct db *db, 
+static int create(struct dbengine *db, 
 		  const char *key, size_t keylen,
 		  const char *data, size_t datalen,
 		  struct txn **tid)
@@ -795,7 +795,7 @@ static int create(struct db *db,
     return mystore(db, key, keylen, data, datalen, tid, 0);
 }
 
-static int store(struct db *db, 
+static int store(struct dbengine *db, 
 		 const char *key, size_t keylen,
 		 const char *data, size_t datalen,
 		 struct txn **tid)
@@ -807,14 +807,14 @@ static int store(struct db *db,
     return mystore(db, key, keylen, data, datalen, tid, 1);
 }
 
-static int delete(struct db *db, 
+static int delete(struct dbengine *db, 
 		  const char *key, size_t keylen,
 		  struct txn **mytid, int force __attribute__((unused)))
 {
     return mystore(db, key, keylen, NULL, 0, mytid, 1);
 }
 
-static int commit_txn(struct db *db, struct txn *tid)
+static int commit_txn(struct dbengine *db, struct txn *tid)
 {
     int writefd;
     int r = 0;

@@ -614,7 +614,7 @@ static int _annotate_getdb(const char *mboxname,
     syslog(LOG_ERR, "Opening annotations db %s\n", fname);
 #endif
 
-    r = DB->open(fname, dbflags, &db);
+    r = cyrusdb_open(DB, fname, dbflags, &db);
     if (r != 0) {
 	if (!(dbflags & CYRUSDB_CREATE) && r == CYRUSDB_NOTFOUND)
 	    goto error;
@@ -665,7 +665,7 @@ static void annotate_closedb(annotate_db_t *d)
     syslog(LOG_ERR, "Closing annotations db %s\n", d->filename);
 #endif
 
-    r = DB->close(d->db);
+    r = cyrusdb_close(d->db);
     if (r)
 	syslog(LOG_ERR, "DBERROR: error closing annotations %s: %s",
 	       d->filename, cyrusdb_strerror(r));
@@ -743,7 +743,7 @@ void annotatemore_abort(void)
 #if DEBUG
 	    syslog(LOG_ERR, "Aborting annotations db %s\n", d->filename);
 #endif
-	    DB->abort(d->db, d->txn);
+	    cyrusdb_abort(d->db, d->txn);
 	}
 	d->txn = NULL;
     }
@@ -773,7 +773,7 @@ int annotatemore_commit(void)
 	syslog(LOG_ERR, "Committing annotations db %s\n", d->filename);
 #endif
 
-	r = DB->commit(d->db, d->txn);
+	r = cyrusdb_commit(d->db, d->txn);
 	d->txn = NULL;
 	if (r) {
 	    annotatemore_abort();
@@ -1032,7 +1032,7 @@ int annotatemore_findall(const char *mboxname,	/* internal */
     }
     keylen = p - key;
 
-    r = DB->foreach(frock.d->db, key, keylen, &find_p, &find_cb,
+    r = cyrusdb_foreach(frock.d->db, key, keylen, &find_p, &find_cb,
 		    &frock, tid(frock.d));
 
 out:
@@ -2324,7 +2324,7 @@ int annotatemore_msg_lookup(const char *mboxname, uint32_t uid, const char *entr
     keylen = make_key(mboxname, uid, entry, userid, key, sizeof(key));
 
     do {
-	r = DB->fetch(d->db, key, keylen, &data, &datalen, tid(d));
+	r = cyrusdb_fetch(d->db, key, keylen, &data, &datalen, tid(d));
     } while (r == CYRUSDB_AGAIN);
 
     if (!r && data) {
@@ -2352,7 +2352,7 @@ static int count_old_storage(annotate_db_t *d,
 
     *oldlenp = 0;
     do {
-	r = DB->fetch(d->db, key, keylen, &data, &datalen, tid(d));
+	r = cyrusdb_fetch(d->db, key, keylen, &data, &datalen, tid(d));
     } while (r == CYRUSDB_AGAIN);
 
     if (r == CYRUSDB_NOTFOUND) {
@@ -2418,7 +2418,7 @@ static int write_entry(const char *mboxname,
 #endif
 
 	do {
-	    r = DB->delete(d->db, key, keylen, tid(d), 0);
+	    r = cyrusdb_delete(d->db, key, keylen, tid(d), 0);
 	} while (r == CYRUSDB_AGAIN);
     }
     else {
@@ -2450,7 +2450,7 @@ static int write_entry(const char *mboxname,
 #endif
 
 	do {
-	    r = DB->store(d->db, key, keylen, data.s, data.len, tid(d));
+	    r = cyrusdb_store(d->db, key, keylen, data.s, data.len, tid(d));
 	} while (r == CYRUSDB_AGAIN);
 	buf_free(&data);
     }
@@ -3294,7 +3294,7 @@ static int reconstruct_prune_cb(void *rock, const char *key, size_t keylen,
 
     /* delete this entry */
     do {
-	r = DB->delete(ars->d->db, key, keylen, tid(ars->d), 0);
+	r = cyrusdb_delete(ars->d->db, key, keylen, tid(ars->d), 0);
     } while (r == CYRUSDB_AGAIN);
 
     return r;
@@ -3324,7 +3324,7 @@ int annotate_reconstruct_commit(annotate_reconstruct_state_t *ars)
     if (r)
 	goto out;
 
-    r = DB->foreach(ars->d->db, NULL, 0, NULL,
+    r = cyrusdb_foreach(ars->d->db, NULL, 0, NULL,
 		    reconstruct_prune_cb, ars, tid(ars->d));
 
     if (r)
