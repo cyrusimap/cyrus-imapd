@@ -51,6 +51,9 @@
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 
+#define SCHED_INBOX	"Inbox/"
+#define SCHED_OUTBOX	"Outbox/"
+
 
 /* Ensure that we have a given namespace.  If it doesn't exist in what we
  * parsed in the request, create it and attach to 'node'.
@@ -384,6 +387,14 @@ static int propfind_restype(const xmlChar *propname, xmlNsPtr ns,
 	    if (fctx->mailbox) {
 		ensure_ns(fctx->ns, NS_CAL, resp->parent, XML_NS_CAL, "C");
 		xmlNewChild(node, fctx->ns[NS_CAL], BAD_CAST "calendar", NULL);
+		if (!strcmp(fctx->req_tgt->collection, SCHED_INBOX)) {
+		    xmlNewChild(node, fctx->ns[NS_CAL],
+				BAD_CAST "schedule-inbox", NULL);
+		}
+		else if (!strcmp(fctx->req_tgt->collection, SCHED_INBOX)) {
+		    xmlNewChild(node, fctx->ns[NS_CAL],
+				BAD_CAST "schedule-outbox", NULL);
+		}
 	    }
 	    break;
 
@@ -986,23 +997,27 @@ static int propfind_caldata(const xmlChar *propname, xmlNsPtr ns,
 }
 
 
-/* Callback to fetch CALDAV:calendar-home-set */
-static int propfind_calhomeset(const xmlChar *propname, xmlNsPtr ns,
-			       struct propfind_ctx *fctx,
-			       xmlNodePtr resp,
-			       xmlNodePtr *propstat,
-			       void *rock __attribute__((unused)))
+/* Callback to fetch CALDAV:calendar-home-set,
+ * CALDAV:schedule-inbox-URL, and CALDAV:schedule-outbox-URL
+ */
+static int propfind_calurl(const xmlChar *propname, xmlNsPtr ns,
+				struct propfind_ctx *fctx,
+				xmlNodePtr resp,
+				xmlNodePtr *propstat,
+				void *rock)
 {
     xmlNodePtr node;
     char uri[MAX_MAILBOX_PATH+1];
+    const char *cal = (const char *) rock;
 
     if (fctx->userid) {
 	node = xml_add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK],
 			    ns, BAD_CAST propname, NULL, NULL, NULL);
 
-	snprintf(uri, sizeof(uri), "/calendars/user/%s/", fctx->userid);
+	snprintf(uri, sizeof(uri), "/calendars/user/%s/%s", fctx->userid,
+		 cal ? cal : "");
 
-	xmlNewChild(node, NULL, BAD_CAST "href", BAD_CAST uri);
+	xmlNewChild(node, fctx->ns[NS_DAV], BAD_CAST "href", BAD_CAST uri);
     }
     else {
 	xml_add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND],
@@ -1185,7 +1200,7 @@ static const struct prop_entry prop_entries[] =
     /* CalDAV (RFC 4791) properties */
     { "calendar-data", NS_CAL, 0, propfind_caldata, NULL, NULL },
     { "calendar-description", NS_CAL, 0, propfind_fromdb, proppatch_todb, "CALDAV" },
-    { "calendar-home-set", NS_CAL, 0, propfind_calhomeset, NULL, NULL },
+    { "calendar-home-set", NS_CAL, 0, propfind_calurl, NULL, NULL },
     { "calendar-timezone", NS_CAL, 0, propfind_fromdb, proppatch_todb, "CALDAV" },
     { "supported-calendar-component-set", NS_CAL, 0, NULL, NULL, NULL },
     { "supported-calendar-data", NS_CAL, 0, NULL, NULL, NULL },
@@ -1196,8 +1211,8 @@ static const struct prop_entry prop_entries[] =
     { "max-attendees-per-instance", NS_CAL, 0, NULL, NULL, NULL },
 
     /* CalDAV Scheduling properties */
-    { "schedule-inbox-URL", NS_CAL, 0, NULL, NULL, NULL },
-    { "schedule-outbox-URL", NS_CAL, 0, NULL, NULL, NULL },
+    { "schedule-inbox-URL", NS_CAL, 0, propfind_calurl, NULL, SCHED_INBOX },
+    { "schedule-outbox-URL", NS_CAL, 0, propfind_calurl, NULL, SCHED_OUTBOX },
     { "calendar-user-address-set", NS_CAL, 0, NULL, NULL, NULL },
     { "calendar-user-type", NS_CAL, 0, NULL, NULL, NULL },
 
