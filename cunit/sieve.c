@@ -7,14 +7,14 @@
  */
 #include "cunit/cunit.h"
 #include <malloc.h>
-#include "sieve_interface.h"
-#include "bytecode.h"
+#include "sieve/bytecode.h"
+#include "sieve/comparator.h"
+#include "sieve/message.h"
+#include "sieve/sieve_interface.h"
 #include "prot.h"
 #include "retry.h"
-#include "comparator.h"
 #include "spool.h"
 #include "map.h"
-#include "message.h"
 #include "cyrusdb.h"
 #include "libcyr_cfg.h"
 #include "libconfig.h"

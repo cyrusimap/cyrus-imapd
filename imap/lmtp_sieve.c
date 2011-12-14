@@ -70,7 +70,7 @@
 #include "notify.h"
 #include "prot.h"
 #include "times.h"
-#include "sieve_interface.h"
+#include "sieve/sieve_interface.h"
 #include "smtpclient.h"
 #include "util.h"
 #include "version.h"

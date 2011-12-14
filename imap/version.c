@@ -67,7 +67,7 @@
 #include "idle.h"
 
 #ifdef USE_SIEVE
-#include "sieve_interface.h"
+#include "sieve/sieve_interface.h"
 #endif
 
 static char id_resp_command[MAXIDVALUELEN];

@@ -405,8 +405,6 @@ if test "$sievedir" != "no"; then
 	AC_SUBST(SIEVE_OBJS)
 	SIEVE_LIBS="../${sievedir}/libsieve.a"
 	AC_SUBST(SIEVE_LIBS)
-	SIEVE_CPPFLAGS="-I\$(srcdir)/../$sievedir"
-	AC_SUBST(SIEVE_CPPFLAGS)
 	SIEVE_TESTSOURCES="sieve.c"
 	AC_SUBST(SIEVE_TESTSOURCES)
 	AC_DEFINE(USE_SIEVE,[],[Build in Sieve support?])
