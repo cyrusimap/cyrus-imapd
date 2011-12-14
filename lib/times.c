@@ -468,7 +468,7 @@ int time_to_rfc3501(time_t date, char *buf, size_t len)
     long gmtoff = gmtoff_of(tm, date);
     int gmtnegative = 0;
 
-    assert(date > 0);
+    /*assert(date > 0); - it turns out these can happen, annoyingly enough */
     assert(tm->tm_year >= 69);
 
     if (gmtoff < 0) {
