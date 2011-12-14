@@ -2147,6 +2147,13 @@ static int recovery1(struct dbengine *db, int *count)
     if (db_is_clean(db))
 	return 0;
 
+    /* dirty the header if not already dirty */
+    if (!(db->header.flags & DIRTY)) {
+	db->header.flags |= DIRTY;
+	r = commit_header(db);
+	if (r) return r;
+    }
+
     /* start with the dummy */
     nextoffset = HEADER_SIZE;
 
