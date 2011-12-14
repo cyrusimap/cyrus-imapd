@@ -1473,7 +1473,8 @@ void response_header(long code, struct transaction_t *txn)
 		prot_printf(httpd_out, ", access-control, extended-mkcol");
 	    }
 	    if (txn->req_tgt.allow & ALLOW_CAL) {
-		prot_printf(httpd_out, ", calendar-access"); /* cal-schedule  */
+		prot_printf(httpd_out, ", calendar-access");
+		/* calendar-auto-schedule  */
 	    }
 #if 0
 	    if (txn->req_tgt.allow & ALLOW_CARD) {
