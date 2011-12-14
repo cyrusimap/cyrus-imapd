@@ -96,8 +96,48 @@ int cyrusdb_open(struct cyrusdb_backend *backend, const char *fname,
     if (!backend) backend = DEFAULT_BACKEND; /* not used yet, later */
     db->backend = backend;
 
+    /* This whole thing is a fricking critical section.  We don't have the API
+     * in place for a safe rename of a locked database, so the choices are
+     * basically:
+     * a) convert each DB layer to support locked database renames while still
+     *    in the transaction.  Best, but lots of work.
+     * b) rename and hope... unreliable
+     * c) global lock around this block of code.  Safest and least efficient.
+     */
+
     /* check if it opens normally.  Horray */
     r = (db->backend->open)(fname, flags, &db->engine);
+    if (r == CYRUSDB_NOTFOUND) goto done; /* no open flags */
+    if (!r) goto done;
+
+    /* magic time - we need to work out if the file was created by a different
+     * backend and convert if possible */
+
+    realname = cyrusdb_detect(fname);
+    if (!realname) {
+	syslog(LOG_ERR, "DBERROR: failed to detect DB type for %s (backend %s) (r was %d)",
+	       fname, backend->name, r);
+	/* r is still set */
+	goto done;
+    }
+
+    /* different type */
+    if (strcmp(realname, backend->name)) {
+	struct cyrusdb_backend *realbe = cyrusdb_fromname(realname);
+	r = cyrusdb_convert(fname, fname, realbe, backend);
+	if (r) {
+	    syslog(LOG_ERR, "DBERROR: failed to convert %s from %s to %s, maybe someone beat us",
+		   fname, realname, backend->name);
+	}
+	else {
+	    syslog(LOG_NOTICE, "cyrusdb: converted %s from %s to %s",
+		   fname, realname, backend->name);
+	}
+    }
+    
+    r = (db->backend->open)(fname, flags, &db->engine);
+
+done:
 
     if (r) free(db);
     else *ret = db;
