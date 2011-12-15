@@ -31,7 +31,8 @@ results reports are written to the current working directory.  Apart from
 reports, Cassandane does not require write permission to its source directory.
 
 Cassandane (or more precisely, the Cyrus code it exercises) needs to be run
-either as the superuser or as the "cyrus" user.
+either as the superuser or as the "cyrus" user.  If run as another user,
+it attempts to use 'sudo' to re-run itself as the "cyrus" user.
 
 The script 'testrunner.pl' is your interface for running Cassandane tests.
 There are several other Perl scripts in the directory, but they are utilities
@@ -130,29 +131,29 @@ The argument can be
 
  * a group of tests (which maps to a directory in Cassandane)
 
-    root@testbox# ./testrunner.pl Cassandane::Cyrus
+    me@testbox% ./testrunner.pl Cassandane::Cyrus
 
  * a test suite (which maps to a module in Cassandane)
 
-    root@testbox# ./testrunner.pl Cassandane::Cyrus::Quota
+    me@testbox% ./testrunner.pl Cassandane::Cyrus::Quota
 
  * a test suite without the leading Cassandane::Cyrus
 
-    root@testbox# ./testrunner.pl Quota
+    me@testbox% ./testrunner.pl Quota
 
  * a single test in a single test suite
 
-    root@testbox# ./testrunner.pl Quota.quotarename
+    me@testbox% ./testrunner.pl Quota.quotarename
 
 Arguments can be negated by using a leading exclamation mark (!)
 character, e.g.
 
-    root@testbox# ./testrunner.pl \!Quota
+    me@testbox% ./testrunner.pl \!Quota
 
 will run all the tests from all the suites except the Quota suite.
 Arguments accumulate from left to right, so e.g.
 
-    root@testbox# ./testrunner.pl Quota \!Quota.quotarename
+    me@testbox% ./testrunner.pl Quota \!Quota.quotarename
 
 will run all the tests in the Quota suite except the quoterename test.
 

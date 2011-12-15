@@ -39,90 +39,45 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
+package Cassandane::Util::Setup;
 use strict;
 use warnings;
-use Cassandane::Util::Setup;
+use base qw(Exporter);
+use POSIX;
+use User::pwent;
 use Cassandane::Util::Log;
-use Cassandane::Config;
-use Cassandane::Instance;
+use Data::Dumper;
 
-my $name;
-my $config = Cassandane::Config->default()->clone();
-my $start_flag = 0;
-my $re_use_dir = 1;
-my $valgrind = 0;
-my @services = ( 'imap' );
-$start_flag = 1 if $0 =~ m/start-instance/;
+our @EXPORT = qw(&become_cyrus);
 
-sub usage
+my $me = $0;
+my @saved_argv = @ARGV;
+
+sub become_cyrus
 {
-    if ($start_flag)
+    my $cyrus = 'cyrus';
+    my $pw = getpwnam($cyrus);
+    die "No user named '$cyrus'"
+	unless defined $pw;
+    my $uid = getuid();
+    if ($uid == $pw->uid)
     {
-	print STDERR "Usage: start-instance.pl [ -O config-option=value ... ] [name]\n";
+	xlog "already running as user $cyrus";
+    }
+    elsif ($uid == 0)
+    {
+	xlog "setuid from root to $cyrus";
+	setgid($pw->gid)
+	    or die "Cannot setgid to group $pw->gid: $!";
+	setuid($pw->uid)
+	    or die "Cannot setuid to group $pw->uid: $!";
     }
     else
     {
-	print STDERR "Usage: stop-instance.pl [name]\n";
-    }
-    exit(1);
-}
-
-while (my $a = shift)
-{
-    if ($a eq '-O' || $a eq '--option')
-    {
-	my $vv = shift || usage;
-	my ($name, $value) = ($vv =~ m/^([a-z][a-z0-9-]+)=(.*)$/);
-	usage() unless defined $value;
-	$config->set($name, $value);
-    }
-    elsif ($a eq '-v' || $a eq '--verbose')
-    {
-	set_verbose(1);
-    }
-    elsif ($a eq '--reset')
-    {
-	$re_use_dir = 0;
-    }
-    elsif ($a eq '--valgrind')
-    {
-	$valgrind = 1;
-    }
-    elsif ($a eq '--service')
-    {
-	my $vv = shift || usage;
-	push(@services, $vv);
-    }
-    elsif ($a =~ m/^-/)
-    {
-	printf STDERR "Unknown option $a\n";
-	usage();
-    }
-    else
-    {
-	usage() if defined $name;
-	$name = $a;
+	xlog "using sudo to re-run as user $cyrus";
+	my @cmd = ( qw(sudo -u), $cyrus, $me, @saved_argv );
+	exec(@cmd);
     }
 }
-$name = 'casscmd' unless defined $name;
 
-become_cyrus();
-
-my $instance = Cassandane::Instance->new(
-		name => $name,
-		config => $config,
-		re_use_dir => $re_use_dir,
-		valgrind => $valgrind,
-		persistent => 1,
-	       );
-$instance->add_services(@services);
-
-if ($start_flag)
-{
-    $instance->start();
-    $instance->describe();
-}
-else
-{
-    $instance->stop();
-}
+1;

@@ -41,6 +41,7 @@
 
 use strict;
 use warnings;
+use Cassandane::Util::Setup;
 use Cassandane::Unit::Runner;
 use Cassandane::Unit::TestPlan;
 use Cassandane::Util::Log;
@@ -81,6 +82,7 @@ eval
     $format = 'xml';
 } or print STDERR "Sorry, XML output format not available.\n";
 
+become_cyrus();
 
 sub usage
 {
