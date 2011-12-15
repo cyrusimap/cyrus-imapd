@@ -61,7 +61,6 @@ SHELL = /bin/sh
 
 prefix = @prefix@
 exec_prefix = @exec_prefix@
-cyrus_prefix = @cyrus_prefix@
 
 # Note that we use the *dynamic* sasl libraries
 SASL_LIB=@LIB_DYN_SASL@

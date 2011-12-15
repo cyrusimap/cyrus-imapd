@@ -76,7 +76,6 @@ MAKEDEPEND = @MAKEDEPEND@
 
 prefix = @prefix@
 exec_prefix = @exec_prefix@
-cyrus_prefix = @cyrus_prefix@
 servicedir = @servicedir@
 
 EXTRA_PROGS = # ptextract pttest

@@ -92,7 +92,6 @@ QUANTOPT=-windows=no -filename-prefix=/tmp/quant/%v.%p -write-summary-file= -log
 
 prefix = @prefix@
 exec_prefix = @exec_prefix@
-cyrus_prefix = @cyrus_prefix@
 servicedir = @servicedir@
 
 LOBJS= annotate.o append.o backend.o convert_code.o dlist.o duplicate.o \

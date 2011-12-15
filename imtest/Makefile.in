@@ -68,7 +68,6 @@ PUREOPT= -best-effort -windows=no -logfile=/tmp/pure/%v.%p.log -always_use_cache
 
 prefix = @prefix@
 exec_prefix = @exec_prefix@
-cyrus_prefix = @cyrus_prefix@
 
 all: imtest
 

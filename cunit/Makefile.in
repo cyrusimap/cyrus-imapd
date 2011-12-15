@@ -89,7 +89,6 @@ VALGRIND_yes = valgrind --tool=memcheck --leak-check=full --suppressions=vg.supp
 
 prefix = @prefix@
 exec_prefix = @exec_prefix@
-cyrus_prefix = @cyrus_prefix@
 servicedir = @servicedir@
 
 CUNIT = @top_srcdir@/cunit/cunit.pl --project @top_srcdir@/cunit

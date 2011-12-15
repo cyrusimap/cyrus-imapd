@@ -47,7 +47,6 @@ top_srcdir = @top_srcdir@
 VPATH = @srcdir@
 
 prefix = @prefix@
-cyrus_prefix = @cyrus_prefix@
 servicedir = @servicedir@
 
 CC = @CC@

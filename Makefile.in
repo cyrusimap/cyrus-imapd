@@ -55,7 +55,6 @@ SHELL = /bin/sh
 
 prefix = @prefix@
 exec_prefix = @exec_prefix@
-cyrus_prefix = @cyrus_prefix@
 
 mandir = @mandir@
 

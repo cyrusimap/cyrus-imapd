@@ -62,7 +62,6 @@ LDFLAGS = @LDFLAGS@ $(EXTRALDFLAGS)
 
 prefix = @prefix@
 exec_prefix = @exec_prefix@
-cyrus_prefix = @cyrus_prefix@
 servicedir = @servicedir@
 
 MAKEDEPEND = @MAKEDEPEND@
