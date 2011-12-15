@@ -5033,11 +5033,14 @@ void cmd_create(char *tag, char *name, struct dlist *extargs, int localonly)
 	if (!r && !config_partitiondir(partition)) {
 	    /* invalid partition, assume its a server (remote mailbox) */
 	    struct backend *s = NULL;
+	    char *p;
 	    int res;
  
 	    /* check for a remote partition */
 	    server = partition;
-	    if (guessedpart) partition = NULL;
+	    p = strchr(server, '!');
+	    if (p) *p++ = '\0';
+	    partition = guessedpart ? NULL : p;
 
 	    s = proxy_findserver(server, &imap_protocol,
 				 proxy_userid, &backend_cached,
@@ -5061,9 +5064,11 @@ void cmd_create(char *tag, char *name, struct dlist *extargs, int localonly)
 		/* ok, send the create to that server */
 		prot_printf(s->out, "%s CREATE ", tag);
 		prot_printastring(s->out, name);
-		prot_putc(' ', s->out);
 		/* Send partition as an atom, since its all we accept */
-		if (partition) prot_printastring(s->out, partition);
+		if (partition) {
+		    prot_putc(' ', s->out);
+		    prot_printastring(s->out, partition);
+		}
 		prot_printf(s->out, "\r\n");
 
 		res = pipe_until_tag(s, tag, 0);
