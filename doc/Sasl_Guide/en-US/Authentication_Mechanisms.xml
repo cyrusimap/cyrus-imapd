@@ -56,8 +56,8 @@
 
     </section>
 
-    <section id="sect-Cyrus_SASL_Guide-Authentication_Mechanisms-SCRAM">
-        <title>SCRAM</title>
+    <section id="sect-Cyrus_SASL_Guide-Authentication_Mechanisms-SCRAM_SHA_1">
+        <title>SCRAM-SHA-1</title>
         <para>
             para
         </para>

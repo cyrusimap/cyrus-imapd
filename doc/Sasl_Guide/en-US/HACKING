@@ -1,0 +1,11 @@
+Terms:
+
+userid
+password
+service
+realm
+
+For ldap authentication, use:
+'simple' to refer to non-sasl, and non-anonymous authentication binds
+'SASL' for sasl binds
+'anonymous' for anonymous binds

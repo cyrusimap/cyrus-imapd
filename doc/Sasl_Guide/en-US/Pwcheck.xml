@@ -16,8 +16,8 @@
 
     </section>
 
-    <section id="sect-Cyrus_SASL_Guide-Pwcheck-Auxprop_hash">
-        <title>Auxprop-hash</title>
+    <section id="sect-Cyrus_SASL_Guide-Pwcheck-Auxprop_hashed">
+        <title>Auxprop-hashed</title>
         <para>
             para
         </para>
@@ -27,7 +27,526 @@
     <section id="sect-Cyrus_SASL_Guide-Pwcheck-Saslauthd">
         <title>Saslauthd</title>
         <para>
-            para
+            <!--    What is saslauthd?    --> saslauthd is a daemon which validates
+        </para>
+        <para>
+            <variablelist>
+                <varlistentry>
+                    <term><option>ldap_servers</option> &mdash; <parameter class="option">ldap://localhost</parameter></term>
+                    <listitem>
+                        <para>
+                            Specify a space separated list of LDAP server URIs of the form <option>ldap[si]://[name[:port]]</option>. See the <citerefentry><refentrytitle>ldap.conf</refentrytitle>
+                            <manvolnum>5</manvolnum></citerefentry> <option>URI</option> option for formating details.
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_bind_dn</option> &mdash; <parameter class="option">none</parameter></term>
+                    <listitem>
+                        <para>
+                            When simple authentication is desired, specify a distinguished name to use for a simple authenticated bind or a simple unauthenticated bind. Do not specify if an anonymous bind is desired. This option is ignored when the evaluated <option>ldap_auth_method</option> is <parameter class="option">fastbind</parameter>.
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_bind_pw</option> &mdash; <parameter class="option">none</parameter></term>
+                    <listitem>
+                        <para>
+                            <option>ldap_bind_pw</option> is an alias for <option>ldap_password</option>.
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_password</option> &mdash; <parameter class="option">none</parameter></term>
+                    <listitem>
+                        <para>
+                            When simple authentication is desired, specify a password to perform an authenticated bind, or do not specify for an unauthenticated or anonymous bind. When SASL authentication is desired, specify a password to use where required by the underlying SASL mechanism. This option is ignored when the evaluated <option>ldap_auth_method</option> is <parameter class="option">fastbind</parameter>.
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_version</option> &mdash; <parameter class="option">3</parameter></term>
+                    <listitem>
+                        <para>
+                            Defaults to version <parameter class="option">3</parameter>. If <option>ldap_use_sasl</option> or <option>ldap_start_tls</option> are enabled, this option will be ignored, and will conform to the default value. Version <parameter class="option">3</parameter> <emphasis>is</emphasis> compatible with anonymous binds, simple authenticated binds and simple unauthenticated binds. Version <parameter class="option">2</parameter> should only be necessary where required by the server.
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_search_base</option> &mdash; <parameter class="option">none</parameter></term>
+                    <listitem>
+                        <para>
+                            When <option>ldap_auth_method</option> is evaluated as <parameter class="option">bind</parameter>, <option>ldap_search_base</option> will be used to search for the user's distinguished name. When <option>ldap_auth_method</option> is <parameter class="option">custom</parameter>, <option>ldap_search_base</option> will be used to find the user's <option>ldap_password_attr</option> attribute. When <option>ldap_auth_method</option> is evaluated as <parameter class="option">fastbind</parameter>, <option>ldap_search_base</option> is ignored. If <option>ldap_search_base</option> contains substitution tokens, they will be replaced as specified in the <option>ldap_filter</option> token expansion rules.
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_filter</option> &mdash; <parameter class="option">uid=%u</parameter></term>
+                    <listitem>
+                        <para>
+                            When <option>ldap_auth_method</option> is evaluated as <parameter class="option">bind</parameter>, <option>ldap_filter</option> will be used to search for the user's distinguished name. When <option>ldap_auth_method</option> is <parameter class="option">custom</parameter>, <option>ldap_filter</option> will become, after token expansion, the user's distinguished name. When <option>ldap_auth_method</option> is evaluated as <parameter class="option">fastbind</parameter>, <option>ldap_filter</option> is ignored.
+                        </para>
+                        <para>
+                            The following tokens, when contained within the <option>ldap_filter</option> option, will be substituted with the specified values:
+                        </para>
+                        <variablelist>
+                            <varlistentry>
+                                <term><option>%%</option></term>
+                                <listitem>
+                                    <para>
+                                        is replaced with a literal <literal>%</literal>.
+                                    </para>
+
+                                </listitem>
+
+                            </varlistentry>
+                            <varlistentry>
+                                <term><option>%u</option></term>
+                                <listitem>
+                                    <para>
+                                        is replaced with the userid to be authenticated.
+                                    </para>
+
+                                </listitem>
+
+                            </varlistentry>
+                            <varlistentry>
+                                <term><option>%U</option></term>
+                                <listitem>
+                                    <para>
+                                        is replaced by the portion of the userid before the first @ character. If an @ character does not exist in the userid, then <option>%U</option> would function identically to <option>%u</option>. For example, if the userid to be authenticated is <parameter class="option">jsmith@example.org</parameter>, <option>%u</option> would be replaced by <parameter class="option">jsmith@example.org</parameter> and <option>%U</option> would be replaced by <parameter class="option">jsmith</parameter>.
+                                    </para>
+
+                                </listitem>
+
+                            </varlistentry>
+                            <varlistentry>
+                                <term><option>%d</option></term>
+                                <listitem>
+                                    <para>
+                                        is replaced by the portion of the userid after the first @ character. If an @ character does not exist in the userid, <option>%d</option> will be replaced by the <option>realm</option> value passed to <application>saslauthd</application>. If no <option>realm</option> value was passed to saslauthd, <option>%d</option> will be replaced by the configured <option>ldap_default_realm</option>, or by an empty string if <option>ldap_default_realm</option> is not configured.
+                                    </para>
+
+                                </listitem>
+
+                            </varlistentry>
+                            <varlistentry>
+                                <term><option>%1-9</option></term>
+                                <listitem>
+                                    <para>
+                                        Within a userid which contains an @ character, followed by a domain name, <option>%1</option> will be replaced by the top level domain, <option>%2</option> will be replaced by the secondary domain, <option>%3</option> will be replaced by the tertiary domain, up to and including <option>%9</option> which would be replaced by the ninth level domain. If no @ character exists in the userid, or if there is no domain name after the @ character, or if the specified hierarchical domain level does not exist, the option is replaced by the <option>realm</option> value passed to <application>saslauthd</application>. Should no <option>realm</option> value exist in those scenarios, the option is replaced by the configured <option>ldap_default_realm</option>, or by an empty string if <option>ldap_default_realm</option> has not been configured.
+                                    </para>
+                                    <para>
+                                        For example, if the userid to be authenticated is <parameter class="option">jsmith@example.org</parameter>, <option>%1</option> would be replaced by <parameter class="option">org</parameter> and <option>%2</option> would be replaced by <parameter class="option">example</parameter>.
+                                    </para>
+
+                                </listitem>
+
+                            </varlistentry>
+                            <varlistentry>
+                                <term><option>%s</option></term>
+                                <listitem>
+                                    <para>
+                                        is replaced by the <option>service</option> option passed to <application>saslauthd</application>, or by an empty string if no <option>service</option> option was passed.
+                                    </para>
+
+                                </listitem>
+
+                            </varlistentry>
+                            <varlistentry>
+                                <term><option>%r</option></term>
+                                <listitem>
+                                    <para>
+                                        is replaced by the <option>realm</option> option passed to <application>saslauthd</application>. If no <option>realm</option> value was passed to saslauthd, <option>%r</option> will be replaced by the configured <option>ldap_default_realm</option>, or by an empty string if <option>ldap_default_realm</option> is not configured.
+                                    </para>
+
+                                </listitem>
+
+                            </varlistentry>
+
+                        </variablelist>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_password_attr</option> &mdash; <parameter class="option">userPassword</parameter></term>
+                    <listitem>
+                        <para>
+                            When <option>ldap_auth_method</option> is evaluated as <parameter class="option">custom</parameter>, <option>ldap_password_attr</option> specifies an attribute that will be requested and retrived. If successfully retrived, the authentication request will succeed if the <option>ldap_password_attr</option> attribute contains a supported password hash, and if the user submitted password matches the hash. When <option>ldap_auth_method</option> is <parameter class="option">bind</parameter> or <parameter class="option">fastbind</parameter>, <option>ldap_password_attr</option> is ignored.
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_group_dn</option> &mdash; <parameter class="option">none</parameter></term>
+                    <listitem>
+                        <para>
+                            If <option>ldap_group_dn</option> is specified, group authorization must also succeed (in addition to the prior authentication step), for the user's authentication attempt to be successful. If <option>ldap_group_dn</option> contains substitution tokens, they will be replaced as specified in the <option>ldap_filter</option> token expansion rules. One additional token substitution is applicable to <option>ldap_group_dn</option>:
+                        </para>
+                        <variablelist>
+                            <varlistentry>
+                                <term><option>%D</option></term>
+                                <listitem>
+                                    <para>
+                                        is replaced by the distinguished name that was specified, or evaluated, in the authentication step. If <option>ldap_use_sasl</option> is enabled, the distinguished name will be resolved by performing an ldapwhoami extended operation after a successful authentication. If <option>ldap_group_dn</option> is specified and <option>ldap_use_sasl</option> is enabled, but the ldap server does not support the ldapwhoami extended operation, or if the ldapwhoami extended operation fails, then the user's authentication attempt is unsuccessful.
+                                    </para>
+
+                                </listitem>
+
+                            </varlistentry>
+
+                        </variablelist>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_group_attr</option> &mdash; <parameter class="option">uniqueMember</parameter></term>
+                    <listitem>
+                        <para>
+                            <option>ldap_group_attr</option> is ignored unless <option>ldap_group_dn</option> is also specified and <option>ldap_group_match_method</option> is <parameter class="option">attr</parameter>. <option>ldap_group_attr</option> specifies an attribute which contains the authenticating identity's dinstinguished name. See the <option>ldap_group_match_method</option> entry for additional details.
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_group_filter</option> &mdash; <parameter class="option">none</parameter></term>
+                    <listitem>
+                        <para>
+
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_group_search_base</option> &mdash; <parameter class="option">defaults to the evaluated <option>ldap_search_base</option></parameter></term>
+                    <listitem>
+                        <para>
+
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_group_scope</option> &mdash; <parameter class="option">sub</parameter></term>
+                    <listitem>
+                        <para>
+
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_group_match_method</option> &mdash; <parameter class="option">attr</parameter></term>
+                    <listitem>
+                        <para>
+
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_default_realm</option> &mdash; <parameter class="option">none</parameter></term>
+                    <listitem>
+                        <para>
+
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_default_domain</option> &mdash; <parameter class="option">none</parameter></term>
+                    <listitem>
+                        <para>
+                            <option>ldap_default_domain</option> is an alias for <option>ldap_default_realm</option>.
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_auth_method</option> &mdash; <parameter class="option">bind</parameter></term>
+                    <listitem>
+                        <para>
+
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_timeout</option> &mdash; <parameter class="option">5</parameter></term>
+                    <listitem>
+                        <para>
+
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_size_limit</option> &mdash; <parameter class="option">1</parameter></term>
+                    <listitem>
+                        <para>
+
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_time_limit</option> &mdash; <parameter class="option">5</parameter></term>
+                    <listitem>
+                        <para>
+
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_deref</option> &mdash; <parameter class="option">never</parameter></term>
+                    <listitem>
+                        <para>
+
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_referrals</option> &mdash; <parameter class="option">no</parameter></term>
+                    <listitem>
+                        <para>
+
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_restart</option> &mdash; <parameter class="option">yes</parameter></term>
+                    <listitem>
+                        <para>
+
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_scope</option> &mdash; <parameter class="option">sub</parameter></term>
+                    <listitem>
+                        <para>
+
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_use_sasl</option> &mdash; <parameter class="option">no</parameter></term>
+                    <listitem>
+                        <para>
+
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_id</option> &mdash; <parameter class="option">none</parameter></term>
+                    <listitem>
+                        <para>
+
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_sasl_authc_id</option> &mdash; <parameter class="option">none</parameter></term>
+                    <listitem>
+                        <para>
+
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_authz_id</option> &mdash; <parameter class="option">none</parameter></term>
+                    <listitem>
+                        <para>
+                            Does not make any sense to supply an authz identity when performing sasl/fastbind.
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_sasl_authz_id</option> &mdash; <parameter class="option">none</parameter></term>
+                    <listitem>
+                        <para>
+                            <option>ldap_sasl_authz_id</option> is an alias for <option>ldap_authz_id</option>.
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_realm</option> &mdash; <parameter class="option">none</parameter></term>
+                    <listitem>
+                        <para>
+
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_sasl_realm</option> &mdash; <parameter class="option"></parameter></term>
+                    <listitem>
+                        <para>
+
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_mech</option> &mdash; <parameter class="option"></parameter></term>
+                    <listitem>
+                        <para>
+                            It doesn't make any sense to use a mech that does not require an authname and password, when using fastbind.
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_sasl_mech</option> &mdash; <parameter class="option"></parameter></term>
+                    <listitem>
+                        <para>
+
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_sasl_secprops</option> &mdash; <parameter class="option"></parameter></term>
+                    <listitem>
+                        <para>
+
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_start_tls</option> &mdash; <parameter class="option"></parameter></term>
+                    <listitem>
+                        <para>
+
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_tls_check_peer</option> &mdash; <parameter class="option"></parameter></term>
+                    <listitem>
+                        <para>
+
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_tls_cacert_file</option> &mdash; <parameter class="option"></parameter></term>
+                    <listitem>
+                        <para>
+
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_tls_cacert_dir</option> &mdash; <parameter class="option"></parameter></term>
+                    <listitem>
+                        <para>
+
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_tls_ciphers</option> &mdash; <parameter class="option"></parameter></term>
+                    <listitem>
+                        <para>
+
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_tls_cert</option> &mdash; <parameter class="option"></parameter></term>
+                    <listitem>
+                        <para>
+
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_tls_key</option> &mdash; <parameter class="option"></parameter></term>
+                    <listitem>
+                        <para>
+
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+                <varlistentry>
+                    <term><option>ldap_debug</option> &mdash; <parameter class="option"></parameter></term>
+                    <listitem>
+                        <para>
+
+                        </para>
+
+                    </listitem>
+
+                </varlistentry>
+
+            </variablelist>
+
         </para>
 
     </section>
