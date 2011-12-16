@@ -8,7 +8,7 @@
     <xi:include href="Preface.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
     <xi:include href="part-Cyrus_IMAP_Administration.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
     <xi:include href="part-Standard_Operating_Procedures.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
-    <xi:include href="Configuration_Reference.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
+    <xi:include href="part-Configuration_Reference.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
     <xi:include href="Revision_History.xml" xmlns:xi="http://www.w3.org/2001/XInclude" />
     <index /><!--
 
