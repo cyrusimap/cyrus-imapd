@@ -49,8 +49,6 @@
 #include <ctype.h>
 #include <syslog.h>
 
-#include <libxml/tree.h>
-
 #include "acl.h"
 #include "charset.h"
 #include "global.h"
@@ -497,15 +495,35 @@ static int fetch_message(struct transaction_t *txn, struct mailbox *mailbox,
 
     return 0;
 }
-			 
+
+
+static void buf_escapestr(struct buf *buf, const char *str, unsigned max)
+{
+    const char *c;
+    unsigned len = 0;
+
+    for (c = str; c && *c && (!max || len < max); c++, len++) {
+	/* Translate CR to HTML <br> tag */
+	if (*c == '\r') buf_appendcstr(buf, "<br>");
+
+	/* Translate XML/HTML specials */
+	else if (*c == '"') buf_appendcstr(buf, "&quot;");
+	else if (*c == '\'') buf_appendcstr(buf, "&apos;");
+	else if (*c == '&') buf_appendcstr(buf, "&amp;");
+	else if (*c == '<') buf_appendcstr(buf, "&lt;");
+	else if (*c == '>') buf_appendcstr(buf, "&gt;");
+
+	/* Translate non-printable chars to X */
+	else if (!(isspace(*c) || isprint(*c))) buf_putc(buf, 'X');
+
+	else buf_putc(buf, *c);
+    }
+}
 
 
 /* List messages as an RSS feed */
 static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 {
-    xmlDocPtr outdoc;
-    xmlNodePtr root, chan, item, node;
-    xmlNsPtr atom;
     const char **via, *prot, *host, *webmaster;
     uint32_t url_len, recno, recentuid = 0;
     int max_items, max_len, ttl, nitems;
@@ -564,18 +582,19 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 	recentuid = mailbox->i.last_uid; /* nothing is recent! */
     }
 #endif
+
+    /* Setup for chunked response */
+    txn->flags |= HTTP_CHUNKED;
+    txn->resp_body.type = "application/xml; charset=utf-8";
+
+    /* Start XML */
+    buf_appendcstr(&buf, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n");
+
     /* Set up the RSS <channel> response for the mailbox */
-    outdoc = xmlNewDoc(BAD_CAST "1.0");
-    root = xmlNewNode(NULL, BAD_CAST "rss");
-    xmlDocSetRootElement(outdoc, root);
-    xmlNewProp(root, BAD_CAST "version", BAD_CAST "2.0");
-
-    /* Recommended by http://www.rssboard.org/rss-profile */
-    atom = xmlNewNs(root, BAD_CAST XML_NS_ATOM, BAD_CAST "atom");
-
-    chan = xmlNewChild(root, NULL, BAD_CAST "channel", NULL);
-
-    xmlNewChild(chan, NULL, BAD_CAST "title", BAD_CAST mailbox->name);
+    buf_appendcstr(&buf, "<rss xmlns:atom=\"" XML_NS_ATOM
+		   "\" version=\"2.0\">\n");
+    buf_appendcstr(&buf, "<channel>\n");
+    buf_printf(&buf, "<title>%s</title>\n", mailbox->name);
 
     /* Construct base URL */
     if ((via = spool_getheader(txn->req_hdrs, "Via"))) {
@@ -598,41 +617,36 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 	       prot, strcspn(host, " \r\n"), host, txn->req_tgt.path);
     url_len = buf_len(&url);
 
-    xmlNewChild(chan, NULL, BAD_CAST "link", BAD_CAST buf_cstring(&url));
+    buf_printf(&buf, "<link>%s</link>\n", buf_cstring(&url));
 
     /* Recommended by http://www.rssboard.org/rss-profile */
-    node = xmlNewChild(chan, atom, BAD_CAST "link", NULL);
-    xmlNewProp(node, BAD_CAST "href", BAD_CAST buf_cstring(&url));
-    xmlNewProp(node, BAD_CAST "rel", BAD_CAST "self");
-    xmlNewProp(node, BAD_CAST "type", BAD_CAST "application/rss+xml");
+    buf_printf(&buf, "<atom:link href=\"%s\" rel=\"self\""
+	       " type=\"application/rss+xml\"/>\n", buf_cstring(&url));
 
     /* XXX  Use /comment annotation as description? */
-    xmlNewChild(chan, NULL, BAD_CAST "description", NULL);
+    buf_appendcstr(&buf, "<description/>\n");
 
     if ((webmaster = config_getstring(IMAPOPT_RSS_WEBMASTER))) {
-	xmlNewChild(chan, NULL, BAD_CAST "webMaster", BAD_CAST webmaster);
+      buf_printf(&buf, "<webMaster>%s</webMaster>\n", webmaster);
     }
 
     rfc822date_gen(datestr, sizeof(datestr), time(NULL));
-    xmlNewChild(chan, NULL, BAD_CAST "pubDate", BAD_CAST datestr);
+    buf_printf(&buf, "<pubDate>%s</pubDate>\n", datestr);
 
     rfc822date_gen(datestr, sizeof(datestr), lastmod);
-    xmlNewChild(chan, NULL, BAD_CAST "lastBuildDate", BAD_CAST datestr);
+    buf_printf(&buf, "<lastBuildDate>%s</lastBuildDate>\n", datestr);
 
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
-	buf_reset(&buf);
-	buf_printf(&buf, "Cyrus HTTP %s", cyrus_version());
-	xmlNewChild(chan, NULL, BAD_CAST "generator",
-		    BAD_CAST buf_cstring(&buf));
+	buf_printf(&buf, "<generator>Cyrus HTTP %s</generator>\n",
+		   cyrus_version());
     }
 
-    xmlNewChild(chan, NULL, BAD_CAST "docs", BAD_CAST RSS_SPEC);
+    buf_printf(&buf, "<docs>%s</docs>\n", RSS_SPEC);
 
-    if (ttl) {
-	buf_reset(&buf);
-	buf_printf(&buf, "%d", ttl);
-	xmlNewChild(chan, NULL, BAD_CAST "ttl", BAD_CAST buf_cstring(&buf));
-    }
+    if (ttl) buf_printf(&buf, "<ttl>%d</ttl>\n", ttl);
+
+    write_body(HTTP_OK, txn, buf.s, buf.len);
+    buf_reset(&buf);
 
     /* Add an <item> for each message */
     for (recno = mailbox->i.num_records, nitems = 0;
@@ -645,6 +659,12 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 	const char *content_types[] = { "text", NULL };
 	struct message_content content;
 	struct bodypart **parts;
+
+	/* Send a body chunk once in a while */
+	if (buf_len(&buf) > PROT_BUFSIZE) {
+	    write_body(0, txn, buf.s, buf.len);
+	    buf_reset(&buf);
+	}
 
 	/* Fetch the message */
 	if (fetch_message(txn, mailbox, recno, 0,
@@ -661,16 +681,17 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 	/* Feeding this message, increment counter */
 	nitems++;
 
-	item = xmlNewChild(chan, NULL, BAD_CAST "item", NULL);
+	buf_appendcstr(&buf, "<item>\n");
 
 	subj = charset_parse_mimeheader(body->subject);
-	xmlNewTextChild(item, NULL, BAD_CAST "title",
-			BAD_CAST (subj && *subj ? subj : "[Untitled]"));
+	buf_appendcstr(&buf, "<title>");
+	buf_escapestr(&buf, subj && *subj ? subj : "[Untitled]", 0);
+	buf_appendcstr(&buf, "</title>\n");
 	free(subj);
 
 	buf_truncate(&url, url_len);
 	buf_printf(&url, "?uid=%u", record.uid);
-	xmlNewChild(item, NULL, BAD_CAST "link", BAD_CAST buf_cstring(&url));
+	buf_printf(&buf, "<link>%s</link>\n", buf_cstring(&url));
 
 	if (body->from || body->sender) {
 	    struct address *addr;
@@ -679,20 +700,24 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 	    else addr = body->sender;
 
 	    if (*addr->mailbox) {
-		buf_reset(&buf);
-		buf_printf(&buf, "%s@%s", addr->mailbox, addr->domain);
-		if (addr->name) buf_printf(&buf, " (%s)", addr->name);
-		xmlNewTextChild(item, NULL, BAD_CAST "author",
-				BAD_CAST buf_cstring(&buf));
+		buf_appendcstr(&buf, "<author>");
+		buf_escapestr(&buf, addr->mailbox, 0);
+		buf_putc(&buf, '@');
+		buf_escapestr(&buf, addr->domain, 0);
+		if (addr->name) {
+		    buf_appendcstr(&buf, " (");
+		    buf_escapestr(&buf, addr->name, 0);
+		    buf_putc(&buf, ')');
+		}
+		buf_appendcstr(&buf, "</author>\n");
 	    }
 	}
 
-	node = xmlNewChild(item, NULL, BAD_CAST "guid",
-			   BAD_CAST message_guid_encode(&record.guid));
-	xmlNewProp(node, BAD_CAST "isPermaLink", BAD_CAST "false");
+	buf_printf(&buf, "<guid isPermaLink=\"false\">%s</guid>\n",
+		   message_guid_encode(&record.guid));
 
 	rfc822date_gen(datestr, sizeof(datestr), record.gmtime);
-	xmlNewChild(item, NULL, BAD_CAST "pubDate", BAD_CAST datestr);
+	buf_printf(&buf, "<pubDate>%s</pubDate>\n", datestr);
 
 	/* Find and use the first text/ part as the <description> */
 	content.base = msg_base;
@@ -701,29 +726,12 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 	message_fetch_part(&content, content_types, &parts);
 
 	if (parts && *parts) {
-	    const char *c;
-	    unsigned len = 0;
-
-	    buf_reset(&buf);
-	    /* Process body text */
-	    for (c = parts[0]->decoded_body; c && *c; c++) {
-		/* Translate CR to HTML <br> tag */
-		if (*c == '\r') buf_appendcstr(&buf, "<br>");
-		/* Translate < to HTML &lt; */
-		else if (*c == '<') buf_printf(&buf, "&lt;");
-		/* Translate non-printable chars to X */
-		else if (!(isspace(*c) || isprint(*c))) buf_putc(&buf, 'X');
-		else buf_putc(&buf, *c);
-
-		/* Mark length of description */
-		if (!max_len || (len < (unsigned) max_len)) len = buf_len(&buf);
-	    }
-
-	    node = xmlNewChild(item, NULL, BAD_CAST "description", NULL);
-	    xmlAddChild(node,
-			xmlNewCDataBlock(outdoc, BAD_CAST buf_cstring(&buf),
-					 len));
+	    buf_appendcstr(&buf, "<description><![CDATA[");
+	    buf_escapestr(&buf, parts[0]->decoded_body, max_len);
+	    buf_appendcstr(&buf, "]]></description>\n");
 	}
+
+	buf_appendcstr(&buf, "</item>\n");
 
 	/* free the results */
 	if (parts) {
@@ -741,10 +749,15 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 	}
     }
 
-    buf_free(&buf);
+    /* End of RSS <channel> */
+    buf_appendcstr(&buf, "</channel>\n</rss>\n");
+    write_body(0, txn, buf.s, buf.len);
 
-    /* Output the XML response */
-    xml_response(HTTP_OK, txn, outdoc);
+    /* End of output */
+    write_body(0, txn, NULL, 0);
+
+    buf_free(&buf);
+    buf_free(&url);
 
     return 0;
 }
