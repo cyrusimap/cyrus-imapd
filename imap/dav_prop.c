@@ -146,7 +146,7 @@ static xmlNodePtr xml_add_prop(long status, xmlNodePtr resp, xmlNodePtr *stat,
     }
 
     if (precond) xml_add_error((*stat)->parent, precond, avail_ns);
-    node = xmlNewChild(*stat, prop_ns, prop_name, content);
+    node = xmlNewTextChild(*stat, prop_ns, prop_name, content);
 
     return node;
 }
@@ -977,13 +977,17 @@ static int propfind_caldata(const xmlChar *propname, xmlNsPtr ns,
     if (fctx->record) {
 	const char *msg_base = NULL;
 	unsigned long msg_size = 0;
+	xmlNodePtr data;
 
 	mailbox_map_message(fctx->mailbox, fctx->record->uid,
 			    &msg_base, &msg_size);
 
-	xml_add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK],
-		     ns, BAD_CAST propname,
-		     BAD_CAST msg_base + fctx->record->header_size, NULL, NULL);
+	data = xml_add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK],
+			    ns, BAD_CAST propname, NULL, NULL, NULL);
+	xmlAddChild(data,
+		    xmlNewCDataBlock(fctx->root->doc,
+				     BAD_CAST msg_base + fctx->record->header_size,
+				     msg_size - fctx->record->header_size));
 
 	mailbox_unmap_message(fctx->mailbox, fctx->record->uid,
 			      &msg_base, &msg_size);
