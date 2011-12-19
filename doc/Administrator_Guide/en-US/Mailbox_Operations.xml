@@ -1,0 +1,44 @@
+<?xml version='1.0' encoding='utf-8' ?>
+<!DOCTYPE chapter PUBLIC "-//OASIS//DTD DocBook XML V4.5//EN" "http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd" [
+<!ENTITY % BOOK_ENTITIES SYSTEM "Administrator_Guide.ent">
+%BOOK_ENTITIES;
+]>
+<chapter id="chap-Administrator_Guide-Mailbox_Operations">
+    <title>Mailbox Operations</title>
+    <section id="sect-Administrator_Guide-Mailbox_Operations-Determining_the_Size_of_a_Mailbox">
+        <title>Determining the Size of a Mailbox</title>
+        <para>
+            The size of a mailbox can be obtained using the <command>cyradm</command> utility, by issuing the <xref linkend="sect-Administrator_Guide-cyradm-info" /> command.
+        </para>
+        <para>
+            When using quota, the size of a mailbox hierarchy under the quota root folder can be obtained using the <xref linkend="sect-Administrator_Guide-cyradm-listquotaroot" /> command.
+        </para>
+
+    </section>
+
+    <section id="sect-Administrator_Guide-Mailbox_Operations-Mailbox_Folders_Excempt_From_Quota">
+        <title>Mailbox Folders Excempt From Quota</title>
+        <para>
+            By creating an additional quota root, a folder's contents can be made excempt from counting towards the mailbox's quota.
+        </para>
+        <example id="exam-Administrator_Guide-Mailbox_Folders_Excempt_From_Quota-Making_an_INBOXArchive_Folder_Excempt_from_Quota">
+            <title>Making an <filename>INBOX/Archive/</filename> Folder Excempt from Quota</title>
+            <para>
+
+<screen>
+cyradm&gt; <userinput>createmailbox user/john.doe@example.org</userinput>
+cyradm&gt; <userinput>setquota user/john.doe@example.org 2097152</userinput>
+cyradm&gt; <userinput>listquotaroot user/john.doe@example.org</userinput>
+cyradm&gt; <userinput>createmailbox user/john.doe/Archive@example.org</userinput>
+cyradm&gt; <userinput>setquota user/john.doe/Archive@example.org</userinput>
+cyradm&gt; <userinput>listquotaroot user/john.doe/Archive@example.org</userinput></screen>
+
+            </para>
+
+        </example>
+
+    </section>
+
+
+</chapter>
+
