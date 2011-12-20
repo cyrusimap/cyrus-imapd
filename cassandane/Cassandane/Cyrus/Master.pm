@@ -137,7 +137,10 @@ sub lemming_census
     {
 	my $ntotal = scalar @{$pids{$tag}};
 	my $nlive = kill(0, @{$pids{$tag}});
-	$actual{$tag} = [ $nlive, $ntotal - $nlive ];
+	$actual{$tag} = {
+	    live => $nlive,
+	    dead => $ntotal - $nlive,
+	};
     }
     return \%actual;
 }
@@ -161,13 +164,13 @@ sub test_service
     my $lemm = lemming_connect($srv);
 
     xlog "connected so one lemming forked";
-    $self->assert_deep_equals({ A => [1, 0] },
+    $self->assert_deep_equals({ A => { live => 1, dead => 0 } },
 			      lemming_census($inst));
 
     lemming_push($lemm, 'success');
 
     xlog "no more live lemmings";
-    $self->assert_deep_equals({ A => [0, 1] },
+    $self->assert_deep_equals({ A => { live => 0, dead => 1 } },
 			      lemming_census($inst));
 
     $inst->stop();
@@ -192,19 +195,19 @@ sub test_multi_connections
     my $lemm1 = lemming_connect($srv);
 
     xlog "connected so one lemming forked";
-    $self->assert_deep_equals({ A => [1, 0] },
+    $self->assert_deep_equals({ A => { live => 1, dead => 0 } },
 			      lemming_census($inst));
 
     my $lemm2 = lemming_connect($srv);
 
     xlog "two connected so two lemmings forked";
-    $self->assert_deep_equals({ A => [2, 0] },
+    $self->assert_deep_equals({ A => { live => 2, dead => 0 } },
 			      lemming_census($inst));
 
     my $lemm3 = lemming_connect($srv);
 
     xlog "three connected so three lemmings forked";
-    $self->assert_deep_equals({ A => [3, 0] },
+    $self->assert_deep_equals({ A => { live => 3, dead => 0 } },
 			      lemming_census($inst));
 
     lemming_push($lemm1, 'success');
@@ -212,7 +215,7 @@ sub test_multi_connections
     lemming_push($lemm3, 'success');
 
     xlog "no more live lemmings";
-    $self->assert_deep_equals({ A => [0, 3] },
+    $self->assert_deep_equals({ A => { live => 0, dead => 3 } },
 			      lemming_census($inst));
 
     $inst->stop();
@@ -239,28 +242,36 @@ sub test_multi_services
     my $lemmA = lemming_connect($srvA);
 
     xlog "connected so one lemming forked";
-    $self->assert_deep_equals({ A => [1, 0] },
+    $self->assert_deep_equals({ A =>  { live => 1, dead => 0 } },
 			      lemming_census($inst));
 
     my $lemmB = lemming_connect($srvB);
 
     xlog "two connected so two lemmings forked";
-    $self->assert_deep_equals({ A => [1, 0], B => [1, 0] },
-			      lemming_census($inst));
+    $self->assert_deep_equals({
+				A => { live => 1, dead => 0 },
+				B => { live => 1, dead => 0 },
+			      }, lemming_census($inst));
 
     my $lemmC = lemming_connect($srvC);
 
     xlog "three connected so three lemmings forked";
-    $self->assert_deep_equals({ A => [1, 0], B => [1, 0], C => [1, 0] },
-			      lemming_census($inst));
+    $self->assert_deep_equals({
+				A => { live => 1, dead => 0 },
+				B => { live => 1, dead => 0 },
+				C => { live => 1, dead => 0 },
+			      }, lemming_census($inst));
 
     lemming_push($lemmA, 'success');
     lemming_push($lemmB, 'success');
     lemming_push($lemmC, 'success');
 
     xlog "no more live lemmings";
-    $self->assert_deep_equals({ A => [0, 1], B => [0, 1], C => [0, 1] },
-			      lemming_census($inst));
+    $self->assert_deep_equals({
+				A => { live => 0, dead => 1 },
+				B => { live => 0, dead => 1 },
+				C => { live => 0, dead => 1 },
+			      }, lemming_census($inst));
 
     $inst->stop();
 }
@@ -280,26 +291,26 @@ sub test_prefork
     $inst->start();
 
     xlog "preforked, so one lemming running already";
-    $self->assert_deep_equals({ A => [ 1, 0 ] },
+    $self->assert_deep_equals({ A => { live => 1, dead => 0 } },
 			      lemming_census($inst));
 
     my $lemm1 = lemming_connect($srv);
 
     xlog "connected so one lemming forked";
-    $self->assert_deep_equals({ A => [2, 0] },
+    $self->assert_deep_equals({ A => { live => 2, dead => 0 } },
 			      lemming_census($inst));
 
     my $lemm2 = lemming_connect($srv);
 
     xlog "connected again so two additional lemmings forked";
-    $self->assert_deep_equals({ A => [3, 0] },
+    $self->assert_deep_equals({ A => { live => 3, dead => 0 } },
 			      lemming_census($inst));
 
     lemming_push($lemm1, 'success');
     lemming_push($lemm2, 'success');
 
     xlog "always at least one live lemming";
-    $self->assert_deep_equals({ A => [1, 2] },
+    $self->assert_deep_equals({ A => { live => 1, dead => 2 } },
 			      lemming_census($inst));
 
     $inst->stop();
@@ -330,7 +341,7 @@ sub test_multi_prefork
 	sub
 	{
 	    my $census = lemming_census($inst);
-	    $census->{A}->[0] == 2 && $census->{C}->[0] == 3
+	    $census->{A}->{live} == 2 && $census->{C}->{live} == 3
 	},
 	description => "master to prefork the configured lemmings");
 
@@ -340,26 +351,35 @@ sub test_multi_prefork
     xlog "connect to A once";
     $lemm = lemming_connect($srvA);
     push(@lemmings, $lemm);
-    $self->assert_deep_equals({ A => [3, 0], C => [3, 0] },
-			      lemming_census($inst));
+    $self->assert_deep_equals({
+				A => { live => 3, dead => 0 },
+				C => { live => 3, dead => 0 },
+			      }, lemming_census($inst));
 
     xlog "connect to A again";
     $lemm = lemming_connect($srvA);
     push(@lemmings, $lemm);
-    $self->assert_deep_equals({ A => [4, 0], C => [3, 0] },
-			      lemming_census($inst));
+    $self->assert_deep_equals({
+				A => { live => 4, dead => 0 },
+				C => { live => 3, dead => 0 },
+			      }, lemming_census($inst));
 
     xlog "connect to A a third time";
     $lemm = lemming_connect($srvA);
     push(@lemmings, $lemm);
-    $self->assert_deep_equals({ A => [5, 0], C => [3, 0] },
-			      lemming_census($inst));
+    $self->assert_deep_equals({
+				A => { live => 5, dead => 0 },
+				C => { live => 3, dead => 0 },
+			      }, lemming_census($inst));
 
     xlog "connect to B";
     $lemm = lemming_connect($srvB);
     push(@lemmings, $lemm);
-    $self->assert_deep_equals({ A => [5, 0], B => [1, 0], C => [3, 0] },
-			      lemming_census($inst));
+    $self->assert_deep_equals({
+				A => { live => 5, dead => 0 },
+				B => { live => 1, dead => 0 },
+				C => { live => 3, dead => 0 },
+			      }, lemming_census($inst));
 
     foreach $lemm (@lemmings)
     {
@@ -367,8 +387,11 @@ sub test_multi_prefork
     }
 
     xlog "our lemmings are gone, others have replaced them";
-    $self->assert_deep_equals({ A => [2, 3], B => [0, 1], C => [3, 0] },
-			      lemming_census($inst));
+    $self->assert_deep_equals({
+				A => { live => 2, dead => 3 },
+				B => { live => 0, dead => 1 },
+				C => { live => 3, dead => 0 },
+			      }, lemming_census($inst));
 
     $inst->stop();
 }
@@ -392,22 +415,22 @@ sub test_exit_after_connect
     my $lemm = lemming_connect($srv);
 
     xlog "connected so one lemming forked";
-    $self->assert_deep_equals({ A => [1, 0] },
+    $self->assert_deep_equals({ A => { live => 1, dead => 0 } },
 			      lemming_census($inst));
 
     xlog "push the lemming off the cliff";
     lemming_push($lemm, 'exit');
-    $self->assert_deep_equals({ A => [0, 1] },
+    $self->assert_deep_equals({ A => { live => 0, dead => 1 } },
 			      lemming_census($inst));
 
     xlog "can connect again";
     $lemm = lemming_connect($srv);
-    $self->assert_deep_equals({ A => [1, 1] },
+    $self->assert_deep_equals({ A => { live => 1, dead => 1 } },
 			      lemming_census($inst));
 
     xlog "push the lemming off the cliff";
     lemming_push($lemm, 'exit');
-    $self->assert_deep_equals({ A => [0, 2] },
+    $self->assert_deep_equals({ A => { live => 0, dead => 2 } },
 			      lemming_census($inst));
 
     $inst->stop();
@@ -438,7 +461,7 @@ sub test_exit_during_start
     $self->assert_null($lemm);
 
     xlog "expect 5 dead lemmings";
-    $self->assert_deep_equals({ A => [0, 5] },
+    $self->assert_deep_equals({ A => { live => 0, dead => 5 } },
 			      lemming_census($inst));
 
     xlog "connections should fail because service disabled";
@@ -447,7 +470,7 @@ sub test_exit_during_start
 	$lemm = lemming_connect($srv);
     };
     $self->assert_null($lemm);
-    $self->assert_deep_equals({ A => [0, 5] },
+    $self->assert_deep_equals({ A => { live => 0, dead => 5 } },
 			      lemming_census($inst));
 
     $inst->stop();
