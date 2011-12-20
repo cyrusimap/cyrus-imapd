@@ -42,10 +42,7 @@
 use strict;
 use warnings;
 package Cassandane::Cyrus::Master;
-# Note, we deliberately don't use Cassandane::Cyrus::TestCase
-# because we need to do strange and interesting things to the
-# Instance we manage.
-use base qw(Cassandane::Unit::TestCase);
+use base qw(Cassandane::Cyrus::TestCase);
 use POSIX qw(getcwd);
 use DateTime;
 use Cassandane::Util::Log;
@@ -60,7 +57,7 @@ my $lemming_bin = getcwd() . '/utils/lemming';
 sub new
 {
     my $class = shift;
-    my $self = $class->SUPER::new(@_);
+    my $self = $class->SUPER::new({ instance => 0 }, @_);
 
     return $self;
 }
