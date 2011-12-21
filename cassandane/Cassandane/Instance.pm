@@ -491,22 +491,41 @@ sub start
     }
 }
 
+# Stop a given PID.  Returns 1 if the process died
+# gracefully (i.e. soon after receiving SIGQUIT)
+# or wasn't even running beforehand.
 sub _stop_pid
 {
     my ($pid) = @_;
 
-    # try to be nice
-    xlog "_stop_pid: sending SIGQUIT to $pid";
-    kill(SIGQUIT, $pid);
-    eval {
-	timed_wait(sub { kill(0, $pid) == 0 });
-    };
-    if ($@)
+    # Try to be nice, but leave open the option of not being nice should
+    # that be necessary.  The signals we send are:
+    #
+    # SIGQUIT - The standard Cyrus graceful shutdown signal, should
+    #           be handled and propagated by master.
+    # SIGILL - Not handled by master; kernel's default action is to
+    #	       dump a core.  We use this to try to get a core when
+    #	       something is wrong with master.
+    # SIGKILL - Hmm, something went wrong with our cunning SIGILL plan,
+    #           let's take off and nuke it from orbit.  We just don't
+    #           want to leave processes around cluttering up the place.
+    #
+    my @sigs = ( SIGQUIT, SIGILL, SIGKILL );
+    my $r = 1;
+
+    foreach my $sig (@sigs)
     {
+	xlog "_stop_pid: sending signal $sig to $pid";
+	kill($sig, $pid);
+	eval {
+	    timed_wait(sub { kill(0, $pid) == 0 });
+	};
+	last unless $@;
 	# Timed out -- No More Mr Nice Guy
-	xlog "_stop_pid: sending SIGTERM to $pid";
-	kill(SIGTERM, $pid);
+	xlog "_stop_pid: failed to shut down pid $pid with signal $sig";
+	$r = 0;
     }
+    return $r;
 }
 
 sub stop
@@ -519,7 +538,11 @@ sub stop
     xlog "stop";
 
     my $pid = $self->_read_pid_file($self->_pid_file());
-    _stop_pid($pid) if defined $pid;
+    if (defined $pid)
+    {
+	_stop_pid($pid)
+	    or die "Cannot shut down master pid $pid";
+    }
     # Note: no need to reap this daemon which is not our child anymore
 
 #     return if ($self->{persistent});
@@ -536,8 +559,7 @@ sub DESTROY
 	if (defined $pid)
 	{
 	    # clean up any dangling master process
-	    xlog "cleaning up $pid";
-	    kill(SIGKILL, $pid);
+	    _stop_pid($pid);
 	}
     }
 }
