@@ -491,6 +491,40 @@ sub start
     }
 }
 
+sub _emit_valgrind_logs
+{
+    my ($self) = @_;
+
+    return unless $self->{valgrind};
+
+    my $valgrind_logdir = $self->{basedir} . '/vglogs';
+    my $nerrs = 0;
+
+    opendir VGLOGS, $valgrind_logdir
+	or die "Cannot open directory $valgrind_logdir for reading: $!";
+    while (my $_ = readdir VGLOGS)
+    {
+	next if m/^\./;
+	next if m/\.core\./;
+	my $log = "$valgrind_logdir/$_";
+	next if -z $log;
+	$nerrs++;
+
+	xlog "Valgrind errors from file $log";
+	open VG, "<$log"
+	    or die "Cannot open Valgrind log $log for reading: $!";
+	while (<VG>) {
+	    chomp;
+	    xlog "$_";
+	}
+	close VG;
+
+    }
+    closedir VGLOGS;
+
+    die "Valgrind found errors" if $nerrs;
+}
+
 # Stop a given PID.  Returns 1 if the process died
 # gracefully (i.e. soon after receiving SIGQUIT)
 # or wasn't even running beforehand.
@@ -544,6 +578,8 @@ sub stop
 	    or die "Cannot shut down master pid $pid";
     }
     # Note: no need to reap this daemon which is not our child anymore
+
+    $self->_emit_valgrind_logs();
 
 #     return if ($self->{persistent});
 #     rmtree $self->{basedir};
