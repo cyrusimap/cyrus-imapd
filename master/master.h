@@ -7,13 +7,14 @@
 #include <sys/resource.h> /* for rlim_t */
 
 #include "libconfig.h" /* for config_dir and IMAPOPT_SYNC_MACHINEID */
+#include "strarray.h"
 
 /* needed for possible SNMP monitoring */
 struct service {
     char *name;			/* name of service */
     char *listen;		/* port/socket to listen to */
     char *proto;		/* protocol to accept */
-    char *const *exec;		/* command (with args) to execute */
+    strarray_t *exec;		/* command (with args) to execute */
     int babysit;		/* babysit this service? */
     
     /* multiple address family support */

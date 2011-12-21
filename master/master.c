@@ -155,7 +155,7 @@ struct event {
     time_t hour;
     time_t min;
     int periodic;
-    char *const *exec;
+    strarray_t *exec;
     struct event *next;
 };
 static struct event *schedule = NULL;
@@ -193,25 +193,23 @@ void fatal(const char *msg, int code)
     exit(code);
 }
 
-static void event_free(struct event *a) 
+static void event_free(struct event *a)
 {
-    if(a->exec) {
-	char **p;
-	for (p = (char **)a->exec ; *p ; p++)
-	    free(*p);
-	free((char *)a->exec);
+    if (a->exec) {
+	strarray_free(a->exec);
+	a->exec = NULL;
     }
-    if(a->name) free((char*)a->name);
+    free(a->name);
     free(a);
 }
 
-static void get_prog(char *path, unsigned size, char *const *cmd)
+static void get_prog(char *path, unsigned size, const strarray_t *cmd)
 {
-    if (cmd[0][0] == '/') {
+    if (cmd->data[0][0] == '/') {
 	/* master lacks strlcpy, due to no libcyrus */
-	snprintf(path, size, "%s", cmd[0]);
+	snprintf(path, size, "%s", cmd->data[0]);
     }
-    else snprintf(path, size, "%s/%s", SERVICE_PATH, cmd[0]);
+    else snprintf(path, size, "%s/%s", SERVICE_PATH, cmd->data[0]);
 }
 
 static void get_statsock(int filedes[2])
@@ -324,7 +322,7 @@ static char *parse_host(char *listen)
     return listen;
 }
 
-static int verify_service_file(char *const *filename)
+static int verify_service_file(const strarray_t *filename)
 {
     char path[PATH_MAX];
     struct stat statbuf;
@@ -333,6 +331,14 @@ static int verify_service_file(char *const *filename)
     if (stat(path, &statbuf)) return 0;
     if (! S_ISREG(statbuf.st_mode)) return 0;
     return statbuf.st_mode & S_IXUSR;
+}
+
+static void service_forget_exec(struct service *s)
+{
+    if (s->exec) {
+	strarray_free(s->exec);
+	s->exec = NULL;
+    }
 }
 
 static void service_create(struct service *s)
@@ -404,8 +410,8 @@ static void service_create(struct service *s)
  	} else {
   	    syslog(LOG_INFO, "invalid proto '%s', disabling %s",
 		   s->proto, s->name);
- 	    s->exec = NULL;
- 	    return;
+	    service_forget_exec(s);
+	    return;
  	}
 
 	/* parse_listen() and resolve_host() are destructive,
@@ -430,7 +436,7 @@ static void service_create(struct service *s)
 
 	if (error) {
 	    syslog(LOG_INFO, "%s, disabling %s", gai_strerror(error), s->name);
-	    s->exec = NULL;
+	    service_forget_exec(s);
 	    return;
 	}
     }
@@ -528,7 +534,7 @@ static void service_create(struct service *s)
     }
     if (nsocket <= 0) {
 	syslog(LOG_ERR, "unable to create %s listener socket: %m", s->name);
-	s->exec = NULL;
+	service_forget_exec(s);
 	return;
     }
 }
@@ -563,7 +569,7 @@ static int decode_wait_status(pid_t pid, int status)
     return failed;
 }
 
-static void run_startup(char **cmd)
+static void run_startup(const strarray_t *cmd)
 {
     pid_t pid;
     int status;
@@ -588,7 +594,7 @@ static void run_startup(char **cmd)
 
 	get_prog(path, sizeof(path), cmd);
 	syslog(LOG_DEBUG, "about to exec %s", path);
-	execv(path, cmd);
+	execv(path, cmd->data);
 	syslog(LOG_ERR, "can't exec %s for startup: %m", path);
 	exit(EX_OSERR);
 	
@@ -711,7 +717,7 @@ static void spawn_service(const int si)
 	snprintf(name_env2, sizeof(name_env2), "CYRUS_ID=%d", s->associate);
 	putenv(name_env2);
 
-	execv(path, s->exec);
+	execv(path, s->exec->data);
 	syslog(LOG_ERR, "couldn't exec %s: %m", path);
 	exit(EX_OSERR);
 
@@ -805,7 +811,7 @@ static void spawn_schedule(time_t now)
 		
 		get_prog(path, sizeof(path), a->exec);
 		syslog(LOG_DEBUG, "about to exec %s", path);
-		execv(path, a->exec);
+		execv(path, a->exec->data);
 		syslog(LOG_ERR, "can't exec %s on schedule: %m", path);
 		exit(EX_OSERR);
 		break;
@@ -909,7 +915,7 @@ static void reap_child(void)
 			    syslog(LOG_ERR, "too many failures for "
 				   "service %s, disabling until next SIGHUP",
 				   SERVICENAME(s->name));
-			    s->exec = NULL;
+			    service_forget_exec(s);
 			    close(s->socket);
 			    s->socket = 0;
 			}
@@ -1402,11 +1408,6 @@ static void process_msg(const int si, struct notify_message *msg)
 	       SERVICENAME(s->name), s->ready_workers);
 }
 
-static char **tokenize(const char *p)
-{
-    return strarray_takevf(strarray_split(p, NULL));
-}
-
 static void add_start(const char *name, struct entry *e,
 		      void *rock __attribute__((unused)))
 {
@@ -1420,7 +1421,7 @@ static void add_start(const char *name, struct entry *e,
     }
 
     tok = strarray_split(cmd, NULL);
-    run_startup(tok->data);
+    run_startup(tok);
     strarray_free(tok);
 }
 
@@ -1503,7 +1504,7 @@ static void add_service(const char *name, struct entry *e, void *rock)
     Services[i].proto = proto;
     proto = NULL; /* avoid freeing it */
 
-    Services[i].exec = tokenize(cmd);
+    Services[i].exec = strarray_split(cmd, NULL);
 
     /* is this service actually there? */
     if (!verify_service_file(Services[i].exec)) {
@@ -1612,9 +1613,7 @@ static void add_event(const char *name, struct entry *e, void *rock)
     }
     evt->period = period;
 
-    evt->exec = tokenize(cmd);
-    free(cmd);
-    if (!evt->exec) fatal("out of memory", EX_UNAVAILABLE);
+    evt->exec = strarray_splitm(cmd, NULL);
 
     schedule_event(evt);
 }
@@ -1672,7 +1671,7 @@ static void reread_conf(void)
 
     /* disable all services -
        they will be re-enabled if they appear in config file */
-    for (i = 0; i < nservices; i++) Services[i].exec = NULL;
+    for (i = 0; i < nservices; i++) service_forget_exec(&Services[i]);
 
     /* read services */
     masterconf_getsection("SERVICES", &add_service, (void*) 1);
