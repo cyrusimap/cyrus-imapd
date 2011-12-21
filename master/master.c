@@ -1050,7 +1050,7 @@ static void sigquit_handler(int sig __attribute__((unused)))
        all children have exited */
     in_shutdown = 1;
 
-    syslog(LOG_INFO, "attempting clean shutdown on SIGQUIT");
+    /* syslog(LOG_INFO, "attempting clean shutdown on SIGQUIT"); */
 }
 
 static volatile sig_atomic_t gotsigchld = 0;
@@ -1089,7 +1089,7 @@ static void sigterm_handler(int sig __attribute__((unused)))
     snmp_shutdown("cyrusMaster");
 #endif
 
-    syslog(LOG_INFO, "exiting on SIGTERM/SIGINT");
+    /* syslog(LOG_INFO, "exiting on SIGTERM/SIGINT"); */
     exit(0);
 }
 
