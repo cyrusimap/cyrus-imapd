@@ -112,7 +112,7 @@ sub test_rename_asuser
 
     $imaptalk->rename("INBOX.user-src", "INBOX.user-dst") || die;
     $imaptalk->select("INBOX.user-dst") || die;
-    my @postdata = $imaptalk->search("FLAG" => "\$NotJunk");
+    my @postdata = $imaptalk->search("KEYWORD" => "\$NotJunk");
     $self->assert_num_equals(1, scalar @postdata);
 }
 
@@ -137,7 +137,7 @@ sub test_rename_subfolder
 
     $imaptalk->rename("INBOX.user-src", "INBOX.user-dst") || die;
     $imaptalk->select("INBOX.user-dst.subdir") || die;
-    my @postdata = $imaptalk->search("FLAG" => "\$NotJunk");
+    my @postdata = $imaptalk->search("KEYWORD" => "\$NotJunk");
     $self->assert_num_equals(1, scalar @postdata);
 }
 
