@@ -2897,7 +2897,7 @@ static int chkchildren(char *name,
     if (!strcmp(part, mbentry.partition))
 	r = CYRUSDB_DONE;
 
-    return 0;
+    return r;
 }
 
 /*
