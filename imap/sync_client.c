@@ -1595,7 +1595,10 @@ int do_folders(struct sync_name_list *mboxname_list,
 
     r = reserve_messages(mboxname_list, master_folders,
 			 replica_folders, reserve_guids);
-    if (r) goto bail;
+    if (r) {
+	syslog(LOG_ERR, "reserve messages: failed: %s", error_message(r));
+	goto bail;
+    }
 
     /* Tag folders on server which still exist on the client. Anything
      * on the server which remains untagged can be deleted immediately */
@@ -1614,7 +1617,11 @@ int do_folders(struct sync_name_list *mboxname_list,
     for (rfolder = replica_folders->head; rfolder; rfolder = rfolder->next) {
 	if (rfolder->mark) continue;
 	r = folder_delete(rfolder->name);
-	if (r) goto bail;
+	if (r) {
+	    syslog(LOG_ERR, "folder_delete(): failed: %s '%s'", 
+		   rfolder->name, error_message(r));
+	    goto bail;
+	}
     }
 
     /* Need to rename folders in an order which avoids dependancy conflicts
