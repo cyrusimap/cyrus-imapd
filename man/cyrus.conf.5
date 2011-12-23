@@ -94,6 +94,9 @@ is required.
 This section is the heart of the \fB/etc/cyrus.conf\fR file.  It lists
 the processes that should be spawned to handle client connections made
 on certain Internet/UNIX sockets.
+.IP "\fBbabysit=\fR0" 5
+Integer value - if non-zero, will make sure at least one process is
+pre-forked, and will set the maxforkrate to 10 if it's zero.
 .IP "\fBcmd=\fR<no default>" 5
 The command (with options) to spawn as a child process.  This string
 argument is required.
@@ -125,13 +128,18 @@ if possible.
 .IP "\fBprefork=\fR0" 5
 The number of instances of this service to always have running and
 waiting for a connection (for faster initial response time).  This
-integer value is optional.
+integer value is optional.  Note that if you are listening on multiple
+network types (i.e. ipv4 and ipv6) then one process will be forked for
+each address, causing twice as many processes as you might expect.
 .IP "\fBmaxchild=\fR-1" 5
 The maximum number of instances of this service to spawn.  A value of
 -1 means unlimited.  This integer value is optional.
 .IP "\fBmaxfds=\fR256" 5
 The maximum number of file descriptors to which to limit this process.
 This integer value is optional.
+.IP "\fBmaxforkrate=\fR0" 5
+Maximum number of processes to fork per second - the master will insert
+sleeps to ensure it doesn't fork faster than this on average.
 .SS EVENTS
 This section lists processes that should be run at specific intervals,
 similar to cron jobs.  This section is typically used to perform
