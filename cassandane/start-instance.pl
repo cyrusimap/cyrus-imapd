@@ -113,7 +113,7 @@ my $instance = Cassandane::Instance->new(
 		config => $config,
 		re_use_dir => $re_use_dir,
 		valgrind => $valgrind,
-		persistent => 1,
+		persistent => $start_flag ? 1 : 0,
 	       );
 $instance->add_services(@services);
 
