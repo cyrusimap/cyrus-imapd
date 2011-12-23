@@ -9,6 +9,42 @@
 <body>
 
 
+<h1>Changes to the Cyrus IMAP Server since 2.4.12</h1>
+<ul>
+<li>Bug #3565 - fix gcc compiler warnings - thanks
+    Dilyan Palauzov &lt;dilyan.palauzov@aegee.org&gt;</li>
+<li>Bug #2685 - rename annots in delayed folder delete.
+    Avoids annotations "reappearing" when a folder is
+    recreated</li>
+<li>Bug #3566 - actually fix in a backward compatible
+    way.  2.4.12 broke older versions of bison</li>
+<li>Lots of small cleanups from CMU as they prepared
+    to build RSS into their 2.4 build.  Thanks Ken</li>
+<li>Bug #3591/#3609 - fix crash in mupdate on partition move</li>
+<li>Bug #3610 - fix replication of partition move</li>
+<li>Bug #3564 - document the way prefork interacts
+    with multiple network protocols</li>
+<li>Bug #3586 - allow rename of "\Noselect" if
+    subfolders exist</li>
+<li>A handful of small cleanups (#3593, #3594, #3595)
+    from David Carter &lt;dpc22@cam.ac.uk&gt;.  Very
+    much appreciated</li>
+<li>Disabled duplicate_check DEBUG level log messages
+    by default.  Thanks Philip Prindeville
+    &lt;philipp@redfish-solutions.com&gt;</li>
+<li>Bug #3608 - log mailbox name in more sync
+    failure cases</li>
+<li>Bug #3615 - fix proxyd_disable_mailbox_referrals.
+    Thanks Andrew Morgan &lt;morgan@orst.edu&gt;</li>
+<li>Bug #3611 - fix crash in sync_mailbox_full if
+    expunge fails</li>
+<li>Backported some nice fixes from master, including
+    safer thread/sort (there were some crashes on bad
+    messages before)</li>
+<li>Fixed infinite loop on suppress_capabilities with
+    substrings of other capabilities.  Ouch.</li>
+</ul>
+
 <h1>Changes to the Cyrus IMAP Server since 2.4.11</h1>
 <ul>
 <li>Bug #3150 - fix issue with overview and messages without
