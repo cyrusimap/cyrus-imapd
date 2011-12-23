@@ -2439,7 +2439,7 @@ int mailbox_repack_commit(struct mailbox_repack **repackptr)
     unsigned char *buf = ibuf.buf;
     struct mailbox_repack *repack = *repackptr;
     int n;
-    int r = 0;
+    int r = IMAP_IOERROR;
 
     assert(repack);
 
@@ -2447,19 +2447,18 @@ int mailbox_repack_commit(struct mailbox_repack **repackptr)
 
     /* rewrite the header with updated details */
     mailbox_index_header_to_buf(&repack->i, buf);
-    n = lseek(repack->newindex_fd, 0, SEEK_SET);
-    if (n == -1) {
-	r = IMAP_IOERROR;
+
+    if (lseek(repack->newindex_fd, 0, SEEK_SET) < 0)
 	goto fail;
-    }
-    n = retry_write(repack->newindex_fd, buf, INDEX_HEADER_SIZE);
-    if (n == -1) {
-	r = IMAP_IOERROR;
+
+    if (retry_write(repack->newindex_fd, buf, INDEX_HEADER_SIZE) < 0)
 	goto fail;
-    }
 
     /* ensure everything is committed to disk */
-    if (fsync(repack->newindex_fd) || fsync(repack->newcache_fd))
+    if (fsync(repack->newindex_fd) < 0)
+	goto fail;
+
+    if (fsync(repack->newcache_fd) < 0)
 	goto fail;
 
     close(repack->newcache_fd);
