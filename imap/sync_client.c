@@ -1757,8 +1757,11 @@ int do_folders(struct sync_name_list *mboxname_list,
 	for (item = rename_folders->head; item; item = item->next) {
 	    if (item->done) continue;
 
-	    item2 = sync_rename_lookup(rename_folders, item->newname);
-	    if (item2 && !item2->done) continue;
+	    /* don't skip rename to different partition */
+	    if (strcmp(item->oldname, item->newname)) {
+		item2 = sync_rename_lookup(rename_folders, item->newname);
+		if (item2 && !item2->done) continue;
+	    }
 
 	    /* Found unprocessed item which should rename cleanly */
 	    r = folder_rename(item->oldname, item->newname, item->part);
