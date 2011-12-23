@@ -1262,7 +1262,7 @@ static int mailbox_full_update(const char *mboxname)
 	r2 = sync_parse_response("EXPUNGE", sync_in, NULL);
 	if (r2) {
 	    syslog(LOG_ERR, "SYNCERROR: failed to expunge in cleanup %s",
-		   mailbox->name);
+		   mboxname);
 	}
     }
 
