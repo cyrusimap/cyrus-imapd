@@ -2996,7 +2996,7 @@ static int chkchildren(char *name,
 
     mboxlist_entry_free(&mbentry);
 
-    return 0;
+    return r;
 }
 
 /*
