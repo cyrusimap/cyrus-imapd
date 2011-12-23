@@ -1194,9 +1194,16 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
 	}
 	else if (partitionmove) {
 	    char *oldpartition = xstrdup(oldmailbox->part);
+	    if (config_auditlog)
+		syslog(LOG_NOTICE, "auditlog: partitionmove sessionid=<%s> "
+		       "mailbox=<%s> uniqueid=<%s> oldpart=<%s> newpart=<%s>",
+		       session_id(),
+		       oldmailbox->name, oldmailbox->uniqueid,
+		       oldpartition, partition);
 	    mailbox_close(&oldmailbox);
 	    mailbox_delete_cleanup(oldpartition, oldname);
 	    free(oldpartition);
+
 	}
 	else
 	    abort(); /* impossible, in theory */
