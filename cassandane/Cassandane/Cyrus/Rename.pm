@@ -117,6 +117,31 @@ sub test_rename_asuser
 }
 
 #
+# Test Bug #3586 - rename subfolders
+#
+sub test_rename_subfolder
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create("INBOX.user-src.subdir") || die;
+    $self->{store}->set_folder("INBOX.user-src.subdir");
+    $self->{store}->write_begin();
+    my $msg1 = $self->{gen}->generate(subject => "subject 1");
+    $self->{store}->write_message($msg1, flags => ["\\Seen", "\$NotJunk"]);
+    $self->{store}->write_end();
+    $imaptalk->select("INBOX.user-src.subdir") || die;
+    my @predata = $imaptalk->search("SEEN");
+    $self->assert_num_equals(1, scalar @predata);
+
+    $imaptalk->rename("INBOX.user-src", "INBOX.user-dst") || die;
+    $imaptalk->select("INBOX.user-dst.subdir") || die;
+    my @postdata = $imaptalk->search("FLAG" => "\$NotJunk");
+    $self->assert_num_equals(1, scalar @postdata);
+}
+
+#
 # Test LSUB behaviour
 #
 sub test_rename_user
