@@ -2819,7 +2819,7 @@ void capa_response(int flags)
 	if (capa_is_disabled(base_capabilities[i].str))
 	    continue;
 	/* Don't show "MAILBOX-REFERRALS" if disabled by config */
-	if (disable_referrals && 
+	if (config_getswitch(IMAPOPT_PROXYD_DISABLE_MAILBOX_REFERRALS) && 
 	    !strcmp(base_capabilities[i].str, "MAILBOX-REFERRALS"))
 	    continue;
 	/* Don't show if they're not shown at this level of login */
@@ -5990,7 +5990,11 @@ void cmd_list(char *tag, struct listargs *listargs)
     clock_t start = clock();
     char mytime[100];
 
-    if (listargs->sel & LIST_SEL_REMOTE) supports_referrals = !disable_referrals;
+    if (listargs->sel & LIST_SEL_REMOTE) {
+	if (!config_getswitch(IMAPOPT_PROXYD_DISABLE_MAILBOX_REFERRALS)) {
+	    supports_referrals = !disable_referrals;
+	}
+    }
 
     list_callback_calls = 0;
 
