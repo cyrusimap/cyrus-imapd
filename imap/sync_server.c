@@ -979,6 +979,48 @@ static void cmd_compress(char *alg)
 }
 #endif
 
+/* ====================================================================== */
+
+/* partition_list is simple linked list of names used by cmd_restart */
+
+struct partition_list {
+    struct partition_list *next;
+    char *name;
+};
+
+static struct partition_list *
+partition_list_add(char *name, struct partition_list *pl)
+{
+    struct partition_list *p;
+
+    /* Is name already on list? */
+    for (p=pl; p; p = p->next) {
+        if (!strcmp(p->name, name))
+            return(pl);
+    }
+
+    /* Add entry to start of list and return new list */
+    p = xzmalloc(sizeof(struct partition_list));
+    p->next = pl;
+    p->name = xstrdup(name);
+
+    return(p);
+}
+
+static void
+partition_list_free(struct partition_list *current)
+{
+    while (current) {
+        struct partition_list *next = current->next;
+
+        free(current->name);
+        free(current);
+
+        current = next;
+    }
+    
+}
+
 static void cmd_restart(struct sync_reserve_list **reserve_listp, int re_alloc)
 {
     struct sync_reserve *res;
@@ -986,14 +1028,27 @@ static void cmd_restart(struct sync_reserve_list **reserve_listp, int re_alloc)
     struct sync_msgid *msg;
     const char *fname;
     int hash_size = l->hash_size;
+    struct partition_list *p, *pl = NULL;
 
     for (res = l->head; res; res = res->next) {
 	for (msg = res->list->head; msg; msg = msg->next) {
+            pl = partition_list_add(res->part, pl);
+
 	    fname = dlist_reserve_path(res->part, &msg->guid);
 	    unlink(fname);
 	}
     }
     sync_reserve_list_free(reserve_listp);
+        
+    /* Remove all <partition>/sync./<pid> directories referred to above */
+    for (p=pl; p ; p = p->next) {
+        static char buf[MAX_MAILBOX_PATH];
+
+        snprintf(buf, MAX_MAILBOX_PATH, "%s/sync./%lu", 
+                 config_partitiondir(p->name), (unsigned long)getpid());
+        rmdir(buf);
+    }
+    partition_list_free(pl);
 
     if (re_alloc)
 	*reserve_listp = sync_reserve_list_create(hash_size);
