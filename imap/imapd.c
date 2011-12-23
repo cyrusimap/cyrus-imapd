@@ -5538,6 +5538,7 @@ struct renrock
     char *acl_olduser, *acl_newuser;
     char *newmailboxname;
     char *partition;
+    int found;
 };
 
 /* Callback for use by cmd_rename */
@@ -5548,6 +5549,8 @@ static int checkmboxname(char *name,
 {
     struct renrock *text = (struct renrock *)rock;
     int r;
+
+    text->found++;
 
     if((text->nl + strlen(name + text->ol)) >= MAX_MAILBOX_BUFFER)
 	return IMAP_MAILBOX_BADNAME;
@@ -5638,6 +5641,7 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
     char oldextname[MAX_MAILBOX_BUFFER];
     char newextname[MAX_MAILBOX_BUFFER];
     int omlen, nmlen;
+    int subcount = 0; /* number of sub-folders found */
     int recursive_rename = 1;
     int rename_user = 0;
     char olduser[128], newuser[128];
@@ -5828,8 +5832,17 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	}
     }
 
+    r = 0; /* doesn't matter if we didn't find it now */
+
+    (*imapd_namespace.mboxname_toexternal)(&imapd_namespace,
+					   oldmailboxname,
+					   imapd_userid, oldextname);
+    (*imapd_namespace.mboxname_toexternal)(&imapd_namespace,
+					   newmailboxname,
+					   imapd_userid, newextname);
+
     /* rename all mailboxes matching this */
-    if (!r && recursive_rename && strcmp(oldmailboxname, newmailboxname)) {
+    if (recursive_rename && strcmp(oldmailboxname, newmailboxname)) {
 	struct renrock rock;
 	int ol = omlen + 1;
 	int nl = nmlen + 1;
@@ -5842,6 +5855,7 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	strcat(nmbn, ".");
 
 	/* setup the rock */
+	rock.found = 0;
 	rock.newmailboxname = nmbn;
 	rock.ol = ol;
 	rock.nl = nl;
@@ -5855,6 +5869,8 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	/* Check mboxnames to ensure we can write them all BEFORE we start */
 	r = mboxlist_findall(NULL, ombn, 1, imapd_userid,
 			     imapd_authstate, checkmboxname, &rock);
+
+	subcount = rock.found;
     }
 
     /* attempt to rename the base mailbox */
@@ -5862,6 +5878,9 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	r = mboxlist_renamemailbox(oldmailboxname, newmailboxname, partition,
 				   imapd_userisadmin, 
 				   imapd_userid, imapd_authstate, 0, rename_user);
+	/* it's OK to not exist if there are subfolders */
+	if (r == IMAP_MAILBOX_NONEXISTENT && subcount && !rename_user) 
+	    goto submboxes;
     }
 
     /* If we're renaming a user, take care of changing quotaroot, ACL,
@@ -5912,27 +5931,19 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
     /* rename all mailboxes matching this */
     if (!r && recursive_rename) {
 	struct renrock rock;
-	int ol = omlen + 1;
-	int nl = nmlen + 1;
-
-	(*imapd_namespace.mboxname_toexternal)(&imapd_namespace,
-					       oldmailboxname,
-					       imapd_userid, oldextname);
-	(*imapd_namespace.mboxname_toexternal)(&imapd_namespace,
-					       newmailboxname,
-					       imapd_userid, newextname);
 
 	prot_printf(imapd_out, "* OK rename %s %s\r\n",
 		    oldextname, newextname);
 	prot_flush(imapd_out);
 
+submboxes:
 	strcat(oldmailboxname, ".*");
 	strcat(newmailboxname, ".");
 
 	/* setup the rock */
 	rock.newmailboxname = newmailboxname;
-	rock.ol = ol;
-	rock.nl = nl;
+	rock.ol = omlen + 1;
+	rock.nl = nmlen + 1;
 	rock.olduser = olduser;
 	rock.newuser = newuser;
 	rock.acl_olduser = acl_olduser;
