@@ -246,7 +246,10 @@ static const int list_select_mod_opts  = LIST_SEL_RECURSIVEMATCH;
 struct list_rock {
     struct listargs *listargs;
     char *last_name;
+    int last_matchlen;
+    char *told_prefix;
     int last_attributes;
+    int has_trailing_percent;
 };
 
 /* Information about one mailbox name that LIST returns */
@@ -10036,6 +10039,69 @@ static int set_subscribed(char *name, int matchlen,
     return 0;
 }
 
+/* output a pre-response filling in any missing levels of the
+ * heirarchy if required */
+static void pre_response(struct list_rock *rock)
+{
+    int pl = strlen(rock->told_prefix);
+    int nl = strlen(rock->last_name);
+    char *p;
+
+    if (pl > nl) pl = nl;
+
+    /* trim back any non-matching parts */
+    while (memcmp(rock->last_name, rock->told_prefix, pl)) {
+	p = strrchr(rock->told_prefix, '.');
+	if (p) pl = (p - rock->told_prefix);
+	else pl = 0;
+	rock->told_prefix[pl] = '\0';
+    }
+
+    /* avoid the 'zero length' case, it has too many false positives...
+     * so we'll content outselves with filling in between 'foo' and
+     * 'foo.bar.baz' with a 'foo.bar' response */
+    if (!pl) return;
+    
+    /* we now have the parts of the matching prefix which have
+     * already been told - tell the rest */
+    while (pl < nl && (p = strchr(rock->last_name + pl + 1, '.'))) {
+	pl = p - rock->last_name;
+	rock->last_name[pl] = '\0';
+	list_response(rock->last_name, MBOX_ATTRIBUTE_HASCHILDREN, rock->listargs);
+	rock->last_name[pl] = '.';
+    }
+}
+
+static void perform_output(const char *name, int matchlen,
+			   struct list_rock *rock)
+{
+    if (rock->last_name) {
+	/* only tell the matching part */
+	if (rock->last_name[rock->last_matchlen]) {
+	    rock->last_attributes |= MBOX_ATTRIBUTE_HASCHILDREN;
+	    rock->last_name[rock->last_matchlen] = '\0';
+	}
+	if (!rock->told_prefix) rock->told_prefix = xstrdup("");
+	/* fill in any gaps if trailing percent is set.  This is pretty
+	 * horrible, but it appears "*%" is actually legal and means
+	 * tell me everything, and fill in the gaps in the tree */
+	if (rock->has_trailing_percent) pre_response(rock);
+	/* don't tell the same name twice */
+	if (strcmpsafe(rock->told_prefix, rock->last_name) < 0)
+	    list_response(rock->last_name, rock->last_attributes, rock->listargs);
+	free(rock->told_prefix);
+	rock->told_prefix = rock->last_name;
+    }
+    if (name) {
+	rock->last_name = xstrdup(name);
+	rock->last_matchlen = matchlen;
+	rock->last_attributes = 0;
+    }
+    else {
+	free(rock->told_prefix);
+    }
+}
+
 /* callback for mboxlist_findall
  * used when the SUBSCRIBED selection option is NOT given */
 static int list_cb(char *name, int matchlen, int maycreate,
@@ -10055,13 +10121,10 @@ static int list_cb(char *name, int matchlen, int maycreate,
 	rock->last_attributes |= MBOX_ATTRIBUTE_HASCHILDREN;
 
     if (!name[matchlen]) {
-	/* exact match */
+	/* tidy up flags */
 	if ( ! (rock->last_attributes & MBOX_ATTRIBUTE_HASCHILDREN) )
 	    rock->last_attributes |= MBOX_ATTRIBUTE_HASNOCHILDREN;
-	list_response(rock->last_name, rock->last_attributes, rock->listargs);
-	free(rock->last_name);
-	rock->last_name = xstrdup(name);
-	rock->last_attributes = 0;
+	perform_output(name, matchlen, rock);
 	if (!maycreate)
 	    rock->last_attributes |= MBOX_ATTRIBUTE_NOINFERIORS;
 	/* xxx: is there a cheaper way to figure out \Subscribed? */
@@ -10081,9 +10144,7 @@ static int list_cb(char *name, int matchlen, int maycreate,
 	 * "Shared Folders/" in the unixhiersep + altnamspace case, even
 	 * though what's passed here is a sort-of-internal-name-but-with
 	 * -INBOX name.  Ugly, ugly, ugly */
-	list_response(rock->last_name, rock->last_attributes, rock->listargs);
-	free(rock->last_name);
-	rock->last_name = xstrndup(name, matchlen);
+	perform_output(name, matchlen, rock);
 	rock->last_attributes = MBOX_ATTRIBUTE_HASCHILDREN;
     }
 
@@ -10109,10 +10170,7 @@ static int subscribed_cb(const char *name, int matchlen, int maycreate,
 	rock->last_attributes |= MBOX_ATTRIBUTE_HASCHILDREN;
 
     if (!name[matchlen]) {
-	/* exact match */
-	list_response(rock->last_name, rock->last_attributes, rock->listargs);
-	free(rock->last_name);
-	rock->last_name = xstrdup(name);
+	perform_output(name, matchlen, rock);
 	rock->last_attributes = MBOX_ATTRIBUTE_SUBSCRIBED;
 	if (!maycreate)
 	    rock->last_attributes |= MBOX_ATTRIBUTE_NOINFERIORS;
@@ -10124,9 +10182,7 @@ static int subscribed_cb(const char *name, int matchlen, int maycreate,
 	 * mailbox names that match the pattern but aren't subscribed
 	 * must also be returned if they have a child mailbox that is
 	 * subscribed */
-	list_response(rock->last_name, rock->last_attributes, rock->listargs);
-	free(rock->last_name);
-	rock->last_name = xstrndup(name, matchlen);
+	perform_output(name, matchlen, rock);
 	rock->last_attributes = MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED;
     }
 
@@ -10307,18 +10363,15 @@ static void list_data(struct listargs *listargs)
 	list_data_recursivematch(listargs, findsub);
     } else {
 	struct strlist *pattern;
-	struct list_rock rock;
-	rock.listargs = listargs;
-	rock.last_name = NULL;
-	rock.last_attributes = 0;
 	if (listargs->sel & LIST_SEL_SUBSCRIBED) {
 	    for (pattern = listargs->pat; pattern; pattern = pattern->next) {
+		struct list_rock rock;
+		memset(&rock, 0, sizeof(struct list_rock));
+		rock.listargs = listargs;
+		rock.has_trailing_percent = (pattern->s[strlen(pattern->s)-1] == '%');
 		findsub(&imapd_namespace, pattern->s, imapd_userisadmin,
 			imapd_userid, imapd_authstate, subscribed_cb, &rock, 1);
-		list_response(rock.last_name, rock.last_attributes,
-			      rock.listargs);
-		free(rock.last_name);
-		rock.last_name = NULL;
+		perform_output(NULL, 0, &rock);
 	    }
 	} else {
 	    if (listargs->scan) {
@@ -10326,12 +10379,13 @@ static void list_data(struct listargs *listargs)
 	    }
 
 	    for (pattern = listargs->pat; pattern; pattern = pattern->next) {
+		struct list_rock rock;
+		memset(&rock, 0, sizeof(struct list_rock));
+		rock.listargs = listargs;
+		rock.has_trailing_percent = (pattern->s[strlen(pattern->s)-1] == '%');
 		findall(&imapd_namespace, pattern->s, imapd_userisadmin,
 			imapd_userid, imapd_authstate, list_cb, &rock);
-		list_response(rock.last_name, rock.last_attributes,
-			      rock.listargs);
-		free(rock.last_name);
-		rock.last_name = NULL;
+		perform_output(NULL, 0, &rock);
 	    }
 
 	    if (listargs->scan)
