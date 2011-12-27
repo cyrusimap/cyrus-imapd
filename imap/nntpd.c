@@ -203,14 +203,6 @@ struct {
 		   {  -1, 238, 438,  -1 },
 		   { 239,  -1,  -1, 439 } };
 
-struct wildmat {
-    char *pat;
-    int not;
-};
-
-static struct wildmat *split_wildmats(char *str);
-static void free_wildmats(struct wildmat *wild);
-
 static void cmdloop(void);
 static int open_group(char *name, int has_prefix,
 		      struct backend **ret, int *postable);
@@ -463,7 +455,8 @@ int service_init(int argc __attribute__((unused)),
     if ((prefix = config_getstring(IMAPOPT_NEWSPREFIX)))
 	snprintf(newsprefix, sizeof(newsprefix), "%s.", prefix);
 
-    newsgroups = split_wildmats((char *) config_getstring(IMAPOPT_NEWSGROUPS));
+    newsgroups = split_wildmats((char *) config_getstring(IMAPOPT_NEWSGROUPS),
+				config_getstring(IMAPOPT_NEWSPREFIX));
 
     /* initialize duplicate delivery database */
     if (duplicate_init(NULL, 0) != 0) {
@@ -2629,7 +2622,8 @@ static void cmd_list(char *arg1, char *arg2)
 	erock.wild = xstrdup(arg2); /* make a copy before we munge it */
 
 	lrock.proc = do_active;
-	lrock.wild = split_wildmats(arg2); /* split the list of wildmats */
+	/* split the list of wildmats */
+	lrock.wild = split_wildmats(arg2, config_getstring(IMAPOPT_NEWSPREFIX));
 
 	/* xxx better way to determine a size for this table? */
 	construct_hash_table(&lrock.server_table, 10, 1);
@@ -2689,7 +2683,8 @@ static void cmd_list(char *arg1, char *arg2)
 	erock.wild = xstrdup(arg2); /* make a copy before we munge it */
 
 	lrock.proc = do_newsgroups;
-	lrock.wild = split_wildmats(arg2); /* split the list of wildmats */
+	/* split the list of wildmats */
+	lrock.wild = split_wildmats(arg2, config_getstring(IMAPOPT_NEWSPREFIX));
 
 	/* xxx better way to determine a size for this table? */
 	construct_hash_table(&lrock.server_table, 10, 1);
@@ -2845,7 +2840,7 @@ static void cmd_newnews(char *wild, time_t tstamp)
     struct newrock nrock;
 
     nrock.tstamp = tstamp;
-    nrock.wild = split_wildmats(wild);
+    nrock.wild = split_wildmats(wild, config_getstring(IMAPOPT_NEWSPREFIX));
 
     prot_printf(nntp_out, "230 List of new articles follows:\r\n");
 
@@ -3687,7 +3682,7 @@ static void feedpeer(char *peer, message_data_t *msg)
 
     /* check newsgroups against wildmat to see if we should feed it */
     if (wild && *wild) {
-	wmat = split_wildmats(wild);
+	wmat = split_wildmats(wild, config_getstring(IMAPOPT_NEWSPREFIX));
 
 	feed = 0;
 	for (n = 0; n < msg->rcpt_num; n++) {
@@ -4210,54 +4205,3 @@ static void cmd_starttls(int nntps __attribute__((unused)))
     fatal("cmd_starttls() called, but no OpenSSL", EC_SOFTWARE);
 }
 #endif /* HAVE_SSL */
-
-static struct wildmat *split_wildmats(char *str)
-{
-    const char *prefix;
-    char pattern[MAX_MAILBOX_BUFFER] = "", *p, *c;
-    struct wildmat *wild = NULL;
-    int n = 0;
-
-    if ((prefix = config_getstring(IMAPOPT_NEWSPREFIX)))
-	snprintf(pattern, sizeof(pattern), "%s.", prefix);
-    p = pattern + strlen(pattern);
-
-    /*
-     * split the list of wildmats
-     *
-     * we split them right to left because this is the order in which
-     * we want to test them (per RFC3977 section 4.2)
-     */
-    do {
-	if ((c = strrchr(str, ',')))
-	    *c++ = '\0';
-	else
-	    c = str;
-
-	if (!(n % 10)) /* alloc some more */
-	    wild = xrealloc(wild, (n + 11) * sizeof(struct wildmat));
-
-	if (*c == '!') wild[n].not = 1;		/* not */
-	else if (*c == '@') wild[n].not = -1;	/* absolute not (feeding) */
-	else wild[n].not = 0;
-
-	strncpy(p, wild[n].not ? c + 1 : c, pattern+sizeof(pattern) - p);
-	pattern[sizeof(pattern)-1] = '\0';
-
-	wild[n++].pat = xstrdup(pattern);
-    } while (c != str);
-    wild[n].pat = NULL;
-
-    return wild;
-}
-
-static void free_wildmats(struct wildmat *wild)
-{
-    struct wildmat *w = wild;
-
-    while (w->pat) {
-	free(w->pat);
-	w++;
-    }
-    free(wild);
-}
