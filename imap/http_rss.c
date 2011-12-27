@@ -66,6 +66,7 @@
 #include "seen.h"
 #include "util.h"
 #include "version.h"
+#include "wildmat.h"
 #include "xmalloc.h"
 #include "xmemmem.h"
 #include "xstrlcpy.h"
@@ -86,6 +87,7 @@ static int meth_get(struct transaction_t *txn);
 static int rss_to_mboxname(struct request_target_t *req_tgt,
 			   char *mboxname, uint32_t *uid,
 			   char *section);
+static int is_feed(const char *mbox);
 static int list_feeds(struct transaction_t *txn,
 		      const char *base, unsigned long len);
 static int fetch_message(struct transaction_t *txn, struct mailbox *mailbox,
@@ -149,6 +151,9 @@ static int meth_get(struct transaction_t *txn)
 	}
 	else return list_feeds(txn, def_template, strlen(def_template));
     }
+
+    /* Make sure its a mailbox that we are treating as an RSS feed */
+    if (!is_feed(mailboxname)) return HTTP_NOT_FOUND;
 
     /* Locate the mailbox */
     if ((r = http_mlookup(mailboxname, &server, NULL, NULL))) {
@@ -300,6 +305,32 @@ static int rss_to_mboxname(struct request_target_t *req_tgt,
 
 
 /*
+ * Checks to make sure that the given mailbox is actually something
+ * that we're treating as an RSS feed.  Returns 1 if yes, 0 if no.
+ */
+static int is_feed(const char *mbox)
+{
+    static struct wildmat *feeds = NULL;
+    struct wildmat *wild;
+
+    if (!feeds) {
+	feeds = split_wildmats((char *) config_getstring(IMAPOPT_RSS_FEEDS),
+			       NULL);
+    }
+
+    /* check mailbox against the 'rss_feeds' wildmat */
+    wild = feeds;
+    while (wild->pat && wildmat(mbox, wild->pat) != 1) wild++;
+
+    /* if we don't have a match, or its a negative match, don't use it */
+    if (!wild->pat || wild->not) return 0;
+
+    /* otherwise, its usable */
+    return 1;
+}
+    
+
+/*
  * mboxlist_findall() callback function to list RSS feeds as a tree
  */
 struct node {
@@ -322,6 +353,9 @@ static int list_cb(char *name, int matchlen, int maycreate, void *rock)
 
     if (name) {
 	char *acl;
+
+	/* Don't list mailboxes that we don't treat as RSS feeds */
+	if (!is_feed(name)) return 0;
 
 	/* Don't list deleted mailboxes */
 	if (mboxname_isdeletedmailbox(name)) return 0;
