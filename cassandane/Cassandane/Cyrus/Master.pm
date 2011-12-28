@@ -173,9 +173,9 @@ sub lemming_cull
     closedir LEMM;
 }
 
-sub lemming_service
+sub _lemming_args
 {
-    my ($self, %params) = @_;
+    my (%params) = @_;
 
     my $tag = delete $params{tag} || 'A';
     my $mode = delete $params{mode} || 'serve';
@@ -184,7 +184,25 @@ sub lemming_service
     my @argv = ( $lemming_bin, '-t', $tag, '-m', $mode );
     push(@argv, '-d', $delay) if defined $delay;
 
-    return $self->{instance}->add_service(name => $tag, argv => \@argv, %params);
+    return (name => $tag, argv => \@argv, %params);
+}
+
+sub lemming_service
+{
+    my ($self, %params) = @_;
+    return $self->{instance}->add_service(_lemming_args(%params));
+}
+
+sub lemming_start
+{
+    my ($self, %params) = @_;
+    return $self->{instance}->add_start(_lemming_args(%params));
+}
+
+sub lemming_event
+{
+    my ($self, %params) = @_;
+    return $self->{instance}->add_event(_lemming_args(%params));
 }
 
 sub lemming_wait
@@ -478,7 +496,7 @@ sub test_exit_after_connect
 #
 # Test a single program in SERVICES which fails during startup
 #
-sub test_exit_during_start
+sub test_service_exit_during_start
 {
     my ($self) = @_;
     my $lemm;
@@ -510,6 +528,48 @@ sub test_exit_during_start
     $self->assert_null($lemm);
     $self->assert_deep_equals({ A => { live => 0, dead => 5 } },
 			      $self->lemming_census());
+}
+
+sub test_startup
+{
+    my ($self) = @_;
+
+    xlog "Test a program in the START section";
+    $self->lemming_start(tag => 'A', delay => 100, mode => 'success');
+    $self->lemming_start(tag => 'B', delay => 200, mode => 'success');
+    # This service won't be used
+    my $srv = $self->lemming_service(tag => 'C');
+    $self->start();
+
+    xlog "expect 2 dead lemmings";
+    $self->assert_deep_equals({
+				A => { live => 0, dead => 1 },
+				B => { live => 0, dead => 1 },
+			      }, $self->lemming_census());
+}
+
+sub test_startup_exits
+{
+    my ($self) = @_;
+
+    xlog "Test a program in the START section which fails";
+    $self->lemming_start(tag => 'A', delay => 100, mode => 'exit');
+    $self->lemming_start(tag => 'B', delay => 200, mode => 'exit');
+    # This service won't be used
+    my $srv = $self->lemming_service(tag => 'C');
+    eval
+    {
+	$self->start();
+    };
+    xlog "start failed (as expected): $@" if $@;
+
+    xlog "master should have exited when first startup failed";
+    $self->assert(!$self->{instance}->is_running());
+
+    xlog "expect 1 dead lemming";
+    $self->assert_deep_equals({
+				A => { live => 0, dead => 1 },
+			      }, $self->lemming_census());
 }
 
 # TODO: test exit during startup with prefork=

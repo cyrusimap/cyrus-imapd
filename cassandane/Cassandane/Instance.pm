@@ -669,6 +669,15 @@ sub DESTROY
     }
 }
 
+sub is_running
+{
+    my ($self) = @_;
+
+    my $pid = $self->_read_pid_file($self->_pid_file());
+    return 0 unless defined $pid;
+    return kill(0, $pid);
+}
+
 sub _setup_for_deliver
 {
     my ($self) = @_;
