@@ -42,16 +42,13 @@
 package Cassandane::Service;
 use strict;
 use warnings;
+use base qw(Cassandane::MasterEntry);
 use Cassandane::Util::Log;
 use Cassandane::MessageStoreFactory;
-
-my @otherparams = qw(prefork maxchild maxforkrate maxfds proto babysit);
 
 my $next_port = 9100;
 sub alloc_port
 {
-    my ($class) = @_;
-
     my $port = $next_port;
     $next_port++;
     return $port;
@@ -59,41 +56,25 @@ sub alloc_port
 
 sub new
 {
-    my $class = shift;
-    my $name = shift;
-    my %params = @_;
+    my ($class, %params) = @_;
 
-    die "No name specified"
-	unless defined $name;
+    my $host = delete $params{host} || '127.0.0.1';
+    my $port = delete $params{port} || alloc_port();
 
-    my $self =
-    {
-	name => $name,
-	host => '127.0.0.1',
-	port => undef,
-	argv => [],
-    };
+    my $self = $class->SUPER::new(%params);
 
-    $self->{host} = $params{host}
-	if defined $params{host};
-    $self->{port} = $params{port}
-	if defined $params{port};
-    $self->{argv} = $params{argv}
-	if defined $params{argv};
-    foreach my $a (@otherparams)
-    {
-	$self->{$a} = $params{$a}
-	    if defined $params{$a};
-    }
+    $self->{host} = $host;
+    $self->{port} = $port;
 
-    $self->{port} = Cassandane::Service->alloc_port()
-	unless defined $self->{port};
-    die "No binary specified"
-	unless defined $self->{argv} && scalar @{$self->{argv}};
-
-    bless $self, $class;
     return $self;
 }
+
+sub _otherparams
+{
+    my ($self) = @_;
+    return ( qw(prefork maxchild maxforkrate maxfds proto babysit) );
+}
+
 
 # Return a hash of parameters suitable for passing
 # to MessageStoreFactory::create.
@@ -122,16 +103,9 @@ sub create_store
 sub master_params
 {
     my ($self) = @_;
-    my %params = (
-	cmd => $self->{argv},
-	listen => $self->address(),
-    );
-    foreach my $a (@otherparams)
-    {
-	$params{$a} = $self->{$a}
-	    if defined $self->{$a};
-    }
-    return \%params;
+    my $params = $self->SUPER::master_params();
+    $params->{listen} = $self->address();
+    return $params;
 }
 
 sub address
