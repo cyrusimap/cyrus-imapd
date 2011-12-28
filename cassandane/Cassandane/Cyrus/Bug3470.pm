@@ -60,8 +60,8 @@ sub new
     $config->set(altimap_unixhierarchysep => 'on');
     $config->set(altimap_altnamespace => 'yes');
     $self->{instance} = Cassandane::Instance->new(config => $config);
-    $self->{instance}->add_service('imap');
-    $self->{instance}->add_service('altimap');
+    $self->{instance}->add_service(name => 'imap');
+    $self->{instance}->add_service(name => 'altimap');
 
     $self->{gen} = Cassandane::Generator->new();
 

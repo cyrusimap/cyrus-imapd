@@ -48,41 +48,40 @@ use Cassandane::IMAPService;
 
 sub create
 {
-    my $class = shift;
-    my $name = shift;
-    my %params = @_;
+    my ($class, %params) = @_;
 
+    my $name = $params{name};
     die "No name specified"
 	unless defined $name;
 
     # try and guess some service-specific defaults
     if ($name =~ m/imap/)
     {
-	return Cassandane::IMAPService->new($name,
+	return Cassandane::IMAPService->new(
 				argv => ['imapd'],
 				%params);
     }
     elsif ($name =~ m/sync/)
     {
-	return Cassandane::Service->new($name,
+	return Cassandane::Service->new(
 				argv => ['sync_server'],
 				%params);
     }
     elsif ($name =~ m/lmtp/)
     {
-	return Cassandane::Service->new($name,
+	return Cassandane::Service->new(
 				argv => ['lmtpd'],
 				%params);
     }
     elsif ($name =~ m/sieve/)
     {
-	return Cassandane::Service->new($name,
+	return Cassandane::Service->new(
 				argv => ['timsieved'],
 				%params);
     }
     elsif ($name =~ m/nntp/)
     {
-	return Cassandane::Service->new($name,
+	return Cassandane::Service->new(
 				argv => ['nntpd'],
 				%params);
     }
@@ -90,7 +89,7 @@ sub create
     {
 	die "No command specified and cannot guess a default"
 	    unless defined $params{argv};
-	return Cassandane::Service->new($name, %params);
+	return Cassandane::Service->new(%params);
     }
 }
 

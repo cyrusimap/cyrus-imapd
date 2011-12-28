@@ -181,12 +181,15 @@ sub cleanup_leftovers
 
 sub add_service
 {
-    my ($self, $name, %params) = @_;
+    my ($self, %params) = @_;
 
+    my $name = $params{name};
+    die "Missing parameter 'name'"
+	unless defined $name;
     die "Already have a service named \"$name\""
 	if defined $self->{services}->{$name};
 
-    my $srv = Cassandane::ServiceFactory->create($name, %params);
+    my $srv = Cassandane::ServiceFactory->create(%params);
     $self->{services}->{$name} = $srv;
     return $srv;
 }
@@ -194,10 +197,7 @@ sub add_service
 sub add_services
 {
     my ($self, @names) = @_;
-    foreach my $n (@names)
-    {
-	$self->add_service($n);
-    }
+    map { $self->add_service(name => $_); } @names;
 }
 
 sub get_service
@@ -629,7 +629,7 @@ sub _setup_for_deliver
 {
     my ($self) = @_;
 
-    $self->add_service('lmtp',
+    $self->add_service(name => 'lmtp',
 		       argv => ['lmtpd', '-a'],
 		       port => $self->{basedir} . '/conf/socket/lmtp');
 }

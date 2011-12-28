@@ -69,7 +69,7 @@ Cassandane::Instance
     daemon.  This is rarely a useful setup.  To add a service, in this case
     the imapd daemon:
 
-    $instance->add_service('imap');
+    $instance->add_service(name => 'imap');
 
     Starting the Instance creates the directory structure and
     configuration files, then starts the master process and waits for

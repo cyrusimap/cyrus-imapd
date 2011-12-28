@@ -56,7 +56,7 @@ sub new
     my $self = $class->SUPER::new(@_);
 
     $self->{instance} = Cassandane::Instance->new();
-    $self->{instance}->add_service('imap');
+    $self->{instance}->add_service(name => 'imap');
 
     $self->{gen} = Cassandane::Generator->new();
 

@@ -183,7 +183,7 @@ sub lemming_service
     my @argv = ( $lemming_bin, '-t', $tag, '-m', $mode );
     push(@argv, '-d', $delay) if defined $delay;
 
-    return $self->{instance}->add_service($tag, argv => \@argv, %params);
+    return $self->{instance}->add_service(name => $tag, argv => \@argv, %params);
 }
 
 sub lemming_wait
