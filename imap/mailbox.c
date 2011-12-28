@@ -2438,7 +2438,6 @@ int mailbox_repack_commit(struct mailbox_repack **repackptr)
     indexbuffer_t ibuf;
     unsigned char *buf = ibuf.buf;
     struct mailbox_repack *repack = *repackptr;
-    int n;
     int r = IMAP_IOERROR;
 
     assert(repack);
