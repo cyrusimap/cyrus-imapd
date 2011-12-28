@@ -500,6 +500,7 @@ sub _check_valgrind_logs
     my $valgrind_logdir = $self->{basedir} . '/vglogs';
     my $nerrs = 0;
 
+    return unless -d $valgrind_logdir;
     opendir VGLOGS, $valgrind_logdir
 	or die "Cannot open directory $valgrind_logdir for reading: $!";
     while (my $_ = readdir VGLOGS)
@@ -532,6 +533,7 @@ sub _check_cores
     my $coredir = $self->{basedir} . '/conf/cores';
     my $ncores = 0;
 
+    return unless -d $coredir;
     opendir CORES, $coredir
 	or die "Cannot open directory $coredir for reading: $!";
     while (my $_ = readdir CORES)

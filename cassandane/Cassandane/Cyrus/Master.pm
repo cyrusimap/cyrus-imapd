@@ -159,6 +159,7 @@ sub lemming_cull
     return unless defined $self->{instance};
     my $coresdir = $self->{instance}->{basedir} . '/conf/cores';
 
+    return unless -d $coresdir;
     opendir LEMM,$coresdir
 	or die "cannot open $coresdir for reading: $!";
     while ($_ = readdir LEMM)
