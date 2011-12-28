@@ -632,10 +632,8 @@ static void run_startup(const strarray_t *cmd)
     default: /* parent */
 	if (waitpid(pid, &status, 0) < 0) {
 	    syslog(LOG_ERR, "waitpid(): %m");
-	} else if (status != 0) {
-	    int failed = decode_wait_status(pid, status);
-	    if (failed)
-		fatal("can't run startup", 1);
+	} else if (decode_wait_status(pid, status)) {
+	    fatal("can't run startup", 1);
 	}
 	break;
     }
