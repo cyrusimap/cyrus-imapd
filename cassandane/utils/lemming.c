@@ -47,6 +47,8 @@
 #include <ctype.h>
 #include <stdint.h>
 #include <sys/poll.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 
 #define STATUS_FD   3
 #define LISTEN_FD   4
@@ -60,6 +62,21 @@ usage(void)
     fprintf(stderr, "Usage: lemming [-d DELAY] [-m FAILMODE] [-t TAG]\n");
     fflush(stderr);
     exit(1);
+}
+
+static void no_cores(void)
+{
+    struct rlimit lim;
+    int r;
+
+    memset(&lim, 0, sizeof(lim));
+    r = getrlimit(RLIMIT_CORE, &lim);
+    if (lim.rlim_cur) {
+	lim.rlim_cur = 0;
+	r = setrlimit(RLIMIT_CORE, &lim);
+	if (r)
+	    syslog(LOG_ERR, "setrlimit failed: %m");
+    }
 }
 
 static int
@@ -167,6 +184,8 @@ main(int argc, char **argv)
     int c;
     int delay_ms = 20;
     char filename[256];
+
+    no_cores();
 
     /* parse arguments */
     while ((c = getopt(argc, argv, "C:d:m:t:")) > 0)
