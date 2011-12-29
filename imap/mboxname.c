@@ -818,6 +818,9 @@ static int mboxname_strip_deletedprefix(char *name, char **ptr)
 	deletedprefix_len = strlen(deletedprefix);
     }
 
+    /* if the prefix is blank, then nothing is deleted */
+    if (!deletedprefix_len) return 0;
+
     if (strncmp(name, deletedprefix, deletedprefix_len))
 	return IMAP_MAILBOX_BADNAME;
 
