@@ -940,10 +940,6 @@ static void reap_child(void)
 		       "service %s pid %d in ILLEGAL STATE: exited. Serious "
 		       "software bug or memory corruption detected!",
 		       s ? SERVICENAME(s->name) : "unknown", pid);
-		syslog(LOG_DEBUG,
-		       "service %s pid %d in ILLEGAL state: forced to valid "
-		       "UNKNOWN state",
-		       s ? SERVICENAME(s->name) : "unknown", pid);
 		centry_set_state(c, SERVICE_STATE_UNKNOWN);
 	    }
 	    if (s) {
@@ -997,7 +993,7 @@ static void reap_child(void)
 		    break;
 		}
 	    } else {
-	    	/* children from spawn_schedule (events) or
+		/* children from spawn_schedule (events) or
 		 * children of services removed by reread_conf() */
 		if (c->service_state != SERVICE_STATE_READY) {
 		    syslog(LOG_WARNING,
@@ -1291,9 +1287,6 @@ static void process_msg(int si, struct notify_message *msg)
 	syslog(LOG_CRIT,
 	       "service %s pid %d in ILLEGAL state: detected. Serious software bug or memory corruption uncloaked while processing message 0x%x from child!",
 	       SERVICENAME(s->name), c->pid, msg->message);
-	syslog(LOG_DEBUG,
-	       "service %s pid %d in ILLEGAL state: forced to valid UNKNOWN state",
-	       SERVICENAME(s->name), c->pid);
 	centry_set_state(c, SERVICE_STATE_UNKNOWN);
 	break;
     }
