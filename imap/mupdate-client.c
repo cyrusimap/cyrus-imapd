@@ -664,6 +664,15 @@ void kick_mupdate(void)
     struct sockaddr_un srvaddr;
     int s, r;
     int len;
+
+    /* no server? drop out */
+    if (!config_mupdate_server)
+	return;
+
+    /* don't kick on standard backends */
+    if (config_mupdate_config == IMAP_ENUM_MUPDATE_CONFIG_STANDARD
+	&& config_getstring(IMAPOPT_PROXYSERVERS))
+	return;
     
     s = socket(AF_UNIX, SOCK_STREAM, 0);
     if (s == -1) {

@@ -5140,10 +5140,8 @@ void cmd_create(char *tag, char *name, struct dlist *extargs, int localonly)
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
     }
     else {
-	if (config_mupdate_server &&
-	    (config_mupdate_config != IMAP_ENUM_MUPDATE_CONFIG_STANDARD)) {
+	if (config_mupdate_server)
 	    kick_mupdate();
-	}
 
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
@@ -5293,10 +5291,8 @@ void cmd_delete(char *tag, char *name, int localonly, int force)
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
     }
     else {
-	if (config_mupdate_server &&
-	    (config_mupdate_config != IMAP_ENUM_MUPDATE_CONFIG_STANDARD)) {
+	if (config_mupdate_server)
 	    kick_mupdate();
-	}
 
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
@@ -5739,10 +5735,8 @@ submboxes:
     if (r) {
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
     } else {
-	if (config_mupdate_server &&
-	    (config_mupdate_config != IMAP_ENUM_MUPDATE_CONFIG_STANDARD)) {
+	if (config_mupdate_server)
 	    kick_mupdate();
-	}
 
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
@@ -6429,10 +6423,8 @@ void cmd_setacl(char *tag, const char *name,
     if (r) {
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
     } else {
-	if (config_mupdate_server &&
-	    (config_mupdate_config != IMAP_ENUM_MUPDATE_CONFIG_STANDARD)) {
+	if (config_mupdate_server)
 	    kick_mupdate();
-	}
 
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
