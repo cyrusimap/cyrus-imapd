@@ -126,7 +126,11 @@ Start in daemon mode (run in background and disconnect from controlling
 terminal).
 .TP
 .BI \-D
-Don't close stdin/stdout/stderr. Primiarly useful for debugging.
+Don't close stdin/stdout/stderr. Primarily useful for debugging.  Note
+that -d and -D cannot be used together; consider using -L instead.
+.TP
+.BI \-L " logfile"
+Redirect stdout and stderr to the given \fIlogfile\fP.
 .TP
 .BI \-x " snmp agentx socket"
 Address the master agent (most likely snmpd) listens on.

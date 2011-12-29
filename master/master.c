@@ -1736,6 +1736,7 @@ int main(int argc, char **argv)
     int pidlock_fd = -1;
 
     int i, opt, close_std = 1, daemon_mode = 0;
+    const char *error_log = NULL;
     extern char *optarg;
 
     char *alt_config = NULL;
@@ -1754,9 +1755,9 @@ int main(int argc, char **argv)
     p = getenv("CYRUS_VERBOSE");
     if (p) verbose = atoi(p) + 1;
 #ifdef HAVE_NETSNMP
-    while ((opt = getopt(argc, argv, "C:M:p:l:Ddj:P:x:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:L:M:p:l:Ddj:P:x:")) != EOF) {
 #else
-    while ((opt = getopt(argc, argv, "C:M:p:l:Ddj:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:L:M:p:l:Ddj:")) != EOF) {
 #endif
 	switch (opt) {
 	case 'C': /* alt imapd.conf file */
@@ -1784,6 +1785,10 @@ int main(int argc, char **argv)
 	    if(daemon_mode)
 		fatal("Unable to be both debug and daemon mode", EX_CONFIG);
 	    close_std = 0;
+	    break;
+	case 'L':
+	    /* error log */
+	    error_log = optarg;
 	    break;
 	case 'j':
 	    /* Janitor frequency */
