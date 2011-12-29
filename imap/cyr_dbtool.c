@@ -142,8 +142,9 @@ int main(int argc, char *argv[])
     int use_stdin = 0;
     int db_flags = 0;
     struct txn *tid = NULL;
+    struct txn **tidp = &tid;
 
-    while ((opt = getopt(argc, argv, "C:n")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:nt")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
@@ -151,6 +152,8 @@ int main(int argc, char *argv[])
 	case 'n': /* create new */
 	    db_flags |= CYRUSDB_CREATE;
 	    break;
+	case 't':
+	    tidp = NULL;
 	}
     }
 
@@ -223,12 +226,12 @@ int main(int argc, char *argv[])
         }
         while ( loop ) {
           if (is_get) {
-            cyrusdb_fetch(odb, key, keylen, &res, &reslen, &tid);
+            cyrusdb_fetch(odb, key, keylen, &res, &reslen, tidp);
             printf("%.*s\n", (int)reslen, res);
           } else if (is_set) {
-            cyrusdb_store(odb, key, keylen, value, vallen, &tid);
+            cyrusdb_store(odb, key, keylen, value, vallen, tidp);
           } else if (is_delete) {
-            cyrusdb_delete(odb, key, keylen, &tid, 1);
+            cyrusdb_delete(odb, key, keylen, tidp, 1);
           }
           loop = 0;
           if ( use_stdin ) {
@@ -237,11 +240,11 @@ int main(int argc, char *argv[])
         }
     } else if (!strcmp(action, "show")) {
         if ((argc - optind) < 4) {
-            cyrusdb_foreach(odb, "", 0, NULL, printer_cb, NULL, &tid);
+            cyrusdb_foreach(odb, "", 0, NULL, printer_cb, NULL, tidp);
         } else {
             key = argv[optind+3];
             keylen = strlen(key);
-            cyrusdb_foreach(odb, key, keylen, NULL, printer_cb, NULL, &tid);
+            cyrusdb_foreach(odb, key, keylen, NULL, printer_cb, NULL, tidp);
         }
     } else if (!strcmp(action, "consistency")) {
         if (cyrusdb_consistent(odb)) {
