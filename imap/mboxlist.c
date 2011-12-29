@@ -1632,8 +1632,7 @@ static int find_p(void *rockp,
 
 	memcpy(namebuf, key, keylen);
 	namebuf[keylen] = '\0';
-	if (mboxlist_delayed_delete_isenabled() && 
-	    mboxname_isdeletedmailbox(namebuf))
+	if (mboxname_isdeletedmailbox(namebuf))
 	    return 0;
     }
 
