@@ -10101,7 +10101,7 @@ static void pre_response(struct list_rock *rock)
      * so we'll content outselves with filling in between 'foo' and
      * 'foo.bar.baz' with a 'foo.bar' response */
     if (!pl) return;
-
+    
     /* we now have the parts of the matching prefix which have
      * already been told - tell the rest */
     while (pl < nl && (p = strchr(rock->last_name + pl + 1, '.'))) {
@@ -10121,22 +10121,16 @@ static void perform_output(const char *name, int matchlen,
 	    rock->last_attributes |= MBOX_ATTRIBUTE_HASCHILDREN;
 	    rock->last_name[rock->last_matchlen] = '\0';
 	}
-
 	if (!rock->told_prefix) rock->told_prefix = xstrdup("");
-
+	/* fill in any gaps if trailing percent is set.  This is pretty
+	 * horrible, but it appears "*%" is actually legal and means
+	 * tell me everything, and fill in the gaps in the tree */
+	if (rock->has_trailing_percent) pre_response(rock);
 	/* don't tell the same name twice */
-	if (strcmpsafe(rock->told_prefix, rock->last_name) < 0) {
-	    /* fill in any gaps if trailing percent is set.  This is pretty
-	     * horrible, but it appears "*%" is actually legal and means
-	     * tell me everything, and fill in the gaps in the tree */
-	    if (rock->has_trailing_percent) pre_response(rock);
+	if (strcmpsafe(rock->told_prefix, rock->last_name) < 0)
 	    list_response(rock->last_name, rock->last_attributes, rock->listargs);
-	    free(rock->told_prefix);
-	    rock->told_prefix = rock->last_name;
-	}
-	else {
-	    free(rock->last_name);
-	}
+	free(rock->told_prefix);
+	rock->told_prefix = rock->last_name;
     }
     if (name) {
 	rock->last_name = xstrdup(name);
