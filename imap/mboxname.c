@@ -811,6 +811,9 @@ int mboxname_isdeletedmailbox(const char *name)
 	deletedprefix_len = strlen(deletedprefix);
     }
 
+    /* if the prefix is blank, then nothing is deleted */
+    if (!deletedprefix_len) return 0;
+
     if (config_virtdomains && (p = strchr(name, '!')))
 	domainlen = p - name + 1;
 
