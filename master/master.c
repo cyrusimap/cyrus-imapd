@@ -1842,14 +1842,10 @@ int main(int argc, char **argv)
 	    break;
 	case 'd':
 	    /* Daemon Mode */
-	    if(!close_std)
-		fatal("Unable to both be debug and daemon mode", EX_CONFIG);
 	    daemon_mode = 1;
 	    break;
 	case 'D':
 	    /* Debug Mode */
-	    if(daemon_mode)
-		fatal("Unable to be both debug and daemon mode", EX_CONFIG);
 	    close_std = 0;
 	    break;
 	case 'L':
@@ -1874,6 +1870,9 @@ int main(int argc, char **argv)
 	    break;
 	}
     }
+
+    if (daemon_mode && !close_std)
+	fatal("Unable to be both debug and daemon mode", EX_CONFIG);
 
     masterconf_init("master", alt_config);
 
