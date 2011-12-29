@@ -8688,6 +8688,7 @@ static int xfer_undump(struct xfer_header *xfer)
 	    syslog(LOG_ERR,
 		   "Failed to open mailbox %s for dump_mailbox() %s",
 		   item->name, error_message(r));
+	    return r;
 	}
 
 	/* Step 4: Dump local -> remote */
@@ -8730,43 +8731,12 @@ static int xfer_undump(struct xfer_header *xfer)
 	    return r;
 	}
 
-	/* 6.5) Kick remote server to correct mupdate entry */
-	/* Note that we don't really care if this succeeds or not */
-	if (xfer->mupdate_h) {
-	    prot_printf(xfer->be->out, "MP1 MUPDATEPUSH {" SIZE_T_FMT "+}\r\n%s\r\n",
-			strlen(extname), extname);
-	    r = getresult(xfer->be->in, "MP1");
-	    if (r) {
-		syslog(LOG_ERR,
-		       "Could not trigger remote push to mupdate server "
-		       "during move of %s", item->name);
-	    }
-	}
-    }
+	/* No need to push the MUPDATE if we're not part of a murder */
+	if (!xfer->mupdate_h) continue;
 
-    return 0;
-}
-
-static int xfer_reactivate(struct xfer_header *xfer)
-{
-    struct xfer_item *item;
-    int r;
-
-    /* Step 6: mupdate.activate(mailbox, remote) */
-    /* We do this from the local server first so that recovery is easier */
-    for (item = xfer->items; item; item = item->next) {
-	const char *topart = xfer->topart;
-	/*
-	 * If we don't have a partition on the target server, we use
-	 * the string "MOVED" instead.  When we issue MUPDATEPUSH to the
-	 * target server, it will correctly update the mupdate master.
-	 * Note that "toserver" is also a guess, since it's not actually
-	 * required to match config_servername on the target server.  So
-	 * much for making recovery easier!
-	 */
-	if (!topart) topart = "MOVED";
-	r = xfer_mupdate(xfer, 1, item->name, topart,
-			 xfer->toserver, item->acl);
+	prot_printf(xfer->be->out, "MP1 MUPDATEPUSH {" SIZE_T_FMT "+}\r\n%s\r\n",
+		    strlen(extname), extname);
+	r = getresult(xfer->be->in, "MP1");
 	if (r) {
 	    syslog(LOG_ERR, "MUPDATE: can't activate mailbox entry '%s'",
 		   item->name);
@@ -8852,7 +8822,6 @@ static int do_xfer(struct xfer_header *xfer)
     r = xfer_deactivate(xfer);
     if (!r) r = xfer_localcreate(xfer);
     if (!r) r = xfer_undump(xfer);
-    if (!r) r = xfer_reactivate(xfer);
     /* note - we don't report errors if this one
      * fails! */
     if (!r) xfer_delete(xfer);
