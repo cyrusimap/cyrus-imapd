@@ -452,6 +452,11 @@ sub _start_master
 	'-d',
 	'-M', $self->_master_conf(),
     );
+    if (get_verbose) {
+	my $logfile = $self->{basedir} . '/conf/master.log';
+	xlog "_start_master: logging to $logfile";
+	push(@cmd, '-L', $logfile);
+    }
     unlink $self->_pid_file();
     # Start master daemon
     $self->run_command({ cyrus => 1 }, @cmd);
