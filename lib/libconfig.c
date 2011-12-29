@@ -160,7 +160,8 @@ const char *config_getoverflowstring(const char *key, const char *def)
     if(config_ident) {
 	if(snprintf(buf,sizeof(buf),"%s_%s",config_ident,key) == -1)
 	    fatal("key too long in config_getoverflowstring", EC_TEMPFAIL);
-    
+
+	lcase(buf);
 	ret = hash_lookup(buf, &confighash);
     }
     
