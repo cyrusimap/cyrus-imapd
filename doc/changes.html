@@ -43,6 +43,17 @@
     messages before)</li>
 <li>Fixed infinite loop on suppress_capabilities with
     substrings of other capabilities.  Ouch.</li>
+<li>Fixed LIST and LSUB again - this time to make
+    LIST "" "*%" work without breaking other things</li>
+<li>Bug #3588 - make XFER not break if the wrong server
+    name was used.  The start of making murder safer</li>
+<li>Bug #3603 - tidied up usage of kick_mupdate so it
+    never gets called on standard murder backends</li>
+<li>Bug #3604 - always suppress the DELETED.* mailbox
+    names, even if delete_mode is immediate.  It means
+    a config change or different frontend won't show
+    undeletable mailboxes</li>
+<li>Bug #3602 - allow UpperCase in service names to work</li>
 </ul>
 
 <h1>Changes to the Cyrus IMAP Server since 2.4.11</h1>
