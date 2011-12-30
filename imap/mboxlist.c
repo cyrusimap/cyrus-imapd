@@ -1685,9 +1685,14 @@ static int check_name(struct find_rock *rock,
 {
     static int n = 0;
     if (rock->prev) {
-	if (bsearch_ncompare(base, len, rock->prev, rock->prevlen) < 0) {
-	    return 0; /* prev name, skip it */
-	}
+	/* check if name is previous to what's already been sent.
+	 * NOTE: must be a < 0, not <=0.  It's tempting not to send
+	 * duplicates, but then you can't find if something has
+	 * children in the LIST "" % case, because the matchlen will
+	 * be the same for the children too.  So the callee must
+	 * suppress duplicates after it's checked if it's a child. */
+	if (bsearch_ncompare(base, len, rock->prev, rock->prevlen) < 0)
+	    return 0;
 	free(rock->prev);
     }
 
@@ -1697,7 +1702,7 @@ static int check_name(struct find_rock *rock,
     return 1;
 }
 
-static int find_cb(void *rockp, 
+static int find_cb(void *rockp,
 		   const char *key, int keylen,
 		   const char *data __attribute__((unused)),
 		   int datalen __attribute__((unused)))
