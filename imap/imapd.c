@@ -9997,7 +9997,7 @@ static int set_subscribed(char *name, int matchlen,
     return 0;
 }
 
-static void perform_output(const char *name, int matchlen,
+static void perform_output(const char *name, size_t matchlen,
 			   struct list_rock *rock)
 {
     if (rock->last_name) {
