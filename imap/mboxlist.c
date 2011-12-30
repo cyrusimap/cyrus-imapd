@@ -1683,7 +1683,6 @@ static int find_p(void *rockp,
 static int check_name(struct find_rock *rock,
 		      const char *base, int len)
 {
-    static int n = 0;
     if (rock->prev) {
 	/* check if name is previous to what's already been sent.
 	 * NOTE: must be a < 0, not <=0.  It's tempting not to send
