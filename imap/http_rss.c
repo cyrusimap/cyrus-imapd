@@ -560,7 +560,8 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 {
     const char **via, *prot, *host, *webmaster;
     uint32_t url_len, recno, recentuid = 0;
-    int max_items, max_len, ttl, nitems;
+    int max_age, max_items, max_len, ttl, nitems;
+    time_t age_mark = 0;
     char datestr[80];
     struct buf url = BUF_INITIALIZER, buf = BUF_INITIALIZER;
 
@@ -572,6 +573,10 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 	/* We failed a precondition - don't perform the request */
 	return precond;
     }
+
+    /* Get maximum age of items to display */
+    max_age = config_getint(IMAPOPT_RSS_MAXAGE);
+    if (max_age > 0) age_mark = time(0) - (max_age * 60 * 60 * 24);
 
     /* Get number of items to display */
     max_items = config_getint(IMAPOPT_RSS_MAXITEMS);
@@ -706,11 +711,15 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 	    continue;
 	}
 
+	/* XXX  Are we going to do anything with \Recent? */
 	if (record.uid <= recentuid) {
 	    syslog(LOG_DEBUG, "recno %u not recent (%u/%u)",
 		   recno, record.uid, recentuid);
 	    continue;
 	}
+
+	/* Make sure the message is new enough */
+	if (record.gmtime < age_mark) continue;
 
 	/* Feeding this message, increment counter */
 	nitems++;
