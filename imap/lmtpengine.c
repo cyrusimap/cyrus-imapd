@@ -943,7 +943,7 @@ static int localauth_mechlist_override(
 }
 
 static struct sasl_callback localauth_override_cb[] = {
-    { SASL_CB_GETOPT, &localauth_mechlist_override, NULL },
+    { SASL_CB_GETOPT, (mysasl_cb_ft *) &localauth_mechlist_override, NULL },
     { SASL_CB_LIST_END, NULL, NULL },
 };
 

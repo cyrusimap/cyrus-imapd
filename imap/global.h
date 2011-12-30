@@ -78,6 +78,8 @@ extern int mysasl_config(void *context,
 			 unsigned *len);
 extern sasl_security_properties_t *mysasl_secprops(int flags);
 
+typedef int (mysasl_cb_ft)(void);
+
 /* user canonification */
 extern char *canonify_userid(char *user, char *loginid, int *domain_from_ip);
 

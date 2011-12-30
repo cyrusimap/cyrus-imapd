@@ -2714,8 +2714,8 @@ void do_daemon(const char *sync_log_file, const char *sync_shutdown_file,
 /* ====================================================================== */
 
 static struct sasl_callback mysasl_cb[] = {
-    { SASL_CB_GETOPT, &mysasl_config, NULL },
-    { SASL_CB_CANON_USER, &mysasl_canon_user, NULL },
+    { SASL_CB_GETOPT, (mysasl_cb_ft *) &mysasl_config, NULL },
+    { SASL_CB_CANON_USER, (mysasl_cb_ft *) &mysasl_canon_user, NULL },
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
