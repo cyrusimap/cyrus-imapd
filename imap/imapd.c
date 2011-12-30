@@ -583,9 +583,9 @@ static int imapd_proxy_policy(sasl_conn_t *conn,
 }
 
 static const struct sasl_callback mysasl_cb[] = {
-    { SASL_CB_GETOPT, &mysasl_config, NULL },
-    { SASL_CB_PROXY_POLICY, &imapd_proxy_policy, (void*) &imapd_proxyctx },
-    { SASL_CB_CANON_USER, &imapd_canon_user, (void*) &disable_referrals },
+    { SASL_CB_GETOPT, (mysasl_cb_ft *) &mysasl_config, NULL },
+    { SASL_CB_PROXY_POLICY, (mysasl_cb_ft *) &imapd_proxy_policy, (void*) &imapd_proxyctx },
+    { SASL_CB_CANON_USER, (mysasl_cb_ft *) &imapd_canon_user, (void*) &disable_referrals },
     { SASL_CB_LIST_END, NULL, NULL }
 };
 

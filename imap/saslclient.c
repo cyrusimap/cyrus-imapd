@@ -55,6 +55,7 @@
 #include "prot.h"
 #include "imap_err.h"
 #include "saslclient.h"
+#include "global.h"
 
 
 static int mysasl_simple_cb(void *context, int id, const char **result,
@@ -121,7 +122,7 @@ sasl_callback_t *mysasl_callbacks(const char *username,
     if (username) {
 	/* user callback */
 	ret[n].id = SASL_CB_USER;
-	ret[n].proc = &mysasl_simple_cb;
+	ret[n].proc = (mysasl_cb_ft *) &mysasl_simple_cb;
 	ret[n].context = (char *) username;
 	n++;
     }	
@@ -129,7 +130,7 @@ sasl_callback_t *mysasl_callbacks(const char *username,
     if (authname) {
 	/* authname */
 	ret[n].id = SASL_CB_AUTHNAME;
-	ret[n].proc = &mysasl_simple_cb;
+	ret[n].proc = (mysasl_cb_ft *) &mysasl_simple_cb;
 	ret[n].context = (char *) authname;
 	n++;
     }
@@ -137,7 +138,7 @@ sasl_callback_t *mysasl_callbacks(const char *username,
     if (realm) {
 	/* realm */
 	ret[n].id = SASL_CB_GETREALM;
-	ret[n].proc = &mysasl_getrealm_cb;
+	ret[n].proc = (mysasl_cb_ft *) &mysasl_getrealm_cb;
 	ret[n].context = (char *) realm;
 	n++;
     }
@@ -152,7 +153,7 @@ sasl_callback_t *mysasl_callbacks(const char *username,
 
 	/* password */
 	ret[n].id = SASL_CB_PASS;
-	ret[n].proc = &mysasl_getsecret_cb;
+	ret[n].proc = (mysasl_cb_ft *) &mysasl_getsecret_cb;
 	ret[n].context = secret;
 	n++;
     }
