@@ -650,4 +650,47 @@ sub test_service_nohost
 			      $self->lemming_census());
 }
 
+sub test_service_dup_port
+{
+    my ($self) = @_;
+
+    xlog "successful two services with listen= ";
+    xlog "parameters which reference the same IPv4 port";
+    my $srvA = $self->lemming_service(tag => 'A');
+    my $srvB = $self->lemming_service(tag => 'B',
+				      port => $srvA->{port});
+
+    # master should emit a syslog message like this
+    #
+    # Dec 31 14:40:57 enki 0340541/master[26085]: unable to create B
+    # listener socket: Address already in use
+    #
+    # and struggle on.
+    # TODO: need a way to check syslog
+    $self->start();
+
+    xlog "not preforked, so no lemmings running yet";
+    $self->assert_deep_equals({},
+			      $self->lemming_census());
+
+    my $lemmA = lemming_connect($srvA);
+
+    xlog "connected so one lemming forked";
+    $self->assert_deep_equals({ A => { live => 1, dead => 0 } },
+			      $self->lemming_census());
+
+    my $lemmB = lemming_connect($srvB);
+
+    xlog "the port is owned by service A";
+    $self->assert_deep_equals({ A => { live => 2, dead => 0 } },
+			      $self->lemming_census());
+
+    lemming_push($lemmA, 'success');
+    lemming_push($lemmB, 'success');
+
+    xlog "no more live lemmings";
+    $self->assert_deep_equals({ A => { live => 0, dead => 2 } },
+			      $self->lemming_census());
+}
+
 1;
