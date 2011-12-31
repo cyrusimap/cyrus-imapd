@@ -475,7 +475,12 @@ sub _start_master
     xlog "_start_master: PID waiting for services";
     foreach my $srv (values %{$self->{services}})
     {
-	timed_wait(sub { $srv->is_listening() },
+	timed_wait(sub
+		{
+		    $self->is_running()
+			or die "Master no longer running";
+		    $srv->is_listening();
+		},
 	        description => $srv->address() . " to be in LISTEN state");
     }
     xlog "_start_master: all services listening";
