@@ -693,4 +693,29 @@ sub test_service_dup_port
 			      $self->lemming_census());
 }
 
+sub test_service_noexe
+{
+    my ($self) = @_;
+
+    xlog "single service with a non-existant executable";
+    my $srvA = $self->lemming_service(tag => 'A');
+    my $srvB = $self->{instance}->add_service(
+		    name => 'B',
+		    argv => ['/usr/bin/no-such-exe','--foo','--bar']);
+
+    # master should exit while adding services, with a message
+    # to syslog like this
+    #
+    # Dec 31 15:03:26 enki 0403231/master[26825]: cannot find executable
+    # for service 'B'
+    eval
+    {
+	$self->start();
+    };
+    xlog "start failed (as expected): $@" if $@;
+
+    xlog "master should have exited when service verification failed";
+    $self->assert(!$self->{instance}->is_running());
+}
+
 1;
