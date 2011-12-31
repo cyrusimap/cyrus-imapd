@@ -142,7 +142,8 @@ my %netstat_match = (
 	return 0 unless scalar(@a) == 6;
 	return 0 unless $a[0] eq 'tcp';
 	return 0 unless $a[5] eq 'LISTEN';
-	return 0 unless $a[3] eq "$self->{host}:$self->{port}";
+	my $host = $self->{host} || '0.0.0.0';
+	return 0 unless $a[3] eq "$host:$self->{port}";
 	return 1;
     },
 
@@ -161,7 +162,8 @@ my %netstat_match = (
 	# Note that we don't use $self->address() because it formats
 	# the address in Cyrus format which is different to what netstat
 	# reports, in the IPv6 case.
-	return 0 unless $a[3] eq "$self->{host}:$self->{port}";
+	my $host = $self->{host} || '::';
+	return 0 unless $a[3] eq "$host:$self->{port}";
 	return 1;
     },
 

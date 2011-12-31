@@ -625,5 +625,29 @@ sub test_service_unix
 			      $self->lemming_census());
 }
 
+sub test_service_nohost
+{
+    my ($self) = @_;
+
+    xlog "single successful service with a port-only listen=";
+    my $srv = $self->lemming_service(host => undef);
+    $self->start();
+
+    xlog "not preforked, so no lemmings running yet";
+    $self->assert_deep_equals({},
+			      $self->lemming_census());
+
+    my $lemm = lemming_connect($srv);
+
+    xlog "connected so one lemming forked";
+    $self->assert_deep_equals({ A => { live => 1, dead => 0 } },
+			      $self->lemming_census());
+
+    lemming_push($lemm, 'success');
+
+    xlog "no more live lemmings";
+    $self->assert_deep_equals({ A => { live => 0, dead => 1 } },
+			      $self->lemming_census());
+}
 
 1;
