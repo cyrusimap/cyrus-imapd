@@ -58,7 +58,9 @@ sub new
 {
     my ($class, %params) = @_;
 
-    my $host = delete $params{host} || '127.0.0.1';
+    my $host = '127.0.0.1';
+    $host = delete $params{host}
+	if (exists $params{host});
     my $port = delete $params{port} || alloc_port();
 
     my $self = $class->SUPER::new(%params);
@@ -111,54 +113,131 @@ sub master_params
 sub address
 {
     my ($self) = @_;
-    if ($self->{port} =~ m/^\d+$/)
+    my @parts;
+
+    if (defined $self->{host} && !($self->{port} =~ m/^\//))
     {
-	return "$self->{host}:$self->{port}";
+	# Cyrus uses the syntax '[ipv6address]:port' to specify
+	# an IPv6 address (which will contain the : character)
+	# as the host part.
+	push(@parts, '[') if ($self->{host} =~ m/:/);
+	push(@parts, $self->{host});
+	push(@parts, ']') if ($self->{host} =~ m/:/);
+	push(@parts, ':');
     }
-    else
+    push(@parts, $self->{port});
+    return join('', @parts);
+}
+
+my %netstat_match = (
+    #     # netstat -ln -Ainet
+    #     Active Internet connections (only servers)
+    #     Proto Recv-Q Send-Q Local Address           Foreign Address State
+    #     tcp        0      0 0.0.0.0:56686           0.0.0.0:* LISTEN
+    inet => sub
     {
-	return $self->{port};
-    }
+	my ($self, $_) = @_;
+
+	my @a = split;
+	return 0 unless scalar(@a) == 6;
+	return 0 unless $a[0] eq 'tcp';
+	return 0 unless $a[5] eq 'LISTEN';
+	return 0 unless $a[3] eq "$self->{host}:$self->{port}";
+	return 1;
+    },
+
+    #  # netstat -ln -Ainet6
+    #  Active Internet connections (only servers)
+    #  Proto Recv-Q Send-Q Local Address           Foreign Address         State
+    #  tcp6       0      0 :::22                   :::*                    LISTEN
+    inet6 => sub
+    {
+	my ($self, $_) = @_;
+
+	my @a = split;
+	return 0 unless scalar(@a) == 6;
+	return 0 unless $a[0] eq 'tcp6';
+	return 0 unless $a[5] eq 'LISTEN';
+	# Note that we don't use $self->address() because it formats
+	# the address in Cyrus format which is different to what netstat
+	# reports, in the IPv6 case.
+	return 0 unless $a[3] eq "$self->{host}:$self->{port}";
+	return 1;
+    },
+
+    #  # netstat -ln -Aunix
+    #  Active UNIX domain sockets (only servers)
+    #  Proto RefCnt Flags       Type       State         I-Node   Path
+    #  unix  2      [ ACC ]     STREAM     LISTENING     7941     /var/run/dbus/system_bus_socket
+    unix => sub
+    {
+	my ($self, $_) = @_;
+
+	# Compress the Flags field to eliminate spaces and make split()
+	# return a predictable number of fields.
+	s/\[[^]]*\]/[]/;
+
+	my @a = split;
+	return 0 unless scalar(@a) == 7;
+	return 0 unless $a[0] eq 'unix';
+	return 0 unless $a[4] eq 'LISTENING';
+	return 0 unless $a[6] eq $self->{port};
+	return 1;
+    },
+);
+
+sub address_family
+{
+    my ($self) = @_;
+    my $h = $self->{host};
+    my $p = $self->{port};
+
+    # port being a UNIX domain socket is ok
+    return 'unix' if ($p =~ m/^\//);
+
+    # otherwise, the port has to be numeric
+    die "Sorry, the port \"$p\" must be a numeric TCP port or unix path"
+	unless ($p =~ m/^\d+$/);
+
+    # undefined host is ok = inet, IPADDR_ANY
+    return 'inet' if !defined $h;
+    # IPv4 address is ok
+    return 'inet' if ($h =~ m/^\d+\.\d+\.\d+\.\d+$/);
+    # full IPv6 address is ok
+    return 'inet6' if ($h =~ m/^([[:xdigit:]]{1,4}::?)+[[:xdigit:]]{1,4}$/);
+    # IPv6 forms xxxx::x and ::x are ok
+    return 'inet6' if ($h =~ m/^[[:xdigit:]]{4}::[[:xdigit:]]{1,4}$/);
+    return 'inet6' if ($h =~ m/^::[[:xdigit:]]{1,4}$/);
+    # others, not so much
+    die "Sorry, the host argument \"$h\" must be a numeric IPv4 or IPv6 address";
 }
 
 sub is_listening
 {
     my ($self) = @_;
 
-    # hardcoded for TCP4
-    die "Sorry, the host argument \"$self->{host}\" must be a numeric IP address"
-	unless ($self->{host} =~ m/^\d+\.\d+\.\d+\.\d+$/);
-    die "Sorry, the port argument \"$self->{port}\" must be a numeric TCP port or unix path"
-	unless ($self->{port} =~ m/^\d+$/ or $self->{port} =~ m{^/});
+    my $af = $self->address_family();
 
     my @cmd = (
 	'netstat',
 	'-l',		# listening ports only
 	'-n',		# numeric output
-	'-Ainet',	# AF_INET only
+	"-A$af",
 	);
 
+    my $matcher = $netstat_match{$af};
     my $found;
-    if ($self->{port} =~ m/^\d+$/) {
-	open NETSTAT,'-|',@cmd
-	    or die "Cannot run netstat to check for port $self->{port}: $!";
-	#     # netstat -ln -Ainet
-	#     Active Internet connections (only servers)
-	#     Proto Recv-Q Send-Q Local Address           Foreign Address State
-	#     tcp        0      0 0.0.0.0:56686           0.0.0.0:* LISTEN
-	while (<NETSTAT>)
-	{
-	    chomp;
-	    my @a = split;
-	    next unless scalar(@a) == 6;
-	    next unless $a[0] eq 'tcp';
-	    next unless $a[5] eq 'LISTEN';
-	    next unless $a[3] eq $self->address();
-	    $found = 1;
-	    last;
-	}
-	close NETSTAT;
+    open NETSTAT,'-|',@cmd
+	or die "Cannot run netstat to check for service: $!";
+
+    while (<NETSTAT>)
+    {
+	chomp;
+	next unless $self->$matcher($_);
+	$found = 1;
+	last;
     }
+    close NETSTAT;
 
     xlog "is_listening: service $self->{name} is " .
 	 "listening on " . $self->address()

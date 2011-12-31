@@ -45,7 +45,6 @@ use warnings;
 use Mail::IMAPTalk;
 use Cassandane::Util::Log;
 use Cassandane::Util::DateTime qw(to_rfc822);
-# use Data::Dumper;
 use overload qw("") => \&as_string;
 
 # TODO: isa Cassandane::MessageStore
@@ -57,6 +56,7 @@ sub new
     my $class = shift;
     my %params = @_;
     my $self = {
+	address_family => 'inet',
 	host => 'localhost',
 	port => 143,
 	folder => 'INBOX',
@@ -75,6 +75,8 @@ sub new
 	fetched => undef,
     };
 
+    $self->{address_family} = $params{address_family}
+	if defined $params{address_family};
     $self->{host} = $params{host}
 	if defined $params{host};
     $self->{port} = 0 + $params{port}
@@ -106,14 +108,16 @@ sub _connect
 	if defined $self->{client};
     $self->{client} = undef;
 
-    xlog "_connect Server=$self->{host} Port=$self->{port}";
+    my $sock = create_client_socket(
+		    $self->{address_family},
+		    $self->{host}, $self->{port})
+	or die "Cannot create client socket: $@";
 
     my $client = Mail::IMAPTalk->new(
-			    Server => $self->{host},
-			    Port => $self->{port},
+			    Socket => $sock,
 			    Pedantic => 1
 			)
-	or die "Cannot connect to server \"$self->{host}:$self->{port}\": $@";
+	or die "Cannot connect to server: $@";
 
     $client->set_tracing(1)
 	if $self->{verbose};

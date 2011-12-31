@@ -64,6 +64,11 @@ Cassandane needs the following software to work:
     CPAN package http://search.cpan.org/~rva/NNTPClient-0.37/
     Ubuntu package libnews-nntpclient-perl
 
+ * IO::Socket::INET6
+    Object interface for AF_INET|AF_INET6 domain sockets
+    CPAN package http://search.cpan.org/~shlomif/IO-Socket-INET6-2.69/lib/IO/Socket/INET6.pm
+    Ubuntu package libio-socket-inet6-perl
+
 Debian/Ubuntu copypasta:
   sudo apt-get -y install liburi-perl libdigest-sha1-perl \
        libdatetime-perl libbsd-resource-perl libtest-unit-perl \

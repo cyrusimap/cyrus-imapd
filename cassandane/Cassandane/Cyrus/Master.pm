@@ -47,10 +47,10 @@ use POSIX qw(getcwd);
 use DateTime;
 use Cassandane::Util::Log;
 use Cassandane::Util::Wait;
+use Cassandane::Util::Socket;
 use Cassandane::Instance;
 use Cassandane::Service;
 use Cassandane::Config;
-use IO::Socket::INET;
 
 my $lemming_bin = getcwd() . '/utils/lemming';
 
@@ -85,12 +85,10 @@ sub lemming_connect
 {
     my ($srv) = @_;
 
-    my $sock = IO::Socket::INET->new(
-	    Type => SOCK_STREAM,
-	    PeerHost => $srv->{host},
-	    PeerPort => $srv->{port});
-    die "Cannot create sock"
-	unless defined $sock;
+    my $sock = create_client_socket(
+		    $srv->address_family(),
+		    $srv->{host}, $srv->{port})
+	or die "Cannot connect to lemming " . $srv->address() . ": $@";
 
     # The lemming sends us his PID so we can later wait for him to die
     # properly.  It's easiest for synchronisation purposes to encode
@@ -573,5 +571,59 @@ sub test_startup_exits
 }
 
 # TODO: test exit during startup with prefork=
+
+sub test_service_ipv6
+{
+    my ($self) = @_;
+
+    xlog "single successful service on IPv6";
+    my $srv = $self->lemming_service(host => '::1');
+    $self->start();
+
+    xlog "not preforked, so no lemmings running yet";
+    $self->assert_deep_equals({},
+			      $self->lemming_census());
+
+    my $lemm = lemming_connect($srv);
+
+    xlog "connected so one lemming forked";
+    $self->assert_deep_equals({ A => { live => 1, dead => 0 } },
+			      $self->lemming_census());
+
+    lemming_push($lemm, 'success');
+
+    xlog "no more live lemmings";
+    $self->assert_deep_equals({ A => { live => 0, dead => 1 } },
+			      $self->lemming_census());
+}
+
+sub test_service_unix
+{
+    my ($self) = @_;
+
+    xlog "single successful service on UNIX domain socket";
+    my $sockname = $self->{instance}->{basedir} .  "/conf/socket/lemming.sock";
+    my $srv = $self->lemming_service(
+			host => undef,
+			port => $sockname);
+    $self->start();
+
+    xlog "not preforked, so no lemmings running yet";
+    $self->assert_deep_equals({},
+			      $self->lemming_census());
+
+    my $lemm = lemming_connect($srv);
+
+    xlog "connected so one lemming forked";
+    $self->assert_deep_equals({ A => { live => 1, dead => 0 } },
+			      $self->lemming_census());
+
+    lemming_push($lemm, 'success');
+
+    xlog "no more live lemmings";
+    $self->assert_deep_equals({ A => { live => 0, dead => 1 } },
+			      $self->lemming_census());
+}
+
 
 1;
