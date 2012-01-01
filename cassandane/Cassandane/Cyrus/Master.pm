@@ -48,6 +48,7 @@ use DateTime;
 use Cassandane::Util::Log;
 use Cassandane::Util::Wait;
 use Cassandane::Util::Socket;
+use Cassandane::Util::Metronome;
 use Cassandane::Instance;
 use Cassandane::Service;
 use Cassandane::Config;
@@ -716,6 +717,66 @@ sub test_service_noexe
 
     xlog "master should have exited when service verification failed";
     $self->assert(!$self->{instance}->is_running());
+}
+
+sub measure_fork_rate
+{
+    my ($self, $srv, $rate) = @_;
+
+    my $metronome = Cassandane::Util::Metronome->new(rate => $rate);
+    for (1..100)
+    {
+	my $lemm = lemming_connect($srv);
+	lemming_push($lemm, 'success');
+	$metronome->tick();
+    }
+    return $metronome->actual_rate();
+}
+
+sub test_maxforkrate
+{
+    my ($self) = @_;
+
+    xlog "Testing enforcement of the maxforkrate= parameter";
+
+    # A very loose error factor.  We don't care too much if the
+    # enforcement is slightly off, it's a rough resource limit and
+    # fairness measure not a precise QoS issue.  Also, even modest fork
+    # rates may be difficult to achieve when running under Valgrind, and
+    # we don't want that to cause the test to fail spuriously.
+    my $epsilon = 0.2;
+    my $fast = 10.0;	    # forks/sec
+    my $slow = 5.0;	    # forks/sec
+
+    my $srvA = $self->lemming_service(tag => 'A');
+    my $srvB = $self->lemming_service(tag => 'B', maxforkrate => int($slow));
+    $self->start();
+
+    xlog "not preforked, so no lemmings running yet";
+    $self->assert_deep_equals({},
+			      $self->lemming_census());
+
+    xlog "Test that we can achieve the fast forks rate on the unlimited service";
+    my $r = $self->measure_fork_rate($srvA, $fast);
+    xlog "Actual rate: $r";
+    $self->assert($r >= (1.0-$epsilon)*$fast,
+		  "Fork rate too slow, wanted $fast");
+    $self->assert($r <= (1.0+$epsilon)*$fast,
+		  "Fork rate too fast, wanted $fast");
+
+    xlog "Test that the fork rate is limited on the limited service";
+    $r = $self->measure_fork_rate($srvB, $fast);
+    xlog "Actual rate: $r";
+    $self->assert($r >= (1.0-$epsilon)*$slow,
+		  "Fork rate too slow, wanted $slow");
+    $self->assert($r <= (1.0+$epsilon)*$slow,
+		  "Fork rate too fast, wanted $slow");
+
+    xlog "no more live lemmings";
+    $self->assert_deep_equals({
+				A => { live => 0, dead => 100 },
+				B => { live => 0, dead => 100 },
+			      }, $self->lemming_census());
 }
 
 1;
