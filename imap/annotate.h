@@ -137,7 +137,7 @@ typedef int (*annotatemore_find_proc_t)(const char *mailbox,
 /* For findall(), matches any non-zero uid */
 #define ANNOTATE_ANY_UID    ((unsigned int)~0)
 /* 'proc'ess all annotations matching 'mailbox' and 'entry' */
-int annotatemore_findall(const char *mailbox, uint32_t uid, const char *entry,
+int annotatemore_findall(const char *mboxname, uint32_t uid, const char *entry,
 			 annotatemore_find_proc_t proc, void *rock);
 
 /* fetch annotations and output results */
@@ -179,20 +179,19 @@ int annotate_state_write(annotate_state_t *, const char *entry,
  * for 'olduserid' are renamed to 'newuserid'
  * Uses its own transaction.
  */
-int annotatemore_rename(const char *oldmboxname, const char *newmboxname,
-			const char *olduserid, const char *newuserid);
+int annotate_rename_mailbox(struct mailbox *oldmailbox,
+			    struct mailbox *newmailbox);
 /* Handle a message COPY, by copying all the appropriate
  * per-message annotations. Requires an open transaction. */
 int annotate_msg_copy(struct mailbox *oldmailbox, uint32_t olduid,
 		      struct mailbox *newmailbox, uint32_t newuid,
 		      const char *userid);
 /* delete the annotations for the given message */
-int annotate_msg_expunge(struct mailbox *, uint32_t uid);
+int annotate_msg_expunge(struct mailbox *mailbox, uint32_t uid);
 
-/* delete the annotations for 'mbentry'
+/* delete the annotations for 'mailbox'
  * Uses its own transaction. */
-int annotate_delete(const struct mboxlist_entry *mbentry,
-		    struct mailbox *);
+int annotate_delete_mailbox(struct mailbox *mailbox);
 
 /* reconstruct APIs */
 int annotate_reconstruct_begin(struct mailbox *mailbox,

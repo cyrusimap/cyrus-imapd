@@ -5602,18 +5602,14 @@ static int renmbox(char *name,
 			   text->acl_olduser, text->acl_newuser);
 	}
 
-	/* Rename mailbox annotations */
-	annotatemore_rename(name, text->newmailboxname,
-			    text->rename_user ? text->olduser : NULL,
-			    text->rename_user ? text->newuser : NULL);
-	
+
 	prot_printf(imapd_out, "* OK rename %s %s\r\n",
 		    oldextname, newextname);
 
 	sync_log_mailbox_double(name, text->newmailboxname);
 
 	if (text->rename_user) {
-	    /* allow the replica to get the correct new quotaroot 
+	    /* allow the replica to get the correct new quotaroot
 	     * and acls copied across */
 	    sync_log_user(text->newuser);
 	    /* allow the replica to clean up the old meta files */
@@ -5917,13 +5913,6 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	user_renamedata(olduser, newuser, imapd_userid, imapd_authstate);
 
 	/* XXX report status/progress of meta-data */
-    }
-
-    if (!r) {
-	/* Rename mailbox annotations */
-	annotatemore_rename(oldmailboxname, newmailboxname,
-			    rename_user ? olduser : NULL,
-			    rename_user ? newuser : NULL);
     }
 
     /* rename all mailboxes matching this */
@@ -9753,7 +9742,7 @@ static int xfer_delete(struct xfer_header *xfer)
 	    /* XXX - really should be using the 'entry' here, not name */
 	    r = mailbox_open_iwl(item->mbentry->name, &mailbox);
 	    /* Delete mailbox annotations */
-	    if (!r) annotate_delete(item->mbentry, mailbox);
+	    if (!r) annotate_delete_mailbox(mailbox);
 	    if (!r) r = mailbox_delete(&mailbox);
 	    if (r) {
 		syslog(LOG_ERR,

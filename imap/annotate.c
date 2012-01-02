@@ -249,11 +249,9 @@ static int annotation_set_pop3showafter(annotate_state_t *state,
 			                struct annotate_entry_list *entry);
 static int annotation_set_specialuse(annotate_state_t *state,
 				     struct annotate_entry_list *entry);
-static int _annotate_rewrite(const char *oldmboxname,
-			     struct mailbox *oldmailbox,
+static int _annotate_rewrite(struct mailbox *oldmailbox,
 			     uint32_t olduid,
 			     const char *olduserid,
-			     const char *newmboxname,
 			     struct mailbox *newmailbox,
 			     uint32_t newuid,
 			     const char *newuserid,
@@ -546,6 +544,21 @@ static int annotate_dbname_mbentry(const struct mboxlist_entry *mbentry,
 
     return 0;
 }
+
+static int annotate_dbname_mailbox(struct mailbox *mailbox, char **fnamep)
+{
+    const char *conf_fname;
+
+    if (!mailbox) return annotate_dbname_mbentry(NULL, fnamep);
+
+    conf_fname = mboxname_metapath(mailbox->part, mailbox->name,
+				   META_ANNOTATIONS, /*isnew*/0);
+    if (!conf_fname) return IMAP_MAILBOX_BADNAME;
+    *fnamep = xstrdup(conf_fname);
+
+    return 0;
+}
+ 
 
 static int annotate_dbname(const char *mboxname, char **fnamep)
 {
@@ -2372,18 +2385,18 @@ out:
     return r;
 }
 
-static int write_entry(const char *mboxname,
+static int write_entry(struct mailbox *mailbox,
 		       unsigned int uid,
 		       const char *entry,
 		       const char *userid,
 		       const struct buf *value,
-		       struct mailbox *mailbox,
 		       int ignorequota)
 {
     char key[MAX_MAILBOX_PATH+1];
     int keylen, r;
     annotate_db_t *d = NULL;
     quota_t oldlen = 0;
+    const char *mboxname = mailbox ? mailbox->name : "";
 
     /* must be in a transaction to modify the db */
     if (!in_txn)
@@ -2455,13 +2468,10 @@ static int write_entry(const char *mboxname,
 	buf_free(&data);
     }
 
-    if (*mboxname)
-	sync_log_mailbox(mboxname);
-    else
-	sync_log_annotation(mboxname);
-
     if (mailbox)
 	mailbox_use_annot_quota(mailbox, value->len - oldlen);
+    else
+	sync_log_annotation("");
 
 out:
     annotate_putdb(&d);
@@ -2474,10 +2484,8 @@ int annotate_state_write(annotate_state_t *state,
 			 const char *userid,
 			 const struct buf *value)
 {
-    const char *mboxname = (state->mailbox ? state->mailbox->name : "");
-    return write_entry(mboxname, state->uid,
-		       entry, userid, value, state->mailbox,
-		       /*ignorequota*/1);
+    return write_entry(state->mailbox, state->uid,
+		       entry, userid, value, /*ignorequota*/1);
 }
 
 static int annotate_canon_value(struct buf *value, int type)
@@ -2665,18 +2673,15 @@ static int annotation_set_todb(annotate_state_t *state,
 			       struct annotate_entry_list *entry)
 {
     int r = 0;
-    const char *mboxname = (state->mailbox ? state->mailbox->name : "");
 
     if (entry->have_shared)
-	r = write_entry(mboxname, state->uid,
+	r = write_entry(state->mailbox, state->uid,
 			entry->name, "",
-			&entry->shared,
-			state->mailbox, 0);
+			&entry->shared, 0);
     if (!r && entry->have_priv)
-	r = write_entry(mboxname, state->uid,
+	r = write_entry(state->mailbox, state->uid,
 			entry->name, state->userid,
-			&entry->priv,
-			state->mailbox, 0);
+			&entry->priv, 0);
 
     return r;
 }
@@ -2981,8 +2986,6 @@ cleanup:
 }
 
 struct rename_rock {
-    const char *oldmboxname;
-    const char *newmboxname;
     struct mailbox *oldmailbox;
     struct mailbox *newmailbox;
     const char *olduserid;
@@ -2992,7 +2995,7 @@ struct rename_rock {
     int copy;
 };
 
-static int rename_cb(const char *mailbox,
+static int rename_cb(const char *mboxname __attribute__((unused)),
 		     uint32_t uid,
 		     const char *entry,
 		     const char *userid, const struct buf *value,
@@ -3001,7 +3004,7 @@ static int rename_cb(const char *mailbox,
     struct rename_rock *rrock = (struct rename_rock *) rock;
     int r = 0;
 
-    if (rrock->newmboxname) {
+    if (rrock->newmailbox) {
 	/* create newly renamed entry */
 	const char *newuserid = userid;
 
@@ -3010,62 +3013,58 @@ static int rename_cb(const char *mailbox,
 	    /* renaming a user, so change the userid for priv annots */
 	    newuserid = rrock->newuserid;
 	}
-	r = write_entry(rrock->newmboxname, rrock->newuid, entry, newuserid, value, rrock->newmailbox, 0);
+	r = write_entry(rrock->newmailbox, rrock->newuid, entry, newuserid, value, 0);
     }
 
     if (!rrock->copy && !r) {
 	/* delete existing entry */
 	struct buf dattrib = BUF_INITIALIZER;
-	r = write_entry(mailbox, uid, entry, userid, &dattrib, rrock->oldmailbox, 0);
+	r = write_entry(rrock->oldmailbox, uid, entry, userid, &dattrib, 0);
     }
 
     return r;
 }
 
-int annotatemore_rename(const char *oldmboxname, const char *newmboxname,
-			const char *olduserid, const char *newuserid)
+int annotate_rename_mailbox(struct mailbox *oldmailbox,
+			    struct mailbox *newmailbox)
 {
+    /* rename one mailbox */
+    char *olduserid = xstrdup(mboxname_to_userid(oldmailbox->name));
+    char *newuserid = xstrdup(mboxname_to_userid(newmailbox->name));
     int r;
 
     /* rewrite any per-folder annotations from the global db */
     r = annotatemore_begin();
-    if (r)
-	return r;
+    if (r) goto done;
 
-    r = _annotate_rewrite(oldmboxname, NULL, 0, olduserid,
-			  newmboxname, NULL, 0, newuserid,
-			  /*copy*/0);
+    /* copy here - delete will dispose of old records later */
+    r = _annotate_rewrite(oldmailbox, 0, olduserid,
+                          newmailbox, 0, newuserid,
+                         /*copy*/1);
+    if (r) goto done;
 
     /*
      * The per-folder database got moved or linked by mailbox_copy_files().
      */
 
-    if (r)
-	annotatemore_abort();
-    else
-	r = annotatemore_commit();
+    r = annotatemore_commit();
+
+ done:
+    free(olduserid);
+    free(newuserid);
 
     return r;
 }
+
 
 /*
  * Perform a scan-and-rewrite through the database(s) for
  * a given set of criteria; common code for several higher
  * level operations.
- *
- * Note that it may seem redundant to pass both the mailbox*
- * and the mboxname, but there some occasions when we need
- * just the mboxname and not the mailbox.  One example is
- * when we're renaming the mailbox; we don't and can't have
- * two open mailbox* with the old and new names.  The mailbox*
- * is basically used just to update the ANNOTSTORAGE quota,
- * and in the rename case that doesn't matter.
  */
-static int _annotate_rewrite(const char *oldmboxname,
-			     struct mailbox *oldmailbox,
+static int _annotate_rewrite(struct mailbox *oldmailbox,
 			     uint32_t olduid,
 			     const char *olduserid,
-			     const char *newmboxname,
 			     struct mailbox *newmailbox,
 			     uint32_t newuid,
 			     const char *newuserid,
@@ -3074,8 +3073,6 @@ static int _annotate_rewrite(const char *oldmboxname,
     struct rename_rock rrock;
     int r;
 
-    rrock.oldmboxname = oldmboxname;
-    rrock.newmboxname = newmboxname;
     rrock.oldmailbox = oldmailbox;
     rrock.newmailbox = newmailbox;
     rrock.olduserid = olduserid;
@@ -3084,7 +3081,7 @@ static int _annotate_rewrite(const char *oldmboxname,
     rrock.newuid = newuid;
     rrock.copy = copy;
 
-    r = annotatemore_findall(oldmboxname, olduid, "*", &rename_cb, &rrock);
+    r = annotatemore_findall(oldmailbox->name, olduid, "*", &rename_cb, &rrock);
 
     if (r)
 	annotatemore_abort();
@@ -3092,32 +3089,27 @@ static int _annotate_rewrite(const char *oldmboxname,
     return r;
 }
 
-int annotate_delete(const struct mboxlist_entry *mbentry,
-		    struct mailbox *mailbox)
+int annotate_delete_mailbox(struct mailbox *mailbox)
 {
     int r;
     char *fname = NULL;
 
-    assert(mbentry);
     assert(mailbox);
 
     /* remove any per-folder annotations from the global db */
     r = annotatemore_begin();
-    if (r)
-	goto out;
+    if (r) goto out;
 
-    r = _annotate_rewrite(mailbox->name, mailbox,
+    r = _annotate_rewrite(mailbox,
 			  /*olduid*/0, /*olduserid*/NULL,
-			 /*newmailboxname*/NULL, /*newmailbox*/NULL,
-			 /*newuid*/0, /*newuserid*/NULL,
-			 /*copy*/0);
-    if (r)
-	goto out;
+			  /*newmailbox*/NULL,
+			  /*newuid*/0, /*newuserid*/NULL,
+			  /*copy*/0);
+    if (r) goto out;
 
     /* remove the entire per-folder database */
-    r = annotate_dbname_mbentry(mbentry, &fname);
-    if (r)
-	goto out;
+    r = annotate_dbname_mailbox(mailbox, &fname);
+    if (r) goto out;
 
     if (unlink(fname) < 0 && errno != ENOENT) {
 	syslog(LOG_ERR, "cannot unlink %s: %m", fname);
@@ -3136,15 +3128,15 @@ int annotate_msg_copy(struct mailbox *oldmailbox, uint32_t olduid,
 		      struct mailbox *newmailbox, uint32_t newuid,
 		      const char *userid)
 {
-    return _annotate_rewrite(oldmailbox->name, oldmailbox, olduid, userid,
-			     newmailbox->name, newmailbox, newuid, userid,
+    return _annotate_rewrite(oldmailbox, olduid, userid,
+			     newmailbox, newuid, userid,
 			     /*copy*/1);
 }
 
 int annotate_msg_expunge(struct mailbox *mailbox, uint32_t uid)
 {
-    return _annotate_rewrite(mailbox->name, mailbox, uid, /*userid*/NULL,
-			     /*newname*/NULL, /*newmbox*/NULL,
+    return _annotate_rewrite(mailbox, uid, /*userid*/NULL,
+			     /*newmbox*/NULL,
 			     /*newuid*/0, /*newuserid*/NULL,
 			     /*copy*/0);
 }

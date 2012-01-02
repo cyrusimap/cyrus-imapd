@@ -76,6 +76,7 @@
 #endif
 
 #include "acl.h"
+#include "annotate.h"
 #include "assert.h"
 #include "crc32.h"
 #include "exitcodes.h"
@@ -87,12 +88,11 @@
 #include "message.h"
 #include "map.h"
 #include "mboxlist.h"
-#include "annotate.h"
+#include "parseaddr.h"
 #include "retry.h"
 #include "seen.h"
 #include "upgrade_index.h"
 #include "util.h"
-#include "annotate.h"
 #include "sequence.h"
 #include "statuscache.h"
 #include "strarray.h"
@@ -3018,6 +3018,10 @@ int mailbox_delete(struct mailbox **mailboxptr)
     /* remove any seen */
     seen_delete_mailbox(NULL, mailbox);
 
+    /* clean up annotations */
+    r = annotate_delete_mailbox(mailbox);
+    if (r) return r;
+
     /* can't unlink any files yet, because our promise to other
      * users of the mailbox applies! Can only unlink with an
      * exclusive lock.  mailbox_close will try to get one of 
@@ -3240,6 +3244,10 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
     if (userid) mailbox_make_uniqueid(newmailbox);
 
     r = seen_copy(userid, oldmailbox, newmailbox);
+    if (r) goto fail;
+
+    /* copy any mailbox annotations */
+    r = annotate_rename_mailbox(oldmailbox, newmailbox);
     if (r) goto fail;
 
     /* mark the "used" back to zero, so it updates the new quota! */

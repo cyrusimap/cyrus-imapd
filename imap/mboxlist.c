@@ -968,12 +968,7 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
     r = mboxlist_renamemailbox((char *)name, newname, mbentry->partition,
                                1 /* isadmin */, userid,
                                auth_state, force, 1);
-    if (r) goto out;
 
-    /* Rename mailbox annotations */
-    r = annotatemore_rename(name, newname, NULL, NULL);
-
-out:
     mboxlist_entry_free(&mbentry);
 
     return r;
@@ -1083,17 +1078,8 @@ int mboxlist_deletemailbox(const char *name, int isadmin,
 
     /* delete underlying mailbox */
     if (!isremote && mailbox) {
-	/* Clean up annotations */
-	r = annotate_delete(mbentry, mailbox);
-	if (r) {
-	    syslog(LOG_ERR,
-		   "Failed to delete annotations with mailbox '%s': %s",
-		   name, error_message(r));
-	}
 	r = mailbox_delete(&mailbox);
     }
-    if (r) goto done;
-
 
  done:
     mailbox_close(&mailbox);
@@ -1294,7 +1280,7 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
 
 	snprintf(buf, sizeof(buf), "%s!%s",
 		 config_servername, newpartition);
-	
+
 	r = mupdate_connect(config_mupdate_server, NULL, &mupdate_h, NULL);
 	if (!partitionmove) {
 	    if (!r && !isusermbox)
