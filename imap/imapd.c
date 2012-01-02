@@ -1183,6 +1183,8 @@ void cmdloop(void)
 	    continue;
 	}
 
+	syslog(LOG_DEBUG, "command with tag: %s", tag.s);
+
 	/* Parse command name */
 	c = getword(imapd_in, &cmd);
 	if (!cmd.s[0]) {
