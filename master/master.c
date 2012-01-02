@@ -152,8 +152,8 @@ struct event {
     char *name;
     struct timeval mark;
     time_t period;
-    time_t hour;
-    time_t min;
+    int hour;
+    int min;
     int periodic;
     strarray_t *exec;
     struct event *next;
