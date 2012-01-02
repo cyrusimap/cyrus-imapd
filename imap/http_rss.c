@@ -531,10 +531,11 @@ static int fetch_message(struct transaction_t *txn, struct mailbox *mailbox,
 }
 
 
-static void buf_escapestr(struct buf *buf, const char *str, unsigned max)
+static void buf_escapestr(struct buf *buf, const char *str, unsigned max,
+			  unsigned replace)
 {
     const char *c;
-    unsigned len = 0;
+    unsigned buflen = buf_len(buf), len = 0;
 
     for (c = str; c && *c && (!max || len < max); c++, len++) {
 	/* Translate CR to HTML <br> tag */
@@ -547,8 +548,22 @@ static void buf_escapestr(struct buf *buf, const char *str, unsigned max)
 	else if (*c == '<') buf_appendcstr(buf, "&lt;");
 	else if (*c == '>') buf_appendcstr(buf, "&gt;");
 
-	/* Translate non-printable chars to X */
-	else if (!(isspace(*c) || isprint(*c))) buf_putc(buf, 'X');
+	/* Check for non-printable chars */
+	else if (!(isspace(*c) || isprint(*c))) {
+	    if (replace) {
+		/* Replace entire string with a warning */
+		buf_truncate(buf, buflen);
+		buf_appendcstr(buf, "<blockquote><i><b>WARNING:</b> "
+			       "This message contains characters "
+			       "that can not be displayed"
+			       "</i></blockquote>");
+		return;
+	    }
+	    else {
+		/* Translate non-printable chars to X */
+		buf_putc(buf, 'X');
+	    }
+	}
 
 	else buf_putc(buf, *c);
     }
@@ -728,7 +743,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 
 	subj = charset_parse_mimeheader(body->subject);
 	buf_appendcstr(&buf, "<title>");
-	buf_escapestr(&buf, subj && *subj ? subj : "[Untitled]", 0);
+	buf_escapestr(&buf, subj && *subj ? subj : "[Untitled]", 0, 0);
 	buf_appendcstr(&buf, "</title>\n");
 	free(subj);
 
@@ -744,12 +759,12 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 
 	    if (*addr->mailbox) {
 		buf_appendcstr(&buf, "<author>");
-		buf_escapestr(&buf, addr->mailbox, 0);
+		buf_escapestr(&buf, addr->mailbox, 0, 0);
 		buf_putc(&buf, '@');
-		buf_escapestr(&buf, addr->domain, 0);
+		buf_escapestr(&buf, addr->domain, 0, 0);
 		if (addr->name) {
 		    buf_appendcstr(&buf, " (");
-		    buf_escapestr(&buf, addr->name, 0);
+		    buf_escapestr(&buf, addr->name, 0, 0);
 		    buf_putc(&buf, ')');
 		}
 		buf_appendcstr(&buf, "</author>\n");
@@ -770,7 +785,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 
 	if (parts && *parts) {
 	    buf_appendcstr(&buf, "<description><![CDATA[");
-	    buf_escapestr(&buf, parts[0]->decoded_body, max_len);
+	    buf_escapestr(&buf, parts[0]->decoded_body, max_len, 1);
 	    buf_appendcstr(&buf, "]]></description>\n");
 	}
 
