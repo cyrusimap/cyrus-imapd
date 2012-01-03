@@ -29,6 +29,9 @@ at all.  This section documents those steps.
 
     # passwd cyrus
 
+    NOTE: User 'cyrus' must actually be in 'group' mail, or the annotator
+    will fail to start.
+
 3.  You need to be able to run a program as the "cyrus" user, preferably
     without entering your password all the time.  One way of doing this
     is to add the following at the *end* of your /etc/sudoers file
