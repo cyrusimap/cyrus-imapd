@@ -110,6 +110,7 @@ sub test_list_percent
           [
             [
               '\\Noinferiors',
+              '\\HasNoChildren'
             ],
             '/',
             'INBOX'
