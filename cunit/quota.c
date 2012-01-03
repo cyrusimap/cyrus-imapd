@@ -999,7 +999,7 @@ static int set_up(void)
     );
 
     cyrusdb_init();
-    config_quota_db = cyrusdb_fromname("skiplist");
+    config_quota_db = "skiplist";
 
     quotadb_init(0);
     quotadb_open(NULL);

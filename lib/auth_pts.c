@@ -328,7 +328,7 @@ static struct auth_state *mynewstate(const char *identifier)
     return output;
 }
 
-static struct cyrusdb_backend *the_ptscache_db = NULL;
+static const char *the_ptscache_db = NULL;
 
 /* Returns 0 on success */
 static int ptload(const char *identifier, struct auth_state **state) 
@@ -352,8 +352,7 @@ static int ptload(const char *identifier, struct auth_state **state)
 
     /* xxx this sucks, but it seems to be the only way to satisfy the linker */
     if(the_ptscache_db == NULL) {
-	the_ptscache_db =
-	    cyrusdb_fromname(libcyrus_config_getstring(CYRUSOPT_PTSCACHE_DB));
+	the_ptscache_db = libcyrus_config_getstring(CYRUSOPT_PTSCACHE_DB);
     }
 
     if(!state || *state) {

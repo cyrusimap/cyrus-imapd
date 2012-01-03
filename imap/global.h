@@ -167,17 +167,17 @@ extern int in_shutdown;
 extern int config_fulldirhash;
 extern int config_implicitrights;
 extern unsigned long config_metapartition_files;
-extern struct cyrusdb_backend *config_mboxlist_db;
-extern struct cyrusdb_backend *config_quota_db;
-extern struct cyrusdb_backend *config_subscription_db;
-extern struct cyrusdb_backend *config_annotation_db;
-extern struct cyrusdb_backend *config_seenstate_db;
-extern struct cyrusdb_backend *config_mboxkey_db;
-extern struct cyrusdb_backend *config_duplicate_db;
-extern struct cyrusdb_backend *config_tlscache_db;
-extern struct cyrusdb_backend *config_ptscache_db;
-extern struct cyrusdb_backend *config_statuscache_db;
-extern struct cyrusdb_backend *config_userdeny_db;
+extern const char *config_mboxlist_db;
+extern const char *config_quota_db;
+extern const char *config_subscription_db;
+extern const char *config_annotation_db;
+extern const char *config_seenstate_db;
+extern const char *config_mboxkey_db;
+extern const char *config_duplicate_db;
+extern const char *config_tlscache_db;
+extern const char *config_ptscache_db;
+extern const char *config_statuscache_db;
+extern const char *config_userdeny_db;
 extern int charset_flags;
 
 /* Session ID */

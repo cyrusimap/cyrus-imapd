@@ -2752,7 +2752,7 @@ static int mboxlist_changequota(const char *name,
 void mboxlist_init(int myflags)
 {
     if (myflags & MBOXLIST_SYNC) {
-	DB->sync();
+	cyrusdb_sync(DB);
     }
 }
 

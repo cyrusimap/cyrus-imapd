@@ -79,9 +79,7 @@ char stack[STACKSIZE+1];
 /* config.c stuff */
 const int config_need_data = 0;
 
-struct cyrusdb_backend *OLDDB = NULL;
-
-struct db *odb = NULL;
+struct db *db = NULL;
 
 int read_key_value(char **keyptr, size_t *keylen, char **valptr, size_t *vallen) {
   int c,res,inkey;
@@ -127,7 +125,7 @@ int printer_cb(void *rock __attribute__((unused)),
 
 int main(int argc, char *argv[])
 {
-    const char *old_db;
+    const char *fname;
     const char *action;
     char *key;
     char *value;
@@ -159,14 +157,16 @@ int main(int argc, char *argv[])
 
     if ((argc - optind) < 3) {
 	char sep;
+	strarray_t *backends = cyrusdb_backends();
 
-	fprintf(stderr, "Usage: %s [-C altconfig] <old db> <old db backend> <action> [<key>] [<value>]\n", argv[0]);
+	fprintf(stderr, "Usage: %s [-C altconfig] <db file> <db backend> <action> [<key>] [<value>]\n", argv[0]);
 	fprintf(stderr, "Usable Backends");
 
-	for(i=0, sep = ':'; cyrusdb_backends[i]; i++) {
-	    fprintf(stderr, "%c %s", sep, cyrusdb_backends[i]->name);
+	for(i=0, sep = ':'; i < backends->count; i++) {
+	    fprintf(stderr, "%c %s", sep, strarray_nth(backends, i));
 	    sep = ',';
 	}
+	strarray_free(backends);
 
 	fprintf(stderr, "\n");
 	fprintf(stderr, "\n");
@@ -183,10 +183,10 @@ int main(int argc, char *argv[])
 	exit(-1);
     }
 
-    old_db = argv[optind];
+    fname = argv[optind];
     action = argv[optind+2];
 
-    if(old_db[0] != '/') {
+    if(fname[0] != '/') {
 	printf("\nSorry, you cannot use this tool with relative path names.\n"
 	       "This is because some database backends (mainly berkeley) do not\n"
 	       "always do what you would expect with them.\n"
@@ -194,18 +194,9 @@ int main(int argc, char *argv[])
 	exit(EC_OSERR);
     }
 
-    for(i=0; cyrusdb_backends[i]; i++) {
-	if(!strcmp(cyrusdb_backends[i]->name, argv[optind+1])) {
-	    OLDDB = cyrusdb_backends[i]; break;
-	}
-    }
-    if(!cyrusdb_backends[i]) {
-	fatal("unknown backend", EC_TEMPFAIL);
-    }
-
     cyrus_init(alt_config, "cyr_dbtool", 0);
 
-    r = cyrusdb_open(OLDDB, old_db, db_flags, &odb);
+    r = cyrusdb_open(argv[optind+1], fname, db_flags, &db);
     if(r != CYRUSDB_OK)
 	fatal("can't open database", EC_TEMPFAIL);
 
@@ -226,12 +217,12 @@ int main(int argc, char *argv[])
         }
         while ( loop ) {
           if (is_get) {
-            cyrusdb_fetch(odb, key, keylen, &res, &reslen, tidp);
+            cyrusdb_fetch(db, key, keylen, &res, &reslen, tidp);
             printf("%.*s\n", (int)reslen, res);
           } else if (is_set) {
-            cyrusdb_store(odb, key, keylen, value, vallen, tidp);
+            cyrusdb_store(db, key, keylen, value, vallen, tidp);
           } else if (is_delete) {
-            cyrusdb_delete(odb, key, keylen, tidp, 1);
+            cyrusdb_delete(db, key, keylen, tidp, 1);
           }
           loop = 0;
           if ( use_stdin ) {
@@ -240,39 +231,39 @@ int main(int argc, char *argv[])
         }
     } else if (!strcmp(action, "show")) {
         if ((argc - optind) < 4) {
-            cyrusdb_foreach(odb, "", 0, NULL, printer_cb, NULL, tidp);
+            cyrusdb_foreach(db, "", 0, NULL, printer_cb, NULL, tidp);
         } else {
             key = argv[optind+3];
             keylen = strlen(key);
-            cyrusdb_foreach(odb, key, keylen, NULL, printer_cb, NULL, tidp);
+            cyrusdb_foreach(db, key, keylen, NULL, printer_cb, NULL, tidp);
         }
     } else if (!strcmp(action, "consistency")) {
-        if (cyrusdb_consistent(odb)) {
-            printf("Consistency Error for %s\n", old_db);
+        if (cyrusdb_consistent(db)) {
+            printf("Consistency Error for %s\n", fname);
         }
     } else if (!strcmp(action, "dump")) {
 	int level = 1;
 	if ((argc - optind) > 3)
 	    level = atoi(argv[optind+3]);
-	cyrusdb_dump(odb, level);
+	cyrusdb_dump(db, level);
     } else if (!strcmp(action, "consistent")) {
-	if (cyrusdb_consistent(odb)) {
+	if (cyrusdb_consistent(db)) {
 	    printf("No, not consistent\n");
 	} else {
 	    printf("Yes, consistent\n");
 	}
     } else if (!strcmp(action, "damage")) {
-	cyrusdb_store(odb, "INVALID", 7, "CRASHME", 7, &tid);
+	cyrusdb_store(db, "INVALID", 7, "CRASHME", 7, &tid);
 	assert(!tid);
     } else {
         printf("Unknown action %s\n", action);
     }
     if (tid) {
-      cyrusdb_commit(odb, tid);
+      cyrusdb_commit(db, tid);
       tid = NULL;
     }
 
-    cyrusdb_close(odb);
+    cyrusdb_close(db);
 
     cyrus_done();
 

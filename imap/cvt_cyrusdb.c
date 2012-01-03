@@ -78,7 +78,7 @@ const int config_need_data = 0;
 
 int main(int argc, char *argv[])
 {
-    struct cyrusdb_backend *OLDDB = NULL, *NEWDB = NULL;
+    const char *OLDDB = NULL, *NEWDB = NULL;
     const char *old_db, *new_db;
     int i;
     int opt;
@@ -93,20 +93,17 @@ int main(int argc, char *argv[])
     }
 
     if ((argc - optind) != 4) {
+	strarray_t *backends = cyrusdb_backends();
+	char sep;
+
 	fprintf(stderr, "Usage: %s [-C altconfig] <old db> <old db backend> <new db> <new db backend>\n", argv[0]);
 	fprintf(stderr, "Usable Backends:  ");
 
-	/* The following is commented out because its an over-paranoid
-	   check (cyrusdb_backends[] is statically defined to be non-empty)
-	   and causes a compiler warning
-
-	if(!cyrusdb_backends || !cyrusdb_backends[0])
-	    fatal("we don't seem to have any db backends available", EC_OSERR);
-	*/
-
-	fprintf(stderr, "%s", cyrusdb_backends[0]->name);
-	for (i=1; cyrusdb_backends[i]; i++)
-	    fprintf(stderr, ", %s", cyrusdb_backends[i]->name);
+	for(i=0, sep = ':'; i < backends->count; i++) {
+	    fprintf(stderr, "%c %s", sep, strarray_nth(backends, i));
+	    sep = ',';
+	}
+	strarray_free(backends);
 
 	fprintf(stderr, "\n");
 	exit(-1);
@@ -123,8 +120,8 @@ int main(int argc, char *argv[])
 	exit(EC_OSERR);
     }
 
-    OLDDB = cyrusdb_fromname(argv[optind+1]);
-    NEWDB = cyrusdb_fromname(argv[optind+3]);
+    OLDDB = argv[optind+1];
+    NEWDB = argv[optind+3];
 
     if (NEWDB == OLDDB) {
 	fatal("no conversion required", EC_TEMPFAIL);
@@ -132,8 +129,8 @@ int main(int argc, char *argv[])
 
     cyrus_init(alt_config, "cvt_cyrusdb", 0);
 
-    printf("Converting from %s (%s) to %s (%s)\n", old_db, OLDDB->name,
-	   new_db, NEWDB->name);
+    printf("Converting from %s (%s) to %s (%s)\n", old_db, OLDDB,
+	   new_db, NEWDB);
 
     cyrusdb_convert(old_db, new_db, OLDDB, NEWDB);
 

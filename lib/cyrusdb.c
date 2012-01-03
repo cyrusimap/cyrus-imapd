@@ -62,8 +62,21 @@
 #include "libcyr_cfg.h"
 #include "retry.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
 
-struct cyrusdb_backend *cyrusdb_backends[] = {
+/* Note that some of these may be undefined symbols
+ * if libcyrus was not built with support for them */
+extern struct cyrusdb_backend cyrusdb_berkeley;
+extern struct cyrusdb_backend cyrusdb_berkeley_nosync;
+extern struct cyrusdb_backend cyrusdb_berkeley_hash;
+extern struct cyrusdb_backend cyrusdb_berkeley_hash_nosync;
+extern struct cyrusdb_backend cyrusdb_flat;
+extern struct cyrusdb_backend cyrusdb_skiplist;
+extern struct cyrusdb_backend cyrusdb_quotalegacy;
+extern struct cyrusdb_backend cyrusdb_sql;
+extern struct cyrusdb_backend cyrusdb_twoskip;
+
+static struct cyrusdb_backend *_backends[] = {
 #ifdef HAVE_BDB
     &cyrusdb_berkeley,
     &cyrusdb_berkeley_nosync,
@@ -79,14 +92,34 @@ struct cyrusdb_backend *cyrusdb_backends[] = {
     &cyrusdb_twoskip,
     NULL };
 
-#define DEFAULT_BACKEND &cyrusdb_twoskip
+#define DEFAULT_BACKEND "twoskip"
 
 struct db {
     struct dbengine *engine;
     struct cyrusdb_backend *backend;
 };
 
-int cyrusdb_open(struct cyrusdb_backend *backend, const char *fname,
+static struct cyrusdb_backend *cyrusdb_fromname(const char *name)
+{
+    int i;
+    struct cyrusdb_backend *db = NULL;
+
+    for (i = 0; _backends[i]; i++) {
+	if (!strcmp(_backends[i]->name, name)) {
+	    db = _backends[i]; break;
+	}
+    }
+    if (!db) {
+	char errbuf[1024];
+	snprintf(errbuf, sizeof(errbuf),
+		 "cyrusdb backend %s not supported", name);
+	fatal(errbuf, EC_CONFIG);
+    }
+
+    return db;
+}
+
+int cyrusdb_open(const char *backend, const char *fname,
 		 int flags, struct db **ret)
 {
     const char *realname;
@@ -94,7 +127,7 @@ int cyrusdb_open(struct cyrusdb_backend *backend, const char *fname,
     int r;
 
     if (!backend) backend = DEFAULT_BACKEND; /* not used yet, later */
-    db->backend = backend;
+    db->backend = cyrusdb_fromname(backend);
 
     /* This whole thing is a fricking critical section.  We don't have the API
      * in place for a safe rename of a locked database, so the choices are
@@ -116,29 +149,28 @@ int cyrusdb_open(struct cyrusdb_backend *backend, const char *fname,
     realname = cyrusdb_detect(fname);
     if (!realname) {
 	syslog(LOG_ERR, "DBERROR: failed to detect DB type for %s (backend %s) (r was %d)",
-	       fname, backend->name, r);
+	       fname, backend, r);
 	/* r is still set */
 	goto done;
     }
 
     /* different type */
-    if (strcmp(realname, backend->name)) {
-	struct cyrusdb_backend *realbe = cyrusdb_fromname(realname);
+    if (strcmp(realname, backend)) {
 	if (flags & CYRUSDB_CONVERT) {
-	    r = cyrusdb_convert(fname, fname, realbe, backend);
+	    r = cyrusdb_convert(fname, fname, realname, backend);
 	    if (r) {
 		syslog(LOG_ERR, "DBERROR: failed to convert %s from %s to %s, maybe someone beat us",
-		       fname, realname, backend->name);
+		       fname, realname, backend);
 	    }
 	    else {
 		syslog(LOG_NOTICE, "cyrusdb: converted %s from %s to %s",
-		       fname, realname, backend->name);
+		       fname, realname, backend);
 	    }
 	}
 	else {
 	    syslog(LOG_NOTICE, "cyrusdb: opening %s with backend %s (requested %s)",
-		   fname, realbe->name, backend->name);
-	    db->backend = realbe;
+		   fname, realname, backend);
+	    db->backend = cyrusdb_fromname(realname);
 	}
     }
     
@@ -253,11 +285,11 @@ void cyrusdb_init(void)
     strcpy(dbdir, confdir);
     strcat(dbdir, FNAME_DBDIR);
 
-    for(i=0; cyrusdb_backends[i]; i++) {
-	r = (cyrusdb_backends[i])->init(dbdir, initflags);
+    for(i=0; _backends[i]; i++) {
+	r = (_backends[i])->init(dbdir, initflags);
 	if(r) {
 	    syslog(LOG_ERR, "DBERROR: init() on %s",
-		   cyrusdb_backends[i]->name);
+		   _backends[i]->name);
 	}
     }
 }
@@ -266,8 +298,8 @@ void cyrusdb_done(void)
 {
     int i;
     
-    for(i=0; cyrusdb_backends[i]; i++) {
-	(cyrusdb_backends[i])->done();
+    for(i=0; _backends[i]; i++) {
+	(_backends[i])->done();
     }
 }
 
@@ -372,8 +404,7 @@ static int converter_cb(void *rock,
    a different format.  It's up to the surrounding code to copy the
    new database over the original if it wants to */
 int cyrusdb_convert(const char *fromfname, const char *tofname,
-		    struct cyrusdb_backend *frombackend,
-		    struct cyrusdb_backend *tobackend)
+		    const char *frombackend, const char *tobackend)
 {
     char *newfname = NULL;
     struct db *fromdb = NULL;
@@ -478,22 +509,81 @@ const char *cyrusdb_detect(const char *fname)
     return NULL;
 }
 
-struct cyrusdb_backend *cyrusdb_fromname(const char *name)
+int cyrusdb_sync(const char *backend)
 {
-    int i;
-    struct cyrusdb_backend *db = NULL;
+    struct cyrusdb_backend *db = cyrusdb_fromname(backend);
+    return db->sync();
+}
 
-    for (i = 0; cyrusdb_backends[i]; i++) {
-	if (!strcmp(cyrusdb_backends[i]->name, name)) {
-	    db = cyrusdb_backends[i]; break;
+cyrusdb_archiver *cyrusdb_getarchiver(const char *backend)
+{
+    struct cyrusdb_backend *db = cyrusdb_fromname(backend);
+    return db->archive; /* the function used for archiving */
+}
+
+int cyrusdb_canfetchnext(const char *backend)
+{
+    struct cyrusdb_backend *db = cyrusdb_fromname(backend);
+    return db->fetchnext ? 1 : 0;
+}
+
+/* caller is responsible for calling strarray_free() */
+strarray_t *cyrusdb_backends()
+{
+    strarray_t *ret = strarray_new();
+    int i;
+
+    for (i = 0; _backends[i]; i++) {
+	strarray_add(ret, _backends[i]->name);
+    }
+
+    return ret;
+}
+
+
+/* generic backend implementations */
+
+int cyrusdb_generic_init(const char *dbdir __attribute__((unused)),
+			 int myflags __attribute__((unused)))
+{
+    return 0;
+}
+
+int cyrusdb_generic_done(void)
+{
+    return 0;
+}
+
+int cyrusdb_generic_sync(void)
+{
+    return 0;
+}
+
+int cyrusdb_generic_archive(const strarray_t *fnames,
+			    const char *dirname)
+{
+    char dstname[1024], *dp;
+    int length, rest;
+    int i;
+    int r;
+    
+    strlcpy(dstname, dirname, sizeof(dstname));
+    length = strlen(dstname);
+    dp = dstname + length;
+    rest = sizeof(dstname) - length;
+    
+    /* archive those files specified by the app */
+    for (i = 0; i < fnames->count; i++) {
+	const char *fname = strarray_nth(fnames, i);
+	syslog(LOG_DEBUG, "archiving database file: %s", fname);
+	strlcpy(dp, strrchr(fname, '/'), rest);
+	r = cyrusdb_copyfile(fname, dstname);
+	if (r) {
+	    syslog(LOG_ERR,
+		   "DBERROR: error archiving database file: %s", fname);
+	    return CYRUSDB_IOERROR;
 	}
     }
-    if (!db) {
-	char errbuf[1024];
-	snprintf(errbuf, sizeof(errbuf),
-		 "cyrusdb backend %s not supported", name);
-	fatal(errbuf, EC_CONFIG);
-    }
 
-    return db;
+    return 0;
 }

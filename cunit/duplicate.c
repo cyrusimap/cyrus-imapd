@@ -298,7 +298,7 @@ static int set_up(void)
     );
 
     cyrusdb_init();
-    config_duplicate_db = cyrusdb_fromname("skiplist");
+    config_duplicate_db = "skiplist";
 
     duplicate_init(0);
 

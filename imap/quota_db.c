@@ -511,7 +511,7 @@ int quota_findroot(char *ret, size_t retlen, const char *name)
 void quotadb_init(int myflags)
 {
     if (myflags & QUOTADB_SYNC) {
-	QDB->sync();
+	cyrusdb_sync(QDB);
     }
 }
 

@@ -237,47 +237,7 @@ static struct txn *new_txn(void)
     return ret;
 }
 
-static int init(const char *dbdir __attribute__((unused)),
-		int myflags __attribute__((unused)))
-{
-    return 0;
-}
 
-static int done(void)
-{
-    return 0;
-}
-
-static int mysync(void)
-{
-    return 0;
-}
-
-static int myarchive(const char **fnames, const char *dirname)
-{
-    int r, d_length, d_remain;
-    const char **fname;
-    char dstname[1024], *dp;
-
-    strlcpy(dstname, dirname, sizeof(dstname));
-    d_length = strlen(dstname);
-    dp = dstname + d_length;
-    d_remain = sizeof(dstname)-d_length;
-
-    /* archive those files specified by the app */
-    for (fname = fnames; *fname != NULL; ++fname) {
-	syslog(LOG_DEBUG, "archiving database file: %s", *fname);
-	strlcpy(dp, strrchr(*fname, '/'), d_remain);
-	r = cyrusdb_copyfile(*fname, dstname);
-	if (r) {
-	    syslog(LOG_ERR,
-		   "DBERROR: error archiving database file: %s", *fname);
-	    return CYRUSDB_IOERROR;
-	}
-    }
-
-    return 0;
-}
 
 static int myopen(const char *fname, int flags, struct dbengine **ret)
 {
@@ -858,10 +818,10 @@ struct cyrusdb_backend cyrusdb_flat =
 {
     "flat",			/* name */
 
-    &init,
-    &done,
-    &mysync,
-    &myarchive,
+    &cyrusdb_generic_init,
+    &cyrusdb_generic_done,
+    &cyrusdb_generic_sync,
+    &cyrusdb_generic_archive,
 
     &myopen,
     &myclose,

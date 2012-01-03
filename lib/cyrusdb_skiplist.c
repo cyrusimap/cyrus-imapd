@@ -284,43 +284,6 @@ normal:
     return 0;
 }
 
-static int mydone(void)
-{
-    return 0;
-}
-
-static int mysync(void)
-{
-    return 0;
-}
-
-static int myarchive(const char **fnames, const char *dirname)
-{
-    int r;
-    const char **fname;
-    char dstname[1024], *dp;
-    int length, rest;
-    
-    strlcpy(dstname, dirname, sizeof(dstname));
-    length = strlen(dstname);
-    dp = dstname + length;
-    rest = sizeof(dstname) - length;
-    
-    /* archive those files specified by the app */
-    for (fname = fnames; *fname != NULL; ++fname) {
-	syslog(LOG_DEBUG, "archiving database file: %s", *fname);
-	strlcpy(dp, strrchr(*fname, '/'), rest);
-	r = cyrusdb_copyfile(*fname, dstname);
-	if (r) {
-	    syslog(LOG_ERR,
-		   "DBERROR: error archiving database file: %s", *fname);
-	    return CYRUSDB_IOERROR;
-	}
-    }
-
-    return 0;
-}
-
 enum {
     SKIPLIST_VERSION = 1,
     SKIPLIST_VERSION_MINOR = 2,
@@ -2407,9 +2370,9 @@ struct cyrusdb_backend cyrusdb_skiplist =
     "skiplist",			/* name */
 
     &myinit,
-    &mydone,
-    &mysync,
-    &myarchive,
+    &cyrusdb_generic_done,
+    &cyrusdb_generic_sync,
+    &cyrusdb_generic_archive,
 
     &myopen,
     &myclose,

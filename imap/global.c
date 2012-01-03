@@ -95,17 +95,17 @@ int in_shutdown = 0;
 int config_fulldirhash;				/* 0 */
 int config_implicitrights;			/* "lkxa" */
 unsigned long config_metapartition_files;	/* 0 */
-struct cyrusdb_backend *config_mboxlist_db;
-struct cyrusdb_backend *config_quota_db;
-struct cyrusdb_backend *config_subscription_db;
-struct cyrusdb_backend *config_annotation_db;
-struct cyrusdb_backend *config_seenstate_db;
-struct cyrusdb_backend *config_mboxkey_db;
-struct cyrusdb_backend *config_duplicate_db;
-struct cyrusdb_backend *config_tlscache_db;
-struct cyrusdb_backend *config_ptscache_db;
-struct cyrusdb_backend *config_statuscache_db;
-struct cyrusdb_backend *config_userdeny_db;
+const char *config_mboxlist_db;
+const char *config_quota_db;
+const char *config_subscription_db;
+const char *config_annotation_db;
+const char *config_seenstate_db;
+const char *config_mboxkey_db;
+const char *config_duplicate_db;
+const char *config_tlscache_db;
+const char *config_ptscache_db;
+const char *config_statuscache_db;
+const char *config_userdeny_db;
 int charset_flags;
 
 #define MAX_SESSIONID_SIZE 256
@@ -217,28 +217,17 @@ int cyrus_init(const char *alt_config, const char *ident, unsigned flags)
 
     if (!cyrus_init_nodb) {
 	/* lookup the database backends */
-	config_mboxlist_db =
-	    cyrusdb_fromname(config_getstring(IMAPOPT_MBOXLIST_DB));
-	config_quota_db =
-	    cyrusdb_fromname(config_getstring(IMAPOPT_QUOTA_DB));
-	config_subscription_db =
-	    cyrusdb_fromname(config_getstring(IMAPOPT_SUBSCRIPTION_DB));
-	config_annotation_db =
-	    cyrusdb_fromname(config_getstring(IMAPOPT_ANNOTATION_DB));
-	config_seenstate_db =
-	    cyrusdb_fromname(config_getstring(IMAPOPT_SEENSTATE_DB));
-	config_mboxkey_db =
-	    cyrusdb_fromname(config_getstring(IMAPOPT_MBOXKEY_DB));
-	config_duplicate_db =
-	    cyrusdb_fromname(config_getstring(IMAPOPT_DUPLICATE_DB));
-	config_tlscache_db =
-	    cyrusdb_fromname(config_getstring(IMAPOPT_TLSCACHE_DB));
-	config_ptscache_db =
-	    cyrusdb_fromname(config_getstring(IMAPOPT_PTSCACHE_DB));
-	config_statuscache_db =
-	    cyrusdb_fromname(config_getstring(IMAPOPT_STATUSCACHE_DB));
-	config_userdeny_db =
-	    cyrusdb_fromname(config_getstring(IMAPOPT_USERDENY_DB));
+	config_mboxlist_db = config_getstring(IMAPOPT_MBOXLIST_DB);
+	config_quota_db = config_getstring(IMAPOPT_QUOTA_DB);
+	config_subscription_db = config_getstring(IMAPOPT_SUBSCRIPTION_DB);
+	config_annotation_db = config_getstring(IMAPOPT_ANNOTATION_DB);
+	config_seenstate_db = config_getstring(IMAPOPT_SEENSTATE_DB);
+	config_mboxkey_db = config_getstring(IMAPOPT_MBOXKEY_DB);
+	config_duplicate_db = config_getstring(IMAPOPT_DUPLICATE_DB);
+	config_tlscache_db = config_getstring(IMAPOPT_TLSCACHE_DB);
+	config_ptscache_db = config_getstring(IMAPOPT_PTSCACHE_DB);
+	config_statuscache_db = config_getstring(IMAPOPT_STATUSCACHE_DB);
+	config_userdeny_db = config_getstring(IMAPOPT_USERDENY_DB);
 
 	/* configure libcyrus as needed */
 	libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, config_dir);

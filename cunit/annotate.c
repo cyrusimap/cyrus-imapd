@@ -1865,9 +1865,9 @@ static int set_up(void)
     );
 
     cyrusdb_init();
-    config_mboxlist_db = cyrusdb_fromname("skiplist");
-    config_annotation_db = cyrusdb_fromname("skiplist");
-    config_quota_db = cyrusdb_fromname("skiplist");
+    config_mboxlist_db = "skiplist";
+    config_annotation_db = "skiplist";
+    config_quota_db = "skiplist";
 
     userid = "smurf";
     isadmin = 0;

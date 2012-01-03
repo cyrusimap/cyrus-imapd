@@ -475,7 +475,7 @@ static int mysync(void)
     return 0;
 }
 
-static int myarchive(const char **fnames __attribute__((unused)),
+static int myarchive(strarray_t *fnames __attribute__((unused)),
 		     const char *dirname __attribute__((unused)))
 {
     return 0;

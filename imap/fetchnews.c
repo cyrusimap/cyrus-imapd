@@ -73,7 +73,7 @@
 const int config_need_data = 0;
 
 #define FNAME_NEWSRCDB "/fetchnews.db"
-#define DB (&cyrusdb_flat)
+#define DB ("flat")
 
 static struct db *newsrc_db = NULL;
 static int newsrc_dbopen = 0;

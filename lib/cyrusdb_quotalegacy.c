@@ -306,28 +306,6 @@ static struct subtxn *new_subtxn(const char *fname __attribute__((unused)),
     return ret;
 }
 
-static int init(const char *dbdir __attribute__((unused)),
-		int myflags __attribute__((unused)))
-{
-    return 0;
-}
-
-static int done(void)
-{
-    return 0;
-}
-
-static int mysync(void)
-{
-    return 0;
-}
-
-static int myarchive(const char **fnames __attribute__((unused)),
-		     const char *dirname __attribute__((unused)))
-{
-    return 0;
-}
-
 static int myopen(const char *fname, int flags, struct dbengine **ret)
 {
     struct dbengine *db = (struct dbengine *) xzmalloc(sizeof(struct dbengine));
@@ -881,10 +859,10 @@ struct cyrusdb_backend cyrusdb_quotalegacy =
 {
     "quotalegacy",			/* name */
 
-    &init,
-    &done,
-    &mysync,
-    &myarchive,
+    &cyrusdb_generic_init,
+    &cyrusdb_generic_done,
+    &cyrusdb_generic_sync,
+    &cyrusdb_generic_archive,
 
     &myopen,
     &myclose,

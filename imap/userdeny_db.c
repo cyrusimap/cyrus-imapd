@@ -165,7 +165,7 @@ int userdeny(const char *user, const char *service, char *msgbuf, size_t bufsiz)
 void denydb_init(int myflags)
 {
     if (myflags & DENYDB_SYNC) {
-	DENYDB->sync();
+	cyrusdb_sync(DENYDB);
     }
 }
 

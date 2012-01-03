@@ -45,6 +45,7 @@
 #define INCLUDED_CYRUSDB_H
 
 #include <stdio.h>
+#include "strarray.h"
 
 struct db;
 struct txn;
@@ -83,6 +84,9 @@ typedef int foreach_cb(void *rock,
 		       const char *key, size_t keylen,
 		       const char *data, size_t datalen);
 
+typedef int cyrusdb_archiver(const strarray_t *fnames,
+			     const char *dirname);
+
 struct dbengine;
 
 struct cyrusdb_backend {
@@ -102,7 +106,7 @@ struct cyrusdb_backend {
 
     /* archives this database environment, and specified databases
      * into the specified directory */
-    int (*archive)(const char **fnames, const char *dirname);
+    int (*archive)(const strarray_t *fnames, const char *dirname);
 
     /* open the specified database in the global environment */
     int (*open)(const char *fname, int flags, struct dbengine **ret);
@@ -207,25 +211,10 @@ struct cyrusdb_backend {
     int (*consistent)(struct dbengine *db);
 };
 
-extern struct cyrusdb_backend *cyrusdb_backends[];
-
-/* Note that some of these may be undefined symbols
- * if libcyrus was not built with support for them */
-extern struct cyrusdb_backend cyrusdb_berkeley;
-extern struct cyrusdb_backend cyrusdb_berkeley_nosync;
-extern struct cyrusdb_backend cyrusdb_berkeley_hash;
-extern struct cyrusdb_backend cyrusdb_berkeley_hash_nosync;
-extern struct cyrusdb_backend cyrusdb_flat;
-extern struct cyrusdb_backend cyrusdb_skiplist;
-extern struct cyrusdb_backend cyrusdb_quotalegacy;
-extern struct cyrusdb_backend cyrusdb_sql;
-extern struct cyrusdb_backend cyrusdb_twoskip;
-
 extern int cyrusdb_copyfile(const char *srcname, const char *dstname);
 
 extern int cyrusdb_convert(const char *fromfname, const char *tofname,
-			   struct cyrusdb_backend *frombackend,
-			   struct cyrusdb_backend *tobackend);
+			   const char *frombackend, const char *tobackend);
 
 int cyrusdb_dumpfile(struct db *db,
 		     const char *prefix, size_t prefixlen,
@@ -244,12 +233,8 @@ extern const char *cyrusdb_detect(const char *fname);
 void cyrusdb_init(void);
 void cyrusdb_done(void);
 
-/* Configuration */
-struct cyrusdb_backend *cyrusdb_fromname(const char *name);
-
 /* direct DB interface */
-extern int cyrusdb_open(struct cyrusdb_backend *backend,
-			const char *fname,
+extern int cyrusdb_open(const char *backend, const char *fname,
 			int flags, struct db **ret);
 extern int cyrusdb_close(struct db *db);
 extern int cyrusdb_fetch(struct db *db,
@@ -285,5 +270,20 @@ extern int cyrusdb_commit(struct db *db, struct txn *tid);
 extern int cyrusdb_abort(struct db *db, struct txn *tid);
 extern int cyrusdb_dump(struct db *db, int detail);
 extern int cyrusdb_consistent(struct db *db);
+
+/* somewhat special case, because they don't take a DB */
+
+extern int cyrusdb_sync(const char *backend);
+extern cyrusdb_archiver *cyrusdb_getarchiver(const char *backend);
+
+extern int cyrusdb_canfetchnext(const char *backend);
+
+extern strarray_t *cyrusdb_backends();
+
+/* generic implementations */
+int cyrusdb_generic_init(const char *dbdir, int myflags);
+int cyrusdb_generic_done(void);
+int cyrusdb_generic_sync(void);
+int cyrusdb_generic_archive(const strarray_t *fnames, const char *dirname);
 
 #endif /* INCLUDED_CYRUSDB_H */

@@ -304,11 +304,10 @@ static int mysync(void)
     return 0;
 }
 
-static int myarchive(const char **fnames, const char *dirname)
+static int myarchive(const strarray_t *fnames, const char *dirname)
 {
     int r;
-    char **begin, **list;
-    const char **fname;
+    char **item, **list;
     char dstname[1024], *dp;
     int length, rest;
 
@@ -325,16 +324,16 @@ static int myarchive(const char **fnames, const char *dirname)
 	return CYRUSDB_IOERROR;
     }
     if (list != NULL) {
-	for (begin = list; *list != NULL; ++list) {
-	    syslog(LOG_DEBUG, "removing log file: %s", *list);
-	    r = unlink(*list);
+	for (item = list; *item != NULL; ++item) {
+	    syslog(LOG_DEBUG, "removing log file: %s", *item);
+	    r = unlink(*item);
 	    if (r) {
 		syslog(LOG_ERR, "DBERROR: error removing log file: %s",
-		       *list);
+		       *item);
 		return CYRUSDB_IOERROR;
 	    }
 	}
-	free (begin);
+	free (list);
     }
 
     /* Get the list of database files to archive. */
@@ -346,24 +345,21 @@ static int myarchive(const char **fnames, const char *dirname)
 	return CYRUSDB_IOERROR;
     }
     if (list != NULL) {
-	for (begin = list; *list != NULL; ++list) {
+	for (item = list; *item != NULL; ++item) {
 	    /* only archive those files specified by the app */
-	    for (fname = fnames; *fname != NULL; ++fname) {
-		if (!strcmp(*list, *fname)) break;
-	    }
-	    if (*fname) {
-		syslog(LOG_DEBUG, "archiving database file: %s", *fname);
-		strlcpy(dp, strrchr(*fname, '/'), rest);
-		r = cyrusdb_copyfile(*fname, dstname);
+	    if (strarray_find(fnames, *item, 0) >= 0) {
+		syslog(LOG_DEBUG, "archiving database file: %s", *item);
+		strlcpy(dp, strrchr(*item, '/'), rest);
+		r = cyrusdb_copyfile(*item, dstname);
 		if (r) {
 		    syslog(LOG_ERR,
 			   "DBERROR: error archiving database file: %s",
-			   *fname);
+			   *item);
 		    return CYRUSDB_IOERROR;
 		}
 	    }
 	}
-	free (begin);
+	free (list);
     }
 
     /* Get the list of log files to archive. */
@@ -374,17 +370,17 @@ static int myarchive(const char **fnames, const char *dirname)
 	return CYRUSDB_IOERROR;
     }
     if (list != NULL) {
-	for (begin = list; *list != NULL; ++list) {
-	    syslog(LOG_DEBUG, "archiving log file: %s", *list);
-	    strcpy(dp, strrchr(*list, '/'));
-	    r = cyrusdb_copyfile(*list, dstname);
+	for (item = list; *item != NULL; ++item) {
+	    syslog(LOG_DEBUG, "archiving log file: %s", *item);
+	    strcpy(dp, strrchr(*item, '/'));
+	    r = cyrusdb_copyfile(*item, dstname);
 	    if (r) {
 		syslog(LOG_ERR, "DBERROR: error archiving log file: %s",
-		       *list);
+		       *item);
 		return CYRUSDB_IOERROR;
 	    }
 	}
-	free (begin);
+	free (list);
     }
 
     return 0;
