@@ -71,7 +71,8 @@ enum cyrusdb_dbflags {
 
 enum cyrusdb_openflags {
     CYRUSDB_CREATE   = 0x01,	/* Create the database if not existant */
-    CYRUSDB_MBOXSORT = 0x02	/* Use mailbox sort order ('.' sorts 1st) */
+    CYRUSDB_MBOXSORT = 0x02,	/* Use mailbox sort order ('.' sorts 1st) */
+    CYRUSDB_CONVERT  = 0x04	/* Convert to the named format if not already */
 };
 
 typedef int foreach_p(void *rock,

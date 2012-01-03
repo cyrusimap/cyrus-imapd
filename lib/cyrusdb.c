@@ -124,14 +124,21 @@ int cyrusdb_open(struct cyrusdb_backend *backend, const char *fname,
     /* different type */
     if (strcmp(realname, backend->name)) {
 	struct cyrusdb_backend *realbe = cyrusdb_fromname(realname);
-	r = cyrusdb_convert(fname, fname, realbe, backend);
-	if (r) {
-	    syslog(LOG_ERR, "DBERROR: failed to convert %s from %s to %s, maybe someone beat us",
-		   fname, realname, backend->name);
+	if (flags & CYRUSDB_CONVERT) {
+	    r = cyrusdb_convert(fname, fname, realbe, backend);
+	    if (r) {
+		syslog(LOG_ERR, "DBERROR: failed to convert %s from %s to %s, maybe someone beat us",
+		       fname, realname, backend->name);
+	    }
+	    else {
+		syslog(LOG_NOTICE, "cyrusdb: converted %s from %s to %s",
+		       fname, realname, backend->name);
+	    }
 	}
 	else {
-	    syslog(LOG_NOTICE, "cyrusdb: converted %s from %s to %s",
-		   fname, realname, backend->name);
+	    syslog(LOG_NOTICE, "cyrusdb: opening %s with backend %s (requested %s)",
+		   fname, realbe->name, backend->name);
+	    db->backend = realbe;
 	}
     }
     
