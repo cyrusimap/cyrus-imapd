@@ -715,6 +715,7 @@ sub _fork_command
     $ENV{CASSANDANE_CYRUS_PREFIX} = $self->{cyrus_prefix};
     $ENV{CASSANDANE_PREFIX} = getcwd();
     $ENV{CASSANDANE_BASEDIR} = $self->{basedir};
+    $ENV{CASSANDANE_VERBOSE} = 1 if get_verbose();
 
     my $cd = $options->{workingdir};
     $cd = $self->{basedir} . '/conf/cores'

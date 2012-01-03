@@ -51,6 +51,8 @@ package Cassandane::AnnotatorDaemon;
 use base qw(Cyrus::Annotator::Daemon);
 use Cassandane::Util::Log;
 
+set_verbose(1) if $ENV{CASSANDANE_VERBOSE};
+
 my %commands =
 (
     set_shared_annotation => sub
@@ -122,8 +124,9 @@ sub annotate_message
 # suck ARGV dry to prevent Net::Daemon getting its hands on it
 @ARGV = ();
 
-xlog "annotator starting";
+xlog "annotator $$ starting";
 Cassandane::AnnotatorDaemon->run(
 	pid_file => "$ENV{CASSANDANE_BASEDIR}/conf/socket/annotator.pid",
 	port => "$ENV{CASSANDANE_BASEDIR}/conf/socket/annotator.sock|SOCK_STREAM|unix",
     );
+xlog "annotator $$ exiting";
