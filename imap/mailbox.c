@@ -3312,9 +3312,13 @@ int mailbox_rename_cleanup(struct mailbox **mailboxptr, int isinbox)
  */
 int mailbox_copyfile(const char *from, const char *to, int nolink)
 {
-    int flags = 0;
+    int flags = COPYFILE_MKDIR;
     if (nolink) flags |= COPYFILE_NOLINK;
-    return cyrus_copyfile(from, to, flags);
+
+    if (cyrus_copyfile(from, to, flags))
+	return IMAP_IOERROR;
+
+    return 0;
 }
 
 /* ---------------------------------------------------------------------- */
