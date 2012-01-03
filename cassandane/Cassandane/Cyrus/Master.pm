@@ -779,4 +779,27 @@ sub test_maxforkrate
 			      }, $self->lemming_census());
 }
 
+sub XXXtest_periodic_event
+{
+    my ($self) = @_;
+
+    xlog "Testing regular events";
+
+    my $srv = $self->lemming_service(tag => 'A');
+    # This is the fastest we can schedule events - every 1 minute
+    # so in the absence of a per-process time machine our test will
+    # need to run for several real minutes.
+    $self->lemming_event(tag => 'B', mode => 'success', period => 1);
+    $self->start();
+
+    xlog "periodic events run immediately";
+
+    xlog "waiting 5 mins for events to fire";
+    sleep(5*60);
+
+    $self->assert_deep_equals({
+				B => { live => 0, dead => 6 },
+			      }, $self->lemming_census());
+}
+
 1;
