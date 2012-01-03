@@ -553,9 +553,9 @@ static void buf_escapestr(struct buf *buf, const char *str, unsigned max,
 	    if (replace) {
 		/* Replace entire string with a warning */
 		buf_truncate(buf, buflen);
-		buf_appendcstr(buf, "<blockquote><i><b>WARNING:</b> "
+		buf_appendcstr(buf, "<blockquote><i><b>NOTE:</b> "
 			       "This message contains characters "
-			       "that can not be displayed"
+			       "that can not be displayed in RSS"
 			       "</i></blockquote>");
 		return;
 	    }
