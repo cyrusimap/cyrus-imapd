@@ -133,6 +133,22 @@ sub _check_no_quota
     $self->assert_str_equals('no', $admintalk->get_last_completion_response());
 }
 
+sub _delayed_expunge
+{
+    my ($self) = @_;
+
+    $self->{store}->disconnect();
+    $self->{adminstore}->disconnect();
+
+    my @cmd = ( 'cyr_expire', '-E', '1', '-X', '0', '-D', '0' );
+    push(@cmd, '-v')
+	if get_verbose;
+    $self->{instance}->run_command({ cyrus => 1 }, @cmd);
+
+    $self->{store}->get_client();
+    $self->{adminstore}->get_client();
+}
+
 sub test_using_storage
 {
     my ($self) = @_;
@@ -448,21 +464,30 @@ sub test_using_annotstorage_msg
 	}
     }
 
-    # delete subfolder
+    xlog "delete subfolder sub1";
     $talk->delete("INBOX.sub1") || die "Failed to delete subfolder";
     $expected -= delete($expecteds{"INBOX.sub1"});
 
     $self->_check_usages([int($expected/1024)]);
 
-    # delete messages
+    xlog "delete messages in sub2";
     $talk->select("INBOX.sub2");
     $talk->store('1:*', '+flags', '(\\deleted)');
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
-    $talk->close();
+    $talk->expunge();
+
+    xlog "Unlike STORAGE, X-ANNOTATION-STORAGE quota is not updated until actual expunge";
+    $self->_check_usages([int($expected/1024)]);
+
+    xlog "Force a delayed expunge";
+    $self->_delayed_expunge();
+    $talk = $self->{store}->get_client();
+
+    xlog "X-ANNOTATION-STORAGE quota should have gone down";
     $expected -= delete($expecteds{"INBOX.sub2"});
     $self->_check_usages([int($expected/1024)]);
 
-    # delete annotations
+    xlog "delete annotations on INBOX";
     $talk->select("INBOX");
     $talk->store('1:*', 'annotation', ['/comment', ['value.priv', undef]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
@@ -510,24 +535,32 @@ sub test_using_annotstorage_msg_late
 
     $self->_set_limits([['x-annotation-storage', int($expected/1024), 100000]]);
 
-    # delete subfolder
+    xlog "delete subfolder sub1";
     $talk->delete("INBOX.sub1") || die "Failed to delete subfolder";
     $expected -= delete($expecteds{"INBOX.sub1"});
     $self->_check_usages([int($expected/1024)]);
 
-    # delete messages
+    xlog "delete messages in sub2";
     $talk->select("INBOX.sub2");
     $talk->store('1:*', '+flags', '(\\deleted)');
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
-    $talk->close();
+    $talk->expunge();
+
+    xlog "Unlike STORAGE, X-ANNOTATION-STORAGE quota is not updated until actual expunge";
+    $self->_check_usages([int($expected/1024)]);
+
+    xlog "Force a delayed expunge";
+    $self->_delayed_expunge();
+    $talk = $self->{store}->get_client();
+
+    xlog "X-ANNOTATION-STORAGE quota should have gone down";
     $expected -= delete($expecteds{"INBOX.sub2"});
     $self->_check_usages([int($expected/1024)]);
 
-    # delete annotations
+    xlog "delete annotations on INBOX";
     $talk->select("INBOX");
     $talk->store('1:*', 'annotation', ['/comment', ['value.priv', undef]]);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
-    $talk->close();
     $expected -= delete($expecteds{"INBOX"});
     $self->assert_num_equals(0, $expected);
     $self->_check_usages([int($expected/1024)]);
@@ -1466,11 +1499,7 @@ sub test_using_annotstorage_msg_copy_exdel
     $self->_check_usages([int(2*$expected/1024)]);
 
     xlog "Performing delayed expunge";
-    $store->disconnect();
-    my @cmd = ( 'cyr_expire', '-E', '1', '-X', '0', '-D', '0' );
-    push(@cmd, '-v')
-	if get_verbose;
-    $self->{instance}->run_command({ cyrus => 1 }, @cmd);
+    $self->_delayed_expunge();
 
     xlog "Check the quota usage is back to single";
     $self->_check_usages([int($expected/1024)]);
@@ -1670,11 +1699,7 @@ sub test_using_annotstorage_msg_copy_dedel
     $self->_check_usages([int($expected/1024)]);
 
     xlog "Performing delayed expunge";
-    $store->disconnect();
-    my @cmd = ( 'cyr_expire', '-E', '1', '-X', '0', '-D', '0' );
-    push(@cmd, '-v')
-	if get_verbose;
-    $self->{instance}->run_command({ cyrus => 1 }, @cmd);
+    $self->_delayed_expunge();
 
     xlog "Check the quota usage is still back to single";
     $self->_check_usages([int($expected/1024)]);
