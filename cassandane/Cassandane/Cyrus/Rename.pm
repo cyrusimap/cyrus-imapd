@@ -42,53 +42,26 @@
 use strict;
 use warnings;
 package Cassandane::Cyrus::Rename;
-use base qw(Cassandane::Unit::TestCase);
-use DateTime;
+use base qw(Cassandane::Cyrus::TestCase);
 use Cassandane::Util::Log;
-use Cassandane::Generator;
-use Cassandane::MessageStoreFactory;
 use Cassandane::Instance;
-use Data::Dumper;
 
 sub new
 {
     my $class = shift;
-    my $self = $class->SUPER::new(@_);
-
-    my $conf = Cassandane::Config->default()->clone();
-
-    $conf->set(
-	'partition-p2' => '@basedir@/data-p2',
-    );
-
-    $self->{instance} = Cassandane::Instance->new(config => $conf);
-    $self->{instance}->add_service('imap');
-
-    $self->{gen} = Cassandane::Generator->new();
-
-    return $self;
+    return $class->SUPER::new({ adminstore => 1 }, @_);
 }
 
 sub set_up
 {
     my ($self) = @_;
-
-    $self->{instance}->start();
-    $self->{store} = $self->{instance}->get_service('imap')->create_store();
-    $self->{adminstore} = $self->{instance}->get_service('imap')->create_store(username => 'admin');
+    $self->SUPER::set_up();
 }
 
 sub tear_down
 {
     my ($self) = @_;
-
-    $self->{store}->disconnect()
-	if defined $self->{store};
-    $self->{store} = undef;
-    $self->{adminstore}->disconnect()
-	if defined $self->{adminstore};
-    $self->{adminstore} = undef;
-    $self->{instance}->stop();
+    $self->SUPER::tear_down();
 }
 
 #
@@ -141,13 +114,19 @@ sub test_rename_subfolder
     $self->assert_num_equals(1, scalar @postdata);
 }
 
-#
-# Test LSUB behaviour
-#
+sub config_rename_user
+{
+    my ($self, $conf) = @_;
+    xlog "Setting up partition p2";
+    $conf->set('partition-p2' => '@basedir@/data-p2');
+}
+
 sub test_rename_user
 {
     my ($self) = @_;
     my $admintalk = $self->{adminstore}->get_client();
+
+    xlog "Test Cyrus extension which renames a user to a different partition";
 
     $admintalk->rename('user.cassandane', 'user.cassandane'); # should have an error;
     $self->assert($admintalk->get_last_error());
