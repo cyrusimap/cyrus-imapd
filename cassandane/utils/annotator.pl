@@ -48,67 +48,74 @@ use lib ("$ENV{CASSANDANE_PREFIX}");
 use strict;
 use warnings;
 package Cassandane::AnnotatorDaemon;
-# use base qw(Cyrus::Annotator::Daemon);
-use Cyrus::Annotator::Daemon;
-our @ISA = qw(Cyrus::Annotator::Daemon);
+use base qw(Cyrus::Annotator::Daemon);
 use Cassandane::Util::Log;
-
-my %valid_shared = ( shared => SHARED, private => PRIVATE );
 
 my %commands =
 (
-    add_annotation => sub
+    set_shared_annotation => sub
     {
-	my ($self, $entry, $shared, $value) = @_;
-	die "Wrong number of args for add_annotation" unless (@_ == 4);
-	$shared = $valid_shared{lc($shared)}
-	    or die "Bad argument 2 for add_annotation";
-	xlog "add_annotation(\"$entry\", " . $shared . ", \"$value\")";
-	$self->add_annotation($entry, $shared, $value);
+	my ($message, $entry, $value) = @_;
+	die "Wrong number of args for set_shared_annotation" unless (@_ == 3);
+	xlog "set_shared_annotation(\"$entry\", \"$value\")";
+	$message->set_shared_annotation($entry, $value);
     },
-    remove_annotation => sub
+    set_private_annotation => sub
     {
-	my ($self, $entry, $shared) = @_;
-	die "Wrong number of args for remove_annotation" unless (@_ == 3);
-	$shared = $valid_shared{lc($shared)}
-	    or die "Bad argument 2 for remove_annotation";
-	xlog "remove_annotation(\"$entry\", " . $shared . ")";
-	$self->remove_annotation($entry, $shared);
+	my ($message, $entry, $value) = @_;
+	die "Wrong number of args for set_private_annotation" unless (@_ == 3);
+	xlog "set_private_annotation(\"$entry\", \"$value\")";
+	$message->set_private_annotation($entry, $value);
+    },
+    clear_shared_annotation => sub
+    {
+	my ($message, $entry) = @_;
+	die "Wrong number of args for clear_shared_annotation" unless (@_ == 2);
+	xlog "clear_shared_annotation(\"$entry\")";
+	$message->clear_shared_annotation($entry);
+    },
+    clear_private_annotation => sub
+    {
+	my ($message, $entry) = @_;
+	die "Wrong number of args for clear_private_annotation" unless (@_ == 2);
+	xlog "clear_private_annotation(\"$entry\")";
+	$message->clear_private_annotation($entry);
     },
     set_flag => sub
     {
-	my ($self, $flag) = @_;
+	my ($message, $flag) = @_;
 	die "Wrong number of args for set_flag" unless (@_ == 2);
 	xlog "set_flag($flag)";
-	$self->set_flag($flag);
+	$message->set_flag($flag);
     },
     clear_flag => sub
     {
-	my ($self, $flag) = @_;
+	my ($message, $flag) = @_;
 	die "Wrong number of args for clear_flag" unless (@_ == 2);
 	xlog "clear_flag($flag)";
-	$self->clear_flag($flag);
+	$message->clear_flag($flag);
     },
 );
 
 sub annotate_message
 {
-    my ($self, $args) = @_;
+    my ($self, $message) = @_;
 
     xlog "annotate_message called";
 
     # Parse the body of the message as a series of test commands
-    seek $args->{FH}, $args->{BODY}->{Offset}, 0
+    my $fh = $message->fh();
+    seek $fh, $message->bodystructure()->{Offset}, 0
 	or die "Cannot seek in message: $!";
 
-    while (my $line = readline $args->{FH})
+    while (my $line = readline $fh)
     {
 	chomp $line;
 	my @a = split /\s+/, $line;
 	my $cmd = $commands{$a[0]}
 	    or die "Unknown command $a[0]";
 	shift(@a);
-	$cmd->($self, @a);
+	$cmd->($message, @a);
     }
 }
 
