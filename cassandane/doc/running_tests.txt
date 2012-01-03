@@ -8,8 +8,8 @@ Prerequisites
 Before running any Cassandane tests, you need to have the following:
 
  * A Cyrus installation, such as an installed package, installed
-   under /usr/cyrus/.  Currently only the bin/ subdirectory is
-   needed.
+   under /usr/cyrus/.  Both the bin and lib (perl library) directories
+   are needed.
 
  * A user "cyrus" in the system password database (e.g. /etc/passwd).
    Most Cyrus packages will ensure this exists as a side effect
