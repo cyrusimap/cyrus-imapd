@@ -129,15 +129,13 @@ sub _create_instances
 	    );
 	}
 
-	eval
+	# Allow the individual test to futz with the config
+	my $sub = $self->{_name};
+	if ($sub =~ s/^test_/config_/ && $self->can($sub))
 	{
-	    # Allow the individual test to futz with the config
-	    my $sub = $self->{_name};
-	    if ($sub =~ s/^test_/config_/)
-	    {
-		$self->$sub($conf);
-	    }
-	};
+	    $self->$sub($conf);
+	}
+
 	$instance_params{config} = $conf;
 
 	$instance_params{description} = "main instance for test $self->{_name}";

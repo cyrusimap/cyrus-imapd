@@ -54,6 +54,52 @@ my $do_list = 0;
 my $do_cleanup = 0;
 my @names;
 
+# This disgusting hack makes Test::Unit report a useful stack trace for
+# it's assert failures instead of just a file name and line number.
+{
+    use Error;
+    use Test::Unit::Exception;
+
+    # We also convert string exceptions into Test::Unit errors.
+    $SIG{__DIE__} = sub
+    {
+	my ($e) = @_;
+	if (!ref($e))
+	{
+	    my ($text, $file, $line) = ($e =~ m/^(.*) at (.*\.pm) line (\d+)/);
+	    if ($line)
+	    {
+		local $Error::Depth = 1;
+		Test::Unit::Error->throw('-text' => "Perl exception: $text\n");
+	    }
+	}
+	die @_;
+    };
+
+    # Disable the warning about redefining T:U:E:stringify.
+    # We know what we're doing, dammit.
+    no warnings;
+    # This makes Error->new() capture a full stacktrace
+    $Error::Debug = 1;
+    *Test::Unit::Exception::stringify = sub
+    {
+	my ($self) = @_;
+	my $s = '';
+
+	my $o = $self->object;
+	$s .= $o->to_string() . "\n " if $o && $o->can('to_string');
+
+	# Note, -stacktrace includes -text
+
+	my $st = $self->{-stacktrace};
+	# Prune all Test::Unit internal calls
+	$st =~ s/Test::Unit::TestCase::run_test.*/[...framework calls elided...]/s;
+	$s .= $st;
+
+	return $s;
+    };
+};
+
 
 my %runners =
 (
