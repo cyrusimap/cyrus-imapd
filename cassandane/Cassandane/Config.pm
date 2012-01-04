@@ -76,7 +76,9 @@ sub default
 	    expunge_mode => 'delayed',
 	    delete_mode => 'delayed',
 	    # for debugging - see cassandane.ini.example
-	    debug_command => '@prefix@/utils/gdbtramp %s %d'
+	    debug_command => '@prefix@/utils/gdbtramp %s %d',
+	    # everyone should be running this
+	    improved_mboxlist_sort => 1,
 	);
 	Cassandane::Cassini->instance()->apply_config($default);
     }
