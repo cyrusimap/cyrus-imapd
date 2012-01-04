@@ -1945,14 +1945,8 @@ static int check_name(struct find_rock *rock,
 		      const char *base, int len)
 {
     if (rock->prev) {
-	if (config_getswitch(IMAPOPT_IMPROVED_MBOXLIST_SORT)) {
-	    if (bsearch_ncompare_mbox(base, len, rock->prev, rock->prevlen) < 0)
-		return 0; /* prev name, skip it */
-	}
-	else {
-	    if (bsearch_ncompare_raw(base, len, rock->prev, rock->prevlen) < 0)
-		return 0; /* prev name, skip it */
-	}
+	if (bsearch_ncompare_mbox(base, len, rock->prev, rock->prevlen) < 0)
+	    return 0; /* prev name, skip it */
 	free(rock->prev);
     }
 
