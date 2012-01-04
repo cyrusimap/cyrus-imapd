@@ -654,10 +654,9 @@ int index_check(struct index_state *state, int usinguid, int printuid)
     int r;
 
     r = mailbox_lock_index(mailbox, LOCK_EXCLUSIVE);
-    if (r) return r;
 
     /* Check for deleted mailbox  */
-    if (mailbox->i.options & OPT_MAILBOX_DELETED) {
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
 	/* Mailbox has been (re)moved */
 	if (config_getswitch(IMAPOPT_DISCONNECT_ON_VANISHED_MAILBOX)) {
 	    syslog(LOG_WARNING,
@@ -676,10 +675,12 @@ int index_check(struct index_state *state, int usinguid, int printuid)
 		prot_printf(state->out, "* 1 EXPUNGE\r\n");
 	    }
 	}
-	mailbox_unlock_index(mailbox, NULL);
+
 	state->exists = 0;
 	return IMAP_MAILBOX_NONEXISTENT;
     }
+
+    if (r) return r;
 
     /* if highestmodseq has changed, read updates */
     if (state->highestmodseq != mailbox->i.highestmodseq)

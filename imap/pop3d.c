@@ -910,8 +910,6 @@ static void cmdloop(void)
 		    goto done;
 		if (mailbox_lock_index(popd_mailbox, LOCK_EXCLUSIVE))
 		    goto done;
-		if (popd_mailbox->i.options & OPT_MAILBOX_DELETED)
-		    goto done;
 
 		/* mark dirty in case everything else misses it - we're updating
 		 * at least the last login */

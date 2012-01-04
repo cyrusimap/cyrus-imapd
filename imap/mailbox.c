@@ -941,12 +941,6 @@ static int mailbox_open_advanced(const char *name,
 	goto done;
     }
 
-    /* we may be in the process of deleting this mailbox */
-    if (mailbox->i.options & OPT_MAILBOX_DELETED) {
-	r = IMAP_MAILBOX_NONEXISTENT;
-	goto done;
-    }
-
 done:
     if (r) mailbox_close(&mailbox);
     else *mailboxptr = mailbox;
@@ -1709,6 +1703,12 @@ restart:
 	       (unsigned int)mailbox->i.header_file_crc);
 	mailbox_unlock_index(mailbox, NULL);
 	return IMAP_MAILBOX_CHECKSUM;
+    }
+
+    /* we may be in the process of deleting this mailbox */
+    if (mailbox->i.options & OPT_MAILBOX_DELETED) {
+	mailbox_unlock_index(mailbox, NULL);
+	return IMAP_MAILBOX_NONEXISTENT;
     }
 
     /* fix up 2.4.0 bug breakage */
