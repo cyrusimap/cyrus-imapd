@@ -2097,6 +2097,15 @@ static int recovery2(struct dbengine *db, int *count)
 	}
     }
 
+    if (!newdb->header.num_records) {
+	/* no records found - almost certainly bogus, and even if not,
+	 * there's no point recovering a zero record file */
+	syslog(LOG_ERR, "DBERROR: %s no records found in recovery2, aborting",
+	       _fname(db));
+	r = CYRUSDB_NOTFOUND;
+	goto err;
+    }
+
     /* regardless, we had a commit during create, and in any _copy_commit, so
      * rename into place */
 
