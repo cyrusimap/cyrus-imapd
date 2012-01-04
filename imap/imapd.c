@@ -10846,7 +10846,7 @@ static int list_cb(char *name, int matchlen, int maycreate,
     perform_output(name, matchlen, rock);
     if (!maycreate)
 	rock->last_attributes |= MBOX_ATTRIBUTE_NOINFERIORS;
-    else if (name[matchlen])
+    else if (name[matchlen] == '.')
 	rock->last_attributes |= MBOX_ATTRIBUTE_HASCHILDREN;
 
     /* XXX: is there a cheaper way to figure out \Subscribed? */
@@ -10882,7 +10882,8 @@ static int subscribed_cb(const char *name, int matchlen, int maycreate,
 	if (!maycreate)
 	    rock->last_attributes |= MBOX_ATTRIBUTE_NOINFERIORS;
     }
-    else if (rock->listargs->cmd & LIST_CMD_LSUB) {
+    else if (name[matchlen] == '.' &&
+	     rock->listargs->cmd & LIST_CMD_LSUB) {
 	/* special case: for LSUB,
 	 * mailbox names that match the pattern but aren't subscribed
 	 * must also be returned if they have a child mailbox that is
