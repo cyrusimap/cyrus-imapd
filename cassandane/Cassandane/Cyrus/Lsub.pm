@@ -189,13 +189,59 @@ sub test_lsub_delete
           ],
     ], "LSUB deltest setup mismatch: " . Dumper($onedata));
 
-
     $imaptalk->delete("INBOX.deltest.sub2");
     my $nodata = $imaptalk->lsub("INBOX.deltest", "*");
     $nodata = [] unless ref($nodata); # dammit Completed return
     $self->assert_deep_equals($nodata, [
     ], "LSUB deltest after delete mismatch: " . Dumper($nodata));
+}
 
+sub test_lsub_extrachild
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create("INBOX.Test") || die;
+    $imaptalk->create("INBOX.Test.Sub") || die;
+    $imaptalk->create("INBOX.Test Foo") || die;
+    $imaptalk->create("INBOX.Test Bar") || die;
+    $imaptalk->subscribe("INBOX.Test") || die;
+    $imaptalk->subscribe("INBOX.Test.Sub") || die;
+    $imaptalk->subscribe("INBOX.Test Foo") || die;
+    $imaptalk->delete("INBOX.Test.Sub") || die;
+    my $subdata = $imaptalk->lsub("", "*");
+    $self->assert_deep_equals($subdata, [
+          [
+            [
+              '\\HasChildren'
+            ],
+            '.',
+            'INBOX'
+          ],
+          [
+            [
+              '\\HasChildren'
+            ],
+            '.',
+            'INBOX.Test'
+          ],
+          [
+            [],
+            '.',
+            'INBOX.Test Foo'
+          ],
+          [
+            [],
+            '.',
+            'INBOX.asub'
+          ],
+          [
+            [],
+            '.',
+            'user.other.sub.folder'
+          ],
+    ], "LSUB extrachild mismatch: " . Dumper($subdata));
 }
 
 1;
