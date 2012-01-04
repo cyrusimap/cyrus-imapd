@@ -74,7 +74,11 @@ eval
     {
 	my ($plan) = @_;
 
-	mkdir($output_dir);
+	if ( ! -d $output_dir )
+	{
+	    mkdir($output_dir)
+		or die "Cannot make output directory \"$output_dir\": $!";
+	}
 	my $runner = Test::Unit::Runner::XML->new($output_dir);
 	$runner->filter('x');
 	$runner->start($plan);
