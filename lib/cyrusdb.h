@@ -285,5 +285,6 @@ int cyrusdb_generic_init(const char *dbdir, int myflags);
 int cyrusdb_generic_done(void);
 int cyrusdb_generic_sync(void);
 int cyrusdb_generic_archive(const strarray_t *fnames, const char *dirname);
+int cyrusdb_generic_noarchive(const strarray_t *fnames, const char *dirname);
 
 #endif /* INCLUDED_CYRUSDB_H */

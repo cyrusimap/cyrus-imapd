@@ -587,3 +587,10 @@ int cyrusdb_generic_archive(const strarray_t *fnames,
 
     return 0;
 }
+
+int cyrusdb_generic_noarchive(const strarray_t *fnames __attribute__((unused)),
+			      const char *dirname __attribute__((unused)))
+{
+    return 0;
+}
+

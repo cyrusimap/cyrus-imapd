@@ -470,17 +470,6 @@ static int done(void)
     return 0;
 }
 
-static int mysync(void)
-{
-    return 0;
-}
-
-static int myarchive(strarray_t *fnames __attribute__((unused)),
-		     const char *dirname __attribute__((unused)))
-{
-    return 0;
-}
-
 static int myopen(const char *fname, int flags, struct dbengine **ret)
 {
     const char *database, *hostnames, *user, *passwd;
@@ -902,8 +891,8 @@ struct cyrusdb_backend cyrusdb_sql =
 
     &init,
     &done,
-    &mysync,
-    &myarchive,
+    &cyrusdb_generic_sync,
+    &cyrusdb_generic_noarchive,
 
     &myopen,
     &myclose,
