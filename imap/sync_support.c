@@ -478,19 +478,19 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
 
     result->next = NULL;
 
-    result->uniqueid = (uniqueid) ? xstrdup(uniqueid) : NULL;
-    result->name = (name) ? xstrdup(name) : NULL;
-    result->part = (part) ? xstrdup(part) : NULL;
-    result->acl = (acl) ? xstrdup(acl)  : NULL;
+    result->uniqueid = xstrdupnull(uniqueid);
+    result->name = xstrdupnull(name);
+    result->part = xstrdupnull(part);
+    result->acl = xstrdupnull(acl);
     result->uidvalidity = uidvalidity;
     result->last_uid = last_uid;
     result->highestmodseq = highestmodseq;
     result->options = options;
-    result->sync_crc = (crc) ? xstrdup(crc) : NULL;
+    result->sync_crc = xstrdupnull(crc);
     result->recentuid = recentuid;
     result->recenttime = recenttime;
     result->pop3_last_login = pop3_last_login;
-    result->specialuse = (specialuse) ? xstrdup(specialuse) : NULL;
+    result->specialuse = xstrdupnull(specialuse);
     result->pop3_show_after = pop3_show_after;
 
     result->mark     = 0;
@@ -1220,8 +1220,8 @@ void sync_action_list_add(struct sync_action_list *l,
 
     current           = xzmalloc(sizeof(struct sync_action));
     current->next     = NULL;
-    current->name     = (name)  ? xstrdup(name)  : NULL;
-    current->user     = (user)  ? xstrdup(user)  : NULL;
+    current->name     = xstrdupnull(name);
+    current->user     = xstrdupnull(user);
     current->active   = 1;
 
     if (l->tail)

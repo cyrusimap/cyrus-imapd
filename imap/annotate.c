@@ -639,7 +639,7 @@ static int _annotate_getdb(const char *mboxname,
     /* record all the above */
     d = xzmalloc(sizeof(*d));
     d->refcount = 1;
-    d->mboxname = (mboxname ? xstrdup(mboxname) : NULL);
+    d->mboxname = xstrdupnull(mboxname);
     d->filename = fname;
     d->db = db;
 

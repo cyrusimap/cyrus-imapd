@@ -372,7 +372,7 @@ char *address_get_all(const struct address *a, int canon_domain)
 
 char *address_get_localpart(const struct address *a)
 {
-    return a->mailbox ? xstrdup(a->mailbox) : NULL;
+    return xstrdupnull(a->mailbox);
 }
 
 char *address_get_domain(const struct address *a, int canon_domain)

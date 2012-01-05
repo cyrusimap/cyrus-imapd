@@ -233,7 +233,7 @@ int index_open(const char *name, struct index_init *init,
 	    state->myrights &= ~ACL_READ_WRITE;
 
 	state->authstate = init->authstate;
-	state->userid = init->userid ? xstrdup(init->userid) : NULL;
+	state->userid = xstrdupnull(init->userid);
 
 	state->internalseen = mailbox_internal_seen(state->mailbox,
 						    state->userid);

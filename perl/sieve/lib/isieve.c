@@ -276,7 +276,7 @@ char * read_capability(isieve_t *obj)
       if (strcasecmp(attr,"SASL")==0)
       {
 	free(cap);
-	cap = val ? xstrdup(val) : NULL;
+	cap = xstrdupnull(val);
       } else if (strcasecmp(attr,"SIEVE")==0) {
 
       } else if (strcasecmp(attr,"IMPLEMENTATION")==0) {
