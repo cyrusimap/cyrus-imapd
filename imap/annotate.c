@@ -3029,8 +3029,8 @@ int annotate_rename_mailbox(struct mailbox *oldmailbox,
 			    struct mailbox *newmailbox)
 {
     /* rename one mailbox */
-    char *olduserid = xstrdup(mboxname_to_userid(oldmailbox->name));
-    char *newuserid = xstrdup(mboxname_to_userid(newmailbox->name));
+    char *olduserid = xstrdupnull(mboxname_to_userid(oldmailbox->name));
+    char *newuserid = xstrdupnull(mboxname_to_userid(newmailbox->name));
     int r;
 
     /* rewrite any per-folder annotations from the global db */
