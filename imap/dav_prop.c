@@ -391,7 +391,7 @@ static int propfind_restype(const xmlChar *propname, xmlNsPtr ns,
 		    xmlNewChild(node, fctx->ns[NS_CAL],
 				BAD_CAST "schedule-inbox", NULL);
 		}
-		else if (!strcmp(fctx->req_tgt->collection, SCHED_INBOX)) {
+		else if (!strcmp(fctx->req_tgt->collection, SCHED_OUTBOX)) {
 		    xmlNewChild(node, fctx->ns[NS_CAL],
 				BAD_CAST "schedule-outbox", NULL);
 		}
