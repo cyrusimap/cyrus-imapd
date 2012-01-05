@@ -66,6 +66,7 @@
 #include "seen.h"
 #include "util.h"
 #include "version.h"
+#include "wildmat.h"
 #include "xmalloc.h"
 #include "xmemmem.h"
 #include "xstrlcpy.h"
@@ -86,6 +87,7 @@ static int meth_get(struct transaction_t *txn);
 static int rss_to_mboxname(struct request_target_t *req_tgt,
 			   char *mboxname, uint32_t *uid,
 			   char *section);
+static int is_feed(const char *mbox);
 static int list_feeds(struct transaction_t *txn,
 		      const char *base, unsigned long len);
 static int fetch_message(struct transaction_t *txn, struct mailbox *mailbox,
@@ -149,6 +151,9 @@ static int meth_get(struct transaction_t *txn)
 	}
 	else return list_feeds(txn, def_template, strlen(def_template));
     }
+
+    /* Make sure its a mailbox that we are treating as an RSS feed */
+    if (!is_feed(mailboxname)) return HTTP_NOT_FOUND;
 
     /* Locate the mailbox */
     if ((r = http_mlookup(mailboxname, &server, NULL, NULL))) {
@@ -300,6 +305,32 @@ static int rss_to_mboxname(struct request_target_t *req_tgt,
 
 
 /*
+ * Checks to make sure that the given mailbox is actually something
+ * that we're treating as an RSS feed.  Returns 1 if yes, 0 if no.
+ */
+static int is_feed(const char *mbox)
+{
+    static struct wildmat *feeds = NULL;
+    struct wildmat *wild;
+
+    if (!feeds) {
+	feeds = split_wildmats((char *) config_getstring(IMAPOPT_RSS_FEEDS),
+			       NULL);
+    }
+
+    /* check mailbox against the 'rss_feeds' wildmat */
+    wild = feeds;
+    while (wild->pat && wildmat(mbox, wild->pat) != 1) wild++;
+
+    /* if we don't have a match, or its a negative match, don't use it */
+    if (!wild->pat || wild->not) return 0;
+
+    /* otherwise, its usable */
+    return 1;
+}
+    
+
+/*
  * mboxlist_findall() callback function to list RSS feeds as a tree
  */
 struct node {
@@ -322,6 +353,9 @@ static int list_cb(char *name, int matchlen, int maycreate, void *rock)
 
     if (name) {
 	char *acl;
+
+	/* Don't list mailboxes that we don't treat as RSS feeds */
+	if (!is_feed(name)) return 0;
 
 	/* Don't list deleted mailboxes */
 	if (mboxname_isdeletedmailbox(name)) return 0;
@@ -497,10 +531,11 @@ static int fetch_message(struct transaction_t *txn, struct mailbox *mailbox,
 }
 
 
-static void buf_escapestr(struct buf *buf, const char *str, unsigned max)
+static void buf_escapestr(struct buf *buf, const char *str, unsigned max,
+			  unsigned replace)
 {
     const char *c;
-    unsigned len = 0;
+    unsigned buflen = buf_len(buf), len = 0;
 
     for (c = str; c && *c && (!max || len < max); c++, len++) {
 	/* Translate CR to HTML <br> tag */
@@ -513,8 +548,22 @@ static void buf_escapestr(struct buf *buf, const char *str, unsigned max)
 	else if (*c == '<') buf_appendcstr(buf, "&lt;");
 	else if (*c == '>') buf_appendcstr(buf, "&gt;");
 
-	/* Translate non-printable chars to X */
-	else if (!(isspace(*c) || isprint(*c))) buf_putc(buf, 'X');
+	/* Check for non-printable chars */
+	else if (!(isspace(*c) || isprint(*c))) {
+	    if (replace) {
+		/* Replace entire string with a warning */
+		buf_truncate(buf, buflen);
+		buf_appendcstr(buf, "<blockquote><i><b>NOTE:</b> "
+			       "This message contains characters "
+			       "that can not be displayed in RSS"
+			       "</i></blockquote>");
+		return;
+	    }
+	    else {
+		/* Translate non-printable chars to X */
+		buf_putc(buf, 'X');
+	    }
+	}
 
 	else buf_putc(buf, *c);
     }
@@ -526,7 +575,8 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 {
     const char **via, *prot, *host, *webmaster;
     uint32_t url_len, recno, recentuid = 0;
-    int max_items, max_len, ttl, nitems;
+    int max_age, max_items, max_len, ttl, nitems;
+    time_t age_mark = 0;
     char datestr[80];
     struct buf url = BUF_INITIALIZER, buf = BUF_INITIALIZER;
 
@@ -538,6 +588,10 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 	/* We failed a precondition - don't perform the request */
 	return precond;
     }
+
+    /* Get maximum age of items to display */
+    max_age = config_getint(IMAPOPT_RSS_MAXAGE);
+    if (max_age > 0) age_mark = time(0) - (max_age * 60 * 60 * 24);
 
     /* Get number of items to display */
     max_items = config_getint(IMAPOPT_RSS_MAXITEMS);
@@ -672,11 +726,15 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 	    continue;
 	}
 
+	/* XXX  Are we going to do anything with \Recent? */
 	if (record.uid <= recentuid) {
 	    syslog(LOG_DEBUG, "recno %u not recent (%u/%u)",
 		   recno, record.uid, recentuid);
 	    continue;
 	}
+
+	/* Make sure the message is new enough */
+	if (record.gmtime < age_mark) continue;
 
 	/* Feeding this message, increment counter */
 	nitems++;
@@ -685,7 +743,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 
 	subj = charset_parse_mimeheader(body->subject);
 	buf_appendcstr(&buf, "<title>");
-	buf_escapestr(&buf, subj && *subj ? subj : "[Untitled]", 0);
+	buf_escapestr(&buf, subj && *subj ? subj : "[Untitled]", 0, 0);
 	buf_appendcstr(&buf, "</title>\n");
 	free(subj);
 
@@ -701,12 +759,12 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 
 	    if (*addr->mailbox) {
 		buf_appendcstr(&buf, "<author>");
-		buf_escapestr(&buf, addr->mailbox, 0);
+		buf_escapestr(&buf, addr->mailbox, 0, 0);
 		buf_putc(&buf, '@');
-		buf_escapestr(&buf, addr->domain, 0);
+		buf_escapestr(&buf, addr->domain, 0, 0);
 		if (addr->name) {
 		    buf_appendcstr(&buf, " (");
-		    buf_escapestr(&buf, addr->name, 0);
+		    buf_escapestr(&buf, addr->name, 0, 0);
 		    buf_putc(&buf, ')');
 		}
 		buf_appendcstr(&buf, "</author>\n");
@@ -727,7 +785,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 
 	if (parts && *parts) {
 	    buf_appendcstr(&buf, "<description><![CDATA[");
-	    buf_escapestr(&buf, parts[0]->decoded_body, max_len);
+	    buf_escapestr(&buf, parts[0]->decoded_body, max_len, 1);
 	    buf_appendcstr(&buf, "]]></description>\n");
 	}
 

@@ -222,6 +222,19 @@ char *beautify_string(const char* src)
     return (beautybuf);
 }
 
+int strcmpsafe(const char *a, const char *b)
+{
+    return strcmp((a == NULL ? "" : a),
+	          (b == NULL ? "" : b));
+}
+
+int strcasecmpsafe(const char *a, const char *b)
+{
+    return strcasecmp((a == NULL ? "" : a),
+	              (b == NULL ? "" : b));
+}
+
+
 /* do a binary search in a keyvalue array
  *  nelem is the number of keyvalue elements in the kv array
  *  cmpf is the comparison function (strcmp, strcasecmp, etc).

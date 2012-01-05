@@ -2438,8 +2438,7 @@ int mailbox_repack_commit(struct mailbox_repack **repackptr)
     indexbuffer_t ibuf;
     unsigned char *buf = ibuf.buf;
     struct mailbox_repack *repack = *repackptr;
-    int n;
-    int r = 0;
+    int r = IMAP_IOERROR;
 
     assert(repack);
 
@@ -2447,19 +2446,18 @@ int mailbox_repack_commit(struct mailbox_repack **repackptr)
 
     /* rewrite the header with updated details */
     mailbox_index_header_to_buf(&repack->i, buf);
-    n = lseek(repack->newindex_fd, 0, SEEK_SET);
-    if (n == -1) {
-	r = IMAP_IOERROR;
+
+    if (lseek(repack->newindex_fd, 0, SEEK_SET) < 0)
 	goto fail;
-    }
-    n = retry_write(repack->newindex_fd, buf, INDEX_HEADER_SIZE);
-    if (n == -1) {
-	r = IMAP_IOERROR;
+
+    if (retry_write(repack->newindex_fd, buf, INDEX_HEADER_SIZE) < 0)
 	goto fail;
-    }
 
     /* ensure everything is committed to disk */
-    if (fsync(repack->newindex_fd) || fsync(repack->newcache_fd))
+    if (fsync(repack->newindex_fd) < 0)
+	goto fail;
+
+    if (fsync(repack->newcache_fd) < 0)
 	goto fail;
 
     close(repack->newcache_fd);
@@ -2897,7 +2895,7 @@ static int chkchildren(char *name,
     if (!strcmp(part, mbentry.partition))
 	r = CYRUSDB_DONE;
 
-    return 0;
+    return r;
 }
 
 /*
@@ -3156,7 +3154,7 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
     newmailbox->i.uidvalidity = time(0);
 
     /* INBOX rename - change uniqueid */
-    if (!userid) mailbox_make_uniqueid(newmailbox);
+    if (userid) mailbox_make_uniqueid(newmailbox);
 
     r = seen_copy(userid, oldmailbox, newmailbox);
     if (r) goto fail;

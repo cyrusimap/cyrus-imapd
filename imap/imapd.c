@@ -561,9 +561,9 @@ static int imapd_proxy_policy(sasl_conn_t *conn,
 }
 
 static const struct sasl_callback mysasl_cb[] = {
-    { SASL_CB_GETOPT, &mysasl_config, NULL },
-    { SASL_CB_PROXY_POLICY, &imapd_proxy_policy, (void*) &imapd_proxyctx },
-    { SASL_CB_CANON_USER, &imapd_canon_user, (void*) &disable_referrals },
+    { SASL_CB_GETOPT, (mysasl_cb_ft *) &mysasl_config, NULL },
+    { SASL_CB_PROXY_POLICY, (mysasl_cb_ft *) &imapd_proxy_policy, (void*) &imapd_proxyctx },
+    { SASL_CB_CANON_USER, (mysasl_cb_ft *) &imapd_canon_user, (void*) &disable_referrals },
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
@@ -2824,7 +2824,7 @@ void capa_response(int flags)
 	if (capa_is_disabled(base_capabilities[i].str))
 	    continue;
 	/* Don't show "MAILBOX-REFERRALS" if disabled by config */
-	if (disable_referrals && 
+	if (config_getswitch(IMAPOPT_PROXYD_DISABLE_MAILBOX_REFERRALS) && 
 	    !strcmp(base_capabilities[i].str, "MAILBOX-REFERRALS"))
 	    continue;
 	/* Don't show if they're not shown at this level of login */
@@ -5137,10 +5137,8 @@ void cmd_create(char *tag, char *name, struct dlist *extargs, int localonly)
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
     }
     else {
-	if (config_mupdate_server &&
-	    (config_mupdate_config != IMAP_ENUM_MUPDATE_CONFIG_STANDARD)) {
+	if (config_mupdate_server)
 	    kick_mupdate();
-	}
 
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
@@ -5290,10 +5288,8 @@ void cmd_delete(char *tag, char *name, int localonly, int force)
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
     }
     else {
-	if (config_mupdate_server &&
-	    (config_mupdate_config != IMAP_ENUM_MUPDATE_CONFIG_STANDARD)) {
+	if (config_mupdate_server)
 	    kick_mupdate();
-	}
 
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
@@ -5309,6 +5305,7 @@ struct renrock
     char *acl_olduser, *acl_newuser;
     char *newmailboxname;
     char *partition;
+    int found;
 };
 
 /* Callback for use by cmd_rename */
@@ -5319,6 +5316,8 @@ static int checkmboxname(char *name,
 {
     struct renrock *text = (struct renrock *)rock;
     int r;
+
+    text->found++;
 
     if((text->nl + strlen(name + text->ol)) >= MAX_MAILBOX_BUFFER)
 	return IMAP_MAILBOX_BADNAME;
@@ -5409,6 +5408,7 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
     char oldextname[MAX_MAILBOX_BUFFER];
     char newextname[MAX_MAILBOX_BUFFER];
     int omlen, nmlen;
+    int subcount = 0; /* number of sub-folders found */
     int recursive_rename = 1;
     int rename_user = 0;
     char olduser[128], newuser[128];
@@ -5598,8 +5598,17 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	}
     }
 
+    r = 0; /* doesn't matter if we didn't find it now */
+
+    (*imapd_namespace.mboxname_toexternal)(&imapd_namespace,
+					   oldmailboxname,
+					   imapd_userid, oldextname);
+    (*imapd_namespace.mboxname_toexternal)(&imapd_namespace,
+					   newmailboxname,
+					   imapd_userid, newextname);
+
     /* rename all mailboxes matching this */
-    if (!r && recursive_rename && strcmp(oldmailboxname, newmailboxname)) {
+    if (recursive_rename && strcmp(oldmailboxname, newmailboxname)) {
 	struct renrock rock;
 	int ol = omlen + 1;
 	int nl = nmlen + 1;
@@ -5612,6 +5621,7 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	strcat(nmbn, ".");
 
 	/* setup the rock */
+	rock.found = 0;
 	rock.newmailboxname = nmbn;
 	rock.ol = ol;
 	rock.nl = nl;
@@ -5625,6 +5635,8 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	/* Check mboxnames to ensure we can write them all BEFORE we start */
 	r = mboxlist_findall(NULL, ombn, 1, imapd_userid,
 			     imapd_authstate, checkmboxname, &rock);
+
+	subcount = rock.found;
     }
 
     /* attempt to rename the base mailbox */
@@ -5632,6 +5644,9 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	r = mboxlist_renamemailbox(oldmailboxname, newmailboxname, partition,
 				   imapd_userisadmin, 
 				   imapd_userid, imapd_authstate, 0, rename_user);
+	/* it's OK to not exist if there are subfolders */
+	if (r == IMAP_MAILBOX_NONEXISTENT && subcount && !rename_user) 
+	    goto submboxes;
     }
 
     /* If we're renaming a user, take care of changing quotaroot, ACL,
@@ -5682,27 +5697,19 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
     /* rename all mailboxes matching this */
     if (!r && recursive_rename) {
 	struct renrock rock;
-	int ol = omlen + 1;
-	int nl = nmlen + 1;
-
-	(*imapd_namespace.mboxname_toexternal)(&imapd_namespace,
-					       oldmailboxname,
-					       imapd_userid, oldextname);
-	(*imapd_namespace.mboxname_toexternal)(&imapd_namespace,
-					       newmailboxname,
-					       imapd_userid, newextname);
 
 	prot_printf(imapd_out, "* OK rename %s %s\r\n",
 		    oldextname, newextname);
 	prot_flush(imapd_out);
 
+submboxes:
 	strcat(oldmailboxname, ".*");
 	strcat(newmailboxname, ".");
 
 	/* setup the rock */
 	rock.newmailboxname = newmailboxname;
-	rock.ol = ol;
-	rock.nl = nl;
+	rock.ol = omlen + 1;
+	rock.nl = nmlen + 1;
 	rock.olduser = olduser;
 	rock.newuser = newuser;
 	rock.acl_olduser = acl_olduser;
@@ -5725,10 +5732,8 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
     if (r) {
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
     } else {
-	if (config_mupdate_server &&
-	    (config_mupdate_config != IMAP_ENUM_MUPDATE_CONFIG_STANDARD)) {
+	if (config_mupdate_server)
 	    kick_mupdate();
-	}
 
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
@@ -5996,7 +6001,11 @@ void cmd_list(char *tag, struct listargs *listargs)
     clock_t start = clock();
     char mytime[100];
 
-    if (listargs->sel & LIST_SEL_REMOTE) supports_referrals = !disable_referrals;
+    if (listargs->sel & LIST_SEL_REMOTE) {
+	if (!config_getswitch(IMAPOPT_PROXYD_DISABLE_MAILBOX_REFERRALS)) {
+	    supports_referrals = !disable_referrals;
+	}
+    }
 
     list_callback_calls = 0;
 
@@ -6411,10 +6420,8 @@ void cmd_setacl(char *tag, const char *name,
     if (r) {
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
     } else {
-	if (config_mupdate_server &&
-	    (config_mupdate_config != IMAP_ENUM_MUPDATE_CONFIG_STANDARD)) {
+	if (config_mupdate_server)
 	    kick_mupdate();
-	}
 
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
@@ -8749,6 +8756,7 @@ static int xfer_undump(struct xfer_header *xfer)
 	    syslog(LOG_ERR,
 		   "Failed to open mailbox %s for dump_mailbox() %s",
 		   item->name, error_message(r));
+	    return r;
 	}
 
 	/* Step 4: Dump local -> remote */
@@ -8791,43 +8799,12 @@ static int xfer_undump(struct xfer_header *xfer)
 	    return r;
 	}
 
-	/* 6.5) Kick remote server to correct mupdate entry */
-	/* Note that we don't really care if this succeeds or not */
-	if (xfer->mupdate_h) {
-	    prot_printf(xfer->be->out, "MP1 MUPDATEPUSH {" SIZE_T_FMT "+}\r\n%s\r\n",
-			strlen(extname), extname);
-	    r = getresult(xfer->be->in, "MP1");
-	    if (r) {
-		syslog(LOG_ERR,
-		       "Could not trigger remote push to mupdate server "
-		       "during move of %s", item->name);
-	    }
-	}
-    }
+	/* No need to push the MUPDATE if we're not part of a murder */
+	if (!xfer->mupdate_h) continue;
 
-    return 0;
-}
-
-static int xfer_reactivate(struct xfer_header *xfer)
-{
-    struct xfer_item *item;
-    int r;
-
-    /* Step 6: mupdate.activate(mailbox, remote) */
-    /* We do this from the local server first so that recovery is easier */
-    for (item = xfer->items; item; item = item->next) {
-	const char *topart = xfer->topart;
-	/*
-	 * If we don't have a partition on the target server, we use
-	 * the string "MOVED" instead.  When we issue MUPDATEPUSH to the
-	 * target server, it will correctly update the mupdate master.
-	 * Note that "toserver" is also a guess, since it's not actually
-	 * required to match config_servername on the target server.  So
-	 * much for making recovery easier!
-	 */
-	if (!topart) topart = "MOVED";
-	r = xfer_mupdate(xfer, 1, item->name, topart,
-			 xfer->toserver, item->acl);
+	prot_printf(xfer->be->out, "MP1 MUPDATEPUSH {" SIZE_T_FMT "+}\r\n%s\r\n",
+		    strlen(extname), extname);
+	r = getresult(xfer->be->in, "MP1");
 	if (r) {
 	    syslog(LOG_ERR, "MUPDATE: can't activate mailbox entry '%s'",
 		   item->name);
@@ -8913,7 +8890,6 @@ static int do_xfer(struct xfer_header *xfer)
     r = xfer_deactivate(xfer);
     if (!r) r = xfer_localcreate(xfer);
     if (!r) r = xfer_undump(xfer);
-    if (!r) r = xfer_reactivate(xfer);
     /* note - we don't report errors if this one
      * fails! */
     if (!r) xfer_delete(xfer);
@@ -10100,6 +10076,24 @@ static int set_subscribed(char *name, int matchlen,
     return 0;
 }
 
+static void perform_output(const char *name, size_t matchlen,
+			   struct list_rock *rock)
+{
+    if (rock->last_name) {
+	if (strlen(rock->last_name) == matchlen && name &&
+	    !strncmp(rock->last_name, name, matchlen))
+	    return; /* skip duplicate calls */
+	list_response(rock->last_name, rock->last_attributes, rock->listargs);
+	free(rock->last_name);
+	rock->last_name = NULL;
+    }
+
+    if (name) {
+	rock->last_name = xstrndup(name, matchlen);
+	rock->last_attributes = 0;
+    }
+}
+
 /* callback for mboxlist_findall
  * used when the SUBSCRIBED selection option is NOT given */
 static int list_cb(char *name, int matchlen, int maycreate,
@@ -10118,38 +10112,20 @@ static int list_cb(char *name, int matchlen, int maycreate,
     if (last_name_is_ancestor)
 	rock->last_attributes |= MBOX_ATTRIBUTE_HASCHILDREN;
 
-    if (!name[matchlen]) {
-	/* exact match */
-	if ( ! (rock->last_attributes & MBOX_ATTRIBUTE_HASCHILDREN) )
-	    rock->last_attributes |= MBOX_ATTRIBUTE_HASNOCHILDREN;
-	list_response(rock->last_name, rock->last_attributes, rock->listargs);
-	free(rock->last_name);
-	rock->last_name = xstrdup(name);
-	rock->last_attributes = 0;
-	if (!maycreate)
-	    rock->last_attributes |= MBOX_ATTRIBUTE_NOINFERIORS;
-	/* xxx: is there a cheaper way to figure out \Subscribed? */
-	if (rock->listargs->ret & LIST_RET_SUBSCRIBED)
-	    mboxlist_findsub(&imapd_namespace, name, imapd_userisadmin,
-			     imapd_userid, imapd_authstate, set_subscribed,
-			     &rock->last_attributes, 0);
-    }
-    else if ((name[matchlen] == '.' ||
-	      name[matchlen] == imapd_namespace.hier_sep)
-	    && !(rock->listargs->cmd & LIST_CMD_EXTENDED)
-	    && !last_name_is_ancestor) {
-	/* special case: if the mailbox name argument of a non-extended List
-	 * command causes a partial match, we need to emit a "haschildren"
-	 * response */
-	/* XXX: this is so awful because we could get passed
-	 * "Shared Folders/" in the unixhiersep + altnamspace case, even
-	 * though what's passed here is a sort-of-internal-name-but-with
-	 * -INBOX name.  Ugly, ugly, ugly */
-	list_response(rock->last_name, rock->last_attributes, rock->listargs);
-	free(rock->last_name);
-	rock->last_name = xstrndup(name, matchlen);
-	rock->last_attributes = MBOX_ATTRIBUTE_HASCHILDREN;
-    }
+    /* tidy up flags */
+    if (!(rock->last_attributes & MBOX_ATTRIBUTE_HASCHILDREN))
+	rock->last_attributes |= MBOX_ATTRIBUTE_HASNOCHILDREN;
+    perform_output(name, matchlen, rock);
+    if (!maycreate)
+	rock->last_attributes |= MBOX_ATTRIBUTE_NOINFERIORS;
+    else if (name[matchlen])
+	rock->last_attributes |= MBOX_ATTRIBUTE_HASCHILDREN;
+
+    /* XXX: is there a cheaper way to figure out \Subscribed? */
+    if (rock->listargs->ret & LIST_RET_SUBSCRIBED)
+	mboxlist_findsub(&imapd_namespace, name, imapd_userisadmin,
+			 imapd_userid, imapd_authstate, set_subscribed,
+			 &rock->last_attributes, 0);
 
     return 0;
 }
@@ -10173,25 +10149,18 @@ static int subscribed_cb(const char *name, int matchlen, int maycreate,
 	rock->last_attributes |= MBOX_ATTRIBUTE_HASCHILDREN;
 
     if (!name[matchlen]) {
-	/* exact match */
-	list_response(rock->last_name, rock->last_attributes, rock->listargs);
-	free(rock->last_name);
-	rock->last_name = xstrdup(name);
-	rock->last_attributes = MBOX_ATTRIBUTE_SUBSCRIBED;
+	perform_output(name, matchlen, rock);
+	rock->last_attributes |= MBOX_ATTRIBUTE_SUBSCRIBED;
 	if (!maycreate)
 	    rock->last_attributes |= MBOX_ATTRIBUTE_NOINFERIORS;
     }
-    else if (name[matchlen] == '.' &&
-	     rock->listargs->cmd & LIST_CMD_LSUB &&
-	     !last_name_is_ancestor) {
+    else if (rock->listargs->cmd & LIST_CMD_LSUB) {
 	/* special case: for LSUB,
 	 * mailbox names that match the pattern but aren't subscribed
 	 * must also be returned if they have a child mailbox that is
 	 * subscribed */
-	list_response(rock->last_name, rock->last_attributes, rock->listargs);
-	free(rock->last_name);
-	rock->last_name = xstrndup(name, matchlen);
-	rock->last_attributes = MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED;
+	perform_output(name, matchlen, rock);
+	rock->last_attributes |= MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED;
     }
 
     return 0;
@@ -10372,17 +10341,14 @@ static void list_data(struct listargs *listargs)
     } else {
 	struct strlist *pattern;
 	struct list_rock rock;
+	memset(&rock, 0, sizeof(struct list_rock));
 	rock.listargs = listargs;
-	rock.last_name = NULL;
-	rock.last_attributes = 0;
+
 	if (listargs->sel & LIST_SEL_SUBSCRIBED) {
 	    for (pattern = listargs->pat; pattern; pattern = pattern->next) {
 		findsub(&imapd_namespace, pattern->s, imapd_userisadmin,
 			imapd_userid, imapd_authstate, subscribed_cb, &rock, 1);
-		list_response(rock.last_name, rock.last_attributes,
-			      rock.listargs);
-		free(rock.last_name);
-		rock.last_name = NULL;
+		perform_output(NULL, 0, &rock);
 	    }
 	} else {
 	    if (listargs->scan) {
@@ -10392,10 +10358,7 @@ static void list_data(struct listargs *listargs)
 	    for (pattern = listargs->pat; pattern; pattern = pattern->next) {
 		findall(&imapd_namespace, pattern->s, imapd_userisadmin,
 			imapd_userid, imapd_authstate, list_cb, &rock);
-		list_response(rock.last_name, rock.last_attributes,
-			      rock.listargs);
-		free(rock.last_name);
-		rock.last_name = NULL;
+		perform_output(NULL, 0, &rock);
 	    }
 
 	    if (listargs->scan)

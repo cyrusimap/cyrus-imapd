@@ -1262,7 +1262,7 @@ static int mailbox_full_update(const char *mboxname)
 	r2 = sync_parse_response("EXPUNGE", sync_in, NULL);
 	if (r2) {
 	    syslog(LOG_ERR, "SYNCERROR: failed to expunge in cleanup %s",
-		   mailbox->name);
+		   mboxname);
 	}
     }
 
@@ -1595,7 +1595,10 @@ int do_folders(struct sync_name_list *mboxname_list,
 
     r = reserve_messages(mboxname_list, master_folders,
 			 replica_folders, reserve_guids);
-    if (r) goto bail;
+    if (r) {
+	syslog(LOG_ERR, "reserve messages: failed: %s", error_message(r));
+	goto bail;
+    }
 
     /* Tag folders on server which still exist on the client. Anything
      * on the server which remains untagged can be deleted immediately */
@@ -1614,7 +1617,11 @@ int do_folders(struct sync_name_list *mboxname_list,
     for (rfolder = replica_folders->head; rfolder; rfolder = rfolder->next) {
 	if (rfolder->mark) continue;
 	r = folder_delete(rfolder->name);
-	if (r) goto bail;
+	if (r) {
+	    syslog(LOG_ERR, "folder_delete(): failed: %s '%s'", 
+		   rfolder->name, error_message(r));
+	    goto bail;
+	}
     }
 
     /* Need to rename folders in an order which avoids dependancy conflicts
@@ -1629,8 +1636,11 @@ int do_folders(struct sync_name_list *mboxname_list,
 	for (item = rename_folders->head; item; item = item->next) {
 	    if (item->done) continue;
 
-	    item2 = sync_rename_lookup(rename_folders, item->newname);
-	    if (item2 && !item2->done) continue;
+	    /* don't skip rename to different partition */
+	    if (strcmp(item->oldname, item->newname)) {
+		item2 = sync_rename_lookup(rename_folders, item->newname);
+		if (item2 && !item2->done) continue;
+	    }
 
 	    /* Found unprocessed item which should rename cleanly */
 	    r = folder_rename(item->oldname, item->newname, item->part);
@@ -2704,8 +2714,8 @@ void do_daemon(const char *sync_log_file, const char *sync_shutdown_file,
 /* ====================================================================== */
 
 static struct sasl_callback mysasl_cb[] = {
-    { SASL_CB_GETOPT, &mysasl_config, NULL },
-    { SASL_CB_CANON_USER, &mysasl_canon_user, NULL },
+    { SASL_CB_GETOPT, (mysasl_cb_ft *) &mysasl_config, NULL },
+    { SASL_CB_CANON_USER, (mysasl_cb_ft *) &mysasl_canon_user, NULL },
     { SASL_CB_LIST_END, NULL, NULL }
 };
 

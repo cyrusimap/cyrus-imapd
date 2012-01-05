@@ -64,6 +64,7 @@
 #include "acl.h"
 #include "annotate.h"
 #include "auth.h"
+#include "bsearch.h"
 #include "glob.h"
 #include "assert.h"
 #include "global.h"
@@ -1194,9 +1195,16 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
 	}
 	else if (partitionmove) {
 	    char *oldpartition = xstrdup(oldmailbox->part);
+	    if (config_auditlog)
+		syslog(LOG_NOTICE, "auditlog: partitionmove sessionid=<%s> "
+		       "mailbox=<%s> uniqueid=<%s> oldpart=<%s> newpart=<%s>",
+		       session_id(),
+		       oldmailbox->name, oldmailbox->uniqueid,
+		       oldpartition, partition);
 	    mailbox_close(&oldmailbox);
 	    mailbox_delete_cleanup(oldpartition, oldname);
 	    free(oldpartition);
+
 	}
 	else
 	    abort(); /* impossible, in theory */
@@ -1556,6 +1564,8 @@ struct find_rock {
     int checkshared;
     int isadmin;
     struct auth_state *auth_state;
+    char *prev;
+    int prevlen;
     int (*proc)(char *, int, int, void *rock);
     void *procrock;
 };
@@ -1625,8 +1635,7 @@ static int find_p(void *rockp,
 
 	memcpy(namebuf, key, keylen);
 	namebuf[keylen] = '\0';
-	if (mboxlist_delayed_delete_isenabled() && 
-	    mboxname_isdeletedmailbox(namebuf))
+	if (mboxname_isdeletedmailbox(namebuf))
 	    return 0;
     }
 
@@ -1671,7 +1680,28 @@ static int find_p(void *rockp,
     return 1;
 }
 
-static int find_cb(void *rockp, 
+static int check_name(struct find_rock *rock,
+		      const char *base, int len)
+{
+    if (rock->prev) {
+	/* check if name is previous to what's already been sent.
+	 * NOTE: must be a < 0, not <=0.  It's tempting not to send
+	 * duplicates, but then you can't find if something has
+	 * children in the LIST "" % case, because the matchlen will
+	 * be the same for the children too.  So the callee must
+	 * suppress duplicates after it's checked if it's a child. */
+	if (bsearch_ncompare(base, len, rock->prev, rock->prevlen) < 0)
+	    return 0;
+	free(rock->prev);
+    }
+
+    rock->prev = xstrndup(base, len);
+    rock->prevlen = len;
+
+    return 1;
+}
+
+static int find_cb(void *rockp,
 		   const char *key, int keylen,
 		   const char *data __attribute__((unused)),
 		   int datalen __attribute__((unused)))
@@ -1686,14 +1716,14 @@ static int find_cb(void *rockp,
     minmatch = 0;
     while (minmatch >= 0) {
 	long matchlen;
-	
+
 	if(keylen >= (int) sizeof(namebuf)) {
 	    syslog(LOG_ERR, "oversize keylen in mboxlist.c:find_cb()");
 	    return 0;
 	}
 	memcpy(namebuf, key, keylen);
 	namebuf[keylen] = '\0';
-	
+
 	if (rock->find_namespace != NAMESPACE_INBOX &&
 	    rock->usermboxname &&
 	    !strncmp(namebuf, rock->usermboxname, rock->usermboxnamelen)
@@ -1703,7 +1733,7 @@ static int find_cb(void *rockp,
 	    return 0;
 	}
 
-      	/* make sure it's in the mailboxes db */
+	/* make sure it's in the mailboxes db */
 	if (rock->checkmboxlist) {
 	    r = mboxlist_lookup(namebuf, NULL, NULL);
 	} else {
@@ -1717,7 +1747,7 @@ static int find_cb(void *rockp,
 	    namebuf[rock->inboxoffset+3] = rock->inboxcase[3];
 	    namebuf[rock->inboxoffset+4] = rock->inboxcase[4];
 	}
-	
+
 	matchlen = glob_test(g, namebuf+rock->inboxoffset,
 			     keylen-rock->inboxoffset, &minmatch);
 
@@ -1744,11 +1774,13 @@ static int find_cb(void *rockp,
 	    }
 
 	    rock->checkshared = 0;
-	    r = (*rock->proc)(namebuf+rock->inboxoffset, matchlen, 
-			      1, rock->procrock);
+
+	    if (check_name(rock, namebuf+rock->inboxoffset, matchlen))
+		r = (*rock->proc)(namebuf+rock->inboxoffset, matchlen,
+				  1, rock->procrock);
 
 	    break;
-	    
+
 	case IMAP_MAILBOX_NONEXISTENT:
 	    /* didn't find the entry */
 	    r = 0;
@@ -1851,6 +1883,8 @@ int mboxlist_findall(struct namespace *namespace,
     cbrock.checkshared = 0;
     cbrock.proc = proc;
     cbrock.procrock = rock;
+    cbrock.prev = NULL;
+    cbrock.prevlen = 0;
 
     /* Build usermboxname */
     if (userid && (!(p = strchr(userid, '.')) || ((p - userid) > userlen)) &&
@@ -1932,6 +1966,10 @@ int mboxlist_findall(struct namespace *namespace,
 			usermboxname, usermboxnamelen,
 			&find_p, &find_cb, &cbrock,
 			NULL);
+
+	free(cbrock.prev);
+	cbrock.prev = NULL;
+	cbrock.prevlen = 0;
     }
 
     if (!r && (isadmin || namespace->accessible[NAMESPACE_USER])) {
@@ -1952,8 +1990,11 @@ int mboxlist_findall(struct namespace *namespace,
 			domainpat, domainlen + prefixlen,
 			&find_p, &find_cb, &cbrock,
 			NULL);
+
+	free(cbrock.prev);
+	cbrock.prev = NULL;
+	cbrock.prevlen = 0;
     }
-    
 
   done:
     glob_free(&cbrock.g);
@@ -1999,6 +2040,8 @@ int mboxlist_findall_alt(struct namespace *namespace,
     cbrock.checkshared = 0;
     cbrock.proc = proc;
     cbrock.procrock = rock;
+    cbrock.prev = NULL;
+    cbrock.prevlen = 0;
 
     /* Build usermboxname */
     if (userid && (!(p = strchr(userid, '.')) || ((p - userid) > userlen)) &&
@@ -2066,6 +2109,9 @@ int mboxlist_findall_alt(struct namespace *namespace,
 		    &find_p, &find_cb, &cbrock,
 		    NULL);
 
+	free(cbrock.prev);
+	cbrock.prev = NULL;
+	cbrock.prevlen = 0;
 	glob_free(&cbrock.g);
     }
 
@@ -2099,7 +2145,7 @@ int mboxlist_findall_alt(struct namespace *namespace,
 	    }
 	    cbrock.find_namespace = NAMESPACE_USER;
 	    cbrock.inboxoffset = 0;
-	
+
 	    /* iterate through prefixes matching usermboxname */
 	    strlcpy(domainpat+domainlen, "user", sizeof(domainpat)-domainlen);
 	    DB->foreach(mbdb,
@@ -2108,6 +2154,9 @@ int mboxlist_findall_alt(struct namespace *namespace,
 			NULL);
 
 	    glob_free(&cbrock.g);
+	    free(cbrock.prev);
+	    cbrock.prev = NULL;
+	    cbrock.prevlen = 0;
         }
     }
 
@@ -2135,10 +2184,9 @@ int mboxlist_findall_alt(struct namespace *namespace,
 		}
 
 		if (*pattern && !strchr(pattern, '.') &&
-		pattern[strlen(pattern)-1] == '%') {
+		    pattern[strlen(pattern)-1] == '%')
 		/* special case:  LIST "" *% -- output prefix */
-		cbrock.checkshared = 1;
-		}
+		    cbrock.checkshared = 1;
 
 		if ((cbrock.checkshared || prefixlen == len) && !*p) {
 		    /* special case:  LIST "" % -- output prefix
@@ -2168,6 +2216,9 @@ int mboxlist_findall_alt(struct namespace *namespace,
 			    &find_p, &find_cb, &cbrock,
 			NULL);
 	    }
+	    free(cbrock.prev);
+	    cbrock.prev = NULL;
+	    cbrock.prevlen = 0;
 	}
     }
 
@@ -2600,6 +2651,8 @@ int mboxlist_findsub(struct namespace *namespace,
     cbrock.checkshared = 0;
     cbrock.proc = proc;
     cbrock.procrock = rock;
+    cbrock.prev = NULL;
+    cbrock.prevlen = 0;
 
     /* open the subscription file that contains the mailboxes the 
        user is subscribed to */
@@ -2684,6 +2737,9 @@ int mboxlist_findsub(struct namespace *namespace,
 		       usermboxname, usermboxnamelen,
 		       &find_p, &find_cb, &cbrock,
 		       NULL);
+	free(cbrock.prev);
+	cbrock.prev = NULL;
+	cbrock.prevlen = 0;
 
 	cbrock.usermboxname = usermboxname;
 	cbrock.usermboxnamelen = usermboxnamelen;
@@ -2707,6 +2763,9 @@ int mboxlist_findsub(struct namespace *namespace,
 	   just bother looking at the ones that have the same pattern prefix. */
 	SUBDB->foreach(subs, domainpat, domainlen + prefixlen,
 		       &find_p, &find_cb, &cbrock, NULL);
+	free(cbrock.prev);
+	cbrock.prev = NULL;
+	cbrock.prevlen = 0;
    }
 
   done:
@@ -2771,6 +2830,8 @@ int mboxlist_findsub_alt(struct namespace *namespace,
     cbrock.checkshared = 0;
     cbrock.proc = proc;
     cbrock.procrock = rock;
+    cbrock.prev = NULL;
+    cbrock.prevlen = 0;
 
     /* open the subscription file that contains the mailboxes the 
        user is subscribed to */
@@ -2839,6 +2900,9 @@ int mboxlist_findsub_alt(struct namespace *namespace,
 		       usermboxname, usermboxnamelen,
 		       &find_p, &find_cb, &cbrock,
 		       NULL);
+	free(cbrock.prev);
+	cbrock.prev = NULL;
+	cbrock.prevlen = 0;
 
 	glob_free(&cbrock.g);
 
@@ -2887,6 +2951,9 @@ int mboxlist_findsub_alt(struct namespace *namespace,
 			   domainpat, strlen(domainpat),
 			   &find_p, &find_cb, &cbrock,
 			   NULL);
+	    free(cbrock.prev);
+	    cbrock.prev = NULL;
+	    cbrock.prevlen = 0;
 
 	    glob_free(&cbrock.g);
 	}
@@ -2938,6 +3005,9 @@ int mboxlist_findsub_alt(struct namespace *namespace,
 			       domainpat, domainlen,
 			       &find_p, &find_cb, &cbrock,
 			       NULL);
+		free(cbrock.prev);
+		cbrock.prev = NULL;
+		cbrock.prevlen = 0;
 	    }
 	    else if (pattern[len] == '.') {
 		strlcpy(domainpat+domainlen, pattern+len+1,
@@ -2948,6 +3018,9 @@ int mboxlist_findsub_alt(struct namespace *namespace,
 			       domainpat, domainlen+prefixlen-(len+1),
 			       &find_p, &find_cb, &cbrock,
 			       NULL);
+		free(cbrock.prev);
+		cbrock.prev = NULL;
+		cbrock.prevlen = 0;
 	    }
 	}
     }

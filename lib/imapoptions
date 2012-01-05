@@ -1081,6 +1081,18 @@ And the notification message will be available on \fIstdin\fR.
    template.  The dynamically created list of feeds based on the
    HTML template will be accessible at the "/rss" URL on the server. */ 
 
+{ "rss_feeds", "*", STRING }
+/* A wildmat pattern specifying which mailbox hierarchies should be
+   treated as RSS feeds.  Only mailboxes matching the wildmat will
+   have their messages available via RSS.  If not set, a default
+   wildmat of "*" (ALL mailboxes) will be used. */
+
+{ "rss_maxage", 0, INT }
+/* Maximum age (in days) of items to display in an RSS channel.  If
+   non-zero, httpd will only display items received within the last
+   \fIrss_maxage\fR days.  If set to 0, all available items will be
+   displayed (the default). */
+
 { "rss_maxitems", 0, INT }
 /* Maximum number of items to display in an RSS channel.  If non-zero,
    httpd will display no more than the \fIrss_maxitems\fR most recent

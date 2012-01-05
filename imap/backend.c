@@ -453,8 +453,8 @@ static int backend_login(struct backend *ret, const char *server,
 
 	if ((r = backend_authenticate(ret, prot, &mlist, userid,
 				      cb, &my_status))) {
-	    syslog(LOG_ERR, "couldn't authenticate to backend server: %s",
-		   sasl_errstring(r, NULL, NULL));
+	    syslog(LOG_ERR, "couldn't authenticate to backend server '%s': %s",
+		   server, sasl_errstring(r, NULL, NULL));
 	}
 	else {
 	    const void *ssf;
