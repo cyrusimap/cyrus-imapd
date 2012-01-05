@@ -255,7 +255,6 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 	    /* Fall through as 100-Continue */
 
 	case 100: /* Continue */
-	    if (hdrs) spool_free_hdrcache(hdrs);
 	    goto response;
 
 	case 200: /* OK */
