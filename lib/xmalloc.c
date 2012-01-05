@@ -99,10 +99,22 @@ char *xstrdup(const char* str)
     return p;
 }
 
+/* return a malloced "" if NULL is passed */
+char *xstrdupsafe(const char *str)
+{
+    return str ? xstrdup(str) : xstrdup("");
+}
+
+/* return NULL if NULL is passed */
+char *xstrdupnull(const char *str)
+{
+    return str ? xstrdup(str) : NULL;
+}
+
 char *xstrndup(const char* str, unsigned len)
 {
     char *p = xmalloc(len+1);
-    strncpy(p, str, len);
+    if (len) strncpy(p, str, len);
     p[len] = '\0';
     return p;
 }
