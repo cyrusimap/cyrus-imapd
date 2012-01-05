@@ -143,22 +143,16 @@ sub compile_sievec
     close(FH);
 
     xlog "Running sievec on script $name";
-    my $result = 'success';
-    eval
-    {
-	$self->{instance}->run_command(
+    my $result = $self->{instance}->run_command(
 	    {
 		cyrus => 1,
 		redirects => { stderr => "$basedir/$name.errors" },
+		handlers => {
+		    exited_normally => sub { return 'success'; },
+		    exited_abnormally => sub { return 'failure'; },
+		},
 	    },
 	    "sievec", "$basedir/$name.script", "$basedir/$name.bc");
-    };
-    if ($@)
-    {
-	$result = $@;
-	chomp $result;
-	$result =~ s/.*exited with code.*/failure/;
-    }
 
     # Read the errors file in @errors
     my (@errors) = read_errors("$basedir/$name.errors");
@@ -206,10 +200,7 @@ sub compile_timsieved
     }
 
     xlog "Running installsieve on script $name";
-    my $result = 'success';
-    eval
-    {
-	$self->{instance}->run_command({
+    my $result = $self->{instance}->run_command({
 		redirects => {
 		    # No cyrus => 1 as installsieve is a Perl
 		    # script which doesn't need Valgrind and
@@ -217,18 +208,15 @@ sub compile_timsieved
 		    stdin => "$basedir/sieve.passwd",
 		    stderr => "$basedir/$name.errors"
 		},
+		handlers => {
+		    exited_normally => sub { return 'success'; },
+		    exited_abnormally => sub { return 'failure'; },
+		},
 	    },
 	    "$bindir/installsieve",
 	    "-i", "$basedir/$name.script",
 	    "-u", "anonymous",
 	    "$srv->{host}:$srv->{port}");
-    };
-    if ($@)
-    {
-	$result = $@;
-	chomp $result;
-	$result =~ s/.*exited with code.*/failure/;
-    }
 
     # Read the errors file in @errors
     my (@errors) = read_errors("$basedir/$name.errors");

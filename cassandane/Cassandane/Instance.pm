@@ -587,6 +587,14 @@ sub deliver
 # cyrus     whether it is a cyrus utility; if so, instance path is
 #           automatically prepended to the given command name
 #
+# handlers  hash of coderefs to be called when various events
+#	    are detected.  Default is to 'die' on any event
+#	    except exiting with code 0.  The events are:
+#
+#   exited_normally($child)
+#   exited_abnormally($child, $code)
+#   signaled($child, $sig)
+#
 # redirects  hash for I/O redirections
 #     stdin     feed stdin from; handles SCALAR data or filename,
 #		    /dev/null by default
@@ -641,6 +649,49 @@ sub stop_command_pidfile
 	if (defined $pid);
 }
 
+my %default_command_handlers = (
+    signaled => sub
+    {
+	my ($child, $sig) = @_;
+	my $desc = _describe_child($child);
+	die "child process $desc terminated by signal $sig";
+    },
+    exited_normally => sub
+    {
+	my ($child) = @_;
+	return 0;
+    },
+    exited_abnormally => sub
+    {
+	my ($child, $code) = @_;
+	my $desc = _describe_child($child);
+	die "child process $desc exited with code $code";
+    },
+);
+
+sub _add_child
+{
+    my ($self, $binary, $pid, $handlers, $fh) = @_;
+    my $key = $fh || $pid;
+
+    $handlers ||= \%default_command_handlers;
+
+    my $child = {
+	binary => $binary,
+	pid => $pid,
+	handlers => { %default_command_handlers, %$handlers },
+    };
+    $self->{_children}->{$key} = $child;
+    return $child;
+}
+
+sub _describe_child
+{
+    my ($child) = @_;
+    return "unknown" unless $child;
+    return "(binary $child->{binary} pid $child->{pid})";
+}
+
 #
 # Starts a new process to run a program.
 #
@@ -690,7 +741,7 @@ sub _fork_command
 	if ($pid)
 	{
 	    # parent process
-	    $self->{_children}->{$fh} = "(binary $binary pid $pid)";
+	    $self->_add_child($binary, $pid, $options->{handlers}, $fh);
 	    print $fh ${$data};
 	    close ($fh);
 	    return $pid;
@@ -705,7 +756,7 @@ sub _fork_command
 	if ($pid)
 	{
 	    # parent process
-	    $self->{_children}->{$pid} = "(binary $binary pid $pid)";
+	    $self->_add_child($binary, $pid, $options->{handlers}, undef);
 	    return $pid;
 	}
     }
@@ -754,25 +805,24 @@ sub _handle_wait_status
     my ($self, $key) = @_;
     my $status = $?;
 
-    my $desc = $self->{_children}->{$key} || "unknown";
-    delete $self->{_children}->{$key};
+    my $child = delete $self->{_children}->{$key};
 
     if (WIFSIGNALED($status))
     {
 	my $sig = WTERMSIG($status);
-	die "child process $desc terminated by signal $sig";
+	return $child->{handlers}->{signaled}->($child, $sig);
     }
     elsif (WIFEXITED($status))
     {
 	my $code = WEXITSTATUS($status);
-	die "child process $desc exited with code $code"
+	return $child->{handlers}->{exited_abnormally}->($child, $code)
 	    if $code != 0;
     }
     else
     {
 	die "WTF? Cannot decode wait status $status";
     }
-    return 0;
+    return $child->{handlers}->{exited_normally}->($child);
 }
 
 sub describe
