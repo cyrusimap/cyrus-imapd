@@ -44,7 +44,7 @@ use warnings;
 package Cassandane::Cyrus::Quota;
 use base qw(Cassandane::Cyrus::TestCase);
 use Cwd qw(abs_path);
-use IO::File;
+use File::Path qw(mkpath);
 use DateTime;
 use Cassandane::Util::Log;
 use Data::Dumper;
@@ -86,7 +86,7 @@ sub _set_limits
 	    or die "No limit specified for $resource";
 	push(@quotalist, uc($resource), $limit);
     }
-    $self->{limits} = { @quotalist };
+    $self->{limits}->{$self->{quotaroot}} = { @quotalist };
     $admintalk->setquota($self->{quotaroot}, \@quotalist);
     $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
 }
@@ -98,11 +98,13 @@ sub _check_usages
     my ($self, %expecteds) = @_;
     my $admintalk = $self->{adminstore}->get_client();
 
+    my $limits = $self->{limits}->{$self->{quotaroot}};
+
     my @result = $admintalk->getquota($self->{quotaroot});
     $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
 
     # check actual and expected number of resources do match
-    $self->assert_num_equals(scalar(keys %{$self->{limits}}) * 3, scalar(@result));
+    $self->assert_num_equals(scalar(keys %$limits) * 3, scalar(@result));
 
     # Convert the IMAP result to a conveniently checkable hash.
     # By checkable, we mean that a failure in assert_deep_equals()
@@ -126,12 +128,58 @@ sub _check_usages
     {
 	$exp{uc($res)} = {
 	    used => $expecteds{$res},
-	    limit => $self->{limits}->{uc($res)},
+	    limit => $limits->{uc($res)},
 	};
     }
 
     # Now actually compare
     $self->assert_deep_equals(\%exp, \%act);
+}
+
+# Reset the recorded usage in the database.  Used for testing
+# quota -f.  Rather hacky.  Both _set_quotaroot() and _set_limits()
+# can be used to set default values.
+sub _zap_quota
+{
+    my ($self, %params) = @_;
+
+    my $quotaroot = $params{quotaroot} || $self->{quotaroot};
+    my $limits = $params{limits} || $self->{limits}->{$quotaroot};
+    my $useds = $params{useds} || {};
+
+    # double check that some other part of Cassandane didn't
+    # accidentally futz with the expected quota db backend
+    my $backend = $self->{instance}->{config}->get('quota_db');
+    $self->assert_str_equals('quotalegacy', $backend)
+	if defined $backend;	    # the default value is also ok
+
+    my ($c) = ($quotaroot =~ m/^user\.(.)/);
+    my $dirname = $self->{instance}->{basedir} . "/conf/quota/$c";
+    my $filename = "$dirname/$quotaroot";
+    mkpath $dirname;
+
+    open QUOTA,'>',$filename
+	or die "Failed to open $filename for writing: $!";
+
+    # STORAGE is special and always present, but -1 if unlimited
+    my $limit = $limits->{STORAGE} || -1;
+    my $used = $useds->{STORAGE} || 0;
+    print QUOTA "$used\n$limit";
+
+    # other resources have a leading keyword if present
+    my %keywords = ( MESSAGE => 'M', 'X-ANNOTATION-STORAGE' => 'AS' );
+    foreach my $resource (keys %$limits)
+    {
+	my $kw = $keywords{$resource} or next;
+	$limit = $limits->{$resource};
+	$used = $useds->{$resource} || 0;
+	print QUOTA " $kw $used $limit";
+    }
+
+    print QUOTA "\n";
+    close QUOTA;
+
+    $self->{instance}->_fix_ownership($self->{instance}{basedir} . "/conf/quota");
 }
 
 # Utility function to check that there is no quota
@@ -820,12 +868,12 @@ sub test_quota_f
     $self->assert_num_equals(9, scalar @origcasres);
 
     # create a bogus quota file
-    mkdir("$self->{instance}{basedir}/conf/quota");
-    mkdir("$self->{instance}{basedir}/conf/quota/q");
-    my $fh = IO::File->new(">$self->{instance}{basedir}/conf/quota/q/user.quotafuser") || die "Failed to open quota file";
-    print $fh "0\n100000 M 0 50000 AS 0 10000\n";
-    close($fh);
-    $self->{instance}->_fix_ownership("$self->{instance}{basedir}/conf/quota");
+    $self->_zap_quota(quotaroot => 'user.quotafuser',
+		      limits => {
+			storage => 100000,
+			message => 50000,
+			'x-annotation-storage' => 10000,
+		      });
 
     # find and add the quota
     $self->{instance}->run_command({ cyrus => 1 }, 'quota', '-f');
@@ -920,6 +968,62 @@ sub test_quota_f_vs_update
     $self->{instance}->reap_command(@bits);
 
     xlog "Check that we have the correct quota usage";
+    $self->_check_usages(storage => int($expected/1024));
+}
+
+sub test_quota_f_nested_qr
+{
+    my ($self) = @_;
+
+    xlog "Test that quota -f correctly calculates the STORAGE quota";
+    xlog "when a nested quotaroot exists [Bug 3621]";
+
+    my $inbox = "user.cassandane";
+    my $nested = "$inbox.nested";
+
+    xlog "set ourselves a basic usage quota";
+    $self->_set_quotaroot($inbox);
+    $self->_set_limits(storage => 100000);
+    $self->_check_usages(storage => 0);
+
+    xlog "make an empty nested mailbox";
+    my $talk = $self->{store}->get_client();
+    $talk->create($nested)
+	or die "Cannot create mailbox $nested: $@";
+
+    xlog "setup a quotaroot on the nested mailbox";
+    $self->_set_quotaroot($nested);
+    $self->_set_limits(storage => 5);
+    $self->_check_usages(storage => 0);
+
+    $self->_set_quotaroot($inbox);
+
+    xlog "add messages to use some STORAGE quota";
+    my $expected = 0;
+    for (1..20) {
+	my $msg = $self->make_message("$_",
+				      min_extra_lines => 5000,
+				      max_extra_lines => 20000);
+	$expected += length($msg->as_string());
+    }
+
+    xlog "check that STORAGE quota is used";
+    $self->_check_usages(storage => int($expected/1024));
+
+    xlog "create a bogus quota file";
+    $self->_zap_quota();
+    $self->_check_usages(storage => 0);
+
+    xlog "run quota -f to find and add the quota";
+    $self->{instance}->run_command({ cyrus => 1 }, 'quota', '-f');
+
+    xlog "check that STORAGE quota is restored";
+    $self->_check_usages(storage => int($expected/1024));
+
+    xlog "run quota -f again";
+    $self->{instance}->run_command({ cyrus => 1 }, 'quota', '-f');
+
+    xlog "check that STORAGE quota is still correct";
     $self->_check_usages(storage => int($expected/1024));
 }
 
