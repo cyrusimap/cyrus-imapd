@@ -1507,11 +1507,11 @@ static int myabort(struct dbengine *db, struct txn *tid)
 
     assert(db->current_txn == tid);
 
-    /* update the mmap so we can see the log entries we need to remove */
-    update_lock(db, tid);
-    
     /* look at the log entries we've written, and undo their effects */
     while (tid->logstart != tid->logend) {
+	/* update the mmap so we can see the log entries we need to remove */
+	update_lock(db, tid);
+
 	/* find the last log entry */
 	for (offset = tid->logstart, ptr = db->map_base + offset; 
 	     offset + RECSIZE(ptr) != (uint32_t) tid->logend;
