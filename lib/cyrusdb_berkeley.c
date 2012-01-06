@@ -992,7 +992,10 @@ static int abort_txn(struct dbengine *db __attribute__((unused)),
     return 0;
 }
 
-static int mycompar(struct dbengine *mydb, const char *a, int alen,
+static int mycompar(struct dbengine *mydb
+#if ((DB_VERSION_MAJOR > 4) || ((DB_VERSION_MAJOR == 4) && (DB_VERSION_MINOR >= 8)))
+		    ,
+		    const char *a, int alen,
 		    const char *b, int blen)
 {
     DB *db = (DB *) mydb;
@@ -1003,6 +1006,12 @@ static int mycompar(struct dbengine *mydb, const char *a, int alen,
     if (funcp == mbox_compar)
 	return bsearch_ncompare_mbox(a, alen, b, blen);
     else
+#else
+		    __attribute__((unused)),
+		    const char *a, int alen,
+		    const char *b, int blen)
+{
+#endif
 	return bsearch_ncompare_raw(a, alen, b, blen);
 
 }
