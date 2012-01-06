@@ -46,6 +46,7 @@ use base qw(Cassandane::Unit::TestCase);
 use Cassandane::Message;
 use Cassandane::Address;
 use Cassandane::Util::Log;
+use Cassandane::Util::DateTime qw(to_rfc3501);
 
 sub new
 {
@@ -402,9 +403,17 @@ sub test_attributes
     $m->set_internaldate(undef);
     $self->assert($m->has_attribute('internaldate'));
     $self->assert_null($m->get_attribute('internaldate'));
-    $m->set_internaldate(DateTime->from_epoch(epoch => 1287073192));
+    my $dt = DateTime->new(
+			  year => 2010,
+			  month => 10,
+			  day => 15,
+			  hour => 3,
+			  minute => 19,
+			  second => 47,
+			  time_zone => 'Australia/Melbourne');
+    $m->set_internaldate($dt);
     $self->assert($m->has_attribute('internaldate'));
-    $self->assert_str_equals('15-Oct-2010 03:19:52 +1100',
+    $self->assert_str_equals(to_rfc3501($dt),
 			     $m->get_attribute('internaldate'));
 
     $m = Cassandane::Message->new(attrs => { UID => 456 });
