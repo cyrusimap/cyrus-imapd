@@ -567,7 +567,7 @@ exit(0);}
 cyrus_cv_func_mmap_shared=no))
 AC_MSG_RESULT($cyrus_cv_func_mmap_shared)
 if test $cyrus_cv_func_mmap_shared = yes; then
-	WITH_MAP="shared"
+	found_map="shared"
 else
 AC_MSG_CHECKING(for stupid shared mmap)
 AC_CACHE_VAL(cyrus_cv_func_mmap_stupidshared,AC_TRY_RUN([
@@ -599,13 +599,16 @@ exit(0);}
 cyrus_cv_func_mmap_stupidshared=no))
 AC_MSG_RESULT($cyrus_cv_func_mmap_stupidshared)
 if test $cyrus_cv_func_mmap_stupidshared = yes; then
-	WITH_MAP="stupidshared"
+	found_map="stupidshared"
 else
 	AC_MSG_WARN([*** This system does not have a working mmap()])
 	AC_MSG_WARN(*** Expect a considerable performance penalty)
-	WITH_MAP=nommap
+	found_map=nommap
 fi
 fi
+
+AC_ARG_WITH(mmap,[  --with-mmap=TYPE    force shared/stupidshared/nommap - JUST FOR TESTING],
+	WITH_MAP="$withval",WITH_MAP="$found_map")
 
 AC_SUBST(WITH_MAP)
 AC_ARG_WITH(lock,
