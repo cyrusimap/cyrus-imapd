@@ -106,9 +106,10 @@ static void _ensure_mapped(struct mappedfile *mf, size_t offset)
     if (offset > mf->map_size) {
 	mf->map_size = offset;
 	mf->was_resized = 1;
-	map_refresh(mf->fd, 0, &mf->map_base, &mf->map_len, mf->map_size,
-		    mf->fname, 0);
     }
+    /* always give refresh another go, we may be map_nommap */
+    map_refresh(mf->fd, 0, &mf->map_base, &mf->map_len, mf->map_size,
+		mf->fname, 0);
 }
 
 /* NOTE - we don't provide any guarantees that the file isn't open multiple
