@@ -43,8 +43,13 @@
 # do the horrible dance needed to import either
 # of Digest::SHA or the older Digest::SHA1
 
+package Cassandane::Util::SHA;
 use strict;
 use warnings;
+use vars qw(@ISA @EXPORT);
+
+@ISA = qw(Exporter);
+@EXPORT = qw(sha1_hex);
 
 BEGIN {
     eval "use Digest::SHA qw(sha1_hex); 1;"
