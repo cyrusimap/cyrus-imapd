@@ -259,8 +259,8 @@ static int do_examine(char *name,
     printf("  Minor Version: %d\n", mailbox->i.minor_version);
     printf("  Header Size: %u bytes  Record Size: %u bytes\n",
 	   mailbox->i.start_offset, mailbox->i.record_size);
-    printf("  Number of Messages: %u  Mailbox Size: " QUOTA_T_FMT " bytes\n",
-	   mailbox->i.exists, mailbox->i.quota_mailbox_used);
+    printf("  Number of Messages: %u  Mailbox Size: " QUOTA_T_FMT " bytes  Annotations Size: " QUOTA_T_FMT " bytes\n",
+	   mailbox->i.exists, mailbox->i.quota_mailbox_used, mailbox->i.quota_annot_used);
     printf("  Last Append Date: (%lu) %s",
 	   mailbox->i.last_appenddate, ctime(&mailbox->i.last_appenddate));
     printf("  UIDValidity: %u  Last UID: %u\n",
