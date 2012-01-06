@@ -114,6 +114,8 @@
 
 #include "pushstats.h"		/* SNMP interface */
 
+#include "iostat.h"
+
 extern int optind;
 extern char *optarg;
 
@@ -867,6 +869,15 @@ int service_main(int argc __attribute__((unused)),
     sasl_security_properties_t *secprops = NULL;
     const char *localip, *remoteip;
 
+    struct io_count *io_count_start;
+    struct io_count *io_count_stop;
+
+    if (config_iolog) { 
+        io_count_start = malloc (sizeof (struct io_count));
+        io_count_stop = malloc (sizeof (struct io_count));
+        read_io_count(io_count_start);
+    }
+
     session_new_id();
 
     signals_poll();
@@ -929,6 +940,16 @@ int service_main(int argc __attribute__((unused)),
 
     /* cleanup */
     imapd_reset();
+
+    if (config_iolog) { 
+	read_io_count(io_count_stop);
+	syslog(LOG_INFO, 
+               "IMAP session stats : I/O read : %d bytes : I/O write : %d bytes",
+                io_count_stop->io_read_count - io_count_start->io_read_count,
+                io_count_stop->io_write_count - io_count_start->io_write_count);
+        free (io_count_start);
+        free (io_count_stop);
+    }
 
     return 0;
 }

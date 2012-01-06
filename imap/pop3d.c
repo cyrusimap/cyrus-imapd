@@ -93,6 +93,8 @@
 #include "sync_log.h"
 #include "statuscache.h"
 
+#include "iostat.h"
+
 #ifdef HAVE_KRB
 /* kerberos des is purported to conflict with OpenSSL DES */
 #define DES_DEFS
@@ -138,6 +140,9 @@ struct msg {
     int deleted;
     int seen;
 } *popd_msg = NULL;
+
+struct io_count *io_count_start;
+struct io_count *io_count_stop;
 
 static sasl_ssf_t extprops_ssf = 0;
 static int pop3s = 0;
@@ -494,6 +499,12 @@ int service_main(int argc __attribute__((unused)),
     const char *localip, *remoteip;
     sasl_security_properties_t *secprops=NULL;
 
+    if (config_iolog) {
+        io_count_start = malloc (sizeof (struct io_count));
+        io_count_stop = malloc (sizeof (struct io_count));
+        read_io_count(io_count_start);
+    }
+
     session_new_id();
 
     signals_poll();
@@ -574,6 +585,16 @@ int service_main(int argc __attribute__((unused)),
 
     /* cleanup */
     popd_reset();
+
+    if (config_iolog) {
+        read_io_count(io_count_stop);
+        syslog(LOG_INFO,
+               "POP session stats : I/O read : %d bytes : I/O write : %d bytes",
+                io_count_stop->io_read_count - io_count_start->io_read_count,
+                io_count_stop->io_write_count - io_count_start->io_write_count);
+        free(io_count_start);
+        free(io_count_stop);
+    }
 
     return 0;
 }
@@ -658,6 +679,16 @@ void shut_down(int code)
 #endif
 
     cyrus_done();
+
+    if (config_iolog) {
+        read_io_count(io_count_stop);
+        syslog(LOG_INFO,
+               "POP session stats : I/O read : %d bytes : I/O write : %d bytes",
+                io_count_stop->io_read_count - io_count_start->io_read_count,
+                io_count_stop->io_write_count - io_count_start->io_write_count);
+        free (io_count_start);
+        free (io_count_stop);
+    }
 
     exit(code);
 }

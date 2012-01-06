@@ -507,6 +507,9 @@ Blank lines and lines beginning with ``#'' are ignored.
    "receivedheader" looks at the top most Received header
    or time/mtime otherwise */
 
+{ "iolog", 0, SWITCH }
+/* Should cyrus output I/O log entries */
+
 { "ldap_authz", NULL, STRING }
 /* SASL authorization ID for the LDAP server */
 

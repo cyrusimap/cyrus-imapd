@@ -107,6 +107,8 @@ static sieve_interp_t *sieve_interp = NULL;
 
 #include "sync_log.h"
 
+#include "iostat.h"
+
 /* forward declarations */
 static int deliver(message_data_t *msgdata, char *authuser,
 		   struct auth_state *authstate);
@@ -269,6 +271,15 @@ int service_main(int argc, char **argv,
 {
     int opt, r;
 
+    struct io_count *io_count_start;
+    struct io_count *io_count_stop;
+
+    if (config_iolog) {
+        io_count_start = malloc (sizeof (struct io_count));
+        io_count_stop = malloc (sizeof (struct io_count));
+        read_io_count(io_count_start);
+    }
+
     session_new_id();
 
     sync_log_init();
@@ -330,6 +341,16 @@ int service_main(int argc, char **argv,
     }
 
     cyrus_reset_stdio();
+
+    if (config_iolog) {
+        read_io_count(io_count_stop);
+        syslog(LOG_INFO,
+               "LMTP session stats : I/O read : %d bytes : I/O write : %d bytes",
+                io_count_stop->io_read_count - io_count_start->io_read_count,
+                io_count_stop->io_write_count - io_count_start->io_write_count);
+        free (io_count_start);
+        free (io_count_stop);
+    }
 
     return 0;
 }
