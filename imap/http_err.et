@@ -65,10 +65,13 @@ ec HTTP_CREATED,
 ec HTTP_NO_CONTENT,
    "204 No Content"
 
+ec HTTP_MOVED,
+   "301 Moved Permanently"
+
 ec HTTP_NOT_MODIFIED,
    "304 Not Modified"
 
-ec HTTP_TEMP_REDIRECT,
+ec HTTP_REDIRECT,
    "307 Temporary Redirect"
 
 ec HTTP_BAD_REQUEST,
