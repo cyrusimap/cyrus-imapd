@@ -16,21 +16,25 @@ Cassandane needs the following software to work:
     Needed by Mail::IMAPTalk
     CPAN package http://search.cpan.org/perldoc?Encode::IMAPUTF7
     Ubuntu package libencode-imaputf7-perl
+    On RH/CentOS, may need to install perl-Test-NoWarnings to build from source
 
  * URI, URI::Escape
     Handles URIs.
     CPAN package at http://search.cpan.org/dist/URI/
     Ubuntu package liburi-perl.
+    RH/CentOS package perl-URI
 
  * Digest::SHA1
     Does the SHA1 message digest algorithm.
     CPAN package http://search.cpan.org/dist/Digest-SHA1/
-    Ubuntu package libdigest-sha1-perl.
+    Ubuntu package libdigest-sha1-perl
+    RH/CentOS package perl-Digest-SHA
 
- * Datetime
+ * DateTime
     Does time manipulation.
     CPAN package http://search.cpan.org/dist/DateTime/
     Ubuntu package libdatetime-perl
+    RH/CentOS package perl-DateTime
 
  * BSD::Resource
     Allows Cyrus to generate core dumps at all
@@ -41,6 +45,7 @@ Cassandane needs the following software to work:
     Unit testing framework for Perl
     CPAN package http://search.cpan.org/dist/Test-Unit/
     Ubuntu package libtest-unit-perl
+    RH/CentOS package perl-Test-Unit
 
  * Test::Unit::Runner::XML
     Addition to Test::Unit which outputs in jUnit's XML
@@ -48,16 +53,19 @@ Cassandane needs the following software to work:
     CPAN package http://search.cpan.org/dist/Test-Unit-Runner-Xml/
     No Ubuntu package (sorry) - but install depends on:
         libxml-generator-perl libxml-xpath-perl
+    RH/CentOS package perl-Test-Unit-Runner-Xml
 
  * Clone
     Provides a Perl structure deep-clone operation
     CPAN package http://search.cpan.org/dist/Clone/
     Ubuntu package libclone-perl
+    RH/CentOS package perl-Clone
 
  * Config::IniFiles
     Read simple .INI style config files.
     CPAN package http://search.cpan.org/~shlomif/Config-IniFiles-2.68/
     Ubuntu package libconfig-inifiles-perl
+    RH/CentOS package perl-Config-IniFiles
 
  * News::NNTPClient
     Perl 5 module to talk to NNTP (RFC977) server
