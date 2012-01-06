@@ -57,15 +57,20 @@ use IO::Socket::INET;
 
 my $lemming_bin = getcwd() . '/utils/lemming';
 
-die "No lemming binary.  Did you run \"make\" in the Cassandane directory?"
-    unless -f $lemming_bin;
-
 sub new
 {
     my $class = shift;
     my $self = $class->SUPER::new(@_);
 
     return $self;
+}
+
+sub set_up
+{
+    my ($self) = @_;
+    die "No lemming binary $lemming_bin.  Did you run \"make\" in the Cassandane directory?"
+	unless (-f $lemming_bin);
+    $self->SUPER::set_up();
 }
 
 # Disable this whole suite - all the tests fail on ToT
