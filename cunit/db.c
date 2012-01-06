@@ -714,6 +714,100 @@ static int deleter(void *rock,
     return 0;
 }
 
+static void test_mboxlist(void)
+{
+    struct db *db = NULL;
+    struct txn *txn = NULL;
+    struct deleteit deldata;
+    struct binary_result *results = NULL;
+    /* random word generator to the rescue! */
+    static const char KEY1[] = "INBOX.a";
+    static const char DATA1[] = "delays maj bullish packard ronald";
+    static const char KEY2[] = "INBOX.a b";
+    static const char DATA2[] = "bobby tswana cu albumin created";
+    static const char KEY3[] = "INBOX.a.b";
+    static const char DATA3[] = "aleut stoic muscovy adonis moe docent";
+    int r;
+
+    r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    CU_ASSERT_PTR_NOT_NULL(db);
+
+    /* store() some records */
+    CANSTORE(KEY1, strlen(KEY1), DATA1, strlen(DATA1));
+    CANSTORE(KEY2, strlen(KEY2), DATA2, strlen(DATA2));
+    CANSTORE(KEY3, strlen(KEY3), DATA3, strlen(DATA3));
+
+    /* commit succeeds */
+    CANCOMMIT();
+
+    /* all records can be fetched back */
+    CANFETCH(KEY1, strlen(KEY1), DATA1, strlen(DATA1));
+    CANFETCH(KEY2, strlen(KEY2), DATA2, strlen(DATA2));
+    CANFETCH(KEY3, strlen(KEY3), DATA3, strlen(DATA3));
+
+    /* commit succeeds */
+    CANCOMMIT();
+
+    /* foreach succeeds */
+    r = cyrusdb_foreach(db, NULL, 0, NULL, foreacher, &results, &txn);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+
+    /* got the expected keys in the expected order */
+    GOTRESULT(KEY1, strlen(KEY1), DATA1, strlen(DATA1));
+    /* flat is always in mboxlist order! */
+    if (!strcmp(backend, "flat")) {
+	GOTRESULT(KEY3, strlen(KEY3), DATA3, strlen(DATA3));
+	GOTRESULT(KEY2, strlen(KEY2), DATA2, strlen(DATA2));
+    }
+    else {
+	GOTRESULT(KEY2, strlen(KEY2), DATA2, strlen(DATA2));
+	GOTRESULT(KEY3, strlen(KEY3), DATA3, strlen(DATA3));
+    }
+    /* foreach iterated over exactly all the keys */
+    CU_ASSERT_PTR_NULL(results);
+
+    /* close the txn - it doesn't matter here if we commit or abort */
+    CANCOMMIT();
+
+    /* closing succeeds */
+    r = cyrusdb_close(db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+
+    /* try again with mboxlist sort */
+
+    r = cyrusdb_open(backend, filename2, CYRUSDB_CREATE | CYRUSDB_MBOXSORT, &db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    CU_ASSERT_PTR_NOT_NULL(db);
+
+    /* store() some records */
+    CANSTORE(KEY1, strlen(KEY1), DATA1, strlen(DATA1));
+    CANSTORE(KEY2, strlen(KEY2), DATA2, strlen(DATA2));
+    CANSTORE(KEY3, strlen(KEY3), DATA3, strlen(DATA3));
+
+    /* commit succeeds */
+    CANCOMMIT();
+
+    /* foreach succeeds */
+    r = cyrusdb_foreach(db, NULL, 0, NULL, foreacher, &results, &txn);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+
+    /* got the expected keys in the expected order - that is MBOXLIST
+     * sort order, so 3 before 2 */
+    GOTRESULT(KEY1, strlen(KEY1), DATA1, strlen(DATA1));
+    GOTRESULT(KEY3, strlen(KEY3), DATA3, strlen(DATA3));
+    GOTRESULT(KEY2, strlen(KEY2), DATA2, strlen(DATA2));
+    /* foreach iterated over exactly all the keys */
+    CU_ASSERT_PTR_NULL(results);
+
+    /* close the txn - it doesn't matter here if we commit or abort */
+    CANCOMMIT();
+
+    /* closing succeeds */
+    r = cyrusdb_close(db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+}
+
 static void test_foreach(void)
 {
     struct db *db = NULL;
