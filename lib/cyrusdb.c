@@ -139,7 +139,7 @@ int cyrusdb_open(const char *backend, const char *fname,
      */
 
     /* check if it opens normally.  Horray */
-    r = (db->backend->open)(fname, flags, &db->engine);
+    r = db->backend->open(fname, flags, &db->engine);
     if (r == CYRUSDB_NOTFOUND) goto done; /* no open flags */
     if (!r) goto done;
 
@@ -174,7 +174,7 @@ int cyrusdb_open(const char *backend, const char *fname,
 	}
     }
     
-    r = (db->backend->open)(fname, flags, &db->engine);
+    r = db->backend->open(fname, flags, &db->engine);
 
 done:
 
@@ -186,7 +186,7 @@ done:
 
 int cyrusdb_close(struct db *db)
 {
-    int r = (db->backend->close)(db->engine);
+    int r = db->backend->close(db->engine);
 
     free(db);
 
@@ -198,8 +198,8 @@ int cyrusdb_fetch(struct db *db,
 	     const char **data, size_t *datalen,
 	     struct txn **mytid)
 {
-    return (db->backend->fetch)(db->engine, key, keylen,
-				    data, datalen, mytid);
+    return db->backend->fetch(db->engine, key, keylen,
+			      data, datalen, mytid);
 }
 
 int cyrusdb_fetchlock(struct db *db,
@@ -207,8 +207,8 @@ int cyrusdb_fetchlock(struct db *db,
 		 const char **data, size_t *datalen,
 		 struct txn **mytid)
 {
-    return (db->backend->fetchlock)(db->engine, key, keylen,
-				        data, datalen, mytid);
+    return db->backend->fetchlock(db->engine, key, keylen,
+				  data, datalen, mytid);
 }
 
 int cyrusdb_fetchnext(struct db *db,
@@ -217,9 +217,9 @@ int cyrusdb_fetchnext(struct db *db,
 		 const char **data, size_t *datalen,
 		 struct txn **mytid)
 {
-    return (db->backend->fetchnext)(db->engine, key, keylen,
-					found, foundlen,
-				        data, datalen, mytid);
+    return db->backend->fetchnext(db->engine, key, keylen,
+				  found, foundlen,
+				  data, datalen, mytid);
 }
 
 int cyrusdb_foreach(struct db *db,
@@ -228,8 +228,8 @@ int cyrusdb_foreach(struct db *db,
 	       foreach_cb *cb, void *rock,
 	       struct txn **tid)
 {
-    return (db->backend->foreach)(db->engine, prefix, prefixlen,
-				      p, cb, rock, tid);
+    return db->backend->foreach(db->engine, prefix, prefixlen,
+				p, cb, rock, tid);
 }
 
 int cyrusdb_create(struct db *db,
@@ -237,7 +237,7 @@ int cyrusdb_create(struct db *db,
 	      const char *data, size_t datalen,
 	      struct txn **tid)
 {
-    return (db->backend->create)(db->engine, key, keylen, data, datalen, tid);
+    return db->backend->create(db->engine, key, keylen, data, datalen, tid);
 }
 
 int cyrusdb_store(struct db *db,
@@ -245,35 +245,44 @@ int cyrusdb_store(struct db *db,
 	     const char *data, size_t datalen,
 	     struct txn **tid)
 {
-    return (db->backend->store)(db->engine, key, keylen, data, datalen, tid);
+    return db->backend->store(db->engine, key, keylen, data, datalen, tid);
 }
 
 int cyrusdb_delete(struct db *db,
 	      const char *key, size_t keylen,
 	      struct txn **tid, int force)
 {
-    return (db->backend->delete)(db->engine, key, keylen, tid, force);
+    return db->backend->delete(db->engine, key, keylen, tid, force);
 }
 
 int cyrusdb_commit(struct db *db, struct txn *tid)
 {
-    return (db->backend->commit)(db->engine, tid);
+    return db->backend->commit(db->engine, tid);
 }
 
 int cyrusdb_abort(struct db *db, struct txn *tid)
 {
-    return (db->backend->abort)(db->engine, tid);
+    return db->backend->abort(db->engine, tid);
 }
 
 int cyrusdb_dump(struct db *db, int detail)
 {
-    return (db->backend->dump)(db->engine, detail);
+    return db->backend->dump(db->engine, detail);
 }
 
 int cyrusdb_consistent(struct db *db)
 {
-    return (db->backend->consistent)(db->engine);
+    return db->backend->consistent(db->engine);
 }
+
+int cyrusdb_compar(struct db *db,
+		   const char *a, int alen,
+		   const char *b, int blen)
+{
+    return db->backend->compar(db->engine, a, alen, b, blen);
+}
+
+/**********************************************/
 
 void cyrusdb_init(void)
 {

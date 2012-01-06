@@ -2365,6 +2365,14 @@ static int recovery(struct dbengine *db, int flags)
     return r;
 }
 
+/* skiplist compar function is set at open */
+static int mycompar(struct dbengine *db, const char *a, int alen,
+		    const char *b, int blen)
+{
+    return db->compar(a, alen, b, blen);
+}
+
+
 struct cyrusdb_backend cyrusdb_skiplist = 
 {
     "skiplist",			/* name */
@@ -2390,5 +2398,6 @@ struct cyrusdb_backend cyrusdb_skiplist =
     &myabort,
 
     &dump,
-    &consistent
+    &consistent,
+    &mycompar
 };

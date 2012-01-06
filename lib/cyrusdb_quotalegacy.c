@@ -855,6 +855,17 @@ static int abort_txn(struct dbengine *db __attribute__((unused)), struct txn *ti
     return tid->result;
 }
 
+/* quotalegacy gets compar set at startup, but it's not the same */
+static int mycompar(struct dbengine *db, const char *a, int alen,
+		    const char*b, int blen)
+{
+    if (db->compar == compar_qr_mbox)
+	return bsearch_ncompare_mbox(a, alen, b, blen);
+    else 
+	return bsearch_ncompare_raw(a, alen, b, blen);
+}
+
+
 struct cyrusdb_backend cyrusdb_quotalegacy = 
 {
     "quotalegacy",			/* name */
@@ -880,5 +891,6 @@ struct cyrusdb_backend cyrusdb_quotalegacy =
     &abort_txn,
 
     NULL,
-    NULL
+    NULL,
+    &mycompar
 };

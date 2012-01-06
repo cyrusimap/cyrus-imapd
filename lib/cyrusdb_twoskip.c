@@ -2275,6 +2275,13 @@ static int delete(struct dbengine *db,
     return mystore(db, key, keylen, NULL, 0, tid, force);
 }
 
+/* twoskip compar function is set at open */
+static int mycompar(struct dbengine *db, const char *a, int alen,
+		    const char *b, int blen)
+{
+    return db->compar(a, alen, b, blen);
+}
+
 struct cyrusdb_backend cyrusdb_twoskip =
 {
     "twoskip",			/* name */
@@ -2300,5 +2307,6 @@ struct cyrusdb_backend cyrusdb_twoskip =
     &myabort,
 
     &dump,
-    &consistent
+    &consistent,
+    &mycompar
 };

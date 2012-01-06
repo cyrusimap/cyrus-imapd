@@ -50,6 +50,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include "bsearch.h"
 #include "cyrusdb.h"
 #include "exitcodes.h"
 #include "libcyr_cfg.h"
@@ -885,6 +886,14 @@ static int abort_txn(struct dbengine *db, struct txn *tid)
     return finish_txn(db, tid, 0);
 }
 
+/* SQL databases have all sorts of evil collations - we can't
+ * make any assumptions though, so just assume raw */
+static int mycompar(struct dbengine *db, const char *a, int alen,
+		    const char *b, int blen)
+{
+    return bsearch_ncompare_raw(a, alen, b, blen);
+}
+
 struct cyrusdb_backend cyrusdb_sql = 
 {
     "sql",			/* name */
@@ -910,5 +919,6 @@ struct cyrusdb_backend cyrusdb_sql =
     &abort_txn,
 
     NULL,
-    NULL
+    NULL,
+    &mycompar
 };

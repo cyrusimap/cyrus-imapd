@@ -992,6 +992,22 @@ static int abort_txn(struct dbengine *db __attribute__((unused)),
     return 0;
 }
 
+static int mycompar(struct dbengine *mydb, const char *a, int alen,
+		    const char *b, int blen)
+{
+    DB *db = (DB *) mydb;
+    int (*funcp)(DB *, const DBT *, const DBT *) = NULL;
+
+    db->get_bt_compare(db, &funcp);
+
+    if (funcp == mbox_compar)
+	return bsearch_ncompare_mbox(a, alen, b, blen);
+    else
+	return bsearch_ncompare_raw(a, alen, b, blen);
+
+}
+
+
 struct cyrusdb_backend cyrusdb_berkeley = 
 {
     "berkeley",			/* name */
@@ -1017,7 +1033,8 @@ struct cyrusdb_backend cyrusdb_berkeley =
     &abort_txn,
     
     NULL,
-    NULL
+    NULL,
+    &mycompar
 };
 
 struct cyrusdb_backend cyrusdb_berkeley_nosync = 
@@ -1045,7 +1062,8 @@ struct cyrusdb_backend cyrusdb_berkeley_nosync =
     &abort_txn,
 
     NULL,
-    NULL
+    NULL,
+    &mycompar
 };
 
 struct cyrusdb_backend cyrusdb_berkeley_hash = 
@@ -1073,7 +1091,8 @@ struct cyrusdb_backend cyrusdb_berkeley_hash =
     &abort_txn,
     
     NULL,
-    NULL
+    NULL,
+    &mycompar
 };
 
 struct cyrusdb_backend cyrusdb_berkeley_hash_nosync = 
@@ -1101,5 +1120,6 @@ struct cyrusdb_backend cyrusdb_berkeley_hash_nosync =
     &abort_txn,
 
     NULL,
-    NULL
+    NULL,
+    &mycompar
 };
