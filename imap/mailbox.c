@@ -1312,14 +1312,14 @@ static int mailbox_refresh_index_map(struct mailbox *mailbox)
 
 	mailbox->index_size = sbuf.st_size;
 
-	/* need to map some more space! */
-	map_refresh(mailbox->index_fd, 1, &mailbox->index_base,
-		    &mailbox->index_len, mailbox->index_size,
-		    "index", mailbox->name);
-
-	/* and the cache will be stale too */
+	/* the cache will be stale too */
 	mailbox->need_cache_refresh = 1;
     }
+
+    /* always refresh, so we're safe for map_nommap */
+    map_refresh(mailbox->index_fd, 1, &mailbox->index_base,
+		&mailbox->index_len, mailbox->index_size,
+		"index", mailbox->name);
 
     return 0;
 }
@@ -2150,8 +2150,8 @@ int mailbox_rewrite_index_record(struct mailbox *mailbox,
 		session_id(), mailbox->name, mailbox->uniqueid,
 		record->uid, message_guid_encode(&record->guid));
     }
-    
-    return 0;
+
+    return mailbox_refresh_index_map(mailbox);
 }
 
 /* append a single message to a mailbox - also updates everything
@@ -2255,13 +2255,6 @@ int mailbox_append_index_record(struct mailbox *mailbox,
     mailbox->i.num_records = recno;
     mailbox->index_size += INDEX_RECORD_SIZE;
 
-    /* extend the mmaped space for the index file */
-    if (mailbox->index_len < mailbox->index_size) {
-	map_refresh(mailbox->index_fd, 1, &mailbox->index_base,
-		    &mailbox->index_len, mailbox->index_size,
-		    "index", mailbox->name);
-    }
-
     if (config_auditlog)
 	syslog(LOG_NOTICE, "auditlog: append sessionid=<%s> mailbox=<%s> uniqueid=<%s> uid=<%u> guid=<%s>",
 	    session_id(), mailbox->name, mailbox->uniqueid, record->uid,
@@ -2288,8 +2281,8 @@ int mailbox_append_index_record(struct mailbox *mailbox,
 		   session_id(), mailbox->name, mailbox->uniqueid,
 		   record->uid);
     }
-    
-    return 0;
+
+    return mailbox_refresh_index_map(mailbox);
 }
 
 static void mailbox_message_unlink(struct mailbox *mailbox, uint32_t uid)
