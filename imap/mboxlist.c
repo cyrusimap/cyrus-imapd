@@ -64,7 +64,6 @@
 #include "acl.h"
 #include "annotate.h"
 #include "auth.h"
-#include "bsearch.h"
 #include "glob.h"
 #include "assert.h"
 #include "global.h"
@@ -1843,6 +1842,7 @@ struct find_rock {
     size_t usermboxnamelen;
     int checkmboxlist;
     int checkshared;
+    struct db *db;
     int isadmin;
     struct auth_state *auth_state;
     char *prev;
@@ -1947,8 +1947,8 @@ static int check_name(struct find_rock *rock,
 		      const char *base, int len)
 {
     if (rock->prev) {
-	if (bsearch_ncompare_mbox(base, len, rock->prev, rock->prevlen) < 0)
-	    return 0; /* prev name, skip it */
+	if (cyrusdb_compar(rock->db, base, len, rock->prev, rock->prevlen) < 0)
+	    return 0; /* previous name, skip it */
 	free(rock->prev);
     }
 
@@ -2142,6 +2142,7 @@ int mboxlist_findall(struct namespace *namespace,
     cbrock.procrock = rock;
     cbrock.prev = NULL;
     cbrock.prevlen = 0;
+    cbrock.db = mbdb;
 
     /* Build usermboxname */
     if (userid && (!(p = strchr(userid, '.')) || ((p - userid) > userlen)) &&
@@ -2297,6 +2298,7 @@ int mboxlist_findall_alt(struct namespace *namespace,
     cbrock.procrock = rock;
     cbrock.prev = NULL;
     cbrock.prevlen = 0;
+    cbrock.db = mbdb;
 
     /* Build usermboxname */
     if (userid && (!(p = strchr(userid, '.')) || ((p - userid) > (int)userlen)) &&
@@ -2895,6 +2897,8 @@ int mboxlist_findsub(struct namespace *namespace,
 	goto done;
     }
 
+    cbrock.db = subs;
+
     /* Build usermboxname */
     if (userid && (!(p = strchr(userid, '.')) || ((p - userid) > (int)userlen)) &&
 	strlen(userid)+5 < MAX_MAILBOX_BUFFER) {
@@ -3071,6 +3075,8 @@ int mboxlist_findsub_alt(struct namespace *namespace,
     if ((r = mboxlist_opensubs(userid, &subs)) != 0) {
 	goto done;
     }
+
+    cbrock.db = subs;
 
     /* Build usermboxname */
     if (userid && (!(p = strchr(userid, '.')) || ((p - userid) > (int)userlen)) &&
