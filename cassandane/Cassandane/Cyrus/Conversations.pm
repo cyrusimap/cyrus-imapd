@@ -45,7 +45,6 @@ package Cassandane::Cyrus::Conversations;
 use base qw(Cassandane::Cyrus::TestCase);
 use DateTime;
 use URI::Escape;
-use Digest::SHA1 qw(sha1_hex);
 use Cassandane::ThreadedGenerator;
 use Cassandane::Util::Log;
 use Cassandane::Util::DateTime qw(to_iso8601 from_iso8601

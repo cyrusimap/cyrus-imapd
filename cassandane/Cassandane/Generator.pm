@@ -46,7 +46,7 @@ use Cassandane::Util::DateTime qw(to_rfc822);
 use Cassandane::Address;
 use Cassandane::Message;
 use Digest::MD5 qw(md5_hex);
-use Digest::SHA1 qw(sha1_hex);
+use Cassandane::Util::SHA;
 
 our $admin = 'gnb@fastmail.fm';
 

@@ -44,7 +44,7 @@ use strict;
 use warnings;
 use Cassandane::Util::Log;
 use Cassandane::Util::DateTime qw(to_rfc3501);
-use Digest::SHA1 qw(sha1_hex);
+use Cassandane::Util::SHA;
 use base qw(Clone Exporter);
 use overload qw("") => \&as_string;
 
