@@ -465,7 +465,11 @@ sub size { return length(shift->as_string); }
 # as defined by RFC5256.  Used for SORT & THREAD.
 sub base_subject
 {
-    my ($_) = @_;
+    my ($s) = @_;
+
+    # Lexical $_ is a 5.10ism dammit
+    my $saved_ = $_;
+    $_ = $s;
 
     # (1) [ ignoring the RFC2047 decoding ]
     # Convert all tabs and continuations to space.
@@ -502,7 +506,9 @@ sub base_subject
     }
     # (5) Repeat (3) and (4) until no matches remain.
 
-    return $_;
+    $s = $_;
+    $_ = $saved_;
+    return $s;
 }
 
 1;

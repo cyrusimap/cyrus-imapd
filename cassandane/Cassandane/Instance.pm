@@ -166,9 +166,9 @@ sub cleanup_leftovers
     opendir ROOT, $rootdir
 	or die "Cannot open directory $rootdir for reading: $!";
     my @dirs;
-    while (my $_ = readdir(ROOT))
+    while (my $e = readdir(ROOT))
     {
-	push(@dirs, $_) if m/^[0-9]{7,}$/;
+	push(@dirs, $_) if ($e =~ m/^[0-9]{7,}$/);
     }
     closedir ROOT;
 

@@ -67,7 +67,6 @@ sub new
 	    # Config::IniFiles seems to include the filename in
 	    # error messages, so we don't.  However it tends to
 	    # emit multiline-messages which confuses our logs.
-	    my $_;
 	    set_verbose(1);
 	    map { s/[\n\r]\s*/ /g; xlog $_; } @Config::IniFiles::errors;
 	    die "Failed reading $filename";
