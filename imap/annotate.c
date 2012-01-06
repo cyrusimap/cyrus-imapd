@@ -209,9 +209,10 @@ struct annotate_db
     struct txn *txn;
 };
 
-struct annotate_reconstruct_state
+struct annotate_recalc_state
 {
     struct mailbox *mailbox;
+    int reconstruct;
     annotate_db_t *d;		    /* reference to per-mailbox db */
     unsigned int num_uids;
     hash_table counts_by_uid;
@@ -222,7 +223,6 @@ struct annotate_reconstruct_state
 static annotate_db_t *all_dbs_head = NULL;
 static annotate_db_t *all_dbs_tail = NULL;
 static int in_txn = 0;
-static struct txn *quota_txn = NULL;
 #define tid(d)	(in_txn ? &(d)->txn : NULL)
 int (*proxy_fetch_func)(const char *server, const char *mbox_pat,
 			const strarray_t *entry_pat,
@@ -761,9 +761,6 @@ void annotatemore_abort(void)
 	d->txn = NULL;
     }
 
-    if (quota_txn)
-	quota_abort(&quota_txn);
-
     annotatemore_end();
 }
 
@@ -793,9 +790,6 @@ int annotatemore_commit(void)
 	    return r;
 	}
     }
-
-    if (quota_txn)
-	quota_commit(&quota_txn);
 
     annotatemore_end();
     return r;
@@ -3141,7 +3135,7 @@ int annotate_msg_expunge(struct mailbox *mailbox, uint32_t uid)
 			     /*copy*/0);
 }
 
-/*************************  Annotation Reconstruction  ************************/
+/*************************  Annotation Recalc  ************************/
 
 
 static int calc_usage_cb(const char *mailbox __attribute__((unused)),
@@ -3151,7 +3145,7 @@ static int calc_usage_cb(const char *mailbox __attribute__((unused)),
 			 const struct buf *value,
 			 void *rock)
 {
-    annotate_reconstruct_state_t *ars = (annotate_reconstruct_state_t *)rock;
+    annotate_recalc_state_t *ars = (annotate_recalc_state_t *)rock;
     uint32_t *cp;
     char uidkey[32];
 
@@ -3172,22 +3166,24 @@ static int calc_usage_cb(const char *mailbox __attribute__((unused)),
  * per-mailbox annotations for this mailbox, to calculate
  * mailbox->i.quota_annot_used.
  */
-int annotate_reconstruct_begin(struct mailbox *mailbox,
-			       annotate_reconstruct_state_t **arsp)
+int annotate_recalc_begin(struct mailbox *mailbox,
+			  annotate_recalc_state_t **arsp,
+			  int reconstruct)
 {
     int r;
-    annotate_reconstruct_state_t *ars;
+    annotate_recalc_state_t *ars;
 
     assert(arsp);
     ars = xzmalloc(sizeof(*ars));
     ars->mailbox = mailbox;
+    ars->reconstruct = reconstruct;
     construct_hash_table(&ars->counts_by_uid, 1024, 0);
 
     /* scan for per-mailbox annotations */
     r = annotatemore_findall(mailbox->name, 0, "*",
 			     calc_usage_cb, ars);
     if (r) {
-	syslog(LOG_ERR, "reconstruct: cannot scan for "
+	syslog(LOG_ERR, "annotation recalc: cannot scan for "
 			"per-mailbox annotations: %s",
 			error_message(r));
     }
@@ -3205,13 +3201,13 @@ int annotate_reconstruct_begin(struct mailbox *mailbox,
 			         calc_usage_cb, ars);
     }
     if (r) {
-	syslog(LOG_ERR, "reconstruct: cannot scan for "
+	syslog(LOG_ERR, "annotation recalc: cannot scan for "
 			"per-message annotations: %s",
 			error_message(r));
     }
 
     /* account for per-mailbox annotations */
-    annotate_reconstruct_add(ars, 0);
+    annotate_recalc_add(ars, 0);
 
     /* there may have been errors above but it doesn't
      * matter for our purposes */
@@ -3219,7 +3215,7 @@ int annotate_reconstruct_begin(struct mailbox *mailbox,
     return 0;
 }
 
-static void annotate_reconstruct_end(annotate_reconstruct_state_t *ars)
+static void annotate_recalc_end(annotate_recalc_state_t *ars)
 {
     assert(ars);
     annotate_putdb(&ars->d);
@@ -3228,8 +3224,8 @@ static void annotate_reconstruct_end(annotate_reconstruct_state_t *ars)
 }
 
 
-void annotate_reconstruct_add(annotate_reconstruct_state_t *ars,
-			      uint32_t uid)
+void annotate_recalc_add(annotate_recalc_state_t *ars,
+			 uint32_t uid)
 {
     uint32_t *cp;
     char uidkey[32];
@@ -3248,11 +3244,11 @@ void annotate_reconstruct_add(annotate_reconstruct_state_t *ars,
     }
 }
 
-static int reconstruct_prune_cb(void *rock, const char *key, size_t keylen,
-			        const char *data __attribute__((unused)),
-				size_t datalen __attribute__((unused)))
+static int recalc_prune_cb(void *rock, const char *key, size_t keylen,
+			   const char *data __attribute__((unused)),
+			   size_t datalen __attribute__((unused)))
 {
-    annotate_reconstruct_state_t *ars = (annotate_reconstruct_state_t *)rock;
+    annotate_recalc_state_t *ars = (annotate_recalc_state_t *)rock;
     int r;
     const char *entry = NULL;
     const char *userid = NULL;
@@ -3261,8 +3257,10 @@ static int reconstruct_prune_cb(void *rock, const char *key, size_t keylen,
     r = split_key(ars->d, key, keylen,
 		  /*mboxnamep*/NULL, &uid, &entry, &userid);
     if (r) {
-	printf("%s: deleting annotation with bad key\n",
-	       ars->mailbox->name);
+	if (ars->reconstruct) {
+	    printf("%s: deleting annotation with bad key\n",
+		   ars->mailbox->name);
+	}
 	syslog(LOG_ERR, "%s: deleting annotation with bad key",
 			ars->mailbox->name);
     }
@@ -3276,9 +3274,11 @@ static int reconstruct_prune_cb(void *rock, const char *key, size_t keylen,
 	    userid = "";
 	if (!entry)
 	    entry = "";
-	printf("%s: deleting orphan annotation "
-	       "entry=\"%s\", uid=%u, userid=\"%s\"\n",
-	       ars->mailbox->name, entry, uid, userid);
+	if (ars->reconstruct) {
+	    printf("%s: deleting orphan annotation "
+		   "entry=\"%s\", uid=%u, userid=\"%s\"\n",
+		   ars->mailbox->name, entry, uid, userid);
+	}
 	syslog(LOG_ERR, "%s: deleting orphan annotation "
 			"entry=\"%s\", uid=%u, userid=\"%s\"",
 			ars->mailbox->name, entry, uid, userid);
@@ -3292,7 +3292,7 @@ static int reconstruct_prune_cb(void *rock, const char *key, size_t keylen,
     return r;
 }
 
-int annotate_reconstruct_commit(annotate_reconstruct_state_t *ars)
+int annotate_recalc_commit(annotate_recalc_state_t *ars)
 {
     int r = 0;
 
@@ -3317,7 +3317,7 @@ int annotate_reconstruct_commit(annotate_reconstruct_state_t *ars)
 	goto out;
 
     r = cyrusdb_foreach(ars->d->db, NULL, 0, NULL,
-		    reconstruct_prune_cb, ars, tid(ars->d));
+		    recalc_prune_cb, ars, tid(ars->d));
 
     if (r)
 	annotatemore_abort();
@@ -3325,20 +3325,20 @@ int annotate_reconstruct_commit(annotate_reconstruct_state_t *ars)
 	r = annotatemore_commit();
 
     if (r) {
-	syslog(LOG_ERR, "reconstruct: could not prune "
+	syslog(LOG_ERR, "annotation recalc: could not prune "
 			"orphan annotations: %s",
 			error_message(r));
     }
 
 out:
-    annotate_reconstruct_end(ars);
+    annotate_recalc_end(ars);
     return r;
 }
 
-void annotate_reconstruct_abort(annotate_reconstruct_state_t *ars)
+void annotate_recalc_abort(annotate_recalc_state_t *ars)
 {
     if (ars)
-	annotate_reconstruct_end(ars);
+	annotate_recalc_end(ars);
 }
 
 /*************************  Annotation Initialization  ************************/

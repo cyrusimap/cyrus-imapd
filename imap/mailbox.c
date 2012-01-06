@@ -2103,7 +2103,7 @@ static int mailbox_index_recalc(struct mailbox *mailbox)
     struct index_record record;
     int r = 0;
     uint32_t recno;
-    annotate_reconstruct_state_t *ars = NULL;
+    annotate_recalc_state_t *ars = NULL;
 
     assert(mailbox_index_islocked(mailbox, 1));
 
@@ -2118,21 +2118,21 @@ static int mailbox_index_recalc(struct mailbox *mailbox)
     mailbox->i.quota_mailbox_used = 0;
     mailbox->i.quota_annot_used = 0;
 
-    annotate_reconstruct_begin(mailbox, &ars);
+    annotate_recalc_begin(mailbox, &ars, 1);
 
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	r = mailbox_read_index_record(mailbox, recno, &record);
 	if (r) goto out;
 	mailbox_index_update_counts(mailbox, &record, 1);
 	if (!(record.system_flags & FLAG_UNLINKED))
-	    annotate_reconstruct_add(ars, record.uid);
+	    annotate_recalc_add(ars, record.uid);
     }
 
 out:
     if (r)
-	annotate_reconstruct_abort(ars);
+	annotate_recalc_abort(ars);
     else
-	annotate_reconstruct_commit(ars);
+	annotate_recalc_commit(ars);
     return r;
 }
 

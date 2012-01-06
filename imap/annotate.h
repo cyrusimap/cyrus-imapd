@@ -80,7 +80,7 @@ struct entryattlist {
 };
 
 typedef struct annotate_state annotate_state_t;
-typedef struct annotate_reconstruct_state annotate_reconstruct_state_t;
+typedef struct annotate_recalc_state annotate_recalc_state_t;
 
 annotate_state_t *annotate_state_new(void);
 void annotate_state_free(annotate_state_t **statep);
@@ -193,13 +193,14 @@ int annotate_msg_expunge(struct mailbox *mailbox, uint32_t uid);
  * Uses its own transaction. */
 int annotate_delete_mailbox(struct mailbox *mailbox);
 
-/* reconstruct APIs */
-int annotate_reconstruct_begin(struct mailbox *mailbox,
-			       annotate_reconstruct_state_t **arsp);
-void annotate_reconstruct_add(annotate_reconstruct_state_t *ars,
-			      uint32_t uid);
-int annotate_reconstruct_commit(annotate_reconstruct_state_t *ars);
-void annotate_reconstruct_abort(annotate_reconstruct_state_t *ars);
+/* recalc APIs */
+int annotate_recalc_begin(struct mailbox *mailbox,
+			  annotate_recalc_state_t **arsp,
+			  int reconstruct);
+void annotate_recalc_add(annotate_recalc_state_t *ars,
+			 uint32_t uid);
+int annotate_recalc_commit(annotate_recalc_state_t *ars);
+void annotate_recalc_abort(annotate_recalc_state_t *ars);
 
 /* Open a new transaction. Any currently open transaction
  * is aborted. */
