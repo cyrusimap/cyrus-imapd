@@ -408,9 +408,9 @@ int quota_update_useds(const char *quotaroot,
 out:
     if (r) {
 	syslog(LOG_ERR, "LOSTQUOTA: unable to record change of "
-	       QUOTA_T_FMT " bytes and " QUOTA_T_FMT " messages in quota %s",
+	       QUOTA_T_FMT " bytes and " QUOTA_T_FMT " messages in quota %s: %s",
 	       diff[QUOTA_STORAGE], diff[QUOTA_MESSAGE],
-	       quotaroot);
+	       quotaroot, error_message(r));
     }
 
     return r;
