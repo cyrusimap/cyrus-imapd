@@ -9903,7 +9903,8 @@ static void list_response(char *name, int attributes,
     if (attributes & (MBOX_ATTRIBUTE_NONEXISTENT | MBOX_ATTRIBUTE_NOSELECT)) {
 	int keep = 0;
 	/* we have to mention this, it has children */
-	if (listargs->ret & LIST_RET_SUBSCRIBED) {
+	if (listargs->ret & LIST_RET_SUBSCRIBED ||
+	    listargs->sel & LIST_SEL_SUBSCRIBED) {
 	    /* subscribed children need a mention */
 	    if (attributes & MBOX_ATTRIBUTE_CHILDINFO_SUBSCRIBED)
 		keep = 1;
