@@ -76,6 +76,7 @@ Cassandane needs the following software to work:
     Object interface for AF_INET|AF_INET6 domain sockets
     CPAN package http://search.cpan.org/~shlomif/IO-Socket-INET6-2.69/lib/IO/Socket/INET6.pm
     Ubuntu package libio-socket-inet6-perl
+    RH/CentOS package perl-IO-Socket-INET6
 
 Debian/Ubuntu copypasta:
   sudo apt-get -y install liburi-perl libdigest-sha1-perl \
