@@ -1568,6 +1568,7 @@ struct find_rock {
     int prevlen;
     int (*proc)(char *, int, int, void *rock);
     void *procrock;
+    int is_mboxsort;
 };
 
 /* return non-zero if we like this one */
@@ -1680,6 +1681,25 @@ static int find_p(void *rockp,
     return 1;
 }
 
+/* yes, I know it has the unsigned bug just like skiplist, w00t */
+static int raw_compare(const char *s1, int l1, const char *s2, int l2)
+{
+    int min = l1 < l2 ? l1 : l2;
+    int cmp = 0;
+
+    while (min-- > 0 && (cmp = *s1 - *s2) == 0) {
+	s1++;
+	s2++;
+    }
+    if (min >= 0) {
+	return cmp;
+    } else {
+	if (l1 > l2) return 1;
+	else if (l2 > l1) return -1;
+	else return 0;
+    }
+}
+
 static int check_name(struct find_rock *rock,
 		      const char *base, int len)
 {
@@ -1690,8 +1710,14 @@ static int check_name(struct find_rock *rock,
 	 * children in the LIST "" % case, because the matchlen will
 	 * be the same for the children too.  So the callee must
 	 * suppress duplicates after it's checked if it's a child. */
-	if (bsearch_ncompare(base, len, rock->prev, rock->prevlen) < 0)
-	    return 0;
+	if (rock->is_mboxsort) {
+	    if (bsearch_ncompare(base, len, rock->prev, rock->prevlen) < 0)
+		return 0;
+	}
+	else {
+	    if (raw_compare(base, len, rock->prev, rock->prevlen) < 0)
+		return 0;
+	}
 	free(rock->prev);
     }
 
@@ -1885,6 +1911,8 @@ int mboxlist_findall(struct namespace *namespace,
     cbrock.procrock = rock;
     cbrock.prev = NULL;
     cbrock.prevlen = 0;
+    cbrock.is_mboxsort = config_getswitch(IMAPOPT_IMPROVED_MBOXLIST_SORT) ||
+			 !strcmp(DB->name, "flat");
 
     /* Build usermboxname */
     if (userid && (!(p = strchr(userid, '.')) || ((p - userid) > userlen)) &&
@@ -2042,6 +2070,8 @@ int mboxlist_findall_alt(struct namespace *namespace,
     cbrock.procrock = rock;
     cbrock.prev = NULL;
     cbrock.prevlen = 0;
+    cbrock.is_mboxsort = config_getswitch(IMAPOPT_IMPROVED_MBOXLIST_SORT) ||
+			 !strcmp(DB->name, "flat");
 
     /* Build usermboxname */
     if (userid && (!(p = strchr(userid, '.')) || ((p - userid) > userlen)) &&
@@ -2653,6 +2683,8 @@ int mboxlist_findsub(struct namespace *namespace,
     cbrock.procrock = rock;
     cbrock.prev = NULL;
     cbrock.prevlen = 0;
+    cbrock.is_mboxsort = config_getswitch(IMAPOPT_IMPROVED_MBOXLIST_SORT) ||
+			 !strcmp(SUBDB->name, "flat");
 
     /* open the subscription file that contains the mailboxes the 
        user is subscribed to */
@@ -2832,6 +2864,8 @@ int mboxlist_findsub_alt(struct namespace *namespace,
     cbrock.procrock = rock;
     cbrock.prev = NULL;
     cbrock.prevlen = 0;
+    cbrock.is_mboxsort = config_getswitch(IMAPOPT_IMPROVED_MBOXLIST_SORT) ||
+			 !strcmp(SUBDB->name, "flat");
 
     /* open the subscription file that contains the mailboxes the 
        user is subscribed to */

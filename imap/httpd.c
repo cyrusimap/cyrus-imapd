@@ -997,7 +997,7 @@ static void cmdloop(void)
 
 	/* Handle CalDAV bootstrapping */
 	if (!ret && !strcmp(txn.req_tgt.path, "/.well-known/caldav")) {
-	    ret = HTTP_TEMP_REDIRECT;
+	    ret = HTTP_MOVED;
 
 	    hdr = spool_getheader(txn.req_hdrs, "Host");
 	    snprintf(buf, sizeof(buf), "%s://%s/calendars/",
