@@ -45,6 +45,7 @@ use warnings;
 use Mail::IMAPTalk;
 use Cassandane::Util::Log;
 use Cassandane::Util::DateTime qw(to_rfc822);
+use Cassandane::Util::Socket;
 use overload qw("") => \&as_string;
 
 # TODO: isa Cassandane::MessageStore
