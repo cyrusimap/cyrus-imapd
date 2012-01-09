@@ -5959,6 +5959,13 @@ void getlistargs(char *tag, struct listargs *listargs)
 	}
     }
 
+    /* Per RFC 5258:
+     * "Note that the SUBSCRIBED selection option implies the SUBSCRIBED
+     * return option."
+     */
+    if (listargs->sel & LIST_SEL_SUBSCRIBED)
+	listargs->ret |= LIST_RET_SUBSCRIBED;
+
     /* check for CRLF */
     if (c == '\r') c = prot_getc(imapd_in);
     if (c != '\n') {
@@ -9231,7 +9238,7 @@ int getlistselopts(char *tag, unsigned *opts)
 	lcase(buf.s);
 
 	if (!strcmp(buf.s, "subscribed")) {
-	    *opts |= LIST_SEL_SUBSCRIBED | LIST_RET_SUBSCRIBED;
+	    *opts |= LIST_SEL_SUBSCRIBED;
 	} else if (!strcmp(buf.s, "remote")) {
 	    *opts |= LIST_SEL_REMOTE;
 	} else if (!strcmp(buf.s, "recursivematch")) {
