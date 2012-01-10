@@ -280,13 +280,13 @@ int mappedfile_writelock(struct mappedfile *mf)
 int mappedfile_unlock(struct mappedfile *mf)
 {
     int r;
-    assert(mf);
-    assert(mf->fd != -1);
-    assert(!mf->dirty);
 
     /* make this safe to call multiple times */
     if (!mf) return 0;
     if (mf->lock_status == MF_UNLOCKED) return 0;
+
+    assert(mf->fd != -1);
+    assert(!mf->dirty);
 
     r = lock_unlock(mf->fd);
     if (r < 0) {
