@@ -178,7 +178,8 @@ sub compile_timsieved
     my ($self, $name, $script) = @_;
 
     my $basedir = $self->{instance}->{basedir};
-    my $bindir = $self->{instance}->{cyrus_prefix} . '/bin';
+    my $bindir = $self->{instance}->{cyrus_destdir} .
+		 $self->{instance}->{cyrus_prefix} . '/bin';
     my $srv = $self->{instance}->get_service('sieve');
 
     xlog "Checking preconditions for compiling sieve script $name";
