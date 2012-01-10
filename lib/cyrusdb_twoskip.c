@@ -1330,7 +1330,7 @@ static int opendb(const char *fname, int flags, struct dbengine **ret)
 
 	/* create the dummy! */
 	memset(&dummy, 0, sizeof(struct skiprecord));
-	dummy.type = '=';
+	dummy.type = DUMMY;
 	dummy.level = MAXLEVEL;
 
 	/* append dummy after header location */
