@@ -89,4 +89,6 @@ at all.  This section documents those steps.
 Now, to run Cassandane use this command
 
     gnb> cd ~/my/cassandane/workarea
-    gnb> sudo -u cyrus ./testrunner.pl -f tap
+    gnb> ./testrunner.pl -f tap
+
+    NOTE: Cassandane will internally run 'sudo' to become user 'cyrus'
