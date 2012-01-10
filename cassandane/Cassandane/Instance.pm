@@ -79,6 +79,7 @@ sub new
 	basedir => undef,
 	installation => 'default',
 	cyrus_prefix => undef,
+	cyrus_destdir => undef,
 	config => Cassandane::Config->default()->clone(),
 	starts => [],
 	services => {},
@@ -102,6 +103,10 @@ sub new
 					  'prefix', '/usr/cyrus');
     $self->{cyrus_prefix} = $params{cyrus_prefix}
 	if defined $params{cyrus_prefix};
+    $self->{cyrus_destdir} = $cassini->val("cyrus $self->{installation}",
+					  'destdir', '');
+    $self->{cyrus_destdir} = $params{cyrus_destdir}
+	if defined $params{cyrus_destdir};
     $self->{config} = $params{config}->clone()
 	if defined $params{config};
     $self->{re_use_dir} = $params{re_use_dir}
@@ -257,7 +262,7 @@ sub _binary
     }
 
     my $bin = $name;
-    $bin = $self->{cyrus_prefix} . '/bin/' . $bin
+    $bin = $self->{cyrus_destdir} . $self->{cyrus_prefix} . '/bin/' . $bin
 	unless $bin =~ m/^\//;
     push(@cmd, $bin);
 
@@ -908,10 +913,14 @@ sub _fork_command
 
     # child process
 
+    my $cassroot = getcwd();
+    my $cyrusroot = $self->{cyrus_destdir} . $self->{cyrus_prefix};
+    $ENV{CASSANDANE_CYRUS_DESTDIR} = $self->{cyrus_destdir};
     $ENV{CASSANDANE_CYRUS_PREFIX} = $self->{cyrus_prefix};
-    $ENV{CASSANDANE_PREFIX} = getcwd();
+    $ENV{CASSANDANE_PREFIX} = $cassroot;
     $ENV{CASSANDANE_BASEDIR} = $self->{basedir};
     $ENV{CASSANDANE_VERBOSE} = 1 if get_verbose();
+    $ENV{PERL5LIB} = join(':', ( $cassroot, "$cyrusroot/share/perl", "$cyrusroot/lib/perl" ));
 
     my $cd = $options->{workingdir};
     $cd = $self->{basedir} . '/conf/cores'

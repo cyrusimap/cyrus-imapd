@@ -51,14 +51,22 @@ at all.  This section documents those steps.
 
     Alternatively, you could set up a cassandane.ini file in the
     Cassandane directory (copy the cassandane.ini.example file) and set
-    'prefix' in the 'cyrus default' section to indicate your Cyrus
-    install directory.
+    the following two variables in the 'cyrus default' section to indicate
+    your how your Cyrus was installed:
+
+     *  'prefix' is where Cyrus internally expects itself to be, i.e.
+	the value of --prefix and --cyrus-prefix when running the Cyrus
+	configure script.  Default is /usr/cyrus
+
+     *  'destdir' is where you installed Cyrus, e.g. if you installed using
+        "make DESTDIR=/my/cyrus/inst install" in the Cyrus directory.
+	Default is empty.
 
     gnb> cd ~/my/cassandane/workarea
     gnb> cp cassandane.ini.example cassandane.ini
     gnb> vi cassandane.ini
     [cyrus default]
-    prefix = /var/tmp/cassandane-cyrus
+    destdir = /var/tmp/cassandane-cyrus
 
     gnb> cd ~/my/cyrus/workarea
     gnb> make DESTDIR=/var/tmp/cassandane-cyrus install

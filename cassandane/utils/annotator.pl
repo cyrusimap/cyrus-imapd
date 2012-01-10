@@ -39,12 +39,6 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
-# Tweak the include path to find the Cyrus install directory.
-use lib ("$ENV{CASSANDANE_CYRUS_PREFIX}/share/perl",
-	 "$ENV{CASSANDANE_CYRUS_PREFIX}/lib/perl");
-# And again to find Cassandane modules
-use lib ("$ENV{CASSANDANE_PREFIX}");
-
 use strict;
 use warnings;
 package Cassandane::AnnotatorDaemon;
