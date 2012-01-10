@@ -2113,6 +2113,9 @@ static int recovery1(struct dbengine *db, int *count)
     if (db_is_clean(db))
 	return 0;
 
+    /* we can't recovery a file that's not created yet */
+    assert(db->header.current_size > HEADER_SIZE);
+
     /* dirty the header if not already dirty */
     if (!(db->header.flags & DIRTY)) {
 	db->header.flags |= DIRTY;
