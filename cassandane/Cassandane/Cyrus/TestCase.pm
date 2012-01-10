@@ -122,7 +122,6 @@ sub _create_instances
 		# tell sync_client how to login
 		sync_authname => 'repluser',
 		sync_password => 'replpass',
-		sync_realm => 'internal',
 		sasl_mech_list => 'PLAIN',
 		# Ensure sync_server gives sync_client enough privileges
 		admins => 'admin repluser',
@@ -170,8 +169,14 @@ sub set_up
 
     $self->{instance}->start()
 	if (defined $self->{instance});
-    $self->{replica}->start()
-	if (defined $self->{replica});
+    if (defined $self->{replica})
+    {
+	$self->{replica}->start();
+	# This is a bit of a hack, we should really remember the
+	# configured logins on the master and copy them across.
+	$self->{replica}->add_login('repluser', 'replpass');
+	$self->{replica}->add_login('cassandane', 'testpw');
+    }
 
     $self->{store} = undef;
     $self->{adminstore} = undef;

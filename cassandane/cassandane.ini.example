@@ -46,6 +46,17 @@
 # Directory under which all the instance directories
 # will be created.  It's wise to keep this short.
 ##rootdir = /var/tmp/cass
+# Which SASL password checking method to use:
+# alwaystrue
+#    is the default and it makes libsasl conveniently accept
+#    any old password, but it can be configured out at libsasl
+#    build time e.g. on older RedHat builds.
+# sasldb
+#    can be used for those RedHat systems, as it's always available
+#    in libsasl.  Cassandane will build a sasldb2 file containing
+#    usernames and passwords, but it requires installing the package
+#    containing the saslpasswd2 binary.
+##pwcheck = alwaystrue
 
 # This section describes the default Cyrus installation.
 [cyrus default]

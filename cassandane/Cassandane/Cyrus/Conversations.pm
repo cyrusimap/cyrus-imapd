@@ -418,10 +418,11 @@ sub test_cross_user_copy
     $self->assert($self->{store}->get_client()->capability()->{xconversations});
 
     my $srv = $self->{instance}->get_service('imap');
+
+    $self->{instance}->create_user($bobuser);
+
     my $adminstore = $srv->create_store(username => 'admin');
     my $adminclient = $adminstore->get_client();
-    $adminclient->create($bobfolder)
-	or die "Cannot create $bobfolder: $@";
     $adminclient->setacl('user.cassandane', $bobuser => 'lrswipkxtecda')
 	or die "Cannot setacl on user.cassandane: $@";
 

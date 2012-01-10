@@ -196,7 +196,7 @@ sub compile_timsieved
     {
 	open(FH, '>', "$basedir/sieve.passwd")
 	    or die "Cannot open $basedir/sieve.passwd for writing: $!";
-	print FH "foo!\nfoo!\n";
+	print FH "\ntestpw\n";
 	close(FH);
     }
 
@@ -216,7 +216,7 @@ sub compile_timsieved
 	    },
 	    "$bindir/installsieve",
 	    "-i", "$basedir/$name.script",
-	    "-u", "anonymous",
+	    "-u", "cassandane",
 	    "$srv->{host}:$srv->{port}");
 
     # Read the errors file in @errors

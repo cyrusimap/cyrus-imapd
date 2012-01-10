@@ -148,6 +148,10 @@ sub new
 	    );
 
     bless $self, $class;
+
+    $self->_set_pwcheck($params{pwcheck} ||
+			$cassini->val('cassandane', 'pwcheck', 'alwaystrue'));
+
     xlog "$self->{description}: basedir $self->{basedir}";
     return $self;
 }
@@ -491,13 +495,57 @@ sub _start_master
     xlog "_start_master: all services listening";
 }
 
+sub _set_pwcheck
+{
+    my ($self, $pwcheck) = @_;
+
+    my $conf = $self->{config};
+    if ($pwcheck eq 'alwaystrue')
+    {
+	$conf->set(sasl_pwcheck_method => 'alwaystrue');
+	$self->{_setup_login} = sub
+	{
+	    # Nothing to do here
+	};
+    }
+    elsif ($pwcheck eq 'sasldb')
+    {
+	$conf->set(sasl_pwcheck_method => 'auxprop');
+	$conf->set(sasl_sasldb_path => '@basedir@/conf/sasldb2');
+	$self->{_setup_login} = sub
+	{
+	    my ($self, $user, $password) = @_;
+	    my $sasldb = $self->{basedir} . '/conf/sasldb2';
+	    my @cmd = ( 'saslpasswd2', '-f', $sasldb, '-c', '-p', $user );
+	    $self->run_command({
+		cyrus => 0,
+		redirects => { stdin => \$password },
+	    }, @cmd);
+	};
+    }
+    else
+    {
+	die "Bad value for pwcheck: \"$pwcheck\"";
+    }
+}
+
+sub add_login
+{
+    my ($self, $user, $password) = @_;
+    my $method = $self->{_setup_login};
+    return $self->$method($user, $password || 'testpw');
+}
+
 sub create_user
 {
     my ($self, $user, %params) = @_;
 
     xlog "create user $user";
+
+    $self->add_login($user, $params{password});
+
     my $srv = $self->get_service('imap');
-    die "No IMAP service in create_user"
+    return
 	unless defined $srv;
 
     my $adminstore = $srv->create_store(username => 'admin');
@@ -541,7 +589,9 @@ sub start
     $self->_start_master();
     $self->{_stopped} = 0;
 
-    if ($created && $self->{setup_mailbox} && defined $self->get_service('imap'))
+    $self->add_login('admin');
+
+    if ($created && $self->{setup_mailbox})
     {
 	$self->create_user("cassandane");
     }
