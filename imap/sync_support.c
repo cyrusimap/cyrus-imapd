@@ -1587,7 +1587,8 @@ int sync_append_copyfile(struct mailbox *mailbox,
     }
 
     if (!message_guid_equal(&tmp_guid, &record->guid)) {
-	syslog(LOG_ERR, "IOERROR: guid mismatch on parse %s", fname);
+	syslog(LOG_ERR, "IOERROR: guid mismatch on parse %s (%s)",
+	       fname, message_guid_encode(&record->guid));
 	return IMAP_IOERROR;
     }
 
