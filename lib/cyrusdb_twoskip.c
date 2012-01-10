@@ -1209,11 +1209,11 @@ static int write_lock(struct dbengine *db)
     if (db->is_open) {
 	r = read_header(db);
 	if (r) return r;
-    }
 
-    /* recovery checks for consistency */
-    r = recovery(db);
-    if (r) return r;
+	/* recovery checks for consistency */
+	r = recovery(db);
+	if (r) return r;
+    }
 
     return 0;
 }
