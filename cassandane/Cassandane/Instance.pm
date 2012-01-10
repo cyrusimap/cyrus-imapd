@@ -91,6 +91,8 @@ sub new
 	_children => {},
 	_stopped => 0,
 	description => 'unknown',
+	_started => 0,
+	_logins => {},
     };
 
     $self->{name} = $params{name}
@@ -151,6 +153,7 @@ sub new
 
     $self->_set_pwcheck($params{pwcheck} ||
 			$cassini->val('cassandane', 'pwcheck', 'alwaystrue'));
+    $self->add_login('admin');
 
     xlog "$self->{description}: basedir $self->{basedir}";
     return $self;
@@ -514,9 +517,10 @@ sub _set_pwcheck
 	$conf->set(sasl_sasldb_path => '@basedir@/conf/sasldb2');
 	$self->{_setup_login} = sub
 	{
-	    my ($self, $user, $password) = @_;
+	    my ($self, $login) = @_;
 	    my $sasldb = $self->{basedir} . '/conf/sasldb2';
-	    my @cmd = ( 'saslpasswd2', '-f', $sasldb, '-c', '-p', $user );
+	    my @cmd = ( 'saslpasswd2', '-f', $sasldb, '-c', '-p', $login->{user} );
+	    my $password = $login->{password};
 	    $self->run_command({
 		cyrus => 0,
 		redirects => { stdin => \$password },
@@ -529,11 +533,51 @@ sub _set_pwcheck
     }
 }
 
+sub _flush_logins
+{
+    my ($self) = @_;
+
+    my $method = $self->{_setup_login};
+    foreach my $login (values %{$self->{_logins}})
+    {
+	next unless $login->{dirty};
+	$self->$method($login);
+	$login->{dirty} = 0;
+    }
+}
+
 sub add_login
 {
     my ($self, $user, $password) = @_;
-    my $method = $self->{_setup_login};
-    return $self->$method($user, $password || 'testpw');
+
+    die "Login \"$user\" already exists"
+	if $self->{_logins}->{$user};
+
+    $self->{_logins}->{$user} = {
+	user => $user,
+	password => $password || 'testpw',
+	dirty => 1,
+    };
+
+    $self->_flush_logins()
+	if ($self->{_started});
+}
+
+# Copy the login data from another instance
+# Useful when setting up a master/replica pair
+sub copy_logins
+{
+    my ($self, $inst) = @_;
+
+    foreach my $login (values %{$inst->{_logins}})
+    {
+	$self->{_logins}->{$login->{user}} = {
+	    %$login,
+	    dirty => 1,
+	};
+    }
+    $self->_flush_logins()
+	if ($self->{_started});
 }
 
 sub create_user
@@ -584,12 +628,13 @@ sub start
 	# TODO: system("echo 1 >/proc/sys/fs/suid_dumpable");
 	$self->_generate_imapd_conf();
 	$self->_generate_master_conf();
+	# Ensure sasldb2 is created and contains 'admin'
+	$self->_flush_logins();
 	$self->_fix_ownership();
     }
     $self->_start_master();
     $self->{_stopped} = 0;
-
-    $self->add_login('admin');
+    $self->{_started} = 1;
 
     if ($created && $self->{setup_mailbox})
     {

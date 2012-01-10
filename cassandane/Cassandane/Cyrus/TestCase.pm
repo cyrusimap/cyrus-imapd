@@ -152,6 +152,7 @@ sub _create_instances
 	    $self->{replica}->add_services(@{$want->{services}});
 	    $self->{replica}->_setup_for_deliver()
 		if ($want->{deliver});
+	    $self->{replica}->add_login('repluser', 'replpass');
 	}
     }
 
@@ -171,11 +172,8 @@ sub set_up
 	if (defined $self->{instance});
     if (defined $self->{replica})
     {
+	$self->{replica}->copy_logins($self->{instance});
 	$self->{replica}->start();
-	# This is a bit of a hack, we should really remember the
-	# configured logins on the master and copy them across.
-	$self->{replica}->add_login('repluser', 'replpass');
-	$self->{replica}->add_login('cassandane', 'testpw');
     }
 
     $self->{store} = undef;
