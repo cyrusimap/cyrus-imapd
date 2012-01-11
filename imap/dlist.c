@@ -153,6 +153,8 @@ const char *dlist_reserve_path(const char *part, struct message_guid *guid)
     snprintf(buf, MAX_MAILBOX_PATH, "%s/sync./%lu/%s",
 		  config_partitiondir(part), (unsigned long)getpid(),
 		  message_guid_encode(guid));
+    /* gotta make sure we can create files */
+    cyrus_mkdir(buf, 0755);
     return buf;
 }
 
@@ -163,11 +165,9 @@ static int reservefile(struct protstream *in, const char *part,
     FILE *file;
     char buf[8192+1];
     int r = 0, n;
-    
+
     /* XXX - write to a temporary file then move in to place! */
     *fname = dlist_reserve_path(part, guid);
-    /* gotta make sure we can create it */
-    cyrus_mkdir(*fname, 0755);
 
     /* remove any duplicates if they're still here */
     unlink(*fname);
