@@ -1274,6 +1274,9 @@ int meth_propfind(struct transaction_t *txn)
 	return HTTP_NOT_ALLOWED;
     }
 
+    /* In case namespace didn't enforce auth - Needed for Evolution */
+    if (!httpd_userid) return HTTP_UNAUTHORIZED;
+
     /* Parse the path */
     if ((r = parse_path(&txn->req_tgt, &txn->errstr))) return r;
 

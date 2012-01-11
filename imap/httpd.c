@@ -1087,6 +1087,7 @@ static void cmdloop(void)
 
 	/* Request authentication, if necessary */
 	if (!httpd_userid && (r || namespace->need_auth)) {
+	  need_auth:
 	    /* User must authenticate */
 
 	    if (httpd_tls_required) {
@@ -1151,7 +1152,10 @@ static void cmdloop(void)
 	/* XXX  Check if method expects a body.  If not, return 415 */
 
 	/* Process the requested method */
-	if (!ret) ret = (*meth_proc)(&txn);
+	if (!ret) {
+	    ret = (*meth_proc)(&txn);
+	    if (ret == HTTP_UNAUTHORIZED) goto need_auth;
+	}
 
 	/* Handle errors (success responses handled by method functions) */
       error:
