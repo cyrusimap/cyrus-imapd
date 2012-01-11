@@ -1002,16 +1002,6 @@ static void cmdloop(void)
 	    txn.errstr = "Missing Host header";
 	}
 
-	/* Handle CalDAV bootstrapping */
-	if (!ret && !strcmp(txn.req_tgt.path, "/.well-known/caldav")) {
-	    ret = HTTP_MOVED;
-
-	    hdr = spool_getheader(txn.req_hdrs, "Host");
-	    snprintf(buf, sizeof(buf), "%s://%s/calendars/",
-		     httpd_tls_done ? "https" : "http", hdr[0]);
-	    txn.loc = buf;
-	}
-
 	/* Check for connection directives */
 	if ((hdr = spool_getheader(txn.req_hdrs, "Connection"))) {
 	    /* Check if this is a non-persistent connection */
@@ -1031,6 +1021,17 @@ static void cmdloop(void)
 		    starttls(0);
 		}
 	    }
+	}
+
+	/* Handle CalDAV bootstrapping */
+	if (!ret && !strncmp(txn.req_tgt.path, "/.well-known/caldav", 19) &&
+	    (!txn.req_tgt.path[19] || !strcmp(txn.req_tgt.path+19, "/"))) {
+	    ret = HTTP_MOVED;
+
+	    hdr = spool_getheader(txn.req_hdrs, "Host");
+	    snprintf(buf, sizeof(buf), "%s://%s/calendars/",
+		     https ? "https" : "http", hdr[0]);
+	    txn.loc = buf;
 	}
 
 	if (ret) goto error;
