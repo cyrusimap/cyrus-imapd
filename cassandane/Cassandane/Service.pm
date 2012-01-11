@@ -136,9 +136,9 @@ my %netstat_match = (
     #     tcp        0      0 0.0.0.0:56686           0.0.0.0:* LISTEN
     inet => sub
     {
-	my ($self, $_) = @_;
+	my ($self, $line) = @_;
 
-	my @a = split;
+	my @a = split(/\s+/, $line);
 	return 0 unless scalar(@a) == 6;
 	return 0 unless $a[0] eq 'tcp';
 	return 0 unless $a[5] eq 'LISTEN';
@@ -153,9 +153,9 @@ my %netstat_match = (
     #  tcp6       0      0 :::22                   :::*                    LISTEN
     inet6 => sub
     {
-	my ($self, $_) = @_;
+	my ($self, $line) = @_;
 
-	my @a = split;
+	my @a = split(/\s+/, $line);
 	return 0 unless scalar(@a) == 6;
 	return 0 unless $a[0] eq 'tcp6';
 	return 0 unless $a[5] eq 'LISTEN';
@@ -173,13 +173,13 @@ my %netstat_match = (
     #  unix  2      [ ACC ]     STREAM     LISTENING     7941     /var/run/dbus/system_bus_socket
     unix => sub
     {
-	my ($self, $_) = @_;
+	my ($self, $line) = @_;
 
 	# Compress the Flags field to eliminate spaces and make split()
 	# return a predictable number of fields.
 	s/\[[^]]*\]/[]/;
 
-	my @a = split;
+	my @a = split(/\s+/, $line);
 	return 0 unless scalar(@a) == 7;
 	return 0 unless $a[0] eq 'unix';
 	return 0 unless $a[4] eq 'LISTENING';
