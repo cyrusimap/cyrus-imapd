@@ -1057,12 +1057,10 @@ void reserve_folder(const char *part, const char *mboxname,
 
     /* Open and lock mailbox */
     r = mailbox_open_irl(mboxname, &mailbox);
-    
+
     if (r) return;
 
-    for (recno = 1; 
-	 part_list->marked < part_list->count && recno <= mailbox->i.num_records;
-	 recno++) {
+    for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	/* ok to skip errors here - just means they'll be uploaded
 	 * rather than reserved */
 	if (mailbox_read_index_record(mailbox, recno, &record))
@@ -1071,8 +1069,13 @@ void reserve_folder(const char *part, const char *mboxname,
 	if (record.system_flags & FLAG_UNLINKED)
 	    continue;
 
+	/* do we need it? */
 	item = sync_msgid_lookup(part_list, &record.guid);
-	if (!item || item->mark)
+	if (!item)
+	    continue;
+
+	/* have we already found it? */
+	if (!item->need_upload)
 	    continue;
 
 	/* Attempt to reserve this message */
@@ -1099,8 +1102,11 @@ void reserve_folder(const char *part, const char *mboxname,
 	    continue;
 	}
 
-	item->mark = 1;
-	part_list->marked++;
+	item->need_upload = 0;
+	part_list->toupload--;
+
+	/* already found everything, drop out */
+	if (!part_list->toupload) break;
     }
 
     mailbox_close(&mailbox);
@@ -1128,7 +1134,7 @@ static int do_reserve(struct dlist *kl, struct sync_reserve_list *reserve_list)
     for (i = gl->head; i; i = i->next) {
 	if (!dlist_toguid(i, &tmpguid))
 	    goto parse_err;
-	sync_msgid_add(part_list, tmpguid);
+	sync_msgid_insert(part_list, tmpguid);
     }
 
     /* need a list so we can mark items */
@@ -1136,9 +1142,8 @@ static int do_reserve(struct dlist *kl, struct sync_reserve_list *reserve_list)
 	sync_name_list_add(folder_names, i->sval);
     }
 
-    for (folder = folder_names->head; 
-	 part_list->marked < part_list->count && folder;
-	 folder = folder->next) {
+    for (folder = folder_names->head; folder; folder = folder->next) {
+	if (!part_list->toupload) break;
 	if (mboxlist_lookup(folder->name, &mbentry, 0) ||
 	    strcmp(mbentry->partition, partition))
 	    continue; /* try folders on the same partition first! */
@@ -1147,12 +1152,12 @@ static int do_reserve(struct dlist *kl, struct sync_reserve_list *reserve_list)
     }
 
     /* if we have other folders, check them now */
-    for (folder = folder_names->head; 
-	 part_list->marked < part_list->count && folder;
-	 folder = folder->next) {
+    for (folder = folder_names->head; folder; folder = folder->next) {
+	if (!part_list->toupload) break;
 	if (folder->mark)
 	    continue;
 	reserve_folder(partition, folder->name, part_list);
+	folder->mark = 1;
     }
 
     /* check if we missed any */
@@ -1161,9 +1166,10 @@ static int do_reserve(struct dlist *kl, struct sync_reserve_list *reserve_list)
 	if (!dlist_toguid(i, &tmpguid))
 	    goto parse_err;
 	item = sync_msgid_lookup(part_list, tmpguid);
-	if (item && !item->mark)
+	if (item->need_upload)
 	    dlist_setguid(kout, "GUID", tmpguid);
     }
+
     if (kout->head)
 	sync_send_response(kout, sync_out);
     dlist_free(&kout);
@@ -2235,16 +2241,16 @@ static int do_upload(struct dlist *kin, struct sync_reserve_list *reserve_list)
     for (ki = kin->head; ki; ki = ki->next) {
 	struct message_guid *guid;
 	const char *part;
+
+	/* XXX - complain more? */
 	if (!dlist_tofile(ki, &part, &guid, NULL, NULL))
 	    continue;
 
 	part_list = sync_reserve_partlist(reserve_list, part);
-	msgid = sync_msgid_lookup(part_list, guid);
-	if (!msgid) 
-	    msgid = sync_msgid_add(part_list, guid);
-	if (!msgid->mark) {
-	    msgid->mark = 1;
-	    part_list->marked++;
+	msgid = sync_msgid_insert(part_list, guid);
+	if (msgid->need_upload) {
+	    msgid->need_upload = 0;
+	    part_list->toupload--;
 	}
     }
 

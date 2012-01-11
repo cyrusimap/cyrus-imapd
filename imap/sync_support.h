@@ -89,7 +89,7 @@ struct sync_msgid {
     struct sync_msgid *next;
     struct sync_msgid *hash_next;
     struct message_guid guid;
-    int mark;
+    int need_upload;
 };
 
 struct sync_msgid_list {
@@ -98,13 +98,13 @@ struct sync_msgid_list {
     struct sync_msgid **hash;
     int hash_size;
     int count;      /* Total number of messages in list    */
-    int marked;     /* Number of reserved messages in list */
+    int toupload;   /* Number of messages needing upload in list */
 };
 
 struct sync_msgid_list *sync_msgid_list_create(int hash_size);
 
-struct sync_msgid *sync_msgid_add(struct sync_msgid_list *list,
-				  struct message_guid *guid);
+struct sync_msgid *sync_msgid_insert(struct sync_msgid_list *list,
+				     struct message_guid *guid);
 
 void sync_msgid_remove(struct sync_msgid_list *l,
 		       struct message_guid *guid);

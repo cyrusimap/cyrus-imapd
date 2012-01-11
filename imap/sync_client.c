@@ -202,7 +202,7 @@ static int find_reserve_messages(struct mailbox *mailbox,
 	if (record.uid <= last_uid)
 	    continue;
 
-	sync_msgid_add(part_list, &record.guid);
+	sync_msgid_insert(part_list, &record.guid);
     }
     
     return(0);
@@ -286,14 +286,12 @@ static int mark_missing (struct dlist *kin,
 	    return IMAP_PROTOCOL_BAD_PARAMETERS;
         }
 
+	/* afraid we will need this after all */
 	msgid = sync_msgid_lookup(part_list, &tmp_guid);
-	if (!msgid) {
-	    syslog(LOG_ERR, "SYNCERROR: reserve: Got unexpected GUID %s", ki->sval);
-	    return IMAP_PROTOCOL_BAD_PARAMETERS;
+	if (msgid && !msgid->need_upload) {
+	    msgid->need_upload = 1;
+	    part_list->toupload++;
 	}
-
-	msgid->mark = 0;
-	part_list->marked--;
     }
 
     return 0;
@@ -311,7 +309,7 @@ static int reserve_partition(char *partition,
     struct dlist *ki;
     int r;
 
-    if (!part_list->count)
+    if (!part_list->toupload)
 	return 0; /* nothing to reserve */
 
     if (!replica_folders->head)
@@ -326,9 +324,11 @@ static int reserve_partition(char *partition,
 
     ki = dlist_newlist(kl, "GUID");
     for (msgid = part_list->head; msgid; msgid = msgid->next) {
+	if (!msgid->need_upload) continue;
 	dlist_setatom(ki, "GUID", message_guid_encode(&msgid->guid));
-	msgid->mark = 1;
-	part_list->marked++;
+	/* we will re-add the "need upload" if we get a MISSING response */
+	msgid->need_upload = 0;
+	part_list->toupload--;
     }
 
     sync_send_apply(kl, sync_out);
@@ -1463,21 +1463,7 @@ static int update_mailbox_once(struct sync_folder *local,
 	mailbox_unlock_index(mailbox, NULL);
 	sync_send_apply(kupload, sync_out);
 	r = sync_parse_response("MESSAGE", sync_in, NULL);
-	if (!r) {
-	    /* update our list of reserved messages on the replica */
-	    struct dlist *ki;
-	    struct sync_msgid *msgid;
-	    for (ki = kupload->head; ki; ki = ki->next) {
-		struct message_guid *guid = NULL;
-		if (!dlist_toguid(ki, &guid))
-		    continue;
-		msgid = sync_msgid_lookup(part_list, guid);
-		if (!msgid)
-		    msgid = sync_msgid_add(part_list, guid);
-		msgid->mark = 1;
-		part_list->marked++; 
-	    }
-	}
+	if (r) goto done; /* abort earlier */
     }
 
     /* close before sending the apply - all data is already read */

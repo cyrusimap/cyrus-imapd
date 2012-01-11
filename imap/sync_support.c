@@ -322,36 +322,45 @@ struct sync_msgid_list *sync_msgid_list_create(int hash_size)
     l->hash_size = hash_size;
     l->hash      = xzmalloc(hash_size * sizeof(struct sync_msgid *));
     l->count     = 0;
-    l->marked    = 0;
+    l->toupload  = 0;
 
     return(l);
 }
 
-struct sync_msgid *sync_msgid_add(struct sync_msgid_list *l,
-				  struct message_guid *guid)
+struct sync_msgid *sync_msgid_insert(struct sync_msgid_list *l,
+				     struct message_guid *guid)
 {
-    struct sync_msgid *result;
+    struct sync_msgid *msgid;
     int offset;
 
     if (message_guid_isnull(guid))
-        return(NULL);
+	return NULL;
 
-    result = xzmalloc(sizeof(struct sync_msgid));
     offset = message_guid_hash(guid, l->hash_size);
 
-    message_guid_copy(&result->guid, guid);
+    /* do we already have it?  Don't add it again */
+    for (msgid = l->hash[offset] ; msgid ; msgid = msgid->hash_next) {
+	if (message_guid_equal(&msgid->guid, guid))
+	    return msgid;
+    }
+
+    msgid = xzmalloc(sizeof(struct sync_msgid));
+    msgid->need_upload = 1;
+    message_guid_copy(&msgid->guid, guid);
 
     l->count++;
+    l->toupload++;
+
     if (l->tail)
-        l->tail = l->tail->next = result;
+        l->tail = l->tail->next = msgid;
     else
-        l->head = l->tail = result;
+        l->head = l->tail = msgid;
 
     /* Insert at start of list */
-    result->hash_next = l->hash[offset];
-    l->hash[offset]   = result;
+    msgid->hash_next = l->hash[offset];
+    l->hash[offset]   = msgid;
 
-    return(result);
+    return msgid;
 }
 
 void sync_msgid_list_free(struct sync_msgid_list **lp)
@@ -384,6 +393,7 @@ struct sync_msgid *sync_msgid_lookup(struct sync_msgid_list *l,
         if (message_guid_equal(&msgid->guid, guid))
             return(msgid);
     }
+
     return(NULL);
 }
 
@@ -1365,12 +1375,11 @@ static int sync_send_file(struct mailbox *mailbox,
 			  struct sync_msgid_list *part_list,
 			  struct dlist *kupload)
 {
-    struct sync_msgid *msgid;
+    struct sync_msgid *msgid = sync_msgid_insert(part_list, &record->guid);
     const char *fname;
 
-    /* is it already reserved? */
-    msgid = sync_msgid_lookup(part_list, &record->guid);
-    if (msgid && msgid->mark) 
+    /* already uploaded, great */
+    if (!msgid->need_upload)
 	return 0;
 
     /* we'll trust that it exists - if not, we'll bail later,
@@ -1380,6 +1389,11 @@ static int sync_send_file(struct mailbox *mailbox,
 
     dlist_setfile(kupload, "MESSAGE", mailbox->part,
 		  &record->guid, record->size, fname);
+
+    /* note that we will be sending it, so it doesn't need to be
+     * sent again */
+    msgid->need_upload = 0;
+    part_list->toupload--;
 
     return 0;
 }
