@@ -225,15 +225,7 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
 
 	/* Quietly skip over folders which have been deleted since we
 	   started working (but record fact in case caller cares) */
-	if (r == IMAP_MAILBOX_NONEXISTENT) {  
-	    r = 0;     
-	    continue;
-	}
-
-	/* Quietly ignore objects that we don't have access to.
-	 * Includes directory stubs, which have not underlying cyrus.*
-	 * files in the filesystem */
-	if (r == IMAP_PERMISSION_DENIED) {
+	if (r == IMAP_MAILBOX_NONEXISTENT) {
 	    r = 0;
 	    continue;
 	}
