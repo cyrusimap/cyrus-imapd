@@ -182,7 +182,7 @@ sub cleanup_leftovers
     my @dirs;
     while (my $e = readdir(ROOT))
     {
-	push(@dirs, $_) if ($e =~ m/^[0-9]{7,}$/);
+	push(@dirs, $e) if ($e =~ m/^[0-9]{7,}$/);
     }
     closedir ROOT;
 
