@@ -153,7 +153,6 @@ const char *dlist_reserve_path(const char *part, struct message_guid *guid)
     snprintf(buf, MAX_MAILBOX_PATH, "%s/sync./%lu/%s",
 		  config_partitiondir(part), (unsigned long)getpid(),
 		  message_guid_encode(guid));
-    cyrus_mkdir(buf, 0755);
     return buf;
 }
 
@@ -167,10 +166,15 @@ static int reservefile(struct protstream *in, const char *part,
     
     /* XXX - write to a temporary file then move in to place! */
     *fname = dlist_reserve_path(part, guid);
+    /* gotta make sure we can create it */
+    cyrus_mkdir(*fname, 0755);
+
+    /* remove any duplicates if they're still here */
+    unlink(*fname);
 
     file = fopen(*fname, "w+");
     if (!file) {
-	syslog(LOG_ERR, "Failed to upload file %s", message_guid_encode(guid));
+	syslog(LOG_ERR, "IOERROR: failed to upload file %s", message_guid_encode(guid));
 	r = IMAP_IOERROR;
 	/* Note: we still read the file's data from the wire,
 	 * to avoid losing protocol sync */
