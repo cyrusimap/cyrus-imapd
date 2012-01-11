@@ -107,6 +107,13 @@
 #define DEBUG 1
 
 
+static const char tls_message[] =
+    HTML_DOCTYPE
+    "<html>\n<head>\n<title>TLS Required</title>\n</head>\n" \
+    "<body>\n<h2>TLS is required to use Basic authentication</h2>\n" \
+    "Use <a href=\"%s\">%s</a> instead.\n" \
+    "</body>\n</html>\n";
+
 extern int optind;
 extern char *optarg;
 extern int opterr;
@@ -1082,12 +1089,35 @@ static void cmdloop(void)
 	    /* User must authenticate */
 
 	    if (httpd_tls_required) {
-		ret = HTTP_UPGRADE;
+		struct buf html = BUF_INITIALIZER;
+		long code;
+
+		/* Create https URL */
 		hdr = spool_getheader(txn.req_hdrs, "Host");
 		snprintf(buf, sizeof(buf),
-			 "SSL/TLS required to use Basic authentication\r\n\r\n"
-			 "Try: https://%s%s", hdr[0], txn.req_tgt.path);
-		txn.errstr = buf;
+			 "https://%s%s", hdr[0], txn.req_tgt.path);
+
+		/* Create HTML body */
+		buf_printf(&html, tls_message, buf, buf);
+
+		/* Check which response is required */
+		if ((hdr = spool_getheader(txn.req_hdrs, "User-Agent")) &&
+		       !strncmp(hdr[0], "Cyrus-Murder/", 13)) {
+		    /* Murder proxies use RFC 2817 (TLS upgrade) */
+		    code = HTTP_UPGRADE;
+		}
+		else {
+		    /* All other clients use RFC 2818 (HTTPS) */
+		    code = HTTP_MOVED;
+		    txn.loc = buf;
+		}
+
+		/* Output our HTML response */
+		txn.resp_body.type = "text/html; charset=utf-8";
+		write_body(code, &txn, html.s, html.len);
+
+		buf_free(&html);
+		goto error;
 	    }
 	    else {
 		/* Tell client to authenticate */
