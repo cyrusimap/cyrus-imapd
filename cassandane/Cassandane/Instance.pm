@@ -654,7 +654,7 @@ sub _check_valgrind_logs
     return unless -d $valgrind_logdir;
     opendir VGLOGS, $valgrind_logdir
 	or die "Cannot open directory $valgrind_logdir for reading: $!";
-    while (my $_ = readdir VGLOGS)
+    while ($_ = readdir VGLOGS)
     {
 	next if m/^\./;
 	next if m/\.core\./;
@@ -687,7 +687,7 @@ sub _check_cores
     return unless -d $coredir;
     opendir CORES, $coredir
 	or die "Cannot open directory $coredir for reading: $!";
-    while (my $_ = readdir CORES)
+    while ($_ = readdir CORES)
     {
 	next if m/^\./;
 	next unless m/^core(\.\d+)?$/;
