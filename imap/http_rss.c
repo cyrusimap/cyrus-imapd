@@ -77,7 +77,7 @@
 #define FEEDLIST_VAR	"%RSS_FEEDLIST%"
 
 static const char def_template[] =
-    HTML_DOCTYPE "\n"
+    HTML_DOCTYPE
     "<html>\n<head>\n<title>Cyrus RSS Feeds</title>\n</head>\n"
     "<body>\n<h2>Cyrus RSS Feeds</h2>\n"
     FEEDLIST_VAR
@@ -1006,7 +1006,7 @@ static void display_message(struct transaction_t *txn,
     txn->resp_body.type = "text/html; charset=utf-8";
 
     /* Start HTML */
-    buf_printf(&buf, HTML_DOCTYPE "\n");
+    buf_printf(&buf, HTML_DOCTYPE);
     buf_printf(&buf, "<html><head><title>%s:%u</title></head><body>\n",
 	       mboxname, uid);
 

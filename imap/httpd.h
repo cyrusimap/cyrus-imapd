@@ -60,9 +60,9 @@
 #define HTTPS_VERSION	"HTTPS/1.1"
 
 /* Supported HTML DOCTYPE */
-#define HTML_DOCTYPE	"<!DOCTYPE HTML PUBLIC "  \
-    "\"-//W3C//DTD HTML 4.01 Transitional//EN\" " \
-    "\"http://www.w3.org/TR/html4/loose.dtd\">"
+#define HTML_DOCTYPE \
+    "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\" " \
+    "\"http://www.w3.org/TR/html4/loose.dtd\">\n"
 
 /* SASL usage based on availability */
 #ifdef SASL_NEED_HTTP
