@@ -79,6 +79,7 @@ sub _set_limits
     my ($self, %resources) = @_;
     my $admintalk = $self->{adminstore}->get_client();
 
+    my $quotaroot = delete $resources{quotaroot} || $self->{quotaroot};
     my @quotalist;
     foreach my $resource (keys %resources)
     {
@@ -86,8 +87,8 @@ sub _set_limits
 	    or die "No limit specified for $resource";
 	push(@quotalist, uc($resource), $limit);
     }
-    $self->{limits}->{$self->{quotaroot}} = { @quotalist };
-    $admintalk->setquota($self->{quotaroot}, \@quotalist);
+    $self->{limits}->{$quotaroot} = { @quotalist };
+    $admintalk->setquota($quotaroot, \@quotalist);
     $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
 }
 
@@ -98,9 +99,10 @@ sub _check_usages
     my ($self, %expecteds) = @_;
     my $admintalk = $self->{adminstore}->get_client();
 
-    my $limits = $self->{limits}->{$self->{quotaroot}};
+    my $quotaroot = delete $expecteds{quotaroot} || $self->{quotaroot};
+    my $limits = $self->{limits}->{$quotaroot};
 
-    my @result = $admintalk->getquota($self->{quotaroot});
+    my @result = $admintalk->getquota($quotaroot);
     $self->assert_str_equals('ok', $admintalk->get_last_completion_response());
 
     # check actual and expected number of resources do match
@@ -976,55 +978,64 @@ sub test_quota_f_nested_qr
     my ($self) = @_;
 
     xlog "Test that quota -f correctly calculates the STORAGE quota";
-    xlog "when a nested quotaroot exists [Bug 3621]";
+    xlog "with a nested quotaroot and a folder whose name sorts after";
+    xlog "the nested quotaroot [Bug 3621]";
 
     my $inbox = "user.cassandane";
-    my $nested = "$inbox.nested";
-
-    xlog "set ourselves a basic usage quota";
-    $self->_set_quotaroot($inbox);
-    $self->_set_limits(storage => 100000);
-    $self->_check_usages(storage => 0);
-
-    xlog "make an empty nested mailbox";
-    my $talk = $self->{store}->get_client();
-    $talk->create($nested)
-	or die "Cannot create mailbox $nested: $@";
-
-    xlog "setup a quotaroot on the nested mailbox";
-    $self->_set_quotaroot($nested);
-    $self->_set_limits(storage => 5);
-    $self->_check_usages(storage => 0);
-
-    $self->_set_quotaroot($inbox);
+    # These names are significant - we need subfolders both before and
+    # after the subfolder on which we will set the nested quotaroot
+    my @folders = ( $inbox, "$inbox.aaa", "$inbox.nnn", "$inbox.zzz" );
 
     xlog "add messages to use some STORAGE quota";
-    my $expected = 0;
-    for (1..20) {
-	my $msg = $self->make_message("$_",
-				      min_extra_lines => 5000,
-				      max_extra_lines => 20000);
-	$expected += length($msg->as_string());
+    my %exp;
+    my $n = 5;
+    foreach my $f (@folders)
+    {
+	$self->{store}->set_folder($f);
+	for (1..$n) {
+	    my $msg = $self->make_message("$f $_",
+					  extra_lines => 10 + rand(5000));
+	    $exp{$f} += length($msg->as_string());
+	}
+	$n += 5;
+	xlog "Expect " . $exp{$f} . " on " . $f;
     }
 
-    xlog "check that STORAGE quota is used";
-    $self->_check_usages(storage => int($expected/1024));
+    xlog "set a quota on inbox";
+    $self->_set_limits(quotaroot => $inbox, storage => 100000);
+
+    xlog "should have correct STORAGE quota";
+    my $ex0 = $exp{$inbox} + $exp{"$inbox.aaa"} + $exp{"$inbox.nnn"} + $exp{"$inbox.zzz"};
+    $self->_check_usages(quotaroot => $inbox, storage => int($ex0/1024));
+
+    xlog "set a quota on inbox.nnn - a nested quotaroot";
+    $self->_set_limits(quotaroot => "$inbox.nnn", storage => 200000);
+
+    xlog "should have correct STORAGE quota for both roots";
+    my $ex1 = $exp{$inbox} + $exp{"$inbox.aaa"} + $exp{"$inbox.zzz"};
+    my $ex2 = $exp{"$inbox.nnn"};
+    $self->_check_usages(quotaroot => $inbox, storage => int($ex1/1024));
+    $self->_check_usages(quotaroot => "$inbox.nnn", storage => int($ex2/1024));
 
     xlog "create a bogus quota file";
-    $self->_zap_quota();
-    $self->_check_usages(storage => 0);
+    $self->_zap_quota(quotaroot => $inbox);
+    $self->_zap_quota(quotaroot => "$inbox.nnn");
+    $self->_check_usages(quotaroot => $inbox, storage => 0);
+    $self->_check_usages(quotaroot => "$inbox.nnn", storage => 0);
 
     xlog "run quota -f to find and add the quota";
     $self->{instance}->run_command({ cyrus => 1 }, 'quota', '-f');
 
-    xlog "check that STORAGE quota is restored";
-    $self->_check_usages(storage => int($expected/1024));
+    xlog "check that STORAGE quota is restored for both roots";
+    $self->_check_usages(quotaroot => $inbox, storage => int($ex1/1024));
+    $self->_check_usages(quotaroot => "$inbox.nnn", storage => int($ex2/1024));
 
     xlog "run quota -f again";
     $self->{instance}->run_command({ cyrus => 1 }, 'quota', '-f');
 
-    xlog "check that STORAGE quota is still correct";
-    $self->_check_usages(storage => int($expected/1024));
+    xlog "check that STORAGE quota is still correct for both roots";
+    $self->_check_usages(quotaroot => $inbox, storage => int($ex1/1024));
+    $self->_check_usages(quotaroot => "$inbox.nnn", storage => int($ex2/1024));
 }
 
 sub test_prefix_mboxexists
