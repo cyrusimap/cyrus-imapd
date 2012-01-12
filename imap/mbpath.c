@@ -137,7 +137,11 @@ main(int argc, char **argv)
       if (mbentry.mbtype & MBTYPE_REMOTE) {
 	printf("%s\n", mbentry.partition);
       } else {
-	char *path = mboxname_metapath(mbentry.partition, mbentry.name, 0, 0);
+	const char *path;
+	if (metadata)
+	    path = mboxname_metapath(mbentry.partition, mbentry.name, 0, 0);
+	else
+	    path = mboxname_datapath(mbentry.partition, mbentry.name, 0);
 	printf("%s\n", path);
       }
     } else {
