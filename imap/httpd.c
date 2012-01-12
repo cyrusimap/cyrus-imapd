@@ -1050,18 +1050,6 @@ static void cmdloop(void)
 
 	    /* Perform authentication, if necessary */
 	    if ((creds = spool_getheader(txn.req_hdrs, "Authorization"))) {
-
-		/* Client is trying to authenticate */
-#if 0 /* XXX Do we want to support reauth? */
-		if (httpd_userid) {
-		    /* Reauthentication - reinitialize */
-		    syslog(LOG_DEBUG, "reauth - reinit");
-		    free(httpd_userid);
-		    httpd_userid = NULL;
-		    reset_saslconn(&httpd_saslconn);
-		    txn.auth_chal.scheme = NULL;
-		}
-#endif
 		/* Check the auth credentials */
 #ifdef SASL_HTTP_REQUEST
 		sasl_setprop(httpd_saslconn, SASL_HTTP_REQUEST, &sasl_http_req);
@@ -1091,6 +1079,7 @@ static void cmdloop(void)
 	    /* User must authenticate */
 
 	    if (httpd_tls_required) {
+		/* We only support TLS+Basic, so tell client to use TLS */
 		struct buf html = BUF_INITIALIZER;
 		long code;
 
@@ -1104,7 +1093,7 @@ static void cmdloop(void)
 
 		/* Check which response is required */
 		if ((hdr = spool_getheader(txn.req_hdrs, "User-Agent")) &&
-		       !strncmp(hdr[0], "Cyrus-Murder/", 13)) {
+		    !strncmp(hdr[0], "Cyrus-Murder/", 13)) {
 		    /* Murder proxies use RFC 2817 (TLS upgrade) */
 		    code = HTTP_UPGRADE;
 		}
