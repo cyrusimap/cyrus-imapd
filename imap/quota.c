@@ -128,7 +128,6 @@ static int (*compar)(const char *s1, const char *s2);
 struct quotaentry *quota;
 int quota_num = 0, quota_alloc = 0;
 
-int firstquota = 0;
 int redofix = 0;
 int test_sync_mode = 0;
 
@@ -416,7 +415,7 @@ static int findroot(const char *name, int *thisquota)
 
     *thisquota = -1;
 
-    for (i = firstquota; i < quota_num; i++) {
+    for (i = 0; i < quota_num; i++) {
 	const char *root = quota[i].quota.root;
 
 	/* have we already passed the name, then there can
@@ -428,18 +427,12 @@ static int findroot(const char *name, int *thisquota)
 	if (mboxname_is_prefix(name, root)) {
 	    /* fantastic, but don't return yet, we may find
 	     * a more exact match */
-	    quota[i].refcount++;
 	    *thisquota = i;
 	}
-	else {
-	    /* not a match, so we can finish everything up to here */
-	    while (firstquota < i) {
-		int r = fixquota_finish(firstquota);
-		if (r) return r;
-		firstquota++;
-	    }
-	}
     }
+
+    if (*thisquota >= 0)
+	quota[*thisquota].refcount++;
 
     return 0;
 }
@@ -670,6 +663,7 @@ int fixquota_dopass(char *domain, char **roots, int nroots,
 int fixquotas(char *domain, char **roots, int nroots)
 {
     int r;
+    int firstquota = 0;
 
     r = fixquota_dopass(domain, roots, nroots, fixquota_pass2);
 
