@@ -151,6 +151,7 @@ while (my $a = shift)
     elsif ($a eq '-c' || $a eq '--cleanup')
     {
 	$do_cleanup = 1;
+	Cassandane::Instance->set_defaults(cleanup => 1);
     }
     elsif ($a eq '-f')
     {

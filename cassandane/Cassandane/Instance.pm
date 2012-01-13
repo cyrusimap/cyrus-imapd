@@ -63,6 +63,7 @@ my $next_unique = 1;
 my %defaults =
 (
     valgrind => 0,
+    cleanup => 0,
 );
 
 sub new
@@ -88,6 +89,7 @@ sub new
 	setup_mailbox => 1,
 	persistent => 0,
 	valgrind => $defaults{valgrind},
+	cleanup => $defaults{cleanup},
 	_children => {},
 	_stopped => 0,
 	description => 'unknown',
@@ -117,6 +119,8 @@ sub new
 	if defined $params{setup_mailbox};
     $self->{valgrind} = $params{valgrind}
 	if defined $params{valgrind};
+    $self->{cleanup} = $params{cleanup}
+	if defined $params{cleanup};
     $self->{persistent} = $params{persistent}
 	if defined $params{persistent};
     $self->{description} = $params{description}
@@ -163,13 +167,14 @@ sub set_defaults
 {
     my ($class, %params) = @_;
 
-    foreach my $p (qw(valgrind))
+    foreach my $p (keys %defaults)
     {
 	$defaults{$p} = $params{$p}
 	    if defined $params{$p};
     }
 }
 
+# Remove on-disk traces of any previous instances
 sub cleanup_leftovers
 {
     my $cassini = Cassandane::Cassini->instance();
@@ -758,9 +763,18 @@ sub stop
 
     $self->_check_valgrind_logs();
     $self->_check_cores();
+}
 
-#     return if ($self->{persistent});
-#     rmtree $self->{basedir};
+sub cleanup
+{
+    my ($self) = @_;
+
+    if ($self->{cleanup})
+    {
+	# Remove all on-disk traces of this instance
+	xlog "Cleaning up basedir " . $self->{basedir};
+	rmtree $self->{basedir};
+    }
 }
 
 sub DESTROY

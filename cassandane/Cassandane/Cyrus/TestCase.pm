@@ -247,11 +247,13 @@ sub tear_down
     if (defined $self->{instance})
     {
 	$self->{instance}->stop();
+	$self->{instance}->cleanup();
 	$self->{instance} = undef;
     }
     if (defined $self->{replica})
     {
 	$self->{replica}->stop();
+	$self->{replica}->cleanup();
 	$self->{replica} = undef;
     }
 }

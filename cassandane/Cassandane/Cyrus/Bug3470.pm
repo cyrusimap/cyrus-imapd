@@ -94,6 +94,7 @@ sub tear_down
 	if defined $self->{store};
     $self->{store} = undef;
     $self->{instance}->stop();
+    $self->{instance}->cleanup();
 }
 
 #
