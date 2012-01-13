@@ -177,7 +177,7 @@ my %netstat_match = (
 
 	# Compress the Flags field to eliminate spaces and make split()
 	# return a predictable number of fields.
-	s/\[[^]]*\]/[]/;
+	$line =~ s/\[[^]]*\]/[]/;
 
 	my @a = split(/\s+/, $line);
 	return 0 unless scalar(@a) == 7;
