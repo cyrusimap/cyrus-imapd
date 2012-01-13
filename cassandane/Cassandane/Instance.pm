@@ -524,7 +524,7 @@ sub _set_pwcheck
 	{
 	    my ($self, $login) = @_;
 	    my $sasldb = $self->{basedir} . '/conf/sasldb2';
-	    my @cmd = ( 'saslpasswd2', '-f', $sasldb, '-c', '-p', $login->{user} );
+	    my @cmd = ( '/usr/sbin/saslpasswd2', '-f', $sasldb, '-c', '-p', $login->{user} );
 	    my $password = $login->{password};
 	    $self->run_command({
 		cyrus => 0,
