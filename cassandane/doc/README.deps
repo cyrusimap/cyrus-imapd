@@ -78,6 +78,16 @@ Cassandane needs the following software to work:
     Ubuntu package libio-socket-inet6-perl
     RH/CentOS package perl-IO-Socket-INET6
 
+ * Net::Server
+    Extensible, general Perl server engine
+    Ubuntu package libnet-server-perl
+    RH/CentOS package perl-Net-Server
+
+ * Unix::Syslog
+    Perl interface to the UNIX syslog(3) calls
+    Ubuntu package libunix-syslog-perl
+    RH/CentOS package perl-Unix-Syslog
+
 Debian/Ubuntu copypasta:
   sudo apt-get -y install liburi-perl libdigest-sha1-perl \
        libdatetime-perl libbsd-resource-perl libtest-unit-perl \
