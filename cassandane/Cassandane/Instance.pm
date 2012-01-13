@@ -1029,7 +1029,12 @@ sub _fork_command
     $ENV{CASSANDANE_PREFIX} = $cassroot;
     $ENV{CASSANDANE_BASEDIR} = $self->{basedir};
     $ENV{CASSANDANE_VERBOSE} = 1 if get_verbose();
-    $ENV{PERL5LIB} = join(':', ( $cassroot, "$cyrusroot/share/perl", "$cyrusroot/lib/perl" ));
+    $ENV{PERL5LIB} = join(':', (
+	$cassroot,
+	"$cyrusroot/share/perl",
+	"$cyrusroot/lib/perl",
+	map { $self->{cyrus_destdir} . $_ if m/^\//; } @INC,
+    ));
 
     my $cd = $options->{workingdir};
     $cd = $self->{basedir} . '/conf/cores'
