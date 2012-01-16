@@ -73,41 +73,6 @@
   #define SASL_USAGE_FLAGS SASL_SUCCESS_DATA
 #endif /* SASL_NEED_HTTP */
 
-/* XML namespace URIs */
-#define XML_NS_DAV	"DAV:"
-#define XML_NS_CAL	"urn:ietf:params:xml:ns:caldav"
-#define XML_NS_CS	"http://calendarserver.org/ns/"
-#define XML_NS_CYRUS	"http://cyrusimap.org/ns/"
-
-/* Cyrus-specific privileges */
-#define DACL_MKCOL	ACL_CREATE	/* CY:make-collection */
-#define DACL_ADDRSRC	ACL_POST	/* CY:add-resource */
-#define DACL_RMCOL	ACL_DELETEMBOX	/* CY:remove-collection */
-#define DACL_RMRSRC	ACL_DELETEMSG	/* CY:remove-resource */
-#define DACL_ADMIN	ACL_ADMIN	/* CY:admin (aggregates
-					   DAV:read-acl, write-acl, unlock) */
-
-/* WebDAV (RFC 3744) privileges */
-#define DACL_READ	ACL_READ	/* DAV:read (aggregates
-					   DAV:read-current-user-privilege-set
-					   and CALDAV:read-free-busy) */
-#define DACL_WRITECONT	ACL_INSERT	/* DAV:write-content */
-#define DACL_WRITEPROPS	ACL_WRITE	/* DAV:write-properties */
-#define DACL_BIND	(DACL_MKCOL\
-			 |DACL_ADDRSRC)	/* DAV:bind */
-#define DACL_UNBIND	(DACL_RMCOL\
-			 |DACL_RMRSRC)	/* DAV:unbind */
-#define DACL_WRITE	(DACL_WRITECONT\
-			 |DACL_WRITEPROPS\
-			 |DACL_BIND\
-			 |DACL_UNBIND)	/* DAV:write */
-#define DACL_ALL	(DACL_READ\
-			 |DACL_WRITE\
-			 |DACL_ADMIN)	/* DAV:all */
-
-/* CalDAV (RFC 4791) privileges */
-#define DACL_READFB	ACL_USER9	/* CALDAV:read-free-busy
-					   (implicit if user has DAV:read) */
 
 /* Path namespaces */
 enum {
