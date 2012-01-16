@@ -56,7 +56,6 @@ enum {
     NS_DAV,
     NS_CAL,
     NS_CS,
-    NS_APPLE,
     NS_CYRUS
 };
 #define NUM_NAMESPACE 5

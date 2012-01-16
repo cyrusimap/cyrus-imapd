@@ -93,8 +93,6 @@ xmlNodePtr init_xml_response(const char *resp,
 	    respNs[NS_CAL] = xmlNewNs(root, reqNs->href, reqNs->prefix);
 	else if (!xmlStrcmp(reqNs->href, BAD_CAST XML_NS_CS))
 	    respNs[NS_CS] = xmlNewNs(root, reqNs->href, reqNs->prefix);
-	else if (!xmlStrcmp(reqNs->href, BAD_CAST XML_NS_APPLE))
-	    respNs[NS_APPLE] = xmlNewNs(root, reqNs->href, reqNs->prefix);
 	else if (!xmlStrcmp(reqNs->href, BAD_CAST XML_NS_CYRUS))
 	    respNs[NS_CYRUS] = xmlNewNs(root, reqNs->href, reqNs->prefix);
 	else
@@ -1237,10 +1235,6 @@ static const struct prop_entry prop_entries[] =
 
     /* Calendar Server properties */
     { "getctag", NS_CS, 1, propfind_sync_token, NULL, NULL },
-
-    /* Apple properties */
-    { "calendar-color", NS_APPLE, 0, propfind_fromdb, proppatch_todb, "APPLE" },
-    { "calendar-order", NS_APPLE, 0, propfind_fromdb, proppatch_todb, "APPLE" },
 
     { NULL, NS_UNKNOWN, 0, NULL, NULL, NULL }
 };

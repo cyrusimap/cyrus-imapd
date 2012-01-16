@@ -77,7 +77,6 @@
 #define XML_NS_DAV	"DAV:"
 #define XML_NS_CAL	"urn:ietf:params:xml:ns:caldav"
 #define XML_NS_CS	"http://calendarserver.org/ns/"
-#define XML_NS_APPLE	"http://apple.com/ns/ical/"
 #define XML_NS_CYRUS	"http://cyrusimap.org/ns/"
 
 /* Cyrus-specific privileges */
