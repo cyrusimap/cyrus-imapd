@@ -131,7 +131,7 @@ xmlNodePtr xml_add_error(xmlNodePtr root, const struct precond *precond,
  * 'stat' will be created as necessary.
  */
 static xmlNodePtr xml_add_prop(long status, xmlNodePtr resp,
-			       struct propstat propstat[],
+			       struct propstat *propstat,
 			       xmlNsPtr prop_ns, const xmlChar *prop_name,
 			       xmlChar *content,
 			       const struct precond *precond)
