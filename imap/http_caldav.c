@@ -1094,7 +1094,6 @@ static int meth_mkcol(struct transaction_t *txn)
     int ret = 0, r = 0;
     xmlDocPtr indoc = NULL, outdoc = NULL;
     xmlNodePtr root = NULL, instr = NULL;
-    xmlNodePtr propstat[NUM_PROPSTAT];
     xmlNsPtr ns[NUM_NAMESPACE];
     char *server, mailboxname[MAX_MAILBOX_BUFFER], *partition = NULL;
     struct proppatch_ctx pctx;
@@ -1204,18 +1203,13 @@ static int meth_mkcol(struct transaction_t *txn)
 	pctx.ret = &r;
 
 	/* Execute the property patch instructions */
-	ret = do_proppatch(&pctx, instr, propstat);
+	ret = do_proppatch(&pctx, instr);
 
 	if (ret || r) {
 	    /* Something failed.  Abort the txn and change the OK status */
 	    annotatemore_abort(pctx.tid);
 
 	    if (!ret) {
-		if (propstat[PROPSTAT_OK]) {
-		    xmlNodeSetContent(propstat[PROPSTAT_OK]->parent->children,
-				      BAD_CAST http_statusline(HTTP_FAILED_DEP));
-		}
-
 		/* Output the XML response */
 		xml_response(HTTP_MULTI_STATUS, txn, outdoc);
 		ret = 0;
@@ -1444,8 +1438,7 @@ static int meth_proppatch(struct transaction_t *txn)
 {
     int ret = 0, r = 0;
     xmlDocPtr indoc = NULL, outdoc = NULL;
-    xmlNodePtr root, instr;
-    xmlNodePtr resp, propstat[NUM_PROPSTAT];
+    xmlNodePtr root, instr, resp;
     xmlNsPtr ns[NUM_NAMESPACE];
     char *server, *acl, mailboxname[MAX_MAILBOX_BUFFER];
     struct proppatch_ctx pctx;
@@ -1542,18 +1535,13 @@ static int meth_proppatch(struct transaction_t *txn)
     pctx.ret = &r;
 
     /* Execute the property patch instructions */
-    ret = do_proppatch(&pctx, instr, propstat);
+    ret = do_proppatch(&pctx, instr);
 
     if (ret || r) {
 	/* Something failed.  Abort the txn and change the OK status */
 	annotatemore_abort(pctx.tid);
 
 	if (ret) goto done;
-
-	if (propstat[PROPSTAT_OK]) {
-	    xmlNodeSetContent(propstat[PROPSTAT_OK]->parent->children,
-			      BAD_CAST http_statusline(HTTP_FAILED_DEP));
-	}
     }
     else {
 	/* Success.  Commit the txn */

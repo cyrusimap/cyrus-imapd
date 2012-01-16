@@ -1303,9 +1303,10 @@ int preload_proplist(xmlNodePtr proplist, struct propfind_entry_list **list)
 
 
 /* Execute the given property patch instructions */
-int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr,
-		 xmlNodePtr *propstat)
+int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr)
 {
+    xmlNodePtr propstat[NUM_PROPSTAT];
+
     memset(propstat, 0, NUM_PROPSTAT * sizeof(xmlNodePtr));
 
     /* Iterate through propertyupdate children */
@@ -1370,6 +1371,12 @@ int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr,
 		}
 	    }
 	}
+    }
+
+    /* One or more of the properties failed */
+    if (*pctx->ret && propstat[PROPSTAT_OK]) {
+	xmlNodeSetContent(propstat[PROPSTAT_OK]->parent->children,
+			  BAD_CAST http_statusline(HTTP_FAILED_DEP));
     }
 
     return 0;

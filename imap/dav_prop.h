@@ -179,7 +179,6 @@ int find_collection_props(char *mboxname,
 			  void *rock);
 
 /* Execute given property patch instructions */
-int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr,
-		 xmlNodePtr *propstat);
+int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr);
 
 #endif /* DAV_PROP_H */
