@@ -61,6 +61,47 @@ enum {
 };
 #define NUM_NAMESPACE 5
 
+/* Index into preconditions array */
+enum {
+    DAV_PROT_PROP = 0,
+    DAV_SUPP_REPORT,
+    DAV_NEED_PRIVS,
+    DAV_NO_INVERT,
+    DAV_NO_ABSTRACT,
+    DAV_SUPP_PRIV,
+    DAV_RECOG_PRINC,
+    DAV_OVER_QUOTA,
+    DAV_NO_DISK_SPACE,
+    DAV_VALID_RESTYPE,
+    DAV_SYNC_TOKEN,
+    DAV_OVER_LIMIT,
+    CALDAV_SUPP_DATA,
+    CALDAV_VALID_DATA
+};
+
+/* Structure for precondition/postcondition errors */
+struct precond {
+    const char *name;			/* Property name */
+    unsigned ns;			/* Index into known namespace array */
+};
+
+extern const struct precond preconds[];
+
+struct propstat {
+    xmlNodePtr prop;
+    long status;
+    const struct precond *precond;
+};
+
+/* Index into propstat array */
+enum {
+    PROPSTAT_OK = 0,
+    PROPSTAT_UNAUTH,
+    PROPSTAT_FORBID,
+    PROPSTAT_NOTFOUND
+};
+#define NUM_PROPSTAT 4
+
 /* Context for fetching properties */
 struct propfind_entry_list;
 
@@ -102,10 +143,10 @@ struct prop_entry {
     unsigned allprop;			/* Should we fetch for allprop? */
     int (*get)(const xmlChar *name,	/* Callback to fetch property */
 	       xmlNsPtr ns, struct propfind_ctx *fctx, xmlNodePtr resp,
-	       xmlNodePtr *propstat, void *rock);
+	       struct propstat propstat[], void *rock);
     int (*put)(xmlNodePtr prop,		/* Callback to write property */
 	       unsigned set, xmlNsPtr ns, struct proppatch_ctx *pctx,
-	       xmlNodePtr *propstat, void *rock);
+	       struct propstat propstat[], void *rock);
     void *rock;				/* Add'l data to pass to callback */
 };
 
@@ -115,45 +156,10 @@ struct propfind_entry_list {
     xmlNsPtr ns;  			/* Namespace of property */
     int (*get)(const xmlChar *name,	/* Callback to fetch property */
 	       xmlNsPtr ns, struct propfind_ctx *fctx, xmlNodePtr resp,
-	       xmlNodePtr *propstat, void *rock);
+	       struct propstat propstat[], void *rock);
     void *rock;				/* Add'l data to pass to callback */
     struct propfind_entry_list *next;
 };
-
-/* Index into propstat array */
-enum {
-    PROPSTAT_OK = 0,
-    PROPSTAT_UNAUTH,
-    PROPSTAT_FORBID,
-    PROPSTAT_NOTFOUND
-};
-#define NUM_PROPSTAT 4
-
-/* Index into preconditions array */
-enum {
-    DAV_PROT_PROP = 0,
-    DAV_SUPP_REPORT,
-    DAV_NEED_PRIVS,
-    DAV_NO_INVERT,
-    DAV_NO_ABSTRACT,
-    DAV_SUPP_PRIV,
-    DAV_RECOG_PRINC,
-    DAV_OVER_QUOTA,
-    DAV_NO_DISK_SPACE,
-    DAV_VALID_RESTYPE,
-    DAV_SYNC_TOKEN,
-    DAV_OVER_LIMIT,
-    CALDAV_SUPP_DATA,
-    CALDAV_VALID_DATA
-};
-
-/* Structure for precondition/postcondition errors */
-struct precond {
-    const char *name;			/* Property name */
-    unsigned ns;			/* Index into known namespace array */
-};
-
-extern const struct precond preconds[];
 
 
 /* Parse the requested properties and create a linked list of fetch callbacks */
