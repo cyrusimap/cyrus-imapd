@@ -1672,8 +1672,13 @@ static int mycommit(struct dbengine *db, struct txn *tid)
 	/* consider checkpointing */
 	size_t diff = db->header.current_size - db->header.repack_size;
 	if (diff > MINREWRITE &&
-	   ((float)diff / (float)db->header.current_size) > REWRITE_RATIO)
-	    r = mycheckpoint(db);
+	   ((float)diff / (float)db->header.current_size) > REWRITE_RATIO) {
+	    int r2 = mycheckpoint(db);
+	    if (r2) {
+		syslog(LOG_NOTICE, "twoskip: failed to checkpoint %s: %m",
+		       _fname(db));
+	    }
+	}
 	else
 	    unlock(db);
 
@@ -1730,6 +1735,7 @@ static int mystore(struct dbengine *db,
 
     if (r) {
 	r2 = myabort(db, *tidptr);
+	*tidptr = NULL;
     }
     else if (localtid) {
 	/* commit the store, which releases the write lock */
@@ -1826,9 +1832,9 @@ static int mycheckpoint(struct dbengine *db)
     return 0;
 
  err:
-    myabort(cr.db, cr.tid);
+    if (cr.tid) myabort(cr.db, cr.tid);
     unlink(_fname(cr.db));
-    myclose(cr.db);
+    dispose_db(cr.db);
     unlock(db);
     return CYRUSDB_IOERROR;
 }
