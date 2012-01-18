@@ -283,7 +283,7 @@ extern cyrusdb_archiver *cyrusdb_getarchiver(const char *backend);
 
 extern int cyrusdb_canfetchnext(const char *backend);
 
-extern strarray_t *cyrusdb_backends();
+extern strarray_t *cyrusdb_backends(void);
 
 /* generic implementations */
 int cyrusdb_generic_init(const char *dbdir, int myflags);

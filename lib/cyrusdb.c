@@ -537,7 +537,7 @@ int cyrusdb_canfetchnext(const char *backend)
 }
 
 /* caller is responsible for calling strarray_free() */
-strarray_t *cyrusdb_backends()
+strarray_t *cyrusdb_backends(void)
 {
     strarray_t *ret = strarray_new();
     int i;
