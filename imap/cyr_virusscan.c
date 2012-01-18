@@ -510,7 +510,7 @@ void append_notifications()
 	    pout = prot_new(fd, 0);
 	    prot_rewind(pout);
 	    append_fromstream(&as, &body, pout, msgsize, t, NULL);
-	    append_commit(&as, NULL, NULL, NULL);
+	    append_commit(&as, NULL);
 
 	    if (body) {
 		message_free_body(body);

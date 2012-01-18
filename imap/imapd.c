@@ -3269,7 +3269,6 @@ void cmd_append(char *tag, char *name, const char *cur_name)
     char mailboxname[MAX_MAILBOX_BUFFER];
     struct appendstate appendstate; 
     unsigned long uidvalidity;
-    unsigned long firstuid, num;
     long doappenduid = 0;
     const char *parseerr = NULL, *url = NULL;
     struct appendstage *curstage;
@@ -3524,7 +3523,11 @@ void cmd_append(char *tag, char *name, const char *cur_name)
 	}
 
 	if (!r) {
-	    r = append_commit(&appendstate, &uidvalidity, &firstuid, &num, NULL);
+	    struct mailbox *mailbox = NULL;
+	    r = append_commit(&appendstate, &mailbox);
+	    if (!r)
+		uidvalidity = mailbox->i.uidvalidity;
+	    mailbox_close(&mailbox);
 	} else {
 	    append_abort(&appendstate);
 	}
@@ -3549,11 +3552,12 @@ void cmd_append(char *tag, char *name, const char *cur_name)
 		    ? "[TOOBIG]" : "", error_message(r));
     } else if (doappenduid) {
 	/* is this a space seperated list or sequence list? */
-	prot_printf(imapd_out, "%s OK [APPENDUID %lu", tag, uidvalidity);
-	if (num == 1) {
-	    prot_printf(imapd_out, " %lu", firstuid);
+	prot_printf(imapd_out, "%s OK [APPENDUID %lu ", tag, uidvalidity);
+	if (appendstate.nummsg == 1) {
+	    prot_printf(imapd_out, "%u", appendstate.baseuid);
 	} else {
-	    prot_printf(imapd_out, " %lu:%lu", firstuid, firstuid + num - 1);
+	    prot_printf(imapd_out, "%u:%u", appendstate.baseuid,
+			appendstate.baseuid + appendstate.nummsg - 1);
 	}
 	prot_printf(imapd_out, "] %s\r\n", error_message(IMAP_OK_COMPLETED));
     } else {

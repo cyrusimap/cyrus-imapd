@@ -118,9 +118,6 @@ extern int append_setup_mbox(struct appendstate *as, struct mailbox *mailbox,
 			     int isadmin);
 
 extern int append_commit(struct appendstate *as,
-			 unsigned long *uidvalidity, 
-			 unsigned long *startuid, 
-			 unsigned long *num,
 			 struct mailbox **mailboxptr);
 extern int append_abort(struct appendstate *as);
 

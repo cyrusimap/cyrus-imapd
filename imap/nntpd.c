@@ -3253,7 +3253,6 @@ static int deliver(message_data_t *msg)
 {
     int n, r = 0, myrights;
     char *rcpt = NULL;
-    unsigned long uid;
     struct body *body = NULL;
     struct dest *dlist = NULL;
     duplicate_key_t dkey = {msg->id, NULL, msg->date};
@@ -3315,12 +3314,12 @@ static int deliver(message_data_t *msg)
 		    }            
 		}                
 		else {           
-		    r = append_commit(&as, NULL, &uid, NULL, NULL);
+		    r = append_commit(&as, NULL);
 		}
 	    }
 
 	    if (!r && msg->id)
-		duplicate_mark(&dkey, time(NULL), uid);
+		duplicate_mark(&dkey, time(NULL), as.baseuid);
 
 	    if (r) {
 		mboxlist_entry_free(&mbentry);

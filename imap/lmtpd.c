@@ -520,7 +520,6 @@ int deliver_mailbox(FILE *f,
 {
     int r = 0;
     struct appendstate as;
-    unsigned long uid;
     const char *notifier;
     duplicate_key_t dkey = DUPLICATE_INITIALIZER;
     quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_INITIALIZER;
@@ -573,13 +572,12 @@ int deliver_mailbox(FILE *f,
 	} else {
 	    struct mailbox *mailbox = NULL;
 	    /* hold the mailbox open until the duplicate mark is done */
-	    r = append_commit(&as, NULL, &uid,
-			      NULL, &mailbox);
+	    r = append_commit(&as, &mailbox);
 	    if (!r) {
 		syslog(LOG_INFO, "Delivered: %s to mailbox: %s",
 		       id, mailboxname);
 		if (dupelim && id) {
-		    duplicate_mark(&dkey, time(NULL), uid);
+		    duplicate_mark(&dkey, time(NULL), as.baseuid);
 		}
 		mailbox_close(&mailbox);
 	    }

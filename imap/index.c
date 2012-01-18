@@ -1160,7 +1160,7 @@ out:
 	 * trick is to give append_commit() a non-NULL mailbox**
 	 * to avoid it calling mailbox_close() too early. */
 	struct mailbox *mailbox = NULL;
-	append_commit(&as, NULL, NULL, NULL, &mailbox);
+	append_commit(&as, &mailbox);
 	/* it turns out that index_unlock() really needs to be
 	 * called with a locked mailbox, if the seen data is dirty */
 	index_unlock(state);
@@ -1628,9 +1628,6 @@ index_copy(struct index_state *state,
     int r;
     struct appendstate appendstate;
     uint32_t msgno, checkval;
-    unsigned long uidvalidity;
-    unsigned long startuid, num;
-    unsigned baseuid;
     long docopyuid;
     struct seqset *seq;
     struct mailbox *mailbox = state->mailbox;
@@ -1668,13 +1665,11 @@ index_copy(struct index_state *state,
     if (r) return r;
 
     docopyuid = (appendstate.myrights & ACL_READ);
-    baseuid = appendstate.mailbox->i.last_uid + 1;
 
     r = append_copy(mailbox, &appendstate, copyargs.nummsg,
 		    copyargs.copymsg, nolink);
     if (!r) {
-	r = append_commit(&appendstate,
-		      &uidvalidity, &startuid, &num, &destmailbox);
+	r = append_commit(&appendstate, &destmailbox);
     }
 
     if (!r && docopyuid) {
@@ -1691,20 +1686,22 @@ index_copy(struct index_state *state,
 	*copyuidp = xmalloc(strlen(source) + 50);
 
 	if (appendstate.nummsg == 1)
-	    sprintf(*copyuidp, "%u %s %u", uidvalidity, source, baseuid);
+	    sprintf(*copyuidp, "%u %s %u", uidvalidity, source,
+		    appendstate.baseuid);
 	else
 	    sprintf(*copyuidp, "%u %s %u:%u", uidvalidity, source,
-		    baseuid, baseuid + appendstate.nummsg - 1);
+		    appendstate.baseuid,
+		    appendstate.baseuid + appendstate.nummsg - 1);
 
 	free(source);
 	seqset_free(seq);
     }
 
-    if (!r) {
-	/* we log the first name to get GUID-copy magic */
-	mailbox_close(&destmailbox);
+    /* we log the first name to get GUID-copy magic */
+    if (!r)
 	sync_log_mailbox_double(mailbox->name, name);
-    }
+
+    mailbox_close(&destmailbox);
 
     return r;
 }

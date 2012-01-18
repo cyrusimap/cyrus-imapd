@@ -224,18 +224,11 @@ int append_setup_mbox(struct appendstate *as, struct mailbox *mailbox,
 /* may return non-zero, indicating that the entire append has failed
  and the mailbox is probably in an inconsistent state. */
 int append_commit(struct appendstate *as, 
-		  unsigned long *uidvalidity, 
-		  unsigned long *start,
-		  unsigned long *num,
 		  struct mailbox **mailboxptr)
 {
     int r = 0;
     
     if (as->s == APPEND_DONE) return 0;
-
-    if (start) *start = as->baseuid;
-    if (num) *num = as->nummsg;
-    if (uidvalidity) *uidvalidity = as->mailbox->i.uidvalidity;
 
     if (as->nummsg) {
 	/* Calculate new index header information */
