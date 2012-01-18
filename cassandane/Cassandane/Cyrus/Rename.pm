@@ -114,6 +114,36 @@ sub test_rename_subfolder
     $self->assert_num_equals(1, scalar @postdata);
 }
 
+#
+# Test Bug #3634 - rename inbox -> inbox.sub
+#
+sub test_rename_inbox
+{
+    my ($self) = @_;
+
+    my $imaptalk = $self->{store}->get_client();
+
+    $self->{store}->set_folder("INBOX");
+    $self->{store}->write_begin();
+    my $msg1 = $self->{gen}->generate(subject => "subject 1");
+    $self->{store}->write_message($msg1, flags => ["\\Seen", "\$NotJunk"]);
+    $self->{store}->write_end();
+
+    $imaptalk->select("INBOX") || die;
+    my @predata = $imaptalk->search("SEEN");
+    $self->assert_num_equals(1, scalar @predata);
+
+    $imaptalk->rename("INBOX", "INBOX.dst") || die;
+
+    $imaptalk->select("INBOX") || die;
+    my @postinboxdata = $imaptalk->search("KEYWORD" => "\$NotJunk");
+    $self->assert_num_equals(0, scalar @postinboxdata);
+
+    $imaptalk->select("INBOX.dst") || die;
+    my @postdata = $imaptalk->search("KEYWORD" => "\$NotJunk");
+    $self->assert_num_equals(1, scalar @postdata);
+}
+
 sub config_rename_user
 {
     my ($self, $conf) = @_;
