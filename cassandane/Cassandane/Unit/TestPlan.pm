@@ -42,6 +42,53 @@
 use strict;
 use warnings;
 use Cassandane::Unit::TestCase;
+package Cassandane::Unit::TestPlanItem;
+
+sub new
+{
+    my ($class, $suite) = @_;
+    my $self = {
+	suite => $suite,
+	loaded_suite => undef,
+	denied => {},
+	allowed => {},
+    };
+    return bless $self, $class;
+}
+
+sub _get_loaded_suite
+{
+    my ($self) = @_;
+    return $self->{loaded_suite} ||= Test::Unit::Loader::load($self->{suite});
+}
+
+sub _is_allowed
+{
+    my ($self, $name) = @_;
+
+    # Rules are:
+    # deny if method has been explicitly denied
+    return 0 if $self->{denied}->{$name};
+    # allow if method has been explicitly allowed
+    return 1 if $self->{allowed}->{$name};
+    # deny if anything is explicitly allowed
+    return 0 if scalar keys %{$self->{allowed}};
+    # finally, allow
+    return 1;
+}
+
+sub _deny
+{
+    my ($self, $name) = @_;
+    $self->{denied}->{$name} = 1;
+}
+
+sub _allow
+{
+    my ($self, $name) = @_;
+    $self->{allowed}->{$name} = 1;
+}
+
 package Cassandane::Unit::TestPlan;
 
 my @default_names = (
@@ -61,6 +108,13 @@ sub new
     return bless $self, $class;
 }
 
+sub _get_item
+{
+    my ($self, $suite) = @_;
+    return $self->{schedule}->{$suite} ||=
+	Cassandane::Unit::TestPlanItem->new($suite);
+}
+
 sub _schedule
 {
     my ($self, $neg, $suite, $test) = @_;
@@ -69,8 +123,7 @@ sub _schedule
 	if (defined $test)
 	{
 	    # disable a specific test
-	    $self->{schedule}->{$suite} ||= { suite => $suite, tests => {} };
-	    $self->{schedule}->{$suite}->{tests}->{"!$test"} = 1;
+	    $self->_get_item($suite)->_deny($test);
 	}
 	else
 	{
@@ -81,14 +134,10 @@ sub _schedule
     else
     {
 	# add to the schedule
-	$self->{schedule}->{$suite} ||= { suite => $suite, tests => {} };
+	my $item = $self->_get_item($suite);
 	if (defined $test)
 	{
-	    $self->{schedule}->{$suite}->{tests}->{$test} = 1;
-	}
-	else
-	{
-	    $self->{schedule}->{$suite}->{tests} = {};
+	    $item->_allow($test) if $test;
 	}
     }
 }
@@ -139,10 +188,31 @@ sub schedule
     }
 }
 
+
+#
+# Get the entire expanded schedule as specific {suite,test} name tuples,
+# sorted in alphabetic order on suite name then test name.
+#
 sub _get_schedule
 {
     my ($self) = @_;
-    return sort { $a->{suite} cmp $b->{suite} } values %{$self->{schedule}};
+
+    my @items = sort { $a->{suite} cmp $b->{suite} } values %{$self->{schedule}};
+    my @res;
+    foreach my $item (@items)
+    {
+	my $loaded = $item->_get_loaded_suite();
+	foreach my $name (sort @{$loaded->names()})
+	{
+	    $name =~ s/^test_//;
+	    next unless $item->_is_allowed($name);
+	    push(@res, {
+		suite => $item->{suite},
+		test => $name,
+	    });
+	}
+    }
+    return @res;
 }
 
 # Sort and return the schedule as a list of "suite.test" strings
@@ -150,15 +220,11 @@ sub _get_schedule
 sub list
 {
     my ($self) = @_;
-    my @res;
 
-    foreach my $item ($self->_get_schedule())
+    my @res;
+    foreach my $eitem ($self->_get_schedule())
     {
-	my $suite = Test::Unit::Loader::load($item->{suite});
-	map {
-	    $_ =~ s/^test_//;
-	    push(@res, "$item->{suite}.$_");
-	} sort @{$suite->names()};
+	push(@res, "$eitem->{suite}.$eitem->{test}");
     }
 
     return @res;
@@ -186,8 +252,8 @@ sub run
 
     foreach my $item ($self->_get_schedule())
     {
-	my $suite = Test::Unit::Loader::load($item->{suite});
-	Cassandane::Unit::TestCase->enable_tests(keys %{$item->{tests}});
+	my $suite = $self->_get_item($item->{suite})->_get_loaded_suite();
+	Cassandane::Unit::TestCase->enable_test($item->{test});
 	$passed = 0
 	    if (!$suite->run($result, $runner));
     }
