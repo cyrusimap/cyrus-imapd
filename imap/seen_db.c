@@ -463,15 +463,14 @@ int seen_copy(const char *userid, struct mailbox *oldmailbox,
 	struct seen *seendb = NULL;
 	struct seendata sd;
 
-	r = seen_open(userid, 0, &seendb);
-	if (r) return r;
+	r = seen_open(userid, SEEN_SILENT, &seendb);
     
-	r = seen_lockread(seendb, oldmailbox->uniqueid, &sd);
+	/* just be silent if it's missing */
+	if (!r) r = seen_lockread(seendb, oldmailbox->uniqueid, &sd);
 	if (!r) r = seen_write(seendb, newmailbox->uniqueid, &sd);
 
 	seen_close(&seendb);
 	seen_freedata(&sd);
-	return r;
     }
 
     /* noop */
