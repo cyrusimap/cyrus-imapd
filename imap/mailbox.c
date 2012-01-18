@@ -3173,9 +3173,11 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
     return 0;
 
 fail:
-     /* failure and back out */
-    /* XXX - per file paths, need to clean up individual filenames */
+    /* first unlock so we don't need to write anything new down */
+    mailbox_unlock_index(newmailbox, NULL);
+    /* then remove all the files */
     mailbox_delete_cleanup(newmailbox->part, newmailbox->name);
+    /* and finally, abort */
     mailbox_close(&newmailbox);
     free(newquotaroot);
 

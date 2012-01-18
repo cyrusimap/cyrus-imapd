@@ -374,8 +374,8 @@ int index_writeseen(struct index_state *state)
 {
     int r;
     struct seen *seendb = NULL;
-    struct seendata oldsd;
-    struct seendata sd;
+    struct seendata oldsd = SEENDATA_INITIALIZER;
+    struct seendata sd = SEENDATA_INITIALIZER;
     struct mailbox *mailbox = state->mailbox;
 
     assert(mailbox->index_locktype == LOCK_EXCLUSIVE);
@@ -449,7 +449,7 @@ static struct seqset *_readseen(struct index_state *state, unsigned *recentuid)
     }
     else if (state->userid) {
 	struct seen *seendb = NULL;
-	struct seendata sd;
+	struct seendata sd = SEENDATA_INITIALIZER;
 	int r;
 
 	r = seen_open(state->userid, SEEN_CREATE, &seendb);
@@ -467,7 +467,7 @@ static struct seqset *_readseen(struct index_state *state, unsigned *recentuid)
 	else {
 	    *recentuid = sd.lastuid;
 	    seenlist = seqset_parse(sd.seenuids, NULL, *recentuid);
-	    free(sd.seenuids);
+	    seen_freedata(&sd);
 	}
     }
     else {
