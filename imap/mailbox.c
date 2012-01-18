@@ -117,6 +117,7 @@ static struct mailboxlist *open_mailboxes = NULL;
 
 static int mailbox_index_unlink(struct mailbox *mailbox);
 static int mailbox_index_repack(struct mailbox *mailbox);
+static int mailbox_read_index_header(struct mailbox *mailbox);
 
 static struct mailboxlist *create_listitem(const char *name)
 {
@@ -1065,7 +1066,8 @@ void mailbox_close(struct mailbox **mailboxptr)
     if (!in_shutdown && (mailbox->i.options & MAILBOX_CLEANUP_MASK)) {
 	int r = mailbox_mboxlock_reopen(listitem, LOCK_NONBLOCKING);
 	if (!r) r = mailbox_open_index(mailbox);
-	if (!r) r = mailbox_lock_index(mailbox, LOCK_EXCLUSIVE);
+	mailbox->index_locktype = LOCK_EXCLUSIVE; /* we're protected by the mboxlock */
+	if (!r) r = mailbox_read_index_header(mailbox);
 	if (!r) {
 	    /* finish cleaning up */
 	    if (mailbox->i.options & OPT_MAILBOX_DELETED)
