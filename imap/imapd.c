@@ -315,6 +315,7 @@ struct capa_struct base_capabilities[] = {
     { "QRESYNC",               2 },
     { "SCAN",                  2 },
     { "XLIST",                 2 },
+    { "XMOVE",                 2 }, /* not standard */
     { "SPECIAL-USE",           2 },
     { "CREATE-SPECIAL-USE",    2 },
 
@@ -357,7 +358,7 @@ void cmd_store(char *tag, char *sequence, int usinguid);
 void cmd_search(char *tag, int usinguid);
 void cmd_sort(char *tag, int usinguid);
 void cmd_thread(char *tag, int usinguid);
-void cmd_copy(char *tag, char *sequence, char *name, int usinguid);
+void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int ismove);
 void cmd_expunge(char *tag, char *sequence);
 void cmd_create(char *tag, char *name, struct dlist *extargs, int localonly);
 void cmd_delete(char *tag, char *name, int localonly, int force);
@@ -1324,7 +1325,7 @@ void cmdloop(void)
 		if (c == '\r') c = prot_getc(imapd_in);
 		if (c != '\n') goto extraargs;
 
-		cmd_copy(tag.s, arg1.s, arg2.s, usinguid);
+		cmd_copy(tag.s, arg1.s, arg2.s, usinguid, /*ismove*/0);
 
 		snmp_increment(COPY_COUNT, 1);
 	    }
@@ -1998,6 +1999,9 @@ void cmdloop(void)
 		else if (!strcmp(arg1.s, "copy")) {
 		    goto copy;
 		}
+		else if (!strcmp(arg1.s, "xmove")) {
+		    goto xmove;
+		}
 		else if (!strcmp(arg1.s, "expunge")) {
 		    c = getword(imapd_in, &arg1);
 		    if (!imparse_issequence(arg1.s)) goto badsequence;
@@ -2103,6 +2107,23 @@ void cmdloop(void)
 		if (listargs.pat.count) cmd_list(tag.s, &listargs);
 
 		snmp_increment(LIST_COUNT, 1);
+	    }
+	    else if (!strcmp(cmd.s, "Xmove")) {
+		if (!imapd_index && !backend_current) goto nomailbox;
+		usinguid = 0;
+		if (c != ' ') goto missingargs;
+	    xmove:
+		c = getword(imapd_in, &arg1);
+		if (c == '\r') goto missingargs;
+		if (c != ' ' || !imparse_issequence(arg1.s)) goto badsequence;
+		c = getastring(imapd_in, imapd_out, &arg2);
+		if (c == EOF) goto missingargs;
+		if (c == '\r') c = prot_getc(imapd_in);
+		if (c != '\n') goto extraargs;
+
+		cmd_copy(tag.s, arg1.s, arg2.s, usinguid, /*ismove*/1);
+
+		snmp_increment(COPY_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Xrunannotator")) {
 		if (!imapd_index && !backend_current) goto nomailbox;
@@ -3956,7 +3977,7 @@ void cmd_close(char *tag, char *cmd)
 
     /* local mailbox */
     if ((cmd[0] == 'C') && (imapd_index->myrights & ACL_EXPUNGE)) {
-	index_expunge(imapd_index, NULL);
+	index_expunge(imapd_index, NULL, 1);
 	/* don't tell changes here */
     }
 
@@ -5020,7 +5041,7 @@ void cmd_thread(char *tag, int usinguid)
 /*
  * Perform a COPY/UID COPY command
  */    
-void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
+void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int ismove)
 {
     int r, myrights;
     char mailboxname[MAX_MAILBOX_BUFFER];
@@ -5051,6 +5072,8 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 	    r = IMAP_SERVER_UNAVAILABLE;
 	    goto done;
 	}
+
+	assert(!ismove); /* XXX - support proxying moves */
 
 	if (s != backend_current) {
 	    /* this is the hard case; we have to fetch the messages and append
@@ -5090,6 +5113,8 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 	}
 
 	if (r) goto done;
+
+	assert(!ismove); /* XXX - support proxying moves */
 
 	/* start the append */
 	prot_printf(s->out, "%s Append {" SIZE_T_FMT "+}\r\n%s",
@@ -5145,7 +5170,7 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid)
 	r = index_copy(imapd_index, sequence, usinguid, mailboxname,
 		       &copyuid, !config_getswitch(IMAPOPT_SINGLEINSTANCESTORE),
 		       &imapd_namespace,
-		       (imapd_userisadmin || imapd_userisproxyadmin));
+		       (imapd_userisadmin || imapd_userisproxyadmin), ismove);
     }
 
     imapd_check(NULL, usinguid);
@@ -5202,7 +5227,7 @@ void cmd_expunge(char *tag, char *sequence)
 
     old = index_highestmodseq(imapd_index);
 
-    if (!r) r = index_expunge(imapd_index, sequence);
+    if (!r) r = index_expunge(imapd_index, sequence, 1);
     /* tell expunges */
     if (!r) index_tellchanges(imapd_index, 1, sequence ? 1 : 0, 0);
     

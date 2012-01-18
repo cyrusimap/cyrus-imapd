@@ -221,7 +221,8 @@ extern int index_copy(struct index_state *state,
 		      char **copyuidp,
 		      int nolink,
 		      struct namespace *namespace,
-		      int isadmin);
+		      int isadmin,
+		      int ismove);
 extern int find_thread_algorithm(char *arg);
 
 extern int index_open(const char *name, struct index_init *init,
@@ -252,7 +253,8 @@ extern int index_copy_remote(struct index_state *state, char *sequence,
 void appendsequencelist(struct index_state *state, struct seqset **l,
 			char *sequence, int usinguid);
 void freesequencelist(struct seqset *l);
-extern int index_expunge(struct index_state *state, char *uidsequence);
+extern int index_expunge(struct index_state *state, char *uidsequence,
+			 int need_deleted);
 
 /* See lib/charset.h for the definition of receiver. */
 extern void index_getsearchtext_single(struct index_state *state, uint32_t msgno,

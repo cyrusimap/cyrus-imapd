@@ -268,7 +268,8 @@ fail:
     return r;
 }
 
-int index_expunge(struct index_state *state, char *sequence)
+int index_expunge(struct index_state *state, char *sequence,
+		  int need_deleted)
 {
     int r;
     uint32_t msgno;
@@ -290,7 +291,7 @@ int index_expunge(struct index_state *state, char *sequence)
 	if (im->record.system_flags & FLAG_EXPUNGED)
 	    continue; /* already expunged */
 
-	if (!(im->record.system_flags & FLAG_DELETED))
+	if (need_deleted && !(im->record.system_flags & FLAG_DELETED))
 	    continue; /* no \Deleted flag */
 
 	/* if there is a sequence list, check it */
@@ -303,9 +304,10 @@ int index_expunge(struct index_state *state, char *sequence)
 	if (im->isrecent)
 	    state->numrecent--;
 
-	im->record.system_flags |= FLAG_EXPUNGED;
-
+	/* set the flags */
+	im->record.system_flags |= FLAG_DELETED | FLAG_EXPUNGED;
 	r = mailbox_rewrite_index_record(state->mailbox, &im->record);
+
 	if (r) break;
     }
 
@@ -1620,7 +1622,8 @@ index_copy(struct index_state *state,
 	   char **copyuidp,
 	   int nolink,
 	   struct namespace *namespace,
-	   int isadmin)
+	   int isadmin,
+	   int ismove)
 {
     static struct copyargs copyargs;
     int i;
@@ -1660,7 +1663,8 @@ index_copy(struct index_state *state,
     qdiffs[QUOTA_MESSAGE] = copyargs.nummsg;
 
     r = append_setup(&appendstate, name, state->userid,
-		     state->authstate, ACL_INSERT, qdiffs,
+		     state->authstate, ACL_INSERT,
+		     ismove ? NULL : qdiffs,
 		     namespace, isadmin);
     if (r) return r;
 
@@ -1672,7 +1676,7 @@ index_copy(struct index_state *state,
 	r = append_commit(&appendstate, &destmailbox);
     }
 
-    if (!r && docopyuid) {
+    if (!r && (docopyuid || ismove)) {
 	char *source;
 	struct seqset *seq;
 	unsigned uidvalidity = destmailbox->i.uidvalidity;
@@ -1683,15 +1687,22 @@ index_copy(struct index_state *state,
 	    seqset_add(seq, copyargs.copymsg[i].uid, 1);
 
 	source = seqset_cstring(seq);
-	*copyuidp = xmalloc(strlen(source) + 50);
 
-	if (appendstate.nummsg == 1)
-	    sprintf(*copyuidp, "%u %s %u", uidvalidity, source,
-		    appendstate.baseuid);
-	else
-	    sprintf(*copyuidp, "%u %s %u:%u", uidvalidity, source,
-		    appendstate.baseuid,
-		    appendstate.baseuid + appendstate.nummsg - 1);
+	/* remove the source messages */
+	if (ismove)
+	    r = index_expunge(state, source, 0);
+
+	if (docopyuid) {
+	    *copyuidp = xmalloc(strlen(source) + 50);
+
+	    if (appendstate.nummsg == 1)
+		sprintf(*copyuidp, "%u %s %u", uidvalidity, source,
+			appendstate.baseuid);
+	    else
+		sprintf(*copyuidp, "%u %s %u:%u", uidvalidity, source,
+			appendstate.baseuid,
+			appendstate.baseuid + appendstate.nummsg - 1);
+	}
 
 	free(source);
 	seqset_free(seq);
