@@ -5173,7 +5173,7 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int ismove)
 		       (imapd_userisadmin || imapd_userisproxyadmin), ismove);
     }
 
-    imapd_check(NULL, usinguid);
+    imapd_check(NULL, ismove || usinguid);
 
   done:
     mboxlist_entry_free(&mbentry);
