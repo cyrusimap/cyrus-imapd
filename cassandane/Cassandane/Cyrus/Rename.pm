@@ -212,7 +212,7 @@ sub test_rename_paths
     -d "$basedir/data/user/cassandane/rename-src/sub" || die;
     -d "$basedir/meta/user/cassandane/rename-src/sub" || die;
 
-    $self->{store}->set_folder("INBOX");
+    $imaptalk->select("INBOX");
 
     # and src don't once we unselect
     -d "$basedir/data/user/cassandane/rename-src" && die;
