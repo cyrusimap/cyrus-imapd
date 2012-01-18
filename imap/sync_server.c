@@ -2044,7 +2044,8 @@ static int do_seen(struct dlist *kin)
 {
     int r;
     struct seen *seendb = NULL;
-    struct seendata sd;
+    struct seendata sd = SEENDATA_INITIALIZER;
+    const char *seenuids;
     const char *userid;
     const char *uniqueid;
 
@@ -2058,14 +2059,17 @@ static int do_seen(struct dlist *kin)
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getdate(kin, "LASTCHANGE", &sd.lastchange))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
-    if (!dlist_getatom(kin, "SEENUIDS", (const char **)&sd.seenuids))
+    if (!dlist_getatom(kin, "SEENUIDS", &seenuids))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
+    sd.seenuids = xstrdup(seenuids);
 
     r = seen_open(userid, SEEN_CREATE, &seendb);
     if (r) return r;
 
     r = seen_write(seendb, uniqueid, &sd);
     seen_close(&seendb);
+
+    seen_freedata(&sd);
 
     return r;
 }

@@ -217,7 +217,7 @@ int status_lookup(const char *mboxname, const char *userid,
 	    recentuid = mailbox->i.recentuid;
 	} else {
 	    struct seen *seendb = NULL;
-	    struct seendata sd;
+	    struct seendata sd = SEENDATA_INITIALIZER;
 
 	    r = seen_open(userid, SEEN_CREATE, &seendb);
 	    if (!r) r = seen_read(seendb, mailbox->uniqueid, &sd);
@@ -226,7 +226,7 @@ int status_lookup(const char *mboxname, const char *userid,
 
 	    recentuid = sd.lastuid;
 	    seq = seqset_parse(sd.seenuids, NULL, recentuid);
-	    free(sd.seenuids);
+	    seen_freedata(&sd);
 	}
 
 	for (recno = 1; recno <= mailbox->i.num_records; recno++) {

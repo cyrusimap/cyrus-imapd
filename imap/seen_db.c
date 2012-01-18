@@ -196,7 +196,7 @@ int foreach_proc(void *rock,
 		 const char *data,
 		 size_t datalen)
 {
-    struct seendata sd;
+    struct seendata sd = SEENDATA_INITIALIZER;
     struct seendata_rock *sr = (struct seendata_rock *)rock;
     char *name = xstrndup(key, keylen);
     int r;
@@ -461,7 +461,7 @@ int seen_copy(const char *userid, struct mailbox *oldmailbox,
     if (userid && strcmp(oldmailbox->uniqueid, newmailbox->uniqueid)) {
 	int r;
 	struct seen *seendb = NULL;
-	struct seendata sd;
+	struct seendata sd = SEENDATA_INITIALIZER;
 
 	r = seen_open(userid, SEEN_SILENT, &seendb);
     

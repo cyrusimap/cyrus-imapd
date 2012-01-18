@@ -740,7 +740,7 @@ static int cleanup_seen_cb(char *name,
     int r;
     struct seqset *seq = NULL;
     struct mailbox *mailbox = NULL;
-    struct seendata sd;
+    struct seendata sd = SEENDATA_INITIALIZER;
     unsigned recno;
     struct index_record record;
 

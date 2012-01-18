@@ -255,7 +255,7 @@ int upgrade_index(struct mailbox *mailbox)
 	mailbox->i.options = config_getint(IMAPOPT_MAILBOX_DEFAULT_OPTIONS);
 
     if (oldminor_version < 12) {
-	struct seendata sd;
+	struct seendata sd = SEENDATA_INITIALIZER;
 	const char *owner_userid;
 
 	/* remove the CONDSTORE option - it's implicit now */

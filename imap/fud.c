@@ -420,7 +420,7 @@ int handle_request(const char *who, const char *name,
 	recentuid = mailbox->i.recentuid;
     } else {
 	struct seen *seendb = NULL;
-	struct seendata sd;
+	struct seendata sd = SEENDATA_INITIALIZER;
 	r = seen_open(who, 0, &seendb);
 	if (!r) r = seen_read(seendb, mailbox->uniqueid, &sd);
 	seen_close(&seendb);

@@ -9614,7 +9614,7 @@ static int xfer_backport_seen_item(struct xfer_item *item,
     struct mailbox *mailbox = NULL;
     struct seqset *outlist = NULL;
     struct index_record record;
-    struct seendata sd;
+    struct seendata sd = SEENDATA_INITIALIZER;
     unsigned recno;
     int r;
 

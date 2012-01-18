@@ -1532,7 +1532,7 @@ static int do_seen(char *user, char *uniqueid)
 {
     int r = 0;
     struct seen *seendb = NULL;
-    struct seendata sd;
+    struct seendata sd = SEENDATA_INITIALIZER;
 
     if (verbose) 
         printf("SEEN %s %s\n", user, uniqueid);
