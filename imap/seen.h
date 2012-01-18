@@ -57,6 +57,8 @@ struct seendata {
     char *seenuids;
 };
 
+#define SEENDATA_INITIALIZER {0, 0, 0, NULL}
+
 typedef int seenproc_t(const char *uniqueid, struct seendata *sd,
 		       void *rock);
 

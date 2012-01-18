@@ -734,7 +734,7 @@ static int append_addseen(struct mailbox *mailbox,
 {
     int r;
     struct seen *seendb = NULL;
-    struct seendata sd;
+    struct seendata sd = SEENDATA_INITIALIZER;
     struct seqset *oldseen;
 
     if (!newseen->len)
@@ -748,7 +748,7 @@ static int append_addseen(struct mailbox *mailbox,
 
     /* parse the old sequence */
     oldseen = seqset_parse(sd.seenuids, NULL, mailbox->i.last_uid);
-    free(sd.seenuids);
+    seen_freedata(&sd);
 
     /* add the extra items */
     seqset_join(oldseen, newseen);
@@ -758,7 +758,7 @@ static int append_addseen(struct mailbox *mailbox,
     /* and write it out */
     sd.lastchange = time(NULL);
     r = seen_write(seendb, mailbox->uniqueid, &sd);
-    free(sd.seenuids);
+    seen_freedata(&sd);
 
  done:
     seen_close(&seendb);
