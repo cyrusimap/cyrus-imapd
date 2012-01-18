@@ -164,4 +164,59 @@ sub test_rename_user
     $admintalk->rename('user.cassandane', 'user.cassandane', 'p2') || die; # partition move
 }
 
+sub config_rename_paths
+{
+    my ($self, $conf) = @_;
+    xlog "Setting up metapartition";
+    $conf->set('metapartition-default' => '@basedir@/meta');
+    $conf->set('metapartition_files' => 'header index');
+}
+
+sub test_rename_paths
+{
+    my ($self) = @_;
+    my $basedir = $self->{instance}->{basedir};
+    my $imaptalk = $self->{store}->get_client();
+
+    $imaptalk->create("INBOX.rename-src.sub") || die;
+
+    $self->{store}->set_folder("INBOX.rename-src.sub");
+    $self->{store}->write_begin();
+    my $msg1 = $self->{gen}->generate(subject => "subject 1");
+    $self->{store}->write_message($msg1, flags => ["\\Seen", "\$NotJunk"]);
+    $self->{store}->write_end();
+
+    # check source files exist
+    -d "$basedir/data/user/cassandane/rename-src/sub" || die;
+    -d "$basedir/meta/user/cassandane/rename-src/sub" || die;
+    -f "$basedir/meta/user/cassandane/rename-src/sub/cyrus.header" || die;
+    -f "$basedir/meta/user/cassandane/rename-src/sub/cyrus.index" || die;
+    -f "$basedir/data/user/cassandane/rename-src/sub/cyrus.cache" || die;
+    -f "$basedir/data/user/cassandane/rename-src/sub/1." || die;
+
+    # and target don't
+    -d "$basedir/data/user/cassandane/rename-dst" && die;
+    -d "$basedir/meta/user/cassandane/rename-dst" && die;
+
+    $imaptalk->rename("INBOX.rename-src.sub", "INBOX.rename-dst.sub");
+
+    # check dest files exist
+    -d "$basedir/data/user/cassandane/rename-dst/sub" || die;
+    -d "$basedir/meta/user/cassandane/rename-dst/sub" || die;
+    -f "$basedir/meta/user/cassandane/rename-dst/sub/cyrus.header" || die;
+    -f "$basedir/meta/user/cassandane/rename-dst/sub/cyrus.index" || die;
+    -f "$basedir/data/user/cassandane/rename-dst/sub/cyrus.cache" || die;
+    -f "$basedir/data/user/cassandane/rename-dst/sub/1." || die;
+
+    # and src still do because it's selected still
+    -d "$basedir/data/user/cassandane/rename-src/sub" || die;
+    -d "$basedir/meta/user/cassandane/rename-src/sub" || die;
+
+    $self->{store}->set_folder("INBOX");
+
+    # and src don't once we unselect
+    -d "$basedir/data/user/cassandane/rename-src" && die;
+    -d "$basedir/meta/user/cassandane/rename-src" && die;
+}
+
 1;
