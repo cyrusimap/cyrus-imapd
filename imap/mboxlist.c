@@ -1298,6 +1298,9 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
     }
 
  done: /* Commit or cleanup */
+    if (!r && newmailbox)
+	r = mailbox_commit(newmailbox);
+
     if (r) {
 	/* XXX - rollback DB changes if it was an mupdate failure */
 	if (newmailbox) mailbox_delete(&newmailbox);
@@ -1306,8 +1309,8 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
 	mailbox_close(&oldmailbox);
     } else {
 	if (newmailbox) {
-	    mailbox_close(&newmailbox);
 	    mailbox_rename_cleanup(&oldmailbox, isusermbox);
+	    mailbox_close(&newmailbox);
 	}
 	else if (partitionmove) {
 	    char *oldpartition = xstrdup(oldmailbox->part);
