@@ -268,27 +268,6 @@ int find_collection_props(char *mboxname,
     size_t len;
     int r = 0;
 
-    /* Append collection name to URL path */
-    if (!fctx->req_tgt->collection) {
-	len = strlen(fctx->req_tgt->path);
-	p = fctx->req_tgt->path + len;
-    }
-    else {
-	p = fctx->req_tgt->collection;
-	len = p - fctx->req_tgt->path;
-    }
-
-    if (p[-1] != '/') {
-	*p++ = '/';
-	len++;
-    }
-    strlcpy(p, strrchr(mboxname, '.') + 1, MAX_MAILBOX_PATH - len);
-    strlcat(p, "/", MAX_MAILBOX_PATH - len - 1);
-    fctx->req_tgt->collection = p;
-    fctx->req_tgt->collen = strlen(p);
-    fctx->req_tgt->resource = NULL;
-    fctx->req_tgt->reslen = 0;
-
     /* Open mailbox for reading */
     if ((r = mailbox_open_irl(mboxname, &mailbox))) {
 	syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
@@ -305,10 +284,32 @@ int find_collection_props(char *mboxname,
 	goto done;
     }
 
-    /* Add response for target collection */
     fctx->mailbox = mailbox;
     fctx->record = NULL;
-    if ((r = xml_add_response(fctx, 0))) goto done;
+
+    if (!fctx->req_tgt->resource) {
+	/* Append collection name to URL path */
+	if (!fctx->req_tgt->collection) {
+	    len = strlen(fctx->req_tgt->path);
+	    p = fctx->req_tgt->path + len;
+	}
+	else {
+	    p = fctx->req_tgt->collection;
+	    len = p - fctx->req_tgt->path;
+	}
+
+	if (p[-1] != '/') {
+	    *p++ = '/';
+	    len++;
+	}
+	strlcpy(p, strrchr(mboxname, '.') + 1, MAX_MAILBOX_PATH - len);
+	strlcat(p, "/", MAX_MAILBOX_PATH - len - 1);
+	fctx->req_tgt->collection = p;
+	fctx->req_tgt->collen = strlen(p);
+
+	/* Add response for target collection */
+	if ((r = xml_add_response(fctx, 0))) goto done;
+    }
 
     if (fctx->depth > 1) {
 	/* Resource(s) */
@@ -326,6 +327,10 @@ int find_collection_props(char *mboxname,
 	else {
 	    /* Add responses for all contained resources */
 	    caldav_foreach(caldavdb, find_resource_props, rock);
+
+	    /* Started with NULL resource, end with NULL resource */
+	    fctx->req_tgt->resource = NULL;
+	    fctx->req_tgt->reslen = 0;
 	}
     }
 
