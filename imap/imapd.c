@@ -5697,19 +5697,16 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
     }
 
     /* canonicalize names */
-    r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, oldname,
-					       imapd_userid, oldmailboxname);
-    if (!r)
-	r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, newname,
-						   imapd_userid, newmailboxname);
+    if (!r) r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, oldname,
+						       imapd_userid, oldmailboxname);
+    if (!r) r = (*imapd_namespace.mboxname_tointernal)(&imapd_namespace, newname,
+						       imapd_userid, newmailboxname);
 
     /* Keep temporary copy: master is trashed */
     strcpy(oldmailboxname2, oldmailboxname);
     strcpy(newmailboxname2, newmailboxname);
 
-    if (!r) {
-	r = mlookup(NULL, NULL, oldmailboxname, &mbentry);
-    }
+    if (!r) r = mlookup(NULL, NULL, oldmailboxname, &mbentry);
 
     if (!r && (mbentry->mbtype & MBTYPE_REMOTE)) {
 	/* remote mailbox */
@@ -5832,7 +5829,7 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	    prot_printf(imapd_out,
 			"%s NO Cross-server or cross-partition move w/rename not supported\r\n",
 			tag);
-	    return;
+	    goto done;
 	}
 
 	/* dest partition? */
@@ -5842,7 +5839,17 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 
 	cmd_xfer(tag, oldname, server, partition);
 
-	return;
+	goto done;
+    }
+
+    /* local rename: it's OK if the mailbox doesn't exist, we'll check
+     * if sub mailboxes can be renamed */
+    if (r == IMAP_MAILBOX_NONEXISTENT)
+	r = 0;
+
+    if (r) {
+	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
+	goto done;
     }
 
     /* local destination */
@@ -5875,8 +5882,6 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 	    recursive_rename = 0;
 	}
     }
-
-    r = 0; /* doesn't matter if we didn't find it now */
 
     (*imapd_namespace.mboxname_toexternal)(&imapd_namespace,
 					   oldmailboxname,
