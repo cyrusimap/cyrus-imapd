@@ -1647,7 +1647,7 @@ void write_body(long code, struct transaction_t *txn,
 	response_header(code, txn);
     }
 
-    if (txn->meth[0] == 'H') return;
+    if (txn->meth && txn->meth[0] == 'H') return;
 
 #ifdef HAVE_ZLIB
     if (txn->flags & HTTP_GZIP) {
