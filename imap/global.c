@@ -108,7 +108,6 @@ const char *config_statuscache_db;
 const char *config_userdeny_db;
 int charset_flags;
 
-#define MAX_SESSIONID_SIZE 256
 char session_id_buf[MAX_SESSIONID_SIZE];
 int session_id_time = 0;
 int session_id_count = 0;
