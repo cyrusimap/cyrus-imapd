@@ -53,6 +53,8 @@
 #include "signals.h"
 #include "util.h"
 
+#define MAX_SESSIONID_SIZE 256
+
 /* Flags for cyrus_init() */
 enum {
     CYRUSINIT_NODB =	(1<<0)
