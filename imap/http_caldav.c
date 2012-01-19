@@ -48,7 +48,6 @@
  *     calendars.
  *   - Check meth_acl() to make sure we have logic correct
  *     (iCal seems to blow up existing ACLs).
- *   - Fix PROPFIND depth logic?  (need to confirm that its broken)
  *   - Support COPY/MOVE on collections
  *   - Add more required properties
  *   - GET/HEAD on collections (iCalendar stream of resources)
