@@ -468,9 +468,12 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* If enabled, a special comparator will be used which will correctly
    sort mailbox names that contain characters such as ' ' and '-'.
 .PP
-   Note that this option SHOULD NOT be changed on a live system.
-   The mailboxes database should be dumped before the option is changed,
-   removed, and then undumped after changing the option. */
+   Note that this option SHOULD NOT be changed on a live system.  The
+   mailboxes database should be dumped (ctl_mboxlist) before the
+   option is changed, removed, and then undumped after changing the
+   option.  When not using flat files for the subscriptions databases
+   the same has to be done (cyr_dbtool) for each subscription database
+   See improved_mboxlist_sort.html.*/
 
 { "internaldate_heuristic", "standard", ENUM("standard", "receivedheader") }
 /* Mechanism to determine email internaldates on delivery/reconstruct.
