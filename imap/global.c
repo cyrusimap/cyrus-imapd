@@ -104,7 +104,6 @@ struct cyrusdb_backend *config_ptscache_db;
 struct cyrusdb_backend *config_statuscache_db;
 struct cyrusdb_backend *config_userdeny_db;
 
-#define MAX_SESSIONID_SIZE 256
 char session_id_buf[MAX_SESSIONID_SIZE];
 int session_id_time = 0;
 int session_id_count = 0;

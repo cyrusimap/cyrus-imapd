@@ -1359,6 +1359,7 @@ void lmtpmode(struct lmtp_func *func,
 
 	      strlcpy(cd.lhlo_param, buf + 5, sizeof(cd.lhlo_param));
 	      
+	      session_new_id();
 	      continue;
 	  }
 	  goto syntaxerr;
@@ -1553,7 +1554,8 @@ void lmtpmode(struct lmtp_func *func,
 		continue;
 	    }
 	    else if (!strcasecmp(buf, "rset")) {
-		prot_printf(pout, "250 2.0.0 ok\r\n");
+		session_new_id();
+		prot_printf(pout, "250 2.0.0 ok SESSIONID=<%s>\r\n", session_id());
 
 	      rset:
 		if (msg) msg_free(msg);
@@ -1845,8 +1847,9 @@ static void pushmsg(struct protstream *in, struct protstream *out,
 int lmtp_runtxn(struct backend *conn, struct lmtp_txn *txn)
 {
     int j, code, r = 0;
-    char buf[8192];
+    char buf[8192], rsessionid[MAX_SESSIONID_SIZE];
     int onegood;
+    char *sp, *ep;
 
     assert(conn && txn);
     /* pipelining v. no pipelining? */
@@ -1859,6 +1862,17 @@ int lmtp_runtxn(struct backend *conn, struct lmtp_txn *txn)
     if (!ISGOOD(code)) {
 	goto failall;
     }
+    if ((sp = strstr(buf, "SESSIONID=<")) && (ep = strchr(sp, '>')))
+    {
+	sp += 11;
+	*ep = '\0';
+	strncpy(rsessionid, sp, MAX_SESSIONID_SIZE);
+    }
+    else
+        strcpy(rsessionid, "unknown");
+
+    if (config_auditlog)
+	syslog(LOG_NOTICE, "auditlog: proxy sessionid=<%s> remote=<%s>", session_id(), rsessionid);
 
     /* mail from */
     if (!txn->from) {
