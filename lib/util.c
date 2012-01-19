@@ -269,7 +269,7 @@ int dir_hash_c(const char *name, int full)
 
     if (full) {
 	unsigned char *pt;
-	unsigned int n;
+	unsigned long long int n;
 	enum {
 	    DIR_X = 3,
 	    DIR_Y = 5,

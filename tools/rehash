@@ -64,6 +64,7 @@ if ($@) { die "$@"; }
 
 __END__
 require 5;
+require Math::BigInt;
 
 $| = 1;
 
@@ -122,12 +123,32 @@ sub ouch {
     }
 }
 
-sub dir_hash_c {
+sub dir_hash_c_32 {
     my $name = shift;
+    my $uint32 = (2**32);
     my ($h, $n);
 
     if ($tofull) {
 	$n = 0;
+	foreach my $b (split(/ */, $name)) {
+	    $n = ((($n << 3) ^ ($n >> 5)) % $uint32) ^ ord($b);
+	}
+	$h = chr(ord('A') + ($n % 23));
+	return $h;
+    }
+    elsif ($tobasic) {
+	$h = lc(substr($name, 0, 1));
+	if (!($h =~ /[a-z]/)) { $h = 'q'; }
+	return $h;
+    }
+}
+
+sub dir_hash_c_64 {
+    my $name = shift;
+    my ($h, $n);
+
+    if ($tofull) {
+	$n = Math::BigInt->new(0);
 	foreach my $b (split(/ */, $name)) {
 	    $n = (($n << 3) ^ ($n >> 5)) ^ ord($b);
 	}
@@ -208,7 +229,7 @@ if ($yn =~ /^y/) {
     print "converting configuration directory $confdir...";
     chdir $confdir or die "couldn't change to $confdir";
     
-    foreach $i ("user", "proc", "db", "socket", "log", "msg", "quota") {
+    foreach $i ("user", "proc", "lock", "db", "socket", "log", "msg", "quota") {
 	unless (-d $i) {
 	    print "creating $i...\n";
 	    mkdir $i, 0755;
@@ -297,7 +318,8 @@ sub move_domains {
 
     my $i;
     my $s;
-    my $h;
+    my $h_32;
+    my $h_64;
     my $mbox;
 
     foreach $i (@{$dirs}) { 
@@ -308,7 +330,7 @@ sub move_domains {
 		    chdir "$i/$s";
 		    &do_subdomain;
 		    chdir "../..";
-		    rename("$i/$s", "$s") or die "couldn't move $s back!";
+		    rename ("$i/$s", "$s") or die "couldn't move $s back!";
 		}
 		closedir SUB;
 		rmdir "$i" or die "couldn't remove $i";
@@ -340,9 +362,15 @@ sub move_domains {
  
 		    chdir "../..";
 
-		    $h = dir_hash_c($s);
-		    print "moving $i/$s to $h/$s\n";
-		    rename("$i/$s", "$h/$s") or ouch "couldn't move $s back!";
+		    $h_32 = dir_hash_c_32($s);
+		    $h_64 = dir_hash_c_64($s);
+		    print "moving $i/$s to $h_64/$s\n";
+		    if ("$h_32" eq "$h_64") {
+			rename ("$i/$s", "$h_64/$s") or ouch "couldn't move $s back!";
+		    } else {
+			rename ("$i/$s", "$h_32/$s") or ouch "couldn't move $s back!";
+			rename ("$h_32/$s", "$h_64/$s") or ouch "couldn't move $s back!";
+		    }
 		}
 		closedir SUB;
 		rmdir "$i" or die "couldn't remove $i";
@@ -364,8 +392,14 @@ sub move_domains {
 
 	    # hash on name before '.sub' suffix
 	    print "$f\n";
-            $h = dir_hash_c($f);
-            rename ($f, "$h/$f") or ouch "couldn't move $f into $h";
+            $h_32 = dir_hash_c_32($f);
+            $h_64 = dir_hash_c_64($f);
+	    if ("$h_32" eq "$h_64") {
+		rename ($f, "$h_64/$f") or ouch "couldn't move $f into $h_64";
+	    } else {
+		rename ($f, "$h_32/$f") or ouch "couldn't move $f into $h_32";
+		rename ($h_32/$f, "$h_64/$f") or ouch "couldn't move $h_32 into $h_64";
+	    }
 	}
 	closedir USER;
     }
@@ -374,7 +408,8 @@ sub move_domains {
 sub move_users {
     my $i;
     my $s;
-    my $h;
+    my $h_32;
+    my $h_64;
     my $f;
     my $mbox;
 
@@ -383,7 +418,7 @@ sub move_users {
 	    if (opendir SUB, $i) {
 		while ($s = readdir SUB) {
 		    if ($s =~ /^\./s) { next; }
-		    rename("$i/$s", "$s") or die "couldn't move $s back!";
+		    rename ("$i/$s", "$s") or die "couldn't move $s back!";
 		}
 		closedir SUB;
 		rmdir "$i" or die "couldn't remove $i";
@@ -401,8 +436,14 @@ sub move_users {
 		    if ($s =~ /^\./s) { next; }
 		    # hash on name before '.sub' suffix
 		    if ($s =~ /^(.+)\./) {
-			$h = dir_hash_c($1);
-			rename("$i/$s", "$h/$s") or ouch "couldn't move $s back!";
+			$h_32 = dir_hash_c_32($1);
+			$h_64 = dir_hash_c_64($1);
+			if ("$h_32" eq "$h_64") {
+			    rename ("$i/$s", "$h_64/$s") or ouch "couldn't move $s back!";
+			} else {
+			    rename ("$i/$s", "$h_32/$s") or ouch "couldn't move $s back!";
+			    rename ("$h_32/$s", "$h_64/$s") or ouch "couldn't move $s back!";
+			}
 		    }
 		}
 		closedir SUB;
@@ -415,8 +456,14 @@ sub move_users {
 	    # hash on name before '.sub' suffix
 	    if ($f =~ /^(.+)\./) {
 		print "$f\n";
-		$h = dir_hash_c($1);
-		rename ($f, "$h/$f") or ouch "couldn't move $f into $h";
+		$h_32 = dir_hash_c_32($1);
+		$h_64 = dir_hash_c_64($1);
+		if ("$h_32" eq "$h_64") {
+			rename ($f, "$h_64/$f") or ouch "couldn't move $f into $h_64";
+		} else {
+			rename ($f, "$h_32/$f") or ouch "couldn't move $f into $h_32";
+			rename ("$h_32/$f", "$h_64/$f") or ouch "couldn't move $h_32/$f into $h_64";
+		}
 	    }
 	}
 	closedir USER;
@@ -426,7 +473,8 @@ sub move_users {
 sub move_quotas {
     my $i;
     my $s;
-    my $h;
+    my $h_32;
+    my $h_64;
     my $mbox;
 
     # first, create directories we know can't conflict with existing files
@@ -460,9 +508,17 @@ sub move_quotas {
 		while ($s = readdir SUB) {
 		    # hash on name after 'user.'
 		    if ($s =~ /^.+\.(.+)$/) {
-			$h = dir_hash_c($1);
-			rename("$i/$s", ".$h/$s")
+			$h_32 = dir_hash_c_32($1);
+			$h_64 = dir_hash_c_64($1);
+			if ("$h_32" eq "$h_64") {
+			    rename ("$i/$s", ".$h_64/$s")
 			    or ouch "couldn't move $s back!";
+			} else {
+			    rename ("$i/$s", ".$h_32/$s")
+			    or ouch "couldn't move $s back!";
+			    rename (".$h_32/$s", ".$h_64/$s")
+			    or ouch "couldn't move $s back!";
+			}
 		    }
 		}
 		closedir SUB;
@@ -475,16 +531,32 @@ sub move_quotas {
 	
 	    # hash on name after 'user.'
 	    if ($mbox =~ /^.*\.(.*)$/) {
-		$h = dir_hash_c($1);
-		rename($mbox, ".$h/$mbox") 
-		    or ouch "couldn't move $mbox into $h";
+		$h_32 = dir_hash_c_32($1);
+		$h_64 = dir_hash_c_64($1);
+		if ("$h_32" eq "$h_64") {
+		    rename ($mbox, ".$h_64/$mbox") 
+		    or ouch "couldn't move $mbox into $h_64";
+		} else {
+		    rename ($mbox, ".$h_32/$mbox") 
+		    or ouch "couldn't move $mbox into $h_32";
+		    rename (".$h_32/$mbox", ".$h_64/$mbox") 
+		    or ouch "couldn't move $mbox into $h_64";
+		}
 		next;
 	    }
 	
 	    # we should try to hash the entire file
-	    $h = dir_hash_c($mbox);
-	    rename($mbox, ".$h/$mbox") 
-		or ouch "couldn't move $mbox into $h";
+	    $h_32 = dir_hash_c_32($mbox);
+	    $h_64 = dir_hash_c_64($mbox);
+	    if ("$h_32" eq "$h_64") {
+		rename ($mbox, ".$h_64/$mbox") 
+		or ouch "couldn't move $mbox into $h_64";
+	    } else {
+		rename ($mbox, ".$h_32/$mbox") 
+		or ouch "couldn't move $mbox into $h_32";
+		rename (".$h_32/$mbox", ".$h_64/$mbox") 
+		or ouch "couldn't move $mbox into $h_64";
+	    }
 	    next;
 	
 	}
@@ -500,7 +572,8 @@ sub move_quotas {
 sub move_sieve {    
         my $i;
 	my $s;
-	my $h;
+	my $h_32;
+	my $h_64;
 	my $mbox;
 
 	foreach $i (@{$dirs}) {
@@ -521,9 +594,17 @@ sub move_sieve {
 		if (opendir SUB, $i) {
 		    while ($s = readdir SUB) {
 			unless ($s =~ /^\./) {
-			    $h = dir_hash_c($s);
-			    rename("$i/$s", ".$h/$s")
+			    $h_32 = dir_hash_c_32($s);
+			    $h_64 = dir_hash_c_64($s);
+			    if ("$h_32" eq "$h_64") {
+				rename ("$i/$s", ".$h_64/$s")
 				or ouch "couldn't move $s back!";
+			    } else {
+				rename ("$i/$s", ".$h_32/$s")
+				or ouch "couldn't move $s back!";
+				rename (".$h_32/$s", ".$h_64/$s")
+				or ouch "couldn't move $s back!";
+			    }
 			}
 		    }
 		    closedir SUB;
@@ -546,7 +627,8 @@ sub move_part {
   my $i;
   my $s;
   my $t;
-  my $h;
+  my $h_32;
+  my $h_64;
   my $dir;
   my $sub;
   my $ismbox;
@@ -596,22 +678,42 @@ sub move_part {
 	    if ($sub =~ /(.*)\.(.*)/) { $ismbox = 1; next; }
 	    
 	    print "/$sub ";
-	    $h = dir_hash_c($sub);
-	    mkdir (".$h/$dir", 0755); # might already be there
-	    rename("$i/$dir/$sub", ".$h/$dir/$sub") or
-	      ouch "couldn't move $dir/$sub into $h";
+	    $h_32 = dir_hash_c_32($sub);
+	    $h_64 = dir_hash_c_64($sub);
+	    mkdir (".$h_64/$dir", 0755); # might already be there
+	    if ("$h_32" eq "$h_64") {
+		rename ("$i/$dir/$sub", ".$h_64/$dir/$sub")
+		or ouch "couldn't move $dir/$sub into $h_64";
+	    } else {
+	        mkdir (".$h_32/$dir", 0755); # might already be there
+		rename ("$i/$dir/$sub", ".$h_32/$dir/$sub")
+		or ouch "couldn't move $dir/$sub into $h_32";
+		rename (".$h_32/$dir/$sub", ".$h_64/$dir/$sub")
+		or ouch "couldn't move $dir/$sub into $h_32";
+	        rmdir ".$h_32/$dir";
+	    }
 	  }
 	  closedir DIR;
 	  # if $ismbox is set, then $dir is a mailbox of it's own right
 	  if ($ismbox) {
-	    $h = dir_hash_c($dir);
-	    mkdir (".$h/$dir", 0755); # might already be there
+	    $h_32 = dir_hash_c_32($dir);
+	    $h_64 = dir_hash_c_64($dir);
+	    mkdir (".$h_64/$dir", 0755); # might already be there
 	    opendir DIR, "$i/$dir";
 	    while ($sub = readdir DIR) {
 	      if ($sub =~ /^\./s) { next; }
 	      print "/$sub ";
-	      rename("$i/$dir/$sub", ".$h/$dir/$sub") or 
-		ouch "couldn't move $dir into $h";
+	      if ("$h_32" eq "$h_64") {
+		rename ("$i/$dir/$sub", ".$h_64/$dir/$sub")
+		or ouch "couldn't move $dir into $h_64";
+	      } else {
+		mkdir (".$h_32/$dir", 0755); # might already be there
+		rename ("$i/$dir/$sub", ".$h_32/$dir/$sub")
+		or ouch "couldn't move $dir into $h_32";
+		rename (".$h_32/$dir/$sub", ".$h_64/$dir/$sub")
+		or ouch "couldn't move $dir into $h_64";
+		rmdir ".$h_32/$dir";
+	      }
 	    }
 	    closedir DIR;
 	  }
@@ -645,21 +747,41 @@ sub move_part {
 	# this isn't a child
 	if ($sub =~ /(.*)\.(.*)/) { $ismbox = 1; next; }
 	
-	$h = dir_hash_c($sub);
-	mkdir (".$h/$dir", 0755); # might already be there
-	rename("$dir/$sub", ".$h/$dir/$sub") or
-	  ouch "couldn't move $dir/$sub into $h";
+	$h_32 = dir_hash_c_32($sub);
+	$h_64 = dir_hash_c_64($sub);
+	mkdir (".$h_64/$dir", 0755); # might already be there
+	if ("$h_32" eq "$h_64") {
+	    rename ("$dir/$sub", ".$h_64/$dir/$sub")
+	    or ouch "couldn't move $dir/$sub into $h_64";
+	} else {
+	    mkdir (".$h_32/$dir", 0755); # might already be there
+	    rename ("$dir/$sub", ".$h_32/$dir/$sub")
+	    or ouch "couldn't move $dir/$sub into $h_32";
+	    rename (".$h_32/$dir/$sub", ".$h_64/$dir/$sub")
+	    or ouch "couldn't move $dir/$sub into $h_64";
+	    rmdir ".$h_32/$dir";
+	}
       }
       closedir DIR;
       # if $ismbox is set, then $dir is a mailbox of it's own right
       if ($ismbox) {
-	$h = dir_hash_c($dir);
-	mkdir (".$h/$dir", 0755); # might already be there
+	$h_32 = dir_hash_c_32($dir);
+	$h_64 = dir_hash_c_64($dir);
+	mkdir (".$h_64/$dir", 0755); # might already be there
 	opendir DIR, $dir;
 	while ($sub = readdir DIR) {
 	  if ($sub =~ /^\./s) { next; }
-	  rename("$dir/$sub", ".$h/$dir/$sub") or 
-	    ouch "couldn't move $dir into $h";
+		if ("$h_32" eq "$h_64") {
+		    rename ("$dir/$sub", ".$h_64/$dir/$sub")
+		    or ouch "couldn't move $dir into $h_64";
+		} else {
+		    mkdir (".$h_32/$dir", 0755); # might already be there
+		    rename ("$dir/$sub", ".$h_32/$dir/$sub")
+		    or ouch "couldn't move $dir into $h_32";
+		    rename (".$h_32/$dir/$sub", ".$h_64/$dir/$sub")
+		    or ouch "couldn't move $dir into $h_64";
+		    rmdir ".$h_32/$dir";
+		}
 	}
 	closedir DIR;
       }
