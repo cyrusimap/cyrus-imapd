@@ -1299,7 +1299,7 @@ int meth_propfind(struct transaction_t *txn)
     if (!hdr || !strcmp(hdr[0], "infinity")) {
 	depth = 2;
     }
-    if (hdr && ((sscanf(hdr[0], "%u", &depth) != 1) || (depth > 1))) {
+    else if (hdr && ((sscanf(hdr[0], "%u", &depth) != 1) || (depth > 1))) {
 	txn->error.desc = "Illegal Depth value";
 	return HTTP_BAD_REQUEST;
     }
