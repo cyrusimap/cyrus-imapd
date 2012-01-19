@@ -1470,6 +1470,10 @@ void response_header(long code, struct transaction_t *txn)
 
 
     /* Response Header Fields */
+    if (httpd_tls_done) {
+	prot_printf(httpd_out, "Strict-Transport-Security: max-age=600\r\n");
+    }
+
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
 	prot_printf(httpd_out, "Server: %s\r\n", buf_cstring(&serverinfo));
     }
