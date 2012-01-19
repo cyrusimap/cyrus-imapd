@@ -2016,6 +2016,18 @@ static int report_sync_col(xmlNodePtr inroot, struct propfind_ctx *fctx,
 		    return HTTP_FORBIDDEN;
 		}
 	    }
+	    if (!xmlStrcmp(node->name, BAD_CAST "sync-level") &&
+		(str = xmlNodeListGetString(inroot->doc, node->children, 1))) {
+		if (!strcmp((char *) str, "infinity")) {
+		    *fctx->errstr = "This server DOES NOT support infinite depth requests";
+		    return HTTP_SERVER_ERROR;
+		}
+		else if ((sscanf((char *) str, "%u", &fctx->depth) != 1) ||
+			 (fctx->depth != 1)) {
+		    *fctx->errstr = "Illegal sync-level";
+		    return HTTP_BAD_REQUEST;
+		}
+	    }
 	    if (!xmlStrcmp(node->name, BAD_CAST "limit")) {
 		for (node2 = node->children; node2; node2 = node2->next) {
 		    if ((node2->type == XML_ELEMENT_NODE) &&
@@ -2030,6 +2042,13 @@ static int report_sync_col(xmlNodePtr inroot, struct propfind_ctx *fctx,
 	    }
 	}
     }
+
+    /* Check Depth */
+    if (!fctx->depth) {
+	*fctx->errstr = "Illegal sync-level";
+	return HTTP_BAD_REQUEST;
+    }
+
 
     /* Construct array of records for sorting and/or fetching cached header */
     istate.mailbox = mailbox;
