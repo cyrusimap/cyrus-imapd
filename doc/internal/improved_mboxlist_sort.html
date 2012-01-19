@@ -1,0 +1,34 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+    "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<title>Enabling improved_mboxlist_sort</title>
+</head>
+<body>
+<H1>Enabling improved_mboxlist_sort</H1>
+
+<p>You can't enable and disable improved_mboxlist_sort on a live
+system.  You need to dump and load the necessary database after
+stopping and before starting the master process.<p>
+
+<p>Dumping the mailboxes.db file</p>
+<pre>
+ctl_mboxlist -d > /var/tmp/mailboxes.txt
+ctl_mboxlist -u < /var/tmp/mailboxes.txt
+</pre>
+
+<p>If your subscription databases are not in flat files you need to do
+something similar. Each user will have his own subscription file.  Do
+the following for each subscription file.</p>
+
+<pre>
+cyr_dbtool -C $file skiplist show > $file.TXT
+cyr_dbtool -n $file skiplist set < $file.TXT
+</pre>
+
+<p>The above fragments will overwrite the original file.  So you could
+redirect to a temporary file and overwrite the database if the import
+succeeds.</p>
+
+</body>
+</html>
