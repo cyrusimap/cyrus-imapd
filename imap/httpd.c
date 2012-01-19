@@ -915,7 +915,7 @@ static void cmdloop(void)
 	    }
 	    /* client closed connection or timed out */
 	    txn.flags |= HTTP_CLOSE;
-	    goto error;
+	    goto done;
 	}
 	if (!buf_len(&meth) || !buf_len(&uri) || !buf_len(&ver)) {
 	    ret = HTTP_BAD_REQUEST;
@@ -978,7 +978,7 @@ static void cmdloop(void)
 	    ret = HTTP_SERVER_ERROR;
 	    txn.flags |= HTTP_CLOSE;
 	    txn.error.desc = "Unable to create header cache";
-	    goto error;
+	    goto done;
 	}
 	if ((r = spool_fill_hdrcache(httpd_in, NULL, txn.req_hdrs, NULL))) {
 	    ret = HTTP_BAD_REQUEST;
@@ -992,7 +992,7 @@ static void cmdloop(void)
 	    ret = HTTP_BAD_REQUEST;
 	    txn.flags |= HTTP_CLOSE;
 	    txn.error.desc = "Missing separator between headers and body";
-	    goto error;
+	    goto done;
 	}
 
 	/* Check for mandatory Host header */
@@ -1033,7 +1033,7 @@ static void cmdloop(void)
 	    txn.loc = buf;
 	}
 
-	if (ret) goto error;
+	if (ret) goto done;
 
 #ifdef SASL_HTTP_REQUEST
 	/* Setup SASL HTTP request in case we need it */
@@ -1107,7 +1107,7 @@ static void cmdloop(void)
 		write_body(code, &txn, html.s, html.len);
 
 		buf_free(&html);
-		goto error;
+		goto done;
 	    }
 	    else {
 		/* Tell client to authenticate */
@@ -1145,20 +1145,18 @@ static void cmdloop(void)
 	    if (ret == HTTP_UNAUTHORIZED) goto need_auth;
 	}
 
+      done:
+	/* If we haven't the read body, read and discard it */
+	if (txn.req_hdrs && !(txn.flags & HTTP_READBODY) &&
+	    read_body(httpd_in, txn.req_hdrs, NULL, &txn.error.desc)) {
+	    txn.flags |= HTTP_CLOSE;
+	}
+
 	/* Handle errors (success responses handled by method functions) */
-      error:
 	if (ret) error_response(ret, &txn);
 
 	/* Memory cleanup */
-	if (txn.req_hdrs) {
-	    /* If we haven't the read body, read and discard it */
-	    if (!(txn.flags & HTTP_READBODY) &&
-		read_body(httpd_in, txn.req_hdrs, NULL, &txn.error.desc)) {
-		txn.flags |= HTTP_CLOSE;
-	    }
-
-	    spool_free_hdrcache(txn.req_hdrs);
-	}
+	if (txn.req_hdrs) spool_free_hdrcache(txn.req_hdrs);
 
 	if (txn.flags & HTTP_CLOSE) {
 	    buf_free(&txn.req_body);
@@ -1415,7 +1413,7 @@ void response_header(long code, struct transaction_t *txn)
     static struct buf log = BUF_INITIALIZER;
     const char **hdr;
 
-    if (txn && txn->meth) {
+    if (txn && txn->req_hdrs) {
 	/* Log the client request and our response */
 	buf_reset(&log);
 	buf_printf(&log, "%s", httpd_clienthost);
