@@ -136,7 +136,7 @@ static int meth_get(struct transaction_t *txn)
 
     /* Construct mailbox name corresponding to request target URI */
     if ((r = rss_to_mboxname(&txn->req_tgt, mailboxname, &uid, section))) {
-	txn->errstr = error_message(r);
+	txn->error.desc = error_message(r);
 	return HTTP_NOT_FOUND;
     }
 
@@ -159,7 +159,7 @@ static int meth_get(struct transaction_t *txn)
     if ((r = http_mlookup(mailboxname, &server, NULL, NULL))) {
 	syslog(LOG_ERR, "mlookup(%s) failed: %s",
 	       mailboxname, error_message(r));
-	txn->errstr = error_message(r);
+	txn->error.desc = error_message(r);
 
 	switch (r) {
 	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
@@ -185,7 +185,7 @@ static int meth_get(struct transaction_t *txn)
     if ((r = http_mailbox_open(mailboxname, &mailbox, LOCK_SHARED))) {
 	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
 	       mailboxname, error_message(r));
-	txn->errstr = error_message(r);
+	txn->error.desc = error_message(r);
 
 	switch (r) {
 	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
@@ -197,7 +197,7 @@ static int meth_get(struct transaction_t *txn)
     /* If no UID specified, list messages as an RSS feed */
     if (!uid) ret = list_messages(txn, mailbox);
     else if (uid > mailbox->i.last_uid) {
-	txn->errstr = "Message does not exist";
+	txn->error.desc = "Message does not exist";
 	ret = HTTP_NOT_FOUND;
     }
     else {
@@ -505,19 +505,19 @@ static int fetch_message(struct transaction_t *txn, struct mailbox *mailbox,
     else r = mailbox_read_index_record(mailbox, recno, record);
     if ((r == CYRUSDB_NOTFOUND) ||
 	(record->system_flags & (FLAG_DELETED|FLAG_EXPUNGED))) {
-	txn->errstr = "Message has been removed";
+	txn->error.desc = "Message has been removed";
 	return HTTP_GONE;
     }
     else if (r) {
 	syslog(LOG_ERR, "find index record failed");
-	txn->errstr = error_message(r);
+	txn->error.desc = error_message(r);
 	return HTTP_SERVER_ERROR;
     }
 
     /* Fetch cache record for the message */
     if ((r = mailbox_cacherecord(mailbox, record))) {
 	syslog(LOG_ERR, "read cache failed");
-	txn->errstr = error_message(r);
+	txn->error.desc = error_message(r);
 	return HTTP_SERVER_ERROR;
     }
 
@@ -1074,7 +1074,7 @@ static void fetch_part(struct transaction_t *txn, struct body *body,
 					 &body->decoded_body, 0, &outsize);
 
 	if (!outbuf) {
-	    txn->errstr = "Unknown MIME encoding";
+	    txn->error.desc = "Unknown MIME encoding";
 	    response_header(HTTP_SERVER_ERROR, txn);
 	    return;
 

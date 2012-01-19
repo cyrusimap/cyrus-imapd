@@ -869,9 +869,8 @@ static void cmdloop(void)
 	txn.flags = !httpd_timeout ? HTTP_CLOSE : 0;
 	txn.auth_chal.param = NULL;
 	txn.loc = txn.etag = NULL;
-	txn.precond = NULL;
-	txn.errstr = NULL;
 	txn.req_hdrs = NULL;
+	memset(&txn.error, 0, sizeof(struct error_t));
 	memset(&txn.resp_body, 0, sizeof(struct resp_body_t));
 #ifdef HAVE_ZLIB
 	deflateReset(&txn.zstrm);
@@ -885,7 +884,7 @@ static void cmdloop(void)
 	if (shutdown_file(buf, sizeof(buf)) ||
 	    (httpd_userid &&
 	     userdeny(httpd_userid, config_ident, buf, sizeof(buf)))) {
-	    txn.errstr = buf;
+	    txn.error.desc = buf;
 	    txn.flags |= HTTP_CLOSE;
 	    response_header(HTTP_UNAVAILABLE, &txn);
 	    shut_down(0);
@@ -910,9 +909,9 @@ static void cmdloop(void)
 	    }
 	}
 	if (c == EOF) {
-	    txn.errstr = prot_error(httpd_in);
-	    if (txn.errstr && strcmp(txn.errstr, PROT_EOF_STRING)) {
-		syslog(LOG_WARNING, "%s, closing connection", txn.errstr);
+	    txn.error.desc = prot_error(httpd_in);
+	    if (txn.error.desc && strcmp(txn.error.desc, PROT_EOF_STRING)) {
+		syslog(LOG_WARNING, "%s, closing connection", txn.error.desc);
 	    }
 	    /* client closed connection or timed out */
 	    txn.flags |= HTTP_CLOSE;
@@ -920,11 +919,11 @@ static void cmdloop(void)
 	}
 	if (!buf_len(&meth) || !buf_len(&uri) || !buf_len(&ver)) {
 	    ret = HTTP_BAD_REQUEST;
-	    txn.errstr = "Missing arguments in Request-Line";
+	    txn.error.desc = "Missing arguments in Request-Line";
 	}
 	else if (c != '\n') {
 	    ret = HTTP_BAD_REQUEST;
-	    txn.errstr = "Unexpected extra arguments in Request-Line";
+	    txn.error.desc = "Unexpected extra arguments in Request-Line";
 	}
 	if (ret) eatline(httpd_in, c);
 
@@ -933,13 +932,13 @@ static void cmdloop(void)
 	    ret = HTTP_BAD_VERSION;
 	    snprintf(buf, sizeof(buf),
 		     "This server only speaks %s", HTTP_VERSION);
-	    txn.errstr = buf;
+	    txn.error.desc = buf;
 	}
 
 	/* Parse request-target URI */
 	if (!ret &&
 	    (r = parse_uri(buf_cstring(&meth), buf_cstring(&uri),
-			   &txn.req_tgt, &txn.errstr))) {
+			   &txn.req_tgt, &txn.error.desc))) {
 	    ret = r;
 	}
 
@@ -978,12 +977,12 @@ static void cmdloop(void)
 	if (!(txn.req_hdrs = spool_new_hdrcache())) {
 	    ret = HTTP_SERVER_ERROR;
 	    txn.flags |= HTTP_CLOSE;
-	    txn.errstr = "Unable to create header cache";
+	    txn.error.desc = "Unable to create header cache";
 	    goto error;
 	}
 	if ((r = spool_fill_hdrcache(httpd_in, NULL, txn.req_hdrs, NULL))) {
 	    ret = HTTP_BAD_REQUEST;
-	    txn.errstr = "Request contains invalid header";
+	    txn.error.desc = "Request contains invalid header";
 	}
 
 	/* Read CRLF separating headers and body */
@@ -992,14 +991,14 @@ static void cmdloop(void)
 	if (c != '\n') {
 	    ret = HTTP_BAD_REQUEST;
 	    txn.flags |= HTTP_CLOSE;
-	    txn.errstr = "Missing separator between headers and body";
+	    txn.error.desc = "Missing separator between headers and body";
 	    goto error;
 	}
 
 	/* Check for mandatory Host header */
 	if (!ret && !(hdr = spool_getheader(txn.req_hdrs, "Host"))) {
 	    ret = HTTP_BAD_REQUEST;
-	    txn.errstr = "Missing Host header";
+	    txn.error.desc = "Missing Host header";
 	}
 
 	/* Check for connection directives */
@@ -1116,8 +1115,8 @@ static void cmdloop(void)
 		sasl_setprop(httpd_saslconn, SASL_HTTP_REQUEST, &sasl_http_req);
 #endif
 		ret = HTTP_UNAUTHORIZED;
-		if (r) txn.errstr = "Authentication failed";
-		else txn.errstr = "Must authenticate to access the specified target";
+		if (r) txn.error.desc = "Authentication failed";
+		else txn.error.desc = "Must authenticate to access the specified target";
 	    }
 	}
 
@@ -1154,7 +1153,7 @@ static void cmdloop(void)
 	if (txn.req_hdrs) {
 	    /* If we haven't the read body, read and discard it */
 	    if (!(txn.flags & HTTP_READBODY) &&
-		read_body(httpd_in, txn.req_hdrs, NULL, &txn.errstr)) {
+		read_body(httpd_in, txn.req_hdrs, NULL, &txn.error.desc)) {
 		txn.flags |= HTTP_CLOSE;
 	    }
 
@@ -1715,8 +1714,8 @@ void html_response(long code, struct transaction_t *txn, xmlDocPtr html)
 	xmlFree(buf);
     }
     else {
-	txn->precond = NULL;
-	txn->errstr = "Error dumping HTML tree";
+	txn->error.precond = NULL;
+	txn->error.desc = "Error dumping HTML tree";
 	error_response(HTTP_SERVER_ERROR, txn);
     }
 }
@@ -1741,8 +1740,8 @@ void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
 	xmlFree(buf);
     }
     else {
-	txn->precond = NULL;
-	txn->errstr = "Error dumping XML tree";
+	txn->error.precond = NULL;
+	txn->error.desc = "Error dumping XML tree";
 	error_response(HTTP_SERVER_ERROR, txn);
     }
 }
@@ -1752,12 +1751,12 @@ void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
 void error_response(long code, struct transaction_t *txn)
 {
     if (txn->meth && txn->meth[0] == 'H') {
-	txn->precond = NULL;
-	txn->errstr = NULL;
+	txn->error.precond = NULL;
+	txn->error.desc = NULL;
     }
 
-    if (txn->precond) {
-	xmlNodePtr root = xml_add_error(NULL, txn->precond, NULL);
+    if (txn->error.precond) {
+	xmlNodePtr root = xml_add_error(NULL, &txn->error, NULL);
 
 	if (root) {
 	    xml_response(code, txn, root->doc);
@@ -1766,8 +1765,9 @@ void error_response(long code, struct transaction_t *txn)
 	}
     }
 
-    if (txn->errstr) txn->resp_body.type = "text/plain";
-    write_body(code, txn, txn->errstr, txn->errstr ? strlen(txn->errstr) : 0);
+    if (txn->error.desc) txn->resp_body.type = "text/plain";
+    write_body(code, txn, txn->error.desc,
+	       txn->error.desc ? strlen(txn->error.desc) : 0);
 }
 
 

@@ -169,7 +169,7 @@ const struct namespace_t namespace_principal = {
  */
 static int meth_acl(struct transaction_t *txn)
 {
-    int ret = 0, r;
+    int ret = 0, r, rights;
     xmlDocPtr indoc = NULL;
     xmlNodePtr root, ace;
     char *server, *aclstr, mailboxname[MAX_MAILBOX_BUFFER];
@@ -180,11 +180,11 @@ static int meth_acl(struct transaction_t *txn)
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED;
 
     /* Parse the path */
-    if ((r = parse_path(&txn->req_tgt, &txn->errstr))) return r;
+    if ((r = parse_path(&txn->req_tgt, &txn->error.desc))) return r;
 
     /* Make sure its a calendar collection */
     if (!txn->req_tgt.collection || txn->req_tgt.resource) {
-	txn->errstr = "ACLs can only be set on calendar collections";
+	txn->error.desc = "ACLs can only be set on calendar collections";
 	syslog(LOG_DEBUG, "Tried to set ACL on non-calendar collection");
 	return HTTP_NOT_ALLOWED;
     }
@@ -196,7 +196,7 @@ static int meth_acl(struct transaction_t *txn)
     if ((r = http_mlookup(mailboxname, &server, &aclstr, NULL))) {
 	syslog(LOG_ERR, "mlookup(%s) failed: %s",
 	       mailboxname, error_message(r));
-	txn->errstr = error_message(r);
+	txn->error.desc = error_message(r);
 
 	switch (r) {
 	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
@@ -206,9 +206,12 @@ static int meth_acl(struct transaction_t *txn)
     }
 
     /* Check ACL for current user */
-    if (!aclstr ||
-	!(cyrus_acl_myrights(httpd_authstate, aclstr) & DACL_ADMIN)) {
+    rights =  aclstr ? cyrus_acl_myrights(httpd_authstate, aclstr) : 0;
+    if (!(rights & DACL_ADMIN)) {
 	/* DAV:need-privileges */
+	txn->error.precond = &preconds[DAV_NEED_PRIVS];
+	txn->error.resource = txn->req_tgt.path;
+	txn->error.rights = DACL_ADMIN;
 	return HTTP_FORBIDDEN;
     }
 
@@ -232,7 +235,7 @@ static int meth_acl(struct transaction_t *txn)
     if ((r = http_mailbox_open(mailboxname, &mailbox, LOCK_EXCLUSIVE))) {
 	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
 	       mailboxname, error_message(r));
-	txn->errstr = error_message(r);
+	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
@@ -240,7 +243,7 @@ static int meth_acl(struct transaction_t *txn)
     /* Parse the ACL body */
     ret = parse_xml_body(txn, &root);
     if (!root) {
-	txn->errstr = "Missing request body";
+	txn->error.desc = "Missing request body";
 	ret = HTTP_BAD_REQUEST;
     }
     if (ret) goto done;
@@ -249,7 +252,7 @@ static int meth_acl(struct transaction_t *txn)
 
     /* Make sure its an DAV:acl element */
     if (xmlStrcmp(root->name, BAD_CAST "acl")) {
-	txn->errstr = "Missing acl element in ACL request";
+	txn->error.desc = "Missing acl element in ACL request";
 	ret = HTTP_BAD_REQUEST;
 	goto done;
     }
@@ -266,7 +269,7 @@ static int meth_acl(struct transaction_t *txn)
 		if (child->type == XML_ELEMENT_NODE) {
 		    if (!xmlStrcmp(child->name, BAD_CAST "principal")) {
 			if (prin) {
-			    txn->errstr = "Multiple principals in ACE";
+			    txn->error.desc = "Multiple principals in ACE";
 			    ret = HTTP_BAD_REQUEST;
 			    goto done;
 			}
@@ -275,7 +278,7 @@ static int meth_acl(struct transaction_t *txn)
 		    }
 		    else if (!xmlStrcmp(child->name, BAD_CAST "grant")) {
 			if (privs) {
-			    txn->errstr = "Multiple grant|deny in ACE";
+			    txn->error.desc = "Multiple grant|deny in ACE";
 			    ret = HTTP_BAD_REQUEST;
 			    goto done;
 			}
@@ -284,7 +287,7 @@ static int meth_acl(struct transaction_t *txn)
 		    }
 		    else if (!xmlStrcmp(child->name, BAD_CAST "deny")) {
 			if (privs) {
-			    txn->errstr = "Multiple grant|deny in ACE";
+			    txn->error.desc = "Multiple grant|deny in ACE";
 			    ret = HTTP_BAD_REQUEST;
 			    goto done;
 			}
@@ -294,11 +297,12 @@ static int meth_acl(struct transaction_t *txn)
 		    }
 		    else if (!xmlStrcmp(child->name, BAD_CAST "invert")) {
 			/* DAV:no-invert */
+			txn->error.precond = &preconds[DAV_NO_INVERT];
 			ret = HTTP_FORBIDDEN;
 			goto done;
 		    }
 		    else {
-			txn->errstr = "Unknown element in ACE";
+			txn->error.desc = "Unknown element in ACE";
 			ret = HTTP_BAD_REQUEST;
 			goto done;
 		    }
@@ -333,6 +337,7 @@ static int meth_acl(struct transaction_t *txn)
 
 	    if (!userid) {
 		/* DAV:recognized-principal */
+		txn->error.precond = &preconds[DAV_RECOG_PRINC];
 		ret = HTTP_FORBIDDEN;
 		goto done;
 	    }
@@ -372,11 +377,13 @@ static int meth_acl(struct transaction_t *txn)
 				 || !xmlStrcmp(privs->children->name,
 					       BAD_CAST "unlock")) {
 			    /* DAV:no-abstract */
+			    txn->error.precond = &preconds[DAV_NO_ABSTRACT];
 			    ret = HTTP_FORBIDDEN;
 			    goto done;
 			}
 			else {
 			    /* DAV:not-supported-privilege */
+			    txn->error.precond = &preconds[DAV_SUPP_PRIV];
 			    ret = HTTP_FORBIDDEN;
 			    goto done;
 			}
@@ -410,12 +417,14 @@ static int meth_acl(struct transaction_t *txn)
 			    rights |= DACL_ADMIN;
 			else {
 			    /* DAV:not-supported-privilege */
+			    txn->error.precond = &preconds[DAV_SUPP_PRIV];
 			    ret = HTTP_FORBIDDEN;
 			    goto done;
 			}
 		    }
 		    else {
 			/* DAV:not-supported-privilege */
+			txn->error.precond = &preconds[DAV_SUPP_PRIV];
 			ret = HTTP_FORBIDDEN;
 			goto done;
 		    }
@@ -431,7 +440,7 @@ static int meth_acl(struct transaction_t *txn)
     if ((r = mboxlist_sync_setacls(mailboxname, buf_cstring(&acl)))) {
 	syslog(LOG_ERR, "mboxlist_sync_setacls(%s) failed: %s",
 	       mailboxname, error_message(r));
-	txn->errstr = error_message(r);
+	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
@@ -465,7 +474,7 @@ static int meth_acl(struct transaction_t *txn)
  */
 static int meth_copy(struct transaction_t *txn)
 {
-    int ret = HTTP_CREATED, r, precond;
+    int ret = HTTP_CREATED, r, precond, rights;
     const char **hdr;
     struct request_target_t dest;  /* Parsed destination URL */
     char src_mboxname[MAX_MAILBOX_BUFFER], dest_mboxname[MAX_MAILBOX_BUFFER];
@@ -486,33 +495,33 @@ static int meth_copy(struct transaction_t *txn)
     if (!(txn->req_tgt.allow & ALLOW_DAV)) return HTTP_NOT_ALLOWED;
 
     /* Parse the path */
-    if ((r = parse_path(&txn->req_tgt, &txn->errstr))) return r;
+    if ((r = parse_path(&txn->req_tgt, &txn->error.desc))) return r;
 
     /* We don't yet handle COPY/MOVE on collections */
     if (!txn->req_tgt.resource) return HTTP_NOT_ALLOWED;
 
     /* Check for mandatory Destination header */
     if (!(hdr = spool_getheader(txn->req_hdrs, "Destination"))) {
-	txn->errstr = "Missing Destination header";
+	txn->error.desc = "Missing Destination header";
 	return HTTP_BAD_REQUEST;
     }
 
     /* Parse destination URI */
-    if ((r = parse_uri(NULL, hdr[0], &dest, &txn->errstr))) return r;
+    if ((r = parse_uri(NULL, hdr[0], &dest, &txn->error.desc))) return r;
 
     /* Check namespace */
     if (strncmp("/calendars/", dest.path, strlen("/calendars/")))
 	return HTTP_FORBIDDEN;
 
     dest.namespace = URL_NS_CALENDAR;
-    if ((r = parse_path(&dest, &txn->errstr))) return r;
+    if ((r = parse_path(&dest, &txn->error.desc))) return r;
 
     /* Make sure dest resource is in same namespace as source */
     if (txn->req_tgt.namespace != dest.namespace) return HTTP_FORBIDDEN;
 
     /* Make sure source and dest resources are NOT the same */
     if (!strcmp(txn->req_tgt.path, dest.path)) {
-	txn->errstr = "Source and destination resources are the same";
+	txn->error.desc = "Source and destination resources are the same";
 	return HTTP_FORBIDDEN;
     }
 
@@ -523,7 +532,7 @@ static int meth_copy(struct transaction_t *txn)
     if ((r = http_mlookup(src_mboxname, &server, &acl, NULL))) {
 	syslog(LOG_ERR, "mlookup(%s) failed: %s",
 	       src_mboxname, error_message(r));
-	txn->errstr = error_message(r);
+	txn->error.desc = error_message(r);
 
 	switch (r) {
 	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
@@ -533,11 +542,13 @@ static int meth_copy(struct transaction_t *txn)
     }
 
     /* Check ACL for current user on source mailbox */
-    if (!acl ||
-	!(cyrus_acl_myrights(httpd_authstate, acl) & DACL_READ) ||
-	((txn->meth[0] == 'M') &&
-	 !(cyrus_acl_myrights(httpd_authstate, acl) & DACL_RMRSRC))) {
+    rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
+    if (!(rights & DACL_READ) ||
+	((txn->meth[0] == 'M') && !(rights & DACL_RMRSRC))) {
 	/* DAV:need-privileges */
+	txn->error.precond = &preconds[DAV_NEED_PRIVS];
+	txn->error.resource = txn->req_tgt.path;
+	txn->error.rights = !(rights & DACL_READ) ? DACL_READ : DACL_RMRSRC;
 	return HTTP_FORBIDDEN;
     }
 
@@ -555,7 +566,7 @@ static int meth_copy(struct transaction_t *txn)
     if ((r = http_mlookup(dest_mboxname, &server, &acl, NULL))) {
 	syslog(LOG_ERR, "mlookup(%s) failed: %s",
 	       dest_mboxname, error_message(r));
-	txn->errstr = error_message(r);
+	txn->error.desc = error_message(r);
 
 	switch (r) {
 	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
@@ -565,10 +576,13 @@ static int meth_copy(struct transaction_t *txn)
     }
 
     /* Check ACL for current user on destination */
-    if (!acl ||
-	!((cyrus_acl_myrights(httpd_authstate, acl) & DACL_WRITECONT) ||
-	  !(cyrus_acl_myrights(httpd_authstate, acl) & DACL_ADDRSRC))) {
+    rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
+    if (!(rights & DACL_ADDRSRC) || !(rights & DACL_WRITECONT)) {
 	/* DAV:need-privileges */
+	txn->error.precond = &preconds[DAV_NEED_PRIVS];
+	txn->error.resource = dest.path;
+	txn->error.rights =
+	    !(rights & DACL_ADDRSRC) ? DACL_ADDRSRC : DACL_WRITECONT;
 	return HTTP_FORBIDDEN;
     }
 
@@ -604,7 +618,7 @@ static int meth_copy(struct transaction_t *txn)
     if ((r = http_mailbox_open(src_mboxname, &src_mbox, LOCK_SHARED))) {
 	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
 	       src_mboxname, error_message(r));
-	txn->errstr = error_message(r);
+	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
@@ -613,7 +627,7 @@ static int meth_copy(struct transaction_t *txn)
     if ((r = caldav_open(src_mbox, 0, &src_caldb))) {
 	syslog(LOG_ERR, "caldav_open(%s) failed: %s",
 	       src_mboxname, error_message(r));
-	txn->errstr = error_message(r);
+	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
@@ -644,7 +658,7 @@ static int meth_copy(struct transaction_t *txn)
     if ((r = mailbox_cacherecord(src_mbox, &src_rec))) {
 	syslog(LOG_ERR, "mailbox_cacherecord(%s) failed: %s",
 	       src_mboxname, error_message(r));
-	txn->errstr = error_message(r);
+	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
@@ -656,7 +670,7 @@ static int meth_copy(struct transaction_t *txn)
     if ((r = mailbox_open_irl(dest_mboxname, &dest_mbox))) {
 	syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
 	       dest_mboxname, error_message(r));
-	txn->errstr = error_message(r);
+	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
@@ -665,7 +679,7 @@ static int meth_copy(struct transaction_t *txn)
     if ((r = caldav_open(dest_mbox, CALDAV_CREATE, &dest_caldb))) {
 	syslog(LOG_ERR, "caldav_open(%s) failed: %s",
 	       dest_mboxname, error_message(r));
-	txn->errstr = error_message(r);
+	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
@@ -692,7 +706,7 @@ static int meth_copy(struct transaction_t *txn)
 	syslog(LOG_ERR, "append_setup(%s) failed: %s",
 	       dest_mboxname, error_message(r));
 	ret = HTTP_SERVER_ERROR;
-	txn->errstr = "append_setup() failed";
+	txn->error.desc = "append_setup() failed";
     }
     else {
 	struct copymsg copymsg;
@@ -728,7 +742,7 @@ static int meth_copy(struct transaction_t *txn)
 	    syslog(LOG_ERR, "append_copy(%s->%s) failed: %s",
 		   src_mboxname, dest_mboxname, error_message(r));
 	    ret = HTTP_SERVER_ERROR;
-	    txn->errstr = "append_copy() failed";
+	    txn->error.desc = "append_copy() failed";
 	}
 
 	if (r) append_abort(&appendstate);
@@ -739,7 +753,7 @@ static int meth_copy(struct transaction_t *txn)
 		syslog(LOG_ERR, "append_commit(%s) failed: %s",
 		       dest_mboxname, error_message(r));
 		ret = HTTP_SERVER_ERROR;
-		txn->errstr = "append_commit() failed";
+		txn->error.desc = "append_commit() failed";
 	    }
 	    else {
 		/* append_commit() returns a write-locked index */
@@ -775,7 +789,7 @@ static int meth_copy(struct transaction_t *txn)
 			syslog(LOG_ERR,
 			       "expunging old dest record (%s) failed: %s",
 			       dest_mboxname, error_message(r));
-			txn->errstr = error_message(r);
+			txn->error.desc = error_message(r);
 			ret = HTTP_SERVER_ERROR;
 			goto done;
 		    }
@@ -812,7 +826,7 @@ static int meth_copy(struct transaction_t *txn)
 	    if ((r = mailbox_rewrite_index_record(src_mbox, &src_rec))) {
 		syslog(LOG_ERR, "expunging src record (%s) failed: %s",
 		       src_mboxname, error_message(r));
-		txn->errstr = error_message(r);
+		txn->error.desc = error_message(r);
 		ret = HTTP_SERVER_ERROR;
 		goto done;
 	    }
@@ -835,7 +849,7 @@ static int meth_copy(struct transaction_t *txn)
 /* Perform a DELETE request */
 static int meth_delete(struct transaction_t *txn)
 {
-    int ret = HTTP_NO_CONTENT, r, precond;
+    int ret = HTTP_NO_CONTENT, r, precond, rights;
     char *server, *acl, mailboxname[MAX_MAILBOX_BUFFER];
     struct mailbox *mailbox = NULL;
     struct caldav_db *caldavdb = NULL;
@@ -848,7 +862,7 @@ static int meth_delete(struct transaction_t *txn)
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
 
     /* Parse the path */
-    if ((r = parse_path(&txn->req_tgt, &txn->errstr))) return r;
+    if ((r = parse_path(&txn->req_tgt, &txn->error.desc))) return r;
 
     /* Construct mailbox name corresponding to request target URI */
     (void) target_to_mboxname(&txn->req_tgt, mailboxname);
@@ -857,7 +871,7 @@ static int meth_delete(struct transaction_t *txn)
     if ((r = http_mlookup(mailboxname, &server, &acl, NULL))) {
 	syslog(LOG_ERR, "mlookup(%s) failed: %s",
 	       mailboxname, error_message(r));
-	txn->errstr = error_message(r);
+	txn->error.desc = error_message(r);
 
 	switch (r) {
 	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
@@ -867,11 +881,13 @@ static int meth_delete(struct transaction_t *txn)
     }
 
     /* Check ACL for current user */
-    if (!acl ||
-	(txn->req_tgt.resource &&
-	 !(cyrus_acl_myrights(httpd_authstate, acl) & DACL_RMRSRC)) ||
-	!(cyrus_acl_myrights(httpd_authstate, acl) & DACL_RMCOL)) {
+    rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
+    if ((txn->req_tgt.resource && !(rights & DACL_RMRSRC)) ||
+	!(rights & DACL_RMCOL)) {
 	/* DAV:need-privileges */
+	txn->error.precond = &preconds[DAV_NEED_PRIVS];
+	txn->error.resource = txn->req_tgt.path;
+	txn->error.rights = txn->req_tgt.resource ? DACL_RMRSRC : DACL_RMCOL;
 	return HTTP_FORBIDDEN;
     }
 
@@ -909,14 +925,14 @@ static int meth_delete(struct transaction_t *txn)
     if ((r = http_mailbox_open(mailboxname, &mailbox, LOCK_EXCLUSIVE))) {
 	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
 	       mailboxname, error_message(r));
-	txn->errstr = error_message(r);
+	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
 
     /* Open the associated CalDAV database */
     if ((r = caldav_open(mailbox, CALDAV_CREATE, &caldavdb))) {
-	txn->errstr = error_message(r);
+	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
@@ -948,7 +964,7 @@ static int meth_delete(struct transaction_t *txn)
     if ((r = mailbox_rewrite_index_record(mailbox, &record))) {
 	syslog(LOG_ERR, "expunging record (%s) failed: %s",
 	       mailboxname, error_message(r));
-	txn->errstr = error_message(r);
+	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
@@ -967,7 +983,7 @@ static int meth_delete(struct transaction_t *txn)
 /* Perform a GET/HEAD request */
 static int meth_get(struct transaction_t *txn)
 {
-    int ret = 0, r, precond;
+    int ret = 0, r, precond, rights;
     const char *msg_base = NULL;
     unsigned long msg_size = 0;
     struct resp_body_t *resp_body = &txn->resp_body;
@@ -980,7 +996,7 @@ static int meth_get(struct transaction_t *txn)
     time_t lastmod = 0;
 
     /* Parse the path */
-    if ((r = parse_path(&txn->req_tgt, &txn->errstr))) return r;
+    if ((r = parse_path(&txn->req_tgt, &txn->error.desc))) return r;
 
     /* We don't handle GET on a calendar collection (yet) */
     if (!txn->req_tgt.resource) return HTTP_NO_CONTENT;
@@ -992,7 +1008,7 @@ static int meth_get(struct transaction_t *txn)
     if ((r = http_mlookup(mailboxname, &server, &acl, NULL))) {
 	syslog(LOG_ERR, "mlookup(%s) failed: %s",
 	       mailboxname, error_message(r));
-	txn->errstr = error_message(r);
+	txn->error.desc = error_message(r);
 
 	switch (r) {
 	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
@@ -1002,8 +1018,12 @@ static int meth_get(struct transaction_t *txn)
     }
 
     /* Check ACL for current user */
-    if (!acl || !(cyrus_acl_myrights(httpd_authstate, acl) & DACL_READ)) {
+    rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
+    if (!(rights & DACL_READ)) {
 	/* DAV:need-privileges */
+	txn->error.precond = &preconds[DAV_NEED_PRIVS];
+	txn->error.resource = txn->req_tgt.path;
+	txn->error.rights = DACL_READ;
 	return HTTP_FORBIDDEN;
     }
 
@@ -1024,14 +1044,14 @@ static int meth_get(struct transaction_t *txn)
     if ((r = http_mailbox_open(mailboxname, &mailbox, LOCK_SHARED))) {
 	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
 	       mailboxname, error_message(r));
-	txn->errstr = error_message(r);
+	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
 
     /* Open the associated CalDAV database */
     if ((r = caldav_open(mailbox, CALDAV_CREATE, &caldavdb))) {
-	txn->errstr = error_message(r);
+	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
@@ -1102,11 +1122,11 @@ static int meth_mkcol(struct transaction_t *txn)
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
 
     /* Parse the path */
-    if ((r = parse_path(&txn->req_tgt, &txn->errstr))) return r;
+    if ((r = parse_path(&txn->req_tgt, &txn->error.desc))) return r;
 
     /* Make sure its a home-set collection */
     if (!txn->req_tgt.collection || txn->req_tgt.resource) {
-	txn->errstr = "Calendars can only be created under a home-set collection";
+	txn->error.precond = &preconds[CALDAV_LOCATION_OK];
 	return HTTP_FORBIDDEN;
     }
 
@@ -1118,7 +1138,7 @@ static int meth_mkcol(struct transaction_t *txn)
     if ((r = http_mlookup(mailboxname, &server, NULL, NULL))) {
 	syslog(LOG_ERR, "mlookup(%s) failed: %s",
 	       mailboxname, error_message(r));
-	txn->errstr = error_message(r);
+	txn->error.desc = error_message(r);
 
 	switch (r) {
 	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
@@ -1166,13 +1186,13 @@ static int meth_mkcol(struct transaction_t *txn)
 	if ((txn->meth[3] == 'O') &&
 	    /* Make sure its a mkcol element */
 	    xmlStrcmp(root->name, BAD_CAST "mkcol")) {
-	    txn->errstr = "Missing mkcol element in MKCOL request";
+	    txn->error.desc = "Missing mkcol element in MKCOL request";
 	    return HTTP_BAD_MEDIATYPE;
 	}
 	else if ((txn->meth[3] == 'A') &&
 		 /* Make sure its a mkcalendar element */
 		 xmlStrcmp(root->name, BAD_CAST "mkcalendar")) {
-	    txn->errstr = "Missing mkcalendar element in MKCALENDAR request";
+	    txn->error.desc = "Missing mkcalendar element in MKCALENDAR request";
 	    return HTTP_BAD_MEDIATYPE;
 	}
 
@@ -1186,7 +1206,7 @@ static int meth_mkcol(struct transaction_t *txn)
 				       "mkcol-response",
 				       root->nsDef, ns))) {
 	    ret = HTTP_SERVER_ERROR;
-	    txn->errstr = "Unable to create XML response";
+	    txn->error.desc = "Unable to create XML response";
 	    goto done;
 	}
 
@@ -1199,7 +1219,7 @@ static int meth_mkcol(struct transaction_t *txn)
 	pctx.root = root;
 	pctx.ns = ns;
 	pctx.tid = NULL;
-	pctx.errstr = &txn->errstr;
+	pctx.errstr = &txn->error.desc;
 	pctx.ret = &r;
 
 	/* Execute the property patch instructions */
@@ -1272,7 +1292,7 @@ int meth_propfind(struct transaction_t *txn)
     if (!httpd_userid) return HTTP_UNAUTHORIZED;
 
     /* Parse the path */
-    if ((r = parse_path(&txn->req_tgt, &txn->errstr))) return r;
+    if ((r = parse_path(&txn->req_tgt, &txn->error.desc))) return r;
 
     /* Check Depth */
     hdr = spool_getheader(txn->req_hdrs, "Depth");
@@ -1280,7 +1300,7 @@ int meth_propfind(struct transaction_t *txn)
 	depth = 2;
     }
     if (hdr && ((sscanf(hdr[0], "%u", &depth) != 1) || (depth > 1))) {
-	txn->errstr = "Illegal Depth value";
+	txn->error.desc = "Illegal Depth value";
 	return HTTP_BAD_REQUEST;
     }
 
@@ -1295,7 +1315,7 @@ int meth_propfind(struct transaction_t *txn)
 	if ((r = http_mlookup(mailboxname, &server, NULL, NULL))) {
 	    syslog(LOG_ERR, "mlookup(%s) failed: %s",
 		   mailboxname, error_message(r));
-	    txn->errstr = error_message(r);
+	    txn->error.desc = error_message(r);
 
 	    switch (r) {
 	    case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
@@ -1340,7 +1360,7 @@ int meth_propfind(struct transaction_t *txn)
 
 	/* Make sure its a propfind element */
 	if (xmlStrcmp(root->name, BAD_CAST "propfind")) {
-	    txn->errstr = "Missing propfind element in PROFIND request";
+	    txn->error.desc = "Missing propfind element in PROFIND request";
 	    ret = HTTP_BAD_REQUEST;
 	    goto done;
 	}
@@ -1360,7 +1380,7 @@ int meth_propfind(struct transaction_t *txn)
     /* Start construction of our multistatus response */
     if (!(root = init_xml_response("multistatus", root->nsDef, ns))) {
 	ret = HTTP_SERVER_ERROR;
-	txn->errstr = "Unable to create XML response";
+	txn->error.desc = "Unable to create XML response";
 	goto done;
     }
 
@@ -1381,7 +1401,7 @@ int meth_propfind(struct transaction_t *txn)
     fctx.elist = elist;
     fctx.root = root;
     fctx.ns = ns;
-    fctx.errstr = &txn->errstr;
+    fctx.errstr = &txn->error.desc;
     fctx.ret = &ret;
 
     if (!txn->req_tgt.collection) {
@@ -1436,7 +1456,7 @@ int meth_propfind(struct transaction_t *txn)
  */
 static int meth_proppatch(struct transaction_t *txn)
 {
-    int ret = 0, r = 0;
+    int ret = 0, r = 0, rights;
     xmlDocPtr indoc = NULL, outdoc = NULL;
     xmlNodePtr root, instr, resp;
     xmlNsPtr ns[NUM_NAMESPACE];
@@ -1447,11 +1467,11 @@ static int meth_proppatch(struct transaction_t *txn)
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED;
 
     /* Parse the path */
-    if ((r = parse_path(&txn->req_tgt, &txn->errstr))) return r;
+    if ((r = parse_path(&txn->req_tgt, &txn->error.desc))) return r;
 
     /* Make sure its a calendar collection */
     if (!txn->req_tgt.collection || txn->req_tgt.resource) {
-	txn->errstr = "Properties can only be updated on calendar collections";
+	txn->error.desc = "Properties can only be updated on calendar collections";
 	return HTTP_FORBIDDEN;
     }
 
@@ -1462,7 +1482,7 @@ static int meth_proppatch(struct transaction_t *txn)
     if ((r = http_mlookup(mailboxname, &server, &acl, NULL))) {
 	syslog(LOG_ERR, "mlookup(%s) failed: %s",
 	       mailboxname, error_message(r));
-	txn->errstr = error_message(r);
+	txn->error.desc = error_message(r);
 
 	switch (r) {
 	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
@@ -1472,8 +1492,12 @@ static int meth_proppatch(struct transaction_t *txn)
     }
 
     /* Check ACL for current user */
-    if (!acl || !(cyrus_acl_myrights(httpd_authstate, acl) & DACL_WRITEPROPS)) {
+    rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
+    if (!(rights & DACL_WRITEPROPS)) {
 	/* DAV:need-privileges */
+	txn->error.precond = &preconds[DAV_NEED_PRIVS];
+	txn->error.resource = txn->req_tgt.path;
+	txn->error.rights = DACL_WRITEPROPS;
 	return HTTP_FORBIDDEN;
     }
 
@@ -1496,7 +1520,7 @@ static int meth_proppatch(struct transaction_t *txn)
     /* Parse the PROPPATCH body */
     ret = parse_xml_body(txn, &root);
     if (!root) {
-	txn->errstr = "Missing request body";
+	txn->error.desc = "Missing request body";
 	return HTTP_BAD_REQUEST;
     }
     if (ret) goto done;
@@ -1505,7 +1529,7 @@ static int meth_proppatch(struct transaction_t *txn)
 
     /* Make sure its a propertyupdate element */
     if (xmlStrcmp(root->name, BAD_CAST "propertyupdate")) {
-	txn->errstr = "Missing propertyupdate element in PROPPATCH request";
+	txn->error.desc = "Missing propertyupdate element in PROPPATCH request";
 	return HTTP_BAD_REQUEST;
     }
     instr = root->children;
@@ -1513,7 +1537,7 @@ static int meth_proppatch(struct transaction_t *txn)
     /* Start construction of our multistatus response */
     if (!(root = init_xml_response("multistatus", root->nsDef, ns))) {
 	ret = HTTP_SERVER_ERROR;
-	txn->errstr = "Unable to create XML response";
+	txn->error.desc = "Unable to create XML response";
 	goto done;
     }
 
@@ -1531,7 +1555,7 @@ static int meth_proppatch(struct transaction_t *txn)
     pctx.root = resp;
     pctx.ns = ns;
     pctx.tid = NULL;
-    pctx.errstr = &txn->errstr;
+    pctx.errstr = &txn->error.desc;
     pctx.ret = &r;
 
     /* Execute the property patch instructions */
@@ -1577,7 +1601,7 @@ static int global_put_count = 0;
 
 static int meth_put(struct transaction_t *txn)
 {
-    int ret = HTTP_CREATED, r, precond;
+    int ret = HTTP_CREATED, r, precond, rights;
     char *server, *acl, mailboxname[MAX_MAILBOX_BUFFER];
     struct mailbox *mailbox = NULL;
     struct caldav_db *caldavdb = NULL;
@@ -1599,7 +1623,7 @@ static int meth_put(struct transaction_t *txn)
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
 
     /* Parse the path */
-    if ((r = parse_path(&txn->req_tgt, &txn->errstr))) return r;
+    if ((r = parse_path(&txn->req_tgt, &txn->error.desc))) return r;
 
     /* We don't handle POST/PUT on non-calendar collections */
     if (!txn->req_tgt.collection) return HTTP_NOT_ALLOWED;
@@ -1610,7 +1634,7 @@ static int meth_put(struct transaction_t *txn)
     /* Check Content-Type */
     if (!(hdr = spool_getheader(txn->req_hdrs, "Content-Type")) ||
 	!is_mediatype(hdr[0], "text/calendar")) {
-	txn->errstr = "This collection only supports text/calendar data";
+	txn->error.desc = "This collection only supports text/calendar data";
 	return HTTP_BAD_MEDIATYPE;
     }
 
@@ -1621,7 +1645,7 @@ static int meth_put(struct transaction_t *txn)
     if ((r = http_mlookup(mailboxname, &server, &acl, NULL))) {
 	syslog(LOG_ERR, "mlookup(%s) failed: %s",
 	       mailboxname, error_message(r));
-	txn->errstr = error_message(r);
+	txn->error.desc = error_message(r);
 
 	switch (r) {
 	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
@@ -1631,10 +1655,13 @@ static int meth_put(struct transaction_t *txn)
     }
 
     /* Check ACL for current user */
-    if (!acl ||
-	!((cyrus_acl_myrights(httpd_authstate, acl) & DACL_WRITECONT) ||
-	  !(cyrus_acl_myrights(httpd_authstate, acl) & DACL_ADDRSRC))) {
+    rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
+    if (!(rights & DACL_WRITECONT) || !(rights & DACL_ADDRSRC)) {
 	/* DAV:need-privileges */
+	txn->error.precond = &preconds[DAV_NEED_PRIVS];
+	txn->error.resource = txn->req_tgt.path;
+	txn->error.rights =
+	    !(rights & DACL_WRITECONT) ? DACL_WRITECONT : DACL_ADDRSRC;
 	return HTTP_FORBIDDEN;
     }
 
@@ -1655,14 +1682,14 @@ static int meth_put(struct transaction_t *txn)
     if ((r = http_mailbox_open(mailboxname, &mailbox, LOCK_SHARED))) {
 	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
 	       mailboxname, error_message(r));
-	txn->errstr = error_message(r);
+	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
 
     /* Open the associated CalDAV database */
     if ((r = caldav_open(mailbox, CALDAV_CREATE, &caldavdb))) {
-	txn->errstr = error_message(r);
+	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
@@ -1715,14 +1742,14 @@ static int meth_put(struct transaction_t *txn)
 
     /* Check if we can append a new iMIP message to calendar mailbox */
     if ((r = append_check(mailboxname, httpd_authstate, ACL_INSERT, size))) {
-	txn->errstr = error_message(r);
+	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
 
     /* Read body */
     txn->flags |= HTTP_READBODY;
-    r = read_body(httpd_in, txn->req_hdrs, &txn->req_body, &txn->errstr);
+    r = read_body(httpd_in, txn->req_hdrs, &txn->req_body, &txn->error.desc);
     if (r) {
 	txn->flags |= HTTP_CLOSE;
 	ret = r;
@@ -1731,7 +1758,7 @@ static int meth_put(struct transaction_t *txn)
 
     /* Make sure we have a body */
     if (!buf_len(&txn->req_body)) {
-	txn->errstr = "Missing request body";
+	txn->error.desc = "Missing request body";
 	ret = HTTP_BAD_REQUEST;
 	goto done;
     }
@@ -1739,7 +1766,7 @@ static int meth_put(struct transaction_t *txn)
     /* Parse the iCal data for important properties */
     ical = icalparser_parse_string(buf_cstring(&txn->req_body));
     if (!ical) {
-	txn->errstr = "Invalid calendar data";
+	txn->error.desc = "Invalid calendar data";
 	ret = HTTP_BAD_MEDIATYPE;
 	goto done;
     }
@@ -1747,7 +1774,7 @@ static int meth_put(struct transaction_t *txn)
 
     /* Prepare to stage the message */
     if (!(f = append_newstage(mailboxname, now, 0, &stage))) {
-	txn->errstr = error_message(r);
+	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
@@ -1795,7 +1822,7 @@ static int meth_put(struct transaction_t *txn)
     if ((r = append_setup(&appendstate, mailboxname, 
 			  httpd_userid, httpd_authstate, ACL_INSERT, size))) {
 	ret = HTTP_SERVER_ERROR;
-	txn->errstr = "append_setup() failed";
+	txn->error.desc = "append_setup() failed";
     }
     else {
 	struct body *body = NULL;
@@ -1803,7 +1830,7 @@ static int meth_put(struct transaction_t *txn)
 	/* Append the iMIP file to the calendar mailbox */
 	if ((r = append_fromstage(&appendstate, &body, stage, now, NULL, 0, 0))) {
 	    ret = HTTP_SERVER_ERROR;
-	    txn->errstr = "append_fromstage() failed";
+	    txn->error.desc = "append_fromstage() failed";
 	}
 	if (body) message_free_body(body);
 
@@ -1812,7 +1839,7 @@ static int meth_put(struct transaction_t *txn)
 	    if ((r = append_commit(&appendstate, size,
 				   NULL, NULL, NULL, &mailbox))) {
 		ret = HTTP_SERVER_ERROR;
-		txn->errstr = "append_commit() failed";
+		txn->error.desc = "append_commit() failed";
 	    }
 	    else {
 		struct index_record newrecord, *expunge;
@@ -1867,7 +1894,7 @@ static int meth_put(struct transaction_t *txn)
 		    if (r) {
 			syslog(LOG_ERR, "expunging record (%s) failed: %s",
 			       mailboxname, error_message(r));
-			txn->errstr = error_message(r);
+			txn->error.desc = error_message(r);
 			ret = HTTP_SERVER_ERROR;
 		    }
 		}
@@ -2129,7 +2156,6 @@ static int meth_report(struct transaction_t *txn)
     xmlNodePtr inroot = NULL, outroot = NULL, cur, prop = NULL;
     const struct report_type_t *report = NULL;
     xmlNsPtr ns[NUM_NAMESPACE];
-    char *server, *acl, mailboxname[MAX_MAILBOX_BUFFER];
     struct mailbox *mailbox = NULL;
     struct caldav_db *caldavdb = NULL;
     struct propfind_ctx fctx;
@@ -2139,16 +2165,16 @@ static int meth_report(struct transaction_t *txn)
     if (!(txn->req_tgt.allow & ALLOW_DAV)) return HTTP_NOT_ALLOWED; 
 
     /* Parse the path */
-    if ((r = parse_path(&txn->req_tgt, &txn->errstr))) return r;
+    if ((r = parse_path(&txn->req_tgt, &txn->error.desc))) return r;
 
     /* Check Depth */
     if ((hdr = spool_getheader(txn->req_hdrs, "Depth"))) {
 	if (!strcmp(hdr[0], "infinity")) {
-	    txn->errstr = "This server DOES NOT support infinite depth requests";
+	    txn->error.desc = "This server DOES NOT support infinite depth requests";
 	    return HTTP_SERVER_ERROR;
 	}
 	else if ((sscanf(hdr[0], "%u", &depth) != 1) || (depth > 1)) {
-	    txn->errstr = "Illegal Depth value";
+	    txn->error.desc = "Illegal Depth value";
 	    return HTTP_BAD_REQUEST;
 	}
     }
@@ -2156,7 +2182,7 @@ static int meth_report(struct transaction_t *txn)
     /* Parse the REPORT body */
     ret = parse_xml_body(txn, &inroot);
     if (!inroot) {
-	txn->errstr = "Missing request body";
+	txn->error.desc = "Missing request body";
 	return HTTP_BAD_REQUEST;
     }
     if (ret) goto done;
@@ -2168,8 +2194,7 @@ static int meth_report(struct transaction_t *txn)
     if (!report || !report->name) {
 	syslog(LOG_WARNING, "REPORT %s", inroot->name);
 	/* DAV:supported-report */
-	txn->precond = &preconds[DAV_SUPP_REPORT];
-	txn->errstr = "Unsupported REPORT type";
+	txn->error.precond = &preconds[DAV_SUPP_REPORT];
 	ret = HTTP_FORBIDDEN;
 	goto done;
     }
@@ -2179,13 +2204,13 @@ static int meth_report(struct transaction_t *txn)
 	if (cur->type == XML_ELEMENT_NODE) {
 	    if (!xmlStrcmp(cur->name, BAD_CAST "allprop")) {
 		syslog(LOG_WARNING, "REPORT %s w/allprop", report->name);
-		txn->errstr = "Unsupported REPORT option <allprop>";
+		txn->error.desc = "Unsupported REPORT option <allprop>";
 		ret = HTTP_NOT_IMPLEMENTED;
 		goto done;
 	    }
 	    else if (!xmlStrcmp(cur->name, BAD_CAST "propname")) {
 		syslog(LOG_WARNING, "REPORT %s w/propname", report->name);
-		txn->errstr = "Unsupported REPORT option <propname>";
+		txn->error.desc = "Unsupported REPORT option <propname>";
 		ret = HTTP_NOT_IMPLEMENTED;
 		goto done;
 	    }
@@ -2197,14 +2222,14 @@ static int meth_report(struct transaction_t *txn)
     }
 
     if (!prop && (report->flags & REPORT_NEED_PROPS)) {
-	txn->errstr = "Missing <prop> element in REPORT";
+	txn->error.desc = "Missing <prop> element in REPORT";
 	ret = HTTP_BAD_REQUEST;
 	goto done;
     }
 
     /* Start construction of our multistatus response */
     if (!(outroot = init_xml_response("multistatus", inroot->nsDef, ns))) {
-	txn->errstr = "Unable to create XML response";
+	txn->error.desc = "Unable to create XML response";
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
@@ -2213,6 +2238,9 @@ static int meth_report(struct transaction_t *txn)
     if (prop) preload_proplist(prop->children, &elist);
 
     if (report->flags & REPORT_NEED_MBOX) {
+	char *server, *acl, mailboxname[MAX_MAILBOX_BUFFER];
+	int rights;
+
 	/* Construct mailbox name corresponding to request target URI */
 	(void) target_to_mboxname(&txn->req_tgt, mailboxname);
 
@@ -2220,7 +2248,7 @@ static int meth_report(struct transaction_t *txn)
 	if ((r = http_mlookup(mailboxname, &server, &acl, NULL))) {
 	    syslog(LOG_ERR, "mlookup(%s) failed: %s",
 		   mailboxname, error_message(r));
-	    txn->errstr = error_message(r);
+	    txn->error.desc = error_message(r);
 
 	    switch (r) {
 	    case IMAP_PERMISSION_DENIED: ret = HTTP_FORBIDDEN;
@@ -2231,8 +2259,12 @@ static int meth_report(struct transaction_t *txn)
 	}
 
 	/* Check ACL for current user */
-	if (!acl || !(cyrus_acl_myrights(httpd_authstate, acl) & DACL_READ)) {
+	rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
+	if (!(rights & DACL_READ)) {
 	    /* DAV:need-privileges */
+	    txn->error.precond = &preconds[DAV_NEED_PRIVS];
+	    txn->error.resource = txn->req_tgt.path;
+	    txn->error.rights = DACL_READ;
 	    ret = HTTP_FORBIDDEN;
 	    goto done;
 	}
@@ -2254,7 +2286,7 @@ static int meth_report(struct transaction_t *txn)
 	if ((r = http_mailbox_open(mailboxname, &mailbox, LOCK_SHARED))) {
 	    syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
 		   mailboxname, error_message(r));
-	    txn->errstr = error_message(r);
+	    txn->error.desc = error_message(r);
 	    ret = HTTP_SERVER_ERROR;
 	    goto done;
 	}
@@ -2262,7 +2294,7 @@ static int meth_report(struct transaction_t *txn)
 	if (report->flags & REPORT_NEED_DAVDB) {
 	    /* Open the associated CalDAV database */
 	    if ((r = caldav_open(mailbox, CALDAV_CREATE, &caldavdb))) {
-		txn->errstr = error_message(r);
+		txn->error.desc = error_message(r);
 		ret = HTTP_SERVER_ERROR;
 		goto done;
 	    }
@@ -2280,7 +2312,7 @@ static int meth_report(struct transaction_t *txn)
     fctx.elist = elist;
     fctx.root = outroot;
     fctx.ns = ns;
-    fctx.errstr = &txn->errstr;
+    fctx.errstr = &txn->error.desc;
     fctx.ret = &ret;
 
     /* Process the requested report */
@@ -2390,13 +2422,13 @@ static int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root)
     if (!(hdr = spool_getheader(txn->req_hdrs, "Content-Type")) ||
 	(!is_mediatype(hdr[0], "text/xml") &&
 	 !is_mediatype(hdr[0], "application/xml"))) {
-	txn->errstr = "This method requires an XML body";
+	txn->error.desc = "This method requires an XML body";
 	return HTTP_BAD_MEDIATYPE;
     }
 
     /* Read body */
     txn->flags |= HTTP_READBODY;
-    if ((r = read_body(httpd_in, txn->req_hdrs, &txn->req_body, &txn->errstr))) {
+    if ((r = read_body(httpd_in, txn->req_hdrs, &txn->req_body, &txn->error.desc))) {
 	txn->flags |= HTTP_CLOSE;
 	return r;
     }
@@ -2412,13 +2444,13 @@ static int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root)
 	xmlFreeParserCtxt(ctxt);
     }
     if (!doc) {
-	txn->errstr = "Unable to parse XML body";
+	txn->error.desc = "Unable to parse XML body";
 	return HTTP_BAD_REQUEST;
     }
 
     /* Get the root element of the XML request */
     if (!(*root = xmlDocGetRootElement(doc))) {
-	txn->errstr = "Missing root element in request";
+	txn->error.desc = "Missing root element in request";
 	return HTTP_BAD_REQUEST;
     }
 

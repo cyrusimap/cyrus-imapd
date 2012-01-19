@@ -142,6 +142,14 @@ struct auth_challenge_t {
     const char *param;	 		/* Server challenge */
 };
 
+/* Meta-data for error response */
+struct error_t {
+    const char *desc;			/* Error description */
+    const struct precond *precond;	/* [Cal]DAV precondition */
+    const char *resource;		/* Resource which lacks privileges */
+    int rights;  			/* Privileges needed by resource */
+};  
+
 /* Meta-data for response body (payload & representation headers) */
 struct resp_body_t {
     ulong len; 		/* Content-Length   */
@@ -162,8 +170,7 @@ struct transaction_t {
     struct auth_challenge_t auth_chal;	/* Authentication challenge */
     const char *loc;	    		/* Location: of resp representation */
     const char *etag;			/* ETag: of response representation */
-    const char *errstr;			/* Error string */
-    const struct precond *precond;	/* [Cal]DAV precondition */
+    struct error_t error;		/* Error response meta-data */
     struct resp_body_t resp_body;	/* Response body meta-data */
 #ifdef HAVE_ZLIB
     z_stream zstrm;			/* Compression context */

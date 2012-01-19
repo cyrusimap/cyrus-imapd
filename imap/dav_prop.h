@@ -110,7 +110,8 @@ enum {
     DAV_SYNC_TOKEN,
     DAV_OVER_LIMIT,
     CALDAV_SUPP_DATA,
-    CALDAV_VALID_DATA
+    CALDAV_VALID_DATA,
+    CALDAV_LOCATION_OK
 };
 
 /* Structure for precondition/postcondition errors */
@@ -121,6 +122,7 @@ struct precond {
 
 extern const struct precond preconds[];
 
+/* Structure for property status */
 struct propstat {
     xmlNodePtr prop;
     long status;
@@ -203,7 +205,8 @@ int preload_proplist(xmlNodePtr proplist, struct propfind_entry_list **list);
 xmlNodePtr init_xml_response(const char *resp,
 			     xmlNsPtr reqNs, xmlNsPtr *respNs);
 
-xmlNodePtr xml_add_error(xmlNodePtr root, const struct precond *precond,
+struct error_t;
+xmlNodePtr xml_add_error(xmlNodePtr root, struct error_t *err,
 			 xmlNsPtr *avail_ns);
 
 /* Add a response tree to 'root' for the specified href and property list */

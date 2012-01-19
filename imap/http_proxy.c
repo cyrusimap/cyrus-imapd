@@ -679,14 +679,14 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 
     /* Read response from backend */
     r = read_response(be, txn->meth, &code, &statline, &resp_hdrs, &resp_body,
-		      &txn->errstr);
+		      &txn->error.desc);
     if (!r) {
 	if (code == 100) { /* Continue */
 	    /* Read body */
 	    if (!(txn->flags & HTTP_READBODY)) {
 		txn->flags |= HTTP_READBODY;
 		r = read_body(httpd_in, txn->req_hdrs,
-			      &txn->req_body, &txn->errstr);
+			      &txn->req_body, &txn->error.desc);
 	    }
 	    if (r) {
 		/* Couldn't get the body and can't finish request */
@@ -702,7 +702,7 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 
 		/* Read final response from backend */
 		r = read_response(be, txn->meth, &code, &statline, &resp_hdrs,
-				  &resp_body, &txn->errstr);
+				  &resp_body, &txn->error.desc);
 	    }
 	}
 
@@ -764,7 +764,7 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 
     /* Read response from source backend */
     r = read_response(src_be, "HEAD", &code, &statline, &resp_hdrs, NULL,
-		      &txn->errstr);
+		      &txn->error.desc);
     if (r) goto cleanup;
 
     if (code == 200) {  /* OK */
@@ -800,7 +800,7 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 
 	/* Read response from dest backend */
 	r = read_response(dest_be, "PUT", &code, &statline, &resp_hdrs,
-			  &resp_body, &txn->errstr);
+			  &resp_body, &txn->error.desc);
 	if (r) goto cleanup;
 
 	if (code == 100) {  /* Continue */
@@ -822,7 +822,7 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 
 	    /* Read response from source backend */
 	    r = read_response(src_be, "GET", &code, &statline, &resp_hdrs,
-			      &resp_body, &txn->errstr);
+			      &resp_body, &txn->error.desc);
 	    if (r) goto cleanup;
 
 	    if (code == 200) {  /* OK */
@@ -834,7 +834,7 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 
 		/* Read final response from dest backend */
 		r = read_response(dest_be, "PUT", &code, &statline, &resp_hdrs,
-				  &resp_body, &txn->errstr);
+				  &resp_body, &txn->error.desc);
 		if (r) goto cleanup;
 	    }
 	    else {
@@ -869,7 +869,7 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 
 	/* Read response from source backend */
 	read_response(src_be, "DELETE", &code, &statline, &resp_hdrs,
-		      &resp_body, &txn->errstr);
+		      &resp_body, &txn->error.desc);
     }
 
   cleanup:

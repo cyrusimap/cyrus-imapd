@@ -54,6 +54,9 @@
 #define SCHED_INBOX	"Inbox/"
 #define SCHED_OUTBOX	"Outbox/"
 
+static int add_privs(int rights, int implicit,
+		     xmlNodePtr parent, xmlNodePtr root, xmlNsPtr *ns);
+
 
 /* Ensure that we have a given namespace.  If it doesn't exist in what we
  * parsed in the request, create it and attach to 'node'.
@@ -106,11 +109,11 @@ xmlNodePtr init_xml_response(const char *resp,
     return root;
 }
 
-xmlNodePtr xml_add_error(xmlNodePtr root, const struct precond *precond,
+xmlNodePtr xml_add_error(xmlNodePtr root, struct error_t *err,
 			 xmlNsPtr *avail_ns)
 {
     xmlNsPtr ns[NUM_NAMESPACE];
-    xmlNodePtr error;
+    xmlNodePtr error, node;
 
     if (!root) {
 	error = root = init_xml_response("error", NULL, ns);
@@ -118,7 +121,15 @@ xmlNodePtr xml_add_error(xmlNodePtr root, const struct precond *precond,
     }
     else error = xmlNewChild(root, NULL, BAD_CAST "error", NULL);
 
-    xmlNewChild(error, avail_ns[precond->ns], BAD_CAST precond->name, NULL);
+    node = xmlNewChild(error, avail_ns[err->precond->ns],
+		       BAD_CAST err->precond->name, NULL);
+
+    if ((err->precond == &preconds[DAV_NEED_PRIVS]) &&
+	err->resource && err->rights) {
+	node = xmlNewChild(node, NULL, BAD_CAST "resource", NULL);
+	xmlNewChild(node, NULL, BAD_CAST "href", BAD_CAST err->resource);
+	add_privs(err->rights, 0, node, root, avail_ns);
+    }
 
     return root;
 }
@@ -193,7 +204,8 @@ int xml_add_response(struct propfind_ctx *fctx, long code)
 	    xmlNewChild(stat->prop->parent, NULL, BAD_CAST "status",
 			BAD_CAST http_statusline(stat->status));
 	    if (stat->precond) {
-		xml_add_error(stat->prop->parent, stat->precond, fctx->ns);
+		struct error_t error = { NULL, stat->precond, NULL, 0 };
+		xml_add_error(stat->prop->parent, &error, fctx->ns);
 	    }
 	}
     }
@@ -668,7 +680,7 @@ static int propfind_curprin(const xmlChar *propname, xmlNsPtr ns,
 }
 
 
-static int add_privs(int rights,
+static int add_privs(int rights, int implicit,
 		     xmlNodePtr parent, xmlNodePtr root, xmlNsPtr *ns)
 {
     xmlNodePtr priv;
@@ -680,8 +692,9 @@ static int add_privs(int rights,
     if (rights & DACL_READ) {
 	priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
 	xmlNewChild(priv, NULL, BAD_CAST "read", NULL);
+	if (implicit) rights |= DACL_READFB;
     }
-    if (rights & (DACL_READ|DACL_READFB)) {
+    if (rights & DACL_READFB) {
 	priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
 	ensure_ns(ns, NS_CAL, root, XML_NS_CAL, "C");
 	xmlNewChild(priv, ns[NS_CAL], BAD_CAST  "read-free-busy", NULL);
@@ -770,7 +783,7 @@ static int propfind_curprivset(const xmlChar *propname, xmlNsPtr ns,
 	set = xml_add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK],
 			   ns, BAD_CAST propname, NULL, NULL);
 
-	add_privs(rights, set, resp->parent, fctx->ns);
+	add_privs(rights, 1, set, resp->parent, fctx->ns);
     }
 
     return 0;
@@ -853,7 +866,7 @@ static int propfind_acl(const xmlChar *propname, xmlNsPtr ns,
 
 	    node = xmlNewChild(ace, NULL,
 			       BAD_CAST (deny ? "deny" : "grant"), NULL);
-	    add_privs(rights, node, resp->parent, fctx->ns);
+	    add_privs(rights, 1, node, resp->parent, fctx->ns);
 
 	    if (fctx->req_tgt->resource) {
 		node = xmlNewChild(ace, NULL, BAD_CAST "inherited", NULL);
@@ -1267,7 +1280,8 @@ const struct precond preconds[] =
 
     /* CalDAV (RFC 4791) preconditions */
     { "supported-calendar-data", NS_CAL },
-    { "valid-calendar-data", NS_CAL }
+    { "valid-calendar-data", NS_CAL },
+    { "calendar-collection-location-ok", NS_CAL }
 };
 
 
@@ -1396,7 +1410,8 @@ int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr)
 	    xmlNewChild(stat->prop->parent, NULL, BAD_CAST "status",
 			BAD_CAST http_statusline(stat->status));
 	    if (stat->precond) {
-		xml_add_error(stat->prop->parent, stat->precond, pctx->ns);
+		struct error_t error = { NULL, stat->precond, NULL, 0 };
+		xml_add_error(stat->prop->parent, &error, pctx->ns);
 	    }
 	}
     }
