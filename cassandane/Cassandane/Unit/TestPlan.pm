@@ -42,6 +42,8 @@
 use strict;
 use warnings;
 use Cassandane::Unit::TestCase;
+use IO::Handle;
+use POSIX qw(pipe);
 package Cassandane::Unit::TestPlanItem;
 
 sub new
@@ -87,6 +89,307 @@ sub _allow
 {
     my ($self, $name) = @_;
     $self->{allowed}->{$name} = 1;
+}
+
+package Cassandane::Unit::Worker;
+
+my $nextid = 1;
+
+sub new
+{
+    my ($class) = @_;
+    my $self = {
+	id => $nextid++,
+	pid => undef,
+	downpipe => undef,
+	uppipe => undef,
+	eitem => undef,
+	handler => undef,
+    };
+    return bless $self, $class;
+}
+
+sub _pipe_read_fh
+{
+    my ($r, $w) = @_;
+
+    POSIX::close($w);
+    my $fh = IO::Handle->new_from_fd($r, "r");
+    $fh->autoflush(1);
+    return $fh;
+}
+
+sub _pipe_write_fh
+{
+    my ($r, $w) = @_;
+
+    POSIX::close($r);
+    my $fh = IO::Handle->new_from_fd($w, "w");
+    $fh->autoflush(1);
+    return $fh;
+}
+
+sub start
+{
+    my ($self) = @_;
+
+    my ($dr, $dw) = POSIX::pipe();
+    die "Cannot create down pipe: $!"
+	unless defined $dw;
+
+    my ($ur, $uw) = POSIX::pipe();
+    die "Cannot create up pipe: $!"
+	unless defined $uw;
+
+    my $pid = fork();
+    die "Cannot fork: $!" unless defined $pid;
+
+    if ($pid)
+    {
+	# parent
+	$self->{downpipe} = _pipe_write_fh($dr, $dw);
+	$self->{uppipe} = _pipe_read_fh($ur, $uw);
+	$self->{pid} = $pid;
+    }
+    else
+    {
+	# child
+	$self->{downpipe} = _pipe_read_fh($dr, $dw);
+	$self->{uppipe} = _pipe_write_fh($ur, $uw);
+	$self->_mainloop();
+	exit(0);
+    }
+}
+
+sub _send
+{
+    my ($fh, $fmt, @args) = @_;
+    my $msg = sprintf($fmt, @args);
+# print STDERR "--> \"$msg\"\n";
+    syswrite($fh, $msg);
+}
+
+sub _receive
+{
+    my ($fh) = @_;
+    my $msg = $fh->gets();
+# print STDERR "<-- \"$msg\"\n";
+    chomp $msg;
+    return $msg;
+}
+
+sub _mainloop
+{
+    my ($self) = @_;
+
+    while (my $msg = _receive($self->{downpipe}))
+    {
+	my ($command, @args) = split(/\s+/, $msg);
+
+	if ($command eq 'stop')
+	{
+	    return;
+	}
+	elsif ($command eq 'run')
+	{
+	    my $eitem = { suite => $args[0], test => $args[1] };
+	    my $res = $self->{handler}->($eitem);
+	    _send($self->{uppipe}, "%s\n", ($res ? 'success' : 'failure'));
+	}
+	else
+	{
+	    print STDERR "_mainloop: unknown command '$command'\n";
+	}
+    }
+}
+
+sub result
+{
+    my ($self) = @_;
+    return if !$self->{eitem};
+    my $msg = _receive($self->{uppipe});
+    my $res;
+    return if !defined $msg;
+    chomp $msg;
+    if ($msg eq 'success')
+    {
+	$res = 1;
+    }
+    elsif ($msg eq 'failure')
+    {
+	$res = 0;
+    }
+    else
+    {
+	die "Unknown result \"$msg\"";
+    }
+    my $eitem = $self->{eitem};
+    $eitem->{result} = $res;
+    $self->{eitem} = undef;
+    return $eitem;
+}
+
+sub assign
+{
+    my ($self, $eitem) = @_;
+    _send($self->{downpipe},
+	  "run %s %s\n", $eitem->{suite}, $eitem->{test});
+    $self->{eitem} = $eitem;
+}
+
+sub stop
+{
+    my ($self) = @_;
+    _send($self->{downpipe}, "stop\n");
+    while (1)
+    {
+	my $res = waitpid($self->{pid}, 0);
+	return if $res < 0;
+	next if $res == 0;
+	next if $res != $self->{pid};
+    }
+    $self->_cleanup();
+}
+
+sub _cleanup
+{
+    my ($self) = @_;
+
+    if ($self->{downpipe})
+    {
+	close $self->{downpipe};
+	$self->{downpipe} = undef;
+    }
+
+    if ($self->{uppipe})
+    {
+	close $self->{uppipe};
+	$self->{uppipe} = undef;
+    }
+
+    $self->{pid} = undef;
+}
+
+sub DESTROY
+{
+    my ($self) = @_;
+    $self->_cleanup();
+}
+
+package Cassandane::Unit::WorkerPool;
+
+sub new
+{
+    my ($class, %params) = @_;
+    my $self = {
+	workers => [],
+	maxworkers => 2,
+	pending => [],
+	handler => sub { die "This should not happen"; },
+    };
+    foreach my $p (qw(maxworkers handler))
+    {
+	$self->{$p} = $params{$p} if $params{$p};
+    }
+    return bless $self, $class;
+}
+
+sub start
+{
+    my ($self) = @_;
+
+    while (scalar @{$self->{workers}} < $self->{maxworkers})
+    {
+	my $w = Cassandane::Unit::Worker->new();
+	$w->{handler} = $self->{handler};
+	$w->start();
+	push(@{$self->{workers}}, $w);
+    }
+}
+
+# Assign an eitem to an idle worker if necessary
+# block until a worker is idle.
+sub assign
+{
+    my ($self, $eitem) = @_;
+
+    my @idle = grep { !$_->{eitem}; } @{$self->{workers}};
+    my $w = shift @idle || $self->_wait();
+    $w->assign($eitem);
+}
+
+# Wait for a Worker to send back a completed work item.
+# Mark the Worker idle, remember its work item where
+# retrieve() will find it, and returns the Worker.
+sub _wait
+{
+    my ($self) = @_;
+
+
+    # Build the bit mask for select()
+    my $rbits = '';
+    foreach my $w (@{$self->{workers}})
+    {
+	next if (!$w->{eitem});
+	vec($rbits, fileno($w->{uppipe}), 1) = 1;
+    }
+
+    # select() with no timeout
+    my $res = select($rbits, undef, undef, undef);
+    die "select failed: $!" if ($res < 0);
+
+    # discover which of our workers has responded
+    foreach my $w (@{$self->{workers}})
+    {
+	if (vec($rbits, fileno($w->{uppipe}), 1))
+	{
+	    push(@{$self->{pending}}, $w->result());
+	    return $w;
+	}
+    }
+    die "Unexpected result from select: $res";
+}
+
+# Retrieve a completed work item
+sub retrieve
+{
+    my ($self) = @_;
+
+    my $eitem = shift @{$self->{pending}};
+    return $eitem;
+}
+
+# Retrieve a completed work item, waiting if necessary.
+# Used when draining i.e. no more work items will be
+# made available.
+sub drain
+{
+    my ($self) = @_;
+
+    if (!scalar @{$self->{pending}})
+    {
+	my @busy = grep { $_->{eitem}; } @{$self->{workers}};
+	$self->_wait() if (scalar @busy);
+    }
+    return $self->retrieve();
+}
+
+
+# reap all workers
+sub stop
+{
+    my ($self) = @_;
+
+    while (my $w = pop @{$self->{workers}})
+    {
+	$w->stop();
+    }
+}
+
+sub DESTROY
+{
+    my ($self) = @_;
+    $self->stop();
 }
 
 package Cassandane::Unit::TestPlan;
@@ -230,6 +533,15 @@ sub list
     return @res;
 }
 
+sub _run_eitem
+{
+    my ($self, $eitem, $result, $runner) = @_;
+
+    my $suite = $self->_get_item($eitem->{suite})->_get_loaded_suite();
+    Cassandane::Unit::TestCase->enable_test($eitem->{test});
+    return $suite->run($result, $runner);
+}
+
 # The 'run' method makes this class look sufficiently like a
 # Test::Unit::TestCase that Test::Unit::TestRunner will happily run it.
 # This enables us to run all our scheduled tests with a single
@@ -239,23 +551,58 @@ sub run
     my ($self, $result, $runner) = @_;
     my $passed = 1;
 
-    if (!$self->{keep_going})
-    {
-	# Hacky!
-	no warnings;
-	*Test::Unit::Result::should_stop = sub
-	{
-	    my ($self) = @_;
-	    return !$self->was_successful();
-	};
-    }
+    my $maxworkers = 2;
 
-    foreach my $item ($self->_get_schedule())
+    # we expand the schedule before forking the
+    # workers so that we can just hand the reference
+    # to the worker
+    my @items = $self->_get_schedule();
+
+    if ($maxworkers > 1)
     {
-	my $suite = $self->_get_item($item->{suite})->_get_loaded_suite();
-	Cassandane::Unit::TestCase->enable_test($item->{test});
-	$passed = 0
-	    if (!$suite->run($result, $runner));
+	# multi-threaded case: use worker pool
+	my $pool = Cassandane::Unit::WorkerPool->new(
+	    maxworkers => $maxworkers,
+	    handler => sub {
+		my ($eitem) = @_;
+		return $self->_run_eitem($eitem, $result, $runner);
+	    },
+	);
+	my $eitem;
+	$pool->start();
+	while ($eitem = shift @items)
+	{
+	    $pool->assign($eitem);
+	    while ($eitem = $pool->retrieve())
+	    {
+		$passed &&= $eitem->{result};
+	    }
+	}
+	while ($eitem = $pool->drain())
+	{
+	    $passed &&= $eitem->{result};
+	}
+	$pool->stop();
+    }
+    else
+    {
+	# single threaded case: just run it all in-process
+
+	if (!$self->{keep_going})
+	{
+	    # Hacky!
+	    no warnings;
+	    *Test::Unit::Result::should_stop = sub
+	    {
+		my ($self) = @_;
+		return !$self->was_successful();
+	    };
+	}
+
+	foreach my $eitem (@items)
+	{
+	    $passed &&= $self->_run_eitem($eitem, $result, $runner);
+	}
     }
 
     return $passed;
