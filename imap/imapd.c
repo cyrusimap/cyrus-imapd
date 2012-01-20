@@ -2463,9 +2463,11 @@ void cmd_authenticate(char *tag, char *authtype, char *resp)
     if (!saslprops.ssf) {
 	prot_printf(imapd_out, "%s OK [CAPABILITY ", tag);
 	capa_response(CAPA_PREAUTH|CAPA_POSTAUTH);
-	prot_printf(imapd_out, "] Success (%s)\r\n", ssfmsg);
+	prot_printf(imapd_out, "] Success (%s) SESSIONID=<%s>\r\n",
+		    ssfmsg, session_id());
     } else {
-	prot_printf(imapd_out, "%s OK Success (%s)\r\n", tag, ssfmsg);
+	prot_printf(imapd_out, "%s OK Success (%s) SESSIONID=<%s>\r\n",
+		    tag, ssfmsg, session_id());
     }
 
     prot_setsasl(imapd_in,  imapd_saslconn);
