@@ -226,7 +226,8 @@ sub read_part_content {
     my $Content = '';
 
     # Could be 0 length body, only die on undef (real error)
-    read($fh, $Content, $nbytes) // die "Cannot read: $!";
+    my $r = read($fh, $Content, $nbytes);
+    die "Cannot read: $!" if !defined $r;
 
     return $self->decode_part($Part, $Content);
 }
