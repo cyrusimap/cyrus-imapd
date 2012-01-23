@@ -302,18 +302,14 @@ sub _set_annotations_from_fetch
     my ($self, $fetchitem) = @_;
     my $ea = {};
 
-    while ($ea->{entry} = shift @$fetchitem)
+    foreach my $entry (keys %$fetchitem)
     {
-	my $attvalues = shift @$fetchitem;
-	die "Bad array in annotation data"
-	    unless ref($attvalues) eq 'ARRAY';
-	die "Bad array in annotation data (2)"
-	    unless (scalar(@$attvalues) % 2 == 0);
-
-	while ($ea->{attrib} = shift @$attvalues)
+	$ea->{entry} = $entry;
+	my $av = $fetchitem->{$entry};
+	foreach my $attrib (keys %$av)
 	{
-	    my $value = shift @$attvalues;
-	    $self->set_annotation($ea, $value);
+	    $ea->{attrib} = $attrib;
+	    $self->set_annotation($ea, $av->{$attrib});
 	}
     }
 }

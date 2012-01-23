@@ -634,9 +634,9 @@ sub test_permessage_getset
     $self->assert_not_null($res);
     $self->assert_deep_equals(
 	    {
-		1 => { annotation => [ $entry, [ $attrib, undef ] ] },
-		2 => { annotation => [ $entry, [ $attrib, undef ] ] },
-		3 => { annotation => [ $entry, [ $attrib, undef ] ] },
+		1 => { annotation => { $entry => { $attrib => undef } } },
+		2 => { annotation => { $entry => { $attrib => undef } } },
+		3 => { annotation => { $entry => { $attrib => undef } } },
 	    },
 	    $res);
 
@@ -652,9 +652,9 @@ sub test_permessage_getset
     $self->assert_not_null($res);
     $self->assert_deep_equals(
 	    {
-		1 => { annotation => [ $entry, [ $attrib, $value1 ] ] },
-		2 => { annotation => [ $entry, [ $attrib, undef ] ] },
-		3 => { annotation => [ $entry, [ $attrib, undef ] ] },
+		1 => { annotation => { $entry => { $attrib => $value1 } } },
+		2 => { annotation => { $entry => { $attrib => undef } } },
+		3 => { annotation => { $entry => { $attrib => undef } } },
 	    },
 	    $res);
 
@@ -670,9 +670,9 @@ sub test_permessage_getset
     $self->assert_not_null($res);
     $self->assert_deep_equals(
 	    {
-		1 => { annotation => [ $entry, [ $attrib, $value1 ] ] },
-		2 => { annotation => [ $entry, [ $attrib, undef ] ] },
-		3 => { annotation => [ $entry, [ $attrib, $value2 ] ] },
+		1 => { annotation => { $entry => { $attrib => $value1 } } },
+		2 => { annotation => { $entry => { $attrib => undef } } },
+		3 => { annotation => { $entry => { $attrib => $value2 } } },
 	    },
 	    $res);
 
@@ -690,9 +690,9 @@ sub test_permessage_getset
     $self->assert_not_null($res);
     $self->assert_deep_equals(
 	    {
-		1 => { annotation => [ $entry, [ $attrib, $value3 ] ] },
-		2 => { annotation => [ $entry, [ $attrib, $value3 ] ] },
-		3 => { annotation => [ $entry, [ $attrib, $value3 ] ] },
+		1 => { annotation => { $entry => { $attrib => $value3 } } },
+		2 => { annotation => { $entry => { $attrib => $value3 } } },
+		3 => { annotation => { $entry => { $attrib => $value3 } } },
 	    },
 	    $res);
 
@@ -710,9 +710,9 @@ sub test_permessage_getset
     $self->assert_not_null($res);
     $self->assert_deep_equals(
 	    {
-		1 => { annotation => [ $entry, [ $attrib, $value3 ] ] },
-		2 => { annotation => [ $entry, [ $attrib, undef ] ] },
-		3 => { annotation => [ $entry, [ $attrib, $value3 ] ] },
+		1 => { annotation => { $entry => { $attrib => $value3 } } },
+		2 => { annotation => { $entry => { $attrib => undef } } },
+		3 => { annotation => { $entry => { $attrib => $value3 } } },
 	    },
 	    $res);
 
@@ -730,9 +730,9 @@ sub test_permessage_getset
     $self->assert_not_null($res);
     $self->assert_deep_equals(
 	    {
-		1 => { annotation => [ $entry, [ $attrib, undef ] ] },
-		2 => { annotation => [ $entry, [ $attrib, undef ] ] },
-		3 => { annotation => [ $entry, [ $attrib, undef ] ] },
+		1 => { annotation => { $entry => { $attrib => undef } } },
+		2 => { annotation => { $entry => { $attrib => undef } } },
+		3 => { annotation => { $entry => { $attrib => undef } } },
 	    },
 	    $res);
 }
@@ -760,7 +760,7 @@ sub test_permessage_unknown
     $self->assert_not_null($res);
     $self->assert_deep_equals(
 	    {
-		1 => { annotation => [ $entry, [ $attrib, undef ] ] },
+		1 => { annotation => { $entry => { $attrib => undef } } }
 	    },
 	    $res);
 
@@ -776,7 +776,7 @@ sub test_permessage_unknown
     $self->assert_not_null($res);
     $self->assert_deep_equals(
 	    {
-		1 => { annotation => [ $entry, [ $attrib, undef ] ] },
+		1 => { annotation => { $entry => { $attrib => undef } } }
 	    },
 	    $res);
 }
@@ -811,7 +811,7 @@ sub test_permessage_unknown_allowed
     $self->assert_not_null($res);
     $self->assert_deep_equals(
 	    {
-		1 => { annotation => [ $entry, [ $attrib, undef ] ] },
+		1 => { annotation => { $entry => { $attrib => undef } } }
 	    },
 	    $res);
 
@@ -827,7 +827,7 @@ sub test_permessage_unknown_allowed
     $self->assert_not_null($res);
     $self->assert_deep_equals(
 	    {
-		1 => { annotation => [ $entry, [ $attrib, $value1 ] ] },
+		1 => { annotation => { $entry => { $attrib => $value1 } } }
 	    },
 	    $res);
 }
@@ -1621,15 +1621,15 @@ sub test_modseq
 	    {
 		1 => {
 			modseq => [$hms0-2],
-			annotation => [ $entry, [ $attrib, undef ] ]
+			annotation => { $entry => { $attrib => undef } }
 		     },
 		2 => {
 			modseq => [$hms0-1],
-			annotation => [ $entry, [ $attrib, undef ] ]
+			annotation => { $entry => { $attrib => undef } }
 		     },
 		3 => {
 			modseq => [$hms0],
-			annotation => [ $entry, [ $attrib, undef ] ]
+			annotation => { $entry => { $attrib => undef } }
 		     },
 	    },
 	    $res);
@@ -1650,15 +1650,15 @@ sub test_modseq
 	    {
 		1 => {
 			modseq => [$hms1],
-			annotation => [ $entry, [ $attrib, $value1 ] ]
+			annotation => { $entry => { $attrib => $value1 } }
 		     },
 		2 => {
 			modseq => [$hms0-1],
-			annotation => [ $entry, [ $attrib, undef ] ]
+			annotation => { $entry => { $attrib => undef } }
 		     },
 		3 => {
 			modseq => [$hms0],
-			annotation => [ $entry, [ $attrib, undef ] ]
+			annotation => { $entry => { $attrib => undef } }
 		     },
 	    },
 	    $res);
@@ -1679,15 +1679,15 @@ sub test_modseq
 	    {
 		1 => {
 			modseq => [$hms2],
-			annotation => [ $entry, [ $attrib, undef ] ]
+			annotation => { $entry => { $attrib => undef } }
 		     },
 		2 => {
 			modseq => [$hms0-1],
-			annotation => [ $entry, [ $attrib, undef ] ]
+			annotation => { $entry => { $attrib => undef } }
 		     },
 		3 => {
 			modseq => [$hms0],
-			annotation => [ $entry, [ $attrib, undef ] ]
+			annotation => { $entry => { $attrib => undef } }
 		     },
 	    },
 	    $res);
@@ -1780,15 +1780,15 @@ sub test_unchangedsince
 	    {
 		1 => {
 			modseq => [$hms1],
-			annotation => [ $entry, [ $attrib, $value1 ] ]
+			annotation => { $entry => { $attrib => $value1 } }
 		     },
 		2 => {
 			modseq => [$hms0-1],
-			annotation => [ $entry, [ $attrib, undef ] ]
+			annotation => { $entry => { $attrib => undef } }
 		     },
 		3 => {
 			modseq => [$hms0],
-			annotation => [ $entry, [ $attrib, undef ] ]
+			annotation => { $entry => { $attrib => undef } }
 		     },
 	    },
 	    $res);
@@ -1812,15 +1812,15 @@ sub test_unchangedsince
 	    {
 		1 => {
 			modseq => [$hms2],
-			annotation => [ $entry, [ $attrib, $value2 ] ]
+			annotation => { $entry => { $attrib => $value2 } }
 		     },
 		2 => {
 			modseq => [$hms0-1],
-			annotation => [ $entry, [ $attrib, undef ] ]
+			annotation => { $entry => { $attrib => undef } }
 		     },
 		3 => {
 			modseq => [$hms0],
-			annotation => [ $entry, [ $attrib, undef ] ]
+			annotation => { $entry => { $attrib => undef } }
 		     },
 	    },
 	    $res);
@@ -1846,15 +1846,15 @@ sub test_unchangedsince
 		1 => {
 			# unchanged
 			modseq => [$hms2],
-			annotation => [ $entry, [ $attrib, $value2 ] ]
+			annotation => { $entry => { $attrib => $value2 } }
 		     },
 		2 => {
 			modseq => [$hms0-1],
-			annotation => [ $entry, [ $attrib, undef ] ]
+			annotation => { $entry => { $attrib => undef } }
 		     },
 		3 => {
 			modseq => [$hms0],
-			annotation => [ $entry, [ $attrib, undef ] ]
+			annotation => { $entry => { $attrib => undef } }
 		     },
 	    },
 	    $res);
