@@ -55,6 +55,7 @@ my $do_cleanup = 0;
 # The default really should be --no-keep-going like make
 my $keep_going = 1;
 my @names;
+my $jobs;
 
 # This disgusting hack makes Test::Unit report a useful stack trace for
 # it's assert failures instead of just a file name and line number.
@@ -168,6 +169,11 @@ while (my $a = shift)
     {
 	Cassandane::Instance->set_defaults(valgrind => 1);
     }
+    elsif ($a eq '-j' || $a eq '--jobs')
+    {
+	$jobs = shift;
+	usage unless defined $jobs;
+    }
     elsif ($a eq '-l' || $a eq '--list')
     {
 	$do_list = 1;
@@ -196,7 +202,8 @@ Cassandane::Instance::cleanup_leftovers()
     if ($do_cleanup);
 
 my $plan = Cassandane::Unit::TestPlan->new(
-	keep_going => $keep_going
+	keep_going => $keep_going,
+	maxworkers => $jobs,
     );
 
 if ($do_list)

@@ -459,6 +459,7 @@ sub new
     my $self = {
 	schedule => {},
 	keep_going => delete $opts{keep_going} || 0,
+	maxworkers => delete $opts{maxworkers},
     };
     die "Unknown options: " . join(' ', keys %opts)
 	if scalar %opts;
@@ -635,7 +636,7 @@ sub run
     my ($self, $result, $runner) = @_;
     my $passed = 1;
 
-    my $maxworkers = 2;
+    my $maxworkers = $self->{maxworkers} || 1;
 
     # we expand the schedule before forking the
     # workers so that we can just hand the reference
