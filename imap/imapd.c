@@ -5635,7 +5635,9 @@ void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 				   imapd_userisadmin, 
 				   imapd_userid, imapd_authstate, 0, rename_user);
 	/* it's OK to not exist if there are subfolders */
-	if (r == IMAP_MAILBOX_NONEXISTENT && subcount && !rename_user) 
+	if (r == IMAP_MAILBOX_NONEXISTENT && subcount && !rename_user &&
+	   mboxname_userownsmailbox(imapd_userid, oldmailboxname) &&
+	   mboxname_userownsmailbox(imapd_userid, newmailboxname))
 	    goto submboxes;
     }
 
