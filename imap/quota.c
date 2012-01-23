@@ -304,7 +304,7 @@ static int findroot(const char *name, int *thisquota)
 	/* have we already passed the name, then there can
 	 * be no further matches */
 	if (compar(root, name) > 0)
-	    return 0;
+	    break;
 
 	/* is the mailbox within this root? */
 	if (mboxname_is_prefix(name, root)) {
