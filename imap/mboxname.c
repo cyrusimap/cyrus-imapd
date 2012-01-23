@@ -1085,6 +1085,7 @@ int mboxname_netnewscheck(const char *name)
 #define GOODCHARS " #$'+,-.0123456789:=@ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz~"
 int mboxname_policycheck(const char *name)
 {
+    const char *p;
     unsigned i;
     struct glob *g;
     int sawutf7 = 0;
@@ -1112,6 +1113,16 @@ int mboxname_policycheck(const char *name)
      * single character top level names */
     if (name[1] == '.' || name[1] == '\0')
 	return IMAP_MAILBOX_BADNAME;
+
+    /* find the virtual domain, if any.  We don't sanity check domain
+       names yet - maybe we should */
+    p = strchr(name, '!');
+    if (p) {
+	if (config_virtdomains)
+	    name = p + 1;
+	else
+	    return IMAP_MAILBOX_BADNAME;
+    }
 
     for (i = 0; i < NUM_BADMBOXPATTERNS; i++) {
 	g = glob_init(badmboxpatterns[i], GLOB_ICASE);
