@@ -624,10 +624,15 @@ int mboxlist_createmailboxcheck(const char *name, int mbtype __attribute__((unus
 				  isadmin, forceuser);
     if (r) goto done;
 
-    r = mboxlist_create_acl(name, &acl);
-    if (r) goto done;
+    if (newacl) {
+	r = mboxlist_create_acl(name, &acl);
+	if (r) goto done;
+    }
 
-    r = mboxlist_create_partition(name, partition, &part);
+    if (newpartition) {
+	r = mboxlist_create_partition(name, partition, &part);
+	if (r) goto done;
+    }
 
  done:
     if (r || !newacl) free(acl);
