@@ -72,7 +72,7 @@ sub new
     my %params = @_;
 
     my $cassini = Cassandane::Cassini->instance();
-    $rootdir = $cassini->val('cassandane', 'rootdir', $ENV{CASROOT} || '/var/tmp/cass')
+    $rootdir = $cassini->val('cassandane', 'rootdir', '/var/tmp/cass')
 	unless defined $rootdir;
 
     my $self = {
