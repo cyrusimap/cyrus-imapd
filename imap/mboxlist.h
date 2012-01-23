@@ -229,9 +229,4 @@ int mboxlist_abort(struct txn *tid);
 
 int mboxlist_delayed_delete_isenabled(void);
 
-/* Small utility routine for limit_user_folders */
-int mboxlist_count_inferiors(const char *mboxname, int isadmin,
-			     const char *userid,
-			     struct auth_state *authstate);
-
 #endif
