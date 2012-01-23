@@ -834,20 +834,28 @@ sub test_quota_f
 
     my $admintalk = $self->{adminstore}->get_client();
 
-    # Right - let's set ourselves a basic usage quota
-    $self->_set_quotaroot('user.cassandane');
+    xlog "set ourselves a basic usage quota";
     $self->_set_limits(
+	quotaroot => 'user.cassandane',
 	storage => 100000,
 	message => 50000,
 	'x-annotation-storage' => 10000,
     );
     $self->_check_usages(
+	quotaroot => 'user.cassandane',
 	storage => 0,
 	message => 0,
 	'x-annotation-storage' => 0,
     );
 
+    xlog "create some messages to use various quota resources";
     $self->{instance}->create_user("quotafuser");
+    $self->_set_limits(
+	quotaroot => 'user.quotafuser',
+	storage => 100000,
+	message => 50000,
+	'x-annotation-storage' => 10000,
+    );
     $self->{adminstore}->set_folder("user.quotafuser");
     my $quotafuser_expected_storage = 0;
     my $quotafuser_expected_message = 0;
@@ -857,52 +865,86 @@ sub test_quota_f
 	$quotafuser_expected_storage += length($msg->as_string());
 	$quotafuser_expected_message++;
     }
-    for (1..10) {
-	$self->make_message("Cassandane $_", extra_lines => 5000);
-    }
-
     my $annotation = $self->make_random_data(10);
-    $admintalk->setmetadata($self->{adminstore}->{folder}, '/private/comment', { Quote => $annotation });
-    $quotafuser_expected_annotation_storage = length($annotation);
-    $admintalk->setmetadata($self->{store}->{folder}, '/private/comment', { Quote => $annotation });
+    $quotafuser_expected_annotation_storage += length($annotation);
+    $admintalk->setmetadata('user.quotafuser', '/private/comment', { Quote => $annotation });
 
-    my @origcasres = $admintalk->getquota("user.cassandane");
-    $self->assert_num_equals(9, scalar @origcasres);
+    my $cassandane_expected_storage = 0;
+    my $cassandane_expected_message = 0;
+    my $cassandane_expected_annotation_storage = 0;
+    for (1..10) {
+	my $msg = $self->make_message("Cassandane $_", extra_lines => 5000);
+	$cassandane_expected_storage += length($msg->as_string());
+	$cassandane_expected_message++;
+    }
+    $annotation = $self->make_random_data(3);
+    $cassandane_expected_annotation_storage += length($annotation);
+    $admintalk->setmetadata('user.cassandane', '/private/comment', { Quote => $annotation });
 
-    # create a bogus quota file
-    $self->_zap_quota(quotaroot => 'user.quotafuser',
-		      limits => {
-			storage => 100000,
-			message => 50000,
-			'x-annotation-storage' => 10000,
-		      });
+    xlog "check usages";
+    $self->_check_usages(
+	quotaroot => 'user.quotafuser',
+	storage => int($quotafuser_expected_storage/1024),
+	message => $quotafuser_expected_message,
+	'x-annotation-storage' => int($quotafuser_expected_annotation_storage/1024),
+    );
+    $self->_check_usages(
+	quotaroot => 'user.cassandane',
+	storage => int($cassandane_expected_storage/1024),
+	message => $cassandane_expected_message,
+	'x-annotation-storage' => int($cassandane_expected_annotation_storage/1024),
+    );
 
-    # find and add the quota
+    xlog "create a bogus quota file";
+    $self->_zap_quota(quotaroot => 'user.quotafuser');
+
+    xlog "check usages";
+    $self->_check_usages(
+	quotaroot => 'user.quotafuser',
+	storage => 0,
+	message => 0,
+	'x-annotation-storage' => 0,
+    );
+    $self->_check_usages(
+	quotaroot => 'user.cassandane',
+	storage => int($cassandane_expected_storage/1024),
+	message => $cassandane_expected_message,
+	'x-annotation-storage' => int($cassandane_expected_annotation_storage/1024),
+    );
+
+    xlog "find and add the quota";
     $self->{instance}->run_command({ cyrus => 1 }, 'quota', '-f');
 
-    my @res = $admintalk->getquota("user.quotafuser");
-    $self->assert_num_equals(9, scalar @res);
-    my @casres = $admintalk->getquota("user.cassandane");
-    $self->assert_num_equals(9, scalar @casres);
+    xlog "check usages";
+    $self->_check_usages(
+	quotaroot => 'user.quotafuser',
+	storage => int($quotafuser_expected_storage/1024),
+	message => $quotafuser_expected_message,
+	'x-annotation-storage' => int($quotafuser_expected_annotation_storage/1024),
+    );
+    $self->_check_usages(
+	quotaroot => 'user.cassandane',
+	storage => int($cassandane_expected_storage/1024),
+	message => $cassandane_expected_message,
+	'x-annotation-storage' => int($cassandane_expected_annotation_storage/1024),
+    );
 
-    # re-run the quota utility
+    xlog "re-run the quota utility";
     $self->{instance}->run_command({ cyrus => 1 }, 'quota', '-f');
 
-    my @res2 = $admintalk->getquota("user.quotafuser");
-    $self->assert_num_equals(9, scalar @res2);
-    my @casres2 = $admintalk->getquota("user.cassandane");
-    $self->assert_num_equals(9, scalar @casres2);
-
-    $self->assert_num_equals(int($quotafuser_expected_storage/1024), $res[1]);
-    $self->assert_num_equals($quotafuser_expected_message, $res[4]);
-    $self->assert_num_equals(int($quotafuser_expected_annotation_storage/1024), $res[7]);
-
-    # usage should be unchanged
-    $self->assert($res[1] == $res2[1] && $res[4] == $res2[4] && $res[7] == $res2[7] && 
-		  $casres[1] == $casres2[1] && $casres[4] == $casres2[4] && $casres[7] == $casres2[7] &&
-		  $casres[1] == $origcasres[1] && $casres[4] == $origcasres[4] && $casres[7] == $origcasres[7], 
-		  "Quota mismatch: quotafuser (1: " . Dumper(\@res) . ", 2: " . Dumper(\@res2) . ") " .
-		  "cassandane (0: " . Dumper(\@origcasres) . ", 1: " . Dumper(\@casres) . ", 2: " . Dumper(\@casres2) . ")");
+    xlog "check usages";
+    $self->_check_usages(
+	quotaroot => 'user.quotafuser',
+	storage => int($quotafuser_expected_storage/1024),
+	message => $quotafuser_expected_message,
+	'x-annotation-storage' => int($quotafuser_expected_annotation_storage/1024),
+    );
+    $self->_check_usages(
+	quotaroot => 'user.cassandane',
+	storage => int($cassandane_expected_storage/1024),
+	message => $cassandane_expected_message,
+	'x-annotation-storage' => int($cassandane_expected_annotation_storage/1024),
+    );
 }
 
 # Test races between quota -f and updates to mailboxes
