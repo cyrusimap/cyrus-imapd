@@ -6219,7 +6219,6 @@ char *identifier;
     if (!r) {
 	struct auth_state *authstate = auth_newstate(identifier);
 	char *canon_identifier;
-	int canonidlen = 0;
 	int implicit;
 	char rightsdesc[100], optional[33];
 
@@ -6228,8 +6227,6 @@ char *identifier;
 	else
 	    canon_identifier = canonify_userid(identifier, imapd_userid, NULL);
 	auth_freestate(authstate);
-
-	if (canon_identifier) canonidlen = strlen(canon_identifier);
 
 	if (!canon_identifier) {
 	    implicit = 0;
