@@ -3073,7 +3073,7 @@ static void add_header(const char *destname, const char **dest,
 
 	if (!dest) {
 	    /* add the new header to the cache */
-	    spool_cache_header(xstrdup("destname"), newdest, hdrcache);
+	    spool_cache_header(xstrdup(destname), newdest, hdrcache);
 	}
     } else if (dest) {
 	/* no source header, use original dest header */
