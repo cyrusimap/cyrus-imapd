@@ -744,10 +744,10 @@ sub test_annotations_from_fetch
     my $a2 = 'value.priv';
 
     my $m = Cassandane::Message->new(attrs => {
-			annotation => [
-			    $e1 => [ $a1, 'whatever' ],
-			    $e2 => [ $a2, 'sartorial' ]
-			]});
+			annotation => {
+			    $e1 => { $a1 => 'whatever' },
+			    $e2 => { $a2 => 'sartorial' }
+			}});
 
     $self->assert($m->has_annotation($e1, $a1));
     $self->assert($m->has_annotation($e2, $a2));
