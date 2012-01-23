@@ -43,7 +43,8 @@ use strict;
 use warnings;
 use Cassandane::Unit::TestCase;
 use IO::Handle;
-use POSIX qw(pipe);
+use POSIX;
+
 package Cassandane::Unit::TestPlanItem;
 
 sub new
@@ -92,6 +93,8 @@ sub _allow
 }
 
 package Cassandane::Unit::Worker;
+use FreezeThaw qw(safeFreeze thaw);
+use MIME::Base64;
 
 my $nextid = 1;
 
@@ -103,7 +106,7 @@ sub new
 	pid => undef,
 	downpipe => undef,
 	uppipe => undef,
-	eitem => undef,
+	busy => 0,
 	handler => undef,
     };
     return bless $self, $class;
@@ -172,7 +175,8 @@ sub _send
 sub _receive
 {
     my ($fh) = @_;
-    my $msg = $fh->gets();
+    my $msg = $fh->gets()
+	or return;
 # print STDERR "<-- \"$msg\"\n";
     chomp $msg;
     return $msg;
@@ -192,9 +196,10 @@ sub _mainloop
 	}
 	elsif ($command eq 'run')
 	{
-	    my $eitem = { suite => $args[0], test => $args[1] };
-	    my $res = $self->{handler}->($eitem);
-	    _send($self->{uppipe}, "%s\n", ($res ? 'success' : 'failure'));
+	    my ($witem) = thaw(decode_base64($args[0]));
+	    $self->{handler}->($witem);
+	    _send($self->{uppipe},
+		  "done %s\n", encode_base64(safeFreeze($witem), ''));
 	}
 	else
 	{
@@ -203,38 +208,26 @@ sub _mainloop
     }
 }
 
-sub result
+sub get_reply
 {
     my ($self) = @_;
-    return if !$self->{eitem};
+    return if !$self->{busy};
     my $msg = _receive($self->{uppipe});
-    my $res;
     return if !defined $msg;
-    chomp $msg;
-    if ($msg eq 'success')
-    {
-	$res = 1;
-    }
-    elsif ($msg eq 'failure')
-    {
-	$res = 0;
-    }
-    else
-    {
-	die "Unknown result \"$msg\"";
-    }
-    my $eitem = $self->{eitem};
-    $eitem->{result} = $res;
-    $self->{eitem} = undef;
-    return $eitem;
+    my ($command, @args) = split(/\s+/, $msg);
+    die "Unknown message \"$msg\""
+	if ($command ne 'done');
+    $self->{busy} = 0;
+    my ($witem) = thaw(decode_base64($args[0]));
+    return $witem;
 }
 
 sub assign
 {
-    my ($self, $eitem) = @_;
+    my ($self, $witem) = @_;
     _send($self->{downpipe},
-	  "run %s %s\n", $eitem->{suite}, $eitem->{test});
-    $self->{eitem} = $eitem;
+	  "run %s\n", encode_base64(safeFreeze($witem), ''));
+    $self->{busy} = 1;
 }
 
 sub stop
@@ -307,15 +300,15 @@ sub start
     }
 }
 
-# Assign an eitem to an idle worker if necessary
+# Assign an work item to an idle worker if necessary
 # block until a worker is idle.
 sub assign
 {
-    my ($self, $eitem) = @_;
+    my ($self, $witem) = @_;
 
-    my @idle = grep { !$_->{eitem}; } @{$self->{workers}};
+    my @idle = grep { !$_->{busy}; } @{$self->{workers}};
     my $w = shift @idle || $self->_wait();
-    $w->assign($eitem);
+    $w->assign($witem);
 }
 
 # Wait for a Worker to send back a completed work item.
@@ -330,7 +323,7 @@ sub _wait
     my $rbits = '';
     foreach my $w (@{$self->{workers}})
     {
-	next if (!$w->{eitem});
+	next if (!$w->{busy});
 	vec($rbits, fileno($w->{uppipe}), 1) = 1;
     }
 
@@ -343,7 +336,7 @@ sub _wait
     {
 	if (vec($rbits, fileno($w->{uppipe}), 1))
 	{
-	    push(@{$self->{pending}}, $w->result());
+	    push(@{$self->{pending}}, $w->get_reply());
 	    return $w;
 	}
     }
@@ -355,8 +348,7 @@ sub retrieve
 {
     my ($self) = @_;
 
-    my $eitem = shift @{$self->{pending}};
-    return $eitem;
+    return shift @{$self->{pending}};
 }
 
 # Retrieve a completed work item, waiting if necessary.
@@ -368,7 +360,7 @@ sub drain
 
     if (!scalar @{$self->{pending}})
     {
-	my @busy = grep { $_->{eitem}; } @{$self->{workers}};
+	my @busy = grep { $_->{busy}; } @{$self->{workers}};
 	$self->_wait() if (scalar @busy);
     }
     return $self->retrieve();
@@ -390,6 +382,68 @@ sub DESTROY
 {
     my ($self) = @_;
     $self->stop();
+}
+
+package Cassandane::Unit::WorkerListener;
+use base qw(Test::Unit::Listener);
+
+sub new
+{
+    my ($class) = shift;
+    my $self = {
+	witem => undef,
+    };
+    return bless $self, $class;
+}
+
+sub start_suite
+{
+    my ($self, $suite) = @_;
+    # nothing to see here
+}
+
+sub start_test
+{
+    my ($self, $test) = @_;
+    # nothing to see here
+}
+
+sub end_test
+{
+    my ($self, $test) = @_;
+    # nothing to see here
+}
+
+sub end_suite
+{
+    my ($self, $suite) = @_;
+    # nothing to see here
+}
+
+sub add_error
+{
+    my ($self, $test, $exception) = @_;
+    my $witem = $self->{witem};
+    $witem->{result} = 'error';
+    $witem->{exception} = $exception;
+    $witem->{test} = $test;
+}
+
+sub add_failure
+{
+    my ($self, $test, $exception) = @_;
+    my $witem = $self->{witem};
+    $witem->{result} = 'fail';
+    $witem->{exception} = $exception;
+    $witem->{test} = $test;
+}
+
+sub add_pass
+{
+    my ($self, $test) = @_;
+    my $witem = $self->{witem};
+    $witem->{result} = 'pass';
+    $witem->{test} = $test;
 }
 
 package Cassandane::Unit::TestPlan;
@@ -420,13 +474,13 @@ sub _get_item
 
 sub _schedule
 {
-    my ($self, $neg, $suite, $test) = @_;
+    my ($self, $neg, $suite, $testname) = @_;
     if ($neg eq '!')
     {
-	if (defined $test)
+	if (defined $testname)
 	{
 	    # disable a specific test
-	    $self->_get_item($suite)->_deny($test);
+	    $self->_get_item($suite)->_deny($testname);
 	}
 	else
 	{
@@ -438,9 +492,9 @@ sub _schedule
     {
 	# add to the schedule
 	my $item = $self->_get_item($suite);
-	if (defined $test)
+	if (defined $testname)
 	{
-	    $item->_allow($test) if $test;
+	    $item->_allow($testname) if $testname;
 	}
     }
 }
@@ -493,8 +547,8 @@ sub schedule
 
 
 #
-# Get the entire expanded schedule as specific {suite,test} name tuples,
-# sorted in alphabetic order on suite name then test name.
+# Get the entire expanded schedule as specific {suite,testname} tuples,
+# sorted in alphabetic order on suite name then testname.
 #
 sub _get_schedule
 {
@@ -511,7 +565,10 @@ sub _get_schedule
 	    next unless $item->_is_allowed($name);
 	    push(@res, {
 		suite => $item->{suite},
-		test => $name,
+		testname => $name,
+		result => 'unknown',
+		exception => undef,
+		test => undef,
 	    });
 	}
     }
@@ -525,21 +582,48 @@ sub list
     my ($self) = @_;
 
     my @res;
-    foreach my $eitem ($self->_get_schedule())
+    foreach my $witem ($self->_get_schedule())
     {
-	push(@res, "$eitem->{suite}.$eitem->{test}");
+	push(@res, "$witem->{suite}.$witem->{testname}");
     }
 
     return @res;
 }
 
-sub _run_eitem
+sub _run_workitem
 {
-    my ($self, $eitem, $result, $runner) = @_;
+    my ($self, $witem, $result, $runner) = @_;
 
-    my $suite = $self->_get_item($eitem->{suite})->_get_loaded_suite();
-    Cassandane::Unit::TestCase->enable_test($eitem->{test});
+    my $suite = $self->_get_item($witem->{suite})->_get_loaded_suite();
+    Cassandane::Unit::TestCase->enable_test($witem->{testname});
     return $suite->run($result, $runner);
+}
+
+sub _finish_workitem
+{
+    my ($self, $witem, $result) = @_;
+    my $test = $witem->{test};
+    my $res;
+
+    $result->start_test($test);
+    if ($witem->{result} eq 'pass')
+    {
+	$result->add_pass($test);
+	$res = 1;
+    }
+    elsif ($witem->{result} eq 'fail')
+    {
+	$result->add_failure($test, $witem->{exception});
+	$res = 0;
+    }
+    elsif ($witem->{result} eq 'error')
+    {
+	$result->add_error($test, $witem->{exception});
+	$res = 0;
+    }
+    $result->end_test($test);
+
+    return $res;
 }
 
 # The 'run' method makes this class look sufficiently like a
@@ -556,31 +640,36 @@ sub run
     # we expand the schedule before forking the
     # workers so that we can just hand the reference
     # to the worker
-    my @items = $self->_get_schedule();
+    my @workitems = $self->_get_schedule();
 
     if ($maxworkers > 1)
     {
 	# multi-threaded case: use worker pool
+
+	my $wlistener = Cassandane::Unit::WorkerListener->new();
+	$result->add_listener($wlistener);
+
 	my $pool = Cassandane::Unit::WorkerPool->new(
 	    maxworkers => $maxworkers,
 	    handler => sub {
-		my ($eitem) = @_;
-		return $self->_run_eitem($eitem, $result, $runner);
+		my ($witem) = @_;
+		$wlistener->{witem} = $witem;
+		$self->_run_workitem($witem, $result, $runner);
 	    },
 	);
-	my $eitem;
+	my $witem;
 	$pool->start();
-	while ($eitem = shift @items)
+	while ($witem = shift @workitems)
 	{
-	    $pool->assign($eitem);
-	    while ($eitem = $pool->retrieve())
+	    $pool->assign($witem);
+	    while ($witem = $pool->retrieve())
 	    {
-		$passed &&= $eitem->{result};
+		$passed &&= $self->_finish_workitem($witem, $result);
 	    }
 	}
-	while ($eitem = $pool->drain())
+	while ($witem = $pool->drain())
 	{
-	    $passed &&= $eitem->{result};
+	    $passed &&= $self->_finish_workitem($witem, $result);
 	}
 	$pool->stop();
     }
@@ -599,9 +688,9 @@ sub run
 	    };
 	}
 
-	foreach my $eitem (@items)
+	foreach my $witem (@workitems)
 	{
-	    $passed &&= $self->_run_eitem($eitem, $result, $runner);
+	    $passed &&= $self->_run_workitem($witem, $result, $runner);
 	}
     }
 
