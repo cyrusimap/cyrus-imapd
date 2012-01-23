@@ -398,7 +398,7 @@ sub move_domains {
 		rename ($f, "$h_64/$f") or ouch "couldn't move $f into $h_64";
 	    } else {
 		rename ($f, "$h_32/$f") or ouch "couldn't move $f into $h_32";
-		rename ($h_32/$f, "$h_64/$f") or ouch "couldn't move $h_32 into $h_64";
+		rename ("$h_32/$f", "$h_64/$f") or ouch "couldn't move $h_32 into $h_64";
 	    }
 	}
 	closedir USER;
