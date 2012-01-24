@@ -66,7 +66,7 @@ sub set_up
     my $sock = $self->{instance}->{basedir} . '/conf/socket/annotator.sock';
     my $pidfile = $self->{instance}->{basedir} . '/conf/socket/annotator.pid';
     # Start daemon
-    $self->{instance}->run_command('/bin/sh', '-c', "strace -f -o /var/tmp/s.log $daemon &");
+    $self->{instance}->run_command($daemon);
     timed_wait(sub { return ( -e $sock ); },
 	       description => 'annotator daemon to be ready');
     $self->{annotator_pidfile} = $pidfile;

@@ -44,8 +44,17 @@ use warnings;
 package Cassandane::AnnotatorDaemon;
 use base qw(Cyrus::Annotator::Daemon);
 use Cassandane::Util::Log;
+use POSIX;
 
 set_verbose(1) if $ENV{CASSANDANE_VERBOSE};
+
+# Hack to work around Net::Server being too dumb to unblock the signals
+# it handles, notably SIGQUIT.  This was breaking the Jenkins build,
+# because Jenkins starts child processes with SIGQUIT blocked and
+# Cassandane::Instance expects to be able to use SIGQUIT to gracefully
+# shut down processes.
+sigprocmask(SIG_UNBLOCK, POSIX::SigSet->new( &POSIX::SIGQUIT ))
+    or die "Cannot unblock SIGQUIT: $!";
 
 my %commands =
 (
