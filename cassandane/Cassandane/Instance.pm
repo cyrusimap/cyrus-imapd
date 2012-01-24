@@ -732,7 +732,7 @@ sub _stop_pid
     foreach my $sig (@sigs)
     {
 	xlog "_stop_pid: sending signal $sig to $pid";
-	kill($sig, $pid);
+	kill($sig, $pid) or xlog "Can't send signal $sig to pid $pid: $!";
 	eval {
 	    timed_wait(sub { kill(0, $pid) == 0 });
 	};
