@@ -185,6 +185,7 @@ extern int charset_flags;
 /* Session ID */
 extern void session_new_id(void);
 extern const char *session_id(void);
+extern void parse_sessionid(const char *str, char *sessionid);
 
 /* Capability suppression */
 extern int capa_is_disabled(const char *str);
