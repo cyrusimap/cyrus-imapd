@@ -2964,6 +2964,13 @@ static void parse_groups(const char *groups, message_data_t *msg)
     free(buf);
 }
 
+/* Create a new header to be cached and/or spooled to disk.
+ *  'destname' contains the name of the new header.
+ *  'dest' contains an optional existing header body to be appended to.
+ *  'src' contains an optional existing header body to add to 'dest'.
+ *  'newspostuser' contains an optional userid used to create "post"
+ *    email addresses from newsgroup names
+ */
 static void add_header(const char *destname, const char **dest,
 		       const char **src, const char *newspostuser,
 		       hdrcache_t hdrcache, FILE *f)
@@ -2974,16 +2981,16 @@ static void add_header(const char *destname, const char **dest,
 
     if (src) {
 	if (!newspostuser) {
-	    /* new header body is copy of source */
+	    /* no translation of source needed - copy as-is to dest */
 	    buf_appendcstr(&buf, src[0]);
 	}
 	else {
-	    const char *s;
+	    /* translate source newsgroups into "post" email addresses */
+	    const char *s, *sep = "";
 	    size_t n;
-	    char  *sep = "";
 
 	    if (dest) {
-		/* append to the cached header */
+		/* append to the existing dest header body */
 		buf_appendcstr(&buf, dest[0]);
 		fold = buf.len + 1;
 		sep = ", ";
@@ -3009,7 +3016,7 @@ static void add_header(const char *destname, const char **dest,
 	newdest = buf_release(&buf);
 
 	if (dest) {
-	    /* replace the existing header */
+	    /* replace the existing cached header */
 	    spool_replace_header(xstrdup(destname), newdest, hdrcache);
 	}
 	else {
@@ -3022,7 +3029,7 @@ static void add_header(const char *destname, const char **dest,
     }
 
     if (newdest) {
-	/* add the new dest header to the file */
+	/* add the new dest header to the spool file */
 	fprintf(f, "%s: ", destname);
 	if (fold) fprintf(f, "%.*s\r\n\t", fold, newdest);
 	fprintf(f, "%s\r\n", newdest+fold);
