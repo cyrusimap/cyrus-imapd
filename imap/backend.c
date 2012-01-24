@@ -414,6 +414,7 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
     char buf[2048], *mechlist = NULL;
     struct sigaction action;
     struct backend *ret;
+    char rsessionid[MAX_SESSIONID_SIZE];
 
     if (!ret_backend) {
 	ret = xzmalloc(sizeof(struct backend));
@@ -608,6 +609,12 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
 		if (mechlist) free(mechlist);
 		mechlist = parse_capability(my_status, prot,
 						&ret->capability);
+	    }
+
+	    if (!(strcmp(prot->service, "imap") &&
+		 (strcmp(prot->service, "pop3")))) {
+		parse_sessionid(my_status, rsessionid);
+		syslog(LOG_NOTICE, "proxy %s sessionid=<%s> remote=<%s>", userid, session_id(), rsessionid);
 	    }
 	}
 

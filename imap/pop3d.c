@@ -1348,9 +1348,9 @@ static void cmd_apop(char *response)
     }
     popd_userid = xstrdup((const char *) canon_user);
     
-    syslog(LOG_NOTICE, "login: %s %s%s APOP%s %s", popd_clienthost,
+    syslog(LOG_NOTICE, "login: %s %s%s APOP%s %s SESSIONID=<%s>", popd_clienthost,
 	   popd_userid, popd_subfolder ? popd_subfolder : "",
-	   popd_starttls_done ? "+TLS" : "", "User logged in");
+	   popd_starttls_done ? "+TLS" : "", "User logged in", session_id());
 
     popd_authstate = auth_newstate(popd_userid);
 
@@ -1417,9 +1417,9 @@ void cmd_pass(char *pass)
 	    return;
 	}
 
-	syslog(LOG_NOTICE, "login: %s %s%s KPOP%s %s", popd_clienthost,
+	syslog(LOG_NOTICE, "login: %s %s%s KPOP%s %s SESSIONID=<%s>", popd_clienthost,
 	       popd_userid, popd_subfolder ? popd_subfolder : "",
-	       popd_starttls_done ? "+TLS" : "", "User logged in");
+	       popd_starttls_done ? "+TLS" : "", "User logged in", session_id());
 
 	openinbox();
 	return;
@@ -1687,9 +1687,9 @@ void cmd_auth(char *arg)
     } else {
 	popd_userid = xstrdup(canon_user);
     }
-    syslog(LOG_NOTICE, "login: %s %s%s %s%s %s", popd_clienthost,
+    syslog(LOG_NOTICE, "login: %s %s%s %s%s %s SESSIONID=<%s>", popd_clienthost,
 	   popd_userid, popd_subfolder ? popd_subfolder : "",
-	   authtype, popd_starttls_done ? "+TLS" : "", "User logged in");
+	   authtype, popd_starttls_done ? "+TLS" : "", "User logged in", session_id());
 
     sasl_getprop(popd_saslconn, SASL_SSF, &val);
     saslprops.ssf = *((sasl_ssf_t *) val);
