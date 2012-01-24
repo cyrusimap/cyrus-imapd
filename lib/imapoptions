@@ -786,7 +786,9 @@ Blank lines and lines beginning with ``#'' are ignored.
    delivery addresses corresponding to each newsgroup in the
    \fINewsgroups:\fR header.  Added \fIReply-To:\fR headers will
    contain email delivery addresses corresponding to each newsgroup in
-   the \fIFollowup-To:\fR or \fINewsgroups:\fR header.
+   the \fIFollowup-To:\fR or \fINewsgroups:\fR header.  If the
+   specified header(s) already exist in an article, the email
+   delivery addresses will be appended to the original header body(s).
 .br
 .sp
    This option applies if and only if the \fBnewspostuser\fR option is
