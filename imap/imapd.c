@@ -2253,12 +2253,15 @@ void cmd_login(char *tag, char *user)
 	}
     }
     else if ( nosaslpasswdcheck ) {
-	reply = "User logged in";
+	snprintf(replybuf, sizeof(replybuf),
+	    "User logged in SESSIONID=<%s>", session_id());
+	reply = replybuf;
 	imapd_userid = xstrdup(canon_user);
 	imapd_authstate = auth_newstate(canon_user);
 	syslog(LOG_NOTICE, "login: %s %s%s nopassword%s %s", imapd_clienthost,
 	       imapd_userid, imapd_magicplus ? imapd_magicplus : "",
-	       imapd_starttls_done ? "+TLS" : "", reply);
+	       imapd_starttls_done ? "+TLS" : "",
+	       reply ? reply : "");
     }
     else if ((r = sasl_checkpass(imapd_saslconn,
 				 canon_user,
@@ -2348,6 +2351,8 @@ void cmd_authenticate(char *tag, char *authtype, char *resp)
 
     const void *val;
     char *ssfmsg=NULL;
+    char replybuf[MAX_MAILBOX_BUFFER];
+    const char *reply = NULL;
 
     const char *canon_user;
 
@@ -2438,9 +2443,13 @@ void cmd_authenticate(char *tag, char *authtype, char *resp)
 	imapd_userid = xstrdup(canon_user);
     }
 
+    snprintf(replybuf, sizeof(replybuf),
+	"User logged in SESSIONID=<%s>", session_id());
+    reply = replybuf;
     syslog(LOG_NOTICE, "login: %s %s%s %s%s %s", imapd_clienthost,
 	   imapd_userid, imapd_magicplus ? imapd_magicplus : "",
-	   authtype, imapd_starttls_done ? "+TLS" : "", "User logged in");
+	   authtype, imapd_starttls_done ? "+TLS" : "",
+	   reply ? reply : "");
 
     sasl_getprop(imapd_saslconn, SASL_SSF, &val);
     saslprops.ssf = *((sasl_ssf_t *) val);

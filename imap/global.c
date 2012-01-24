@@ -807,6 +807,29 @@ const char *session_id()
     return (const char *)session_id_buf;
 }
 
+/* parse sessionid out of protocol answers */
+void parse_sessionid(const char *str, char *sessionid)
+{
+    char *sp, *ep;
+    int len;
+
+    if ((str) && (sp = strstr(str, "SESSIONID=<")) && (ep = strchr(sp, '>')))
+    {
+	sp += 11;
+	len = ep - sp;
+	if (len < MAX_SESSIONID_SIZE)
+	{
+	    strncpy(sessionid, sp, len);
+	    ep = sessionid + len;
+	    *ep = '\0';
+	}
+	else
+	    strcpy(sessionid, "invalid");
+    }
+    else
+	strcpy(sessionid, "unknown");
+}
+
 int capa_is_disabled(const char *str)
 {
     if (!suppressed_capabilities) return 0;
