@@ -622,6 +622,24 @@ sub _finish_workitem
     return $res;
 }
 
+sub _setup_worker_listeners
+{
+    my ($result, $wlistener) = @_;
+
+    # Remove the output format listener
+    my @list;
+    my $found = 0;
+    foreach my $ll (@{$result->{_Listeners}})
+    {
+	push(@list, $ll)
+	    unless ref($ll) eq 'Cassandane::Unit::Runner';
+	$found ||= (ref($ll) eq ref($wlistener));
+    }
+    push(@list, $wlistener)
+	unless $found;
+    $result->{_Listeners} = \@list;
+}
+
 # The 'run' method makes this class look sufficiently like a
 # Test::Unit::TestCase that Test::Unit::TestRunner will happily run it.
 # This enables us to run all our scheduled tests with a single
@@ -646,13 +664,13 @@ sub run
 	$SIG{PIPE} = 'IGNORE';
 
 	my $wlistener = Cassandane::Unit::WorkerListener->new();
-	$result->add_listener($wlistener);
 
 	my $pool = Cassandane::Unit::WorkerPool->new(
 	    maxworkers => $maxworkers,
 	    handler => sub {
 		my ($witem) = @_;
 		$wlistener->{witem} = $witem;
+		_setup_worker_listeners($result, $wlistener);
 		$self->_run_workitem($witem, $result, $runner);
 	    },
 	);
