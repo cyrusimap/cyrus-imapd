@@ -420,8 +420,12 @@ sub add_error
     my ($self, $test, $exception) = @_;
     my $witem = $self->{witem};
     $witem->{result} = 'error';
+
+    # Remove '-object' which points at the TestCase, which will have all
+    # sorts of stuff we can't thaw.  We have enough information to
+    # discover the right TestCase in the parent process.
+    $exception->{'-object'} = undef;
     $witem->{exception} = $exception;
-    $witem->{test} = $test;
 }
 
 sub add_failure
@@ -429,8 +433,12 @@ sub add_failure
     my ($self, $test, $exception) = @_;
     my $witem = $self->{witem};
     $witem->{result} = 'fail';
+
+    # Remove '-object' which points at the TestCase, which will have all
+    # sorts of stuff we can't thaw.  We have enough information to
+    # discover the right TestCase in the parent process.
+    $exception->{'-object'} = undef;
     $witem->{exception} = $exception;
-    $witem->{test} = $test;
 }
 
 sub add_pass
@@ -438,7 +446,6 @@ sub add_pass
     my ($self, $test) = @_;
     my $witem = $self->{witem};
     $witem->{result} = 'pass';
-    $witem->{test} = $test;
 }
 
 package Cassandane::Unit::TestPlan;
@@ -564,7 +571,6 @@ sub _get_schedule
 		testname => $name,
 		result => 'unknown',
 		exception => undef,
-		test => undef,
 	    });
 	}
     }
@@ -598,7 +604,8 @@ sub _run_workitem
 sub _finish_workitem
 {
     my ($self, $witem, $result) = @_;
-    my $test = $witem->{test};
+    my $suite = $self->_get_item($witem->{suite})->_get_loaded_suite();
+    my ($test) = grep { $_->name() eq 'test_' . $witem->{testname}; } @{$suite->tests()};;
     my $res;
 
     $result->start_test($test);
@@ -609,11 +616,13 @@ sub _finish_workitem
     }
     elsif ($witem->{result} eq 'fail')
     {
+	$witem->{exception}->{'-object'} = $test;
 	$result->add_failure($test, $witem->{exception});
 	$res = 0;
     }
     elsif ($witem->{result} eq 'error')
     {
+	$witem->{exception}->{'-object'} = $test;
 	$result->add_error($test, $witem->{exception});
 	$res = 0;
     }
