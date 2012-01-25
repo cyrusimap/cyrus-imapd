@@ -133,6 +133,10 @@ sub new
     {
 	$stamp = to_iso8601(DateTime->now);
 	$stamp =~ s/.*T(\d+)Z/$1/;
+
+	# name workers as A, B, C, ...
+	my $workerid = $ENV{TEST_UNIT_WORKER_ID};
+	$stamp .= chr(64 + $workerid) if defined $workerid;
     }
 
     if (!defined $self->{name})

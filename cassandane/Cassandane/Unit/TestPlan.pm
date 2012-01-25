@@ -159,6 +159,7 @@ sub start
 	# child
 	$self->{downpipe} = _pipe_read_fh($dr, $dw);
 	$self->{uppipe} = _pipe_write_fh($ur, $uw);
+	$ENV{TEST_UNIT_WORKER_ID} = $self->{id};    # 1, 2, 3...
 	$self->_mainloop();
 	exit(0);
     }

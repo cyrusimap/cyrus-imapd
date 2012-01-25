@@ -46,10 +46,18 @@ use base qw(Cassandane::MasterEntry);
 use Cassandane::Util::Log;
 use Cassandane::MessageStoreFactory;
 
-my $next_port = 9100;
+# my $next_port = 9100;
+my $base_port;
+my $max_ports = 10;
+my $next_port = 0;
 sub alloc_port
 {
-    my $port = $next_port;
+    if (!defined $base_port)
+    {
+	my $workerid = $ENV{TEST_UNIT_WORKER_ID} || '1';
+	$base_port = 9100 + $max_ports * ($workerid-1);
+    }
+    my $port = $base_port + ($next_port % $max_ports);
     $next_port++;
     return $port;
 }
