@@ -111,6 +111,12 @@ static int parseheader(struct protstream *fin, FILE *fout,
        either we successfully read a header (got_header)
        or we hit an error (ph_error) */
     while ((c = prot_getc(fin)) != EOF) { /* examine each character */
+	/* reject \0 */
+	if (!c) {
+	    r = IMAP_MESSAGE_CONTAINSNULL;
+	    goto ph_error;
+	}
+
 	switch (s) {
 	case NAME_START:
 	    if (c == '.') {

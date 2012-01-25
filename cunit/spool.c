@@ -1,5 +1,6 @@
 #include "config.h"
 #include "cunit/cunit.h"
+#include "imap_err.h"
 #include "prot.h"
 #include "retry.h"
 #include "xmalloc.h"
@@ -181,6 +182,56 @@ static void test_fill(void)
     CU_ASSERT_STRING_EQUAL(val[1], HRECEIVED2);
     CU_ASSERT_STRING_EQUAL(val[2], HRECEIVED3);
     CU_ASSERT_PTR_NULL(val[3]);
+
+    spool_free_hdrcache(cache);
+    fclose(fout);
+    prot_free(pin);
+    unlink(tempfile);
+}
+
+/* BZ3640: headers with NULL bytes shall be rejected. */
+static void test_fill_null(void)
+{
+    static const char MSG[] =
+"From: " HFROM "\r\n"
+"To: " HTO "\r\n"
+"Date: " HDATE "\r\n"
+"Subject: " HSUBJECT "\r\n"
+"Message-ID: " HMESSAGEID "\r\n"
+"Received: " HRECEIVED1 "\r\n"
+"Received:\0" HRECEIVED2 "\r\n"
+"Received: " HRECEIVED3 "\r\n"
+"\r\n"
+"Hello, World\r\n";
+
+    hdrcache_t cache;
+    const char **val;
+    int fd;
+    char tempfile[32];
+    int r;
+    struct protstream *pin;
+    FILE *fout;
+
+    /* Setup @pin to point to the start of a file open for (at least)
+     * reading containing the message. */
+    strcpy(tempfile, "/tmp/spooltestAXXXXXX");
+    fd = mkstemp(tempfile);
+    CU_ASSERT(fd >= 0);
+    r = retry_write(fd, MSG, sizeof(MSG)-1);
+    CU_ASSERT_EQUAL(r, sizeof(MSG)-1);
+    lseek(fd, SEEK_SET, 0);
+    pin = prot_new(fd, /*read*/0);
+    CU_ASSERT_PTR_NOT_NULL(pin);
+
+    /* Setup @fout to ignore data written to it */
+    fout = fopen("/dev/null", "w");
+    CU_ASSERT_PTR_NOT_NULL(fout);
+
+    cache = spool_new_hdrcache();
+    CU_ASSERT_PTR_NOT_NULL(cache);
+
+    r = spool_fill_hdrcache(pin, fout, cache, NULL);
+    CU_ASSERT_EQUAL(r, IMAP_MESSAGE_CONTAINSNULL);
 
     spool_free_hdrcache(cache);
     fclose(fout);
