@@ -347,29 +347,20 @@ sub _wait
     die "Unexpected result from select: $res";
 }
 
-# Retrieve a completed work item
+# Retrieve a completed work item.  If $blocking is true,
+# wait if necessary (used when draining i.e. no more work
+# items will be made available).
 sub retrieve
 {
-    my ($self) = @_;
+    my ($self, $blocking) = @_;
 
-    return shift @{$self->{pending}};
-}
-
-# Retrieve a completed work item, waiting if necessary.
-# Used when draining i.e. no more work items will be
-# made available.
-sub drain
-{
-    my ($self) = @_;
-
-    if (!scalar @{$self->{pending}})
+    if ($blocking && !scalar @{$self->{pending}})
     {
 	my @busy = grep { $_->{busy}; } @{$self->{workers}};
 	$self->_wait() if (scalar @busy);
     }
-    return $self->retrieve();
+    return shift @{$self->{pending}};
 }
-
 
 # reap all workers
 sub stop
@@ -670,12 +661,12 @@ sub run
 	while ($witem = shift @workitems)
 	{
 	    $pool->assign($witem);
-	    while ($witem = $pool->retrieve())
+	    while ($witem = $pool->retrieve(0))
 	    {
 		$passed &&= $self->_finish_workitem($witem, $result);
 	    }
 	}
-	while ($witem = $pool->drain())
+	while ($witem = $pool->retrieve(1))
 	{
 	    $passed &&= $self->_finish_workitem($witem, $result);
 	}
