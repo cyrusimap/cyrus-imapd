@@ -169,7 +169,8 @@ sub _send
     my ($fh, $fmt, @args) = @_;
     my $msg = sprintf($fmt, @args);
 # print STDERR "--> \"$msg\"\n";
-    syswrite($fh, $msg);
+    syswrite($fh, $msg)
+	or die "Cannot write to pipe: $!";
 }
 
 sub _receive
@@ -233,13 +234,16 @@ sub assign
 sub stop
 {
     my ($self) = @_;
-    _send($self->{downpipe}, "stop\n");
+    eval
+    {
+	# We don't care if this dies, it just
+	# means the Worker has died prematurely.
+	_send($self->{downpipe}, "stop\n");
+    };
     while (1)
     {
 	my $res = waitpid($self->{pid}, 0);
-	return if $res < 0;
-	next if $res == 0;
-	next if $res != $self->{pid};
+	last if ($res < 0 || $res == $self->{pid});
     }
     $self->_cleanup();
 }
@@ -646,6 +650,9 @@ sub run
     if ($maxworkers > 1)
     {
 	# multi-threaded case: use worker pool
+
+	# we want an error not a signal
+	$SIG{PIPE} = 'IGNORE';
 
 	my $wlistener = Cassandane::Unit::WorkerListener->new();
 	$result->add_listener($wlistener);
