@@ -713,8 +713,8 @@ int prot_fill(struct protstream *s)
 	}
 
 	/* we have data, reset the timeout_mark */
-	s->timeout_mark = time(NULL) + s->read_timeout;
-	
+	prot_resettimeout(s);
+
 	do {
 	    cmdtime_netstart();
 #ifdef HAVE_SSL	  
