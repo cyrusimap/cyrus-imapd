@@ -610,7 +610,8 @@ sub _finish_workitem
     my $res;
 
     $result->start_test($test);
-    if ($witem->{result} eq 'pass')
+    if ($witem->{result} eq 'pass' ||
+        $witem->{result} eq 'unknown')
     {
 	$result->add_pass($test);
 	$res = 1;
@@ -691,12 +692,12 @@ sub run
 	    $pool->assign($witem);
 	    while ($witem = $pool->retrieve(0))
 	    {
-		$passed &&= $self->_finish_workitem($witem, $result);
+		$passed &= $self->_finish_workitem($witem, $result);
 	    }
 	}
 	while ($witem = $pool->retrieve(1))
 	{
-	    $passed &&= $self->_finish_workitem($witem, $result);
+	    $passed &= $self->_finish_workitem($witem, $result);
 	}
 	$pool->stop();
     }
@@ -717,7 +718,7 @@ sub run
 
 	foreach my $witem (@workitems)
 	{
-	    $passed &&= $self->_run_workitem($witem, $result, $runner);
+	    $passed &= $self->_run_workitem($witem, $result, $runner);
 	}
     }
 
