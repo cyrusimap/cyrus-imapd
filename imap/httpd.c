@@ -203,6 +203,7 @@ static void cmdloop(void);
 static struct accept *parse_accept(const char *hdr);
 static int http_auth(const char *creds, const char *authzid,
 		     struct auth_challenge_t *chal);
+static void log_cachehdr(const char *name, const char *contents, void *rock);
 
 static int meth_get(struct transaction_t *txn);
 
@@ -1062,6 +1063,18 @@ static void cmdloop(void)
 		    reset_saslconn(&httpd_saslconn);
 		    txn.auth_chal.scheme = NULL;
 		    r = SASL_FAIL;
+		}
+		else if ((r == SASL_OK) && (httpd_logfd != -1)) {
+		    /* Auth succeeded - log request to userid telemetry */
+		    FILE *logf = fdopen(httpd_logfd, "a");
+		    fprintf(logf, "<%ld<", time(NULL));
+		    fprintf(logf, "%s %s", txn.meth, txn.req_tgt.path);
+		    if (*txn.req_tgt.query)
+			fprintf(logf, "?%s", txn.req_tgt.query);
+		    fprintf(logf, " %s\r\n", HTTP_VERSION);
+		    spool_enum_hdrcache(txn.req_hdrs, &log_cachehdr, logf);
+		    fprintf(logf, "\r\n%s", buf_cstring(&txn.req_body));
+		    fflush(logf);
 		}
 	    }
 	    else if (txn.auth_chal.scheme) {
@@ -1995,6 +2008,19 @@ static int http_auth(const char *creds, const char *authzid,
     httpd_logfd = telemetry_log(httpd_userid, httpd_in, httpd_out, 0);
 
     return status;
+}
+
+
+/* Write cached header (removing auth creds) to telemetry log. */
+static void log_cachehdr(const char *name, const char *contents, void *rock)
+{
+    FILE *logf = (FILE *) rock;
+
+    fprintf(logf, "%c%s: ", toupper(name[0]), name+1);
+    if (!strcmp(name, "authorization"))
+	fprintf(logf, "%.*s ...\r\n", strcspn(contents, " \t\r\n"), contents);
+    else
+	fprintf(logf, "%s\r\n", contents);
 }
 
 
