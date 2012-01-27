@@ -550,7 +550,7 @@ static void write_cachehdr(const char *name, const char *contents, void *rock)
 
     for (hdr = hop_by_hop; *hdr && strcmp(name, *hdr); hdr++);
 
-    if (!*hdr) prot_printf(pout, "%s: %s\r\n", name, contents);
+    if (!*hdr) prot_printf(pout, "%c%s: %s\r\n", name[0], name+1, contents);
 
 }
 
