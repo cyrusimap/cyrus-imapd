@@ -46,10 +46,10 @@ use base qw(Cassandane::MasterEntry);
 use Cassandane::Util::Log;
 use Cassandane::MessageStoreFactory;
 
-# my $next_port = 9100;
 my $base_port;
 my $max_ports = 10;
 my $next_port = 0;
+my %port_allocated;
 sub alloc_port
 {
     if (!defined $base_port)
@@ -57,9 +57,24 @@ sub alloc_port
 	my $workerid = $ENV{TEST_UNIT_WORKER_ID} || '1';
 	$base_port = 9100 + $max_ports * ($workerid-1);
     }
-    my $port = $base_port + ($next_port % $max_ports);
-    $next_port++;
-    return $port;
+    for (my $i = 0 ; $i < $max_ports ; $i++)
+    {
+	my $port = $base_port + (($next_port + $i) % $max_ports);
+	if (!$port_allocated{$port})
+	{
+	    $port_allocated{$port} = 1;
+	    $next_port++;
+	    return $port;
+	}
+    }
+    die "No ports remaining";
+}
+
+sub free_port
+{
+    my ($port) = @_;
+    return if ($port =~ m/^\//);
+    $port_allocated{$port} = 0;
 }
 
 sub new
@@ -69,7 +84,7 @@ sub new
     my $host = '127.0.0.1';
     $host = delete $params{host}
 	if (exists $params{host});
-    my $port = delete $params{port} || alloc_port();
+    my $port = delete $params{port};
     my $type = delete $params{type} || 'unknown';
 
     my $self = $class->SUPER::new(%params);
@@ -81,12 +96,32 @@ sub new
     return $self;
 }
 
+sub DESTROY
+{
+    my ($self) = @_;
+    free_port($self->{port}) if defined $self->{port};
+}
+
 sub _otherparams
 {
     my ($self) = @_;
     return ( qw(prefork maxchild maxforkrate maxfds proto babysit) );
 }
 
+# Return the host
+sub host
+{
+    my ($self) = @_;
+    return $self->{host};
+}
+
+# Return the port
+sub port
+{
+    my ($self) = @_;
+    $self->{port} ||= alloc_port();
+    return $self->{port};
+}
 
 # Return a hash of parameters suitable for passing
 # to MessageStoreFactory::create.
@@ -96,8 +131,8 @@ sub store_params
 
     $params{type} ||= $self->{type};
     $params{address_family} = $self->{address_family};
-    $params{host} = $self->{host};
-    $params{port} = $self->{port};
+    $params{host} = $self->host();
+    $params{port} = $self->port();
     $params{username} ||= 'cassandane';
     $params{password} ||= 'testpw';
     $params{verbose} ||= get_verbose();
@@ -126,7 +161,8 @@ sub address
     my ($self) = @_;
     my @parts;
 
-    if (defined $self->{host} && !($self->{port} =~ m/^\//))
+    my $port = $self->port();
+    if (defined $self->{host} && !($port =~ m/^\//))
     {
 	# Cyrus uses the syntax '[ipv6address]:port' to specify
 	# an IPv6 address (which will contain the : character)
@@ -136,7 +172,7 @@ sub address
 	push(@parts, ']') if ($self->{host} =~ m/:/);
 	push(@parts, ':');
     }
-    push(@parts, $self->{port});
+    push(@parts, $port);
     return join('', @parts);
 }
 
@@ -202,8 +238,8 @@ my %netstat_match = (
 sub address_family
 {
     my ($self) = @_;
-    my $h = $self->{host};
-    my $p = $self->{port};
+    my $h = $self->host();
+    my $p = $self->port();
 
     # port being a UNIX domain socket is ok
     return 'unix' if ($p =~ m/^\//);
