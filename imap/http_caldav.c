@@ -1986,6 +1986,7 @@ static int report_sync_col(xmlNodePtr inroot, struct propfind_ctx *fctx,
 {
     int ret = 0, r, userflag;
     struct mailbox *mailbox = fctx->mailbox;
+    uint32_t uidvalidity = 0;
     modseq_t syncmodseq = 0, highestmodseq = mailbox->i.highestmodseq;
     uint32_t limit = -1, recno, nresp;
     xmlNodePtr node;
@@ -2007,8 +2008,10 @@ static int report_sync_col(xmlNodePtr inroot, struct propfind_ctx *fctx,
 		if (xmlStrncmp(str, BAD_CAST XML_NS_CYRUS "sync/",
 			       strlen(XML_NS_CYRUS "sync/")) ||
 		    (sscanf(strrchr((char *) str, '/') + 1,
-			    MODSEQ_FMT, &syncmodseq) != 1) ||
+			    "%u-" MODSEQ_FMT,
+			    &uidvalidity, &syncmodseq) != 2) ||
 		    !syncmodseq ||
+		    (uidvalidity != mailbox->i.uidvalidity) ||
 		    (syncmodseq < mailbox->i.deletedmodseq) ||
 		    (syncmodseq > highestmodseq)) {
 		    /* DAV:valid-sync-token */
@@ -2134,7 +2137,8 @@ static int report_sync_col(xmlNodePtr inroot, struct propfind_ctx *fctx,
 
     /* Add sync-token element */
     snprintf(tokenuri, MAX_MAILBOX_PATH,
-	     XML_NS_CYRUS "sync/" MODSEQ_FMT, highestmodseq);
+	     XML_NS_CYRUS "sync/%u-" MODSEQ_FMT,
+	     fctx->mailbox->i.uidvalidity, highestmodseq);
     xmlNewChild(fctx->root, NULL, BAD_CAST "sync-token", BAD_CAST tokenuri);
 
     free(istate.map);

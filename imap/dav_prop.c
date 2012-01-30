@@ -489,8 +489,8 @@ static int propfind_sync_token(const xmlChar *propname, xmlNsPtr ns,
     if (fctx->mailbox && !fctx->record) {
 	char sync[MAX_MAILBOX_PATH+1];
 
-	snprintf(sync, MAX_MAILBOX_PATH, XML_NS_CYRUS "sync/" MODSEQ_FMT,
-		 fctx->mailbox->i.highestmodseq);
+	snprintf(sync, MAX_MAILBOX_PATH, XML_NS_CYRUS "sync/%u-" MODSEQ_FMT,
+		 fctx->mailbox->i.uidvalidity, fctx->mailbox->i.highestmodseq);
 
 	xml_add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK],
 		     ns, BAD_CAST propname, BAD_CAST sync, NULL);
