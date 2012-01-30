@@ -56,6 +56,8 @@ typedef struct
     char **data;
 } strarray_t;
 
+typedef int compar_t(const void *a, const void *b);
+
 #define STRARRAY_INITIALIZER	{ 0, 0, NULL }
 #define strarray_init(sa)   (memset((sa), 0, sizeof(strarray_t)))
 void strarray_fini(strarray_t *);
@@ -91,7 +93,8 @@ strarray_t *strarray_splitm(char *buf, const char *sep);
 strarray_t *strarray_split(const char *buf, const char *sep);
 strarray_t *strarray_nsplit(const char *buf, size_t len, const char *sep);
 
-void strarray_sort(strarray_t *);
+void strarray_sort(strarray_t *, compar_t *);
+void strarray_uniq(strarray_t *);
 
 char **strarray_takevf(strarray_t *sa);
 

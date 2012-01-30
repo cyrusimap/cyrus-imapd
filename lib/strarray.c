@@ -45,7 +45,8 @@
 
 #include "strarray.h"
 #include <memory.h>
-#include "util.h"   /* for strcmpsafe et al */
+#include "bsearch.h"
+#include "util.h"
 #include "xmalloc.h"
 
 strarray_t *strarray_new(void)
@@ -331,19 +332,20 @@ char **strarray_takevf(strarray_t *sa)
     return d;
 }
 
-/* direct from the qsort manpage */
-static int cmpstringp(const void *p1, const void *p2) 
+void strarray_sort(strarray_t *sa, compar_t *cmp)
 {
-    /* The actual arguments to this function are "pointers to
-    pointers to char", but strcmp(3) arguments are "pointers
-   to char", hence the following cast plus dereference */
-
-   return strcmpsafe(* (char * const *) p1, * (char * const *) p2);
+    qsort(sa->data, sa->count, sizeof(char *), cmp);
 }
 
-void strarray_sort(strarray_t *sa)
+
+void strarray_uniq(strarray_t *sa)
 {
-    qsort(sa->data, sa->count, sizeof(char *), cmpstringp);
+    int i;
+
+    for (i = 1; i < sa->count; i++) {
+	if (!strcmpsafe(sa->data[i-1], sa->data[i]))
+	    free(strarray_remove(sa, i--));
+    }
 }
 
 /* common generic routine for the _find family */

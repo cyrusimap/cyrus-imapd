@@ -63,6 +63,7 @@
 
 #include "global.h"
 #include "assert.h"
+#include "bsearch.h"
 #include "mboxlist.h"
 #include "exitcodes.h"
 #include "imap_err.h"
@@ -1942,7 +1943,7 @@ static const char *sync_record_representation(
 	strarray_appendm(&lcflags, f);
     }
 
-    strarray_sort(&lcflags);
+    strarray_sort(&lcflags, cmpstringp_raw);
     flags = strarray_join(&lcflags, " ");
     strarray_fini(&lcflags);
 

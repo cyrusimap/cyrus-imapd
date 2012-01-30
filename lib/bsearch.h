@@ -56,4 +56,7 @@ extern int bsearch_ncompare_mbox(const char *s1, int l1, const char *s2, int l2)
 
 extern int bsearch_ncompare_raw(const char *s1, int l1, const char *s2, int l2);
 
+extern int cmpstringp_raw(const void *p1, const void *p2);
+extern int cmpstringp_mbox(const void *p1, const void *p2);
+
 #endif /* INCLUDED_BSEARCH_H */

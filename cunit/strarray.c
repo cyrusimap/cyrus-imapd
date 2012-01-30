@@ -1,5 +1,6 @@
 #include "cunit/cunit.h"
 #include "xmalloc.h"
+#include "bsearch.h"
 #include "strarray.h"
 
 static void test_fini_null(void)
@@ -1200,6 +1201,63 @@ static void test_pop(void)
 #undef WORD2
 #undef WORD3
 #undef WORD4
+}
+
+static void test_sortuniq(void)
+{
+    strarray_t sa = STRARRAY_INITIALIZER;
+#define WORD0	"INBOX"
+#define WORD1	"INBOX.a folder"
+#define WORD2	"INBOX.a.sub"
+#define WORD3	"INBOX.a.aaa"
+
+    /* initialise */
+    CU_ASSERT_EQUAL(sa.count, 0);
+    strarray_append(&sa, WORD0);
+    strarray_append(&sa, WORD1);
+    strarray_append(&sa, WORD2);
+    strarray_append(&sa, WORD3);
+    /* duplicates */
+    strarray_append(&sa, WORD0);
+    strarray_append(&sa, WORD2);
+    strarray_append(&sa, WORD1);
+
+    CU_ASSERT_EQUAL(sa.count, 7);
+
+    /* normal sort */
+    strarray_sort(&sa, cmpstringp_raw);
+
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD0);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 2), WORD1);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 3), WORD1);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 4), WORD3);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 5), WORD2);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 6), WORD2);
+
+    /* mbox order sort */
+    strarray_sort(&sa, cmpstringp_mbox);
+
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD0);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 2), WORD3);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 3), WORD2);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 4), WORD2);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 5), WORD1);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 6), WORD1);
+
+    strarray_uniq(&sa);
+    CU_ASSERT_EQUAL(sa.count, 4);
+
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD3);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 2), WORD2);
+    CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 3), WORD1);
+
+#undef WORD0
+#undef WORD1
+#undef WORD2
+#undef WORD3
 }
 
 static void test_add(void)
