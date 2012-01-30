@@ -42,27 +42,19 @@
 package Cassandane::MaildirMessageStore;
 use strict;
 use warnings;
+use base qw(Cassandane::MessageStore);
 use File::Path qw(mkpath rmtree);
-use Cassandane::Util::DateTime qw(to_rfc822);
-
-# TODO: isa Cassandane::MessageStore
 
 sub new
 {
-    my $class = shift;
-    my %params = @_;
-    my $self = {
-	directory => undef,
-	next_uid => 1,
+    my ($class, %params) = @_;
+    my %bits = (
+	directory => delete $params{directory},
+	next_uid => 0 + (delete $params{next_uid} || 1),
 	uids_to_read => [],
-    };
-
-    $self->{directory} = $params{directory}
-	if defined $params{directory};
-    $self->{next_uid} = $params{next_uid}
-	if defined $params{next_uid};
-
-    bless $self, $class;
+    );
+    my $self = $class->SUPER::new(%params);
+    map { $self->{$_} = $bits{$_}; } keys %bits;
     return $self;
 }
 
@@ -101,6 +93,8 @@ sub write_message
 
 sub write_end
 {
+    my ($self) = @_;
+    # Nothing to do
 }
 
 sub read_begin
@@ -175,13 +169,6 @@ sub remove
 	die "rmtree failed: $!"
 	    if (!$r && ! $!{ENOENT} );
     }
-}
-
-sub get_client
-{
-    my ($self) = @_;
-
-    die "No client object for Maildir";
 }
 
 1;

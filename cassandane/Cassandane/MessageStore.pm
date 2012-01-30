@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 #
-#  Copyright (c) 2011 Opera Software Australia Pty. Ltd.  All rights
+#  Copyright (c) 2011-2012 Opera Software Australia Pty. Ltd.  All rights
 #  reserved.
 #
 #  Redistribution and use in source and binary forms, with or without
@@ -39,34 +39,81 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
-package Cassandane::IMAPService;
+package Cassandane::MessageStore;
 use strict;
 use warnings;
-use base qw(Cassandane::Service);
 use Cassandane::Util::Log;
+use overload qw("") => \&as_string;
 
 sub new
 {
-    my $class = shift;
-    my $self = $class->SUPER::new(@_);
-    return $self;
+    my ($class, %params) = @_;
+    my $self = {
+	verbose => delete $params{verbose} || 0,
+    };
+    die "Unknown parameters: " . join(' ', keys %params)
+	if scalar %params;
+    return bless $self, $class;
 }
 
-# Return a hash of parameters suitable for passing
-# to MessageStoreFactory::create.
-sub store_params
+sub connect
 {
-    my ($self, %params) = @_;
+    my ($self) = @_;
+    die "Unimplemented in base class " . __PACKAGE__;
+}
 
-    $params{type} = 'imap';
-    $params{address_family} = $self->{address_family};
-    $params{host} = $self->{host};
-    $params{port} = $self->{port};
-    $params{folder} ||= 'inbox';
-    $params{username} ||= 'cassandane';
-    $params{password} ||= 'testpw';
-    $params{verbose} ||= get_verbose();
-    return \%params;
+sub disconnect
+{
+    my ($self) = @_;
+    die "Unimplemented in base class " . __PACKAGE__;
+}
+
+sub write_begin
+{
+    my ($self) = @_;
+    die "Unimplemented in base class " . __PACKAGE__;
+}
+
+sub write_message
+{
+    my ($self, $msg, %opts) = @_;
+    die "Unimplemented in base class " . __PACKAGE__;
+}
+
+sub write_end
+{
+    my ($self) = @_;
+    die "Unimplemented in base class " . __PACKAGE__;
+}
+
+sub read_begin
+{
+    my ($self) = @_;
+    die "Unimplemented in base class " . __PACKAGE__;
+}
+
+sub read_message
+{
+    my ($self) = @_;
+    die "Unimplemented in base class " . __PACKAGE__;
+}
+
+sub read_end
+{
+    my ($self) = @_;
+    die "Unimplemented in base class " . __PACKAGE__;
+}
+
+sub get_client
+{
+    my ($self) = @_;
+    die "Unimplemented in base class " . __PACKAGE__;
+}
+
+sub as_string
+{
+    my ($self) = @_;
+    return "unknown";
 }
 
 1;

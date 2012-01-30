@@ -166,7 +166,7 @@ sub test_seen
 
     xlog "Reconnect, \\Seen should still be on message A";
     $self->{store}->disconnect();
-    $self->{store}->_connect();
+    $self->{store}->connect();
     $self->{store}->_select();
     $self->check_messages(\%msg);
 }
@@ -216,7 +216,7 @@ sub test_flagged
 
     xlog "Reconnect, \\Flagged should still be on message A";
     $self->{store}->disconnect();
-    $self->{store}->_connect();
+    $self->{store}->connect();
     $self->{store}->_select();
     $self->check_messages(\%msg);
 }
@@ -269,7 +269,7 @@ sub test_userflag
 
     xlog "Reconnect, \$Foobar should still be on message A";
     $self->{store}->disconnect();
-    $self->{store}->_connect();
+    $self->{store}->connect();
     $self->{store}->_select();
     $self->check_messages(\%msg);
 }
@@ -344,7 +344,7 @@ sub test_max_userflags
 
     xlog "Reconnect, all the flags should still be on message A";
     $self->{store}->disconnect();
-    $self->{store}->_connect();
+    $self->{store}->connect();
     $self->{store}->_select();
     $self->check_messages(\%msg);
 }
@@ -425,7 +425,7 @@ sub test_multi_flags
 
     xlog "Reconnect, all the flags should still be on message A";
     $self->{store}->disconnect();
-    $self->{store}->_connect();
+    $self->{store}->connect();
     $self->{store}->_select();
     $self->check_messages(\%msg);
 }
@@ -738,7 +738,7 @@ sub test_unchangedsince_multi
 
     {
 	my $store2 = $self->{instance}->get_service('imap')->create_store();
-	$store2->_connect();
+	$store2->connect();
 	$store2->_select();
 	my $talk2 = $store2->get_client();
 	xlog "Delete and expunge D,E,F from another session";

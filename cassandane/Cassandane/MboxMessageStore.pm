@@ -42,27 +42,22 @@
 package Cassandane::MboxMessageStore;
 use strict;
 use warnings;
-use Cassandane::Util::DateTime qw(to_rfc822 from_rfc822);
+use base qw(Cassandane::MessageStore);
+use Cassandane::Util::DateTime qw(from_rfc822);
 use POSIX qw(strftime);
 use Cassandane::Message;
 
-# TODO: isa Cassandane::MessageStore
-
 sub new
 {
-    my $class = shift;
-    my %params = @_;
-    my $self = {
-	filename => undef,
+    my ($class, %params) = @_;
+    my %bits = (
+	filename => delete $params{filename},
 	fh => undef,
 	ourfh => 0,
 	lineno => undef,
-    };
-
-    $self->{filename} = $params{filename}
-	if defined $params{filename};
-
-    bless $self, $class;
+    );
+    my $self = $class->SUPER::new(%params);
+    map { $self->{$_} = $bits{$_}; } keys %bits;
     return $self;
 }
 
@@ -185,13 +180,6 @@ sub remove
 	die "unlink failed: $!"
 	    if (!$r && ! $!{ENOENT} );
     }
-}
-
-sub get_client
-{
-    my ($self) = @_;
-
-    die "No client object for Mbox";
 }
 
 1;

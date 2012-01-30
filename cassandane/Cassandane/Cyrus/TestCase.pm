@@ -431,7 +431,7 @@ sub run_replication
     {
 	if (defined $self->{$s})
 	{
-	    $self->{$s}->_connect();
+	    $self->{$s}->connect();
 	    $self->{$s}->_select();
 	}
     }

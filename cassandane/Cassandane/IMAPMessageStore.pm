@@ -42,28 +42,24 @@
 package Cassandane::IMAPMessageStore;
 use strict;
 use warnings;
+use base qw(Cassandane::MessageStore);
 use Mail::IMAPTalk;
 use Cassandane::Util::Log;
 use Cassandane::Util::DateTime qw(to_rfc822);
 use Cassandane::Util::Socket;
-use overload qw("") => \&as_string;
-
-# TODO: isa Cassandane::MessageStore
 
 our $BATCHSIZE = 10;
 
 sub new
 {
-    my $class = shift;
-    my %params = @_;
-    my $self = {
-	address_family => 'inet',
-	host => 'localhost',
-	port => 143,
-	folder => 'INBOX',
-	username => undef,
-	password => undef,
-	verbose => 0,
+    my ($class, %params) = @_;
+    my %bits = (
+	address_family => delete $params{address_family} || 'inet',
+	host => delete $params{host} || 'localhost',
+	port => 0 + (delete $params{port} || 143),
+	folder => delete $params{folder} || 'INBOX',
+	username => delete $params{username},
+	password => delete $params{password},
 	client => undef,
 	banner => undef,
 	# state for streaming read
@@ -74,28 +70,13 @@ sub new
 	fetch_attrs => { uid => 1, 'body.peek[]' => 1 },
 	# state for XCONVFETCH
 	fetched => undef,
-    };
-
-    $self->{address_family} = $params{address_family}
-	if defined $params{address_family};
-    $self->{host} = $params{host}
-	if defined $params{host};
-    $self->{port} = 0 + $params{port}
-	if defined $params{port};
-    $self->{folder} = $params{folder}
-	if defined $params{folder};
-    $self->{username} = $params{username}
-	if defined $params{username};
-    $self->{password} = $params{password}
-	if defined $params{password};
-    $self->{verbose} = 0 + $params{verbose}
-	if defined $params{verbose};
-
-    bless $self, $class;
+    );
+    my $self = $class->SUPER::new(%params);
+    map { $self->{$_} = $bits{$_}; } keys %bits;
     return $self;
 }
 
-sub _connect
+sub connect
 {
     my ($self) = @_;
 
@@ -166,7 +147,7 @@ sub write_begin
     my ($self) = @_;
     my $r;
 
-    $self->_connect();
+    $self->connect();
 
     $r = $self->_select();
     if (!defined $r)
@@ -217,9 +198,8 @@ sub set_fetch_attributes
 sub read_begin
 {
     my ($self) = @_;
-    my $r;
 
-    $self->_connect();
+    $self->connect();
 
     $self->_select()
 	or die "Cannot select folder \"$self->{folder}\": $@";
@@ -292,7 +272,7 @@ sub remove
 {
     my ($self) = @_;
 
-    $self->_connect();
+    $self->connect();
     my $r = $self->{client}->delete($self->{folder});
     die "IMAP DELETE failed: $@"
 	if (!defined $r && !($self->{client}->get_last_error() =~ m/does not exist/));
@@ -302,7 +282,7 @@ sub get_client
 {
     my ($self) = @_;
 
-    $self->_connect();
+    $self->connect();
     return $self->{client};
 }
 
@@ -310,7 +290,7 @@ sub get_server_name
 {
     my ($self) = @_;
 
-    $self->_connect();
+    $self->connect();
 
     # Cyrus returns the servername config variable in the first
     # word of the untagged OK reponse sent on connection.  We
@@ -377,7 +357,7 @@ sub xconvfetch_begin
 	}
     );
 
-    $self->_connect();
+    $self->connect();
 
     $self->{client}->_imap_cmd("xconvfetch", 0, \%handlers, @args)
 	or return undef;

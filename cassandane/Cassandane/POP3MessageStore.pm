@@ -42,48 +42,30 @@
 package Cassandane::POP3MessageStore;
 use strict;
 use warnings;
+use base qw(Cassandane::MessageStore);
 use Net::POP3;
 use Cassandane::Util::Log;
-# use Cassandane::Util::DateTime qw(to_rfc822);
-# use Data::Dumper;
-
-# TODO: isa Cassandane::MessageStore
 
 sub new
 {
-    my $class = shift;
-    my %params = @_;
-    my $self = {
-	host => 'localhost',
-	port => 110,
-	folder => 'INBOX',
-	username => undef,
-	password => undef,
-	verbose => 0,
+    my ($class, %params) = @_;
+    my %bits = (
+	host => delete $params{host} || 'localhost',
+	port => 0 + (delete $params{port} || 110),
+	folder => delete $params{folder} || 'INBOX',
+	username => delete $params{username},
+	password => delete $params{password},
 	client => undef,
 	# state for streaming read
 	next_id => undef,
 	last_id => undef,
-    };
-
-    $self->{host} = $params{host}
-	if defined $params{host};
-    $self->{port} = 0 + $params{port}
-	if defined $params{port};
-    $self->{folder} = $params{folder}
-	if defined $params{folder};
-    $self->{username} = $params{username}
-	if defined $params{username};
-    $self->{password} = $params{password}
-	if defined $params{password};
-    $self->{verbose} = 0 + $params{verbose}
-	if defined $params{verbose};
-
-    bless $self, $class;
+    );
+    my $self = $class->SUPER::new(%params);
+    map { $self->{$_} = $bits{$_}; } keys %bits;
     return $self;
 }
 
-sub _connect
+sub connect
 {
     my ($self) = @_;
 
@@ -91,7 +73,7 @@ sub _connect
     return
 	if (defined $self->{client});
 
-    # xlog "_connect: creating POP3 object";
+    # xlog "connect: creating POP3 object";
     my %opts;
     $opts{Debug} = $self->{verbose}
 	if $self->{verbose};
@@ -117,21 +99,21 @@ sub _connect
     }
 
     my $pop3_username = "$uu$ff$ud";
-    # xlog "_connect: pop3_username=\"$pop3_username\"", ;
-    # xlog "_connect: password=\"" . $self->{password} . "\"";
+    # xlog "connect: pop3_username=\"$pop3_username\"", ;
+    # xlog "connect: password=\"" . $self->{password} . "\"";
 
     my $res = $client->login($pop3_username, $self->{password})
 	or die "Cannot login via POP3";
     $res = 0 if ($res eq '0E0');
     $res = 0 + $res;
 
-    # xlog "_connect: found $res messages";
+    xlog "connect: found $res messages";
 
     $self->{last_id} = $res;
     $self->{client} = $client;
 }
 
-sub _disconnect
+sub disconnect
 {
     my ($self) = @_;
 
@@ -139,39 +121,17 @@ sub _disconnect
     $self->{client} = undef;
 }
 
-sub write_begin
-{
-    my ($self) = @_;
-
-    die "cannot write messages to POP3 server";
-}
-
-sub write_message
-{
-    my ($self, $msg) = @_;
-
-    die "cannot write messages to POP3 server";
-}
-
-sub write_end
-{
-    my ($self) = @_;
-
-    die "cannot write messages to POP3 server";
-}
-
 sub read_begin
 {
     my ($self) = @_;
-    my $r;
 
-    $self->_connect();
+    $self->connect();
     $self->{next_id} = 1;
 }
 
 sub read_message
 {
-    my ($self, $msg) = @_;
+    my ($self) = @_;
 
     my $id = $self->{next_id};
     return undef
@@ -185,22 +145,15 @@ sub read_end
 {
     my ($self) = @_;
 
-    $self->_disconnect();
+    $self->disconnect();
     $self->{next_id} = undef;
-}
-
-sub remove
-{
-    my ($self) = @_;
-
-    die "cannot remove folder with POP3 server";
 }
 
 sub get_client
 {
     my ($self) = @_;
 
-    $self->_connect();
+    $self->connect();
     return $self->{client};
 }
 

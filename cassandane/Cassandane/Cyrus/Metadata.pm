@@ -837,7 +837,7 @@ sub set_msg_annotation
     my ($self, $store, $uid, $entry, $attrib, $value) = @_;
 
     $store ||= $self->{store};
-    $store->_connect();
+    $store->connect();
     $store->_select();
     my $talk = $store->get_client();
     # Note $value might have no whitespace so we have to
