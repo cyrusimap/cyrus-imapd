@@ -1493,25 +1493,25 @@ void response_header(long code, struct transaction_t *txn)
 
     prot_printf(httpd_out, "Accept-Ranges: none\r\n");
 
+    if (txn->req_tgt.allow & ALLOW_DAV) {
+	prot_printf(httpd_out, "DAV: 1, 3");
+	if (txn->req_tgt.allow & ALLOW_WRITE) {
+	    prot_printf(httpd_out, ", access-control, extended-mkcol");
+	}
+	if (txn->req_tgt.allow & ALLOW_CAL) {
+	    prot_printf(httpd_out, ", calendar-access");
+	    /* calendar-auto-schedule  */
+	}
+#if 0
+	if (txn->req_tgt.allow & ALLOW_CARD) {
+	    prot_printf(httpd_out, ", addressbook");
+	}
+#endif
+	prot_printf(httpd_out, "\r\n");
+    }
+
     if ((code == HTTP_NOT_ALLOWED) ||
 	((code == HTTP_OK) && txn->meth && (txn->meth[0] == 'O'))) {
-	if (txn->req_tgt.allow & ALLOW_DAV) {
-	    prot_printf(httpd_out, "DAV: 1, 3");
-	    if (txn->req_tgt.allow & ALLOW_WRITE) {
-		prot_printf(httpd_out, ", access-control, extended-mkcol");
-	    }
-	    if (txn->req_tgt.allow & ALLOW_CAL) {
-		prot_printf(httpd_out, ", calendar-access");
-		/* calendar-auto-schedule  */
-	    }
-#if 0
-	    if (txn->req_tgt.allow & ALLOW_CARD) {
-		prot_printf(httpd_out, ", addressbook");
-	    }
-#endif
-	    prot_printf(httpd_out, "\r\n");
-	}
-
 	prot_printf(httpd_out, "Allow: OPTIONS");
 	if (txn->req_tgt.allow & ALLOW_READ) {
 	    prot_printf(httpd_out, ", GET, HEAD");
