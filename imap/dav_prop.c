@@ -1246,8 +1246,8 @@ static const struct prop_entry prop_entries[] =
     { "max-attendees-per-instance", NS_CAL, 0, NULL, NULL, NULL },
 
     /* CalDAV Scheduling properties */
-    { "schedule-inbox-URL", NS_CAL, 0, propfind_calurl, NULL, SCHED_INBOX },
-    { "schedule-outbox-URL", NS_CAL, 0, propfind_calurl, NULL, SCHED_OUTBOX },
+    { "schedule-inbox-URL", NS_CAL, 0, NULL, NULL, SCHED_INBOX },
+    { "schedule-outbox-URL", NS_CAL, 0, NULL, NULL, SCHED_OUTBOX },
     { "calendar-user-address-set", NS_CAL, 0, NULL, NULL, NULL },
     { "calendar-user-type", NS_CAL, 0, NULL, NULL, NULL },
 
