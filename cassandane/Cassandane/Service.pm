@@ -62,11 +62,13 @@ sub new
     $host = delete $params{host}
 	if (exists $params{host});
     my $port = delete $params{port} || alloc_port();
+    my $type = delete $params{type} || 'unknown';
 
     my $self = $class->SUPER::new(%params);
 
     $self->{host} = $host;
     $self->{port} = $port;
+    $self->{type} = $type;
 
     return $self;
 }
@@ -84,12 +86,13 @@ sub store_params
 {
     my ($self, %params) = @_;
 
-    $params{type} = 'unknown'
-	unless defined $params{type};
+    $params{type} ||= $self->{type};
+    $params{address_family} = $self->{address_family};
     $params{host} = $self->{host};
     $params{port} = $self->{port};
-    $params{verbose} = get_verbose
-	unless defined $params{verbose};
+    $params{username} ||= 'cassandane';
+    $params{password} ||= 'testpw';
+    $params{verbose} ||= get_verbose();
     return \%params;
 }
 

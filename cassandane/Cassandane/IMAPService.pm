@@ -48,7 +48,7 @@ use Cassandane::Util::Log;
 sub new
 {
     my $class = shift;
-    my $self = $class->SUPER::new(@_);
+    my $self = $class->SUPER::new(type => 'imap', @_);
     return $self;
 }
 
@@ -56,17 +56,11 @@ sub new
 # to MessageStoreFactory::create.
 sub store_params
 {
-    my ($self, %params) = @_;
+    my ($self, %inparams) = @_;
 
-    $params{type} = 'imap';
-    $params{address_family} = $self->{address_family};
-    $params{host} = $self->{host};
-    $params{port} = $self->{port};
-    $params{folder} ||= 'inbox';
-    $params{username} ||= 'cassandane';
-    $params{password} ||= 'testpw';
-    $params{verbose} ||= get_verbose();
-    return \%params;
+    my $outparams = $self->SUPER::store_params(%inparams);
+    $outparams->{folder} ||= 'inbox';
+    return $outparams;
 }
 
 1;

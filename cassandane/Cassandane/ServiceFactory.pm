@@ -85,6 +85,13 @@ sub create
 				argv => ['nntpd'],
 				%params);
     }
+    elsif ($name =~ m/pop/)
+    {
+	return Cassandane::Service->new(
+				type => 'pop3',
+				argv => ['pop3d'],
+				%params);
+    }
     else
     {
 	die "No command specified and cannot guess a default"

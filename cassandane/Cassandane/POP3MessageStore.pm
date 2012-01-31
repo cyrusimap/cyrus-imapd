@@ -60,6 +60,14 @@ sub new
 	next_id => undef,
 	last_id => undef,
     );
+
+    # Sadly, it seems the version of Net::POP3 I'm using has
+    # neither support for specifying inet6 nor a way of passing
+    # an already connected socket.  So, no IPv6 for us.
+    my $af = delete $params{address_family};
+    die "Sorry, only INET supported for POP3"
+	if (defined $af && $af ne 'inet');
+
     my $self = $class->SUPER::new(%params);
     map { $self->{$_} = $bits{$_}; } keys %bits;
     return $self;
