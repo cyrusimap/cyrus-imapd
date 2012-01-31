@@ -46,14 +46,12 @@
  *   - Make proxying more robust.  Currently depends on calendar collections
  *     residing on same server as user's INBOX.  Doesn't handle global/shared
  *     calendars.
- *   - Check meth_acl() to make sure we have logic correct
- *     (iCal seems to blow up existing ACLs).
  *   - Support COPY/MOVE on collections
  *   - Add more required properties
  *   - GET/HEAD on collections (iCalendar stream of resources)
  *   - calendar-query REPORT filtering (optimize for time range, component type)
- *   - free-busy-query REPORT
- *   - sync-collection REPORT (need to handle Depth infinity)
+ *   - free-busy-query REPORT?
+ *   - sync-collection REPORT - need to handle Depth infinity?
  *   - Use XML precondition error codes
  *   - Add WebDAV LOCKing?  Does anybody use it?
  */
@@ -548,12 +546,12 @@ static int meth_copy(struct transaction_t *txn)
 
     /* Check ACL for current user on source mailbox */
     rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
-    if (!(rights & DACL_READ) ||
+    if (((rights & DACL_READ) != DACL_READ) ||
 	((txn->meth[0] == 'M') && !(rights & DACL_RMRSRC))) {
 	/* DAV:need-privileges */
 	txn->error.precond = &preconds[DAV_NEED_PRIVS];
 	txn->error.resource = txn->req_tgt.path;
-	txn->error.rights = !(rights & DACL_READ) ? DACL_READ : DACL_RMRSRC;
+	txn->error.rights = (rights & DACL_READ) != DACL_READ ? DACL_READ : DACL_RMRSRC;
 	return HTTP_FORBIDDEN;
     }
 
@@ -1024,7 +1022,7 @@ static int meth_get(struct transaction_t *txn)
 
     /* Check ACL for current user */
     rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
-    if (!(rights & DACL_READ)) {
+    if ((rights & DACL_READ) != DACL_READ) {
 	/* DAV:need-privileges */
 	txn->error.precond = &preconds[DAV_NEED_PRIVS];
 	txn->error.resource = txn->req_tgt.path;
@@ -2297,7 +2295,7 @@ static int meth_report(struct transaction_t *txn)
 
 	/* Check ACL for current user */
 	rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
-	if (!(rights & DACL_READ)) {
+	if ((rights & DACL_READ) != DACL_READ) {
 	    /* DAV:need-privileges */
 	    txn->error.precond = &preconds[DAV_NEED_PRIVS];
 	    txn->error.resource = txn->req_tgt.path;

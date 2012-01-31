@@ -75,7 +75,8 @@ enum {
 					   DAV:read-acl, write-acl, unlock) */
 
 /* WebDAV (RFC 3744) privileges */
-#define DACL_READ	ACL_READ	/* DAV:read (aggregates
+#define DACL_READ	(ACL_READ\
+			 |ACL_LOOKUP)	/* DAV:read (aggregates
 					   DAV:read-current-user-privilege-set
 					   and CALDAV:read-free-busy) */
 #define DACL_WRITECONT	ACL_INSERT	/* DAV:write-content */

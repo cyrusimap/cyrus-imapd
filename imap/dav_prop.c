@@ -699,7 +699,7 @@ static int add_privs(int rights, int implicit,
 	priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
 	xmlNewChild(priv, NULL, BAD_CAST "all", NULL);
     }
-    if (rights & DACL_READ) {
+    if ((rights & DACL_READ) == DACL_READ) {
 	priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
 	xmlNewChild(priv, NULL, BAD_CAST "read", NULL);
 	if (implicit) rights |= DACL_READFB;
@@ -772,9 +772,9 @@ static int propfind_curprivset(const xmlChar *propname, xmlNsPtr ns,
 	xml_add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND],
 		     ns, BAD_CAST propname, NULL, NULL);
     }
-    else if (!((rights =
-		cyrus_acl_myrights(fctx->authstate, fctx->mailbox->acl))
-	       & DACL_READ)) {
+    else if (((rights =
+	       cyrus_acl_myrights(fctx->authstate, fctx->mailbox->acl))
+	      & DACL_READ) != DACL_READ) {
 	xml_add_prop(HTTP_UNAUTHORIZED, resp, &propstat[PROPSTAT_UNAUTH],
 		     ns, BAD_CAST propname, NULL, NULL);
     }
