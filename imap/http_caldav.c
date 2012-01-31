@@ -273,7 +273,8 @@ static int meth_acl(struct transaction_t *txn)
 			    goto done;
 			}
 
-			prin = child->children;
+			for (prin = child->children;
+			     prin->type != XML_ELEMENT_NODE; prin = prin->next);
 		    }
 		    else if (!xmlStrcmp(child->name, BAD_CAST "grant")) {
 			if (privs) {
@@ -282,7 +283,8 @@ static int meth_acl(struct transaction_t *txn)
 			    goto done;
 			}
 
-			privs = child->children;
+			for (privs = child->children;
+			     privs->type != XML_ELEMENT_NODE; privs = privs->next);
 		    }
 		    else if (!xmlStrcmp(child->name, BAD_CAST "deny")) {
 			if (privs) {
@@ -291,7 +293,8 @@ static int meth_acl(struct transaction_t *txn)
 			    goto done;
 			}
 
-			privs = child->children;
+			for (privs = child->children;
+			     privs->type != XML_ELEMENT_NODE; privs = privs->next);
 			deny = 1;
 		    }
 		    else if (!xmlStrcmp(child->name, BAD_CAST "invert")) {
@@ -343,37 +346,40 @@ static int meth_acl(struct transaction_t *txn)
 
 	    for (; privs; privs = privs->next) {
 		if (privs->type == XML_ELEMENT_NODE) {
-		    if (!xmlStrcmp(privs->children->ns->href,
+		    xmlNodePtr priv = privs->children;
+		    for (; priv->type != XML_ELEMENT_NODE; priv = priv->next);
+
+		    if (!xmlStrcmp(priv->ns->href,
 				   BAD_CAST XML_NS_DAV)) {
 			/* WebDAV privileges */
-			if (!xmlStrcmp(privs->children->name,
+			if (!xmlStrcmp(priv->name,
 				       BAD_CAST "all"))
 			    rights |= DACL_ALL | DACL_READFB;
-			else if (!xmlStrcmp(privs->children->name,
+			else if (!xmlStrcmp(priv->name,
 				       BAD_CAST "read"))
 			    rights |= DACL_READ | DACL_READFB;
-			else if (!xmlStrcmp(privs->children->name,
+			else if (!xmlStrcmp(priv->name,
 				       BAD_CAST "write"))
 			    rights |= DACL_WRITE;
-			else if (!xmlStrcmp(privs->children->name,
+			else if (!xmlStrcmp(priv->name,
 				       BAD_CAST "write-content"))
 			    rights |= DACL_WRITECONT;
-			else if (!xmlStrcmp(privs->children->name,
+			else if (!xmlStrcmp(priv->name,
 				       BAD_CAST "write-properties"))
 			    rights |= DACL_WRITEPROPS;
-			else if (!xmlStrcmp(privs->children->name,
+			else if (!xmlStrcmp(priv->name,
 				       BAD_CAST "bind"))
 			    rights |= DACL_BIND;
-			else if (!xmlStrcmp(privs->children->name,
+			else if (!xmlStrcmp(priv->name,
 				       BAD_CAST "unbind"))
 			    rights |= DACL_UNBIND;
-			else if (!xmlStrcmp(privs->children->name,
+			else if (!xmlStrcmp(priv->name,
 					    BAD_CAST "read-current-user-privilege-set")
-				 || !xmlStrcmp(privs->children->name,
+				 || !xmlStrcmp(priv->name,
 					       BAD_CAST "read-acl")
-				 || !xmlStrcmp(privs->children->name,
+				 || !xmlStrcmp(priv->name,
 					       BAD_CAST "write-acl")
-				 || !xmlStrcmp(privs->children->name,
+				 || !xmlStrcmp(priv->name,
 					       BAD_CAST "unlock")) {
 			    /* DAV:no-abstract */
 			    txn->error.precond = &preconds[DAV_NO_ABSTRACT];
@@ -388,30 +394,30 @@ static int meth_acl(struct transaction_t *txn)
 			}
 		    }
 
-		    else if (!xmlStrcmp(privs->children->ns->href,
+		    else if (!xmlStrcmp(priv->ns->href,
 				   BAD_CAST XML_NS_CAL)
 			     /* CalDAV privileges */
-			     && !xmlStrcmp(privs->children->name,
+			     && !xmlStrcmp(priv->name,
 				   BAD_CAST "read-free-busy")) {
 			rights |= DACL_READFB;
 		    }
 
-		    else if (!xmlStrcmp(privs->children->ns->href,
+		    else if (!xmlStrcmp(priv->ns->href,
 				   BAD_CAST XML_NS_CYRUS)) {
 			/* Cyrus-specific privileges */
-			if (!xmlStrcmp(privs->children->name,
+			if (!xmlStrcmp(priv->name,
 				       BAD_CAST "make-collection"))
 			    rights |= DACL_MKCOL;
-			else if (!xmlStrcmp(privs->children->name,
+			else if (!xmlStrcmp(priv->name,
 				       BAD_CAST "remove-collection"))
 			    rights |= DACL_RMCOL;
-			else if (!xmlStrcmp(privs->children->name,
+			else if (!xmlStrcmp(priv->name,
 				       BAD_CAST "add-resource"))
 			    rights |= DACL_ADDRSRC;
-			else if (!xmlStrcmp(privs->children->name,
+			else if (!xmlStrcmp(priv->name,
 				       BAD_CAST "remove-resource"))
 			    rights |= DACL_RMRSRC;
-			else if (!xmlStrcmp(privs->children->name,
+			else if (!xmlStrcmp(priv->name,
 				       BAD_CAST "admin"))
 			    rights |= DACL_ADMIN;
 			else {
