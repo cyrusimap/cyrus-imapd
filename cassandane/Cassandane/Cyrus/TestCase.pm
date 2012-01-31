@@ -314,22 +314,26 @@ sub make_random_data
 sub check_messages
 {
     my ($self, $expected, %params) = @_;
-    my $actual = {};
-    my $store = $params{store} || $self->{store};
+    my $actual = $params{actual};
     my $check_guid = $params{check_guid};
     $check_guid = 1 unless defined $check_guid;
     my $keyed_on = $params{keyed_on} || 'subject';
 
     xlog "check_messages: " . join(' ', %params);
 
-    $store->read_begin();
-    while (my $msg = $store->read_message())
+    if (!defined $actual)
     {
-	my $key = $msg->$keyed_on();
-	$self->assert(!defined $actual->{$key});
-	$actual->{$key} = $msg;
+	my $store = $params{store} || $self->{store};
+	$actual = {};
+	$store->read_begin();
+	while (my $msg = $store->read_message())
+	{
+	    my $key = $msg->$keyed_on();
+	    $self->assert(!defined $actual->{$key});
+	    $actual->{$key} = $msg;
+	}
+	$store->read_end();
     }
-    $store->read_end();
 
     $self->assert(scalar keys %$actual == scalar keys %$expected);
 
