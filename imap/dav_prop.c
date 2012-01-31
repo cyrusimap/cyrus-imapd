@@ -1244,7 +1244,7 @@ static const struct prop_entry prop_entries[] =
     { "calendar-description", NS_CAL, 0, propfind_fromdb, proppatch_todb, "CALDAV" },
     { "calendar-home-set", NS_CAL, 0, propfind_calurl, NULL, NULL },
     { "calendar-timezone", NS_CAL, 0, propfind_fromdb, proppatch_todb, "CALDAV" },
-    { "supported-calendar-component-set", NS_CAL, 0, NULL, NULL, NULL },
+    { "supported-calendar-component-set", NS_CAL, 0, NULL, proppatch_todb, NULL },
     { "supported-calendar-data", NS_CAL, 0, NULL, NULL, NULL },
     { "max-resource-size", NS_CAL, 0, NULL, NULL, NULL },
     { "min-date-time", NS_CAL, 0, NULL, NULL, NULL },
