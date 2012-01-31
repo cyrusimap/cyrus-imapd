@@ -1094,6 +1094,8 @@ done:
 	    uint32_t lines;
 	    int r;
 
+	    if (!p)
+		p = "";
 	    while (*p && Uisspace(*p)) {
 		p++;
 	    }
