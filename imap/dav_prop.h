@@ -144,13 +144,13 @@ struct propfind_entry_list;
 struct propfind_ctx {
     struct request_target_t *req_tgt;	/* parsed request target URL */
     unsigned depth;	    		/* 0 = root, 1 = calendar, 2 = resrc */
+    unsigned brief;			/* omit 404 propstat elements */
     const char *userid;			/* userid client has logged in as */
     int userisadmin;			/* is userid an admin */
     struct auth_state *authstate;	/* authorization state for userid */
     struct mailbox *mailbox;		/* mailbox correspondng to collection */
     struct quota quota;			/* quota info for collection */
     struct index_record *record;	/* cyrus.index record for resource */
-    hdrcache_t hdrcache;		/* Parsed headers from cyrus.cache */
     struct propfind_entry_list *elist;	/* List of props to fetch w/callbacks */
     xmlNodePtr root;			/* root node to add to XML tree */
     xmlNsPtr *ns;			/* Array of our supported namespaces */

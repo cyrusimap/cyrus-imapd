@@ -1403,6 +1403,11 @@ int meth_propfind(struct transaction_t *txn)
     fctx.errstr = &txn->error.desc;
     fctx.ret = &ret;
 
+    /* Check for Brief header */
+    if ((hdr = spool_getheader(txn->req_hdrs, "Brief")) && !strcasecmp(hdr[0], "t")) {
+	fctx.brief = 1;
+    }
+
     if (!txn->req_tgt.collection) {
 	/* Add response for home-set collection */
 	if (xml_add_response(&fctx, 0)) goto done;
@@ -2151,7 +2156,8 @@ static int report_sync_col(xmlNodePtr inroot, struct propfind_ctx *fctx,
 enum {
     REPORT_NEED_MBOX  = (1<<0),
     REPORT_NEED_DAVDB = (1<<1),
-    REPORT_NEED_PROPS = (1<<2)
+    REPORT_NEED_PROPS = (1<<2),
+    REPORT_USE_BRIEF  = (1<<3)
 };
 
 typedef int (*report_proc_t)(xmlNodePtr inroot, struct propfind_ctx *fctx,
@@ -2159,13 +2165,16 @@ typedef int (*report_proc_t)(xmlNodePtr inroot, struct propfind_ctx *fctx,
 
 static const struct report_type_t {
     const char *name;
-    unsigned flags;
     report_proc_t proc;
+    unsigned flags;
 } report_types[] = {
-    { "calendar-query", REPORT_NEED_MBOX|REPORT_NEED_DAVDB, &report_cal_query },
-    { "calendar-multiget", REPORT_NEED_MBOX|REPORT_NEED_DAVDB, &report_cal_multiget },
-    { "sync-collection", REPORT_NEED_MBOX|REPORT_NEED_PROPS, &report_sync_col },
-    { NULL, 0, NULL }
+    { "calendar-query", &report_cal_query,
+      REPORT_NEED_MBOX |REPORT_NEED_DAVDB | REPORT_USE_BRIEF },
+    { "calendar-multiget", &report_cal_multiget,
+      REPORT_NEED_MBOX | REPORT_NEED_DAVDB | REPORT_USE_BRIEF },
+    { "sync-collection", &report_sync_col,
+      REPORT_NEED_MBOX | REPORT_NEED_PROPS },
+    { NULL, NULL, 0 }
 };
 
 
@@ -2324,6 +2333,7 @@ static int meth_report(struct transaction_t *txn)
     }
 
     /* Populate our propfind context */
+    memset(&fctx, 0, sizeof(struct propfind_ctx));
     fctx.req_tgt = &txn->req_tgt;
     fctx.depth = depth;
     fctx.userid = httpd_userid;
@@ -2336,6 +2346,12 @@ static int meth_report(struct transaction_t *txn)
     fctx.ns = ns;
     fctx.errstr = &txn->error.desc;
     fctx.ret = &ret;
+
+    /* Check for Brief header */
+    if ((report->flags & REPORT_USE_BRIEF) &&
+	(hdr = spool_getheader(txn->req_hdrs, "Brief")) && !strcasecmp(hdr[0], "t")) {
+	fctx.brief = 1;
+    }
 
     /* Process the requested report */
     ret = (*report->proc)(inroot, &fctx, caldavdb);

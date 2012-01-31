@@ -201,6 +201,8 @@ int xml_add_response(struct propfind_ctx *fctx, long code)
     for (i = 0; i < NUM_PROPSTAT; i++) {
 	struct propstat *stat = &propstat[i];
 
+	if ((i == PROPSTAT_NOTFOUND) && fctx->brief) continue;
+
 	if (stat->root) {
 	    xmlNewChild(stat->root, NULL, BAD_CAST "status",
 			BAD_CAST http_statusline(stat->status));
