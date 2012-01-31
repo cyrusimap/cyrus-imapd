@@ -124,7 +124,7 @@ extern const struct precond preconds[];
 
 /* Structure for property status */
 struct propstat {
-    xmlNodePtr prop;
+    xmlNodePtr root;
     long status;
     const struct precond *precond;
 };

@@ -147,12 +147,12 @@ static xmlNodePtr xml_add_prop(long status, xmlNodePtr resp,
 {
     xmlNodePtr prop;
 
-    if (!propstat->prop) {
-	xmlNodePtr stat = xmlNewChild(resp, NULL, BAD_CAST "propstat", NULL);
-	propstat->prop = xmlNewChild(stat, NULL, BAD_CAST "prop", NULL);
+    if (!propstat->root) {
+	propstat->root = xmlNewNode(resp->ns, BAD_CAST "propstat");
+	xmlNewChild(propstat->root, NULL, BAD_CAST "prop", NULL);
     }
 
-    prop = xmlNewTextChild(propstat->prop, prop_ns, prop_name, content);
+    prop = xmlNewTextChild(propstat->root->children, prop_ns, prop_name, content);
     propstat->status = status;
     propstat->precond = precond;
 
@@ -196,17 +196,20 @@ int xml_add_response(struct propfind_ctx *fctx, long code)
 	}
     }
 
-    /* Add status and optional error to the propstat elements */
+    /* Add status and optional error to the propstat elements
+       and then add them to response element */
     for (i = 0; i < NUM_PROPSTAT; i++) {
 	struct propstat *stat = &propstat[i];
 
-	if (stat->prop) {
-	    xmlNewChild(stat->prop->parent, NULL, BAD_CAST "status",
+	if (stat->root) {
+	    xmlNewChild(stat->root, NULL, BAD_CAST "status",
 			BAD_CAST http_statusline(stat->status));
 	    if (stat->precond) {
 		struct error_t error = { NULL, stat->precond, NULL, 0 };
-		xml_add_error(stat->prop->parent, &error, fctx->ns);
+		xml_add_error(stat->root, &error, fctx->ns);
 	    }
+
+	    xmlAddChild(resp, stat->root);
 	}
     }
 
@@ -1404,22 +1407,25 @@ int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr)
     }
 
     /* One or more of the properties failed */
-    if (*pctx->ret && propstat[PROPSTAT_OK].prop) {
+    if (*pctx->ret && propstat[PROPSTAT_OK].root) {
 	/* 200 status must become 424 */
 	propstat[PROPSTAT_OK].status = HTTP_FAILED_DEP;
     }
 
-    /* Add status and optional error to the propstat elements */
+    /* Add status and optional error to the propstat elements
+       and then add them to the response element */
     for (i = 0; i < NUM_PROPSTAT; i++) {
 	struct propstat *stat = &propstat[i];
 
-	if (stat->prop) {
-	    xmlNewChild(stat->prop->parent, NULL, BAD_CAST "status",
+	if (stat->root) {
+	    xmlNewChild(stat->root, NULL, BAD_CAST "status",
 			BAD_CAST http_statusline(stat->status));
 	    if (stat->precond) {
 		struct error_t error = { NULL, stat->precond, NULL, 0 };
-		xml_add_error(stat->prop->parent, &error, pctx->ns);
+		xml_add_error(stat->root, &error, pctx->ns);
 	    }
+
+	    xmlAddChild(pctx->root, stat->root);
 	}
     }
 
