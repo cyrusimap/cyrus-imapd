@@ -125,8 +125,11 @@ sub disconnect
 {
     my ($self) = @_;
 
-    $self->{client}->quit();
-    $self->{client} = undef;
+    if (defined $self->{client})
+    {
+	$self->{client}->quit();
+	$self->{client} = undef;
+    }
 }
 
 sub read_begin
