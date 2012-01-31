@@ -120,7 +120,7 @@ sub read_errors
 	}
 	# Hack to remove spurious junk generated when
 	# running coveraged code under ggcov-run
-	@errors = grep { ! m/libggcov:/ } @errors;
+	@errors = grep { ! m/libggcov:/ && ! m/profiling:/ } @errors;
     }
     return @errors;
 }
