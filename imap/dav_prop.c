@@ -1013,6 +1013,7 @@ static int propfind_caldata(const xmlChar *propname, xmlNsPtr ns,
 	mailbox_map_message(fctx->mailbox, fctx->record->uid,
 			    &msg_base, &msg_size);
 
+	ensure_ns(fctx->ns, NS_CAL, resp->parent, XML_NS_CAL, "C");
 	data = xml_add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK],
 			    ns, BAD_CAST propname, NULL, NULL);
 	xmlAddChild(data,
@@ -1046,6 +1047,7 @@ static int propfind_calurl(const xmlChar *propname, xmlNsPtr ns,
     const char *cal = (const char *) rock;
 
     if (fctx->userid) {
+	ensure_ns(fctx->ns, NS_CAL, resp->parent, XML_NS_CAL, "C");
 	node = xml_add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK],
 			    ns, BAD_CAST propname, NULL, NULL);
 
