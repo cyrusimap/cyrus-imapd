@@ -51,12 +51,14 @@ my @default_names = (
 
 sub new
 {
-    my $class = shift;
+    my ($class, %opts) = @_;
     my $self = {
 	schedule => {},
+	keep_going => delete $opts{keep_going} || 0,
     };
-    bless $self, $class;
-    return $self;
+    die "Unknown options: " . join(' ', keys %opts)
+	if scalar %opts;
+    return bless $self, $class;
 }
 
 sub _schedule
@@ -170,6 +172,17 @@ sub run
 {
     my ($self, $result, $runner) = @_;
     my $passed = 1;
+
+    if (!$self->{keep_going})
+    {
+	# Hacky!
+	no warnings;
+	*Test::Unit::Result::should_stop = sub
+	{
+	    my ($self) = @_;
+	    return !$self->was_successful();
+	};
+    }
 
     foreach my $item ($self->_get_schedule())
     {

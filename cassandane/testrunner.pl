@@ -52,6 +52,8 @@ my $format = 'tap';
 my $output_dir = 'reports';
 my $do_list = 0;
 my $do_cleanup = 0;
+# The default really should be --no-keep-going like make
+my $keep_going = 1;
 my @names;
 
 # This disgusting hack makes Test::Unit report a useful stack trace for
@@ -170,6 +172,16 @@ while (my $a = shift)
     {
 	$do_list = 1;
     }
+    elsif ($a eq '-k' || $a eq '--keep-going')
+    {
+	# These option names stolen from GNU make
+	$keep_going = 1;
+    }
+    elsif ($a eq '-S' || $a eq '--stop' || $a eq '--no-keep-going')
+    {
+	# These option names stolen from GNU make
+	$keep_going = 0;
+    }
     elsif ($a =~ m/^-/)
     {
 	usage;
@@ -183,7 +195,9 @@ while (my $a = shift)
 Cassandane::Instance::cleanup_leftovers()
     if ($do_cleanup);
 
-my $plan = Cassandane::Unit::TestPlan->new();
+my $plan = Cassandane::Unit::TestPlan->new(
+	keep_going => $keep_going
+    );
 
 if ($do_list)
 {
