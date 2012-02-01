@@ -534,7 +534,7 @@ static int propfind_reportset(xmlNodePtr prop,
 
     if ((fctx->req_tgt->namespace == URL_NS_CALENDAR ||
 	 fctx->req_tgt->namespace == URL_NS_ADDRESSBOOK) &&
-	!fctx->req_tgt->resource) {
+	fctx->req_tgt->collection && !fctx->req_tgt->resource) {
 	s = xmlNewChild(top, NULL, BAD_CAST "supported-report", NULL);
 	r = xmlNewChild(s, NULL, BAD_CAST "report", NULL);
 	ensure_ns(fctx->ns, NS_DAV, resp->parent, XML_NS_DAV, "D");
