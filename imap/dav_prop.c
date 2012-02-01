@@ -72,6 +72,31 @@ static int ensure_ns(xmlNsPtr *respNs, int ns, xmlNodePtr node,
 }
 
 
+/* Add namespaces declared in the request to our root node and Ns array */
+static int xml_add_ns(xmlNsPtr reqNs, xmlNsPtr *respNs, xmlNodePtr root)
+{
+    for (; reqNs; reqNs = reqNs->next) {
+	if (!xmlStrcmp(reqNs->href, BAD_CAST XML_NS_DAV))
+	    ensure_ns(respNs, NS_DAV, root,
+		      (const char *) reqNs->href, (const char *) reqNs->prefix);
+	else if (!xmlStrcmp(reqNs->href, BAD_CAST XML_NS_CAL))
+	    ensure_ns(respNs, NS_CAL, root,
+		      (const char *) reqNs->href, (const char *) reqNs->prefix);
+	else if (!xmlStrcmp(reqNs->href, BAD_CAST XML_NS_CS))
+	    ensure_ns(respNs, NS_CS, root,
+		      (const char *) reqNs->href, (const char *) reqNs->prefix);
+	else if (!xmlStrcmp(reqNs->href, BAD_CAST XML_NS_CYRUS))
+	    ensure_ns(respNs, NS_CYRUS, root,
+		      (const char *) reqNs->href, (const char *) reqNs->prefix);
+	else
+	    xmlNewNs(root, reqNs->href, reqNs->prefix);
+    }
+
+    /* XXX  check for errors */
+    return 0;
+}
+
+
 /* Initialize an XML tree for a property response */
 xmlNodePtr init_xml_response(const char *resp,
 			     xmlNsPtr reqNs, xmlNsPtr *respNs)
@@ -89,18 +114,7 @@ xmlNodePtr init_xml_response(const char *resp,
      * creating array of known namespaces that we can reference later.
      */
     memset(respNs, 0, NUM_NAMESPACE * sizeof(xmlNsPtr));
-    for (; reqNs; reqNs = reqNs->next) {
-	if (!xmlStrcmp(reqNs->href, BAD_CAST XML_NS_DAV))
-	    respNs[NS_DAV] = xmlNewNs(root, reqNs->href, reqNs->prefix);
-	else if (!xmlStrcmp(reqNs->href, BAD_CAST XML_NS_CAL))
-	    respNs[NS_CAL] = xmlNewNs(root, reqNs->href, reqNs->prefix);
-	else if (!xmlStrcmp(reqNs->href, BAD_CAST XML_NS_CS))
-	    respNs[NS_CS] = xmlNewNs(root, reqNs->href, reqNs->prefix);
-	else if (!xmlStrcmp(reqNs->href, BAD_CAST XML_NS_CYRUS))
-	    respNs[NS_CYRUS] = xmlNewNs(root, reqNs->href, reqNs->prefix);
-	else
-	    xmlNewNs(root, reqNs->href, reqNs->prefix);
-    }
+    xml_add_ns(reqNs, respNs, root);
 
     /* Set namespace of root node */
     ensure_ns(respNs, NS_DAV, root, XML_NS_DAV, "D");
@@ -1300,7 +1314,7 @@ const struct precond preconds[] =
 /* Parse the requested properties and create a linked list of fetch callbacks.
  * The list gets reused for each href if Depth > 0
  */
-int preload_proplist(xmlNodePtr proplist, struct propfind_entry_list **list)
+int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
 {
     xmlNodePtr prop;
     const struct prop_entry *entry;
@@ -1310,6 +1324,9 @@ int preload_proplist(xmlNodePtr proplist, struct propfind_entry_list **list)
 	if (prop->type == XML_ELEMENT_NODE) {
 	    struct propfind_entry_list *nentry =
 		xzmalloc(sizeof(struct propfind_entry_list));
+
+	    /* Add any namespaces declared on this property */
+	    if (prop->nsDef) xml_add_ns(prop->nsDef, fctx->ns, fctx->root);
 
 	    /* Look for a match against our known properties */
 	    for (entry = prop_entries;
@@ -1328,8 +1345,8 @@ int preload_proplist(xmlNodePtr proplist, struct propfind_entry_list **list)
 		nentry->get = propfind_fromdb;
 		nentry->rock = NULL;
 	    }
-	    nentry->next = *list;
-	    *list = nentry;
+	    nentry->next = fctx->elist;
+	    fctx->elist = nentry;
 	}
     }
 
@@ -1372,6 +1389,9 @@ int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr)
 	    for (prop = prop->children; prop; prop = prop->next) {
 		if (prop->type == XML_ELEMENT_NODE) {
 		    const struct prop_entry *entry;
+
+		    /* Add any namespaces declared on this property */
+		    if (prop->nsDef) xml_add_ns(prop->nsDef, pctx->ns, pctx->root);
 
 		    /* Look for a match against our known properties */
 		    for (entry = prop_entries;

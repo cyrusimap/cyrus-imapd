@@ -200,7 +200,7 @@ struct propfind_entry_list {
 
 
 /* Parse the requested properties and create a linked list of fetch callbacks */
-int preload_proplist(xmlNodePtr proplist, struct propfind_entry_list **list);
+int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx);
 
 /* Initialize an XML tree */
 xmlNodePtr init_xml_response(const char *resp,

@@ -1389,9 +1389,6 @@ int meth_propfind(struct transaction_t *txn)
 
     outdoc = root->doc;
 
-    /* Parse the list of properties and build a list of callbacks */
-    preload_proplist(cur->children, &elist);
-
     /* Populate our propfind context */
     memset(&fctx, 0, sizeof(struct propfind_ctx));
     fctx.req_tgt = &txn->req_tgt;
@@ -1401,16 +1398,20 @@ int meth_propfind(struct transaction_t *txn)
     fctx.authstate = httpd_authstate;
     fctx.mailbox = NULL;
     fctx.record = NULL;
-    fctx.elist = elist;
+    fctx.elist = NULL;
     fctx.root = root;
     fctx.ns = ns;
     fctx.errstr = &txn->error.desc;
     fctx.ret = &ret;
 
     /* Check for Brief header */
-    if ((hdr = spool_getheader(txn->req_hdrs, "Brief")) && !strcasecmp(hdr[0], "t")) {
+    if ((hdr = spool_getheader(txn->req_hdrs, "Brief")) &&
+	!strcasecmp(hdr[0], "t")) {
 	fctx.brief = 1;
     }
+
+    /* Parse the list of properties and build a list of callbacks */
+    preload_proplist(cur->children, &fctx);
 
     if (!txn->req_tgt.collection) {
 	/* Add response for home-set collection */
@@ -1443,6 +1444,7 @@ int meth_propfind(struct transaction_t *txn)
 
   done:
     /* Free the entry list */
+    elist = fctx.elist;
     while (elist) {
 	struct propfind_entry_list *freeme = elist;
 	elist = elist->next;
@@ -2269,8 +2271,30 @@ static int meth_report(struct transaction_t *txn)
 	goto done;
     }
 
+    /* Populate our propfind context */
+    memset(&fctx, 0, sizeof(struct propfind_ctx));
+    fctx.req_tgt = &txn->req_tgt;
+    fctx.depth = depth;
+    fctx.userid = httpd_userid;
+    fctx.userisadmin = httpd_userisadmin;
+    fctx.authstate = httpd_authstate;
+    fctx.mailbox = NULL;
+    fctx.record = NULL;
+    fctx.elist = NULL;
+    fctx.root = outroot;
+    fctx.ns = ns;
+    fctx.errstr = &txn->error.desc;
+    fctx.ret = &ret;
+
+    /* Check for Brief header */
+    if ((report->flags & REPORT_USE_BRIEF) &&
+	(hdr = spool_getheader(txn->req_hdrs, "Brief")) &&
+	!strcasecmp(hdr[0], "t")) {
+	fctx.brief = 1;
+    }
+
     /* Parse the list of properties and build a list of callbacks */
-    if (prop) preload_proplist(prop->children, &elist);
+    if (prop) preload_proplist(prop->children, &fctx);
 
     if (report->flags & REPORT_NEED_MBOX) {
 	char *server, *acl, mailboxname[MAX_MAILBOX_BUFFER];
@@ -2334,27 +2358,8 @@ static int meth_report(struct transaction_t *txn)
 		goto done;
 	    }
 	}
-    }
 
-    /* Populate our propfind context */
-    memset(&fctx, 0, sizeof(struct propfind_ctx));
-    fctx.req_tgt = &txn->req_tgt;
-    fctx.depth = depth;
-    fctx.userid = httpd_userid;
-    fctx.userisadmin = httpd_userisadmin;
-    fctx.authstate = httpd_authstate;
-    fctx.mailbox = mailbox;
-    fctx.record = NULL;
-    fctx.elist = elist;
-    fctx.root = outroot;
-    fctx.ns = ns;
-    fctx.errstr = &txn->error.desc;
-    fctx.ret = &ret;
-
-    /* Check for Brief header */
-    if ((report->flags & REPORT_USE_BRIEF) &&
-	(hdr = spool_getheader(txn->req_hdrs, "Brief")) && !strcasecmp(hdr[0], "t")) {
-	fctx.brief = 1;
+	fctx.mailbox = mailbox;
     }
 
     /* Process the requested report */
@@ -2368,6 +2373,7 @@ static int meth_report(struct transaction_t *txn)
     if (mailbox) mailbox_unlock_index(mailbox, NULL);
 
     /* Free the entry list */
+    elist = fctx.elist;
     while (elist) {
 	struct propfind_entry_list *freeme = elist;
 	elist = elist->next;
