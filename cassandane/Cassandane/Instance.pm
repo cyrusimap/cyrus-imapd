@@ -659,13 +659,14 @@ sub _check_valgrind_logs
     return unless -d $valgrind_logdir;
     opendir VGLOGS, $valgrind_logdir
 	or die "Cannot open directory $valgrind_logdir for reading: $!";
+    my @nzlogs;
     while ($_ = readdir VGLOGS)
     {
 	next if m/^\./;
 	next if m/\.core\./;
 	my $log = "$valgrind_logdir/$_";
 	next if -z $log;
-	$nerrs++;
+	push(@nzlogs, $_);
 
 	xlog "Valgrind errors from file $log";
 	open VG, "<$log"
@@ -679,7 +680,10 @@ sub _check_valgrind_logs
     }
     closedir VGLOGS;
 
-    die "Valgrind found errors" if $nerrs;
+    die "Found Valgrind errors in: " .
+	join(' ', @nzlogs) .
+	" in $valgrind_logdir, see log for details"
+	if scalar @nzlogs;
 }
 
 sub _check_cores
