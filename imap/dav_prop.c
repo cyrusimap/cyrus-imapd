@@ -462,7 +462,7 @@ static int propfind_restype(const xmlChar *propname, xmlNsPtr ns,
 
 /* Callback to "write" resourcetype property */
 static int proppatch_restype(xmlNodePtr prop, unsigned set,
-			     xmlNsPtr ns, struct proppatch_ctx *pctx,
+			     struct proppatch_ctx *pctx,
 			     struct propstat propstat[],
 			     void *rock __attribute__((unused)))
 {
@@ -481,7 +481,7 @@ static int proppatch_restype(xmlNodePtr prop, unsigned set,
 	if (!cur) {
 	    /* All resourcetypes are valid */
 	    xml_add_prop(HTTP_OK, pctx->root, &propstat[PROPSTAT_OK],
-			 ns, prop->name, NULL, NULL);
+			 prop->ns, prop->name, NULL, NULL);
 
 	    return 0;
 	}
@@ -489,7 +489,7 @@ static int proppatch_restype(xmlNodePtr prop, unsigned set,
 
     /* Protected property / Invalid resourcetype */
     xml_add_prop(HTTP_FORBIDDEN, pctx->root, &propstat[PROPSTAT_FORBID],
-		 ns, prop->name, NULL,
+		 prop->ns, prop->name, NULL,
 		 (set && pctx->meth[0] == 'M') ? &preconds[DAV_VALID_RESTYPE] :
 		 &preconds[DAV_PROT_PROP]);
 	     
@@ -1171,7 +1171,7 @@ static int propfind_fromdb(const xmlChar *propname, xmlNsPtr ns,
 
 /* Callback to write a property to annotation DB */
 static int proppatch_todb(xmlNodePtr prop, unsigned set,
-			  xmlNsPtr ns, struct proppatch_ctx *pctx,
+			  struct proppatch_ctx *pctx,
 			  struct propstat propstat[], void *ns_prefix)
 {
     char prop_annot[MAX_MAILBOX_PATH+1];
@@ -1189,7 +1189,7 @@ static int proppatch_todb(xmlNodePtr prop, unsigned set,
 	/* "dead" property - use hash of the namespace href as prefix */
 	snprintf(prop_annot, sizeof(prop_annot),
 		 "/vendor/cmu/cyrus-imapd/%08X:%s",
-		 strhash((const char *) ns->href), BAD_CAST prop->name);
+		 strhash((const char *) prop->ns->href), BAD_CAST prop->name);
     }
 
     if (set) freeme = xmlNodeGetContent(prop);
@@ -1200,12 +1200,12 @@ static int proppatch_todb(xmlNodePtr prop, unsigned set,
 				       value, NULL, strlen(value), 0,
 				       &pctx->tid))) {
 	node = xml_add_prop(HTTP_OK, pctx->root, &propstat[PROPSTAT_OK],
-			    ns, prop->name, NULL, NULL);
+			    prop->ns, prop->name, NULL, NULL);
     }
     else {
 	/* XXX  Is this the correct code for a write failure? */
 	node = xml_add_prop(HTTP_FORBIDDEN, pctx->root, &propstat[PROPSTAT_FORBID],
-			    ns, prop->name, NULL, NULL);
+			    prop->ns, prop->name, NULL, NULL);
 	*pctx->ret = r;
     }
 
@@ -1404,24 +1404,18 @@ int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr)
 			    /* Protected property */
 			    xml_add_prop(HTTP_FORBIDDEN, pctx->root,
 					 &propstat[PROPSTAT_FORBID],
-					 prop->ns,
-					 prop->name, NULL,
+					 prop->ns, prop->name, NULL,
 					 &preconds[DAV_PROT_PROP]);
 			    *pctx->ret = HTTP_FORBIDDEN;
 			}
 			else {
 			    /* Write "live" property */
-			    entry->put(prop, set,
-				       prop->ns,
-				       pctx, propstat,
-				       entry->rock);
+			    entry->put(prop, set, pctx, propstat, entry->rock);
 			}
 		    }
 		    else {
 			/* Write "dead" property */
-			proppatch_todb(prop, set,
-				       prop->ns, pctx, propstat,
-				       NULL);
+			proppatch_todb(prop, set, pctx, propstat, NULL);
 		    }
 		}
 	    }

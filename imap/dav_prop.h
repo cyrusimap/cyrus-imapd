@@ -182,7 +182,7 @@ struct prop_entry {
 	       xmlNsPtr ns, struct propfind_ctx *fctx, xmlNodePtr resp,
 	       struct propstat propstat[], void *rock);
     int (*put)(xmlNodePtr prop,		/* Callback to write property */
-	       unsigned set, xmlNsPtr ns, struct proppatch_ctx *pctx,
+	       unsigned set, struct proppatch_ctx *pctx,
 	       struct propstat propstat[], void *rock);
     void *rock;				/* Add'l data to pass to callback */
 };
