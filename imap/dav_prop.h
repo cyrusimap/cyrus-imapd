@@ -178,8 +178,8 @@ struct prop_entry {
     const char *name;			/* Property name */
     unsigned namespace;			/* Index into known namespace array */
     unsigned allprop;			/* Should we fetch for allprop? */
-    int (*get)(const xmlChar *name,	/* Callback to fetch property */
-	       xmlNsPtr ns, struct propfind_ctx *fctx, xmlNodePtr resp,
+    int (*get)(xmlNodePtr node,		/* Callback to fetch property */
+	       struct propfind_ctx *fctx, xmlNodePtr resp,
 	       struct propstat propstat[], void *rock);
     int (*put)(xmlNodePtr prop,		/* Callback to write property */
 	       unsigned set, struct proppatch_ctx *pctx,
@@ -189,10 +189,9 @@ struct prop_entry {
 
 /* Linked-list of properties for fetching */
 struct propfind_entry_list {
-    const xmlChar *name;		/* Property name */
-    xmlNsPtr ns;  			/* Namespace of property */
-    int (*get)(const xmlChar *name,	/* Callback to fetch property */
-	       xmlNsPtr ns, struct propfind_ctx *fctx, xmlNodePtr resp,
+    xmlNodePtr prop;			/* Property */
+    int (*get)(xmlNodePtr node,		/* Callback to fetch property */
+	       struct propfind_ctx *fctx, xmlNodePtr resp,
 	       struct propstat propstat[], void *rock);
     void *rock;				/* Add'l data to pass to callback */
     struct propfind_entry_list *next;
