@@ -362,6 +362,72 @@ enum {
  */
 #define FORWARD(ptr, x) (ntohl(*((uint32_t *)(FIRSTPTR(ptr) + 4 * (x)))))
 
+static int is_safe(struct dbengine *db, const char *ptr)
+{
+    if (ptr < db->map_base)
+	return 0;
+    if (ptr >= db->map_base + db->map_size)
+	return 0;
+
+    return 1;
+}
+
+static unsigned LEVEL_safe(struct dbengine *db, const char *ptr)
+{
+    const uint32_t *p, *q;
+
+    assert(TYPE(ptr) == DUMMY || TYPE(ptr) == INORDER || TYPE(ptr) == ADD);
+    if (!is_safe(db, ptr + 12))
+	return 0;
+    if (!is_safe(db, ptr + 12 + KEYLEN(ptr)))
+	return 0;
+    p = q = (uint32_t *) FIRSTPTR(ptr);
+    if (!is_safe(db, (const char *)p))
+	return 0;
+    while (*p != (uint32_t)-1) {
+	p++;
+	if (!is_safe(db, (const char *)p))
+	    return 0;
+    }
+    return (p - q);
+}
+
+/* how big is this record? */
+static unsigned RECSIZE_safe(struct dbengine *db, const char *ptr)
+{
+    int ret = 0;
+    int level;
+    switch (TYPE(ptr)) {
+    case DUMMY:
+    case INORDER:
+    case ADD:
+	level = LEVEL_safe(db, ptr);
+	if (!level) {
+	    syslog(LOG_ERR, "IOERROR: skiplist2 RECSIZE_safe not safe %s, offset %u",
+		   db->fname, (unsigned)(ptr - db->map_base));
+	    return 0;
+	}
+	ret += 4;			/* tag */
+	ret += 4;			/* keylen */
+	ret += ROUNDUP(KEYLEN(ptr));    /* key */
+	ret += 4;			/* datalen */
+	ret += ROUNDUP(DATALEN(ptr));   /* data */
+	ret += 4 * level;	        /* pointers */
+	ret += 4;			/* padding */
+	break;
+
+    case DELETE:
+	ret += 8;
+	break;
+
+    case COMMIT:
+	ret += 4;
+	break;
+    }
+
+    return ret;
+}
+
 /* how many levels does this record have? */
 static unsigned LEVEL(const char *ptr)
 {
@@ -2173,7 +2239,7 @@ static int recovery(struct dbengine *db, int flags)
 	q = db->map_base + db->map_size;
 	p = ptr;
 	for (;;) {
-            if (RECSIZE(p) <= 0) {
+            if (RECSIZE_safe(db, p) <= 0) {
                 /* hmm, we can't trust this transaction */
 		syslog(LOG_ERR,
 		       "DBERROR: skiplist recovery %s: found a RECSIZE of 0, "
