@@ -1158,7 +1158,9 @@ static int propfind_fromdb(xmlNodePtr prop,
 
     if (value) {
 	node = xml_add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK],
-			    prop, BAD_CAST value, NULL);
+			    prop, NULL, NULL);
+	xmlAddChild(node, xmlNewCDataBlock(fctx->root->doc,
+					   BAD_CAST attrib.value, attrib.size));
     }
     else {
 	node = xml_add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND],
