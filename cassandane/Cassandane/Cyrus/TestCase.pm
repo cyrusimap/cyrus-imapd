@@ -166,6 +166,11 @@ sub set_up
 {
     my ($self) = @_;
 
+    xlog_set_listener(sub {
+	my ($msg) = @_;
+	$self->annotate("$msg\n");
+    });
+
     $self->_create_instances();
 
     $self->{instance}->start()
@@ -256,6 +261,7 @@ sub tear_down
 	$self->{replica}->cleanup();
 	$self->{replica} = undef;
     }
+    xlog_set_listener(undef);
 }
 
 sub _save_message
