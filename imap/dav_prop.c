@@ -1131,6 +1131,7 @@ static int propfind_fromdb(xmlNodePtr prop,
     struct annotation_data attrib;
     xmlNodePtr node;
     const char *value = NULL;
+    int r = 0;
 
     if (ns_prefix) {
 	snprintf(prop_annot, sizeof(prop_annot),
@@ -1144,19 +1145,21 @@ static int propfind_fromdb(xmlNodePtr prop,
 		 strhash((const char *) prop->ns->href), prop->name);
     }
 
-    if (fctx->mailbox && !fctx->record) {
-	if (!annotatemore_lookup(fctx->mailbox->name, prop_annot,
-				 /* shared */ "", &attrib)
-	    && attrib.value) {
-	    value = attrib.value;
-	}
+    if (fctx->mailbox && !fctx->record &&
+	!(r = annotatemore_lookup(fctx->mailbox->name, prop_annot,
+				  /* shared */ "", &attrib))) {
+	if (attrib.value) value = attrib.value;
 	else if (!xmlStrcmp(prop->name, BAD_CAST "displayname")) {
 	    /* Special case empty displayname -- use last segment of path */
 	    value = strrchr(fctx->mailbox->name, '.') + 1;
 	}
     }
 
-    if (value) {
+    if (r) {
+	node = xml_add_prop(HTTP_SERVER_ERROR, resp,
+			    &propstat[PROPSTAT_ERROR], prop, NULL, NULL);
+    }
+    else if (value) {
 	node = xml_add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK],
 			    prop, NULL, NULL);
 	xmlAddChild(node, xmlNewCDataBlock(fctx->root->doc,
@@ -1205,10 +1208,8 @@ static int proppatch_todb(xmlNodePtr prop, unsigned set,
 			    prop, NULL, NULL);
     }
     else {
-	/* XXX  Is this the correct code for a write failure? */
-	node = xml_add_prop(HTTP_FORBIDDEN, pctx->root, &propstat[PROPSTAT_FORBID],
-			    prop, NULL, NULL);
-	*pctx->ret = r;
+	node = xml_add_prop(HTTP_SERVER_ERROR, pctx->root,
+			    &propstat[PROPSTAT_ERROR], prop, NULL, NULL);
     }
 
     if (freeme) xmlFree(freeme);
