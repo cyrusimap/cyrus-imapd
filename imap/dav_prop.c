@@ -191,7 +191,8 @@ static xmlNodePtr xml_add_prop(long status, xmlNodePtr resp,
 	xmlNewChild(propstat->root, NULL, BAD_CAST "prop", NULL);
     }
 
-    newprop = xmlNewTextChild(propstat->root->children, prop->ns, prop->name, content);
+    newprop = xmlNewTextChild(propstat->root->children,
+			      prop->ns, prop->name, content);
     propstat->status = status;
     propstat->precond = precond;
 
@@ -491,6 +492,8 @@ static int proppatch_restype(xmlNodePtr prop, unsigned set,
 			     struct propstat propstat[],
 			     void *rock __attribute__((unused)))
 {
+    const struct precond *precond = NULL;
+
     if (set && pctx->meth[0] == 'M') {
 	/* "Writeable" for MKCOL/MKCALENDAR only */
 	xmlNodePtr cur;
@@ -510,13 +513,17 @@ static int proppatch_restype(xmlNodePtr prop, unsigned set,
 
 	    return 0;
 	}
+
+	/* Invalid resourcetype */
+	precond = &preconds[DAV_VALID_RESTYPE];
+    }
+    else {
+	/* Protected property */
+	precond = &preconds[DAV_PROT_PROP];
     }
 
-    /* Protected property / Invalid resourcetype */
     xml_add_prop(HTTP_FORBIDDEN, pctx->root, &propstat[PROPSTAT_FORBID],
-		 prop, NULL,
-		 (set && pctx->meth[0] == 'M') ? &preconds[DAV_VALID_RESTYPE] :
-		 &preconds[DAV_PROT_PROP]);
+		 prop, NULL, precond);
 	     
     *pctx->ret = HTTP_FORBIDDEN;
 
@@ -1081,10 +1088,10 @@ static int propfind_caldata(xmlNodePtr prop,
  * CALDAV:schedule-inbox-URL, and CALDAV:schedule-outbox-URL
  */
 static int propfind_calurl(xmlNodePtr prop,
-				struct propfind_ctx *fctx,
-				xmlNodePtr resp,
-				struct propstat propstat[],
-				void *rock)
+			   struct propfind_ctx *fctx,
+			   xmlNodePtr resp,
+			   struct propstat propstat[],
+			   void *rock)
 {
     xmlNodePtr node;
     char uri[MAX_MAILBOX_PATH+1];
