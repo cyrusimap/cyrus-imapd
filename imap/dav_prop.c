@@ -56,6 +56,29 @@
 #define SCHED_INBOX	"Inbox/"
 #define SCHED_OUTBOX	"Outbox/"
 
+/* Bitmask of calendar components */
+enum {
+    CAL_COMP_VEVENT =		(1<<0),
+    CAL_COMP_VTODO =		(1<<1),
+    CAL_COMP_VJOURNAL =		(1<<2),
+    CAL_COMP_VFREEBUSY =	(1<<3),
+    CAL_COMP_VTIMEZONE =	(1<<4),
+    CAL_COMP_VALARM =		(1<<5)
+};
+
+static const struct cal_comp_t {
+    const char *name;
+    unsigned long type;
+} cal_comps[] = {
+    { "VEVENT",    CAL_COMP_VEVENT },
+    { "VTODO",     CAL_COMP_VTODO },
+    { "VJOURNAL",  CAL_COMP_VJOURNAL },
+    { "VFREEBUSY", CAL_COMP_VFREEBUSY },
+    { "VTIMEZONE", CAL_COMP_VTIMEZONE },
+    { "VALARM",	   CAL_COMP_VALARM },
+    { NULL, 0 }
+};
+
 static int add_privs(int rights, int implicit,
 		     xmlNodePtr parent, xmlNodePtr root, xmlNsPtr *ns);
 
@@ -1086,6 +1109,128 @@ static int propfind_calurl(xmlNodePtr prop,
 }
 
 
+/* Callback to fetch CALDAV:supported-calendar-component-set */
+static int propfind_calcompset(xmlNodePtr prop,
+			       struct propfind_ctx *fctx,
+			       xmlNodePtr resp,
+			       struct propstat propstat[],
+			       void *rock __attribute__((unused)))
+{
+    struct annotation_data attrib;
+    const char *value = NULL;
+    unsigned long types;
+    int r = 0;
+
+    if ((fctx->req_tgt->namespace == URL_NS_CALENDAR) &&
+	fctx->req_tgt->collection && !fctx->req_tgt->resource) {
+	const char *prop_annot =
+	    ANNOT_NS "CALDAV:supported-calendar-component-set";
+
+	if (!(r = annotatemore_lookup(fctx->mailbox->name, prop_annot,
+				      /* shared */ "", &attrib))
+	    && attrib.value) {
+	    value = attrib.value;
+	}
+    }
+
+    if (r) {
+	xml_add_prop(HTTP_SERVER_ERROR, resp,
+		     &propstat[PROPSTAT_ERROR], prop, NULL, NULL);
+    }
+    else if (value && (types = strtoul(value, NULL, 10))) {
+	xmlNodePtr set, node;
+	const struct cal_comp_t *comp;
+
+	set = xml_add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK],
+			   prop, NULL, NULL);
+	/* Create "comp" elements from the stored bitmask */
+	for (comp = cal_comps; comp->name; comp++) {
+	    if (types & comp->type) {
+		node = xmlNewChild(set, fctx->ns[NS_CAL], BAD_CAST "comp", NULL);
+		xmlNewProp(node, BAD_CAST "name", BAD_CAST comp->name);
+	    }
+	}
+    }
+    else {
+	xml_add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND],
+		     prop, NULL, NULL);
+    }
+
+    return 0;
+}
+
+
+/* Callback to write supported-calendar-component-set property */
+static int proppatch_calcompset(xmlNodePtr prop, unsigned set,
+				struct proppatch_ctx *pctx,
+				struct propstat propstat[],
+				void *rock __attribute__((unused)))
+{
+    int r = 0;
+    const struct precond *precond = NULL;
+
+    if ((pctx->req_tgt->namespace == URL_NS_CALENDAR) &&
+	set && pctx->meth[0] == 'M') {
+	/* "Writeable" for MKCOL/MKCALENDAR only */
+	xmlNodePtr cur;
+	unsigned long types = 0;
+
+	/* Work through the given list of components */
+	for (cur = prop->children; cur; cur = cur->next) {
+	    xmlChar *name;
+	    const struct cal_comp_t *comp;
+
+	    /* Make sure its a "comp" element with a "name" */
+	    if (cur->type != XML_ELEMENT_NODE) continue;
+	    if (xmlStrcmp(cur->name, BAD_CAST "comp") ||
+		!(name = xmlGetProp(cur, BAD_CAST "name"))) break;
+
+	    /* Make sure we have a valid component type */
+	    for (comp = cal_comps;
+		 comp->name && xmlStrcmp(name, BAD_CAST comp->name); comp++);
+	    if (comp->name) types |= comp->type;   /* found match in our list */
+	    else break;	    	     		   /* no match - invalid type */
+	}
+
+	if (!cur) {
+	    /* All component types are valid */
+	    const char *prop_annot =
+		ANNOT_NS "CALDAV:supported-calendar-component-set";
+	    char value[11];
+
+	    snprintf(value, sizeof(value), "%lu", types);
+	    if (!(r = annotatemore_write_entry(pctx->mailboxname,
+					       prop_annot, /* shared */ "",
+					       value, NULL, strlen(value), 0,
+					       &pctx->tid))) {
+		xml_add_prop(HTTP_OK, pctx->root,
+			     &propstat[PROPSTAT_OK], prop, NULL, NULL);
+	    }
+	    else {
+		xml_add_prop(HTTP_SERVER_ERROR, pctx->root,
+			     &propstat[PROPSTAT_ERROR], prop, NULL, NULL);
+	    }
+
+	    return 0;
+	}
+
+	/* Invalid component type */
+	precond = &preconds[CALDAV_SUPP_COMP];
+    }
+    else {
+	/* Protected property */
+	precond = &preconds[DAV_PROT_PROP];
+    }
+
+    xml_add_prop(HTTP_FORBIDDEN, pctx->root, &propstat[PROPSTAT_FORBID],
+		 prop, NULL, precond);
+	     
+    *pctx->ret = HTTP_FORBIDDEN;
+
+    return 0;
+}
+
+
 /* Callback to fetch properties from resource header */
 static int propfind_fromhdr(xmlNodePtr prop,
 			    struct propfind_ctx *fctx, xmlNodePtr resp,
@@ -1259,7 +1404,8 @@ static const struct prop_entry prop_entries[] =
     { "calendar-description", NS_CAL, 0, propfind_fromdb, proppatch_todb, "CALDAV" },
     { "calendar-home-set", NS_CAL, 0, propfind_calurl, NULL, NULL },
     { "calendar-timezone", NS_CAL, 0, propfind_fromdb, proppatch_todb, "CALDAV" },
-    { "supported-calendar-component-set", NS_CAL, 0, NULL, proppatch_todb, NULL },
+    { "supported-calendar-component-set", NS_CAL, 0,
+      propfind_calcompset, proppatch_calcompset, NULL },
     { "supported-calendar-data", NS_CAL, 0, NULL, NULL, NULL },
     { "max-resource-size", NS_CAL, 0, NULL, NULL, NULL },
     { "min-date-time", NS_CAL, 0, NULL, NULL, NULL },
@@ -1308,6 +1454,7 @@ const struct precond preconds[] =
     /* CalDAV (RFC 4791) preconditions */
     { "supported-calendar-data", NS_CAL },
     { "valid-calendar-data", NS_CAL },
+    { "supported-calendar-component", NS_CAL },
     { "calendar-collection-location-ok", NS_CAL }
 };
 
