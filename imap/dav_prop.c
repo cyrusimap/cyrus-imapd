@@ -51,6 +51,8 @@
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 
+#define ANNOT_NS	"/vendor/cmu/cyrus-imapd/"
+
 #define SCHED_INBOX	"Inbox/"
 #define SCHED_OUTBOX	"Outbox/"
 
@@ -1134,14 +1136,12 @@ static int propfind_fromdb(xmlNodePtr prop,
     int r = 0;
 
     if (ns_prefix) {
-	snprintf(prop_annot, sizeof(prop_annot),
-		 "/vendor/cmu/cyrus-imapd/%s:%s",
+	snprintf(prop_annot, sizeof(prop_annot), ANNOT_NS "%s:%s",
 		(const char *) ns_prefix, prop->name);
     }
     else {
 	/* "dead" property - use hash of the namespace href as prefix */
-	snprintf(prop_annot, sizeof(prop_annot),
-		 "/vendor/cmu/cyrus-imapd/%08X:%s",
+	snprintf(prop_annot, sizeof(prop_annot), ANNOT_NS "%08X:%s",
 		 strhash((const char *) prop->ns->href), prop->name);
     }
 
@@ -1186,14 +1186,12 @@ static int proppatch_todb(xmlNodePtr prop, unsigned set,
     int r;
 
     if (ns_prefix) {
-	snprintf(prop_annot, sizeof(prop_annot),
-		 "/vendor/cmu/cyrus-imapd/%s:%s",
+	snprintf(prop_annot, sizeof(prop_annot), ANNOT_NS "%s:%s",
 		 (const char *) ns_prefix, BAD_CAST prop->name);
     }
     else {
 	/* "dead" property - use hash of the namespace href as prefix */
-	snprintf(prop_annot, sizeof(prop_annot),
-		 "/vendor/cmu/cyrus-imapd/%08X:%s",
+	snprintf(prop_annot, sizeof(prop_annot), ANNOT_NS "%08X:%s",
 		 strhash((const char *) prop->ns->href), BAD_CAST prop->name);
     }
 
