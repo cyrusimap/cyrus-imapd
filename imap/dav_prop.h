@@ -135,9 +135,10 @@ enum {
     PROPSTAT_OK = 0,
     PROPSTAT_UNAUTH,
     PROPSTAT_FORBID,
-    PROPSTAT_NOTFOUND
+    PROPSTAT_NOTFOUND,
+    PROPSTAT_ERROR
 };
-#define NUM_PROPSTAT 4
+#define NUM_PROPSTAT 5
 
 /* Context for fetching properties */
 struct propfind_entry_list;
