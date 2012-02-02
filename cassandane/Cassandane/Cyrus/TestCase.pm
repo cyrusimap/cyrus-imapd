@@ -346,6 +346,7 @@ sub check_messages
     foreach my $expmsg (values %$expected)
     {
 	my $key = $expmsg->$keyed_on();
+	xlog "message \"$key\"";
 	my $actmsg = $actual->{$key};
 
 	$self->assert_not_null($actmsg);
@@ -360,7 +361,7 @@ sub check_messages
 	# Check required headers
 	foreach my $h (qw(x-cassandane-unique))
 	{
-	    xlog "checking $h";
+	    xlog "checking header $h";
 	    $self->assert_not_null($actmsg->get_header($h));
 	    $self->assert_str_equals($expmsg->get_header($h),
 				     $actmsg->get_header($h));
@@ -372,7 +373,7 @@ sub check_messages
 	foreach my $a (qw(id uid cid))
 	{
 	    next unless defined $expmsg->get_attribute($a);
-	    xlog "checking $a";
+	    xlog "checking attribute $a";
 	    $self->assert_str_equals($expmsg->get_attribute($a),
 				     $actmsg->get_attribute($a));
 	}
@@ -381,7 +382,7 @@ sub check_messages
 	foreach my $a (qw(flags modseq))
 	{
 	    next unless defined $expmsg->get_attribute($a);
-	    xlog "checking $a";
+	    xlog "checking attribute $a";
 	    $self->assert_deep_equals($expmsg->get_attribute($a),
 				      $actmsg->get_attribute($a));
 	}
