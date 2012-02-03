@@ -48,6 +48,7 @@
 #include "global.h"
 #include "http_err.h"
 #include "xmalloc.h"
+#include "rfc822date.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 
@@ -416,6 +417,29 @@ static int propfind_addmember(xmlNodePtr prop,
 }
 
 
+/* Callback to fetch DAV:getcontentlength */
+static int propfind_getlength(xmlNodePtr prop,
+			      struct propfind_ctx *fctx, xmlNodePtr resp,
+			      struct propstat propstat[],
+			      void *rock __attribute__((unused)))
+{
+    if (fctx->record) {
+	char lenstr[21];
+
+	sprintf(lenstr, "%u", fctx->record->size - fctx->record->header_size);
+
+	xml_add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK],
+		     prop, BAD_CAST lenstr, NULL);
+    }
+    else {
+	xml_add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND],
+		     prop, NULL, NULL);
+    }
+
+    return 0;
+}
+
+
 /* Callback to fetch DAV:getetag */
 static int propfind_getetag(xmlNodePtr prop,
 			    struct propfind_ctx *fctx, xmlNodePtr resp,
@@ -430,6 +454,29 @@ static int propfind_getetag(xmlNodePtr prop,
 
 	xml_add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK],
 		     prop, BAD_CAST etag, NULL);
+    }
+    else {
+	xml_add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND],
+		     prop, NULL, NULL);
+    }
+
+    return 0;
+}
+
+
+/* Callback to fetch DAV:getlastmodified */
+static int propfind_getlastmod(xmlNodePtr prop,
+			       struct propfind_ctx *fctx, xmlNodePtr resp,
+			       struct propstat propstat[],
+			       void *rock __attribute__((unused)))
+{
+    if (fctx->record) {
+	char datestr[80];
+
+	rfc822date_gen(datestr, sizeof(datestr), fctx->record->internaldate);
+
+	xml_add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK],
+		     prop, BAD_CAST datestr, NULL);
     }
     else {
 	xml_add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND],
@@ -1375,10 +1422,10 @@ static const struct prop_entry prop_entries[] =
     { "creationdate", NS_DAV, 1, NULL, NULL, NULL },
     { "displayname", NS_DAV, 1, propfind_fromdb, proppatch_todb, "DAV" },
     { "getcontentlanguage", NS_DAV, 1, propfind_fromhdr, NULL, "Content-Language" },
-    { "getcontentlength", NS_DAV, 1, NULL, NULL, NULL },
+    { "getcontentlength", NS_DAV, 1, propfind_getlength, NULL, NULL },
     { "getcontenttype", NS_DAV, 1, propfind_fromhdr, NULL, "Content-Type" },
     { "getetag", NS_DAV, 1, propfind_getetag, NULL, NULL },
-    { "getlastmodified", NS_DAV, 1, NULL, NULL, NULL },
+    { "getlastmodified", NS_DAV, 1, propfind_getlastmod, NULL, NULL },
     { "lockdiscovery", NS_DAV, 1, NULL, NULL, NULL },
     { "resourcetype", NS_DAV, 1, propfind_restype, proppatch_restype, NULL },
     { "supportedlock", NS_DAV, 1, NULL, NULL, NULL },
