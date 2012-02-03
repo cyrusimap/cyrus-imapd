@@ -59,14 +59,13 @@
 
 /* Index into known namespace array */
 enum {
-    NS_UNKNOWN = -1,
     NS_DAV,
     NS_CALDAV,
     NS_CS,
     NS_CYRUS,
     NS_ICAL
 };
-#define NUM_NAMESPACE 6
+#define NUM_NAMESPACE 5
 
 /* Cyrus-specific privileges */
 #define DACL_MKCOL	ACL_CREATE	/* CY:make-collection */
@@ -182,7 +181,7 @@ struct proppatch_ctx {
 /* Structure for known "live" properties */
 struct prop_entry {
     const char *name;			/* Property name */
-    unsigned namespace;			/* Index into known namespace array */
+    const char *ns;			/* Property namespace */
     unsigned allprop;			/* Should we fetch for allprop? */
     int (*get)(xmlNodePtr node,		/* Callback to fetch property */
 	       struct propfind_ctx *fctx, xmlNodePtr resp,

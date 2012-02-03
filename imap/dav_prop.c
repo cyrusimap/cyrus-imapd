@@ -1429,71 +1429,71 @@ static int proppatch_todb(xmlNodePtr prop, unsigned set,
 static const struct prop_entry prop_entries[] = 
 {
     /* WebDAV (RFC 4918) properties */
-    { "add-member", NS_DAV, 0, propfind_addmember, NULL, NULL },
-    { "creationdate", NS_DAV, 1, NULL, NULL, NULL },
-    { "displayname", NS_DAV, 1, propfind_fromdb, proppatch_todb, "DAV" },
-    { "getcontentlanguage", NS_DAV, 1, propfind_fromhdr, NULL, "Content-Language" },
-    { "getcontentlength", NS_DAV, 1, propfind_getlength, NULL, NULL },
-    { "getcontenttype", NS_DAV, 1, propfind_fromhdr, NULL, "Content-Type" },
-    { "getetag", NS_DAV, 1, propfind_getetag, NULL, NULL },
-    { "getlastmodified", NS_DAV, 1, propfind_getlastmod, NULL, NULL },
-    { "lockdiscovery", NS_DAV, 1, NULL, NULL, NULL },
-    { "resourcetype", NS_DAV, 1, propfind_restype, proppatch_restype, NULL },
-    { "supportedlock", NS_DAV, 1, NULL, NULL, NULL },
-    { "sync-token", NS_DAV, 1, propfind_sync_token, NULL, NULL },
+    { "add-member", XML_NS_DAV, 0, propfind_addmember, NULL, NULL },
+    { "creationdate", XML_NS_DAV, 1, NULL, NULL, NULL },
+    { "displayname", XML_NS_DAV, 1, propfind_fromdb, proppatch_todb, "DAV" },
+    { "getcontentlanguage", XML_NS_DAV, 1, propfind_fromhdr, NULL, "Content-Language" },
+    { "getcontentlength", XML_NS_DAV, 1, propfind_getlength, NULL, NULL },
+    { "getcontenttype", XML_NS_DAV, 1, propfind_fromhdr, NULL, "Content-Type" },
+    { "getetag", XML_NS_DAV, 1, propfind_getetag, NULL, NULL },
+    { "getlastmodified", XML_NS_DAV, 1, propfind_getlastmod, NULL, NULL },
+    { "lockdiscovery", XML_NS_DAV, 1, NULL, NULL, NULL },
+    { "resourcetype", XML_NS_DAV, 1, propfind_restype, proppatch_restype, NULL },
+    { "supportedlock", XML_NS_DAV, 1, NULL, NULL, NULL },
+    { "sync-token", XML_NS_DAV, 1, propfind_sync_token, NULL, NULL },
 
     /* WebDAV Versioning (RFC 3253) properties */
-    { "supported-report-set", NS_DAV, 0, propfind_reportset, NULL, NULL },
+    { "supported-report-set", XML_NS_DAV, 0, propfind_reportset, NULL, NULL },
 
     /* WebDAV ACL (RFC 3744) properties */
-    { "alternate-URI-set", NS_DAV, 0, NULL, NULL, NULL },
-    { "principal-URL", NS_DAV, 0, propfind_principalurl, NULL, NULL },
-    { "group-member-set", NS_DAV, 0, NULL, NULL, NULL },
-    { "group-membership", NS_DAV, 0, NULL, NULL, NULL },
-    { "owner", NS_DAV, 0, propfind_owner, NULL, NULL },
-    { "group", NS_DAV, 0, NULL, NULL, NULL },
-    { "supported-privilege-set", NS_DAV, 0, propfind_supprivset, NULL, NULL },
-    { "current-user-principal", NS_DAV, 0, propfind_curprin, NULL, NULL },
-    { "current-user-privilege-set", NS_DAV, 0, propfind_curprivset, NULL, NULL },
-    { "acl", NS_DAV, 0, propfind_acl, NULL, NULL },
-    { "acl-restrictions", NS_DAV, 0, propfind_aclrestrict, NULL, NULL },
-    { "inherited-acl-set", NS_DAV, 0, NULL, NULL, NULL },
-    { "principal-collection-set", NS_DAV, 0, propfind_princolset, NULL, NULL },
+    { "alternate-URI-set", XML_NS_DAV, 0, NULL, NULL, NULL },
+    { "principal-URL", XML_NS_DAV, 0, propfind_principalurl, NULL, NULL },
+    { "group-member-set", XML_NS_DAV, 0, NULL, NULL, NULL },
+    { "group-membership", XML_NS_DAV, 0, NULL, NULL, NULL },
+    { "owner", XML_NS_DAV, 0, propfind_owner, NULL, NULL },
+    { "group", XML_NS_DAV, 0, NULL, NULL, NULL },
+    { "supported-privilege-set", XML_NS_DAV, 0, propfind_supprivset, NULL, NULL },
+    { "current-user-principal", XML_NS_DAV, 0, propfind_curprin, NULL, NULL },
+    { "current-user-privilege-set", XML_NS_DAV, 0, propfind_curprivset, NULL, NULL },
+    { "acl", XML_NS_DAV, 0, propfind_acl, NULL, NULL },
+    { "acl-restrictions", XML_NS_DAV, 0, propfind_aclrestrict, NULL, NULL },
+    { "inherited-acl-set", XML_NS_DAV, 0, NULL, NULL, NULL },
+    { "principal-collection-set", XML_NS_DAV, 0, propfind_princolset, NULL, NULL },
 
     /* WebDAV Quota (RFC 4331) properties */
-    { "quota-available-bytes", NS_DAV, 0, propfind_quota, NULL, NULL },
-    { "quota-used-bytes", NS_DAV, 0, propfind_quota, NULL, NULL },
+    { "quota-available-bytes", XML_NS_DAV, 0, propfind_quota, NULL, NULL },
+    { "quota-used-bytes", XML_NS_DAV, 0, propfind_quota, NULL, NULL },
 
     /* CalDAV (RFC 4791) properties */
-    { "calendar-data", NS_CALDAV, 0, propfind_caldata, NULL, NULL },
-    { "calendar-description", NS_CALDAV, 0,
+    { "calendar-data", XML_NS_CALDAV, 0, propfind_caldata, NULL, NULL },
+    { "calendar-description", XML_NS_CALDAV, 0,
       propfind_fromdb, proppatch_todb, "CALDAV" },
-    { "calendar-home-set", NS_CALDAV, 0, propfind_calurl, NULL, NULL },
-    { "calendar-timezone", NS_CALDAV, 0,
+    { "calendar-home-set", XML_NS_CALDAV, 0, propfind_calurl, NULL, NULL },
+    { "calendar-timezone", XML_NS_CALDAV, 0,
       propfind_fromdb, proppatch_todb, "CALDAV" },
-    { "supported-calendar-component-set", NS_CALDAV, 0,
+    { "supported-calendar-component-set", XML_NS_CALDAV, 0,
       propfind_calcompset, proppatch_calcompset, NULL },
-    { "supported-calendar-data", NS_CALDAV, 0, NULL, NULL, NULL },
-    { "max-resource-size", NS_CALDAV, 0, NULL, NULL, NULL },
-    { "min-date-time", NS_CALDAV, 0, NULL, NULL, NULL },
-    { "max-date-time", NS_CALDAV, 0, NULL, NULL, NULL },
-    { "max-instances", NS_CALDAV, 0, NULL, NULL, NULL },
-    { "max-attendees-per-instance", NS_CALDAV, 0, NULL, NULL, NULL },
+    { "supported-calendar-data", XML_NS_CALDAV, 0, NULL, NULL, NULL },
+    { "max-resource-size", XML_NS_CALDAV, 0, NULL, NULL, NULL },
+    { "min-date-time", XML_NS_CALDAV, 0, NULL, NULL, NULL },
+    { "max-date-time", XML_NS_CALDAV, 0, NULL, NULL, NULL },
+    { "max-instances", XML_NS_CALDAV, 0, NULL, NULL, NULL },
+    { "max-attendees-per-instance", XML_NS_CALDAV, 0, NULL, NULL, NULL },
 
     /* CalDAV Scheduling properties */
-    { "schedule-inbox-URL", NS_CALDAV, 0, NULL, NULL, SCHED_INBOX },
-    { "schedule-outbox-URL", NS_CALDAV, 0, NULL, NULL, SCHED_OUTBOX },
-    { "calendar-user-address-set", NS_CALDAV, 0, NULL, NULL, NULL },
-    { "calendar-user-type", NS_CALDAV, 0, NULL, NULL, NULL },
+    { "schedule-inbox-URL", XML_NS_CALDAV, 0, NULL, NULL, SCHED_INBOX },
+    { "schedule-outbox-URL", XML_NS_CALDAV, 0, NULL, NULL, SCHED_OUTBOX },
+    { "calendar-user-address-set", XML_NS_CALDAV, 0, NULL, NULL, NULL },
+    { "calendar-user-type", XML_NS_CALDAV, 0, NULL, NULL, NULL },
 
     /* Calendar Server properties */
-    { "getctag", NS_CS, 1, propfind_sync_token, NULL, NULL },
+    { "getctag", XML_NS_CS, 1, propfind_sync_token, NULL, NULL },
 
     /* Apple iCal properties */
-    { "calendar-color", NS_ICAL, 0, propfind_fromdb, proppatch_todb, "iCAL" },
-    { "calendar-order", NS_ICAL, 0, propfind_fromdb, proppatch_todb, "iCAL" },
+    { "calendar-color", XML_NS_ICAL, 0, propfind_fromdb, proppatch_todb, "iCAL" },
+    { "calendar-order", XML_NS_ICAL, 0, propfind_fromdb, proppatch_todb, "iCAL" },
 
-    { NULL, NS_UNKNOWN, 0, NULL, NULL, NULL }
+    { NULL, NULL, 0, NULL, NULL, NULL }
 };
 
 const struct precond preconds[] =
@@ -1549,7 +1549,9 @@ int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
 
 	    /* Look for a match against our known properties */
 	    for (entry = prop_entries;
-		 entry->name && strcmp((const char *) prop->name, entry->name);
+		 entry->name && 
+		     (strcmp((const char *) prop->name, entry->name) ||
+		      strcmp((const char *) prop->ns->href, entry->ns));
 		 entry++);
 
 	    nentry->prop = prop;
@@ -1614,7 +1616,8 @@ int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr)
 		    /* Look for a match against our known properties */
 		    for (entry = prop_entries;
 			 entry->name &&
-			     strcmp((const char *) prop->name, entry->name);
+			     (strcmp((const char *) prop->name, entry->name) ||
+			      strcmp((const char *) prop->ns->href, entry->ns));
 			 entry++);
 
 		    if (entry->name) {
