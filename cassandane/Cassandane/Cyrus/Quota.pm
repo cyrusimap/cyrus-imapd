@@ -194,22 +194,6 @@ sub _check_no_quota
     $self->assert_str_equals('no', $admintalk->get_last_completion_response());
 }
 
-sub _delayed_expunge
-{
-    my ($self) = @_;
-
-    $self->{store}->disconnect();
-    $self->{adminstore}->disconnect();
-
-    my @cmd = ( 'cyr_expire', '-E', '1', '-X', '0', '-D', '0' );
-    push(@cmd, '-v')
-	if get_verbose;
-    $self->{instance}->run_command({ cyrus => 1 }, @cmd);
-
-    $self->{store}->get_client();
-    $self->{adminstore}->get_client();
-}
-
 sub test_using_storage
 {
     my ($self) = @_;
@@ -547,8 +531,7 @@ sub test_using_annotstorage_msg
     xlog "Unlike STORAGE, X-ANNOTATION-STORAGE quota is not updated until actual expunge";
     $self->_check_usages('x-annotation-storage' => int($expected/1024));
 
-    xlog "Force a delayed expunge";
-    $self->_delayed_expunge();
+    $self->run_delayed_expunge();
     $talk = $self->{store}->get_client();
 
     xlog "X-ANNOTATION-STORAGE quota should have gone down";
@@ -618,8 +601,7 @@ sub test_using_annotstorage_msg_late
     xlog "Unlike STORAGE, X-ANNOTATION-STORAGE quota is not updated until actual expunge";
     $self->_check_usages('x-annotation-storage' => int($expected/1024));
 
-    xlog "Force a delayed expunge";
-    $self->_delayed_expunge();
+    $self->run_delayed_expunge();
     $talk = $self->{store}->get_client();
 
     xlog "X-ANNOTATION-STORAGE quota should have gone down";
@@ -1695,8 +1677,7 @@ sub test_using_annotstorage_msg_copy_exdel
     xlog "Check the quota usage is still doubled";
     $self->_check_usages('x-annotation-storage' => int(2*$expected/1024));
 
-    xlog "Performing delayed expunge";
-    $self->_delayed_expunge();
+    $self->run_delayed_expunge();
 
     xlog "Check the quota usage is back to single";
     $self->_check_usages('x-annotation-storage' => int($expected/1024));
@@ -1897,8 +1878,7 @@ sub test_using_annotstorage_msg_copy_dedel
     xlog "Check the quota usage is back to single";
     $self->_check_usages('x-annotation-storage' => int($expected/1024));
 
-    xlog "Performing delayed expunge";
-    $self->_delayed_expunge();
+    $self->run_delayed_expunge();
 
     xlog "Check the quota usage is still back to single";
     $self->_check_usages('x-annotation-storage' => int($expected/1024));

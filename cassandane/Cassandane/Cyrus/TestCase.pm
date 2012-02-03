@@ -419,6 +419,31 @@ sub check_messages
     return $actual;
 }
 
+sub _disconnect_all
+{
+    my ($self) = @_;
+
+    foreach my $s (@stores)
+    {
+	$self->{$s}->disconnect()
+	    if defined $self->{$s};
+    }
+}
+
+sub _reconnect_all
+{
+    my ($self) = @_;
+
+    foreach my $s (@stores)
+    {
+	if (defined $self->{$s})
+	{
+	    $self->{$s}->connect();
+	    $self->{$s}->_select();
+	}
+    }
+}
+
 sub run_replication
 {
     my ($self) = @_;
@@ -428,11 +453,7 @@ sub run_replication
     # Disconnect during replication to ensure no imapd
     # is locking the mailbox, which gives us a spurious
     # error which is ignored in real world scenarios.
-    foreach my $s (@stores)
-    {
-	$self->{$s}->disconnect()
-	    if defined $self->{$s};
-    }
+    $self->_disconnect_all();
 
     my $params =
 	$self->{replica}->get_service('sync')->store_params();
@@ -447,15 +468,23 @@ sub run_replication
 	'-u', 'cassandane',	# replicate the Cassandane user
 	);
 
+    $self->_reconnect_all();
+}
 
-    foreach my $s (@stores)
-    {
-	if (defined $self->{$s})
-	{
-	    $self->{$s}->connect();
-	    $self->{$s}->_select();
-	}
-    }
+sub run_delayed_expunge
+{
+    my ($self) = @_;
+
+    xlog "Performing delayed expunge";
+
+    $self->_disconnect_all();
+
+    my @cmd = ( 'cyr_expire', '-E', '1', '-X', '0', '-D', '0' );
+    push(@cmd, '-v')
+	if get_verbose;
+    $self->{instance}->run_command({ cyrus => 1 }, @cmd);
+
+    $self->_reconnect_all();
 }
 
 
