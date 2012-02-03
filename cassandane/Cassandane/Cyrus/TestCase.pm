@@ -247,6 +247,8 @@ sub tear_down
 {
     my ($self) = @_;
 
+    xlog_set_listener(undef);
+
     foreach my $s (@stores)
     {
 	if (defined $self->{$s})
@@ -270,7 +272,6 @@ sub tear_down
 	$self->{replica}->cleanup();
 	$self->{replica} = undef;
     }
-    xlog_set_listener(undef);
 }
 
 sub _save_message
