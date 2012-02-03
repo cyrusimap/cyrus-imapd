@@ -105,14 +105,17 @@ static int xml_add_ns(xmlNsPtr reqNs, xmlNsPtr *respNs, xmlNodePtr root)
 	if (!xmlStrcmp(reqNs->href, BAD_CAST XML_NS_DAV))
 	    ensure_ns(respNs, NS_DAV, root,
 		      (const char *) reqNs->href, (const char *) reqNs->prefix);
-	else if (!xmlStrcmp(reqNs->href, BAD_CAST XML_NS_CAL))
-	    ensure_ns(respNs, NS_CAL, root,
+	else if (!xmlStrcmp(reqNs->href, BAD_CAST XML_NS_CALDAV))
+	    ensure_ns(respNs, NS_CALDAV, root,
 		      (const char *) reqNs->href, (const char *) reqNs->prefix);
 	else if (!xmlStrcmp(reqNs->href, BAD_CAST XML_NS_CS))
 	    ensure_ns(respNs, NS_CS, root,
 		      (const char *) reqNs->href, (const char *) reqNs->prefix);
 	else if (!xmlStrcmp(reqNs->href, BAD_CAST XML_NS_CYRUS))
 	    ensure_ns(respNs, NS_CYRUS, root,
+		      (const char *) reqNs->href, (const char *) reqNs->prefix);
+	else if (!xmlStrcmp(reqNs->href, BAD_CAST XML_NS_ICAL))
+	    ensure_ns(respNs, NS_ICAL, root,
 		      (const char *) reqNs->href, (const char *) reqNs->prefix);
 	else
 	    xmlNewNs(root, reqNs->href, reqNs->prefix);
@@ -509,14 +512,14 @@ static int propfind_restype(xmlNodePtr prop,
 
 	case URL_NS_CALENDAR:
 	    if (fctx->mailbox) {
-		ensure_ns(fctx->ns, NS_CAL, resp->parent, XML_NS_CAL, "C");
-		xmlNewChild(node, fctx->ns[NS_CAL], BAD_CAST "calendar", NULL);
+		ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
+		xmlNewChild(node, fctx->ns[NS_CALDAV], BAD_CAST "calendar", NULL);
 		if (!strcmp(fctx->req_tgt->collection, SCHED_INBOX)) {
-		    xmlNewChild(node, fctx->ns[NS_CAL],
+		    xmlNewChild(node, fctx->ns[NS_CALDAV],
 				BAD_CAST "schedule-inbox", NULL);
 		}
 		else if (!strcmp(fctx->req_tgt->collection, SCHED_OUTBOX)) {
-		    xmlNewChild(node, fctx->ns[NS_CAL],
+		    xmlNewChild(node, fctx->ns[NS_CALDAV],
 				BAD_CAST "schedule-outbox", NULL);
 		}
 	    }
@@ -524,8 +527,8 @@ static int propfind_restype(xmlNodePtr prop,
 
 	case URL_NS_ADDRESSBOOK:
 	    if (fctx->mailbox) {
-		ensure_ns(fctx->ns, NS_CAL, resp->parent, XML_NS_CAL, "C");
-		xmlNewChild(node, fctx->ns[NS_CAL], BAD_CAST "addressbook", NULL);
+		ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
+		xmlNewChild(node, fctx->ns[NS_CALDAV], BAD_CAST "addressbook", NULL);
 	    }
 	    break;
 	}
@@ -627,13 +630,13 @@ static int propfind_reportset(xmlNodePtr prop,
     if (fctx->req_tgt->namespace == URL_NS_CALENDAR) {
 	s = xmlNewChild(top, NULL, BAD_CAST "supported-report", NULL);
 	r = xmlNewChild(s, NULL, BAD_CAST "report", NULL);
-	ensure_ns(fctx->ns, NS_CAL, resp->parent, XML_NS_CAL, "C");
-	xmlNewChild(r, fctx->ns[NS_CAL], BAD_CAST "calendar-query", NULL);
+	ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
+	xmlNewChild(r, fctx->ns[NS_CALDAV], BAD_CAST "calendar-query", NULL);
 
 	s = xmlNewChild(top, NULL, BAD_CAST "supported-report", NULL);
 	r = xmlNewChild(s, NULL, BAD_CAST "report", NULL);
-	ensure_ns(fctx->ns, NS_CAL, resp->parent, XML_NS_CAL, "C");
-	xmlNewChild(r, fctx->ns[NS_CAL], BAD_CAST "calendar-multiget", NULL);
+	ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
+	xmlNewChild(r, fctx->ns[NS_CALDAV], BAD_CAST "calendar-multiget", NULL);
     }
 
     return 0;
@@ -731,8 +734,8 @@ static int propfind_supprivset(xmlNodePtr prop,
     add_suppriv(agg, "read-current-user-privilege-set", NULL, 1,
 		"Read current user privilege set");
 
-    ensure_ns(fctx->ns, NS_CAL, resp->parent, XML_NS_CAL, "C");
-    add_suppriv(agg, "read-free-busy", fctx->ns[NS_CAL], 0,
+    ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
+    add_suppriv(agg, "read-free-busy", fctx->ns[NS_CALDAV], 0,
 		"Read free/busy time");
 
     write = add_suppriv(all, "write", NULL, 0, "Write any object");
@@ -805,8 +808,8 @@ static int add_privs(int rights, int implicit,
     }
     if (rights & DACL_READFB) {
 	priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
-	ensure_ns(ns, NS_CAL, root, XML_NS_CAL, "C");
-	xmlNewChild(priv, ns[NS_CAL], BAD_CAST  "read-free-busy", NULL);
+	ensure_ns(ns, NS_CALDAV, root, XML_NS_CALDAV, "C");
+	xmlNewChild(priv, ns[NS_CALDAV], BAD_CAST  "read-free-busy", NULL);
     }
     if ((rights & DACL_WRITE) == DACL_WRITE) {
 	priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
@@ -1116,7 +1119,7 @@ static int propfind_caldata(xmlNodePtr prop,
 	mailbox_map_message(fctx->mailbox, fctx->record->uid,
 			    &msg_base, &msg_size);
 
-	ensure_ns(fctx->ns, NS_CAL, resp->parent, XML_NS_CAL, "C");
+	ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
 	data = xml_add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK],
 			    prop, NULL, NULL);
 	xmlAddChild(data,
@@ -1149,7 +1152,7 @@ static int propfind_calurl(xmlNodePtr prop,
     const char *cal = (const char *) rock;
 
     if (fctx->userid) {
-	ensure_ns(fctx->ns, NS_CAL, resp->parent, XML_NS_CAL, "C");
+	ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
 	node = xml_add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK],
 			    prop, NULL, NULL);
 
@@ -1206,7 +1209,8 @@ static int propfind_calcompset(xmlNodePtr prop,
 	/* Create "comp" elements from the stored bitmask */
 	for (comp = cal_comps; comp->name; comp++) {
 	    if (types & comp->type) {
-		node = xmlNewChild(set, fctx->ns[NS_CAL], BAD_CAST "comp", NULL);
+		node = xmlNewChild(set, fctx->ns[NS_CALDAV],
+				   BAD_CAST "comp", NULL);
 		xmlNewProp(node, BAD_CAST "name", BAD_CAST comp->name);
 	    }
 	}
@@ -1461,27 +1465,33 @@ static const struct prop_entry prop_entries[] =
     { "quota-used-bytes", NS_DAV, 0, propfind_quota, NULL, NULL },
 
     /* CalDAV (RFC 4791) properties */
-    { "calendar-data", NS_CAL, 0, propfind_caldata, NULL, NULL },
-    { "calendar-description", NS_CAL, 0, propfind_fromdb, proppatch_todb, "CALDAV" },
-    { "calendar-home-set", NS_CAL, 0, propfind_calurl, NULL, NULL },
-    { "calendar-timezone", NS_CAL, 0, propfind_fromdb, proppatch_todb, "CALDAV" },
-    { "supported-calendar-component-set", NS_CAL, 0,
+    { "calendar-data", NS_CALDAV, 0, propfind_caldata, NULL, NULL },
+    { "calendar-description", NS_CALDAV, 0,
+      propfind_fromdb, proppatch_todb, "CALDAV" },
+    { "calendar-home-set", NS_CALDAV, 0, propfind_calurl, NULL, NULL },
+    { "calendar-timezone", NS_CALDAV, 0,
+      propfind_fromdb, proppatch_todb, "CALDAV" },
+    { "supported-calendar-component-set", NS_CALDAV, 0,
       propfind_calcompset, proppatch_calcompset, NULL },
-    { "supported-calendar-data", NS_CAL, 0, NULL, NULL, NULL },
-    { "max-resource-size", NS_CAL, 0, NULL, NULL, NULL },
-    { "min-date-time", NS_CAL, 0, NULL, NULL, NULL },
-    { "max-date-time", NS_CAL, 0, NULL, NULL, NULL },
-    { "max-instances", NS_CAL, 0, NULL, NULL, NULL },
-    { "max-attendees-per-instance", NS_CAL, 0, NULL, NULL, NULL },
+    { "supported-calendar-data", NS_CALDAV, 0, NULL, NULL, NULL },
+    { "max-resource-size", NS_CALDAV, 0, NULL, NULL, NULL },
+    { "min-date-time", NS_CALDAV, 0, NULL, NULL, NULL },
+    { "max-date-time", NS_CALDAV, 0, NULL, NULL, NULL },
+    { "max-instances", NS_CALDAV, 0, NULL, NULL, NULL },
+    { "max-attendees-per-instance", NS_CALDAV, 0, NULL, NULL, NULL },
 
     /* CalDAV Scheduling properties */
-    { "schedule-inbox-URL", NS_CAL, 0, NULL, NULL, SCHED_INBOX },
-    { "schedule-outbox-URL", NS_CAL, 0, NULL, NULL, SCHED_OUTBOX },
-    { "calendar-user-address-set", NS_CAL, 0, NULL, NULL, NULL },
-    { "calendar-user-type", NS_CAL, 0, NULL, NULL, NULL },
+    { "schedule-inbox-URL", NS_CALDAV, 0, NULL, NULL, SCHED_INBOX },
+    { "schedule-outbox-URL", NS_CALDAV, 0, NULL, NULL, SCHED_OUTBOX },
+    { "calendar-user-address-set", NS_CALDAV, 0, NULL, NULL, NULL },
+    { "calendar-user-type", NS_CALDAV, 0, NULL, NULL, NULL },
 
     /* Calendar Server properties */
     { "getctag", NS_CS, 1, propfind_sync_token, NULL, NULL },
+
+    /* Apple iCal properties */
+    { "calendar-color", NS_ICAL, 0, propfind_fromdb, proppatch_todb, "iCAL" },
+    { "calendar-order", NS_ICAL, 0, propfind_fromdb, proppatch_todb, "iCAL" },
 
     { NULL, NS_UNKNOWN, 0, NULL, NULL, NULL }
 };
@@ -1513,10 +1523,10 @@ const struct precond preconds[] =
     { "number-of-matches-within-limits", NS_DAV },
 
     /* CalDAV (RFC 4791) preconditions */
-    { "supported-calendar-data", NS_CAL },
-    { "valid-calendar-data", NS_CAL },
-    { "supported-calendar-component", NS_CAL },
-    { "calendar-collection-location-ok", NS_CAL }
+    { "supported-calendar-data", NS_CALDAV },
+    { "valid-calendar-data", NS_CALDAV },
+    { "supported-calendar-component", NS_CALDAV },
+    { "calendar-collection-location-ok", NS_CALDAV }
 };
 
 

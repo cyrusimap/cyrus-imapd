@@ -393,7 +393,7 @@ static int meth_acl(struct transaction_t *txn)
 		    }
 
 		    else if (!xmlStrcmp(priv->ns->href,
-				   BAD_CAST XML_NS_CAL)
+				   BAD_CAST XML_NS_CALDAV)
 			     /* CalDAV privileges */
 			     && !xmlStrcmp(priv->name,
 				   BAD_CAST "read-free-busy")) {
