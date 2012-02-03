@@ -1265,6 +1265,8 @@ static int meth_mkcol(struct transaction_t *txn)
     }
 
   done:
+    buf_free(&pctx.buf);
+
     if (outdoc) xmlFreeDoc(outdoc);
     if (indoc) xmlFreeDoc(indoc);
 
@@ -1451,6 +1453,8 @@ int meth_propfind(struct transaction_t *txn)
 	free(freeme);
     }
 
+    buf_free(&fctx.buf);
+
     if (outdoc) xmlFreeDoc(outdoc);
     if (indoc) xmlFreeDoc(indoc);
 
@@ -1586,6 +1590,8 @@ static int meth_proppatch(struct transaction_t *txn)
     xml_response(HTTP_MULTI_STATUS, txn, outdoc);
 
   done:
+    buf_free(&pctx.buf);
+
     if (outdoc) xmlFreeDoc(outdoc);
     if (indoc) xmlFreeDoc(indoc);
 
@@ -2379,6 +2385,8 @@ static int meth_report(struct transaction_t *txn)
 	elist = elist->next;
 	free(freeme);
     }
+
+    buf_free(&fctx.buf);
 
     if (inroot) xmlFreeDoc(inroot->doc);
     if (outroot) xmlFreeDoc(outroot->doc);

@@ -397,7 +397,6 @@ static int propfind_addmember(xmlNodePtr prop,
     if (fctx->req_tgt->collection) {
 	xmlNodePtr node;
 	size_t len;
-	char uri[MAX_MAILBOX_PATH+1];
 
 	node = xml_add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK],
 			    prop, NULL, NULL);
@@ -405,8 +404,11 @@ static int propfind_addmember(xmlNodePtr prop,
 	len = fctx->req_tgt->resource ?
 	    (size_t) (fctx->req_tgt->resource - fctx->req_tgt->path) :
 	    strlen(fctx->req_tgt->path);
-	snprintf(uri, sizeof(uri), "%.*s", len, fctx->req_tgt->path);
-	xmlNewChild(node, NULL, BAD_CAST "href", BAD_CAST uri);
+	buf_reset(&fctx->buf);
+	buf_printf(&fctx->buf, "%.*s", len, fctx->req_tgt->path);
+
+	xmlNewChild(node, NULL, BAD_CAST "href",
+		    BAD_CAST buf_cstring(&fctx->buf));
     }
     else {
 	xml_add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND],
@@ -424,12 +426,12 @@ static int propfind_getlength(xmlNodePtr prop,
 			      void *rock __attribute__((unused)))
 {
     if (fctx->record) {
-	char lenstr[21];
-
-	sprintf(lenstr, "%u", fctx->record->size - fctx->record->header_size);
+	buf_reset(&fctx->buf);
+	buf_printf(&fctx->buf, "%u",
+		   fctx->record->size - fctx->record->header_size);
 
 	xml_add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK],
-		     prop, BAD_CAST lenstr, NULL);
+		     prop, BAD_CAST buf_cstring(&fctx->buf), NULL);
     }
     else {
 	xml_add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND],
@@ -447,13 +449,13 @@ static int propfind_getetag(xmlNodePtr prop,
 			    void *rock __attribute__((unused)))
 {
     if (fctx->record) {
-	char etag[2*MESSAGE_GUID_SIZE+3];
-
 	/* add DQUOTEs */
-	sprintf(etag, "\"%s\"", message_guid_encode(&fctx->record->guid));
+	buf_reset(&fctx->buf);
+	buf_printf(&fctx->buf, "\"%s\"",
+		   message_guid_encode(&fctx->record->guid));
 
 	xml_add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK],
-		     prop, BAD_CAST etag, NULL);
+		     prop, BAD_CAST buf_cstring(&fctx->buf), NULL);
     }
     else {
 	xml_add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND],
@@ -471,12 +473,12 @@ static int propfind_getlastmod(xmlNodePtr prop,
 			       void *rock __attribute__((unused)))
 {
     if (fctx->record) {
-	char datestr[80];
-
-	rfc822date_gen(datestr, sizeof(datestr), fctx->record->internaldate);
+	buf_ensure(&fctx->buf, 80);
+	rfc822date_gen(fctx->buf.s, fctx->buf.alloc,
+		       fctx->record->internaldate);
 
 	xml_add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK],
-		     prop, BAD_CAST datestr, NULL);
+		     prop, BAD_CAST fctx->buf.s, NULL);
     }
     else {
 	xml_add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND],
@@ -585,13 +587,13 @@ static int propfind_sync_token(xmlNodePtr prop,
 			       void *rock __attribute__((unused)))
 {
     if (fctx->mailbox && !fctx->record) {
-	char sync[MAX_MAILBOX_PATH+1];
-
-	snprintf(sync, MAX_MAILBOX_PATH, XML_NS_CYRUS "sync/%u-" MODSEQ_FMT,
-		 fctx->mailbox->i.uidvalidity, fctx->mailbox->i.highestmodseq);
+	buf_reset(&fctx->buf);
+	buf_printf(&fctx->buf, XML_NS_CYRUS "sync/%u-" MODSEQ_FMT,
+		   fctx->mailbox->i.uidvalidity,
+		   fctx->mailbox->i.highestmodseq);
 
 	xml_add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK],
-		     prop, BAD_CAST sync, NULL);
+		     prop, BAD_CAST buf_cstring(&fctx->buf), NULL);
     }
     else {
 	xml_add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND],
@@ -608,8 +610,10 @@ static int propfind_reportset(xmlNodePtr prop,
 			      struct propstat propstat[],
 			      void *rock __attribute__((unused)))
 {
-    xmlNodePtr s, r, top = xml_add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK],
-					prop, NULL, NULL);
+    xmlNodePtr s, r, top;
+
+    top = xml_add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK],
+		       prop, NULL, NULL);
 
     if ((fctx->req_tgt->namespace == URL_NS_CALENDAR ||
 	 fctx->req_tgt->namespace == URL_NS_ADDRESSBOOK) &&
@@ -643,7 +647,6 @@ static int propfind_principalurl(xmlNodePtr prop,
 				 void *rock __attribute__((unused)))
 {
     xmlNodePtr node;
-    char uri[MAX_MAILBOX_PATH+1] = "";
 
     if (fctx->req_tgt->namespace != URL_NS_PRINCIPAL) {
 	xml_add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND],
@@ -653,12 +656,14 @@ static int propfind_principalurl(xmlNodePtr prop,
 	node = xml_add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK],
 			    prop, NULL, NULL);
 
+	buf_reset(&fctx->buf);
 	if (fctx->req_tgt->user) {
-	    snprintf(uri, sizeof(uri), "/principals/user/%.*s/",
-		     fctx->req_tgt->userlen, fctx->req_tgt->user);
+	    buf_printf(&fctx->buf, "/principals/user/%.*s/",
+		       fctx->req_tgt->userlen, fctx->req_tgt->user);
 	}
 
-	xmlNewChild(node, NULL, BAD_CAST "href", BAD_CAST uri);
+	xmlNewChild(node, NULL, BAD_CAST "href",
+		    BAD_CAST buf_cstring(&fctx->buf));
     }
 
     return 0;
@@ -672,17 +677,17 @@ static int propfind_owner(xmlNodePtr prop,
 			  void *rock __attribute__((unused)))
 {
     xmlNodePtr node;
-    char uri[MAX_MAILBOX_PATH+1] = "";
 
     node = xml_add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK],
 			prop, NULL, NULL);
 
-    if ((fctx->req_tgt->namespace == URL_NS_CALENDAR) &&
-	fctx->req_tgt->user) {
-	    snprintf(uri, sizeof(uri), "/principals/user/%.*s/",
-		     fctx->req_tgt->userlen, fctx->req_tgt->user);
+    if ((fctx->req_tgt->namespace == URL_NS_CALENDAR) && fctx->req_tgt->user) {
+	buf_reset(&fctx->buf);
+	buf_printf(&fctx->buf, "/principals/user/%.*s/",
+		   fctx->req_tgt->userlen, fctx->req_tgt->user);
 
-	    xmlNewChild(node, NULL, BAD_CAST "href", BAD_CAST uri);
+	xmlNewChild(node, NULL, BAD_CAST "href",
+		    BAD_CAST buf_cstring(&fctx->buf));
     }
 
     return 0;
@@ -766,14 +771,15 @@ static int propfind_curprin(xmlNodePtr prop,
 			    void *rock __attribute__((unused)))
 {
     xmlNodePtr node;
-    char uri[MAX_MAILBOX_PATH+1];
 
     node = xml_add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK],
 			prop, NULL, NULL);
 
     if (fctx->userid) {
-	snprintf(uri, sizeof(uri), "/principals/user/%s/", fctx->userid);
-	xmlNewChild(node, NULL, BAD_CAST "href", BAD_CAST uri);
+	buf_reset(&fctx->buf);
+	buf_printf(&fctx->buf, "/principals/user/%s/", fctx->userid);
+	xmlNewChild(node, NULL, BAD_CAST "href",
+		    BAD_CAST buf_cstring(&fctx->buf));
     }
     else {
 	xmlNewChild(node, NULL, BAD_CAST "unauthenticated", NULL);
@@ -926,7 +932,6 @@ static int propfind_acl(xmlNodePtr prop,
 	while (userid) {
 	    char *rightstr, *nextid;
 	    xmlNodePtr ace, node;
-	    char uri[MAX_MAILBOX_PATH+1];
 	    int deny = 0;
 
 	    rightstr = strchr(userid, '\t');
@@ -963,8 +968,10 @@ static int propfind_acl(xmlNodePtr prop,
 	    else if (!strcmp(userid, "anyone"))
 		xmlNewChild(node, NULL, BAD_CAST "authenticated", NULL);
 	    else {
-		snprintf(uri, sizeof(uri), "/principals/user/%s/", userid);
-		xmlNewChild(node, NULL, BAD_CAST "href", BAD_CAST uri);
+		buf_reset(&fctx->buf);
+		buf_printf(&fctx->buf, "/principals/user/%s/", userid);
+		xmlNewChild(node, NULL, BAD_CAST "href",
+			    BAD_CAST buf_cstring(&fctx->buf));
 	    }
 
 	    node = xmlNewChild(ace, NULL,
@@ -973,10 +980,12 @@ static int propfind_acl(xmlNodePtr prop,
 
 	    if (fctx->req_tgt->resource) {
 		node = xmlNewChild(ace, NULL, BAD_CAST "inherited", NULL);
-		snprintf(uri, sizeof(uri), "%.*s",
-			 fctx->req_tgt->resource - fctx->req_tgt->path,
-		    fctx->req_tgt->path);
-		xmlNewChild(node, NULL, BAD_CAST "href", BAD_CAST uri);
+		buf_reset(&fctx->buf);
+		buf_printf(&fctx->buf, "%.*s",
+			   fctx->req_tgt->resource - fctx->req_tgt->path,
+			   fctx->req_tgt->path);
+		xmlNewChild(node, NULL, BAD_CAST "href",
+			    BAD_CAST buf_cstring(&fctx->buf));
 	    }
 
 	    userid = nextid;
@@ -1015,13 +1024,11 @@ static int propfind_princolset(xmlNodePtr prop,
 			       void *rock __attribute__((unused)))
 {
     xmlNodePtr node;
-    char uri[MAX_MAILBOX_PATH+1];
 
     node = xml_add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK],
 			prop, NULL, NULL);
 
-    snprintf(uri, sizeof(uri), "/principals/");
-    xmlNewChild(node, NULL, BAD_CAST "href", BAD_CAST uri);
+    xmlNewChild(node, NULL, BAD_CAST "href", BAD_CAST "/principals/");
 
     return 0;
 }
@@ -1051,8 +1058,6 @@ static int propfind_quota(xmlNodePtr prop,
     }
 
     if (qr) {
-	char bytes[21]; /* ULLONG_MAX is 20 digits */
-
 	if (!fctx->quota.root ||
 	    strcmp(fctx->quota.root, qr)) {
 	    /* Different quotaroot - read it */
@@ -1064,29 +1069,29 @@ static int propfind_quota(xmlNodePtr prop,
 	    quota_read(&fctx->quota, NULL, 0);
 	}
 
+	buf_reset(&fctx->buf);
 	if (!xmlStrcmp(prop->name, BAD_CAST "quota-available-bytes")) {
 	    /* Calculate limit in bytes and subtract usage */
 	    uquota_t limit = fctx->quota.limit * QUOTA_UNITS;
 
-	    snprintf(bytes, sizeof(bytes),
-		     UQUOTA_T_FMT, limit - fctx->quota.used);
+	    buf_printf(&fctx->buf, UQUOTA_T_FMT, limit - fctx->quota.used);
 	}
 	else if (fctx->record) {
 	    /* Bytes used by resource */
-	    snprintf(bytes, sizeof(bytes), "%u", fctx->record->size);
+	    buf_printf(&fctx->buf, "%u", fctx->record->size);
 	}
 	else if (fctx->mailbox) {
 	    /* Bytes used by calendar collection */
-	    snprintf(bytes, sizeof(bytes), UQUOTA_T_FMT,
-		     fctx->mailbox->i.quota_mailbox_used);
+	    buf_printf(&fctx->buf, UQUOTA_T_FMT,
+		       fctx->mailbox->i.quota_mailbox_used);
 	}
 	else {
 	    /* Bytes used by entire hierarchy */
-	    snprintf(bytes, sizeof(bytes), UQUOTA_T_FMT, fctx->quota.used);
+	    buf_printf(&fctx->buf, UQUOTA_T_FMT, fctx->quota.used);
 	}
 
 	xml_add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK],
-		     prop, BAD_CAST bytes, NULL);
+		     prop, BAD_CAST buf_cstring(&fctx->buf), NULL);
     }
     else {
 	xml_add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND],
@@ -1141,7 +1146,6 @@ static int propfind_calurl(xmlNodePtr prop,
 			   void *rock)
 {
     xmlNodePtr node;
-    char uri[MAX_MAILBOX_PATH+1];
     const char *cal = (const char *) rock;
 
     if (fctx->userid) {
@@ -1149,10 +1153,12 @@ static int propfind_calurl(xmlNodePtr prop,
 	node = xml_add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK],
 			    prop, NULL, NULL);
 
-	snprintf(uri, sizeof(uri), "/calendars/user/%s/%s", fctx->userid,
-		 cal ? cal : "");
+	buf_reset(&fctx->buf);
+	buf_printf(&fctx->buf, "/calendars/user/%s/%s", fctx->userid,
+		   cal ? cal : "");
 
-	xmlNewChild(node, fctx->ns[NS_DAV], BAD_CAST "href", BAD_CAST uri);
+	xmlNewChild(node, fctx->ns[NS_DAV], BAD_CAST "href",
+		    BAD_CAST buf_cstring(&fctx->buf));
     }
     else {
 	xml_add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND],
@@ -1250,12 +1256,13 @@ static int proppatch_calcompset(xmlNodePtr prop, unsigned set,
 	    /* All component types are valid */
 	    const char *prop_annot =
 		ANNOT_NS "CALDAV:supported-calendar-component-set";
-	    char value[11];
 
-	    snprintf(value, sizeof(value), "%lu", types);
+	    buf_reset(&pctx->buf);
+	    buf_printf(&pctx->buf, "%lu", types);
 	    if (!(r = annotatemore_write_entry(pctx->mailboxname,
 					       prop_annot, /* shared */ "",
-					       value, NULL, strlen(value), 0,
+					       buf_cstring(&pctx->buf), NULL,
+					       buf_len(&pctx->buf), 0,
 					       &pctx->tid))) {
 		xml_add_prop(HTTP_OK, pctx->root,
 			     &propstat[PROPSTAT_OK], prop, NULL, NULL);
@@ -1328,24 +1335,24 @@ static int propfind_fromdb(xmlNodePtr prop,
 			   struct propfind_ctx *fctx, xmlNodePtr resp,
 			   struct propstat propstat[], void *ns_prefix)
 {
-    char prop_annot[MAX_MAILBOX_PATH+1];
     struct annotation_data attrib;
     xmlNodePtr node;
     const char *value = NULL;
     int r = 0;
 
+    buf_reset(&fctx->buf);
     if (ns_prefix) {
-	snprintf(prop_annot, sizeof(prop_annot), ANNOT_NS "%s:%s",
-		(const char *) ns_prefix, prop->name);
+	buf_printf(&fctx->buf, ANNOT_NS "%s:%s",
+		   (const char *) ns_prefix, prop->name);
     }
     else {
 	/* "dead" property - use hash of the namespace href as prefix */
-	snprintf(prop_annot, sizeof(prop_annot), ANNOT_NS "%08X:%s",
-		 strhash((const char *) prop->ns->href), prop->name);
+	buf_printf(&fctx->buf, ANNOT_NS "%08X:%s",
+		   strhash((const char *) prop->ns->href), prop->name);
     }
 
     if (fctx->mailbox && !fctx->record &&
-	!(r = annotatemore_lookup(fctx->mailbox->name, prop_annot,
+	!(r = annotatemore_lookup(fctx->mailbox->name, buf_cstring(&fctx->buf),
 				  /* shared */ "", &attrib))) {
 	if (attrib.value) value = attrib.value;
 	else if (!xmlStrcmp(prop->name, BAD_CAST "displayname")) {
@@ -1378,27 +1385,27 @@ static int proppatch_todb(xmlNodePtr prop, unsigned set,
 			  struct proppatch_ctx *pctx,
 			  struct propstat propstat[], void *ns_prefix)
 {
-    char prop_annot[MAX_MAILBOX_PATH+1];
     xmlChar *freeme = NULL;
     const char *value;
     xmlNodePtr node;
     int r;
 
+    buf_reset(&pctx->buf);
     if (ns_prefix) {
-	snprintf(prop_annot, sizeof(prop_annot), ANNOT_NS "%s:%s",
-		 (const char *) ns_prefix, BAD_CAST prop->name);
+	buf_printf(&pctx->buf, ANNOT_NS "%s:%s",
+		   (const char *) ns_prefix, BAD_CAST prop->name);
     }
     else {
 	/* "dead" property - use hash of the namespace href as prefix */
-	snprintf(prop_annot, sizeof(prop_annot), ANNOT_NS "%08X:%s",
-		 strhash((const char *) prop->ns->href), BAD_CAST prop->name);
+	buf_printf(&pctx->buf, ANNOT_NS "%08X:%s",
+		   strhash((const char *) prop->ns->href), BAD_CAST prop->name);
     }
 
     if (set) freeme = xmlNodeGetContent(prop);
     value = freeme ? (const char *) freeme : "";
 
     if (!(r = annotatemore_write_entry(pctx->mailboxname,
-				       prop_annot, /* shared */ "",
+				       buf_cstring(&pctx->buf), /* shared */ "",
 				       value, NULL, strlen(value), 0,
 				       &pctx->tid))) {
 	node = xml_add_prop(HTTP_OK, pctx->root, &propstat[PROPSTAT_OK],

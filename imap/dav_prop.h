@@ -159,6 +159,7 @@ struct propfind_ctx {
     xmlNsPtr *ns;			/* Array of our supported namespaces */
     const char **errstr;		/* Error string to pass up to caller */
     int *ret;  				/* Return code to pass up to caller */
+    struct buf buf;			/* Working buffer */
 };
 
 
@@ -172,6 +173,7 @@ struct proppatch_ctx {
     struct txn *tid;			/* Transaction ID for annot writes */
     const char **errstr;		/* Error string to pass up to caller */
     int *ret;  				/* Return code to pass up to caller */
+    struct buf buf;			/* Working buffer */
 };
 
 
