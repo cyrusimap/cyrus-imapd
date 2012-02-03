@@ -209,6 +209,25 @@ sub _params_defaults
     $params->{messageid} = $self->_generate_messageid($params)
 	unless defined $params->{messageid};
 
+    # Allow 'references' to be an array of Message objects
+    # which is really handy for generating conversation data
+    if (defined $params->{references} &&
+	ref $params->{references} eq 'ARRAY')
+    {
+	my @refs;
+	map {
+	    if (ref($_) eq 'Cassandane::Message')
+	    {
+		push(@refs, $_->messageid())
+	    }
+	    else
+	    {
+		push(@refs, "" . $_);
+	    }
+	} @{$params->{references}};
+	$params->{references} = join(', ', @refs);
+    }
+
     $params->{uid} = $self->_generate_uid()
 	unless defined $params->{uid};
 

@@ -144,9 +144,7 @@ sub test_append_clash
     my $ElCid = choose_cid($exp{A}->get_attribute('cid'),
 			   $exp{B}->get_attribute('cid'));
     $exp{C} = $self->make_message("Message C",
-				  references =>
-				       $exp{A}->get_header('message-id') .  ", " .
-				       $exp{B}->get_header('message-id'),
+				  references => [ $exp{A}, $exp{B} ],
 				 );
     $exp{C}->set_attributes(uid => 3, cid => $ElCid);
 
@@ -197,10 +195,7 @@ sub test_double_clash
 			   $exp{B}->get_attribute('cid'),
 			   $exp{C}->get_attribute('cid'));
     $exp{D} = $self->make_message("Message D",
-				  references =>
-				       $exp{A}->get_header('message-id') .  ", " .
-				       $exp{B}->get_header('message-id') .  ", " .
-				       $exp{C}->get_header('message-id'),
+				  references => [ $exp{A}, $exp{B}, $exp{C} ],
 				 );
     $exp{D}->set_attributes(uid => 4, cid => $ElCid);
 
@@ -272,10 +267,7 @@ sub test_replication_clash
 			   $exp{C}->get_attribute('cid'));
     $exp{D} = $self->make_message("Message D",
 				  store => $master_store,
-				  references =>
-				       $exp{A}->get_header('message-id') .  ", " .
-				       $exp{B}->get_header('message-id') .  ", " .
-				       $exp{C}->get_header('message-id')
+				  references => [ $exp{A}, $exp{B}, $exp{C} ],
 				 );
     $exp{D}->set_attributes(uid => 4, cid => $ElCid);
 
@@ -432,8 +424,7 @@ sub test_cross_user_copy
     my $cid = $exp{A}->make_cid();
     $exp{A}->set_attribute(cid => $cid);
     $exp{B} = $self->{gen}->generate(subject => 'Message B',
-				     references =>
-					$exp{A}->get_header('message-id'));
+				     references => [ $exp{A} ]);
     $exp{B}->set_attribute(cid => $cid);
 
     xlog "Writing messaged to user.cassandane";

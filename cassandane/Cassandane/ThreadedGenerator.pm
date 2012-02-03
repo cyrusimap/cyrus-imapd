@@ -147,7 +147,7 @@ sub generate
     if (defined $last)
     {
 	$params{subject} = "Re: " . $thread->{subject};
-	$params{references} = $last->get_header("Message-ID");
+	$params{references} = [ $last ];
     }
     else
     {
