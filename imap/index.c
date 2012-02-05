@@ -1628,6 +1628,7 @@ index_copy(struct index_state *state,
     static struct copyargs copyargs;
     int i;
     quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_INITIALIZER;
+    quota_t *qptr = NULL;
     int r;
     struct appendstate appendstate;
     uint32_t msgno, checkval;
@@ -1658,14 +1659,20 @@ index_copy(struct index_state *state,
 
     if (copyargs.nummsg == 0) return IMAP_NO_NOSUCHMSG;
 
-    for (i = 0; i < copyargs.nummsg; i++)
-	qdiffs[QUOTA_STORAGE] += copyargs.copymsg[i].size;
-    qdiffs[QUOTA_MESSAGE] = copyargs.nummsg;
+    r = mailbox_open_iwl(name, &destmailbox);
+    if (r) return r;
 
-    r = append_setup(&appendstate, name, state->userid,
-		     state->authstate, ACL_INSERT,
-		     ismove ? NULL : qdiffs,
-		     namespace, isadmin);
+    /* not moving or different quota root - need to check quota */
+    if (!ismove || strcmpsafe(mailbox->quotaroot, destmailbox->quotaroot)) {
+	for (i = 0; i < copyargs.nummsg; i++)
+	    qdiffs[QUOTA_STORAGE] += copyargs.copymsg[i].size;
+	qdiffs[QUOTA_MESSAGE] = copyargs.nummsg;
+	qptr = qdiffs;
+    }
+
+    r = append_setup_mbox(&appendstate, destmailbox, state->userid,
+			  state->authstate, ACL_INSERT,
+			  qptr, namespace, isadmin);
     if (r) return r;
 
     docopyuid = (appendstate.myrights & ACL_READ);
