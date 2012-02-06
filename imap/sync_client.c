@@ -258,6 +258,7 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
     }
 
 bail:
+    mailbox_close(&mailbox);
     return r;
 }
 
