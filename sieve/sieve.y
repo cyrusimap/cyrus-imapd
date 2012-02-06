@@ -220,6 +220,8 @@ extern void sieverestart(FILE *f);
 
 %name-prefix="sieve"
 %defines
+%destructor { free_tree($$); } commands command action elsif block
+
 %%
 
 start: reqs			{ ret = NULL; }
