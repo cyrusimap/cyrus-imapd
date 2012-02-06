@@ -629,7 +629,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
   const char *serverout=NULL;
   unsigned int serveroutlen;
   const void *canon_user, *val;
-  char *username;
+  char *username = NULL;
   int ret = TRUE;
   struct mboxlist_entry *mbentry = NULL;
 
@@ -653,12 +653,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
 	*errmsg="error base64 decoding string";
 	syslog(LOG_NOTICE, "badlogin: %s %s %s",
 	       sieved_clienthost, mech, "error base64 decoding string");
-
-      if(reset_saslconn(&sieved_saslconn, ssf, authid) != SASL_OK)
-	  fatal("could not reset the sasl_conn_t after failure",
-		EC_TEMPFAIL);
-
-	return FALSE;
+	goto reset;
       }
   }
 
@@ -683,11 +678,13 @@ static int cmd_authenticate(struct protstream *sieved_out,
     prot_printf(sieved_out, "{%d}\r\n",inbase64len);
     prot_write(sieved_out,inbase64,inbase64len);
     prot_printf(sieved_out,"\r\n");
+    free(inbase64);
 
     token1 = timlex(&str, NULL, sieved_in);
 
     if (token1==STRING)
     {
+      free(clientin);
       clientin=(char *) malloc(str->len*2);
 
       if (str->len) {
@@ -697,28 +694,19 @@ static int cmd_authenticate(struct protstream *sieved_out,
 	  clientinlen = 0;
 	  sasl_result = SASL_OK;
       }
+      string_free(&str);
 
       if (sasl_result!=SASL_OK)
       {
 	*errmsg="error base64 decoding string";
 	syslog(LOG_NOTICE, "badlogin: %s %s %s",
 	       sieved_clienthost, mech, "error base64 decoding string");
+	goto reset;
+      }
 
-      if(reset_saslconn(&sieved_saslconn, ssf, authid) != SASL_OK)
-	  fatal("could not reset the sasl_conn_t after failure",
-		EC_TEMPFAIL);
-
-	return FALSE;
-      }      
-      
     } else {
       *errmsg="Expected STRING-xxx1";
-
-      if(reset_saslconn(&sieved_saslconn, ssf, authid) != SASL_OK)
-	  fatal("could not reset the sasl_conn_t after failure",
-		EC_TEMPFAIL);
-
-      return FALSE;
+      goto reset;
     }
 
     token2 = timlex(&blahstr, NULL, sieved_in);
@@ -734,12 +722,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
       *errmsg = "expected a STRING followed by an EOL";
       syslog(LOG_NOTICE, "badlogin: %s %s %s",
 	     sieved_clienthost, mech, "expected string");
-
-      if(reset_saslconn(&sieved_saslconn, ssf, authid) != SASL_OK)
-	  fatal("could not reset the sasl_conn_t after failure",
-		EC_TEMPFAIL);
-
-      return FALSE;
+      goto reset;
     }
 
   }
@@ -752,12 +735,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
       *errmsg = (const char *) sasl_errstring(sasl_result,NULL,NULL);
       syslog(LOG_NOTICE, "badlogin: %s %s %s",
 	     sieved_clienthost, mech, *errmsg);
-
-      if(reset_saslconn(&sieved_saslconn, ssf, authid) != SASL_OK)
-	  fatal("could not reset the sasl_conn_t after failure",
-		EC_TEMPFAIL);
-
-      return FALSE;
+      goto reset;
   }
 
   /* get the userid from SASL */
@@ -767,12 +745,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
     *errmsg = "Internal SASL error";
     syslog(LOG_ERR, "SASL: sasl_getprop SASL_USERNAME: %s",
 	   sasl_errstring(sasl_result, NULL, NULL));
-
-    if(reset_saslconn(&sieved_saslconn, ssf, authid) != SASL_OK)
-	fatal("could not reset the sasl_conn_t after failure",
-	      EC_TEMPFAIL);
-
-    return FALSE;
+    goto reset;
   }
   username = xstrdup((const char *) canon_user);
 
@@ -803,13 +776,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
       if(r && !sieved_userisadmin) {
 	  /* lookup error */
 	  syslog(LOG_ERR, "%s", error_message(r));
-
-	  if(reset_saslconn(&sieved_saslconn, ssf, authid) != SASL_OK)
-	      fatal("could not reset the sasl_conn_t after failure",
-		    EC_TEMPFAIL);
-
-	  ret = FALSE;
-	  goto cleanup;
+	  goto reset;
       }
 
       if (mbentry && mbentry->mbtype & MBTYPE_REMOTE) {
@@ -830,13 +797,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
 		      *errmsg = "Internal SASL error";
 		      syslog(LOG_ERR, "SASL: sasl_getprop SASL_AUTHUSER: %s",
 			     sasl_errstring(sasl_result, NULL, NULL));
-
-		      if(reset_saslconn(&sieved_saslconn, ssf, authid) != SASL_OK)
-			  fatal("could not reset the sasl_conn_t after failure",
-				EC_TEMPFAIL);
-
-		      ret = FALSE;
-		      goto cleanup;
+		      goto reset;
 		  }
 		  authname = xstrdup((const char *) canon_user);
 
@@ -874,13 +835,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
       } else if (actions_setuser(username) != TIMSIEVE_OK) {
 	  *errmsg = "internal error";
 	  syslog(LOG_ERR, "error in actions_setuser()");
-
-	  if(reset_saslconn(&sieved_saslconn, ssf, authid) != SASL_OK)
-	      fatal("could not reset the sasl_conn_t after failure",
-		    EC_TEMPFAIL);
-
-	  ret = FALSE;
-	  goto cleanup;
+	  goto reset;
       }
   }
 
@@ -920,13 +875,21 @@ static int cmd_authenticate(struct protstream *sieved_out,
 
   /* Create telemetry log */
   sieved_logfd = telemetry_log(username, sieved_in, sieved_out, 0);
-  
-  cleanup:
+
+cleanup:
   /* free memory */
   mboxlist_entry_free(&mbentry);
   free(username);
+  free(clientin);
 
   return ret;
+
+reset:
+  if(reset_saslconn(&sieved_saslconn, ssf, authid) != SASL_OK)
+      fatal("could not reset the sasl_conn_t after failure",
+	    EC_TEMPFAIL);
+  ret = FALSE;
+  goto cleanup;
 }
 
 #ifdef HAVE_SSL

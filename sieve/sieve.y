@@ -727,6 +727,7 @@ commandlist_t *sieve_parse(sieve_script_t *script, FILE *f)
     sieverestart(f);
     if (yyparse()) {
 	t = NULL;
+	free_tree(ret);
     } else {
 	t = ret;
     }

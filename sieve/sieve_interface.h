@@ -182,7 +182,7 @@ int sieve_script_load(const char *fpath, sieve_execute_t **ret);
 int sieve_script_unload(sieve_execute_t **s);
 
 /* Free a sieve_script_t */
-int sieve_script_free(sieve_script_t **s);
+void sieve_script_free(sieve_script_t **s);
 
 /* execute bytecode on a message */
 int sieve_execute_bytecode(sieve_execute_t *script, sieve_interp_t *interp,

@@ -208,10 +208,7 @@ int sieve_script_parse(sieve_interp_t *interp, FILE *script,
     sievelineno = 1;		/* reset line number */
     s->cmds = sieve_parse(s, script);
     if (s->err > 0) {
-	if (s->cmds) {
-	    free_tree(s->cmds);
-	}
-	s->cmds = NULL;
+	sieve_script_free(&s);
 	res = SIEVE_PARSE_ERROR;
     }
 
@@ -219,16 +216,13 @@ int sieve_script_parse(sieve_interp_t *interp, FILE *script,
     return res;
 }
 
-int sieve_script_free(sieve_script_t **s)
+void sieve_script_free(sieve_script_t **s)
 {
     if (*s) {
-	if ((*s)->cmds) {
-	    free_tree((*s)->cmds);
-	}
+	free_tree((*s)->cmds);
 	free(*s);
+	*s = NULL;
     }
-
-    return SIEVE_OK;
 }
  
 static void add_header(sieve_interp_t *i, int isenv, char *header, 

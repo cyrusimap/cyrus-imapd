@@ -206,6 +206,7 @@ int is_script_parsable(FILE *stream, char **errstr, sieve_script_t **ret)
 	}
     }
     else {
+	sieve_script_free(&s);
 	*errstr = buf_release(&errors);
     }
     buf_free(&errors);
