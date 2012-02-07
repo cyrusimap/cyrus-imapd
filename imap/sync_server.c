@@ -1137,9 +1137,13 @@ static int do_reserve(struct dlist *kl, struct sync_reserve_list *reserve_list)
 
     for (folder = folder_names->head; folder; folder = folder->next) {
 	if (!part_list->toupload) break;
-	if (mboxlist_lookup(folder->name, &mbentry, 0) ||
-	    strcmp(mbentry->partition, partition))
+	if (mboxlist_lookup(folder->name, &mbentry, 0))
+	    continue;
+	if (strcmp(mbentry->partition, partition)) {
+	    mboxlist_entry_free(&mbentry);
 	    continue; /* try folders on the same partition first! */
+	}
+	mboxlist_entry_free(&mbentry);
 	reserve_folder(partition, folder->name, part_list);
 	folder->mark = 1;
     }
