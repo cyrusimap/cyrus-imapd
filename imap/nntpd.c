@@ -2093,6 +2093,11 @@ static void cmd_authinfo_pass(char *pass)
 
 	prot_printf(nntp_out, "281 User logged in\r\n");
 
+	/* nntp_authstate may have been set as a side effect
+	 * of sasl_checkpass() calling mysasl_proxy_policy */
+	if (nntp_authstate)
+	    auth_freestate(nntp_authstate);
+
 	nntp_authstate = auth_newstate(nntp_userid);
 
 	/* Close IP-based telemetry log and create new log based on userid */

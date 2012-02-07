@@ -1503,6 +1503,11 @@ void cmd_pass(char *pass)
 	}
     }
 
+    /* popd_authstate may have been set as a side effect
+     * of sasl_checkpass() calling mysasl_proxy_policy */
+    if (popd_authstate)
+	auth_freestate(popd_authstate);
+
     popd_authstate = auth_newstate(popd_userid);
 
     openinbox();
