@@ -80,6 +80,16 @@
    ...
 }
 {
+   getgrgid_leak
+   Memcheck:Leak
+   fun:malloc
+   ...
+   fun:__nss_database_lookup
+   ...
+   fun:getgrgid
+   ...
+}
+{
    zlib_inflateInit2_cond
    Memcheck:Cond
    fun:inflateReset2
