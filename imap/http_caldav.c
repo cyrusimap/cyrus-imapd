@@ -1442,7 +1442,7 @@ int meth_propfind(struct transaction_t *txn)
     }
 
     /* Output the XML response */
-    xml_response(HTTP_MULTI_STATUS, txn, outdoc);
+    if (!ret) xml_response(HTTP_MULTI_STATUS, txn, outdoc);
 
   done:
     /* Free the entry list */
@@ -1587,7 +1587,7 @@ static int meth_proppatch(struct transaction_t *txn)
     }
 
     /* Output the XML response */
-    xml_response(HTTP_MULTI_STATUS, txn, outdoc);
+    if (!ret) xml_response(HTTP_MULTI_STATUS, txn, outdoc);
 
   done:
     buf_free(&pctx.buf);
