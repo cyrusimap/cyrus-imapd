@@ -599,7 +599,7 @@ sub _run_workitem
 
     my $suite = $self->_get_item($witem->{suite})->_get_loaded_suite();
     Cassandane::Unit::TestCase->enable_test($witem->{testname});
-    return $suite->run($result, $runner);
+    $suite->run($result, $runner);
 }
 
 sub _finish_workitem
@@ -607,30 +607,24 @@ sub _finish_workitem
     my ($self, $witem, $result) = @_;
     my $suite = $self->_get_item($witem->{suite})->_get_loaded_suite();
     my ($test) = grep { $_->name() eq 'test_' . $witem->{testname}; } @{$suite->tests()};;
-    my $res;
 
     $result->start_test($test);
     if ($witem->{result} eq 'pass' ||
         $witem->{result} eq 'unknown')
     {
 	$result->add_pass($test);
-	$res = 1;
     }
     elsif ($witem->{result} eq 'fail')
     {
 	$witem->{exception}->{'-object'} = $test;
 	$result->add_failure($test, $witem->{exception});
-	$res = 0;
     }
     elsif ($witem->{result} eq 'error')
     {
 	$witem->{exception}->{'-object'} = $test;
 	$result->add_error($test, $witem->{exception});
-	$res = 0;
     }
     $result->end_test($test);
-
-    return $res;
 }
 
 sub _setup_worker_listeners
@@ -658,7 +652,6 @@ sub _setup_worker_listeners
 sub run
 {
     my ($self, $result, $runner) = @_;
-    my $passed = 1;
 
     my $maxworkers = $self->{maxworkers} || 1;
 
@@ -689,40 +682,30 @@ sub run
 	$pool->start();
 	while ($witem = shift @workitems)
 	{
-	    $pool->assign($witem);
+	    $pool->assign($witem)
+		if ($self->{keep_going} || $result->was_successful());
 	    while ($witem = $pool->retrieve(0))
 	    {
-		$passed &= $self->_finish_workitem($witem, $result);
+		$self->_finish_workitem($witem, $result);
 	    }
 	}
 	while ($witem = $pool->retrieve(1))
 	{
-	    $passed &= $self->_finish_workitem($witem, $result);
+	    $self->_finish_workitem($witem, $result);
 	}
 	$pool->stop();
     }
     else
     {
 	# single threaded case: just run it all in-process
-
-	if (!$self->{keep_going})
-	{
-	    # Hacky!
-	    no warnings;
-	    *Test::Unit::Result::should_stop = sub
-	    {
-		my ($self) = @_;
-		return !$self->was_successful();
-	    };
-	}
-
 	foreach my $witem (@workitems)
 	{
-	    $passed &= $self->_run_workitem($witem, $result, $runner);
+	    $self->_run_workitem($witem, $result, $runner);
+	    last if (!($self->{keep_going} || $result->was_successful()));
 	}
     }
 
-    return $passed;
+    return $result->was_successful();
 }
 
 1;
