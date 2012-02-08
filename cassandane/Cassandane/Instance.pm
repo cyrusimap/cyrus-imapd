@@ -258,16 +258,19 @@ sub _binary
     my @cmd;
     my $valground = 0;
 
+    my $cassini = Cassandane::Cassini->instance();
+
     if ($self->{valgrind} &&
         !($name =~ m/\.pl$/) &&
 	!($name =~ m/^\//))
     {
 	my $valgrind_logdir = $self->{basedir} . '/vglogs';
-	my $valgrind_suppressions = abs_path('vg.supp');
+	my $valgrind_suppressions =
+	    abs_path($cassini->val('valgrind', 'suppression', 'vg.supp'));
 	mkpath $valgrind_logdir
 	    unless ( -d $valgrind_logdir );
 	push(@cmd,
-	    '/usr/bin/valgrind',
+	    $cassini->val('valgrind', 'binary', '/usr/bin/valgrind'),
 	    '-q',
 	    "--log-file=$valgrind_logdir/$name.%p",
 	    "--suppressions=$valgrind_suppressions",
@@ -282,7 +285,6 @@ sub _binary
 	unless $bin =~ m/^\//;
     push(@cmd, $bin);
 
-    my $cassini = Cassandane::Cassini->instance();
     if (!$valground && $cassini->val('gdb', $name, 'no') =~ m/^yes$/i)
     {
 	xlog "Will run binary $name under gdb due to cassandane.ini";

@@ -58,6 +58,13 @@
 #    containing the saslpasswd2 binary.
 ##pwcheck = alwaystrue
 
+# This section describes configurable properties of Valgrind.
+[valgrind]
+# Where to find the Valgrind binary
+##binary = /usr/bin/valgrind
+# File containing Valgrind suppression rules
+##suppressions = vg.supp
+
 # This section describes the default Cyrus installation.
 [cyrus default]
 # Prefix of the installation; should be the value which
