@@ -73,14 +73,14 @@ int telemetry_log(const char *userid, struct protstream *pin,
 	gettimeofday(&tv, NULL);
 
 	/* use sec.clocks */
-	snprintf(buf, sizeof(buf), "%s%s%s/%lu.%lu",
-		 config_dir, FNAME_LOGDIR, userid,
+	snprintf(buf, sizeof(buf), "%s%s%s/%s-%lu.%lu",
+		 config_dir, FNAME_LOGDIR, userid, config_ident,
 		 (unsigned long)tv.tv_sec, (unsigned long)tv.tv_usec);
     } else {
 	/* use pid */
-	snprintf(buf, sizeof(buf), "%s%s%s/%lu", 
-		 config_dir, FNAME_LOGDIR, userid, (unsigned long)
-		 getpid());
+	snprintf(buf, sizeof(buf), "%s%s%s/%s-%lu", 
+		 config_dir, FNAME_LOGDIR, userid, config_ident,
+		 (unsigned long) getpid());
     }
 
     fd = open(buf, O_CREAT | O_APPEND | O_WRONLY, 0644);
