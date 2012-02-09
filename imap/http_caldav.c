@@ -1121,6 +1121,8 @@ static int meth_mkcol(struct transaction_t *txn)
     char *server, mailboxname[MAX_MAILBOX_BUFFER], *partition = NULL;
     struct proppatch_ctx pctx;
 
+    memset(&pctx, 0, sizeof(struct proppatch_ctx));
+
     /* Make sure its a DAV resource */
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
 
@@ -1287,6 +1289,8 @@ int meth_propfind(struct transaction_t *txn)
     struct propfind_ctx fctx;
     struct propfind_entry_list *elist = NULL;
 
+    memset(&fctx, 0, sizeof(struct propfind_ctx));
+
     /* Make sure its a DAV resource */
     if (!(txn->req_tgt.allow & ALLOW_DAV) && 
 	strcmp(txn->req_tgt.path, "/")) {  /* Apple iCal checks "/" */
@@ -1392,7 +1396,6 @@ int meth_propfind(struct transaction_t *txn)
     outdoc = root->doc;
 
     /* Populate our propfind context */
-    memset(&fctx, 0, sizeof(struct propfind_ctx));
     fctx.req_tgt = &txn->req_tgt;
     fctx.depth = depth;
     fctx.userid = httpd_userid;
@@ -1476,6 +1479,8 @@ static int meth_proppatch(struct transaction_t *txn)
     xmlNsPtr ns[NUM_NAMESPACE];
     char *server, *acl, mailboxname[MAX_MAILBOX_BUFFER];
     struct proppatch_ctx pctx;
+
+    memset(&pctx, 0, sizeof(struct proppatch_ctx));
 
     /* Make sure its a DAV resource */
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED;
@@ -2204,6 +2209,8 @@ static int meth_report(struct transaction_t *txn)
     struct propfind_ctx fctx;
     struct propfind_entry_list *elist = NULL;
 
+    memset(&fctx, 0, sizeof(struct propfind_ctx));
+
     /* Make sure its a DAV resource */
     if (!(txn->req_tgt.allow & ALLOW_DAV)) return HTTP_NOT_ALLOWED; 
 
@@ -2278,7 +2285,6 @@ static int meth_report(struct transaction_t *txn)
     }
 
     /* Populate our propfind context */
-    memset(&fctx, 0, sizeof(struct propfind_ctx));
     fctx.req_tgt = &txn->req_tgt;
     fctx.depth = depth;
     fctx.userid = httpd_userid;
