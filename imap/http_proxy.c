@@ -43,6 +43,7 @@
 
 #include <config.h>
 
+#include <ctype.h>
 #include <syslog.h>
 #include <sasl/sasl.h>
 #include <sasl/saslutil.h>
