@@ -1769,12 +1769,14 @@ static int meth_put(struct transaction_t *txn)
     }
 
     /* Read body */
-    txn->flags |= HTTP_READBODY;
-    r = read_body(httpd_in, txn->req_hdrs, &txn->req_body, &txn->error.desc);
-    if (r) {
-	txn->flags |= HTTP_CLOSE;
-	ret = r;
-	goto done;
+    if (!(txn->flags & HTTP_READBODY)) {
+	txn->flags |= HTTP_READBODY;
+	r = read_body(httpd_in, txn->req_hdrs, &txn->req_body, &txn->error.desc);
+	if (r) {
+	    txn->flags |= HTTP_CLOSE;
+	    ret = r;
+	    goto done;
+	}
     }
 
     /* Make sure we have a body */
@@ -2489,10 +2491,13 @@ static int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root)
     }
 
     /* Read body */
-    txn->flags |= HTTP_READBODY;
-    if ((r = read_body(httpd_in, txn->req_hdrs, &txn->req_body, &txn->error.desc))) {
-	txn->flags |= HTTP_CLOSE;
-	return r;
+    if (!(txn->flags & HTTP_READBODY)) {
+	txn->flags |= HTTP_READBODY;
+	r = read_body(httpd_in, txn->req_hdrs, &txn->req_body, &txn->error.desc);
+	if (r) {
+	    txn->flags |= HTTP_CLOSE;
+	    return r;
+	}
     }
 
     if (!buf_len(&txn->req_body)) return 0;
