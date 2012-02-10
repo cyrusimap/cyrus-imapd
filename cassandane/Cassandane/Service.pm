@@ -55,6 +55,8 @@ sub alloc_port
     if (!defined $base_port)
     {
 	my $workerid = $ENV{TEST_UNIT_WORKER_ID} || '1';
+	die "Invalid TEST_UNIT_WORKER_ID - code not run in Worker context"
+	    if (defined($workerid) && $workerid eq 'invalid');
 	$base_port = 9100 + $max_ports * ($workerid-1);
     }
     for (my $i = 0 ; $i < $max_ports ; $i++)
@@ -119,6 +121,14 @@ sub host
 sub port
 {
     my ($self) = @_;
+
+    if (defined $self->{port} &&
+	defined $self->{config})
+    {
+	# expand @basedir@ et al
+	$self->{port} = $self->{config}->substitute($self->{port});
+    }
+
     $self->{port} ||= alloc_port();
     return $self->{port};
 }

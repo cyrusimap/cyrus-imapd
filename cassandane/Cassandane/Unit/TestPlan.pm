@@ -667,6 +667,9 @@ sub run
 	# we want an error not a signal
 	$SIG{PIPE} = 'IGNORE';
 
+	# Just In Case any code samples this in a TestCase c'tor
+	$ENV{TEST_UNIT_WORKER_ID} = 'invalid';
+
 	my $wlistener = Cassandane::Unit::WorkerListener->new();
 
 	my $pool = Cassandane::Unit::WorkerPool->new(

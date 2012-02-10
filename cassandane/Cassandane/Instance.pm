@@ -45,7 +45,7 @@ use warnings;
 use File::Path qw(mkpath rmtree);
 use File::Find qw(find);
 use File::Basename;
-use POSIX qw(geteuid :signal_h :sys_wait_h);
+use POSIX qw(geteuid :signal_h :sys_wait_h :errno_h);
 use DateTime;
 use BSD::Resource;
 use Cwd qw(abs_path getcwd);
@@ -57,7 +57,7 @@ use Cassandane::Service;
 use Cassandane::ServiceFactory;
 use Cassandane::Cassini;
 
-my $rootdir;
+my $__cached_rootdir;
 my $stamp;
 my $next_unique = 1;
 my %defaults =
@@ -72,8 +72,6 @@ sub new
     my %params = @_;
 
     my $cassini = Cassandane::Cassini->instance();
-    $rootdir = $cassini->val('cassandane', 'rootdir', '/var/tmp/cass')
-	unless defined $rootdir;
 
     my $self = {
 	name => undef,
@@ -95,6 +93,7 @@ sub new
 	description => 'unknown',
 	_started => 0,
 	_logins => {},
+	_pwcheck => $cassini->val('cassandane', 'pwcheck', 'alwaystrue'),
     };
 
     $self->{name} = $params{name}
@@ -125,10 +124,27 @@ sub new
 	if defined $params{persistent};
     $self->{description} = $params{description}
 	if defined $params{description};
+    $self->{pwcheck} = $params{pwcheck}
+	if defined $params{pwcheck};
 
     # XXX - get testcase name from caller, to apply even finer
     # configuration from cassini ?
+    return bless $self, $class;
+}
 
+sub _rootdir
+{
+    if (!defined $__cached_rootdir)
+    {
+	my $cassini = Cassandane::Cassini->instance();
+	$__cached_rootdir =
+	    $cassini->val('cassandane', 'rootdir', '/var/tmp/cass');
+    }
+    return $__cached_rootdir;
+}
+
+sub _make_unique_basedir_and_name
+{
     if (!defined $stamp)
     {
 	$stamp = to_iso8601(DateTime->now);
@@ -136,35 +152,52 @@ sub new
 
 	# name workers as A, B, C, ...
 	my $workerid = $ENV{TEST_UNIT_WORKER_ID};
+	die "Invalid TEST_UNIT_WORKER_ID - code not run in Worker context"
+	    if (defined($workerid) && $workerid eq 'invalid');
 	$stamp .= chr(64 + $workerid) if defined $workerid;
     }
 
-    if (!defined $self->{name})
+    my $rootdir = _rootdir();
+
+    my $name;
+    my $basedir;
+    for (;;)
     {
-	for (;;)
-	{
-	    $self->{name} = $stamp . $next_unique;
-	    $next_unique++;
-	    last unless -d "$rootdir/$self->{name}";
-	}
+	$name = $stamp . $next_unique;
+	$next_unique++;
+	$basedir = "$rootdir/$name";
+	last if mkdir($basedir);
+	die "Cannot create $basedir: $!" if ($! != EEXIST);
     }
-    $self->{basedir} = $rootdir . '/' . $self->{name}
-	unless defined $self->{basedir};
-    $self->{config}->set_variables(
-		name => $self->{name},
-		basedir => $self->{basedir},
-		cyrus_prefix => $self->{cyrus_prefix},
-		prefix => getcwd(),
-	    );
+    return ($name, $basedir);
+}
 
-    bless $self, $class;
+sub _init_basedir_and_name
+{
+    my ($self) = @_;
 
-    $self->_set_pwcheck($params{pwcheck} ||
-			$cassini->val('cassandane', 'pwcheck', 'alwaystrue'));
-    $self->add_login('admin');
-
-    xlog "$self->{description}: basedir $self->{basedir}";
-    return $self;
+    my $which = (defined $self->{name} ? 1 : 0) |
+		(defined $self->{basedir} ? 2 : 0);
+    if ($which == 0)
+    {
+	# have neither name nor basedir
+	# usual first time case for test instances
+	my ($name, $basedir) = _make_unique_basedir_and_name();
+	$self->{name} = $name;
+	$self->{basedir} = $basedir;
+    }
+    elsif ($which == 1)
+    {
+	# have name but not basedir
+	# usual first time case for start-instance.pl
+	$self->{basedir} = _rootdir() . '/' . $self->{name};
+    }
+    elsif ($which == 2)
+    {
+	# have basedir but not name
+	# this could happen if the caller did odd things
+	$self->{name} = basename($self->{basedir});
+    }
 }
 
 sub set_defaults
@@ -181,9 +214,7 @@ sub set_defaults
 # Remove on-disk traces of any previous instances
 sub cleanup_leftovers
 {
-    my $cassini = Cassandane::Cassini->instance();
-    $rootdir = $cassini->val('cassandane', 'rootdir', '/var/tmp/cass')
-	unless defined $rootdir;
+    my $rootdir = _rootdir();
 
     return if (!-d $rootdir);
     opendir ROOT, $rootdir
@@ -191,7 +222,7 @@ sub cleanup_leftovers
     my @dirs;
     while (my $e = readdir(ROOT))
     {
-	push(@dirs, $e) if ($e =~ m/^[0-9]{7,}$/);
+	push(@dirs, $e) if ($e =~ m/^[0-9]{6}([A-Z]|)[0-9]{1,}$/);
     }
     closedir ROOT;
 
@@ -224,6 +255,7 @@ sub add_service
 
     my $srv = Cassandane::ServiceFactory->create(%params);
     $self->{services}->{$name} = $srv;
+    $srv->{config} = $self->{config};
     return $srv;
 }
 
@@ -249,6 +281,14 @@ sub add_event
 {
     my ($self, %params) = @_;
     push(@{$self->{events}}, Cassandane::MasterEvent->new(%params));
+}
+
+sub set_config
+{
+    my ($self, $conf) = @_;
+
+    $self->{config} = $conf;
+    map { $_->{config} = $conf; } (values %{$self->{services}});
 }
 
 sub _binary
@@ -348,6 +388,12 @@ sub _generate_imapd_conf
 {
     my ($self) = @_;
 
+    $self->{config}->set_variables(
+		name => $self->{name},
+		basedir => $self->{basedir},
+		cyrus_prefix => $self->{cyrus_prefix},
+		prefix => getcwd(),
+	    );
     $self->{config}->generate($self->_imapd_conf());
 }
 
@@ -509,9 +555,10 @@ sub _start_master
     xlog "_start_master: all services listening";
 }
 
-sub _set_pwcheck
+sub _init_pwcheck
 {
-    my ($self, $pwcheck) = @_;
+    my ($self) = @_;
+    my $pwcheck = $self->{_pwcheck};
 
     my $conf = $self->{config};
     if ($pwcheck eq 'alwaystrue')
@@ -574,6 +621,13 @@ sub add_login
 	if ($self->{_started});
 }
 
+sub have_login
+{
+    my ($self, $user) = @_;
+
+    return (defined $self->{_logins}->{$user});
+}
+
 # Copy the login data from another instance
 # Useful when setting up a master/replica pair
 sub copy_logins
@@ -629,11 +683,17 @@ sub start
 
     my $created = 0;
 
-    xlog "start";
+    $self->_init_basedir_and_name();
+
+    xlog "start $self->{description}: basedir $self->{basedir}";
+
     if (!$self->{re_use_dir} || ! -d $self->{basedir})
     {
 	$created = 1;
 	rmtree $self->{basedir};
+	$self->_init_pwcheck();
+	$self->add_login('admin')
+	    if !$self->have_login('admin');
 	$self->_build_skeleton();
 	# TODO: system("echo 1 >/proc/sys/kernel/core_uses_pid");
 	# TODO: system("echo 1 >/proc/sys/fs/suid_dumpable");
@@ -758,6 +818,8 @@ sub stop
 {
     my ($self) = @_;
 
+    $self->_init_basedir_and_name();
+
     return if ($self->{_stopped});
     $self->{_stopped} = 1;
 
@@ -791,7 +853,9 @@ sub DESTROY
 {
     my ($self) = @_;
 
-    if (!$self->{persistent} && !$self->{_stopped})
+    if (defined $self->{basedir} &&
+	!$self->{persistent} &&
+	!$self->{_stopped})
     {
 	my $pid = $self->_read_pid_file($self->_pid_file());
 	if (defined $pid)
@@ -817,7 +881,7 @@ sub _setup_for_deliver
 
     $self->add_service(name => 'lmtp',
 		       argv => ['lmtpd', '-a'],
-		       port => $self->{basedir} . '/conf/socket/lmtp');
+		       port => '@basedir@/conf/socket/lmtp');
 }
 
 sub deliver

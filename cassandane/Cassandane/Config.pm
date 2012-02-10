@@ -145,7 +145,7 @@ sub _get_variable
     die "Variable $n not defined";
 }
 
-sub _substitute
+sub substitute
 {
     my ($self, $s) = @_;
 
@@ -175,7 +175,7 @@ sub _flatten
     {
 	foreach my $n (keys %{$conf->{params}})
 	{
-	    $nv{$n} = $self->_substitute($conf->{params}->{$n})
+	    $nv{$n} = $self->substitute($conf->{params}->{$n})
 		unless defined $nv{$n};
 	}
     }
