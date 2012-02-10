@@ -117,7 +117,7 @@ my %runners =
 
 eval
 {
-    require Test::Unit::Runner::XML;
+    require Cassandane::Unit::RunnerXML;
 
     $runners{xml} = sub
     {
@@ -128,7 +128,7 @@ eval
 	    mkdir($output_dir)
 		or die "Cannot make output directory \"$output_dir\": $!";
 	}
-	my $runner = Test::Unit::Runner::XML->new($output_dir);
+	my $runner = Cassandane::Unit::RunnerXML->new($output_dir);
 	$runner->filter('x');
 	$runner->start($plan);
 	return $runner->all_tests_passed();

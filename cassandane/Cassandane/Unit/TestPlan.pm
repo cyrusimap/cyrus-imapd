@@ -44,6 +44,7 @@ use warnings;
 use Cassandane::Unit::TestCase;
 use IO::Handle;
 use POSIX;
+use Time::HiRes qw(time);
 
 package Cassandane::Unit::TestPlanItem;
 
@@ -227,6 +228,7 @@ sub get_reply
 sub assign
 {
     my ($self, $witem) = @_;
+    $witem->{start_time} = time();
     _send($self->{downpipe},
 	  "run %s\n", encode_base64(safeFreeze($witem), ''));
     $self->{busy} = 1;
@@ -604,11 +606,16 @@ sub _run_workitem
 
 sub _finish_workitem
 {
-    my ($self, $witem, $result) = @_;
+    my ($self, $witem, $result, $runner) = @_;
     my $suite = $self->_get_item($witem->{suite})->_get_loaded_suite();
     my ($test) = grep { $_->name() eq 'test_' . $witem->{testname}; } @{$suite->tests()};;
 
     $result->start_test($test);
+    if ($runner->can('fake_start_time'))
+    {
+	$runner->fake_start_time($test, $witem->{start_time});
+    }
+
     if ($witem->{result} eq 'pass' ||
         $witem->{result} eq 'unknown')
     {
@@ -689,12 +696,12 @@ sub run
 		if ($self->{keep_going} || $result->was_successful());
 	    while ($witem = $pool->retrieve(0))
 	    {
-		$self->_finish_workitem($witem, $result);
+		$self->_finish_workitem($witem, $result, $runner);
 	    }
 	}
 	while ($witem = $pool->retrieve(1))
 	{
-	    $self->_finish_workitem($witem, $result);
+	    $self->_finish_workitem($witem, $result, $runner);
 	}
 	$pool->stop();
     }
