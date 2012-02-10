@@ -96,7 +96,7 @@ sub install_sieve_script
     $self->assert(( -f "$sieved/$name.bc" ));
 
     symlink("$name.bc", "$sieved/defaultbc")
-	or die "Cannot symlink testsieve.bc to $sieved/defaultbc";
+	or die "Cannot symlink $name.bc to $sieved/defaultbc";
     $self->assert(( -l "$sieved/defaultbc" ));
 
     xlog "Sieve script installed successfully";
@@ -362,6 +362,55 @@ sub test_badscript_timsieved
     xlog "Testing sieve script compile failures, via timsieved";
     $self->{compile_method} = 'timsieved';
     $self->badscript_common();
+}
+
+sub test_dup_keep_keep
+{
+    my ($self) = @_;
+
+    xlog "Testing duplicate suppression between 'keep' & 'keep'";
+
+    $self->install_sieve_script(<<EOF
+keep;
+keep;
+EOF
+    );
+
+    xlog "Deliver a message";
+    my $msg1 = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg1);
+
+    xlog "Check that only one copy of the message made it to INBOX";
+    $self->{store}->set_folder('INBOX');
+    $self->check_messages({ 1 => $msg1 }, check_guid => 0);
+}
+
+# Note: experiment indicates that duplicate suppression
+# with sieve's fileinto does not work if the mailbox has
+# the OPT_IMAP_DUPDELIVER option enabled.  This is not
+# really broken, although perhaps unexpected, and it not
+# tested for here.
+
+sub test_dup_keep_fileinto
+{
+    my ($self) = @_;
+
+    xlog "Testing duplicate suppression between 'keep' & 'fileinto'";
+
+    $self->install_sieve_script(<<EOF
+require ["fileinto"];
+keep;
+fileinto "INBOX";
+EOF
+    );
+
+    xlog "Deliver a message";
+    my $msg1 = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg1);
+
+    xlog "Check that only one copy of the message made it to INBOX";
+    $self->{store}->set_folder('INBOX');
+    $self->check_messages({ 1 => $msg1 }, check_guid => 0);
 }
 
 1;
