@@ -847,9 +847,6 @@ static void cmdloop(void)
     struct transaction_t txn;
     const struct namespace_t *namespace;
     method_proc_t meth_proc;
-#ifdef SASL_HTTP_REQUEST
-    sasl_http_request_t sasl_http_req;
-#endif
 
     /* Start with an empty (clean) transaction */
     memset(&txn, 0, sizeof(struct transaction_t));
@@ -1036,15 +1033,6 @@ static void cmdloop(void)
 
 	if (ret) goto done;
 
-#ifdef SASL_HTTP_REQUEST
-	/* Setup SASL HTTP request in case we need it */
-	sasl_http_req.method = txn.meth;
-	sasl_http_req.uri = buf_cstring(&uri);
-	sasl_http_req.entity = (u_char *) buf_cstring(&txn.req_body);
-	sasl_http_req.elen = buf_len(&txn.req_body);
-	sasl_http_req.non_persist = (txn.flags & HTTP_CLOSE);
-#endif /* SASL_HTTP_REQUEST */
-
 	if (!httpd_userid) {
 	    const char **creds, **authzid;
 
@@ -1052,8 +1040,24 @@ static void cmdloop(void)
 	    if ((creds = spool_getheader(txn.req_hdrs, "Authorization"))) {
 		/* Check the auth credentials */
 #ifdef SASL_HTTP_REQUEST
+		/* Setup SASL HTTP request in case we need it */
+		sasl_http_request_t sasl_http_req;
+
+		txn.flags |= HTTP_READBODY;
+		if ((r = read_body(httpd_in, txn.req_hdrs, &txn.req_body,
+				   &txn.error.desc))) {
+		    txn.flags |= HTTP_CLOSE;
+		    ret = r;
+		    goto done;
+		}
+		sasl_http_req.method = txn.meth;
+		sasl_http_req.uri = buf_cstring(&uri);
+		sasl_http_req.entity = (u_char *) buf_cstring(&txn.req_body);
+		sasl_http_req.elen = buf_len(&txn.req_body);
+		sasl_http_req.non_persist = (txn.flags & HTTP_CLOSE);
 		sasl_setprop(httpd_saslconn, SASL_HTTP_REQUEST, &sasl_http_req);
-#endif
+#endif /* SASL_HTTP_REQUEST */
+
 		authzid = spool_getheader(txn.req_hdrs, "Authorization-Id");
 		r = http_auth(creds[0],
 			      authzid ? authzid[0] : NULL, &txn.auth_chal);
@@ -1124,9 +1128,6 @@ static void cmdloop(void)
 	    }
 	    else {
 		/* Tell client to authenticate */
-#ifdef SASL_HTTP_REQUEST
-		sasl_setprop(httpd_saslconn, SASL_HTTP_REQUEST, &sasl_http_req);
-#endif
 		ret = HTTP_UNAUTHORIZED;
 		if (r) txn.error.desc = "Authentication failed";
 		else txn.error.desc = "Must authenticate to access the specified target";
