@@ -86,6 +86,7 @@ sub tear_down
     $self->{store} = undef;
     $self->{instance}->stop();
     $self->{instance}->cleanup();
+    $self->{instance} = undef;
 }
 
 #

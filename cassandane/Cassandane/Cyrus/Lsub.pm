@@ -101,6 +101,7 @@ sub tear_down
     $self->{adminstore} = undef;
     $self->{instance}->stop();
     $self->{instance}->cleanup();
+    $self->{instance} = undef;
 }
 
 #
