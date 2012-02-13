@@ -465,6 +465,7 @@ sub new
 	schedule => {},
 	keep_going => delete $opts{keep_going} || 0,
 	maxworkers => delete $opts{maxworkers},
+	post_test_handler => delete $opts{post_test_handler} || sub {},
     };
     die "Unknown options: " . join(' ', keys %opts)
 	if scalar %opts;
@@ -602,6 +603,7 @@ sub _run_workitem
     my $suite = $self->_get_item($witem->{suite})->_get_loaded_suite();
     Cassandane::Unit::TestCase->enable_test($witem->{testname});
     $suite->run($result, $runner);
+    $self->{post_test_handler}->($result, $runner);
 }
 
 sub _finish_workitem

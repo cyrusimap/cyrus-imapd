@@ -48,6 +48,7 @@ use Cassandane::Util::Words;
 use Cassandane::Generator;
 use Cassandane::MessageStoreFactory;
 use Cassandane::Instance;
+use Cassandane::PortManager;
 
 my @stores = qw(store adminstore replica_store replica_adminstore);
 
@@ -115,7 +116,7 @@ sub _create_instances
 
 	if ($want->{replica})
 	{
-	    $port = Cassandane::Service->alloc_port();
+	    $port = Cassandane::PortManager::alloc();
 	    $conf->set(
 		# sync_client will find the port in the config
 		sync_port => $port,
