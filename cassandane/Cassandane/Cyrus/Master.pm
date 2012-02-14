@@ -79,9 +79,6 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
-# Disable this whole suite - all the tests fail on ToT
-sub filter { return { x => sub { return 1; } }; }
-
 sub lemming_connect
 {
     my ($srv) = @_;
