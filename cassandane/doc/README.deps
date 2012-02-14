@@ -47,7 +47,8 @@ Cassandane needs the following software to work:
     Ubuntu package libtest-unit-perl
     RH/CentOS package perl-Test-Unit
 
- * Test::Unit::Runner::XML
+ * (Cassandane has it's own copy of this code for now)
+    Test::Unit::Runner::XML
     Addition to Test::Unit which outputs in jUnit's XML
     format, for integration with Jenkins CI.
     CPAN package http://search.cpan.org/dist/Test-Unit-Runner-Xml/
@@ -97,4 +98,3 @@ Debian/Ubuntu copypasta:
        libxml-generator-perl libxml-xpath-perl libclone-perl \
        libencode-imaputf7-perl libconfig-inifiles-perl \
        libnews-nntpclient-perl
-  sudo cpan Test::Unit::Runner::XML
