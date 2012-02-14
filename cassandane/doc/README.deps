@@ -89,9 +89,6 @@ Cassandane needs the following software to work:
     Ubuntu package libunix-syslog-perl
     RH/CentOS package perl-Unix-Syslog
 
- * FreezeThaw
-    Ubuntu package libfreezethaw-perl
-
 Debian/Ubuntu copypasta:
   sudo apt-get -y install liburi-perl libdigest-sha1-perl \
        libdatetime-perl libbsd-resource-perl libtest-unit-perl \

@@ -94,7 +94,7 @@ sub _allow
 }
 
 package Cassandane::Unit::Worker;
-use FreezeThaw qw(safeFreeze thaw);
+use Storable qw(freeze thaw);
 use MIME::Base64;
 
 my $nextid = 1;
@@ -202,7 +202,7 @@ sub _mainloop
 	    my ($witem) = thaw(decode_base64($args[0]));
 	    $self->{handler}->($witem);
 	    _send($self->{uppipe},
-		  "done %s\n", encode_base64(safeFreeze($witem), ''));
+		  "done %s\n", encode_base64(freeze($witem), ''));
 	}
 	else
 	{
@@ -230,7 +230,7 @@ sub assign
     my ($self, $witem) = @_;
     $witem->{start_time} = time();
     _send($self->{downpipe},
-	  "run %s\n", encode_base64(safeFreeze($witem), ''));
+	  "run %s\n", encode_base64(freeze($witem), ''));
     $self->{busy} = 1;
 }
 
