@@ -77,7 +77,7 @@ sub default
 	    # for debugging - see cassandane.ini.example
 	    debug_command => '@prefix@/utils/gdbtramp %s %d',
 	    # everyone should be running this
-	    improved_mboxlist_sort => 1,
+	    improved_mboxlist_sort => 'yes',
 	);
 	Cassandane::Cassini->instance()->apply_config($default);
     }
