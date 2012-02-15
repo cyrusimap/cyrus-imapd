@@ -338,6 +338,26 @@ static void service_forget_exec(struct service *s)
     }
 }
 
+static struct service *service_add(const struct service *proto)
+{
+    struct service *s;
+
+    if (nservices == allocservices) {
+	if (allocservices > SERVICE_MAX - 5)
+	    fatal("out of service structures, please restart", EX_UNAVAILABLE);
+	Services = xrealloc(Services,
+			   (allocservices+=5) * sizeof(struct service));
+    }
+    s = &Services[nservices++];
+
+    if (proto)
+	memcpy(s, proto, sizeof(struct service));
+    else
+	memset(s, 0, sizeof(struct service));
+
+    return s;
+}
+
 static void service_create(struct service *s)
 {
     struct service service0, service;
@@ -511,16 +531,8 @@ static void service_create(struct service *s)
 	
 	get_statsock(s->stat);
 	
-	if (s == &service) {
-	    if (nservices == allocservices) {
-		if (allocservices > SERVICE_MAX - 5)
-		    fatal("out of service structures, please restart", EX_UNAVAILABLE);
-		Services = xrealloc(Services, 
-				    (allocservices+=5) * sizeof(struct service));
-		if (!Services) fatal("out of memory", EX_UNAVAILABLE);
-	    }
-	    memcpy(&Services[nservices++], s, sizeof(struct service));
-	}
+	if (s == &service)
+	    service_add(s);
 	nsocket++;
     }
     if (res0) {
@@ -1463,20 +1475,13 @@ static void add_service(const char *name, struct entry *e, void *rock)
 
 	fatal(buf, EX_CONFIG);
     }
- 
+
     if (i == nservices) {
 	/* either we don't have an existing entry or we are changing
 	 * the port parameters, so create a new service
 	 */
-	if (nservices == allocservices) {
-	    if (allocservices > SERVICE_MAX - 5)
-		fatal("out of service structures, please restart", EX_UNAVAILABLE);
-	    Services = xrealloc(Services, 
-			       (allocservices+=5) * sizeof(struct service));
-	}
-	memset(&Services[nservices++], 0, sizeof(struct service));
-
-	gettimeofday(&Services[i].last_interval_start, 0);
+	struct service *s = service_add(NULL);
+	gettimeofday(&s->last_interval_start, 0);
     }
     else if (Services[i].listen) reconfig = 1;
 
