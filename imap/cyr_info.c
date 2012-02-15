@@ -125,9 +125,21 @@ static void do_conf(int only_changed)
 	case OPT_STRING:
 	case OPT_STRINGLIST:
 	    if (only_changed) {
-		if (!imapopts[i].def.s && !imapopts[i].val.s) break;
-		if (imapopts[i].def.s && imapopts[i].val.s &&
-		    !strcmp(imapopts[i].def.s, imapopts[i].val.s)) break;
+		const char *defvalue = imapopts[i].def.s;
+		char *freeme = NULL;
+
+		if (defvalue &&
+		    !strncasecmp(defvalue, "{configdirectory}", 17))
+		{
+		    freeme = strconcat(imapopts[IMAPOPT_CONFIGDIRECTORY].val.s,
+				       defvalue+17, (char *)NULL);
+		    defvalue = freeme;
+		}
+		if (!strcmpsafe(defvalue, imapopts[i].val.s)) {
+		    free(freeme);
+		    break;
+		}
+		free(freeme);
 	    }
 	    printf("%s: %s\n", imapopts[i].optname, imapopts[i].val.s ? imapopts[i].val.s : "");
 	    break;
