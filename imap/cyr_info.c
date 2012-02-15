@@ -161,7 +161,7 @@ static void do_conf(int only_changed)
 	    }
 	    printf("%s:", imapopts[i].optname);
 	    for (j = 0; imapopts[i].enum_options[j].name; j++) {
-		if ((unsigned)imapopts[i].val.e == (1U<<j)) {
+		if (imapopts[i].val.e == imapopts[i].enum_options[j].val) {
 		    printf(" %s", imapopts[i].enum_options[j].name);
 		    break;
 		}
