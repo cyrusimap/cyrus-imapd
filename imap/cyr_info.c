@@ -237,11 +237,8 @@ static void add_service(const char *name,
 {
     struct service_item **ksp = (struct service_item **)rock;
     struct service_item *knew = xmalloc(sizeof(struct service_item));
-    knew->prefixlen = strlen(name);
-    knew->prefix = xmalloc(knew->prefixlen+2);
-    memcpy(knew->prefix, name, knew->prefixlen);
-    knew->prefix[knew->prefixlen++] = '_';
-    knew->prefix[knew->prefixlen] = '\0';
+    knew->prefix = strconcat(name, "_", (char *)NULL);
+    knew->prefixlen = strlen(knew->prefix);
     knew->next = *ksp;
     *ksp = knew;
 }
