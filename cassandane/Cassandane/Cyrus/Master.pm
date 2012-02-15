@@ -600,10 +600,9 @@ sub test_service_unix
     my ($self) = @_;
 
     xlog "single successful service on UNIX domain socket";
-    my $sockname = $self->{instance}->{basedir} .  "/conf/socket/lemming.sock";
     my $srv = $self->lemming_service(
 			host => undef,
-			port => $sockname);
+			port => '@basedir@/conf/socket/lemming.sock');
     $self->start();
 
     xlog "not preforked, so no lemmings running yet";
@@ -656,7 +655,7 @@ sub test_service_dup_port
     xlog "parameters which reference the same IPv4 port";
     my $srvA = $self->lemming_service(tag => 'A');
     my $srvB = $self->lemming_service(tag => 'B',
-				      port => $srvA->{port});
+				      port => $srvA->port());
 
     # master should emit a syslog message like this
     #
@@ -757,17 +756,17 @@ sub test_maxforkrate
     my $r = $self->measure_fork_rate($srvA, $fast);
     xlog "Actual rate: $r";
     $self->assert($r >= (1.0-$epsilon)*$fast,
-		  "Fork rate too slow, wanted $fast");
+		  "Fork rate too slow, for $r wanted $fast");
     $self->assert($r <= (1.0+$epsilon)*$fast,
-		  "Fork rate too fast, wanted $fast");
+		  "Fork rate too fast, for $r wanted $fast");
 
     xlog "Test that the fork rate is limited on the limited service";
     $r = $self->measure_fork_rate($srvB, $fast);
     xlog "Actual rate: $r";
     $self->assert($r >= (1.0-$epsilon)*$slow,
-		  "Fork rate too slow, wanted $slow");
+		  "Fork rate too slow, got $r wanted $slow");
     $self->assert($r <= (1.0+$epsilon)*$slow,
-		  "Fork rate too fast, wanted $slow");
+		  "Fork rate too fast, got $r wanted $slow");
 
     xlog "no more live lemmings";
     $self->assert_deep_equals({
