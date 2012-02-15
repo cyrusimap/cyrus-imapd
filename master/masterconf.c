@@ -69,7 +69,20 @@ struct configlist {
     char *value;
 };
 
-extern void fatal(const char *buf, int code);
+extern void fatal(const char *buf, int code)
+    __attribute__((noreturn));
+
+void fatalf(int code, const char *fmt, ...)
+{
+    va_list args;
+    char buf[2048];
+
+    va_start(args, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+    fatal(buf, code);
+}
+
 
 int masterconf_init(const char *ident, const char *alt_config)
 {
@@ -131,11 +144,9 @@ const char *masterconf_getstring(struct entry *e, const char *key,
 		if (*p == '"') break;
 		v[i] = *p++;
 	    }
-	    if (*p != '"') {
-		sprintf(k, "configuration file %s: missing \" on line %d",
+	    if (*p != '"')
+		fatalf(EX_CONFIG, "configuration file %s: missing \" on line %d",
 			MASTER_CONFIG_FILENAME, e->lineno);
-		fatal(k, EX_CONFIG);
-	    }
 	} else {
 	    /* one word */
 	    for (i = 0; *p && i < 255; i++) {
@@ -241,11 +252,9 @@ void masterconf_getsection(const char *section, masterconf_process *f,
     if (!infile)
 	infile = fopen(MASTER_CONFIG_FILENAME, "r");
 
-    if (!infile) {
-	snprintf(buf, sizeof(buf), "can't open configuration file %s: %s",
-		MASTER_CONFIG_FILENAME, strerror(errno));
-	fatal(buf, EX_CONFIG);
-    }
+    if (!infile)
+	fatalf(EX_CONFIG, "can't open configuration file %s: %m",
+		MASTER_CONFIG_FILENAME);
 
     while (fgets(buf, sizeof(buf), infile)) {
 	char *p, *q;

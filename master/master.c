@@ -217,24 +217,21 @@ static void get_statsock(int filedes[2])
     int r, fdflags;
 
     r = pipe(filedes);
-    if (r != 0) {
-	fatal("couldn't create status socket: %m", 1);
-    }
+    if (r != 0)
+	fatalf(1, "couldn't create status socket: %m");
 
     /* we don't want the master blocking on reads */
     fdflags = fcntl(filedes[0], F_GETFL, 0);
     if (fdflags != -1) fdflags = fcntl(filedes[0], F_SETFL, 
 				       fdflags | O_NONBLOCK);
-    if (fdflags == -1) {
-	fatal("unable to set non-blocking: %m", 1);
-    }
+    if (fdflags == -1)
+	fatalf(1, "unable to set non-blocking: %m");
     /* we don't want the services to be able to read from it */
     fdflags = fcntl(filedes[0], F_GETFD, 0);
     if (fdflags != -1) fdflags = fcntl(filedes[0], F_SETFD, 
 				       fdflags | FD_CLOEXEC);
-    if (fdflags == -1) {
-	fatal("unable to set close-on-exec: %m", 1);
-    }
+    if (fdflags == -1)
+	fatalf(1, "unable to set close-on-exec: %m");
 }
 
 /* return a new 'centry', by malloc'ing it */
@@ -577,26 +574,22 @@ static void run_startup(const strarray_t *cmd)
 
     switch (pid = fork()) {
     case -1:
-	syslog(LOG_CRIT, "can't fork process to run startup: %m");
-	fatal("can't run startup", 1);
+	fatalf(1, "can't fork process to run startup: %m");
 	break;
 	
     case 0:
 	/* Child - Release our pidfile lock. */
 	if(pidfd != -1) close(pidfd);
 
-	if (become_cyrus() != 0) {
-	    syslog(LOG_ERR, "can't change to the cyrus user: %m");
-	    exit(1);
-	}
+	if (become_cyrus() != 0)
+	    fatalf(1, "can't change to the cyrus user: %m");
 
 	limit_fds(256);
 
 	get_prog(path, sizeof(path), cmd);
 	syslog(LOG_DEBUG, "about to exec %s", path);
 	execv(path, cmd->data);
-	syslog(LOG_ERR, "can't exec %s for startup: %m", path);
-	exit(EX_OSERR);
+	fatalf(EX_OSERR, "can't exec %s for startup: %m", path);
 	
     default: /* parent */
 	if (waitpid(pid, &status, 0) < 0) {
@@ -1126,36 +1119,30 @@ static void sighandler_setup(void)
 #ifdef SA_RESTART
     action.sa_flags |= SA_RESTART;
 #endif
-    if (sigaction(SIGHUP, &action, NULL) < 0) {
-	fatal("unable to install signal handler for SIGHUP: %m", 1);
-    }
+    if (sigaction(SIGHUP, &action, NULL) < 0)
+	fatalf(1, "unable to install signal handler for SIGHUP: %m");
 
     action.sa_handler = sigalrm_handler;
-    if (sigaction(SIGALRM, &action, NULL) < 0) {
-	fatal("unable to install signal handler for SIGALRM: %m", 1);
-    }
+    if (sigaction(SIGALRM, &action, NULL) < 0)
+	fatalf(1, "unable to install signal handler for SIGALRM: %m");
 
     /* Allow a clean shutdown on SIGQUIT */
     action.sa_handler = sigquit_handler;
-    if (sigaction(SIGQUIT, &action, NULL) < 0) {
-	fatal("unable to install signal handler for SIGQUIT: %m", 1);
-    }
+    if (sigaction(SIGQUIT, &action, NULL) < 0)
+	fatalf(1, "unable to install signal handler for SIGQUIT: %m");
 
     /* Handle SIGTERM and SIGINT the same way -- kill
      * off our children! */
     action.sa_handler = sigterm_handler;
-    if (sigaction(SIGTERM, &action, NULL) < 0) {
-	fatal("unable to install signal handler for SIGTERM: %m", 1);
-    }
-    if (sigaction(SIGINT, &action, NULL) < 0) {
-	fatal("unable to install signal handler for SIGINT: %m", 1);
-    }
+    if (sigaction(SIGTERM, &action, NULL) < 0)
+	fatalf(1, "unable to install signal handler for SIGTERM: %m");
+    if (sigaction(SIGINT, &action, NULL) < 0)
+	fatalf(1, "unable to install signal handler for SIGINT: %m");
 
     action.sa_flags |= SA_NOCLDSTOP;
     action.sa_handler = sigchld_handler;
-    if (sigaction(SIGCHLD, &action, NULL) < 0) {
-	fatal("unable to install signal handler for SIGCHLD: %m", 1);
-    }
+    if (sigaction(SIGCHLD, &action, NULL) < 0)
+	fatalf(1, "unable to install signal handler for SIGCHLD: %m");
 }
 
 /*
@@ -1412,13 +1399,10 @@ static void add_start(const char *name, struct entry *e,
 		      void *rock __attribute__((unused)))
 {
     const char *cmd = masterconf_getstring(e, "cmd", "");
-    char buf[256];
     strarray_t *tok;
 
-    if (!strcmp(cmd,"")) {
-	snprintf(buf, sizeof(buf), "unable to find command for %s", name);
-	fatal(buf, EX_CONFIG);
-    }
+    if (!strcmp(cmd,""))
+	fatalf(EX_CONFIG, "unable to find command for %s", name);
 
     tok = strarray_split(cmd, NULL);
     run_startup(tok);
@@ -1508,11 +1492,9 @@ static void add_service(const char *name, struct entry *e, void *rock)
 
     /* is this service actually there? */
     if (!verify_service_file(Services[i].exec)) {
-	char buf[1024];
-	snprintf(buf, sizeof(buf),
+	fatalf(EX_CONFIG,
 		 "cannot find executable for service '%s'", name);
 	/* if it is not, we're misconfigured, die. */
-	fatal(buf, EX_CONFIG);
     }
 
     Services[i].maxforkrate = maxforkrate;
@@ -1838,12 +1820,8 @@ int main(int argc, char **argv)
 	    int mode = (fd > 0 ? O_WRONLY : O_RDWR) |
 		       (error_log && fd > 0 ? O_CREAT|O_APPEND : 0);
 	    close(fd);
-	    if (open(file, mode, 0666) != fd) {
-		char buf[1024];
-		snprintf(buf, sizeof(buf), "couldn't open %s: %s",
-			 file, strerror(errno));
-		fatal(buf, 2);
-	    }
+	    if (open(file, mode, 0666) != fd)
+		fatalf(2, "couldn't open %s: %m", file);
 	}
     }
 
@@ -1851,7 +1829,7 @@ int main(int argc, char **argv)
        better be available. */
     for (fd = 3; fd < 5; fd++) {
 	close(fd);
-	if (dup(0) != fd) fatal("couldn't dup fd 0: %m", 2);
+	if (dup(0) != fd) fatalf(2, "couldn't dup fd 0: %m");
     }
 
     /* Pidfile Algorithm in Daemon Mode.  This is a little subtle because
@@ -1969,7 +1947,7 @@ int main(int argc, char **argv)
 		/* Tell our parent that we failed. */
 		write(startup_pipe[1], &exit_result, sizeof(exit_result));
 
-		fatal("unable to set close-on-exec for pidfile: %m", EX_OSERR);
+		fatalf(EX_OSERR, "unable to set close-on-exec for pidfile: %m");
 	    }
 	    
 	    /* Write PID */
@@ -1982,10 +1960,10 @@ int main(int argc, char **argv)
 		/* Tell our parent that we failed. */
 		write(startup_pipe[1], &exit_result, sizeof(exit_result));
 
-		fatal("unable to write to pidfile: %m", EX_OSERR);
+		fatalf(EX_OSERR, "unable to write to pidfile: %m");
 	    }
 	    if (fsync(pidfd))
-		fatal("unable to sync pidfile: %m", EX_OSERR);
+		fatalf(EX_OSERR, "unable to sync pidfile: %m");
 	}
     }
 
@@ -1993,11 +1971,9 @@ int main(int argc, char **argv)
 	int exit_result = 0;
 
 	/* success! */
-	if (write(startup_pipe[1], &exit_result, sizeof(exit_result)) == -1) {
-	    syslog(LOG_ERR,
+	if (write(startup_pipe[1], &exit_result, sizeof(exit_result)) == -1)
+	    fatalf(EX_OSERR,
 		   "could not write success result to startup pipe (%m)");
-	    exit(EX_OSERR);
-	}
 
 	close(startup_pipe[1]);
 	if (pidlock_fd != -1) close(pidlock_fd);
@@ -2188,7 +2164,7 @@ int main(int argc, char **argv)
 	if (r == -1 && errno == EINTR) continue;
 	if (r == -1) {
 	    /* uh oh */
-	    fatal("select failed: %m", 1);
+	    fatalf(1, "select failed: %m");
 	}
 
 #if defined(HAVE_UCDSNMP) || defined(HAVE_NETSNMP)
