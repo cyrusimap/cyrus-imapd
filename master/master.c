@@ -1830,13 +1830,21 @@ int main(int argc, char **argv)
 
     masterconf_init("master", alt_config);
 
-    if (close_std) {
-      /* close stdin/out/err */
-      for (fd = 0; fd < 3; fd++) {
-	close(fd);
-	if (open("/dev/null", O_RDWR, 0) != fd)
-	  fatal("couldn't open /dev/null: %m", 2);
-      }
+    if (close_std || error_log) {
+	/* close stdin/out/err */
+	for (fd = 0; fd < 3; fd++) {
+	    const char *file = (error_log && fd > 0 ?
+				error_log : "/dev/null");
+	    int mode = (fd > 0 ? O_WRONLY : O_RDWR) |
+		       (error_log && fd > 0 ? O_CREAT|O_APPEND : 0);
+	    close(fd);
+	    if (open(file, mode, 0666) != fd) {
+		char buf[1024];
+		snprintf(buf, sizeof(buf), "couldn't open %s: %s",
+			 file, strerror(errno));
+		fatal(buf, 2);
+	    }
+	}
     }
 
     /* we reserve fds 3 and 4 for children to communicate with us, so they
