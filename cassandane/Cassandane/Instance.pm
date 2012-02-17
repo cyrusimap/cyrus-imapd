@@ -1244,4 +1244,41 @@ sub unpack
     return $self->run_command($options, @cmd);
 }
 
+sub folder_to_directory
+{
+    my ($self, $folder) = @_;
+
+    $folder =~ s/^inbox\./user.cassandane./i;
+    $folder =~ s/^inbox$/user.cassandane/i;
+    $folder =~ s/\./\//g;
+
+    my $dir = $self->{basedir} . "/data/$folder";
+    return undef unless -d $dir;
+    return $dir;
+}
+
+sub folder_to_deleted_directories
+{
+    my ($self, $folder) = @_;
+
+    $folder =~ s/^inbox\./user.cassandane./i;
+    $folder =~ s/^inbox$/user.cassandane/i;
+    $folder =~ s/\./\//g;
+
+    my @dirs;
+    my $deldir = $self->{basedir} . "/data/DELETED/$folder";
+    if ( -d $deldir )
+    {
+	opendir DELDIR, $deldir
+	    or die "Cannot open directory $deldir: $!";
+	while (my $e = readdir DELDIR)
+	{
+	    push(@dirs, "$deldir/$e")
+		if ($e =~ m/^[0-9A-F]{8}$/);
+	}
+	closedir DELDIR;
+    }
+    return @dirs;
+}
+
 1;

@@ -48,7 +48,7 @@ use Cassandane::Util::Log;
 sub new
 {
     my ($class, @args) = @_;
-    return $class->SUPER::new({}, @args);
+    return $class->SUPER::new({ adminstore => 1 }, @args);
 }
 
 sub set_up
@@ -63,15 +63,95 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
-sub test_self_inbox
+sub check_folder_ondisk
+{
+    my ($self, $folder, %params) = @_;
+
+    my $instance = delete $params{instance} || $self->{instance};
+    my $deleted = delete $params{deleted} || 0;
+    my $exp = delete $params{expected};
+    die "Bad params: " . join(' ', keys %params)
+	if scalar %params;
+
+    my $display_folder = ($deleted ? "DELETED " : "") . $folder;
+    xlog "Checking that $display_folder exists on disk";
+
+    my $dir;
+    if ($deleted)
+    {
+	my @dirs = $instance->folder_to_deleted_directories($folder);
+	$self->assert_equals(1, scalar(@dirs),
+			     "too many directories for $display_folder");
+	$dir = shift @dirs;
+    }
+    else
+    {
+	$dir = $instance->folder_to_directory($folder);
+    }
+
+    $self->assert_not_null($dir,
+			   "directory missing for $display_folder");
+    $self->assert( -f "$dir/cyrus.cache",
+		  "cyrus.cache missing for $display_folder");
+    $self->assert( -f "$dir/cyrus.header",
+		  "cyrus.header missing for $display_folder");
+    $self->assert( -f "$dir/cyrus.index",
+		  "cyrus.index missing for $display_folder");
+
+    if (defined $exp)
+    {
+	map
+	{
+	    my $uid = $_->uid();
+	    $self->assert( -f "$dir/$uid.",
+			  "message $uid missing for $display_folder");
+	} values %$exp;
+    }
+}
+
+sub check_folder_not_ondisk
+{
+    my ($self, $folder, %params) = @_;
+
+    my $instance = delete $params{instance} || $self->{instance};
+    my $deleted = delete $params{deleted} || 0;
+    die "Bad params: " . join(' ', keys %params)
+	if scalar %params;
+
+    my $display_folder = ($deleted ? "DELETED " : "") . $folder;
+    xlog "Checking that $display_folder does not exist on disk";
+
+    if ($deleted)
+    {
+	my @dirs = $instance->folder_to_deleted_directories($folder);
+	$self->assert_equals(0, scalar(@dirs),
+			     "directory unexpectedly present for $display_folder");
+    }
+    else
+    {
+	my $dir = $instance->folder_to_directory($folder);
+	$self->assert_null($dir,
+			     "directory unexpectedly present for $display_folder");
+    }
+}
+
+sub config_self_inbox_imm
+{
+    my ($self, $conf) = @_;
+    xlog "Setting delete_mode = immediate";
+    $conf->set(delete_mode => 'immediate');
+}
+
+sub test_self_inbox_imm
 {
     my ($self) = @_;
 
     xlog "Testing that a non-admin can delete an a subfolder";
-    xlog "but cannot delete their own INBOX";
+    xlog "but cannot delete their own INBOX, immediate delete version";
 
     my $store = $self->{store};
     my $talk = $store->get_client();
+    my $inbox = 'INBOX';
     my $subfolder = 'INBOX.foo';
 
     xlog "First create a sub folder";
@@ -79,9 +159,9 @@ sub test_self_inbox
 	or die "Cannot create folder $subfolder: $@";
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
-    xlog "Generate a message in INBOX";
+    xlog "Generate a message in $inbox";
     my %exp_inbox;
-    $exp_inbox{A} = $self->make_message("Message INBOX A");
+    $exp_inbox{A} = $self->make_message("Message $inbox A");
     $self->check_messages(\%exp_inbox);
 
     xlog "Generate a message in $subfolder";
@@ -91,6 +171,11 @@ sub test_self_inbox
     $self->{gen}->set_next_uid(1);
     $exp_sub{A} = $self->make_message("Message $subfolder A");
     $self->check_messages(\%exp_sub);
+
+    $self->check_folder_ondisk($inbox, expected => \%exp_inbox);
+    $self->check_folder_ondisk($subfolder, expected => \%exp_sub);
+    $self->check_folder_not_ondisk($inbox, deleted => 1);
+    $self->check_folder_not_ondisk($subfolder, deleted => 1);
 
     xlog "can delete the subfolder";
     $talk->unselect();
@@ -103,20 +188,241 @@ sub test_self_inbox
     $self->assert_str_equals('no', $talk->get_last_completion_response());
     $self->assert_matches(qr/Mailbox does not exist/i, $talk->get_last_error());
 
-    xlog "But the message in INBOX is still there";
-    $store->set_folder('INBOX');
+    xlog "But the message in $inbox is still there";
+    $store->set_folder($inbox);
     $store->_select();
     $self->check_messages(\%exp_inbox);
 
-    xlog "cannot delete our own INBOX";
-    $talk->delete('INBOX');
+    xlog "cannot delete our own $inbox";
+    $talk->delete($inbox);
     $self->assert_str_equals('no', $talk->get_last_completion_response());
     $self->assert_matches(qr/Operation is not supported/i, $talk->get_last_error());
 
-    xlog "And the message in INBOX is still there";
-    $store->set_folder('INBOX');
+    xlog "And the message in $inbox is still there";
+    $store->set_folder($inbox);
     $store->_select();
     $self->check_messages(\%exp_inbox);
+
+    $self->check_folder_ondisk($inbox, expected => \%exp_inbox);
+    $self->check_folder_not_ondisk($subfolder);
+    $self->check_folder_not_ondisk($inbox, deleted => 1);
+    $self->check_folder_not_ondisk($subfolder, deleted => 1);
+}
+
+sub config_self_inbox_del
+{
+    my ($self, $conf) = @_;
+    xlog "Setting delete_mode = delayed";
+    $conf->set(delete_mode => 'delayed');
+}
+
+sub test_self_inbox_del
+{
+    my ($self) = @_;
+
+    xlog "Testing that a non-admin can delete an a subfolder";
+    xlog "but cannot delete their own INBOX, delayed delete version";
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    my $inbox = 'INBOX';
+    my $subfolder = 'INBOX.foo';
+
+    xlog "First create a sub folder";
+    $talk->create($subfolder)
+	or die "Cannot create folder $subfolder: $@";
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog "Generate a message in $inbox";
+    my %exp_inbox;
+    $exp_inbox{A} = $self->make_message("Message $inbox A");
+    $self->check_messages(\%exp_inbox);
+
+    xlog "Generate a message in $subfolder";
+    my %exp_sub;
+    $store->set_folder($subfolder);
+    $store->_select();
+    $self->{gen}->set_next_uid(1);
+    $exp_sub{A} = $self->make_message("Message $subfolder A");
+    $self->check_messages(\%exp_sub);
+
+    $self->check_folder_ondisk($inbox, expected => \%exp_inbox);
+    $self->check_folder_ondisk($subfolder, expected => \%exp_sub);
+    $self->check_folder_not_ondisk($inbox, deleted => 1);
+    $self->check_folder_not_ondisk($subfolder, deleted => 1);
+
+    xlog "can delete the subfolder";
+    $talk->unselect();
+    $talk->delete($subfolder)
+	or die "Cannot delete folder $subfolder: $@";
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog "Cannot select the subfolder anymore";
+    $talk->select($subfolder);
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert_matches(qr/Mailbox does not exist/i, $talk->get_last_error());
+
+    xlog "But the message in $inbox is still there";
+    $store->set_folder($inbox);
+    $store->_select();
+    $self->check_messages(\%exp_inbox);
+
+    xlog "cannot delete our own $inbox";
+    $talk->delete($inbox);
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert_matches(qr/Operation is not supported/i, $talk->get_last_error());
+
+    xlog "And the message in $inbox is still there";
+    $store->set_folder($inbox);
+    $store->_select();
+    $self->check_messages(\%exp_inbox);
+
+    $self->check_folder_ondisk($inbox, expected => \%exp_inbox);
+    $self->check_folder_not_ondisk($subfolder);
+    $self->check_folder_not_ondisk($inbox, deleted => 1);
+    $self->check_folder_ondisk($subfolder, deleted => 1, expected => \%exp_sub);
+
+    $self->run_delayed_expunge();
+
+    $self->check_folder_ondisk($inbox, expected => \%exp_inbox);
+    $self->check_folder_not_ondisk($subfolder);
+    $self->check_folder_not_ondisk($inbox, deleted => 1);
+    $self->check_folder_not_ondisk($subfolder, deleted => 1);
+}
+
+sub config_admin_inbox_imm
+{
+    my ($self, $conf) = @_;
+    xlog "Setting delete_mode = immediate";
+    $conf->set(delete_mode => 'immediate');
+}
+
+sub test_admin_inbox_imm
+{
+    my ($self) = @_;
+
+    xlog "Testing that an admin can delete the INBOX of a user";
+    xlog "and it will delete the whole user, immediate delete version";
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+    my $inbox = 'user.cassandane';
+    my $subfolder = 'user.cassandane.foo';
+
+    xlog "First create a sub folder";
+    $talk->create($subfolder)
+	or die "Cannot create folder $subfolder: $@";
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog "Generate a message in $inbox";
+    my %exp_inbox;
+    $exp_inbox{A} = $self->make_message("Message $inbox A");
+    $self->check_messages(\%exp_inbox);
+
+    xlog "Generate a message in $subfolder";
+    my %exp_sub;
+    $store->set_folder($subfolder);
+    $store->_select();
+    $self->{gen}->set_next_uid(1);
+    $exp_sub{A} = $self->make_message("Message $subfolder A");
+    $self->check_messages(\%exp_sub);
+    $talk->unselect();
+
+    $self->check_folder_ondisk($inbox, expected => \%exp_inbox);
+    $self->check_folder_ondisk($subfolder, expected => \%exp_sub);
+    $self->check_folder_not_ondisk($inbox, deleted => 1);
+    $self->check_folder_not_ondisk($subfolder, deleted => 1);
+
+    xlog "admin can delete $inbox";
+    $admintalk->delete($inbox);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog "Cannot select $inbox anymore";
+    $talk->select($inbox);
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert_matches(qr/Mailbox does not exist/i, $talk->get_last_error());
+
+    xlog "Cannot select $subfolder anymore";
+    $talk->select($subfolder);
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert_matches(qr/Mailbox does not exist/i, $talk->get_last_error());
+
+    $self->check_folder_not_ondisk($inbox);
+    $self->check_folder_not_ondisk($subfolder);
+    $self->check_folder_not_ondisk($inbox, deleted => 1);
+    $self->check_folder_not_ondisk($subfolder, deleted => 1);
+}
+
+sub config_admin_inbox_del
+{
+    my ($self, $conf) = @_;
+    xlog "Setting delete_mode = delayed";
+    $conf->set(delete_mode => 'delayed');
+}
+
+sub test_admin_inbox_del
+{
+    my ($self) = @_;
+
+    xlog "Testing that an admin can delete the INBOX of a user";
+    xlog "and it will delete the whole user, delayed delete version";
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+    my $admintalk = $self->{adminstore}->get_client();
+    my $inbox = 'user.cassandane';
+    my $subfolder = 'user.cassandane.foo';
+
+    xlog "First create a sub folder";
+    $talk->create($subfolder)
+	or die "Cannot create folder $subfolder: $@";
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog "Generate a message in $inbox";
+    my %exp_inbox;
+    $exp_inbox{A} = $self->make_message("Message $inbox A");
+    $self->check_messages(\%exp_inbox);
+
+    xlog "Generate a message in $subfolder";
+    my %exp_sub;
+    $store->set_folder($subfolder);
+    $store->_select();
+    $self->{gen}->set_next_uid(1);
+    $exp_sub{A} = $self->make_message("Message $subfolder A");
+    $self->check_messages(\%exp_sub);
+    $talk->unselect();
+
+    $self->check_folder_ondisk($inbox, expected => \%exp_inbox);
+    $self->check_folder_ondisk($subfolder, expected => \%exp_sub);
+    $self->check_folder_not_ondisk($inbox, deleted => 1);
+    $self->check_folder_not_ondisk($subfolder, deleted => 1);
+
+    xlog "admin can delete $inbox";
+    $admintalk->delete($inbox);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    xlog "Cannot select $inbox anymore";
+    $talk->select($inbox);
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert_matches(qr/Mailbox does not exist/i, $talk->get_last_error());
+
+    xlog "Cannot select $subfolder anymore";
+    $talk->select($subfolder);
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert_matches(qr/Mailbox does not exist/i, $talk->get_last_error());
+
+    $self->check_folder_not_ondisk($inbox);
+    $self->check_folder_not_ondisk($subfolder);
+    $self->check_folder_ondisk($inbox, deleted => 1, expected => \%exp_inbox);
+    $self->check_folder_ondisk($subfolder, deleted => 1, expected => \%exp_sub);
+
+    $self->run_delayed_expunge();
+
+    $self->check_folder_not_ondisk($inbox);
+    $self->check_folder_not_ondisk($subfolder);
+    $self->check_folder_not_ondisk($inbox, deleted => 1);
+    $self->check_folder_not_ondisk($subfolder, deleted => 1);
 }
 
 1;
