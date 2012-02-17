@@ -5454,7 +5454,7 @@ static int delmbox(char *name,
         r = mboxlist_delayed_deletemailbox(name,
 					   imapd_userisadmin || imapd_userisproxyadmin,
                                            imapd_userid, imapd_authstate,
-                                           0, 0, 0);
+                                           0, 0);
     }
     
     if(r) {
@@ -5544,7 +5544,7 @@ void cmd_delete(char *tag, char *name, int localonly, int force)
             r = mboxlist_delayed_deletemailbox(mailboxname,
 					       imapd_userisadmin || imapd_userisproxyadmin,
                                                imapd_userid, imapd_authstate,
-                                               1-force, localonly, 0);
+                                               1-force, 0);
         }
     }
 

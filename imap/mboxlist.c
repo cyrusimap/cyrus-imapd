@@ -902,14 +902,11 @@ int mboxlist_deleteremote(const char *name, struct txn **in_tid)
 
 /*
  * Delayed Delete a mailbox: translate delete into rename
- *
- * XXX local_only?
  */
 int
 mboxlist_delayed_deletemailbox(const char *name, int isadmin,
 			       const char *userid,
 			       struct auth_state *auth_state, int checkacl,
-			       int local_only __attribute__((unused)),
 			       int force)
 {
     struct mboxlist_entry *mbentry = NULL;

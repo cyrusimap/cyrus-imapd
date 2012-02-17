@@ -141,7 +141,7 @@ int mboxlist_createsync(const char *name, int mbtype,
 int
 mboxlist_delayed_deletemailbox(const char *name, int isadmin, const char *userid, 
                                struct auth_state *auth_state, int checkacl,
-                               int local_only, int force);
+                               int force);
 /* Delete a mailbox. */
 /* setting local_only disables any communication with the mupdate server
  * and deletes the mailbox from the filesystem regardless of if it is
