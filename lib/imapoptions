@@ -406,6 +406,14 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* If enabled, the server will compress responses if the client
    indicates that it can accept them. */
 
+{ "httpkeepalive", 20, INT }
+/* Set the length of the HTTP server's keepalive heartbeat in seconds.
+   The default is 20.  The minimum value is 0, which will disable the
+   keepalive heartbeat.  When enabled, if a request takes longer than
+   \fIhttpkeepalive\fR seconds to process, the server will send the client
+   provisional responses every \fIhttpkeepalive\fR seconds until the
+   final response can be sent */
+
 { "httpdocroot", NULL, STRING }
 /* If set, http will serve the static content (html/text/jpeg/gif
    files, etc) rooted at this directory.  Otherwise, httpd will not

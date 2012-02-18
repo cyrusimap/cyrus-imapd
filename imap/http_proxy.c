@@ -43,6 +43,9 @@
 
 #include <config.h>
 
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
 #include <ctype.h>
 #include <syslog.h>
 #include <sasl/sasl.h>
@@ -256,6 +259,7 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 	    /* Fall through as 100-Continue */
 
 	case 100: /* Continue */
+	case 102: /* Processing */
 	    goto response;
 
 	case 200: /* OK */
@@ -438,13 +442,17 @@ static int ping(struct backend *s)
     prot_printf(s->out, "\r\n");
     prot_flush(s->out);
 
-    r = read_response(s, "OPTIONS", &code, NULL, &hdrs, NULL, &errstr);
+    do {
+	r = read_response(s, "OPTIONS", &code, NULL, &hdrs, NULL, &errstr);
 
-    /* Check if this is a non-persistent connection */
-    if (!r && (hdr = spool_getheader(hdrs, "Connection")) &&
-	!strcmp(hdr[0], "close")) {
-	r = HTTP_SERVER_ERROR;
-    }
+	/* Check if this is a non-persistent connection */
+	if (!r && (hdr = spool_getheader(hdrs, "Connection")) &&
+	    !strcmp(hdr[0], "close")) {
+	    r = HTTP_SERVER_ERROR;
+	}
+
+	/* Continue until error or final response */
+    } while (!r && (code < 200));
 
     if (hdrs) spool_free_hdrcache(hdrs);
 
@@ -605,6 +613,9 @@ static void send_response(struct protstream *pout,
 {
     unsigned long len;
 
+    /* Stop method processing alarm */
+    alarm(0);
+
     /*
      * - Use cached Status-Line
      * - Add/append-to Via: header
@@ -679,11 +690,12 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
     prot_printf(be->out, "Transfer-Encoding: chunked\r\n\r\n");
     prot_flush(be->out);
 
-    /* Read response from backend */
-    r = read_response(be, txn->meth, &code, &statline, &resp_hdrs, &resp_body,
-		      &txn->error.desc);
-    if (!r) {
-	if (code == 100) { /* Continue */
+    do {
+	/* Read response from backend */
+	r = read_response(be, txn->meth, &code, &statline,
+			  &resp_hdrs, &resp_body, &txn->error.desc);
+
+	if (!r && (code == 100)) { /* Continue */
 	    /* Read body */
 	    if (!(txn->flags & HTTP_READBODY)) {
 		txn->flags |= HTTP_READBODY;
@@ -701,17 +713,15 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 		prot_putbuf(be->out, &txn->req_body);
 		prot_printf(be->out, "\r\n0\r\n\r\n");
 		prot_flush(be->out);
-
-		/* Read final response from backend */
-		r = read_response(be, txn->meth, &code, &statline, &resp_hdrs,
-				  &resp_body, &txn->error.desc);
 	    }
 	}
 
-	/* Send response to client */
-	if (!r) send_response(httpd_out, statline, resp_hdrs, &resp_body,
-			      txn->flags);
-    }
+	/* Continue until error or final response */
+    } while (!r && (code < 200));
+
+    /* Send response to client */
+    if (!r) send_response(httpd_out, statline, resp_hdrs, &resp_body,
+			  txn->flags);
 
     if (resp_hdrs) spool_free_hdrcache(resp_hdrs);
     buf_free(&resp_body);

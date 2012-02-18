@@ -135,6 +135,9 @@ ec HTTP_BAD_VERSION,
 
 # WebDAV (RFC 4918)
 
+ec HTTP_PROCESSING,
+   "102 Processing"
+
 ec HTTP_MULTI_STATUS,
    "207 Multi-Status"
 

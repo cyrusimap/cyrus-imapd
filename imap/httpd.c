@@ -126,7 +126,7 @@ static SSL *tls_conn;
 sasl_conn_t *httpd_saslconn; /* the sasl connection context */
 
 static struct mailbox *httpd_mailbox = NULL;
-int httpd_timeout;
+int httpd_timeout, httpd_keepalive;
 char *httpd_userid = 0;
 struct auth_state *httpd_authstate = 0;
 int httpd_userisadmin = 0;
@@ -204,6 +204,7 @@ static struct accept *parse_accept(const char *hdr);
 static int http_auth(const char *creds, const char *authzid,
 		     struct auth_challenge_t *chal);
 static void log_cachehdr(const char *name, const char *contents, void *rock);
+static void keep_alive(int sig);
 
 static int meth_get(struct transaction_t *txn);
 
@@ -529,11 +530,30 @@ int service_main(int argc __attribute__((unused)),
        TLS negotiation immediatly */
     if (https == 1) starttls(1);
 
+    /* Setup the signal handler for keepalive heartbeat */
+    httpd_keepalive = config_getint(IMAPOPT_HTTPKEEPALIVE);
+    if (httpd_keepalive < 0) httpd_keepalive = 0;
+    if (httpd_keepalive) {
+	struct sigaction action;
+
+	sigemptyset(&action.sa_mask);
+	action.sa_flags = 0;
+#ifdef SA_RESTART
+	action.sa_flags |= SA_RESTART;
+#endif
+	action.sa_handler = keep_alive;
+	if (sigaction(SIGALRM, &action, NULL) < 0) {
+	    syslog(LOG_ERR, "unable to install signal handler for %d: %m", SIGALRM);
+	    httpd_keepalive = 0;
+	}
+    }
+
     cmdloop();
 
     /* Closing connection */
 
     /* cleanup */
+    signal(SIGALRM, SIG_IGN);
     httpd_reset();
 
     return 0;
@@ -672,9 +692,8 @@ static void starttls(int https)
     }
 
     if (!https) {
+	/* tell client to start TLS */
 	response_header(HTTP_SWITCH_PROT, NULL);
-	/* must flush our buffers before starting tls */
-	prot_flush(httpd_out);
     }
   
     result=tls_start_servertls(0, /* read */
@@ -1032,6 +1051,9 @@ static void cmdloop(void)
 	}
 
 	if (ret) goto done;
+
+	/* Start method processing alarm */
+	alarm(httpd_keepalive);
 
 	if (!httpd_userid) {
 	    const char **creds, **authzid;
@@ -1427,6 +1449,9 @@ void response_header(long code, struct transaction_t *txn)
     static struct buf log = BUF_INITIALIZER;
     const char **hdr;
 
+    /* Stop method processing alarm */
+    alarm(0);
+
     if (txn && txn->req_hdrs) {
 	/* Log the client request and our response */
 	buf_reset(&log);
@@ -1461,18 +1486,27 @@ void response_header(long code, struct transaction_t *txn)
 	prot_printf(httpd_out, "Upgrade: TLS/1.0\r\n");
     }
 
-    if (code == HTTP_SWITCH_PROT) {
+    switch (code) {
+    case HTTP_SWITCH_PROT:
 	prot_printf(httpd_out, "Connection: Upgrade\r\n");
-    }
 
-    if (!txn) {
+    case HTTP_CONTINUE:
+    case HTTP_PROCESSING:
 	/* Provisional response - nothing else needed */
 
 	/* Blank line terminating the header */
 	prot_printf(httpd_out, "\r\n");
+
+	/* Force the response to the client immediately */
+	prot_flush(httpd_out);
+
+	/* Restart method processing alarm (don't interrupt TLS negotiation) */
+	if (code != HTTP_SWITCH_PROT) alarm(httpd_keepalive);
+
 	return;
     }
 
+    /* Final response */
     if (txn->flags & HTTP_CLOSE)
 	prot_printf(httpd_out, "Connection: close");
     else {
@@ -1613,6 +1647,12 @@ void response_header(long code, struct transaction_t *txn)
 
     /* Blank line terminating the header */
     prot_printf(httpd_out, "\r\n");
+}
+
+
+static void keep_alive(int sig)
+{
+    if (sig == SIGALRM) response_header(HTTP_PROCESSING, NULL);
 }
 
 
