@@ -70,6 +70,7 @@
 #include "prot.h"
 #include "backend.h"
 #include "global.h"
+#include "nonblock.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
@@ -391,17 +392,6 @@ static int backend_authenticate(struct backend *s, struct protocol_t *prot,
     return r;
 }
 
-static volatile sig_atomic_t timedout = 0;
-
-static void timed_out(int sig) 
-{
-    if (sig == SIGALRM) {
-	timedout = 1;
-    } else {
-	fatal("Bad signal in timed_out", EC_SOFTWARE);
-    }
-}
-
 static int backend_login(struct backend *ret, const char *server,
 			 struct protocol_t *prot, const char *userid,
 			 sasl_callback_t *cb, const char **auth_status)
@@ -548,7 +538,6 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
     int err = -1;
     struct addrinfo hints, *res0 = NULL, *res;
     struct sockaddr_un sunsock;
-    struct sigaction action;
     struct backend *ret;
 
     if (!ret_backend) {
@@ -592,34 +581,58 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
 	}
     }
 
-    /* Setup timeout */
-    timedout = 0;
-    action.sa_flags = 0;
-    action.sa_handler = timed_out;
-    sigemptyset(&action.sa_mask);
-    if(sigaction(SIGALRM, &action, NULL) < 0) 
-    {
-	syslog(LOG_ERR, "Setting timeout in backend_connect failed: sigaction: %m");
-	/* continue anyway */
-    }
-    
     for (res = res0; res; res = res->ai_next) {
 	sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
 	if (sock < 0)
 	    continue;
-	alarm(config_getint(IMAPOPT_CLIENT_TIMEOUT));
-	if (connect(sock, res->ai_addr, res->ai_addrlen) >= 0)
+
+	/* Do a non-blocking connect() */
+	nonblock(sock, 1);
+	if (!connect(sock, res->ai_addr, res->ai_addrlen)) {
+	    /* connect() succeeded immediately */
 	    break;
-	if(errno == EINTR && timedout == 1)
-	    errno = ETIMEDOUT;
+	}
+	else if (errno == EINPROGRESS) {
+	    /* connect() in progress */
+	    int n;
+	    fd_set wfds;
+	    time_t now = time(NULL);
+	    time_t timeout = now + config_getint(IMAPOPT_CLIENT_TIMEOUT);
+	    struct timeval waitfor;
+
+	    /* select() socket for writing until we succeed, fail, or timeout */
+	    do {
+		FD_ZERO(&wfds);
+		FD_SET(sock, &wfds);
+    		waitfor.tv_sec = timeout - now;
+		waitfor.tv_usec = 0;
+
+		n = select(sock + 1, NULL, &wfds, NULL, &waitfor);
+		now = time(NULL);
+
+		/* Retry select() if interrupted */
+	    } while (n < 0 && errno == EINTR && now < timeout);
+
+	    if (!n) {
+		/* select() timed out */
+		errno = ETIMEDOUT;
+	    }
+	    else if (n == 1 && FD_ISSET(sock, &wfds)) {
+		/* Socket is writable - get SO_ERROR to determine status */
+		socklen_t errlen = sizeof(err);
+
+		if (!getsockopt(sock, SOL_SOCKET, SO_ERROR, &err, &errlen) &&
+		    !(errno = err)) {
+		    /* connect() succeeded */
+		    break;
+		}
+	    }
+	}
+
 	close(sock);
 	sock = -1;
     }
 
-    /* Remove timeout code */
-    alarm(0);
-    signal(SIGALRM, SIG_IGN);
-    
     if (sock < 0) {
 	if (res0 != &hints)
 	    freeaddrinfo(res0);
@@ -627,6 +640,10 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
 	if (!ret_backend) free(ret);
 	return NULL;
     }
+
+    /* Reset socket to blocking */
+    nonblock(sock, 0);
+
     memcpy(&ret->addr, res->ai_addr, res->ai_addrlen);
     if (res0 != &hints)
 	freeaddrinfo(res0);
