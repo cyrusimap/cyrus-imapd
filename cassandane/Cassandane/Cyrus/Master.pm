@@ -766,12 +766,19 @@ sub measure_fork_rate
     my ($self, $srv, $rate) = @_;
 
     my $metronome = Cassandane::Util::Metronome->new(rate => $rate);
+    my @lemmings;
     for (1..100)
     {
 	my $lemm = lemming_connect($srv);
-	lemming_push($lemm, 'success');
+	push(@lemmings, $lemm);
 	$metronome->tick();
     }
+
+    foreach my $lemm (@lemmings)
+    {
+	lemming_push($lemm, 'success');
+    }
+
     return $metronome->actual_rate();
 }
 
