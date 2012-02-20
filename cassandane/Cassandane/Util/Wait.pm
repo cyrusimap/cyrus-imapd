@@ -69,11 +69,13 @@ sub timed_wait
 	$p{delay} *= 1.5;	# backoff
     }
 
-    xlog "Waited " .
-	tv_interval($start, [gettimeofday()]) .
-	" sec for " .
-	$p{description}
-	if ($delayed);
+    if ($delayed)
+    {
+	my $t = tv_interval($start, [gettimeofday()]);
+	xlog "Waited $t sec for " . $p{description};
+	return $t;
+    }
+    return 0.0;
 }
 
 

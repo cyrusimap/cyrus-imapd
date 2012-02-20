@@ -48,6 +48,7 @@ use DateTime;
 use Cassandane::Util::Log;
 use Cassandane::Util::Wait;
 use Cassandane::Util::Socket;
+use Cassandane::Util::Sample;
 use Cassandane::Util::Metronome;
 use Cassandane::Instance;
 use Cassandane::Service;
@@ -112,7 +113,7 @@ sub lemming_push
     $lemming->{sock}->close();
 
     # Wait for the master process to wake up and reap the lemming.
-    timed_wait(sub { kill(0, $lemming->{pid}) == 0 },
+    return timed_wait(sub { kill(0, $lemming->{pid}) == 0 },
 	       description => "master to reap lemming $lemming->{pid}");
 }
 
@@ -713,6 +714,51 @@ sub test_service_noexe
 
     xlog "master should have exited when service verification failed";
     $self->assert(!$self->{instance}->is_running());
+}
+
+sub test_reap_rate
+{
+    my ($self) = @_;
+
+    xlog "Testing latency after which cyrus reaps dead children";
+
+    my $max_latency = 1.0;  # seconds
+
+    my $srv = $self->lemming_service(tag => 'A');
+    $self->start();
+
+    xlog "not preforked, so no lemmings running yet";
+    $self->assert_deep_equals({},
+			      $self->lemming_census());
+
+    xlog "Build a vast flock of lemmings";
+    my @lemmings;
+    for (1..100)
+    {
+	push(@lemmings, lemming_connect($srv));
+    }
+    $self->assert_deep_equals({
+				A => { live => 100, dead => 0 },
+			      }, $self->lemming_census());
+
+    # This technique avoids having new connections at the
+    # same time as we're trying to measure reaping latency,
+    # which can hide racy bugs in the main select() loop.
+    xlog "Killing all the lemmings one by one";
+    my $ss = new Cassandane::Util::Sample;
+    while (my $lemm = shift @lemmings)
+    {
+	my $t = lemming_push($lemm, 'success');
+	$self->assert($t < $max_latency,
+		      "Child reap latency is >= $max_latency sec");
+	$ss->add($t);
+    }
+    xlog "Reap times: $ss";
+
+    xlog "no more live lemmings";
+    $self->assert_deep_equals({
+				A => { live => 0, dead => 100 },
+			      }, $self->lemming_census());
 }
 
 sub measure_fork_rate
