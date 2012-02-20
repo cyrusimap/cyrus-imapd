@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 #
-#  Copyright (c) 2011 Opera Software Australia Pty. Ltd.  All rights
+#  Copyright (c) 2011-2012 Opera Software Australia Pty. Ltd.  All rights
 #  reserved.
 #
 #  Redistribution and use in source and binary forms, with or without
@@ -39,48 +39,96 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
+package Cassandane::Util::Sample;
 use strict;
 use warnings;
-package Cassandane::Test::Metronome;
-use base qw(Cassandane::Unit::TestCase);
-use Cassandane::Util::Metronome;
-use Cassandane::Util::Sample;
-use Cassandane::Util::Log;
+use overload qw("") => \&as_string;
 
 sub new
 {
-    my $class = shift;
-    my $self = $class->SUPER::new(@_);
-    return $self;
+    my ($class, @args) = @_;
+
+    die "Unknown extra arguments"
+	if scalar(@args);
+
+    my $self =
+    {
+	_total => 0.0,
+	_total2 => 0.0,
+	_n => 0,
+	_min => undef,
+	_max => undef,
+    };
+    return bless($self, $class);
 }
 
-sub test_basic
+sub add
+{
+    my ($self, $x) = @_;
+
+    $self->{_total} += $x;
+    $self->{_total2} += $x * $x;
+    $self->{_n}++;
+    $self->{_min} = $x
+	if (!defined $self->{_min} || $x < $self->{_min});
+    $self->{_max} = $x
+	if (!defined $self->{_max} || $x > $self->{_max});
+}
+
+sub nsamples
 {
     my ($self) = @_;
+    return $self->{_n};
+}
 
-    my $rate = 100.0;
-    my $epsilon = 0.01;
-    my $m = Cassandane::Util::Metronome->new(rate => $rate);
+sub average
+{
+    my ($self) = @_;
+    die "No samples yet" if (!$self->{_n});
+    return $self->{_total} / $self->{_n};
+}
 
-    my $ss = new Cassandane::Util::Sample;
+sub minimum
+{
+    my ($self) = @_;
+    die "No samples yet" if (!$self->{_n});
+    return $self->{_min};
+}
 
-    for (1..$rate)
+sub maximum
+{
+    my ($self) = @_;
+    die "No samples yet" if (!$self->{_n});
+    return $self->{_max};
+}
+
+sub sample_deviation
+{
+    my ($self) = @_;
+    die "No samples yet" if ($self->{_n} < 2);
+    return sqrt(
+	($self->{_n} * $self->{_total2} - $self->{_total} * $self->{_total})
+	/
+	($self->{_n} * ($self->{_n} - 1))
+    );
+}
+
+sub as_string
+{
+    my ($self) = @_;
+    my $s = "no samples";
+    if ($self->{_n} > 0)
     {
-	$m->tick();
-	my $r = $m->actual_rate();
-	xlog "Actual rate $r";
-	# Be forgiving of early samples to let the
-	# metronome stabilise.
-	$ss->add($r) if ($_ >= 20)
+	$s = "count " . $self->nsamples() .
+	     " minimum " . $self->minimum() .
+	     " maximum " . $self->maximum() .
+	     " average " . $self->average();
+	if ($self->{_n} > 1)
+	{
+	    $s .= " sample_deviation " . $self->sample_deviation();
+	}
     }
-
-    xlog "Rates: $ss";
-    my $avg = $ss->average();
-    my $std = $ss->sample_deviation();
-    $self->assert($avg >= (1.0-$epsilon)*$rate && $avg <= (1.0+$epsilon)*$rate,
-		  "Average $avg is outside expected range");
-    $self->assert($std/$rate < $epsilon,
-		  "Standard deviation $std is too high");
+    return $s;
 }
 
 1;

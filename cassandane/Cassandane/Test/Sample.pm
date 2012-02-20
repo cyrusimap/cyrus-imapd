@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 #
-#  Copyright (c) 2011 Opera Software Australia Pty. Ltd.  All rights
+#  Copyright (c) 2011-2012 Opera Software Australia Pty. Ltd.  All rights
 #  reserved.
 #
 #  Redistribution and use in source and binary forms, with or without
@@ -41,46 +41,69 @@
 
 use strict;
 use warnings;
-package Cassandane::Test::Metronome;
+package Cassandane::Test::Sample;
 use base qw(Cassandane::Unit::TestCase);
-use Cassandane::Util::Metronome;
 use Cassandane::Util::Sample;
 use Cassandane::Util::Log;
 
 sub new
 {
     my $class = shift;
-    my $self = $class->SUPER::new(@_);
-    return $self;
+    return $class->SUPER::new(@_);
 }
 
-sub test_basic
+sub check_expected
+{
+    my ($self, $ss, $ecount, $eavg, $emin, $emax, $estd) = @_;
+
+    my $epsilon = 0.01;
+
+    $self->assert_equals($ss->nsamples(), $ecount);
+
+    my $avg = $ss->average();
+    $self->assert(abs($eavg - $avg) < $epsilon,
+		  "Average: expecting $eavg got $avg");
+
+    my $min = $ss->minimum();
+    $self->assert(abs($emin - $min) < $epsilon,
+		  "Minimum: expecting $emin got $min");
+
+    my $max = $ss->maximum();
+    $self->assert(abs($emax - $max) < $epsilon,
+		  "Maximum: expecting $emax got $max");
+
+    my $std = $ss->sample_deviation();
+    $self->assert(abs($estd - $std) < $epsilon,
+		  "Sample Deviation: expecting $estd got $std");
+}
+
+sub test_uniform
 {
     my ($self) = @_;
 
-    my $rate = 100.0;
-    my $epsilon = 0.01;
-    my $m = Cassandane::Util::Metronome->new(rate => $rate);
-
+    xlog "Sample with 4 x 10.0";
     my $ss = new Cassandane::Util::Sample;
+    $ss->add(10.0);
+    $ss->add(10.0);
+    $ss->add(10.0);
+    $ss->add(10.0);
+    xlog "Sample: $ss";
+    $self->check_expected($ss, 4, 10.0, 10.0, 10.0, 0.0);
+}
 
-    for (1..$rate)
-    {
-	$m->tick();
-	my $r = $m->actual_rate();
-	xlog "Actual rate $r";
-	# Be forgiving of early samples to let the
-	# metronome stabilise.
-	$ss->add($r) if ($_ >= 20)
-    }
+sub test_ramp
+{
+    my ($self) = @_;
 
-    xlog "Rates: $ss";
-    my $avg = $ss->average();
-    my $std = $ss->sample_deviation();
-    $self->assert($avg >= (1.0-$epsilon)*$rate && $avg <= (1.0+$epsilon)*$rate,
-		  "Average $avg is outside expected range");
-    $self->assert($std/$rate < $epsilon,
-		  "Standard deviation $std is too high");
+    xlog "Sample with ramp from 1 to 5";
+    my $ss = new Cassandane::Util::Sample;
+    $ss->add(1.0);
+    $ss->add(2.0);
+    $ss->add(3.0);
+    $ss->add(4.0);
+    $ss->add(5.0);
+    xlog "Sample: $ss";
+    $self->check_expected($ss, 5, 3.0, 1.0, 5.0, 1.5811);
 }
 
 1;
