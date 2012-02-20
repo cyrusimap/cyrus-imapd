@@ -182,7 +182,7 @@ my %netstat_match = (
 
 	my @a = split(/\s+/, $line);
 	return 0 unless scalar(@a) == 6;
-	return 0 unless $a[0] eq 'tcp6';
+	return 0 unless ($a[0] eq 'tcp' || $a[0] eq 'tcp6');
 	return 0 unless $a[5] eq 'LISTEN';
 	# Note that we don't use $self->address() because it formats
 	# the address in Cyrus format which is different to what netstat
