@@ -186,6 +186,29 @@ static struct timeval janitor_mark;	/* Last time janitor did a sweep */
 static void limit_fds(rlim_t);
 static void schedule_event(struct event *a);
 
+#if HAVE_PSELECT
+static sigset_t pselect_sigmask;
+#endif
+
+static int myselect(int nfds, fd_set *rfds, fd_set *wfds,
+		    fd_set *efds, struct timeval *tout)
+{
+#if HAVE_PSELECT
+    /* pselect() closes the race between SIGCHLD arriving
+    * and select() sleeping for up to 10 seconds. */
+    struct timespec ts, *tsptr = NULL;
+
+    if (tout) {
+	ts.tv_sec = tout->tv_sec;
+	ts.tv_nsec = tout->tv_usec * 1000;
+	tsptr = &ts;
+    }
+    return pselect(nfds, rfds, wfds, efds, tsptr, &pselect_sigmask);
+#else
+    return select(nfds, rfds, wfds, efds, tout);
+#endif
+}
+
 void fatal(const char *msg, int code)
 {
     syslog(LOG_CRIT, "%s", msg);
@@ -1155,6 +1178,14 @@ static void sighandler_setup(void)
     action.sa_handler = sigchld_handler;
     if (sigaction(SIGCHLD, &action, NULL) < 0)
 	fatalf(1, "unable to install signal handler for SIGCHLD: %m");
+
+#if HAVE_PSELECT
+    /* block SIGCHLD, and set up pselect_sigmask so SIGCHLD
+     * will be unblocked again inside pselect() */
+    sigemptyset(&siglist);
+    sigaddset(&siglist, SIGCHLD);
+    sigprocmask(SIG_BLOCK, &siglist, &pselect_sigmask);
+#endif
 }
 
 /*
@@ -2164,7 +2195,7 @@ int main(int argc, char **argv)
 	snmp_select_info(&maxfd, &rfds, tvptr, &blockp);
 #endif
 	errno = 0;
-	r = select(maxfd, &rfds, NULL, NULL, tvptr);
+	r = myselect(maxfd, &rfds, NULL, NULL, tvptr);
 	if (r == -1 && errno == EAGAIN) continue;
 	if (r == -1 && errno == EINTR) continue;
 	if (r == -1) {
