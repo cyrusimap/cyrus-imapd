@@ -150,7 +150,7 @@ int config_need_data = 0;
 
 struct event {
     char *name;
-    time_t mark;
+    struct timeval mark;
     time_t period;
     time_t hour;
     time_t min;
@@ -687,7 +687,9 @@ static int service_is_fork_limited(struct service *s)
 	struct event *evt = (struct event *) xzmalloc(sizeof(struct event));
 
 	evt->name = xstrdup("forkrate wakeup call");
-	evt->mark = time(NULL) + (unsigned int)FORKRATE_INTERVAL;
+	evt->mark = now;
+	timeval_add_double(&evt->mark, FORKRATE_INTERVAL);
+
 	schedule_event(evt);
 
 	return 1;
@@ -783,13 +785,14 @@ static void schedule_event(struct event *a)
 	fatal("Serious software bug found: schedule_event() called on unnamed event!",
 		EX_SOFTWARE);
 
-    if (!schedule || a->mark < schedule->mark) {
+    if (!schedule || timesub(&schedule->mark, &a->mark) < 0.0) {
 	a->next = schedule;
 	schedule = a;
 	
 	return;
     }
-    for (ptr = schedule; ptr->next && ptr->next->mark <= a->mark; 
+    for (ptr = schedule;
+	 ptr->next && timesub(&a->mark, &ptr->next->mark) <= 0.0;
 	 ptr = ptr->next) ;
 
     /* insert a */
@@ -797,7 +800,7 @@ static void schedule_event(struct event *a)
     ptr->next = a;
 }
 
-static void spawn_schedule(time_t now)
+static void spawn_schedule(struct timeval now)
 {
     struct event *a, *b;
     int i;
@@ -807,7 +810,7 @@ static void spawn_schedule(time_t now)
 
     a = NULL;
     /* update schedule accordingly */
-    while (schedule && schedule->mark <= now) {
+    while (schedule && timesub(&now, &schedule->mark) <= 0.0) {
 	/* delete from schedule, insert into a */
 	struct event *ptr = schedule;
 
@@ -869,26 +872,26 @@ static void spawn_schedule(time_t now)
 	b = a->next;
 	if (a->period) {
 	    if(a->periodic) {
-		a->mark = now + a->period;
+		a->mark = now;
+		a->mark.tv_sec += a->period;
 	    } else {
 		struct tm *tm;
 		int delta;
 		/* Daily Event */
-		while(a->mark <= now) {
-		    a->mark += a->period;
-		}
+		while (timesub(&now, &a->mark) <= 0.0)
+		    a->mark.tv_sec += a->period;
 		/* check for daylight savings fuzz... */
-		tm = localtime(&(a->mark));
+		tm = localtime(&a->mark.tv_sec);
 		if (tm->tm_hour != a->hour || tm->tm_min != a->min) {
 		    /* calculate the same time on the new day */
 		    tm->tm_hour = a->hour;
 		    tm->tm_min = a->min;
-		    delta = mktime(tm) - a->mark;
+		    delta = mktime(tm) - a->mark.tv_sec;
 		    /* bring it within half a period either way */
 		    while (delta > (a->period/2)) delta -= a->period;
 		    while (delta < -(a->period/2)) delta += a->period;
 		    /* update the time */
-		    a->mark += delta;
+		    a->mark.tv_sec += delta;
 		    /* and let us know about the change */
 		    syslog(LOG_NOTICE, "timezone shift for %s - altering schedule by %d seconds", a->name, delta);
 		}
@@ -1024,28 +1027,25 @@ static void init_janitor(void)
     evt->name = xstrdup("janitor periodic wakeup call");
     evt->period = 10;
     evt->periodic = 1;
-    evt->mark = time(NULL) + 2;
+    evt->mark = janitor_mark;
+    evt->mark.tv_sec += 2;
     schedule_event(evt);
 }
 
-static void child_janitor(time_t now)
+static void child_janitor(struct timeval now)
 {
     int i;
     struct centry **p;
     struct centry *c;
-    struct timeval rightnow;
     
     /* Estimate the number of entries to clean up in this sweep */
-    gettimeofday(&rightnow, NULL);
-    if (rightnow.tv_sec > janitor_mark.tv_sec + 1) {
+    if (now.tv_sec > janitor_mark.tv_sec + 1) {
 	/* overflow protection */
 	i = child_table_size;
     } else {
 	double n;
 	
-	n = child_table_size * janitor_frequency * 
-	    (double) ((rightnow.tv_sec - janitor_mark.tv_sec) * 1000000 +
-	              rightnow.tv_usec - janitor_mark.tv_usec ) / 1000000;
+	n = child_table_size * janitor_frequency * timesub(&janitor_mark, &now);
 	if (n < child_table_size) {
 	    i = n;
 	} else {
@@ -1059,7 +1059,7 @@ static void child_janitor(time_t now)
 	while (*p) {
 	    c = *p;
 	    if (c->service_state == SERVICE_STATE_DEAD) {
-		if (c->janitor_deadline < now) {
+		if (c->janitor_deadline < now.tv_sec) {
 		    *p = c->next;
 		    centry_free(c);
 		} else {
@@ -1601,8 +1601,10 @@ static void add_event(const char *name, struct entry *e, void *rock)
     char *cmd = xstrdup(masterconf_getstring(e, "cmd", ""));
     int period = 60 * masterconf_getint(e, "period", 0);
     int at = masterconf_getint(e, "at", -1), hour, min;
-    time_t now = time(NULL);
+    struct timeval now;
     struct event *evt;
+
+    gettimeofday(&now, 0);
 
     if (!strcmp(cmd,"")) {
 	char buf[256];
@@ -1621,7 +1623,7 @@ static void add_event(const char *name, struct entry *e, void *rock)
     evt->name = xstrdup(name);
 
     if (at >= 0 && ((hour = at / 100) <= 23) && ((min = at % 100) <= 59)) {
-	struct tm *tm = localtime(&now);
+	struct tm *tm = localtime(&now.tv_sec);
 
 	period = 86400; /* 24 hours */
 	evt->periodic = 0;
@@ -1630,9 +1632,11 @@ static void add_event(const char *name, struct entry *e, void *rock)
 	tm->tm_hour = hour;
 	tm->tm_min = min;
 	tm->tm_sec = 0;
-	if ((evt->mark = mktime(tm)) < now) {
+	evt->mark.tv_sec = mktime(tm);
+	evt->mark.tv_usec = 0;
+	if (timesub(&now, &evt->mark) < 0.0) {
 	    /* already missed it, so schedule for next day */
-	    evt->mark += period;
+	    evt->mark.tv_sec += period;
 	}
     }
     else {
@@ -1797,7 +1801,7 @@ int main(int argc, char **argv)
     int agentxpinginterval = -1;
 #endif
 
-    time_t now;
+    struct timeval now;
 
     p = getenv("CYRUS_VERBOSE");
     if (p) verbose = atoi(p) + 1;
@@ -2084,7 +2088,7 @@ int main(int argc, char **argv)
     /* ok, we're going to start spawning like mad now */
     syslog(LOG_DEBUG, "ready for work");
 
-    now = time(NULL);
+    gettimeofday(&now, 0);
     for (;;) {
 	int r, i, maxfd, total_children = 0;
 	struct timeval tv, *tvptr;
@@ -2195,9 +2199,14 @@ int main(int argc, char **argv)
 	 * calls get accounted for*/
 	tvptr = NULL;
 	if (schedule) {
-	    if (now < schedule->mark) tv.tv_sec = schedule->mark - now;
-	    else tv.tv_sec = 0;
-	    tv.tv_usec = 0;
+	    double delay = timesub(&now, &schedule->mark);
+	    if (delay > 0.0) {
+		timeval_set_double(&tv, delay);
+	    }
+	    else {
+		tv.tv_sec = 0;
+		tv.tv_usec = 0;
+	    }
 	    tvptr = &tv;
 	}
 
@@ -2257,7 +2266,7 @@ int main(int argc, char **argv)
 		}
 	    }
 	}
-	now = time(NULL);
+	gettimeofday(&now, 0);
 	child_janitor(now);
 
 #ifdef HAVE_NETSNMP
