@@ -648,24 +648,15 @@ static void fcntl_unset(int fd, int flag)
     }
 }
 
-static void spawn_service(int si)
+static int service_is_fork_limited(struct service *s)
 {
 #define FORKRATE_INTERVAL   2.0	/* seconds */
 #define FORKRATE_ALPHA	    0.5
-
-    pid_t p;
-    int i;
-    char path[PATH_MAX];
-    static char name_env[100], name_env2[100];
-    struct centry *c;
-    struct service *s = &Services[si];
     struct timeval now;
     double interval;
 
-    if (!s->name) {
-	fatal("Serious software bug found: spawn_service() called on unnamed service!",
-		EX_SOFTWARE);
-    }
+    if (!s->maxforkrate)
+	return 0;
 
     gettimeofday(&now, 0);
     interval = timesub(&s->last_interval_start, &now);
@@ -692,15 +683,34 @@ static void spawn_service(int si)
     /* If we've been busy lately, we will refuse to fork! */
     /* (We schedule a wakeup call for sometime soon though to be
      * sure that we don't wait to do the fork that is required forever! */
-    if(s->maxforkrate && (unsigned int)s->forkrate >= s->maxforkrate) {
+    if ((unsigned int)s->forkrate >= s->maxforkrate) {
 	struct event *evt = (struct event *) xzmalloc(sizeof(struct event));
 
 	evt->name = xstrdup("forkrate wakeup call");
 	evt->mark = time(NULL) + (unsigned int)FORKRATE_INTERVAL;
 	schedule_event(evt);
 
-	return;
+	return 1;
     }
+    return 0;
+}
+
+static void spawn_service(int si)
+{
+    pid_t p;
+    int i;
+    char path[PATH_MAX];
+    static char name_env[100], name_env2[100];
+    struct centry *c;
+    struct service *s = &Services[si];
+
+    if (!s->name) {
+	fatal("Serious software bug found: spawn_service() called on unnamed service!",
+		EX_SOFTWARE);
+    }
+
+    if (service_is_fork_limited(s))
+	return;
 
     switch (p = fork()) {
     case -1:
@@ -2164,7 +2174,8 @@ int main(int argc, char **argv)
 
 	    /* connections */
 	    if (y > 0 && Services[i].ready_workers == 0 &&
-		Services[i].nactive < Services[i].max_workers) {
+		Services[i].nactive < Services[i].max_workers &&
+		!service_is_fork_limited(&Services[i])) {
 		if (verbose > 2)
 		    syslog(LOG_DEBUG, "listening for connections for %s", 
 			   Services[i].name);
