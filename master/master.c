@@ -648,7 +648,7 @@ static void fcntl_unset(int fd, int flag)
     }
 }
 
-static void spawn_service(const int si)
+static void spawn_service(int si)
 {
 #define FORKRATE_INTERVAL   2.0	/* seconds */
 #define FORKRATE_ALPHA	    0.5
@@ -658,7 +658,7 @@ static void spawn_service(const int si)
     char path[PATH_MAX];
     static char name_env[100], name_env2[100];
     struct centry *c;
-    struct service * const s = &Services[si];
+    struct service *s = &Services[si];
     struct timeval now;
     double interval;
 
@@ -1218,11 +1218,11 @@ static int read_msg(int fd, struct notify_message *msg)
     return 0;
 }
 
-static void process_msg(const int si, struct notify_message *msg) 
+static void process_msg(int si, struct notify_message *msg)
 {
     struct centry *c;
     /* si must NOT point to an invalid service */
-    struct service * const s = &Services[si];
+    struct service *s = &Services[si];
 
     c = centry_find(msg->service_pid);
 
