@@ -650,8 +650,10 @@ static void fcntl_unset(int fd, int flag)
 
 static int service_is_fork_limited(struct service *s)
 {
-#define FORKRATE_INTERVAL   2.0	/* seconds */
-#define FORKRATE_ALPHA	    0.5
+/* The longest period for which we will ignore the service */
+#define FORKRATE_INTERVAL   0.4	/* seconds */
+/* How much the forkrate estimator decays, as a proportion, per second */
+#define FORKRATE_ALPHA		0.5	/* per second */
     struct timeval now;
     double interval;
 
@@ -661,8 +663,8 @@ static int service_is_fork_limited(struct service *s)
     gettimeofday(&now, 0);
     interval = timesub(&s->last_interval_start, &now);
     /* update our fork rate */
-    if (interval >= 0.9*FORKRATE_INTERVAL) {
-	double f = pow(FORKRATE_ALPHA, interval/FORKRATE_INTERVAL);
+    if (interval > 0.0) {
+	double f = pow(FORKRATE_ALPHA, interval);
 	s->forkrate = f * s->forkrate +
 		      (1.0-f) * (s->interval_forks/interval);
 	s->interval_forks = 0;
