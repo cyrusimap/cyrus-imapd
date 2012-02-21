@@ -187,6 +187,9 @@ extern void cmdtime_starttimer(void);
 extern void cmdtime_endtimer(double * cmdtime, double * nettime);
 extern void cmdtime_netstart(void);
 extern void cmdtime_netend(void);
+extern double timeval_get_double(const struct timeval *tv);
+extern void timeval_set_double(struct timeval *tv, double d);
+extern void timeval_add_double(struct timeval *tv, double delta);
 extern double timesub(const struct timeval *start, const struct timeval *end);
 
 extern clock_t sclock(void);

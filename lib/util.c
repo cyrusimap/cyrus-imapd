@@ -50,6 +50,7 @@
 #include <grp.h>
 #include <limits.h>
 #include <pwd.h>
+#include <math.h>
 #include <string.h>
 #include <stdlib.h>
 #include <syslog.h>
@@ -539,6 +540,25 @@ int become_cyrus(void)
 static int cmdtime_enabled = 0;
 static struct timeval cmdtime_start, cmdtime_end, nettime_start, nettime_end;
 static double totaltime, cmdtime, nettime;
+
+double timeval_get_double(const struct timeval *tv)
+{
+    return (double)tv->tv_sec + (double)tv->tv_usec/1000000.0;
+}
+
+void timeval_set_double(struct timeval *tv, double d)
+{
+    double sec;
+    double subsec = modf(d, &sec);
+
+    tv->tv_sec = sec;
+    tv->tv_usec = 1000000.0*subsec;
+}
+
+void timeval_add_double(struct timeval *tv, double delta)
+{
+    timeval_set_double(tv, timeval_get_double(tv) + delta);
+}
 
 double timesub(const struct timeval *start, const struct timeval *end)
 {
