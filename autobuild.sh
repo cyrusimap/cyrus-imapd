@@ -192,11 +192,13 @@ fi
 
 # The first line in this file is like
 # Changes in branch origin/for-upstream, between $SHA and $SHA
+if [ -n "$JENKINS_HOME" ] ; then
 revlist=$(perl \
     -n \
     -e 's/^Changes .*between ([[:xdigit:]]{40}) and ([[:xdigit:]]{40})/\1..\2/; print; exit 0;' \
     $WORKSPACE/../builds/$BUILD_ID/changelog.xml \
     2>/dev/null)
 [ -n "$revlist" ] && $HISTCOV $revlist 2>/dev/null
+fi
 
 exit $exitcode
