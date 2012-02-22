@@ -192,6 +192,8 @@ if [ -d $CASSANDANE_SRC ]; then
     mkdir -m 0777 reports || fatal "Can't mkdir reports"
 
     ./testrunner.pl --cleanup -f xml -v > cass.errs 2>&1 || exitcode=1
+
+    cd "$CYRUS_SRC"
 fi
 
 # Report on coverage
