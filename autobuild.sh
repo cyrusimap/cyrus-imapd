@@ -53,40 +53,48 @@ function fatal()
 
 ## Ensure $PATH is right
 PATH=/usr/bin:/bin:/usr/sbin:/usr/local/bin:$PATH
+
 echo "==================== CYRUS IMAPD ===================="
-if [ "$1" == --manual ] ; then
-    echo "Invoked manually"
-    BUILD_ID=build$(date +%Y%m%dT%H%M%S)
-    WORKSPACE=/home/gnb/software/cyrus
-    COVERAGE=coverage_
-    TGGCOV=/home/gnb/software/ggcov/src/tggcov
-    HISTCOV=/home/gnb/software/ggcov/scripts/git-history-coverage
-else
+
+if [ -n "$JENKINS_HOME" -a -n "$BUILD_ID" -a -n "$WORKSPACE" ] ; then
     echo "Invoked from Jenkins"
-    [ -n "$JENKINS_HOME" ] || fatal "No \$JENKINS_HOME defined in environment"
-    [ -n "$BUILD_ID" ] || fatal "Did not receive \$BUILD_ID in environment from Jenkins"
-    [ -n "$WORKSPACE" ] || fatal "Did not receive \$WORKSPACE in environment from Jenkins"
-    COVERAGE=coverage_
-    TGGCOV=tggcov
-    HISTCOV=git-history-coverage
-
-    echo "Workspace is $WORKSPACE"
-    if [ -n "$COVERAGE" ]; then
-	echo "Coverage is enabled"
-    else
-	echo "Coverage is disabled"
-    fi
-
+    CYRUS_SRC="$WORKSPACE/imapd"
+    CYRUS_INST="$WORKSPACE/inst"
+    CASSANDANE_SRC="$WORKSPACE/cassandane"
     # We want new files to be group-writable
     # so that the Cassandane tests running
     # as user 'cyrus' can write them
     umask 002
+else
+    echo "Invoked manually"
+    echo "(assumed, as one of \$JENKINS_HOME \$BUILD_ID or \$WORKSPACE is missing)"
+    BUILD_ID=build$(date +%Y%m%dT%H%M%S)
+    WORKSPACE=$(cd .. ; /bin/pwd)
+    CYRUS_SRC=$(/bin/pwd)
+    CYRUS_INST=$(cd ../inst ; /bin/pwd)
+    CASSANDANE_SRC=$(cd ../cassandane ; /bin/pwd)
+fi
+
+echo "Build ID is $BUILD_ID"
+echo "Workspace is $WORKSPACE"
+echo " -  Cyrus IMAPD source in $CYRUS_SRC"
+echo " -  Temporary Cyrus IMAPD installation will be in $CYRUS_INST"
+echo " -  Cassandane test suite expected in $CASSANDANE_SRC"
+
+TGGCOV=$(which tggcov 2>/dev/null)
+HISTCOV=$(which git-history-coverage 2>/dev/null)
+if [ -n "$TGGCOV" -a -x "$TGGCOV" ]; then
+    echo "Found coverage tools, enabling coverage"
+    echo " -  tggcov: $TGGCOV"
+    echo " -  git-history-coverage: $HISTCOV"
+    COVERAGE=coverage_
+else
+    echo "No coverage tools found, disabling coverage"
+    echo "(ggcov may be downloaded from ggcov.sourceforge.net)"
 fi
 
 
-CYRUS_SRC="$WORKSPACE/imapd"
-CYRUS_INST="$WORKSPACE/inst"
-CASSANDANE_SRC="$WORKSPACE/cassandane"
+
 COPTIMISEFLAGS="-O0"
 CONFIGURE_ARGS="\
     --prefix=/usr/cyrus \
