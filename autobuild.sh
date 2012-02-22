@@ -193,6 +193,8 @@ if [ -d $CASSANDANE_SRC ]; then
 
     ./testrunner.pl --cleanup -f xml -v > cass.errs 2>&1 || exitcode=1
 
+    [ -x jenkins-xml-summary.pl ] && ./jenkins-xml-summary.pl ${BUILD_URL:+--build-url=$BUILD_URL}
+
     cd "$CYRUS_SRC"
 fi
 
