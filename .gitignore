@@ -31,6 +31,7 @@ com_err/et/error_message.o
 com_err/et/et_name.o
 com_err/et/init_et.o
 com_err/et/libcom_err.a
+coverage.xml
 cunit/cunit.mk
 cunit/.cunit-*.c
 cunit/default.cunit
