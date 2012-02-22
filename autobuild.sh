@@ -51,6 +51,8 @@ function fatal()
     exit 1
 }
 
+## Ensure $PATH is right
+PATH=/usr/bin:/bin:/usr/sbin:/usr/local/bin:$PATH
 echo "==================== CYRUS IMAPD ===================="
 if [ "$1" == --manual ] ; then
     echo "Invoked manually"
@@ -81,8 +83,6 @@ else
     umask 002
 fi
 
-## Ensure $PATH is right
-#PATH=/usr/bin:/bin:/usr/sbin:$PATH
 
 CYRUS_SRC="$WORKSPACE/imapd"
 CYRUS_INST="$WORKSPACE/inst"
