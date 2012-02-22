@@ -59,7 +59,6 @@ if [ "$1" == --manual ] ; then
     COVERAGE=coverage_
     TGGCOV=/home/gnb/software/ggcov/src/tggcov
     HISTCOV=/home/gnb/software/ggcov/scripts/git-history-coverage
-    CLEANGIT=yes
 else
     echo "Invoked from Jenkins"
     [ -n "$JENKINS_HOME" ] || fatal "No \$JENKINS_HOME defined in environment"
@@ -68,7 +67,6 @@ else
     COVERAGE=coverage_
     TGGCOV=tggcov
     HISTCOV=git-history-coverage
-    CLEANGIT=no
 
     echo "Workspace is $WORKSPACE"
     if [ -n "$COVERAGE" ]; then
@@ -121,15 +119,8 @@ echo "Building on git branch $BRANCH, top commit $COMMIT"
 CONFIGURE_ARGS="--with-extraident=$BRANCH-$COMMIT $CONFIGURE_ARGS"
 
 set -x
-if [ $CLEANGIT = yes ] ; then
-    # clean out any uncontrolled files
-    git ls-files -o -z | xargs -0 rm
-    # clean out any modifications to controlled files
-    git reset --hard HEAD || fatal "Cannot git-reset"
-else
-    git ls-files -o
-    git status
-fi
+git ls-files -o
+git status
 
 
 # do the whole autotools dance
@@ -177,16 +168,8 @@ if [ -d $CASSANDANE_SRC ]; then
     nfiles=$(git ls-files|wc -l)
     [ $nfiles -gt 0 ] || fatal "$CASSANDANE_SRC: cannot list git controlled files"
 
-    # TODO: factor this out into a shell function
-    if [ $CLEANGIT = yes ] ; then
-	# clean out any uncontrolled files
-	git ls-files -o -z | xargs -0 rm
-	# clean out any modifications to controlled files
-	git reset --hard HEAD || fatal "Cannot git-reset"
-    else
-	git ls-files -o
-	git status
-    fi
+    git ls-files -o
+    git status
 
     make || fatal "Can't make in cassandane/";
 
