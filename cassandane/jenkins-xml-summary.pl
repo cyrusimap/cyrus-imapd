@@ -122,7 +122,7 @@ foreach my $file (@report_files)
 	if (defined $build_url)
 	{
 	    my $quoted_suite = $suite;
-	    $quoted_suite =~ s/:\//_/g;
+	    $quoted_suite =~ s/[:\/]/_/g;
 	    my $url = "$build_url/testReport/%28root%29/$quoted_suite/test_$case/";
 	    print "    $url\n";
 	}
