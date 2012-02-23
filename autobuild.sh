@@ -170,6 +170,12 @@ if [ -d $CASSANDANE_SRC ]; then
 # 	chmod 666 $(find . -type f -name '*.gcda')
 #     fi
 
+    # Shoot down any leftover processes - Cassandane sometimes
+    # leaks these under mysterious circumstances.  Sadly this means
+    # we cannot run two autobuilds in parallel, oh well :(
+    # The -n is to prevent sudo going interactive.
+    sudo -n /usr/bin/killall -u cyrus
+
     # TODO: factor this out into a shell function
     cd "$CASSANDANE_SRC" || fatal "$CASSANDANE_SRC: cannot cd"
     [ -d .git ] || fatal "$CASSANDANE_SRC: not a git repository"
@@ -194,6 +200,9 @@ if [ -d $CASSANDANE_SRC ]; then
     ./testrunner.pl --cleanup -f xml -v > cass.errs 2>&1 || exitcode=1
 
     [ -x jenkins-xml-summary.pl ] && ./jenkins-xml-summary.pl ${BUILD_URL:+--build-url=$BUILD_URL}
+
+    # Shoot down leftover processes again
+    sudo -n /usr/bin/killall -u cyrus
 
     cd "$CYRUS_SRC"
 fi
