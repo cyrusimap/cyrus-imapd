@@ -2235,7 +2235,7 @@ int main(int argc, char **argv)
 	/* how long to wait? - do now so that any scheduled wakeup
 	 * calls get accounted for*/
 	tvptr = NULL;
-	if (schedule) {
+	if (schedule && !in_shutdown) {
 	    double delay = timesub(&now, &schedule->mark);
 	    if (delay > 0.0) {
 		timeval_set_double(&tv, delay);
