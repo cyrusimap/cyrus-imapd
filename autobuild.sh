@@ -202,6 +202,7 @@ if [ -d $CASSANDANE_SRC ]; then
     [ -x jenkins-xml-summary.pl ] && ./jenkins-xml-summary.pl ${BUILD_URL:+--build-url=$BUILD_URL}
 
     # Shoot down leftover processes again
+    ps -u cyrus
     sudo -n /usr/bin/killall -u cyrus
 
     cd "$CYRUS_SRC"
