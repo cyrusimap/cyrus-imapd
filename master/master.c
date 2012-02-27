@@ -131,7 +131,7 @@ static int verbose = 0;
 static int listen_queue_backlog = 32;
 static int pidfd = -1;
 
-static volatile int in_shutdown = 0;
+static int in_shutdown = 0;
 
 const char *MASTER_CONFIG_FILENAME = DEFAULT_MASTER_CONFIG_FILENAME;
 
@@ -185,6 +185,7 @@ static struct timeval janitor_mark;	/* Last time janitor did a sweep */
 
 static void limit_fds(rlim_t);
 static void schedule_event(struct event *a);
+static void child_sighandler_setup(void);
 
 #if HAVE_PSELECT
 static sigset_t pselect_sigmask;
@@ -619,6 +620,8 @@ static void run_startup(const strarray_t *cmd)
 	if (become_cyrus() != 0)
 	    fatalf(1, "can't change to the cyrus user: %m");
 
+	child_sighandler_setup();
+
 	limit_fds(256);
 
 	get_prog(path, sizeof(path), cmd);
@@ -729,6 +732,8 @@ static void spawn_service(int si)
 	    syslog(LOG_ERR, "can't change to the cyrus user");
 	    exit(1);
 	}
+
+	child_sighandler_setup();
 
 	get_prog(path, sizeof(path), s->exec);
 	if (dup2(s->stat[1], STATUS_FD) < 0) {
@@ -1075,28 +1080,28 @@ static void child_janitor(struct timeval now)
 }
 
 /* Allow a clean shutdown on SIGQUIT */
+static volatile sig_atomic_t gotsigquit = 0;
+
 static void sigquit_handler(int sig __attribute__((unused)))
 {
-    struct sigaction action;
+    gotsigquit = 1;
+}
 
-    /* Ignore SIGQUIT ourselves */
-    sigemptyset(&action.sa_mask);
-    action.sa_flags = 0;
-    action.sa_handler = SIG_IGN;
-    if (sigaction(SIGQUIT, &action, (struct sigaction *) 0) < 0) {
-	syslog(LOG_ERR, "sigaction: %m");
-    }
+static void begin_shutdown(void)
+{
+    /* Set a flag so main loop knows to shut down when
+       all children have exited.  Note, we will be called
+       twice as we send SIGQUIT to our own process group. */
+    if (in_shutdown)
+	return;
+    in_shutdown = 1;
 
     /* send our process group a SIGQUIT */
     if (kill(0, SIGQUIT) < 0) {
-	syslog(LOG_ERR, "sigquit_handler: kill(0, SIGQUIT): %m");
+	syslog(LOG_ERR, "begin_shutdown: kill(0, SIGQUIT): %m");
     }
 
-    /* Set a flag so main loop knows to shut down when
-       all children have exited */
-    in_shutdown = 1;
-
-    /* syslog(LOG_INFO, "attempting clean shutdown on SIGQUIT"); */
+    syslog(LOG_INFO, "attempting clean shutdown on SIGQUIT");
 }
 
 static volatile sig_atomic_t gotsigchld = 0;
@@ -1193,10 +1198,36 @@ static void sighandler_setup(void)
 
 #if HAVE_PSELECT
     /* block SIGCHLD, and set up pselect_sigmask so SIGCHLD
-     * will be unblocked again inside pselect() */
+     * will be unblocked again inside pselect().  Ditto SIGQUIT.  */
     sigemptyset(&siglist);
     sigaddset(&siglist, SIGCHLD);
+    sigaddset(&siglist, SIGQUIT);
     sigprocmask(SIG_BLOCK, &siglist, &pselect_sigmask);
+#endif
+}
+
+static void child_sighandler_setup(void)
+{
+#if HAVE_PSELECT
+    /*
+     * We need to explicitly reset our SIGQUIT handler to the default
+     * action.  This happens at execv() time, but in the small window
+     * between fork() and execv() any SIGQUIT signal delivered will be
+     * caught, and the gotsigquit flag set, but that flag is then
+     * completely ignored.
+     */
+    struct sigaction action;
+
+    memset(&action, 0, sizeof(action));
+    sigemptyset(&action.sa_mask);
+    action.sa_handler = SIG_DFL;
+    if (sigaction(SIGQUIT, &action, NULL) < 0) {
+	syslog(LOG_ERR, "unable to remove signal handler for SIGQUIT: %m");
+	exit(EX_TEMPFAIL);
+    }
+
+    /* Unblock SIGCHLD et al in the child */
+    sigprocmask(SIG_SETMASK, &pselect_sigmask, NULL);
 #endif
 }
 
@@ -2098,6 +2129,10 @@ int main(int argc, char **argv)
 #if defined(HAVE_UCDSNMP) || defined(HAVE_NETSNMP)
 	int blockp = 0;
 #endif
+	if (gotsigquit) {
+	    gotsigquit = 0;
+	    begin_shutdown();
+	}
 
 	/* run any scheduled processes */
 	if (!in_shutdown)
