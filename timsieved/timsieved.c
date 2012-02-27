@@ -207,13 +207,6 @@ static void cmdloop(void)
     shut_down(0);
 }
 
-void printstring(const char *s __attribute__((unused)))
-{
-    /* needed to link against annotate.o */
-    fatal("printstring() executed, but its not used for timsieved!",
-	  EC_SOFTWARE);
-}
-
 void fatal(const char *s, int code)
 {
     static int recurse_code = 0;

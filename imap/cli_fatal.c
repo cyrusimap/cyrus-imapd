@@ -50,14 +50,6 @@
 #include "global.h"
 #include "xmalloc.h"
 
-/* generic printstring() implementation for command line utilities */
-void printstring(const char *s __attribute__((unused)))
-{
-    /* needed to link against annotate.o */
-    fatal("printstring() executed, but its not used for utilities!",
-	  EC_SOFTWARE);
-}
-
 /* generic fatal() routine for command line utilities */
 void fatal(const char *message, int code)
 {

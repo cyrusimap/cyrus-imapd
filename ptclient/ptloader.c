@@ -269,9 +269,3 @@ void fatal(const char *msg, int exitcode)
     exit(exitcode);
 }
 
-void printstring(const char *s __attribute__((unused)))
-{
-    /* needed to link against annotate.o */
-    fatal("printstring() executed, but its not used for PTLOADER!",
-	  EC_SOFTWARE);
-}

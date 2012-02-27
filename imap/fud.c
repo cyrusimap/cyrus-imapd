@@ -495,9 +495,3 @@ void fatal(const char* s, int code)
     shut_down(code);
 }
 
-void printstring(const char *s __attribute__((unused)))
-{
-    /* needed to link against annotate.o */
-    fatal("printstring() executed, but its not used for FUD!",
-	  EC_SOFTWARE);
-}

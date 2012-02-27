@@ -850,13 +850,6 @@ static void cmd_authenticate(char *mech, char *resp)
     sync_logfd = telemetry_log(sync_userid, sync_in, sync_out, 0);
 }
 
-void printstring(const char *s __attribute__((unused)))
-{
-    /* needed to link against annotate.o */
-    fatal("printstring() executed, but its not used for sync_server!",
-	  EC_SOFTWARE);
-}
-
 #ifdef HAVE_SSL
 static void cmd_starttls(void)
 {

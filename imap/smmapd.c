@@ -483,9 +483,3 @@ int begin_handling(void)
     return 0;
 }
 
-void printstring(const char *s __attribute__((unused)))
-{
-    /* needed to link against annotate.o */
-    fatal("printstring() executed, but its not used for smmapd!",
-	  EC_SOFTWARE);
-}

@@ -432,10 +432,3 @@ int main(int argc, char **argv)
     exit(1);
 }
 
-void printstring(const char *s __attribute__((unused)))
-{ 
-    /* needed to link against annotate.o */
-    fatal("printstring() executed, but its not used for POP3!",
-          EC_SOFTWARE);
-}
-
