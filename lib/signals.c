@@ -52,12 +52,16 @@
 #include "xmalloc.h"
 #include "exitcodes.h"
 
-static volatile sig_atomic_t gotsignal = 0;
+#ifndef _NSIG
+#define _NSIG 65
+#endif
+static volatile sig_atomic_t gotsignal[_NSIG];
 
 static void sighandler(int sig)
 {
-    /* syslog(LOG_DEBUG, "got signal %d", sig); */
-    gotsignal = sig;
+    if (sig < 1 || sig >= _NSIG)
+	sig = _NSIG-1;
+    gotsignal[sig] = 1;
 }
 
 static const int catch[] = { SIGHUP, SIGINT, 0 };
@@ -106,15 +110,15 @@ void signals_set_shutdown(shutdownfn *s)
 
 int signals_poll(void)
 {
-    switch (gotsignal) {
-    case SIGINT:
-    case SIGQUIT:
+    int sig;
+
+    if (gotsignal[SIGINT] || gotsignal[SIGQUIT]) {
 	if (shutdown_cb) shutdown_cb(EC_TEMPFAIL);
 	else exit(EC_TEMPFAIL);
-	break;
-    default:
-	return gotsignal;
-	break;
     }
-    return 0; /* compiler warning stupidity */
+    for (sig = 1 ; sig < _NSIG ; sig++) {
+	if (gotsignal[sig])
+	    return sig;
+    }
+    return 0;
 }
