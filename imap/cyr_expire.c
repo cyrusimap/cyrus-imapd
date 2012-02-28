@@ -75,7 +75,7 @@
 
 /* global state */
 const int config_need_data = 0;
-static int sigquit = 0;
+static volatile sig_atomic_t sigquit = 0;
 static int verbose = 0;
 
 void usage(void)
@@ -310,7 +310,8 @@ static int delete(char *name,
 
     return(0);
 }
-static void sighandler (int sig __attribute((unused)))
+
+static void sighandler(int sig __attribute((unused)))
 {
     sigquit = 1;
     return;
@@ -389,9 +390,12 @@ int main(int argc, char *argv[])
     sigemptyset(&action.sa_mask);
     action.sa_flags = 0;
     action.sa_handler = sighandler;
-    if (sigaction(SIGQUIT, &action, NULL) < 0) {
-        fatal("unable to install signal handler for %d: %m", SIGQUIT);
-    }
+    if (sigaction(SIGQUIT, &action, NULL) < 0)
+	fatal("unable to install signal handler for SIGQUIT", EC_TEMPFAIL);
+    if (sigaction(SIGINT, &action, NULL) < 0)
+	fatal("unable to install signal handler for SIGINT", EC_TEMPFAIL);
+    if (sigaction(SIGTERM, &action, NULL) < 0)
+	fatal("unable to install signal handler for SIGTERM", EC_TEMPFAIL);
 
     cyrus_init(alt_config, "cyr_expire", 0);
     global_sasl_init(1, 0, NULL);
