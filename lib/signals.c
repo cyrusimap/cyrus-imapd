@@ -47,6 +47,8 @@
 #include <stdlib.h>
 #include <signal.h>
 #include <syslog.h>
+#include <string.h>
+#include <errno.h>
 
 #include "signals.h"
 #include "xmalloc.h"
@@ -64,7 +66,7 @@ static void sighandler(int sig)
     gotsignal[sig] = 1;
 }
 
-static const int catch[] = { SIGHUP, SIGINT, 0 };
+static const int catch[] = { SIGHUP, SIGINT, SIGTERM, 0 };
 
 void signals_add_handlers(int alarm)
 {
@@ -82,12 +84,12 @@ void signals_add_handlers(int alarm)
 
     /* SIGALRM used as a syscall timeout, so we don't set SA_RESTART */
     if (alarm && sigaction(SIGALRM, &action, NULL) < 0) {
-	fatal("unable to install signal handler for %d: %m", SIGALRM);
+	fatal("unable to install signal handler for SIGALRM", EC_TEMPFAIL);
     }
 
     /* no restartable SIGQUIT thanks */
     if (sigaction(SIGQUIT, &action, NULL) < 0) {
-	fatal("unable to install signal handler for %d: %m", SIGQUIT);
+	fatal("unable to install signal handler for SIGQUIT", EC_TEMPFAIL);
     }
 
 #ifdef SA_RESTART
@@ -96,7 +98,11 @@ void signals_add_handlers(int alarm)
     
     for (i = 0; catch[i] != 0; i++) {
 	if (catch[i] != SIGALRM && sigaction(catch[i], &action, NULL) < 0) {
-	    fatal("unable to install signal handler for %d: %m", catch[i]);
+	    char buf[256];
+	    snprintf(buf, sizeof(buf),
+		     "unable to install signal handler for %s: %s",
+		     strsignal(catch[i]), strerror(errno));
+	    fatal(buf, EC_TEMPFAIL);
 	}
     }
 }
@@ -112,7 +118,7 @@ int signals_poll(void)
 {
     int sig;
 
-    if (gotsignal[SIGINT] || gotsignal[SIGQUIT]) {
+    if (gotsignal[SIGINT] || gotsignal[SIGQUIT] || gotsignal[SIGTERM]) {
 	if (shutdown_cb) shutdown_cb(EC_TEMPFAIL);
 	else exit(EC_TEMPFAIL);
     }
