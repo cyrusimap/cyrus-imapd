@@ -77,7 +77,7 @@ extern char *optarg;
 static int verbose = 0;
 static int debugmode = 0;
 static time_t idle_timeout;
-static int sigquit = 0;
+static volatile sig_atomic_t sigquit = 0;
 
 struct ientry {
     pid_t pid;
@@ -248,7 +248,7 @@ void idle_alert(const char *key __attribute__((unused)),
     }
 }
 
-static void sighandler (int sig __attribute__((unused))) 
+static void sighandler(int sig __attribute__((unused)))
 {
     sigquit = 1;
     return;
@@ -332,9 +332,12 @@ int main(int argc, char **argv)
     
     action.sa_flags = 0;
     action.sa_handler = sighandler;
-    if (sigaction(SIGQUIT, &action, NULL) < 0) {
-        fatal("unable to install signal handler for %d: %m", SIGQUIT);
-    }
+    if (sigaction(SIGQUIT, &action, NULL) < 0)
+	fatal("unable to install signal handler for SIGQUIT", 1);
+    if (sigaction(SIGINT, &action, NULL) < 0)
+	fatal("unable to install signal handler for SIGINT", 1);
+    if (sigaction(SIGTERM, &action, NULL) < 0)
+	fatal("unable to install signal handler for SIGTERM", 1);
 
     /* create idle table -- +1 to avoid a zero value */
     construct_hash_table(&itable, nmbox + 1, 1);
