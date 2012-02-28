@@ -1079,7 +1079,7 @@ static void child_janitor(struct timeval now)
     }
 }
 
-/* Allow a clean shutdown on SIGQUIT */
+/* Allow a clean shutdown on SIGQUIT, SIGTERM or SIGINT */
 static volatile sig_atomic_t gotsigquit = 0;
 
 static void sigquit_handler(int sig __attribute__((unused)))
@@ -1091,17 +1091,21 @@ static void begin_shutdown(void)
 {
     /* Set a flag so main loop knows to shut down when
        all children have exited.  Note, we will be called
-       twice as we send SIGQUIT to our own process group. */
+       twice as we send SIGTERM to our own process group. */
     if (in_shutdown)
 	return;
     in_shutdown = 1;
+    syslog(LOG_INFO, "attempting clean shutdown on signal");
 
-    /* send our process group a SIGQUIT */
-    if (kill(0, SIGQUIT) < 0) {
-	syslog(LOG_ERR, "begin_shutdown: kill(0, SIGQUIT): %m");
+#if defined(HAVE_UCDSNMP) || defined(HAVE_NETSNMP)
+    /* tell master agent we're exiting */
+    snmp_shutdown("cyrusMaster");
+#endif
+
+    /* send our process group a SIGTERM */
+    if (kill(0, SIGTERM) < 0) {
+	syslog(LOG_ERR, "begin_shutdown: kill(0, SIGTERM): %m");
     }
-
-    syslog(LOG_INFO, "attempting clean shutdown on SIGQUIT");
 }
 
 static volatile sig_atomic_t gotsigchld = 0;
@@ -1116,32 +1120,6 @@ static volatile int gotsighup = 0;
 static void sighup_handler(int sig __attribute__((unused)))
 {
     gotsighup = 1;
-}
-
-static void sigterm_handler(int sig __attribute__((unused)))
-{
-    struct sigaction action;
-
-    /* send all the other processes SIGTERM, then exit */
-    sigemptyset(&action.sa_mask);
-    action.sa_flags = 0;
-    action.sa_handler = SIG_IGN;
-    if (sigaction(SIGTERM, &action, (struct sigaction *) 0) < 0) {
-	syslog(LOG_ERR, "sigaction: %m");
-	exit(1);
-    }
-    /* kill my process group */
-    if (kill(0, SIGTERM) < 0) {
-	syslog(LOG_ERR, "sigterm_handler: kill(0, SIGTERM): %m");
-    }
-
-#if defined(HAVE_UCDSNMP) || defined(HAVE_NETSNMP)
-    /* tell master agent we're exiting */
-    snmp_shutdown("cyrusMaster");
-#endif
-
-    /* syslog(LOG_INFO, "exiting on SIGTERM/SIGINT"); */
-    exit(0);
 }
 
 static void sigalrm_handler(int sig __attribute__((unused)))
@@ -1178,14 +1156,10 @@ static void sighandler_setup(void)
     if (sigaction(SIGALRM, &action, NULL) < 0)
 	fatalf(1, "unable to install signal handler for SIGALRM: %m");
 
-    /* Allow a clean shutdown on SIGQUIT */
+    /* Allow a clean shutdown on any of SIGQUIT, SIGINT or SIGTERM */
     action.sa_handler = sigquit_handler;
     if (sigaction(SIGQUIT, &action, NULL) < 0)
 	fatalf(1, "unable to install signal handler for SIGQUIT: %m");
-
-    /* Handle SIGTERM and SIGINT the same way -- kill
-     * off our children! */
-    action.sa_handler = sigterm_handler;
     if (sigaction(SIGTERM, &action, NULL) < 0)
 	fatalf(1, "unable to install signal handler for SIGTERM: %m");
     if (sigaction(SIGINT, &action, NULL) < 0)
@@ -1202,6 +1176,8 @@ static void sighandler_setup(void)
     sigemptyset(&siglist);
     sigaddset(&siglist, SIGCHLD);
     sigaddset(&siglist, SIGQUIT);
+    sigaddset(&siglist, SIGINT);
+    sigaddset(&siglist, SIGTERM);
     sigprocmask(SIG_BLOCK, &siglist, &pselect_sigmask);
 #endif
 }
@@ -1214,7 +1190,7 @@ static void child_sighandler_setup(void)
      * action.  This happens at execv() time, but in the small window
      * between fork() and execv() any SIGQUIT signal delivered will be
      * caught, and the gotsigquit flag set, but that flag is then
-     * completely ignored.
+     * completely ignored.  Ditto SIGINT and SIGTERM.
      */
     struct sigaction action;
 
@@ -1223,6 +1199,14 @@ static void child_sighandler_setup(void)
     action.sa_handler = SIG_DFL;
     if (sigaction(SIGQUIT, &action, NULL) < 0) {
 	syslog(LOG_ERR, "unable to remove signal handler for SIGQUIT: %m");
+	exit(EX_TEMPFAIL);
+    }
+    if (sigaction(SIGINT, &action, NULL) < 0) {
+	syslog(LOG_ERR, "unable to remove signal handler for SIGINT: %m");
+	exit(EX_TEMPFAIL);
+    }
+    if (sigaction(SIGTERM, &action, NULL) < 0) {
+	syslog(LOG_ERR, "unable to remove signal handler for SIGTERM: %m");
 	exit(EX_TEMPFAIL);
     }
 
