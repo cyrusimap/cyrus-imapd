@@ -347,8 +347,8 @@ struct skiploc {
     struct skiprecord record;
 
     /* we need both sets of offsets to cheaply insert */
-    size_t backloc[MAXLEVEL];
-    size_t forwardloc[MAXLEVEL];
+    size_t backloc[MAXLEVEL+1];
+    size_t forwardloc[MAXLEVEL+1];
 
     /* need a generation so we know if the location is still valid */
     uint64_t generation;
@@ -588,13 +588,15 @@ static int check_tailcrc(struct dbengine *db, struct skiprecord *record)
 }
 
 /* read a single skiprecord at the given offset */
-static int read_record(struct dbengine *db, size_t offset,
-		       struct skiprecord *record)
+static int read_onerecord(struct dbengine *db, size_t offset,
+			  struct skiprecord *record)
 {
     const char *base;
     int i;
 
     memset(record, 0, sizeof(struct skiprecord));
+
+    if (!offset) return 0;
 
     record->offset = offset;
     record->len = 24; /* absolute minimum */
@@ -661,6 +663,18 @@ badsize:
     syslog(LOG_ERR, "twoskip: attempt to read past end of file %s: %08llX > %08llX",
 	   _fname(db), (LLU)record->offset + record->len, (LLU)_size(db));
     return CYRUSDB_IOERROR;
+}
+
+static int read_skipdelete(struct dbengine *db, size_t offset,
+			   struct skiprecord *record)
+{
+    int r;
+
+    r = read_onerecord(db, offset, record);
+    if (record->type == DELETE)
+	r = read_onerecord(db, record->nextloc[0], record);
+
+    return r;
 }
 
 /* prepare the header part of the record (everything except the key, value
@@ -795,8 +809,14 @@ static int append_record(struct dbengine *db, struct skiprecord *record,
 
 /************************** LOCATION MANAGEMENT ***************************/
 
-static size_t _getzero(struct dbengine *db, struct skiprecord *record)
+/* find the next record at a given level, encapsulating the
+ * level 0 magic */
+static size_t _getloc(struct dbengine *db, struct skiprecord *record,
+		      uint8_t level)
 {
+    if (level)
+	return record->nextloc[level + 1];
+
     /* if one is past, must be the other */
     if (record->nextloc[0] >= db->end)
 	return record->nextloc[1];
@@ -808,39 +828,6 @@ static size_t _getzero(struct dbengine *db, struct skiprecord *record)
 	return record->nextloc[0];
     else
 	return record->nextloc[1];
-}
-
-/* find the next record at a given level, encapsulating the
- * level 0 magic */
-static int _getloc(struct dbengine *db, struct skiprecord *record,
-		   uint8_t level, size_t *outloc)
-{
-    struct skiprecord local;
-    size_t offset;
-    int r;
-
-    if (level) {
-	*outloc = record->nextloc[level + 1];
-	return 0;
-    }
-
-    offset = _getzero(db, record);
-
-    /* obviously not a delete! */
-    if (!offset) {
-	*outloc = offset;
-	return 0;
-    }
-
-    r = read_record(db, offset, &local);
-    if (r) return r;
-
-    if (local.type == '-')
-	*outloc = local.nextloc[0];
-    else
-	*outloc = offset;
-
-    return 0;
 }
 
 /* set the next record at a given level, encapsulating the
@@ -883,31 +870,39 @@ static int relocate(struct dbengine *db)
     loc->end = db->end;
 
     /* start with the dummy */
-    r = read_record(db, HEADER_SIZE, &loc->record);
+    r = read_onerecord(db, HEADER_SIZE, &loc->record);
     loc->is_exactmatch = 0;
+
+    /* initialise pointers */
+    level = loc->record.level;
+    newrecord.offset = 0;
+    loc->backloc[level] = loc->record.offset;
+    loc->forwardloc[level] = 0;
 
     /* special case start pointer for efficiency */
     if (!loc->keybuf.len) {
 	for (i = 0; i < loc->record.level; i++) {
 	    loc->backloc[i] = loc->record.offset;
-	    r = _getloc(db, &loc->record, i, &loc->forwardloc[i]);
-	    if (r) return r;
+	    loc->forwardloc[i] = _getloc(db, &loc->record, i);
 	}
 	return 0;
     }
 
-    level = loc->record.level;
-    newrecord.offset = 0;
     while (level) {
-	r = _getloc(db, &loc->record, level-1, &offset);
-	if (r) return r;
+	offset = _getloc(db, &loc->record, level-1);
 
 	loc->backloc[level-1] = loc->record.offset;
 	loc->forwardloc[level-1] = offset;
 
-	if (offset && newrecord.offset != offset) {
-	    r = read_record(db, offset, &newrecord);
-	    if (r) return r;
+	r = read_skipdelete(db, offset, &newrecord);
+	if (r) return r;
+
+	if (newrecord.offset) {
+	    assert(newrecord.level >= level);
+
+	    /* may have read past a delete */
+	    loc->forwardloc[level-1] = newrecord.offset;
+
 	    cmp = db->compar(_key(db, &newrecord), newrecord.keylen,
 			     loc->keybuf.s, loc->keybuf.len);
 
@@ -925,10 +920,9 @@ static int relocate(struct dbengine *db)
     if (cmp == 0) { /* we found it exactly */
 	loc->is_exactmatch = 1;
 	loc->record = newrecord;
-	for (i = 0; i < loc->record.level; i++) {
-	    r = _getloc(db, &loc->record, i, &loc->forwardloc[i]);
-	    if (r) return r;
-	}
+
+	for (i = 0; i < loc->record.level; i++)
+	    loc->forwardloc[i] = _getloc(db, &loc->record, i);
 
 	/* make sure this record is complete */
 	r = check_tailcrc(db, &loc->record);
@@ -965,15 +959,15 @@ static int find_loc(struct dbengine *db, const char *key, size_t keylen)
 	    for (i = 0; i < db->loc.record.level; i++)
 		loc->backloc[i] = db->loc.record.offset;
 
+	    /* read the next record */
+	    r = read_skipdelete(db, loc->forwardloc[0], &newrecord);
+	    if (r) return r;
+
 	    /* nothing afterwards? */
-	    if (!loc->forwardloc[0]) {
+	    if (!newrecord.offset) {
 		db->loc.is_exactmatch = 0;
 		return 0;
 	    }
-
-	    /* read the next record */
-	    r = read_record(db, loc->forwardloc[0], &newrecord);
-	    if (r) return r;
 
 	    /* now where is THIS record? */
 	    cmp = db->compar(_key(db, &newrecord), newrecord.keylen,
@@ -983,10 +977,9 @@ static int find_loc(struct dbengine *db, const char *key, size_t keylen)
 	    if (cmp == 0) {
 		db->loc.is_exactmatch = 1;
 		db->loc.record = newrecord;
-		for (i = 0; i < newrecord.level; i++) {
-		    r = _getloc(db, &newrecord, i, &loc->forwardloc[i]);
-		    if (r) return r;
-		}
+
+		for (i = 0; i < newrecord.level; i++)
+		    loc->forwardloc[i] = _getloc(db, &newrecord, i);
 
 		/* make sure this record is complete */
 		r = check_tailcrc(db, &loc->record);
@@ -1021,25 +1014,23 @@ static int advance_loc(struct dbengine *db)
 	if (r) return r;
     }
 
-    /* reached the end? */
-    if (!loc->forwardloc[0]) {
-	buf_reset(&loc->keybuf);
-	return relocate(db);
-    }
-
     /* update back pointers */
     for (i = 0; i < loc->record.level; i++)
 	loc->backloc[i] = loc->record.offset;
 
     /* ADVANCE */
-    r = read_record(db, loc->forwardloc[0], &loc->record);
+    r = read_skipdelete(db, loc->forwardloc[0], &loc->record);
     if (r) return r;
 
-    /* update forward pointers */
-    for (i = 0; i < loc->record.level; i++) {
-	r = _getloc(db, &loc->record, i, &loc->forwardloc[i]);
-	if (r) return r;
+    /* reached the end? */
+    if (!loc->record.offset) {
+	buf_reset(&loc->keybuf);
+	return relocate(db);
     }
+
+    /* update forward pointers */
+    for (i = 0; i < loc->record.level; i++)
+	loc->forwardloc[i] = _getloc(db, &loc->record, i);
 
     /* keep our location */
     buf_setmap(&loc->keybuf, _key(db, &loc->record), loc->record.keylen);
@@ -1056,7 +1047,7 @@ static int advance_loc(struct dbengine *db)
  * after appending a new record, either create or delete.  The
  * caller must set forwardloc[] correctly for each level it has
  * changed */
-static int stitch(struct dbengine *db, uint8_t maxlevel)
+static int stitch(struct dbengine *db, uint8_t maxlevel, size_t newoffset)
 {
     struct skiploc *loc = &db->loc;
     struct skiprecord oldrecord;
@@ -1067,8 +1058,11 @@ static int stitch(struct dbengine *db, uint8_t maxlevel)
     while (oldrecord.level < maxlevel) {
 	uint8_t level = oldrecord.level;
 
-	r = read_record(db, loc->backloc[level], &oldrecord);
+	r = read_onerecord(db, loc->backloc[level], &oldrecord);
 	if (r) return r;
+
+	/* always getting higher */
+	assert(oldrecord.level > level);
 
 	for (i = level; i < maxlevel; i++)
 	    _setloc(db, &oldrecord, i, loc->forwardloc[i]);
@@ -1077,18 +1071,27 @@ static int stitch(struct dbengine *db, uint8_t maxlevel)
 	if (r) return r;
     }
 
+    /* re-read the "current record" */
+    r = read_onerecord(db, newoffset, &loc->record);
+    if (r) return r;
+
+    /* and update the forward locations */
+    for (i = 0; i < loc->record.level; i++)
+	loc->forwardloc[i] = _getloc(db, &loc->record, i);
+
     return 0;
 }
 
-/* overall "store" function - pass NULL val for delete.  This is
- * the place that all changes funnel through */
+/* overall "store" function - update the value in the current loc.
+   All new values funnel through here.  Check delete_here for
+   deletion.   Force is implied here, it gets checked higher. */
 static int store_here(struct dbengine *db, const char *val, size_t vallen)
 {
     struct skiploc *loc = &db->loc;
     struct skiprecord newrecord;
     uint8_t level = 0;
+    uint8_t i;
     int r;
-    int i;
 
     if (loc->is_exactmatch) {
 	level = loc->record.level;
@@ -1102,6 +1105,7 @@ static int store_here(struct dbengine *db, const char *val, size_t vallen)
     newrecord.level = randlvl(1, MAXLEVEL);
     newrecord.keylen = loc->keybuf.len;
     newrecord.vallen = vallen;
+    newrecord.nextloc[0] = loc->forwardloc[0];
     for (i = 0; i < newrecord.level; i++)
 	newrecord.nextloc[i+1] = loc->forwardloc[i];
     if (newrecord.level > level)
@@ -1116,23 +1120,14 @@ static int store_here(struct dbengine *db, const char *val, size_t vallen)
 	loc->forwardloc[i] = newrecord.offset;
 
     /* update all backpointers */
-    r = stitch(db, level);
-
-    /* finally, re-read the record so we're working with keyoffset
-     * and valoffset fields which are accurate.  Could also fix
-     * append_record to handle this. */
-    r = read_record(db, newrecord.offset, &loc->record);
+    r = stitch(db, level, newrecord.offset);
     if (r) return r;
-
-    /* and update the location to know about it */
-    loc->is_exactmatch = 1;
-    for (i = 0; i < newrecord.level; i++)
-	loc->forwardloc[i] = newrecord.nextloc[i+1];
 
     /* update header to know details of new record */
     db->header.num_records++;
     db->header.repack_size += loc->record.len;
 
+    loc->is_exactmatch = 1;
     loc->end = db->end;
 
     return 0;
@@ -1143,6 +1138,7 @@ static int delete_here(struct dbengine *db)
 {
     struct skiploc *loc = &db->loc;
     struct skiprecord newrecord;
+    struct skiprecord nextrecord;
     int r;
 
     if (!loc->is_exactmatch)
@@ -1151,10 +1147,14 @@ static int delete_here(struct dbengine *db)
     db->header.num_records--;
     db->header.repack_size -= loc->record.len;
 
+    /* by the magic of zeroing, this even works for zero */
+    r = read_skipdelete(db, loc->forwardloc[0], &nextrecord);
+    if (r) return r;
+
     /* build a delete record */
     memset(&newrecord, 0, sizeof(struct skiprecord));
-    newrecord.type = '-';
-    newrecord.nextloc[0] = loc->forwardloc[0];
+    newrecord.type = DELETE;
+    newrecord.nextloc[0] = nextrecord.offset;
 
     /* append to the file */
     r = append_record(db, &newrecord, NULL, NULL);
@@ -1165,18 +1165,11 @@ static int delete_here(struct dbengine *db)
 
     /* update all backpointers right up to the old record's
      * level, so that they all point past */
-    r = stitch(db, loc->record.level);
-    if (r) return r;
-
-    /* load in the back record just so things match up neatly,
-     * may not strictly be required */
-    r = read_record(db, loc->backloc[0], &loc->record);
+    r = stitch(db, loc->record.level, loc->backloc[0]);
     if (r) return r;
 
     /* update location */
-    loc->forwardloc[0] = newrecord.nextloc[0];
     loc->is_exactmatch = 0;
-
     loc->end = db->end;
 
     return 0;
@@ -1862,7 +1855,7 @@ static int dump(struct dbengine *db, int detail __attribute__((unused)))
     while (offset < db->header.current_size) {
 	printf("%08llX ", (LLU)offset);
 
-	r = read_record(db, offset, &record);
+	r = read_onerecord(db, offset, &record);
 	if (r) return r;
 
 	if (r) {
@@ -1928,18 +1921,19 @@ static int myconsistent(struct dbengine *db, struct txn *tid)
     assert(db->current_txn == tid); /* could both be null */
 
     /* read in the dummy */
-    r = read_record(db, HEADER_SIZE, &oldrecord);
+    r = read_onerecord(db, HEADER_SIZE, &oldrecord);
     if (r) return r;
 
     /* set up the location pointers */
-    for (i = 0; i < MAXLEVEL; i++) {
-	r = _getloc(db, &oldrecord, i, &fwd[i]);
-	if (r) return r;
-    }
+    for (i = 0; i < MAXLEVEL; i++)
+	fwd[i] = _getloc(db, &oldrecord, i);
 
     while (fwd[0]) {
-	r = read_record(db, fwd[0], &record);
+	r = read_skipdelete(db, fwd[0], &record);
 	if (r) return r;
+
+	/* was a delete */
+	if (!record.offset) break;
 
 	cmp = db->compar(_key(db, &record), record.keylen,
 			 _key(db, &oldrecord), oldrecord.keylen);
@@ -1955,13 +1949,20 @@ static int myconsistent(struct dbengine *db, struct txn *tid)
 	for (i = 0; i < record.level; i++) {
 	    /* check the old pointer was to here */
 	    if (fwd[i] != record.offset) {
+		/* maybe it's a delete */
+		struct skiprecord tmprecord;
+		r = read_onerecord(db, fwd[i], &tmprecord);
+		if (r) return r;
+		if (tmprecord.type == DELETE)
+		    fwd[i] = tmprecord.nextloc[0];
+	    }
+	    if (fwd[i] != record.offset) {
 		syslog(LOG_ERR, "DBERROR: twoskip broken linkage %s: %08llX at %d, expected %08llX",
 		       _fname(db), (LLU)record.offset, i, (LLU)fwd[i]);
 		return CYRUSDB_INTERNAL;
 	    }
 	    /* and advance to the new pointer */
-	    r = _getloc(db, &record, i, &fwd[i]);
-	    if (r) return r;
+	    fwd[i] = _getloc(db, &record, i);
 	}
 
 	/* keep a copy for comparison purposes */
@@ -1991,7 +1992,7 @@ static int _copy_commit(struct dbengine *db, struct dbengine *newdb,
     int r = 0;
 
     for (offset = commit->nextloc[0]; offset < commit->offset; offset += record.len) {
-	r = read_record(db, offset, &record);
+	r = read_onerecord(db, offset, &record);
 	if (r) goto err;
 	switch (record.type) {
 	case DELETE:
@@ -2044,7 +2045,7 @@ static int recovery2(struct dbengine *db, int *count)
 
     /* start with the dummy */
     for (offset = HEADER_SIZE; offset < _size(db); offset += record.len) {
-	r = read_record(db, offset, &record);
+	r = read_onerecord(db, offset, &record);
 	if (r) {
 	    syslog(LOG_ERR, "DBERROR: %s failed to read at %08llX in recovery2, truncating",
 		   _fname(db), (LLU)offset);
@@ -2106,11 +2107,13 @@ static int recovery1(struct dbengine *db, int *count)
     size_t prev[MAXLEVEL+1];
     size_t next[MAXLEVEL+1];
     struct skiprecord record;
+    struct skiprecord prevrecord;
     struct skiprecord fixrecord;
     size_t nextoffset = 0;
     uint64_t num_records = 0;
     int changed = 0;
     int r = 0;
+    int cmp;
     int i;
 
     assert(mappedfile_iswritelocked(db->mf));
@@ -2130,21 +2133,43 @@ static int recovery1(struct dbengine *db, int *count)
     }
 
     /* start with the dummy */
-    nextoffset = HEADER_SIZE;
+    r = read_onerecord(db, HEADER_SIZE, &prevrecord);
+    if (r) return r;
 
-    /* and everything points back here */
-    for (i = 0; i <= MAXLEVEL; i++)
-	next[i] = nextoffset;
+    /* and pointers forwards */
+    for (i = 0; i <= MAXLEVEL; i++) {
+	prev[i] = prevrecord.offset;
+	next[i] = prevrecord.nextloc[i];
+    }
+
+    nextoffset = _getloc(db, &prevrecord, 0);
 
     while (nextoffset) {
-	r = read_record(db, nextoffset, &record);
+	r = read_onerecord(db, nextoffset, &record);
 	if (r) return r;
+
+	/* just skip over delele records */
+	if (record.type == DELETE) {
+	    nextoffset = record.nextloc[0];
+	    continue;
+	}
+
+	cmp = db->compar(_key(db, &record), record.keylen,
+			 _key(db, &prevrecord), prevrecord.keylen);
+	if (cmp <= 0) {
+	    syslog(LOG_ERR, "DBERROR: twoskip out of order %s: %.*s (%08llX) <= %.*s (%08llX)",
+		   _fname(db), (int)record.keylen, _key(db, &record),
+		   (LLU)record.offset,
+		   (int)prevrecord.keylen, _key(db, &prevrecord),
+		   (LLU)prevrecord.offset);
+	    return CYRUSDB_INTERNAL;
+	}
 
 	/* check for old offsets needing fixing */
 	for (i = 2; i <= record.level; i++) {
 	    if (next[i] != record.offset) {
 		/* need to fix up the previous record to point here */
-		r = read_record(db, prev[i], &fixrecord);
+		r = read_onerecord(db, prev[i], &fixrecord);
 		if (r) return r;
 
 		/* XXX - optimise adjacent same records */
@@ -2160,26 +2185,26 @@ static int recovery1(struct dbengine *db, int *count)
 	/* check for broken level - pointers */
 	for (i = 0; i < 2; i++) {
 	    if (record.nextloc[i] >= db->header.current_size) {
-		record.nextloc[i] = 0;
+		record.nextloc[i] = record.nextloc[1-i];
 		r = rewrite_record(db, &record);
 		changed++;
 	    }
 	}
 
-	/* find the next record */
-	nextoffset = _getzero(db, &record);
-	if (r) return r;
-
 	/* don't count the dummy or deletes */
 	if (record.keylen)
 	    num_records++;
+
+	/* find the next record */
+	prevrecord = record;
+	nextoffset = _getloc(db, &prevrecord, 0);
     }
 
     /* check for remaining offsets needing fixing */
     for (i = 2; i <= MAXLEVEL; i++) {
 	if (next[i]) {
 	    /* need to fix up the previous record to point to the end */
-	    r = read_record(db, prev[i], &fixrecord);
+	    r = read_onerecord(db, prev[i], &fixrecord);
 	    if (r) return r;
 
 	    /* XXX - optimise, same as above */
