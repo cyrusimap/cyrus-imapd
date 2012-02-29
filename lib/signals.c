@@ -66,7 +66,7 @@ static void sighandler(int sig)
     gotsignal[sig] = 1;
 }
 
-static const int catch[] = { SIGHUP, SIGINT, SIGTERM, 0 };
+static const int catch[] = { SIGHUP, 0 };
 
 void signals_add_handlers(int alarm)
 {
@@ -88,9 +88,12 @@ void signals_add_handlers(int alarm)
     }
 
     /* no restartable SIGQUIT thanks */
-    if (sigaction(SIGQUIT, &action, NULL) < 0) {
+    if (sigaction(SIGQUIT, &action, NULL) < 0)
 	fatal("unable to install signal handler for SIGQUIT", EC_TEMPFAIL);
-    }
+    if (sigaction(SIGINT, &action, NULL) < 0)
+	fatal("unable to install signal handler for SIGINT", EC_TEMPFAIL);
+    if (sigaction(SIGTERM, &action, NULL) < 0)
+	fatal("unable to install signal handler for SIGTERM", EC_TEMPFAIL);
 
 #ifdef SA_RESTART
     action.sa_flags |= SA_RESTART;
