@@ -97,8 +97,8 @@ static void sieve_dispose(isieve_t *obj)
     sasl_dispose(&obj->conn);
     free(obj->serverFQDN);
 
-    if (obj->refer_authinfo) free(obj->refer_authinfo);
-    if (obj->refer_callbacks) free(obj->refer_callbacks);
+    free(obj->refer_authinfo);
+    free(obj->refer_callbacks);
 
     prot_free(obj->pin);
     prot_free(obj->pout);
@@ -143,10 +143,7 @@ int init_net(char *serverFQDN, int port, isieve_t **obj)
     return -1;
   }
 
-  *obj = (isieve_t *) xmalloc(sizeof(isieve_t));
-  if (!*obj) return -1;
-
-  memset(*obj, '\0', sizeof(isieve_t));
+  *obj = (isieve_t *) xzmalloc(sizeof(isieve_t));
 
   (*obj)->sock = sock;
   (*obj)->serverFQDN = xstrdup(serverFQDN);
@@ -646,9 +643,9 @@ static int do_referral(isieve_t *obj, char *refer_to)
 
 	if(mtried) {
 	    char *newlist = (char*) xmalloc(strlen(mechlist)+1);
-	    char *mtr = (char*) xstrdup(mtried);
+	    char *mtr = xstrdup(mtried);
 	    char *tmp;
-	    
+
 	    ucase(mtr);
 	    tmp = strstr(mechlist,mtr);
 	    if (tmp) {
