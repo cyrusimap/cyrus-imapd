@@ -54,6 +54,10 @@
 
 EXPORTED const char *map_method_desc = "stupidshared";
 
+#ifndef MAP_FAILED
+#define MAP_FAILED ((void *)-1)
+#endif
+
 /*
  * Create/refresh mapping of file
  */
@@ -63,6 +67,7 @@ EXPORTED map_refresh(int fd, int onceonly, const char **base,
 		     const char *mboxname)
 {
     struct stat sbuf;
+    int flags;
     char buf[80];
 
     if (newlen == MAP_UNKNOWN_LEN) {
@@ -80,15 +85,16 @@ EXPORTED map_refresh(int fd, int onceonly, const char **base,
 
     if (*len) munmap((char *)*base, *len);
 
-    *base = (char *)mmap((caddr_t)0, newlen, PROT_READ, MAP_SHARED
+    flags = MAP_SHARED;
 #ifdef MAP_FILE
-| MAP_FILE
+    flags |= MAP_FILE;
 #endif
 #ifdef MAP_VARIABLE
-| MAP_VARIABLE
+    flags |= MAP_VARIABLE;
 #endif
-			 , fd, 0L);
-    if (*base == (char *)-1) {
+
+    *base = (char *)mmap((caddr_t)0, newlen, PROT_READ, flags, fd, 0L);
+    if (*base == (char *)MAP_FAILED) {
 	syslog(LOG_ERR, "IOERROR: mapping %s file%s%s: %m", name,
 	       mboxname ? " for " : "", mboxname ? mboxname : "");
 	snprintf(buf, sizeof(buf), "failed to mmap %s file", name);
