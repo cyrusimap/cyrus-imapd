@@ -1662,7 +1662,7 @@ static int mycommit(struct dbengine *db, struct txn *tid)
 	}
     } else {
 	/* consider checkpointing */
-	size_t diff = db->header.current_size - db->header.repack_size;
+	int diff = db->header.current_size - db->header.repack_size;
 	if (diff > MINREWRITE &&
 	   ((float)diff / (float)db->header.current_size) > REWRITE_RATIO) {
 	    int r2 = mycheckpoint(db);
