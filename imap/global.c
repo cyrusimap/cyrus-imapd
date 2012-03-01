@@ -357,9 +357,7 @@ EXPORTED int mysasl_config(void *context __attribute__((unused)),
 		  const char **result,
 		  unsigned *len)
 {
-    char opt[1024];
-
-    if (!strcmp(option, "srvtab")) { 
+    if (!strcmp(option, "srvtab")) {
 	/* we don't transform srvtab! */
 	*result = config_getstring(IMAPOPT_SRVTAB);
     } else {
@@ -367,18 +365,16 @@ EXPORTED int mysasl_config(void *context __attribute__((unused)),
 
 	if (plugin_name) {
 	    /* first try it with the plugin name */
-	    strlcpy(opt, "sasl_", sizeof(opt));
-	    strlcat(opt, plugin_name, sizeof(opt));
-	    strlcat(opt, "_", sizeof(opt));
-	    strlcat(opt, option, sizeof(opt));
+	    char *opt = strconcat("sasl_", plugin_name, "_", option, (char*)NULL);
 	    *result = config_getoverflowstring(opt, NULL);
+	    free(opt);
 	}
 
 	if (*result == NULL) {
 	    /* try without the plugin name */
-	    strlcpy(opt, "sasl_", sizeof(opt));
-	    strlcat(opt, option, sizeof(opt));
+	    char *opt = strconcat("sasl_", option, (char *)NULL);
 	    *result = config_getoverflowstring(opt, NULL);
+	    free(opt);
 	}
     }
 
@@ -386,7 +382,7 @@ EXPORTED int mysasl_config(void *context __attribute__((unused)),
 	if (len) { *len = strlen(*result); }
 	return SASL_OK;
     }
-   
+
     return SASL_FAIL;
 }
 
