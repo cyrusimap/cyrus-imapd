@@ -75,7 +75,7 @@ static int lexer_state = LEXER_STATE_NORMAL;
 		ERR();					\
   	      }
 
-static int token_lookup(char *str, int len __attribute__((unused)))
+static int token_lookup(const char *str)
 {
   if (strcmp(str,"ok")==0) return TOKEN_OK;
   if (strcmp(str,"no")==0) return TOKEN_NO;
@@ -260,7 +260,7 @@ int yylex(lexstate_t * lvalp, void * client)
 	buffer[ buff_ptr - buffer] = '\0';
 
 	/* We've got the atom. */
-	token = token_lookup((char *) buffer, (int) (buff_ptr - buffer));
+	token = token_lookup(buffer);
 
 	if (token!=-1) {
 	  lexer_state=LEXER_STATE_NORMAL;
