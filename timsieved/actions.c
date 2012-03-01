@@ -386,14 +386,14 @@ int putscript(struct protstream *conn, const struct buf *name,
   result = is_script_parsable(stream, &errstr, &s);
 
   if (result != TIMSIEVE_OK) {
-      if (errstr && *errstr) { 
-	  prot_printf(conn, "NO {" SIZE_T_FMT "}\r\n%s\r\n",
-		      strlen(errstr), errstr);
-	  free(errstr);
+      if (errstr && *errstr) {
+	  prot_printf(conn, "NO ");
+	  prot_printstring(conn, errstr);
+	  prot_printf(conn, "\r\n");
       } else {
-	  if (errstr) free(errstr);
 	  prot_printf(conn, "NO \"parse failed\"\r\n");
       }
+      free(errstr);
       fclose(stream);
       unlink(path);
       return result;
