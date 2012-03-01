@@ -569,12 +569,9 @@ int listscripts(struct protstream *conn)
 	{
 	    if (strcmp(dir->d_name + (length - 7), ".script")==0)
 	    {
-		char *namewo=(char *) xmalloc(length-6);
+		char *namewo = xstrndup(dir->d_name, length-7);
 
-		memcpy(namewo, dir->d_name, length-7);
-		namewo[length-7]='\0';
-
-		if (isactive(namewo)==TRUE)
+		if (isactive(namewo))
 		    prot_printf(conn,"\"%s\" ACTIVE\r\n", namewo);
 		else
 		    prot_printf(conn,"\"%s\"\r\n", namewo);
