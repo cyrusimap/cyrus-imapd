@@ -62,7 +62,7 @@
 #include "util.h"
 #include "xmalloc.h"
 
-static int token_lookup (char *str, int len __attribute__((unused)))
+static int token_lookup(const char *str)
 {
     switch (*str) {
     case 'a':
@@ -357,7 +357,7 @@ int timlex(struct buf *outstr, unsigned long *outnum,  struct protstream *stream
 	*buff_ptr = '\0';
 
 	/* We've got the atom. */
-	token = token_lookup((char *) buffer, (int) (buff_ptr - buffer));
+	token = token_lookup(buffer);
 
 	if (token!=-1) {
 	  lexer_state=LEXER_STATE_NORMAL;
