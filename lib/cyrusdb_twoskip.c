@@ -419,6 +419,7 @@ enum {
 };
 
 #define HEADER_SIZE 64
+#define DUMMY_OFFSET HEADER_SIZE
 #define MAXRECORDHEAD ((MAXLEVEL + 5)*8)
 
 /* mount a scratch monkey */
@@ -671,6 +672,8 @@ static int read_skipdelete(struct dbengine *db, size_t offset,
     int r;
 
     r = read_onerecord(db, offset, record);
+    if (r) return r;
+
     if (record->type == DELETE)
 	r = read_onerecord(db, record->nextloc[0], record);
 
@@ -870,7 +873,7 @@ static int relocate(struct dbengine *db)
     loc->end = db->end;
 
     /* start with the dummy */
-    r = read_onerecord(db, HEADER_SIZE, &loc->record);
+    r = read_onerecord(db, DUMMY_OFFSET, &loc->record);
     loc->is_exactmatch = 0;
 
     /* initialise pointers */
@@ -899,9 +902,6 @@ static int relocate(struct dbengine *db)
 
 	if (newrecord.offset) {
 	    assert(newrecord.level >= level);
-
-	    /* may have read past a delete */
-	    loc->forwardloc[level-1] = newrecord.offset;
 
 	    cmp = db->compar(_key(db, &newrecord), newrecord.keylen,
 			     loc->keybuf.s, loc->keybuf.len);
@@ -1105,7 +1105,6 @@ static int store_here(struct dbengine *db, const char *val, size_t vallen)
     newrecord.level = randlvl(1, MAXLEVEL);
     newrecord.keylen = loc->keybuf.len;
     newrecord.vallen = vallen;
-    newrecord.nextloc[0] = loc->forwardloc[0];
     for (i = 0; i < newrecord.level; i++)
 	newrecord.nextloc[i+1] = loc->forwardloc[i];
     if (newrecord.level > level)
@@ -1327,7 +1326,7 @@ static int opendb(const char *fname, int flags, struct dbengine **ret)
 	dummy.level = MAXLEVEL;
 
 	/* append dummy after header location */
-	db->end = HEADER_SIZE;
+	db->end = DUMMY_OFFSET;
 	r = write_record(db, &dummy, NULL, NULL);
 	if (r) {
 	    syslog(LOG_ERR, "DBERROR: writing dummy node for %s: %m",
@@ -1841,7 +1840,7 @@ static int mycheckpoint(struct dbengine *db)
 static int dump(struct dbengine *db, int detail __attribute__((unused)))
 {
     struct skiprecord record;
-    size_t offset = HEADER_SIZE;
+    size_t offset = DUMMY_OFFSET;
     int r = 0;
     int i;
 
@@ -1911,9 +1910,10 @@ static int consistent(struct dbengine *db)
 /* perform some basic consistency checks */
 static int myconsistent(struct dbengine *db, struct txn *tid)
 {
-    struct skiprecord oldrecord;
+    struct skiprecord prevrecord;
     struct skiprecord record;
     size_t fwd[MAXLEVEL];
+    size_t num_records = 0;
     int r = 0;
     int cmp;
     int i;
@@ -1921,41 +1921,35 @@ static int myconsistent(struct dbengine *db, struct txn *tid)
     assert(db->current_txn == tid); /* could both be null */
 
     /* read in the dummy */
-    r = read_onerecord(db, HEADER_SIZE, &oldrecord);
+    r = read_onerecord(db, DUMMY_OFFSET, &prevrecord);
     if (r) return r;
 
     /* set up the location pointers */
     for (i = 0; i < MAXLEVEL; i++)
-	fwd[i] = _getloc(db, &oldrecord, i);
+	fwd[i] = _getloc(db, &prevrecord, i);
 
     while (fwd[0]) {
-	r = read_skipdelete(db, fwd[0], &record);
+	r = read_onerecord(db, fwd[0], &record);
 	if (r) return r;
 
-	/* was a delete */
-	if (!record.offset) break;
+	if (record.type == DELETE) {
+	    fwd[0] = record.nextloc[0];
+	    continue;
+	}
 
 	cmp = db->compar(_key(db, &record), record.keylen,
-			 _key(db, &oldrecord), oldrecord.keylen);
+			 _key(db, &prevrecord), prevrecord.keylen);
 	if (cmp <= 0) {
 	    syslog(LOG_ERR, "DBERROR: twoskip out of order %s: %.*s (%08llX) <= %.*s (%08llX)",
 		   _fname(db), (int)record.keylen, _key(db, &record),
 		   (LLU)record.offset,
-		   (int)oldrecord.keylen, _key(db, &oldrecord),
-		   (LLU)oldrecord.offset);
+		   (int)prevrecord.keylen, _key(db, &prevrecord),
+		   (LLU)prevrecord.offset);
 	    return CYRUSDB_INTERNAL;
 	}
 
 	for (i = 0; i < record.level; i++) {
 	    /* check the old pointer was to here */
-	    if (fwd[i] != record.offset) {
-		/* maybe it's a delete */
-		struct skiprecord tmprecord;
-		r = read_onerecord(db, fwd[i], &tmprecord);
-		if (r) return r;
-		if (tmprecord.type == DELETE)
-		    fwd[i] = tmprecord.nextloc[0];
-	    }
 	    if (fwd[i] != record.offset) {
 		syslog(LOG_ERR, "DBERROR: twoskip broken linkage %s: %08llX at %d, expected %08llX",
 		       _fname(db), (LLU)record.offset, i, (LLU)fwd[i]);
@@ -1966,7 +1960,8 @@ static int myconsistent(struct dbengine *db, struct txn *tid)
 	}
 
 	/* keep a copy for comparison purposes */
-	oldrecord = record;
+	num_records++;
+	prevrecord = record;
     }
 
     for (i = 0; i < MAXLEVEL; i++) {
@@ -1978,6 +1973,12 @@ static int myconsistent(struct dbengine *db, struct txn *tid)
     }
 
     /* we walked the whole file and saw every pointer */
+
+    if (num_records != db->header.num_records) {
+	syslog(LOG_ERR, "DBERROR: twoskip record count mismatch %s: %llu should be %llu",
+	       _fname(db), (LLU)num_records, (LLU)db->header.num_records);
+	return CYRUSDB_INTERNAL;
+    }
 
     return 0;
 }
@@ -2044,7 +2045,7 @@ static int recovery2(struct dbengine *db, int *count)
     newdb->header.generation = db->header.generation + 1;
 
     /* start with the dummy */
-    for (offset = HEADER_SIZE; offset < _size(db); offset += record.len) {
+    for (offset = DUMMY_OFFSET; offset < _size(db); offset += record.len) {
 	r = read_onerecord(db, offset, &record);
 	if (r) {
 	    syslog(LOG_ERR, "DBERROR: %s failed to read at %08llX in recovery2, truncating",
@@ -2133,13 +2134,22 @@ static int recovery1(struct dbengine *db, int *count)
     }
 
     /* start with the dummy */
-    r = read_onerecord(db, HEADER_SIZE, &prevrecord);
+    r = read_onerecord(db, DUMMY_OFFSET, &prevrecord);
     if (r) return r;
 
     /* and pointers forwards */
-    for (i = 0; i <= MAXLEVEL; i++) {
+    for (i = 2; i <= MAXLEVEL; i++) {
 	prev[i] = prevrecord.offset;
 	next[i] = prevrecord.nextloc[i];
+    }
+
+    /* check for broken level - pointers */
+    for (i = 0; i < 2; i++) {
+	if (prevrecord.nextloc[i] >= db->end) {
+	    prevrecord.nextloc[i] = 0;
+	    r = rewrite_record(db, &prevrecord);
+	    changed++;
+	}
     }
 
     nextoffset = _getloc(db, &prevrecord, 0);
@@ -2184,20 +2194,19 @@ static int recovery1(struct dbengine *db, int *count)
 
 	/* check for broken level - pointers */
 	for (i = 0; i < 2; i++) {
-	    if (record.nextloc[i] >= db->header.current_size) {
-		record.nextloc[i] = record.nextloc[1-i];
+	    if (record.nextloc[i] >= db->end) {
+		record.nextloc[i] = 0;
 		r = rewrite_record(db, &record);
 		changed++;
 	    }
 	}
 
-	/* don't count the dummy or deletes */
-	if (record.keylen)
-	    num_records++;
+	num_records++;
 
 	/* find the next record */
+	nextoffset = _getloc(db, &record, 0);
+
 	prevrecord = record;
-	nextoffset = _getloc(db, &prevrecord, 0);
     }
 
     /* check for remaining offsets needing fixing */
