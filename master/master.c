@@ -344,43 +344,60 @@ static void centry_set_state(struct centry *c, enum sstate state)
 	c->janitor_deadline = time(NULL) + 2;
 }
 
-/* see if 'listen' parameter has both hostname and port, or just port */
-static char *parse_listen(char *listen)
+/*
+ * Parse the "listen" parameter as one of the forms:
+ *
+ * hostname
+ * hostname ':' port
+ * ipv4-address
+ * ipv4-address ':' port
+ * '[' ipv4-address ']'
+ * '[' ipv4-address ']' ':' port
+ * '[' ipv6-address ']'
+ * '[' ipv6-address ']' ':' port
+ *
+ * Returns 0 on success with one or more of *@hostp and *@portp set
+ * to new strings which must be free()d by the caller, or -1 on error.
+ */
+static int parse_inet_listen(const char *listen,
+			     char **hostp, char **portp)
 {
-    char *cp;
-    char *port = NULL;
+    const char *cp;
 
-    if ((cp = strrchr(listen,']')) != NULL) {
-        /* ":port" after closing bracket for IP address? */
-        if (*cp++ != '\0' && *cp == ':') {
-            *cp++ = '\0';
-            if (*cp != '\0') {
-                port = cp;
-            }
-        }
-    } else if ((cp = strrchr(listen,':')) != NULL) {
-        /* ":port" after hostname? */
-        *cp++ = '\0';
-        if (*cp != '\0') {
-            port = cp;
-        }
+    *portp = NULL;
+    *hostp = NULL;
+    if (listen[0] == '[') {
+	cp = strrchr(listen, ']');
+	if (!cp)
+	    return -1;
+	cp++;
+	if (*cp == ':') {
+	    if (!cp[1])
+		return -1;
+	    *hostp = xstrndup(listen+1, (cp - listen - 2));
+	    *portp = xstrdup(cp+1);
+	    return 0;
+	}
+	if (!*cp) {
+	    *hostp = xstrndup(listen+1, (cp - listen - 2));
+	    /* no port specified */
+	    return 0;
+	}
+	return -1;
     }
-    return port;
-}
 
-static char *parse_host(char *listen)
-{
-    char *cp;
-
-    /* do we have a hostname, or IP number? */
-    /* XXX are brackets necessary  */
-    if (*listen == '[') {
-        listen++;  /* skip first bracket */
-        if ((cp = strrchr(listen,']')) != NULL) {
-            *cp = '\0';
-        }
+    cp = strrchr(listen, ':');
+    if (cp) {
+	if (!cp[1])
+	    return -1;
+	*hostp = xstrndup(listen, (cp - listen));
+	*portp = xstrdup(cp+1);
+	return 0;
     }
-    return listen;
+
+    /* no host specified */
+    *portp = xstrdup(listen);
+    return 0;
 }
 
 static int verify_service_file(const strarray_t *filename)
@@ -468,7 +485,7 @@ static void service_create(struct service *s)
 	strcpy(sunsock.sun_path, s->listen);
 	unlink(s->listen);
     } else { /* inet socket */
-	char *listen, *port;
+	char *port;
 	char *listen_addr;
 
 	memset(&hints, 0, sizeof(hints));
@@ -502,25 +519,17 @@ static void service_create(struct service *s)
 	    return;
 	}
 
-	/* parse_listen() and resolve_host() are destructive,
-	 * so make a work copy of s->listen
-	 */
-	listen = xstrdup(s->listen);
-
-        if ((port = parse_listen(listen)) == NULL) {
-	    /* listen IS the port */
-	    port = listen;
-	    listen_addr = NULL;
-        } else {
-	    /* listen is now just the address */
-	    listen_addr = parse_host(listen);
-	    if (*listen_addr == '\0')
-		listen_addr = NULL;
-        }
+	if (parse_inet_listen(s->listen, &listen_addr, &port) < 0) {
+	    syslog(LOG_ERR, "invalid listen '%s', disabling %s",
+		   s->listen, s->name);
+	    service_forget_exec(s);
+	    return;
+	}
 
 	error = getaddrinfo(listen_addr, port, &hints, &res0);
 
-	free(listen);
+	free(listen_addr);
+	free(port);
 
 	if (error) {
 	    syslog(LOG_INFO, "%s, disabling %s", gai_strerror(error), s->name);
