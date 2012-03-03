@@ -942,7 +942,10 @@ static int find_loc(struct dbengine *db, const char *key, size_t keylen)
     struct skiploc *loc = &db->loc;
     int cmp, i, r;
 
-    buf_setmap(&loc->keybuf, key, keylen);
+    if (key != loc->keybuf.s)
+	buf_setmap(&loc->keybuf, key, keylen);
+    else if (keylen != loc->keybuf.len)
+	buf_truncate(&loc->keybuf, keylen);
 
     /* can we special case advance? */
     if (keylen && loc->end == db->end
