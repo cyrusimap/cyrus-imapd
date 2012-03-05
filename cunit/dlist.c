@@ -1,0 +1,42 @@
+#include "config.h"
+#include "cunit/cunit.h"
+#include "prot.h"
+#include "dlist.h"
+#include "xmalloc.h"
+#include "util.h"
+
+/* XXX - need LOTS of dlist tests */
+
+static void test_nil(void)
+{
+    struct buf b = BUF_INITIALIZER;
+    struct dlist *dl = dlist_newlist(NULL, NULL);
+    struct dlist *item;
+    const char *s;
+    int r;
+
+    dlist_setatom(dl, "STRING", "NIL");
+    dlist_setatom(dl, "EMPTY", NULL);
+    dlist_printbuf(dl, 0, &b);
+
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&b), "(\"NIL\" NIL)");
+    dlist_free(&dl);
+
+    r = dlist_parsemap(&dl, 0, b.s, b.len);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_PTR_NOT_NULL(dl);
+
+    item = dlist_getchildn(dl, 0);
+    CU_ASSERT_PTR_NOT_NULL(item);
+    CU_ASSERT_EQUAL(item->type, DL_ATOM);
+    CU_ASSERT_STRING_EQUAL(item->sval, "NIL");
+
+    item = dlist_getchildn(dl, 1);
+    CU_ASSERT_PTR_NOT_NULL(item);
+    CU_ASSERT_EQUAL(item->type, DL_NIL);
+    CU_ASSERT_PTR_NULL(item->sval);
+
+    dlist_free(&dl);
+    buf_free(&b);
+}
+
