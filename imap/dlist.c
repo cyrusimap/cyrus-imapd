@@ -745,7 +745,7 @@ char dlist_parse(struct dlist **dlp, int parsekey, struct protstream *in)
     }
     else {
 	prot_ungetc(c, in);
-	c = getastring(in, NULL, &vbuf);
+	c = getnastring(in, NULL, &vbuf);
 	dl = dlist_setatom(NULL, kbuf.s, vbuf.s);
     }
 
