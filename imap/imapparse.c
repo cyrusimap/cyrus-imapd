@@ -188,7 +188,11 @@ int getxstring(struct protstream *pin, struct protstream *pout,
 	    for (;;) {
 		if (c == EOF || isspace(c) || c == '(' || 
 		          c == ')' || c == '\"') {
-		    buf_cstring(buf);
+		    /* gotta handle NIL here too */
+		    if ((flags & GXS_NIL) && buf->len == 3 && !memcmp(buf->s, "NIL", 3))
+			buf_free(buf);
+		    else
+			buf_cstring(buf);
 		    return c;
 		}
 		buf_putc(buf, c);
