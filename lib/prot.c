@@ -1419,7 +1419,8 @@ int prot_printastring(struct protstream *out, const char *s)
 
     /* special cases for atoms */
     if (!*s) return prot_printf(out, "\"\"");
-    if (imparse_isatom(s)) return prot_printf(out, "%s", s);
+    if (imparse_isatom(s) && strcmp(s, "NIL"))
+	return prot_printf(out, "%s", s);
 
     /* not an atom, so pass to printstring */
     return prot_printstring(out, s);
