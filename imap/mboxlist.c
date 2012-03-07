@@ -1642,6 +1642,14 @@ static int find_p(void *rockp,
 	    return 0;
     }
 
+    /* Suppress calendar mailboxes unless admin: overrides ACL_LOOKUP test */
+    if (!rock->isadmin) {
+	int mbtype;
+
+	mbtype = strtol(data, NULL, 10);
+	if (mbtype & MBTYPE_CALENDAR) return 0;
+    }
+
 
     /* check acl */
     if (!rock->isadmin) {
