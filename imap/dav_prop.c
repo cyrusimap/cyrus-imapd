@@ -80,6 +80,7 @@ static const struct cal_comp_t {
     { NULL, 0 }
 };
 
+extern int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname);
 static int add_privs(int rights, int implicit,
 		     xmlNodePtr parent, xmlNodePtr root, xmlNsPtr *ns);
 

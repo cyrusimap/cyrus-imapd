@@ -98,6 +98,7 @@ static int meth_report(struct transaction_t *txn);
 static int parse_path(struct request_target_t *tgt, const char **errstr);
 static int is_mediatype(const char *hdr, const char *type);
 static int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root);
+int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname);
 
 /* Namespace for CalDAV collections */
 const struct namespace_t namespace_calendar = {
@@ -2519,6 +2520,40 @@ static int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root)
     if (!(*root = xmlDocGetRootElement(doc))) {
 	txn->error.desc = "Missing root element in request";
 	return HTTP_BAD_REQUEST;
+    }
+
+    return 0;
+}
+
+
+/* Create a mailbox name from the request URL */ 
+int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname)
+{
+    char *p;
+    size_t siz, len;
+
+    p = mboxname;
+    siz = MAX_MAILBOX_BUFFER - 1;
+    if (req_tgt->user) {
+	len = snprintf(p, siz, "user");
+	p += len;
+	siz -= len;
+
+	if (req_tgt->userlen) {
+	    len = snprintf(p, siz, ".%.*s",
+			   req_tgt->userlen, req_tgt->user);
+	    p += len;
+	    siz -= len;
+	}
+    }
+    len = snprintf(p, siz, "%s%s", p != mboxname ? "." : "",
+		   req_tgt->namespace == URL_NS_CALENDAR ? "#calendars" :
+		   "#addressbooks");
+    p += len;
+    siz -= len;
+    if (req_tgt->collection) {
+	snprintf(p, siz, ".%.*s",
+		 req_tgt->collen, req_tgt->collection);
     }
 
     return 0;
