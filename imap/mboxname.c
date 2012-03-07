@@ -822,6 +822,40 @@ int mboxname_isdeletedmailbox(const char *name)
 }
 
 /*
+ * If (internal) mailbox 'name' is a CALENDAR mailbox
+ * returns boolean
+ */
+int mboxname_iscalendarmailbox(const char *name, int mbtype)
+{
+    static const char *calendarprefix = NULL;
+    static int calendarprefix_len = 0;
+    const char *p;
+    const char *start = name;
+
+    if (mbtype & MBTYPE_CALENDAR) return 1;  /* Only works on backends */
+
+    if (!calendarprefix) {
+	calendarprefix = config_getstring(IMAPOPT_CALENDARPREFIX);
+	if (calendarprefix) calendarprefix_len = strlen(calendarprefix);
+    }
+
+    /* if the prefix is blank, then no calendars */
+    if (!calendarprefix_len) return 0;
+
+    /* step past the domain part */
+    if (config_virtdomains && (p = strchr(start, '!')))
+	start = p + 1;
+
+    /* step past the user part */
+    if (!strncmp(start, "user.", 5) && (p = strchr(start+5, '.')))
+	start = p + 1;
+
+    return ((!strncmp(start, calendarprefix, calendarprefix_len) &&
+	     (start[calendarprefix_len] == '\0' ||
+	      start[calendarprefix_len] == '.')) ? 1 : 0);
+}
+
+/*
  * Translate (internal) inboxname into corresponding userid.
  */
 char *mboxname_to_userid(const char *mboxname)

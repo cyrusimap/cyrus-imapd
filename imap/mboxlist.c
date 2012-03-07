@@ -1632,22 +1632,17 @@ static int find_p(void *rockp,
 	return 0;
     }
 
-    /* Suppress deleted hierarchy unless admin: overrides ACL_LOOKUP test */
+    /* Suppress deleted hierarchy and calendar mailboxes unless admin:
+       overrides ACL_LOOKUP test */
     if (!rock->isadmin) {
 	char namebuf[MAX_MAILBOX_BUFFER];
+	int mbtype = strtol(data, NULL, 10);
 
 	memcpy(namebuf, key, keylen);
 	namebuf[keylen] = '\0';
-	if (mboxname_isdeletedmailbox(namebuf))
+	if (mboxname_isdeletedmailbox(namebuf) ||
+	    mboxname_iscalendarmailbox(namebuf, mbtype))
 	    return 0;
-    }
-
-    /* Suppress calendar mailboxes unless admin: overrides ACL_LOOKUP test */
-    if (!rock->isadmin) {
-	int mbtype;
-
-	mbtype = strtol(data, NULL, 10);
-	if (mbtype & MBTYPE_CALENDAR) return 0;
     }
 
 

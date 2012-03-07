@@ -2529,8 +2529,13 @@ static int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root)
 /* Create a mailbox name from the request URL */ 
 int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname)
 {
+    static const char *calendarprefix = NULL;
     char *p;
     size_t siz, len;
+
+    if (!calendarprefix) {
+	calendarprefix = config_getstring(IMAPOPT_CALENDARPREFIX);
+    }
 
     p = mboxname;
     siz = MAX_MAILBOX_BUFFER - 1;
@@ -2547,7 +2552,7 @@ int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname)
 	}
     }
     len = snprintf(p, siz, "%s%s", p != mboxname ? "." : "",
-		   req_tgt->namespace == URL_NS_CALENDAR ? "#calendars" :
+		   req_tgt->namespace == URL_NS_CALENDAR ? calendarprefix :
 		   "#addressbooks");
     p += len;
     siz -= len;

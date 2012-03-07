@@ -335,6 +335,12 @@ int service_init(int argc __attribute__((unused)),
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
     setproctitle_init(argc, argv, envp);
 
+#ifdef WITH_CALDAV
+    if (!config_getstring(IMAPOPT_CALENDARPREFIX)) {
+	fatal("the 'calendarprefix' option is not set", EC_CONFIG);
+    }
+#endif
+
     /* set signal handlers */
     signals_set_shutdown(&shut_down);
     signal(SIGPIPE, SIG_IGN);

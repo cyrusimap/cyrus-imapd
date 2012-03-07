@@ -133,6 +133,12 @@ char *mboxname_isusermailbox(const char *name, int isinbox);
  */
 int mboxname_isdeletedmailbox(const char *name);
 
+/*
+ * If (internal) mailbox 'name' is a CALENDAR mailbox
+ * returns boolean
+ */
+int mboxname_iscalendarmailbox(const char *name, int mbtype);
+
 /* check if one mboxname is a parent or same as the other */
 int mboxname_is_prefix(const char *longstr, const char *shortstr);
 
