@@ -816,6 +816,7 @@ static int expunge_deleted(void)
     struct index_record record;
     uint32_t msgno;
     int r = 0;
+    int numexpunged = 0;
 
     /* loop over all known messages looking for deletes */
     for (msgno = 1; msgno <= popd_exists; msgno++) {
@@ -833,6 +834,7 @@ static int expunge_deleted(void)
 
 	/* mark expunged */
 	record.system_flags |= FLAG_EXPUNGED;
+        numexpunged++;
 
 	/* store back to the mailbox */
 	r = mailbox_rewrite_index_record(popd_mailbox, &record);
@@ -842,6 +844,11 @@ static int expunge_deleted(void)
     if (r) {
 	syslog(LOG_ERR, "IOERROR: %s failed to expunge record %u uid %u, aborting",
 	       popd_mailbox->name, msgno, popd_msg[msgno].uid);
+    }
+
+    if (!r && (numexpunged > 0)) {
+	syslog(LOG_NOTICE, "Expunged %d messages from %s",
+	       numexpunged, popd_mailbox->name);
     }
 
     return r;

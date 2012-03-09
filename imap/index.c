@@ -295,6 +295,7 @@ int index_expunge(struct index_state *state, char *sequence)
     uint32_t msgno;
     struct index_map *im;
     struct seqset *seq = NULL;
+    int numexpunged = 0;
 
     r = index_lock(state);
     if (r) return r;
@@ -322,6 +323,7 @@ int index_expunge(struct index_state *state, char *sequence)
 	    state->numrecent--;
 
 	im->record.system_flags |= FLAG_EXPUNGED;
+        numexpunged++;
 
 	r = mailbox_rewrite_index_record(state->mailbox, &im->record);
 	if (r) break;
@@ -332,6 +334,10 @@ int index_expunge(struct index_state *state, char *sequence)
     /* unlock before responding */
     index_unlock(state);
 
+    if (!r && (numexpunged > 0)) {
+	syslog(LOG_NOTICE, "Expunged %d messages from %s",
+	       numexpunged, state->mailbox->name);
+    }
     return r;
 }
 

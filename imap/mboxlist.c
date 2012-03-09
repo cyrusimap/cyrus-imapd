@@ -1113,6 +1113,8 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
     }
 
     /* Rename the actual mailbox */
+    syslog(LOG_INFO, "Rename: %s -> %s", oldname, newname);
+
     r = mailbox_rename_copy(oldmailbox, newname, newpartition,
 			    isusermbox ? userid : NULL, ignorequota,
 			    &newmailbox);
