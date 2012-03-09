@@ -283,6 +283,25 @@ static void test_long_domain(void)
     parseaddr_free(a);
 }
 
+static void test_rfc2047_text(void)
+{
+    struct address *a;
+
+    /* RFC2047 MIME-encoded text in an address is passed through
+     * unmolested, to be decoded by upper layers, or not, on demand */
+
+    a = NULL;
+    parseaddr_list("=?UTF-8?Q?=F0=92=8C=89=F0=92=8B=9B?= <Dumusi@lagash.sm>", &a);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(a);
+    CU_ASSERT_STRING_EQUAL(a->name, "=?UTF-8?Q?=F0=92=8C=89=F0=92=8B=9B?=");
+    CU_ASSERT_STRING_EQUAL(a->mailbox, "Dumusi");
+    CU_ASSERT_STRING_EQUAL(a->domain, "lagash.sm");
+    CU_ASSERT_PTR_NULL(a->next);
+
+    parseaddr_free(a);
+}
+
+
 static void test_group(void)
 {
     struct address *a;
