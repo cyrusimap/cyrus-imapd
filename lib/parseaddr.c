@@ -254,11 +254,12 @@ char *specials;
 		src++;
 		if (c == '\"') break;
 		if (c == '\\') {
-		    if (!(c = *src)) break;
+		    if (!(c = *src)) goto fail;
 		    src++;
 		}
 		*dst++ = c;
 	    }
+	    if (c != '"') goto fail;
 	}
 	else if (Uisspace(c) || c == '(') {
 	    src--;
@@ -275,6 +276,11 @@ char *specials;
 	    *dst++ = c;
 	}
     }
+
+fail:
+    /* simulate end-of-string */
+    *phrasep = "";
+    return 0;
 }
 
 /*
