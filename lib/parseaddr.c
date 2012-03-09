@@ -249,17 +249,30 @@ char *specials;
 
     for (;;) {
         c = *src++;
-	if (c == '\"') {
+	if (c == '"') {
 	    while ((c = *src)) {
 		src++;
-		if (c == '\"') break;
+		if (c == '\r' && *src == '\n') {
+		    /* CR+LF combination */
+		    src++;
+		    if (*src == ' ' || *src == '\t') {
+			/* CR+LF+WSP - folded header field,
+			 * unfold it by skipping ONLY the CR+LF */
+			continue;
+		    }
+		    /* otherwise we have CR+LF at the end of a header
+		     * field, which means we have an unbalanced " */
+		    goto fail;
+		}
+		if (c == '\r' || c == '\n') goto fail;	/* invalid chars */
+		if (c == '"') break;	    /* end of quoted string */
 		if (c == '\\') {
 		    if (!(c = *src)) goto fail;
 		    src++;
 		}
 		*dst++ = c;
 	    }
-	    if (c != '"') goto fail;
+	    if (c != '"') goto fail;	    /* unbalanced " */
 	}
 	else if (Uisspace(c) || c == '(') {
 	    src--;
