@@ -1231,6 +1231,8 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
 			    &newmailbox);
     if (r) goto done;
 
+    syslog(LOG_INFO, "Rename: %s -> %s", oldname, newname);
+
     /* 7a. create new entry */
     newmbentry = mboxlist_entry_create();
     newmbentry->mbtype = newmailbox->mbtype;
