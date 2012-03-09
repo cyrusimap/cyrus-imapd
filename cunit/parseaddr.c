@@ -130,6 +130,18 @@ static void test_quoted_name_comma(void)
     parseaddr_free(a);
 }
 
+static void test_quoted_name_unbalanced(void)
+{
+    struct address *a;
+
+    /* If a quoted string is not terminated, we are parsing a header
+     * field with an unbalanced " and should fail. */
+
+    a = NULL;
+    parseaddr_list("\"Charles Manson <forever@prison.ca.us>", &a);
+    CU_ASSERT_PTR_NULL_FATAL(a);
+}
+
 static void test_comment_name(void)
 {
     struct address *a;
