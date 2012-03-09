@@ -440,6 +440,7 @@ static int sieve_reject(void *ac,
     sieve_reject_context_t *rc = (sieve_reject_context_t *) ac;
     script_data_t *sd = (script_data_t *) sc;
     message_data_t *md = ((deliver_data_t *) mc)->m;
+    char userbuf[MAX_MAILBOX_NAME];
     const char **body;
     const char *origreceip;
     int res;
@@ -459,10 +460,17 @@ static int sieve_reject(void *ac,
 	return SIEVE_OK;
     }
 
+    strlcpy(userbuf, sd->username, sizeof(userbuf));
+    /* append default domain if no domain given */
+    if (config_defdomain && !strchr(userbuf, '@')) {
+	strlcat(userbuf, "@", sizeof(userbuf));
+	strlcat(userbuf, config_defdomain, sizeof(userbuf));
+    }
+
     body = msg_getheader(md, "original-recipient");
     origreceip = body ? body[0] : NULL;
     if ((res = send_rejection(md->id, md->return_path, 
-			      origreceip, sd->username,
+			      origreceip, userbuf,
 			      rc->msg, md->data)) == 0) {
 	snmp_increment(SIEVE_REJECT, 1);
 	syslog(LOG_INFO, "sieve rejected: %s to: %s",
@@ -931,6 +939,7 @@ int run_sieve(const char *user, const char *domain, const char *mailbox,
     script = NULL;
 
     if (user) strlcpy(userbuf, user, sizeof(userbuf));
+    mboxname_hiersep_toexternal(msgdata->namespace, userbuf, 0);
     if (domain) {
 	strlcat(userbuf, "@", sizeof(userbuf));
 	strlcat(userbuf, domain, sizeof(userbuf));
@@ -939,16 +948,11 @@ int run_sieve(const char *user, const char *domain, const char *mailbox,
     sdata.mailboxname = mailbox;
 
     if (user) {
-	strlcpy(authuserbuf, userbuf, sizeof(authuserbuf));
-	if (config_getswitch(IMAPOPT_UNIXHIERARCHYSEP)) {
-	    mboxname_hiersep_toexternal(msgdata->namespace, authuserbuf,
-					domain ? strcspn(authuserbuf, "@") : 0);
-	}
-	sdata.authstate = auth_newstate(authuserbuf);
+	sdata.authstate = auth_newstate(userbuf);
     }
     else {
 	sdata.authstate = msgdata->authstate;
-    }	
+    }
 
     r = sieve_execute_bytecode(bc, interp,
 			       (void *) &sdata, (void *) msgdata);
@@ -956,24 +960,24 @@ int run_sieve(const char *user, const char *domain, const char *mailbox,
     if ((r == SIEVE_OK) && (msgdata->m->id)) {
 	/* ok, we've run the script */
 	char *sdb;
-		    
+
 	/* slap the mailbox back on so we hash the envelope & id
 	   when we figure out whether or not to keep the message */
 	snprintf(namebuf, sizeof(namebuf), "%s+%s@%s",
 		 user ? user : "", mailbox ? mailbox : "",
 		 domain ? domain : "");
 	sdb = make_sieve_db(namebuf);
-		
+
 	dkey.id = msgdata->m->id;
 	dkey.to = sdb;
 	dkey.date = msgdata->m->date;
 	duplicate_mark(&dkey, time(NULL), 0);
     }
-		
+
     /* free everything */
     if (user && sdata.authstate) auth_freestate(sdata.authstate);
     sieve_script_unload(&bc);
-		
+
     /* if there was an error, r is non-zero and 
        we'll do normal delivery */
     return r;
