@@ -142,6 +142,56 @@ static void test_quoted_name_unbalanced(void)
     CU_ASSERT_PTR_NULL_FATAL(a);
 }
 
+static void test_quoted_name_folded(void)
+{
+    struct address *a;
+
+    /* If a quoted string contains an embedded CR+LF+WSP, because we're
+     * parsing a header value directly, the CR+LF should be stripped out
+     * and the WSP and any following WSP* should be preserved (i.e.  we
+     * should perform header field unfolding per RFC2822) */
+
+    a = NULL;
+    parseaddr_list("\"Akira\r\n \t Yoshizawa\" <akira@origami.jp>", &a);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(a);
+    CU_ASSERT_STRING_EQUAL(a->name, "Akira \t Yoshizawa");
+    CU_ASSERT_STRING_EQUAL(a->mailbox, "akira");
+    CU_ASSERT_STRING_EQUAL(a->domain, "origami.jp");
+    CU_ASSERT_PTR_NULL(a->next);
+
+    parseaddr_free(a);
+}
+
+static void test_quoted_name_crlf(void)
+{
+    struct address *a;
+
+    /* If a quoted string contains an embedded CR+LF *without* trailing
+     * WSP, then we have walked off the end of the header field and thus
+     * we're parsing a header field which has an unbalanced ", and
+     * should fail.  */
+
+    a = NULL;
+    parseaddr_list("\"Akira\r\nYoshizawa\" <akira@origami.jp>", &a);
+    CU_ASSERT_PTR_NULL_FATAL(a);
+
+    /* CR+LF+CR+LF is a subcase of that, for the last header field. */
+    a = NULL;
+    parseaddr_list("\"Akira\r\n\r\nYoshizawa\" <akira@origami.jp>", &a);
+    CU_ASSERT_PTR_NULL_FATAL(a);
+
+    /* A lone CR is invalid and the parse should fail */
+    a = NULL;
+    parseaddr_list("\"Akira\rYoshizawa\" <akira@origami.jp>", &a);
+    CU_ASSERT_PTR_NULL_FATAL(a);
+
+    /* A lone LF is invalid and the parse should fail */
+    a = NULL;
+    parseaddr_list("\"Akira\nYoshizawa\" <akira@origami.jp>", &a);
+    CU_ASSERT_PTR_NULL_FATAL(a);
+}
+
+
 static void test_comment_name(void)
 {
     struct address *a;
