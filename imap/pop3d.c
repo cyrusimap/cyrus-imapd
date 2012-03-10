@@ -833,8 +833,8 @@ static int expunge_deleted(void)
 	    continue;
 
 	/* mark expunged */
-	record.system_flags |= FLAG_EXPUNGED;
-        numexpunged++;
+	record.system_flags |= FLAG_DELETED | FLAG_EXPUNGED;
+	numexpunged++;
 
 	/* store back to the mailbox */
 	r = mailbox_rewrite_index_record(popd_mailbox, &record);
