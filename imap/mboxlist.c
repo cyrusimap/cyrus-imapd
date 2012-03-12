@@ -1010,12 +1010,23 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
 
     myrights = cyrus_acl_myrights(auth_state, oldmailbox->acl);
 
-    /* 2. verify acls */
+    /* check the ACLs up-front */
+    if (!isadmin) {
+	if (!(myrights & ACL_DELETEMBOX)) {
+	    r = (myrights & ACL_LOOKUP) ?
+		IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
+	    goto done;
+	}
+    }
+
+    /* 2. verify valid move */
     /* XXX - handle remote mailbox */
+
+    /* special case: same mailbox, must be a partition move */
     if (!strcmp(oldname, newname)) {
 	char *oldpath = mailbox_datapath(oldmailbox);
 
-	/* Attempt to move mailbox across partition */
+	/* Only admin can move mailboxes between partitions */
 	if (!isadmin) {
 	    r = IMAP_PERMISSION_DENIED;
 	    goto done;
@@ -1027,7 +1038,9 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
 	    goto done;
 	}
 
+	/* let mupdate code below know it was a partition move */
 	partitionmove = 1;
+
 	/* this is OK because it uses a different static buffer */
 	root = config_partitiondir(partition);
 	if (!root) {
@@ -1040,39 +1053,7 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
 	    r = IMAP_MAILBOX_EXISTS;
 	    goto done;
 	}
-    } else if ((p = mboxname_isusermailbox(oldname, 1))) {
-	if (!strncmp(p, userid, config_virtdomains ? strcspn(userid, "@") :
-		     strlen(userid))) {
-	    /* Special case of renaming inbox */
-	    if (!(myrights & ACL_DELETEMBOX)) {
-		r = IMAP_PERMISSION_DENIED;
-		goto done;
-	    }
-	    isusermbox = 1;
-	} else if ((config_getswitch(IMAPOPT_ALLOWUSERMOVES) &&
-		    mboxname_isusermailbox(newname, 1)) ||
-		   mboxname_isdeletedmailbox(newname)) {
-	    /* Special case of renaming a user */
-	    if (!(myrights & ACL_DELETEMBOX) && !isadmin) {
-		r = (myrights & ACL_LOOKUP) ?
-		    IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
-		goto done;
-	    }
-	} else {
-	    /* Even admins can only rename an INBOX to another INBOX */
-	    r = IMAP_MAILBOX_NOTSUPPORTED;
-	    goto done;
-	}
-    } else {
-	if (!(myrights & ACL_DELETEMBOX) && !isadmin) {
-	    r = (myrights & ACL_LOOKUP) ?
-		IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
-	    goto done;
-	}
-    }
 
-    /* Check ability to create new mailbox */
-    if (partitionmove) {
 	/* NOTE: this is a rename to the same mailbox name on a
 	 * different partition.  This is a pretty filthy hack,
 	 * which should be handled by having four totally different
@@ -1086,16 +1067,41 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
 	r = DB->store(mbdb, newname, strlen(newname), 
 		      mboxent, strlen(mboxent), &tid);
 	if (r) goto done;
+
+	/* skip ahead to the commit */
 	goto dbdone;
     }
-    else {
-	r = mboxlist_mycreatemailboxcheck(newname, 0, partition, isadmin, 
-					  userid, auth_state, NULL, 
-					  &newpartition, 1, 0, forceuser, NULL);
-	if (r) goto done;
 
-	if (!newpartition) newpartition = xstrdup(config_defpartition);
+    /* RENAME of some user's INBOX */
+    if (mboxname_isusermailbox(oldname, 1)) {
+	if (mboxname_isdeletedmailbox(newname)) {
+	    /* delete user is OK */
+	}
+	else if (mboxname_isusermailbox(newname, 1)) {
+	    /* user rename is depends on config */
+	    if (!config_getswitch(IMAPOPT_ALLOWUSERMOVES)) {
+		r = IMAP_MAILBOX_NOTSUPPORTED;
+		goto done;
+	    }
+	}
+	else if (mboxname_userownsmailbox(userid, oldname) &&
+		 mboxname_userownsmailbox(userid, newname)) {
+	    /* Special case of renaming inbox */
+	    isusermbox = 1;
+	}
+	else {
+	    /* Everything else is bogus */
+	    r = IMAP_MAILBOX_NOTSUPPORTED;
+	    goto done;
+	}
     }
+
+    r = mboxlist_mycreatemailboxcheck(newname, 0, partition, isadmin, 
+				      userid, auth_state, NULL, 
+				      &newpartition, 1, 0, forceuser, NULL);
+    if (r) goto done;
+
+    if (!newpartition) newpartition = xstrdup(config_defpartition);
 
     /* Rename the actual mailbox */
     syslog(LOG_INFO, "Rename: %s -> %s", oldname, newname);
@@ -1105,18 +1111,20 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
 			    &newmailbox);
     if (r) goto done;
 
-    /* 7a. create new entry */
+    /* create new entry */
     mboxent = mboxlist_makeentry(newmailbox->mbtype, newmailbox->part,
 				 newmailbox->acl);
     do {
-	/* 7b. put it into the db */
-	r = DB->store(mbdb, newname, strlen(newname), 
-		      mboxent, strlen(mboxent), &tid);
+	r = 0;
 
-	if (!r && !isusermbox) {
-	    /* 4. Delete entry from berkeley db */
+	/* delete the old entry */
+	if (!isusermbox)
 	    r = DB->delete(mbdb, oldname, strlen(oldname), &tid, 0);
-	}
+
+	/* create a new entry */
+	if (!r)
+	    r = DB->store(mbdb, newname, strlen(newname), 
+			  mboxent, strlen(mboxent), &tid);
 
 	switch (r) {
 	case 0: /* success */
