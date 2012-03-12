@@ -1876,19 +1876,6 @@ int openinbox(void)
 
 	/* finished our initial read */
 	mailbox_unlock_index(popd_mailbox, NULL);
-
-	/* Update the statuscache entry if the maildrop is empty */
-	if (config_getswitch(IMAPOPT_STATUSCACHE) && !popd_exists) {
-	    /* We always have message count, uidnext,
-	     * uidvalidity, and highestmodseq for cache */
-	    unsigned statusitems = STATUS_MESSAGES | STATUS_UIDNEXT |
-		STATUS_UIDVALIDITY | STATUS_HIGHESTMODSEQ;
-
-	    statuscache_fill(&sdata, popd_userid, popd_mailbox,
-			     statusitems, 0, 0);
-	    mailbox_close(&popd_mailbox);
-	    statuscache_update(inboxname, &sdata);
-	}
     }
 
     limits.procname = "pop3d";
