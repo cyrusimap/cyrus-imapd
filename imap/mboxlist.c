@@ -362,7 +362,7 @@ int mboxlist_update(struct mboxlist_entry *mbentry, int localonly)
 
     mboxent = mboxlist_entry_cstring(mbentry);
     r = cyrusdb_store(mbdb, mbentry->name, strlen(mbentry->name),
-		  mboxent, strlen(mboxent), &tid);
+		      mboxent, strlen(mboxent), &tid);
     free(mboxent);
     mboxent = NULL;
 
@@ -810,7 +810,7 @@ int mboxlist_insertremote(struct mboxlist_entry *mbentry,
 
     /* database put */
     r = cyrusdb_store(mbdb, mbentry->name, strlen(mbentry->name),
-		  mboxent, strlen(mboxent), tid);
+		      mboxent, strlen(mboxent), tid);
     switch (r) {
     case CYRUSDB_OK:
 	break;
@@ -1176,7 +1176,7 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
 	newmbentry->acl = oldmailbox->acl;
 	mboxent = mboxlist_entry_cstring(newmbentry);
 	r = cyrusdb_store(mbdb, newname, strlen(newname), 
-		      mboxent, strlen(mboxent), &tid);
+		          mboxent, strlen(mboxent), &tid);
 	mboxlist_entry_free(&newmbentry);
 	if (r) goto done;
 
@@ -1240,7 +1240,7 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
 	/* create a new entry */
 	if (!r)
 	    r = cyrusdb_store(mbdb, newname, strlen(newname), 
-			  mboxent, strlen(mboxent), &tid);
+			      mboxent, strlen(mboxent), &tid);
 
 	switch (r) {
 	case 0: /* success */
@@ -1580,7 +1580,7 @@ int mboxlist_setacl(const char *name, const char *identifier,
 
 	do {
 	    r = cyrusdb_store(mbdb, name, strlen(name),
-			  mboxent, strlen(mboxent), &tid);
+			      mboxent, strlen(mboxent), &tid);
 	} while(r == CYRUSDB_AGAIN);
     
 	if(r) {
@@ -1687,7 +1687,7 @@ mboxlist_sync_setacls(const char *name, const char *newacl)
 
 	do {
 	    r = cyrusdb_store(mbdb, name, strlen(name),
-			  mboxent, strlen(mboxent), &tid);
+			      mboxent, strlen(mboxent), &tid);
 	} while (r == CYRUSDB_AGAIN);
     
 	if (r) {
@@ -1786,7 +1786,7 @@ int mboxlist_setspecialuse(struct mailbox *mailbox, const char *specialuse)
     mboxent = mboxlist_entry_cstring(mbentry);
     do {
 	r = cyrusdb_store(mbdb, name, strlen(name),
-		      mboxent, strlen(mboxent), &tid);
+		          mboxent, strlen(mboxent), &tid);
     } while (r == CYRUSDB_AGAIN);
 
     if (r) {
@@ -2159,7 +2159,7 @@ int mboxlist_findall(struct namespace *namespace,
     if (userid) {
 	if (GLOB_TEST(cbrock.g, "INBOX") != -1) {
 	    r = cyrusdb_fetch(mbdb, usermboxname, usermboxnamelen,
-			  &data, &datalen, NULL);
+			      &data, &datalen, NULL);
 	    if (r == CYRUSDB_NOTFOUND) r = 0;
 	    else if (!r)
 		r = (*proc)(cbrock.inboxcase, 5, 1, rock);
@@ -2168,7 +2168,7 @@ int mboxlist_findall(struct namespace *namespace,
 			  usermboxname+domainlen, usermboxnamelen-domainlen) &&
 		 GLOB_TEST(cbrock.g, usermboxname+domainlen) != -1) {
 	    r = cyrusdb_fetch(mbdb, usermboxname, usermboxnamelen,
-			  &data, &datalen, NULL);
+			      &data, &datalen, NULL);
 	    if (r == CYRUSDB_NOTFOUND) r = 0;
 	    else if (!r)
 		r = (*proc)(usermboxname, usermboxnamelen, 1, rock);
@@ -2216,9 +2216,9 @@ int mboxlist_findall(struct namespace *namespace,
 	cbrock.find_namespace = NAMESPACE_INBOX;
 	/* iterate through prefixes matching usermboxname */
 	r = cyrusdb_foreach(mbdb,
-			usermboxname, usermboxnamelen,
-			&find_p, &find_cb, &cbrock,
-			NULL);
+			    usermboxname, usermboxnamelen,
+			    &find_p, &find_cb, &cbrock,
+			    NULL);
 
 	free(cbrock.prev);
 	cbrock.prev = NULL;
@@ -2240,9 +2240,9 @@ int mboxlist_findall(struct namespace *namespace,
 	   just bother looking at the ones that have the same pattern
 	   prefix. */
 	r = cyrusdb_foreach(mbdb,
-			domainpat, domainlen + prefixlen,
-			&find_p, &find_cb, &cbrock,
-			NULL);
+			    domainpat, domainlen + prefixlen,
+			    &find_p, &find_cb, &cbrock,
+			    NULL);
 
 	free(cbrock.prev);
 	cbrock.prev = NULL;
@@ -2315,7 +2315,7 @@ int mboxlist_findall_alt(struct namespace *namespace,
     if (userid) {
 	if (GLOB_TEST(cbrock.g, "INBOX") != -1) {
 	    r = cyrusdb_fetch(mbdb, usermboxname, usermboxnamelen,
-			  &data, &datalen, NULL);
+			      &data, &datalen, NULL);
 	    if (r == CYRUSDB_NOTFOUND) r = 0;
 	    else if (!r)
 		r = (*proc)(cbrock.inboxcase, 5, 0, rock);
@@ -2358,9 +2358,9 @@ int mboxlist_findall_alt(struct namespace *namespace,
 
 	/* iterate through prefixes matching usermboxname */
 	cyrusdb_foreach(mbdb,
-		    usermboxname, usermboxnamelen,
-		    &find_p, &find_cb, &cbrock,
-		    NULL);
+			usermboxname, usermboxnamelen,
+			&find_p, &find_cb, &cbrock,
+			NULL);
 
 	free(cbrock.prev);
 	cbrock.prev = NULL;
@@ -2402,9 +2402,9 @@ int mboxlist_findall_alt(struct namespace *namespace,
 	    /* iterate through prefixes matching usermboxname */
 	    strlcpy(domainpat+domainlen, "user", sizeof(domainpat)-domainlen);
 	    cyrusdb_foreach(mbdb,
-			domainpat, strlen(domainpat),
-			&find_p, &find_cb, &cbrock,
-			NULL);
+			    domainpat, strlen(domainpat),
+			    &find_p, &find_cb, &cbrock,
+			    NULL);
 
 	    glob_free(&cbrock.g);
 	    free(cbrock.prev);
@@ -2455,9 +2455,9 @@ int mboxlist_findall_alt(struct namespace *namespace,
 
 		domainpat[domainlen] = '\0';
 		cyrusdb_foreach(mbdb,
-			    domainpat, domainlen,
-			    &find_p, &find_cb, &cbrock,
-			    NULL);
+				domainpat, domainlen,
+				&find_p, &find_cb, &cbrock,
+				NULL);
 	    }
 	    else if (pattern[len] == '.') {
 		strlcpy(domainpat+domainlen, pattern+len+1,
@@ -2465,9 +2465,9 @@ int mboxlist_findall_alt(struct namespace *namespace,
 		cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
 
 		cyrusdb_foreach(mbdb,
-			    domainpat, domainlen+prefixlen-(len+1),
-			    &find_p, &find_cb, &cbrock,
-			NULL);
+				domainpat, domainlen+prefixlen-(len+1),
+				&find_p, &find_cb, &cbrock,
+				NULL);
 	    }
 	    free(cbrock.prev);
 	    cbrock.prev = NULL;
@@ -2968,9 +2968,9 @@ int mboxlist_findsub(struct namespace *namespace,
 	cbrock.find_namespace = NAMESPACE_INBOX;
 	/* iterate through prefixes matching usermboxname */
 	cyrusdb_foreach(subs,
-		       usermboxname, usermboxnamelen,
-		       &find_p, &find_cb, &cbrock,
-		       NULL);
+			usermboxname, usermboxnamelen,
+			&find_p, &find_cb, &cbrock,
+			NULL);
 	free(cbrock.prev);
 	cbrock.prev = NULL;
 	cbrock.prevlen = 0;
@@ -2996,7 +2996,7 @@ int mboxlist_findsub(struct namespace *namespace,
 	/* search for all remaining mailboxes.
 	   just bother looking at the ones that have the same pattern prefix. */
 	cyrusdb_foreach(subs, domainpat, domainlen + prefixlen,
-		       &find_p, &find_cb, &cbrock, NULL);
+			&find_p, &find_cb, &cbrock, NULL);
 	free(cbrock.prev);
 	cbrock.prev = NULL;
 	cbrock.prevlen = 0;
@@ -3093,7 +3093,7 @@ int mboxlist_findsub_alt(struct namespace *namespace,
     if (userid) {
 	if (GLOB_TEST(cbrock.g, "INBOX") != -1) {
 	    r = cyrusdb_fetch(subs, usermboxname, usermboxnamelen,
-			     &data, &datalen, NULL);
+			      &data, &datalen, NULL);
 	    if (r == CYRUSDB_NOTFOUND) r = 0;
 	    else if (!r)
 		r = (*proc)(cbrock.inboxcase, 5, 0, rock);
@@ -3132,9 +3132,9 @@ int mboxlist_findsub_alt(struct namespace *namespace,
 
 	/* iterate through prefixes matching usermboxname */
 	cyrusdb_foreach(subs,
-		       usermboxname, usermboxnamelen,
-		       &find_p, &find_cb, &cbrock,
-		       NULL);
+			usermboxname, usermboxnamelen,
+			&find_p, &find_cb, &cbrock,
+			NULL);
 	free(cbrock.prev);
 	cbrock.prev = NULL;
 	cbrock.prevlen = 0;
@@ -3183,9 +3183,9 @@ int mboxlist_findsub_alt(struct namespace *namespace,
 	    /* iterate through prefixes matching usermboxname */
 	    strlcpy(domainpat+domainlen, "user", sizeof(domainpat)-domainlen);
 	    cyrusdb_foreach(subs,
-			   domainpat, strlen(domainpat),
-			   &find_p, &find_cb, &cbrock,
-			   NULL);
+			    domainpat, strlen(domainpat),
+			    &find_p, &find_cb, &cbrock,
+			    NULL);
 	    free(cbrock.prev);
 	    cbrock.prev = NULL;
 	    cbrock.prevlen = 0;
@@ -3237,9 +3237,9 @@ int mboxlist_findsub_alt(struct namespace *namespace,
 
 		domainpat[domainlen] = '\0';
 		cyrusdb_foreach(subs,
-			       domainpat, domainlen,
-			       &find_p, &find_cb, &cbrock,
-			       NULL);
+				domainpat, domainlen,
+				&find_p, &find_cb, &cbrock,
+				NULL);
 		free(cbrock.prev);
 		cbrock.prev = NULL;
 		cbrock.prevlen = 0;
@@ -3250,9 +3250,9 @@ int mboxlist_findsub_alt(struct namespace *namespace,
 		cbrock.g = glob_init(domainpat, GLOB_HIERARCHY);
 
 		cyrusdb_foreach(subs,
-			       domainpat, domainlen+prefixlen-(len+1),
-			       &find_p, &find_cb, &cbrock,
-			       NULL);
+				domainpat, domainlen+prefixlen-(len+1),
+				&find_p, &find_cb, &cbrock,
+				NULL);
 		free(cbrock.prev);
 		cbrock.prev = NULL;
 		cbrock.prevlen = 0;
