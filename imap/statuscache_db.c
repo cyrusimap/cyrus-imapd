@@ -198,8 +198,8 @@ int status_lookup(const char *mboxname, const char *userid,
 
     /* We always have message count, uidnext,
        uidvalidity, and highestmodseq for cache */
-     c_statusitems = STATUS_MESSAGES | STATUS_UIDNEXT |
-		     STATUS_UIDVALIDITY | STATUS_HIGHESTMODSEQ;
+    c_statusitems = STATUS_MESSAGES | STATUS_UIDNEXT |
+		    STATUS_UIDVALIDITY | STATUS_HIGHESTMODSEQ;
 
     if (!mailbox->i.exists) {
 	/* no messages, so these two must also be zero */
