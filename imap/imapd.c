@@ -10067,8 +10067,10 @@ static void list_response(char *name, int attributes,
     (*imapd_namespace.mboxname_toexternal)(&imapd_namespace, name,
             imapd_userid, mboxname);
 
-    if (listargs->cmd == LIST_CMD_XLIST)
+    if (config_getswitch(IMAPOPT_SPECIALUSEALWAYS) ||
+	    listargs->cmd == LIST_CMD_XLIST)
 	xlist_flags(internal_name, sep);
+
     prot_printf(imapd_out, ") ");
 
     prot_printf(imapd_out, "\"%c\" ", imapd_namespace.hier_sep);

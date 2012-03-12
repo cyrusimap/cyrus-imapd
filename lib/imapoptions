@@ -1252,6 +1252,10 @@ product version in the capabilities */
    successfully authenticate.  Otherwise lmtpd returns permanent failures
    (causing the mail to bounce immediately). */
 
+{ "specialusealways", 0, SWITCH }
+/* If enabled, this option causes LIST and LSUB output to always include
+   the XLIST "special-use" flags */
+
 { "sql_database", NULL, STRING }
 /* Name of the database which contains the cyrusdb table(s). */
 
