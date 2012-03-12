@@ -10826,11 +10826,13 @@ static void list_response(const char *name, int attributes,
     (*imapd_namespace.mboxname_toexternal)(&imapd_namespace, name,
             imapd_userid, mboxname);
 
-    if (listargs->cmd == LIST_CMD_XLIST || 
+    if (config_getswitch(IMAPOPT_SPECIALUSEALWAYS) ||
+	listargs->cmd == LIST_CMD_XLIST || 
 	listargs->ret & LIST_RET_SPECIALUSE ||
 	listargs->sel & LIST_SEL_SPECIALUSE) {
 	specialuse_flags(mbentry, sep, listargs->cmd == LIST_CMD_XLIST);
     }
+
     prot_printf(imapd_out, ") ");
 
     prot_printf(imapd_out, "\"%c\" ", imapd_namespace.hier_sep);
