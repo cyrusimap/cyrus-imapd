@@ -1202,21 +1202,6 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
 	goto dbdone;
     }
     else {
-	if (mboxname_isusermailbox(newname, 1)) {
-	    if ((config_getswitch(IMAPOPT_ALLOWUSERMOVES) &&
-		 mboxname_isusermailbox(oldname, 1)) ||
-		mboxname_isdeletedmailbox(oldname, NULL)) {
-		if (!isadmin) {
-		    /* Only admins can rename users (INBOX to INBOX) */
-		    r = IMAP_MAILBOX_NOTSUPPORTED;
-		    goto done;
-		}
-	    } else {
-		/* Even admins can't rename to user's inboxes */
-		r = IMAP_MAILBOX_NOTSUPPORTED;
-		goto done;
-	    }
-	}
 	r = mboxlist_mycreatemailboxcheck(newname, 0, partition, isadmin, 
 					  userid, auth_state, NULL, 
 					  &newpartition, 1, 0, forceuser, NULL);
