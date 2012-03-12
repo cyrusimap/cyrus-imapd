@@ -1463,13 +1463,18 @@ product version in the capabilities */
    domain (if set). */
 
 # {"xlist-*", NULL, STRING }
-/* Cyrus 2.4 ONLY - enable the special use flags with 
-   "xlist-name: FolderName" in your imapd.conf, for example:
-   "xlist-drafts: MyDrafts".
+/* Cyrus 2.4 ONLY - enable special use flags.  The valid names
+   can be taken from GMail's XLIST documents or RFC 6154.
+   Attribute name in the configuration key should be defined in
+   lowercase. The attribute value is case sensitive, may contain
+   whitespace and and must valid UTF7-IMAP string.  It must
+   exactly match the name of the subfolder of a user's INBOX.
 
-   Every user on your server with a 'MyDrafts' folder will get 
+   Example: xlist-drafts: My Drafts
+
+   Every user on your server with a 'INBOX.My Drafts' folder will get 
    the special use flag "\Drafts" added.  Later versions of Cyrus
-   will have a much more flexible RFC 6154 compatible system.  */
+   have a much more flexible RFC 6154 compatible system.  */
 
 /*
 .SH SEE ALSO
