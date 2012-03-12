@@ -1254,7 +1254,7 @@ product version in the capabilities */
 
 { "specialusealways", 0, SWITCH }
 /* If enabled, this option causes LIST and LSUB output to always include
-   the XLIST "special-use" flags */
+   the XLIST "special-use" flags. See "xlist-*'"*/
 
 { "sql_database", NULL, STRING }
 /* Name of the database which contains the cyrusdb table(s). */
@@ -1461,6 +1461,15 @@ product version in the capabilities */
    a reverse lookup on the IP address of the incoming network
    interface, otherwise the user is assumed to be in the default
    domain (if set). */
+
+# {"xlist-*", NULL, STRING }
+/* Cyrus 2.4 ONLY - enable the special use flags with 
+   "xlist-name: FolderName" in your imapd.conf, for example:
+   "xlist-drafts: MyDrafts".
+
+   Every user on your server with a 'MyDrafts' folder will get 
+   the special use flag "\Drafts" added.  Later versions of Cyrus
+   will have a much more flexible RFC 6154 compatible system.  */
 
 /*
 .SH SEE ALSO
