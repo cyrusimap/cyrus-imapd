@@ -7,6 +7,48 @@
 #include "mailbox.h"
 #include "global.h"
 
+static void test_dir_hash_c(void)
+{
+    static const char FRED[] = "fred";
+    static const char FRED_DRAFTS[] = "fred.Drafts";
+    static const char JANEAT_SENT[] = "bloggs.com!user.jane.Sent";
+    static const char SHARED[] = "Gossip";
+    static const char INTERNAL[] = "internal!Tattle";
+    static const char LONGNAME[] = "thisisareallylongname";
+    static const char LONGNAME_SUB[] = "thisisareallylongname.with.a.subdir";
+    char c;
+
+    c = dir_hash_c(FRED, 0);
+    CU_ASSERT_EQUAL(c, 'f');
+    c = dir_hash_c(FRED_DRAFTS, 0);
+    CU_ASSERT_EQUAL(c, 'f');
+    c = dir_hash_c(JANEAT_SENT, 0);
+    CU_ASSERT_EQUAL(c, 'b');
+    c = dir_hash_c(SHARED, 0);
+    CU_ASSERT_EQUAL(c, 'g');
+    c = dir_hash_c(INTERNAL, 0);
+    CU_ASSERT_EQUAL(c, 'i');
+    c = dir_hash_c(LONGNAME, 0);
+    CU_ASSERT_EQUAL(c, 't');
+    c = dir_hash_c(LONGNAME_SUB, 0);
+    CU_ASSERT_EQUAL(c, 't');
+
+    c = dir_hash_c(FRED, 1);
+    CU_ASSERT_EQUAL(c, 'E');
+    c = dir_hash_c(FRED_DRAFTS, 1);
+    CU_ASSERT_EQUAL(c, 'E');
+    c = dir_hash_c(JANEAT_SENT, 1);
+    CU_ASSERT_EQUAL(c, 'L');
+    c = dir_hash_c(SHARED, 1);
+    CU_ASSERT_EQUAL(c, 'K');
+    c = dir_hash_c(INTERNAL, 1);
+    CU_ASSERT_EQUAL(c, 'I');
+    c = dir_hash_c(LONGNAME, 1);
+    CU_ASSERT_EQUAL(c, 'J');
+    c = dir_hash_c(LONGNAME_SUB, 1);
+    CU_ASSERT_EQUAL(c, 'J');
+}
+
 static void test_to_parts(void)
 {
     static const char FRED_DRAFTS[] = "user.fred.Drafts";
