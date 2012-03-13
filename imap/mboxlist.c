@@ -1001,7 +1001,6 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
     const char *root = NULL;
     char *newpartition = NULL;
     char *mboxent = NULL;
-    char *p;
     mupdate_handle *mupdate_h = NULL;
 
     /* 1. open mailbox */
