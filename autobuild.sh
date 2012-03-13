@@ -132,6 +132,7 @@ git status
 
 
 # do the whole autotools dance
+[ -f Makefile ] && make distclean
 aclocal -I cmulocal || fatal "Can't run aclocal"
 autoconf || fatal "Can't run autoconf"
 autoheader || fatal "Can't run autoheader"
