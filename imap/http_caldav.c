@@ -1656,8 +1656,8 @@ static int meth_put(struct transaction_t *txn)
     /* Check Content-Type */
     if (!(hdr = spool_getheader(txn->req_hdrs, "Content-Type")) ||
 	!is_mediatype(hdr[0], "text/calendar")) {
-	txn->error.desc = "This collection only supports text/calendar data";
-	return HTTP_BAD_MEDIATYPE;
+	txn->error.precond = &preconds[CALDAV_SUPP_DATA];
+	return HTTP_FORBIDDEN;
     }
 
     /* Construct mailbox name corresponding to request target URI */
@@ -1789,9 +1789,9 @@ static int meth_put(struct transaction_t *txn)
 
     /* Parse the iCal data for important properties */
     ical = icalparser_parse_string(buf_cstring(&txn->req_body));
-    if (!ical) {
-	txn->error.desc = "Invalid calendar data";
-	ret = HTTP_BAD_MEDIATYPE;
+    if (!ical || !icalrestriction_check(ical)) {
+	txn->error.precond = &preconds[CALDAV_VALID_DATA];
+	ret = HTTP_FORBIDDEN;
 	goto done;
     }
     comp = icalcomponent_get_first_real_component(ical);
