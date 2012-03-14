@@ -1107,6 +1107,7 @@ sub _fork_command
 	$cassroot,
 	"$cyrusroot/share/perl",
 	"$cyrusroot/lib/perl",
+	"$cyrusroot/lib/perl5/site_perl",
 	map { $self->{cyrus_destdir} . $_ if m/^\//; } @INC,
     ));
 
