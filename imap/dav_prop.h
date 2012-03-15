@@ -114,7 +114,8 @@ enum {
     CALDAV_SUPP_DATA,
     CALDAV_VALID_DATA,
     CALDAV_SUPP_COMP,
-    CALDAV_LOCATION_OK
+    CALDAV_LOCATION_OK,
+    CALDAV_SUPP_FILTER
 };
 
 /* Structure for precondition/postcondition errors */
