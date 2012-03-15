@@ -1636,13 +1636,15 @@ static int meth_put(struct transaction_t *txn)
     time_t lastmod;
     FILE *f = NULL;
     struct stagemsg *stage = NULL;
-    const char **hdr, *uid, *meth;
+    const char **hdr, *uid;
     uquota_t size = 0;
     time_t now = time(NULL);
     pid_t pid = getpid();
     char datestr[80];
     struct appendstate appendstate;
     icalcomponent *ical, *comp;
+    icalcomponent_kind kind;
+    icalproperty_method meth;
 
     /* Make sure its a DAV resource */
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
@@ -1797,7 +1799,6 @@ static int meth_put(struct transaction_t *txn)
 	ret = HTTP_FORBIDDEN;
 	goto done;
     }
-    comp = icalcomponent_get_first_real_component(ical);
 
     /* Prepare to stage the message */
     if (!(f = append_newstage(mailboxname, now, 0, &stage))) {
@@ -1806,6 +1807,9 @@ static int meth_put(struct transaction_t *txn)
 	goto done;
     }
 
+    meth = icalcomponent_get_method(ical);
+    comp = icalcomponent_get_first_real_component(ical);
+    kind = icalcomponent_isa(comp);
 
     /* Create iMIP header for resource */
     fprintf(f, "From: <%s>\r\n", httpd_userid ? httpd_userid : "");
@@ -1822,11 +1826,10 @@ static int meth_put(struct transaction_t *txn)
 
     hdr = spool_getheader(txn->req_hdrs, "Content-Type");
     fprintf(f, "Content-Type: %s", hdr[0]);
-    if ((meth = icalproperty_method_to_string(icalcomponent_get_method(comp)))
-	&& *meth) {
-	fprintf(f, "; method=%s", meth);
+    if (meth != ICAL_METHOD_NONE) {
+	fprintf(f, "; method=%s", icalproperty_method_to_string(meth));
     }
-    fprintf(f, "\r\n");
+    fprintf(f, "; component=%s\r\n", icalcomponent_kind_to_string(kind));
 
     fprintf(f, "Content-Length: %u\r\n", buf_len(&txn->req_body));
     fprintf(f, "Content-Disposition: inline; filename=%s\r\n",
