@@ -552,7 +552,8 @@ static int meth_copy(struct transaction_t *txn)
 	/* DAV:need-privileges */
 	txn->error.precond = &preconds[DAV_NEED_PRIVS];
 	txn->error.resource = txn->req_tgt.path;
-	txn->error.rights = (rights & DACL_READ) != DACL_READ ? DACL_READ : DACL_RMRSRC;
+	txn->error.rights =
+	    (rights & DACL_READ) != DACL_READ ? DACL_READ : DACL_RMRSRC;
 	return HTTP_FORBIDDEN;
     }
 
@@ -1094,7 +1095,8 @@ static int meth_get(struct transaction_t *txn)
 	       /* skip message header */
 	       msg_base + record.header_size, record.size - record.header_size);
 
-    if (msg_base) mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
+    if (msg_base)
+	mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
 
   done:
     if (caldavdb) caldav_close(caldavdb);
@@ -1491,7 +1493,8 @@ static int meth_proppatch(struct transaction_t *txn)
 
     /* Make sure its a calendar collection */
     if (!txn->req_tgt.collection || txn->req_tgt.resource) {
-	txn->error.desc = "Properties can only be updated on calendar collections";
+	txn->error.desc =
+	    "Properties can only be updated on calendar collections";
 	return HTTP_FORBIDDEN;
     }
 
@@ -2047,7 +2050,8 @@ static int report_sync_col(xmlNodePtr inroot, struct propfind_ctx *fctx,
 	    if (!xmlStrcmp(node->name, BAD_CAST "sync-level") &&
 		(str = xmlNodeListGetString(inroot->doc, node->children, 1))) {
 		if (!strcmp((char *) str, "infinity")) {
-		    *fctx->errstr = "This server DOES NOT support infinite depth requests";
+		    *fctx->errstr =
+			"This server DOES NOT support infinite depth requests";
 		    return HTTP_SERVER_ERROR;
 		}
 		else if ((sscanf((char *) str, "%u", &fctx->depth) != 1) ||
@@ -2223,7 +2227,8 @@ static int meth_report(struct transaction_t *txn)
     /* Check Depth */
     if ((hdr = spool_getheader(txn->req_hdrs, "Depth"))) {
 	if (!strcmp(hdr[0], "infinity")) {
-	    txn->error.desc = "This server DOES NOT support infinite depth requests";
+	    txn->error.desc =
+		"This server DOES NOT support infinite depth requests";
 	    return HTTP_SERVER_ERROR;
 	}
 	else if ((sscanf(hdr[0], "%u", &depth) != 1) || (depth > 1)) {
