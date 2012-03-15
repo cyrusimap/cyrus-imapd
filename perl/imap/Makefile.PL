@@ -62,7 +62,10 @@ sub MY::postamble
 {
     return <<'EOT';
 cyradm: cyradm.sh
-	$(ABSPERLRUN) -pne 's|\@INSTALLSITEARCH\@|$(INSTALLSITEARCH)|g;' < $< > $@
+	$(ABSPERLRUN) -pn \
+	    -e 's|\@INSTALLVENDORLIB\@|$(INSTALLVENDORLIB)|g;' \
+	    -e 's|\@INSTALLVENDORARCH\@|$(INSTALLVENDORARCH)|g;' \
+	    < $< > $@
 
 EOT
 }
@@ -79,4 +82,5 @@ WriteMakefile(
     'DEFINE'	=> '-DPERL_POLLUTE',    # e.g., '-DHAVE_SOMETHING' 
     'INC'	=> "-I../../lib -I../.. -I../../com_err/et $SASL_INC $OPENSSL_INC", 
     'EXE_FILES' => [cyradm],
+    INSTALLDIRS => 'vendor',
 );

@@ -43,7 +43,7 @@ exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 #
 # $Id: installsieve.pl,v 1.9 2010/01/06 17:01:57 murch Exp $
 #
-use lib ("@prefix@/lib/perl", "@prefix@/share/perl");
+use lib ("@INSTALLVENDORLIB@", "@INSTALLVENDORARCH@");
 use Cyrus::SIEVE::managesieve;
 use Getopt::Long;
 

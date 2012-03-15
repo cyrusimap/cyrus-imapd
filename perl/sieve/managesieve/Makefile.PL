@@ -67,4 +67,5 @@ WriteMakefile(
     'DEFINE'	=> '-DPERL_POLLUTE $(COVERAGE)',     # e.g., '-DHAVE_SOMETHING' 
     'INC'	=> "-I../lib/ -I../../../lib/ $SASL_INC $OPENSSL_INC",
     'LD'	=> $Config{ld} . ' $(COVERAGE)',
+    INSTALLDIRS => 'vendor',
 );

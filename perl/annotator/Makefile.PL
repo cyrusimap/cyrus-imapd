@@ -45,4 +45,5 @@ WriteMakefile(
     'NAME'	=> 'Cyrus::Annotator::Daemon',
     'ABSTRACT'  => 'Cyrus annotator daemon framework',
     'VERSION_FROM' => 'Daemon.pm', # finds $VERSION
+    INSTALLDIRS => 'vendor',
 );

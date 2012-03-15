@@ -96,7 +96,10 @@ all::
 install::
 	for s in $(SCRIPTS); \
 	do \
-		$(PERL) -pne 's|\@prefix\@|$(prefix)|g;' < scripts/$$s.pl > scripts/$$s ;\
+		$(PERL) -pn \
+		    -e 's|\@INSTALLVENDORLIB\@|@PERL_INSTALLVENDORLIB@|g;' \
+		    -e 's|\@INSTALLVENDORARCH\@|@PERL_INSTALLVENDORARCH@|g;' \
+		    < scripts/$$s.pl > scripts/$$s ;\
 		$(INSTALL) -m 755 scripts/$$s $(DESTDIR)$(exec_prefix)/bin/$$s ; \
 	done
 #xxx install scripts/*
