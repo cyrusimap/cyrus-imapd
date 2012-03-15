@@ -1440,7 +1440,7 @@ int meth_propfind(struct transaction_t *txn)
 	    /* Add responses for all contained calendar collections */
 	    strlcat(mailboxname, ".%", sizeof(mailboxname));
 	    r = mboxlist_findall(NULL,  /* internal namespace */
-				 mailboxname, 0, httpd_userid, 
+				 mailboxname, 1, httpd_userid, 
 				 httpd_authstate, find_collection_props, &fctx);
 	}
 
