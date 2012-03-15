@@ -42,6 +42,7 @@
 package Cassandane::Instance;
 use strict;
 use warnings;
+use Config;
 use File::Path qw(mkpath rmtree);
 use File::Find qw(find);
 use File::Basename;
@@ -1105,10 +1106,8 @@ sub _fork_command
     $ENV{CASSANDANE_VERBOSE} = 1 if get_verbose();
     $ENV{PERL5LIB} = join(':', (
 	$cassroot,
-	"$cyrusroot/share/perl",
-	"$cyrusroot/lib/perl",
-	"$cyrusroot/lib/perl5/site_perl",
-	map { $self->{cyrus_destdir} . $_ if m/^\//; } @INC,
+	$cyrusroot . substr($Config{installvendorlib}, length($Config{prefix})),
+	$cyrusroot . substr($Config{installvendorarch}, length($Config{prefix})),
     ));
 
     my $cd = $options->{workingdir};
