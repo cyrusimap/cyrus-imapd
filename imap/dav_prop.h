@@ -47,6 +47,7 @@
 #include "httpd.h"
 #include "spool.h"
 #include "quota.h"
+#include <libical/ical.h>
 #include <libxml/tree.h>
 
 
@@ -146,6 +147,12 @@ enum {
 /* Context for fetching properties */
 struct propfind_entry_list;
 
+struct query_filter {
+    unsigned comp;
+    struct icaltimetype start;
+    struct icaltimetype end;
+};
+
 struct propfind_ctx {
     struct request_target_t *req_tgt;	/* parsed request target URL */
     unsigned depth;	    		/* 0 = root, 1 = calendar, 2 = resrc */
@@ -156,6 +163,9 @@ struct propfind_ctx {
     struct mailbox *mailbox;		/* mailbox correspondng to collection */
     struct quota quota;			/* quota info for collection */
     struct index_record *record;	/* cyrus.index record for resource */
+    const char *msg_base;		/* base of mmap()'d resource file */
+    unsigned long msg_size;		/* size of mmap()'d resource file */
+    struct query_filter filter;		/* criteria to filter resources */
     struct propfind_entry_list *elist;	/* List of props to fetch w/callbacks */
     xmlNodePtr root;			/* root node to add to XML tree */
     xmlNsPtr *ns;			/* Array of our supported namespaces */

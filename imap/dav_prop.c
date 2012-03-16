@@ -266,6 +266,14 @@ int xml_add_response(struct propfind_ctx *fctx, long code)
 }
 
 
+static void resource_inrange(icalcomponent *comp __attribute__((unused)),
+			     struct icaltime_span *span __attribute__((unused)),
+			     void *rock)
+{
+    *((int *) rock) = 1;
+}
+
+
 /* caldav_foreach() callback to find props on a resource */
 int find_resource_props(void *rock, const char *resource, uint32_t uid)
 {
@@ -273,7 +281,7 @@ int find_resource_props(void *rock, const char *resource, uint32_t uid)
     struct index_record record;
     char *p;
     size_t len;
-    int r;
+    int r, ret = 0;
 
     /* Append resource name to URL path */
     if (!fctx->req_tgt->resource) {
@@ -299,10 +307,66 @@ int find_resource_props(void *rock, const char *resource, uint32_t uid)
 	/* XXX  Check errors */
 
 	fctx->record = r ? NULL : &record;
+
+	if (fctx->record &&
+	    (fctx->filter.comp || !icaltime_is_null_time(fctx->filter.start))) {
+	    /* mmap() and parse iCalendar object to perform filtering */
+	    icalcomponent *ical, *comp;
+
+	    mailbox_map_message(fctx->mailbox, uid,
+				&fctx->msg_base, &fctx->msg_size);
+
+	    ical = icalparser_parse_string(fctx->msg_base +
+					   fctx->record->header_size);
+	    comp = icalcomponent_get_first_real_component(ical);
+
+	    if (fctx->filter.comp) {
+		/* Perform CALDAV:comp-filter filtering */
+		/* XXX  This should be checked with a caldav_db entry */
+		icalcomponent_kind kind = icalcomponent_isa(comp);
+		unsigned mykind = 0;
+
+		switch (kind) {
+		case ICAL_VEVENT_COMPONENT: mykind = COMP_VEVENT; break;
+		case ICAL_VTODO_COMPONENT: mykind = COMP_VTODO; break;
+		case ICAL_VJOURNAL_COMPONENT: mykind = COMP_VJOURNAL; break;
+		case ICAL_VFREEBUSY_COMPONENT: mykind = COMP_VFREEBUSY; break;
+		default: break;
+		}
+
+		/* Not looking for this component type -- skip it */
+		if (!(mykind & fctx->filter.comp)) goto cleanup;
+	    }
+
+	    if (!icaltime_is_null_time(fctx->filter.start)) {
+		/* Perform CALDAV:time-range filtering */
+		int inrange = 0;
+
+		icalcomponent_foreach_recurrence(comp,
+						 fctx->filter.start,
+						 fctx->filter.end,
+						 resource_inrange,
+						 &inrange);
+
+		/* (Recurring) component is outside of time-range -- skip it */
+		if (!inrange) goto cleanup;
+	    }
+	}
     }
 
     /* Add response for target */
-    return xml_add_response(fctx, (!uid || !fctx->record) ? HTTP_NOT_FOUND : 0);
+    ret = xml_add_response(fctx, (!uid || !fctx->record) ? HTTP_NOT_FOUND : 0);
+
+  cleanup:
+    if (fctx->msg_base) {
+	mailbox_unmap_message(fctx->mailbox, uid,
+			      &fctx->msg_base, &fctx->msg_size);
+    }
+    fctx->msg_base = NULL;
+    fctx->msg_size = 0;
+    fctx->record = NULL;
+
+    return ret;
 }
 
 /* mboxlist_findall() callback to find props on a collection */
@@ -1113,23 +1177,22 @@ static int propfind_caldata(xmlNodePtr prop,
 			    void *rock __attribute__((unused)))
 {
     if (fctx->record) {
-	const char *msg_base = NULL;
-	unsigned long msg_size = 0;
 	xmlNodePtr data;
 
-	mailbox_map_message(fctx->mailbox, fctx->record->uid,
-			    &msg_base, &msg_size);
+	if (!fctx->msg_base) {
+	    mailbox_map_message(fctx->mailbox, fctx->record->uid,
+				&fctx->msg_base, &fctx->msg_size);
+	}
 
 	ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
 	data = xml_add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK],
 			    prop, NULL, NULL);
 	xmlAddChild(data,
 		    xmlNewCDataBlock(fctx->root->doc,
-				     BAD_CAST msg_base + fctx->record->header_size,
-				     msg_size - fctx->record->header_size));
-
-	mailbox_unmap_message(fctx->mailbox, fctx->record->uid,
-			      &msg_base, &msg_size);
+				     BAD_CAST fctx->msg_base +
+				     fctx->record->header_size,
+				     fctx->record->size -
+				     fctx->record->header_size));
     }
     else {
 	xml_add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND],

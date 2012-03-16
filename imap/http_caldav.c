@@ -49,7 +49,7 @@
  *   - Support COPY/MOVE on collections
  *   - Add more required properties
  *   - GET/HEAD on collections (iCalendar stream of resources)
- *   - calendar-query REPORT filtering (optimize for time range, component type)
+ *   - calendar-query REPORT (handle partial retrieval, prop-filter, timezone?)
  *   - free-busy-query REPORT?
  *   - sync-collection REPORT - need to handle Depth infinity?
  *   - Use XML precondition error codes
@@ -1958,6 +1958,51 @@ static int meth_put(struct transaction_t *txn)
 }
 
 
+static int parse_comp_filter(xmlNodePtr root, struct query_filter *filter)
+{
+    int ret = 0;
+    xmlNodePtr node;
+
+    /* Parse children element of report */
+    for (node = root; node; node = node->next) {
+	if (node->type == XML_ELEMENT_NODE) {
+	    if (!xmlStrcmp(node->name, BAD_CAST "comp-filter")) {
+		xmlChar *name = xmlGetProp(node, BAD_CAST "name");
+
+		if (filter->comp) return HTTP_FORBIDDEN;
+
+		if (!xmlStrcmp(name, BAD_CAST "VCALENDAR"))
+		    filter->comp = COMP_VCALENDAR;
+		else if (!xmlStrcmp(name, BAD_CAST "VEVENT"))
+		    filter->comp = COMP_VEVENT;
+		else if (!xmlStrcmp(name, BAD_CAST "VTODO"))
+		    filter->comp = COMP_VTODO;
+		else if (!xmlStrcmp(name, BAD_CAST "VJOURNAL"))
+		    filter->comp = COMP_VJOURNAL;
+		else if (!xmlStrcmp(name, BAD_CAST "VFREEBUSY"))
+		    filter->comp = COMP_VFREEBUSY;
+		else return HTTP_FORBIDDEN;
+
+		ret = parse_comp_filter(node->children, filter);
+	    }
+	    else if (!xmlStrcmp(node->name, BAD_CAST "time-range")) {
+		const char *start, *end;
+
+		start = (const char *) xmlGetProp(node, BAD_CAST "start");
+		filter->start = start ? icaltime_from_string(start) :
+		    icaltime_null_time();
+
+		end = (const char *) xmlGetProp(node, BAD_CAST "end");
+		filter->end = end ? icaltime_from_string(end) :
+		    icaltime_null_time();
+	    }
+	}
+    }
+
+    return ret;
+}
+
+
 static int report_cal_query(xmlNodePtr inroot, struct propfind_ctx *fctx,
 			    struct caldav_db *caldavdb)
 {
@@ -1968,7 +2013,10 @@ static int report_cal_query(xmlNodePtr inroot, struct propfind_ctx *fctx,
     for (node = inroot->children; node; node = node->next) {
 	if (node->type == XML_ELEMENT_NODE) {
 	    if (!xmlStrcmp(node->name, BAD_CAST "filter")) {
-		syslog(LOG_WARNING, "REPORT calendar-query w/filter");
+		ret = parse_comp_filter(node->children, &fctx->filter);
+	    }
+	    else if (!xmlStrcmp(node->name, BAD_CAST "timezone")) {
+		syslog(LOG_WARNING, "REPORT calendar-query w/timezone");
 	    }
 	}
     }
