@@ -268,9 +268,9 @@ int xml_add_response(struct propfind_ctx *fctx, long code)
 
 static void resource_inrange(icalcomponent *comp __attribute__((unused)),
 			     struct icaltime_span *span __attribute__((unused)),
-			     void *rock)
+			     void *inrange)
 {
-    *((int *) rock) = 1;
+    *((unsigned *) inrange) = 1;
 }
 
 
@@ -340,7 +340,7 @@ int find_resource_props(void *rock, const char *resource, uint32_t uid)
 
 	    if (!icaltime_is_null_time(fctx->filter.start)) {
 		/* Perform CALDAV:time-range filtering */
-		int inrange = 0;
+		unsigned inrange = 0;
 
 		icalcomponent_foreach_recurrence(comp,
 						 fctx->filter.start,
