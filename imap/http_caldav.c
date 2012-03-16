@@ -1990,11 +1990,11 @@ static int parse_comp_filter(xmlNodePtr root, struct query_filter *filter)
 
 		start = (const char *) xmlGetProp(node, BAD_CAST "start");
 		filter->start = start ? icaltime_from_string(start) :
-		    icaltime_null_time();
+		    icaltime_from_timet_with_zone(INT_MIN, 0, NULL);
 
 		end = (const char *) xmlGetProp(node, BAD_CAST "end");
 		filter->end = end ? icaltime_from_string(end) :
-		    icaltime_null_time();
+		    icaltime_from_timet_with_zone(INT_MAX, 0, NULL);
 	    }
 	}
     }
