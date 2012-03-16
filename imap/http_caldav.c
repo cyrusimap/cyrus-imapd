@@ -1958,7 +1958,8 @@ static int meth_put(struct transaction_t *txn)
 }
 
 
-static int parse_comp_filter(xmlNodePtr root, struct query_filter *filter)
+static int parse_comp_filter(xmlNodePtr root, struct query_filter *filter,
+			     struct error_t *error)
 {
     int ret = 0;
     xmlNodePtr node;
@@ -1969,7 +1970,10 @@ static int parse_comp_filter(xmlNodePtr root, struct query_filter *filter)
 	    if (!xmlStrcmp(node->name, BAD_CAST "comp-filter")) {
 		xmlChar *name = xmlGetProp(node, BAD_CAST "name");
 
-		if (filter->comp) return HTTP_FORBIDDEN;
+		if (filter->comp) {
+		    error->precond = &preconds[CALDAV_VALID_FILTER];
+		    return HTTP_FORBIDDEN;
+		}
 
 		if (!xmlStrcmp(name, BAD_CAST "VCALENDAR"))
 		    filter->comp = COMP_VCALENDAR;
@@ -1981,9 +1985,13 @@ static int parse_comp_filter(xmlNodePtr root, struct query_filter *filter)
 		    filter->comp = COMP_VJOURNAL;
 		else if (!xmlStrcmp(name, BAD_CAST "VFREEBUSY"))
 		    filter->comp = COMP_VFREEBUSY;
-		else return HTTP_FORBIDDEN;
+		else {
+		    error->precond = &preconds[CALDAV_SUPP_FILTER];
+		    return HTTP_FORBIDDEN;
+		}
 
-		ret = parse_comp_filter(node->children, filter);
+		ret = parse_comp_filter(node->children, filter, error);
+		if (ret) return ret;
 	    }
 	    else if (!xmlStrcmp(node->name, BAD_CAST "time-range")) {
 		const char *start, *end;
@@ -1996,6 +2004,10 @@ static int parse_comp_filter(xmlNodePtr root, struct query_filter *filter)
 		filter->end = end ? icaltime_from_string(end) :
 		    icaltime_from_timet_with_zone(INT_MAX, 0, NULL);
 	    }
+	    else {
+		error->precond = &preconds[CALDAV_SUPP_FILTER];
+		return HTTP_FORBIDDEN;
+	    }
 	}
     }
 
@@ -2004,7 +2016,8 @@ static int parse_comp_filter(xmlNodePtr root, struct query_filter *filter)
 
 
 static int report_cal_query(xmlNodePtr inroot, struct propfind_ctx *fctx,
-			    struct caldav_db *caldavdb)
+			    struct caldav_db *caldavdb,
+			    struct error_t *error)
 {
     int ret = 0;
     xmlNodePtr node;
@@ -2013,7 +2026,7 @@ static int report_cal_query(xmlNodePtr inroot, struct propfind_ctx *fctx,
     for (node = inroot->children; node; node = node->next) {
 	if (node->type == XML_ELEMENT_NODE) {
 	    if (!xmlStrcmp(node->name, BAD_CAST "filter")) {
-		ret = parse_comp_filter(node->children, &fctx->filter);
+		ret = parse_comp_filter(node->children, &fctx->filter, error);
 	    }
 	    else if (!xmlStrcmp(node->name, BAD_CAST "timezone")) {
 		syslog(LOG_WARNING, "REPORT calendar-query w/timezone");
@@ -2028,7 +2041,8 @@ static int report_cal_query(xmlNodePtr inroot, struct propfind_ctx *fctx,
 
 
 static int report_cal_multiget(xmlNodePtr inroot, struct propfind_ctx *fctx,
-			       struct caldav_db *caldavdb)
+			       struct caldav_db *caldavdb,
+			       struct error_t *error __attribute__((unused)))
 {
     int ret = 0;
     xmlNodePtr node;
@@ -2061,7 +2075,8 @@ static int map_modseq_cmp(const struct index_map *m1,
 }
 
 static int report_sync_col(xmlNodePtr inroot, struct propfind_ctx *fctx,
-			   struct caldav_db *caldavdb __attribute__((unused)))
+			   struct caldav_db *caldavdb __attribute__((unused)),
+			   struct error_t *error __attribute__((unused)))
 {
     int ret = 0, r, userflag;
     struct mailbox *mailbox = fctx->mailbox;
@@ -2236,7 +2251,8 @@ enum {
 };
 
 typedef int (*report_proc_t)(xmlNodePtr inroot, struct propfind_ctx *fctx,
-			     struct caldav_db *caldavdb);
+			     struct caldav_db *caldavdb,
+			     struct error_t *error);
 
 static const struct report_type_t {
     const char *name;
@@ -2434,7 +2450,7 @@ static int meth_report(struct transaction_t *txn)
     }
 
     /* Process the requested report */
-    ret = (*report->proc)(inroot, &fctx, caldavdb);
+    ret = (*report->proc)(inroot, &fctx, caldavdb, &txn->error);
 
     /* Output the XML response */
     if (!ret) xml_response(HTTP_MULTI_STATUS, txn, outroot->doc);

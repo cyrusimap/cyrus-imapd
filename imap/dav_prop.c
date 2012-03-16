@@ -1592,6 +1592,7 @@ const struct precond preconds[] =
     { "supported-calendar-component", NS_CALDAV },
     { "calendar-collection-location-ok", NS_CALDAV },
     { "supported-filter", NS_CALDAV },
+    { "valid-filter", NS_CALDAV }
 };
 
 
