@@ -2257,15 +2257,16 @@ typedef int (*report_proc_t)(xmlNodePtr inroot, struct propfind_ctx *fctx,
 static const struct report_type_t {
     const char *name;
     report_proc_t proc;
+    unsigned long need_privs;
     unsigned flags;
 } report_types[] = {
-    { "calendar-query", &report_cal_query,
+    { "calendar-query", &report_cal_query, DACL_READ,
       REPORT_NEED_MBOX |REPORT_NEED_DAVDB | REPORT_USE_BRIEF },
-    { "calendar-multiget", &report_cal_multiget,
+    { "calendar-multiget", &report_cal_multiget, DACL_READ,
       REPORT_NEED_MBOX | REPORT_NEED_DAVDB | REPORT_USE_BRIEF },
-    { "sync-collection", &report_sync_col,
+    { "sync-collection", &report_sync_col, DACL_READ,
       REPORT_NEED_MBOX | REPORT_NEED_PROPS },
-    { NULL, NULL, 0 }
+    { NULL, NULL, 0, 0 }
 };
 
 
@@ -2406,11 +2407,11 @@ static int meth_report(struct transaction_t *txn)
 
 	/* Check ACL for current user */
 	rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
-	if ((rights & DACL_READ) != DACL_READ) {
+	if ((rights & report->need_privs) != report->need_privs) {
 	    /* DAV:need-privileges */
 	    txn->error.precond = &preconds[DAV_NEED_PRIVS];
 	    txn->error.resource = txn->req_tgt.path;
-	    txn->error.rights = DACL_READ;
+	    txn->error.rights = report->need_privs;
 	    ret = HTTP_FORBIDDEN;
 	    goto done;
 	}
