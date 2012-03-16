@@ -2015,9 +2015,9 @@ static int parse_comp_filter(xmlNodePtr root, struct query_filter *filter,
 }
 
 
-static int report_cal_query(xmlNodePtr inroot, struct propfind_ctx *fctx,
-			    struct caldav_db *caldavdb,
-			    struct error_t *error)
+static int report_cal_query(struct transaction_t *txn,
+			    xmlNodePtr inroot, struct propfind_ctx *fctx,
+			    struct caldav_db *caldavdb)
 {
     int ret = 0;
     xmlNodePtr node;
@@ -2026,7 +2026,8 @@ static int report_cal_query(xmlNodePtr inroot, struct propfind_ctx *fctx,
     for (node = inroot->children; node; node = node->next) {
 	if (node->type == XML_ELEMENT_NODE) {
 	    if (!xmlStrcmp(node->name, BAD_CAST "filter")) {
-		ret = parse_comp_filter(node->children, &fctx->filter, error);
+		ret = parse_comp_filter(node->children, &fctx->filter,
+					&txn->error);
 	    }
 	    else if (!xmlStrcmp(node->name, BAD_CAST "timezone")) {
 		syslog(LOG_WARNING, "REPORT calendar-query w/timezone");
@@ -2040,9 +2041,9 @@ static int report_cal_query(xmlNodePtr inroot, struct propfind_ctx *fctx,
 }
 
 
-static int report_cal_multiget(xmlNodePtr inroot, struct propfind_ctx *fctx,
-			       struct caldav_db *caldavdb,
-			       struct error_t *error __attribute__((unused)))
+static int report_cal_multiget(struct transaction_t *txn __attribute__((unused)),
+			       xmlNodePtr inroot, struct propfind_ctx *fctx,
+			       struct caldav_db *caldavdb)
 {
     int ret = 0;
     xmlNodePtr node;
@@ -2066,6 +2067,7 @@ static int report_cal_multiget(xmlNodePtr inroot, struct propfind_ctx *fctx,
     return ret;
 }
 
+
 static int map_modseq_cmp(const struct index_map *m1,
 			  const struct index_map *m2)
 {
@@ -2074,9 +2076,10 @@ static int map_modseq_cmp(const struct index_map *m1,
     return 0;
 }
 
-static int report_sync_col(xmlNodePtr inroot, struct propfind_ctx *fctx,
-			   struct caldav_db *caldavdb __attribute__((unused)),
-			   struct error_t *error __attribute__((unused)))
+
+static int report_sync_col(struct transaction_t *txn __attribute__((unused)),
+			   xmlNodePtr inroot, struct propfind_ctx *fctx,
+			   struct caldav_db *caldavdb __attribute__((unused)))
 {
     int ret = 0, r, userflag;
     struct mailbox *mailbox = fctx->mailbox;
@@ -2250,9 +2253,9 @@ enum {
     REPORT_USE_BRIEF  = (1<<3)
 };
 
-typedef int (*report_proc_t)(xmlNodePtr inroot, struct propfind_ctx *fctx,
-			     struct caldav_db *caldavdb,
-			     struct error_t *error);
+typedef int (*report_proc_t)(struct transaction_t *txn, xmlNodePtr inroot,
+			     struct propfind_ctx *fctx,
+			     struct caldav_db *caldavdb);
 
 static const struct report_type_t {
     const char *name;
@@ -2261,7 +2264,7 @@ static const struct report_type_t {
     unsigned flags;
 } report_types[] = {
     { "calendar-query", &report_cal_query, DACL_READ,
-      REPORT_NEED_MBOX |REPORT_NEED_DAVDB | REPORT_USE_BRIEF },
+      REPORT_NEED_MBOX | REPORT_NEED_DAVDB | REPORT_USE_BRIEF },
     { "calendar-multiget", &report_cal_multiget, DACL_READ,
       REPORT_NEED_MBOX | REPORT_NEED_DAVDB | REPORT_USE_BRIEF },
     { "sync-collection", &report_sync_col, DACL_READ,
@@ -2451,7 +2454,7 @@ static int meth_report(struct transaction_t *txn)
     }
 
     /* Process the requested report */
-    ret = (*report->proc)(inroot, &fctx, caldavdb, &txn->error);
+    ret = (*report->proc)(txn, inroot, &fctx, caldavdb);
 
     /* Output the XML response */
     if (!ret) xml_response(HTTP_MULTI_STATUS, txn, outroot->doc);
