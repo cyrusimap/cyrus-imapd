@@ -1963,7 +1963,7 @@ static int parse_comp_filter(xmlNodePtr root, struct query_filter *filter)
     int ret = 0;
     xmlNodePtr node;
 
-    /* Parse children element of report */
+    /* Parse elements of filter */
     for (node = root; node; node = node->next) {
 	if (node->type == XML_ELEMENT_NODE) {
 	    if (!xmlStrcmp(node->name, BAD_CAST "comp-filter")) {
