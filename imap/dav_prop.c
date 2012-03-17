@@ -270,7 +270,7 @@ static void resource_inrange(icalcomponent *comp __attribute__((unused)),
 			     struct icaltime_span *span __attribute__((unused)),
 			     void *inrange)
 {
-    *((unsigned *) inrange) = 1;
+    *((int *) inrange) = 1;
 }
 
 
@@ -281,7 +281,7 @@ int find_resource_props(void *rock, const char *resource, uint32_t uid)
     struct index_record record;
     char *p;
     size_t len;
-    int r, ret = 0;
+    int r, ret = 0, add_it = 1;;
 
     /* Append resource name to URL path */
     if (!fctx->req_tgt->resource) {
@@ -335,29 +335,30 @@ int find_resource_props(void *rock, const char *resource, uint32_t uid)
 		}
 
 		/* Not looking for this component type -- skip it */
-		if (!(mykind & fctx->filter.comp)) goto cleanup;
+		if (!(mykind & fctx->filter.comp)) add_it = 0;
 	    }
 
-	    if (!icaltime_is_null_time(fctx->filter.start)) {
+	    if (add_it && !icaltime_is_null_time(fctx->filter.start)) {
 		/* Perform CALDAV:time-range filtering */
-		unsigned inrange = 0;
+		add_it = 0;
 
 		icalcomponent_foreach_recurrence(comp,
 						 fctx->filter.start,
 						 fctx->filter.end,
 						 resource_inrange,
-						 &inrange);
-
-		/* (Recurring) component is outside of time-range -- skip it */
-		if (!inrange) goto cleanup;
+						 &add_it);
 	    }
+
+	    icalcomponent_free(ical);
 	}
     }
 
-    /* Add response for target */
-    ret = xml_add_response(fctx, (!uid || !fctx->record) ? HTTP_NOT_FOUND : 0);
+    if (add_it) {
+	/* Add response for target */
+	ret = xml_add_response(fctx,
+			       (!uid || !fctx->record) ? HTTP_NOT_FOUND : 0);
+    }
 
-  cleanup:
     if (fctx->msg_base) {
 	mailbox_unmap_message(fctx->mailbox, uid,
 			      &fctx->msg_base, &fctx->msg_size);
