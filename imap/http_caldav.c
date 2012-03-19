@@ -1434,14 +1434,14 @@ int meth_propfind(struct transaction_t *txn)
 
 	if (txn->req_tgt.collection) {
 	    /* Add response for target calendar collection */
-	    find_collection_props(mailboxname, 0, 0, &fctx);
+	    propfind_by_collection(mailboxname, 0, 0, &fctx);
 	}
 	else {
 	    /* Add responses for all contained calendar collections */
 	    strlcat(mailboxname, ".%", sizeof(mailboxname));
 	    r = mboxlist_findall(NULL,  /* internal namespace */
 				 mailboxname, 1, httpd_userid, 
-				 httpd_authstate, find_collection_props, &fctx);
+				 httpd_authstate, propfind_by_collection, &fctx);
 	}
 
 	ret = *fctx.ret;
@@ -2035,7 +2035,7 @@ static int report_cal_query(struct transaction_t *txn,
 	}
     }
 
-    caldav_foreach(caldavdb, find_resource_props, fctx);
+    caldav_foreach(caldavdb, propfind_by_resource, fctx);
 
     return ret;
 }
@@ -2060,7 +2060,7 @@ static int report_cal_multiget(struct transaction_t *txn __attribute__((unused))
 	    caldav_read(caldavdb, resource, &uid);
 	    /* XXX  Check errors */
 
-	    find_resource_props(fctx, resource, uid);
+	    propfind_by_resource(fctx, resource, uid);
 	}
     }
 
@@ -2224,12 +2224,12 @@ static int report_sync_col(struct transaction_t *txn __attribute__((unused)),
 
 	if (record->system_flags & FLAG_EXPUNGED) {
 	    /* report as NOT FOUND
-	       find_resource_props() will append our resource name */
-	    find_resource_props(fctx, resource, 0 /* ignore record */);
+	       propfind_by_resource() will append our resource name */
+	    propfind_by_resource(fctx, resource, 0 /* ignore record */);
 	}
 	else {
 	    fctx->record = record;
-	    find_resource_props(fctx, resource, record->uid);
+	    propfind_by_resource(fctx, resource, record->uid);
 	}
     }
 

@@ -230,13 +230,13 @@ xmlNodePtr xml_add_error(xmlNodePtr root, struct error_t *err,
 int xml_add_response(struct propfind_ctx *fctx, long code);
 
 /* caldav_foreach() callback to find props on a resource */
-int find_resource_props(void *rock, const char *resource, uint32_t uid);
+int propfind_by_resource(void *rock, const char *resource, uint32_t uid);
 
 /* mboxlist_findall() callback to find props on a collection */
-int find_collection_props(char *mboxname,
-			  int matchlen __attribute__((unused)),
-			  int maycreate __attribute__((unused)),
-			  void *rock);
+int propfind_by_collection(char *mboxname,
+			   int matchlen __attribute__((unused)),
+			   int maycreate __attribute__((unused)),
+			   void *rock);
 
 /* Execute given property patch instructions */
 int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr);

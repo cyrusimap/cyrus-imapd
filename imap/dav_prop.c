@@ -275,7 +275,7 @@ static void resource_inrange(icalcomponent *comp __attribute__((unused)),
 
 
 /* caldav_foreach() callback to find props on a resource */
-int find_resource_props(void *rock, const char *resource, uint32_t uid)
+int propfind_by_resource(void *rock, const char *resource, uint32_t uid)
 {
     struct propfind_ctx *fctx = (struct propfind_ctx *) rock;
     struct index_record record;
@@ -371,10 +371,10 @@ int find_resource_props(void *rock, const char *resource, uint32_t uid)
 }
 
 /* mboxlist_findall() callback to find props on a collection */
-int find_collection_props(char *mboxname,
-			  int matchlen __attribute__((unused)),
-			  int maycreate __attribute__((unused)),
-			  void *rock)
+int propfind_by_collection(char *mboxname,
+			   int matchlen __attribute__((unused)),
+			   int maycreate __attribute__((unused)),
+			   void *rock)
 {
     struct propfind_ctx *fctx = (struct propfind_ctx *) rock;
     struct mailbox *mailbox = NULL;
@@ -437,11 +437,11 @@ int find_collection_props(char *mboxname,
 	    caldav_read(caldavdb, fctx->req_tgt->resource, &uid);
 	    /* XXX  Check errors */
 
-	    r = find_resource_props(rock, fctx->req_tgt->resource, uid);
+	    r = propfind_by_resource(rock, fctx->req_tgt->resource, uid);
 	}
 	else {
 	    /* Add responses for all contained resources */
-	    caldav_foreach(caldavdb, find_resource_props, rock);
+	    caldav_foreach(caldavdb, propfind_by_resource, rock);
 
 	    /* Started with NULL resource, end with NULL resource */
 	    fctx->req_tgt->resource = NULL;
