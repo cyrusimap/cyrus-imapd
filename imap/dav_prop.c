@@ -705,6 +705,11 @@ static int propfind_reportset(xmlNodePtr prop,
 	r = xmlNewChild(s, NULL, BAD_CAST "report", NULL);
 	ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
 	xmlNewChild(r, fctx->ns[NS_CALDAV], BAD_CAST "calendar-multiget", NULL);
+
+	s = xmlNewChild(top, NULL, BAD_CAST "supported-report", NULL);
+	r = xmlNewChild(s, NULL, BAD_CAST "report", NULL);
+	ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
+	xmlNewChild(r, fctx->ns[NS_CALDAV], BAD_CAST "free-busy-query", NULL);
     }
 
     return 0;

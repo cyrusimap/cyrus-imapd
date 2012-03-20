@@ -154,6 +154,12 @@ struct calquery_filter {
     struct icaltimetype end;
 };
 
+struct busytime {
+    struct icalperiodtype *busy;
+    unsigned len;
+    unsigned alloc;
+};
+
 struct propfind_ctx {
     struct request_target_t *req_tgt;	/* parsed request target URL */
     unsigned depth;	    		/* 0 = root, 1 = calendar, 2 = resrc */
@@ -170,6 +176,7 @@ struct propfind_ctx {
     int (*proc_by_resource)(void *rock,	/* Callback to process a resource */
 		const char *resource, uint32_t uid);
     struct propfind_entry_list *elist;	/* List of props to fetch w/callbacks */
+    struct busytime *busytime;    	/* array of found busytime periods */
     xmlNodePtr root;			/* root node to add to XML tree */
     xmlNsPtr *ns;			/* Array of our supported namespaces */
     const char **errstr;		/* Error string to pass up to caller */

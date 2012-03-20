@@ -50,7 +50,8 @@
  *   - Add more required properties
  *   - GET/HEAD on collections (iCalendar stream of resources)
  *   - calendar-query REPORT (handle partial retrieval, prop-filter, timezone?)
- *   - free-busy-query REPORT?
+ *   - free-busy-query REPORT (check ACL and transp on all calendars,
+ *     handle overridden recurrences)
  *   - sync-collection REPORT - need to handle Depth infinity?
  *   - Use XML precondition error codes
  *   - Add WebDAV LOCKing?  Does anybody use it?
@@ -82,6 +83,7 @@
 #include "spool.h"
 #include "stristr.h"
 #include "util.h"
+#include "version.h"
 #include "xmalloc.h"
 #include "xstrlcat.h"
 
@@ -2115,6 +2117,229 @@ static int report_cal_multiget(struct transaction_t *txn __attribute__((unused))
 }
 
 
+
+static void add_busytime(icalcomponent *comp, struct icaltime_span *span,
+			 void *rock)
+{
+    struct busytime *busytime = (struct busytime *) rock;
+    int is_date = icaltime_is_date(icalcomponent_get_dtstart(comp));
+    icaltimezone *utc = icaltimezone_get_utc_timezone();
+    struct icalperiodtype *newp;
+
+    /* Grow the array, if necessary */
+    if (busytime->len == busytime->alloc) {
+	busytime->alloc *= 2;
+	xrealloc(busytime->busy,
+		 busytime->alloc * sizeof(struct icalperiodtype));
+    }
+
+    /* Add new busytime */
+    newp = &busytime->busy[busytime->len++];
+    newp->start = icaltime_from_timet_with_zone(span->start, is_date, utc);
+    newp->end = icaltime_from_timet_with_zone(span->end, is_date, utc);
+    newp->duration = icaldurationtype_null_duration();
+}
+
+
+static int busytime_by_resource(void *rock,
+				const char *resource __attribute__((unused)),
+				uint32_t uid)
+{
+    struct propfind_ctx *fctx = (struct propfind_ctx *) rock;
+    struct index_record record;
+    int r, ret = 0;
+
+    if (uid) {
+	/* Fetch index record for the resource */
+	r = mailbox_find_index_record(fctx->mailbox, uid, &record);
+	/* XXX  Check errors */
+
+	if (!r) {
+	    /* mmap() and parse iCalendar object to perform filtering */
+	    const char *msg_base = NULL;
+	    unsigned long msg_size = 0;
+	    icalcomponent *ical, *comp;
+	    icalcomponent_kind kind;
+	    unsigned mykind = 0;
+
+	    mailbox_map_message(fctx->mailbox, uid, &msg_base, &msg_size);
+
+	    ical = icalparser_parse_string(msg_base + record.header_size);
+
+	    mailbox_unmap_message(fctx->mailbox, uid, &msg_base, &msg_size);
+
+	    comp = icalcomponent_get_first_real_component(ical);
+	    kind = icalcomponent_isa(comp);
+
+	    /* Perform CALDAV:comp-filter filtering */
+	    /* XXX  This should be checked with a caldav_db entry */
+	    switch (kind) {
+	    case ICAL_VEVENT_COMPONENT: mykind = COMP_VEVENT; break;
+	    case ICAL_VTODO_COMPONENT: mykind = COMP_VTODO; break;
+	    case ICAL_VJOURNAL_COMPONENT: mykind = COMP_VJOURNAL; break;
+	    case ICAL_VFREEBUSY_COMPONENT: mykind = COMP_VFREEBUSY; break;
+	    default: break;
+	    }
+
+	    if (mykind & fctx->calfilter->comp) {
+		/* Add all busytime in specified time-range */
+		icalcomponent_foreach_recurrence(comp,
+						 fctx->calfilter->start,
+						 fctx->calfilter->end,
+						 add_busytime,
+						 fctx->busytime);
+
+		/* XXX  Handle overridden recurrences */
+	    }
+
+	    icalcomponent_free(ical);
+	}
+    }
+
+    fctx->msg_base = NULL;
+    fctx->msg_size = 0;
+    fctx->record = NULL;
+
+    return ret;
+}
+
+
+static int compare_busytime(const void *b1, const void *b2)
+{
+    struct icalperiodtype *a = (struct icalperiodtype *) b1;
+    struct icalperiodtype *b = (struct icalperiodtype *) b2;
+
+    return icaltime_compare(a->start, b->start);
+}
+
+
+static int report_fb_query(struct transaction_t *txn,
+			   xmlNodePtr inroot, struct propfind_ctx *fctx,
+			   char mailboxname[])
+{
+    int ret = 0;
+    struct calquery_filter filter;
+    struct busytime busytime;
+    xmlNodePtr node;
+
+    memset(&filter, 0, sizeof(struct calquery_filter));
+    filter.comp = COMP_VEVENT | COMP_VFREEBUSY;
+    filter.start = icaltime_from_timet_with_zone(INT_MIN, 0, NULL);
+    filter.end = icaltime_from_timet_with_zone(INT_MAX, 0, NULL);
+    fctx->calfilter = &filter;
+
+    memset(&busytime, 0, sizeof(struct busytime));
+    busytime.alloc = 100;
+    busytime.busy = xmalloc(busytime.alloc * sizeof(struct icalperiodtype));
+    fctx->busytime = &busytime;
+
+    fctx->proc_by_resource = &busytime_by_resource;
+
+    /* Parse children element of report */
+    for (node = inroot->children; node; node = node->next) {
+	if (node->type == XML_ELEMENT_NODE) {
+	    if (!xmlStrcmp(node->name, BAD_CAST "time-range")) {
+		const char *start, *end;
+
+		start = (const char *) xmlGetProp(node, BAD_CAST "start");
+		if (start) filter.start = icaltime_from_string(start);
+
+		end = (const char *) xmlGetProp(node, BAD_CAST "end");
+		if (end) filter.end = icaltime_from_string(end);
+	    }
+	}
+    }
+
+    /* Gather up all of the busytime */
+    if (fctx->depth > 0) {
+	/* Calendar collection(s) */
+	int r;
+
+	/* XXX  Check DACL_READFB on all calendars */
+
+	if (txn->req_tgt.collection) {
+	    /* Get busytime for target calendar collection */
+	    propfind_by_collection(mailboxname, 0, 0, fctx);
+	}
+	else {
+	    /* Get busytime for all contained calendar collections */
+	    strlcat(mailboxname, ".%", sizeof(mailboxname));
+	    r = mboxlist_findall(NULL,  /* internal namespace */
+				 mailboxname, 1, httpd_userid, 
+				 httpd_authstate, propfind_by_collection, fctx);
+	}
+
+	ret = *fctx->ret;
+    }
+
+    if (!ret) {
+	struct buf prodid = BUF_INITIALIZER;
+	icalcomponent *cal, *fb;
+	time_t now = time(0);
+	unsigned n;
+	const char *cal_str;
+
+	/* Construct iCalendar object with VFREEBUSY component */
+	buf_printf(&prodid, "-//cyrusimap.org/Cyrus %s//EN", cyrus_version());
+	cal = icalcomponent_vanew(ICAL_VCALENDAR_COMPONENT,
+				  icalproperty_new_version("2.0"),
+				  icalproperty_new_prodid(buf_cstring(&prodid)),
+				  0);
+	buf_free(&prodid);
+
+	fb = icalcomponent_vanew(ICAL_VFREEBUSY_COMPONENT,
+				 icalproperty_new_dtstamp(
+				     icaltime_from_timet_with_zone(
+					 now,
+					 0,
+					 icaltimezone_get_utc_timezone())),
+				 icalproperty_new_dtstart(filter.start),
+				 icalproperty_new_dtend(filter.end),
+				 0);
+
+	icalcomponent_add_component(cal, fb);
+
+	/* Sort busytime periods by start time */
+	qsort(busytime.busy, busytime.len, sizeof(struct icalperiodtype),
+	      compare_busytime);
+
+	/* Add busytime periods to VFREEBUSY component, coalescing as needed */
+	for (n = 0; n < busytime.len; n++) {
+	    if ((n+1 < busytime.len) &&
+		icaltime_compare(busytime.busy[n].end,
+				 busytime.busy[n+1].start) >= 0) {
+		/* Periods overlap -- coalesce into next busytime */
+		memcpy(&busytime.busy[n+1].start, &busytime.busy[n].start,
+		       sizeof(struct icaltimetype));
+		if (icaltime_compare(busytime.busy[n].end,
+				     busytime.busy[n+1].end) > 0) {
+		    memcpy(&busytime.busy[n+1].end, &busytime.busy[n].end,
+			   sizeof(struct icaltimetype));
+		}
+	    }
+	    else {
+		icalproperty *busy =
+		    icalproperty_new_freebusy(busytime.busy[n]);
+
+		icalcomponent_add_property(fb, busy);
+	    }
+	}
+
+	/* Output the iCalendar object as text/calendar */
+	cal_str = icalcomponent_as_ical_string(cal);
+	icalcomponent_free(cal);
+
+	txn->resp_body.type = "text/calendar; charset=utf-8";
+
+	write_body(HTTP_OK, txn, cal_str, strlen(cal_str));
+    }
+
+    free(busytime.busy);
+
+    return ret;
+}
+
+
 static int map_modseq_cmp(const struct index_map *m1,
 			  const struct index_map *m2)
 {
@@ -2316,9 +2541,10 @@ static int report_sync_col(struct transaction_t *txn __attribute__((unused)),
 
 /* Report types and flags */
 enum {
-    REPORT_NEED_MBOX  = (1<<0),
-    REPORT_NEED_PROPS = (1<<1),
-    REPORT_USE_BRIEF  = (1<<2)
+    REPORT_NEED_MBOX	= (1<<0),
+    REPORT_NEED_PROPS 	= (1<<1),
+    REPORT_MULTISTATUS	= (1<<2),
+    REPORT_USE_BRIEF  	= (1<<3)
 };
 
 typedef int (*report_proc_t)(struct transaction_t *txn, xmlNodePtr inroot,
@@ -2332,11 +2558,13 @@ static const struct report_type_t {
     unsigned flags;
 } report_types[] = {
     { "calendar-query", &report_cal_query, DACL_READ,
-      REPORT_NEED_MBOX | REPORT_USE_BRIEF },
+      REPORT_NEED_MBOX | REPORT_MULTISTATUS | REPORT_USE_BRIEF},
     { "calendar-multiget", &report_cal_multiget, DACL_READ,
-      REPORT_NEED_MBOX | REPORT_USE_BRIEF },
+      REPORT_NEED_MBOX | REPORT_MULTISTATUS | REPORT_USE_BRIEF },
+    { "free-busy-query", &report_fb_query, DACL_READFB,
+      REPORT_NEED_MBOX },
     { "sync-collection", &report_sync_col, DACL_READ,
-      REPORT_NEED_MBOX | REPORT_NEED_PROPS },
+      REPORT_NEED_MBOX | REPORT_MULTISTATUS | REPORT_NEED_PROPS },
     { NULL, NULL, 0, 0 }
 };
 
@@ -2476,7 +2704,8 @@ static int meth_report(struct transaction_t *txn)
     }
 
     /* Start construction of our multistatus response */
-    if (!(outroot = init_xml_response("multistatus", inroot->nsDef, ns))) {
+    if ((report->flags & REPORT_MULTISTATUS) &&
+	!(outroot = init_xml_response("multistatus", inroot->nsDef, ns))) {
 	txn->error.desc = "Unable to create XML response";
 	ret = HTTP_SERVER_ERROR;
 	goto done;
@@ -2510,7 +2739,7 @@ static int meth_report(struct transaction_t *txn)
     ret = (*report->proc)(txn, inroot, &fctx, mailboxname);
 
     /* Output the XML response */
-    if (!ret) xml_response(HTTP_MULTI_STATUS, txn, outroot->doc);
+    if (!ret && outroot) xml_response(HTTP_MULTI_STATUS, txn, outroot->doc);
 
   done:
     /* Free the entry list */
