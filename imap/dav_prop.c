@@ -309,7 +309,9 @@ int propfind_by_resource(void *rock, const char *resource, uint32_t uid)
 	fctx->record = r ? NULL : &record;
 
 	if (fctx->record &&
-	    (fctx->filter.comp || !icaltime_is_null_time(fctx->filter.start))) {
+	    fctx->calfilter &&
+	    (fctx->calfilter->comp ||
+	     !icaltime_is_null_time(fctx->calfilter->start))) {
 	    /* mmap() and parse iCalendar object to perform filtering */
 	    icalcomponent *ical, *comp;
 
@@ -320,7 +322,7 @@ int propfind_by_resource(void *rock, const char *resource, uint32_t uid)
 					   fctx->record->header_size);
 	    comp = icalcomponent_get_first_real_component(ical);
 
-	    if (fctx->filter.comp) {
+	    if (fctx->calfilter->comp) {
 		/* Perform CALDAV:comp-filter filtering */
 		/* XXX  This should be checked with a caldav_db entry */
 		icalcomponent_kind kind = icalcomponent_isa(comp);
@@ -335,16 +337,16 @@ int propfind_by_resource(void *rock, const char *resource, uint32_t uid)
 		}
 
 		/* Not looking for this component type -- skip it */
-		if (!(mykind & fctx->filter.comp)) add_it = 0;
+		if (!(mykind & fctx->calfilter->comp)) add_it = 0;
 	    }
 
-	    if (add_it && !icaltime_is_null_time(fctx->filter.start)) {
+	    if (add_it && !icaltime_is_null_time(fctx->calfilter->start)) {
 		/* Perform CALDAV:time-range filtering */
 		add_it = 0;
 
 		icalcomponent_foreach_recurrence(comp,
-						 fctx->filter.start,
-						 fctx->filter.end,
+						 fctx->calfilter->start,
+						 fctx->calfilter->end,
 						 resource_inrange,
 						 &add_it);
 	    }
@@ -422,8 +424,8 @@ int propfind_by_collection(char *mboxname,
 	fctx->req_tgt->collection = p;
 	fctx->req_tgt->collen = strlen(p);
 
-	/* Add response for target collection */
-	if ((r = xml_add_response(fctx, 0))) goto done;
+	/* If not filtering by calendar resource, add response for collection */
+	if (!fctx->calfilter && (r = xml_add_response(fctx, 0))) goto done;
     }
 
     if (fctx->depth > 1) {
@@ -437,11 +439,11 @@ int propfind_by_collection(char *mboxname,
 	    caldav_read(caldavdb, fctx->req_tgt->resource, &uid);
 	    /* XXX  Check errors */
 
-	    r = propfind_by_resource(rock, fctx->req_tgt->resource, uid);
+	    r = fctx->proc_by_resource(rock, fctx->req_tgt->resource, uid);
 	}
 	else {
 	    /* Add responses for all contained resources */
-	    caldav_foreach(caldavdb, propfind_by_resource, rock);
+	    caldav_foreach(caldavdb, fctx->proc_by_resource, rock);
 
 	    /* Started with NULL resource, end with NULL resource */
 	    fctx->req_tgt->resource = NULL;

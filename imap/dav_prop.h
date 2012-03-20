@@ -148,7 +148,7 @@ enum {
 /* Context for fetching properties */
 struct propfind_entry_list;
 
-struct query_filter {
+struct calquery_filter {
     unsigned comp;
     struct icaltimetype start;
     struct icaltimetype end;
@@ -166,7 +166,9 @@ struct propfind_ctx {
     struct index_record *record;	/* cyrus.index record for resource */
     const char *msg_base;		/* base of mmap()'d resource file */
     unsigned long msg_size;		/* size of mmap()'d resource file */
-    struct query_filter filter;		/* criteria to filter resources */
+    struct calquery_filter *calfilter;	/* criteria to filter cal resources */
+    int (*proc_by_resource)(void *rock,	/* Callback to process a resource */
+		const char *resource, uint32_t uid);
     struct propfind_entry_list *elist;	/* List of props to fetch w/callbacks */
     xmlNodePtr root;			/* root node to add to XML tree */
     xmlNsPtr *ns;			/* Array of our supported namespaces */

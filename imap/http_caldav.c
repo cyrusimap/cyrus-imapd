@@ -1406,6 +1406,8 @@ int meth_propfind(struct transaction_t *txn)
     fctx.authstate = httpd_authstate;
     fctx.mailbox = NULL;
     fctx.record = NULL;
+    fctx.calfilter = NULL;
+    fctx.proc_by_resource = &propfind_by_resource;
     fctx.elist = NULL;
     fctx.root = root;
     fctx.ns = ns;
@@ -1958,7 +1960,7 @@ static int meth_put(struct transaction_t *txn)
 }
 
 
-static int parse_comp_filter(xmlNodePtr root, struct query_filter *filter,
+static int parse_comp_filter(xmlNodePtr root, struct calquery_filter *filter,
 			     struct error_t *error)
 {
     int ret = 0;
@@ -2017,17 +2019,21 @@ static int parse_comp_filter(xmlNodePtr root, struct query_filter *filter,
 
 static int report_cal_query(struct transaction_t *txn,
 			    xmlNodePtr inroot, struct propfind_ctx *fctx,
-			    struct caldav_db *caldavdb)
+			    char mailboxname[])
 {
     int ret = 0;
     xmlNodePtr node;
+    struct calquery_filter filter;
+
+    memset(&filter, 0, sizeof(struct calquery_filter));
+    fctx->calfilter = &filter;
+    fctx->proc_by_resource = &propfind_by_resource;
 
     /* Parse children element of report */
     for (node = inroot->children; node; node = node->next) {
 	if (node->type == XML_ELEMENT_NODE) {
 	    if (!xmlStrcmp(node->name, BAD_CAST "filter")) {
-		ret = parse_comp_filter(node->children, &fctx->filter,
-					&txn->error);
+		ret = parse_comp_filter(node->children, &filter, &txn->error);
 	    }
 	    else if (!xmlStrcmp(node->name, BAD_CAST "timezone")) {
 		syslog(LOG_WARNING, "REPORT calendar-query w/timezone");
@@ -2035,7 +2041,24 @@ static int report_cal_query(struct transaction_t *txn,
 	}
     }
 
-    caldav_foreach(caldavdb, propfind_by_resource, fctx);
+    if (fctx->depth > 0) {
+	/* Calendar collection(s) */
+	int r;
+
+	if (txn->req_tgt.collection) {
+	    /* Add response for target calendar collection */
+	    propfind_by_collection(mailboxname, 0, 0, fctx);
+	}
+	else {
+	    /* Add responses for all contained calendar collections */
+	    strlcat(mailboxname, ".%", sizeof(mailboxname));
+	    r = mboxlist_findall(NULL,  /* internal namespace */
+				 mailboxname, 1, httpd_userid, 
+				 httpd_authstate, propfind_by_collection, fctx);
+	}
+
+	ret = *fctx->ret;
+    }
 
     return ret;
 }
@@ -2043,10 +2066,30 @@ static int report_cal_query(struct transaction_t *txn,
 
 static int report_cal_multiget(struct transaction_t *txn __attribute__((unused)),
 			       xmlNodePtr inroot, struct propfind_ctx *fctx,
-			       struct caldav_db *caldavdb)
+			       char mailboxname[])
 {
-    int ret = 0;
+    int r, ret = 0;
+    struct mailbox *mailbox = NULL;
+    struct caldav_db *caldavdb = NULL;
     xmlNodePtr node;
+
+    /* Open mailbox for reading */
+    if ((r = http_mailbox_open(mailboxname, &mailbox, LOCK_SHARED))) {
+	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
+	       mailboxname, error_message(r));
+	txn->error.desc = error_message(r);
+	ret = HTTP_SERVER_ERROR;
+	goto done;
+    }
+
+    /* Open the associated CalDAV database */
+    if ((r = caldav_open(mailbox, CALDAV_CREATE, &caldavdb))) {
+	txn->error.desc = error_message(r);
+	ret = HTTP_SERVER_ERROR;
+	goto done;
+    }
+
+    fctx->mailbox = mailbox;
 
     /* Get props for each href */
     for (node = inroot->children; node; node = node->next) {
@@ -2064,6 +2107,10 @@ static int report_cal_multiget(struct transaction_t *txn __attribute__((unused))
 	}
     }
 
+  done:
+    if (caldavdb) caldav_close(caldavdb);
+    if (mailbox) mailbox_unlock_index(mailbox, NULL);
+
     return ret;
 }
 
@@ -2079,12 +2126,12 @@ static int map_modseq_cmp(const struct index_map *m1,
 
 static int report_sync_col(struct transaction_t *txn __attribute__((unused)),
 			   xmlNodePtr inroot, struct propfind_ctx *fctx,
-			   struct caldav_db *caldavdb __attribute__((unused)))
+			   char mailboxname[])
 {
     int ret = 0, r, userflag;
-    struct mailbox *mailbox = fctx->mailbox;
+    struct mailbox *mailbox = NULL;
     uint32_t uidvalidity = 0;
-    modseq_t syncmodseq = 0, highestmodseq = mailbox->i.highestmodseq;
+    modseq_t syncmodseq = 0, highestmodseq;
     uint32_t limit = -1, recno, nresp;
     xmlNodePtr node;
     struct index_state istate;
@@ -2093,6 +2140,20 @@ static int report_sync_col(struct transaction_t *txn __attribute__((unused)),
 
     /* XXX  Handle Depth (cal-home-set at toplevel) */
 
+    istate.map = NULL;
+
+    /* Open mailbox for reading */
+    if ((r = http_mailbox_open(mailboxname, &mailbox, LOCK_SHARED))) {
+	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
+	       mailboxname, error_message(r));
+	txn->error.desc = error_message(r);
+	ret = HTTP_SERVER_ERROR;
+	goto done;
+    }
+
+    fctx->mailbox = mailbox;
+
+    highestmodseq = mailbox->i.highestmodseq;
     r = mailbox_user_flag(mailbox, DFLAG_UNBIND, &userflag);
 
     /* Parse children element of report */
@@ -2113,7 +2174,8 @@ static int report_sync_col(struct transaction_t *txn __attribute__((unused)),
 		    (syncmodseq > highestmodseq)) {
 		    /* DAV:valid-sync-token */
 		    *fctx->errstr = "Invalid sync-token";
-		    return HTTP_FORBIDDEN;
+		    ret = HTTP_FORBIDDEN;
+		    goto done;
 		}
 	    }
 	    if (!xmlStrcmp(node->name, BAD_CAST "sync-level") &&
@@ -2121,12 +2183,14 @@ static int report_sync_col(struct transaction_t *txn __attribute__((unused)),
 		if (!strcmp((char *) str, "infinity")) {
 		    *fctx->errstr =
 			"This server DOES NOT support infinite depth requests";
-		    return HTTP_SERVER_ERROR;
+		    ret = HTTP_SERVER_ERROR;
+		    goto done;
 		}
 		else if ((sscanf((char *) str, "%u", &fctx->depth) != 1) ||
 			 (fctx->depth != 1)) {
 		    *fctx->errstr = "Illegal sync-level";
-		    return HTTP_BAD_REQUEST;
+		    ret = HTTP_BAD_REQUEST;
+		    goto done;
 		}
 	    }
 	    if (!xmlStrcmp(node->name, BAD_CAST "limit")) {
@@ -2137,7 +2201,8 @@ static int report_sync_col(struct transaction_t *txn __attribute__((unused)),
 						      node2->children, 1)) ||
 			 (sscanf((char *) str, "%u", &limit) != 1))) {
 			*fctx->errstr = "Invalid limit";
-			return HTTP_FORBIDDEN;
+			ret = HTTP_FORBIDDEN;
+			goto done;
 		    }
 		}
 	    }
@@ -2147,7 +2212,8 @@ static int report_sync_col(struct transaction_t *txn __attribute__((unused)),
     /* Check Depth */
     if (!fctx->depth) {
 	*fctx->errstr = "Illegal sync-level";
-	return HTTP_BAD_REQUEST;
+	ret = HTTP_BAD_REQUEST;
+	goto done;
     }
 
 
@@ -2199,7 +2265,8 @@ static int report_sync_col(struct transaction_t *txn __attribute__((unused)),
 	if (!nresp) {
 	    /* DAV:number-of-matches-within-limits */
 	    *fctx->errstr = "Unable to truncate results";
-	    return HTTP_FORBIDDEN;  /* HTTP_NO_STORAGE ? */
+	    ret = HTTP_FORBIDDEN;  /* HTTP_NO_STORAGE ? */
+	    goto done;
 	}
 
 	/* highestmodseq will be modseq of last record we return */
@@ -2236,10 +2303,12 @@ static int report_sync_col(struct transaction_t *txn __attribute__((unused)),
     /* Add sync-token element */
     snprintf(tokenuri, MAX_MAILBOX_PATH,
 	     XML_NS_CYRUS "sync/%u-" MODSEQ_FMT,
-	     fctx->mailbox->i.uidvalidity, highestmodseq);
+	     mailbox->i.uidvalidity, highestmodseq);
     xmlNewChild(fctx->root, NULL, BAD_CAST "sync-token", BAD_CAST tokenuri);
 
-    free(istate.map);
+  done:
+    if (istate.map) free(istate.map);
+    if (mailbox) mailbox_unlock_index(mailbox, NULL);
 
     return ret;
 }
@@ -2248,14 +2317,13 @@ static int report_sync_col(struct transaction_t *txn __attribute__((unused)),
 /* Report types and flags */
 enum {
     REPORT_NEED_MBOX  = (1<<0),
-    REPORT_NEED_DAVDB = (1<<1),
-    REPORT_NEED_PROPS = (1<<2),
-    REPORT_USE_BRIEF  = (1<<3)
+    REPORT_NEED_PROPS = (1<<1),
+    REPORT_USE_BRIEF  = (1<<2)
 };
 
 typedef int (*report_proc_t)(struct transaction_t *txn, xmlNodePtr inroot,
 			     struct propfind_ctx *fctx,
-			     struct caldav_db *caldavdb);
+			     char mailboxname[]);
 
 static const struct report_type_t {
     const char *name;
@@ -2264,9 +2332,9 @@ static const struct report_type_t {
     unsigned flags;
 } report_types[] = {
     { "calendar-query", &report_cal_query, DACL_READ,
-      REPORT_NEED_MBOX | REPORT_NEED_DAVDB | REPORT_USE_BRIEF },
+      REPORT_NEED_MBOX | REPORT_USE_BRIEF },
     { "calendar-multiget", &report_cal_multiget, DACL_READ,
-      REPORT_NEED_MBOX | REPORT_NEED_DAVDB | REPORT_USE_BRIEF },
+      REPORT_NEED_MBOX | REPORT_USE_BRIEF },
     { "sync-collection", &report_sync_col, DACL_READ,
       REPORT_NEED_MBOX | REPORT_NEED_PROPS },
     { NULL, NULL, 0, 0 }
@@ -2282,8 +2350,7 @@ static int meth_report(struct transaction_t *txn)
     xmlNodePtr inroot = NULL, outroot = NULL, cur, prop = NULL;
     const struct report_type_t *report = NULL;
     xmlNsPtr ns[NUM_NAMESPACE];
-    struct mailbox *mailbox = NULL;
-    struct caldav_db *caldavdb = NULL;
+    char mailboxname[MAX_MAILBOX_BUFFER];
     struct propfind_ctx fctx;
     struct propfind_entry_list *elist = NULL;
 
@@ -2298,15 +2365,19 @@ static int meth_report(struct transaction_t *txn)
     /* Check Depth */
     if ((hdr = spool_getheader(txn->req_hdrs, "Depth"))) {
 	if (!strcmp(hdr[0], "infinity")) {
-	    txn->error.desc =
-		"This server DOES NOT support infinite depth requests";
-	    return HTTP_SERVER_ERROR;
+	    depth = 2;
 	}
 	else if ((sscanf(hdr[0], "%u", &depth) != 1) || (depth > 1)) {
 	    txn->error.desc = "Illegal Depth value";
 	    return HTTP_BAD_REQUEST;
 	}
     }
+
+    /* Normalize depth so that:
+     * 0 = home-set collection, 1+ = calendar collection, 2+ = calendar resource
+     */
+    if (txn->req_tgt.collection) depth++;
+    if (txn->req_tgt.resource) depth++;
 
     /* Parse the REPORT body */
     ret = parse_xml_body(txn, &inroot);
@@ -2327,6 +2398,54 @@ static int meth_report(struct transaction_t *txn)
 	ret = HTTP_FORBIDDEN;
 	goto done;
     }
+
+    if (report->flags & REPORT_NEED_MBOX) {
+	char *server, *acl;
+	int rights;
+
+	/* Construct mailbox name corresponding to request target URI */
+	(void) target_to_mboxname(&txn->req_tgt, mailboxname);
+
+	/* Locate the mailbox */
+	if ((r = http_mlookup(mailboxname, &server, &acl, NULL))) {
+	    syslog(LOG_ERR, "mlookup(%s) failed: %s",
+		   mailboxname, error_message(r));
+	    txn->error.desc = error_message(r);
+
+	    switch (r) {
+	    case IMAP_PERMISSION_DENIED: ret = HTTP_FORBIDDEN;
+	    case IMAP_MAILBOX_NONEXISTENT: ret = HTTP_NOT_FOUND;
+	    default: ret = HTTP_SERVER_ERROR;
+	    }
+	    goto done;
+	}
+
+	/* Check ACL for current user */
+	rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
+	if ((rights & report->need_privs) != report->need_privs) {
+	    /* DAV:need-privileges */
+	    txn->error.precond = &preconds[DAV_NEED_PRIVS];
+	    txn->error.resource = txn->req_tgt.path;
+	    txn->error.rights = report->need_privs;
+	    ret = HTTP_FORBIDDEN;
+	    goto done;
+	}
+
+	if (server) {
+	    /* Remote mailbox */
+	    struct backend *be;
+
+	    be = proxy_findserver(server, &http_protocol, httpd_userid,
+				  &backend_cached, NULL, NULL, httpd_in);
+	    if (!be) ret = HTTP_UNAVAILABLE;
+	    else ret = http_pipe_req_resp(be, txn);
+	    goto done;
+	}
+
+	/* Local Mailbox */
+    }
+
+    /* Principal or Local Mailbox */
 
     /* Parse children element of report */
     for (cur = inroot->children; cur; cur = cur->next) {
@@ -2387,82 +2506,13 @@ static int meth_report(struct transaction_t *txn)
     /* Parse the list of properties and build a list of callbacks */
     if (prop) preload_proplist(prop->children, &fctx);
 
-    if (report->flags & REPORT_NEED_MBOX) {
-	char *server, *acl, mailboxname[MAX_MAILBOX_BUFFER];
-	int rights;
-
-	/* Construct mailbox name corresponding to request target URI */
-	(void) target_to_mboxname(&txn->req_tgt, mailboxname);
-
-	/* Locate the mailbox */
-	if ((r = http_mlookup(mailboxname, &server, &acl, NULL))) {
-	    syslog(LOG_ERR, "mlookup(%s) failed: %s",
-		   mailboxname, error_message(r));
-	    txn->error.desc = error_message(r);
-
-	    switch (r) {
-	    case IMAP_PERMISSION_DENIED: ret = HTTP_FORBIDDEN;
-	    case IMAP_MAILBOX_NONEXISTENT: ret = HTTP_NOT_FOUND;
-	    default: ret = HTTP_SERVER_ERROR;
-	    }
-	    goto done;
-	}
-
-	/* Check ACL for current user */
-	rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
-	if ((rights & report->need_privs) != report->need_privs) {
-	    /* DAV:need-privileges */
-	    txn->error.precond = &preconds[DAV_NEED_PRIVS];
-	    txn->error.resource = txn->req_tgt.path;
-	    txn->error.rights = report->need_privs;
-	    ret = HTTP_FORBIDDEN;
-	    goto done;
-	}
-
-	if (server) {
-	    /* Remote mailbox */
-	    struct backend *be;
-
-	    be = proxy_findserver(server, &http_protocol, httpd_userid,
-				  &backend_cached, NULL, NULL, httpd_in);
-	    if (!be) ret = HTTP_UNAVAILABLE;
-	    else ret = http_pipe_req_resp(be, txn);
-	    goto done;
-	}
-
-	/* Local Mailbox */
-
-	/* Open mailbox for reading */
-	if ((r = http_mailbox_open(mailboxname, &mailbox, LOCK_SHARED))) {
-	    syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-		   mailboxname, error_message(r));
-	    txn->error.desc = error_message(r);
-	    ret = HTTP_SERVER_ERROR;
-	    goto done;
-	}
-
-	if (report->flags & REPORT_NEED_DAVDB) {
-	    /* Open the associated CalDAV database */
-	    if ((r = caldav_open(mailbox, CALDAV_CREATE, &caldavdb))) {
-		txn->error.desc = error_message(r);
-		ret = HTTP_SERVER_ERROR;
-		goto done;
-	    }
-	}
-
-	fctx.mailbox = mailbox;
-    }
-
     /* Process the requested report */
-    ret = (*report->proc)(txn, inroot, &fctx, caldavdb);
+    ret = (*report->proc)(txn, inroot, &fctx, mailboxname);
 
     /* Output the XML response */
     if (!ret) xml_response(HTTP_MULTI_STATUS, txn, outroot->doc);
 
   done:
-    if (caldavdb) caldav_close(caldavdb);
-    if (mailbox) mailbox_unlock_index(mailbox, NULL);
-
     /* Free the entry list */
     elist = fctx.elist;
     while (elist) {
