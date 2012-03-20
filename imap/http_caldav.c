@@ -2543,8 +2543,7 @@ static int report_sync_col(struct transaction_t *txn __attribute__((unused)),
 enum {
     REPORT_NEED_MBOX	= (1<<0),
     REPORT_NEED_PROPS 	= (1<<1),
-    REPORT_MULTISTATUS	= (1<<2),
-    REPORT_USE_BRIEF  	= (1<<3)
+    REPORT_MULTISTATUS	= (1<<2)
 };
 
 typedef int (*report_proc_t)(struct transaction_t *txn, xmlNodePtr inroot,
@@ -2558,9 +2557,9 @@ static const struct report_type_t {
     unsigned flags;
 } report_types[] = {
     { "calendar-query", &report_cal_query, DACL_READ,
-      REPORT_NEED_MBOX | REPORT_MULTISTATUS | REPORT_USE_BRIEF},
+      REPORT_NEED_MBOX | REPORT_MULTISTATUS },
     { "calendar-multiget", &report_cal_multiget, DACL_READ,
-      REPORT_NEED_MBOX | REPORT_MULTISTATUS | REPORT_USE_BRIEF },
+      REPORT_NEED_MBOX | REPORT_MULTISTATUS },
     { "free-busy-query", &report_fb_query, DACL_READFB,
       REPORT_NEED_MBOX },
     { "sync-collection", &report_sync_col, DACL_READ,
@@ -2726,8 +2725,7 @@ static int meth_report(struct transaction_t *txn)
     fctx.ret = &ret;
 
     /* Check for Brief header */
-    if ((report->flags & REPORT_USE_BRIEF) &&
-	(hdr = spool_getheader(txn->req_hdrs, "Brief")) &&
+    if ((hdr = spool_getheader(txn->req_hdrs, "Brief")) &&
 	!strcasecmp(hdr[0], "t")) {
 	fctx.brief = 1;
     }
