@@ -1413,7 +1413,6 @@ static int propfind_fromdb(xmlNodePtr prop,
 {
     struct annotation_data attrib;
     xmlNodePtr node;
-    const char *value = NULL;
     int r = 0;
 
     buf_reset(&fctx->buf);
@@ -1430,10 +1429,11 @@ static int propfind_fromdb(xmlNodePtr prop,
     if (fctx->mailbox && !fctx->record &&
 	!(r = annotatemore_lookup(fctx->mailbox->name, buf_cstring(&fctx->buf),
 				  /* shared */ "", &attrib))) {
-	if (attrib.value) value = attrib.value;
-	else if (!xmlStrcmp(prop->name, BAD_CAST "displayname")) {
+	if (!attrib.value && 
+	    !xmlStrcmp(prop->name, BAD_CAST "displayname")) {
 	    /* Special case empty displayname -- use last segment of path */
-	    value = strrchr(fctx->mailbox->name, '.') + 1;
+	    attrib.value = strrchr(fctx->mailbox->name, '.') + 1;
+	    attrib.size = strlen(attrib.value);
 	}
     }
 
@@ -1441,7 +1441,7 @@ static int propfind_fromdb(xmlNodePtr prop,
 	node = xml_add_prop(HTTP_SERVER_ERROR, resp,
 			    &propstat[PROPSTAT_ERROR], prop, NULL, NULL);
     }
-    else if (value) {
+    else if (attrib.value) {
 	node = xml_add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK],
 			    prop, NULL, NULL);
 	xmlAddChild(node, xmlNewCDataBlock(fctx->root->doc,
