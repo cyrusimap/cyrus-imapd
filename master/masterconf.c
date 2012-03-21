@@ -205,7 +205,7 @@ static void process_section(FILE *f, int *lnptr,
 	if (buf[strlen(buf)-1] == '\n') buf[strlen(buf)-1] = '\0';
 	/* remove starting whitespace */
 	for (p = buf; *p && Uisspace(*p); p++);
-	
+
 	/* remove comments */
 	q = strchr(p, '#');
 	if (q) *q = '\0';
@@ -215,8 +215,14 @@ static void process_section(FILE *f, int *lnptr,
 	if (*p == '}') break;
 
 	for (q = p; Uisalnum(*q); q++) ;
-	if (*q) { *q = '\0'; q++; }
-	
+	if (*q) {
+	    if (q > p && !Uisspace(*q))
+		fatalf(EX_CONFIG, "configuration file %s: "
+				  "bad character '%c' in name on line %d",
+				  MASTER_CONFIG_FILENAME, *q, lineno);
+	    *q++ = '\0';
+	}
+
 	if (q - p > 0) {
 	    /* there's a value on this line */
 	    e.line = q;
