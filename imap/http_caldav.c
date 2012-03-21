@@ -95,6 +95,7 @@ static int meth_delete(struct transaction_t *txn);
 static int meth_get(struct transaction_t *txn);
 static int meth_mkcol(struct transaction_t *txn);
 static int meth_proppatch(struct transaction_t *txn);
+static int meth_post(struct transaction_t *txn);
 static int meth_put(struct transaction_t *txn);
 static int meth_report(struct transaction_t *txn);
 static int parse_path(struct request_target_t *tgt, const char **errstr);
@@ -117,7 +118,7 @@ const struct namespace_t namespace_calendar = {
 	&meth_mkcol,		/* MKCOL	*/
 	&meth_copy,		/* MOVE		*/
 	&meth_options,		/* OPTIONS	*/
-	&meth_put,		/* POST		*/
+	&meth_post,		/* POST		*/
 	&meth_propfind,		/* PROPFIND	*/
 	&meth_proppatch,	/* PROPPATCH	*/
 	&meth_put,		/* PUT		*/
@@ -1612,7 +1613,36 @@ static int meth_proppatch(struct transaction_t *txn)
 }
 
 
-/* Perform a PUT/POST request
+/* Perform a POST request */
+static int meth_post(struct transaction_t *txn)
+{
+    static unsigned post_count = 0;
+    int r;
+    size_t len;
+    char *p;
+
+    /* Make sure its a DAV resource */
+    if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
+
+    /* Parse the path */
+    if ((r = parse_path(&txn->req_tgt, &txn->error.desc))) return r;
+
+    /* We only handle POST on calendar collections */
+    if (!txn->req_tgt.collection ||
+	txn->req_tgt.resource) return HTTP_NOT_ALLOWED;
+
+    /* Append a unique resource name to URL path and perform a PUT */
+    len = strlen(txn->req_tgt.path);
+    p = txn->req_tgt.path + len;
+
+    snprintf(p, MAX_MAILBOX_PATH - len, "%d-%ld-%u.ics",
+	     getpid(), time(0), post_count++);
+
+    return meth_put(txn);
+}
+
+
+/* Perform a PUT request
  *
  * preconditions:
  *   CALDAV:supported-calendar-data
@@ -1626,10 +1656,9 @@ static int meth_proppatch(struct transaction_t *txn)
  *   CALDAV:max-instances
  *   CALDAV:max-attendees-per-instance
  */
-static int global_put_count = 0;
-
 static int meth_put(struct transaction_t *txn)
 {
+    static unsigned put_count = 0;
     int ret = HTTP_CREATED, r, precond, rights;
     char *server, *acl, mailboxname[MAX_MAILBOX_BUFFER];
     struct mailbox *mailbox = NULL;
@@ -1656,11 +1685,8 @@ static int meth_put(struct transaction_t *txn)
     /* Parse the path */
     if ((r = parse_path(&txn->req_tgt, &txn->error.desc))) return r;
 
-    /* We don't handle POST/PUT on non-calendar collections */
-    if (!txn->req_tgt.collection) return HTTP_NOT_ALLOWED;
-
-    /* We don't handle PUT on calendar collections */
-    if (!txn->req_tgt.resource && (txn->meth[1] != 'O')) return HTTP_NOT_ALLOWED;
+    /* We only handle PUT on resources */
+    if (!txn->req_tgt.resource) return HTTP_NOT_ALLOWED;
 
     /* Check Content-Type */
     if (!(hdr = spool_getheader(txn->req_hdrs, "Content-Type")) ||
@@ -1723,21 +1749,6 @@ static int meth_put(struct transaction_t *txn)
 	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
-    }
-
-    if (txn->meth[1] == 'O') {
-	/* POST - Create a unique resource name and append to URL path */
-	size_t len = strlen(txn->req_tgt.path);
-	char *p = txn->req_tgt.path + len;
-
-	if (p[-1] != '/') {
-	    *p++ = '/';
-	    len++;
-	}
-	snprintf(p, MAX_MAILBOX_PATH - len, "%d-%d-%s-%u.ics",
-		 pid, (int) now, mailbox->uniqueid, mailbox->i.last_uid+1);
-	txn->req_tgt.resource = p;
-	txn->req_tgt.reslen = strlen(p);
     }
 
     /* Find message UID for the resource, if exists */
@@ -1825,7 +1836,7 @@ static int meth_put(struct transaction_t *txn)
 
     fprintf(f, "Message-ID: ");
     if ((uid = icalcomponent_get_uid(comp)) && *uid) fprintf(f, "<%s", uid);
-    else fprintf(f, "<cmu-http-%d-%d-%d", pid, (int) now, global_put_count++);
+    else fprintf(f, "<cmu-http-%d-%ld-%u", pid, now, put_count++);
     fprintf(f, "@%s>\r\n", config_servername);
 
     hdr = spool_getheader(txn->req_hdrs, "Content-Type");
@@ -2799,7 +2810,14 @@ static int parse_path(struct request_target_t *tgt, const char **errstr)
     tgt->collen = len;
 
     p += len;
-    if (!*p || !*++p) return 0;
+    if (!*p || !*++p) {
+	/* Make sure collection is terminated with '/' */
+	if (p[-1] != '/') {
+	    *p++ = '/';
+	    tgt->collen++;
+	}
+	return 0;
+    }
 
     /* Get resource */
     len = strcspn(p, "/");
