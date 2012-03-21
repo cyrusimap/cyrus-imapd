@@ -2812,10 +2812,7 @@ static int parse_path(struct request_target_t *tgt, const char **errstr)
     p += len;
     if (!*p || !*++p) {
 	/* Make sure collection is terminated with '/' */
-	if (p[-1] != '/') {
-	    *p++ = '/';
-	    tgt->collen++;
-	}
+	if (p[-1] != '/') *p++ = '/';
 	return 0;
     }
 
