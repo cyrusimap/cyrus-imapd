@@ -851,4 +851,32 @@ sub XXXtest_periodic_event
 			      }, $self->lemming_census());
 }
 
+sub test_service_bad_name
+{
+    my ($self) = @_;
+
+    xlog "services with bad names (Bug 3654)";
+    $self->lemming_service(tag => 'foo');
+    $self->lemming_service(tag => 'foo_bar');
+    $self->lemming_service(tag => 'foo-baz');
+    $self->lemming_service(tag => 'foo&baz');
+
+    # master should exit while adding services, with a message
+    # to syslog like this
+    #
+    # Mar 21 19:53:21 gnb-desktop 0853201/master[8789]: configuration
+    # file /var/tmp/cass/0853201/conf/cyrus.conf: bad character '-' in
+    # name on line 2
+    #
+    eval
+    {
+	$self->start();
+    };
+    xlog "start failed (as expected): $@" if $@;
+
+    xlog "master should have exited when service verification failed";
+    $self->assert(!$self->{instance}->is_running());
+}
+
+
 1;
