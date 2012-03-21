@@ -1426,6 +1426,8 @@ static int propfind_fromdb(xmlNodePtr prop,
 		   strhash((const char *) prop->ns->href), prop->name);
     }
 
+    memset(&attrib, 0, sizeof(struct annotation_data));
+
     if (fctx->mailbox && !fctx->record &&
 	!(r = annotatemore_lookup(fctx->mailbox->name, buf_cstring(&fctx->buf),
 				  /* shared */ "", &attrib))) {
