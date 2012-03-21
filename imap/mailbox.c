@@ -3237,8 +3237,8 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
     if (r) return r;
 
     /* Check quota if necessary */
-    if (!ignorequota && newmailbox->quotaroot && (!oldmailbox->quotaroot || 
-	strcmp(oldmailbox->quotaroot, newmailbox->quotaroot))) {
+    if (!ignorequota && newmailbox->quotaroot &&
+	strcmpsafe(oldmailbox->quotaroot, newmailbox->quotaroot)) {
 
 	quota_t usage[QUOTA_NUMRESOURCES];
 	mailbox_get_usage(oldmailbox, usage);
@@ -3247,7 +3247,7 @@ int mailbox_rename_copy(struct mailbox *oldmailbox,
 	if (r)
 	    goto fail;
     }
-    if (newmailbox->quotaroot) newquotaroot = xstrdup(newmailbox->quotaroot);
+    newquotaroot = xstrdupnull(newmailbox->quotaroot);
 
     r = mailbox_copy_files(oldmailbox, newpartition, newname);
     if (r) goto fail;
