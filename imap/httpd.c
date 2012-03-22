@@ -1541,7 +1541,9 @@ void response_header(long code, struct transaction_t *txn)
 	}
 	if (txn->req_tgt.allow & ALLOW_CAL) {
 	    prot_printf(httpd_out, ", calendar-access");
-	    /* calendar-auto-schedule  */
+#if 0
+	    prot_printf(httpd_out, ", calendar-auto-schedule");
+#endif
 	}
 #if 0
 	if (txn->req_tgt.allow & ALLOW_CARD) {

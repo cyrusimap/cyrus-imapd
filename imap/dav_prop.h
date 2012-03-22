@@ -51,6 +51,9 @@
 #include <libxml/tree.h>
 
 
+#define SCHED_INBOX	"Inbox/"
+#define SCHED_OUTBOX	"Outbox/"
+
 /* XML namespace URIs */
 #define XML_NS_DAV	"DAV:"
 #define XML_NS_CALDAV	"urn:ietf:params:xml:ns:caldav"
@@ -117,7 +120,8 @@ enum {
     CALDAV_SUPP_COMP,
     CALDAV_LOCATION_OK,
     CALDAV_SUPP_FILTER,
-    CALDAV_VALID_FILTER
+    CALDAV_VALID_FILTER,
+    CALDAV_VALID_SCHED
 };
 
 /* Structure for precondition/postcondition errors */

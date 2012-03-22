@@ -54,9 +54,6 @@
 
 #define ANNOT_NS	"/vendor/cmu/cyrus-imapd/"
 
-#define SCHED_INBOX	"Inbox/"
-#define SCHED_OUTBOX	"Outbox/"
-
 /* Bitmask of calendar components */
 enum {
     CAL_COMP_VEVENT =		(1<<0),
@@ -1244,6 +1241,36 @@ static int propfind_calurl(xmlNodePtr prop,
 }
 
 
+/* Callback to fetch CALDAV:calendar-user-address-set */
+static int propfind_caluseraddr(xmlNodePtr prop,
+				struct propfind_ctx *fctx,
+				xmlNodePtr resp,
+				struct propstat propstat[],
+				void *rock __attribute__((unused)))
+{
+    xmlNodePtr node;
+
+    if (fctx->userid) {
+	ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
+	node = xml_add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK],
+			    prop, NULL, NULL);
+
+	/* XXX  This needs to be done via an LDAP/DB lookup */
+	buf_reset(&fctx->buf);
+	buf_printf(&fctx->buf, "mailto:%s@%s", fctx->userid, config_servername);
+
+	xmlNewChild(node, fctx->ns[NS_DAV], BAD_CAST "href",
+		    BAD_CAST buf_cstring(&fctx->buf));
+    }
+    else {
+	xml_add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND],
+		     prop, NULL, NULL);
+    }
+
+    return 0;
+}
+
+
 /* Callback to fetch CALDAV:supported-calendar-component-set */
 static int propfind_calcompset(xmlNodePtr prop,
 			       struct propfind_ctx *fctx,
@@ -1555,9 +1582,9 @@ static const struct prop_entry prop_entries[] =
     { "max-attendees-per-instance", XML_NS_CALDAV, 0, NULL, NULL, NULL },
 
     /* CalDAV Scheduling properties */
-    { "schedule-inbox-URL", XML_NS_CALDAV, 0, NULL, NULL, SCHED_INBOX },
-    { "schedule-outbox-URL", XML_NS_CALDAV, 0, NULL, NULL, SCHED_OUTBOX },
-    { "calendar-user-address-set", XML_NS_CALDAV, 0, NULL, NULL, NULL },
+    { "schedule-inbox-URL", XML_NS_CALDAV, 0, propfind_calurl, NULL, SCHED_INBOX },
+    { "schedule-outbox-URL", XML_NS_CALDAV, 0, propfind_calurl, NULL, SCHED_OUTBOX },
+    { "calendar-user-address-set", XML_NS_CALDAV, 0, propfind_caluseraddr, NULL, NULL },
     { "calendar-user-type", XML_NS_CALDAV, 0, NULL, NULL, NULL },
 
     /* Calendar Server properties */
@@ -1602,7 +1629,10 @@ const struct precond preconds[] =
     { "supported-calendar-component", NS_CALDAV },
     { "calendar-collection-location-ok", NS_CALDAV },
     { "supported-filter", NS_CALDAV },
-    { "valid-filter", NS_CALDAV }
+    { "valid-filter", NS_CALDAV },
+
+    /* CalDAV Scheduling (draft-desruisseaux-caldav-sched) preconditions */
+    { "valid-scheduling-message", NS_CALDAV }
 };
 
 
