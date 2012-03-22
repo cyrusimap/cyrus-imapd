@@ -85,7 +85,7 @@ struct ientry {
     struct ientry *next;
 };
 static struct hash_table itable;
-void idle_done(char *mboxname, pid_t pid);
+void idle_done(const char *mboxname, pid_t pid);
 
 void fatal(const char *msg, int err)
 {
@@ -111,7 +111,7 @@ static int mbox_count_cb(void *rockp,
 }
 
 /* remove pid from list of those idling on mboxname */
-void idle_done(char *mboxname, pid_t pid)
+void idle_done(const char *mboxname, pid_t pid)
 {
     struct ientry *t, *p = NULL;
 
