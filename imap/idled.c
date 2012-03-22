@@ -47,8 +47,6 @@
 #endif
 
 #include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/un.h>
 #include <syslog.h>
 #include <sys/stat.h>
 #include <stdlib.h>
@@ -59,7 +57,7 @@
 #include <signal.h>
 #include <fcntl.h>
 
-#include "idled.h"
+#include "idlemsg.h"
 #include "global.h"
 #include "mboxlist.h"
 #include "xmalloc.h"
@@ -233,9 +231,6 @@ int main(int argc, char **argv)
     int nmbox = 0;
     int s, len;
     struct sockaddr_un local;
-    idle_message_t msg;
-    struct sockaddr_un from;
-    socklen_t fromlen;
     mode_t oldumask;
     fd_set read_set, rset;
     int nfds;
@@ -342,6 +337,7 @@ int main(int argc, char **argv)
     }
     umask(oldumask); /* for Linux */
     chmod(local.sun_path, 0777); /* for DUX */
+    idle_set_sock(s);
 
     /* get ready for select() */
     FD_ZERO(&read_set);
@@ -381,21 +377,13 @@ int main(int argc, char **argv)
 	    fatal("select error",-1);
 	}
 
-	/* read on unix socket */
+	/* read and process a message */
 	if (FD_ISSET(s, &rset)) {
-	    fromlen = sizeof(from);
-	    n = recvfrom(s, (void*) &msg, sizeof(idle_message_t), 0,
-			 (struct sockaddr *) &from, &fromlen);
+	    struct sockaddr_un from;
+	    idle_message_t msg;
 
-	    if (n > 0) {
-		if (n <= IDLE_MESSAGE_BASE_SIZE ||
-		    msg.mboxname[n - 1 - IDLE_MESSAGE_BASE_SIZE] != '\0')
-		    syslog(LOG_ERR, "Invalid message received, size=%d\n", n);
-		else 
-		    process_message(&msg);
-	    }
-	} else {
-	    /* log some sort of error */
+	    if (idle_recv(&from, &msg))
+		process_message(&msg);
 	}
 
     }

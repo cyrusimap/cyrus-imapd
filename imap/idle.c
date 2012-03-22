@@ -57,7 +57,7 @@
 #include <string.h>
 
 #include "idle.h"
-#include "idled.h"
+#include "idlemsg.h"
 #include "global.h"
 
 const char *idle_method_desc = "no";
@@ -70,14 +70,10 @@ static time_t idle_period = -1;
 static int idle_started = 0;
 
 /* UNIX socket variables */
-static int notify_sock = -1;
 static struct sockaddr_un idle_remote;
 static int idle_remote_len = 0;
 
 
-/*
- * Send a message to idled
- */
 static int idle_send_msg(int which, const char *mboxname)
 {
     idle_message_t msg;
@@ -88,14 +84,7 @@ static int idle_send_msg(int which, const char *mboxname)
     strncpy(msg.mboxname, mboxname ? mboxname : ".", sizeof(msg.mboxname));
 
     /* send */
-    if (sendto(notify_sock, (void *) &msg,
-	       IDLE_MESSAGE_BASE_SIZE+strlen(msg.mboxname)+1, /* 1 for NULL */
-	       0, (struct sockaddr *) &idle_remote, idle_remote_len) == -1) {
-      syslog(LOG_ERR, "error sending to idled: %x", which);
-      return 0;
-    }
-
-    return 1;
+    return idle_send(&idle_remote, &msg);
 }
 
 /*
@@ -157,11 +146,11 @@ int idle_enabled(void)
 	if (fdflags != -1) fdflags = fcntl(s, F_SETFL, O_NONBLOCK | fdflags);
 	if (fdflags == -1) { close(s); return idle_period; }
 
-	notify_sock = s;
+	idle_set_sock(s);
 
 	if (!idle_send_msg(IDLE_MSG_NOOP, NULL)) {
 	    close(s);
-	    notify_sock = -1;
+	    idle_set_sock(-1);
 	    return idle_period;
 	}
 
@@ -172,7 +161,7 @@ int idle_enabled(void)
 
 	return 1;
     }
-    else if (notify_sock != -1) {
+    else if (idle_get_sock() != -1) {
 	/* if the idle socket is already open, we're enabled */
 	return 1;
     }
@@ -235,7 +224,7 @@ void idle_start(const char *mboxname)
     idle_started = 1;
 
     /* Tell idled that we're idling */
-    if (notify_sock == -1 || !idle_send_msg(IDLE_MSG_INIT, mboxname)) {
+    if (!idle_send_msg(IDLE_MSG_INIT, mboxname)) {
 	/* otherwise, we'll poll with SIGALRM */
 	alarm(idle_period);
     }
@@ -244,7 +233,7 @@ void idle_start(const char *mboxname)
 void idle_done(const char *mboxname)
 {
     /* Tell idled that we're done idling */
-    if (notify_sock != -1) idle_send_msg(IDLE_MSG_DONE, mboxname);
+    idle_send_msg(IDLE_MSG_DONE, mboxname);
 
     /* Cancel alarm */
     alarm(0);
