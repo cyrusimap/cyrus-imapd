@@ -78,20 +78,20 @@ static int idle_remote_len = 0;
 /*
  * Send a message to idled
  */
-static int idle_send_msg(int msg, const char *mboxname)
+static int idle_send_msg(int which, const char *mboxname)
 {
-    idle_data_t idledata;
+    idle_message_t msg;
 
     /* fill the structure */
-    idledata.msg = msg;
-    idledata.pid = getpid();
-    strncpy(idledata.mboxname, mboxname ? mboxname : ".", sizeof(idledata.mboxname));
+    msg.which = which;
+    msg.pid = getpid();
+    strncpy(msg.mboxname, mboxname ? mboxname : ".", sizeof(msg.mboxname));
 
     /* send */
-    if (sendto(notify_sock, (void *) &idledata,
-	       IDLEDATA_BASE_SIZE+strlen(idledata.mboxname)+1, /* 1 for NULL */
+    if (sendto(notify_sock, (void *) &msg,
+	       IDLE_MESSAGE_BASE_SIZE+strlen(msg.mboxname)+1, /* 1 for NULL */
 	       0, (struct sockaddr *) &idle_remote, idle_remote_len) == -1) {
-      syslog(LOG_ERR, "error sending to idled: %x", msg);
+      syslog(LOG_ERR, "error sending to idled: %x", which);
       return 0;
     }
 

@@ -50,15 +50,18 @@
 /* socket to communicate with the idled */
 #define FNAME_IDLE_SOCK "/socket/idle"
 
-typedef struct idle_data_s {
-    unsigned long msg;
+typedef struct idle_message_s idle_message_t;
+
+struct idle_message_s
+{
+    unsigned long which;
     unsigned long pid;
 
     /* 1 for null. leave at end of structure for alignment */
     char mboxname[MAX_MAILBOX_BUFFER];
-} idle_data_t;
+};
 
-#define IDLEDATA_BASE_SIZE	(2 * (int) sizeof(unsigned long))
+#define IDLE_MESSAGE_BASE_SIZE	(2 * (int) sizeof(unsigned long))
 
 enum {
     IDLE_MSG_INIT,
