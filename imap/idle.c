@@ -136,7 +136,7 @@ int idle_enabled(void)
 
 	idle_remote.sun_family = AF_UNIX;
 	idle_sock = config_getstring(IMAPOPT_IDLESOCKET);
-	if (idle_sock) {	
+	if (idle_sock) {
 	    strcpy(idle_remote.sun_path, idle_sock);
 	}
 	else {

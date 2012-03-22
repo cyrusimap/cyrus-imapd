@@ -96,7 +96,7 @@ void fatal(const char *msg, int err)
     syslog(LOG_NOTICE, "exiting");
 
     cyrus_done();
-    
+
     exit(err);
 }
 
@@ -185,7 +185,7 @@ void process_msg(idle_data_t *idledata)
 	n->next = t;
 	hash_insert(idledata->mboxname, n, &itable);
 	break;
-	
+
     case IDLE_NOTIFY:
 	if (verbose || debugmode)
 	    syslog(LOG_DEBUG, "IDLE_NOTIFY '%s'\n", idledata->mboxname);
@@ -213,7 +213,7 @@ void process_msg(idle_data_t *idledata)
 	    }
 	}
 	break;
-	
+
     case IDLE_DONE:
 	if (verbose || debugmode)
 	    syslog(LOG_DEBUG, "imapd[%ld]: IDLE_DONE '%s'\n",
@@ -225,7 +225,7 @@ void process_msg(idle_data_t *idledata)
 
     case IDLE_NOOP:
 	break;
-	
+
     default:
 	syslog(LOG_ERR, "unrecognized message: %lx", idledata->msg);
 	break;
@@ -295,14 +295,14 @@ int main(int argc, char **argv)
 
     /* fork unless we were given the -d option */
     if (debugmode == 0) {
-	
+
 	pid = fork();
-	
+
 	if (pid == -1) {
 	    perror("fork");
 	    exit(1);
 	}
-	
+
 	if (pid != 0) { /* parent */
 	    exit(0);
 	}
@@ -329,7 +329,7 @@ int main(int argc, char **argv)
     mboxlist_done();
 
     sigemptyset(&action.sa_mask);
-    
+
     action.sa_flags = 0;
     action.sa_handler = sighandler;
     if (sigaction(SIGQUIT, &action, NULL) < 0)
@@ -353,7 +353,7 @@ int main(int argc, char **argv)
     /* bind it to a local file */
     local.sun_family = AF_UNIX;
     idle_sock = config_getstring(IMAPOPT_IDLESOCKET);
-    if (idle_sock) {	
+    if (idle_sock) {
 	strlcpy(local.sun_path, idle_sock, sizeof(local.sun_path));
     }
     else {
@@ -425,7 +425,7 @@ int main(int argc, char **argv)
 		    process_msg(&idledata);
 	    }
 	} else {
-	    /* log some sort of error */	    
+	    /* log some sort of error */
 	}
 
     }
