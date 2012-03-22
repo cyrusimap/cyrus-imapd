@@ -56,15 +56,79 @@
 #include <signal.h>
 #include <string.h>
 
+#include "xstrlcpy.h"
+#include "xstrlcat.h"
 #include "idlemsg.h"
 #include "global.h"
 
 /* UNIX socket variables */
 static int notify_sock = -1;
 
-void idle_set_sock(int s)
+int idle_make_server_address(struct sockaddr_un *sun)
 {
+    const char *idle_sock;
+
+    memset(sun, 0, sizeof(*sun));
+    sun->sun_family = AF_UNIX;
+    idle_sock = config_getstring(IMAPOPT_IDLESOCKET);
+    if (idle_sock) {
+	strlcpy(sun->sun_path, idle_sock, sizeof(sun->sun_path));
+    }
+    else {
+	/* TODO: detect overflow and fail */
+	strlcpy(sun->sun_path, config_dir, sizeof(sun->sun_path));
+	strlcat(sun->sun_path, FNAME_IDLE_SOCK, sizeof(sun->sun_path));
+    }
+    return 1;
+}
+
+
+int idle_make_client_address(struct sockaddr_un *sun)
+{
+    memset(sun, 0, sizeof(*sun));
+    sun->sun_family = AF_UNIX;
+    /* TODO: detect overflow and fail */
+    snprintf(sun->sun_path, sizeof(sun->sun_path), "%s%s/idle.%d",
+	     config_dir, FNAME_IDLE_SOCK_DIR, (int)getpid());
+    return 1;
+}
+
+
+int idle_init_sock(const struct sockaddr_un *local)
+{
+    int len;
+    int s;
+    mode_t oldumask;
+
+    /* create socket we are going to use for listening */
+    if ((s = socket(AF_UNIX, SOCK_DGRAM, 0)) == -1) {
+	perror("socket");
+	return 0;
+    }
+
+    /* bind it to a local file */
+    unlink(local->sun_path);
+    len = sizeof(local->sun_family) + strlen(local->sun_path) + 1;
+
+    oldumask = umask((mode_t) 0); /* for Linux */
+
+    if (bind(s, (struct sockaddr *)local, len) == -1) {
+	perror("bind");
+	return 0;
+    }
+    umask(oldumask); /* for Linux */
+    chmod(local->sun_path, 0777); /* for DUX */
+
     notify_sock = s;
+
+    return 1;
+}
+
+void idle_done_sock(void)
+{
+    if (notify_sock >= 0)
+	close(notify_sock);
+    notify_sock = -1;
 }
 
 int idle_get_sock(void)

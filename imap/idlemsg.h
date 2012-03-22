@@ -50,7 +50,8 @@
 #include "mailbox.h"
 
 /* socket to communicate with the idled */
-#define FNAME_IDLE_SOCK "/socket/idle"
+#define FNAME_IDLE_SOCK_DIR "/socket"
+#define FNAME_IDLE_SOCK FNAME_IDLE_SOCK_DIR"/idle"
 
 typedef struct idle_message_s idle_message_t;
 
@@ -72,7 +73,10 @@ enum {
     IDLE_MSG_NOOP
 };
 
-void idle_set_sock(int s);
+int idle_make_server_address(struct sockaddr_un *);
+int idle_make_client_address(struct sockaddr_un *);
+int idle_init_sock(const struct sockaddr_un *);
+void idle_done_sock(void);
 int idle_get_sock(void);
 int idle_send(const struct sockaddr_un *remote,
 	      const idle_message_t *msg);

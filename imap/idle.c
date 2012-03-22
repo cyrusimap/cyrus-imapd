@@ -71,7 +71,6 @@ static int idle_started = 0;
 
 /* UNIX socket variables */
 static struct sockaddr_un idle_remote;
-static int idle_remote_len = 0;
 
 
 static int idle_send_msg(int which, const char *mboxname)
@@ -107,7 +106,7 @@ int idle_enabled(void)
 	int s;
 	int fdflags;
 	struct stat sbuf;
-	const char *idle_sock;
+	struct sockaddr_un local;
 
 	/* get polling period in case we can't connect to idled
 	 * NOTE: if used, a period of zero disables IDLE
@@ -119,38 +118,27 @@ int idle_enabled(void)
 
 	idle_method_desc = "poll";
 
-	if ((s = socket(AF_UNIX, SOCK_DGRAM, 0)) == -1) {
+	if (!idle_make_client_address(&local) ||
+	    !idle_init_sock(&local))
 	    return idle_period;
-	}
+	s = idle_get_sock();
 
-	idle_remote.sun_family = AF_UNIX;
-	idle_sock = config_getstring(IMAPOPT_IDLESOCKET);
-	if (idle_sock) {
-	    strcpy(idle_remote.sun_path, idle_sock);
-	}
-	else {
-	    strcpy(idle_remote.sun_path, config_dir);
-	    strcat(idle_remote.sun_path, FNAME_IDLE_SOCK);
-	}
-	idle_remote_len = sizeof(idle_remote.sun_family) +
-	    strlen(idle_remote.sun_path) + 1;
+	if (!idle_make_server_address(&idle_remote))
+	    return idle_period;
 
 	/* check that the socket exists */
 	if (stat(idle_remote.sun_path, &sbuf) < 0) {
-	    close(s);
+	    idle_done_sock();
 	    return idle_period;
 	}
 
 	/* put us in non-blocking mode */
 	fdflags = fcntl(s, F_GETFD, 0);
 	if (fdflags != -1) fdflags = fcntl(s, F_SETFL, O_NONBLOCK | fdflags);
-	if (fdflags == -1) { close(s); return idle_period; }
-
-	idle_set_sock(s);
+	if (fdflags == -1) { idle_done_sock(); return idle_period; }
 
 	if (!idle_send_msg(IDLE_MSG_NOOP, NULL)) {
-	    close(s);
-	    idle_set_sock(-1);
+	    idle_done_sock();
 	    return idle_period;
 	}
 
@@ -242,6 +230,9 @@ void idle_done(const char *mboxname)
     signal(SIGUSR1, SIG_IGN);
     signal(SIGUSR2, SIG_IGN);
     signal(SIGALRM, SIG_IGN);
+
+    /* close the AF_UNIX socket */
+    idle_done_sock();
 
     idle_update = NULL;
     idle_started = 0;

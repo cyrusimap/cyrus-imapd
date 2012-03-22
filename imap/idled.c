@@ -61,8 +61,6 @@
 #include "global.h"
 #include "mboxlist.h"
 #include "xmalloc.h"
-#include "xstrlcpy.h"
-#include "xstrlcat.h"
 #include "hash.h"
 #include "exitcodes.h"
 
@@ -229,16 +227,14 @@ int main(int argc, char **argv)
     char *p = NULL;
     int opt;
     int nmbox = 0;
-    int s, len;
+    int s;
     struct sockaddr_un local;
-    mode_t oldumask;
     fd_set read_set, rset;
     int nfds;
     struct timeval timeout;
     pid_t pid;
     int fd;
     char *alt_config = NULL;
-    const char *idle_sock;
     struct sigaction action;
 
     p = getenv("CYRUS_VERBOSE");
@@ -308,36 +304,12 @@ int main(int argc, char **argv)
     /* create idle table -- +1 to avoid a zero value */
     construct_hash_table(&itable, nmbox + 1, 1);
 
-    /* create socket we are going to use for listening */
-    if ((s = socket(AF_UNIX, SOCK_DGRAM, 0)) == -1) {
-	perror("socket");
+    if (!idle_make_server_address(&local) ||
+	!idle_init_sock(&local)) {
 	cyrus_done();
 	exit(1);
     }
-
-    /* bind it to a local file */
-    local.sun_family = AF_UNIX;
-    idle_sock = config_getstring(IMAPOPT_IDLESOCKET);
-    if (idle_sock) {
-	strlcpy(local.sun_path, idle_sock, sizeof(local.sun_path));
-    }
-    else {
-	strlcpy(local.sun_path, config_dir, sizeof(local.sun_path));
-	strlcat(local.sun_path, FNAME_IDLE_SOCK, sizeof(local.sun_path));
-    }
-    unlink(local.sun_path);
-    len = sizeof(local.sun_family) + strlen(local.sun_path) + 1;
-
-    oldumask = umask((mode_t) 0); /* for Linux */
-
-    if (bind(s, (struct sockaddr *)&local, len) == -1) {
-	perror("bind");
-	cyrus_done();
-	exit(1);
-    }
-    umask(oldumask); /* for Linux */
-    chmod(local.sun_path, 0777); /* for DUX */
-    idle_set_sock(s);
+    s = idle_get_sock();
 
     /* get ready for select() */
     FD_ZERO(&read_set);
