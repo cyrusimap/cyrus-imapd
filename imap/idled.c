@@ -138,31 +138,31 @@ static void remove_ientry(const char *mboxname, pid_t pid)
     }
 }
 
-static void process_message(idle_data_t *idledata)
+static void process_message(idle_message_t *msg)
 {
     struct ientry *t, *n;
 
-    switch (idledata->msg) {
+    switch (msg->which) {
     case IDLE_MSG_INIT:
 	if (verbose || debugmode)
 	    syslog(LOG_DEBUG, "imapd[%ld]: IDLE_MSG_INIT '%s'\n",
-		   idledata->pid, idledata->mboxname);
+		   msg->pid, msg->mboxname);
 
 	/* add pid to list of those idling on mboxname */
-	t = (struct ientry *) hash_lookup(idledata->mboxname, &itable);
+	t = (struct ientry *) hash_lookup(msg->mboxname, &itable);
 	n = (struct ientry *) xzmalloc(sizeof(struct ientry));
-	n->pid = idledata->pid;
+	n->pid = msg->pid;
 	n->itime = time(NULL);
 	n->next = t;
-	hash_insert(idledata->mboxname, n, &itable);
+	hash_insert(msg->mboxname, n, &itable);
 	break;
 
     case IDLE_MSG_NOTIFY:
 	if (verbose || debugmode)
-	    syslog(LOG_DEBUG, "IDLE_MSG_NOTIFY '%s'\n", idledata->mboxname);
+	    syslog(LOG_DEBUG, "IDLE_MSG_NOTIFY '%s'\n", msg->mboxname);
 
 	/* send a message to all pids idling on mboxname */
-	t = (struct ientry *) hash_lookup(idledata->mboxname, &itable);
+	t = (struct ientry *) hash_lookup(msg->mboxname, &itable);
 	while (t) {
 	    if ((t->itime + idle_timeout) < time(NULL)) {
 		/* This process has been idling for longer than the timeout
@@ -173,7 +173,7 @@ static void process_message(idle_data_t *idledata)
 
 		n = t;
 		t = t->next;
-		remove_ientry(idledata->mboxname, n->pid);
+		remove_ientry(msg->mboxname, n->pid);
 	    }
 	    else { /* signal process to update */
 		if (verbose || debugmode)
@@ -188,17 +188,17 @@ static void process_message(idle_data_t *idledata)
     case IDLE_MSG_DONE:
 	if (verbose || debugmode)
 	    syslog(LOG_DEBUG, "imapd[%ld]: IDLE_MSG_DONE '%s'\n",
-		   idledata->pid, idledata->mboxname);
+		   msg->pid, msg->mboxname);
 
 	/* remove pid from list of those idling on mboxname */
-	remove_ientry(idledata->mboxname, idledata->pid);
+	remove_ientry(msg->mboxname, msg->pid);
 	break;
 
     case IDLE_MSG_NOOP:
 	break;
 
     default:
-	syslog(LOG_ERR, "unrecognized message: %lx", idledata->msg);
+	syslog(LOG_ERR, "unrecognized message: %lx", msg->which);
 	break;
     }
 }
@@ -233,7 +233,7 @@ int main(int argc, char **argv)
     int nmbox = 0;
     int s, len;
     struct sockaddr_un local;
-    idle_data_t idledata;
+    idle_message_t msg;
     struct sockaddr_un from;
     socklen_t fromlen;
     mode_t oldumask;
@@ -384,15 +384,15 @@ int main(int argc, char **argv)
 	/* read on unix socket */
 	if (FD_ISSET(s, &rset)) {
 	    fromlen = sizeof(from);
-	    n = recvfrom(s, (void*) &idledata, sizeof(idle_data_t), 0,
+	    n = recvfrom(s, (void*) &msg, sizeof(idle_message_t), 0,
 			 (struct sockaddr *) &from, &fromlen);
 
 	    if (n > 0) {
-		if (n <= IDLEDATA_BASE_SIZE ||
-		    idledata.mboxname[n - 1 - IDLEDATA_BASE_SIZE] != '\0')
+		if (n <= IDLE_MESSAGE_BASE_SIZE ||
+		    msg.mboxname[n - 1 - IDLE_MESSAGE_BASE_SIZE] != '\0')
 		    syslog(LOG_ERR, "Invalid message received, size=%d\n", n);
 		else 
-		    process_message(&idledata);
+		    process_message(&msg);
 	    }
 	} else {
 	    /* log some sort of error */
