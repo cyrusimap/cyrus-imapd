@@ -85,8 +85,6 @@ struct ientry {
     struct ientry *next;
 };
 static struct hash_table itable;
-static struct ientry *ifreelist;
-static int itable_inc = 100;
 void idle_done(char *mboxname, pid_t pid);
 
 void fatal(const char *msg, int err)
@@ -110,31 +108,6 @@ static int mbox_count_cb(void *rockp,
     (*ip)++;
 
     return 0;
-}
-
-/* return a new 'ientry', either from the freelist or by malloc'ing it */
-static struct ientry *get_ientry(void)
-{
-    struct ientry *t;
-
-    if (!ifreelist) {
-	/* create child_table_inc more and add them to the freelist */
-	struct ientry *n;
-	int i;
-
-	n = xmalloc(itable_inc * sizeof(struct ientry));
-	ifreelist = n;
-	for (i = 0; i < itable_inc - 1; i++) {
-	    n[i].next = n + (i + 1);
-	}
-	/* i == child_table_inc - 1, last item in block */
-	n[i].next = NULL;
-    }
-
-    t = ifreelist;
-    ifreelist = ifreelist->next;
-
-    return t;
 }
 
 /* remove pid from list of those idling on mboxname */
@@ -162,8 +135,7 @@ void idle_done(char *mboxname, pid_t pid)
 
 	    p->next = t->next; /* remove node */
 	}
-	t->next = ifreelist; /* add to freelist */
-	ifreelist = t;
+	free(t);
     }
 }
 
@@ -179,7 +151,7 @@ void process_msg(idle_data_t *idledata)
 
 	/* add pid to list of those idling on mboxname */
 	t = (struct ientry *) hash_lookup(idledata->mboxname, &itable);
-	n = get_ientry();
+	n = (struct ientry *) xzmalloc(sizeof(struct ientry));
 	n->pid = idledata->pid;
 	n->itime = time(NULL);
 	n->next = t;
@@ -341,7 +313,6 @@ int main(int argc, char **argv)
 
     /* create idle table -- +1 to avoid a zero value */
     construct_hash_table(&itable, nmbox + 1, 1);
-    ifreelist = NULL;
 
     /* create socket we are going to use for listening */
     if ((s = socket(AF_UNIX, SOCK_DGRAM, 0)) == -1) {
