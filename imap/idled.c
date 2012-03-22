@@ -172,9 +172,9 @@ void process_msg(idle_data_t *idledata)
     struct ientry *t, *n;
 
     switch (idledata->msg) {
-    case IDLE_INIT:
+    case IDLE_MSG_INIT:
 	if (verbose || debugmode)
-	    syslog(LOG_DEBUG, "imapd[%ld]: IDLE_INIT '%s'\n",
+	    syslog(LOG_DEBUG, "imapd[%ld]: IDLE_MSG_INIT '%s'\n",
 		   idledata->pid, idledata->mboxname);
 
 	/* add pid to list of those idling on mboxname */
@@ -186,9 +186,9 @@ void process_msg(idle_data_t *idledata)
 	hash_insert(idledata->mboxname, n, &itable);
 	break;
 
-    case IDLE_NOTIFY:
+    case IDLE_MSG_NOTIFY:
 	if (verbose || debugmode)
-	    syslog(LOG_DEBUG, "IDLE_NOTIFY '%s'\n", idledata->mboxname);
+	    syslog(LOG_DEBUG, "IDLE_MSG_NOTIFY '%s'\n", idledata->mboxname);
 
 	/* send a message to all pids idling on mboxname */
 	t = (struct ientry *) hash_lookup(idledata->mboxname, &itable);
@@ -214,16 +214,16 @@ void process_msg(idle_data_t *idledata)
 	}
 	break;
 
-    case IDLE_DONE:
+    case IDLE_MSG_DONE:
 	if (verbose || debugmode)
-	    syslog(LOG_DEBUG, "imapd[%ld]: IDLE_DONE '%s'\n",
+	    syslog(LOG_DEBUG, "imapd[%ld]: IDLE_MSG_DONE '%s'\n",
 		   idledata->pid, idledata->mboxname);
 
 	/* remove pid from list of those idling on mboxname */
 	idle_done(idledata->mboxname, idledata->pid);
 	break;
 
-    case IDLE_NOOP:
+    case IDLE_MSG_NOOP:
 	break;
 
     default:

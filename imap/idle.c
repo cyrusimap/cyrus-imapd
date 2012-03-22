@@ -106,7 +106,7 @@ void idle_notify(const char *mboxname)
     /* We should try to determine if we need to send this
      * (ie, is an imapd is IDLE on 'mailbox'?).
      */
-    idle_send_msg(IDLE_NOTIFY, mboxname);
+    idle_send_msg(IDLE_MSG_NOTIFY, mboxname);
 }
 
 /*
@@ -159,7 +159,7 @@ int idle_enabled(void)
 
 	notify_sock = s;
 
-	if (!idle_send_msg(IDLE_NOOP, NULL)) {
+	if (!idle_send_msg(IDLE_MSG_NOOP, NULL)) {
 	    close(s);
 	    notify_sock = -1;
 	    return idle_period;
@@ -235,7 +235,7 @@ void idle_start(const char *mboxname)
     idle_started = 1;
 
     /* Tell idled that we're idling */
-    if (notify_sock == -1 || !idle_send_msg(IDLE_INIT, mboxname)) {
+    if (notify_sock == -1 || !idle_send_msg(IDLE_MSG_INIT, mboxname)) {
 	/* otherwise, we'll poll with SIGALRM */
 	alarm(idle_period);
     }
@@ -244,7 +244,7 @@ void idle_start(const char *mboxname)
 void idle_done(const char *mboxname)
 {
     /* Tell idled that we're done idling */
-    if (notify_sock != -1) idle_send_msg(IDLE_DONE, mboxname);
+    if (notify_sock != -1) idle_send_msg(IDLE_MSG_DONE, mboxname);
 
     /* Cancel alarm */
     alarm(0);
