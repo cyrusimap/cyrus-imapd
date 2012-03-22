@@ -62,7 +62,7 @@
 #include "global.h"
 
 /* UNIX socket variables */
-static int notify_sock = -1;
+static int idle_sock = -1;
 
 int idle_make_server_address(struct sockaddr_un *sun)
 {
@@ -119,21 +119,21 @@ int idle_init_sock(const struct sockaddr_un *local)
     umask(oldumask); /* for Linux */
     chmod(local->sun_path, 0777); /* for DUX */
 
-    notify_sock = s;
+    idle_sock = s;
 
     return 1;
 }
 
 void idle_done_sock(void)
 {
-    if (notify_sock >= 0)
-	close(notify_sock);
-    notify_sock = -1;
+    if (idle_sock >= 0)
+	close(idle_sock);
+    idle_sock = -1;
 }
 
 int idle_get_sock(void)
 {
-    return notify_sock;
+    return idle_sock;
 }
 
 /*
@@ -142,10 +142,10 @@ int idle_get_sock(void)
 int idle_send(const struct sockaddr_un *remote,
 	      const idle_message_t *msg)
 {
-    if (notify_sock < 0)
+    if (idle_sock < 0)
 	return 0;
 
-    if (sendto(notify_sock, (void *) msg,
+    if (sendto(idle_sock, (void *) msg,
 	       IDLE_MESSAGE_BASE_SIZE+strlen(msg->mboxname)+1, /* 1 for NULL */
 	       0, (struct sockaddr *) remote, sizeof(*remote)) == -1) {
 	syslog(LOG_ERR, "error sending to idled: %lx", msg->which);
@@ -160,11 +160,11 @@ int idle_recv(struct sockaddr_un *remote, idle_message_t *msg)
     socklen_t remote_len = sizeof(*remote);
     int n;
 
-    if (notify_sock < 0)
+    if (idle_sock < 0)
 	return 0;
 
     memset(remote, 0, remote_len);
-    n = recvfrom(notify_sock, (void *) msg, sizeof(idle_message_t), 0,
+    n = recvfrom(idle_sock, (void *) msg, sizeof(idle_message_t), 0,
 		 (struct sockaddr *) remote, &remote_len);
 
     if (n < 0)
