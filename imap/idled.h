@@ -60,11 +60,11 @@ typedef struct idle_data_s {
 
 #define IDLEDATA_BASE_SIZE	(2 * (int) sizeof(unsigned long))
 
-typedef enum {
-    IDLE_INIT,
-    IDLE_DONE,
-    IDLE_NOTIFY,
-    IDLE_NOOP
-} idle_msg_t;
+enum {
+    IDLE_MSG_INIT,
+    IDLE_MSG_DONE,
+    IDLE_MSG_NOTIFY,
+    IDLE_MSG_NOOP
+};
 
 #endif
