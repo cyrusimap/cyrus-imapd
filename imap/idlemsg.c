@@ -1,6 +1,5 @@
-/* idled.h - daemon for handling IMAP IDLE notifications
- *
- * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
+/*
+ * Copyright (c) 1994-2012 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -39,35 +38,80 @@
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- * $Id: idled.h,v 1.9 2010/01/06 17:01:32 murch Exp $
+ * $Id: idle.c,v 1.7 2010/01/06 17:01:32 murch Exp $
  */
 
-#ifndef IDLED_H
-#define IDLED_H
+#include <config.h>
 
-#include "mailbox.h"
-
-/* socket to communicate with the idled */
-#define FNAME_IDLE_SOCK "/socket/idle"
-
-typedef struct idle_message_s idle_message_t;
-
-struct idle_message_s
-{
-    unsigned long which;
-    unsigned long pid;
-
-    /* 1 for null. leave at end of structure for alignment */
-    char mboxname[MAX_MAILBOX_BUFFER];
-};
-
-#define IDLE_MESSAGE_BASE_SIZE	(2 * (int) sizeof(unsigned long))
-
-enum {
-    IDLE_MSG_INIT,
-    IDLE_MSG_DONE,
-    IDLE_MSG_NOTIFY,
-    IDLE_MSG_NOOP
-};
-
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <syslog.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <syslog.h>
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
 #endif
+#include <signal.h>
+#include <string.h>
+
+#include "idlemsg.h"
+#include "global.h"
+
+/* UNIX socket variables */
+static int notify_sock = -1;
+
+void idle_set_sock(int s)
+{
+    notify_sock = s;
+}
+
+int idle_get_sock(void)
+{
+    return notify_sock;
+}
+
+/*
+ * Send a message to idled
+ */
+int idle_send(const struct sockaddr_un *remote,
+	      const idle_message_t *msg)
+{
+    if (notify_sock < 0)
+	return 0;
+
+    if (sendto(notify_sock, (void *) msg,
+	       IDLE_MESSAGE_BASE_SIZE+strlen(msg->mboxname)+1, /* 1 for NULL */
+	       0, (struct sockaddr *) remote, sizeof(*remote)) == -1) {
+	syslog(LOG_ERR, "error sending to idled: %lx", msg->which);
+	return 0;
+    }
+
+    return 1;
+}
+
+int idle_recv(struct sockaddr_un *remote, idle_message_t *msg)
+{
+    socklen_t remote_len = sizeof(*remote);
+    int n;
+
+    if (notify_sock < 0)
+	return 0;
+
+    memset(remote, 0, remote_len);
+    n = recvfrom(notify_sock, (void *) msg, sizeof(idle_message_t), 0,
+		 (struct sockaddr *) remote, &remote_len);
+
+    if (n < 0)
+	return 0;
+
+    if (n <= IDLE_MESSAGE_BASE_SIZE ||
+	msg->mboxname[n - 1 - IDLE_MESSAGE_BASE_SIZE] != '\0') {
+	syslog(LOG_ERR, "Invalid message received, size=%d\n", n);
+	return 0;
+    }
+
+    return 1;
+}
+
