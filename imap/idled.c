@@ -85,7 +85,6 @@ struct ientry {
     struct ientry *next;
 };
 static struct hash_table itable;
-void idle_done(const char *mboxname, pid_t pid);
 
 void fatal(const char *msg, int err)
 {
@@ -111,7 +110,7 @@ static int mbox_count_cb(void *rockp,
 }
 
 /* remove pid from list of those idling on mboxname */
-void idle_done(const char *mboxname, pid_t pid)
+static void remove_ientry(const char *mboxname, pid_t pid)
 {
     struct ientry *t, *p = NULL;
 
@@ -139,7 +138,7 @@ void idle_done(const char *mboxname, pid_t pid)
     }
 }
 
-void process_msg(idle_data_t *idledata)
+static void process_message(idle_data_t *idledata)
 {
     struct ientry *t, *n;
 
@@ -174,7 +173,7 @@ void process_msg(idle_data_t *idledata)
 
 		n = t;
 		t = t->next;
-		idle_done(idledata->mboxname, n->pid);
+		remove_ientry(idledata->mboxname, n->pid);
 	    }
 	    else { /* signal process to update */
 		if (verbose || debugmode)
@@ -192,7 +191,7 @@ void process_msg(idle_data_t *idledata)
 		   idledata->pid, idledata->mboxname);
 
 	/* remove pid from list of those idling on mboxname */
-	idle_done(idledata->mboxname, idledata->pid);
+	remove_ientry(idledata->mboxname, idledata->pid);
 	break;
 
     case IDLE_MSG_NOOP:
@@ -204,9 +203,9 @@ void process_msg(idle_data_t *idledata)
     }
 }
 
-void idle_alert(const char *key __attribute__((unused)),
-		void *data,
-		void *rock __attribute__((unused)))
+static void send_alert(const char *key __attribute__((unused)),
+		       void *data,
+		       void *rock __attribute__((unused)))
 {
     struct ientry *t = (struct ientry *) data;
 
@@ -358,11 +357,11 @@ int main(int argc, char **argv)
 	    if (verbose || debugmode)
 		syslog(LOG_DEBUG, "IDLE_ALERT\n");
 
-	    hash_enumerate(&itable, idle_alert, NULL);
+	    hash_enumerate(&itable, send_alert, NULL);
 	    break;
 	}
 	if (sigquit) {
-	    hash_enumerate(&itable, idle_alert, NULL);
+	    hash_enumerate(&itable, send_alert, NULL);
 	    break;
 	}
 
@@ -393,7 +392,7 @@ int main(int argc, char **argv)
 		    idledata.mboxname[n - 1 - IDLEDATA_BASE_SIZE] != '\0')
 		    syslog(LOG_ERR, "Invalid message received, size=%d\n", n);
 		else 
-		    process_msg(&idledata);
+		    process_message(&idledata);
 	    }
 	} else {
 	    /* log some sort of error */
