@@ -55,15 +55,13 @@
 #endif
 #include <signal.h>
 #include <string.h>
+#include <errno.h>
 
 #include "idle.h"
 #include "idlemsg.h"
 #include "global.h"
 
 const char *idle_method_desc = "no";
-
-/* function to report mailbox updates to the client */
-static idle_updateproc_t *idle_update = NULL;
 
 /* how often to poll the mailbox */
 static time_t idle_period = -1;
@@ -79,7 +77,6 @@ static int idle_send_msg(int which, const char *mboxname)
 
     /* fill the structure */
     msg.which = which;
-    msg.pid = getpid();
     strncpy(msg.mboxname, mboxname ? mboxname : ".", sizeof(msg.mboxname));
 
     /* send */
@@ -158,64 +155,79 @@ int idle_enabled(void)
     }
 }
 
-static void idle_handler(int sig)
-{
-    /* ignore the signals, unless the server has started idling */
-    if (!idle_started) return;
-
-    switch (sig) {
-    case SIGUSR1:
-	idle_update(IDLE_MAILBOX);
-	break;
-    case SIGUSR2:
-	idle_update(IDLE_ALERT);
-	break;
-    case SIGALRM:
-	idle_update(IDLE_MAILBOX|IDLE_ALERT);
-	alarm(idle_period);
-	break;
-    }
-}
-
-int idle_init(idle_updateproc_t *proc)
-{
-    struct sigaction action;
-
-    idle_update = proc;
-
-    /* We don't want recursive calls to idle_update() */
-    sigemptyset(&action.sa_mask);
-    sigaddset(&action.sa_mask, SIGUSR1);
-    sigaddset(&action.sa_mask, SIGUSR2);
-    action.sa_flags = 0;
-#ifdef SA_RESTART
-    action.sa_flags |= SA_RESTART;
-#endif
-    action.sa_handler = idle_handler;
-
-    /* Setup the signal handlers */
-    if ((sigaction(SIGUSR1, &action, NULL) < 0) ||
-	(sigaction(SIGUSR2, &action, NULL) < 0) ||
-	(sigaction(SIGALRM, &action, NULL) < 0)) {
-	syslog(LOG_ERR, "sigaction: %m");
-
-	/* Cancel receiving signals */
-	idle_done(NULL);
-	return 0;
-    }
-
-    return 1;
-}
-
 void idle_start(const char *mboxname)
 {
     idle_started = 1;
 
-    /* Tell idled that we're idling */
-    if (!idle_send_msg(IDLE_MSG_INIT, mboxname)) {
-	/* otherwise, we'll poll with SIGALRM */
-	alarm(idle_period);
-    }
+    /* Tell idled that we're idling.  It doesn't
+     * matter if it fails, we'll still poll */
+    idle_send_msg(IDLE_MSG_INIT, mboxname);
+}
+
+int idle_wait(int otherfd)
+{
+    int s = idle_get_sock();
+    fd_set rfds;
+    int maxfd;
+    struct timeval timeout;
+    int r;
+    int flags = 0;
+
+    if (!idle_started)
+	return 0;
+
+    do {
+	FD_ZERO(&rfds);
+	maxfd = -1;
+	if (s >= 0) {
+	    FD_SET(s, &rfds);
+	    maxfd = MAX(maxfd, s);
+	}
+	if (otherfd >= 0) {
+	    FD_SET(otherfd, &rfds);
+	    maxfd = MAX(maxfd, otherfd);
+	}
+
+	/* Note: it's technically valid for there to be no fds to listen
+	 * to, in the case where @otherfd is passed as -1 and we failed
+	 * to talk to idled.  It shouldn't happen though as we're always
+	 * called with a valid otherfd.  */
+
+	/* TODO: this is wrong, we actually want a rolling period */
+	timeout.tv_sec = idle_period;
+	timeout.tv_usec = 0;
+
+	r = select(maxfd+1, &rfds, NULL, NULL, &timeout);
+	if (r < 0) {
+	    if (errno == EAGAIN || errno == EINTR)
+		continue;
+	    syslog(LOG_ERR, "select: %m");
+	    return 0;
+	}
+	if (r == 0) {
+	    /* timeout */
+	    flags |= IDLE_MAILBOX|IDLE_ALERT;
+	}
+	if (r > 0 && FD_ISSET(idle_get_sock(), &rfds)) {
+	    struct sockaddr_un from;
+	    idle_message_t msg;
+
+	    if (idle_recv(&from, &msg)) {
+		switch (msg.which) {
+		case IDLE_MSG_NOTIFY:
+		    flags |= IDLE_MAILBOX;
+		    break;
+		case IDLE_MSG_ALERT:
+		    flags |= IDLE_ALERT;
+		    break;
+		}
+	    }
+	}
+	if (r > 0 && otherfd >= 0 && FD_ISSET(otherfd, &rfds))
+	    flags |= IDLE_INPUT;
+    } while (!flags);
+
+    return flags;
 }
 
 void idle_done(const char *mboxname)
@@ -223,17 +235,8 @@ void idle_done(const char *mboxname)
     /* Tell idled that we're done idling */
     idle_send_msg(IDLE_MSG_DONE, mboxname);
 
-    /* Cancel alarm */
-    alarm(0);
-
-    /* Remove the signal handlers */
-    signal(SIGUSR1, SIG_IGN);
-    signal(SIGUSR2, SIG_IGN);
-    signal(SIGALRM, SIG_IGN);
-
     /* close the AF_UNIX socket */
     idle_done_sock();
 
-    idle_update = NULL;
     idle_started = 0;
 }

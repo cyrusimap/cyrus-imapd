@@ -56,6 +56,7 @@
 #include <signal.h>
 #include <string.h>
 
+#include "assert.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 #include "idlemsg.h"
@@ -93,6 +94,21 @@ int idle_make_client_address(struct sockaddr_un *sun)
 	     config_dir, FNAME_IDLE_SOCK_DIR, (int)getpid());
     return 1;
 }
+
+/* Extract an identifying string from the remote AF_UNIX address,
+ * suitable for logging debug messages.  Returns a string into an
+ * internal buffer */
+const char *idle_id_from_addr(const struct sockaddr_un *sun)
+{
+    const char *tail = strrchr(sun->sun_path, '/');
+    const char *p;
+    /* Has to be an absolute path, so there must be at least 1 / */
+    assert(tail);
+    tail++;
+    p = strchr(tail, '.');
+    return (p ? p+1 : tail);
+}
+
 
 
 int idle_init_sock(const struct sockaddr_un *local)

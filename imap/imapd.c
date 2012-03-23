@@ -387,7 +387,6 @@ extern void id_getcmdline(int argc, char **argv);
 extern void id_response(struct protstream *pout);
 
 void cmd_idle(char* tag);
-void idle_update(idle_flags_t flags);
 
 void cmd_starttls(char *tag, int imaps);
 
@@ -2765,16 +2764,11 @@ void cmd_id(char *tag)
 void cmd_idle(char *tag)
 {
     int c = EOF;
+    int flags;
     static struct buf arg;
     static int idle_period = -1;
 
     if (!backend_current) {  /* Local mailbox */
-	/* Setup for doing mailbox updates */
-	if (!idle_init(idle_update)) {
-	    prot_printf(imapd_out, 
-			"%s NO cannot start idling\r\n", tag);
-	    return;
-	}
 
 	/* Tell client we are idling and waiting for end of command */
 	prot_printf(imapd_out, "+ idling\r\n");
@@ -2787,8 +2781,32 @@ void cmd_idle(char *tag)
 	 * connection abort we tell idled about it */
 	idling = 1;
 
-	/* Get continuation data */
-	c = getword(imapd_in, &arg);
+	while ((flags = idle_wait(imapd_in->fd))) {
+	    if (flags & IDLE_INPUT) {
+		/* Get continuation data */
+		c = getword(imapd_in, &arg);
+		break;
+	    }
+
+	    /* Send unsolicited untagged responses to the client */
+	    if ((flags & IDLE_MAILBOX) && imapd_index)
+		index_check(imapd_index, 1, 0);
+
+	    if (flags & IDLE_ALERT) {
+		char shut[MAX_MAILBOX_PATH+1];
+		if (! imapd_userisadmin &&
+		    (shutdown_file(shut, sizeof(shut)) ||
+		     (imapd_userid && 
+		      userdeny(imapd_userid, config_ident, shut, sizeof(shut))))) {
+		    char *p;
+		    for (p = shut; *p == '['; p++); /* can't have [ be first char */
+		    prot_printf(imapd_out, "* BYE [ALERT] %s\r\n", p);
+		    shut_down(0);
+		}
+	    }
+
+	    prot_flush(imapd_out);
+	}
 
 	/* Stop updates and do any necessary cleanup */
 	idling = 0;
@@ -2884,27 +2902,6 @@ void cmd_idle(char *tag)
     }
 }
 
-/* Send unsolicited untagged responses to the client */
-void idle_update(idle_flags_t flags)
-{
-    if ((flags & IDLE_MAILBOX) && imapd_index)
-	index_check(imapd_index, 1, 0);
-
-    if (flags & IDLE_ALERT) {
-	char shut[MAX_MAILBOX_PATH+1];
-	if (! imapd_userisadmin &&
-	    (shutdown_file(shut, sizeof(shut)) ||
-	     (imapd_userid && 
-	      userdeny(imapd_userid, config_ident, shut, sizeof(shut))))) {
-	    char *p;
-	    for (p = shut; *p == '['; p++); /* can't have [ be first char */
-	    prot_printf(imapd_out, "* BYE [ALERT] %s\r\n", p);
-	    shut_down(0);
-	}
-    }
-
-    prot_flush(imapd_out);
-}
 
 void capa_response(int flags)
 {

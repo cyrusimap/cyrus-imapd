@@ -76,7 +76,7 @@ static time_t idle_timeout;
 static volatile sig_atomic_t sigquit = 0;
 
 struct ientry {
-    pid_t pid;
+    struct sockaddr_un remote;
     time_t itime;
     struct ientry *next;
 };
@@ -105,19 +105,20 @@ static int mbox_count_cb(void *rockp,
     return 0;
 }
 
-/* remove pid from list of those idling on mboxname */
-static void remove_ientry(const char *mboxname, pid_t pid)
+/* remove an ientry from list of those idling on mboxname */
+static void remove_ientry(const char *mboxname,
+			  const struct sockaddr_un *remote)
 {
     struct ientry *t, *p = NULL;
 
     t = (struct ientry *) hash_lookup(mboxname, &itable);
-    while (t && t->pid != pid) {
+    while (t && memcmp(&t->remote, remote, sizeof(*remote))) {
 	p = t;
 	t = t->next;
     }
     if (t) {
 	if (!p) {
-	    /* first pid in the linked list */
+	    /* first ientry in the linked list */
 
 	    p = t->next; /* remove node */
 
@@ -126,7 +127,7 @@ static void remove_ientry(const char *mboxname, pid_t pid)
 	    hash_insert(mboxname, p, &itable);
 	}
 	else {
-	    /* not the first pid in the linked list */
+	    /* not the first ientry in the linked list */
 
 	    p->next = t->next; /* remove node */
 	}
@@ -134,20 +135,22 @@ static void remove_ientry(const char *mboxname, pid_t pid)
     }
 }
 
-static void process_message(idle_message_t *msg)
+
+
+static void process_message(struct sockaddr_un *remote, idle_message_t *msg)
 {
     struct ientry *t, *n;
 
     switch (msg->which) {
     case IDLE_MSG_INIT:
 	if (verbose || debugmode)
-	    syslog(LOG_DEBUG, "imapd[%ld]: IDLE_MSG_INIT '%s'\n",
-		   msg->pid, msg->mboxname);
+	    syslog(LOG_DEBUG, "imapd[%s]: IDLE_MSG_INIT '%s'\n",
+		   idle_id_from_addr(remote), msg->mboxname);
 
-	/* add pid to list of those idling on mboxname */
+	/* add an ientry to list of those idling on mboxname */
 	t = (struct ientry *) hash_lookup(msg->mboxname, &itable);
 	n = (struct ientry *) xzmalloc(sizeof(struct ientry));
-	n->pid = msg->pid;
+	n->remote = *remote;
 	n->itime = time(NULL);
 	n->next = t;
 	hash_insert(msg->mboxname, n, &itable);
@@ -157,37 +160,40 @@ static void process_message(idle_message_t *msg)
 	if (verbose || debugmode)
 	    syslog(LOG_DEBUG, "IDLE_MSG_NOTIFY '%s'\n", msg->mboxname);
 
-	/* send a message to all pids idling on mboxname */
+	/* send a message to all clients idling on mboxname */
 	t = (struct ientry *) hash_lookup(msg->mboxname, &itable);
-	while (t) {
+	for ( ; t ; t = n) {
+	    n = t->next;
 	    if ((t->itime + idle_timeout) < time(NULL)) {
 		/* This process has been idling for longer than the timeout
 		 * period, so it probably died.  Remove it from the list.
 		 */
 		if (verbose || debugmode)
-		    syslog(LOG_DEBUG, "    TIMEOUT %d\n", t->pid);
+		    syslog(LOG_DEBUG, "    TIMEOUT %s\n", idle_id_from_addr(&t->remote));
 
-		n = t;
-		t = t->next;
-		remove_ientry(msg->mboxname, n->pid);
+		remove_ientry(msg->mboxname, &t->remote);
 	    }
 	    else { /* signal process to update */
 		if (verbose || debugmode)
-		    syslog(LOG_DEBUG, "    SIGUSR1 %d\n", t->pid);
+		    syslog(LOG_DEBUG, "    fwd NOTIFY %s\n", idle_id_from_addr(&t->remote));
 
-		kill(t->pid, SIGUSR1);
-		t = t->next;
+		/* forward the received msg onto our clients */
+		if (!idle_send(&t->remote, msg)) {
+		    if (verbose || debugmode)
+			syslog(LOG_DEBUG, "    forgetting %s\n", idle_id_from_addr(&t->remote));
+		    remove_ientry(msg->mboxname, &t->remote);
+		}
 	    }
 	}
 	break;
 
     case IDLE_MSG_DONE:
 	if (verbose || debugmode)
-	    syslog(LOG_DEBUG, "imapd[%ld]: IDLE_MSG_DONE '%s'\n",
-		   msg->pid, msg->mboxname);
+	    syslog(LOG_DEBUG, "imapd[%s]: IDLE_MSG_DONE '%s'\n",
+		   idle_id_from_addr(remote), msg->mboxname);
 
-	/* remove pid from list of those idling on mboxname */
-	remove_ientry(msg->mboxname, msg->pid);
+	/* remove client from list of those idling on mboxname */
+	remove_ientry(msg->mboxname, remote);
 	break;
 
     case IDLE_MSG_NOOP:
@@ -199,19 +205,31 @@ static void process_message(idle_message_t *msg)
     }
 }
 
-static void send_alert(const char *key __attribute__((unused)),
+
+static void send_alert(const char *key,
 		       void *data,
 		       void *rock __attribute__((unused)))
 {
     struct ientry *t = (struct ientry *) data;
+    struct ientry *n;
+    idle_message_t msg;
 
-    while (t) {
+    msg.which = IDLE_MSG_ALERT;
+    strncpy(msg.mboxname, ".", sizeof(msg.mboxname));
+    
+
+    for ( ; t ; t = n) {
+	n = t->next;
+
 	/* signal process to check ALERTs */
 	if (verbose || debugmode)
-	    syslog(LOG_DEBUG, "    SIGUSR2 %d\n", t->pid);
-	kill(t->pid, SIGUSR2);
+	    syslog(LOG_DEBUG, "    ALERT %s\n", idle_id_from_addr(&t->remote));
 
-	t = t->next;
+	if (!idle_send(&t->remote, &msg)) {
+	    if (verbose || debugmode)
+		syslog(LOG_DEBUG, "    forgetting %s\n", idle_id_from_addr(&t->remote));
+	    remove_ientry(key, &t->remote);
+	}
     }
 }
 
@@ -355,7 +373,7 @@ int main(int argc, char **argv)
 	    idle_message_t msg;
 
 	    if (idle_recv(&from, &msg))
-		process_message(&msg);
+		process_message(&from, &msg);
 	}
 
     }
