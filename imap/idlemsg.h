@@ -58,23 +58,24 @@ typedef struct idle_message_s idle_message_t;
 struct idle_message_s
 {
     unsigned long which;
-    unsigned long pid;
 
     /* 1 for null. leave at end of structure for alignment */
     char mboxname[MAX_MAILBOX_BUFFER];
 };
 
-#define IDLE_MESSAGE_BASE_SIZE	(2 * (int) sizeof(unsigned long))
+#define IDLE_MESSAGE_BASE_SIZE	(1 * (int) sizeof(unsigned long))
 
 enum {
     IDLE_MSG_INIT,
     IDLE_MSG_DONE,
     IDLE_MSG_NOTIFY,
-    IDLE_MSG_NOOP
+    IDLE_MSG_NOOP,
+    IDLE_MSG_ALERT
 };
 
 int idle_make_server_address(struct sockaddr_un *);
 int idle_make_client_address(struct sockaddr_un *);
+const char *idle_id_from_addr(const struct sockaddr_un *);
 int idle_init_sock(const struct sockaddr_un *);
 void idle_done_sock(void);
 int idle_get_sock(void);

@@ -49,8 +49,15 @@
 extern const char *idle_method_desc;
 
 typedef enum {
+    /* something noteworthy may have happened to the mailbox,
+     * e.g. a delivery, so it needs to be checked */
     IDLE_MAILBOX =	0x1,
-    IDLE_ALERT =	0x2
+    /* the shutdownfile may have been written, needing an ALERT reponse
+     * to be sent to any IMAP clients */
+    IDLE_ALERT =	0x2,
+    /* input was detected on the @otherfd, probably because the IMAP
+     * client cancelled the IDLE */
+    IDLE_INPUT =	0x4
 } idle_flags_t;
 
 typedef void idle_updateproc_t(idle_flags_t flags);
@@ -59,14 +66,18 @@ typedef void idle_updateproc_t(idle_flags_t flags);
 /* Is IDLE enabled?  Can also do initial setup, if necessary */
 int idle_enabled(void);
 
-/* Setup for IDLE.
- * 'proc' is a pointer to a function which reports mailbox updates and/or
- * ALERTs to the client.
- */
-int idle_init(idle_updateproc_t *proc);
-
 /* Start IDLEing on 'mailbox'. */
 void idle_start(const char *mboxname);
+
+/* Wait for something to happen while IDLEing.  @otherfd is a file
+ * descriptor on which to wait for input; presumably this will be the
+ * fd of the main protstream from the IMAP client.  Returns a mask of
+ * flags indicating what if anything happened, see idle_flags_t, or 0
+ * on error.  If idled is disabled or was not contacted, we fall back
+ * to polling mode and return the flags IDLE_MAILBOX and IDLE_INPUT
+ * periodically.
+ */
+int idle_wait(int otherfd);
 
 /* Cleanup when IDLE is completed. */
 void idle_done(const char *mboxname);
