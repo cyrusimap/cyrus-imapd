@@ -68,6 +68,7 @@
 #include "exitcodes.h"
 #include "imap/imap_err.h"
 #include "mailbox.h"
+#include "md5.h"
 #include "quota.h"
 #include "xmalloc.h"
 #include "xstrlcat.h"
@@ -1979,6 +1980,23 @@ static void sync_crc32_addrecord_plus(const struct mailbox *mailbox,
 	sync_crc32 += crc32_cstring(rep);
 }
 
+static void sync_md5_addrecord_xor(const struct mailbox *mailbox,
+				   const struct index_record *record,
+				   int cflags)
+{
+    MD5_CTX ctx;
+    unsigned char result[16];
+    const char *rep = sync_record_representation(mailbox, record, cflags);
+
+    if (!rep) return;
+
+    MD5Init(&ctx);
+    MD5Update(&ctx, rep, strlen(rep));
+    MD5Final(result, &ctx);
+
+    sync_crc32 ^= ntohl(*((bit32 *)result));
+}
+
 static const char *sync_annot_representation(const struct sync_annot *annot)
 {
     buf_reset(&sync_crc32_buf);
@@ -1986,6 +2004,21 @@ static const char *sync_annot_representation(const struct sync_annot *annot)
     buf_append(&sync_crc32_buf, &annot->value);
 
     return buf_cstring(&sync_crc32_buf);
+}
+
+static void sync_md5_addannot_xor(const struct sync_annot *annot)
+{
+    MD5_CTX ctx;
+    unsigned char result[16];
+    const char *rep = sync_annot_representation(annot);
+
+    if (!rep) return;
+
+    MD5Init(&ctx);
+    MD5Update(&ctx, rep, strlen(rep));
+    MD5Final(result, &ctx);
+
+    sync_crc32 ^= ntohl(*((bit32 *)result));
 }
 
 static void sync_crc32_addannot_xor(const struct sync_annot *annot)
@@ -2024,6 +2057,13 @@ static const struct sync_crc_algorithm sync_crc_algorithms[] = {
 	sync_crc32_begin,
 	sync_crc32_addrecord_plus,
 	sync_crc32_addannot_plus,
+	sync_crc32_end },
+    { "MD5",  /* XOR the first 16 bytes of md5s instead */
+	3,
+	sync_crc32_setup,
+	sync_crc32_begin,
+	sync_md5_addrecord_xor,
+	sync_md5_addannot_xor,
 	sync_crc32_end },
     { NULL, 0, NULL, NULL, NULL, NULL, NULL }
 };
