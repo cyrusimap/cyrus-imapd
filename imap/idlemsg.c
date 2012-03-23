@@ -63,6 +63,7 @@
 
 /* UNIX socket variables */
 static int idle_sock = -1;
+static struct sockaddr_un idle_local;
 
 int idle_make_server_address(struct sockaddr_un *sun)
 {
@@ -114,20 +115,24 @@ int idle_init_sock(const struct sockaddr_un *local)
 
     if (bind(s, (struct sockaddr *)local, len) == -1) {
 	perror("bind");
+	close(s);
 	return 0;
     }
     umask(oldumask); /* for Linux */
     chmod(local->sun_path, 0777); /* for DUX */
 
     idle_sock = s;
+    idle_local = *local;
 
     return 1;
 }
 
 void idle_done_sock(void)
 {
-    if (idle_sock >= 0)
+    if (idle_sock >= 0) {
 	close(idle_sock);
+	unlink(idle_local.sun_path);
+    }
     idle_sock = -1;
 }
 

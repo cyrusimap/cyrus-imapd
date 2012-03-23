@@ -360,6 +360,7 @@ int main(int argc, char **argv)
 
     }
 
+    idle_done_sock();
     cyrus_done();
 
     exit(1);
