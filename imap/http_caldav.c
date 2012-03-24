@@ -2155,7 +2155,7 @@ static void add_busytime(icalcomponent *comp, struct icaltime_span *span,
 
     /* Grow the array, if necessary */
     if (busytime->len == busytime->alloc) {
-	busytime->alloc += 1;  /* XXX  arbitrary */
+	busytime->alloc += 100;  /* XXX  arbitrary */
 	busytime->busy = xrealloc(busytime->busy,
 				  busytime->alloc *
 				  sizeof(struct icalperiodtype));
