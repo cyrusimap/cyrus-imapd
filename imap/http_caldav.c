@@ -2155,9 +2155,10 @@ static void add_busytime(icalcomponent *comp, struct icaltime_span *span,
 
     /* Grow the array, if necessary */
     if (busytime->len == busytime->alloc) {
-	busytime->alloc *= 2;
-	xrealloc(busytime->busy,
-		 busytime->alloc * sizeof(struct icalperiodtype));
+	busytime->alloc += 1;  /* XXX  arbitrary */
+	busytime->busy = xrealloc(busytime->busy,
+				  busytime->alloc *
+				  sizeof(struct icalperiodtype));
     }
 
     /* Add new busytime */
@@ -2227,17 +2228,17 @@ static int busytime_by_resource(void *rock,
 	    icaltime_as_timet_with_zone(fctx->calfilter->end, utc);
 
 	/* Mark start of where recurrences will be added */
-	firstr = fctx->busytime->len;
+	firstr = fctx->busytime.len;
 
 	/* Add all recurring busytime in specified time-range */
 	icalcomponent_foreach_recurrence(comp,
 					 fctx->calfilter->start,
 					 fctx->calfilter->end,
 					 add_busytime,
-					 fctx->busytime);
+					 &fctx->busytime);
 
 	/* Mark end of where recurrences were added */
-	lastr = fctx->busytime->len;
+	lastr = fctx->busytime.len;
 
 	/* XXX  Should we sort the busytime array, so we can use bsearch()? */
 
@@ -2274,15 +2275,15 @@ static int busytime_by_resource(void *rock,
 	    /* XXX  Should we replace this linear search with bsearch() */
 	    for (n = firstr; n < lastr; n++) {
 		if (!icaltime_compare(recurid,
-				      fctx->busytime->busy[n].start)) {
+				      fctx->busytime.busy[n].start)) {
 		    /* Remove the instance
 		       by sliding all future instances into its place */
 		    /* XXX  Doesn't handle the RANGE=THISANDFUTURE param */
-		    fctx->busytime->len--;
-		    memmove(&fctx->busytime->busy[n],
-			    &fctx->busytime->busy[n+1],
+		    fctx->busytime.len--;
+		    memmove(&fctx->busytime.busy[n],
+			    &fctx->busytime.busy[n+1],
 			    sizeof(struct icalperiodtype) *
-			    (fctx->busytime->len - n));
+			    (fctx->busytime.len - n));
 		    lastr--;
 
 		    break;
@@ -2295,7 +2296,7 @@ static int busytime_by_resource(void *rock,
 
 	    if (icaltime_span_overlaps(&recurspan, &rangespan)) {
 		/* Add this instance to the array */
-		add_busytime(comp, &recurspan, fctx->busytime);
+		add_busytime(comp, &recurspan, &fctx->busytime);
 	    }
 	}
     }
@@ -2327,13 +2328,8 @@ static icalcomponent *do_fb_query(struct transaction_t *txn,
 				  const char *organizer,
 				  const char *attendee)
 {
-    struct busytime busytime;
+    struct busytime *busytime = &fctx->busytime;
     icalcomponent *cal = NULL;
-
-    memset(&busytime, 0, sizeof(struct busytime));
-    busytime.alloc = 100;
-    busytime.busy = xmalloc(busytime.alloc * sizeof(struct icalperiodtype));
-    fctx->busytime = &busytime;
 
     fctx->proc_by_resource = &busytime_by_resource;
 
@@ -2397,33 +2393,31 @@ static icalcomponent *do_fb_query(struct transaction_t *txn,
 	icalcomponent_add_component(cal, fb);
 
 	/* Sort busytime periods by start time */
-	qsort(busytime.busy, busytime.len, sizeof(struct icalperiodtype),
+	qsort(busytime->busy, busytime->len, sizeof(struct icalperiodtype),
 	      compare_busytime);
 
 	/* Add busytime periods to VFREEBUSY component, coalescing as needed */
-	for (n = 0; n < busytime.len; n++) {
-	    if ((n+1 < busytime.len) &&
-		icaltime_compare(busytime.busy[n].end,
-				 busytime.busy[n+1].start) >= 0) {
+	for (n = 0; n < busytime->len; n++) {
+	    if ((n+1 < busytime->len) &&
+		icaltime_compare(busytime->busy[n].end,
+				 busytime->busy[n+1].start) >= 0) {
 		/* Periods overlap -- coalesce into next busytime */
-		memcpy(&busytime.busy[n+1].start, &busytime.busy[n].start,
+		memcpy(&busytime->busy[n+1].start, &busytime->busy[n].start,
 		       sizeof(struct icaltimetype));
-		if (icaltime_compare(busytime.busy[n].end,
-				     busytime.busy[n+1].end) > 0) {
-		    memcpy(&busytime.busy[n+1].end, &busytime.busy[n].end,
+		if (icaltime_compare(busytime->busy[n].end,
+				     busytime->busy[n+1].end) > 0) {
+		    memcpy(&busytime->busy[n+1].end, &busytime->busy[n].end,
 			   sizeof(struct icaltimetype));
 		}
 	    }
 	    else {
 		icalproperty *busy =
-		    icalproperty_new_freebusy(busytime.busy[n]);
+		    icalproperty_new_freebusy(busytime->busy[n]);
 
 		icalcomponent_add_property(fb, busy);
 	    }
 	}
     }
-
-    free(busytime.busy);
 
     return cal;
 }
@@ -2460,6 +2454,8 @@ static int report_fb_query(struct transaction_t *txn,
     }
 
     cal = do_fb_query(txn, fctx, mailboxname, 0, NULL, NULL, NULL);
+
+    if (fctx->busytime.busy) free(fctx->busytime.busy);
 
     if (cal) {
 	/* Output the iCalendar object as text/calendar */
@@ -3205,6 +3201,7 @@ static int sched_busytime(struct transaction_t *txn)
 		 "user.%.*s.#calendars", strcspn(attendee+7, "@"), attendee+7);
 
 	fctx.req_tgt->collection = NULL;
+	fctx.busytime.len = 0;
 	fb = do_fb_query(txn, &fctx, mailboxname,
 			 ICAL_METHOD_REPLY, uid, organizer, attendee);
 
@@ -3230,6 +3227,7 @@ static int sched_busytime(struct transaction_t *txn)
     /* Output the XML response */
     if (!ret) xml_response(HTTP_OK, txn, doc);
 
+    if (fctx.busytime.busy) free(fctx.busytime.busy);
     if (doc) xmlFree(doc);
     icalcomponent_free(ical);
 
