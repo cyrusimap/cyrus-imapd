@@ -692,6 +692,7 @@ int shutdown_file(char *buf, int size)
     FILE *f;
     static char shutdownfilename[1024] = "";
     char *p;
+    char tmpbuf[1024];
     
     if (!shutdownfilename[0])
 	snprintf(shutdownfilename, sizeof(shutdownfilename), 
@@ -699,6 +700,11 @@ int shutdown_file(char *buf, int size)
 
     f = fopen(shutdownfilename, "r");
     if (!f) return 0;
+
+    if (!buf) {
+	buf = tmpbuf;
+	size = sizeof(tmpbuf);
+    }
 
     if (!fgets(buf, size, f)) {
 	*buf = '\0';
