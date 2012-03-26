@@ -242,15 +242,6 @@ xmlNodePtr xml_add_error(xmlNodePtr root, struct error_t *err,
 /* Add a response tree to 'root' for the specified href and property list */
 int xml_add_response(struct propfind_ctx *fctx, long code);
 
-/* caldav_foreach() callback to find props on a resource */
-int propfind_by_resource(void *rock, const char *resource, uint32_t uid);
-
-/* mboxlist_findall() callback to find props on a collection */
-int propfind_by_collection(char *mboxname,
-			   int matchlen __attribute__((unused)),
-			   int maycreate __attribute__((unused)),
-			   void *rock);
-
 /* Execute given property patch instructions */
 int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr);
 
