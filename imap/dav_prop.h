@@ -176,6 +176,7 @@ struct propfind_ctx {
     struct index_record *record;	/* cyrus.index record for resource */
     const char *msg_base;		/* base of mmap()'d resource file */
     unsigned long msg_size;		/* size of mmap()'d resource file */
+    unsigned long reqd_privs;		/* privileges req'd on collections */
     struct calquery_filter *calfilter;	/* criteria to filter cal resources */
     int (*proc_by_resource)(void *rock,	/* Callback to process a resource */
 		const char *resource, uint32_t uid);

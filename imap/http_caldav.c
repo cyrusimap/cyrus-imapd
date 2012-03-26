@@ -1515,11 +1515,24 @@ static int propfind_by_collection(char *mboxname,
 				  void *rock)
 {
     struct propfind_ctx *fctx = (struct propfind_ctx *) rock;
+    struct mboxlist_entry mbentry;
     struct mailbox *mailbox = NULL;
     struct caldav_db *caldavdb = NULL;
     char *p;
     size_t len;
-    int r = 0;
+    int r = 0, rights;
+
+    /* Check ACL on mailbox for current user */
+    if ((r = mboxlist_lookup(mboxname, &mbentry, NULL))) {
+	syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
+	       mboxname, error_message(r));
+	*fctx->errstr = error_message(r);
+	*fctx->ret = HTTP_SERVER_ERROR;
+	goto done;
+    }
+
+    rights = mbentry.acl ? cyrus_acl_myrights(httpd_authstate, mbentry.acl) : 0;
+    if ((rights & fctx->reqd_privs) != fctx->reqd_privs) goto done;
 
     /* Open mailbox for reading */
     if ((r = mailbox_open_irl(mboxname, &mailbox))) {
@@ -1633,14 +1646,14 @@ int meth_propfind(struct transaction_t *txn)
     }
 
     if ((txn->req_tgt.namespace == URL_NS_CALENDAR) && txn->req_tgt.user) {
-	char *server;
+	char *server, *acl;
+	int rights;
 
-	/* Construct mailbox name corresponding to calendar-home-set */
-	r = (*httpd_namespace.mboxname_tointernal)(&httpd_namespace, "INBOX",
-						   httpd_userid, mailboxname);
+	/* Construct mailbox name corresponding to request target URI */
+	(void) target_to_mboxname(&txn->req_tgt, mailboxname);
 
 	/* Locate the mailbox */
-	if ((r = http_mlookup(mailboxname, &server, NULL, NULL))) {
+	if ((r = http_mlookup(mailboxname, &server, &acl, NULL))) {
 	    syslog(LOG_ERR, "mlookup(%s) failed: %s",
 		   mailboxname, error_message(r));
 	    txn->error.desc = error_message(r);
@@ -1650,6 +1663,17 @@ int meth_propfind(struct transaction_t *txn)
 	    case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
 	    default: return HTTP_SERVER_ERROR;
 	    }
+	}
+
+	/* Check ACL for current user */
+	rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
+	if ((rights & DACL_READ) != DACL_READ) {
+	    /* DAV:need-privileges */
+	    txn->error.precond = &preconds[DAV_NEED_PRIVS];
+	    txn->error.resource = txn->req_tgt.path;
+	    txn->error.rights = DACL_READ;
+	    ret = HTTP_FORBIDDEN;
+	    goto done;
 	}
 
 	if (server) {
@@ -1722,6 +1746,7 @@ int meth_propfind(struct transaction_t *txn)
     fctx.authstate = httpd_authstate;
     fctx.mailbox = NULL;
     fctx.record = NULL;
+    fctx.reqd_privs = DACL_READ;
     fctx.calfilter = NULL;
     fctx.proc_by_resource = &propfind_by_resource;
     fctx.elist = NULL;
@@ -2852,7 +2877,7 @@ typedef int (*report_proc_t)(struct transaction_t *txn, xmlNodePtr inroot,
 static const struct report_type_t {
     const char *name;
     report_proc_t proc;
-    unsigned long need_privs;
+    unsigned long reqd_privs;
     unsigned flags;
 } report_types[] = {
     { "calendar-query", &report_cal_query, DACL_READ,
@@ -2948,12 +2973,15 @@ static int meth_report(struct transaction_t *txn)
 
 	/* Check ACL for current user */
 	rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
-	if ((rights & report->need_privs) != report->need_privs) {
-	    /* DAV:need-privileges */
-	    txn->error.precond = &preconds[DAV_NEED_PRIVS];
-	    txn->error.resource = txn->req_tgt.path;
-	    txn->error.rights = report->need_privs;
-	    ret = HTTP_FORBIDDEN;
+	if ((rights & report->reqd_privs) != report->reqd_privs) {
+	    if (report->reqd_privs == DACL_READFB) ret = HTTP_NOT_FOUND;
+	    else {
+		/* DAV:need-privileges */
+		txn->error.precond = &preconds[DAV_NEED_PRIVS];
+		txn->error.resource = txn->req_tgt.path;
+		txn->error.rights = report->reqd_privs;
+		ret = HTTP_FORBIDDEN;
+	    }
 	    goto done;
 	}
 
@@ -3017,6 +3045,7 @@ static int meth_report(struct transaction_t *txn)
     fctx.authstate = httpd_authstate;
     fctx.mailbox = NULL;
     fctx.record = NULL;
+    fctx.reqd_privs = report->reqd_privs;
     fctx.elist = NULL;
     fctx.root = outroot;
     fctx.ns = ns;
