@@ -122,7 +122,6 @@ extern char *optarg;
 /* global state */
 const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
-static char shutdownfilename[MAX_MAILBOX_PATH+1];
 static int imaps = 0;
 static sasl_ssf_t extprops_ssf = 0;
 static int nosaslpasswdcheck = 0;
@@ -776,9 +775,8 @@ static void imapd_reset(void)
  */
 int service_init(int argc, char **argv, char **envp)
 {
-    int ret;
     int opt;
-    
+
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
     setproctitle_init(argc, argv, envp);
 
@@ -788,14 +786,6 @@ int service_init(int argc, char **argv, char **envp)
 
     /* load the SASL plugins */
     global_sasl_init(1, 1, mysasl_cb);
-
-    ret = snprintf(shutdownfilename, sizeof(shutdownfilename),
-		   "%s/msg/shutdown", config_dir);
-    
-    if(ret < 0 || ret >= (int) sizeof(shutdownfilename)) {
-       fatal("shutdownfilename buffer too small (configdirectory too long)",
-	     EC_CONFIG);
-    }
 
     /* open the mboxlist, we'll need it for real work */
     mboxlist_init(0);
