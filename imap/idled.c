@@ -216,7 +216,7 @@ static void send_alert(const char *key,
 
     msg.which = IDLE_MSG_ALERT;
     strncpy(msg.mboxname, ".", sizeof(msg.mboxname));
-    
+
 
     for ( ; t ; t = n) {
 	n = t->next;
@@ -241,7 +241,6 @@ static void sighandler(int sig __attribute__((unused)))
 
 int main(int argc, char **argv)
 {
-    char shutdownfilename[1024];
     char *p = NULL;
     int opt;
     int nmbox = 0;
@@ -251,7 +250,6 @@ int main(int argc, char **argv)
     int nfds;
     struct timeval timeout;
     pid_t pid;
-    int fd;
     char *alt_config = NULL;
     struct sigaction action;
 
@@ -290,10 +288,6 @@ int main(int argc, char **argv)
     /* child */
 
     cyrus_init(alt_config, "idled", 0);
-
-    /* get name of shutdown file */
-    snprintf(shutdownfilename, sizeof(shutdownfilename), "%s/msg/shutdown",
-	     config_dir);
 
     /* Set inactivity timer (convert from minutes to seconds) */
     idle_timeout = config_getint(IMAPOPT_TIMEOUT);
@@ -338,7 +332,7 @@ int main(int argc, char **argv)
 	int n;
 
 	/* check for shutdown file */
-	if ((fd = open(shutdownfilename, O_RDONLY, 0)) != -1) {
+	if (shutdown_file(NULL, 0)) {
 	    /* signal all processes to shutdown */
 	    if (verbose || debugmode)
 		syslog(LOG_DEBUG, "IDLE_ALERT\n");
