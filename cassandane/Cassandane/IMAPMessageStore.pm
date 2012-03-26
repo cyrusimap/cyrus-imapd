@@ -384,4 +384,103 @@ sub xconvfetch_end
     $self->{fetched} = undef;
 }
 
+#
+# Begin idling.  Sends the IDLE command and waits for the server to
+# respond with the "+ idling" response.  Returns undef and sets $@
+# on error, or dies on timeout.
+#
+sub idle_begin
+{
+    my ($self) = @_;
+
+    my $talk = $self->get_client();
+
+    $talk->_send_cmd('idle');
+
+    my $got_idling = 0;
+    my $handlers = { idling => sub { $got_idling = 1; } };
+
+    # Await the "+ idling" response
+
+    # temporarily set Timeout
+    my $old_tout = $talk->{Timeout};
+    $talk->{Timeout} = 5;
+
+    # hack to force a line read
+    $talk->{ReadLine} = undef;
+
+    # temporarily replace CmdId with '+' so that
+    # _parse_response() will think it's a tag.
+    my $cmd_id = $talk->{CmdId};
+    $talk->{CmdId} = '+';
+
+    # Will die if timedout - failing the test
+    $talk->_parse_response($handlers);
+
+    # replace CmdId, Timeout
+    $talk->{CmdId} = $cmd_id;
+    $talk->{Timeout} = $old_tout;
+
+    if (!$got_idling)
+    {
+	$@ = "Did not receive expected \"idling\" response";
+	return undef;
+    }
+
+    return 1;
+}
+
+#
+# Read any unsolicited responses from the server.  The $handlers is
+# argument is like the one passed to Mail::IMAPTalk->_imap_cmd().  The
+# $tout argument is a timeout in seconds indicating how long to wait if
+# no responses have yet been received, with 0 specifically meaning "just
+# poll, do not block".  Returns true if at a response was read.
+#
+sub idle_response
+{
+    my ($self, $handlers, $tout) = @_;
+    my $talk = $self->get_client();
+
+    # Temporarily set the Timeout for _parse_response
+    my $old_tout = $talk->{Timeout};
+    $talk->{Timeout} = $tout;
+
+    # Temporarily set CmdId to fool _parse_response into returning as
+    # soon as it sees the first unsolicited response instead of waiting
+    # for the actual tagged response, which might be a very long time
+    # coming.
+    my $cmd_id = $talk->{CmdId};
+    $talk->{CmdId} = '*';
+
+    my $got = 0;
+    eval
+    {
+	$talk->_parse_response($handlers);
+	$got = 1;
+    };
+
+    # Restore old values of CmdId and Timeout
+    $talk->{CmdId} = $cmd_id;
+    $talk->{Timeout} = $old_tout;
+
+    return $got;
+}
+
+sub idle_end
+{
+    my ($self, $handlers) = @_;
+
+    my $talk = $self->get_client();
+
+    # Send the "DONE" continuation which cancels the IDLE command
+    $talk->_imap_socket_out("DONE\n");
+
+    # Get the final tagged response including any unsolicited responses not yet seen
+    $talk->_parse_response($handlers);
+
+    # Prepare for the next command
+    $talk->{CmdId}++;
+}
+
 1;
