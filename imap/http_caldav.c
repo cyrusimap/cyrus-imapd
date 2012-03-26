@@ -2626,6 +2626,9 @@ static int report_fb_query(struct transaction_t *txn,
     xmlNodePtr node;
     icalcomponent *cal;
 
+    /* Can not be run against a collection */
+    if (txn->req_tgt.resource) return HTTP_FORBIDDEN;
+
     memset(&filter, 0, sizeof(struct calquery_filter));
     filter.comp = COMP_VEVENT | COMP_VFREEBUSY;
     filter.start = icaltime_from_timet_with_zone(INT_MIN, 0, NULL);
