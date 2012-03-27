@@ -54,6 +54,7 @@ sub new
     return $class->SUPER::new({
 	config => $config,
 	deliver => 1,
+	start_instances => 0,
     }, @_);
 }
 
@@ -61,21 +62,12 @@ sub set_up
 {
     my ($self) = @_;
     $self->SUPER::set_up();
-    $self->{instance}->add_start(name => 'idled',
-				 argv => [ 'idled' ]);
 }
 
 sub tear_down
 {
     my ($self) = @_;
     $self->SUPER::tear_down();
-}
-
-sub config_disabled
-{
-    my ($self, $conf) = @_;
-    xlog "Setting imapidlepoll = 0";
-    $conf->set(imapidlepoll => '0');
 }
 
 sub test_disabled
@@ -85,7 +77,12 @@ sub test_disabled
     xlog "Test that the IDLE command can be disabled in";
     xlog "imapd.conf by settung imapidlepoll = 0";
 
-    my $store = $self->{store};
+    xlog "Starting up the instance";
+    $self->{instance}->{config}->set(imapidlepoll => '0');
+    $self->{instance}->start();
+    my $svc = $self->{instance}->get_service('imap');
+
+    my $store = $svc->create_store(folder => 'INBOX');
     my $talk = $store->get_client();
 
     xlog "The server should not report the IDLE capability";
@@ -106,32 +103,36 @@ sub test_basic
 
     xlog "Basic test of the IDLE command";
 
+    xlog "Starting up the instance";
+    $self->{instance}->{config}->set(imapidlepoll => '2');
+    $self->{instance}->add_start(name => 'idled',
+				 argv => [ 'idled' ]);
+    $self->{instance}->start();
     my $svc = $self->{instance}->get_service('imap');
 
-    my $idle_store = $svc->create_store(folder => 'INBOX');
-    my $idle_talk = $idle_store->get_client();
-    $idle_store->_select();
+    my $store = $svc->create_store(folder => 'INBOX');
+    my $talk = $store->get_client();
+    $store->_select();
 
     xlog "The server should report the IDLE capability";
-    $self->assert($idle_talk->capability()->{idle});
+    $self->assert($talk->capability()->{idle});
 
     xlog "Sending the IDLE command";
-    $idle_store->idle_begin()
+    $store->idle_begin()
 	or die "IDLE failed: $@";
 
     xlog "Poll for any unsolicited response - should be none";
-    my $r = $idle_store->idle_response({}, 0);
+    my $r = $store->idle_response({}, 0);
     $self->assert(!$r, "No unsolicted response");
 
     xlog "Sending DONE continuation";
-    $idle_store->idle_end({});
-    $self->assert_str_equals('ok', $idle_talk->get_last_completion_response());
+    $store->idle_end({});
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
     xlog "Testing that normal IMAP commands still work";
-    my $res = $idle_talk->status('INBOX', '(messages unseen)');
+    my $res = $talk->status('INBOX', '(messages unseen)');
     $self->assert_deep_equals({ messages => 0, unseen => 0 }, $res);
 }
-
 
 sub test_delivery
 {
@@ -139,43 +140,48 @@ sub test_delivery
 
     xlog "Test the IDLE command vs local delivery";
 
+    xlog "Starting up the instance";
+    $self->{instance}->{config}->set(imapidlepoll => '2');
+    $self->{instance}->add_start(name => 'idled',
+				 argv => [ 'idled' ]);
+    $self->{instance}->start();
     my $svc = $self->{instance}->get_service('imap');
 
-    my $idle_store = $svc->create_store(folder => 'INBOX');
-    my $idle_talk = $idle_store->get_client();
-    $idle_store->_select();
+    my $store = $svc->create_store(folder => 'INBOX');
+    my $talk = $store->get_client();
+    $store->_select();
 
     xlog "Sending the IDLE command";
-    $idle_store->idle_begin()
+    $store->idle_begin()
 	or die "IDLE failed: $@";
 
     xlog "Poll for any unsolicited response - should be none";
-    my $r = $idle_store->idle_response({}, 0);
+    my $r = $store->idle_response({}, 0);
     $self->assert(!$r, "No unsolicted response");
 
     xlog "sleeping for 3 seconds";
     sleep(3);
 
     xlog "Poll for any unsolicited response - should be none";
-    $r = $idle_store->idle_response({}, 0);
+    $r = $store->idle_response({}, 0);
     $self->assert(!$r, "No unsolicted response");
 
     xlog "Deliver a message";
     my $msg = $self->{gen}->generate(subject => "Message 1");
     $self->{instance}->deliver($msg);
 
-    $r = $idle_store->idle_response({}, 5);
+    $r = $store->idle_response({}, 5);
     $self->assert($r, "received an unsolicited response");
-    $r = $idle_store->idle_response({}, 5);
+    $r = $store->idle_response({}, 5);
     $self->assert($r, "received an unsolicited response");
-    $r = $idle_store->idle_response({}, 1);
+    $r = $store->idle_response({}, 1);
     $self->assert(!$r, "no more unsolicited responses");
-    $self->assert_num_equals(1, $idle_talk->get_response_code('exists'));
-    $self->assert_num_equals(1, $idle_talk->get_response_code('recent'));
+    $self->assert_num_equals(1, $talk->get_response_code('exists'));
+    $self->assert_num_equals(1, $talk->get_response_code('recent'));
 
     xlog "Sending DONE continuation";
-    $idle_store->idle_end({});
-    $self->assert_str_equals('ok', $idle_talk->get_last_completion_response());
+    $store->idle_end({});
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
 }
 
 sub test_shutdownfile
@@ -184,28 +190,33 @@ sub test_shutdownfile
 
     xlog "Test the IDLE command vs the shutdownfile";
 
+    xlog "Starting up the instance";
+    $self->{instance}->{config}->set(imapidlepoll => '2');
+    $self->{instance}->add_start(name => 'idled',
+				 argv => [ 'idled' ]);
+    $self->{instance}->start();
     my $svc = $self->{instance}->get_service('imap');
 
-    my $idle_store = $svc->create_store(folder => 'INBOX');
-    my $idle_talk = $idle_store->get_client();
-    $idle_store->_select();
+    my $store = $svc->create_store(folder => 'INBOX');
+    my $talk = $store->get_client();
+    $store->_select();
 
     xlog "Sending the IDLE command";
-    $idle_store->idle_begin()
+    $store->idle_begin()
 	or die "IDLE failed: $@";
 
     xlog "Poll for any unsolicited response - should be none";
-    my $r = $idle_store->idle_response({}, 0);
+    my $r = $store->idle_response({}, 0);
     $self->assert(!$r, "No unsolicted response");
 
     xlog "sleeping for 3 seconds";
     sleep(3);
 
     xlog "Poll for any unsolicited response - should be none";
-    $r = $idle_store->idle_response({}, 0);
+    $r = $store->idle_response({}, 0);
     $self->assert(!$r, "No unsolicted response");
 
-    $self->assert_null($idle_talk->get_response_code('alert'));
+    $self->assert_null($talk->get_response_code('alert'));
 
     xlog "Write some text to the shutdown file";
     my $admin_store = $svc->create_store(folder => 'user.casssandane',
@@ -215,9 +226,6 @@ sub test_shutdownfile
 		"/shared/vendor/cmu/cyrus-imapd/shutdown", $shut_message);
     $admin_store->disconnect();
     $admin_store = undef;
-
-    $self->{store}->disconnect();
-    $self->{store} = undef;
 
     # We want to override Mail::IMAPTalk's builtin handling of the BYE
     # untagged response, as it will 'die' immediately without parsing
@@ -240,7 +248,7 @@ sub test_shutdownfile
     };
 
     xlog "Check that we got a BYE [ALERT] response with the message";
-    $r = $idle_store->idle_response($handlers, 5);
+    $r = $store->idle_response($handlers, 5);
     $self->assert($r, "Got an unsolicited response");
     $self->assert_not_null($got_bye_alert);
     $self->assert_str_equals($shut_message, $got_bye_alert);
@@ -252,8 +260,8 @@ sub test_shutdownfile
 	# through _imap_cmd() because the latter will warn() to stderr
 	# about the exception we're about to generate, which is
 	# downright untidy.
-	$idle_talk->_send_cmd('status', 'INBOX', '(messages unseen)');
-	$idle_talk->_parse_response({});
+	$talk->_send_cmd('status', 'INBOX', '(messages unseen)');
+	$talk->_parse_response({});
     };
     my $mm = $@;    # this doesn't survive unless we save it
     $self->assert_matches(qr/IMAP Connection closed by other end/, $mm);
