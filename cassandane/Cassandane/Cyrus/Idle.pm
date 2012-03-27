@@ -71,6 +71,34 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
+sub config_disabled
+{
+    my ($self, $conf) = @_;
+    xlog "Setting imapidlepoll = 0";
+    $conf->set(imapidlepoll => '0');
+}
+
+sub test_disabled
+{
+    my ($self) = @_;
+
+    xlog "Test that the IDLE command can be disabled in";
+    xlog "imapd.conf by settung imapidlepoll = 0";
+
+    my $store = $self->{store};
+    my $talk = $store->get_client();
+
+    xlog "The server should not report the IDLE capability";
+    $self->assert(!$talk->capability()->{idle});
+
+    xlog "The IDLE command should not be recognised";
+    # Note that we don't use idle_begin() because that will get
+    # upset if we get "tag BAD ..." back instead of "+ something".
+    my $r = $talk->_imap_cmd('idle', 0, '');
+    $self->assert_null($r);
+    $self->assert_str_equals('bad', $talk->get_last_completion_response());
+    $self->assert_matches(qr/Unrecognized command/, $talk->get_last_error());
+}
 
 sub test_basic
 {
