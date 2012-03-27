@@ -208,7 +208,7 @@ int idle_wait(int otherfd)
 	    /* timeout */
 	    flags |= IDLE_MAILBOX|IDLE_ALERT;
 	}
-	if (r > 0 && FD_ISSET(idle_get_sock(), &rfds)) {
+	if (r > 0 && s >= 0 && FD_ISSET(s, &rfds)) {
 	    struct sockaddr_un from;
 	    idle_message_t msg;
 
