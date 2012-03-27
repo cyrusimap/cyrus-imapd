@@ -70,12 +70,51 @@ sub tear_down
     $self->SUPER::tear_down();
 }
 
+sub start_and_abort_idled
+{
+    my ($self) = @_;
+
+    # We don't start idled via the START section in cyrus.conf,
+    # because master would restart it when we kill it, and we
+    # want to test that the fallback to polling mode works even
+    # when it's not restarted.
+    #
+    # Also note, one of the effects of the -d option is to prevent
+    # idled forking, which lets us predict which pid to kill.
+
+    my $pid = $self->{instance}->run_command({
+	cyrus => 1,
+	background => 1
+    }, 'idled', '-d');
+    xlog "pid of idled should be $pid";
+
+    xlog "giving idled some time to start up";
+    sleep(1);
+
+    xlog "bring idled's reign to an abrupt and brutal end";
+    kill('KILL', $pid)
+	or die "Failed to kill idled $pid: $!";
+
+    # reap_command will 'die' because the process terminated
+    # on SIGKILL.  We need to avoid that stopping the test.
+    # But we still need to waitpid() to avoid zombies.
+    xlog "reaping pid $pid";
+    eval { $self->{instance}->reap_command($pid); };
+
+    # Now, no idled is running, but any state created by idled in the
+    # filesystem is still present.  In particular, the idle socket.
+    # Let's check that our assumption is correct.
+    xlog "check that idle left a socket lying around";
+    my $idle_sock = $self->{instance}->{basedir} . "/conf/socket/idle";
+    $self->assert( -S $idle_sock, "$idle_sock exists and is a socket");
+}
+
 sub test_disabled
 {
     my ($self) = @_;
 
     xlog "Test that the IDLE command can be disabled in";
-    xlog "imapd.conf by settung imapidlepoll = 0";
+    xlog "imapd.conf by setting imapidlepoll = 0";
 
     xlog "Starting up the instance";
     $self->{instance}->{config}->set(imapidlepoll => '0');
@@ -101,8 +140,6 @@ sub common_basic
 {
     my ($self) = @_;
 
-    xlog "Starting up the instance";
-    $self->{instance}->start();
     my $svc = $self->{instance}->get_service('imap');
 
     my $store = $svc->create_store(folder => 'INBOX');
@@ -138,6 +175,7 @@ sub test_basic_idled
     $self->{instance}->{config}->set(imapidlepoll => '2');
     $self->{instance}->add_start(name => 'idled',
 				 argv => [ 'idled' ]);
+    $self->{instance}->start();
     $self->common_basic();
 }
 
@@ -148,6 +186,20 @@ sub test_basic_noidled
     xlog "Basic test of the IDLE command, no idled started";
 
     $self->{instance}->{config}->set(imapidlepoll => '2');
+    $self->{instance}->start();
+    $self->common_basic();
+}
+
+sub test_basic_abortedidled
+{
+    my ($self) = @_;
+
+    xlog "Basic test of the IDLE command, idled started but aborted";
+
+    $self->{instance}->{config}->set(imapidlepoll => '2');
+    $self->{instance}->start();
+    $self->start_and_abort_idled();
+
     $self->common_basic();
 }
 
@@ -156,7 +208,6 @@ sub common_delivery
     my ($self) = @_;
 
     xlog "Starting up the instance";
-    $self->{instance}->start();
     my $svc = $self->{instance}->get_service('imap');
 
     my $store = $svc->create_store(folder => 'INBOX');
@@ -205,6 +256,7 @@ sub test_delivery_idled
     $self->{instance}->{config}->set(imapidlepoll => '2');
     $self->{instance}->add_start(name => 'idled',
 				 argv => [ 'idled' ]);
+    $self->{instance}->start();
     $self->common_delivery();
 }
 
@@ -214,8 +266,21 @@ sub test_delivery_noidled
 
     xlog "Test the IDLE command vs local delivery, no idled started";
 
-    xlog "Starting up the instance";
     $self->{instance}->{config}->set(imapidlepoll => '2');
+    $self->{instance}->start();
+    $self->common_delivery();
+}
+
+sub test_delivery_abortedidled
+{
+    my ($self) = @_;
+
+    xlog "Test the IDLE command vs local delivery, idled started but aborted";
+
+    $self->{instance}->{config}->set(imapidlepoll => '2');
+    $self->{instance}->start();
+    $self->start_and_abort_idled();
+
     $self->common_delivery();
 }
 
@@ -224,7 +289,6 @@ sub common_shutdownfile
     my ($self) = @_;
 
     xlog "Starting up the instance";
-    $self->{instance}->start();
     my $svc = $self->{instance}->get_service('imap');
 
     my $store = $svc->create_store(folder => 'INBOX');
@@ -306,6 +370,7 @@ sub test_shutdownfile_idled
     $self->{instance}->{config}->set(imapidlepoll => '2');
     $self->{instance}->add_start(name => 'idled',
 				 argv => [ 'idled' ]);
+    $self->{instance}->start();
     $self->common_shutdownfile();
 }
 
@@ -316,7 +381,22 @@ sub test_shutdownfile_noidled
     xlog "Test the IDLE command vs the shutdownfile";
 
     $self->{instance}->{config}->set(imapidlepoll => '2');
+    $self->{instance}->start();
     $self->common_shutdownfile();
 }
+
+sub test_shutdownfile_abortedidled
+{
+    my ($self) = @_;
+
+    xlog "Test the IDLE command vs the shutdownfile, idled started but aborted";
+
+    $self->{instance}->{config}->set(imapidlepoll => '2');
+    $self->{instance}->start();
+    $self->start_and_abort_idled();
+
+    $self->common_basic();
+}
+
 
 1;
