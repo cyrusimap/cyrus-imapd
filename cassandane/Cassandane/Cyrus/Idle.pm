@@ -97,16 +97,11 @@ sub test_disabled
     $self->assert_matches(qr/Unrecognized command/, $talk->get_last_error());
 }
 
-sub test_basic
+sub common_basic
 {
     my ($self) = @_;
 
-    xlog "Basic test of the IDLE command";
-
     xlog "Starting up the instance";
-    $self->{instance}->{config}->set(imapidlepoll => '2');
-    $self->{instance}->add_start(name => 'idled',
-				 argv => [ 'idled' ]);
     $self->{instance}->start();
     my $svc = $self->{instance}->get_service('imap');
 
@@ -134,16 +129,33 @@ sub test_basic
     $self->assert_deep_equals({ messages => 0, unseen => 0 }, $res);
 }
 
-sub test_delivery
+sub test_basic_idled
 {
     my ($self) = @_;
 
-    xlog "Test the IDLE command vs local delivery";
+    xlog "Basic test of the IDLE command, idled started";
 
-    xlog "Starting up the instance";
     $self->{instance}->{config}->set(imapidlepoll => '2');
     $self->{instance}->add_start(name => 'idled',
 				 argv => [ 'idled' ]);
+    $self->common_basic();
+}
+
+sub test_basic_noidled
+{
+    my ($self) = @_;
+
+    xlog "Basic test of the IDLE command, no idled started";
+
+    $self->{instance}->{config}->set(imapidlepoll => '2');
+    $self->common_basic();
+}
+
+sub common_delivery
+{
+    my ($self) = @_;
+
+    xlog "Starting up the instance";
     $self->{instance}->start();
     my $svc = $self->{instance}->get_service('imap');
 
@@ -184,16 +196,34 @@ sub test_delivery
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 }
 
-sub test_shutdownfile
+sub test_delivery_idled
 {
     my ($self) = @_;
 
-    xlog "Test the IDLE command vs the shutdownfile";
+    xlog "Test the IDLE command vs local delivery, idled started";
 
-    xlog "Starting up the instance";
     $self->{instance}->{config}->set(imapidlepoll => '2');
     $self->{instance}->add_start(name => 'idled',
 				 argv => [ 'idled' ]);
+    $self->common_delivery();
+}
+
+sub test_delivery_noidled
+{
+    my ($self) = @_;
+
+    xlog "Test the IDLE command vs local delivery, no idled started";
+
+    xlog "Starting up the instance";
+    $self->{instance}->{config}->set(imapidlepoll => '2');
+    $self->common_delivery();
+}
+
+sub common_shutdownfile
+{
+    my ($self) = @_;
+
+    xlog "Starting up the instance";
     $self->{instance}->start();
     my $svc = $self->{instance}->get_service('imap');
 
@@ -265,6 +295,28 @@ sub test_shutdownfile
     };
     my $mm = $@;    # this doesn't survive unless we save it
     $self->assert_matches(qr/IMAP Connection closed by other end/, $mm);
+}
+
+sub test_shutdownfile_idled
+{
+    my ($self) = @_;
+
+    xlog "Test the IDLE command vs the shutdownfile, idled started";
+
+    $self->{instance}->{config}->set(imapidlepoll => '2');
+    $self->{instance}->add_start(name => 'idled',
+				 argv => [ 'idled' ]);
+    $self->common_shutdownfile();
+}
+
+sub test_shutdownfile_noidled
+{
+    my ($self) = @_;
+
+    xlog "Test the IDLE command vs the shutdownfile";
+
+    $self->{instance}->{config}->set(imapidlepoll => '2');
+    $self->common_shutdownfile();
 }
 
 1;
