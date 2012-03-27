@@ -59,6 +59,7 @@ sub new
     my $want = {
 	instance => 1,
 	replica => 0,
+	start_instances => 1,
 	services => [ 'imap' ],
 	store => 1,
 	adminstore => 0,
@@ -173,6 +174,13 @@ sub set_up
     });
 
     $self->_create_instances();
+    $self->_start_instances()
+	if $self->{_want}->{start_instances};
+}
+
+sub _start_instances
+{
+    my ($self) = @_;
 
     $self->{instance}->start()
 	if (defined $self->{instance});
