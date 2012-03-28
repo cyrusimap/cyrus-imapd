@@ -3254,6 +3254,23 @@ int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname)
 }
 
 
+/* XXX  This needs to be done via an LDAP/DB lookup */
+static char *caladdress_to_userid(const char *addr)
+{
+    static char userid[MAX_MAILBOX_BUFFER];
+    char *p;
+
+    if (!addr) return NULL;
+
+    p = (char *) addr;
+    if (!strncmp(addr, "mailto:", 7)) p += 7;
+    strlcpy(userid, p, sizeof(userid));
+    if ((p = strchr(userid, '@'))) *p = '\0';
+
+    return userid;
+}
+
+
 /* Perform a Scheduling Busy Time request */
 static int sched_busytime(struct transaction_t *txn)
 {
@@ -3261,10 +3278,11 @@ static int sched_busytime(struct transaction_t *txn)
     char *server, *acl, mailboxname[MAX_MAILBOX_BUFFER];
     const char **hdr;
     icalcomponent *ical, *comp;
-    icalcomponent_kind kind;
-    icalproperty_method meth;
-    icalproperty *prop;
-    const char *uid, *organizer = NULL, *attendee;
+    icalcomponent_kind kind = 0;
+    icalproperty_method meth = 0;
+    icalproperty *prop = NULL;
+    const char *uid = NULL, *organizer = NULL, *orgid = NULL;
+    struct auth_state *org_authstate = NULL;
     xmlDocPtr doc = NULL;
     xmlNodePtr root = NULL;
     xmlNsPtr calns = NULL, davns = NULL;
@@ -3295,14 +3313,12 @@ static int sched_busytime(struct transaction_t *txn)
     }
 
     /* Check ACL for current user */
-    /* XXX  Setup new right for schedule-outbox */
     rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
-    if (!(rights & DACL_WRITECONT) || !(rights & DACL_ADDRSRC)) {
+    if (!(rights & DACL_SCHED)) {
 	/* DAV:need-privileges */
 	txn->error.precond = &preconds[DAV_NEED_PRIVS];
 	txn->error.resource = txn->req_tgt.path;
-	txn->error.rights =
-	    !(rights & DACL_WRITECONT) ? DACL_WRITECONT : DACL_ADDRSRC;
+	txn->error.rights = DACL_SCHED;
 	return HTTP_FORBIDDEN;
     }
 
@@ -3344,26 +3360,37 @@ static int sched_busytime(struct transaction_t *txn)
 
     meth = icalcomponent_get_method(ical);
     comp = icalcomponent_get_first_real_component(ical);
-    kind = icalcomponent_isa(comp);
+    if (comp) {
+	uid = icalcomponent_get_uid(comp);
+	kind = icalcomponent_isa(comp);
+	prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+    }
 
-    if (!meth || meth != ICAL_METHOD_REQUEST ||
-	kind != ICAL_VFREEBUSY_COMPONENT) {
+    /* Check method preconditions */
+    if (!meth || meth != ICAL_METHOD_REQUEST || !uid ||
+	kind != ICAL_VFREEBUSY_COMPONENT || !prop) {
 	txn->error.precond = &preconds[CALDAV_VALID_SCHED];
 	return HTTP_BAD_REQUEST;
     }
 
-    uid = icalcomponent_get_uid(comp);
-    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
-    if (prop) {
-	organizer = icalproperty_get_organizer(prop);
+    organizer = icalproperty_get_organizer(prop);
+    if (organizer) orgid = caladdress_to_userid(organizer);
 
-	/* XXX  Check ORGANIZER against Outbox owner */
+    if (!orgid || strncmp(orgid, txn->req_tgt.user, txn->req_tgt.userlen)) {
+	txn->error.precond = &preconds[CALDAV_VALID_ORGANIZER];
+	return HTTP_FORBIDDEN;
     }
 
+    org_authstate = auth_newstate(orgid);
+
+    /* Start construction of our schedule-response */
     if (!(doc = xmlNewDoc(BAD_CAST "1.0")) ||
 	!(root = xmlNewNode(NULL, BAD_CAST "schedule-response")) ||
 	!(calns = xmlNewNs(root, BAD_CAST XML_NS_CALDAV, BAD_CAST "C")) ||
 	!(davns = xmlNewNs(root, BAD_CAST XML_NS_DAV, BAD_CAST "D"))) {
+	ret = HTTP_SERVER_ERROR;
+	txn->error.desc = "Unable to create XML response";
+	goto done;
     }
 
     xmlDocSetRootElement(doc, root);
@@ -3381,14 +3408,19 @@ static int sched_busytime(struct transaction_t *txn)
     fctx.userid = httpd_userid;
     fctx.userisadmin = httpd_userisadmin;
     fctx.authstate = httpd_authstate;
+    fctx.reqd_privs = 0;  /* handled by CALDAV:schedule-deliver on Inbox */
     fctx.calfilter = &filter;
     fctx.errstr = &txn->error.desc;
     fctx.ret = &ret;
 
-    prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
-    while (prop) {
+    for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
+	 prop;
+	 prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
+	const char *attendee, *userid;
 	xmlNodePtr resp, recip, cdata;
+	struct mboxlist_entry mbentry;
 	icalcomponent *fb;
+	int r;
 
 	attendee = icalproperty_get_attendee(prop);
 
@@ -3396,9 +3428,31 @@ static int sched_busytime(struct transaction_t *txn)
 	recip = xmlNewChild(resp, NULL, BAD_CAST "recipient", NULL);
 	xmlNewChild(recip, davns, BAD_CAST "href", BAD_CAST attendee);
 
-	/* XXX  This needs to be done via an LDAP/DB lookup */
+	userid = caladdress_to_userid(attendee);
+
+	/* Check ACL of ORGANIZER on attendee's Scheduling Inbox */
 	snprintf(mailboxname, sizeof(mailboxname),
-		 "user.%.*s.#calendars", strcspn(attendee+7, "@"), attendee+7);
+		 "user.%s.#calendars.Inbox", userid);
+
+	if ((r = mboxlist_lookup(mailboxname, &mbentry, NULL))) {
+	    syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
+		   mailboxname, error_message(r));
+	    xmlNewChild(resp, NULL, BAD_CAST "request-status",
+			BAD_CAST "3.7;Invalid calendar user");
+	    continue;
+	}
+
+	rights =
+	    mbentry.acl ? cyrus_acl_myrights(org_authstate, mbentry.acl) : 0;
+	if (!(rights & DACL_SCHED)) {
+	    xmlNewChild(resp, NULL, BAD_CAST "request-status",
+			BAD_CAST "3.8;No authority");
+	    continue;
+	}
+
+	/* Start query at attendee's calendar-home-set */
+	snprintf(mailboxname, sizeof(mailboxname),
+		 "user.%s.#calendars", userid);
 
 	fctx.req_tgt->collection = NULL;
 	fctx.busytime.len = 0;
@@ -3420,13 +3474,13 @@ static int sched_busytime(struct transaction_t *txn)
 	    xmlNewChild(resp, NULL, BAD_CAST "request-status",
 			BAD_CAST "3.7;Invalid calendar user");
 	}
-
-	prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY);
     }
 
     /* Output the XML response */
     if (!ret) xml_response(HTTP_OK, txn, doc);
 
+  done:
+    if (org_authstate) auth_freestate(org_authstate);
     if (fctx.busytime.busy) free(fctx.busytime.busy);
     if (doc) xmlFree(doc);
     icalcomponent_free(ical);

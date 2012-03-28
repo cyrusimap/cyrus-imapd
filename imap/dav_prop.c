@@ -732,6 +732,13 @@ static int add_privs(int rights, int implicit,
 	xmlNewChild(priv, ns[NS_CYRUS], BAD_CAST  "admin", NULL);
     }
 
+    if (rights & DACL_SCHED) {
+	priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
+	ensure_ns(ns, NS_CALDAV, root, XML_NS_CALDAV, "C");
+	/* XXX  How to determine if its Inbox or Outbox? */
+	xmlNewChild(priv, ns[NS_CALDAV], BAD_CAST  "schedule-send", NULL);
+    }
+
     return 0;
 }
 
@@ -1437,7 +1444,8 @@ const struct precond preconds[] =
     { "valid-filter", NS_CALDAV },
 
     /* CalDAV Scheduling (draft-desruisseaux-caldav-sched) preconditions */
-    { "valid-scheduling-message", NS_CALDAV }
+    { "valid-scheduling-message", NS_CALDAV },
+    { "valid-organizer", NS_CALDAV }
 };
 
 

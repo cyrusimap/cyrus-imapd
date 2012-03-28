@@ -101,6 +101,20 @@ enum {
 /* CalDAV (RFC 4791) privileges */
 #define DACL_READFB	ACL_USER9	/* CALDAV:read-free-busy
 					   (implicit if user has DAV:read) */
+
+/* CalDAV scheduling (draft-desruisseaux-caldav-sched) privileges */
+#define DACL_SCHED	ACL_USER8	/* For Scheduling Inbox:
+					   CALDAV:schedule-deliver (aggregates
+					   CALDAV:schedule-deliver-invite,
+					   schedule-deliver-reply,
+					   schedule-query-freebusy);
+
+					   For Scheduling Outbox:
+					   CALDAV:schedule-send (aggregates
+					   CALDAV:schedule-send-invite,
+					   schedule-send-reply,
+					   schedule-send-freebusy) */
+
 /* Index into preconditions array */
 enum {
     DAV_PROT_PROP = 0,
@@ -121,7 +135,8 @@ enum {
     CALDAV_LOCATION_OK,
     CALDAV_SUPP_FILTER,
     CALDAV_VALID_FILTER,
-    CALDAV_VALID_SCHED
+    CALDAV_VALID_SCHED,
+    CALDAV_VALID_ORGANIZER
 };
 
 /* Structure for precondition/postcondition errors */
