@@ -50,8 +50,6 @@
 #include "xmalloc.h"
 #include "rfc822date.h"
 
-#define ANNOT_NS	"/vendor/cmu/cyrus-imapd/"
-
 /* Bitmask of calendar components */
 enum {
     CAL_COMP_VEVENT =		(1<<0),
@@ -1207,6 +1205,110 @@ static int proppatch_calcompset(xmlNodePtr prop, unsigned set,
 }
 
 
+/* Callback to fetch CALDAV:schedule-calendar-transp */
+static int propfind_caltransp(xmlNodePtr prop,
+			      struct propfind_ctx *fctx,
+			      xmlNodePtr resp,
+			      struct propstat propstat[],
+			      void *rock __attribute__((unused)))
+{
+    struct annotation_data attrib;
+    const char *value = NULL;
+    int r = 0;
+
+    if ((fctx->req_tgt->namespace == URL_NS_CALENDAR) &&
+	fctx->req_tgt->collection && !fctx->req_tgt->resource) {
+	const char *prop_annot =
+	    ANNOT_NS "CALDAV:schedule-calendar-transp";
+
+	if (!(r = annotatemore_lookup(fctx->mailbox->name, prop_annot,
+				      /* shared */ "", &attrib))
+	    && attrib.value) {
+	    value = attrib.value;
+	}
+    }
+
+    if (r) {
+	xml_add_prop(HTTP_SERVER_ERROR, resp,
+		     &propstat[PROPSTAT_ERROR], prop, NULL, NULL);
+    }
+    else if (value) {
+	xmlNodePtr node;
+
+	node = xml_add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK],
+			    prop, NULL, NULL);
+	xmlNewChild(node, fctx->ns[NS_CALDAV], BAD_CAST value, NULL);
+    }
+    else {
+	xml_add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND],
+		     prop, NULL, NULL);
+    }
+
+    return 0;
+}
+
+
+/* Callback to write schedule-calendar-transp property */
+static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
+			       struct proppatch_ctx *pctx,
+			       struct propstat propstat[],
+			       void *rock __attribute__((unused)))
+{
+    if ((pctx->req_tgt->namespace == URL_NS_CALENDAR) &&
+	pctx->req_tgt->collection && !pctx->req_tgt->resource) {
+	const char *prop_annot =
+	    ANNOT_NS "CALDAV:schedule-calendar-transp";
+	const char *transp = "";
+
+	if (set) {
+	    xmlNodePtr cur;
+
+	    /* Find the value */
+	    for (cur = prop->children; cur; cur = cur->next) {
+
+		/* Make sure its a value we understand */
+		if (cur->type != XML_ELEMENT_NODE) continue;
+		if (!xmlStrcmp(cur->name, BAD_CAST "opaque") ||
+		    !xmlStrcmp(cur->name, BAD_CAST "transparent")) {
+		    transp = (const char *) cur->name;
+		    break;
+		}
+		else {
+		    /* Unknown value */
+		    xml_add_prop(HTTP_CONFLICT, pctx->root,
+				 &propstat[PROPSTAT_CONFLICT], prop, NULL, NULL);
+
+		    *pctx->ret = HTTP_FORBIDDEN;
+
+		    return 0;
+		}
+	    }
+	}
+
+	if (!annotatemore_write_entry(pctx->mailboxname,
+				      prop_annot, /* shared */ "",
+				      transp, NULL,
+				      strlen(transp), 0,
+				      &pctx->tid)) {
+	    xml_add_prop(HTTP_OK, pctx->root,
+			 &propstat[PROPSTAT_OK], prop, NULL, NULL);
+	}
+	else {
+	    xml_add_prop(HTTP_SERVER_ERROR, pctx->root,
+			 &propstat[PROPSTAT_ERROR], prop, NULL, NULL);
+	}
+    }
+    else {
+	xml_add_prop(HTTP_FORBIDDEN, pctx->root, &propstat[PROPSTAT_FORBID],
+		     prop, NULL, NULL);
+
+	*pctx->ret = HTTP_FORBIDDEN;
+    }
+
+    return 0;
+}
+
+
 /* Callback to fetch properties from resource header */
 static int propfind_fromhdr(xmlNodePtr prop,
 			    struct propfind_ctx *fctx, xmlNodePtr resp,
@@ -1396,6 +1498,8 @@ static const struct prop_entry prop_entries[] =
     /* CalDAV Scheduling properties */
     { "schedule-inbox-URL", XML_NS_CALDAV, 0, propfind_calurl, NULL, SCHED_INBOX },
     { "schedule-outbox-URL", XML_NS_CALDAV, 0, propfind_calurl, NULL, SCHED_OUTBOX },
+    { "schedule-calendar-transp", XML_NS_CALDAV, 0,
+      propfind_caltransp, proppatch_caltransp, NULL },
     { "calendar-user-address-set", XML_NS_CALDAV, 0, propfind_caluseraddr, NULL, NULL },
     { "calendar-user-type", XML_NS_CALDAV, 0, NULL, NULL, NULL },
 

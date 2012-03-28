@@ -1522,6 +1522,16 @@ static int propfind_by_collection(char *mboxname,
     size_t len;
     int r = 0, rights;
 
+    if (fctx->calfilter && fctx->calfilter->check_transp) {
+	/* Check if the collection is marked as transparent */
+	struct annotation_data attrib;
+	const char *prop_annot =
+	    ANNOT_NS "CALDAV:schedule-calendar-transp";
+
+	if (!annotatemore_lookup(mboxname, prop_annot, /* shared */ "", &attrib)
+	    && attrib.value && !strcmp(attrib.value, "transparent")) return 0;
+    }
+
     /* Check ACL on mailbox for current user */
     if ((r = mboxlist_lookup(mboxname, &mbentry, NULL))) {
 	syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
@@ -3400,6 +3410,7 @@ static int sched_busytime(struct transaction_t *txn)
     filter.comp = COMP_VEVENT | COMP_VFREEBUSY;
     filter.start = icalcomponent_get_dtstart(comp);
     filter.end = icalcomponent_get_dtend(comp);
+    filter.check_transp = 1;
 
     /* Populate our propfind context */
     memset(&fctx, 0, sizeof(struct propfind_ctx));

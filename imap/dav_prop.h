@@ -51,6 +51,8 @@
 #include <libxml/tree.h>
 
 
+#define ANNOT_NS	"/vendor/cmu/cyrus-imapd/"
+
 #define SCHED_INBOX	"Inbox/"
 #define SCHED_OUTBOX	"Outbox/"
 
@@ -160,9 +162,10 @@ enum {
     PROPSTAT_UNAUTH,
     PROPSTAT_FORBID,
     PROPSTAT_NOTFOUND,
+    PROPSTAT_CONFLICT,
     PROPSTAT_ERROR
 };
-#define NUM_PROPSTAT 5
+#define NUM_PROPSTAT 6
 
 /* Context for fetching properties */
 struct propfind_entry_list;
@@ -171,6 +174,7 @@ struct calquery_filter {
     unsigned comp;
     struct icaltimetype start;
     struct icaltimetype end;
+    unsigned check_transp;
 };
 
 struct busytime {
