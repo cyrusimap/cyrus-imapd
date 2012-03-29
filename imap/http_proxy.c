@@ -66,6 +66,7 @@
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
 
+#include <libxml/uri.h>
 
 static int login(struct backend *s, const char *server __attribute__((unused)),
 		 struct protocol_t *prot, const char *userid,
@@ -664,6 +665,7 @@ static void send_response(struct protstream *pout,
 int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 {
     int r = 0;
+    xmlChar *uri;
     unsigned code;
     const char *statline;
     hdrcache_t resp_hdrs = NULL;
@@ -678,7 +680,9 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
      * - Use all cached end-to-end headers from client
      * - Body will be sent using "chunked" TE
      */
-    prot_printf(be->out, "%s %s", txn->meth, txn->req_tgt.path);
+    uri = xmlURIEscapeStr(BAD_CAST txn->req_tgt.path, BAD_CAST "/");
+    prot_printf(be->out, "%s %s", txn->meth, uri);
+    free(uri);
     if (*txn->req_tgt.query) {
 	prot_printf(be->out, "?%s", txn->req_tgt.query);
     }
