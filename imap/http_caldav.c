@@ -178,7 +178,7 @@ const struct namespace_t namespace_principal = {
  */
 static int meth_acl(struct transaction_t *txn)
 {
-    int ret = 0, r, rights;
+    int ret = 0, r, rights, is_inbox = 0, is_outbox = 0;
     xmlDocPtr indoc = NULL;
     xmlNodePtr root, ace;
     char *server, *aclstr, mailboxname[MAX_MAILBOX_BUFFER];
@@ -265,6 +265,10 @@ static int meth_acl(struct transaction_t *txn)
 	ret = HTTP_BAD_REQUEST;
 	goto done;
     }
+
+    /* See if its a scheduling collection */
+    if (!strcmp(txn->req_tgt.collection, SCHED_INBOX)) is_inbox++;
+    else if (!strcmp(txn->req_tgt.collection, SCHED_INBOX)) is_outbox++;
 
     /* Parse the DAV:ace elements */
     for (ace = root->children; ace; ace = ace->next) {
@@ -363,25 +367,27 @@ static int meth_acl(struct transaction_t *txn)
 				   BAD_CAST XML_NS_DAV)) {
 			/* WebDAV privileges */
 			if (!xmlStrcmp(priv->name,
-				       BAD_CAST "all"))
+				       BAD_CAST "all")) {
 			    rights |= DACL_ALL | DACL_READFB;
+			    if (is_inbox || is_outbox) rights |= DACL_SCHED;
+			}
 			else if (!xmlStrcmp(priv->name,
-				       BAD_CAST "read"))
+					    BAD_CAST "read"))
 			    rights |= DACL_READ | DACL_READFB;
 			else if (!xmlStrcmp(priv->name,
-				       BAD_CAST "write"))
+					    BAD_CAST "write"))
 			    rights |= DACL_WRITE;
 			else if (!xmlStrcmp(priv->name,
-				       BAD_CAST "write-content"))
+					    BAD_CAST "write-content"))
 			    rights |= DACL_WRITECONT;
 			else if (!xmlStrcmp(priv->name,
-				       BAD_CAST "write-properties"))
+					    BAD_CAST "write-properties"))
 			    rights |= DACL_WRITEPROPS;
 			else if (!xmlStrcmp(priv->name,
-				       BAD_CAST "bind"))
+					    BAD_CAST "bind"))
 			    rights |= DACL_BIND;
 			else if (!xmlStrcmp(priv->name,
-				       BAD_CAST "unbind"))
+					    BAD_CAST "unbind"))
 			    rights |= DACL_UNBIND;
 			else if (!xmlStrcmp(priv->name,
 					    BAD_CAST "read-current-user-privilege-set")
@@ -405,11 +411,42 @@ static int meth_acl(struct transaction_t *txn)
 		    }
 
 		    else if (!xmlStrcmp(priv->ns->href,
-				   BAD_CAST XML_NS_CALDAV)
-			     /* CalDAV privileges */
-			     && !xmlStrcmp(priv->name,
-				   BAD_CAST "read-free-busy")) {
-			rights |= DACL_READFB;
+					BAD_CAST XML_NS_CALDAV)) {
+			/* CalDAV privileges */
+			if (!xmlStrcmp(priv->name,
+				       BAD_CAST "read-free-busy"))
+			    rights |= DACL_READFB;
+			else if (is_inbox &&
+				 !xmlStrcmp(priv->name,
+					    BAD_CAST "schedule-deliver"))
+			    rights |= DACL_SCHED;
+			else if (is_outbox &&
+				 !xmlStrcmp(priv->name,
+					    BAD_CAST "schedule-send"))
+			    rights |= DACL_SCHED;
+			else if (!xmlStrcmp(priv->name,
+					    BAD_CAST "schedule-deliver-invite")
+				 || !xmlStrcmp(priv->name,
+					       BAD_CAST "schedule-deliver-reply")
+				 || !xmlStrcmp(priv->name,
+					       BAD_CAST "schedule-query-freebusy")
+				 || !xmlStrcmp(priv->name,
+					       BAD_CAST "schedule-send-invite")
+				 || !xmlStrcmp(priv->name,
+					       BAD_CAST "schedule-send-reply")
+				 || !xmlStrcmp(priv->name,
+					       BAD_CAST "schedule-send-freebusy")) {
+			    /* DAV:no-abstract */
+			    txn->error.precond = &preconds[DAV_NO_ABSTRACT];
+			    ret = HTTP_FORBIDDEN;
+			    goto done;
+			}
+			else {
+			    /* DAV:not-supported-privilege */
+			    txn->error.precond = &preconds[DAV_SUPP_PRIV];
+			    ret = HTTP_FORBIDDEN;
+			    goto done;
+			}
 		    }
 
 		    else if (!xmlStrcmp(priv->ns->href,

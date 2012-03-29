@@ -73,8 +73,15 @@ static const struct cal_comp_t {
     { NULL, 0 }
 };
 
+/* Bitmask of privilege flags */
+enum {
+    PRIV_IMPLICIT =		(1<<0),
+    PRIV_INBOX =		(1<<1),
+    PRIV_OUTBOX =		(1<<2)
+};
+
 extern int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname);
-static int add_privs(int rights, int implicit,
+static int add_privs(int rights, unsigned flags,
 		     xmlNodePtr parent, xmlNodePtr root, xmlNsPtr *ns);
 
 
@@ -163,9 +170,19 @@ xmlNodePtr xml_add_error(xmlNodePtr root, struct error_t *err,
 
     if ((err->precond == &preconds[DAV_NEED_PRIVS]) &&
 	err->resource && err->rights) {
+	unsigned flags = 0;
+	size_t rlen = strlen(err->resource);
+	const char *p = err->resource + rlen;
+
 	node = xmlNewChild(node, NULL, BAD_CAST "resource", NULL);
 	xmlNewChild(node, NULL, BAD_CAST "href", BAD_CAST err->resource);
-	add_privs(err->rights, 0, node, root, avail_ns);
+
+	if (rlen > 6 && !strcmp(p-6, SCHED_INBOX))
+	    flags |= PRIV_INBOX;
+	else if (rlen > 7 && !strcmp(p-7, SCHED_OUTBOX))
+	    flags |= PRIV_OUTBOX;
+
+	add_privs(err->rights, flags, node, root, avail_ns);
     }
 
     return root;
@@ -635,6 +652,29 @@ static int propfind_supprivset(xmlNodePtr prop,
     add_suppriv(agg, "write-acl", NULL, 1, "Write ACL");
     add_suppriv(agg, "unlock", NULL, 1, "Unlock resource");
 
+    if (!strcmp(fctx->req_tgt->collection, SCHED_INBOX)) {
+	ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
+	agg = add_suppriv(all, "schedule-deliver", fctx->ns[NS_CALDAV], 0,
+			  "Deliver scheduling messages");
+	add_suppriv(agg, "schedule-deliver-invite", fctx->ns[NS_CALDAV], 1,
+			  "Deliver scheduling messages from Organizers");
+	add_suppriv(agg, "schedule-deliver-reply", fctx->ns[NS_CALDAV], 1,
+			  "Deliver scheduling messages from Attendees");
+	add_suppriv(agg, "schedule-query-freebusy", fctx->ns[NS_CALDAV], 1,
+			  "Accept freebusy requests");
+    }
+    else if (!strcmp(fctx->req_tgt->collection, SCHED_OUTBOX)) {
+	ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
+	agg = add_suppriv(all, "schedule-send", fctx->ns[NS_CALDAV], 0,
+			  "Send scheduling messages");
+	add_suppriv(agg, "schedule-send-invite", fctx->ns[NS_CALDAV], 1,
+			  "Send scheduling messages by Organizers");
+	add_suppriv(agg, "schedule-send-reply", fctx->ns[NS_CALDAV], 1,
+			  "Send scheduling messages by Attendees");
+	add_suppriv(agg, "schedule-send-freebusy", fctx->ns[NS_CALDAV], 1,
+			  "Submit freebusy requests");
+    }
+
     return 0;
 }
 
@@ -665,7 +705,7 @@ static int propfind_curprin(xmlNodePtr prop,
 }
 
 
-static int add_privs(int rights, int implicit,
+static int add_privs(int rights, unsigned flags,
 		     xmlNodePtr parent, xmlNodePtr root, xmlNsPtr *ns)
 {
     xmlNodePtr priv;
@@ -677,7 +717,7 @@ static int add_privs(int rights, int implicit,
     if ((rights & DACL_READ) == DACL_READ) {
 	priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
 	xmlNewChild(priv, NULL, BAD_CAST "read", NULL);
-	if (implicit) rights |= DACL_READFB;
+	if (flags & PRIV_IMPLICIT) rights |= DACL_READFB;
     }
     if (rights & DACL_READFB) {
 	priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
@@ -733,8 +773,10 @@ static int add_privs(int rights, int implicit,
     if (rights & DACL_SCHED) {
 	priv = xmlNewChild(parent, NULL, BAD_CAST "privilege", NULL);
 	ensure_ns(ns, NS_CALDAV, root, XML_NS_CALDAV, "C");
-	/* XXX  How to determine if its Inbox or Outbox? */
-	xmlNewChild(priv, ns[NS_CALDAV], BAD_CAST  "schedule-send", NULL);
+	if (flags & PRIV_INBOX)
+	    xmlNewChild(priv, ns[NS_CALDAV], BAD_CAST "schedule-deliver", NULL);
+	else if (flags & PRIV_OUTBOX)
+	    xmlNewChild(priv, ns[NS_CALDAV], BAD_CAST "schedule-send", NULL);
     }
 
     return 0;
@@ -749,6 +791,7 @@ static int propfind_curprivset(xmlNodePtr prop,
 			       void *rock __attribute__((unused)))
 {
     int rights;
+    unsigned flags = PRIV_IMPLICIT;
 
     if (!fctx->mailbox) {
 	xml_add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND],
@@ -775,7 +818,12 @@ static int propfind_curprivset(xmlNodePtr prop,
 	set = xml_add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK],
 			   prop, NULL, NULL);
 
-	add_privs(rights, 1, set, resp->parent, fctx->ns);
+	if (!strcmp(fctx->req_tgt->collection, SCHED_INBOX))
+	    flags |= PRIV_INBOX;
+	else if (!strcmp(fctx->req_tgt->collection, SCHED_OUTBOX))
+	    flags |= PRIV_OUTBOX;
+
+	add_privs(rights, flags, set, resp->parent, fctx->ns);
     }
 
     return 0;
@@ -804,6 +852,12 @@ static int propfind_acl(xmlNodePtr prop,
     else {
 	xmlNodePtr acl;
 	char *aclstr, *userid;
+	unsigned flags = PRIV_IMPLICIT;
+
+	if (!strcmp(fctx->req_tgt->collection, SCHED_INBOX))
+	    flags |= PRIV_INBOX;
+	else if (!strcmp(fctx->req_tgt->collection, SCHED_OUTBOX))
+	    flags |= PRIV_OUTBOX;
 
 	/* Start the acl XML response */
 	acl = xml_add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK],
@@ -859,7 +913,7 @@ static int propfind_acl(xmlNodePtr prop,
 
 	    node = xmlNewChild(ace, NULL,
 			       BAD_CAST (deny ? "deny" : "grant"), NULL);
-	    add_privs(rights, 1, node, resp->parent, fctx->ns);
+	    add_privs(rights, flags, node, resp->parent, fctx->ns);
 
 	    if (fctx->req_tgt->resource) {
 		node = xmlNewChild(ace, NULL, BAD_CAST "inherited", NULL);
