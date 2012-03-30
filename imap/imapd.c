@@ -3158,7 +3158,16 @@ static int catenate_url(const char *s, const char *cur_name, FILE *f,
 	    mboxlist_entry_free(&mbentry);
 
 	    /* local mailbox */
-	    if (!r) r = index_open(mailboxname, NULL, &state);
+	    if (!r) {
+		struct index_init init;
+		memset(&init, 0, sizeof(init));
+		init.qresync = imapd_client_capa & CAPA_QRESYNC;
+		init.userid = imapd_userid;
+		init.authstate = imapd_authstate;
+		init.out = imapd_out;
+		r = index_open(mailboxname, &init, &state);
+		if (init.vanishedlist) seqset_free(init.vanishedlist);
+	    }
 	    if (!r) doclose = 1;
 
 	    if (!r && !(state->myrights & ACL_READ))
