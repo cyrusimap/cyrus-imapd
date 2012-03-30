@@ -4,6 +4,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta name="generator" content="HTML Tidy, see www.w3.org" />
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8" />
 <title>Changes to the Cyrus IMAP Server</title>
 </head>
 <body>
@@ -467,7 +468,7 @@ support for deprecated (compile-time) LISTEXT IMAP extension.
   Cyril Servant &lt;elfejoyeux@gmail.com&gt;) </li>
 <li>Added <tt>annotation_definitions</tt> option for specifying
   external (third-party) annotations. (courtesy of Thomas
-  Viehmann <tv@beamnet.de>)</li>
+  Viehmann &lt;tv@beamnet.de&gt;)</li>
 <li>Added <tt>sync_compress</tt> option to compress replication traffic</li>
 <li>Added <tt>user_folder_limit</tt> option to limit the number of
   folders a non-admin user is allowed to create.</li>
@@ -897,7 +898,7 @@ annotation).</li>
 RFC3977).</li>
 <li>Updated IMAP UIDPLUS extension to be compliant with latest
 specification (RFC4315).</li>
-<li>Performance improvements to <tt>quota</tt> utility.<li>
+<li>Performance improvements to <tt>quota</tt> utility.</li>
 <li>Fixed possible race condition in IMAP IDLE.</li>
 <li>Made <tt>ptloader</tt> runtime configurable.</li>
 <li>Added more extensive output to <tt>arbitron</tt>.</li>
@@ -1020,7 +1021,7 @@ Special care needs to be taken when berkley db is used for mboxlist.</li>
 <li>Runtime configuration of the Cyrus databases.  The cyrudb backend
 used for each database can be specified with an <tt>imapd.conf</tt>
 option.  <b>NOTE:</b> You MUST convert the database using
-<tt>cvt_cyrusdb</tt> BEFORE changing the backend in <tt>imapd.conf</tt>.
+<tt>cvt_cyrusdb</tt> BEFORE changing the backend in <tt>imapd.conf</tt>.</li>
 <li>Sendmail socket map support (<tt>smmapd</tt>) for verifying that
 mailboxes exist and are deliverable before accepting the message and
 sending it to Cyrus.</li>
@@ -1051,7 +1052,7 @@ support (Thanks in large part to work by Christian Schulte &lt;cs@schulte.it&gt;
 &lt;hmh@debian.org&gt;)</li>
 <li>Significantly improved message header caching (based in large part
 on code supplied by David Carter &lt;David.Carter@ucs.cam.ac.uk&gt; from
-the University of Cambridge)
+the University of Cambridge)</li>
 <li>The sieve bytecode format has been updated once more, to correctly
 handle short-circuiting of the allof and anyof operators</li>
 <li>Support for warning quota based on absolute mailbox size</li>
@@ -1234,19 +1235,19 @@ as a pre-login buffer overflow in the IMAP parsing code.</li>
 
 <h2>Changes to the Cyrus IMAP Server since 2.1.9</h2>
 <ul>
-<li>support Berkley DB 4.1
-<li>more portable use of errno throughout
-<li>timsieved now does telemetry logging
-<li>libcyrus.a no longer supplies fs_get() and fs_give()
+<li>support Berkley DB 4.1</li>
+<li>more portable use of errno throughout</li>
+<li>timsieved now does telemetry logging</li>
+<li>libcyrus.a no longer supplies fs_get() and fs_give()</li>
 </ul>
 
 <h2>Changes to the Cyrus IMAP Server since 2.1.8</h2>
 <ul>
-<li>Fix a strlcpy() off-by-one error.
+<li>Fix a strlcpy() off-by-one error.</li>
 <li>Better handling of errors in connecting to LMTP servers for deliver and
-lmtpproxyd.
-<li>Fix bug in pop3proxyd's pop3s handling.
-<li>Fix Exim install documentation.
+lmtpproxyd.</li>
+<li>Fix bug in pop3proxyd's pop3s handling.</li>
+<li>Fix Exim install documentation.</li>
 </ul>
 
 <h2>Changes to the Cyrus IMAP Server since 2.1.7</h2>
