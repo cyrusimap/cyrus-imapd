@@ -2694,7 +2694,7 @@ int index_urlfetch(struct index_state *state, uint32_t msgno,
 
     r = mailbox_cacherecord(mailbox, &im->record);
     if (r) return r;
-    
+
     /* Open the message file */
     if (mailbox_map_message(mailbox, im->record.uid, &msg_base, &msg_size))
 	return IMAP_NO_MSGGONE;
@@ -2705,7 +2705,6 @@ int index_urlfetch(struct index_state *state, uint32_t msgno,
     if (size > msg_size) size = msg_size;
 
     cacheitem = cacheitem_base(&im->record, CACHE_SECTION);
-    cacheitem += CACHE_ITEM_SIZE_SKIP;
 
     /* Special-case BODY[] */
     if (!section || !*section) {
@@ -2802,6 +2801,7 @@ int index_urlfetch(struct index_state *state, uint32_t msgno,
 	if (!data) {
 	    /* failed to decode */
 	    prot_printf(pout, " NIL)");
+	    r = 0;
 	    goto done;
 	}
     }
@@ -2837,6 +2837,8 @@ int index_urlfetch(struct index_state *state, uint32_t msgno,
 
     /* Complete extended URLFETCH response */
     if (params & (URLFETCH_BODY | URLFETCH_BINARY)) prot_printf(pout, ")");
+
+    r = 0;
 
   done:
     /* Close the message file */
