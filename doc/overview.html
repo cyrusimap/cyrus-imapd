@@ -183,24 +183,24 @@ letters or digits, each letter or digit conferring a particular privilege.
 The defined rights are:
 
 <DL compact>
-<DT><TT>l<dd>lookup     </TT> - The user may see that the mailbox exists.
-<dt><TT>r<dd>read       </TT> - The user may read the mailbox.
+<DT><TT>l</TT><dd><TT>lookup</TT> - The user may see that the mailbox exists.
+<dt><TT>r</TT><dd><TT>read</TT> - The user may read the mailbox.
         The user may select the mailbox, fetch data, perform searches,
         and copy messages from the mailbox.
-<dt><TT>s<dd>seen       </TT> - Keep per-user seen state.
+<dt><TT>s</TT><dd><TT>seen</TT> - Keep per-user seen state.
         The "Seen" and "Recent" flags are preserved for the user.
-<dt><TT>w<dd>write      </TT> -  The user may modify flags and keywords other than
+<dt><TT>w</TT><dd><TT>write</TT> -  The user may modify flags and keywords other than
         "Seen" and "Deleted" (which are controlled by other sets of rights).
-<dt><TT>i<dd>insert     </TT> - The user may insert new messages into the mailbox.
-<dt><TT>p<dd>post       </TT> - The user may send mail to the submission address for
+<dt><TT>i</TT><dd><TT>insert</TT> - The user may insert new messages into the mailbox.
+<dt><TT>p</TT><dd><TT>post</TT> - The user may send mail to the submission address for
         the mailbox.  This right differs from the "<TT>i</TT>" right in that
         the delivery system inserts trace information into submitted
         messages.
-<dt><TT>c<dd>create     </TT> - The user may create new sub-mailboxes
+<dt><TT>c</TT><dd><TT>create</TT> - The user may create new sub-mailboxes
         of the mailbox, or delete or rename the current mailbox.
-<dt><TT>d<dd>delete     </TT> - The user may store the "Deleted" flag,
+<dt><TT>d</TT><dd><TT>delete</TT> - The user may store the "Deleted" flag,
         and perform expunges.
-<dt><TT>a<dd>administer </TT> - The user may change the ACL on the mailbox.
+<dt><TT>a</TT><dd><TT>administer</TT> - The user may change the ACL on the mailbox.
 </DL>
 
 You can combine access rights in different ways.  For example:
