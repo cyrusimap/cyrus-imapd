@@ -15,7 +15,6 @@
 <li><a href="#analysis">Analysis</a></li>
 <li><a href="#futures">Futures</a></li>
 </ul>
-</div>
 
 <div class="bodytext">
 
@@ -224,7 +223,7 @@ client UI changes.</p>
 
 <h3>3.3 Subscriptions</h3>
 
-<tt>[LSUB, SUBSCRIBE, UNSUBSCRIBE]</tt><br />
+<tt>[LSUB, SUBSCRIBE, UNSUBSCRIBE]</tt><br>
 
 The front end server directs the <tt>LSUB</tt> to the back end server
 that has the user's <tt>INBOX</tt>. As such, the back end server may
@@ -241,7 +240,7 @@ subscriptions (though apparently some clients do this).</p>
 
 <h3>3.4 Finding a Mailbox</h3>
 
-<tt>[SETQUOTA, GETQUOTA, EXAMINE, STATUS]</tt><br />
+<tt>[SETQUOTA, GETQUOTA, EXAMINE, STATUS]</tt><br>
 
 The front end machine looks up the location of the mailbox,
 connects via IMAP to the back end server, and issues the equivalent
@@ -251,13 +250,13 @@ command there.
 <p>A quota root is not allowed to span across multiple servers.  Atleast,
 not with the semantics that it will be inclusive across the murder.</p>
 
-<p><tt>[SELECT]</tt><br />
+<p><tt>[SELECT]</tt><br>
 
 To <tt>SELECT</tt> a mailbox:</p>
 <ol >
 <li><tt>proxyd</tt>: lookup foo.bar in local mailboxes database</li>
-<li>if yes, <tt>proxyd</tt> -> back end: send SELECT</li>
-<li>if no, <tt>proxyd</tt> -> <tt>mupdate slave</tt> -> mupdate master:
+<li>if yes, <tt>proxyd</tt> -&gt; back end: send SELECT</li>
+<li>if no, <tt>proxyd</tt> -&gt; <tt>mupdate slave</tt> -&gt; mupdate master:
 send a ping along the UPDATE channel in order to ensure that we have received
 the latest data from the MUPDATE master.</li>
 
@@ -272,7 +271,7 @@ seen the update yet).</p>
 
 <h3>3.5 Operations within a Mailbox</h3>
 
-<tt>[APPEND, CHECK, CLOSE, EXPUNGE, SEARCH, FETCH, STORE, UID]</tt><br />
+<tt>[APPEND, CHECK, CLOSE, EXPUNGE, SEARCH, FETCH, STORE, UID]</tt><br>
 
 These commands are sent to the appropriate back end server. The
 aggregator does not need to modify any of these commands before
@@ -297,7 +296,7 @@ the messages to the destination server.</p>
 
 <h3>3.7 Operations on the Mailbox List</h3>
 
-<tt>[CREATE, DELETE, RENAME, SETACL]</tt><br />
+<tt>[CREATE, DELETE, RENAME, SETACL]</tt><br>
 
 These commands are all done by the back end server using the MUPDATE
 server as a lock manager.  Changes are then propogated to the frontend
@@ -305,13 +304,13 @@ via the MUPDATE protocol.
 
 <p><tt>[LIST]</tt></p>
 
-<br />
+<br>
 
 <tt>LIST</tt> is handled by the front end servers; no interaction
 is required with the back end server as the front ends have a local
 database that is never more than a few seconds out of date.
 
-<p><tt>[CREATE]</tt><br />
+<p><tt>[CREATE]</tt><br>
 
 <tt>CREATE</tt> creates the mailbox on the same back end server as the
 parent mailbox. If the parent exists but exists on multiple back end
@@ -333,7 +332,7 @@ specific host name on which the mailbox is to be created.</p>
       of the parent mailbox, as top level mailboxes cannot be created
       by the proxies).</li>
 
-<li><tt>proxyd</tt> -> back end: duplicate CREATE command and verifies
+<li><tt>proxyd</tt> -&gt; back end: duplicate CREATE command and verifies
       that the <tt>CREATE</tt> does not create an  inconsistency in
       the mailbox list (i.e. the folder name is still unique).</li>
 </ol>
@@ -345,7 +344,7 @@ specific host name on which the mailbox is to be created.</p>
 
 <li><tt>imapd</tt> may have to open an MUPDATE connection here if one
 doesn't already exist
-<li><tt>imapd</tt> -> MUPDATE: set foo.bar reserved (CRASH: MUPDATE externally
+<li><tt>imapd</tt> -&gt; MUPDATE: set foo.bar reserved (CRASH: MUPDATE externally
 inconsistent)
 <li><tt>imapd</tt>: create foo.bar in spool disk (CRASH: MUPDATE externally
 inconsistent, back end externally inconsistent, this can be resolved
@@ -354,7 +353,7 @@ MUPDATE and the backend)
 <li><tt>imapd</tt>: add foo.bar to mailboxes dataset (CRASH: ditto)
 <li><tt>imapd</tt>: commit transaction (CRASH: ditto, but the
 recovery can activate the mailbox in mupdate instead)
-<li><tt>imapd</tt> -> MUPDATE: set foo.bar active (CRASH: committed)
+<li><tt>imapd</tt> -&gt; MUPDATE: set foo.bar active (CRASH: committed)
 </ol>
 
 <p> Failure modes: Above, all back end inconsistencies result in the
@@ -364,7 +363,7 @@ latter one makes the mailbox unreachable and un-createable.  Though, this
 is safer than potentially having the mailbox appaear in two places when
 the failed backend comes back up.</p>
 
-<p><tt>[RENAME]</tt><br />
+<p><tt>[RENAME]</tt><br>
 
 <tt>RENAME</tt> is only interesting in the cross-server case.  In this
 case it issues a (non-standard) XFER command to the backend that currently
@@ -425,7 +424,7 @@ MUPDATE connection and listens for updates from the MUPDATE master server
 (as backends inform it of updates). The slave makes these modifications on
 the local copy of the mailboxes database.
 
-<a name="analysis"><h3>4.0 Analysis</h3></a>
+<h3><a name="analysis">4.0 Analysis</a></h3>
 
 <p><b>???</b> Add timing info? Random load testing?
 
@@ -508,7 +507,7 @@ hierarchy can also exist across multiple machines.
 
 </ul>
 
-<a name="futures"><h3>5.0 Futures</h3></a>
+<h3><a name="futures">5.0 Futures</a></h3>
 
 <ul>
 <li>It would be nice to be able to replicate the messages in a
@@ -665,7 +664,7 @@ commands to query the ACAP server:
 <p>
 
 <tt>[LSUB, SUBSCRIBE, UNSUBSCRIBE, SETQUOTA, GETQUOTA, EXAMINE,
-      STATUS]</tt><br />
+      STATUS]</tt><br>
 
 All these commands could be handled by the mailboxes
 dataset.[MBOXDSET] This would mainly be a client enhancement. For
@@ -684,7 +683,7 @@ Lewis. He writes:
 
 <blockquote>
 i would have called it an atlas....  or iatlas (pronounced "yatlas")
-<br />
+<br>
 it is a collection of (i)maps.
 </blockquote>
 
