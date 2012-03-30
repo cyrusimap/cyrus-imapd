@@ -3173,7 +3173,10 @@ static int append_catenate(FILE *f, const char *cur_name, unsigned *totalsize,
 
 	    if (!r) {
 		r = catenate_url(arg.s, cur_name, f, totalsize, parseerr);
-		if (r) *url = arg.s;
+		if (r) {
+		    *url = arg.s;
+		    return r;
+		}
 	    }
 	}
 	else {
