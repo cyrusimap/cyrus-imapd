@@ -58,7 +58,7 @@ are held separate from the rest of the representation. (bc_generate.c)</li>
 located elsewhere in memory.  The entry point is bc_generate: sieve_generate_bytecode()
 / bc_action_generate().</p>
 
-<p>bc_action_generate traverses the commandlist_t tree and emits opcodes in 
+<p>bc_action_generate traverses the commandlist_t tree and emits opcodes in
 sequence.</p>
 
 <p>Simple actions (STOP, DISCARD, KEEP, MARK, UNMARK) have no arguments,
@@ -119,10 +119,10 @@ other changes in format.</p>
 <p>Two new opcodes exist: NULL and JUMP (which performs an unconditional
 jump).</p>
 
-<p>Stringlists and testslists now include a precomputed byte length of  
+<p>Stringlists and testslists now include a precomputed byte length of
 the entire list, so it can be skipped over as needed.</p>
 
-<p>So as to be executable without a stack, the IF statements are designed as 
+<p>So as to be executable without a stack, the IF statements are designed as
 follows:</p>
 
 <pre>
@@ -156,8 +156,8 @@ pointer at the end of the string.</p>
 
 <h2>Other things to consider</h2>
 
-<p>The Bytecode can be extended to contain other extensions. This could require 
-regeneration of older scripts.  In many cases this can be avoided by putting 
+<p>The Bytecode can be extended to contain other extensions. This could require
+regeneration of older scripts.  In many cases this can be avoided by putting
 the new commands at the end of the proper enum in bytecode.h</p>
 
 </body>

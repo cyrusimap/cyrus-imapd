@@ -74,7 +74,7 @@ NAME="configure"><tt>configure</tt></A>".
 <dt><tt>--with-auth=METHOD</tt>
 <dd>Specifies the authorization (group membership) module to use.
 Currently implemented authorization modules are:
-<dl compact> 
+<dl compact>
 <DT><tt>unix</tt>
 <DD>Unix <tt>/etc/passwd</tt> and <tt>/etc/group</tt> file
 <DT><tt>krb</tt>
@@ -135,7 +135,7 @@ default, configure uses "<TT>berkeley_nosync</TT>".<P>
 <dt><tt>--with-idle=METHOD</tt>
 <dd>Specifies the IMAP IDLE method to use.
 Currently implemented IDLE methods are:
-<dl compact> 
+<dl compact>
 <DT><tt>idled</tt>
 <DD>Use the IDLE daemon.  The IDLE daemon listens on a UNIX socket for
 messages from lmtpd/imapd/pop3d that a mailbox has been updated.  The
@@ -174,12 +174,12 @@ Daemon.<P>
 <dd>Specifies where to find the Perl binary (full path, including
 name of binary).<P>
 
-<dt><tt>--with-sasl=PATH</tt> 
+<dt><tt>--with-sasl=PATH</tt>
 <dd>Specifies the path to the directories containing the library
 (<tt>.../lib</tt>) and include (<tt>.../include</tt>)
 files for libsasl. <P>
 
-<dt><tt>--with-statedir=PATH</tt> 
+<dt><tt>--with-statedir=PATH</tt>
 <dd>Specifies the directory used for communicating with various
 daemons.  By default, configure uses "<TT>/var</TT>". <P>
 
@@ -254,7 +254,7 @@ empty.<br>
 <DT><TT>LDFLAGS</TT>
 <DD>Stripping ("<TT>-s</TT>") and any other miscellaneous options for the
 linker.  If it is not set in the environment when "<tt>configure</tt>" runs,
-the default value is empty. 
+the default value is empty.
 
 <DT><TT>DEFS</TT>
 <DD>Configuration options, in the form "<tt>-Dfoo -Dbar ...</tt>"<br>
@@ -269,7 +269,7 @@ environment is <strong>added</strong> to the value that
 If you need to do unusual things to compile the package, we encourage
 you to figure out how "<tt>configure</tt>" could check whether to do
 them. After doing so, please send us a patch! Instructions for doing
-so can be found on the <a href="feedback.html">feedback</a> page. 
+so can be found on the <a href="feedback.html">feedback</a> page.
 
 <p>The file "<tt>configure.in</tt>" is used as a template to create
 "<tt>configure</tt>" by a program called "<tt>autoconf</tt>".  You

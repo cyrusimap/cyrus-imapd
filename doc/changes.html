@@ -292,11 +292,11 @@
 <h1>Changes to the Cyrus IMAP Server since 2.4.4</h1>
 <ul>
 <li>Tidy up of the git version number added to the ID response</li>
-<li>Fixed incorrect time field in date searches (Bug #3339) 
+<li>Fixed incorrect time field in date searches (Bug #3339)
  - thanks Greg Banks for noticing this one</li>
-<li>Fixed reconstruct crash and other potential issues (Bug #3353) 
+<li>Fixed reconstruct crash and other potential issues (Bug #3353)
  - first reported Paul Dekkers</li>
-<li>Fixed ACL passing for rename/delete on murder backends (Bug #3342) 
+<li>Fixed ACL passing for rename/delete on murder backends (Bug #3342)
  - first reported by Robert Spellman</li>
 <li>Fixed corruption of long (&gt;1024 byte) seen records on replica
  (Bug #3344) - found at FastMail by Bron Gondwana</li>
@@ -305,7 +305,7 @@
 <li>Fixed crash on message with incomplete final boundary (Bug #3345)
  - found at FastMail by Bron Gondwana</li>
 <li>Regression: sync_crc was being set to 00000000 on repack - introduced
- in 2.4.4 (Bug #3347)  - first found at FastMail, but also seen at 
+ in 2.4.4 (Bug #3347)  - first found at FastMail, but also seen at
  multiple other sites</li>
 <li>Always print [CLOSED] response when selecting a new mailbox, even
  if a CONDSTORE enabling command has not been sent (Bug #3352) - reported
@@ -392,7 +392,7 @@
 <li>Fix cyrdump to work with -C for alternate config</li>
 <li>Change master to process all pending child messages once per
   loop, which fixes a DoS situation if there is too much message churn
-  in a slower box - thanks to Henrique de Moraes Holschuh 
+  in a slower box - thanks to Henrique de Moraes Holschuh
   &lt;hmh@debian.org&gt;</li>
 <li>Reconstruct added flags -R, -U, -o, -O to give options
   handling corrupt or missing files</li>
@@ -422,7 +422,7 @@
   consistency checking, and recovery from "split-brain" scenarios.</li>
 <li>Added support for LIST-EXTENDED IMAP extension.  Removed
 support for deprecated (compile-time) LISTEXT IMAP extension.
-<i>Based on work by Martin Konold &lt;martin.konold@erfrakon.de&gt;</i></li> 
+<i>Based on work by Martin Konold &lt;martin.konold@erfrakon.de&gt;</i></li>
 <li>Added support for ESEARCH IMAP extension.</li>
 <li>Added support for WITHIN extension to IMAP SEARCH.</li>
 <li>Added support for ENABLE IMAP extension.</li>
@@ -439,10 +439,10 @@ support for deprecated (compile-time) LISTEXT IMAP extension.
 </ul>
 
 <h1>Changes to the Cyrus IMAP Server since 2.3.17</h1>
-<ul>  
+<ul>
 <li>Fix for incomplete authentication checks in nntpd,
-    reported by Secunia as SA46093 - thanks Stefan Cornelius, 
-    Secunia Research</li> 
+    reported by Secunia as SA46093 - thanks Stefan Cornelius,
+    Secunia Research</li>
 </ul>
 
 <h1>Changes to the Cyrus IMAP Server since 2.3.16</h1>
@@ -472,7 +472,7 @@ support for deprecated (compile-time) LISTEXT IMAP extension.
 <li>Added <tt>user_folder_limit</tt> option to limit the number of
   folders a non-admin user is allowed to create.</li>
 <li>Added <tt>-x</tt> option to <tt>cyr_expire</tt> to disable expunge</li>
-<li>Track idle state so a shutdown doesn't leave idled killing random other 
+<li>Track idle state so a shutdown doesn't leave idled killing random other
   processes on a busy system</li>
 <li>Fix missing closedir() - bug #3159 (thanks Simon Matter)</li>
 <li>Make Cyrus compile with older GCC (thanks Simon Matter)</li>
@@ -509,7 +509,7 @@ disk space usage.</li>
 <li>Fixed incorrect quota calculations on sync_server when replicating
   unexpunged messages (thanks David Carter)</li>
 <li>Allow user rename to succeed even if the user is over quota</li>
-<li>Fixed a skiplist foreach bug and various datatype size issues that 
+<li>Fixed a skiplist foreach bug and various datatype size issues that
   caused problems on some 64 bit architectures</li>
 <li>Added additional logging of mailbox events if condstore is enabled
   to ensure modseq values are always correctly replicated</li>
@@ -596,7 +596,7 @@ Pine/Alpine to do cross-mailbox searches
 <i>-- based on work of David Carter</i>.</li>
 <li>Implemented incremental squat updates (see <tt>squatter.8</tt>)
 <i>-- courtesy of David Carter</i>.</li>
-<li>Fixed major bugs in <tt>reconstruct -k</tt> implementation 
+<li>Fixed major bugs in <tt>reconstruct -k</tt> implementation
 <i>-- courtesy of David Carter</i>.</li>
 <li>Added code to promote transaction safety and to track the lock
 status of skiplist databases <i>-- courtesy of Fastmail.fm</i>.</li>
@@ -650,7 +650,7 @@ by the admin in case of user error.  The mailboxes and messages can be
 removed at a later time by <tt>cyr_expire</tt>.  The new
 <tt>delete_mode</tt> and <tt>deletedprefix</tt> options in
 <tt>imapd.conf</tt> controls whether deletes are "immediate" or
-"delayed" and the mailbox hierarchy for "delayed" deletes. 
+"delayed" and the mailbox hierarchy for "delayed" deletes.
 <i>-- courtesy of David Carter and FastMail.fm</i>.</li>
 <li>Fixed the special case of RENAMEing an Inbox, so that it doesn't
 keep the same mailbox uniqueid, thus allowing it to replicate
@@ -713,14 +713,14 @@ from <tt>sync_client</tt> on a UNIX socket.</li>
 <tt>BODYSTRUCTURE</tt> response (per RFC 3501). <i>-- inspired by
 Fastmail.fm</i></li>
 <li>Fixed <tt>flushseenstate</tt> bug which was causing unsolicited
-EXPUNGE responses during FETCH/STORE. <i>-- courtesy of David 
+EXPUNGE responses during FETCH/STORE. <i>-- courtesy of David
 Carter</i></li>
 <li>Added option to <tt>ctl_mboxlist</tt> to verify the consistency of
 the mailbox list database and the spool  partition(s).  See
 <tt>ctl_mboxlist.8</tt> for details.</li>
 <li>RENAME now copies <tt>cyrus.expunge</tt> index file as well as
 expunged message files.</li>
-<li>Fixed replication of 64-bit quotas.  <i>-- courtesy of David 
+<li>Fixed replication of 64-bit quotas.  <i>-- courtesy of David
 Carter</i></li>
 <li>Fixed miscellaneous bugs, memory leaks, and build issues.</li>
 </ul>
@@ -761,19 +761,19 @@ characters in headers are changed to 'X' or are left alone.</li>
 <li>Fixed miscellaneous bugs and build issues.</li>
 </ul>
 
-<h1>Changes to the Cyrus IMAP Server since 2.3.5</h1> 
-<ul> 
+<h1>Changes to the Cyrus IMAP Server since 2.3.5</h1>
+<ul>
 <li>Fixed COPY code so that clients display new messages (added MODSEQ).</li>
 <li>Fixed imtest to be compatible with SASL 2.1.22.</li>
 </ul>
 
-<h1>Changes to the Cyrus IMAP Server since 2.3.4</h1> 
-<ul> 
+<h1>Changes to the Cyrus IMAP Server since 2.3.4</h1>
+<ul>
 <li>Fixed append/delivery code so that clients display new messages.</li>
 </ul>
 
-<h1>Changes to the Cyrus IMAP Server since 2.3.3</h1> 
-<ul> 
+<h1>Changes to the Cyrus IMAP Server since 2.3.3</h1>
+<ul>
 <li>Added support for BINARY APPEND (including CATENATE).
 <i>Based on contributions from Tom Esh &lt;esh@lucent.com&gt;</i>.</li>
 <li>Added support for CONDSTORE (must be enabled on a per-mailbox
@@ -789,13 +789,13 @@ making it useful for remote mailboxes.</li>
 <li>Fixed miscellaneous bugs and build issues.</li>
 </ul>
 
-<h1>Changes to the Cyrus IMAP Server since 2.3.2</h1> 
-<ul> 
+<h1>Changes to the Cyrus IMAP Server since 2.3.2</h1>
+<ul>
 <li>Fixed broken berkeley (btree) backend.</li>
 </ul>
 
-<h1>Changes to the Cyrus IMAP Server since 2.3.1</h1> 
-<ul> 
+<h1>Changes to the Cyrus IMAP Server since 2.3.1</h1>
+<ul>
 <li>Added more extensive output to arbitron.</li>
 <li>Allow responses of any length from backend when proxing
 IMAP/POP3/NNTP traffic.</li>
@@ -810,8 +810,8 @@ IMAP/POP3/NNTP traffic.</li>
 <li>Fixed miscellaneous bugs and build issues.</li>
 </ul>
 
-<h1>Changes to the Cyrus IMAP Server since 2.3.0</h1> 
-<ul> 
+<h1>Changes to the Cyrus IMAP Server since 2.3.0</h1>
+<ul>
 <li>Updated ACL code to RFC 4314 (separate rights for message delete,
 mailbox delete, and expunge).</li>
 <li>Fixed IDLE to use idled for local mailboxes.</li>
@@ -828,7 +828,7 @@ merged with <tt>imapd</tt> and <tt>lmtpd</tt> respectively), or all
 "replicated" servers can serve the same mailboxes from a shared
 filesystem.  The new <tt>mupdate_config</tt> option in
 <tt>imapd.conf</tt> is used to determine whether a Murder is using a
-"traditional", "unified" or "replicated" configuration.</li> 
+"traditional", "unified" or "replicated" configuration.</li>
 <li>Ported/rewrote/integrated David Carter's mailspool replication
 code.  <i>Development sponsored by Columbia University</i>.</li>
 <li>Added support for "delayed" expunge, in which messages are
@@ -877,20 +877,20 @@ performance/scalability.  <i>Based on a patch by John A. Tamplin
 <li>The Sieve "copy" extension is now supported.</li>
 <li>The IMAP "CATENATE" and "URLAUTH" extensions are now supported.</li>
 <li>Updated Sieve "vacation" extension to draft-ietf-sieve-vacation-04.</li>
-<li>Added support for Sieve scripts on shared mailboxes via the 
+<li>Added support for Sieve scripts on shared mailboxes via the
 /vendor/cmu/cyrus-imapd/sieve annotation.</li>
 </ul>
 
-<h1>Changes to the Cyrus IMAP Server since 2.2.13</h1> 
-<ul> 
+<h1>Changes to the Cyrus IMAP Server since 2.2.13</h1>
+<ul>
 <li><tt>ctl_mboxlist</tt> now dumps/undumps the mailbox type flags,
 making it useful for remote mailboxes.</li>
 <li>Added <tt>sieve_allowreferrals</tt> option to control whether
 <tt>timsieved</tt> issues referrals or proxys traffic to backends.</li>
 </ul>
 
-<h1>Changes to the Cyrus IMAP Server since 2.2.12</h1> 
-<ul> 
+<h1>Changes to the Cyrus IMAP Server since 2.2.12</h1>
+<ul>
 <li>Allow sieve scripts to be run on shared mailboxes (via <tt>sieve</tt>
 annotation).</li>
 <li>Updated <tt>nntpd</tt> to be compliant with latest draft (soon to be
@@ -912,8 +912,8 @@ cyrusdb backends (seem to perform better under heavy loads).</li>
 <li>Fixed miscellaneous bugs and build issues.</li>
 </ul>
 
-<h1>Changes to the Cyrus IMAP Server since 2.2.11</h1> 
-<ul> 
+<h1>Changes to the Cyrus IMAP Server since 2.2.11</h1>
+<ul>
 <li>Revert index change which wasn't supposed to make it into 2.2.11</li>
 </ul>
 
@@ -936,7 +936,7 @@ from the last ALERT, or we haven't sent an ALERT in over 10 min.</li>
 <h1>Changes to the Cyrus IMAP Server since 2.2.8</h1>
 <ul>
 <li>Change ACLs correctly when renaming a user</li>
-<li>Do not abandon std{in,out,err} file descriptors; syslog assumes it can 
+<li>Do not abandon std{in,out,err} file descriptors; syslog assumes it can
 use stderr if syslogd isn't running.</li>
 <li>Clean up imap magic plus to avoid buffer overrun (CAN-2004-1011)</li>
 <li>Fix lack of bounds checking in PARTIAL and FETCH (CAN-2004-1012, CAN-2004-1013)</li>
@@ -1073,7 +1073,7 @@ ANNOTATEMORE is also always enabled now.</li>
 <li><tt>expirenews</tt> has been replaced by <tt>cyr_expire</tt> which
 uses annotations for fine-grained mailbox expiration.</li>
 <li><tt>squatter</tt> can now use annotations for fine-grained mailbox
-indexing.</li> 
+indexing.</li>
 <li>Many nntpd enhancements including: reader-only and feeder-only
 modes, support for LIST NEWSGROUPS (via mailbox annotations) and
 gatewaying news to mail (via mailbox annotations).</li>
@@ -1296,7 +1296,7 @@ part of this, the default install location for mupdatetest has changed
 to be the same as the other test utilities.  <tt>imtest</tt> also
 includes new MANAGESIEVE functionality (sivtest) as well as the
 ability to reconnect to the same server multiple times (useful for testing
-SSL/TLS session caching and DIGEST-MD5 fast reauth).</li> 
+SSL/TLS session caching and DIGEST-MD5 fast reauth).</li>
 
 <li>snmpgen generates stubbed out code so we don't waste resources on
 something that just doesn't work. At some point in time, we'll make it
@@ -1379,7 +1379,7 @@ performance. </li>
 Currently off (it seems to hurt performance on Linux). </li>
 
 <li> <tt>master</tt> has preliminary code to avoid forking
-storms. </li> 
+storms. </li>
 
 <li> <tt>sieveshell</tt> should now loop through all available SASL
 mechanisms before conceding defeat. </li>
@@ -1392,7 +1392,7 @@ mechanisms before conceding defeat. </li>
 
 <ul>
 <li> fud now runs from the Cyrus master process; more generally, the
-Cyrus master process can deal with UDP services. (Amos Gouaux, 
+Cyrus master process can deal with UDP services. (Amos Gouaux,
 <tt>amos@utdallas.edu</tt>)</li>
 
 <li> Sieve has been updated to be compliant with RFC 3028 and
@@ -2054,7 +2054,7 @@ timezone.</li>
 
 <li>The default format for reading information from INN has
 changed. If you use INN to feed imapd news, you must change your
-"<tt>newsfeeds</tt>" file to contain 
+"<tt>newsfeeds</tt>" file to contain
 
 <pre>
 collectnews!:*:Tf,WO:collectnews
@@ -2223,7 +2223,7 @@ a file. This is a gross hack.</li>
 <h2>Changes to the Cyrus IMAP Server Since Version 1.5.14</h2>
 
 <ul>
-<li>LIST now honors the reference argument. 
+<li>LIST now honors the reference argument.
 
 <p>This behavior can be turned off by a configuration option
 imapd.conf--which may be desirable because of certain clients that
@@ -2266,7 +2266,7 @@ newer).</li>
 
 <li>A few configure tweaks.</li>
 
-<li>Duplicate delivery changes: 
+<li>Duplicate delivery changes:
 
 <ul>
 <li>Split out duplicate delivery elimination to multiple files.

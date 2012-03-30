@@ -59,11 +59,11 @@ If your server is running, you'll get the following message:
    <kbd>% /usr/local/bin/imtest -m login foobar</kbd>
    S: * OK mail1.andrew.cmu.edu Cyrus IMAP4 v2.0.0 server ready
    C: C01 CAPABILITY
-   S: * CAPABILITY IMAP4 IMAP4rev1 ACL QUOTA LITERAL+ NAMESPACE UIDPLUS 
-   X-NON-HIERARCHICAL-RENAME NO_ATOMIC_RENAME AUTH=GSSAPI AUTH=ANONYMOUS 
+   S: * CAPABILITY IMAP4 IMAP4rev1 ACL QUOTA LITERAL+ NAMESPACE UIDPLUS
+   X-NON-HIERARCHICAL-RENAME NO_ATOMIC_RENAME AUTH=GSSAPI AUTH=ANONYMOUS
    AUTH=KERBEROS_V4 UNSELECT
    S: C01 OK Completed
-   Password: 
+   Password:
    + go ahead
    L01 OK User logged in
    Authenticated.
@@ -80,7 +80,7 @@ authentication mechanisms you have installed. The supported mechanisms
 are listed in the CAPABILITY line:
 
 <pre>
-  * CAPABILITY IMAP4 IMAP4rev1 ACL QUOTA LITERAL+ NAMESPACE UIDPLUS 
+  * CAPABILITY IMAP4 IMAP4rev1 ACL QUOTA LITERAL+ NAMESPACE UIDPLUS
   X-NON-HIERARCHICAL-RENAME NO_ATOMIC_RENAME AUTH=ANONYMOUS
   AUTH=KERBEROS_V4 AUTH=DIGEST-MD5 AUTH=CRAM-MD5 UNSELECT
   . OK Completed

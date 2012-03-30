@@ -13,7 +13,7 @@
 ulong::
   Unsigned long integer 0 <= x <= (2^32)-1
 
-quota_t:: 
+quota_t::
   EITHER : Unsigned long integer      :: 0 <= x <= (2^32)-1
       OR : Unsigned long long integer :: 0 <= x <= (2^64)-1
 
@@ -75,7 +75,7 @@ Activate sieve file of given name for this user.
   mailboxname :: astring  -- e.g: user.dpc22.zzz
   uniqueid    :: astring  -- Cyrus UniqueID (currently 64bit hex number)
   acl         :: astring  -- Initial ACL for this mailbox
-  mbtype      :: int      
+  mbtype      :: int
   uidvalidity :: ulong
 </pre>
 
@@ -87,9 +87,9 @@ Special value "NIL" for ACL means that mailbox has come from UW world or
 some other location without ACL. We construct appropriate default ACL:
 
 <pre>
-     userid    --> "lrswipcda" 
+     userid    --> "lrswipcda"
      anonymous --> "0"           (for FUD daemon)
-</pre>  
+</pre>
 
 <hr>
 <h4>CONTENTS</h4>
@@ -100,7 +100,7 @@ downloading messages from Cyrus into UW world.
 Response is series of lines of the form:
 
 <pre>
-  * [uid] [internaldate] 
+  * [uid] [internaldate]
     [flags :: flag_list_t]
     [message body :: literal]
 </pre>
@@ -165,7 +165,7 @@ Sieve script
 </pre>
 
 <hr>
-<h4>INFO</h4> 
+<h4>INFO</h4>
 
 Get meta information for currently selected folder. Response is single line
 of the form:
@@ -230,7 +230,7 @@ Get quota root information. Response is single line of the form:
 <pre>
 OK
   Limit                 :: quota_t   (Kbytes)
-  Expunged_timeout      :: ulong     (seconds) 
+  Expunged_timeout      :: ulong     (seconds)
   Expunged_vol_min      :: quota_t   (KBytes)
   Expunged_vol_max      :: quota_t   (KBytes)
   Expunged_vol_overflow :: quota_t   (KBytes)
@@ -440,7 +440,7 @@ replication runs. Essentially UPLOAD operation with an empty message list.
 <hr>
 <h4>USER</h4>
 <pre>
-  user ::astring 
+  user ::astring
 </pre>
 
 Select given user: locks out concurrent access from other replication
@@ -454,7 +454,7 @@ Response:
 <hr>
 <h4>USER_ALL</h4>
 <pre>
-  user ::astring 
+  user ::astring
 </pre>
 
 Select given user: locks out concurrent access from other replication
@@ -469,15 +469,15 @@ portion of the target account.
 <pre>
 **** Sieve script. Single line response of the form:
 
-  **** [name :: astring]       
-       [last_update :: time_t] 
+  **** [name :: astring]
+       [last_update :: time_t]
        [* - if active Sieve]
 
 *** Subscription. Single line response of the form:
 
   *** [name :: astring]
 
-** Mailbox. Single line response of the form: 
+** Mailbox. Single line response of the form:
 
   ** [uniqueid   :: astring]
      [name       :: astring]
@@ -499,17 +499,17 @@ in the same format:
 <pre>
 OK
   Limit                 :: quota_t   (Kbytes)
-  expunged_timeout      :: ulong     (seconds) 
+  expunged_timeout      :: ulong     (seconds)
   expunged_vol_min      :: quota_t   (KBytes)
   expunged_vol_max      :: quota_t   (KBytes)
   expunged_vol_overflow :: quota_t   (KBytes)
   mailbox_limit         :: ulong     (KBytes)
 </pre>
-  
+
 <hr>
 <h4>USER_SOME</h4>
 <pre>
-  user     :: astring 
+  user     :: astring
   mailbox1 :: astring
     . . .
   mailboxn :: astring

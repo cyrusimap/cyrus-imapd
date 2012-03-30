@@ -17,7 +17,7 @@
 
 <p>The Index API is implemented in <tt>imap/index.h</tt> and
 <tt>imap/index.c</tt>.  It provides a snapshot view into the
-underlying mailbox (see <a href="mailbox-api.html">the 
+underlying mailbox (see <a href="mailbox-api.html">the
 Mailbox API documentation</a> which obeys IMAP semantics,
 as well as all the searching and sorting logic.
 
@@ -50,7 +50,7 @@ only reading, or use the code already in imapd and you'll be fine.</p>
 
 <p>Ok - I think a few words about the index model and how it differs
 from direct mailbox access are needed!  In the past, index.c used
-pointers directly into the mmaped <tt>cyrus.index</tt> file and 
+pointers directly into the mmaped <tt>cyrus.index</tt> file and
 maintained the old mmaped copy if an expunge took place.  Under the
 namelock regime, this is no longer required because namelocks will
 avoid the file being re-written.</p>

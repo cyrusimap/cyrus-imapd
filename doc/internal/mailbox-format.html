@@ -66,14 +66,14 @@ actually used.</p>
 
 <h3>Locking Considerations</h3>
 
-<p>The <tt>cyrus.index</tt> file must be locked in exclusive mode 
-while making changes to the <tt>cyrus.header</tt> file to ensure 
+<p>The <tt>cyrus.index</tt> file must be locked in exclusive mode
+while making changes to the <tt>cyrus.header</tt> file to ensure
 consistency.  All changes are made by rewriting the entire file
 and renaming the new version into place.</p>
 
 <h2><tt>cyrus.cache</tt></h2>
 
-<p>The <tt>cyrus.cache</tt> file is a pure cache of information that's 
+<p>The <tt>cyrus.cache</tt> file is a pure cache of information that's
 also present in the message files.  It exists to make ENVELOPE and
 specific header fetches more efficient, as well as to assist with
 searches and sorts.</p>
@@ -147,7 +147,7 @@ size).</p>
    [zero *or* number of sub-parts in the case of a multipart.
     if nonzero, this is a recursion into the top structure]
       (repeat for each part)
-  ] 
+  ]
 </pre>
 
 <p>
@@ -311,7 +311,7 @@ can not change UID for a particular offset, and the file can't be
 rewritten or deleted) unless there's an exclusive namelock held
 for the mailbox name.  This is to avoid race conditions and simplify
 the use of mailboxes.  Whenever a mailbox is opened, the caller
-holds a shared namelock on the mailbox name for the duration of 
+holds a shared namelock on the mailbox name for the duration of
 the "mailbox object"'s existence.</p>
 
 <p> All reads of a <tt>cyrus.index</tt> file must be done with a
@@ -374,7 +374,7 @@ the "poptimeout" <tt>imapd.conf</tt> option.</dd>
 <dt>Deleted, Answered, and Flagged (4 bytes each)</dt>
 <dd> Counts of how many messages have each flag.</dd>
 
-<dt>Mailbox Options (4 bytes)</dt> 
+<dt>Mailbox Options (4 bytes)</dt>
 
 <dd> Bitmask of mailbox options, consisting of any combination of the
 following:
@@ -408,7 +408,7 @@ first without files disappearing from under them!
 </dl>
 </dd>
 
-<dt>Leaked Cache (4 bytes)</dt> 
+<dt>Leaked Cache (4 bytes)</dt>
 <dd> Number of leaked records in the cache file.</dd>
 
 <dt>Highest ModSeq (8 bytes)</dt>
@@ -460,7 +460,7 @@ actually necessary.  Oh well</dd>
 <dd> Must always be the LAST record of the header.  This is the CRC32
 of the actual bytes on disk (network order format) for the rest of the
 cyrus.index.  By keeping it last, it can be easily calculated with
-the following snippet of code: 
+the following snippet of code:
 <tt>crc = crc32_map(buf, OFFSET_HEADER_CRC);</tt> - i.e. crc32 from
 the start of the buffer to just before this field.</dd>
 
@@ -510,7 +510,7 @@ message.</p>
 
 <dt>USER FLAGS (MAX_USER_FLAGS / 32 bytes)</dt>
 <dd> Bitmask showing which user flags are set/unset (bits correspond to
-     positions in the cyrus.header flag list, i.e. 
+     positions in the cyrus.header flag list, i.e.
      (1&lt;&lt;0) == the flag name</dd>
 
 <dt>CONTENT_LINES (4 bytes)</dt>

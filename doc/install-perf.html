@@ -12,7 +12,7 @@
 Cyrus presents various performance issues for you to consider. If you never expect to have
 more than 100 simultaneous users, chances are any hardware you have
 will be fine. If you plan on having thousands or more users, please
-be sure to review this section. 
+be sure to review this section.
 
 <p>If your configuration directory is not <tt>/var/imap</tt>,
 adjust accordingly.</p>
@@ -21,7 +21,7 @@ adjust accordingly.</p>
 <li><tt><b>/var/imap/proc</b></tt> - After a successful login, the
 <tt>imapd</tt> creates a file in <tt>var/imap/proc</tt> that is its unix
 process id. It also contains the name of any <tt>SELECT</tt>ed
-mailbox. The file is deleted when the user logs out. 
+mailbox. The file is deleted when the user logs out.
 
 <p>Given the potential load, this is a good candidate to move
 elsewhere. This can be done by symlink'ing the directory to another

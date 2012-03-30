@@ -8,14 +8,14 @@
 <H1>Cyrus IMAP Server:  Overview and Concepts</H1>
 
 <p>This document gives an overview of the Cyrus IMAP server.  The
-Cyrus IMAP (Internet Message Access Protocol) server provides 
-access to personal mail and system-wide bulletin boards through 
-the IMAP protocol.   The Cyrus IMAP server is a scalable 
-enterprise mail system designed for use from small to 
-large enterprise environments using 
-standards-based technologies.   
+Cyrus IMAP (Internet Message Access Protocol) server provides
+access to personal mail and system-wide bulletin boards through
+the IMAP protocol.   The Cyrus IMAP server is a scalable
+enterprise mail system designed for use from small to
+large enterprise environments using
+standards-based technologies.
 
-<p>A full Cyrus IMAP implementation allows a seamless mail and 
+<p>A full Cyrus IMAP implementation allows a seamless mail and
 bulletin board environment to be set up across
 multiple servers.  It differs from other IMAP server
 implementations in that it is run on "sealed" servers,
@@ -46,7 +46,7 @@ quotas on mailbox hierarchies.
 <li><A href="#aclauth">Kerberos vs. Unix Authorization</A>
 <LI><A HREF="#aclneg">Negative Rights</A>
 <li><A href="#acluser">Calculating Users' Rights</A>
-<li><A HREF="#acladm">Implicit Rights for Administrators on Personal 
+<li><A HREF="#acladm">Implicit Rights for Administrators on Personal
 Mailboxes</A>
 <li><A href="#aclmbox">Initial ACLs for Newly Created Mailboxes</A>
 </UL>
@@ -140,19 +140,19 @@ user's personal mailboxes are deleted as well.
 <p>With the one notable exception of <TT>INBOX</TT>, all mailbox names are
 system-wide--they refer to the same mailbox regardless of the user.
 <A HREF="#acl">Access control lists</A> determine which users can
-access or see which mailboxes.  Using 
+access or see which mailboxes.  Using
 
 <p>In contexts which permit relative mailbox names, the mailbox namespace
 works as follows:
 
 <UL>
-<LI> Names that do not start with "." are fully qualified. 
+<LI> Names that do not start with "." are fully qualified.
 <LI> Names that start with "." are relative to the current context.
 </UL>
 
 Thus, if you are working with folder names and the top of the
-hierarchy is named "<TT>cmu.</TT>", the name "<TT>comp.infosystems.www</TT>" 
-resolves to "<TT>comp.infosystems.www</TT>" and the name 
+hierarchy is named "<TT>cmu.</TT>", the name "<TT>comp.infosystems.www</TT>"
+resolves to "<TT>comp.infosystems.www</TT>" and the name
 "<TT>.comp.infosystems.www</TT>" resolves to
 "<TT>cmu.comp.infosystems.www</TT>".
 
@@ -210,12 +210,12 @@ You can combine access rights in different ways.  For example:
 <DD>The user can read the mailbox.
 </DL>
 
-<DL> 
-<DT><TT>lrsp</TT> 
+<DL>
+<DT><TT>lrsp</TT>
 <DD>The user can read the mailbox, and can
 post to it through the delivery system.  Most delivery
 systems do not provide authentication, so the "<TT>p</TT>" right usually has
-meaning only for the "anonymous" user.  
+meaning only for the "anonymous" user.
 </DL>
 
 <DL>
@@ -241,11 +241,11 @@ IMAP, or through the delivery system.
 
 <H3><A name="aclident">Identifiers</A></H3>
 
-The identifier part of an ACL entry specifies the user or group 
+The identifier part of an ACL entry specifies the user or group
 for which the entry applies.
 
 <p>There are two special identifiers,
-"anonymous", and "anyone", which are explained below.  The meaning of 
+"anonymous", and "anyone", which are explained below.  The meaning of
 other identifiers usually depends on the authorization mechanism being used
 (selected by <tt>--with-auth</tt> at compile time, defaulting to Unix).
 
@@ -270,7 +270,7 @@ what rights you have.  Authentication is discussed in the
 <a href="#login">Login Authentication</a> part of this document.
 
 <p>In the Unix authorization mechanism, identifiers are either a
-valid userid or the string "<tt>group</tt>": 
+valid userid or the string "<tt>group</tt>":
 followed by a group listed in "<tt>/etc/group</tt>".  Thus:
 
 <pre>
@@ -311,7 +311,7 @@ to implement a local group mechanism.  If it does so (by implementing an
 <tt>auth_[whatever]</tt> module), it will dictate its own form and meaning
 of identifiers.
 
-<H3><A name="aclneg">Negative Rights</A></H3> 
+<H3><A name="aclneg">Negative Rights</A></H3>
 
 Any of the above defined identifiers may be prefixed with a "<TT>-</TT>"
 character.  The associated rights are then removed from that
@@ -336,7 +336,7 @@ to all groups the user is a member of.
 The user "<TT>fred</TT>" will be granted the rights "<TT>lrswip</TT>"
 and the anonymous user will be granted the rights "<TT>lrp</TT>".
 
-<H4><A name="acladm">Implicit Rights for Administrators on Personal 
+<H4><A name="acladm">Implicit Rights for Administrators on Personal
 Mailboxes</A></H4>
 
 Regardless of the ACL on a mailbox, users who are listed in the
@@ -449,7 +449,7 @@ distribution)
 <h2><a name="quota">Quotas</a></h2>
 
 Quotas allow server administrators to limit resources used by
-hierarchies of mailboxes on the server.  
+hierarchies of mailboxes on the server.
 
 <h3><a name="quotasup">Supports Quotas on Storage</a></h3>
 
@@ -483,7 +483,7 @@ limited by at most one quota root.
 <p>exist and the quota roots
 
 <pre>
-   user.bovik 
+   user.bovik
    user.bovik.list
    user.bovik.saved
 </pre>
@@ -630,9 +630,9 @@ syslog facility.  The severity levels used are:
 
 <UL>
 <LI><TT>CRIT</TT> - Critical errors which probably require prompt administrator action
-<LI><TT>ERR</TT> - I/O errors, including failure to update quota usage.  
+<LI><TT>ERR</TT> - I/O errors, including failure to update quota usage.
 The syslog message includes the specific file and Unix error.
-<LI><TT>WARNING</TT> - Protection mechanism failures, client inactivity 
+<LI><TT>WARNING</TT> - Protection mechanism failures, client inactivity
 timeouts
 <LI><TT>NOTICE</TT> - Authentications, both successful and unsuccessful
 <LI><TT>INFO</TT> - Mailbox openings, duplicate delivery suppression
@@ -650,16 +650,16 @@ The largest database is the mailbox directories.  Each
 mailbox directory contains the following files:
 
 <DL>
-<DT>message files 
+<DT>message files
 <DD> There is one file per message, containing the
    message in RFC 822 format.  Lines in the message are separated by
    CRLF, not just LF.  The file name of each message is the message's
-   UID followed by a dot (.). 
+   UID followed by a dot (.).
 
 <P>In netnews newsgroups, the message files instead follow the
    format and naming conventions imposed by the netnews software. <P>
 
-<DT><TT>cyrus.header</TT> 
+<DT><TT>cyrus.header</TT>
 <DD>This file contains a magic number and variable-length
    information about the mailbox itself.  <P>
 
@@ -673,7 +673,7 @@ mailbox directory contains the following files:
 
 <DT><TT>cyrus.seen</TT>
 <DD>This file contains variable-length state information about
-   each reader of the mailbox who has "<TT>s</TT>" permissions.  
+   each reader of the mailbox who has "<TT>s</TT>" permissions.
 </DL>
 
 The "<TT>reconstruct</TT>" program can be used to recover from
@@ -726,7 +726,7 @@ usage of each <a href="#quotaroots">quota root</a>.
 
 <h4><a name="recoveryquotasrm">Removing Quota Roots</a></h4>
 
-To remove a quota root, remove the quota root's file.  Then run 
+To remove a quota root, remove the quota root's file.  Then run
 "<TT>quota -f</TT>" to make the quota files consistent again.
 
 <h3><a name="recoverysubs">Subscriptions</a></h3>
@@ -758,7 +758,7 @@ the first command following authentication.
 
 <h3><a name="configdirproc">"<TT>proc</TT>" Directory</a></h3>
 
-The subdirectory "<TT>proc</TT>" under the configuration directory 
+The subdirectory "<TT>proc</TT>" under the configuration directory
 contains one file per active server process.  The file name is the ASCII
 representation of the process id and the file contains the following
 tab-separated fields:
@@ -806,7 +806,7 @@ LMTP admins (either via the <tt>admins</tt> imapd.conf option or via the
 <p>Alternatively you may deliver via LMTP to a unix domain socket, and the
 connection will be preauthenticated as an administrative user (and access
 control is accomplished by controlling access to the socket).</p>
-  
+
 <p>Note that if a user has a sieve script, the sieve script runs authorized
 as *that* user, and the rights of the posting user are ignored for the purposes
 of determining the outcome of the sieve script.</p>
@@ -827,7 +827,7 @@ recipients of the message.</p>
 A message is considered a duplicate if two copies of a message with
 the same message-id and the same envelope receipient are received.
 Cyrus uses the duplicate delivery database to hold this information,
-and it looks approximately 3 days back in the default install. 
+and it looks approximately 3 days back in the default install.
 
 <p>Duplicate delivery suppression can be turned off by using the
 "duplicatesuppression" flag in the configuration file.</p>

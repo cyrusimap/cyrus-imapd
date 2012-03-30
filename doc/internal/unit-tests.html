@@ -219,7 +219,7 @@ valgrind --tool=memcheck --leak-check=full ./unit -v   <span class="note">(a)</s
 ==2999== Copyright (C) 2002-2010, and GNU GPL'd, by Julian Seward et al.
 ==2999== Using Valgrind-3.6.0.SVN-Debian and LibVEX; [...]
 ==2999== Command: ./unit -v
-==2999== 
+==2999==
 ...
 --Run Summary: Type      Total     Ran  Passed  Failed   <span class="note">(b)</span>
                suites        9       9     n/a       0
@@ -229,7 +229,7 @@ valgrind --tool=memcheck --leak-check=full ./unit -v   <span class="note">(a)</s
 ==2999== HEAP SUMMARY:   <span class="note">(c)</span>
 ==2999==     in use at exit: 4,489 bytes in 134 blocks
 ==2999==   total heap usage: 715 allocs, 581 frees, 352,763 bytes allocated
-==2999== 
+==2999==
 ==2999== 4 bytes in 1 blocks are definitely lost in loss record 3 of 50
 ==2999==    at 0x4C2815C: malloc (vg_replace_malloc.c:236)
 ==2999==    by 0x44A0CA: xmalloc (xmalloc.c:57)
@@ -240,7 +240,7 @@ valgrind --tool=memcheck --leak-check=full ./unit -v   <span class="note">(a)</s
 ==2999==    by 0x61B3827: CU_run_all_tests (in /usr/lib/libcunit.so.1.0.1)
 ==2999==    by 0x4066CC: run_tests (unit.c:144)
 ==2999==    by 0x406806: main (unit.c:283)
-==2999== 
+==2999==
 ...
 </blockquote>
 
@@ -552,7 +552,7 @@ Suite: crc32
 
 <a name="suite-init-and-cleanup"/><h2>4.3 Suite Init And Cleanup</h2>
 
-<p>Sometimes the behaviour of the functions under test depend on 
+<p>Sometimes the behaviour of the functions under test depend on
 external influences such as environment variables, global variables,
 or the presence of certain files.</p>
 

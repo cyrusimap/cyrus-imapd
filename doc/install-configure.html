@@ -11,7 +11,7 @@
 </h1>
 <body>
 
-This section describes the shell scripts to run and the configuration 
+This section describes the shell scripts to run and the configuration
 files to modify once "<tt>configure</tt>" and "<tt>make</tt>" have run.
 
 <ol> <li>Create a user and group for the Cyrus subsystem.  The
@@ -45,7 +45,7 @@ it does not, replace the system "<tt>syslogd</tt>" and
    mv syslog.conf /etc/syslog.conf
 </kbd></pre>
 
-If you do not copy the "<tt>syslog/syslog.conf</tt>" file to the 
+If you do not copy the "<tt>syslog/syslog.conf</tt>" file to the
 "<tt>/etc</tt>" directory, be sure to add support for
 "<tt>local6.debug</tt>".  The file should include a line like:
 
@@ -118,7 +118,7 @@ cyrus user and group and should not permit access to other users.
 <li>Create the default partition directories specified in the
 "<tt>/etc/imapd.conf</tt>" file.
 
-<p>This document uses a default partition directory of 
+<p>This document uses a default partition directory of
 "<tt>/var/spool/imap</tt>" in the following example:
 
 <pre>
@@ -183,7 +183,7 @@ synchronously.  The following example is for sendmail:
 <p><li>To enable STARTTLS support, see <a href="#openssl">how to
 configure OpenSSL</a> below.
 
-<p><li>Add the following lines to the "<tt>/etc/services</tt>" file if they 
+<p><li>Add the following lines to the "<tt>/etc/services</tt>" file if they
 aren't already there.
 
 <pre>
@@ -356,7 +356,7 @@ to select a different GID for Cyrus.  See the Cyrus configure options
 was more crucial when the use of Cyrus' "<tt>deliver</tt>" was more
 prevalent, but it is still a good idea to follow this policy.)
 
-<p>Another thing to note is the location of your "<tt>sendmail</tt>"  
+<p>Another thing to note is the location of your "<tt>sendmail</tt>"
 command.  On some platforms this will be "<tt>/usr/sbin/sendmail</tt>",
 on others, "<tt>/usr/lib/sendmail</tt>".  Cyrus will need to know where
 this command is.  See <a href="install-sieve.html">Installing Sieve</a>
@@ -390,7 +390,7 @@ message store capability of Cyrus.  The concurrency limit can be
 used to control how many simultaneous LMTP sessions will be
 permitted to the Cyrus message store.
 
-<p>Additional examples are included in the Postfix 
+<p>Additional examples are included in the Postfix
 file "<tt>README_FILES/LMTP_README</tt>".
 
 <h4>Configuring <a href="http://www.exim.org/">Exim 4</a></h4>
@@ -474,7 +474,7 @@ authenticate the client.</p>
 <li><p>OpenSSL requires the certificate and key in PEM format.  You can
 create the server's private key and certificate yourself using
 OpenSSL.  Here, we create a self-signed  key for the machine
-"<tt>foobar.andrew.cmu.edu</tt>" and put both the certificate and key 
+"<tt>foobar.andrew.cmu.edu</tt>" and put both the certificate and key
 in the file "<tt>/var/imap/server.pem</tt>".</p>
 
 <p>Please do not blindly enter in the information to OpenSSL

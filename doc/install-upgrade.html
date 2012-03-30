@@ -98,7 +98,7 @@
 
 <h2>Upgrading from 2.4.5</h2>
 <ul>
-<li>New config option: <tt>suppress_capabilities</tt>, which 
+<li>New config option: <tt>suppress_capabilities</tt>, which
   takes a space separated list of capabilities which will NOT
   be given in any imap capability response.  This can be used
   on frontends to not display capabilities that older backends
@@ -128,8 +128,8 @@
 <h2>Upgrading from 2.4.2</h2>
 <ul>
 <li>The AFS ptloader configure options have changed.  If you were
-    previously specifying --with-afs when you built, you'll now 
-    want to use --enable-afs instead.  Additionally, you may 
+    previously specifying --with-afs when you built, you'll now
+    want to use --enable-afs instead.  Additionally, you may
     now specify --with-afs-libdir and --with-afs-incdir to
     facilitate finding the AFS libraries and header files.</li>
 <li>The <i>sync_log_names</i> option has been replaced with
@@ -419,11 +419,11 @@ Note that this will fail for scripts that use the &quot;envelope&quot;
 extention but do not require it.  Cyrus 2.1's <tt>timsieved</tt> did
 not do appropriate checking that the optional envelope test was
 required before it was used.
-</li> 
+</li>
 
-<li> Configuration subsystem changes: 
+<li> Configuration subsystem changes:
 
-<ul> 
+<ul>
  <li>The tls_[service]_* configuration options have been removed.  Now
  use [servicename]_tls_*, where servicename is the service identifier
  from <tt>cyrus.conf</tt> for that particular process.</li>
@@ -547,11 +547,11 @@ and Sieve) have been merged into a single <tt>deliver.db</tt> database.
 You can safely remove the entire <tt>/var/imap/deliverdb</tt>
 directory structure after shutting down the server.
 
-<li>All of the Cyrus databases have been unified under a single BDB 
-environment.  A new <tt>ctl_cyrusdb</tt> tool is now used for database 
-recovery and checkpointing instead of <tt>ctl_mboxlist</tt> and 
-<tt>ctl_deliver</tt>.  You should replace the appropriate <tt>START</tt> and 
-<tt>EVENTS</tt> entries in <tt>cyrus.conf</tt> with those in the 
+<li>All of the Cyrus databases have been unified under a single BDB
+environment.  A new <tt>ctl_cyrusdb</tt> tool is now used for database
+recovery and checkpointing instead of <tt>ctl_mboxlist</tt> and
+<tt>ctl_deliver</tt>.  You should replace the appropriate <tt>START</tt> and
+<tt>EVENTS</tt> entries in <tt>cyrus.conf</tt> with those in the
 sample configurations in the <tt>master/conf</tt> directory.
 
 <li> Cyrus now caches SSL/TLS sessions in an external database. If you

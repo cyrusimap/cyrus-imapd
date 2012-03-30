@@ -43,11 +43,11 @@ struct prot_waitevent {
 calls to a prot function on the stream which this event is
 associated.</p>
 
-The API is as follows: 
+The API is as follows:
 
 <ul>
 <li>Use <tt>prot_addwaitevent()</tt> to add an event callback onto
-the stream: 
+the stream:
 
 <pre>
 extern struct prot_waitevent *prot_addwaitevent(struct protstream *s,
@@ -62,7 +62,7 @@ and <i>rock</i> is an opaque data item handed to the callback. It
 returns a pointer to the event structure; this is the pointer that
 must be used to remove the event or modify it in some way.</li>
 
-<li>Use <tt>prot_removewaitevent()</tt> to remove an event: 
+<li>Use <tt>prot_removewaitevent()</tt> to remove an event:
 
 <pre>
 extern void prot_removewaitevent(struct protstream *s,
