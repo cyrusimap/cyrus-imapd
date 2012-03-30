@@ -8,14 +8,14 @@
 <H1>              Cyrus IMAP Server:  Alternate Namespace</H1>
 
 <p>This document describes the alternatives to the <a
-href=overview.html#mboxname> standard</a> mailbox presentation
+href="overview.html#mboxname"> standard</a> mailbox presentation
 method.  These alternatives may be used together or independently.
 
 <p>The namespace options do NOT change the rules governing the behavior of
-mailboxes (as described in <a href=overview.html#mboxname>
+mailboxes (as described in <a href="overview.html#mboxname">
 overview.html</a>) or how mailboxes are stored on the filesystem.  The
-mailboxes are ALWAYS stored using the <a href=overview.html#mboxname>
-<tt>netnews</tt> convention</a> and <a href=overview.html#mboxnamestd>
+mailboxes are ALWAYS stored using the <a href="overview.html#mboxname">
+<tt>netnews</tt> convention</a> and <a href="overview.html#mboxnamestd">
 internal namespace</a>.  When configured to use one (or both) of the
 options below, the server simply translates mailbox names between the
 internal  names and the external names when used by the client in the
@@ -41,19 +41,19 @@ appear as if they reside at the same level as that user's
 "<TT>bovik</TT>" had a personal "<TT>work</TT>" mailbox, it would
 appear to user "<TT>bovik</TT>" as "<TT>work</TT>" instead of
 "<TT>INBOX.work</TT>" as it would in the <a
-href=overview.html#mboxnamestd> standard namespace</a>.
+href="overview.html#mboxnamestd"> standard namespace</a>.
 
 <p>This configuration requires that a special prefix be used for
 shared folders (to distinguish them from personal folders) and for
 accessing other users' folders.   By default, the prefix for shared
 folders is "<tt>Shared Folders</tt>" and the prefix for other users
 folders is "<tt>Other Users</tt>".  For example, a shared folder
-"<tt>foo</tt>" in the <a href=overview.html#mboxnamestd> standard
+"<tt>foo</tt>" in the <a href="overview.html#mboxnamestd"> standard
 namespace</a> would be presented as "<tt>Shared Folders.foo</tt>" in
 the alternate namespace.
 
 <p><b>NOTE:</b> All tools for administering the server, including
-admins using cyradm, always use the <a href=overview.html#mboxnamestd>
+admins using cyradm, always use the <a href="overview.html#mboxnamestd">
 internal namespace</a>.
 
 <H3><a name="altnameconfig">Configuring the Alternate
@@ -72,17 +72,17 @@ character ("/") to delimit levels of the mailbox hierarchy instead of
 the <tt>netnews</tt> character (".").  For example, if user
 "<tt>bovik</tt>" had a personal "<tt>work</tt>" mailbox, it would
 appear to user "<tt>bovik</tt>" as "<tt>INBOX/work</tt>" in the
-<a href=overview.html#mboxnamestd>standard namespace</a>.
+<a href="overview.html#mboxnamestd">standard namespace</a>.
 
 <p> When the UNIX hierarchy convention is used, the "." character MAY
 be used in mailbox names, including user names.  In order to maintain
 backwards compatibility with the <a
-href=overview.html#mboxnamestd>internal namespace</a>, all "."
+href="overview.html#mboxnamestd">internal namespace</a>, all "."
 characters are translated to a benign character (currently
 "^") before any data is stored to disk.  For example, if user
 "<tt>elmer.fudd</tt>" had a personal "<tt>rabbit.holes</tt>" mailbox,
 it would be stored as "<tt>user.elmer^fud.rabbit^holes</tt>" in the <a
-href=overview.html#mboxnamestd>internal namespace</a>.  It is
+href="overview.html#mboxnamestd">internal namespace</a>.  It is
 important to remember this phenomenon if/when reverting back to the
 <tt>netnews</tt> hierarchy convention.
 

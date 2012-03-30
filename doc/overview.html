@@ -106,7 +106,7 @@ character, nor may it contain two "." characters in a row.
 metacharacters are not permitted in mailbox names.
 
 <p>Optionally, the server can present mailboxes using the <a
-href=altnamespace.html#unixhiersep> UNIX hierarchy convention</a>.
+href="altnamespace.html#unixhiersep"> UNIX hierarchy convention</a>.
 
 <H3><A NAME="mboxnamestd">Standard (Internal) Namespace</A></H3>
 
@@ -159,7 +159,7 @@ resolves to "<TT>comp.infosystems.www</TT>" and the name
 <H3><A NAME="mboxnamealt">Alternate Namespace</A></H3>
 
 The Cyrus IMAP server can also use an <a
-href=altnamespace.html#altname> alternate namespace</a> which allows
+href="altnamespace.html#altname"> alternate namespace</a> which allows
 a user's personal mailboxes to appear as if they reside at the same
 level as that user's <TT>INBOX</TT> as opposed to children of it.  With
 this feature, it may appear that there are non-unique names for mailboxes
@@ -545,7 +545,7 @@ quota root can apply to mailboxes in different partitions.
 supports multiple mechanisms for notifying users of new mail.
 Notifications can be configured to be sent upon normal delivery
 (<tt>"MAIL"</tt> class) and/or sent as requested by a <a
-href=specs.html#sieve>Sieve</a> script (<tt>"SIEVE"</tt> class).
+href="specs.html#sieve">Sieve</a> script (<tt>"SIEVE"</tt> class).
 
 <p>By default, both types of notifications are disabled.
 Notifications are enabled by using one or both of the following
@@ -554,13 +554,13 @@ configuration options:
 <ul>
 <li>
 the "<TT>mailnotifier</TT>" option selects the <a
-href=man/notifyd.8.html>notifyd</a> method to use for
+href="man/notifyd.8.html">notifyd</a> method to use for
 "<tt>MAIL</tt>" class notifications
 </li>
 
 <li>
 the "<TT>sievenotifier</TT>" option selects the <a
-href=man/notifyd.8.html>notifyd</a> method to use for
+href="man/notifyd.8.html">notifyd</a> method to use for
 "<tt>SIEVE</tt>" class notifications (when no method is specified by
 the Sieve action)
 </li>
