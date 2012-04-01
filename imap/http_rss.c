@@ -212,14 +212,17 @@ static int meth_get(struct transaction_t *txn)
 	    int precond;
 	    time_t lastmod = 0;
 	    static struct buf etag = BUF_INITIALIZER;
+	    struct resp_body_t *resp_body = &txn->resp_body;
 
 	    /* Check any preconditions */
-	    buf_reset(&etag);
-	    buf_printf(&etag, "%s-%s",
-		       message_guid_encode(&record.guid),
-		       *section ? section : "html");
+	    buf_setcstr(&etag, message_guid_encode(&record.guid));
+	    if (!*section) buf_appendcstr(&etag, ".html");
+	    else if (strcmp(section, "0")) buf_printf(&etag, ".%s", section);
+
+	    resp_body->etag = buf_cstring(&etag);
 	    lastmod = record.internaldate;
-	    precond = check_precond(txn->meth, etag.s, lastmod, txn->req_hdrs);
+	    precond = check_precond(txn->meth, resp_body->etag,
+				    lastmod, txn->req_hdrs);
 
 	    if (precond != HTTP_OK) {
 		/* We failed a precondition - don't perform the request */
@@ -227,9 +230,8 @@ static int meth_get(struct transaction_t *txn)
 		goto done;
 	    }
 
-	    /* Fill in Etag, Last-Modified */
-	    txn->etag = etag.s;
-	    txn->resp_body.lastmod = lastmod;
+	    /* Fill in Last-Modified */
+	    resp_body->lastmod = lastmod;
 	    
 	    if (!*section) {
 		/* Return entire message formatted as text/html */
@@ -237,7 +239,7 @@ static int meth_get(struct transaction_t *txn)
 	    }
 	    else if (!strcmp(section, "0")) {
 		/* Return entire message as text/plain */
-		txn->resp_body.type = "text/plain";
+		resp_body->type = "text/plain";
 
 		write_body(HTTP_OK, txn, msg_base, msg_size);
 	    }
@@ -450,12 +452,21 @@ static int list_feeds(struct transaction_t *txn,
 
     /* Dynamic response should not be cached */
     txn->flags |= HTTP_NOCACHE;
-    txn->etag = NULL;
-    txn->resp_body.lastmod = 0;
 
     /* Setup for chunked response */
     txn->flags |= HTTP_CHUNKED;
+
+    /* Flush representation headers from template doc and set Content-Type */
+    memset(&txn->resp_body, 0, sizeof(struct resp_body_t));
     txn->resp_body.type = "text/html; charset=utf-8";
+
+    /* XXX  Can we get an ETag or Last-Modified from mailboxes.db? */
+
+    /* Short-circuit for HEAD request */
+    if (txn->meth[0] == 'H') {
+	response_header(HTTP_OK, txn);
+	return 0;
+    }
 
     if (!var) write_body(HTTP_OK, txn, base, len);
     else {
@@ -589,6 +600,19 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 	return precond;
     }
 
+    /* Fill in Last-Modified */
+    txn->resp_body.lastmod = lastmod;
+
+    /* Setup for chunked response */
+    txn->flags |= HTTP_CHUNKED;
+    txn->resp_body.type = "application/xml; charset=utf-8";
+
+    /* Short-circuit for HEAD request */
+    if (txn->meth[0] == 'H') {
+	response_header(HTTP_OK, txn);
+	return 0;
+    }
+
     /* Get maximum age of items to display */
     max_age = config_getint(IMAPOPT_RSS_MAXAGE);
     if (max_age > 0) age_mark = time(0) - (max_age * 60 * 60 * 24);
@@ -604,9 +628,6 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     /* Get TTL */
     ttl = config_getint(IMAPOPT_RSS_TTL);
     if (ttl < 0) ttl = 0;
-
-    /* Fill in Last-Modified */
-    txn->resp_body.lastmod = lastmod;
 
 #if 0
     /* Obtain recentuid */
@@ -636,10 +657,6 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
 	recentuid = mailbox->i.last_uid; /* nothing is recent! */
     }
 #endif
-
-    /* Setup for chunked response */
-    txn->flags |= HTTP_CHUNKED;
-    txn->resp_body.type = "application/xml; charset=utf-8";
 
     /* Start XML */
     buf_appendcstr(&buf, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n");
@@ -1004,6 +1021,12 @@ static void display_message(struct transaction_t *txn,
     /* Setup for chunked response */
     txn->flags |= HTTP_CHUNKED;
     txn->resp_body.type = "text/html; charset=utf-8";
+
+    /* Short-circuit for HEAD request */
+    if (txn->meth[0] == 'H') {
+	response_header(HTTP_OK, txn);
+	return;
+    }
 
     /* Start HTML */
     buf_printf(&buf, HTML_DOCTYPE);

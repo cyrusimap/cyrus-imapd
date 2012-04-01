@@ -853,8 +853,7 @@ static int meth_copy(struct transaction_t *txn)
 		/* XXX  check for errors, if this fails, backout changes */
 
 		/* Tell client about the new resource */
-		txn->etag = message_guid_encode(&newrecord.guid);
-		txn->loc = dest.path;
+		txn->resp_body.etag = message_guid_encode(&newrecord.guid);
 
 		mailbox_unlock_index(dest_mbox, NULL);
 	    }
@@ -1045,7 +1044,6 @@ static int meth_get(struct transaction_t *txn)
     struct caldav_db *caldavdb = NULL;
     uint32_t uid = 0;
     struct index_record record;
-    const char *etag = NULL;
     time_t lastmod = 0;
 
     /* Parse the path */
@@ -1119,9 +1117,9 @@ static int meth_get(struct transaction_t *txn)
     }
 
     /* Check any preconditions */
-    etag = message_guid_encode(&record.guid);
+    resp_body->etag = message_guid_encode(&record.guid);
     lastmod = record.internaldate;
-    precond = check_precond(txn->meth, etag, lastmod, txn->req_hdrs);
+    precond = check_precond(txn->meth, resp_body->etag, lastmod, txn->req_hdrs);
 
     if (precond != HTTP_OK) {
 	/* We failed a precondition - don't perform the request */
@@ -1129,8 +1127,7 @@ static int meth_get(struct transaction_t *txn)
 	goto done;
     }
 
-    /* Fill in Etag, Last-Modified, and Content-Length */
-    txn->etag = etag;
+    /* Fill in Last-Modified, and Content-Length */
     resp_body->lastmod = lastmod;
     resp_body->type = "text/calendar; charset=utf-8";
 
@@ -2344,8 +2341,8 @@ static int meth_put(struct transaction_t *txn)
 		    /* XXX  check for errors, if this fails, backout changes */
 
 		    /* Tell client about the new resource */
-		    txn->etag = message_guid_encode(&newrecord.guid);
-		    txn->loc = txn->req_tgt.path;
+		    txn->resp_body.etag = message_guid_encode(&newrecord.guid);
+		    if (txn->meth[1] == 'O') txn->loc = txn->req_tgt.path;
 		}
 	    }
 	}

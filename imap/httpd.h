@@ -157,6 +157,7 @@ struct resp_body_t {
     const char *lang;	/* Content-Language */
     const char *loc;	/* Content-Location */
     const char *type;	/* Content-Type     */
+    const char *etag;	/* ETag             */
     time_t lastmod;	/* Last-Modified    */
 };
 
@@ -169,7 +170,6 @@ struct transaction_t {
     struct buf req_body;		/* Buffered request body */
     struct auth_challenge_t auth_chal;	/* Authentication challenge */
     const char *loc;	    		/* Location: of resp representation */
-    const char *etag;			/* ETag: of response representation */
     struct error_t error;		/* Error response meta-data */
     struct resp_body_t resp_body;	/* Response body meta-data */
 #ifdef HAVE_ZLIB

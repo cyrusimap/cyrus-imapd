@@ -891,7 +891,7 @@ static void cmdloop(void)
 	txn.meth = NULL;
 	txn.flags = !httpd_timeout ? HTTP_CLOSE : 0;
 	txn.auth_chal.param = NULL;
-	txn.loc = txn.etag = NULL;
+	txn.loc = NULL;
 	txn.req_hdrs = NULL;
 	memset(&txn.error, 0, sizeof(struct error_t));
 	memset(&txn.resp_body, 0, sizeof(struct resp_body_t));
@@ -924,6 +924,7 @@ static void cmdloop(void)
 
 	/* Read Request-Line = Method SP request-target SP HTTP-Version CRLF */
 	c = getword(httpd_in, &meth);
+	txn.meth = buf_cstring(&meth);
 	if (c == ' ') {
 	    c = getword(httpd_in, &uri);
 	    if (c == ' ') {
@@ -987,7 +988,6 @@ static void cmdloop(void)
 
 	/* Check Method against list of supported methods in the namespace */
 	if (!ret) {
-	    txn.meth = buf_cstring(&meth);
 	    for (i = 0;
 		 http_methods[i] && strcmp(http_methods[i], txn.meth); i++);
 
@@ -1450,8 +1450,8 @@ const char *http_statusline(long code)
 void response_header(long code, struct transaction_t *txn)
 {
     char datestr[80];
-    struct auth_challenge_t *auth_chal;
-    struct resp_body_t *resp_body;
+    struct auth_challenge_t *auth_chal = &txn->auth_chal;
+    struct resp_body_t *resp_body = &txn->resp_body;
     static struct buf log = BUF_INITIALIZER;
     const char **hdr;
 
@@ -1485,15 +1485,9 @@ void response_header(long code, struct transaction_t *txn)
 
 
     /* General Header Fields */
-    rfc822date_gen(datestr, sizeof(datestr), time(0));
-    prot_printf(httpd_out, "Date: %s\r\n", datestr);
-
-    if (!httpd_tls_done && tls_enabled()) {
-	prot_printf(httpd_out, "Upgrade: TLS/1.0\r\n");
-    }
-
     switch (code) {
     case HTTP_SWITCH_PROT:
+	prot_printf(httpd_out, "Upgrade: TLS/1.0\r\n");
 	prot_printf(httpd_out, "Connection: Upgrade\r\n");
 
     case HTTP_CONTINUE:
@@ -1506,35 +1500,47 @@ void response_header(long code, struct transaction_t *txn)
 	/* Force the response to the client immediately */
 	prot_flush(httpd_out);
 
-	/* Restart method processing alarm (don't interrupt TLS negotiation) */
+	/* Restart method processing alarm if not doing TLS negotiation */
 	if (code != HTTP_SWITCH_PROT) alarm(httpd_keepalive);
 
 	return;
+
+    case HTTP_UPGRADE:
+	prot_printf(httpd_out, "Upgrade: TLS/1.0\r\n");
+
+    default:
+	/* Final response */
+	if (txn->flags & HTTP_CLOSE)
+	    prot_printf(httpd_out, "Connection: close");
+	else {
+	    prot_printf(httpd_out, "Keep-Alive: timeout=%d\r\n", httpd_timeout);
+	    prot_printf(httpd_out, "Connection: Keep-Alive");
+	}
+	prot_printf(httpd_out, "%s\r\n",
+		    (code == HTTP_UPGRADE) ? ", Upgrade" : "");
     }
 
-    /* Final response */
-    if (txn->flags & HTTP_CLOSE)
-	prot_printf(httpd_out, "Connection: close");
-    else {
-	prot_printf(httpd_out, "Keep-Alive: timeout=%d\r\n", httpd_timeout);
-	prot_printf(httpd_out, "Connection: Keep-Alive");
+    if (txn->flags & HTTP_NOCACHE) {
+	prot_printf(httpd_out, "Cache-Control: no-cache\r\n");
     }
-    prot_printf(httpd_out, "%s\r\n",
-		(code == HTTP_UPGRADE) ? ", Upgrade" : "");
 
 
     /* Response Header Fields */
-    if (httpd_tls_done) {
-	prot_printf(httpd_out, "Strict-Transport-Security: max-age=600\r\n");
-    }
+    rfc822date_gen(datestr, sizeof(datestr), time(0));
+    prot_printf(httpd_out, "Date: %s\r\n", datestr);
 
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
 	prot_printf(httpd_out, "Server: %s\r\n", buf_cstring(&serverinfo));
     }
 
+    if (httpd_tls_done) {
+	prot_printf(httpd_out, "Strict-Transport-Security: max-age=600\r\n");
+    }
+
     prot_printf(httpd_out, "Accept-Ranges: none\r\n");
 
     if (txn->req_tgt.allow & ALLOW_DAV) {
+	/* Construct DAV header based on namespace of request URL */
 	prot_printf(httpd_out, "DAV: 1, 3");
 	if (txn->req_tgt.allow & ALLOW_WRITE) {
 	    prot_printf(httpd_out, ", access-control, extended-mkcol");
@@ -1553,8 +1559,12 @@ void response_header(long code, struct transaction_t *txn)
 	prot_printf(httpd_out, "\r\n");
     }
 
-    if ((code == HTTP_NOT_ALLOWED) ||
-	((code == HTTP_OK) && txn->meth && (txn->meth[0] == 'O'))) {
+    switch (code) {
+    case HTTP_OK:
+	if (txn->meth[0] != 'O') break;
+
+    case HTTP_NOT_ALLOWED:
+	/* Construct Allow header for OPTIONS response and 405 response */
 	prot_printf(httpd_out, "Allow: OPTIONS");
 	if (txn->req_tgt.allow & ALLOW_READ) {
 	    prot_printf(httpd_out, ", GET, HEAD");
@@ -1575,7 +1585,6 @@ void response_header(long code, struct transaction_t *txn)
 	}
     }
 
-    auth_chal = &txn->auth_chal;
     if (code == HTTP_UNAUTHORIZED) {
 	if (!auth_chal->scheme) {
 	    /* Require authentication by advertising all possible schemes */
@@ -1615,22 +1624,20 @@ void response_header(long code, struct transaction_t *txn)
 	}
     }
 
-    if (txn->flags & HTTP_NOCACHE) {
-	prot_printf(httpd_out, "Cache-Control: no-cache\r\n");
-    }
-
-    if (txn->etag) prot_printf(httpd_out, "ETag: \"%s\"\r\n", txn->etag);
-
     if (txn->loc) prot_printf(httpd_out, "Location: %s\r\n", txn->loc);
 
 
     /* Payload Header Fields */
-    resp_body = &txn->resp_body;
-    if (txn->flags & HTTP_CHUNKED) {
-	prot_printf(httpd_out, "Transfer-Encoding: chunked\r\n");
-    }
-    else {
-	prot_printf(httpd_out, "Content-Length: %lu\r\n", resp_body->len);
+    switch (code) {
+    case HTTP_NO_CONTENT:
+    case HTTP_NOT_MODIFIED:
+	break;
+
+    default:
+	if (txn->flags & HTTP_CHUNKED)
+	    prot_printf(httpd_out, "Transfer-Encoding: chunked\r\n");
+	else
+	    prot_printf(httpd_out, "Content-Length: %lu\r\n", resp_body->len);
     }
 
 
@@ -1646,6 +1653,9 @@ void response_header(long code, struct transaction_t *txn)
     }
     if (resp_body->type) {
 	prot_printf(httpd_out, "Content-Type: %s\r\n", resp_body->type);
+    }
+    if (resp_body->etag) {
+	prot_printf(httpd_out, "ETag: \"%s\"\r\n", resp_body->etag);
     }
     if (resp_body->lastmod) {
 	rfc822date_gen(datestr, sizeof(datestr), resp_body->lastmod);
@@ -1711,7 +1721,18 @@ void write_body(long code, struct transaction_t *txn,
 	response_header(code, txn);
     }
 
-    if (txn->meth && txn->meth[0] == 'H') return;
+    /* MUST NOT send a body for 1xx/204/304 response or any HEAD response */
+    switch (code) {
+    case HTTP_CONTINUE:
+    case HTTP_SWITCH_PROT:
+    case HTTP_PROCESSING:
+    case HTTP_NO_CONTENT:
+    case HTTP_NOT_MODIFIED:
+	return;
+
+    default:
+	if (txn->meth[0] == 'H') return;
+    }
 
 #ifdef HAVE_ZLIB
     if (txn->flags & HTTP_GZIP) {
@@ -1814,11 +1835,6 @@ void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
 /* Output an HTTP error response with optional XML or text body */
 void error_response(long code, struct transaction_t *txn)
 {
-    if (txn->meth && txn->meth[0] == 'H') {
-	txn->error.precond = NULL;
-	txn->error.desc = NULL;
-    }
-
     if (txn->error.precond) {
 	xmlNodePtr root = xml_add_error(NULL, &txn->error, NULL);
 
@@ -2225,15 +2241,13 @@ int get_doc(struct transaction_t *txn, filter_proc_t filter)
 
     map_refresh(fd, 1, &msg_base, &msg_size, sbuf.st_size, path, NULL);
 
-    /* Fill in Etag, Last-Modified, and Content-Length */
+    /* Fill in Etag */
     message_guid_generate(&guid, msg_base, msg_size);
-    txn->etag = message_guid_encode(&guid);
-    resp_body->lastmod = sbuf.st_mtime;
-    resp_body->len = msg_size;
+    resp_body->etag = message_guid_encode(&guid);
 
     /* Check any preconditions */
-    precond = check_precond(txn->meth, txn->etag,
-			    resp_body->lastmod, txn->req_hdrs);
+    precond = check_precond(txn->meth, resp_body->etag,
+			    sbuf.st_mtime, txn->req_hdrs);
 
     /* We failed a precondition - don't perform the request */
     if (precond != HTTP_OK) {
@@ -2242,6 +2256,10 @@ int get_doc(struct transaction_t *txn, filter_proc_t filter)
 
 	return precond;
     }
+
+    /* Fill in Last-Modified, and Content-Length */
+    resp_body->lastmod = sbuf.st_mtime;
+    resp_body->len = msg_size;
 
     if ((ext = strrchr(txn->req_tgt.path, '.'))) {
 	/* Try to use filename extension to identity Content-Type */
