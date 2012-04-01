@@ -207,7 +207,7 @@ removed from <tt>/etc/[x]inetd.conf</tt> and [x]inetd needs to be
 restarted.
 </ol>
 
-<a name="master"><h3>Configuring the Master Process</h3></a>
+<h3><a name="master">Configuring the Master Process</a></h3>
 
 <ol>
 <li> Choose a configuration from the <tt>master/conf</tt> directory:
@@ -282,7 +282,7 @@ specific signal numbers - check your own system before using this):
 </pre>
 </ol>
 
-<a name="mta"><h3>Configuring the Mail Transfer Agent</h3></a>
+<h3><a name="mta">Configuring the Mail Transfer Agent</a></h3>
 
 <p>In order to deliver mail to the Cyrus system, you'll have to
 configure your MTA (Sendmail, Postfix, Exim, etc.) to use LMTP.
@@ -312,11 +312,11 @@ If you wish to change the name of the UNIX socket or switch to TCP,
 define <tt>CYRUSV2_MAILER_ARGS</tt> appropriately as described in
 <TT>cf/README</TT>.</li>
 
-<p><li> For Sendmail 8.10 - 8.12.3, use the <a
+<li> For Sendmail 8.10 - 8.12.3, use the <a
 href="cyrusv2.mc">cyrusv2.mc</a> file as a template to create a
 Sendmail configuration file.</li>
 
-<p><li> For Sendmail 8.9.x and earlier, use the <tt>cyrus</tt> mailer
+<li> For Sendmail 8.9.x and earlier, use the <tt>cyrus</tt> mailer
 definition in the Sendmail distribution:
 
 <pre>
@@ -394,7 +394,7 @@ file "<tt>README_FILES/LMTP_README</tt>".
 
 <h4>Configuring <a href="http://www.exim.org/">Exim 4</a></h4>
 
-Generate an Exim configuration file which delivers local mail to the
+<p>Generate an Exim configuration file which delivers local mail to the
 IMAP server.  See the Exim documentation for information on how to
 create a complete configuration file.
 
@@ -402,20 +402,18 @@ create a complete configuration file.
 are usually no local user accounts.  As a result, you must define the
 following "router":
 
-<ul>
 <pre>
 localuser:
   driver = accept
   transport = local_delivery
 </pre>
-</ul>
 
 <p>The following "transports" assume that you are using either the
 <tt>lmtpunix</tt> or <tt>lmtp</tt> service from one of the sample
 <tt>cyrus.conf</tt> files discussed above.
 
 <ul>
-<p><li> Using <tt>lmtpunix</tt> (UNIX socket):
+<li> Using <tt>lmtpunix</tt> (UNIX socket):
 
 <pre>
 local_delivery:
@@ -426,7 +424,7 @@ local_delivery:
 </pre>
 </li>
 
-<p><li> Using <tt>lmtp</tt> (TCP socket -- Exim and Cyrus on same host):
+<li> Using <tt>lmtp</tt> (TCP socket -- Exim and Cyrus on same host):
 
 <pre>
 local_delivery:
@@ -446,7 +444,7 @@ consult the Exim documentation and sample configurations.
 If you wish to use export Netnews via IMAP, consult <a
 href="install-netnews.html">install-netnews.html</a>.
 
-<a name="openssl"><h2>SSL, TLS, and OpenSSL</h2></a>
+<h2><a name="openssl">SSL, TLS, and OpenSSL</a></h2>
 
 <p>Transport Layer Security (TLS), is a standardized version of the Secure
 Sockets Layer (SSL v3) standard.  IMAP can make use of two different
@@ -567,8 +565,8 @@ client certificates.  To do this, try the following:</p>
 authenticate DN (distinguished name) to a SASL authentication
 name.</p>
 
-<a name="altnamespace"><h2>Alternate Namespace and UNIX Hierarchy
-Convention</h2></a>
+<h2><a name="altnamespace">Alternate Namespace and UNIX Hierarchy
+Convention</a></h2>
 
 If you wish to use the alternate namespace and/or the UNIX hierarchy
 convention, consult <a
