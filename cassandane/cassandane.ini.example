@@ -107,3 +107,16 @@
 [config]
 ##sasl_mech_list = PLAIN LOGIN DIGEST-MD5
 ##debug_command = @prefix@/utils/gdbtramp %s %d
+
+# This section describes how Cassandane interacts with the ImapTest
+# testsuite, which is a test suite for IMAP servers written by the
+# Dovecot team and downloadable from http://www.imapwiki.org/ImapTest/
+[imaptest]
+# The base directory of a built but not installed ImapTest.  If empty,
+# no ImapTests will be found or run.
+##basedir =
+# A list of tests which will be suppressed, i.e. not reported and not
+# run.  The default value is the list of ImapTest tests which are known
+# to trigger unfixed bugs in Cyrus at the moment, hopefully that will
+# shrink to nil in the future.
+##suppress = listext subscribe

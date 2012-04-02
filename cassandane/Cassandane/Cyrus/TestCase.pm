@@ -193,16 +193,19 @@ sub _run_magic
 	$seen{$m} = 1;
     }
 
-    foreach my $a (attributes::get($self->can($self->{_name})))
-    {
-	my $m = lc($a);
-	die "Unknown attribute $a"
-	    unless defined $magic_handlers{$m};
-	next if $seen{$m};
-	$self->{_current_magic} = "Magic attribute $a";
-	$magic_handlers{$m}->($self);
-	$self->{_current_magic} = undef;
-	$seen{$m} = 1;
+    my $sub = $self->can($self->{_name});
+    if (defined $sub) {
+	foreach my $a (attributes::get($sub))
+	{
+	    my $m = lc($a);
+	    die "Unknown attribute $a"
+		unless defined $magic_handlers{$m};
+	    next if $seen{$m};
+	    $self->{_current_magic} = "Magic attribute $a";
+	    $magic_handlers{$m}->($self);
+	    $self->{_current_magic} = undef;
+	    $seen{$m} = 1;
+	}
     }
 }
 
