@@ -25,13 +25,13 @@ International</a>.
 
 <p>You'll need to make sure that "<tt>lmtpd</tt>" can send outgoing
 messages.  Currently, it invokes "<tt>/usr/lib/sendmail</tt>" by
-default to send messages.  Change this by adding a line like:
+default to send messages.  Change this by adding a line like:</p>
 
 <pre>
    sendmail: /usr/sbin/sendmail
 </pre>
 
-in your "<tt>/etc/imapd.conf</tt>".  If you're using Postfix or another
+<p>in your "<tt>/etc/imapd.conf</tt>".  If you're using Postfix or another
 MTA, make sure that the sendmail referenced in
 "<tt>/etc/imapd.conf</tt>" is Sendmail-compatible.</p>
 
@@ -49,14 +49,12 @@ sieve script stored in the home directory of the user as
 <h3>Testing the sieve server</h3>
 <ol>
 
-<p>
 <li>The Sieve server, "<tt>timsieved</tt>", is used for transporting
 user Sieve scripts to the sealed IMAP server.  It is incompatible with
 the "<tt>sieveusehomedir</tt>" option.  It is named after the
 principal author, Tim Martin, who desperately wanted something named
 after him in the Cyrus distribution.
 
-<p>
 <li>From your normal account, telnet to the sieve port on the
 server you're setting up:
 
@@ -64,7 +62,7 @@ server you're setting up:
 <kbd>   telnet foobar sieve
 </kbd></pre>
 
-If your server is running, you'll get a message similar to the following one:
+<p>If your server is running, you'll get a message similar to the following one:
 
 <pre>
    Trying 128.2.10.192...
@@ -83,7 +81,6 @@ are listed. This list should be identical to the one listed by
 "<tt>imapd</tt>" earlier. Next terminate the connection, by typing
     "<kbd>logout</kbd>".
 
-<p>
 <li>Next test authenticating to the sieve server. To do this run the
 "<tt>sieveshell</tt>" utility. You must specify the server.  If you
 run this utility from a different machine without the "sieve" entry in

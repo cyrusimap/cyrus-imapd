@@ -176,7 +176,7 @@ the index header.  The interesting work is actualy done in
 <tt>mailbox_close</tt>.  See below under "delayed actions".</p>
 
 <p><tt>mailbox_delete</tt> requires an exclusive index lock, but
-can complete quite happily with only a shared namelock.
+can complete quite happily with only a shared namelock.</p>
 
 <h2>Reading and writing records</h2>
 
@@ -231,7 +231,7 @@ never be unexpunged, UIDs can't change, etc) and the internal
 tracking counts and quota data are updated as well.  They will
 be committed at unlock time, see "delayed actions"</p>
 
-<p>If you don't set the <tt>record.silent<tt> field to a true value
+<p>If you don't set the <tt>record.silent</tt> field to a true value
 before rewriting or appending, the <tt>record.modseq</tt> and
 <tt>record.last_updated</tt> values will be changed.  This allows
 condstore to work correctly.</p>

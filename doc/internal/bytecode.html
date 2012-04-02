@@ -69,10 +69,10 @@ following the initial opcode.</p>
 
 <p>For example, single argument commands such as REJECT, FILEINTO, REDIRECT
 are followed by a bytecode_t for a string's length, and then a bytecode_t
-which contains a pointer to a string.<p>
+which contains a pointer to a string.</p>
 
 <p>Commands such as ADDFLAG, SETFLAG, REMOVEFLAG, which take a stringlist,
- format the stringlist as (using bc_stringlist_generate):
+ format the stringlist as (using bc_stringlist_generate):</p>
 
 <pre>
 {Number of Strings}{String 1 Length}{String 1 Ptr}{String 2 Length}....

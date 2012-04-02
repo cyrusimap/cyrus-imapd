@@ -391,12 +391,11 @@ on the mailbox.</dd>
 <dt>IMAP_DUPDELIVER</dt>
 <dd> Flag signalling that we're allowing duplicate delivery of
 messages to the mailbox, overriding system-wide duplicate suppression.</dd>
-</dl>
 
 <dt>MAILBOX_NEEDS_REPACK</dt>
 <dd> Flag signalling that the mailbox is due to be repacked.  During
 mailbox_close() every process will attempt to take an exclusive namelock
-on the mailbox and repack.
+on the mailbox and repack.</dd>
 
 <dt>MAILBOX_DELETED</dt>
 <dd> Flag signalling that the mailbox is deleted.  This can be set with
@@ -405,6 +404,7 @@ they need to close it and attempt cleanup.  The last process to close
 the mailbox will perform the final cleanup under an exclusive namelock,
 giving the other processes a chance to finish their current operation
 first without files disappearing from under them!
+</dd>
 </dl>
 </dd>
 
@@ -414,7 +414,6 @@ first without files disappearing from under them!
 <dt>Highest ModSeq (8 bytes)</dt>
 <dd> Highest Modification Sequence of all the messages in the
 mailbox (CONDSTORE).</dd>
-</dl>
 
 <dt>Deleted ModSeq (8 bytes)</dt>
 <dd> Lowest Modification Sequence before which expunged message data
@@ -438,7 +437,7 @@ too close together if expunges were closely spaced</dd>
 <dd> CRC32 value of the bytes in the <tt>cyrus.header</tt> file for
 this mailbox.  Must be rewritten whenever the cyrus.header file is
 changed (see locking considerations above - this is why the
-cyrus.index must be exclusively locked!)
+cyrus.index must be exclusively locked!)</dd>
 
 <dt>Sync CRC (4 bytes)</dt>
 <dd> An XOR of the CRC32 of a specially generated value for each of

@@ -5,7 +5,7 @@
 <head>
 <!-- warning this is a UTF-8 file. please don't pretend it's ISO-8859. -->
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-<meta name="revision" 
+<meta name="revision"
 content="$Id: internationalization.html,v 1.7 2003/10/22 18:50:05 rjs3 Exp $" />
 <meta name="author" content="Larry Greenfield" />
 
@@ -112,7 +112,7 @@ file; it is stable and is an integer. If this version of Cyrus does
 not support the charset, <tt>CHARSET_UNKNOWN_CHARSET</tt> is
 returned.</dd>
 
-<dt><tt>comp_pat *charset_compilepat(const char *s)</tt></dt> 
+<dt><tt>comp_pat *charset_compilepat(const char *s)</tt></dt>
 <dd>
 Compiles a NUL-terminated canonicalized string <i>s</i> into a
 Boyer-Moore table for fast searching. I'll describe these <a
@@ -125,15 +125,15 @@ href="#comp_pat">compiled patterns</a> later. </dd>
     const char *s, int len)</tt></dt>
 <dd> Searches for a canonicalized string <i>substr</i> in the
     canonicalized string <i>s</i>. <i>s</i> is of length <i>len</i>.
-    <i>substr</i> must have been previously compiled into <i>pat</i>. 
+    <i>substr</i> must have been previously compiled into <i>pat</i>.
     Returns non-zero for a hit, zero for no match.
 </dd>
 
 <dt><tt>int charset_searchfile(const char *substr, comp_pat *pat,
-                              const char *msg_base, int mapnl, int len, 
+			      const char *msg_base, int mapnl, int len,
                               charset_index charset, int encoding)</tt></dt>
 
-<dd> 
+<dd>
 Searches for the canonicalized string <i>substr</i> with compiled
 pattern <i>pat</i> in a large buffer starting at <i>msg_base</i> of
 length <i>len</i>. The large buffer is of charset <i>charset</i> with
@@ -150,7 +150,7 @@ is dynamically converted to <tt>\r\n</tt>. This feature is deprecated.)
 <dd>
 Decode the MIME body part (per RFC 2045) located in the large buffer
 starting at <i>msg_base</i> of length <i>len</i>. The large buffer is of
-encoding <i>encoding</i>. <tt>charset_decode_mimebody()</tt> will decode 
+encoding <i>encoding</i>. <tt>charset_decode_mimebody()</tt> will decode
 into <i>buf</i>. <i>buf</i> must be reallocable and currently at least size
 <i>bufsz</i>.  The number of decoded bytes is returned in <i>outlen</i>.</dd>
 
@@ -310,7 +310,7 @@ characters and has an implicit jump to the 1st table of UTF-8.</dd>
 
 <p>Finally, it's useful to mention the special character
 <tt>EMPTY</tt> which is guaranteed not to match any character. It is
-also represented by an uppercase US-ASCII character.
+also represented by an uppercase US-ASCII character.</p>
 
 <h2 id="comp_pat">searching and compiled patterns</h2>
 
@@ -346,7 +346,7 @@ character. (Actually, some ISO-8859-x octets do not map to any Unicode
 character. In that case, the file either does not contain that octet
 or map it to "<tt>????</tt>".)</p>
 
-<p>Other character sets are trickier. For instance, GB-2312 has both 
+<p>Other character sets are trickier. For instance, GB-2312 has both
 single and double byte characters, but is still a simple map from
 input character to output character. More complicated are modal
 character encodings. For instance, ISO-2022-JP starts in US-ASCII mode

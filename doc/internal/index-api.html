@@ -19,7 +19,7 @@
 <tt>imap/index.c</tt>.  It provides a snapshot view into the
 underlying mailbox (see <a href="mailbox-api.html">the
 Mailbox API documentation</a> which obeys IMAP semantics,
-as well as all the searching and sorting logic.
+as well as all the searching and sorting logic.</p>
 
 <h2>Opening and closing</h2>
 
@@ -72,11 +72,12 @@ a <b>huge</b> mailbox.</p>
     non-peek body fetch, expunge) then cycle through the refreshed
     state map and update the records which are affected.</li>
 <li>call <tt>index_unlock</tt> (unlock the underlying mailbox and
-    commit the statuscache changes)</li>
+    commit the statuscache changes)
 
 <p>At this point the index lock is <b>released</b> and we have not
    yet generated any network traffic.  Now start generating the
    response.</p>
+</li>
 
 <li>if expunges are allowed, call <tt>index_tellexpunge</tt></li>
 <li>call <tt>index_tellchanges</tt> to tell about all other changes</li>

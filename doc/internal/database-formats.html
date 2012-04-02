@@ -77,7 +77,7 @@ contents has the following format:</p>
 </pre>
 
 <p>The translation to/from this data record format is handled by the
-quota_legacy cyrusdb backend.<p>
+quota_legacy cyrusdb backend.</p>
 
 <h2>Duplicate Delivery (deliver.db)</h2>
 
@@ -90,7 +90,7 @@ the mailbox (if delivered locally). The format of each record is as
 follows:</p>
 
 <pre>
-Key: &lt;Message-ID&gt\0&lt;Recipient&gt;\0
+Key: &lt;Message-ID&gt;\0&lt;Recipient&gt;\0
 
 Data: &lt;Timestamp (4 bytes)&gt;&lt;Message UID (4 bytes)&gt;
 </pre>
@@ -161,7 +161,7 @@ Data: &lt;Version&gt;TAB&lt;Deny List (comma-separated wildmat patterns)&gt;TAB&
 
 <h2>Seen State (&lt;userid&gt;.seen)</h2>
 
-This database is a per-user database and maintains the list of
+<p>This database is a per-user database and maintains the list of
 messages that the user has read in each mailbox.  The database is
 indexed by mailbox unique-id and each data record contains the
 database version number, the timestamp of when a message was last

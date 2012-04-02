@@ -12,7 +12,7 @@
 used in Cyrus naming of users, folders, directory paths, etc.</p>
 
 <h2>Current Uses</h2>
-<br>
+<br/>
 Character: +
 <ul>
 <li>(LMTP) Separation of postuser and target mailbox for delivery</li>
@@ -21,40 +21,42 @@ Character: +
     return LSUB results (when imapmagicplus is set)</li>
 <li>(POP3) POP a subfolder directly (e.g. rjs3+foo POPs user.rjs3.foo)</li>
 </ul>
-<br>
+<br/>
 
 Character: . /
-<br>
+<br/>
 <ul>
 <li>[mailbox names] Hierarchy separators</li>
 </ul>
-<br>
+<br/>
 
 Character: ^
-<br>
+<br/>
 <ul>
 <li>[mailbox names] In unixhierarchysep, ^ is the part of the internal
     name that represents a '.'</li>
 </ul>
-<br>
+<br/>
 
 Characters: @ %
-<br>
+<br/>
 <ul>
 <li>[usernames] These are realm separators for the purposes of authentication</li>
 </ul>
-<br>
+<br/>
 
 <h2>Future Uses</h2>
 
 Character: +
-<br>
+<br/>
 <ul>
 <li>IMAP LIST filters (e.g. rjs3+foo will only list folders that match foo*)</li>
 <li>possibly other interpretations here:
-<br>
+<br/>
      - rjs3+foo will do an effective chroot(foo.)
-<br>
+<br/>
      - rjs3+foo will only list folders in user.rjs3.foo*</li>
+</ul>
+
 </body>
 </html>

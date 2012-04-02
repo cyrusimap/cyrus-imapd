@@ -29,21 +29,21 @@ breaking things.  Exceptions are noted below.</p>
 <h2>Code Layout</h2>
 
 <p>The implementation of each interface is in <tt>lib/cyrusdb_NAME.c</tt>,
-for example lib/cyrusdb_flat.c</p>.  General functions are in
-<tt>lib/cyrusdb.c</tt> and the interface in <tt>lib/cyrusdb.h</tt>.
+for example lib/cyrusdb_flat.c.  General functions are in
+<tt>lib/cyrusdb.c</tt> and the interface in <tt>lib/cyrusdb.h</tt>.</p>
 
 <h2>Configuration</h2>
 
 <p>The name of the backend for each of the main internal databases can be
-configured in imapd.conf, for example: <tt>annotation_db: skiplist</tt>.</p>
+configured in imapd.conf, for example: <tt>annotation_db: skiplist</tt>.
 This is then read in imap/global.h and imap/global.c during startup, so
 that the global variable <tt>config_annotation_db</tt> gets set to the actual
-database backend:
+database backend:</p>
 
 <pre>
     config_annotation_db =
             cyrusdb_fromname(config_getstring(IMAPOPT_ANNOTATION_DB));
-</pre></p>
+</pre>
 
 <p><tt>cyrusdb_fromname</tt> uses the database name to find the
 <tt>struct cyrusdb_backend *</tt> of the actual database.</p>
@@ -51,7 +51,7 @@ database backend:
 <p>The main module for each database then sets up a "short name" to
 refer to the struct containing the funtion pointers for each action
 on that database type, giving an "object oriented" API to the database,
-for example:
+for example:</p>
 
 <pre>
   #define DB config_annotation_db
@@ -59,11 +59,10 @@ for example:
   r = DB-&gt;open(fname, dbflags, &amp;db);
 
   r = DB-&gt;fetch(&amp;db, key, keylen, &amp;data, &amp;datalen, &amp;tid);
-</pre></p>
+</pre>
 
 <h2>A full example</h2>
 
-<p>
 <pre>
   struct cyrusdb_backend *BE = NULL;
   struct db *db = NULL;
@@ -83,13 +82,12 @@ for example:
 
   cyrus_done();
 </pre>
-</p>
 
 <p>Note that you always open a database first, and close it at the end.
 You must always call cyrus_init() and cyrus_done() to properly intialise
-and clean up the DB environments.
+and clean up the DB environments.</p>
 
-This example also uses a transaction, meaning that the database is locked
+<p>This example also uses a transaction, meaning that the database is locked
 in exclusive mode between the 'fetch' (the first use of the transaction)
 and the commit.</p>
 
@@ -97,7 +95,7 @@ and the commit.</p>
 
 <p>The cyrusdb interface works in two modes - transactional and
 non-transactional.  The value of the 'tid' parameter decides which
-mode is used.  There are three possible values:
+mode is used.  There are three possible values:</p>
 
 <ul>
  <li>NULL - non-transactional.  Will create a temporary lock for the
@@ -109,7 +107,6 @@ mode is used.  There are three possible values:
      point to the new transaction.</li>
  <li>Pointer to a valid transaction.  Will keep using this transaction</li>
 </ul>
-</p>
 
 <p>If you are currently in a transaction, you MUST pass the same transaction
 to every database call.  It is not possible to mix or nest transactions.
@@ -129,12 +126,11 @@ No other calls will be made until this is called.  Dbdir is the directory
 where database log files and other "state information" is stored.</p>
 
 <p>
-Flags:
+Flags:</p>
 <ul>
  <li>CYRUSDB_RECOVER - called by <tt>ctl_cyrusdb -r</tt> during startup to
      do initial setup after a restart</li>
 </ul>
-</p>
 
 <h3>done()</h3>
 
@@ -152,10 +148,10 @@ backend.  Is called by <tt>ctl_cyrusdb -c</tt> on a regular basis</p>
 the named directory.  Called by <tt>ctl_cyrusdb -c</tt> to take
 backups of important databases.</p>
 
-<p>Errors:
+<p>Errors:</p>
 <ul>
  <li>CYRUSDB_IOERROR - if an error occurs copying a file</li>
-</ul></p>
+</ul>
 
 <h3>open(const char *fname, int flags, struct db **retdb)</h3>
 
@@ -163,17 +159,17 @@ backups of important databases.</p>
 for example the sql backend is not a filename), and if successful returns
 an opaque database structure</p>
 
-<p>Flags:
+<p>Flags:</p>
 <ul>
  <li>CYRUSDB_CREATE - create the database if it doesn't exist</li>
  <li>CYRUSDB_MBOXSORT - sort '.' first, so folder listing is correct</li>
-</ul></p>
+</ul>
 
-<p>Errors:
+<p>Errors:</p>
 <ul>
  <li>CYRUSDB_IOERROR - if there is any error reading the file, or any
      corruption detected while loading the file</li>
-</ul></p>
+</ul>
 
 <h3>close(struct db *db)</h3>
 
@@ -181,10 +177,10 @@ an opaque database structure</p>
 held, but it's bad practice to close without committing or aborting, so
 the backend should log an error</p>
 
-<p>Errors:
+<p>Errors:</p>
 <ul>
  <li>CYRUSDB_IOERROR - if there are any errors during close</li>
-</ul></p>
+</ul>
 
 <h3>fetch(struct db *db, const char *key, size_t keylen,
     const char **data, size_t *datalen, struct txn **tidptr)</h3>
@@ -208,12 +204,12 @@ a non-NULL value</p>
 however it is acceptable to call with a NULL data and a non-NULL datalen
 if you are only interested in the length</p>
 
-<p>Errors:
+<p>Errors:</p>
 <ul>
  <li>CYRUSDB_IOERROR - if any error occurs reading from the database</li>
  <li>CYRUSDB_LOCKED - if tidptr is incorrect</li>
  <li>CYRUSDB_NOTFOUND - if there is no record that matches the key</li>
-</ul></p>
+</ul>
 
 <h3>foreach(struct db *db, const char *prefix, size_t prefixlen,
     foreach_p *goodp, foreach_p *procp, void *rock, struct txn **tidptr)</h3>
@@ -243,12 +239,12 @@ becomes the return value of procp.  If procp returns zero, the foreach loop
 will continue at the NEXT record by sort order, regardless of whether the
 current record has changed or been removed.  procp MUST NOT be NULL.</p>
 
-<p>Errors:
+<p>Errors:</p>
 <ul>
  <li>procp_result - whatever your callback returns</li>
  <li>CYRUSDB_IOERROR - if any error occurs while reading</li>
  <li>CYRUSDB_LOCKED - if tidptr is incorrect</li>
-</ul></p>
+</ul>
 
 <h3>create(struct db *db, const char *key, size_t keylen, const char *data,
     size_t datalen, struct txn **tidptr)</h3>
@@ -266,16 +262,16 @@ of the action.</p>
 as returning an error</p>
 
 <p>It is legal to pass NULL for the data field ONLY if datalen is zero.  It
-is not legal to pass NULL for key or zero for keylen</li>
+is not legal to pass NULL for key or zero for keylen</p>
 
-<p>Errors:
+<p>Errors:</p>
 <ul>
  <li>CYRUSDB_IOERROR - any error to write to the database</li>
  <li>CYRUSDB_LOCKED - if tidptr is incorrect</li>
  <li>CYRUSDB_EXISTS - if <tt>create</tt> is called on an existing key</li>
  <li>CYRUSDB_AGAIN - if a deadlock is created.  The current transaction has
      been aborted, but a retry may succeed</li>
-</ul></p>
+</ul>
 
 <h3>delete(struct db *db, const char *key, size_t keylen,
     struct txn **tidptr, int force)</h3>
@@ -283,16 +279,16 @@ is not legal to pass NULL for key or zero for keylen</li>
 <p>Delete the given record from the database.  If force is true, then
 succeed even if the record doesn't currently exist.</p>
 
-<p>It is not legal to pass NULL for key or zero for keylen</li>
+<p>It is not legal to pass NULL for key or zero for keylen</p>
 
-<p>Errors:
+<p>Errors:</p>
 <ul>
  <li>CYRUSDB_IOERROR - any error to write to the database</li>
  <li>CYRUSDB_LOCKED - if tidptr is incorrect</li>
  <li>CYRUSDB_NOTFOUND - if force is not set and the key doesn't exist</li>
  <li>CYRUSDB_AGAIN - if a deadlock is created.  The current transaction has
      been aborted, but a retry may succeed</li>
-</ul></p>
+</ul>
 
 
 <h3>commit(struct db *db, struct txn *tid)</h3>
@@ -302,13 +298,13 @@ regardless of success</p>
 
 <p>If the commit fails, it will attempt to abort the transaction</p>
 
-<p>Errors:
+<p>Errors:</p>
 <ul>
  <li>CYRUSDB_IOERROR - any error to write to the database</li>
  <li>CYRUSDB_LOCKED - if tidptr is incorrect</li>
  <li>CYRUSDB_AGAIN - if a deadlock is created.  The current transaction has
      been aborted, but a retry may succeed</li>
-</ul></p>
+</ul>
 
 <h3>abort(struct db *db, struct txn *tid)</h3>
 
@@ -317,11 +313,11 @@ regardless of success</p>
 
 <p>Attempt to roll back all changes made in the current transaction.</p>
 
-<p>Errors:
+<p>Errors:</p>
 <ul>
  <li>CYRUSDB_IOERROR - any error to write to the database</li>
  <li>CYRUSDB_LOCKED - if tidptr is incorrect</li>
-</ul></p>
+</ul>
 
 <h3>dump(struct db *db, int detail)</h3>
 

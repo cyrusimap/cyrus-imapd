@@ -64,10 +64,10 @@ part of a Murder (it should only be configured into the Murder at the
 point at which it replaces a failed backend "master").<p>
 
 <ol>
-<p><li>Configure a standalone server as described in the rest
+<li>Configure a standalone server as described in the rest
 of the documentation.
 
-<p><li>Add the following line to the "<tt>/etc/services</tt>" file.
+<li>Add the following line to the "<tt>/etc/services</tt>" file.
 
 <pre>
    csync     2005/tcp
@@ -94,7 +94,7 @@ is actively serving mailboxes to clients.  This server needs to be
 configured to synchronize its mailstore with a "replica" server.<p>
 
 <ol>
-<p><li>Add the following line to the "<tt>/etc/services</tt>" file.
+<li>Add the following line to the "<tt>/etc/services</tt>" file.
 
 <pre>
    csync     2005/tcp
@@ -103,15 +103,15 @@ configured to synchronize its mailstore with a "replica" server.<p>
 <p>Note that the port number MUST be the same as that used on the
 "replica" server.
 
-<p><li>
+<li>
 Specify the hostname of the "replica" server and how to authenticate
 to it using the following imap.conf options:
 
 <ul>
-<li><tt>sync_host</tt></li>
-<li><tt>sync_authname</tt></li>
-<li><tt>sync_realm</tt></li>
-<li><tt>sync_password</tt></li>
+<li><tt>sync_host</tt>
+<li><tt>sync_authname</tt>
+<li><tt>sync_realm</tt>
+<li><tt>sync_password</tt>
 </ul>
 
 <p>Note that <tt>sync_authname</tt> MUST be an admin on the "replica"
@@ -129,7 +129,7 @@ to save bandwidth at a slight increase in CPU cost.  You can set the
 'sync_compress' imapd.conf value, or pass the '-z' flag to sync_client.
 
 <ol>
-<li><tt>sync_compress: 1</tt></li>
+<li><tt>sync_compress: 1</tt>
 </ol>
 
 <h4>"Rolling" replication</h4>
@@ -139,21 +139,21 @@ synchonizes itself with the replica.  To configure "rolling"
 replication, perform the following:
 
 <ol>
-<p><li>Enable the <tt>sync_log</tt> option in imapd.conf.  This allows
+<li>Enable the <tt>sync_log</tt> option in imapd.conf.  This allows
 the <tt>imapd</tt>, <tt>pop3d</tt>, <tt>nntpd</tt>, and <tt>lmtpd</tt>
 services to log synchonization actions which will be periodically
 serviced by <tt>sync_client</tt>.
 
-<p><li>Optionally, adjust the <tt>sync_repeat_interval</tt> in imapd.conf.
+<li>Optionally, adjust the <tt>sync_repeat_interval</tt> in imapd.conf.
 
-<p><li>
-Add a line similar to the following in the STARTUP section of cyrus.conf:<p>
+<li>
+Add a line similar to the following in the STARTUP section of cyrus.conf:
 
 <pre>
   syncclient       cmd="/usr/cyrus/bin/sync_client -r"
 </pre>
 
-<p><li>Start/restart <tt>"/usr/cyrus/bin/master"</tt>.
+<li>Start/restart <tt>"/usr/cyrus/bin/master"</tt>.
 
 </ol>
 

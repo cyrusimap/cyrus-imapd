@@ -56,16 +56,16 @@ INBOX.  This is done via an address of the form: username+mailfolder@domain,
 which will deliver to the user's INBOX.mailfolder folder (or altnamespace
 equivalent).  This submailbox must allow the posting user the 'p' right
 (generally, this means 'anyone' must have the 'p' right), otherwise the
-message will just be filed into the user's INBOX.
+message will just be filed into the user's INBOX.</p>
 
 <p>The second way is to form an address like [postuser]+mailfolder@domain.
 This will deliver into the mailbox 'mailfolder'.  [postuser] is the string
 specified in the imapd.conf option of the same name, and may be the
 empty string.  As before, the posting user will need to have the 'p' right on
-the mailbox.
+the mailbox.</p>
 
 <p>For both methods, if 'mailfolder' is more than one level deep, you will
-need to conform to the hierarchy separator appropriate to your site.
+need to conform to the hierarchy separator appropriate to your site.</p>
 </li>
 
 <li><b>Performance/Capacity/Scaling</b> - See <a
@@ -86,20 +86,20 @@ href="install-perf.html">the performance guide</a>.</li>
    the MTA will get a separate response for each recipient and
    will only have to reattempt to deliver it to the second recipient.
    If using SMTP, only a single temporary failure response would be
-   returned, and the entire transaction would have to be reattempted.
+   returned, and the entire transaction would have to be reattempted.</p>
 <p>Furthermore, LMTP is superior to invoking command-line delivery
 agents from the MTA in that most ESMTP extensions are supported by
-LMTP, without having to extend any interfaces.
+LMTP, without having to extend any interfaces.</p>
 <p>Lastly, because LMTP can be run over TCP, it allows you to run SMTP
 (and spam/virus scanning) and mailbox access on separate servers, thus
-allowing better scalability.
+allowing better scalability.</p>
 </dd>
 
 <dt><b>Q:</b> How do I configure my MTA?</dt>
 
 <dd>
 <p><b>A:</b> See <a href="install-configure.html#mta">Configuring the
-Mail Transfer Agent</a>
+Mail Transfer Agent</a></p>
 </dd>
 
 <dt><b>Q:</b> How should I configure partitions to deal
@@ -113,12 +113,12 @@ read/write cache, and perhaps RAID 10 instead of RAID 5) will improve
 the number of users a partition can serve.  To benefit from multiple
 partitions, each should be on its own set of disks, served by an
 unsaturated interface (FC, SCSI, SAS, SATA, etc) to the host running
-Cyrus.
+Cyrus.</p>
 <p>See <a href="install-perf.html">the performance guide</a> or general
 performance guidelines.  Also see <tt>metapartition_files</tt> and
 <tt>metapartition-name</tt> in <tt>imapd.conf.5</tt> for additional
 configuration options which can help with performance, especially if
-you have access to high-speed storage (faster than disks).
+you have access to high-speed storage (faster than disks).</p>
 </dd>
 </dl>
 
@@ -133,7 +133,7 @@ advertise PLAIN or plaintext login commands?</dt>
 PLAIN or plaintext login commands on encrypted connections
 (SSL-wrapped connections or after a successful STARTTLS command).
 This behavior can be changed with the use of the
-<tt>allowplaintext</tt> option in <tt>imapd.conf.5</tt>.
+<tt>allowplaintext</tt> option in <tt>imapd.conf.5</tt>.</p>
 </dd>
 
 <dt><b>Q:</b> I'm getting syslog'd messages from the master process
@@ -169,7 +169,7 @@ Dec  6 12:58:57 mail3.andrew.cmu.edu imapd[1297]: cannot connect to saslauthd se
 </pre>
 
 <p>Make sure that <tt>saslauthd</tt> is running and that the cyrus
-user can access the unix domain socket (defaults to <tt>/var/run/mux</tt>).
+user can access the unix domain socket (defaults to <tt>/var/run/mux</tt>).</p>
 
 </dd>
 
@@ -248,14 +248,8 @@ tls.c:</p>
 </pre>
 </dd>
 
-<dt><b>Q:</b> I'm getting messages in <tt>imapd.log</tt> like:
-<pre>
-Sep 11 17:23:55 ogg lmtpd[773]: DBERROR db3: 16 lockers
-Sep 11 17:23:55 ogg lmtpd[1409]: DBERROR db3: 17 lockers
-Sep 11 17:23:56 ogg lmtpd[1508]: DBERROR db3: 9 lockers
-Sep 11 17:23:56 ogg lmtpd[776]: DBERROR db3: 9 lockers
-</pre>
-What's wrong?
+<dt><b>Q:</b> I'm getting messages in <tt>imapd.log</tt> like
+"DBERROR db3: 16 lockers".  What's wrong?
 </dt>
 
 <dd>
@@ -302,7 +296,7 @@ another 'Trash', another 'Recycle Bin', etc)
 </p><p>
 Given the lack of protocol support for a trash folder, this is mostly a
 quality-of-implementation issue on the client side.  There
-are a few options here:
+are a few options here:</p>
 <ul>
 <li>Contact your client vendor to have
 the broken client fixed (one possibility is to have the client ask the user
@@ -313,7 +307,6 @@ of users.  This last option is significantly harder to do correctly, since
 it assumes that all clients that make use of a trash folder do so with the
 same folder name.</li>
 </ul>
-</p>
 </dd>
 
 <dt><b>Q:</b> How do I stop Cyrus from advertising the DIGEST-MD5 and
