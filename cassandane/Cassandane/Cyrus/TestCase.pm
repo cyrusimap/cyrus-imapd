@@ -350,7 +350,7 @@ sub check_messages
 	$store->read_end();
     }
 
-    $self->assert(scalar keys %$actual == scalar keys %$expected);
+    $self->assert_num_equals(scalar keys %$expected, scalar keys %$actual);
 
     foreach my $expmsg (values %$expected)
     {
