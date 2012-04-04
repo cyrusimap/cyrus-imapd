@@ -259,7 +259,8 @@ EOF
     xlog "Actually create the target folder";
     my $imaptalk = $self->{store}->get_client();
 
-    $imaptalk->create($target);
+    $imaptalk->create($target)
+	 or die "Cannot create $target: $@";
     $self->{store}->set_fetch_attributes('uid');
 
     xlog "Deliver another message";
@@ -412,5 +413,51 @@ EOF
     $self->{store}->set_folder('INBOX');
     $self->check_messages({ 1 => $msg1 }, check_guid => 0);
 }
+
+sub config_deliver_fileinto_dot
+{
+    my ($self, $conf) = @_;
+    xlog "Setting unixhierarchysep = yes";
+    $conf->set(unixhierarchysep => 'yes');
+}
+
+sub test_deliver_fileinto_dot
+{
+    my ($self) = @_;
+
+    xlog "Testing a sieve script which does a 'fileinto' a mailbox";
+    xlog "when the user has a dot in their name.  Bug 3664";
+
+    xlog "Create the dotted user";
+    my $user = 'betty.boop';
+    $self->{instance}->create_user($user);
+
+    xlog "Connect as the new user";
+    my $svc = $self->{instance}->get_service('imap');
+    $self->{store} = $svc->create_store(username => $user, folder => 'INBOX');
+    $self->{store}->set_fetch_attributes('uid');
+    my $imaptalk = $self->{store}->get_client();
+
+    xlog "Create the target folder";
+    my $target = $self->{instance}->mboxname('inbox', 'target');
+    $imaptalk->create($target)
+	 or die "Cannot create $target: $@";
+
+    xlog "Install the sieve script";
+    $self->install_sieve_script(<<EOF
+require ["fileinto"];
+fileinto "$target";
+EOF
+    , username => 'betty^boop');
+
+    xlog "Deliver a message";
+    my $msg1 = $self->{gen}->generate(subject => "Message 1");
+    $self->{instance}->deliver($msg1, users => [ $user ]);
+
+    xlog "Check that the message made it to target";
+    $self->{store}->set_folder($target);
+    $self->check_messages({ 1 => $msg1 }, check_guid => 0);
+}
+
 
 1;
