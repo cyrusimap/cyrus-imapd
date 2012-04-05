@@ -60,6 +60,9 @@
 
 # This section describes configurable properties of Valgrind.
 [valgrind]
+# Whether to run Cyrus binaries under Valgrind (see also the
+# --valgrind option to testrunner.pl)
+##enabled = no
 # Where to find the Valgrind binary
 ##binary = /usr/bin/valgrind
 # File containing Valgrind suppression rules

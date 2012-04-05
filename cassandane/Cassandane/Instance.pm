@@ -65,7 +65,6 @@ my $stamp;
 my $next_unique = 1;
 my %defaults =
 (
-    valgrind => 0,
     cleanup => 0,
 );
 
@@ -89,7 +88,6 @@ sub new
 	re_use_dir => 0,
 	setup_mailbox => 1,
 	persistent => 0,
-	valgrind => $defaults{valgrind},
 	cleanup => $defaults{cleanup},
 	_children => {},
 	_stopped => 0,
@@ -119,8 +117,6 @@ sub new
 	if defined $params{re_use_dir};
     $self->{setup_mailbox} = $params{setup_mailbox}
 	if defined $params{setup_mailbox};
-    $self->{valgrind} = $params{valgrind}
-	if defined $params{valgrind};
     $self->{cleanup} = $params{cleanup}
 	if defined $params{cleanup};
     $self->{persistent} = $params{persistent}
@@ -303,7 +299,7 @@ sub _binary
 
     my $cassini = Cassandane::Cassini->instance();
 
-    if ($self->{valgrind} &&
+    if ($cassini->bool_val('valgrind', 'enabled') &&
         !($name =~ m/\.pl$/) &&
 	!($name =~ m/^\//))
     {
@@ -720,7 +716,7 @@ sub _check_valgrind_logs
 {
     my ($self) = @_;
 
-    return unless $self->{valgrind};
+    return unless Cassandane::Cassini->instance()->bool_val('valgrind', 'enabled');
 
     my $valgrind_logdir = $self->{basedir} . '/vglogs';
     my $nerrs = 0;

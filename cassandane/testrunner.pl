@@ -170,7 +170,11 @@ while (my $a = shift)
     }
     elsif ($a eq '--valgrind')
     {
-	Cassandane::Instance->set_defaults(valgrind => 1);
+	push(@cassini_overrides, ['valgrind', 'enabled', 'yes']);
+    }
+    elsif ($a eq '--no-valgrind')
+    {
+	push(@cassini_overrides, ['valgrind', 'enabled', 'no']);
     }
     elsif ($a eq '-j' || $a eq '--jobs')
     {

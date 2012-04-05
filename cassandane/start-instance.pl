@@ -45,12 +45,12 @@ use Cassandane::Util::Setup;
 use Cassandane::Util::Log;
 use Cassandane::Config;
 use Cassandane::Instance;
+use Cassandane::Cassini;
 
 my $name;
 my $config = Cassandane::Config->default()->clone();
 my $start_flag = 0;
 my $re_use_dir = 1;
-my $valgrind = 0;
 my @services = ( 'imap' );
 $start_flag = 1 if $0 =~ m/start-instance/;
 
@@ -86,7 +86,7 @@ while (my $a = shift)
     }
     elsif ($a eq '--valgrind')
     {
-	$valgrind = 1;
+	Cassandane::Cassini->instance()->override('valgrind', 'enabled', 'yes');
     }
     elsif ($a eq '--service')
     {
@@ -112,7 +112,6 @@ my $instance = Cassandane::Instance->new(
 		name => $name,
 		config => $config,
 		re_use_dir => $re_use_dir,
-		valgrind => $valgrind,
 		persistent => $start_flag ? 1 : 0,
 	       );
 $instance->add_services(@services);
