@@ -281,6 +281,7 @@ int dir_hash_c(const char *name, int full)
 	pt = (unsigned char *)name;
 	while (*pt && *pt != '.') {
 	    n = ((n << DIR_X) ^ (n >> DIR_Y)) ^ *pt;
+	    n &= UINT32_MAX;
 	    ++pt;
 	}
 	c = DIR_A + (n % DIR_P);

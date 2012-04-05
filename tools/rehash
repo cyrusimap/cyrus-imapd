@@ -210,6 +210,28 @@ sub ouch {
     }
 }
 
+# force 32 bit
+sub dir_hash_c {
+    my $name = shift;
+    my ($h, $n);
+
+    if ($tofull) {
+	$name =~ s/\..*//; # trim from first dot
+	$n = 0;
+	foreach my $b (split(/ */, $name)) {
+	    $n = (($n << 3) ^ ($n >> 5)) ^ ord($b);
+	    $n &= 4294967295; # UINT32_MAX
+	}
+	$h = chr(ord('A') + ($n % 23));
+	return $h;
+    }
+    elsif ($tobasic) {
+	$h = lc(substr($name, 0, 1));
+	if (!($h =~ /[a-z]/)) { $h = 'q'; }
+	return $h;
+    }
+}
+
 sub read_conf {
     my $file = shift;
 
@@ -473,48 +495,47 @@ sub move_quotas {
 }
 
 sub move_sieve {    
-        my $i;
-	my $s;
-	my $h;
-	my $mbox;
+    my $s;
+    my $h;
+    my $mbox;
 
-	foreach $i (@{$dirs}) {
-	    unless ($tonone) {
-		if (-d $i) {
-		    rename ($i, ".$i") or die "couldn't rename $i to .$i";
-		}
-		else {
-		    mkdir (".$i", 0755);
-		}
+    foreach my $i (@{$dirs}) {
+	unless ($tonone) {
+	    if (-d $i) {
+		rename ($i, ".$i") or die "couldn't rename $i to .$i";
 	    }
 	    else {
-		rmdir "$i";
+		mkdir (".$i", 0755);
 	    }
 	}
-	unless ($tonone) {
-	    foreach $i (@{$old}) {
-		if (opendir SUB, $i) {
-		    while ($s = readdir SUB) {
-			unless ($s =~ /^\./) {
-			    $h = dir_hash_c($s);
-			    rename("$i/$s", ".$h/$s")
-				or ouch "couldn't move $s back!";
-			}
+	else {
+	    rmdir "$i";
+	}
+    }
+    unless ($tonone) {
+	foreach $i (@{$old}) {
+	    if (opendir SUB, $i) {
+		while ($s = readdir SUB) {
+		    unless ($s =~ /^\./) {
+			$h = dir_hash_c($s);
+			rename("$i/$s", ".$h/$s")
+			    or ouch "couldn't move $s back!";
 		    }
-		    closedir SUB;
-		    rmdir "$i" or die "couldn't remove $i";
 		}
-	    }
-	    # now move each temporary directory to the right place
-	    foreach $i (@{$dirs}) { 
-		rename (".$i", $i) or ouch "couldn't rename $i into place";
+		closedir SUB;
+		rmdir "$i" or die "couldn't remove $i";
 	    }
 	}
+	# now move each temporary directory to the right place
+	foreach $i (@{$dirs}) { 
+	    rename (".$i", $i) or ouch "couldn't rename $i into place";
+	}
+    }
 
-	if($virtdomains && chdir "domain") {
-	  &move_domains($MOVE_DOMAIN_SIEVE);
-	  chdir "..";
-	}
+    if($virtdomains && chdir "domain") {
+      &move_domains($MOVE_DOMAIN_SIEVE);
+      chdir "..";
+    }
 }
 
 sub move_part {
