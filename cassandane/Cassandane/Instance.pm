@@ -626,6 +626,14 @@ sub copy_logins
 	if ($self->{_started});
 }
 
+sub mboxname
+{
+    my ($self, @comps) = @_;
+    my $sep = $self->{config}->get_bool('unixhierarchysep', 'off') ? '/' : '.';
+    map { die "Bad mboxname component \"$_\"" if index($_, $sep) >= 0; } @comps;
+    return join($sep, @comps);
+}
+
 sub create_user
 {
     my ($self, $user, %params) = @_;
@@ -641,8 +649,8 @@ sub create_user
     my $adminstore = $srv->create_store(username => 'admin');
     my $adminclient = $adminstore->get_client();
 
-    my @mboxes = ( "user.$user" );
-    map { push(@mboxes, "user.$user.$_"); } @{$params{subdirs}}
+    my @mboxes = ( $self->mboxname('user', $user) );
+    map { push(@mboxes, $self->mboxname('user', $user, $_)); } @{$params{subdirs}}
 	if ($params{subdirs});
 
     foreach my $mb (@mboxes)
