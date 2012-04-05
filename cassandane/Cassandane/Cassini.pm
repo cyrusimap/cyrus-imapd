@@ -92,7 +92,7 @@ sub instance
 
     if (!defined $instance)
     {
-	Cassandane::Cassini->new();
+	$instance = Cassandane::Cassini->new();
 	die "Singleton broken in Cassini ctor!"
 	    unless defined $instance;
     }

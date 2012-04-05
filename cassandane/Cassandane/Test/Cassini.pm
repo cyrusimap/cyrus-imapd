@@ -93,7 +93,7 @@ sub test_basic
 	'helvetica.blog' => 'ethical',
     );
 
-    my $cassini = Cassandane::Cassini->instance();
+    my $cassini = new Cassandane::Cassini;
 
     # Don't find non-existant param in non-existant section
     $self->assert_null($cassini->val('swag', 'quinoa'));
@@ -150,7 +150,7 @@ sub test_boolval
 	'narwhal.vegan' => 'invalid',
     );
 
-    my $cassini = Cassandane::Cassini->instance();
+    my $cassini = new Cassandane::Cassini;
 
     $self->assert_equals(0, $cassini->bool_val('narwhal', 'cardigan'));
     $self->assert_equals(1, $cassini->bool_val('narwhal', 'banksy'));
