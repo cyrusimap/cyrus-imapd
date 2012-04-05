@@ -1546,7 +1546,7 @@ void response_header(long code, struct transaction_t *txn)
 	    prot_printf(httpd_out, ", access-control, extended-mkcol");
 	}
 	if (txn->req_tgt.allow & ALLOW_CAL) {
-	    prot_printf(httpd_out, ", calendar-access");
+	    prot_printf(httpd_out, "\r\nDAV: calendar-access");
 #if 0
 	    prot_printf(httpd_out, ", calendar-auto-schedule");
 #endif
