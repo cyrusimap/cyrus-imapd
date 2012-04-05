@@ -908,6 +908,7 @@ int run_sieve(const char *user, const char *domain, const char *mailbox,
     sieve_execute_t *bc = NULL;
     script_data_t sdata;
     char userbuf[MAX_MAILBOX_BUFFER] = "";
+    char authuserbuf[MAX_MAILBOX_BUFFER];
     int r = 0;
     duplicate_key_t dkey = DUPLICATE_INITIALIZER;
 
