@@ -143,18 +143,15 @@ sub override
     }
 }
 
-sub apply_config
+sub get_section
 {
-    my ($self, $config, $member) = @_;
+    my ($self, $section) = @_;
     my $inifile = $self->{inifile};
-
-    my $section = defined($member) ? "config $member" : 'config';
+    my %params;
     if ($inifile->SectionExists($section)) {
-	$config->set(map { $_ => $inifile->val($section, $_) } $inifile->Parameters($section));
+	map { $params{$_} = $inifile->val($section, $_) } $inifile->Parameters($section);
     }
-    # XXX - member parent hierarchy too ?
-
-    return $config;
+    return \%params;
 }
 
 1;

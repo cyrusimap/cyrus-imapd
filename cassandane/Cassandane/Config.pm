@@ -79,7 +79,8 @@ sub default
 	    # everyone should be running this
 	    improved_mboxlist_sort => 'yes',
 	);
-	Cassandane::Cassini->instance()->apply_config($default);
+	my $defs = Cassandane::Cassini->instance()->get_section('config');
+	$default->set(%$defs);
     }
 
     return $default;
