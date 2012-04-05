@@ -556,7 +556,8 @@ static void write_cachehdr(const char *name, const char *contents, void *rock)
     struct protstream *pout = (struct protstream *) rock;
     const char **hdr, *hop_by_hop[] =
 	{ "authorization", "connection", "content-length", "expect",
-	  "host", "keep-alive", "transfer-encoding", "upgrade", "via", NULL };
+	  "host", "keep-alive", "strict-transport-security",
+	  "transfer-encoding", "upgrade", "via", NULL };
 
     for (hdr = hop_by_hop; *hdr && strcmp(name, *hdr); hdr++);
 
@@ -626,9 +627,6 @@ static void send_response(struct protstream *pout,
      */
     prot_printf(pout, "%s", statline);
     write_via_hdr(pout, hdrs);
-    if (!httpd_tls_done && tls_enabled()) {
-	prot_printf(pout, "Upgrade: TLS/1.0\r\n");
-    }
     if (flags & HTTP_CLOSE)
 	prot_printf(pout, "Connection: close\r\n");
     else {
@@ -637,6 +635,9 @@ static void send_response(struct protstream *pout,
     }
     if (flags & HTTP_NOCACHE) {
 	prot_printf(pout, "Cache-Control: no-cache\r\n");
+    }
+    if (httpd_tls_done) {
+	prot_printf(httpd_out, "Strict-Transport-Security: max-age=600\r\n");
     }
     spool_enum_hdrcache(hdrs, &write_cachehdr, pout);
 
