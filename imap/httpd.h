@@ -89,8 +89,7 @@ enum {
     ALLOW_WRITE =	(1<<1),
     ALLOW_DAV =		(1<<2),
     ALLOW_CAL =		(1<<3),
-    ALLOW_CARD =	(1<<4),
-    ALLOW_ALL =		0xff
+    ALLOW_CARD =	(1<<4)
 };
 
 #define MAX_QUERY_LEN	100

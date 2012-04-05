@@ -412,8 +412,8 @@ int service_init(int argc __attribute__((unused)),
 	buf_printf(&serverinfo, " libxml/%s", LIBXML_DOTTED_VERSION);
 #ifdef WITH_CALDAV
 	buf_printf(&serverinfo, " libical/%s", ICAL_VERSION);
-    }
 #endif
+    }
 
     return 0;
 }
@@ -1835,6 +1835,7 @@ void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
 /* Output an HTTP error response with optional XML or text body */
 void error_response(long code, struct transaction_t *txn)
 {
+#ifdef WITH_CALDAV
     if (txn->error.precond) {
 	xmlNodePtr root = xml_add_error(NULL, &txn->error, NULL);
 
@@ -1844,6 +1845,7 @@ void error_response(long code, struct transaction_t *txn)
 	    return;
 	}
     }
+#endif
 
     if (txn->error.desc) txn->resp_body.type = "text/plain";
     write_body(code, txn, txn->error.desc,
@@ -2313,10 +2315,14 @@ int meth_options(struct transaction_t *txn)
     /* Response should not be cached */
     txn->flags |= HTTP_NOCACHE;
 
-#ifdef WITH_CALDAV
     /* Special case "*" - show all features/methods available on server */
-    if (!strcmp(txn->req_tgt.path, "*")) txn->req_tgt.allow = ALLOW_ALL;
-#endif
+    if (!strcmp(txn->req_tgt.path, "*")) {
+	int i;
+
+	for (i = 0; namespaces[i]; i++) {
+	    txn->req_tgt.allow |= namespaces[i]->allow;
+	}
+    }
 
     response_header(HTTP_OK, txn);
     return 0;
