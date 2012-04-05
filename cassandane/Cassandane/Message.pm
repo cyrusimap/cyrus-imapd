@@ -363,7 +363,7 @@ sub set_lines
 	    my $first = shift @pending;
 	    my ($name, $value) = ($first =~ m/^([!-9;-~]+):(.*)$/);
 
-	    die "Malformed RFC822 header at or near \"$b\""
+	    die "Malformed RFC822 header at or near \"$first\""
 		unless defined $value;
 
 	    $value = join("\r\n", ($value, @pending));
