@@ -326,7 +326,7 @@ sub _binary
 	unless $bin =~ m/^\//;
     push(@cmd, $bin);
 
-    if (!$valground && $cassini->val('gdb', $name, 'no') =~ m/^yes$/i)
+    if (!$valground && $cassini->bool_val('gdb', $name))
     {
 	xlog "Will run binary $name under gdb due to cassandane.ini";
 	xlog "Look in syslog for helpful instructions from gdbtramp";

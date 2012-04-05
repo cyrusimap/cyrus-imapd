@@ -123,4 +123,56 @@ sub test_basic
     $self->assert_str_equals('ethical', $cassini->val('helvetica', 'blog'));
 }
 
+sub test_boolval
+{
+    my ($self) = @_;
+
+    local $CWD = tempdir(CLEANUP => 1);
+
+    xlog "Working in temporary directory $CWD";
+    # data thanks to hipsteripsum.me
+    write_inifile({},
+	'narwhal.cardigan' => 'no',
+	'narwhal.banksy' => 'yes',
+	'narwhal.occupy' => 'NO',
+	'narwhal.mustache' => 'YES',
+	'narwhal.gentrify' => 'false',
+	'narwhal.thundercats' => 'true',
+	'narwhal.scenester' => 'FALSE',
+	'narwhal.squid' => 'TRUE',
+	'narwhal.selvage' => '0',
+	'narwhal.portland' => '1',
+	'narwhal.bunch' => 'off',
+	'narwhal.bicycle' => 'on',
+	'narwhal.organic' => 'OFF',
+	'narwhal.leggings' => 'ON',
+	'narwhal.mixtape' => '',
+	'narwhal.vegan' => 'invalid',
+    );
+
+    my $cassini = Cassandane::Cassini->instance();
+
+    $self->assert_equals(0, $cassini->bool_val('narwhal', 'cardigan'));
+    $self->assert_equals(1, $cassini->bool_val('narwhal', 'banksy'));
+    $self->assert_equals(0, $cassini->bool_val('narwhal', 'occupy'));
+    $self->assert_equals(1, $cassini->bool_val('narwhal', 'mustache'));
+    $self->assert_equals(0, $cassini->bool_val('narwhal', 'gentrify'));
+    $self->assert_equals(1, $cassini->bool_val('narwhal', 'thundercats'));
+    $self->assert_equals(0, $cassini->bool_val('narwhal', 'scenester'));
+    $self->assert_equals(1, $cassini->bool_val('narwhal', 'squid'));
+    $self->assert_equals(0, $cassini->bool_val('narwhal', 'selvage'));
+    $self->assert_equals(1, $cassini->bool_val('narwhal', 'portland'));
+    $self->assert_equals(0, $cassini->bool_val('narwhal', 'brunch'));
+    $self->assert_equals(1, $cassini->bool_val('narwhal', 'bicycle'));
+    $self->assert_equals(0, $cassini->bool_val('narwhal', 'organic'));
+    $self->assert_equals(1, $cassini->bool_val('narwhal', 'leggings'));
+
+    eval { $cassini->bool_val('narwhal', 'mixtape'); };
+    $self->assert_matches(qr/Bad boolean/i, $@);
+
+    eval { $cassini->bool_val('narwhal', 'vegan'); };
+    $self->assert_matches(qr/Bad boolean/i, $@);
+}
+
+
 1;

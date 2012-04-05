@@ -105,6 +105,27 @@ sub val
     return $self->{inifile}->val(@args);
 }
 
+sub bool_val
+{
+    # Args are: section, name, default
+    # returns a boolean 1 or 0
+    my ($self, $section, $parameter, $default) = @_;
+    $default = 'no' if !defined $default;
+    my $v = $self->val($section, $parameter, $default);
+
+    return 1 if ($v =~ m/^yes$/i);
+    return 1 if ($v =~ m/^true$/i);
+    return 1 if ($v =~ m/^on$/i);
+    return 1 if ($v =~ m/^1$/);
+
+    return 0 if ($v =~ m/^no$/i);
+    return 0 if ($v =~ m/^false$/i);
+    return 0 if ($v =~ m/^off$/i);
+    return 0 if ($v =~ m/^0$/);
+
+    die "Bad boolean \"$v\"";
+}
+
 sub apply_config
 {
     my ($self, $config, $member) = @_;
