@@ -83,18 +83,7 @@ shift @ARGV;
 
 my @bdirs = ("a".."z");
 my @fdirs = ("A".."W");
-my $dirs = [@bdirs, @fdirs] if $tonone;
-my $old = [];
-
-if ($tobasic) {
-    $dirs = \@bdirs;
-    $old = \@fdirs;
-}
-
-if ($tofull) {
-    $dirs = \@fdirs;
-    $old = \@bdirs;
-}
+my %ishash = map { $_ => 1 } (@bdirs, @fdirs);
 
 my $imapdconf = shift || "/etc/imapd.conf";
 
@@ -213,10 +202,11 @@ sub ouch {
 # force 32 bit
 sub dir_hash_c {
     my $name = shift;
+
     my ($h, $n);
 
     if ($tofull) {
-	$name =~ s/\..*//; # trim from first dot
+	$name =~ s/\..*//; # remove trailing dots
 	$n = 0;
 	foreach my $b (split(/ */, $name)) {
 	    $n = (($n << 3) ^ ($n >> 5)) ^ ord($b);
@@ -275,397 +265,207 @@ sub read_conf {
 sub do_subdomain_conf {
     if(-d "quota") {
 	chdir "quota";
-	&move_quotas;
+	move_quotas();
 	chdir "..";
     }
     if(-d "user") {
 	chdir "user";
-	&move_users;
+	move_users();
 	chdir "..";
     }
 }
 
-sub move_domains {
-    my $type_of_move = shift;
+sub add_found {
+    # here be dragons, eep
+    my $ispart = shift;
+    my $found = shift;
+    my $name = shift;
+    my $location = shift;
 
-    if(!defined($type_of_move) || !$type_of_move) {
-      die "move_domains called badly";
+    unless ($ispart) {
+	if ($found->{$name}) {
+	    die "IN $ENV{PWD} FOUND BOTH $found->{$name} and $location - you need to fix this by hand\n";
+	}
+	$found->{$name} = $location;
+	return;
     }
 
-    my $i;
-    my $s;
-    my $h;
-    my $mbox;
+    opendir(SUB, $location) or ouch "Failed to open $ENV{PWD}/$location";
+    while (my $sub = readdir SUB) {
+	next if $sub =~ m/^\./;
+	my $key = "$name/$sub";
+	if ($found->{$key}) {
+	    die "IN $ENV{PWD} FOUND BOTH $found->{$key} and $location/$sub - you need to fix this by hand\n";
+	}
+	$found->{$key} = "$location/$sub";
+    }
+    closedir(SUB);
+}
 
-    foreach $i (@{$dirs}) { 
-	if ($tonone) {
-	    if (opendir SUB, $i) {
-		while ($s = readdir SUB) {
-		    if ($s =~ /^\./s) { next; }
-		    chdir "$i/$s";
-		    &do_subdomain;
-		    chdir "../..";
-		    rename("$i/$s", "$s") or die "couldn't move $s back!";
-		}
-		closedir SUB;
-		rmdir "$i" or die "couldn't remove $i";
-	    }
+sub find_items {
+    my $ispart = shift;
+    my %found;
+    my @subs;
+
+    opendir(ITEMS, ".") or ouch "couldn't read $ENV{PWD}";
+    while (my $item = readdir ITEMS) {
+	# guaranteed evil
+	next if $item =~ m/^\./;
+	next if $item eq 'lost+found';
+	next if $item eq 'stage.';
+	next if $item eq 'sync.';
+
+	if ($ishash{$item}) {
+	    push @subs, $item;
 	}
 	else {
-	    unless (-d $i) {
-		mkdir ("$i", 0755) or ouch "couldn't create $i";
-	    }
+	    add_found($ispart, \%found, $item, $item);
 	}
     }
-    unless ($tonone) {
-	foreach $i (@{$old}) {
-	    if (opendir SUB, $i) {
-		while ($s = readdir SUB) {
-		    if ($s =~ /^\./s) { next; }
+    closedir(ITEMS);
 
-		    chdir "$i/$s";
-
-		    if($type_of_move == $MOVE_DOMAIN_CONF) {
-		      &do_subdomain_conf;
-		    } elsif ($type_of_move == $MOVE_DOMAIN_SIEVE) {
-		      &move_sieve;
-		    } elsif ($type_of_move == $MOVE_DOMAIN_PART) {
-		      &move_part;
-		    } else {
-		      die "bad domain move mode: $type_of_move";
-		    }
- 
-		    chdir "../..";
-
-		    $h = dir_hash_c($s);
-		    print "moving $i/$s to $h/$s\n";
-		    rename("$i/$s", "$h/$s") or ouch "couldn't move $s back!";
-		}
-		closedir SUB;
-		rmdir "$i" or die "couldn't remove $i";
-	    }
+    foreach my $sub (@subs) {
+	next unless opendir(ITEMS, $sub);
+	while (my $item = readdir ITEMS) {
+	    next if $item =~ m/^\./;
+	    # we can't fix duplicate directories ourselves!
+	    add_found($ispart, \%found, $item, "$sub/$item");
 	}
-	opendir (USER, ".");
-	while (my $f = readdir USER) {
-	    if ($f =~ /^\./s) { next; }
+	closedir(ITEMS);
+    }
 
-	    # don't move the hashed directories themselves
-	    my $flag = 0;
-	    foreach my $item (@{$dirs}) {
-		if($item eq $f) {
-		    $flag = 1;
-		    last;
-		}
+    return %found;
+}
+
+sub tidydir {
+    my $onemore = shift;
+    my $dir = shift;
+
+    if ($onemore) {
+	if (opendir(DIR, $dir)) {
+	    while (my $item = readdir DIR) {
+		next if $item =~ m/^\./;
+		rmdir("$dir/$item");
 	    }
-	    next if($flag);
-
-	    # hash on name before '.sub' suffix
-	    print "$f\n";
-            $h = dir_hash_c($f);
-            rename ($f, "$h/$f") or ouch "couldn't move $f into $h";
+	    closedir(DIR);
 	}
-	closedir USER;
+    }
+
+    rmdir($dir);
+}
+
+sub tidy_up {
+    my $onemore = shift;
+    unless ($tofull) {
+	tidydir($onemore, $_) for @fdirs;
+    }
+    unless ($tobasic) {
+	tidydir($onemore, $_) for @bdirs;
+    }
+}
+
+sub ensurepath {
+    my $path = shift;
+    return unless $path =~ s{/[^/]+$}{}; # gotta trim something!
+    unless (-d $path) {
+	ensurepath($path);
+	mkdir($path, 0755);
+    }
+}
+
+sub do_moves {
+    my $skiptochar = shift;
+    my %found = @_;
+
+    my $hashfn = sub {
+	my $item = shift;
+	return $item if $tonone;
+	my $tohash = $item;
+	if ($skiptochar) {
+	    # strip up to and including the character
+	    $tohash =~ s/^.*?\Q$skiptochar//;
+	}
+	return dir_hash_c($tohash) . "/$item";
+    };
+
+    foreach my $item (sort keys %found) {
+	my $src = $found{$item};
+	my $dst = $hashfn->($item);
+
+	if ($src ne $dst) {
+	    ensurepath($dst);
+	    rename($src, $dst) or ouch "failed to rename $src to $dst";
+	}
+    }
+
+    tidy_up();
+}
+
+sub move_domains {
+    my $type_of_move = shift || die "move_domains called badly";
+
+    my %found = find_items();
+
+    do_moves(undef, %found);
+
+    # let's do the subdirs
+    foreach my $item (sort keys %found) {
+	chdir ($found{$item});
+
+	if ($type_of_move == $MOVE_DOMAIN_CONF) {
+	    &do_subdomain_conf;
+	} elsif ($type_of_move == $MOVE_DOMAIN_SIEVE) {
+	    &move_sieve;
+	} elsif ($type_of_move == $MOVE_DOMAIN_PART) {
+	    &move_part;
+	} else {
+	    die "bad domain move mode: $type_of_move";
+	}
     }
 }
 
 sub move_users {
-    my $i;
-    my $s;
-    my $h;
-    my $f;
-    my $mbox;
-
-    foreach $i (@{$dirs}) { 
-	if ($tonone) {
-	    if (opendir SUB, $i) {
-		while ($s = readdir SUB) {
-		    if ($s =~ /^\./s) { next; }
-		    rename("$i/$s", "$s") or die "couldn't move $s back!";
-		}
-		closedir SUB;
-		rmdir "$i" or die "couldn't remove $i";
-	    }
-	} else {
-	    unless (-d $i) {
-		mkdir ("$i", 0755) or ouch "couldn't create $i";
-	    }
-	}
-    }
-    unless ($tonone) {
-	foreach $i (@{$old}) {
-	    if (opendir SUB, $i) {
-		while ($s = readdir SUB) {
-		    if ($s =~ /^\./s) { next; }
-		    # hash on name before '.sub' suffix
-		    if ($s =~ /^(.+)\./) {
-			$h = dir_hash_c($1);
-			rename("$i/$s", "$h/$s") or ouch "couldn't move $s back!";
-		    }
-		}
-		closedir SUB;
-		rmdir "$i" or die "couldn't remove $i";
-	    }
-	}
-	opendir (USER, ".");
-	while ($f = readdir USER) {
-	    if ($f =~ /^\./s) { next; }
-	    # hash on name before '.sub' suffix
-	    if ($f =~ /^(.+)\./) {
-		print "$f\n";
-		$h = dir_hash_c($1);
-		rename ($f, "$h/$f") or ouch "couldn't move $f into $h";
-	    }
-	}
-	closedir USER;
-    }
+    my %found = find_items();
+    do_moves(undef, %found);
 }
 
 sub move_quotas {
-    my $i;
-    my $s;
-    my $h;
-    my $mbox;
-
-    # first, create directories we know can't conflict with existing files
-    foreach $i (@{$dirs}) { 
-	if ($tonone) {
-	    if (-d $i) {
-		rename ($i, ".$i") or die "couldn't rename $i to .$i";
-		opendir SUB, ".$i";
-		while ($s = readdir SUB) {
-		    if ($s =~ /^\./s) { next; }
-		    rename(".$i/$s", $s) or die "couldn't move $s back!";
-		}
-		closedir SUB;
-		rmdir ".$i" or die "couldn't remove .$i";
-	    }
-	}
-	else {
-	    if (-d $i) {
-		rename ($i, ".$i") or die "couldn't rename $i to .$i";
-	    }
-	    else {
-		mkdir (".$i", 0755);
-	    }
-	}
-    }
-
-    # now for each file, move it into the appropriate directory
-    unless ($tonone) {
-	foreach $i (@{$old}) {
-	    if (opendir SUB, $i) {
-		while ($s = readdir SUB) {
-		    # hash on name after 'user.'
-		    if ($s =~ /^.+\.(.+)$/) {
-			$h = dir_hash_c($1);
-			rename("$i/$s", ".$h/$s")
-			    or ouch "couldn't move $s back!";
-		    }
-		}
-		closedir SUB;
-		rmdir "$i" or die "couldn't remove $i";
-	    }
-	}
-	opendir QUOTA, ".";
-	while ($mbox = readdir QUOTA) {
-	    if ($mbox =~ /^\./s) { next; }
-	
-	    # hash on name after 'user.'
-	    if ($mbox =~ /^.*\.(.*)$/) {
-		$h = dir_hash_c($1);
-		rename($mbox, ".$h/$mbox") 
-		    or ouch "couldn't move $mbox into $h";
-		next;
-	    }
-	
-	    # we should try to hash the entire file
-	    $h = dir_hash_c($mbox);
-	    rename($mbox, ".$h/$mbox") 
-		or ouch "couldn't move $mbox into $h";
-	    next;
-	
-	}
-	closedir QUOTA;
-    
-	# now move each temporary directory to the right place
-	foreach $i (@{$dirs}) { 
-	    rename (".$i", $i) or ouch "couldn't rename $i into place";
-	}
-    }
+    my %found = find_items();
+    do_moves('.', %found);
 }
 
-sub move_sieve {    
-    my $s;
-    my $h;
-    my $mbox;
+sub move_sieve {
+    my $do_domain = 0;
 
-    foreach my $i (@{$dirs}) {
-	unless ($tonone) {
-	    if (-d $i) {
-		rename ($i, ".$i") or die "couldn't rename $i to .$i";
-	    }
-	    else {
-		mkdir (".$i", 0755);
-	    }
-	}
-	else {
-	    rmdir "$i";
-	}
-    }
-    unless ($tonone) {
-	foreach $i (@{$old}) {
-	    if (opendir SUB, $i) {
-		while ($s = readdir SUB) {
-		    unless ($s =~ /^\./) {
-			$h = dir_hash_c($s);
-			rename("$i/$s", ".$h/$s")
-			    or ouch "couldn't move $s back!";
-		    }
-		}
-		closedir SUB;
-		rmdir "$i" or die "couldn't remove $i";
-	    }
-	}
-	# now move each temporary directory to the right place
-	foreach $i (@{$dirs}) { 
-	    rename (".$i", $i) or ouch "couldn't rename $i into place";
-	}
+    my %found = find_items();
+
+    if (delete $found{'domain'}) {
+	$do_domain = 1;
     }
 
-    if($virtdomains && chdir "domain") {
-      &move_domains($MOVE_DOMAIN_SIEVE);
-      chdir "..";
+    do_moves(undef, %found);
+
+    if ($do_domain) {
+	chdir('domain');
+	&move_domains($MOVE_DOMAIN_SIEVE);
     }
 }
 
 sub move_part {
-  my $i;
-  my $s;
-  my $t;
-  my $h;
-  my $dir;
-  my $sub;
-  my $ismbox;
+    my $do_domain = 0;
+    # let's just assume nobody is being stupid and creating 1 character toplevel names
+    my %found = find_items(1);
 
-  foreach $i (@{$dirs}) { 
-    if ($tonone) {
-      if (-d $i) {
-	rename ($i, ".$i") or die "couldn't rename $i to .$i";
-	print "$i ";
-	
-	opendir SUB, ".$i";
-	while ($s = readdir SUB) {
-	  if ($s =~ /^\./s) { next; }
-	  mkdir $s, 0755; # ignore errors as it might already exist
-	  
-	  opendir MV, ".$i/$s";
-	  while ($t = readdir MV) {
-	    if ($t =~ /^\./s) { next; }
-	    rename (".$i/$s/$t", "$s/$t")
-	      or die "couldn't rename .$i/$s/$t to $s/$t";
-	  }
-	  closedir MV;
-	}
-	closedir SUB;
-	rmdir ".$i" or die "could not remove .$i";
-      }
-      print "done\n";
+    if (delete $found{'domain'}) {
+	$do_domain = 1;
     }
-    else {
-      mkdir (".$i", 0755) or ouch "couldn't create .$i";
+
+    do_moves('/', %found);
+    # extra level of tidying
+    tidy_up(1);
+
+    if ($do_domain) {
+	chdir('domain');
+	move_domains($MOVE_DOMAIN_PART);
     }
-  }
-  
-  unless ($tonone) {
-    foreach $i (@{$old}) {
-      if (opendir SUB, $i) {
-	while ($dir = readdir SUB) {
-	  if ($dir =~ /^\./s) { next; }
-	  # process $dir
-	  print "$i/$dir ";
-	  opendir DIR, "$i/$dir";
-	  $ismbox = 0;
-	  while ($sub = readdir DIR) {
-	    if ($sub =~ /^\./s) { next; }
-	    # if there's a dot in this, we're a mbox and 
-	    # this isn't a child
-	    if ($sub =~ /(.*)\.(.*)/) { $ismbox = 1; next; }
-	    
-	    print "/$sub ";
-	    $h = dir_hash_c($sub);
-	    mkdir (".$h/$dir", 0755); # might already be there
-	    rename("$i/$dir/$sub", ".$h/$dir/$sub") or
-	      ouch "couldn't move $dir/$sub into $h";
-	  }
-	  closedir DIR;
-	  # if $ismbox is set, then $dir is a mailbox of it's own right
-	  if ($ismbox) {
-	    $h = dir_hash_c($dir);
-	    mkdir (".$h/$dir", 0755); # might already be there
-	    opendir DIR, "$i/$dir";
-	    while ($sub = readdir DIR) {
-	      if ($sub =~ /^\./s) { next; }
-	      print "/$sub ";
-	      rename("$i/$dir/$sub", ".$h/$dir/$sub") or 
-		ouch "couldn't move $dir into $h";
-	    }
-	    closedir DIR;
-	  }
-	  
-	  rmdir "$i/$dir" or print "\ncouldn't remove '$dir'??\n";
-	}
-	closedir SUB;
-	rmdir "$i" or die "couldn't remove $i";
-      }
-    }
-    opendir PART, ".";
-    while ($dir = readdir PART) {
-      if ($dir =~ /^\./s) { next; }
-      if ($dir eq "lost+found") { next; }
-      if ($dir eq "stage.") { next; }
-      if ($dir eq "domain") { 
-	if(chdir "domain") {
-	  &move_domains($MOVE_DOMAIN_PART);
-	  chdir "..";
-	}
-	next;
-      }
-      
-      # process $dir
-      print "$dir ";
-      opendir DIR, $dir;
-      $ismbox = 0;
-      while ($sub = readdir DIR) {
-	if ($sub =~ /^\./s) { next; }
-	# if there's a dot in this, we're a mbox and 
-	# this isn't a child
-	if ($sub =~ /(.*)\.(.*)/) { $ismbox = 1; next; }
-	
-	$h = dir_hash_c($sub);
-	mkdir (".$h/$dir", 0755); # might already be there
-	rename("$dir/$sub", ".$h/$dir/$sub") or
-	  ouch "couldn't move $dir/$sub into $h";
-      }
-      closedir DIR;
-      # if $ismbox is set, then $dir is a mailbox of it's own right
-      if ($ismbox) {
-	$h = dir_hash_c($dir);
-	mkdir (".$h/$dir", 0755); # might already be there
-	opendir DIR, $dir;
-	while ($sub = readdir DIR) {
-	  if ($sub =~ /^\./s) { next; }
-	  rename("$dir/$sub", ".$h/$dir/$sub") or 
-	    ouch "couldn't move $dir into $h";
-	}
-	closedir DIR;
-      }
-      
-      rmdir $dir or print "\ncouldn't remove '$dir'??\n";
-    }
-    closedir PART;
-    
-    foreach $i (@{$dirs}) { 
-      rename (".$i", $i) or ouch "couldn't rename .$i to $i";
-    }
-  }
 }
