@@ -219,9 +219,9 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 	if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
 	    prot_printf(s->out, "User-Agent: %s\r\n", buf_cstring(&serverinfo));
 	}
+	prot_printf(s->out, "Upgrade: TLS/1.0\r\n");
 	if (need_tls) {
 	    prot_printf(s->out, "Connection: Upgrade\r\n");
-	    prot_printf(s->out, "Upgrade: TLS/1.0\r\n");
 	    need_tls = 0;
 	}
 	prot_printf(s->out, "Authorization: %s %s\r\n",

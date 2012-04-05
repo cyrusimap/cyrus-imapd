@@ -1136,9 +1136,9 @@ static void cmdloop(void)
 		buf_printf(&html, tls_message, buf, buf);
 
 		/* Check which response is required */
-		if ((hdr = spool_getheader(txn.req_hdrs, "User-Agent")) &&
-		    !strncmp(hdr[0], "Cyrus-Murder/", 13)) {
-		    /* Murder proxies use RFC 2817 (TLS upgrade) */
+		if ((hdr = spool_getheader(txn.req_hdrs, "Upgrade")) &&
+		    !strcmp(hdr[0], "TLS/1.0")) {
+		    /* Client (Murder proxy) prefers RFC 2817 (TLS upgrade) */
 		    code = HTTP_UPGRADE;
 		}
 		else {
