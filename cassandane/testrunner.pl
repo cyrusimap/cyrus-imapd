@@ -52,7 +52,6 @@ use Cassandane::PortManager;
 my $format = 'tap';
 my $output_dir = 'reports';
 my $do_list = 0;
-my $do_cleanup = 0;
 # The default really should be --no-keep-going like make
 my $keep_going = 1;
 my @names;
@@ -156,8 +155,11 @@ while (my $a = shift)
     }
     elsif ($a eq '-c' || $a eq '--cleanup')
     {
-	$do_cleanup = 1;
-	Cassandane::Instance->set_defaults(cleanup => 1);
+	push(@cassini_overrides, ['cassandane', 'cleanup', 'yes']);
+    }
+    elsif ($a eq '--no-cleanup')
+    {
+	push(@cassini_overrides, ['cassandane', 'cleanup', 'no']);
     }
     elsif ($a eq '-f')
     {
@@ -214,7 +216,7 @@ my $cassini = Cassandane::Cassini->new(filename => $cassini_filename);
 map { $cassini->override(@$_); } @cassini_overrides;
 
 Cassandane::Instance::cleanup_leftovers()
-    if ($do_cleanup);
+    if ($cassini->bool_val('cassandane', 'cleanup'));
 
 my $plan = Cassandane::Unit::TestPlan->new(
 	keep_going => $keep_going,

@@ -63,10 +63,6 @@ use Cassandane::Cassini;
 my $__cached_rootdir;
 my $stamp;
 my $next_unique = 1;
-my %defaults =
-(
-    cleanup => 0,
-);
 
 sub new
 {
@@ -88,7 +84,6 @@ sub new
 	re_use_dir => 0,
 	setup_mailbox => 1,
 	persistent => 0,
-	cleanup => $defaults{cleanup},
 	_children => {},
 	_stopped => 0,
 	description => 'unknown',
@@ -117,8 +112,6 @@ sub new
 	if defined $params{re_use_dir};
     $self->{setup_mailbox} = $params{setup_mailbox}
 	if defined $params{setup_mailbox};
-    $self->{cleanup} = $params{cleanup}
-	if defined $params{cleanup};
     $self->{persistent} = $params{persistent}
 	if defined $params{persistent};
     $self->{description} = $params{description}
@@ -196,17 +189,6 @@ sub _init_basedir_and_name
 	# have basedir but not name
 	# this could happen if the caller did odd things
 	$self->{name} = basename($self->{basedir});
-    }
-}
-
-sub set_defaults
-{
-    my ($class, %params) = @_;
-
-    foreach my $p (keys %defaults)
-    {
-	$defaults{$p} = $params{$p}
-	    if defined $params{$p};
     }
 }
 
@@ -840,7 +822,7 @@ sub cleanup
 {
     my ($self) = @_;
 
-    if ($self->{cleanup})
+    if (Cassandane::Cassini->instance()->bool_val('cassandane', 'cleanup'))
     {
 	# Remove all on-disk traces of this instance
 	xlog "Cleaning up basedir " . $self->{basedir};
