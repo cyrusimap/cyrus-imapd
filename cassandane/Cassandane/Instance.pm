@@ -56,6 +56,8 @@ use Cassandane::Util::Wait;
 use Cassandane::Config;
 use Cassandane::Service;
 use Cassandane::ServiceFactory;
+use Cassandane::MasterStart;
+use Cassandane::MasterEvent;
 use Cassandane::Cassini;
 
 my $__cached_rootdir;

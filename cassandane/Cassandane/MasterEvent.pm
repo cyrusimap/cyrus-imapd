@@ -39,57 +39,20 @@
 #  OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
-package Cassandane::MasterEntry;
+package Cassandane::MasterEvent;
+use base qw(Cassandane::MasterEntry);
 use strict;
 use warnings;
-use Cassandane::Util::Log;
-
-my $next_tag = 1;
 
 sub new
 {
-    my ($class, %params) = @_;
-
-    my $name = delete $params{name};
-    if (!defined $name)
-    {
-	$name = "xx$next_tag";
-	$next_tag++;
-    }
-
-    my $argv = delete $params{argv};
-    die "No argv= parameter"
-	unless defined $argv && scalar @$argv;
-
-    my $self = bless
-    {
-	name => $name,
-	argv => $argv,
-    }, $class;
-
-    foreach my $a ($self->_otherparams())
-    {
-	$self->{$a} = delete $params{$a}
-	    if defined $params{$a};
-    }
-    die "Unexpected parameters: " . join(" ", keys %params)
-	if scalar %params;
-
-    return $self;
+    return shift->SUPER::new(@_);
 }
 
-# Return a hash of key,value pairs which need to go into the line in the
-# cyrus master config file.
-sub master_params
+sub _otherparams
 {
     my ($self) = @_;
-    my $params = {};
-    foreach my $a ('name', 'argv', $self->_otherparams())
-    {
-	$params->{$a} = $self->{$a}
-	    if defined $self->{$a};
-    }
-    return $params;
+    return ( qw(period at) );
 }
 
 1;
