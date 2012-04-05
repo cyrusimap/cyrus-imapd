@@ -124,6 +124,26 @@ sub get
     return undef;
 }
 
+sub get_bool
+{
+    my ($self, $n, $def) = @_;
+    $def = 'no' if !defined $def;
+    my $v = $self->get($n);
+    $v = $def if !defined $v;
+
+    return 1 if ($v =~ m/^yes$/i);
+    return 1 if ($v =~ m/^true$/i);
+    return 1 if ($v =~ m/^on$/i);
+    return 1 if ($v =~ m/^1$/);
+
+    return 0 if ($v =~ m/^no$/i);
+    return 0 if ($v =~ m/^false$/i);
+    return 0 if ($v =~ m/^off$/i);
+    return 0 if ($v =~ m/^0$/);
+
+    die "Bad boolean \"$v\"";
+}
+
 sub set_variables
 {
     my ($self, %nv) = @_;
