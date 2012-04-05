@@ -40,5 +40,13 @@
 
 SUBDIRS = utils
 
-all clean install:
+all clean install::
 	@for dir in $(SUBDIRS) ; do cd $$dir ; $(MAKE) $@ || exit 1 ; done
+
+PERL=	perl
+all::
+	@ e=0; \
+	for module in testrunner.pl `find Cassandane -type f -name '*.pm'` ; do \
+	    $(PERL) -c $$module || e=1 ;\
+	done ;\
+	exit $$e;
