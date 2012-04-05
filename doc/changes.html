@@ -8,6 +8,39 @@
 </head>
 <body>
 
+<h1>Changes to the Cyrus IMAP Server since 2.4.14</h1>
+<ul>
+<li>Bug #3664, #3665 - Sieve filters don't work if mailbox contains dots</li>
+<li>Bug #3651 - 64 bit dirhash breaks existing systems</li>
+<li>Bug #1228 - mailbox dumps need to dump quotaroots</li>
+<li>Bug #3613 - CATENATE command returns BADURL</li>
+<li>Bug #3627 - enabling improved_mboxlist_sort documentation mention subscription files</li>
+<li>Bug #3661 - Memory leaks in sync_server, nntpd, popd</li>
+<li>Bug #3621 - quota bug involving nested quota roots</li>
+</ul>
+
+<h1>Changes to the Cyrus IMAP Server since 2.4.13</h1>
+<ul>
+<li>Bug #2685 - folder delete and annotations</li>
+<li>Bug #3381 - tools/rehash script is not 64bit safe</li>
+<li>Bug #3405 - Cyrus IMAP  tls support for ctl_mboxlist</li>
+<li>Bug #3485 - cyr_expire tries to delete parent directories that are not empty</li>
+<li>Bug #3582 - Extra LF+SP characters been inserted in the middle of the XML attachments</li>
+<li>Bug #3598 - lmtp auditlog for murder proxy mode</li>
+<li>Bug #3623 - OpenBSD (and other platforms without working mmap) multiple bugs</li>
+<li>Bug #3626 - Renaming a mailbox doesn't remove old folder</li>
+<li>Bug #3628 - folders with spaces and subfolders with same prefix as parent folder don't show up</li>
+<li>Bug #3634 - RENAME INBOX no longer works</li>
+<li>Bug #3635 - cmd_rename() fails to check error codes</li>
+<li>Bug #3636 - unexpunge locks mailbox until all output is emitted</li>
+<li>Bug #3637 - imapd and ipop3d in 2.4 no longer log expunge events to syslog</li>
+<li>Bug #3638 - sessionid logging improvements for murder environments</li>
+<li>Bug #3640 - LMTP accepts NULL bytes in headers, resulting in incorrect header/mail size in meta-data</li>
+<li>Bug #3642 - iPhone 5 expects SPECIAL-USE in LIST output</li>
+<li>Bug #3649 - unable to remove mailbox</li>
+<li>Bug #3650 - ENVELOPE contains unexpected CRLF</li>
+<li>Bug #3645 - bility to delete folder "shared"</li>
+</ul>
 
 <h1>Changes to the Cyrus IMAP Server since 2.4.12</h1>
 <ul>
