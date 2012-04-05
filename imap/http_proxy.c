@@ -592,13 +592,20 @@ static int read_response(struct backend *be, const char *meth,
     }
     eatline(be->in, c); /* CRLF separating headers & body */
 
-    if (meth[0] == 'H') {
-	/* Not expecting a body */
-	if (resp_body) buf_reset(resp_body);
-	return 0;
-    }
+    if (resp_body) buf_reset(resp_body);
 
-    if (*code < 200) resp_body = NULL; /* Disregard body of provisional resp */
+    /* Not expecting a body for 1xx/204/304 response or any HEAD response */
+    switch (*code){
+    case 100: /* Continue */
+    case 101: /* Switching Protocols */
+    case 102: /* Processing */
+    case 204: /* No Content */
+    case 304: /* Not Modified */
+	return 0;
+
+    default:
+	if (meth[0] == 'H') return 0;
+    }
 
     if (read_body(be->in, *resp_hdrs, resp_body, errstr)) {
 	return HTTP_UNAVAILABLE;
@@ -633,11 +640,11 @@ static void send_response(struct protstream *pout,
 	prot_printf(pout, "Keep-Alive: timeout=%d\r\n", httpd_timeout);
 	prot_printf(pout, "Connection: Keep-Alive\r\n");
     }
-    if (flags & HTTP_NOCACHE) {
-	prot_printf(pout, "Cache-Control: no-cache\r\n");
-    }
     if (httpd_tls_done) {
 	prot_printf(httpd_out, "Strict-Transport-Security: max-age=600\r\n");
+    }
+    if (flags & HTTP_NOCACHE) {
+	prot_printf(pout, "Cache-Control: no-cache\r\n");
     }
     spool_enum_hdrcache(hdrs, &write_cachehdr, pout);
 
