@@ -174,5 +174,41 @@ sub test_boolval
     $self->assert_matches(qr/Bad boolean/i, $@);
 }
 
+sub test_override
+{
+    my ($self) = @_;
+
+    local $CWD = tempdir(CLEANUP => 1);
+
+    xlog "Working in temporary directory $CWD";
+    # data thanks to hipsteripsum.me
+    write_inifile({},
+	'semiotics.skateboard' => 'flexitarian',
+    );
+
+    my $cassini = new Cassandane::Cassini;
+
+    $self->assert_null($cassini->val('semiotics', 'typewriter'));
+    $self->assert_str_equals('whatever',
+			     $cassini->val('semiotics', 'typewriter', 'whatever'));
+    $self->assert_str_equals('flexitarian',
+			     $cassini->val('semiotics', 'skateboard', 'whatever'));
+    $self->assert_str_equals('flexitarian',
+			     $cassini->val('semiotics', 'skateboard'));
+    $self->assert_null($cassini->val('twee', 'cliche'));
+
+    $cassini->override('semiotics', 'typewriter', 'vegan');
+
+    $self->assert_str_equals('vegan',
+			     $cassini->val('semiotics', 'typewriter'));
+    $self->assert_str_equals('vegan',
+			     $cassini->val('semiotics', 'typewriter', 'whatever'));
+    $self->assert_str_equals('flexitarian',
+			     $cassini->val('semiotics', 'skateboard', 'whatever'));
+    $self->assert_str_equals('flexitarian',
+			     $cassini->val('semiotics', 'skateboard'));
+    $self->assert_null($cassini->val('twee', 'cliche'));
+}
+
 
 1;

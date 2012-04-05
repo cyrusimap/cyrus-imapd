@@ -145,12 +145,14 @@ sub usage
     exit(1);
 }
 
+my $cassini_filename;
+my @cassini_overrides;
+
 while (my $a = shift)
 {
     if ($a eq '--config')
     {
-	my $filename = shift;
-	Cassandane::Cassini->new(filename => $filename);
+	$cassini_filename = shift;
     }
     elsif ($a eq '-c' || $a eq '--cleanup')
     {
@@ -189,6 +191,11 @@ while (my $a = shift)
 	# These option names stolen from GNU make
 	$keep_going = 0;
     }
+    elsif ($a =~ m/^-D.*=/)
+    {
+	my ($sec, $param, $val) = ($a =~ m/^-D([^.=]+)\.([^.=]+)=(.*)$/);
+	push(@cassini_overrides, [$sec, $param, $val]);
+    }
     elsif ($a =~ m/^-/)
     {
 	usage;
@@ -198,6 +205,9 @@ while (my $a = shift)
 	push(@names, $a);
     }
 }
+
+my $cassini = Cassandane::Cassini->new(filename => $cassini_filename);
+map { $cassini->override(@$_); } @cassini_overrides;
 
 Cassandane::Instance::cleanup_leftovers()
     if ($do_cleanup);

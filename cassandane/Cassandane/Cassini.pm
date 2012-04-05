@@ -128,6 +128,21 @@ sub bool_val
     die "Bad boolean \"$v\"";
 }
 
+sub override
+{
+    my ($self, $section, $parameter, $value) = @_;
+    my $ii = $self->{inifile};
+
+    if ($ii->exists($section, $parameter))
+    {
+	$ii->setval($section, $parameter, $value);
+    }
+    else
+    {
+	$ii->newval($section, $parameter, $value);
+    }
+}
+
 sub apply_config
 {
     my ($self, $config, $member) = @_;
