@@ -44,6 +44,7 @@
 package Cassandane::Cassini;
 use strict;
 use warnings;
+use Cwd qw(abs_path);
 use Config::IniFiles;
 use Cassandane::Util::Log;
 
@@ -56,6 +57,7 @@ sub new
     my $filename = 'cassandane.ini';
     $filename = $params{filename}
 	if defined $params{filename};
+    $filename = abs_path($filename);
 
     my $inifile = new Config::IniFiles();
     if ( -f $filename)
