@@ -75,7 +75,7 @@ sub write_inifile
 	printf INIFILE "[%s]\n", $sec;
 	foreach my $param (keys %{$sections{$sec}})
 	{
-	    printf INIFILE "%s=%s\n", $sec, $sections{$sec}->{$param};
+	    printf INIFILE "%s=%s\n", $param, $sections{$sec}->{$param};
 	}
     }
     close INIFILE;
@@ -168,10 +168,12 @@ sub test_boolval
     $self->assert_equals(1, $cassini->bool_val('narwhal', 'leggings'));
 
     eval { $cassini->bool_val('narwhal', 'mixtape'); };
-    $self->assert_matches(qr/Bad boolean/i, $@);
+    my $exception = $@;
+    $self->assert_matches(qr/Bad boolean/, $exception);
 
     eval { $cassini->bool_val('narwhal', 'vegan'); };
-    $self->assert_matches(qr/Bad boolean/i, $@);
+    $exception = $@;
+    $self->assert_matches(qr/Bad boolean/, $exception);
 }
 
 sub test_override
