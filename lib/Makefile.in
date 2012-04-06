@@ -43,12 +43,6 @@
 #
 # $Id: Makefile.in,v 1.77 2010/06/28 12:06:31 brong Exp $
 
-# Authorization namespace.
-AUTH=auth.o auth_krb.o auth_unix.o auth_krb5.o auth_pts.o
-
-# ACL interpretation.  Only one choice for now:
-ACL=acl_afs.o
-
 srcdir = @srcdir@
 top_srcdir = @top_srcdir@
 VPATH = @srcdir@
@@ -90,13 +84,14 @@ LIBCYR_HDRS = $(srcdir)/acl.h $(srcdir)/assert.h $(srcdir)/auth.h \
 	$(srcdir)/util.h $(srcdir)/xmalloc.h $(srcdir)/xstrlcat.h \
 	$(srcdir)/xstrlcpy.h
 
-LIBCYR_OBJS = acl.o bsearch.o byteorder64.o charset.o chartable.o crc32.o \
+LIBCYR_OBJS = acl.o acl_afs.o auth.o auth_krb.o auth_unix.o auth_krb5.o \
+	auth_pts.o bsearch.o byteorder64.o charset.o chartable.o crc32.o \
 	cyrusdb.o glob.o gmtoff_@WITH_GMTOFF@.o imapurl.o imclient.o \
 	imparse.o iostat.o iptostring.o libcyr_cfg.o lock_@WITH_LOCK@.o \
 	lsort.o mkgmtime.o nonblock_@WITH_NONBLOCK@.o parseaddr.o prot.o \
 	ptrarray.o signals.o strarray.o strhash.o stristr.o times.o tok.o \
-	util.o wildmat.o xmalloc.o xstrlcat.o xstrlcpy.o $(ACL) $(AUTH) \
-	@CYRUSDB_OBJS@ @LIBOBJS@
+	util.o wildmat.o xmalloc.o xstrlcat.o xstrlcpy.o @CYRUSDB_OBJS@ \
+	@LIBOBJS@
 
 LIBCYRM_HDRS = $(srcdir)/assert.h $(srcdir)/hash.h $(srcdir)/imapopts.h \
 	$(srcdir)/libconfig.h $(srcdir)/map.h $(srcdir)/mappedfile.h \
