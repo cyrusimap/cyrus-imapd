@@ -228,17 +228,15 @@ imapd.quant: $(IMAPDOBJS) mutex_fake.o libimap.a $(DEPLIBS) $(SERVICE)
 	 $(SERVICE) $(IMAPDOBJS) mutex_fake.o libimap.a \
 	$(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
-mupdate: mupdate.o mupdate-slave.o mupdate-client.o mutex_pthread.o \
-	libimap.a $(DEPLIBS)
+mupdate: mupdate.o mupdate-slave.o mutex_pthread.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o mupdate \
-	 $(SERVICETHREAD) mupdate.o mupdate-slave.o mupdate-client.o \
-	 mutex_pthread.o libimap.a $(DEPLIBS) $(LIBS) $(LIB_WRAP) -lpthread
+	 $(SERVICETHREAD) mupdate.o mupdate-slave.o mutex_pthread.o libimap.a \
+	 $(DEPLIBS) $(LIBS) $(LIB_WRAP) -lpthread
 
-mupdate.pure: mupdate.o mupdate-slave.o mupdate-client.o mutex_pthread.o \
-	libimap.a $(DEPLIBS)
+mupdate.pure: mupdate.o mupdate-slave.o mutex_pthread.o libimap.a $(DEPLIBS)
 	$(PURIFY) $(PUREOPT) $(CC) $(LDFLAGS) -o mupdate.pure \
-	 $(SERVICETHREAD) mupdate.o mupdate-slave.o mupdate-client.o \
-	 mutex_pthread.o libimap.a $(DEPLIBS) $(LIBS) $(LIB_WRAP) -lpthread
+	 $(SERVICETHREAD) mupdate.o mupdate-slave.o mutex_pthread.o libimap.a \
+	 $(DEPLIBS) $(LIBS) $(LIB_WRAP) -lpthread
 
 pop3d: backend.o mutex_fake.o pop3d.o proxy.o libimap.a $(DEPLIBS) $(SERVICE)
 	$(CC) $(LDFLAGS) -o pop3d backend.o mutex_fake.o pop3d.o proxy.o \
@@ -310,8 +308,8 @@ ctl_deliver: ctl_deliver.o $(CLIOBJS) libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o \
 	 $@ ctl_deliver.o $(CLIOBJS) libimap.a $(DEPLIBS) $(LIBS)
 
-ctl_mboxlist: ctl_mboxlist.o mupdate-client.o $(CLIOBJS) libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o $@ ctl_mboxlist.o mupdate-client.o $(CLIOBJS) \
+ctl_mboxlist: ctl_mboxlist.o $(CLIOBJS) libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o $@ ctl_mboxlist.o $(CLIOBJS) \
 	libimap.a $(DEPLIBS) $(LIBS)
 
 ctl_cyrusdb: ctl_cyrusdb.o $(CLIOBJS) libimap.a $(DEPLIBS)
