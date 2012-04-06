@@ -51,6 +51,7 @@
 #include <stdlib.h>
 
 #include <sasl/sasl.h>
+#include <config.h>
 
 #ifdef HAVE_SSL
 #include <openssl/ssl.h>
