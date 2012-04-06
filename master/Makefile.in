@@ -88,8 +88,7 @@ install:
 
 # This is awful.  We should use libcyrus.a but we also need
 # to grab a lock*.o from it explicitly.
-LIBCYRUS=   ../lib/strarray.o \
-	    ../lib/lock_@WITH_LOCK@.o
+LIBCYRUS=   ../lib/strarray.o
 
 master: master.o masterconf.o cyrusMasterMIB.o $(LIBCYRUS)
 	$(CC) $(LDFLAGS) -o master master.o masterconf.o cyrusMasterMIB.o $(LIBCYRUS) $(LIBS) $(DEPLIBS)

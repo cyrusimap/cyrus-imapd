@@ -72,35 +72,30 @@ libdir = @libdir@
 BUILTSOURCES = imapopts.h imapopts.c
 
 LIBCYR_HDRS = $(srcdir)/acl.h $(srcdir)/assert.h $(srcdir)/auth.h \
-	$(srcdir)/brearch.h $(srcdir)/byteorder64.h $(srcdir)/charset.h \
-	$(srcdir)/crc32.h $(srcdir)/cyr_lock.h $(srcdir)/cyrusdb.h \
-	$(srcdir)/glob.h $(srcdir)/gmtoff.h $(srcdir)/imapurl.h \
-	$(srcdir)/imclient.h $(srcdir)/imparse.h $(srcdir)/iostat.h \
-	$(srcdir)/iptostring.h $(srcdir)/libcyr_cfg.h $(srcdir)/lsort.h \
-	$(srcdir)/md5.h $(srcdir)/mkgmtime.h $(srcdir)/nonblock.h \
+	$(srcdir)/brearch.h $(srcdir)/charset.h $(srcdir)/cyr_lock.h \
+	$(srcdir)/cyrusdb.h $(srcdir)/glob.h $(srcdir)/gmtoff.h \
+	$(srcdir)/imapurl.h $(srcdir)/imclient.h $(srcdir)/imparse.h \
+	$(srcdir)/iostat.h $(srcdir)/iptostring.h $(srcdir)/libcyr_cfg.h \
+	$(srcdir)/lsort.h $(srcdir)/mkgmtime.h $(srcdir)/nonblock.h \
 	$(srcdir)/parseaddr.h $(srcdir)/rfc822date.h $(srcdir)/signals.h \
 	$(srcdir)/strarray.h $(srcdir)/strhash.h $(srcdir)/stristr.h \
-	$(srcdir)/sysexits.h $(srcdir)/times.h $(srcdir)/util.h 
-	$(srcdir)/xmalloc.h $(srcdir)/xstrlcat.h $(srcdir)/xstrlcpy.h
+	$(srcdir)/sysexits.h $(srcdir)/times.h 
 
 LIBCYR_OBJS = acl.o acl_afs.o auth.o auth_krb.o auth_unix.o auth_krb5.o \
 	auth_pts.o bsearch.o byteorder64.o charset.o chartable.o crc32.o \
 	cyrusdb.o glob.o gmtoff_@WITH_GMTOFF@.o imapurl.o imclient.o \
-	imparse.o iostat.o iptostring.o libcyr_cfg.o lock_@WITH_LOCK@.o \
-	lsort.o mkgmtime.o nonblock_@WITH_NONBLOCK@.o parseaddr.o prot.o \
-	ptrarray.o signals.o strarray.o strhash.o stristr.o times.o tok.o \
-	util.o wildmat.o xmalloc.o xstrlcat.o xstrlcpy.o @CYRUSDB_OBJS@ \
-	@LIBOBJS@
+	imparse.o iostat.o iptostring.o libcyr_cfg.o lsort.o mkgmtime.o \
+	nonblock_@WITH_NONBLOCK@.o parseaddr.o prot.o ptrarray.o signals.o \
+	strarray.o stristr.o times.o tok.o wildmat.o @CYRUSDB_OBJS@
 
-LIBCYRM_HDRS = $(srcdir)/assert.h $(srcdir)/hash.h $(srcdir)/imapopts.h \
+LIBCYRM_HDRS = $(srcdir)/assert.h $(srcdir)/exitcodes.h $(srcdir)/hash.h \
 	$(srcdir)/libconfig.h $(srcdir)/map.h $(srcdir)/mappedfile.h \
 	$(srcdir)/mpool.h $(srcdir)/retry.h $(srcdir)/strhash.h \
-	$(srcdir)/util.h $(srcdir)/xmalloc.h $(srcdir)/xstrlcat.h \
-	$(srcdir)/xstrlcpy.h 
+	$(srcdir)/xmalloc.h imapopts.h 
 
-LIBCYRM_OBJS = assert.o hash.o imapopts.o libconfig.o mappedfile.o mpool.o \
-	retry.o signals.o strhash.o util.o xmalloc.o xstrlcat.o xstrlcpy.o \
-	@IPV6_OBJS@ map_@WITH_MAP@.o
+LIBCYRM_OBJS = assert.o hash.o imapopts.o libconfig.o lock_@WITH_LOCK@.o \
+	mappedfile.o map_@WITH_MAP@.o mpool.o retry.o strhash.o util.o \
+	xmalloc.o xstrlcat.o xstrlcpy.o @IPV6_OBJS@ @LIBOBJS@
 
 all: $(BUILTSOURCES) libcyrus_min.a libcyrus.a
 
