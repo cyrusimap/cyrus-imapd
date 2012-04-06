@@ -1301,7 +1301,10 @@ static int meth_mkcol(struct transaction_t *txn)
     if (!r) ret = HTTP_CREATED;
     else if (r == IMAP_PERMISSION_DENIED) ret = HTTP_FORBIDDEN;
     else if (r == IMAP_MAILBOX_EXISTS) ret = HTTP_FORBIDDEN;
-    else if (r) ret = HTTP_SERVER_ERROR;
+    else if (r) {
+	txn->error.desc = error_message(r);
+	ret = HTTP_SERVER_ERROR;
+    }
 
     if (instr) {
 	if (r) {
@@ -3216,14 +3219,6 @@ static int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root)
 
     *root = NULL;
 
-    /* Check Content-Type */
-    if (!(hdr = spool_getheader(txn->req_hdrs, "Content-Type")) ||
-	(!is_mediatype(hdr[0], "text/xml") &&
-	 !is_mediatype(hdr[0], "application/xml"))) {
-	txn->error.desc = "This method requires an XML body";
-	return HTTP_BAD_MEDIATYPE;
-    }
-
     /* Read body */
     if (!(txn->flags & HTTP_READBODY)) {
 	txn->flags |= HTTP_READBODY;
@@ -3235,6 +3230,14 @@ static int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root)
     }
 
     if (!buf_len(&txn->req_body)) return 0;
+
+    /* Check Content-Type */
+    if (!(hdr = spool_getheader(txn->req_hdrs, "Content-Type")) ||
+	(!is_mediatype(hdr[0], "text/xml") &&
+	 !is_mediatype(hdr[0], "application/xml"))) {
+	txn->error.desc = "This method requires an XML body";
+	return HTTP_BAD_MEDIATYPE;
+    }
 
     /* Parse the XML request */
     ctxt = xmlNewParserCtxt();
