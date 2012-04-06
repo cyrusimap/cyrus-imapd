@@ -92,6 +92,7 @@
 #include "tok.h"
 
 #ifdef WITH_CALDAV
+#include "dav_prop.h"
 #include <libical/ical.h>
 #endif
 

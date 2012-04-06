@@ -51,7 +51,6 @@
 #include <zlib.h>
 #endif /* HAVE_ZLIB */
 
-#include "dav_prop.h"
 #include "mailbox.h"
 #include "spool.h"
 
