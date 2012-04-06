@@ -50,6 +50,9 @@
 #include "xmalloc.h"
 #include "rfc822date.h"
 
+#include <libxml/uri.h>
+
+
 /* Bitmask of calendar components */
 enum {
     CAL_COMP_VEVENT =		(1<<0),
@@ -153,6 +156,16 @@ xmlNodePtr init_xml_response(const char *resp,
     return root;
 }
 
+static xmlNodePtr xml_add_href(xmlNodePtr parent, xmlNsPtr ns,
+			       const char *href)
+{
+    xmlChar *uri = xmlURIEscapeStr(BAD_CAST href, BAD_CAST "/");
+    xmlNodePtr node = xmlNewChild(parent, ns, BAD_CAST "href", uri);
+
+    free(uri);
+    return node;
+}
+
 xmlNodePtr xml_add_error(xmlNodePtr root, struct error_t *err,
 			 xmlNsPtr *avail_ns)
 {
@@ -175,7 +188,7 @@ xmlNodePtr xml_add_error(xmlNodePtr root, struct error_t *err,
 	const char *p = err->resource + rlen;
 
 	node = xmlNewChild(node, NULL, BAD_CAST "resource", NULL);
-	xmlNewChild(node, NULL, BAD_CAST "href", BAD_CAST err->resource);
+	xml_add_href(node, NULL, err->resource);
 
 	if (rlen > 6 && !strcmp(p-6, SCHED_INBOX))
 	    flags |= PRIV_INBOX;
@@ -232,7 +245,7 @@ int xml_add_response(struct propfind_ctx *fctx, long code)
 	*fctx->ret = HTTP_SERVER_ERROR;
 	return HTTP_SERVER_ERROR;
     }
-    xmlNewChild(resp, NULL, BAD_CAST "href", BAD_CAST fctx->req_tgt->path);
+    xml_add_href(resp, NULL, fctx->req_tgt->path);
 
     if (code) {
 	xmlNewChild(resp, NULL, BAD_CAST "status",
@@ -295,8 +308,7 @@ static int propfind_addmember(xmlNodePtr prop,
 	buf_reset(&fctx->buf);
 	buf_printf(&fctx->buf, "%.*s", len, fctx->req_tgt->path);
 
-	xmlNewChild(node, NULL, BAD_CAST "href",
-		    BAD_CAST buf_cstring(&fctx->buf));
+	xml_add_href(node, NULL, buf_cstring(&fctx->buf));
     }
     else {
 	xml_add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND],
@@ -555,8 +567,7 @@ static int propfind_principalurl(xmlNodePtr prop,
 		       fctx->req_tgt->userlen, fctx->req_tgt->user);
 	}
 
-	xmlNewChild(node, NULL, BAD_CAST "href",
-		    BAD_CAST buf_cstring(&fctx->buf));
+	xml_add_href(node, NULL, buf_cstring(&fctx->buf));
     }
 
     return 0;
@@ -579,8 +590,7 @@ static int propfind_owner(xmlNodePtr prop,
 	buf_printf(&fctx->buf, "/principals/user/%.*s/",
 		   fctx->req_tgt->userlen, fctx->req_tgt->user);
 
-	xmlNewChild(node, NULL, BAD_CAST "href",
-		    BAD_CAST buf_cstring(&fctx->buf));
+	xml_add_href(node, NULL, buf_cstring(&fctx->buf));
     }
 
     return 0;
@@ -694,8 +704,7 @@ static int propfind_curprin(xmlNodePtr prop,
     if (fctx->userid) {
 	buf_reset(&fctx->buf);
 	buf_printf(&fctx->buf, "/principals/user/%s/", fctx->userid);
-	xmlNewChild(node, NULL, BAD_CAST "href",
-		    BAD_CAST buf_cstring(&fctx->buf));
+	xml_add_href(node, NULL, buf_cstring(&fctx->buf));
     }
     else {
 	xmlNewChild(node, NULL, BAD_CAST "unauthenticated", NULL);
@@ -907,8 +916,7 @@ static int propfind_acl(xmlNodePtr prop,
 	    else {
 		buf_reset(&fctx->buf);
 		buf_printf(&fctx->buf, "/principals/user/%s/", userid);
-		xmlNewChild(node, NULL, BAD_CAST "href",
-			    BAD_CAST buf_cstring(&fctx->buf));
+		xml_add_href(node, NULL, buf_cstring(&fctx->buf));
 	    }
 
 	    node = xmlNewChild(ace, NULL,
@@ -921,8 +929,7 @@ static int propfind_acl(xmlNodePtr prop,
 		buf_printf(&fctx->buf, "%.*s",
 			   fctx->req_tgt->resource - fctx->req_tgt->path,
 			   fctx->req_tgt->path);
-		xmlNewChild(node, NULL, BAD_CAST "href",
-			    BAD_CAST buf_cstring(&fctx->buf));
+		xml_add_href(node, NULL, buf_cstring(&fctx->buf));
 	    }
 
 	    userid = nextid;
@@ -1093,8 +1100,7 @@ static int propfind_calurl(xmlNodePtr prop,
 	buf_printf(&fctx->buf, "/calendars/user/%s/%s", fctx->userid,
 		   cal ? cal : "");
 
-	xmlNewChild(node, fctx->ns[NS_DAV], BAD_CAST "href",
-		    BAD_CAST buf_cstring(&fctx->buf));
+	xml_add_href(node, fctx->ns[NS_DAV], buf_cstring(&fctx->buf));
     }
     else {
 	xml_add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND],
