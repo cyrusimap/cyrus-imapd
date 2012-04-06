@@ -197,9 +197,9 @@ mupdate-client.o mupdate.o mupdate-slave.o: mupdate_err.h
 @MAINT@rfc822_header.o: rfc822_header.h
 
 ### Services
-idled: idled.o idlemsg.o mutex_fake.o libimap.a $(DEPLIBS)
+idled: idled.o mutex_fake.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o idled \
-	 idled.o idlemsg.o mutex_fake.o libimap.a $(DEPLIBS) $(LIBS)
+	 idled.o mutex_fake.o libimap.a $(DEPLIBS) $(LIBS)
 
 lmtpd: lmtpd.o proxy.o $(LMTPOBJS) $(SIEVE_OBJS) mutex_fake.o \
 	 libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(SERVICE)
