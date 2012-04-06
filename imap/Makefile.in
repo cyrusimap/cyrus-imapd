@@ -228,12 +228,11 @@ imapd.quant: $(IMAPDOBJS) mutex_fake.o libimap.a $(DEPLIBS) $(SERVICE)
 	 $(SERVICE) $(IMAPDOBJS) mutex_fake.o libimap.a \
 	$(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
-mupdate: mupdate.o mupdate-slave.o mupdate-client.o mutex_pthread.o tls.o \
+mupdate: mupdate.o mupdate-slave.o mupdate-client.o mutex_pthread.o \
 	libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o mupdate \
 	 $(SERVICETHREAD) mupdate.o mupdate-slave.o mupdate-client.o \
-	 mutex_pthread.o tls.o libimap.a \
-	 $(DEPLIBS) $(LIBS) $(LIB_WRAP) -lpthread
+	 mutex_pthread.o libimap.a $(DEPLIBS) $(LIBS) $(LIB_WRAP) -lpthread
 
 mupdate.pure: mupdate.o mupdate-slave.o mupdate-client.o mutex_pthread.o \
 	libimap.a $(DEPLIBS)
@@ -241,16 +240,15 @@ mupdate.pure: mupdate.o mupdate-slave.o mupdate-client.o mutex_pthread.o \
 	 $(SERVICETHREAD) mupdate.o mupdate-slave.o mupdate-client.o \
 	 mutex_pthread.o libimap.a $(DEPLIBS) $(LIBS) $(LIB_WRAP) -lpthread
 
-pop3d: pop3d.o proxy.o backend.o tls.o mutex_fake.o libimap.a \
-	$(DEPLIBS) $(SERVICE)
-	$(CC) $(LDFLAGS) -o pop3d pop3d.o proxy.o backend.o tls.o $(SERVICE) \
-	 mutex_fake.o libimap.a $(DEPLIBS) $(LIBS) $(LIB_WRAP)
+pop3d: backend.o mutex_fake.o pop3d.o proxy.o libimap.a $(DEPLIBS) $(SERVICE)
+	$(CC) $(LDFLAGS) -o pop3d backend.o mutex_fake.o pop3d.o proxy.o \
+	 libimap.a $(DEPLIBS) $(LIBS) $(LIB_WRAP) $(SERVICE)
 
-nntpd: nntpd.o proxy.o backend.o index.o smtpclient.o spool.o tls.o \
-	 mutex_fake.o nntp_err.o libimap.a $(DEPLIBS) $(SERVICE)
-	$(CC) $(LDFLAGS) -o nntpd nntpd.o proxy.o backend.o index.o spool.o \
-	 smtpclient.o tls.o $(SERVICE) mutex_fake.o nntp_err.o \
-	 libimap.a $(DEPLIBS) $(LIBS) $(LIB_WRAP)
+nntpd: backend.o index.o mutex_fake.o nntpd.o nntp_err.o proxy.o smtpclient.o \
+	spool.o libimap.a $(DEPLIBS) $(SERVICE)
+	$(CC) $(LDFLAGS) -o nntpd backend.o index.o mutex_fake.o nntpd.o \
+	 nntp_err.o proxy.o smtpclient.o spool.o libimap.a $(DEPLIBS) \
+	 $(SERVICE) $(LIBS) $(LIB_WRAP)
 
 fud: fud.o libimap.a mutex_fake.o $(DEPLIBS) $(SERVICE)
 	$(CC) $(LDFLAGS) -o fud $(SERVICE) fud.o mutex_fake.o libimap.a \
@@ -260,12 +258,11 @@ smmapd: smmapd.o libimap.a mutex_fake.o $(DEPLIBS) $(SERVICE)
 	$(CC) $(LDFLAGS) -o smmapd $(SERVICE) smmapd.o mutex_fake.o libimap.a \
 	$(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
-sync_server: sync_server.o sync_support.o \
-	imapparse.o tls.o libimap.a mutex_fake.o $(DEPLIBS) $(SERVICE)
-	$(CC) $(LDFLAGS) -o \
-	sync_server sync_server.o sync_support.o \
-	imapparse.o tls.o $(SERVICE) libimap.a mutex_fake.o \
-	$(DEPLIBS) $(LIBS) $(LIB_WRAP)
+sync_server: imapparse.o mutex_fake.o sync_server.o sync_support.o libimap.a \
+	$(DEPLIBS) $(SERVICE)
+	$(CC) $(LDFLAGS) -o sync_server \
+	imapparse.o mutex_fake.o sync_server.o sync_support.o libimap.a \
+	$(DEPLIBS) $(SERVICE) $(LIBS) $(LIB_WRAP)
 
 ### Command Line Utilities
 arbitron: arbitron.o $(CLIOBJS) libimap.a $(DEPLIBS)
@@ -365,19 +362,19 @@ quota: quota.o $(CLIOBJS) libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o quota quota.o $(CLIOBJS) \
 	libimap.a $(DEPLIBS) $(LIBS)
 
-tls_prune: tls_prune.o tls.o $(CLIOBJS) libimap.a $(DEPLIBS)
+tls_prune: tls_prune.o $(CLIOBJS) libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o \
-	 $@ tls_prune.o tls.o $(CLIOBJS) libimap.a $(DEPLIBS) $(LIBS)
+	 $@ tls_prune.o $(CLIOBJS) libimap.a $(DEPLIBS) $(LIBS)
 
 unexpunge: unexpunge.o $(CLIOBJS) libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o $@ unexpunge.o $(CLIOBJS) \
 	libimap.a $(DEPLIBS) $(LIBS)
 
-sync_client: sync_client.o sync_support.o \
-	backend.o tls.o imapparse.o libimap.a mutex_fake.o $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o \
-	sync_client sync_client.o sync_support.o \
-	backend.o tls.o imapparse.o libimap.a mutex_fake.o $(DEPLIBS) $(LIBS)
+sync_client: backend.o imapparse.o mutex_fake.o sync_client.o sync_support.o \
+	libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o sync_client \
+	backend.o imapparse.o mutex_fake.o sync_client.o sync_support.o \
+	libimap.a $(DEPLIBS) $(LIBS)
 
 sync_reset: sync_reset.o sync_support.o \
 	libimap.a mutex_fake.o $(DEPLIBS)
