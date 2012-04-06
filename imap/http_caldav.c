@@ -62,6 +62,7 @@
 
 #include <libical/ical.h>
 #include <libxml/tree.h>
+#include <libxml/uri.h>
 
 #include "acl.h"
 #include "append.h"
@@ -2479,6 +2480,7 @@ static int report_cal_multiget(struct transaction_t *txn __attribute__((unused))
     struct mailbox *mailbox = NULL;
     struct caldav_db *caldavdb = NULL;
     xmlNodePtr node;
+    struct buf uri = BUF_INITIALIZER;
 
     /* Open mailbox for reading */
     if ((r = http_mailbox_open(mailboxname, &mailbox, LOCK_SHARED))) {
@@ -2503,8 +2505,13 @@ static int report_cal_multiget(struct transaction_t *txn __attribute__((unused))
 	if ((node->type == XML_ELEMENT_NODE) &&
 	    !xmlStrcmp(node->name, BAD_CAST "href")) {
 	    xmlChar *href = xmlNodeListGetString(inroot->doc, node->children, 1);
-	    const char *resource = strrchr((char *) href, '/') + 1;
+	    int len = xmlStrlen(href);
+	    const char *resource;
 	    uint32_t uid = 0;
+
+	    buf_ensure(&uri, len);
+	    xmlURIUnescapeString((const char *) href, len, uri.s);
+	    resource = strrchr(uri.s, '/') + 1;
 
 	    /* Find message UID for the resource */
 	    caldav_read(caldavdb, resource, &uid);
@@ -2517,6 +2524,7 @@ static int report_cal_multiget(struct transaction_t *txn __attribute__((unused))
   done:
     if (caldavdb) caldav_close(caldavdb);
     if (mailbox) mailbox_unlock_index(mailbox, NULL);
+    buf_free(&uri);
 
     return ret;
 }
