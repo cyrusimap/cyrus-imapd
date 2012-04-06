@@ -95,34 +95,33 @@ exec_prefix = @exec_prefix@
 cyrus_prefix = @cyrus_prefix@
 service_path = @service_path@
 
-LOBJS= append.o mailbox.o mboxlist.o mupdate-client.o mboxname.o message.o \
-	global.o imap_err.o mupdate_err.o proc.o setproctitle.o \
-	convert_code.o duplicate.o saslclient.o saslserver.o \
-	annotate.o search_engines.o squat.o squat_internal.o mbdump.o \
-	imapparse.o telemetry.o user.o notify.o idle.o idlemsg.o quota_db.o \
-	sync_log.o $(SEEN) mboxkey.o backend.o tls.o message_guid.o \
-	statuscache_db.o userdeny_db.o sequence.o upgrade_index.o \
-	dlist.o version.o rfc822_header.o
+LOBJS= annotate.o append.o backend.o convert_code.o dlist.o duplicate.o \
+	global.o idle.o idlemsg.o imapparse.o imap_err.o mailbox.o mbdump.o \
+	mboxkey.o mboxlist.o mboxname.o message_guid.o mupdate-client.o \
+	mupdate_err.o message.o notify.o proc.o quota_db.o rfc822_header.o \
+	setproctitle.o saslclient.o saslserver.o search_engines.o sequence.o \
+	squat.o squat_internal.o statuscache_db.o sync_log.o telemetry.o \
+	tls.o upgrade_index.o user.o userdeny_db.o version.o $(SEEN)
 
-IMAPDOBJS=pushstats.o imapd.o proxy.o imap_proxy.o index.o
+IMAPDOBJS=imap_proxy.o imapd.o index.o pushstats.o proxy.o
 
-LMTPOBJS=lmtpstats.o lmtpengine.o spool.o
+LMTPOBJS=lmtpengine.o lmtpstats.o spool.o
 
 # Your typical objects for the command line utilities
 CLIOBJS=cli_fatal.o mutex_fake.o
 
-SERVICE=../master/service.o
-SERVICETHREAD=../master/service-thread.o
+SERVICE=$(top_builddir)/master/service.o
+SERVICETHREAD=$(top_builddir)/master/service-thread.o
 
-PROGS = imapd lmtpd pop3d \
-	fud smmapd reconstruct quota mbpath ipurge cyr_dbtool cyr_synclog \
-	cyrdump chk_cyrus cvt_cyrusdb deliver ctl_mboxlist mbtool \
-	ctl_deliver ctl_cyrusdb squatter mbexamine cyr_expire arbitron \
-	unexpunge cyr_df cyr_sequence cyr_userseen cyr_info @IMAP_PROGS@
+PROGS = arbitron chk_cyrus ctl_cyrusdb ctl_deliver ctl_mboxlist cvt_cyrusdb \
+	cyr_df cyrdump cyr_dbtool cyr_expire cyr_info cyr_sequence \
+	cyr_synclog cyr_userseen deliver fud imapd ipurge lmtpd mbexamine \
+	mbpath mbtool pop3d quota reconstruct smmapd squatter unexpunge \
+	@IMAP_PROGS@
 
-BUILTSOURCES = imap_err.c imap_err.h pushstats.c pushstats.h \
-	lmtpstats.c lmtpstats.h mupdate_err.c mupdate_err.h \
-	nntp_err.c nntp_err.h
+BUILTSOURCES = imap_err.c imap_err.h lmtpstats.c lmtpstats.h \
+	mupdate_err.c mupdate_err.h nntp_err.c nntp_err.h \
+	pushstats.c pushstats.h
 
 all: $(BUILTSOURCES) $(PROGS) $(SUIDPROGS)
 
@@ -197,185 +196,175 @@ mupdate-client.o mupdate.o mupdate-slave.o: mupdate_err.h
 @MAINT@rfc822_header.o: rfc822_header.h
 
 ### Services
+fud: fud.o mutex_fake.o libimap.a $(DEPLIBS) $(SERVICE)
+	$(CC) $(LDFLAGS) -o $@ fud.o mutex_fake.o libimap.a $(DEPLIBS) \
+	$(LIBS) $(LIB_WRAP) $(SERVICE) 
+
 idled: idled.o mutex_fake.o libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o idled \
+	$(CC) $(LDFLAGS) -o $@ \
 	 idled.o mutex_fake.o libimap.a $(DEPLIBS) $(LIBS)
 
-lmtpd: lmtpd.o proxy.o $(LMTPOBJS) $(SIEVE_OBJS) mutex_fake.o \
-	 libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(SERVICE)
-	$(CC) $(LDFLAGS) -o lmtpd \
-	 $(SERVICE) lmtpd.o proxy.o $(LMTPOBJS) $(SIEVE_OBJS) \
-	 mutex_fake.o libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(LIBS) $(LIB_WRAP)
+imapd: mutex_fake.o libimap.a $(DEPLIBS) $(IMAPDOBJS) $(SERVICE)
+	$(CC) $(LDFLAGS) -o $@ mutex_fake.o $(SERVICE) \
+	 $(IMAPDOBJS) libimap.a $(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
-lmtpd.pure: lmtpd.o proxy.o $(LMTPOBJS) $(SIEVE_OBJS) \
-	 mutex_fake.o libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(SERVICE)
-	$(PURIFY) $(PUREOPT) $(CC) $(LDFLAGS) -o lmtpd.pure \
-	 $(SERVICE) lmtpd.o proxy.o $(LMTPOBJS) $(SIEVE_OBJS) \
-	 mutex_fake.o libimap.a $(SIEVE_LIBS) $(DEPLIBS) $(LIBS) $(LIB_WRAP)
+imapd.pure: mutex_fake.o libimap.a $(DEPLIBS) $(IMAPDOBJS) $(SERVICE)
+	$(PURIFY) $(PUREOPT) $(CC) $(LDFLAGS) -o $@ mutex_fake.o $(SERVICE) \
+	$(IMAPDOBJS) libimap.a $(DEPLIBS)  $(LIBS) $(LIB_WRAP)
 
-imapd: $(IMAPDOBJS) mutex_fake.o libimap.a $(DEPLIBS) $(SERVICE)
-	$(CC) $(LDFLAGS) -o imapd \
-	 $(SERVICE) $(IMAPDOBJS) mutex_fake.o \
-	libimap.a $(DEPLIBS) $(LIBS) $(LIB_WRAP)
+imapd.quant: mutex_fake.o libimap.a $(IMAPDOBJS) $(DEPLIBS) $(SERVICE)
+	$(QUANTIFY) $(QUANTOPT) $(CC) $(LDFLAGS) -o $@ \
+	 mutex_fake.o $(SERVICE) $(IMAPDOBJS) libimap.a $(DEPLIBS) $(LIBS) $(LIB_WRAP) 
 
-imapd.pure: $(IMAPDOBJS) mutex_fake.o libimap.a $(DEPLIBS) $(SERVICE)
-	$(PURIFY) $(PUREOPT) $(CC) $(LDFLAGS) -o imapd.pure \
-	 $(SERVICE) $(IMAPDOBJS) mutex_fake.o libimap.a \
-	$(DEPLIBS) $(LIBS) $(LIB_WRAP)
+lmtpd: lmtpd.o mutex_fake.o proxy.o libimap.a $(DEPLIBS) $(LMTPOBJS) \
+	$(SERVICE) $(SIEVE_LIBS) $(SIEVE_OBJS) 
+	$(CC) $(LDFLAGS) -o $@ \
+	 lmtpd.o mutex_fake.o proxy.o $(LMTPOBJS) $(SERVICE) $(SIEVE_OBJS) \
+	 $(SIEVE_LIBS) libimap.a $(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
-imapd.quant: $(IMAPDOBJS) mutex_fake.o libimap.a $(DEPLIBS) $(SERVICE)
-	$(QUANTIFY) $(QUANTOPT) $(CC) $(LDFLAGS) -o imapd.quant \
-	 $(SERVICE) $(IMAPDOBJS) mutex_fake.o libimap.a \
-	$(DEPLIBS) $(LIBS) $(LIB_WRAP)
+lmtpd.pure: lmtpd.o mutex_fake.o proxy.o libimap.a $(DEPLIBS) $(LMTPOBJS) \
+	  $(SERVICE) $(SIEVE_LIBS) $(SIEVE_OBJS)
+	$(PURIFY) $(PUREOPT) $(CC) $(LDFLAGS) -o $@ \
+	 lmtpd.o mutex_fake.o proxy.o $(LMTPOBJS) $(SERVICE) $(SIEVE_OBJS) \
+	 $(SIEVE_LIBS) libimap.a $(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
 mupdate: mupdate.o mupdate-slave.o mutex_pthread.o libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o mupdate \
+	$(CC) $(LDFLAGS) -o $@ \
 	 $(SERVICETHREAD) mupdate.o mupdate-slave.o mutex_pthread.o libimap.a \
 	 $(DEPLIBS) $(LIBS) $(LIB_WRAP) -lpthread
 
 mupdate.pure: mupdate.o mupdate-slave.o mutex_pthread.o libimap.a $(DEPLIBS)
-	$(PURIFY) $(PUREOPT) $(CC) $(LDFLAGS) -o mupdate.pure \
+	$(PURIFY) $(PUREOPT) $(CC) $(LDFLAGS) -o $@ \
 	 $(SERVICETHREAD) mupdate.o mupdate-slave.o mutex_pthread.o libimap.a \
 	 $(DEPLIBS) $(LIBS) $(LIB_WRAP) -lpthread
 
-pop3d: mutex_fake.o pop3d.o proxy.o libimap.a $(DEPLIBS) $(SERVICE)
-	$(CC) $(LDFLAGS) -o pop3d mutex_fake.o pop3d.o proxy.o libimap.a \
-	$(DEPLIBS) $(LIBS) $(LIB_WRAP) $(SERVICE)
-
 nntpd: index.o mutex_fake.o nntpd.o nntp_err.o proxy.o smtpclient.o spool.o \
 	libimap.a $(DEPLIBS) $(SERVICE)
-	$(CC) $(LDFLAGS) -o nntpd index.o mutex_fake.o nntpd.o nntp_err.o \
-	 proxy.o smtpclient.o spool.o libimap.a $(DEPLIBS) $(SERVICE) $(LIBS) \
-	 $(LIB_WRAP)
+	$(CC) $(LDFLAGS) -o $@ \
+	 index.o mutex_fake.o nntpd.o nntp_err.o proxy.o smtpclient.o spool.o \
+	 libimap.a $(DEPLIBS) $(LIBS) $(LIB_WRAP) $(SERVICE)
 
-fud: fud.o libimap.a mutex_fake.o $(DEPLIBS) $(SERVICE)
-	$(CC) $(LDFLAGS) -o fud $(SERVICE) fud.o mutex_fake.o libimap.a \
-	$(DEPLIBS) $(LIBS) $(LIB_WRAP)
+pop3d: mutex_fake.o pop3d.o proxy.o libimap.a $(DEPLIBS) $(SERVICE)
+	$(CC) $(LDFLAGS) -o $@ mutex_fake.o pop3d.o proxy.o libimap.a \
+	$(DEPLIBS) $(LIBS) $(LIB_WRAP) $(SERVICE)
 
-smmapd: smmapd.o libimap.a mutex_fake.o $(DEPLIBS) $(SERVICE)
-	$(CC) $(LDFLAGS) -o smmapd $(SERVICE) smmapd.o mutex_fake.o libimap.a \
-	$(DEPLIBS) $(LIBS) $(LIB_WRAP)
+smmapd: mutex_fake.o smmapd.o libimap.a $(DEPLIBS) $(SERVICE)
+	$(CC) $(LDFLAGS) -o $@ mutex_fake.o smmapd.o libimap.a \
+	$(DEPLIBS) $(LIBS) $(LIB_WRAP) $(SERVICE)
 
 sync_server: mutex_fake.o sync_server.o sync_support.o libimap.a $(DEPLIBS) \
 	$(SERVICE)
-	$(CC) $(LDFLAGS) -o sync_server \
+	$(CC) $(LDFLAGS) -o $@ \
 	mutex_fake.o sync_server.o sync_support.o libimap.a $(DEPLIBS) \
-	$(SERVICE) $(LIBS) $(LIB_WRAP)
+	$(LIBS) $(LIB_WRAP) $(SERVICE)
 
 ### Command Line Utilities
 arbitron: arbitron.o $(CLIOBJS) libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o arbitron arbitron.o $(CLIOBJS) \
-	libimap.a $(DEPLIBS) $(LIBS)
-
-cyr_info: cyr_info.o mutex_fake.o libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o cyr_info cyr_info.o $(CLIOBJS) \
-	../master/masterconf.o \
-	libimap.a $(DEPLIBS) $(LIBS)
-
-mbtool: mbtool.o mutex_fake.o libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o mbtool mbtool.o $(CLIOBJS) \
-	libimap.a $(DEPLIBS) $(LIBS)
-
-cyr_userseen: cyr_userseen.o mutex_fake.o libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o cyr_userseen cyr_userseen.o $(CLIOBJS) \
-	libimap.a $(DEPLIBS) $(LIBS)
-
-cyr_sequence: cyr_sequence.o mutex_fake.o libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o cyr_sequence cyr_sequence.o $(CLIOBJS) \
-	libimap.a $(DEPLIBS) $(LIBS)
-
-cyr_dbtool: cyr_dbtool.o mutex_fake.o libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o cyr_dbtool cyr_dbtool.o $(CLIOBJS) \
-	libimap.a $(DEPLIBS) $(LIBS)
-
-cyr_synclog: cyr_synclog.o mutex_fake.o libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o cyr_synclog cyr_synclog.o $(CLIOBJS) \
-	libimap.a $(DEPLIBS) $(LIBS)
-
-cvt_cyrusdb: cvt_cyrusdb.o mutex_fake.o libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o cvt_cyrusdb cvt_cyrusdb.o $(CLIOBJS) \
-	libimap.a $(DEPLIBS) $(LIBS)
+	$(CC) $(LDFLAGS) -o $@ \
+	arbitron.o $(CLIOBJS) libimap.a $(DEPLIBS) $(LIBS)
 
 chk_cyrus: chk_cyrus.o mutex_fake.o libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o chk_cyrus chk_cyrus.o $(CLIOBJS) \
-	libimap.a $(DEPLIBS) $(LIBS)
-
-deliver: deliver.o $(LMTPOBJS) proxy.o mutex_fake.o libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o deliver deliver.o $(LMTPOBJS) proxy.o \
-	mutex_fake.o libimap.a $(DEPLIBS) $(LIBS)
-
-ctl_deliver: ctl_deliver.o $(CLIOBJS) libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o \
-	 $@ ctl_deliver.o $(CLIOBJS) libimap.a $(DEPLIBS) $(LIBS)
-
-ctl_mboxlist: ctl_mboxlist.o $(CLIOBJS) libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o $@ ctl_mboxlist.o $(CLIOBJS) \
-	libimap.a $(DEPLIBS) $(LIBS)
+	$(CC) $(LDFLAGS) -o $@ \
+	 chk_cyrus.o $(CLIOBJS) libimap.a $(DEPLIBS) $(LIBS)
 
 ctl_cyrusdb: ctl_cyrusdb.o $(CLIOBJS) libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o \
-	 $@ ctl_cyrusdb.o $(CLIOBJS) libimap.a $(DEPLIBS) $(LIBS)
+	$(CC) $(LDFLAGS) -o $@ \
+	 ctl_cyrusdb.o $(CLIOBJS) libimap.a $(DEPLIBS) $(LIBS)
 
-cyr_expire: cyr_expire.o $(CLIOBJS) libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o $@ cyr_expire.o $(CLIOBJS) \
-	libimap.a $(DEPLIBS) $(LIBS)
+ctl_deliver: ctl_deliver.o $(CLIOBJS) libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o $@ \
+	 ctl_deliver.o $(CLIOBJS) libimap.a $(DEPLIBS) $(LIBS)
 
-fetchnews: fetchnews.o $(CLIOBJS) libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o \
-	 $@ fetchnews.o $(CLIOBJS) libimap.a $(DEPLIBS) $(LIBS)
+ctl_mboxlist: ctl_mboxlist.o $(CLIOBJS) libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o $@ \
+	 ctl_mboxlist.o $(CLIOBJS) libimap.a $(DEPLIBS) $(LIBS)
 
-squatter: squatter.o index.o squat_build.o $(CLIOBJS) libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o squatter squatter.o index.o squat_build.o \
-	$(CLIOBJS) libimap.a $(DEPLIBS) $(LIBS)
-
-mbpath: mbpath.o $(CLIOBJS) libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o mbpath mbpath.o $(CLIOBJS) libimap.a \
-	$(DEPLIBS) $(LIBS)
-
-ipurge: ipurge.o $(CLIOBJS) libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o ipurge ipurge.o $(CLIOBJS) \
-	libimap.a $(DEPLIBS) $(LIBS)
-
-cyr_virusscan: cyr_virusscan.o index.o $(CLIOBJS) libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o cyr_virusscan cyr_virusscan.o index.o $(CLIOBJS) \
-	libimap.a $(DEPLIBS) $(LIBS) -lclamav
+cvt_cyrusdb: cvt_cyrusdb.o mutex_fake.o libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o $@ \
+	 cvt_cyrusdb.o $(CLIOBJS) libimap.a $(DEPLIBS) $(LIBS)
 
 cyrdump: cyrdump.o index.o $(CLIOBJS) libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o cyrdump cyrdump.o index.o $(CLIOBJS) \
-	libimap.a $(DEPLIBS) $(LIBS)
+	$(CC) $(LDFLAGS) -o $@ \
+	 cyrdump.o index.o $(CLIOBJS) libimap.a $(DEPLIBS) $(LIBS)
+
+cyr_dbtool: cyr_dbtool.o mutex_fake.o libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o $@ \
+	 cyr_dbtool.o $(CLIOBJS) libimap.a $(DEPLIBS) $(LIBS)
 
 cyr_df: cyr_df.o $(CLIOBJS) libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o \
-	 cyr_df cyr_df.o $(CLIOBJS) libimap.a $(DEPLIBS) $(LIBS)
+	$(CC) $(LDFLAGS) -o $@ cyr_df.o $(CLIOBJS) libimap.a $(DEPLIBS) $(LIBS)
+
+cyr_expire: cyr_expire.o $(CLIOBJS) libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o $@ \
+	 cyr_expire.o $(CLIOBJS) libimap.a $(DEPLIBS) $(LIBS)
+
+cyr_info: cyr_info.o mutex_fake.o libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o $@ cyr_info.o $(CLIOBJS) \
+	$(top_builddir)/master/masterconf.o libimap.a $(DEPLIBS) $(LIBS)
+
+cyr_sequence: cyr_sequence.o mutex_fake.o libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o $@ \
+	 cyr_sequence.o $(CLIOBJS) libimap.a $(DEPLIBS) $(LIBS)
+
+cyr_synclog: cyr_synclog.o mutex_fake.o libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o $@ \
+	 cyr_synclog.o $(CLIOBJS) libimap.a $(DEPLIBS) $(LIBS)
+
+cyr_userseen: cyr_userseen.o mutex_fake.o libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o $@ \
+	 cyr_userseen.o $(CLIOBJS) libimap.a $(DEPLIBS) $(LIBS)
+
+cyr_virusscan: cyr_virusscan.o index.o $(CLIOBJS) libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o $@ cyr_virusscan.o index.o $(CLIOBJS) \
+	libimap.a $(DEPLIBS) $(LIBS) -lclamav
+
+deliver: deliver.o $(LMTPOBJS) mutex_fake.o proxy.o libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o $@ deliver.o \
+	 mutex_fake.o proxy.o $(LMTPOBJS) libimap.a $(DEPLIBS) $(LIBS)
+
+fetchnews: fetchnews.o $(CLIOBJS) libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o $@ \
+	 fetchnews.o $(CLIOBJS) libimap.a $(DEPLIBS) $(LIBS)
+
+ipurge: ipurge.o $(CLIOBJS) libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o $@ ipurge.o $(CLIOBJS) libimap.a $(DEPLIBS) $(LIBS)
 
 mbexamine: mbexamine.o $(CLIOBJS) libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o \
-	 mbexamine mbexamine.o $(CLIOBJS) libimap.a $(DEPLIBS) $(LIBS)
+	$(CC) $(LDFLAGS) -o $@ \
+	 mbexamine.o $(CLIOBJS) libimap.a $(DEPLIBS) $(LIBS)
 
-reconstruct: reconstruct.o $(CLIOBJS) libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o \
-	 reconstruct reconstruct.o $(CLIOBJS) libimap.a $(DEPLIBS) $(LIBS)
+mbpath: mbpath.o $(CLIOBJS) libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o $@ mbpath.o $(CLIOBJS) libimap.a $(DEPLIBS) $(LIBS)
+
+mbtool: mbtool.o mutex_fake.o libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o $@ mbtool.o $(CLIOBJS) libimap.a $(DEPLIBS) $(LIBS)
 
 quota: quota.o $(CLIOBJS) libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o quota quota.o $(CLIOBJS) \
-	libimap.a $(DEPLIBS) $(LIBS)
+	$(CC) $(LDFLAGS) -o $@ quota.o $(CLIOBJS) libimap.a $(DEPLIBS) $(LIBS)
+
+reconstruct: reconstruct.o $(CLIOBJS) libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o $@ \
+	 reconstruct.o $(CLIOBJS) libimap.a $(DEPLIBS) $(LIBS)
+
+squatter: index.o squatter.o squat_build.o $(CLIOBJS) libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o $@ index.o \
+	squatter.o squat_build.o $(CLIOBJS) libimap.a $(DEPLIBS) $(LIBS)
+
+sync_client: mutex_fake.o sync_client.o sync_support.o libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o $@ \
+	mutex_fake.o sync_client.o sync_support.o libimap.a $(DEPLIBS) $(LIBS)
+
+sync_reset: mutex_fake.o sync_reset.o sync_support.o libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -o $@ \
+	sync_reset.o sync_support.o libimap.a mutex_fake.o $(DEPLIBS) $(LIBS)
 
 tls_prune: tls_prune.o $(CLIOBJS) libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o \
-	 $@ tls_prune.o $(CLIOBJS) libimap.a $(DEPLIBS) $(LIBS)
+	$(CC) $(LDFLAGS) -o $@ \
+	 tls_prune.o $(CLIOBJS) libimap.a $(DEPLIBS) $(LIBS)
 
 unexpunge: unexpunge.o $(CLIOBJS) libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o $@ unexpunge.o $(CLIOBJS) \
 	libimap.a $(DEPLIBS) $(LIBS)
-
-sync_client: mutex_fake.o sync_client.o sync_support.o libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o sync_client \
-	mutex_fake.o sync_client.o sync_support.o libimap.a $(DEPLIBS) $(LIBS)
-
-sync_reset: mutex_fake.o sync_reset.o sync_support.o libimap.a $(DEPLIBS)
-	$(CC) $(LDFLAGS) -o \
-	sync_reset sync_reset.o sync_support.o \
-	libimap.a mutex_fake.o $(DEPLIBS) $(LIBS)
 
 ### Other Misc Targets
 
