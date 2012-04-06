@@ -238,15 +238,15 @@ mupdate.pure: mupdate.o mupdate-slave.o mutex_pthread.o libimap.a $(DEPLIBS)
 	 $(SERVICETHREAD) mupdate.o mupdate-slave.o mutex_pthread.o libimap.a \
 	 $(DEPLIBS) $(LIBS) $(LIB_WRAP) -lpthread
 
-pop3d: backend.o mutex_fake.o pop3d.o proxy.o libimap.a $(DEPLIBS) $(SERVICE)
-	$(CC) $(LDFLAGS) -o pop3d backend.o mutex_fake.o pop3d.o proxy.o \
-	 libimap.a $(DEPLIBS) $(LIBS) $(LIB_WRAP) $(SERVICE)
+pop3d: mutex_fake.o pop3d.o proxy.o libimap.a $(DEPLIBS) $(SERVICE)
+	$(CC) $(LDFLAGS) -o pop3d mutex_fake.o pop3d.o proxy.o libimap.a \
+	$(DEPLIBS) $(LIBS) $(LIB_WRAP) $(SERVICE)
 
-nntpd: backend.o index.o mutex_fake.o nntpd.o nntp_err.o proxy.o smtpclient.o \
-	spool.o libimap.a $(DEPLIBS) $(SERVICE)
-	$(CC) $(LDFLAGS) -o nntpd backend.o index.o mutex_fake.o nntpd.o \
-	 nntp_err.o proxy.o smtpclient.o spool.o libimap.a $(DEPLIBS) \
-	 $(SERVICE) $(LIBS) $(LIB_WRAP)
+nntpd: index.o mutex_fake.o nntpd.o nntp_err.o proxy.o smtpclient.o spool.o \
+	libimap.a $(DEPLIBS) $(SERVICE)
+	$(CC) $(LDFLAGS) -o nntpd index.o mutex_fake.o nntpd.o nntp_err.o \
+	 proxy.o smtpclient.o spool.o libimap.a $(DEPLIBS) $(SERVICE) $(LIBS) \
+	 $(LIB_WRAP)
 
 fud: fud.o libimap.a mutex_fake.o $(DEPLIBS) $(SERVICE)
 	$(CC) $(LDFLAGS) -o fud $(SERVICE) fud.o mutex_fake.o libimap.a \
@@ -256,11 +256,11 @@ smmapd: smmapd.o libimap.a mutex_fake.o $(DEPLIBS) $(SERVICE)
 	$(CC) $(LDFLAGS) -o smmapd $(SERVICE) smmapd.o mutex_fake.o libimap.a \
 	$(DEPLIBS) $(LIBS) $(LIB_WRAP)
 
-sync_server: imapparse.o mutex_fake.o sync_server.o sync_support.o libimap.a \
-	$(DEPLIBS) $(SERVICE)
+sync_server: mutex_fake.o sync_server.o sync_support.o libimap.a $(DEPLIBS) \
+	$(SERVICE)
 	$(CC) $(LDFLAGS) -o sync_server \
-	imapparse.o mutex_fake.o sync_server.o sync_support.o libimap.a \
-	$(DEPLIBS) $(SERVICE) $(LIBS) $(LIB_WRAP)
+	mutex_fake.o sync_server.o sync_support.o libimap.a $(DEPLIBS) \
+	$(SERVICE) $(LIBS) $(LIB_WRAP)
 
 ### Command Line Utilities
 arbitron: arbitron.o $(CLIOBJS) libimap.a $(DEPLIBS)
@@ -368,14 +368,11 @@ unexpunge: unexpunge.o $(CLIOBJS) libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o $@ unexpunge.o $(CLIOBJS) \
 	libimap.a $(DEPLIBS) $(LIBS)
 
-sync_client: backend.o imapparse.o mutex_fake.o sync_client.o sync_support.o \
-	libimap.a $(DEPLIBS)
+sync_client: mutex_fake.o sync_client.o sync_support.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o sync_client \
-	backend.o imapparse.o mutex_fake.o sync_client.o sync_support.o \
-	libimap.a $(DEPLIBS) $(LIBS)
+	mutex_fake.o sync_client.o sync_support.o libimap.a $(DEPLIBS) $(LIBS)
 
-sync_reset: sync_reset.o sync_support.o \
-	libimap.a mutex_fake.o $(DEPLIBS)
+sync_reset: mutex_fake.o sync_reset.o sync_support.o libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o \
 	sync_reset sync_reset.o sync_support.o \
 	libimap.a mutex_fake.o $(DEPLIBS) $(LIBS)
