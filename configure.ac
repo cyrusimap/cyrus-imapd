@@ -411,7 +411,6 @@ if test "$sievedir" != "no"; then
 	dnl Sieve configure stuff
 	AC_PROG_YACC
 	AC_PROG_LEX
-	AC_CHECK_LIB(fl,main)
 
 	if test "$testpcre" != "no"; then
 	    AC_CHECK_HEADER(pcreposix.h)
