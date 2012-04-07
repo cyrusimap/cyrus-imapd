@@ -46,6 +46,8 @@
  *   - Make proxying more robust.  Currently depends on calendar collections
  *     residing on same server as user's INBOX.  Doesn't handle global/shared
  *     calendars.
+ *   - Rewrite COPY/MOVE to use guts of PUT.  Current code doesn't rewrite
+ *     Content-Disposition to have new filename.
  *   - Support COPY/MOVE on collections
  *   - Add more required properties
  *   - GET/HEAD on collections (iCalendar stream of resources)
@@ -801,9 +803,11 @@ static int meth_copy(struct transaction_t *txn)
 
 	if (r) append_abort(&appendstate);
 	else {
+	    struct mailbox *lock_mbox = NULL;
+
 	    /* Commit the append to the destination mailbox */
 	    if ((r = append_commit(&appendstate, -1,
-				   NULL, NULL, NULL, &dest_mbox))) {
+				   NULL, NULL, NULL, &lock_mbox))) {
 		syslog(LOG_ERR, "append_commit(%s) failed: %s",
 		       dest_mboxname, error_message(r));
 		ret = HTTP_SERVER_ERROR;
@@ -814,7 +818,7 @@ static int meth_copy(struct transaction_t *txn)
 		struct index_record newrecord, oldrecord;
 
 		/* Read index record for new message (always the last one) */
-		mailbox_read_index_record(dest_mbox, dest_mbox->i.num_records,
+		mailbox_read_index_record(lock_mbox, lock_mbox->i.num_records,
 					  &newrecord);
 
 		/* Find message UID for the dest resource, if exists */
@@ -829,15 +833,15 @@ static int meth_copy(struct transaction_t *txn)
 		    ret = HTTP_NO_CONTENT;
 
 		    /* Fetch index record for the old message */
-		    r = mailbox_find_index_record(dest_mbox, olduid, &oldrecord);
+		    r = mailbox_find_index_record(lock_mbox, olduid, &oldrecord);
 
 		    /* Expunge the old message */
-		    if (!r) r = mailbox_user_flag(dest_mbox, DFLAG_UNBIND,
+		    if (!r) r = mailbox_user_flag(lock_mbox, DFLAG_UNBIND,
 						  &userflag);
 		    if (!r) {
 			oldrecord.user_flags[userflag/32] |= 1<<(userflag&31);
 			oldrecord.system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
-			r = mailbox_rewrite_index_record(dest_mbox, &oldrecord);
+			r = mailbox_rewrite_index_record(lock_mbox, &oldrecord);
 		    }
 		    if (r) {
 			syslog(LOG_ERR,
@@ -852,11 +856,14 @@ static int meth_copy(struct transaction_t *txn)
 		/* Create mapping entry from dest resource name to UID */
 		caldav_write(dest_caldb, dest.resource, newrecord.uid);
 		/* XXX  check for errors, if this fails, backout changes */
+		caldav_unlock(dest_caldb);
+
+		/* append_setup() opened mailbox again,
+		   we need to close it to decrement reference count */
+		mailbox_close(&lock_mbox);
 
 		/* Tell client about the new resource */
 		txn->resp_body.etag = message_guid_encode(&newrecord.guid);
-
-		mailbox_unlock_index(dest_mbox, NULL);
 	    }
 	}
     }
@@ -2274,18 +2281,22 @@ static int meth_put(struct transaction_t *txn)
 	}
 	if (body) message_free_body(body);
 
-	if (!r) {
+	if (r) append_abort(&appendstate);
+	else {
+	    struct mailbox *lock_mbox = NULL;
+
 	    /* Commit the append to the calendar mailbox */
 	    if ((r = append_commit(&appendstate, size,
-				   NULL, NULL, NULL, &mailbox))) {
+				   NULL, NULL, NULL, &lock_mbox))) {
 		ret = HTTP_SERVER_ERROR;
 		txn->error.desc = "append_commit() failed";
 	    }
 	    else {
+		/* append_commit() returns a write-locked index */
 		struct index_record newrecord, *expunge;
 
 		/* Read index record for new message (always the last one) */
-		mailbox_read_index_record(mailbox, mailbox->i.num_records,
+		mailbox_read_index_record(lock_mbox, lock_mbox->i.num_records,
 					  &newrecord);
 
 		/* Find message UID for the resource, if exists */
@@ -2303,7 +2314,7 @@ static int meth_put(struct transaction_t *txn)
 		    ret = HTTP_NO_CONTENT;
 
 		    /* Fetch index record for the resource */
-		    r = mailbox_find_index_record(mailbox, olduid, &oldrecord);
+		    r = mailbox_find_index_record(lock_mbox, olduid, &oldrecord);
 
 		    etag = message_guid_encode(&oldrecord.guid);
 		    lastmod = oldrecord.internaldate;
@@ -2325,11 +2336,11 @@ static int meth_put(struct transaction_t *txn)
 		    }
 
 		    /* Perform the actual expunge */
-		    r = mailbox_user_flag(mailbox, DFLAG_UNBIND,  &userflag);
+		    r = mailbox_user_flag(lock_mbox, DFLAG_UNBIND,  &userflag);
 		    if (!r) {
 			expunge->user_flags[userflag/32] |= 1<<(userflag&31);
 			expunge->system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
-			r = mailbox_rewrite_index_record(mailbox, expunge);
+			r = mailbox_rewrite_index_record(lock_mbox, expunge);
 		    }
 		    if (r) {
 			syslog(LOG_ERR, "expunging record (%s) failed: %s",
@@ -2344,19 +2355,16 @@ static int meth_put(struct transaction_t *txn)
 		    caldav_write(caldavdb, txn->req_tgt.resource, newrecord.uid);
 		    /* XXX  check for errors, if this fails, backout changes */
 
+		    /* append_setup() opened mailbox again,
+		       we need to close it to decrement reference count */
+		    mailbox_close(&lock_mbox);
+
 		    /* Tell client about the new resource */
 		    txn->resp_body.etag = message_guid_encode(&newrecord.guid);
 		    if (txn->meth[1] == 'O') txn->loc = txn->req_tgt.path;
 		}
 	    }
 	}
-	else {
-	    append_abort(&appendstate);
-	}
-
-	/* append_setup() opened mailbox again,
-	   we need to close it to decrement reference count */
-	if (mailbox) mailbox_close(&mailbox);
     }
 
   done:
