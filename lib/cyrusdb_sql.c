@@ -561,7 +561,7 @@ static int myopen(const char *fname, int flags, struct dbengine **ret)
 	}
     }
 
-    *ret = (struct dbengine *) xzmalloc(sizeof(struct db));
+    *ret = (struct dbengine *) xzmalloc(sizeof(struct dbengine));
     (*ret)->conn = conn;
     (*ret)->table = table;
 
