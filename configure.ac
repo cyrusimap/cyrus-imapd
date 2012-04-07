@@ -786,8 +786,6 @@ fi
 if test "x$enable_afs" = "xyes" -o "x$with_ldap" != "xno"; then
         EXTRA_SUBDIRS="${EXTRA_SUBDIRS} ptclient"
         EXTRA_OUTPUT="${EXTRA_OUTPUT} ptclient/Makefile"
-
-	AC_DEFINE(WITH_PTS,[],[Build in PTS support?])
 fi
 
 
