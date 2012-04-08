@@ -2480,33 +2480,19 @@ static int report_cal_query(struct transaction_t *txn,
 }
 
 
-static int report_cal_multiget(struct transaction_t *txn __attribute__((unused)),
+static int report_cal_multiget(struct transaction_t *txn,
 			       xmlNodePtr inroot, struct propfind_ctx *fctx,
 			       char mailboxname[])
 {
     int r, ret = 0;
+    struct request_target_t tgt;
     struct mailbox *mailbox = NULL;
     struct caldav_db *caldavdb = NULL;
     xmlNodePtr node;
     struct buf uri = BUF_INITIALIZER;
 
-    /* Open mailbox for reading */
-    if ((r = http_mailbox_open(mailboxname, &mailbox, LOCK_SHARED))) {
-	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
-	       mailboxname, error_message(r));
-	txn->error.desc = error_message(r);
-	ret = HTTP_SERVER_ERROR;
-	goto done;
-    }
-
-    /* Open the associated CalDAV database */
-    if ((r = caldav_open(mailbox, CALDAV_CREATE, &caldavdb))) {
-	txn->error.desc = error_message(r);
-	ret = HTTP_SERVER_ERROR;
-	goto done;
-    }
-
-    fctx->mailbox = mailbox;
+    memset(&tgt, 0, sizeof(struct request_target_t));
+    tgt.namespace = URL_NS_CALENDAR;
 
     /* Get props for each href */
     for (node = inroot->children; node; node = node->next) {
@@ -2514,18 +2500,51 @@ static int report_cal_multiget(struct transaction_t *txn __attribute__((unused))
 	    !xmlStrcmp(node->name, BAD_CAST "href")) {
 	    xmlChar *href = xmlNodeListGetString(inroot->doc, node->children, 1);
 	    int len = xmlStrlen(href);
-	    const char *resource;
 	    uint32_t uid = 0;
 
 	    buf_ensure(&uri, len);
 	    xmlURIUnescapeString((const char *) href, len, uri.s);
-	    resource = strrchr(uri.s, '/') + 1;
+
+	    /* Parse the path */
+	    strlcpy(tgt.path, uri.s, sizeof(tgt.path));
+	    if ((r = parse_path(&tgt, fctx->errstr))) {
+		ret = r;
+		goto done;
+	    }
+
+	    fctx->req_tgt = &tgt;
+
+	    target_to_mboxname(&tgt, mailboxname);
+
+	    /* Check if we already have this mailbox open */
+	    if (!mailbox || strcmp(mailbox->name, mailboxname)) {
+		if (caldavdb) caldav_close(caldavdb);
+		if (mailbox) mailbox_unlock_index(mailbox, NULL);
+
+		/* Open mailbox for reading */
+		if ((r = http_mailbox_open(mailboxname, &mailbox, LOCK_SHARED))) {
+		    syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
+			   mailboxname, error_message(r));
+		    txn->error.desc = error_message(r);
+		    ret = HTTP_SERVER_ERROR;
+		    goto done;
+		}
+
+		/* Open the associated CalDAV database */
+		if ((r = caldav_open(mailbox, CALDAV_CREATE, &caldavdb))) {
+		    txn->error.desc = error_message(r);
+		    ret = HTTP_SERVER_ERROR;
+		    goto done;
+		}
+
+		fctx->mailbox = mailbox;
+	    }
 
 	    /* Find message UID for the resource */
-	    caldav_read(caldavdb, resource, &uid);
+	    caldav_read(caldavdb, tgt.resource, &uid);
 	    /* XXX  Check errors */
 
-	    propfind_by_resource(fctx, resource, uid);
+	    propfind_by_resource(fctx, tgt.resource, uid);
 	}
     }
 
