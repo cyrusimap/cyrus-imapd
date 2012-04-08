@@ -253,7 +253,7 @@ struct propfind_entry_list {
 int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx);
 
 /* Initialize an XML tree */
-xmlNodePtr init_xml_response(const char *resp,
+xmlNodePtr init_xml_response(const char *resp, int ns,
 			     xmlNsPtr reqNs, xmlNsPtr *respNs);
 
 struct error_t;

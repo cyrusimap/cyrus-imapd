@@ -1268,10 +1268,13 @@ static int meth_mkcol(struct transaction_t *txn)
 
     if (instr) {
 	/* Start construction of our mkcol/mkcalendar response */
-	if (!(root = init_xml_response(txn->meth[3] == 'A' ?
-				       "mkcalendar-response" :
-				       "mkcol-response",
-				       root->nsDef, ns))) {
+	if (txn->meth[3] == 'A')
+	    root = init_xml_response("mkcalendar-response", NS_CALDAV,
+				     root->nsDef, ns);
+	else
+	    root = init_xml_response("mkcol-response", NS_DAV,
+				     root->nsDef, ns);
+	if (!root) {
 	    ret = HTTP_SERVER_ERROR;
 	    txn->error.desc = "Unable to create XML response";
 	    goto done;
@@ -1794,7 +1797,7 @@ int meth_propfind(struct transaction_t *txn)
     }
 
     /* Start construction of our multistatus response */
-    if (!(root = init_xml_response("multistatus", root->nsDef, ns))) {
+    if (!(root = init_xml_response("multistatus", NS_DAV, root->nsDef, ns))) {
 	ret = HTTP_SERVER_ERROR;
 	txn->error.desc = "Unable to create XML response";
 	goto done;
@@ -1966,7 +1969,7 @@ static int meth_proppatch(struct transaction_t *txn)
     instr = root->children;
 
     /* Start construction of our multistatus response */
-    if (!(root = init_xml_response("multistatus", root->nsDef, ns))) {
+    if (!(root = init_xml_response("multistatus", NS_DAV, root->nsDef, ns))) {
 	ret = HTTP_SERVER_ERROR;
 	txn->error.desc = "Unable to create XML response";
 	goto done;
@@ -3125,7 +3128,7 @@ static int meth_report(struct transaction_t *txn)
 
     /* Start construction of our multistatus response */
     if ((report->flags & REPORT_MULTISTATUS) &&
-	!(outroot = init_xml_response("multistatus", inroot->nsDef, ns))) {
+	!(outroot = init_xml_response("multistatus", NS_DAV, inroot->nsDef, ns))) {
 	txn->error.desc = "Unable to create XML response";
 	ret = HTTP_SERVER_ERROR;
 	goto done;
