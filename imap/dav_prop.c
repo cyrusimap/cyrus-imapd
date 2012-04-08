@@ -1461,7 +1461,8 @@ static int proppatch_todb(xmlNodePtr prop, unsigned set,
 			  struct propstat propstat[], void *ns_prefix)
 {
     xmlChar *freeme = NULL;
-    const char *value;
+    const char *value = NULL;
+    size_t len = 0;
     xmlNodePtr node;
     int r;
 
@@ -1476,12 +1477,15 @@ static int proppatch_todb(xmlNodePtr prop, unsigned set,
 		   strhash((const char *) prop->ns->href), BAD_CAST prop->name);
     }
 
-    if (set) freeme = xmlNodeGetContent(prop);
-    value = freeme ? (const char *) freeme : "";
+    if (set) {
+	freeme = xmlNodeGetContent(prop);
+	value = (const char *) freeme;
+	len = strlen(value);
+    }
 
     if (!(r = annotatemore_write_entry(pctx->mailboxname,
 				       buf_cstring(&pctx->buf), /* shared */ "",
-				       value, NULL, strlen(value), 0,
+				       value, NULL, len, 0,
 				       &pctx->tid))) {
 	node = xml_add_prop(HTTP_OK, pctx->root, &propstat[PROPSTAT_OK],
 			    prop, NULL, NULL);
