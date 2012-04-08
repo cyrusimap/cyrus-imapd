@@ -1183,7 +1183,10 @@ static int meth_mkcol(struct transaction_t *txn)
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
 
     /* Parse the path */
-    if ((r = parse_path(&txn->req_tgt, &txn->error.desc))) return r;
+    if ((r = parse_path(&txn->req_tgt, &txn->error.desc))) {
+	txn->error.precond = &preconds[CALDAV_LOCATION_OK];
+	return HTTP_FORBIDDEN;
+    }
 
     /* Make sure its a home-set collection */
     if (!txn->req_tgt.collection || txn->req_tgt.resource) {
@@ -1234,7 +1237,10 @@ static int meth_mkcol(struct transaction_t *txn)
 				    NULL, &partition, 0);
 
     if (r == IMAP_PERMISSION_DENIED) return HTTP_FORBIDDEN;
-    else if (r == IMAP_MAILBOX_EXISTS) return HTTP_FORBIDDEN;
+    else if (r == IMAP_MAILBOX_EXISTS) {
+	txn->error.precond = &preconds[DAV_RSRC_EXISTS];
+	return HTTP_FORBIDDEN;
+    }
     else if (r) return HTTP_SERVER_ERROR;
 
     /* Parse the MKCOL/MKCALENDAR body, if exists */
@@ -1292,7 +1298,7 @@ static int meth_mkcol(struct transaction_t *txn)
 
 	    if (!ret) {
 		/* Output the XML response */
-		xml_response(HTTP_MULTI_STATUS, txn, outdoc);
+		xml_response(HTTP_FORBIDDEN, txn, outdoc);
 		ret = 0;
 	    }
 
@@ -1308,7 +1314,10 @@ static int meth_mkcol(struct transaction_t *txn)
 
     if (!r) ret = HTTP_CREATED;
     else if (r == IMAP_PERMISSION_DENIED) ret = HTTP_FORBIDDEN;
-    else if (r == IMAP_MAILBOX_EXISTS) ret = HTTP_FORBIDDEN;
+    else if (r == IMAP_MAILBOX_EXISTS) {
+	txn->error.precond = &preconds[DAV_RSRC_EXISTS];
+	ret = HTTP_FORBIDDEN;
+    }
     else if (r) {
 	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;

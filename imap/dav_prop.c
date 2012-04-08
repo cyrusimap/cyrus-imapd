@@ -178,6 +178,9 @@ xmlNodePtr xml_add_error(xmlNodePtr root, struct error_t *err,
     }
     else error = xmlNewChild(root, NULL, BAD_CAST "error", NULL);
 
+    if (err->precond->ns == NS_CALDAV) {
+	ensure_ns(avail_ns, NS_CALDAV, root, XML_NS_CALDAV, "C");
+    }
     node = xmlNewChild(error, avail_ns[err->precond->ns],
 		       BAD_CAST err->precond->name, NULL);
 
@@ -1580,6 +1583,7 @@ const struct precond preconds[] =
 
     /* WebDAV Versioning (RFC 3253) preconditions */
     { "supported-report", NS_DAV },
+    { "resource-must-be-null", NS_DAV },
 
     /* WebDAV ACL (RFC 3744) preconditions */
     { "need-privileges", NS_DAV },

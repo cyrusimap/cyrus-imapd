@@ -121,6 +121,7 @@ enum {
 enum {
     DAV_PROT_PROP = 0,
     DAV_SUPP_REPORT,
+    DAV_RSRC_EXISTS,
     DAV_NEED_PRIVS,
     DAV_NO_INVERT,
     DAV_NO_ABSTRACT,
