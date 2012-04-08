@@ -1238,11 +1238,6 @@ fi
 dnl for the Cyrus annotator daemon class
 PERL_SUBDIRS="${PERL_SUBDIRS} annotator"
 
-dnl snmp
-dnl (agentx was depricated, but SNMP_SUBDIRS is conveinent as a placeholder)
-SNMP_SUBDIRS=""
-AC_SUBST(SNMP_SUBDIRS)
-
 CMU_LIBWRAP
 CMU_UCDSNMP
 
