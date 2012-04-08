@@ -41,37 +41,52 @@
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
-SUBDIRS = man @PRE_SUBDIRS@ lib @SIEVE_SUBDIRS@ @SERVER_SUBDIRS@ \
-	imtest @EXTRA_SUBDIRS@ @CUNIT_SUBDIRS@
+ACLOCAL_AMFLAGS = -I cmulocal
+BUILT_SOURCES = xversion.h
+
+SUBDIRS = . lib imtest man
+if COM_ERR
+SUBDIRS += com_err/et
+endif
+if SYSLOG
+SUBDIRS += syslog
+endif
+if CMULOCAL
+SUBDIRS += depot netnews
+endif
+if PTCLIENT
+SUBDIRS += ptclient
+endif
+if PERL
+SUBDIRS += perl
+endif
+if SIEVE
+SUBDIRS += sieve
+endif
+if SERVER
+SUBDIRS += master imap
+endif
+
+if SIEVE
+if SERVER
+SUBDIRS += notifyd timsieved
+endif
+if PERL
+SUBDIRS += perl/sieve perl/sieve/lib
+endif
+endif
+
+if CUNIT
+SUBDIRS += cunit
+endif
+
+EXTRA_DIST = xversion.h
 DISTSUBDIRS = doc
-
-srcdir = @srcdir@
-VPATH = @srcdir@
-
-INSTALL = @INSTALL@
 
 SHELL = /bin/sh
 @SET_MAKE@
 
-prefix = @prefix@
-exec_prefix = @exec_prefix@
-
-mandir = @mandir@
-
-YACC = @YACC@
-LEX = @LEX@
-COMPILE_ET = @COMPILE_ET@
-
-PACKAGE_NAME = @PACKAGE_NAME@
-PACKAGE_VERSION = @PACKAGE_VERSION@
 GIT_VERSION = $(PACKAGE_VERSION).git$(shell date +'%Y%m%d%H%M')
-
-all:: xversion
-	@for d in  $(SUBDIRS); \
-	do \
-		(cd $$d; echo "### Making" all "in" `pwd`;	\
-			$(MAKE) $(MFLAGS) DESTDIR=$(DESTDIR) all) || exit 1; \
-	done
 
 snapshot::
 	@echo "creating snapshot $(GIT_VERSION)"
@@ -82,7 +97,7 @@ snapshot::
 	@echo "#define CYRUS_GITVERSION \"`git log --abbrev=8 --pretty=\"format:%h %ci\" -1 | cut -d\" \" -f1,2`\"" >> snapshot/$(PACKAGE_NAME)-$(GIT_VERSION)/xversion.h
 	@touch snapshot/$(PACKAGE_NAME)-$(GIT_VERSION)/xversion
 	@cd snapshot/$(PACKAGE_NAME)-$(GIT_VERSION) ; sh SMakefile
-	@for d in $(SUBDIRS) $(DISTSUBDIRS); \
+	@for d in $(DIST_SUBDIRS) $(DISTSUBDIRS); \
 	do \
 	(cd snapshot/$(PACKAGE_NAME)-$(GIT_VERSION)/$$d; \
 	if [ -f Makefile.dist ]; then \
@@ -95,10 +110,10 @@ snapshot::
 	tar -C snapshot -c -f - $(PACKAGE_NAME)-$(GIT_VERSION) | gzip -9 > $(PACKAGE_NAME)-$(GIT_VERSION).tar.gz
 	@rm -rf snapshot
 
-dist:: distgit
+dist-old:: distgit
 	@echo "creating configure"
 	@cd dist/cyrus-imapd-$(PACKAGE_VERSION) ; sh SMakefile
-	@for d in $(SUBDIRS) $(DISTSUBDIRS); \
+	@for d in $(DIST_SUBDIRS) $(DISTSUBDIRS); \
 	do \
 	(cd dist/cyrus-imapd-$(PACKAGE_VERSION)/$$d; \
 	if [ -f Makefile.dist ]; then \
@@ -130,62 +145,15 @@ xversion xversion.h:
 	@cmp -s xversion.h.tmp xversion.h || mv xversion.h.tmp xversion.h
 	@rm -f xversion.h.tmp
 
-check:
-	@-for d in  $(SUBDIRS); \
-	do \
-		(cd $$d; echo "### Making" check "in" `pwd`;	\
-			$(MAKE) $(MFLAGS) DESTDIR=$(DESTDIR) check ;	\
-			echo "### Done with" `pwd`);		\
-	done
-
 valgrind:
 	$(MAKE) VG=yes check
 
-install::
-	$(INSTALL) -d ${DESTDIR}$(exec_prefix)/bin
-	$(INSTALL) -d ${DESTDIR}$(exec_prefix)/lib
-	$(INSTALL) -d ${DESTDIR}$(prefix)/include/cyrus
-	$(INSTALL) -d ${DESTDIR}$(mandir)/man1
-	$(INSTALL) -d ${DESTDIR}$(mandir)/man3
-	$(INSTALL) -d ${DESTDIR}$(mandir)/man5
-	$(INSTALL) -d ${DESTDIR}$(mandir)/man8
-	@for d in  $(SUBDIRS); \
-	do \
-		(cd $$d; echo "### Making" install "in" `pwd`;	\
-			$(MAKE) $(MFLAGS) DESTDIR=$(DESTDIR) install) || exit 1; \
-	done
-
-clean::
-	@-for d in  $(SUBDIRS); \
-	do \
-		(cd $$d; echo "### Making" clean "in" `pwd`;	\
-			$(MAKE) $(MFLAGS) DESTDIR=$(DESTDIR) clean ;	\
-			echo "### Done with" `pwd`);		\
-	done
-
-distclean::
-	@-for d in  $(SUBDIRS); \
-	do \
-		(cd $$d; echo "### Making" clean "in" `pwd`;	\
-			$(MAKE) $(MFLAGS) DESTDIR=$(DESTDIR) distclean ; \
-			echo "### Done with" `pwd`);		\
-	done
-	rm -f Makefile Makefile.bak \
-	   config.status config.log config.cache config.h
-
 depend::
-	@for d in  $(SUBDIRS); \
+	@for d in  $(DIST_SUBDIRS); \
 	do \
 		(cd $$d; echo "### Making" depend "in" `pwd`;	\
 			$(MAKE) $(MFLAGS) DESTDIR=$(DESTDIR) depend) || exit 1; \
 	done
-
-Makefile: Makefile.in config.status
-	$(SHELL) config.status
-config.status: configure
-	$(SHELL) config.status --recheck
-configure: configure.ac
-	cd $(srcdir); rm -f config.cache; autoconf
 
 coverage_all:
 	$(MAKE) COVERAGE="--coverage" EXTRACFLAGS="--coverage" EXTRALDFLAGS="--coverage" all
@@ -194,7 +162,7 @@ coverage_check:
 	$(MAKE) COVERAGE="--coverage" EXTRACFLAGS="--coverage" EXTRALDFLAGS="--coverage" check
 
 tags cscope:
-	find $(SUBDIRS) -type f -name '*.[ch]' > cs.files
+	find $(DIST_SUBDIRS) -type f -name '*.[ch]' > cs.files
 	cscope -b -k -i cs.files
 	$(RM) cs.files
 

@@ -52,6 +52,9 @@ AC_CONFIG_SRCDIR([imap/imapd.c])
 AC_CONFIG_HEADERS(config.h)
 AC_CANONICAL_SYSTEM
 
+AM_INIT_AUTOMAKE([-Wall -Werror -Wno-portability foreign dist-bzip2 no-installinfo subdir-objects])
+dnl 
+AM_SILENT_RULES([yes])
 AC_CONFIG_LIBOBJ_DIR([lib])
 dnl Useful hook for distributions
 AC_ARG_WITH(extraident,
@@ -97,6 +100,7 @@ fi
 AC_DEFINE_UNQUOTED(SYSCONFDIR,"$sysconfdir",[Config File Location])
 
 AC_PROG_CC
+AM_PROG_CC_C_O
 AC_PROG_RANLIB
 AC_PROG_MAKE_SET
 AC_PROG_INSTALL
@@ -177,8 +181,6 @@ AC_STRUCT_TIMEZONE
 AC_CHECK_FUNCS(timegm)
 
 AC_SUBST(CPPFLAGS)
-AC_SUBST(PRE_SUBDIRS)
-AC_SUBST(EXTRA_SUBDIRS)
 AC_SUBST(DEPLIBS)
 AC_SUBST(LOCALDEFS)
 AC_FUNC_VPRINTF
@@ -384,14 +386,8 @@ dnl End SQL DB Detection
 
 AC_SUBST(CYRUSDB_OBJS)
 
-SIEVE_SUBDIRS=""
-sievedir="sieve"
 AC_ARG_ENABLE(sieve,
-        [AS_HELP_STRING([--disable-sieve], [disable Sieve support])],
-	if test "$enableval" = no; then
-		sievedir="no"
-	fi)
-
+        [AS_HELP_STRING([--disable-sieve], [disable Sieve support])])
 testpcre="yes"
 AC_ARG_ENABLE(pcre,
 	[AS_HELP_STRING([--disable-pcre], [disable PCRE library])],
@@ -399,10 +395,10 @@ AC_ARG_ENABLE(pcre,
 		testpcre="no"
 	fi)
 
-if test "$sievedir" != "no"; then
+if test "$enable_sieve" != "no"; then
 	SIEVE_OBJS="lmtp_sieve.o smtpclient.o"
 	AC_SUBST(SIEVE_OBJS)
-	SIEVE_LIBS="../${sievedir}/libsieve.a"
+	SIEVE_LIBS="../sieve/libsieve.a"
 	AC_SUBST(SIEVE_LIBS)
 	SIEVE_TESTSOURCES="sieve.c"
 	AC_SUBST(SIEVE_TESTSOURCES)
@@ -410,7 +406,7 @@ if test "$sievedir" != "no"; then
 
 	dnl Sieve configure stuff
 	AC_PROG_YACC
-	AC_PROG_LEX
+	AM_PROG_LEX
 
 	if test "$testpcre" != "no"; then
 	    AC_CHECK_HEADER(pcreposix.h)
@@ -442,12 +438,9 @@ if test "$sievedir" != "no"; then
 					[Do we have a regex library?]), [])
 		fi
 	fi
-
-	SIEVE_SUBDIRS="${SIEVE_SUBDIRS} $sievedir"
-	EXTRA_OUTPUT="${EXTRA_OUTPUT} $sievedir/Makefile"
 fi
 
-AC_SUBST(SIEVE_SUBDIRS)
+AM_CONDITIONAL([SIEVE], [test "${enable_sieve}" != "no"])
 
 dnl for et routines
 AC_FUNC_CHECK(strerror,AC_DEFINE(HAS_STRERROR,[],[Do we have strerror()?]),
@@ -783,20 +776,13 @@ if test "x$with_ldap" != "xno"; then
     LDFLAGS=$save_LDFLAGS
 fi
  
-if test "x$enable_afs" = "xyes" -o "x$with_ldap" != "xno"; then
-        EXTRA_SUBDIRS="${EXTRA_SUBDIRS} ptclient"
-        EXTRA_OUTPUT="${EXTRA_OUTPUT} ptclient/Makefile"
-fi
+AM_CONDITIONAL([PTCLIENT], [test "x$enable_afs" = "xyes" -o "x$with_ldap" != "xno"])
 
 
 
-SERVER_SUBDIRS="master imap"
 AC_ARG_ENABLE(server,
-	[AS_HELP_STRING([--disable-server], [disable compiling servers])],
-	if test "$enableval" = no; then
-        	SERVER_SUBDIRS=""
-	fi)
-AC_SUBST(SERVER_SUBDIRS)
+	[AS_HELP_STRING([--disable-server], [disable compiling servers])])
+AM_CONDITIONAL([SERVER], [test "$enable_server" != "no"])
 # We always output a server makefile (just because we can)
 
 dnl this is the new simple check for kerberos; since the person had to
@@ -1095,8 +1081,6 @@ case "$with_com_err" in
 	  COMPILE_ET="../com_err/et/compile_et"
 	  COM_ERR_LDFLAGS=""
 	  COM_ERR_CPPFLAGS="-I\${top_srcdir}/com_err/et"
-	  PRE_SUBDIRS="com_err/et ${PRE_SUBDIRS}"
-	  EXTRA_OUTPUT="${EXTRA_OUTPUT} com_err/et/Makefile"
 	  ;;
   "")   # no problem, we already have it in the paths
 	# we do nothing to pick it up
@@ -1116,6 +1100,7 @@ case "$with_com_err" in
 dnl     CMU_ADD_LIBPATH_TO(${with_com_err}/lib, COM_ERR_LDFLAGS)
      COMPILE_ET="${with_com_err}/bin/compile_et"
 esac
+AM_CONDITIONAL([COM_ERR], [test "$with_com_err" = "yes"])
 AC_SUBST(COMPILE_ET)
 AC_SUBST(COM_ERR_LIBS)
 AC_SUBST(COM_ERR_LDFLAGS)
@@ -1134,11 +1119,10 @@ AC_CACHE_VAL(cyrus_cv_lib_syslog, AC_TRY_CPP([#include <syslog.h>
 #include </nonexistent>
 #endif],cyrus_cv_lib_syslog=yes,cyrus_cv_lib_syslog=no))
 if test $cyrus_cv_lib_syslog = no; then
-	PRE_SUBDIRS="${PRE_SUBDIRS} syslog"
-	EXTRA_OUTPUT="${EXTRA_OUTPUT} syslog/Makefile"
 	DEPLIBS="${DEPLIBS} ../syslog/libsyslog.a"
 	CPPFLAGS="$CPPFLAGS -I\$(srcdir)/../syslog"
 fi
+AM_CONDITIONAL([SYSLOG], [test "$cyrus_cv_lib_syslog" = "no"])
 AC_MSG_RESULT($cyrus_cv_lib_syslog)
 
 AC_MSG_CHECKING(which syslog facility to use)
@@ -1154,12 +1138,8 @@ AC_MSG_RESULT($SYSLOG_FACILITY)
 dnl Have to check getdtabalesize after adding ossup, as some ossups define it
 AC_REPLACE_FUNCS(getdtablesize)
 AC_ARG_ENABLE(cmulocal,
-	[AS_HELP_STRING([--enable-cmulocal], [enable CMU-specific local support])],
-	if test "$enableval" = yes; then
-		EXTRA_SUBDIRS="${EXTRA_SUBDIRS} netnews depot"
-		EXTRA_OUTPUT="${EXTRA_OUTPUT} depot/Makefile"
-	fi)
-
+	[AS_HELP_STRING([--enable-cmulocal], [enable CMU-specific local support])])
+AM_CONDITIONAL([CMULOCAL], [test "$enable_cmulocal" = "yes"])
 AC_MSG_CHECKING(to use old sieve service name)
 AC_ARG_ENABLE(oldsievename,
 	[AS_HELP_STRING([--enable-oldsievename], [enable the use of 'imap' as the sieve service name])],
@@ -1196,12 +1176,11 @@ if test "${with_perl}" != no; then
 	AC_CHECK_PROGS(PERL, ${with_perl} perl, with_perl=notfound)
     fi
 fi
+AM_CONDITIONAL([PERL], [test "$with_perl" != "no" -a "$with_perl" != "notfound"])
 if test "$with_perl" = "notfound"; then
     AC_MSG_WARN(Perl not found: Administrative tools will not be available)
 elif test "${with_perl}" != "no"; then
-dnl compile perl stuff
-    EXTRA_SUBDIRS="${EXTRA_SUBDIRS} perl"
-dnl and compile perl/cyradm
+dnl compile perl stuff and perl/cyradm
     PERL_SUBDIRS="imap"
     PERL="${with_perl}"
 dnl add perl cccdlflags when building libraries -- this ensures that the
@@ -1224,13 +1203,9 @@ dnl -- this is needed on NetBSD and Linux, but seems to cause problems on atleas
 fi
 
 dnl for timsieved
-if test "$sievedir" != "no"; then
-	EXTRA_SUBDIRS="${EXTRA_SUBDIRS} timsieved notifyd"
-	EXTRA_OUTPUT="${EXTRA_OUTPUT} timsieved/Makefile notifyd/Makefile"
-
+if test "$enable_sieve" != "no"; then
 	PERL_SUBDIRS="${PERL_SUBDIRS} sieve"
 	PERL_DEPSUBDIRS="sieve"
-	EXTRA_OUTPUT="${EXTRA_OUTPUT} perl/sieve/Makefile perl/sieve/lib/Makefile"
 else
 	PERL_DEPSUBDIRS="none"
 fi
@@ -1317,14 +1292,7 @@ if test "$enable_unit_tests" != "no" ; then
     AC_CHECK_HEADERS([valgrind/valgrind.h])
 fi
 
-CUNIT_SUBDIRS=
-if test "$enable_unit_tests" != "no" ; then
-    CUNIT_SUBDIRS=cunit
-fi
-AC_SUBST(CUNIT_SUBDIRS)
-
-dnl
-
+AM_CONDITIONAL([CUNIT], [test "$enable_unit_tests" != "no"])
 
 AH_TOP([
 /*
@@ -1541,5 +1509,5 @@ enum {
 ])
 
 dnl make sure that Makefile is the last thing output
-AC_CONFIG_FILES([cunit/Makefile imap/Makefile imtest/Makefile lib/Makefile man/Makefile master/Makefile netnews/Makefile perl/Makefile $EXTRA_OUTPUT Makefile])
+AC_CONFIG_FILES([com_err/et/Makefile cunit/Makefile depot/Makefile imap/Makefile imtest/Makefile lib/Makefile man/Makefile master/Makefile netnews/Makefile notifyd/Makefile perl/Makefile perl/sieve/Makefile perl/sieve/lib/Makefile ptclient/Makefile sieve/Makefile syslog/Makefile timsieved/Makefile Makefile])
 AC_OUTPUT
