@@ -325,18 +325,14 @@ static int propfind_getlength(xmlNodePtr prop,
 			      struct propstat propstat[],
 			      void *rock __attribute__((unused)))
 {
-    if (fctx->record) {
-	buf_reset(&fctx->buf);
-	buf_printf(&fctx->buf, "%u",
-		   fctx->record->size - fctx->record->header_size);
+    uint32_t len = 0;
 
-	xml_add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK],
-		     prop, BAD_CAST buf_cstring(&fctx->buf), NULL);
-    }
-    else {
-	xml_add_prop(HTTP_NOT_FOUND, resp, &propstat[PROPSTAT_NOTFOUND],
-		     prop, NULL, NULL);
-    }
+    if (fctx->record) len = fctx->record->size - fctx->record->header_size;
+
+    buf_reset(&fctx->buf);
+    buf_printf(&fctx->buf, "%u", len);
+    xml_add_prop(HTTP_OK, resp, &propstat[PROPSTAT_OK],
+		 prop, BAD_CAST buf_cstring(&fctx->buf), NULL);
 
     return 0;
 }
