@@ -3226,7 +3226,7 @@ static int parse_path(struct request_target_t *tgt, const char **errstr)
     len = strcspn(p, "/");
     if (!strncmp(p, "user", len)) {
 	p += len;
-	if (!*p || !*++p) return HTTP_FORBIDDEN;  /* need to specify a userid */
+	if (!*p || !*++p) return 0;
 
 	/* Get user id */
 	len = strcspn(p, "/");
@@ -3241,7 +3241,7 @@ static int parse_path(struct request_target_t *tgt, const char **errstr)
 	len = strcspn(p, "/");
     }
     else if (tgt->namespace == URL_NS_PRINCIPAL) {
-	return HTTP_FORBIDDEN;  /* need to specify a userid */
+	return HTTP_NOT_FOUND;  /* need to specify a userid */
     }
 
     /* Get collection */
