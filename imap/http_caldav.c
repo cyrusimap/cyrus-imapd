@@ -1395,10 +1395,10 @@ static int apply_calfilter(struct propfind_ctx *fctx)
 	/* Perform CALDAV:comp-filter filtering */
 	/* XXX  This should be checked with a caldav_db entry */
 	switch (kind) {
-	case ICAL_VEVENT_COMPONENT: mykind = COMP_VEVENT; break;
-	case ICAL_VTODO_COMPONENT: mykind = COMP_VTODO; break;
-	case ICAL_VJOURNAL_COMPONENT: mykind = COMP_VJOURNAL; break;
-	case ICAL_VFREEBUSY_COMPONENT: mykind = COMP_VFREEBUSY; break;
+	case ICAL_VEVENT_COMPONENT: mykind = CAL_COMP_VEVENT; break;
+	case ICAL_VTODO_COMPONENT: mykind = CAL_COMP_VTODO; break;
+	case ICAL_VJOURNAL_COMPONENT: mykind = CAL_COMP_VJOURNAL; break;
+	case ICAL_VFREEBUSY_COMPONENT: mykind = CAL_COMP_VFREEBUSY; break;
 	default: break;
 	}
 
@@ -2237,10 +2237,10 @@ static int meth_put(struct transaction_t *txn)
     kind = icalcomponent_isa(comp);
 
     switch (kind) {
-    case ICAL_VEVENT_COMPONENT: mykind = COMP_VEVENT; break;
-    case ICAL_VTODO_COMPONENT: mykind = COMP_VTODO; break;
-    case ICAL_VJOURNAL_COMPONENT: mykind = COMP_VJOURNAL; break;
-    case ICAL_VFREEBUSY_COMPONENT: mykind = COMP_VFREEBUSY; break;
+    case ICAL_VEVENT_COMPONENT: mykind = CAL_COMP_VEVENT; break;
+    case ICAL_VTODO_COMPONENT: mykind = CAL_COMP_VTODO; break;
+    case ICAL_VJOURNAL_COMPONENT: mykind = CAL_COMP_VJOURNAL; break;
+    case ICAL_VFREEBUSY_COMPONENT: mykind = CAL_COMP_VFREEBUSY; break;
     default: break;
     }
 
@@ -2430,15 +2430,15 @@ static int parse_comp_filter(xmlNodePtr root, struct calquery_filter *filter,
 		}
 
 		if (!xmlStrcmp(name, BAD_CAST "VCALENDAR"))
-		    filter->comp = COMP_VCALENDAR;
+		    filter->comp = CAL_COMP_VCALENDAR;
 		else if (!xmlStrcmp(name, BAD_CAST "VEVENT"))
-		    filter->comp = COMP_VEVENT;
+		    filter->comp = CAL_COMP_VEVENT;
 		else if (!xmlStrcmp(name, BAD_CAST "VTODO"))
-		    filter->comp = COMP_VTODO;
+		    filter->comp = CAL_COMP_VTODO;
 		else if (!xmlStrcmp(name, BAD_CAST "VJOURNAL"))
-		    filter->comp = COMP_VJOURNAL;
+		    filter->comp = CAL_COMP_VJOURNAL;
 		else if (!xmlStrcmp(name, BAD_CAST "VFREEBUSY"))
-		    filter->comp = COMP_VFREEBUSY;
+		    filter->comp = CAL_COMP_VFREEBUSY;
 		else {
 		    error->precond = &preconds[CALDAV_SUPP_FILTER];
 		    return HTTP_FORBIDDEN;
@@ -2748,7 +2748,7 @@ static int report_fb_query(struct transaction_t *txn,
     if (txn->req_tgt.resource) return HTTP_FORBIDDEN;
 
     memset(&filter, 0, sizeof(struct calquery_filter));
-    filter.comp = COMP_VEVENT | COMP_VFREEBUSY;
+    filter.comp = CAL_COMP_VEVENT | CAL_COMP_VFREEBUSY;
     filter.start = icaltime_from_timet_with_zone(INT_MIN, 0, NULL);
     filter.end = icaltime_from_timet_with_zone(INT_MAX, 0, NULL);
     fctx->calfilter = &filter;
@@ -3515,7 +3515,7 @@ static int sched_busytime(struct transaction_t *txn)
     xmlSetNs(root, calns);
 
     memset(&filter, 0, sizeof(struct calquery_filter));
-    filter.comp = COMP_VEVENT | COMP_VFREEBUSY;
+    filter.comp = CAL_COMP_VEVENT | CAL_COMP_VFREEBUSY;
     filter.start = icalcomponent_get_dtstart(comp);
     filter.end = icalcomponent_get_dtend(comp);
     filter.check_transp = 1;

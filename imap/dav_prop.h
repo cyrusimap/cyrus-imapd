@@ -117,6 +117,17 @@ enum {
 					   schedule-send-reply,
 					   schedule-send-freebusy) */
 
+/* Bitmask of calendar components */
+enum {
+    CAL_COMP_VCALENDAR =	(0<<0),
+    CAL_COMP_VEVENT =		(1<<0),
+    CAL_COMP_VTODO =		(1<<1),
+    CAL_COMP_VJOURNAL =		(1<<2),
+    CAL_COMP_VFREEBUSY =	(1<<3),
+    CAL_COMP_VTIMEZONE =	(1<<4),
+    CAL_COMP_VALARM =		(1<<5)
+};
+
 /* Index into preconditions array */
 enum {
     DAV_PROT_PROP = 0,

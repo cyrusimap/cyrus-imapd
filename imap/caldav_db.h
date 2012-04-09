@@ -48,16 +48,6 @@ struct caldav_db;
 
 #define CALDAV_CREATE 0x01
 
-enum ical_comp {
-    COMP_VCALENDAR	= (0<<0),
-    COMP_VEVENT		= (1<<0),
-    COMP_VTODO		= (1<<1),
-    COMP_VJOURNAL	= (1<<2),
-    COMP_VFREEBUSY	= (1<<3),
-    COMP_TIMEZONE	= (1<<4),
-    COMP_VALARM		= (1<<5)
-};
-
 /* get a database handle corresponding to mailbox */
 int caldav_open(struct mailbox *mailbox, int flags,
 		struct caldav_db **caldavdb);
