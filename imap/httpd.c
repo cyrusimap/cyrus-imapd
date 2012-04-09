@@ -1046,16 +1046,19 @@ static void cmdloop(void)
 	    }
 	}
 
+#ifdef WITH_CALDAV
 	/* Handle CalDAV bootstrapping */
 	if (!ret && !strncmp(txn.req_tgt.path, "/.well-known/caldav", 19) &&
 	    (!txn.req_tgt.path[19] || !strcmp(txn.req_tgt.path+19, "/"))) {
 	    ret = HTTP_MOVED;
 
 	    hdr = spool_getheader(txn.req_hdrs, "Host");
-	    snprintf(buf, sizeof(buf), "%s://%s/calendars/",
-		     https ? "https" : "http", hdr[0]);
+	    snprintf(buf, sizeof(buf), "%s://%s%s/",
+		     https ? "https" : "http", hdr[0],
+		     namespace_calendar.prefix);
 	    txn.loc = buf;
 	}
+#endif
 
 	if (ret) goto done;
 
