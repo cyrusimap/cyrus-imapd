@@ -2092,6 +2092,9 @@ static int meth_put(struct transaction_t *txn)
     icalcomponent *ical, *comp;
     icalcomponent_kind kind;
     icalproperty_method meth;
+    unsigned mykind = 0;
+    const char *prop_annot = ANNOT_NS "CALDAV:supported-calendar-component-set";
+    struct annotation_data attrib;
 
     /* Make sure its a DAV resource */
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
@@ -2229,16 +2232,37 @@ static int meth_put(struct transaction_t *txn)
 	goto done;
     }
 
+    meth = icalcomponent_get_method(ical);
+    comp = icalcomponent_get_first_real_component(ical);
+    kind = icalcomponent_isa(comp);
+
+    switch (kind) {
+    case ICAL_VEVENT_COMPONENT: mykind = COMP_VEVENT; break;
+    case ICAL_VTODO_COMPONENT: mykind = COMP_VTODO; break;
+    case ICAL_VJOURNAL_COMPONENT: mykind = COMP_VJOURNAL; break;
+    case ICAL_VFREEBUSY_COMPONENT: mykind = COMP_VFREEBUSY; break;
+    default: break;
+    }
+
+    /* Check for supported component type */
+    if (!annotatemore_lookup(mailboxname, prop_annot,
+			     /* shared */ "", &attrib)
+	&& attrib.value) {
+	unsigned long supp_comp = strtoul(attrib.value, NULL, 10);
+
+	if (!(mykind & supp_comp)) {
+	    txn->error.precond = &preconds[CALDAV_SUPP_COMP];
+	    ret = HTTP_FORBIDDEN;
+	    goto done;
+	}
+    }
+
     /* Prepare to stage the message */
     if (!(f = append_newstage(mailboxname, now, 0, &stage))) {
 	txn->error.desc = error_message(r);
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
-
-    meth = icalcomponent_get_method(ical);
-    comp = icalcomponent_get_first_real_component(ical);
-    kind = icalcomponent_isa(comp);
 
     /* Create iMIP header for resource */
     fprintf(f, "From: <%s>\r\n", httpd_userid ? httpd_userid : "");
