@@ -44,7 +44,7 @@
 ACLOCAL_AMFLAGS = -I cmulocal
 BUILT_SOURCES = xversion.h
 
-SUBDIRS = . lib imtest man
+SUBDIRS = . lib imtest
 if COM_ERR
 SUBDIRS += com_err/et
 endif
@@ -86,6 +86,21 @@ DISTSUBDIRS = doc
 SHELL = /bin/sh
 @SET_MAKE@
 
+dist_man_MANS = man/imtest.1 man/installsieve.1 man/lmtptest.1 \
+	man/mupdatetest.1 man/nntptest.1 man/pop3test.1 man/sieveshell.1 \
+	man/sivtest.1 man/smtptest.1 \
+	man/imclient.3 \
+	man/cyrus.conf.5 man/imapd.conf.5 man/krb.equiv.5 \
+	man/arbitron.8 man/chk_cyrus.8 man/ctl_cyrusdb.8 man/ctl_deliver.8 \
+	man/ctl_mboxlist.8 man/cyr_expire.8 man/cvt_cyrusdb.8 \
+	man/cyr_dbtool.8 man/cyr_df.8 man/cyr_info.8 man/cyr_synclog.8 \
+	man/deliver.8 man/fetchnews.8 man/fud.8 man/idled.8 man/imapd.8 \
+	man/ipurge.8 man/lmtpd.8 man/master.8 man/mbexamine.8 man/mbpath.8 \
+	man/nntpd.8 man/notifyd.8 man/pop3d.8 man/quota.8 man/reconstruct.8 \
+	man/rmnews.8 man/smmapd.8 man/squatter.8 man/syncnews.8 \
+	man/sync_client.8 man/sync_reset.8 man/sync_server.8 man/timsieved.8 \
+	man/tls_prune.8 man/unexpunge.8
+
 GIT_VERSION = $(PACKAGE_VERSION).git$(shell date +'%Y%m%d%H%M')
 
 snapshot::
@@ -109,6 +124,16 @@ snapshot::
 	@echo "creating tarfile"
 	tar -C snapshot -c -f - $(PACKAGE_NAME)-$(GIT_VERSION) | gzip -9 > $(PACKAGE_NAME)-$(GIT_VERSION).tar.gz
 	@rm -rf snapshot
+
+man/imapd.conf.5:
+	@echo creating man/imapd.conf.5
+	@$(MKDIR_P) man
+	$(top_srcdir)/tools/config2man $(top_srcdir)/lib/imapoptions > man/imapd.conf.5
+
+man/sieveshell.1: $(top_srcdir)/perl/sieve/scripts/sieveshell.pl
+	@echo creating man/sieveshell.1
+	@$(MKDIR_P) man
+	pod2man $(top_srcdir)/perl/sieve/scripts/sieveshell.pl > man/sieveshell.1
 
 dist-old:: distgit
 	@echo "creating configure"

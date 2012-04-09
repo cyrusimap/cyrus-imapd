@@ -1509,5 +1509,5 @@ enum {
 ])
 
 dnl make sure that Makefile is the last thing output
-AC_CONFIG_FILES([com_err/et/Makefile cunit/Makefile depot/Makefile imap/Makefile imtest/Makefile lib/Makefile man/Makefile master/Makefile netnews/Makefile notifyd/Makefile perl/Makefile perl/sieve/Makefile perl/sieve/lib/Makefile ptclient/Makefile sieve/Makefile syslog/Makefile timsieved/Makefile Makefile])
+AC_CONFIG_FILES([com_err/et/Makefile cunit/Makefile depot/Makefile imap/Makefile imtest/Makefile lib/Makefile master/Makefile netnews/Makefile notifyd/Makefile perl/Makefile perl/sieve/Makefile perl/sieve/lib/Makefile ptclient/Makefile sieve/Makefile syslog/Makefile timsieved/Makefile Makefile])
 AC_OUTPUT

@@ -1,3 +1,0 @@
-# $Id: Makefile.dist,v 1.2 2006/11/30 17:11:23 murch Exp $
-dist:
-	../tools/config2man ../lib/imapoptions > imapd.conf.5
