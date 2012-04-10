@@ -1324,6 +1324,9 @@ int read_body(struct protstream *pin,
 	    len = strtoul(hdr[0], NULL, 10);
 	    /* XXX  Should we sanity check and/or limit the body len? */
 	}
+	else if ((hdr = spool_getheader(hdrs, "Content-Type"))) {
+	    return HTTP_LENGTH_REQUIRED;
+	}
     }
 
     if (need_cont) {
