@@ -181,7 +181,8 @@ enum {
     HTTP_GZIP =	  	(1<<1),
     HTTP_CHUNKED =	(1<<2),
     HTTP_NOCACHE =	(1<<3),
-    HTTP_READBODY =	(1<<4)
+    HTTP_READBODY =	(1<<4),
+    HTTP_RANGES =	(1<<5)
 };
 
 typedef int (*method_proc_t)(struct transaction_t *txn);

@@ -1544,7 +1544,11 @@ void response_header(long code, struct transaction_t *txn)
 	prot_printf(httpd_out, "Strict-Transport-Security: max-age=600\r\n");
     }
 
-    prot_printf(httpd_out, "Accept-Ranges: none\r\n");
+    if (strchr("OGH", txn->meth[0])) {
+	/* Add Accept-Ranges header for OPTIONS, GET, HEAD responses */
+	prot_printf(httpd_out, "Accept-Ranges: %s\r\n",
+		    txn->flags & HTTP_RANGES ? "bytes" : "none");
+    }
 
     if (txn->req_tgt.allow & ALLOW_DAV) {
 	/* Construct DAV header based on namespace of request URL */
