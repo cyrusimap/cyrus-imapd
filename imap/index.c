@@ -3275,7 +3275,7 @@ static int index_store_annotation(struct index_state *state,
     if (r) goto out;
 
     /* if it's silent and unchanged, update the seen value */
-    if (storeargs->silent && im->told_modseq == oldmodseq)
+    if (!state->qresync && storeargs->silent && im->told_modseq == oldmodseq)
 	im->told_modseq = im->record.modseq;
 
 out:
