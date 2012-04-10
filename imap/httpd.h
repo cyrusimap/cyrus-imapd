@@ -84,11 +84,11 @@ enum {
 
 /* Bitmask of features/methods to allow, based on URL */
 enum {
-    ALLOW_READ =	(1<<0),
-    ALLOW_WRITE =	(1<<1),
-    ALLOW_DAV =		(1<<2),
-    ALLOW_CAL =		(1<<3),
-    ALLOW_CARD =	(1<<4)
+    ALLOW_READ =	(1<<0),	/* Read resources/properties */
+    ALLOW_WRITE =	(1<<1),	/* Create/modify/delete/lock resources/props */
+    ALLOW_DAV =		(1<<2),	/* WebDAV specific methods/features */
+    ALLOW_CAL =		(1<<3),	/* CalDAV specific methods/features */
+    ALLOW_CARD =	(1<<4)	/* CardDAV specific methods/features */
 };
 
 #define MAX_QUERY_LEN	100
@@ -177,12 +177,12 @@ struct transaction_t {
 
 /* Transaction flags */
 enum {
-    HTTP_READBODY =	(1<<0),	/* body of request has been read */
-    HTTP_CLOSE =	(1<<1),	/* close connection after response */
-    HTTP_GZIP =	  	(1<<2),	/* gzip the representation */
-    HTTP_CHUNKED =	(1<<3),	/* response payload will be chunked */
-    HTTP_NOCACHE =	(1<<4),	/* response should NOT be cached */
-    HTTP_RANGES =	(1<<5)	/* accept range requests for resource */
+    HTTP_READBODY =	(1<<0),	/* Body of request has been read */
+    HTTP_CLOSE =	(1<<1),	/* Close connection after response */
+    HTTP_GZIP =	  	(1<<2),	/* Gzip the representation */
+    HTTP_CHUNKED =	(1<<3),	/* Response payload will be chunked */
+    HTTP_NOCACHE =	(1<<4),	/* Response should NOT be cached */
+    HTTP_RANGES =	(1<<5)	/* Accept range requests for resource */
 };
 
 typedef int (*method_proc_t)(struct transaction_t *txn);
