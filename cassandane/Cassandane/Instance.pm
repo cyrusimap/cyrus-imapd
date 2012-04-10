@@ -628,8 +628,21 @@ sub copy_logins
 
 sub mboxname
 {
-    my ($self, @comps) = @_;
+    my ($self, @args) = @_;
     my $sep = $self->{config}->get_bool('unixhierarchysep', 'off') ? '/' : '.';
+    my @comps;
+    # Flatten out any array refs and stringify
+    foreach my $c (@args)
+    {
+	if (ref $c && ref $c eq 'ARRAY')
+	{
+	    map { push(@comps, "" . $_); } @$c;
+	}
+	elsif (!ref $c)
+	{
+	    push(@comps, "" . $c);
+	}
+    }
     map { die "Bad mboxname component \"$_\"" if index($_, $sep) >= 0; } @comps;
     return join($sep, @comps);
 }

@@ -80,7 +80,7 @@ sub set_up
 
     # sub folders of another user - one is subscribable
     $self->{instance}->create_user("other",
-				   subdirs => [ qw(sub sub.folder) ]);
+				   subdirs => [ 'sub', ['sub', 'folder'] ]);
     $admintalk->setacl("user.other.sub.folder", "cassandane", "lrs");
 
     my $usertalk = $self->{store}->get_client();
