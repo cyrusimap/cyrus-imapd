@@ -86,12 +86,8 @@ install:
 .c.o:
 	$(CC) -c $(CPPFLAGS) $(DEFS) $(CFLAGS) $<
 
-# This is awful.  We should use libcyrus.a but we also need
-# to grab a lock*.o from it explicitly.
-LIBCYRUS=   ../lib/strarray.o
-
-master: master.o masterconf.o cyrusMasterMIB.o $(LIBCYRUS)
-	$(CC) $(LDFLAGS) -o master master.o masterconf.o cyrusMasterMIB.o $(LIBCYRUS) $(LIBS) $(DEPLIBS)
+master: master.o masterconf.o cyrusMasterMIB.o
+	$(CC) $(LDFLAGS) -o master master.o masterconf.o cyrusMasterMIB.o $(LIBS) $(DEPLIBS)
 
 clean:
 	rm -f *.o *.a Makefile.bak $(PROGS) *.gcno *.gcda
