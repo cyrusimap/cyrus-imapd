@@ -1657,6 +1657,7 @@ void response_header(long code, struct transaction_t *txn)
 
     /* Representation Header Fields */
     if (resp_body->enc) {
+	prot_printf(httpd_out, "Vary: Accept-Encoding\r\n");
 	prot_printf(httpd_out, "Content-Encoding: %s\r\n", resp_body->enc);
     }
     if (resp_body->lang) {
