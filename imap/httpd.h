@@ -177,12 +177,12 @@ struct transaction_t {
 
 /* Transaction flags */
 enum {
-    HTTP_CLOSE =	(1<<0),
-    HTTP_GZIP =	  	(1<<1),
-    HTTP_CHUNKED =	(1<<2),
-    HTTP_NOCACHE =	(1<<3),
-    HTTP_READBODY =	(1<<4),
-    HTTP_RANGES =	(1<<5)
+    HTTP_READBODY =	(1<<0),	/* body of request has been read */
+    HTTP_CLOSE =	(1<<1),	/* close connection after response */
+    HTTP_GZIP =	  	(1<<2),	/* gzip the representation */
+    HTTP_CHUNKED =	(1<<3),	/* response payload will be chunked */
+    HTTP_NOCACHE =	(1<<4),	/* response should NOT be cached */
+    HTTP_RANGES =	(1<<5)	/* accept range requests for resource */
 };
 
 typedef int (*method_proc_t)(struct transaction_t *txn);
