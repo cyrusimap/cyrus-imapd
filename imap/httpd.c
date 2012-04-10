@@ -1496,6 +1496,7 @@ void response_header(long code, struct transaction_t *txn)
     case HTTP_SWITCH_PROT:
 	prot_printf(httpd_out, "Upgrade: TLS/1.0\r\n");
 	prot_printf(httpd_out, "Connection: Upgrade\r\n");
+	/* Fall through as provisional response */
 
     case HTTP_CONTINUE:
     case HTTP_PROCESSING:
@@ -1514,6 +1515,7 @@ void response_header(long code, struct transaction_t *txn)
 
     case HTTP_UPGRADE:
 	prot_printf(httpd_out, "Upgrade: TLS/1.0\r\n");
+	/* Fall through as final response */
 
     default:
 	/* Final response */
@@ -1573,6 +1575,7 @@ void response_header(long code, struct transaction_t *txn)
     switch (code) {
     case HTTP_OK:
 	if (txn->meth[0] != 'O') break;
+	/* Fall through as successful OPTIONS */
 
     case HTTP_NOT_ALLOWED:
 	/* Construct Allow header for OPTIONS response and 405 response */
