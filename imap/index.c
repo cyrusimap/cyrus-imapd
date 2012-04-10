@@ -3235,8 +3235,12 @@ static int index_storeflag(struct index_state *state, uint32_t msgno,
     r = mailbox_rewrite_index_record(mailbox, &im->record);
     if (r) return r;
 
-    /* if it's silent and unchanged, update the seen value */
-    if (storeargs->silent && im->told_modseq == oldmodseq)
+    /* if it's silent and unchanged, update the seen value, but
+     * not if qresync is enabled - RFC 4551 says that the MODSEQ
+     * must always been told, and we prefer just to tell flags
+     * as well in this case, it's simpler and not much more
+     * bandwidth */
+    if (!state->qresync && storeargs->silent && im->told_modseq == oldmodseq)
 	im->told_modseq = im->record.modseq;
 
     return 0;
