@@ -48,8 +48,9 @@ AM_LDFLAGS = ${EXTRALDFLAGS}
 BUILT_SOURCES = xversion.h lib/imapopts.c
 
 SUBDIRS = . imtest
-noinst_LIBRARIES =
+dist_sysconf_DATA =
 lib_LIBRARIES = lib/libcyrus.a lib/libcyrus_min.a
+noinst_LIBRARIES =
 check_PROGRAMS =
 service_PROGRAMS =
 
@@ -63,7 +64,7 @@ if SYSLOG
 SUBDIRS += syslog
 endif
 if CMULOCAL
-SUBDIRS += depot
+dist_sysconf_DATA += depot/rc.local.imap depot/rc.local.ptclient
 service_PROGRAMS += netnews/remotepurge
 endif
 if PTCLIENT
@@ -339,6 +340,11 @@ xversion xversion.h:
 	@echo "#define CYRUS_GITVERSION \"`git log --abbrev=8 --pretty=\"format:%h %ci\" -1 | cut -d\" \" -f1,2`\"" >> xversion.h.tmp
 	@cmp -s xversion.h.tmp xversion.h || mv xversion.h.tmp xversion.h
 	@rm -f xversion.h.tmp
+
+install-data-hook:
+if CMULOCAL
+	$(INSTALL) -m 644 $(top_srcdir)/depot/depot.conf $(DESTDIR)/
+endif
 
 valgrind:
 	$(MAKE) VG=yes check
