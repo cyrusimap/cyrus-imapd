@@ -1271,7 +1271,7 @@ for flag in ${ldflags} ${default_ldflags}; do
   esac
 done
 
-IMAP_LIBS="${LIB_SASL} ${LIBS} ${SQL_LIBS}"
+IMAP_LIBS="${LIB_SASL} ${LIBS}"
 
 AC_SUBST(LIB_RT)
 AC_SUBST(LIB_UUID)
