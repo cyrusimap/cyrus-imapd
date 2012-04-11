@@ -130,25 +130,42 @@ enum {
 
 /* Index into preconditions array */
 enum {
+    /* WebDAV (RFC 4918) preconditons */
     DAV_PROT_PROP = 0,
+
+    /* WebDAV Versioning (RFC 3253) preconditions */
     DAV_SUPP_REPORT,
     DAV_RSRC_EXISTS,
+
+    /* WebDAV ACL (RFC 3744) preconditions */
     DAV_NEED_PRIVS,
     DAV_NO_INVERT,
     DAV_NO_ABSTRACT,
     DAV_SUPP_PRIV,
     DAV_RECOG_PRINC,
+
+    /* WebDAV Quota (RFC 4331) preconditions */
     DAV_OVER_QUOTA,
     DAV_NO_DISK_SPACE,
+
+    /* WebDAV Extended MKCOL (RFC 5689) preconditions */
     DAV_VALID_RESTYPE,
+
+    /* WebDAV Sync (RFC 6578) preconditions */
     DAV_SYNC_TOKEN,
     DAV_OVER_LIMIT,
+
+    /* CalDAV (RFC 4791) preconditions */
     CALDAV_SUPP_DATA,
     CALDAV_VALID_DATA,
+    CALDAV_VALID_OBJECT,
     CALDAV_SUPP_COMP,
     CALDAV_LOCATION_OK,
+    CALDAV_UID_CONFLICT,
     CALDAV_SUPP_FILTER,
     CALDAV_VALID_FILTER,
+
+    /* CalDAV Scheduling (draft-desruisseaux-caldav-sched) preconditions */
     CALDAV_VALID_SCHED,
     CALDAV_VALID_ORGANIZER
 };

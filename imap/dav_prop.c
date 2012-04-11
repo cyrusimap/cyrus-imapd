@@ -1607,15 +1607,17 @@ const struct precond preconds[] =
     /* WebDAV Extended MKCOL (RFC 5689) preconditions */
     { "valid-resourcetype", NS_DAV },
 
-    /* WebDAV Sync (draft-daboo-webdav-sync) preconditions */
+    /* WebDAV Sync (RFC 6578) preconditions */
     { "valid-sync-token", NS_DAV },
     { "number-of-matches-within-limits", NS_DAV },
 
     /* CalDAV (RFC 4791) preconditions */
     { "supported-calendar-data", NS_CALDAV },
     { "valid-calendar-data", NS_CALDAV },
+    { "valid-calendar-object-resource", NS_CALDAV },
     { "supported-calendar-component", NS_CALDAV },
     { "calendar-collection-location-ok", NS_CALDAV },
+    { "no-uid-conflict", NS_CALDAV },
     { "supported-filter", NS_CALDAV },
     { "valid-filter", NS_CALDAV },
 
