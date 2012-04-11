@@ -78,7 +78,8 @@ check_PROGRAMS += sieve/test
 service_PROGRAMS += sieve/sievec sieve/sieved
 endif
 if SERVER
-SUBDIRS += master imap
+SUBDIRS += imap
+service_PROGRAMS += master/master
 endif
 
 if SIEVE
@@ -115,6 +116,7 @@ EXTRA_DIST = xversion.h com_err/et/com_err com_err/et/et_c.awk \
 	lib/test/cyrusdb.OUTPUT lib/test/cyrusdbtxn.INPUT \
 	lib/test/cyrusdbtxn.OUTPUT lib/test/pool.c lib/test/rnddb.c \
 	lib/test/testglob2.c \
+	master/CYRUS-MASTER.mib master/conf/cmu-backend.conf master/conf/cmu-frontend.conf master/conf/normal.conf master/conf/prefork.conf master/conf/small.conf master/README \
 	sieve/test/testExtension sieve/test/testExtension/uberExtensionTestScript.key sieve/test/testExtension/testm sieve/test/testExtension/testm/uetest-envelope sieve/test/testExtension/testm/uetest-asub sieve/test/testExtension/testm/uetest-areg sieve/test/testExtension/testm/uetest-count sieve/test/testExtension/testm/uetest-value sieve/test/testExtension/testm/uetest-hreg sieve/test/testExtension/serverm sieve/test/testExtension/serverm/uetmail-hreg sieve/test/testExtension/serverm/uetmail-value sieve/test/testExtension/serverm/uetmail-count2 sieve/test/testExtension/serverm/uetmail-envelope sieve/test/testExtension/serverm/uetmail-asub sieve/test/testExtension/serverm/uetmail-value2 sieve/test/testExtension/serverm/uetmail-areg sieve/test/testExtension/serverm/uetmail-count sieve/test/testExtension/uberExtensionTestScript.s sieve/test/README sieve/test/action sieve/test/action/testm sieve/test/action/testm/uatest-keep sieve/test/action/testm/uatest-redirect sieve/test/action/testm/uatest-discard sieve/test/action/testm/uatest-stop2 sieve/test/action/testm/uatest-stop sieve/test/action/serverm sieve/test/action/serverm/uamail-stop2 sieve/test/action/serverm/uamail-redirect sieve/test/action/serverm/uamail-stop sieve/test/action/serverm/uamail-keep sieve/test/action/serverm/uamail-discard sieve/test/action/uberActionScript.key sieve/test/action/uberActionScript.s sieve/test/test sieve/test/test/uberTestScript.key sieve/test/test/testm sieve/test/test/testm/utest-header sieve/test/test/testm/utest-address sieve/test/test/serverm sieve/test/test/serverm/utmail-address sieve/test/test/serverm/utmail-header sieve/test/test/uberTestScript.s sieve/test/actionExtensions sieve/test/actionExtensions/uberExtensionActionScript.s sieve/test/actionExtensions/testm sieve/test/actionExtensions/testm/ueatest-flag4 sieve/test/actionExtensions/testm/ueatest-flag2 sieve/test/actionExtensions/testm/ueatest-fileinto sieve/test/actionExtensions/testm/ueatest-denotify sieve/test/actionExtensions/testm/ueatest-vacation sieve/test/actionExtensions/testm/ueatest-reject sieve/test/actionExtensions/testm/ueatest-mark sieve/test/actionExtensions/testm/ueatest-denotify2 sieve/test/actionExtensions/testm/ueatest-flag5 sieve/test/actionExtensions/testm/ueatest-notify2 sieve/test/actionExtensions/testm/ueatest-notify sieve/test/actionExtensions/testm/ueatest-flag1 sieve/test/actionExtensions/testm/ueatest-flag3 sieve/test/actionExtensions/testm/ueatest-unmark sieve/test/actionExtensions/uberExtensionActionScript.key sieve/test/actionExtensions/serverm sieve/test/actionExtensions/serverm/ueamail-flag4 sieve/test/actionExtensions/serverm/ueamail-denotify sieve/test/actionExtensions/serverm/ueamail-mark sieve/test/actionExtensions/serverm/ueamail-denotify2 sieve/test/actionExtensions/serverm/ueamail-flag2 sieve/test/actionExtensions/serverm/ueamail-unmark sieve/test/actionExtensions/serverm/ueamail-reject sieve/test/actionExtensions/serverm/ueamail-flag3 sieve/test/actionExtensions/serverm/ueamail-fileinto sieve/test/actionExtensions/serverm/ueamail-flag1 sieve/test/actionExtensions/serverm/ueamail-notify sieve/test/actionExtensions/serverm/ueamail-flag5 sieve/test/actionExtensions/serverm/ueamail-notify2 sieve/test/actionExtensions/serverm/ueamail-vacation
 
 TEXINFO_TEX = com_err/et/texinfo.tex
@@ -239,6 +241,11 @@ dist_man_MANS = man/imtest.1 man/installsieve.1 man/lmtptest.1 \
 	man/rmnews.8 man/smmapd.8 man/squatter.8 man/syncnews.8 \
 	man/sync_client.8 man/sync_reset.8 man/sync_server.8 man/timsieved.8 \
 	man/tls_prune.8 man/unexpunge.8
+
+master_master_SOURCES = master/cyrusMasterMIB.c master/cyrusMasterMIB.h \
+	master/master.c master/master.h master/masterconf.c \
+	master/masterconf.h master/service.h
+master_master_LDADD = lib/libcyrus_min.a @LIB_UCDSNMP@ @LIBS@ -lm $(DEPLIBS)
 
 sieve_libsieve_a_SOURCES = sieve/bytecode.h sieve/addr.y sieve/addr-lex.l \
 	sieve/bc_dump.c sieve/bc_emit.c sieve/bc_eval.c sieve/bc_generate.c \
