@@ -2072,7 +2072,6 @@ static int meth_post(struct transaction_t *txn)
  */
 static int meth_put(struct transaction_t *txn)
 {
-    static unsigned put_count = 0;
     int ret = HTTP_CREATED, r, precond, rights;
     char *server, *acl, mailboxname[MAX_MAILBOX_BUFFER];
     struct mailbox *mailbox = NULL;
@@ -2086,12 +2085,12 @@ static int meth_put(struct transaction_t *txn)
     const char **hdr, *uid;
     uquota_t size = 0;
     time_t now = time(NULL);
-    pid_t pid = getpid();
     char datestr[80];
     struct appendstate appendstate;
     icalcomponent *ical, *comp, *compnext;
     icalcomponent_kind kind;
     icalproperty_method meth;
+    icalproperty *prop = NULL;
     unsigned mykind = 0;
     const char *prop_annot = ANNOT_NS "CALDAV:supported-calendar-component-set";
     struct annotation_data attrib;
@@ -2289,17 +2288,23 @@ static int meth_put(struct transaction_t *txn)
     }
 
     /* Create iMIP header for resource */
-    fprintf(f, "From: <%s>\r\n", httpd_userid ? httpd_userid : "");
+    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+    if (prop) {
+	fprintf(f, "From: %s\r\n", icalproperty_get_organizer(prop)+7);
+    }
+    else {
+	/* XXX  This needs to be done via an LDAP/DB lookup */
+	fprintf(f, "From: %s@%s\r\n", httpd_userid, config_servername);
+    }
 
     fprintf(f, "Subject: %s\r\n", icalcomponent_get_summary(comp));
 
-    rfc822date_gen(datestr, sizeof(datestr), now);
+    rfc822date_gen(datestr, sizeof(datestr),
+		   icaltime_as_timet_with_zone(icalcomponent_get_dtstamp(comp),
+					       icaltimezone_get_utc_timezone()));
     fprintf(f, "Date: %s\r\n", datestr);
 
-    fprintf(f, "Message-ID: ");
-    if (uid && *uid) fprintf(f, "<%s", uid);
-    else fprintf(f, "<cmu-http-%d-%ld-%u", pid, now, put_count++);
-    fprintf(f, "@%s>\r\n", config_servername);
+    fprintf(f, "Message-ID: <%s@%s>\r\n", uid, config_servername);
 
     hdr = spool_getheader(txn->req_hdrs, "Content-Type");
     fprintf(f, "Content-Type: %s", hdr[0]);
