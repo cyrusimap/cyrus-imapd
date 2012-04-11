@@ -86,7 +86,9 @@ endif
 
 if SIEVE
 if SERVER
-SUBDIRS += notifyd timsieved
+SUBDIRS += timsieved
+check_PROGRAMS += notifyd/notifytest
+service_PROGRAMS += notifyd/notifyd
 endif
 if PERL
 SUBDIRS += perl/sieve
@@ -253,6 +255,17 @@ master_master_LDADD = lib/libcyrus_min.a @LIB_UCDSNMP@ @LIBS@ -lm $(DEPLIBS)
 
 netnews_remotepurge_SOURCES = netnews/macros.h netnews/readconfig.c netnews/readconfig.h netnews/remotepurge.c
 netnews_remotepurge_LDADD = lib/libcyrus.a lib/libcyrus_min.a @DEPLIBS@ ${LIB_SASL} ${LIBS} @LIB_RT@ @LIB_UUID@
+
+notifyd_notifyd_SOURCES = imap/mutex_fake.c master/service.c \
+	notifyd/exitcodes.h notifyd/notify_external.c \
+	notifyd/notify_external.h notifyd/notify_log.c notifyd/notify_log.h \
+	notifyd/notify_mailto.c notifyd/notify_mailto.h notifyd/notify_null.c \
+	notifyd/notify_null.h notifyd/notify_zephyr.c notifyd/notify_zephyr.h \
+	notifyd/notifyd.c notifyd/notifyd.h notifyd/version.h
+notifyd_notifyd_LDADD = imap/libimap.a @COM_ERR_LIBS@ @LIB_WRAP@ $(netnews_remotepurge_LDADD) @ZEPHYR_LIBS@
+
+notifyd_notifytest_SOURCES = notifyd/notifytest.c imap/mutex_fake.o
+notifyd_notifytest_LDADD = ${notifyd_notifyd_LDADD}
 
 perl_sieve_lib_libisieve_a_SOURCES = perl/sieve/lib/isieve.c perl/sieve/lib/lex.c perl/sieve/lib/mystring.c perl/sieve/lib/request.c
 
