@@ -2746,7 +2746,7 @@ int mailbox_expunge_cleanup(struct mailbox *mailbox, time_t expunge_mark,
 	record.system_flags |= FLAG_UNLINKED;
 	record.silent = 1;
 	if (mailbox_rewrite_index_record(mailbox, &record)) {
-	    syslog(LOG_ERR, "failed to write changes to %s recno %d",
+	    syslog(LOG_ERR, "IOERROR: failed to write changes to %s recno %d",
 		   mailbox->name, recno);
 	    break;
 	}
