@@ -63,7 +63,8 @@ if SYSLOG
 SUBDIRS += syslog
 endif
 if CMULOCAL
-SUBDIRS += depot netnews
+SUBDIRS += depot
+service_PROGRAMS += netnews/remotepurge
 endif
 if PTCLIENT
 SUBDIRS += ptclient
@@ -118,6 +119,7 @@ EXTRA_DIST = xversion.h com_err/et/com_err com_err/et/et_c.awk \
 	lib/test/cyrusdbtxn.OUTPUT lib/test/pool.c lib/test/rnddb.c \
 	lib/test/testglob2.c \
 	master/CYRUS-MASTER.mib master/conf/cmu-backend.conf master/conf/cmu-frontend.conf master/conf/normal.conf master/conf/prefork.conf master/conf/small.conf master/README \
+	netnews/inn.diffs \
 	sieve/test/testExtension sieve/test/testExtension/uberExtensionTestScript.key sieve/test/testExtension/testm sieve/test/testExtension/testm/uetest-envelope sieve/test/testExtension/testm/uetest-asub sieve/test/testExtension/testm/uetest-areg sieve/test/testExtension/testm/uetest-count sieve/test/testExtension/testm/uetest-value sieve/test/testExtension/testm/uetest-hreg sieve/test/testExtension/serverm sieve/test/testExtension/serverm/uetmail-hreg sieve/test/testExtension/serverm/uetmail-value sieve/test/testExtension/serverm/uetmail-count2 sieve/test/testExtension/serverm/uetmail-envelope sieve/test/testExtension/serverm/uetmail-asub sieve/test/testExtension/serverm/uetmail-value2 sieve/test/testExtension/serverm/uetmail-areg sieve/test/testExtension/serverm/uetmail-count sieve/test/testExtension/uberExtensionTestScript.s sieve/test/README sieve/test/action sieve/test/action/testm sieve/test/action/testm/uatest-keep sieve/test/action/testm/uatest-redirect sieve/test/action/testm/uatest-discard sieve/test/action/testm/uatest-stop2 sieve/test/action/testm/uatest-stop sieve/test/action/serverm sieve/test/action/serverm/uamail-stop2 sieve/test/action/serverm/uamail-redirect sieve/test/action/serverm/uamail-stop sieve/test/action/serverm/uamail-keep sieve/test/action/serverm/uamail-discard sieve/test/action/uberActionScript.key sieve/test/action/uberActionScript.s sieve/test/test sieve/test/test/uberTestScript.key sieve/test/test/testm sieve/test/test/testm/utest-header sieve/test/test/testm/utest-address sieve/test/test/serverm sieve/test/test/serverm/utmail-address sieve/test/test/serverm/utmail-header sieve/test/test/uberTestScript.s sieve/test/actionExtensions sieve/test/actionExtensions/uberExtensionActionScript.s sieve/test/actionExtensions/testm sieve/test/actionExtensions/testm/ueatest-flag4 sieve/test/actionExtensions/testm/ueatest-flag2 sieve/test/actionExtensions/testm/ueatest-fileinto sieve/test/actionExtensions/testm/ueatest-denotify sieve/test/actionExtensions/testm/ueatest-vacation sieve/test/actionExtensions/testm/ueatest-reject sieve/test/actionExtensions/testm/ueatest-mark sieve/test/actionExtensions/testm/ueatest-denotify2 sieve/test/actionExtensions/testm/ueatest-flag5 sieve/test/actionExtensions/testm/ueatest-notify2 sieve/test/actionExtensions/testm/ueatest-notify sieve/test/actionExtensions/testm/ueatest-flag1 sieve/test/actionExtensions/testm/ueatest-flag3 sieve/test/actionExtensions/testm/ueatest-unmark sieve/test/actionExtensions/uberExtensionActionScript.key sieve/test/actionExtensions/serverm sieve/test/actionExtensions/serverm/ueamail-flag4 sieve/test/actionExtensions/serverm/ueamail-denotify sieve/test/actionExtensions/serverm/ueamail-mark sieve/test/actionExtensions/serverm/ueamail-denotify2 sieve/test/actionExtensions/serverm/ueamail-flag2 sieve/test/actionExtensions/serverm/ueamail-unmark sieve/test/actionExtensions/serverm/ueamail-reject sieve/test/actionExtensions/serverm/ueamail-flag3 sieve/test/actionExtensions/serverm/ueamail-fileinto sieve/test/actionExtensions/serverm/ueamail-flag1 sieve/test/actionExtensions/serverm/ueamail-notify sieve/test/actionExtensions/serverm/ueamail-flag5 sieve/test/actionExtensions/serverm/ueamail-notify2 sieve/test/actionExtensions/serverm/ueamail-vacation
 
 TEXINFO_TEX = com_err/et/texinfo.tex
@@ -247,6 +249,9 @@ master_master_SOURCES = master/cyrusMasterMIB.c master/cyrusMasterMIB.h \
 	master/master.c master/master.h master/masterconf.c \
 	master/masterconf.h master/service.h
 master_master_LDADD = lib/libcyrus_min.a @LIB_UCDSNMP@ @LIBS@ -lm $(DEPLIBS)
+
+netnews_remotepurge_SOURCES = netnews/macros.h netnews/readconfig.c netnews/readconfig.h netnews/remotepurge.c
+netnews_remotepurge_LDADD = lib/libcyrus.a lib/libcyrus_min.a @DEPLIBS@ ${LIB_SASL} ${LIBS} @LIB_RT@ @LIB_UUID@
 
 perl_sieve_lib_libisieve_a_SOURCES = perl/sieve/lib/isieve.c perl/sieve/lib/lex.c perl/sieve/lib/mystring.c perl/sieve/lib/request.c
 
