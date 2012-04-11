@@ -42,16 +42,20 @@
 #
 
 ACLOCAL_AMFLAGS = -I cmulocal
-AM_CPPFLAGS = @COM_ERR_CPPFLAGS@
-BUILT_SOURCES = xversion.h
+AM_CFLAGS = @PERL_CCCDLFLAGS@ $(EXTRACFLAGS)
+AM_CPPFLAGS = @COM_ERR_CPPFLAGS@ -I${top_srcdir} -I${top_srcdir}/lib -I${top_builddir} -I${top_builddir}/lib ${DEFS} ${LOCALDEFS} @SASLFLAGS@
+AM_LDFLAGS = ${EXTRALDFLAGS}
+BUILT_SOURCES = xversion.h lib/imapopts.c
 
-SUBDIRS = . lib imtest
+SUBDIRS = . imtest
 noinst_LIBRARIES =
+lib_LIBRARIES = lib/libcyrus.a lib/libcyrus_min.a
 if COM_ERR
 BUILT_SOURCES += com_err/et/compile_et
 noinst_LIBRARIES += com_err/et/libcom_err.a
 COM_ERR_LIBS += com_err/et/libcom_err.a
 endif
+
 if SYSLOG
 SUBDIRS += syslog
 endif
@@ -86,9 +90,28 @@ endif
 
 EXTRA_DIST = xversion.h com_err/et/com_err com_err/et/et_c.awk \
 	com_err/et/et_h.awk com_err/et/test1.et com_err/et/test2.et \
-	com_err/et/test_et.c
+	com_err/et/test_et.c lib/charset/aliases.txt lib/charset/big5.t \
+	lib/charset/gb2312.t lib/charset/iso-2022-jp.t \
+	lib/charset/iso-2022-kr.t lib/charset/iso-8859-10.t \
+	lib/charset/iso-8859-11.t lib/charset/iso-8859-13.t \
+	lib/charset/iso-8859-14.t lib/charset/iso-8859-15.t \
+	lib/charset/iso-8859-16.t lib/charset/iso-8859-1.t \
+	lib/charset/iso-8859-2.t lib/charset/iso-8859-3.t \
+	lib/charset/iso-8859-4.t lib/charset/iso-8859-5.t \
+	lib/charset/iso-8859-6.t lib/charset/iso-8859-7.t \
+	lib/charset/iso-8859-8.t lib/charset/iso-8859-9.t \
+	lib/charset/koi8-r.t lib/charset/UnicodeData.txt \
+	lib/charset/unifix.txt lib/charset/us-ascii.t \
+	lib/charset/windows-1250.t lib/charset/windows-1251.t \
+	lib/charset/windows-1252.t lib/charset/windows-1255.t \
+	lib/charset/windows-1256.t lib/test/cyrusdb.c lib/test/cyrusdb.INPUT \
+	lib/test/cyrusdblong.INPUT lib/test/cyrusdblong.OUTPUT \
+	lib/test/cyrusdb.OUTPUT lib/test/cyrusdbtxn.INPUT \
+	lib/test/cyrusdbtxn.OUTPUT lib/test/pool.c lib/test/rnddb.c \
+	lib/test/testglob2.c
 TEXINFO_TEX = com_err/et/texinfo.tex
-EXTRA_SCRIPTS = com_err/et/compile_et.sh com_err/et/config_script
+EXTRA_SCRIPTS = com_err/et/compile_et.sh com_err/et/config_script \
+	lib/imapoptions lib/mkchartable.pl lib/test/run
 noinst_MAN = com_err/et/com_err.3 com_err/et/compile_et.1
 noinst_TEXINFOS = com_err/et/com_err.texinfo
 
@@ -101,6 +124,93 @@ com_err/et/compile_et: com_err/et/compile_et.sh com_err/et/config_script \
 	config.h
 	@${top_srcdir}/com_err/et/config_script ${top_srcdir}/com_err/et/compile_et.sh ${AWK} ${SED} > $@
 	@chmod 755 $@
+
+includedir=@includedir@/cyrus
+include_HEADERS = lib/acl.h lib/assert.h lib/auth.h lib/auth_pts.h \
+	lib/bsearch.h lib/charset.h lib/chartable.h lib/crc32.h \
+	lib/cyr_lock.h lib/cyrusdb.h lib/exitcodes.h lib/glob.h lib/gmtoff.h \
+	lib/hash.h lib/imapopts.h lib/imapurl.h lib/imclient.h lib/imparse.h \
+	lib/iostat.h lib/iptostring.h lib/libcyr_cfg.h lib/lsort.h \
+	lib/map.h lib/mappedfile.h lib/mkgmtime.h lib/mpool.h lib/nonblock.h \
+	lib/parseaddr.h lib/retry.h lib/rfc822date.h lib/signals.h \
+	lib/strhash.h lib/stristr.h lib/sysexits.h lib/times.h lib/tok.h \
+	lib/wildmat.h lib/xmalloc.h
+
+noinst_HEADERS = lib/byteorder64.h lib/gai.h lib/libconfig.h lib/md5.h \
+	lib/prot.h lib/ptrarray.h lib/strarray.h lib/util.h lib/xstrlcat.h \
+	lib/xstrlcpy.h
+
+lib_libcyrus_a_SOURCES = lib/acl.c lib/acl_afs.c lib/auth.c lib/auth_krb.c \
+	lib/auth_krb5.c lib/auth_pts.c lib/auth_unix.c lib/bsearch.c \
+	lib/byteorder64.c lib/charset.c lib/chartable.c lib/crc32.c \
+	lib/cyrusdb.c 
+if USE_BERKELEY
+lib_libcyrus_a_SOURCES += lib/cyrusdb_berkeley.c
+endif
+lib_libcyrus_a_SOURCES += lib/cyrusdb_flat.c lib/cyrusdb_quotalegacy.c \
+	lib/cyrusdb_skiplist.c
+if USE_SQL
+lib_libcyrus_a_SOURCES += lib/cyrusdb_sql.c
+endif
+lib_libcyrus_a_SOURCES += lib/cyrusdb_twoskip.c lib/glob.c
+if GMTOFF_TM
+lib_libcyrus_a_SOURCES += lib/gmtoff_tm.c
+else
+lib_libcyrus_a_SOURCES += lib/gmtoff_gmtime.c
+endif
+lib_libcyrus_a_SOURCES += lib/imapurl.c lib/imclient.c lib/imparse.c \
+	lib/iostat.c lib/iptostring.c lib/libcyr_cfg.c lib/lsort.c \
+	lib/mkgmtime.c
+if NONBLOCK_FCNTL
+lib_libcyrus_a_SOURCES += lib/nonblock_fcntl.c
+else
+lib_libcyrus_a_SOURCES += lib/nonblock_ioctl.c
+endif
+lib_libcyrus_a_SOURCES += lib/parseaddr.c lib/prot.c lib/ptrarray.c \
+	lib/signals.c lib/stristr.c lib/times.c lib/tok.c lib/wildmat.c
+
+lib_libcyrus_min_a_SOURCES = lib/assert.c
+if IPV6_noGETADDRINFO
+lib_libcyrus_min_a_SOURCES += lib/getaddrinfo.c
+endif
+if IPV6_noGETNAMEINFO
+lib_libcyrus_min_a_SOURCES += lib/getnameinfo.c
+endif
+lib_libcyrus_min_a_SOURCES += lib/hash.c lib/imapopts.c lib/libconfig.c
+if LOCK_FCNTL
+lib_libcyrus_min_a_SOURCES += lib/lock_fcntl.c
+else
+lib_libcyrus_min_a_SOURCES += lib/lock_flock.c
+endif
+lib_libcyrus_min_a_SOURCES += lib/mappedfile.c
+if MAP_SHARED
+lib_libcyrus_min_a_SOURCES += lib/map_shared.c
+else
+if MAP_STUPIDSHARED
+lib_libcyrus_min_a_SOURCES += lib/map_stupidshared.c
+else
+lib_libcyrus_min_a_SOURCES += lib/map_nommap.c
+endif
+endif
+lib_libcyrus_min_a_SOURCES += lib/mpool.c lib/retry.c lib/strarray.c \
+	lib/strhash.c lib/util.c lib/xmalloc.c lib/xstrlcat.c lib/xstrlcpy.c
+lib_libcyrus_min_a_LIBADD = $(LIBOBJS)
+
+
+lib/chartable.c: lib/mkchartable.pl lib/charset/unifix.txt \
+	$(top_srcdir)/lib/charset/*.t lib/charset/UnicodeData.txt \
+	lib/charset/aliases.txt
+	@echo "### Building chartables..."
+	perl $(top_srcdir)/lib/mkchartable.pl -m $(top_srcdir)/lib/charset/unifix.txt -m $(top_srcdir)/lib/charset/UnicodeData.txt -a $(top_srcdir)/lib/charset/aliases.txt -o $@ $(top_srcdir)/lib/charset/*.t
+	@echo "### Done building chartables."
+
+lib/imapopts.c: lib/imapoptions tools/config2header
+	$(top_srcdir)/tools/config2header CC="$(CC)" $(top_builddir)/lib/imapopts.c $(top_builddir)/lib/imapopts.h < $(top_srcdir)/lib/imapoptions
+
+#this is from lib/test/Makefile.in, however testglob.c does not exist in
+#/lib/test, instead testglob2.c is there.
+#lib_test_testglob_LIRBARIES = lib/libcyrus.a lib/libcyrus_min.a -ldb-4.0
+
 
 DISTSUBDIRS = doc
 

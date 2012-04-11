@@ -155,23 +155,15 @@ IPv6_CHECK_FUNC(getaddrinfo, [IPv6_CHECK_FUNC(gai_strerror,
 	AC_DEFINE(HAVE_GETADDRINFO,[],[Do we have a getaddrinfo?]),
 	cyrus_cv_getaddrinfo=no)], cyrus_cv_getaddrinfo=no)
 
-if test $cyrus_cv_getaddrinfo = no; then
-	IPV6_OBJS="getaddrinfo.o"
-fi
-
 cyrus_cv_getnameinfo=yes
 IPv6_CHECK_FUNC(getnameinfo,
 	AC_DEFINE(HAVE_GETNAMEINFO,[],[Do we have a getnameinfo?]),
 	cyrus_cv_getnameinfo=no)
 
-if test $cyrus_cv_getnameinfo = no; then
-	IPV6_OBJS="$IPV6_OBJS getnameinfo.o"
-fi
-
+AM_CONDITIONAL([IPV6_noGETADDRINFO], [test $cyrus_cv_getaddrinfo = no])
+AM_CONDITIONAL([IPV6_noGETNAMEINFO], [test $cyrus_cv_getnameinfo = no])
 IPv6_CHECK_SS_FAMILY()
 IPv6_CHECK_SA_LEN()
-
-AC_SUBST(IPV6_OBJS)
 
 dnl this is to check for time things
 AC_CHECK_HEADERS(sys/time.h)
@@ -187,8 +179,6 @@ AC_FUNC_VPRINTF
 
 dnl function for doing each of the database backends
 dnl parameters: backend name, variable to set, withval
-
-CYRUSDB_OBJS="cyrusdb_flat.o cyrusdb_skiplist.o cyrusdb_quotalegacy.o cyrusdb_twoskip.o"
 
 dnl Berkeley DB Detection
 
@@ -234,10 +224,9 @@ if test "$use_berkeley" != "no"; then
 
   LIBS="${LIBS} ${BDB_LIBADD}"
   CPPFLAGS="${BDB_INCADD} ${CPPFLAGS}"
-
-  CYRUSDB_OBJS="$CYRUSDB_OBJS cyrusdb_berkeley.o"
   AC_DEFINE(HAVE_BDB,[],[Build in Berkeley DB support?])
 fi
+AM_CONDITIONAL([USE_BERKELEY], [test "$use_berkeley" != "no"])
 
 dnl End Berkeley DB Detection
 
@@ -377,14 +366,8 @@ fi
 
 dnl End SQLite Detection
 
-
-if test $HAVE_SQL = 1; then
-  CYRUSDB_OBJS="${CYRUSDB_OBJS} cyrusdb_sql.o"
-fi
-
+AM_CONDITIONAL([USE_SQL], [test $HAVE_SQL = 1])
 dnl End SQL DB Detection
-
-AC_SUBST(CYRUSDB_OBJS)
 
 AC_ARG_ENABLE(sieve,
         [AS_HELP_STRING([--disable-sieve], [disable Sieve support])])
@@ -523,18 +506,16 @@ AC_CACHE_VAL(cyrus_cv_sys_nonblock,AC_TRY_LINK([#include <sys/types.h>
 #define FNDELAY		O_NDELAY
 #endif],[fcntl(0, F_GETFL, 0)&FNDELAY],
 cyrus_cv_sys_nonblock=fcntl,cyrus_cv_sys_nonblock=ioctl))
-WITH_NONBLOCK=$cyrus_cv_sys_nonblock
-AC_SUBST(WITH_NONBLOCK)
-AC_MSG_RESULT($WITH_NONBLOCK)
+AM_CONDITIONAL([NONBLOCK_FCNTL], [test "$cyrus_cv_sys_nonblock" = "fcntl"])
+AC_MSG_RESULT($cyrus_cv_sys_nonblock)
 
 AC_MSG_CHECKING(timezone GMT offset method)
 AC_CACHE_VAL(cyrus_cv_struct_sys_gmtoff,AC_TRY_COMPILE([
 #include <time.h>],[struct tm tm;
 tm.tm_gmtoff = 0;
 ],cyrus_cv_struct_sys_gmtoff=tm,cyrus_cv_struct_sys_gmtoff=gmtime))
-WITH_GMTOFF=$cyrus_cv_struct_sys_gmtoff
-AC_SUBST(WITH_GMTOFF)
-AC_MSG_RESULT($WITH_GMTOFF)
+AM_CONDITIONAL([GMTOFF_TM], [test "$cyrus_cv_struct_sys_gmtoff" = "tm"])
+AC_MSG_RESULT($cyrus_cv_struct_sys_gmtoff)
 AC_MSG_CHECKING(for shared mmap)
 AC_CACHE_VAL(cyrus_cv_func_mmap_shared,AC_TRY_RUN([
 #include <sys/types.h>
@@ -607,8 +588,9 @@ fi
 AC_ARG_WITH(mmap,
 	[AS_HELP_STRING([--with-mmap=TYPE], [force shared/stupidshared/nommap - JUST FOR TESTING])],
 	WITH_MAP="$withval",WITH_MAP="$found_map")
+AM_CONDITIONAL([MAP_SHARED], [test "$WITH_MAP" = "shared"])
+AM_CONDITIONAL([MAP_STUPIDSHARED], [test "$WITH_MAP" = "stupidshared"])
 
-AC_SUBST(WITH_MAP)
 AC_ARG_WITH(lock,
   [AS_HELP_STRING([--with-lock=METHOD], [force use of METHOD for locking (flock or fcntl)])],
   WITH_LOCK="$withval", [
@@ -618,8 +600,7 @@ AC_ARG_WITH(lock,
 			      ])
 		])
   ])
-
-AC_SUBST(WITH_LOCK)
+AM_CONDITIONAL([LOCK_FCNTL], [test $WITH_LOCK = "fcntl"])
 
 dnl check for fdatasync (used by cyrusdb_skiplist)
 LIB_RT=""
@@ -1506,5 +1487,5 @@ enum {
 ])
 
 dnl make sure that Makefile is the last thing output
-AC_CONFIG_FILES([cunit/Makefile depot/Makefile imap/Makefile imtest/Makefile lib/Makefile master/Makefile netnews/Makefile notifyd/Makefile perl/Makefile perl/sieve/Makefile perl/sieve/lib/Makefile ptclient/Makefile sieve/Makefile syslog/Makefile timsieved/Makefile Makefile])
+AC_CONFIG_FILES([cunit/Makefile depot/Makefile imap/Makefile imtest/Makefile master/Makefile netnews/Makefile notifyd/Makefile perl/Makefile perl/sieve/Makefile perl/sieve/lib/Makefile ptclient/Makefile sieve/Makefile syslog/Makefile timsieved/Makefile Makefile])
 AC_OUTPUT
