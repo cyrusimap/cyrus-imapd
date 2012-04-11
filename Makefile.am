@@ -87,7 +87,8 @@ if SERVER
 SUBDIRS += notifyd timsieved
 endif
 if PERL
-SUBDIRS += perl/sieve perl/sieve/lib
+SUBDIRS += perl/sieve
+noinst_LIBRARIES += perl/sieve/lib/libisieve.a
 endif
 endif
 
@@ -246,6 +247,8 @@ master_master_SOURCES = master/cyrusMasterMIB.c master/cyrusMasterMIB.h \
 	master/master.c master/master.h master/masterconf.c \
 	master/masterconf.h master/service.h
 master_master_LDADD = lib/libcyrus_min.a @LIB_UCDSNMP@ @LIBS@ -lm $(DEPLIBS)
+
+perl_sieve_lib_libisieve_a_SOURCES = perl/sieve/lib/isieve.c perl/sieve/lib/lex.c perl/sieve/lib/mystring.c perl/sieve/lib/request.c
 
 sieve_libsieve_a_SOURCES = sieve/bytecode.h sieve/addr.y sieve/addr-lex.l \
 	sieve/bc_dump.c sieve/bc_emit.c sieve/bc_eval.c sieve/bc_generate.c \
