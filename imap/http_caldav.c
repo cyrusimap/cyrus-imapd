@@ -2087,7 +2087,7 @@ static int meth_put(struct transaction_t *txn)
     time_t now = time(NULL);
     char datestr[80];
     struct appendstate appendstate;
-    icalcomponent *ical, *comp, *compnext;
+    icalcomponent *ical, *comp, *nextcomp;
     icalcomponent_kind kind;
     icalproperty_method meth;
     icalproperty *prop = NULL;
@@ -2223,7 +2223,7 @@ static int meth_put(struct transaction_t *txn)
 	goto done;
     }
 
-    /* Parse the iCal data for important properties */
+    /* Parse and validate the iCal data */
     ical = icalparser_parse_string(buf_cstring(&txn->req_body));
     if (!ical || (icalcomponent_isa(ical) != ICAL_VCALENDAR_COMPONENT)) {
 	txn->error.precond = &preconds[CALDAV_VALID_DATA];
@@ -2236,12 +2236,23 @@ static int meth_put(struct transaction_t *txn)
 	goto done;
     }
 
-    meth = icalcomponent_get_method(ical);
+    /* Make sure iCal UIDs in all components are the same */
     comp = icalcomponent_get_first_real_component(ical);
     uid = icalcomponent_get_uid(comp);
-    kind = icalcomponent_isa(comp);
+    while ((nextcomp =
+	    icalcomponent_get_next_component(ical,
+					     ICAL_ANY_COMPONENT))) {
+	const char *nextuid = icalcomponent_get_uid(nextcomp);
+
+	if (nextuid && *nextuid && strcmp(uid, nextuid)) {
+	    txn->error.precond = &preconds[CALDAV_VALID_OBJECT];
+	    ret = HTTP_FORBIDDEN;
+	    goto done;
+	}
+    }
 
     /* Check for supported component type */
+    kind = icalcomponent_isa(comp);
     switch (kind) {
     case ICAL_VEVENT_COMPONENT: mykind = CAL_COMP_VEVENT; break;
     case ICAL_VTODO_COMPONENT: mykind = CAL_COMP_VTODO; break;
@@ -2265,20 +2276,8 @@ static int meth_put(struct transaction_t *txn)
 	}
     }
 
-    /* Make sure iCal UIDs in all components are the same */
-    while ((compnext =
-	    icalcomponent_get_next_component(ical,
-					     ICAL_ANY_COMPONENT))) {
-	const char *uidnext = icalcomponent_get_uid(compnext);
-
-	if (uidnext && *uidnext && strcmp(uid, uidnext)) {
-	    txn->error.precond = &preconds[CALDAV_VALID_OBJECT];
-	    ret = HTTP_FORBIDDEN;
-	    goto done;
-	}
-    }
-
     /* XXX  Check for existing iCal UID => CALDAV:no-uid-conflict */
+
 
     /* Prepare to stage the message */
     if (!(f = append_newstage(mailboxname, now, 0, &stage))) {
@@ -2308,7 +2307,7 @@ static int meth_put(struct transaction_t *txn)
 
     hdr = spool_getheader(txn->req_hdrs, "Content-Type");
     fprintf(f, "Content-Type: %s", hdr[0]);
-    if (meth != ICAL_METHOD_NONE) {
+    if ((meth = icalcomponent_get_method(ical)) != ICAL_METHOD_NONE) {
 	fprintf(f, "; method=%s", icalproperty_method_to_string(meth));
     }
     fprintf(f, "; component=%s\r\n", icalcomponent_kind_to_string(kind));
