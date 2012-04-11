@@ -996,8 +996,10 @@ struct mailbox *mailbox_findopen(const char *name)
 
     if (listitem) {
 	struct mailbox *mailbox = &listitem->m;
-	assert(mailbox->index_locktype == LOCK_EXCLUSIVE);
-	return mailbox;
+	/* we only want exclusive locked - otherwise fall back to
+	 * open_advanced and refcounting */
+	if (mailbox->index_locktype == LOCK_EXCLUSIVE)
+	    return mailbox;
     }
 
     return NULL;
