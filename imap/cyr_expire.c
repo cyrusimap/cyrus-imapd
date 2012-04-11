@@ -223,6 +223,8 @@ static int expire(char *name, int matchlen __attribute__((unused)),
     }
     free(buf);
 
+    annotatemore_begin();
+
     r = mailbox_open_iwl(name, &mailbox);
     if (r) {
 	/* mailbox corrupt/nonexistent -- skip it */
@@ -263,6 +265,10 @@ static int expire(char *name, int matchlen __attribute__((unused)),
 
     if (r) {
 	syslog(LOG_WARNING, "failure expiring %s: %s", name, error_message(r));
+	annotatemore_abort();
+    }
+    else {
+	annotatemore_commit();
     }
 
     /* Even if we had a problem with one mailbox, continue with the others */
