@@ -164,7 +164,7 @@ static int verify_utf8(char *s);
 
 int yyerror(const char *msg);
 extern int yylex(void);
-extern void yyrestart(FILE *f);
+extern void sieverestart(FILE *f);
 
 #define YYERROR_VERBOSE /* i want better error messages! */
 
@@ -217,6 +217,8 @@ extern void yyrestart(FILE *f);
 %type <dtag> dtags
 %type <nval> priority
 
+%name-prefix="sieve"
+%defines
 %%
 
 start: reqs			{ ret = NULL; }
@@ -712,7 +714,7 @@ commandlist_t *sieve_parse(sieve_script_t *script, FILE *f)
     commandlist_t *t;
 
     parse_script = script;
-    yyrestart(f);
+    sieverestart(f);
     if (yyparse()) {
 	t = NULL;
     } else {
@@ -724,11 +726,11 @@ commandlist_t *sieve_parse(sieve_script_t *script, FILE *f)
 
 int yyerror(const char *msg)
 {
-    extern int yylineno;
+    extern int sievelineno;
 
     parse_script->err++;
     if (parse_script->interp.err) {
-	parse_script->interp.err(yylineno, msg, 
+	parse_script->interp.err(sievelineno, msg, 
 				 parse_script->interp.interp_context,
 				 parse_script->script_context);
     }

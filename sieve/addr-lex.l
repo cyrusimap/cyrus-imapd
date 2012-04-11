@@ -61,7 +61,7 @@ static int ncom;	/* number of open comments */
 %option noyywrap
 %option nounput
 %option noinput
-%option prefix="addr"
+%option prefix="addr" outfile="lex.yy.c"
 
 %x QSTRING DOMAINLIT COMMENT
 
