@@ -48,6 +48,7 @@ AM_LDFLAGS = ${EXTRALDFLAGS}
 BUILT_SOURCES = xversion.h lib/imapopts.c
 
 SUBDIRS = . imtest
+dist_doc_DATA = README README.andrew
 dist_sysconf_DATA =
 check_LIBRARIES =
 noinst_LIBRARIES =
@@ -105,9 +106,10 @@ if CUNIT
 SUBDIRS += cunit
 endif
 
-EXTRA_DIST = xversion.h com_err/et/com_err com_err/et/et_c.awk \
-	com_err/et/et_h.awk com_err/et/test1.et com_err/et/test2.et \
-	com_err/et/test_et.c lib/charset/aliases.txt lib/charset/big5.t \
+EXTRA_DIST = xversion.h SMakefile COPYRIGHT \
+	com_err/et/com_err com_err/et/et_c.awk com_err/et/et_h.awk \
+	com_err/et/test1.et com_err/et/test2.et com_err/et/test_et.c \
+	lib/charset/aliases.txt lib/charset/big5.t \
 	lib/charset/gb2312.t lib/charset/iso-2022-jp.t \
 	lib/charset/iso-2022-kr.t lib/charset/iso-8859-10.t \
 	lib/charset/iso-8859-11.t lib/charset/iso-8859-13.t \
@@ -137,7 +139,8 @@ TEXINFO_TEX = com_err/et/texinfo.tex
 EXTRA_SCRIPTS = com_err/et/compile_et.sh com_err/et/config_script \
 	lib/imapoptions lib/mkchartable.pl lib/test/run \
 	tools/arbitronsort.pl tools/compile_st.pl tools/config2header tools/config2man tools/convert-sieve.pl tools/dohash tools/masssievec tools/migrate-metadata tools/mkimap tools/mknewsgroups tools/mupdate-loadgen.pl tools/rehash tools/translatesieve tools/undohash tools/upgradesieve \
-	snmp/snmpgen
+	snmp/snmpgen \
+	autobuild.sh
 noinst_MAN = com_err/et/com_err.3 com_err/et/compile_et.1 syslog/logger.1 \
 	syslog/syslog.3 syslog/syslog.8
 noinst_TEXINFOS = com_err/et/com_err.texinfo
