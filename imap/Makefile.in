@@ -72,7 +72,6 @@ CFLAGS = @CFLAGS@ $(EXTRACFLAGS)
 LDFLAGS = @LDFLAGS@ $(EXTRALDFLAGS)
 
 SHELL = /bin/sh
-MAKEDEPEND = @MAKEDEPEND@
 
 COMPILE_ET=${top_builddir}/@COMPILE_ET@
 
@@ -368,15 +367,10 @@ unexpunge: unexpunge.o $(CLIOBJS) libimap.a $(DEPLIBS)
 ### Other Misc Targets
 
 clean:
-	rm -f *.o *.a Makefile.bak makedepend.log \
+	rm -f *.o *.a Makefile.bak \
 	$(BUILTSOURCES) $(PROGS) $(SUIDPROGS) cyr_virusscan *.gcno *.gcda
 
 distclean: clean
 	rm -f Makefile
 
 check:
-
-depend: imap_err.h
-	${MAKEDEPEND} $(CPPFLAGS) $(DEFS) $(CFLAGS) *.c $(srcdir)/*.c 1>makedepend.log 2>&1
-
-# DO NOT DELETE THIS LINE -- make depend depends on it.

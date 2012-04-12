@@ -64,9 +64,3 @@ ci: docs
 	cvs ci -m 'updated from html source' $(DOCS)
 
 distclean: clean
-
-depend:
-
-# DO NOT DELETE THIS LINE -- make depend depends on it.
-
-

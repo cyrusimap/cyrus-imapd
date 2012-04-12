@@ -61,7 +61,6 @@ CFLAGS = @CFLAGS@ $(EXTRACFLAGS)
 LDFLAGS = @LDFLAGS@ $(EXTRALDFLAGS)
 
 SHELL = /bin/sh
-MAKEDEPEND = @MAKEDEPEND@
 
 PURIFY=/usr/local/bin/purify
 PUREOPT= -best-effort -windows=no -logfile=/tmp/pure/%v.%p.log -always_use_cache_dir
@@ -93,12 +92,7 @@ imtest.pure: imtest.o $(DEPLIBS)
 	$(PURIFY) $(PUREOPT) $(CC) $(LDFLAGS) -o imtest $(OBJS) $(DEPLIBS) $(LIBS) $(IMAP_LIBS)
 
 clean:
-	rm -f *.o Makefile.bak makedepend.log imtest *.gcno *.gcda
+	rm -f *.o Makefile.bak imtest *.gcno *.gcda
 
 distclean: clean
 	rm -f Makefile
-
-depend: 
-	${MAKEDEPEND} $(CPPFLAGS) $(DEFS) $(CFLAGS) *.c $(srcdir)/*.c 1> makedepend.log 2>&1
-
-# DO NOT DELETE THIS LINE -- make depend depends on it.

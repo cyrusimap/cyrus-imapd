@@ -61,12 +61,6 @@ AC_ARG_WITH(extraident,
         [AS_HELP_STRING([--with-extraident=STRING],[use STRING as extra version information])],
 	[AC_DEFINE_UNQUOTED(EXTRA_IDENT,"$withval", [Extra version information for imap/version.h])])
 
-srctoolsdir=`cd ${srcdir};pwd`/tools
-AC_CHECK_PROG(MAKEDEPEND,makedepend,makedepend,[${srctoolsdir}/not-mkdep])
-if test "$MAKEDEPEND" != "makedepend"; then
-        AC_MSG_WARN([Makedepend is not installed on this system.  You should compile and install the version from the makedepend subdirectory.])
-fi
-
 dnl If we were using Automake, this would be AM_MAINTAINER_MODE
 CMU_MAINTAINER_MODE
 
@@ -618,7 +612,7 @@ AC_CHECK_LIB(uuid, uuid_generate,[
     AC_DEFINE(HAVE_LIBUUID,[],[Do we have the uuid library])
 ])
 
-dnl for makedepend and AFS.
+dnl for AFS.
 cant_find_sigvec=no
 AC_CACHE_VAL(cyrus_cv_sigveclib,[
  dnl bsd classic flavor
@@ -1155,6 +1149,7 @@ if test "${with_perl}" != no; then
     fi
 fi
 AM_CONDITIONAL([PERL], [test "$with_perl" != "no" -a "$with_perl" != "notfound"])
+srctoolsdir=`cd ${srcdir};pwd`/tools
 if test "$with_perl" = "notfound"; then
     AC_MSG_WARN(Perl not found: Administrative tools will not be available)
 elif test "${with_perl}" != "no"; then
@@ -1183,9 +1178,6 @@ fi
 dnl for timsieved
 if test "$enable_sieve" != "no"; then
 	PERL_SUBDIRS="${PERL_SUBDIRS} sieve"
-	PERL_DEPSUBDIRS="sieve"
-else
-	PERL_DEPSUBDIRS="none"
 fi
 
 dnl for the Cyrus annotator daemon class
@@ -1237,7 +1229,6 @@ dnl     (cd perl/imap; $perl Makefile.PL PREFIX=$prefix)
 dnl   fi
 dnl ], perl=$PERL; with_perl=$with_perl; prefix=$prefix; SASL_LIB="$LIB_SASL"; SASL_INC="$SASLFLAGS"; export SASL_LIB SASL_INC)
 AC_SUBST(PERL_SUBDIRS)
-AC_SUBST(PERL_DEPSUBDIRS)
 AC_SUBST(PERL)
 
 dnl

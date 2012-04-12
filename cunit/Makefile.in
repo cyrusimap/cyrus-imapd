@@ -69,7 +69,6 @@ CFLAGS = @CFLAGS@
 LDFLAGS = @LDFLAGS@ $(EXTRALDFLAGS)
 
 SHELL = /bin/sh
-MAKEDEPEND = @MAKEDEPEND@
 
 #
 # Some notes on purify --
@@ -175,9 +174,8 @@ unit.quant: $(UNITOBJS) $(CUNIT_DEPLIBS) $(SYSLOG_LIBS)
 ### Other Misc Targets
 
 clean::
-	rm -f *.o *.a Makefile.bak makedepend.log \
-	$(BUILTSOURCES) $(PROGS) $(UNITOBJS) cunit.mk \
-	default.cunit *.gcno *.gcda
+	rm -f *.o *.a Makefile.bak $(BUILTSOURCES) $(PROGS) $(UNITOBJS) \
+	cunit.mk default.cunit *.gcno *.gcda
 
 distclean: clean
 	rm -f Makefile
@@ -191,8 +189,3 @@ UNIT_POST_junit=    ./cunit-to-junit.pl
 check: unit
 	$(VALGRIND_$(VG)) ./unit $(UNIT_FLAGS_$(CUFORMAT))
 	$(UNIT_POST_$(CUFORMAT))
-
-depend: 
-	${MAKEDEPEND} $(CPPFLAGS) $(DEFS) $(CFLAGS) *.c $(srcdir)/*.c 1>makedepend.log 2>&1
-
-# DO NOT DELETE THIS LINE -- make depend depends on it.
