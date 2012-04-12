@@ -53,7 +53,7 @@ dist_sysconf_DATA =
 check_LIBRARIES =
 noinst_LIBRARIES =
 lib_LIBRARIES = lib/libcyrus.a lib/libcyrus_min.a
-noinst_PROGRAMS =
+noinst_PROGRAMS = doc/text/htmlstrip
 check_PROGRAMS =
 service_PROGRAMS =
 
@@ -158,6 +158,8 @@ com_err/et/compile_et: com_err/et/compile_et.sh com_err/et/config_script \
 	@${top_srcdir}/com_err/et/config_script ${top_srcdir}/com_err/et/compile_et.sh ${AWK} ${SED} > $@
 	@chmod 755 $@
 
+doc_text_htmlstrip_SOURCE = doc/text/htmlstrip.c
+
 includedir=@includedir@/cyrus
 include_HEADERS = lib/acl.h lib/assert.h lib/auth.h lib/auth_pts.h \
 	lib/bsearch.h lib/charset.h lib/chartable.h lib/crc32.h \
@@ -252,8 +254,6 @@ lib/imapopts.c: lib/imapoptions tools/config2header
 #lib_test_testglob_LIRBARIES = lib/libcyrus.a lib/libcyrus_min.a -ldb-4.0
 
 
-DISTSUBDIRS = doc
-
 SHELL = /bin/sh
 @SET_MAKE@
 
@@ -344,7 +344,7 @@ snapshot::
 	@echo "#define CYRUS_GITVERSION \"`git log --abbrev=8 --pretty=\"format:%h %ci\" -1 | cut -d\" \" -f1,2`\"" >> snapshot/$(PACKAGE_NAME)-$(GIT_VERSION)/xversion.h
 	@touch snapshot/$(PACKAGE_NAME)-$(GIT_VERSION)/xversion
 	@cd snapshot/$(PACKAGE_NAME)-$(GIT_VERSION) ; sh SMakefile
-	@for d in $(DIST_SUBDIRS) $(DISTSUBDIRS); \
+	@for d in $(DIST_SUBDIRS); \
 	do \
 	(cd snapshot/$(PACKAGE_NAME)-$(GIT_VERSION)/$$d; \
 	if [ -f Makefile.dist ]; then \
@@ -366,11 +366,21 @@ man/sieveshell.1: $(top_srcdir)/perl/sieve/scripts/sieveshell.pl
 	@echo creating man/sieveshell.1
 	@$(MKDIR_P) man
 	pod2man $(top_srcdir)/perl/sieve/scripts/sieveshell.pl > man/sieveshell.1
+man/cyradm.1.html:
+	@$(MKDIR_P) man
+	pod2html $(top_srcdir)/perl/imap/cyradm.sh > man/cyradm.1.html
+	rm man/pod2htm*
+
+man/sieveshell.1.html:
+	@$(MKDIR_P) man
+	pod2html $(top_srcdir)/perl/sieve/scripts/sieveshell.pl > man/sieveshell.1.html
+	rm man/pod2htm*
+
 
 dist-old:: distgit
 	@echo "creating configure"
 	@cd dist/cyrus-imapd-$(PACKAGE_VERSION) ; sh SMakefile
-	@for d in $(DIST_SUBDIRS) $(DISTSUBDIRS); \
+	@for d in $(DIST_SUBDIRS); \
 	do \
 	(cd dist/cyrus-imapd-$(PACKAGE_VERSION)/$$d; \
 	if [ -f Makefile.dist ]; then \
@@ -401,6 +411,26 @@ xversion xversion.h:
 	@echo "#define CYRUS_GITVERSION \"`git log --abbrev=8 --pretty=\"format:%h %ci\" -1 | cut -d\" \" -f1,2`\"" >> xversion.h.tmp
 	@cmp -s xversion.h.tmp xversion.h || mv xversion.h.tmp xversion.h
 	@rm -f xversion.h.tmp
+
+dist-hook: doc/text/htmlstrip man/cyradm.1.html man/sieveshell.1.html
+	@$(MKDIR_P) doc
+	@$(MKDIR_P) doc/text
+	for man in $(top_builddir)/man/*.[1-9] $(top_srcdir)/man/*.[1-9]; \
+	do \
+		echo "=== $$man ==="; \
+		groff -man -Thtml $$man > man/`basename $$man`.html; \
+	done
+	rm -f doc/groff-html-*.png
+
+	fig2dev -L png doc/murder.fig doc/murder.png
+	fig2dev -L png doc/netnews.fig doc/netnews.png
+
+	for file in $(top_srcdir)/doc/*.html; \
+	do \
+		echo "=== $$file ==="; \
+		doc/text/htmlstrip $$file > doc/text/`basename $$file .html`; \
+	done
+	@echo "== done =="
 
 install-data-hook:
 if CMULOCAL
