@@ -70,7 +70,8 @@ dist_sysconf_DATA += depot/rc.local.imap depot/rc.local.ptclient
 service_PROGRAMS += netnews/remotepurge
 endif
 if PTCLIENT
-SUBDIRS += ptclient
+service_PROGRAMS += ptclient/ptdump ptclient/ptexpire ptclient/ptloader
+# ptclient/ptextract
 endif
 if PERL
 SUBDIRS += perl
@@ -124,6 +125,7 @@ EXTRA_DIST = xversion.h com_err/et/com_err com_err/et/et_c.awk \
 	lib/test/testglob2.c \
 	master/CYRUS-MASTER.mib master/conf/cmu-backend.conf master/conf/cmu-frontend.conf master/conf/normal.conf master/conf/prefork.conf master/conf/small.conf master/README \
 	netnews/inn.diffs \
+	ptclient/README ptclient/test.c ptclient/test2.c \
 	sieve/test/testExtension sieve/test/testExtension/uberExtensionTestScript.key sieve/test/testExtension/testm sieve/test/testExtension/testm/uetest-envelope sieve/test/testExtension/testm/uetest-asub sieve/test/testExtension/testm/uetest-areg sieve/test/testExtension/testm/uetest-count sieve/test/testExtension/testm/uetest-value sieve/test/testExtension/testm/uetest-hreg sieve/test/testExtension/serverm sieve/test/testExtension/serverm/uetmail-hreg sieve/test/testExtension/serverm/uetmail-value sieve/test/testExtension/serverm/uetmail-count2 sieve/test/testExtension/serverm/uetmail-envelope sieve/test/testExtension/serverm/uetmail-asub sieve/test/testExtension/serverm/uetmail-value2 sieve/test/testExtension/serverm/uetmail-areg sieve/test/testExtension/serverm/uetmail-count sieve/test/testExtension/uberExtensionTestScript.s sieve/test/README sieve/test/action sieve/test/action/testm sieve/test/action/testm/uatest-keep sieve/test/action/testm/uatest-redirect sieve/test/action/testm/uatest-discard sieve/test/action/testm/uatest-stop2 sieve/test/action/testm/uatest-stop sieve/test/action/serverm sieve/test/action/serverm/uamail-stop2 sieve/test/action/serverm/uamail-redirect sieve/test/action/serverm/uamail-stop sieve/test/action/serverm/uamail-keep sieve/test/action/serverm/uamail-discard sieve/test/action/uberActionScript.key sieve/test/action/uberActionScript.s sieve/test/test sieve/test/test/uberTestScript.key sieve/test/test/testm sieve/test/test/testm/utest-header sieve/test/test/testm/utest-address sieve/test/test/serverm sieve/test/test/serverm/utmail-address sieve/test/test/serverm/utmail-header sieve/test/test/uberTestScript.s sieve/test/actionExtensions sieve/test/actionExtensions/uberExtensionActionScript.s sieve/test/actionExtensions/testm sieve/test/actionExtensions/testm/ueatest-flag4 sieve/test/actionExtensions/testm/ueatest-flag2 sieve/test/actionExtensions/testm/ueatest-fileinto sieve/test/actionExtensions/testm/ueatest-denotify sieve/test/actionExtensions/testm/ueatest-vacation sieve/test/actionExtensions/testm/ueatest-reject sieve/test/actionExtensions/testm/ueatest-mark sieve/test/actionExtensions/testm/ueatest-denotify2 sieve/test/actionExtensions/testm/ueatest-flag5 sieve/test/actionExtensions/testm/ueatest-notify2 sieve/test/actionExtensions/testm/ueatest-notify sieve/test/actionExtensions/testm/ueatest-flag1 sieve/test/actionExtensions/testm/ueatest-flag3 sieve/test/actionExtensions/testm/ueatest-unmark sieve/test/actionExtensions/uberExtensionActionScript.key sieve/test/actionExtensions/serverm sieve/test/actionExtensions/serverm/ueamail-flag4 sieve/test/actionExtensions/serverm/ueamail-denotify sieve/test/actionExtensions/serverm/ueamail-mark sieve/test/actionExtensions/serverm/ueamail-denotify2 sieve/test/actionExtensions/serverm/ueamail-flag2 sieve/test/actionExtensions/serverm/ueamail-unmark sieve/test/actionExtensions/serverm/ueamail-reject sieve/test/actionExtensions/serverm/ueamail-flag3 sieve/test/actionExtensions/serverm/ueamail-fileinto sieve/test/actionExtensions/serverm/ueamail-flag1 sieve/test/actionExtensions/serverm/ueamail-notify sieve/test/actionExtensions/serverm/ueamail-flag5 sieve/test/actionExtensions/serverm/ueamail-notify2 sieve/test/actionExtensions/serverm/ueamail-vacation \
 	syslog/syslog.conf syslog/README syslog/logger.c \
 	timsieved/TODO
@@ -272,6 +274,18 @@ notifyd_notifytest_SOURCES = notifyd/notifytest.c imap/mutex_fake.o
 notifyd_notifytest_LDADD = ${notifyd_notifyd_LDADD}
 
 perl_sieve_lib_libisieve_a_SOURCES = perl/sieve/lib/isieve.c perl/sieve/lib/lex.c perl/sieve/lib/mystring.c perl/sieve/lib/request.c
+
+ptclient_ptdump_SOURCES = imap/cli_fatal.o imap/mutex_fake.o ptclient/ptdump.c
+ptclient_ptdump_LDADD = imap/libimap.a @COM_ERR_LIBS@ $(netnews_remotepurge_LDADD)
+ptclient_ptexpire_SOURCES = imap/cli_fatal.o imap/mutex_fake.o ptclient/ptexpire.c
+ptclient_ptexpire_LDADD = $(ptclient_ptdump_LDADD)
+
+#ptclient_ptextract_SOURCES = imap/cli_fatal.o imap/mutex_fake.o ptclient/ptextrac.c
+#ptclient_ptextract_LDADD = $(ptclient_ptdump_LDADD)
+
+ptclient_ptloader_SOURCES = ptclient/ptloader.c ptclient/ptloader.h ptclient/afskrb.oc ptclient/ldap.c imap/mutex_fake.o master/service-thread.c
+ptclient_ptloader_LDADD = @AFS_LIBS@ @LDAP_LIBS@ $(ptclient_ptdump_LDADD) @LIB_WRAP@
+ptclient_ptloader_LDFLAGS = @AFS_LDFLAGS@ @LDAP_LDFLAGS@
 
 sieve_libsieve_a_SOURCES = sieve/bytecode.h sieve/addr.y sieve/addr-lex.l \
 	sieve/bc_dump.c sieve/bc_emit.c sieve/bc_eval.c sieve/bc_generate.c \
