@@ -135,7 +135,9 @@ EXTRA_DIST = xversion.h com_err/et/com_err com_err/et/et_c.awk \
 
 TEXINFO_TEX = com_err/et/texinfo.tex
 EXTRA_SCRIPTS = com_err/et/compile_et.sh com_err/et/config_script \
-	lib/imapoptions lib/mkchartable.pl lib/test/run
+	lib/imapoptions lib/mkchartable.pl lib/test/run \
+	tools/arbitronsort.pl tools/compile_st.pl tools/config2header tools/config2man tools/convert-sieve.pl tools/dohash tools/masssievec tools/migrate-metadata tools/mkimap tools/mknewsgroups tools/mupdate-loadgen.pl tools/rehash tools/translatesieve tools/undohash tools/upgradesieve \
+	snmp/snmpgen
 noinst_MAN = com_err/et/com_err.3 com_err/et/compile_et.1 syslog/logger.1 \
 	syslog/syslog.3 syslog/syslog.8
 noinst_TEXINFOS = com_err/et/com_err.texinfo
