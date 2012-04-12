@@ -1155,7 +1155,6 @@ if test "$with_perl" = "notfound"; then
     AC_MSG_WARN(Perl not found: Administrative tools will not be available)
 elif test "${with_perl}" != "no"; then
 dnl compile perl stuff and perl/cyradm
-    PERL_SUBDIRS="imap"
     PERL="${with_perl}"
 dnl add perl cccdlflags when building libraries -- this ensures that the
 dnl libraries will be compiled as PIC if perl requires PIC objects
@@ -1175,14 +1174,6 @@ dnl -- this is needed on NetBSD and Linux, but seems to cause problems on atleas
     PERL_PREINSTALL="${PERL} ${srctoolsdir}/fixsearchpath.pl ${cyrus_prefix} ${bindir}"
     AC_SUBST(PERL_PREINSTALL)
 fi
-
-dnl for timsieved
-if test "$enable_sieve" != "no"; then
-	PERL_SUBDIRS="${PERL_SUBDIRS} sieve"
-fi
-
-dnl for the Cyrus annotator daemon class
-PERL_SUBDIRS="${PERL_SUBDIRS} annotator"
 
 CMU_LIBWRAP
 CMU_UCDSNMP
@@ -1223,13 +1214,6 @@ AC_SUBST(LIB_RT)
 AC_SUBST(LIB_UUID)
 AC_SUBST(IMAP_LIBS)
 
-dnl AC_OUTPUT_COMMANDS([
-dnl   if test "$with_perl" != "no"; then
-dnl     (cd perl/sieve/managesieve; $perl Makefile.PL PREFIX=$prefix)
-dnl     (cd perl/imap; $perl Makefile.PL PREFIX=$prefix)
-dnl   fi
-dnl ], perl=$PERL; with_perl=$with_perl; prefix=$prefix; SASL_LIB="$LIB_SASL"; SASL_INC="$SASLFLAGS"; export SASL_LIB SASL_INC)
-AC_SUBST(PERL_SUBDIRS)
 AC_SUBST(PERL)
 
 dnl
@@ -1479,5 +1463,5 @@ enum {
 ])
 
 dnl make sure that Makefile is the last thing output
-AC_CONFIG_FILES([cunit/Makefile imap/Makefile perl/Makefile perl/sieve/Makefile Makefile])
+AC_CONFIG_FILES([cunit/Makefile imap/Makefile Makefile])
 AC_OUTPUT

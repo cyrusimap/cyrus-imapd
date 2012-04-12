@@ -77,7 +77,8 @@ service_PROGRAMS += ptclient/ptdump ptclient/ptexpire ptclient/ptloader
 # ptclient/ptextract
 endif
 if PERL
-SUBDIRS += perl
+SUBDIRS += perl/annotator perl/imap
+BUILT_SOURCES += perl/imap/Makefile perl/annotator/Makefile
 endif
 if SIEVE
 BUILT_SOURCES += sieve/addr.c sieve/sieve.c sieve/sieve_err.c
@@ -98,7 +99,8 @@ check_PROGRAMS += notifyd/notifytest
 service_PROGRAMS += notifyd/notifyd timsieved/timsieved
 endif
 if PERL
-SUBDIRS += perl/sieve
+SUBDIRS += perl/sieve/managesieve
+BUILT_SOURCES += perl/sieve/managesieve/Makefile
 noinst_LIBRARIES += perl/sieve/lib/libisieve.a
 endif
 endif
@@ -132,6 +134,9 @@ EXTRA_DIST = xversion.h SMakefile COPYRIGHT \
 	lib/test/testglob2.c \
 	master/CYRUS-MASTER.mib master/conf/cmu-backend.conf master/conf/cmu-frontend.conf master/conf/normal.conf master/conf/prefork.conf master/conf/small.conf master/README \
 	netnews/inn.diffs \
+	perl/annotator/Daemon.pm perl/annotator/Makefile.PL perl/annotator/MANIEST perl/annotator/Message.pm perl/annotator/README \
+	perl/imap/Changes perl/imap/cyradm.sh perl/imap/cyrperl.h perl/imap/Cyrus/Shell.pm perl/imap/examples/auditmbox.pl perl/imap/examples/imapcollate.pl perl/imap/examples/imapdu.pl perl/imap/example/test-imsp.pl perl/imap/IMAP/Admin.pm perl/imap/IMAP/IMSP.pm perl/imap/IMAP/Shell.pm perl/imap/IMAP.pm perl/imap/IMAP.xs perl/imap/Makefile.PL perl/imap/README perl/imap/t/01-imclient.t perl/imap/t/02-admin.t perl/imap/typemap perl/imap/xsutil.c \
+	perl/sieve/managesieve/Makefile.PL perl/sieve/managesieve/managesieve.h perl/sieve/managesieve/managesieve.pm perl/sieve/managesieve/managesieve.xs perl/sieve/managesieve/MANIFEST perl/sieve/managesieve/typemap \
 	ptclient/README ptclient/test.c ptclient/test2.c \
 	sieve/test/testExtension sieve/test/testExtension/uberExtensionTestScript.key sieve/test/testExtension/testm sieve/test/testExtension/testm/uetest-envelope sieve/test/testExtension/testm/uetest-asub sieve/test/testExtension/testm/uetest-areg sieve/test/testExtension/testm/uetest-count sieve/test/testExtension/testm/uetest-value sieve/test/testExtension/testm/uetest-hreg sieve/test/testExtension/serverm sieve/test/testExtension/serverm/uetmail-hreg sieve/test/testExtension/serverm/uetmail-value sieve/test/testExtension/serverm/uetmail-count2 sieve/test/testExtension/serverm/uetmail-envelope sieve/test/testExtension/serverm/uetmail-asub sieve/test/testExtension/serverm/uetmail-value2 sieve/test/testExtension/serverm/uetmail-areg sieve/test/testExtension/serverm/uetmail-count sieve/test/testExtension/uberExtensionTestScript.s sieve/test/README sieve/test/action sieve/test/action/testm sieve/test/action/testm/uatest-keep sieve/test/action/testm/uatest-redirect sieve/test/action/testm/uatest-discard sieve/test/action/testm/uatest-stop2 sieve/test/action/testm/uatest-stop sieve/test/action/serverm sieve/test/action/serverm/uamail-stop2 sieve/test/action/serverm/uamail-redirect sieve/test/action/serverm/uamail-stop sieve/test/action/serverm/uamail-keep sieve/test/action/serverm/uamail-discard sieve/test/action/uberActionScript.key sieve/test/action/uberActionScript.s sieve/test/test sieve/test/test/uberTestScript.key sieve/test/test/testm sieve/test/test/testm/utest-header sieve/test/test/testm/utest-address sieve/test/test/serverm sieve/test/test/serverm/utmail-address sieve/test/test/serverm/utmail-header sieve/test/test/uberTestScript.s sieve/test/actionExtensions sieve/test/actionExtensions/uberExtensionActionScript.s sieve/test/actionExtensions/testm sieve/test/actionExtensions/testm/ueatest-flag4 sieve/test/actionExtensions/testm/ueatest-flag2 sieve/test/actionExtensions/testm/ueatest-fileinto sieve/test/actionExtensions/testm/ueatest-denotify sieve/test/actionExtensions/testm/ueatest-vacation sieve/test/actionExtensions/testm/ueatest-reject sieve/test/actionExtensions/testm/ueatest-mark sieve/test/actionExtensions/testm/ueatest-denotify2 sieve/test/actionExtensions/testm/ueatest-flag5 sieve/test/actionExtensions/testm/ueatest-notify2 sieve/test/actionExtensions/testm/ueatest-notify sieve/test/actionExtensions/testm/ueatest-flag1 sieve/test/actionExtensions/testm/ueatest-flag3 sieve/test/actionExtensions/testm/ueatest-unmark sieve/test/actionExtensions/uberExtensionActionScript.key sieve/test/actionExtensions/serverm sieve/test/actionExtensions/serverm/ueamail-flag4 sieve/test/actionExtensions/serverm/ueamail-denotify sieve/test/actionExtensions/serverm/ueamail-mark sieve/test/actionExtensions/serverm/ueamail-denotify2 sieve/test/actionExtensions/serverm/ueamail-flag2 sieve/test/actionExtensions/serverm/ueamail-unmark sieve/test/actionExtensions/serverm/ueamail-reject sieve/test/actionExtensions/serverm/ueamail-flag3 sieve/test/actionExtensions/serverm/ueamail-fileinto sieve/test/actionExtensions/serverm/ueamail-flag1 sieve/test/actionExtensions/serverm/ueamail-notify sieve/test/actionExtensions/serverm/ueamail-flag5 sieve/test/actionExtensions/serverm/ueamail-notify2 sieve/test/actionExtensions/serverm/ueamail-vacation \
 	SIEVE/scripts/sieveshell.pl \
@@ -141,6 +146,7 @@ EXTRA_DIST = xversion.h SMakefile COPYRIGHT \
 TEXINFO_TEX = com_err/et/texinfo.tex
 EXTRA_SCRIPTS = com_err/et/compile_et.sh com_err/et/config_script \
 	lib/imapoptions lib/mkchartable.pl lib/test/run \
+	perl/sieve/scripts/installsieve.pl perl/sieve/scripts/sieveshell.pl \
 	tools/arbitronsort.pl tools/compile_st.pl tools/config2header tools/config2man tools/convert-sieve.pl tools/dohash tools/masssievec tools/migrate-metadata tools/mkimap tools/mknewsgroups tools/mupdate-loadgen.pl tools/rehash tools/translatesieve tools/undohash tools/upgradesieve \
 	snmp/snmpgen \
 	autobuild.sh
@@ -293,6 +299,40 @@ notifyd_notifytest_LDADD = ${notifyd_notifyd_LDADD}
 
 perl_sieve_lib_libisieve_a_SOURCES = perl/sieve/lib/isieve.c perl/sieve/lib/lex.c perl/sieve/lib/mystring.c perl/sieve/lib/request.c
 
+perl/annotator/Makefile perl/imap/Makefile: perl/annotator/Makefile.PL perl/imap/Makefile.PL
+	@for d in annotator imap; \
+        do \
+	if [ ! -e perl/$$d ]; then $(MKDIR_P) perl/$$d; fi; \
+		 cd perl/$$d; echo "### Making" all "in" `pwd`; \
+			if [ -f ../../${top_srcdir}/perl/$$d/Makefile.PL -a ! -f Makefile ]; then \
+			   LIB_RT="$(LIB_RT)" \
+			   LIB_UUID="$(LIB_UUID)" \
+			   ZLIB="$(ZLIB)" \
+			   srcdir="../../${top_srcdir}/perl/$$d" \
+			   top_srcdir="../../$(top_srcdir)" \
+			   BDB_LIB="$(BDB_LIB)" BDB_INC="$(BDB_INC)" \
+			   OPENSSL_LIB="$(OPENSSL_LIB)" OPENSSL_INC="$(OPENSSL_INC)" \
+			   SASL_LIB="$(SASL_LIB)" SASL_INC="$(SASL_INC)" CC="$(CC)" \
+			   COVERAGE="$(COVERAGE)" PERL_PREINSTALL="$(PERL_PREINSTALL)" \
+			     $(PERL) ../../${top_srcdir}/perl/$$d/Makefile.PL PREFIX=$(prefix); \
+			fi; \
+		cd ../..; \
+	done
+
+perl/sieve/managesieve/Makefile: perl/sieve/managesieve/Makefile.PL
+	@if [ ! -e perl/sieve/managesieve ]; then $(MKDIR_P) perl/sieve/managesieve; fi; \
+		 cd perl/sieve/managesieve; echo "### Making" all "in" `pwd`; \
+			if [ -f ../../../$(top_srcdir)/perl/sieve/managesieve/Makefile.PL -a ! -f Makefile ]; then \
+			   LIB_RT="$(LIB_RT)" \
+			   LIB_UUID="$(LIB_UUID)" \
+			   ZLIB="$(ZLIB)" \
+			   srcdir="../../../$(top_srcdir)/perl/sieve/managesieve" \
+			   top_srcdir="../../../$(top_srcdir)" \
+			   BDB_LIB="$(BDB_LIB)" BDB_INC="$(BDB_INC)" \
+			   OPENSSL_LIB="$(OPENSSL_LIB)" OPENSSL_INC="$(OPENSSL_INC)" \
+			   SASL_LIB="$(SASL_LIB)" SASL_INC="$(SASL_INC)" CC="$(CC)" \
+			     $(PERL) ../../../${top_srcdir}/perl/sieve/managesieve/Makefile.PL PREFIX=$(prefix); \
+			fi;
 ptclient_ptdump_SOURCES = imap/cli_fatal.o imap/mutex_fake.o ptclient/ptdump.c
 ptclient_ptdump_LDADD = imap/libimap.a @COM_ERR_LIBS@ $(netnews_remotepurge_LDADD)
 ptclient_ptexpire_SOURCES = imap/cli_fatal.o imap/mutex_fake.o ptclient/ptexpire.c
@@ -438,6 +478,12 @@ if CMULOCAL
 endif
 
 install-exec-hook:
+	for s in installsieve sieveshell; \
+	do \
+	  $(PERL_PREINSTALL) < perl/sieve/scripts/$$s.pl > perl/sieve/scripts/$$s ;\
+	  $(INSTALL) -m 755 perl/sieve/scripts/$$s $(DESTDIR)$(bindir)/$$s ; \
+	done
+
 	cd $(DESTDIR)$(bindir) && \
 	  $(LN_S) -f imtest lmtptest && \
 	  $(LN_S) -f imtest mupatetest && \
