@@ -49,6 +49,7 @@ BUILT_SOURCES = xversion.h lib/imapopts.c
 
 SUBDIRS = . imtest
 dist_sysconf_DATA =
+check_LIBRARIES =
 noinst_LIBRARIES =
 lib_LIBRARIES = lib/libcyrus.a lib/libcyrus_min.a
 noinst_PROGRAMS =
@@ -79,6 +80,8 @@ endif
 if SIEVE
 BUILT_SOURCES += sieve/addr.c sieve/sieve.c sieve/sieve_err.c
 lib_LIBRARIES += sieve/libsieve.a
+check_PROGRAMS += installsieve/installsieve
+check_LIBRARIES += installsieve/libinstallsieve.a
 check_PROGRAMS += sieve/test
 service_PROGRAMS += sieve/sievec sieve/sieved
 endif
@@ -161,6 +164,10 @@ include_HEADERS = lib/acl.h lib/assert.h lib/auth.h lib/auth_pts.h \
 noinst_HEADERS = lib/byteorder64.h lib/gai.h lib/libconfig.h lib/md5.h \
 	lib/prot.h lib/ptrarray.h lib/strarray.h lib/util.h lib/xstrlcat.h \
 	lib/xstrlcpy.h
+
+installsieve_libinstallsieve_a_SOURCES = installsieve/codes.h installsieve/exitcodes.h installsieve/isieve.c installsieve/isieve.h installsieve/lex.c installsieve/lex.h installsieve/mystring.c installsieve/mystring.h installsieve/request.c installsieve/request.h
+installsieve_installsieve_SOURCES = installsieve/installscript.c
+installsieve_installsieve_LDADD = installsieve/libinstallsieve.a lib/libcyrus.a @SYSLOG_LIBS@ $(LIB_SASL) ${LIBS}
 
 lib_libcyrus_a_SOURCES = lib/acl.c lib/acl_afs.c lib/auth.c lib/auth_krb.c \
 	lib/auth_krb5.c lib/auth_pts.c lib/auth_unix.c lib/bsearch.c \
