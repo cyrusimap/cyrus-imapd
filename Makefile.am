@@ -47,7 +47,7 @@ AM_CPPFLAGS = @COM_ERR_CPPFLAGS@ -I${top_srcdir} -I${top_srcdir}/lib -I${top_bui
 AM_LDFLAGS = ${EXTRALDFLAGS}
 BUILT_SOURCES = xversion.h lib/imapopts.c
 
-SUBDIRS = . imtest
+SUBDIRS = .
 dist_doc_DATA = README README.andrew
 dist_sysconf_DATA =
 check_LIBRARIES =
@@ -63,6 +63,7 @@ noinst_LIBRARIES += com_err/et/libcom_err.a
 COM_ERR_LIBS += com_err/et/libcom_err.a
 endif
 
+bin_PROGRAMS = imtest/imtest
 if SYSLOG
 noinst_LIBRARIES += syslog/libsyslog.a
 noinst_PROGRAMS += syslog/syslogd
@@ -171,6 +172,9 @@ include_HEADERS = lib/acl.h lib/assert.h lib/auth.h lib/auth_pts.h \
 noinst_HEADERS = lib/byteorder64.h lib/gai.h lib/libconfig.h lib/md5.h \
 	lib/prot.h lib/ptrarray.h lib/strarray.h lib/util.h lib/xstrlcat.h \
 	lib/xstrlcpy.h
+
+imtest_imtest_SOURCES = imtest/imtest.c
+imtest_imtest_LDADD = ${netnews_remotepurge_LDADD}
 
 installsieve_libinstallsieve_a_SOURCES = installsieve/codes.h installsieve/exitcodes.h installsieve/isieve.c installsieve/isieve.h installsieve/lex.c installsieve/lex.h installsieve/mystring.c installsieve/mystring.h installsieve/request.c installsieve/request.h
 installsieve_installsieve_SOURCES = installsieve/installscript.c
@@ -402,6 +406,16 @@ install-data-hook:
 if CMULOCAL
 	$(INSTALL) -m 644 $(top_srcdir)/depot/depot.conf $(DESTDIR)/
 endif
+
+install-exec-hook:
+	cd $(DESTDIR)$(bindir) && \
+	  $(LN_S) -f imtest lmtptest && \
+	  $(LN_S) -f imtest mupatetest && \
+	  $(LN_S) -f imtest nntptest && \
+	  $(LN_S) -f imtest pop3test && \
+	  $(LN_S) -f imtest sivtest && \
+	  $(LN_S) -f imtest smpttest && \
+	  $(LN_S) -f imtest synctest
 
 valgrind:
 	$(MAKE) VG=yes check

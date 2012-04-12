@@ -95,6 +95,7 @@ AC_DEFINE_UNQUOTED(SYSCONFDIR,"$sysconfdir",[Config File Location])
 
 AC_PROG_CC
 AM_PROG_CC_C_O
+AC_PROG_LN_S
 AC_PROG_RANLIB
 AC_PROG_MAKE_SET
 AC_PROG_INSTALL
@@ -1478,5 +1479,5 @@ enum {
 ])
 
 dnl make sure that Makefile is the last thing output
-AC_CONFIG_FILES([cunit/Makefile imap/Makefile imtest/Makefile perl/Makefile perl/sieve/Makefile Makefile])
+AC_CONFIG_FILES([cunit/Makefile imap/Makefile perl/Makefile perl/sieve/Makefile Makefile])
 AC_OUTPUT
