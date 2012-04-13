@@ -1184,7 +1184,7 @@ if test "${with_perl}" != no; then
     fi
 fi
 if test "$with_perl" = "notfound"; then
-    AC_MSG_WARN(Perl not found: Administrative tools will not be available)
+    AC_MSG_WARN(Perl not found: Administrative tools won't be available)
 elif test "${with_perl}" != "no"; then
 dnl compile perl stuff
     EXTRA_SUBDIRS="${EXTRA_SUBDIRS} perl"
@@ -1205,11 +1205,6 @@ dnl -- this is needed on NetBSD and Linux, but seems to cause problems on atleas
         *)
             AC_MSG_WARN(skipping check for perl cccdlflags on "${target_os}")
     esac
-
-    PERL_INSTALLVENDORLIB=$cyrus_prefix`${PERL} -MConfig -e 'print substr($Config{installvendorlib},length($Config{prefix}))'`
-    PERL_INSTALLVENDORARCH=$cyrus_prefix`${PERL} -MConfig -e 'print substr($Config{installvendorarch},length($Config{prefix}))'`
-    AC_SUBST(PERL_INSTALLVENDORLIB)
-    AC_SUBST(PERL_INSTALLVENDORARCH)
 fi
 
 dnl for timsieved
