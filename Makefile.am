@@ -42,11 +42,15 @@
 #
 
 ACLOCAL_AMFLAGS = -I cmulocal
+AM_CPPFLAGS = @COM_ERR_CPPFLAGS@
 BUILT_SOURCES = xversion.h
 
 SUBDIRS = . lib imtest
+noinst_LIBRARIES =
 if COM_ERR
-SUBDIRS += com_err/et
+BUILT_SOURCES += com_err/et/compile_et
+noinst_LIBRARIES += com_err/et/libcom_err.a
+COM_ERR_LIBS += com_err/et/libcom_err.a
 endif
 if SYSLOG
 SUBDIRS += syslog
@@ -80,7 +84,24 @@ if CUNIT
 SUBDIRS += cunit
 endif
 
-EXTRA_DIST = xversion.h
+EXTRA_DIST = xversion.h com_err/et/com_err com_err/et/et_c.awk \
+	com_err/et/et_h.awk com_err/et/test1.et com_err/et/test2.et \
+	com_err/et/test_et.c
+TEXINFO_TEX = com_err/et/texinfo.tex
+EXTRA_SCRIPTS = com_err/et/compile_et.sh com_err/et/config_script
+noinst_MAN = com_err/et/com_err.3 com_err/et/compile_et.1
+noinst_TEXINFOS = com_err/et/com_err.texinfo
+
+com_err_et_libcom_err_a_SOURCES = com_err/et/com_err.c com_err/et/com_err.h \
+	com_err/et/error_message.c com_err/et/error_table.h \
+	com_err/et/et_name.c com_err/et/init_et.c com_err/et/internal.h \
+	com_err/et/mit-sipb-copyright.h
+
+com_err/et/compile_et: com_err/et/compile_et.sh com_err/et/config_script \
+	config.h
+	@${top_srcdir}/com_err/et/config_script ${top_srcdir}/com_err/et/compile_et.sh ${AWK} ${SED} > $@
+	@chmod 755 $@
+
 DISTSUBDIRS = doc
 
 SHELL = /bin/sh

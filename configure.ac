@@ -1077,16 +1077,14 @@ fi
 case "$with_com_err" in
   # built-in et
   yes) # use the com_err we're gonna build
-	  COM_ERR_LIBS="../com_err/et/libcom_err.a"
-	  COMPILE_ET="../com_err/et/compile_et"
-	  COM_ERR_LDFLAGS=""
+	  COM_ERR_LIBS="com_err/et/libcom_err.a"
+	  COMPILE_ET="com_err/et/compile_et"
 	  COM_ERR_CPPFLAGS="-I\${top_srcdir}/com_err/et"
 	  ;;
   "")   # no problem, we already have it in the paths
 	# we do nothing to pick it up
 	COM_ERR_LIBS="-lcom_err" # hope it's not shared
 	# we already set COMPILE_ET, or we didn't get here
-	COM_ERR_LDFLAGS=""
 	COM_ERR_CPPFLAGS=""
       ;;
   *) # use whatever they told us, or whatever we found
@@ -1103,7 +1101,6 @@ esac
 AM_CONDITIONAL([COM_ERR], [test "$with_com_err" = "yes"])
 AC_SUBST(COMPILE_ET)
 AC_SUBST(COM_ERR_LIBS)
-AC_SUBST(COM_ERR_LDFLAGS)
 AC_SUBST(COM_ERR_CPPFLAGS)
 
 if test "$USE_MAINTAINER_MODE" = "yes" ; then
@@ -1509,5 +1506,5 @@ enum {
 ])
 
 dnl make sure that Makefile is the last thing output
-AC_CONFIG_FILES([com_err/et/Makefile cunit/Makefile depot/Makefile imap/Makefile imtest/Makefile lib/Makefile master/Makefile netnews/Makefile notifyd/Makefile perl/Makefile perl/sieve/Makefile perl/sieve/lib/Makefile ptclient/Makefile sieve/Makefile syslog/Makefile timsieved/Makefile Makefile])
+AC_CONFIG_FILES([cunit/Makefile depot/Makefile imap/Makefile imtest/Makefile lib/Makefile master/Makefile netnews/Makefile notifyd/Makefile perl/Makefile perl/sieve/Makefile perl/sieve/lib/Makefile ptclient/Makefile sieve/Makefile syslog/Makefile timsieved/Makefile Makefile])
 AC_OUTPUT

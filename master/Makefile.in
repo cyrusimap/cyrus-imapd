@@ -54,12 +54,12 @@ CYRUS_USER=@cyrus_user@
 CYRUS_GROUP=@cyrus_group@
 
 DEFS = @DEFS@ @LOCALDEFS@
-CPPFLAGS = -I$(top_srcdir) -I$(top_srcdir)/lib -I$(top_builddir) -I$(top_builddir)/lib @CPPFLAGS@ @COM_ERR_CPPFLAGS@
+CPPFLAGS = -I$(top_srcdir) -I$(top_srcdir)/lib -I$(top_builddir) -I$(top_builddir)/lib @CPPFLAGS@
 DEPLIBS = @DEPLIBS@
 
 CFLAGS = @CFLAGS@ $(EXTRACFLAGS)
-LDFLAGS = @LDFLAGS@ @COM_ERR_LDFLAGS@ $(EXTRALDFLAGS)
-LIBS = $(top_builddir)/lib/libcyrus_min.a @LIB_UCDSNMP@ @LIBS@ @COM_ERR_LIBS@ -lm
+LDFLAGS = @LDFLAGS@ $(EXTRALDFLAGS)
+LIBS = $(top_builddir)/lib/libcyrus_min.a @LIB_UCDSNMP@ @LIBS@ -lm
 
 SHELL = /bin/sh
 MAKEDEPEND = @MAKEDEPEND@

@@ -65,16 +65,16 @@ IMAP_LIBS = @IMAP_LIBS@ @LIB_RT@ @LIB_UUID@
 SIEVE_OBJS = @SIEVE_OBJS@
 SIEVE_LIBS = @SIEVE_LIBS@
 LIB_WRAP = @LIB_WRAP@
-LIBS = $(IMAP_LIBS) @COM_ERR_LIBS@
+LIBS = $(IMAP_LIBS) ${top_builddir}/@COM_ERR_LIBS@
 DEPLIBS = $(top_builddir)/lib/libcyrus.a $(top_builddir)/lib/libcyrus_min.a @DEPLIBS@
 
 CFLAGS = @CFLAGS@ $(EXTRACFLAGS)
-LDFLAGS = @LDFLAGS@ @COM_ERR_LDFLAGS@ $(EXTRALDFLAGS)
+LDFLAGS = @LDFLAGS@ $(EXTRALDFLAGS)
 
 SHELL = /bin/sh
 MAKEDEPEND = @MAKEDEPEND@
 
-COMPILE_ET=@COMPILE_ET@
+COMPILE_ET=${top_builddir}/@COMPILE_ET@
 
 #
 # Some notes on purify --

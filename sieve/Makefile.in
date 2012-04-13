@@ -55,7 +55,7 @@ YFLAGS = -d
 LEX = @LEX@
 INSTALL = @INSTALL@
 RANLIB = @RANLIB@
-COMPILE_ET = @COMPILE_ET@
+COMPILE_ET = ${top_builddir}/@COMPILE_ET@
 top_builddir = @top_builddir@
 
 DEFS = @DEFS@ @LOCALDEFS@
@@ -68,7 +68,7 @@ MAKEDEPEND = @MAKEDEPEND@
 
 IMAP_LIBS = @IMAP_LIBS@
 IMAP_LIBS = @IMAP_LIBS@ @LIB_RT@ @LIB_UUID@
-LIBS = libsieve.a $(IMAP_LIBS) @COM_ERR_LIBS@
+LIBS = libsieve.a $(IMAP_LIBS) ${top_builddir}/@COM_ERR_LIBS@
 DEPLIBS=$(top_builddir)/lib/libcyrus.a $(top_builddir)/lib/libcyrus_min.a @DEPLIBS@
 LIBIMAP = $(top_builddir)/imap/mutex_fake.o $(top_builddir)/imap/libimap.a
 

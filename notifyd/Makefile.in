@@ -72,7 +72,7 @@ SERVICE=../master/service.o
 
 IMAP_LIBS = @IMAP_LIBS@ @LIB_RT@ @LIB_UUID@
 LIB_WRAP = @LIB_WRAP@
-LIBS = @ZEPHYR_LIBS@ @LIBS@ @COM_ERR_LIBS@
+LIBS = @ZEPHYR_LIBS@ @LIBS@ ${top_builddir}/@COM_ERR_LIBS@
 DEPLIBS=$(top_builddir)/imap/mutex_fake.o $(top_builddir)/imap/libimap.a $(top_builddir)/lib/libcyrus.a $(top_builddir)/lib/libcyrus_min.a @DEPLIBS@
 
 PURIFY=/usr/local/bin/purify
