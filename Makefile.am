@@ -68,9 +68,19 @@ if SYSLOG
 noinst_LIBRARIES += syslog/libsyslog.a
 noinst_PROGRAMS += syslog/syslogd
 endif
+if SERVER
+SUBDIRS += imap
+service_PROGRAMS += master/master
+endif
 if CMULOCAL
 dist_sysconf_DATA += depot/rc.local.imap depot/rc.local.ptclient
 service_PROGRAMS += netnews/remotepurge
+endif
+if SIEVE
+if SERVER
+check_PROGRAMS += notifyd/notifytest
+service_PROGRAMS += notifyd/notifyd
+endif
 endif
 if PTCLIENT
 service_PROGRAMS += ptclient/ptdump ptclient/ptexpire ptclient/ptloader
@@ -81,27 +91,19 @@ SUBDIRS += perl/annotator perl/imap
 BUILT_SOURCES += perl/imap/Makefile perl/annotator/Makefile
 endif
 if SIEVE
+if PERL
+SUBDIRS += perl/sieve/managesieve
+BUILT_SOURCES += perl/sieve/managesieve/Makefile
+noinst_LIBRARIES += perl/sieve/lib/libisieve.a
+endif
 BUILT_SOURCES += sieve/addr.c sieve/sieve.c sieve/sieve_err.c
 lib_LIBRARIES += sieve/libsieve.a
 check_PROGRAMS += installsieve/installsieve
 check_LIBRARIES += installsieve/libinstallsieve.a
 check_PROGRAMS += sieve/test
 service_PROGRAMS += sieve/sievec sieve/sieved
-endif
 if SERVER
-SUBDIRS += imap
-service_PROGRAMS += master/master
-endif
-
-if SIEVE
-if SERVER
-check_PROGRAMS += notifyd/notifytest
-service_PROGRAMS += notifyd/notifyd timsieved/timsieved
-endif
-if PERL
-SUBDIRS += perl/sieve/managesieve
-BUILT_SOURCES += perl/sieve/managesieve/Makefile
-noinst_LIBRARIES += perl/sieve/lib/libisieve.a
+service_PROGRAMS += timsieved/timsieved
 endif
 endif
 
