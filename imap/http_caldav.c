@@ -800,6 +800,16 @@ static int meth_copy(struct transaction_t *txn)
     }
 
   done:
+    if (ret == HTTP_CREATED) {
+	/* Tell client where to find the new resource */
+	txn->loc = dest.path;
+    }
+    else {
+	/* Don't confuse client by providing ETag of Destination resource */
+	txn->resp_body.etag = NULL;
+	break;
+    }
+
     if (ical) icalcomponent_free(ical);
     if (dest_caldb) caldav_close(dest_caldb);
     if (dest_mbox) mailbox_close(&dest_mbox);
