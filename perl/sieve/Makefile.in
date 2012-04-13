@@ -76,6 +76,7 @@ ZLIB=@ZLIB@
 
 CC=@CC@
 PERL=@PERL@
+PERL_PREINSTALL=@PERL_PREINSTALL@
 
 all::
 	@for d in  $(SUBDIRS); \
@@ -88,6 +89,7 @@ all::
 			   BDB_LIB="$(BDB_LIB)" BDB_INC="$(BDB_INC)" \
 			   OPENSSL_LIB="$(OPENSSL_LIB)" OPENSSL_INC="$(OPENSSL_INC)" \
 			   SASL_LIB="$(SASL_LIB)" SASL_INC="$(SASL_INC)" CC="$(CC)" \
+			   PERL_PREINSTALL="$(PERL_PREINSTALL)" \
 			     $(PERL) Makefile.PL PREFIX=$(prefix); \
 			fi; \
 			$(MAKE) $(MFLAGS) DESTDIR=$(DESTDIR) all) || exit 1; \
@@ -96,7 +98,7 @@ all::
 install::
 	for s in $(SCRIPTS); \
 	do \
-		$(PERL) -pne 's|\@prefix\@|$(prefix)|g;' < scripts/$$s.pl > scripts/$$s ;\
+		$(PERL_PREINSTALL) < scripts/$$s.pl > scripts/$$s ;\
 		$(INSTALL) -m 755 scripts/$$s $(DESTDIR)$(exec_prefix)/bin/$$s ; \
 	done
 #xxx install scripts/*

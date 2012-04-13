@@ -54,6 +54,8 @@ my $LIB_RT = $ENV{LIB_RT};
 my $LIB_UUID = $ENV{LIB_UUID};
 my $ZLIB = $ENV{ZLIB};
 
+my $PERL_PREINSTALL = $ENV{PERL_PREINSTALL};
+
 # See lib/ExtUtils/MakeMaker.pm for details of how to influence
 # the contents of the Makefile that is written.
 $libs = "-lcyrus";
@@ -62,7 +64,7 @@ sub MY::postamble
 {
     return <<'EOT';
 cyradm: cyradm.sh
-	$(ABSPERLRUN) -pne 's|\@INSTALLSITEARCH\@|$(INSTALLSITEARCH)|g;' < $< > $@
+	$(PERL_PREINSTALL) < $< > $@
 
 EOT
 }
@@ -71,7 +73,10 @@ WriteMakefile(
     'NAME'	=> 'Cyrus::IMAP',
     'ABSTRACT'  => 'Cyrus administrative interface',
     'VERSION_FROM' => 'IMAP.pm', # finds $VERSION
-    'macro'	=> {'IMCLIENT_LIBS' => ''},	# hack
+    'macro'	=> {
+		    'IMCLIENT_LIBS' => '',	# hack
+		    'PERL_PREINSTALL' => $PERL_PREINSTALL,
+		},
     'clean'	=> {'FILES' => 'libcyrperl.a cyradm'},
     'OBJECT'    => 'IMAP.o',
     'MYEXTLIB'  => '../../lib/libcyrus.a ../../lib/libcyrus_min.a',

@@ -44,7 +44,6 @@ exec perl -x -S $0 ${1+"$@"} # -*-perl-*-
 # $Id: sieveshell.pl,v 1.26 2010/01/06 17:01:57 murch Exp $
 #
 
-use lib ("@prefix@/lib/perl", "@prefix@/share/perl");
 use Cyrus::SIEVE::managesieve;
 use Getopt::Long;
 use strict;

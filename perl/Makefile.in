@@ -66,6 +66,7 @@ LIB_UUID=@LIB_UUID@
 ZLIB=@ZLIB@
 
 PERL=@PERL@
+PERL_PREINSTALL=@PERL_PREINSTALL@
 
 SHELL = /bin/sh
 @SET_MAKE@
@@ -88,7 +89,7 @@ all::
 			   BDB_LIB="$(BDB_LIB)" BDB_INC="$(BDB_INC)" \
 			   OPENSSL_LIB="$(OPENSSL_LIB)" OPENSSL_INC="$(OPENSSL_INC)" \
 			   SASL_LIB="$(SASL_LIB)" SASL_INC="$(SASL_INC)" CC="$(CC)" \
-			   COVERAGE="$(COVERAGE)" \
+			   COVERAGE="$(COVERAGE)" PERL_PREINSTALL="$(PERL_PREINSTALL)" \
 			     $(PERL) Makefile.PL PREFIX=$(prefix); \
 			fi; \
 			$(MAKE) $(MFLAGS) DESTDIR=$(DESTDIR) all) || exit 1; \

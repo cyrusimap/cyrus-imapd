@@ -55,7 +55,8 @@ dnl Useful hook for distributions
 AC_ARG_WITH(extraident,[  --with-extraident=STRING   use STRING as extra version information],
 	[AC_DEFINE_UNQUOTED(EXTRA_IDENT,"$withval", [Extra version information for imap/version.h])])
 
-AC_CHECK_PROG(MAKEDEPEND,makedepend,makedepend,[`cd ${srcdir};pwd`/tools/not-mkdep])
+srctoolsdir=`cd ${srcdir};pwd`/tools
+AC_CHECK_PROG(MAKEDEPEND,makedepend,makedepend,[${srctoolsdir}/not-mkdep])
 if test "$MAKEDEPEND" != "makedepend"; then
         AC_MSG_WARN([Makedepend is not installed on this system.  You should compile and install the version from the makedepend subdirectory.])
 fi
@@ -1184,7 +1185,7 @@ if test "${with_perl}" != no; then
     fi
 fi
 if test "$with_perl" = "notfound"; then
-    AC_MSG_WARN(Perl not found: Administrative tools won't be available)
+    AC_MSG_WARN(Perl not found: Administrative tools will not be available)
 elif test "${with_perl}" != "no"; then
 dnl compile perl stuff
     EXTRA_SUBDIRS="${EXTRA_SUBDIRS} perl"
@@ -1205,6 +1206,9 @@ dnl -- this is needed on NetBSD and Linux, but seems to cause problems on atleas
         *)
             AC_MSG_WARN(skipping check for perl cccdlflags on "${target_os}")
     esac
+
+    PERL_PREINSTALL="${PERL} ${srctoolsdir}/fixsearchpath.pl ${cyrus_prefix} ${bindir}"
+    AC_SUBST(PERL_PREINSTALL)
 fi
 
 dnl for timsieved
