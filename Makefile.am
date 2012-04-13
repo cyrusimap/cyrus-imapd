@@ -126,7 +126,7 @@ GIT_VERSION = $(PACKAGE_VERSION).git$(shell date +'%Y%m%d%H%M')
 
 snapshot::
 	@echo "creating snapshot $(GIT_VERSION)"
-	@if [ \! -d snapshot ]; then mkdir snapshot ; fi
+	@$(MKDIR_P) snapshot
 	@git archive --format=tar --prefix=$(PACKAGE_NAME)-$(GIT_VERSION)/ HEAD | tar -C snapshot/ -x -f -
 	@echo "/* $(PACKAGE_NAME) $(GIT_VERSION) */" > snapshot/$(PACKAGE_NAME)-$(GIT_VERSION)/xversion.h
 	@echo "#define _CYRUS_VERSION \"git$(PACKAGE_VERSION)+`git log --pretty=oneline $(PACKAGE_NAME)-$(PACKAGE_VERSION)..HEAD | wc -l`\"" >> snapshot/$(PACKAGE_NAME)-$(GIT_VERSION)/xversion.h
@@ -175,7 +175,7 @@ dist-old:: distgit
 	rm -rf dist
 
 distgit:
-	if [ \! -d dist ]; then mkdir dist ; fi
+	$(MKDIR_P) dist
 	@echo "checking out the distribution from tag $(PACKAGE_NAME)-$(PACKAGE_VERSION)"
 	git archive --format=tar --prefix=$(PACKAGE_NAME)-$(PACKAGE_VERSION)/ $(PACKAGE_NAME)-$(PACKAGE_VERSION) | tar -C dist -x -f -
 	echo "/* Release $(PACKAGE_NAME)-$(PACKAGE_VERSION) */" > dist/$(PACKAGE_NAME)-$(PACKAGE_VERSION)/xversion.h
