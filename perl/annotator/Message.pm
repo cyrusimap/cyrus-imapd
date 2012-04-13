@@ -39,9 +39,8 @@
 # AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
 # OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
-
-use warnings;
 use strict;
+use warnings;
 
 package Cyrus::Annotator::Message;
 
@@ -98,7 +97,7 @@ Takes the following args:
 
  # totally optional (will be considered empty if not set)
  * FLAGS => array of already set flags
- * ANNOTATAIONS => array of already set annotations
+ * ANNOTATIONS => array of already set annotations
 
 =cut
 
@@ -110,7 +109,7 @@ sub new {
     my %annots;
 
     my $fs = $args{FLAGS} || [];
-    my $as = $args{ANNOTATAIONS} || [];
+    my $as = $args{ANNOTATIONS} || [];
 
     for my $name (@$fs) {
 	$flags{$name} = {
@@ -119,8 +118,9 @@ sub new {
 	};
     }
 
-    for my $obj (@$as) {
-	my ($entry, $type, $value) = @$obj;
+    while (my $entry = shift @$as) {
+	my $rest = shift @$as;
+	my ($type, $value) = @$rest;
 	$annots{$entry}{$type} = {
 	    value => $value,
 	    orig => $value,
@@ -187,7 +187,15 @@ sub decode_part {
 	$Content = decode_qp($Content);
     }
 
-    my $charset = $Part->{'Content-Type'}{charset} || 'iso-8859-1';
+    my $charset = lc($Part->{'Content-Type'}{charset} || 'iso-8859-1');
+
+    # If no charset is present, it defaults to ascii. But some systems
+    #  send 8-bit data. For them, assume iso-8859-1, ascii is a subset anyway
+    $charset = 'iso-8859-1'
+	if $charset eq 'ascii' || $charset eq 'us-ascii';
+
+    # Fix up some bogus formatted iso charsets
+    $charset =~ s/^(iso)[\-_]?(\d+)[\-_](\d+)[\-_]?\w*/$1-$2-$3/i;
 
     return eval { decode($charset, $Content) } || decode('iso-8859-1', $Content);
 }
@@ -216,7 +224,7 @@ sub read_part_content {
     die "No Size for part"
 	unless defined $Part->{Size};
 
-    unless (defined $nbytes and $nbytes > $Part->{Size}) {
+    if (!defined($nbytes) || $Part->{Size} < $nbytes) {
 	$nbytes = $Part->{Size};
     }
 
@@ -340,6 +348,11 @@ sub get_flag {
     return $self->{flag}{$name}{value};
 }
 
+sub get_flags {
+    my $self = shift;
+    return grep { $self->{flag}{$_}{value} } keys %{$self->{flag}};
+}
+
 sub set_flag_value {
     my $self = shift;
     my ($name, $value) = @_;
@@ -457,11 +470,21 @@ sub get_changed {
 	foreach my $type (sort keys %{$self->{annot}{$entry}}) {
 	    my $item = $self->{annot}{$entry}{$type};
 	    push @annots, [$entry, $type, $item->{value}]
-		unless $item->{value} eq $item->{orig};
+		unless is_eq($item->{value}, $item->{orig});
 	}
     }
 
     return (\@flags, \@annots);
+}
+
+sub is_eq {
+    my ($l, $r) = @_;
+    if (defined $l && defined $r) {
+	return $l eq $r;
+    }
+    else {
+	return !defined $l && !defined $r;
+    }
 }
 
 =back
