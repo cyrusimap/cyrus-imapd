@@ -69,8 +69,38 @@ noinst_LIBRARIES += syslog/libsyslog.a
 noinst_PROGRAMS += syslog/syslogd
 endif
 if SERVER
-SUBDIRS += imap
-service_PROGRAMS += master/master
+BUILT_SOURCES += imap/imap_err.c imap/mupdate_err.c imap/nntp_err.c \
+	imap/lmtpstats.c imap/pushstats.c imap/rfc822_header.c \
+	imap/rfc822_header.h
+noinst_LIBRARIES += imap/libimap.a
+service_PROGRAMS += imap/arbitron imap/chk_cyrus imap/ctl_cyrusdb \
+	imap/ctl_deliver imap/ctl_mboxlist imap/cvt_cyrusdb imap/cyr_df \
+	imap/cyrdump imap/cyr_dbtool imap/cyr_expire imap/cyr_info \
+	imap/cyr_sequence imap/cyr_synclog imap/cyr_userseen imap/deliver
+if NNTPD
+service_PROGRAMS += imap/fetchnews
+endif
+service_PROGRAMS += imap/fud
+if IDLED
+service_PROGRAMS += imap/idled
+endif
+service_PROGRAMS += imap/imapd imap/ipurge imap/lmtpd imap/mbexamine \
+	imap/mbpath imap/mbtool
+if MURDER
+service_PROGRAMS += imap/mupdate
+endif
+if NNTPD
+service_PROGRAMS += imap/nntpd
+endif
+service_PROGRAMS += imap/pop3d imap/quota imap/reconstruct imap/smmapd \
+	imap/squatter
+if REPLICATION
+service_PROGRAMS += imap/sync_client imap/sync_reset imap/sync_server
+endif
+if WITH_OPENSSL
+service_PROGRAMS += imap/tls_prune
+endif
+service_PROGRAMS += imap/unexpunge master/master
 endif
 if CMULOCAL
 dist_sysconf_DATA += depot/rc.local.imap depot/rc.local.ptclient
@@ -183,6 +213,173 @@ noinst_HEADERS = lib/byteorder64.h lib/gai.h lib/libconfig.h lib/md5.h \
 	lib/prot.h lib/ptrarray.h lib/strarray.h lib/util.h lib/xstrlcat.h \
 	lib/xstrlcpy.h
 
+imap_arbitron_SOURCES = imap/arbitron.c imap/cli_fatal.c imap/mutex_fake.c
+imap_arbitron_LDADD = $(ptclient_ptdump_LDADD)
+
+imap_chk_cyrus_SOURCES = imap/chk_cyrus.c imap/cli_fatal.c imap/mutex_fake.c
+imap_chk_cyrus_LDADD = $(ptclient_ptdump_LDADD)
+
+imap_ctl_cyrusdb_SOURCES = imap/cli_fatal.c imap/ctl_cyrusdb.c imap/mutex_fake.c
+imap_ctl_cyrusdb_LDADD = $(ptclient_ptdump_LDADD)
+
+imap_ctl_deliver_SOURCES = imap/cli_fatal.c imap/ctl_deliver.c imap/mutex_fake.c
+imap_ctl_deliver_LDADD = $(ptclient_ptdump_LDADD)
+
+imap_ctl_mboxlist_SOURCES = imap/cli_fatal.c imap/ctl_mboxlist.c imap/mutex_fake.c
+imap_ctl_mboxlist_LDADD = $(ptclient_ptdump_LDADD)
+
+imap_cvt_cyrusdb_SOURCES = imap/cli_fatal.c imap/cvt_cyrusdb.c imap/mutex_fake.c
+imap_cvt_cyrusdb_LDADD = $(ptclient_ptdump_LDADD)
+
+imap_cyrdump_SOURCES = imap/cli_fatal.c imap/cyrdump.c imap/index.c imap/mutex_fake.c
+imap_cyrdump_LDADD = $(ptclient_ptdump_LDADD)
+
+imap_cyr_dbtool_SOURCES = imap/cli_fatal.c imap/cyr_dbtool.c imap/mutex_fake.c
+imap_cyr_dbtool_LDADD = $(ptclient_ptdump_LDADD)
+
+imap_cyr_df_SOURCES = imap/cli_fatal.c imap/cyr_df.c imap/mutex_fake.c
+imap_cyr_df_LDADD = $(ptclient_ptdump_LDADD)
+
+imap_cyr_expire_SOURCES = imap/cli_fatal.c imap/cyr_expire.c imap/mutex_fake.c
+imap_cyr_expire_LDADD = $(ptclient_ptdump_LDADD)
+
+imap_cyr_info_SOURCES = imap/cli_fatal.c imap/cyr_info.c imap/mutex_fake.c master/masterconf.c
+imap_cyr_info_LDADD = $(ptclient_ptdump_LDADD)
+
+imap_cyr_sequence_SOURCES = imap/cli_fatal.c imap/cyr_sequence.c imap/mutex_fake.c
+imap_cyr_sequence_LDADD = $(ptclient_ptdump_LDADD)
+
+imap_cyr_synclog_SOURCES = imap/cli_fatal.c imap/cyr_synclog.c imap/mutex_fake.c
+imap_cyr_synclog_LDADD = $(ptclient_ptdump_LDADD)
+
+imap_cyr_userseen_SOURCES = imap/cli_fatal.c imap/cyr_userseen.c imap/mutex_fake.c
+imap_cyr_userseen_LDADD = $(ptclient_ptdump_LDADD)
+
+#imap_cyr_virusscan_SOURCES = imap/cli_fatal.c imap/cyr_virusscan.c imap/index.c imap/mutex_fake.c
+#imap_cyr_vyrusscan_LDADD = $(ptclient_ptdump_LDADD) -lclamav
+
+imap_deliver_SOURCES = imap/deliver.c imap/lmtpengine.c imap/lmtpstats.c imap/mutex_fake.c imap/proxy.c imap/spool.c
+imap_deliver_LDADD = $(ptclient_ptdump_LDADD)
+
+imap_fetchnews_SOURCES = imap/cli_fatal.c imap/fetchnews.c imap/mutex_fake.c
+imap_fetchnews_LDADD = $(ptclient_ptdump_LDADD)
+
+imap_fud_SOURCES = imap/fud.c imap/mutex_fake.c master/service.c
+imap_fud_LDADD = $(ptclient_ptdump_LDADD) @LIB_WRAP@
+
+imap_idled_SOURCES = imap/idled.c imap/mutex_fake.c
+imap_idled_LDADD = $(ptclient_ptdump_LDADD)
+
+imap_imapd_SOURCES = imap/imap_proxy.c imap/imap_proxy.h imap/imapd.c imap/imapd.h imap/index.c imap/mutex_fake.c imap/pushstats.c imap/pushstats.h imap/proxy.c master/service.c
+imap_imapd_LDADD = $(imap_fud_LDADD)
+
+imap_ipurge_SOURCES = imap/cli_fatal.c imap/ipurge.c imap/mutex_fake.c
+imap_ipurge_LDADD = $(ptclient_ptdump_LDADD)
+
+imap_libimap_a_SOURCES = imap/annotate.c imap/annotate.h imap/append.c \
+	imap/append.h imap/backend.c imap/backend.h imap/convert_code.c \
+	imap/convert_code.h imap/dlist.c imap/dlist.h imap/duplicate.c \
+	imap/duplicate.h imap/global.c imap/global.h imap/idle.c imap/idle.h \
+	imap/idlemsg.c imap/idlemsg.h imap/imapparse.c imap/imap_err.c \
+	imap/index.h imap/mailbox.c imap/mailbox.c imap/mbdump.c \
+	imap/mbdump.h imap/mboxkey.c imap/mboxkey.h imap/mboxlist.c \
+	imap/mboxlist.h imap/mboxname.c imap/mboxname.h imap/message_guid.c \
+	imap/message_guid.h imap/message.c imap/message.h \
+	imap/mupdate-client.c imap/mupdate-client.h imap/mupdate_err.c \
+	imap/mupdate_err.h imap/mutex.h imap/notify.c imap/notify.h \
+	imap/proc.c imap/proc.h imap/protocol.h imap/quota_db.c \
+	imap/rfc822_header.c imap/rfc822_header.h imap/saslclient.c \
+	imap/saslclient.h imap/saslserver.c imap/search_engines.c \
+	imap/search_engines.h imap/seen.h imap/seen_db.c imap/sequence.c \
+	imap/sequence.h imap/setproctitle.c imap/squat.c imap/squat.h \
+	imap/squat_internal.c imap/squat_internal.h imap/statuscache.h \
+	imap/statuscache_db.c imap/sync_log.c imap/sync_log.h \
+	imap/telemetry.c imap/telemetry.h imap/tls.c imap/tls.h \
+	imap/upgrade_index.c imap/upgrade_index.h imap/user.c imap/user.h \
+	imap/userdeny_db.c imap/userdeny.h imap/version.c imap/version.h
+
+imap_lmtpd_SOURCES = imap/lmtpd.c imap/lmtpd.h imap/lmtpengine.c \
+	imap/lmtpengine.h imap/lmtpstats.c imap/lmtpstats.h
+imap_lmtpd_LDADD =
+if SIEVE
+imap_lmtpd_SOURCES += imap/lmtp_sieve.c
+imap_lmtpd_LDADD += sieve/libsieve.a
+endif
+imap_lmtpd_SOURCES += imap/mutex_fake.c imap/proxy.c
+if SIEVE
+imap_lmtpd_SOURCES += imap/smtpclient.c
+endif
+imap_lmtpd_SOURCES += imap/spool.c master/service.c
+imap_lmtpd_LDADD += $(imap_fud_LDADD)
+
+imap/lmtpstats.c: imap/lmtpstats.snmp
+	cd imap && ../${top_srcdir}/snmp/snmpgen ../${top_srcdir}/imap/lmtpstats.snmp
+
+imap/pushstats.c: imap/pushstats.snmp
+	cd imap && ../${top_srcdir}/snmp/snmpgen ../${top_srcdir}/imap/pushstats.snmp
+
+imap_mbexamine_SOURCES = imap/cli_fatal.c imap/mbexamine.c imap/mutex_fake.c
+imap_mbexamine_LDADD = $(ptclient_ptdump_LDADD)
+
+imap_mbpath_SOURCES = imap/cli_fatal.c imap/mbpath.c imap/mutex_fake.c
+imap_mbpath_LDADD = $(ptclient_ptdump_LDADD)
+
+imap_mbtool_SOURCES = imap/cli_fatal.c imap/mbtool.c imap/mutex_fake.c
+imap_mbtool_LDADD = $(ptclient_ptdump_LDADD)
+
+imap_mupdate_SOURCES = imap/mupdate.c imap/mupdate-slave.c imap/mutex_pthread.c master/service-thread.c
+imap_mupdate_LDADD = $(imap_fud_LDADD) -lpthread
+
+imap_nntpd_SOURCES = imap/index.c imap/mutex_fake.c imap/nntpd.c \
+	imap/nntp_err.c imap/nntp_err.h imap/proxy.c imap/smtpclient.c \
+	imap/smtpclient.h imap/spool.c imap/spool.h master/service.c
+imap_nntpd_LDADD = $(imap_fud_LDADD)
+
+imap_pop3d_SOURCES = imap/mutex_fake.c imap/pop3d.c imap/proxy.c master/service.c
+imap_pop3d_LDADD = $(imap_fud_LDADD)
+
+imap_quota_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/quota.c
+imap_quota_LDADD = $(ptclient_ptdump_LDADD)
+
+imap_reconstruct_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/reconstruct.c
+imap_reconstruct_LDADD = $(ptclient_ptdump_LDADD)
+
+imap_smmapd_SOURCES = imap/mutex_fake.c imap/proxy.c imap/smmapd.c master/service.c
+imap_smmapd_LDADD = $(imap_fud_LDADD)
+
+imap_squatter_SOURCES = imap/cli_fatal.c imap/index.c imap/mutex_fake.c imap/squatter.c imap/squat_build.c
+imap_squatter_LDADD = $(ptclient_ptdump_LDADD)
+
+imap_sync_client_SOURCES = imap/mutex_fake.c imap/sync_client.c imap/sync_support.c
+imap_sync_client_LDADD = $(ptclient_ptdump_LDADD)
+
+imap_sync_reset_SOURCES = imap/mutex_fake.c imap/sync_reset.c imap/sync_support.c
+imap_sync_reset_LDADD = $(ptclient_ptdump_LDADD)
+
+imap_sync_server_SOURCES = imap/mutex_fake.c imap/sync_server.c imap/sync_support.c master/service.c
+imap_sync_server_LDADD = $(imap_fud_LDADD)
+
+imap_tls_prune_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/tls_prune.c
+imap_tls_prune_LDADD = $(ptclient_ptdump_LDADD)
+
+imap_unexpunge_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/unexpunge.c
+imap_unexpunge_LDADD = $(ptclient_ptdump_LDADD)
+
+imap/imap_err.h imap/imap_err.c: imap/imap_err.et
+	cd imap && $(top_builddir)/../$(COMPILE_ET) ../$(top_srcdir)/imap/imap_err.et
+
+imap/mupdate_err.h imap/mupdate_err.c: imap/mupdate_err.et
+	cd imap && $(top_builddir)/../$(COMPILE_ET) ../$(top_srcdir)/imap/mupdate_err.et
+
+imap/nntp_err.h imap/nntp_err.c: imap/nntp_err.et
+	cd imap && $(top_builddir)/../$(COMPILE_ET) ../$(top_srcdir)/imap/nntp_err.et
+
+imap/rfc822_header.c: imap/rfc822_header.st
+	${top_srcdir}/tools/compile_st.pl -c $< > $@
+
+imap/rfc822_header.h: imap/rfc822_header.st
+	${top_srcdir}/tools/compile_st.pl -h $< > $@
+
 imtest_imtest_SOURCES = imtest/imtest.c
 imtest_imtest_LDADD = ${netnews_remotepurge_LDADD}
 
@@ -294,7 +491,7 @@ notifyd_notifyd_SOURCES = imap/mutex_fake.c master/service.c \
 	notifyd/notify_mailto.c notifyd/notify_mailto.h notifyd/notify_null.c \
 	notifyd/notify_null.h notifyd/notify_zephyr.c notifyd/notify_zephyr.h \
 	notifyd/notifyd.c notifyd/notifyd.h notifyd/version.h
-notifyd_notifyd_LDADD = imap/libimap.a @COM_ERR_LIBS@ @LIB_WRAP@ $(netnews_remotepurge_LDADD) @ZEPHYR_LIBS@
+notifyd_notifyd_LDADD = $(imap_fud_LDADD) @ZEPHYR_LIBS@
 
 notifyd_notifytest_SOURCES = notifyd/notifytest.c imap/mutex_fake.o
 notifyd_notifytest_LDADD = ${notifyd_notifyd_LDADD}
@@ -486,6 +683,10 @@ install-exec-hook:
 	  $(INSTALL) -m 755 perl/sieve/scripts/$$s $(DESTDIR)$(bindir)/$$s ; \
 	done
 
+	cd $(DESTDIR)$(servicedir) && \
+	  $(LN_S) -f pop3d pop3proxyd && \
+	  $(LN_S) -f imapd proxyd && \
+	  $(LN_S) -f lmtpd lmtpprodyx
 	cd $(DESTDIR)$(bindir) && \
 	  $(LN_S) -f imtest lmtptest && \
 	  $(LN_S) -f imtest mupatetest && \

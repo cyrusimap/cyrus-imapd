@@ -852,7 +852,6 @@ SASL_SET_GSSAPI_LIBS
 dnl
 dnl Test for OpenSSL
 dnl
-IMAP_PROGS=""
 AC_ARG_WITH(openssl,
 	[AS_HELP_STRING([--with-openssl=DIR], [use OpenSSL from DIR])],
 	with_openssl="${withval}")
@@ -891,12 +890,12 @@ AC_MSG_RESULT($with_openssl)
 
 if test "$with_openssl" != "no"; then
 	AC_DEFINE(HAVE_SSL,[],[Build with SSL support?])
-	IMAP_PROGS="$IMAP_PROGS tls_prune"
         if test "${krb4}" != no; then
            AC_DEFINE(OPENSSL_ENABLE_OLD_DES_SUPPORT,[],[Configure OpenSSL to provide legacy des apis])
            AC_DEFINE(OPENSSL_DES_LIBDES_COMPATIBILITY,[],[Configure OpenSSL to provide krb4-compatible legacy des apis])
         fi
 fi
+AM_CONDITIONAL([WITH_OPENSSL], [test "$with_openssl" != "no"])
 AC_SUBST(OPENSSL_INC)
 AC_SUBST(OPENSSL_LIB)
 
@@ -965,32 +964,21 @@ dnl
 dnl see if we're compiling with IMAP idled support
 dnl
 AC_ARG_ENABLE(idled,
-        [AS_HELP_STRING([--enable-idled], [enable IMAP idled support])],
-        if test "$enable_val" != no; then
-	  IMAP_PROGS="$IMAP_PROGS idled"
-        fi) 
-
+        [AS_HELP_STRING([--enable-idled], [enable IMAP idled support])])
+AM_CONDITIONAL([IDLED], [test "$enable_idled" != "no"])
 dnl
 dnl see if we're compiling with NNTP support
 dnl
-ENABLE_NNTP=no
 AC_ARG_ENABLE(nntp,
-        [AS_HELP_STRING([--enable-nntp], [enable NNTP support])],
-	ENABLE_NNTP=$enableval
-        if test "$ENABLE_NNTP" != no; then
-	  IMAP_PROGS="$IMAP_PROGS nntpd fetchnews"
-        fi) 
-
+        [AS_HELP_STRING([--enable-nntp], [enable NNTP support])])
+AM_CONDITIONAL([NNTPD], [test "$enable_nntp" != "no"])
 dnl
 dnl see if we're compiling the Murder support programs
 dnl
-ENABLE_MURDER=no
 AC_ARG_ENABLE(murder,
-        [AS_HELP_STRING([--enable-murder], [enable IMAP Murder support])],
-	ENABLE_MURDER=$enableval)
-
-if test "$ENABLE_MURDER" != no; then
-	IMAP_PROGS="$IMAP_PROGS mupdate"
+        [AS_HELP_STRING([--enable-murder], [enable IMAP Murder support])])
+AM_CONDITIONAL([MURDER], [test "$enable_murder" != "no"])
+if test "$enable_murder" != no; then
 	# for master/slave auto-selection
 	AC_CHECK_HEADERS(sys/sockio.h)
 fi
@@ -998,15 +986,9 @@ fi
 dnl
 dnl see if we're compiling replication support programs
 dnl
-ENABLE_REPLICATION=no
 AC_ARG_ENABLE(replication,
-        [AS_HELP_STRING([--enable-replication], [enable replication support (experimental)])],
-	ENABLE_REPLICATION=$enableval
-        if test "$ENABLE_REPLICATION" != no; then
-	  IMAP_PROGS="$IMAP_PROGS sync_client sync_server sync_reset"
-        fi) 
-
-AC_SUBST(IMAP_PROGS)
+        [AS_HELP_STRING([--enable-replication], [enable replication support (experimental)])])
+AM_CONDITIONAL([REPLICATION], [test "$enable_replication" != no])
 
 dnl
 dnl Try and find a system version of com_err.
@@ -1208,12 +1190,9 @@ for flag in ${ldflags} ${default_ldflags}; do
   esac
 done
 
-IMAP_LIBS="${LIB_SASL} ${LIBS}"
-
+AC_SUBST(LIB_SASL)
 AC_SUBST(LIB_RT)
 AC_SUBST(LIB_UUID)
-AC_SUBST(IMAP_LIBS)
-
 AC_SUBST(PERL)
 
 dnl
@@ -1463,5 +1442,5 @@ enum {
 ])
 
 dnl make sure that Makefile is the last thing output
-AC_CONFIG_FILES([cunit/Makefile imap/Makefile Makefile])
+AC_CONFIG_FILES([cunit/Makefile Makefile])
 AC_OUTPUT
