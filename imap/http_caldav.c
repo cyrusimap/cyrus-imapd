@@ -111,13 +111,13 @@ static int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root);
 static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 			  struct mailbox *mailbox, const char *resource,
 			  struct caldav_db *caldavdb, int overwrite);
-static icalcomponent *do_fb_query(struct transaction_t *txn,
-				  struct propfind_ctx *fctx,
-				  char mailboxname[],
-				  icalproperty_method method,
-				  const char *uid,
-				  const char *organizer,
-				  const char *attendee);
+static icalcomponent *busytime(struct transaction_t *txn,
+			       struct propfind_ctx *fctx,
+			       char mailboxname[],
+			       icalproperty_method method,
+			       const char *uid,
+			       const char *organizer,
+			       const char *attendee);
 static int sched_busytime(struct transaction_t *txn);
 int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname);
 
@@ -2350,6 +2350,7 @@ static int report_cal_multiget(struct transaction_t *txn,
 
 
 
+/* caldav_foreach() callback to find busytime of a resource */
 static int busytime_by_resource(void *rock,
 				const char *resource __attribute__((unused)),
 				uint32_t uid)
@@ -2379,6 +2380,7 @@ static int busytime_by_resource(void *rock,
 }
 
 
+/* Compare start times of busytime period -- used for sorting */
 static int compare_busytime(const void *b1, const void *b2)
 {
     struct icalperiodtype *a = (struct icalperiodtype *) b1;
@@ -2388,13 +2390,14 @@ static int compare_busytime(const void *b1, const void *b2)
 }
 
 
-static icalcomponent *do_fb_query(struct transaction_t *txn,
-				  struct propfind_ctx *fctx,
-				  char mailboxname[],
-				  icalproperty_method method,
-				  const char *uid,
-				  const char *organizer,
-				  const char *attendee)
+/* Create an iCalendar object containing busytime of all specified resources */
+static icalcomponent *busytime(struct transaction_t *txn,
+			       struct propfind_ctx *fctx,
+			       char mailboxname[],
+			       icalproperty_method method,
+			       const char *uid,
+			       const char *organizer,
+			       const char *attendee)
 {
     struct busytime *busytime = &fctx->busytime;
     icalcomponent *cal = NULL;
@@ -2524,7 +2527,7 @@ static int report_fb_query(struct transaction_t *txn,
 	}
     }
 
-    cal = do_fb_query(txn, fctx, mailboxname, 0, NULL, NULL, NULL);
+    cal = busytime(txn, fctx, mailboxname, 0, NULL, NULL, NULL);
 
     if (cal) {
 	/* Output the iCalendar object as text/calendar */
@@ -2541,6 +2544,7 @@ static int report_fb_query(struct transaction_t *txn,
 }
 
 
+/* Compare modseq in index maps -- used for sorting */
 static int map_modseq_cmp(const struct index_map *m1,
 			  const struct index_map *m2)
 {
@@ -3495,7 +3499,7 @@ static int sched_busytime(struct transaction_t *txn)
 	const char *attendee, *userid;
 	xmlNodePtr resp, recip, cdata;
 	struct mboxlist_entry mbentry;
-	icalcomponent *fb;
+	icalcomponent *busy;
 	int r;
 
 	attendee = icalproperty_get_attendee(prop);
@@ -3532,12 +3536,12 @@ static int sched_busytime(struct transaction_t *txn)
 
 	fctx.req_tgt->collection = NULL;
 	fctx.busytime.len = 0;
-	fb = do_fb_query(txn, &fctx, mailboxname,
-			 ICAL_METHOD_REPLY, uid, organizer, attendee);
+	busy = busytime(txn, &fctx, mailboxname,
+			ICAL_METHOD_REPLY, uid, organizer, attendee);
 
-	if (fb) {
-	    const char *fb_str = icalcomponent_as_ical_string(fb);
-	    icalcomponent_free(fb);
+	if (busy) {
+	    const char *fb_str = icalcomponent_as_ical_string(busy);
+	    icalcomponent_free(busy);
 
 	    xmlNewChild(resp, NULL, BAD_CAST "request-status",
 			BAD_CAST "2.0;Success");
