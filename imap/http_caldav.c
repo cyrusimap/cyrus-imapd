@@ -46,8 +46,6 @@
  *   - Make proxying more robust.  Currently depends on calendar collections
  *     residing on same server as user's INBOX.  Doesn't handle global/shared
  *     calendars.
- *   - Rewrite COPY/MOVE to use guts of PUT.  Current code doesn't rewrite
- *     Content-Disposition to have new filename.
  *   - Support COPY/MOVE on collections
  *   - Add more required properties
  *   - GET/HEAD on collections (iCalendar stream of resources)
@@ -92,6 +90,12 @@
 
 #define DFLAG_UNBIND "DAV:unbind"
 
+enum {
+    OVERWRITE_CHECK = -1,
+    OVERWRITE_NO,
+    OVERWRITE_YES
+};
+
 static int meth_acl(struct transaction_t *txn);
 static int meth_copy(struct transaction_t *txn);
 static int meth_delete(struct transaction_t *txn);
@@ -104,6 +108,9 @@ static int meth_report(struct transaction_t *txn);
 static int parse_path(struct request_target_t *tgt, const char **errstr);
 static int is_mediatype(const char *hdr, const char *type);
 static int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root);
+static int store_resource(struct transaction_t *txn, icalcomponent *ical,
+			  struct mailbox *mailbox, const char *resource,
+			  struct caldav_db *caldavdb, int overwrite);
 static icalcomponent *do_fb_query(struct transaction_t *txn,
 				  struct propfind_ctx *fctx,
 				  char mailboxname[],
@@ -529,7 +536,8 @@ static int meth_acl(struct transaction_t *txn)
  */
 static int meth_copy(struct transaction_t *txn)
 {
-    int ret = HTTP_CREATED, r, precond, rights;
+    int ret = HTTP_CREATED, r, precond, rights, overwrite = OVERWRITE_YES;
+    size_t plen;
     const char **hdr;
     struct request_target_t dest;  /* Parsed destination URL */
     char src_mboxname[MAX_MAILBOX_BUFFER], dest_mboxname[MAX_MAILBOX_BUFFER];
@@ -541,7 +549,9 @@ static int meth_copy(struct transaction_t *txn)
     struct index_record src_rec;
     const char *etag = NULL;
     time_t lastmod = 0;
-    struct appendstate appendstate;
+    const char *msg_base = NULL;
+    unsigned long msg_size = 0;
+    icalcomponent *ical = NULL;
 
     /* Response should not be cached */
     txn->flags |= HTTP_NOCACHE;
@@ -564,9 +574,12 @@ static int meth_copy(struct transaction_t *txn)
     /* Parse destination URI */
     if ((r = parse_uri(NULL, hdr[0], &dest, &txn->error.desc))) return r;
 
-    /* Check namespace */
-    if (strncmp("/calendars/", dest.path, strlen("/calendars/")))
+    /* Check namespace of destination */
+    plen = strlen(namespace_calendar.prefix);
+    if (strncmp(namespace_calendar.prefix, dest.path, plen) ||
+	dest.path[plen] != '/') {
 	return HTTP_FORBIDDEN;
+    }
 
     dest.namespace = URL_NS_CALENDAR;
     if ((r = parse_path(&dest, &txn->error.desc))) return r;
@@ -670,6 +683,43 @@ static int meth_copy(struct transaction_t *txn)
 
     /* Local Mailbox */
 
+    /* Open dest mailbox for reading */
+    if ((r = mailbox_open_irl(dest_mboxname, &dest_mbox))) {
+	syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
+	       dest_mboxname, error_message(r));
+	txn->error.desc = error_message(r);
+	ret = HTTP_SERVER_ERROR;
+	goto done;
+    }
+
+    /* Open the associated CalDAV database */
+    if ((r = caldav_open(dest_mbox, CALDAV_CREATE, &dest_caldb))) {
+	syslog(LOG_ERR, "caldav_open(%s) failed: %s",
+	       dest_mboxname, error_message(r));
+	txn->error.desc = error_message(r);
+	ret = HTTP_SERVER_ERROR;
+	goto done;
+    }
+
+    /* Find message UID for the dest resource, if exists */
+    caldav_read(dest_caldb, dest.resource, &olduid);
+    /* XXX  Check errors */
+
+    /* Finished our initial read of dest mailbox */
+    mailbox_unlock_index(dest_mbox, NULL);
+
+    /* Check any preconditions on destination */
+    if ((hdr = spool_getheader(txn->req_hdrs, "Overwrite")) &&
+	!strcmp(hdr[0], "F")) {
+
+	if (olduid) {
+	    /* Don't overwrite the destination resource */
+	    ret = HTTP_PRECOND_FAILED;
+	    goto done;
+	}
+	overwrite = OVERWRITE_NO;
+    }
+
     /* Open source mailbox for reading */
     if ((r = http_mailbox_open(src_mboxname, &src_mbox, LOCK_SHARED))) {
 	syslog(LOG_ERR, "http_mailbox_open(%s) failed: %s",
@@ -708,168 +758,21 @@ static int meth_copy(struct transaction_t *txn)
 	goto done;
     }
 
-    /* Local Mailbox */
-
-    /* Fetch cache record for the source resource (so we can copy it) */
-    if ((r = mailbox_cacherecord(src_mbox, &src_rec))) {
-	syslog(LOG_ERR, "mailbox_cacherecord(%s) failed: %s",
-	       src_mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-	ret = HTTP_SERVER_ERROR;
-	goto done;
-    }
+    /* Load message containing the resource and parse iCal data */
+    mailbox_map_message(src_mbox, src_uid, &msg_base, &msg_size);
+    ical = icalparser_parse_string(msg_base + src_rec.header_size);
+    mailbox_unmap_message(src_mbox, src_uid, &msg_base, &msg_size);
 
     /* Finished our initial read of source mailbox */
     mailbox_unlock_index(src_mbox, NULL);
 
-    /* Open dest mailbox for reading */
-    if ((r = mailbox_open_irl(dest_mboxname, &dest_mbox))) {
-	syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
-	       dest_mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-	ret = HTTP_SERVER_ERROR;
-	goto done;
-    }
-
-    /* Open the associated CalDAV database */
-    if ((r = caldav_open(dest_mbox, CALDAV_CREATE, &dest_caldb))) {
-	syslog(LOG_ERR, "caldav_open(%s) failed: %s",
-	       dest_mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-	ret = HTTP_SERVER_ERROR;
-	goto done;
-    }
-
-    /* Find message UID for the dest resource, if exists */
-    caldav_read(dest_caldb, dest.resource, &olduid);
-    /* XXX  Check errors */
-
-    /* Finished our initial read of dest mailbox */
-    mailbox_unlock_index(dest_mbox, NULL);
-
-    /* Check any preconditions on destination */
-    if (olduid && (hdr = spool_getheader(txn->req_hdrs, "Overwrite")) &&
-	!strcmp(hdr[0], "F")) {
-	/* Don't overwrite the destination resource */
-	ret = HTTP_PRECOND_FAILED;
-	goto done;
-    }
-
-    /* Prepare to append source resource to destination mailbox */
-    if ((r = append_setup(&appendstate, dest_mboxname, 
-			  httpd_userid, httpd_authstate, ACL_INSERT,
-			  (txn->meth[0]) == 'C' ? (long) src_rec.size : -1))) {
-	syslog(LOG_ERR, "append_setup(%s) failed: %s",
-	       dest_mboxname, error_message(r));
-	ret = HTTP_SERVER_ERROR;
-	txn->error.desc = "append_setup() failed";
-    }
-    else {
-	struct copymsg copymsg;
-	int flag = 0, userflag;
-	bit32 flagmask = 0;
-
-	/* Copy the resource */
-	copymsg.uid = src_rec.uid;
-	copymsg.internaldate = src_rec.internaldate;
-	copymsg.sentdate = src_rec.sentdate;
-	copymsg.gmtime = src_rec.gmtime;
-	copymsg.size = src_rec.size;
-	copymsg.header_size = src_rec.header_size;
-	copymsg.content_lines = src_rec.content_lines;
-	copymsg.cache_version = src_rec.cache_version;
-	copymsg.cache_crc = src_rec.cache_crc;
-	copymsg.crec = src_rec.crec;
-	message_guid_copy(&copymsg.guid, &src_rec.guid);
-	copymsg.system_flags = src_rec.system_flags;
-
-	for (userflag = 0; userflag < MAX_USER_FLAGS; userflag++) {
-	    if ((userflag & 31) == 0) {
-		flagmask = src_rec.user_flags[userflag/32];
-	    }
-	    if (src_mbox->flagname[userflag] && (flagmask & (1<<(userflag&31)))) {
-		copymsg.flag[flag++] = src_mbox->flagname[userflag];
-	    }
-	}
-	copymsg.flag[flag] = 0;
-	copymsg.seen = 0;  /* XXX */
-
-	if ((r = append_copy(src_mbox, &appendstate, 1, &copymsg, 0))) {
-	    syslog(LOG_ERR, "append_copy(%s->%s) failed: %s",
-		   src_mboxname, dest_mboxname, error_message(r));
-	    ret = HTTP_SERVER_ERROR;
-	    txn->error.desc = "append_copy() failed";
-	}
-
-	if (r) append_abort(&appendstate);
-	else {
-	    struct mailbox *lock_mbox = NULL;
-
-	    /* Commit the append to the destination mailbox */
-	    if ((r = append_commit(&appendstate, -1,
-				   NULL, NULL, NULL, &lock_mbox))) {
-		syslog(LOG_ERR, "append_commit(%s) failed: %s",
-		       dest_mboxname, error_message(r));
-		ret = HTTP_SERVER_ERROR;
-		txn->error.desc = "append_commit() failed";
-	    }
-	    else {
-		/* append_commit() returns a write-locked index */
-		struct index_record newrecord, oldrecord;
-
-		/* Read index record for new message (always the last one) */
-		mailbox_read_index_record(lock_mbox, lock_mbox->i.num_records,
-					  &newrecord);
-
-		/* Find message UID for the dest resource, if exists */
-		caldav_lockread(dest_caldb, dest.resource, &olduid);
-		/* XXX  check for errors */
-
-		if (olduid) {
-		    /* Now that we have the replacement message in place
-		       and the mailbox locked, re-read the old record
-		       and expunge it.
-		    */
-		    ret = HTTP_NO_CONTENT;
-
-		    /* Fetch index record for the old message */
-		    r = mailbox_find_index_record(lock_mbox, olduid, &oldrecord);
-
-		    /* Expunge the old message */
-		    if (!r) r = mailbox_user_flag(lock_mbox, DFLAG_UNBIND,
-						  &userflag);
-		    if (!r) {
-			oldrecord.user_flags[userflag/32] |= 1<<(userflag&31);
-			oldrecord.system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
-			r = mailbox_rewrite_index_record(lock_mbox, &oldrecord);
-		    }
-		    if (r) {
-			syslog(LOG_ERR,
-			       "expunging old dest record (%s) failed: %s",
-			       dest_mboxname, error_message(r));
-			txn->error.desc = error_message(r);
-			ret = HTTP_SERVER_ERROR;
-			goto done;
-		    }
-		}
-
-		/* Create mapping entry from dest resource name to UID */
-		caldav_write(dest_caldb, dest.resource, newrecord.uid);
-		/* XXX  check for errors, if this fails, backout changes */
-		caldav_unlock(dest_caldb);
-
-		/* append_setup() opened mailbox again,
-		   we need to close it to decrement reference count */
-		mailbox_close(&lock_mbox);
-
-		/* Tell client about the new resource */
-		txn->resp_body.etag = message_guid_encode(&newrecord.guid);
-	    }
-	}
-    }
+    /* Store source resource at destination */
+    ret = store_resource(txn, ical, dest_mbox, dest.resource,
+			 dest_caldb, overwrite);
 
     /* For MOVE, we need to delete the source resource */
-    if (!r && (txn->meth[0] == 'M')) {
+    if ((txn->meth[0] == 'M') &&
+	(ret == HTTP_CREATED || ret == HTTP_NO_CONTENT)) {
 	/* Lock source mailbox */
 	mailbox_lock_index(src_mbox, LOCK_EXCLUSIVE);
 
@@ -897,6 +800,7 @@ static int meth_copy(struct transaction_t *txn)
     }
 
   done:
+    if (ical) icalcomponent_free(ical);
     if (dest_caldb) caldav_close(dest_caldb);
     if (dest_mbox) mailbox_close(&dest_mbox);
     if (src_caldb) caldav_close(src_caldb);
@@ -2023,9 +1927,12 @@ static int meth_proppatch(struct transaction_t *txn)
 static int meth_post(struct transaction_t *txn)
 {
     static unsigned post_count = 0;
-    int r;
+    int r, ret;
     size_t len;
     char *p;
+
+    /* Response should not be cached */
+    txn->flags |= HTTP_NOCACHE;
 
     /* Make sure its a DAV resource */
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
@@ -2049,10 +1956,17 @@ static int meth_post(struct transaction_t *txn)
     len = strlen(txn->req_tgt.path);
     p = txn->req_tgt.path + len;
 
-    snprintf(p, MAX_MAILBOX_PATH - len, "%d-%ld-%u.ics",
-	     getpid(), time(0), post_count++);
+    snprintf(p, MAX_MAILBOX_PATH - len, "%x-%d-%ld-%u.ics",
+	     strhash(txn->req_tgt.path), getpid(), time(0), post_count++);
 
-    return meth_put(txn);
+    ret = meth_put(txn);
+
+    if (ret == HTTP_CREATED) {
+	/* Tell client where to find the new resource */
+	txn->loc = txn->req_tgt.path;
+    }
+
+    return ret;
 }
 
 
@@ -2072,7 +1986,7 @@ static int meth_post(struct transaction_t *txn)
  */
 static int meth_put(struct transaction_t *txn)
 {
-    int ret = HTTP_CREATED, r, precond, rights;
+    int ret, r, precond, rights;
     char *server, *acl, mailboxname[MAX_MAILBOX_BUFFER];
     struct mailbox *mailbox = NULL;
     struct caldav_db *caldavdb = NULL;
@@ -2080,20 +1994,9 @@ static int meth_put(struct transaction_t *txn)
     struct index_record oldrecord;
     const char *etag;
     time_t lastmod;
-    FILE *f = NULL;
-    struct stagemsg *stage = NULL;
     const char **hdr, *uid;
     uquota_t size = 0;
-    time_t now = time(NULL);
-    char datestr[80];
-    struct appendstate appendstate;
-    icalcomponent *ical, *comp, *nextcomp;
-    icalcomponent_kind kind;
-    icalproperty_method meth;
-    icalproperty *prop = NULL;
-    unsigned mykind = 0;
-    const char *prop_annot = ANNOT_NS "CALDAV:supported-calendar-component-set";
-    struct annotation_data attrib;
+    icalcomponent *ical = NULL, *comp, *nextcomp;
 
     /* Make sure its a DAV resource */
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
@@ -2186,6 +2089,9 @@ static int meth_put(struct transaction_t *txn)
 	lastmod = 0;
     }
 
+    /* Finished our initial read */
+    mailbox_unlock_index(mailbox, NULL);
+
     /* Check any preconditions */
     precond = check_precond(txn->meth, etag, lastmod, txn->req_hdrs);
 
@@ -2195,31 +2101,29 @@ static int meth_put(struct transaction_t *txn)
 	goto done;
     }
 
-    /* Finished our initial read */
-    mailbox_unlock_index(mailbox, NULL);
-
-    /* Check if we can append a new iMIP message to calendar mailbox */
-    if ((r = append_check(mailboxname, httpd_authstate, ACL_INSERT, size))) {
-	txn->error.desc = error_message(r);
-	ret = HTTP_SERVER_ERROR;
-	goto done;
-    }
-
     /* Read body */
     if (!(txn->flags & HTTP_READBODY)) {
 	txn->flags |= HTTP_READBODY;
-	r = read_body(httpd_in, txn->req_hdrs, &txn->req_body, &txn->error.desc);
-	if (r) {
+	ret = read_body(httpd_in, txn->req_hdrs,
+			&txn->req_body, &txn->error.desc);
+	if (ret) {
 	    txn->flags |= HTTP_CLOSE;
-	    ret = r;
 	    goto done;
 	}
     }
 
     /* Make sure we have a body */
-    if (!buf_len(&txn->req_body)) {
+    size = buf_len(&txn->req_body);
+    if (!size) {
 	txn->error.desc = "Missing request body";
 	ret = HTTP_BAD_REQUEST;
+	goto done;
+    }
+
+    /* Check if we can append a new iMIP message to calendar mailbox */
+    if ((r = append_check(mailboxname, httpd_authstate, ACL_INSERT, size))) {
+	txn->error.desc = error_message(r);
+	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
 
@@ -2251,188 +2155,12 @@ static int meth_put(struct transaction_t *txn)
 	}
     }
 
-    /* Check for supported component type */
-    kind = icalcomponent_isa(comp);
-    switch (kind) {
-    case ICAL_VEVENT_COMPONENT: mykind = CAL_COMP_VEVENT; break;
-    case ICAL_VTODO_COMPONENT: mykind = CAL_COMP_VTODO; break;
-    case ICAL_VJOURNAL_COMPONENT: mykind = CAL_COMP_VJOURNAL; break;
-    case ICAL_VFREEBUSY_COMPONENT: mykind = CAL_COMP_VFREEBUSY; break;
-    default:
-	txn->error.precond = &preconds[CALDAV_SUPP_COMP];
-	ret = HTTP_FORBIDDEN;
-	goto done;
-    }
-
-    if (!annotatemore_lookup(mailboxname, prop_annot,
-			     /* shared */ "", &attrib)
-	&& attrib.value) {
-	unsigned long supp_comp = strtoul(attrib.value, NULL, 10);
-
-	if (!(mykind & supp_comp)) {
-	    txn->error.precond = &preconds[CALDAV_SUPP_COMP];
-	    ret = HTTP_FORBIDDEN;
-	    goto done;
-	}
-    }
-
-    /* XXX  Check for existing iCal UID => CALDAV:no-uid-conflict */
-
-
-    /* Prepare to stage the message */
-    if (!(f = append_newstage(mailboxname, now, 0, &stage))) {
-	txn->error.desc = error_message(r);
-	ret = HTTP_SERVER_ERROR;
-	goto done;
-    }
-
-    /* Create iMIP header for resource */
-    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
-    if (prop) {
-	fprintf(f, "From: %s\r\n", icalproperty_get_organizer(prop)+7);
-    }
-    else {
-	/* XXX  This needs to be done via an LDAP/DB lookup */
-	fprintf(f, "From: %s@%s\r\n", httpd_userid, config_servername);
-    }
-
-    fprintf(f, "Subject: %s\r\n", icalcomponent_get_summary(comp));
-
-    rfc822date_gen(datestr, sizeof(datestr),
-		   icaltime_as_timet_with_zone(icalcomponent_get_dtstamp(comp),
-					       icaltimezone_get_utc_timezone()));
-    fprintf(f, "Date: %s\r\n", datestr);
-
-    fprintf(f, "Message-ID: <%s@%s>\r\n", uid, config_servername);
-
-    hdr = spool_getheader(txn->req_hdrs, "Content-Type");
-    fprintf(f, "Content-Type: %s", hdr[0]);
-    if ((meth = icalcomponent_get_method(ical)) != ICAL_METHOD_NONE) {
-	fprintf(f, "; method=%s", icalproperty_method_to_string(meth));
-    }
-    fprintf(f, "; component=%s\r\n", icalcomponent_kind_to_string(kind));
-
-    fprintf(f, "Content-Length: %u\r\n", buf_len(&txn->req_body));
-    fprintf(f, "Content-Disposition: inline; filename=%s\r\n",
-	    txn->req_tgt.resource);
-
-    /* XXX  Check domain of data and use appropriate CTE */
-
-    fprintf(f, "MIME-Version: 1.0\r\n");
-    fprintf(f, "\r\n");
-    size += ftell(f);
-
-    /* Write the iCal data to the file */
-    fprintf(f, "%s", buf_cstring(&txn->req_body));
-    size += buf_len(&txn->req_body);
-
-    fclose(f);
-
-
-    /* Prepare to append the iMIP message to calendar mailbox */
-    if ((r = append_setup(&appendstate, mailboxname, 
-			  httpd_userid, httpd_authstate, ACL_INSERT, size))) {
-	ret = HTTP_SERVER_ERROR;
-	txn->error.desc = "append_setup() failed";
-    }
-    else {
-	struct body *body = NULL;
-
-	/* Append the iMIP file to the calendar mailbox */
-	if ((r = append_fromstage(&appendstate, &body, stage, now, NULL, 0, 0))) {
-	    ret = HTTP_SERVER_ERROR;
-	    txn->error.desc = "append_fromstage() failed";
-	}
-	if (body) message_free_body(body);
-
-	if (r) append_abort(&appendstate);
-	else {
-	    struct mailbox *lock_mbox = NULL;
-
-	    /* Commit the append to the calendar mailbox */
-	    if ((r = append_commit(&appendstate, size,
-				   NULL, NULL, NULL, &lock_mbox))) {
-		ret = HTTP_SERVER_ERROR;
-		txn->error.desc = "append_commit() failed";
-	    }
-	    else {
-		/* append_commit() returns a write-locked index */
-		struct index_record newrecord, *expunge;
-
-		/* Read index record for new message (always the last one) */
-		mailbox_read_index_record(lock_mbox, lock_mbox->i.num_records,
-					  &newrecord);
-
-		/* Find message UID for the resource, if exists */
-		caldav_lockread(caldavdb, txn->req_tgt.resource, &olduid);
-		/* XXX  check for errors */
-
-		if (olduid) {
-		    /* Now that we have the replacement message in place
-		       and the mailbox locked, re-read the old record
-		       and re-test any preconditions. Either way,
-		       one of our records will have to be expunged.
-		    */
-		    int userflag;
-
-		    ret = HTTP_NO_CONTENT;
-
-		    /* Fetch index record for the resource */
-		    r = mailbox_find_index_record(lock_mbox, olduid, &oldrecord);
-
-		    etag = message_guid_encode(&oldrecord.guid);
-		    lastmod = oldrecord.internaldate;
-
-		    /* Check any preconditions */
-		    precond = check_precond(txn->meth, etag, lastmod,
-					    txn->req_hdrs);
-
-		    if (precond != HTTP_OK) {
-			/* We failed a precondition */
-			ret = precond;
-
-			/* Keep old resource - expunge the new one */
-			expunge = &newrecord;
-		    }
-		    else {
-			/* Keep new resource - expunge the old one */
-			expunge = &oldrecord;
-		    }
-
-		    /* Perform the actual expunge */
-		    r = mailbox_user_flag(lock_mbox, DFLAG_UNBIND,  &userflag);
-		    if (!r) {
-			expunge->user_flags[userflag/32] |= 1<<(userflag&31);
-			expunge->system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
-			r = mailbox_rewrite_index_record(lock_mbox, expunge);
-		    }
-		    if (r) {
-			syslog(LOG_ERR, "expunging record (%s) failed: %s",
-			       mailboxname, error_message(r));
-			txn->error.desc = error_message(r);
-			ret = HTTP_SERVER_ERROR;
-		    }
-		}
-
-		if (!r) {
-		    /* Create mapping entry from resource name and UID */
-		    caldav_write(caldavdb, txn->req_tgt.resource, newrecord.uid);
-		    /* XXX  check for errors, if this fails, backout changes */
-
-		    /* append_setup() opened mailbox again,
-		       we need to close it to decrement reference count */
-		    mailbox_close(&lock_mbox);
-
-		    /* Tell client about the new resource */
-		    txn->resp_body.etag = message_guid_encode(&newrecord.guid);
-		    if (txn->meth[1] == 'O') txn->loc = txn->req_tgt.path;
-		}
-	    }
-	}
-    }
+    /* Store resource at target */
+    ret = store_resource(txn, ical, mailbox, txn->req_tgt.resource,
+			 caldavdb, OVERWRITE_CHECK);
 
   done:
-    if (stage) append_removestage(stage);
+    if (ical) icalcomponent_free(ical);
     if (caldavdb) caldav_close(caldavdb);
     if (mailbox) mailbox_unlock_index(mailbox, NULL);
 
@@ -3397,6 +3125,207 @@ int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname)
     }
 
     return 0;
+}
+
+
+/* Store the iCal data in the specified calendar/resource */
+static int store_resource(struct transaction_t *txn, icalcomponent *ical,
+			  struct mailbox *mailbox, const char *resource,
+			  struct caldav_db *caldavdb, int overwrite)
+{
+    int ret = HTTP_CREATED, r;
+    icalcomponent *comp;
+    icalcomponent_kind kind;
+    icalproperty_method meth;
+    icalproperty *prop;
+    unsigned mykind = 0;
+    const char *prop_annot = ANNOT_NS "CALDAV:supported-calendar-component-set";
+    struct annotation_data attrib;
+    FILE *f = NULL;
+    struct stagemsg *stage;
+    const char *uid, *ics;
+    uquota_t size;
+    time_t now = time(NULL);
+    char datestr[80];
+    struct appendstate as;
+
+    /* Check for supported component type */
+    comp = icalcomponent_get_first_real_component(ical);
+    kind = icalcomponent_isa(comp);
+    switch (kind) {
+    case ICAL_VEVENT_COMPONENT: mykind = CAL_COMP_VEVENT; break;
+    case ICAL_VTODO_COMPONENT: mykind = CAL_COMP_VTODO; break;
+    case ICAL_VJOURNAL_COMPONENT: mykind = CAL_COMP_VJOURNAL; break;
+    case ICAL_VFREEBUSY_COMPONENT: mykind = CAL_COMP_VFREEBUSY; break;
+    default:
+	txn->error.precond = &preconds[CALDAV_SUPP_COMP];
+	return HTTP_FORBIDDEN;
+    }
+
+    if (!annotatemore_lookup(mailbox->name, prop_annot,
+			     /* shared */ "", &attrib)
+	&& attrib.value) {
+	unsigned long supp_comp = strtoul(attrib.value, NULL, 10);
+
+	if (!(mykind & supp_comp)) {
+	    txn->error.precond = &preconds[CALDAV_SUPP_COMP];
+	    return HTTP_FORBIDDEN;
+	}
+    }
+
+    /* XXX  Check for existing iCal UID => CALDAV:no-uid-conflict */
+    uid = icalcomponent_get_uid(comp);
+
+    /* Prepare to stage the message */
+    if (!(f = append_newstage(mailbox->name, now, 0, &stage))) {
+	txn->error.desc = "append_newstage() failed";
+	return HTTP_SERVER_ERROR;
+    }
+
+    ics = icalcomponent_as_ical_string(ical);
+
+    /* Create iMIP header for resource */
+    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+    if (prop) {
+	fprintf(f, "From: %s\r\n", icalproperty_get_organizer(prop)+7);
+    }
+    else {
+	/* XXX  This needs to be done via an LDAP/DB lookup */
+	fprintf(f, "From: %s@%s\r\n", httpd_userid, config_servername);
+    }
+
+    fprintf(f, "Subject: %s\r\n", icalcomponent_get_summary(comp));
+
+    rfc822date_gen(datestr, sizeof(datestr),
+		   icaltime_as_timet_with_zone(icalcomponent_get_dtstamp(comp),
+					       icaltimezone_get_utc_timezone()));
+    fprintf(f, "Date: %s\r\n", datestr);
+
+    fprintf(f, "Message-ID: <%s@%s>\r\n", uid, config_servername);
+
+    fprintf(f, "Content-Type: text/calendar; charset=UTF-8");
+    if ((meth = icalcomponent_get_method(ical)) != ICAL_METHOD_NONE) {
+	fprintf(f, "; method=%s", icalproperty_method_to_string(meth));
+    }
+    fprintf(f, "; component=%s\r\n", icalcomponent_kind_to_string(kind));
+
+    fprintf(f, "Content-Length: %u\r\n", strlen(ics));
+    fprintf(f, "Content-Disposition: inline; filename=%s\r\n", resource);
+
+    /* XXX  Check domain of data and use appropriate CTE */
+
+    fprintf(f, "MIME-Version: 1.0\r\n");
+    fprintf(f, "\r\n");
+
+    /* Write the iCal data to the file */
+    fprintf(f, "%s", ics);
+    size = ftell(f);
+
+    fclose(f);
+
+
+    /* Prepare to append the iMIP message to calendar mailbox */
+    if ((r = append_setup(&as, mailbox->name, 
+			  httpd_userid, httpd_authstate, ACL_INSERT, size))) {
+	ret = HTTP_SERVER_ERROR;
+	txn->error.desc = "append_setup() failed";
+    }
+    else {
+	struct body *body = NULL;
+
+	/* Append the iMIP file to the calendar mailbox */
+	if ((r = append_fromstage(&as, &body, stage, now, NULL, 0, 0))) {
+	    ret = HTTP_SERVER_ERROR;
+	    txn->error.desc = "append_fromstage() failed";
+	}
+	if (body) message_free_body(body);
+
+	if (r) append_abort(&as);
+	else {
+	    /* Commit the append to the calendar mailbox */
+	    if ((r = append_commit(&as, size, NULL, NULL, NULL, &mailbox))) {
+		ret = HTTP_SERVER_ERROR;
+		txn->error.desc = "append_commit() failed";
+	    }
+	    else {
+		/* append_commit() returns a write-locked index */
+		struct index_record newrecord, oldrecord, *expunge;
+		uint32_t olduid = 0;
+
+		/* Read index record for new message (always the last one) */
+		mailbox_read_index_record(mailbox, mailbox->i.num_records,
+					  &newrecord);
+
+		/* Find message UID for the current resource, if exists */
+		caldav_lockread(caldavdb, resource, &olduid);
+		/* XXX  check for errors */
+
+		if (olduid) {
+		    /* Now that we have the replacement message in place
+		       and the mailbox locked, re-read the old record
+		       and see if we should overwrite it.  Either way,
+		       one of our records will have to be expunged.
+		    */
+		    int userflag;
+
+		    ret = HTTP_NO_CONTENT;
+
+		    /* Fetch index record for the resource */
+		    r = mailbox_find_index_record(mailbox, olduid, &oldrecord);
+
+		    if (overwrite == OVERWRITE_CHECK) {
+			/* Check any preconditions */
+			const char *etag = message_guid_encode(&oldrecord.guid);
+			time_t lastmod = oldrecord.internaldate;
+			int precond = check_precond(txn->meth, etag, lastmod,
+						    txn->req_hdrs);
+
+			overwrite = (precond == HTTP_OK);
+		    }
+
+		    if (overwrite) {
+			/* Keep new resource - expunge the old one */
+			expunge = &oldrecord;
+		    }
+		    else {
+			/* Keep old resource - expunge the new one */
+			expunge = &newrecord;
+			ret = HTTP_PRECOND_FAILED;
+		    }
+
+		    /* Perform the actual expunge */
+		    r = mailbox_user_flag(mailbox, DFLAG_UNBIND,  &userflag);
+		    if (!r) {
+			expunge->user_flags[userflag/32] |= 1<<(userflag&31);
+			expunge->system_flags |= FLAG_EXPUNGED | FLAG_UNLINKED;
+			r = mailbox_rewrite_index_record(mailbox, expunge);
+		    }
+		    if (r) {
+			syslog(LOG_ERR, "expunging record (%s) failed: %s",
+			       mailbox->name, error_message(r));
+			txn->error.desc = error_message(r);
+			ret = HTTP_SERVER_ERROR;
+		    }
+		}
+
+		if (!r) {
+		    /* Create mapping entry from resource name and UID */
+		    caldav_write(caldavdb, resource, newrecord.uid);
+		    /* XXX  check for errors, if this fails, backout changes */
+
+		    /* Tell client about the new resource */
+		    txn->resp_body.etag = message_guid_encode(&newrecord.guid);
+		}
+
+		/* need to close mailbox returned to us by append_commit */
+		mailbox_close(&mailbox);
+	    }
+	}
+    }
+
+    append_removestage(stage);
+
+    return ret;
 }
 
 
