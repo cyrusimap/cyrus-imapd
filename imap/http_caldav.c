@@ -807,7 +807,6 @@ static int meth_copy(struct transaction_t *txn)
     else {
 	/* Don't confuse client by providing ETag of Destination resource */
 	txn->resp_body.etag = NULL;
-	break;
     }
 
     if (ical) icalcomponent_free(ical);
