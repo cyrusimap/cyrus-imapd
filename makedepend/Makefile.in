@@ -53,7 +53,7 @@ RANLIB = @RANLIB@
 DEFS = @DEFS@
 CPPFLAGS = -I. -I$(srcdir)  @CPPFLAGS@ 
 LIBS = @LIBS@
-DEPLIBS = @DEPLIBS@ 
+SYSLOG_LIBS = @SYSLOG_LIBS@ 
 
 CFLAGS = @CFLAGS@
 LDFLAGS = @LDFLAGS@
@@ -67,7 +67,7 @@ all: makedepend
 
 makedepend: cppsetup.o ifparser.o include.o main.o parse.o pr.o
 	$(CC) $(LDFLAGS) -o makedepend cppsetup.o ifparser.o include.o \
-		main.o parse.o pr.o $(DEPLIBS) $(LIBS)
+		main.o parse.o pr.o $(SYSLOG_LIBS) $(LIBS)
 
 clean:
 	rm -f *.o Makefile.bak makedepend

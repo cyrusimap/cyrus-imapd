@@ -66,7 +66,7 @@ SIEVE_OBJS = @SIEVE_OBJS@
 SIEVE_LIBS = @SIEVE_LIBS@
 LIB_WRAP = @LIB_WRAP@
 LIBS = $(IMAP_LIBS) ${top_builddir}/@COM_ERR_LIBS@
-DEPLIBS = $(top_builddir)/lib/libcyrus.a $(top_builddir)/lib/libcyrus_min.a @DEPLIBS@
+DEPLIBS = $(top_builddir)/lib/libcyrus.a $(top_builddir)/lib/libcyrus_min.a @SYSLOG_LIBS@
 
 CFLAGS = @CFLAGS@ $(EXTRACFLAGS)
 LDFLAGS = @LDFLAGS@ $(EXTRALDFLAGS)

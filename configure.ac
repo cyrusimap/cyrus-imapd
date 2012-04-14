@@ -173,7 +173,7 @@ AC_STRUCT_TIMEZONE
 AC_CHECK_FUNCS(timegm)
 
 AC_SUBST(CPPFLAGS)
-AC_SUBST(DEPLIBS)
+AC_SUBST(SYSLOG_LIBS)
 AC_SUBST(LOCALDEFS)
 AC_FUNC_VPRINTF
 
@@ -1097,7 +1097,7 @@ AC_CACHE_VAL(cyrus_cv_lib_syslog, AC_TRY_CPP([#include <syslog.h>
 #include </nonexistent>
 #endif],cyrus_cv_lib_syslog=yes,cyrus_cv_lib_syslog=no))
 if test $cyrus_cv_lib_syslog = no; then
-	DEPLIBS="${DEPLIBS} ../syslog/libsyslog.a"
+	SYSLOG_LIBS="../syslog/libsyslog.a"
 	CPPFLAGS="$CPPFLAGS -I\$(srcdir)/../syslog"
 fi
 AM_CONDITIONAL([SYSLOG], [test "$cyrus_cv_lib_syslog" = "no"])
@@ -1487,5 +1487,5 @@ enum {
 ])
 
 dnl make sure that Makefile is the last thing output
-AC_CONFIG_FILES([cunit/Makefile imap/Makefile imtest/Makefile perl/Makefile perl/sieve/Makefile ptclient/Makefile syslog/Makefile Makefile])
+AC_CONFIG_FILES([cunit/Makefile imap/Makefile imtest/Makefile perl/Makefile perl/sieve/Makefile ptclient/Makefile Makefile])
 AC_OUTPUT

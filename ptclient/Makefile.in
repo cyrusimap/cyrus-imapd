@@ -61,7 +61,7 @@ IMAP_LIBS = @IMAP_LIBS@ @LIB_RT@ @LIB_UUID@
 LIBS = $(IMAP_LIBS) @COM_ERR_LIBS@
 LIB_SASL = @LIB_SASL@
 LIB_WRAP = @LIB_WRAP@
-DEPLIBS = $(top_builddir)/imap/libimap.a $(top_builddir)/lib/libcyrus.a $(top_builddir)/lib/libcyrus_min.a @DEPLIBS@
+DEPLIBS = $(top_builddir)/imap/libimap.a $(top_builddir)/lib/libcyrus.a $(top_builddir)/lib/libcyrus_min.a @SYSLOG_LIBS@
 UTIL_LIBS = $(top_builddir)/imap/mutex_fake.o $(top_builddir)/imap/cli_fatal.o
 
 LDAP_LIBS=@LDAP_LIBS@

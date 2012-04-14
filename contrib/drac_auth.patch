@@ -97,7 +97,7 @@ index b5e139b..1f887f3 100644
  LIB_WRAP = @LIB_WRAP@
 +DRAC_LIBS = @DRACLIBS@
  LIBS = $(IMAP_LIBS) @COM_ERR_LIBS@
- DEPLIBS = ../lib/libcyrus.a ../lib/libcyrus_min.a @DEPLIBS@
+ DEPLIBS = ../lib/libcyrus.a ../lib/libcyrus_min.a @SYSLOG_LIBS@
  
 @@ -203,17 +204,17 @@ lmtpd.pure: lmtpd.o proxy.o $(LMTPOBJS) $(SIEVE_OBJS) \
  imapd: $(IMAPDOBJS) mutex_fake.o libimap.a $(DEPLIBS) $(SERVICE)
