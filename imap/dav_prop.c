@@ -405,7 +405,6 @@ static int propfind_restype(xmlNodePtr prop,
 	case URL_NS_CALENDAR:
 	    if (fctx->mailbox) {
 		ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
-		xmlNewChild(node, fctx->ns[NS_CALDAV], BAD_CAST "calendar", NULL);
 		if (!strcmp(fctx->req_tgt->collection, SCHED_INBOX)) {
 		    xmlNewChild(node, fctx->ns[NS_CALDAV],
 				BAD_CAST "schedule-inbox", NULL);
@@ -413,6 +412,10 @@ static int propfind_restype(xmlNodePtr prop,
 		else if (!strcmp(fctx->req_tgt->collection, SCHED_OUTBOX)) {
 		    xmlNewChild(node, fctx->ns[NS_CALDAV],
 				BAD_CAST "schedule-outbox", NULL);
+		}
+		else {
+		    xmlNewChild(node, fctx->ns[NS_CALDAV],
+				BAD_CAST "calendar", NULL);
 		}
 	    }
 	    break;
