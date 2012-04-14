@@ -419,13 +419,16 @@ static int propfind_restype(xmlNodePtr prop,
 		}
 	    }
 	    break;
-
+#if 0
 	case URL_NS_ADDRESSBOOK:
 	    if (fctx->mailbox) {
-		ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
-		xmlNewChild(node, fctx->ns[NS_CALDAV], BAD_CAST "addressbook", NULL);
+		ensure_ns(fctx->ns, NS_CARDDAV, resp->parent,
+			  XML_NS_CARDDAV, "C");
+		xmlNewChild(node, fctx->ns[NS_CARDDAV],
+			    BAD_CAST "addressbook", NULL);
 	    }
 	    break;
+#endif
 	}
     }
 
