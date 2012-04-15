@@ -1027,6 +1027,18 @@ sub _describe_child
     return "(binary $child->{binary} pid $child->{pid})";
 }
 
+sub _cyrus_perl_search_path
+{
+    my ($self) = @_;
+    my @inc = (
+	substr($Config{installvendorlib}, length($Config{vendorprefix})),
+	substr($Config{installvendorarch}, length($Config{vendorprefix})),
+	substr($Config{installsitelib}, length($Config{siteprefix})),
+	substr($Config{installsitearch}, length($Config{siteprefix}))
+    );
+    return map { $self->{cyrus_destdir} . $self->{cyrus_prefix} . $_; } @inc;
+}
+
 #
 # Starts a new process to run a program.
 #
@@ -1099,17 +1111,14 @@ sub _fork_command
     # child process
 
     my $cassroot = getcwd();
-    my $cyrusroot = $self->{cyrus_destdir} . $self->{cyrus_prefix};
     $ENV{CASSANDANE_CYRUS_DESTDIR} = $self->{cyrus_destdir};
     $ENV{CASSANDANE_CYRUS_PREFIX} = $self->{cyrus_prefix};
     $ENV{CASSANDANE_PREFIX} = $cassroot;
     $ENV{CASSANDANE_BASEDIR} = $self->{basedir};
     $ENV{CASSANDANE_VERBOSE} = 1 if get_verbose();
-    $ENV{PERL5LIB} = join(':', (
-	$cassroot,
-	$cyrusroot . substr($Config{installvendorlib}, length($Config{prefix})),
-	$cyrusroot . substr($Config{installvendorarch}, length($Config{prefix})),
-    ));
+    $ENV{PERL5LIB} = join(':', ($cassroot, $self->_cyrus_perl_search_path()));
+
+#     xlog "\$PERL5LIB is"; map { xlog "    $_"; } split(/:/, $ENV{PERL5LIB});
 
     my $cd = $options->{workingdir};
     $cd = $self->{basedir} . '/conf/cores'
