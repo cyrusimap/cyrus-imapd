@@ -366,13 +366,13 @@ imap_unexpunge_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/unexpunge.c
 imap_unexpunge_LDADD = $(ptclient_ptdump_LDADD)
 
 imap/imap_err.h imap/imap_err.c: imap/imap_err.et
-	cd imap && $(top_builddir)/../$(COMPILE_ET) ../$(top_srcdir)/imap/imap_err.et
+	cd imap && $(COMPILE_ET) ../$(top_srcdir)/imap/imap_err.et
 
 imap/mupdate_err.h imap/mupdate_err.c: imap/mupdate_err.et
-	cd imap && $(top_builddir)/../$(COMPILE_ET) ../$(top_srcdir)/imap/mupdate_err.et
+	cd imap && $(COMPILE_ET) ../$(top_srcdir)/imap/mupdate_err.et
 
 imap/nntp_err.h imap/nntp_err.c: imap/nntp_err.et
-	cd imap && $(top_builddir)/../$(COMPILE_ET) ../$(top_srcdir)/imap/nntp_err.et
+	cd imap && $(COMPILE_ET) ../$(top_srcdir)/imap/nntp_err.et
 
 imap/rfc822_header.c: imap/rfc822_header.st
 	${top_srcdir}/tools/compile_st.pl -c $< > $@
@@ -555,7 +555,7 @@ sieve_sievec_LDADD = sieve/libsieve.a lib/libcyrus.a lib/libcyrus_min.a ${COM_ER
 sieve_sieved_LDADD = ${sieve_sievec_LDADD}
 
 sieve/sieve_err.h sieve/sieve_err.c: sieve/sieve_err.et
-	cd sieve && $(top_builddir)/../$(COMPILE_ET) ../$(top_srcdir)/sieve/sieve_err.et
+	cd sieve && $(COMPILE_ET) ../$(top_srcdir)/sieve/sieve_err.et
 
 sieve_test_SOURCES = sieve/test.c imap/mutex_fake.c
 sieve_test_LDADD = imap/libimap.a ${sieve_sievec_LDADD}
