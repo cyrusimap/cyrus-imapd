@@ -256,7 +256,7 @@ imap_cyr_userseen_SOURCES = imap/cli_fatal.c imap/cyr_userseen.c imap/mutex_fake
 imap_cyr_userseen_LDADD = $(ptclient_ptdump_LDADD)
 
 #imap_cyr_virusscan_SOURCES = imap/cli_fatal.c imap/cyr_virusscan.c imap/index.c imap/mutex_fake.c
-#imap_cyr_vyrusscan_LDADD = $(ptclient_ptdump_LDADD) -lclamav
+#imap_cyr_virusscan_LDADD = $(ptclient_ptdump_LDADD) -lclamav
 
 imap_deliver_SOURCES = imap/deliver.c imap/lmtpengine.c imap/lmtpstats.c imap/mutex_fake.c imap/proxy.c imap/spool.c
 imap_deliver_LDADD = $(ptclient_ptdump_LDADD)
@@ -490,7 +490,7 @@ notifyd_notifyd_SOURCES = imap/mutex_fake.c master/service.c \
 	notifyd/notifyd.c notifyd/notifyd.h notifyd/version.h
 notifyd_notifyd_LDADD = $(imap_fud_LDADD) @ZEPHYR_LIBS@
 
-notifyd_notifytest_SOURCES = notifyd/notifytest.c imap/mutex_fake.o
+notifyd_notifytest_SOURCES = notifyd/notifytest.c imap/mutex_fake.c
 notifyd_notifytest_LDADD = ${notifyd_notifyd_LDADD}
 
 perl_sieve_lib_libisieve_a_SOURCES = perl/sieve/lib/isieve.c perl/sieve/lib/lex.c perl/sieve/lib/mystring.c perl/sieve/lib/request.c
@@ -534,11 +534,10 @@ ptclient_ptdump_LDADD = imap/libimap.a @COM_ERR_LIBS@ $(netnews_remotepurge_LDAD
 ptclient_ptexpire_SOURCES = imap/cli_fatal.c imap/mutex_fake.c ptclient/ptexpire.c
 ptclient_ptexpire_LDADD = $(ptclient_ptdump_LDADD)
 
-#ptclient_ptextract_SOURCES = imap/cli_fatal.o imap/mutex_fake.o ptclient/ptextrac.c
+#ptclient_ptextract_SOURCES = imap/cli_fatal.c imap/mutex_fake.o ptclient/ptextrac.c
 #ptclient_ptextract_LDADD = $(ptclient_ptdump_LDADD)
 
-ptclient_ptloader_SOURCES = ptclient/ptloader.c ptclient/ptloader.h imap/mutex_fake.o master/service-thread.c
-
+ptclient_ptloader_SOURCES = ptclient/ptloader.c ptclient/ptloader.h imap/mutex_fake.c master/service-thread.c
 ptclient_ptloader_LDADD = $(ptclient_ptdump_LDADD) @LIB_WRAP@
 ptclient_ptloader_LDFLAGS = 
 
