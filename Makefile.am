@@ -299,18 +299,13 @@ imap_libimap_a_SOURCES = imap/annotate.c imap/annotate.h imap/append.c \
 	imap/userdeny_db.c imap/userdeny.h imap/version.c imap/version.h
 
 imap_lmtpd_SOURCES = imap/lmtpd.c imap/lmtpd.h imap/lmtpengine.c \
-	imap/lmtpengine.h imap/lmtpstats.c imap/lmtpstats.h
-imap_lmtpd_LDADD =
+	imap/lmtpengine.h imap/lmtpstats.c imap/lmtpstats.h \
+	imap/mutex_fake.c imap/proxy.c imap/spool.c master/service.c
+imap_lmtpd_LDADD = $(imap_fud_LDADD)
 if SIEVE
-imap_lmtpd_SOURCES += imap/lmtp_sieve.c
+imap_lmtpd_SOURCES += imap/lmtp_sieve.c imap/smtpclient.c
 imap_lmtpd_LDADD += sieve/libsieve.a
 endif
-imap_lmtpd_SOURCES += imap/mutex_fake.c imap/proxy.c
-if SIEVE
-imap_lmtpd_SOURCES += imap/smtpclient.c
-endif
-imap_lmtpd_SOURCES += imap/spool.c master/service.c
-imap_lmtpd_LDADD += $(imap_fud_LDADD)
 
 imap/lmtpstats.c: imap/lmtpstats.snmp
 	cd imap && ../${top_srcdir}/snmp/snmpgen ../${top_srcdir}/imap/lmtpstats.snmp
@@ -532,9 +527,9 @@ perl/sieve/managesieve/Makefile: perl/sieve/managesieve/Makefile.PL
 			   SASL_LIB="$(SASL_LIB)" SASL_INC="$(SASL_INC)" CC="$(CC)" \
 			     $(PERL) ../../../${top_srcdir}/perl/sieve/managesieve/Makefile.PL PREFIX=$(prefix); \
 			fi;
-ptclient_ptdump_SOURCES = imap/cli_fatal.c imap/mutex_fake.o ptclient/ptdump.c
+ptclient_ptdump_SOURCES = imap/cli_fatal.c imap/mutex_fake.c ptclient/ptdump.c
 ptclient_ptdump_LDADD = imap/libimap.a @COM_ERR_LIBS@ $(netnews_remotepurge_LDADD)
-ptclient_ptexpire_SOURCES = imap/cli_fatal.c imap/mutex_fake.o ptclient/ptexpire.c
+ptclient_ptexpire_SOURCES = imap/cli_fatal.c imap/mutex_fake.c ptclient/ptexpire.c
 ptclient_ptexpire_LDADD = $(ptclient_ptdump_LDADD)
 
 #ptclient_ptextract_SOURCES = imap/cli_fatal.o imap/mutex_fake.o ptclient/ptextrac.c
