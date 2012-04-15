@@ -1037,9 +1037,9 @@ fi
 case "$with_com_err" in
   # built-in et
   yes) # use the com_err we're gonna build
-	  COM_ERR_LIBS="${top_srcdir}/com_err/et/libcom_err.a"
-	  COMPILE_ET="${top_srcdir}/com_err/et/compile_et"
-	  COM_ERR_CPPFLAGS="-I\${top_srcdir}/com_err/et"
+	  COM_ERR_LIBS="${top_builddir}/com_err/et/libcom_err.a"
+	  COMPILE_ET="${top_builddir}/com_err/et/compile_et"
+	  COM_ERR_CPPFLAGS="-I${top_builddir}/com_err/et"
 	  ;;
   "")   # no problem, we already have it in the paths
 	# we do nothing to pick it up
