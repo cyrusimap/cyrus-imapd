@@ -713,7 +713,7 @@ if test "x$enable_afs" = "xyes"; then
     LIBS="$SAVE_LIBS"
 
 fi
-AM_CONDITIONAL([USE_AFSKRB], [test $HAVE_AFSKRB = 1])
+AM_CONDITIONAL([USE_AFSKRB], [test "$HAVE_AFSKRB" = "1"])
 
 LDAP_CPPFLAGS=""
 LDAP_LDFLAGS=""
@@ -752,11 +752,10 @@ if test "x$with_ldap" != "xno"; then
 
     CPPFLAGS=$save_CPPFLAGS
     LDFLAGS=$save_LDFLAGS
-
-    AM_CONDITIONAL([USE_LDAP], [test $HAVE_LDAP = 1])
-
 fi
  
+AM_CONDITIONAL([USE_LDAP], [test "$HAVE_LDAP" = "1"])
+
 AM_CONDITIONAL([PTCLIENT], [test "x$enable_afs" = "xyes" -o "x$with_ldap" != "xno"])
 
 AC_ARG_ENABLE(server,
