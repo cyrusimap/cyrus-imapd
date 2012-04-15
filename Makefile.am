@@ -301,11 +301,13 @@ imap_libimap_a_SOURCES = imap/annotate.c imap/annotate.h imap/append.c \
 imap_lmtpd_SOURCES = imap/lmtpd.c imap/lmtpd.h imap/lmtpengine.c \
 	imap/lmtpengine.h imap/lmtpstats.c imap/lmtpstats.h \
 	imap/mutex_fake.c imap/proxy.c imap/spool.c master/service.c
-imap_lmtpd_LDADD = $(imap_fud_LDADD)
+imap_lmtpd_LDADD =
+# sieve/libsieve.a must be added to LDADD before lib/libcyrus.a (#3677)
 if SIEVE
-imap_lmtpd_SOURCES += imap/lmtp_sieve.c imap/smtpclient.c sieve/sieve.c
+imap_lmtpd_SOURCES += imap/lmtp_sieve.c imap/smtpclient.c
 imap_lmtpd_LDADD += sieve/libsieve.a
 endif
+imap_lmtpd_LDADD += $(imap_fud_LDADD)
 
 imap/lmtpstats.c: imap/lmtpstats.snmp
 	cd imap && ../${top_srcdir}/snmp/snmpgen ../${top_srcdir}/imap/lmtpstats.snmp
