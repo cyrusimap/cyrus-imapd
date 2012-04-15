@@ -540,9 +540,22 @@ ptclient_ptexpire_LDADD = $(ptclient_ptdump_LDADD)
 #ptclient_ptextract_SOURCES = imap/cli_fatal.o imap/mutex_fake.o ptclient/ptextrac.c
 #ptclient_ptextract_LDADD = $(ptclient_ptdump_LDADD)
 
-ptclient_ptloader_SOURCES = ptclient/ptloader.c ptclient/ptloader.h ptclient/afskrb.oc ptclient/ldap.c imap/mutex_fake.o master/service-thread.c
-ptclient_ptloader_LDADD = @AFS_LIBS@ @LDAP_LIBS@ $(ptclient_ptdump_LDADD) @LIB_WRAP@
-ptclient_ptloader_LDFLAGS = @AFS_LDFLAGS@ @LDAP_LDFLAGS@
+ptclient_ptloader_SOURCES = ptclient/ptloader.c ptclient/ptloader.h imap/mutex_fake.o master/service-thread.c
+
+ptclient_ptloader_LDADD = $(ptclient_ptdump_LDADD) @LIB_WRAP@
+ptclient_ptloader_LDFLAGS = 
+
+if USE_LDAP
+ptclient_ptloader_SOURCES += ptclient/ldap.c
+ptclient_ptloader_LDADD += @LDAP_LIBS@
+ptclient_ptloader_LDFLAGS += @LDAP_LDFLAGS@
+endif
+
+if USE_AFSKRB
+ptclient_ptloader_SOURCES += ptclient/afskrb.c
+ptclient_ptloader_LDADD += @AFS_LIBS@
+ptclient_ptloader_LDFLAGS += @AFS_LDFLAGS@
+endif
 
 sieve_libsieve_a_SOURCES = sieve/bytecode.h sieve/addr.y sieve/addr-lex.l \
 	sieve/bc_dump.c sieve/bc_emit.c sieve/bc_eval.c sieve/bc_generate.c \
