@@ -532,9 +532,9 @@ perl/sieve/managesieve/Makefile: perl/sieve/managesieve/Makefile.PL
 			   SASL_LIB="$(SASL_LIB)" SASL_INC="$(SASL_INC)" CC="$(CC)" \
 			     $(PERL) ../../../${top_srcdir}/perl/sieve/managesieve/Makefile.PL PREFIX=$(prefix); \
 			fi;
-ptclient_ptdump_SOURCES = imap/cli_fatal.o imap/mutex_fake.o ptclient/ptdump.c
+ptclient_ptdump_SOURCES = imap/cli_fatal.c imap/mutex_fake.o ptclient/ptdump.c
 ptclient_ptdump_LDADD = imap/libimap.a @COM_ERR_LIBS@ $(netnews_remotepurge_LDADD)
-ptclient_ptexpire_SOURCES = imap/cli_fatal.o imap/mutex_fake.o ptclient/ptexpire.c
+ptclient_ptexpire_SOURCES = imap/cli_fatal.c imap/mutex_fake.o ptclient/ptexpire.c
 ptclient_ptexpire_LDADD = $(ptclient_ptdump_LDADD)
 
 #ptclient_ptextract_SOURCES = imap/cli_fatal.o imap/mutex_fake.o ptclient/ptextrac.c
