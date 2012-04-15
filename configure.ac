@@ -697,7 +697,7 @@ if test "x$enable_afs" = "xyes"; then
         ])
     if test "$cyrus_cv_afs_sigvec" = yes; then
       if test "$cant_find_sigvec" = yes; then
-        AC_MSG_WARN([Can't find a sigvec for AFS libraries which seem to need one.])
+        AC_MSG_WARN([Can not find a sigvec for AFS libraries which seem to need one.])
       else
         AFS_LIBS="${AFS_LIBS} $cyrus_cv_sigveclib"
         AC_SUBST(AFS_LIBS)
@@ -711,7 +711,9 @@ if test "x$enable_afs" = "xyes"; then
       AC_DEFINE(HAVE_AFSKRB,[],[Should we build afskrb pts module?])
     fi
     LIBS="$SAVE_LIBS"
+
 fi
+AM_CONDITIONAL([USE_AFSKRB], [test $HAVE_AFSKRB = 1])
 
 LDAP_CPPFLAGS=""
 LDAP_LDFLAGS=""
@@ -750,11 +752,12 @@ if test "x$with_ldap" != "xno"; then
 
     CPPFLAGS=$save_CPPFLAGS
     LDFLAGS=$save_LDFLAGS
+
+    AM_CONDITIONAL([USE_LDAP], [test $HAVE_LDAP = 1])
+
 fi
  
 AM_CONDITIONAL([PTCLIENT], [test "x$enable_afs" = "xyes" -o "x$with_ldap" != "xno"])
-
-
 
 AC_ARG_ENABLE(server,
 	[AS_HELP_STRING([--disable-server], [disable compiling servers])])
