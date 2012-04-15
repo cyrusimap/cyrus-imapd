@@ -303,7 +303,7 @@ imap_lmtpd_SOURCES = imap/lmtpd.c imap/lmtpd.h imap/lmtpengine.c \
 	imap/mutex_fake.c imap/proxy.c imap/spool.c master/service.c
 imap_lmtpd_LDADD = $(imap_fud_LDADD)
 if SIEVE
-imap_lmtpd_SOURCES += imap/lmtp_sieve.c imap/smtpclient.c
+imap_lmtpd_SOURCES += imap/lmtp_sieve.c imap/smtpclient.c sieve/sieve.c
 imap_lmtpd_LDADD += sieve/libsieve.a
 endif
 
