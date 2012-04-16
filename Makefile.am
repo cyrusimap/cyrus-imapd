@@ -43,7 +43,7 @@
 
 ACLOCAL_AMFLAGS = -I cmulocal
 AM_CFLAGS = @PERL_CCCDLFLAGS@ $(EXTRACFLAGS)
-AM_CPPFLAGS = @COM_ERR_CPPFLAGS@ -I${top_srcdir} -I${top_srcdir}/lib -I${top_builddir} -I${top_builddir}/lib ${DEFS} ${LOCALDEFS} @SASLFLAGS@
+AM_CPPFLAGS = @COM_ERR_CPPFLAGS@ -I${top_builddir} -I${top_builddir}/lib -I${top_srcdir} -I${top_srcdir}/lib ${DEFS} ${LOCALDEFS} @SASLFLAGS@
 AM_LDFLAGS = ${EXTRALDFLAGS}
 BUILT_SOURCES = xversion.h lib/imapopts.c
 
