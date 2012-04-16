@@ -495,40 +495,21 @@ notifyd_notifytest_LDADD = ${notifyd_notifyd_LDADD}
 
 perl_sieve_lib_libisieve_a_SOURCES = perl/sieve/lib/isieve.c perl/sieve/lib/lex.c perl/sieve/lib/mystring.c perl/sieve/lib/request.c
 
-perl/annotator/Makefile perl/imap/Makefile: perl/annotator/Makefile.PL perl/imap/Makefile.PL
-	@for d in annotator imap; \
-        do \
-	if [ ! -e perl/$$d ]; then $(MKDIR_P) perl/$$d; fi; \
-		 cd perl/$$d; echo "### Making" all "in" `pwd`; \
-			if [ -f ../../${top_srcdir}/perl/$$d/Makefile.PL -a ! -f Makefile ]; then \
-			   LIB_RT="$(LIB_RT)" \
-			   LIB_UUID="$(LIB_UUID)" \
-			   ZLIB="$(ZLIB)" \
-			   srcdir="../../${top_srcdir}/perl/$$d" \
-			   top_srcdir="../../$(top_srcdir)" \
-			   BDB_LIB="$(BDB_LIB)" BDB_INC="$(BDB_INC)" \
-			   OPENSSL_LIB="$(OPENSSL_LIB)" OPENSSL_INC="$(OPENSSL_INC)" \
-			   SASL_LIB="$(SASL_LIB)" SASL_INC="$(SASL_INC)" CC="$(CC)" \
-			   COVERAGE="$(COVERAGE)" PERL_PREINSTALL="$(PERL_PREINSTALL)" \
-			     $(PERL) ../../${top_srcdir}/perl/$$d/Makefile.PL PREFIX=$(prefix); \
-			fi; \
-		cd ../..; \
-	done
+perl/annotator/Makefile: perl/annotator/Makefile.PL
+	@if [ ! -e perl/annotator ] ; then $(MKDIR_P) perl/annotator; fi; \
+	cd perl/annotator; echo "### Making" all "in" `pwd`; \
+	$(PERL) ../../${top_srcdir}/perl/annotator/Makefile.PL PREFIX=$(prefix);
+
+perl/imap/Makefile:  perl/imap/Makefile.PL
+	@if [ ! -e perl/imap ] ; then $(MKDIR_P) perl/imap; fi; \
+	cd perl/imap; echo "### Making" all "in" `pwd`; \
+	$(PERL) ../../${top_srcdir}/perl/imap/Makefile.PL PREFIX=$(prefix);
 
 perl/sieve/managesieve/Makefile: perl/sieve/managesieve/Makefile.PL
 	@if [ ! -e perl/sieve/managesieve ]; then $(MKDIR_P) perl/sieve/managesieve; fi; \
-		 cd perl/sieve/managesieve; echo "### Making" all "in" `pwd`; \
-			if [ -f ../../../$(top_srcdir)/perl/sieve/managesieve/Makefile.PL -a ! -f Makefile ]; then \
-			   LIB_RT="$(LIB_RT)" \
-			   LIB_UUID="$(LIB_UUID)" \
-			   ZLIB="$(ZLIB)" \
-			   srcdir="../../../$(top_srcdir)/perl/sieve/managesieve" \
-			   top_srcdir="../../../$(top_srcdir)" \
-			   BDB_LIB="$(BDB_LIB)" BDB_INC="$(BDB_INC)" \
-			   OPENSSL_LIB="$(OPENSSL_LIB)" OPENSSL_INC="$(OPENSSL_INC)" \
-			   SASL_LIB="$(SASL_LIB)" SASL_INC="$(SASL_INC)" CC="$(CC)" \
-			     $(PERL) ../../../${top_srcdir}/perl/sieve/managesieve/Makefile.PL PREFIX=$(prefix); \
-			fi;
+	cd perl/sieve/managesieve; \
+	$(PERL) ../../../${top_srcdir}/perl/sieve/managesieve/Makefile.PL PREFIX=$(prefix);
+
 ptclient_ptdump_SOURCES = imap/cli_fatal.c imap/mutex_fake.c ptclient/ptdump.c
 ptclient_ptdump_LDADD = imap/libimap.a @COM_ERR_LIBS@ $(netnews_remotepurge_LDADD)
 ptclient_ptexpire_SOURCES = imap/cli_fatal.c imap/mutex_fake.c ptclient/ptexpire.c

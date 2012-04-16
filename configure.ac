@@ -1445,4 +1445,8 @@ enum {
 
 dnl make sure that Makefile is the last thing output
 AC_CONFIG_FILES([cunit/Makefile Makefile])
+AM_COND_IF([PERL], [
+	AC_CONFIG_FILES([perl/annotator/Makefile.PL perl/imap/Makefile.PL])
+	AM_COND_IF([SIEVE], AC_CONFIG_FILES([perl/sieve/managesieve/Makefile.PL]))
+])
 AC_OUTPUT

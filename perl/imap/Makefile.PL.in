@@ -40,11 +40,37 @@
 
 use ExtUtils::MakeMaker;
 use Config;
-my $SRCDIR = $ENV{srcdir};
 
-WriteMakefile(
-    'NAME'	=> 'Cyrus::Annotator::Daemon',
-    'ABSTRACT'  => 'Cyrus annotator daemon framework',
-    'VERSION_FROM' => "$SRCDIR/Daemon.pm", # finds $VERSION
-    INSTALLDIRS => 'vendor',
+my $LIB_SASL = "@LIB_SASL@" || "-lsasl2";
+
+# See lib/ExtUtils/MakeMaker.pm for details of how to influence
+# the contents of the Makefile that is written.
+$libs = "-lcyrus";
+
+sub MY::postamble
+{
+    return "\nVPATH=@top_srcdir@/perl/imap" . <<'EOT';
+
+
+cyradm: cyradm.sh
+	@PERL_PREINSTALL@ < $< > $@
+
+EOT
+}
+
+WriteMakefile( 
+    'NAME'	=> 'Cyrus::IMAP',
+    'ABSTRACT'  => 'Cyrus administrative interface',
+    'VERSION_FROM' => "@top_srcdir@/perl/imap/IMAP.pm", # finds $VERSION
+    'macro'	=> {
+		    'IMCLIENT_LIBS' => '',	# hack
+		    'PERL_PREINSTALL' => '@PERL_PREINSTALL@',
+		},
+    'clean'	=> {'FILES' => 'libcyrperl.a cyradm'},
+    'OBJECT'    => 'IMAP.o',
+    'MYEXTLIB'  => '../../lib/libcyrus.a ../../lib/libcyrus_min.a',
+    'LIBS'	=> ["@BDB_LIB@ $LIB_SASL @OPENSSL_LIB@ @LIB_RT@ @LIB_UUID@ @ZLIB@ -lssl -lcrypto"],
+    'DEFINE'	=> '-DPERL_POLLUTE',    # e.g., '-DHAVE_SOMETHING' 
+    'INC'	=> "-I@BDB_INC@ -I@top_srcdir@ -I@top_srcdir@/com_err/et @SASLFLAGS@ @OPENSSL_INC@ -I@top_srcdir@/perl/imap", 
+    'EXE_FILES' => [cyradm],
 );
