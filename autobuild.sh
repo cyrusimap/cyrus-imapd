@@ -100,6 +100,7 @@ CONFIGURE_ARGS="\
     --prefix=/usr/cyrus \
     --with-cyrus-prefix=/usr/cyrus \
     --with-bdb=4.8 \
+    --with-ldap=/usr \
     --with-openssl \
     --enable-sieve \
     --enable-idled \
