@@ -3092,7 +3092,6 @@ static int catenate_url(const char *s, const char *cur_name, FILE *f,
 		init.authstate = imapd_authstate;
 		init.out = imapd_out;
 		r = index_open(mailboxname, &init, &state);
-		if (init.vanishedlist) seqset_free(init.vanishedlist);
 	    }
 	    if (!r) doclose = 1;
 
