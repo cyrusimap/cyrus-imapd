@@ -309,10 +309,10 @@ imap_lmtpd_LDADD += sieve/libsieve.a
 endif
 imap_lmtpd_LDADD += $(imap_fud_LDADD)
 
-imap/lmtpstats.c: imap/lmtpstats.snmp
+imap/lmtpstats.c: imap/lmtpstats.snmp snmp/snmpgen
 	cd imap && ../${top_srcdir}/snmp/snmpgen ../${top_srcdir}/imap/lmtpstats.snmp
 
-imap/pushstats.c: imap/pushstats.snmp
+imap/pushstats.c: imap/pushstats.snmp snmp/snmpgen
 	cd imap && ../${top_srcdir}/snmp/snmpgen ../${top_srcdir}/imap/pushstats.snmp
 
 imap_mbexamine_SOURCES = imap/cli_fatal.c imap/mbexamine.c imap/mutex_fake.c
