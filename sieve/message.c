@@ -60,7 +60,6 @@
 #include "sieve_interface.h"
 #include "interp.h"
 #include "message.h"
-#include "parseaddr.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
