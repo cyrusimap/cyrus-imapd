@@ -6086,7 +6086,7 @@ void cmd_reconstruct(const char *tag, const char *name, int recursive)
 	    fclose(stdout);
 	    fclose(stderr);
 
-	    ret = snprintf(buf, sizeof(buf), "%s/reconstruct", SERVICE_PATH);
+	    ret = snprintf(buf, sizeof(buf), "%s/reconstruct", SERVICE_DIR);
 	    if(ret < 0 || ret >= (int) sizeof(buf)) {
 		/* in child, so fatailing won't disconnect our user */ 
 	        fatal("reconstruct buffer not sufficiently big", EC_CONFIG);
@@ -6147,7 +6147,7 @@ void cmd_reconstruct(const char *tag, const char *name, int recursive)
 	    fclose(stdout);
 	    fclose(stderr);
 
-	    ret = snprintf(buf, sizeof(buf), "%s/quota", SERVICE_PATH);
+	    ret = snprintf(buf, sizeof(buf), "%s/quota", SERVICE_DIR);
 	    if(ret < 0 || ret >= (int) sizeof(buf)) {
 		/* in child, so fatailing won't disconnect our user */ 
 	        fatal("quota buffer not sufficiently big", EC_CONFIG);

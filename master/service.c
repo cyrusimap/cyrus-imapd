@@ -389,7 +389,7 @@ int main(int argc, char **argv, char **envp)
     if (newargv.data[0][0] == '/')
 	strlcpy(path, newargv.data[0], sizeof(path));
     else
-	snprintf(path, sizeof(path), "%s/%s", SERVICE_PATH, newargv.data[0]);
+	snprintf(path, sizeof(path), "%s/%s", SERVICE_DIR, newargv.data[0]);
 
     stat(path, &sbuf);
     start_ino= sbuf.st_ino;
