@@ -64,7 +64,6 @@ WriteMakefile(
     'VERSION_FROM' => "@top_srcdir@/perl/imap/IMAP.pm", # finds $VERSION
     'macro'	=> {
 		    'IMCLIENT_LIBS' => '',	# hack
-		    'PERL_PREINSTALL' => '@PERL_PREINSTALL@',
 		},
     'clean'	=> {'FILES' => 'libcyrperl.a cyradm'},
     'OBJECT'    => 'IMAP.o',
