@@ -672,7 +672,7 @@ install-exec-hook:
 	cd $(DESTDIR)$(servicedir) && \
 	  $(LN_S) -f pop3d pop3proxyd && \
 	  $(LN_S) -f imapd proxyd && \
-	  $(LN_S) -f lmtpd lmtpprodyx
+	  $(LN_S) -f lmtpd lmtpproxyd
 	cd $(DESTDIR)$(bindir) && \
 	  $(LN_S) -f imtest lmtptest && \
 	  $(LN_S) -f imtest mupatetest && \
