@@ -42,7 +42,7 @@
 
 error_table http
 
-# HTTP/1.1 Status Codes (RFC 2616bis)
+# HTTP/1.1 Status Codes (draft-ietf-httpbis-*)
 #
 # 1xx: Informational - Request received, continuing process
 # 2xx: Successful    - Request successfully received, understood, and accepted
@@ -71,7 +71,7 @@ ec HTTP_MOVED,
 ec HTTP_NOT_MODIFIED,
    "304 Not Modified"
 
-ec HTTP_REDIRECT,
+ec HTTP_TEMP_REDIRECT,
    "307 Temporary Redirect"
 
 ec HTTP_BAD_REQUEST,
@@ -152,5 +152,20 @@ ec HTTP_FAILED_DEP,
 
 ec HTTP_NO_STORAGE,
    "507 Insufficient Storage"
+
+
+
+# draft-reschke-http-status-308
+
+ec HTTP_PERM_REDIRECT,
+   "308 Permanent Redirect"
+
+
+
+# draft-nottingham-new-status
+
+ec HTTP_PRECOND_REQUIRED,
+   "412 Precondition Required"
+
 
 end
