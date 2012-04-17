@@ -168,7 +168,6 @@ AC_STRUCT_TIMEZONE
 AC_CHECK_FUNCS(timegm)
 
 AC_SUBST(CPPFLAGS)
-AC_SUBST(SYSLOG_LIBS)
 AC_SUBST(LOCALDEFS)
 AC_FUNC_VPRINTF
 
@@ -1079,7 +1078,6 @@ if test $cyrus_cv_lib_syslog = no; then
 	SYSLOG_LIBS="../syslog/libsyslog.a"
 	CPPFLAGS="$CPPFLAGS -I\$(srcdir)/../syslog"
 fi
-AM_CONDITIONAL([SYSLOG], [test "$cyrus_cv_lib_syslog" = "no"])
 AC_MSG_RESULT($cyrus_cv_lib_syslog)
 
 AC_MSG_CHECKING(which syslog facility to use)

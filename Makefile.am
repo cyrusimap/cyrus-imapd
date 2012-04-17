@@ -64,10 +64,6 @@ COM_ERR_LIBS += com_err/et/libcom_err.a
 endif
 
 bin_PROGRAMS = imtest/imtest
-if SYSLOG
-noinst_LIBRARIES += syslog/libsyslog.a
-noinst_PROGRAMS += syslog/syslogd
-endif
 if SERVER
 BUILT_SOURCES += imap/imap_err.c imap/mupdate_err.c imap/nntp_err.c \
 	imap/lmtpstats.c imap/pushstats.c imap/rfc822_header.c \
@@ -169,7 +165,6 @@ EXTRA_DIST = xversion.h SMakefile COPYRIGHT \
 	perl/sieve/managesieve/Makefile.PL perl/sieve/managesieve/managesieve.h perl/sieve/managesieve/managesieve.pm perl/sieve/managesieve/managesieve.xs perl/sieve/managesieve/MANIFEST perl/sieve/managesieve/typemap \
 	ptclient/README ptclient/test.c ptclient/test2.c \
 	sieve/tests/testExtension sieve/tests/testExtension/uberExtensionTestScript.key sieve/tests/testExtension/testm sieve/tests/testExtension/testm/uetest-envelope sieve/tests/testExtension/testm/uetest-asub sieve/tests/testExtension/testm/uetest-areg sieve/tests/testExtension/testm/uetest-count sieve/tests/testExtension/testm/uetest-value sieve/tests/testExtension/testm/uetest-hreg sieve/tests/testExtension/serverm sieve/tests/testExtension/serverm/uetmail-hreg sieve/tests/testExtension/serverm/uetmail-value sieve/tests/testExtension/serverm/uetmail-count2 sieve/tests/testExtension/serverm/uetmail-envelope sieve/tests/testExtension/serverm/uetmail-asub sieve/tests/testExtension/serverm/uetmail-value2 sieve/tests/testExtension/serverm/uetmail-areg sieve/tests/testExtension/serverm/uetmail-count sieve/tests/testExtension/uberExtensionTestScript.s sieve/tests/README sieve/tests/action sieve/tests/action/testm sieve/tests/action/testm/uatest-keep sieve/tests/action/testm/uatest-redirect sieve/tests/action/testm/uatest-discard sieve/tests/action/testm/uatest-stop2 sieve/tests/action/testm/uatest-stop sieve/tests/action/serverm sieve/tests/action/serverm/uamail-stop2 sieve/tests/action/serverm/uamail-redirect sieve/tests/action/serverm/uamail-stop sieve/tests/action/serverm/uamail-keep sieve/tests/action/serverm/uamail-discard sieve/tests/action/uberActionScript.key sieve/tests/action/uberActionScript.s sieve/tests/test sieve/tests/test/uberTestScript.key sieve/tests/test/testm sieve/tests/test/testm/utest-header sieve/tests/test/testm/utest-address sieve/tests/test/serverm sieve/tests/test/serverm/utmail-address sieve/tests/test/serverm/utmail-header sieve/tests/test/uberTestScript.s sieve/tests/actionExtensions sieve/tests/actionExtensions/uberExtensionActionScript.s sieve/tests/actionExtensions/testm sieve/tests/actionExtensions/testm/ueatest-flag4 sieve/tests/actionExtensions/testm/ueatest-flag2 sieve/tests/actionExtensions/testm/ueatest-fileinto sieve/tests/actionExtensions/testm/ueatest-denotify sieve/tests/actionExtensions/testm/ueatest-vacation sieve/tests/actionExtensions/testm/ueatest-reject sieve/tests/actionExtensions/testm/ueatest-mark sieve/tests/actionExtensions/testm/ueatest-denotify2 sieve/tests/actionExtensions/testm/ueatest-flag5 sieve/tests/actionExtensions/testm/ueatest-notify2 sieve/tests/actionExtensions/testm/ueatest-notify sieve/tests/actionExtensions/testm/ueatest-flag1 sieve/tests/actionExtensions/testm/ueatest-flag3 sieve/tests/actionExtensions/testm/ueatest-unmark sieve/tests/actionExtensions/uberExtensionActionScript.key sieve/tests/actionExtensions/serverm sieve/tests/actionExtensions/serverm/ueamail-flag4 sieve/tests/actionExtensions/serverm/ueamail-denotify sieve/tests/actionExtensions/serverm/ueamail-mark sieve/tests/actionExtensions/serverm/ueamail-denotify2 sieve/tests/actionExtensions/serverm/ueamail-flag2 sieve/tests/actionExtensions/serverm/ueamail-unmark sieve/tests/actionExtensions/serverm/ueamail-reject sieve/tests/actionExtensions/serverm/ueamail-flag3 sieve/tests/actionExtensions/serverm/ueamail-fileinto sieve/tests/actionExtensions/serverm/ueamail-flag1 sieve/tests/actionExtensions/serverm/ueamail-notify sieve/tests/actionExtensions/serverm/ueamail-flag5 sieve/tests/actionExtensions/serverm/ueamail-notify2 sieve/tests/actionExtensions/serverm/ueamail-vacation \
-	syslog/syslog.conf syslog/README syslog/logger.c \
 	timsieved/TODO
 
 TEXINFO_TEX = com_err/et/texinfo.tex
@@ -179,8 +174,7 @@ EXTRA_SCRIPTS = com_err/et/compile_et.sh com_err/et/config_script \
 	tools/arbitronsort.pl tools/compile_st.pl tools/config2header tools/config2man tools/convert-sieve.pl tools/dohash tools/masssievec tools/migrate-metadata tools/mkimap tools/mknewsgroups tools/mupdate-loadgen.pl tools/rehash tools/translatesieve tools/undohash tools/upgradesieve \
 	snmp/snmpgen \
 	autobuild.sh
-noinst_MAN = com_err/et/com_err.3 com_err/et/compile_et.1 syslog/logger.1 \
-	syslog/syslog.3 syslog/syslog.8
+noinst_MAN = com_err/et/com_err.3 com_err/et/compile_et.1
 noinst_TEXINFOS = com_err/et/com_err.texinfo
 
 com_err_et_libcom_err_a_SOURCES = com_err/et/com_err.c com_err/et/com_err.h \
@@ -470,10 +464,10 @@ dist_man_MANS = man/imtest.1 man/installsieve.1 man/lmtptest.1 \
 master_master_SOURCES = master/cyrusMasterMIB.c master/cyrusMasterMIB.h \
 	master/master.c master/master.h master/masterconf.c \
 	master/masterconf.h master/service.h
-master_master_LDADD = lib/libcyrus_min.a @LIB_UCDSNMP@ @LIBS@ -lm @SYSLOG_LIBS@
+master_master_LDADD = lib/libcyrus_min.a @LIB_UCDSNMP@ @LIBS@ -lm
 
 netnews_remotepurge_SOURCES = netnews/macros.h netnews/readconfig.c netnews/readconfig.h netnews/remotepurge.c
-netnews_remotepurge_LDADD = lib/libcyrus.a lib/libcyrus_min.a @LIB_RT@ ${LIB_SASL} @LIB_UUID@ ${LIBS} @SYSLOG_LIBS@
+netnews_remotepurge_LDADD = lib/libcyrus.a lib/libcyrus_min.a @LIB_RT@ ${LIB_SASL} @LIB_UUID@ ${LIBS}
 
 notifyd_notifyd_SOURCES = imap/mutex_fake.c master/service.c \
 	notifyd/exitcodes.h notifyd/notify_external.c \
@@ -531,7 +525,7 @@ sieve_libsieve_a_SOURCES = sieve/bytecode.h sieve/addr.y sieve/addr-lex.l \
 	sieve/sieve-lex.l sieve/sieve.y sieve/sieve_err.c sieve/sieve_err.h \
 	sieve/sieve_interface.h sieve/tree.c sieve/tree.h
 
-sieve_sievec_LDADD = sieve/libsieve.a lib/libcyrus.a lib/libcyrus_min.a ${COM_ERR_LIBS} @LIB_RT@ ${LIB_SASL} @LIB_UUID@ @SYSLOG_LIBS@
+sieve_sievec_LDADD = sieve/libsieve.a lib/libcyrus.a lib/libcyrus_min.a ${COM_ERR_LIBS} @LIB_RT@ ${LIB_SASL} @LIB_UUID@
 sieve_sieved_LDADD = ${sieve_sievec_LDADD}
 
 sieve/sieve_err.h sieve/sieve_err.c: sieve/sieve_err.et
@@ -539,10 +533,6 @@ sieve/sieve_err.h sieve/sieve_err.c: sieve/sieve_err.et
 
 sieve_test_SOURCES = sieve/test.c imap/mutex_fake.c
 sieve_test_LDADD = imap/libimap.a ${sieve_sievec_LDADD}
-
-syslog_syslogd_SOURCES = syslog/syslogd.c syslog/syslogd.h
-syslog_syslogd_LDADD = @LIBS@
-syslog_libsyslog_a_SOURCES = syslog/syslog.c syslog/syslog.h
 
 timsieved_timsieved_SOURCES = imap/mutex_fake.c imap/proxy.c master/service.c \
 	timsieved/actions.c timsieved/actions.h timsieved/codes.h \
