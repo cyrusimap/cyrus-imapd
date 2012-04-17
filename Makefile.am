@@ -622,7 +622,6 @@ xversion xversion.h:
 	@rm -f xversion.h.tmp
 
 dist-hook: doc/text/htmlstrip man/cyradm.1.html man/sieveshell.1.html
-	@$(MKDIR_P) doc
 	@$(MKDIR_P) doc/text
 	for man in $(top_builddir)/man/*.[1-9] $(top_srcdir)/man/*.[1-9]; \
 	do \
