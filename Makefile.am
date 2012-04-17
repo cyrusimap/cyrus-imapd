@@ -128,8 +128,6 @@ noinst_LIBRARIES += perl/sieve/lib/libisieve.a
 endif
 BUILT_SOURCES += sieve/addr.c sieve/sieve.c sieve/sieve_err.c
 lib_LIBRARIES += sieve/libsieve.a
-check_PROGRAMS += installsieve/installsieve
-check_LIBRARIES += installsieve/libinstallsieve.a
 check_PROGRAMS += sieve/test
 service_PROGRAMS += sieve/sievec sieve/sieved
 if SERVER
@@ -378,10 +376,6 @@ imap/rfc822_header.h: imap/rfc822_header.st
 
 imtest_imtest_SOURCES = imtest/imtest.c
 imtest_imtest_LDADD = ${netnews_remotepurge_LDADD}
-
-installsieve_libinstallsieve_a_SOURCES = installsieve/codes.h installsieve/exitcodes.h installsieve/isieve.c installsieve/isieve.h installsieve/lex.c installsieve/lex.h installsieve/mystring.c installsieve/mystring.h installsieve/request.c installsieve/request.h
-installsieve_installsieve_SOURCES = installsieve/installscript.c
-installsieve_installsieve_LDADD = installsieve/libinstallsieve.a lib/libcyrus.a @SYSLOG_LIBS@ $(LIB_SASL) ${LIBS}
 
 lib_libcyrus_a_SOURCES = lib/acl.c lib/acl_afs.c lib/auth.c lib/auth_krb.c \
 	lib/auth_krb5.c lib/auth_pts.c lib/auth_unix.c lib/bsearch.c \
