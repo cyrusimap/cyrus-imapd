@@ -183,11 +183,7 @@ void service_abort(int error)
 	       cyrusdb_strerror(r));
     }
 
-    r = DB->done();
-    if (r) {
-	syslog(LOG_ERR, "DBERROR: error exiting application: %s",
-	       cyrusdb_strerror(r));
-    }
+    cyrusdb_done();
 
     exit(error);
 }
@@ -213,7 +209,7 @@ int service_main_fd(int c, int argc __attribute__((unused)),
 
     if (size > PTS_DB_KEYSIZE)  {
 	syslog(LOG_ERR, "size sent %d is greater than buffer size %d", 
-	       size, PTS_DB_KEYSIZE);
+	       (int)size, PTS_DB_KEYSIZE);
 	reply = "Error: invalid request size";
 	goto sendreply;
     }
@@ -226,7 +222,7 @@ int service_main_fd(int c, int argc __attribute__((unused)),
 
     memset(&user, 0, sizeof(user));
     if (read(c, &user, size) < 0) {
-        syslog(LOG_ERR, "socket(user; size = %d): %m", size);
+	syslog(LOG_ERR, "socket(user; size = %d): %m", (int)size);
         reply = "Error reading request (user)";
         goto sendreply;
     }

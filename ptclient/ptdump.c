@@ -54,9 +54,9 @@
 int config_need_data = 0;
 
 static int dump_cb(void *rockp __attribute__((unused)),
-		     const char *key, int keylen,
+		     const char *key, size_t keylen,
 		     const char *data,
-		     int datalen __attribute__((unused))) 
+		     size_t datalen __attribute__((unused)))
 {
     struct auth_state *authstate = (struct auth_state *)data;
     int i;

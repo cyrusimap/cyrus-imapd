@@ -81,9 +81,9 @@ int config_need_data = 0;
 
 static int expire_p(void *rockp __attribute__((unused)),
 		    const char *key __attribute__((unused)),
-		    int keylen __attribute__((unused)),
+		    size_t keylen __attribute__((unused)),
 		    const char *data,
-		    int datalen __attribute__((unused)))
+		    size_t datalen __attribute__((unused)))
 {
     struct auth_state *authstate = (struct auth_state *)data;
     if (authstate->mark + expire_time < timenow) {
@@ -93,9 +93,9 @@ static int expire_p(void *rockp __attribute__((unused)),
 }
 
 static int expire_cb(void *rockp,
-		     const char *key, int keylen,
+		     const char *key, size_t keylen,
 		     const char *data __attribute__((unused)),
-		     int datalen __attribute__((unused))) 
+		     size_t datalen __attribute__((unused)))
 {
     /* We only get called when we want to delete it */
     syslog(LOG_DEBUG, "deleteing entry for %s", key);
@@ -144,7 +144,7 @@ int main(int argc, char *argv[])
 
     timenow = time(0);
     syslog(LOG_INFO, "Expiring entries older than %d seconds (currently %d)",
-	   expire_time, timenow);
+	   (int)expire_time, (int)timenow);
     syslog(LOG_DEBUG, "%s", rcsid);
     
     /* open database */
