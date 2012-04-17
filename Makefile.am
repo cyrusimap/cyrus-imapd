@@ -583,7 +583,7 @@ snapshot::
 	tar -C snapshot -c -f - $(PACKAGE_NAME)-$(GIT_VERSION) | gzip -9 > $(PACKAGE_NAME)-$(GIT_VERSION).tar.gz
 	@rm -rf snapshot
 
-man/imapd.conf.5:
+man/imapd.conf.5: $(top_srcdir)/tools/config2man $(top_srcdir)/lib/imapoptions
 	@echo creating man/imapd.conf.5
 	@$(MKDIR_P) man
 	$(top_srcdir)/tools/config2man $(top_srcdir)/lib/imapoptions > man/imapd.conf.5
@@ -592,12 +592,12 @@ man/sieveshell.1: $(top_srcdir)/perl/sieve/scripts/sieveshell.pl
 	@echo creating man/sieveshell.1
 	@$(MKDIR_P) man
 	pod2man $(top_srcdir)/perl/sieve/scripts/sieveshell.pl > man/sieveshell.1
-man/cyradm.1.html:
+man/cyradm.1.html: $(top_srcdir)/perl/imap/cyradm.sh
 	@$(MKDIR_P) man
 	pod2html $(top_srcdir)/perl/imap/cyradm.sh > man/cyradm.1.html
 	rm man/pod2htm*
 
-man/sieveshell.1.html:
+man/sieveshell.1.html: $(top_srcdir)/perl/sieve/scripts/sieveshell.pl
 	@$(MKDIR_P) man
 	pod2html $(top_srcdir)/perl/sieve/scripts/sieveshell.pl > man/sieveshell.1.html
 	rm man/pod2htm*
