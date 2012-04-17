@@ -897,7 +897,7 @@ if test "$with_openssl" != "no"; then
            AC_DEFINE(OPENSSL_DES_LIBDES_COMPATIBILITY,[],[Configure OpenSSL to provide krb4-compatible legacy des apis])
         fi
 fi
-AM_CONDITIONAL([WITH_OPENSSL], [test "$with_openssl" != "no"])
+AM_CONDITIONAL([OPENSSL], [test "$with_openssl" != "no"])
 AC_SUBST(OPENSSL_INC)
 AC_SUBST(OPENSSL_LIB)
 

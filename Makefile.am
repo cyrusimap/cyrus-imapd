@@ -97,7 +97,7 @@ service_PROGRAMS += imap/pop3d imap/quota imap/reconstruct imap/smmapd \
 if REPLICATION
 service_PROGRAMS += imap/sync_client imap/sync_reset imap/sync_server
 endif
-if WITH_OPENSSL
+if OPENSSL
 service_PROGRAMS += imap/tls_prune
 endif
 service_PROGRAMS += imap/unexpunge master/master
@@ -505,7 +505,7 @@ ptclient_ptdump_LDADD = imap/libimap.a @COM_ERR_LIBS@ $(netnews_remotepurge_LDAD
 ptclient_ptexpire_SOURCES = imap/cli_fatal.c imap/mutex_fake.c ptclient/ptexpire.c
 ptclient_ptexpire_LDADD = $(ptclient_ptdump_LDADD)
 
-#ptclient_ptextract_SOURCES = imap/cli_fatal.c imap/mutex_fake.c ptclient/ptextrac.c
+#ptclient_ptextract_SOURCES = imap/cli_fatal.c imap/mutex_fake.c ptclient/ptextract.c
 #ptclient_ptextract_LDADD = $(ptclient_ptdump_LDADD)
 
 ptclient_ptloader_SOURCES = ptclient/ptloader.c ptclient/ptloader.h imap/mutex_fake.c master/service-thread.c
