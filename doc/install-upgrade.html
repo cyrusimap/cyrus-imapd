@@ -8,6 +8,16 @@
 
 <h1>Upgrading From Previous Versions</h1>
 
+<h2>Upgrading from 2.4.14</h2>
+<ul>
+<li>We recommend that ALL sites with fulldirhash enabled run
+    tools/rehash on their mail spools after upgrading from
+    2.4.14.  There were serious 32 vs 64 bit hashing bugs
+    which were made worse with 2.4.14.  NOTE: the syntax of
+    tools/rehash has changed.  Run it without arguments to
+    see a usage statement.</li>
+</ul>
+
 <h2>Upgrading from 2.4.12</h2>
 <ul>
 <li>some LOG_DEBUG level messages are no longer created by
