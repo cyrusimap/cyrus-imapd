@@ -11,7 +11,9 @@
 <h1>Changes to the Cyrus IMAP Server since 2.4.14</h1>
 <ul>
 <li>Bug #3664, #3665 - Sieve filters don't work if mailbox contains dots</li>
-<li>Bug #3651 - 64 bit dirhash breaks existing systems</li>
+<li>Bug #3651 - 64 bit dirhash breaks existing systems.  NOTE - this includes a complete
+    rewrite of tools/rehash, making it much simpler and more reliable.  Check the usage
+    statement</li>
 <li>Bug #1228 - mailbox dumps need to dump quotaroots</li>
 <li>Bug #3613 - CATENATE command returns BADURL</li>
 <li>Bug #3627 - enabling improved_mboxlist_sort documentation mention subscription files</li>
