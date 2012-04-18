@@ -60,11 +60,6 @@ die "must not run as root" if ($< == 0);
 
 my $imapdconf = shift || usage();
 
-# constants
-my $MOVE_DOMAIN_CONF = 1;
-my $MOVE_DOMAIN_SIEVE = 2;
-my $MOVE_DOMAIN_PART = 3;
-
 my @bdirs = ("a".."z");
 my @fdirs = ("A".."W");
 my %ishash = map { $_ => 1 } (@bdirs, @fdirs);
@@ -100,7 +95,7 @@ foreach my $i ("user", "proc", "lock", "db", "socket", "log", "msg", "quota") {
 if ($virtdomains) {
     print "domain ";
     ensure_dir("$confdir/domain");
-    move_domains("$confdir/domain", $MOVE_DOMAIN_CONF);
+    move_domains("$confdir/domain", 'conf');
 }
 
 # *** user subdirectory; holds subscription files
@@ -202,6 +197,11 @@ sub hash_path {
     if ($skiptochar) {
 	# strip up to and including the character
 	$tohash =~ s/^.*?\Q$skiptochar//;
+	if ($skiptochar eq '/' and $tohash =~ m/\./) {
+	    # we've got a top level directory, oops
+	    $tohash = $item;
+	    $tohash =~ s{/.*$}{};
+	}
     }
 
     return "$path/" . dir_hash_c($tohash) . "/$item";
@@ -252,12 +252,12 @@ sub read_conf {
 
 sub add_found {
     # here be dragons, eep
-    my $ispart = shift;
+    my $type = shift;
     my $found = shift;
     my $name = shift;
     my $location = shift;
 
-    unless ($ispart) {
+    if ($type ne 'part') {
 	if ($found->{$name}) {
 	    die "FOUND BOTH $found->{$name} and $location - you need to fix this by hand\n";
 	}
@@ -265,7 +265,11 @@ sub add_found {
 	return;
     }
 
-    opendir(SUB, $location) or die "Failed to open $location";
+    unless (opendir(SUB, $location)) {
+	print "Failed to open directory $location\n";
+	die unless $OPT_NoAction;
+	return;
+    }
     while (my $sub = readdir SUB) {
 	next if $sub =~ m/^\./;
 	my $key = "$name/$sub";
@@ -279,11 +283,15 @@ sub add_found {
 
 sub find_items {
     my $path = shift;
-    my $ispart = shift;
+    my $type = shift;
     my %found;
     my @subs;
 
-    opendir(ITEMS, $path) or die "couldn't read $path";
+    unless (opendir(ITEMS, $path)) {
+	print "Failed to open directory $path\n";
+	die unless $OPT_NoAction;
+	return;
+    }
     while (my $item = readdir ITEMS) {
 	# guaranteed evil
 	next if $item =~ m/^\./;
@@ -296,7 +304,7 @@ sub find_items {
 	    push @subs, $item;
 	}
 	else {
-	    add_found($ispart, \%found, $item, "$path/$item");
+	    add_found($type, \%found, $item, "$path/$item");
 	}
     }
     closedir(ITEMS);
@@ -306,7 +314,7 @@ sub find_items {
 	while (my $item = readdir ITEMS) {
 	    next if $item =~ m/^\./;
 	    # we can't fix duplicate directories ourselves!
-	    add_found($ispart, \%found, $item, "$path/$sub/$item");
+	    add_found($type, \%found, $item, "$path/$sub/$item");
 	}
 	closedir(ITEMS);
     }
@@ -340,22 +348,22 @@ sub do_moves {
 sub move_domains {
     my $path = shift;
     my $type_of_move = shift || die "move_domains called badly";
-    my $isspool = ($type_of_move == $MOVE_DOMAIN_PART);
+    my $isspool = ($type_of_move eq 'part');
 
-    my %found = find_items($path);
+    my %found = find_items($path, 'domain');
 
     # let's do the subdirs first, then move the top levels
     foreach my $item (sort keys %found) {
-	if ($type_of_move == $MOVE_DOMAIN_CONF) {
+	if ($type_of_move eq 'conf') {
 	    if (-d "$path/quota") {
 		move_quotas("$path/quota");
 	    }
 	    if (-d "$path/user") {
 		move_users("$path/user");
 	    }
-	} elsif ($type_of_move == $MOVE_DOMAIN_SIEVE) {
+	} elsif ($type_of_move eq 'sieve') {
 	    move_sieve($found{$item}, 1);
-	} elsif ($type_of_move == $MOVE_DOMAIN_PART) {
+	} elsif ($type_of_move == 'part') {
 	    move_part($found{$item}, 1);
 	} else {
 	    die "bad domain move mode: $type_of_move";
@@ -369,7 +377,7 @@ sub move_domains {
 sub move_users {
     my $path = shift;
 
-    my %found = find_items($path);
+    my %found = find_items($path, 'user');
     do_moves($path, 0, undef, %found);
     tidy_up($path, 0, 0);
 }
@@ -377,7 +385,7 @@ sub move_users {
 sub move_quotas {
     my $path = shift;
 
-    my %found = find_items($path);
+    my %found = find_items($path, 'quota');
     do_moves($path, 0, '.', %found);
     tidy_up($path, 0, 0);
 }
@@ -386,11 +394,11 @@ sub move_sieve {
     my $path = shift;
     my $indomain = shift;
 
-    my %found = find_items($path);
+    my %found = find_items($path, 'sieve');
 
     if ($virtdomains and not $indomain) {
 	ensure_dir("$path/domain");
-	move_domains("$path/domain", $MOVE_DOMAIN_SIEVE);
+	move_domains("$path/domain", 'sieve');
     }
 
     do_moves($path, 0, undef, %found);
@@ -403,11 +411,11 @@ sub move_part {
     my $indomain = shift;
 
     # let's just assume nobody is being stupid and creating 1 character toplevel names
-    my %found = find_items($path, 1);
+    my %found = find_items($path, 'part');
 
     if ($virtdomains and not $indomain) {
 	ensure_dir("$path/domain");
-	move_domains("$path/domain", $MOVE_DOMAIN_PART);
+	move_domains("$path/domain", 'part');
     }
 
     do_moves($path, 1, '/', %found);
