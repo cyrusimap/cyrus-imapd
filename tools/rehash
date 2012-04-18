@@ -355,15 +355,15 @@ sub move_domains {
     # let's do the subdirs first, then move the top levels
     foreach my $item (sort keys %found) {
 	if ($type_of_move eq 'conf') {
-	    if (-d "$path/quota") {
-		move_quotas("$path/quota");
+	    if (-d "$found{$item}/quota") {
+		move_quotas("$found{$item}/quota");
 	    }
-	    if (-d "$path/user") {
-		move_users("$path/user");
+	    if (-d "$found{$item}/user") {
+		move_users("$found{$item}/user");
 	    }
 	} elsif ($type_of_move eq 'sieve') {
 	    move_sieve($found{$item}, 1);
-	} elsif ($type_of_move == 'part') {
+	} elsif ($type_of_move eq 'part') {
 	    move_part($found{$item}, 1);
 	} else {
 	    die "bad domain move mode: $type_of_move";
