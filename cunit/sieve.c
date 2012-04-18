@@ -11,6 +11,7 @@
 #include "sieve/comparator.h"
 #include "sieve/message.h"
 #include "sieve/sieve_interface.h"
+#include "imap/message.h"
 #include "prot.h"
 #include "retry.h"
 #include "spool.h"
