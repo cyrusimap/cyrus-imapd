@@ -242,7 +242,7 @@ sub read_conf {
 	    $sievedir = $1;
 	    print "you are using $sievedir as your sieve directory.\n";
         }
-        if (/^virtdomains:\s+(1|t|yes|on)/) {
+        if (/^virtdomains:\s+(1|t|yes|on|userid)/) {
 	    $virtdomains = 1;
 	    print "i will deal with virtual domains.\n";
         }
@@ -290,6 +290,7 @@ sub find_items {
 	next if $item eq 'lost+found';
 	next if $item eq 'stage.';
 	next if $item eq 'sync.';
+	next if $item eq 'domain'; # this is just stupid, it should at LEAST have a dot
 
 	if ($ishash{$item}) {
 	    push @subs, $item;
@@ -353,9 +354,9 @@ sub move_domains {
 		move_users("$path/user");
 	    }
 	} elsif ($type_of_move == $MOVE_DOMAIN_SIEVE) {
-	    move_sieve($found{$item});
+	    move_sieve($found{$item}, 1);
 	} elsif ($type_of_move == $MOVE_DOMAIN_PART) {
-	    move_part($found{$item});
+	    move_part($found{$item}, 1);
 	} else {
 	    die "bad domain move mode: $type_of_move";
 	}
@@ -383,11 +384,11 @@ sub move_quotas {
 
 sub move_sieve {
     my $path = shift;
+    my $indomain = shift;
 
     my %found = find_items($path);
 
-    if ($virtdomains) {
-	delete $found{domain};
+    if ($virtdomains and not $indomain) {
 	ensure_dir("$path/domain");
 	move_domains("$path/domain", $MOVE_DOMAIN_SIEVE);
     }
@@ -399,12 +400,12 @@ sub move_sieve {
 # could be data or meta
 sub move_part {
     my $path = shift;
+    my $indomain = shift;
 
     # let's just assume nobody is being stupid and creating 1 character toplevel names
     my %found = find_items($path, 1);
 
-    if ($virtdomains) {
-	delete $found{domain};
+    if ($virtdomains and not $indomain) {
 	ensure_dir("$path/domain");
 	move_domains("$path/domain", $MOVE_DOMAIN_PART);
     }
