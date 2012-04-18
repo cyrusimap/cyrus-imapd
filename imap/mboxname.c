@@ -965,7 +965,7 @@ int mboxname_policycheck(const char *name)
     /* because directory hashing could create ambiguous naming for
      * a folder if the first item is a single character long, reject
      * single character top level names */
-    if (name[1] == '.')
+    if (name[1] == '.' || name[1] == '\0')
 	return IMAP_MAILBOX_BADNAME;
 
     for (i = 0; i < NUM_BADMBOXPATTERNS; i++) {
