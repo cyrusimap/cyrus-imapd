@@ -1106,6 +1106,13 @@ int mboxname_policycheck(const char *name)
 
     if (strlen(name) > MAX_MAILBOX_NAME)
 	return IMAP_MAILBOX_BADNAME;
+
+    /* because directory hashing could create ambiguous naming for
+     * a folder if the first item is a single character long, reject
+     * single character top level names */
+    if (name[1] == '.')
+	return IMAP_MAILBOX_BADNAME;
+
     for (i = 0; i < NUM_BADMBOXPATTERNS; i++) {
 	g = glob_init(badmboxpatterns[i], GLOB_ICASE);
 	if (GLOB_TEST(g, name) != -1) {
