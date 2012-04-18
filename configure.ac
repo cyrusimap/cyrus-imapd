@@ -47,14 +47,12 @@ dnl
 
 
 AC_INIT([cyrus-imapd], [2.5], [http://bugzilla.cyrusimap.org],,[http://www.cyrusimap.org])
-AC_PREREQ([2.68])
+AC_PREREQ([2.67])
 AC_CONFIG_SRCDIR([imap/imapd.c])
 AC_CONFIG_HEADERS(config.h)
 AC_CANONICAL_SYSTEM
 
 AM_INIT_AUTOMAKE([-Wall -Werror -Wno-portability foreign dist-bzip2 no-installinfo subdir-objects])
-dnl 
-AM_SILENT_RULES([yes])
 AC_CONFIG_LIBOBJ_DIR([lib])
 dnl Useful hook for distributions
 AC_ARG_WITH(extraident,
@@ -1442,9 +1440,11 @@ enum {
 ])
 
 dnl make sure that Makefile is the last thing output
-AC_CONFIG_FILES([cunit/Makefile Makefile])
-AM_COND_IF([PERL], [
-	AC_CONFIG_FILES([perl/annotator/Makefile.PL perl/imap/Makefile.PL])
-	AM_COND_IF([SIEVE], AC_CONFIG_FILES([perl/sieve/managesieve/Makefile.PL]))
+AC_CONFIG_FILES([
+    Makefile
+    cunit/Makefile
+    perl/annotator/Makefile.PL
+    perl/imap/Makefile.PL
+    perl/sieve/managesieve/Makefile.PL
 ])
 AC_OUTPUT
