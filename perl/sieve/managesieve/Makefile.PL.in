@@ -56,7 +56,7 @@ WriteMakefile(
     'MYEXTLIB'  => '../lib/isieve.o ../lib/lex.o ../lib/mystring.o ../lib/request.o ../../../lib/libcyrus.a ../../../lib/libcyrus_min.a',
     'LIBS'	=> ["@BDB_LIB@ $LIB_SASL @OPENSSL_LIB@ @LIB_RT@ @LIB_UUID@ @ZLIB@ -lssl -lcrypto"], 
     'DEFINE'	=> '-DPERL_POLLUTE @COVERAGE@',     # e.g., '-DHAVE_SOMETHING' 
-    'INC'	=> "-I@BDB_INC@ -I@top_srcdir@/lib -I@top_srcdir@/perl/sieve/lib @SASLFLAGS@ @OPENSSL_INC@",
+    'INC'	=> "@BDB_INC@ -I@top_srcdir@/lib -I@top_srcdir@/perl/sieve/lib @SASLFLAGS@ @OPENSSL_INC@",
     'OBJECT'    => 'managesieve.o',
     'LD'	=> $Config{ld} . ' @COVERAGE@',
 );

@@ -70,6 +70,6 @@ WriteMakefile(
     'MYEXTLIB'  => '../../lib/libcyrus.a ../../lib/libcyrus_min.a',
     'LIBS'	=> ["@BDB_LIB@ $LIB_SASL @OPENSSL_LIB@ @LIB_RT@ @LIB_UUID@ @ZLIB@ -lssl -lcrypto"],
     'DEFINE'	=> '-DPERL_POLLUTE',    # e.g., '-DHAVE_SOMETHING' 
-    'INC'	=> "-I@BDB_INC@ -I@top_srcdir@ -I@top_srcdir@/com_err/et @SASLFLAGS@ @OPENSSL_INC@ -I@top_srcdir@/perl/imap", 
+    'INC'	=> "@BDB_INC@ -I@top_srcdir@ -I@top_srcdir@/com_err/et @SASLFLAGS@ @OPENSSL_INC@ -I@top_srcdir@/perl/imap", 
     'EXE_FILES' => [cyradm],
 );
