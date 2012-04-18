@@ -464,7 +464,7 @@ dist_man_MANS = man/imtest.1 man/installsieve.1 man/lmtptest.1 \
 master_master_SOURCES = master/cyrusMasterMIB.c master/cyrusMasterMIB.h \
 	master/master.c master/master.h master/masterconf.c \
 	master/masterconf.h master/service.h
-master_master_LDADD = lib/libcyrus_min.a @LIB_UCDSNMP@ @LIBS@ -lm
+master_master_LDADD = lib/libcyrus_min.a $(COM_ERR_LIBS) @LIB_UCDSNMP@ @LIBS@ -lm
 
 netnews_remotepurge_SOURCES = netnews/macros.h netnews/readconfig.c netnews/readconfig.h netnews/remotepurge.c
 netnews_remotepurge_LDADD = lib/libcyrus.a lib/libcyrus_min.a @LIB_RT@ ${LIB_SASL} @LIB_UUID@ ${LIBS}
