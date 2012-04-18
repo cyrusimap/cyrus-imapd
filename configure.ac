@@ -62,6 +62,17 @@ AC_ARG_WITH(extraident,
 dnl If we were using Automake, this would be AM_MAINTAINER_MODE
 CMU_MAINTAINER_MODE
 
+AC_ARG_ENABLE(coverage,
+	[AS_HELP_STRING([--enable-coverage],[enable C test coverage])],
+	[COV_CFLAGS="--coverage"
+	 COV_LDFLAGS="--coverage"
+	],[
+	 COV_CFLAGS=
+	 COV_LDFLAGS=
+	])
+AC_SUBST(COV_CFLAGS)
+AC_SUBST(COV_LDFLAGS)
+
 AC_ARG_WITH(login,,AC_ERROR([--with-login is no longer supported.
 Configure SASL appropriately instead.]))
 

@@ -42,9 +42,9 @@
 #
 
 ACLOCAL_AMFLAGS = -I cmulocal
-AM_CFLAGS = @PERL_CCCDLFLAGS@ $(EXTRACFLAGS)
+AM_CFLAGS = @PERL_CCCDLFLAGS@ @COV_CFLAGS@
 AM_CPPFLAGS = @COM_ERR_CPPFLAGS@ -I${top_builddir} -I${top_builddir}/lib -I${top_srcdir} -I${top_srcdir}/lib ${DEFS} ${LOCALDEFS} @SASLFLAGS@
-AM_LDFLAGS = ${EXTRALDFLAGS}
+AM_LDFLAGS = @COV_LDFLAGS@
 BUILT_SOURCES = xversion.h lib/imapopts.c
 
 SUBDIRS = .
@@ -667,12 +667,6 @@ install-exec-hook:
 
 valgrind:
 	$(MAKE) VG=yes check
-
-coverage_all:
-	$(MAKE) COVERAGE="--coverage" EXTRACFLAGS="--coverage" EXTRALDFLAGS="--coverage" all
-
-coverage_check:
-	$(MAKE) COVERAGE="--coverage" EXTRACFLAGS="--coverage" EXTRALDFLAGS="--coverage" check
 
 tags cscope:
 	find $(DIST_SUBDIRS) -type f -name '*.[ch]' > cs.files

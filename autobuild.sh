@@ -87,7 +87,7 @@ if [ -n "$TGGCOV" -a -x "$TGGCOV" ]; then
     echo "Found coverage tools, enabling coverage"
     echo " -  tggcov: $TGGCOV"
     echo " -  git-history-coverage: $HISTCOV"
-    COVERAGE=coverage_
+    COVERAGE=--enable-coverage
 else
     echo "No coverage tools found, disabling coverage"
     echo "(ggcov may be downloaded from ggcov.sourceforge.net)"
@@ -107,6 +107,7 @@ CONFIGURE_ARGS="\
     --enable-murder \
     --enable-replication \
     --enable-unit-tests \
+    $COVERAGE \
     "
 
 NCPUS=$(grep '^processor' /proc/cpuinfo | wc -l)
@@ -148,12 +149,12 @@ perl -p -i.orig -e 's/^(CFLAGS\s*=\s*.*)\s+-O2/\1 '"$COPTIMISEFLAGS"'/' $mf $(fi
 # hack to work around a makefile race condition
 # make -C sieve sieve.c sieve.h addr.c addr.h
 # Finally the actual build
-# make -j$NCPUS ${COVERAGE}all || fatal "Can't make all"
-make ${COVERAGE}all || fatal "Can't make all"
+# make -j$NCPUS all || fatal "Can't make all"
+make all || fatal "Can't make all"
 
 # Run CUnit based unit tests
 # [ -n "$COVERAGE" ] && find . -name '*.gcda' -exec rm '{}' \;
-make CUFORMAT=junit ${COVERAGE}check || fatal "Can't make check"
+make CUFORMAT=junit check || fatal "Can't make check"
 
 # Do a temporary install for Cassandane
 [ -d $CYRUS_INST.old ] && rm -rf $CYRUS_INST.old
