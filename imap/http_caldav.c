@@ -802,7 +802,8 @@ static int meth_copy(struct transaction_t *txn)
   done:
     if (ret == HTTP_CREATED) {
 	/* Tell client where to find the new resource */
-	txn->loc = dest.path;
+	hdr = spool_getheader(txn->req_hdrs, "Destination");
+	buf_setcstr(&txn->loc, hdr[0]);
     }
     else {
 	/* Don't confuse client by providing ETag of Destination resource */
@@ -1972,7 +1973,9 @@ static int meth_post(struct transaction_t *txn)
 
     if (ret == HTTP_CREATED) {
 	/* Tell client where to find the new resource */
-	txn->loc = txn->req_tgt.path;
+	const char **hdr = spool_getheader(txn->req_hdrs, "Host");
+	buf_printf(&txn->loc, "%s://%s%s/",
+		   https ? "https" : "http", hdr[0], txn->req_tgt.path);
     }
 
     return ret;

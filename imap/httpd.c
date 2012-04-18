@@ -892,7 +892,7 @@ static void cmdloop(void)
 	txn.meth = NULL;
 	txn.flags = !httpd_timeout ? HTTP_CLOSE : 0;
 	txn.auth_chal.param = NULL;
-	txn.loc = NULL;
+	buf_reset(&txn.loc);
 	txn.req_hdrs = NULL;
 	memset(&txn.error, 0, sizeof(struct error_t));
 	memset(&txn.resp_body, 0, sizeof(struct resp_body_t));
@@ -1053,10 +1053,9 @@ static void cmdloop(void)
 	    ret = HTTP_MOVED;
 
 	    hdr = spool_getheader(txn.req_hdrs, "Host");
-	    snprintf(buf, sizeof(buf), "%s://%s%s/",
-		     https ? "https" : "http", hdr[0],
-		     namespace_calendar.prefix);
-	    txn.loc = buf;
+	    buf_printf(&txn.loc, "%s://%s%s/",
+		       https ? "https" : "http", hdr[0],
+		       namespace_calendar.prefix);
 	}
 #endif
 
@@ -1133,11 +1132,11 @@ static void cmdloop(void)
 
 		/* Create https URL */
 		hdr = spool_getheader(txn.req_hdrs, "Host");
-		snprintf(buf, sizeof(buf),
-			 "https://%s%s", hdr[0], txn.req_tgt.path);
+		buf_printf(&txn.loc, "https://%s%s", hdr[0], txn.req_tgt.path);
 
 		/* Create HTML body */
-		buf_printf(&html, tls_message, buf, buf);
+		buf_printf(&html, tls_message,
+			   buf_cstring(&txn.loc), buf_cstring(&txn.loc));
 
 		/* Check which response is required */
 		if ((hdr = spool_getheader(txn.req_hdrs, "Upgrade")) &&
@@ -1148,12 +1147,11 @@ static void cmdloop(void)
 		else {
 		    /* All other clients use RFC 2818 (HTTPS) */
 		    code = HTTP_MOVED;
-		    txn.loc = buf;
 		}
 
 		/* Output our HTML response */
 		txn.resp_body.type = "text/html; charset=utf-8";
-		write_body(code, &txn, html.s, html.len);
+		write_body(code, &txn, buf_cstring(&html), buf_len(&html));
 
 		buf_free(&html);
 		goto done;
@@ -1482,7 +1480,9 @@ void response_header(long code, struct transaction_t *txn)
 	    buf_printf(&log, " (%s)", hdr[0]);
 	}
 	buf_printf(&log, " => \"%s\"", error_message(code));
-	if (txn->loc) buf_printf(&log, " (%s)", txn->loc);
+	if (buf_len(&txn->loc)) {
+	    buf_printf(&log, " (%s)", buf_cstring(&txn->loc));
+	}
 	syslog(LOG_INFO, "%s", buf_cstring(&log));
     }
 
@@ -1638,7 +1638,9 @@ void response_header(long code, struct transaction_t *txn)
 	}
     }
 
-    if (txn->loc) prot_printf(httpd_out, "Location: %s\r\n", txn->loc);
+    if (buf_len(&txn->loc)) {
+	prot_printf(httpd_out, "Location: %s\r\n", buf_cstring(&txn->loc));
+    }
 
 
     /* Payload Header Fields */

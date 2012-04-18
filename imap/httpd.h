@@ -167,7 +167,7 @@ struct transaction_t {
     hdrcache_t req_hdrs;    		/* Cached HTTP headers */
     struct buf req_body;		/* Buffered request body */
     struct auth_challenge_t auth_chal;	/* Authentication challenge */
-    const char *loc;	    		/* Location: of resp representation */
+    struct buf loc;	    		/* Location of resource */
     struct error_t error;		/* Error response meta-data */
     struct resp_body_t resp_body;	/* Response body meta-data */
 #ifdef HAVE_ZLIB
