@@ -78,11 +78,6 @@ SHELL = /bin/sh
 #     It may also help to run purify by hand to instrument any of
 #     the dynamic libraries that may crop up during run time.
 # 
-PURIFY=/usr/local/bin/purify
-PUREOPT= -best-effort -logfile=/tmp/pure/%v.%p.log -always_use_cache_dir -cachedir=/usr/tmp/$(USER)
-QUANTIFY=/usr/local/bin/quantify
-QUANTOPT=-windows=no -filename-prefix=/tmp/quant/%v.%p -write-summary-file= -logfile=/tmp/quant/%v.%p.log
-
 VALGRIND_yes = valgrind --tool=memcheck --leak-check=full --suppressions=vg.supp
 
 prefix = @prefix@
@@ -161,14 +156,6 @@ cunit.mk: Makefile
 unit: $(UNITOBJS) $(CUNIT_DEPLIBS)
 	$(CC) $(LDFLAGS) -o unit $(UNITOBJS) $(CUNIT_OBJECTS) \
 	$(LIBS) $(LIB_WRAP)
-
-unit.pure: $(UNITOBJS) $(CUNIT_DEPLIBS)
-	$(PURIFY) $(PUREOPT) $(CC) $(LDFLAGS) -o unit.pure \
-	 $(UNITOBJS) $(CUNIT_OBJECTS) $(LIBS) $(LIB_WRAP)
-
-unit.quant: $(UNITOBJS) $(CUNIT_DEPLIBS)
-	$(QUANTIFY) $(QUANTOPT) $(CC) $(LDFLAGS) -o unit.quant \
-	 $(UNITOBJS) $(CUNIT_OBJECTS) $(LIBS) $(LIB_WRAP)
 
 ### Other Misc Targets
 
