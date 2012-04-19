@@ -1454,8 +1454,12 @@ dnl make sure that Makefile is the last thing output
 AC_CONFIG_FILES([
     Makefile
     cunit/Makefile
-    perl/annotator/Makefile.PL
-    perl/imap/Makefile.PL
-    perl/sieve/managesieve/Makefile.PL
 ])
+
+if test "$with_perl" != "no" -a "$with_perl" != "notfound" ; then
+CMU_PERL_MAKEMAKER(perl/annotator)
+CMU_PERL_MAKEMAKER(perl/imap)
+CMU_PERL_MAKEMAKER(perl/sieve/managesieve)
+fi
+
 AC_OUTPUT

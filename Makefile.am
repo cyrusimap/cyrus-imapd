@@ -114,12 +114,10 @@ service_PROGRAMS += ptclient/ptdump ptclient/ptexpire ptclient/ptloader
 endif
 if PERL
 SUBDIRS += perl/annotator perl/imap
-BUILT_SOURCES += perl/imap/Makefile perl/annotator/Makefile
 endif
 if SIEVE
 if PERL
 SUBDIRS += perl/sieve/managesieve
-BUILT_SOURCES += perl/sieve/managesieve/Makefile
 noinst_LIBRARIES += perl/sieve/lib/libisieve.a
 endif
 BUILT_SOURCES += sieve/addr.c sieve/sieve.c sieve/sieve_err.c
@@ -481,18 +479,6 @@ notifyd_notifytest_SOURCES = notifyd/notifytest.c imap/mutex_fake.c
 notifyd_notifytest_LDADD = ${notifyd_notifyd_LDADD}
 
 perl_sieve_lib_libisieve_a_SOURCES = perl/sieve/lib/isieve.c perl/sieve/lib/lex.c perl/sieve/lib/mystring.c perl/sieve/lib/request.c
-
-perl/annotator/Makefile: perl/annotator/Makefile.PL
-	@cd perl/annotator; \
-	  $(PERL) ../../${top_srcdir}/perl/annotator/Makefile.PL PREFIX=$(prefix);
-
-perl/imap/Makefile:  perl/imap/Makefile.PL
-	@cd perl/imap; \
-	  $(PERL) ../../${top_srcdir}/perl/imap/Makefile.PL PREFIX=$(prefix);
-
-perl/sieve/managesieve/Makefile: perl/sieve/managesieve/Makefile.PL
-	@cd perl/sieve/managesieve; \
-	   $(PERL) ../../../${top_srcdir}/perl/sieve/managesieve/Makefile.PL PREFIX=$(prefix);
 
 ptclient_ptdump_SOURCES = imap/cli_fatal.c imap/mutex_fake.c ptclient/ptdump.c
 ptclient_ptdump_LDADD = imap/libimap.a @COM_ERR_LIBS@ $(netnews_remotepurge_LDADD)
