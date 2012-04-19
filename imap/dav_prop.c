@@ -263,17 +263,20 @@ int xml_add_response(struct propfind_ctx *fctx, long code)
     for (i = 0; i < NUM_PROPSTAT; i++) {
 	struct propstat *stat = &propstat[i];
 
-	if ((i == PROPSTAT_NOTFOUND) && fctx->brief) continue;
-
 	if (stat->root) {
-	    xmlNewChild(stat->root, NULL, BAD_CAST "status",
-			BAD_CAST http_statusline(stat->status));
-	    if (stat->precond) {
-		struct error_t error = { NULL, stat->precond, NULL, 0 };
-		xml_add_error(stat->root, &error, fctx->ns);
+	    if ((stat->status == HTTP_NOT_FOUND) && fctx->brief) {
+		xmlFreeNode(stat->root);
 	    }
+	    else {
+		xmlNewChild(stat->root, NULL, BAD_CAST "status",
+			    BAD_CAST http_statusline(stat->status));
+		if (stat->precond) {
+		    struct error_t error = { NULL, stat->precond, NULL, 0 };
+		    xml_add_error(stat->root, &error, fctx->ns);
+		}
 
-	    xmlAddChild(resp, stat->root);
+		xmlAddChild(resp, stat->root);
+	    }
 	}
     }
 
@@ -1759,17 +1762,20 @@ int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr)
     for (i = 0; i < NUM_PROPSTAT; i++) {
 	struct propstat *stat = &propstat[i];
 
-	if ((i == PROPSTAT_OK) && pctx->brief) continue;
-
 	if (stat->root) {
-	    xmlNewChild(stat->root, NULL, BAD_CAST "status",
-			BAD_CAST http_statusline(stat->status));
-	    if (stat->precond) {
-		struct error_t error = { NULL, stat->precond, NULL, 0 };
-		xml_add_error(stat->root, &error, pctx->ns);
+	    if ((stat->status == HTTP_OK) && pctx->brief) {
+		xmlFreeNode(stat->root);
 	    }
+	    else {
+		xmlNewChild(stat->root, NULL, BAD_CAST "status",
+			    BAD_CAST http_statusline(stat->status));
+		if (stat->precond) {
+		    struct error_t error = { NULL, stat->precond, NULL, 0 };
+		    xml_add_error(stat->root, &error, pctx->ns);
+		}
 
-	    xmlAddChild(pctx->root, stat->root);
+		xmlAddChild(pctx->root, stat->root);
+	    }
 	}
     }
 
