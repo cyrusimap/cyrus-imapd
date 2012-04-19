@@ -1198,6 +1198,7 @@ static int meth_mkcol(struct transaction_t *txn)
 
 	/* Populate our proppatch context */
 	pctx.req_tgt = &txn->req_tgt;
+	pctx.brief = 1;  /* MKCOL/MKCALENDAR are always Brief */
 	pctx.meth = txn->meth;
 	pctx.mailboxname = mailboxname;
 	pctx.root = root;
