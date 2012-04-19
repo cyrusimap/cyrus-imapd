@@ -192,9 +192,11 @@ enum {
     PROPSTAT_FORBID,
     PROPSTAT_NOTFOUND,
     PROPSTAT_CONFLICT,
-    PROPSTAT_ERROR
+    PROPSTAT_FAILEDDEP,
+    PROPSTAT_ERROR,
+    PROPSTAT_OVERQUOTA
 };
-#define NUM_PROPSTAT 6
+#define NUM_PROPSTAT 8
 
 /* Context for fetching properties */
 struct propfind_entry_list;
@@ -241,6 +243,7 @@ struct propfind_ctx {
 /* Context for patching (writing) properties */
 struct proppatch_ctx {
     struct request_target_t *req_tgt;	/* parsed request target URL */
+    unsigned brief;			/* omit 200 propstat elements */
     const char *meth;	    		/* requested Method */
     const char *mailboxname;		/* mailbox correspondng to collection */
     xmlNodePtr root;			/* root node to add to XML tree */

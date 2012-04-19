@@ -1749,13 +1749,17 @@ int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr)
     /* One or more of the properties failed */
     if (*pctx->ret && propstat[PROPSTAT_OK].root) {
 	/* 200 status must become 424 */
-	propstat[PROPSTAT_OK].status = HTTP_FAILED_DEP;
+	propstat[PROPSTAT_FAILEDDEP].root = propstat[PROPSTAT_OK].root;
+	propstat[PROPSTAT_FAILEDDEP].status = HTTP_FAILED_DEP;
+	propstat[PROPSTAT_OK].root = NULL;
     }
 
     /* Add status and optional error to the propstat elements
        and then add them to the response element */
     for (i = 0; i < NUM_PROPSTAT; i++) {
 	struct propstat *stat = &propstat[i];
+
+	if ((i == PROPSTAT_OK) && pctx->brief) continue;
 
 	if (stat->root) {
 	    xmlNewChild(stat->root, NULL, BAD_CAST "status",

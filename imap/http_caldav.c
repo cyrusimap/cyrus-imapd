@@ -1807,6 +1807,7 @@ static int meth_proppatch(struct transaction_t *txn)
     xmlNsPtr ns[NUM_NAMESPACE];
     char *server, *acl, mailboxname[MAX_MAILBOX_BUFFER];
     struct proppatch_ctx pctx;
+    const char **hdr;
 
     memset(&pctx, 0, sizeof(struct proppatch_ctx));
 
@@ -1905,6 +1906,12 @@ static int meth_proppatch(struct transaction_t *txn)
     pctx.tid = NULL;
     pctx.errstr = &txn->error.desc;
     pctx.ret = &r;
+
+    /* Check for Brief header */
+    if ((hdr = spool_getheader(txn->req_hdrs, "Brief")) &&
+	!strcasecmp(hdr[0], "t")) {
+	pctx.brief = 1;
+    }
 
     /* Execute the property patch instructions */
     ret = do_proppatch(&pctx, instr);
