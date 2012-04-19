@@ -60,6 +60,10 @@ WriteMakefile(
     'INC'	=> "@BDB_INC@ -I@top_srcdir@/lib -I@top_srcdir@/perl/sieve/lib @SASLFLAGS@ @OPENSSL_INC@",
     'OBJECT'    => 'managesieve.o',
     'LD'	=> $Config{ld} . ' @COV_LDFLAGS@',
+    # This is a disgusting hack to effectively disable the stupid
+    # behaviour of the generated Makefile which moves itself aside
+    # on a 'make clean' instead of on 'make distclean'.
+    'MAKEFILE_OLD' => 'Makefile',
 );
 
 sub MY::postamble {

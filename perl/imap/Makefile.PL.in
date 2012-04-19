@@ -72,4 +72,8 @@ WriteMakefile(
     'DEFINE'	=> '-DPERL_POLLUTE',    # e.g., '-DHAVE_SOMETHING' 
     'INC'	=> "@BDB_INC@ -I@top_srcdir@ -I@top_srcdir@/com_err/et @SASLFLAGS@ @OPENSSL_INC@ -I@top_srcdir@/perl/imap", 
     'EXE_FILES' => [cyradm],
+    # This is a disgusting hack to effectively disable the stupid
+    # behaviour of the generated Makefile which moves itself aside
+    # on a 'make clean' instead of on 'make distclean'.
+    'MAKEFILE_OLD' => 'Makefile',
 );
