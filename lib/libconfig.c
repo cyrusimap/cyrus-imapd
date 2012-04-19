@@ -384,7 +384,7 @@ void config_read_file(const char *filename)
 
     if (!infile) {
 	snprintf(buf, bufsize, "can't open configuration file %s: %s",
-		 filename, error_message(errno));
+		 filename, strerror(errno));
 	fatal(buf, EC_CONFIG);
     }
 
