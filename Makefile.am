@@ -359,11 +359,13 @@ imap/mupdate_err.h imap/mupdate_err.c: imap/mupdate_err.et
 imap/nntp_err.h imap/nntp_err.c: imap/nntp_err.et
 	cd imap && $(COMPILE_ET) ../$(top_srcdir)/imap/nntp_err.et
 
-@MAINT@imap/rfc822_header.c: imap/rfc822_header.st
-@MAINT@	${top_srcdir}/tools/compile_st.pl -c $< > $@.NEW && mv $@.NEW $@
-@MAINT@
-@MAINT@imap/rfc822_header.h: imap/rfc822_header.st
-@MAINT@	${top_srcdir}/tools/compile_st.pl -h $< > $@.NEW && mv $@.NEW $@
+if MAINTAINER_MODE
+imap/rfc822_header.c: imap/rfc822_header.st
+	${top_srcdir}/tools/compile_st.pl -c $< > $@.NEW && mv $@.NEW $@
+
+imap/rfc822_header.h: imap/rfc822_header.st
+	${top_srcdir}/tools/compile_st.pl -h $< > $@.NEW && mv $@.NEW $@
+endif
 
 imtest_imtest_SOURCES = imtest/imtest.c
 imtest_imtest_LDADD = ${netnews_remotepurge_LDADD}
