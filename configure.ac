@@ -59,8 +59,7 @@ AC_ARG_WITH(extraident,
         [AS_HELP_STRING([--with-extraident=STRING],[use STRING as extra version information])],
 	[AC_DEFINE_UNQUOTED(EXTRA_IDENT,"$withval", [Extra version information for imap/version.h])])
 
-dnl If we were using Automake, this would be AM_MAINTAINER_MODE
-CMU_MAINTAINER_MODE
+AM_MAINTAINER_MODE
 
 AC_ARG_ENABLE(coverage,
 	[AS_HELP_STRING([--enable-coverage],[enable C test coverage])],
