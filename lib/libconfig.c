@@ -383,8 +383,8 @@ void config_read_file(const char *filename)
 	infile = fopen(filename, "r");
 
     if (!infile) {
-	snprintf(buf, bufsize, "can't open configuration file %s: %m",
-		 filename);
+	snprintf(buf, bufsize, "can't open configuration file %s: %s",
+		 filename, strerror(errno));
 	fatal(buf, EC_CONFIG);
     }
 
