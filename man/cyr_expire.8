@@ -50,11 +50,13 @@ cyr_expire \- expire messages and duplicate delivery database entries
 .I config-file
 ]
 [
-.BI \-D " delete-days"
+.BI \-D " delete-duration"
 ]
-.BI \-E " expire-duration"
 [
-.BI \-X " expunge-days"
+.BI \-E " expire-duration"
+]
+[
+.BI \-X " expunge-duration"
 ]
 [
 .BI \-p " mailbox-prefix"
@@ -101,6 +103,8 @@ expired using the value given to the \fB-E\fR option.
 .PP
 \fBCyr_expire\fR reads its configuration options out of the \fIimapd.conf\fR(5)
 file unless specified otherwise by \fB-C\fR.
+.PP
+\fBCyr_expire\fR requires at least one of \fB-D -E\fR or \fB-X\fR to be supplied.
 .SH OPTIONS
 .TP
 \fB\-C\fI config-file\fR

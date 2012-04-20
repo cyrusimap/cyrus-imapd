@@ -81,7 +81,7 @@ static int verbose = 0;
 void usage(void)
 {
     fprintf(stderr,
-	    "cyr_expire [-C <altconfig>] -E <days> [-X <expunge-days>] [-p prefix] [-a] [-v]\n");
+	    "cyr_expire [-C <altconfig>] [-E <expire-duration>] [-D <delete-duration] [-X <expunge-duration>] [-p prefix] [-a] [-v] [-x]\n");
     exit(-1);
 }
 
@@ -391,7 +391,7 @@ int main(int argc, char *argv[])
 	}
     }
 
-    if (!expire_seconds) usage();
+    if (!expire_seconds && delete_seconds == -1 && expunge_seconds == -1) usage();
 
     sigemptyset(&action.sa_mask);
     action.sa_flags = 0;
@@ -422,7 +422,7 @@ int main(int argc, char *argv[])
 	exit(1);
     }
 
-    if (do_expunge) {
+    if (do_expunge && (expunge_seconds >= 0 || expire_seconds)) {
 	/* xxx better way to determine a size for this table? */
 
 	/* expire messages from mailboxes,
@@ -504,7 +504,8 @@ int main(int argc, char *argv[])
     }
 
     /* purge deliver.db entries of expired messages */
-    r = duplicate_prune(expire_seconds, &erock.table);
+    if (expire_seconds > 0)
+	r = duplicate_prune(expire_seconds, &erock.table);
 
 finish:
     free_hash_table(&erock.table, free);
