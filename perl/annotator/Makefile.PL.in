@@ -52,5 +52,11 @@ WriteMakefile(
 );
 
 sub MY::postamble {
-    return "VPATH=@top_srcdir@/perl/annotator\n";
+    return <<'EOT';
+
+VPATH=@top_srcdir@/perl/annotator
+
+check:
+
+EOT
 }

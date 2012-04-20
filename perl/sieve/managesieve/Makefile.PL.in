@@ -67,5 +67,11 @@ WriteMakefile(
 );
 
 sub MY::postamble {
-    return "VPATH=@top_srcdir@/perl/sieve/managesieve\n";
+    return <<'EOT';
+
+VPATH=@top_srcdir@/perl/sieve/managesieve
+
+check:
+
+EOT
 }

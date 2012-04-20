@@ -49,11 +49,14 @@ $libs = "-lcyrus";
 
 sub MY::postamble
 {
-    return "\nVPATH=@top_srcdir@/perl/imap" . <<'EOT';
+    return <<'EOT';
 
+VPATH=@top_srcdir@/perl/imap
 
 cyradm: cyradm.sh
 	@PERL_PREINSTALL@ < $< > $@
+
+check:
 
 EOT
 }
