@@ -1040,14 +1040,22 @@ if test -z "$with_com_err"; then
 	  AC_MSG_WARN([Will build com_err from included sources.])
 	  with_com_err="yes" # build it ourselves
 	fi
+else
+	if test "${with_com_err}" = "no"; then
+	  AC_MSG_WARN([com_err is required; included version will be used.])
+	  with_com_err="yes"
+	fi
 fi
 
 case "$with_com_err" in
   # built-in et
   yes) # use the com_err we're gonna build
+	  # COMPILE_ET needs to be absolute because we use it
+	  # in subdirectories, but LIBS and CPPFLAGS are only
+	  # used when compiling from top_builddir anyway.
 	  COM_ERR_LIBS="com_err/et/libcom_err.a"
-	  COMPILE_ET="../com_err/et/compile_et"
-	  COM_ERR_CPPFLAGS="-I\${top_builddir}/com_err/et"
+	  COMPILE_ET="\${abs_top_builddir}/com_err/et/compile_et"
+	  COM_ERR_CPPFLAGS="-Icom_err/et"
 	  ;;
   "")   # no problem, we already have it in the paths
 	# we do nothing to pick it up

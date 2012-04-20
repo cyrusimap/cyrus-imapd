@@ -43,7 +43,7 @@
 
 ACLOCAL_AMFLAGS = -I cmulocal
 AM_CFLAGS = @PERL_CCCDLFLAGS@ @COV_CFLAGS@
-AM_CPPFLAGS = @COM_ERR_CPPFLAGS@ -I${top_builddir} -I${top_builddir}/lib -I${top_srcdir} -I${top_srcdir}/lib ${DEFS} ${LOCALDEFS} @SASLFLAGS@
+AM_CPPFLAGS = $(COM_ERR_CPPFLAGS) -I${top_builddir} -I${top_builddir}/lib -I${top_srcdir} -I${top_srcdir}/lib ${DEFS} ${LOCALDEFS} @SASLFLAGS@
 AM_LDFLAGS = @COV_LDFLAGS@
 BUILT_SOURCES = xversion.h lib/imapopts.c
 
@@ -60,7 +60,6 @@ service_PROGRAMS =
 if COM_ERR
 BUILT_SOURCES += com_err/et/compile_et
 noinst_LIBRARIES += com_err/et/libcom_err.a
-COM_ERR_LIBS += com_err/et/libcom_err.a
 endif
 
 bin_PROGRAMS = imtest/imtest
@@ -481,7 +480,7 @@ notifyd_notifytest_LDADD = ${notifyd_notifyd_LDADD}
 perl_sieve_lib_libisieve_a_SOURCES = perl/sieve/lib/isieve.c perl/sieve/lib/lex.c perl/sieve/lib/mystring.c perl/sieve/lib/request.c
 
 ptclient_ptdump_SOURCES = imap/cli_fatal.c imap/mutex_fake.c ptclient/ptdump.c
-ptclient_ptdump_LDADD = imap/libimap.a @COM_ERR_LIBS@ $(netnews_remotepurge_LDADD)
+ptclient_ptdump_LDADD = imap/libimap.a $(COM_ERR_LIBS) $(netnews_remotepurge_LDADD)
 ptclient_ptexpire_SOURCES = imap/cli_fatal.c imap/mutex_fake.c ptclient/ptexpire.c
 ptclient_ptexpire_LDADD = $(ptclient_ptdump_LDADD)
 
@@ -511,7 +510,7 @@ sieve_libsieve_a_SOURCES = sieve/bytecode.h sieve/addr.y sieve/addr-lex.l \
 	sieve/sieve-lex.l sieve/sieve.y sieve/sieve_err.c sieve/sieve_err.h \
 	sieve/sieve_interface.h sieve/tree.c sieve/tree.h
 
-sieve_sievec_LDADD = sieve/libsieve.a lib/libcyrus.a lib/libcyrus_min.a ${COM_ERR_LIBS} @LIB_RT@ ${LIB_SASL} @LIB_UUID@
+sieve_sievec_LDADD = sieve/libsieve.a lib/libcyrus.a lib/libcyrus_min.a $(COM_ERR_LIBS) @LIB_RT@ ${LIB_SASL} @LIB_UUID@
 sieve_sieved_LDADD = ${sieve_sievec_LDADD}
 
 sieve/sieve_err.h sieve/sieve_err.c: sieve/sieve_err.et
@@ -526,7 +525,7 @@ timsieved_timsieved_SOURCES = imap/mutex_fake.c imap/proxy.c master/service.c \
 	timsieved/mystring.c timsieved/mystring.h timsieved/parser.c \
 	timsieved/parser.h timsieved/scripttest.c timsieved/scripttest.h \
 	timsieved/timsieved.c
-timsieved_timsieved_LDADD = sieve/libsieve.a imap/libimap.a @COM_ERR_LIBS@ @LIB_WRAP@ ${netnews_remotepurge_LDADD}
+timsieved_timsieved_LDADD = sieve/libsieve.a imap/libimap.a $(COM_ERR_LIBS) @LIB_WRAP@ ${netnews_remotepurge_LDADD}
 
 GIT_VERSION = $(PACKAGE_VERSION).git$(shell date +'%Y%m%d%H%M')
 
