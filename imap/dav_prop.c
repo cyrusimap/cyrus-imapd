@@ -40,6 +40,28 @@
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
  */
+/*
+ * TODO:
+ *
+ *   - CALDAV:supported-calendar-component-set should be a bitmask in
+ *     cyrus.index header Mailbox Options field
+ *
+ *   - CALDAV:schedule-calendar-transp should be a flag in
+ *     cyrus.index header (Mailbox Options)
+ *
+ *   - DAV:creationdate sould be added to cyrus.header since it only
+ *     gets set at creation time
+ *
+ *   - Should add a last_metadata_update field to cyrus.index header
+ *     for use in PROPFIND, PROPPATCH, and possibly REPORT.
+ *     This would get updated any time a mailbox annotation, mailbox
+ *     acl, or quota root limit is changed
+ *
+ *   - Should we use cyrus.index header Format field to indicate
+ *     CalDAV mailbox?
+ *
+ */
+
 
 #include "dav_prop.h"
 #include "annotate.h"
