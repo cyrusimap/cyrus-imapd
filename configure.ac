@@ -1047,10 +1047,10 @@ fi
 case "$with_com_err" in
   # built-in et
   yes) # use the com_err we're gonna build
-	  # COMPILE_ET needs to be absolute because we use it
-	  # in subdirectories, but LIBS and CPPFLAGS are only
+	  # COMPILE_ET and COM_ERR_LIBS need to be absolute because
+	  # we use them in subdirectories, but CPPFLAGS are only
 	  # used when compiling from top_builddir anyway.
-	  COM_ERR_LIBS="com_err/et/libcom_err.a"
+	  COM_ERR_LIBS="\${abs_top_builddir}/com_err/et/libcom_err.a"
 	  COMPILE_ET="\${abs_top_builddir}/com_err/et/compile_et"
 	  COM_ERR_CPPFLAGS="-Icom_err/et"
 	  ;;
