@@ -1088,10 +1088,6 @@ AC_CACHE_VAL(cyrus_cv_lib_syslog, AC_TRY_CPP([#include <syslog.h>
 #ifndef LOG_LOCAL6
 #include </nonexistent>
 #endif],cyrus_cv_lib_syslog=yes,cyrus_cv_lib_syslog=no))
-if test $cyrus_cv_lib_syslog = no; then
-	SYSLOG_LIBS="../syslog/libsyslog.a"
-	CPPFLAGS="$CPPFLAGS -I\$(srcdir)/../syslog"
-fi
 AC_MSG_RESULT($cyrus_cv_lib_syslog)
 
 AC_MSG_CHECKING(which syslog facility to use)
