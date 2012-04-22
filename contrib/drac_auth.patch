@@ -92,14 +92,14 @@ diff --git a/imap/Makefile.in b/imap/Makefile.in
 index b5e139b..1f887f3 100644
 --- a/imap/Makefile.in
 +++ b/imap/Makefile.in
-@@ -66,5 +66,6 @@ SIEVE_OBJS = @SIEVE_OBJS@
+@@ -66,5 +66,6 @@
  SIEVE_LIBS = @SIEVE_LIBS@
  LIB_WRAP = @LIB_WRAP@
 +DRAC_LIBS = @DRACLIBS@
  LIBS = $(IMAP_LIBS) @COM_ERR_LIBS@
  DEPLIBS = ../lib/libcyrus.a ../lib/libcyrus_min.a @SYSLOG_LIBS@
  
-@@ -203,7 +204,7 @@ lmtpd.pure: lmtpd.o proxy.o $(LMTPOBJS) $(SIEVE_OBJS) \
+@@ -203,7 +204,7 @@ lmtpd.pure: lmtpd.o proxy.o $(LMTPOBJS) \
  imapd: $(IMAPDOBJS) mutex_fake.o libimap.a $(DEPLIBS) $(SERVICE)
  	$(CC) $(LDFLAGS) -o imapd \
  	 $(SERVICE) $(IMAPDOBJS) mutex_fake.o \

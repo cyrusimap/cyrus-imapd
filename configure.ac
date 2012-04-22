@@ -381,8 +381,6 @@ AC_ARG_ENABLE(pcre,
 	fi)
 
 if test "$enable_sieve" != "no"; then
-	SIEVE_OBJS="lmtp_sieve.o smtpclient.o"
-	AC_SUBST(SIEVE_OBJS)
 	SIEVE_LIBS="../sieve/libsieve.a"
 	AC_SUBST(SIEVE_LIBS)
 	SIEVE_TESTSOURCES="sieve.c"
