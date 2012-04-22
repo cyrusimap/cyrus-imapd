@@ -1,10 +1,10 @@
 #include "config.h"
 #include "cunit/cunit.h"
-#include "imap_err.h"
+#include "imap/imap_err.h"
 #include "prot.h"
 #include "retry.h"
 #include "xmalloc.h"
-#include "spool.h"
+#include "imap/spool.h"
 
 #define DELIVERED   "Fri, 29 Oct 2010 13:07:07 +1100"
 #define FIRST_RX    "Fri, 29 Oct 2010 13:05:01 +1100"

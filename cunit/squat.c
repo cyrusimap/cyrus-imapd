@@ -1,6 +1,6 @@
 #include "config.h"
 #include "cunit/cunit.h"
-#include "squat_internal.h"
+#include "imap/squat_internal.h"
 
 static void test_coding_int32(void)
 {

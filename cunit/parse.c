@@ -2,7 +2,7 @@
 #include "cunit/cunit.h"
 #include "xmalloc.h"
 #include "prot.h"
-#include "global.h"
+#include "imap/global.h"
 #include "util.h"
 
 #define CANARY		0xdeadbeef

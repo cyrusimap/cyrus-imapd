@@ -14,7 +14,7 @@
 #include "imap/message.h"
 #include "prot.h"
 #include "retry.h"
-#include "spool.h"
+#include "imap/spool.h"
 #include "map.h"
 #include "cyrusdb.h"
 #include "libcyr_cfg.h"

@@ -3,9 +3,9 @@
 #endif
 #include "cunit/cunit.h"
 #include "libconfig.h"
-#include "mboxname.h"
-#include "mailbox.h"
-#include "global.h"
+#include "imap/mboxname.h"
+#include "imap/mailbox.h"
+#include "imap/global.h"
 
 static void test_dir_hash_c(void)
 {

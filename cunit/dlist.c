@@ -1,7 +1,7 @@
 #include "config.h"
 #include "cunit/cunit.h"
 #include "prot.h"
-#include "dlist.h"
+#include "imap/dlist.h"
 #include "xmalloc.h"
 #include "util.h"
 

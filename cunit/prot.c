@@ -3,7 +3,7 @@
 #include <sys/stat.h>
 #include "xmalloc.h"
 #include "prot.h"
-#include "global.h"
+#include "imap/global.h"
 
 
 #define PROLOG \

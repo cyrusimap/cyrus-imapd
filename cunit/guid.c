@@ -1,5 +1,5 @@
 #include "cunit/cunit.h"
-#include "message_guid.h"
+#include "imap/message_guid.h"
 
 static void test_guid(void)
 {

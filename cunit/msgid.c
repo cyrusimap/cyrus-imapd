@@ -2,7 +2,7 @@
 #include <config.h>
 #endif
 #include "cunit/cunit.h"
-#include "global.h"
+#include "imap/global.h"
 #include "xmalloc.h"
 
 static void test_simple(void)

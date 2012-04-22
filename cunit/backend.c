@@ -6,13 +6,13 @@
 #include <sys/mman.h>
 #include <assert.h>
 #include "cunit/cunit.h"
-#include "saslclient.h"
+#include "imap/saslclient.h"
 #include <sasl/saslutil.h>
 #include <sasl/saslplug.h>
 #include "xmalloc.h"
-#include "mutex.h"
+#include "imap/mutex.h"
 #include "prot.h"
-#include "backend.h"
+#include "imap/backend.h"
 
 struct server_config {
     int sasl_plain;

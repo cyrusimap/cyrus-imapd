@@ -3,7 +3,7 @@
 #include "cunit/cunit.h"
 #include "xmalloc.h"
 #include "prot.h"
-#include "global.h"
+#include "imap/global.h"
 
 /*
  * Here's the ABNF describing the various types of string from RF3501.

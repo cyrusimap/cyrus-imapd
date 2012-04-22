@@ -1,7 +1,7 @@
 #include "config.h"
 #include "cunit/cunit.h"
 #include "xmalloc.h"
-#include "global.h"
+#include "imap/global.h"
 #include "retry.h"
 #include "cyrusdb.h"
 #include "libcyr_cfg.h"
