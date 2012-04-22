@@ -67,7 +67,7 @@ LIBS = $(IMAP_LIBS) $(COM_ERR_LIBS) -lcunit
 CFLAGS = @CFLAGS@
 LDFLAGS = @LDFLAGS@ @COV_LDFLAGS@
 
-SHELL = /bin/sh
+SHELL = @SHELL@
 
 #
 # Some notes on purify --

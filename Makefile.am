@@ -443,7 +443,6 @@ lib/imapopts.c: lib/imapoptions tools/config2header
 #lib_test_testglob_LIRBARIES = lib/libcyrus.a lib/libcyrus_min.a -ldb-4.0
 
 
-SHELL = /bin/sh
 @SET_MAKE@
 
 dist_man_MANS = man/imtest.1 man/installsieve.1 man/lmtptest.1 \
