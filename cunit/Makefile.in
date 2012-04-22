@@ -69,15 +69,6 @@ LDFLAGS = @LDFLAGS@ @COV_LDFLAGS@
 
 SHELL = @SHELL@
 
-#
-# Some notes on purify --
-#     you probably want to run the make as the cyrus user as 
-#     purify sets the cache directory based on the user. So,
-#     if you don't, purify can't find the instrumented libraries
-#     and so you don't get any useful information.
-#     It may also help to run purify by hand to instrument any of
-#     the dynamic libraries that may crop up during run time.
-# 
 VALGRIND_yes = valgrind --tool=memcheck --leak-check=full --suppressions=vg.supp
 
 prefix = @prefix@
