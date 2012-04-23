@@ -47,12 +47,8 @@ if test ! -x configure; then
 # -nt deeply upsets normal sh.
 #        -o configure.ac -nt configure
 #        -o acconfig.h -nt configure -o SMakefile -nt configure; then
-  echo aclocal
-  aclocal
-  echo autoheader
-  autoheader
-  echo autoconf
-  autoconf
+  echo autoreconf
+  autoreconf
 fi
 
 MAKE=gmake

@@ -134,15 +134,10 @@ git status
 
 # do the whole autotools dance
 [ -f Makefile ] && make distclean
-aclocal -I cmulocal || fatal "Can't run aclocal"
-autoconf || fatal "Can't run autoconf"
-autoheader || fatal "Can't run autoheader"
+autoreconf || fatal "Can't run autoreconf"
 [ -f configure ] || fatal "autoconf did not produce a configure script"
 ./configure $CONFIGURE_ARGS || fatal "Cannot run configure"
 [ -f config.status ] || fatal "configure did not produce a config.status script"
-[ -f lib/Makefile ] || fatal "configure did not produce lib/Makefile"
-[ -f imap/Makefile ] || fatal "configure did not produce a imap/Makefile"
-
 # Tweak makefiles for optimisation flags
 perl -p -i.orig -e 's/^(CFLAGS\s*=\s*.*)\s+-O2/\1 '"$COPTIMISEFLAGS"'/' $mf $(find . -name Makefile)
 
