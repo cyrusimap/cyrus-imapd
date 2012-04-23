@@ -1785,19 +1785,14 @@ int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr)
 	struct propstat *stat = &propstat[i];
 
 	if (stat->root) {
-	    if ((stat->status == HTTP_OK) && pctx->brief) {
-		xmlFreeNode(stat->root);
+	    xmlNewChild(stat->root, NULL, BAD_CAST "status",
+			BAD_CAST http_statusline(stat->status));
+	    if (stat->precond) {
+		struct error_t error = { NULL, stat->precond, NULL, 0 };
+		xml_add_error(stat->root, &error, pctx->ns);
 	    }
-	    else {
-		xmlNewChild(stat->root, NULL, BAD_CAST "status",
-			    BAD_CAST http_statusline(stat->status));
-		if (stat->precond) {
-		    struct error_t error = { NULL, stat->precond, NULL, 0 };
-		    xml_add_error(stat->root, &error, pctx->ns);
-		}
 
-		xmlAddChild(pctx->root, stat->root);
-	    }
+	    xmlAddChild(pctx->root, stat->root);
 	}
     }
 

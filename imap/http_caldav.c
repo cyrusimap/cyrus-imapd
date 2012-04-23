@@ -1198,7 +1198,6 @@ static int meth_mkcol(struct transaction_t *txn)
 
 	/* Populate our proppatch context */
 	pctx.req_tgt = &txn->req_tgt;
-	pctx.brief = 1;  /* MKCOL/MKCALENDAR are always Brief */
 	pctx.meth = txn->meth;
 	pctx.mailboxname = mailboxname;
 	pctx.root = root;
@@ -1808,7 +1807,6 @@ static int meth_proppatch(struct transaction_t *txn)
     xmlNsPtr ns[NUM_NAMESPACE];
     char *server, *acl, mailboxname[MAX_MAILBOX_BUFFER];
     struct proppatch_ctx pctx;
-    const char **hdr;
 
     memset(&pctx, 0, sizeof(struct proppatch_ctx));
 
@@ -1908,12 +1906,6 @@ static int meth_proppatch(struct transaction_t *txn)
     pctx.errstr = &txn->error.desc;
     pctx.ret = &r;
 
-    /* Check for Brief header */
-    if ((hdr = spool_getheader(txn->req_hdrs, "Brief")) &&
-	!strcasecmp(hdr[0], "t")) {
-	pctx.brief = 1;
-    }
-
     /* Execute the property patch instructions */
     ret = do_proppatch(&pctx, instr);
 
@@ -1929,7 +1921,13 @@ static int meth_proppatch(struct transaction_t *txn)
     }
 
     /* Output the XML response */
-    if (!ret) xml_response(HTTP_MULTI_STATUS, txn, outdoc);
+    if (!ret) {
+	/* Check for Brief header */
+	const char **hdr = spool_getheader(txn->req_hdrs, "Brief");
+
+	if (hdr && !strcasecmp(hdr[0], "t")) ret = HTTP_OK;
+	else xml_response(HTTP_MULTI_STATUS, txn, outdoc);
+    }
 
   done:
     buf_free(&pctx.buf);
