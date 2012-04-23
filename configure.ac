@@ -701,18 +701,15 @@ if test "x$enable_afs" = "xyes"; then
         AC_MSG_WARN([Can not find a sigvec for AFS libraries which seem to need one.])
       else
         AFS_LIBS="${AFS_LIBS} $cyrus_cv_sigveclib"
-        AC_SUBST(AFS_LIBS)
-        AC_SUBST(AFS_LDFLAGS)
         AC_DEFINE(HAVE_AFSKRB,[],[Should we build afskrb pts module?])
       fi
     else
       AFS_LIBS="${AFS_LIBS}"
-      AC_SUBST(AFS_LIBS)
-      AC_SUBST(AFS_LDFLAGS)
       AC_DEFINE(HAVE_AFSKRB,[],[Should we build afskrb pts module?])
     fi
     LIBS="$SAVE_LIBS"
-
+    AC_SUBST(AFS_LDFLAGS)
+    AC_SUBST(AFS_LIBS)
 fi
 AM_CONDITIONAL([USE_AFSKRB], [test "$HAVE_AFSKRB" = "1"])
 
@@ -736,9 +733,6 @@ if test "x$with_ldap" != "xno"; then
 
     AC_CHECK_LIB(ldap, ldap_initialize, 
         [ AC_DEFINE(HAVE_LDAP,[],[Should we build ldap pts module?])
-          AC_SUBST(LDAP_CPPFLAGS)
-          AC_SUBST(LDAP_LDFLAGS)
-          AC_SUBST(LDAP_LIBS) 
           LDAP_LIBS="-lldap -llber" ],,-llber)
 
     CPPFLAGS=$save_CPPFLAGS
@@ -746,13 +740,13 @@ if test "x$with_ldap" != "xno"; then
 
     AC_CHECK_LIB(ldap, ldap_initialize, 
         [ AC_DEFINE(HAVE_LDAP,[],[Should we build ldap pts module?])
-          AC_SUBST(LDAP_CPPFLAGS)
-          AC_SUBST(LDAP_LDFLAGS)
-          AC_SUBST(LDAP_LIBS) 
           LDAP_LIBS="-lldap -llber" ],,-llber)
 
     CPPFLAGS=$save_CPPFLAGS
     LDFLAGS=$save_LDFLAGS
+    AC_SUBST(LDAP_CPPFLAGS)
+    AC_SUBST(LDAP_LDFLAGS)
+    AC_SUBST(LDAP_LIBS)
 fi
  
 AM_CONDITIONAL([USE_LDAP], [test "$HAVE_LDAP" = "1"])
