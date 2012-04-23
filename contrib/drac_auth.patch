@@ -93,7 +93,6 @@ index b5e139b..1f887f3 100644
 --- a/imap/Makefile.in
 +++ b/imap/Makefile.in
 @@ -66,5 +66,6 @@
- SIEVE_LIBS = @SIEVE_LIBS@
  LIB_WRAP = @LIB_WRAP@
 +DRAC_LIBS = @DRACLIBS@
  LIBS = $(IMAP_LIBS) @COM_ERR_LIBS@

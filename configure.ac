@@ -381,10 +381,6 @@ AC_ARG_ENABLE(pcre,
 	fi)
 
 if test "$enable_sieve" != "no"; then
-	SIEVE_LIBS="../sieve/libsieve.a"
-	AC_SUBST(SIEVE_LIBS)
-	SIEVE_TESTSOURCES="sieve.c"
-	AC_SUBST(SIEVE_TESTSOURCES)
 	AC_DEFINE(USE_SIEVE,[],[Build in Sieve support?])
 
 	dnl Sieve configure stuff
