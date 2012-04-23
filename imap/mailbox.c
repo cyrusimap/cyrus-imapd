@@ -48,7 +48,11 @@
 #endif
 #include <ctype.h>
 #include <errno.h>
-#include <stdint.h>
+#ifdef HAVE_INTTYPES_H
+# include <inttypes.h>
+#elif defined(HAVE_STDINT_H)
+# include <stdint.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

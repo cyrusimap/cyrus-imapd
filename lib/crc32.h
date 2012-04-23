@@ -5,10 +5,10 @@
 #define CRC32_H
 #include "util.h"
 #include <sys/uio.h>
-#ifdef HAVE_STDINT_H
-# include <stdint.h>
-#else
+#ifdef HAVE_INTTYPES_H
 # include <inttypes.h>
+#elif defined(HAVE_STDINT_H)
+# include <stdint.h>
 #endif
 
 uint32_t crc32_map(const char *base, unsigned len);
