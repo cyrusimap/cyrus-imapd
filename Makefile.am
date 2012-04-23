@@ -183,6 +183,86 @@ com_err/et/compile_et: com_err/et/compile_et.sh com_err/et/config_script \
 	@${top_srcdir}/com_err/et/config_script ${top_srcdir}/com_err/et/compile_et.sh ${AWK} ${SED} > $@
 	@chmod 755 $@
 
+if CUNIT
+
+CUNIT_PROJECT = cunit/default.cunit
+BUILT_SOURCES += cunit/registers.h $(CUNIT_PROJECT)
+CLEANFILES += cunit/registers.h $(CUNIT_PROJECT)
+check_PROGRAMS += cunit/unit
+
+cunit_FRAMEWORK = \
+	cunit/unit.c cunit/cunit.h \
+	cunit/syslog.c cunit/cunit-syslog.h \
+	cunit/timeout.c cunit/timeout.h
+
+cunit_TESTS = \
+	cunit/annotate.testc \
+	cunit/backend.testc \
+	cunit/binhex.testc \
+	cunit/buf.testc \
+	cunit/charset.testc \
+	cunit/crc32.testc \
+	cunit/db.testc \
+	cunit/dlist.testc \
+	cunit/duplicate.testc \
+	cunit/getxstring.testc \
+	cunit/glob.testc \
+	cunit/guid.testc \
+	cunit/hash.testc \
+	cunit/imapurl.testc \
+	cunit/mboxname.testc \
+	cunit/md5.testc \
+	cunit/message.testc \
+	cunit/msgid.testc \
+	cunit/parseaddr.testc \
+	cunit/parse.testc \
+	cunit/prot.testc \
+	cunit/ptrarray.testc \
+	cunit/quota.testc
+if SIEVE
+cunit_TESTS += cunit/sieve.testc
+endif
+cunit_TESTS += \
+	cunit/spool.testc \
+	cunit/squat.testc \
+	cunit/strarray.testc \
+	cunit/strconcat.testc \
+	cunit/times.testc \
+	cunit/tok.testc
+
+cunit_unit_SOURCES = $(cunit_FRAMEWORK) $(cunit_TESTS) \
+		imap/mutex_fake.c imap/spool.c
+cunit_unit_LDADD =
+if SIEVE
+cunit_unit_LDADD += sieve/libsieve.a
+endif
+cunit_unit_LDADD += ${ptclient_ptdump_LDADD} -lcunit
+
+CUNIT_PL = cunit/cunit.pl --project $(CUNIT_PROJECT)
+
+.testc.o:
+	$(CUNIT_PL) --generate-wrapper $<
+	$(COMPILE) -c -o $@ $<-cunit.c
+	$(RM) $<-cunit.c
+
+$(CUNIT_PROJECT):
+	$(RM) $@
+	$(CUNIT_PL) --add-sources $(cunit_TESTS)
+
+cunit/registers.h: $(CUNIT_PROJECT)
+	$(CUNIT_PL) --generate-register-function $@
+
+# To run under Valgrind, do: make VG=1 check
+VALGRIND = valgrind --tool=memcheck --leak-check=full --suppressions=vg.supp
+
+check-local:
+	@echo "Running unit tests"
+	@vg= ; test -z "$$VG" || vg="$(VALGRIND)" ;\
+	cd cunit ;\
+	$$vg ./unit -x ;\
+	$(RM) -rf reports ; mkdir reports ; ./cunit-to-junit.pl
+endif
+
 doc_text_htmlstrip_SOURCE = doc/text/htmlstrip.c
 
 includedir=@includedir@/cyrus
@@ -442,87 +522,6 @@ lib/imapopts.c: lib/imapoptions tools/config2header
 
 
 @SET_MAKE@
-
-if CUNIT
-
-CUNIT_PROJECT = cunit/default.cunit
-BUILT_SOURCES += cunit/registers.h $(CUNIT_PROJECT)
-CLEANFILES += cunit/registers.h $(CUNIT_PROJECT)
-check_PROGRAMS += cunit/unit
-
-cunit_FRAMEWORK = \
-	cunit/unit.c cunit/cunit.h \
-	cunit/syslog.c cunit/cunit-syslog.h \
-	cunit/timeout.c cunit/timeout.h
-
-cunit_TESTS = \
-	cunit/annotate.testc \
-	cunit/backend.testc \
-	cunit/binhex.testc \
-	cunit/buf.testc \
-	cunit/charset.testc \
-	cunit/crc32.testc \
-	cunit/db.testc \
-	cunit/dlist.testc \
-	cunit/duplicate.testc \
-	cunit/getxstring.testc \
-	cunit/glob.testc \
-	cunit/guid.testc \
-	cunit/hash.testc \
-	cunit/imapurl.testc \
-	cunit/mboxname.testc \
-	cunit/md5.testc \
-	cunit/message.testc \
-	cunit/msgid.testc \
-	cunit/parseaddr.testc \
-	cunit/parse.testc \
-	cunit/prot.testc \
-	cunit/ptrarray.testc \
-	cunit/quota.testc \
-	cunit/spool.testc \
-	cunit/squat.testc \
-	cunit/strarray.testc \
-	cunit/strconcat.testc \
-	cunit/times.testc \
-	cunit/tok.testc
-
-cunit_SIEVE_OBJS =
-if SIEVE
-cunit_TESTS += cunit/sieve.testc
-cunit_SIEVE_OBJS += sieve/libsieve.a
-endif
-
-cunit_unit_SOURCES = $(cunit_FRAMEWORK) $(cunit_TESTS) \
-		imap/spool.c imap/mutex_fake.c
-cunit_unit_LDADD = imap/libimap.a $(cunit_SIEVE_OBJS) lib/libcyrus.a lib/libcyrus_min.a \
-		$(LIB_SASL) $(LIB_UUID) $(COM_ERR_LIBS) -lcunit
-
-CUNIT_PL = cunit/cunit.pl --project $(CUNIT_PROJECT)
-
-.testc.o:
-	$(CUNIT_PL) --generate-wrapper $<
-	$(COMPILE) -c -o $@ $<-cunit.c
-	$(RM) $<-cunit.c
-
-$(CUNIT_PROJECT):
-	$(RM) $@
-	$(CUNIT_PL) --add-sources $(cunit_TESTS)
-
-cunit/registers.h: $(CUNIT_PROJECT)
-	$(CUNIT_PL) --generate-register-function $@
-
-# To run under Valgrind, do: make VG=1 check
-VALGRIND = valgrind --tool=memcheck --leak-check=full --suppressions=vg.supp
-
-check-local:
-	@echo "Running unit tests"
-	@vg= ; test -z "$$VG" || vg="$(VALGRIND)" ;\
-	cd cunit ;\
-	$$vg ./unit -x ;\
-	$(RM) -rf reports ; mkdir reports ; ./cunit-to-junit.pl
-
-endif
-
 
 dist_man_MANS = man/imtest.1 man/installsieve.1 man/lmtptest.1 \
 	man/mupdatetest.1 man/nntptest.1 man/pop3test.1 man/sieveshell.1 \
