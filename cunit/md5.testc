@@ -42,3 +42,4 @@ static void test_multiple(void)
     MD5Final(result, &ctx);
     CU_ASSERT_STRING_EQUAL(asciify(result), expected);
 }
+/* vim: set ft=c: */

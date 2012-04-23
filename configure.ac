@@ -1214,7 +1214,7 @@ AC_ARG_ENABLE(unit-tests,
 
 dnl Unit tests need the CUnit library, so check if we
 dnl have both the header and the library.
-if test "$enable_unit_tests" != "no" ; then
+if test "$enable_unit_tests" = "yes" ; then
     AC_CHECK_LIB(cunit,CU_initialize_registry,found_lib=yes,found_lib=no)
     AC_CHECK_HEADER([CUnit/CUnit.h],found_hdr=yes,found_hdr=no)
     if test "$found_lib$found_hdr" != "yesyes" ; then
@@ -1222,7 +1222,7 @@ if test "$enable_unit_tests" != "no" ; then
 	enable_unit_tests=no
     fi
 fi
-if test "$enable_unit_tests" != "no" ; then
+if test "$enable_unit_tests" = "yes" ; then
     dnl Valgrind is an amazingly useful tool for running tests.  It doesn't
     dnl need the program under test to be modified in any way, but it we can
     dnl optionally use some magic in it's header file to compensate for some
@@ -1235,7 +1235,7 @@ if test "$enable_unit_tests" != "no" ; then
     AC_CHECK_HEADERS([valgrind/valgrind.h])
 fi
 
-AM_CONDITIONAL([CUNIT], [test "$enable_unit_tests" != "no"])
+AM_CONDITIONAL([CUNIT], [test "$enable_unit_tests" = "yes"])
 
 AH_TOP([
 /*
@@ -1454,7 +1454,6 @@ enum {
 dnl make sure that Makefile is the last thing output
 AC_CONFIG_FILES([
     Makefile
-    cunit/Makefile
 ])
 
 if test "$with_perl" != "no" -a "$with_perl" != "notfound" ; then

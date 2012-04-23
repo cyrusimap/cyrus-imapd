@@ -258,3 +258,4 @@ static void test_getmodseq(void)
     /* sadly, val is undefined at this point */
 }
 
+/* vim: set ft=c: */

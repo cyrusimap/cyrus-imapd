@@ -381,3 +381,4 @@ static void test_cycle(void)
     free(iurl2.freeme);
 }
 
+/* vim: set ft=c: */

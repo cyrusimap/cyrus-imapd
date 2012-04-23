@@ -1946,3 +1946,4 @@ static int tear_down(void)
 
     return 0;
 }
+/* vim: set ft=c: */

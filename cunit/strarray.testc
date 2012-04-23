@@ -1482,3 +1482,4 @@ static void test_add_case(void)
 #undef WORD1
 }
 
+/* vim: set ft=c: */

@@ -807,3 +807,4 @@ static void test_compress(void)
 
 /* TODO: test the Copy-On-Write feature of buf_ensure()...if anyone
  * actually uses it */
+/* vim: set ft=c: */

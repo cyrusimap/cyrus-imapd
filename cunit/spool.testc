@@ -327,3 +327,4 @@ static void test_replace(void)
 #undef FOOBAR3
 #undef FOOBAR4
 }
+/* vim: set ft=c: */

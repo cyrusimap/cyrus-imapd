@@ -614,3 +614,4 @@ static void test_getnastring(void)
     /* literals with embedded NUL - getastring() rejects these */
     TESTCASE(getnastring, "{7}\r\nfoo\0bar ", EOF, ""); /* should be ' ', "foo\0bar" */
 }
+/* vim: set ft=c: */

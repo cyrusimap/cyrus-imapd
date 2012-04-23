@@ -995,3 +995,4 @@ static void test_address_localpart(void)
 // if anyof(true,false) {...} else {...}
 //
 // if anyof(true,true) {...} else {...}
+/* vim: set ft=c: */

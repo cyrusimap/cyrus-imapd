@@ -240,3 +240,4 @@ static void test_printmap(void)
     prot_free(p);
     EPILOG;
 }
+/* vim: set ft=c: */

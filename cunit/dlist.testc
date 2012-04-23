@@ -40,3 +40,4 @@ static void test_nil(void)
     buf_free(&b);
 }
 
+/* vim: set ft=c: */

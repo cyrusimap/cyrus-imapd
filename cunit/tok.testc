@@ -354,3 +354,4 @@ static void test_initmnull(void)
     tok_fini(&tok);
 }
 
+/* vim: set ft=c: */

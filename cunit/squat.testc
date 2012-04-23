@@ -128,3 +128,4 @@ static void test_coding_I(void)
     TESTCASE(0x4afebabebdefaced);
 #undef TESTCASE
 }
+/* vim: set ft=c: */

@@ -621,3 +621,4 @@ static void test_getparts_nodomain(void)
     parseaddr_free(a);
 }
 
+/* vim: set ft=c: */

@@ -189,3 +189,4 @@ static void test_rfc5051(void)
     CU_ASSERT_STRING_EQUAL(s, RES_RFC5051);
     free(s);
 }
+/* vim: set ft=c: */

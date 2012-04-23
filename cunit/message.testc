@@ -804,3 +804,4 @@ static void test_write_xdrstring(void)
 }
 
 #undef TESTCASE
+/* vim: set ft=c: */

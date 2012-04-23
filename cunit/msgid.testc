@@ -488,3 +488,4 @@ static void test_malformed_angles(void)
 #undef C_MSGID3
 }
 
+/* vim: set ft=c: */

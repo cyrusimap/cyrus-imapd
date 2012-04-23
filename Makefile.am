@@ -57,6 +57,7 @@ lib_LIBRARIES = lib/libcyrus.a lib/libcyrus_min.a
 noinst_PROGRAMS = doc/text/htmlstrip
 check_PROGRAMS =
 service_PROGRAMS =
+CLEANFILES =
 
 if COM_ERR
 BUILT_SOURCES += com_err/et/compile_et
@@ -129,15 +130,11 @@ service_PROGRAMS += timsieved/timsieved
 endif
 endif
 
-if CUNIT
-SUBDIRS += cunit
-endif
-
 EXTRA_DIST = xversion.h SMakefile COPYRIGHT \
 	com_err/et/com_err com_err/et/et_c.awk com_err/et/et_h.awk \
 	com_err/et/test1.et com_err/et/test2.et com_err/et/test_et.c \
 	contrib/drac_auth.patch contrib/sieve-spamasssassin contrib/fud-client.c contrib/deliver-notify-zephyr.patch contrib/add-cyrus-user contrib/README contrib/cyrus-graphtools.1.0 contrib/cyrus-graphtools.1.0/cgi-bin/cyrus_master.pl contrib/cyrus-graphtools.1.0/cgi-bin/graph_cyrus_db.pl contrib/cyrus-graphtools.1.0/cgi-bin/graph_cyrus_db-sum.pl contrib/cyrus-graphtools.1.0/html contrib/cyrus-graphtools.1.0/html/index.html contrib/cyrus-graphtools.1.0/README contrib/cyrus-graphtools.1.0/script contrib/cyrus-graphtools.1.0/script/cyrus.pl contrib/cyrus-graphtools.1.0/script/run contrib/cyrus-graphtools.1.0/script/cyrusrc contrib/notify_unix/notify contrib/notify_unix/net-server-prefork-0.01.tgz contrib/notify_unix/README contrib/notify_unix/sql_notify.pl contrib/notify_unix/simple_notify.pl contrib/squatrunner.pl contrib/mupdate-test.pl contrib/squatrunner.txt \
-	cunit/annotate.c cunit/backend.c cunit/binhex.c cunit/buf.c cunit/cacert.pem cunit/cert.pem cunit/charset.c cunit/crc32.c cunit/cunit.h cunit/cunit.pl cunit/cunit-syslog.h cunit/cunit-to-junit.pl cunit/db.c cunit/dlist.c cunit/duplicate.c cunit/getxstring.c cunit/glob.c cunit/guid.c cunit/hash.c cunit/imapurl.c cunit/key.pem cunit/mboxname.c cunit/md5.c cunit/message.c cunit/msgid.c cunit/parseaddr.c cunit/parse.c cunit/prot.c cunit/ptrarray.c cunit/quota.c cunit/sieve.c cunit/spool.c cunit/squat.c cunit/strarray.c cunit/strconcat.c cunit/syslog.c cunit/timeout.c cunit/timeout.h cunit/times.c cunit/tok.c cunit/unit.c cunit/vg.supp \
+	cunit/cacert.pem cunit/cert.pem cunit/cunit.pl cunit/cunit-to-junit.pl cunit/key.pem cunit/vg.supp \
 	lib/charset/aliases.txt lib/charset/big5.t \
 	lib/charset/gb2312.t lib/charset/iso-2022-jp.t \
 	lib/charset/iso-2022-kr.t lib/charset/iso-8859-10.t \
@@ -445,6 +442,87 @@ lib/imapopts.c: lib/imapoptions tools/config2header
 
 
 @SET_MAKE@
+
+if CUNIT
+
+CUNIT_PROJECT = cunit/default.cunit
+BUILT_SOURCES += cunit/registers.h $(CUNIT_PROJECT)
+CLEANFILES += cunit/registers.h $(CUNIT_PROJECT)
+check_PROGRAMS += cunit/unit
+
+cunit_FRAMEWORK = \
+	cunit/unit.c cunit/cunit.h \
+	cunit/syslog.c cunit/cunit-syslog.h \
+	cunit/timeout.c cunit/timeout.h
+
+cunit_TESTS = \
+	cunit/annotate.testc \
+	cunit/backend.testc \
+	cunit/binhex.testc \
+	cunit/buf.testc \
+	cunit/charset.testc \
+	cunit/crc32.testc \
+	cunit/db.testc \
+	cunit/dlist.testc \
+	cunit/duplicate.testc \
+	cunit/getxstring.testc \
+	cunit/glob.testc \
+	cunit/guid.testc \
+	cunit/hash.testc \
+	cunit/imapurl.testc \
+	cunit/mboxname.testc \
+	cunit/md5.testc \
+	cunit/message.testc \
+	cunit/msgid.testc \
+	cunit/parseaddr.testc \
+	cunit/parse.testc \
+	cunit/prot.testc \
+	cunit/ptrarray.testc \
+	cunit/quota.testc \
+	cunit/spool.testc \
+	cunit/squat.testc \
+	cunit/strarray.testc \
+	cunit/strconcat.testc \
+	cunit/times.testc \
+	cunit/tok.testc
+
+cunit_SIEVE_OBJS =
+if SIEVE
+cunit_TESTS += cunit/sieve.testc
+cunit_SIEVE_OBJS += sieve/libsieve.a
+endif
+
+cunit_unit_SOURCES = $(cunit_FRAMEWORK) $(cunit_TESTS) \
+		imap/spool.c imap/mutex_fake.c
+cunit_unit_LDADD = imap/libimap.a $(cunit_SIEVE_OBJS) lib/libcyrus.a lib/libcyrus_min.a \
+		$(LIB_SASL) $(LIB_UUID) $(COM_ERR_LIBS) -lcunit
+
+CUNIT_PL = cunit/cunit.pl --project $(CUNIT_PROJECT)
+
+.testc.o:
+	$(CUNIT_PL) --generate-wrapper $<
+	$(COMPILE) -c -o $@ $<-cunit.c
+	$(RM) $<-cunit.c
+
+$(CUNIT_PROJECT):
+	$(RM) $@
+	$(CUNIT_PL) --add-sources $(cunit_TESTS)
+
+cunit/registers.h: $(CUNIT_PROJECT)
+	$(CUNIT_PL) --generate-register-function $@
+
+# To run under Valgrind, do: make VG=1 check
+VALGRIND = valgrind --tool=memcheck --leak-check=full --suppressions=vg.supp
+
+check-local:
+	@echo "Running unit tests"
+	@vg= ; test -z "$$VG" || vg="$(VALGRIND)" ;\
+	cd cunit ;\
+	$$vg ./unit -x ;\
+	$(RM) -rf reports ; mkdir reports ; ./cunit-to-junit.pl
+
+endif
+
 
 dist_man_MANS = man/imtest.1 man/installsieve.1 man/lmtptest.1 \
 	man/mupdatetest.1 man/nntptest.1 man/pop3test.1 man/sieveshell.1 \

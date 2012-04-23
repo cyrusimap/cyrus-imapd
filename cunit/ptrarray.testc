@@ -522,3 +522,4 @@ static void test_add(void)
     ptrarray_fini(&pa);
 }
 
+/* vim: set ft=c: */

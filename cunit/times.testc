@@ -473,3 +473,4 @@ test_leapyear_rfc822(void)
     CU_ASSERT_EQUAL(r, 31);
     CU_ASSERT_EQUAL(t, FEB2004_TIMET);
 }
+/* vim: set ft=c: */

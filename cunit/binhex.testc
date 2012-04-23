@@ -172,3 +172,4 @@ static void test_hex_to_bin_null(void)
     CU_ASSERT_EQUAL(bin[0], 0xff);
 }
 
+/* vim: set ft=c: */

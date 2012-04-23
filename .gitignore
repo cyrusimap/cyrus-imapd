@@ -33,11 +33,6 @@ com_err/et/init_et.o
 com_err/et/libcom_err.a
 coverage.xml
 cscope.out
-cunit/cunit.mk
-cunit/.cunit-*.c
-cunit/default.cunit
-cunit/registers.h
-cunit/unit
 depcomp
 imap/arbitron
 imap/chk_cyrus

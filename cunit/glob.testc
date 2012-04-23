@@ -196,3 +196,4 @@ static void test_star_icase(void)
     glob_free(&g);
 }
 
+/* vim: set ft=c: */

@@ -77,3 +77,4 @@ static void test_encode(void)
     s = message_guid_encode(&guid);
     CU_ASSERT_STRING_EQUAL(s, SHA1HEX);
 }
+/* vim: set ft=c: */

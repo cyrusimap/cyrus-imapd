@@ -291,3 +291,4 @@ static void test_freeing_nonempty(void)
     free_hash_table(&ht, lincoln);
     CU_ASSERT_EQUAL(N, freed_count);
 }
+/* vim: set ft=c: */

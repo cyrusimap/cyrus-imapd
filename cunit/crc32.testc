@@ -29,3 +29,4 @@ static void test_iovec(void)
     c = crc32_iovec(iov, 2);
     CU_ASSERT_EQUAL(c, CRC32);
 }
+/* vim: set ft=c: */

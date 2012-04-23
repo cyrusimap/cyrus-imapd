@@ -80,3 +80,4 @@ static void test_strcmpsafe(void)
     CU_ASSERT(strcmpsafe(NULL, word1) < 0);
     CU_ASSERT(strcmpsafe(NULL, word2) < 0);
 }
+/* vim: set ft=c: */
