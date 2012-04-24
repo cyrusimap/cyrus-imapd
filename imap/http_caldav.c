@@ -2602,7 +2602,7 @@ static int report_sync_col(struct transaction_t *txn __attribute__((unused)),
     fctx->mailbox = mailbox;
 
     highestmodseq = mailbox->i.highestmodseq;
-    r = mailbox_user_flag(mailbox, DFLAG_UNBIND, &userflag);
+    if (mailbox_user_flag(mailbox, DFLAG_UNBIND, &userflag)) userflag = -1;
 
     /* Parse children element of report */
     for (node = inroot->children; node; node = node->next) {
@@ -2684,7 +2684,8 @@ static int report_sync_col(struct transaction_t *txn __attribute__((unused)),
 	    continue;
 	}
 
-	if (record->user_flags[userflag / 32] & (1 << (userflag & 31))) {
+	if ((userflag >= 0) &&
+	    record->user_flags[userflag / 32] & (1 << (userflag & 31))) {
 	    /* Resource replaced by a PUT, COPY, or MOVE - ignore it */
 	    continue;
 	}
