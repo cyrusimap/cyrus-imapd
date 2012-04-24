@@ -2735,7 +2735,12 @@ static int report_sync_col(struct transaction_t *txn __attribute__((unused)),
 	    resource = strstr(p, "filename=") + 9;
 	}
 	if (!resource) continue;  /* No filename */
-	if ((p = strchr(resource, ';'))) *p = '\0';
+
+	if (*resource == '\"') {
+	    resource++;
+	    if ((p = strchr(resource, '\"'))) *p = '\0';
+	}
+	else if ((p = strchr(resource, ';'))) *p = '\0';
 
 	if (record->system_flags & FLAG_EXPUNGED) {
 	    /* report as NOT FOUND
@@ -3232,7 +3237,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     fprintf(f, "; component=%s\r\n", icalcomponent_kind_to_string(kind));
 
     fprintf(f, "Content-Length: %u\r\n", strlen(ics));
-    fprintf(f, "Content-Disposition: inline; filename=%s\r\n", resource);
+    fprintf(f, "Content-Disposition: inline; filename=\"%s\"\r\n", resource);
 
     /* XXX  Check domain of data and use appropriate CTE */
 
