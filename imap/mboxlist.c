@@ -1197,7 +1197,7 @@ int mboxlist_renamemailbox(const char *oldname, const char *newname,
     }
 
     r = mboxlist_create_namecheck(newname, userid, auth_state,
-				  /*isadmin*/1, forceuser);
+				  isadmin, forceuser);
     if (r) goto done;
 
     r = mboxlist_create_partition(newname, partition, &newpartition);
