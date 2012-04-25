@@ -84,7 +84,6 @@ int idle_make_server_address(struct sockaddr_un *mysun)
     return 1;
 }
 
-
 int idle_make_client_address(struct sockaddr_un *mysun)
 {
     memset(mysun, 0, sizeof(*mysun));
@@ -109,13 +108,13 @@ const char *idle_id_from_addr(const struct sockaddr_un *mysun)
     return (p ? p+1 : tail);
 }
 
-
-
 int idle_init_sock(const struct sockaddr_un *local)
 {
     int len;
     int s;
     mode_t oldumask;
+
+    assert(idle_sock == -1);
 
     /* create socket we are going to use for listening */
     if ((s = socket(AF_UNIX, SOCK_DGRAM, 0)) == -1) {
@@ -148,7 +147,9 @@ void idle_done_sock(void)
     if (idle_sock >= 0) {
 	close(idle_sock);
 	unlink(idle_local.sun_path);
+	memset(&idle_local, 0, sizeof(struct sockaddr_un)); 
     }
+
     idle_sock = -1;
 }
 
@@ -169,7 +170,8 @@ int idle_send(const struct sockaddr_un *remote,
     if (sendto(idle_sock, (void *) msg,
 	       IDLE_MESSAGE_BASE_SIZE+strlen(msg->mboxname)+1, /* 1 for NULL */
 	       0, (struct sockaddr *) remote, sizeof(*remote)) == -1) {
-	syslog(LOG_ERR, "error sending to idled: %lx", msg->which);
+	syslog(LOG_ERR, "IDLE: error sending message: %s (%s)",
+	       idle_msg_string(msg->which), msg->mboxname);
 	return 0;
     }
 
@@ -185,6 +187,8 @@ int idle_recv(struct sockaddr_un *remote, idle_message_t *msg)
 	return 0;
 
     memset(remote, 0, remote_len);
+    memset(msg, 0, sizeof(idle_message_t));
+
     n = recvfrom(idle_sock, (void *) msg, sizeof(idle_message_t), 0,
 		 (struct sockaddr *) remote, &remote_len);
 
@@ -193,10 +197,36 @@ int idle_recv(struct sockaddr_un *remote, idle_message_t *msg)
 
     if (n <= IDLE_MESSAGE_BASE_SIZE ||
 	msg->mboxname[n - 1 - IDLE_MESSAGE_BASE_SIZE] != '\0') {
-	syslog(LOG_ERR, "Invalid message received, size=%d\n", n);
+	syslog(LOG_ERR, "IDLE: invalid message received: size=%d, type=%s\n",
+	       n, idle_msg_string(msg->which));
 	return 0;
     }
 
     return 1;
+}
+
+const char *idle_msg_string(unsigned long which)
+{
+    const char *msg = "unknown";
+
+    switch(which) {
+    case IDLE_MSG_INIT:
+	msg = "init";
+	break;
+    case IDLE_MSG_DONE:
+	msg = "done";
+	break;
+    case IDLE_MSG_NOTIFY:
+	msg = "notify";
+	break;
+    case IDLE_MSG_NOOP:
+	msg = "noop";
+	break;
+    case IDLE_MSG_ALERT:
+	msg = "alert";
+	break;
+    }
+
+    return msg;
 }
 

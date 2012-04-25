@@ -476,7 +476,7 @@ int service_init(int argc __attribute__((unused)),
     denydb_open(NULL);
 
     /* setup for sending IMAP IDLE notifications */
-    idle_enabled();
+    idle_init();
 
     while ((opt = getopt(argc, argv, "srfp:")) != EOF) {
 	switch(opt) {
@@ -666,6 +666,8 @@ void shut_down(int code)
 
     annotatemore_close();
     annotatemore_done();
+
+    idle_done();
 
     if (nntp_in) {
 	prot_NONBLOCK(nntp_in);
