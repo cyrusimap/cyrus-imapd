@@ -57,23 +57,29 @@
 #include <string.h>
 #include <errno.h>
 
+#include "assert.h"
 #include "idle.h"
 #include "idlemsg.h"
 #include "global.h"
 
 const char *idle_method_desc = "no";
 
-/* how often to poll the mailbox */
-static time_t idle_period = -1;
-static int idle_started = 0;
-
-/* UNIX socket variables */
+/* link to idled */
 static struct sockaddr_un idle_remote;
 
+/* track idle state */
+static int idle_started;
 
 static int idle_send_msg(int which, const char *mboxname)
 {
     idle_message_t msg;
+
+    /* do we have a local socket? */
+    if (!idle_get_sock())
+	return 0;
+
+    /* maybe the idled came along, so we always send anyway, because
+     * polled idle is too awful to contemplate */
 
     /* fill the structure */
     msg.which = which;
@@ -97,107 +103,99 @@ void idle_notify(const char *mboxname)
 /*
  * Create connection to idled for sending notifications
  */
+void idle_init(void)
+{
+    struct sockaddr_un local;
+    int fdflags;
+    int s;
+
+    if (!idle_enabled()) return;
+
+    assert(idle_make_client_address(&local));
+    assert(idle_make_server_address(&idle_remote));
+
+    idle_method_desc = "poll";
+
+    /* set the mailbox update notifier */
+    mailbox_set_updatenotifier(idle_notify);
+
+    if (!idle_init_sock(&local))
+	return;
+
+    s = idle_get_sock();
+
+    /* put us in non-blocking mode */
+    fdflags = fcntl(s, F_GETFD, 0);
+    if (fdflags != -1)
+	fdflags = fcntl(s, F_SETFL, O_NONBLOCK | fdflags);
+    if (fdflags == -1) {
+	idle_done_sock();
+	return;
+    }
+
+    idle_method_desc = "idled";
+}
+
 int idle_enabled(void)
 {
-    if (idle_period == -1) {
-	int s;
-	int fdflags;
-	struct stat sbuf;
-	struct sockaddr_un local;
+    int idle_period = config_getint(IMAPOPT_IMAPIDLEPOLL);
 
-	/* get polling period in case we can't connect to idled
-	 * NOTE: if used, a period of zero disables IDLE
-	 */
-	idle_period = config_getint(IMAPOPT_IMAPIDLEPOLL);
-	if (idle_period < 0) idle_period = 0;
-
-	if (!idle_period) return 0;
-
-	idle_method_desc = "poll";
-
-	if (!idle_make_client_address(&local) ||
-	    !idle_init_sock(&local))
-	    return idle_period;
-	s = idle_get_sock();
-
-	if (!idle_make_server_address(&idle_remote))
-	    return idle_period;
-
-	/* check that the socket exists */
-	if (stat(idle_remote.sun_path, &sbuf) < 0) {
-	    idle_done_sock();
-	    return idle_period;
-	}
-
-	/* put us in non-blocking mode */
-	fdflags = fcntl(s, F_GETFD, 0);
-	if (fdflags != -1) fdflags = fcntl(s, F_SETFL, O_NONBLOCK | fdflags);
-	if (fdflags == -1) { idle_done_sock(); return idle_period; }
-
-	if (!idle_send_msg(IDLE_MSG_NOOP, NULL)) {
-	    idle_done_sock();
-	    return idle_period;
-	}
-
-	/* set the mailbox update notifier */
-	mailbox_set_updatenotifier(idle_notify);
-
-	idle_method_desc = "idled";
-
-	return 1;
-    }
-    else if (idle_get_sock() != -1) {
-	/* if the idle socket is already open, we're enabled */
-	return 1;
-    }
-    else {
-	return idle_period;
-    }
+    /* only enabled if a positive period */
+    return (idle_period > 0);
 }
 
 void idle_start(const char *mboxname)
 {
-    idle_started = 1;
+    if (!idle_enabled()) return;
 
     /* Tell idled that we're idling.  It doesn't
      * matter if it fails, we'll still poll */
-    idle_send_msg(IDLE_MSG_INIT, mboxname);
+    if (idle_send_msg(IDLE_MSG_INIT, mboxname))
+	idle_started = 1;
 }
 
 int idle_wait(int otherfd)
 {
-    int s = idle_get_sock();
     fd_set rfds;
-    int maxfd;
+    int maxfd = -1;
+    int s = -1;
     struct timeval timeout;
     int r;
     int flags = 0;
+    int idle_timeout = config_getint(IMAPOPT_IMAPIDLEPOLL);
 
-    if (!idle_started)
-	return 0;
+    if (!idle_enabled()) return;
+
+    /* we still listen on the socket, because we might get ALERTs,
+     * but we won't get mailbox notifications */
+    if (!idle_started) {
+	/* XXX - shorter poll interval? */
+	syslog(LOG_NOTICE, "IDLE: poll fallback - %d seconds", idle_timeout);
+    }
+
+    FD_ZERO(&rfds);
+    s = idle_get_sock();
+    if (s >= 0) {
+	FD_SET(s, &rfds);
+	maxfd = MAX(maxfd, s);
+    }
+    if (otherfd >= 0) {
+	FD_SET(otherfd, &rfds);
+	maxfd = MAX(maxfd, otherfd);
+    }
+
+    /* Note: it's technically valid for there to be no fds to listen
+     * to, in the case where @otherfd is passed as -1 and we failed
+     * to talk to idled.  It shouldn't happen though as we're always
+     * called with a valid otherfd.  */
+
+    /* maximum possible timeout before we double-check anyway */
+    timeout.tv_sec = idle_timeout;
+    timeout.tv_usec = 0;
 
     do {
-	FD_ZERO(&rfds);
-	maxfd = -1;
-	if (s >= 0) {
-	    FD_SET(s, &rfds);
-	    maxfd = MAX(maxfd, s);
-	}
-	if (otherfd >= 0) {
-	    FD_SET(otherfd, &rfds);
-	    maxfd = MAX(maxfd, otherfd);
-	}
-
-	/* Note: it's technically valid for there to be no fds to listen
-	 * to, in the case where @otherfd is passed as -1 and we failed
-	 * to talk to idled.  It shouldn't happen though as we're always
-	 * called with a valid otherfd.  */
-
-	/* TODO: this is wrong, we actually want a rolling period */
-	timeout.tv_sec = idle_period;
-	timeout.tv_usec = 0;
-
 	r = select(maxfd+1, &rfds, NULL, NULL, &timeout);
+
 	if (r < 0) {
 	    if (errno == EAGAIN || errno == EINTR) {
 		signals_poll();
@@ -232,13 +230,18 @@ int idle_wait(int otherfd)
     return flags;
 }
 
-void idle_done(const char *mboxname)
+void idle_stop(const char *mboxname)
 {
+    if (!idle_started) return;
+
     /* Tell idled that we're done idling */
     idle_send_msg(IDLE_MSG_DONE, mboxname);
 
-    /* close the AF_UNIX socket */
-    idle_done_sock();
-
     idle_started = 0;
+}
+
+void idle_done(void)
+{
+    /* close the local socket */
+    idle_done_sock();
 }

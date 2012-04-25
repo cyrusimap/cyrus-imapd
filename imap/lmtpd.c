@@ -237,7 +237,7 @@ int service_init(int argc __attribute__((unused)),
 	statuscache_open(NULL);
 
 	/* setup for sending IMAP IDLE notifications */
-	idle_enabled();
+	idle_init();
     }
 
     /* Set namespace */
@@ -969,6 +969,8 @@ void shut_down(int code)
 
 	statuscache_close();
 	statuscache_done();
+
+	idle_done();
     }
 
 #ifdef HAVE_SSL

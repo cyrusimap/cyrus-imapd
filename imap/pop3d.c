@@ -450,7 +450,7 @@ int service_init(int argc __attribute__((unused)),
     }
 
     /* setup for sending IMAP IDLE notifications */
-    idle_enabled();
+    idle_init();
 
     /* Set namespace */
     if ((r = mboxname_init_namespace(&popd_namespace, 1)) != 0) {
@@ -666,6 +666,8 @@ void shut_down(int code)
 
     denydb_close();
     denydb_done();
+
+    idle_done();
 
     if (popd_in) {
 	prot_NONBLOCK(popd_in);

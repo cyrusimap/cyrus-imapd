@@ -791,7 +791,7 @@ int service_init(int argc, char **argv, char **envp)
     denydb_open(NULL);
 
     /* setup for sending IMAP IDLE notifications */
-    idle_enabled();
+    idle_init();
 
     /* create connection to the SNMP listener, if available. */
     snmp_connect(); /* ignore return code */
@@ -1005,7 +1005,7 @@ void shut_down(int code)
     if (backend_cached) free(backend_cached);
 
     if (idling)
-	idle_done(imapd_index ? imapd_index->mailbox->name : NULL);
+	idle_stop(imapd_index ? imapd_index->mailbox->name : NULL);
 
     if (imapd_index) index_close(&imapd_index);
 
@@ -1023,6 +1023,8 @@ void shut_down(int code)
 
     annotatemore_close();
     annotatemore_done();
+
+    idle_done();
 
     if (config_getswitch(IMAPOPT_STATUSCACHE)) {
 	statuscache_close();
@@ -2719,7 +2721,7 @@ void cmd_idle(char *tag)
 
 	/* Stop updates and do any necessary cleanup */
 	idling = 0;
-	idle_done(imapd_index ? imapd_index->mailbox->name : NULL);
+	idle_stop(imapd_index ? imapd_index->mailbox->name : NULL);
     }
     else {  /* Remote mailbox */
 	int done = 0, shutdown = 0;

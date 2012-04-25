@@ -62,8 +62,10 @@ typedef enum {
 
 typedef void idle_updateproc_t(idle_flags_t flags);
 
+/* set up the link to the idled for notifications */
+void idle_init(void);
 
-/* Is IDLE enabled?  Can also do initial setup, if necessary */
+/* Is IDLE enabled? */
 int idle_enabled(void);
 
 /* Start IDLEing on 'mailbox'. */
@@ -79,7 +81,10 @@ void idle_start(const char *mboxname);
  */
 int idle_wait(int otherfd);
 
-/* Cleanup when IDLE is completed. */
-void idle_done(const char *mboxname);
+/* Stop IDLEing on 'mailbox'. */
+void idle_stop(const char *mboxname);
+
+/* Clean up when IDLE is completed. */
+void idle_done(void);
 
 #endif
