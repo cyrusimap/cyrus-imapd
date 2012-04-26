@@ -1,0 +1,80 @@
+#include "cunit/cunit.h"
+#include "imap/message_guid.h"
+
+static void test_guid(void)
+{
+    static const char TEXT[] = "lorem ipsum dolor sit amet, "
+			       "consectetur adipisicing elit\n";
+    static const unsigned char SHA1[20] = {
+	0xd1,0xb0,0x52,0xa0,0x12,0xcb,0xec,0xd5,0x42,0x5b,
+	0x23,0xf3,0x61,0x42,0x6f,0x24,0xdb,0x56,0xd7,0x45
+    };
+    struct message_guid guid;
+    struct message_guid guid2;
+    int r;
+
+    message_guid_set_null(&guid);
+    r = message_guid_isnull(&guid);
+    CU_ASSERT_EQUAL(r, 1);
+    r = message_guid_isnull(&guid);
+    CU_ASSERT_EQUAL(r, 1);
+
+    message_guid_generate(&guid, TEXT, sizeof(TEXT)-1);
+    r = message_guid_isnull(&guid);
+    CU_ASSERT_EQUAL(r, 0);
+    r = message_guid_isnull(&guid);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(memcmp(&guid.value, SHA1, sizeof(SHA1)), 0);
+
+    memset(&guid2, 0x45, sizeof(guid2));
+    r = message_guid_equal(&guid, &guid2);
+    CU_ASSERT_EQUAL(r, 0);
+
+    message_guid_copy(&guid2, &guid);
+    CU_ASSERT_EQUAL(memcmp(&guid2.value, SHA1, sizeof(SHA1)), 0);
+    r = message_guid_equal(&guid, &guid2);
+    CU_ASSERT_EQUAL(r, 1);
+}
+
+static void test_import(void)
+{
+    static const unsigned char SHA1[20] = {
+	0xd1,0xb0,0x52,0xa0,0x12,0xcb,0xec,0xd5,0x42,0x5b,
+	0x23,0xf3,0x61,0x42,0x6f,0x24,0xdb,0x56,0xd7,0x45
+    };
+    struct message_guid guid;
+    unsigned char buf[MESSAGE_GUID_SIZE];
+    int r;
+
+    memset(&guid, 0x45, sizeof(guid));
+    message_guid_import(&guid, SHA1);
+    r = message_guid_isnull(&guid);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(memcmp(&guid.value, SHA1, sizeof(SHA1)), 0);
+
+    memset(buf, 0x69, sizeof(buf));
+    message_guid_export(&guid, buf);
+    CU_ASSERT_EQUAL(memcmp(buf, SHA1, sizeof(SHA1)), 0);
+}
+
+static void test_encode(void)
+{
+    static const char SHA1HEX[41] = "d1b052a012cbecd5425b23f361426f24db56d745";
+    static const unsigned char SHA1BIN[20] = {
+	0xd1,0xb0,0x52,0xa0,0x12,0xcb,0xec,0xd5,0x42,0x5b,
+	0x23,0xf3,0x61,0x42,0x6f,0x24,0xdb,0x56,0xd7,0x45
+    };
+    struct message_guid guid;
+    char *s;
+    int r;
+
+    memset(&guid, 0x45, sizeof(guid));
+    message_guid_decode(&guid, SHA1HEX);
+    r = message_guid_isnull(&guid);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(memcmp(&guid.value, SHA1BIN, sizeof(SHA1BIN)), 0);
+
+    s = message_guid_encode(&guid);
+    CU_ASSERT_STRING_EQUAL(s, SHA1HEX);
+}
+/* vim: set ft=c: */

@@ -59,17 +59,17 @@ AC_REQUIRE([CMU_SOCKETS])
 AC_REQUIRE([CMU_SASL2])
 AC_REQUIRE([CMU_LIBSSL])
 AC_ARG_WITH(libcyrus,
-	[  --with-libcyrus=PREFIX      Compile with Libcyrus support],
+	[AS_HELP_STRING([--with-libcyrus=PREFIX], [Compile with Libcyrus support])],
 	[if test "X$with_libcyrus" = "X"; then
 		with_libcyrus=yes
 	fi])
 AC_ARG_WITH(libcyrus-lib,
-	[  --with-libcyrus-lib=dir     use libcyrus libraries in dir],
+	[AS_HELP_STRING([--with-libcyrus-lib=DIR], [use libcyrus libraries in DIR])],
 	[if test "$withval" = "yes" -o "$withval" = "no"; then
 		AC_MSG_ERROR([No argument for --with-libcyrus-lib])
 	fi])
 AC_ARG_WITH(libcyrus-include,
-	[  --with-libcyrus-include=dir use libcyrus headers in dir],
+	[AS_HELP_STRING([--with-libcyrus-include=DIR], [use libcyrus headers in DIR])],
 	[if test "$withval" = "yes" -o "$withval" = "no"; then
 		AC_MSG_ERROR([No argument for --with-libcyrus-include])
 	fi])

@@ -46,7 +46,7 @@
 #define LMTP_SIEVE_H
 
 #include "lmtpd.h"
-#include "sieve_interface.h"
+#include "sieve/sieve_interface.h"
 
 sieve_interp_t *setup_sieve(void);
 int run_sieve(const char *user, const char *domain, const char *mailbox,

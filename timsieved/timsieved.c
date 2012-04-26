@@ -68,13 +68,14 @@
 #include <signal.h>
 #include <string.h>
 
-#include "sieve_interface.h"
+#include "sieve/sieve_interface.h"
 
 #include "prot.h"
 #include "libconfig.h"
 #include "xmalloc.h"
 #include "exitcodes.h"
-#include "global.h"
+#include "iptostring.h"
+#include "imap/global.h"
 #include "codes.h"
 #include "actions.h"
 #include "parser.h"
@@ -83,16 +84,16 @@
 
 #include "auth.h"
 #include "acl.h"
-#include "backend.h"
-#include "mboxlist.h"
-#include "proxy.h"
+#include "imap/backend.h"
+#include "imap/mboxlist.h"
+#include "imap/proxy.h"
 #include "util.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
 
 #include "scripttest.h"
 
-#include "sync_log.h"
+#include "imap/sync_log.h"
 
 /* global state */
 const int config_need_data = 0;

@@ -63,7 +63,7 @@
 #include "notifyd.h"
 
 #include "exitcodes.h"
-#include "global.h"
+#include "imap/global.h"
 #include "libconfig.h"
 #include "xmalloc.h"
 #include "strarray.h"

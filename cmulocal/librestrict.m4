@@ -31,7 +31,7 @@ AC_DEFUN([CMU_RESTRICT_LIB_WHERE], [
 AC_DEFUN([CMU_RESTRICT], [
 AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
 AC_ARG_WITH(restrict,
-	[  --with-restrict=PREFIX      Compile with RESTRICT support],
+	[AS_HELP_STRING([--with-restrict=PREFIX], [Compile with RESTRICT support])],
 	[if test "X$with_restrict" = "X"; then
 		with_restrict=yes
 	fi])

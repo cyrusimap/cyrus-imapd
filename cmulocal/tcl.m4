@@ -45,14 +45,15 @@ dnl > Checking for Tcl first puts -lm before -lkrb on the library list.
 dnl
 
 dnl Check for some information from the user on what the world looks like
-AC_ARG_WITH(tclconfig,[  --with-tclconfig=PATH   use tclConfig.sh from PATH
-                          (configure gets Tcl configuration from here)],
+AC_ARG_WITH(tclconfig,
+	[AS_HELP_STRING([--with-tclconfig=DIR], [use tclConfig.sh from DIR (configure gets Tcl configuration from here)])], 
         dnl trim tclConfig.sh off the end so we can add it back on later.
 	TclLibBase=`echo ${withval} | sed s/tclConfig.sh\$//`)
-AC_ARG_WITH(tcl,      [  --with-tcl=PATH         use Tcl from PATH],
+AC_ARG_WITH(tcl,
+        [AS_HELP_STRING([--with-tcl=DIR], [use Tcl from DIR])],
 	TclLibBase="${withval}/lib")
-AC_ARG_WITH(tclsh,    [  --with-tclsh=TCLSH      use TCLSH as the tclsh program
-                          (let configure find Tcl using this program)],
+AC_ARG_WITH(tclsh,
+        [AS_HELP_STRING([--with-tclsh=TCLSH], [use TCLSH as the tclsh program (let configure find Tcl using this program)])],
 	TCLSH="${withval}")
 
 if test "$TCLSH" = "no" -o "$with_tclconfig" = "no" ; then

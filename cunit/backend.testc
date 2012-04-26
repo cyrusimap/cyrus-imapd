@@ -1,0 +1,1324 @@
+#if HAVE_CONFIG_H
+#include <config.h>
+#endif
+#include <signal.h>
+#include <sys/wait.h>
+#include <sys/mman.h>
+#include <assert.h>
+#include "cunit/cunit.h"
+#include "imap/saslclient.h"
+#include <sasl/saslutil.h>
+#include <sasl/saslplug.h>
+#include "xmalloc.h"
+#include "imap/mutex.h"
+#include "prot.h"
+#include "imap/backend.h"
+
+struct server_config {
+    int sasl_plain;
+    int sasl_login;
+    int sasl_digestmd5;
+    int starttls;
+    int deflate;
+    int caps_one_per_line;
+};
+
+/*
+ * This is a useful hack.  All the test server's state is
+ * stored using this structure in an anonymous page which
+ * is shared between the client and server.  This lets the
+ * test code in the client reach into the server state and
+ * either tweak the behaviour via the config or do asserts
+ * on the per-connection state (which makes integrating
+ * with CUnit a whole lot easier, as CU asserts in a child
+ * process are really not helpful).
+ */
+struct server_state {
+    /* dynamic configuration */
+    struct server_config config;
+
+    /* global state */
+    int rend_sock;
+
+    /* per-connection state */
+    int is_connected;
+    int is_authenticated;
+    int is_tls;
+    sasl_conn_t *saslconn;	    /* the sasl connection context */
+#ifdef HAVE_SSL
+    SSL *tls_conn;
+#endif
+    struct protstream *in;
+    struct protstream *out;
+};
+
+
+#define HOST		"localhost"
+#define SASLSERVICE	"vorpal"
+#define USERID		"fbloggs"
+#define PASSWORD	"shibboleth"
+extern int verbose;
+
+static sasl_callback_t *callbacks;
+static struct server_state *server_state;
+static const struct server_config default_server_config = {
+    .sasl_plain = 1,
+    .sasl_login = 0,
+    .sasl_digestmd5 = 0,
+    .starttls = 0,
+    .deflate = 0,
+    .caps_one_per_line = 1
+};
+static const struct capa_t default_capa[] = {
+    { "CCSASL", CAPA_AUTH },
+    { "CCSTARTTLS", CAPA_STARTTLS },
+    { "CCCOMPRESS=DEFLATE", CAPA_COMPRESS },
+    { NULL, 0 }
+};
+static char default_service[32];
+
+static int init_sasl(int isclient);
+
+static struct protocol_t test_prot =
+{
+    /* .service is setup in default_conditions() */
+    .sasl_service = SASLSERVICE,
+    .banner = {
+	.auto_capa = 1,
+	.resp = "OK"
+    },
+    .capa_cmd = {
+	.cmd = "XXCAPABILITY",
+	.arg = NULL,
+	.resp = "OK",
+	.postcapability = NULL,
+	.formatflags = CAPAF_ONE_PER_LINE|CAPAF_SKIP_FIRST_WORD,
+	/* .capa is setup in default_conditions() */
+    },
+    .tls_cmd = {
+	.cmd = "XXSTARTTLS",
+	.ok = "OK",
+	.fail = "NO",
+	.auto_capa = 0
+    },
+    .sasl_cmd = {
+	.cmd = "XXAUTHENTICATE",
+	.maxlen = USHRT_MAX,
+	.quote = 0,
+	.ok = "OK",
+	.fail = "NO",
+	.cont = "+ ",
+	.cancel = "*",
+	.parse_success = NULL,
+	.auto_capa = 0
+    },
+    .compress_cmd = {
+	.cmd = NULL,
+	.unsol = NULL,
+	.ok = NULL
+    },
+    .ping_cmd = {
+	.cmd = "XXNOOP",
+	.unsol = NULL,
+	.ok = "OK"
+    },
+    .logout_cmd = {
+	.cmd = "XXLOGOUT",
+	.unsol = NULL,
+	.ok = "OK"
+    }
+};
+
+
+/*
+ * Setup default test conditions, on both the client and server.
+ */
+static void default_conditions(void)
+{
+    server_state->config = default_server_config;
+
+    test_prot.service = default_service;
+    memcpy(&test_prot.capa_cmd.capa, default_capa, sizeof(default_capa));
+    test_prot.capa_cmd.formatflags = CAPAF_ONE_PER_LINE|CAPAF_SKIP_FIRST_WORD;
+}
+
+/* ====================================================================== */
+
+/*
+ * Test connecting to a host which doesn't exist.
+ */
+static void test_badhost(void)
+{
+    struct backend *be;
+    const char *auth_status = NULL;
+
+    default_conditions();
+
+    be = backend_connect(NULL, "nonexistanthost", &test_prot,
+			 USERID, callbacks, &auth_status);
+    CU_ASSERT_PTR_NULL(be);
+    CU_ASSERT_EQUAL(server_state->is_connected, 0);
+}
+
+/*
+ * Test connecting to the wrong port on the right host.
+ */
+static void test_badservice(void)
+{
+    struct backend *be;
+    const char *auth_status = NULL;
+
+    default_conditions();
+    test_prot.service = "nonexistantservice";
+
+    be = backend_connect(NULL, HOST, &test_prot,
+			 USERID, callbacks, &auth_status);
+    CU_ASSERT_PTR_NULL(be);
+    CU_ASSERT_EQUAL(server_state->is_connected, 0);
+}
+
+/*
+ * Test authenticating with the PLAIN mechanism.
+ */
+static void test_sasl_plain(void)
+{
+    struct backend *be;
+    const char *auth_status = NULL;
+    char *mechs;
+    int r;
+
+    default_conditions();
+    server_state->config.sasl_plain = 1;
+
+    be = backend_connect(NULL, HOST, &test_prot,
+			 USERID, callbacks, &auth_status);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(be);
+    CU_ASSERT_EQUAL(server_state->is_connected, 1);
+    CU_ASSERT_EQUAL(server_state->is_authenticated, 1);
+    CU_ASSERT_EQUAL(server_state->is_tls, 0);
+
+    mechs = backend_get_cap_params(be, CAPA_AUTH);
+    CU_ASSERT_STRING_EQUAL(mechs, "PLAIN");
+    free(mechs);
+
+    r = backend_ping(be);
+    CU_ASSERT_EQUAL(r, 0);
+
+    backend_disconnect(be);
+    free(be);
+}
+
+#if 0
+/*
+ * Test authenticating with the LOGIN mechanism.
+ * This test doesn't work for me.  I have NFI why - gnb.
+ */
+static void not_test_sasl_login(void)
+{
+    struct backend *be;
+    const char *auth_status = NULL;
+    char *mechs;
+    int r;
+
+    default_conditions();
+    server_state->config.sasl_plain = 0;
+    server_state->config.sasl_login = 1;
+
+    be = backend_connect(NULL, HOST, &test_prot,
+			 USERID, callbacks, &auth_status);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(be);
+    CU_ASSERT_EQUAL(server_state->is_connected, 1);
+    CU_ASSERT_EQUAL(server_state->is_authenticated, 1);
+    CU_ASSERT_EQUAL(server_state->is_tls, 0);
+
+    mechs = backend_get_cap_params(be, CAPA_AUTH);
+    CU_ASSERT_STRING_EQUAL(mechs, "LOGIN");
+    free(mechs);
+
+    r = backend_ping(be);
+    CU_ASSERT_EQUAL(r, 0);
+
+    backend_disconnect(be);
+    free(be);
+}
+#endif
+
+/*
+ * Test authenticating with the DIGEST-MD5 mechanism.
+ */
+static void test_sasl_digestmd5(void)
+{
+    struct backend *be;
+    const char *auth_status = NULL;
+    char *mechs;
+    int r;
+
+    default_conditions();
+    server_state->config.sasl_plain = 0;
+    server_state->config.sasl_digestmd5 = 1;
+
+    be = backend_connect(NULL, HOST, &test_prot,
+			 USERID, callbacks, &auth_status);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(be);
+    CU_ASSERT_EQUAL(server_state->is_connected, 1);
+    CU_ASSERT_EQUAL(server_state->is_authenticated, 1);
+    CU_ASSERT_EQUAL(server_state->is_tls, 0);
+
+    mechs = backend_get_cap_params(be, CAPA_AUTH);
+    CU_ASSERT_STRING_EQUAL(mechs, "DIGEST-MD5");
+    free(mechs);
+
+    r = backend_ping(be);
+    CU_ASSERT_EQUAL(r, 0);
+
+    backend_disconnect(be);
+    free(be);
+}
+
+/* Common routine to test the semantics of capabilities */
+static void caps_common(void)
+{
+#define CAPA_FOO	(1<<(CAPA_COMPRESS+1))
+#define CAPA_BAZ	(1<<(CAPA_COMPRESS+2))
+#define CAPA_QUUX	(1<<(CAPA_COMPRESS+3))
+#define CAPA_FNORD	(1<<(CAPA_COMPRESS+4))
+#define CAPA_CAPITALS	(1<<(CAPA_COMPRESS+5))
+#define CAPA_MIA	(1<<(CAPA_COMPRESS+6))
+    struct backend *be;
+    const char *auth_status = NULL;
+    char *params;
+    int r;
+    int n;
+    static const struct capa_t extra_capa[] = {
+	{ "FOO", CAPA_FOO },
+	{ "BAZ", CAPA_BAZ },
+	{ "QUUX", CAPA_QUUX },
+	{ "FNORD=BOO", CAPA_FNORD },
+	{ "CAPITALS", CAPA_CAPITALS },
+	{ "MIA", CAPA_MIA },
+	{ NULL, 0 }
+	/* No more room in the fixed size array, dammit */
+    };
+
+    /* append some extra capabilities */
+    n = sizeof(default_capa)/sizeof(default_capa[0]) - 1;
+    CU_ASSERT_FATAL(n * sizeof(struct capa_t) +
+		    sizeof(extra_capa) <= sizeof(test_prot.capa_cmd.capa));
+    memcpy(&test_prot.capa_cmd.capa[n], extra_capa, sizeof(extra_capa));
+
+    be = backend_connect(NULL, HOST, &test_prot,
+			 USERID, callbacks, &auth_status);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(be);
+    CU_ASSERT_EQUAL(server_state->is_connected, 1);
+    CU_ASSERT_EQUAL(server_state->is_authenticated, 1);
+    CU_ASSERT_EQUAL(server_state->is_tls, 0);
+
+    /* FOO is present, its parameter is BAR */
+    CU_ASSERT_EQUAL(!!CAPA(be, CAPA_FOO), 1);
+    params = backend_get_cap_params(be, CAPA_FOO);
+    CU_ASSERT_STRING_EQUAL(params, "BAR");
+    free(params);
+
+    /* BAZ is present, it has no parameters */
+    CU_ASSERT_EQUAL(!!CAPA(be, CAPA_BAZ), 1);
+    params = backend_get_cap_params(be, CAPA_BAZ);
+    CU_ASSERT_PTR_NULL(params);
+
+    /* QUUX is present, its parameters are FOONLY and FMEH */
+    CU_ASSERT_EQUAL(!!CAPA(be, CAPA_QUUX), 1);
+    params = backend_get_cap_params(be, CAPA_QUUX);
+    CU_ASSERT_STRING_EQUAL(params, "FOONLY FMEH");
+    free(params);
+
+    /* FNORD is present, its parameters are BOO and GNERGH,
+     * but we asked specifically for FNORD=BOO so CAPA()
+     * should succeed but we should see no params. */
+    CU_ASSERT_EQUAL(!!CAPA(be, CAPA_FNORD), 1);
+    params = backend_get_cap_params(be, CAPA_FNORD);
+    CU_ASSERT_PTR_NULL(params);
+
+    /* CAPITALS is present, its parameter is Oslo.  Note the
+     * name is matched case-insensitive but the parameters
+     * are returned as seen on the wire. */
+    CU_ASSERT_EQUAL(!!CAPA(be, CAPA_CAPITALS), 1);
+    params = backend_get_cap_params(be, CAPA_CAPITALS);
+    CU_ASSERT_STRING_EQUAL(params, "Oslo");
+    free(params);
+
+    /* MIA is missing in action */
+    CU_ASSERT_EQUAL(!!CAPA(be, CAPA_MIA), 0);
+    params = backend_get_cap_params(be, CAPA_MIA);
+    CU_ASSERT_PTR_NULL(params);
+
+    r = backend_ping(be);
+    CU_ASSERT_EQUAL(r, 0);
+
+    backend_disconnect(be);
+    free(be);
+#undef CAPA_FOO
+#undef CAPA_BAZ
+#undef CAPA_QUUX
+#undef CAPA_FNORD
+#undef CAPA_CAPITALS
+#undef CAPA_MIA
+}
+
+/*
+ * Test parsing capabilities in multi-line format
+ */
+static void test_multiline_caps(void)
+{
+    default_conditions();
+    server_state->config.caps_one_per_line = 1;
+    test_prot.capa_cmd.formatflags = CAPAF_ONE_PER_LINE|CAPAF_SKIP_FIRST_WORD;
+    caps_common();
+}
+
+/*
+ * Test parsing capabilities in one-line format
+ */
+static void test_oneline_caps(void)
+{
+    default_conditions();
+    server_state->config.caps_one_per_line = 0;
+    test_prot.capa_cmd.formatflags = CAPAF_MANY_PER_LINE;
+    caps_common();
+}
+
+#ifdef HAVE_SSL
+/*
+ * Test STARTTLS
+ */
+static void test_starttls(void)
+{
+    struct backend *be;
+    const char *auth_status = NULL;
+    char *mechs;
+    int r;
+
+    default_conditions();
+    server_state->config.sasl_plain = 1;
+    server_state->config.starttls = 1;
+
+    be = backend_connect(NULL, HOST, &test_prot,
+			 USERID, callbacks, &auth_status);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(be);
+    CU_ASSERT_EQUAL(server_state->is_connected, 1);
+    CU_ASSERT_EQUAL(server_state->is_authenticated, 1);
+    CU_ASSERT_EQUAL(server_state->is_tls, 1);
+
+    mechs = backend_get_cap_params(be, CAPA_AUTH);
+    CU_ASSERT_STRING_EQUAL(mechs, "PLAIN");
+    free(mechs);
+
+    CU_ASSERT(CAPA(be, CAPA_STARTTLS))
+
+    r = backend_ping(be);
+    CU_ASSERT_EQUAL(r, 0);
+
+    backend_disconnect(be);
+    free(be);
+}
+#endif
+
+/* TODO: test UNIX socket comms too */
+/* TODO: test IPv6 socket comms too */
+/* TODO: test connect() timeout */
+
+/* ====================================================================== */
+
+/*
+ * Allocate, and return a mapped pointer to, an anonymous page in
+ * memory (a non-heap non-text page with no backing file) which will be
+ * shared across fork().  The page is assumed to be zeroed.
+ */
+static void *get_anonymous_page(void)
+{
+    void *page;
+    size_t pagesize = getpagesize();
+
+#if defined(MAP_ANON) && !defined(MAP_ANONYMOUS)
+    /* FreeBSD */
+#define MAP_ANONYMOUS MAP_ANON
+#endif
+
+#ifdef MAP_ANONYMOUS
+    /* Linux and Solaris */
+    page = mmap(NULL, pagesize, PROT_READ|PROT_WRITE,
+	        MAP_ANONYMOUS|MAP_SHARED, -1, 0);
+    if (page == MAP_FAILED) {
+	perror("mmap");
+	return NULL;
+    }
+#else
+    int fd;
+
+    fd = open("/dev/zero", O_RDWR);
+    if (fd < 0) {
+	perror("/dev/zero");
+	return NULL;
+    }
+    page = mmap(NULL, pagesize, PROT_READ|PROT_WRITE,
+	        MAP_SHARED, fd, 0);
+    if (page == MAP_FAILED) {
+	perror("mmap");
+	page = NULL;
+    }
+    close(fd);
+#endif
+
+    return page;
+}
+
+/*
+ * Free an anonymous page returned from get_anonymous_page()
+ */
+static void free_anonymous_page(void *page)
+{
+    munmap(page, getpagesize());
+}
+
+/*
+ * Create a bound and listening TCP4 server socket, bound to the IPv4
+ * loopback address and a port chosen by the kernel.
+ *
+ * Returns: socket, or -1 on error.  *@portp is filled with the port
+ * number.
+ */
+static int create_server_socket(int *portp)
+{
+    int sock;
+    struct sockaddr_in sin;
+    int r;
+
+    sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (sock < 0) {
+	perror("socket(TCP)");
+	return -1;
+    }
+
+    memset(&sin, 0, sizeof(sin));
+    sin.sin_family = AF_INET;
+    sin.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    if (*portp)
+	sin.sin_port = htons(*portp);
+
+    r = bind(sock, (struct sockaddr *)&sin, sizeof(sin));
+    if (r < 0) {
+	perror("bind");
+	goto error;
+    }
+
+    r = listen(sock, 5);
+    if (r < 0) {
+	perror("listen");
+	goto error;
+    }
+
+    if (!*portp) {
+	socklen_t len = sizeof(sin);
+	r = getsockname(sock, (struct sockaddr *)&sin, &len);
+	if (r < 0) {
+	    perror("getsockname");
+	    goto error;
+	}
+	if (len != sizeof(sin) || sin.sin_family != AF_INET) {
+	    fprintf(stderr, "Bad address from getsockname()\n");
+	    goto error;
+	}
+	*portp = ntohs(sin.sin_port);
+    }
+
+    return sock;
+
+error:
+    close(sock);
+    return -1;
+}
+
+/*
+ * Block until an incoming connection is received, then establish the
+ * connection and initialise per-connection state.  On success, set
+ * @state->is_connected.
+ *
+ * Returns 0 on success, -1 on failure (errors indicate some resource
+ * limitation in the server, not any behaviour of the client, and
+ * should be fatal).
+ */
+static int server_accept(struct server_state *state)
+{
+    int conn_sock;
+    int r;
+
+    if (verbose > 1)
+	fprintf(stderr, "Server waiting for connection\n");
+
+    conn_sock = accept(state->rend_sock, NULL, NULL);
+    if (conn_sock < 0) {
+	perror("accept");
+	return -1;
+    }
+    if (verbose > 1)
+	fprintf(stderr, "Server accepted connection\n");
+
+    state->in = prot_new(conn_sock, /*read*/0);
+    state->out = prot_new(dup(conn_sock), /*write*/1);
+    if (!state->in || !state->out) {
+	perror("prot_new");
+	return -1;
+    }
+
+    r = sasl_server_new(SASLSERVICE, HOST,
+			/*user_realm*/NULL, /*iplocalport*/NULL,
+			/*ipremoteport*/NULL, /*callbacks*/NULL,
+			/*flags*/0, &state->saslconn);
+    if (r != SASL_OK) {
+	fprintf(stderr, "sasl_server_new() failed with error %d\n", r);
+	return -1;
+    }
+
+    state->is_authenticated = 0;
+    state->is_connected = 1;
+    state->is_tls = 0;
+    state->tls_conn = NULL;
+
+    return 0;
+}
+
+/*
+ * Handle the end of a connection, by cleaning up all the per-connection
+ * state.  In particular, clears @state->is_connected.
+ */
+static void server_unaccept(struct server_state *state)
+{
+    prot_free(state->in);
+    state->in = NULL;
+    prot_free(state->out);
+    state->out = NULL;
+    sasl_dispose(&state->saslconn);
+    state->is_connected = 0;
+    state->is_tls = 0;
+    if (state->tls_conn) {
+	tls_reset_servertls(&state->tls_conn);
+	state->tls_conn = NULL;
+    }
+}
+
+/*
+ * Main routine for pushing text back to the client.
+ */
+static void server_printf(struct server_state *, const char *fmt, ...)
+    __attribute__((format(printf,2,3)));
+
+static void server_printf(struct server_state *state, const char *fmt, ...)
+{
+    va_list args;
+    int r;
+    char buf[2048];
+
+    if (verbose > 1) {
+	va_start(args, fmt);
+	fprintf(stderr, "S: ");
+	vfprintf(stderr, fmt, args);
+	va_end(args);
+    }
+
+    va_start(args, fmt);
+    r = vsnprintf(buf, sizeof(buf), fmt, args);
+    assert(r < (int)sizeof(buf));
+    va_end(args);
+
+    r = prot_write(state->out, buf, strlen(buf));
+    assert(r >= 0);
+}
+
+/*
+ * Flush any pending output back to the client.
+ */
+static void server_flush(struct server_state *state)
+{
+    prot_flush(state->out);
+}
+
+/*
+ * Get a line of text from the client.  Blocks until
+ * a while line is available.
+ *
+ * Returns: 0 on success, -1 on error or end of file.
+ */
+static int server_getline(struct server_state *state,
+			  char *buf, int maxlen)
+{
+    if (!prot_fgets(buf, maxlen, state->in))
+	return -1;
+    if (verbose > 1)
+	fprintf(stderr, "C: %s\n", buf);
+    return 0;
+}
+
+/*
+ * Emit to the client a banner including the server's capability
+ * strings.  This might be in response to the client connecting, or to
+ * the client issuing the XXCAPABILITY command.  Various flags in
+ * @state->config control which of the magical caps known by the
+ * backend.c client code are reported.  Some other test capabilities are
+ * always reported.  Depending on @state->config.caps_one_per_line, the
+ * caps are listed in a multi-line format, one cap per line (LMTP, POP3,
+ * ManageSieve, and sync style) or a single-line, many caps per line
+ * format (IMAP style).
+ */
+static void server_emit_caps(struct server_state *state)
+{
+    const char *saslmechs = NULL;
+    char *p;
+    char *b;
+    int n = 0;
+    const char *name;
+    const char *words[256];	/* array of:
+				 * NAME, VALUE, VALUE, NULL,
+				 * NAME, VALUE, NULL,
+				 * NULL */
+    char line[1024];
+    static const char banner[] = "Toy Test server v0.0.1";
+
+    /*
+     * The ccSASL cap reports a list of SASL mechanism names.
+     * Note that we suppress them all if STARTTLS is enabled.
+     */
+    if (!state->config.starttls || state->is_tls) {
+	int got_login = 0;
+	int got_plain = 0;
+	int got_digestmd5 = 0;
+
+	/* First see what mechanisms SASL has; no point reporting
+	 * mechanisms which aren't actually available. */
+	sasl_listmech(state->saslconn, /*user*/NULL, /*prefix*/"",
+		      /*sep*/" ", /*suffix*/"", &saslmechs, /*plen*/NULL,
+		      /*pcount*/NULL);
+	b = xstrdup(saslmechs);
+	/* Build our own list of mechanisms, which is the intersection
+	 * of the ones configured in SASL and the ones our server config
+	 * allows us. */
+	words[n++] = "ccSASL";
+	for (p = strtok(b, " ") ; p ; p = strtok(NULL, " ")) {
+	    if (!strcasecmp(p, "LOGIN") && state->config.sasl_login) {
+		words[n++] = "LOGIN";
+		got_login = 1;
+	    }
+	    if (!strcasecmp(p, "LOGIN") && state->config.sasl_plain) {
+		words[n++] = "PLAIN";
+		got_plain = 1;
+	    }
+	    if (!strcasecmp(p, "DIGEST-MD5") && state->config.sasl_digestmd5) {
+		words[n++] = "DIGEST-MD5";
+		got_digestmd5 = 1;
+	    }
+	}
+	words[n++] = NULL;
+	free(b);
+
+	if (state->config.sasl_login && !got_login)
+	    fprintf(stderr, "Server failed to find requested "
+			    "SASL mechanism \"LOGIN\"\n");
+	if (state->config.sasl_plain && !got_plain)
+	    fprintf(stderr, "Server failed to find requested "
+			    "SASL mechanism \"PLAIN\"\n");
+	if (state->config.sasl_digestmd5 && !got_digestmd5)
+	    fprintf(stderr, "Server failed to find requested "
+			    "SASL mechanism \"DIGEST-MD5\"\n");
+    }
+
+    /*
+     * The ccSTARTTLS cap reports the ability to do STARTTLS
+     */
+    if (state->config.starttls) {
+	words[n++] = "ccSTARTTLS";
+	words[n++] = NULL;
+    }
+
+    /*
+     * The ccCOMPRESS=DEFLATE cap reports the ability to do Deflate
+     * compression.
+     */
+    if (state->config.deflate) {
+	words[n++] = "ccCOMPRESS";
+	words[n++] = "DEFLATE";
+	words[n++] = NULL;
+    }
+
+    /*
+     * Various test capabilities; the test code in the client knows what
+     * to expect for these.
+     */
+    words[n++] = "FOO";
+    words[n++] = "BAR";
+    words[n++] = NULL;
+
+    words[n++] = "BAZ";
+    words[n++] = NULL;
+
+    words[n++] = "QUUX";
+    words[n++] = "FOONLY";
+    words[n++] = "FMEH";
+    words[n++] = NULL;
+
+    words[n++] = "FNORD";
+    words[n++] = "BOO";
+    words[n++] = "GNERGH";
+    words[n++] = NULL;
+
+    words[n++] = "cApItAls";
+    words[n++] = "Oslo";
+    words[n++] = NULL;
+
+    words[n++] = NULL;
+
+    /*
+     * Finally we have all the capability names and values, now
+     * pull them out of words[] and emit lines to the client.
+     */
+    n = 0;
+    if (state->config.caps_one_per_line) {
+	/* Multi-line, one cap and all its values on each line (LMTP,
+	 * ManageSieve, POP3 and sync style) */
+	while ((name = words[n++])) {
+	    line[0] = '\0';
+	    for ( ; words[n] ; n++) {
+		strcat(line, " ");
+		strcat(line, words[n]);
+	    }
+	    n++;
+	    server_printf(state, "* %s%s\r\n", name, line);
+	}
+	server_printf(state, "OK %s\r\n", banner);
+    } else {
+	/* One-line, NAME=VALUE pairs inside IMAP-style response code */
+	line[0] = '\0';
+	while ((name = words[n++])) {
+	    if (words[n]) {
+		for ( ; words[n] ; n++) {
+		    strcat(line, " ");
+		    strcat(line, name);
+		    strcat(line, "=");
+		    strcat(line, words[n]);
+		}
+	    } else {
+		strcat(line, " ");
+		strcat(line, name);
+	    }
+	    n++;
+	}
+	server_printf(state, "OK [CAPABILITY%s] %s\r\n", line, banner);
+    }
+    server_flush(state);
+}
+
+/*
+ * Handle the XXAUTHENTICATE command from the client.  The 1st and 2nd
+ * arguments to the command on wire are passed as @mech and
+ * @initial_in_b64.  Handles any SASL conversation with the client (e.g.
+ * server challenges and client responses), and telling the client the
+ * final status.  If successful, sets @state->is_authenticated.
+ */
+static void cmd_authenticate(struct server_state *state,
+			     const char *mech, const char *initial_in_b64)
+{
+    char *word;
+    const char *server_out;
+    unsigned int server_out_len;
+    int r;
+    unsigned int buflen = 0;
+    char buf[21848];
+    static const char sep[] = " \t\r\n";
+
+    if (!mech)
+	goto badsyntax;
+
+    if (initial_in_b64) {
+	r = sasl_decode64(initial_in_b64, strlen(initial_in_b64),
+			  buf, sizeof(buf), &buflen);
+	if (r != SASL_OK)
+	    goto badsyntax;
+    } else {
+	buflen = 0;
+    }
+
+    server_out = NULL;
+    server_out_len = 0;
+    r = sasl_server_start(state->saslconn, mech,
+			  buf, buflen,
+			  &server_out, &server_out_len);
+
+    while (r == SASL_CONTINUE) {
+	if (server_out_len)
+	    sasl_encode64(server_out, server_out_len, buf, sizeof(buf), NULL);
+	else
+	    strcpy(buf, "=");
+	server_printf(state, "+ %s\n", buf);
+	server_flush(state);
+
+	if (server_getline(state, buf, sizeof(buf)) < 0) {
+	    fprintf(stderr, "No response to AUTH challenge\n");
+	    return;
+	}
+	word = strtok(buf, sep);
+	if (word) {
+	    r = sasl_decode64(word, strlen(word), buf, sizeof(buf), &buflen);
+	    if (r != SASL_OK)
+		goto badsyntax;
+	} else {
+	    buflen = 0;
+	}
+
+	server_out = NULL;
+	server_out_len = 0;
+	r = sasl_server_step(state->saslconn, buf, buflen,
+			     &server_out, &server_out_len);
+    }
+
+    if (r != SASL_OK) {
+	server_printf(state, "BAD sasl error code %d\r\n", r);
+	server_flush(state);
+	return;
+    }
+
+    state->is_authenticated = 1;
+    server_printf(state, "OK\r\n");
+    server_flush(state);
+    return;
+
+badsyntax:
+    server_printf(state, "BAD syntax\r\n");
+    server_flush(state);
+}
+
+/*
+ * Handle the XXSTARTTLS command from the client.
+ * If successful, sets @state->is_tls.
+ */
+static void cmd_starttls(struct server_state *state)
+{
+#ifdef HAVE_SSL
+    int r;
+    char *auth_id = NULL;
+    SSL *tls_conn = NULL;
+    sasl_ssf_t ssf;
+
+    r = tls_init_serverengine("backend_test", /*verifydepth*/5,
+			      /*askcert*/1, /*tlsonly*/1);
+    if (r < 0) {
+	server_printf(state, "BAD error initializing TLS\r\n");
+	server_flush(state);
+	return;
+    }
+
+    server_printf(state, "OK Begin TLS negotiation now\r\n");
+    /* must flush our buffers before starting tls */
+    server_flush(state);
+
+    r = tls_start_servertls(/*readfd*/state->in->fd,
+			    /*writefd*/state->out->fd,
+			    /*timeout_sec*/3000,
+			    (int *)&ssf, &auth_id, &tls_conn);
+    if (r < 0) {
+	server_printf(state, "BAD STARTTLS negotiation failed\r\n");
+	server_flush(state);
+	return;
+    }
+
+    /* tell SASL about the negotiated layer */
+    r = sasl_setprop(state->saslconn, SASL_SSF_EXTERNAL, &ssf);
+    if (r != SASL_OK) {
+	server_printf(state, "BAD sasl_setprop(SASL_SSF_EXTERNAL) "
+			      "failed: cmd_starttls()\r\n");
+	server_flush(state);
+	return;
+    }
+
+    r = sasl_setprop(state->saslconn, SASL_AUTH_EXTERNAL, auth_id);
+    if (r != SASL_OK) {
+	server_printf(state, "BAD sasl_setprop(SASL_AUTH_EXTERNAL) "
+			     "failed: cmd_starttls()\r\n");
+	server_flush(state);
+	return;
+    }
+
+    /* tell the prot layer about our new layers */
+    prot_settls(state->in, tls_conn);
+    prot_settls(state->out, tls_conn);
+    state->tls_conn = tls_conn;
+    state->is_tls = 1;
+#else
+    server_printf(state, "BAD this server is not built with SSL\r\n");
+    server_flush(state);
+#endif
+}
+
+/*
+ * Server main command loop for a single connection.  Blocks waiting for
+ * commands from the client, and handles each command.  Returns when the
+ * client sends a XXLOGOUT command or drops the connection.
+ */
+static void server_cmdloop(struct server_state *state)
+{
+    char *command;
+    char buf[1024];
+    static const char sep[] = " \t\r\n";
+
+    /* Emit the connection banner */
+    server_emit_caps(state);
+
+    while (server_getline(state, buf, sizeof(buf)) == 0) {
+	command = strtok(buf, sep);
+
+	if (!command) {
+	    server_printf(state, "BAD command\r\n");
+	    server_flush(state);
+	    continue;
+	}
+
+	if (!strcasecmp(command, "XXLOGOUT")) {
+	    /* graceful disconnect */
+	    server_printf(state, "OK\r\n");
+	    server_flush(state);
+	    break;
+	} else if (!strcasecmp(command, "XXNOOP")) {
+	    server_printf(state, "OK\r\n");
+	    server_flush(state);
+	} else if (!strcasecmp(command, "XXCAPABILITY")) {
+	    server_emit_caps(state);
+	} else if (!strcasecmp(command, "XXAUTHENTICATE")) {
+	    char *mech = strtok(NULL, sep);
+	    char *initial_in = strtok(NULL, sep);
+	    cmd_authenticate(state, mech, initial_in);
+	} else if (!strcasecmp(command, "XXSTARTTLS")) {
+	    cmd_starttls(state);
+	} else {
+	    server_printf(state, "BAD command\r\n");
+	    server_flush(state);
+	}
+    }
+}
+
+/*
+ * Start the server.  Forks a child process, which does some once-off
+ * server initialisation and then enters a service loop.  The service
+ * loop is very dumb: it serves a single connection at a time, with no
+ * forking or threading or async request handling.
+ *
+ * Returns: pid of the child process, or -1 on error.
+ */
+static pid_t server_start(struct server_state *state)
+{
+    pid_t pid;
+
+    pid = fork();
+    if (pid < 0) {
+	perror("fork");
+	return -1;
+    }
+    if (pid) {
+	/* We are the parent process.  We don't need to wait for the
+	 * child to finish starting, as we have a bound socket we can
+	 * connect immediately (it just might take the child a little
+	 * while to respond to the first command). */
+	close(state->rend_sock);
+	return pid;
+    }
+    /* We are the child process. */
+
+    if (init_sasl(/*client*/0) < 0)
+	exit(1);
+
+    /* Main connection loop.  This is a toy, single-threaded server
+     * which handles one connection at a time. */
+    for (;;)
+    {
+	/* Wait for a connection */
+	if (server_accept(state) < 0)
+	    exit(1);
+
+	/* Run the main command loop for this connection */
+	server_cmdloop(state);
+
+	/* Forget the per-connection state */
+	server_unaccept(state);
+    }
+}
+
+/*
+ * Shut down the server, given it's PID.  It's pretty simple and brutal:
+ * we just send it SIGTERM and wait to reap it.
+ */
+static void server_shutdown(pid_t pid)
+{
+    int status;
+    pid_t r;
+
+    kill(pid, SIGTERM);
+    for (;;) {
+	r = waitpid(pid, &status, 0);
+	if (r < 0) {
+	    if (errno == EINTR)
+		continue;
+	    if (errno != ESRCH)
+		perror("waitpid");
+	    return;
+	}
+	if (r == pid)
+	    return; /* ok, killed it */
+	fprintf(stderr, "WTF? waitpid(%d) = %d?\n", pid, r);
+    }
+}
+
+/*
+ * Callback which we use to fakes server-side password checking for
+ * those mechanisms where a plaintext password from the client is
+ * available to the SASL server code, i.e. PLAIN and LOGIN.
+ */
+static int server_checkpass(sasl_conn_t *conn __attribute__((unused)),
+			    void *context __attribute__((unused)),
+			    const char *user, const char *pass,
+			    unsigned passlen,
+			    struct propctx *propctx __attribute__((unused)))
+{
+    if (strcmp(user, USERID))
+	return SASL_NOUSER;
+    if (passlen != strlen(PASSWORD) ||
+	strncmp(pass, PASSWORD, passlen))
+	return SASL_BADAUTH;
+    return SASL_OK;
+}
+
+/*
+ * Callback which we use to fake out server-side password checking for
+ * those mechanisms where a plaintext password from the client is *NOT*
+ * available, and so the SASL server code needs to retrieve the password
+ * from an auxprop plugin.
+ */
+static void server_auxprop_lookup(void *glob_context __attribute__((unused)),
+				  sasl_server_params_t *sparams,
+				  unsigned flags __attribute__((unused)),
+				  const char *user,
+				  unsigned ulen)
+{
+    const struct propval *prop;
+
+    if (ulen != strlen(USERID) ||
+	strncmp(user, USERID, ulen))
+	return;
+
+    prop = sparams->utils->prop_get(sparams->propctx);
+    if (!prop)
+	return;
+    for ( ; prop->name ; prop++) {
+	if (!strcmp(prop->name, "*userPassword") ||
+	    !strcmp(prop->name, "*cmusaslsecretDIGEST-MD5")) {
+	    if (prop->values)
+		sparams->utils->prop_erase(sparams->propctx, prop->name);
+	    sparams->utils->prop_set(sparams->propctx, prop->name,
+				     PASSWORD, strlen(PASSWORD));
+	}
+    }
+}
+
+/*
+ * Helps create a fake "auxiliary propert plugin" for the SASL library,
+ * which is how we hook into the DIGEST-MD5 mechanism when it wants to
+ * get a plaintext password to check aginst the hash received from the
+ * client.
+ */
+static int server_auxprop_init(const sasl_utils_t *utils __attribute__((unused)),
+			       int max_version,
+			       int *out_version,
+			       sasl_auxprop_plug_t **plugp,
+			       const char *plugname __attribute__((unused)))
+{
+    static sasl_auxprop_plug_t plug = {
+	.features = 0,
+	.auxprop_lookup = server_auxprop_lookup,
+	.name = "testserver-hack"
+    };
+
+    *out_version = max_version;
+    *plugp = &plug;
+    return SASL_OK;
+}
+
+/*
+ * Initialise the SASL library, client or server.
+ *
+ * Returns: 0 on success, -ve on error.
+ */
+static int init_sasl(int isclient)
+{
+    int r;
+
+    /* set the SASL allocation functions */
+    sasl_set_alloc((sasl_malloc_t *)xmalloc,
+		   (sasl_calloc_t *)xcalloc,
+		   (sasl_realloc_t *)xrealloc,
+		   (sasl_free_t *)free);
+
+    /* set the SASL mutex functions */
+    sasl_set_mutex(cyrus_mutex_alloc, cyrus_mutex_lock,
+		   cyrus_mutex_unlock, cyrus_mutex_free);
+
+    if (isclient) {
+	static const struct sasl_callback client_cb[] = {
+	    { SASL_CB_LIST_END, NULL, NULL }
+	};
+
+	/* load the SASL client plugins */
+	if (sasl_client_init(client_cb)) {
+	    fprintf(stderr, "could not init sasl client\n");
+	    return -1;
+	}
+
+	callbacks = mysasl_callbacks(USERID, USERID, NULL, PASSWORD);
+	if (!callbacks)
+	    return -1;
+    } else {
+	static const struct sasl_callback server_cb[] = {
+	    { SASL_CB_SERVER_USERDB_CHECKPASS, &server_checkpass, NULL },
+	    { SASL_CB_LIST_END, NULL, NULL }
+	};
+
+	/* load the SASL server plugins */
+	r = sasl_server_init(server_cb, "testserver");
+	if (r != SASL_OK) {
+	    fprintf(stderr, "sasl_server_init() failed: error %d\n", r);
+	    return -1;
+	}
+
+	sasl_auxprop_add_plugin("testserver", server_auxprop_init);
+    }
+
+    return 0;
+}
+
+/* ====================================================================== */
+
+static struct server_state *server_state;
+static pid_t server_pid;
+static int sasl_initialised;
+static int old_session_timeout;
+static char *old_config_dir;
+static char *old_tls_ca_file;
+static char *old_tls_cert_file;
+static char *old_tls_key_file;
+
+/*
+ * Test suite setup function.  Sets up the global
+ * server_state page.  Forks a server process which listens
+ * on a TCP port, and writes the port number into default_service[]
+ * so that the client code can connect to it.
+ */
+static int set_up(void)
+{
+    int rend_sock, port = 0;
+    char *sr;
+    static char cwd[PATH_MAX];
+
+    if (verbose > 1)
+	fprintf(stderr, "Starting server!\n");
+
+    sr = getcwd(cwd, sizeof(cwd));
+    if (!sr) {
+	fprintf(stderr, "getcwd() failed: %s\n", strerror(errno));
+	return -1;
+    }
+
+    old_config_dir = (char *)config_dir;
+    config_dir = xstrdup(cwd);
+
+    old_tls_ca_file = (char *)imapopts[IMAPOPT_TLS_CA_FILE].val.s;
+    imapopts[IMAPOPT_TLS_CA_FILE].val.s =
+	    strconcat(cwd, "/cacert.pem", (char *)NULL);
+
+    old_tls_cert_file = (char *)imapopts[IMAPOPT_TLS_CERT_FILE].val.s;
+    imapopts[IMAPOPT_TLS_CERT_FILE].val.s =
+	    strconcat(cwd, "/cert.pem", (char *)NULL);
+
+    old_tls_key_file = (char *)imapopts[IMAPOPT_TLS_KEY_FILE].val.s;
+    imapopts[IMAPOPT_TLS_KEY_FILE].val.s =
+	    strconcat(cwd, "/key.pem", (char *)NULL);
+
+    /* disable SSL session caching */
+    old_session_timeout = imapopts[IMAPOPT_TLS_SESSION_TIMEOUT].val.i;
+    imapopts[IMAPOPT_TLS_SESSION_TIMEOUT].val.i = 0;
+
+    rend_sock = create_server_socket(&port);
+    if (rend_sock < 0)
+	return -1;
+
+    server_state = get_anonymous_page();
+    if (!server_state) {
+	close(rend_sock);
+	return -1;
+    }
+    server_state->rend_sock = rend_sock;
+
+    if (verbose > 1)
+	fprintf(stderr, "Bound to port tcp/%u\n", port);
+    snprintf(default_service, sizeof(default_service), "%d", port);
+
+    server_pid = server_start(server_state);
+    if (server_pid < 0)
+	return -1;
+
+    /*
+     * Initialise the SASL library in the client process.  This init
+     * function can actually be called multiple times in the lifetime of
+     * a test runner process, which is perhaps surprising, but we have
+     * to deal with it.  We do however seem to be able to get away with
+     * initialising SASL multiple times as long as we call sasl_done()
+     * after we're done.
+     */
+    if (init_sasl(/*client*/1) < 0)
+	return -1;
+    sasl_initialised = 1;
+
+    return 0;
+}
+
+/*
+ * Test suite teardown function.  Shuts down the server and
+ * removes the global server_state page.
+ */
+static int tear_down(void)
+{
+    if (verbose > 1)
+	fprintf(stderr, "Cleaning up server! NOT.\n");
+    if (server_pid > 1)
+	server_shutdown(server_pid);
+    if (server_state)
+	free_anonymous_page(server_state);
+    if (callbacks) {
+	free_callbacks(callbacks);
+	callbacks = NULL;
+    }
+    if (sasl_initialised) {
+	sasl_done();
+	sasl_initialised = 0;
+    }
+
+    free((char *)config_dir);
+    config_dir = old_config_dir;
+
+    imapopts[IMAPOPT_TLS_SESSION_TIMEOUT].val.i = old_session_timeout;
+
+    free((char *)imapopts[IMAPOPT_TLS_CA_FILE].val.s);
+    imapopts[IMAPOPT_TLS_CA_FILE].val.s = old_tls_ca_file;
+
+    free((char *)imapopts[IMAPOPT_TLS_CERT_FILE].val.s);
+    imapopts[IMAPOPT_TLS_CERT_FILE].val.s = old_tls_cert_file;
+
+    free((char *)imapopts[IMAPOPT_TLS_KEY_FILE].val.s);
+    imapopts[IMAPOPT_TLS_KEY_FILE].val.s = old_tls_key_file;
+
+    return 0;
+}
+
+/* ====================================================================== */
+/* vim: set ft=c: */

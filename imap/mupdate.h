@@ -58,7 +58,7 @@
 #include "mailbox.h"
 #include "mpool.h"
 #include "mupdate-client.h"
-#include "mupdate_err.h"
+#include "imap/mupdate_err.h"
 #include "global.h"
 
 struct mupdate_handle_s {

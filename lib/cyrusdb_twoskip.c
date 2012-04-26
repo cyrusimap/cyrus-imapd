@@ -280,6 +280,7 @@
 #define PROB 0.5
 
 /* format specifics */
+#undef VERSION /* defined in config.h */
 #define VERSION 1
 
 /* type aliases */

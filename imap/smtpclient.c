@@ -53,7 +53,7 @@
 
 #include "global.h"
 #include "exitcodes.h"
-#include "imap_err.h"
+#include "imap/imap_err.h"
 #include "smtpclient.h"
 
 extern void fatal(const char *buf, int code);

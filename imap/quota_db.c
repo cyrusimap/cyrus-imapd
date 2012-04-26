@@ -57,7 +57,7 @@
 #include "cyrusdb.h"
 #include "exitcodes.h"
 #include "global.h"
-#include "imap_err.h"
+#include "imap/imap_err.h"
 #include "mailbox.h"
 #include "quota.h"
 #include "util.h"

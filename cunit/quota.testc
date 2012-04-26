@@ -1,0 +1,1025 @@
+#include <unistd.h>
+#include <stdlib.h>
+#include "config.h"
+#include "cunit/cunit.h"
+#include "imap/quota.h"
+#include "xmalloc.h"
+#include "retry.h"
+#include "imap/global.h"
+#include "imap/imap_err.h"
+#include "cyrusdb.h"
+#include "libcyr_cfg.h"
+#include "libconfig.h"
+#include "hash.h"
+
+#define DBDIR			"test-mb-dbdir"
+#define QUOTAROOT		"user.smurf"
+#define QUOTAROOT_NONEXISTANT	"no-such-quotaroot"
+
+static void test_names(void)
+{
+    int r;
+
+    CU_ASSERT_STRING_EQUAL(quota_names[QUOTA_STORAGE],
+			   "STORAGE");
+    r = quota_name_to_resource("STORAGE");
+    CU_ASSERT_EQUAL(r, QUOTA_STORAGE);
+    r = quota_name_to_resource("storage");
+    CU_ASSERT_EQUAL(r, QUOTA_STORAGE);
+    r = quota_name_to_resource("StOrAge");
+    CU_ASSERT_EQUAL(r, QUOTA_STORAGE);
+
+    CU_ASSERT_STRING_EQUAL(quota_names[QUOTA_ANNOTSTORAGE],
+			   "X-ANNOTATION-STORAGE");
+    r = quota_name_to_resource("X-ANNOTATION-STORAGE");
+    CU_ASSERT_EQUAL(r, QUOTA_ANNOTSTORAGE);
+    r = quota_name_to_resource("x-annotation-storage");
+    CU_ASSERT_EQUAL(r, QUOTA_ANNOTSTORAGE);
+    r = quota_name_to_resource("X-AnNotAtiOn-StOragE");
+    CU_ASSERT_EQUAL(r, QUOTA_ANNOTSTORAGE);
+
+    r = quota_name_to_resource("nonesuch");
+    CU_ASSERT_EQUAL(r, -1);
+
+}
+
+/*
+ * Trying to read quota for a quotaroot which is NULL, an empty string,
+ * or a string which is not found in the database.
+ */
+static void test_read_no_root(void)
+{
+    struct quota q;
+    struct txn *txn = NULL;
+    int r;
+
+    q.root = NULL;
+    r = quota_read(&q, NULL, 0);
+    CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
+
+    q.root = "";
+    r = quota_read(&q, NULL, 0);
+    CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
+
+    /* Also, for NULL or "" no txn is started */
+    q.root = NULL;
+    r = quota_read(&q, &txn, 1);
+    CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
+    CU_ASSERT_PTR_NULL(txn);
+
+    q.root = "";
+    r = quota_read(&q, &txn, 1);
+    CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
+    CU_ASSERT_PTR_NULL(txn);
+
+    q.root = QUOTAROOT_NONEXISTANT;
+    r = quota_read(&q, NULL, 0);
+    CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
+}
+
+static void test_write_no_root(void)
+{
+    struct quota q;
+    struct txn *txn = NULL;
+    int r;
+
+    q.root = NULL;
+    r = quota_write(&q, NULL);
+    CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
+
+    q.root = "";
+    r = quota_write(&q, NULL);
+    CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
+
+    /* Also, for NULL or "" no txn is started */
+    q.root = NULL;
+    r = quota_write(&q, &txn);
+    CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
+    CU_ASSERT_PTR_NULL(txn);
+
+    q.root = "";
+    r = quota_write(&q, &txn);
+    CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
+    CU_ASSERT_PTR_NULL(txn);
+}
+
+
+static void test_read_write(void)
+{
+    struct quota q;
+    struct quota q2;
+    struct txn *txn = NULL;
+    struct txn *oldtxn = NULL;
+    int res;
+    int r;
+
+    memset(&q, 0, sizeof(q));
+    q.root = QUOTAROOT;
+
+    r = quota_read(&q, &txn, 1);
+    CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
+    /* we went to the db and started a transaction */
+    CU_ASSERT_PTR_NOT_NULL(txn);
+
+    q.useds[QUOTA_STORAGE] = 12345;
+    q.limits[QUOTA_STORAGE] = 678;
+    q.useds[QUOTA_MESSAGE] = 2345;
+    q.limits[QUOTA_MESSAGE] = 78;
+    q.useds[QUOTA_ANNOTSTORAGE] = 345;
+    q.limits[QUOTA_ANNOTSTORAGE] = 8;
+
+    oldtxn = txn;
+    r = quota_write(&q, &txn);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_PTR_NOT_NULL(txn);
+    CU_ASSERT_PTR_EQUAL(oldtxn, txn);
+
+    /* reading in the same txn gets the new values */
+    memset(&q2, 0, sizeof(q2));
+    q2.root = QUOTAROOT;
+    r = quota_read(&q2, &txn, 0);
+    CU_ASSERT_EQUAL(r, 0);
+    for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
+	CU_ASSERT_EQUAL(q2.useds[res], q.useds[res]);
+	CU_ASSERT_EQUAL(q2.limits[res], q.limits[res]);
+    }
+
+    /* commit the txn */
+    quota_commit(&txn);
+    CU_ASSERT_PTR_NULL(txn);
+
+    /* reading in a new txn gets the new values */
+    memset(&q2, 0, sizeof(q2));
+    q2.root = QUOTAROOT;
+    r = quota_read(&q2, &txn, 0);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_PTR_NOT_NULL(txn);
+    for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
+	CU_ASSERT_EQUAL(q2.useds[res], q.useds[res]);
+	CU_ASSERT_EQUAL(q2.limits[res], q.limits[res]);
+    }
+
+    quota_commit(&txn);
+    CU_ASSERT_PTR_NULL(txn);
+}
+
+static void test_abort(void)
+{
+    struct quota q;
+    struct quota q2;
+    struct txn *txn = NULL;
+    struct txn *oldtxn = NULL;
+    int r;
+
+    memset(&q, 0, sizeof(q));
+    q.root = QUOTAROOT;
+
+    r = quota_read(&q, &txn, 1);
+    CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
+    /* we went to the db and started a transaction */
+    CU_ASSERT_PTR_NOT_NULL(txn);
+
+    q.useds[QUOTA_STORAGE] = 12345;
+    q.limits[QUOTA_STORAGE] = 678;
+
+    oldtxn = txn;
+    r = quota_write(&q, &txn);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_PTR_NOT_NULL(txn);
+    CU_ASSERT_PTR_EQUAL(oldtxn, txn);
+
+    /* reading in the same txn gets the new values */
+    memset(&q2, 0, sizeof(q2));
+    q2.root = QUOTAROOT;
+    r = quota_read(&q2, &txn, 0);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(q2.useds[QUOTA_STORAGE], q.useds[QUOTA_STORAGE]);
+    CU_ASSERT_EQUAL(q2.limits[QUOTA_STORAGE], q.limits[QUOTA_STORAGE]);
+
+    /* abort the txn */
+    quota_abort(&txn);
+    CU_ASSERT_PTR_NULL(txn);
+
+    /* reading in a new txn gets no result */
+    memset(&q2, 0, sizeof(q2));
+    q2.root = QUOTAROOT;
+    r = quota_read(&q2, &txn, 0);
+    CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
+    CU_ASSERT_PTR_NOT_NULL(txn);
+
+    quota_commit(&txn);
+    CU_ASSERT_PTR_NULL(txn);
+}
+
+static void test_abort2(void)
+{
+    struct quota q;
+    struct quota oldq;
+    struct quota q2;
+    struct txn *txn = NULL;
+    int r;
+
+    memset(&q, 0, sizeof(q));
+    q.root = QUOTAROOT;
+
+    r = quota_read(&q, &txn, 1);
+    CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
+    /* we went to the db and started a transaction */
+    CU_ASSERT_PTR_NOT_NULL(txn);
+
+    q.useds[QUOTA_STORAGE] = 12345;
+    q.limits[QUOTA_STORAGE] = 678;
+
+    r = quota_write(&q, &txn);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_PTR_NOT_NULL(txn);
+
+    /* commit some old values */
+    quota_commit(&txn);
+    CU_ASSERT_PTR_NULL(txn);
+
+    /* write some new values */
+    oldq = q;
+    q.useds[QUOTA_STORAGE] = 23456;
+    q.limits[QUOTA_STORAGE] = 789;
+    r = quota_write(&q, &txn);
+    CU_ASSERT_EQUAL(r, 0);
+
+    /* reading in the same txn gets the new values */
+    memset(&q2, 0, sizeof(q2));
+    q2.root = QUOTAROOT;
+    r = quota_read(&q2, &txn, 0);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(q2.useds[QUOTA_STORAGE], q.useds[QUOTA_STORAGE]);
+    CU_ASSERT_EQUAL(q2.limits[QUOTA_STORAGE], q.limits[QUOTA_STORAGE]);
+
+    /* abort the txn */
+    quota_abort(&txn);
+    CU_ASSERT_PTR_NULL(txn);
+
+    /* reading in a new txn gets old values */
+    memset(&q2, 0, sizeof(q2));
+    q2.root = QUOTAROOT;
+    r = quota_read(&q2, &txn, 0);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_PTR_NOT_NULL(txn);
+    CU_ASSERT_EQUAL(q2.useds[QUOTA_STORAGE], oldq.useds[QUOTA_STORAGE]);
+    CU_ASSERT_EQUAL(q2.limits[QUOTA_STORAGE], oldq.limits[QUOTA_STORAGE]);
+
+    quota_commit(&txn);
+    CU_ASSERT_PTR_NULL(txn);
+}
+
+static void test_check_use(void)
+{
+    struct quota q;
+    unsigned int i;
+    int r;
+
+    memset(&q, 0, sizeof(q));
+    q.root = QUOTAROOT;
+    q.limits[QUOTA_STORAGE] = 100;
+
+    for (i = 1 ; i <= 63 ; i++)
+    {
+	quota_t diff = (1ULL<<i)-1;
+	r = quota_check(&q, QUOTA_STORAGE, diff);
+	CU_ASSERT_EQUAL(r, (diff > 100*1024 ? IMAP_QUOTA_EXCEEDED : 0));
+	CU_ASSERT_EQUAL(q.useds[QUOTA_STORAGE], 0);
+    }
+
+    r = quota_check(&q, QUOTA_STORAGE, 10*1024);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(q.useds[QUOTA_STORAGE], 0);
+
+    quota_use(&q, QUOTA_STORAGE, 10*1024);
+    CU_ASSERT_EQUAL(q.useds[QUOTA_STORAGE], 10*1024);
+
+    r = quota_check(&q, QUOTA_STORAGE, 80*1024);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(q.useds[QUOTA_STORAGE], 10*1024);
+
+    quota_use(&q, QUOTA_STORAGE, 80*1024);
+    CU_ASSERT_EQUAL(q.useds[QUOTA_STORAGE], (10+80)*1024);
+
+    r = quota_check(&q, QUOTA_STORAGE, 15*1024);
+    CU_ASSERT_EQUAL(r, IMAP_QUOTA_EXCEEDED);
+    CU_ASSERT_EQUAL(q.useds[QUOTA_STORAGE], (10+80)*1024);
+
+    /* test the zero limit */
+    memset(&q, 0, sizeof(q));
+    q.root = QUOTAROOT;
+    q.limits[QUOTA_STORAGE] = 0;
+
+    r = quota_check(&q, QUOTA_STORAGE, 15*1024);
+    CU_ASSERT_EQUAL(r, IMAP_QUOTA_EXCEEDED);
+    CU_ASSERT_EQUAL(q.useds[QUOTA_STORAGE], 0);
+
+    r = quota_check(&q, QUOTA_STORAGE, 1);
+    CU_ASSERT_EQUAL(r, IMAP_QUOTA_EXCEEDED);
+    CU_ASSERT_EQUAL(q.useds[QUOTA_STORAGE], 0);
+
+    /* test the special limit QUOTA_UNLIMITED */
+    memset(&q, 0, sizeof(q));
+    q.root = QUOTAROOT;
+    q.limits[QUOTA_STORAGE] = QUOTA_UNLIMITED;
+
+    for (i = 1 ; i <= 63 ; i++)
+    {
+	quota_t diff = (1ULL<<i)-1;
+	r = quota_check(&q, QUOTA_STORAGE, diff);
+	CU_ASSERT_EQUAL(r, 0);
+	CU_ASSERT_EQUAL(q.useds[QUOTA_STORAGE], 0);
+    }
+
+    /* test negative diffs in quota_check */
+    memset(&q, 0, sizeof(q));
+    q.root = QUOTAROOT;
+    q.useds[QUOTA_STORAGE] = 80*1024;	/* used 80 KiB */
+    q.limits[QUOTA_STORAGE] = 100;	/* limit 100 KiB */
+
+    r = quota_check(&q, QUOTA_STORAGE, -1);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(q.useds[QUOTA_STORAGE], 80*1024);
+
+    r = quota_check(&q, QUOTA_STORAGE, -10*1024);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(q.useds[QUOTA_STORAGE], 80*1024);
+
+    r = quota_check(&q, QUOTA_STORAGE, -80*1024);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(q.useds[QUOTA_STORAGE], 80*1024);
+
+    r = quota_check(&q, QUOTA_STORAGE, -1000*1024);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(q.useds[QUOTA_STORAGE], 80*1024);
+
+    /* test negative diffs in quota_use */
+    memset(&q, 0, sizeof(q));
+    q.root = QUOTAROOT;
+    q.useds[QUOTA_STORAGE] = 80*1024;	/* used 80 KiB */
+    q.limits[QUOTA_STORAGE] = 100;	/* limit 100 KiB */
+
+    quota_use(&q, QUOTA_STORAGE, -1);
+    CU_ASSERT_EQUAL(q.useds[QUOTA_STORAGE], 80*1024-1);
+
+    q.useds[QUOTA_STORAGE] = 80*1024;	/* used 80 KiB */
+    quota_use(&q, QUOTA_STORAGE, -10*1024);
+    CU_ASSERT_EQUAL(q.useds[QUOTA_STORAGE], 70*1024);
+
+    q.useds[QUOTA_STORAGE] = 80*1024;	/* used 80 KiB */
+    quota_use(&q, QUOTA_STORAGE, -80*1024);
+    CU_ASSERT_EQUAL(q.useds[QUOTA_STORAGE], 0);
+
+    /* test underflow in quota_use */
+    CU_SYSLOG_MATCH("Quota underflow");
+    q.useds[QUOTA_STORAGE] = 80*1024;	/* used 80 KiB */
+    quota_use(&q, QUOTA_STORAGE, -1000*1024);
+    CU_ASSERT_EQUAL(q.useds[QUOTA_STORAGE], 0);	/* clamped */
+    CU_ASSERT_SYSLOG(/*all*/0, 1);		/* whined */
+}
+
+static void test_update_useds(void)
+{
+    struct quota q;
+    struct quota q2;
+    struct txn *txn = NULL;
+    int res;
+    quota_t quota_diff[QUOTA_NUMRESOURCES];
+    int r;
+
+    memset(&q, 0, sizeof(q));
+    q.root = QUOTAROOT;
+    memset(quota_diff, 0, sizeof(quota_diff));
+
+    /* updating a NULL or empty or non-existant root returns the error */
+    quota_diff[QUOTA_STORAGE] = 10*1024;
+    quota_diff[QUOTA_MESSAGE] = 2;
+    quota_diff[QUOTA_ANNOTSTORAGE] = 1*1024;
+    r = quota_update_useds(NULL, quota_diff, 0);
+    CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
+
+    r = quota_update_useds("", quota_diff, 0);
+    CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
+
+    r = quota_update_useds(QUOTAROOT_NONEXISTANT, quota_diff, 0);
+    CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
+
+    /* set limits */
+    q.limits[QUOTA_STORAGE] = 100;  /* limit storage to 100 KiB */
+    q.limits[QUOTA_MESSAGE] = 20;  /* limit messages to 20 */
+    q.limits[QUOTA_ANNOTSTORAGE] = 10;  /* limit annotations storage to 10 KiB */
+    r = quota_write(&q, &txn);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_PTR_NOT_NULL(txn);
+    quota_commit(&txn);
+    CU_ASSERT_PTR_NULL(txn);
+
+#define TESTCASE(d0, d1, d2, e0, e1, e2) { \
+    static const quota_t diff[QUOTA_NUMRESOURCES] = { d0, d1, d2 }; \
+    static const quota_t expused[QUOTA_NUMRESOURCES] = { e0, e1, e2 }; \
+    r = quota_update_useds(QUOTAROOT, diff, 0); \
+    CU_ASSERT_EQUAL(r, 0); \
+    memset(&q2, 0, sizeof(q2)); \
+    q2.root = QUOTAROOT; \
+    r = quota_read(&q2, NULL, 0); \
+    CU_ASSERT_EQUAL(r, 0); \
+    for (res = 0; res < QUOTA_NUMRESOURCES; res++) { \
+        CU_ASSERT_EQUAL(q2.useds[res], expused[res]); \
+        CU_ASSERT_EQUAL(q2.limits[res], q.limits[res]) \
+    } \
+}
+
+    /* updating a root which has a record, succeeds */
+    TESTCASE(10*1024, 2, 1*1024,
+	     10*1024, 2, 1*1024);
+
+    /* updating some more adds to the used value */
+    TESTCASE(80*1024, 16, 8*1024,
+	     90*1024, 18, 9*1024);
+
+    /* updating with a zero diff does not change the used value */
+    TESTCASE(0, 0, 0,
+	     90*1024, 18, 9*1024);
+
+    /* quota_update_useds() does not enforce the limit */
+    TESTCASE(20*1024, 4, 2*1024,
+	     110*1024,		/* used 110 KiB limit 100 KiB */
+	     22,		/* used 22 limit 20 */
+	     11*1024);		/* used 11 KiB limit 10 KiB */
+
+    /* updating with a negative value */
+    TESTCASE(-70*1024, -14, -7*1024,
+	     40*1024, 8, 4*1024);
+
+    /* underflow is prevented */
+    TESTCASE(-50*1024, -10, -5*1024,
+	     0, 0, 0);
+
+#undef TESTCASE
+}
+
+static void test_delete(void)
+{
+    struct quota q;
+    struct quota q2;
+    struct txn *txn = NULL;
+    int r;
+
+    /* first, deleteroot() behaviour with nothing in the db */
+    r = quota_deleteroot(NULL);
+    CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
+
+    r = quota_deleteroot("");
+    CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
+
+    r = quota_deleteroot(QUOTAROOT_NONEXISTANT);
+    CU_ASSERT_EQUAL(r, 0);
+
+    r = quota_deleteroot(QUOTAROOT);
+    CU_ASSERT_EQUAL(r, 0);
+
+
+    /* add a record to the db and check it's there */
+    memset(&q, 0, sizeof(q));
+    q.root = QUOTAROOT;
+    q.useds[QUOTA_STORAGE] = 12345;
+    q.limits[QUOTA_STORAGE] = 678;
+
+    r = quota_write(&q, &txn);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_PTR_NOT_NULL(txn);
+
+    quota_commit(&txn);
+    CU_ASSERT_PTR_NULL(txn);
+
+    memset(&q2, 0, sizeof(q2));
+    q2.root = QUOTAROOT;
+    r = quota_read(&q2, NULL, 0);
+    CU_ASSERT_EQUAL(r, 0);
+    CU_ASSERT_EQUAL(q2.useds[QUOTA_STORAGE], q.useds[QUOTA_STORAGE]);
+    CU_ASSERT_EQUAL(q2.limits[QUOTA_STORAGE], q.limits[QUOTA_STORAGE]);
+
+    /* check behaviour with a record in the db */
+    r = quota_deleteroot(NULL);
+    CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
+
+    r = quota_deleteroot("");
+    CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
+
+    r = quota_deleteroot(QUOTAROOT_NONEXISTANT);
+    CU_ASSERT_EQUAL(r, 0);
+
+    r = quota_deleteroot(QUOTAROOT);
+    CU_ASSERT_EQUAL(r, 0);
+
+    /* record should now be gone */
+    memset(&q2, 0, sizeof(q2));
+    q2.root = QUOTAROOT;
+    r = quota_read(&q2, NULL, 0);
+    CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
+}
+
+static void count_cb(const char *key __attribute__((unused)),
+		     void *data __attribute__((unused)),
+		     void *rock)
+{
+    unsigned int *np = (unsigned int *)rock;
+    (*np)++;
+}
+
+static unsigned int hash_count(hash_table *ht)
+{
+    unsigned int n = 0;
+    hash_enumerate(ht, count_cb, &n);
+    return n;
+}
+
+static const char *nth_quotaroot(unsigned int n)
+{
+    static char buf[100];
+    static const char * const ones[10] = {
+	".around", ".defend", ".failure", ".develop", ".nader",
+	".fuels", ".mixtec", ".bunting", ".energy", ".orlons" };
+    static const char * const tens[10] = {
+	"", ".blob", ".flakier", ".freda", ".garbs",
+	".debug", ".ava", ".dumbing", ".addend", ".apaches" };
+    static const char * const hundreds[10] = {
+	"", ".volcker", ".genies", ".spiro", ".alone",
+	".drawer", ".eighth", ".micheal", ".coheres", ".garrick" };
+    static const char * const thousands[10] = {
+	"", ".epilogs", ".cue", ".cahoots", ".decking",
+	".gypsum", ".gratis", ".dimple", ".pedro", ".fading" };
+
+    snprintf(buf, sizeof(buf), "user%s%s%s%s",
+	     thousands[(n / 1000) % 10],
+	     hundreds[(n / 100) % 10],
+	     tens[(n / 10) % 10],
+	     ones[n % 10]);
+    return buf;
+}
+
+static quota_t nth_used(unsigned int n)
+{
+    quota_t u = n;
+
+    if (n % 7 == 0)
+	u *= 1023;
+    else if (n % 17 == 0)
+	u |= (u << 53);
+    return u;
+}
+
+static int nth_limit(unsigned int n)
+{
+    return n * 1024 * 1023;
+}
+
+static int found_cb(struct quota *q, void *rock)
+{
+    hash_table *exphash = (hash_table *)rock;
+    struct quota *expected = hash_lookup(q->root, exphash);
+
+    CU_ASSERT_PTR_NOT_NULL(expected);
+    CU_ASSERT_STRING_EQUAL(q->root, expected->root);
+    CU_ASSERT_EQUAL(q->useds[QUOTA_STORAGE],
+		    expected->useds[QUOTA_STORAGE]);
+    CU_ASSERT_EQUAL(q->limits[QUOTA_STORAGE],
+		    expected->limits[QUOTA_STORAGE]);
+
+    hash_del(q->root, exphash);
+    return 0;
+}
+
+#define FOREACH_PRECONDITION(condition, expcount) \
+{ \
+    unsigned int nsubset = 0; \
+    unsigned int i; \
+    for (i = 0 ; i <= MAXN ; i++) { \
+	if ((condition)) { \
+	    hash_insert(expected[i].root, &expected[i], &exphash); \
+	    nsubset++; \
+	} \
+    } \
+    CU_ASSERT_EQUAL(nsubset, expcount); \
+    CU_ASSERT_EQUAL(hash_count(&exphash), nsubset); \
+}
+
+#define FOREACH_POSTCONDITION() \
+    CU_ASSERT_EQUAL(r, 0); \
+    CU_ASSERT_EQUAL(hash_count(&exphash), 0);
+
+#define FOREACH_TEST(prefix, condition, expcount) \
+    FOREACH_PRECONDITION(condition, expcount); \
+    r = quota_foreach(prefix, found_cb, &exphash, NULL); \
+    FOREACH_POSTCONDITION()
+
+static void notest_foreach(void)
+{
+    struct quota q;
+    struct quota q2;
+    struct txn *txn = NULL;
+    unsigned int n;
+    struct quota *expected;
+    hash_table exphash = HASH_TABLE_INITIALIZER;
+#define MAXN	4095
+    int r;
+
+    expected = (struct quota *)xzmalloc((MAXN+1) * sizeof(struct quota));
+    for (n = 0 ; n <= MAXN ; n++) {
+	expected[n].root = xstrdup(nth_quotaroot(n));
+	expected[n].useds[QUOTA_STORAGE] = nth_used(n);
+	expected[n].limits[QUOTA_STORAGE] = nth_limit(n);
+    }
+    construct_hash_table(&exphash, (MAXN+1)*4, 0);
+
+    /* add records to the db */
+    for (n = 0 ; n <= MAXN ; n++)
+    {
+	q = expected[n];
+	r = quota_write(&q, &txn);
+	CU_ASSERT_EQUAL(r, 0);
+	CU_ASSERT_PTR_NOT_NULL(txn);
+    }
+
+    quota_commit(&txn);
+    CU_ASSERT_PTR_NULL(txn);
+
+    /* check the records all made it */
+    for (n = 0 ; n <= MAXN ; n++)
+    {
+	memset(&q2, 0, sizeof(q2));
+	q2.root = nth_quotaroot(n);
+	r = quota_read(&q2, NULL, 0);
+	CU_ASSERT_EQUAL(r, 0);
+	CU_ASSERT_EQUAL(q2.useds[QUOTA_STORAGE],
+			expected[n].useds[QUOTA_STORAGE]);
+	CU_ASSERT_EQUAL(q2.limits[QUOTA_STORAGE],
+			expected[n].limits[QUOTA_STORAGE]);
+    }
+
+    /* prefix=NULL: iterate all the records */
+    FOREACH_TEST(NULL, 1, MAXN+1);
+
+    /* prefix="": iterate all the records */
+    FOREACH_TEST("", 1, MAXN+1);
+
+    /* prefix=a common prefix: iterate all the records */
+    FOREACH_TEST("user.", 1, MAXN+1);
+
+    /* prefix=an uncommon prefix: iterate some of the records */
+    FOREACH_TEST("user.epilogs", i / 1000 == 1, 1000);
+
+    /* delete records one by one, checking that foreach
+     * walks over the expected number at each point */
+    for (n = 0 ; n <= MAXN ; n++) {
+	r = quota_deleteroot(nth_quotaroot(n));
+	CU_ASSERT_EQUAL(r, 0);
+
+	if (n && n % 301 == 0) {
+	    FOREACH_TEST("user.", i > n, MAXN-n);
+	}
+    }
+
+    free_hash_table(&exphash, NULL);
+    for (n = 0 ; n <= MAXN ; n++)
+	free((char *)expected[n].root);
+    free(expected);
+#undef MAXN
+}
+
+/*
+ * TODO: should test for quota_foreach() iteration order,
+ *  with and without IMAPOPT_IMPROVED_MBOXLIST_SORT set.
+ *  There is code that depends on it, e.g. for quota -f.
+ */
+
+
+/* Note that quota_findroot() returns 0 (not found)
+ * or 1 (found) and never an error code. */
+#define TESTCASE(in, exp) \
+{ \
+    const char *expected = (exp); \
+    int r; \
+    char res[1024]; \
+    r = quota_findroot(res, sizeof(res), (in)); \
+    if (expected) { \
+	CU_ASSERT_EQUAL(r, 1); \
+	CU_ASSERT_STRING_EQUAL(res, expected); \
+    } \
+    else { \
+	CU_ASSERT_EQUAL(r, 0); \
+	/* contents of res[] not defined */ \
+    } \
+}
+
+static void test_findroot(void)
+{
+    struct quota q;
+    struct txn *txn = NULL;
+    int r;
+
+    memset(&q, 0, sizeof(q));
+    q.useds[QUOTA_STORAGE] = 123;
+    q.limits[QUOTA_STORAGE] = 456;
+
+    /*
+     * behaviour when the database is empty:
+     * there is no root to be found
+     */
+    TESTCASE("user.foo.bar.baz", NULL);
+    TESTCASE("user.foo.quux", NULL);
+    TESTCASE("user.foo", NULL);
+    TESTCASE("user.foonly", NULL);
+    TESTCASE("user.fo", NULL);
+    TESTCASE("user.smeg", NULL);
+    TESTCASE("user.smeg.fridge", NULL);
+    TESTCASE("user.farnarkle", NULL);
+
+    /* add some db entries, but not the "user." */
+    q.root = "user.foo";
+    r = quota_write(&q, &txn);
+    CU_ASSERT_EQUAL(r, 0);
+
+    q.root = "user.smeg";
+    r = quota_write(&q, &txn);
+    CU_ASSERT_EQUAL(r, 0);
+
+    CU_ASSERT_PTR_NOT_NULL(txn);
+    quota_commit(&txn);
+    CU_ASSERT_PTR_NULL(txn);
+
+    /*
+     * behaviour with these new entries
+     */
+    /* "user.foo" and its subfolders match the "user.foo" root */
+    TESTCASE("user.foo.bar.baz", "user.foo");
+    TESTCASE("user.foo.quux", "user.foo");
+    TESTCASE("user.foo", "user.foo");
+    /* "user.foonly" doesn't match "user.foo" despite the leading
+     * 8 characters being the same */
+    TESTCASE("user.foonly", NULL);
+    /* "user.fo" doesn't match "user.foo" despite the leading
+     * 7 characters being the same */
+    TESTCASE("user.fo", NULL);
+    /* "user.smeg" and its subfolders matches the "user.smeg" root */
+    TESTCASE("user.smeg", "user.smeg");
+    TESTCASE("user.smeg.fridge", "user.smeg");
+    /* no root matches at all for "user.farnarkle" */
+    TESTCASE("user.farnarkle", NULL);
+
+    /* add a catch-all "user" record */
+    q.root = "user";
+    r = quota_write(&q, &txn);
+    CU_ASSERT_EQUAL(r, 0);
+
+    CU_ASSERT_PTR_NOT_NULL(txn);
+    quota_commit(&txn);
+    CU_ASSERT_PTR_NULL(txn);
+
+    /*
+     * behaviour with these new entries
+     */
+    /* "user.foo" unchanged */
+    TESTCASE("user.foo.bar.baz", "user.foo");
+    TESTCASE("user.foo.quux", "user.foo");
+    TESTCASE("user.foo", "user.foo");
+    /* "user.foonly" matches the catch-all */
+    TESTCASE("user.foonly", "user");
+    /* "user.fo" ditto */
+    TESTCASE("user.fo", "user");
+    /* "user.smeg" unchanged */
+    TESTCASE("user.smeg", "user.smeg");
+    TESTCASE("user.smeg.fridge", "user.smeg");
+    /* "user.farnarkle" matches the catch-all */
+    TESTCASE("user.farnarkle", "user");
+}
+
+static void test_findroot_virtdomains(void)
+{
+    struct quota q;
+    struct txn *txn = NULL;
+    int r;
+
+    config_virtdomains = IMAP_ENUM_VIRTDOMAINS_ON;
+    /* this shouldn't matter, quota_findroot() doesn't use it */
+    config_defdomain = "smaak.nl";
+
+    memset(&q, 0, sizeof(q));
+    q.useds[QUOTA_STORAGE] = 123;
+    q.limits[QUOTA_STORAGE] = 456;
+
+    /*
+     * behaviour when the database is empty:
+     * there is no root to be found
+     */
+    TESTCASE("bloggs.com!user.foo.bar.baz", NULL);
+    TESTCASE("bloggs.com!user.foo.quux", NULL);
+    TESTCASE("bloggs.com!user.foo", NULL);
+    TESTCASE("fnarp.org!user.foo.bar.baz", NULL);
+    TESTCASE("fnarp.org!user.foo.quux", NULL);
+    TESTCASE("fnarp.org!user.foo", NULL);
+    TESTCASE("user.foo.bar.baz", NULL);
+    TESTCASE("user.foo.quux", NULL);
+    TESTCASE("user.foo", NULL);
+    TESTCASE("bloggs.com!user.smeg", NULL);
+    TESTCASE("bloggs.com!user.smeg.fridge", NULL);
+    TESTCASE("fnarp.org!user.smeg", NULL);
+    TESTCASE("fnarp.org!user.smeg.fridge", NULL);
+    TESTCASE("user.smeg", NULL);
+    TESTCASE("user.smeg.fridge", NULL);
+    TESTCASE("bloggs.com!user.farnarkle", NULL);
+    TESTCASE("fnarp.org!user.farnarkle", NULL);
+    TESTCASE("user.farnarkle", NULL);
+
+    /* add some db entries for bloggs.com, but not fnarp.org,
+     * not the default domain, and not the "user." */
+    q.root = "bloggs.com!user.foo";
+    r = quota_write(&q, &txn);
+    CU_ASSERT_EQUAL(r, 0);
+
+    q.root = "bloggs.com!user.smeg";
+    r = quota_write(&q, &txn);
+    CU_ASSERT_EQUAL(r, 0);
+
+    CU_ASSERT_PTR_NOT_NULL(txn);
+    quota_commit(&txn);
+    CU_ASSERT_PTR_NULL(txn);
+
+    /*
+     * behaviour with these new entries
+     */
+    /* foo@bloggs.com's home and its subfolders match
+     * the "bloggs.com!user.foo" root */
+    TESTCASE("bloggs.com!user.foo.bar.baz", "bloggs.com!user.foo");
+    TESTCASE("bloggs.com!user.foo.quux", "bloggs.com!user.foo");
+    TESTCASE("bloggs.com!user.foo", "bloggs.com!user.foo");
+    /* foo@fnarp.org's home and its subfolders don't match anything */
+    TESTCASE("fnarp.org!user.foo.bar.baz", NULL);
+    TESTCASE("fnarp.org!user.foo.quux", NULL);
+    TESTCASE("fnarp.org!user.foo", NULL);
+    /* foo's home and its subfolders don't match anything */
+    TESTCASE("user.foo.bar.baz", NULL);
+    TESTCASE("user.foo.quux", NULL);
+    TESTCASE("user.foo", NULL);
+    /* smeg@bloggs.com's home and its subfolders match
+     * the "bloggs.com!user.smeg" root */
+    TESTCASE("bloggs.com!user.smeg", "bloggs.com!user.smeg");
+    TESTCASE("bloggs.com!user.smeg.fridge", "bloggs.com!user.smeg");
+    /* smeg@fnarp.org's home and its subfolders don't match anything */
+    TESTCASE("fnarp.org!user.smeg", NULL);
+    TESTCASE("fnarp.org!user.smeg.fridge", NULL);
+    /* smeg's home and its subfolders don't match anything */
+    TESTCASE("user.smeg", NULL);
+    TESTCASE("user.smeg.fridge", NULL);
+    /* no root matches at all for "user.farnarkle" in any domain */
+    TESTCASE("bloggs.com!user.farnarkle", NULL);
+    TESTCASE("fnarp.org!user.farnarkle", NULL);
+    TESTCASE("user.farnarkle", NULL);
+
+    /* add a catch-all "bloggs.com" record */
+    q.root = "bloggs.com!";
+    r = quota_write(&q, &txn);
+    CU_ASSERT_EQUAL(r, 0);
+
+    CU_ASSERT_PTR_NOT_NULL(txn);
+    quota_commit(&txn);
+    CU_ASSERT_PTR_NULL(txn);
+
+    /*
+     * behaviour with these new entries
+     */
+    /* foo@bloggs.com unchanged */
+    TESTCASE("bloggs.com!user.foo.bar.baz", "bloggs.com!user.foo");
+    TESTCASE("bloggs.com!user.foo.quux", "bloggs.com!user.foo");
+    TESTCASE("bloggs.com!user.foo", "bloggs.com!user.foo");
+    /* foo@fnarp.org's unchanged */
+    TESTCASE("fnarp.org!user.foo.bar.baz", NULL);
+    TESTCASE("fnarp.org!user.foo.quux", NULL);
+    TESTCASE("fnarp.org!user.foo", NULL);
+    /* foo unchanged */
+    TESTCASE("user.foo.bar.baz", NULL);
+    TESTCASE("user.foo.quux", NULL);
+    TESTCASE("user.foo", NULL);
+    /* smeg@bloggs.com unchanged */
+    TESTCASE("bloggs.com!user.smeg", "bloggs.com!user.smeg");
+    TESTCASE("bloggs.com!user.smeg.fridge", "bloggs.com!user.smeg");
+    /* smeg@fnarp.org unchanged */
+    TESTCASE("fnarp.org!user.smeg", NULL);
+    TESTCASE("fnarp.org!user.smeg.fridge", NULL);
+    /* smeg unchanged */
+    TESTCASE("user.smeg", NULL);
+    TESTCASE("user.smeg.fridge", NULL);
+    /* farnarkle@bloggs.com matches the bloggs.com catch-all */
+    TESTCASE("bloggs.com!user.farnarkle", "bloggs.com!");
+    /* farnarkle at other domains unchanged */
+    TESTCASE("fnarp.org!user.farnarkle", NULL);
+    TESTCASE("user.farnarkle", NULL);
+
+    /* add a catch-all "fnarp.org!user" record */
+    q.root = "fnarp.org!user";
+    r = quota_write(&q, &txn);
+    CU_ASSERT_EQUAL(r, 0);
+
+    CU_ASSERT_PTR_NOT_NULL(txn);
+    quota_commit(&txn);
+    CU_ASSERT_PTR_NULL(txn);
+
+    /*
+     * behaviour with these new entries
+     */
+    /* foo@bloggs.com unchanged */
+    TESTCASE("bloggs.com!user.foo.bar.baz", "bloggs.com!user.foo");
+    TESTCASE("bloggs.com!user.foo.quux", "bloggs.com!user.foo");
+    TESTCASE("bloggs.com!user.foo", "bloggs.com!user.foo");
+    /* foo@fnarp.org's matches the fnarp.org catch-all */
+    TESTCASE("fnarp.org!user.foo.bar.baz", "fnarp.org!user");
+    TESTCASE("fnarp.org!user.foo.quux", "fnarp.org!user");
+    TESTCASE("fnarp.org!user.foo", "fnarp.org!user");
+    /* foo unchanged */
+    TESTCASE("user.foo.bar.baz", NULL);
+    TESTCASE("user.foo.quux", NULL);
+    TESTCASE("user.foo", NULL);
+    /* smeg@bloggs.com unchanged */
+    TESTCASE("bloggs.com!user.smeg", "bloggs.com!user.smeg");
+    TESTCASE("bloggs.com!user.smeg.fridge", "bloggs.com!user.smeg");
+    /* smeg@fnarp.org matches the fnarp.org catch-all */
+    TESTCASE("fnarp.org!user.smeg", "fnarp.org!user");
+    TESTCASE("fnarp.org!user.smeg.fridge", "fnarp.org!user");
+    /* smeg unchanged */
+    TESTCASE("user.smeg", NULL);
+    TESTCASE("user.smeg.fridge", NULL);
+    /* farnarkle@bloggs.com matches the bloggs.com catch-all */
+    TESTCASE("bloggs.com!user.farnarkle", "bloggs.com!");
+    /* farnarkle@fnarp.org matches the fnarp.org catch-all */
+    TESTCASE("fnarp.org!user.farnarkle", "fnarp.org!user");
+    /* farnarkle in the default domain unchanged */
+    TESTCASE("user.farnarkle", NULL);
+}
+
+
+static void config_read_string(const char *s)
+{
+    char *fname = xstrdup("/tmp/cyrus-cunit-configXXXXXX");
+    int fd = mkstemp(fname);
+    retry_write(fd, s, strlen(s));
+    config_reset();
+    config_read(fname);
+    unlink(fname);
+    free(fname);
+    close(fd);
+}
+
+static int set_up(void)
+{
+    int r;
+    const char * const *d;
+    static const char * const dirs[] = {
+	DBDIR,
+	DBDIR"/db",
+	NULL
+    };
+
+    r = system("rm -rf " DBDIR);
+    if (r)
+	return r;
+
+    for (d = dirs ; *d ; d++) {
+	r = mkdir(*d, 0777);
+	if (r < 0) {
+	    int e = errno;
+	    perror(*d);
+	    return e;
+	}
+    }
+
+    libcyrus_config_setstring(CYRUSOPT_CONFIG_DIR, DBDIR);
+    config_read_string(
+	"configdirectory: "DBDIR"/conf\n"
+    );
+
+    cyrusdb_init();
+    config_quota_db = "skiplist";
+
+    quotadb_init(0);
+    quotadb_open(NULL);
+
+    return 0;
+}
+
+static int tear_down(void)
+{
+    int r;
+
+    quotadb_close();
+    quotadb_done();
+    cyrusdb_done();
+    config_quota_db = NULL;
+    config_reset();
+
+    r = system("rm -rf " DBDIR);
+    /* I'm ignoring you */
+
+    return 0;
+}
+/* vim: set ft=c: */

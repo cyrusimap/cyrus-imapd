@@ -1,0 +1,243 @@
+#include "config.h"
+#include "cunit/cunit.h"
+#include <sys/stat.h>
+#include "xmalloc.h"
+#include "prot.h"
+#include "imap/global.h"
+
+
+#define PROLOG \
+    char *_fname = xstrdup("/tmp/cyrus-protXXXXXX"); \
+    int _fd = mkstemp(_fname)
+#define BEGIN \
+    { \
+	int r = ftruncate(_fd, 0); \
+	CU_ASSERT_EQUAL_FATAL(r, 0); \
+	lseek(_fd, (off_t)0, SEEK_SET); \
+    }
+#define END(b, n) \
+    { \
+	struct stat _sb; \
+	lseek(_fd, (off_t)0, SEEK_SET); \
+	if (fstat(_fd, &_sb) < 0) CU_FAIL_FATAL("fstat"); \
+	(n) = read(_fd, (b), _sb.st_size); \
+	if ((n) < _sb.st_size) CU_FAIL_FATAL("short read"); \
+	if ((n) >= 0) (b)[(n)] = '\0'; \
+    }
+#define EPILOG \
+    unlink(_fname); \
+    free(_fname); \
+    close(_fd)
+
+static void test_printstring(void)
+{
+    PROLOG;
+    struct protstream *p;
+    int len;
+    struct buf b = BUF_INITIALIZER;
+    int i;
+    char str[2600];
+
+    p = prot_new(_fd, 1);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(p);
+
+    /* NULL string */
+    BEGIN;
+    prot_printstring(p, NULL);
+    prot_flush(p);
+    END(str, len);
+    CU_ASSERT_EQUAL(len, 3);
+    CU_ASSERT_STRING_EQUAL(str, "NIL");
+
+    /* Zero length string */
+    BEGIN;
+    prot_printstring(p, "");
+    prot_flush(p);
+    END(str, len);
+    CU_ASSERT_EQUAL(len, 2);
+    CU_ASSERT_STRING_EQUAL(str, "\"\"");
+
+    /* Boring string */
+    BEGIN;
+    prot_printstring(p, "Hello");
+    prot_flush(p);
+    END(str, len);
+    CU_ASSERT_EQUAL(len, 7);
+    CU_ASSERT_STRING_EQUAL(str, "\"Hello\"");
+
+    /* String with non-dangerous whitespace */
+    BEGIN;
+    prot_printstring(p, "Hello World\tagain");
+    prot_flush(p);
+    END(str, len);
+    CU_ASSERT_EQUAL(len, 19);
+    CU_ASSERT_STRING_EQUAL(str, "\"Hello World\tagain\"");
+
+    /* String with dangerous whitespace */
+    BEGIN;
+    prot_printstring(p, "Good\rBye\nEarth");
+    prot_flush(p);
+    END(str, len);
+    CU_ASSERT_EQUAL(len, 20);
+    CU_ASSERT_STRING_EQUAL(str, "{14}\r\nGood\rBye\nEarth");
+
+    /* String with embedded dquote */
+    BEGIN;
+    prot_printstring(p, "Quot\"able");
+    prot_flush(p);
+    END(str, len);
+    CU_ASSERT_EQUAL(len, 14);
+    CU_ASSERT_STRING_EQUAL(str, "{9}\r\nQuot\"able");
+
+    /* String with embedded percent */
+    BEGIN;
+    prot_printstring(p, "per%ent");
+    prot_flush(p);
+    END(str, len);
+    CU_ASSERT_EQUAL(len, 12);
+    CU_ASSERT(!strcmp(str, "{7}\r\nper%ent"));
+
+    /* String with embedded backslash */
+    BEGIN;
+    prot_printstring(p, "slash\\dot");
+    prot_flush(p);
+    END(str, len);
+    CU_ASSERT_EQUAL(len, 14);
+    CU_ASSERT_STRING_EQUAL(str, "{9}\r\nslash\\dot");
+
+    /* String with embedded 8-bit chars */
+    BEGIN;
+    prot_printstring(p, "Hi I'm \330l\345f");
+    prot_flush(p);
+    END(str, len);
+    CU_ASSERT_EQUAL(len, 17);
+    CU_ASSERT_STRING_EQUAL(str, "{11}\r\nHi I'm \330l\345f");
+
+    /* Boring but overly long string */
+    for (i = 0 ; i<500 ; i++)
+	buf_appendcstr(&b, "blah ");
+    buf_cstring(&b);
+    BEGIN;
+    prot_printstring(p, b.s);
+    prot_flush(p);
+    END(str, len);
+    CU_ASSERT_EQUAL(len, b.len+8);
+    CU_ASSERT_STRING_EQUAL(str+8, b.s);
+    str[8] = '\0';
+    CU_ASSERT_STRING_EQUAL(str, "{2500}\r\n");
+
+    buf_free(&b);
+    prot_free(p);
+    EPILOG;
+}
+
+static void test_printmap(void)
+{
+    PROLOG;
+    struct protstream *p;
+    int len;
+    struct buf b = BUF_INITIALIZER;
+    int i;
+    char str[2600];
+
+    p = prot_new(_fd, 1);
+    CU_ASSERT_PTR_NOT_NULL_FATAL(p);
+
+    /* NULL string */
+    BEGIN;
+    prot_printmap(p, NULL, 0);
+    prot_flush(p);
+    END(str, len);
+    CU_ASSERT_EQUAL(len, 3);
+    CU_ASSERT_STRING_EQUAL(str, "NIL");
+
+    /* Zero length string */
+    BEGIN;
+    prot_printmap(p, "", 0);
+    prot_flush(p);
+    END(str, len);
+    CU_ASSERT_EQUAL(len, 2);
+    CU_ASSERT_STRING_EQUAL(str, "\"\"");
+
+    /* Boring string */
+    BEGIN;
+    prot_printmap(p, "Hello", 5);
+    prot_flush(p);
+    END(str, len);
+    CU_ASSERT_EQUAL(len, 7);
+    CU_ASSERT_STRING_EQUAL(str, "\"Hello\"");
+
+    /* Boring string with short length */
+    BEGIN;
+    prot_printmap(p, "Hello", 3);
+    prot_flush(p);
+    END(str, len);
+    CU_ASSERT_EQUAL(len, 5);
+    CU_ASSERT_STRING_EQUAL(str, "\"Hel\"");
+
+    /* String with non-dangerous whitespace */
+    BEGIN;
+    prot_printmap(p, "Hello World\tagain", 17);
+    prot_flush(p);
+    END(str, len);
+    CU_ASSERT_EQUAL(len, 19);
+    CU_ASSERT_STRING_EQUAL(str, "\"Hello World\tagain\"");
+
+    /* String with dangerous whitespace */
+    BEGIN;
+    prot_printmap(p, "Good\rBye\nEarth", 14);
+    prot_flush(p);
+    END(str, len);
+    CU_ASSERT_EQUAL(len, 20);
+    CU_ASSERT_STRING_EQUAL(str, "{14}\r\nGood\rBye\nEarth");
+
+    /* String with embedded dquote */
+    BEGIN;
+    prot_printmap(p, "Quot\"able", 9);
+    prot_flush(p);
+    END(str, len);
+    CU_ASSERT_EQUAL(len, 14);
+    CU_ASSERT_STRING_EQUAL(str, "{9}\r\nQuot\"able");
+
+    /* String with embedded percent */
+    BEGIN;
+    prot_printmap(p, "per%ent", 7);
+    prot_flush(p);
+    END(str, len);
+    CU_ASSERT_EQUAL(len, 12);
+    CU_ASSERT(!strcmp(str, "{7}\r\nper%ent"));
+
+    /* String with embedded backslash */
+    BEGIN;
+    prot_printmap(p, "slash\\dot", 9);
+    prot_flush(p);
+    END(str, len);
+    CU_ASSERT_EQUAL(len, 14);
+    CU_ASSERT_STRING_EQUAL(str, "{9}\r\nslash\\dot");
+
+    /* String with embedded 8-bit chars */
+    BEGIN;
+    prot_printmap(p, "Hi I'm \330l\345f", 11);
+    prot_flush(p);
+    END(str, len);
+    CU_ASSERT_EQUAL(len, 17);
+    CU_ASSERT_STRING_EQUAL(str, "{11}\r\nHi I'm \330l\345f");
+
+    /* Boring but overly long string */
+    for (i = 0 ; i<500 ; i++)
+	buf_appendcstr(&b, "blah ");
+    buf_cstring(&b);
+    BEGIN;
+    prot_printmap(p, b.s, b.len);
+    prot_flush(p);
+    END(str, len);
+    CU_ASSERT_EQUAL(len, b.len+8);
+    CU_ASSERT_STRING_EQUAL(str+8, b.s);
+    str[8] = '\0';
+    CU_ASSERT_STRING_EQUAL(str, "{2500}\r\n");
+
+    buf_free(&b);
+    prot_free(p);
+    EPILOG;
+}
+/* vim: set ft=c: */

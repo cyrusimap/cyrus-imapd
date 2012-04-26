@@ -52,8 +52,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "addr.h"
-#include "script.h"
+#include "sieve/addr.h"
+#include "sieve/script.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 
@@ -71,6 +71,7 @@ extern int yylex(void);
 
 %token ATOM QTEXT DTEXT
 %name-prefix="addr"
+%defines
 %%
 sieve_address: addrspec			/* simple address */
 	| phrase '<' addrspec '>'	/* name & addr-spec */

@@ -45,7 +45,7 @@
  * $Id: addr-lex.l,v 1.12 2010/01/06 17:01:58 murch Exp $
  */
 
-#include "addr.h"
+#include "sieve/addr.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -61,7 +61,7 @@ static int ncom;	/* number of open comments */
 %option noyywrap
 %option nounput
 %option noinput
-%option prefix="addr"
+%option prefix="addr" outfile="lex.yy.c"
 
 %x QSTRING DOMAINLIT COMMENT
 

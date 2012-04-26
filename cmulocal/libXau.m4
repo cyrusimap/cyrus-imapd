@@ -57,17 +57,17 @@ AC_DEFUN([CMU_XAU], [
 AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
 AC_REQUIRE([CMU_SOCKETS])
 AC_ARG_WITH(Xau,
-	[  --with-Xau=PREFIX      Compile with Xau support],
+	[AS_HELP_STRING([--with-Xau=PREFIX], [Compile with Xau support])],
 	[if test "X$with_Xau" = "X"; then
 		with_Xau=yes
 	fi])
 AC_ARG_WITH(Xau-lib,
-	[  --with-Xau-lib=dir     use Xau libraries in dir],
+	[AS_HELP_STRING([--with-Xau-lib=DIR], [use Xau libraries in DIR])],
 	[if test "$withval" = "yes" -o "$withval" = "no"; then
 		AC_MSG_ERROR([No argument for --with-Xau-lib])
 	fi])
 AC_ARG_WITH(Xau-include,
-	[  --with-Xau-include=dir use Xau headers in dir],
+	[AS_HELP_STRING([--with-Xau-include=DIR], [use Xau headers in DIR])],
 	[if test "$withval" = "yes" -o "$withval" = "no"; then
 		AC_MSG_ERROR([No argument for --with-Xau-include])
 	fi])

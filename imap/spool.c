@@ -57,8 +57,8 @@
 #include "util.h"
 #include "xmalloc.h"
 #include "exitcodes.h"
-#include "imap_err.h"
-#include "nntp_err.h"
+#include "imap/imap_err.h"
+#include "imap/nntp_err.h"
 #include "global.h"
 #include "strarray.h"
 

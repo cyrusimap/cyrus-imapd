@@ -61,17 +61,17 @@ AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
 AC_REQUIRE([CMU_SOCKETS])
 AC_REQUIRE([CMU_KRB4])
 AC_ARG_WITH(zephyr,
-        [  --with-zephyr=PREFIX      Compile with Zephyr support],
+        [AS_HELP_STRING([--with-zephyr=PREFIX],[Compile with Zephyr support])],
         [if test "X$with_zephyr" = "X"; then
                 with_zephyr=yes
         fi])
 AC_ARG_WITH(zephyr-lib,
-        [  --with-zephyr-lib=dir     use zephyr libraries in dir],
+        [AS_HELP_STRING([--with-zephyr-lib=DIR], [use zephyr libraries in DIR])],
         [if test "$withval" = "yes" -o "$withval" = "no"; then
                 AC_MSG_ERROR([No argument for --with-zephyr-lib])
         fi])
 AC_ARG_WITH(zephyr-include,
-        [  --with-zephyr-include=dir use zephyr headers in dir],
+        [AS_HELP_STRING([--with-zephyr-include=DIR], [use zephyr headers in DIR])],
         [if test "$withval" = "yes" -o "$withval" = "no"; then
                 AC_MSG_ERROR([No argument for --with-zephyr-include])
         fi])

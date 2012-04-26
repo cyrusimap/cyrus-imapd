@@ -48,7 +48,7 @@
 
 #include "auth_pts.h"
 #include "cyrusdb.h"
-#include "global.h"
+#include "imap/global.h"
 #include "libconfig.h"
 
 int config_need_data = 0;

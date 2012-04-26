@@ -54,7 +54,7 @@
 
 #include "comparator.h"
 #include "tree.h"
-#include "sieve.h"
+#include "sieve/sieve.h"
 #include "bytecode.h"
 #include "xmalloc.h"
 #include "util.h"

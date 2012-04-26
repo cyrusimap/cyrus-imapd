@@ -66,7 +66,7 @@
 #include "bytecode.h"
 #include "comparator.h"
 #include "tree.h"
-#include "sieve.h"
+#include "sieve/sieve.h"
 #include "imap/message.h"
 #include "util.h"
 #include "xmalloc.h"

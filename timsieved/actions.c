@@ -64,20 +64,20 @@
 #include <retry.h>
 
 #include "prot.h"
-#include "tls.h"
+#include "imap/tls.h"
 #include "util.h"
-#include "global.h"
+#include "imap/global.h"
 #include "libconfig.h"
 #include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
-#include "sieve_interface.h"
+#include "sieve/sieve_interface.h"
 
 #include "codes.h"
 #include "actions.h"
 #include "scripttest.h"
 
-#include "sync_log.h"
+#include "imap/sync_log.h"
 
 /* after a user has authentication, our current directory is their Sieve 
    directory! */

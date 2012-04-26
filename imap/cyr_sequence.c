@@ -67,7 +67,7 @@
 #include "auth.h"
 #include "exitcodes.h"
 #include "glob.h"
-#include "imap_err.h"
+#include "imap/imap_err.h"
 #include "global.h"
 #include "util.h"
 #include "xmalloc.h"

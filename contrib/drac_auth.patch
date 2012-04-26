@@ -64,10 +64,10 @@ imapd: Once a client is logged in (via LOGIN or AUTHENTICATE),
 
 
 
-diff --git a/configure.in b/configure.in
+diff --git a/configure.ac b/configure.ac
 index e0e8cf4..7d237c0 100644
---- a/configure.in
-+++ b/configure.in
+--- a/configure.ac
++++ b/configure.ac
 @@ -1171,6 +1171,19 @@ dnl (agentx was depricated, but SNMP_SUBDIRS is conveinent as a placeholder)
  SNMP_SUBDIRS=""
  AC_SUBST(SNMP_SUBDIRS)
@@ -92,32 +92,18 @@ diff --git a/imap/Makefile.in b/imap/Makefile.in
 index b5e139b..1f887f3 100644
 --- a/imap/Makefile.in
 +++ b/imap/Makefile.in
-@@ -66,6 +66,7 @@ SIEVE_OBJS = @SIEVE_OBJS@
- SIEVE_LIBS = @SIEVE_LIBS@
- IMAP_COM_ERR_LIBS = @IMAP_COM_ERR_LIBS@
+@@ -66,5 +66,6 @@
  LIB_WRAP = @LIB_WRAP@
 +DRAC_LIBS = @DRACLIBS@
- LIBS = $(IMAP_LIBS) $(IMAP_COM_ERR_LIBS)
- DEPLIBS = ../lib/libcyrus.a ../lib/libcyrus_min.a @DEPLIBS@
+ LIBS = $(IMAP_LIBS) @COM_ERR_LIBS@
+ DEPLIBS = ../lib/libcyrus.a ../lib/libcyrus_min.a @SYSLOG_LIBS@
  
-@@ -203,17 +204,17 @@ lmtpd.pure: lmtpd.o proxy.o $(LMTPOBJS) $(SIEVE_OBJS) \
+@@ -203,7 +204,7 @@ lmtpd.pure: lmtpd.o proxy.o $(LMTPOBJS) \
  imapd: $(IMAPDOBJS) mutex_fake.o libimap.a $(DEPLIBS) $(SERVICE)
  	$(CC) $(LDFLAGS) -o imapd \
  	 $(SERVICE) $(IMAPDOBJS) mutex_fake.o \
 -	libimap.a $(DEPLIBS) $(LIBS) $(LIB_WRAP)
 +	libimap.a $(DEPLIBS) $(LIBS) $(LIB_WRAP) $(DRAC_LIBS)
- 
- imapd.pure: $(IMAPDOBJS) mutex_fake.o libimap.a $(DEPLIBS) $(SERVICE)
- 	$(PURIFY) $(PUREOPT) $(CC) $(LDFLAGS) -o imapd.pure \
- 	 $(SERVICE) $(IMAPDOBJS) mutex_fake.o libimap.a \
--	$(DEPLIBS) $(LIBS) $(LIB_WRAP)
-+	$(DEPLIBS) $(LIBS) $(LIB_WRAP) $(DRAC_LIBS)
- 
- imapd.quant: $(IMAPDOBJS) mutex_fake.o libimap.a $(DEPLIBS) $(SERVICE)
- 	$(QUANTIFY) $(QUANTOPT) $(CC) $(LDFLAGS) -o imapd.quant \
- 	 $(SERVICE) $(IMAPDOBJS) mutex_fake.o libimap.a \
--	$(DEPLIBS) $(LIBS) $(LIB_WRAP)
-+	$(DEPLIBS) $(LIBS) $(LIB_WRAP) $(DRAC_LIBS)
  
  mupdate: mupdate.o mupdate-slave.o mupdate-client.o mutex_pthread.o tls.o \
  	libimap.a $(DEPLIBS)

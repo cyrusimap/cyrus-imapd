@@ -56,7 +56,7 @@
 #include "exitcodes.h"
 #include "global.h"
 #include "index.h"
-#include "imap_err.h"
+#include "imap/imap_err.h"
 #include "imapurl.h"
 #include "mailbox.h"
 #include "mboxlist.h"

@@ -233,7 +233,7 @@ static void get_prog(char *path, unsigned size, const strarray_t *cmd)
 	/* master lacks strlcpy, due to no libcyrus */
 	snprintf(path, size, "%s", cmd->data[0]);
     }
-    else snprintf(path, size, "%s/%s", SERVICE_PATH, cmd->data[0]);
+    else snprintf(path, size, "%s/%s", SERVICE_DIR, cmd->data[0]);
 }
 
 static void get_statsock(int filedes[2])

@@ -53,7 +53,7 @@
 #include <syslog.h>
 #include <errno.h>
 
-#include "global.h"
+#include "imap/global.h"
 #include "libconfig.h"
 #include "notify_external.h"
 

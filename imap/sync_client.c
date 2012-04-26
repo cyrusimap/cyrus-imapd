@@ -71,7 +71,7 @@
 #include "append.h"
 #include "mboxlist.h"
 #include "exitcodes.h"
-#include "imap_err.h"
+#include "imap/imap_err.h"
 #include "mailbox.h"
 #include "quota.h"
 #include "xmalloc.h"

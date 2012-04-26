@@ -48,7 +48,7 @@ AC_DEFUN([CMU_SASL_LIB_WHERE], [
 AC_DEFUN([CMU_SASL], [
 AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
 AC_ARG_WITH(sasl,
-            [  --with-sasl=DIR        Compile with libsasl in <DIR>],
+            [AS_HELP_STRING([--with-sasl=DIR], [Compile with libsasl in DIR])],
 	    with_sasl="$withval",
             with_sasl="yes")
 

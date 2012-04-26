@@ -64,7 +64,7 @@
 #include "cyr_lock.h"
 #include "global.h"
 #include "exitcodes.h"
-#include "imap_err.h"
+#include "imap/imap_err.h"
 #include "mailbox.h"
 #include "xmalloc.h"
 #include "mboxlist.h"

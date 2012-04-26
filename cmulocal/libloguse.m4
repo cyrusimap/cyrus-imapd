@@ -32,7 +32,7 @@ AC_DEFUN([CMU_LOGUSE], [
 AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
 AC_REQUIRE([CMU_SOCKETS])
 AC_ARG_WITH(loguse,
-	[  --with-loguse=PREFIX      Compile with LOGUSE support],
+	[AS_HELP_STRING([--with-loguse=PREFIX], [Compile with LOGUSE support])],
 	[if test "X$with_loguse" = "X"; then
 		with_loguse=yes
 	fi])

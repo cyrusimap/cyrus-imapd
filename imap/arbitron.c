@@ -62,7 +62,7 @@
 #include "global.h"
 #include "exitcodes.h"
 #include "hash.h"
-#include "imap_err.h"
+#include "imap/imap_err.h"
 #include "mailbox.h"
 #include "mpool.h"
 #include "mboxlist.h"

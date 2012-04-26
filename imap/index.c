@@ -62,7 +62,7 @@
 #include "charset.h"
 #include "exitcodes.h"
 #include "hash.h"
-#include "imap_err.h"
+#include "imap/imap_err.h"
 #include "global.h"
 #include "times.h"
 #include "imapd.h"

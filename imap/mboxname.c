@@ -57,7 +57,7 @@
 #include "exitcodes.h"
 #include "glob.h"
 #include "global.h"
-#include "imap_err.h"
+#include "imap/imap_err.h"
 #include "mailbox.h"
 #include "util.h"
 #include "xmalloc.h"

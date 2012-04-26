@@ -58,7 +58,7 @@ AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
 AC_REQUIRE([CMU_SOCKETS])
 AC_REQUIRE([CMU_LIBSSL])
 AC_ARG_WITH(AFS,
-	[  --with-afs=PREFIX      Compile with AFS support],
+	[AS_HELP_STRING([--with-afs=PREFIX], [Compile with AFS support])],
 	[if test "X$with_AFS" = "X"; then
 		with_AFS=yes
 	fi])

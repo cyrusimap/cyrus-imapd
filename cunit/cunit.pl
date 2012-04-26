@@ -253,11 +253,7 @@ sub suite_path_to_name($)
 sub suite_path_to_wrapper($)
 {
     my ($path) = @_;
-    my $wrap = basename($path);
-    $wrap =~ s/^/.cunit-/;
-    die "WTF?"
-	if ($wrap eq $path);
-    return $wrap;
+    return $path . "-cunit.c";
 }
 
 #
@@ -870,7 +866,7 @@ sub add_sources(@)
     foreach my $path (@args)
     {
 	die "$path: not a C source file"
-	    unless ($path =~ m/\.(c|C|cc|cxx|c\+\+)$/);
+	    unless ($path =~ m/\.(test)?(c|C|cc|cxx|c\+\+)$/);
 	project_add_suite(suite_new($path, $here));
     }
 

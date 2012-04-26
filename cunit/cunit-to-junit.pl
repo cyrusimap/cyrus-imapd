@@ -186,10 +186,14 @@ foreach my $suite (get_children($result, 'CUNIT_RUN_SUITE'))
 
 my $dir = dirname($outbase . 'foo');
 rmtree($dir) if (defined $dir && $dir ne '.');
+my $nrun = 0;
+my $nfailed = 0;
 
 foreach my $s (@suites)
 {
     my $sdoc = XML::DOM::Document->new();
+
+    $nfailed += $s->{nerrors};
 
     my $selt = $sdoc->createElement('testsuite');
     $selt->setAttribute(failures => 0);
@@ -201,6 +205,8 @@ foreach my $s (@suites)
 
     foreach my $t (@{$s->{tests}})
     {
+	$nrun++;
+
 	my $telt = $sdoc->createElement('testcase');
 	$telt->setAttribute(time => "0.001");
 	$telt->setAttribute(name => $t->{name});
@@ -218,3 +224,6 @@ foreach my $s (@suites)
     mkpath(dirname($fname));
     $sdoc->printToFile($fname);
 }
+
+print "$0: ran $nrun tests, $nfailed failed\n";
+exit(1) if ($nfailed > 0);

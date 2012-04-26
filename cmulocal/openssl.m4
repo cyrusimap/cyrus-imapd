@@ -5,7 +5,8 @@ dnl
 
 AC_DEFUN([CMU_HAVE_OPENSSL], [
 AC_REQUIRE([CMU_FIND_LIB_SUBDIR])
-AC_ARG_WITH(openssl,[  --with-openssl=PATH     use OpenSSL from PATH],
+AC_ARG_WITH(openssl,
+	[AS_HELP_STRING([--with-openssl=DIR], [use OpenSSL from DIR])],
 	with_openssl=$withval, with_openssl="yes")
 
 	save_CPPFLAGS=$CPPFLAGS

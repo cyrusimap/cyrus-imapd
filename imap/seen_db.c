@@ -67,7 +67,7 @@
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 #include "mailbox.h"
-#include "imap_err.h"
+#include "imap/imap_err.h"
 #include "statuscache.h"
 #include "seen.h"
 #include "sync_log.h"
