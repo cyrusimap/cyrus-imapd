@@ -1596,7 +1596,7 @@ static const struct prop_entry prop_entries[] =
     { "max-date-time", XML_NS_CALDAV, 0, NULL, NULL, NULL },
     { "max-instances", XML_NS_CALDAV, 0, NULL, NULL, NULL },
     { "max-attendees-per-instance", XML_NS_CALDAV, 0, NULL, NULL, NULL },
-
+#if 0
     /* CalDAV Scheduling properties */
     { "schedule-inbox-URL", XML_NS_CALDAV, 0, propfind_calurl, NULL, SCHED_INBOX },
     { "schedule-outbox-URL", XML_NS_CALDAV, 0, propfind_calurl, NULL, SCHED_OUTBOX },
@@ -1604,7 +1604,7 @@ static const struct prop_entry prop_entries[] =
       propfind_caltransp, proppatch_caltransp, NULL },
     { "calendar-user-address-set", XML_NS_CALDAV, 0, propfind_caluseraddr, NULL, NULL },
     { "calendar-user-type", XML_NS_CALDAV, 0, NULL, NULL, NULL },
-
+#endif
     /* Calendar Server properties */
     { "getctag", XML_NS_CS, 1, propfind_sync_token, NULL, NULL },
 
