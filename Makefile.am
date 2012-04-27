@@ -576,8 +576,9 @@ ptclient_ptloader_SOURCES = ptclient/ptloader.c ptclient/ptloader.h imap/mutex_f
 ptclient_ptloader_LDADD = $(ptclient_ptdump_LDADD) $(LIB_WRAP)
 ptclient_ptloader_LDFLAGS = 
 
-if USE_LDAP
+if HAVE_LDAP
 ptclient_ptloader_SOURCES += ptclient/ldap.c
+ptclient_ptloader_CPPFLAGS = $(AM_CPPFLAGS) $(LDAP_CPPFLAGS)
 ptclient_ptloader_LDADD += $(LDAP_LIBS)
 ptclient_ptloader_LDFLAGS += $(LDAP_LDFLAGS)
 endif

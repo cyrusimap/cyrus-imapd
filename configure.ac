@@ -713,45 +713,59 @@ if test "x$enable_afs" = "xyes"; then
 fi
 AM_CONDITIONAL([USE_AFSKRB], [test "$HAVE_AFSKRB" = "1"])
 
-LDAP_CPPFLAGS=""
-LDAP_LDFLAGS=""
-LDAP_LIBS=""
+have_ldap=no
+LDAP_CPPFLAGS=
+LDAP_LDFLAGS=
+LDAP_LIBS=
 
-if test "x$with_ldap" != "xno"; then
-    if test ! -d $with_ldap; then
-        with_ldap=/usr/local
+case "x$with_ldap" in
+xno)
+    # default args or --without-ldap
+    # do not try to enable
+    ;;
+xyes)
+    # --with-ldap
+    # try to enable, search in default system directories
+    ldap_cppflags=
+    ldap_ldflags=
+    ;;
+*)
+    # --with-ldap=DIR
+    # try to enable, search in given install directory
+    if test "x$with_ldap" != "x" -a -d "$with_ldap"; then
+	ldap_cppflags="-I${with_ldap}/include"
+	ldap_ldflags="-L${with_ldap}/lib"
+	with_ldap=yes
+    else
+	AC_WARN([Disabling LDAP - no include files found])
+	with_ldap=no
     fi
+esac
 
-    LDAP_CPPFLAGS="$CPPFLAGS -I${with_ldap}/include"
-    LDAP_LDFLAGS="$LDFLAGS -L${with_ldap}/lib"
-    LDAP_LIBS=""
+if test $with_ldap = yes; then
+    save_CPPFLAGS="$CPPFLAGS"
+    save_LDFLAGS="$LDFLAGS"
+    CPPFLAGS="$CPPFLAGS $ldap_cppflags"
+    LDFLAGS="$LDFLAGS $ldap_ldflags"
 
-    save_CPPFLAGS=$CPPFLAGS
-    save_LDFLAGS=$LDFLAGS
-    CPPFLAGS=$LDAP_CPPFLAGS
-    LDFLAGS=$LDAP_LDFLAGS
+    AC_CHECK_LIB(ldap, ldap_initialize, [
+	AC_DEFINE(HAVE_LDAP,[],[Should we build the LDAP pts module?])
+	LDAP_CPPFLAGS="$ldap_cppflags"
+	LDAP_LDFLAGS="$ldap_ldflags"
+	LDAP_LIBS="-lldap -llber"
+	have_ldap=yes
+    ],,-llber)
 
-    AC_CHECK_LIB(ldap, ldap_initialize, 
-        [ AC_DEFINE(HAVE_LDAP,[],[Should we build ldap pts module?])
-          LDAP_LIBS="-lldap -llber" ],,-llber)
-
-    CPPFLAGS=$save_CPPFLAGS
-    LDFLAGS=$LDAP_LDFLAGS
-
-    AC_CHECK_LIB(ldap, ldap_initialize, 
-        [ AC_DEFINE(HAVE_LDAP,[],[Should we build ldap pts module?])
-          LDAP_LIBS="-lldap -llber" ],,-llber)
-
-    CPPFLAGS=$save_CPPFLAGS
-    LDFLAGS=$save_LDFLAGS
-    AC_SUBST(LDAP_CPPFLAGS)
-    AC_SUBST(LDAP_LDFLAGS)
-    AC_SUBST(LDAP_LIBS)
+    CPPFLAGS="$save_CPPFLAGS"
+    LDFLAGS="$save_LDFLAGS"
 fi
- 
-AM_CONDITIONAL([USE_LDAP], [test "$HAVE_LDAP" = "1"])
+AC_SUBST(LDAP_CPPFLAGS)
+AC_SUBST(LDAP_LDFLAGS)
+AC_SUBST(LDAP_LIBS)
+AM_CONDITIONAL([HAVE_LDAP], [test "$have_ldap" = "yes"])
 
-AM_CONDITIONAL([PTCLIENT], [test "x$enable_afs" = "xyes" -o "x$with_ldap" != "xno"])
+
+AM_CONDITIONAL([PTCLIENT], [test "x$enable_afs" = "xyes" -o "$have_ldap" = "yes"])
 
 AC_ARG_ENABLE(server,
 	[AS_HELP_STRING([--disable-server], [disable compiling servers])])
