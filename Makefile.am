@@ -48,7 +48,7 @@ AM_LDFLAGS = $(COV_LDFLAGS)
 BUILT_SOURCES = xversion.h lib/imapopts.c
 MAINTAINERCLEANFILES = \
 	imap/imap_err.h imap/lmtpstats.h imap/mupdate_err.h imap/nntp_err.h imap/pushstats.h \
-	lib/imapopts.h \
+	lib/chartable.c lib/imapopts.h \
 	man/cyradm.1.html man/imapd.conf.5 man/sieveshell.1 man/sieveshell.1.html \
 	sieve/addr.h sieve/sieve.h sieve/sieve_err.h
 
