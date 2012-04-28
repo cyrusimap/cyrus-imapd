@@ -47,6 +47,7 @@ AM_CPPFLAGS = $(COM_ERR_CPPFLAGS) -I${top_builddir} -I${top_builddir}/lib -I${to
 AM_LDFLAGS = $(COV_LDFLAGS)
 BUILT_SOURCES = xversion.h lib/imapopts.c
 MAINTAINERCLEANFILES = \
+	doc/murder.png doc/netnews.png \
 	imap/imap_err.h imap/lmtpstats.h imap/mupdate_err.h imap/nntp_err.h imap/pushstats.h \
 	lib/chartable.c lib/imapopts.h \
 	man/cyradm.1.html man/imapd.conf.5 man/sieveshell.1 man/sieveshell.1.html \
@@ -139,6 +140,7 @@ EXTRA_DIST = COPYRIGHT README.andrew SMakefile xversion.h \
 	com_err/et/test1.et com_err/et/test2.et com_err/et/test_et.c \
 	contrib/drac_auth.patch contrib/sieve-spamasssassin contrib/fud-client.c contrib/deliver-notify-zephyr.patch contrib/add-cyrus-user contrib/README contrib/cyrus-graphtools.1.0 contrib/cyrus-graphtools.1.0/cgi-bin/cyrus_master.pl contrib/cyrus-graphtools.1.0/cgi-bin/graph_cyrus_db.pl contrib/cyrus-graphtools.1.0/cgi-bin/graph_cyrus_db-sum.pl contrib/cyrus-graphtools.1.0/html contrib/cyrus-graphtools.1.0/html/index.html contrib/cyrus-graphtools.1.0/README contrib/cyrus-graphtools.1.0/script contrib/cyrus-graphtools.1.0/script/cyrus.pl contrib/cyrus-graphtools.1.0/script/run contrib/cyrus-graphtools.1.0/script/cyrusrc contrib/notify_unix/notify contrib/notify_unix/net-server-prefork-0.01.tgz contrib/notify_unix/README contrib/notify_unix/sql_notify.pl contrib/notify_unix/simple_notify.pl contrib/squatrunner.pl contrib/mupdate-test.pl contrib/squatrunner.txt \
 	cunit/cacert.pem cunit/cert.pem cunit/cunit.pl cunit/cunit-to-junit.pl cunit/key.pem cunit/vg.supp \
+	doc/murder.fig doc/netnews.fig \
 	lib/charset/aliases.txt lib/charset/big5.t \
 	lib/charset/gb2312.t lib/charset/iso-2022-jp.t \
 	lib/charset/iso-2022-kr.t lib/charset/iso-8859-10.t \
@@ -700,9 +702,6 @@ dist-hook: doc/text/htmlstrip man/cyradm.1.html man/sieveshell.1.html
 	done
 	rm -f doc/groff-html-*.png
 
-	fig2dev -L png doc/murder.fig doc/murder.png
-	fig2dev -L png doc/netnews.fig doc/netnews.png
-
 	for file in $(top_srcdir)/doc/*.html; \
 	do \
 		echo "=== $$file ==="; \
@@ -734,6 +733,11 @@ install-exec-hook:
 	  $(LN_S) -f imtest sivtest && \
 	  $(LN_S) -f imtest smpttest && \
 	  $(LN_S) -f imtest synctest
+
+SUFFIXES = .fig.png
+
+.fig.png:
+	fig2dev -L png $< $@
 
 valgrind:
 	$(MAKE) VG=yes check
