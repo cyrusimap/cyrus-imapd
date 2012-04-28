@@ -54,7 +54,6 @@ MAINTAINERCLEANFILES = \
 
 SUBDIRS = .
 DIST_SUBDIRS = .
-dist_doc_DATA = README README.andrew
 dist_sysconf_DATA =
 check_LIBRARIES =
 noinst_LIBRARIES =
@@ -135,8 +134,8 @@ service_PROGRAMS += timsieved/timsieved
 endif
 endif
 
-EXTRA_DIST = xversion.h SMakefile COPYRIGHT \
-	com_err/et/com_err com_err/et/et_c.awk com_err/et/et_h.awk \
+EXTRA_DIST = COPYRIGHT README.andrew SMakefile xversion.h \
+	com_err/et/et_c.awk com_err/et/et_h.awk \
 	com_err/et/test1.et com_err/et/test2.et com_err/et/test_et.c \
 	contrib/drac_auth.patch contrib/sieve-spamasssassin contrib/fud-client.c contrib/deliver-notify-zephyr.patch contrib/add-cyrus-user contrib/README contrib/cyrus-graphtools.1.0 contrib/cyrus-graphtools.1.0/cgi-bin/cyrus_master.pl contrib/cyrus-graphtools.1.0/cgi-bin/graph_cyrus_db.pl contrib/cyrus-graphtools.1.0/cgi-bin/graph_cyrus_db-sum.pl contrib/cyrus-graphtools.1.0/html contrib/cyrus-graphtools.1.0/html/index.html contrib/cyrus-graphtools.1.0/README contrib/cyrus-graphtools.1.0/script contrib/cyrus-graphtools.1.0/script/cyrus.pl contrib/cyrus-graphtools.1.0/script/run contrib/cyrus-graphtools.1.0/script/cyrusrc contrib/notify_unix/notify contrib/notify_unix/net-server-prefork-0.01.tgz contrib/notify_unix/README contrib/notify_unix/sql_notify.pl contrib/notify_unix/simple_notify.pl contrib/squatrunner.pl contrib/mupdate-test.pl contrib/squatrunner.txt \
 	cunit/cacert.pem cunit/cert.pem cunit/cunit.pl cunit/cunit-to-junit.pl cunit/key.pem cunit/vg.supp \
@@ -161,8 +160,8 @@ EXTRA_DIST = xversion.h SMakefile COPYRIGHT \
 	lib/test/testglob2.c \
 	master/CYRUS-MASTER.mib master/conf/cmu-backend.conf master/conf/cmu-frontend.conf master/conf/normal.conf master/conf/prefork.conf master/conf/small.conf master/README \
 	netnews/inn.diffs \
-	perl/annotator/Daemon.pm perl/annotator/Makefile.PL.in perl/annotator/MANIEST perl/annotator/Message.pm perl/annotator/README \
-	perl/imap/Changes perl/imap/cyradm.sh perl/imap/cyrperl.h perl/imap/Cyrus/Shell.pm perl/imap/examples/auditmbox.pl perl/imap/examples/imapcollate.pl perl/imap/examples/imapdu.pl perl/imap/example/test-imsp.pl perl/imap/IMAP/Admin.pm perl/imap/IMAP/IMSP.pm perl/imap/IMAP/Shell.pm perl/imap/IMAP.pm perl/imap/IMAP.xs perl/imap/Makefile.PL.in perl/imap/README perl/imap/t/01-imclient.t perl/imap/t/02-admin.t perl/imap/typemap perl/imap/xsutil.c \
+	perl/annotator/Daemon.pm perl/annotator/Makefile.PL.in perl/annotator/MANIFEST perl/annotator/Message.pm perl/annotator/README \
+	perl/imap/Changes perl/imap/cyradm.sh perl/imap/cyrperl.h perl/imap/Cyrus/Shell.pm perl/imap/examples/auditmbox.pl perl/imap/examples/imapcollate.pl perl/imap/examples/imapdu.pl perl/imap/examples/test-imsp.pl perl/imap/IMAP/Admin.pm perl/imap/IMAP/IMSP.pm perl/imap/IMAP/Shell.pm perl/imap/IMAP.pm perl/imap/IMAP.xs perl/imap/Makefile.PL.in perl/imap/MANIFEST perl/imap/README perl/imap/t/01-imclient.t perl/imap/t/02-admin.t perl/imap/typemap perl/imap/xsutil.c \
 	perl/sieve/managesieve/Makefile.PL.in perl/sieve/managesieve/managesieve.h perl/sieve/managesieve/managesieve.pm perl/sieve/managesieve/managesieve.xs perl/sieve/managesieve/MANIFEST perl/sieve/managesieve/typemap \
 	ptclient/README ptclient/test.c ptclient/test2.c \
 	sieve/tests/testExtension sieve/tests/testExtension/uberExtensionTestScript.key sieve/tests/testExtension/testm sieve/tests/testExtension/testm/uetest-envelope sieve/tests/testExtension/testm/uetest-asub sieve/tests/testExtension/testm/uetest-areg sieve/tests/testExtension/testm/uetest-count sieve/tests/testExtension/testm/uetest-value sieve/tests/testExtension/testm/uetest-hreg sieve/tests/testExtension/serverm sieve/tests/testExtension/serverm/uetmail-hreg sieve/tests/testExtension/serverm/uetmail-value sieve/tests/testExtension/serverm/uetmail-count2 sieve/tests/testExtension/serverm/uetmail-envelope sieve/tests/testExtension/serverm/uetmail-asub sieve/tests/testExtension/serverm/uetmail-value2 sieve/tests/testExtension/serverm/uetmail-areg sieve/tests/testExtension/serverm/uetmail-count sieve/tests/testExtension/uberExtensionTestScript.s sieve/tests/README sieve/tests/action sieve/tests/action/testm sieve/tests/action/testm/uatest-keep sieve/tests/action/testm/uatest-redirect sieve/tests/action/testm/uatest-discard sieve/tests/action/testm/uatest-stop2 sieve/tests/action/testm/uatest-stop sieve/tests/action/serverm sieve/tests/action/serverm/uamail-stop2 sieve/tests/action/serverm/uamail-redirect sieve/tests/action/serverm/uamail-stop sieve/tests/action/serverm/uamail-keep sieve/tests/action/serverm/uamail-discard sieve/tests/action/uberActionScript.key sieve/tests/action/uberActionScript.s sieve/tests/test sieve/tests/test/uberTestScript.key sieve/tests/test/testm sieve/tests/test/testm/utest-header sieve/tests/test/testm/utest-address sieve/tests/test/serverm sieve/tests/test/serverm/utmail-address sieve/tests/test/serverm/utmail-header sieve/tests/test/uberTestScript.s sieve/tests/actionExtensions sieve/tests/actionExtensions/uberExtensionActionScript.s sieve/tests/actionExtensions/testm sieve/tests/actionExtensions/testm/ueatest-flag4 sieve/tests/actionExtensions/testm/ueatest-flag2 sieve/tests/actionExtensions/testm/ueatest-fileinto sieve/tests/actionExtensions/testm/ueatest-denotify sieve/tests/actionExtensions/testm/ueatest-vacation sieve/tests/actionExtensions/testm/ueatest-reject sieve/tests/actionExtensions/testm/ueatest-mark sieve/tests/actionExtensions/testm/ueatest-denotify2 sieve/tests/actionExtensions/testm/ueatest-flag5 sieve/tests/actionExtensions/testm/ueatest-notify2 sieve/tests/actionExtensions/testm/ueatest-notify sieve/tests/actionExtensions/testm/ueatest-flag1 sieve/tests/actionExtensions/testm/ueatest-flag3 sieve/tests/actionExtensions/testm/ueatest-unmark sieve/tests/actionExtensions/uberExtensionActionScript.key sieve/tests/actionExtensions/serverm sieve/tests/actionExtensions/serverm/ueamail-flag4 sieve/tests/actionExtensions/serverm/ueamail-denotify sieve/tests/actionExtensions/serverm/ueamail-mark sieve/tests/actionExtensions/serverm/ueamail-denotify2 sieve/tests/actionExtensions/serverm/ueamail-flag2 sieve/tests/actionExtensions/serverm/ueamail-unmark sieve/tests/actionExtensions/serverm/ueamail-reject sieve/tests/actionExtensions/serverm/ueamail-flag3 sieve/tests/actionExtensions/serverm/ueamail-fileinto sieve/tests/actionExtensions/serverm/ueamail-flag1 sieve/tests/actionExtensions/serverm/ueamail-notify sieve/tests/actionExtensions/serverm/ueamail-flag5 sieve/tests/actionExtensions/serverm/ueamail-notify2 sieve/tests/actionExtensions/serverm/ueamail-vacation \
@@ -649,12 +648,12 @@ man/sieveshell.1: $(top_srcdir)/perl/sieve/scripts/sieveshell.pl
 man/cyradm.1.html: $(top_srcdir)/perl/imap/cyradm.sh
 	@$(MKDIR_P) man
 	pod2html $(top_srcdir)/perl/imap/cyradm.sh > man/cyradm.1.html
-	rm man/pod2htm*
+	rm pod2htm*
 
 man/sieveshell.1.html: $(top_srcdir)/perl/sieve/scripts/sieveshell.pl
 	@$(MKDIR_P) man
 	pod2html $(top_srcdir)/perl/sieve/scripts/sieveshell.pl > man/sieveshell.1.html
-	rm man/pod2htm*
+	rm pod2htm*
 
 
 dist-old:: distgit
