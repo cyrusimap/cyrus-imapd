@@ -66,31 +66,31 @@
 static int idle_sock = -1;
 static struct sockaddr_un idle_local;
 
-int idle_make_server_address(struct sockaddr_un *sun)
+int idle_make_server_address(struct sockaddr_un *mysun)
 {
     const char *idle_sock;
 
-    memset(sun, 0, sizeof(*sun));
-    sun->sun_family = AF_UNIX;
+    memset(mysun, 0, sizeof(*mysun));
+    mysun->sun_family = AF_UNIX;
     idle_sock = config_getstring(IMAPOPT_IDLESOCKET);
     if (idle_sock) {
-	strlcpy(sun->sun_path, idle_sock, sizeof(sun->sun_path));
+	strlcpy(mysun->sun_path, idle_sock, sizeof(mysun->sun_path));
     }
     else {
 	/* TODO: detect overflow and fail */
-	strlcpy(sun->sun_path, config_dir, sizeof(sun->sun_path));
-	strlcat(sun->sun_path, FNAME_IDLE_SOCK, sizeof(sun->sun_path));
+	strlcpy(mysun->sun_path, config_dir, sizeof(mysun->sun_path));
+	strlcat(mysun->sun_path, FNAME_IDLE_SOCK, sizeof(mysun->sun_path));
     }
     return 1;
 }
 
 
-int idle_make_client_address(struct sockaddr_un *sun)
+int idle_make_client_address(struct sockaddr_un *mysun)
 {
-    memset(sun, 0, sizeof(*sun));
-    sun->sun_family = AF_UNIX;
+    memset(mysun, 0, sizeof(*mysun));
+    mysun->sun_family = AF_UNIX;
     /* TODO: detect overflow and fail */
-    snprintf(sun->sun_path, sizeof(sun->sun_path), "%s%s/idle.%d",
+    snprintf(mysun->sun_path, sizeof(mysun->sun_path), "%s%s/idle.%d",
 	     config_dir, FNAME_IDLE_SOCK_DIR, (int)getpid());
     return 1;
 }
@@ -98,9 +98,9 @@ int idle_make_client_address(struct sockaddr_un *sun)
 /* Extract an identifying string from the remote AF_UNIX address,
  * suitable for logging debug messages.  Returns a string into an
  * internal buffer */
-const char *idle_id_from_addr(const struct sockaddr_un *sun)
+const char *idle_id_from_addr(const struct sockaddr_un *mysun)
 {
-    const char *tail = strrchr(sun->sun_path, '/');
+    const char *tail = strrchr(mysun->sun_path, '/');
     const char *p;
     /* Has to be an absolute path, so there must be at least 1 / */
     assert(tail);

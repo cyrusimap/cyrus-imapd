@@ -428,7 +428,7 @@ static int callout_run_socket(const char *callout,
 			      struct dlist **results)
 {
     int sock = -1;
-    struct sockaddr_un sun;
+    struct sockaddr_un mysun;
     int r;
 
     sock = socket(PF_UNIX, SOCK_STREAM, 0);
@@ -438,10 +438,10 @@ static int callout_run_socket(const char *callout,
 	goto out;
     }
 
-    memset(&sun, 0, sizeof(sun));
-    sun.sun_family = AF_UNIX;
-    strncpy(sun.sun_path, callout, sizeof(sun.sun_path));
-    r = connect(sock, (struct sockaddr *)&sun, sizeof(sun));
+    memset(&mysun, 0, sizeof(mysun));
+    mysun.sun_family = AF_UNIX;
+    strncpy(mysun.sun_path, callout, sizeof(mysun.sun_path));
+    r = connect(sock, (struct sockaddr *)&mysun, sizeof(mysun));
     if (r < 0) {
 	syslog(LOG_ERR, "cannot connect socket for callout: %m");
 	r = IMAP_SYS_ERROR;
