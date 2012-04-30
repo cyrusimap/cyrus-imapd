@@ -200,7 +200,7 @@ com_err/et/compile_et: com_err/et/compile_et.sh com_err/et/config_script \
 # BASIC is the libraries that every Cyrus program (except master) will
 # need to link with.
 LD_BASIC_FLAGS =
-LD_BASIC_ADD = lib/libcyrus.a lib/libcyrus_min.a
+LD_BASIC_ADD = lib/libcyrus.a lib/libcyrus_min.a $(LIB_RT) ${LIB_SASL} $(LIB_UUID) ${LIBS}
 
 # UTILITY is the libraries that utility programs which use Cyrus'
 # mailbox and message handling code need to link with.
@@ -530,7 +530,7 @@ imtest_imtest_LDADD = $(LD_UTILITY_ADD)
 lib_libcyrus_a_SOURCES = lib/acl.c lib/acl_afs.c lib/auth.c lib/auth_krb.c \
 	lib/auth_krb5.c lib/auth_pts.c lib/auth_unix.c lib/bsearch.c \
 	lib/byteorder64.c lib/charset.c lib/chartable.c lib/crc32.c \
-	lib/cyrusdb.c 
+	lib/cyrusdb.c
 if USE_BERKELEY
 lib_libcyrus_a_SOURCES += lib/cyrusdb_berkeley.c
 endif
@@ -623,7 +623,8 @@ master_master_LDADD = lib/libcyrus_min.a $(LIB_UCDSNMP) $(LIBS) -lm
 
 
 netnews_remotepurge_SOURCES = netnews/macros.h netnews/readconfig.c netnews/readconfig.h netnews/remotepurge.c
-netnews_remotepurge_LDADD = $(LD_BASIC_ADD)
+netnews_remotepurge_LDADD = $(LD_BASIC_ADD) $(SSL_LDADD)
+netnews_remotepurge_LDFLAGS = $(SSL_LDFLAGS)
 
 notifyd_notifyd_SOURCES = imap/mutex_fake.c master/service.c \
 	notifyd/exitcodes.h notifyd/notify_external.c \
@@ -652,8 +653,8 @@ ptclient_ptexpire_LDADD = $(LD_UTILITY_ADD)
 #ptclient_ptextract_LDADD = $(LD_UTILITY_ADD)
 
 ptclient_ptloader_SOURCES = ptclient/ptloader.c ptclient/ptloader.h imap/mutex_fake.c master/service-thread.c
-ptclient_ptloader_LDFLAGS = $(LD_UTILITY_FLAGS)
-ptclient_ptloader_LDADD = $(LD_UTILITY_ADD)
+ptclient_ptloader_LDFLAGS = $(LD_SERVER_FLAGS)
+ptclient_ptloader_LDADD = $(LD_SERVER_ADD)
 
 if HAVE_LDAP
 ptclient_ptloader_SOURCES += ptclient/ldap.c
