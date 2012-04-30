@@ -721,10 +721,12 @@ install-exec-hook:
 	  $(INSTALL) -m 755 perl/sieve/scripts/$$s $(DESTDIR)$(bindir)/$$s ; \
 	done
 
+	@$(MKDIR_P) $(DESTDIR)$(servicedir)
 	cd $(DESTDIR)$(servicedir) && \
 	  $(LN_S) -f pop3d pop3proxyd && \
 	  $(LN_S) -f imapd proxyd && \
 	  $(LN_S) -f lmtpd lmtpproxyd
+	@$(MKDIR_P) $(DESTDIR)$(bindir)
 	cd $(DESTDIR)$(bindir) && \
 	  $(LN_S) -f imtest lmtptest && \
 	  $(LN_S) -f imtest mupatetest && \
