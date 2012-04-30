@@ -54,10 +54,10 @@ WriteMakefile(
     'ABSTRACT'  => 'Cyrus Sieve management interface',
     'VERSION_FROM' => "@top_srcdir@/perl/sieve/managesieve/managesieve.pm", # finds $VERSION
     'MYEXTLIB'  => '../lib/isieve.o ../lib/lex.o ../lib/mystring.o ../lib/request.o @top_builddir@/lib/libcyrus.a @top_builddir@/lib/libcyrus_min.a',
-    'LIBS'	=> ["@BDB_LIB@ $LIB_SASL @OPENSSL_LIB@ @LIB_RT@ @LIB_UUID@ @ZLIB@ -lssl -lcrypto"], 
+    'LIBS'	=> ["@BDB_LIB@ $LIB_SASL @SSL_LDFLAGS@ @SSL_LDADD@ @LIB_RT@ @LIB_UUID@ @ZLIB@"],
     'CCFLAGS'	=> '@COV_CFLAGS@',
     'DEFINE'	=> '-DPERL_POLLUTE',     # e.g., '-DHAVE_SOMETHING' 
-    'INC'	=> "@BDB_INC@ -I@top_srcdir@/lib -I@top_srcdir@/perl/sieve/lib @SASLFLAGS@ @OPENSSL_INC@",
+    'INC'	=> "@BDB_INC@ -I@top_srcdir@/lib -I@top_srcdir@/perl/sieve/lib @SASLFLAGS@ @SSL_CPPFLAGS@",
     'OBJECT'    => 'managesieve.o',
     'LD'	=> $Config{ld} . ' @COV_LDFLAGS@',
     # This is a disgusting hack to effectively disable the stupid

@@ -43,7 +43,10 @@
 
 ACLOCAL_AMFLAGS = -I cmulocal
 AM_CFLAGS = @PERL_CCCDLFLAGS@ $(COV_CFLAGS)
-AM_CPPFLAGS = $(COM_ERR_CPPFLAGS) -I${top_builddir} -I${top_builddir}/lib -I${top_srcdir} -I${top_srcdir}/lib ${DEFS} ${LOCALDEFS} $(SASLFLAGS)
+AM_CPPFLAGS = $(COM_ERR_CPPFLAGS) \
+	-I${top_builddir} -I${top_builddir}/lib \
+	-I${top_srcdir} -I${top_srcdir}/lib \
+	${DEFS} ${LOCALDEFS} $(SASLFLAGS) $(SSL_CPPFLAGS)
 AM_LDFLAGS = $(COV_LDFLAGS)
 BUILT_SOURCES = xversion.h lib/imapopts.c
 MAINTAINERCLEANFILES = \
@@ -99,7 +102,7 @@ service_PROGRAMS += imap/pop3d imap/quota imap/reconstruct imap/smmapd \
 if REPLICATION
 service_PROGRAMS += imap/sync_client imap/sync_reset imap/sync_server
 endif
-if OPENSSL
+if HAVE_SSL
 service_PROGRAMS += imap/tls_prune
 endif
 service_PROGRAMS += imap/unexpunge master/master
@@ -202,9 +205,9 @@ LD_BASIC_ADD = lib/libcyrus.a lib/libcyrus_min.a
 # Note that several places in the code use -lcrypto, e.g. for SHA1 or
 # MD5 algorithms, without needing SSL.  Currently we have no way of
 # minimally linking such code.
-LD_UTILITY_FLAGS = $(LD_BASIC_FLAGS)
+LD_UTILITY_FLAGS = $(LD_BASIC_FLAGS) $(SSL_LDFLAGS)
 LD_UTILITY_ADD = imap/libimap.a $(LD_BASIC_ADD) $(COM_ERR_LIBS) $(LIB_UUID) \
-		$(LIB_SASL)
+		$(SSL_LDADD) $(LIB_SASL)
 
 # SERVER is the libraries that network-facing servers need to link with
 #
