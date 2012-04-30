@@ -47,6 +47,9 @@ AM_CPPFLAGS = $(COM_ERR_CPPFLAGS) \
 	-I${top_builddir} -I${top_builddir}/lib \
 	-I${top_srcdir} -I${top_srcdir}/lib \
 	${DEFS} ${LOCALDEFS} $(SASLFLAGS) $(SSL_CPPFLAGS)
+if HAVE_LDAP
+AM_CPPFLAGS += $(LDAP_CPPFLAGS)
+endif
 AM_LDFLAGS = $(COV_LDFLAGS)
 BUILT_SOURCES = xversion.h lib/imapopts.c
 MAINTAINERCLEANFILES = \
@@ -654,7 +657,6 @@ ptclient_ptloader_LDADD = $(LD_UTILITY_ADD)
 
 if HAVE_LDAP
 ptclient_ptloader_SOURCES += ptclient/ldap.c
-ptclient_ptloader_CPPFLAGS = $(AM_CPPFLAGS) $(LDAP_CPPFLAGS)
 ptclient_ptloader_LDADD += $(LDAP_LIBS)
 ptclient_ptloader_LDFLAGS += $(LDAP_LDFLAGS)
 endif
