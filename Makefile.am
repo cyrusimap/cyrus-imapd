@@ -275,7 +275,8 @@ cunit_unit_LDADD =
 if SIEVE
 cunit_unit_LDADD += sieve/libsieve.a
 endif
-cunit_unit_LDADD += ${ptclient_ptdump_LDADD} -lcunit
+cunit_unit_LDADD += $(LD_UTILITY_ADD) -lcunit
+cunit_unit_LDFLAGS = $(LD_UTILITY_FLAGS)
 
 CUNIT_PL = cunit/cunit.pl --project $(CUNIT_PROJECT)
 
@@ -688,7 +689,7 @@ sieve/sieve_err.h sieve/sieve_err.c: sieve/sieve_err.et
 
 sieve_test_SOURCES = sieve/test.c imap/mutex_fake.c
 sieve_test_LDFLAGS = $(LD_SIEVE_FLAGS)
-sieve_test_LDADD = $(LD_SIEVE_ADD)
+sieve_test_LDADD = imap/libimap.a $(LD_SIEVE_ADD)
 
 timsieved_timsieved_SOURCES = imap/mutex_fake.c imap/proxy.c master/service.c \
 	timsieved/actions.c timsieved/actions.h timsieved/codes.h \
