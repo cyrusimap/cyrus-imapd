@@ -199,8 +199,10 @@ int idle_wait(int otherfd)
 
 	r = select(maxfd+1, &rfds, NULL, NULL, &timeout);
 	if (r < 0) {
-	    if (errno == EAGAIN || errno == EINTR)
+	    if (errno == EAGAIN || errno == EINTR) {
+		signals_poll();
 		continue;
+	    }
 	    syslog(LOG_ERR, "select: %m");
 	    return 0;
 	}
