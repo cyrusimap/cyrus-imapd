@@ -689,8 +689,8 @@ sieve/sieve_err.h sieve/sieve_err.c: sieve/sieve_err.et
 	cd sieve && $(COMPILE_ET) ../$(top_srcdir)/sieve/sieve_err.et
 
 sieve_test_SOURCES = sieve/test.c imap/mutex_fake.c
-sieve_test_LDFLAGS = $(LD_SIEVE_FLAGS)
-sieve_test_LDADD = imap/libimap.a $(LD_SIEVE_ADD)
+sieve_test_LDFLAGS = $(LD_UTILITY_FLAGS)
+sieve_test_LDADD = sieve/libsieve.a $(LD_UTILITY_ADD)
 
 timsieved_timsieved_SOURCES = imap/mutex_fake.c imap/proxy.c master/service.c \
 	timsieved/actions.c timsieved/actions.h timsieved/codes.h \
