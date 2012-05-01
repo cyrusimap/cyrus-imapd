@@ -808,11 +808,13 @@ install-exec-hook:
 	  $(INSTALL) -m 755 perl/sieve/scripts/$$s $(DESTDIR)$(bindir)/$$s ; \
 	done
 
+## The @$(MKDIR_P) line is added due to a bug in Automake 1.10 and can be removed if using Automake 1.12.
 	@$(MKDIR_P) $(DESTDIR)$(servicedir)
 	cd $(DESTDIR)$(servicedir) && \
 	  $(LN_S) -f pop3d pop3proxyd && \
 	  $(LN_S) -f imapd proxyd && \
 	  $(LN_S) -f lmtpd lmtpproxyd
+## The @$(MKDIR_P) line is added due to a bug in Automake 1.10 and can be removed if using Automake 1.12.
 	@$(MKDIR_P) $(DESTDIR)$(bindir)
 	cd $(DESTDIR)$(bindir) && \
 	  $(LN_S) -f imtest lmtptest && \
