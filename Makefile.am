@@ -526,8 +526,8 @@ imap/rfc822_header.h: imap/rfc822_header.st
 endif
 
 imtest_imtest_SOURCES = imtest/imtest.c
-imtest_imtest_LDFLAGS = $(LD_UTILITY_FLAGS)
-imtest_imtest_LDADD = $(LD_UTILITY_ADD)
+imtest_imtest_LDFLAGS = $(LD_BASIC_FLAGS)
+imtest_imtest_LDADD = $(LD_BASIC_ADD)
 
 lib_libcyrus_a_SOURCES = lib/acl.c lib/acl_afs.c lib/auth.c lib/auth_krb.c \
 	lib/auth_krb5.c lib/auth_pts.c lib/auth_unix.c lib/bsearch.c \
