@@ -200,18 +200,18 @@ com_err/et/compile_et: com_err/et/compile_et.sh com_err/et/config_script \
 
 # BASIC is the libraries that every Cyrus program (except master) will
 # need to link with.
-LD_BASIC_FLAGS =
-LD_BASIC_ADD = lib/libcyrus.a lib/libcyrus_min.a $(LIB_RT) ${LIB_SASL} $(LIB_UUID) ${LIBS}
-
-# UTILITY is the libraries that utility programs which use Cyrus'
-# mailbox and message handling code need to link with.
 #
 # Note that several places in the code use -lcrypto, e.g. for SHA1 or
 # MD5 algorithms, without needing SSL.  Currently we have no way of
 # minimally linking such code.
-LD_UTILITY_FLAGS = $(LD_BASIC_FLAGS) $(SSL_LDFLAGS)
-LD_UTILITY_ADD = imap/libimap.a $(LD_BASIC_ADD) $(COM_ERR_LIBS) $(LIB_UUID) \
-		$(SSL_LDADD) $(LIB_SASL)
+LD_BASIC_FLAGS = $(SSL_LDFLAGS)
+LD_BASIC_ADD = lib/libcyrus.a lib/libcyrus_min.a $(LIB_RT) ${LIB_SASL} $(SSL_LDADD) ${LIBS}
+
+# UTILITY is the libraries that utility programs which use Cyrus'
+# mailbox and message handling code need to link with.
+
+LD_UTILITY_FLAGS = $(LD_BASIC_FLAGS)
+LD_UTILITY_ADD = imap/libimap.a $(LD_BASIC_ADD) $(COM_ERR_LIBS) $(LIB_UUID)
 
 # SERVER is the libraries that network-facing servers need to link with
 #
@@ -625,8 +625,8 @@ master_master_LDADD = lib/libcyrus_min.a $(LIB_UCDSNMP) $(LIBS) -lm
 
 
 netnews_remotepurge_SOURCES = netnews/macros.h netnews/readconfig.c netnews/readconfig.h netnews/remotepurge.c
-netnews_remotepurge_LDADD = $(LD_BASIC_ADD) $(SSL_LDADD)
-netnews_remotepurge_LDFLAGS = $(SSL_LDFLAGS)
+netnews_remotepurge_LDADD = $(LD_BASIC_ADD)
+netnews_remotepurge_LDFLAGS = $(LD_BASIC_FLAGS)
 
 notifyd_notifyd_SOURCES = imap/mutex_fake.c master/service.c \
 	notifyd/exitcodes.h notifyd/notify_external.c \
@@ -677,8 +677,8 @@ sieve_libsieve_a_SOURCES = sieve/bytecode.h sieve/addr.y sieve/addr-lex.l \
 	sieve/sieve-lex.l sieve/sieve.y sieve/sieve_err.c sieve/sieve_err.h \
 	sieve/sieve_interface.h sieve/tree.c sieve/tree.h
 
-LD_SIEVE_FLAGS = $(LD_BASIC_FLAGS) $(SSL_LDFLAGS)
-LD_SIEVE_ADD = sieve/libsieve.a $(LD_BASIC_ADD) $(SSL_LDADD) $(COM_ERR_LIBS)
+LD_SIEVE_FLAGS = $(LD_BASIC_FLAGS)
+LD_SIEVE_ADD = sieve/libsieve.a $(LD_BASIC_ADD) $(COM_ERR_LIBS)
 
 sieve_sievec_LDFLAGS = $(LD_SIEVE_FLAGS)
 sieve_sievec_LDADD = $(LD_SIEVE_ADD)
