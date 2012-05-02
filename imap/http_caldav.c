@@ -195,6 +195,8 @@ static void my_caldav_init(struct buf *serverinfo)
 static void my_caldav_auth(const char *userid)
 {
     caldavdb = caldav_open(userid, CALDAV_CREATE);
+    if (!caldavdb) fatal("Unable to open CalDAV DB", EC_IOERR);
+
 }
 
 
