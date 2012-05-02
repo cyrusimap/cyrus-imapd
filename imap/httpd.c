@@ -733,7 +733,11 @@ void fatal(const char* s, int code)
     }
     recurse_code = code;
     if (httpd_out) {
-	prot_printf(httpd_out, "%s: Fatal error: %s\r\n",
+	prot_printf(httpd_out,
+		    "HTTP/1.1 %s\r\n"
+		    "Content-Type: text/plain\r\n"
+		    "Connection: close\r\n\r\n"
+		    "Fatal error: %s\r\n",
 		    error_message(HTTP_SERVER_ERROR), s);
 	prot_flush(httpd_out);
     }
