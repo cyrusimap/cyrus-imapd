@@ -485,7 +485,13 @@ int mysasl_canon_user(sasl_conn_t *conn,
 	sasl_seterror(conn, 0, "buffer overflow while canonicalizing");
 	return SASL_BUFOVER;
     }
-    memcpy(out, user, ulen);
+    if (out != user) {
+	/* There are some paths through libsasl which result in our
+	 * being called with parameters 'user' and 'out' being the
+	 * same buffer.  We can handle that case just fine, but this
+	 * memcpy() is redundant and causes a warning in Valgrind. */
+	memcpy(out, user, ulen);
+    }
     out[ulen] = '\0';
 
     canonuser = canonify_userid(out, NULL, (int*) context);
