@@ -105,4 +105,7 @@ int caldav_commit(struct caldav_db *caldavdb);
 /* abort transaction */
 int caldav_abort(struct caldav_db *caldavdb);
 
+/* create caldav_data from icalcomponent */
+void caldav_make_entry(icalcomponent *ical, struct caldav_data *cdata);
+
 #endif /* CALDAV_DB_H */

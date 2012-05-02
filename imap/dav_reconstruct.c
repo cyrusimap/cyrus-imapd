@@ -158,26 +158,6 @@ void usage(void)
 }
 
 
-/* icalcomponent_foreach_recurrence() callback to find ealiest/latest time */
-static void get_times(icalcomponent *comp, struct icaltime_span *span,
-		      void *rock)
-{
-    struct icalperiodtype *period = (struct icalperiodtype *) rock;
-    int is_date = icaltime_is_date(icalcomponent_get_dtstart(comp));
-    icaltimezone *utc = icaltimezone_get_utc_timezone();
-    struct icaltimetype start =
-	icaltime_from_timet_with_zone(span->start, is_date, utc);
-    struct icaltimetype end =
-	icaltime_from_timet_with_zone(span->end, is_date, utc);
-
-    if (icaltime_compare(start, period->start) < 0)
-	memcpy(&period->start, &start, sizeof(struct icaltimetype));
-
-    if (icaltime_compare(end, period->end) > 0)
-	memcpy(&period->end, &end, sizeof(struct icaltimetype));
-}
-
-
 /*
  * mboxlist_findall() callback function to create DAV DB entries for a mailbox
  */
@@ -191,7 +171,6 @@ int do_reconstruct(char *mboxname,
     char ext_name_buf[MAX_MAILBOX_PATH+1];
     struct mailbox *mailbox = NULL;
     struct index_record record;
-    icaltimezone *utc = icaltimezone_get_utc_timezone();
     struct caldav_data cdata;
     
     signals_poll();
@@ -228,11 +207,7 @@ int do_reconstruct(char *mboxname,
 	struct param *param;
 	const char *msg_base = NULL, *resource = NULL;
 	unsigned long msg_size = 0;
-	icalcomponent *ical = NULL, *comp;
-	icalcomponent_kind kind;
-	icalproperty *prop;
-	unsigned mykind = 0, recurring = 0, transp = 0;
-	struct icalperiodtype period;
+	icalcomponent *ical = NULL;
 
 	if (mailbox_read_index_record(mailbox, recno, &record)) continue;
 
@@ -260,86 +235,7 @@ int do_reconstruct(char *mboxname,
 	}
 	cdata.resource = resource;
 
-	/* Get icalendar UID */
-	comp = icalcomponent_get_first_real_component(ical);
-	cdata.ical_uid = icalcomponent_get_uid(comp);
-
-	/* Get component type */
-	kind = icalcomponent_isa(comp);
-	switch (kind) {
-	case ICAL_VEVENT_COMPONENT: mykind = CAL_COMP_VEVENT; break;
-	case ICAL_VTODO_COMPONENT: mykind = CAL_COMP_VTODO; break;
-	case ICAL_VJOURNAL_COMPONENT: mykind = CAL_COMP_VJOURNAL; break;
-	case ICAL_VFREEBUSY_COMPONENT: mykind = CAL_COMP_VFREEBUSY; break;
-	default: break;
-	}
-	cdata.comp_type = mykind;
-
-	/* Get organizer */
-	prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
-	if (prop) {
-	    /* Scheduling message - set initial stag = etag */
-	    cdata.organizer = icalproperty_get_organizer(prop)+7;
-	    cdata.sched_tag = message_guid_encode(&record.guid);
-	}
-
-	/* Get transparency */
-	prop = icalcomponent_get_first_property(comp, ICAL_TRANSP_PROPERTY);
-	if (prop) {
-	    icalvalue *transp_val = icalproperty_get_value(prop);
-
-	    switch (icalvalue_get_transp(transp_val)) {
-	    case ICAL_TRANSP_TRANSPARENT:
-	    case ICAL_TRANSP_TRANSPARENTNOCONFLICT:
-		transp = 1;
-		break;
-
-	    default:
-		transp = 0;
-		break;
-	    }
-	}
-	cdata.transp = transp;
-
-	/* Get dtstart and dtend */
-	period.start =
-	    icaltime_convert_to_zone(icalcomponent_get_dtstart(comp), utc);
-	period.end =
-	    icaltime_convert_to_zone(icalcomponent_get_dtend(comp), utc);
-
-	/* See if its a recurring event */
-	if (icalcomponent_get_first_property(comp,ICAL_RRULE_PROPERTY) ||
-	    icalcomponent_get_first_property(comp,ICAL_RDATE_PROPERTY) ||
-	    icalcomponent_get_first_property(comp,ICAL_EXDATE_PROPERTY)) {
-	    /* Recurring - find widest time range that includes events */
-	    recurring = 1;
-
-	    icalcomponent_foreach_recurrence(
-		comp,
-		icaltime_from_timet_with_zone(INT_MIN, 0, NULL),
-		icaltime_from_timet_with_zone(INT_MAX, 0, NULL),
-		get_times,
-		&period);
-
-	    /* Handle overridden recurrences */
-	    while ((comp =
-		    icalcomponent_get_next_component(ical, kind))) {
-		struct icaltimetype start =
-		    icaltime_convert_to_zone(icalcomponent_get_dtstart(comp), utc);
-		struct icaltimetype end =
-		    icaltime_convert_to_zone(icalcomponent_get_dtend(comp), utc);
-
-		if (icaltime_compare(start, period.start) < 0)
-		    memcpy(&period.start, &start, sizeof(struct icaltimetype));
-
-		if (icaltime_compare(end, period.end) > 0)
-		    memcpy(&period.end, &end, sizeof(struct icaltimetype));
-	    }
-	}
-
-	cdata.dtstart = icaltime_as_ical_string(period.start);
-	cdata.dtend = icaltime_as_ical_string(period.end);
-	cdata.recurring = recurring;
+	caldav_make_entry(ical, &cdata);
 
 	caldav_write(caldavdb, &cdata);
 

@@ -3353,6 +3353,8 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 		    cdata.mailbox = mailbox->name;
 		    cdata.resource = resource;
 		    cdata.imap_uid = newrecord.uid;
+		    caldav_make_entry(ical, &cdata);
+
 		    caldav_write(caldavdb, &cdata);
 		    caldav_commit(caldavdb);
 		    /* XXX  check for errors, if this fails, backout changes */
