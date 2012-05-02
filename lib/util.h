@@ -54,6 +54,20 @@
 #include <stdarg.h>
 #include <stdio.h>
 
+#ifdef ENABLE_REGEX
+# ifdef HAVE_PCREPOSIX_H
+#  include <pcre.h>
+#  include <pcreposix.h>
+# else /* !HAVE_PCREPOSIX_H */
+#  ifdef HAVE_RXPOSIX_H
+#   include <rxposix.h>
+#  else /* !HAVE_RXPOSIX_H */
+#   include <sys/types.h>
+#   include <regex.h>
+#  endif /* HAVE_RXPOSIX_H */
+# endif /* HAVE_PCREPOSIX_H */
+#endif /* ENABLE_REGEX */
+
 #define BIT32_MAX 4294967295U
 
 #if UINT_MAX == BIT32_MAX
@@ -224,6 +238,12 @@ void buf_printf(struct buf *buf, const char *fmt, ...)
     __attribute__((format(printf,2,3)));
 unsigned int buf_replace_all(struct buf *buf, const char *match,
 			     const char *replace);
+#ifdef ENABLE_REGEX
+unsigned int buf_replace_all_re(struct buf *buf, const regex_t *,
+				const char *replace);
+unsigned int buf_replace_one_re(struct buf *buf, const regex_t *,
+				const char *replace);
+#endif
 int buf_cmp(const struct buf *, const struct buf *);
 void buf_init(struct buf *buf);
 void buf_init_ro(struct buf *buf, const char *base, int len);

@@ -598,6 +598,214 @@ static void test_replace_all(void)
 #undef WORD4
 }
 
+/* we use buf_init_ro() instead of buf_appendcstr() to test
+ * the case where the input buffer is not a C string before
+ * caling buf_replace_*() */
+#define TESTCASE_START(in, reg, rep, expn, exp) \
+    { \
+	static const char _in[] = in; \
+	static const char _reg[] = reg; \
+	static const char *_rep = rep; \
+	static const int _expn = expn; \
+	static const char _exp[] = exp; \
+	struct buf b = BUF_INITIALIZER; \
+	regex_t re; \
+	unsigned int n; \
+	int r; \
+ \
+	buf_init_ro(&b, _in, sizeof(_in)-1); \
+	CU_ASSERT_EQUAL(b.len, sizeof(_in)-1); \
+	CU_ASSERT_EQUAL(buf_len(&b), b.len); \
+	CU_ASSERT_PTR_NOT_NULL(b.s); \
+	CU_ASSERT_STRING_EQUAL(b.s, _in); \
+ \
+	r = regcomp(&re, _reg, REG_EXTENDED); \
+	CU_ASSERT_EQUAL(r, 0);
+#define TESTCASE_MIDDLE \
+	n = buf_replace_one_re(&b, &re, _rep);
+#define TESTCASE_END \
+	CU_ASSERT_EQUAL(n, _expn); \
+	CU_ASSERT_EQUAL(b.len, sizeof(_exp)-1); \
+	CU_ASSERT_EQUAL(buf_len(&b), b.len); \
+	CU_ASSERT(b.alloc >= b.len); \
+	CU_ASSERT_PTR_NOT_NULL(b.s); \
+	CU_ASSERT_STRING_EQUAL(b.s, _exp); \
+	regfree(&re); \
+	buf_free(&b); \
+    }
+
+#define TESTCASE(in, reg, rep, expn, exp) \
+	TESTCASE_START(in, reg, rep, expn, exp) \
+	TESTCASE_MIDDLE \
+	TESTCASE_END
+
+static void test_replace_one_re(void)
+{
+    /* data thanks to hipsteripsum.me */
+#define WORD0	    "bespoke"
+#define WORD0_RE    "be[a-df-z]+e"
+#define WORD0REP    "butcher"
+#define WORD0REP2   "BeSp0K3"
+#define WORD0REP3   "BpK"
+#define WORD0REP4   "XbespokeY"
+#define WORD1	    "tattooed"
+#define WORD2	    "fap"
+#define WORD3	    "keffiyeh"
+#define WORD4	    "biodiesel"
+#define WORD4_RE    "[a-z]iod[a-z]+"
+    const char *buf_s;
+
+    /* simple test: a single replacement */
+    TESTCASE(WORD0" "WORD1,
+	     WORD0_RE, WORD0REP,
+	     1, WORD0REP" "WORD1);
+
+    /* simple test: failure to match */
+    TESTCASE_START(WORD0" "WORD1,
+		   WORD4_RE, WORD0REP,
+		   0, WORD0" "WORD1);
+    TESTCASE_MIDDLE
+    CU_ASSERT_EQUAL(b.alloc, 0);	/* no replacement => never alloced */
+    buf_cstring(&b);
+    TESTCASE_END
+
+    /* a replacement which doesn't change the size */
+    TESTCASE_START(WORD0" "WORD1,
+		   WORD0_RE, WORD0REP2,
+		   1, WORD0REP2" "WORD1);
+    buf_s = buf_cstring(&b);
+    TESTCASE_MIDDLE
+    CU_ASSERT_PTR_EQUAL(buf_cstring(&b), buf_s);  /* no size change => no realloc */
+    TESTCASE_END
+
+    /* a replacement which shrinks the size */
+    TESTCASE_START(WORD0" "WORD1,
+		   WORD0_RE, WORD0REP3,
+		   1, WORD0REP3" "WORD1);
+    buf_s = buf_cstring(&b);
+    TESTCASE_MIDDLE
+    CU_ASSERT_PTR_EQUAL(buf_cstring(&b), buf_s);  /* no size change => no realloc */
+    TESTCASE_END
+
+    /* a replacement with an empty string */
+    TESTCASE(WORD0" "WORD1,
+	     WORD0_RE, "",
+	     1, " "WORD1);
+
+    /* a replacement with a NULL string */
+    TESTCASE(WORD0" "WORD1,
+	     WORD0_RE, NULL,
+	     1, " "WORD1);
+
+    /* multiple matches, including abutted ones */
+    TESTCASE(WORD0" "WORD1" "WORD2" "WORD0" "WORD3" "WORD0""WORD0" "WORD4,
+	     WORD0_RE, WORD0REP2,
+	     1, WORD0REP2" "WORD1" "WORD2" "WORD0" "WORD3" "WORD0""WORD0" "WORD4);
+
+    /* multiple matches with a replacement which contains the match */
+    TESTCASE(WORD0" "WORD1" "WORD2" "WORD0" "WORD3" "WORD0""WORD0" "WORD4,
+	     WORD0_RE, WORD0REP4,
+	     1, WORD0REP4" "WORD1" "WORD2" "WORD0" "WORD3" "WORD0""WORD0" "WORD4);
+
+#undef WORD0
+#undef WORD0REP
+#undef WORD0REP2
+#undef WORD0REP3
+#undef WORD0REP4
+#undef WORD1
+#undef WORD2
+#undef WORD3
+#undef WORD4
+}
+
+#undef TESTCASE_MIDDLE
+#define TESTCASE_MIDDLE \
+	n = buf_replace_all_re(&b, &re, _rep);
+
+static void test_replace_all_re(void)
+{
+    /* data thanks to hipsteripsum.me */
+#define WORD0	    "bespoke"
+#define WORD0_RE    "be[a-df-z]+e"
+#define WORD0REP    "butcher"
+#define WORD0REP2   "BeSp0K3"
+#define WORD0REP3   "BpK"
+#define WORD0REP4   "XbespokeY"
+#define WORD1	    "tattooed"
+#define WORD2	    "fap"
+#define WORD3	    "keffiyeh"
+#define WORD4	    "biodiesel"
+#define WORD4_RE    "[a-z]iod[a-z]+"
+    const char *buf_s;
+
+    /* simple test: a single replacement */
+    TESTCASE(WORD0" "WORD1,
+	     WORD0_RE, WORD0REP,
+	     1, WORD0REP" "WORD1);
+
+    /* simple test: failure to match */
+    TESTCASE_START(WORD0" "WORD1,
+		   WORD4_RE, WORD0REP,
+		   0, WORD0" "WORD1);
+    TESTCASE_MIDDLE
+    CU_ASSERT_EQUAL(b.alloc, 0);	/* no replacement => never alloced */
+    buf_cstring(&b);
+    TESTCASE_END
+
+    /* a replacement which doesn't change the size */
+    TESTCASE_START(WORD0" "WORD1,
+		   WORD0_RE, WORD0REP2,
+		   1, WORD0REP2" "WORD1);
+    buf_s = buf_cstring(&b);
+    TESTCASE_MIDDLE
+    CU_ASSERT_PTR_EQUAL(buf_cstring(&b), buf_s);  /* no size change => no realloc */
+    TESTCASE_END
+
+    /* a replacement which shrinks the size */
+    TESTCASE_START(WORD0" "WORD1,
+		   WORD0_RE, WORD0REP3,
+		   1, WORD0REP3" "WORD1);
+    buf_s = buf_cstring(&b);
+    TESTCASE_MIDDLE
+    CU_ASSERT_PTR_EQUAL(buf_cstring(&b), buf_s);  /* no size change => no realloc */
+    TESTCASE_END
+
+    /* a replacement with an empty string */
+    TESTCASE(WORD0" "WORD1,
+	     WORD0_RE, "",
+	     1, " "WORD1);
+
+    /* a replacement with a NULL string */
+    TESTCASE(WORD0" "WORD1,
+	     WORD0_RE, NULL,
+	     1, " "WORD1);
+
+    /* multiple matches, including abutted ones */
+    TESTCASE(WORD0" "WORD1" "WORD2" "WORD0" "WORD3" "WORD0""WORD0" "WORD4,
+	     WORD0_RE, WORD0REP2,
+	     4, WORD0REP2" "WORD1" "WORD2" "WORD0REP2" "WORD3" "WORD0REP2""WORD0REP2" "WORD4);
+
+    /* multiple matches with a replacement which contains the match */
+    TESTCASE(WORD0" "WORD1" "WORD2" "WORD0" "WORD3" "WORD0""WORD0" "WORD4,
+	     WORD0_RE, WORD0REP4,
+	     4, WORD0REP4" "WORD1" "WORD2" "WORD0REP4" "WORD3" "WORD0REP4""WORD0REP4" "WORD4);
+
+#undef WORD0
+#undef WORD0REP
+#undef WORD0REP2
+#undef WORD0REP3
+#undef WORD0REP4
+#undef WORD1
+#undef WORD2
+#undef WORD3
+#undef WORD4
+}
+
+#undef TESTCASE_START
+#undef TESTCASE_MIDDLE
+#undef TESTCASE_END
+
+
 static void test_truncate(void)
 {
 #define WORD0	"lorem"

@@ -909,6 +909,28 @@ void buf_printf(struct buf *buf, const char *fmt, ...)
     buf->flags |= BUF_CSTRING;
 }
 
+static void buf_replace_buf(struct buf *buf,
+			    unsigned int offset,
+			    unsigned int length,
+			    const struct buf *replace)
+{
+    /* we need buf to be a nul terminated string now please */
+    buf_cstring(buf);
+
+    if (replace->len > length) {
+	/* string will need to expand */
+	buf_ensure(buf, replace->len - length);
+    }
+    if (length != replace->len) {
+	memmove(buf->s + offset + replace->len,
+		buf->s + offset + length,
+		buf->len - offset - length + replace->len + 1);
+	buf->len += (replace->len - length);
+    }
+    if (replace)
+	memcpy(buf->s + offset, replace->s, replace->len);
+}
+
 /**
  * Replace all instances of the string literal @match in @buf
  * with the string @replace, which may be NULL to just remove
@@ -920,33 +942,87 @@ unsigned int buf_replace_all(struct buf *buf, const char *match,
 {
     unsigned int n = 0;
     int matchlen = strlen(match);
-    int replacelen = (replace ? strlen(replace) : 0);
+    struct buf replace_buf = BUF_INITIALIZER;
+    unsigned int off;
     char *p;
+
+    if (replace)
+	buf_init_ro(&replace_buf, replace, strlen(replace));
 
     /* we need buf to be a nul terminated string now please */
     buf_cstring(buf);
 
-    p = buf->s;
-    while ((p = strstr(p, match))) {
-	if (replacelen > matchlen) {
-	    /* string will need to expand */
-	    int dp = (p - buf->s);
-	    buf_ensure(buf, replacelen - matchlen);
-	    p = buf->s + dp;
-	}
-	if (matchlen != replacelen) {
-	    memmove(p+replacelen, p+matchlen,
-		    buf->len - (p - buf->s) - matchlen + replacelen + 1);
-	    buf->len += (replacelen - matchlen);
-	}
-	if (replace)
-	    memcpy(p, replace, replacelen);
+    off = 0;
+    while ((p = strstr(buf->s + off, match))) {
+	off = (p - buf->s);
+	buf_replace_buf(buf, off, matchlen, &replace_buf);
 	n++;
-	p += replacelen;
+	off += replace_buf.len;
     }
 
     return n;
 }
+
+#ifdef ENABLE_REGEX
+/**
+ * Replace the first instance of the compiled regexp @preg
+ * in @buf with the string @replace, which may be NULL to just
+ * remove an instance of @preg.  Does not support capture references
+ * in the replace text.
+ * Returns: the number of substitutions made (0 or 1)
+ */
+unsigned int buf_replace_one_re(struct buf *buf, const regex_t *preg,
+				const char *replace)
+{
+    struct buf replace_buf = BUF_INITIALIZER;
+    regmatch_t rm;
+
+    if (replace)
+	buf_init_ro(&replace_buf, replace, strlen(replace));
+
+    /* we need buf to be a nul terminated string now please */
+    buf_cstring(buf);
+
+    if (!regexec(preg, buf->s, 1, &rm, 0)) {
+	buf_replace_buf(buf, rm.rm_so, rm.rm_eo - rm.rm_so, &replace_buf);
+	return 1;
+    }
+
+    return 0;
+}
+
+/**
+ * Replace all instances of the compiled regexp @preg in @buf
+ * with the string @replace, which may be NULL to just remove
+ * instances of @preg.  Does not support capture references
+ * in the replace text.
+ * Returns: the number of substitutions made.
+ */
+unsigned int buf_replace_all_re(struct buf *buf, const regex_t *preg,
+				const char *replace)
+{
+    unsigned int n = 0;
+    struct buf replace_buf = BUF_INITIALIZER;
+    regmatch_t rm;
+    unsigned int off;
+
+    if (replace)
+	buf_init_ro(&replace_buf, replace, strlen(replace));
+
+    /* we need buf to be a nul terminated string now please */
+    buf_cstring(buf);
+
+    off = 0;
+    while (!regexec(preg, buf->s + off, 1, &rm, (off ? REG_NOTBOL : 0))) {
+	buf_replace_buf(buf, off + rm.rm_so, rm.rm_eo - rm.rm_so, &replace_buf);
+	off += rm.rm_so + replace_buf.len;
+	n++;
+    }
+
+    return n;
+}
+#endif
+
 
 /*
  * Compare two struct bufs bytewise.  Returns a number
