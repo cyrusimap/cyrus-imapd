@@ -1,4 +1,4 @@
-/* caldav_db.h -- abstract interface for per-user CalDAV database
+/* dav_db.h -- abstract interface for per-user DAV database
  *
  * Copyright (c) 1994-2012 Carnegie Mellon University.  All rights reserved.
  *
@@ -41,68 +41,36 @@
  *
  */
 
-#ifndef CALDAV_DB_H
-#define CALDAV_DB_H
+#ifndef DAV_DB_H
+#define DAV_DB_H
 
-#include "dav_db.h"
+#include <sqlite3.h>
 
-struct caldav_db;
-
-#define CALDAV_CREATE 0x01
-#define CALDAV_TRUNC  0x02
-
-struct caldav_data {
-    unsigned rowid;
-    const char *mailbox;
-    const char *resource;
-    uint32_t imap_uid;
-    const char *ical_uid;
-    unsigned comp_type;
-    const char *organizer;
-    const char *sched_tag;
-    const char *dtstart;
-    const char *dtend;
-    unsigned recurring;
-    unsigned transp;
+struct bind_val {
+    const char *name;
+    int type;
+    union {
+	int i;
+	const char *s;
+    } val;
 };
 
-/* prepare for caldav operations in this process */
-int caldav_init(void);
+/* prepare for DAV operations in this process */
+int dav_init(void);
 
-/* done with all caldav operations for this process */
-int caldav_done(void);
+/* done with all DAV operations for this process */
+int dav_done(void);
 
 /* get a database handle corresponding to userid */
-struct caldav_db *caldav_open(const char *userid, int flags);
+sqlite3 *dav_open(const char *userid, const char *cmds);
 
 /* close this handle */
-int caldav_close(struct caldav_db *caldavdb);
+int dav_close(sqlite3 *davdb);
 
-/* read an entry from 'caldavdb' */
-int caldav_read(struct caldav_db *caldavdb, struct caldav_data *cdata);
+/* execute 'cmd' and process results with 'cb'
+   'cmd' is prepared as 'stmt' with 'bval' as bound values */
+int dav_exec(sqlite3 *davdb, const char *cmd, struct bind_val bval[],
+	     int (*cb)(sqlite3_stmt *stmt, void *rock), void *rock,
+	     sqlite3_stmt **stmt);
 
-/* read an entry from 'caldavdb' and begin a transaction for updates */
-int caldav_lockread(struct caldav_db *caldavdb, struct caldav_data *cdata);
-
-/* process each entry for 'mailbox' in 'caldavdb' with cb() */
-int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
-		   int (*cb)(void *rock,
-			     const char *resource, uint32_t imap_uid),
-		   void *rock);
-
-/* write an entry to 'caldavdb' */
-int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata);
-
-/* delete an entry from 'caldavdb' */
-int caldav_delete(struct caldav_db *caldavdb, struct caldav_data *cdata);
-
-/* delete all entries for 'mailbox' from 'caldavdb' */
-int caldav_delmbox(struct caldav_db *caldavdb, const char *mailbox);
-
-/* commit transaction */
-int caldav_commit(struct caldav_db *caldavdb);
-
-/* abort transaction */
-int caldav_abort(struct caldav_db *caldavdb);
-
-#endif /* CALDAV_DB_H */
+#endif /* DAV_DB_H */

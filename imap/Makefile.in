@@ -63,7 +63,7 @@ CPPFLAGS = -I.. -I$(srcdir)/../lib @COM_ERR_CPPFLAGS@ @SIEVE_CPPFLAGS@ @CPPFLAGS
 IMAP_LIBS = @IMAP_LIBS@ @LIB_RT@
 
 RSS_OBJS = http_rss.o
-CALDAV_OBJS = http_caldav.o dav_prop.o caldav_db.o
+CALDAV_OBJS = http_caldav.o dav_prop.o caldav_db.o dav_db.o
 HTTP_OBJS = httpd.o http_err.o http_proxy.o @HTTP_OBJS@
 HTTP_LIBS = @XML_LIBS@ @ICAL_LIBS@
 
@@ -352,6 +352,12 @@ mbexamine: mbexamine.o $(CLIOBJS) libimap.a $(DEPLIBS)
 reconstruct: reconstruct.o $(CLIOBJS) libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o \
 	 reconstruct reconstruct.o $(CLIOBJS) libimap.a $(DEPLIBS) $(LIBS)
+
+dav_reconstruct: dav_reconstruct.o caldav_db.o dav_db.o $(CLIOBJS) \
+	libimap.a $(DEPLIBS)
+	$(CC) $(LDFLAGS) -lical -o \
+	 $@ dav_reconstruct.o caldav_db.o dav_db.o $(CLIOBJS) \
+	 libimap.a $(DEPLIBS) $(LIBS)
 
 quota: quota.o $(CLIOBJS) libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o quota quota.o $(CLIOBJS) \

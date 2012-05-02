@@ -93,7 +93,6 @@
 
 #ifdef WITH_CALDAV
 #include "dav_prop.h"
-#include <libical/ical.h>
 #endif
 
 #include <libxml/tree.h>
@@ -230,11 +229,79 @@ struct accept {
     struct accept *next;
 };
 
+/* Array of HTTP methods known by our server. */
+const char *http_methods[] = {
+    "ACL",
+    "COPY",
+    "DELETE",
+    "GET",
+    "HEAD",
+    "LOCK",
+    "MKCALENDAR",
+    "MKCOL",
+    "MOVE",
+    "OPTIONS",
+    "POST",
+    "PROPFIND",
+    "PROPPATCH",
+    "PUT",
+    "REPORT",
+    "UNLOCK",
+    NULL
+};
+
+/* Namespace to fetch static content from filesystem */
+const struct namespace_t namespace_default = {
+    URL_NS_DEFAULT, "", 0 /* no auth */, ALLOW_READ,
+    NULL, NULL, NULL, NULL,
+    {
+	NULL,			/* ACL		*/
+	NULL,			/* COPY		*/
+	NULL,			/* DELETE	*/
+	&meth_get,		/* GET		*/
+	&meth_get,		/* HEAD		*/
+	NULL,			/* LOCK		*/
+	NULL,			/* MKCALENDAR	*/
+	NULL,			/* MKCOL	*/
+	NULL,			/* MOVE		*/
+	&meth_options,		/* OPTIONS	*/
+	NULL,			/* POST		*/
+#ifdef WITH_CALDAV
+	&meth_propfind,		/* PROPFIND	*/
+#else
+	NULL,			/* PROPFIND	*/
+#endif
+	NULL,			/* PROPPATCH	*/
+	NULL,			/* PUT		*/
+	NULL,			/* REPORT	*/
+	NULL			/* UNLOCK	*/
+    }
+};
+
+/* Array of different namespaces and features supported by the server */
+const struct namespace_t *namespaces[] = {
+#ifdef WITH_CALDAV
+    &namespace_calendar,
+    &namespace_principal,
+#endif
+#ifdef WITH_RSS
+    &namespace_rss,
+#endif
+    &namespace_default,		/* MUST be present and be last!! */
+    NULL,
+};
+
+
 static void httpd_reset(void)
 {
     int i;
     int bytes_in = 0;
     int bytes_out = 0;
+
+    /* do any namespace specific cleanup */
+    for (i = 0; namespaces[i]; i++) {
+	if (namespaces[i]->reset) namespaces[i]->reset();
+    }
 
     proc_cleanup();
 
@@ -327,7 +394,7 @@ int service_init(int argc __attribute__((unused)),
 		 char **argv __attribute__((unused)),
 		 char **envp __attribute__((unused)))
 {
-    int r, opt;
+    int r, opt, i;
 
     LIBXML_TEST_VERSION
 
@@ -335,12 +402,6 @@ int service_init(int argc __attribute__((unused)),
 
     if (geteuid() == 0) fatal("must run as the Cyrus user", EC_USAGE);
     setproctitle_init(argc, argv, envp);
-
-#ifdef WITH_CALDAV
-    if (!config_getstring(IMAPOPT_CALENDARPREFIX)) {
-	fatal("the 'calendarprefix' option is not set", EC_CONFIG);
-    }
-#endif
 
     /* set signal handlers */
     signals_set_shutdown(&shut_down);
@@ -411,9 +472,11 @@ int service_init(int argc __attribute__((unused)),
 	buf_printf(&serverinfo, " zlib/%s", ZLIB_VERSION);
 #endif
 	buf_printf(&serverinfo, " libxml/%s", LIBXML_DOTTED_VERSION);
-#ifdef WITH_CALDAV
-	buf_printf(&serverinfo, " libical/%s", ICAL_VERSION);
-#endif
+    }
+
+    /* do any namespace specific initialization */
+    for (i = 0; namespaces[i]; i++) {
+	if (namespaces[i]->init) namespaces[i]->init(&serverinfo);
     }
 
     return 0;
@@ -593,6 +656,11 @@ void shut_down(int code)
     int bytes_out = 0;
 
     in_shutdown = 1;
+
+    /* do any namespace specific cleanup */
+    for (i = 0; namespaces[i]; i++) {
+	if (namespaces[i]->shutdown) namespaces[i]->shutdown();
+    }
 
     xmlCleanupParser();
 
@@ -797,68 +865,6 @@ static int reset_saslconn(sasl_conn_t **conn)
 
     return SASL_OK;
 }
-
-
-/* Array of HTTP methods known by our server. */
-const char *http_methods[] = {
-    "ACL",
-    "COPY",
-    "DELETE",
-    "GET",
-    "HEAD",
-    "LOCK",
-    "MKCALENDAR",
-    "MKCOL",
-    "MOVE",
-    "OPTIONS",
-    "POST",
-    "PROPFIND",
-    "PROPPATCH",
-    "PUT",
-    "REPORT",
-    "UNLOCK",
-    NULL
-};
-
-/* Namespace to fetch static content from filesystem */
-const struct namespace_t namespace_default = {
-    URL_NS_DEFAULT, "", 0 /* no auth */, ALLOW_READ,
-    {
-	NULL,			/* ACL		*/
-	NULL,			/* COPY		*/
-	NULL,			/* DELETE	*/
-	&meth_get,		/* GET		*/
-	&meth_get,		/* HEAD		*/
-	NULL,			/* LOCK		*/
-	NULL,			/* MKCALENDAR	*/
-	NULL,			/* MKCOL	*/
-	NULL,			/* MOVE		*/
-	&meth_options,		/* OPTIONS	*/
-	NULL,			/* POST		*/
-#ifdef WITH_CALDAV
-	&meth_propfind,		/* PROPFIND	*/
-#else
-	NULL,			/* PROPFIND	*/
-#endif
-	NULL,			/* PROPPATCH	*/
-	NULL,			/* PUT		*/
-	NULL,			/* REPORT	*/
-	NULL			/* UNLOCK	*/
-    }
-};
-
-/* Array of different namespaces and features supported by the server */
-const struct namespace_t *namespaces[] = {
-#ifdef WITH_CALDAV
-    &namespace_calendar,
-    &namespace_principal,
-#endif
-#ifdef WITH_RSS
-    &namespace_rss,
-#endif
-    &namespace_default,		/* MUST be present and be last!! */
-    NULL,
-};
 
 
 /*
@@ -1887,6 +1893,7 @@ static int http_auth(const char *creds, const char *authzid,
     struct auth_scheme_t *scheme;
     static char base64[BASE64_BUF_SIZE+1];
     const void *canon_user;
+    int i;
 
     chal->param = NULL;
 
@@ -2090,6 +2097,11 @@ static int http_auth(const char *creds, const char *authzid,
     /* Close IP-based telemetry log and create new log based on userid */
     if (httpd_logfd != -1) close(httpd_logfd);
     httpd_logfd = telemetry_log(httpd_userid, httpd_in, httpd_out, 0);
+
+    /* do any namespace specific post-auth processing */
+    for (i = 0; namespaces[i]; i++) {
+	if (namespaces[i]->auth) namespaces[i]->auth(httpd_userid);
+    }
 
     return status;
 }

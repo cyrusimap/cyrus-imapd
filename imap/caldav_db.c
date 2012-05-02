@@ -1,6 +1,6 @@
-/* caldav_db.c -- implementation of per-mailbox CalDAV database
+/* caldav_db.c -- implementation of per-user CalDAV database
  *
- * Copyright (c) 1994-2011 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2012 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -43,382 +43,312 @@
 
 #include <config.h>
 
-#include <stdlib.h>
 #include <syslog.h>
 #include <string.h>
-#include <ctype.h>
-#include <sys/types.h>
-#include <netinet/in.h>
-#include <errno.h>
-#ifdef HAVE_UNISTD_H
-#include <unistd.h>
-#endif
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <sys/uio.h>
 
-#include "assert.h"
-#include "cyrusdb.h"
-#include "map.h"
-#include "util.h"
-
-#include "global.h"
-#include "xmalloc.h"
-#include "mailbox.h"
-#include "imap_err.h"
-#include "xstrlcpy.h"
 #include "caldav_db.h"
+#include "cyrusdb.h"
+#include "xmalloc.h"
+
 
 enum {
-    CALDAV_VERSION = 1,
-    CALDAV_DEBUG = 0
+    STMT_SELECT,
+    STMT_SELMBOX,
+    STMT_INSERT,
+    STMT_UPDATE,
+    STMT_DELETE,
+    STMT_DELMBOX,
+    STMT_BEGIN,
+    STMT_COMMIT,
+    STMT_ROLLBACK
 };
+
+#define NUM_STMT 9
 
 struct caldav_db {
-    char *fname;		/* filename (full path) of db */
-    struct db *db;
-    struct txn *tid;		/* outstanding txn, if any */
+    sqlite3 *db;			/* DB handle */
+    char *userid;			/* DB owner's userid */
+    sqlite3_stmt *stmt[NUM_STMT];	/* prepared statements */
 };
 
-static struct caldav_db *lastcaldav = NULL;
 
-#define DB (&cyrusdb_flat) /*(config_caldav_db)*/
-
-static void abortcurrent(struct caldav_db *s)
+int caldav_init(void)
 {
-    if (s && s->tid) {
-	int r = DB->abort(s->db, s->tid);
-	if (r) {
-	    syslog(LOG_ERR, "DBERROR: error aborting txn: %s", 
-		   cyrusdb_strerror(r));
-	}
-	s->tid = NULL;
-    }
+    return dav_init();
 }
 
-int caldav_open(struct mailbox *mailbox, int flags,
-		struct caldav_db **caldavdbptr)
-{
-    struct caldav_db *caldavdb = NULL;
-    char *fname = NULL;
-    int r;
-#if 0
-    struct stat sbuf;
-
-    /* try to reuse the last db handle */
-    caldavdb = lastcaldav;
-    lastcaldav = NULL;
-    if (CALDAV_DEBUG) {
-	syslog(LOG_DEBUG, "caldav_db: caldav_open(%s)", user);
-    }
-
-    /* if this is the db we've already opened, return it */
-    if (caldavdb && !strcmp(caldavdb->user, user) &&
-	!stat(caldavdb->fname, &sbuf)) {
-	abortcurrent(caldavdb);
-	*caldavdbptr = caldavdb;
-	return 0;
-    }
-#endif
-    *caldavdbptr = NULL;
-    /* otherwise, close the existing database */
-    if (caldavdb) {
-	abortcurrent(caldavdb);
-	r = (DB->close)(caldavdb->db);
-	if (r) {
-	    syslog(LOG_ERR, "DBERROR: error closing caldavdb: %s", 
-		   cyrusdb_strerror(r));
-	}
-	free(caldavdb->fname);
-    } else {
-	/* create caldavdb */
-	caldavdb = (struct caldav_db *) xmalloc(sizeof(struct caldav_db));
-    }
-
-    /* open the caldavdb corresponding to mailbox */
-    fname = mailbox_meta_fname(mailbox, META_CALDAV);
-    r = (DB->open)(fname, (flags & CALDAV_CREATE) ? CYRUSDB_CREATE : 0,
-		 &caldavdb->db);
-    if (r != 0) {
-	int level = (flags & CALDAV_CREATE) ? LOG_ERR : LOG_DEBUG;
-	syslog(level, "DBERROR: opening %s: %s", fname, 
-	       cyrusdb_strerror(r));
-	r = IMAP_IOERROR;
-	free(caldavdb);
-	return r;
-    }
-    syslog(LOG_DEBUG, "caldav_db: opened %s", fname);
-
-    caldavdb->tid = NULL;
-    caldavdb->fname = xstrdup(fname);
-
-    *caldavdbptr = caldavdb;
-    return r;
-}
-
-static int parse_data(const char *data, int datalen, uint32_t *uid)
-{
-    char *p;
-    unsigned short version;
-
-    /* 'data' is <version> SP <UID> */
-    version = strtol(data, &p, 10);
-    assert(version == CALDAV_VERSION);
-
-    *uid = strtoul(p, &p, 10);
-    /* XXX  may not work for berkeley, skiplist */
-    if (p > (data + datalen)) return IMAP_IOERROR;
-
-    return 0;
-}
-
-static int caldav_readit(struct caldav_db *caldavdb, const char *resource,
-			 uint32_t *uid, int rw)
-{
-    int r;
-    const char *data;
-    int datalen;
-
-    assert(caldavdb && resource);
-
-    if (rw || caldavdb->tid) {
-	r = DB->fetchlock(caldavdb->db, resource, strlen(resource),
-			  &data, &datalen, &caldavdb->tid);
-    } else {
-	r = DB->fetch(caldavdb->db, resource, strlen(resource),
-		      &data, &datalen, NULL);
-    }
-    switch (r) {
-    case 0:
-	break;
-    case CYRUSDB_AGAIN:
-	syslog(LOG_DEBUG, "deadlock in caldav database for '%s'", resource);
-	return IMAP_AGAIN;
-	break;
-    case CYRUSDB_IOERROR:
-	syslog(LOG_ERR, "DBERROR: error fetching txn %s",
-	       cyrusdb_strerror(r));
-	return IMAP_IOERROR;
-	break;
-    case CYRUSDB_NOTFOUND:
-	*uid = 0;
-
-	return 0;
-	break;
-    }
-
-    return parse_data(data, datalen, uid);
-}
-
-int caldav_read(struct caldav_db *caldavdb, const char *resource, uint32_t *uid)
-{
-    if (CALDAV_DEBUG) {
-	syslog(LOG_DEBUG, "caldav_db: caldav_read(%s)", resource);
-    }
-
-    return caldav_readit(caldavdb, resource, uid, 0);
-}
-
-int caldav_lockread(struct caldav_db *caldavdb, const char *resource,
-		    uint32_t *uid)
-{
-    if (CALDAV_DEBUG) {
-	syslog(LOG_DEBUG, "caldav_db: caldav_lockread(%s)", resource);
-    }
-
-    return caldav_readit(caldavdb, resource, uid, 1);
-}
-
-int caldav_write(struct caldav_db *caldavdb, const char *resource, uint32_t uid)
-{
-    int r;
-	char data[20];
-
-    assert(caldavdb && resource);
-/*    assert(caldavdb->tid);*/
-
-    if (CALDAV_DEBUG) {
-	syslog(LOG_DEBUG, "caldav_db: caldav_write(%s, %u)", resource, uid);
-    }
-
-    snprintf(data, sizeof(data), "%u %u", CALDAV_VERSION, uid);
-
-    r = DB->store(caldavdb->db, resource, strlen(resource),
-		  data, strlen(data), &caldavdb->tid);
-
-    switch (r) {
-    case CYRUSDB_OK:
-	break;
-    case CYRUSDB_IOERROR:
-	r = IMAP_AGAIN;
-	break;
-    default:
-	syslog(LOG_ERR, "DBERROR: error updating database: %s", 
-	       cyrusdb_strerror(r));
-	r = IMAP_IOERROR;
-	break;
-    }
-
-    return r;
-}
-
-int caldav_delete(struct caldav_db *caldavdb, const char *resource)
-{
-    int r;
-
-    assert(caldavdb && resource);
-/*    assert(caldavdb->tid);*/
-
-    if (CALDAV_DEBUG) {
-	syslog(LOG_DEBUG, "caldav_db: caldav_delete(%s)", resource);
-    }
-
-    r = DB->delete(caldavdb->db, resource, strlen(resource),
-		   &caldavdb->tid, 1);
-
-    switch (r) {
-    case CYRUSDB_OK:
-	break;
-    case CYRUSDB_IOERROR:
-	r = IMAP_AGAIN;
-	break;
-    default:
-	syslog(LOG_ERR, "DBERROR: error updating database: %s", 
-	       cyrusdb_strerror(r));
-	r = IMAP_IOERROR;
-	break;
-    }
-
-    return r;
-}
-
-struct forrock {
-    int (*cb)(void *rock, const char *resource, uint32_t uid);
-    void *rock;
-};
-
-static int for_cb(void *rock,
-		  const char *key, int keylen,
-		  const char *data, int datalen)
-{
-    struct forrock *frock = (struct forrock *) rock;
-    char resource[MAX_MAILBOX_PATH+1];
-    uint32_t uid;
-    int r;
-
-    strlcpy(resource, key, keylen+1);
-    resource[keylen] = '\0';
-
-    if ((r = parse_data(data, datalen, &uid))) return r;
-
-    frock->cb(frock->rock, resource, uid);
-
-    return 0;
-}
-
-int caldav_foreach(struct caldav_db *caldavdb,
-		   int (*cb)(void *rock, const char *resource, uint32_t uid),
-		   void *rock)
-{
-    struct forrock frock;
-
-    frock.cb = cb;
-    frock.rock = rock;
-
-    return DB->foreach(caldavdb->db, "", 0, NULL, &for_cb, &frock, NULL);
-}
-
-int caldav_close(struct caldav_db *caldavdb)
-{
-    int r;
-
-    if (CALDAV_DEBUG) {
-	syslog(LOG_DEBUG, "caldav_db: caldav_close(%s)", caldavdb->fname);
-    }
-
-    if (caldavdb->tid) {
-	r = DB->commit(caldavdb->db, caldavdb->tid);
-	if (r != CYRUSDB_OK) {
-	    syslog(LOG_ERR, "DBERROR: error committing caldav txn; "
-		   "caldav state lost: %s", cyrusdb_strerror(r));
-	}
-	caldavdb->tid = NULL;
-    }
-#if 0
-    r = (DB->close)(caldavdb->db);
-    if (r) {
-	syslog(LOG_ERR, "DBERROR: error closing: %s",
-	       cyrusdb_strerror(r));
-	r = IMAP_IOERROR;
-    }
-	free(caldavdb->fname);
-	free(caldavdb);
-#else
-    if (lastcaldav) {
-	int r;
-
-	/* free the old database hanging around */
-	abortcurrent(lastcaldav);
-	r = (DB->close)(lastcaldav->db);
-	if (r != CYRUSDB_OK) {
-	    syslog(LOG_ERR, "DBERROR: error closing lastcaldav: %s",
-		   cyrusdb_strerror(r));
-	    r = IMAP_IOERROR;
-	}
-	if(!r) lastcaldav->db = NULL;
-	free(lastcaldav->fname);
-	free(lastcaldav);
-	lastcaldav = NULL;
-    }
-
-    /* this database can now be reused */
-    lastcaldav = caldavdb;
-#endif
-    return 0;
-}
-
-/* database better have been locked before this ! */
-int caldav_unlock(struct caldav_db *caldavdb)
-{
-    int r;
-
-    assert(caldavdb);
-    if (!caldavdb->tid) return 0;
-
-    if (CALDAV_DEBUG) {
-	syslog(LOG_DEBUG, "caldav_db: caldav_unlock(%s)", caldavdb->fname);
-    }
-
-    r = DB->commit(caldavdb->db, caldavdb->tid);
-    if (r != CYRUSDB_OK) {
-	syslog(LOG_ERR, "DBERROR: error committing caldav txn; "
-	       "caldav state lost: %s", cyrusdb_strerror(r));
-    }
-    caldavdb->tid = NULL;
-
-    return 0;
-}
 
 int caldav_done(void)
 {
-    int r = 0;
+    return dav_done();
+}
 
-    if (CALDAV_DEBUG) {
-	syslog(LOG_DEBUG, "caldav_db: caldav_done()");
+
+#define CMD_DROP "DROP TABLE IF EXISTS ical_objs;"
+
+#define CMD_CREATE							\
+    "CREATE TABLE IF NOT EXISTS ical_objs ("				\
+    " rowid INTEGER PRIMARY KEY,"					\
+    " mailbox TEXT NOT NULL,"						\
+    " resource TEXT NOT NULL,"						\
+    " imap_uid INTEGER,"						\
+    " ical_uid TEXT,"							\
+    " comp_type INTEGER,"						\
+    " organizer TEXT,"							\
+    " sched_tag TEXT,"							\
+    " dtstart TEXT,"							\
+    " dtend TEXT,"							\
+    " recurring INTEGER,"						\
+    " transp INTEGER,"							\
+    " UNIQUE( mailbox, resource ) );"					\
+    "CREATE INDEX IF NOT EXISTS idx_ical_uid ON ical_objs ( ical_uid );"
+
+/* Open DAV DB corresponding to userid */
+struct caldav_db *caldav_open(const char *userid, int flags)
+{
+    sqlite3 *db;
+    struct caldav_db *caldavdb = NULL;
+    const char *cmds = CMD_CREATE;
+
+    if (flags & CALDAV_TRUNC) cmds = CMD_DROP CMD_CREATE;
+
+    db = dav_open(userid, cmds);
+
+    if (db) {
+	caldavdb = xzmalloc(sizeof(struct caldav_db));
+	caldavdb->db = db;
+	caldavdb->userid = xstrdup(userid);
     }
-#if 0
-    if (lastcaldav) {
-	abortcurrent(lastcaldav);
-	r = (DB->close)(lastcaldav->db);
-	if (r) {
-	    syslog(LOG_ERR, "DBERROR: error closing lastcaldav: %s",
-		   cyrusdb_strerror(r));
-	    r = IMAP_IOERROR;
-	}
-	free(lastcaldav->user);
-	free(lastcaldav->fname);
-	free(lastcaldav);
+
+    return caldavdb;
+}
+
+
+/* Close DAV DB */
+int caldav_close(struct caldav_db *caldavdb)
+{
+    int i, r = 0;
+
+    if (!caldavdb) return 0;
+
+    for (i = 0; i < NUM_STMT; i++) {
+	sqlite3_stmt *stmt = caldavdb->stmt[i];
+	if (stmt) sqlite3_finalize(stmt);
     }
-#endif
+
+    r = dav_close(caldavdb->db);
+
+    free(caldavdb->userid);
+    free(caldavdb);
+
     return r;
+}
+
+
+static int read_cb(sqlite3_stmt *stmt, void *rock)
+{
+    struct caldav_data *cdata = (struct caldav_data *) rock;
+
+    memset(cdata, 0, sizeof(struct caldav_data));
+    cdata->rowid = sqlite3_column_int(stmt, 0);
+    cdata->mailbox = (const char *) sqlite3_column_text(stmt, 1);
+    cdata->resource = (const char *) sqlite3_column_text(stmt, 2);
+    cdata->imap_uid = sqlite3_column_int(stmt, 3);
+    cdata->ical_uid = (const char *) sqlite3_column_text(stmt, 4);
+    cdata->comp_type = sqlite3_column_int(stmt, 5);
+    cdata->organizer = (const char *) sqlite3_column_text(stmt, 6);
+    cdata->sched_tag = (const char *) sqlite3_column_text(stmt, 7);
+    cdata->dtstart = (const char *) sqlite3_column_text(stmt, 8);
+    cdata->dtend = (const char *) sqlite3_column_text(stmt, 9);
+    cdata->recurring = sqlite3_column_int(stmt, 10);
+    cdata->transp = sqlite3_column_int(stmt, 11);
+
+    return 0;
+}
+
+
+#define CMD_SELECT							\
+    "SELECT rowid, mailbox, resource, imap_uid, ical_uid, comp_type,"	\
+    "  organizer, sched_tag, dtstart, dtend, recurring, transp"		\
+    " FROM ical_objs"							\
+    " WHERE ( mailbox = :mailbox AND resource = :resource )"		\
+    "  OR ical_uid = :ical_uid;"
+
+int caldav_read(struct caldav_db *caldavdb, struct caldav_data *cdata)
+{
+    struct bind_val bval[] = {
+	{ ":mailbox", SQLITE_TEXT, { .s = cdata->mailbox } },
+	{ ":resource", SQLITE_TEXT, { .s = cdata->resource } },
+	{ ":ical_uid", SQLITE_TEXT, { .s = cdata->ical_uid } },
+	{ NULL, SQLITE_NULL, { .s = NULL } } };
+    int r;
+
+    cdata->rowid = 0;
+    r = dav_exec(caldavdb->db, CMD_SELECT, bval, &read_cb, cdata,
+		 &caldavdb->stmt[STMT_SELECT]);
+    if (!r && !cdata->rowid) r = CYRUSDB_NOTFOUND;
+
+    return r;
+}
+
+
+#define CMD_BEGIN "BEGIN TRANSACTION;"
+
+int caldav_lockread(struct caldav_db *caldavdb, struct caldav_data *cdata)
+{
+    int r;
+
+    /* begin a transaction */
+    r = dav_exec(caldavdb->db, CMD_BEGIN, NULL, NULL, NULL,
+		 &caldavdb->stmt[STMT_BEGIN]);
+    if (r) return r;
+
+    /* do the actual read */
+    return caldav_read(caldavdb, cdata);
+}
+
+
+struct for_rock {
+    int (*cb)(void *rock, const char *resource, uint32_t imap_uid);
+    void *rock;
+};
+
+
+static int for_cb(sqlite3_stmt *stmt, void *rock)
+{
+    struct for_rock *frock = (struct for_rock *) rock;
+    const char *resource;
+    uint32_t imap_uid;
+
+    resource = (const char *) sqlite3_column_text(stmt, 2);
+    imap_uid = sqlite3_column_int(stmt, 3);
+
+    return frock->cb(frock->rock, resource, imap_uid);
+}
+
+
+#define CMD_SELMBOX							\
+    "SELECT rowid, mailbox, resource, imap_uid, ical_uid, comp_type,"	\
+    "  organizer, sched_tag, dtstart, dtend, recurring, transp"		\
+    " FROM ical_objs WHERE mailbox = :mailbox;"
+
+int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
+		   int (*cb)(void *rock,
+			     const char *resource, uint32_t imap_uid),
+		   void *rock)
+{
+    struct bind_val bval[] = {
+	{ ":mailbox", SQLITE_TEXT, { .s = mailbox } },
+	{ NULL, SQLITE_NULL, { .s = NULL } } };
+    struct for_rock frock = { cb, rock };
+
+    return dav_exec(caldavdb->db, CMD_SELMBOX, bval, &for_cb, &frock,
+		    &caldavdb->stmt[STMT_SELMBOX]);
+}
+
+
+#define CMD_INSERT							\
+    "INSERT INTO ical_objs ("						\
+    "  mailbox, resource, imap_uid, ical_uid, comp_type,"		\
+    "  organizer, sched_tag, dtstart, dtend, recurring, transp )"	\
+    " VALUES ("								\
+    "  :mailbox, :resource, :imap_uid, :ical_uid, :comp_type,"		\
+    "  :organizer, :sched_tag, :dtstart, :dtend, :recurring, :transp );"
+
+#define CMD_UPDATE		\
+    "UPDATE ical_objs SET"	\
+    "  imap_uid  = :imap_uid,"	\
+    "  ical_uid  = :ical_uid,"	\
+    "  comp_type = :comp_type," \
+    "  organizer = :organizer," \
+    "  sched_tag = :sched_tag," \
+    "  dtstart   = :dtstart,"	\
+    "  dtend     = :dtend,"	\
+    "  recurring = :recurring," \
+    "  transp    = :transp"	\
+    " WHERE rowid = :rowid;"
+
+int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata)
+{
+    struct bind_val bval[] = {
+	{ ":imap_uid", SQLITE_INTEGER, { .i = cdata->imap_uid } },
+	{ ":ical_uid", SQLITE_TEXT, { .s = cdata->ical_uid } },
+	{ ":comp_type", SQLITE_INTEGER, { .i = cdata->comp_type } },
+	{ ":organizer", SQLITE_TEXT, { .s = cdata->organizer } },
+	{ ":sched_tag", SQLITE_TEXT, { .s = cdata->sched_tag } },
+	{ ":dtstart", SQLITE_TEXT, { .s = cdata->dtstart } },
+	{ ":dtend", SQLITE_TEXT, { .s = cdata->dtend } },
+	{ ":recurring:", SQLITE_INTEGER, { .i = cdata->recurring } },
+	{ ":transp", SQLITE_INTEGER, { .i = cdata->transp } },
+	{ NULL, SQLITE_NULL, { .s = NULL } },
+	{ NULL, SQLITE_NULL, { .s = NULL } },
+	{ NULL, SQLITE_NULL, { .s = NULL } } };
+    const char *cmd;
+    sqlite3_stmt **stmt;
+
+    if (cdata->rowid) {
+	cmd = CMD_UPDATE;
+	stmt = &caldavdb->stmt[STMT_UPDATE];
+
+	bval[9].name = ":rowid";
+	bval[9].type = SQLITE_INTEGER;
+	bval[9].val.i = cdata->rowid;
+    }
+    else {
+	cmd = CMD_INSERT;
+	stmt = &caldavdb->stmt[STMT_INSERT];
+
+	bval[9].name = ":mailbox";
+	bval[9].type = SQLITE_TEXT;
+	bval[9].val.s = cdata->mailbox;
+	bval[10].name = ":resource";
+	bval[10].type = SQLITE_TEXT;
+	bval[10].val.s = cdata->resource;
+    }
+
+    return dav_exec(caldavdb->db, cmd, bval, NULL, NULL, stmt);
+}
+
+
+#define CMD_DELETE "DELETE FROM ical_objs WHERE rowid = :rowid;"
+
+int caldav_delete(struct caldav_db *caldavdb, struct caldav_data *cdata)
+{
+    struct bind_val bval[] = {
+	{ ":rowid", SQLITE_INTEGER, { .i = cdata->rowid } },
+	{ NULL, SQLITE_NULL, { .s = NULL } } };
+
+    return dav_exec(caldavdb->db, CMD_DELETE, bval, NULL, NULL,
+		    &caldavdb->stmt[STMT_DELETE]);
+}
+
+
+#define CMD_DELMBOX "DELETE FROM ical_objs WHERE mailbox = :mailbox;"
+
+int caldav_delmbox(struct caldav_db *caldavdb, const char *mailbox)
+{
+    struct bind_val bval[] = {
+	{ ":mailbox", SQLITE_TEXT, { .s = mailbox } },
+	{ NULL, SQLITE_NULL, { .s = NULL } } };
+
+    return dav_exec(caldavdb->db, CMD_DELMBOX, bval, NULL, NULL,
+		    &caldavdb->stmt[STMT_DELMBOX]);
+}
+
+
+#define CMD_COMMIT "COMMIT TRANSACTION;"
+
+int caldav_commit(struct caldav_db *caldavdb)
+{
+    return dav_exec(caldavdb->db, CMD_COMMIT, NULL, NULL, NULL,
+		    &caldavdb->stmt[STMT_COMMIT]);
+}
+
+
+#define CMD_ROLLBACK "ROLLBACK TRANSACTION;"
+
+int caldav_abort(struct caldav_db *caldavdb)
+{
+    return dav_exec(caldavdb->db, CMD_ROLLBACK, NULL, NULL, NULL,
+		    &caldavdb->stmt[STMT_ROLLBACK]);
 }

@@ -39,6 +39,7 @@ imap/cyr_sequence
 imap/cyr_synclog
 imap/cyr_userseen
 imap/cyrdump
+imap/dav_reconstruct
 imap/deliver
 imap/fetchnews
 imap/fud

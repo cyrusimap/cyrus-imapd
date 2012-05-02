@@ -96,6 +96,13 @@ enum {
     OVERWRITE_YES
 };
 
+static struct caldav_db *caldavdb = NULL;
+
+static void my_caldav_init(struct buf *serverinfo);
+static void my_caldav_auth(const char *userid);
+static void my_caldav_reset(void);
+static void my_caldav_shutdown(void);
+
 static int meth_acl(struct transaction_t *txn);
 static int meth_copy(struct transaction_t *txn);
 static int meth_delete(struct transaction_t *txn);
@@ -110,7 +117,7 @@ static int is_mediatype(const char *hdr, const char *type);
 static int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root);
 static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 			  struct mailbox *mailbox, const char *resource,
-			  struct caldav_db *caldavdb, int overwrite);
+			  int overwrite);
 static icalcomponent *busytime(struct transaction_t *txn,
 			       struct propfind_ctx *fctx,
 			       char mailboxname[],
@@ -125,6 +132,7 @@ int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname);
 const struct namespace_t namespace_calendar = {
     URL_NS_CALENDAR, "/calendars", 1 /* auth */,
     (ALLOW_READ | ALLOW_WRITE | ALLOW_DAV | ALLOW_CAL),
+    &my_caldav_init, &my_caldav_auth, my_caldav_reset, &my_caldav_shutdown,
     { 
 	&meth_acl,		/* ACL		*/
 	&meth_copy,		/* COPY		*/
@@ -149,6 +157,7 @@ const struct namespace_t namespace_calendar = {
 const struct namespace_t namespace_principal = {
     URL_NS_PRINCIPAL, "/principals", 1 /* auth */,
     (ALLOW_DAV | ALLOW_CAL | ALLOW_CARD),
+    NULL, NULL, NULL, NULL,
     {
 	NULL,			/* ACL		*/
 	NULL,			/* COPY		*/
@@ -168,6 +177,38 @@ const struct namespace_t namespace_principal = {
 	NULL			/* UNLOCK	*/
     }
 };
+
+
+static void my_caldav_init(struct buf *serverinfo)
+{
+    if (!config_getstring(IMAPOPT_CALENDARPREFIX)) {
+	fatal("the 'calendarprefix' option is not set", EC_CONFIG);
+    }
+
+    caldav_init();
+
+    buf_printf(serverinfo, " libical/%s", ICAL_VERSION);
+    buf_printf(serverinfo, " SQLite/%s", sqlite3_libversion());
+}
+
+
+static void my_caldav_auth(const char *userid)
+{
+    caldavdb = caldav_open(userid, CALDAV_CREATE);
+}
+
+
+static void my_caldav_reset(void)
+{
+    if (caldavdb) caldav_close(caldavdb);
+    caldavdb = NULL;
+}
+
+
+static void my_caldav_shutdown(void)
+{
+    caldav_done();
+}
 
 
 /* Perform an ACL request
@@ -544,8 +585,7 @@ static int meth_copy(struct transaction_t *txn)
     char *server, *acl;
     struct backend *src_be = NULL, *dest_be = NULL;
     struct mailbox *src_mbox = NULL, *dest_mbox = NULL;
-    struct caldav_db *src_caldb = NULL, *dest_caldb = NULL;
-    uint32_t src_uid = 0, olduid = 0;
+    struct caldav_data cdata;
     struct index_record src_rec;
     const char *etag = NULL;
     time_t lastmod = 0;
@@ -692,17 +732,11 @@ static int meth_copy(struct transaction_t *txn)
 	goto done;
     }
 
-    /* Open the associated CalDAV database */
-    if ((r = caldav_open(dest_mbox, CALDAV_CREATE, &dest_caldb))) {
-	syslog(LOG_ERR, "caldav_open(%s) failed: %s",
-	       dest_mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-	ret = HTTP_SERVER_ERROR;
-	goto done;
-    }
-
     /* Find message UID for the dest resource, if exists */
-    caldav_read(dest_caldb, dest.resource, &olduid);
+    memset(&cdata, 0, sizeof(struct caldav_data));
+    cdata.mailbox = dest_mboxname;
+    cdata.resource = dest.resource;
+    caldav_read(caldavdb, &cdata);
     /* XXX  Check errors */
 
     /* Finished our initial read of dest mailbox */
@@ -712,7 +746,7 @@ static int meth_copy(struct transaction_t *txn)
     if ((hdr = spool_getheader(txn->req_hdrs, "Overwrite")) &&
 	!strcmp(hdr[0], "F")) {
 
-	if (olduid) {
+	if (cdata.imap_uid) {
 	    /* Don't overwrite the destination resource */
 	    ret = HTTP_PRECOND_FAILED;
 	    goto done;
@@ -729,20 +763,16 @@ static int meth_copy(struct transaction_t *txn)
 	goto done;
     }
 
-    /* Open the associated CalDAV database */
-    if ((r = caldav_open(src_mbox, 0, &src_caldb))) {
-	syslog(LOG_ERR, "caldav_open(%s) failed: %s",
-	       src_mboxname, error_message(r));
-	txn->error.desc = error_message(r);
-	ret = HTTP_SERVER_ERROR;
-	goto done;
-    }
-
     /* Find message UID for the source resource */
-    caldav_read(src_caldb, txn->req_tgt.resource, &src_uid);
+    memset(&cdata, 0, sizeof(struct caldav_data));
+    cdata.mailbox = src_mboxname;
+    cdata.resource = txn->req_tgt.resource;
+    caldav_read(caldavdb, &cdata);
+    /* XXX  Check errors */
 
     /* Fetch index record for the source resource */
-    if (!src_uid || mailbox_find_index_record(src_mbox, src_uid, &src_rec)) {
+    if (!cdata.imap_uid ||
+	mailbox_find_index_record(src_mbox, cdata.imap_uid, &src_rec)) {
 	ret = HTTP_NOT_FOUND;
 	goto done;
     }
@@ -759,16 +789,15 @@ static int meth_copy(struct transaction_t *txn)
     }
 
     /* Load message containing the resource and parse iCal data */
-    mailbox_map_message(src_mbox, src_uid, &msg_base, &msg_size);
+    mailbox_map_message(src_mbox, src_rec.uid, &msg_base, &msg_size);
     ical = icalparser_parse_string(msg_base + src_rec.header_size);
-    mailbox_unmap_message(src_mbox, src_uid, &msg_base, &msg_size);
+    mailbox_unmap_message(src_mbox, src_rec.uid, &msg_base, &msg_size);
 
     /* Finished our initial read of source mailbox */
     mailbox_unlock_index(src_mbox, NULL);
 
     /* Store source resource at destination */
-    ret = store_resource(txn, ical, dest_mbox, dest.resource,
-			 dest_caldb, overwrite);
+    ret = store_resource(txn, ical, dest_mbox, dest.resource, overwrite);
 
     /* For MOVE, we need to delete the source resource */
     if ((txn->meth[0] == 'M') &&
@@ -777,12 +806,15 @@ static int meth_copy(struct transaction_t *txn)
 	mailbox_lock_index(src_mbox, LOCK_EXCLUSIVE);
 
 	/* Find message UID for the source resource */
-	caldav_lockread(src_caldb, txn->req_tgt.resource, &src_uid);
+	memset(&cdata, 0, sizeof(struct caldav_data));
+	cdata.mailbox = src_mboxname;
+	cdata.resource = txn->req_tgt.resource;
+	caldav_lockread(caldavdb, &cdata);
 	/* XXX  Check errors */
 
 	/* Fetch index record for the source resource */
-	if (src_uid &&
-	    !mailbox_find_index_record(src_mbox, src_uid, &src_rec)) {
+	if (cdata.imap_uid &&
+	    !mailbox_find_index_record(src_mbox, cdata.imap_uid, &src_rec)) {
 
 	    /* Expunge the source message */
 	    src_rec.system_flags |= FLAG_EXPUNGED;
@@ -796,7 +828,8 @@ static int meth_copy(struct transaction_t *txn)
 	}
 
 	/* Delete mapping entry for source resource name */
-	caldav_delete(src_caldb, txn->req_tgt.resource);
+	caldav_delete(caldavdb, &cdata);
+	caldav_commit(caldavdb);
     }
 
   done:
@@ -811,9 +844,7 @@ static int meth_copy(struct transaction_t *txn)
     }
 
     if (ical) icalcomponent_free(ical);
-    if (dest_caldb) caldav_close(dest_caldb);
     if (dest_mbox) mailbox_close(&dest_mbox);
-    if (src_caldb) caldav_close(src_caldb);
     if (src_mbox) mailbox_unlock_index(src_mbox, NULL);
 
     return ret;
@@ -826,8 +857,7 @@ static int meth_delete(struct transaction_t *txn)
     int ret = HTTP_NO_CONTENT, r, precond, rights;
     char *server, *acl, mailboxname[MAX_MAILBOX_BUFFER];
     struct mailbox *mailbox = NULL;
-    struct caldav_db *caldavdb = NULL;
-    uint32_t uid = 0;
+    struct caldav_data cdata;
     struct index_record record;
     const char *etag = NULL;
     time_t lastmod = 0;
@@ -885,7 +915,8 @@ static int meth_delete(struct transaction_t *txn)
 				   httpd_userid, httpd_authstate,
 				   1, 0, 0);
 
-	if (r == IMAP_PERMISSION_DENIED) ret = HTTP_FORBIDDEN;
+	if (!r) caldav_delmbox(caldavdb, mailboxname);
+	else if (r == IMAP_PERMISSION_DENIED) ret = HTTP_FORBIDDEN;
 	else if (r == IMAP_MAILBOX_NONEXISTENT) ret = HTTP_NOT_FOUND;
 	else if (r) ret = HTTP_SERVER_ERROR;
 
@@ -904,18 +935,16 @@ static int meth_delete(struct transaction_t *txn)
 	goto done;
     }
 
-    /* Open the associated CalDAV database */
-    if ((r = caldav_open(mailbox, CALDAV_CREATE, &caldavdb))) {
-	txn->error.desc = error_message(r);
-	ret = HTTP_SERVER_ERROR;
-	goto done;
-    }
-
     /* Find message UID for the resource */
-    caldav_lockread(caldavdb, txn->req_tgt.resource, &uid);
+    memset(&cdata, 0, sizeof(struct caldav_data));
+    cdata.mailbox = mailboxname;
+    cdata.resource = txn->req_tgt.resource;
+    caldav_lockread(caldavdb, &cdata);
+    /* XXX  Check errors */
 
     /* Fetch index record for the resource */
-    if (!uid || mailbox_find_index_record(mailbox, uid, &record)) {
+    if (!cdata.imap_uid ||
+	mailbox_find_index_record(mailbox, cdata.imap_uid, &record)) {
 	ret = HTTP_NOT_FOUND;
 	goto done;
     }
@@ -944,10 +973,10 @@ static int meth_delete(struct transaction_t *txn)
     }
 
     /* Delete mapping entry for resource name */
-    caldav_delete(caldavdb, txn->req_tgt.resource);
+    caldav_delete(caldavdb, &cdata);
+    caldav_commit(caldavdb);
 
   done:
-    if (caldavdb) caldav_close(caldavdb);
     if (mailbox) mailbox_unlock_index(mailbox, NULL);
 
     return ret;
@@ -963,8 +992,7 @@ static int meth_get(struct transaction_t *txn)
     struct resp_body_t *resp_body = &txn->resp_body;
     char *server, *acl, mailboxname[MAX_MAILBOX_BUFFER];
     struct mailbox *mailbox = NULL;
-    struct caldav_db *caldavdb = NULL;
-    uint32_t uid = 0;
+    struct caldav_data cdata;
     struct index_record record;
     time_t lastmod = 0;
 
@@ -1022,18 +1050,16 @@ static int meth_get(struct transaction_t *txn)
 	goto done;
     }
 
-    /* Open the associated CalDAV database */
-    if ((r = caldav_open(mailbox, CALDAV_CREATE, &caldavdb))) {
-	txn->error.desc = error_message(r);
-	ret = HTTP_SERVER_ERROR;
-	goto done;
-    }
-
     /* Find message UID for the resource */
-    caldav_read(caldavdb, txn->req_tgt.resource, &uid);
+    memset(&cdata, 0, sizeof(struct caldav_data));
+    cdata.mailbox = mailboxname;
+    cdata.resource = txn->req_tgt.resource;
+    caldav_read(caldavdb, &cdata);
+    /* XXX  Check errors */
 
     /* Fetch index record for the resource */
-    if (!uid || mailbox_find_index_record(mailbox, uid, &record)) {
+    if (!cdata.imap_uid ||
+	mailbox_find_index_record(mailbox, cdata.imap_uid, &record)) {
 	ret = HTTP_NOT_FOUND;
 	goto done;
     }
@@ -1066,7 +1092,6 @@ static int meth_get(struct transaction_t *txn)
 	mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
 
   done:
-    if (caldavdb) caldav_close(caldavdb);
     if (mailbox) mailbox_unlock_index(mailbox, NULL);
 
     return ret;
@@ -1488,7 +1513,6 @@ static int propfind_by_collection(char *mboxname,
     struct propfind_ctx *fctx = (struct propfind_ctx *) rock;
     struct mboxlist_entry mbentry;
     struct mailbox *mailbox = NULL;
-    struct caldav_db *caldavdb = NULL;
     char *p;
     size_t len;
     int r = 0, rights;
@@ -1519,13 +1543,6 @@ static int propfind_by_collection(char *mboxname,
     if ((r = mailbox_open_irl(mboxname, &mailbox))) {
 	syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
 	       mboxname, error_message(r));
-	*fctx->errstr = error_message(r);
-	*fctx->ret = HTTP_SERVER_ERROR;
-	goto done;
-    }
-
-    /* Open the associated CalDAV database */
-    if ((r = caldav_open(mailbox, CALDAV_CREATE, &caldavdb))) {
 	*fctx->errstr = error_message(r);
 	*fctx->ret = HTTP_SERVER_ERROR;
 	goto done;
@@ -1563,17 +1580,21 @@ static int propfind_by_collection(char *mboxname,
 
 	if (fctx->req_tgt->resource) {
 	    /* Add response for target resource */
-	    uint32_t uid;
+	    struct caldav_data cdata;
 
 	    /* Find message UID for the resource */
-	    caldav_read(caldavdb, fctx->req_tgt->resource, &uid);
+	    memset(&cdata, 0, sizeof(struct caldav_data));
+	    cdata.mailbox = mboxname;
+	    cdata.resource = fctx->req_tgt->resource;
+	    caldav_read(caldavdb, &cdata);
 	    /* XXX  Check errors */
 
-	    r = fctx->proc_by_resource(rock, fctx->req_tgt->resource, uid);
+	    r = fctx->proc_by_resource(rock, fctx->req_tgt->resource,
+				       cdata.imap_uid);
 	}
 	else {
 	    /* Add responses for all contained resources */
-	    caldav_foreach(caldavdb, fctx->proc_by_resource, rock);
+	    caldav_foreach(caldavdb, mboxname, fctx->proc_by_resource, rock);
 
 	    /* Started with NULL resource, end with NULL resource */
 	    fctx->req_tgt->resource = NULL;
@@ -1582,7 +1603,6 @@ static int propfind_by_collection(char *mboxname,
     }
 
   done:
-    if (caldavdb) caldav_close(caldavdb);
     if (mailbox) mailbox_close(&mailbox);
 
     return r;
@@ -2007,8 +2027,7 @@ static int meth_put(struct transaction_t *txn)
     int ret, r, precond, rights;
     char *server, *acl, mailboxname[MAX_MAILBOX_BUFFER];
     struct mailbox *mailbox = NULL;
-    struct caldav_db *caldavdb = NULL;
-    uint32_t olduid = 0;
+    struct caldav_data cdata;
     struct index_record oldrecord;
     const char *etag;
     time_t lastmod;
@@ -2081,21 +2100,18 @@ static int meth_put(struct transaction_t *txn)
 	goto done;
     }
 
-    /* Open the associated CalDAV database */
-    if ((r = caldav_open(mailbox, CALDAV_CREATE, &caldavdb))) {
-	txn->error.desc = error_message(r);
-	ret = HTTP_SERVER_ERROR;
-	goto done;
-    }
-
     /* Find message UID for the resource, if exists */
-    caldav_read(caldavdb, txn->req_tgt.resource, &olduid);
+    memset(&cdata, 0, sizeof(struct caldav_data));
+    cdata.mailbox = mailboxname;
+    cdata.resource = txn->req_tgt.resource;
+    caldav_read(caldavdb, &cdata);
+    /* XXX  Check errors */
 
-    if (olduid) {
+    if (cdata.imap_uid) {
 	/* Overwriting existing resource */
 
 	/* Fetch index record for the resource */
-	r = mailbox_find_index_record(mailbox, olduid, &oldrecord);
+	r = mailbox_find_index_record(mailbox, cdata.imap_uid, &oldrecord);
 	/* XXX  check for errors */
 
 	etag = message_guid_encode(&oldrecord.guid);
@@ -2175,11 +2191,10 @@ static int meth_put(struct transaction_t *txn)
 
     /* Store resource at target */
     ret = store_resource(txn, ical, mailbox, txn->req_tgt.resource,
-			 caldavdb, OVERWRITE_CHECK);
+			 OVERWRITE_CHECK);
 
   done:
     if (ical) icalcomponent_free(ical);
-    if (caldavdb) caldav_close(caldavdb);
     if (mailbox) mailbox_unlock_index(mailbox, NULL);
 
     return ret;
@@ -2297,7 +2312,6 @@ static int report_cal_multiget(struct transaction_t *txn,
     int r, ret = 0;
     struct request_target_t tgt;
     struct mailbox *mailbox = NULL;
-    struct caldav_db *caldavdb = NULL;
     xmlNodePtr node;
     struct buf uri = BUF_INITIALIZER;
 
@@ -2310,7 +2324,7 @@ static int report_cal_multiget(struct transaction_t *txn,
 	    !xmlStrcmp(node->name, BAD_CAST "href")) {
 	    xmlChar *href = xmlNodeListGetString(inroot->doc, node->children, 1);
 	    int len = xmlStrlen(href);
-	    uint32_t uid = 0;
+	    struct caldav_data cdata;
 
 	    buf_ensure(&uri, len);
 	    xmlURIUnescapeString((const char *) href, len, uri.s);
@@ -2328,7 +2342,6 @@ static int report_cal_multiget(struct transaction_t *txn,
 
 	    /* Check if we already have this mailbox open */
 	    if (!mailbox || strcmp(mailbox->name, mailboxname)) {
-		if (caldavdb) caldav_close(caldavdb);
 		if (mailbox) mailbox_unlock_index(mailbox, NULL);
 
 		/* Open mailbox for reading */
@@ -2340,26 +2353,21 @@ static int report_cal_multiget(struct transaction_t *txn,
 		    goto done;
 		}
 
-		/* Open the associated CalDAV database */
-		if ((r = caldav_open(mailbox, CALDAV_CREATE, &caldavdb))) {
-		    txn->error.desc = error_message(r);
-		    ret = HTTP_SERVER_ERROR;
-		    goto done;
-		}
-
 		fctx->mailbox = mailbox;
 	    }
 
 	    /* Find message UID for the resource */
-	    caldav_read(caldavdb, tgt.resource, &uid);
+	    memset(&cdata, 0, sizeof(struct caldav_data));
+	    cdata.mailbox = mailboxname;
+	    cdata.resource = tgt.resource;
+	    caldav_read(caldavdb, &cdata);
 	    /* XXX  Check errors */
 
-	    propfind_by_resource(fctx, tgt.resource, uid);
+	    propfind_by_resource(fctx, tgt.resource, cdata.imap_uid);
 	}
     }
 
   done:
-    if (caldavdb) caldav_close(caldavdb);
     if (mailbox) mailbox_unlock_index(mailbox, NULL);
     buf_free(&uri);
 
@@ -3159,7 +3167,7 @@ int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname)
 /* Store the iCal data in the specified calendar/resource */
 static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 			  struct mailbox *mailbox, const char *resource,
-			  struct caldav_db *caldavdb, int overwrite)
+			  int overwrite)
 {
     int ret = HTTP_CREATED, r;
     icalcomponent *comp;
@@ -3278,17 +3286,20 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 	    else {
 		/* append_commit() returns a write-locked index */
 		struct index_record newrecord, oldrecord, *expunge;
-		uint32_t olduid = 0;
+		struct caldav_data cdata;
 
 		/* Read index record for new message (always the last one) */
 		mailbox_read_index_record(mailbox, mailbox->i.num_records,
 					  &newrecord);
 
 		/* Find message UID for the current resource, if exists */
-		caldav_lockread(caldavdb, resource, &olduid);
+		memset(&cdata, 0, sizeof(struct caldav_data));
+		cdata.mailbox = mailbox->name;
+		cdata.resource = resource;
+		caldav_lockread(caldavdb, &cdata);
 		/* XXX  check for errors */
 
-		if (olduid) {
+		if (cdata.imap_uid) {
 		    /* Now that we have the replacement message in place
 		       and the mailbox locked, re-read the old record
 		       and see if we should overwrite it.  Either way,
@@ -3299,7 +3310,8 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 		    ret = HTTP_NO_CONTENT;
 
 		    /* Fetch index record for the resource */
-		    r = mailbox_find_index_record(mailbox, olduid, &oldrecord);
+		    r = mailbox_find_index_record(mailbox,
+						  cdata.imap_uid, &oldrecord);
 
 		    if (overwrite == OVERWRITE_CHECK) {
 			/* Check any preconditions */
@@ -3338,7 +3350,11 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 
 		if (!r) {
 		    /* Create mapping entry from resource name and UID */
-		    caldav_write(caldavdb, resource, newrecord.uid);
+		    cdata.mailbox = mailbox->name;
+		    cdata.resource = resource;
+		    cdata.imap_uid = newrecord.uid;
+		    caldav_write(caldavdb, &cdata);
+		    caldav_commit(caldavdb);
 		    /* XXX  check for errors, if this fails, backout changes */
 
 		    /* Tell client about the new resource */

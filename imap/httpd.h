@@ -194,6 +194,10 @@ struct namespace_t {
     const char *prefix;		/* Prefix of URL path denoting namespace */
     unsigned need_auth;		/* Do we need to auth for this namespace? */
     unsigned long allow;	/* Bitmask of allowed features/methods */
+    void (*init)(struct buf *serverinfo);
+    void (*auth)(const char *userid);
+    void (*reset)(void);
+    void (*shutdown)(void);
     method_proc_t proc[];	/* Functions to perform HTTP methods.
 				 * MUST be a function pointer for EACH method
 				 * (or NULL if method not supported)

@@ -1024,6 +1024,7 @@ if test "$ENABLE_RSS" != no -o "$ENABLE_CALDAV" != no; then
 
    if test "$ENABLE_CALDAV" != no; then
       AC_DEFINE(WITH_CALDAV,[],[Build CalDAV support into httpd?])
+      IMAP_PROGS="$IMAP_PROGS dav_reconstruct"
       HTTP_OBJS="$HTTP_OBJS \$(CALDAV_OBJS)"
       AC_SUBST(ICAL_CFLAGS)
       AC_SUBST(ICAL_LIBS)
