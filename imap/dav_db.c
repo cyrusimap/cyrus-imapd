@@ -90,6 +90,7 @@ static const char *dav_getpath(const char *userid)
 {
     char c, *domain;
 
+    buf_reset(&fname);
     if (config_virtdomains && (domain = strchr(userid, '@'))) {
 	char d = (char) dir_hash_c(domain+1, config_fulldirhash);
 	*domain = '\0';  /* split user@domain */
