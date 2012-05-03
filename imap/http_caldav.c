@@ -182,7 +182,7 @@ const struct namespace_t namespace_principal = {
 static void my_caldav_init(struct buf *serverinfo)
 {
     if (!config_getstring(IMAPOPT_CALENDARPREFIX)) {
-	fatal("the 'calendarprefix' option is not set", EC_CONFIG);
+	fatal("Required 'calendarprefix' option is not set", EC_CONFIG);
     }
 
     caldav_init();
@@ -194,9 +194,13 @@ static void my_caldav_init(struct buf *serverinfo)
 
 static void my_caldav_auth(const char *userid)
 {
+    if (config_mupdate_server && !config_getstring(IMAPOPT_PROXYSERVERS)) {
+	/* proxy-only server */
+	return;
+    }
+
     caldavdb = caldav_open(userid, CALDAV_CREATE);
     if (!caldavdb) fatal("Unable to open CalDAV DB", EC_IOERR);
-
 }
 
 
