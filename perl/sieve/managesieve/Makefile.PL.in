@@ -52,7 +52,7 @@ $libs = "-lcyrus";
 WriteMakefile(
     'NAME'	=> 'Cyrus::SIEVE::managesieve',
     'ABSTRACT'  => 'Cyrus Sieve management interface',
-    'VERSION_FROM' => "@top_srcdir@/perl/sieve/managesieve/managesieve.pm", # finds $VERSION
+    'VERSION'	=> "@VERSION@",
     'MYEXTLIB'  => '../lib/isieve.o ../lib/lex.o ../lib/mystring.o ../lib/request.o @top_builddir@/lib/libcyrus.a @top_builddir@/lib/libcyrus_min.a',
     'LIBS'	=> ["@BDB_LIB@ $LIB_SASL @SSL_LDFLAGS@ @SSL_LDADD@ @LIB_RT@ @LIB_UUID@ @ZLIB@"],
     'CCFLAGS'	=> '@COV_CFLAGS@',

@@ -61,10 +61,10 @@ check:
 EOT
 }
 
-WriteMakefile( 
+WriteMakefile(
     'NAME'	=> 'Cyrus::IMAP',
     'ABSTRACT'  => 'Cyrus administrative interface',
-    'VERSION_FROM' => "@top_srcdir@/perl/imap/IMAP.pm", # finds $VERSION
+    'VERSION'	=> "@VERSION@",
     'macro'	=> {
 		    'IMCLIENT_LIBS' => '',	# hack
 		},
