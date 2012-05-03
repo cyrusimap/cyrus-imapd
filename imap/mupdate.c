@@ -987,6 +987,7 @@ int service_main_fd(int fd,
 		    char **envp __attribute__((unused)))
 {
     int flag;
+    int r;
 
     /* First check that we can handle the new connection. */
     pthread_mutex_lock(&connection_count_mutex); /* LOCK */
@@ -997,7 +998,7 @@ int service_main_fd(int fd,
     if (flag) {
 	/* Do the nonblocking write, if it fails, too bad for them. */
 	nonblock(fd, 1);
-	write(fd,SERVER_UNABLE_STRING,sizeof(SERVER_UNABLE_STRING));
+	r = write(fd,SERVER_UNABLE_STRING,sizeof(SERVER_UNABLE_STRING));
 	close(fd);
 
 	syslog(LOG_ERR,

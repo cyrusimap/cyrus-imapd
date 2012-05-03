@@ -1883,7 +1883,7 @@ static int mycheckpoint(struct dbengine *db, int locked)
 	struct stat sbuf;
 
 	/* remove content of old file so it doesn't sit around using disk */
-	ftruncate(oldfd, 0);
+	r = ftruncate(oldfd, 0);
 
 	/* release old write lock */
 	close(oldfd);

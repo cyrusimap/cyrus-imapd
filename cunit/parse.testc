@@ -11,7 +11,7 @@
 static void test_parsenum(void)
 {
     const char NUM[] = "18338747846901181684 some other stuff";
-    uint64_t val = CANARY64;
+    bit64 val = CANARY64;
     int r;
 
     r = parsenum(NUM, NULL, strlen(NUM), &val);
