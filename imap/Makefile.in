@@ -59,13 +59,13 @@ CYRUS_USER=@cyrus_user@
 CYRUS_GROUP=@cyrus_group@
 
 DEFS = @DEFS@ @LOCALDEFS@
-CPPFLAGS = -I.. -I$(srcdir)/../lib @COM_ERR_CPPFLAGS@ @SIEVE_CPPFLAGS@ @CPPFLAGS@ @SASLFLAGS@ @XML_CFLAGS@ @ICAL_CFLAGS@
+CPPFLAGS = -I.. -I$(srcdir)/../lib @COM_ERR_CPPFLAGS@ @SIEVE_CPPFLAGS@ @CPPFLAGS@ @SASLFLAGS@ @XML2_CFLAGS@ @ICAL_CFLAGS@ @SQLITE3_CFLAGS@
 IMAP_LIBS = @IMAP_LIBS@ @LIB_RT@
 
 RSS_OBJS = http_rss.o
 CALDAV_OBJS = http_caldav.o dav_prop.o caldav_db.o dav_db.o
 HTTP_OBJS = httpd.o http_err.o http_proxy.o @HTTP_OBJS@
-HTTP_LIBS = @XML_LIBS@ @ICAL_LIBS@
+HTTP_LIBS = @XML2_LIBS@ @ICAL_LIBS@ @SQLITE3_LIBS@
 
 SIEVE_OBJS = @SIEVE_OBJS@
 SIEVE_LIBS = @SIEVE_LIBS@
@@ -357,7 +357,7 @@ dav_reconstruct: dav_reconstruct.o caldav_db.o dav_db.o $(CLIOBJS) \
 	libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -lical -o \
 	 $@ dav_reconstruct.o caldav_db.o dav_db.o $(CLIOBJS) \
-	 libimap.a $(DEPLIBS) $(LIBS)
+	 libimap.a $(DEPLIBS) $(LIBS) $(HTTP_LIBS)
 
 quota: quota.o $(CLIOBJS) libimap.a $(DEPLIBS)
 	$(CC) $(LDFLAGS) -o quota quota.o $(CLIOBJS) \
