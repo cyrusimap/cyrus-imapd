@@ -2464,7 +2464,7 @@ static icalcomponent *busytime(struct transaction_t *txn,
 	unsigned n;
 
 	/* Construct iCalendar object with VFREEBUSY component */
-	buf_printf(&prodid, "-//cyrusimap.org/Cyrus %s//EN", cyrus_version());
+	buf_printf(&prodid, "-//CyrusIMAP.org/Cyrus %s//EN", cyrus_version());
 	cal = icalcomponent_vanew(ICAL_VCALENDAR_COMPONENT,
 				  icalproperty_new_version("2.0"),
 				  icalproperty_new_prodid(buf_cstring(&prodid)),
