@@ -3179,6 +3179,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     unsigned mykind = 0;
     const char *prop_annot = ANNOT_NS "CALDAV:supported-calendar-component-set";
     struct annotation_data attrib;
+    struct caldav_data cdata;
     FILE *f = NULL;
     struct stagemsg *stage;
     const char *uid, *ics;
@@ -3211,8 +3212,16 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 	}
     }
 
-    /* XXX  Check for existing iCal UID => CALDAV:no-uid-conflict */
-    uid = icalcomponent_get_uid(comp);
+    /* Check for existing iCalendar UID */
+    memset(&cdata, 0, sizeof(struct caldav_data));
+    cdata.ical_uid = uid = icalcomponent_get_uid(comp);
+    caldav_read(caldavdb, &cdata);
+    if (cdata.resource) {
+	/* CALDAV:no-uid-conflict */
+	txn->error.precond = &preconds[CALDAV_UID_CONFLICT];
+	/* XXX  need to add DAV:href of existing resource */
+	return HTTP_FORBIDDEN;
+    }
 
     /* Prepare to stage the message */
     if (!(f = append_newstage(mailbox->name, now, 0, &stage))) {
@@ -3288,7 +3297,6 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 	    else {
 		/* append_commit() returns a write-locked index */
 		struct index_record newrecord, oldrecord, *expunge;
-		struct caldav_data cdata;
 
 		/* Read index record for new message (always the last one) */
 		mailbox_read_index_record(mailbox, mailbox->i.num_records,
