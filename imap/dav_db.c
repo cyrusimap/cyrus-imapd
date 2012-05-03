@@ -116,8 +116,7 @@ sqlite3 *dav_open(const char *userid, const char *cmds)
     const char *fname = dav_getpath(userid);
     sqlite3 *db = NULL;
 
-    rc = sqlite3_open_v2(fname, &db,
-			 SQLITE_OPEN_CREATE | SQLITE_OPEN_READWRITE, NULL);
+    rc = sqlite3_open(fname, &db);
     if (rc != SQLITE_OK) {
 	syslog(LOG_ERR, "dav_open(%s) open: %s",
 	       userid, db ? sqlite3_errmsg(db) : "failed");
@@ -173,7 +172,6 @@ int dav_exec(sqlite3 *davdb, const char *cmd, struct bind_val bval[],
 
     /* reset statement */
     sqlite3_reset(*stmt);
-    sqlite3_clear_bindings(*stmt);
 
     /* bind values */
     for (; bval && bval->name; bval++) {
