@@ -747,7 +747,10 @@ static void mailbox_make_uniqueid(struct mailbox *mailbox)
     free(mailbox->uniqueid);
     /* 36 bytes of uuid plus \0 */
     mailbox->uniqueid = xmalloc(37);
-    uuid_unparse_lower(uu, mailbox->uniqueid);
+    /* Solaris has an older libuuid which has uuid_unparse() but not
+     * uuid_unparse_lower(), so we post-process the result ourself. */
+    uuid_unparse(uu, mailbox->uniqueid);
+    lcase(mailbox->uniqueid);
 #else
 #define PRIME (2147484043UL)
     unsigned hash = 0;
