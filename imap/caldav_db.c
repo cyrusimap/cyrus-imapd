@@ -148,9 +148,17 @@ int caldav_close(struct caldav_db *caldavdb)
 }
 
 
+struct read_rock {
+    struct caldav_data *cdata;
+    int (*cb)(void *rock, struct caldav_data *cdata);
+    void *rock;
+};
+
 static int read_cb(sqlite3_stmt *stmt, void *rock)
 {
-    struct caldav_data *cdata = (struct caldav_data *) rock;
+    struct read_rock *rrock = (struct read_rock *) rock;
+    struct caldav_data *cdata = rrock->cdata;
+    int r = 0;
 
     memset(cdata, 0, sizeof(struct caldav_data));
     cdata->rowid = sqlite3_column_int(stmt, 0);
@@ -166,7 +174,9 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
     cdata->recurring = sqlite3_column_int(stmt, 10);
     cdata->transp = sqlite3_column_int(stmt, 11);
 
-    return 0;
+    if (rrock->cb) r = rrock->cb(rrock->rock, cdata);
+
+    return r;
 }
 
 
@@ -184,10 +194,11 @@ int caldav_read(struct caldav_db *caldavdb, struct caldav_data *cdata)
 	{ ":resource", SQLITE_TEXT, { .s = cdata->resource } },
 	{ ":ical_uid", SQLITE_TEXT, { .s = cdata->ical_uid } },
 	{ NULL, SQLITE_NULL, { .s = NULL } } };
+    struct read_rock rrock = { cdata, NULL, NULL };
     int r;
 
     cdata->rowid = 0;
-    r = dav_exec(caldavdb->db, CMD_SELECT, bval, &read_cb, cdata,
+    r = dav_exec(caldavdb->db, CMD_SELECT, bval, &read_cb, &rrock,
 		 &caldavdb->stmt[STMT_SELECT]);
     if (!r && !cdata->rowid) r = CYRUSDB_NOTFOUND;
 
@@ -211,41 +222,22 @@ int caldav_lockread(struct caldav_db *caldavdb, struct caldav_data *cdata)
 }
 
 
-struct for_rock {
-    int (*cb)(void *rock, const char *resource, uint32_t imap_uid);
-    void *rock;
-};
-
-
-static int for_cb(sqlite3_stmt *stmt, void *rock)
-{
-    struct for_rock *frock = (struct for_rock *) rock;
-    const char *resource;
-    uint32_t imap_uid;
-
-    resource = (const char *) sqlite3_column_text(stmt, 2);
-    imap_uid = sqlite3_column_int(stmt, 3);
-
-    return frock->cb(frock->rock, resource, imap_uid);
-}
-
-
 #define CMD_SELMBOX							\
     "SELECT rowid, mailbox, resource, imap_uid, ical_uid, comp_type,"	\
     "  organizer, sched_tag, dtstart, dtend, recurring, transp"		\
     " FROM ical_objs WHERE mailbox = :mailbox;"
 
 int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
-		   int (*cb)(void *rock,
-			     const char *resource, uint32_t imap_uid),
+		   int (*cb)(void *rock, struct caldav_data *cdata),
 		   void *rock)
 {
     struct bind_val bval[] = {
 	{ ":mailbox", SQLITE_TEXT, { .s = mailbox } },
 	{ NULL, SQLITE_NULL, { .s = NULL } } };
-    struct for_rock frock = { cb, rock };
+    struct caldav_data cdata;
+    struct read_rock rrock = { &cdata, cb, rock };
 
-    return dav_exec(caldavdb->db, CMD_SELMBOX, bval, &for_cb, &frock,
+    return dav_exec(caldavdb->db, CMD_SELMBOX, bval, &read_cb, &rrock,
 		    &caldavdb->stmt[STMT_SELMBOX]);
 }
 

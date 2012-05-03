@@ -86,8 +86,7 @@ int caldav_lockread(struct caldav_db *caldavdb, struct caldav_data *cdata);
 
 /* process each entry for 'mailbox' in 'caldavdb' with cb() */
 int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
-		   int (*cb)(void *rock,
-			     const char *resource, uint32_t imap_uid),
+		   int (*cb)(void *rock, struct caldav_data *cdata),
 		   void *rock);
 
 /* write an entry to 'caldavdb' */

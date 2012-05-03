@@ -44,9 +44,11 @@
 #ifndef DAV_PROP_H
 #define DAV_PROP_H
 
+#include "caldav_db.h"
 #include "httpd.h"
 #include "spool.h"
 #include "quota.h"
+
 #include <libical/ical.h>
 #include <libxml/tree.h>
 
@@ -229,7 +231,7 @@ struct propfind_ctx {
     unsigned long reqd_privs;		/* privileges req'd on collections */
     struct calquery_filter *calfilter;	/* criteria to filter cal resources */
     int (*proc_by_resource)(void *rock,	/* Callback to process a resource */
-			    const char *resource, uint32_t uid);
+			    struct caldav_data *cdata);
     struct propfind_entry_list *elist;	/* List of props to fetch w/callbacks */
     struct busytime busytime;    	/* array of found busytime periods */
     xmlNodePtr root;			/* root node to add to XML tree */
