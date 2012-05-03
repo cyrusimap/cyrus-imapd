@@ -91,7 +91,7 @@
  * This may not be restrictive enough.
  * Here are the reasons for the restrictions:
  *
- * &	forbidden because of MUTF-7.  (This could be fixed.)
+ * &    forbidden because of MUTF-7.  (This could be fixed.)
  * :    forbidden because it's special in /etc/passwd
  * /    forbidden because it can't be used in a mailbox name
  * * %  forbidden because they're IMAP magic in the LIST/LSUB commands
@@ -158,6 +158,7 @@ typedef struct _ptsm {
     const char   *tls_cert;
     const char   *tls_key;
     int    member_method;
+    const char   *user_attribute;
     const char   *member_attribute;
     const char   *member_filter;
     const char   *member_base;
@@ -182,41 +183,41 @@ typedef struct _ptsm {
 static t_ptsm *ptsm = NULL;
 
 static int ptsmodule_interact(
-	LDAP *ld, 
-	unsigned flags __attribute__((unused)), 
-	void *def, 
-	void *inter)
+    LDAP *ld,
+    unsigned flags __attribute__((unused)),
+    void *def,
+    void *inter)
 {
-	sasl_interact_t *in = inter;
-	const char *p;
-	t_ptsm *ptsmdef = def;
+    sasl_interact_t *in = inter;
+    const char *p;
+    t_ptsm *ptsmdef = def;
 
-	for (;in->id != SASL_CB_LIST_END;in++) {
-		p = NULL;
-		switch(in->id) {
-			case SASL_CB_AUTHNAME:
-				if (ISSET(ptsmdef->id))
-					p = ptsmdef->id;
-				break;
-			case SASL_CB_USER:
-				if (ISSET(ptsmdef->authz))
-					p = ptsmdef->authz;
-				break;
-			case SASL_CB_GETREALM:
-				if (ISSET(ptsmdef->realm))
-					p = ptsmdef->realm;
-				break;          
-			case SASL_CB_PASS:
-				if (ISSET(ptsmdef->password))
-					p = ptsmdef->password;
-				break;
-		}
+    for (;in->id != SASL_CB_LIST_END;in++) {
+        p = NULL;
+        switch(in->id) {
+            case SASL_CB_AUTHNAME:
+                if (ISSET(ptsmdef->id))
+                    p = ptsmdef->id;
+                break;
+            case SASL_CB_USER:
+                if (ISSET(ptsmdef->authz))
+                    p = ptsmdef->authz;
+                break;
+            case SASL_CB_GETREALM:
+                if (ISSET(ptsmdef->realm))
+                    p = ptsmdef->realm;
+                break;
+            case SASL_CB_PASS:
+                if (ISSET(ptsmdef->password))
+                    p = ptsmdef->password;
+                break;
+        }
 
-		in->result = p ? p : "";
-		in->len = strlen(in->result);
-	}
+        in->result = p ? p : "";
+        in->len = strlen(in->result);
+    }
 
-	return LDAP_SUCCESS;
+    return LDAP_SUCCESS;
 }
 
 /*
@@ -259,11 +260,11 @@ static char *ptsmodule_canonifyid(const char *identifier, size_t len)
         switch (allowedchars[*(unsigned char*) p]) {
         case 0:
             return NULL;
-            
+
         case 2:
             sawalpha = 1;
             /* FALL THROUGH */
-            
+
         default:
             ;
         }
@@ -426,14 +427,14 @@ static int ptsmodule_connect(void)
         ldap_unbind(ptsm->ld);
         ptsm->ld = NULL;
         return (rc == LDAP_SERVER_DOWN ? PTSM_RETRY : PTSM_FAIL);
-	}
+    }
 
-	return PTSM_OK;
+    return PTSM_OK;
 }
 
 /* API */
 
-static void myinit(void) 
+static void myinit(void)
 {
     const char *p = NULL;
 
@@ -445,7 +446,7 @@ static void myinit(void)
         fatal("xmalloc() failed", EC_CONFIG);
     }
 
-    ptsm->uri = (config_getstring(IMAPOPT_LDAP_URI) ? 
+    ptsm->uri = (config_getstring(IMAPOPT_LDAP_URI) ?
         config_getstring(IMAPOPT_LDAP_URI) : config_getstring(IMAPOPT_LDAP_SERVERS));
     ptsm->version = (config_getint(IMAPOPT_LDAP_VERSION) == 2 ? LDAP_VERSION2 : LDAP_VERSION3);
     ptsm->timeout.tv_sec = config_getint(IMAPOPT_LDAP_TIME_LIMIT);
@@ -474,15 +475,15 @@ static void myinit(void)
     }
     ptsm->bind_dn = config_getstring(IMAPOPT_LDAP_BIND_DN);
     ptsm->sasl = config_getswitch(IMAPOPT_LDAP_SASL);
-    ptsm->id = (config_getstring(IMAPOPT_LDAP_ID) ? 
+    ptsm->id = (config_getstring(IMAPOPT_LDAP_ID) ?
         config_getstring(IMAPOPT_LDAP_ID) : config_getstring(IMAPOPT_LDAP_SASL_AUTHC));
-    ptsm->authz = (config_getstring(IMAPOPT_LDAP_AUTHZ) ? 
+    ptsm->authz = (config_getstring(IMAPOPT_LDAP_AUTHZ) ?
         config_getstring(IMAPOPT_LDAP_AUTHZ) : config_getstring(IMAPOPT_LDAP_SASL_AUTHZ));
-    ptsm->mech = (config_getstring(IMAPOPT_LDAP_MECH) ? 
+    ptsm->mech = (config_getstring(IMAPOPT_LDAP_MECH) ?
         config_getstring(IMAPOPT_LDAP_MECH) : config_getstring(IMAPOPT_LDAP_SASL_MECH));
-    ptsm->realm = (config_getstring(IMAPOPT_LDAP_REALM) ? 
+    ptsm->realm = (config_getstring(IMAPOPT_LDAP_REALM) ?
         config_getstring(IMAPOPT_LDAP_REALM) : config_getstring(IMAPOPT_LDAP_SASL_REALM));
-    ptsm->password = (config_getstring(IMAPOPT_LDAP_PASSWORD) ? 
+    ptsm->password = (config_getstring(IMAPOPT_LDAP_PASSWORD) ?
         config_getstring(IMAPOPT_LDAP_PASSWORD) : config_getstring(IMAPOPT_LDAP_SASL_PASSWORD));
     ptsm->start_tls = config_getswitch(IMAPOPT_LDAP_START_TLS);
     ptsm->tls_check_peer = config_getswitch(IMAPOPT_LDAP_TLS_CHECK_PEER);
@@ -509,6 +510,8 @@ static void myinit(void)
     ptsm->member_base = config_getstring(IMAPOPT_LDAP_MEMBER_BASE);
     ptsm->member_attribute = (config_getstring(IMAPOPT_LDAP_MEMBER_ATTRIBUTE) ?
         config_getstring(IMAPOPT_LDAP_MEMBER_ATTRIBUTE) : config_getstring(IMAPOPT_LDAP_MEMBER_ATTRIBUTE));
+    ptsm->user_attribute = (config_getstring(IMAPOPT_LDAP_USER_ATTRIBUTE) ?
+        config_getstring(IMAPOPT_LDAP_USER_ATTRIBUTE) : config_getstring(IMAPOPT_LDAP_USER_ATTRIBUTE));
     p = config_getstring(IMAPOPT_LDAP_GROUP_SCOPE);
     if (!strcasecmp(p, "one")) {
         ptsm->group_scope = LDAP_SCOPE_ONELEVEL;
@@ -522,10 +525,10 @@ static void myinit(void)
     ptsm->filter = config_getstring(IMAPOPT_LDAP_FILTER);
     ptsm->base = config_getstring(IMAPOPT_LDAP_BASE);
 
-	if (ptsm->version != LDAP_VERSION3 && 
-	    (ptsm->sasl ||
-	     ptsm->start_tls))
-	    ptsm->version = LDAP_VERSION3;
+    if (ptsm->version != LDAP_VERSION3 &&
+        (ptsm->sasl ||
+         ptsm->start_tls))
+        ptsm->version = LDAP_VERSION3;
 
     ptsm->ld = NULL;
 }
@@ -534,98 +537,98 @@ static void myinit(void)
  * Note: calling function must free memory.
  */
 static int ptsmodule_escape(
-	const char *s, 
-	const unsigned int n, 
-	char **result) 
+    const char *s,
+    const unsigned int n,
+    char **result)
 {
-	char *buf;
-	char *end, *ptr, *temp;
+    char *buf;
+    char *end, *ptr, *temp;
 
-	if (n > strlen(s))  // Sanity check, just in case
-		return PTSM_FAIL;
+    if (n > strlen(s))  // Sanity check, just in case
+        return PTSM_FAIL;
 
-	buf = xmalloc(n * 5 + 1);
-	if (buf == NULL) {
-		return PTSM_NOMEM;
-	}
+    buf = xmalloc(n * 5 + 1);
+    if (buf == NULL) {
+        return PTSM_NOMEM;
+    }
 
-	buf[0] = '\0';
-	ptr = (char *)s;
-	end = ptr + n;
+    buf[0] = '\0';
+    ptr = (char *)s;
+    end = ptr + n;
 
-	while (((temp = strpbrk(ptr, "*()\\\0"))!=NULL) && (temp<end)) {
+    while (((temp = strpbrk(ptr, "*()\\\0"))!=NULL) && (temp<end)) {
 
-		if (temp>ptr)
-			strncat(buf, ptr, temp-ptr);
+        if (temp>ptr)
+            strncat(buf, ptr, temp-ptr);
 
-		switch (*temp) {
-			case '*':
-				strcat(buf, "\\2a");
-				break;
-			case '(':
-				strcat(buf, "\\28");
-				break;
-			case ')':
-				strcat(buf, "\\29");
-				break;
-			case '\\':
-				strcat(buf, "\\5c");
-				break;
-			case '\0':
-				strcat(buf, "\\00");
-				break;
-		}
-		ptr=temp+1;
-	}
-	if (ptr<end)
-		strncat(buf, ptr, end-ptr);
+        switch (*temp) {
+            case '*':
+                strcat(buf, "\\2a");
+                break;
+            case '(':
+                strcat(buf, "\\28");
+                break;
+            case ')':
+                strcat(buf, "\\29");
+                break;
+            case '\\':
+                strcat(buf, "\\5c");
+                break;
+            case '\0':
+                strcat(buf, "\\00");
+                break;
+        }
+        ptr=temp+1;
+    }
+    if (ptr<end)
+        strncat(buf, ptr, end-ptr);
 
-	*result = buf;
+    *result = buf;
 
-	return PTSM_OK;
+    return PTSM_OK;
 }
 
 static int ptsmodule_tokenize_domains(
-	const char *d, 
-	int n, 
-	char **result)
+    const char *d,
+    int n,
+    char **result)
 {
-	char *s, *s1;
-	char *lasts;
-	int nt, i, rc;
+    char *s, *s1;
+    char *lasts;
+    int nt, i, rc;
 
-	*result = NULL;
+    *result = NULL;
 
-	if (d == NULL || n < 1 || n > 9)
-		return PTSM_FAIL;
+    if (d == NULL || n < 1 || n > 9)
+        return PTSM_FAIL;
 
-	s = strdup(d);
-	if (s == NULL)
-		return PTSM_NOMEM;
+    s = strdup(d);
+    if (s == NULL)
+        return PTSM_NOMEM;
 
-	for( nt=0, s1=s; *s1; s1++ )
-		if( *s1 == '.' ) nt++;
-	nt++;
+    for( nt=0, s1=s; *s1; s1++ )
+        if( *s1 == '.' ) nt++;
+    nt++;
 
-	if (n > nt) {
-		free(s);
-		return PTSM_FAIL;
-	}
+    if (n > nt) {
+        free(s);
+        return PTSM_FAIL;
+    }
 
-	i = nt - n;
-	s1 = (char *)strtok_r(s, ".", &lasts);
-	while(s1) {
-		if (i == 0) {
-			rc = ptsmodule_escape(s1, strlen(s1), result);
-			free(s);
-			return rc;
-		}
-		s1 = (char *)strtok_r(NULL, ".", &lasts);
-		i--;
-	}
+    i = nt - n;
+    s1 = (char *)strtok_r(s, ".", &lasts);
+    while(s1) {
+        if (i == 0) {
+            rc = ptsmodule_escape(s1, strlen(s1), result);
+            free(s);
+            return rc;
+        }
+        s1 = (char *)strtok_r(NULL, ".", &lasts);
+        i--;
+    }
 
-	free(s);
-	return PTSM_FAIL;
+    free(s);
+    return PTSM_FAIL;
 }
 
 #define PTSM_MAX(a,b) (a>b?a:b)
@@ -643,137 +646,137 @@ static int ptsmodule_tokenize_domains(
  * Note: calling function must free memory.
  */
 static int ptsmodule_expand_tokens(
-	const char *pattern,
-	const char *username, 
-	const char *dn,
-	char **result) 
+    const char *pattern,
+    const char *username,
+    const char *dn,
+    char **result)
 {
-	char *buf; 
-	char *end, *ptr, *temp;
-	char *ebuf, *user;
-	char *domain;
-	int rc;
+    char *buf;
+    char *end, *ptr, *temp;
+    char *ebuf, *user;
+    char *domain;
+    int rc;
 
-	/* to permit multiple occurences of username and/or realm in filter */
-	/* and avoid memory overflow in filter build [eg: (|(uid=%u)(userid=%u)) ] */
-	int percents, user_len, dn_len, maxparamlength;
-	
-	if (pattern == NULL) {
-		syslog(LOG_ERR, "filter pattern not setup");
-		return PTSM_FAIL;
-	}
+    /* to permit multiple occurences of username and/or realm in filter */
+    /* and avoid memory overflow in filter build [eg: (|(uid=%u)(userid=%u)) ] */
+    int percents, user_len, dn_len, maxparamlength;
 
-	/* find the longest param of username and realm, 
-	   do not worry about domain because it is always shorter 
-	   then username                                           */
-	user_len=username ? strlen(username) : 0;
-	dn_len=dn ? strlen(dn) : 0;
+    if (pattern == NULL) {
+        syslog(LOG_ERR, "filter pattern not setup");
+        return PTSM_FAIL;
+    }
 
-	maxparamlength = PTSM_MAX(user_len+1, dn_len); /* +1 for %R when '@' is prepended */
+    /* find the longest param of username and realm,
+       do not worry about domain because it is always shorter
+       then username                                           */
+    user_len=username ? strlen(username) : 0;
+    dn_len=dn ? strlen(dn) : 0;
 
-	/* find the number of occurences of percent sign in filter */
-	for( percents=0, buf=(char *)pattern; *buf; buf++ ) {
-		if( *buf == '%' ) percents++;
-	}
+    maxparamlength = PTSM_MAX(user_len+1, dn_len); /* +1 for %R when '@' is prepended */
 
-	/* percents * 3 * maxparamlength because we need to account for
+    /* find the number of occurences of percent sign in filter */
+    for( percents=0, buf=(char *)pattern; *buf; buf++ ) {
+        if( *buf == '%' ) percents++;
+    }
+
+    /* percents * 3 * maxparamlength because we need to account for
          * an entirely-escaped worst-case-length parameter */
-	buf=xmalloc(strlen(pattern) + (percents * 3 * maxparamlength) +1);
-	if(buf == NULL)
-		return PTSM_NOMEM;
-	buf[0] = '\0';
-	
-	ptr = (char *)pattern;
-	end = ptr + strlen(ptr);
+    buf=xmalloc(strlen(pattern) + (percents * 3 * maxparamlength) +1);
+    if(buf == NULL)
+        return PTSM_NOMEM;
+    buf[0] = '\0';
 
-	while ((temp=strchr(ptr,'%'))!=NULL ) {
+    ptr = (char *)pattern;
+    end = ptr + strlen(ptr);
 
-		if ((temp-ptr) > 0)
-			strncat(buf, ptr, temp-ptr);
+    while ((temp=strchr(ptr,'%'))!=NULL ) {
 
-		if ((temp+1) >= end) {
-			syslog(LOG_DEBUG, "Incomplete lookup substitution format");
-			break;
-		}
+        if ((temp-ptr) > 0)
+            strncat(buf, ptr, temp-ptr);
 
-		switch (*(temp+1)) {
-			case '%':
-				strncat(buf,temp+1,1);
-				break;
-			case 'u':
-				if (ISSET(username)) {
-					rc=ptsmodule_escape(username, strlen(username), &ebuf);
-					if (rc == PTSM_OK) {
-						strcat(buf,ebuf);
-						free(ebuf);
-					}
-				} else
-					syslog(LOG_DEBUG, "Username not available.");
-				break;
-			case 'U':
-				if (ISSET(username)) {
-					
-					user = strchr(username, '@');
-					rc=ptsmodule_escape(username, (user ? user - username : strlen(username)), &ebuf);
-					if (rc == PTSM_OK) {
-						strcat(buf,ebuf);
-						free(ebuf);
-					}
-				} else
-					syslog(LOG_DEBUG, "Username not available.");
-				break;
-			case '1':
-			case '2':
-			case '3':
-			case '4':
-			case '5':
-			case '6':
-			case '7':
-			case '8':
-			case '9':
-				if (ISSET(username) && (domain = strchr(username, '@')) && domain[1]!='\0') {
-					rc=ptsmodule_tokenize_domains(domain+1, (int) *(temp+1)-48, &ebuf);
-					if (rc == PTSM_OK) {
-						strcat(buf,ebuf);
-						free(ebuf);
-					}
-				} else
-					syslog(LOG_DEBUG, "Domain tokens not available.");
-				break;
-			case 'R':
-			case 'd':
-				if (ISSET(username) && (domain = strchr(username, '@')) && domain[1]!='\0') {
-					rc=ptsmodule_escape(domain+1, strlen(domain+1), &ebuf);
-					if (rc == PTSM_OK) {
-						if (*(temp+1) == 'R')
-							strcat(buf,"@");
-						strcat(buf,ebuf);
-						free(ebuf);
-					}
-					break;
-				} 
-				break;
-			case 'D':
-				if (ISSET(dn)) {
-					rc = ptsmodule_escape(dn, strlen(dn), &ebuf);
-					if (rc == PTSM_OK) {
-						strcat(buf,ebuf);
-						free(ebuf);
-					}
-				} else
-					syslog(LOG_DEBUG, "dn not available.");
-				break;
-			default:
-				break;
-		}
-		ptr=temp+2;
-	}
-	if (temp<end)
-		strcat(buf, ptr);
+        if ((temp+1) >= end) {
+            syslog(LOG_DEBUG, "Incomplete lookup substitution format");
+            break;
+        }
 
-	*result = buf;
+        switch (*(temp+1)) {
+            case '%':
+                strncat(buf,temp+1,1);
+                break;
+            case 'u':
+                if (ISSET(username)) {
+                    rc=ptsmodule_escape(username, strlen(username), &ebuf);
+                    if (rc == PTSM_OK) {
+                        strcat(buf,ebuf);
+                        free(ebuf);
+                    }
+                } else
+                    syslog(LOG_DEBUG, "Username not available.");
+                break;
+            case 'U':
+                if (ISSET(username)) {
 
-	return PTSM_OK;
+                    user = strchr(username, '@');
+                    rc=ptsmodule_escape(username, (user ? user - username : strlen(username)), &ebuf);
+                    if (rc == PTSM_OK) {
+                        strcat(buf,ebuf);
+                        free(ebuf);
+                    }
+                } else
+                    syslog(LOG_DEBUG, "Username not available.");
+                break;
+            case '1':
+            case '2':
+            case '3':
+            case '4':
+            case '5':
+            case '6':
+            case '7':
+            case '8':
+            case '9':
+                if (ISSET(username) && (domain = strchr(username, '@')) && domain[1]!='\0') {
+                    rc=ptsmodule_tokenize_domains(domain+1, (int) *(temp+1)-48, &ebuf);
+                    if (rc == PTSM_OK) {
+                        strcat(buf,ebuf);
+                        free(ebuf);
+                    }
+                } else
+                    syslog(LOG_DEBUG, "Domain tokens not available.");
+                break;
+            case 'R':
+            case 'd':
+                if (ISSET(username) && (domain = strchr(username, '@')) && domain[1]!='\0') {
+                    rc=ptsmodule_escape(domain+1, strlen(domain+1), &ebuf);
+                    if (rc == PTSM_OK) {
+                        if (*(temp+1) == 'R')
+                            strcat(buf,"@");
+                        strcat(buf,ebuf);
+                        free(ebuf);
+                    }
+                    break;
+                }
+                break;
+            case 'D':
+                if (ISSET(dn)) {
+                    rc = ptsmodule_escape(dn, strlen(dn), &ebuf);
+                    if (rc == PTSM_OK) {
+                        strcat(buf,ebuf);
+                        free(ebuf);
+                    }
+                } else
+                    syslog(LOG_DEBUG, "dn not available.");
+                break;
+            default:
+                break;
+        }
+        ptr=temp+2;
+    }
+    if (temp<end)
+        strcat(buf, ptr);
+
+    *result = buf;
+
+    return PTSM_OK;
 }
 
 
@@ -791,7 +794,7 @@ static int ptsmodule_get_dn(
     char *authzid;
 #endif
     char *base = NULL, *filter = NULL;
-    char *attrs[] = {NULL};
+    char *attrs[] = {LDAP_NO_ATTRS,NULL}; //do not return all attrs!
     LDAPMessage *res;
     LDAPMessage *entry;
     char *attr, **vals;
@@ -860,14 +863,14 @@ static int ptsmodule_get_dn(
             return PTSM_FAIL;
         }
 
-	/*
-	 * We don't want to return the *first* entry found, we want to return
-	 * the *only* entry found.
-	 */
-	if ( ldap_count_entries(ptsm->ld, res) == 1 ) {
-	    if ( (entry = ldap_first_entry(ptsm->ld, res)) != NULL )
-		*ret = ldap_get_dn(ptsm->ld, entry);
-	}
+    /*
+     * We don't want to return the *first* entry found, we want to return
+     * the *only* entry found.
+     */
+    if ( ldap_count_entries(ptsm->ld, res) == 1 ) {
+        if ( (entry = ldap_first_entry(ptsm->ld, res)) != NULL )
+        *ret = ldap_get_dn(ptsm->ld, entry);
+    }
 
         ldap_msgfree(res);
         res = NULL;
@@ -880,16 +883,17 @@ static int ptsmodule_get_dn(
 static int ptsmodule_make_authstate_attribute(
     const char *canon_id,
     size_t size,
-    const char **reply, 
+    const char **reply,
     int *dsize,
-    struct auth_state **newstate) 
+    struct auth_state **newstate)
 {
     char *dn = NULL;
     LDAPMessage *res = NULL;
     LDAPMessage *entry = NULL;
     char **vals = NULL;
+    char **rdn = NULL;
     int rc;
-    char *attrs[] = {(char *)ptsm->member_attribute,NULL};
+    char *attrs[] = {(char *)ptsm->member_attribute,(char *)ptsm->user_attribute,NULL};
 
     rc = ptsmodule_connect();
     if (rc != PTSM_OK) {
@@ -916,37 +920,69 @@ static int ptsmodule_make_authstate_attribute(
     }
 
     if ((entry = ldap_first_entry(ptsm->ld, res)) != NULL) {
-	int i, numvals;
+    int i, numvals;
 
-	vals = ldap_get_values(ptsm->ld, entry, (char *)ptsm->member_attribute);
-	if (vals != NULL) {
-	    numvals = ldap_count_values( vals );
+    vals = ldap_get_values(ptsm->ld, entry, (char *)ptsm->member_attribute);
+    if (vals != NULL) {
+        numvals = ldap_count_values( vals );
 
-	    *dsize = sizeof(struct auth_state) +
-		     (numvals * sizeof(struct auth_ident));
-	    *newstate = xmalloc(*dsize);
-	    if (*newstate == NULL) {
-		*reply = "no memory";
-		rc = PTSM_FAIL;
-		goto done;
-	    }
-	    (*newstate)->ngroups = numvals;
+        *dsize = sizeof(struct auth_state) +
+             (numvals * sizeof(struct auth_ident));
+        *newstate = xmalloc(*dsize);
+        if (*newstate == NULL) {
+            *reply = "no memory";
+            rc = PTSM_FAIL;
+            goto done;
+        }
 
-	    for (i = 0; i < numvals; i++) {
-		int j;
-		strcpy((*newstate)->groups[i].id, "group:");
-		for(j =0; j < strlen(vals[i]); j++) {
-		  if(Uisupper(vals[i][j]))
-		    vals[i][j]=tolower(vals[i][j]);
-		}
-		strlcat((*newstate)->groups[i].id, vals[i], 
-		    sizeof((*newstate)->groups[i].id));
-		(*newstate)->groups[i].hash = strhash((*newstate)->groups[i].id);
-	    }
+        (*newstate)->ngroups = numvals;
+        (*newstate)->userid.id[0] = '\0';
+        for (i = 0; i < numvals; i++) {
+            int j;
+            strcpy((*newstate)->groups[i].id, "group:");
+            rdn = ldap_explode_rdn(vals[i],1);
+            for (j = 0; j < strlen(rdn[0]); j++) {
+              if (Uisupper(rdn[0][j]))
+                  rdn[0][j]=tolower(rdn[0][j]);
+            }
+            strlcat((*newstate)->groups[i].id, rdn[0],
+                sizeof((*newstate)->groups[i].id));
+            (*newstate)->groups[i].hash = strhash((*newstate)->groups[i].id);
+        }
 
-	    ldap_value_free(vals);
-	    vals = NULL;
-	}
+        ldap_value_free(rdn);
+        ldap_value_free(vals);
+        vals = NULL;
+    }
+
+    if ((char *)ptsm->user_attribute) {
+        vals = ldap_get_values(ptsm->ld, entry, (char *)ptsm->user_attribute);
+        if (vals != NULL) {
+            numvals = ldap_count_values( vals );
+
+                if (numvals==1) {
+                    if(!*newstate) {
+                        *dsize = sizeof(struct auth_state);
+                        *newstate = xmalloc(*dsize);
+
+                        if (*newstate == NULL) {
+                            *reply = "no memory";
+                            rc = PTSM_FAIL;
+                            goto done;
+                        }
+
+                        (*newstate)->ngroups = 0;
+                    }
+
+                    size=strlen(vals[0]);
+                    strcpy((*newstate)->userid.id, ptsmodule_canonifyid(vals[0],size));
+                    (*newstate)->userid.hash = strhash((*newstate)->userid.id);
+                }
+
+                ldap_value_free(vals);
+                vals = NULL;
+            }
+        }
     }
 
     if(!*newstate) {
@@ -958,11 +994,14 @@ static int ptsmodule_make_authstate_attribute(
             goto done;
         }
         (*newstate)->ngroups = 0;
+        (*newstate)->userid.id[0] = '\0';
     }
-    
+
     /* fill in the rest of our new state structure */
-    strcpy((*newstate)->userid.id, canon_id);
-    (*newstate)->userid.hash = strhash(canon_id);
+    if ((*newstate)->userid.id[0]=='\0') {
+        strcpy((*newstate)->userid.id, canon_id);
+        (*newstate)->userid.hash = strhash(canon_id);
+    }
     (*newstate)->mark = time(0);
 
     rc = PTSM_OK;
@@ -982,9 +1021,9 @@ done:;
 static int ptsmodule_make_authstate_filter(
     const char *canon_id,
     size_t size,
-    const char **reply, 
+    const char **reply,
     int *dsize,
-    struct auth_state **newstate) 
+    struct auth_state **newstate)
 {
     char *base = NULL, *filter = NULL;
     int rc;
@@ -1054,32 +1093,32 @@ static int ptsmodule_make_authstate_filter(
     for (i = 0, entry = ldap_first_entry(ptsm->ld, res); entry != NULL;
          i++, entry = ldap_next_entry(ptsm->ld, entry)) {
 
-	vals = ldap_get_values(ptsm->ld, entry, (char *)ptsm->member_attribute);
-	if (vals == NULL)
-	    continue;
+    vals = ldap_get_values(ptsm->ld, entry, (char *)ptsm->member_attribute);
+    if (vals == NULL)
+        continue;
 
-	if ( ldap_count_values( vals ) != 1 ) {
-	    *reply = "too many values";
-	    rc = PTSM_FAIL;
-	    ldap_value_free(vals);
-	    vals = NULL;
-	    goto done;
-	}
+    if ( ldap_count_values( vals ) != 1 ) {
+        *reply = "too many values";
+        rc = PTSM_FAIL;
+        ldap_value_free(vals);
+        vals = NULL;
+        goto done;
+    }
 
-	strcpy((*newstate)->groups[i].id, "group:");
+    strcpy((*newstate)->groups[i].id, "group:");
 
-	int j;
-	for(j =0; j < strlen(vals[0]); j++) {
-	  if(Uisupper(vals[0][j]))
-	    vals[0][j]=tolower(vals[0][j]);
-	}
+    int j;
+    for(j =0; j < strlen(vals[0]); j++) {
+      if(Uisupper(vals[0][j]))
+        vals[0][j]=tolower(vals[0][j]);
+    }
 
-	strlcat((*newstate)->groups[i].id, vals[0], 
-	    sizeof((*newstate)->groups[i].id));
-	(*newstate)->groups[i].hash = strhash((*newstate)->groups[i].id);
+    strlcat((*newstate)->groups[i].id, vals[0],
+        sizeof((*newstate)->groups[i].id));
+    (*newstate)->groups[i].hash = strhash((*newstate)->groups[i].id);
 
-	ldap_value_free(vals);
-	vals = NULL;
+    ldap_value_free(vals);
+    vals = NULL;
     }
 
     rc = PTSM_OK;
@@ -1101,9 +1140,9 @@ done:;
 static int ptsmodule_make_authstate_group(
     const char *canon_id,
     size_t size,
-    const char **reply, 
+    const char **reply,
     int *dsize,
-    struct auth_state **newstate) 
+    struct auth_state **newstate)
 {
     char *base = NULL, *filter = NULL;
     int rc;
@@ -1185,8 +1224,8 @@ done:;
 static struct auth_state *myauthstate(
     const char *identifier,
     size_t size,
-    const char **reply, 
-    int *dsize) 
+    const char **reply,
+    int *dsize)
 {
     const char *canon_id;
     struct auth_state *newstate = NULL;
@@ -1225,23 +1264,23 @@ retry:;
 
 static void myinit(void)
 {
-	fatal("PTS module (ldap) not compiled in", EC_CONFIG);
+    fatal("PTS module (ldap) not compiled in", EC_CONFIG);
 }
 
 static struct auth_state *myauthstate(
     const char *identifier __attribute__((unused)),
     size_t size __attribute__((unused)),
-    const char **reply __attribute__((unused)), 
-    int *dsize __attribute__((unused))) 
+    const char **reply __attribute__((unused)),
+    int *dsize __attribute__((unused)))
 {
-	fatal("PTS module (ldap) not compiled in", EC_CONFIG);
+    fatal("PTS module (ldap) not compiled in", EC_CONFIG);
 }
 
 #endif /* HAVE_LDAP */
 
-struct pts_module pts_ldap = 
+struct pts_module pts_ldap =
 {
-    "ldap",		/* name */
+    "ldap",        /* name */
 
     &myinit,
     &myauthstate,

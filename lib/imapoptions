@@ -556,6 +556,9 @@ Blank lines and lines beginning with ``#'' are ignored.
 { "ldap_mech", NULL, STRING }
 /* SASL mechanism for LDAP authentication */
 
+{ "ldap_user_attribute", NULL, STRING }
+/* Specify LDAP attribute to use as canonical user id */
+
 { "ldap_member_attribute", NULL, STRING }
 /* See ldap_member_method. */
 
