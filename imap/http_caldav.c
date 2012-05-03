@@ -3216,7 +3216,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     memset(&cdata, 0, sizeof(struct caldav_data));
     cdata.ical_uid = uid = icalcomponent_get_uid(comp);
     caldav_read(caldavdb, &cdata);
-    if (cdata.resource) {
+    if (cdata.resource && strcmp(cdata.resource, resource)) {
 	/* CALDAV:no-uid-conflict */
 	txn->error.precond = &preconds[CALDAV_UID_CONFLICT];
 	/* XXX  need to add DAV:href of existing resource */
