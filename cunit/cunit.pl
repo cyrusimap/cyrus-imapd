@@ -234,7 +234,7 @@ sub suite_path_to_name($)
     vmsg("inferred top_srcdir is \"$topdir\"");
     my $name = path_relativise($path, $topdir);
 
-    $name =~ s/\.c$//;
+    $name =~ s/\.(testc|c)$//;
     $name =~ s/\/test_?/\//g;
     $name =~ s/_?test\//\//g;
     $name =~ s/\/+/\//g;
