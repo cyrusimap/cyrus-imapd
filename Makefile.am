@@ -56,7 +56,7 @@ MAINTAINERCLEANFILES = \
 	doc/murder.png doc/netnews.png \
 	imap/imap_err.h imap/lmtpstats.h imap/mupdate_err.h imap/nntp_err.h imap/pushstats.h \
 	lib/chartable.c lib/imapopts.h \
-	man/cyradm.1.html man/imapd.conf.5 man/sieveshell.1 man/sieveshell.1.html \
+	doc/man/cyradm.1.html man/imapd.conf.5 man/sieveshell.1 doc/man/sieveshell.1.html \
 	sieve/addr.h sieve/sieve.h sieve/sieve_err.h
 
 SUBDIRS = .
@@ -730,20 +730,21 @@ snapshot::
 man/imapd.conf.5: $(top_srcdir)/tools/config2man $(top_srcdir)/lib/imapoptions
 	@echo creating man/imapd.conf.5
 	@$(MKDIR_P) man
-	$(top_srcdir)/tools/config2man $(top_srcdir)/lib/imapoptions > man/imapd.conf.5
+	$(top_srcdir)/tools/config2man $(top_srcdir)/lib/imapoptions > $@
 
 man/sieveshell.1: $(top_srcdir)/perl/sieve/scripts/sieveshell.pl
 	@echo creating man/sieveshell.1
 	@$(MKDIR_P) man
-	pod2man $(top_srcdir)/perl/sieve/scripts/sieveshell.pl > man/sieveshell.1
-man/cyradm.1.html: $(top_srcdir)/perl/imap/cyradm.sh
+	pod2man $(top_srcdir)/perl/sieve/scripts/sieveshell.pl > $@
+
+doc/man/cyradm.1.html: $(top_srcdir)/perl/imap/cyradm.sh
 	@$(MKDIR_P) man
-	pod2html $(top_srcdir)/perl/imap/cyradm.sh > man/cyradm.1.html
+	pod2html $(top_srcdir)/perl/imap/cyradm.sh > $@
 	rm pod2htm*
 
-man/sieveshell.1.html: $(top_srcdir)/perl/sieve/scripts/sieveshell.pl
+doc/man/sieveshell.1.html: $(top_srcdir)/perl/sieve/scripts/sieveshell.pl
 	@$(MKDIR_P) man
-	pod2html $(top_srcdir)/perl/sieve/scripts/sieveshell.pl > man/sieveshell.1.html
+	pod2html $(top_srcdir)/perl/sieve/scripts/sieveshell.pl > $@
 	rm pod2htm*
 
 
@@ -782,7 +783,7 @@ xversion xversion.h:
 	@cmp -s xversion.h.tmp xversion.h || mv xversion.h.tmp xversion.h
 	@rm -f xversion.h.tmp
 
-dist-hook: doc/text/htmlstrip man/cyradm.1.html man/sieveshell.1.html
+dist-hook: doc/text/htmlstrip doc/man/cyradm.1.html doc/man/sieveshell.1.html
 	@$(MKDIR_P) doc/text doc/man
 	for man in $(top_builddir)/man/*.[1-9] $(top_srcdir)/man/*.[1-9]; \
 	do \
