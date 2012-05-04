@@ -60,14 +60,6 @@
 #include <string.h>
 
 
-
-struct bytecode_info 
-{
-    bytecode_t *data;/* pointer to almost-flat bytecode */
-    size_t scriptend; /* used by emit code to know final length of bytecode */
-    size_t reallen; /* allocated length of 'data' */
-};
-
 static int bc_test_generate(int codep, bytecode_info_t *retval, test_t *t);
 
 /* returns false if the request can't be satisfied, true if it can. */

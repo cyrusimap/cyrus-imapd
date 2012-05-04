@@ -70,14 +70,6 @@ static inline int write_int (int fd, int x)
 }
  
     
-
-struct bytecode_info 
-{
-    bytecode_t *data;/* pointer to almost-flat bytecode */
-    size_t scriptend; /* used by emit code to know final length of bytecode  */
-    size_t reallen; /* allocated length of 'data' */
-};
-
 /* Pad null bytes onto the end of the string we just wrote */
 /* returns -1 on failure or number of bytes written on success */
 static int align_string(int fd, int string_len) 

@@ -70,6 +70,13 @@ typedef union
     char *str;
 } bytecode_t;
 
+struct bytecode_info
+{
+    bytecode_t *data;/* pointer to almost-flat bytecode */
+    size_t scriptend; /* used by emit code to know final length of bytecode */
+    size_t reallen; /* allocated length of 'data' */
+};
+
 /* For sanity during input on 64-bit platforms.
  * str should only be accessed as (char *)&str, but given the use of
  * unwrap_string, this should be OK */
