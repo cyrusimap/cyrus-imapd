@@ -738,12 +738,12 @@ man/sieveshell.1: $(top_srcdir)/perl/sieve/scripts/sieveshell.pl
 	pod2man $(top_srcdir)/perl/sieve/scripts/sieveshell.pl > $@
 
 doc/man/cyradm.1.html: $(top_srcdir)/perl/imap/cyradm.sh
-	@$(MKDIR_P) man
+	@$(MKDIR_P) doc/man
 	pod2html $(top_srcdir)/perl/imap/cyradm.sh > $@
 	rm pod2htm*
 
 doc/man/sieveshell.1.html: $(top_srcdir)/perl/sieve/scripts/sieveshell.pl
-	@$(MKDIR_P) man
+	@$(MKDIR_P) doc/man
 	pod2html $(top_srcdir)/perl/sieve/scripts/sieveshell.pl > $@
 	rm pod2htm*
 
