@@ -146,7 +146,7 @@ EXTRA_DIST = COPYRIGHT README.andrew SMakefile xversion.h \
 	com_err/et/test1.et com_err/et/test2.et com_err/et/test_et.c \
 	contrib/drac_auth.patch contrib/sieve-spamasssassin contrib/fud-client.c contrib/deliver-notify-zephyr.patch contrib/add-cyrus-user contrib/README contrib/cyrus-graphtools.1.0 contrib/cyrus-graphtools.1.0/cgi-bin/cyrus_master.pl contrib/cyrus-graphtools.1.0/cgi-bin/graph_cyrus_db.pl contrib/cyrus-graphtools.1.0/cgi-bin/graph_cyrus_db-sum.pl contrib/cyrus-graphtools.1.0/html contrib/cyrus-graphtools.1.0/html/index.html contrib/cyrus-graphtools.1.0/README contrib/cyrus-graphtools.1.0/script contrib/cyrus-graphtools.1.0/script/cyrus.pl contrib/cyrus-graphtools.1.0/script/run contrib/cyrus-graphtools.1.0/script/cyrusrc contrib/notify_unix/notify contrib/notify_unix/net-server-prefork-0.01.tgz contrib/notify_unix/README contrib/notify_unix/sql_notify.pl contrib/notify_unix/simple_notify.pl contrib/squatrunner.pl contrib/mupdate-test.pl contrib/squatrunner.txt \
 	cunit/cacert.pem cunit/cert.pem cunit/cunit.pl cunit/cunit-to-junit.pl cunit/key.pem cunit/vg.supp \
-	doc/murder.fig doc/murder.png doc/netnews.fig doc/netnews.png \
+	doc \
 	imap/imap_err.et imap/mupdate_err.et imap/nntp_err.et imap/rfc822_header.st \
 	lib/charset/aliases.txt lib/charset/big5.t \
 	lib/charset/gb2312.t lib/charset/iso-2022-jp.t \
