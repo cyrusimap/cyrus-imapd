@@ -112,7 +112,7 @@ extern int quota_write(struct quota *quota, struct txn **tid);
 
 extern int quota_update_useds(const char *quotaroot,
 			      const quota_t diff[QUOTA_NUMRESOURCES],
-			      int is_scanned);
+			      const char *mboxname);
 extern int quota_check_useds(const char *quotaroot,
 			     const quota_t diff[QUOTA_NUMRESOURCES]);
 

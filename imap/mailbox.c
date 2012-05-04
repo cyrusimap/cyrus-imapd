@@ -1967,8 +1967,7 @@ int mailbox_commit_quota(struct mailbox *mailbox)
 
     assert(mailbox_index_islocked(mailbox, 1));
 
-    quota_update_useds(mailbox->quotaroot, quota_usage,
-		       (mailbox->i.options & OPT_MAILBOX_QUOTA_SCANNED));
+    quota_update_useds(mailbox->quotaroot, quota_usage, mailbox->name);
     /* XXX - fail upon issue?  It's tempting */
 
     return 0;

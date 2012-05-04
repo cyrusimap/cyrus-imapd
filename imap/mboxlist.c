@@ -2695,13 +2695,11 @@ static int mboxlist_changequota(const char *name,
     const char *root = (const char *) rock;
     int res;
     quota_t quota_usage[QUOTA_NUMRESOURCES];
-    int is_scanned;
 
     assert(root);
 
     r = mailbox_open_iwl(name, &mailbox);
     if (r) goto done;
-    is_scanned = (mailbox->i.options & OPT_MAILBOX_QUOTA_SCANNED);
 
     mailbox_get_usage(mailbox, quota_usage);
 
@@ -2717,7 +2715,8 @@ static int mboxlist_changequota(const char *name,
 	for (res = 0; res < QUOTA_NUMRESOURCES ; res++) {
 	    quota_diff[res] = -quota_usage[res];
 	}
-	r = quota_update_useds(mailbox->quotaroot, quota_diff, is_scanned);
+	r = quota_update_useds(mailbox->quotaroot, quota_diff,
+			       mailbox->name);
     }
 
     /* update (or set) the quotaroot */
@@ -2725,7 +2724,7 @@ static int mboxlist_changequota(const char *name,
     if (r) goto done;
 
     /* update the new quota root */
-    r = quota_update_useds(root, quota_usage, is_scanned);
+    r = quota_update_useds(root, quota_usage, mailbox->name);
 
  done:
     mailbox_close(&mailbox);

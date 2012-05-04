@@ -416,8 +416,7 @@ no_expunge:
 	/* storage usage is already taken into account */
 	usage[QUOTA_STORAGE] = 0;
 
-	quota_update_useds(mailbox->quotaroot, usage,
-	    (mailbox->i.options & OPT_MAILBOX_QUOTA_SCANNED));
+	quota_update_useds(mailbox->quotaroot, usage, mailbox->name);
 	mailbox->quota_dirty = 0;
     }
 

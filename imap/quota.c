@@ -115,8 +115,7 @@ static int buildquotalist(char *domain, char **roots, int nroots);
 static int fixquotas(char *domain, char **roots, int nroots);
 static int fixquota_dopass(char *domain, char **roots, int nroots,
 			   foreach_cb *pass);
-static int fixquota_pass1(void *rock, const char *name, size_t namelen,
-			  const char *val, size_t vallen);
+static int fixquota_pass1(void);
 static int fixquota_pass2(void *rock, const char *name, size_t namelen,
 			  const char *val, size_t vallen);
 static int fixquota_fixroot(struct mailbox *mailbox, const char *root);
@@ -200,7 +199,7 @@ int main(int argc,char **argv)
     quotadb_open(NULL);
 
     if (fflag)
-	r = fixquota_dopass(domain, argv+optind, argc-optind, fixquota_pass1);
+	r = fixquota_pass1();
 
     if (!r)
 	r = buildquotalist(domain, argv+optind, argc-optind);
@@ -444,43 +443,27 @@ static int findroot(const char *name, int *thisquota)
 }
 
 /*
- * Pass 1: reset the 'scanned' flag on each mailbox.
+ * Pass 1: reset the scanset.
  */
-static int fixquota_pass1(void *rock,
-			  const char *name, size_t namelen,
-			  const char *val __attribute__((unused)),
-			  size_t vallen __attribute__((unused)))
+static int fixquota_pass1(void)
 {
     int r = 0;
-    const char *prefix = (const char *)rock;
-    int prefixlen = (prefix ? strlen(prefix) : 0);
-    struct mailbox *mailbox = NULL;
-    char *mboxname = xstrndup(name, namelen);
+    struct txn *txn = NULL;
 
-    assert(prefixlen <= namelen);
-    if (prefixlen && mboxname[prefixlen] && mboxname[prefixlen] != '.') goto done;
-
-    r = mailbox_open_iwl(mboxname, &mailbox);
+    r = quota_clear_scanset(&txn);
     if (r) {
-	errmsg("failed opening header for mailbox '%s'", name, r);
-	goto done;
+	quota_abort(&txn);
+	syslog(LOG_ERR, "Unable to clear scanset: %s", error_message(r));
+	fatal(error_message(r), EC_CONFIG);
     }
-
-    if ((mailbox->i.options & OPT_MAILBOX_QUOTA_SCANNED)) {
-	mailbox_index_dirty(mailbox);
-	mailbox->i.options &= ~OPT_MAILBOX_QUOTA_SCANNED;
-    }
-
-done:
-    mailbox_close(&mailbox);
-    free(mboxname);
+    quota_commit(&txn);
 
     return r;
 }
 
 /*
  * Pass 2: account for mailbox 'name' when fixing the quota roots
- *         and set the 'scanned' flag so that mailbox updates racing
+ *         and add the mboxname to the scanset so that mailbox updates racing
  *         with us will start updating the usedBs[].
  */
 static int fixquota_pass2(void *rock,
@@ -494,6 +477,7 @@ static int fixquota_pass2(void *rock,
     struct mailbox *mailbox = NULL;
     int thisquota = -1;
     char *mboxname = xstrndup(name, namelen);
+    struct txn *txn = NULL;
 
     assert(prefixlen <= namelen);
     if (prefixlen && mboxname[prefixlen] && mboxname[prefixlen] != '.') goto done;
@@ -537,9 +521,9 @@ static int fixquota_pass2(void *rock,
 		quota[thisquota].newused[res] += usage[res];
 	    }
 
-	    /* Set the 'scanned' flag in the mailbox */
-	    mailbox_index_dirty(mailbox);
-	    mailbox->i.options |= OPT_MAILBOX_QUOTA_SCANNED;
+	    r = quota_update_scanset(mboxname, &txn);
+	    if (!r)
+		quota_commit(&txn);
 	}
     }
 

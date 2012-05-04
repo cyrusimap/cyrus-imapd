@@ -372,14 +372,17 @@ int quota_write(struct quota *quota, struct txn **tid)
 
 int quota_update_useds(const char *quotaroot,
 		       const quota_t diff[QUOTA_NUMRESOURCES],
-		       int is_scanned)
+		       const char *mboxname)
 {
     struct quota q;
     struct txn *tid = NULL;
+    int is_scanned;
     int r = 0;
 
     if (!quotaroot || !*quotaroot)
 	return IMAP_QUOTAROOT_NONEXISTENT;
+
+    is_scanned = (mboxname && quota_is_in_scanset(mboxname, &tid) > 0);
 
     q.root = quotaroot;
     r = quota_read(&q, &tid, 1);
