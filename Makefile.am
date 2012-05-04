@@ -147,7 +147,7 @@ EXTRA_DIST = COPYRIGHT README.andrew SMakefile xversion.h \
 	contrib/drac_auth.patch contrib/sieve-spamasssassin contrib/fud-client.c contrib/deliver-notify-zephyr.patch contrib/add-cyrus-user contrib/README contrib/cyrus-graphtools.1.0 contrib/cyrus-graphtools.1.0/cgi-bin/cyrus_master.pl contrib/cyrus-graphtools.1.0/cgi-bin/graph_cyrus_db.pl contrib/cyrus-graphtools.1.0/cgi-bin/graph_cyrus_db-sum.pl contrib/cyrus-graphtools.1.0/html contrib/cyrus-graphtools.1.0/html/index.html contrib/cyrus-graphtools.1.0/README contrib/cyrus-graphtools.1.0/script contrib/cyrus-graphtools.1.0/script/cyrus.pl contrib/cyrus-graphtools.1.0/script/run contrib/cyrus-graphtools.1.0/script/cyrusrc contrib/notify_unix/notify contrib/notify_unix/net-server-prefork-0.01.tgz contrib/notify_unix/README contrib/notify_unix/sql_notify.pl contrib/notify_unix/simple_notify.pl contrib/squatrunner.pl contrib/mupdate-test.pl contrib/squatrunner.txt \
 	cunit/cacert.pem cunit/cert.pem cunit/cunit.pl cunit/cunit-to-junit.pl cunit/key.pem cunit/vg.supp \
 	doc/murder.fig doc/murder.png doc/netnews.fig doc/netnews.png \
-	imap/rfc822_header.st \
+	imap/imap_err.et imap/mupdate_err.et imap/nntp_err.et imap/rfc822_header.st \
 	lib/charset/aliases.txt lib/charset/big5.t \
 	lib/charset/gb2312.t lib/charset/iso-2022-jp.t \
 	lib/charset/iso-2022-kr.t lib/charset/iso-8859-10.t \
@@ -173,7 +173,7 @@ EXTRA_DIST = COPYRIGHT README.andrew SMakefile xversion.h \
 	perl/imap/Changes perl/imap/cyradm.sh perl/imap/cyrperl.h perl/imap/Cyrus/Shell.pm perl/imap/examples/auditmbox.pl perl/imap/examples/imapcollate.pl perl/imap/examples/imapdu.pl perl/imap/examples/test-imsp.pl perl/imap/IMAP/Admin.pm perl/imap/IMAP/IMSP.pm perl/imap/IMAP/Shell.pm perl/imap/IMAP.pm perl/imap/IMAP.xs perl/imap/Makefile.PL.in perl/imap/MANIFEST perl/imap/README perl/imap/t/01-imclient.t perl/imap/t/02-admin.t perl/imap/typemap perl/imap/xsutil.c \
 	perl/sieve/managesieve/Makefile.PL.in perl/sieve/managesieve/managesieve.h perl/sieve/managesieve/managesieve.pm perl/sieve/managesieve/managesieve.xs perl/sieve/managesieve/MANIFEST perl/sieve/managesieve/typemap \
 	ptclient/README ptclient/test.c ptclient/test2.c \
-	sieve/addr.h sieve/sieve.h sieve/tests/testExtension sieve/tests/testExtension/uberExtensionTestScript.key sieve/tests/testExtension/testm sieve/tests/testExtension/testm/uetest-envelope sieve/tests/testExtension/testm/uetest-asub sieve/tests/testExtension/testm/uetest-areg sieve/tests/testExtension/testm/uetest-count sieve/tests/testExtension/testm/uetest-value sieve/tests/testExtension/testm/uetest-hreg sieve/tests/testExtension/serverm sieve/tests/testExtension/serverm/uetmail-hreg sieve/tests/testExtension/serverm/uetmail-value sieve/tests/testExtension/serverm/uetmail-count2 sieve/tests/testExtension/serverm/uetmail-envelope sieve/tests/testExtension/serverm/uetmail-asub sieve/tests/testExtension/serverm/uetmail-value2 sieve/tests/testExtension/serverm/uetmail-areg sieve/tests/testExtension/serverm/uetmail-count sieve/tests/testExtension/uberExtensionTestScript.s sieve/tests/README sieve/tests/action sieve/tests/action/testm sieve/tests/action/testm/uatest-keep sieve/tests/action/testm/uatest-redirect sieve/tests/action/testm/uatest-discard sieve/tests/action/testm/uatest-stop2 sieve/tests/action/testm/uatest-stop sieve/tests/action/serverm sieve/tests/action/serverm/uamail-stop2 sieve/tests/action/serverm/uamail-redirect sieve/tests/action/serverm/uamail-stop sieve/tests/action/serverm/uamail-keep sieve/tests/action/serverm/uamail-discard sieve/tests/action/uberActionScript.key sieve/tests/action/uberActionScript.s sieve/tests/test sieve/tests/test/uberTestScript.key sieve/tests/test/testm sieve/tests/test/testm/utest-header sieve/tests/test/testm/utest-address sieve/tests/test/serverm sieve/tests/test/serverm/utmail-address sieve/tests/test/serverm/utmail-header sieve/tests/test/uberTestScript.s sieve/tests/actionExtensions sieve/tests/actionExtensions/uberExtensionActionScript.s sieve/tests/actionExtensions/testm sieve/tests/actionExtensions/testm/ueatest-flag4 sieve/tests/actionExtensions/testm/ueatest-flag2 sieve/tests/actionExtensions/testm/ueatest-fileinto sieve/tests/actionExtensions/testm/ueatest-denotify sieve/tests/actionExtensions/testm/ueatest-vacation sieve/tests/actionExtensions/testm/ueatest-reject sieve/tests/actionExtensions/testm/ueatest-mark sieve/tests/actionExtensions/testm/ueatest-denotify2 sieve/tests/actionExtensions/testm/ueatest-flag5 sieve/tests/actionExtensions/testm/ueatest-notify2 sieve/tests/actionExtensions/testm/ueatest-notify sieve/tests/actionExtensions/testm/ueatest-flag1 sieve/tests/actionExtensions/testm/ueatest-flag3 sieve/tests/actionExtensions/testm/ueatest-unmark sieve/tests/actionExtensions/uberExtensionActionScript.key sieve/tests/actionExtensions/serverm sieve/tests/actionExtensions/serverm/ueamail-flag4 sieve/tests/actionExtensions/serverm/ueamail-denotify sieve/tests/actionExtensions/serverm/ueamail-mark sieve/tests/actionExtensions/serverm/ueamail-denotify2 sieve/tests/actionExtensions/serverm/ueamail-flag2 sieve/tests/actionExtensions/serverm/ueamail-unmark sieve/tests/actionExtensions/serverm/ueamail-reject sieve/tests/actionExtensions/serverm/ueamail-flag3 sieve/tests/actionExtensions/serverm/ueamail-fileinto sieve/tests/actionExtensions/serverm/ueamail-flag1 sieve/tests/actionExtensions/serverm/ueamail-notify sieve/tests/actionExtensions/serverm/ueamail-flag5 sieve/tests/actionExtensions/serverm/ueamail-notify2 sieve/tests/actionExtensions/serverm/ueamail-vacation \
+	sieve/addr.h sieve/sieve.h sieve/sieve_err.et sieve/tests/testExtension sieve/tests/testExtension/uberExtensionTestScript.key sieve/tests/testExtension/testm sieve/tests/testExtension/testm/uetest-envelope sieve/tests/testExtension/testm/uetest-asub sieve/tests/testExtension/testm/uetest-areg sieve/tests/testExtension/testm/uetest-count sieve/tests/testExtension/testm/uetest-value sieve/tests/testExtension/testm/uetest-hreg sieve/tests/testExtension/serverm sieve/tests/testExtension/serverm/uetmail-hreg sieve/tests/testExtension/serverm/uetmail-value sieve/tests/testExtension/serverm/uetmail-count2 sieve/tests/testExtension/serverm/uetmail-envelope sieve/tests/testExtension/serverm/uetmail-asub sieve/tests/testExtension/serverm/uetmail-value2 sieve/tests/testExtension/serverm/uetmail-areg sieve/tests/testExtension/serverm/uetmail-count sieve/tests/testExtension/uberExtensionTestScript.s sieve/tests/README sieve/tests/action sieve/tests/action/testm sieve/tests/action/testm/uatest-keep sieve/tests/action/testm/uatest-redirect sieve/tests/action/testm/uatest-discard sieve/tests/action/testm/uatest-stop2 sieve/tests/action/testm/uatest-stop sieve/tests/action/serverm sieve/tests/action/serverm/uamail-stop2 sieve/tests/action/serverm/uamail-redirect sieve/tests/action/serverm/uamail-stop sieve/tests/action/serverm/uamail-keep sieve/tests/action/serverm/uamail-discard sieve/tests/action/uberActionScript.key sieve/tests/action/uberActionScript.s sieve/tests/test sieve/tests/test/uberTestScript.key sieve/tests/test/testm sieve/tests/test/testm/utest-header sieve/tests/test/testm/utest-address sieve/tests/test/serverm sieve/tests/test/serverm/utmail-address sieve/tests/test/serverm/utmail-header sieve/tests/test/uberTestScript.s sieve/tests/actionExtensions sieve/tests/actionExtensions/uberExtensionActionScript.s sieve/tests/actionExtensions/testm sieve/tests/actionExtensions/testm/ueatest-flag4 sieve/tests/actionExtensions/testm/ueatest-flag2 sieve/tests/actionExtensions/testm/ueatest-fileinto sieve/tests/actionExtensions/testm/ueatest-denotify sieve/tests/actionExtensions/testm/ueatest-vacation sieve/tests/actionExtensions/testm/ueatest-reject sieve/tests/actionExtensions/testm/ueatest-mark sieve/tests/actionExtensions/testm/ueatest-denotify2 sieve/tests/actionExtensions/testm/ueatest-flag5 sieve/tests/actionExtensions/testm/ueatest-notify2 sieve/tests/actionExtensions/testm/ueatest-notify sieve/tests/actionExtensions/testm/ueatest-flag1 sieve/tests/actionExtensions/testm/ueatest-flag3 sieve/tests/actionExtensions/testm/ueatest-unmark sieve/tests/actionExtensions/uberExtensionActionScript.key sieve/tests/actionExtensions/serverm sieve/tests/actionExtensions/serverm/ueamail-flag4 sieve/tests/actionExtensions/serverm/ueamail-denotify sieve/tests/actionExtensions/serverm/ueamail-mark sieve/tests/actionExtensions/serverm/ueamail-denotify2 sieve/tests/actionExtensions/serverm/ueamail-flag2 sieve/tests/actionExtensions/serverm/ueamail-unmark sieve/tests/actionExtensions/serverm/ueamail-reject sieve/tests/actionExtensions/serverm/ueamail-flag3 sieve/tests/actionExtensions/serverm/ueamail-fileinto sieve/tests/actionExtensions/serverm/ueamail-flag1 sieve/tests/actionExtensions/serverm/ueamail-notify sieve/tests/actionExtensions/serverm/ueamail-flag5 sieve/tests/actionExtensions/serverm/ueamail-notify2 sieve/tests/actionExtensions/serverm/ueamail-vacation \
 	timsieved/TODO
 
 TEXINFO_TEX = com_err/et/texinfo.tex
@@ -405,27 +405,28 @@ imap_ipurge_SOURCES = imap/cli_fatal.c imap/ipurge.c imap/mutex_fake.c
 imap_ipurge_LDFLAGS = $(LD_UTILITY_FLAGS)
 imap_ipurge_LDADD = $(LD_UTILITY_ADD)
 
+nodist_imap_libimap_a_SOURCES = imap/imap_err.c imap/mupdate_err.c imap/mupdate_err.h 
 imap_libimap_a_SOURCES = imap/annotate.c imap/annotate.h imap/append.c \
 	imap/append.h imap/backend.c imap/backend.h imap/convert_code.c \
 	imap/convert_code.h imap/dlist.c imap/dlist.h imap/duplicate.c \
 	imap/duplicate.h imap/global.c imap/global.h imap/idle.c imap/idle.h \
-	imap/idlemsg.c imap/idlemsg.h imap/imapparse.c imap/imap_err.c \
-	imap/index.h imap/mailbox.c imap/mailbox.c imap/mbdump.c \
-	imap/mbdump.h imap/mboxkey.c imap/mboxkey.h imap/mboxlist.c \
-	imap/mboxlist.h imap/mboxname.c imap/mboxname.h imap/message_guid.c \
+	imap/idlemsg.c imap/idlemsg.h imap/imapparse.c imap/index.h \
+	imap/mailbox.c imap/mailbox.c imap/mbdump.c imap/mbdump.h \
+	imap/mboxkey.c imap/mboxkey.h imap/mboxlist.c imap/mboxlist.h \
+	imap/mboxname.c imap/mboxname.h imap/message_guid.c \
 	imap/message_guid.h imap/message.c imap/message.h \
-	imap/mupdate-client.c imap/mupdate-client.h imap/mupdate_err.c \
-	imap/mupdate_err.h imap/mutex.h imap/notify.c imap/notify.h \
-	imap/proc.c imap/proc.h imap/protocol.h imap/quota_db.c \
-	imap/rfc822_header.c imap/rfc822_header.h imap/saslclient.c \
-	imap/saslclient.h imap/saslserver.c imap/search_engines.c \
-	imap/search_engines.h imap/seen.h imap/seen_db.c imap/sequence.c \
-	imap/sequence.h imap/setproctitle.c imap/squat.c imap/squat.h \
-	imap/squat_internal.c imap/squat_internal.h imap/statuscache.h \
-	imap/statuscache_db.c imap/sync_log.c imap/sync_log.h \
-	imap/telemetry.c imap/telemetry.h imap/tls.c imap/tls.h \
-	imap/upgrade_index.c imap/upgrade_index.h imap/user.c imap/user.h \
-	imap/userdeny_db.c imap/userdeny.h imap/version.c imap/version.h
+	imap/mupdate-client.c imap/mupdate-client.h imap/mutex.h \
+	imap/notify.c imap/notify.h imap/proc.c imap/proc.h imap/protocol.h \
+	imap/quota_db.c imap/rfc822_header.c imap/rfc822_header.h \
+	imap/saslclient.c imap/saslclient.h imap/saslserver.c \
+	imap/search_engines.c imap/search_engines.h imap/seen.h \
+	imap/seen_db.c imap/sequence.c imap/sequence.h imap/setproctitle.c \
+	imap/squat.c imap/squat.h imap/squat_internal.c imap/squat_internal.h \
+	imap/statuscache.h imap/statuscache_db.c imap/sync_log.c \
+	imap/sync_log.h imap/telemetry.c imap/telemetry.h imap/tls.c \
+	imap/tls.h imap/upgrade_index.c imap/upgrade_index.h imap/user.c \
+	imap/user.h imap/userdeny_db.c imap/userdeny.h imap/version.c \
+	imap/version.h
 
 imap_lmtpd_SOURCES = imap/lmtpd.c imap/lmtpd.h imap/lmtpengine.c \
 	imap/lmtpengine.h imap/lmtpstats.c imap/lmtpstats.h \
@@ -462,9 +463,10 @@ imap_mupdate_SOURCES = imap/mupdate.c imap/mupdate-slave.c imap/mutex_pthread.c 
 imap_mupdate_LDFLAGS = $(LD_SERVER_FLAGS)
 imap_mupdate_LDADD = $(LD_SERVER_ADD) -lpthread
 
+nodist_imap_nntpd_SOURCES = imap/nntp_err.c imap/nntp_err.h
 imap_nntpd_SOURCES = imap/index.c imap/mutex_fake.c imap/nntpd.c \
-	imap/nntp_err.c imap/nntp_err.h imap/proxy.c imap/smtpclient.c \
-	imap/smtpclient.h imap/spool.c imap/spool.h master/service.c
+	imap/proxy.c imap/smtpclient.c imap/smtpclient.h imap/spool.c \
+	imap/spool.h master/service.c
 imap_nntpd_LDFLAGS = $(LD_SERVER_FLAGS)
 imap_nntpd_LDADD = $(LD_SERVER_ADD)
 
@@ -670,12 +672,12 @@ ptclient_ptloader_LDADD += $(AFS_LIBS)
 ptclient_ptloader_LDFLAGS += $(AFS_LDFLAGS)
 endif
 
+nodist_sieve_libsieve_a_SOURCES = sieve/sieve_err.c sieve/sieve_err.h
 sieve_libsieve_a_SOURCES = sieve/bytecode.h sieve/addr.y sieve/addr-lex.l \
 	sieve/bc_dump.c sieve/bc_emit.c sieve/bc_eval.c sieve/bc_generate.c \
 	sieve/comparator.c sieve/comparator.h sieve/interp.c sieve/interp.h \
 	sieve/message.c sieve/message.h sieve/script.c sieve/script.h \
-	sieve/sieve-lex.l sieve/sieve.y sieve/sieve_err.c sieve/sieve_err.h \
-	sieve/sieve_interface.h sieve/tree.c sieve/tree.h
+	sieve/sieve-lex.l sieve/sieve.y sieve/sieve_interface.h sieve/tree.c sieve/tree.h
 
 LD_SIEVE_FLAGS = $(LD_BASIC_FLAGS)
 LD_SIEVE_ADD = sieve/libsieve.a $(LD_BASIC_ADD) $(COM_ERR_LIBS)
