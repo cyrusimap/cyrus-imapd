@@ -535,7 +535,7 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
     /* need to (re)establish connection to server or create one */
     int sock = -1;
     int r;
-    int err = -1;
+    int err = 0;
     struct addrinfo hints, *res0 = NULL, *res;
     struct sockaddr_un sunsock;
     struct backend *ret;
@@ -595,7 +595,7 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
 	else if (errno == EINPROGRESS) {
 	    /* connect() in progress */
 	    int n;
-	    fd_set wfds;
+	    fd_set wfds, rfds;
 	    time_t now = time(NULL);
 	    time_t timeout = now + config_getint(IMAPOPT_CLIENT_TIMEOUT);
 	    struct timeval waitfor;
@@ -604,10 +604,11 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
 	    do {
 		FD_ZERO(&wfds);
 		FD_SET(sock, &wfds);
+		rfds = wfds;
     		waitfor.tv_sec = timeout - now;
 		waitfor.tv_usec = 0;
 
-		n = select(sock + 1, NULL, &wfds, NULL, &waitfor);
+		n = select(sock + 1, &rfds, &wfds, NULL, &waitfor);
 		now = time(NULL);
 
 		/* Retry select() if interrupted */
@@ -617,8 +618,8 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
 		/* select() timed out */
 		errno = ETIMEDOUT;
 	    }
-	    else if (n == 1 && FD_ISSET(sock, &wfds)) {
-		/* Socket is writable - get SO_ERROR to determine status */
+	    else if (FD_ISSET(sock, &rfds) || FD_ISSET(sock, &wfds)) {
+		/* Socket is ready for I/O - get SO_ERROR to determine status */
 		socklen_t errlen = sizeof(err);
 
 		if (!getsockopt(sock, SOL_SOCKET, SO_ERROR, &err, &errlen) &&
@@ -634,8 +635,7 @@ struct backend *backend_connect(struct backend *ret_backend, const char *server,
     }
 
     if (sock < 0) {
-	if (res0 != &hints)
-	    freeaddrinfo(res0);
+	if (res0 != &hints) freeaddrinfo(res0);
 	syslog(LOG_ERR, "connect(%s) failed: %m", server);
 	if (!ret_backend) free(ret);
 	return NULL;
