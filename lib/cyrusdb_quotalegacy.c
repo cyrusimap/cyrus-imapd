@@ -439,12 +439,14 @@ static int myfetch(struct dbengine *db, char *quota_path,
 	}
 	/* convert the terminating \n to \0 */
 	*eol = '\0';
+
+	*data = db->data;
+	*datalen = eol - db->data;
     }
     else {
-	db->data = xstrdup("");
+	*data = db->data = xstrdup("");
+	*datalen = 0;
     }
-    *data = db->data;
-    *datalen = strlen(db->data);
 
     map_free(&quota_base, &quota_len);
     if (!tid) close(quota_fd);
