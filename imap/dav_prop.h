@@ -286,7 +286,7 @@ int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx);
 
 /* Initialize an XML tree */
 xmlNodePtr init_xml_response(const char *resp, int ns,
-			     xmlNsPtr reqNs, xmlNsPtr *respNs);
+			     xmlNodePtr req, xmlNsPtr *respNs);
 
 struct error_t;
 xmlNodePtr xml_add_error(xmlNodePtr root, struct error_t *err,

@@ -115,26 +115,39 @@ static int ensure_ns(xmlNsPtr *respNs, int ns, xmlNodePtr node,
 
 
 /* Add namespaces declared in the request to our root node and Ns array */
-static int xml_add_ns(xmlNsPtr reqNs, xmlNsPtr *respNs, xmlNodePtr root)
+static int xml_add_ns(xmlNodePtr req, xmlNsPtr *respNs, xmlNodePtr root)
 {
-    for (; reqNs; reqNs = reqNs->next) {
-	if (!xmlStrcmp(reqNs->href, BAD_CAST XML_NS_DAV))
-	    ensure_ns(respNs, NS_DAV, root,
-		      (const char *) reqNs->href, (const char *) reqNs->prefix);
-	else if (!xmlStrcmp(reqNs->href, BAD_CAST XML_NS_CALDAV))
-	    ensure_ns(respNs, NS_CALDAV, root,
-		      (const char *) reqNs->href, (const char *) reqNs->prefix);
-	else if (!xmlStrcmp(reqNs->href, BAD_CAST XML_NS_CS))
-	    ensure_ns(respNs, NS_CS, root,
-		      (const char *) reqNs->href, (const char *) reqNs->prefix);
-	else if (!xmlStrcmp(reqNs->href, BAD_CAST XML_NS_CYRUS))
-	    ensure_ns(respNs, NS_CYRUS, root,
-		      (const char *) reqNs->href, (const char *) reqNs->prefix);
-	else if (!xmlStrcmp(reqNs->href, BAD_CAST XML_NS_ICAL))
-	    ensure_ns(respNs, NS_ICAL, root,
-		      (const char *) reqNs->href, (const char *) reqNs->prefix);
-	else
-	    xmlNewNs(root, reqNs->href, reqNs->prefix);
+    for (; req; req = req->next) {
+	if (req->type == XML_ELEMENT_NODE) {
+	    xmlNsPtr nsDef;
+
+	    for (nsDef = req->nsDef; nsDef; nsDef = nsDef->next) {
+		if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_DAV))
+		    ensure_ns(respNs, NS_DAV, root,
+			      (const char *) nsDef->href,
+			      (const char *) nsDef->prefix);
+		else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_CALDAV))
+		    ensure_ns(respNs, NS_CALDAV, root,
+			      (const char *) nsDef->href,
+			      (const char *) nsDef->prefix);
+		else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_CS))
+		    ensure_ns(respNs, NS_CS, root,
+			      (const char *) nsDef->href,
+			      (const char *) nsDef->prefix);
+		else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_CYRUS))
+		    ensure_ns(respNs, NS_CYRUS, root,
+			      (const char *) nsDef->href,
+			      (const char *) nsDef->prefix);
+		else if (!xmlStrcmp(nsDef->href, BAD_CAST XML_NS_ICAL))
+		    ensure_ns(respNs, NS_ICAL, root,
+			      (const char *) nsDef->href,
+			      (const char *) nsDef->prefix);
+		else
+		    xmlNewNs(root, nsDef->href, nsDef->prefix);
+	    }
+	}
+
+	xml_add_ns(req->children, respNs, root);
     }
 
     /* XXX  check for errors */
@@ -144,7 +157,7 @@ static int xml_add_ns(xmlNsPtr reqNs, xmlNsPtr *respNs, xmlNodePtr root)
 
 /* Initialize an XML tree for a property response */
 xmlNodePtr init_xml_response(const char *resp, int ns,
-			     xmlNsPtr reqNs, xmlNsPtr *respNs)
+			     xmlNodePtr req, xmlNsPtr *respNs)
 {
     /* Start construction of our XML response tree */
     xmlDocPtr doc = xmlNewDoc(BAD_CAST "1.0");
@@ -159,7 +172,7 @@ xmlNodePtr init_xml_response(const char *resp, int ns,
      * creating array of known namespaces that we can reference later.
      */
     memset(respNs, 0, NUM_NAMESPACE * sizeof(xmlNsPtr));
-    xml_add_ns(reqNs, respNs, root);
+    xml_add_ns(req, respNs, root);
 
     /* Set namespace of root node */
     if (ns == NS_CALDAV) ensure_ns(respNs, NS_CALDAV, root, XML_NS_CALDAV, "C");
@@ -1672,9 +1685,6 @@ int preload_proplist(xmlNodePtr proplist, struct propfind_ctx *fctx)
 	    struct propfind_entry_list *nentry =
 		xzmalloc(sizeof(struct propfind_entry_list));
 
-	    /* Add any namespaces declared on this property */
-	    if (prop->nsDef) xml_add_ns(prop->nsDef, fctx->ns, fctx->root);
-
 	    /* Look for a match against our known properties */
 	    for (entry = prop_entries;
 		 entry->name && 
@@ -1737,9 +1747,6 @@ int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr)
 	    for (prop = prop->children; prop; prop = prop->next) {
 		if (prop->type == XML_ELEMENT_NODE) {
 		    const struct prop_entry *entry;
-
-		    /* Add any namespaces declared on this property */
-		    if (prop->nsDef) xml_add_ns(prop->nsDef, pctx->ns, pctx->root);
 
 		    /* Look for a match against our known properties */
 		    for (entry = prop_entries;
