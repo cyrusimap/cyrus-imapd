@@ -190,10 +190,10 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
 int caldav_read(struct caldav_db *caldavdb, struct caldav_data *cdata)
 {
     struct bind_val bval[] = {
-	{ ":mailbox", SQLITE_TEXT, { .s = cdata->mailbox } },
+	{ ":mailbox",  SQLITE_TEXT, { .s = cdata->mailbox  } },
 	{ ":resource", SQLITE_TEXT, { .s = cdata->resource } },
 	{ ":ical_uid", SQLITE_TEXT, { .s = cdata->ical_uid } },
-	{ NULL, SQLITE_NULL, { .s = NULL } } };
+	{ NULL,	       SQLITE_NULL, { .s = NULL		   } } };
     struct read_rock rrock = { cdata, NULL, NULL };
     int r;
 
@@ -233,7 +233,7 @@ int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
 {
     struct bind_val bval[] = {
 	{ ":mailbox", SQLITE_TEXT, { .s = mailbox } },
-	{ NULL, SQLITE_NULL, { .s = NULL } } };
+	{ NULL,	      SQLITE_NULL, { .s = NULL    } } };
     struct caldav_data cdata;
     struct read_rock rrock = { &cdata, cb, rock };
 
@@ -266,18 +266,18 @@ int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
 int caldav_write(struct caldav_db *caldavdb, struct caldav_data *cdata)
 {
     struct bind_val bval[] = {
-	{ ":imap_uid", SQLITE_INTEGER, { .i = cdata->imap_uid } },
-	{ ":ical_uid", SQLITE_TEXT, { .s = cdata->ical_uid } },
-	{ ":comp_type", SQLITE_INTEGER, { .i = cdata->comp_type } },
-	{ ":organizer", SQLITE_TEXT, { .s = cdata->organizer } },
-	{ ":sched_tag", SQLITE_TEXT, { .s = cdata->sched_tag } },
-	{ ":dtstart", SQLITE_TEXT, { .s = cdata->dtstart } },
-	{ ":dtend", SQLITE_TEXT, { .s = cdata->dtend } },
-	{ ":recurring:", SQLITE_INTEGER, { .i = cdata->recurring } },
-	{ ":transp", SQLITE_INTEGER, { .i = cdata->transp } },
-	{ NULL, SQLITE_NULL, { .s = NULL } },
-	{ NULL, SQLITE_NULL, { .s = NULL } },
-	{ NULL, SQLITE_NULL, { .s = NULL } } };
+	{ ":imap_uid",	 SQLITE_INTEGER, { .i = cdata->imap_uid  } },
+	{ ":ical_uid",	 SQLITE_TEXT,	 { .s = cdata->ical_uid  } },
+	{ ":comp_type",	 SQLITE_INTEGER, { .i = cdata->comp_type } },
+	{ ":organizer",	 SQLITE_TEXT,	 { .s = cdata->organizer } },
+	{ ":sched_tag",	 SQLITE_TEXT,	 { .s = cdata->sched_tag } },
+	{ ":dtstart",	 SQLITE_TEXT,	 { .s = cdata->dtstart   } },
+	{ ":dtend",	 SQLITE_TEXT,	 { .s = cdata->dtend     } },
+	{ ":recurring",	 SQLITE_INTEGER, { .i = cdata->recurring } },
+	{ ":transp",	 SQLITE_INTEGER, { .i = cdata->transp    } },
+	{ NULL,		 SQLITE_NULL,	 { .s = NULL		 } },
+	{ NULL,		 SQLITE_NULL,	 { .s = NULL		 } },
+	{ NULL,		 SQLITE_NULL,	 { .s = NULL		 } } };
     const char *cmd;
     sqlite3_stmt **stmt;
 
@@ -311,7 +311,7 @@ int caldav_delete(struct caldav_db *caldavdb, struct caldav_data *cdata)
 {
     struct bind_val bval[] = {
 	{ ":rowid", SQLITE_INTEGER, { .i = cdata->rowid } },
-	{ NULL, SQLITE_NULL, { .s = NULL } } };
+	{ NULL,	    SQLITE_NULL,    { .s = NULL         } } };
 
     return dav_exec(caldavdb->db, CMD_DELETE, bval, NULL, NULL,
 		    &caldavdb->stmt[STMT_DELETE]);
@@ -324,7 +324,7 @@ int caldav_delmbox(struct caldav_db *caldavdb, const char *mailbox)
 {
     struct bind_val bval[] = {
 	{ ":mailbox", SQLITE_TEXT, { .s = mailbox } },
-	{ NULL, SQLITE_NULL, { .s = NULL } } };
+	{ NULL,	      SQLITE_NULL, { .s = NULL    } } };
 
     return dav_exec(caldavdb->db, CMD_DELMBOX, bval, NULL, NULL,
 		    &caldavdb->stmt[STMT_DELMBOX]);
