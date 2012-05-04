@@ -1320,129 +1320,145 @@ static void add_busytime(icalcomponent *comp, struct icaltime_span *span,
 /* See if the current resource matches the specified filter
  * (comp-type and/or time-range).  Returns 1 if match, 0 otherwise.
  */
-static int apply_calfilter(struct propfind_ctx *fctx)
+static int apply_calfilter(struct propfind_ctx *fctx, struct caldav_data *cdata)
 {
     int match = 1;
-    icalcomponent *ical, *comp;
-
-    /* mmap() and parse iCalendar object to perform filtering */
-    mailbox_map_message(fctx->mailbox, fctx->record->uid,
-			&fctx->msg_base, &fctx->msg_size);
-
-    ical = icalparser_parse_string(fctx->msg_base + fctx->record->header_size);
-
-    comp = icalcomponent_get_first_real_component(ical);
 
     if (fctx->calfilter->comp) {
-	icalcomponent_kind kind = icalcomponent_isa(comp);
-	unsigned mykind = 0;
-
 	/* Perform CALDAV:comp-filter filtering */
-	/* XXX  This should be checked with a caldav_db entry */
-	switch (kind) {
-	case ICAL_VEVENT_COMPONENT: mykind = CAL_COMP_VEVENT; break;
-	case ICAL_VTODO_COMPONENT: mykind = CAL_COMP_VTODO; break;
-	case ICAL_VJOURNAL_COMPONENT: mykind = CAL_COMP_VJOURNAL; break;
-	case ICAL_VFREEBUSY_COMPONENT: mykind = CAL_COMP_VFREEBUSY; break;
-	default: break;
-	}
-
-	if (!(mykind & fctx->calfilter->comp)) match = 0;
+	if (!(cdata->comp_type & fctx->calfilter->comp)) return 0;
     }
 
-    if (match && !icaltime_is_null_time(fctx->calfilter->start)) {
-	/* XXX  This code assumes that the first VEVENT will contain
-	 * the recurrence rule and the subsequent VEVENTs will
-	 * be the overrides.  Technically this doesn't have to be
-	 * the case, but it appears to be true in practice.
-	 */
-	unsigned firstr, lastr;
-	icaltimezone *utc = icaltimezone_get_utc_timezone();
-	icaltime_span rangespan;
+    if (!icaltime_is_null_time(fctx->calfilter->start)) {
+	/* Perform CALDAV:time-range filtering */
+	struct icaltimetype dtstart = icaltime_from_string(cdata->dtstart);
+	struct icaltimetype dtend = icaltime_from_string(cdata->dtend);
 
-	/* Create a span for the given time-range */
-	rangespan.start =
-	    icaltime_as_timet_with_zone(fctx->calfilter->start, utc);
-	rangespan.end =
-	    icaltime_as_timet_with_zone(fctx->calfilter->end, utc);
+	if (icaltime_compare(dtend, fctx->calfilter->start) <= 0) {
+	    /* Component is earlier than range */
+	    return 0;
+	}
+	else if (icaltime_compare(dtstart, fctx->calfilter->end) >= 0) {
+	    /* Component is later than range */
+	    return 0;
+	}
+	else if (!cdata->recurring) {
+	    /* Component is within range and non-recurring */
+	    return 1;
+	}
+	else {
+	    /* Component is within range and recurring.
+	     * Need to mmap() and parse iCalendar object
+	     * to perform complete check of each recurrence.
+	     */
+	    icalcomponent *ical, *comp;
+	    icalcomponent_kind kind;
+	    icaltimezone *utc = icaltimezone_get_utc_timezone();
+	    icaltime_span rangespan;
+	    unsigned firstr, lastr;
 
-	/* Mark start of where recurrences will be added */
-	firstr = fctx->busytime.len;
+	    mailbox_map_message(fctx->mailbox, fctx->record->uid,
+				&fctx->msg_base, &fctx->msg_size);
 
-	/* Add all recurring busytime in specified time-range */
-	icalcomponent_foreach_recurrence(comp,
-					 fctx->calfilter->start,
-					 fctx->calfilter->end,
-					 add_busytime,
-					 &fctx->busytime);
+	    ical = icalparser_parse_string(fctx->msg_base +
+					   fctx->record->header_size);
 
-	/* Mark end of where recurrences were added */
-	lastr = fctx->busytime.len;
+	    comp = icalcomponent_get_first_real_component(ical);
+	    kind = icalcomponent_isa(comp);
 
-	/* XXX  Should we sort the busytime array, so we can use bsearch()? */
+	    /* XXX  This code assumes that the first VEVENT will contain
+	     * the recurrence rule and the subsequent VEVENTs will
+	     * be the overrides.  Technically this doesn't have to be
+	     * the case, but it appears to be true in practice.
+	     */
 
-	/* Handle overridden recurrences */
-	while ((comp =
-		icalcomponent_get_next_component(ical,
-						 ICAL_VEVENT_COMPONENT))) {
-	    unsigned n;
-	    icalproperty *prop;
-	    struct icaltimetype recurid;
-	    icalparameter *param;
-	    icaltime_span recurspan;
+	    /* Create a span for the given time-range */
+	    rangespan.start =
+		icaltime_as_timet_with_zone(fctx->calfilter->start, utc);
+	    rangespan.end =
+		icaltime_as_timet_with_zone(fctx->calfilter->end, utc);
 
-	    /* The *_get_recurrenceid() functions don't appear
-	       to deal with timezones properly, so we do it ourselves */
-	    prop = icalcomponent_get_first_property(comp,
-						    ICAL_RECURRENCEID_PROPERTY);
-	    recurid = icalproperty_get_recurrenceid(prop);
-	    param = icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER);
+	    /* Mark start of where recurrences will be added */
+	    firstr = fctx->busytime.len;
 
-	    if (param) {
-		const char *tzid = icalparameter_get_tzid(param);
-		icaltimezone *tz = NULL;
+	    /* Add all recurring busytime in specified time-range */
+	    icalcomponent_foreach_recurrence(comp,
+					     fctx->calfilter->start,
+					     fctx->calfilter->end,
+					     add_busytime,
+					     &fctx->busytime);
 
-		tz = icalcomponent_get_timezone(ical, tzid);
-		if (!tz) tz = icaltimezone_get_builtin_timezone_from_tzid(tzid);
-		if (tz) icaltime_set_timezone(&recurid, tz);
-	    }
+	    /* Mark end of where recurrences were added */
+	    lastr = fctx->busytime.len;
 
-	    recurid = icaltime_convert_to_zone(recurid,
-					       icaltimezone_get_utc_timezone());
+	    /* XXX  Should we sort busytime array, so we can use bsearch()? */
 
-	    /* Check if this overridden instance is in our array */
-	    /* XXX  Should we replace this linear search with bsearch() */
-	    for (n = firstr; n < lastr; n++) {
-		if (!icaltime_compare(recurid,
-				      fctx->busytime.busy[n].start)) {
-		    /* Remove the instance
-		       by sliding all future instances into its place */
-		    /* XXX  Doesn't handle the RANGE=THISANDFUTURE param */
-		    fctx->busytime.len--;
-		    memmove(&fctx->busytime.busy[n],
-			    &fctx->busytime.busy[n+1],
-			    sizeof(struct icalperiodtype) *
-			    (fctx->busytime.len - n));
-		    lastr--;
+	    /* Handle overridden recurrences */
+	    while ((comp = icalcomponent_get_next_component(ical, kind))) {
+		icalproperty *prop;
+		struct icaltimetype recurid;
+		icalparameter *param;
+		icaltime_span recurspan;
+		unsigned n;
 
-		    break;
+		/* The *_get_recurrenceid() functions don't appear
+		   to deal with timezones properly, so we do it ourselves */
+		prop =
+		    icalcomponent_get_first_property(comp,
+						     ICAL_RECURRENCEID_PROPERTY);
+		recurid = icalproperty_get_recurrenceid(prop);
+		param =
+		    icalproperty_get_first_parameter(prop, ICAL_TZID_PARAMETER);
+
+		if (param) {
+		    const char *tzid = icalparameter_get_tzid(param);
+		    icaltimezone *tz = NULL;
+
+		    tz = icalcomponent_get_timezone(ical, tzid);
+		    if (!tz) {
+			tz = icaltimezone_get_builtin_timezone_from_tzid(tzid);
+		    }
+		    if (tz) icaltime_set_timezone(&recurid, tz);
+		}
+
+		recurid =
+		    icaltime_convert_to_zone(recurid,
+					     icaltimezone_get_utc_timezone());
+
+		/* Check if this overridden instance is in our array */
+		/* XXX  Should we replace this linear search with bsearch() */
+		for (n = firstr; n < lastr; n++) {
+		    if (!icaltime_compare(recurid,
+					  fctx->busytime.busy[n].start)) {
+			/* Remove the instance
+			   by sliding all future instances into its place */
+			/* XXX  Doesn't handle the RANGE=THISANDFUTURE param */
+			fctx->busytime.len--;
+			memmove(&fctx->busytime.busy[n],
+				&fctx->busytime.busy[n+1],
+				sizeof(struct icalperiodtype) *
+				(fctx->busytime.len - n));
+			lastr--;
+
+			break;
+		    }
+		}
+
+		/* Check if the new instance is in our time-range */
+		recurspan = icaltime_span_new(icalcomponent_get_dtstart(comp),
+					      icalcomponent_get_dtend(comp), 1);
+
+		if (icaltime_span_overlaps(&recurspan, &rangespan)) {
+		    /* Add this instance to the array */
+		    add_busytime(comp, &recurspan, &fctx->busytime);
 		}
 	    }
 
-	    /* Check if the new instance is in our time-range */
-	    recurspan = icaltime_span_new(icalcomponent_get_dtstart(comp),
-					  icalcomponent_get_dtend(comp), 1);
+	    if (!fctx->busytime.len) match = 0;
 
-	    if (icaltime_span_overlaps(&recurspan, &rangespan)) {
-		/* Add this instance to the array */
-		add_busytime(comp, &recurspan, &fctx->busytime);
-	    }
+	    icalcomponent_free(ical);
 	}
-
-	if (!fctx->busytime.len) match = 0;
     }
-
-    icalcomponent_free(ical);
 
     return match;
 }
@@ -1491,7 +1507,7 @@ static int propfind_by_resource(void *rock, struct caldav_data *cdata)
 	int add_it = 1;
 
 	fctx->busytime.len = 0;
-	if (fctx->calfilter) add_it = apply_calfilter(fctx);
+	if (fctx->calfilter) add_it = apply_calfilter(fctx, cdata);
 
 	if (add_it) {
 	    /* Add response for target */
@@ -2396,7 +2412,7 @@ static int busytime_by_resource(void *rock,
     if (r) return 0;
 
     fctx->record = &record;
-    (void) apply_calfilter(fctx);
+    (void) apply_calfilter(fctx, cdata);
 
     if (fctx->msg_base) {
 	mailbox_unmap_message(fctx->mailbox, fctx->record->uid,
