@@ -435,8 +435,7 @@ void caldav_make_entry(icalcomponent *ical, struct caldav_data *cdata)
 	    &period);
 
 	/* Handle overridden recurrences */
-	while ((comp =
-		icalcomponent_get_next_component(ical, kind))) {
+	while ((comp = icalcomponent_get_next_component(ical, kind))) {
 	    struct icaltimetype start =
 		icaltime_convert_to_zone(icalcomponent_get_dtstart(comp), utc);
 	    struct icaltimetype end =
