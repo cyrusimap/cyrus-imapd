@@ -44,7 +44,7 @@ use Config;
 WriteMakefile(
     'NAME'	=> 'Cyrus::Annotator::Daemon',
     'ABSTRACT'  => 'Cyrus annotator daemon framework',
-    'VERSION'	=> "@VERSION@",
+    'VERSION_FROM' => "@top_srcdir@/perl/annotator/Daemon.pm", # finds $VERSION
     # This is a disgusting hack to effectively disable the stupid
     # behaviour of the generated Makefile which moves itself aside
     # on a 'make clean' instead of on 'make distclean'.
