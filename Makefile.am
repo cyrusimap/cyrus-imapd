@@ -783,11 +783,11 @@ xversion xversion.h:
 	@rm -f xversion.h.tmp
 
 dist-hook: doc/text/htmlstrip man/cyradm.1.html man/sieveshell.1.html
-	@$(MKDIR_P) doc/text
+	@$(MKDIR_P) doc/text doc/man
 	for man in $(top_builddir)/man/*.[1-9] $(top_srcdir)/man/*.[1-9]; \
 	do \
 		echo "=== $$man ==="; \
-		groff -man -Thtml $$man > man/`basename $$man`.html; \
+		groff -man -Thtml $$man > doc/man/`basename $$man`.html; \
 	done
 	rm -f doc/groff-html-*.png
 
