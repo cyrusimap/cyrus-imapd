@@ -44,6 +44,10 @@
 #ifndef CALDAV_DB_H
 #define CALDAV_DB_H
 
+#include <config.h>
+
+#include <libical/ical.h>
+
 #include "dav_db.h"
 
 struct caldav_db;
