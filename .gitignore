@@ -108,6 +108,9 @@ perl/sieve/managesieve/managesieve.c
 perl/sieve/managesieve/pm_to_blib
 perl/sieve/managesieve/Makefile.old
 perl/sieve/managesieve/Makefile.PL
+ptclient/ptexpire
+ptclient/ptdump
+ptclient/ptloader
 sieve/Makefile
 sieve/addr-lex.c
 sieve/addr.c
