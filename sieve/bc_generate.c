@@ -830,4 +830,3 @@ void sieve_free_bytecode(bytecode_info_t **p)
     free(*p);
     *p = NULL;
 }
- 

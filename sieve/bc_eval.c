@@ -1413,5 +1413,5 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
   done:
     bc_cur->is_executing = 0;
 
-    return res;      
+    return res;
 }

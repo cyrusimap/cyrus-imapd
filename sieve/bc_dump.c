@@ -57,8 +57,12 @@
 static void print_spaces(int n)
 {
     int temp_n=0;
-    while(temp_n++ < (n))
+    while(temp_n++ < (n)) {
 	putchar(' ');
+	putchar(' ');
+	putchar(' ');
+	putchar(' ');
+    }
 }
 
 
@@ -69,7 +73,7 @@ static int dump_sl(bytecode_info_t *d, int ip, int level)
     int i;
     
     for(i=0; i<numstr; i++) {
-	print_spaces(level*4);
+	print_spaces(level);
 	printf(" {%d}",d->data[++ip].len);
 	printf("%s\n",d->data[++ip].str);
     }
@@ -80,13 +84,13 @@ static int dump_sl(bytecode_info_t *d, int ip, int level)
 static int dump_test(bytecode_info_t *d, int ip, int level);
 
 /* Dump a testlist.  Return the last address used by the list */
-static int dump_tl(bytecode_info_t *d, int ip, int level) 
+static int dump_tl(bytecode_info_t *d, int ip, int level)
 {
     int numtest = d->data[ip].listlen;
     int i;
     
     for(i=0; i<numtest; i++) {
-	print_spaces(level*4);
+	print_spaces(level);
 	printf(" (until %d)\n", d->data[++ip].jump);
 	ip = dump_test(d, ++ip, level);
     }
@@ -97,7 +101,7 @@ static int dump_tl(bytecode_info_t *d, int ip, int level)
 /* Dump a test, return the last address used by the test */
 static int dump_test(bytecode_info_t *d, int ip, int level ) {
 
-    print_spaces(level*4);
+    print_spaces(level);
     switch(d->data[ip].op) {
     case BC_TRUE:
 	printf("%d: TRUE\n",ip);
@@ -111,7 +115,7 @@ static int dump_test(bytecode_info_t *d, int ip, int level ) {
 	printf("%d: NOT TEST(\n",ip++);
 	/*   printf("  (until %d)\n", d->data[ip++].jump);*/
 	ip = dump_test(d,ip, level);
-	print_spaces(level*4);
+	print_spaces(level);
 	printf("    )\n");
 	break;
 
@@ -127,25 +131,20 @@ static int dump_test(bytecode_info_t *d, int ip, int level ) {
 	break;
 
     case BC_ALLOF:
-	printf("%d: ALLOF (\n",ip++);
+    case BC_ANYOF:
+	printf("%d: %s (\n",ip,
+	       d->data[ip++].op == BC_ALLOF ? "ALLOF" : "ANYOF");
 	ip = dump_tl(d,ip,level);
-	print_spaces(level*4);
+	print_spaces(level);
 	printf(")\n");
 	break;
 
-    case BC_ANYOF:
-	printf("%d: ANYOF (\n",ip++);
-	ip = dump_tl(d,ip, level);
-	  print_spaces(level*4);
-	printf(")\n");
-	break;
-	    
     case BC_HEADER:
 	printf("%d: HEADER (\n",ip++);
-	print_spaces(level*4);
+	print_spaces(level);
 	if (d->data[ip].value == B_COUNT || d->data[ip].value == B_VALUE)
 	{
-	    printf("      MATCH:%d  RELATION:%d  COMP:%d HEADERS:\n", 
+	    printf("      MATCH:%d RELATION:%d COMP:%d HEADERS:\n",
 		   d->data[ip].value, d->data[ip+1].value,d->data[ip+2].value);
 	} else {
 	    printf("      MATCH:%d COMP:%d HEADERS:\n",d->data[ip].value, d->data[ip+2].value);
@@ -153,19 +152,19 @@ static int dump_test(bytecode_info_t *d, int ip, int level ) {
 	ip+=3;
 	ip = dump_sl(d,ip,level);
 	ip++;
-	print_spaces(level*4);
+	print_spaces(level);
 	printf("      DATA:\n");
 	ip = dump_sl(d,ip,level);
 	break;
 	
     case BC_ADDRESS:
     case BC_ENVELOPE:
-	printf("%d: %s (\n",ip++,
-	       d->data[ip].op == BC_ADDRESS ? "ADDRESS" : "ENVELOPE");
-	print_spaces(level*4);
+	printf("%d: %s (\n",ip,
+	       d->data[ip++].op == BC_ADDRESS ? "ADDRESS" : "ENVELOPE");
+	print_spaces(level);
 	if (d->data[ip].value == B_COUNT || d->data[ip].value == B_VALUE)
 	{
-	    printf("      MATCH:%d RELATION: %d COMP: %d TYPE: %d HEADERS:\n", 
+	    printf("      MATCH:%d RELATION:%d COMP: %d TYPE: %d HEADERS:\n",
 		   d->data[ip].value, d->data[ip+1].value, d->data[ip+2].value, d->data[ip+3].value);
 	} else {
 	    printf("      MATCH:%d COMP:%d TYPE:%d HEADERS:\n",
@@ -173,14 +172,14 @@ static int dump_test(bytecode_info_t *d, int ip, int level ) {
 	}
 	ip+=4;
 	ip = dump_sl(d,ip,level); ip++;
-	print_spaces(level*4);
+	print_spaces(level);
 	printf("      DATA:\n");
 	ip = dump_sl(d,ip,level);
 	break;
 
     case BC_BODY:
 	printf("%d: BODY (\n",ip++);
-	print_spaces(level*4);
+	print_spaces(level);
 	if (d->data[ip].value == B_COUNT || d->data[ip].value == B_VALUE)
 	{
 	    printf("      MATCH:%d RELATION: %d COMP: %d TRANSFORM: %d OFFSET: %d CONTENT-TYPES:\n", 
@@ -193,7 +192,7 @@ static int dump_test(bytecode_info_t *d, int ip, int level ) {
 	}
 	ip+=5;
 	ip = dump_sl(d,ip,level); ip++;
-	print_spaces(level*4);
+	print_spaces(level);
 	printf("      DATA:\n");
 	ip = dump_sl(d,ip,level);
 	break;
@@ -214,7 +213,7 @@ void dump(bytecode_info_t *d, int level)
     if(!d) return;
     
     for(i=0; i<d->scriptend; i++) {
-	print_spaces(level*4);
+	print_spaces(level);
 	switch(d->data[i].op) {
 	case B_REJECT:
 	    printf("%d: REJECT {%d}%s\n",i,

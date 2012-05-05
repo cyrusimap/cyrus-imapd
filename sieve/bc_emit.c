@@ -68,8 +68,8 @@ static inline int write_int (int fd, int x)
     int y=htonl(x);
     return (write(fd, &y, sizeof(int)));
 }
- 
-    
+
+
 /* Pad null bytes onto the end of the string we just wrote */
 /* returns -1 on failure or number of bytes written on success */
 static int align_string(int fd, int string_len) 
