@@ -82,13 +82,6 @@ int putscript(struct protstream *conn, mystring_t *name, mystring_t *data,
 int deletescript(struct protstream *conn, mystring_t *name);
 
 /*
- * ?
- *
- */
-
-int verifyscriptname(mystring_t *name);
-
-/*
  * Is there space for this script?
  *
  */
