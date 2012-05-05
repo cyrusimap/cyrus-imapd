@@ -93,7 +93,6 @@
 #include "message.h"
 #include "map.h"
 #include "mboxlist.h"
-#include "parseaddr.h"
 #include "retry.h"
 #include "seen.h"
 #include "upgrade_index.h"
