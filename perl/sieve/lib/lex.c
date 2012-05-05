@@ -74,7 +74,7 @@ int lexer_state = LEXER_STATE_NORMAL;
 		ERR();					\
   	      }
 
-int token_lookup(char *str, int len __attribute__((unused)))
+static int token_lookup(char *str, int len __attribute__((unused)))
 {
   if (strcmp(str,"ok")==0) return TOKEN_OK;
   if (strcmp(str,"no")==0) return TOKEN_NO;

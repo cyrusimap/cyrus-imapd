@@ -82,6 +82,8 @@
 #define STARTTLS     409
 #define NOOP         410
 #define UNAUTHENTICATE 411
+#define CHECKSCRIPT  412
+#define RENAMESCRIPT 413
 
 
 int lex_init(void);

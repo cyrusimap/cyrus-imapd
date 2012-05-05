@@ -64,7 +64,7 @@
 #include "util.h"
 #include "xmalloc.h"
 
-int token_lookup (char *str, int len __attribute__((unused)))
+static int token_lookup (char *str, int len __attribute__((unused)))
 {
     switch (*str) {
     case 'a':
@@ -73,6 +73,7 @@ int token_lookup (char *str, int len __attribute__((unused)))
 
     case 'c':
 	if (strcmp(str, "capability")==0) return CAPABILITY;
+	if (strcmp(str, "checkscript")==0) return CHECKSCRIPT;
 	break;
 
     case 'd':
@@ -98,6 +99,10 @@ int token_lookup (char *str, int len __attribute__((unused)))
 
     case 'p':
 	if (strcmp(str, "putscript")==0) return PUTSCRIPT;
+	break;
+
+    case 'r':
+	if (strcmp(str, "renamescript")==0) return RENAMESCRIPT;
 	break;
 
     case 's':

@@ -158,7 +158,7 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
 
   if (!authenticated && (token > 255) && (token!=AUTHENTICATE) &&
       (token!=LOGOUT) && (token!=CAPABILITY) &&
-      (token!=NOOP) &&
+      (token!=NOOP) && (token!=CHECKSCRIPT) &&
       (!tls_enabled() || (token!=STARTTLS)))
   {
     error_msg = "Authenticate first";
@@ -168,7 +168,8 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
     goto error;
   }
 
-  if (verify_only && (token > 255) && (token!=PUTSCRIPT) && (token!=LOGOUT))
+  if (verify_only && (token > 255) && (token!=CHECKSCRIPT)
+    && (token!=PUTSCRIPT) && (token!=LOGOUT))
   {
     error_msg = "Script verification only";
     if (token!=EOL)
@@ -253,6 +254,30 @@ int parser(struct protstream *sieved_out, struct protstream *sieved_in)
 
       capabilities(sieved_out, sieved_saslconn, starttls_done, authenticated,
 		   sasl_ssf);
+      break;
+
+  case CHECKSCRIPT:
+      if (timlex(NULL, NULL, sieved_in)!=SPACE)
+      {
+          error_msg = "SPACE must occur after CHECKSCRIPT";
+          goto error;
+      }
+
+      if (timlex(&sieve_data, NULL, sieved_in)!=STRING)
+      {
+          error_msg = "Did not specify legal script data length";
+          goto error;
+      }
+
+      if (timlex(NULL, NULL, sieved_in)!=EOL)
+      {
+        error_msg = "Expected EOL";
+        goto error;
+      }
+
+      /* f stands for "f"aked name, it could be any valid script name */
+      string_allocate(1, "f", &sieve_name);
+      putscript(sieved_out, sieve_name, sieve_data, /* verify_only */ 1);
       break;
 
   case HAVESPACE:
