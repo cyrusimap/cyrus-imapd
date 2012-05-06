@@ -50,7 +50,6 @@
 #include "prot.h"
 #include "mystring.h"
 
-#define LEXER_STATE_TAG         60
 #define LEXER_STATE_RECOVER     61
 #define LEXER_STATE_RECOVER_CR  62
 #define LEXER_STATE_CR          63
