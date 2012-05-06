@@ -50,7 +50,7 @@
 #include "version.h"
 
 #define TIMSIEVE_OK 0
-#define TIMSIEVE_FAIL -1
+#define TIMSIEVE_FAIL -10
 
 #define TIMSIEVE_NOMEM -2
 #define TIMSIEVE_BADPORT -5
