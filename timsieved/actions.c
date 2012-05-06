@@ -160,7 +160,7 @@ int actions_setuser(const char *userid)
  *
  */
 
-int scriptname_valid(mystring_t *name)
+static int scriptname_valid(mystring_t *name)
 {
   int lup;
   char *ptr;
@@ -544,7 +544,7 @@ int listscripts(struct protstream *conn)
 
     /* open the directory */
     dp=opendir(".");
-  
+
     if (dp==NULL)
     {
 	prot_printf(conn,"NO \"Error opening directory\"\r\n");
@@ -559,10 +559,10 @@ int listscripts(struct protstream *conn)
 	    if (strcmp(dir->d_name + (length - 7), ".script")==0)
 	    {
 		char *namewo=(char *) xmalloc(length-6);
-	  
+
 		memcpy(namewo, dir->d_name, length-7);
 		namewo[length-7]='\0';
-	
+
 		if (isactive(namewo)==TRUE)
 		    prot_printf(conn,"\"%s\" ACTIVE\r\n", namewo);
 		else
@@ -570,13 +570,13 @@ int listscripts(struct protstream *conn)
 
 		free(namewo);
 	    }
-	}    
+	}
     }
 
     closedir(dp);
 
     prot_printf(conn,"OK\r\n");
-  
+
     return TIMSIEVE_OK;
 }
 
