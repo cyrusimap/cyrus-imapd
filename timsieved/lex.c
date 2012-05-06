@@ -53,18 +53,16 @@
 #include <ctype.h>
 #include <string.h>
 
-#include "prot.h"
 #include "tls.h"
 #include "lex.h"
 #include "codes.h"
-#include "mystring.h"
 #include "actions.h"
 #include "libconfig.h"
 #include "global.h"
 #include "util.h"
 #include "xmalloc.h"
 
-int token_lookup (char *str, int len __attribute__((unused)))
+static int token_lookup (char *str, int len __attribute__((unused)))
 {
     switch (*str) {
     case 'a':
@@ -116,9 +114,7 @@ int token_lookup (char *str, int len __attribute__((unused)))
 }
 
 /* current state the lexer is in */
-int lexer_state = LEXER_STATE_NORMAL;
-
-extern struct protstream *sieved_out;
+static int lexer_state = LEXER_STATE_NORMAL;
 
 #define ERR() {								\
 		lexer_state=LEXER_STATE_RECOVER;                        \
@@ -130,20 +126,13 @@ extern struct protstream *sieved_out;
 		ERR();					\
   	      }
 
-int lex_reset(void)
-{
-  lexer_state = LEXER_STATE_NORMAL;
-
-  return 0;
-}
-
 void lex_setrecovering(void)
 {
   lexer_state = LEXER_STATE_RECOVER;
 }
 
-unsigned long maxscriptsize=0;
-char *buffer;
+static unsigned long maxscriptsize=0;
+static char *buffer;
 
 int lex_init(void)
 {
@@ -372,7 +361,7 @@ int timlex(mystring_t **outstr, unsigned long *outnum,  struct protstream *strea
       if (!Uisalpha(ch)) {
 	int token;
 
-	buffer[ buff_ptr - buffer] = '\0';
+	buffer[buff_ptr - buffer] = '\0';
 
 	/* We've got the atom. */
 	token = token_lookup((char *) buffer, (int) (buff_ptr - buffer));
