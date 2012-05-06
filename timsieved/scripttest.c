@@ -53,8 +53,6 @@
 
 #include "codes.h"
 
-#include "mystring.h"
-
 #include "xmalloc.h"
 #include "util.h"
 #include <string.h>
