@@ -797,6 +797,7 @@ dist-hook: doc/text/htmlstrip doc/man/cyradm.1.html doc/man/sieveshell.1.html
 		echo "=== $$file ==="; \
 		doc/text/htmlstrip $$file > doc/text/`basename $$file .html`; \
 	done
+	@rm doc/text/htmlstrip doc/text/htmlstrip.o doc/text/.dirstamp
 	@echo "== done =="
 
 install-data-hook:
