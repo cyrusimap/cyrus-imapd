@@ -59,13 +59,13 @@
 #include <stdlib.h>
 
 /* to make larry's stupid functions happy :) */ 
-void foo(void)
+static void foo(void)
 {
     fatal("stub function called", 0);
 }
 
 
-sieve_vacation_t vacation = {
+static sieve_vacation_t vacation = {
     0,				/* min response */
     0,				/* max response */
     (sieve_callback *) &foo,	/* autorespond() */
@@ -82,7 +82,7 @@ static int sieve_notify(void *ac __attribute__((unused)),
     return SIEVE_FAIL;
 }
 
-int mysieve_error(int lineno, const char *msg,
+static int mysieve_error(int lineno, const char *msg,
 		  void *i __attribute__((unused)), void *s)
 {
     struct buf *errors = (struct buf *)s;
