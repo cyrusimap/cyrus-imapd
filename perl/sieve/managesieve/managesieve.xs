@@ -241,7 +241,7 @@ sieve_get_handle(servername, username_cb, authname_cb, password_cb, realm_cb)
       /* map port -> num */
       serv = getservbyname("sieve", "tcp");
       if (serv == NULL) {
-	  port = 2000;
+	  port = 4190;
       } else {
 	  port = ntohs(serv->s_port);
       }

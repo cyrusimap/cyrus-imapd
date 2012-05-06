@@ -618,7 +618,7 @@ int do_referral(isieve_t *obj, char *refer_to)
     } else {
 	serv = getservbyname("sieve", "tcp");
 	if (serv == NULL) {
-	    port = 2000;
+	    port = 4190;
 	} else {
 	    port = ntohs(serv->s_port);
 	}
