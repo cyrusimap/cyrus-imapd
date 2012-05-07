@@ -133,7 +133,7 @@ SUBDIRS += perl/sieve/managesieve
 noinst_LIBRARIES += perl/sieve/lib/libisieve.a
 endif
 BUILT_SOURCES += sieve/addr.c sieve/sieve.c sieve/sieve_err.c
-lib_LIBRARIES += sieve/libsieve.a
+noinst_LIBRARIES += sieve/libsieve.a
 check_PROGRAMS += sieve/test
 service_PROGRAMS += sieve/sievec sieve/sieved
 if SERVER
