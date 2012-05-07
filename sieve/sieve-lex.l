@@ -136,6 +136,7 @@ CRLF		(\r\n|\r|\n)
 <INITIAL>:message	return MESSAGE;
 <INITIAL>vacation	return VACATION;
 <INITIAL>:days		return DAYS;
+<INITIAL>:seconds	return SECONDS;
 <INITIAL>:addresses	return ADDRESSES;
 <INITIAL>:subject	return SUBJECT;
 <INITIAL>:from		return FROM;

@@ -41,6 +41,9 @@ RFC 3028, January, 2001.
 [VACATION] Showalter, T., "Sieve: Vacation Extension",
 draft-showalter-sieve-vacation-04.txt, August, 2000.
 
+[VACATION-SECONDS] George, R., Leiba, B., "Sieve Vacation: Seconds parameter",
+RFC 6131, July 2011.
+
 [IMAPFLAGS] Melnikov, A., "Sieve -- IMAP flag extension",
 draft-melnikov-sieve-imapflags-03.txt, July, 2000.
 

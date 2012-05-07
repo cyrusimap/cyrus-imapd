@@ -119,6 +119,18 @@ int script_require(sieve_script_t *s, char *req)
 	} else {
 	    return 0;
 	}
+    } else if (!strcmp("vacation-seconds", req)) {
+	if (s->interp.vacation &&
+	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_VACATION_SECONDS)) {
+	    /* Note that "vacation-seconds" implies "vacation", and a script
+	     * with "vacation-seconds" in a "require" list MAY omit "vacation"
+	     * from that list. */
+	    s->support.vacation = 1;
+	    s->support.vacation_seconds = 1;
+	    return 1;
+	} else {
+	    return 0;
+	}
     } else if (!strcmp("imapflags", req)) {
 	if (s->interp.markflags->count &&
 	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_IMAPFLAGS)) {

@@ -200,7 +200,7 @@ extern void sieverestart(FILE *f);
 %token GT GE LT LE EQ NE
 %token ALL LOCALPART DOMAIN USER DETAIL
 %token RAW TEXT CONTENT
-%token DAYS ADDRESSES SUBJECT FROM HANDLE MIME
+%token DAYS ADDRESSES SUBJECT FROM HANDLE MIME SECONDS
 %token METHOD ID OPTIONS LOW NORMAL HIGH ANY MESSAGE
 %token INCLUDE PERSONAL GLOBAL RETURN
 %token COPY
@@ -414,8 +414,15 @@ priority: LOW                   { $$ = LOW; }
 
 vtags: /* empty */		 { $$ = new_vtags(); }
 	| vtags DAYS NUMBER	 { if ($$->seconds != -1) {
-					yyerror("duplicate :days"); YYERROR; }
+					yyerror("duplicate :days or :seconds"); YYERROR; }
 				   else { $$->seconds = $3 * DAY2SEC; } }
+	| vtags SECONDS NUMBER	 { if (!parse_script->support.vacation_seconds) {
+				     yyerror("vacation-seconds not required");
+				     YYERROR;
+				   }
+				   if ($$->seconds != -1) {
+					yyerror("duplicate :days or :seconds"); YYERROR; }
+				   else { $$->seconds = $3; } }
 	| vtags ADDRESSES stringlist { if ($$->addresses != NULL) { 
 					yyerror("duplicate :addresses"); 
 					YYERROR;

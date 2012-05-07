@@ -1,4 +1,4 @@
-require ["reject", "fileinto", "imapflags", "vacation", "notify"];
+require ["reject", "fileinto", "imapflags", "vacation", "notify", "vacation-seconds"];
 
 #this is for the extra thigns we have added to sieve
 
@@ -54,6 +54,17 @@ vacation :days 5
 	 :addresses ["me@blah.com" , "me@somewhereelse.com"]
          :subject "i'm at the beach"
 	 "I'll respond in a week or two, when i get back";
+}
+
+#VACATION-SECONDS
+#############################################
+if header :contains "subject" "vacation-seconds"
+{
+
+vacation :seconds 60
+	 :addresses ["me@blah.com" , "me@somewhereelse.com"]
+         :subject "i'm out of the room"
+	 "I'll respond in a minute, when i get back";
 }
 
 #NOTIFY and DENOTIFY

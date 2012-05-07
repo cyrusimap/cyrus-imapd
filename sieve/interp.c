@@ -116,6 +116,9 @@ const char *sieve_listextensions(sieve_interp_t *i)
 	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_REJECT))
 	    strlcat(extensions, " reject", EXT_LEN);
 	if (i->vacation &&
+	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_VACATION_SECONDS))
+	    strlcat(extensions, " vacation vacation-seconds", EXT_LEN);
+	else if (i->vacation &&
 	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_VACATION))
 	    strlcat(extensions, " vacation", EXT_LEN);
 	if (i->markflags &&
