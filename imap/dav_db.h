@@ -73,4 +73,7 @@ int dav_exec(sqlite3 *davdb, const char *cmd, struct bind_val bval[],
 	     int (*cb)(sqlite3_stmt *stmt, void *rock), void *rock,
 	     sqlite3_stmt **stmt);
 
+/* delete database corresponding to userid */
+int dav_delete(const char *userid);
+
 #endif /* DAV_DB_H */

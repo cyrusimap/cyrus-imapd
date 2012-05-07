@@ -46,6 +46,10 @@
 #include <stdlib.h>
 #include <syslog.h>
 #include <string.h>
+#include <errno.h>
+#ifdef HAVE_UNISTD_H
+#include <unistd.h>
+#endif
 
 #include "cyrusdb.h"
 #include "dav_db.h"
@@ -195,6 +199,20 @@ int dav_exec(sqlite3 *davdb, const char *cmd, struct bind_val bval[],
 
     if (rc != SQLITE_DONE) {
 	syslog(LOG_ERR, "dav_exec() step: %s", sqlite3_errmsg(davdb));
+	r = CYRUSDB_INTERNAL;
+    }
+
+    return r;
+}
+
+
+int dav_delete(const char *userid)
+{
+    const char *fname = dav_getpath(userid);
+    int r = 0;
+
+    if (unlink(fname) && errno != ENOENT) {
+	syslog(LOG_ERR, "dav_db: error unlinking %s: %m", fname);
 	r = CYRUSDB_INTERNAL;
     }
 
