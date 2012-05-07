@@ -56,6 +56,7 @@
 #include "sieve_interface.h"
 #include "interp.h"
 #include "libconfig.h"
+#include "times.h"
 
 #define EXT_LEN 4096
 
@@ -255,9 +256,9 @@ int sieve_register_vacation(sieve_interp_t *interp, sieve_vacation_t *v)
 	return SIEVE_NOT_FINALIZED; /* we need envelope for vacation! */
     }
 
-    if (v->min_response == 0) v->min_response = 3;
-    if (v->max_response == 0) v->max_response = 90;
-    if (v->min_response < 0 || v->max_response < 7 || !v->autorespond
+    if (v->min_response == 0) v->min_response = 3 * DAY2SEC;
+    if (v->max_response == 0) v->max_response = 90 * DAY2SEC;
+    if (v->min_response < 0 || v->max_response < 7 * DAY2SEC || !v->autorespond
 	|| !v->send_response) {
 	return SIEVE_FAIL;
     }

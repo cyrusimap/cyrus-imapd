@@ -74,6 +74,7 @@
 #include "xstrlcpy.h"
 #include "strarray.h"
 #include "hash.h"
+#include "times.h"
 
 char vacation_answer;
 
@@ -467,7 +468,7 @@ static int autorespond(void *ac, void *ic __attribute__((unused)),
     for (i = 0; i < SIEVE_HASHLEN; i++) {
 	printf("%x", arc->hash[i]);
     }
-    printf("' in %d days? ", arc->days);
+    printf("' in %d days? ", arc->seconds / DAY2SEC);
     scanf(" %c", &yn);
     }
 

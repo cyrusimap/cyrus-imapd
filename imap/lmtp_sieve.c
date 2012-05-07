@@ -607,7 +607,7 @@ static int autorespond(void *ac,
     }
 
     if (ret == SIEVE_OK) {
-	duplicate_mark(&dkey, now + arc->days * (24 * 60 * 60), 0);
+	duplicate_mark(&dkey, now + arc->seconds, 0);
     }
 
     free(id);
@@ -706,8 +706,8 @@ static int send_response(void *ac,
 
 /* vacation support */
 sieve_vacation_t vacation = {
-    1,				/* min response */
-    31,				/* max response */
+    1 * DAY2SEC,		/* min response */
+    31 * DAY2SEC,		/* max response */
     &autorespond,		/* autorespond() */
     &send_response,		/* send_response() */
 };
