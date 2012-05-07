@@ -49,8 +49,12 @@
 #include <libical/ical.h>
 
 #include "caldav_db.h"
-#include "dav_prop.h"
 #include "cyrusdb.h"
+#include "dav_prop.h"
+#include "httpd.h"
+#include "libconfig.h"
+#include "mboxname.h"
+#include "xstrlcat.h"
 #include "xmalloc.h"
 
 
@@ -70,7 +74,7 @@ enum {
 
 struct caldav_db {
     sqlite3 *db;			/* DB handle */
-    char *userid;			/* DB owner's userid */
+    char sched_inbox[MAX_MAILBOX_NAME];	/* DB owner's scheduling Inbox */
     sqlite3_stmt *stmt[NUM_STMT];	/* prepared statements */
 };
 
@@ -118,9 +122,19 @@ struct caldav_db *caldav_open(const char *userid, int flags)
     db = dav_open(userid, cmds);
 
     if (db) {
+	size_t len;
+
 	caldavdb = xzmalloc(sizeof(struct caldav_db));
 	caldavdb->db = db;
-	caldavdb->userid = xstrdup(userid);
+
+	/* Construct mailbox name corresponding to userid's scheduling Inbox */
+	(*httpd_namespace.mboxname_tointernal)(&httpd_namespace, "INBOX",
+					       userid,
+					       caldavdb->sched_inbox);
+	len = strlen(caldavdb->sched_inbox);
+	snprintf(caldavdb->sched_inbox+len, MAX_MAILBOX_NAME - len,
+		 ".%s.%.*s", config_getstring(IMAPOPT_CALENDARPREFIX),
+		 strlen(SCHED_INBOX)-1, SCHED_INBOX);
     }
 
     return caldavdb;
@@ -141,7 +155,6 @@ int caldav_close(struct caldav_db *caldavdb)
 
     r = dav_close(caldavdb->db);
 
-    free(caldavdb->userid);
     free(caldavdb);
 
     return r;
@@ -185,15 +198,16 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
     "  organizer, sched_tag, dtstart, dtend, recurring, transp"		\
     " FROM ical_objs"							\
     " WHERE ( mailbox = :mailbox AND resource = :resource )"		\
-    "  OR ical_uid = :ical_uid;"
+    "  OR ( ical_uid = :ical_uid AND mailbox != :inbox);"
 
 int caldav_read(struct caldav_db *caldavdb, struct caldav_data *cdata)
 {
     struct bind_val bval[] = {
-	{ ":mailbox",  SQLITE_TEXT, { .s = cdata->mailbox  } },
-	{ ":resource", SQLITE_TEXT, { .s = cdata->resource } },
-	{ ":ical_uid", SQLITE_TEXT, { .s = cdata->ical_uid } },
-	{ NULL,	       SQLITE_NULL, { .s = NULL		   } } };
+	{ ":mailbox",  SQLITE_TEXT, { .s = cdata->mailbox	 } },
+	{ ":resource", SQLITE_TEXT, { .s = cdata->resource	 } },
+	{ ":ical_uid", SQLITE_TEXT, { .s = cdata->ical_uid	 } },
+	{ ":inbox",    SQLITE_TEXT, { .s = caldavdb->sched_inbox } },
+	{ NULL,	       SQLITE_NULL, { .s = NULL			 } } };
     struct read_rock rrock = { cdata, NULL, NULL };
     int r;
 
