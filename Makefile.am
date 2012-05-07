@@ -411,7 +411,7 @@ imap_libimap_a_SOURCES = imap/annotate.c imap/annotate.h imap/append.c \
 	imap/convert_code.h imap/dlist.c imap/dlist.h imap/duplicate.c \
 	imap/duplicate.h imap/global.c imap/global.h imap/idle.c imap/idle.h \
 	imap/idlemsg.c imap/idlemsg.h imap/imapparse.c imap/index.h \
-	imap/mailbox.c imap/mailbox.c imap/mbdump.c imap/mbdump.h \
+	imap/mailbox.c imap/mailbox.h imap/mbdump.c imap/mbdump.h \
 	imap/mboxkey.c imap/mboxkey.h imap/mboxlist.c imap/mboxlist.h \
 	imap/mboxname.c imap/mboxname.h imap/message_guid.c \
 	imap/message_guid.h imap/message.c imap/message.h \
