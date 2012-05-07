@@ -50,6 +50,7 @@ AC_INIT([cyrus-imapd], [2.5], [http://bugzilla.cyrusimap.org],,[http://www.cyrus
 AC_PREREQ([2.67])
 AC_CONFIG_SRCDIR([imap/imapd.c])
 AC_CONFIG_HEADERS(config.h)
+AC_CONFIG_MACRO_DIR([cmulocal])
 AC_CANONICAL_SYSTEM
 
 AM_INIT_AUTOMAKE([-Wall -Werror -Wno-portability foreign dist-bzip2 no-installinfo subdir-objects])
@@ -104,10 +105,9 @@ AC_DEFINE_UNQUOTED(SYSCONFDIR,"$sysconfdir",[Config File Location])
 AC_PROG_CC
 AM_PROG_CC_C_O
 AC_PROG_LN_S
-AC_PROG_RANLIB
 AC_PROG_MAKE_SET
 AC_PROG_INSTALL
-AC_AIX
+AC_USE_SYSTEM_EXTENSIONS
 AC_ISC_POSIX
 AC_PROG_AWK
 AC_C_CONST
@@ -116,6 +116,10 @@ if test $ac_cv_sys_long_file_names = no; then
 	AC_MSG_ERROR(The Cyrus IMAPD requires support for long file names)
 fi
 AC_C_INLINE
+
+LT_PREREQ([2.4.2])
+LT_INIT([])
+AC_SUBST([LIBTOOL_DEPS])
 
 dnl Check the size of various types
 AC_CHECK_SIZEOF(int)
