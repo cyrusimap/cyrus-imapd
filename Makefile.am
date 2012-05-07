@@ -90,7 +90,7 @@ if SERVER
 BUILT_SOURCES += imap/imap_err.c imap/mupdate_err.c imap/nntp_err.c \
 	imap/lmtpstats.c imap/pushstats.c imap/rfc822_header.c \
 	imap/rfc822_header.h
-noinst_LIBRARIES += imap/libimap.a
+pkglib_LTLIBRARIES += imap/libimap.la
 service_PROGRAMS += imap/arbitron imap/chk_cyrus imap/ctl_cyrusdb \
 	imap/ctl_deliver imap/ctl_mboxlist imap/cvt_cyrusdb imap/cyr_df \
 	imap/cyrdump imap/cyr_dbtool imap/cyr_expire imap/cyr_info \
@@ -221,7 +221,7 @@ LD_BASIC_ADD = lib/libcyrus.la lib/libcyrus_min.la ${LIBS}
 # mailbox and message handling code need to link with.
 
 LD_UTILITY_FLAGS = $(LD_BASIC_FLAGS)
-LD_UTILITY_ADD = imap/libimap.a $(LD_BASIC_ADD) $(COM_ERR_LIB) $(LIB_UUID)
+LD_UTILITY_ADD = imap/libimap.la $(LD_BASIC_ADD)
 
 # SERVER is the libraries that network-facing servers need to link with
 #
@@ -415,8 +415,8 @@ imap_ipurge_SOURCES = imap/cli_fatal.c imap/ipurge.c imap/mutex_fake.c
 imap_ipurge_LDFLAGS = $(LD_UTILITY_FLAGS)
 imap_ipurge_LDADD = $(LD_UTILITY_ADD)
 
-nodist_imap_libimap_a_SOURCES = imap/imap_err.c imap/mupdate_err.c imap/mupdate_err.h 
-imap_libimap_a_SOURCES = imap/annotate.c imap/annotate.h imap/append.c \
+nodist_imap_libimap_la_SOURCES = imap/imap_err.c imap/mupdate_err.c imap/mupdate_err.h
+imap_libimap_la_SOURCES = imap/annotate.c imap/annotate.h imap/append.c \
 	imap/append.h imap/backend.c imap/backend.h imap/convert_code.c \
 	imap/convert_code.h imap/dlist.c imap/dlist.h imap/duplicate.c \
 	imap/duplicate.h imap/global.c imap/global.h imap/idle.c imap/idle.h \
@@ -437,6 +437,7 @@ imap_libimap_a_SOURCES = imap/annotate.c imap/annotate.h imap/append.c \
 	imap/tls.h imap/upgrade_index.c imap/upgrade_index.h imap/user.c \
 	imap/user.h imap/userdeny_db.c imap/userdeny.h imap/version.c \
 	imap/version.h
+imap_libimap_la_LIBADD = $(COM_ERR_LIB) $(LIB_UUID)
 
 imap_lmtpd_SOURCES = imap/lmtpd.c imap/lmtpd.h imap/lmtpengine.c \
 	imap/lmtpengine.h imap/lmtpstats.c imap/lmtpstats.h \
