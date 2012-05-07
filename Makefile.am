@@ -68,7 +68,8 @@ DIST_SUBDIRS = .
 dist_sysconf_DATA =
 check_LIBRARIES =
 noinst_LIBRARIES =
-lib_LIBRARIES = lib/libcyrus.a lib/libcyrus_min.a
+lib_LIBRARIES = lib/libcyrus.a
+lib_LTLIBRARIES = lib/libcyrus_min.la
 noinst_PROGRAMS = doc/text/htmlstrip
 check_PROGRAMS =
 service_PROGRAMS =
@@ -209,7 +210,7 @@ com_err/et/compile_et: com_err/et/compile_et.sh com_err/et/config_script \
 # MD5 algorithms, without needing SSL.  Currently we have no way of
 # minimally linking such code.
 LD_BASIC_FLAGS = $(SSL_LDFLAGS)
-LD_BASIC_ADD = lib/libcyrus.a lib/libcyrus_min.a $(LIB_RT) ${LIB_SASL} $(SSL_LDADD) ${LIBS}
+LD_BASIC_ADD = lib/libcyrus.a lib/libcyrus_min.la $(LIB_RT) ${LIB_SASL} $(SSL_LDADD) ${LIBS}
 
 # UTILITY is the libraries that utility programs which use Cyrus'
 # mailbox and message handling code need to link with.
@@ -564,33 +565,32 @@ endif
 lib_libcyrus_a_SOURCES += lib/parseaddr.c lib/prot.c lib/ptrarray.c \
 	lib/signals.c lib/stristr.c lib/times.c lib/tok.c lib/wildmat.c
 
-lib_libcyrus_min_a_SOURCES = lib/assert.c
+lib_libcyrus_min_la_SOURCES = lib/assert.c
 if IPV6_noGETADDRINFO
-lib_libcyrus_min_a_SOURCES += lib/getaddrinfo.c
+lib_libcyrus_min_la_SOURCES += lib/getaddrinfo.c
 endif
 if IPV6_noGETNAMEINFO
-lib_libcyrus_min_a_SOURCES += lib/getnameinfo.c
+lib_libcyrus_min_la_SOURCES += lib/getnameinfo.c
 endif
-lib_libcyrus_min_a_SOURCES += lib/hash.c lib/imapopts.c lib/libconfig.c
+lib_libcyrus_min_la_SOURCES += lib/hash.c lib/imapopts.c lib/libconfig.c
 if LOCK_FCNTL
-lib_libcyrus_min_a_SOURCES += lib/lock_fcntl.c
+lib_libcyrus_min_la_SOURCES += lib/lock_fcntl.c
 else
-lib_libcyrus_min_a_SOURCES += lib/lock_flock.c
+lib_libcyrus_min_la_SOURCES += lib/lock_flock.c
 endif
-lib_libcyrus_min_a_SOURCES += lib/mappedfile.c
+lib_libcyrus_min_la_SOURCES += lib/mappedfile.c
 if MAP_SHARED
-lib_libcyrus_min_a_SOURCES += lib/map_shared.c
+lib_libcyrus_min_la_SOURCES += lib/map_shared.c
 else
 if MAP_STUPIDSHARED
-lib_libcyrus_min_a_SOURCES += lib/map_stupidshared.c
+lib_libcyrus_min_la_SOURCES += lib/map_stupidshared.c
 else
-lib_libcyrus_min_a_SOURCES += lib/map_nommap.c
+lib_libcyrus_min_la_SOURCES += lib/map_nommap.c
 endif
 endif
-lib_libcyrus_min_a_SOURCES += lib/mpool.c lib/retry.c lib/strarray.c \
+lib_libcyrus_min_la_SOURCES += lib/mpool.c lib/retry.c lib/strarray.c \
 	lib/strhash.c lib/util.c lib/xmalloc.c lib/xstrlcat.c lib/xstrlcpy.c
-lib_libcyrus_min_a_LIBADD = $(LIBOBJS)
-
+lib_libcyrus_min_la_LIBADD = $(LTLIBOBJS)
 
 lib/chartable.c: lib/mkchartable.pl lib/charset/unifix.txt \
 	$(top_srcdir)/lib/charset/*.t lib/charset/UnicodeData.txt \
@@ -604,7 +604,7 @@ lib/imapopts.c: lib/imapoptions tools/config2header
 
 #this is from lib/test/Makefile.in, however testglob.c does not exist in
 #/lib/test, instead testglob2.c is there.
-#lib_test_testglob_LIRBARIES = lib/libcyrus.a lib/libcyrus_min.a -ldb-4.0
+#lib_test_testglob_LIRBARIES = lib/libcyrus.a lib/libcyrus_min.la -ldb-4.0
 
 
 @SET_MAKE@
@@ -627,7 +627,7 @@ dist_man_MANS = man/imtest.1 man/installsieve.1 man/lmtptest.1 \
 master_master_SOURCES = master/cyrusMasterMIB.c master/cyrusMasterMIB.h \
 	master/master.c master/master.h master/masterconf.c \
 	master/masterconf.h master/service.h
-master_master_LDADD = lib/libcyrus_min.a $(LIB_UCDSNMP) $(LIBS) -lm
+master_master_LDADD = lib/libcyrus_min.la $(LIB_UCDSNMP) $(LIBS) -lm
 
 
 netnews_remotepurge_SOURCES = netnews/macros.h netnews/readconfig.c netnews/readconfig.h netnews/remotepurge.c
