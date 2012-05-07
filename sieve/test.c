@@ -541,7 +541,7 @@ int autorespond(void *ac, void *ic __attribute__((unused)),
     for (i = 0; i < SIEVE_HASHLEN; i++) {
 	printf("%x", arc->hash[i]);
     }
-    printf("' in %d days? ", arc->days);
+    printf("' in %d days? ", arc->seconds / DAY2SEC);
     scanf(" %c", &yn);
 
     if (tolower(yn) == 'y') return SIEVE_DONE;

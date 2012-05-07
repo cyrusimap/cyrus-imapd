@@ -142,7 +142,7 @@ struct Commandlist {
 	} r;
 	struct { /* it's a vacation action */
 	    char *subject;
-	    int days;
+	    int seconds;
 	    stringlist_t *addresses;
 	    char *message;
 	    char *from;

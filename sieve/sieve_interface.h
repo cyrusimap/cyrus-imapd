@@ -82,9 +82,12 @@ typedef struct sieve_bodypart {
 typedef int sieve_get_body(void *message_context, const char **content_types,
 			   sieve_bodypart_t ***parts);
 
+/* Factor for converting days to seconds. */
+#define DAY2SEC (24 * 60 * 60)
+
 typedef struct sieve_vacation {
-    int min_response;		/* 0 -> defaults to 3 */
-    int max_response;		/* 0 -> defaults to 90 */
+    int min_response;		/* 0 -> defaults to 3 days */
+    int max_response;		/* 0 -> defaults to 90 days */
 
     /* given a hash, say whether we've already responded to it in the last
        days days.  return SIEVE_OK if we SHOULD autorespond (have not already)
@@ -128,7 +131,7 @@ typedef struct sieve_notify_context {
 
 typedef struct sieve_autorespond_context {
     unsigned char hash[SIEVE_HASHLEN];
-    int days;
+    int seconds;
 } sieve_autorespond_context_t;
 
 typedef struct sieve_send_response_context {

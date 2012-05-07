@@ -669,7 +669,7 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 	    	    break;
 	case B_VACATION:
 	    /* Address list, Subject String, Message String,
-	       Days (word), Mime (word), From String, Handle String */
+	       Seconds (word), Mime (word), From String, Handle String */
 	   
 	        /*new code-this might be broken*/
 	    ret = bc_stringlist_emit(fd, &codep, bc);
@@ -705,7 +705,7 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 		}
 		
 	    }
-	    /* Days*/
+	    /* Seconds*/
 	    if(write_int(fd,bc->data[codep].value) == -1)
 		return -1;
 	    codep++;

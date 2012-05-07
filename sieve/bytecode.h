@@ -96,8 +96,9 @@ typedef union
  * version 0x03 scripts implemented short-circuiting of testlists (recompile)
  * version 0x04 scripts implemented BODY, INCLUDE and COPY extensions
  * version 0x05 scripts implemented updated VACATION (:from and :handle)
+ * version 0x06 scripts implemented updated VACATION (:seconds)
  */
-#define BYTECODE_VERSION 0x05
+#define BYTECODE_VERSION 0x06
 #define BYTECODE_MIN_VERSION 0x03 /* minimum supported version */
 #define BYTECODE_MAGIC "CyrSBytecode"
 #define BYTECODE_MAGIC_LEN 12 /* Should be multiple of 4 */
@@ -127,7 +128,7 @@ enum bytecode {
     B_NOTIFY,		/* require notify */
     B_DENOTIFY,		/* require notify */
 
-    B_VACATION,		/* require vacation */
+    B_VACATION_ORIG,	/* legacy vacation w/o support for :seconds */
     B_NULL,
     B_JUMP,
 
@@ -135,7 +136,9 @@ enum bytecode {
     B_RETURN,		/* require include */
 
     B_FILEINTO,		/* require fileinto */
-    B_REDIRECT
+    B_REDIRECT,
+
+    B_VACATION,		/* require vacation */
 };
 
 enum bytecode_comps {

@@ -356,11 +356,13 @@ static void dump2(bytecode_input_t *d, int bc_len)
     
     for(i++; i<bc_len;) 
     {
+	int op;
 	int copy = 0;
 
 	printf("%d: ",i);
 
-	switch(ntohl(d[i++].op)) {
+	op = ntohl(d[i++].op);
+	switch (op) {
 	    
 	case B_STOP:/*0*/
 	    printf("STOP\n");
@@ -459,7 +461,8 @@ static void dump2(bytecode_input_t *d, int bc_len)
 
 	    break;
 
-	case B_VACATION:/*14*/
+	case B_VACATION_ORIG:/*14*/
+	case B_VACATION:/*22*/
 	    printf("VACATION\n");
 	    /*add address list here!*/
 	    i=write_list(ntohl(d[i].len),i+1,d);
@@ -472,7 +475,7 @@ static void dump2(bytecode_input_t *d, int bc_len)
 
 	    printf("%d MESG({%d}%s) \n", i, len, (!data ? "[nil]" : data));
 
-	    printf("DAYS(%d) MIME(%d)\n", ntohl(d[i].value), ntohl(d[i+1].value));
+	    printf("SECONDS(%d) MIME(%d)\n", ntohl(d[i].value) * (op == B_VACATION ? 1: 24 * 60 * 60 /* 1 day */), ntohl(d[i+1].value));
 	    i+=2;
 
 	    if (version >= 0x05) {
