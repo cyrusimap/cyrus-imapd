@@ -126,6 +126,7 @@ static icalcomponent *busytime(struct transaction_t *txn,
 			       const char *organizer,
 			       const char *attendee);
 #ifdef WITH_CALDAV_SCHED
+static char *caladdress_to_userid(const char *addr);
 static int sched_busytime(struct transaction_t *txn);
 static int sched_organizer(struct transaction_t *txn, icalcomponent *ical,
 			   struct mailbox *mailbox);
@@ -2055,7 +2056,7 @@ static int meth_put(struct transaction_t *txn)
     struct mailbox *mailbox = NULL;
     struct caldav_data cdata;
     struct index_record oldrecord;
-    const char *etag;
+    const char *etag, *organizer;
     time_t lastmod;
     const char **hdr, *uid;
     uquota_t size = 0;
@@ -2218,10 +2219,16 @@ static int meth_put(struct transaction_t *txn)
 
     prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
 #ifdef WITH_CALDAV_SCHED
-    if (prop) {
+	if (prop && (organizer = icalproperty_get_organizer(prop))) {
 	/* Scheduling object resource */
-	/* XXX  Check if Organizer == calendar owner */
-	ret = sched_organizer(txn, ical, mailbox);
+	if (!strcmp(caladdress_to_userid(organizer),
+		    mboxname_to_userid(mailboxname))) {
+	    /* Organizer scheduling object resource */
+	    ret = sched_organizer(txn, ical, mailbox);
+	}
+	else {
+	    /* Attendee scheduling object resource */
+	}
     }
     else
 #endif
@@ -3680,12 +3687,13 @@ static int sched_organizer(struct transaction_t *txn, icalcomponent *ical,
 			   struct mailbox *mailbox)
 {
     int ret;
-    struct buf prodid = BUF_INITIALIZER;
+    struct buf prodid = BUF_INITIALIZER, resource = BUF_INITIALIZER;
     icalproperty *prop;
     icalcomponent *comp, *att_req;
     const char *organizer;
     time_t now = time(0);
     struct auth_state *authstate;
+    static unsigned sched_count = 0;
 
     syslog(LOG_INFO, "sched_organizer()");
 
@@ -3718,6 +3726,9 @@ static int sched_organizer(struct transaction_t *txn, icalcomponent *ical,
 				      0,
 				      icaltimezone_get_utc_timezone()));
     icalcomponent_add_property(comp, prop);
+
+    buf_printf(&resource, "%x-%d-%ld-%u.ics",
+	       strhash(txn->req_tgt.path), getpid(), time(0), sched_count++);
 
     /* Process each attendee */
     for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
@@ -3779,7 +3790,8 @@ static int sched_organizer(struct transaction_t *txn, icalcomponent *ical,
 	    else {
 		mailbox_unlock_index(inbox, NULL);
 
-		r = store_resource(txn, att_req, inbox, "sched-request.ics",
+		memset(&txn->error, 0, sizeof(struct error_t));
+		r = store_resource(txn, att_req, inbox, buf_cstring(&resource),
 				   att_caldavdb, OVERWRITE_YES);
 
 		if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
@@ -3800,7 +3812,8 @@ static int sched_organizer(struct transaction_t *txn, icalcomponent *ical,
 	    param = icalparameter_new(ICAL_IANA_PARAMETER);
 	    icalparameter_set_iana_name(param, "SCHEDULE-STATUS");
 	    icalparameter_set_iana_value(param, stat);
-syslog(LOG_INFO, "SCHEDULE-STATUS: %s", stat);
+syslog(LOG_INFO, "SCHEDULE-STATUS: %s %s", stat,
+       txn->error.precond ? txn->error.precond->name: "");
 	    icalproperty_add_parameter(prop, param);
 	}
     }
@@ -3809,6 +3822,7 @@ syslog(LOG_INFO, "SCHEDULE-STATUS: %s", stat);
     icalcomponent_free(att_req);
 
     /* Store updated organizer resource at target */
+    memset(&txn->error, 0, sizeof(struct error_t));
     ret = store_resource(txn, ical, mailbox, txn->req_tgt.resource,
 			 auth_caldavdb, OVERWRITE_CHECK);
 
