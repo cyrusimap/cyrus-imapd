@@ -96,7 +96,7 @@ enum {
     OVERWRITE_YES
 };
 
-static struct caldav_db *caldavdb = NULL;
+static struct caldav_db *auth_caldavdb = NULL;
 
 static void my_caldav_init(struct buf *serverinfo);
 static void my_caldav_auth(const char *userid);
@@ -117,7 +117,7 @@ static int is_mediatype(const char *hdr, const char *type);
 static int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root);
 static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 			  struct mailbox *mailbox, const char *resource,
-			  int overwrite);
+			  struct caldav_db *caldavdb, int overwrite);
 static icalcomponent *busytime(struct transaction_t *txn,
 			       struct propfind_ctx *fctx,
 			       char mailboxname[],
@@ -125,7 +125,11 @@ static icalcomponent *busytime(struct transaction_t *txn,
 			       const char *uid,
 			       const char *organizer,
 			       const char *attendee);
+#ifdef WITH_CALDAV_SCHED
 static int sched_busytime(struct transaction_t *txn);
+static int sched_organizer(struct transaction_t *txn, icalcomponent *ical,
+			   struct mailbox *mailbox);
+#endif
 int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname);
 
 /* Namespace for CalDAV collections */
@@ -199,15 +203,15 @@ static void my_caldav_auth(const char *userid)
 	return;
     }
 
-    caldavdb = caldav_open(userid, CALDAV_CREATE);
-    if (!caldavdb) fatal("Unable to open CalDAV DB", EC_IOERR);
+    auth_caldavdb = caldav_open(userid, CALDAV_CREATE);
+    if (!auth_caldavdb) fatal("Unable to open CalDAV DB", EC_IOERR);
 }
 
 
 static void my_caldav_reset(void)
 {
-    if (caldavdb) caldav_close(caldavdb);
-    caldavdb = NULL;
+    if (auth_caldavdb) caldav_close(auth_caldavdb);
+    auth_caldavdb = NULL;
 }
 
 
@@ -742,7 +746,7 @@ static int meth_copy(struct transaction_t *txn)
     memset(&cdata, 0, sizeof(struct caldav_data));
     cdata.mailbox = dest_mboxname;
     cdata.resource = dest.resource;
-    caldav_read(caldavdb, &cdata);
+    caldav_read(auth_caldavdb, &cdata);
     /* XXX  Check errors */
 
     /* Finished our initial read of dest mailbox */
@@ -773,7 +777,7 @@ static int meth_copy(struct transaction_t *txn)
     memset(&cdata, 0, sizeof(struct caldav_data));
     cdata.mailbox = src_mboxname;
     cdata.resource = txn->req_tgt.resource;
-    caldav_read(caldavdb, &cdata);
+    caldav_read(auth_caldavdb, &cdata);
     /* XXX  Check errors */
 
     /* Fetch index record for the source resource */
@@ -803,7 +807,8 @@ static int meth_copy(struct transaction_t *txn)
     mailbox_unlock_index(src_mbox, NULL);
 
     /* Store source resource at destination */
-    ret = store_resource(txn, ical, dest_mbox, dest.resource, overwrite);
+    ret = store_resource(txn, ical, dest_mbox, dest.resource, auth_caldavdb,
+			 overwrite);
 
     /* For MOVE, we need to delete the source resource */
     if ((txn->meth[0] == 'M') &&
@@ -815,7 +820,7 @@ static int meth_copy(struct transaction_t *txn)
 	memset(&cdata, 0, sizeof(struct caldav_data));
 	cdata.mailbox = src_mboxname;
 	cdata.resource = txn->req_tgt.resource;
-	caldav_lockread(caldavdb, &cdata);
+	caldav_lockread(auth_caldavdb, &cdata);
 	/* XXX  Check errors */
 
 	/* Fetch index record for the source resource */
@@ -834,8 +839,8 @@ static int meth_copy(struct transaction_t *txn)
 	}
 
 	/* Delete mapping entry for source resource name */
-	caldav_delete(caldavdb, &cdata);
-	caldav_commit(caldavdb);
+	caldav_delete(auth_caldavdb, &cdata);
+	caldav_commit(auth_caldavdb);
     }
 
   done:
@@ -921,7 +926,7 @@ static int meth_delete(struct transaction_t *txn)
 				   httpd_userid, httpd_authstate,
 				   1, 0, 0);
 
-	if (!r) caldav_delmbox(caldavdb, mailboxname);
+	if (!r) caldav_delmbox(auth_caldavdb, mailboxname);
 	else if (r == IMAP_PERMISSION_DENIED) ret = HTTP_FORBIDDEN;
 	else if (r == IMAP_MAILBOX_NONEXISTENT) ret = HTTP_NOT_FOUND;
 	else if (r) ret = HTTP_SERVER_ERROR;
@@ -945,7 +950,7 @@ static int meth_delete(struct transaction_t *txn)
     memset(&cdata, 0, sizeof(struct caldav_data));
     cdata.mailbox = mailboxname;
     cdata.resource = txn->req_tgt.resource;
-    caldav_lockread(caldavdb, &cdata);
+    caldav_lockread(auth_caldavdb, &cdata);
     /* XXX  Check errors */
 
     /* Fetch index record for the resource */
@@ -979,8 +984,8 @@ static int meth_delete(struct transaction_t *txn)
     }
 
     /* Delete mapping entry for resource name */
-    caldav_delete(caldavdb, &cdata);
-    caldav_commit(caldavdb);
+    caldav_delete(auth_caldavdb, &cdata);
+    caldav_commit(auth_caldavdb);
 
   done:
     if (mailbox) mailbox_unlock_index(mailbox, NULL);
@@ -1060,7 +1065,7 @@ static int meth_get(struct transaction_t *txn)
     memset(&cdata, 0, sizeof(struct caldav_data));
     cdata.mailbox = mailboxname;
     cdata.resource = txn->req_tgt.resource;
-    caldav_read(caldavdb, &cdata);
+    caldav_read(auth_caldavdb, &cdata);
     /* XXX  Check errors */
 
     /* Fetch index record for the resource */
@@ -1608,14 +1613,14 @@ static int propfind_by_collection(char *mboxname,
 	    memset(&cdata, 0, sizeof(struct caldav_data));
 	    cdata.mailbox = mboxname;
 	    cdata.resource = fctx->req_tgt->resource;
-	    caldav_read(caldavdb, &cdata);
+	    caldav_read(auth_caldavdb, &cdata);
 	    /* XXX  Check errors */
 
 	    r = fctx->proc_by_resource(rock, &cdata);
 	}
 	else {
 	    /* Add responses for all contained resources */
-	    caldav_foreach(caldavdb, mboxname, fctx->proc_by_resource, rock);
+	    caldav_foreach(auth_caldavdb, mboxname, fctx->proc_by_resource, rock);
 
 	    /* Started with NULL resource, end with NULL resource */
 	    fctx->req_tgt->resource = NULL;
@@ -2000,13 +2005,13 @@ static int meth_post(struct transaction_t *txn)
     /* We only handle POST on calendar collections */
     if (!txn->req_tgt.collection ||
 	txn->req_tgt.resource) return HTTP_NOT_ALLOWED;
-
+#ifdef WITH_CALDAV_SCHED
     if (!strcmp(txn->req_tgt.collection, SCHED_OUTBOX)) {
 	/* POST to schedule-outbox (busy time request) */
 
 	return sched_busytime(txn);
     }
-
+#endif
     /* POST to regular calendar collection */
 
     /* Append a unique resource name to URL path and perform a PUT */
@@ -2055,6 +2060,7 @@ static int meth_put(struct transaction_t *txn)
     const char **hdr, *uid;
     uquota_t size = 0;
     icalcomponent *ical = NULL, *comp, *nextcomp;
+    icalproperty *prop;
 
     /* Make sure its a DAV resource */
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
@@ -2125,7 +2131,7 @@ static int meth_put(struct transaction_t *txn)
     memset(&cdata, 0, sizeof(struct caldav_data));
     cdata.mailbox = mailboxname;
     cdata.resource = txn->req_tgt.resource;
-    caldav_read(caldavdb, &cdata);
+    caldav_read(auth_caldavdb, &cdata);
     /* XXX  Check errors */
 
     if (cdata.imap_uid) {
@@ -2210,9 +2216,20 @@ static int meth_put(struct transaction_t *txn)
 	}
     }
 
-    /* Store resource at target */
-    ret = store_resource(txn, ical, mailbox, txn->req_tgt.resource,
-			 OVERWRITE_CHECK);
+    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+#ifdef WITH_CALDAV_SCHED
+    if (prop) {
+	/* Scheduling object resource */
+	/* XXX  Check if Organizer == calendar owner */
+	ret = sched_organizer(txn, ical, mailbox);
+    }
+    else
+#endif
+    {
+	/* Non-scheduling object resource - store at target */
+	ret = store_resource(txn, ical, mailbox, txn->req_tgt.resource,
+			     auth_caldavdb, OVERWRITE_CHECK);
+    }
 
   done:
     if (ical) icalcomponent_free(ical);
@@ -2381,7 +2398,7 @@ static int report_cal_multiget(struct transaction_t *txn,
 	    memset(&cdata, 0, sizeof(struct caldav_data));
 	    cdata.mailbox = mailboxname;
 	    cdata.resource = tgt.resource;
-	    caldav_read(caldavdb, &cdata);
+	    caldav_read(auth_caldavdb, &cdata);
 	    /* XXX  Check errors */
 
 	    propfind_by_resource(fctx, &cdata);
@@ -3193,7 +3210,7 @@ int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname)
 /* Store the iCal data in the specified calendar/resource */
 static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 			  struct mailbox *mailbox, const char *resource,
-			  int overwrite)
+			  struct caldav_db *caldavdb, int overwrite)
 {
     int ret = HTTP_CREATED, r;
     icalcomponent *comp;
@@ -3249,6 +3266,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 
     /* Prepare to stage the message */
     if (!(f = append_newstage(mailbox->name, now, 0, &stage))) {
+	syslog(LOG_ERR, "append_newstage(%s) failed", mailbox->name);
 	txn->error.desc = "append_newstage() failed";
 	return HTTP_SERVER_ERROR;
     }
@@ -3297,7 +3315,9 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 
     /* Prepare to append the iMIP message to calendar mailbox */
     if ((r = append_setup(&as, mailbox->name, 
-			  httpd_userid, httpd_authstate, ACL_INSERT, size))) {
+			  httpd_userid, httpd_authstate, 0, size))) {
+	syslog(LOG_ERR, "append_setup(%s) failed: %s",
+	       mailbox->name, error_message(r));
 	ret = HTTP_SERVER_ERROR;
 	txn->error.desc = "append_setup() failed";
     }
@@ -3306,6 +3326,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 
 	/* Append the iMIP file to the calendar mailbox */
 	if ((r = append_fromstage(&as, &body, stage, now, NULL, 0, 0))) {
+	    syslog(LOG_ERR, "append_fromstage() failed");
 	    ret = HTTP_SERVER_ERROR;
 	    txn->error.desc = "append_fromstage() failed";
 	}
@@ -3315,6 +3336,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 	else {
 	    /* Commit the append to the calendar mailbox */
 	    if ((r = append_commit(&as, size, NULL, NULL, NULL, &mailbox))) {
+		syslog(LOG_ERR, "append_commit() failed");
 		ret = HTTP_SERVER_ERROR;
 		txn->error.desc = "append_commit() failed";
 	    }
@@ -3408,7 +3430,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     return ret;
 }
 
-
+#ifdef WITH_CALDAV_SCHED
 /* XXX  This needs to be done via an LDAP/DB lookup */
 static char *caladdress_to_userid(const char *addr)
 {
@@ -3643,3 +3665,165 @@ static int sched_busytime(struct transaction_t *txn)
 
     return ret;
 }
+
+
+#define SCHEDSTAT_PENDING	"1.0"
+#define SCHEDSTAT_SENT		"1.1"
+#define SCHEDSTAT_DELIVERED	"1.2"
+#define SCHEDSTAT_NOUSER	"3.7"
+#define SCHEDSTAT_NOPRIVS	"3.8"
+#define SCHEDSTAT_TEMPFAIL	"5.1"
+#define SCHEDSTAT_NOPROT	"5.2"
+#define SCHEDSTAT_NOSCHED	"5.3"
+
+static int sched_organizer(struct transaction_t *txn, icalcomponent *ical,
+			   struct mailbox *mailbox)
+{
+    int ret;
+    struct buf prodid = BUF_INITIALIZER;
+    icalproperty *prop;
+    icalcomponent *comp, *att_req;
+    const char *organizer;
+    time_t now = time(0);
+    struct auth_state *authstate;
+
+    syslog(LOG_INFO, "sched_organizer()");
+
+    /* Replace PRODID on iCal object */
+    prop = icalcomponent_get_first_property(ical, ICAL_PRODID_PROPERTY);
+    icalcomponent_remove_property(ical, prop);
+
+    buf_printf(&prodid, "-//CyrusIMAP.org/Cyrus %s//EN", cyrus_version());
+    prop = icalproperty_new_prodid(buf_cstring(&prodid));
+    icalcomponent_add_property(ical, prop);
+    buf_free(&prodid);
+
+    /* Clone the iCal object for the attendees */
+    att_req = icalcomponent_new_clone(ical);
+    prop = icalproperty_new_method(ICAL_METHOD_REQUEST);
+    icalcomponent_add_property(att_req, prop);
+
+    comp = icalcomponent_get_first_real_component(ical);
+
+    /* Grab the organizer */
+    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+    organizer = icalproperty_get_organizer(prop);
+    authstate = auth_newstate(caladdress_to_userid(organizer));
+
+    /* Replace DTSTAMP on iCal object */
+    prop = icalcomponent_get_first_property(comp, ICAL_DTSTAMP_PROPERTY);
+    icalcomponent_remove_property(comp, prop);
+    prop = icalproperty_new_dtstamp(
+	icaltime_from_timet_with_zone(now,
+				      0,
+				      icaltimezone_get_utc_timezone()));
+    icalcomponent_add_property(comp, prop);
+
+    /* Process each attendee */
+    for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
+	 prop;
+	 prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
+	const char *attendee = icalproperty_get_attendee(prop);
+
+	/* Attendee != organizer, try to deliver the request */
+	if (strcmp(attendee, organizer)) {
+	    int r = 0, rights;
+	    const char *userid;
+	    const char *stat;
+	    char inboxname[MAX_MAILBOX_BUFFER];
+	    struct mboxlist_entry mbentry;
+	    struct mailbox *inbox = NULL;
+	    struct caldav_db *att_caldavdb = NULL;
+	    icalparameter *param;
+
+	    /* Check SCHEDULE-AGENT parameter */ 
+	    /* Check SCHEDULE-FORCE-SEND parameter */
+
+	    userid = caladdress_to_userid(attendee);
+	    if (!userid) {
+		stat = SCHEDSTAT_NOUSER;
+		goto next;
+	    }
+
+	    snprintf(inboxname, sizeof(inboxname),
+		     "user.%s.#calendars.Inbox", userid);
+
+	    /* Check ACL of ORGANIZER on attendee's Scheduling Inbox */
+	    if ((r = mboxlist_lookup(inboxname, &mbentry, NULL))) {
+		syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
+		       inboxname, error_message(r));
+		stat = SCHEDSTAT_NOSCHED;
+		goto next;
+	    }
+
+	    rights =
+		mbentry.acl ? cyrus_acl_myrights(authstate, mbentry.acl) : 0;
+	    if (!(rights & DACL_SCHED)) {
+		stat = SCHEDSTAT_NOPRIVS;
+		goto next;
+	    }
+
+	    /* Search for iCal UID in attendee's calendars */
+	    att_caldavdb = caldav_open(userid, CALDAV_CREATE);
+	    if (!att_caldavdb) {
+		stat = SCHEDSTAT_TEMPFAIL;
+		goto next;
+	    }
+
+	    /* Open attendee's Inbox for reading */
+	    if ((r = mailbox_open_irl(inboxname, &inbox))) {
+		syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
+		       inboxname, error_message(r));
+		stat = SCHEDSTAT_TEMPFAIL;
+	    }
+	    else {
+		mailbox_unlock_index(inbox, NULL);
+
+		r = store_resource(txn, att_req, inbox, "sched-request.ics",
+				   att_caldavdb, OVERWRITE_YES);
+
+		if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
+		    stat = SCHEDSTAT_DELIVERED;
+		}
+		else {
+		    syslog(LOG_ERR, "store_resource(%s) failed: %s",
+			   inbox->name, error_message(r));
+		    stat = SCHEDSTAT_TEMPFAIL;
+		}
+	    }
+
+	  next:
+	    if (inbox) mailbox_close(&inbox);
+	    if (att_caldavdb) caldav_close(att_caldavdb);
+
+	    /* Set SCHEDULE-STATUS appropriately */
+	    param = icalparameter_new(ICAL_IANA_PARAMETER);
+	    icalparameter_set_iana_name(param, "SCHEDULE-STATUS");
+	    icalparameter_set_iana_value(param, stat);
+syslog(LOG_INFO, "SCHEDULE-STATUS: %s", stat);
+	    icalproperty_add_parameter(prop, param);
+	}
+    }
+
+    auth_freestate(authstate);
+    icalcomponent_free(att_req);
+
+    /* Store updated organizer resource at target */
+    ret = store_resource(txn, ical, mailbox, txn->req_tgt.resource,
+			 auth_caldavdb, OVERWRITE_CHECK);
+
+    if (ret == HTTP_CREATED) {
+	const char *cal_str = icalcomponent_as_ical_string(ical);
+
+	txn->resp_body.loc = txn->req_tgt.path;
+	txn->resp_body.stag = txn->resp_body.etag;
+	txn->resp_body.type = "text/calendar; charset=utf-8";
+
+	write_body(HTTP_CREATED, txn, cal_str, strlen(cal_str));
+
+	return 0;
+    }
+
+    return ret;
+}
+#endif /* WITH_CALDAV_SCHED */

@@ -157,6 +157,7 @@ struct resp_body_t {
     const char *type;	/* Content-Type     */
     const char *etag;	/* ETag             */
     time_t lastmod;	/* Last-Modified    */
+    const char *stag;	/* Schedule-Tag     */
 };
 
 /* Transaction context */

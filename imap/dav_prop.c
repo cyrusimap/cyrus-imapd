@@ -1157,36 +1157,6 @@ static int propfind_calurl(xmlNodePtr prop,
 }
 
 
-/* Callback to fetch CALDAV:calendar-user-address-set */
-static int propfind_caluseraddr(xmlNodePtr prop,
-				struct propfind_ctx *fctx,
-				xmlNodePtr resp,
-				struct propstat propstat[],
-				void *rock __attribute__((unused)))
-{
-    xmlNodePtr node;
-
-    ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
-    if (fctx->userid) {
-	node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-			    prop, NULL, NULL);
-
-	/* XXX  This needs to be done via an LDAP/DB lookup */
-	buf_reset(&fctx->buf);
-	buf_printf(&fctx->buf, "mailto:%s@%s", fctx->userid, config_servername);
-
-	xmlNewChild(node, fctx->ns[NS_DAV], BAD_CAST "href",
-		    BAD_CAST buf_cstring(&fctx->buf));
-    }
-    else {
-	xml_add_prop(HTTP_NOT_FOUND, fctx->ns[NS_DAV],
-		     &propstat[PROPSTAT_NOTFOUND], prop, NULL, NULL);
-    }
-
-    return 0;
-}
-
-
 /* Callback to fetch CALDAV:supported-calendar-component-set */
 static int propfind_calcompset(xmlNodePtr prop,
 			       struct propfind_ctx *fctx,
@@ -1310,6 +1280,36 @@ static int proppatch_calcompset(xmlNodePtr prop, unsigned set,
     return 0;
 }
 
+#ifdef WITH_CALDAV_SCHED
+/* Callback to fetch CALDAV:calendar-user-address-set */
+static int propfind_caluseraddr(xmlNodePtr prop,
+				struct propfind_ctx *fctx,
+				xmlNodePtr resp,
+				struct propstat propstat[],
+				void *rock __attribute__((unused)))
+{
+    xmlNodePtr node;
+
+    ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
+    if (fctx->userid) {
+	node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+			    prop, NULL, NULL);
+
+	/* XXX  This needs to be done via an LDAP/DB lookup */
+	buf_reset(&fctx->buf);
+	buf_printf(&fctx->buf, "mailto:%s@%s", fctx->userid, config_servername);
+
+	xmlNewChild(node, fctx->ns[NS_DAV], BAD_CAST "href",
+		    BAD_CAST buf_cstring(&fctx->buf));
+    }
+    else {
+	xml_add_prop(HTTP_NOT_FOUND, fctx->ns[NS_DAV],
+		     &propstat[PROPSTAT_NOTFOUND], prop, NULL, NULL);
+    }
+
+    return 0;
+}
+
 
 /* Callback to fetch CALDAV:schedule-calendar-transp */
 static int propfind_caltransp(xmlNodePtr prop,
@@ -1414,7 +1414,7 @@ static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
 
     return 0;
 }
-
+#endif /* WITH_CALDAV_SCHED */
 
 /* Callback to fetch properties from resource header */
 static int propfind_fromhdr(xmlNodePtr prop,
@@ -1609,7 +1609,8 @@ static const struct prop_entry prop_entries[] =
     { "max-date-time", XML_NS_CALDAV, 0, NULL, NULL, NULL },
     { "max-instances", XML_NS_CALDAV, 0, NULL, NULL, NULL },
     { "max-attendees-per-instance", XML_NS_CALDAV, 0, NULL, NULL, NULL },
-#if 0
+
+#ifdef WITH_CALDAV_SCHED
     /* CalDAV Scheduling properties */
     { "schedule-inbox-URL", XML_NS_CALDAV, 0, propfind_calurl, NULL, SCHED_INBOX },
     { "schedule-outbox-URL", XML_NS_CALDAV, 0, propfind_calurl, NULL, SCHED_OUTBOX },
@@ -1617,7 +1618,8 @@ static const struct prop_entry prop_entries[] =
       propfind_caltransp, proppatch_caltransp, NULL },
     { "calendar-user-address-set", XML_NS_CALDAV, 0, propfind_caluseraddr, NULL, NULL },
     { "calendar-user-type", XML_NS_CALDAV, 0, NULL, NULL, NULL },
-#endif
+#endif /* WITH_CALDAV_SCHED */
+
     /* Calendar Server properties */
     { "getctag", XML_NS_CS, 1, propfind_sync_token, NULL, NULL },
 

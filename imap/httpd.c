@@ -1570,11 +1570,11 @@ void response_header(long code, struct transaction_t *txn)
 	}
 	if (txn->req_tgt.allow & ALLOW_CAL) {
 	    prot_printf(httpd_out, "\r\nDAV: calendar-access");
-#if 0
+#ifdef WITH_CALDAV_SCHED
 	    prot_printf(httpd_out, ", calendar-auto-schedule");
 #endif
 	}
-#if 0
+#ifdef WITH_CARDDAV
 	if (txn->req_tgt.allow & ALLOW_CARD) {
 	    prot_printf(httpd_out, ", addressbook");
 	}
@@ -1687,6 +1687,9 @@ void response_header(long code, struct transaction_t *txn)
     if (resp_body->lastmod) {
 	rfc822date_gen(datestr, sizeof(datestr), resp_body->lastmod);
 	prot_printf(httpd_out, "Last-Modified: %s\r\n", datestr);
+    }
+    if (resp_body->stag) {
+	prot_printf(httpd_out, "Schedule-Tag: \"%s\"\r\n", resp_body->stag);
     }
 
 
