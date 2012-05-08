@@ -91,8 +91,12 @@ man/sieveshell.1
 master/master
 missing
 notifyd/notifyd
+notifyd/notifytest
 perl/annotator/Makefile.old
 perl/annotator/Makefile.PL
+perl/annotator/MYMETA.yml
+perl/annotator/blib/
+perl/annotator/pm_to_blib
 perl/imap/IMAP.bs
 perl/imap/IMAP.c
 perl/imap/IMAP.o
@@ -101,6 +105,7 @@ perl/imap/Makefile.PL
 perl/imap/blib/
 perl/imap/cyradm
 perl/imap/pm_to_blib
+perl/imap/MYMETA.yml
 perl/sieve/managesieve/MYMETA.json
 perl/sieve/managesieve/MYMETA.yml
 perl/sieve/managesieve/blib/
@@ -108,6 +113,8 @@ perl/sieve/managesieve/managesieve.c
 perl/sieve/managesieve/pm_to_blib
 perl/sieve/managesieve/Makefile.old
 perl/sieve/managesieve/Makefile.PL
+perl/sieve/scripts/installsieve
+perl/sieve/scripts/sieveshell
 ptclient/ptexpire
 ptclient/ptdump
 ptclient/ptloader
