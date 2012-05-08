@@ -1238,6 +1238,14 @@ product version in the capabilities */
 /* If enabled, timsieved will emit a capability response after a successful
    SASL authentication, per draft-martin-managesieve-12.txt . */
 
+{ "sieve_vacation_min_response", 259200 /* 3 days */, INT }
+/* Minimum time interval (in seconds) between consecutive vacation responses,
+   per draft-ietf-vacation-seconds.txt . */
+
+{ "sieve_vacation_max_response", 7776000 /* 90 days */, INT }
+/* Maximum time interval (in seconds) between consecutive vacation responses,
+   per draft-ietf-vacation-seconds.txt . */
+
 { "sievedir", "/usr/sieve", STRING }
 /* If sieveusehomedir is false, this directory is searched for Sieve
    scripts. */
