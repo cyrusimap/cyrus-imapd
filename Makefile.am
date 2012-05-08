@@ -214,13 +214,11 @@ com_err/et/compile_et: com_err/et/compile_et.sh com_err/et/config_script \
 # Note that several places in the code use -lcrypto, e.g. for SHA1 or
 # MD5 algorithms, without needing SSL.  Currently we have no way of
 # minimally linking such code.
-LD_BASIC_FLAGS =
 LD_BASIC_ADD = lib/libcyrus.la lib/libcyrus_min.la ${LIBS}
 
 # UTILITY is the libraries that utility programs which use Cyrus'
 # mailbox and message handling code need to link with.
 
-LD_UTILITY_FLAGS = $(LD_BASIC_FLAGS)
 LD_UTILITY_ADD = imap/libimap.la $(LD_BASIC_ADD)
 
 # SERVER is the libraries that network-facing servers need to link with
@@ -228,7 +226,6 @@ LD_UTILITY_ADD = imap/libimap.la $(LD_BASIC_ADD)
 # Note that the code is horribly intertwingled e.g. in imap/global.c
 # so that even utilities which never open a socket need to link against
 # the SASL library.
-LD_SERVER_FLAGS = $(LD_UTILITY_FLAGS)
 LD_SERVER_ADD = $(LD_UTILITY_ADD) $(LIB_WRAP)
 
 # ----
@@ -287,7 +284,6 @@ if SIEVE
 cunit_unit_LDADD += sieve/libsieve.la
 endif
 cunit_unit_LDADD += $(LD_UTILITY_ADD) -lcunit
-cunit_unit_LDFLAGS = $(LD_UTILITY_FLAGS)
 
 CUNIT_PL = cunit/cunit.pl --project $(CUNIT_PROJECT)
 
@@ -332,87 +328,66 @@ noinst_HEADERS = lib/byteorder64.h lib/gai.h lib/libconfig.h lib/md5.h \
 	lib/xstrlcpy.h
 
 imap_arbitron_SOURCES = imap/arbitron.c imap/cli_fatal.c imap/mutex_fake.c
-imap_arbitron_LDFLAGS = $(LD_UTILITY_FLAGS)
 imap_arbitron_LDADD = $(LD_UTILITY_ADD)
 
 imap_chk_cyrus_SOURCES = imap/chk_cyrus.c imap/cli_fatal.c imap/mutex_fake.c
-imap_chk_cyrus_LDFLAGS = $(LD_UTILITY_FLAGS)
 imap_chk_cyrus_LDADD = $(LD_UTILITY_ADD)
 
 imap_ctl_cyrusdb_SOURCES = imap/cli_fatal.c imap/ctl_cyrusdb.c imap/mutex_fake.c
-imap_ctl_cyrusdb_LDFLAGS = $(LD_UTILITY_FLAGS)
 imap_ctl_cyrusdb_LDADD = $(LD_UTILITY_ADD)
 
 imap_ctl_deliver_SOURCES = imap/cli_fatal.c imap/ctl_deliver.c imap/mutex_fake.c
-imap_ctl_deliver_LDFLAGS = $(LD_UTILITY_FLAGS)
 imap_ctl_deliver_LDADD = $(LD_UTILITY_ADD)
 
 imap_ctl_mboxlist_SOURCES = imap/cli_fatal.c imap/ctl_mboxlist.c imap/mutex_fake.c
-imap_ctl_mboxlist_LDFLAGS = $(LD_UTILITY_FLAGS)
 imap_ctl_mboxlist_LDADD = $(LD_UTILITY_ADD)
 
 imap_cvt_cyrusdb_SOURCES = imap/cli_fatal.c imap/cvt_cyrusdb.c imap/mutex_fake.c
-imap_cvt_cyrusdb_LDFLAGS = $(LD_UTILITY_FLAGS)
 imap_cvt_cyrusdb_LDADD = $(LD_UTILITY_ADD)
 
 imap_cyrdump_SOURCES = imap/cli_fatal.c imap/cyrdump.c imap/mutex_fake.c
-imap_cyrdump_LDFLAGS = $(LD_UTILITY_FLAGS)
 imap_cyrdump_LDADD = $(LD_UTILITY_ADD)
 
 imap_cyr_dbtool_SOURCES = imap/cli_fatal.c imap/cyr_dbtool.c imap/mutex_fake.c
-imap_cyr_dbtool_LDFLAGS = $(LD_UTILITY_FLAGS)
 imap_cyr_dbtool_LDADD = $(LD_UTILITY_ADD)
 
 imap_cyr_df_SOURCES = imap/cli_fatal.c imap/cyr_df.c imap/mutex_fake.c
-imap_cyr_df_LDFLAGS = $(LD_UTILITY_FLAGS)
 imap_cyr_df_LDADD = $(LD_UTILITY_ADD)
 
 imap_cyr_expire_SOURCES = imap/cli_fatal.c imap/cyr_expire.c imap/mutex_fake.c
-imap_cyr_expire_LDFLAGS = $(LD_UTILITY_FLAGS)
 imap_cyr_expire_LDADD = $(LD_UTILITY_ADD)
 
 imap_cyr_info_SOURCES = imap/cli_fatal.c imap/cyr_info.c imap/mutex_fake.c master/masterconf.c
-imap_cyr_info_LDFLAGS = $(LD_UTILITY_FLAGS)
 imap_cyr_info_LDADD = $(LD_UTILITY_ADD)
 
 imap_cyr_sequence_SOURCES = imap/cli_fatal.c imap/cyr_sequence.c imap/mutex_fake.c
-imap_cyr_sequence_LDFLAGS = $(LD_UTILITY_FLAGS)
 imap_cyr_sequence_LDADD = $(LD_UTILITY_ADD)
 
 imap_cyr_synclog_SOURCES = imap/cli_fatal.c imap/cyr_synclog.c imap/mutex_fake.c
-imap_cyr_synclog_LDFLAGS = $(LD_UTILITY_FLAGS)
 imap_cyr_synclog_LDADD = $(LD_UTILITY_ADD)
 
 imap_cyr_userseen_SOURCES = imap/cli_fatal.c imap/cyr_userseen.c imap/mutex_fake.c
-imap_cyr_userseen_LDFLAGS = $(LD_UTILITY_FLAGS)
 imap_cyr_userseen_LDADD = $(LD_UTILITY_ADD)
 
 #imap_cyr_virusscan_SOURCES = imap/cli_fatal.c imap/cyr_virusscan.c imap/mutex_fake.c
-#imap_cyr_virusscan_LDFLAGS = $(LD_UTILITY_FLAGS)
 #imap_cyr_virusscan_LDADD = $(LD_UTILITY_ADD) -lclamav
 
 imap_deliver_SOURCES = imap/deliver.c imap/lmtpengine.c imap/lmtpstats.c imap/mutex_fake.c imap/proxy.c imap/spool.c
-imap_deliver_LDFLAGS = $(LD_UTILITY_FLAGS)
 imap_deliver_LDADD = $(LD_UTILITY_ADD)
 
 imap_fetchnews_SOURCES = imap/cli_fatal.c imap/fetchnews.c imap/mutex_fake.c
-imap_fetchnews_LDFLAGS = $(LD_UTILITY_FLAGS)
 imap_fetchnews_LDADD = $(LD_UTILITY_ADD)
 
 imap_fud_SOURCES = imap/fud.c imap/mutex_fake.c master/service.c
-imap_fud_LDFLAGS = $(LD_SERVER_FLAGS)
 imap_fud_LDADD = $(LD_SERVER_ADD)
 
 imap_idled_SOURCES = imap/idled.c imap/mutex_fake.c
-imap_idled_LDFLAGS = $(LD_UTILITY_FLAGS)
 imap_idled_LDADD = $(LD_UTILITY_ADD)
 
 imap_imapd_SOURCES = imap/imap_proxy.c imap/imap_proxy.h imap/imapd.c imap/imapd.h imap/mutex_fake.c imap/pushstats.c imap/pushstats.h imap/proxy.c master/service.c
-imap_imapd_LDFLAGS = $(LD_SERVER_FLAGS)
 imap_imapd_LDADD = $(LD_SERVER_ADD)
 
 imap_ipurge_SOURCES = imap/cli_fatal.c imap/ipurge.c imap/mutex_fake.c
-imap_ipurge_LDFLAGS = $(LD_UTILITY_FLAGS)
 imap_ipurge_LDADD = $(LD_UTILITY_ADD)
 
 nodist_imap_libimap_la_SOURCES = imap/imap_err.c imap/mupdate_err.c imap/mupdate_err.h
@@ -449,7 +424,6 @@ if SIEVE
 imap_lmtpd_SOURCES += imap/lmtp_sieve.c imap/smtpclient.c
 imap_lmtpd_LDADD += sieve/libsieve.la
 endif
-imap_lmtpd_LDFLAGS += $(LD_SERVER_FLAGS)
 imap_lmtpd_LDADD += $(LD_SERVER_ADD)
 
 imap/lmtpstats.c: imap/lmtpstats.snmp snmp/snmpgen
@@ -459,66 +433,51 @@ imap/pushstats.c: imap/pushstats.snmp snmp/snmpgen
 	cd imap && ../${top_srcdir}/snmp/snmpgen ../${top_srcdir}/imap/pushstats.snmp
 
 imap_mbexamine_SOURCES = imap/cli_fatal.c imap/mbexamine.c imap/mutex_fake.c
-imap_mbexamine_LDFLAGS = $(LD_UTILITY_FLAGS)
 imap_mbexamine_LDADD = $(LD_UTILITY_ADD)
 
 imap_mbpath_SOURCES = imap/cli_fatal.c imap/mbpath.c imap/mutex_fake.c
-imap_mbpath_LDFLAGS = $(LD_UTILITY_FLAGS)
 imap_mbpath_LDADD = $(LD_UTILITY_ADD)
 
 imap_mbtool_SOURCES = imap/cli_fatal.c imap/mbtool.c imap/mutex_fake.c
-imap_mbtool_LDFLAGS = $(LD_UTILITY_FLAGS)
 imap_mbtool_LDADD = $(LD_UTILITY_ADD)
 
 imap_mupdate_SOURCES = imap/mupdate.c imap/mupdate-slave.c imap/mutex_pthread.c master/service-thread.c
-imap_mupdate_LDFLAGS = $(LD_SERVER_FLAGS)
 imap_mupdate_LDADD = $(LD_SERVER_ADD) -lpthread
 
 nodist_imap_nntpd_SOURCES = imap/nntp_err.c imap/nntp_err.h
 imap_nntpd_SOURCES = imap/mutex_fake.c imap/nntpd.c \
 	imap/proxy.c imap/smtpclient.c imap/smtpclient.h imap/spool.c \
 	imap/spool.h master/service.c
-imap_nntpd_LDFLAGS = $(LD_SERVER_FLAGS)
 imap_nntpd_LDADD = $(LD_SERVER_ADD)
 
 imap_pop3d_SOURCES = imap/mutex_fake.c imap/pop3d.c imap/proxy.c master/service.c
-imap_pop3d_LDFLAGS = $(LD_SERVER_FLAGS)
 imap_pop3d_LDADD = $(LD_SERVER_ADD)
 
 imap_quota_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/quota.c
-imap_quota_LDFLAGS = $(LD_UTILITY_FLAGS)
 imap_quota_LDADD = $(LD_UTILITY_ADD)
 
 imap_reconstruct_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/reconstruct.c
-imap_reconstruct_LDFLAGS = $(LD_UTILITY_FLAGS)
 imap_reconstruct_LDADD = $(LD_UTILITY_ADD)
 
 imap_smmapd_SOURCES = imap/mutex_fake.c imap/proxy.c imap/smmapd.c master/service.c
-imap_smmapd_LDFLAGS = $(LD_SERVER_FLAGS)
 imap_smmapd_LDADD = $(LD_SERVER_ADD)
 
 imap_squatter_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/squatter.c imap/squat_build.c
-imap_squatter_LDFLAGS = $(LD_UTILITY_FLAGS)
 imap_squatter_LDADD = $(LD_UTILITY_ADD)
 
 imap_sync_client_SOURCES = imap/mutex_fake.c imap/sync_client.c imap/sync_support.c
-imap_sync_client_LDFLAGS = $(LD_UTILITY_FLAGS)
 imap_sync_client_LDADD = $(LD_UTILITY_ADD)
 
 imap_sync_reset_SOURCES = imap/mutex_fake.c imap/sync_reset.c imap/sync_support.c
-imap_sync_reset_LDFLAGS = $(LD_UTILITY_FLAGS)
 imap_sync_reset_LDADD = $(LD_UTILITY_ADD)
 
 imap_sync_server_SOURCES = imap/mutex_fake.c imap/sync_server.c imap/sync_support.c master/service.c
-imap_sync_server_LDFLAGS = $(LD_SERVER_FLAGS)
 imap_sync_server_LDADD = $(LD_SERVER_ADD)
 
 imap_tls_prune_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/tls_prune.c
-imap_tls_prune_LDFLAGS = $(LD_UTILITY_FLAGS)
 imap_tls_prune_LDADD = $(LD_UTILITY_ADD)
 
 imap_unexpunge_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/unexpunge.c
-imap_unexpunge_LDFLAGS = $(LD_UTILITY_FLAGS)
 imap_unexpunge_LDADD = $(LD_UTILITY_ADD)
 
 imap/imap_err.h imap/imap_err.c: imap/imap_err.et
@@ -539,7 +498,6 @@ imap/rfc822_header.h: imap/rfc822_header.st
 endif
 
 imtest_imtest_SOURCES = imtest/imtest.c
-imtest_imtest_LDFLAGS = $(LD_BASIC_FLAGS)
 imtest_imtest_LDADD = $(LD_BASIC_ADD)
 
 nodist_lib_libcyrus_la_SOURCES = lib/chartable.c
@@ -639,7 +597,6 @@ master_master_LDADD = lib/libcyrus_min.la $(LIB_UCDSNMP) $(LIBS) -lm
 
 netnews_remotepurge_SOURCES = netnews/macros.h netnews/readconfig.c netnews/readconfig.h netnews/remotepurge.c
 netnews_remotepurge_LDADD = $(LD_BASIC_ADD)
-netnews_remotepurge_LDFLAGS = $(LD_BASIC_FLAGS)
 
 notifyd_notifyd_SOURCES = imap/mutex_fake.c master/service.c \
 	notifyd/exitcodes.h notifyd/notify_external.c \
@@ -647,28 +604,23 @@ notifyd_notifyd_SOURCES = imap/mutex_fake.c master/service.c \
 	notifyd/notify_mailto.c notifyd/notify_mailto.h notifyd/notify_null.c \
 	notifyd/notify_null.h notifyd/notify_zephyr.c notifyd/notify_zephyr.h \
 	notifyd/notifyd.c notifyd/notifyd.h notifyd/version.h
-notifyd_notifyd_LDFLAGS = $(LD_SERVER_FLAGS)
 notifyd_notifyd_LDADD = $(LD_SERVER_ADD) $(ZEPHYR_LIBS)
 
 notifyd_notifytest_SOURCES = notifyd/notifytest.c imap/mutex_fake.c
-notifyd_notifytest_LDFLAGS = $(LD_BASIC_FLAGS)
 notifyd_notifytest_LDADD = $(LD_BASIC_ADD)
 
 perl_sieve_lib_libisieve_a_SOURCES = perl/sieve/lib/isieve.c perl/sieve/lib/lex.c perl/sieve/lib/mystring.c perl/sieve/lib/request.c
 
 ptclient_ptdump_SOURCES = imap/cli_fatal.c imap/mutex_fake.c ptclient/ptdump.c
-ptclient_ptdump_LDFLAGS = $(LD_UTILITY_FLAGS)
 ptclient_ptdump_LDADD = $(LD_UTILITY_ADD)
 ptclient_ptexpire_SOURCES = imap/cli_fatal.c imap/mutex_fake.c ptclient/ptexpire.c
-ptclient_ptexpire_LDFLAGS = $(LD_UTILITY_FLAGS)
 ptclient_ptexpire_LDADD = $(LD_UTILITY_ADD)
 
 #ptclient_ptextract_SOURCES = imap/cli_fatal.c imap/mutex_fake.c ptclient/ptextract.c
-#ptclient_ptextract_LDFLAGS = $(LD_UTILITY_FLAGS)
 #ptclient_ptextract_LDADD = $(LD_UTILITY_ADD)
 
 ptclient_ptloader_SOURCES = ptclient/ptloader.c ptclient/ptloader.h imap/mutex_fake.c master/service-thread.c
-ptclient_ptloader_LDFLAGS = $(LD_SERVER_FLAGS)
+ptclient_ptloader_LDFLAGS =
 ptclient_ptloader_LDADD = $(LD_SERVER_ADD)
 
 if HAVE_LDAP
@@ -691,19 +643,15 @@ sieve_libsieve_la_SOURCES = sieve/bytecode.h sieve/addr.y sieve/addr-lex.l \
 	sieve/sieve-lex.l sieve/sieve.y sieve/sieve_interface.h sieve/tree.c sieve/tree.h
 sieve_libsieve_la_LIBADD = $(COM_ERR_LIB)
 
-LD_SIEVE_FLAGS = $(LD_BASIC_FLAGS)
 LD_SIEVE_ADD = sieve/libsieve.la $(LD_BASIC_ADD)
 
-sieve_sievec_LDFLAGS = $(LD_SIEVE_FLAGS)
 sieve_sievec_LDADD = $(LD_SIEVE_ADD)
-sieve_sieved_LDFLAGS = $(LD_SIEVE_FLAGS)
 sieve_sieved_LDADD = $(LD_SIEVE_ADD)
 
 sieve/sieve_err.h sieve/sieve_err.c: sieve/sieve_err.et
 	cd sieve && $(COMPILE_ET) ../$(top_srcdir)/sieve/sieve_err.et
 
 sieve_test_SOURCES = sieve/test.c imap/mutex_fake.c
-sieve_test_LDFLAGS = $(LD_UTILITY_FLAGS)
 sieve_test_LDADD = sieve/libsieve.la $(LD_UTILITY_ADD)
 
 timsieved_timsieved_SOURCES = imap/mutex_fake.c imap/proxy.c master/service.c \
@@ -712,7 +660,6 @@ timsieved_timsieved_SOURCES = imap/mutex_fake.c imap/proxy.c master/service.c \
 	timsieved/mystring.c timsieved/mystring.h timsieved/parser.c \
 	timsieved/parser.h timsieved/scripttest.c timsieved/scripttest.h \
 	timsieved/timsieved.c
-timsieved_timsieved_LDFLAGS = $(LD_SERVER_FLAGS)
 timsieved_timsieved_LDADD = sieve/libsieve.la $(LD_SERVER_ADD)
 
 GIT_VERSION = $(PACKAGE_VERSION).git$(shell date +'%Y%m%d%H%M')
