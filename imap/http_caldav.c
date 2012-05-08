@@ -117,7 +117,8 @@ static int is_mediatype(const char *hdr, const char *type);
 static int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root);
 static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 			  struct mailbox *mailbox, const char *resource,
-			  struct caldav_db *caldavdb, int overwrite);
+			  struct caldav_db *caldavdb, int overwrite,
+			  int new_stag);
 static icalcomponent *busytime(struct transaction_t *txn,
 			       struct propfind_ctx *fctx,
 			       char mailboxname[],
@@ -810,7 +811,7 @@ static int meth_copy(struct transaction_t *txn)
 
     /* Store source resource at destination */
     ret = store_resource(txn, ical, dest_mbox, dest.resource, auth_caldavdb,
-			 overwrite);
+			 overwrite, 1);
 
     /* For MOVE, we need to delete the source resource */
     if ((txn->meth[0] == 'M') &&
@@ -2239,7 +2240,7 @@ static int meth_put(struct transaction_t *txn)
     {
 	/* Non-scheduling object resource - store at target */
 	ret = store_resource(txn, ical, mailbox, txn->req_tgt.resource,
-			     auth_caldavdb, OVERWRITE_CHECK);
+			     auth_caldavdb, OVERWRITE_CHECK, 1);
     }
 
   done:
@@ -3221,7 +3222,8 @@ int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname)
 /* Store the iCal data in the specified calendar/resource */
 static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 			  struct mailbox *mailbox, const char *resource,
-			  struct caldav_db *caldavdb, int overwrite)
+			  struct caldav_db *caldavdb, int overwrite,
+			  int new_stag)
 {
     int ret = HTTP_CREATED, r;
     icalcomponent *comp;
@@ -3239,6 +3241,8 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     time_t now = time(NULL);
     char datestr[80];
     struct appendstate as;
+    static char sched_tag[64];
+    static unsigned store_count = 0;
 
     /* Check for supported component type */
     comp = icalcomponent_get_first_real_component(ical);
@@ -3417,11 +3421,18 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 		}
 
 		if (!r) {
-		    /* Create mapping entry from resource name and UID */
+		    /* Create mapping entry from resource name to UID */
 		    cdata.mailbox = mailbox->name;
 		    cdata.resource = resource;
 		    cdata.imap_uid = newrecord.uid;
 		    caldav_make_entry(ical, &cdata);
+
+		    if (!cdata.organizer) cdata.sched_tag = NULL;
+		    else if (new_stag) {
+			sprintf(sched_tag, "%d-%ld-%u",
+				getpid(), now, store_count++);
+			cdata.sched_tag = sched_tag;
+		    }
 
 		    caldav_write(caldavdb, &cdata);
 		    caldav_commit(caldavdb);
@@ -3429,6 +3440,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 
 		    /* Tell client about the new resource */
 		    txn->resp_body.etag = message_guid_encode(&newrecord.guid);
+		    if (cdata.sched_tag) txn->resp_body.stag = cdata.sched_tag;
 		}
 
 		/* need to close mailbox returned to us by append_commit */
@@ -3797,7 +3809,7 @@ static int sched_organizer(struct transaction_t *txn, icalcomponent *ical,
 
 		memset(&txn->error, 0, sizeof(struct error_t));
 		r = store_resource(txn, att_req, inbox, buf_cstring(&resource),
-				   att_caldavdb, OVERWRITE_YES);
+				   att_caldavdb, OVERWRITE_YES, 0);
 
 		if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
 		    stat = SCHEDSTAT_DELIVERED;
@@ -3829,7 +3841,7 @@ syslog(LOG_INFO, "SCHEDULE-STATUS: %s %s", stat,
     /* Store updated organizer resource at target */
     memset(&txn->error, 0, sizeof(struct error_t));
     ret = store_resource(txn, ical, mailbox, txn->req_tgt.resource,
-			 auth_caldavdb, OVERWRITE_CHECK);
+			 auth_caldavdb, OVERWRITE_CHECK, 1);
 
     if (ret == HTTP_CREATED) {
 	const char *cal_str = icalcomponent_as_ical_string(ical);
