@@ -75,9 +75,9 @@ service_PROGRAMS =
 CLEANFILES =
 
 if COM_ERR
-COM_ERR_LIB = com_err/et/libcom_err.a
+COM_ERR_LIB = com_err/et/libcyrus_com_err.la
 BUILT_SOURCES += com_err/et/compile_et
-noinst_LIBRARIES += com_err/et/libcom_err.a
+lib_LTLIBRARIES += com_err/et/libcyrus_com_err.la
 else
 COM_ERR_LIB = $(COM_ERR_LIBS)
 endif
@@ -193,7 +193,7 @@ EXTRA_SCRIPTS = com_err/et/compile_et.sh com_err/et/config_script \
 noinst_MAN = com_err/et/com_err.3 com_err/et/compile_et.1
 noinst_TEXINFOS = com_err/et/com_err.texinfo
 
-com_err_et_libcom_err_a_SOURCES = com_err/et/com_err.c com_err/et/com_err.h \
+com_err_et_libcyrus_com_err_la_SOURCES = com_err/et/com_err.c com_err/et/com_err.h \
 	com_err/et/error_message.c com_err/et/error_table.h \
 	com_err/et/et_name.c com_err/et/init_et.c com_err/et/internal.h \
 	com_err/et/mit-sipb-copyright.h
