@@ -52,12 +52,15 @@ AM_CPPFLAGS += $(LDAP_CPPFLAGS)
 endif
 AM_LDFLAGS = $(COV_LDFLAGS)
 BUILT_SOURCES = xversion.h lib/imapopts.c
+DISTCLEANFILES = imap/imap_err.c imap/imap_err.h imap/mupdate_err.c imap/mupdate_err.h imap/nntp_err.c imap/nntp_err.h \
+	sieve/sieve_err.c sieve/sieve_err.h
+
 MAINTAINERCLEANFILES = \
 	doc/murder.png doc/netnews.png \
-	imap/imap_err.h imap/lmtpstats.h imap/mupdate_err.h imap/nntp_err.h imap/pushstats.h \
-	lib/chartable.c lib/imapopts.h \
 	doc/man/cyradm.1.html man/imapd.conf.5 man/sieveshell.1 doc/man/sieveshell.1.html \
-	sieve/addr.h sieve/sieve.h sieve/sieve_err.h
+	imap/lmtpstats.h imap/pushstats.h \
+	lib/chartable.c lib/imapopts.h \
+	sieve/addr.h sieve/sieve.h
 
 SUBDIRS = .
 DIST_SUBDIRS = .
