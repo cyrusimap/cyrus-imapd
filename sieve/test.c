@@ -1,6 +1,6 @@
 /*NEW
   
- * test.c -- tester for libsieve
+ * test.c -- tester for libcyrus_sieve
  * Larry Greenfield
  *
  * usage: "test message script"
