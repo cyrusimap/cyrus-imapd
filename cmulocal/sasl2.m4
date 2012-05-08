@@ -41,7 +41,7 @@ if test "$gssapi" != no; then
     *)
       AC_WARN([The system type is not recognized. If you believe that CyberSafe GSSAPI works on this platform, please update the configure script])
       if test "$gss_impl" = "cybersafe"; then
-        AC_ERROR([CyberSafe was forced, cannot continue as platform is not supported])
+        AC_MSG_ERROR([CyberSafe was forced, cannot continue as platform is not supported])
       fi
       ;;
   esac
@@ -339,7 +339,7 @@ if test ${with_staticsasl} != "no"; then
                                     done
                                     if test ! "$ac_cv_found_sasl" = "yes"; then
                                       AC_MSG_CHECKING([for static libsasl])
-                                      AC_ERROR([Could not find ${with_staticsasl}/lib*/libsasl2.a])
+                                      AC_MSG_ERROR([Could not find ${with_staticsasl}/lib*/libsasl2.a])
                                     fi])])
 
   AC_MSG_RESULT([found])
@@ -410,7 +410,7 @@ AC_SUBST(SASLFLAGS)
 AC_DEFUN([CMU_SASL2_REQUIRED],
 [AC_REQUIRE([CMU_SASL2])
 if test "$ac_cv_found_sasl" != "yes"; then
-  AC_ERROR([Cannot continue without libsasl2.
+  AC_MSG_ERROR([Cannot continue without libsasl2.
 Get it from ftp://ftp.andrew.cmu.edu/pub/cyrus-mail/.])
 fi])
 
@@ -440,7 +440,7 @@ AC_TRY_CPP([
 #error SASL version is less than $1.$2.$3
 #endif
 ],,
-           [AC_ERROR([Incorrect SASL headers found.  This package requires SASL $1.$2.$3 or newer.])])
+           [AC_MSG_ERROR([Incorrect SASL headers found.  This package requires SASL $1.$2.$3 or newer.])])
 
 CPPFLAGS=$cmu_saved_CPPFLAGS
 ])# CMU_SASL2_REQUIRE_VER
