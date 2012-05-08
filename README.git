@@ -1,0 +1,28 @@
+Obtaining the latest sources:
+
+You can always fetch the latest Cyrus development or stable
+code from the repository at:
+
+git://git.cyrusimap.org/cyrus-imapd
+
+The latest development code is on the branch called 'master',
+and the latest code destined for the stable release is on
+the branch 'cyrus-imapd-$major-$minor'.  So the current
+stable is called cyrus-imapd-2.4
+
+The best way to make contributions to the project is to
+clone the git repository and make your changes on a branch
+off master, then push them somewhere public and let us
+know about them on the cyrus-devel@lists.andrew.cmu.edu
+mailing list.
+
+Of course, it's always good to talk about what you are
+planning to do on the list first as well!
+
+
+BUILDING FROM GIT:
+
+Unlike releases, the git repository doesn't have a pre-built
+./configure script.  You need to run:
+
+autoreconf -v -i
