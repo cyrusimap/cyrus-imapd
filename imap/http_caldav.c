@@ -791,7 +791,8 @@ static int meth_copy(struct transaction_t *txn)
     /* Check any preconditions on source */
     etag = message_guid_encode(&src_rec.guid);
     lastmod = src_rec.internaldate;
-    precond = check_precond(txn->meth, etag, lastmod, txn->req_hdrs);
+    precond = check_precond(txn->meth, cdata.sched_tag,
+			    etag, lastmod, txn->req_hdrs);
 
     if (precond != HTTP_OK) {
 	/* We failed a precondition - don't perform the request */
@@ -965,7 +966,8 @@ static int meth_delete(struct transaction_t *txn)
     lastmod = record.internaldate;
 
     /* Check any preconditions */
-    precond = check_precond(txn->meth, etag, lastmod, txn->req_hdrs);
+    precond = check_precond(txn->meth, cdata.sched_tag,
+			    etag, lastmod, txn->req_hdrs);
 
     /* We failed a precondition - don't perform the request */
     if (precond != HTTP_OK) {
@@ -1079,7 +1081,8 @@ static int meth_get(struct transaction_t *txn)
     /* Check any preconditions */
     resp_body->etag = message_guid_encode(&record.guid);
     lastmod = record.internaldate;
-    precond = check_precond(txn->meth, resp_body->etag, lastmod, txn->req_hdrs);
+    precond = check_precond(txn->meth, cdata.sched_tag,
+			    resp_body->etag, lastmod, txn->req_hdrs);
 
     if (precond != HTTP_OK) {
 	/* We failed a precondition - don't perform the request */
@@ -2155,7 +2158,8 @@ static int meth_put(struct transaction_t *txn)
     mailbox_unlock_index(mailbox, NULL);
 
     /* Check any preconditions */
-    precond = check_precond(txn->meth, etag, lastmod, txn->req_hdrs);
+    precond = check_precond(txn->meth, cdata.sched_tag,
+			    etag, lastmod, txn->req_hdrs);
 
     if (precond != HTTP_OK) {
 	/* We failed a precondition - don't perform the request */
@@ -2219,7 +2223,7 @@ static int meth_put(struct transaction_t *txn)
 
     prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
 #ifdef WITH_CALDAV_SCHED
-	if (prop && (organizer = icalproperty_get_organizer(prop))) {
+    if (prop && (organizer = icalproperty_get_organizer(prop))) {
 	/* Scheduling object resource */
 	if (!strcmp(caladdress_to_userid(organizer),
 		    mboxname_to_userid(mailboxname))) {
@@ -3380,7 +3384,8 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 			/* Check any preconditions */
 			const char *etag = message_guid_encode(&oldrecord.guid);
 			time_t lastmod = oldrecord.internaldate;
-			int precond = check_precond(txn->meth, etag, lastmod,
+			int precond = check_precond(txn->meth, cdata.sched_tag,
+						    etag, lastmod,
 						    txn->req_hdrs);
 
 			overwrite = (precond == HTTP_OK);

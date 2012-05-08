@@ -242,8 +242,8 @@ extern void write_body(long code, struct transaction_t *txn,
 extern int meth_options(struct transaction_t *txn);
 extern int get_doc(struct transaction_t *txn, filter_proc_t filter);
 extern int meth_propfind(struct transaction_t *txn);
-extern int check_precond(const char *meth, const char *etag, time_t lastmod,
-			 hdrcache_t hdrcache);
+extern int check_precond(const char *meth, const char *stag, const char *etag,
+			 time_t lastmod, hdrcache_t hdrcache);
 extern int read_body(struct protstream *pin,
 		     hdrcache_t hdrs, struct buf *body, const char **errstr);
 

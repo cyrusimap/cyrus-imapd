@@ -2180,8 +2180,8 @@ static int etagcmp(const char *hdr, const char *etag) {
  * the If-None-Match and If-Modified-Since headers can be used together, but
  * any other interaction is undefined.
  */
-int check_precond(const char *meth, const char *etag, time_t lastmod,
-		  hdrcache_t hdrcache)
+int check_precond(const char *meth, const char *stag, const char *etag,
+		  time_t lastmod, hdrcache_t hdrcache)
 {
     unsigned ret = HTTP_OK;
     const char **hdr;
@@ -2190,6 +2190,14 @@ int check_precond(const char *meth, const char *etag, time_t lastmod,
     if ((hdr = spool_getheader(hdrcache, "If"))) {
 	/* XXX  Need to support this for sync-token and possibly lock-token */
 	syslog(LOG_WARNING, "If: %s", hdr[0]);
+    }
+
+    if ((hdr = spool_getheader(hdrcache, "If-Schedule-Tag-Match"))) {
+	if (!etagcmp(hdr[0], stag)) {
+	    /* Precond success - ignore remaining conditional headers */
+	    return HTTP_OK;
+	}
+	else return HTTP_PRECOND_FAILED;
     }
 
     if ((hdr = spool_getheader(hdrcache, "If-Match"))) {
@@ -2284,7 +2292,7 @@ int get_doc(struct transaction_t *txn, filter_proc_t filter)
     resp_body->etag = message_guid_encode(&guid);
 
     /* Check any preconditions */
-    precond = check_precond(txn->meth, resp_body->etag,
+    precond = check_precond(txn->meth, NULL, resp_body->etag,
 			    sbuf.st_mtime, txn->req_hdrs);
 
     /* We failed a precondition - don't perform the request */
