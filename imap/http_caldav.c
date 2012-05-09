@@ -129,8 +129,7 @@ static icalcomponent *busytime(struct transaction_t *txn,
 #ifdef WITH_CALDAV_SCHED
 static char *caladdress_to_userid(const char *addr);
 static int sched_busytime(struct transaction_t *txn);
-static int sched_organizer(struct transaction_t *txn, icalcomponent *ical,
-			   struct mailbox *mailbox);
+static int sched_organizer(struct transaction_t *txn, icalcomponent *ical);
 #endif
 int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname);
 
@@ -2229,19 +2228,17 @@ static int meth_put(struct transaction_t *txn)
 	if (!strcmp(caladdress_to_userid(organizer),
 		    mboxname_to_userid(mailboxname))) {
 	    /* Organizer scheduling object resource */
-	    ret = sched_organizer(txn, ical, mailbox);
+	    ret = sched_organizer(txn, ical);
 	}
 	else {
 	    /* Attendee scheduling object resource */
 	}
     }
-    else
 #endif
-    {
-	/* Non-scheduling object resource - store at target */
-	ret = store_resource(txn, ical, mailbox, txn->req_tgt.resource,
-			     auth_caldavdb, OVERWRITE_CHECK, 1);
-    }
+
+    /* Store resource at target */
+    if (!ret) ret = store_resource(txn, ical, mailbox, txn->req_tgt.resource,
+				   auth_caldavdb, OVERWRITE_CHECK, 1);
 
   done:
     if (ical) icalcomponent_free(ical);
@@ -3700,10 +3697,9 @@ static int sched_busytime(struct transaction_t *txn)
 #define SCHEDSTAT_NOPROT	"5.2"
 #define SCHEDSTAT_NOSCHED	"5.3"
 
-static int sched_organizer(struct transaction_t *txn, icalcomponent *ical,
-			   struct mailbox *mailbox)
+static int sched_organizer(struct transaction_t *txn, icalcomponent *ical)
 {
-    int ret;
+    int ret = 0;
     struct buf prodid = BUF_INITIALIZER, resource = BUF_INITIALIZER;
     icalproperty *prop;
     icalcomponent *comp, *att_req;
@@ -3837,23 +3833,6 @@ syslog(LOG_INFO, "SCHEDULE-STATUS: %s %s", stat,
 
     auth_freestate(authstate);
     icalcomponent_free(att_req);
-
-    /* Store updated organizer resource at target */
-    memset(&txn->error, 0, sizeof(struct error_t));
-    ret = store_resource(txn, ical, mailbox, txn->req_tgt.resource,
-			 auth_caldavdb, OVERWRITE_CHECK, 1);
-
-    if (ret == HTTP_CREATED) {
-	const char *cal_str = icalcomponent_as_ical_string(ical);
-
-	txn->resp_body.loc = txn->req_tgt.path;
-	txn->resp_body.stag = txn->resp_body.etag;
-	txn->resp_body.type = "text/calendar; charset=utf-8";
-
-	write_body(HTTP_CREATED, txn, cal_str, strlen(cal_str));
-
-	return 0;
-    }
 
     return ret;
 }
