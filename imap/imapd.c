@@ -431,10 +431,10 @@ static int parse_metadata_store_data(const char *tag,
 static int getlistselopts(char *tag, struct listargs *args);
 static int getlistretopts(char *tag, struct listargs *args);
 
-static int getsearchreturnopts(char *tag, struct searchargs *searchargs);
-static int getsearchprogram(char *tag, struct searchargs *searchargs,
+static int getsearchreturnopts(const char *tag, struct searchargs *searchargs);
+static int getsearchprogram(const char *tag, struct searchargs *searchargs,
 			int *charsetp, int is_search_cmd);
-static int getsearchcriteria(char *tag, struct searchargs *searchargs,
+static int getsearchcriteria(const char *tag, struct searchargs *searchargs,
 			 int *charsetp, int *searchstatep);
 static int getsearchdate(time_t *start, time_t *end);
 static int getsortcriteria(char *tag, struct sortcrit **sortcrit);
@@ -8887,7 +8887,7 @@ out:
 /*
  * Parse search return options
  */
-int getsearchreturnopts(char *tag, struct searchargs *searchargs)
+static int getsearchreturnopts(const char *tag, struct searchargs *searchargs)
 {
     int c;
     static struct buf opt;
@@ -8939,8 +8939,8 @@ int getsearchreturnopts(char *tag, struct searchargs *searchargs)
 /*
  * Parse a search program
  */
-static int getsearchprogram(char *tag, struct searchargs *searchargs,
-		     int *charsetp, int is_search_cmd)
+static int getsearchprogram(const char *tag, struct searchargs *searchargs,
+			    int *charsetp, int is_search_cmd)
 {
     int c;
     int searchstate = 0;
@@ -8957,8 +8957,8 @@ static int getsearchprogram(char *tag, struct searchargs *searchargs,
 /*
  * Parse a search criteria
  */
-static int getsearchcriteria(char *tag, struct searchargs *searchargs,
-		      int *charsetp, int *searchstatep)
+static int getsearchcriteria(const char *tag, struct searchargs *searchargs,
+			     int *charsetp, int *searchstatep)
 {
     static struct buf criteria, arg;
     struct searchargs *sub1, *sub2;
