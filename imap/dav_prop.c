@@ -1669,7 +1669,11 @@ const struct precond preconds[] =
 
     /* CalDAV Scheduling (draft-desruisseaux-caldav-sched) preconditions */
     { "valid-scheduling-message", NS_CALDAV },
-    { "valid-organizer", NS_CALDAV }
+    { "valid-organizer", NS_CALDAV },
+    { "unique-scheduling-object-resource", NS_CALDAV },
+    { "same-organizer-in-all-components", NS_CALDAV },
+    { "allowed-organizer-scheduling-object-change", NS_CALDAV },
+    { "allowed-attendee-scheduling-object-change", NS_CALDAV }
 };
 
 

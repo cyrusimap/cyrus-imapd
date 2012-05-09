@@ -2059,11 +2059,12 @@ static int meth_put(struct transaction_t *txn)
     struct mailbox *mailbox = NULL;
     struct caldav_data cdata;
     struct index_record oldrecord;
-    const char *etag, *organizer;
+    const char *etag, *organizer = NULL;
     time_t lastmod;
     const char **hdr, *uid;
     uquota_t size = 0;
     icalcomponent *ical = NULL, *comp, *nextcomp;
+    icalcomponent_kind kind;
     icalproperty *prop;
 
     /* Make sure its a DAV resource */
@@ -2206,24 +2207,38 @@ static int meth_put(struct transaction_t *txn)
 	goto done;
     }
 
-    /* Make sure iCal UIDs in all components are the same */
+    /* Make sure iCal UIDs [and ORGANIZERs] in all components are the same */
     comp = icalcomponent_get_first_real_component(ical);
+    kind = icalcomponent_isa(comp);
     uid = icalcomponent_get_uid(comp);
+    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+    if (prop) organizer = icalproperty_get_organizer(prop);
     while ((nextcomp =
-	    icalcomponent_get_next_component(ical,
-					     ICAL_ANY_COMPONENT))) {
+	    icalcomponent_get_next_component(ical, kind))) {
 	const char *nextuid = icalcomponent_get_uid(nextcomp);
 
-	if (nextuid && *nextuid && strcmp(uid, nextuid)) {
+	if (!nextuid || strcmp(uid, nextuid)) {
 	    txn->error.precond = &preconds[CALDAV_VALID_OBJECT];
 	    ret = HTTP_FORBIDDEN;
 	    goto done;
 	}
+
+	if (organizer) {
+	    const char *nextorg = NULL;
+
+	    prop = icalcomponent_get_first_property(nextcomp,
+						    ICAL_ORGANIZER_PROPERTY);
+	    if (prop) nextorg = icalproperty_get_organizer(prop);
+	    if (!nextorg || strcmp(organizer, nextorg)) {
+		txn->error.precond = &preconds[CALDAV_SAME_ORGANIZER];
+		ret = HTTP_FORBIDDEN;
+		goto done;
+	    }
+	}
     }
 
-    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
 #ifdef WITH_CALDAV_SCHED
-    if (prop && (organizer = icalproperty_get_organizer(prop))) {
+    if (organizer) {
 	/* Scheduling object resource */
 	if (!strcmp(caladdress_to_userid(organizer),
 		    mboxname_to_userid(mailboxname))) {

@@ -169,7 +169,11 @@ enum {
 
     /* CalDAV Scheduling (draft-desruisseaux-caldav-sched) preconditions */
     CALDAV_VALID_SCHED,
-    CALDAV_VALID_ORGANIZER
+    CALDAV_VALID_ORGANIZER,
+    CALDAV_UNIQUE_OBJECT,
+    CALDAV_SAME_ORGANIZER,
+    CALDAV_ALLOWED_ORG_CHANGE,
+    CALDAV_ALLOWED_ATT_CHANGE
 };
 
 /* Structure for precondition/postcondition errors */
