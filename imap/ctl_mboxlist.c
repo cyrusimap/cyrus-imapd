@@ -88,9 +88,6 @@
 
 #include "sync_log.h"
 
-/* config.c stuff */
-const int config_need_data = 0;
-
 extern int optind;
 extern char *optarg;
 
@@ -1057,7 +1054,7 @@ int main(int argc, char *argv[])
 	libcyrus_config_setint(CYRUSOPT_DB_INIT_FLAGS, CYRUSDB_RECOVER);
     }
     
-    cyrus_init(alt_config, "ctl_mboxlist", 0);
+    cyrus_init(alt_config, "ctl_mboxlist", 0, 0);
     global_sasl_init(1,0,NULL);
 
     switch (op) {

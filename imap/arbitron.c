@@ -73,9 +73,6 @@
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 
-/* config.c stuff */
-const int config_need_data = 0;
-
 #define DB (config_seenstate_db)
 #define SUBDB (config_subscription_db)
 
@@ -196,7 +193,7 @@ int main(int argc,char **argv)
     }
 
     /* Init Cyrus Backend Foo */
-    cyrus_init(alt_config, "arbitron", 0);
+    cyrus_init(alt_config, "arbitron", 0, 0);
 
     mboxlist_init(0);
     mboxlist_open(NULL);

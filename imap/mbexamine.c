@@ -102,9 +102,6 @@ extern char *optarg;
 /* current namespace */
 static struct namespace recon_namespace;
 
-/* config.c stuff */
-const int config_need_data = 0;
-
 /* forward declarations */
 static int do_examine(char *name, int matchlen, int maycreate, void *rock);
 static int do_quota(char *name, int matchlen, int maycreate, void *rock);
@@ -157,7 +154,7 @@ int main(int argc, char **argv)
 	}
     }
 
-    cyrus_init(alt_config, "mbexamine", 0);
+    cyrus_init(alt_config, "mbexamine", 0, 0);
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&recon_namespace, 1)) != 0) {

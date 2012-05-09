@@ -57,9 +57,6 @@
 #include "util.h"
 #include "xmalloc.h"
 
-/* config.c stuff */
-const int config_need_data = 0;
-
 int main(int argc, char *argv[])
 {
     char *alt_config = NULL;
@@ -124,7 +121,7 @@ int main(int argc, char *argv[])
 	exit(-1);
     }
 
-    cyrus_init(alt_config, "cyr_synclog", 0);
+    cyrus_init(alt_config, "cyr_synclog", 0, 0);
     sync_log_init();
 
     switch(cmd) {
