@@ -2239,8 +2239,34 @@ static int meth_put(struct transaction_t *txn)
 #ifdef WITH_CALDAV_SCHED
     if (organizer) {
 	/* Scheduling object resource */
-	if (!strcmp(caladdress_to_userid(organizer),
-		    mboxname_to_userid(mailboxname))) {
+	const char *userid = mboxname_to_userid(mailboxname);
+	struct mboxlist_entry mbentry;
+	static struct buf href = BUF_INITIALIZER;
+
+	/* Check ACL of auth'd user on userid's Scheduling Outbox */
+	caldav_mboxname(SCHED_OUTBOX, userid, mailboxname);
+
+	if ((r = mboxlist_lookup(mailboxname, &mbentry, NULL))) {
+	    syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
+		   mailboxname, error_message(r));
+	    mbentry.acl = NULL;
+	}
+
+	rights =
+	    mbentry.acl ? cyrus_acl_myrights(httpd_authstate, mbentry.acl) : 0;
+	if (!(rights & DACL_SCHED)) {
+	    /* DAV:need-privileges */
+	    txn->error.precond = &preconds[DAV_NEED_PRIVS];
+	    txn->error.rights = DACL_SCHED;
+	    ret = HTTP_FORBIDDEN;
+
+	    buf_reset(&href);
+	    buf_printf(&href, "/calendars/user/%s/%s", userid, SCHED_OUTBOX);
+	    txn->error.resource = buf_cstring(&href);
+	    goto done;
+	}
+
+	if (!strcmp(caladdress_to_userid(organizer), userid)) {
 	    /* Organizer scheduling object resource */
 	    ret = sched_organizer(ical);
 	}
