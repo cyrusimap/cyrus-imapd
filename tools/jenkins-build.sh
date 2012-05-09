@@ -66,6 +66,8 @@ if [ -n "$JENKINS_HOME" -a -n "$BUILD_ID" -a -n "$WORKSPACE" ] ; then
     # as user 'cyrus' can write them
     umask 002
 else
+    [ -n "$CYRUS_YES_I_KNOW_WHAT_IM_DOING" ] || \
+	fatal "Do not run $0 manually, use autoreconf -vi ; ./configure ; make"
     echo "Invoked manually"
     echo "(assumed, as one of \$JENKINS_HOME \$BUILD_ID or \$WORKSPACE is missing)"
     BUILD_ID=build$(date +%Y%m%dT%H%M%S)
