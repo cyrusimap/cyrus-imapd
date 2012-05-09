@@ -65,9 +65,6 @@
 #include "util.h"
 #include "xmalloc.h"
 
-/* global state */
-const int config_need_data = 0;
-
 void usage(void)
 {
     fprintf(stderr,
@@ -138,7 +135,7 @@ int main(int argc, char *argv[])
     }
 
     case DUMP:
-	cyrus_init(alt_config, "ctl_deliver", 0);
+	cyrus_init(alt_config, "ctl_deliver", 0, 0);
 
 	if (duplicate_init(alt_file) != 0) {
 	    fprintf(stderr, 

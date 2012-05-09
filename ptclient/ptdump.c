@@ -51,8 +51,6 @@
 #include "imap/global.h"
 #include "libconfig.h"
 
-int config_need_data = 0;
-
 static int dump_cb(void *rockp __attribute__((unused)),
 		     const char *key, size_t keylen,
 		     const char *data,
@@ -96,7 +94,7 @@ int main(int argc, char *argv[])
 	}
     }
 
-    cyrus_init(alt_config, "ptdump", 0);
+    cyrus_init(alt_config, "ptdump", 0, 0);
 
     /* open database */
     strcpy(fnamebuf, config_dir);

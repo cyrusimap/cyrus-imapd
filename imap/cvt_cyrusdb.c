@@ -73,9 +73,6 @@
 #include "util.h"
 #include "xmalloc.h"
 
-/* config.c stuff */
-const int config_need_data = 0;
-
 int main(int argc, char *argv[])
 {
     const char *OLDDB = NULL, *NEWDB = NULL;
@@ -127,7 +124,7 @@ int main(int argc, char *argv[])
 	fatal("no conversion required", EC_TEMPFAIL);
     }
 
-    cyrus_init(alt_config, "cvt_cyrusdb", 0);
+    cyrus_init(alt_config, "cvt_cyrusdb", 0, 0);
 
     printf("Converting from %s (%s) to %s (%s)\n", old_db, OLDDB,
 	   new_db, NEWDB);

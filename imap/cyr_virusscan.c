@@ -68,9 +68,6 @@
 #include "sync_log.h"
 #include "times.h"
 
-/* config.c stuff */
-const int config_need_data = CONFIG_NEED_PARTITION_DATA;
-
 struct infected_msg {
     char *mboxname;
     char *virname;
@@ -263,7 +260,7 @@ int main (int argc, char *argv[]) {
 	}
     }
 
-    cyrus_init(alt_config, "cyr_virusscan", 0);
+    cyrus_init(alt_config, "cyr_virusscan", 0, CONFIG_NEED_PARTITION_DATA);
 
     if (!engine.name) {
 	fatal("no virus scanner configured", EC_SOFTWARE);
