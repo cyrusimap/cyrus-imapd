@@ -129,7 +129,7 @@ static icalcomponent *busytime(struct transaction_t *txn,
 #ifdef WITH_CALDAV_SCHED
 static char *caladdress_to_userid(const char *addr);
 static int sched_busytime(struct transaction_t *txn);
-static int sched_organizer(struct transaction_t *txn, icalcomponent *ical);
+static int sched_organizer(icalcomponent *ical);
 #endif
 int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname);
 
@@ -2242,7 +2242,7 @@ static int meth_put(struct transaction_t *txn)
 	if (!strcmp(caladdress_to_userid(organizer),
 		    mboxname_to_userid(mailboxname))) {
 	    /* Organizer scheduling object resource */
-	    ret = sched_organizer(txn, ical);
+	    ret = sched_organizer(ical);
 	}
 	else {
 	    /* Attendee scheduling object resource */
@@ -3711,15 +3711,13 @@ static int sched_busytime(struct transaction_t *txn)
 #define SCHEDSTAT_NOPROT	"5.2"
 #define SCHEDSTAT_NOSCHED	"5.3"
 
-static int sched_organizer(struct transaction_t *txn, icalcomponent *ical)
+static int sched_organizer(icalcomponent *ical)
 {
-    int ret = 0, r = 0, rights;
-    static struct buf prodid = BUF_INITIALIZER, resource = BUF_INITIALIZER;
+    int ret = 0;
+    struct buf prodid = BUF_INITIALIZER, resource = BUF_INITIALIZER;
     icalproperty *prop;
     icalcomponent *comp, *att_req;
-    const char *organizer, *userid;
-    char mailboxname[MAX_MAILBOX_BUFFER];
-    struct mboxlist_entry mbentry;
+    const char *organizer;
     time_t now = time(0);
     struct auth_state *authstate;
     static unsigned sched_count = 0;
@@ -3731,31 +3729,7 @@ static int sched_organizer(struct transaction_t *txn, icalcomponent *ical)
 
     prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
     organizer = icalproperty_get_organizer(prop);
-    userid = caladdress_to_userid(organizer);
-
-    /* Check ACL of auth'd user on userid's Scheduling Outbox */
-    caldav_mboxname(SCHED_OUTBOX, userid, mailboxname);
-
-    if ((r = mboxlist_lookup(mailboxname, &mbentry, NULL))) {
-	syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
-	       mailboxname, error_message(r));
-	mbentry.acl = NULL;
-    }
-
-    rights =
-	mbentry.acl ? cyrus_acl_myrights(httpd_authstate, mbentry.acl) : 0;
-    if (!(rights & DACL_SCHED)) {
-	/* DAV:need-privileges */
-	txn->error.precond = &preconds[DAV_NEED_PRIVS];
-
-	buf_reset(&resource);
-	buf_printf(&resource, "/calendars/user/%s/%s", userid, SCHED_OUTBOX);
-	txn->error.resource = buf_cstring(&resource);
-	txn->error.rights = DACL_SCHED;
-	return HTTP_FORBIDDEN;
-    }
-
-    authstate = auth_newstate(userid);
+    authstate = auth_newstate(caladdress_to_userid(organizer));
 
     /* Clone the iCal object for the attendees */
     att_req = icalcomponent_new_clone(ical);
@@ -3766,11 +3740,10 @@ static int sched_organizer(struct transaction_t *txn, icalcomponent *ical)
     prop = icalcomponent_get_first_property(att_req, ICAL_PRODID_PROPERTY);
     icalcomponent_remove_property(att_req, prop);
 
-    if (!buf_len(&prodid)) {
-	buf_printf(&prodid, "-//CyrusIMAP.org/Cyrus %s//EN", cyrus_version());
-    }
+    buf_printf(&prodid, "-//CyrusIMAP.org/Cyrus %s//EN", cyrus_version());
     prop = icalproperty_new_prodid(buf_cstring(&prodid));
     icalcomponent_add_property(att_req, prop);
+    buf_free(&prodid);
 
     /* Replace DTSTAMP on iCal object */
     comp = icalcomponent_get_first_real_component(att_req);
@@ -3782,7 +3755,6 @@ static int sched_organizer(struct transaction_t *txn, icalcomponent *ical)
 				      icaltimezone_get_utc_timezone()));
     icalcomponent_add_property(comp, prop);
 
-    buf_reset(&resource);
     buf_printf(&resource, "%x-%d-%ld-%u.ics",
 	       strhash(icalcomponent_get_uid(comp)), getpid(),
 	       time(0), sched_count++);
@@ -3795,13 +3767,17 @@ static int sched_organizer(struct transaction_t *txn, icalcomponent *ical)
 
 	/* Attendee != organizer, try to deliver the request */
 	if (strcmp(attendee, organizer)) {
+	    int r = 0, rights;
+	    const char *userid;
 	    const char *stat;
+	    char inboxname[MAX_MAILBOX_BUFFER];
+	    struct mboxlist_entry mbentry;
 	    struct mailbox *inbox = NULL;
 	    struct caldav_db *att_caldavdb = NULL;
 	    icalparameter *param;
-	    struct transaction_t mytxn;
+	    struct transaction_t txn;
 
-	    memset(&mytxn, 0, sizeof(struct transaction_t));
+	    memset(&txn, 0, sizeof(struct transaction_t));
 
 	    /* Check SCHEDULE-AGENT parameter */ 
 	    /* Check SCHEDULE-FORCE-SEND parameter */
@@ -3812,11 +3788,12 @@ static int sched_organizer(struct transaction_t *txn, icalcomponent *ical)
 		goto next;
 	    }
 
+	    caldav_mboxname(SCHED_INBOX, userid, inboxname);
+
 	    /* Check ACL of ORGANIZER on attendee's Scheduling Inbox */
-	    caldav_mboxname(SCHED_INBOX, userid, mailboxname);
-	    if ((r = mboxlist_lookup(mailboxname, &mbentry, NULL))) {
+	    if ((r = mboxlist_lookup(inboxname, &mbentry, NULL))) {
 		syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
-		       mailboxname, error_message(r));
+		       inboxname, error_message(r));
 		stat = SCHEDSTAT_NOSCHED;
 		goto next;
 	    }
@@ -3836,16 +3813,15 @@ static int sched_organizer(struct transaction_t *txn, icalcomponent *ical)
 	    }
 
 	    /* Open attendee's Inbox for reading */
-	    if ((r = mailbox_open_irl(mailboxname, &inbox))) {
+	    if ((r = mailbox_open_irl(inboxname, &inbox))) {
 		syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
-		       mailboxname, error_message(r));
+		       inboxname, error_message(r));
 		stat = SCHEDSTAT_TEMPFAIL;
 	    }
 	    else {
 		mailbox_unlock_index(inbox, NULL);
 
-		r = store_resource(&mytxn, att_req, inbox,
-				   buf_cstring(&resource),
+		r = store_resource(&txn, att_req, inbox, buf_cstring(&resource),
 				   att_caldavdb, OVERWRITE_YES, 0);
 
 		if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
@@ -3866,6 +3842,8 @@ static int sched_organizer(struct transaction_t *txn, icalcomponent *ical)
 	    param = icalparameter_new(ICAL_IANA_PARAMETER);
 	    icalparameter_set_iana_name(param, "SCHEDULE-STATUS");
 	    icalparameter_set_iana_value(param, stat);
+syslog(LOG_INFO, "SCHEDULE-STATUS: %s %s", stat,
+       txn.error.precond ? txn.error.precond->name: "");
 	    icalproperty_add_parameter(prop, param);
 	}
     }
