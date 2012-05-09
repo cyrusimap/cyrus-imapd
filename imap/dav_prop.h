@@ -57,6 +57,7 @@
 
 #define SCHED_INBOX	"Inbox/"
 #define SCHED_OUTBOX	"Outbox/"
+#define SCHED_DEFAULT	"Default/"
 
 /* XML namespace URIs */
 #define XML_NS_DAV	"DAV:"

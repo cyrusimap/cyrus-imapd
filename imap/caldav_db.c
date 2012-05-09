@@ -74,7 +74,7 @@ enum {
 
 struct caldav_db {
     sqlite3 *db;			/* DB handle */
-    char sched_inbox[MAX_MAILBOX_NAME];	/* DB owner's scheduling Inbox */
+    char sched_inbox[MAX_MAILBOX_BUFFER];/* DB owner's scheduling Inbox */
     sqlite3_stmt *stmt[NUM_STMT];	/* prepared statements */
 };
 
@@ -122,19 +122,11 @@ struct caldav_db *caldav_open(const char *userid, int flags)
     db = dav_open(userid, cmds);
 
     if (db) {
-	size_t len;
-
 	caldavdb = xzmalloc(sizeof(struct caldav_db));
 	caldavdb->db = db;
 
 	/* Construct mailbox name corresponding to userid's scheduling Inbox */
-	(*httpd_namespace.mboxname_tointernal)(&httpd_namespace, "INBOX",
-					       userid,
-					       caldavdb->sched_inbox);
-	len = strlen(caldavdb->sched_inbox);
-	snprintf(caldavdb->sched_inbox+len, MAX_MAILBOX_NAME - len,
-		 ".%s.%.*s", config_getstring(IMAPOPT_CALENDARPREFIX),
-		 strlen(SCHED_INBOX)-1, SCHED_INBOX);
+	caldav_mboxname(SCHED_INBOX, userid, caldavdb->sched_inbox);
     }
 
     return caldavdb;
@@ -466,4 +458,25 @@ void caldav_make_entry(icalcomponent *ical, struct caldav_data *cdata)
     cdata->dtstart = icaltime_as_ical_string(period.start);
     cdata->dtend = icaltime_as_ical_string(period.end);
     cdata->recurring = recurring;
+}
+
+
+int caldav_mboxname(const char *name, const char *userid, char *result)
+{
+    size_t len;
+
+    /* Construct mailbox name corresponding to userid's calendar mailbox */
+    (*httpd_namespace.mboxname_tointernal)(&httpd_namespace, "INBOX",
+					   userid, result);
+    len = strlen(result);
+    len += snprintf(result+len, MAX_MAILBOX_BUFFER - len,
+		    ".%s", config_getstring(IMAPOPT_CALENDARPREFIX));
+    if (name && *name) {
+	len += snprintf(result+len, MAX_MAILBOX_BUFFER - len,
+			".%s", name);
+    }
+
+    if (result[len-1] == '/') result[len-1] = '\0';
+
+    return 0;
 }

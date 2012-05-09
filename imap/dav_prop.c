@@ -1126,7 +1126,8 @@ static int propfind_caldata(xmlNodePtr prop,
 
 
 /* Callback to fetch CALDAV:calendar-home-set,
- * CALDAV:schedule-inbox-URL, and CALDAV:schedule-outbox-URL
+ * CALDAV:schedule-inbox-URL, CALDAV:schedule-outbox-URL,
+ * and CALDAV:schedule-default-calendar-URL
  */
 static int propfind_calurl(xmlNodePtr prop,
 			   struct propfind_ctx *fctx,
@@ -1562,13 +1563,15 @@ static const struct prop_entry prop_entries[] =
     { "add-member", XML_NS_DAV, 0, propfind_addmember, NULL, NULL },
     { "creationdate", XML_NS_DAV, 1, NULL, NULL, NULL },
     { "displayname", XML_NS_DAV, 1, propfind_fromdb, proppatch_todb, "DAV" },
-    { "getcontentlanguage", XML_NS_DAV, 1, propfind_fromhdr, NULL, "Content-Language" },
+    { "getcontentlanguage", XML_NS_DAV, 1,
+      propfind_fromhdr, NULL, "Content-Language" },
     { "getcontentlength", XML_NS_DAV, 1, propfind_getlength, NULL, NULL },
     { "getcontenttype", XML_NS_DAV, 1, propfind_fromhdr, NULL, "Content-Type" },
     { "getetag", XML_NS_DAV, 1, propfind_getetag, NULL, NULL },
     { "getlastmodified", XML_NS_DAV, 1, propfind_getlastmod, NULL, NULL },
     { "lockdiscovery", XML_NS_DAV, 1, NULL, NULL, NULL },
-    { "resourcetype", XML_NS_DAV, 1, propfind_restype, proppatch_restype, NULL },
+    { "resourcetype", XML_NS_DAV, 1,
+      propfind_restype, proppatch_restype, NULL },
     { "supportedlock", XML_NS_DAV, 1, NULL, NULL, NULL },
     { "sync-token", XML_NS_DAV, 1, propfind_sync_token, NULL, NULL },
 
@@ -1582,13 +1585,17 @@ static const struct prop_entry prop_entries[] =
     { "group-membership", XML_NS_DAV, 0, NULL, NULL, NULL },
     { "owner", XML_NS_DAV, 0, propfind_owner, NULL, NULL },
     { "group", XML_NS_DAV, 0, NULL, NULL, NULL },
-    { "supported-privilege-set", XML_NS_DAV, 0, propfind_supprivset, NULL, NULL },
-    { "current-user-principal", XML_NS_DAV, 0, propfind_curprin, NULL, NULL },
-    { "current-user-privilege-set", XML_NS_DAV, 0, propfind_curprivset, NULL, NULL },
+    { "supported-privilege-set", XML_NS_DAV, 0,
+      propfind_supprivset, NULL, NULL },
+    { "current-user-principal", XML_NS_DAV, 0,
+      propfind_curprin, NULL, NULL },
+    { "current-user-privilege-set", XML_NS_DAV, 0,
+      propfind_curprivset, NULL, NULL },
     { "acl", XML_NS_DAV, 0, propfind_acl, NULL, NULL },
     { "acl-restrictions", XML_NS_DAV, 0, propfind_aclrestrict, NULL, NULL },
     { "inherited-acl-set", XML_NS_DAV, 0, NULL, NULL, NULL },
-    { "principal-collection-set", XML_NS_DAV, 0, propfind_princolset, NULL, NULL },
+    { "principal-collection-set", XML_NS_DAV, 0,
+      propfind_princolset, NULL, NULL },
 
     /* WebDAV Quota (RFC 4331) properties */
     { "quota-available-bytes", XML_NS_DAV, 0, propfind_quota, NULL, NULL },
@@ -1612,11 +1619,16 @@ static const struct prop_entry prop_entries[] =
 
 #ifdef WITH_CALDAV_SCHED
     /* CalDAV Scheduling properties */
-    { "schedule-inbox-URL", XML_NS_CALDAV, 0, propfind_calurl, NULL, SCHED_INBOX },
-    { "schedule-outbox-URL", XML_NS_CALDAV, 0, propfind_calurl, NULL, SCHED_OUTBOX },
+    { "schedule-inbox-URL", XML_NS_CALDAV, 0,
+      propfind_calurl, NULL, SCHED_INBOX },
+    { "schedule-outbox-URL", XML_NS_CALDAV, 0,
+      propfind_calurl, NULL, SCHED_OUTBOX },
+    { "schedule-default-calendar-URL", XML_NS_CALDAV, 0,
+      propfind_calurl, NULL, SCHED_DEFAULT },
     { "schedule-calendar-transp", XML_NS_CALDAV, 0,
       propfind_caltransp, proppatch_caltransp, NULL },
-    { "calendar-user-address-set", XML_NS_CALDAV, 0, propfind_caluseraddr, NULL, NULL },
+    { "calendar-user-address-set", XML_NS_CALDAV, 0,
+      propfind_caluseraddr, NULL, NULL },
     { "calendar-user-type", XML_NS_CALDAV, 0, NULL, NULL, NULL },
 #endif /* WITH_CALDAV_SCHED */
 
@@ -1624,8 +1636,10 @@ static const struct prop_entry prop_entries[] =
     { "getctag", XML_NS_CS, 1, propfind_sync_token, NULL, NULL },
 
     /* Apple iCal properties */
-    { "calendar-color", XML_NS_ICAL, 0, propfind_fromdb, proppatch_todb, "iCAL" },
-    { "calendar-order", XML_NS_ICAL, 0, propfind_fromdb, proppatch_todb, "iCAL" },
+    { "calendar-color", XML_NS_ICAL, 0,
+      propfind_fromdb, proppatch_todb, "iCAL" },
+    { "calendar-order", XML_NS_ICAL, 0,
+      propfind_fromdb, proppatch_todb, "iCAL" },
 
     { NULL, NULL, 0, NULL, NULL, NULL }
 };

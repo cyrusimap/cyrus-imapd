@@ -1149,8 +1149,7 @@ static int meth_mkcol(struct transaction_t *txn)
     }
 
     /* Construct mailbox name corresponding to calendar-home-set */
-    r = (*httpd_namespace.mboxname_tointernal)(&httpd_namespace, "INBOX",
-					       httpd_userid, mailboxname);
+    r = caldav_mboxname("", httpd_userid, mailboxname);
 
     /* Locate the mailbox */
     if ((r = http_mlookup(mailboxname, &server, NULL, NULL))) {
@@ -3725,28 +3724,29 @@ static int sched_organizer(icalcomponent *ical)
 
     syslog(LOG_INFO, "sched_organizer()");
 
-    /* Replace PRODID on iCal object */
-    prop = icalcomponent_get_first_property(ical, ICAL_PRODID_PROPERTY);
-    icalcomponent_remove_property(ical, prop);
+    /* Grab the organizer */
+    comp = icalcomponent_get_first_real_component(ical);
 
-    buf_printf(&prodid, "-//CyrusIMAP.org/Cyrus %s//EN", cyrus_version());
-    prop = icalproperty_new_prodid(buf_cstring(&prodid));
-    icalcomponent_add_property(ical, prop);
-    buf_free(&prodid);
+    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+    organizer = icalproperty_get_organizer(prop);
+    authstate = auth_newstate(caladdress_to_userid(organizer));
 
     /* Clone the iCal object for the attendees */
     att_req = icalcomponent_new_clone(ical);
     prop = icalproperty_new_method(ICAL_METHOD_REQUEST);
     icalcomponent_add_property(att_req, prop);
 
-    comp = icalcomponent_get_first_real_component(ical);
+    /* Replace PRODID on iCal object */
+    prop = icalcomponent_get_first_property(att_req, ICAL_PRODID_PROPERTY);
+    icalcomponent_remove_property(att_req, prop);
 
-    /* Grab the organizer */
-    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
-    organizer = icalproperty_get_organizer(prop);
-    authstate = auth_newstate(caladdress_to_userid(organizer));
+    buf_printf(&prodid, "-//CyrusIMAP.org/Cyrus %s//EN", cyrus_version());
+    prop = icalproperty_new_prodid(buf_cstring(&prodid));
+    icalcomponent_add_property(att_req, prop);
+    buf_free(&prodid);
 
     /* Replace DTSTAMP on iCal object */
+    comp = icalcomponent_get_first_real_component(att_req);
     prop = icalcomponent_get_first_property(comp, ICAL_DTSTAMP_PROPERTY);
     icalcomponent_remove_property(comp, prop);
     prop = icalproperty_new_dtstamp(
@@ -3788,8 +3788,7 @@ static int sched_organizer(icalcomponent *ical)
 		goto next;
 	    }
 
-	    snprintf(inboxname, sizeof(inboxname),
-		     "user.%s.#calendars.Inbox", userid);
+	    caldav_mboxname(SCHED_INBOX, userid, inboxname);
 
 	    /* Check ACL of ORGANIZER on attendee's Scheduling Inbox */
 	    if ((r = mboxlist_lookup(inboxname, &mbentry, NULL))) {
