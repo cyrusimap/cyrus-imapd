@@ -2058,7 +2058,7 @@ static int meth_put(struct transaction_t *txn)
     struct mailbox *mailbox = NULL;
     struct caldav_data cdata;
     struct index_record oldrecord;
-    const char *etag, *organizer = NULL;
+    const char *etag, *organizer = NULL, *userid;
     time_t lastmod;
     const char **hdr, *uid;
     uquota_t size = 0;
@@ -2084,6 +2084,7 @@ static int meth_put(struct transaction_t *txn)
 
     /* Construct mailbox name corresponding to request target URI */
     (void) target_to_mboxname(&txn->req_tgt, mailboxname);
+    userid = mboxname_to_userid(mailboxname);
 
     /* Locate the mailbox */
     if ((r = http_mlookup(mailboxname, &server, &acl, NULL))) {
@@ -2239,7 +2240,6 @@ static int meth_put(struct transaction_t *txn)
 #ifdef WITH_CALDAV_SCHED
     if (organizer) {
 	/* Scheduling object resource */
-	const char *userid = mboxname_to_userid(mailboxname);
 	struct mboxlist_entry mbentry;
 	static struct buf href = BUF_INITIALIZER;
 
@@ -2258,11 +2258,30 @@ static int meth_put(struct transaction_t *txn)
 	    /* DAV:need-privileges */
 	    txn->error.precond = &preconds[DAV_NEED_PRIVS];
 	    txn->error.rights = DACL_SCHED;
-	    ret = HTTP_FORBIDDEN;
 
 	    buf_reset(&href);
 	    buf_printf(&href, "/calendars/user/%s/%s", userid, SCHED_OUTBOX);
 	    txn->error.resource = buf_cstring(&href);
+	    ret = HTTP_FORBIDDEN;
+	    goto done;
+	}
+
+	/* Make sure iCal UID is unique for this user */
+	memset(&cdata, 0, sizeof(struct caldav_data));
+	cdata.ical_uid = uid;
+	caldav_read(auth_caldavdb, &cdata);
+	/* XXX  Check errors */
+
+	if (cdata.mailbox && (strcmp(cdata.mailbox, mailboxname) ||
+			      strcmp(cdata.resource, txn->req_tgt.resource))) {
+	    /* CALDAV:unique-scheduling-object-resource */
+
+	    txn->error.precond = &preconds[CALDAV_UNIQUE_OBJECT];
+	    buf_reset(&href);
+	    buf_printf(&href, "/calendars/user/%s/%s/%s",
+		       userid, strrchr(cdata.mailbox, '.')+1, cdata.resource);
+	    txn->error.resource = buf_cstring(&href);
+	    ret = HTTP_FORBIDDEN;
 	    goto done;
 	}
 
@@ -3309,10 +3328,17 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     memset(&cdata, 0, sizeof(struct caldav_data));
     cdata.ical_uid = uid = icalcomponent_get_uid(comp);
     caldav_read(caldavdb, &cdata);
-    if (cdata.resource && strcmp(cdata.resource, resource)) {
+    if (cdata.mailbox && !strcmp(cdata.mailbox, mailbox->name) &&
+	strcmp(cdata.resource, resource)) {
 	/* CALDAV:no-uid-conflict */
+	static struct buf href = BUF_INITIALIZER;
+
 	txn->error.precond = &preconds[CALDAV_UID_CONFLICT];
-	/* XXX  need to add DAV:href of existing resource */
+	buf_reset(&href);
+	buf_printf(&href, "/calendars/user/%s/%s/%s",
+		   mboxname_to_userid(cdata.mailbox),
+		   strrchr(cdata.mailbox, '.')+1, cdata.resource);
+	txn->error.resource = buf_cstring(&href);
 	return HTTP_FORBIDDEN;
     }
 
@@ -3814,9 +3840,8 @@ static int sched_organizer(icalcomponent *ical)
 		goto next;
 	    }
 
-	    caldav_mboxname(SCHED_INBOX, userid, inboxname);
-
 	    /* Check ACL of ORGANIZER on attendee's Scheduling Inbox */
+	    caldav_mboxname(SCHED_INBOX, userid, inboxname);
 	    if ((r = mboxlist_lookup(inboxname, &mbentry, NULL))) {
 		syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
 		       inboxname, error_message(r));

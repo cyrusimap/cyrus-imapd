@@ -226,6 +226,11 @@ xmlNodePtr xml_add_error(xmlNodePtr root, struct error_t *err,
 
 	add_privs(err->rights, flags, node, root, avail_ns);
     }
+    else if (((err->precond == &preconds[CALDAV_UNIQUE_OBJECT]) ||
+	      (err->precond == &preconds[CALDAV_UID_CONFLICT])) &&
+	     err->resource) {
+	xml_add_href(node, avail_ns[NS_DAV], err->resource);
+    }
 
     return root;
 }
