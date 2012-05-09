@@ -473,6 +473,7 @@ cunit_TESTS = \
 	cunit/annotate.testc \
 	cunit/backend.testc \
 	cunit/binhex.testc \
+	cunit/bitvector.testc \
 	cunit/buf.testc \
 	cunit/byteorder64.testc \
 	cunit/charset.testc \
@@ -549,6 +550,7 @@ include_HEADERS = \
 	lib/assert.h \
 	lib/auth.h \
 	lib/auth_pts.h \
+	lib/bitvector.h \
 	lib/bsearch.h \
 	lib/charset.h \
 	lib/chartable.h \
@@ -899,6 +901,7 @@ lib_libcyrus_la_SOURCES = \
 	lib/auth_krb5.c \
 	lib/auth_pts.c \
 	lib/auth_unix.c \
+	lib/bitvector.c \
 	lib/bsearch.c \
 	lib/byteorder64.c \
 	lib/charset.c \
