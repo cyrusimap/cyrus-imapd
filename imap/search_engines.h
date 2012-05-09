@@ -53,6 +53,6 @@
  */
 extern int search_prefilter_messages(unsigned* msg_list,
 				     struct index_state *state,
-				     struct searchargs *searchargs);
+				     const struct searchargs *searchargs);
 
 #endif

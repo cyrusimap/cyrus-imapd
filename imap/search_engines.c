@@ -179,7 +179,7 @@ static int search_strlist(SquatSearchIndex* index, struct index_state *state,
 
 static unsigned char* search_squat_do_query(SquatSearchIndex* index,
 					    struct index_state *state,
-					    struct searchargs* args)
+					    const struct searchargs* args)
 {
     int vlen = vector_len(state);
     unsigned char* vect = xmalloc(vlen);
@@ -251,7 +251,7 @@ cleanup:
 }
 
 static int search_squat(unsigned* msg_list, struct index_state *state,
-                        struct searchargs *searchargs)
+			const struct searchargs *searchargs)
 {
     char *fname;
     int fd;
@@ -312,7 +312,8 @@ static int search_squat(unsigned* msg_list, struct index_state *state,
 }
 
 HIDDEN int search_prefilter_messages(unsigned *msgno_list,
-		struct index_state *state, struct searchargs *searchargs)
+				     struct index_state *state,
+				     const struct searchargs *searchargs)
 {
     unsigned i;
     int count;
