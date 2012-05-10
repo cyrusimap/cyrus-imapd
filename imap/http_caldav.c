@@ -2241,14 +2241,15 @@ static int meth_put(struct transaction_t *txn)
     if (organizer) {
 	/* Scheduling object resource */
 	struct mboxlist_entry mbentry;
+	char outboxname[MAX_MAILBOX_BUFFER];
 	static struct buf href = BUF_INITIALIZER;
 
 	/* Check ACL of auth'd user on userid's Scheduling Outbox */
-	caldav_mboxname(SCHED_OUTBOX, userid, mailboxname);
+	caldav_mboxname(SCHED_OUTBOX, userid, outboxname);
 
-	if ((r = mboxlist_lookup(mailboxname, &mbentry, NULL))) {
+	if ((r = mboxlist_lookup(outboxname, &mbentry, NULL))) {
 	    syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
-		   mailboxname, error_message(r));
+		   outboxname, error_message(r));
 	    mbentry.acl = NULL;
 	}
 
