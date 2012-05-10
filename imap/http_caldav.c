@@ -280,7 +280,7 @@ static int meth_acl(struct transaction_t *txn)
     rights =  aclstr ? cyrus_acl_myrights(httpd_authstate, aclstr) : 0;
     if (!(rights & DACL_ADMIN)) {
 	/* DAV:need-privileges */
-	txn->error.precond = &preconds[DAV_NEED_PRIVS];
+	txn->error.precond = DAV_NEED_PRIVS;
 	txn->error.resource = txn->req_tgt.path;
 	txn->error.rights = DACL_ADMIN;
 	return HTTP_FORBIDDEN;
@@ -375,7 +375,7 @@ static int meth_acl(struct transaction_t *txn)
 		    }
 		    else if (!xmlStrcmp(child->name, BAD_CAST "invert")) {
 			/* DAV:no-invert */
-			txn->error.precond = &preconds[DAV_NO_INVERT];
+			txn->error.precond = DAV_NO_INVERT;
 			ret = HTTP_FORBIDDEN;
 			goto done;
 		    }
@@ -415,7 +415,7 @@ static int meth_acl(struct transaction_t *txn)
 
 	    if (!userid) {
 		/* DAV:recognized-principal */
-		txn->error.precond = &preconds[DAV_RECOG_PRINC];
+		txn->error.precond = DAV_RECOG_PRINC;
 		ret = HTTP_FORBIDDEN;
 		goto done;
 	    }
@@ -460,13 +460,13 @@ static int meth_acl(struct transaction_t *txn)
 				 || !xmlStrcmp(priv->name,
 					       BAD_CAST "unlock")) {
 			    /* DAV:no-abstract */
-			    txn->error.precond = &preconds[DAV_NO_ABSTRACT];
+			    txn->error.precond = DAV_NO_ABSTRACT;
 			    ret = HTTP_FORBIDDEN;
 			    goto done;
 			}
 			else {
 			    /* DAV:not-supported-privilege */
-			    txn->error.precond = &preconds[DAV_SUPP_PRIV];
+			    txn->error.precond = DAV_SUPP_PRIV;
 			    ret = HTTP_FORBIDDEN;
 			    goto done;
 			}
@@ -499,13 +499,13 @@ static int meth_acl(struct transaction_t *txn)
 				 || !xmlStrcmp(priv->name,
 					       BAD_CAST "schedule-send-freebusy")) {
 			    /* DAV:no-abstract */
-			    txn->error.precond = &preconds[DAV_NO_ABSTRACT];
+			    txn->error.precond = DAV_NO_ABSTRACT;
 			    ret = HTTP_FORBIDDEN;
 			    goto done;
 			}
 			else {
 			    /* DAV:not-supported-privilege */
-			    txn->error.precond = &preconds[DAV_SUPP_PRIV];
+			    txn->error.precond = DAV_SUPP_PRIV;
 			    ret = HTTP_FORBIDDEN;
 			    goto done;
 			}
@@ -531,14 +531,14 @@ static int meth_acl(struct transaction_t *txn)
 			    rights |= DACL_ADMIN;
 			else {
 			    /* DAV:not-supported-privilege */
-			    txn->error.precond = &preconds[DAV_SUPP_PRIV];
+			    txn->error.precond = DAV_SUPP_PRIV;
 			    ret = HTTP_FORBIDDEN;
 			    goto done;
 			}
 		    }
 		    else {
 			/* DAV:not-supported-privilege */
-			txn->error.precond = &preconds[DAV_SUPP_PRIV];
+			txn->error.precond = DAV_SUPP_PRIV;
 			ret = HTTP_FORBIDDEN;
 			goto done;
 		    }
@@ -665,7 +665,7 @@ static int meth_copy(struct transaction_t *txn)
     if (((rights & DACL_READ) != DACL_READ) ||
 	((txn->meth[0] == 'M') && !(rights & DACL_RMRSRC))) {
 	/* DAV:need-privileges */
-	txn->error.precond = &preconds[DAV_NEED_PRIVS];
+	txn->error.precond = DAV_NEED_PRIVS;
 	txn->error.resource = txn->req_tgt.path;
 	txn->error.rights =
 	    (rights & DACL_READ) != DACL_READ ? DACL_READ : DACL_RMRSRC;
@@ -699,7 +699,7 @@ static int meth_copy(struct transaction_t *txn)
     rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
     if (!(rights & DACL_ADDRSRC) || !(rights & DACL_WRITECONT)) {
 	/* DAV:need-privileges */
-	txn->error.precond = &preconds[DAV_NEED_PRIVS];
+	txn->error.precond = DAV_NEED_PRIVS;
 	txn->error.resource = dest.path;
 	txn->error.rights =
 	    !(rights & DACL_ADDRSRC) ? DACL_ADDRSRC : DACL_WRITECONT;
@@ -902,7 +902,7 @@ static int meth_delete(struct transaction_t *txn)
     if ((txn->req_tgt.resource && !(rights & DACL_RMRSRC)) ||
 	!(rights & DACL_RMCOL)) {
 	/* DAV:need-privileges */
-	txn->error.precond = &preconds[DAV_NEED_PRIVS];
+	txn->error.precond = DAV_NEED_PRIVS;
 	txn->error.resource = txn->req_tgt.path;
 	txn->error.rights = txn->req_tgt.resource ? DACL_RMRSRC : DACL_RMCOL;
 	return HTTP_FORBIDDEN;
@@ -1036,7 +1036,7 @@ static int meth_get(struct transaction_t *txn)
     rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
     if ((rights & DACL_READ) != DACL_READ) {
 	/* DAV:need-privileges */
-	txn->error.precond = &preconds[DAV_NEED_PRIVS];
+	txn->error.precond = DAV_NEED_PRIVS;
 	txn->error.resource = txn->req_tgt.path;
 	txn->error.rights = DACL_READ;
 	return HTTP_FORBIDDEN;
@@ -1138,13 +1138,13 @@ static int meth_mkcol(struct transaction_t *txn)
 
     /* Parse the path */
     if ((r = parse_path(&txn->req_tgt, &txn->error.desc))) {
-	txn->error.precond = &preconds[CALDAV_LOCATION_OK];
+	txn->error.precond = CALDAV_LOCATION_OK;
 	return HTTP_FORBIDDEN;
     }
 
     /* Make sure its a home-set collection */
     if (!txn->req_tgt.collection || txn->req_tgt.resource) {
-	txn->error.precond = &preconds[CALDAV_LOCATION_OK];
+	txn->error.precond = CALDAV_LOCATION_OK;
 	return HTTP_FORBIDDEN;
     }
 
@@ -1191,7 +1191,7 @@ static int meth_mkcol(struct transaction_t *txn)
 
     if (r == IMAP_PERMISSION_DENIED) return HTTP_FORBIDDEN;
     else if (r == IMAP_MAILBOX_EXISTS) {
-	txn->error.precond = &preconds[DAV_RSRC_EXISTS];
+	txn->error.precond = DAV_RSRC_EXISTS;
 	return HTTP_FORBIDDEN;
     }
     else if (r) return HTTP_SERVER_ERROR;
@@ -1271,7 +1271,7 @@ static int meth_mkcol(struct transaction_t *txn)
     if (!r) ret = HTTP_CREATED;
     else if (r == IMAP_PERMISSION_DENIED) ret = HTTP_FORBIDDEN;
     else if (r == IMAP_MAILBOX_EXISTS) {
-	txn->error.precond = &preconds[DAV_RSRC_EXISTS];
+	txn->error.precond = DAV_RSRC_EXISTS;
 	ret = HTTP_FORBIDDEN;
     }
     else if (r) {
@@ -1699,7 +1699,7 @@ int meth_propfind(struct transaction_t *txn)
 	rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
 	if ((rights & DACL_READ) != DACL_READ) {
 	    /* DAV:need-privileges */
-	    txn->error.precond = &preconds[DAV_NEED_PRIVS];
+	    txn->error.precond = DAV_NEED_PRIVS;
 	    txn->error.resource = txn->req_tgt.path;
 	    txn->error.rights = DACL_READ;
 	    ret = HTTP_FORBIDDEN;
@@ -1892,7 +1892,7 @@ static int meth_proppatch(struct transaction_t *txn)
     rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
     if (!(rights & DACL_WRITEPROPS)) {
 	/* DAV:need-privileges */
-	txn->error.precond = &preconds[DAV_NEED_PRIVS];
+	txn->error.precond = DAV_NEED_PRIVS;
 	txn->error.resource = txn->req_tgt.path;
 	txn->error.rights = DACL_WRITEPROPS;
 	return HTTP_FORBIDDEN;
@@ -2078,7 +2078,7 @@ static int meth_put(struct transaction_t *txn)
     /* Check Content-Type */
     if (!(hdr = spool_getheader(txn->req_hdrs, "Content-Type")) ||
 	!is_mediatype(hdr[0], "text/calendar")) {
-	txn->error.precond = &preconds[CALDAV_SUPP_DATA];
+	txn->error.precond = CALDAV_SUPP_DATA;
 	return HTTP_FORBIDDEN;
     }
 
@@ -2103,7 +2103,7 @@ static int meth_put(struct transaction_t *txn)
     rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
     if (!(rights & DACL_WRITECONT) || !(rights & DACL_ADDRSRC)) {
 	/* DAV:need-privileges */
-	txn->error.precond = &preconds[DAV_NEED_PRIVS];
+	txn->error.precond = DAV_NEED_PRIVS;
 	txn->error.resource = txn->req_tgt.path;
 	txn->error.rights =
 	    !(rights & DACL_WRITECONT) ? DACL_WRITECONT : DACL_ADDRSRC;
@@ -2197,12 +2197,12 @@ static int meth_put(struct transaction_t *txn)
     /* Parse and validate the iCal data */
     ical = icalparser_parse_string(buf_cstring(&txn->req_body));
     if (!ical || (icalcomponent_isa(ical) != ICAL_VCALENDAR_COMPONENT)) {
-	txn->error.precond = &preconds[CALDAV_VALID_DATA];
+	txn->error.precond = CALDAV_VALID_DATA;
 	ret = HTTP_FORBIDDEN;
 	goto done;
     }
     else if (!icalrestriction_check(ical)) {
-	txn->error.precond = &preconds[CALDAV_VALID_OBJECT];
+	txn->error.precond = CALDAV_VALID_OBJECT;
 	ret = HTTP_FORBIDDEN;
 	goto done;
     }
@@ -2218,7 +2218,7 @@ static int meth_put(struct transaction_t *txn)
 	const char *nextuid = icalcomponent_get_uid(nextcomp);
 
 	if (!nextuid || strcmp(uid, nextuid)) {
-	    txn->error.precond = &preconds[CALDAV_VALID_OBJECT];
+	    txn->error.precond = CALDAV_VALID_OBJECT;
 	    ret = HTTP_FORBIDDEN;
 	    goto done;
 	}
@@ -2230,7 +2230,7 @@ static int meth_put(struct transaction_t *txn)
 						    ICAL_ORGANIZER_PROPERTY);
 	    if (prop) nextorg = icalproperty_get_organizer(prop);
 	    if (!nextorg || strcmp(organizer, nextorg)) {
-		txn->error.precond = &preconds[CALDAV_SAME_ORGANIZER];
+		txn->error.precond = CALDAV_SAME_ORGANIZER;
 		ret = HTTP_FORBIDDEN;
 		goto done;
 	    }
@@ -2256,7 +2256,7 @@ static int meth_put(struct transaction_t *txn)
 	    mbentry.acl ? cyrus_acl_myrights(httpd_authstate, mbentry.acl) : 0;
 	if (!(rights & DACL_SCHED)) {
 	    /* DAV:need-privileges */
-	    txn->error.precond = &preconds[DAV_NEED_PRIVS];
+	    txn->error.precond = DAV_NEED_PRIVS;
 	    txn->error.rights = DACL_SCHED;
 
 	    buf_reset(&href);
@@ -2276,7 +2276,7 @@ static int meth_put(struct transaction_t *txn)
 			      strcmp(cdata.resource, txn->req_tgt.resource))) {
 	    /* CALDAV:unique-scheduling-object-resource */
 
-	    txn->error.precond = &preconds[CALDAV_UNIQUE_OBJECT];
+	    txn->error.precond = CALDAV_UNIQUE_OBJECT;
 	    buf_reset(&href);
 	    buf_printf(&href, "/calendars/user/%s/%s/%s",
 		       userid, strrchr(cdata.mailbox, '.')+1, cdata.resource);
@@ -2320,7 +2320,7 @@ static int parse_comp_filter(xmlNodePtr root, struct calquery_filter *filter,
 		xmlChar *name = xmlGetProp(node, BAD_CAST "name");
 
 		if (filter->comp) {
-		    error->precond = &preconds[CALDAV_VALID_FILTER];
+		    error->precond = CALDAV_VALID_FILTER;
 		    return HTTP_FORBIDDEN;
 		}
 
@@ -2335,7 +2335,7 @@ static int parse_comp_filter(xmlNodePtr root, struct calquery_filter *filter,
 		else if (!xmlStrcmp(name, BAD_CAST "VFREEBUSY"))
 		    filter->comp = CAL_COMP_VFREEBUSY;
 		else {
-		    error->precond = &preconds[CALDAV_SUPP_FILTER];
+		    error->precond = CALDAV_SUPP_FILTER;
 		    return HTTP_FORBIDDEN;
 		}
 
@@ -2354,7 +2354,7 @@ static int parse_comp_filter(xmlNodePtr root, struct calquery_filter *filter,
 		    icaltime_from_timet_with_zone(INT_MAX, 0, NULL);
 	    }
 	    else {
-		error->precond = &preconds[CALDAV_SUPP_FILTER];
+		error->precond = CALDAV_SUPP_FILTER;
 		return HTTP_FORBIDDEN;
 	    }
 	}
@@ -2969,7 +2969,7 @@ static int meth_report(struct transaction_t *txn)
     if (!report || !report->name) {
 	syslog(LOG_WARNING, "REPORT %s", inroot->name);
 	/* DAV:supported-report */
-	txn->error.precond = &preconds[DAV_SUPP_REPORT];
+	txn->error.precond = DAV_SUPP_REPORT;
 	ret = HTTP_FORBIDDEN;
 	goto done;
     }
@@ -3001,7 +3001,7 @@ static int meth_report(struct transaction_t *txn)
 	    if (report->reqd_privs == DACL_READFB) ret = HTTP_NOT_FOUND;
 	    else {
 		/* DAV:need-privileges */
-		txn->error.precond = &preconds[DAV_NEED_PRIVS];
+		txn->error.precond = DAV_NEED_PRIVS;
 		txn->error.resource = txn->req_tgt.path;
 		txn->error.rights = report->reqd_privs;
 		ret = HTTP_FORBIDDEN;
@@ -3309,7 +3309,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     case ICAL_VJOURNAL_COMPONENT: mykind = CAL_COMP_VJOURNAL; break;
     case ICAL_VFREEBUSY_COMPONENT: mykind = CAL_COMP_VFREEBUSY; break;
     default:
-	txn->error.precond = &preconds[CALDAV_SUPP_COMP];
+	txn->error.precond = CALDAV_SUPP_COMP;
 	return HTTP_FORBIDDEN;
     }
 
@@ -3319,7 +3319,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 	unsigned long supp_comp = strtoul(attrib.value, NULL, 10);
 
 	if (!(mykind & supp_comp)) {
-	    txn->error.precond = &preconds[CALDAV_SUPP_COMP];
+	    txn->error.precond = CALDAV_SUPP_COMP;
 	    return HTTP_FORBIDDEN;
 	}
     }
@@ -3333,7 +3333,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 	/* CALDAV:no-uid-conflict */
 	static struct buf href = BUF_INITIALIZER;
 
-	txn->error.precond = &preconds[CALDAV_UID_CONFLICT];
+	txn->error.precond = CALDAV_UID_CONFLICT;
 	buf_reset(&href);
 	buf_printf(&href, "/calendars/user/%s/%s/%s",
 		   mboxname_to_userid(cdata.mailbox),
@@ -3556,7 +3556,7 @@ static int sched_busytime(struct transaction_t *txn)
     /* Check Content-Type */
     if (!(hdr = spool_getheader(txn->req_hdrs, "Content-Type")) ||
 	!is_mediatype(hdr[0], "text/calendar")) {
-	txn->error.precond = &preconds[CALDAV_SUPP_DATA];
+	txn->error.precond = CALDAV_SUPP_DATA;
 	return HTTP_BAD_REQUEST;
     }
 
@@ -3580,7 +3580,7 @@ static int sched_busytime(struct transaction_t *txn)
     rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
     if (!(rights & DACL_SCHED)) {
 	/* DAV:need-privileges */
-	txn->error.precond = &preconds[DAV_NEED_PRIVS];
+	txn->error.precond = DAV_NEED_PRIVS;
 	txn->error.resource = txn->req_tgt.path;
 	txn->error.rights = DACL_SCHED;
 	return HTTP_FORBIDDEN;
@@ -3618,7 +3618,7 @@ static int sched_busytime(struct transaction_t *txn)
     /* Parse the iCal data for important properties */
     ical = icalparser_parse_string(buf_cstring(&txn->req_body));
     if (!ical || !icalrestriction_check(ical)) {
-	txn->error.precond = &preconds[CALDAV_VALID_DATA];
+	txn->error.precond = CALDAV_VALID_DATA;
 	return HTTP_BAD_REQUEST;
     }
 
@@ -3633,7 +3633,7 @@ static int sched_busytime(struct transaction_t *txn)
     /* Check method preconditions */
     if (!meth || meth != ICAL_METHOD_REQUEST || !uid ||
 	kind != ICAL_VFREEBUSY_COMPONENT || !prop) {
-	txn->error.precond = &preconds[CALDAV_VALID_SCHED];
+	txn->error.precond = CALDAV_VALID_SCHED;
 	return HTTP_BAD_REQUEST;
     }
 
@@ -3641,7 +3641,7 @@ static int sched_busytime(struct transaction_t *txn)
     if (organizer) orgid = caladdress_to_userid(organizer);
 
     if (!orgid || strncmp(orgid, txn->req_tgt.user, txn->req_tgt.userlen)) {
-	txn->error.precond = &preconds[CALDAV_VALID_ORGANIZER];
+	txn->error.precond = CALDAV_VALID_ORGANIZER;
 	return HTTP_FORBIDDEN;
     }
 
@@ -3893,8 +3893,6 @@ static int sched_organizer(icalcomponent *ical)
 	    param = icalparameter_new(ICAL_IANA_PARAMETER);
 	    icalparameter_set_iana_name(param, "SCHEDULE-STATUS");
 	    icalparameter_set_iana_value(param, stat);
-syslog(LOG_INFO, "SCHEDULE-STATUS: %s %s", stat,
-       txn.error.precond ? txn.error.precond->name: "");
 	    icalproperty_add_parameter(prop, param);
 	}
     }

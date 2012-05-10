@@ -143,7 +143,7 @@ struct auth_challenge_t {
 /* Meta-data for error response */
 struct error_t {
     const char *desc;			/* Error description */
-    const struct precond *precond;	/* [Cal]DAV precondition */
+    unsigned precond;			/* [Cal]DAV precondition */
     const char *resource;		/* Resource which lacks privileges */
     int rights;  			/* Privileges needed by resource */
 };  

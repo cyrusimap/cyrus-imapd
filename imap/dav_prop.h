@@ -134,7 +134,7 @@ enum {
 /* Index into preconditions array */
 enum {
     /* WebDAV (RFC 4918) preconditons */
-    DAV_PROT_PROP = 0,
+    DAV_PROT_PROP = 1,
 
     /* WebDAV Versioning (RFC 3253) preconditions */
     DAV_SUPP_REPORT,
@@ -177,19 +177,11 @@ enum {
     CALDAV_ALLOWED_ATT_CHANGE
 };
 
-/* Structure for precondition/postcondition errors */
-struct precond {
-    const char *name;			/* Property name */
-    unsigned ns;			/* Index into known namespace array */
-};
-
-extern const struct precond preconds[];
-
 /* Structure for property status */
 struct propstat {
     xmlNodePtr root;
     long status;
-    const struct precond *precond;
+    unsigned precond;
 };
 
 /* Index into propstat array */
@@ -260,20 +252,6 @@ struct proppatch_ctx {
     struct buf buf;			/* Working buffer */
 };
 
-
-/* Structure for known "live" properties */
-struct prop_entry {
-    const char *name;			/* Property name */
-    const char *ns;			/* Property namespace */
-    unsigned allprop;			/* Should we fetch for allprop? */
-    int (*get)(xmlNodePtr node,		/* Callback to fetch property */
-	       struct propfind_ctx *fctx, xmlNodePtr resp,
-	       struct propstat propstat[], void *rock);
-    int (*put)(xmlNodePtr prop,		/* Callback to write property */
-	       unsigned set, struct proppatch_ctx *pctx,
-	       struct propstat propstat[], void *rock);
-    void *rock;				/* Add'l data to pass to callback */
-};
 
 /* Linked-list of properties for fetching */
 struct propfind_entry_list {

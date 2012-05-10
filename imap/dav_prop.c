@@ -192,11 +192,64 @@ static xmlNodePtr xml_add_href(xmlNodePtr parent, xmlNsPtr ns,
     return node;
 }
 
+/* Array of precondition/postcondition errors */
+static const struct precond_t {
+    const char *name;			/* Property name */
+    unsigned ns;			/* Index into known namespace array */
+} preconds[] = {
+    /* Placeholder for zero (no) precondition code */
+    { NULL, 0 },
+
+    /* WebDAV (RFC 4918) preconditons */
+    { "cannot-modify-protected-property", NS_DAV },
+
+    /* WebDAV Versioning (RFC 3253) preconditions */
+    { "supported-report", NS_DAV },
+    { "resource-must-be-null", NS_DAV },
+
+    /* WebDAV ACL (RFC 3744) preconditions */
+    { "need-privileges", NS_DAV },
+    { "no-invert", NS_DAV },
+    { "no-abstract", NS_DAV },
+    { "not-supported-privilege", NS_DAV },
+    { "recognized-principal", NS_DAV },
+
+    /* WebDAV Quota (RFC 4331) preconditions */
+    { "quota-not-exceeded", NS_DAV },
+    { "sufficient-disk-space", NS_DAV },
+
+    /* WebDAV Extended MKCOL (RFC 5689) preconditions */
+    { "valid-resourcetype", NS_DAV },
+
+    /* WebDAV Sync (RFC 6578) preconditions */
+    { "valid-sync-token", NS_DAV },
+    { "number-of-matches-within-limits", NS_DAV },
+
+    /* CalDAV (RFC 4791) preconditions */
+    { "supported-calendar-data", NS_CALDAV },
+    { "valid-calendar-data", NS_CALDAV },
+    { "valid-calendar-object-resource", NS_CALDAV },
+    { "supported-calendar-component", NS_CALDAV },
+    { "calendar-collection-location-ok", NS_CALDAV },
+    { "no-uid-conflict", NS_CALDAV },
+    { "supported-filter", NS_CALDAV },
+    { "valid-filter", NS_CALDAV },
+
+    /* CalDAV Scheduling (draft-desruisseaux-caldav-sched) preconditions */
+    { "valid-scheduling-message", NS_CALDAV },
+    { "valid-organizer", NS_CALDAV },
+    { "unique-scheduling-object-resource", NS_CALDAV },
+    { "same-organizer-in-all-components", NS_CALDAV },
+    { "allowed-organizer-scheduling-object-change", NS_CALDAV },
+    { "allowed-attendee-scheduling-object-change", NS_CALDAV }
+};
+
 xmlNodePtr xml_add_error(xmlNodePtr root, struct error_t *err,
 			 xmlNsPtr *avail_ns)
 {
     xmlNsPtr ns[NUM_NAMESPACE];
     xmlNodePtr error, node;
+    const struct precond_t *precond = &preconds[err->precond];
 
     if (!root) {
 	error = root = init_xml_response("error", NS_DAV, NULL, ns);
@@ -204,32 +257,35 @@ xmlNodePtr xml_add_error(xmlNodePtr root, struct error_t *err,
     }
     else error = xmlNewChild(root, NULL, BAD_CAST "error", NULL);
 
-    if (err->precond->ns == NS_CALDAV) {
+    if (precond->ns == NS_CALDAV) {
 	ensure_ns(avail_ns, NS_CALDAV, root, XML_NS_CALDAV, "C");
     }
-    node = xmlNewChild(error, avail_ns[err->precond->ns],
-		       BAD_CAST err->precond->name, NULL);
+    node = xmlNewChild(error, avail_ns[precond->ns],
+		       BAD_CAST precond->name, NULL);
 
-    if ((err->precond == &preconds[DAV_NEED_PRIVS]) &&
-	err->resource && err->rights) {
-	unsigned flags = 0;
-	size_t rlen = strlen(err->resource);
-	const char *p = err->resource + rlen;
+    switch (err->precond) {
+    case DAV_NEED_PRIVS:
+	if (err->resource && err->rights) {
+	    unsigned flags = 0;
+	    size_t rlen = strlen(err->resource);
+	    const char *p = err->resource + rlen;
 
-	node = xmlNewChild(node, NULL, BAD_CAST "resource", NULL);
-	xml_add_href(node, NULL, err->resource);
+	    node = xmlNewChild(node, NULL, BAD_CAST "resource", NULL);
+	    xml_add_href(node, NULL, err->resource);
 
-	if (rlen > 6 && !strcmp(p-6, SCHED_INBOX))
-	    flags |= PRIV_INBOX;
-	else if (rlen > 7 && !strcmp(p-7, SCHED_OUTBOX))
-	    flags |= PRIV_OUTBOX;
+	    if (rlen > 6 && !strcmp(p-6, SCHED_INBOX))
+		flags |= PRIV_INBOX;
+	    else if (rlen > 7 && !strcmp(p-7, SCHED_OUTBOX))
+		flags |= PRIV_OUTBOX;
 
-	add_privs(err->rights, flags, node, root, avail_ns);
-    }
-    else if (((err->precond == &preconds[CALDAV_UNIQUE_OBJECT]) ||
-	      (err->precond == &preconds[CALDAV_UID_CONFLICT])) &&
-	     err->resource) {
-	xml_add_href(node, avail_ns[NS_DAV], err->resource);
+	    add_privs(err->rights, flags, node, root, avail_ns);
+	}
+	break;
+
+    case CALDAV_UNIQUE_OBJECT:
+    case CALDAV_UID_CONFLICT:
+	if (err->resource) xml_add_href(node, avail_ns[NS_DAV], err->resource);
+	break;
     }
 
     return root;
@@ -242,9 +298,8 @@ xmlNodePtr xml_add_error(xmlNodePtr root, struct error_t *err,
  */
 static xmlNodePtr xml_add_prop(long status, xmlNsPtr davns,
 			       struct propstat *propstat,
-			       xmlNodePtr prop,
-			       xmlChar *content,
-			       const struct precond *precond)
+			       xmlNodePtr prop, xmlChar *content,
+			       unsigned precond)
 {
     xmlNodePtr newprop;
 
@@ -293,7 +348,7 @@ int xml_add_response(struct propfind_ctx *fctx, long code)
 	    }
 	    else {
 		xml_add_prop(HTTP_NOT_FOUND, fctx->ns[NS_DAV],
-			     &propstat[PROPSTAT_NOTFOUND], e->prop, NULL, NULL);
+			     &propstat[PROPSTAT_NOTFOUND], e->prop, NULL, 0);
 	    }
 	}
     }
@@ -338,7 +393,7 @@ static int propfind_addmember(xmlNodePtr prop,
 	size_t len;
 
 	node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-			    prop, NULL, NULL);
+			    prop, NULL, 0);
 
 	len = fctx->req_tgt->resource ?
 	    (size_t) (fctx->req_tgt->resource - fctx->req_tgt->path) :
@@ -350,7 +405,7 @@ static int propfind_addmember(xmlNodePtr prop,
     }
     else {
 	xml_add_prop(HTTP_NOT_FOUND, fctx->ns[NS_DAV],
-		     &propstat[PROPSTAT_NOTFOUND], prop, NULL, NULL);
+		     &propstat[PROPSTAT_NOTFOUND], prop, NULL, 0);
     }
 
     return 0;
@@ -371,7 +426,7 @@ static int propfind_getlength(xmlNodePtr prop,
     buf_reset(&fctx->buf);
     buf_printf(&fctx->buf, "%u", len);
     xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-		 prop, BAD_CAST buf_cstring(&fctx->buf), NULL);
+		 prop, BAD_CAST buf_cstring(&fctx->buf), 0);
 
     return 0;
 }
@@ -391,11 +446,11 @@ static int propfind_getetag(xmlNodePtr prop,
 		   message_guid_encode(&fctx->record->guid));
 
 	xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-		     prop, BAD_CAST buf_cstring(&fctx->buf), NULL);
+		     prop, BAD_CAST buf_cstring(&fctx->buf), 0);
     }
     else {
 	xml_add_prop(HTTP_NOT_FOUND, fctx->ns[NS_DAV],
-		     &propstat[PROPSTAT_NOTFOUND], prop, NULL, NULL);
+		     &propstat[PROPSTAT_NOTFOUND], prop, NULL, 0);
     }
 
     return 0;
@@ -415,11 +470,11 @@ static int propfind_getlastmod(xmlNodePtr prop,
 		       fctx->record->internaldate);
 
 	xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-		     prop, BAD_CAST fctx->buf.s, NULL);
+		     prop, BAD_CAST fctx->buf.s, 0);
     }
     else {
 	xml_add_prop(HTTP_NOT_FOUND, fctx->ns[NS_DAV],
-		     &propstat[PROPSTAT_NOTFOUND], prop, NULL, NULL);
+		     &propstat[PROPSTAT_NOTFOUND], prop, NULL, 0);
     }
 
     return 0;
@@ -434,7 +489,7 @@ static int propfind_restype(xmlNodePtr prop,
 			    void *rock __attribute__((unused)))
 {
     xmlNodePtr node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
-				   &propstat[PROPSTAT_OK], prop, NULL, NULL);
+				   &propstat[PROPSTAT_OK], prop, NULL, 0);
 
     if ((fctx->req_tgt->namespace != URL_NS_DEFAULT) && !fctx->record) {
 	xmlNewChild(node, NULL, BAD_CAST "collection", NULL);
@@ -485,7 +540,7 @@ static int proppatch_restype(xmlNodePtr prop, unsigned set,
 			     struct propstat propstat[],
 			     void *rock __attribute__((unused)))
 {
-    const struct precond *precond = NULL;
+    unsigned precond = 0;
 
     if (set && pctx->meth[0] == 'M') {
 	/* "Writeable" for MKCOL/MKCALENDAR only */
@@ -502,17 +557,17 @@ static int proppatch_restype(xmlNodePtr prop, unsigned set,
 	if (!cur) {
 	    /* All resourcetypes are valid */
 	    xml_add_prop(HTTP_OK, pctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-			 prop, NULL, NULL);
+			 prop, NULL, 0);
 
 	    return 0;
 	}
 
 	/* Invalid resourcetype */
-	precond = &preconds[DAV_VALID_RESTYPE];
+	precond = DAV_VALID_RESTYPE;
     }
     else {
 	/* Protected property */
-	precond = &preconds[DAV_PROT_PROP];
+	precond = DAV_PROT_PROP;
     }
 
     xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV], &propstat[PROPSTAT_FORBID],
@@ -538,11 +593,11 @@ static int propfind_sync_token(xmlNodePtr prop,
 		   fctx->mailbox->i.highestmodseq);
 
 	xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-		     prop, BAD_CAST buf_cstring(&fctx->buf), NULL);
+		     prop, BAD_CAST buf_cstring(&fctx->buf), 0);
     }
     else {
 	xml_add_prop(HTTP_NOT_FOUND, fctx->ns[NS_DAV],
-		     &propstat[PROPSTAT_NOTFOUND], prop, NULL, NULL);
+		     &propstat[PROPSTAT_NOTFOUND], prop, NULL, 0);
     }
 
     return 0;
@@ -559,7 +614,7 @@ static int propfind_reportset(xmlNodePtr prop,
     xmlNodePtr s, r, top;
 
     top = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-		       prop, NULL, NULL);
+		       prop, NULL, 0);
 
     if ((fctx->req_tgt->namespace == URL_NS_CALENDAR ||
 	 fctx->req_tgt->namespace == URL_NS_ADDRESSBOOK) &&
@@ -602,11 +657,11 @@ static int propfind_principalurl(xmlNodePtr prop,
 
     if (fctx->req_tgt->namespace != URL_NS_PRINCIPAL) {
 	xml_add_prop(HTTP_NOT_FOUND, fctx->ns[NS_DAV],
-		     &propstat[PROPSTAT_NOTFOUND], prop, NULL, NULL);
+		     &propstat[PROPSTAT_NOTFOUND], prop, NULL, 0);
     }
     else {
 	node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-			    prop, NULL, NULL);
+			    prop, NULL, 0);
 
 	buf_reset(&fctx->buf);
 	if (fctx->req_tgt->user) {
@@ -631,7 +686,7 @@ static int propfind_owner(xmlNodePtr prop,
     xmlNodePtr node;
 
     node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-			prop, NULL, NULL);
+			prop, NULL, 0);
 
     if ((fctx->req_tgt->namespace == URL_NS_CALENDAR) && fctx->req_tgt->user) {
 	buf_reset(&fctx->buf);
@@ -675,7 +730,7 @@ static int propfind_supprivset(xmlNodePtr prop,
     xmlNodePtr set, all, agg, write;
 
     set = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-		       prop, NULL, NULL);
+		       prop, NULL, 0);
 
     all = add_suppriv(set, "all", NULL, 0, "Any operation");
 
@@ -748,7 +803,7 @@ static int propfind_curprin(xmlNodePtr prop,
     xmlNodePtr node;
 
     node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-			prop, NULL, NULL);
+			prop, NULL, 0);
 
     if (fctx->userid) {
 	buf_reset(&fctx->buf);
@@ -853,13 +908,13 @@ static int propfind_curprivset(xmlNodePtr prop,
 
     if (!fctx->mailbox) {
 	xml_add_prop(HTTP_NOT_FOUND, fctx->ns[NS_DAV],
-		     &propstat[PROPSTAT_NOTFOUND], prop, NULL, NULL);
+		     &propstat[PROPSTAT_NOTFOUND], prop, NULL, 0);
     }
     else if (((rights =
 	       cyrus_acl_myrights(fctx->authstate, fctx->mailbox->acl))
 	      & DACL_READ) != DACL_READ) {
 	xml_add_prop(HTTP_UNAUTHORIZED, fctx->ns[NS_DAV],
-		     &propstat[PROPSTAT_UNAUTH], prop, NULL, NULL);
+		     &propstat[PROPSTAT_UNAUTH], prop, NULL, 0);
     }
     else {
 	xmlNodePtr set;
@@ -874,7 +929,7 @@ static int propfind_curprivset(xmlNodePtr prop,
 
 	/* Build the rest of the XML response */
 	set = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-			   prop, NULL, NULL);
+			   prop, NULL, 0);
 
 	if (!strcmp(fctx->req_tgt->collection, SCHED_INBOX))
 	    flags |= PRIV_INBOX;
@@ -899,13 +954,13 @@ static int propfind_acl(xmlNodePtr prop,
 
     if (!fctx->mailbox) {
 	xml_add_prop(HTTP_NOT_FOUND, fctx->ns[NS_DAV],
-		     &propstat[PROPSTAT_NOTFOUND], prop, NULL, NULL);
+		     &propstat[PROPSTAT_NOTFOUND], prop, NULL, 0);
     }
     else if (!((rights =
 		cyrus_acl_myrights(fctx->authstate, fctx->mailbox->acl))
 	       & DACL_ADMIN)) {
 	xml_add_prop(HTTP_UNAUTHORIZED, fctx->ns[NS_DAV],
-		     &propstat[PROPSTAT_UNAUTH], prop, NULL, NULL);
+		     &propstat[PROPSTAT_UNAUTH], prop, NULL, 0);
     }
     else {
 	xmlNodePtr acl;
@@ -919,7 +974,7 @@ static int propfind_acl(xmlNodePtr prop,
 
 	/* Start the acl XML response */
 	acl = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-			   prop, NULL, NULL);
+			   prop, NULL, 0);
 
 	/* Parse the ACL string (userid/rights pairs) */
 	userid = aclstr = xstrdup(fctx->mailbox->acl);
@@ -1001,7 +1056,7 @@ static int propfind_aclrestrict(xmlNodePtr prop,
     xmlNodePtr node;
 
     node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-			prop, NULL, NULL);
+			prop, NULL, 0);
 
     xmlNewChild(node, NULL, BAD_CAST "no-invert", NULL);
 
@@ -1019,7 +1074,7 @@ static int propfind_princolset(xmlNodePtr prop,
     xmlNodePtr node;
 
     node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-			prop, NULL, NULL);
+			prop, NULL, 0);
 
     xmlNewChild(node, NULL, BAD_CAST "href", BAD_CAST "/principals/");
 
@@ -1085,11 +1140,11 @@ static int propfind_quota(xmlNodePtr prop,
 	}
 
 	xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-		     prop, BAD_CAST buf_cstring(&fctx->buf), NULL);
+		     prop, BAD_CAST buf_cstring(&fctx->buf), 0);
     }
     else {
 	xml_add_prop(HTTP_NOT_FOUND, fctx->ns[NS_DAV],
-		     &propstat[PROPSTAT_NOTFOUND], prop, NULL, NULL);
+		     &propstat[PROPSTAT_NOTFOUND], prop, NULL, 0);
     }
 
     return 0;
@@ -1113,7 +1168,7 @@ static int propfind_caldata(xmlNodePtr prop,
 	}
 
 	data = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-			    prop, NULL, NULL);
+			    prop, NULL, 0);
 	xmlAddChild(data,
 		    xmlNewCDataBlock(fctx->root->doc,
 				     BAD_CAST fctx->msg_base +
@@ -1123,7 +1178,7 @@ static int propfind_caldata(xmlNodePtr prop,
     }
     else {
 	xml_add_prop(HTTP_NOT_FOUND, fctx->ns[NS_DAV],
-		     &propstat[PROPSTAT_NOTFOUND], prop, NULL, NULL);
+		     &propstat[PROPSTAT_NOTFOUND], prop, NULL, 0);
     }
 
     return 0;
@@ -1146,7 +1201,7 @@ static int propfind_calurl(xmlNodePtr prop,
     ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
     if (fctx->userid) {
 	node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-			    prop, NULL, NULL);
+			    prop, NULL, 0);
 
 	buf_reset(&fctx->buf);
 	buf_printf(&fctx->buf, "/calendars/user/%s/%s", fctx->userid,
@@ -1156,7 +1211,7 @@ static int propfind_calurl(xmlNodePtr prop,
     }
     else {
 	xml_add_prop(HTTP_NOT_FOUND, fctx->ns[NS_DAV],
-		     &propstat[PROPSTAT_NOTFOUND], prop, NULL, NULL);
+		     &propstat[PROPSTAT_NOTFOUND], prop, NULL, 0);
     }
 
     return 0;
@@ -1189,14 +1244,14 @@ static int propfind_calcompset(xmlNodePtr prop,
 
     if (r) {
 	xml_add_prop(HTTP_SERVER_ERROR, fctx->ns[NS_DAV],
-		     &propstat[PROPSTAT_ERROR], prop, NULL, NULL);
+		     &propstat[PROPSTAT_ERROR], prop, NULL, 0);
     }
     else if (value && (types = strtoul(value, NULL, 10))) {
 	xmlNodePtr set, node;
 	const struct cal_comp_t *comp;
 
 	set = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-			   prop, NULL, NULL);
+			   prop, NULL, 0);
 	/* Create "comp" elements from the stored bitmask */
 	for (comp = cal_comps; comp->name; comp++) {
 	    if (types & comp->type) {
@@ -1208,7 +1263,7 @@ static int propfind_calcompset(xmlNodePtr prop,
     }
     else {
 	xml_add_prop(HTTP_NOT_FOUND, fctx->ns[NS_DAV],
-		     &propstat[PROPSTAT_NOTFOUND], prop, NULL, NULL);
+		     &propstat[PROPSTAT_NOTFOUND], prop, NULL, 0);
     }
 
     return 0;
@@ -1222,7 +1277,7 @@ static int proppatch_calcompset(xmlNodePtr prop, unsigned set,
 				void *rock __attribute__((unused)))
 {
     int r = 0;
-    const struct precond *precond = NULL;
+    unsigned precond = 0;
 
     if ((pctx->req_tgt->namespace == URL_NS_CALENDAR) &&
 	set && pctx->meth[0] == 'M') {
@@ -1260,22 +1315,22 @@ static int proppatch_calcompset(xmlNodePtr prop, unsigned set,
 					       buf_len(&pctx->buf), 0,
 					       &pctx->tid))) {
 		xml_add_prop(HTTP_OK, pctx->ns[NS_DAV],
-			     &propstat[PROPSTAT_OK], prop, NULL, NULL);
+			     &propstat[PROPSTAT_OK], prop, NULL, 0);
 	    }
 	    else {
 		xml_add_prop(HTTP_SERVER_ERROR, pctx->ns[NS_DAV],
-			     &propstat[PROPSTAT_ERROR], prop, NULL, NULL);
+			     &propstat[PROPSTAT_ERROR], prop, NULL, 0);
 	    }
 
 	    return 0;
 	}
 
 	/* Invalid component type */
-	precond = &preconds[CALDAV_SUPP_COMP];
+	precond = CALDAV_SUPP_COMP;
     }
     else {
 	/* Protected property */
-	precond = &preconds[DAV_PROT_PROP];
+	precond = DAV_PROT_PROP;
     }
 
     xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV], &propstat[PROPSTAT_FORBID],
@@ -1299,7 +1354,7 @@ static int propfind_caluseraddr(xmlNodePtr prop,
     ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
     if (fctx->userid) {
 	node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-			    prop, NULL, NULL);
+			    prop, NULL, 0);
 
 	/* XXX  This needs to be done via an LDAP/DB lookup */
 	buf_reset(&fctx->buf);
@@ -1310,7 +1365,7 @@ static int propfind_caluseraddr(xmlNodePtr prop,
     }
     else {
 	xml_add_prop(HTTP_NOT_FOUND, fctx->ns[NS_DAV],
-		     &propstat[PROPSTAT_NOTFOUND], prop, NULL, NULL);
+		     &propstat[PROPSTAT_NOTFOUND], prop, NULL, 0);
     }
 
     return 0;
@@ -1343,18 +1398,18 @@ static int propfind_caltransp(xmlNodePtr prop,
     ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
     if (r) {
 	xml_add_prop(HTTP_SERVER_ERROR, fctx->ns[NS_DAV],
-		     &propstat[PROPSTAT_ERROR], prop, NULL, NULL);
+		     &propstat[PROPSTAT_ERROR], prop, NULL, 0);
     }
     else if (value) {
 	xmlNodePtr node;
 
 	node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-			    prop, NULL, NULL);
+			    prop, NULL, 0);
 	xmlNewChild(node, fctx->ns[NS_CALDAV], BAD_CAST value, NULL);
     }
     else {
 	xml_add_prop(HTTP_NOT_FOUND, fctx->ns[NS_DAV],
-		     &propstat[PROPSTAT_NOTFOUND], prop, NULL, NULL);
+		     &propstat[PROPSTAT_NOTFOUND], prop, NULL, 0);
     }
 
     return 0;
@@ -1389,7 +1444,7 @@ static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
 		else {
 		    /* Unknown value */
 		    xml_add_prop(HTTP_CONFLICT, pctx->ns[NS_DAV],
-				 &propstat[PROPSTAT_CONFLICT], prop, NULL, NULL);
+				 &propstat[PROPSTAT_CONFLICT], prop, NULL, 0);
 
 		    *pctx->ret = HTTP_FORBIDDEN;
 
@@ -1404,16 +1459,16 @@ static int proppatch_caltransp(xmlNodePtr prop, unsigned set,
 				      strlen(transp), 0,
 				      &pctx->tid)) {
 	    xml_add_prop(HTTP_OK, pctx->ns[NS_DAV],
-			 &propstat[PROPSTAT_OK], prop, NULL, NULL);
+			 &propstat[PROPSTAT_OK], prop, NULL, 0);
 	}
 	else {
 	    xml_add_prop(HTTP_SERVER_ERROR, pctx->ns[NS_DAV],
-			 &propstat[PROPSTAT_ERROR], prop, NULL, NULL);
+			 &propstat[PROPSTAT_ERROR], prop, NULL, 0);
 	}
     }
     else {
 	xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
-		     &propstat[PROPSTAT_FORBID], prop, NULL, NULL);
+		     &propstat[PROPSTAT_FORBID], prop, NULL, 0);
 
 	*pctx->ret = HTTP_FORBIDDEN;
     }
@@ -1446,7 +1501,7 @@ static int propfind_fromhdr(xmlNodePtr prop,
 
 	    if ((hdr = spool_getheader(hdrs, (const char *) hdrname))) {
 		xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-			     prop, BAD_CAST hdr[0], NULL);
+			     prop, BAD_CAST hdr[0], 0);
 	    }
 
 	    spool_free_hdrcache(hdrs);
@@ -1456,7 +1511,7 @@ static int propfind_fromhdr(xmlNodePtr prop,
     }
 
     xml_add_prop(HTTP_NOT_FOUND, fctx->ns[NS_DAV], &propstat[PROPSTAT_NOTFOUND],
-		 prop, NULL, NULL);
+		 prop, NULL, 0);
 
     return 0;
 }
@@ -1499,17 +1554,17 @@ static int propfind_fromdb(xmlNodePtr prop,
 
     if (r) {
 	node = xml_add_prop(HTTP_SERVER_ERROR, fctx->ns[NS_DAV],
-			    &propstat[PROPSTAT_ERROR], prop, NULL, NULL);
+			    &propstat[PROPSTAT_ERROR], prop, NULL, 0);
     }
     else if (attrib.value) {
 	node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-			    prop, NULL, NULL);
+			    prop, NULL, 0);
 	xmlAddChild(node, xmlNewCDataBlock(fctx->root->doc,
 					   BAD_CAST attrib.value, attrib.size));
     }
     else {
 	node = xml_add_prop(HTTP_NOT_FOUND, fctx->ns[NS_DAV],
-			    &propstat[PROPSTAT_NOTFOUND], prop, NULL, NULL);
+			    &propstat[PROPSTAT_NOTFOUND], prop, NULL, 0);
     }
 
     return 0;
@@ -1549,11 +1604,11 @@ static int proppatch_todb(xmlNodePtr prop, unsigned set,
 				       value, NULL, len, 0,
 				       &pctx->tid))) {
 	node = xml_add_prop(HTTP_OK, pctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-			    prop, NULL, NULL);
+			    prop, NULL, 0);
     }
     else {
 	node = xml_add_prop(HTTP_SERVER_ERROR, pctx->ns[NS_DAV],
-			    &propstat[PROPSTAT_ERROR], prop, NULL, NULL);
+			    &propstat[PROPSTAT_ERROR], prop, NULL, 0);
     }
 
     if (freeme) xmlFree(freeme);
@@ -1562,8 +1617,20 @@ static int proppatch_todb(xmlNodePtr prop, unsigned set,
 }
 
 
-static const struct prop_entry prop_entries[] = 
-{
+/* Array of known "live" properties */
+static const struct prop_entry {
+    const char *name;			/* Property name */
+    const char *ns;			/* Property namespace */
+    unsigned allprop;			/* Should we fetch for allprop? */
+    int (*get)(xmlNodePtr node,		/* Callback to fetch property */
+	       struct propfind_ctx *fctx, xmlNodePtr resp,
+	       struct propstat propstat[], void *rock);
+    int (*put)(xmlNodePtr prop,		/* Callback to write property */
+	       unsigned set, struct proppatch_ctx *pctx,
+	       struct propstat propstat[], void *rock);
+    void *rock;				/* Add'l data to pass to callback */
+} prop_entries[] = {
+
     /* WebDAV (RFC 4918) properties */
     { "add-member", XML_NS_DAV, 0, propfind_addmember, NULL, NULL },
     { "creationdate", XML_NS_DAV, 1, NULL, NULL, NULL },
@@ -1647,52 +1714,6 @@ static const struct prop_entry prop_entries[] =
       propfind_fromdb, proppatch_todb, "iCAL" },
 
     { NULL, NULL, 0, NULL, NULL, NULL }
-};
-
-const struct precond preconds[] =
-{
-    /* WebDAV (RFC 4918) preconditons */
-    { "cannot-modify-protected-property", NS_DAV },
-
-    /* WebDAV Versioning (RFC 3253) preconditions */
-    { "supported-report", NS_DAV },
-    { "resource-must-be-null", NS_DAV },
-
-    /* WebDAV ACL (RFC 3744) preconditions */
-    { "need-privileges", NS_DAV },
-    { "no-invert", NS_DAV },
-    { "no-abstract", NS_DAV },
-    { "not-supported-privilege", NS_DAV },
-    { "recognized-principal", NS_DAV },
-
-    /* WebDAV Quota (RFC 4331) preconditions */
-    { "quota-not-exceeded", NS_DAV },
-    { "sufficient-disk-space", NS_DAV },
-
-    /* WebDAV Extended MKCOL (RFC 5689) preconditions */
-    { "valid-resourcetype", NS_DAV },
-
-    /* WebDAV Sync (RFC 6578) preconditions */
-    { "valid-sync-token", NS_DAV },
-    { "number-of-matches-within-limits", NS_DAV },
-
-    /* CalDAV (RFC 4791) preconditions */
-    { "supported-calendar-data", NS_CALDAV },
-    { "valid-calendar-data", NS_CALDAV },
-    { "valid-calendar-object-resource", NS_CALDAV },
-    { "supported-calendar-component", NS_CALDAV },
-    { "calendar-collection-location-ok", NS_CALDAV },
-    { "no-uid-conflict", NS_CALDAV },
-    { "supported-filter", NS_CALDAV },
-    { "valid-filter", NS_CALDAV },
-
-    /* CalDAV Scheduling (draft-desruisseaux-caldav-sched) preconditions */
-    { "valid-scheduling-message", NS_CALDAV },
-    { "valid-organizer", NS_CALDAV },
-    { "unique-scheduling-object-resource", NS_CALDAV },
-    { "same-organizer-in-all-components", NS_CALDAV },
-    { "allowed-organizer-scheduling-object-change", NS_CALDAV },
-    { "allowed-attendee-scheduling-object-change", NS_CALDAV }
 };
 
 
@@ -1786,7 +1807,7 @@ int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr)
 			    xml_add_prop(HTTP_FORBIDDEN, pctx->ns[NS_DAV],
 					 &propstat[PROPSTAT_FORBID],
 					 prop, NULL,
-					 &preconds[DAV_PROT_PROP]);
+					 DAV_PROT_PROP);
 			    *pctx->ret = HTTP_FORBIDDEN;
 			}
 			else {
