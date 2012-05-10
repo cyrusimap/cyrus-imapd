@@ -256,7 +256,7 @@ int service_main_fd(int c, int argc __attribute__((unused)),
     return 0;
 }
 
-/* we need to have this function here 'cause libcyrus.la
+/* we need to have this function here 'cause libcyrus.a 
  * makes calls to this function. 
  */
 void fatal(const char *msg, int exitcode)

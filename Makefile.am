@@ -68,8 +68,8 @@ DIST_SUBDIRS = .
 dist_sysconf_DATA =
 check_LIBRARIES =
 noinst_LIBRARIES =
-lib_LIBRARIES =
-lib_LTLIBRARIES = lib/libcyrus_min.la lib/libcyrus.la
+lib_LIBRARIES = lib/libcyrus.a
+lib_LTLIBRARIES = lib/libcyrus_min.la
 noinst_PROGRAMS = doc/text/htmlstrip
 check_PROGRAMS =
 service_PROGRAMS =
@@ -209,8 +209,8 @@ com_err/et/compile_et: com_err/et/compile_et.sh com_err/et/config_script \
 # Note that several places in the code use -lcrypto, e.g. for SHA1 or
 # MD5 algorithms, without needing SSL.  Currently we have no way of
 # minimally linking such code.
-LD_BASIC_FLAGS =
-LD_BASIC_ADD = lib/libcyrus.la lib/libcyrus_min.la ${LIBS}
+LD_BASIC_FLAGS = $(SSL_LDFLAGS)
+LD_BASIC_ADD = lib/libcyrus.a lib/libcyrus_min.la $(LIB_RT) ${LIB_SASL} $(SSL_LDADD) ${LIBS}
 
 # UTILITY is the libraries that utility programs which use Cyrus'
 # mailbox and message handling code need to link with.
@@ -438,7 +438,7 @@ imap_lmtpd_SOURCES = imap/lmtpd.c imap/lmtpd.h imap/lmtpengine.c \
 	imap/mutex_fake.c imap/proxy.c imap/spool.c master/service.c
 imap_lmtpd_LDFLAGS =
 imap_lmtpd_LDADD =
-# sieve/libsieve.a must be added to LDADD before lib/libcyrus.la (#3677)
+# sieve/libsieve.a must be added to LDADD before lib/libcyrus.a (#3677)
 if SIEVE
 imap_lmtpd_SOURCES += imap/lmtp_sieve.c imap/smtpclient.c
 imap_lmtpd_LDADD += sieve/libsieve.a
@@ -536,35 +536,34 @@ imtest_imtest_SOURCES = imtest/imtest.c
 imtest_imtest_LDFLAGS = $(LD_BASIC_FLAGS)
 imtest_imtest_LDADD = $(LD_BASIC_ADD)
 
-nodist_lib_libcyrus_la_SOURCES = lib/chartable.c
-lib_libcyrus_la_SOURCES = lib/acl.c lib/acl_afs.c lib/auth.c lib/auth_krb.c \
+nodist_lib_libcyrus_a_SOURCES = lib/chartable.c
+lib_libcyrus_a_SOURCES = lib/acl.c lib/acl_afs.c lib/auth.c lib/auth_krb.c \
 	lib/auth_krb5.c lib/auth_pts.c lib/auth_unix.c lib/bsearch.c \
 	lib/byteorder64.c lib/charset.c lib/crc32.c lib/cyrusdb.c
 if USE_BERKELEY
-lib_libcyrus_la_SOURCES += lib/cyrusdb_berkeley.c
+lib_libcyrus_a_SOURCES += lib/cyrusdb_berkeley.c
 endif
-lib_libcyrus_la_SOURCES += lib/cyrusdb_flat.c lib/cyrusdb_quotalegacy.c \
+lib_libcyrus_a_SOURCES += lib/cyrusdb_flat.c lib/cyrusdb_quotalegacy.c \
 	lib/cyrusdb_skiplist.c
 if USE_SQL
-lib_libcyrus_la_SOURCES += lib/cyrusdb_sql.c
+lib_libcyrus_a_SOURCES += lib/cyrusdb_sql.c
 endif
-lib_libcyrus_la_SOURCES += lib/cyrusdb_twoskip.c lib/glob.c
+lib_libcyrus_a_SOURCES += lib/cyrusdb_twoskip.c lib/glob.c
 if GMTOFF_TM
-lib_libcyrus_la_SOURCES += lib/gmtoff_tm.c
+lib_libcyrus_a_SOURCES += lib/gmtoff_tm.c
 else
-lib_libcyrus_la_SOURCES += lib/gmtoff_gmtime.c
+lib_libcyrus_a_SOURCES += lib/gmtoff_gmtime.c
 endif
-lib_libcyrus_la_SOURCES += lib/imapurl.c lib/imclient.c lib/imparse.c \
+lib_libcyrus_a_SOURCES += lib/imapurl.c lib/imclient.c lib/imparse.c \
 	lib/iostat.c lib/iptostring.c lib/libcyr_cfg.c lib/lsort.c \
 	lib/mkgmtime.c
 if NONBLOCK_FCNTL
-lib_libcyrus_la_SOURCES += lib/nonblock_fcntl.c
+lib_libcyrus_a_SOURCES += lib/nonblock_fcntl.c
 else
-lib_libcyrus_la_SOURCES += lib/nonblock_ioctl.c
+lib_libcyrus_a_SOURCES += lib/nonblock_ioctl.c
 endif
-lib_libcyrus_la_SOURCES += lib/parseaddr.c lib/prot.c lib/ptrarray.c \
+lib_libcyrus_a_SOURCES += lib/parseaddr.c lib/prot.c lib/ptrarray.c \
 	lib/signals.c lib/stristr.c lib/times.c lib/tok.c lib/wildmat.c
-lib_libcyrus_la_LIBADD = $(LIB_RT) ${LIB_SASL} $(SSL_LDFLAGS) $(SSL_LDADD)
 
 lib_libcyrus_min_la_SOURCES = lib/assert.c
 if IPV6_noGETADDRINFO
@@ -605,7 +604,7 @@ lib/imapopts.c: lib/imapoptions tools/config2header
 
 #this is from lib/test/Makefile.in, however testglob.c does not exist in
 #/lib/test, instead testglob2.c is there.
-#lib_test_testglob_LIRBARIES = lib/libcyrus.la lib/libcyrus_min.la -ldb-4.0
+#lib_test_testglob_LIRBARIES = lib/libcyrus.a lib/libcyrus_min.la -ldb-4.0
 
 
 @SET_MAKE@
