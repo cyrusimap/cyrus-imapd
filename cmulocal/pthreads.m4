@@ -7,7 +7,7 @@ AC_DEFUN([CMU_PTHREADS], [
    cmu_save_LIBS="$LIBS"
    AC_CHECK_LIB(pthread, pthread_create,LIB_PTHREAD="-lpthread",
      AC_CHECK_LIB(c_r, pthread_create,LIB_PTHREAD="-lc_r",
-       AC_MSG_ERROR([Can't compile without pthreads])))
+       AC_ERROR([Can't compile without pthreads])))
   LIBS="$cmu_save_LIBS"
    AC_SUBST(LIB_PTHREAD)
    AC_DEFINE(_REENTRANT)

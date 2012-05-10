@@ -73,7 +73,7 @@ AC_ARG_ENABLE(coverage,
 AC_SUBST(COV_CFLAGS)
 AC_SUBST(COV_LDFLAGS)
 
-AC_ARG_WITH(login,,AC_MSG_ERROR([--with-login is no longer supported.
+AC_ARG_WITH(login,,AC_ERROR([--with-login is no longer supported.
 Configure SASL appropriately instead.]))
 
 AC_ARG_WITH(cyrus-prefix,
@@ -217,7 +217,7 @@ if test "$use_berkeley" != "no"; then
   CYRUS_BERKELEY_DB_CHK()
 
   if test "$dblib" = "no"; then
-    AC_MSG_ERROR([Berkeley DB 3.x or later was not found.  You may need to 
+    AC_ERROR([Berkeley DB 3.x or later was not found.  You may need to 
     supply the --with-bdb-libdir or --with-bdb-incdir configure options.])
   fi
 
@@ -268,7 +268,7 @@ if test "$use_mysql" != "no"; then
   CYRUS_MYSQL_CHK()
 
   if test "$mysqllib" = "no"; then
-    AC_MSG_ERROR([MySQL was not found.  You may need to supply the
+    AC_ERROR([MySQL was not found.  You may need to supply the
     --with-mysql-libdir or --with-mysql-incdir configure options.])
   else
     HAVE_SQL=1
@@ -312,7 +312,7 @@ if test "$use_pgsql" != "no"; then
   CYRUS_PGSQL_CHK()
 
   if test "$pgsqllib" = "no"; then
-    AC_MSG_ERROR([PgSQL was not found.  You may need to supply the
+    AC_ERROR([PgSQL was not found.  You may need to supply the
     --with-pgsql-libdir or --with-pgsql-incdir configure options.])
   else
     HAVE_SQL=1
@@ -356,7 +356,7 @@ if test "$use_sqlite" != "no"; then
   CYRUS_SQLITE_CHK()
 
   if test "$sqlitelib" = "no"; then
-    AC_MSG_ERROR([Sqlite was not found.  You may need to supply the
+    AC_ERROR([Sqlite was not found.  You may need to supply the
     --with-sqlite-libdir or --with-sqlite-incdir configure options.])
   else
     HAVE_SQL=1
@@ -598,7 +598,7 @@ AC_ARG_WITH(lock,
   WITH_LOCK="$withval", [
   AC_CHECK_FUNC(fcntl,WITH_LOCK="fcntl",[
 		AC_CHECK_FUNC(flock,WITH_LOCK="flock",[
-				AC_MSG_ERROR(unable to detect locking method)
+				AC_ERROR(unable to detect locking method)
 			      ])
 		])
   ])
@@ -1067,7 +1067,7 @@ if test -z "$with_com_err"; then
 		with_com_err=""
 		AC_CHECK_HEADER(et/com_err.h,
 		  [AC_DEFINE(HAVE_ET_COM_ERR_H,[],[We need et/com_err.h])],
-		  [AC_CHECK_HEADER(com_err.h,[],[AC_MSG_ERROR([cannot locate com_err.h])])])
+		  [AC_CHECK_HEADER(com_err.h,[],[AC_ERROR([cannot locate com_err.h])])])
 		AC_PATH_PROG(COMPILE_ET, compile_et, [no compile et])
 	], [
 	if test -f /usr/local/include/com_err.h -o -f /usr/local/include/et/com_err.h; then

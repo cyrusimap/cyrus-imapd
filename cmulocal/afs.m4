@@ -310,5 +310,5 @@ ac_cv_afs_int32=yes, ac_cv_afs_int32=no)])
 AC_DEFUN([CMU_NEEDS_AFS],
 [AC_REQUIRE([CMU_AFS])
 if test "$ac_cv_found_afs" != "yes"; then
-        AC_MSG_ERROR([Cannot continue without AFS])
+        AC_ERROR([Cannot continue without AFS])
 fi])
