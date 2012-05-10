@@ -86,6 +86,8 @@ unsigned config_maxquoted;
 int config_qosmarking;
 int config_debug;
 
+/* declared in each binary that uses libconfig */
+extern const int config_need_data;
 extern void fatal(const char *fatal_message, int fatal_code)
    __attribute__ ((noreturn));
 
@@ -268,8 +270,7 @@ static const unsigned char qos[] = {
 /* ef */		0xb8
 };
 
-
-void config_read(const char *alt_config, const int config_need_data)
+void config_read(const char *alt_config)
 {
     enum imapopt opt = IMAPOPT_ZERO;
     char buf[4096];

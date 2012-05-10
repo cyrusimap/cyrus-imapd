@@ -104,7 +104,7 @@ int main(int argc, char **argv)
     }
     
     /* Load configuration file. */
-    config_read(alt_config, 0);
+    config_read(alt_config);
 
     if(is_script_parsable(instream, &err, &s) == TIMSIEVE_FAIL) {
 	if(err) {

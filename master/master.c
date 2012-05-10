@@ -145,6 +145,9 @@ struct service *Services = NULL;
 static int allocservices = 0;
 int nservices = 0;
 
+/* make libcyrus_min happy */
+int config_need_data = 0;
+
 struct event {
     char *name;
     struct timeval mark;

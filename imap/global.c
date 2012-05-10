@@ -149,8 +149,7 @@ int cyrus_init(const char *alt_config, const char *ident, unsigned flags)
     openlog(config_ident, syslog_opts, SYSLOG_FACILITY);
 
     /* Load configuration file.  This will set config_dir when it finds it */
-    extern const int config_need_data;
-    config_read(alt_config, config_need_data);
+    config_read(alt_config);
 
     prefix = config_getstring(IMAPOPT_SYSLOG_PREFIX);
 

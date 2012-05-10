@@ -94,7 +94,7 @@ int masterconf_init(const char *ident, const char *alt_config)
     openlog(ident, LOG_PID, SYSLOG_FACILITY);
 
     config_ident = ident;
-    config_read(alt_config, 0);
+    config_read(alt_config);
 
     prefix = config_getstring(IMAPOPT_SYSLOG_PREFIX);
     
