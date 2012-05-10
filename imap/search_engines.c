@@ -55,20 +55,18 @@
 #include "index.h"
 #include "global.h"
 #include "xmalloc.h"
+#include "xstrlcpy.h"
+#include "xstrlcat.h"
+#include "bitvector.h"
 
 #include "squat.h"
 
 typedef struct {
-    unsigned char	*vector;
+    bitvector_t		*vector;
     struct index_state	*state;
     const char		*part_types;
     int			found_validity;
 } SquatSearchResult;
-
-static int vector_len(struct index_state *state)
-{
-    return (state->exists >> 3) + 1;
-}
 
 /* The document name is of the form
 
@@ -122,10 +120,8 @@ static int drop_indexed_docs(void* closure, const SquatListDoc *doc)
     SquatSearchResult* r = (SquatSearchResult*)closure;
     int doc_uid = parse_doc_name(r, doc->doc_name);
 
-    if (doc_uid >= 0) {
-	unsigned char* vect = r->vector;
-	vect[doc_uid >> 3] &= ~(1 << (doc_uid & 0x7));
-    }
+    if (doc_uid >= 0)
+	bv_clear(r->vector, doc_uid);
     return SQUAT_CALLBACK_CONTINUE;
 }
 
@@ -134,20 +130,16 @@ static int fill_with_hits(void* closure, char const* doc)
     SquatSearchResult* r = (SquatSearchResult*)closure;
     int doc_uid = parse_doc_name(r, doc);
 
-    if (doc_uid >= 0) {
-	unsigned char* vect = r->vector;
-	vect[doc_uid >> 3] |= 1 << (doc_uid & 0x7);
-    }
+    if (doc_uid >= 0)
+	bv_set(r->vector, doc_uid);
     return SQUAT_CALLBACK_CONTINUE;
 }
 
 static int search_strlist(SquatSearchIndex* index, struct index_state *state,
-			  unsigned char* output, unsigned char* tmp,
+			  bitvector_t *output, bitvector_t *tmp,
 			  struct strlist* strs, char const* part_types)
 {
     SquatSearchResult r;
-    int i;
-    int len = vector_len(state);
 
     r.part_types = part_types;
     r.vector = tmp;
@@ -155,7 +147,7 @@ static int search_strlist(SquatSearchIndex* index, struct index_state *state,
     while (strs != NULL) {
 	char const* s = strs->s;
 
-	memset(tmp, 0, len);
+	bv_clearall(tmp);
 	if (squat_search_execute(index, s, strlen(s), fill_with_hits, &r)
 	    != SQUAT_OK) {
 	    if (squat_get_last_error() == SQUAT_ERR_SEARCH_STRING_TOO_SHORT)
@@ -164,36 +156,37 @@ static int search_strlist(SquatSearchIndex* index, struct index_state *state,
 			      "with part types %s", s, part_types);
 	    return 0;
 	}
-	for (i = 0; i < len; i++) {
-	    output[i] &= tmp[i];
-	}
+	bv_andeq(output, tmp);
 
 	strs = strs->next;
     }
     return 1;
 }
 
-static unsigned char* search_squat_do_query(SquatSearchIndex* index,
-					    struct index_state *state,
-					    const struct searchargs* args)
+static int search_squat_do_query(SquatSearchIndex* index,
+				 struct index_state *state,
+				 const struct searchargs* args,
+				 bitvector_t *vect)
 {
-    int vlen = vector_len(state);
-    unsigned char* vect = xmalloc(vlen);
-    unsigned char* t_vect = xmalloc(vlen);
+    bitvector_t t_vect = BV_INITIALIZER;
+    bitvector_t sub1_vect = BV_INITIALIZER;
+    bitvector_t sub2_vect = BV_INITIALIZER;
     struct searchsub* sub;
     int found_something = 1;
 
-    memset(vect, 255, vlen);
+    bv_setsize(vect, state->exists);
+    bv_setall(vect);
+    bv_setsize(&t_vect, state->exists);
 
-    if (!(search_strlist(index, state, vect, t_vect, args->to, "t")
-	&& search_strlist(index, state, vect, t_vect, args->from, "f")
-	&& search_strlist(index, state, vect, t_vect, args->cc, "c")
-	&& search_strlist(index, state, vect, t_vect, args->bcc, "b")
-	&& search_strlist(index, state, vect, t_vect, args->subject, "s")
-	&& search_strlist(index, state, vect, t_vect, args->header_name, "h")
-	&& search_strlist(index, state, vect, t_vect, args->header, "h")
-	&& search_strlist(index, state, vect, t_vect, args->body, "m")
-	&& search_strlist(index, state, vect, t_vect, args->text, "mh"))) {
+    if (!(search_strlist(index, state, vect, &t_vect, args->to, "t")
+	&& search_strlist(index, state, vect, &t_vect, args->from, "f")
+	&& search_strlist(index, state, vect, &t_vect, args->cc, "c")
+	&& search_strlist(index, state, vect, &t_vect, args->bcc, "b")
+	&& search_strlist(index, state, vect, &t_vect, args->subject, "s")
+	&& search_strlist(index, state, vect, &t_vect, args->header_name, "h")
+	&& search_strlist(index, state, vect, &t_vect, args->header, "h")
+	&& search_strlist(index, state, vect, &t_vect, args->body, "m")
+	&& search_strlist(index, state, vect, &t_vect, args->text, "mh"))) {
 	found_something = 0;
 	goto cleanup;
     }
@@ -207,43 +200,30 @@ static unsigned char* search_squat_do_query(SquatSearchIndex* index,
 	    /* Note that it's OK to do nothing. We'll just be returning more
 	       false positives. */
 	} else {
-	    unsigned char* sub1_vect =
-		    search_squat_do_query(index, state, args->sublist->sub1);
-	    unsigned char* sub2_vect;
-	    int i;
-
-	    if (sub1_vect == NULL) {
+	    if (!search_squat_do_query(index, state,
+				       args->sublist->sub1, &sub1_vect)) {
 		found_something = 0;
 		goto cleanup;
 	    }
 
-	    sub2_vect = search_squat_do_query(index, state, args->sublist->sub2);
-
-	    if (sub2_vect == NULL) {
+	    if (!search_squat_do_query(index, state,
+				       args->sublist->sub2, &sub2_vect)) {
 		found_something = 0;
-		free(sub1_vect);
 		goto cleanup;
 	    }
 
-	    for (i = 0; i < vlen; i++) {
-		vect[i] &= sub1_vect[i] | sub2_vect[i];
-	    }
-
-	    free(sub1_vect);
-	    free(sub2_vect);
+	    bv_oreq(&sub1_vect, &sub2_vect);
+	    bv_oreq(vect, &sub1_vect);
 	}
 
 	sub = sub->next;
     }
 
 cleanup:
-    free(t_vect);
-    if (!found_something) {
-	free(vect);
-	return NULL;
-    }
-
-    return vect;
+    bv_free(&t_vect);
+    bv_free(&sub1_vect);
+    bv_free(&sub2_vect);
+    return found_something;
 }
 
 static int search_squat(unsigned* msg_list, struct index_state *state,
@@ -252,7 +232,7 @@ static int search_squat(unsigned* msg_list, struct index_state *state,
     const char *fname;
     int fd;
     SquatSearchIndex* index;
-    unsigned char* msg_vector;
+    bitvector_t msg_vector = BV_INITIALIZER;
     int result;
 
     fname = mailbox_meta_fname(state->mailbox, META_SQUAT);
@@ -265,17 +245,16 @@ static int search_squat(unsigned* msg_list, struct index_state *state,
 	close(fd);
 	return -1;
     }
-    if ((msg_vector = search_squat_do_query(index, state, searchargs))
-	    == NULL) {
+    if (!search_squat_do_query(index, state, searchargs, &msg_vector)) {
 	result = -1;
     } else {
 	unsigned i;
-	unsigned vlen = vector_len(state);
-	unsigned char* unindexed_vector = xmalloc(vlen);
+	bitvector_t unindexed_vector = BV_INITIALIZER;
 	SquatSearchResult r;
 
-	memset(unindexed_vector, 255, vlen);
-	r.vector = unindexed_vector;
+	bv_setsize(&unindexed_vector, state->exists);
+	bv_setall(&unindexed_vector);
+	r.vector = &unindexed_vector;
 	r.state = state;
 	r.part_types = "tfcbsmh";
 	r.found_validity = 0;
@@ -287,21 +266,19 @@ static int search_squat(unsigned* msg_list, struct index_state *state,
 	    result = -1;
 	} else {
 	    /* Add in any unindexed messages. They must be searched manually. */
-	    for (i = 0; i < vlen; i++) {
-		msg_vector[i] |= unindexed_vector[i];
-	    }
+	    bv_oreq(&msg_vector, &unindexed_vector);
 
 	    result = 0;
 	    for (i = 1; i <= state->exists; i++) {
-	        if ((msg_vector[i >> 3] & (1 << (i & 7))) != 0) {
+		if (bv_isset(&msg_vector, i)) {
 		    msg_list[result] = i;
 		    result++;
 		}
 	    }
 	}
-	free(msg_vector);
-	free(unindexed_vector);
+	bv_free(&unindexed_vector);
     }
+    bv_free(&msg_vector);
     squat_search_close(index);
     close(fd);
     return result;
