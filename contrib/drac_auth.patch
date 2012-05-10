@@ -99,23 +99,23 @@ index b5e139b..1f887f3 100644
  DEPLIBS = ../lib/libcyrus.la ../lib/libcyrus_min.la @SYSLOG_LIBS@
  
 @@ -203,7 +204,7 @@ lmtpd.pure: lmtpd.o proxy.o $(LMTPOBJS) \
- imapd: $(IMAPDOBJS) mutex_fake.o libimap.la $(DEPLIBS) $(SERVICE)
+ imapd: $(IMAPDOBJS) mutex_fake.o libimap.a $(DEPLIBS) $(SERVICE)
  	$(CC) $(LDFLAGS) -o imapd \
  	 $(SERVICE) $(IMAPDOBJS) mutex_fake.o \
--	libimap.la $(DEPLIBS) $(LIBS) $(LIB_WRAP)
-+	libimap.la $(DEPLIBS) $(LIBS) $(LIB_WRAP) $(DRAC_LIBS)
+-	libimap.a $(DEPLIBS) $(LIBS) $(LIB_WRAP)
++	libimap.a $(DEPLIBS) $(LIBS) $(LIB_WRAP) $(DRAC_LIBS)
  
  mupdate: mupdate.o mupdate-slave.o mupdate-client.o mutex_pthread.o tls.o \
- 	libimap.la $(DEPLIBS)
+ 	libimap.a $(DEPLIBS)
 @@ -231,7 +232,7 @@ mupdate.pure: mupdate.o mupdate-slave.o mupdate-client.o mutex_pthread.o \
- pop3d: pop3d.o proxy.o backend.o tls.o mutex_fake.o libimap.la \
+ pop3d: pop3d.o proxy.o backend.o tls.o mutex_fake.o libimap.a \
  	$(DEPLIBS) $(SERVICE)
  	$(CC) $(LDFLAGS) -o pop3d pop3d.o proxy.o backend.o tls.o $(SERVICE) \
--	 mutex_fake.o libimap.la $(DEPLIBS) $(LIBS) $(LIB_WRAP)
-+	 mutex_fake.o libimap.la $(DEPLIBS) $(LIBS) $(LIB_WRAP) $(DRAC_LIBS)
+-	 mutex_fake.o libimap.a $(DEPLIBS) $(LIBS) $(LIB_WRAP)
++	 mutex_fake.o libimap.a $(DEPLIBS) $(LIBS) $(LIB_WRAP) $(DRAC_LIBS)
  
  nntpd: nntpd.o proxy.o backend.o index.o smtpclient.o spool.o tls.o \
- 	 mutex_fake.o nntp_err.o libimap.la $(DEPLIBS) $(SERVICE)
+ 	 mutex_fake.o nntp_err.o libimap.a $(DEPLIBS) $(SERVICE)
 diff --git a/imap/imapd.c b/imap/imapd.c
 index d979f3b..e9f51d1 100644
 --- a/imap/imapd.c
