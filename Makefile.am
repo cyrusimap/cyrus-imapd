@@ -349,7 +349,7 @@ imap_cvt_cyrusdb_SOURCES = imap/cli_fatal.c imap/cvt_cyrusdb.c imap/mutex_fake.c
 imap_cvt_cyrusdb_LDFLAGS = $(LD_UTILITY_FLAGS)
 imap_cvt_cyrusdb_LDADD = $(LD_UTILITY_ADD)
 
-imap_cyrdump_SOURCES = imap/cli_fatal.c imap/cyrdump.c imap/mutex_fake.c
+imap_cyrdump_SOURCES = imap/cli_fatal.c imap/cyrdump.c imap/index.c imap/mutex_fake.c
 imap_cyrdump_LDFLAGS = $(LD_UTILITY_FLAGS)
 imap_cyrdump_LDADD = $(LD_UTILITY_ADD)
 
@@ -381,7 +381,7 @@ imap_cyr_userseen_SOURCES = imap/cli_fatal.c imap/cyr_userseen.c imap/mutex_fake
 imap_cyr_userseen_LDFLAGS = $(LD_UTILITY_FLAGS)
 imap_cyr_userseen_LDADD = $(LD_UTILITY_ADD)
 
-#imap_cyr_virusscan_SOURCES = imap/cli_fatal.c imap/cyr_virusscan.c imap/mutex_fake.c
+#imap_cyr_virusscan_SOURCES = imap/cli_fatal.c imap/cyr_virusscan.c imap/index.c imap/mutex_fake.c
 #imap_cyr_virusscan_LDFLAGS = $(LD_UTILITY_FLAGS)
 #imap_cyr_virusscan_LDADD = $(LD_UTILITY_ADD) -lclamav
 
@@ -401,7 +401,7 @@ imap_idled_SOURCES = imap/idled.c imap/mutex_fake.c
 imap_idled_LDFLAGS = $(LD_UTILITY_FLAGS)
 imap_idled_LDADD = $(LD_UTILITY_ADD)
 
-imap_imapd_SOURCES = imap/imap_proxy.c imap/imap_proxy.h imap/imapd.c imap/imapd.h imap/mutex_fake.c imap/pushstats.c imap/pushstats.h imap/proxy.c master/service.c
+imap_imapd_SOURCES = imap/imap_proxy.c imap/imap_proxy.h imap/imapd.c imap/imapd.h imap/index.c imap/mutex_fake.c imap/pushstats.c imap/pushstats.h imap/proxy.c master/service.c
 imap_imapd_LDFLAGS = $(LD_SERVER_FLAGS)
 imap_imapd_LDADD = $(LD_SERVER_ADD)
 
@@ -414,10 +414,10 @@ imap_libimap_a_SOURCES = imap/annotate.c imap/annotate.h imap/append.c \
 	imap/append.h imap/backend.c imap/backend.h imap/convert_code.c \
 	imap/convert_code.h imap/dlist.c imap/dlist.h imap/duplicate.c \
 	imap/duplicate.h imap/global.c imap/global.h imap/idle.c imap/idle.h \
-	imap/idlemsg.c imap/idlemsg.h imap/imapparse.c imap/index.c \
-	imap/index.h imap/mailbox.c imap/mailbox.h imap/mbdump.c \
-	imap/mbdump.h imap/mboxkey.c imap/mboxkey.h imap/mboxlist.c \
-	imap/mboxlist.h imap/mboxname.c imap/mboxname.h imap/message_guid.c \
+	imap/idlemsg.c imap/idlemsg.h imap/imapparse.c imap/index.h \
+	imap/mailbox.c imap/mailbox.h imap/mbdump.c imap/mbdump.h \
+	imap/mboxkey.c imap/mboxkey.h imap/mboxlist.c imap/mboxlist.h \
+	imap/mboxname.c imap/mboxname.h imap/message_guid.c \
 	imap/message_guid.h imap/message.c imap/message.h \
 	imap/mupdate-client.c imap/mupdate-client.h imap/mutex.h \
 	imap/notify.c imap/notify.h imap/proc.c imap/proc.h imap/protocol.h \
@@ -468,7 +468,7 @@ imap_mupdate_LDFLAGS = $(LD_SERVER_FLAGS)
 imap_mupdate_LDADD = $(LD_SERVER_ADD) -lpthread
 
 nodist_imap_nntpd_SOURCES = imap/nntp_err.c imap/nntp_err.h
-imap_nntpd_SOURCES = imap/mutex_fake.c imap/nntpd.c \
+imap_nntpd_SOURCES = imap/index.c imap/mutex_fake.c imap/nntpd.c \
 	imap/proxy.c imap/smtpclient.c imap/smtpclient.h imap/spool.c \
 	imap/spool.h master/service.c
 imap_nntpd_LDFLAGS = $(LD_SERVER_FLAGS)
@@ -490,7 +490,7 @@ imap_smmapd_SOURCES = imap/mutex_fake.c imap/proxy.c imap/smmapd.c master/servic
 imap_smmapd_LDFLAGS = $(LD_SERVER_FLAGS)
 imap_smmapd_LDADD = $(LD_SERVER_ADD)
 
-imap_squatter_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/squatter.c imap/squat_build.c
+imap_squatter_SOURCES = imap/cli_fatal.c imap/index.c imap/mutex_fake.c imap/squatter.c imap/squat_build.c
 imap_squatter_LDFLAGS = $(LD_UTILITY_FLAGS)
 imap_squatter_LDADD = $(LD_UTILITY_ADD)
 
