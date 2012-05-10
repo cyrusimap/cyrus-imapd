@@ -68,7 +68,6 @@ DIST_SUBDIRS = .
 dist_sysconf_DATA =
 check_LIBRARIES =
 noinst_LIBRARIES =
-noinst_LTLIBRARIES =
 lib_LIBRARIES =
 lib_LTLIBRARIES = lib/libcyrus_min.la lib/libcyrus.la
 noinst_PROGRAMS = doc/text/htmlstrip
@@ -77,11 +76,8 @@ service_PROGRAMS =
 CLEANFILES =
 
 if COM_ERR
-COM_ERR_LIB = com_err/et/libcom_err.la
 BUILT_SOURCES += com_err/et/compile_et
-noinst_LTLIBRARIES += com_err/et/libcom_err.la
-else
-COM_ERR_LIB = $(COM_ERR_LIBS)
+noinst_LIBRARIES += com_err/et/libcom_err.a
 endif
 
 bin_PROGRAMS = imtest/imtest
@@ -195,7 +191,7 @@ EXTRA_SCRIPTS = com_err/et/compile_et.sh com_err/et/config_script \
 noinst_MAN = com_err/et/com_err.3 com_err/et/compile_et.1
 noinst_TEXINFOS = com_err/et/com_err.texinfo
 
-com_err_et_libcom_err_la_SOURCES = com_err/et/com_err.c com_err/et/com_err.h \
+com_err_et_libcom_err_a_SOURCES = com_err/et/com_err.c com_err/et/com_err.h \
 	com_err/et/error_message.c com_err/et/error_table.h \
 	com_err/et/et_name.c com_err/et/init_et.c com_err/et/internal.h \
 	com_err/et/mit-sipb-copyright.h
@@ -220,7 +216,7 @@ LD_BASIC_ADD = lib/libcyrus.la lib/libcyrus_min.la ${LIBS}
 # mailbox and message handling code need to link with.
 
 LD_UTILITY_FLAGS = $(LD_BASIC_FLAGS)
-LD_UTILITY_ADD = imap/libimap.a $(LD_BASIC_ADD) $(COM_ERR_LIB) $(LIB_UUID)
+LD_UTILITY_ADD = imap/libimap.a $(LD_BASIC_ADD) $(COM_ERR_LIBS) $(LIB_UUID)
 
 # SERVER is the libraries that network-facing servers need to link with
 #
@@ -689,7 +685,7 @@ sieve_libsieve_a_SOURCES = sieve/bytecode.h sieve/addr.y sieve/addr-lex.l \
 	sieve/sieve-lex.l sieve/sieve.y sieve/sieve_interface.h sieve/tree.c sieve/tree.h
 
 LD_SIEVE_FLAGS = $(LD_BASIC_FLAGS)
-LD_SIEVE_ADD = sieve/libsieve.a $(LD_BASIC_ADD) $(COM_ERR_LIB)
+LD_SIEVE_ADD = sieve/libsieve.a $(LD_BASIC_ADD) $(COM_ERR_LIBS)
 
 sieve_sievec_LDFLAGS = $(LD_SIEVE_FLAGS)
 sieve_sievec_LDADD = $(LD_SIEVE_ADD)

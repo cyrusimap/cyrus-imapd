@@ -63,7 +63,7 @@ int __far __pascal MessageBox (void __far *, const char __far*, const char __far
 #else
 #define INTERFACE
 #define INTERFACE_C
-#include <errno.h>
+extern int errno;
 #endif
 
 struct error_table {
