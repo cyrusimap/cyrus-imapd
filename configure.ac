@@ -373,6 +373,18 @@ dnl End SQLite Detection
 AM_CONDITIONAL([USE_SQL], [test $HAVE_SQL = 1])
 dnl End SQL DB Detection
 
+dnl
+dnl Search engines - SQUAT
+dnl
+
+AC_ARG_ENABLE(squat,
+	[  --disable-squat         disable Squat support])
+if test "x$enable_squat" != xno ; then
+    AC_DEFINE(USE_SQUAT,[],[Build in Squat support?])
+fi
+AM_CONDITIONAL([USE_SQUAT], [test "${enable_squat}" != "no"])
+
+
 AC_ARG_ENABLE(sieve,
         [AS_HELP_STRING([--disable-sieve], [disable Sieve support])],,[enable_sieve="yes";])
 AC_ARG_ENABLE(pcre,
@@ -1723,9 +1735,6 @@ enum {
 
     /* should we do a fast TLS session shutdown? */
     TLS_FAST_SHUTDOWN = 1,
-
-    /* should we use the SQUAT engine to accelerate SEARCH? */
-    SQUAT_ENGINE = 1,
 
     /* should we have long LMTP error messages? */
     LMTP_LONG_ERROR_MSGS = 1

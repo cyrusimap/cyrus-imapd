@@ -53,8 +53,10 @@
 #include "index.h"
 #include "global.h"
 
+#ifdef USE_SQUAT
 extern int search_squat(unsigned* msg_list, struct index_state *state,
 			const struct searchargs *searchargs);
+#endif
 
 HIDDEN int search_prefilter_messages(unsigned *msgno_list,
 				     struct index_state *state,
@@ -63,17 +65,17 @@ HIDDEN int search_prefilter_messages(unsigned *msgno_list,
     unsigned i;
     int count;
 
-    if (SQUAT_ENGINE) {
-	count = search_squat(msgno_list, state, searchargs);
-	if (count >= 0) {
-	    syslog(LOG_DEBUG, "SQUAT returned %d messages", count);
-	    return count;
-	} else {
-	    /* otherwise, we failed for some reason, so do the default */
-	    syslog(LOG_DEBUG, "SQUAT failed");
-	}
+#ifdef USE_SQUAT
+    count = search_squat(msgno_list, state, searchargs);
+    if (count >= 0) {
+	syslog(LOG_DEBUG, "SQUAT returned %d messages", count);
+	return count;
+    } else {
+	/* otherwise, we failed for some reason, so do the default */
+	syslog(LOG_DEBUG, "SQUAT failed");
     }
-  
+#endif
+
     /* Just put in all possible messages. This falls back to Cyrus' default
      * search. */
 
