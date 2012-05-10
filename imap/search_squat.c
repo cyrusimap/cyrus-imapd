@@ -59,6 +59,7 @@
 #include "xstrlcat.h"
 #include "bitvector.h"
 
+#include "search_engines.h"
 #include "squat.h"
 
 typedef struct {
@@ -226,8 +227,7 @@ cleanup:
     return found_something;
 }
 
-HIDDEN int search_squat(unsigned* msg_list,
-			struct index_state *state,
+static int search_squat(unsigned* msg_list, struct index_state *state,
 			const struct searchargs *searchargs)
 {
     char *fname;
@@ -284,4 +284,10 @@ HIDDEN int search_squat(unsigned* msg_list,
     close(fd);
     return result;
 }
+
+const struct search_engine squat_search_engine = {
+    "SQUAT",
+    0,
+    search_squat
+};
 

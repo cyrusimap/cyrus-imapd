@@ -45,6 +45,14 @@
 
 #include "index.h"
 
+struct search_engine {
+    const char *name;
+    unsigned int flags;
+    int (*search)(unsigned* msg_list,
+		  struct index_state *state,
+		  const struct searchargs *searchargs);
+};
+
 /* Fill the msg_list with a list of message IDs which could match the
  * searchargs.
  * Return the number of message IDs inserted.
