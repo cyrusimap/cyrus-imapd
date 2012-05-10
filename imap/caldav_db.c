@@ -79,8 +79,18 @@ struct caldav_db {
 };
 
 
+static struct namespace caldav_namespace;
+
 int caldav_init(void)
 {
+    int r;
+
+    /* Set namespace -- force standard (internal) */
+    if ((r = mboxname_init_namespace(&caldav_namespace, 1))) {
+	syslog(LOG_ERR, "%s", error_message(r));
+	fatal(error_message(r), EC_CONFIG);
+    }
+
     return dav_init();
 }
 
@@ -466,8 +476,8 @@ int caldav_mboxname(const char *name, const char *userid, char *result)
     size_t len;
 
     /* Construct mailbox name corresponding to userid's calendar mailbox */
-    (*httpd_namespace.mboxname_tointernal)(&httpd_namespace, "INBOX",
-					   userid, result);
+    (*caldav_namespace.mboxname_tointernal)(&caldav_namespace, "INBOX",
+					    userid, result);
     len = strlen(result);
     len += snprintf(result+len, MAX_MAILBOX_BUFFER - len,
 		    ".%s", config_getstring(IMAPOPT_CALENDARPREFIX));
