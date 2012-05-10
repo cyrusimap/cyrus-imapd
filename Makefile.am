@@ -845,6 +845,3 @@ tags cscope:
 	find $(DIST_SUBDIRS) -type f -name '*.[ch]' > cs.files
 	cscope -b -k -i cs.files
 	$(RM) cs.files
-
-libtool: $(LIBTOOL_DEPS)
-	$(SHELL) ./config.status libtool
