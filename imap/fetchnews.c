@@ -69,6 +69,9 @@
 #include "xstrlcat.h"
 #include "strarray.h"
 
+/* global state */
+const int config_need_data = 0;
+
 #define FNAME_NEWSRCDB "/fetchnews.db"
 #define DB ("flat")
 
@@ -322,7 +325,7 @@ int main(int argc, char *argv[])
 
     peer = argv[optind++];
 
-    cyrus_init(alt_config, "fetchnews", 0, 0);
+    cyrus_init(alt_config, "fetchnews", 0);
 
     /* connect to the peer */
     /* xxx configurable port number? */

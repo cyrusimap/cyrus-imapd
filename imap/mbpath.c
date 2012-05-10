@@ -75,6 +75,9 @@ extern char *optarg;
 /* current namespace */
 static struct namespace mbpath_namespace;
 
+/* config.c stuff */
+const int config_need_data = 0;
+
 static int 
 usage(void) {
   fprintf(stderr,"usage: mbpath [-C <alt_config>] [-q] [-s] [-m] <mailbox name>...\n");
@@ -117,7 +120,7 @@ main(int argc, char **argv)
     }
   }
 
-  cyrus_init(alt_config, "mbpath", 0, 0);
+  cyrus_init(alt_config, "mbpath", 0);
 
   if ((rc = mboxname_init_namespace(&mbpath_namespace, 1)) != 0) {
     fatal(error_message(rc), -1);

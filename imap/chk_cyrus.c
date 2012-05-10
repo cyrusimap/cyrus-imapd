@@ -70,6 +70,9 @@
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 
+/* config.c stuff */
+const int config_need_data = CONFIG_NEED_PARTITION_DATA;
+
 void usage(void)
 {
     fprintf(stderr, "chk_cyrus [-C <altconfig>] partition\n");
@@ -147,7 +150,7 @@ int main(int argc, char **argv)
 	}
     }
 
-    cyrus_init(alt_config, "chk_cyrus", 0, CONFIG_NEED_PARTITION_DATA);
+    cyrus_init(alt_config, "chk_cyrus", 0);
 
     mboxlist_init(0);
     mboxlist_open(NULL);

@@ -63,6 +63,9 @@
 
 #include "map.h"
 
+/* config.c stuff */
+const int config_need_data = 0;
+
 static void dump2(bytecode_input_t *d, int len);
 static int dump2_test(bytecode_input_t * d, int i);
  

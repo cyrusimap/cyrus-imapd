@@ -148,7 +148,7 @@ static int libwrap_ask(struct request_info *r __attribute__((unused)),
 
 #endif
 
-extern void cyrus_init(const char *, const char *, unsigned, int);
+extern void cyrus_init(const char *, const char *, unsigned);
 
 int main(int argc, char **argv, char **envp)
 {
@@ -206,8 +206,7 @@ int main(int argc, char **argv, char **envp)
     }
     service = xstrdup(p);
 
-    extern const int config_need_data;
-    cyrus_init(alt_config, service, 0, config_need_data);
+    cyrus_init(alt_config, service, 0);
 
     if (call_debugger) {
 	char debugbuf[1024];

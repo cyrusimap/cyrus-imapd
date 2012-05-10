@@ -61,6 +61,9 @@
 extern int optind;
 extern char *optarg;
 
+/* config.c stuff */
+const int config_need_data = 0;
+
 /* forward declarations */
 void usage(void);
 void get_part_stats(const char *key, const char *val, void *rock);
@@ -90,7 +93,7 @@ int main(int argc, char *argv[])
 	}
     }
 
-    cyrus_init(alt_config, "cyr_df", 0, 0);
+    cyrus_init(alt_config, "cyr_df", 0);
 
     printf("%-12s %12s %12s %12s %3s %s\n", "Partition",
 	   "1k-blocks", "Used", "Available", "Use%", "Location");

@@ -77,6 +77,9 @@
 #include "proxy.h"
 #include "version.h"
 
+/* config.c stuff */
+const int config_need_data = CONFIG_NEED_PARTITION_DATA;
+
 extern int optind;
 extern char *optarg;
 
@@ -241,7 +244,7 @@ int main(int argc, char **argv)
     prot_setflushonread(deliver_in, deliver_out);
     prot_settimeout(deliver_in, 300);
 
-    cyrus_init(alt_config, "deliver", CYRUSINIT_NODB, CONFIG_NEED_PARTITION_DATA);
+    cyrus_init(alt_config, "deliver", CYRUSINIT_NODB);
 
     sockaddr = config_getstring(IMAPOPT_LMTPSOCKET);
     if (!sockaddr) {	

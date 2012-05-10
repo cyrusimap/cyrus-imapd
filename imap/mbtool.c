@@ -103,6 +103,9 @@ extern char *optarg;
 /* current namespace */
 static struct namespace recon_namespace;
 
+/* config.c stuff */
+const int config_need_data = 0;
+
 /* forward declarations */
 static int do_cmd(char *name, int matchlen, int maycreate, void *rock);
 
@@ -143,7 +146,7 @@ int main(int argc, char **argv)
 	}
     }
 
-    cyrus_init(alt_config, "mbtool", 0, 0);
+    cyrus_init(alt_config, "mbtool", 0);
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&recon_namespace, 1)) != 0) {

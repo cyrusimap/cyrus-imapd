@@ -69,7 +69,7 @@ think may be generally useful to people hacking on the cyrus source:
 - Command line apps should link cli_fatal.o so they all fatal()
 in the same way, unless there is a really good reason they need to do
 something unique.
-- If you call cyrus_init() you must call cyrus_done() before you exit.
+- If you call config_init() you must call cyrus_done() before you exit.
 - No one should ever call DB->init() or DB->done() cyrusdb functions
 except for in libcyrus_init()
 - I've been trying to keep #include statements for libcyrus and libimap

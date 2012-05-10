@@ -120,6 +120,9 @@ struct uniqmailid *uniqmid_head;
 /* current namespace */
 static struct namespace recon_namespace;
 
+/* config.c stuff */
+const int config_need_data = CONFIG_NEED_PARTITION_DATA;
+
 /* forward declarations */
 void do_mboxlist(void);
 static int do_reconstruct(char *name, int matchlen, int maycreate, void *rock);
@@ -225,7 +228,7 @@ int main(int argc, char **argv)
 	}
     }
 
-    cyrus_init(alt_config, "reconstruct", 0, CONFIG_NEED_PARTITION_DATA);
+    cyrus_init(alt_config, "reconstruct", 0);
     global_sasl_init(1,0,NULL);
 
     /* Set namespace -- force standard (internal) */

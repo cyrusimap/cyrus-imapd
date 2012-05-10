@@ -64,6 +64,9 @@
 #include "hash.h"
 #include "exitcodes.h"
 
+/* global state */
+const int config_need_data = 0;
+
 extern int optind;
 extern char *optarg;
 
@@ -284,7 +287,7 @@ int main(int argc, char **argv)
     }
     /* child */
 
-    cyrus_init(alt_config, "idled", 0, 0);
+    cyrus_init(alt_config, "idled", 0);
 
     /* Set inactivity timer (convert from minutes to seconds) */
     idle_timeout = config_getint(IMAPOPT_TIMEOUT);

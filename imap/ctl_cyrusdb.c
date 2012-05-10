@@ -88,6 +88,9 @@
 
 #define N(a) (sizeof(a) / sizeof(a[0]))
 
+/* config.c stuff */
+const int config_need_data = 0;
+
 struct cyrusdb {
     const char *name;
     const char **configptr;
@@ -266,7 +269,7 @@ int main(int argc, char *argv[])
 	/* NOTREACHED */
     }
 
-    cyrus_init(alt_config, "ctl_cyrusdb", 0, 0);
+    cyrus_init(alt_config, "ctl_cyrusdb", 0);
 
     /* create the name of the db directory */
     /* (used by backup directory names) */

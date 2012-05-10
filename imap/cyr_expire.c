@@ -74,6 +74,7 @@
 #include "strarray.h"
 
 /* global state */
+const int config_need_data = 0;
 static volatile sig_atomic_t sigquit = 0;
 static int verbose = 0;
 
@@ -402,7 +403,7 @@ int main(int argc, char *argv[])
     if (sigaction(SIGTERM, &action, NULL) < 0)
 	fatal("unable to install signal handler for SIGTERM", EC_TEMPFAIL);
 
-    cyrus_init(alt_config, "cyr_expire", 0, 0);
+    cyrus_init(alt_config, "cyr_expire", 0);
     global_sasl_init(1, 0, NULL);
 
     annotatemore_init(NULL, NULL);

@@ -72,6 +72,8 @@
 #include "util.h"
 #include "xmalloc.h"
 
+const int config_need_data = 0;
+
 static void usage(const char *name)
 {
     fprintf(stderr, "Usage: %s [-C altconfig] [-m maxval] command sequence [args]\n", name);
@@ -114,8 +116,7 @@ int main(int argc, char *argv[])
 	
     if ((argc - optind) < 1) usage(argv[0]);
 
-
-    cyrus_init(alt_config, "cyr_sequence", 0, 0);
+    cyrus_init(alt_config, "cyr_sequence", 0);
 
     /* special case */
     if (!strcmp(argv[optind], "create")) {

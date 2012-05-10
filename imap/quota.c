@@ -97,6 +97,9 @@ extern char *optarg;
 /* current namespace */
 static struct namespace quota_namespace;
 
+/* config.c stuff */
+const int config_need_data = CONFIG_NEED_PARTITION_DATA;
+
 struct quotaentry {
     struct quota quota;
     char *allocname;
@@ -172,7 +175,7 @@ int main(int argc,char **argv)
     if (!fflag)
 	do_report = 1;
 
-    cyrus_init(alt_config, "quota", 0, CONFIG_NEED_PARTITION_DATA);
+    cyrus_init(alt_config, "quota", 0);
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&quota_namespace, 1)) != 0) {

@@ -497,6 +497,8 @@ sieve_vacation_t vacation = {
     &send_response		/* send_response() */
 };
 
+int config_need_data = 0;
+
 static int usage(const char *argv0) __attribute__((noreturn));
 static int usage(const char *argv0)
 {

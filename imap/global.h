@@ -66,7 +66,7 @@ enum {
  * for any libimap/libcyrus process, and should be called fairly early
  * (and needs an associated cyrus_done call) */
 extern int cyrus_init(const char *alt_config, const char *ident,
-		      unsigned flags, int config_need_data);
+		      unsigned flags);
 extern void global_sasl_init(int client, int server,
 			     const sasl_callback_t *callbacks);
 

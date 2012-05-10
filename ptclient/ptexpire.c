@@ -77,6 +77,8 @@ static char rcsid[] = "$Id: ptexpire.c,v 1.23 2010/01/06 17:01:57 murch Exp $";
 time_t timenow;
 time_t expire_time = (3*60*60); /* 3 Hours */
 
+int config_need_data = 0;
+
 static int expire_p(void *rockp __attribute__((unused)),
 		    const char *key __attribute__((unused)),
 		    size_t keylen __attribute__((unused)),
@@ -138,7 +140,7 @@ int main(int argc, char *argv[])
 	}
     }
 
-    cyrus_init(alt_config, "ptexpire", 0, 0);
+    cyrus_init(alt_config, "ptexpire", 0);
 
     timenow = time(0);
     syslog(LOG_INFO, "Expiring entries older than %d seconds (currently %d)",

@@ -67,6 +67,9 @@
 #include "util.h"
 #include "sync_log.h"
 
+/* config.c stuff */
+const int config_need_data = CONFIG_NEED_PARTITION_DATA;
+
 /* globals for getopt routines */
 extern char *optarg;
 extern int  optind;
@@ -172,7 +175,7 @@ int main (int argc, char *argv[]) {
     usage(argv[0]);
   }
 
-  cyrus_init(alt_config, "ipurge", 0, CONFIG_NEED_PARTITION_DATA);
+  cyrus_init(alt_config, "ipurge", 0);
 
   /* Set namespace -- force standard (internal) */
   if ((r = mboxname_init_namespace(&purge_namespace, 1)) != 0) {
