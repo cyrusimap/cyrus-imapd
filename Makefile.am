@@ -71,7 +71,6 @@ noinst_LIBRARIES =
 noinst_LTLIBRARIES =
 lib_LIBRARIES =
 lib_LTLIBRARIES = lib/libcyrus_min.la lib/libcyrus.la
-pkglib_LTLIBRARIES =
 noinst_PROGRAMS = doc/text/htmlstrip
 check_PROGRAMS =
 service_PROGRAMS =
@@ -143,7 +142,7 @@ SUBDIRS += perl/sieve/managesieve
 noinst_LIBRARIES += perl/sieve/lib/libisieve.a
 endif
 BUILT_SOURCES += sieve/addr.c sieve/sieve.c sieve/sieve_err.c
-pkglib_LTLIBRARIES += sieve/libsieve.la
+noinst_LIBRARIES += sieve/libsieve.a
 check_PROGRAMS += sieve/test
 service_PROGRAMS += sieve/sievec sieve/sieved
 if SERVER
@@ -284,7 +283,7 @@ cunit_unit_SOURCES = $(cunit_FRAMEWORK) $(cunit_TESTS) \
 		imap/mutex_fake.c imap/spool.c
 cunit_unit_LDADD =
 if SIEVE
-cunit_unit_LDADD += sieve/libsieve.la
+cunit_unit_LDADD += sieve/libsieve.a
 endif
 cunit_unit_LDADD += $(LD_UTILITY_ADD) -lcunit
 cunit_unit_LDFLAGS = $(LD_UTILITY_FLAGS)
@@ -443,10 +442,10 @@ imap_lmtpd_SOURCES = imap/lmtpd.c imap/lmtpd.h imap/lmtpengine.c \
 	imap/mutex_fake.c imap/proxy.c imap/spool.c master/service.c
 imap_lmtpd_LDFLAGS =
 imap_lmtpd_LDADD =
-# sieve/libsieve.la must be added to LDADD before lib/libcyrus.la (#3677)
+# sieve/libsieve.a must be added to LDADD before lib/libcyrus.la (#3677)
 if SIEVE
 imap_lmtpd_SOURCES += imap/lmtp_sieve.c imap/smtpclient.c
-imap_lmtpd_LDADD += sieve/libsieve.la
+imap_lmtpd_LDADD += sieve/libsieve.a
 endif
 imap_lmtpd_LDFLAGS += $(LD_SERVER_FLAGS)
 imap_lmtpd_LDADD += $(LD_SERVER_ADD)
@@ -682,16 +681,15 @@ ptclient_ptloader_LDADD += $(AFS_LIBS)
 ptclient_ptloader_LDFLAGS += $(AFS_LDFLAGS)
 endif
 
-nodist_sieve_libsieve_la_SOURCES = sieve/sieve_err.c sieve/sieve_err.h
-sieve_libsieve_la_SOURCES = sieve/bytecode.h sieve/addr.y sieve/addr-lex.l \
+nodist_sieve_libsieve_a_SOURCES = sieve/sieve_err.c sieve/sieve_err.h
+sieve_libsieve_a_SOURCES = sieve/bytecode.h sieve/addr.y sieve/addr-lex.l \
 	sieve/bc_dump.c sieve/bc_emit.c sieve/bc_eval.c sieve/bc_generate.c \
 	sieve/comparator.c sieve/comparator.h sieve/interp.c sieve/interp.h \
 	sieve/message.c sieve/message.h sieve/script.c sieve/script.h \
 	sieve/sieve-lex.l sieve/sieve.y sieve/sieve_interface.h sieve/tree.c sieve/tree.h
-sieve_libsieve_la_LIBADD = $(COM_ERR_LIB)
 
 LD_SIEVE_FLAGS = $(LD_BASIC_FLAGS)
-LD_SIEVE_ADD = sieve/libsieve.la $(LD_BASIC_ADD)
+LD_SIEVE_ADD = sieve/libsieve.a $(LD_BASIC_ADD) $(COM_ERR_LIB)
 
 sieve_sievec_LDFLAGS = $(LD_SIEVE_FLAGS)
 sieve_sievec_LDADD = $(LD_SIEVE_ADD)
@@ -703,7 +701,7 @@ sieve/sieve_err.h sieve/sieve_err.c: sieve/sieve_err.et
 
 sieve_test_SOURCES = sieve/test.c imap/mutex_fake.c
 sieve_test_LDFLAGS = $(LD_UTILITY_FLAGS)
-sieve_test_LDADD = sieve/libsieve.la $(LD_UTILITY_ADD)
+sieve_test_LDADD = sieve/libsieve.a $(LD_UTILITY_ADD)
 
 timsieved_timsieved_SOURCES = imap/mutex_fake.c imap/proxy.c master/service.c \
 	timsieved/actions.c timsieved/actions.h timsieved/codes.h \
@@ -712,7 +710,7 @@ timsieved_timsieved_SOURCES = imap/mutex_fake.c imap/proxy.c master/service.c \
 	timsieved/parser.h timsieved/scripttest.c timsieved/scripttest.h \
 	timsieved/timsieved.c
 timsieved_timsieved_LDFLAGS = $(LD_SERVER_FLAGS)
-timsieved_timsieved_LDADD = sieve/libsieve.la $(LD_SERVER_ADD)
+timsieved_timsieved_LDADD = sieve/libsieve.a $(LD_SERVER_ADD)
 
 GIT_VERSION = $(PACKAGE_VERSION).git$(shell date +'%Y%m%d%H%M')
 
