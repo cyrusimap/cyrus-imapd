@@ -384,6 +384,27 @@ if test "x$enable_squat" != xno ; then
 fi
 AM_CONDITIONAL([USE_SQUAT], [test "${enable_squat}" != "no"])
 
+dnl
+dnl Search engines - Sphinx
+dnl
+
+AC_ARG_ENABLE(sphinx,
+	[  --enable-sphinx         disable Sphinx support],[
+	    enable_sphinx=$enableval
+	],[
+	    enable_sphinx=no
+	])
+if test "x$enable_sphinx" != xno ; then
+    AC_DEFINE(USE_SPHINX,[],[Build in Sphinx support?])
+fi
+AM_CONDITIONAL([USE_SPHINX], [test "${enable_sphinx}" != "no"])
+
+dnl Note that Sphinx' searchd uses the MySQL protocol
+dnl so we need to link with the MySQL client libraries.
+if test "$enable_sphinx" = yes -a "$with_mysql" = no ; then
+    AC_MSG_ERROR([Sphinx requires MySQL but you have not used --with-mysql; disabling Sphinx])
+    enable_sphinx=no
+fi
 
 AC_ARG_ENABLE(sieve,
         [AS_HELP_STRING([--disable-sieve], [disable Sieve support])],,[enable_sieve="yes";])

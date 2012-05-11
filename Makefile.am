@@ -930,9 +930,7 @@ imap_libcyrus_imap_la_SOURCES = \
 	imap/userdeny.h \
 	imap/version.c \
 	imap/version.h
-<<<<<<< HEAD
 
-=======
 if USE_SQUAT
 imap_libcyrus_imap_la_SOURCES += \
 	imap/search_squat.c \
@@ -941,7 +939,12 @@ imap_libcyrus_imap_la_SOURCES += \
 	imap/squat_internal.c \
 	imap/squat_internal.h
 endif
->>>>>>> Add --disable-squat to configure
+
+if USE_SPHINX
+imap_libcyrus_imap_la_SOURCES += \
+	imap/search_sphinx.c
+endif
+
 imap_libcyrus_imap_la_LIBADD = $(COM_ERR_LIBS) $(LIB_UUID) lib/libcyrus_min.la lib/libcyrus.la
 imap_libcyrus_imap_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 

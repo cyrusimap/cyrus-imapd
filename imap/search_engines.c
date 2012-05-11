@@ -57,6 +57,9 @@
 #ifdef USE_SQUAT
 extern const struct search_engine squat_search_engine;
 #endif
+#ifdef USE_SPHINX
+extern const struct search_engine sphinx_search_engine;
+#endif
 
 static int default_search(unsigned* msg_list, struct index_state *state,
 			 const struct searchargs *searchargs
@@ -81,6 +84,9 @@ static const struct search_engine default_search_engine = {
 };
 
 static const struct search_engine *search_engines[] = {
+#ifdef USE_SPHINX
+    &sphinx_search_engine,
+#endif
 #ifdef USE_SQUAT
     &squat_search_engine,
 #endif
