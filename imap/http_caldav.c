@@ -130,7 +130,7 @@ static icalcomponent *busytime(struct transaction_t *txn,
 #ifdef WITH_CALDAV_SCHED
 static char *caladdress_to_userid(const char *addr);
 static int sched_busytime(struct transaction_t *txn);
-static int sched_organizer_create(icalcomponent *ical);
+static int sched_request(icalcomponent *ical);
 #endif
 int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname);
 
@@ -2292,7 +2292,7 @@ static int meth_put(struct transaction_t *txn)
 
 	if (!strcmp(caladdress_to_userid(organizer), userid)) {
 	    /* Organizer scheduling object resource */
-	    ret = sched_organizer_create(ical);
+	    ret = sched_request(ical);
 	}
 	else {
 	    /* Attendee scheduling object resource */
@@ -3818,6 +3818,7 @@ struct deliver_rock {
 #define SCHEDSTAT_PARAM		"2.3"
 #define SCHEDSTAT_NOUSER	"3.7"
 #define SCHEDSTAT_NOPRIVS	"3.8"
+#define SCHEDSTAT_FAIL		"5.0"
 #define SCHEDSTAT_TEMPFAIL	"5.1"
 #define SCHEDSTAT_NOPROT	"5.2"
 #define SCHEDSTAT_NOSCHED	"5.3"
@@ -3828,11 +3829,14 @@ void sched_deliver(char *attendee, void *data, void *rock)
     struct att_data *att_data = (struct att_data *) data;
     struct deliver_rock *drock = (struct deliver_rock *) rock;
     int r = 0, rights;
-    const char *userid;
-    char inboxname[MAX_MAILBOX_BUFFER];
+    const char *userid, *mboxname, *resource;
+    char namebuf[MAX_MAILBOX_BUFFER];
     struct mboxlist_entry mbentry;
-    struct mailbox *inbox = NULL;
+    struct mailbox *mailbox = NULL, *inbox = NULL;
     struct caldav_db *att_caldavdb = NULL;
+    struct caldav_data cdata;
+    icalcomponent *ical = NULL;
+    struct transaction_t txn;
 
     userid = caladdress_to_userid(attendee);
     if (!userid) {
@@ -3847,10 +3851,10 @@ void sched_deliver(char *attendee, void *data, void *rock)
     }
 
     /* Check ACL of ORGANIZER on attendee's Scheduling Inbox */
-    caldav_mboxname(SCHED_INBOX, userid, inboxname);
-    if ((r = mboxlist_lookup(inboxname, &mbentry, NULL))) {
+    caldav_mboxname(SCHED_INBOX, userid, namebuf);
+    if ((r = mboxlist_lookup(namebuf, &mbentry, NULL))) {
 	syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
-	       inboxname, error_message(r));
+	       namebuf, error_message(r));
 	att_data->sched_stat = SCHEDSTAT_NOSCHED;
 	goto done;
     }
@@ -3862,6 +3866,14 @@ void sched_deliver(char *attendee, void *data, void *rock)
 	goto done;
     }
 
+    /* Open attendee's Inbox for reading */
+    if ((r = mailbox_open_irl(namebuf, &inbox))) {
+	syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
+	       namebuf, error_message(r));
+	att_data->sched_stat = SCHEDSTAT_TEMPFAIL;
+	goto done;
+    }
+
     /* Search for iCal UID in attendee's calendars */
     att_caldavdb = caldav_open(userid, CALDAV_CREATE);
     if (!att_caldavdb) {
@@ -3869,33 +3881,72 @@ void sched_deliver(char *attendee, void *data, void *rock)
 	goto done;
     }
 
-    /* Open attendee's Inbox for reading */
-    if ((r = mailbox_open_irl(inboxname, &inbox))) {
-	syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
-	       inboxname, error_message(r));
-	att_data->sched_stat = SCHEDSTAT_TEMPFAIL;
+    memset(&cdata, 0, sizeof(struct caldav_data));
+    cdata.ical_uid = icalcomponent_get_uid(att_data->master);
+    caldav_read(att_caldavdb, &cdata);
+    if (cdata.mailbox) {
+	mboxname = cdata.mailbox;
+	resource = cdata.resource;
     }
     else {
-	struct transaction_t txn;
-
-	mailbox_unlock_index(inbox, NULL);
-
-	r = store_resource(&txn, att_data->ical, inbox,
-			   buf_cstring(&drock->resource),
-			   att_caldavdb, OVERWRITE_YES, 0);
-
-	if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
-	    att_data->sched_stat = SCHEDSTAT_DELIVERED;
-	}
-	else {
-	    syslog(LOG_ERR, "store_resource(%s) failed: %s",
-		   inbox->name, error_message(r));
-	    att_data->sched_stat = SCHEDSTAT_TEMPFAIL;
-	}
+	caldav_mboxname(SCHED_DEFAULT, userid, namebuf);
+	mboxname = namebuf;
+	resource = buf_cstring(&drock->resource);
     }
 
+    /* Open attendee's calendar for reading */
+    if ((r = mailbox_open_irl(mboxname, &mailbox))) {
+	syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
+	       mboxname, error_message(r));
+	att_data->sched_stat = SCHEDSTAT_TEMPFAIL;
+	goto done;
+    }
+
+    if (cdata.imap_uid) {
+	/* Modify existing object */
+	/* XXX  Do modify logic */
+	syslog(LOG_INFO, "modify existing sched object");
+	att_data->sched_stat = SCHEDSTAT_FAIL;
+	goto done;
+    }
+    else {
+	/* Create new object (copy of request w/o METHOD) */
+	icalproperty *prop;
+
+	ical = icalcomponent_new_clone(att_data->ical);
+
+	prop = icalcomponent_get_first_property(ical, ICAL_METHOD_PROPERTY);
+	icalcomponent_remove_property(ical, prop);
+    }
+
+    /* Store the object in the attendee's calendar */
+    mailbox_unlock_index(mailbox, NULL);
+
+    r = store_resource(&txn, ical, mailbox, resource,
+		       att_caldavdb, OVERWRITE_YES, 1);
+
+    if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
+	att_data->sched_stat = SCHEDSTAT_DELIVERED;
+    }
+    else {
+	syslog(LOG_ERR, "store_resource(%s) failed: %s",
+	       mailbox->name, error_message(r));
+	att_data->sched_stat = SCHEDSTAT_TEMPFAIL;
+	goto done;
+    }
+
+    /* Store the request in the attendee's Inbox */
+    mailbox_unlock_index(inbox, NULL);
+
+    r = store_resource(&txn, att_data->ical, inbox,
+		       buf_cstring(&drock->resource),
+		       att_caldavdb, OVERWRITE_YES, 0);
+    /* XXX  What do we do if storing to Inbox fails? */
+
   done:
+    if (ical) icalcomponent_free(ical);
     if (inbox) mailbox_close(&inbox);
+    if (mailbox) mailbox_close(&inbox);
     if (att_caldavdb) caldav_close(att_caldavdb);
 }
 
@@ -3908,7 +3959,7 @@ void free_att_data(void *data) {
     }
 }
 
-static int sched_organizer_create(icalcomponent *ical)
+static int sched_request(icalcomponent *ical)
 {
     int ret = 0;
 //    icaltimezone *utc = icaltimezone_get_utc_timezone();
