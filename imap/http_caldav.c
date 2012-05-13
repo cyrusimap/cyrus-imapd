@@ -195,6 +195,9 @@ static void my_caldav_init(struct buf *serverinfo)
 
     buf_printf(serverinfo, " libical/%s", ICAL_VERSION);
     buf_printf(serverinfo, " SQLite/%s", sqlite3_libversion());
+
+    /* Need to set this to parse CalDAV Scheduling parameters */
+    ical_set_unknown_token_handling_setting(ICAL_ASSUME_IANA_TOKEN);
 }
 
 
@@ -3760,6 +3763,7 @@ struct att_data {
     icalcomponent *ical;
     icalcomponent *master;
     unsigned comp_mask;
+    const char *sched_force;
     const char *sched_stat;
 };
 
@@ -3811,6 +3815,7 @@ struct deliver_rock {
 #define SCHEDSTAT_PENDING	"1.0"
 #define SCHEDSTAT_SENT		"1.1"
 #define SCHEDSTAT_DELIVERED	"1.2"
+#define SCHEDSTAT_PARAM		"2.3"
 #define SCHEDSTAT_NOUSER	"3.7"
 #define SCHEDSTAT_NOPRIVS	"3.8"
 #define SCHEDSTAT_TEMPFAIL	"5.1"
@@ -3832,6 +3837,12 @@ void sched_deliver(char *attendee, void *data, void *rock)
     userid = caladdress_to_userid(attendee);
     if (!userid) {
 	att_data->sched_stat = SCHEDSTAT_NOUSER;
+	goto done;
+    }
+
+    /* Check SCHEDULE-FORCE-SEND value */
+    if (att_data->sched_force && strcmp(att_data->sched_force, "REQUEST")) {
+	att_data->sched_stat = SCHEDSTAT_PARAM;
 	goto done;
     }
 
@@ -3980,32 +3991,49 @@ static int sched_organizer_create(icalcomponent *ical)
 	icalcomponent_add_property(comp, prop);
 #endif
 	/* Process each attendee */
-	for (prop =
-		 icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
+	for (prop = icalcomponent_get_first_property(comp,
+						     ICAL_ATTENDEE_PROPERTY);
 	     prop;
-	     prop =
-		 icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
+	     prop = icalcomponent_get_next_property(comp,
+						    ICAL_ATTENDEE_PROPERTY)) {
 	    const char *attendee = icalproperty_get_attendee(prop);
+	    const char *sched_agent = NULL, *sched_force = NULL;
+	    icalparameter *param;
 
-	    /* XXX  Check SCHEDULE-AGENT parameter */ 
-	    /* XXX  Check SCHEDULE-FORCE-SEND parameter */
+	    /* Check CalDAV Scheduling parameters */
+	    for (param = icalproperty_get_first_parameter(prop,
+							  ICAL_IANA_PARAMETER);
+		 param;
+		 param = icalproperty_get_next_parameter(prop,
+							 ICAL_IANA_PARAMETER)) {
+		if (!strcmp(icalparameter_get_iana_name(param),
+			    "SCHEDULE-AGENT")) {
+		    sched_agent = icalparameter_get_iana_value(param);
+		}
+		else if (!strcmp(icalparameter_get_iana_name(param),
+				 "SCHEDULE-FORCE-SEND")) {
+		    sched_force = icalparameter_get_iana_value(param);
+		}
+	    }
 
-	    /* Attendee != organizer, create/augment request object */
-	    if (strcmp(attendee, organizer)) {
+	    /* Check if we are supposed to schedule for this attendee */
+	    if ((!sched_agent || !strcmp(sched_agent, "SERVER")) &&
+		strcmp(attendee, organizer)) {
 		struct att_data *att_data;
 		icalcomponent *new_comp;
 
 		att_data = hash_lookup(attendee, &att_table);
 		if (!att_data) {
-		    /* New attendee - add it to the has table */
+		    /* New attendee - add it to the hash table */
 		    att_data = xzmalloc(sizeof(struct att_data));
 		    att_data->ical = icalcomponent_new_clone(req);
 		    hash_insert(attendee, att_data, &att_table);
 		}
 		new_comp = icalcomponent_new_clone(comp);
 		icalcomponent_add_component(att_data->ical, new_comp);
-		if (!ncomp) att_data->master = new_comp;
 		att_data->comp_mask |= (1 << ncomp);
+		if (!ncomp) att_data->master = new_comp;
+		if (!att_data->sched_force) att_data->sched_force = sched_force;
 	    }
 	}
 
