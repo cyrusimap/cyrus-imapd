@@ -3763,7 +3763,7 @@ struct att_data {
     icalcomponent *ical;
     icalcomponent *master;
     unsigned comp_mask;
-    const char *sched_force;
+    char *force_send;
     const char *sched_stat;
 };
 
@@ -3818,7 +3818,6 @@ struct deliver_rock {
 #define SCHEDSTAT_PARAM		"2.3"
 #define SCHEDSTAT_NOUSER	"3.7"
 #define SCHEDSTAT_NOPRIVS	"3.8"
-#define SCHEDSTAT_FAIL		"5.0"
 #define SCHEDSTAT_TEMPFAIL	"5.1"
 #define SCHEDSTAT_NOPROT	"5.2"
 #define SCHEDSTAT_NOSCHED	"5.3"
@@ -3845,7 +3844,7 @@ void sched_deliver(char *attendee, void *data, void *rock)
     }
 
     /* Check SCHEDULE-FORCE-SEND value */
-    if (att_data->sched_force && strcmp(att_data->sched_force, "REQUEST")) {
+    if (att_data->force_send && strcmp(att_data->force_send, "REQUEST")) {
 	att_data->sched_stat = SCHEDSTAT_PARAM;
 	goto done;
     }
@@ -3903,10 +3902,10 @@ void sched_deliver(char *attendee, void *data, void *rock)
     }
 
     if (cdata.imap_uid) {
-	/* Modify existing object */
-	/* XXX  Do modify logic */
-	syslog(LOG_INFO, "modify existing sched object");
-	att_data->sched_stat = SCHEDSTAT_FAIL;
+	/* Merge with existing object */
+	/* XXX  Do merge logic */
+	syslog(LOG_INFO, "merge with existing sched object");
+	att_data->sched_stat = SCHEDSTAT_TEMPFAIL;
 	goto done;
     }
     else {
@@ -3955,6 +3954,7 @@ void free_att_data(void *data) {
 
     if (att_data) {
 	if (att_data->ical) icalcomponent_free(att_data->ical);
+	if (att_data->force_send) free(att_data->force_send);
 	free(att_data);
     }
 }
@@ -4048,8 +4048,8 @@ static int sched_request(icalcomponent *ical)
 	     prop = icalcomponent_get_next_property(comp,
 						    ICAL_ATTENDEE_PROPERTY)) {
 	    const char *attendee = icalproperty_get_attendee(prop);
-	    const char *sched_agent = NULL, *sched_force = NULL;
-	    icalparameter *param;
+	    unsigned do_sched = 1;
+	    icalparameter *param, *force_send = NULL;
 
 	    /* Check CalDAV Scheduling parameters */
 	    for (param = icalproperty_get_first_parameter(prop,
@@ -4059,17 +4059,18 @@ static int sched_request(icalcomponent *ical)
 							 ICAL_IANA_PARAMETER)) {
 		if (!strcmp(icalparameter_get_iana_name(param),
 			    "SCHEDULE-AGENT")) {
-		    sched_agent = icalparameter_get_iana_value(param);
+		    do_sched =
+			!strcmp(icalparameter_get_iana_value(param), "SERVER");
+		    icalproperty_remove_parameter_by_ref(prop, param);
 		}
 		else if (!strcmp(icalparameter_get_iana_name(param),
 				 "SCHEDULE-FORCE-SEND")) {
-		    sched_force = icalparameter_get_iana_value(param);
+		    force_send = param;
 		}
 	    }
 
 	    /* Check if we are supposed to schedule for this attendee */
-	    if ((!sched_agent || !strcmp(sched_agent, "SERVER")) &&
-		strcmp(attendee, organizer)) {
+	    if (do_sched && strcmp(attendee, organizer)) {
 		struct att_data *att_data;
 		icalcomponent *new_comp;
 
@@ -4078,14 +4079,20 @@ static int sched_request(icalcomponent *ical)
 		    /* New attendee - add it to the hash table */
 		    att_data = xzmalloc(sizeof(struct att_data));
 		    att_data->ical = icalcomponent_new_clone(req);
+		    if (force_send) {
+			att_data->force_send =
+			    xstrdup(icalparameter_get_iana_value(force_send));
+		    }
 		    hash_insert(attendee, att_data, &att_table);
 		}
 		new_comp = icalcomponent_new_clone(comp);
 		icalcomponent_add_component(att_data->ical, new_comp);
 		att_data->comp_mask |= (1 << ncomp);
 		if (!ncomp) att_data->master = new_comp;
-		if (!att_data->sched_force) att_data->sched_force = sched_force;
 	    }
+
+	    if (force_send)
+		icalproperty_remove_parameter_by_ref(prop, force_send);
 	}
 
 	if (ncomp) {
