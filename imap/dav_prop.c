@@ -1342,6 +1342,31 @@ static int proppatch_calcompset(xmlNodePtr prop, unsigned set,
 }
 
 #ifdef WITH_CALDAV_SCHED
+/* Callback to fetch CALDAV:schedule-tag */
+static int propfind_schedtag(xmlNodePtr prop,
+			     struct propfind_ctx *fctx,
+			     xmlNodePtr resp,
+			     struct propstat propstat[],
+			     void *rock __attribute__((unused)))
+{
+    ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
+    if (fctx->cdata->sched_tag) {
+	/* add DQUOTEs */
+	buf_reset(&fctx->buf);
+	buf_printf(&fctx->buf, "\"%s\"", fctx->cdata->sched_tag);
+
+	xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+		     prop, BAD_CAST buf_cstring(&fctx->buf), 0);
+    }
+    else {
+	xml_add_prop(HTTP_NOT_FOUND, fctx->ns[NS_DAV],
+		     &propstat[PROPSTAT_NOTFOUND], prop, NULL, 0);
+    }
+
+    return 0;
+}
+
+
 /* Callback to fetch CALDAV:calendar-user-address-set */
 static int propfind_caluseraddr(xmlNodePtr prop,
 				struct propfind_ctx *fctx,
@@ -1691,6 +1716,7 @@ static const struct prop_entry {
 
 #ifdef WITH_CALDAV_SCHED
     /* CalDAV Scheduling properties */
+    { "schedule-tag", XML_NS_CALDAV, 0, propfind_schedtag, NULL, NULL },
     { "schedule-inbox-URL", XML_NS_CALDAV, 0,
       propfind_calurl, NULL, SCHED_INBOX },
     { "schedule-outbox-URL", XML_NS_CALDAV, 0,

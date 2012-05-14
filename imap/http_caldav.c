@@ -1503,6 +1503,7 @@ static int propfind_by_resource(void *rock, struct caldav_data *cdata)
     fctx->req_tgt->resource = p;
     fctx->req_tgt->reslen = strlen(p);
 
+    fctx->cdata = cdata;
     if (cdata->imap_uid && !fctx->record) {
 	/* Fetch index record for the resource */
 	r = mailbox_find_index_record(fctx->mailbox, cdata->imap_uid, &record);
@@ -1534,6 +1535,7 @@ static int propfind_by_resource(void *rock, struct caldav_data *cdata)
     fctx->msg_base = NULL;
     fctx->msg_size = 0;
     fctx->record = NULL;
+    fctx->cdata = NULL;
 
     return ret;
 }
