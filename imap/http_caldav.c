@@ -131,6 +131,7 @@ static icalcomponent *busytime(struct transaction_t *txn,
 static char *caladdress_to_userid(const char *addr);
 static int sched_busytime(struct transaction_t *txn);
 static int sched_request(icalcomponent *ical);
+static int sched_reply(icalcomponent *ical, const char *userid);
 #endif
 int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname);
 
@@ -2298,6 +2299,7 @@ static int meth_put(struct transaction_t *txn)
 	}
 	else {
 	    /* Attendee scheduling object resource */
+	    ret = sched_reply(ical, userid);
 	}
     }
 #endif
@@ -3761,12 +3763,13 @@ static int sched_busytime(struct transaction_t *txn)
 }
 
 
-struct att_data {
+struct sched_data {
+    unsigned is_reply;
     icalcomponent *ical;
     icalcomponent *master;
     unsigned comp_mask;
     char *force_send;
-    const char *sched_stat;
+    const char *status;
 };
 
 struct exclude_rock {
@@ -3775,13 +3778,13 @@ struct exclude_rock {
 };
 
 /* Add EXDATE to master component if attendee is excluded from recurrence */
-void sched_exclude(char *attendee __attribute__((unused)),
-		   void *data, void *rock)
+static void sched_exclude(char *attendee __attribute__((unused)),
+			  void *data, void *rock)
 {
-    struct att_data *att_data = (struct att_data *) data;
+    struct sched_data *sched_data = (struct sched_data *) data;
     struct exclude_rock *erock = (struct exclude_rock *) rock;
 
-    if (!(att_data->comp_mask & (1<<erock->ncomp))) {
+    if (!(sched_data->comp_mask & (1<<erock->ncomp))) {
 	icalproperty *recurid, *exdate;
 	struct icaltimetype exdt;
 	icalparameter *param;
@@ -3805,7 +3808,7 @@ void sched_exclude(char *attendee __attribute__((unused)),
 	/* XXX  Need to handle RANGE parameter */
 
 	/* Add the EXDATE to the master component for this attendee */
-	icalcomponent_add_property(att_data->master, exdate);
+	icalcomponent_add_property(sched_data->master, exdate);
     }
 }
 
@@ -3821,85 +3824,95 @@ struct deliver_rock {
 #define SCHEDSTAT_NOUSER	"3.7"
 #define SCHEDSTAT_NOPRIVS	"3.8"
 #define SCHEDSTAT_TEMPFAIL	"5.1"
-#define SCHEDSTAT_NOPROT	"5.2"
-#define SCHEDSTAT_NOSCHED	"5.3"
+#define SCHEDSTAT_PERMFAIL	"5.2"
+#define SCHEDSTAT_REJECTED	"5.3"
 
-/* Deliver scheduling object to attendee's Inbox */
-void sched_deliver(char *attendee, void *data, void *rock)
+/* Deliver scheduling object to recipient's Inbox */
+static void sched_deliver(char *recipient, void *data, void *rock)
 {
-    struct att_data *att_data = (struct att_data *) data;
+    struct sched_data *sched_data = (struct sched_data *) data;
     struct deliver_rock *drock = (struct deliver_rock *) rock;
     int r = 0, rights;
-    const char *userid, *mboxname, *resource;
+    const char *userid, *mboxname = NULL, *resource = NULL;
     char namebuf[MAX_MAILBOX_BUFFER];
     struct mboxlist_entry mbentry;
     struct mailbox *mailbox = NULL, *inbox = NULL;
-    struct caldav_db *att_caldavdb = NULL;
+    struct caldav_db *caldavdb = NULL;
     struct caldav_data cdata;
     icalcomponent *ical = NULL;
     struct transaction_t txn;
 
-    userid = caladdress_to_userid(attendee);
+    userid = caladdress_to_userid(recipient);
     if (!userid) {
-	att_data->sched_stat = SCHEDSTAT_NOUSER;
+	sched_data->status = SCHEDSTAT_NOUSER;
 	goto done;
     }
 
     /* Check SCHEDULE-FORCE-SEND value */
-    if (att_data->force_send && strcmp(att_data->force_send, "REQUEST")) {
-	att_data->sched_stat = SCHEDSTAT_PARAM;
-	goto done;
+    if (sched_data->force_send) {
+	const char *force = sched_data->is_reply ? "REPLY" : "REQUEST";
+
+	if (strcmp(sched_data->force_send, force)) {
+	    sched_data->status = SCHEDSTAT_PARAM;
+	    goto done;
+	}
     }
 
-    /* Check ACL of ORGANIZER on attendee's Scheduling Inbox */
+    /* Check ACL of sender on recipient's Scheduling Inbox */
     caldav_mboxname(SCHED_INBOX, userid, namebuf);
     if ((r = mboxlist_lookup(namebuf, &mbentry, NULL))) {
 	syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
 	       namebuf, error_message(r));
-	att_data->sched_stat = SCHEDSTAT_NOSCHED;
+	sched_data->status = SCHEDSTAT_REJECTED;
 	goto done;
     }
 
     rights =
 	mbentry.acl ? cyrus_acl_myrights(drock->authstate, mbentry.acl) : 0;
     if (!(rights & DACL_SCHED)) {
-	att_data->sched_stat = SCHEDSTAT_NOPRIVS;
+	sched_data->status = SCHEDSTAT_NOPRIVS;
 	goto done;
     }
 
-    /* Open attendee's Inbox for reading */
+    /* Open recipient's Inbox for reading */
     if ((r = mailbox_open_irl(namebuf, &inbox))) {
 	syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
 	       namebuf, error_message(r));
-	att_data->sched_stat = SCHEDSTAT_TEMPFAIL;
+	sched_data->status = SCHEDSTAT_TEMPFAIL;
 	goto done;
     }
 
-    /* Search for iCal UID in attendee's calendars */
-    att_caldavdb = caldav_open(userid, CALDAV_CREATE);
-    if (!att_caldavdb) {
-	att_data->sched_stat = SCHEDSTAT_TEMPFAIL;
+    /* Search for iCal UID in recipient's calendars */
+    caldavdb = caldav_open(userid, CALDAV_CREATE);
+    if (!caldavdb) {
+	sched_data->status = SCHEDSTAT_TEMPFAIL;
 	goto done;
     }
 
     memset(&cdata, 0, sizeof(struct caldav_data));
-    cdata.ical_uid = icalcomponent_get_uid(att_data->master);
-    caldav_read(att_caldavdb, &cdata);
+    cdata.ical_uid = icalcomponent_get_uid(sched_data->ical);
+    caldav_read(caldavdb, &cdata);
     if (cdata.mailbox) {
 	mboxname = cdata.mailbox;
 	resource = cdata.resource;
     }
+    else if (sched_data->is_reply) {
+	/* Can't find object belonging to organizer - ignore reply */
+	sched_data->status = SCHEDSTAT_PERMFAIL;
+	goto done;
+    }
     else {
+	/* Can't find object belonging to attendee - use default calendar */
 	caldav_mboxname(SCHED_DEFAULT, userid, namebuf);
 	mboxname = namebuf;
 	resource = buf_cstring(&drock->resource);
     }
 
-    /* Open attendee's calendar for reading */
+    /* Open recipient's calendar for reading */
     if ((r = mailbox_open_irl(mboxname, &mailbox))) {
 	syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
 	       mboxname, error_message(r));
-	att_data->sched_stat = SCHEDSTAT_TEMPFAIL;
+	sched_data->status = SCHEDSTAT_TEMPFAIL;
 	goto done;
     }
 
@@ -3907,57 +3920,58 @@ void sched_deliver(char *attendee, void *data, void *rock)
 	/* Merge with existing object */
 	/* XXX  Do merge logic */
 	syslog(LOG_INFO, "merge with existing sched object");
-	att_data->sched_stat = SCHEDSTAT_TEMPFAIL;
-	goto done;
+	sched_data->status = SCHEDSTAT_TEMPFAIL;
+	goto inbox;
     }
     else {
 	/* Create new object (copy of request w/o METHOD) */
 	icalproperty *prop;
 
-	ical = icalcomponent_new_clone(att_data->ical);
+	ical = icalcomponent_new_clone(sched_data->ical);
 
 	prop = icalcomponent_get_first_property(ical, ICAL_METHOD_PROPERTY);
 	icalcomponent_remove_property(ical, prop);
     }
 
-    /* Store the object in the attendee's calendar */
+    /* Store the object in the recipients's calendar */
     mailbox_unlock_index(mailbox, NULL);
 
     r = store_resource(&txn, ical, mailbox, resource,
-		       att_caldavdb, OVERWRITE_YES, 1);
+		       caldavdb, OVERWRITE_YES, 1);
 
     if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
-	att_data->sched_stat = SCHEDSTAT_DELIVERED;
+	sched_data->status = SCHEDSTAT_DELIVERED;
     }
     else {
 	syslog(LOG_ERR, "store_resource(%s) failed: %s",
 	       mailbox->name, error_message(r));
-	att_data->sched_stat = SCHEDSTAT_TEMPFAIL;
+	sched_data->status = SCHEDSTAT_TEMPFAIL;
 	goto done;
     }
 
-    /* Store the request in the attendee's Inbox */
+  inbox:
+    /* Store the request in the recipient's Inbox */
     mailbox_unlock_index(inbox, NULL);
 
-    r = store_resource(&txn, att_data->ical, inbox,
+    r = store_resource(&txn, sched_data->ical, inbox,
 		       buf_cstring(&drock->resource),
-		       att_caldavdb, OVERWRITE_YES, 1);
+		       caldavdb, OVERWRITE_YES, 1);
     /* XXX  What do we do if storing to Inbox fails? */
 
   done:
     if (ical) icalcomponent_free(ical);
     if (inbox) mailbox_close(&inbox);
     if (mailbox) mailbox_close(&inbox);
-    if (att_caldavdb) caldav_close(att_caldavdb);
+    if (caldavdb) caldav_close(caldavdb);
 }
 
-void free_att_data(void *data) {
-    struct att_data *att_data = (struct att_data *) data;
+static void free_sched_data(void *data) {
+    struct sched_data *sched_data = (struct sched_data *) data;
 
-    if (att_data) {
-	if (att_data->ical) icalcomponent_free(att_data->ical);
-	if (att_data->force_send) free(att_data->force_send);
-	free(att_data);
+    if (sched_data) {
+	if (sched_data->ical) icalcomponent_free(sched_data->ical);
+	if (sched_data->force_send) free(sched_data->force_send);
+	free(sched_data);
     }
 }
 
@@ -4073,24 +4087,24 @@ static int sched_request(icalcomponent *ical)
 
 	    /* Check if we are supposed to schedule for this attendee */
 	    if (do_sched && strcmp(attendee, organizer)) {
-		struct att_data *att_data;
+		struct sched_data *sched_data;
 		icalcomponent *new_comp;
 
-		att_data = hash_lookup(attendee, &att_table);
-		if (!att_data) {
+		sched_data = hash_lookup(attendee, &att_table);
+		if (!sched_data) {
 		    /* New attendee - add it to the hash table */
-		    att_data = xzmalloc(sizeof(struct att_data));
-		    att_data->ical = icalcomponent_new_clone(req);
+		    sched_data = xzmalloc(sizeof(struct sched_data));
+		    sched_data->ical = icalcomponent_new_clone(req);
 		    if (force_send) {
-			att_data->force_send =
+			sched_data->force_send =
 			    xstrdup(icalparameter_get_iana_value(force_send));
 		    }
-		    hash_insert(attendee, att_data, &att_table);
+		    hash_insert(attendee, sched_data, &att_table);
 		}
 		new_comp = icalcomponent_new_clone(comp);
-		icalcomponent_add_component(att_data->ical, new_comp);
-		att_data->comp_mask |= (1 << ncomp);
-		if (!ncomp) att_data->master = new_comp;
+		icalcomponent_add_component(sched_data->ical, new_comp);
+		sched_data->comp_mask |= (1 << ncomp);
+		if (!ncomp) sched_data->master = new_comp;
 	    }
 
 	    if (force_send)
@@ -4118,13 +4132,13 @@ static int sched_request(icalcomponent *ical)
 	 prop;
 	 prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
 	const char *attendee = icalproperty_get_attendee(prop);
-	struct att_data *att_data;
+	struct sched_data *sched_data;
 
-	att_data = hash_lookup(attendee, &att_table);
-	if (att_data) {
+	sched_data = hash_lookup(attendee, &att_table);
+	if (sched_data) {
 	    icalparameter *param = icalparameter_new(ICAL_IANA_PARAMETER);
 	    icalparameter_set_iana_name(param, "SCHEDULE-STATUS");
-	    icalparameter_set_iana_value(param, att_data->sched_stat);
+	    icalparameter_set_iana_value(param, sched_data->status);
 	    icalproperty_add_parameter(prop, param);
 	}
     }
@@ -4135,7 +4149,165 @@ static int sched_request(icalcomponent *ical)
     icalcomponent_free(copy);
     icalcomponent_free(req);
 
-    free_hash_table(&att_table, free_att_data);
+    free_hash_table(&att_table, free_sched_data);
+
+    return ret;
+}
+
+static int sched_reply(icalcomponent *ical, const char *userid)
+{
+    int ret = 0;
+    static struct buf prodid = BUF_INITIALIZER;
+    struct sched_data *sched_data;
+    struct deliver_rock drock = { NULL, BUF_INITIALIZER };
+    icalcomponent *copy, *comp;
+    icalproperty *prop;
+    icalparameter *param;
+    icalcomponent_kind kind;
+    const char *organizer;
+    time_t now = time(0);
+    static unsigned sched_count = 0;
+
+    sched_data = xzmalloc(sizeof(struct sched_data));
+    sched_data->is_reply = 1;
+
+    /* Create our reply iCal object */
+    if (!buf_len(&prodid)) {
+	buf_printf(&prodid, "-//CyrusIMAP.org/Cyrus %s//EN", cyrus_version());
+    }
+
+    sched_data->ical =
+	icalcomponent_vanew(ICAL_VCALENDAR_COMPONENT,
+			    icalproperty_new_version("2.0"),
+			    icalproperty_new_prodid(buf_cstring(&prodid)),
+			    icalproperty_new_method(ICAL_METHOD_REPLY),
+			    0);
+
+    /* Clone a working copy of the iCal object */
+    copy = icalcomponent_new_clone(ical);
+
+    /* Copy over any CALSCALE property */
+    prop = icalcomponent_get_first_property(copy, ICAL_CALSCALE_PROPERTY);
+    if (prop) {
+	icalcomponent_add_property(sched_data->ical,
+				   icalproperty_new_clone(prop));
+    }
+
+    /* Copy over any VTIMEZONE components */
+    for (comp = icalcomponent_get_first_component(copy,
+						  ICAL_VTIMEZONE_COMPONENT);
+	 comp;
+	 comp = icalcomponent_get_next_component(copy,
+						 ICAL_VTIMEZONE_COMPONENT)) {
+	 icalcomponent_add_component(sched_data->ical,
+				     icalcomponent_new_clone(comp));
+    }
+
+    /* Create a name for the created resource */
+    buf_printf(&drock.resource, "%x-%d-%ld-%u.ics",
+	       strhash(icalcomponent_get_uid(comp)), getpid(),
+	       now, sched_count++);
+
+    drock.authstate = auth_newstate(userid);
+
+    /* Process each component */
+    comp = icalcomponent_get_first_real_component(copy);
+    kind = icalcomponent_isa(comp);
+    do {
+	icalcomponent *alarm, *nextcomp;
+	icalproperty *nextprop, *myattendee = NULL;
+
+	/* Remove any VALARM components */
+	for (alarm = icalcomponent_get_first_component(comp,
+						       ICAL_VALARM_COMPONENT);
+	     alarm; alarm = nextcomp) {
+	    nextcomp = icalcomponent_get_next_component(comp,
+						    ICAL_VALARM_COMPONENT);
+	    icalcomponent_remove_component(comp, alarm);
+	}
+
+	/* See if userid is in attendee list (stripping others) */
+	for (prop = icalcomponent_get_first_property(comp,
+						     ICAL_ATTENDEE_PROPERTY);
+	     prop;
+	     prop = nextprop) {
+	    const char *attendee = icalproperty_get_attendee(prop);
+
+	    nextprop = icalcomponent_get_next_property(comp,
+						   ICAL_ATTENDEE_PROPERTY);
+
+	    if (!strcmp(caladdress_to_userid(attendee), userid)) {
+		/* Found it */
+		myattendee = prop;
+	    }
+	    else {
+		/* Some other attendee, remove it */
+		icalcomponent_remove_property(comp, prop);
+	    }
+	}
+
+	if (myattendee) {
+	    /* Found our userid */
+	    unsigned do_sched = 1;
+	    icalparameter *force_send = NULL;
+
+	    /* Check CalDAV Scheduling parameters */
+	    for (param = icalproperty_get_first_parameter(myattendee,
+							  ICAL_IANA_PARAMETER);
+		 param;
+		 param = icalproperty_get_next_parameter(myattendee,
+							 ICAL_IANA_PARAMETER)) {
+		if (!strcmp(icalparameter_get_iana_name(param),
+			    "SCHEDULE-AGENT")) {
+		    do_sched =
+			!strcmp(icalparameter_get_iana_value(param), "SERVER");
+		    icalproperty_remove_parameter_by_ref(prop, param);
+		}
+		else if (!strcmp(icalparameter_get_iana_name(param),
+				 "SCHEDULE-FORCE-SEND")) {
+		    force_send = param;
+		}
+	    }
+
+	    /* Check if we are supposed to schedule for this attendee */
+	    if (do_sched) {
+		icalcomponent *new_comp;
+
+		if (force_send) {
+		    if (!sched_data->force_send) {
+			sched_data->force_send =
+			    xstrdup(icalparameter_get_iana_value(force_send));
+		    }
+
+		    icalproperty_remove_parameter_by_ref(prop, force_send);
+		}
+
+		new_comp = icalcomponent_new_clone(comp);
+		icalcomponent_add_component(sched_data->ical, new_comp);
+	    }
+	}
+
+    } while ((comp = icalcomponent_get_next_component(copy, kind)));
+
+    /* Grab the organizer */
+    comp = icalcomponent_get_first_real_component(ical);
+    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+    organizer = icalproperty_get_organizer(prop);
+
+    /* Attempt to deliver reply to organizer */
+    sched_deliver((char *) organizer, sched_data, &drock);
+
+    /* Set SCHEDULE-STATUS for organizer in attendee object */
+    param = icalparameter_new(ICAL_IANA_PARAMETER);
+    icalparameter_set_iana_name(param, "SCHEDULE-STATUS");
+    icalparameter_set_iana_value(param, sched_data->status);
+    icalproperty_add_parameter(prop, param);
+
+    /* Cleanup */
+    buf_free(&drock.resource);
+    auth_freestate(drock.authstate);
+    icalcomponent_free(copy);
+    free_sched_data(sched_data);
 
     return ret;
 }
