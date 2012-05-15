@@ -2565,6 +2565,10 @@ int mboxlist_setquotas(const char *root,
 	if (r) goto done;
     }
 
+    /* safe against quota -f and other root change races */
+    r = quota_changelock();
+    if (r) goto done;
+
     /* initialise the quota */
     quota_init(&q);
     memcpy(q.limits, newquotas, sizeof(q.limits));
@@ -2581,6 +2585,8 @@ int mboxlist_setquotas(const char *root,
 
     /* submailboxes - we're using internal names here */
     mboxlist_findall(NULL, pattern, 1, 0, 0, mboxlist_changequota, (void *)root);
+
+    quota_changelockrelease();
 
 done:
     if (r && tid) quota_abort(&tid);
@@ -2609,6 +2615,8 @@ int mboxlist_unsetquota(const char *root)
     if (r == IMAP_QUOTAROOT_NONEXISTENT) return 0;
     if (r) return r;
 
+    r = quota_changelock();
+
     /*
      * Have to remove it from all affected mailboxes
      */
@@ -2626,6 +2634,8 @@ int mboxlist_unsetquota(const char *root)
     mboxlist_findall(NULL, pattern, 1, 0, 0, mboxlist_rmquota, (void *)root);
 
     r = quota_deleteroot(root);
+    quota_changelockrelease();
+
     if (!r) sync_log_quota(root);
 
     return r;

@@ -59,6 +59,7 @@
 #include "global.h"
 #include "imap/imap_err.h"
 #include "mailbox.h"
+#include "mboxname.h"
 #include "quota.h"
 #include "util.h"
 #include "xmalloc.h"
@@ -69,6 +70,10 @@
 #define QDB config_quota_db
 
 struct db *qdb;
+
+/* skanky reuse of mboxname locks.  Ideally we would rename
+ * them to something more general and use them elsewhere */
+struct mboxlocklist *qchangelock;
 
 static int quota_dbopen = 0;
 
@@ -101,6 +106,16 @@ int quota_name_to_resource(const char *str)
 	    return res;
     }
     return -1;
+}
+
+int quota_changelock(void)
+{
+    return mboxname_lock("$QUOTACHANGE", &qchangelock, LOCK_EXCLUSIVE);
+}
+
+void quota_changelockrelease()
+{
+    mboxname_release(&qchangelock);
 }
 
 /*
