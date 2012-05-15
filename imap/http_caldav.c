@@ -3955,7 +3955,7 @@ static void sched_deliver(char *recipient, void *data, void *rock)
 
     r = store_resource(&txn, sched_data->ical, inbox,
 		       buf_cstring(&drock->resource),
-		       caldavdb, OVERWRITE_YES, 1);
+		       caldavdb, OVERWRITE_YES, 0);
     /* XXX  What do we do if storing to Inbox fails? */
 
   done:
