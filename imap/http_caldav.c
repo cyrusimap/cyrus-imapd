@@ -4205,7 +4205,7 @@ static int sched_reply(icalcomponent *ical, const char *userid)
 
     /* Create a name for the created resource */
     buf_printf(&drock.resource, "%x-%d-%ld-%u.ics",
-	       strhash(icalcomponent_get_uid(comp)), getpid(),
+	       strhash(icalcomponent_get_uid(ical)), getpid(),
 	       now, sched_count++);
 
     drock.authstate = auth_newstate(userid);
