@@ -665,7 +665,6 @@ static void test_replace_one_re(void)
 		   WORD4_RE, WORD0REP,
 		   0, WORD0" "WORD1);
     TESTCASE_MIDDLE
-    CU_ASSERT_EQUAL(b.alloc, 0);	/* no replacement => never alloced */
     buf_cstring(&b);
     TESTCASE_END
 
@@ -748,7 +747,6 @@ static void test_replace_all_re(void)
 		   WORD4_RE, WORD0REP,
 		   0, WORD0" "WORD1);
     TESTCASE_MIDDLE
-    CU_ASSERT_EQUAL(b.alloc, 0);	/* no replacement => never alloced */
     buf_cstring(&b);
     TESTCASE_END
 
