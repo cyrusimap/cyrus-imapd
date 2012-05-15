@@ -4244,12 +4244,12 @@ badannotation:
 		    if (*p) {
 			prot_printf(imapd_out, "%s BAD Junk after body section\r\n", tag);
 			eatline(imapd_in, c);
-			strarray_free(newfields);
 			goto freeargs;
 		    }
 		    appendfieldlist(&fa->fsections,
 				    section, newfields, fieldname.s,
 				    &oi, sizeof(oi));
+		    /* old 'newfields' is managed by the fieldlist now */
 		    newfields = strarray_new();
 		    break;
 		}
