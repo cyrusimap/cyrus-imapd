@@ -297,6 +297,7 @@ sub make_message
     delete $attrs{store};
 
     my $msg = $self->{gen}->generate(subject => $subject, %attrs);
+    $msg->remove_headers('subject') if !defined $subject;
     $self->_save_message($msg, $store);
 
     return $msg;

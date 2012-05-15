@@ -125,6 +125,7 @@ sub _canon_value
 	$res .= $l;
 	$res .= "\r\n";
     }
+    $res .= "\r\n" if ($res eq "");
     return $res;
 }
 

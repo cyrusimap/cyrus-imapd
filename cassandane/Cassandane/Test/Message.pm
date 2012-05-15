@@ -851,4 +851,30 @@ EOF
     $self->assert_str_equals($exp, "" . $m);
 }
 
+# Test a header field which is present but with an empty value
+sub test_add_empty
+{
+    my ($self) = @_;
+    my $m = Cassandane::Message->new();
+    $m->add_header('subject', 'Hello World');
+    $m->add_header('X-Justin-Beiber', "");
+    $m->add_header('From', Cassandane::Address->new(
+	    name => 'Fred J. Bloggs',
+	    localpart => 'fbloggs',
+	    domain => 'fastmail.fm'));
+    $m->set_body("This is a message to let you know\r\nthat I'm alive and well\r\n");
+    my $exp = <<'EOF';
+Subject: Hello World
+X-Justin-Beiber: 
+From: Fred J. Bloggs <fbloggs@fastmail.fm>
+
+This is a message to let you know
+that I'm alive and well
+EOF
+    $exp =~ s/\n/\r\n/g;
+    $self->assert_str_equals($exp, $m->as_string);
+    $self->assert_str_equals($exp, "" . $m);
+}
+
+
 1;
