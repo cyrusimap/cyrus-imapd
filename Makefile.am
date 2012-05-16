@@ -75,8 +75,11 @@ service_PROGRAMS =
 CLEANFILES =
 
 if COM_ERR
+COM_ERR_LIB = com_err/et/libcom_err.a
 BUILT_SOURCES += com_err/et/compile_et
 noinst_LIBRARIES += com_err/et/libcom_err.a
+else
+COM_ERR_LIB = $(COM_ERR_LIBS)
 endif
 
 bin_PROGRAMS = imtest/imtest
@@ -213,7 +216,7 @@ LD_BASIC_ADD = lib/libcyrus.a lib/libcyrus_min.a $(LIB_RT) ${LIB_SASL} $(SSL_LIB
 # UTILITY is the libraries that utility programs which use Cyrus'
 # mailbox and message handling code need to link with.
 
-LD_UTILITY_ADD = imap/libimap.a $(LD_BASIC_ADD) $(COM_ERR_LIBS) $(LIB_UUID)
+LD_UTILITY_ADD = imap/libimap.a $(LD_BASIC_ADD) $(COM_ERR_LIB) $(LIB_UUID)
 
 # SERVER is the libraries that network-facing servers need to link with
 #
@@ -634,7 +637,7 @@ sieve_libsieve_a_SOURCES = sieve/bytecode.h sieve/addr.y sieve/addr-lex.l \
 	sieve/message.c sieve/message.h sieve/script.c sieve/script.h \
 	sieve/sieve-lex.l sieve/sieve.y sieve/sieve_interface.h sieve/tree.c sieve/tree.h
 
-LD_SIEVE_ADD = sieve/libsieve.a $(LD_BASIC_ADD) $(COM_ERR_LIBS)
+LD_SIEVE_ADD = sieve/libsieve.a $(LD_BASIC_ADD) $(COM_ERR_LIB)
 
 sieve_sievec_LDADD = $(LD_SIEVE_ADD)
 sieve_sieved_LDADD = $(LD_SIEVE_ADD)
