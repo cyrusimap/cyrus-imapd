@@ -868,8 +868,7 @@ AC_ARG_WITH(openssl,
 	with_ssl="${withval}")
 
 SSL_CPPFLAGS=
-SSL_LDFLAGS=
-SSL_LDADD=
+SSL_LIBS=
 
 case "x$with_ssl" in
 xno)
@@ -911,23 +910,23 @@ if test "$with_ssl" != "no"; then
 
     dnl if openssl has been compiled with the rsaref2 libraries,
     dnl we need to include the rsaref libraries in the crypto check
-    ssl_ldadd=
+    ssl_libs=
     AC_CHECK_LIB(rsaref, RSAPublicEncrypt,[
-       ssl_ldadd="-lRSAglue -lrsaref"
+       ssl_libs="-lRSAglue -lrsaref"
     ],[
        # whatever, we do not care
        :
     ])
     AC_CHECK_LIB(crypto, BIO_accept,[
-	ssl_ldadd="-lcrypto $ssl_ldadd"
+	ssl_libs="-lcrypto $ssl_libs"
     ],[
 	with_ssl=no
-    ], $ssl_ldadd)
+    ], $ssl_libs)
     AC_CHECK_LIB(ssl, SSL_CTX_new, [
-	ssl_ldadd="-lssl $ssl_ldadd"
+	ssl_libs="-lssl $ssl_libs"
     ],[
 	with_ssl=no
-    ], $ssl_ldadd)
+    ], $ssl_libs)
 
     if test "$with_ssl" = "no"; then
 	AC_WARN([Disabling SSL - no library files found])
@@ -941,8 +940,7 @@ AC_MSG_RESULT($with_ssl)
 
 if test "$with_ssl" != "no"; then
     SSL_CPPFLAGS="$ssl_cppflags"
-    SSL_LDFLAGS="$ssl_ldflags"
-    SSL_LDADD="$ssl_ldadd"
+    SSL_LIBS="$ssl_ldflags $ssl_libs"
     AC_DEFINE(HAVE_SSL,[],[Build with SSL support?])
     if test "${krb4}" != no; then
        AC_DEFINE(OPENSSL_ENABLE_OLD_DES_SUPPORT,[],[Configure OpenSSL to provide legacy des apis])
@@ -951,8 +949,7 @@ if test "$with_ssl" != "no"; then
 fi
 AM_CONDITIONAL([HAVE_SSL], [test "$with_ssl" != "no"])
 AC_SUBST(SSL_CPPFLAGS)
-AC_SUBST(SSL_LDFLAGS)
-AC_SUBST(SSL_LDADD)
+AC_SUBST(SSL_LIBS)
 
 dnl
 dnl Allow for setting EGD socket file on systems without /dev/*random.
