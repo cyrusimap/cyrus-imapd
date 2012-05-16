@@ -271,22 +271,6 @@ int main(int argc, char **argv)
 	}
     }
 
-    /* fork unless we were given the -d option */
-    if (debugmode == 0) {
-
-	pid = fork();
-
-	if (pid == -1) {
-	    perror("fork");
-	    exit(1);
-	}
-
-	if (pid != 0) { /* parent */
-	    exit(0);
-	}
-    }
-    /* child */
-
     cyrus_init(alt_config, "idled", 0);
 
     /* Set inactivity timer (convert from minutes to seconds) */
@@ -322,6 +306,23 @@ int main(int argc, char **argv)
 	exit(1);
     }
     s = idle_get_sock();
+
+    /* fork unless we were given the -d option */
+    if (debugmode == 0) {
+
+	pid = fork();
+
+	if (pid == -1) {
+	    perror("fork");
+	    exit(1);
+	}
+
+	if (pid != 0) { /* parent */
+	    exit(0);
+	}
+    }
+    /* child */
+
 
     /* get ready for select() */
     FD_ZERO(&read_set);
