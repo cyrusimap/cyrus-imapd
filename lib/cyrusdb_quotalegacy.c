@@ -47,6 +47,8 @@
  * where used is a 64 bit unsigned value in bytes
  * limit is a 32 bit signed value in kilobytes (1024 bytes)
  * special value: -1 means unlimited quota
+ * then there's some extra rubbish for multiple quotas
+ * and finally there's the dlist file format, which just plain sucks less
  */
 
 #include <config.h>
@@ -358,6 +360,7 @@ static int myfetch(struct dbengine *db, char *quota_path,
     int quota_fd;
     const char *quota_base = 0;
     size_t quota_len = 0;
+    int r = 0;
 
     assert(db);
 
@@ -413,43 +416,36 @@ static int myfetch(struct dbengine *db, char *quota_path,
     else
 	quota_fd = mytid->fd;
 
+    free(db->data);
+    db->data = NULL;
+
     map_refresh(quota_fd, 1, &quota_base, &quota_len,
 		MAP_UNKNOWN_LEN, quota_path, 0);
 
-    if (quota_len) {
-	char *p, *eol;
-
-	db->data = xrealloc(db->data, quota_len);
-	memcpy(db->data, quota_base, quota_len);
-
-	p = db->data;
-	eol = memchr(p, '\n', quota_len - (p - db->data));
-	if (!eol) {
-	    map_free(&quota_base, &quota_len);
-	    return CYRUSDB_IOERROR;
-	}
-	/* convert the separating \n to SP */
-	*eol = ' ';
-
-	p = eol + 1;
-	eol = memchr(p, '\n', quota_len - (p - db->data));
-	if (!eol) {
-	    map_free(&quota_base, &quota_len);
-	    return CYRUSDB_IOERROR;
-	}
-	/* convert the terminating \n to \0 */
-	*eol = '\0';
-
-	*data = db->data;
-	*datalen = eol - db->data;
-    }
-    else {
+    if (!quota_len) {
 	*data = db->data = xstrdup("");
 	*datalen = 0;
+    }
+    else if (quota_base[quota_len-1] != '\n') {
+	r = CYRUSDB_IOERROR;
+    }
+    else {
+	*data = db->data = xstrndup(quota_base, quota_len);
+	*datalen = quota_len - 1;
+	db->data[*datalen] = '\0';
     }
 
     map_free(&quota_base, &quota_len);
     if (!tid) close(quota_fd);
+
+    if (r) return r;
+
+    /* magic old-format conversion */
+    if (db->data[0] != '%') {
+	char *eol = strchr(db->data, '\n');
+	/* convert the separating \n to SP */
+	if (eol) *eol = ' ';
+    }
 
     return 0;
 }
@@ -765,9 +761,11 @@ static int mystore(struct dbengine *db,
 
 	buf = xmalloc(datalen+1);
 	memcpy(buf, data, datalen);
-	/* convert separating SP to \n */
-	p = memchr(buf, ' ', datalen);
-	*p = '\n';
+	if (buf[0] != '%') {
+	    /* convert separating SP to \n */
+	    p = memchr(buf, ' ', datalen);
+	    if (p) *p = '\n';
+	}
 	/* add a terminating \n */
 	buf[datalen] = '\n';
 
