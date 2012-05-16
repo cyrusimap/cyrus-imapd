@@ -120,45 +120,25 @@ int masterconf_init(const char *ident, const char *alt_config)
 }
 
 struct entry {
-    char *line;
+#define MAXARGS	    64
+    int nargs;
+    struct {
+	char *key;
+	char *value;
+    } args[MAXARGS];
     int lineno;
 };
 
-const char *masterconf_getstring(struct entry *e, const char *key, 
+const char *masterconf_getstring(struct entry *e, const char *key,
 				 const char *def)
 {
-    char k[256];
-    static char v[256];
     int i;
-    char *p;
 
-    strcpy(k, key);
-    strcat(k, "=");
-
-    p = strstr(e->line, k);
-    if (p) {
-	p += strlen(k);
-	if (*p == '"') {
-	    p++;
-	    for (i = 0; *p && i < 255; i++) {
-		if (*p == '"') break;
-		v[i] = *p++;
-	    }
-	    if (*p != '"')
-		fatalf(EX_CONFIG, "configuration file %s: missing \" on line %d",
-			MASTER_CONFIG_FILENAME, e->lineno);
-	} else {
-	    /* one word */
-	    for (i = 0; *p && i < 255; i++) {
-		if (Uisspace(*p)) break;
-		v[i] = *p++;
-	    }
-	}
-	v[i] = '\0';
-	return v;
-    } else {
-	return def;
+    for (i = 0 ; i < e->nargs ; i++) {
+	if (!strcmp(key, e->args[i].key))
+	    return e->args[i].value;
     }
+    return def;
 }
 
 int masterconf_getint(struct entry *e, 
@@ -187,6 +167,59 @@ int masterconf_getswitch(struct entry *e, const char *key, int def)
 	return 1;
     }
     return def;
+}
+
+static void split_args(struct entry *e, char *buf)
+{
+    char *p = buf, *q;
+    char *key, *value;
+
+    for (;;) {
+	/* skip whitespace before arg */
+	while (Uisspace(*p))
+	    p++;
+	if (!*p)
+	    return;
+	key = p;
+
+	/* parse the key */
+	for (q = p ; Uisalnum(*q) ; q++)
+	    ;
+	if (*q != '=')
+	    fatalf(EX_CONFIG, "configuration file %s: "
+			      "bad character '%c' in argument on line %d",
+			      MASTER_CONFIG_FILENAME, *q, e->lineno);
+	*q++ = '\0';
+
+	/* parse the value */
+	if (*q == '"') {
+	    /* quoted string */
+	    value = ++q;
+	    q = strchr(q, '"');
+	    if (!q)
+		fatalf(EX_CONFIG, "configuration file %s: missing \" on line %d",
+			MASTER_CONFIG_FILENAME, e->lineno);
+	    *q++ = '\0';
+	}
+	else {
+	    /* simple word */
+	    value = q;
+	    while (*q && !Uisspace(*q))
+		q++;
+	    if (*q)
+		*q++ = '\0';
+	}
+
+	if (e->nargs == MAXARGS)
+		fatalf(EX_CONFIG, "configuration file %s: too many arguments on line %d",
+			MASTER_CONFIG_FILENAME, e->lineno);
+	e->args[e->nargs].key = key;
+	e->args[e->nargs].value = value;
+syslog(LOG_ERR, "XXX split_args [%d] = { key=\"%s\" value=\"%s\" }",
+	    e->nargs, e->args[e->nargs].key, e->args[e->nargs].value);
+	e->nargs++;
+	p = q;
+    }
 }
 
 static void process_section(FILE *f, int *lnptr, 
@@ -225,8 +258,9 @@ static void process_section(FILE *f, int *lnptr,
 
 	if (q - p > 0) {
 	    /* there's a value on this line */
-	    e.line = q;
+	    memset(&e, 0, sizeof(e));
 	    e.lineno = lineno;
+	    split_args(&e, q);
 	    func(p, &e, rock);
 	}
 
