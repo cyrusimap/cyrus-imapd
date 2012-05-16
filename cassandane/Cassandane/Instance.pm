@@ -296,7 +296,8 @@ sub _binary
 	    "--log-file=$valgrind_logdir/$name.%p",
 	    "--suppressions=$valgrind_suppressions",
 	    '--tool=memcheck',
-	    '--leak-check=full'
+	    '--leak-check=full',
+	    '--run-libc-freeres=no'
 	);
 	$valground = 1;
     }
