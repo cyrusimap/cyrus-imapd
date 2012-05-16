@@ -3879,11 +3879,6 @@ static void sched_exclude(char *attendee __attribute__((unused)),
     }
 }
 
-struct deliver_rock {
-    struct auth_state *authstate;
-    struct buf resource;
-};
-
 #define SCHEDSTAT_PENDING	"1.0"
 #define SCHEDSTAT_SENT		"1.1"
 #define SCHEDSTAT_DELIVERED	"1.2"
@@ -3898,9 +3893,11 @@ struct deliver_rock {
 static void sched_deliver(char *recipient, void *data, void *rock)
 {
     struct sched_data *sched_data = (struct sched_data *) data;
-    struct deliver_rock *drock = (struct deliver_rock *) rock;
+    struct auth_state *authstate = (struct auth_state *) rock;
     int r = 0, rights;
     const char *userid, *mboxname = NULL, *resource = NULL;
+    static struct buf buf = BUF_INITIALIZER;
+    static unsigned sched_count = 0;
     char namebuf[MAX_MAILBOX_BUFFER];
     struct mboxlist_entry mbentry;
     struct mailbox *mailbox = NULL, *inbox = NULL;
@@ -3936,7 +3933,7 @@ static void sched_deliver(char *recipient, void *data, void *rock)
     }
 
     rights =
-	mbentry.acl ? cyrus_acl_myrights(drock->authstate, mbentry.acl) : 0;
+	mbentry.acl ? cyrus_acl_myrights(authstate, mbentry.acl) : 0;
     if (!(rights & DACL_SCHED)) {
 	sched_data->status = SCHEDSTAT_NOPRIVS;
 	goto done;
@@ -3957,7 +3954,14 @@ static void sched_deliver(char *recipient, void *data, void *rock)
 	goto done;
     }
 
+    /* Get METHOD of the iTIP message */
     method = icalcomponent_get_method(sched_data->ical);
+
+    /* Create a name for the newly created resource */
+    buf_reset(&buf);
+    buf_printf(&buf, "%x-%d-%ld-%u.ics",
+	       strhash(icalcomponent_get_uid(sched_data->ical)), getpid(),
+	       time(0), sched_count++);
 
     memset(&cdata, 0, sizeof(struct caldav_data));
     cdata.ical_uid = icalcomponent_get_uid(sched_data->ical);
@@ -3976,7 +3980,7 @@ static void sched_deliver(char *recipient, void *data, void *rock)
 	/* Can't find object belonging to attendee - use default calendar */
 	caldav_mboxname(SCHED_DEFAULT, userid, namebuf);
 	mboxname = namebuf;
-	resource = buf_cstring(&drock->resource);
+	resource = buf_cstring(&buf);
     }
 
     /* Open recipient's calendar for writing */
@@ -4049,8 +4053,7 @@ static void sched_deliver(char *recipient, void *data, void *rock)
     /* Store the request in the recipient's Inbox */
     mailbox_unlock_index(inbox, NULL);
 
-    r = store_resource(&txn, sched_data->ical, inbox,
-		       buf_cstring(&drock->resource),
+    r = store_resource(&txn, sched_data->ical, inbox, buf_cstring(&buf),
 		       caldavdb, OVERWRITE_YES, 0);
     /* XXX  What do we do if storing to Inbox fails? */
 
@@ -4078,13 +4081,11 @@ static int sched_request(icalcomponent *oldical, icalcomponent *newical)
     icalproperty_method method;
 //    icaltimezone *utc = icaltimezone_get_utc_timezone();
     static struct buf prodid = BUF_INITIALIZER;
-    struct deliver_rock drock = { NULL, BUF_INITIALIZER };
+    struct auth_state *authstate;
     icalcomponent *req, *copy, *comp;
     icalproperty *prop;
     icalcomponent_kind kind;
     const char *organizer;
-    time_t now = time(0);
-    static unsigned sched_count = 0;
     struct hash_table att_table;
     unsigned ncomp;
 
@@ -4138,12 +4139,7 @@ static int sched_request(icalcomponent *oldical, icalcomponent *newical)
 
     prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
     organizer = icalproperty_get_organizer(prop);
-    drock.authstate = auth_newstate(caladdress_to_userid(organizer));
-
-    /* Create a name for the created resource */
-    buf_printf(&drock.resource, "%x-%d-%ld-%u.ics",
-	       strhash(icalcomponent_get_uid(comp)), getpid(),
-	       now, sched_count++);
+    authstate = auth_newstate(caladdress_to_userid(organizer));
 
     /* Process each component */
     ncomp = 0;
@@ -4239,7 +4235,7 @@ static int sched_request(icalcomponent *oldical, icalcomponent *newical)
     } while ((comp = icalcomponent_get_next_component(copy, kind)));
 
     /* Attempt to deliver requests to attendees */
-    hash_enumerate(&att_table, sched_deliver, &drock);
+    hash_enumerate(&att_table, sched_deliver, authstate);
 
     if (newical) {
 	/* Set SCHEDULE-STATUS for each attendee in organizer object */
@@ -4264,8 +4260,7 @@ static int sched_request(icalcomponent *oldical, icalcomponent *newical)
     }
 
     /* Cleanup */
-    buf_free(&drock.resource);
-    auth_freestate(drock.authstate);
+    auth_freestate(authstate);
     icalcomponent_free(copy);
     icalcomponent_free(req);
 
@@ -4282,14 +4277,12 @@ static int sched_reply(icalcomponent *oldical, icalcomponent *newical,
     icalproperty_method method;
     static struct buf prodid = BUF_INITIALIZER;
     struct sched_data *sched_data;
-    struct deliver_rock drock = { NULL, BUF_INITIALIZER };
+    struct auth_state *authstate;
     icalcomponent *copy, *comp;
     icalproperty *prop;
     icalparameter *param;
     icalcomponent_kind kind;
     const char *organizer;
-    time_t now = time(0);
-    static unsigned sched_count = 0;
 
     sched_data = xzmalloc(sizeof(struct sched_data));
     sched_data->is_reply = 1;
@@ -4337,12 +4330,7 @@ static int sched_reply(icalcomponent *oldical, icalcomponent *newical,
 				     icalcomponent_new_clone(comp));
     }
 
-    /* Create a name for the created resource */
-    buf_printf(&drock.resource, "%x-%d-%ld-%u.ics",
-	       strhash(icalcomponent_get_uid(ical)), getpid(),
-	       now, sched_count++);
-
-    drock.authstate = auth_newstate(userid);
+    authstate = auth_newstate(userid);
 
     /* Process each component */
     comp = icalcomponent_get_first_real_component(copy);
@@ -4429,7 +4417,7 @@ static int sched_reply(icalcomponent *oldical, icalcomponent *newical,
     organizer = icalproperty_get_organizer(prop);
 
     /* Attempt to deliver reply to organizer */
-    sched_deliver((char *) organizer, sched_data, &drock);
+    sched_deliver((char *) organizer, sched_data, authstate);
 
     if (newical) {
 	/* Set SCHEDULE-STATUS for organizer in attendee object */
@@ -4440,8 +4428,7 @@ static int sched_reply(icalcomponent *oldical, icalcomponent *newical,
     }
 
     /* Cleanup */
-    buf_free(&drock.resource);
-    auth_freestate(drock.authstate);
+    auth_freestate(authstate);
     icalcomponent_free(copy);
     free_sched_data(sched_data);
 
