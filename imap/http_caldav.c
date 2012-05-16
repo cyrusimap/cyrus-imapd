@@ -130,8 +130,9 @@ static icalcomponent *busytime(struct transaction_t *txn,
 #ifdef WITH_CALDAV_SCHED
 static char *caladdress_to_userid(const char *addr);
 static int sched_busytime(struct transaction_t *txn);
-static int sched_request(icalcomponent *ical);
-static int sched_reply(icalcomponent *ical, const char *userid);
+static int sched_request(icalcomponent *oldical, icalcomponent *newical);
+static int sched_reply(icalcomponent *oldical, icalcomponent *newical,
+		       const char *userid);
 #endif
 int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname);
 
@@ -877,7 +878,7 @@ static int meth_delete(struct transaction_t *txn)
     struct mailbox *mailbox = NULL;
     struct caldav_data cdata;
     struct index_record record;
-    const char *etag = NULL;
+    const char *etag = NULL, *userid;
     time_t lastmod = 0;
 
     /* Make sure its a DAV resource */
@@ -888,6 +889,7 @@ static int meth_delete(struct transaction_t *txn)
 
     /* Construct mailbox name corresponding to request target URI */
     (void) target_to_mboxname(&txn->req_tgt, mailboxname);
+    userid = mboxname_to_userid(mailboxname);
 
     /* Locate the mailbox */
     if ((r = http_mlookup(mailboxname, &server, &acl, NULL))) {
@@ -979,6 +981,71 @@ static int meth_delete(struct transaction_t *txn)
 	ret = precond;
 	goto done;
     }
+
+#ifdef WITH_CALDAV_SCHED
+    if (cdata.sched_tag) {
+	/* Scheduling object resource */
+	struct mboxlist_entry mbentry;
+	char outboxname[MAX_MAILBOX_BUFFER];
+	static struct buf href = BUF_INITIALIZER;
+	const char *msg_base = NULL, *organizer;
+	unsigned long msg_size = 0;
+	icalcomponent *ical, *comp;
+	icalproperty *prop;
+
+	/* Check ACL of auth'd user on userid's Scheduling Outbox */
+	caldav_mboxname(SCHED_OUTBOX, userid, outboxname);
+
+	if ((r = mboxlist_lookup(outboxname, &mbentry, NULL))) {
+	    syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
+		   outboxname, error_message(r));
+	    mbentry.acl = NULL;
+	}
+
+	rights =
+	    mbentry.acl ? cyrus_acl_myrights(httpd_authstate, mbentry.acl) : 0;
+	if (!(rights & DACL_SCHED)) {
+	    /* DAV:need-privileges */
+	    txn->error.precond = DAV_NEED_PRIVS;
+	    txn->error.rights = DACL_SCHED;
+
+	    buf_reset(&href);
+	    buf_printf(&href, "/calendars/user/%s/%s", userid, SCHED_OUTBOX);
+	    txn->error.resource = buf_cstring(&href);
+	    ret = HTTP_FORBIDDEN;
+	    goto done;
+	}
+
+	/* Load message containing the resource and parse iCal data */
+	mailbox_map_message(mailbox, record.uid, &msg_base, &msg_size);
+	ical = icalparser_parse_string(msg_base + record.header_size);
+	mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
+
+	if (!ical) {
+	    syslog(LOG_ERR,
+		   "meth_delete: failed to parse iCalendar object %s:%u",
+		   mailboxname, record.uid);
+	    ret = HTTP_SERVER_ERROR;
+	    goto done;
+	}
+
+	/* Grab the organizer */
+	comp = icalcomponent_get_first_real_component(ical);
+	prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+	organizer = icalproperty_get_organizer(prop);
+
+	if (!strcmp(caladdress_to_userid(organizer), userid)) {
+	    /* Organizer scheduling object resource */
+	    ret = sched_request(ical, NULL);
+	}
+	else {
+	    /* Attendee scheduling object resource */
+	    ret = sched_reply(ical, NULL, userid);
+	}
+
+	icalcomponent_free(ical);
+    }
+#endif /* WITH_CALDAV_SCHED */
 
     /* Expunge the resource */
     record.system_flags |= FLAG_EXPUNGED;
@@ -2295,14 +2362,14 @@ static int meth_put(struct transaction_t *txn)
 
 	if (!strcmp(caladdress_to_userid(organizer), userid)) {
 	    /* Organizer scheduling object resource */
-	    ret = sched_request(ical);
+	    ret = sched_request(NULL, ical);
 	}
 	else {
 	    /* Attendee scheduling object resource */
-	    ret = sched_reply(ical, userid);
+	    ret = sched_reply(NULL, ical, userid);
 	}
     }
-#endif
+#endif /* WITH_CALDAV_SCHED */
 
     /* Store resource at target */
     if (!ret) ret = store_resource(txn, ical, mailbox, txn->req_tgt.resource,
@@ -3839,6 +3906,7 @@ static void sched_deliver(char *recipient, void *data, void *rock)
     struct mailbox *mailbox = NULL, *inbox = NULL;
     struct caldav_db *caldavdb = NULL;
     struct caldav_data cdata;
+    icalproperty_method method;
     icalcomponent *ical = NULL;
     struct transaction_t txn;
 
@@ -3889,14 +3957,17 @@ static void sched_deliver(char *recipient, void *data, void *rock)
 	goto done;
     }
 
+    method = icalcomponent_get_method(sched_data->ical);
+
     memset(&cdata, 0, sizeof(struct caldav_data));
     cdata.ical_uid = icalcomponent_get_uid(sched_data->ical);
     caldav_read(caldavdb, &cdata);
+
     if (cdata.mailbox) {
 	mboxname = cdata.mailbox;
 	resource = cdata.resource;
     }
-    else if (sched_data->is_reply) {
+    else if (method == ICAL_METHOD_REPLY) {
 	/* Can't find object belonging to organizer - ignore reply */
 	sched_data->status = SCHEDSTAT_PERMFAIL;
 	goto done;
@@ -3908,45 +3979,70 @@ static void sched_deliver(char *recipient, void *data, void *rock)
 	resource = buf_cstring(&drock->resource);
     }
 
-    /* Open recipient's calendar for reading */
-    if ((r = mailbox_open_irl(mboxname, &mailbox))) {
+    /* Open recipient's calendar for writing */
+    if ((r = mailbox_open_iwl(mboxname, &mailbox))) {
 	syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
 	       mboxname, error_message(r));
 	sched_data->status = SCHEDSTAT_TEMPFAIL;
 	goto done;
     }
 
-    if (cdata.imap_uid) {
-	/* Merge with existing object */
-	/* XXX  Do merge logic */
-	syslog(LOG_INFO, "merge with existing sched object");
-	sched_data->status = SCHEDSTAT_TEMPFAIL;
-	goto inbox;
+    if (method == ICAL_METHOD_CANCEL) {
+	struct index_record record;
+
+	if (!cdata.imap_uid ||
+	    mailbox_find_index_record(mailbox, cdata.imap_uid, &record)) {
+	    goto inbox;
+	}
+
+	/* Expunge the resource */
+	record.system_flags |= FLAG_EXPUNGED;
+
+	if ((r = mailbox_rewrite_index_record(mailbox, &record))) {
+	    syslog(LOG_ERR, "expunging record (%s) failed: %s",
+		   mboxname, error_message(r));
+	    sched_data->status = SCHEDSTAT_TEMPFAIL;
+	    goto done;
+	}
+
+	/* Delete mapping entry for resource name */
+	caldav_lockread(caldavdb, &cdata);
+	caldav_delete(caldavdb, &cdata);
+	caldav_commit(caldavdb);
     }
     else {
-	/* Create new object (copy of request w/o METHOD) */
-	icalproperty *prop;
+	if (cdata.imap_uid) {
+	    /* Merge with existing object */
+	    /* XXX  Do merge logic */
+	    syslog(LOG_INFO, "merge with existing sched object");
+	    sched_data->status = SCHEDSTAT_TEMPFAIL;
+	    goto inbox;
+	}
+	else {
+	    /* Create new object (copy of request w/o METHOD) */
+	    icalproperty *prop;
 
-	ical = icalcomponent_new_clone(sched_data->ical);
+	    ical = icalcomponent_new_clone(sched_data->ical);
 
-	prop = icalcomponent_get_first_property(ical, ICAL_METHOD_PROPERTY);
-	icalcomponent_remove_property(ical, prop);
-    }
+	    prop = icalcomponent_get_first_property(ical, ICAL_METHOD_PROPERTY);
+	    icalcomponent_remove_property(ical, prop);
+	}
 
-    /* Store the object in the recipients's calendar */
-    mailbox_unlock_index(mailbox, NULL);
+	/* Store the object in the recipients's calendar */
+	mailbox_unlock_index(mailbox, NULL);
 
-    r = store_resource(&txn, ical, mailbox, resource,
-		       caldavdb, OVERWRITE_YES, 1);
+	r = store_resource(&txn, ical, mailbox, resource,
+			   caldavdb, OVERWRITE_YES, 1);
 
-    if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
-	sched_data->status = SCHEDSTAT_DELIVERED;
-    }
-    else {
-	syslog(LOG_ERR, "store_resource(%s) failed: %s",
-	       mailbox->name, error_message(r));
-	sched_data->status = SCHEDSTAT_TEMPFAIL;
-	goto done;
+	if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
+	    sched_data->status = SCHEDSTAT_DELIVERED;
+	}
+	else {
+	    syslog(LOG_ERR, "store_resource(%s) failed: %s",
+		   mailbox->name, error_message(r));
+	    sched_data->status = SCHEDSTAT_TEMPFAIL;
+	    goto done;
+	}
     }
 
   inbox:
@@ -3961,7 +4057,7 @@ static void sched_deliver(char *recipient, void *data, void *rock)
   done:
     if (ical) icalcomponent_free(ical);
     if (inbox) mailbox_close(&inbox);
-    if (mailbox) mailbox_close(&inbox);
+    if (mailbox) mailbox_close(&mailbox);
     if (caldavdb) caldav_close(caldavdb);
 }
 
@@ -3975,9 +4071,11 @@ static void free_sched_data(void *data) {
     }
 }
 
-static int sched_request(icalcomponent *ical)
+static int sched_request(icalcomponent *oldical, icalcomponent *newical)
 {
     int ret = 0;
+    icalcomponent *ical;
+    icalproperty_method method;
 //    icaltimezone *utc = icaltimezone_get_utc_timezone();
     static struct buf prodid = BUF_INITIALIZER;
     struct deliver_rock drock = { NULL, BUF_INITIALIZER };
@@ -3992,6 +4090,17 @@ static int sched_request(icalcomponent *ical)
 
     construct_hash_table(&att_table, 10, 1);
 
+    /* Check what kind of METHOD we are dealing with */
+    if (!newical) {
+	method = ICAL_METHOD_CANCEL;
+	ical = oldical;
+    }
+    else {
+	/* XXX  Need to handle modify */
+	method = ICAL_METHOD_REQUEST;
+	ical = newical;
+    }
+
     /* Clone a working copy of the iCal object */
     copy = icalcomponent_new_clone(ical);
 
@@ -4003,7 +4112,7 @@ static int sched_request(icalcomponent *ical)
     req = icalcomponent_vanew(ICAL_VCALENDAR_COMPONENT,
 			      icalproperty_new_version("2.0"),
 			      icalproperty_new_prodid(buf_cstring(&prodid)),
-			      icalproperty_new_method(ICAL_METHOD_REQUEST),
+			      icalproperty_new_method(method),
 			      0);
 
     /* Copy over any CALSCALE property */
@@ -4057,6 +4166,13 @@ static int sched_request(icalcomponent *ical)
 	    icalproperty_new_dtstamp(icaltime_from_timet_with_zone(now, 0, utc));
 	icalcomponent_add_property(comp, prop);
 #endif
+	if (method == ICAL_METHOD_CANCEL) {
+	    /* Deleting the object -- set STATUS to CANCELLED for component */
+	    icalcomponent_set_status(comp, ICAL_STATUS_CANCELLED);
+	    icalcomponent_set_sequence(comp,
+				       icalcomponent_get_sequence(comp) + 1);
+	}
+
 	/* Process each attendee */
 	for (prop = icalcomponent_get_first_property(comp,
 						     ICAL_ATTENDEE_PROPERTY);
@@ -4125,21 +4241,25 @@ static int sched_request(icalcomponent *ical)
     /* Attempt to deliver requests to attendees */
     hash_enumerate(&att_table, sched_deliver, &drock);
 
-    /* Set SCHEDULE-STATUS for each attendee in organizer object */
-    comp = icalcomponent_get_first_real_component(ical);
+    if (newical) {
+	/* Set SCHEDULE-STATUS for each attendee in organizer object */
+	comp = icalcomponent_get_first_real_component(newical);
 
-    for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
-	 prop;
-	 prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
-	const char *attendee = icalproperty_get_attendee(prop);
-	struct sched_data *sched_data;
+	for (prop =
+		 icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
+	     prop;
+	     prop =
+		 icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
+	    const char *attendee = icalproperty_get_attendee(prop);
+	    struct sched_data *sched_data;
 
-	sched_data = hash_lookup(attendee, &att_table);
-	if (sched_data) {
-	    icalparameter *param = icalparameter_new(ICAL_IANA_PARAMETER);
-	    icalparameter_set_iana_name(param, "SCHEDULE-STATUS");
-	    icalparameter_set_iana_value(param, sched_data->status);
-	    icalproperty_add_parameter(prop, param);
+	    sched_data = hash_lookup(attendee, &att_table);
+	    if (sched_data) {
+		icalparameter *param = icalparameter_new(ICAL_IANA_PARAMETER);
+		icalparameter_set_iana_name(param, "SCHEDULE-STATUS");
+		icalparameter_set_iana_value(param, sched_data->status);
+		icalproperty_add_parameter(prop, param);
+	    }
 	}
     }
 
@@ -4154,9 +4274,12 @@ static int sched_request(icalcomponent *ical)
     return ret;
 }
 
-static int sched_reply(icalcomponent *ical, const char *userid)
+static int sched_reply(icalcomponent *oldical, icalcomponent *newical,
+		       const char *userid)
 {
     int ret = 0;
+    icalcomponent *ical;
+    icalproperty_method method;
     static struct buf prodid = BUF_INITIALIZER;
     struct sched_data *sched_data;
     struct deliver_rock drock = { NULL, BUF_INITIALIZER };
@@ -4171,6 +4294,17 @@ static int sched_reply(icalcomponent *ical, const char *userid)
     sched_data = xzmalloc(sizeof(struct sched_data));
     sched_data->is_reply = 1;
 
+    /* Check what kind of METHOD we are dealing with */
+    if (!newical) {
+	method = ICAL_METHOD_CANCEL;
+	ical = oldical;
+    }
+    else {
+	/* XXX  Need to handle modify */
+	method = ICAL_METHOD_REPLY;
+	ical = newical;
+    }
+
     /* Create our reply iCal object */
     if (!buf_len(&prodid)) {
 	buf_printf(&prodid, "-//CyrusIMAP.org/Cyrus %s//EN", cyrus_version());
@@ -4180,7 +4314,7 @@ static int sched_reply(icalcomponent *ical, const char *userid)
 	icalcomponent_vanew(ICAL_VCALENDAR_COMPONENT,
 			    icalproperty_new_version("2.0"),
 			    icalproperty_new_prodid(buf_cstring(&prodid)),
-			    icalproperty_new_method(ICAL_METHOD_REPLY),
+			    icalproperty_new_method(method),
 			    0);
 
     /* Clone a working copy of the iCal object */
@@ -4297,11 +4431,13 @@ static int sched_reply(icalcomponent *ical, const char *userid)
     /* Attempt to deliver reply to organizer */
     sched_deliver((char *) organizer, sched_data, &drock);
 
-    /* Set SCHEDULE-STATUS for organizer in attendee object */
-    param = icalparameter_new(ICAL_IANA_PARAMETER);
-    icalparameter_set_iana_name(param, "SCHEDULE-STATUS");
-    icalparameter_set_iana_value(param, sched_data->status);
-    icalproperty_add_parameter(prop, param);
+    if (newical) {
+	/* Set SCHEDULE-STATUS for organizer in attendee object */
+	param = icalparameter_new(ICAL_IANA_PARAMETER);
+	icalparameter_set_iana_name(param, "SCHEDULE-STATUS");
+	icalparameter_set_iana_value(param, sched_data->status);
+	icalproperty_add_parameter(prop, param);
+    }
 
     /* Cleanup */
     buf_free(&drock.resource);
