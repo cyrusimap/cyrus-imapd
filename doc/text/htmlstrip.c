@@ -46,6 +46,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <ctype.h>
 
 #define MODE_PRE 1		/* Preformatted */
 #define MODE_IGNORETXT 2	/* Discard text */
@@ -63,7 +64,7 @@ struct mode {
     int startline;
 };
 
-struct mode modestack[100] = {"TOPLEVEL", 4};
+struct mode modestack[100] = {{"TOPLEVEL", 4, 0, 0, 0, 0}};
 int curmode = 0;
 int didparagraph = 1;
 
@@ -119,10 +120,10 @@ struct tag cmds[] = {
     { "td",	0,		0,		0, },
 };
 
+static void parse(FILE *infile);
+static int lex(FILE *infile, int *cmdptr, int *endtagptr, int *linenoptr);
 
-main(argc, argv)
-int argc;
-char **argv;
+int main(int argc, char **argv)
 {
     FILE *infile;
 
@@ -141,8 +142,7 @@ char **argv;
     exit(0);
 }
 
-parse(infile)
-FILE *infile;
+static void parse(FILE *infile)
 {
     char outputbuf[1024];
     int outpos = 0;
@@ -345,15 +345,11 @@ FILE *infile;
     }
 }
 
-int lex(infile, cmdptr, endtagptr, linenoptr)
-FILE *infile;
-int *cmdptr;
-int *endtagptr;
-int *linenoptr;
+static int lex(FILE *infile, int *cmdptr, int *endtagptr, int *linenoptr)
 {
     int c;
     static char buf[1024];
-    int i = 0;
+    unsigned int i = 0;
     int lineno = *linenoptr;
     char *p;
 
@@ -416,7 +412,7 @@ int *linenoptr;
 	exit(1);
     }
 
-    if (p = strchr(buf, ' ')) *p = '\0';
+    if ((p = strchr(buf, ' '))) *p = '\0';
 
     p = buf;
     if (*p == '/') {
