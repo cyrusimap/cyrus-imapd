@@ -636,9 +636,7 @@ sieve_libsieve_a_SOURCES = sieve/bytecode.h sieve/addr.y sieve/addr-lex.l \
 
 LD_SIEVE_ADD = sieve/libsieve.a $(LD_BASIC_ADD) $(COM_ERR_LIBS)
 
-sieve_sievec_LDFLAGS = $(LD_SIEVE_FLAGS)
 sieve_sievec_LDADD = $(LD_SIEVE_ADD)
-sieve_sieved_LDFLAGS = $(LD_SIEVE_FLAGS)
 sieve_sieved_LDADD = $(LD_SIEVE_ADD)
 
 sieve/sieve_err.h sieve/sieve_err.c: sieve/sieve_err.et
