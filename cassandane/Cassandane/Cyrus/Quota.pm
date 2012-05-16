@@ -296,7 +296,7 @@ sub test_exceeding_storage
 
     xlog "test exceeding the STORAGE quota limit";
 
-    my $imaptalk = $self->{store}->get_client();
+    my $talk = $self->{store}->get_client();
 
     xlog "set a low limit";
     $self->_set_quotaroot('user.cassandane');
@@ -330,14 +330,11 @@ sub test_exceeding_storage
     xlog "add a message that exceeds the limit";
     my $nlines = int(($slack - 640) / 23) * 2;
     $nlines = 500 if ($nlines < 500);
-    $self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
-    eval
-    {
-	my $msg = $self->make_message("Message $n",
-				      extra_lines => $nlines);
-    };
-    $self->assert_str_equals('no', $imaptalk->get_last_completion_response());
-    $self->assert($imaptalk->get_last_error() =~ m/over quota/i);
+    $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    my $overmsg = eval { $self->make_message("Message $n", extra_lines => $nlines) };
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert($talk->get_last_error() =~ m/over quota/i);
 
     xlog "check that the exceeding message is not in the mailbox";
     $self->check_messages(\%msgs);
@@ -461,17 +458,10 @@ sub test_exceeding_message
     $self->_check_usages(message => 10);
 
     xlog "add a message that exceeds the limit";
-    eval
-    {
-	my $msg = $self->make_message("Message 11");
-    };
-    # As opposed to storage checking, which is currently done after receiving the
-    # (LITERAL) mail, message count checking is performed right away. This early
-    # NO response while writing the LITERAL triggers a die in IMAPTalk, leaving
-    # the completion response undefined.
-    my $ex = $@;
-    $self->assert_not_null($ex);
-    $self->assert($ex =~ m/Got - \d+ NO Over quota/);
+    my $overmsg = eval { $self->make_message("Message 11") };
+
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert($talk->get_last_error() =~ m/over quota/i);
 
     xlog "check that the exceeding message is not in the mailbox";
     $self->_check_usages(message => 10);
@@ -726,7 +716,7 @@ sub test_quotarename
     my ($self) = @_;
 
     my $admintalk = $self->{adminstore}->get_client();
-    my $imaptalk = $self->{store}->get_client();
+    my $talk = $self->{store}->get_client();
 
     # Right - let's set ourselves a basic usage quota
     $self->_set_quotaroot('user.cassandane');
@@ -752,8 +742,8 @@ sub test_quotarename
 
 	my $annotation = $self->make_random_data(1);
 	$expected_annotation_storage += length($annotation);
-	$imaptalk->store('' . $uid, 'annotation', ['/comment', ['value.priv', { Quote => $annotation }]]);
-	$self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+	$talk->store('' . $uid, 'annotation', ['/comment', ['value.priv', { Quote => $annotation }]]);
+	$self->assert_str_equals('ok', $talk->get_last_completion_response());
 	$uid++;
     }
 
@@ -763,9 +753,9 @@ sub test_quotarename
 	'x-annotation-storage' => int($expected_annotation_storage/1024),
     );
 
-    $imaptalk->create("INBOX.sub") || die "Failed to create subfolder";
+    $talk->create("INBOX.sub") || die "Failed to create subfolder";
     $self->{store}->set_folder("INBOX.sub");
-    $imaptalk->select($self->{store}->{folder}) || die;
+    $talk->select($self->{store}->{folder}) || die;
     my $expected_storage_more = $expected_storage;
     my $expected_message_more = $expected_message;
     my $expected_annotation_storage_more = $expected_annotation_storage;
@@ -779,12 +769,12 @@ sub test_quotarename
 
 	my $annotation = $self->make_random_data(1);
 	$expected_annotation_storage_more += length($annotation);
-	$imaptalk->store('' . $uid, 'annotation', ['/comment', ['value.priv', { Quote => $annotation }]]);
-	$self->assert_str_equals('ok', $imaptalk->get_last_completion_response());
+	$talk->store('' . $uid, 'annotation', ['/comment', ['value.priv', { Quote => $annotation }]]);
+	$self->assert_str_equals('ok', $talk->get_last_completion_response());
 	$uid++;
     }
     $self->{store}->set_folder("INBOX");
-    $imaptalk->select($self->{store}->{folder}) || die;
+    $talk->select($self->{store}->{folder}) || die;
 
     $self->_check_usages(
 	storage => int($expected_storage_more/1024),
@@ -792,8 +782,8 @@ sub test_quotarename
 	'x-annotation-storage' => int($expected_annotation_storage_more/1024),
     );
 
-    $imaptalk->rename("INBOX.sub", "INBOX.othersub") || die;
-    $imaptalk->select("INBOX.othersub") || die;
+    $talk->rename("INBOX.sub", "INBOX.othersub") || die;
+    $talk->select("INBOX.othersub") || die;
 
     # usage should be the same after a rename
     $self->_check_usages(
@@ -802,7 +792,7 @@ sub test_quotarename
 	'x-annotation-storage' => int($expected_annotation_storage_more/1024),
     );
 
-    $imaptalk->delete("INBOX.othersub") || die;
+    $talk->delete("INBOX.othersub") || die;
 
     $self->_check_usages(
 	storage => int($expected_storage/1024),
@@ -944,19 +934,19 @@ sub test_quota_f_vs_update
     $self->_set_quotaroot($basefolder);
     $self->_set_limits(storage => 1000000);
     $self->_check_usages(storage => 0);
-    my $imaptalk = $self->{store}->get_client();
+    my $talk = $self->{store}->get_client();
 
     xlog "Create some sub folders";
     for my $f (@folders)
     {
-	$imaptalk->create("$basefolder.$f") || die "Failed $@";
+	$talk->create("$basefolder.$f") || die "Failed $@";
 	$self->{store}->set_folder("$basefolder.$f");
 	$msg = $self->make_message("Cassandane $f",
 				      extra_lines => 2000+rand(5000));
 	$expected += length($msg->as_string());
     }
     # unselect so quota -f can lock the mailboxes
-    $imaptalk->unselect();
+    $talk->unselect();
 
     xlog "Check that we have some quota usage";
     $self->_check_usages(storage => int($expected/1024));
