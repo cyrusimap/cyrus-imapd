@@ -473,7 +473,7 @@ static int fixquota_pass2(void *rock,
 {
     int r = 0;
     const char *prefix = (const char *)rock;
-    int prefixlen = (prefix ? strlen(prefix) : 0);
+    size_t prefixlen = (prefix ? strlen(prefix) : 0);
     struct mailbox *mailbox = NULL;
     int thisquota = -1;
     char *mboxname = xstrndup(name, namelen);
