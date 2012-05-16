@@ -398,5 +398,69 @@ sub test_shutdownfile_abortedidled
     $self->common_basic();
 }
 
+sub test_sigterm
+{
+    my ($self) = @_;
+
+    xlog "Test that an imapd can be killed with SIGTERM";
+    xlog "while executing an IDLE command";
+
+    $self->{instance}->{config}->set(imapidlepoll => '2');
+    $self->{instance}->add_start(name => 'idled',
+				 argv => [ 'idled' ]);
+    xlog "Starting up the instance";
+    $self->{instance}->start();
+
+    my $svc = $self->{instance}->get_service('imap');
+
+    my $store = $svc->create_store(folder => 'INBOX');
+    my $talk = $store->get_client();
+
+    # User logged in SESSIONID=<0604061-29539-1337148251-1>
+    my $rem = $talk->get_response_code('remainder');
+    my ($name, $imapd_pid, $start, $n) =
+	($rem =~ m/SESSIONID=<([^-]+)-(\d+)-(\d+)-(\d+)>/);
+    $self->assert_not_null($imapd_pid);
+    $imapd_pid = 0 + $imapd_pid;
+    $self->assert($imapd_pid > 1);
+    xlog "PID of imapd process is $imapd_pid";
+
+    $store->_select();
+
+    xlog "Sending the IDLE command";
+    $store->idle_begin()
+	or die "IDLE failed: $@";
+
+    xlog "Poll for any unsolicited response - should be none";
+    my $r = $store->idle_response({}, 0);
+    $self->assert(!$r, "No unsolicted response");
+
+    xlog "sleeping for 3 seconds";
+    sleep(3);
+
+    xlog "Poll for any unsolicited response - should be none";
+    $r = $store->idle_response({}, 0);
+    $self->assert(!$r, "No unsolicted response");
+
+    $self->assert_null($talk->get_response_code('alert'));
+
+    xlog "Send SIGQUIT (or worse) to the imapd";
+    my $r = Cassandane::Instance::_stop_pid($imapd_pid);
+    $self->assert($r == 1, "shutdown required brute force");
+
+    xlog "Check that the server disconnected";
+    eval
+    {
+	# We use _send_cmd() and _next_atom() rather the normal path
+	# through _imap_cmd() because the latter will warn() to stderr
+	# about the exception we're about to generate, which is
+	# downright untidy.
+	$talk->_send_cmd('status', 'INBOX', '(messages unseen)');
+	$talk->_parse_response({});
+    };
+    my $mm = $@;    # this doesn't survive unless we save it
+    $self->assert_matches(qr/IMAP Connection closed by other end/, $mm);
+}
+
 
 1;
