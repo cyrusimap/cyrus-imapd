@@ -1036,14 +1036,24 @@ static int meth_delete(struct transaction_t *txn)
 
 	if (!strcmp(caladdress_to_userid(organizer), userid)) {
 	    /* Organizer scheduling object resource */
-	    ret = sched_request(ical, NULL);
+	    r = sched_request(ical, NULL);
 	}
 	else {
 	    /* Attendee scheduling object resource */
-	    ret = sched_reply(ical, NULL, userid);
+	    r = sched_reply(ical, NULL, userid);
 	}
 
 	icalcomponent_free(ical);
+
+	if (r) {
+	    syslog(LOG_ERR,
+		   "meth_delete: failed to process scheduling message in %s"
+		   " (org=%s, att=%s)",
+		   mailboxname, organizer, userid);
+	    txn->error.desc = "Failed to process scheduling message";
+	    ret = HTTP_SERVER_ERROR;
+	    goto done;
+	}
     }
 #endif /* WITH_CALDAV_SCHED */
 
@@ -2362,18 +2372,28 @@ static int meth_put(struct transaction_t *txn)
 
 	if (!strcmp(caladdress_to_userid(organizer), userid)) {
 	    /* Organizer scheduling object resource */
-	    ret = sched_request(NULL, ical);
+	    r = sched_request(NULL, ical);
 	}
 	else {
 	    /* Attendee scheduling object resource */
-	    ret = sched_reply(NULL, ical, userid);
+	    r = sched_reply(NULL, ical, userid);
+	}
+
+	if (r) {
+	    syslog(LOG_ERR,
+		   "meth_put: failed to process scheduling message in %s"
+		   " (org=%s, att=%s)",
+		   mailboxname, organizer, userid);
+	    txn->error.desc = "Failed to process scheduling message";
+	    ret = HTTP_SERVER_ERROR;
+	    goto done;
 	}
     }
 #endif /* WITH_CALDAV_SCHED */
 
     /* Store resource at target */
-    if (!ret) ret = store_resource(txn, ical, mailbox, txn->req_tgt.resource,
-				   auth_caldavdb, OVERWRITE_CHECK, 1);
+    ret = store_resource(txn, ical, mailbox, txn->req_tgt.resource,
+			 auth_caldavdb, OVERWRITE_CHECK, 1);
 
   done:
     if (ical) icalcomponent_free(ical);
@@ -3468,8 +3488,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 
 
     /* Prepare to append the iMIP message to calendar mailbox */
-    if ((r = append_setup(&as, mailbox->name, 
-			  httpd_userid, httpd_authstate, 0, size))) {
+    if ((r = append_setup(&as, mailbox->name, NULL, NULL, 0, size))) {
 	syslog(LOG_ERR, "append_setup(%s) failed: %s",
 	       mailbox->name, error_message(r));
 	ret = HTTP_SERVER_ERROR;
@@ -3895,8 +3914,8 @@ static void sched_deliver(char *recipient, void *data, void *rock)
     struct sched_data *sched_data = (struct sched_data *) data;
     struct auth_state *authstate = (struct auth_state *) rock;
     int r = 0, rights;
-    const char *userid, *mboxname = NULL, *resource = NULL;
-    static struct buf buf = BUF_INITIALIZER;
+    const char *userid, *mboxname = NULL;
+    static struct buf resource = BUF_INITIALIZER;
     static unsigned sched_count = 0;
     char namebuf[MAX_MAILBOX_BUFFER];
     struct mboxlist_entry mbentry;
@@ -3957,21 +3976,15 @@ static void sched_deliver(char *recipient, void *data, void *rock)
     /* Get METHOD of the iTIP message */
     method = icalcomponent_get_method(sched_data->ical);
 
-    /* Create a name for the newly created resource */
-    buf_reset(&buf);
-    buf_printf(&buf, "%x-%d-%ld-%u.ics",
-	       strhash(icalcomponent_get_uid(sched_data->ical)), getpid(),
-	       time(0), sched_count++);
-
     memset(&cdata, 0, sizeof(struct caldav_data));
     cdata.ical_uid = icalcomponent_get_uid(sched_data->ical);
     caldav_read(caldavdb, &cdata);
 
     if (cdata.mailbox) {
 	mboxname = cdata.mailbox;
-	resource = cdata.resource;
+	buf_setcstr(&resource, cdata.resource);
     }
-    else if (method == ICAL_METHOD_REPLY) {
+    else if (sched_data->is_reply) {
 	/* Can't find object belonging to organizer - ignore reply */
 	sched_data->status = SCHEDSTAT_PERMFAIL;
 	goto done;
@@ -3980,80 +3993,90 @@ static void sched_deliver(char *recipient, void *data, void *rock)
 	/* Can't find object belonging to attendee - use default calendar */
 	caldav_mboxname(SCHED_DEFAULT, userid, namebuf);
 	mboxname = namebuf;
-	resource = buf_cstring(&buf);
+	buf_reset(&resource);
+	buf_printf(&resource, "%s.ics",
+		   icalcomponent_get_uid(sched_data->ical));
     }
 
-    /* Open recipient's calendar for writing */
-    if ((r = mailbox_open_iwl(mboxname, &mailbox))) {
+    /* Open recipient's calendar for reading */
+    if ((r = mailbox_open_irl(mboxname, &mailbox))) {
 	syslog(LOG_ERR, "mailbox_open_irl(%s) failed: %s",
 	       mboxname, error_message(r));
 	sched_data->status = SCHEDSTAT_TEMPFAIL;
 	goto done;
     }
 
-    if (method == ICAL_METHOD_CANCEL) {
+    if (cdata.imap_uid) {
+	/* Merge or remove */
 	struct index_record record;
+	const char *msg_base = NULL;
+	unsigned long msg_size = 0;
 
-	if (!cdata.imap_uid ||
-	    mailbox_find_index_record(mailbox, cdata.imap_uid, &record)) {
-	    goto inbox;
+	/* Load message containing the resource and parse iCal data */
+	mailbox_find_index_record(mailbox, cdata.imap_uid, &record);
+	mailbox_map_message(mailbox, record.uid, &msg_base, &msg_size);
+	ical = icalparser_parse_string(msg_base + record.header_size);
+	mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
+
+	if (method == ICAL_METHOD_CANCEL) {
+	    /* Set STATUS:CANCELLED on all components */
+	    icalcomponent *comp;
+	    icalcomponent_kind kind;
+
+	    comp = icalcomponent_get_first_real_component(ical);
+	    kind = icalcomponent_isa(comp);
+
+	    do {
+		icalcomponent_set_status(comp, ICAL_STATUS_CANCELLED);
+		icalcomponent_set_sequence(comp,
+					   icalcomponent_get_sequence(comp)+1);
+	    } while ((comp = icalcomponent_get_next_component(ical, kind)));
 	}
-
-	/* Expunge the resource */
-	record.system_flags |= FLAG_EXPUNGED;
-
-	if ((r = mailbox_rewrite_index_record(mailbox, &record))) {
-	    syslog(LOG_ERR, "expunging record (%s) failed: %s",
-		   mboxname, error_message(r));
-	    sched_data->status = SCHEDSTAT_TEMPFAIL;
-	    goto done;
-	}
-
-	/* Delete mapping entry for resource name */
-	caldav_lockread(caldavdb, &cdata);
-	caldav_delete(caldavdb, &cdata);
-	caldav_commit(caldavdb);
-    }
-    else {
-	if (cdata.imap_uid) {
+	else {
 	    /* Merge with existing object */
 	    /* XXX  Do merge logic */
 	    syslog(LOG_INFO, "merge with existing sched object");
 	    sched_data->status = SCHEDSTAT_TEMPFAIL;
 	    goto inbox;
 	}
-	else {
-	    /* Create new object (copy of request w/o METHOD) */
-	    icalproperty *prop;
+    }
+    else {
+	/* Create new object (copy of request w/o METHOD) */
+	icalproperty *prop;
 
-	    ical = icalcomponent_new_clone(sched_data->ical);
+	ical = icalcomponent_new_clone(sched_data->ical);
 
-	    prop = icalcomponent_get_first_property(ical, ICAL_METHOD_PROPERTY);
-	    icalcomponent_remove_property(ical, prop);
-	}
+	prop = icalcomponent_get_first_property(ical, ICAL_METHOD_PROPERTY);
+	icalcomponent_remove_property(ical, prop);
+    }
 
-	/* Store the object in the recipients's calendar */
-	mailbox_unlock_index(mailbox, NULL);
+    /* Store the object in the recipients's calendar */
+    mailbox_unlock_index(mailbox, NULL);
 
-	r = store_resource(&txn, ical, mailbox, resource,
-			   caldavdb, OVERWRITE_YES, 1);
+    r = store_resource(&txn, ical, mailbox, buf_cstring(&resource),
+		       caldavdb, OVERWRITE_YES, 1);
 
-	if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
-	    sched_data->status = SCHEDSTAT_DELIVERED;
-	}
-	else {
-	    syslog(LOG_ERR, "store_resource(%s) failed: %s",
-		   mailbox->name, error_message(r));
-	    sched_data->status = SCHEDSTAT_TEMPFAIL;
-	    goto done;
-	}
+    if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
+	sched_data->status = SCHEDSTAT_DELIVERED;
+    }
+    else {
+	syslog(LOG_ERR, "store_resource(%s) failed: %s (%s)",
+	       mailbox->name, error_message(r), txn.error.resource);
+	sched_data->status = SCHEDSTAT_TEMPFAIL;
+	goto done;
     }
 
   inbox:
+    /* Create a name for the newly created resource */
+    buf_reset(&resource);
+    buf_printf(&resource, "%x-%d-%ld-%u.ics",
+	       strhash(icalcomponent_get_uid(sched_data->ical)), getpid(),
+	       time(0), sched_count++);
+
     /* Store the request in the recipient's Inbox */
     mailbox_unlock_index(inbox, NULL);
 
-    r = store_resource(&txn, sched_data->ical, inbox, buf_cstring(&buf),
+    r = store_resource(&txn, sched_data->ical, inbox, buf_cstring(&resource),
 		       caldavdb, OVERWRITE_YES, 0);
     /* XXX  What do we do if storing to Inbox fails? */
 
