@@ -3901,6 +3901,7 @@ static void sched_exclude(char *attendee __attribute__((unused)),
 #define SCHEDSTAT_PENDING	"1.0"
 #define SCHEDSTAT_SENT		"1.1"
 #define SCHEDSTAT_DELIVERED	"1.2"
+#define SCHEDSTAT_SUCCESS	"2.0"
 #define SCHEDSTAT_PARAM		"2.3"
 #define SCHEDSTAT_NOUSER	"3.7"
 #define SCHEDSTAT_NOPRIVS	"3.8"
@@ -3922,8 +3923,8 @@ static void sched_deliver(char *recipient, void *data, void *rock)
     struct mailbox *mailbox = NULL, *inbox = NULL;
     struct caldav_db *caldavdb = NULL;
     struct caldav_data cdata;
-    icalproperty_method method;
     icalcomponent *ical = NULL;
+    icalproperty *prop;
     struct transaction_t txn;
 
     userid = caladdress_to_userid(recipient);
@@ -3973,9 +3974,6 @@ static void sched_deliver(char *recipient, void *data, void *rock)
 	goto done;
     }
 
-    /* Get METHOD of the iTIP message */
-    method = icalcomponent_get_method(sched_data->ical);
-
     memset(&cdata, 0, sizeof(struct caldav_data));
     cdata.ical_uid = icalcomponent_get_uid(sched_data->ical);
     caldav_read(caldavdb, &cdata);
@@ -4006,11 +4004,21 @@ static void sched_deliver(char *recipient, void *data, void *rock)
 	goto done;
     }
 
-    if (cdata.imap_uid) {
-	/* Merge or remove */
+    if (!cdata.imap_uid) {
+	/* Create new object (copy of request w/o METHOD) */
+	ical = icalcomponent_new_clone(sched_data->ical);
+
+	prop = icalcomponent_get_first_property(ical, ICAL_METHOD_PROPERTY);
+	icalcomponent_remove_property(ical, prop);
+    }
+    else {
+	/* Update existing object */
 	struct index_record record;
 	const char *msg_base = NULL;
 	unsigned long msg_size = 0;
+	icalcomponent *comp;
+	icalcomponent_kind kind;
+	icalproperty_method method;
 
 	/* Load message containing the resource and parse iCal data */
 	mailbox_find_index_record(mailbox, cdata.imap_uid, &record);
@@ -4018,39 +4026,102 @@ static void sched_deliver(char *recipient, void *data, void *rock)
 	ical = icalparser_parse_string(msg_base + record.header_size);
 	mailbox_unmap_message(mailbox, record.uid, &msg_base, &msg_size);
 
-	if (method == ICAL_METHOD_CANCEL) {
+	/* Get component type */
+	comp = icalcomponent_get_first_real_component(ical);
+	kind = icalcomponent_isa(comp);
+
+	/* Get METHOD of the iTIP message */
+	method = icalcomponent_get_method(sched_data->ical);
+
+	switch (method) {
+	case ICAL_METHOD_CANCEL:
 	    /* Set STATUS:CANCELLED on all components */
-	    icalcomponent *comp;
-	    icalcomponent_kind kind;
-
-	    comp = icalcomponent_get_first_real_component(ical);
-	    kind = icalcomponent_isa(comp);
-
 	    do {
 		icalcomponent_set_status(comp, ICAL_STATUS_CANCELLED);
 		icalcomponent_set_sequence(comp,
 					   icalcomponent_get_sequence(comp)+1);
 	    } while ((comp = icalcomponent_get_next_component(ical, kind)));
+
+	    break;
+
+	case ICAL_METHOD_REPLY: {
+	    icalcomponent *itip;
+	    icalparameter *param;
+	    icalparameter_partstat partstat;
+	    const char *attendee, *req_stat = SCHEDSTAT_SUCCESS;
+
+	    itip = icalcomponent_get_first_component(sched_data->ical, kind);
+
+	    prop = icalcomponent_get_first_property(itip,
+						    ICAL_ATTENDEE_PROPERTY);
+	    attendee = icalproperty_get_attendee(prop);
+	    param = icalproperty_get_first_parameter(prop,
+						     ICAL_PARTSTAT_PARAMETER);
+	    partstat = icalparameter_get_partstat(param);
+
+	    prop =
+		icalcomponent_get_first_property(itip,
+						 ICAL_REQUESTSTATUS_PROPERTY);
+	    if (prop) {
+		struct icalreqstattype rq =
+		    icalproperty_get_requeststatus(prop);
+		req_stat =
+		    icalenum_reqstat_code(rq.code);
+	    }
+
+	    /* Find matching attendee in existing object */
+	    for (prop =
+		     icalcomponent_get_first_property(comp,
+						      ICAL_ATTENDEE_PROPERTY);
+		 prop && strcmp(attendee, icalproperty_get_attendee(prop));
+		 prop =
+		     icalcomponent_get_next_property(comp,
+						     ICAL_ATTENDEE_PROPERTY));
+	    if (!prop) break;
+
+	    /* Find and set PARTSTAT */
+	    param =
+		icalproperty_get_first_parameter(prop,
+						 ICAL_PARTSTAT_PARAMETER);
+	    if (!param) {
+		param = icalparameter_new(ICAL_PARTSTAT_PARAMETER);
+		icalproperty_add_parameter(prop, param);
+	    }
+	    icalparameter_set_partstat(param, partstat);
+
+	    /* Find and set SCHEDULE-STATUS */
+	    for (param = icalproperty_get_first_parameter(prop,
+							  ICAL_IANA_PARAMETER);
+		 param && strcmp(icalparameter_get_iana_name(param),
+				 "SCHEDULE-STATUS");
+		 param = icalproperty_get_next_parameter(prop,
+							 ICAL_IANA_PARAMETER));
+	    if (!param) {
+		param = icalparameter_new(ICAL_IANA_PARAMETER);
+		icalproperty_add_parameter(prop, param);
+		icalparameter_set_iana_name(param, "SCHEDULE-STATUS");
+	    }
+	    icalparameter_set_iana_value(param, SCHEDSTAT_SUCCESS);
+
+	    break;
 	}
-	else {
-	    /* Merge with existing object */
+
+	case ICAL_METHOD_REQUEST:
 	    /* XXX  Do merge logic */
 	    syslog(LOG_INFO, "merge with existing sched object");
 	    sched_data->status = SCHEDSTAT_TEMPFAIL;
 	    goto inbox;
+	    break;
+
+	default:
+	    /* Unknown METHOD -- ignore it */
+	    syslog(LOG_ERR, "Unknown iTIP method: %s",
+		   icalenum_method_to_string(method));
+	    goto done;
 	}
     }
-    else {
-	/* Create new object (copy of request w/o METHOD) */
-	icalproperty *prop;
 
-	ical = icalcomponent_new_clone(sched_data->ical);
-
-	prop = icalcomponent_get_first_property(ical, ICAL_METHOD_PROPERTY);
-	icalcomponent_remove_property(ical, prop);
-    }
-
-    /* Store the object in the recipients's calendar */
+    /* Store the (updated) object in the recipients's calendar */
     mailbox_unlock_index(mailbox, NULL);
 
     r = store_resource(&txn, ical, mailbox, buf_cstring(&resource),
@@ -4067,17 +4138,17 @@ static void sched_deliver(char *recipient, void *data, void *rock)
     }
 
   inbox:
-    /* Create a name for the newly created resource */
+    /* Create a name for the new iTIP message resource */
     buf_reset(&resource);
     buf_printf(&resource, "%x-%d-%ld-%u.ics",
 	       strhash(icalcomponent_get_uid(sched_data->ical)), getpid(),
 	       time(0), sched_count++);
 
-    /* Store the request in the recipient's Inbox */
+    /* Store the message in the recipient's Inbox */
     mailbox_unlock_index(inbox, NULL);
 
     r = store_resource(&txn, sched_data->ical, inbox, buf_cstring(&resource),
-		       caldavdb, OVERWRITE_YES, 0);
+		       caldavdb, OVERWRITE_NO, 0);
     /* XXX  What do we do if storing to Inbox fails? */
 
   done:
