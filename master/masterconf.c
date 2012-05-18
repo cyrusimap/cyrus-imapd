@@ -215,8 +215,6 @@ static void split_args(struct entry *e, char *buf)
 			MASTER_CONFIG_FILENAME, e->lineno);
 	e->args[e->nargs].key = key;
 	e->args[e->nargs].value = value;
-syslog(LOG_ERR, "XXX split_args [%d] = { key=\"%s\" value=\"%s\" }",
-	    e->nargs, e->args[e->nargs].key, e->args[e->nargs].value);
 	e->nargs++;
 	p = q;
     }
