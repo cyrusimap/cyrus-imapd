@@ -105,7 +105,6 @@ struct quotaentry {
     char *allocname;
     int refcount;
     int deleted;
-    quota_t newused[QUOTA_NUMRESOURCES];
 };
 
 /* forward declarations */
@@ -115,8 +114,7 @@ static int buildquotalist(char *domain, char **roots, int nroots);
 static int fixquotas(char *domain, char **roots, int nroots);
 static int fixquota_dopass(char *domain, char **roots, int nroots,
 			   foreach_cb *pass);
-static int fixquota_pass1(void);
-static int fixquota_pass2(void *rock, const char *name, size_t namelen,
+static int fixquota_dombox(void *rock, const char *name, size_t namelen,
 			  const char *val, size_t vallen);
 static int fixquota_fixroot(struct mailbox *mailbox, const char *root);
 static int fixquota_finish(int thisquota);
@@ -198,14 +196,15 @@ int main(int argc,char **argv)
     quotadb_init(0);
     quotadb_open(NULL);
 
-    if (fflag)
-	r = fixquota_pass1();
+    quota_changelock();
 
     if (!r)
 	r = buildquotalist(domain, argv+optind, argc-optind);
 
     if (!r && fflag)
 	r = fixquotas(domain, argv+optind, argc-optind);
+
+    quota_changelockrelease();
 
     quotadb_close();
     quotadb_done();
@@ -334,9 +333,9 @@ static int fixquota_addroot(struct quota *q,
 
     quota[quota_num].allocname   = xstrdup(q->root);
     quota[quota_num].quota.root  = quota[quota_num].allocname;
+    quota_init(&quota[quota_num].quota);
 
-    /* we can't use the already-read value, because we need a safe
-     * locked read */
+    /* get a locked read */
     r = quota_read(&quota[quota_num].quota, &tid, 1);
     if (r) {
 	errmsg("failed reading quota record for '%s'",
@@ -344,29 +343,28 @@ static int fixquota_addroot(struct quota *q,
 	goto done;
     }
 
-    /*
-     * Mark the quotaroots in the db to non-invalid to indicate
-     * that a scan is in progress.  Other processes doing quota
-     * updates for mailboxes will now start to update usedBs[].
-     */
-    memset(quota[quota_num].quota.usedBs, 0, sizeof(quota[quota_num].quota.usedBs));
+    /* clean the scanused data if present */
+    if (quota[quota_num].quota.scanmbox) {
+	free(quota[quota_num].quota.scanmbox);
+	quota[quota_num].quota.scanmbox = NULL;
 
-    r = quota_write(&quota[quota_num].quota, &tid);
-    if (r) {
-	errmsg("failed writing quota record for '%s'",
-	       q->root, r);
-	goto done;
+	r = quota_write(&quota[quota_num].quota, &tid);
+	if (r) {
+	    errmsg("failed writing quota record for '%s'",
+		   q->root, r);
+	    goto done;
+	}
     }
-
-    quota_num++;
 
 done:
     if (r) {
 	free(quota[quota_num].allocname);
 	quota_abort(&tid);
     }
-    else
+    else {
 	quota_commit(&tid);
+	quota_num++;
+    }
 
     return r;
 }
@@ -443,33 +441,12 @@ static int findroot(const char *name, int *thisquota)
 }
 
 /*
- * Pass 1: reset the scanset.
- */
-static int fixquota_pass1(void)
-{
-    int r = 0;
-    struct txn *txn = NULL;
-
-    r = quota_clear_scanset(&txn);
-    if (r) {
-	quota_abort(&txn);
-	syslog(LOG_ERR, "Unable to clear scanset: %s", error_message(r));
-	fatal(error_message(r), EC_CONFIG);
-    }
-    quota_commit(&txn);
-
-    return r;
-}
-
-/*
  * Pass 2: account for mailbox 'name' when fixing the quota roots
- *         and add the mboxname to the scanset so that mailbox updates racing
- *         with us will start updating the usedBs[].
  */
-static int fixquota_pass2(void *rock,
-			  const char *name, size_t namelen,
-			  const char *val __attribute__((unused)),
-			  size_t vallen __attribute__((unused)))
+static int fixquota_dombox(void *rock,
+			   const char *name, size_t namelen,
+			   const char *val __attribute__((unused)),
+			   size_t vallen __attribute__((unused)))
 {
     int r = 0;
     const char *prefix = (const char *)rock;
@@ -501,30 +478,41 @@ static int fixquota_pass2(void *rock,
 	 * mailbox if present */
 	if (mailbox->quotaroot) {
 	    r = fixquota_fixroot(mailbox, (char *)0);
+	    if (r) goto done;
 	}
     }
     else {
+	quota_t useds[QUOTA_NUMRESOURCES];
+	int res;
+
 	/* matching quotaroot exists, ensure mailbox has the
 	 * correct root */
 	if (!mailbox->quotaroot ||
 	    strcmp(mailbox->quotaroot, quota[thisquota].quota.root) != 0) {
 	    r = fixquota_fixroot(mailbox, quota[thisquota].quota.root);
+	    if (r) goto done;
 	}
 
-	/* and track the total usage inside this root */
-	if (!r) {
-	    quota_t usage[QUOTA_NUMRESOURCES];
-	    int res;
+	/* read the current data */
+	r = quota_read(&quota[thisquota].quota, &txn, 1);
+	if (r) goto done;
 
-	    mailbox_get_usage(mailbox, usage);
-	    for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
-		quota[thisquota].newused[res] += usage[res];
-	    }
+	/* add the usage for this mailbox */
+	mailbox_get_usage(mailbox, useds);
+	for (res = 0; res < QUOTA_NUMRESOURCES; res++)
+	    quota[thisquota].quota.scanuseds[res] += useds[res];
 
-	    r = quota_update_scanset(mboxname, &txn);
-	    if (!r)
-		quota_commit(&txn);
+	/* and mention that this mailbox has been scanned */
+	free(quota[thisquota].quota.scanmbox);
+	quota[thisquota].quota.scanmbox = xstrdup(mboxname);
+
+	r = quota_write(&quota[thisquota].quota, &txn);
+	if (r) {
+	    quota_abort(&txn);
+	    goto done;
 	}
+
+	quota_commit(&txn);
     }
 
 done:
@@ -577,29 +565,23 @@ int fixquota_finish(int thisquota)
 	return r;
     }
 
-    for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
-	if (quota[thisquota].quota.usedBs[res] != QUOTA_INVALID) {
-	    /* adjust the newused figure for accumulated mailbox
-	     * updates which lost the race against the scan */
-	    quota[thisquota].newused[res] += quota[thisquota].quota.usedBs[res];
-	    /* reset usedBs to record that the scan is complete */
-	    quota[thisquota].quota.usedBs[res] = QUOTA_INVALID;
-	}
-    }
 
     /* is it different? */
     for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
-	if (quota[thisquota].quota.useds[res] != quota[thisquota].newused[res]) {
+	if (quota[thisquota].quota.scanuseds[res] != quota[thisquota].quota.useds[res]) {
 	    printf("%s: %s usage was " QUOTA_T_FMT ", now " QUOTA_T_FMT "\n",
 		quota[thisquota].quota.root,
 		quota_names[res],
 		quota[thisquota].quota.useds[res],
-		quota[thisquota].newused[res]);
-	    quota[thisquota].quota.useds[res] = quota[thisquota].newused[res];
+		quota[thisquota].quota.scanuseds[res]);
+	    quota[thisquota].quota.useds[res] = quota[thisquota].quota.scanuseds[res];
 	}
     }
 
-    /* always write out the record, we should have just reset usedBs */
+    free(quota[thisquota].quota.scanmbox);
+    quota[thisquota].quota.scanmbox = NULL;
+    
+    /* always write out the record, we should have cleared the scan record */
     r = quota_write(&quota[thisquota].quota, &tid);
     if (r) {
 	errmsg("failed writing quotaroot '%s'",
@@ -617,7 +599,7 @@ int fixquota_finish(int thisquota)
  * Run a pass over all the quota roots
  */
 int fixquota_dopass(char *domain, char **roots, int nroots,
-		    foreach_cb *pass)
+		    foreach_cb *cb)
 {
     int i, r;
     char buf[MAX_MAILBOX_BUFFER], *tail;
@@ -632,7 +614,7 @@ int fixquota_dopass(char *domain, char **roots, int nroots,
 
     /* basic case - everything (potentially limited by domain still) */
     if (!nroots) {
-	r = mboxlist_allmbox(buf, pass, buf);
+	r = mboxlist_allmbox(buf, cb, buf);
 	if (r) {
 	    errmsg("processing mbox list for '%s'", buf, IMAP_IOERROR);
 	}
@@ -647,7 +629,7 @@ int fixquota_dopass(char *domain, char **roots, int nroots,
 	/* change the separator to internal namespace */
 	mboxname_hiersep_tointernal(&quota_namespace, tail, 0);
 
-	r = mboxlist_allmbox(buf, pass, buf);
+	r = mboxlist_allmbox(buf, cb, buf);
 	if (r) {
 	    errmsg("processing mbox list for '%s'", buf, IMAP_IOERROR);
 	    break;
@@ -665,7 +647,7 @@ int fixquotas(char *domain, char **roots, int nroots)
     int r;
     int firstquota = 0;
 
-    r = fixquota_dopass(domain, roots, nroots, fixquota_pass2);
+    r = fixquota_dopass(domain, roots, nroots, fixquota_dombox);
 
     while (!r && firstquota < quota_num) {
 	r = fixquota_finish(firstquota);

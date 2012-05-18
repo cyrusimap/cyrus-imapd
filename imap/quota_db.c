@@ -55,6 +55,7 @@
 
 #include "assert.h"
 #include "cyrusdb.h"
+#include "dlist.h"
 #include "exitcodes.h"
 #include "global.h"
 #include "imap/imap_err.h"
@@ -73,13 +74,13 @@ struct db *qdb;
 
 /* skanky reuse of mboxname locks.  Ideally we would rename
  * them to something more general and use them elsewhere */
-struct mboxlocklist *qchangelock;
+struct mboxlock *qchangelock;
 
 static int quota_dbopen = 0;
 
 /* keywords used when storing fields in the new quota db format */
 static const char * const quota_db_names[QUOTA_NUMRESOURCES] = {
-    NULL,	/* QUOTA_STORAGE */
+    "S",	/* QUOTA_STORAGE */
     "M",	/* QUOTA_MESSAGE */
     "AS"	/* QUOTA_ANNOTSTORAGE */
 };
@@ -129,11 +130,17 @@ void quota_init(struct quota *q)
     int res;
 
     memset(q, 0, sizeof(*q));
-    for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++) {
+    for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++)
 	q->limits[res] = QUOTA_UNLIMITED;
-	q->usedBs[res] = QUOTA_INVALID;
-    }
+
     q->root = root;
+}
+
+/* just clear the scanmbox */
+void quota_free(struct quota *q)
+{
+    free(q->scanmbox);
+    q->scanmbox = NULL;
 }
 
 /*
@@ -141,27 +148,63 @@ void quota_init(struct quota *q)
  * containing multiple space-separated fields, into a struct quota.
  * Returns: 0 on success or an IMAP error code.
  */
-static int quota_parseval(const char *data, struct quota *quota)
+static int quota_parseval(const char *data, size_t datalen,
+			  struct quota *quota, int iswrite)
 {
-    strarray_t *fields = strarray_split(data, NULL);
-    int r = 0;
+    strarray_t *fields = NULL;
+    int r = IMAP_MAILBOX_BADFORMAT;
     int i = 0;
     int res = QUOTA_STORAGE;
-    quota_t usedB;
+    struct dlist *dl = NULL;
+    quota_t temp;
 
     quota_init(quota);
 
+    /* new dlist format */
+    if (data[0] == '%') {
+	if (dlist_parsemap(&dl, 0, data, datalen))
+	    goto out;
+
+	for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
+	    struct dlist *val;
+	    struct dlist *item = dlist_getchild(dl, quota_db_names[res]);
+	    if (!item) continue;
+	    val = dlist_getchildn(item, 0);
+	    if (val) quota->useds[res] = dlist_num(val);
+	    val = dlist_getchildn(item, 1);
+	    if (val) quota->limits[res] = dlist_num(val);
+	}
+
+	/* only read the SCAN stuff if it's a write lock */
+	if (iswrite) {
+	    struct dlist *scan = dlist_getchild(dl, "SCAN");
+	    const char *mboxname = NULL;
+	    if (!scan) goto done;
+	    if (!dlist_getatom(scan, "MBOX", &mboxname)) goto done;
+	    quota->scanmbox = xstrdup(mboxname);
+	    for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
+		struct dlist *val = dlist_getchild(scan, quota_db_names[res]);
+		if (val) quota->scanuseds[res] = dlist_num(val);
+	    }
+	}
+
+	goto done;
+    }
+
+    /* parse historical formats */
+    quota_init(quota);
+
+    fields = strarray_split(data, NULL);
     for (;;) {
-	r = IMAP_MAILBOX_BADFORMAT;
 	if (i+2 > fields->count)
 	    goto out;	/* need at least 2 more fields */
 	if (sscanf(fields->data[i++], QUOTA_T_FMT, &quota->useds[res]) != 1)
 	    goto out;
 	if (sscanf(fields->data[i++], "%d", &quota->limits[res]) != 1)
 	    goto out;
+	/* skip over temporary extra used data from failed quota -f runs */
 	if (i < fields->count &&
-	    sscanf(fields->data[i], QUOTA_T_FMT, &usedB) == 1) {
-	    quota->usedBs[res] = usedB;
+	    sscanf(fields->data[i], QUOTA_T_FMT, &temp) == 1) {
 	    i++;
 	}
 	if (i == fields->count)
@@ -177,8 +220,10 @@ static int quota_parseval(const char *data, struct quota *quota)
 	i++;
     }
 
+done:
     r = 0;
 out:
+    dlist_free(&dl);
     strarray_free(fields);
     return r;
 }
@@ -207,7 +252,7 @@ int quota_read(struct quota *quota, struct txn **tid, int wrlock)
     switch (r) {
     case CYRUSDB_OK:
 	if (!*data) return IMAP_QUOTAROOT_NONEXISTENT;
-	r = quota_parseval(data, quota);
+	r = quota_parseval(data, datalen, quota, wrlock);
 	if (r) {
 	    syslog(LOG_ERR, "DBERROR: error fetching quota "
 			    "root=<%s> value=<%s>",
@@ -272,6 +317,7 @@ void quota_use(struct quota *q,
 struct quota_foreach_t {
     quotaproc_t *proc;
     void *rock;
+    struct txn **tid;
 };
 
 static int do_onequota(void *rock,
@@ -282,14 +328,17 @@ static int do_onequota(void *rock,
     struct quota quota;
     struct quota_foreach_t *fd = (struct quota_foreach_t *)rock;
     char *root = xstrndup(key, keylen);
+    int iswrite = fd->tid ? 1 : 0;
 
     quota.root = root;
+    quota_init(&quota);
 
     /* XXX - error if not parsable? */
-    if (datalen && !quota_parseval(data, &quota)) {
+    if (datalen && !quota_parseval(data, datalen, &quota, iswrite)) {
 	r = fd->proc(&quota, fd->rock);
     }
 
+    quota_free(&quota);
     free(root);
 
     return r;
@@ -304,6 +353,7 @@ int quota_foreach(const char *prefix, quotaproc_t *proc,
 
     foreach_d.proc = proc;
     foreach_d.rock = rock;
+    foreach_d.tid = tid;
 
     r = cyrusdb_foreach(qdb, search, strlen(search), NULL,
 		     do_onequota, &foreach_d, tid);
@@ -346,24 +396,30 @@ int quota_write(struct quota *quota, struct txn **tid)
     int qrlen;
     int res;
     struct buf buf = BUF_INITIALIZER;
+    struct dlist *dl = dlist_newkvlist(NULL, NULL);
 
     if (!quota->root) return IMAP_QUOTAROOT_NONEXISTENT;
 
     qrlen = strlen(quota->root);
     if (!qrlen) return IMAP_QUOTAROOT_NONEXISTENT;
 
-    for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++)
-    {
-	if (quota_db_names[res])
-	    buf_printf(&buf, " %s ", quota_db_names[res]);
-	buf_printf(&buf, QUOTA_T_FMT " %d",
-		   quota->useds[res], quota->limits[res]);
-	if (quota->usedBs[res] != QUOTA_INVALID)
-	    buf_printf(&buf, " "QUOTA_T_FMT,
-		       quota->usedBs[res]);
+    for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
+	struct dlist *item = dlist_newlist(dl, quota_db_names[res]);
+	dlist_setnum64(item, NULL, quota->useds[res]);
+	if (quota->limits[res] != QUOTA_UNLIMITED)
+	    dlist_setnum64(item, NULL, quota->limits[res]);
     }
 
-    r = cyrusdb_store(qdb, quota->root, qrlen, buf_cstring(&buf), buf.len, tid);
+    if (quota->scanmbox) {
+	struct dlist *scan = dlist_newkvlist(dl, "SCAN");
+	dlist_setatom(scan, "MBOX", quota->scanmbox);
+	for (res = 0; res < QUOTA_NUMRESOURCES; res++)
+	    dlist_setnum64(scan, quota_db_names[res], quota->scanuseds[res]);
+    }
+
+    dlist_printbuf(dl, 0, &buf);
+
+    r = cyrusdb_store(qdb, quota->root, qrlen, buf.s, buf.len, tid);
 
     switch (r) {
     case CYRUSDB_OK:
@@ -381,6 +437,7 @@ int quota_write(struct quota *quota, struct txn **tid)
 	break;
     }
 
+    dlist_free(&dl);
     buf_free(&buf);
     return r;
 }
@@ -391,28 +448,27 @@ int quota_update_useds(const char *quotaroot,
 {
     struct quota q;
     struct txn *tid = NULL;
-    int is_scanned;
     int r = 0;
 
     if (!quotaroot || !*quotaroot)
 	return IMAP_QUOTAROOT_NONEXISTENT;
 
-    is_scanned = (mboxname && quota_is_in_scanset(mboxname, &tid) > 0);
-
     q.root = quotaroot;
+    quota_init(&q);
+
     r = quota_read(&q, &tid, 1);
 
     if (!r) {
 	int res;
-
+	int cmp = 1;
+	if (q.scanmbox) {
+	    cmp = cyrusdb_compar(qdb, mboxname, strlen(mboxname),
+				 q.scanmbox, strlen(q.scanmbox));
+	}
 	for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
-	    /* Note: usedBs[] is a cumulative delta, not an absolute
-	     * number; so it can go negative and must be updated
-	     * without clamping. */
-	    if (is_scanned && q.usedBs[res] != QUOTA_INVALID)
-		q.usedBs[res] += diff[res];
-
 	    quota_use(&q, res, diff[res]);
+	    if (cmp <= 0)
+		q.scanuseds[res] += diff[res];
 	}
 	r = quota_write(&q, &tid);
     }
@@ -424,6 +480,7 @@ int quota_update_useds(const char *quotaroot,
     quota_commit(&tid);
 
 out:
+    quota_free(&q);
     if (r) {
 	syslog(LOG_ERR, "LOSTQUOTA: unable to record change of "
 	       QUOTA_T_FMT " bytes and " QUOTA_T_FMT " messages in quota %s: %s",

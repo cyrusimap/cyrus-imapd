@@ -79,8 +79,11 @@ struct quota {
 
     /* Information in quota entry */
     quota_t useds[QUOTA_NUMRESOURCES];
-    quota_t usedBs[QUOTA_NUMRESOURCES];		/* for quota -f */
     int limits[QUOTA_NUMRESOURCES];		/* in QUOTA_UNITS */
+
+    /* information for scanning */
+    char *scanmbox;
+    quota_t scanuseds[QUOTA_NUMRESOURCES];
 };
 
 /* special value to indicate no limit applies */
@@ -98,7 +101,8 @@ typedef int quotaproc_t(struct quota *quota, void *rock);
 extern int quota_changelock(void);
 extern void quota_changelockrelease(void);
 
-extern void quota_init(struct quota *);
+extern void quota_init(struct quota *quota);
+extern void quota_free(struct quota *quota);
 
 extern int quota_read(struct quota *quota, struct txn **tid, int wrlock);
 
