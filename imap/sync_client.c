@@ -528,7 +528,7 @@ static int folder_rename(const char *oldname, const char *newname,
     return sync_parse_response(cmd, sync_in, NULL);
 }
 
-static int folder_delete(char *mboxname)
+static int folder_delete(const char *mboxname)
 {
     const char *cmd = "UNMAILBOX";
     struct dlist *kl;
