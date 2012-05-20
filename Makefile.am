@@ -53,6 +53,7 @@ endif
 AM_LDFLAGS = $(COV_LDFLAGS)
 BUILT_SOURCES = xversion.h lib/imapopts.c
 DISTCLEANFILES = imap/imap_err.c imap/imap_err.h imap/mupdate_err.c imap/mupdate_err.h imap/nntp_err.c imap/nntp_err.h \
+	com_err/et/compile_et \
 	perl/annotator/Makefile perl/imap/Makefile perl/sieve/managesieve/Makefile \
 	sieve/sieve_err.c sieve/sieve_err.h
 
@@ -75,6 +76,7 @@ service_PROGRAMS =
 CLEANFILES =
 
 if COM_ERR
+COMPILE_ET_DEP = com_err/et/compile_et
 COM_ERR_LIB = com_err/et/libcom_err.a
 BUILT_SOURCES += com_err/et/compile_et
 noinst_LIBRARIES += com_err/et/libcom_err.a
@@ -475,13 +477,13 @@ imap_tls_prune_LDADD = $(LD_UTILITY_ADD)
 imap_unexpunge_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/unexpunge.c
 imap_unexpunge_LDADD = $(LD_UTILITY_ADD)
 
-imap/imap_err.h imap/imap_err.c: imap/imap_err.et
+imap/imap_err.h imap/imap_err.c: imap/imap_err.et $(COMPILE_ET_DEP)
 	cd imap && $(COMPILE_ET) ../$(top_srcdir)/imap/imap_err.et
 
-imap/mupdate_err.h imap/mupdate_err.c: imap/mupdate_err.et
+imap/mupdate_err.h imap/mupdate_err.c: imap/mupdate_err.et $(COMPILE_ET_DEP)
 	cd imap && $(COMPILE_ET) ../$(top_srcdir)/imap/mupdate_err.et
 
-imap/nntp_err.h imap/nntp_err.c: imap/nntp_err.et
+imap/nntp_err.h imap/nntp_err.c: imap/nntp_err.et $(COMPILE_ET_DEP)
 	cd imap && $(COMPILE_ET) ../$(top_srcdir)/imap/nntp_err.et
 
 if MAINTAINER_MODE
@@ -642,7 +644,7 @@ LD_SIEVE_ADD = sieve/libsieve.a $(LD_BASIC_ADD) $(COM_ERR_LIB)
 sieve_sievec_LDADD = $(LD_SIEVE_ADD)
 sieve_sieved_LDADD = $(LD_SIEVE_ADD)
 
-sieve/sieve_err.h sieve/sieve_err.c: sieve/sieve_err.et
+sieve/sieve_err.h sieve/sieve_err.c: sieve/sieve_err.et $(COMPILE_ET_DEP)
 	cd sieve && $(COMPILE_ET) ../$(top_srcdir)/sieve/sieve_err.et
 
 sieve_test_SOURCES = sieve/test.c imap/mutex_fake.c
