@@ -5671,7 +5671,7 @@ static int renmbox(char *name,
 	     * and acls copied across */
 	    sync_log_user(text->newuser);
 	    /* allow the replica to clean up the old meta files */
-	    sync_log_user(text->olduser);
+	    sync_log_unuser(text->olduser);
 	}
     }
 
@@ -6024,6 +6024,7 @@ submboxes:
 	prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		    error_message(IMAP_OK_COMPLETED));
         sync_log_mailbox_double(oldmailboxname2, newmailboxname2);
+	if (rename_user) sync_log_user(newuser);
     }
 
 done:

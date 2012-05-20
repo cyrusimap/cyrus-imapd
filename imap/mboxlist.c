@@ -1075,6 +1075,8 @@ int mboxlist_deletemailbox(const char *name, int isadmin,
 
     /* delete underlying mailbox */
     if (!isremote && mailbox) {
+	/* only on a real delete do we delete from the remote end as well */
+	sync_log_unmailbox(mailbox->name);
 	r = mailbox_delete(&mailbox);
     }
 

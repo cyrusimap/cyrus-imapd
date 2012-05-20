@@ -59,11 +59,17 @@ void sync_log(const char *fmt, ...);
 #define sync_log_user(user) \
     sync_log("USER %s\n", user)
 
+#define sync_log_unuser(user) \
+    sync_log("UNUSER %s\n", user)
+
 #define sync_log_sieve(user) \
     sync_log("META %s\n", user)
 
 #define sync_log_mailbox(name) \
     sync_log("MAILBOX %s\n", name)
+
+#define sync_log_unmailbox(name) \
+    sync_log("UNMAILBOX %s\n", name)
 
 #define sync_log_mailbox_double(name1, name2) \
     sync_log("MAILBOX %s\nMAILBOX %s\n", name1, name2)
@@ -87,11 +93,17 @@ void sync_log_channel(const char *channel, const char *fmt, ...);
 #define sync_log_user_channel(channel, user) \
     sync_log_channel(channel, "USER %s\n", user)
 
+#define sync_log_unuser_channel(channel, name) \
+    sync_log_channel(channel, "UNUSER %s\n", name)
+
 #define sync_log_sieve_channel(channel, user) \
     sync_log_channel(channel, "META %s\n", user)
 
 #define sync_log_mailbox_channel(channel, name) \
     sync_log_channel(channel, "MAILBOX %s\n", name)
+
+#define sync_log_unmailbox_channel(channel, name) \
+    sync_log_channel(channel, "UNMAILBOX %s\n", name)
 
 #define sync_log_mailbox_double_channel(channel, name1, name2) \
     sync_log_channel(channel, "MAILBOX %s\nMAILBOX %s\n", name1, name2)

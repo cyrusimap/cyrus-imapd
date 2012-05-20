@@ -80,7 +80,6 @@
 #include "mboxname.h"
 #include "quota.h"
 #include "seen.h"
-#include "sync_log.h"
 #include "user.h"
 #include "util.h"
 #include "xmalloc.h"
@@ -207,8 +206,6 @@ int user_deletedata(const char *userid, int wipe_user)
     /* delete sieve scripts */
     user_deletesieve(userid);
 
-    sync_log_user(userid);
-    
     return 0;
 }
 

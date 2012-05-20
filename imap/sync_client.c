@@ -493,19 +493,30 @@ static int response_parse(const char *cmd,
     return IMAP_PROTOCOL_BAD_PARAMETERS;
 }
 
-static int user_reset(const char *userid)
+static int do_unuser(const char *userid)
 {
     const char *cmd = "UNUSER";
+    struct mailbox *mailbox = NULL;
+    char buf[MAX_MAILBOX_BUFFER];
     struct dlist *kl;
     int r;
 
-    kl = dlist_setatom(NULL, cmd, userid);
-    sync_send_apply(kl, sync_out);
-    dlist_free(&kl);
+    /* check local mailbox first */
+    (sync_namespace.mboxname_tointernal)(&sync_namespace, "INBOX",
+					  userid, buf);
+    r = mailbox_open_irl(buf, &mailbox);
 
-    r = sync_parse_response(cmd, sync_in, NULL);
-    if (r == IMAP_MAILBOX_NONEXISTENT)
-	r = 0;
+    /* only remove from server if there's no local mailbox */
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+	kl = dlist_setatom(NULL, cmd, userid);
+	sync_send_apply(kl, sync_out);
+	dlist_free(&kl);
+
+	r = sync_parse_response(cmd, sync_in, NULL);
+	if (r == IMAP_MAILBOX_NONEXISTENT) r = 0;
+    }
+
+    mailbox_close(&mailbox);
 
     return r;
 }
@@ -1407,8 +1418,9 @@ static int update_mailbox_once(struct sync_folder *local,
 
     r = mailbox_open_irl(local->name, &mailbox);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
-	/* been deleted in the meanwhile... */
-	r = folder_delete(remote->name);
+	/* been deleted in the meanwhile... it will get picked up by the
+	 * delete call later */
+	r = 0;
 	goto done;
     }
     else if (r)
@@ -1689,7 +1701,7 @@ bail:
 /* ====================================================================== */
 
 int do_folders(struct sync_name_list *mboxname_list,
-	       struct sync_folder_list *replica_folders)
+	       struct sync_folder_list *replica_folders, int delete_remote)
 {
     int r;
     struct sync_folder_list *master_folders;
@@ -1722,13 +1734,15 @@ int do_folders(struct sync_name_list *mboxname_list,
     }
 
     /* Delete folders on server which no longer exist on client */
-    for (rfolder = replica_folders->head; rfolder; rfolder = rfolder->next) {
-	if (rfolder->mark) continue;
-	r = folder_delete(rfolder->name);
-	if (r) {
-	    syslog(LOG_ERR, "folder_delete(): failed: %s '%s'", 
-		   rfolder->name, error_message(r));
-	    goto bail;
+    if (delete_remote) {
+	for (rfolder = replica_folders->head; rfolder; rfolder = rfolder->next) {
+	    if (rfolder->mark) continue;
+	    r = folder_delete(rfolder->name);
+	    if (r) {
+		syslog(LOG_ERR, "folder_delete(): failed: %s '%s'", 
+		       rfolder->name, error_message(r));
+		goto bail;
+	    }
 	}
     }
 
@@ -1793,6 +1807,24 @@ int do_folders(struct sync_name_list *mboxname_list,
     return r;
 }
 
+static int do_unmailbox(const char *mboxname)
+{
+    struct mailbox *mailbox = NULL;
+    int r;
+
+    r = mailbox_open_irl(mboxname, &mailbox);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+	r = folder_delete(mboxname);
+	if (r) {
+	    syslog(LOG_ERR, "folder_delete(): failed: %s '%s'",
+		   mboxname, error_message(r));
+	}
+    }
+    mailbox_close(&mailbox);
+
+    return r;
+}
+
 static int do_mailboxes(struct sync_name_list *mboxname_list)
 {
     struct sync_name *mbox;
@@ -1821,8 +1853,12 @@ static int do_mailboxes(struct sync_name_list *mboxname_list)
 
     r = response_parse("MAILBOXES", replica_folders, NULL, NULL, NULL, NULL);
 
+    /* we don't want to delete remote folders which weren't found locally,
+     * because we may be racing with a rename, and we don't want to lose
+     * the remote files.  A real delete will always have inserted a
+     * UNMAILBOX anyway */
     if (!r)
-	r = do_folders(mboxname_list, replica_folders);
+	r = do_folders(mboxname_list, replica_folders, /*delete_remote*/0);
 
     sync_folder_list_free(&replica_folders);
 
@@ -1927,7 +1963,10 @@ static int do_user_main(const char *user,
 					      &info);
     }
 
-    if (!r) r = do_folders(mboxname_list, replica_folders);
+    /* we know all the folders present on the master, so it's safe to delete
+     * anything not mentioned here on the replica - at least until we get
+     * real tombstones */
+    if (!r) r = do_folders(mboxname_list, replica_folders, /*delete_remote*/1);
     if (!r) r = do_user_quota(master_quotaroots, replica_quota);
 
     sync_name_list_free(&mboxname_list);
@@ -2106,6 +2145,20 @@ static int do_user(const char *userid)
     if (verbose_logging)
         syslog(LOG_INFO, "USER %s", userid);
 
+    /* check local mailbox first */
+    (sync_namespace.mboxname_tointernal)(&sync_namespace, "INBOX",
+					  userid, buf);
+    r = mailbox_open_irl(buf, &mailbox);
+    if (r == IMAP_MAILBOX_NONEXISTENT) {
+	/* user has been removed, skip */
+	r = 0;
+	goto done;
+    }
+    if (r) goto done;
+
+    /* we don't hold locks while sending commands */
+    mailbox_close(&mailbox);
+
     kl = dlist_setatom(NULL, "USER", userid);
     sync_send_lookup(kl, sync_out);
     dlist_free(&kl);
@@ -2117,19 +2170,6 @@ static int do_user(const char *userid)
     if (r == IMAP_MAILBOX_NONEXISTENT) r = 0;
     if (r) goto done;
 
-    (sync_namespace.mboxname_tointernal)(&sync_namespace, "INBOX",
-					  userid, buf);
-    r = mailbox_open_irl(buf, &mailbox);
-    if (r == IMAP_MAILBOX_NONEXISTENT) {
-	/* user has been removed, RESET server */
-	syslog(LOG_ERR, "Inbox missing on master for %s", userid);
-	r = user_reset(userid);
-	goto done;
-    }
-    if (r) goto done;
-
-    /* we don't hold locks while sending commands */
-    mailbox_close(&mailbox);
     r = do_user_main(userid, replica_folders, replica_quota);
     if (r) goto done;
     r = do_user_sub(userid, replica_subs);
@@ -2254,8 +2294,10 @@ static int do_sync_mailboxes(struct sync_name_list *mboxname_list,
 static int do_sync(const char *filename)
 {
     struct sync_action_list *user_list = sync_action_list_create();
+    struct sync_action_list *unuser_list = sync_action_list_create();
     struct sync_action_list *meta_list = sync_action_list_create();
     struct sync_action_list *mailbox_list = sync_action_list_create();
+    struct sync_action_list *unmailbox_list = sync_action_list_create();
     struct sync_action_list *quota_list = sync_action_list_create();
     struct sync_action_list *annot_list = sync_action_list_create();
     struct sync_action_list *seen_list = sync_action_list_create();
@@ -2327,12 +2369,16 @@ static int do_sync(const char *filename)
 
 	if (!strcmp(type.s, "USER"))
 	    sync_action_list_add(user_list, NULL, arg1s);
+	else if (!strcmp(type.s, "UNUSER"))
+	    sync_action_list_add(unuser_list, NULL, arg1s);
 	else if (!strcmp(type.s, "META"))
 	    sync_action_list_add(meta_list, NULL, arg1s);
 	else if (!strcmp(type.s, "SIEVE"))
 	    sync_action_list_add(meta_list, NULL, arg1s);
 	else if (!strcmp(type.s, "MAILBOX"))
 	    sync_action_list_add(mailbox_list, arg1s, NULL);
+	else if (!strcmp(type.s, "UNMAILBOX"))
+	    sync_action_list_add(unmailbox_list, arg1s, NULL);
 	else if (!strcmp(type.s, "QUOTA"))
 	    sync_action_list_add(quota_list, arg1s, NULL);
 	else if (!strcmp(type.s, "ANNOTATION"))
@@ -2365,19 +2411,54 @@ static int do_sync(const char *filename)
 	(sync_namespace.mboxname_tointernal)(&sync_namespace, "INBOX",
 					      action->user, inboxname);
 	remove_folder(inboxname, mailbox_list, 1);
+	remove_folder(inboxname, unmailbox_list, 1);
 
 	/* remove deleted namespace items as well */
 	if (mboxlist_delayed_delete_isenabled()) {
 	    mboxname_todeleted(inboxname, deletedname, 0);
 	    remove_folder(deletedname, mailbox_list, 1);
+	    remove_folder(deletedname, unmailbox_list, 1);
 	}
 
 	/* remove per-user items */
 	remove_meta(action->user, meta_list);
 	remove_meta(action->user, seen_list);
 	remove_meta(action->user, sub_list);
+
+	/* add back in inbox, because it may have a rename to detect, woot */
+	sync_action_list_add(mailbox_list, inboxname, NULL);
     }
-    
+
+    /* duplicate removal for unuser - we also strip all the user events */
+    for (action = unuser_list->head; action; action = action->next) {
+	char inboxname[MAX_MAILBOX_BUFFER];
+	char deletedname[MAX_MAILBOX_BUFFER];
+
+	/* USER action overrides any MAILBOX action on any of the 
+	 * user's mailboxes or any META, SEEN or SUB/UNSUB
+	 * action for same user */
+	(sync_namespace.mboxname_tointernal)(&sync_namespace, "INBOX",
+					      action->user, inboxname);
+	remove_folder(inboxname, mailbox_list, 1);
+	remove_folder(inboxname, unmailbox_list, 1);
+
+	/* remove deleted namespace items as well */
+	if (mboxlist_delayed_delete_isenabled()) {
+	    mboxname_todeleted(inboxname, deletedname, 0);
+	    remove_folder(deletedname, mailbox_list, 1);
+	    remove_folder(deletedname, unmailbox_list, 1);
+	}
+
+	/* remove per-user items */
+	remove_meta(action->user, meta_list);
+	remove_meta(action->user, seen_list);
+	remove_meta(action->user, sub_list);
+	remove_meta(action->user, user_list); 
+
+	/* add back in inbox, because it may have a rename to detect, woot */
+	sync_action_list_add(mailbox_list, inboxname, NULL);
+    }
+
     for (action = meta_list->head; action; action = action->next) {
 	/* META action overrides any user SEEN or SUB/UNSUB action
 	   for same user */
@@ -2490,6 +2571,13 @@ static int do_sync(const char *filename)
     r = do_sync_mailboxes(mboxname_list, user_list);
     if (r) goto cleanup;
 
+    for (action = unmailbox_list->head; action; action = action->next) {
+	if (!action->active)
+	    continue;
+	r = do_unmailbox(action->name);
+	if (r) goto cleanup;
+    }
+
     for (action = meta_list->head; action; action = action->next) {
 	if (!action->active)
 	    continue;
@@ -2511,7 +2599,16 @@ static int do_sync(const char *filename)
     }
 
     for (action = user_list->head; action; action = action->next) {
+	if (!action->active)
+	    continue;
 	r = do_user(action->user);
+	if (r) goto cleanup;
+    }
+
+    for (action = unuser_list->head; action; action = action->next) {
+	if (!action->active)
+	    continue;
+	r = do_unuser(action->user);
 	if (r) goto cleanup;
     }
 
@@ -2528,6 +2625,7 @@ static int do_sync(const char *filename)
     sync_action_list_free(&user_list);
     sync_action_list_free(&meta_list);
     sync_action_list_free(&mailbox_list);
+    sync_action_list_free(&unmailbox_list);
     sync_action_list_free(&quota_list);
     sync_action_list_free(&annot_list);
     sync_action_list_free(&seen_list);
