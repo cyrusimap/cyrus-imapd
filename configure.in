@@ -942,20 +942,13 @@ if test -z "$with_zephyr"; then
      fi
 fi
 ZEPHYR_LIBS=""
-ZEPHYR_CPPFLAGS=""
 case "$with_zephyr" in
 	no) true;;
 	""|yes) AC_CHECK_LIB(zephyr,ZInitialize,ZEPHYR_LIBS="-lzephyr",
 		with_zephyr="no",);;
-       *)  if test -d ${with_zephyr}/include/zephyr; then
-               ZEPHYR_CPPFLAGS="-I${with_zephyr}/include/zephyr"
-           else
-               ZEPHYR_CPPFLAGS="-I${with_zephyr}/include"
-           fi
-           ZEPHYR_LIBS="-lzephyr";;
+       *)  ZEPHYR_LIBS="-lzephyr";;
 esac
 AC_SUBST(ZEPHYR_LIBS)
-AC_SUBST(ZEPHYR_CPPFLAGS)
 if test "$with_zephyr" != "no"; then
 	AC_DEFINE(HAVE_ZEPHYR,[],[Build with Zephyr support?])
 fi
