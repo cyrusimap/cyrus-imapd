@@ -194,7 +194,7 @@ int dav_exec(sqlite3 *davdb, const char *cmd, struct bind_val bval[],
 
     /* execute and process the results */
     while ((rc = sqlite3_step(*stmt)) == SQLITE_ROW) {
-	if (!r && cb) r = cb(*stmt, rock);
+	if (cb && (r = cb(*stmt, rock))) return r;
     }
 
     if (rc != SQLITE_DONE) {
