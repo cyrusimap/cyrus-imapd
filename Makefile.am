@@ -599,8 +599,11 @@ notifyd_notifyd_SOURCES = imap/mutex_fake.c master/service.c \
 	notifyd/exitcodes.h notifyd/notify_external.c \
 	notifyd/notify_external.h notifyd/notify_log.c notifyd/notify_log.h \
 	notifyd/notify_mailto.c notifyd/notify_mailto.h notifyd/notify_null.c \
-	notifyd/notify_null.h notifyd/notify_zephyr.c notifyd/notify_zephyr.h \
-	notifyd/notifyd.c notifyd/notifyd.h notifyd/version.h
+	notifyd/notify_null.h
+if ZEPHYR
+notifyd_notifyd_SOURCES += notifyd/notify_zephyr.c notifyd/notify_zephyr.h
+endif
+notifyd_notifyd_SOURCES += notifyd/notifyd.c notifyd/notifyd.h notifyd/version.h
 notifyd_notifyd_LDADD = $(LD_SERVER_ADD) $(ZEPHYR_LIBS)
 
 notifyd_notifytest_SOURCES = notifyd/notifytest.c imap/mutex_fake.c

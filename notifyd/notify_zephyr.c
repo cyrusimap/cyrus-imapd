@@ -44,8 +44,6 @@
 
 #include <config.h>
 
-#ifdef HAVE_ZEPHYR
-
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -149,5 +147,3 @@ char* notify_zephyr(const char *class, const char *priority,
 
     return strdup("OK zephyr notification successful");
 }
-
-#endif /* HAVE_ZEPHYR */
