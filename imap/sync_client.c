@@ -1700,6 +1700,28 @@ bail:
 
 /* ====================================================================== */
 
+static void folderlist_remove(struct sync_folder_list *list, const char *prefix)
+{
+    struct sync_folder *item;
+
+    for (item = list->head; item; item = item->next) {
+	if (mboxname_is_prefix(item->name, prefix))
+	    item->mark = 1;
+    }
+}
+
+static void renamelist_remove(struct sync_rename_list *list, const char *prefix)
+{
+    struct sync_rename *item;
+
+    for (item = list->head; item; item = item->next) {
+	if (mboxname_is_prefix(item->oldname, prefix)) {
+	    list->done++;
+	    item->done = 1;
+	}
+    }
+}
+
 int do_folders(struct sync_name_list *mboxname_list,
 	       struct sync_folder_list *replica_folders, int delete_remote)
 {
@@ -1723,14 +1745,31 @@ int do_folders(struct sync_name_list *mboxname_list,
     /* Tag folders on server which still exist on the client. Anything
      * on the server which remains untagged can be deleted immediately */
     for (mfolder = master_folders->head; mfolder; mfolder = mfolder->next) {
+	if (mfolder->mark) continue;
 	rfolder = sync_folder_lookup(replica_folders, mfolder->uniqueid);
 	if (!rfolder) continue;
+	if (rfolder->mark) continue;
 	rfolder->mark = 1;
 
 	/* does it need a rename? */
-	if (strcmp(mfolder->name, rfolder->name) || strcmp(mfolder->part, rfolder->part))
+	if (strcmp(mfolder->name, rfolder->name)) {
 	    sync_rename_list_add(rename_folders, mfolder->uniqueid, rfolder->name, 
 				 mfolder->name, mfolder->part, mfolder->uidvalidity);
+	    if (mboxname_isusermailbox(mfolder->name, 1) &&
+		mboxname_isusermailbox(rfolder->name, 1)) {
+		/* user rename - strip all other folders from consideration.  They
+		 * will be picked up by the full user sync later */
+		folderlist_remove(master_folders, mfolder->name);
+		renamelist_remove(rename_folders, rfolder->name);
+		folderlist_remove(replica_folders, rfolder->name);
+	    }
+	}
+
+	/* partition change is a rename too */
+	else if (strcmp(mfolder->part, rfolder->part)) {
+	    sync_rename_list_add(rename_folders, mfolder->uniqueid, rfolder->name, 
+				 mfolder->name, mfolder->part, mfolder->uidvalidity);
+	}
     }
 
     /* Delete folders on server which no longer exist on client */
@@ -1788,6 +1827,7 @@ int do_folders(struct sync_name_list *mboxname_list,
     }
 
     for (mfolder = master_folders->head; mfolder; mfolder = mfolder->next) {
+	if (mfolder->mark) continue;
 	/* NOTE: rfolder->name may now be wrong, but we're guaranteed that
 	 * it was successfully renamed above, so just use mfolder->name for
 	 * all commands */
