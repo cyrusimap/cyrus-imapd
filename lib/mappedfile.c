@@ -331,7 +331,8 @@ ssize_t mappedfile_pwrite(struct mappedfile *mf,
 			  const char *base, size_t len,
 			  off_t offset)
 {
-    int n;
+    ssize_t written;
+    off_t pos;
 
     assert(mf);
     assert(mf->lock_status == MF_WRITELOCKED);
@@ -345,32 +346,33 @@ ssize_t mappedfile_pwrite(struct mappedfile *mf,
     mf->dirty++;
 
     /* locate the file handle */
-    n = lseek(mf->fd, offset, SEEK_SET);
-    if (n < 0) {
+    pos = lseek(mf->fd, offset, SEEK_SET);
+    if (pos < 0) {
 	syslog(LOG_ERR, "IOERROR: %s seek to %llX: %m", mf->fname,
 	       (long long unsigned int)offset);
-	return n;
+	return -1;
     }
 
     /* write the buffer */
-    n = retry_write(mf->fd, base, len);
-    if (n < 0) {
+    written = retry_write(mf->fd, base, len);
+    if (written < 0) {
 	syslog(LOG_ERR, "IOERROR: %s write %llu bytes at %llX: %m",
 	       mf->fname, (long long unsigned int)len,
 	       (long long unsigned int)offset);
-	return n;
+	return -1;
     }
 
-    _ensure_mapped(mf, offset+n);
+    _ensure_mapped(mf, pos+written);
 
-    return n;
+    return written;
 }
 
 ssize_t mappedfile_pwritev(struct mappedfile *mf,
 			   const struct iovec *iov, int nio,
 			   off_t offset)
 {
-    int n;
+    ssize_t written;
+    off_t pos;
 
     assert(mf);
     assert(mf->lock_status == MF_WRITELOCKED);
@@ -384,16 +386,16 @@ ssize_t mappedfile_pwritev(struct mappedfile *mf,
     mf->dirty++;
 
     /* locate the file handle */
-    n = lseek(mf->fd, offset, SEEK_SET);
-    if (n < 0) {
+    pos = lseek(mf->fd, offset, SEEK_SET);
+    if (pos < 0) {
 	syslog(LOG_ERR, "IOERROR: %s seek to %llX: %m", mf->fname,
 	       (long long unsigned int)offset);
-	return n;
+	return -1;
     }
 
     /* write the buffer */
-    n = retry_writev(mf->fd, iov, nio);
-    if (n < 0) {
+    written = retry_writev(mf->fd, iov, nio);
+    if (written < 0) {
 	size_t len = 0;
 	int i;
 	for (i = 0; i < nio; i++) {
@@ -402,12 +404,12 @@ ssize_t mappedfile_pwritev(struct mappedfile *mf,
 	syslog(LOG_ERR, "IOERROR: %s write %llu bytes at %llX: %m",
 	       mf->fname, (long long unsigned int)len,
 	       (long long unsigned int)offset);
-	return n;
+	return -1;
     }
 
-    _ensure_mapped(mf, offset+n);
+    _ensure_mapped(mf, pos+written);
 
-    return n;
+    return written;
 }
 
 int mappedfile_truncate(struct mappedfile *mf, off_t offset)
