@@ -1955,10 +1955,10 @@ static int meth_proppatch(struct transaction_t *txn)
     /* Parse the path */
     if ((r = parse_path(&txn->req_tgt, &txn->error.desc))) return r;
 
-    /* Make sure its a calendar collection */
-    if (!txn->req_tgt.collection || txn->req_tgt.resource) {
+    /* Make sure its a collection */
+    if ((txn->req_tgt.namespace != URL_NS_CALENDAR) || txn->req_tgt.resource) {
 	txn->error.desc =
-	    "Properties can only be updated on calendar collections";
+	    "Properties can only be updated on collections";
 	return HTTP_FORBIDDEN;
     }
 
