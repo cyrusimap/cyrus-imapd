@@ -324,7 +324,7 @@ int xml_add_response(struct propfind_ctx *fctx, long code)
     xmlNodePtr resp;
     struct propstat propstat[NUM_PROPSTAT];
     struct propfind_entry_list *e;
-    int i;
+    int i, have_propstat = 0;
 
     memset(propstat, 0, NUM_PROPSTAT * sizeof(struct propstat));
 
@@ -364,6 +364,8 @@ int xml_add_response(struct propfind_ctx *fctx, long code)
 		xmlFreeNode(stat->root);
 	    }
 	    else {
+		have_propstat = 1;
+
 		xmlNewChild(stat->root, NULL, BAD_CAST "status",
 			    BAD_CAST http_statusline(stat->status));
 		if (stat->precond) {
@@ -374,6 +376,12 @@ int xml_add_response(struct propfind_ctx *fctx, long code)
 		xmlAddChild(resp, stat->root);
 	    }
 	}
+    }
+
+    if (!have_propstat)	{
+	/* Didn't include and propstat elements, so add a status element */
+	xmlNewChild(resp, NULL, BAD_CAST "status",
+		    BAD_CAST http_statusline(HTTP_OK));
     }
 
     fctx->record = NULL;
