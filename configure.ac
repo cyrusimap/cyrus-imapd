@@ -117,7 +117,7 @@ if test $ac_cv_sys_long_file_names = no; then
 fi
 AC_C_INLINE
 
-LT_PREREQ([2.4.2])
+LT_PREREQ([2.2.6])
 LT_INIT([disable-static])
 AC_SUBST([LIBTOOL_DEPS])
 
