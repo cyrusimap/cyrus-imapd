@@ -1113,12 +1113,16 @@ static void cmdloop(void)
 		    /* Auth succeeded - log request to userid telemetry */
 		    FILE *logf = fdopen(httpd_logfd, "a");
 		    fprintf(logf, "<%ld<", time(NULL));
+		    /* request-line */
 		    fprintf(logf, "%s %s", txn.meth, txn.req_tgt.path);
 		    if (*txn.req_tgt.query)
 			fprintf(logf, "?%s", txn.req_tgt.query);
 		    fprintf(logf, " %s\r\n", HTTP_VERSION);
+		    /* request headers */
 		    spool_enum_hdrcache(txn.req_hdrs, &log_cachehdr, logf);
+		    /* request body */
 		    fprintf(logf, "\r\n%s", buf_cstring(&txn.req_body));
+		    fwrite(httpd_in->ptr, httpd_in->cnt, 1, logf);
 		    fflush(logf);
 		}
 	    }
