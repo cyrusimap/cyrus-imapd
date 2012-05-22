@@ -1199,7 +1199,14 @@ static int propfind_calurl(xmlNodePtr prop,
     const char *cal = (const char *) rock;
 
     ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
-    if (fctx->userid) {
+    if (fctx->userid &&
+	/* sched-def-cal-URL only defined on sched-inbox-URL */
+	((fctx->req_tgt->namespace == URL_NS_CALENDAR &&
+	  fctx->req_tgt->collection && cal &&
+	  !strcmp(fctx->req_tgt->collection, SCHED_INBOX) &&
+	  !strcmp(cal, SCHED_DEFAULT))
+	 /* others only defined on principals */
+	 || (fctx->req_tgt->namespace == URL_NS_PRINCIPAL))) {
 	node = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 			    prop, NULL, 0);
 
