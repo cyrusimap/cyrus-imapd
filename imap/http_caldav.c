@@ -83,6 +83,7 @@
 #include "rfc822date.h"
 #include "spool.h"
 #include "stristr.h"
+#include "tok.h"
 #include "util.h"
 #include "version.h"
 #include "xmalloc.h"
@@ -90,6 +91,8 @@
 #include "xstrlcpy.h"
 
 #define DFLAG_UNBIND "DAV:unbind"
+
+#define NEW_STAG (1<<8)  /* Make sure we skip over PREFER bits */
 
 enum {
     OVERWRITE_CHECK = -1,
@@ -115,11 +118,12 @@ static int meth_put(struct transaction_t *txn);
 static int meth_report(struct transaction_t *txn);
 static int parse_path(struct request_target_t *tgt, const char **errstr);
 static int is_mediatype(const char *hdr, const char *type);
+static unsigned get_preferences(hdrcache_t hdrcache);
 static int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root);
 static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 			  struct mailbox *mailbox, const char *resource,
 			  struct caldav_db *caldavdb, int overwrite,
-			  int new_stag);
+			  unsigned flags);
 static icalcomponent *busytime(struct transaction_t *txn,
 			       struct propfind_ctx *fctx,
 			       char mailboxname[],
@@ -816,7 +820,7 @@ static int meth_copy(struct transaction_t *txn)
 
     /* Store source resource at destination */
     ret = store_resource(txn, ical, dest_mbox, dest.resource, auth_caldavdb,
-			 overwrite, 1);
+			 overwrite, NEW_STAG);
 
     /* For MOVE, we need to delete the source resource */
     if ((txn->meth[0] == 'M') &&
@@ -1619,8 +1623,7 @@ static int propfind_by_resource(void *rock, struct caldav_data *cdata)
 }
 
 /* mboxlist_findall() callback to find props on a collection */
-static int propfind_by_collection(char *mboxname,
-				  int matchlen __attribute__((unused)),
+static int propfind_by_collection(char *mboxname, int matchlen,
 				  int maycreate __attribute__((unused)),
 				  void *rock)
 {
@@ -1629,7 +1632,11 @@ static int propfind_by_collection(char *mboxname,
     struct mailbox *mailbox = NULL;
     char *p;
     size_t len;
-    int r = 0, rights;
+    int r = 0, rights, root;
+
+    /* If this function is called outside of mboxlist_findall()
+       with matchlen == 0, this is the root resource of the PROPFIND */
+    root = !matchlen;
 
     if (fctx->calfilter && fctx->calfilter->check_transp) {
 	/* Check if the collection is marked as transparent */
@@ -1685,8 +1692,11 @@ static int propfind_by_collection(char *mboxname,
 	fctx->req_tgt->collection = p;
 	fctx->req_tgt->collen = strlen(p);
 
-	/* If not filtering by calendar resource, add response for collection */
-	if (!fctx->calfilter && (r = xml_add_response(fctx, 0))) goto done;
+	/* If not filtering by calendar resource, and not excluding root,
+	   add response for collection */
+	if (!fctx->calfilter &&
+	    (!root || (fctx->depth == 1) || !(fctx->prefer & PREFER_NOROOT)) &&
+	    (r = xml_add_response(fctx, 0))) goto done;
     }
 
     if (fctx->depth > 1) {
@@ -1855,6 +1865,7 @@ int meth_propfind(struct transaction_t *txn)
     /* Populate our propfind context */
     fctx.req_tgt = &txn->req_tgt;
     fctx.depth = depth;
+    fctx.prefer = get_preferences(txn->req_hdrs);
     fctx.userid = httpd_userid;
     fctx.userisadmin = httpd_userisadmin;
     fctx.authstate = httpd_authstate;
@@ -1869,16 +1880,11 @@ int meth_propfind(struct transaction_t *txn)
     fctx.errstr = &txn->error.desc;
     fctx.ret = &ret;
 
-    /* Check for Brief header */
-    if ((hdr = spool_getheader(txn->req_hdrs, "Brief")) &&
-	!strcasecmp(hdr[0], "t")) {
-	fctx.brief = 1;
-    }
-
     /* Parse the list of properties and build a list of callbacks */
     preload_proplist(cur->children, &fctx);
 
-    if (!txn->req_tgt.collection) {
+    if (!txn->req_tgt.collection &&
+	(!depth || !(fctx.prefer & PREFER_NOROOT))) {
 	/* Add response for home-set collection */
 	if (xml_add_response(&fctx, 0)) goto done;
     }
@@ -2055,10 +2061,7 @@ static int meth_proppatch(struct transaction_t *txn)
 
     /* Output the XML response */
     if (!ret) {
-	/* Check for Brief header */
-	const char **hdr = spool_getheader(txn->req_hdrs, "Brief");
-
-	if (hdr && !strcasecmp(hdr[0], "t")) ret = HTTP_OK;
+	if (get_preferences(txn->req_hdrs) & PREFER_MIN) ret = HTTP_OK;
 	else xml_response(HTTP_MULTI_STATUS, txn, outdoc);
     }
 
@@ -2092,6 +2095,7 @@ static int meth_post(struct transaction_t *txn)
     /* We only handle POST on calendar collections */
     if (!txn->req_tgt.collection ||
 	txn->req_tgt.resource) return HTTP_NOT_ALLOWED;
+
 #ifdef WITH_CALDAV_SCHED
     if (!strcmp(txn->req_tgt.collection, SCHED_OUTBOX)) {
 	/* POST to schedule-outbox (busy time request) */
@@ -2099,6 +2103,7 @@ static int meth_post(struct transaction_t *txn)
 	return sched_busytime(txn);
     }
 #endif
+
     /* POST to regular calendar collection */
 
     /* Append a unique resource name to URL path and perform a PUT */
@@ -2108,14 +2113,12 @@ static int meth_post(struct transaction_t *txn)
     snprintf(p, MAX_MAILBOX_PATH - len, "%x-%d-%ld-%u.ics",
 	     strhash(txn->req_tgt.path), getpid(), time(0), post_count++);
 
+    /* Tell client where to find the new resource */
+    buf_setcstr(&txn->loc, txn->req_tgt.path);
+
     ret = meth_put(txn);
 
-    if (ret == HTTP_CREATED) {
-	/* Tell client where to find the new resource */
-	const char **hdr = spool_getheader(txn->req_hdrs, "Host");
-	buf_printf(&txn->loc, "%s://%s%s/",
-		   https ? "https" : "http", hdr[0], txn->req_tgt.path);
-    }
+    if (ret != HTTP_CREATED) buf_reset(&txn->loc);
 
     return ret;
 }
@@ -2149,6 +2152,7 @@ static int meth_put(struct transaction_t *txn)
     icalcomponent *ical = NULL, *comp, *nextcomp;
     icalcomponent_kind kind;
     icalproperty *prop;
+    unsigned flags;
 
     /* Make sure its a DAV resource */
     if (!(txn->req_tgt.allow & ALLOW_WRITE)) return HTTP_NOT_ALLOWED; 
@@ -2391,9 +2395,12 @@ static int meth_put(struct transaction_t *txn)
     }
 #endif /* WITH_CALDAV_SCHED */
 
+    flags = NEW_STAG;
+    if (get_preferences(txn->req_hdrs) & PREFER_REP) flags |= PREFER_REP;
+
     /* Store resource at target */
     ret = store_resource(txn, ical, mailbox, txn->req_tgt.resource,
-			 auth_caldavdb, OVERWRITE_CHECK, 1);
+			 auth_caldavdb, OVERWRITE_CHECK, flags);
 
   done:
     if (ical) icalcomponent_free(ical);
@@ -3160,6 +3167,7 @@ static int meth_report(struct transaction_t *txn)
     /* Populate our propfind context */
     fctx.req_tgt = &txn->req_tgt;
     fctx.depth = depth;
+    fctx.prefer = get_preferences(txn->req_hdrs);
     fctx.userid = httpd_userid;
     fctx.userisadmin = httpd_userisadmin;
     fctx.authstate = httpd_authstate;
@@ -3171,12 +3179,6 @@ static int meth_report(struct transaction_t *txn)
     fctx.ns = ns;
     fctx.errstr = &txn->error.desc;
     fctx.ret = &ret;
-
-    /* Check for Brief header */
-    if ((hdr = spool_getheader(txn->req_hdrs, "Brief")) &&
-	!strcasecmp(hdr[0], "t")) {
-	fctx.brief = 1;
-    }
 
     /* Parse the list of properties and build a list of callbacks */
     if (prop) preload_proplist(prop->children, &fctx);
@@ -3375,7 +3377,7 @@ int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname)
 static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 			  struct mailbox *mailbox, const char *resource,
 			  struct caldav_db *caldavdb, int overwrite,
-			  int new_stag)
+			  unsigned flags)
 {
     int ret = HTTP_CREATED, r;
     icalcomponent *comp;
@@ -3536,7 +3538,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 		    */
 		    int userflag;
 
-		    ret = HTTP_NO_CONTENT;
+		    ret = (flags & PREFER_REP) ? HTTP_OK : HTTP_NO_CONTENT;
 
 		    /* Fetch index record for the resource */
 		    r = mailbox_find_index_record(mailbox,
@@ -3586,7 +3588,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 		    caldav_make_entry(ical, &cdata);
 
 		    if (!cdata.organizer) cdata.sched_tag = NULL;
-		    else if (new_stag) {
+		    else if (flags & NEW_STAG) {
 			sprintf(sched_tag, "%d-%ld-%u",
 				getpid(), now, store_count++);
 			cdata.sched_tag = sched_tag;
@@ -3599,6 +3601,17 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 		    /* Tell client about the new resource */
 		    txn->resp_body.etag = message_guid_encode(&newrecord.guid);
 		    if (cdata.sched_tag) txn->resp_body.stag = cdata.sched_tag;
+
+		    if (flags & PREFER_REP) {
+			struct resp_body_t *resp_body = &txn->resp_body;
+
+			resp_body->loc = txn->req_tgt.path;
+			resp_body->type = "text/calendar; charset=utf-8";
+			resp_body->len = strlen(ics);
+
+			write_body(ret, txn, ics, strlen(ics));
+			ret = 0;
+		    }
 		}
 
 		/* need to close mailbox returned to us by append_commit */
@@ -3610,6 +3623,40 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     append_removestage(stage);
 
     return ret;
+}
+
+static unsigned get_preferences(hdrcache_t hdrcache)
+{
+    unsigned prefs = 0;
+    const char **hdr;
+
+    /* Check for Brief header */
+    if ((hdr = spool_getheader(hdrcache, "Brief")) &&
+	!strcasecmp(hdr[0], "t")) {
+	prefs |= PREFER_MIN;
+    }
+
+    /* Check for Prefer header(s) */
+    if ((hdr = spool_getheader(hdrcache, "Prefer"))) {
+	int i;
+	for (i = 0; hdr[i]; i++) {
+	    tok_t tok;
+	    char *token;
+
+	    tok_init(&tok, hdr[i], ",\r\n", TOK_TRIMLEFT|TOK_TRIMRIGHT);
+	    while ((token = tok_next(&tok))) {
+		if (!strcmp(token, "return-minimal"))
+		    prefs |= PREFER_MIN;
+		else if (!strcmp(token, "return-representation"))
+		    prefs |= PREFER_REP;
+		else if (!strcmp(token, "depth-noroot"))
+		    prefs |= PREFER_NOROOT;
+	    }
+	    tok_fini(&tok);
+	}
+    }
+
+    return prefs;
 }
 
 #ifdef WITH_CALDAV_SCHED
@@ -4125,7 +4172,7 @@ static void sched_deliver(char *recipient, void *data, void *rock)
     mailbox_unlock_index(mailbox, NULL);
 
     r = store_resource(&txn, ical, mailbox, buf_cstring(&resource),
-		       caldavdb, OVERWRITE_YES, 1);
+		       caldavdb, OVERWRITE_YES, NEW_STAG);
 
     if (r == HTTP_CREATED || r == HTTP_NO_CONTENT) {
 	sched_data->status = SCHEDSTAT_DELIVERED;

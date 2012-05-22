@@ -359,7 +359,8 @@ int xml_add_response(struct propfind_ctx *fctx, long code)
 	struct propstat *stat = &propstat[i];
 
 	if (stat->root) {
-	    if ((stat->status == HTTP_NOT_FOUND) && fctx->brief) {
+	    if ((stat->status == HTTP_NOT_FOUND) &&
+		(fctx->prefer & PREFER_MIN)) {
 		xmlFreeNode(stat->root);
 	    }
 	    else {

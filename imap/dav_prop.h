@@ -197,6 +197,13 @@ enum {
 };
 #define NUM_PROPSTAT 8
 
+/* Preference bits */
+enum {
+    PREFER_MIN    = (1<<0),
+    PREFER_REP    = (1<<1),
+    PREFER_NOROOT = (1<<2)
+};
+
 /* Context for fetching properties */
 struct propfind_entry_list;
 
@@ -216,7 +223,7 @@ struct busytime {
 struct propfind_ctx {
     struct request_target_t *req_tgt;	/* parsed request target URL */
     unsigned depth;	    		/* 0 = root, 1 = calendar, 2 = resrc */
-    unsigned brief;			/* omit 404 propstat elements */
+    unsigned prefer;			/* bitmask of client preferences */
     const char *userid;			/* userid client has logged in as */
     int userisadmin;			/* is userid an admin */
     struct auth_state *authstate;	/* authorization state for userid */
