@@ -56,16 +56,13 @@
  * Keep calling the read() system call with 'fd', 'buf', and 'nbyte'
  * until all the data is read in or an error occurs.
  */
-int retry_read(int fd, void *vbuf, size_t nbyte)
+ssize_t retry_read(int fd, void *vbuf, size_t nbyte)
 {
-    int n;
-    int nread = 0;
+    size_t nread;
     char *buf = vbuf;
-
-    if (nbyte == 0) return 0;
-
-    for (;;) {
-	n = read(fd, buf, nbyte);
+    
+    for (nread = 0; nread < nbyte; ) {
+	ssize_t n = read(fd, buf + nread, nbyte - nread);
 	if (n == 0) {
 	    /* end of file */
 	    return -1;
@@ -77,54 +74,47 @@ int retry_read(int fd, void *vbuf, size_t nbyte)
 	}
 
 	nread += n;
-
-	if (((size_t) n) >= nbyte) return nread;
-
-	buf += n;
-	nbyte -= n;
     }
+
+    return nread;
 }
 
 /*
  * Keep calling the write() system call with 'fd', 'buf', and 'nbyte'
  * until all the data is written out or an error occurs.
  */
-int retry_write(int fd, const void *vbuf, size_t nbyte)
+ssize_t retry_write(int fd, const void *vbuf, size_t nbyte)
 {
-    int n;
-    int written = 0;
     const char *buf = vbuf;
+    size_t written = 0;
 
     if (nbyte == 0) return 0;
 
-    for (;;) {
-	n = write(fd, buf, nbyte);
+    for (written = 0; written < nbyte; ) {
+	ssize_t n = write(fd, buf + written, nbyte - written);
+
 	if (n == -1) {
 	    if (errno == EINTR) continue;
 	    return -1;
 	}
 
 	written += n;
-
-	if (((size_t) n) >= nbyte) return written;
-
-	buf += n;
-	nbyte -= n;
     }
+
+    return written;
 }
 
-	
 /*
  * Keep calling the writev() system call with 'fd', 'iov', and 'iovcnt'
  * until all the data is written out or an error occurs.
  *
  * Now no longer destructive of parameters!
  */
-int retry_writev(int fd, const struct iovec *srciov, int iovcnt)
+ssize_t retry_writev(int fd, const struct iovec *srciov, int iovcnt)
 {
-    int n;
     int i;
-    int written = 0;
+    ssize_t n;
+    size_t written = 0;
     struct iovec *iov, *baseiov;
     static int iov_max =
 #ifdef MAXIOV
@@ -138,6 +128,9 @@ int retry_writev(int fd, const struct iovec *srciov, int iovcnt)
 #endif
 	;
 
+    if (!iovcnt)
+	return 0;
+
     baseiov = iov = (struct iovec *)xmalloc(iovcnt * sizeof(struct iovec));
     for (i = 0; i < iovcnt; i++) {
 	iov[i].iov_base = srciov[i].iov_base;
@@ -150,7 +143,7 @@ int retry_writev(int fd, const struct iovec *srciov, int iovcnt)
 	    iovcnt--;
 	}
 
-	if (!iovcnt) goto done;
+	if (!iovcnt) break;
 
 	n = writev(fd, iov, iovcnt > iov_max ? iov_max : iovcnt);
 	if (n == -1) {
@@ -159,14 +152,14 @@ int retry_writev(int fd, const struct iovec *srciov, int iovcnt)
 		continue;
 	    }
 	    if (errno == EINTR) continue;
-	    written = -1;
-	    goto done;
+	    free(baseiov);
+	    return -1;
 	}
 
 	written += n;
 
 	for (i = 0; i < iovcnt; i++) {
-	    if (iov[i].iov_len > (size_t) n) {
+	    if (iov[i].iov_len > (size_t)n) {
 		iov[i].iov_base = (char *)iov[i].iov_base + n;
 		iov[i].iov_len -= n;
 		break;
@@ -175,12 +168,9 @@ int retry_writev(int fd, const struct iovec *srciov, int iovcnt)
 	    iov[i].iov_len = 0;
 	}
 
-	if (i == iovcnt) goto done;
+	if (i == iovcnt) break;
     }
 
-done:
     free(baseiov);
     return written;
 }
-
-	

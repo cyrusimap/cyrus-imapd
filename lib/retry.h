@@ -56,9 +56,9 @@
 #include <sys/uio.h>
 #include "xmalloc.h"
 
-extern int retry_read P((int fd, void *buf, size_t nbyte));
-extern int retry_write P((int fd, const void *buf, size_t nbyte));
-extern int retry_writev P((int fd, const struct iovec *iov, int iovcnt));
+extern ssize_t retry_read P((int fd, void *buf, size_t nbyte));
+extern ssize_t retry_write P((int fd, const void *buf, size_t nbyte));
+extern ssize_t retry_writev P((int fd, const struct iovec *iov, int iovcnt));
 
 /* add a buffer 's' of length 'len' to iovec 'iov' */
 #define WRITEV_ADD_TO_IOVEC(iov, num_iov, s, len) \
@@ -67,6 +67,5 @@ extern int retry_writev P((int fd, const struct iovec *iov, int iovcnt));
 
 /* add a string 's' to iovec 'iov' */
 #define WRITEV_ADDSTR_TO_IOVEC(iov, num_iov, s) WRITEV_ADD_TO_IOVEC(iov, num_iov, s, strlen(s))
-                
 
 #endif /* INCLUDED_RETRY_H */
