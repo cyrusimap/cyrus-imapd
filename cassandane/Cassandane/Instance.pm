@@ -1134,7 +1134,7 @@ sub _fork_command
 		split(/:/, $ENV{LD_LIBRARY_PATH} || "")
 	));
     }
-    xlog "\$LD_LIBRARY_PATH is"; map { xlog "    $_"; } split(/:/, $ENV{LD_LIBRARY_PATH});
+#     xlog "\$LD_LIBRARY_PATH is"; map { xlog "    $_"; } split(/:/, $ENV{LD_LIBRARY_PATH});
 
     my $cd = $options->{workingdir};
     $cd = $self->{basedir} . '/conf/cores'
