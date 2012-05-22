@@ -1121,6 +1121,21 @@ sub _fork_command
 
 #     xlog "\$PERL5LIB is"; map { xlog "    $_"; } split(/:/, $ENV{PERL5LIB});
 
+    # Set up the runtime linker path to find the Cyrus shared libraries
+    #
+    # TODO: on some platforms we need lib64/ not lib/ but it's not
+    # entirely clear how to detect that - we could use readelf -d
+    # on an executable to discover what it thinks it's RPATH ought
+    # to be, then prepend destdir to that.
+    if ($self->{cyrus_destdir} ne "")
+    {
+	$ENV{LD_LIBRARY_PATH} = join(':', (
+		$self->{cyrus_destdir} . $self->{cyrus_prefix} . "/lib",
+		split(/:/, $ENV{LD_LIBRARY_PATH} || "")
+	));
+    }
+    xlog "\$LD_LIBRARY_PATH is"; map { xlog "    $_"; } split(/:/, $ENV{LD_LIBRARY_PATH});
+
     my $cd = $options->{workingdir};
     $cd = $self->{basedir} . '/conf/cores'
 	unless defined($cd);
