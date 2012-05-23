@@ -977,10 +977,12 @@ static int propfind_acl(xmlNodePtr prop,
 	char *aclstr, *userid;
 	unsigned flags = PRIV_IMPLICIT;
 
-	if (!strcmp(fctx->req_tgt->collection, SCHED_INBOX))
-	    flags |= PRIV_INBOX;
-	else if (!strcmp(fctx->req_tgt->collection, SCHED_OUTBOX))
-	    flags |= PRIV_OUTBOX;
+	if (fctx->req_tgt->collection) {
+	    if (!strcmp(fctx->req_tgt->collection, SCHED_INBOX))
+		flags |= PRIV_INBOX;
+	    else if (!strcmp(fctx->req_tgt->collection, SCHED_OUTBOX))
+		flags |= PRIV_OUTBOX;
+	}
 
 	/* Start the acl XML response */
 	acl = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
