@@ -1886,7 +1886,21 @@ int meth_propfind(struct transaction_t *txn)
     if (!txn->req_tgt.collection &&
 	(!depth || !(fctx.prefer & PREFER_NOROOT))) {
 	/* Add response for home-set collection */
-	if (xml_add_response(&fctx, 0)) goto done;
+	struct mailbox *mailbox = NULL;
+
+	/* Open mailbox for reading */
+	if ((r = mailbox_open_irl(mailboxname, &mailbox))) {
+	    syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
+		   mailboxname, error_message(r));
+	    txn->error.desc = error_message(r);
+	    ret = HTTP_SERVER_ERROR;
+	    goto done;
+	}
+	fctx.mailbox = mailbox;
+
+	xml_add_response(&fctx, 0);
+
+	mailbox_close(&mailbox);
     }
 
     if (depth > 0) {
