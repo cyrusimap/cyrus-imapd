@@ -8482,6 +8482,8 @@ static void cmd_setmetadata(const char *tag, char *mboxpat)
     }
     if (!r)
 	annotatemore_commit();
+    else
+	annotatemore_abort();
 
     imapd_check(NULL, 0);
 
