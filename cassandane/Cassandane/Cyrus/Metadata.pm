@@ -44,6 +44,8 @@ use warnings;
 package Cassandane::Cyrus::Metadata;
 use base qw(Cassandane::Cyrus::TestCase);
 use DateTime;
+use File::Temp qw(:POSIX);
+use Config;
 use Cassandane::Util::Log;
 
 sub new
@@ -101,6 +103,112 @@ sub make_message_pair
     $self->_save_message($msg1, $store1);
     return ($msg0, $msg1);
 }
+
+# Undo the binary escaping used by cvt_cyrusdb, which uses \xff as the
+# escape character and escapes \0 \t \r \n and \xff.  We need to do this
+# because both the key and value in the annotations DB use \0 as field
+# separators and we need to parse them correctly.
+sub unescape
+{
+    my ($s) = @_;
+    my $r = '';
+
+    for (;;)
+    {
+	my  ($pre, $byte, $post) =
+		($s =~ m/^([\0-\xfe]*)\xff([\x80-\xff])(.*)$/);
+	last if !defined $byte;
+
+	$r .= $pre;
+	if ($byte eq '\xff')
+	{
+	    $r .= '\xff';
+	}
+	else
+	{
+	    $r .= chr(ord($byte) & ~0x80);
+	}
+
+	last if !defined $post;
+	$s = $post;
+    }
+
+    $r .= $s;
+
+    return $r;
+}
+
+# List annotations actually stored in the database.
+sub list_annotations
+{
+    my ($self, %params) = @_;
+
+    my $scope = delete $params{scope} || 'global';
+    my $mailbox = delete $params{mailbox} || 'user.cassandane';
+    die "Unknown parameters: " . join(' ', map { $_ . '=' . $params{$_}; } keys %params)
+	if scalar %params;
+
+    my $basedir = $self->{instance}->{basedir};
+
+    my $mailbox_db;
+    if ($scope eq 'global' || $scope eq 'mailbox')
+    {
+	$mailbox_db = "$basedir/conf/annotations.db";
+    }
+    elsif ($scope eq 'message')
+    {
+	my $mb = $mailbox;
+	$mb =~ s/\./\//g;
+	$mailbox_db = "$basedir/data/$mb/cyrus.annotations";
+    }
+    else
+    {
+	die "Unknown scope: $scope";
+    }
+
+    my $tmpfile = tmpnam();
+    $self->{instance}->run_command({ cyrus => 1 },
+			'cvt_cyrusdb',
+			$mailbox_db, 'skiplist',
+			$tmpfile, 'flat');
+
+    my @annots;
+    open TMP, '<', $tmpfile
+	or die "Cannot open $tmpfile for reading: $!";
+    while (<TMP>)
+    {
+	chomp;
+	my ($key, $value) = split(/\t/, $_, 2);
+	my @f = split(/\0/, unescape($key), 4);
+	$value = unescape($value);
+
+	# Damn stupid database format has sizeof(long) bytes of length.
+	my ($length) = unpack("N", $value);
+	my $data = substr($value, $Config{longsize}, $length);
+
+	push(@annots, {
+	    uid => ($scope eq 'message' ? $f[0] : 0),
+	    mboxname => ($scope eq 'message' ? $mailbox : $f[0]),
+	    entry => $f[1],
+	    userid => $f[2],
+	    data => $data
+	});
+    }
+    close(TMP);
+    unlink($tmpfile);
+
+    # enforce a stable order so we have some chance of
+    # comparing the results
+    @annots = sort {
+	$a->{mboxname} cmp $b->{mboxname} ||
+	$a->{uid} <=> $b->{uid} ||
+	$a->{userid} cmp $b->{userid} ||
+	$a->{entry} cmp $b->{entry};
+    } @annots;
+
+    return \@annots;
+}
+
 
 #
 # Test the capabilities
@@ -2004,6 +2112,116 @@ sub test_copy_messages
     $store->_select();
     $self->check_messages(\%exp);
 
+}
+
+sub test_expunge_messages
+{
+    my ($self) = @_;
+
+    xlog "testing expunge of messages with message scope";
+    xlog "annotations [IRIS-1553]";
+
+    my $entry = '/comment';
+    my $attrib = 'value.priv';
+
+    $self->{store}->set_fetch_attributes('uid', "annotation ($entry $attrib)");
+    my $talk = $self->{store}->get_client();
+    $talk->uid(1);
+
+    my @data_by_uid = (
+	undef,
+	# data thanks to hipsteripsum.me
+	"polaroid seitan",
+	"bicycle rights",
+	"bushwick gastropub"
+    );
+
+    xlog "Append some messages and store annotations";
+    my %exp;
+    my $uid = 1;
+    while (defined $data_by_uid[$uid])
+    {
+	my $data = $data_by_uid[$uid];
+	my $msg = $self->make_message("Message $uid");
+	$msg->set_annotation($entry, $attrib, $data);
+	$exp{$uid} = $msg;
+	$self->set_msg_annotation(undef, $uid, $entry, $attrib, $data);
+	$uid++;
+    }
+
+    xlog "Check the annotations are there";
+    $self->check_messages(\%exp, keyed_on => 'uid');
+
+    xlog "Check the annotations are in the DB too";
+    my $r = $self->list_annotations(scope => 'message');
+    $self->assert_deep_equals([
+	{
+	    mboxname => 'user.cassandane',
+	    uid => 1,
+	    entry => $entry,
+	    userid => 'cassandane',
+	    data => $data_by_uid[1]
+	},
+	{
+	    mboxname => 'user.cassandane',
+	    uid => 2,
+	    entry => $entry,
+	    userid => 'cassandane',
+	    data => $data_by_uid[2]
+	},
+	{
+	    mboxname => 'user.cassandane',
+	    uid => 3,
+	    entry => $entry,
+	    userid => 'cassandane',
+	    data => $data_by_uid[3]
+	}
+    ], $r);
+
+    $uid = 1;
+    while (defined $data_by_uid[$uid])
+    {
+	xlog "Delete message $uid";
+	$talk->store($uid, '+flags', '(\\Deleted)');
+	$talk->expunge();
+
+	xlog "Check the annotation is gone";
+	delete $exp{$uid};
+	$self->check_messages(\%exp);
+	$uid++;
+    }
+
+    xlog "Check the annotations are still in the DB";
+    $r = $self->list_annotations(scope => 'message');
+    $self->assert_deep_equals([
+	{
+	    mboxname => 'user.cassandane',
+	    uid => 1,
+	    entry => $entry,
+	    userid => 'cassandane',
+	    data => $data_by_uid[1]
+	},
+	{
+	    mboxname => 'user.cassandane',
+	    uid => 2,
+	    entry => $entry,
+	    userid => 'cassandane',
+	    data => $data_by_uid[2]
+	},
+	{
+	    mboxname => 'user.cassandane',
+	    uid => 3,
+	    entry => $entry,
+	    userid => 'cassandane',
+	    data => $data_by_uid[3]
+	}
+    ], $r);
+
+    $self->run_delayed_expunge();
+
+    xlog "Check the annotations are gone from the DB";
+    $r = $self->list_annotations(scope => 'message');
+    $self->assert_deep_equals([], $r);
 }
 
 sub test_cvt_cyrusdb
