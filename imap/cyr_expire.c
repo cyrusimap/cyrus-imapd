@@ -228,7 +228,9 @@ static int expire(char *name, int matchlen __attribute__((unused)),
     r = mailbox_open_iwl(name, &mailbox);
     if (r) {
 	/* mailbox corrupt/nonexistent -- skip it */
-	syslog(LOG_WARNING, "unable to open mailbox %s", name);
+	syslog(LOG_WARNING, "unable to open mailbox %s: %s",
+	       name, error_message(r));
+	annotatemore_abort();
 	return 0;
     }
 

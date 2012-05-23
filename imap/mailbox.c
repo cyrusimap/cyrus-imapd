@@ -2626,9 +2626,6 @@ static int mailbox_index_repack(struct mailbox *mailbox)
 
     syslog(LOG_INFO, "Repacking mailbox %s", mailbox->name);
 
-    r = annotatemore_begin();
-    if (r) return r;
-
     r = mailbox_repack_setup(mailbox, &repack);
     if (r) goto fail;
 
@@ -2663,9 +2660,6 @@ static int mailbox_index_repack(struct mailbox *mailbox)
     repack->i.options &= ~(OPT_MAILBOX_NEEDS_REPACK|OPT_MAILBOX_NEEDS_UNLINK);
 
     r = mailbox_repack_commit(&repack);
-    if (r) goto fail;
-
-    r = annotatemore_commit();
     if (r) goto fail;
 
     return 0;

@@ -3167,6 +3167,10 @@ int annotate_msg_copy(struct mailbox *oldmailbox, uint32_t olduid,
 
 int annotate_msg_expunge(struct mailbox *mailbox, uint32_t uid)
 {
+#if DEBUG
+    syslog(LOG_ERR, "annotate_msg_expunge: expunging mailbox=%s uid=%u",
+	    mailbox->name, uid);
+#endif
     return _annotate_rewrite(mailbox, uid, /*userid*/NULL,
 			     /*newmbox*/NULL,
 			     /*newuid*/0, /*newuserid*/NULL,
