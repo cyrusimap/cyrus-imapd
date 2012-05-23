@@ -1180,6 +1180,10 @@ void cmdloop(void)
 	    continue;
 	}
 
+	/* Check for leaked annotate txns */
+	annotatemore_begin();	/* will fail an assert if a nested txn */
+	annotatemore_abort();
+
 	/* Parse tag */
 	c = getword(imapd_in, &tag);
 	if (c == EOF) {

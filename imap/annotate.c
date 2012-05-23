@@ -723,6 +723,11 @@ int annotatemore_begin(void)
 {
     if (!all_dbs_head)
 	return IMAP_INTERNAL;
+
+    /* It is an error to begin a txn without explicitly either
+     * committing or aborting the previous txn.  */
+    assert(!in_txn);
+
     /* abort any dangling db-transactions */
     annotatemore_abort();
     in_txn = 1;			/* beginning of ann-transaction */
