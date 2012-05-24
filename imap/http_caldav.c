@@ -117,7 +117,6 @@ static int meth_post(struct transaction_t *txn);
 static int meth_put(struct transaction_t *txn);
 static int meth_report(struct transaction_t *txn);
 static int parse_path(struct request_target_t *tgt, const char **errstr);
-static int is_mediatype(const char *hdr, const char *type);
 static unsigned get_preferences(hdrcache_t hdrcache);
 static int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root);
 static int store_resource(struct transaction_t *txn, icalcomponent *ical,
@@ -137,13 +136,13 @@ static int sched_busytime(struct transaction_t *txn);
 static int sched_request(icalcomponent *oldical, icalcomponent *newical);
 static int sched_reply(icalcomponent *oldical, icalcomponent *newical,
 		       const char *userid);
-#endif
+#endif /* WITH_CALDAV_SCHED */
 int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname);
 
 /* Namespace for CalDAV collections */
 const struct namespace_t namespace_calendar = {
     URL_NS_CALENDAR, "/calendars", 1 /* auth */,
-    (ALLOW_READ | ALLOW_WRITE | ALLOW_DAV | ALLOW_CAL),
+    (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DAV | ALLOW_CAL), 0,
     &my_caldav_init, &my_caldav_auth, my_caldav_reset, &my_caldav_shutdown,
     { 
 	&meth_acl,		/* ACL		*/
@@ -168,7 +167,7 @@ const struct namespace_t namespace_calendar = {
 /* Namespace for WebDAV principals */
 const struct namespace_t namespace_principal = {
     URL_NS_PRINCIPAL, "/principals", 1 /* auth */,
-    (ALLOW_DAV | ALLOW_CAL | ALLOW_CARD),
+    (ALLOW_DAV | ALLOW_CAL | ALLOW_CARD), 0,
     NULL, NULL, NULL, NULL,
     {
 	NULL,			/* ACL		*/
@@ -3287,14 +3286,6 @@ static int parse_path(struct request_target_t *tgt, const char **errstr)
 }
 
 
-static int is_mediatype(const char *hdr, const char *type)
-{
-    size_t len = strlen(type);
-
-    return (!strncasecmp(hdr, type, len) && strchr("; \t\r\n\0", hdr[len]));
-}
-
-
 /* Parse an XML body into a tree */
 static int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root)
 {
@@ -3691,130 +3682,44 @@ static char *caladdress_to_userid(const char *addr)
 }
 
 
-/* Perform a Scheduling Busy Time request */
-static int sched_busytime(struct transaction_t *txn)
+/* Perform a Busy Time query based on given VFREEBUSY component */
+int busytime_query(struct transaction_t *txn, icalcomponent *comp)
 {
-    int ret = 0, r, rights;
-    char *server, *acl, mailboxname[MAX_MAILBOX_BUFFER];
-    const char **hdr;
-    icalcomponent *ical, *comp;
-    icalcomponent_kind kind = 0;
-    icalproperty_method meth = 0;
+    int ret = 0;
+    char mailboxname[MAX_MAILBOX_BUFFER];
     icalproperty *prop = NULL;
-    const char *uid = NULL, *organizer = NULL, *orgid = NULL;
+    const char *uid = NULL, *organizer = NULL;
     struct auth_state *org_authstate = NULL;
     xmlDocPtr doc = NULL;
     xmlNodePtr root = NULL;
-    xmlNsPtr calns = NULL, davns = NULL;
+    xmlNsPtr ns = NULL, davns = NULL;
     struct propfind_ctx fctx;
     struct calquery_filter filter;
 
-    /* Check Content-Type */
-    if (!(hdr = spool_getheader(txn->req_hdrs, "Content-Type")) ||
-	!is_mediatype(hdr[0], "text/calendar")) {
-	txn->error.precond = CALDAV_SUPP_DATA;
-	return HTTP_BAD_REQUEST;
-    }
+    uid = icalcomponent_get_uid(comp);
 
-    /* Construct mailbox name corresponding to request target URI */
-    (void) target_to_mboxname(&txn->req_tgt, mailboxname);
-
-    /* Locate the mailbox */
-    if ((r = http_mlookup(mailboxname, &server, &acl, NULL))) {
-	syslog(LOG_ERR, "mlookup(%s) failed: %s",
-	       mailboxname, error_message(r));
-	txn->error.desc = error_message(r);
-
-	switch (r) {
-	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
-	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
-	default: return HTTP_SERVER_ERROR;
-	}
-    }
-
-    /* Check ACL for current user */
-    rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
-    if (!(rights & DACL_SCHED)) {
-	/* DAV:need-privileges */
-	txn->error.precond = DAV_NEED_PRIVS;
-	txn->error.resource = txn->req_tgt.path;
-	txn->error.rights = DACL_SCHED;
-	return HTTP_FORBIDDEN;
-    }
-
-    if (server) {
-	/* Remote mailbox */
-	struct backend *be;
-
-	be = proxy_findserver(server, &http_protocol, httpd_userid,
-			      &backend_cached, NULL, NULL, httpd_in);
-	if (!be) return HTTP_UNAVAILABLE;
-
-	return http_pipe_req_resp(be, txn);
-    }
-
-    /* Local Mailbox */
-
-    /* Read body */
-    if (!(txn->flags & HTTP_READBODY)) {
-	txn->flags |= HTTP_READBODY;
-	r = read_body(httpd_in, txn->req_hdrs, &txn->req_body, &txn->error.desc);
-	if (r) {
-	    txn->flags |= HTTP_CLOSE;
-	    return r;
-	}
-    }
-
-    /* Make sure we have a body */
-    if (!buf_len(&txn->req_body)) {
-	txn->error.desc = "Missing request body";
-	return HTTP_BAD_REQUEST;
-    }
-
-    /* Parse the iCal data for important properties */
-    ical = icalparser_parse_string(buf_cstring(&txn->req_body));
-    if (!ical || !icalrestriction_check(ical)) {
-	txn->error.precond = CALDAV_VALID_DATA;
-	return HTTP_BAD_REQUEST;
-    }
-
-    meth = icalcomponent_get_method(ical);
-    comp = icalcomponent_get_first_real_component(ical);
-    if (comp) {
-	uid = icalcomponent_get_uid(comp);
-	kind = icalcomponent_isa(comp);
-	prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
-    }
-
-    /* Check method preconditions */
-    if (!meth || meth != ICAL_METHOD_REQUEST || !uid ||
-	kind != ICAL_VFREEBUSY_COMPONENT || !prop) {
-	txn->error.precond = CALDAV_VALID_SCHED;
-	return HTTP_BAD_REQUEST;
-    }
-
+    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
     organizer = icalproperty_get_organizer(prop);
-    if (organizer) orgid = caladdress_to_userid(organizer);
-
-    if (!orgid || strncmp(orgid, txn->req_tgt.user, txn->req_tgt.userlen)) {
-	txn->error.precond = CALDAV_VALID_ORGANIZER;
-	return HTTP_FORBIDDEN;
-    }
-
-    org_authstate = auth_newstate(orgid);
+    org_authstate = auth_newstate(caladdress_to_userid(organizer));
 
     /* Start construction of our schedule-response */
-    if (!(doc = xmlNewDoc(BAD_CAST "1.0")) ||
-	!(root = xmlNewNode(NULL, BAD_CAST "schedule-response")) ||
-	!(calns = xmlNewNs(root, BAD_CAST XML_NS_CALDAV, BAD_CAST "C")) ||
-	!(davns = xmlNewNs(root, BAD_CAST XML_NS_DAV, BAD_CAST "D"))) {
+    if ((doc = xmlNewDoc(BAD_CAST "1.0")) &&
+	(root = xmlNewNode(NULL, BAD_CAST "schedule-response"))) {
+	if (txn->flags & HTTP_ISCHEDULE) {
+	    ns = xmlNewNs(root, BAD_CAST XML_NS_ISCHED, NULL);
+	}
+	else  if ((davns = xmlNewNs(root, BAD_CAST XML_NS_DAV, BAD_CAST "D"))) {
+	    ns = xmlNewNs(root, BAD_CAST XML_NS_CALDAV, BAD_CAST "C");
+	}
+    }
+    if (!ns) {
 	ret = HTTP_SERVER_ERROR;
 	txn->error.desc = "Unable to create XML response";
 	goto done;
     }
 
     xmlDocSetRootElement(doc, root);
-    xmlSetNs(root, calns);
+    xmlSetNs(root, ns);
 
     memset(&filter, 0, sizeof(struct calquery_filter));
     filter.comp = CAL_COMP_VEVENT | CAL_COMP_VFREEBUSY;
@@ -3828,7 +3733,7 @@ static int sched_busytime(struct transaction_t *txn)
     fctx.depth = 2;
     fctx.userid = httpd_userid;
     fctx.userisadmin = httpd_userisadmin;
-    fctx.authstate = httpd_authstate;
+    fctx.authstate = org_authstate;
     fctx.reqd_privs = 0;  /* handled by CALDAV:schedule-deliver on Inbox */
     fctx.calfilter = &filter;
     fctx.errstr = &txn->error.desc;
@@ -3841,13 +3746,18 @@ static int sched_busytime(struct transaction_t *txn)
 	xmlNodePtr resp, recip, cdata;
 	struct mboxlist_entry mbentry;
 	icalcomponent *busy;
-	int r;
+	int r, rights;
 
 	attendee = icalproperty_get_attendee(prop);
 
 	resp = xmlNewChild(root, NULL, BAD_CAST "response", NULL);
 	recip = xmlNewChild(resp, NULL, BAD_CAST "recipient", NULL);
-	xmlNewChild(recip, davns, BAD_CAST "href", BAD_CAST attendee);
+	if (txn->flags & HTTP_ISCHEDULE) {
+	    xmlNodeAddContent(recip, BAD_CAST attendee);
+	}
+	else {
+	    xmlNewChild(recip, davns, BAD_CAST "href", BAD_CAST attendee);
+	}
 
 	userid = caladdress_to_userid(attendee);
 
@@ -3904,6 +3814,104 @@ static int sched_busytime(struct transaction_t *txn)
     if (org_authstate) auth_freestate(org_authstate);
     if (fctx.busytime.busy) free(fctx.busytime.busy);
     if (doc) xmlFree(doc);
+
+    return ret;
+}
+
+
+/* Perform a CalDAV Scheduling Busy Time request */
+static int sched_busytime(struct transaction_t *txn)
+{
+    int ret = 0, r, rights;
+    char *acl, mailboxname[MAX_MAILBOX_BUFFER];
+    const char **hdr;
+    icalcomponent *ical, *comp;
+    icalcomponent_kind kind = 0;
+    icalproperty_method meth = 0;
+    icalproperty *prop = NULL;
+    const char *uid = NULL, *organizer = NULL, *orgid = NULL;
+
+    /* Check Content-Type */
+    if (!(hdr = spool_getheader(txn->req_hdrs, "Content-Type")) ||
+	!is_mediatype(hdr[0], "text/calendar")) {
+	txn->error.precond = CALDAV_SUPP_DATA;
+	return HTTP_BAD_REQUEST;
+    }
+
+    /* Construct mailbox name corresponding to request target URI */
+    (void) target_to_mboxname(&txn->req_tgt, mailboxname);
+
+    /* Locate the mailbox */
+    if ((r = http_mlookup(mailboxname, NULL, &acl, NULL))) {
+	syslog(LOG_ERR, "mlookup(%s) failed: %s",
+	       mailboxname, error_message(r));
+	txn->error.desc = error_message(r);
+
+	switch (r) {
+	case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
+	case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
+	default: return HTTP_SERVER_ERROR;
+	}
+    }
+
+    /* Check ACL for current user */
+    rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
+    if (!(rights & DACL_SCHED)) {
+	/* DAV:need-privileges */
+	txn->error.precond = DAV_NEED_PRIVS;
+	txn->error.resource = txn->req_tgt.path;
+	txn->error.rights = DACL_SCHED;
+	return HTTP_FORBIDDEN;
+    }
+
+    /* Read body */
+    if (!(txn->flags & HTTP_READBODY)) {
+	txn->flags |= HTTP_READBODY;
+	r = read_body(httpd_in, txn->req_hdrs, &txn->req_body, &txn->error.desc);
+	if (r) {
+	    txn->flags |= HTTP_CLOSE;
+	    return r;
+	}
+    }
+
+    /* Make sure we have a body */
+    if (!buf_len(&txn->req_body)) {
+	txn->error.desc = "Missing request body";
+	return HTTP_BAD_REQUEST;
+    }
+
+    /* Parse the iCal data for important properties */
+    ical = icalparser_parse_string(buf_cstring(&txn->req_body));
+    if (!ical || !icalrestriction_check(ical)) {
+	txn->error.precond = CALDAV_VALID_DATA;
+	return HTTP_BAD_REQUEST;
+    }
+
+    meth = icalcomponent_get_method(ical);
+    comp = icalcomponent_get_first_real_component(ical);
+    if (comp) {
+	uid = icalcomponent_get_uid(comp);
+	kind = icalcomponent_isa(comp);
+	prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
+    }
+
+    /* Check method preconditions */
+    if (!meth || meth != ICAL_METHOD_REQUEST || !uid ||
+	kind != ICAL_VFREEBUSY_COMPONENT || !prop) {
+	txn->error.precond = CALDAV_VALID_SCHED;
+	return HTTP_BAD_REQUEST;
+    }
+
+    organizer = icalproperty_get_organizer(prop);
+    if (organizer) orgid = caladdress_to_userid(organizer);
+
+    if (!orgid || strncmp(orgid, txn->req_tgt.user, txn->req_tgt.userlen)) {
+	txn->error.precond = CALDAV_VALID_ORGANIZER;
+	return HTTP_FORBIDDEN;
+    }
+
+    ret = busytime_query(txn, comp);
+
     icalcomponent_free(ical);
 
     return ret;

@@ -252,7 +252,7 @@ const char *http_methods[] = {
 
 /* Namespace to fetch static content from filesystem */
 const struct namespace_t namespace_default = {
-    URL_NS_DEFAULT, "", 0 /* no auth */, ALLOW_READ,
+    URL_NS_DEFAULT, "", 0 /* no auth */, ALLOW_READ, 0,
     NULL, NULL, NULL, NULL,
     {
 	NULL,			/* ACL		*/
@@ -283,6 +283,9 @@ const struct namespace_t *namespaces[] = {
 #ifdef WITH_CALDAV
     &namespace_calendar,
     &namespace_principal,
+#ifdef WITH_CALDAV_SCHED
+    &namespace_ischedule,
+#endif
 #endif
 #ifdef WITH_RSS
     &namespace_rss,
@@ -991,6 +994,7 @@ static void cmdloop(void)
 	    if ((namespace = namespaces[i])) {
 		txn.req_tgt.namespace = namespace->id;
 		txn.req_tgt.allow = namespace->allow;
+		txn.flags = namespace->flags;
 	    } else {
 		/* XXX  Should never get here */
 		ret = HTTP_SERVER_ERROR;
@@ -1067,7 +1071,19 @@ static void cmdloop(void)
 		       https ? "https" : "http", hdr[0],
 		       namespace_calendar.prefix);
 	}
-#endif
+#ifdef WITH_CALDAV_SCHED
+	/* Handle iSchedule bootstrapping */
+	if (!ret && !strncmp(txn.req_tgt.path, "/.well-known/ischedule", 22) &&
+	    (!txn.req_tgt.path[22] || !strcmp(txn.req_tgt.path+22, "/"))) {
+	    ret = HTTP_MOVED;
+
+	    hdr = spool_getheader(txn.req_hdrs, "Host");
+	    buf_printf(&txn.loc, "%s://%s%s/",
+		       https ? "https" : "http", hdr[0],
+		       namespace_ischedule.prefix);
+	}
+#endif  /* WITH_CALDAV_SCHED */
+#endif  /* WITH_CALDAV */
 
 	if (ret) goto done;
 
@@ -1278,10 +1294,20 @@ int parse_uri(const char *meth, const char *uri,
 
     /* Make a working copy of the path and query,  and free the parsed struct */
     strcpy(tgt->path, p_uri->path);
+    tgt->tail = tgt->path + strlen(tgt->path);
     if (p_uri->query) strcpy(tgt->query, p_uri->query);
     xmlFreeURI(p_uri);
 
     return 0;
+}
+
+
+/* Compare Content-Types */
+int is_mediatype(const char *hdr, const char *type)
+{
+    size_t len = strlen(type);
+
+    return (!strncasecmp(hdr, type, len) && strchr("; \t\r\n\0", hdr[len]));
 }
 
 
@@ -1485,6 +1511,7 @@ void response_header(long code, struct transaction_t *txn)
 	if ((hdr = spool_getheader(txn->req_hdrs, "User-Agent"))) {
 	    buf_printf(&log, " with \"%s\"", hdr[0]);
 	}
+	if (txn->req_tgt.tail) *txn->req_tgt.tail = '\0';
 	buf_printf(&log, "; \"%s %s", txn->meth, txn->req_tgt.path);
 	if (*txn->req_tgt.query) {
 	    buf_printf(&log, "?%s", txn->req_tgt.query);
@@ -1543,6 +1570,9 @@ void response_header(long code, struct transaction_t *txn)
 		    (code == HTTP_UPGRADE) ? ", Upgrade" : "");
     }
 
+    if (txn->flags & HTTP_ISCHEDULE) {
+	prot_printf(httpd_out, "iSchedule-Version: 1.0\r\n");
+    }
     if (txn->flags & HTTP_NOCACHE) {
 	prot_printf(httpd_out, "Cache-Control: no-cache\r\n");
     }
@@ -1597,8 +1627,11 @@ void response_header(long code, struct transaction_t *txn)
 	if (txn->req_tgt.allow & ALLOW_READ) {
 	    prot_printf(httpd_out, ", GET, HEAD");
 	}
+	if (txn->req_tgt.allow & ALLOW_POST) {
+	    prot_printf(httpd_out, ", POST");
+	}
 	if (txn->req_tgt.allow & ALLOW_WRITE) {
-	    prot_printf(httpd_out, ", POST, PUT, DELETE");
+	    prot_printf(httpd_out, ", PUT, DELETE");
 	}
 	prot_printf(httpd_out, "\r\n");
 	if (txn->req_tgt.allow & ALLOW_DAV) {
