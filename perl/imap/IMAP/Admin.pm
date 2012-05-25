@@ -46,7 +46,7 @@ use Cyrus::IMAP;
 use vars qw($VERSION
 	    *create *delete *deleteacl *listacl *list *rename *setacl
 	    *subscribed *quota *quotaroot *info *setinfo *xfer
-	    *subscribe *unsubscribe);
+	    *subscribe *unsubscribe *createcal);
 
 $VERSION = '1.00';
 
@@ -214,6 +214,75 @@ sub createmailbox {
   }
 }
 *create = *createmailbox;
+
+sub createcalendar {
+  my ($self, $username, $calprefix) = @_;
+  my ($mbx, $hs, $rc, $default, $inbox, $outbox);
+  $calprefix = '#calendars' if !defined($calprefix);
+  # need to determine hierarchy separator
+  $hs = ($self->list('', ''))[0][2];
+  $mbx = 'user' . $hs . $username . $hs . $calprefix;
+  # create the calendarprefix folder first.
+  print(" + creating $mbx...");
+  $rc = $self->createmailbox($mbx);
+  if(!$rc) {
+    print("failed: " . $self->error . "\n");
+    return $rc;
+  }
+  print("success.\n");
+  # set ACL on calendarprefix
+  print(" + setacl $mbx anyone 9...");
+  $rc = $self->setacl($mbx, 'anyone 9');
+  if(!$rc) {
+    print("failed: " . $self->error . "\n");
+    return $rc;
+  }
+  print("success.\n");
+  # create Default calendar
+  $default = $mbx . $hs . 'Default';
+  print(" + creating $default...");
+  $rc = $self->createmailbox($default);
+  if(!$rc) {
+    print("failed: " . $self->error . "\n");
+    return $rc;
+  }
+  print("success.\n");
+  # create calendar Inbox
+  $inbox = $mbx . $hs . 'Inbox';
+  print(" + creating $inbox...");
+  $rc = $self->createmailbox($inbox);
+  if(!$rc) {
+    print("failed: " . $self->error . "\n");
+    return $rc;
+  }
+  print("success.\n");
+  # set ACL on Inbox
+  print(" + setacl $inbox anyone 8...");
+  $rc = $self->setacl($inbox, 'anyone 8');
+  if(!$rc) {
+    print("failed: " . $self->error . "\n");
+    return $rc;
+  }
+  print("success.\n");
+  # create calendar Outbox
+  $outbox = $mbx . $hs . 'Outbox';
+  print(" + creating $outbox...");
+  $rc = $self->createmailbox($outbox);
+  if(!$rc) {
+    print("failed: " . $self->error . "\n");
+    return $rc;
+  }
+  print("success.\n");
+  # set ACL on Outbox
+  print(" + setacl $outbox $username 8...");
+  $rc = $self->setacl($outbox, "$username 8");
+  if(!$rc) {
+    print("failed: " . $self->error . "\n");
+    return $rc;
+  }
+  print("success.\n");
+}
+*createcal = *createcalendar;
 
 sub deletemailbox {
   my ($self, $mbx) = @_;
