@@ -3686,6 +3686,7 @@ static char *caladdress_to_userid(const char *addr)
 int busytime_query(struct transaction_t *txn, icalcomponent *comp)
 {
     int ret = 0;
+    static const char *calendarprefix = NULL;
     char mailboxname[MAX_MAILBOX_BUFFER];
     icalproperty *prop = NULL;
     const char *uid = NULL, *organizer = NULL;
@@ -3695,6 +3696,10 @@ int busytime_query(struct transaction_t *txn, icalcomponent *comp)
     xmlNsPtr ns = NULL, davns = NULL;
     struct propfind_ctx fctx;
     struct calquery_filter filter;
+
+    if (!calendarprefix) {
+	calendarprefix = config_getstring(IMAPOPT_CALENDARPREFIX);
+    }
 
     uid = icalcomponent_get_uid(comp);
 
@@ -3763,7 +3768,7 @@ int busytime_query(struct transaction_t *txn, icalcomponent *comp)
 
 	/* Check ACL of ORGANIZER on attendee's Scheduling Inbox */
 	snprintf(mailboxname, sizeof(mailboxname),
-		 "user.%s.#calendars.Inbox", userid);
+		 "user.%s.%s.Inbox", userid, calendarprefix);
 
 	if ((r = mboxlist_lookup(mailboxname, &mbentry, NULL))) {
 	    syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
