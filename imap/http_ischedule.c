@@ -85,7 +85,7 @@ const struct namespace_t namespace_ischedule = {
 
 static int meth_get(struct transaction_t *txn)
 {
-    int ret = 0, r;
+    int ret = 0;
     xmlDocPtr doc;
     xmlNodePtr root, capa, node, comp, meth;
     xmlNsPtr ns;
@@ -200,13 +200,28 @@ static int meth_post(struct transaction_t *txn)
     }
 
     /* Check method preconditions */
-    if (!meth || meth != ICAL_METHOD_REQUEST || !uid ||
-	kind != ICAL_VFREEBUSY_COMPONENT || !prop) {
+    if (!meth || meth != ICAL_METHOD_REQUEST || !uid || !prop) {
 	txn->error.precond = CALDAV_VALID_SCHED;
 	return HTTP_BAD_REQUEST;
     }
 
-    ret = busytime_query(txn, comp);
+    switch (meth) {
+    case ICAL_METHOD_REQUEST:
+	switch (kind) {
+	case ICAL_VFREEBUSY_COMPONENT:
+	    ret = busytime_query(txn, comp);
+	    break;
+
+	default:
+	    txn->error.precond = CALDAV_VALID_SCHED;
+	    return HTTP_BAD_REQUEST;
+	}
+	break;
+
+    default:
+	txn->error.precond = CALDAV_VALID_SCHED;
+	return HTTP_BAD_REQUEST;
+    }
 
     icalcomponent_free(ical);
 
