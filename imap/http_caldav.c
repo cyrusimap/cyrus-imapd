@@ -3788,7 +3788,7 @@ int busytime_query(struct transaction_t *txn, icalcomponent *comp)
 
 	/* Start query at attendee's calendar-home-set */
 	snprintf(mailboxname, sizeof(mailboxname),
-		 "user.%s.#calendars", userid);
+		 "user.%s.%s", userid, calendarprefix);
 
 	fctx.req_tgt->collection = NULL;
 	fctx.busytime.len = 0;
