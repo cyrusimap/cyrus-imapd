@@ -2506,8 +2506,6 @@ static int report_cal_query(struct transaction_t *txn,
 
     if (fctx->depth > 0) {
 	/* Calendar collection(s) */
-	int r;
-
 	if (txn->req_tgt.collection) {
 	    /* Add response for target calendar collection */
 	    propfind_by_collection(mailboxname, 0, 0, fctx);
@@ -2515,9 +2513,9 @@ static int report_cal_query(struct transaction_t *txn,
 	else {
 	    /* Add responses for all contained calendar collections */
 	    strlcat(mailboxname, ".%", sizeof(mailboxname));
-	    r = mboxlist_findall(NULL,  /* internal namespace */
-				 mailboxname, 1, httpd_userid, 
-				 httpd_authstate, propfind_by_collection, fctx);
+	    mboxlist_findall(NULL,  /* internal namespace */
+			     mailboxname, 1, httpd_userid, 
+			     httpd_authstate, propfind_by_collection, fctx);
 	}
 
 	ret = *fctx->ret;
@@ -2654,7 +2652,6 @@ static icalcomponent *busytime(struct transaction_t *txn,
     /* Gather up all of the busytime */
     if (fctx->depth > 0) {
 	/* Calendar collection(s) */
-	int r;
 
 	/* XXX  Check DACL_READFB on all calendars */
 
@@ -2665,9 +2662,9 @@ static icalcomponent *busytime(struct transaction_t *txn,
 	else {
 	    /* Get busytime for all contained calendar collections */
 	    strlcat(mailboxname, ".%", sizeof(mailboxname));
-	    r = mboxlist_findall(NULL,  /* internal namespace */
-				 mailboxname, 1, httpd_userid, 
-				 httpd_authstate, propfind_by_collection, fctx);
+	    mboxlist_findall(NULL,  /* internal namespace */
+			     mailboxname, 1, httpd_userid, 
+			     httpd_authstate, propfind_by_collection, fctx);
 	}
     }
 
