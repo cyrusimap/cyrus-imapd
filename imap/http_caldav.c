@@ -141,7 +141,7 @@ int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname);
 
 /* Namespace for CalDAV collections */
 const struct namespace_t namespace_calendar = {
-    URL_NS_CALENDAR, "/calendars", 1 /* auth */,
+    URL_NS_CALENDAR, "/calendars", "/.well-known/caldav", 1 /* auth */,
     (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DAV | ALLOW_CAL), 0,
     &my_caldav_init, &my_caldav_auth, my_caldav_reset, &my_caldav_shutdown,
     { 
@@ -166,7 +166,7 @@ const struct namespace_t namespace_calendar = {
 
 /* Namespace for WebDAV principals */
 const struct namespace_t namespace_principal = {
-    URL_NS_PRINCIPAL, "/principals", 1 /* auth */,
+    URL_NS_PRINCIPAL, "/principals", NULL, 1 /* auth */,
     (ALLOW_DAV | ALLOW_CAL | ALLOW_CARD), 0,
     NULL, NULL, NULL, NULL,
     {

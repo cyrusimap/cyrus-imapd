@@ -252,7 +252,7 @@ const char *http_methods[] = {
 
 /* Namespace to fetch static content from filesystem */
 const struct namespace_t namespace_default = {
-    URL_NS_DEFAULT, "", 0 /* no auth */, ALLOW_READ, 0,
+    URL_NS_DEFAULT, "", NULL, 0 /* no auth */, ALLOW_READ, 0,
     NULL, NULL, NULL, NULL,
     {
 	NULL,			/* ACL		*/
@@ -980,36 +980,6 @@ static void cmdloop(void)
 	    ret = r;
 	}
 
-	/* Find the namespace of the requested resource */
-	if (!ret) {
-	    for (i = 0; namespaces[i]; i++) {
-		size_t len = strlen(namespaces[i]->prefix);
-
-		/* See if the prefix matches - terminated with NUL or '/' */
-		if (!strncmp(namespaces[i]->prefix, txn.req_tgt.path, len) &&
-		    (!txn.req_tgt.path[len] ||
-		     (txn.req_tgt.path[len] == '/') ||
-		     !strcmp(txn.req_tgt.path, "*"))) break;
-	    }
-	    if ((namespace = namespaces[i])) {
-		txn.req_tgt.namespace = namespace->id;
-		txn.req_tgt.allow = namespace->allow;
-		txn.flags = namespace->flags;
-	    } else {
-		/* XXX  Should never get here */
-		ret = HTTP_SERVER_ERROR;
-	    }
-	}
-
-	/* Check Method against list of supported methods in the namespace */
-	if (!ret) {
-	    for (i = 0;
-		 http_methods[i] && strcmp(http_methods[i], txn.meth); i++);
-
-	    if (!http_methods[i]) ret = HTTP_NOT_IMPLEMENTED;
-	    else if (!(meth_proc = namespace->proc[i])) ret = HTTP_NOT_ALLOWED;
-	}
-
 	/* Read and parse headers */
 	syslog(LOG_DEBUG, "read & parse headers");
 	if (!(txn.req_hdrs = spool_new_hdrcache())) {
@@ -1060,30 +1030,52 @@ static void cmdloop(void)
 	    }
 	}
 
-#ifdef WITH_CALDAV
-	/* Handle CalDAV bootstrapping */
-	if (!ret && !strncmp(txn.req_tgt.path, "/.well-known/caldav", 19) &&
-	    (!txn.req_tgt.path[19] || !strcmp(txn.req_tgt.path+19, "/"))) {
-	    ret = HTTP_MOVED;
+	/* Find the namespace of the requested resource */
+	if (!ret) {
+	    for (i = 0; namespaces[i]; i++) {
+		const char *path = txn.req_tgt.path;
+		size_t len;
 
-	    hdr = spool_getheader(txn.req_hdrs, "Host");
-	    buf_printf(&txn.loc, "%s://%s%s/",
-		       https ? "https" : "http", hdr[0],
-		       namespace_calendar.prefix);
-	}
-#ifdef WITH_CALDAV_SCHED
-	/* Handle iSchedule bootstrapping */
-	if (!ret && !strncmp(txn.req_tgt.path, "/.well-known/ischedule", 22) &&
-	    (!txn.req_tgt.path[22] || !strcmp(txn.req_tgt.path+22, "/"))) {
-	    ret = HTTP_MOVED;
+		/* Handle any /.well-known/ bootstrapping */
+		if (namespaces[i]->well_known) {
+		    len = strlen(namespaces[i]->well_known);
+		    if (!strncmp(path, namespaces[i]->well_known, len) &&
+			(!path[len] || !strcmp(path+len, "/"))) {
+			ret = HTTP_MOVED;
+		    
+			hdr = spool_getheader(txn.req_hdrs, "Host");
+			buf_printf(&txn.loc, "%s://%s%s/",
+				   https ? "https" : "http", hdr[0],
+				   namespaces[i]->prefix);
+			break;
+		    }
+		}
 
-	    hdr = spool_getheader(txn.req_hdrs, "Host");
-	    buf_printf(&txn.loc, "%s://%s%s/",
-		       https ? "https" : "http", hdr[0],
-		       namespace_ischedule.prefix);
+		/* See if the prefix matches - terminated with NUL or '/' */
+		len = strlen(namespaces[i]->prefix);
+		if (!strncmp(namespaces[i]->prefix, path, len) &&
+		    (!path[len] || (path[len] == '/') || !strcmp(path, "*"))) {
+		    break;
+		}
+	    }
+	    if ((namespace = namespaces[i])) {
+		txn.req_tgt.namespace = namespace->id;
+		txn.req_tgt.allow = namespace->allow;
+		txn.flags |= namespace->flags;
+	    } else {
+		/* XXX  Should never get here */
+		ret = HTTP_SERVER_ERROR;
+	    }
 	}
-#endif  /* WITH_CALDAV_SCHED */
-#endif  /* WITH_CALDAV */
+
+	/* Check Method against list of supported methods in the namespace */
+	if (!ret) {
+	    for (i = 0;
+		 http_methods[i] && strcmp(http_methods[i], txn.meth); i++);
+
+	    if (!http_methods[i]) ret = HTTP_NOT_IMPLEMENTED;
+	    else if (!(meth_proc = namespace->proc[i])) ret = HTTP_NOT_ALLOWED;
+	}
 
 	if (ret) goto done;
 

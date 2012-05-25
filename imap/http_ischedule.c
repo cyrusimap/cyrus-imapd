@@ -59,7 +59,7 @@ static int meth_get(struct transaction_t *txn);
 static int meth_post(struct transaction_t *txn);
 
 const struct namespace_t namespace_ischedule = {
-    URL_NS_ISCHEDULE, "/ischedule", 1 /* auth */,
+  URL_NS_ISCHEDULE, "/ischedule", "/.well-known/ischedule", 1 /* auth */,
     (ALLOW_READ | ALLOW_POST), HTTP_ISCHEDULE,
     NULL, NULL, NULL, NULL,
     {

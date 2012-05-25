@@ -197,6 +197,7 @@ typedef int (*filter_proc_t)(struct transaction_t *txn,
 struct namespace_t {
     unsigned id;		/* Namespace identifier */
     const char *prefix;		/* Prefix of URL path denoting namespace */
+    const char *well_known;	/* Any /.well-known/ URI */
     unsigned need_auth;		/* Do we need to auth for this namespace? */
     unsigned long allow;	/* Bitmask of allowed features/methods */
     unsigned long flags;	/* Bitmask of txn flags */
