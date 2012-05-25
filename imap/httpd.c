@@ -1858,7 +1858,7 @@ void html_response(long code, struct transaction_t *txn, xmlDocPtr html)
 	xmlFree(buf);
     }
     else {
-	txn->error.precond = NULL;
+	txn->error.precond = 0;
 	txn->error.desc = "Error dumping HTML tree";
 	error_response(HTTP_SERVER_ERROR, txn);
     }
@@ -1884,7 +1884,7 @@ void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
 	xmlFree(buf);
     }
     else {
-	txn->error.precond = NULL;
+	txn->error.precond = 0;
 	txn->error.desc = "Error dumping XML tree";
 	error_response(HTTP_SERVER_ERROR, txn);
     }
