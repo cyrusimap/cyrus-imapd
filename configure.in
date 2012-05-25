@@ -1039,6 +1039,7 @@ if test "$ENABLE_RSS" != no -o "$ENABLE_CALDAV" != no; then
       AC_SUBST(SQLITE3_LIBS)
       if test "$ENABLE_CALDAV_SCHED" != no; then
       	 AC_DEFINE(WITH_CALDAV_SCHED,[],[Build CalDAV Scheduling support into httpd?])
+         HTTP_OBJS="$HTTP_OBJS \$(ISCHED_OBJS)"
       fi
    fi
 fi

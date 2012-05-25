@@ -105,7 +105,7 @@ static void fetch_part(struct transaction_t *txn, struct body *body,
 
 /* Namespace for RSS feeds of mailboxes */
 const struct namespace_t namespace_rss = {
-    URL_NS_RSS, "/rss", 1 /* auth */, ALLOW_READ,
+    URL_NS_RSS, "/rss", NULL, 1 /* auth */, ALLOW_READ, 0,
     NULL, NULL, NULL, NULL,
     {
 	NULL,			/* ACL		*/
@@ -471,7 +471,6 @@ static int list_feeds(struct transaction_t *txn,
 
     if (!var) write_body(HTTP_OK, txn, base, len);
     else {
-	int r;
 	struct buf buf = BUF_INITIALIZER;
 	struct list_rock lrock;
 	struct node root = { "", 0, NULL, NULL };
@@ -482,8 +481,8 @@ static int list_feeds(struct transaction_t *txn,
 	lrock.last = &root;
 
 	/* generate tree view of feeds */
-	r = mboxlist_findall(NULL, "*", httpd_userisadmin, NULL, httpd_authstate,
-			     list_cb, &lrock);
+	mboxlist_findall(NULL, "*", httpd_userisadmin, NULL, httpd_authstate,
+			 list_cb, &lrock);
 
 	/* close out the tree */
 	list_cb(NULL, 0, 0, &lrock);

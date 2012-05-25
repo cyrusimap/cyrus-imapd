@@ -252,7 +252,7 @@ const char *http_methods[] = {
 
 /* Namespace to fetch static content from filesystem */
 const struct namespace_t namespace_default = {
-    URL_NS_DEFAULT, "", 0 /* no auth */, ALLOW_READ,
+    URL_NS_DEFAULT, "", NULL, 0 /* no auth */, ALLOW_READ, 0,
     NULL, NULL, NULL, NULL,
     {
 	NULL,			/* ACL		*/
@@ -283,6 +283,9 @@ const struct namespace_t *namespaces[] = {
 #ifdef WITH_CALDAV
     &namespace_calendar,
     &namespace_principal,
+#ifdef WITH_CALDAV_SCHED
+    &namespace_ischedule,
+#endif
 #endif
 #ifdef WITH_RSS
     &namespace_rss,
@@ -977,35 +980,6 @@ static void cmdloop(void)
 	    ret = r;
 	}
 
-	/* Find the namespace of the requested resource */
-	if (!ret) {
-	    for (i = 0; namespaces[i]; i++) {
-		size_t len = strlen(namespaces[i]->prefix);
-
-		/* See if the prefix matches - terminated with NUL or '/' */
-		if (!strncmp(namespaces[i]->prefix, txn.req_tgt.path, len) &&
-		    (!txn.req_tgt.path[len] ||
-		     (txn.req_tgt.path[len] == '/') ||
-		     !strcmp(txn.req_tgt.path, "*"))) break;
-	    }
-	    if ((namespace = namespaces[i])) {
-		txn.req_tgt.namespace = namespace->id;
-		txn.req_tgt.allow = namespace->allow;
-	    } else {
-		/* XXX  Should never get here */
-		ret = HTTP_SERVER_ERROR;
-	    }
-	}
-
-	/* Check Method against list of supported methods in the namespace */
-	if (!ret) {
-	    for (i = 0;
-		 http_methods[i] && strcmp(http_methods[i], txn.meth); i++);
-
-	    if (!http_methods[i]) ret = HTTP_NOT_IMPLEMENTED;
-	    else if (!(meth_proc = namespace->proc[i])) ret = HTTP_NOT_ALLOWED;
-	}
-
 	/* Read and parse headers */
 	syslog(LOG_DEBUG, "read & parse headers");
 	if (!(txn.req_hdrs = spool_new_hdrcache())) {
@@ -1056,18 +1030,52 @@ static void cmdloop(void)
 	    }
 	}
 
-#ifdef WITH_CALDAV
-	/* Handle CalDAV bootstrapping */
-	if (!ret && !strncmp(txn.req_tgt.path, "/.well-known/caldav", 19) &&
-	    (!txn.req_tgt.path[19] || !strcmp(txn.req_tgt.path+19, "/"))) {
-	    ret = HTTP_MOVED;
+	/* Find the namespace of the requested resource */
+	if (!ret) {
+	    for (i = 0; namespaces[i]; i++) {
+		const char *path = txn.req_tgt.path;
+		size_t len;
 
-	    hdr = spool_getheader(txn.req_hdrs, "Host");
-	    buf_printf(&txn.loc, "%s://%s%s/",
-		       https ? "https" : "http", hdr[0],
-		       namespace_calendar.prefix);
+		/* Handle any /.well-known/ bootstrapping */
+		if (namespaces[i]->well_known) {
+		    len = strlen(namespaces[i]->well_known);
+		    if (!strncmp(path, namespaces[i]->well_known, len) &&
+			(!path[len] || !strcmp(path+len, "/"))) {
+			ret = HTTP_MOVED;
+		    
+			hdr = spool_getheader(txn.req_hdrs, "Host");
+			buf_printf(&txn.loc, "%s://%s%s/",
+				   https ? "https" : "http", hdr[0],
+				   namespaces[i]->prefix);
+			break;
+		    }
+		}
+
+		/* See if the prefix matches - terminated with NUL or '/' */
+		len = strlen(namespaces[i]->prefix);
+		if (!strncmp(namespaces[i]->prefix, path, len) &&
+		    (!path[len] || (path[len] == '/') || !strcmp(path, "*"))) {
+		    break;
+		}
+	    }
+	    if ((namespace = namespaces[i])) {
+		txn.req_tgt.namespace = namespace->id;
+		txn.req_tgt.allow = namespace->allow;
+		txn.flags |= namespace->flags;
+	    } else {
+		/* XXX  Should never get here */
+		ret = HTTP_SERVER_ERROR;
+	    }
 	}
-#endif
+
+	/* Check Method against list of supported methods in the namespace */
+	if (!ret) {
+	    for (i = 0;
+		 http_methods[i] && strcmp(http_methods[i], txn.meth); i++);
+
+	    if (!http_methods[i]) ret = HTTP_NOT_IMPLEMENTED;
+	    else if (!(meth_proc = namespace->proc[i])) ret = HTTP_NOT_ALLOWED;
+	}
 
 	if (ret) goto done;
 
@@ -1278,10 +1286,20 @@ int parse_uri(const char *meth, const char *uri,
 
     /* Make a working copy of the path and query,  and free the parsed struct */
     strcpy(tgt->path, p_uri->path);
+    tgt->tail = tgt->path + strlen(tgt->path);
     if (p_uri->query) strcpy(tgt->query, p_uri->query);
     xmlFreeURI(p_uri);
 
     return 0;
+}
+
+
+/* Compare Content-Types */
+int is_mediatype(const char *hdr, const char *type)
+{
+    size_t len = strlen(type);
+
+    return (!strncasecmp(hdr, type, len) && strchr("; \t\r\n\0", hdr[len]));
 }
 
 
@@ -1485,6 +1503,7 @@ void response_header(long code, struct transaction_t *txn)
 	if ((hdr = spool_getheader(txn->req_hdrs, "User-Agent"))) {
 	    buf_printf(&log, " with \"%s\"", hdr[0]);
 	}
+	if (txn->req_tgt.tail) *txn->req_tgt.tail = '\0';
 	buf_printf(&log, "; \"%s %s", txn->meth, txn->req_tgt.path);
 	if (*txn->req_tgt.query) {
 	    buf_printf(&log, "?%s", txn->req_tgt.query);
@@ -1543,6 +1562,9 @@ void response_header(long code, struct transaction_t *txn)
 		    (code == HTTP_UPGRADE) ? ", Upgrade" : "");
     }
 
+    if (txn->flags & HTTP_ISCHEDULE) {
+	prot_printf(httpd_out, "iSchedule-Version: 1.0\r\n");
+    }
     if (txn->flags & HTTP_NOCACHE) {
 	prot_printf(httpd_out, "Cache-Control: no-cache\r\n");
     }
@@ -1597,8 +1619,11 @@ void response_header(long code, struct transaction_t *txn)
 	if (txn->req_tgt.allow & ALLOW_READ) {
 	    prot_printf(httpd_out, ", GET, HEAD");
 	}
+	if (txn->req_tgt.allow & ALLOW_POST) {
+	    prot_printf(httpd_out, ", POST");
+	}
 	if (txn->req_tgt.allow & ALLOW_WRITE) {
-	    prot_printf(httpd_out, ", POST, PUT, DELETE");
+	    prot_printf(httpd_out, ", PUT, DELETE");
 	}
 	prot_printf(httpd_out, "\r\n");
 	if (txn->req_tgt.allow & ALLOW_DAV) {
@@ -1833,7 +1858,7 @@ void html_response(long code, struct transaction_t *txn, xmlDocPtr html)
 	xmlFree(buf);
     }
     else {
-	txn->error.precond = NULL;
+	txn->error.precond = 0;
 	txn->error.desc = "Error dumping HTML tree";
 	error_response(HTTP_SERVER_ERROR, txn);
     }
@@ -1859,7 +1884,7 @@ void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
 	xmlFree(buf);
     }
     else {
-	txn->error.precond = NULL;
+	txn->error.precond = 0;
 	txn->error.desc = "Error dumping XML tree";
 	error_response(HTTP_SERVER_ERROR, txn);
     }
