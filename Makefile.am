@@ -74,11 +74,9 @@ service_PROGRAMS =
 CLEANFILES =
 
 if COM_ERR
-COM_ERR_LIB = com_err/et/libcyrus_com_err.la
+COM_ERR_LIBS += com_err/et/libcyrus_com_err.la
 BUILT_SOURCES += com_err/et/compile_et
 lib_LTLIBRARIES += com_err/et/libcyrus_com_err.la
-else
-COM_ERR_LIB = $(COM_ERR_LIBS)
 endif
 
 bin_PROGRAMS = imtest/imtest
@@ -408,7 +406,7 @@ imap_libcyrus_imap_la_SOURCES = imap/annotate.c imap/annotate.h imap/append.c \
 	imap/tls.h imap/upgrade_index.c imap/upgrade_index.h imap/user.c \
 	imap/user.h imap/userdeny_db.c imap/userdeny.h imap/version.c \
 	imap/version.h
-imap_libcyrus_imap_la_LIBADD = $(COM_ERR_LIB) $(LIB_UUID)
+imap_libcyrus_imap_la_LIBADD = $(COM_ERR_LIBS) $(LIB_UUID)
 
 imap_lmtpd_SOURCES = imap/lmtpd.c imap/lmtpd.h imap/lmtpengine.c \
 	imap/lmtpengine.h imap/lmtpstats.c imap/lmtpstats.h \
@@ -636,7 +634,7 @@ sieve_libcyrus_sieve_la_SOURCES = sieve/bytecode.h sieve/addr.y sieve/addr-lex.l
 	sieve/comparator.c sieve/comparator.h sieve/interp.c sieve/interp.h \
 	sieve/message.c sieve/message.h sieve/script.c sieve/script.h \
 	sieve/sieve-lex.l sieve/sieve.y sieve/sieve_interface.h sieve/tree.c sieve/tree.h
-sieve_libcyrus_sieve_la_LIBADD = $(COM_ERR_LIB)
+sieve_libcyrus_sieve_la_LIBADD = $(COM_ERR_LIBS)
 
 LD_SIEVE_ADD = sieve/libcyrus_sieve.la $(LD_BASIC_ADD)
 
