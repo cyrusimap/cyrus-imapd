@@ -182,7 +182,8 @@ void list_expunged(const char *mboxname)
 }
 
 int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *uids,
-		     unsigned nuids, time_t time_since, unsigned *numrestored)
+		     unsigned nuids, time_t time_since, unsigned *numrestored,
+		     const char *mboxname)
 {
     uint32_t recno;
     uint32_t olduid;
@@ -246,7 +247,7 @@ int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *uids,
 
 	if (verbose)
 	    printf("Unexpunged %s: %u => %u\n",
-		   mailbox->name, olduid, record.uid);
+		   mboxname, olduid, record.uid);
 
 	(*numrestored)++;
     }
@@ -267,6 +268,7 @@ int main(int argc, char *argv[])
     int len, secs = 0;
     unsigned long *uids = NULL;
     unsigned nuids = 0;
+    char *mboxname = NULL;
 
     if ((geteuid()) == 0 && (become_cyrus() != 0)) {
 	fatal("must run as the Cyrus user", EC_USAGE);
@@ -382,17 +384,20 @@ int main(int argc, char *argv[])
 	qsort(uids, nuids, sizeof(unsigned long), compare_uid);
     }
 
-    printf("restoring %sexpunged messages in mailbox '%s'\n",
-	    mode == MODE_ALL ? "all " : "", mailbox->name);
+    mboxname = xstrdup(mailbox->name);
+    mboxname_hiersep_toexternal(&unex_namespace, mboxname, 0);
 
-    r = restore_expunged(mailbox, mode, uids, nuids, time_since, &numrestored);
+    printf("restoring %sexpunged messages in mailbox '%s'\n",
+	    mode == MODE_ALL ? "all " : "", mboxname);
+
+    r = restore_expunged(mailbox, mode, uids, nuids, time_since, &numrestored, mboxname);
 
     if (!r) {
 	printf("restored %u expunged messages\n",
 		numrestored);
 	syslog(LOG_NOTICE,
 	       "restored %u expunged messages in mailbox '%s'",
-	       numrestored, mailbox->name);
+	       numrestored, mboxname);
     }
 
     mailbox_close(&mailbox);
