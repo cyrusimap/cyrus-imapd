@@ -109,7 +109,7 @@ static void test_getset_server_shared(void)
     struct buf val = BUF_INITIALIZER;
     struct buf val2 = BUF_INITIALIZER;
 
-    annotatemore_init(NULL, NULL);
+    annotate_init(NULL, NULL);
 
     annotatemore_open();
 
@@ -300,7 +300,7 @@ static void test_getset_mailbox_shared(void)
     struct buf val2 = BUF_INITIALIZER;
     struct mailbox *mailbox = NULL;
 
-    annotatemore_init(NULL, NULL);
+    annotate_init(NULL, NULL);
 
     annotatemore_open();
 
@@ -490,7 +490,7 @@ static void test_getset_message_shared(void)
     struct buf val2 = BUF_INITIALIZER;
     struct mailbox *mailbox = NULL;
 
-    annotatemore_init(NULL, NULL);
+    annotate_init(NULL, NULL);
 
     annotatemore_open();
 
@@ -693,7 +693,7 @@ static void test_delete(void)
 
     CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/cyrus.annotations"), -ENOENT);
 
-    annotatemore_init(NULL, NULL);
+    annotate_init(NULL, NULL);
 
     annotatemore_open();
 
@@ -821,7 +821,7 @@ static void test_rename(void)
     struct mailbox *mailbox1 = NULL;
     struct mailbox *mailbox2 = NULL;
 
-    annotatemore_init(NULL, NULL);
+    annotate_init(NULL, NULL);
 
     annotatemore_open();
 
@@ -977,7 +977,7 @@ static void test_abort(void)
     struct buf val2 = BUF_INITIALIZER;
     struct mailbox *mailbox = NULL;
 
-    annotatemore_init(NULL, NULL);
+    annotate_init(NULL, NULL);
 
     annotatemore_open();
 
@@ -1110,7 +1110,7 @@ static void test_msg_copy(void)
     struct mailbox *mailbox1 = NULL;
     struct mailbox *mailbox2 = NULL;
 
-    annotatemore_init(NULL, NULL);
+    annotate_init(NULL, NULL);
 
     annotatemore_open();
 
@@ -1269,7 +1269,7 @@ static void test_missing_definitions_file(void)
     set_annotation_definitions(NULL);
     CU_SYSLOG_MATCH("annotations\\.def: could not open.*No such file");
 
-    annotatemore_init(NULL, NULL);
+    annotate_init(NULL, NULL);
     /* if we got here, we didn't fatal() */
 
     /* but we did complain to syslog */
@@ -1282,7 +1282,7 @@ static void test_broken_definitions_file_1(void)
 	EXENTRY",sXerver,string,backend,value.shared,\n");
     CU_SYSLOG_MATCH("invalid annotation scope.*'sXerver'");
 
-    annotatemore_init(NULL, NULL);
+    annotate_init(NULL, NULL);
     /* if we got here, we didn't fatal() */
 
     /* but we did complain to syslog */
@@ -1295,7 +1295,7 @@ static void test_broken_definitions_file_2(void)
 	EXENTRY",server,stXring,backend,value.shared,\n");
     CU_SYSLOG_MATCH("invalid annotation type.*'stXring'");
 
-    annotatemore_init(NULL, NULL);
+    annotate_init(NULL, NULL);
     /* if we got here, we didn't fatal() */
 
     /* but we did complain to syslog */
@@ -1308,7 +1308,7 @@ static void test_broken_definitions_file_3(void)
 	EXENTRY",server,string,bacXkend,value.shared,\n");
     CU_SYSLOG_MATCH("invalid annotation proxy type.*'bacXkend'");
 
-    annotatemore_init(NULL, NULL);
+    annotate_init(NULL, NULL);
     /* if we got here, we didn't fatal() */
 
     /* but we did complain to syslog */
@@ -1321,7 +1321,7 @@ static void test_broken_definitions_file_4(void)
 	EXENTRY",server,string,backend,valuXe.shared,\n");
     CU_SYSLOG_MATCH("invalid annotation attributes.*'valuXe.shared'");
 
-    annotatemore_init(NULL, NULL);
+    annotate_init(NULL, NULL);
     /* if we got here, we didn't fatal() */
 
     /* but we did complain to syslog */
@@ -1334,7 +1334,7 @@ static void test_broken_definitions_file_5(void)
 	"/flags/foobar,message,string,backend,value.shared,\n");
     CU_SYSLOG_MATCH("message entry under /flags/");
 
-    annotatemore_init(NULL, NULL);
+    annotate_init(NULL, NULL);
     /* if we got here, we didn't fatal() */
 
     /* but we did complain to syslog */
@@ -1347,7 +1347,7 @@ static void test_broken_definitions_file_6(void)
 	"/vendor/cmu/cyrus-imapd/foobar,server,string,backend,value.shared,\n");
     CU_SYSLOG_MATCH("annotation under /vendor/cmu/cyrus-imapd/");
 
-    annotatemore_init(NULL, NULL);
+    annotate_init(NULL, NULL);
     /* if we got here, we didn't fatal() */
 
     /* but we did complain to syslog */
@@ -1360,7 +1360,7 @@ static void test_broken_definitions_file_7(void)
 	EXENTRY",server,string,backend,value.shared,,,,\n");
     CU_SYSLOG_MATCH("junk at end of line");
 
-    annotatemore_init(NULL, NULL);
+    annotate_init(NULL, NULL);
     /* if we got here, we didn't fatal() */
 
     /* but we did complain to syslog */
@@ -1373,7 +1373,7 @@ static void test_broken_definitions_file_8(void)
 	EXENTRY",server,string,\n");
     CU_SYSLOG_MATCH("short line");
 
-    annotatemore_init(NULL, NULL);
+    annotate_init(NULL, NULL);
     /* if we got here, we didn't fatal() */
 
     /* but we did complain to syslog */
@@ -1388,7 +1388,7 @@ static void test_broken_definitions_file_9(void)
 	EXENTRY",server,string,backend,value valXue valYue,\n");
     CU_SYSLOG_MATCH("invalid annotation attributes.*'valXue'");
 
-    annotatemore_init(NULL, NULL);
+    annotate_init(NULL, NULL);
     /* if we got here, we didn't fatal() */
 
     /* but we did complain to syslog */
@@ -1401,7 +1401,7 @@ static void test_broken_definitions_file_10(void)
 	EXENTRY",ser@ver,string,backend,value.shared,\n");
     CU_SYSLOG_MATCH("invalid character.*'@");
 
-    annotatemore_init(NULL, NULL);
+    annotate_init(NULL, NULL);
     /* if we got here, we didn't fatal() */
 
     /* but we did complain to syslog */
@@ -1419,7 +1419,7 @@ static void test_getset_server_undefined(void)
     struct buf val = BUF_INITIALIZER;
     struct buf val2 = BUF_INITIALIZER;
 
-    annotatemore_init(NULL, NULL);
+    annotate_init(NULL, NULL);
 
     annotatemore_open();
 
@@ -1516,7 +1516,7 @@ static void test_getset_server_defined(void)
 
     set_annotation_definitions(
 	EXENTRY",server,string,backend,value.shared,\n");
-    annotatemore_init(NULL, NULL);
+    annotate_init(NULL, NULL);
 
     annotatemore_open();
 

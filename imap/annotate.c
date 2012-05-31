@@ -480,10 +480,10 @@ void freeentryatts(struct entryattlist *l)
 }
 
 /* must be called after cyrus_init */
-void annotatemore_init(int (*fetch_func)(const char *, const char *,
-					 const strarray_t *, const strarray_t *),
-		       int (*store_func)(const char *, const char *,
-					 struct entryattlist *))
+void annotate_init(int (*fetch_func)(const char *, const char *,
+				     const strarray_t *, const strarray_t *),
+		   int (*store_func)(const char *, const char *,
+				     struct entryattlist *))
 {
     if (fetch_func) {
 	proxy_fetch_func = fetch_func;

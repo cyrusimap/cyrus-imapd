@@ -3192,7 +3192,7 @@ int main(int argc, char **argv)
     quotadb_open(NULL);
 
     /* open the annotation db */
-    annotatemore_init(NULL, NULL);
+    annotate_init(NULL, NULL);
     annotatemore_open();
 
     signals_set_shutdown(&shut_down);

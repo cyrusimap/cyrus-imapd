@@ -830,9 +830,9 @@ int service_init(int argc, char **argv, char **envp)
 
     /* Initialize the annotatemore extention */
     if (config_mupdate_server)
-	annotatemore_init(annotate_fetch_proxy, annotate_store_proxy);
+	annotate_init(annotate_fetch_proxy, annotate_store_proxy);
     else
-	annotatemore_init(NULL, NULL);
+	annotate_init(NULL, NULL);
     annotatemore_open();
 
     if (config_getswitch(IMAPOPT_STATUSCACHE)) {

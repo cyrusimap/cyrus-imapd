@@ -284,7 +284,7 @@ int service_init(int argc __attribute__((unused)),
     quotadb_open(NULL);
 
     /* Initialize the annotatemore extention */
-    annotatemore_init(NULL, NULL);
+    annotate_init(NULL, NULL);
     annotatemore_open();
 
     /* Open the statuscache so we can invalidate seen states */

@@ -402,7 +402,7 @@ int main(int argc, char *argv[])
     cyrus_init(alt_config, "cyr_expire", 0);
     global_sasl_init(1, 0, NULL);
 
-    annotatemore_init(NULL, NULL);
+    annotate_init(NULL, NULL);
     annotatemore_open();
 
     mboxlist_init(0);

@@ -253,7 +253,7 @@ main(int argc, char **argv)
     signals_set_shutdown(&shut_down);
     signals_add_handlers(0);
 
-    annotatemore_init(NULL, NULL);
+    annotate_init(NULL, NULL);
     annotatemore_open();
 
     if (!force) {

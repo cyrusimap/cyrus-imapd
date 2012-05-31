@@ -123,7 +123,7 @@ size_t sizeentryatts(const struct entryattlist *);
 void freeentryatts(struct entryattlist *l);
 
 /* initialize database structures */
-void annotatemore_init(
+void annotate_init(
 		       int (*fetch_func)(const char *, const char *,
 					 const strarray_t *, const strarray_t *),
 		       int (*store_func)(const char *, const char *,
