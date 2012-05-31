@@ -390,12 +390,14 @@ int quota_write(struct quota *quota, struct txn **tid)
     int qrlen;
     int res;
     struct buf buf = BUF_INITIALIZER;
-    struct dlist *dl = dlist_newkvlist(NULL, NULL);
+    struct dlist *dl = NULL;
 
     if (!quota->root) return IMAP_QUOTAROOT_NONEXISTENT;
 
     qrlen = strlen(quota->root);
     if (!qrlen) return IMAP_QUOTAROOT_NONEXISTENT;
+
+    dl = dlist_newkvlist(NULL, NULL);
 
     for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
 	struct dlist *item = dlist_newlist(dl, quota_db_names[res]);
