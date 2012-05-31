@@ -8053,9 +8053,13 @@ static void getannotation_response(const char *mboxname,
 {
     int sep = '(';
     struct attvaluelist *l;
+    char ext_mboxname[MAX_MAILBOX_BUFFER];
+
+    imapd_namespace.mboxname_toexternal(&imapd_namespace, mboxname,
+					imapd_userid, ext_mboxname);
 
     prot_printf(imapd_out, "* ANNOTATION ");
-    prot_printastring(imapd_out, mboxname);
+    prot_printastring(imapd_out, ext_mboxname);
     prot_putc(' ', imapd_out);
     prot_printstring(imapd_out, entry);
     prot_putc(' ', imapd_out);
@@ -8301,9 +8305,13 @@ static void getmetadata_response(const char *mboxname,
     int sep = '(';
     struct attvaluelist *l;
     struct buf mentry = BUF_INITIALIZER;
+    char ext_mboxname[MAX_MAILBOX_BUFFER];
+
+    imapd_namespace.mboxname_toexternal(&imapd_namespace, mboxname,
+					imapd_userid, ext_mboxname);
 
     prot_printf(imapd_out, "* METADATA ");
-    prot_printastring(imapd_out, mboxname);
+    prot_printastring(imapd_out, ext_mboxname);
     prot_putc(' ', imapd_out);
     for (l = attvalues ; l ; l = l->next) {
 	/* check if it's a value we print... */

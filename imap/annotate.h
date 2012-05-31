@@ -144,7 +144,7 @@ int annotatemore_findall(const char *mboxname, uint32_t uid, const char *entry,
 			 annotatemore_find_proc_t proc, void *rock);
 
 /* fetch annotations and output results */
-typedef void (*annotate_fetch_cb_t)(const char *mboxname,
+typedef void (*annotate_fetch_cb_t)(const char *mboxname, /* internal */
 				    uint32_t uid,
 				    const char *entry,
 				    struct attvaluelist *,

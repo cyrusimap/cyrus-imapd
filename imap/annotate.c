@@ -146,7 +146,7 @@ struct annotate_state
 
     /* state for output_entryatt */
     struct attvaluelist *attvalues;
-    char lastname[MAX_MAILBOX_BUFFER];
+    char lastname[MAX_MAILBOX_BUFFER];	/* internal */
     char lastentry[MAX_MAILBOX_BUFFER];
     uint32_t lastuid;
     annotate_fetch_cb_t callback;
@@ -1263,7 +1263,6 @@ static void output_entryatt(annotate_state_t *state, const char *entry,
     char key[MAX_MAILBOX_BUFFER]; /* XXX MAX_MAILBOX_NAME + entry + userid */
     struct buf buf = BUF_INITIALIZER;
     int vallen;
-    char ext_mboxname[MAX_MAILBOX_BUFFER];
 
     /* We don't put any funny interpretations on NULL values for
      * some of these anymore, now that the dirty hacks are gone. */
@@ -1272,17 +1271,11 @@ static void output_entryatt(annotate_state_t *state, const char *entry,
     assert(userid);
     assert(value);
 
-    if (state->mailbox) {
-	assert(state->namespace != NULL);
-	state->namespace->mboxname_toexternal(state->namespace,
-					      state->mailbox->name,
-					      state->userid,
-					      ext_mboxname);
-	mboxname = ext_mboxname;
-    }
+    if (state->mailbox)
+	mboxname = state->mailbox->name;
     else
 	mboxname = "";
-    /* @mboxname is now an external mailbox name */
+    /* @mboxname is now an internal mailbox name */
 
     /* Check if this is a new entry.
      * If so, flush our current entry.
