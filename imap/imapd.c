@@ -8096,6 +8096,142 @@ static int annot_store_cb(annotate_state_t *astate, void *rock)
 }
 
 /*
+ * Common code used to apply a function to every mailbox which matches
+ * a mailbox pattern, with an annotate_state_t* set up to point to the
+ * mailbox.
+ */
+
+struct apply_rock {
+    annotate_state_t *state;
+    int (*proc)(annotate_state_t *, void *data);
+    void *data;
+    char lastname[MAX_MAILBOX_PATH+1];
+    int sawuser;
+    unsigned int nseen;
+};
+
+static int apply_cb(char *name, int matchlen,
+		    int maycreate __attribute__((unused)), void* rock)
+{
+    struct apply_rock *arock = (struct apply_rock *)rock;
+    annotate_state_t *state = arock->state;
+    struct mboxlist_entry *mbentry = NULL;
+    char int_mboxname[MAX_MAILBOX_BUFFER];
+    int r;
+
+    /* Suppress any output of a partial match */
+    if (name[matchlen] && strncmp(arock->lastname, name, matchlen) == 0)
+	return 0;
+
+    /*
+     * We can get a partial match for "user" multiple times with
+     * other matches inbetween.  Handle it as a special case
+     */
+    if (matchlen == 4 && strncasecmp(name, "user", 4) == 0) {
+	if (arock->sawuser)
+	    return 0;
+	arock->sawuser = 1;
+    }
+
+    strlcpy(arock->lastname, name, sizeof(arock->lastname));
+    arock->lastname[matchlen] = '\0';
+
+    if (!strncasecmp(arock->lastname, "INBOX", 5)) {
+	imapd_namespace.mboxname_tointernal(&imapd_namespace, "INBOX",
+					    imapd_userid, int_mboxname);
+	strlcat(int_mboxname, arock->lastname+5, sizeof(int_mboxname));
+    }
+    else
+	strlcpy(int_mboxname, arock->lastname, sizeof(int_mboxname));
+
+    r = 0;
+    if (mboxlist_lookup(int_mboxname, &mbentry, NULL))
+	goto out;
+
+    r = annotate_state_set_mailbox_mbe(state, mbentry);
+    if (r)
+	goto out;
+
+    r = arock->proc(state, arock->data);
+    arock->nseen++;
+
+out:
+    annotate_state_unset_scope(state);
+    mboxlist_entry_free(&mbentry);
+    return r;
+}
+
+static int apply_mailbox_pattern(annotate_state_t *state,
+				 const char *pattern,
+				 int (*proc)(annotate_state_t *, void *),
+				 void *data)
+{
+    struct apply_rock arock;
+    char mboxpat[MAX_MAILBOX_BUFFER];
+    int r = 0;
+
+    memset(&arock, 0, sizeof(arock));
+    arock.state = state;
+    arock.proc = proc;
+    arock.data = data;
+
+    /* copy the pattern so we can change hiersep */
+    strlcpy(mboxpat, pattern, sizeof(mboxpat));
+    mboxname_hiersep_tointernal(&imapd_namespace, mboxpat,
+				config_virtdomains ?
+				strcspn(mboxpat, "@") : 0);
+
+    r = imapd_namespace.mboxlist_findall(&imapd_namespace,
+					 mboxpat,
+					 imapd_userisadmin || imapd_userisproxyadmin,
+					 imapd_userid,
+					 imapd_authstate,
+					 apply_cb, &arock);
+
+    if (!r && !arock.nseen)
+	r = IMAP_MAILBOX_NONEXISTENT;
+
+    return r;
+}
+
+static int apply_mailbox_array(annotate_state_t *state,
+			       const strarray_t *mboxes,
+			       int (*proc)(annotate_state_t *, void *),
+			       void *rock)
+{
+    int i;
+    struct mboxlist_entry *mbentry = NULL;
+    char int_mboxname[MAX_MAILBOX_BUFFER];
+    int r = 0;
+
+    for (i = 0 ; i < mboxes->count ; i++) {
+	imapd_namespace.mboxname_tointernal(&imapd_namespace,
+					    mboxes->data[i],
+					    imapd_userid,
+					    int_mboxname);
+	r = mboxlist_lookup(int_mboxname, &mbentry, NULL);
+	if (r)
+	    break;
+
+	r = annotate_state_set_mailbox_mbe(state, mbentry);
+	if (r)
+	    break;
+
+	r = proc(state, rock);
+	if (r)
+	    break;
+
+	annotate_state_unset_scope(state);
+	mboxlist_entry_free(&mbentry);
+    }
+
+    annotate_state_unset_scope(state);
+    mboxlist_entry_free(&mbentry);
+    return r;
+}
+
+
+/*
  * Perform a GETANNOTATION command
  *
  * The command has been parsed up to the entries
@@ -8137,7 +8273,7 @@ static void cmd_getannotation(const char *tag, char *mboxpat)
 	arock.attribs = &attribs;
 	arock.callback = getannotation_response;
 	arock.sizeptr = NULL;
-	r = annotate_apply_mailbox_pattern(astate, mboxpat, annot_fetch_cb, &arock);
+	r = apply_mailbox_pattern(astate, mboxpat, annot_fetch_cb, &arock);
     }
 
     imapd_check(NULL, 0);
@@ -8357,9 +8493,9 @@ static void cmd_getmetadata(const char *tag)
 	arock.callback = getmetadata_response;
 	arock.sizeptr = sizeptr;
 	if (mbox_is_pattern)
-	    r = annotate_apply_mailbox_pattern(astate, mboxes.data[0], annot_fetch_cb, &arock);
+	    r = apply_mailbox_pattern(astate, mboxes.data[0], annot_fetch_cb, &arock);
 	else
-	    r = annotate_apply_mailbox_array(astate, &mboxes, annot_fetch_cb, &arock);
+	    r = apply_mailbox_array(astate, &mboxes, annot_fetch_cb, &arock);
     }
 
     imapd_check(NULL, 0);
@@ -8428,7 +8564,7 @@ static void cmd_setannotation(const char *tag, char *mboxpat)
 	else {
 	    struct annot_store_rock arock;
 	    arock.entryatts = entryatts;
-	    r = annotate_apply_mailbox_pattern(astate, mboxpat, annot_store_cb, &arock);
+	    r = apply_mailbox_pattern(astate, mboxpat, annot_store_cb, &arock);
 	}
     }
     if (!r)
@@ -8486,7 +8622,7 @@ static void cmd_setmetadata(const char *tag, char *mboxpat)
 	else {
 	    struct annot_store_rock arock;
 	    arock.entryatts = entryatts;
-	    r = annotate_apply_mailbox_pattern(astate, mboxpat, annot_store_cb, &arock);
+	    r = apply_mailbox_pattern(astate, mboxpat, annot_store_cb, &arock);
 	}
     }
     if (!r)

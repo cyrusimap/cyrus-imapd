@@ -233,7 +233,6 @@ static ptrarray_t message_entries = PTRARRAY_INITIALIZER;
 static ptrarray_t mailbox_entries = PTRARRAY_INITIALIZER;
 static ptrarray_t server_entries = PTRARRAY_INITIALIZER;
 
-static void annotate_state_unset_scope(annotate_state_t *state);
 static int annotate_state_set_scope(annotate_state_t *state,
 				    struct mboxlist_entry *mbentry,
 				    struct mailbox *mailbox,
@@ -1146,6 +1145,12 @@ void annotate_state_set_mailbox(annotate_state_t *state,
     annotate_state_set_scope(state, NULL, mailbox, 0);
 }
 
+int annotate_state_set_mailbox_mbe(annotate_state_t *state,
+				   struct mboxlist_entry *mbentry)
+{
+    return annotate_state_set_scope(state, mbentry, NULL, 0);
+}
+
 void annotate_state_set_message(annotate_state_t *state,
 				struct mailbox *mailbox,
 				unsigned int uid)
@@ -1154,7 +1159,7 @@ void annotate_state_set_message(annotate_state_t *state,
 }
 
 /* unset any state from a previous scope */
-static void annotate_state_unset_scope(annotate_state_t *state)
+void annotate_state_unset_scope(annotate_state_t *state)
 {
     if (state->mailbox && state->mailbox_is_ours)
 	mailbox_close(&state->mailbox);
@@ -1225,142 +1230,6 @@ static int annotate_state_need_mbentry(annotate_state_t *state)
     }
 
 out:
-    return r;
-}
-
-
-/*
- * Common code used to apply a function to every mailbox which matches
- * a mailbox pattern, with an annotate_state_t* set up to point to the
- * mailbox.
- */
-
-struct apply_rock {
-    annotate_state_t *state;
-    int (*proc)(annotate_state_t *, void *data);
-    void *data;
-    char lastname[MAX_MAILBOX_PATH+1];
-    int sawuser;
-    unsigned int nseen;
-};
-
-static int apply_cb(char *name, int matchlen,
-		    int maycreate __attribute__((unused)), void* rock)
-{
-    struct apply_rock *arock = (struct apply_rock *)rock;
-    annotate_state_t *state = arock->state;
-    struct mboxlist_entry *mbentry = NULL;
-    char int_mboxname[MAX_MAILBOX_BUFFER];
-    int r;
-
-    /* Suppress any output of a partial match */
-    if (name[matchlen] && strncmp(arock->lastname, name, matchlen) == 0)
-	return 0;
-
-    /*
-     * We can get a partial match for "user" multiple times with
-     * other matches inbetween.  Handle it as a special case
-     */
-    if (matchlen == 4 && strncasecmp(name, "user", 4) == 0) {
-	if (arock->sawuser)
-	    return 0;
-	arock->sawuser = 1;
-    }
-
-    strlcpy(arock->lastname, name, sizeof(arock->lastname));
-    arock->lastname[matchlen] = '\0';
-
-    if (!strncasecmp(arock->lastname, "INBOX", 5)) {
-	assert(state->namespace != NULL);
-	state->namespace->mboxname_tointernal(state->namespace, "INBOX",
-					      state->userid, int_mboxname);
-	strlcat(int_mboxname, arock->lastname+5, sizeof(int_mboxname));
-    }
-    else
-	strlcpy(int_mboxname, arock->lastname, sizeof(int_mboxname));
-
-    r = 0;
-    if (mboxlist_lookup(int_mboxname, &mbentry, NULL))
-	goto out;
-
-    r = annotate_state_set_scope(state, mbentry, NULL, 0);
-    if (r)
-	goto out;
-
-    r = arock->proc(state, arock->data);
-    arock->nseen++;
-
-out:
-    annotate_state_unset_scope(state);
-    mboxlist_entry_free(&mbentry);
-    return r;
-}
-
-int annotate_apply_mailbox_pattern(annotate_state_t *state,
-				   const char *pattern,
-				   int (*proc)(annotate_state_t *, void *),
-				   void *data)
-{
-    struct apply_rock arock;
-    char mboxpat[MAX_MAILBOX_BUFFER];
-    int r = 0;
-
-    memset(&arock, 0, sizeof(arock));
-    arock.state = state;
-    arock.proc = proc;
-    arock.data = data;
-
-    /* copy the pattern so we can change hiersep */
-    strlcpy(mboxpat, pattern, sizeof(mboxpat));
-    assert(state->namespace != NULL);
-    mboxname_hiersep_tointernal(state->namespace, mboxpat,
-				config_virtdomains ?
-				strcspn(mboxpat, "@") : 0);
-
-    r = state->namespace->mboxlist_findall(state->namespace, mboxpat,
-					   state->isadmin, state->userid,
-					   state->auth_state,
-					   apply_cb, &arock);
-
-    if (!r && !arock.nseen)
-	r = IMAP_MAILBOX_NONEXISTENT;
-
-    return r;
-}
-
-int annotate_apply_mailbox_array(annotate_state_t *state,
-				 const strarray_t *mboxes,
-			         int (*proc)(annotate_state_t *, void *),
-			         void *data)
-{
-    int i;
-    struct mboxlist_entry *mbentry = NULL;
-    char int_mboxname[MAX_MAILBOX_BUFFER];
-    int r = 0;
-
-    for (i = 0 ; i < mboxes->count ; i++) {
-	state->namespace->mboxname_tointernal(state->namespace,
-					      mboxes->data[i],
-					      state->userid,
-					      int_mboxname);
-	r = mboxlist_lookup(int_mboxname, &mbentry, NULL);
-	if (r)
-	    break;
-
-	r = annotate_state_set_scope(state, mbentry, NULL, 0);
-	if (r)
-	    break;
-
-	r = proc(state, data);
-	if (r)
-	    break;
-
-	annotate_state_unset_scope(state);
-	mboxlist_entry_free(&mbentry);
-    }
-
-    annotate_state_unset_scope(state);
-    mboxlist_entry_free(&mbentry);
     return r;
 }
 
