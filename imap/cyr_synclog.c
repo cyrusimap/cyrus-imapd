@@ -67,7 +67,7 @@ int main(int argc, char *argv[])
 	fatal("must run as the Cyrus user", EC_USAGE);
     }
 
-    while ((opt = getopt(argc, argv, "C:uvmacqnsb")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:uUvmMacqnsb")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
@@ -75,11 +75,17 @@ int main(int argc, char *argv[])
 	case 'u': /* User */
 	    cmd = 'u';
 	    break;
+	case 'U': /* UnUser */
+	    cmd = 'U';
+	    break;
 	case 'v': /* sieVe */
 	    cmd = 'v';
 	    break;
 	case 'm': /* Mailbox */
 	    cmd = 'm';
+	    break;
+	case 'M': /* UnMailbox */
+	    cmd = 'M';
 	    break;
 	case 'a': /* Append */
 	    cmd = 'a';
@@ -109,8 +115,10 @@ int main(int argc, char *argv[])
 	fprintf(stderr, "\n");
 	fprintf(stderr, "types:\n");
 	fprintf(stderr, "  -u   USER\n");
+	fprintf(stderr, "  -U   UNUSER\n");
 	fprintf(stderr, "  -v   SIEVE\n");
 	fprintf(stderr, "  -m   MAILBOX\n");
+	fprintf(stderr, "  -M   UNMAILBOX\n");
 	fprintf(stderr, "  -q   QUOTA\n");
 	fprintf(stderr, "  -n   ANNOTATION\n");
 	fprintf(stderr, "  -s   SEEN\n");
@@ -128,11 +136,17 @@ int main(int argc, char *argv[])
 	case 'u': /* User */
 	    sync_log_user(argv[optind]);
 	    break;
+	case 'U': /* UnUser */
+	    sync_log_unuser(argv[optind]);
+	    break;
 	case 'v': /* sieVe */
 	    sync_log_sieve(argv[optind]);
 	    break;
 	case 'm': /* Mailbox */
 	    sync_log_mailbox(argv[optind]);
+	    break;
+	case 'M': /* UnMailbox */
+	    sync_log_unmailbox(argv[optind]);
 	    break;
 	case 'q': /* Quota */
 	    sync_log_quota(argv[optind]);
