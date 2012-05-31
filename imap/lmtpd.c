@@ -993,7 +993,7 @@ void shut_down(int code)
 	quotadb_done();
 
 	annotatemore_close();
-	annotatemore_done();
+	annotate_done();
 
 	statuscache_close();
 	statuscache_done();

@@ -1026,7 +1026,7 @@ void shut_down(int code)
     denydb_done();
 
     annotatemore_close();
-    annotatemore_done();
+    annotate_done();
 
     idle_done();
 

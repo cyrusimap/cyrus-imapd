@@ -465,7 +465,7 @@ void shut_down(int code)
     quotadb_done();
 
     annotatemore_close();
-    annotatemore_done();
+    annotate_done();
 
     if (sync_in) {
 	prot_NONBLOCK(sync_in);

@@ -104,7 +104,7 @@ static void shut_down(int code)
     in_shutdown = 1;
 
     annotatemore_close();
-    annotatemore_done();
+    annotate_done();
 
     if (sync_userid)    free(sync_userid);
     if (sync_authstate) auth_freestate(sync_authstate);

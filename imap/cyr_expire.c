@@ -518,7 +518,7 @@ finish:
     mboxlist_close();
     mboxlist_done();
     annotatemore_close();
-    annotatemore_done();
+    annotate_done();
     duplicate_done();
     sasl_done();
     cyrus_done();

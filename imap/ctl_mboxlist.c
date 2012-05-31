@@ -1086,7 +1086,7 @@ int main(int argc, char *argv[])
 	do_dump(op, partition, dopurge);
 
 	annotatemore_close();
-	annotatemore_done();
+	annotate_done();
 
 	quotadb_close();
 	quotadb_done();
@@ -1108,7 +1108,7 @@ int main(int argc, char *argv[])
 	do_undump();
 
 	annotatemore_close();
-	annotatemore_done();
+	annotate_done();
 
 	quotadb_close();
 	quotadb_done();

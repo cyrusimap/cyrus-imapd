@@ -178,7 +178,7 @@ static void recover_reserved(void)
     quotadb_done();
 
     annotatemore_close();
-    annotatemore_done();
+    annotate_done();
 
     mboxlist_close();
     mboxlist_done();

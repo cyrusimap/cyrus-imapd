@@ -1930,7 +1930,7 @@ static int tear_down(void)
     quotadb_close();
     quotadb_done();
 
-    annotatemore_done();
+    annotate_done();
 
     imapopts[IMAPOPT_ANNOTATION_DEFINITIONS].val.s =
 	old_annotation_definitions;

@@ -800,7 +800,7 @@ int annotatemore_commit(void)
     return r;
 }
 
-void annotatemore_done(void)
+void annotate_done(void)
 {
     /* DB->done() handled by cyrus_done() */
 }

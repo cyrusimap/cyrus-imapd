@@ -146,7 +146,7 @@ static void shut_down(int code)
 
     seen_done();
     annotatemore_close();
-    annotatemore_done();
+    annotate_done();
     quotadb_close();
     quotadb_done();
     mboxlist_close();

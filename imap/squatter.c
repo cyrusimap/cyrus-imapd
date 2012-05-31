@@ -766,7 +766,7 @@ int main(int argc, char **argv)
     mboxlist_close();
     mboxlist_done();
     annotatemore_close();
-    annotatemore_done();
+    annotate_done();
 
     cyrus_done();
 

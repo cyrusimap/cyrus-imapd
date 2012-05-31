@@ -219,7 +219,7 @@ int annotatemore_commit(void);
 void annotatemore_close(void);
 
 /* done with database stuff */
-void annotatemore_done(void);
+void annotate_done(void);
 
 /* These APIs allow calling code to hold an extra reference to a
  * per-message database for an extended period of time, which can be a
