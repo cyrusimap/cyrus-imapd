@@ -2594,7 +2594,7 @@ static int index_fetchannotations(struct index_state *state,
     struct fetch_annotation_rock rock;
     int r = 0;
 
-    annotate_state_set_auth(astate, fetchargs->namespace, fetchargs->isadmin,
+    annotate_state_set_auth(astate, fetchargs->isadmin,
 			    fetchargs->userid, fetchargs->authstate);
     annotate_state_set_message(astate, state->mailbox,
 			       state->map[msgno-1].record.uid);
@@ -3261,7 +3261,7 @@ static int index_store_annotation(struct index_state *state,
 
     oldmodseq = im->record.modseq;
 
-    annotate_state_set_auth(astate, storeargs->namespace, storeargs->isadmin,
+    annotate_state_set_auth(astate, storeargs->isadmin,
 			    storeargs->userid, storeargs->authstate);
     annotate_state_set_message(astate, state->mailbox, im->record.uid);
     r = annotate_state_store(astate, storeargs->entryatts);
@@ -3350,7 +3350,7 @@ static int _search_annotation(struct index_state *state,
     strarray_append(&entries, sa->entry);
     strarray_append(&attribs, sa->attrib);
 
-    annotate_state_set_auth(astate, sa->namespace, sa->isadmin,
+    annotate_state_set_auth(astate, sa->isadmin,
 			    sa->userid, sa->auth_state);
     annotate_state_set_message(astate, state->mailbox,
 			       state->map[msgno-1].record.uid);

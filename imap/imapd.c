@@ -8263,7 +8263,7 @@ static void cmd_getannotation(const char *tag, char *mboxpat)
 	goto freeargs;
     }
 
-    annotate_state_set_auth(astate, &imapd_namespace,
+    annotate_state_set_auth(astate,
 			    imapd_userisadmin || imapd_userisproxyadmin,
 			    imapd_userid, imapd_authstate);
     if (!*mboxpat) {
@@ -8485,7 +8485,7 @@ static void cmd_getmetadata(const char *tag)
     if (have_private) strarray_append(&newa, "value.priv");
     if (have_shared) strarray_append(&newa, "value.shared");
 
-    annotate_state_set_auth(astate, &imapd_namespace,
+    annotate_state_set_auth(astate,
 			    imapd_userisadmin || imapd_userisproxyadmin,
 			    imapd_userid, imapd_authstate);
     basesize = maxsize;
@@ -8561,7 +8561,7 @@ static void cmd_setannotation(const char *tag, char *mboxpat)
 	goto freeargs;
     }
 
-    annotate_state_set_auth(astate, &imapd_namespace, imapd_userisadmin,
+    annotate_state_set_auth(astate, imapd_userisadmin,
 			    imapd_userid, imapd_authstate);
     r = annotatemore_begin();
     if (!r) {
@@ -8619,7 +8619,7 @@ static void cmd_setmetadata(const char *tag, char *mboxpat)
 	goto freeargs;
     }
 
-    annotate_state_set_auth(astate, &imapd_namespace, imapd_userisadmin,
+    annotate_state_set_auth(astate, imapd_userisadmin,
 			    imapd_userid, imapd_authstate);
     r = annotatemore_begin();
     if (!r) {

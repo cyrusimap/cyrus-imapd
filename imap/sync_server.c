@@ -1909,7 +1909,7 @@ static int do_annotation(struct dlist *kin)
 		   &value);
     appendentryatt(&entryatts, entry, attvalues);
     astate = annotate_state_new();
-    annotate_state_set_auth(astate, sync_namespacep,
+    annotate_state_set_auth(astate,
 			    sync_userisadmin, userid, sync_authstate);
     annotate_state_set_mailbox(astate, mailbox);
 
@@ -1963,7 +1963,7 @@ static int do_unannotation(struct dlist *kin)
 		   &empty);
     appendentryatt(&entryatts, entry, attvalues);
     astate = annotate_state_new();
-    annotate_state_set_auth(astate, sync_namespacep,
+    annotate_state_set_auth(astate,
 			    sync_userisadmin, userid, sync_authstate);
     annotate_state_set_mailbox(astate, mailbox);
 

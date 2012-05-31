@@ -947,13 +947,13 @@ int append_fromstage(struct appendstate *as, struct body **body,
 	annotate_state_t *astate = annotate_state_new();
 	annotate_state_set_message(astate, as->mailbox, record.uid);
 	if (user_annots) {
-	    annotate_state_set_auth(astate, as->namespace, as->isadmin,
+	    annotate_state_set_auth(astate, as->isadmin,
 				    as->userid, as->auth_state);
 	    r = annotate_state_store(astate, user_annots);
 	}
 	if (!r && system_annots) {
 	    /* pretend to be admin to avoid ACL checks */
-	    annotate_state_set_auth(astate, as->namespace, /*isadmin*/1,
+	    annotate_state_set_auth(astate, /*isadmin*/1,
 				    as->userid, as->auth_state);
 	    r = annotate_state_store(astate, system_annots);
 	    if (r) {
@@ -1139,14 +1139,14 @@ int append_run_annotator(struct appendstate *as,
     astate = annotate_state_new();
     annotate_state_set_message(astate, as->mailbox, record->uid);
     if (user_annots) {
-	annotate_state_set_auth(astate, as->namespace, as->isadmin,
+	annotate_state_set_auth(astate, as->isadmin,
 				as->userid, as->auth_state);
 	r = annotate_state_store(astate, user_annots);
 	if (r) goto out;
     }
     if (system_annots) {
 	/* pretend to be admin to avoid ACL checks */
-	annotate_state_set_auth(astate, as->namespace, /*isadmin*/1,
+	annotate_state_set_auth(astate, /*isadmin*/1,
 				as->userid, as->auth_state);
 	r = annotate_state_store(astate, system_annots);
 	if (r) {

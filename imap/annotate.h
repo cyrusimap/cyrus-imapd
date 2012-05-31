@@ -85,7 +85,6 @@ typedef struct annotate_recalc_state annotate_recalc_state_t;
 annotate_state_t *annotate_state_new(void);
 void annotate_state_free(annotate_state_t **statep);
 void annotate_state_set_auth(annotate_state_t *state,
-			     struct namespace *namespace,
 		             int isadmin, const char *userid,
 		             struct auth_state *auth_state);
 void annotate_state_set_server(annotate_state_t *state);

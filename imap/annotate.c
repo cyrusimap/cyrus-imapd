@@ -118,7 +118,6 @@ struct annotate_state
     const char *acl;		/* for _MESSAGE */
 
     /* authentication state */
-    struct namespace *namespace;
     const char *userid;
     int isadmin;
     struct auth_state *auth_state;
@@ -1121,14 +1120,11 @@ _annotate_state_add_entry(annotate_state_t *state,
 }
 
 void annotate_state_set_auth(annotate_state_t *state,
-			     struct namespace *namespace,
 		             int isadmin, const char *userid,
 		             struct auth_state *auth_state)
 {
-    /* Note: lmtpd calls through the append code with
-     * namespace=NULL and sometimes with auth_state=NULL,
-     * so we cannot rely on either of those being non-NULL */
-    state->namespace = namespace;
+    /* Note: lmtpd sometimes calls through the append code with
+     * auth_state=NULL, so we cannot rely on it being non-NULL */
     state->userid = userid;
     state->isadmin = isadmin;
     state->auth_state = auth_state;
