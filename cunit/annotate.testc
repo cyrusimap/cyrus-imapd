@@ -26,7 +26,6 @@
 #define VALUE2		"dolor sit amet"
 #define ACL		"anyone\tlrswipkxtecdan\t"
 
-static struct namespace namespace;
 static int isadmin;
 static const char *userid;
 static struct auth_state *auth_state;
@@ -147,7 +146,7 @@ static void test_store_without_begin(void)
     astate = annotate_state_new();
     annotate_state_set_server(astate);
     isadmin = 1;	/* pretend to be admin */
-    annotate_state_set_auth(astate, &namespace, isadmin, userid, auth_state);
+    annotate_state_set_auth(astate, isadmin, userid, auth_state);
     isadmin = 0;
 
     strarray_append(&entries, COMMENT);
@@ -196,7 +195,7 @@ static void test_getset_server_shared(void)
 
     astate = annotate_state_new();
     annotate_state_set_server(astate);
-    annotate_state_set_auth(astate, &namespace, isadmin, userid, auth_state);
+    annotate_state_set_auth(astate, isadmin, userid, auth_state);
 
     strarray_append(&entries, COMMENT);
     strarray_append(&attribs, VALUE_SHARED);
@@ -228,7 +227,7 @@ static void test_getset_server_shared(void)
     /* set a value */
 
     /* pretend to be admin */
-    annotate_state_set_auth(astate, &namespace, /*isadmin*/1, userid, auth_state);
+    annotate_state_set_auth(astate, /*isadmin*/1, userid, auth_state);
 
     buf_appendcstr(&val, VALUE0);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
@@ -262,7 +261,7 @@ static void test_getset_server_shared(void)
     CU_ASSERT_EQUAL(r, 0);
 
     /* check that we can fetch the value back in a new txn */
-    annotate_state_set_auth(astate, &namespace, /*isadmin*/0, userid, auth_state);
+    annotate_state_set_auth(astate, /*isadmin*/0, userid, auth_state);
 
     r = annotate_state_fetch(astate,
 		             &entries, &attribs,
@@ -320,7 +319,7 @@ static void test_getset_server_shared(void)
     buf_free(&val);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
     /* pretend to be admin */
-    annotate_state_set_auth(astate, &namespace, /*isadmin*/1, userid, auth_state);
+    annotate_state_set_auth(astate, /*isadmin*/1, userid, auth_state);
     r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
@@ -331,7 +330,7 @@ static void test_getset_server_shared(void)
 
     /* check that there is no value any more */
 
-    annotate_state_set_auth(astate, &namespace, isadmin, userid, auth_state);
+    annotate_state_set_auth(astate, isadmin, userid, auth_state);
     r = annotate_state_fetch(astate,
 		             &entries, &attribs,
 		             fetch_cb, &results,
@@ -383,7 +382,7 @@ static void test_getset_mailbox_shared(void)
 
     astate = annotate_state_new();
     annotate_state_set_mailbox(astate, mailbox);
-    annotate_state_set_auth(astate, &namespace, isadmin, userid, auth_state);
+    annotate_state_set_auth(astate, isadmin, userid, auth_state);
 
     strarray_append(&entries, COMMENT);
     strarray_append(&attribs, VALUE_SHARED);
@@ -563,7 +562,7 @@ static void test_getset_message_shared(void)
 
     astate = annotate_state_new();
     annotate_state_set_message(astate, mailbox, 42);
-    annotate_state_set_auth(astate, &namespace, isadmin, userid, auth_state);
+    annotate_state_set_auth(astate, isadmin, userid, auth_state);
 
     strarray_append(&entries, COMMENT);
     strarray_append(&attribs, VALUE_SHARED);
@@ -761,7 +760,7 @@ static void test_delete(void)
     buf_appendcstr(&val, VALUE0);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
     astate = annotate_state_new();
-    annotate_state_set_auth(astate, &namespace, isadmin, userid, auth_state);
+    annotate_state_set_auth(astate, isadmin, userid, auth_state);
     annotate_state_set_mailbox(astate, mailbox);
     r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
@@ -882,7 +881,7 @@ static void test_rename(void)
     buf_appendcstr(&val, VALUE0);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
     astate = annotate_state_new();
-    annotate_state_set_auth(astate, &namespace, isadmin, userid, auth_state);
+    annotate_state_set_auth(astate, isadmin, userid, auth_state);
     annotate_state_set_mailbox(astate, mailbox1);
     r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
@@ -1043,7 +1042,7 @@ static void test_abort(void)
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
     astate = annotate_state_new();
     annotate_state_set_server(astate);
-    annotate_state_set_auth(astate, &namespace, /*isadmin*/1, userid, auth_state);
+    annotate_state_set_auth(astate, /*isadmin*/1, userid, auth_state);
     r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
@@ -1052,7 +1051,7 @@ static void test_abort(void)
     buf_appendcstr(&val, VALUE0);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
     annotate_state_set_mailbox(astate, mailbox);
-    annotate_state_set_auth(astate, &namespace, /*isadmin*/0, userid, auth_state);
+    annotate_state_set_auth(astate, /*isadmin*/0, userid, auth_state);
     r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
@@ -1134,7 +1133,7 @@ static void test_msg_copy(void)
     buf_appendcstr(&val, VALUE0);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
     astate = annotate_state_new();
-    annotate_state_set_auth(astate, &namespace, isadmin, userid, auth_state);
+    annotate_state_set_auth(astate, isadmin, userid, auth_state);
     annotate_state_set_message(astate, mailbox1, 17);
     r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
@@ -1418,7 +1417,7 @@ static void test_getset_server_undefined(void)
 
     astate = annotate_state_new();
     annotate_state_set_server(astate);
-    annotate_state_set_auth(astate, &namespace, isadmin, userid, auth_state);
+    annotate_state_set_auth(astate, isadmin, userid, auth_state);
 
     strarray_append(&entries, EXENTRY);
     strarray_append(&attribs, VALUE_SHARED);
@@ -1451,9 +1450,9 @@ static void test_getset_server_undefined(void)
 
     buf_appendcstr(&val, VALUE0);
     setentryatt(&ealist, EXENTRY, VALUE_SHARED, &val);
-    annotate_state_set_auth(astate, &namespace, /*isadmin*/1, userid, auth_state);
+    annotate_state_set_auth(astate, /*isadmin*/1, userid, auth_state);
     r = annotate_state_store(astate, ealist);
-    annotate_state_set_auth(astate, &namespace, /*isadmin*/0, userid, auth_state);
+    annotate_state_set_auth(astate, /*isadmin*/0, userid, auth_state);
     CU_ASSERT_EQUAL(r, IMAP_PERMISSION_DENIED);
     freeentryatts(ealist);
     ealist = NULL;
@@ -1513,7 +1512,7 @@ static void test_getset_server_defined(void)
 
     astate = annotate_state_new();
     annotate_state_set_server(astate);
-    annotate_state_set_auth(astate, &namespace, isadmin, userid, auth_state);
+    annotate_state_set_auth(astate, isadmin, userid, auth_state);
 
     strarray_append(&entries, EXENTRY);
     strarray_append(&attribs, VALUE_SHARED);
@@ -1548,9 +1547,9 @@ static void test_getset_server_defined(void)
 
     buf_appendcstr(&val, VALUE0);
     setentryatt(&ealist, EXENTRY, VALUE_SHARED, &val);
-    annotate_state_set_auth(astate, &namespace, /*isadmin*/1, userid, auth_state);
+    annotate_state_set_auth(astate, /*isadmin*/1, userid, auth_state);
     r = annotate_state_store(astate, ealist);
-    annotate_state_set_auth(astate, &namespace, /*isadmin*/0, userid, auth_state);
+    annotate_state_set_auth(astate, /*isadmin*/0, userid, auth_state);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
     ealist = NULL;
@@ -1639,9 +1638,9 @@ static void test_getset_server_defined(void)
 
     buf_free(&val);
     setentryatt(&ealist, EXENTRY, VALUE_SHARED, &val);
-    annotate_state_set_auth(astate, &namespace, /*isadmin*/1, userid, auth_state);
+    annotate_state_set_auth(astate, /*isadmin*/1, userid, auth_state);
     r = annotate_state_store(astate, ealist);
-    annotate_state_set_auth(astate, &namespace, /*isadmin*/0, userid, auth_state);
+    annotate_state_set_auth(astate, /*isadmin*/0, userid, auth_state);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
     ealist = NULL;
@@ -1872,7 +1871,6 @@ static int set_up(void)
     userid = "smurf";
     isadmin = 0;
     auth_state = auth_newstate(userid);
-    mboxname_init_namespace(&namespace, isadmin);
 
     quotadb_init(0);
     quotadb_open(NULL);
