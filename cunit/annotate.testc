@@ -12,9 +12,7 @@
 
 #define DBDIR		"test-dbdir"
 #define MBOXNAME1_INT   "user.smurf"
-#define MBOXNAME1_EXT   "INBOX"
 #define MBOXNAME2_INT   "user.smurfette"
-#define MBOXNAME2_EXT   "user.smurfette"
 #define PARTITION	"default"
 #define COMMENT		"/comment"
 #define EXENTRY		"/vendor/example.com/a-non-default-entry"
@@ -320,7 +318,7 @@ static void XXtest_getset_mailbox_shared(void)
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
-	   "mboxname=\"" MBOXNAME1_EXT "\" " \
+	   "mboxname=\"" MBOXNAME1_INT "\" " \
 	   "uid=0 " \
 	   "entry=\"" COMMENT "\" " \
 	   VALUE_SHARED "=NIL"
@@ -351,7 +349,7 @@ static void XXtest_getset_mailbox_shared(void)
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
-	   "mboxname=\"" MBOXNAME1_EXT "\" " \
+	   "mboxname=\"" MBOXNAME1_INT "\" " \
 	   "uid=0 " \
 	   "entry=\"" COMMENT "\" " \
 	   VALUE_SHARED "=\"" VALUE0 "\""
@@ -376,7 +374,7 @@ static void XXtest_getset_mailbox_shared(void)
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
-	   "mboxname=\"" MBOXNAME1_EXT "\" " \
+	   "mboxname=\"" MBOXNAME1_INT "\" " \
 	   "uid=0 " \
 	   "entry=\"" COMMENT "\" " \
 	   VALUE_SHARED "=\"" VALUE0 "\""
@@ -403,7 +401,7 @@ static void XXtest_getset_mailbox_shared(void)
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
-	   "mboxname=\"" MBOXNAME1_EXT "\" " \
+	   "mboxname=\"" MBOXNAME1_INT "\" " \
 	   "uid=0 " \
 	   "entry=\"" COMMENT "\" " \
 	   VALUE_SHARED "=\"" VALUE0 "\""
@@ -441,7 +439,7 @@ static void XXtest_getset_mailbox_shared(void)
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
-	   "mboxname=\"" MBOXNAME1_EXT "\" " \
+	   "mboxname=\"" MBOXNAME1_INT "\" " \
 	   "uid=0 " \
 	   "entry=\"" COMMENT "\" " \
 	   VALUE_SHARED "=NIL"
@@ -501,7 +499,7 @@ static void XXtest_getset_message_shared(void)
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
-	   "mboxname=\"" MBOXNAME1_EXT "\" " \
+	   "mboxname=\"" MBOXNAME1_INT "\" " \
 	   "uid=42 " \
 	   "entry=\"" COMMENT "\" " \
 	   VALUE_SHARED "=NIL"
@@ -533,7 +531,7 @@ static void XXtest_getset_message_shared(void)
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
-	   "mboxname=\"" MBOXNAME1_EXT "\" " \
+	   "mboxname=\"" MBOXNAME1_INT "\" " \
 	   "uid=42 " \
 	   "entry=\"" COMMENT "\" " \
 	   VALUE_SHARED "=\"" VALUE0 "\""
@@ -558,7 +556,7 @@ static void XXtest_getset_message_shared(void)
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
-	   "mboxname=\"" MBOXNAME1_EXT "\" " \
+	   "mboxname=\"" MBOXNAME1_INT "\" " \
 	   "uid=42 " \
 	   "entry=\"" COMMENT "\" " \
 	   VALUE_SHARED "=\"" VALUE0 "\""
@@ -585,7 +583,7 @@ static void XXtest_getset_message_shared(void)
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
-	   "mboxname=\"" MBOXNAME1_EXT "\" " \
+	   "mboxname=\"" MBOXNAME1_INT "\" " \
 	   "uid=42 " \
 	   "entry=\"" COMMENT "\" " \
 	   VALUE_SHARED "=\"" VALUE0 "\""
@@ -623,7 +621,7 @@ static void XXtest_getset_message_shared(void)
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_EQUAL_FATAL(results.count, 1);
 #define EXPECTED \
-	   "mboxname=\"" MBOXNAME1_EXT "\" " \
+	   "mboxname=\"" MBOXNAME1_INT "\" " \
 	   "uid=42 " \
 	   "entry=\"" COMMENT "\" " \
 	   VALUE_SHARED "=NIL"
