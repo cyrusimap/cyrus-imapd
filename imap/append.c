@@ -215,8 +215,6 @@ int append_setup_mbox(struct appendstate *as, struct mailbox *mailbox,
     as->baseuid = as->mailbox->i.last_uid + 1;
     as->s = APPEND_READY;
 
-    annotatemore_begin();
-
     return 0;
 }
 
@@ -253,9 +251,6 @@ int append_commit(struct appendstate *as,
 	return r;
     }
 
-    /* TODO: what could we do in the case of an error? */
-    annotatemore_commit();
-
     if (mailboxptr) {
 	*mailboxptr = as->mailbox;
     }
@@ -280,9 +275,6 @@ int append_abort(struct appendstate *as)
 
     /* close mailbox */
     mailbox_close(&as->mailbox);
-
-    /* Abort any annotation changes */
-    annotatemore_abort();
 
     seqset_free(as->seen_seq);
 
@@ -944,8 +936,9 @@ int append_fromstage(struct appendstate *as, struct body **body,
 	flags = newflags;
     }
     if (!r && (user_annots || system_annots)) {
-	annotate_state_t *astate = annotate_state_new();
-	annotate_state_set_message(astate, as->mailbox, record.uid);
+	annotate_state_t *astate = NULL;
+	r = mailbox_get_annotate_state(as->mailbox, record.uid, &astate);
+	if (r) goto out;
 	if (user_annots) {
 	    annotate_state_set_auth(astate, as->isadmin,
 				    as->userid, as->auth_state);
@@ -963,7 +956,6 @@ int append_fromstage(struct appendstate *as, struct body **body,
 		r = 0;
 	    }
 	}
-	annotate_state_free(&astate);
     }
     if (r)
 	goto out;
@@ -1136,8 +1128,8 @@ int append_run_annotator(struct appendstate *as,
     r = append_apply_flags(as, record, &flags);
     if (r) goto out;
 
-    astate = annotate_state_new();
-    annotate_state_set_message(astate, as->mailbox, record->uid);
+    r = mailbox_get_annotate_state(as->mailbox, record->uid, &astate);
+    if (r) goto out;
     if (user_annots) {
 	annotate_state_set_auth(astate, as->isadmin,
 				as->userid, as->auth_state);
@@ -1158,7 +1150,6 @@ int append_run_annotator(struct appendstate *as,
     }
 
 out:
-    annotate_state_free(&astate);
     freeentryatts(user_annots);
     freeentryatts(system_annots);
     strarray_fini(&flags);

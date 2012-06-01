@@ -117,6 +117,7 @@ struct annotate_state
     int mailbox_is_ours;
     unsigned int uid;		/* for _MESSAGE */
     const char *acl;		/* for _MESSAGE */
+    annotate_db_t *d;
 
     /* authentication state */
     const char *userid;
@@ -207,6 +208,7 @@ struct annotate_db
     char *filename;
     struct db *db;
     struct txn *txn;
+    int in_txn;
 };
 
 struct annotate_recalc_state
@@ -222,8 +224,7 @@ struct annotate_recalc_state
 
 static annotate_db_t *all_dbs_head = NULL;
 static annotate_db_t *all_dbs_tail = NULL;
-static int in_txn = 0;
-#define tid(d)	(in_txn ? &(d)->txn : NULL)
+#define tid(d)	((d)->in_txn ? &(d)->txn : NULL)
 int (*proxy_fetch_func)(const char *server, const char *mbox_pat,
 			const strarray_t *entry_pat,
 			const strarray_t *attribute_pat) = NULL;
@@ -258,6 +259,9 @@ static int _annotate_rewrite(struct mailbox *oldmailbox,
 static int _annotate_may_store(annotate_state_t *state,
 			       int is_shared,
 			       const annotate_entrydesc_t *desc);
+static void annotate_begin(annotate_db_t *d);
+static void annotate_abort(annotate_db_t *d);
+static int annotate_commit(annotate_db_t *d);
 
 /* String List Management */
 /*
@@ -695,8 +699,17 @@ void annotate_putdb(annotate_db_t **dbp)
     if (!dbp || !(d = *dbp))
 	return;
     assert(d->refcount > 0);
-    if (--d->refcount == 0 && !in_txn)
+    if (--d->refcount == 0) {
+	if (d->in_txn && d->txn) {
+	    syslog(LOG_ERR, "IOERROR: dropped last reference on "
+			    "database %s with uncommitted updates, "
+			    "aborting - DATA LOST!",
+			    d->filename);
+	    annotate_abort(d);
+	}
+	assert(!d->in_txn);
 	annotate_closedb(d);
+    }
     *dbp = NULL;
 }
 
@@ -718,84 +731,47 @@ void annotatemore_close(void)
 	annotate_closedb(all_dbs_head);
 }
 
-int annotatemore_begin(void)
+/* Begin a txn if one is not already started.  Can be called multiple
+ * times */
+static void annotate_begin(annotate_db_t *d)
 {
-    if (!all_dbs_head)
-	return IMAP_INTERNAL;
-
-    /* It is an error to begin a txn without explicitly either
-     * committing or aborting the previous txn.  */
-    assert(!in_txn);
-
-    /* abort any dangling db-transactions */
-    annotatemore_abort();
-    in_txn = 1;			/* beginning of ann-transaction */
-    return 0;
+    if (d)
+	d->in_txn = 1;
 }
 
-static void annotatemore_end(void)
+static void annotate_abort(annotate_db_t *d)
 {
-    annotate_db_t *d, *next;
-
-    /* perform delayed close of any db_t's kept
-     * alive during an ann-transaction */
-    for (d = all_dbs_head ; d ; d = next) {
-	next = d->next;
-	if (!d->refcount)
-	    annotate_closedb(d);
-    }
-    in_txn = 0;			/* end of ann-transaction */
-}
-
-void annotatemore_abort(void)
-{
-    annotate_db_t *d;
-
     /* don't double-abort */
-    if (!in_txn) return;
+    if (!d || !d->in_txn) return;
 
-    /* abort all open db-transactions */
-    for (d = all_dbs_head ; d ; d = d->next) {
-	if (d->txn) {
+    if (d->txn) {
 #if DEBUG
-	    syslog(LOG_ERR, "Aborting annotations db %s\n", d->filename);
+	syslog(LOG_ERR, "Aborting annotations db %s\n", d->filename);
 #endif
-	    cyrusdb_abort(d->db, d->txn);
-	}
-	d->txn = NULL;
+	cyrusdb_abort(d->db, d->txn);
     }
-
-    annotatemore_end();
+    d->txn = NULL;
+    d->in_txn = 0;
 }
 
-int annotatemore_commit(void)
+static int annotate_commit(annotate_db_t *d)
 {
-    annotate_db_t *d;
     int r = 0;
 
-    if (!all_dbs_head)
-	return IMAP_INTERNAL;	/* no open dbs */
-    if (!in_txn)
-	return IMAP_INTERNAL;	/* not in an ann-transaction */
+    /* silently succeed if not in a txn */
+    if (!d || !d->in_txn) return 0;
 
-    /* commit any open db-transactions */
-    for (d = all_dbs_head ; d ; d = d->next) {
-	if (!d->txn)
-	    continue;	/* no changes */
-
+    if (d->txn) {
 #if DEBUG
 	syslog(LOG_ERR, "Committing annotations db %s\n", d->filename);
 #endif
-
 	r = cyrusdb_commit(d->db, d->txn);
+	if (r)
+	    r = IMAP_IOERROR;
 	d->txn = NULL;
-	if (r) {
-	    annotatemore_abort();
-	    return r;
-	}
     }
+    d->in_txn = 0;
 
-    annotatemore_end();
     return r;
 }
 
@@ -1090,7 +1066,7 @@ static void annotate_state_finish(annotate_state_t *state)
 }
 
 
-void annotate_state_free(annotate_state_t **statep)
+static void annotate_state_free(annotate_state_t **statep)
 {
     annotate_state_t *state = *statep;
 
@@ -1102,6 +1078,25 @@ void annotate_state_free(annotate_state_t **statep)
     free(state);
     *statep = NULL;
 }
+
+void annotate_state_abort(annotate_state_t **statep)
+{
+    if (*statep)
+	annotate_abort((*statep)->d);
+
+    annotate_state_free(statep);
+}
+
+int annotate_state_commit(annotate_state_t **statep)
+{
+    int r = 0;
+    if (*statep)
+	r = annotate_commit((*statep)->d);
+
+    annotate_state_free(statep);
+    return r;
+}
+
 
 static struct annotate_entry_list *
 _annotate_state_add_entry(annotate_state_t *state,
@@ -1170,6 +1165,7 @@ void annotate_state_unset_scope(annotate_state_t *state)
 
     state->uid = 0;
     state->which = ANNOTATION_SCOPE_UNKNOWN;
+    annotate_putdb(&state->d);
 }
 
 static int annotate_state_set_scope(annotate_state_t *state,
@@ -1177,7 +1173,14 @@ static int annotate_state_set_scope(annotate_state_t *state,
 				    struct mailbox *mailbox,
 				    unsigned int uid)
 {
-    int r;
+    int r = 0;
+    annotate_db_t *oldd = NULL;
+
+    /* Carefully preserve the reference on the old DB just in case it
+     * turns out to be the same as the new DB, so we avoid the overhead
+     * of an unnecessary cyrusdb_open/close pair. */
+    oldd = state->d;
+    state->d = NULL;
 
     annotate_state_unset_scope(state);
 
@@ -1186,7 +1189,7 @@ static int annotate_state_set_scope(annotate_state_t *state,
 	    /* local mailbox */
 	    r = mailbox_open_iwl(mbentry->name, &mailbox);
 	    if (r)
-		return r;
+		goto out;
 	    state->mailbox_is_ours = 1;
 	}
 	assert(mailbox);
@@ -1209,7 +1212,12 @@ static int annotate_state_set_scope(annotate_state_t *state,
     state->mailbox = mailbox;
     state->uid = uid;
 
-    return 0;
+    r = _annotate_getdb(mailbox ? mailbox->name : NULL, uid,
+			CYRUSDB_CREATE, &state->d);
+
+out:
+    annotate_putdb(&oldd);
+    return r;
 }
 
 static int annotate_state_need_mbentry(annotate_state_t *state)
@@ -2292,13 +2300,12 @@ static int write_entry(struct mailbox *mailbox,
     quota_t oldlen = 0;
     const char *mboxname = mailbox ? mailbox->name : "";
 
-    /* must be in a transaction to modify the db */
-    if (!in_txn)
-	return IMAP_INTERNAL;
-
     r = _annotate_getdb(mboxname, uid, CYRUSDB_CREATE, &d);
     if (r)
 	return r;
+
+    /* must be in a transaction to modify the db */
+    annotate_begin(d);
 
     keylen = make_key(mboxname, uid, entry, userid, key, sizeof(key));
 
@@ -2873,9 +2880,6 @@ int annotate_state_store(annotate_state_t *state, struct entryattlist *l)
 	    goto cleanup;
     }
 
-    if (r)
-	annotatemore_abort();
-
 cleanup:
     annotate_state_finish(state);
     return r;
@@ -2927,10 +2931,16 @@ int annotate_rename_mailbox(struct mailbox *oldmailbox,
     /* rename one mailbox */
     char *olduserid = xstrdupnull(mboxname_to_userid(oldmailbox->name));
     char *newuserid = xstrdupnull(mboxname_to_userid(newmailbox->name));
-    int r;
+    annotate_db_t *d = NULL;
+    int r = 0;
 
     /* rewrite any per-folder annotations from the global db */
-    r = annotatemore_begin();
+    r = _annotate_getdb(NULL, 0, /*don't create*/0, &d);
+    if (r == CYRUSDB_NOTFOUND) {
+	/* no global database, must not be anything to rename */
+	r = 0;
+	goto done;
+    }
     if (r) goto done;
 
     /* copy here - delete will dispose of old records later */
@@ -2939,13 +2949,15 @@ int annotate_rename_mailbox(struct mailbox *oldmailbox,
                          /*copy*/1);
     if (r) goto done;
 
+    r = annotate_commit(d);
+    if (r) goto done;
+
     /*
      * The per-folder database got moved or linked by mailbox_copy_files().
      */
 
-    r = annotatemore_commit();
-
  done:
+    annotate_putdb(&d);
     free(olduserid);
     free(newuserid);
 
@@ -2967,7 +2979,6 @@ static int _annotate_rewrite(struct mailbox *oldmailbox,
 			     int copy)
 {
     struct rename_rock rrock;
-    int r;
 
     rrock.oldmailbox = oldmailbox;
     rrock.newmailbox = newmailbox;
@@ -2977,23 +2988,24 @@ static int _annotate_rewrite(struct mailbox *oldmailbox,
     rrock.newuid = newuid;
     rrock.copy = copy;
 
-    r = annotatemore_findall(oldmailbox->name, olduid, "*", &rename_cb, &rrock);
-
-    if (r)
-	annotatemore_abort();
-
-    return r;
+    return annotatemore_findall(oldmailbox->name, olduid, "*", &rename_cb, &rrock);
 }
 
 int annotate_delete_mailbox(struct mailbox *mailbox)
 {
-    int r;
+    int r = 0;
     char *fname = NULL;
+    annotate_db_t *d = NULL;
 
     assert(mailbox);
 
     /* remove any per-folder annotations from the global db */
-    r = annotatemore_begin();
+    r = _annotate_getdb(NULL, 0, /*don't create*/0, &d);
+    if (r == CYRUSDB_NOTFOUND) {
+	/* no global database, must not be anything to rename */
+	r = 0;
+	goto out;
+    }
     if (r) goto out;
 
     r = _annotate_rewrite(mailbox,
@@ -3007,16 +3019,16 @@ int annotate_delete_mailbox(struct mailbox *mailbox)
     r = annotate_dbname_mailbox(mailbox, &fname);
     if (r) goto out;
 
+    /* (gnb)TODO: do we even need to do this?? */
     if (unlink(fname) < 0 && errno != ENOENT) {
 	syslog(LOG_ERR, "cannot unlink %s: %m", fname);
     }
 
-    r = annotatemore_commit();
+    r = annotate_commit(d);
 
 out:
+    annotate_putdb(&d);
     free(fname);
-    if (r)
-	annotatemore_abort();
     return r;
 }
 
@@ -3029,13 +3041,10 @@ int annotate_msg_copy(struct mailbox *oldmailbox, uint32_t olduid,
 			     /*copy*/1);
 }
 
-int annotate_msg_expunge(struct mailbox *mailbox, uint32_t uid)
+int annotate_msg_expunge(annotate_state_t *state)
 {
-#if DEBUG
-    syslog(LOG_ERR, "annotate_msg_expunge: expunging mailbox=%s uid=%u",
-	    mailbox->name, uid);
-#endif
-    return _annotate_rewrite(mailbox, uid, /*userid*/NULL,
+    if (state->which != ANNOTATION_SCOPE_MESSAGE) return IMAP_INTERNAL;
+    return _annotate_rewrite(state->mailbox, state->uid, /*userid*/NULL,
 			     /*newmbox*/NULL,
 			     /*newuid*/0, /*newuserid*/NULL,
 			     /*copy*/0);
@@ -3218,17 +3227,15 @@ int annotate_recalc_commit(annotate_recalc_state_t *ars)
      * Start a transaction, and make a pass through the
      * database deleting any annotations for leftover uids.
      */
-    r = annotatemore_begin();
-    if (r)
-	goto out;
+    annotate_begin(ars->d);
 
     r = cyrusdb_foreach(ars->d->db, NULL, 0, NULL,
 		    recalc_prune_cb, ars, tid(ars->d));
 
-    if (r)
-	annotatemore_abort();
+    if (!r)
+	r = annotate_commit(ars->d);
     else
-	r = annotatemore_commit();
+	annotate_abort(ars->d);
 
     if (r) {
 	syslog(LOG_ERR, "annotation recalc: could not prune "

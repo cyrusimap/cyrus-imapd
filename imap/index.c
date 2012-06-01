@@ -280,9 +280,6 @@ int index_expunge(struct index_state *state, char *sequence,
     r = index_lock(state);
     if (r) return r;
 
-    r = annotatemore_begin();
-    if (r) return r;
-
     /* XXX - earlier list if the sequence names UIDs that don't exist? */
     seq = _parse_sequence(state, sequence, 1);
 
@@ -315,11 +312,6 @@ int index_expunge(struct index_state *state, char *sequence,
     }
 
     seqset_free(seq);
-
-    if (r)
-	annotatemore_abort();
-    else
-	r = annotatemore_commit();
 
     /* unlock before responding */
     index_unlock(state);
@@ -1011,11 +1003,6 @@ int index_store(struct index_state *state, char *sequence,
 
     storeargs->update_time = time((time_t *)0);
 
-    if (storeargs->operation == STORE_ANNOTATION) {
-	r = annotatemore_begin();
-	if (r) goto out;
-    }
-
     for (msgno = 1; msgno <= state->exists; msgno++) {
 	im = &state->map[msgno-1];
 	checkval = storeargs->usinguid ? im->record.uid : msgno;
@@ -1058,12 +1045,8 @@ int index_store(struct index_state *state, char *sequence,
     }
 
 out:
-    if (storeargs->operation == STORE_ANNOTATION) {
-	if (r)
-	    annotatemore_abort();
-	else
-	    r = annotatemore_commit();
-    }
+    if (storeargs->operation == STORE_ANNOTATION && r)
+	annotate_state_abort(&state->mailbox->annot_state);
     seqset_free(seq);
     index_unlock(state);
     index_tellchanges(state, storeargs->usinguid, storeargs->usinguid,
@@ -2590,14 +2573,16 @@ static int index_fetchannotations(struct index_state *state,
 				  uint32_t msgno,
 				  const struct fetchargs *fetchargs)
 {
-    annotate_state_t *astate = annotate_state_new();
+    annotate_state_t *astate = NULL;
     struct fetch_annotation_rock rock;
     int r = 0;
 
+    r = mailbox_get_annotate_state(state->mailbox,
+			           state->map[msgno-1].record.uid,
+				   &astate);
+    if (r) return r;
     annotate_state_set_auth(astate, fetchargs->isadmin,
 			    fetchargs->userid, fetchargs->authstate);
-    annotate_state_set_message(astate, state->mailbox,
-			       state->map[msgno-1].record.uid);
 
     memset(&rock, 0, sizeof(rock));
     rock.pout = state->out;
@@ -2607,7 +2592,6 @@ static int index_fetchannotations(struct index_state *state,
 			     &fetchargs->entries, &fetchargs->attribs,
 			     fetch_annotation_response, &rock,
 			     0);
-    annotate_state_free(&astate);
 
     return r;
 }
@@ -3256,14 +3240,15 @@ static int index_store_annotation(struct index_state *state,
     modseq_t oldmodseq;
     struct mailbox *mailbox = state->mailbox;
     struct index_map *im = &state->map[msgno-1];
-    annotate_state_t *astate = annotate_state_new();
+    annotate_state_t *astate = NULL;
     int r;
 
     oldmodseq = im->record.modseq;
 
+    r = mailbox_get_annotate_state(state->mailbox, im->record.uid, &astate);
+    if (r) goto out;
     annotate_state_set_auth(astate, storeargs->isadmin,
 			    storeargs->userid, storeargs->authstate);
-    annotate_state_set_message(astate, state->mailbox, im->record.uid);
     r = annotate_state_store(astate, storeargs->entryatts);
     if (r) goto out;
 
@@ -3279,7 +3264,6 @@ static int index_store_annotation(struct index_state *state,
 	im->told_modseq = im->record.modseq;
 
 out:
-    annotate_state_free(&astate);
     return r;
 }
 
@@ -3343,17 +3327,19 @@ static int _search_annotation(struct index_state *state,
 {
     strarray_t entries = STRARRAY_INITIALIZER;
     strarray_t attribs = STRARRAY_INITIALIZER;
-    annotate_state_t *astate = annotate_state_new();
+    annotate_state_t *astate = NULL;
     struct search_annot_rock rock;
     int r;
 
     strarray_append(&entries, sa->entry);
     strarray_append(&attribs, sa->attrib);
 
+    r = mailbox_get_annotate_state(state->mailbox,
+			           state->map[msgno-1].record.uid,
+				   &astate);
+    if (r) goto out;
     annotate_state_set_auth(astate, sa->isadmin,
 			    sa->userid, sa->auth_state);
-    annotate_state_set_message(astate, state->mailbox,
-			       state->map[msgno-1].record.uid);
 
     memset(&rock, 0, sizeof(rock));
     rock.match = &sa->value;
@@ -3365,7 +3351,7 @@ static int _search_annotation(struct index_state *state,
     if (r >= 0)
 	r = rock.result;
 
-    annotate_state_free(&astate);
+out:
     strarray_fini(&entries);
     strarray_fini(&attribs);
     return r;

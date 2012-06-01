@@ -8291,7 +8291,8 @@ static void cmd_getannotation(const char *tag, char *mboxpat)
     }
 
  freeargs:
-    annotate_state_free(&astate);
+    /* we didn't write anything */
+    annotate_state_abort(&astate);
     strarray_fini(&entries);
     strarray_fini(&attribs);
 }
@@ -8521,7 +8522,8 @@ static void cmd_getmetadata(const char *tag)
     }
 
   freeargs:
-    annotate_state_free(&astate);
+    /* we didn't write anything */
+    annotate_state_abort(&astate);
     strarray_fini(&entries);
     strarray_fini(&attribs);
     strarray_fini(&newe);
@@ -8545,7 +8547,7 @@ static void cmd_setannotation(const char *tag, char *mboxpat)
 {
     int c, r = 0;
     struct entryattlist *entryatts = NULL;
-    annotate_state_t *astate = annotate_state_new();
+    annotate_state_t *astate = NULL;
 
     c = parse_annotate_store_data(tag, 0, &entryatts);
     if (c == EOF) {
@@ -8563,9 +8565,9 @@ static void cmd_setannotation(const char *tag, char *mboxpat)
 	goto freeargs;
     }
 
+    astate = annotate_state_new();
     annotate_state_set_auth(astate, imapd_userisadmin,
 			    imapd_userid, imapd_authstate);
-    r = annotatemore_begin();
     if (!r) {
 	if (!*mboxpat) {
 	    r = annotate_state_set_server(astate);
@@ -8579,7 +8581,9 @@ static void cmd_setannotation(const char *tag, char *mboxpat)
 	}
     }
     if (!r)
-	annotatemore_commit();
+	annotate_state_commit(&astate);
+    else
+	annotate_state_abort(&astate);
 
     imapd_check(NULL, 0);
 
@@ -8591,7 +8595,6 @@ static void cmd_setannotation(const char *tag, char *mboxpat)
     }
 
   freeargs:
-    annotate_state_free(&astate);
     if (entryatts) freeentryatts(entryatts);
 }
 
@@ -8604,7 +8607,7 @@ static void cmd_setmetadata(const char *tag, char *mboxpat)
 {
     int c, r = 0;
     struct entryattlist *entryatts = NULL;
-    annotate_state_t *astate = annotate_state_new();
+    annotate_state_t *astate = NULL;
 
     c = parse_metadata_store_data(tag, &entryatts);
     if (c == EOF) {
@@ -8622,9 +8625,9 @@ static void cmd_setmetadata(const char *tag, char *mboxpat)
 	goto freeargs;
     }
 
+    astate = annotate_state_new();
     annotate_state_set_auth(astate, imapd_userisadmin,
 			    imapd_userid, imapd_authstate);
-    r = annotatemore_begin();
     if (!r) {
 	if (!*mboxpat) {
 	    r = annotate_state_set_server(astate);
@@ -8638,9 +8641,9 @@ static void cmd_setmetadata(const char *tag, char *mboxpat)
 	}
     }
     if (!r)
-	annotatemore_commit();
+	r = annotate_state_commit(&astate);
     else
-	annotatemore_abort();
+	annotate_state_abort(&astate);
 
     imapd_check(NULL, 0);
 
@@ -8652,7 +8655,6 @@ static void cmd_setmetadata(const char *tag, char *mboxpat)
     }
 
   freeargs:
-    annotate_state_free(&astate);
     if (entryatts) freeentryatts(entryatts);
     return;
 }

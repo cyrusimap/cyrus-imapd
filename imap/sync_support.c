@@ -1785,9 +1785,16 @@ int apply_annotations(struct mailbox *mailbox,
     const struct buf *value;
     int r = 0;
     int diff;
-    annotate_state_t *astate = annotate_state_new();
+    annotate_state_t *astate = NULL;
 
-    annotate_state_set_message(astate, mailbox, record ? record->uid : 0);
+    if (record) {
+	r = mailbox_get_annotate_state(mailbox, record->uid, &astate);
+    }
+    else {
+	astate = annotate_state_new();
+	r = annotate_state_set_mailbox(astate, mailbox);
+    }
+    if (r) goto out;
 
     /*
      * We rely here on the database scan order resulting in lists
@@ -1825,7 +1832,16 @@ int apply_annotations(struct mailbox *mailbox,
 	    break;
     }
 
-    annotate_state_free(&astate);
+out:
+    if (!record) {
+	/* need to manage our own txn for the global db */
+	if (r)
+	    r = annotate_state_commit(&astate);
+	else
+	    annotate_state_abort(&astate);
+    }
+    /* else, the struct mailbox manages it for us */
+
     return r;
 }
 

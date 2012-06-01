@@ -221,6 +221,9 @@ struct mailbox {
 
     struct timeval starttime;
 
+    /* annotations */
+    struct annotate_state *annot_state;
+
     /* change management */
     int modseq_dirty;
     int header_dirty;
@@ -541,5 +544,9 @@ extern int mailbox_repack_commit(struct mailbox_repack **repackptr);
 void mailbox_get_usage(struct mailbox *mailbox,
 			quota_t usage[QUOTA_NUMRESOURCES]);
 void mailbox_use_annot_quota(struct mailbox *mailbox, quota_t diff);
+
+extern int mailbox_get_annotate_state(struct mailbox *mailbox,
+				      unsigned int uid,
+				      struct annotate_state **statep);
 
 #endif /* INCLUDED_MAILBOX_H */

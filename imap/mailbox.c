@@ -2025,6 +2025,9 @@ int mailbox_commit(struct mailbox *mailbox)
     r = mailbox_commit_quota(mailbox);
     if (r) return r;
 
+    r = annotate_state_commit(&mailbox->annot_state);
+    if (r) return r;
+
     r = mailbox_commit_header(mailbox);
     if (r) return r;
 
@@ -2429,6 +2432,8 @@ int mailbox_append_index_record(struct mailbox *mailbox,
 static void mailbox_message_unlink(struct mailbox *mailbox, uint32_t uid)
 {
     const char *fname = mailbox_message_fname(mailbox, uid);
+    annotate_state_t *astate = NULL;
+    int r;
 
     /* XXX - reports errors other than ENOENT ? */
 
@@ -2440,7 +2445,18 @@ static void mailbox_message_unlink(struct mailbox *mailbox, uint32_t uid)
 		   session_id(), mailbox->name, mailbox->uniqueid, uid);
     }
 
-    annotate_msg_expunge(mailbox, uid);
+    r = mailbox_get_annotate_state(mailbox, uid, &astate);
+    if (r) {
+	syslog("IOERROR: failed to get annotate state unlink %s %u: %s",
+	       mailbox->name, uid, error_message(r));
+	return;
+    }
+    r = annotate_msg_expunge(mailbox, uid);
+    if (r) {
+	syslog("IOERROR: failed to expunge annotations %s %u: %s",
+	       mailbox->name, uid, error_message(r));
+	return;
+    }
 }
 
 /* need a mailbox exclusive lock, we're removing files */
@@ -2665,7 +2681,6 @@ static int mailbox_index_repack(struct mailbox *mailbox)
     return 0;
 
 fail:
-    annotatemore_abort();
     mailbox_repack_abort(&repack);
     return r;
 }
@@ -4317,4 +4332,18 @@ void mailbox_use_annot_quota(struct mailbox *mailbox, quota_t diff)
     mailbox_index_dirty(mailbox);
     mailbox_quota_dirty(mailbox);
     mailbox->i.quota_annot_used += diff;
+}
+
+int mailbox_get_annotate_state(struct mailbox *mailbox,
+			       unsigned int uid,
+			       annotate_state_t **statep)
+{
+    int r = 0;
+
+    if (!mailbox->annot_state)
+	mailbox->annot_state = annotate_state_new();
+
+    r = annotate_state_set_message(mailbox->annot_state, mailbox, uid);
+    *statep = (r ? NULL : mailbox->annot_state);
+    return r;
 }

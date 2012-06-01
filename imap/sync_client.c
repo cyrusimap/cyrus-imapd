@@ -1214,7 +1214,6 @@ static int mailbox_full_update(const char *mboxname)
 {
     const char *cmd = "FULLMAILBOX";
     struct mailbox *mailbox = NULL;
-    annotate_db_t *user_annot_db = NULL;
     int r;
     struct dlist *kin = NULL;
     struct dlist *kr = NULL;
@@ -1271,10 +1270,6 @@ static int mailbox_full_update(const char *mboxname)
 
     /* we'll be updating it! */
     r = mailbox_open_iwl(mboxname, &mailbox);
-    if (r) goto done;
-
-    r = annotatemore_begin();
-    if (!r) r = annotate_getdb(mailbox->name, &user_annot_db);
     if (r) goto done;
 
     /* if local UIDVALIDITY is lower, copy from remote, otherwise
@@ -1341,11 +1336,6 @@ static int mailbox_full_update(const char *mboxname)
     /* we still need to do the EXPUNGEs */
  cleanup:
 
-    /* commit annotations changes first */
-    annotate_putdb(&user_annot_db);
-    r = annotatemore_commit();
-    if (r) goto done;
-
     /* close the mailbox before sending any expunges
      * to avoid deadlocks */
     mailbox_close(&mailbox);
@@ -1362,9 +1352,8 @@ static int mailbox_full_update(const char *mboxname)
     }
 
 done:
-    /* if we got here, time to get out */
-    annotate_putdb(&user_annot_db);
-    annotatemore_abort();
+    if (r)
+	annotate_state_abort(&mailbox->annot_state);
     mailbox_close(&mailbox);
 
     dlist_free(&kin);
@@ -1415,7 +1404,6 @@ static int update_mailbox_once(struct sync_folder *local,
     int r = 0;
     struct dlist *kl = dlist_newkvlist(NULL, "MAILBOX");
     struct dlist *kupload = dlist_newlist(NULL, "MESSAGE");
-    annotate_db_t *user_annot_db = NULL;
 
     r = mailbox_open_irl(local->name, &mailbox);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
@@ -1426,10 +1414,6 @@ static int update_mailbox_once(struct sync_folder *local,
     }
     else if (r)
 	goto done;
-
-    r = annotatemore_begin();
-    if (!r) r = annotate_getdb(mailbox->name, &user_annot_db);
-    if (r) goto done;
 
     /* definitely bad if these don't match! */
     if (strcmp(mailbox->uniqueid, local->uniqueid) ||
@@ -1464,10 +1448,6 @@ static int update_mailbox_once(struct sync_folder *local,
     r = sync_mailbox(mailbox, remote, part_list, kl, kupload, 1);
     if (r) goto done;
 
-    /* drop the annotations DB now */
-    annotate_putdb(&user_annot_db);
-    annotatemore_abort();
-
     /* upload any messages required */
     if (kupload->head) {
 	/* keep the mailbox locked for shorter time! Unlock the index now
@@ -1487,10 +1467,6 @@ static int update_mailbox_once(struct sync_folder *local,
     r = sync_parse_response("MAILBOX", sync_in, NULL);
 
 done:
-    annotate_putdb(&user_annot_db);
-    /* we didn't write anything */
-    annotatemore_abort();
-
     mailbox_close(&mailbox);
 
     dlist_free(&kupload);

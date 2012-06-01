@@ -223,8 +223,6 @@ static int expire(char *name, int matchlen __attribute__((unused)),
     }
     free(buf);
 
-    annotatemore_begin();
-
     r = mailbox_open_iwl(name, &mailbox);
     if (r) {
 	/* mailbox corrupt/nonexistent -- skip it */
@@ -263,15 +261,12 @@ static int expire(char *name, int matchlen __attribute__((unused)),
     erock->messages_expunged += numexpunged;
     erock->mailboxes_seen++;
 
-    mailbox_close(&mailbox);
-
     if (r) {
 	syslog(LOG_WARNING, "failure expiring %s: %s", name, error_message(r));
-	annotatemore_abort();
+	annotate_state_abort(&mailbox->annot_state);
     }
-    else {
-	annotatemore_commit();
-    }
+
+    mailbox_close(&mailbox);
 
     /* Even if we had a problem with one mailbox, continue with the others */
     return 0;

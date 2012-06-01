@@ -887,8 +887,6 @@ int undump_mailbox(const char *mbname,
     astate = annotate_state_new();
     r = annotate_state_set_mailbox(astate, mailbox);
     if (r) goto done;
-    r = annotatemore_begin();
-    if (r) goto done;
 
     while(1) {
 	char fnamebuf[MAX_MAILBOX_PATH + 1024];
@@ -1212,8 +1210,8 @@ int undump_mailbox(const char *mbname,
     buf_free(&file);
     buf_free(&data);
 
-    if (!r)
-	annotatemore_commit();
+    if (r)
+	annotate_state_abort(&mailbox->annot_state);
 
     if (curfile >= 0) close(curfile);
     /* we fiddled the files under the hood, so we can't do anything
@@ -1283,7 +1281,10 @@ int undump_mailbox(const char *mbname,
  done2:
     /* just in case we failed during the modifications, close again */
     mailbox_close(&mailbox);
-    annotate_state_free(&astate);
+    if (!r)
+	r = annotate_state_commit(&astate);
+    else
+	annotate_state_abort(&astate);
     free(annotation);
     buf_free(&content);
     free(seen_file);

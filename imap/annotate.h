@@ -83,7 +83,9 @@ typedef struct annotate_state annotate_state_t;
 typedef struct annotate_recalc_state annotate_recalc_state_t;
 
 annotate_state_t *annotate_state_new(void);
-void annotate_state_free(annotate_state_t **statep);
+/* either of these close */
+void annotate_state_abort(annotate_state_t **statep);
+int annotate_state_commit(annotate_state_t **statep);
 void annotate_state_set_auth(annotate_state_t *state,
 		             int isadmin, const char *userid,
 		             struct auth_state *auth_state);
@@ -181,7 +183,7 @@ int annotate_msg_copy(struct mailbox *oldmailbox, uint32_t olduid,
 		      struct mailbox *newmailbox, uint32_t newuid,
 		      const char *userid);
 /* delete the annotations for the given message */
-int annotate_msg_expunge(struct mailbox *mailbox, uint32_t uid);
+int annotate_msg_expunge(annotate_state_t *);
 
 /* delete the annotations for 'mailbox'
  * Uses its own transaction. */
@@ -196,13 +198,22 @@ void annotate_recalc_add(annotate_recalc_state_t *ars,
 int annotate_recalc_commit(annotate_recalc_state_t *ars);
 void annotate_recalc_abort(annotate_recalc_state_t *ars);
 
-/* Open a new transaction. Any currently open transaction
- * is aborted. */
-int annotatemore_begin(void);
-/* Abort the current transaction */
-void annotatemore_abort(void);
-/* Commit the current transaction */
-int annotatemore_commit(void);
+/*
+ * Annotation DB transactions used to be opened and closed explicitly.
+ * Now they're opened whenever they're needed as a side effect of
+ * calling an API function which needs to modify the database.  Closing
+ * the transaction, however, is now a lot more complicated:
+ *
+ * scope   | to commit                  | to abort
+ * --------+----------------------------+----------------------------
+ * global  | annotate_state_commit()    | annotate_state_abort()
+ *         |                            |
+ * mailbox | annotate_state_commit()    | annotate_state_abort()
+ *         |                            |
+ * message | mailbox_unlock() or        | annotate_state_abort(
+ *         | mailbox_commit()           |     &mailbox->annot_state)
+ * --------+----------------------------+----------------------------
+ */
 
 /* close the database */
 void annotatemore_close(void);

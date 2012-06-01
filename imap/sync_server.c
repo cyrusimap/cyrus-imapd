@@ -1366,8 +1366,6 @@ static int do_mailbox(struct dlist *kin)
     struct dlist *ka = NULL;
     int r;
 
-    annotate_db_t *user_annot_db = NULL;
-
     if (!dlist_getatom(kin, "UNIQUEID", &uniqueid))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getatom(kin, "PARTITION", &partition))
@@ -1424,13 +1422,6 @@ static int do_mailbox(struct dlist *kin)
     if (strcmp(mailbox->uniqueid, uniqueid)) {
 	syslog(LOG_ERR, "Mailbox uniqueid changed %s - retry", mboxname);
 	r = IMAP_MAILBOX_MOVED;
-	goto done;
-    }
-
-    r = annotatemore_begin();
-    if (!r) r = annotate_getdb(mailbox->name, &user_annot_db);
-    if (r) {
-	syslog(LOG_ERR, "Failed to open annotations %s to update", mboxname);
 	goto done;
     }
 
@@ -1534,9 +1525,6 @@ static int do_mailbox(struct dlist *kin)
     }
 
 done:
-    annotate_putdb(&user_annot_db);
-    annotatemore_commit();
-
     mailbox_close(&mailbox);
 
     /* check return value */
@@ -1622,9 +1610,6 @@ static int mailbox_cb(char *name,
     }
     if (r) goto out;
 
-    r = annotatemore_begin();
-    if (r) goto out;
-
     if (qrl && mailbox->quotaroot &&
 	 !sync_name_lookup(qrl, mailbox->quotaroot))
 	sync_name_list_add(qrl, mailbox->quotaroot);
@@ -1634,8 +1619,7 @@ static int mailbox_cb(char *name,
     mailbox_close(&mailbox);
 
 out:
-    /* we didn't write anything */
-    annotatemore_abort();
+    mailbox_close(&mailbox);
     dlist_free(&kl);
 
     return r;
@@ -1647,19 +1631,16 @@ static int do_getfullmailbox(struct dlist *kin)
     struct dlist *kl = dlist_newkvlist(NULL, "MAILBOX");
     int r;
 
-    r = annotatemore_begin();
-    if (r) return r;
-
-    r = mailbox_open_irl(kin->sval, &mailbox);
-    if (r) return r;
+    /* XXX again - this is a read-only request, but we
+     * don't have a good way to express that, so we use
+     * write locks anyway */
+    r = mailbox_open_iwl(kin->sval, &mailbox);
+    if (r) goto out;
 
     r = sync_mailbox(mailbox, NULL, NULL, kl, NULL, 1);
     if (!r) sync_send_response(kl, sync_out);
     dlist_free(&kl);
     mailbox_close(&mailbox);
-
-    /* we didn't write anything */
-    annotatemore_abort();
 
     return r;
 }
@@ -1914,18 +1895,17 @@ static int do_annotation(struct dlist *kin)
     r = annotate_state_set_mailbox(astate, mailbox);
     if (r) goto done;
 
-    r = annotatemore_begin();
-    if (!r)
-	r = annotate_state_store(astate, entryatts);
-    if (!r)
-	annotatemore_commit();
+    r = annotate_state_store(astate, entryatts);
 
 done:
-    if (r) annotatemore_abort();
+    if (!r)
+	r = annotate_state_commit(&astate);
+    else
+	annotate_state_abort(&astate);
+
     mailbox_close(&mailbox);
     freeentryatts(entryatts);
     free(name);
-    annotate_state_free(&astate);
 
     return r;
 }
@@ -1950,6 +1930,7 @@ static int do_unannotation(struct dlist *kin)
     if (!dlist_getatom(kin, "USERID", &userid))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
 
+    /* (gnb)TODO: this is broken with unixhierarchysep */
     /* annotatemore_store() expects external mailbox names,
        so translate the separator character */
     name = xstrdup(mboxname);
@@ -1969,14 +1950,13 @@ static int do_unannotation(struct dlist *kin)
     r = annotate_state_set_mailbox(astate, mailbox);
     if (r) goto done;
 
-    r = annotatemore_begin();
-    if (!r)
-	r = annotate_state_store(astate, entryatts);
-    if (!r)
-	annotatemore_commit();
+    r = annotate_state_store(astate, entryatts);
 
 done:
-    if (r) annotatemore_abort();
+    if (!r)
+	r = annotate_state_commit(&astate);
+    else
+	annotate_state_abort(&astate);
     mailbox_close(&mailbox);
     freeentryatts(entryatts);
     free(name);
