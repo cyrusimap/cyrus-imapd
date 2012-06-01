@@ -1175,6 +1175,7 @@ static int annotate_state_set_scope(annotate_state_t *state,
 {
     int r = 0;
     annotate_db_t *oldd = NULL;
+    int oldwhich = state->which;
 
     /* Carefully preserve the reference on the old DB just in case it
      * turns out to be the same as the new DB, so we avoid the overhead
@@ -1209,6 +1210,8 @@ static int annotate_state_set_scope(annotate_state_t *state,
 	assert(!uid);
 	state->which = ANNOTATION_SCOPE_SERVER;
     }
+    assert(oldwhich == ANNOTATION_SCOPE_UNKNOWN ||
+	   oldwhich == state->which);
     state->mailbox = mailbox;
     state->uid = uid;
 
