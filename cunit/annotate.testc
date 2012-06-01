@@ -94,89 +94,11 @@ static void fetch_cb(const char *mboxname, uint32_t uid,
     strarray_appendm(results, buf_release(&buf));
 }
 
-static void test_begin_without_open(void)
-{
-    int r;
+/* test_begin_without_open deleted -- begin has been removed */
 
-    annotatemore_init(NULL, NULL);
+/* test_commit_without_begin deleted -- begin has been removed */
 
-    /* no call to annotatemore_open() here */
-
-    r = annotatemore_begin();
-    CU_ASSERT_EQUAL(r, IMAP_INTERNAL);
-
-    r = annotatemore_commit();
-    CU_ASSERT_EQUAL(r, IMAP_INTERNAL);
-}
-
-static void test_commit_without_begin(void)
-{
-    int r;
-
-    annotatemore_init(NULL, NULL);
-
-    annotatemore_open();
-
-    r = annotatemore_commit();
-    CU_ASSERT_EQUAL(r, IMAP_INTERNAL);
-
-    r = annotatemore_begin();
-    CU_ASSERT_EQUAL(r, 0);
-
-    r = annotatemore_commit();
-    CU_ASSERT_EQUAL(r, 0);
-
-    annotatemore_close();
-}
-
-static void test_store_without_begin(void)
-{
-    int r;
-    annotate_state_t *astate = NULL;
-    strarray_t entries = STRARRAY_INITIALIZER;
-    strarray_t attribs = STRARRAY_INITIALIZER;
-    struct entryattlist *ealist = NULL;
-    struct buf val = BUF_INITIALIZER;
-    struct buf val2 = BUF_INITIALIZER;
-
-    annotatemore_init(NULL, NULL);
-
-    annotatemore_open();
-
-    astate = annotate_state_new();
-    annotate_state_set_server(astate);
-    isadmin = 1;	/* pretend to be admin */
-    annotate_state_set_auth(astate, isadmin, userid, auth_state);
-    isadmin = 0;
-
-    strarray_append(&entries, COMMENT);
-    strarray_append(&attribs, VALUE_SHARED);
-
-    /* store should fail as we're not in a txn */
-
-    buf_appendcstr(&val, VALUE0);
-    setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    r = annotate_state_store(astate, ealist);
-    CU_ASSERT_EQUAL(r, IMAP_INTERNAL);
-
-    /* commit should fail as we're not in a txn */
-    r = annotatemore_commit();
-    CU_ASSERT_EQUAL(r, IMAP_INTERNAL);
-
-    /* check that the failed _store did not store */
-    r = annotatemore_lookup(/*mboxname*/"", COMMENT, /*userid*/"", &val2);
-    CU_ASSERT_EQUAL_FATAL(r, 0);
-    CU_ASSERT_PTR_NULL(val2.s);
-
-    annotatemore_close();
-
-    strarray_fini(&entries);
-    strarray_fini(&attribs);
-    buf_free(&val);
-    buf_free(&val2);
-    freeentryatts(ealist);
-    annotate_state_free(&astate);
-}
+/* test_store_without_begin deleted -- begin has been removed */
 
 static void test_getset_server_shared(void)
 {
