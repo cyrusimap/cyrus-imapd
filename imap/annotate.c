@@ -82,6 +82,7 @@
 
 #define DEBUG 0
 
+#define ANNOTATION_SCOPE_UNKNOWN    (-1)
 enum {
   ANNOTATION_SCOPE_SERVER = 1,
   ANNOTATION_SCOPE_MAILBOX = 2,
@@ -1060,7 +1061,7 @@ annotate_state_t *annotate_state_new(void)
     annotate_state_t *state;
 
     state = xzmalloc(sizeof(*state));
-    state->which = -1;	/* invalid scope */
+    state->which = ANNOTATION_SCOPE_UNKNOWN;
 
     return state;
 }
@@ -1168,7 +1169,7 @@ void annotate_state_unset_scope(annotate_state_t *state)
     state->mbentry_is_ours = 0;
 
     state->uid = 0;
-    state->which = -1;
+    state->which = ANNOTATION_SCOPE_UNKNOWN;
 }
 
 static int annotate_state_set_scope(annotate_state_t *state,
