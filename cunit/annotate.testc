@@ -142,9 +142,6 @@ static void test_getset_server_shared(void)
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_PTR_NULL(val.s);
 
-    r = annotatemore_begin();
-    CU_ASSERT_EQUAL(r, 0);
-
     /* set a value */
 
     /* pretend to be admin */
@@ -178,11 +175,14 @@ static void test_getset_server_shared(void)
     CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE0);
     buf_free(&val2);
 
-    r = annotatemore_commit();
+    r = annotate_state_commit(&astate);
     CU_ASSERT_EQUAL(r, 0);
 
     /* check that we can fetch the value back in a new txn */
+    astate = annotate_state_new();
     annotate_state_set_auth(astate, /*isadmin*/0, userid, auth_state);
+    r = annotate_state_set_server(astate);
+    CU_ASSERT_EQUAL(r, 0);
 
     r = annotate_state_fetch(astate,
 		             &entries, &attribs,
@@ -205,11 +205,17 @@ static void test_getset_server_shared(void)
     CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE0);
     buf_free(&val2);
 
+    annotate_state_abort(&astate);
     annotatemore_close();
 
     /* check that we can fetch the value back after close and re-open */
 
     annotatemore_open();
+
+    astate = annotate_state_new();
+    annotate_state_set_auth(astate, /*isadmin*/0, userid, auth_state);
+    r = annotate_state_set_server(astate);
+    CU_ASSERT_EQUAL(r, 0);
 
     r = annotate_state_fetch(astate,
 		             &entries, &attribs,
@@ -234,9 +240,6 @@ static void test_getset_server_shared(void)
 
     /* delete the value */
 
-    r = annotatemore_begin();
-    CU_ASSERT_EQUAL(r, 0);
-
     buf_free(&val);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
     /* pretend to be admin */
@@ -246,10 +249,14 @@ static void test_getset_server_shared(void)
     freeentryatts(ealist);
     ealist = NULL;
 
-    r = annotatemore_commit();
+    r = annotate_state_commit(&astate);
     CU_ASSERT_EQUAL(r, 0);
 
     /* check that there is no value any more */
+    astate = annotate_state_new();
+    annotate_state_set_auth(astate, /*isadmin*/0, userid, auth_state);
+    r = annotate_state_set_server(astate);
+    CU_ASSERT_EQUAL(r, 0);
 
     annotate_state_set_auth(astate, isadmin, userid, auth_state);
     r = annotate_state_fetch(astate,
@@ -272,17 +279,16 @@ static void test_getset_server_shared(void)
     CU_ASSERT_PTR_NULL(val.s);
 
 
+    annotate_state_abort(&astate);
     annotatemore_close();
 
     strarray_fini(&entries);
     strarray_fini(&attribs);
     strarray_fini(&results);
     buf_free(&val);
-    annotate_state_free(&astate);
 }
 
-#if 0
-static void XXtest_getset_mailbox_shared(void)
+static void test_getset_mailbox_shared(void)
 {
     int r;
     annotate_state_t *astate = NULL;
@@ -330,9 +336,6 @@ static void XXtest_getset_mailbox_shared(void)
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_PTR_NULL(val.s);
 
-    r = annotatemore_begin();
-    CU_ASSERT_EQUAL(r, 0);
-
     /* set a value */
     buf_appendcstr(&val, VALUE0);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
@@ -363,10 +366,15 @@ static void XXtest_getset_mailbox_shared(void)
     CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE0);
     buf_free(&val2);
 
-    r = annotatemore_commit();
+    r = annotate_state_commit(&astate);
     CU_ASSERT_EQUAL(r, 0);
 
     /* check that we can fetch the value back in a new txn */
+    astate = annotate_state_new();
+    r = annotate_state_set_mailbox(astate, mailbox);
+    CU_ASSERT_EQUAL(r, 0);
+    annotate_state_set_auth(astate, isadmin, userid, auth_state);
+
     r = annotate_state_fetch(astate,
 		             &entries, &attribs,
 		             fetch_cb, &results,
@@ -388,11 +396,17 @@ static void XXtest_getset_mailbox_shared(void)
     CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE0);
     buf_free(&val2);
 
+    annotate_state_abort(&astate);
     annotatemore_close();
 
     /* check that we can fetch the value back after close and re-open */
 
     annotatemore_open();
+
+    astate = annotate_state_new();
+    r = annotate_state_set_mailbox(astate, mailbox);
+    CU_ASSERT_EQUAL(r, 0);
+    annotate_state_set_auth(astate, isadmin, userid, auth_state);
 
     r = annotate_state_fetch(astate,
 		             &entries, &attribs,
@@ -417,9 +431,6 @@ static void XXtest_getset_mailbox_shared(void)
 
     /* delete the value */
 
-    r = annotatemore_begin();
-    CU_ASSERT_EQUAL(r, 0);
-
     buf_free(&val);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
     r = annotate_state_store(astate, ealist);
@@ -427,10 +438,14 @@ static void XXtest_getset_mailbox_shared(void)
     freeentryatts(ealist);
     ealist = NULL;
 
-    r = annotatemore_commit();
+    r = annotate_state_commit(&astate);
     CU_ASSERT_EQUAL(r, 0);
 
     /* check that there is no value any more */
+    astate = annotate_state_new();
+    r = annotate_state_set_mailbox(astate, mailbox);
+    CU_ASSERT_EQUAL(r, 0);
+    annotate_state_set_auth(astate, isadmin, userid, auth_state);
 
     r = annotate_state_fetch(astate,
 		             &entries, &attribs,
@@ -452,18 +467,18 @@ static void XXtest_getset_mailbox_shared(void)
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_PTR_NULL(val.s);
 
+    annotate_state_abort(&astate);
     annotatemore_close();
 
     strarray_fini(&entries);
     strarray_fini(&attribs);
     strarray_fini(&results);
     buf_free(&val);
-    annotate_state_free(&astate);
     mailbox_close(&mailbox);
 }
 
 
-static void XXtest_getset_message_shared(void)
+static void test_getset_message_shared(void)
 {
     int r;
     annotate_state_t *astate = NULL;
@@ -482,8 +497,7 @@ static void XXtest_getset_message_shared(void)
     r = mailbox_open_iwl(MBOXNAME1_INT, &mailbox);
     CU_ASSERT_EQUAL_FATAL(r, 0);
 
-    astate = annotate_state_new();
-    r = annotate_state_set_message(astate, mailbox, 42);
+    r = mailbox_get_annotate_state(mailbox, 42, &astate);
     CU_ASSERT_EQUAL(r, 0);
     annotate_state_set_auth(astate, isadmin, userid, auth_state);
 
@@ -511,9 +525,6 @@ static void XXtest_getset_message_shared(void)
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_PTR_NULL(val.s);
 
-    r = annotatemore_begin();
-    CU_ASSERT_EQUAL(r, 0);
-
     /* set a value */
 
     buf_appendcstr(&val, VALUE0);
@@ -545,10 +556,17 @@ static void XXtest_getset_message_shared(void)
     CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE0);
     buf_free(&val2);
 
-    r = annotatemore_commit();
+    r = mailbox_commit(mailbox);
     CU_ASSERT_EQUAL(r, 0);
+    mailbox_close(&mailbox);
 
     /* check that we can fetch the value back in a new txn */
+    r = mailbox_open_iwl(MBOXNAME1_INT, &mailbox);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    r = mailbox_get_annotate_state(mailbox, 42, &astate);
+    CU_ASSERT_EQUAL(r, 0);
+    annotate_state_set_auth(astate, isadmin, userid, auth_state);
+
     r = annotate_state_fetch(astate,
 		             &entries, &attribs,
 		             fetch_cb, &results,
@@ -570,11 +588,21 @@ static void XXtest_getset_message_shared(void)
     CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE0);
     buf_free(&val2);
 
+    r = mailbox_commit(mailbox);
+    CU_ASSERT_EQUAL(r, 0);
+    mailbox_close(&mailbox);
+
     annotatemore_close();
 
     /* check that we can fetch the value back after close and re-open */
 
     annotatemore_open();
+
+    r = mailbox_open_iwl(MBOXNAME1_INT, &mailbox);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    r = mailbox_get_annotate_state(mailbox, 42, &astate);
+    CU_ASSERT_EQUAL(r, 0);
+    annotate_state_set_auth(astate, isadmin, userid, auth_state);
 
     r = annotate_state_fetch(astate,
 		             &entries, &attribs,
@@ -599,9 +627,6 @@ static void XXtest_getset_message_shared(void)
 
     /* delete the value */
 
-    r = annotatemore_begin();
-    CU_ASSERT_EQUAL(r, 0);
-
     buf_free(&val);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
     r = annotate_state_store(astate, ealist);
@@ -609,10 +634,16 @@ static void XXtest_getset_message_shared(void)
     freeentryatts(ealist);
     ealist = NULL;
 
-    r = annotatemore_commit();
+    r = mailbox_commit(mailbox);
     CU_ASSERT_EQUAL(r, 0);
+    mailbox_close(&mailbox);
 
     /* check that there is no value any more */
+    r = mailbox_open_iwl(MBOXNAME1_INT, &mailbox);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    r = mailbox_get_annotate_state(mailbox, 42, &astate);
+    CU_ASSERT_EQUAL(r, 0);
+    annotate_state_set_auth(astate, isadmin, userid, auth_state);
 
     r = annotate_state_fetch(astate,
 		             &entries, &attribs,
@@ -634,6 +665,9 @@ static void XXtest_getset_message_shared(void)
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_PTR_NULL(val.s);
 
+    r = mailbox_commit(mailbox);
+    CU_ASSERT_EQUAL(r, 0);
+    mailbox_close(&mailbox);
 
     annotatemore_close();
 
@@ -641,12 +675,11 @@ static void XXtest_getset_message_shared(void)
     strarray_fini(&attribs);
     strarray_fini(&results);
     buf_free(&val);
-    annotate_state_free(&astate);
     mailbox_close(&mailbox);
 }
 
 
-static void XXtest_delete(void)
+static void test_delete(void)
 {
     int r;
     annotate_state_t *astate = NULL;
@@ -675,9 +708,6 @@ static void XXtest_delete(void)
     strarray_append(&entries, COMMENT);
     strarray_append(&attribs, VALUE_SHARED);
 
-    r = annotatemore_begin();
-    CU_ASSERT_EQUAL(r, 0);
-
     /* set some values */
 
     buf_appendcstr(&val, VALUE0);
@@ -691,11 +721,15 @@ static void XXtest_delete(void)
     freeentryatts(ealist);
     ealist = NULL;
 
+    r = annotate_state_commit(&astate);
+    CU_ASSERT_EQUAL(r, 0);
+
     buf_reset(&val);
     buf_appendcstr(&val, VALUE1);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    r = annotate_state_set_message(astate, mailbox, 42);
+    r = mailbox_get_annotate_state(mailbox, 42, &astate);
     CU_ASSERT_EQUAL(r, 0);
+    annotate_state_set_auth(astate, isadmin, userid, auth_state);
     r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
@@ -704,15 +738,17 @@ static void XXtest_delete(void)
     buf_reset(&val);
     buf_appendcstr(&val, VALUE2);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    r = annotate_state_set_message(astate, mailbox, 127);
+    r = mailbox_get_annotate_state(mailbox, 127, &astate);
     CU_ASSERT_EQUAL(r, 0);
+    annotate_state_set_auth(astate, isadmin, userid, auth_state);
     r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
     ealist = NULL;
 
-    r = annotatemore_commit();
+    r = mailbox_commit(mailbox);
     CU_ASSERT_EQUAL(r, 0);
+    mailbox_close(&mailbox);
 
     /* check that we can fetch the values back */
 
@@ -737,6 +773,9 @@ static void XXtest_delete(void)
     CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/cyrus.annotations"), 0);
 
     /* delete all the entries associated with the mailbox */
+
+    r = mailbox_open_iwl(MBOXNAME1_INT, &mailbox);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
 
     r = annotate_delete_mailbox(mailbox);
     CU_ASSERT_EQUAL(r, 0);
@@ -767,11 +806,10 @@ static void XXtest_delete(void)
     strarray_fini(&entries);
     strarray_fini(&attribs);
     buf_free(&val);
-    annotate_state_free(&astate);
     mailbox_close(&mailbox);
 }
 
-static void XXtest_rename(void)
+static void test_rename(void)
 {
     int r;
     annotate_state_t *astate = NULL;
@@ -799,9 +837,6 @@ static void XXtest_rename(void)
     strarray_append(&entries, COMMENT);
     strarray_append(&attribs, VALUE_SHARED);
 
-    r = annotatemore_begin();
-    CU_ASSERT_EQUAL(r, 0);
-
     /* set some values */
 
     buf_appendcstr(&val, VALUE0);
@@ -812,14 +847,17 @@ static void XXtest_rename(void)
     CU_ASSERT_EQUAL(r, 0);
     r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
+    r = annotate_state_commit(&astate);
+    CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
     ealist = NULL;
 
     buf_reset(&val);
     buf_appendcstr(&val, VALUE1);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    r = annotate_state_set_message(astate, mailbox1, 42);
+    r = mailbox_get_annotate_state(mailbox1, 42, &astate);
     CU_ASSERT_EQUAL(r, 0);
+    annotate_state_set_auth(astate, isadmin, userid, auth_state);
     r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
@@ -828,15 +866,20 @@ static void XXtest_rename(void)
     buf_reset(&val);
     buf_appendcstr(&val, VALUE2);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    r = annotate_state_set_message(astate, mailbox1, 127);
+    r = mailbox_get_annotate_state(mailbox1, 127, &astate);
     CU_ASSERT_EQUAL(r, 0);
+    annotate_state_set_auth(astate, isadmin, userid, auth_state);
     r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
     ealist = NULL;
 
-    r = annotatemore_commit();
+    r = mailbox_commit(mailbox1);
     CU_ASSERT_EQUAL(r, 0);
+    mailbox_close(&mailbox1);
+
+    r = mailbox_open_iwl(MBOXNAME1_INT, &mailbox1);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
 
     /* check that we can fetch the values back */
 
@@ -919,12 +962,11 @@ static void XXtest_rename(void)
     strarray_fini(&entries);
     strarray_fini(&attribs);
     buf_free(&val);
-    annotate_state_free(&astate);
     mailbox_close(&mailbox1);
     mailbox_close(&mailbox2);
 }
 
-static void XXtest_abort(void)
+static void test_abort(void)
 {
     int r;
     annotate_state_t *astate = NULL;
@@ -962,10 +1004,7 @@ static void XXtest_abort(void)
     CU_ASSERT_EQUAL_FATAL(r, 0);
     CU_ASSERT_PTR_NULL_FATAL(val2.s);
 
-    /* set some values */
-
-    r = annotatemore_begin();
-    CU_ASSERT_EQUAL(r, 0);
+    /* set a per-server value */
 
     buf_appendcstr(&val, VALUE0);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
@@ -978,8 +1017,21 @@ static void XXtest_abort(void)
     freeentryatts(ealist);
     ealist = NULL;
 
+    /* but abort the txn */
+    annotate_state_abort(&astate);
+
+    /* check that the values are still not present */
+
+    buf_free(&val2);
+    r = annotatemore_msg_lookup("", 0, COMMENT, /*userid*/"", &val2);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    CU_ASSERT_PTR_NULL_FATAL(val2.s);
+
+    /* set a per-mailbox value */
+
     buf_appendcstr(&val, VALUE0);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
+    astate = annotate_state_new();
     r = annotate_state_set_mailbox(astate, mailbox);
     CU_ASSERT_EQUAL(r, 0);
     annotate_state_set_auth(astate, /*isadmin*/0, userid, auth_state);
@@ -988,19 +1040,36 @@ static void XXtest_abort(void)
     freeentryatts(ealist);
     ealist = NULL;
 
+    /* but abort the txn */
+    annotate_state_abort(&astate);
+
+    /* check that the values are still not present */
+
+    buf_free(&val2);
+    r = annotatemore_msg_lookup("", 0, COMMENT, /*userid*/"", &val2);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    CU_ASSERT_PTR_NULL_FATAL(val2.s);
+
+    buf_free(&val2);
+    r = annotatemore_msg_lookup(MBOXNAME1_INT, 0, COMMENT, /*userid*/"", &val2);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
+    CU_ASSERT_PTR_NULL_FATAL(val2.s);
+
+    /* set a per-message value */
+
     buf_reset(&val);
     buf_appendcstr(&val, VALUE1);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    r = annotate_state_set_message(astate, mailbox, 42);
+    r = mailbox_get_annotate_state(mailbox, 42, &astate);
     CU_ASSERT_EQUAL(r, 0);
+    annotate_state_set_auth(astate, isadmin, userid, auth_state);
     r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
     ealist = NULL;
 
-    /* abort the txn */
-
-    annotatemore_abort();
+    /* but abort the txn */
+    annotate_state_abort(&mailbox->annot_state);
 
     /* check that the values are still not present */
 
@@ -1025,12 +1094,11 @@ static void XXtest_abort(void)
     strarray_fini(&attribs);
     buf_free(&val);
     buf_free(&val2);
-    annotate_state_free(&astate);
     mailbox_close(&mailbox);
 }
 
 
-static void XXtest_msg_copy(void)
+static void test_msg_copy(void)
 {
     int r;
     annotate_state_t *astate = NULL;
@@ -1057,17 +1125,13 @@ static void XXtest_msg_copy(void)
     strarray_append(&entries, COMMENT);
     strarray_append(&attribs, VALUE_SHARED);
 
-    r = annotatemore_begin();
-    CU_ASSERT_EQUAL(r, 0);
-
     /* set some values */
 
     buf_appendcstr(&val, VALUE0);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    astate = annotate_state_new();
-    annotate_state_set_auth(astate, isadmin, userid, auth_state);
-    r = annotate_state_set_message(astate, mailbox1, 17);
+    r = mailbox_get_annotate_state(mailbox1, 17, &astate);
     CU_ASSERT_EQUAL(r, 0);
+    annotate_state_set_auth(astate, isadmin, userid, auth_state);
     r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
@@ -1076,8 +1140,9 @@ static void XXtest_msg_copy(void)
     buf_reset(&val);
     buf_appendcstr(&val, VALUE1);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    r = annotate_state_set_message(astate, mailbox1, 42);
+    r = mailbox_get_annotate_state(mailbox1, 42, &astate);
     CU_ASSERT_EQUAL(r, 0);
+    annotate_state_set_auth(astate, isadmin, userid, auth_state);
     r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
@@ -1086,15 +1151,17 @@ static void XXtest_msg_copy(void)
     buf_reset(&val);
     buf_appendcstr(&val, VALUE2);
     setentryatt(&ealist, COMMENT, VALUE_SHARED, &val);
-    r = annotate_state_set_message(astate, mailbox1, 127);
+    r = mailbox_get_annotate_state(mailbox1, 127, &astate);
     CU_ASSERT_EQUAL(r, 0);
+    annotate_state_set_auth(astate, isadmin, userid, auth_state);
     r = annotate_state_store(astate, ealist);
     CU_ASSERT_EQUAL(r, 0);
     freeentryatts(ealist);
     ealist = NULL;
 
-    r = annotatemore_commit();
+    r = mailbox_commit(mailbox1);
     CU_ASSERT_EQUAL(r, 0);
+    mailbox_close(&mailbox1);
 
     /* check that we can fetch the values back */
 
@@ -1125,15 +1192,22 @@ static void XXtest_msg_copy(void)
     CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurfette/cyrus.annotations"), -ENOENT);
 
     /* copy MBOXNAME1,17 -> MBOXNAME2,35 */
+    r = mailbox_open_iwl(MBOXNAME1_INT, &mailbox1);
+    CU_ASSERT_EQUAL_FATAL(r, 0);
 
-    r = annotatemore_begin();
+    /* ensure we have an astate connected to the destination
+     * mailbox, so that the annotation txn will be committed
+     * when we close the mailbox */
+    r = mailbox_get_annotate_state(mailbox2, 35, &astate);
     CU_ASSERT_EQUAL(r, 0);
 
     r = annotate_msg_copy(mailbox1, 17, mailbox2, 35, "smurf");
     CU_ASSERT_EQUAL(r, 0);
 
-    r = annotatemore_commit();
+    r = mailbox_commit(mailbox2);
     CU_ASSERT_EQUAL(r, 0);
+    mailbox_close(&mailbox2);
+    mailbox_close(&mailbox1);
 
     CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurf/cyrus.annotations"), 0);
     CU_ASSERT_EQUAL(fexists(DBDIR"/data/user/smurfette/cyrus.annotations"), 0);
@@ -1186,11 +1260,9 @@ static void XXtest_msg_copy(void)
     strarray_fini(&attribs);
     buf_free(&val);
     buf_free(&val2);
-    annotate_state_free(&astate);
     mailbox_close(&mailbox1);
     mailbox_close(&mailbox2);
 }
-#endif
 
 static void test_missing_definitions_file(void)
 {
@@ -1336,8 +1408,7 @@ static void test_broken_definitions_file_10(void)
     CU_ASSERT_SYSLOG(/*all*/0, 1);
 }
 
-#if 0
-static void XXtest_getset_server_undefined(void)
+static void test_getset_server_undefined(void)
 {
     int r;
     annotate_state_t *astate = NULL;
@@ -1381,9 +1452,6 @@ static void XXtest_getset_server_undefined(void)
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_PTR_NULL(val.s);
 
-    r = annotatemore_begin();
-    CU_ASSERT_EQUAL(r, 0);
-
     /* setting a value should fail */
 
     buf_appendcstr(&val, VALUE0);
@@ -1395,10 +1463,14 @@ static void XXtest_getset_server_undefined(void)
     freeentryatts(ealist);
     ealist = NULL;
 
-    r = annotatemore_commit();
+    r = annotate_state_commit(&astate);
     CU_ASSERT_EQUAL(r, 0);
 
     /* check that there is no value */
+    astate = annotate_state_new();
+    r = annotate_state_set_server(astate);
+    CU_ASSERT_EQUAL(r, 0);
+    annotate_state_set_auth(astate, /*isadmin*/0, userid, auth_state);
 
     r = annotate_state_fetch(astate,
 		             &entries, &attribs,
@@ -1420,6 +1492,7 @@ static void XXtest_getset_server_undefined(void)
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_PTR_NULL(val.s);
 
+    annotate_state_abort(&astate);
     annotatemore_close();
 
     strarray_fini(&entries);
@@ -1427,11 +1500,10 @@ static void XXtest_getset_server_undefined(void)
     strarray_fini(&results);
     buf_free(&val);
     buf_free(&val2);
-    annotate_state_free(&astate);
 }
 
 
-static void XXtest_getset_server_defined(void)
+static void test_getset_server_defined(void)
 {
     int r;
     annotate_state_t *astate = NULL;
@@ -1479,9 +1551,6 @@ static void XXtest_getset_server_defined(void)
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_PTR_NULL(val.s);
 
-    r = annotatemore_begin();
-    CU_ASSERT_EQUAL(r, 0);
-
     /* set a value */
 
     buf_appendcstr(&val, VALUE0);
@@ -1516,10 +1585,15 @@ static void XXtest_getset_server_defined(void)
     CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE0);
     buf_free(&val2);
 
-    r = annotatemore_commit();
+    r = annotate_state_commit(&astate);
     CU_ASSERT_EQUAL(r, 0);
 
     /* check that we can fetch the value back in a new txn */
+    astate = annotate_state_new();
+    r = annotate_state_set_server(astate);
+    CU_ASSERT_EQUAL(r, 0);
+    annotate_state_set_auth(astate, isadmin, userid, auth_state);
+
     r = annotate_state_fetch(astate,
 		             &entries, &attribs,
 		             fetch_cb, &results,
@@ -1542,12 +1616,18 @@ static void XXtest_getset_server_defined(void)
     CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE0);
     buf_free(&val2);
 
+    annotate_state_abort(&astate);
     annotatemore_close();
 
     /* check that we can fetch the value back after close and re-open */
 
     annotatemore_open();
 
+    astate = annotate_state_new();
+    r = annotate_state_set_server(astate);
+    CU_ASSERT_EQUAL(r, 0);
+    annotate_state_set_auth(astate, isadmin, userid, auth_state);
+
     r = annotate_state_fetch(astate,
 		             &entries, &attribs,
 		             fetch_cb, &results,
@@ -1569,11 +1649,6 @@ static void XXtest_getset_server_defined(void)
     CU_ASSERT_PTR_NOT_NULL_FATAL(val2.s);
     CU_ASSERT_STRING_EQUAL(buf_cstring(&val2), VALUE0);
     buf_free(&val2);
-
-    /* delete the value */
-
-    r = annotatemore_begin();
-    CU_ASSERT_EQUAL(r, 0);
 
     buf_free(&val);
     setentryatt(&ealist, EXENTRY, VALUE_SHARED, &val);
@@ -1584,10 +1659,14 @@ static void XXtest_getset_server_defined(void)
     freeentryatts(ealist);
     ealist = NULL;
 
-    r = annotatemore_commit();
+    r = annotate_state_commit(&astate);
     CU_ASSERT_EQUAL(r, 0);
 
     /* check that there is no value any more */
+    astate = annotate_state_new();
+    r = annotate_state_set_server(astate);
+    CU_ASSERT_EQUAL(r, 0);
+    annotate_state_set_auth(astate, isadmin, userid, auth_state);
 
     r = annotate_state_fetch(astate,
 		             &entries, &attribs,
@@ -1610,15 +1689,14 @@ static void XXtest_getset_server_defined(void)
     CU_ASSERT_PTR_NULL(val.s);
 
 
+    annotate_state_abort(&astate);
     annotatemore_close();
 
     strarray_fini(&entries);
     strarray_fini(&attribs);
     strarray_fini(&results);
     buf_free(&val);
-    annotate_state_free(&astate);
 }
-#endif
 
 static const char *stringifyea(const struct entryattlist *ea)
 {
