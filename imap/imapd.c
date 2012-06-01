@@ -8267,9 +8267,10 @@ static void cmd_getannotation(const char *tag, char *mboxpat)
 			    imapd_userisadmin || imapd_userisproxyadmin,
 			    imapd_userid, imapd_authstate);
     if (!*mboxpat) {
-	annotate_state_set_server(astate);
-	r = annotate_state_fetch(astate, &entries, &attribs,
-				 getannotation_response, NULL, 0);
+	r = annotate_state_set_server(astate);
+	if (!r)
+	    r = annotate_state_fetch(astate, &entries, &attribs,
+				     getannotation_response, NULL, 0);
     }
     else {
 	struct annot_fetch_rock arock;
@@ -8490,9 +8491,10 @@ static void cmd_getmetadata(const char *tag)
 			    imapd_userid, imapd_authstate);
     basesize = maxsize;
     if (!mboxes.count) {
-	annotate_state_set_server(astate);
-	r = annotate_state_fetch(astate, &newe, &newa,
-				 getmetadata_response, NULL, sizeptr);
+	r = annotate_state_set_server(astate);
+	if (!r)
+	    r = annotate_state_fetch(astate, &newe, &newa,
+				     getmetadata_response, NULL, sizeptr);
     }
     else {
 	struct annot_fetch_rock arock;
@@ -8566,8 +8568,9 @@ static void cmd_setannotation(const char *tag, char *mboxpat)
     r = annotatemore_begin();
     if (!r) {
 	if (!*mboxpat) {
-	    annotate_state_set_server(astate);
-	    r = annotate_state_store(astate, entryatts);
+	    r = annotate_state_set_server(astate);
+	    if (!r)
+		r = annotate_state_store(astate, entryatts);
 	}
 	else {
 	    struct annot_store_rock arock;
@@ -8624,8 +8627,9 @@ static void cmd_setmetadata(const char *tag, char *mboxpat)
     r = annotatemore_begin();
     if (!r) {
 	if (!*mboxpat) {
-	    annotate_state_set_server(astate);
-	    r = annotate_state_store(astate, entryatts);
+	    r = annotate_state_set_server(astate);
+	    if (!r)
+		r = annotate_state_store(astate, entryatts);
 	}
 	else {
 	    struct annot_store_rock arock;

@@ -87,14 +87,14 @@ void annotate_state_free(annotate_state_t **statep);
 void annotate_state_set_auth(annotate_state_t *state,
 		             int isadmin, const char *userid,
 		             struct auth_state *auth_state);
-void annotate_state_set_server(annotate_state_t *state);
-void annotate_state_set_mailbox(annotate_state_t *state,
-				struct mailbox *mailbox);
+int annotate_state_set_server(annotate_state_t *state);
+int annotate_state_set_mailbox(annotate_state_t *state,
+			       struct mailbox *mailbox);
 int annotate_state_set_mailbox_mbe(annotate_state_t *state,
 				   struct mboxlist_entry *);
-void annotate_state_set_message(annotate_state_t *state,
-				struct mailbox *mailbox,
-				unsigned int uid);
+int annotate_state_set_message(annotate_state_t *state,
+			       struct mailbox *mailbox,
+			       unsigned int uid);
 void annotate_state_unset_scope(annotate_state_t *state);
 
 /* String List Management */

@@ -1131,15 +1131,15 @@ void annotate_state_set_auth(annotate_state_t *state,
     state->auth_state = auth_state;
 }
 
-void annotate_state_set_server(annotate_state_t *state)
+int annotate_state_set_server(annotate_state_t *state)
 {
-    annotate_state_set_scope(state, NULL, NULL, 0);
+    return annotate_state_set_scope(state, NULL, NULL, 0);
 }
 
-void annotate_state_set_mailbox(annotate_state_t *state,
+int annotate_state_set_mailbox(annotate_state_t *state,
 				struct mailbox *mailbox)
 {
-    annotate_state_set_scope(state, NULL, mailbox, 0);
+    return annotate_state_set_scope(state, NULL, mailbox, 0);
 }
 
 int annotate_state_set_mailbox_mbe(annotate_state_t *state,
@@ -1148,11 +1148,11 @@ int annotate_state_set_mailbox_mbe(annotate_state_t *state,
     return annotate_state_set_scope(state, mbentry, NULL, 0);
 }
 
-void annotate_state_set_message(annotate_state_t *state,
-				struct mailbox *mailbox,
-				unsigned int uid)
+int annotate_state_set_message(annotate_state_t *state,
+			       struct mailbox *mailbox,
+			       unsigned int uid)
 {
-    annotate_state_set_scope(state, NULL, mailbox, uid);
+    return annotate_state_set_scope(state, NULL, mailbox, uid);
 }
 
 /* unset any state from a previous scope */

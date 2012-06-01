@@ -1911,7 +1911,8 @@ static int do_annotation(struct dlist *kin)
     astate = annotate_state_new();
     annotate_state_set_auth(astate,
 			    sync_userisadmin, userid, sync_authstate);
-    annotate_state_set_mailbox(astate, mailbox);
+    r = annotate_state_set_mailbox(astate, mailbox);
+    if (r) goto done;
 
     r = annotatemore_begin();
     if (!r)
@@ -1965,7 +1966,8 @@ static int do_unannotation(struct dlist *kin)
     astate = annotate_state_new();
     annotate_state_set_auth(astate,
 			    sync_userisadmin, userid, sync_authstate);
-    annotate_state_set_mailbox(astate, mailbox);
+    r = annotate_state_set_mailbox(astate, mailbox);
+    if (r) goto done;
 
     r = annotatemore_begin();
     if (!r)
