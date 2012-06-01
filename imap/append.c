@@ -1178,6 +1178,7 @@ int append_copy(struct mailbox *mailbox,
     char *srcfname, *destfname;
     int r = 0;
     int flag, userflag;
+    annotate_state_t *astate = NULL;
     
     if (!nummsg) {
 	append_abort(as);
@@ -1237,6 +1238,12 @@ int append_copy(struct mailbox *mailbox,
 
 	/* Write out index file entry */
 	r = mailbox_append_index_record(as->mailbox, &record);
+	if (r) goto out;
+
+	/* ensure we have an astate connected to the destination
+	 * mailbox, so that the annotation txn will be committed
+	 * when we close the mailbox */
+	r = mailbox_get_annotate_state(as->mailbox, record.uid, &astate);
 	if (r) goto out;
 
 	r = annotate_msg_copy(mailbox, copymsg[msg].uid,

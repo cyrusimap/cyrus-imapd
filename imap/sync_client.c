@@ -751,6 +751,7 @@ static int copy_local(struct mailbox *mailbox, unsigned long uid)
     uint32_t recno;
     struct index_record oldrecord;
     int r;
+    annotate_state_t *astate = NULL;
 
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	r = mailbox_read_index_record(mailbox, recno, &oldrecord);
@@ -775,6 +776,12 @@ static int copy_local(struct mailbox *mailbox, unsigned long uid)
 
 	    /* append the new record */
 	    r = mailbox_append_index_record(mailbox, &newrecord);
+	    if (r) return r;
+
+	    /* ensure we have an astate connected to the destination
+	     * mailbox, so that the annotation txn will be committed
+	     * when we close the mailbox */
+	    r = mailbox_get_annotate_state(mailbox, newrecord.uid, &astate);
 	    if (r) return r;
 
 	    /* Copy across any per-message annotations */
