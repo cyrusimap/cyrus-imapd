@@ -2447,13 +2447,13 @@ static void mailbox_message_unlink(struct mailbox *mailbox, uint32_t uid)
 
     r = mailbox_get_annotate_state(mailbox, uid, &astate);
     if (r) {
-	syslog("IOERROR: failed to get annotate state unlink %s %u: %s",
+	syslog(LOG_ERR, "IOERROR: failed to get annotate state unlink %s %u: %s",
 	       mailbox->name, uid, error_message(r));
 	return;
     }
-    r = annotate_msg_expunge(mailbox, uid);
+    r = annotate_msg_expunge(astate);
     if (r) {
-	syslog("IOERROR: failed to expunge annotations %s %u: %s",
+	syslog(LOG_ERR, "IOERROR: failed to expunge annotations %s %u: %s",
 	       mailbox->name, uid, error_message(r));
 	return;
     }

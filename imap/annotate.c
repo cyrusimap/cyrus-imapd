@@ -2946,6 +2946,8 @@ int annotate_rename_mailbox(struct mailbox *oldmailbox,
     }
     if (r) goto done;
 
+    annotate_begin(d);
+
     /* copy here - delete will dispose of old records later */
     r = _annotate_rewrite(oldmailbox, 0, olduserid,
                           newmailbox, 0, newuserid,
@@ -3010,6 +3012,8 @@ int annotate_delete_mailbox(struct mailbox *mailbox)
 	goto out;
     }
     if (r) goto out;
+
+    annotate_begin(d);
 
     r = _annotate_rewrite(mailbox,
 			  /*olduid*/0, /*olduserid*/NULL,
