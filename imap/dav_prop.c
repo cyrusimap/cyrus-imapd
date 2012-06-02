@@ -301,15 +301,15 @@ static xmlNodePtr xml_add_prop(long status, xmlNsPtr davns,
 			       xmlNodePtr prop, xmlChar *content,
 			       unsigned precond)
 {
-    xmlNodePtr newprop;
+    xmlNodePtr newprop = NULL;
 
     if (!propstat->root) {
 	propstat->root = xmlNewNode(davns, BAD_CAST "propstat");
 	xmlNewChild(propstat->root, NULL, BAD_CAST "prop", NULL);
     }
 
-    newprop = xmlNewTextChild(propstat->root->children,
-			      prop->ns, prop->name, content);
+    if (prop) newprop = xmlNewTextChild(propstat->root->children,
+					prop->ns, prop->name, content);
     propstat->status = status;
     propstat->precond = precond;
 
@@ -331,10 +331,14 @@ int xml_add_response(struct propfind_ctx *fctx, long code)
     }
     xml_add_href(resp, NULL, fctx->req_tgt->path);
 
-    if (!code) {
-	struct propstat propstat[NUM_PROPSTAT];
+    if (code) {
+	xmlNewChild(resp, NULL, BAD_CAST "status",
+		    BAD_CAST http_statusline(code));
+    }
+    else {
+	struct propstat propstat[NUM_PROPSTAT], *stat;
 	struct propfind_entry_list *e;
-	int i, have_propstat = 0;
+	int i;
 
 	memset(propstat, 0, NUM_PROPSTAT * sizeof(struct propstat));
 
@@ -343,46 +347,43 @@ int xml_add_response(struct propfind_ctx *fctx, long code)
 	    if (e->get) {
 		e->get(e->prop, fctx, resp, propstat, e->rock);
 	    }
-	    else {
+	    else if (!(fctx->prefer & PREFER_MIN)) {
 		xml_add_prop(HTTP_NOT_FOUND, fctx->ns[NS_DAV],
 			     &propstat[PROPSTAT_NOTFOUND], e->prop, NULL, 0);
 	    }
 	}
 
+	/* Remove propstat 404 element if using return-minimal */
+	stat = &propstat[PROPSTAT_NOTFOUND];
+	if (stat->root && (fctx->prefer & PREFER_MIN)) {
+	    xmlFreeNode(stat->root);
+	    stat->root = NULL;
+	}
+
+	/* Check if we have any propstat elements */
+	for (i = 0; i < NUM_PROPSTAT && !propstat[i].root; i++);
+	if (i == NUM_PROPSTAT) {
+	    /* Add an empty propstat 200 */
+	    xml_add_prop(HTTP_OK, fctx->ns[NS_DAV],
+			 &propstat[PROPSTAT_OK], NULL, NULL, 0);
+	}
+
 	/* Add status and optional error to the propstat elements
 	   and then add them to response element */
 	for (i = 0; i < NUM_PROPSTAT; i++) {
-	    struct propstat *stat = &propstat[i];
+	    stat = &propstat[i];
 
 	    if (stat->root) {
-		if ((stat->status == HTTP_NOT_FOUND) &&
-		    (fctx->prefer & PREFER_MIN)) {
-		    xmlFreeNode(stat->root);
+		xmlNewChild(stat->root, NULL, BAD_CAST "status",
+			    BAD_CAST http_statusline(stat->status));
+		if (stat->precond) {
+		    struct error_t error = { NULL, stat->precond, NULL, 0 };
+		    xml_add_error(stat->root, &error, fctx->ns);
 		}
-		else {
-		    have_propstat = 1;
 
-		    xmlNewChild(stat->root, NULL, BAD_CAST "status",
-				BAD_CAST http_statusline(stat->status));
-		    if (stat->precond) {
-			struct error_t error = { NULL, stat->precond, NULL, 0 };
-			xml_add_error(stat->root, &error, fctx->ns);
-		    }
-
-		    xmlAddChild(resp, stat->root);
-		}
+		xmlAddChild(resp, stat->root);
 	    }
 	}
-
-	if (!have_propstat) {
-	    /* Didn't include any propstat elements, so add a status element */
-	    code = HTTP_OK;
-	}
-    }
-
-    if (code) {
-	xmlNewChild(resp, NULL, BAD_CAST "status",
-		    BAD_CAST http_statusline(code));
     }
 
     fctx->record = NULL;
