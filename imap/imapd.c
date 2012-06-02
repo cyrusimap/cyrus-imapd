@@ -8242,7 +8242,7 @@ static void cmd_getannotation(const char *tag, char *mboxpat)
     int c, r = 0;
     strarray_t entries = STRARRAY_INITIALIZER;
     strarray_t attribs = STRARRAY_INITIALIZER;
-    annotate_state_t *astate = annotate_state_new();
+    annotate_state_t *astate = NULL;
 
     c = parse_annotate_fetch_data(tag, /*permessage_flag*/0, &entries, &attribs);
     if (c == EOF) {
@@ -8260,6 +8260,7 @@ static void cmd_getannotation(const char *tag, char *mboxpat)
 	goto freeargs;
     }
 
+    astate = annotate_state_new();
     annotate_state_set_auth(astate,
 			    imapd_userisadmin || imapd_userisproxyadmin,
 			    imapd_userid, imapd_authstate);
@@ -8277,6 +8278,8 @@ static void cmd_getannotation(const char *tag, char *mboxpat)
 	arock.sizeptr = NULL;
 	r = apply_mailbox_pattern(astate, mboxpat, annot_fetch_cb, &arock);
     }
+    /* we didn't write anything */
+    annotate_state_abort(&astate);
 
     imapd_check(NULL, 0);
 
@@ -8288,8 +8291,6 @@ static void cmd_getannotation(const char *tag, char *mboxpat)
     }
 
  freeargs:
-    /* we didn't write anything */
-    annotate_state_abort(&astate);
     strarray_fini(&entries);
     strarray_fini(&attribs);
 }
@@ -8357,7 +8358,7 @@ static void cmd_getmetadata(const char *tag)
     int have_shared = 0;
     int have_private = 0;
     int i;
-    annotate_state_t *astate = annotate_state_new();
+    annotate_state_t *astate = NULL;
 
     c = prot_getc(imapd_in);
     if (c == EOF)
@@ -8484,6 +8485,7 @@ static void cmd_getmetadata(const char *tag)
     if (have_private) strarray_append(&newa, "value.priv");
     if (have_shared) strarray_append(&newa, "value.shared");
 
+    astate = annotate_state_new();
     annotate_state_set_auth(astate,
 			    imapd_userisadmin || imapd_userisproxyadmin,
 			    imapd_userid, imapd_authstate);
@@ -8505,6 +8507,8 @@ static void cmd_getmetadata(const char *tag)
 	else
 	    r = apply_mailbox_array(astate, &mboxes, annot_fetch_cb, &arock);
     }
+    /* we didn't write anything */
+    annotate_state_abort(&astate);
 
     imapd_check(NULL, 0);
 
@@ -8519,8 +8523,6 @@ static void cmd_getmetadata(const char *tag)
     }
 
   freeargs:
-    /* we didn't write anything */
-    annotate_state_abort(&astate);
     strarray_fini(&entries);
     strarray_fini(&attribs);
     strarray_fini(&newe);
