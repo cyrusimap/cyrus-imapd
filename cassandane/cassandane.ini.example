@@ -71,6 +71,8 @@
 ##binary = /usr/bin/valgrind
 # File containing Valgrind suppression rules
 ##suppressions = vg.supp
+# Other arguments passed to Valgrind
+##arguments = -q --tool=memcheck --leak-check=full --run-libc-freeres=no
 
 # This section describes the default Cyrus installation.
 [cyrus default]
