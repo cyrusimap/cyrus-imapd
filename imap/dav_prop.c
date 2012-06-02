@@ -511,7 +511,7 @@ static int propfind_restype(xmlNodePtr prop,
 	    break;
 
 	case URL_NS_CALENDAR:
-	    if (fctx->mailbox) {
+	    if (fctx->req_tgt->collection) {
 		ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
 		if (!strcmp(fctx->req_tgt->collection, SCHED_INBOX)) {
 		    xmlNewChild(node, fctx->ns[NS_CALDAV],
@@ -529,7 +529,7 @@ static int propfind_restype(xmlNodePtr prop,
 	    break;
 #if 0
 	case URL_NS_ADDRESSBOOK:
-	    if (fctx->mailbox) {
+	    if (fctx->req_tgt->collection) {
 		ensure_ns(fctx->ns, NS_CARDDAV, resp->parent,
 			  XML_NS_CARDDAV, "C");
 		xmlNewChild(node, fctx->ns[NS_CARDDAV],
