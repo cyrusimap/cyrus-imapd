@@ -3068,6 +3068,9 @@ int annotate_msg_copy(struct mailbox *oldmailbox, uint32_t olduid,
 int annotate_msg_expunge(annotate_state_t *state)
 {
     if (state->which != ANNOTATION_SCOPE_MESSAGE) return IMAP_INTERNAL;
+
+    annotate_begin(state->d);
+
     return _annotate_rewrite(state->mailbox, state->uid, /*userid*/NULL,
 			     /*newmbox*/NULL,
 			     /*newuid*/0, /*newuserid*/NULL,
