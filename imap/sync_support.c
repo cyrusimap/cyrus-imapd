@@ -1835,7 +1835,7 @@ int apply_annotations(struct mailbox *mailbox,
 out:
     if (!record) {
 	/* need to manage our own txn for the global db */
-	if (r)
+	if (!r)
 	    r = annotate_state_commit(&astate);
 	else
 	    annotate_state_abort(&astate);
