@@ -8160,7 +8160,6 @@ static int apply_cb(char *name, int matchlen,
     arock->nseen++;
 
 out:
-    annotate_state_unset_scope(state);
     mboxlist_entry_free(&mbentry);
     return r;
 }
@@ -8225,11 +8224,9 @@ static int apply_mailbox_array(annotate_state_t *state,
 	if (r)
 	    break;
 
-	annotate_state_unset_scope(state);
 	mboxlist_entry_free(&mbentry);
     }
 
-    annotate_state_unset_scope(state);
     mboxlist_entry_free(&mbentry);
     return r;
 }

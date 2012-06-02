@@ -97,7 +97,6 @@ int annotate_state_set_mailbox_mbe(annotate_state_t *state,
 int annotate_state_set_message(annotate_state_t *state,
 			       struct mailbox *mailbox,
 			       unsigned int uid);
-void annotate_state_unset_scope(annotate_state_t *state);
 
 /* String List Management */
 void appendstrlist(struct strlist **l, char *s);

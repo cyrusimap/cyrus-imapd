@@ -234,6 +234,7 @@ static ptrarray_t message_entries = PTRARRAY_INITIALIZER;
 static ptrarray_t mailbox_entries = PTRARRAY_INITIALIZER;
 static ptrarray_t server_entries = PTRARRAY_INITIALIZER;
 
+static void annotate_state_unset_scope(annotate_state_t *state);
 static int annotate_state_set_scope(annotate_state_t *state,
 				    struct mboxlist_entry *mbentry,
 				    struct mailbox *mailbox,
@@ -1151,7 +1152,7 @@ int annotate_state_set_message(annotate_state_t *state,
 }
 
 /* unset any state from a previous scope */
-void annotate_state_unset_scope(annotate_state_t *state)
+static void annotate_state_unset_scope(annotate_state_t *state)
 {
     if (state->mailbox && state->mailbox_is_ours)
 	mailbox_close(&state->mailbox);
