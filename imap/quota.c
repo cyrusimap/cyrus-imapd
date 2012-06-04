@@ -124,8 +124,8 @@ static int (*compar)(const char *s1, const char *s2);
 
 struct quotaentry *quota;
 int quota_num = 0, quota_alloc = 0;
+int quota_todo = 0;
 
-int redofix = 0;
 int test_sync_mode = 0;
 
 int main(int argc,char **argv)
@@ -418,7 +418,7 @@ static int findroot(const char *name, int *thisquota)
 
     *thisquota = -1;
 
-    for (i = 0; i < quota_num; i++) {
+    for (i = quota_todo; i < quota_num; i++) {
 	const char *root = quota[i].quota.root;
 
 	/* have we already passed the name, then there can
@@ -458,6 +458,18 @@ static int fixquota_dombox(void *rock,
 
     assert(prefixlen <= namelen);
     if (prefixlen && mboxname[prefixlen] && mboxname[prefixlen] != '.') goto done;
+
+    while (!r && quota_todo < quota_num) {
+	/* in the future, definitely don't close yet */
+	if (compar(mboxname, quota[quota_todo].quota.root) > 0)
+	    break;
+	/* inside the first root, don't close yet */
+	if (mboxname_is_prefix(mboxname, quota[quota_todo].quota.root))
+	    break;
+	/* finished, close out now */
+	r = fixquota_finish(quota_todo);
+	quota_todo++;
+    }
 
     test_sync_wait(mboxname);
 
@@ -562,9 +574,8 @@ int fixquota_finish(int thisquota)
     if (r) {
 	errmsg("failed reading quotaroot '%s'",
 	       quota[thisquota].quota.root, r);
-	return r;
+	goto done;
     }
-
 
     /* is it different? */
     for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
@@ -578,21 +589,24 @@ int fixquota_finish(int thisquota)
 	}
     }
 
-    free(quota[thisquota].quota.scanmbox);
-    quota[thisquota].quota.scanmbox = NULL;
-    
-    /* always write out the record, we should have cleared the scan record */
+    /* remove the scanned data, we're now up-to-date */
+    free(quota[quota_num].quota.scanmbox);
+    quota[quota_num].quota.scanmbox = NULL;
+
     r = quota_write(&quota[thisquota].quota, &tid);
     if (r) {
-	errmsg("failed writing quotaroot '%s'",
+	errmsg("failed writing quotaroot: '%s'",
 	       quota[thisquota].quota.root, r);
-	quota_abort(&tid);
-	return r;
+	goto done;
     }
 
-    quota_commit(&tid);
+done:
+    if (r) quota_abort(&tid);
+    else quota_commit(&tid);
 
-    return 0;
+    quota_free(&quota[thisquota].quota);
+
+    return r;
 }
 
 /*
@@ -645,13 +659,12 @@ int fixquota_dopass(char *domain, char **roots, int nroots,
 int fixquotas(char *domain, char **roots, int nroots)
 {
     int r;
-    int firstquota = 0;
 
     r = fixquota_dopass(domain, roots, nroots, fixquota_dombox);
 
-    while (!r && firstquota < quota_num) {
-	r = fixquota_finish(firstquota);
-	firstquota++;
+    while (!r && quota_todo < quota_num) {
+	r = fixquota_finish(quota_todo);
+	quota_todo++;
     }
 
     return r;
