@@ -453,9 +453,9 @@ sub add_pass
 
 package Cassandane::Unit::TestPlan;
 
-my @default_names = (
-    'Cassandane::Test',
-    'Cassandane::Cyrus',
+my @test_roots = (
+    'Cassandane/Test',
+    'Cassandane/Cyrus',
 );
 
 sub new
@@ -481,7 +481,13 @@ sub _get_item
 
 sub _schedule
 {
-    my ($self, $neg, $suite, $testname) = @_;
+    my ($self, $neg, $path, $testname) = @_;
+    return if ($path =~ m/\/TestCase\.pm$/);
+
+    my $suite = $path;
+    $suite =~ s/\.pm$//;
+    $suite =~ s/\//::/g;
+
     if ($neg eq '!')
     {
 	if (defined $testname)
@@ -506,48 +512,71 @@ sub _schedule
     }
 }
 
+# Returns ($neg, $ostype, $ospath, $testname)
+sub _parse_test_spec
+{
+    my ($name) = @_;
+
+    my ($neg, $path) = ($name =~ m/^(!?)(.*)$/);
+    $path =~ s/\.pm$//g;
+    $path =~ s/::/\//g;
+    $path =~ s/\./\//g;
+    $path =~ s/\/+/\//g;
+    $path =~ s/^\/*//;
+    $path =~ s/\/*$//;
+
+    foreach my $root (@test_roots)
+    {
+	return ($neg, 'd', $path, undef)
+	    if ($root eq $path);
+
+	my $fpath = $path;
+	$fpath = "$root/$path"
+	    if ("$root/" ne substr($path, 0, length($root)+1));
+
+	return ($neg, 'd', $fpath, undef)
+	    if ( -d $fpath );
+	return ($neg, 'f', "$fpath.pm", undef)
+	    if ( -f "$fpath.pm" );
+
+	my $test;
+	($fpath, $test) = ($fpath =~ m/^(.*)\/([^\/]+)$/);
+	next unless defined $test;
+	return ($neg, 'f', "$fpath.pm", $test)
+	    if ( -f "$fpath.pm" );
+    }
+
+    die "Unrecognised test specification: $name";
+}
+
 sub schedule
 {
     my ($self, @names) = @_;
 
-    @names = @default_names
+    @names = @test_roots
 	if !scalar @names;
 
     foreach my $name (@names)
     {
-	my ($neg, $sname, $tname) = ($name =~ m/^(!?)([^.]+)(\.[^.]+)?$/);
-	$tname =~ s/^\.// if defined $tname;
+	my ($neg, $type, $path, $test) = _parse_test_spec($name);
 
-	$self->schedule(@default_names)
+	$self->schedule(@test_roots)
 	    if $neg eq '!' && !scalar %{$self->{schedule}};
 
-	my $dir = $sname;
-	$dir =~ s/::/\//g;
-	my $file = "$dir.pm";
-
-	if ( -d $dir )
+	if ($type eq 'd')
 	{
-	    die "Cannot specify directory.testname" if defined $tname;
-	    opendir DIR, $dir
-		or die "Cannot open directory $dir for reading: $!";
+	    opendir DIR, $path
+		or die "Cannot open directory $path for reading: $!";
 	    while ($_ = readdir DIR)
 	    {
 		next unless m/\.pm$/;
-		next if m/^TestCase\.pm$/;
-		$_ = "$dir/$_";
-		s/\.pm$//;
-		s/\//::/g;
-		$self->_schedule($neg, $_, undef);
+		$self->_schedule($neg, "$path/$_", undef);
 	    }
 	    closedir DIR;
 	}
-	elsif ( -f $file )
+	else
 	{
-	    $self->_schedule($neg, $sname, $tname);
-	}
-	elsif ( -f "Cassandane/Cyrus/$file" )
-	{
-	    $self->_schedule($neg, "Cassandane::Cyrus::$sname", $tname);
+	    $self->_schedule($neg, $path, $test);
 	}
     }
 }
