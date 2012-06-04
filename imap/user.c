@@ -415,10 +415,11 @@ int user_copyquotaroot(char *oldname, char *newname)
     int r = 0;
     struct quota q;
 
-    q.root = oldname;
+    quota_init(&q, oldname);
     r = quota_read(&q, NULL, 0);
     if (!r)
 	mboxlist_setquotas(newname, q.limits, 0);
+    quota_free(&q);
 
     return r;
 }

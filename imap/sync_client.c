@@ -1580,8 +1580,9 @@ static int do_quota(const char *root)
     if (verbose_logging)
         syslog(LOG_INFO, "SETQUOTA: %s", root);
 
-    q.root = root;
+    quota_init(&q, root);
     r = update_quota_work(&q, NULL);
+    quota_free(&q);
 
     return r;
 }
@@ -1951,10 +1952,11 @@ static int do_user_quota(struct sync_name_list *master_quotaroots,
     /* set any new or changed quotas */
     for (mitem = master_quotaroots->head; mitem; mitem = mitem->next) {
 	rquota = sync_quota_lookup(replica_quota, mitem->name);
-	q.root = mitem->name;
 	if (rquota)
 	    rquota->done = 1;
+	quota_init(&q, mitem->name);
 	r = update_quota_work(&q, rquota);
+	quota_free(&q);
 	if (r) return r;
     }
 

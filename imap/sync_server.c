@@ -1590,9 +1590,10 @@ static int quota_work(const char *root)
 {
     struct quota q;
 
-    q.root = root;
+    quota_init(&q, root);
     if (!quota_read(&q, NULL, 0))
 	print_quota(&q);
+    quota_free(&q);
 
     return 0;
 }

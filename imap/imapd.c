@@ -3643,7 +3643,7 @@ static void warn_about_quota(const char *quotaroot)
     strlcpy(lastqr, quotaroot, sizeof(lastqr));
     nextalert = now + 600;
 
-    q.root = quotaroot;
+    quota_init(&q, quotaroot);
     r = quota_read(&q, NULL, 0);
     if (r)
 	return;	    /* failed to read */
@@ -3676,6 +3676,8 @@ static void warn_about_quota(const char *quotaroot)
 	if (msg.len)
 	    prot_printf(imapd_out, "* NO [ALERT] %s\r\n", buf_cstring(&msg));
     }
+
+    quota_free(&q);
 }
 
 
@@ -6854,7 +6856,7 @@ void cmd_getquota(const char *tag, const char *name)
 
     /* local mailbox */
 
-    q.root = internalname;
+    quota_init(&q, internalname);
     r = quota_read(&q, NULL, 0);
     if (r) {
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
@@ -6869,6 +6871,8 @@ void cmd_getquota(const char *tag, const char *name)
 
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
+
+    quota_free(&q);
 }
 
 /*
@@ -6942,7 +6946,7 @@ void cmd_getquotaroot(const char *tag, const char *name)
 						   imapd_userid, mailboxname);
 	    prot_printf(imapd_out, " ");
 	    prot_printastring(imapd_out, mailboxname);
-	    q.root = mailbox->quotaroot;
+	    quota_init(&q, mailbox->quotaroot);
 	    r = quota_read(&q, NULL, 0);
 	    if (!r) {
 		prot_printf(imapd_out, "\r\n* QUOTA ");
@@ -6950,6 +6954,7 @@ void cmd_getquotaroot(const char *tag, const char *name)
 		prot_putc(' ', imapd_out);
 		print_quota_used(imapd_out, &q);
 	    }
+	    quota_free(&q);
 	}
 	prot_printf(imapd_out, "\r\n");
     }
@@ -9917,15 +9922,15 @@ static int do_xfer(struct xfer_header *xfer)
 
 static int xfer_setquotaroot(struct xfer_header *xfer, const char *mboxname)
 {
-    struct quota quota;
+    struct quota q;
     int r;
     char extname[MAX_MAILBOX_NAME];
 
     (*imapd_namespace.mboxname_toexternal)(&imapd_namespace, mboxname,
 					   imapd_userid, extname);
     
-    quota.root = mboxname;
-    r = quota_read(&quota, NULL, 0);
+    quota_init(&q, mboxname);
+    r = quota_read(&q, NULL, 0);
     if (r == IMAP_QUOTAROOT_NONEXISTENT) return 0;
     if (r) return r;
     
@@ -9933,8 +9938,9 @@ static int xfer_setquotaroot(struct xfer_header *xfer, const char *mboxname)
      * quotaroot */
     prot_printf(xfer->be->out, "Q01 SETQUOTA {" SIZE_T_FMT "+}\r\n+%s ",
 		strlen(extname)+1, extname);
-    print_quota_limits(xfer->be->out, &quota);
+    print_quota_limits(xfer->be->out, &q);
     prot_printf(xfer->be->out, "\r\n");
+    quota_free(&q);
 
     r = getresult(xfer->be->in, "Q01");
     if (r) syslog(LOG_ERR,

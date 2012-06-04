@@ -507,7 +507,7 @@ int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid_start,
     /* The first member is either a number (if it is a quota root), or NIL
      * (if it isn't) */
     {
-	q.root = mailbox->name;
+	quota_init(&q, mailbox->name);
 	r = quota_read(&q, NULL, 0);
 
 	if (!r) {
@@ -516,7 +516,7 @@ int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid_start,
 	    prot_printf(pout, "NIL");
 	    if (r == IMAP_QUOTAROOT_NONEXISTENT) r = 0;
 	    /* do not send other quota data later */
-	    q.root = NULL;
+	    quota_free(&q);
 	}
     }
 
@@ -717,6 +717,7 @@ int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid_start,
 	    }
 	    prot_putc(')', pout);
 	}
+	quota_free(&q);
     }
 
  done:

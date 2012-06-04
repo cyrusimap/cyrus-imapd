@@ -2497,7 +2497,7 @@ int mboxlist_setquotas(const char *root,
 	return IMAP_MAILBOX_BADNAME;
     }
     
-    q.root = root;
+    quota_init(&q, root);
     r = quota_read(&q, &tid, 1);
 
     if (!r) {
@@ -2561,7 +2561,6 @@ int mboxlist_setquotas(const char *root,
     if (r) goto done;
 
     /* initialise the quota */
-    quota_init(&q);
     memcpy(q.limits, newquotas, sizeof(q.limits));
     r = quota_write(&q, &tid);
     if (r) goto done;
@@ -2600,11 +2599,14 @@ int mboxlist_unsetquota(const char *root)
 	return IMAP_MAILBOX_BADNAME;
     }
     
-    q.root = root;
+    quota_init(&q, root);
     r = quota_read(&q, NULL, 0);
     /* already unset */
-    if (r == IMAP_QUOTAROOT_NONEXISTENT) return 0;
-    if (r) return r;
+    if (r == IMAP_QUOTAROOT_NONEXISTENT) {
+	r = 0;
+	goto done;
+    }
+    if (r) goto done;
 
     r = quota_changelock();
 
@@ -2629,6 +2631,8 @@ int mboxlist_unsetquota(const char *root)
 
     if (!r) sync_log_quota(root);
 
+ done:
+    quota_free(&q);
     return r;
 }
 

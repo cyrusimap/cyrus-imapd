@@ -101,7 +101,7 @@ typedef int quotaproc_t(struct quota *quota, void *rock);
 extern int quota_changelock(void);
 extern void quota_changelockrelease(void);
 
-extern void quota_init(struct quota *quota);
+extern void quota_init(struct quota *quota, const char *root);
 extern void quota_free(struct quota *quota);
 
 extern int quota_read(struct quota *quota, struct txn **tid, int wrlock);

@@ -124,9 +124,8 @@ void quota_changelockrelease()
  * of the .root field which is presumed to have been passed in by the
  * caller.
  */
-void quota_init(struct quota *q)
+void quota_init(struct quota *q, const char *root)
 {
-    const char *root = q->root;	    /* save this, it was passed in */
     int res;
 
     memset(q, 0, sizeof(*q));
@@ -157,8 +156,6 @@ static int quota_parseval(const char *data, size_t datalen,
     int res = QUOTA_STORAGE;
     struct dlist *dl = NULL;
     quota_t temp;
-
-    quota_init(quota);
 
     /* new dlist format */
     if (data[0] == '%') {
@@ -192,8 +189,6 @@ static int quota_parseval(const char *data, size_t datalen,
     }
 
     /* parse historical formats */
-    quota_init(quota);
-
     fields = strarray_split(data, NULL);
     for (;;) {
 	if (i+2 > fields->count)
@@ -330,8 +325,7 @@ static int do_onequota(void *rock,
     char *root = xstrndup(key, keylen);
     int iswrite = fd->tid ? 1 : 0;
 
-    quota.root = root;
-    quota_init(&quota);
+    quota_init(&quota, root);
 
     /* XXX - error if not parsable? */
     if (datalen && !quota_parseval(data, datalen, &quota, iswrite)) {
@@ -453,8 +447,7 @@ int quota_update_useds(const char *quotaroot,
     if (!quotaroot || !*quotaroot)
 	return IMAP_QUOTAROOT_NONEXISTENT;
 
-    q.root = quotaroot;
-    quota_init(&q);
+    quota_init(&q, quotaroot);
 
     r = quota_read(&q, &tid, 1);
 
