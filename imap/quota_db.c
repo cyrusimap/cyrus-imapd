@@ -489,7 +489,7 @@ out:
 int quota_check_useds(const char *quotaroot,
 		      const quota_t diff[QUOTA_NUMRESOURCES])
 {
-    int r;
+    int r = 0;
     struct quota q;
     int res;
 
@@ -505,20 +505,23 @@ int quota_check_useds(const char *quotaroot,
     if (res == QUOTA_NUMRESOURCES)
 	return 0;	    /* all negative */
 
-    q.root = quotaroot;
+    quota_init(&q, quotaroot);
     r = quota_read(&q, NULL, /*wrlock*/0);
 
-    if (r == IMAP_QUOTAROOT_NONEXISTENT)
-	return 0;
-    if (r)
-	return r;
+    if (r == IMAP_QUOTAROOT_NONEXISTENT) {
+	r = 0;
+	goto done;
+    }
+    if (r) goto done;
 
     for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++) {
 	r = quota_check(&q, res, diff[res]);
-	if (r)
-	    return r;
+	if (r) goto done;
     }
-    return 0;
+
+done:
+    quota_free(&q);
+    return r;
 }
 
 /*
