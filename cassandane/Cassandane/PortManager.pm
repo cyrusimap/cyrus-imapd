@@ -92,7 +92,7 @@ sub assert_all_free
 	my $port = $base_port + $i;
 	if ($allocated{$port})
 	{
-	    print STDERR "WARNING: Port $port never freed.  Allocated " . $trace{$port};
+# 	    print STDERR "WARNING: Port $port never freed.  Allocated " . $trace{$port};
 	    $allocated{$port} = 0;
 	    $trace{$port} = undef;
 	}
