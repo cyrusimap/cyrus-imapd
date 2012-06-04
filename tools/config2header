@@ -164,6 +164,7 @@ while (<STDIN>) {
 	    # strip quotes from default value
 	    $def = substr($2, 1, -1);
 	    $e = "IMAP_ENUM_" . uc($opt) . "_" . uc($def);
+	    $e =~ s/[^0-9A-Z_a-z]/_/g;
 	    $def = $use_gcc_extension
 			? "(union config_value)((enum enum_value) $e)"
 			: "{(void *)($e)}";
@@ -171,6 +172,7 @@ while (<STDIN>) {
 	    # output the enum_options
 	    foreach $v (@values) {
 		$e = "IMAP_ENUM_" . uc($opt) . "_" . uc($v);
+		$e =~ s/[^0-9A-Z_a-z]/_/g;
 		$enums .= " { \"$v\" , $e },\n     ";
 
 		# if this is the first enum value, normalize to zero
@@ -214,7 +216,9 @@ while (<STDIN>) {
 	    @values = split(' ', $def);
 	    $e = "";
 	    foreach $v (@values) {
-		$e .= "IMAP_ENUM_" . uc($opt) . "_" . uc($v) . "\n\t\t\t | ";
+		my $ev = "IMAP_ENUM_" . uc($opt) . "_" . uc($v);
+		$ev =~ s/[^0-9A-Z_a-z]/_/g;
+		$e .= "$ev\n\t\t\t | ";
 	    }
 	    $e .= "0";
 	    $def = $use_gcc_extension
@@ -225,6 +229,7 @@ while (<STDIN>) {
 	    @values = eval $4;
 	    foreach $v (@values) {
 		$e = "IMAP_ENUM_" . uc($opt) . "_" . uc($v);
+		$e =~ s/[^0-9A-Z_a-z]/_/g;
 		$enums .= " { \"$v\" , $e },\n     ";
 
 		# add the corresponding bit value

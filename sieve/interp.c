@@ -56,6 +56,7 @@
 #include "sieve_interface.h"
 #include "interp.h"
 #include "libconfig.h"
+#include "times.h"
 
 #define EXT_LEN 4096
 
@@ -115,6 +116,9 @@ const char *sieve_listextensions(sieve_interp_t *i)
 	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_REJECT))
 	    strlcat(extensions, " reject", EXT_LEN);
 	if (i->vacation &&
+	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_VACATION_SECONDS))
+	    strlcat(extensions, " vacation vacation-seconds", EXT_LEN);
+	else if (i->vacation &&
 	    (config_sieve_extensions & IMAP_ENUM_SIEVE_EXTENSIONS_VACATION))
 	    strlcat(extensions, " vacation", EXT_LEN);
 	if (i->markflags &&
@@ -255,9 +259,11 @@ int sieve_register_vacation(sieve_interp_t *interp, sieve_vacation_t *v)
 	return SIEVE_NOT_FINALIZED; /* we need envelope for vacation! */
     }
 
-    if (v->min_response == 0) v->min_response = 3;
-    if (v->max_response == 0) v->max_response = 90;
-    if (v->min_response < 0 || v->max_response < 7 || !v->autorespond
+    if (v->min_response == 0)
+	v->min_response = config_getint(IMAPOPT_SIEVE_VACATION_MIN_RESPONSE);
+    if (v->max_response == 0)
+	v->max_response = config_getint(IMAPOPT_SIEVE_VACATION_MAX_RESPONSE);
+    if (v->min_response < 0 || v->max_response < 7 * DAY2SEC || !v->autorespond
 	|| !v->send_response) {
 	return SIEVE_FAIL;
     }

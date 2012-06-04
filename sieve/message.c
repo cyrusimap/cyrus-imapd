@@ -235,7 +235,7 @@ static int makehash(unsigned char hash[],
 }
 
 int do_vacation(action_list_t *a, char *addr, char *fromaddr,
-		char *subj, const char *msg, int days,
+		char *subj, const char *msg, int seconds,
 		int mime, const char *handle)
 {
     action_list_t *b = NULL;
@@ -264,7 +264,7 @@ int do_vacation(action_list_t *a, char *addr, char *fromaddr,
 	makehash(a->u.vac.autoresp.hash, addr, handle, NULL);
     else
 	makehash(a->u.vac.autoresp.hash, addr, fromaddr, msg);
-    a->u.vac.autoresp.days = days;
+    a->u.vac.autoresp.seconds = seconds;
     a->next = NULL;
     b->next = a;
     return 0;

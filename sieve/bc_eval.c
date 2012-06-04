@@ -60,6 +60,7 @@
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 #include "util.h"
+#include "times.h"
 
 #include <string.h>
 #include <ctype.h>
@@ -1267,6 +1268,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	    
 	    break;
 	}
+	case B_VACATION_ORIG:
 	case B_VACATION:
 	{
 	    int respond;
@@ -1274,7 +1276,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	    char *toaddr = NULL; /* relative to message we send */
 	    const char *handle = NULL;
 	    const char *message = NULL;
-	    int days, mime;
+	    int seconds, mime;
 	    char buf[128];
 	    char subject[1024];
 	    int x;
@@ -1311,7 +1313,10 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 
 		ip = unwrap_string(bc, ip, &message, NULL);
 
-		days = ntohl(bc[ip].value);
+		seconds = ntohl(bc[ip].value);
+		if (op == B_VACATION_ORIG) {
+		    seconds *= DAY2SEC;
+		}
 		mime = ntohl(bc[ip+1].value);
 
 		ip+=2;
@@ -1334,7 +1339,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 		}
 
 		res = do_vacation(actions, toaddr, fromaddr, xstrdup(subject),
-				  message, days, mime, handle);
+				  message, seconds, mime, handle);
 
 		if (res == SIEVE_RUN_ERROR)
 		    *errmsg = "Vacation can not be used with Reject or Vacation";

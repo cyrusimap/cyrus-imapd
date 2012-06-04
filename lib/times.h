@@ -45,6 +45,9 @@
 
 #include <time.h>
 
+/* Factor for converting days to seconds. */
+#define DAY2SEC (24 * 60 * 60)
+
 /*
  * RFC822 datetime format
  */

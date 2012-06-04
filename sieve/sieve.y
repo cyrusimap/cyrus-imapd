@@ -62,6 +62,7 @@
 #include "util.h"
 #include "imparse.h"
 #include "libconfig.h"
+#include "times.h"
 
 #define ERR_BUF_SIZE 1024
 
@@ -71,7 +72,7 @@ char errbuf[ERR_BUF_SIZE];
     extern int addrparse(void);
 
 struct vtags {
-    int days;
+    int seconds;
     strarray_t *addresses;
     char *subject;
     char *from;
@@ -199,7 +200,7 @@ extern void sieverestart(FILE *f);
 %token GT GE LT LE EQ NE
 %token ALL LOCALPART DOMAIN USER DETAIL
 %token RAW TEXT CONTENT
-%token DAYS ADDRESSES SUBJECT FROM HANDLE MIME
+%token DAYS ADDRESSES SUBJECT FROM HANDLE MIME SECONDS
 %token METHOD ID OPTIONS LOW NORMAL HIGH ANY MESSAGE
 %token INCLUDE PERSONAL GLOBAL RETURN
 %token COPY
@@ -412,9 +413,16 @@ priority: LOW                   { $$ = LOW; }
         ;
 
 vtags: /* empty */		 { $$ = new_vtags(); }
-	| vtags DAYS NUMBER	 { if ($$->days != -1) { 
-					yyerror("duplicate :days"); YYERROR; }
-				   else { $$->days = $3; } }
+	| vtags DAYS NUMBER	 { if ($$->seconds != -1) {
+					yyerror("duplicate :days or :seconds"); YYERROR; }
+				   else { $$->seconds = $3 * DAY2SEC; } }
+	| vtags SECONDS NUMBER	 { if (!parse_script->support.vacation_seconds) {
+				     yyerror("vacation-seconds not required");
+				     YYERROR;
+				   }
+				   if ($$->seconds != -1) {
+					yyerror("duplicate :days or :seconds"); YYERROR; }
+				   else { $$->seconds = $3; } }
 	| vtags ADDRESSES stringlist { if ($$->addresses != NULL) { 
 					yyerror("duplicate :addresses"); 
 					YYERROR;
@@ -831,7 +839,7 @@ static commandlist_t *build_vacation(int t, struct vtags *v, char *reason)
 	ret->u.v.subject = v->subject; v->subject = NULL;
 	ret->u.v.from = v->from; v->from = NULL;
 	ret->u.v.handle = v->handle; v->handle = NULL;
-	ret->u.v.days = v->days;
+	ret->u.v.seconds = v->seconds;
 	ret->u.v.mime = v->mime;
 	ret->u.v.addresses = v->addresses; v->addresses = NULL;
 	free_vtags(v);
@@ -996,7 +1004,7 @@ static struct vtags *new_vtags(void)
 {
     struct vtags *r = (struct vtags *) xmalloc(sizeof(struct vtags));
 
-    r->days = -1;
+    r->seconds = -1;
     r->addresses = NULL;
     r->subject = NULL;
     r->from = NULL;
@@ -1010,11 +1018,11 @@ static struct vtags *canon_vtags(struct vtags *v)
 {
     assert(parse_script->interp.vacation != NULL);
 
-    if (v->days == -1) { v->days = 7; }
-    if (v->days < parse_script->interp.vacation->min_response) 
-       { v->days = parse_script->interp.vacation->min_response; }
-    if (v->days > parse_script->interp.vacation->max_response)
-       { v->days = parse_script->interp.vacation->max_response; }
+    if (v->seconds == -1) { v->seconds = 7 * DAY2SEC; }
+    if (v->seconds < parse_script->interp.vacation->min_response)
+       { v->seconds = parse_script->interp.vacation->min_response; }
+    if (v->seconds > parse_script->interp.vacation->max_response)
+       { v->seconds = parse_script->interp.vacation->max_response; }
     if (v->mime == -1) { v->mime = 0; }
 
     return v;

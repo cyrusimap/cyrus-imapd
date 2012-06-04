@@ -651,7 +651,7 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
 		   STRINGLIST addresses
 		   STRING subject (if len is -1, then subject was NULL)
 		   STRING message (again, len == -1 means message was NULL)
-		   VALUE days
+		   VALUE seconds
 		   VALUE mime
 		   STRING from (if len is -1, then from was NULL)
 		   STRING handle (again, len == -1 means handle was NULL)
@@ -684,7 +684,7 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
 		}
 
 		if (!atleast(retval, codep+2)) return -1;
-		retval->data[codep++].value = c->u.v.days;
+		retval->data[codep++].value = c->u.v.seconds;
 		retval->data[codep++].value = c->u.v.mime;
 	    
 		if (!atleast(retval, codep+2)) return -1;
