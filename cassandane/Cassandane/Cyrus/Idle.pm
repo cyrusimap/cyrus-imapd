@@ -445,7 +445,7 @@ sub test_sigterm
     $self->assert_null($talk->get_response_code('alert'));
 
     xlog "Send SIGQUIT (or worse) to the imapd";
-    my $r = Cassandane::Instance::_stop_pid($imapd_pid);
+    $r = Cassandane::Instance::_stop_pid($imapd_pid);
     $self->assert($r == 1, "shutdown required brute force");
 
     xlog "Check that the server disconnected";
