@@ -1700,7 +1700,7 @@ static int myabort(struct dbengine *db, struct txn *tid)
     /* recovery will clean up */
     r = recovery1(db, NULL);
 
-    buf_reset(&db->loc.keybuf);
+    buf_free(&db->loc.keybuf);
     memset(&db->loc, 0, sizeof(struct skiploc));
 
     unlock(db);
