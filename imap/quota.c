@@ -101,8 +101,7 @@ static struct namespace quota_namespace;
 const int config_need_data = CONFIG_NEED_PARTITION_DATA;
 
 struct quotaentry {
-    struct quota quota;
-    char *allocname;
+    char *name;
     int refcount;
     int deleted;
 };
@@ -122,7 +121,7 @@ static int (*compar)(const char *s1, const char *s2);
 
 #define QUOTAGROW 300
 
-struct quotaentry *quota;
+struct quotaentry *quotaroots;
 int quota_num = 0, quota_alloc = 0;
 int quota_todo = 0;
 
@@ -206,19 +205,19 @@ int main(int argc,char **argv)
 
     quota_changelockrelease();
 
+    if (r) code = convert_code(r);
+    else if (do_report) reportquota();
+
     quotadb_close();
     quotadb_done();
 
     mboxlist_close();
     mboxlist_done();
 
-    if (r) code = convert_code(r);
-    else if (do_report) reportquota();
-
     /* just for neatness */
     for (i = 0; i < quota_num; i++)
-	free(quota[i].allocname);
-    free(quota);
+	free(quotaroots[i].name);
+    free(quotaroots);
 
     cyrus_done();
 
@@ -316,6 +315,7 @@ static int fixquota_addroot(struct quota *q,
 {
     const char *prefix = (const char *)rock;
     int prefixlen = (prefix ? strlen(prefix) : 0);
+    struct quota localq;
     struct txn *tid = NULL;
     int r;
 
@@ -326,17 +326,16 @@ static int fixquota_addroot(struct quota *q,
     if (quota_num == quota_alloc) {
 	/* Create new qr list entry */
 	quota_alloc += QUOTAGROW;
-	quota = (struct quotaentry *)
-	    xrealloc((char *)quota, quota_alloc * sizeof(struct quotaentry));
-	memset(&quota[quota_num], 0, QUOTAGROW * sizeof(struct quotaentry));
+	quotaroots = (struct quotaentry *)
+	    xrealloc((char *)quotaroots, quota_alloc * sizeof(struct quotaentry));
+	memset(&quotaroots[quota_num], 0, QUOTAGROW * sizeof(struct quotaentry));
     }
 
-    quota[quota_num].allocname   = xstrdup(q->root);
-    quota[quota_num].quota.root  = quota[quota_num].allocname;
-    quota_init(&quota[quota_num].quota);
+    quotaroots[quota_num].name = xstrdup(q->root);
 
     /* get a locked read */
-    r = quota_read(&quota[quota_num].quota, &tid, 1);
+    quota_init(&localq, quotaroots[quota_num].name);
+    r = quota_read(&localq, &tid, 1);
     if (r) {
 	errmsg("failed reading quota record for '%s'",
 	       q->root, r);
@@ -344,11 +343,11 @@ static int fixquota_addroot(struct quota *q,
     }
 
     /* clean the scanused data if present */
-    if (quota[quota_num].quota.scanmbox) {
-	free(quota[quota_num].quota.scanmbox);
-	quota[quota_num].quota.scanmbox = NULL;
+    if (localq.scanmbox) {
+	free(localq.scanmbox);
+	localq.scanmbox = NULL;
 
-	r = quota_write(&quota[quota_num].quota, &tid);
+	r = quota_write(&localq, &tid);
 	if (r) {
 	    errmsg("failed writing quota record for '%s'",
 		   q->root, r);
@@ -357,8 +356,8 @@ static int fixquota_addroot(struct quota *q,
     }
 
 done:
+    quota_free(&localq);
     if (r) {
-	free(quota[quota_num].allocname);
 	quota_abort(&tid);
     }
     else {
@@ -419,7 +418,7 @@ static int findroot(const char *name, int *thisquota)
     *thisquota = -1;
 
     for (i = quota_todo; i < quota_num; i++) {
-	const char *root = quota[i].quota.root;
+	const char *root = quotaroots[i].name;
 
 	/* have we already passed the name, then there can
 	 * be no further matches */
@@ -435,7 +434,7 @@ static int findroot(const char *name, int *thisquota)
     }
 
     if (*thisquota >= 0)
-	quota[*thisquota].refcount++;
+	quotaroots[*thisquota].refcount++;
 
     return 0;
 }
@@ -459,16 +458,21 @@ static int fixquota_dombox(void *rock,
     assert(prefixlen <= namelen);
     if (prefixlen && mboxname[prefixlen] && mboxname[prefixlen] != '.') goto done;
 
-    while (!r && quota_todo < quota_num) {
+    while (quota_todo < quota_num) {
+	const char *root = quotaroots[quota_todo].name;
+
 	/* in the future, definitely don't close yet */
-	if (compar(mboxname, quota[quota_todo].quota.root) > 0)
+	if (compar(mboxname, root) > 0)
 	    break;
+
 	/* inside the first root, don't close yet */
-	if (mboxname_is_prefix(mboxname, quota[quota_todo].quota.root))
+	if (mboxname_is_prefix(mboxname, root))
 	    break;
+
 	/* finished, close out now */
 	r = fixquota_finish(quota_todo);
 	quota_todo++;
+	if (r) goto done;
     }
 
     test_sync_wait(mboxname);
@@ -489,36 +493,41 @@ static int fixquota_dombox(void *rock,
 	/* no matching quotaroot exists, remove from
 	 * mailbox if present */
 	if (mailbox->quotaroot) {
-	    r = fixquota_fixroot(mailbox, (char *)0);
+	    r = fixquota_fixroot(mailbox, NULL);
 	    if (r) goto done;
 	}
     }
     else {
+	const char *root = quotaroots[thisquota].name;
 	quota_t useds[QUOTA_NUMRESOURCES];
+	struct quota localq;
 	int res;
 
 	/* matching quotaroot exists, ensure mailbox has the
 	 * correct root */
 	if (!mailbox->quotaroot ||
-	    strcmp(mailbox->quotaroot, quota[thisquota].quota.root) != 0) {
-	    r = fixquota_fixroot(mailbox, quota[thisquota].quota.root);
+	    strcmp(mailbox->quotaroot, root) != 0) {
+	    r = fixquota_fixroot(mailbox, root);
 	    if (r) goto done;
 	}
 
 	/* read the current data */
-	r = quota_read(&quota[thisquota].quota, &txn, 1);
+	quota_init(&localq, root);
+	r = quota_read(&localq, &txn, 1);
 	if (r) goto done;
 
 	/* add the usage for this mailbox */
 	mailbox_get_usage(mailbox, useds);
 	for (res = 0; res < QUOTA_NUMRESOURCES; res++)
-	    quota[thisquota].quota.scanuseds[res] += useds[res];
+	    localq.scanuseds[res] += useds[res];
 
 	/* and mention that this mailbox has been scanned */
-	free(quota[thisquota].quota.scanmbox);
-	quota[thisquota].quota.scanmbox = xstrdup(mboxname);
+	free(localq.scanmbox);
+	localq.scanmbox = xstrdup(mboxname);
 
-	r = quota_write(&quota[thisquota].quota, &txn);
+	r = quota_write(&localq, &txn);
+	quota_free(&localq);
+
 	if (r) {
 	    quota_abort(&txn);
 	    goto done;
@@ -558,53 +567,54 @@ int fixquota_finish(int thisquota)
     int res;
     int r = 0;
     struct txn *tid = NULL;
+    const char *root = quotaroots[thisquota].name;
+    struct quota localq;
 
-    if (!quota[thisquota].refcount) {
-	printf("%s: removed\n", quota[thisquota].quota.root);
-	r = quota_deleteroot(quota[thisquota].quota.root);
+    if (!quotaroots[thisquota].refcount) {
+	quotaroots[thisquota].deleted = 1;
+	printf("%s: removed\n", root);
+	r = quota_deleteroot(root);
 	if (r) {
-	    errmsg("failed deleting quotaroot '%s'",
-		   quota[thisquota].quota.root, r);
+	    errmsg("failed deleting quotaroot '%s'", root, r);
 	}
 	return r;
     }
 
     /* re-read the quota with the record locked */
-    r = quota_read(&quota[thisquota].quota, &tid, 1);
+    quota_init(&localq, root);
+    r = quota_read(&localq, &tid, 1);
     if (r) {
-	errmsg("failed reading quotaroot '%s'",
-	       quota[thisquota].quota.root, r);
+	errmsg("failed reading quotaroot '%s'", root, r);
 	goto done;
     }
 
     /* is it different? */
     for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
-	if (quota[thisquota].quota.scanuseds[res] != quota[thisquota].quota.useds[res]) {
+	if (localq.scanuseds[res] != localq.useds[res]) {
 	    printf("%s: %s usage was " QUOTA_T_FMT ", now " QUOTA_T_FMT "\n",
-		quota[thisquota].quota.root,
+		root,
 		quota_names[res],
-		quota[thisquota].quota.useds[res],
-		quota[thisquota].quota.scanuseds[res]);
-	    quota[thisquota].quota.useds[res] = quota[thisquota].quota.scanuseds[res];
+		localq.useds[res],
+		localq.scanuseds[res]);
+	    localq.useds[res] = localq.scanuseds[res];
 	}
     }
 
     /* remove the scanned data, we're now up-to-date */
-    free(quota[quota_num].quota.scanmbox);
-    quota[quota_num].quota.scanmbox = NULL;
+    free(localq.scanmbox);
+    localq.scanmbox = NULL;
 
-    r = quota_write(&quota[thisquota].quota, &tid);
+    r = quota_write(&localq, &tid);
     if (r) {
-	errmsg("failed writing quotaroot: '%s'",
-	       quota[thisquota].quota.root, r);
+	errmsg("failed writing quotaroot: '%s'", root, r);
 	goto done;
     }
 
 done:
+    quota_free(&localq);
+
     if (r) quota_abort(&tid);
     else quota_commit(&tid);
-
-    quota_free(&quota[thisquota].quota);
 
     return r;
 }
@@ -695,19 +705,27 @@ void reportquota(void)
 {
     int i;
     int res;
-    char buf[MAX_MAILBOX_PATH+1];
 
     printf("   Quota   %% Used     Used             Resource Root\n");
 
     for (i = 0; i < quota_num; i++) {
-	if (quota[i].deleted) continue;
+	struct quota localq;
+	int r;
 
-	/* Convert internal name to external */
-	(*quota_namespace.mboxname_toexternal)(&quota_namespace,
-					       quota[i].quota.root,
-					       "cyrus", buf);
-	for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
-	    reportquota_resource(&quota[i].quota, buf, res);
+	if (quotaroots[i].deleted) continue;
+
+	/* XXX - cache these from either the parse or the commit again */
+	quota_init(&localq, quotaroots[i].name);
+	r = quota_read(&localq, NULL, 0);
+	if (r) {
+	    quota_free(&localq);
+	    return;
 	}
+
+	for (res = 0; res < QUOTA_NUMRESOURCES; res++) {
+	    reportquota_resource(&localq, quotaroots[i].name, res);
+	}
+
+	quota_free(&localq);
     }
 }
