@@ -6,6 +6,19 @@ unprivileged user.  However, Cassandane needs root to make some small
 one-time adjustments to be performed to your system before it will run
 at all.  This section documents those steps.
 
+0.  Before doing anything else, make sure you have all the pre-reqs
+    listed in README.deps installed.  A good way to check is:
+
+    gnb> cd ~/my/cassandane/workarea
+    gnb> make
+    ...
+    testrunner.pl syntax OK
+    Cassandane/ThreadedGenerator.pm syntax OK
+    Cassandane/MasterEvent.pm syntax OK
+    Cassandane/PortManager.pm syntax OK
+    Cassandane/IMAPMessageStore.pm syntax OK
+    ...
+
 1.  Your Cyrus install needs to have this patch applied, which
     allows Cyrus to be started as the Cyrus user instead of being
     started as root and changing to the Cyrus user.
@@ -40,36 +53,40 @@ at all.  This section documents those steps.
 
     Obviously, replace 'gnb' with your username.
 
-4.  The pathname /usr/cyrus needs to point to an installed Cyrus.  As
-    you will probably want to make changes and re-run tests a lot, the
-    easiest thing is to make /usr/cyrus a symlink to a directory you
-    can install into.  For example:
+4.  You need to tell Cassandane how to find Cyrus.  There are two
+    obvious ways of doing this.
 
-    gnb> sudo ln -snf /var/tmp/cassandane-cyrus/usr/cyrus /usr/cyrus
-    gnb> cd ~/my/cyrus/workarea
-    gnb> make DESTDIR=/var/tmp/cassandane-cyrus install
+     *  Fully installed Cyrus build in /usr/cyrus.  This requires
+	you to do a step as root every time you build Cyrus, which
+	can be a pain.
 
-    Alternatively, you could set up a cassandane.ini file in the
-    Cassandane directory (copy the cassandane.ini.example file) and set
-    the following two variables in the 'cyrus default' section to indicate
-    your how your Cyrus was installed:
+	gnb> cd ~/my/cyrus/workarea
+	gnb> ./configure --prefix=/usr/cyrus \
+	      --with-cyrus-prefix=/usr/cyrus ...
+	gnb> make && sudo make install
 
-     *  'prefix' is where Cyrus internally expects itself to be, i.e.
-	the value of --prefix and --cyrus-prefix when running the Cyrus
-	configure script.  Default is /usr/cyrus
+     *  Partially installed Cyrus build in a temp directory.  This
+	is what I use.
 
-     *  'destdir' is where you installed Cyrus, e.g. if you installed using
-        "make DESTDIR=/my/cyrus/inst install" in the Cyrus directory.
-	Default is empty.
+	gnb> cd ~/my/cyrus/workarea
+	gnb> ./configure --prefix=/usr/cyrus \
+	      --with-cyrus-prefix=/usr/cyrus ...
+	gnb> make && make DESTDIR=/var/tmp/cyrus install
 
-    gnb> cd ~/my/cassandane/workarea
-    gnb> cp cassandane.ini.example cassandane.ini
-    gnb> vi cassandane.ini
-    [cyrus default]
-    destdir = /var/tmp/cassandane-cyrus
+	gnb> cd ~/my/cassandane/workarea
+	gnb> cp cassandane.ini.example cassandane.ini
+	gnb> vi cassandane.ini
+	[cyrus default]
+	destdir = /var/tmp/cyrus
 
-    gnb> cd ~/my/cyrus/workarea
-    gnb> make DESTDIR=/var/tmp/cassandane-cyrus install
+    Also note that you can do other combinations too, the trick is to
+    set up the 'cyrus default' section in the cassandane.ini such that
+
+     *  'prefix' is the value of --prefix and --cyrus-prefix you used
+	 when you ran the Cyrus configure script.  Default is /usr/cyrus
+
+     *  'destdir' is the value of DESTDIR when you did 'make install'
+	in the Cyrus directory.  Default is empty.
 
 5.  It's also a good idea to set some kernel tunables.
 

@@ -5,19 +5,9 @@ This document describes how to run the Cassandane tests.
 Prerequisites
 -------------
 
-Before running any Cassandane tests, you need to have the following:
-
- * A Cyrus installation, such as an installed package, installed
-   under /usr/cyrus/.  Both the bin and lib (perl library) directories
-   are needed.
-
- * A user "cyrus" in the system password database (e.g. /etc/passwd).
-   Most Cyrus packages will ensure this exists as a side effect
-   of installation.
-
- * The various pieces of Perl software mentioned in README.deps
-   installed where they available to Perl (e.g. in a directory
-   mentioned in $PERL5LIB).
+Before running any Cassandane tests, you need to set up Cassandane,
+Cyrus and your system.  Read the file setting_up.txt and follow the
+instructions there.
 
 Running Tests
 -------------
@@ -100,40 +90,32 @@ TAP format can be selected by using the "-f tap" option to testrunner.pl.
 
 
 root@testbox# ./testrunner.pl -f tap
-....
-Time:  0 wallclock secs ( 0.00 usr +  0.00 sys =  0.00 CPU)
+.........................................................................
+.........................................................................
+..........................................................
+Time: 295 wallclock secs ( 0.25 usr  0.01 sys + 398.16 cusr 35.72 csys = 434.14 CPU)
 
-OK (4 tests)
-..
-Time:  0 wallclock secs ( 0.00 usr +  0.00 sys =  0.00 CPU)
-
-OK (2 tests)
-.
-Time:  0 wallclock secs ( 0.00 usr +  0.01 sys =  0.01 CPU)
-
-OK (1 tests)
-...........
-Time:  0 wallclock secs ( 0.00 usr +  0.00 sys =  0.00 CPU)
-
-OK (11 tests)
-....
-Time:  0 wallclock secs ( 0.00 usr +  0.00 sys =  0.00 CPU)
-
-OK (4 tests)
-.
-Time:  0 wallclock secs ( 0.01 usr +  0.00 sys =  0.01 CPU)
-
-OK (1 tests)
+OK (204 tests)
 
 
 You can run only a subset of tests by giving an argument to testrunner.pl.
 The argument can be
 
- * a group of tests (which maps to a directory in Cassandane)
+ * a group of tests (which is a directory under Cassandane/ )
+
+    me@testbox% ./testrunner.pl Cassandane/Cyrus
+
+ * likewise, but specified with "." or "::" separators
+
+    me@testbox% ./testrunner.pl Cassandane.Cyrus
 
     me@testbox% ./testrunner.pl Cassandane::Cyrus
 
- * a test suite (which maps to a module in Cassandane)
+ * a test suite (which maps to a Perl module under Cassandane/ )
+
+    me@testbox% ./testrunner.pl Cassandane/Cyrus/Quota.pm
+
+ * likewise, but using the Perl module name syntax
 
     me@testbox% ./testrunner.pl Cassandane::Cyrus::Quota
 
@@ -146,7 +128,8 @@ The argument can be
     me@testbox% ./testrunner.pl Quota.quotarename
 
 Arguments can be negated by using a leading exclamation mark (!)
-character, e.g.
+character.  Note that you will need to escape the ! from the
+shell:
 
     me@testbox% ./testrunner.pl \!Quota
 
@@ -159,11 +142,20 @@ will run all the tests in the Quota suite except the quoterename test.
 
 The -v (or --verbose) option to testrunner.pl causes both Cassandane and
 several Cyrus programs run by Cassandane, to emit a lot of information
-to stderr.  The output from Cassandane is prefixed by "=====>".
+to stderr.  The output from Cassandane is prefixed by "=====>".  Log
+messages are also written to the syslog.
 
 The --valgrind option to testrunner.pl runs all the Cyrus executables
 using Valgrind.  This is of course much slower but is recommended
 because it finds many subtle bugs.  The Valgrind logs are saved in
-the files /var/tmp/cass/$instance/vglogs/$name.$pid.  Cassandane does
-not examine these logs in any way; in particular it will not fail if
-Valgrind detects any errors.
+the files /var/tmp/cass/$instance/vglogs/$name.$pid.  Cassandane will
+examine these logs after each test finishes, and will fail the test
+if there are any errors (including memory leaks) reported.
+
+The --cleanup option causes Cassandane to do two things.  Firstly, it
+immediately cleans up any files left over in /var/tmp/cass/.  Secondly,
+it cleans up any such files after each test, unless the test fails.
+This should be helpful when /var/tmp does not have much room.  Be aware
+that Cassandane tests can use over 20 MB per test, most of which is due
+to inefficiencies in the Berkeley DB library.
+
