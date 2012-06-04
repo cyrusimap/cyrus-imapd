@@ -747,9 +747,7 @@ sub _check_valgrind_logs
     }
     closedir VGLOGS;
 
-    die "Found Valgrind errors in: " .
-	join(' ', @nzlogs) .
-	" in $valgrind_logdir, see log for details"
+    die "Found Valgrind errors, see log for details"
 	if scalar @nzlogs;
 }
 
