@@ -2579,6 +2579,7 @@ int mboxlist_setquotas(const char *root,
     quota_changelockrelease();
 
 done:
+    quota_free(&q);
     if (r && tid) quota_abort(&tid);
     if (!r) sync_log_quota(root);
 

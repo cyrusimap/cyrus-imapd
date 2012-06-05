@@ -3673,6 +3673,7 @@ static void warn_about_quota(const char *quotaroot)
 	    prot_printf(imapd_out, "* NO [ALERT] %s\r\n", buf_cstring(&msg));
     }
 
+    buf_reset(&msg);
     quota_free(&q);
 }
 
@@ -6856,7 +6857,7 @@ void cmd_getquota(const char *tag, const char *name)
     r = quota_read(&q, NULL, 0);
     if (r) {
 	prot_printf(imapd_out, "%s NO %s\r\n", tag, error_message(r));
-	return;
+	goto done;
     }
 
     prot_printf(imapd_out, "* QUOTA ");
@@ -6868,6 +6869,7 @@ void cmd_getquota(const char *tag, const char *name)
     prot_printf(imapd_out, "%s OK %s\r\n", tag,
 		error_message(IMAP_OK_COMPLETED));
 
+ done:
     quota_free(&q);
 }
 
