@@ -110,6 +110,7 @@ CONFIGURE_ARGS="\
     --enable-murder \
     --enable-replication \
     --enable-unit-tests \
+    --enable-maintainer-mode \
     $COVERAGE \
     "
 
