@@ -132,6 +132,7 @@ service_PROGRAMS += ptclient/ptdump ptclient/ptexpire ptclient/ptloader
 endif
 if PERL
 SUBDIRS += perl/annotator perl/imap
+noinst_LTLIBRARIES = perl/libcyrus.la perl/libcyrus_min.la
 endif
 if SIEVE
 if PERL
@@ -603,6 +604,11 @@ notifyd_notifyd_LDADD = $(LD_SERVER_ADD) $(ZEPHYR_LIBS)
 
 notifyd_notifytest_SOURCES = notifyd/notifytest.c imap/mutex_fake.c
 notifyd_notifytest_LDADD = $(LD_BASIC_ADD)
+
+perl_libcyrus_la_SOURCES = $(lib_libcyrus_la_SOURCES)
+perl_libcyrus_la_LIBADD = $(lib_libcyrus_la_LIBADD)
+perl_libcyrus_min_la_SOURCES = $(lib_libcyrus_min_la_SOURCES)
+perl_libcyrus_min_la_LIBADD = $(lib_libcyrus_min_la_LIBADD)
 
 perl_sieve_lib_libisieve_a_SOURCES = perl/sieve/lib/isieve.c perl/sieve/lib/lex.c perl/sieve/lib/mystring.c perl/sieve/lib/request.c
 
