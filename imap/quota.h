@@ -75,7 +75,7 @@ enum quota_resource {
 	{ -1, -1, -1 }
 
 struct quota {
-    const char *root;
+    char *root;
 
     /* Information in quota entry */
     quota_t useds[QUOTA_NUMRESOURCES];

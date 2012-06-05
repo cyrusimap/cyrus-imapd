@@ -120,9 +120,8 @@ void quota_changelockrelease()
 }
 
 /*
- * Initialise a struct quota, except that we preserve the original value
- * of the .root field which is presumed to have been passed in by the
- * caller.
+ * Initialise a struct quota and set the root field.  Quota must be initialised
+ * before use.
  */
 void quota_init(struct quota *q, const char *root)
 {
@@ -132,14 +131,15 @@ void quota_init(struct quota *q, const char *root)
     for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++)
 	q->limits[res] = QUOTA_UNLIMITED;
 
-    q->root = root;
+    q->root = xstrdup(root);
 }
 
-/* just clear the scanmbox */
+/* release all the memory allocated in a struct quota */
 void quota_free(struct quota *q)
 {
     free(q->scanmbox);
-    q->scanmbox = NULL;
+    free(q->root);
+    memset(q, 0, sizeof(*q));
 }
 
 /*
