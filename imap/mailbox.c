@@ -2208,7 +2208,11 @@ int mailbox_rewrite_index_record(struct mailbox *mailbox,
 	   record->recno <= mailbox->i.num_records);
 
     r = mailbox_read_index_record(mailbox, record->recno, &oldrecord);
-    if (r) return r;
+    if (r) {
+	syslog(LOG_ERR, "IOERROR: re-reading: %s %u",
+	       mailbox->name, record->uid);
+	return r;
+    }
 
     /* the UID has to match, of course, for it to be the same
      * record.  XXX - test fields like "internaldate", etc here
@@ -2802,8 +2806,8 @@ int mailbox_expunge_cleanup(struct mailbox *mailbox, time_t expunge_mark,
 	record.system_flags |= FLAG_UNLINKED;
 	record.silent = 1;
 	if (mailbox_rewrite_index_record(mailbox, &record)) {
-	    syslog(LOG_ERR, "IOERROR: failed to write changes to %s recno %d",
-		   mailbox->name, recno);
+	    syslog(LOG_ERR, "IOERROR: failed to mark unlinked %s %u (recno %d)",
+		   mailbox->name, record.uid, recno);
 	    break;
 	}
     }
