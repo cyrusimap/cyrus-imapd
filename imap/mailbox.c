@@ -121,7 +121,6 @@ static struct mailboxlist *open_mailboxes = NULL;
 
 static int mailbox_index_unlink(struct mailbox *mailbox);
 static int mailbox_index_repack(struct mailbox *mailbox);
-static int mailbox_read_index_header(struct mailbox *mailbox);
 static int mailbox_lock_index_internal(struct mailbox *mailbox,
 				       int locktype);
 
