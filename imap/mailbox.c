@@ -2244,10 +2244,6 @@ int mailbox_rewrite_index_record(struct mailbox *mailbox,
 	if (expunge_mode == IMAP_ENUM_EXPUNGE_MODE_IMMEDIATE)
 	    mailbox->i.options |= OPT_MAILBOX_NEEDS_REPACK;
 	mailbox->i.options |= OPT_MAILBOX_NEEDS_UNLINK;
-
-	/* clean up any annotations now too */
-	r = annotate_msg_expunge(mailbox, record->uid);
-	if (r) return r;
     }
     else {
 	/* write the cache record before buffering the message, it
@@ -2434,6 +2430,8 @@ static void mailbox_message_unlink(struct mailbox *mailbox, uint32_t uid)
 {
     const char *fname = mailbox_message_fname(mailbox, uid);
 
+    /* XXX - reports errors other than ENOENT ? */
+
     /* no error, we removed a file */
     if (unlink(fname) == 0) {
 	if (config_auditlog)
@@ -2441,6 +2439,8 @@ static void mailbox_message_unlink(struct mailbox *mailbox, uint32_t uid)
 		   "mailbox=<%s> uniqueid=<%s> uid=<%u>",
 		   session_id(), mailbox->name, mailbox->uniqueid, uid);
     }
+
+    annotate_msg_expunge(mailbox, uid);
 }
 
 /* need a mailbox exclusive lock, we're removing files */
@@ -2641,11 +2641,9 @@ static int mailbox_index_repack(struct mailbox *mailbox)
 
 	/* we aren't keeping unlinked files, that's kind of the point */
 	if (record.system_flags & FLAG_UNLINKED) {
-	    /* just in case it was left lying around - but ignore
-	     * errors this time */
+	    /* just in case it was left lying around */
 	    mailbox_message_unlink(mailbox, record.uid);
-	    annotate_msg_expunge(mailbox, record.uid);
-    
+
 	    /* track the modseq for QRESYNC purposes */
 	    if (record.modseq > repack->i.deletedmodseq)
 		repack->i.deletedmodseq = record.modseq;
