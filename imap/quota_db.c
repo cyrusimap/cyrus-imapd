@@ -189,7 +189,7 @@ static int quota_parseval(const char *data, size_t datalen,
     }
 
     /* parse historical formats */
-    fields = strarray_split(data, NULL);
+    fields = strarray_split(data, NULL, 0);
     for (;;) {
 	if (i+2 > fields->count)
 	    goto out;	/* need at least 2 more fields */

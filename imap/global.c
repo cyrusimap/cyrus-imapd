@@ -199,7 +199,7 @@ int cyrus_init(const char *alt_config, const char *ident, unsigned flags)
 
     val = config_getstring(IMAPOPT_SUPPRESS_CAPABILITIES);
     if (val)
-	suppressed_capabilities = strarray_split(val, NULL);
+	suppressed_capabilities = strarray_split(val, NULL, 0);
     if (config_getswitch(IMAPOPT_SEARCH_SKIPDIACRIT))
 	charset_flags |= CHARSET_SKIPDIACRIT;
 

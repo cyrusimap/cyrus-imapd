@@ -1465,7 +1465,7 @@ static void add_start(const char *name, struct entry *e,
     if (!strcmp(cmd,""))
 	fatalf(EX_CONFIG, "unable to find command for %s", name);
 
-    tok = strarray_split(cmd, NULL);
+    tok = strarray_split(cmd, NULL, 0);
     run_startup(tok);
     strarray_free(tok);
 }
@@ -1542,7 +1542,7 @@ static void add_service(const char *name, struct entry *e, void *rock)
     Services[i].proto = proto;
     proto = NULL; /* avoid freeing it */
 
-    Services[i].exec = strarray_split(cmd, NULL);
+    Services[i].exec = strarray_split(cmd, NULL, 0);
 
     /* is this service actually there? */
     if (!verify_service_file(Services[i].exec)) {
@@ -1653,7 +1653,7 @@ static void add_event(const char *name, struct entry *e, void *rock)
     }
     evt->period = period;
 
-    evt->exec = strarray_splitm(cmd, NULL);
+    evt->exec = strarray_splitm(cmd, NULL, 0);
 
     schedule_event(evt);
 }

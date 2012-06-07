@@ -321,35 +321,42 @@ char *strarray_join(const strarray_t *sa, const char *sep)
     return buf;
 }
 
-strarray_t *strarray_splitm(char *buf, const char *sep)
+strarray_t *strarray_splitm(char *buf, const char *sep, int flags)
 {
     strarray_t *sa = strarray_new();
-    char *p;
+    char *p, *q;
 
     if (!buf) return sa;
 
     if (!sep)
 	sep = " \t\r\n";
 
-    for (p = strtok(buf, sep) ; p ; p = strtok(NULL, sep))
-	strarray_append(sa, p);
+    for (p = strtok(buf, sep) ; p ; p = strtok(NULL, sep)) {
+	if (flags & STRARRAY_TRIM) {
+	    while (Uisspace(*p)) p++;
+	    q = p + strlen(p);
+	    while (q > p && Uisspace(q[-1])) q--;
+	    *q = '\0';
+	}
+	if (*p) strarray_append(sa, p);
+    }
 
     free(buf);
     return sa;
 }
 
-strarray_t *strarray_split(const char *line, const char *sep)
+strarray_t *strarray_split(const char *line, const char *sep, int flags)
 {
     if (!line)
 	return strarray_new();
-    return strarray_splitm(xstrdup(line), sep);
+    return strarray_splitm(xstrdup(line), sep, flags);
 }
 
-strarray_t *strarray_nsplit(const char *buf, size_t len, const char *sep)
+strarray_t *strarray_nsplit(const char *buf, size_t len, const char *sep, int flags)
 {
     if (!len)
 	return strarray_new();
-    return strarray_splitm(xstrndup(buf, len), sep);
+    return strarray_splitm(xstrndup(buf, len), sep, flags);
 }
 
 char **strarray_takevf(strarray_t *sa)

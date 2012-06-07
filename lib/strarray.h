@@ -89,9 +89,10 @@ strarray_t *strarray_dup(const strarray_t *);
 #define strarray_pushm(sa, s)	    strarray_appendm((sa), (s))
 
 char *strarray_join(const strarray_t *, const char *sep);
-strarray_t *strarray_splitm(char *buf, const char *sep);
-strarray_t *strarray_split(const char *buf, const char *sep);
-strarray_t *strarray_nsplit(const char *buf, size_t len, const char *sep);
+#define STRARRAY_TRIM (1<<0)
+strarray_t *strarray_splitm(char *buf, const char *sep, int flags);
+strarray_t *strarray_split(const char *buf, const char *sep, int flags);
+strarray_t *strarray_nsplit(const char *buf, size_t len, const char *sep, int flags);
 
 void strarray_sort(strarray_t *, compar_t *);
 void strarray_uniq(strarray_t *);

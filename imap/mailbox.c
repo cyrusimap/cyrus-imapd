@@ -2966,7 +2966,7 @@ int mailbox_create(const char *name,
 	const char *val = config_getstring(IMAPOPT_MAILBOX_INITIAL_FLAGS);
 	int i;
 
-	initial_flags = strarray_split(val, NULL);
+	initial_flags = strarray_split(val, NULL, 0);
 
 	for (i = 0; i < initial_flags->count; i++) {
 	    const char *flag = strarray_nth(initial_flags, i);

@@ -2689,7 +2689,7 @@ static int annotation_set_specialuse(annotate_state_t *state,
 	if (!val) {
 	    const char * specialuse_extra_opt = config_getstring(IMAPOPT_SPECIALUSE_EXTRA);
 	    if (specialuse_extra_opt) {
-		specialuse_extra = strarray_split(specialuse_extra_opt, NULL);
+		specialuse_extra = strarray_split(specialuse_extra_opt, NULL, 0);
 
 		for (i = 0; i < specialuse_extra->count; i++) {
 		    const char * extra_val = strarray_nth(specialuse_extra, i);
