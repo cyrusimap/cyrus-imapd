@@ -497,8 +497,9 @@ static int mboxlist_create_namecheck(const char *mboxname,
 
 	/* check the folder limit */
 	if (user_folder_limit) {
-	    const char *inbox = mboxname_user_inbox(userid);
+	    char *inbox = mboxname_user_mbox(userid, NULL);
 	    int num = mboxlist_count_inferiors(inbox);
+	    free(inbox);
 
 	    if (num + 1 > user_folder_limit) {
 		syslog(LOG_NOTICE, "LIMIT: refused to create "

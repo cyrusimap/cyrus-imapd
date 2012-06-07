@@ -894,9 +894,9 @@ const char *mboxname_to_userid(const char *mboxname)
     return ret;
 }
 
-const char *mboxname_user_inbox(const char *userid)
+char *mboxname_user_mbox(const char *userid, const char *subfolder)
 {
-    static char mboxname[MAX_MAILBOX_BUFFER];
+    struct buf mbox = BUF_INITIALIZER;
 
     if (!userid) return NULL;
 
@@ -904,16 +904,19 @@ const char *mboxname_user_inbox(const char *userid)
 	const char *atp;
 	atp = strchr(userid, '@');
 	if (atp) {
-	    snprintf(mboxname, MAX_MAILBOX_BUFFER,
-		     "%s!user.%.*s", atp+1, (int)(atp-userid), userid);
-	    return mboxname;
+	    buf_printf(&mbox, "%s!user.%.*s", atp+1, (int)(atp-userid), userid);
+	    goto userdone;
 	}
     }
 
     /* otherwise it's simple */
-    snprintf(mboxname, MAX_MAILBOX_BUFFER, "user.%s", userid);
+    buf_printf(&mbox, "user.%s", userid);
 
-    return mboxname;
+ userdone:
+    if (subfolder)
+	buf_printf(&mbox, ".%s", subfolder);
+
+    return buf_release(&mbox);
 }
 
 /*

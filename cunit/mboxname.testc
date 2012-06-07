@@ -108,18 +108,39 @@ static void test_to_userid(void)
     CU_ASSERT_PTR_NULL(r);
 }
 
-static void test_to_inbox(void)
+static void test_to_usermbox(void)
 {
-    const char *r;
+    char *r;
 
-    r = mboxname_user_inbox("sam");
-    CU_ASSERT_STRING_EQUAL(r, "user.sam");
-
-    r = mboxname_user_inbox("betty@boop.com");
-    CU_ASSERT_STRING_EQUAL(r, "boop.com!user.betty");
-
-    r = mboxname_user_inbox(NULL);
+    r = mboxname_user_mbox(NULL, NULL);
     CU_ASSERT_PTR_NULL(r);
+
+    r = mboxname_user_mbox(NULL, "extra.stuff");
+    CU_ASSERT_PTR_NULL(r);
+
+    r = mboxname_user_mbox("sam", NULL);
+    CU_ASSERT_STRING_EQUAL(r, "user.sam");
+    free(r);
+
+    r = mboxname_user_mbox("betty@boop.com", NULL);
+    CU_ASSERT_STRING_EQUAL(r, "boop.com!user.betty");
+    free(r);
+
+    r = mboxname_user_mbox("sam", "sub");
+    CU_ASSERT_STRING_EQUAL(r, "user.sam.sub");
+    free(r);
+
+    r = mboxname_user_mbox("sam", "sub.deep.stuff");
+    CU_ASSERT_STRING_EQUAL(r, "user.sam.sub.deep.stuff");
+    free(r);
+
+    r = mboxname_user_mbox("betty@boop.com", "sub");
+    CU_ASSERT_STRING_EQUAL(r, "boop.com!user.betty.sub");
+    free(r);
+
+    r = mboxname_user_mbox("betty@boop.com", "sub.deep.stuff");
+    CU_ASSERT_STRING_EQUAL(r, "boop.com!user.betty.sub.deep.stuff");
+    free(r);
 }
 
 
