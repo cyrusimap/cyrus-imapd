@@ -4121,17 +4121,6 @@ EXPORTED void index_getsearchtext_single(struct index_state *state, uint32_t msg
 			SEARCHINDEX_CMD_STUFFPART);
 }
 
-void index_getsearchtext(struct index_state *state,
-			 index_search_text_receiver_t receiver,
-			 void *rock)
-{
-    uint32_t msgno;
-
-    /* Send the converted text of every message out to the receiver. */
-    for (msgno = 1; msgno <= state->exists; msgno++)
-	index_getsearchtext_single(state, msgno, receiver, rock);
-}
-
 /*
  * Helper function to set up arguments to append_copy()
  */

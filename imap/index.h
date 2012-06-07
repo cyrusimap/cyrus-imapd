@@ -268,10 +268,6 @@ extern void index_getsearchtext_single(struct index_state *state, uint32_t msgno
                                        index_search_text_receiver_t receiver,
                                        void* rock);
 
-extern void index_getsearchtext(struct index_state *state,
-                                index_search_text_receiver_t receiver,
-                                void* rock);
-
 extern int index_getuidsequence(struct index_state *state,
 				struct searchargs *searchargs,
 				unsigned **uid_list);
