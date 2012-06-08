@@ -3130,8 +3130,7 @@ static void index_fetchfsection(struct index_state *state,
 static char *index_readheader(const char *msg_base, unsigned long msg_size,
 			      unsigned offset, unsigned size)
 {
-    static char *buf;
-    static unsigned bufsize;
+    static struct buf buf = BUF_INITIALIZER;
 
     if (offset + size > msg_size) {
 	/* Message file is too short, truncate request */
@@ -3143,17 +3142,9 @@ static char *index_readheader(const char *msg_base, unsigned long msg_size,
 	}
     }
 
-    if (bufsize < size+2) {
-	bufsize = size+100;
-	buf = xrealloc(buf, bufsize);
-    }
-
-    msg_base += offset;
-
-    memcpy(buf, msg_base, size);
-    buf[size] = '\0';
-
-    return buf;
+    buf_reset(&buf);
+    buf_appendmap(&buf, msg_base+offset, size);
+    return (char *)buf_cstring(&buf);
 }
 
 /*
