@@ -301,6 +301,55 @@ Blank lines and lines beginning with ``#'' are ignored.
 /* Time in seconds. Any imap command that takes longer than this
    time is logged. */
 
+{ "createonpost", 0, SWITCH }
+/* If yes, when lmtpd receives an incoming mail for an INBOX that does not exist,
+   then the INBOX is automatically created by lmtpd. */
+
+{ "autocreateinboxfolders", NULL, STRING }
+/* If a user does not have an INBOX created then the INBOX as well as some INBOX 
+   subfolders are created under two conditions.
+     1. The user logins via the IMAP or the POP3 protocol. (autocreatequota option must have a nonzero value)
+     2. A message arrives for the user through the LMTPD protocol.(createonpost option must be yes)
+   autocreateinboxfolders is a list of INBOX's subfolders separated by a "|", that 
+   are automatically created by the server under the previous two situations. */
+
+{ "autosubscribeinboxfolders", NULL, STRING }
+/* A list of folder names, separated by "|", that the users get automatically subscribed to, 
+   when their INBOX is created. These folder names must have been included in the 
+   autocreateinboxfolders option of the imapd.conf. */
+
+{ "autosubscribesharedfolders", NULL, STRING }
+/* A list of shared folders (bulletin boards), separated by "|", that the users get
+   automatically subscribed to, after their INBOX is created. The shared folder must 
+   have been created and the user must have the required permissions to get subscribed 
+   to it. Otherwise, subscribing to the shared folder fails. */
+
+{ "autosubscribe_all_sharedfolders", 0, SWITCH }
+/* If set to yes, the user is automatically subscribed to all shared folders, one has permission
+   to subscribe to. */
+
+{ "autocreate_sieve_script", NULL, STRING }
+/* The full path of a file that contains a sieve script. This script automatically becomes a
+   user's initial default sieve filter script. When this option is not defined, no default 
+   sieve filter is created. The file must be readable by the cyrus daemon. */
+
+{ "autocreate_sieve_compiledscript", NULL, STRING }
+/* The full path of a file that contains a compiled in bytecode sieve script. This script 
+   automatically becomes a user's initial default sieve filter script.  If this option is 
+   not specified, or the filename doesn't exist then the script defined by 
+   autocreate_sieve_script is compiled on the fly and installed as the user's default
+   sieve script */
+
+{ "generate_compiled_sieve_script", 0, SWITCH }
+/* If set to yes and no compiled sieve script file exists, the sieve script which is 
+   compiled on the fly will be saved in the file name that autocreate_sieve_compiledscript 
+   option points to. In order a compiled script to be generated, autocreate_sieve_script and 
+   autocreate_sieve_compiledscript must have valid values */
+
+{ "autocreate_users", "anyone", STRING }
+/* A space separated list of users and/or groups that are allowed their INBOX to be
+   automatically created. */
+
 { "configdirectory", NULL, STRING }
 /* The pathname of the IMAP configuration directory.  This field is
    required. */
@@ -1262,6 +1311,15 @@ product version in the capabilities */
 { "sieveusehomedir", 0, SWITCH }
 /* If enabled, lmtpd will look for Sieve scripts in user's home
    directories: ~user/.sieve. */
+
+{ "anysievefolder", 0, SWITCH }
+/* It must be "yes" in order to permit the autocreation of any INBOX subfolder 
+   requested by a sieve filter, through the "fileinto" action. (default = no) */
+
+{ "autosievefolders", NULL, STRING }
+/* It is a "|" separated list of subfolders of INBOX that will be automatically created, 
+   if requested by a sieve filter, through the "fileinto" action. (default = null)
+   i.e. autosievefolders: Junk | Spam */
 
 { "singleinstancestore", 1, SWITCH }
 /* If enabled, imapd, lmtpd and nntpd attempt to only write one copy

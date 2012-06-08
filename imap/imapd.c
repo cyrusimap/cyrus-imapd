@@ -73,6 +73,7 @@
 #include "annotate.h"
 #include "append.h"
 #include "auth.h"
+#include "autocreate.h"
 #include "backend.h"
 #include "bsearch.h"
 #include "charset.h"
@@ -2189,6 +2190,24 @@ void cmdloop(void)
     }
 }
 
+/*
+ * Autocreate Inbox and subfolders upon login
+ */
+static void autocreate_inbox(void)
+{
+    if (imapd_userisadmin) return;
+    if (imapd_userisproxyadmin) return;
+
+    if (config_getint(IMAPOPT_AUTOCREATEQUOTA)) {
+	char *inboxname = mboxname_user_mbox(imapd_userid, NULL);
+	int r = mboxlist_lookup(inboxname, NULL, NULL);
+	free(inboxname);
+	if (r != IMAP_MAILBOX_NONEXISTENT) return;
+    }
+
+    autocreate_user(&imapd_namespace, imapd_userid);
+}
+
 static void authentication_success(void)
 {
     int r;
@@ -2217,6 +2236,8 @@ static void authentication_success(void)
     mboxname_hiersep_tointernal(&imapd_namespace, imapd_userid,
 				config_virtdomains ?
 				strcspn(imapd_userid, "@") : 0);
+
+    autocreate_inbox();
 }
 
 static int checklimits(const char *tag)
@@ -6288,6 +6309,8 @@ void getlistargs(char *tag, struct listargs *listargs)
 	eatline(imapd_in, c);
 	goto freeargs;
     }
+
+    autocreate_inbox();
 
     return;
 

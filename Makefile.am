@@ -225,6 +225,11 @@ LD_UTILITY_ADD = imap/libimap.a $(LD_BASIC_ADD) $(COM_ERR_LIBS) $(LIB_UUID)
 # the SASL library.
 LD_SERVER_ADD = $(LD_UTILITY_ADD) $(LIB_WRAP)
 
+#if SIEVE
+# sieve/libsieve.a must be added to LDADD before lib/libcyrus.a (#3677)
+LD_SIEVE = sieve/libsieve.a
+#endif
+
 # ----
 
 if CUNIT
@@ -278,7 +283,7 @@ cunit_unit_SOURCES = $(cunit_FRAMEWORK) $(cunit_TESTS) \
 		imap/mutex_fake.c imap/spool.c
 cunit_unit_LDADD =
 if SIEVE
-cunit_unit_LDADD += sieve/libsieve.a
+cunit_unit_LDADD += $(LD_SIEVE)
 endif
 cunit_unit_LDADD += $(LD_UTILITY_ADD) -lcunit
 
@@ -381,8 +386,14 @@ imap_fud_LDADD = $(LD_SERVER_ADD)
 imap_idled_SOURCES = imap/idled.c imap/mutex_fake.c
 imap_idled_LDADD = $(LD_UTILITY_ADD)
 
-imap_imapd_SOURCES = imap/imap_proxy.c imap/imap_proxy.h imap/imapd.c imap/imapd.h imap/mutex_fake.c imap/pushstats.c imap/pushstats.h imap/proxy.c master/service.c
-imap_imapd_LDADD = $(LD_SERVER_ADD)
+imap_imapd_SOURCES = imap/imap_proxy.c imap/imap_proxy.h imap/imapd.c imap/imapd.h imap/mutex_fake.c \
+		     imap/pushstats.c imap/pushstats.h imap/proxy.c master/service.c \
+		     imap/autocreate.h imap/autocreate.c
+imap_imapd_LDADD = 
+if SIEVE
+imap_imapd_LDADD += $(LD_SIEVE)
+endif
+imap_imapd_LDADD += $(LD_SERVER_ADD)
 
 imap_ipurge_SOURCES = imap/cli_fatal.c imap/ipurge.c imap/mutex_fake.c
 imap_ipurge_LDADD = $(LD_UTILITY_ADD)
@@ -412,12 +423,12 @@ imap_libimap_a_SOURCES = imap/annotate.c imap/annotate.h imap/append.c \
 
 imap_lmtpd_SOURCES = imap/lmtpd.c imap/lmtpd.h imap/lmtpengine.c \
 	imap/lmtpengine.h imap/lmtpstats.c imap/lmtpstats.h \
-	imap/mutex_fake.c imap/proxy.c imap/spool.c master/service.c
+	imap/mutex_fake.c imap/proxy.c imap/spool.c master/service.c \
+	imap/autocreate.h imap/autocreate.c
 imap_lmtpd_LDADD =
-# sieve/libsieve.a must be added to LDADD before lib/libcyrus.a (#3677)
 if SIEVE
 imap_lmtpd_SOURCES += imap/lmtp_sieve.c imap/smtpclient.c
-imap_lmtpd_LDADD += sieve/libsieve.a
+imap_lmtpd_LDADD += $(LD_SIEVE)
 endif
 imap_lmtpd_LDADD += $(LD_SERVER_ADD)
 
@@ -445,8 +456,13 @@ imap_nntpd_SOURCES = imap/mutex_fake.c imap/nntpd.c \
 	imap/spool.h master/service.c
 imap_nntpd_LDADD = $(LD_SERVER_ADD)
 
-imap_pop3d_SOURCES = imap/mutex_fake.c imap/pop3d.c imap/proxy.c master/service.c
-imap_pop3d_LDADD = $(LD_SERVER_ADD)
+imap_pop3d_SOURCES = imap/mutex_fake.c imap/pop3d.c imap/proxy.c master/service.c \
+		     imap/autocreate.h imap/autocreate.c
+imap_pop3d_LDADD =
+if SIEVE
+imap_pop3d_LDADD += sieve/libsieve.a
+endif
+imap_pop3d_LDADD += $(LD_SERVER_ADD)
 
 imap_quota_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/quota.c
 imap_quota_LDADD = $(LD_UTILITY_ADD)

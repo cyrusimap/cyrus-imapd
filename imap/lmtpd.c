@@ -70,6 +70,7 @@
 #include "append.h"
 #include "assert.h"
 #include "auth.h"
+#include "autocreate.h"
 #include "backend.h"
 #include "duplicate.h"
 #include "exitcodes.h"
@@ -121,6 +122,8 @@ void shut_down(int code);
 
 static FILE *spoolfile(message_data_t *msgdata);
 static void removespool(message_data_t *msgdata);
+
+static int autocreate_inbox(const char *user, const char *domain);
 
 /* current namespace */
 static struct namespace lmtpd_namespace;
@@ -1018,6 +1021,51 @@ void shut_down(int code)
     exit(code);
 }
 
+
+/*
+ * Autocreate Inbox and subfolders upon login
+ */
+int autocreate_inbox(const char *user, const char *domain)
+{
+    char *username;
+    int r = 0;
+
+    if (!user)
+	return IMAP_MAILBOX_NONEXISTENT;
+
+    if (domain) {
+	username = strconcat(user, "@", domain, (char *)NULL);
+    } else {
+	username = xstrdup(user);
+    }
+
+    /*
+     * Exclude anonymous
+     */
+    if (!strcmp(username, "anonymous")) {
+	free(username);
+	return IMAP_MAILBOX_NONEXISTENT;
+    }
+
+    /*
+     * Check for autocreatequota and createonpost
+     */
+    if (!config_getint(IMAPOPT_AUTOCREATEQUOTA)) {
+	free(username);
+	return IMAP_MAILBOX_NONEXISTENT;
+    }
+    if (!config_getswitch(IMAPOPT_CREATEONPOST)) {
+	free(username);
+	return IMAP_MAILBOX_NONEXISTENT;
+    }
+
+    r = autocreate_user(&lmtpd_namespace, username);
+
+    free(username);
+
+    return r;
+}
+
 static int verify_user(const char *user, const char *domain, char *mailbox,
 		       quota_t quotastorage_check, quota_t quotamessage_check,
 		       struct auth_state *authstate)
@@ -1062,18 +1110,22 @@ static int verify_user(const char *user, const char *domain, char *mailbox,
 	 */
 	r = mlookup(namebuf, &mbentry);
 
+	/* If user mailbox does not exist, then invoke autocreate inbox function */
+	if (r == IMAP_MAILBOX_NONEXISTENT) {
+	    r = autocreate_inbox(user, domain);
+	    if (!r) r = mlookup(namebuf, &mbentry);
+	}
+
 	if (r == IMAP_MAILBOX_NONEXISTENT && !user &&
 	    config_getswitch(IMAPOPT_LMTP_FUZZY_MAILBOX_MATCH) &&
 	    /* see if we have a mailbox whose name is close */
 	    fuzzy_match(namebuf)) {
-
 	    /* We are guaranteed that the mailbox returned by fuzzy_match()
 	       will be no longer than the original, so we can copy over
 	       the existing mailbox.  The keeps us from having to do the
 	       fuzzy match multiple times. */
 	    strcpy(mailbox, domain ? namebuf+strlen(domain)+1 : namebuf);
 
-	    mboxlist_entry_free(&mbentry);
 	    r = mlookup(namebuf, &mbentry);
 	}
 
