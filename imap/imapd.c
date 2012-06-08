@@ -314,7 +314,8 @@ struct capa_struct base_capabilities[] = {
     { "QRESYNC",               2 },
     { "SCAN",                  2 },
     { "XLIST",                 2 },
-    { "XMOVE",                 2 }, /* not standard */
+    { "XMOVE",                 2 },
+    { "MOVE",                  2 }, /* draft */
     { "SPECIAL-USE",           2 },
     { "CREATE-SPECIAL-USE",    2 },
 
@@ -1646,6 +1647,23 @@ void cmdloop(void)
 		cmd_mupdatepush(tag.s, arg1.s);
 		
 		/* xxxx snmp_increment(MUPDATEPUSH_COUNT, 1); */
+	    }
+	    else if (!strcmp(cmd.s, "Move")) {
+		if (!imapd_index && !backend_current) goto nomailbox;
+		usinguid = 0;
+		if (c != ' ') goto missingargs;
+	    move:
+		c = getword(imapd_in, &arg1);
+		if (c == '\r') goto missingargs;
+		if (c != ' ' || !imparse_issequence(arg1.s)) goto badsequence;
+		c = getastring(imapd_in, imapd_out, &arg2);
+		if (c == EOF) goto missingargs;
+		if (c == '\r') c = prot_getc(imapd_in);
+		if (c != '\n') goto extraargs;
+
+		cmd_copy(tag.s, arg1.s, arg2.s, usinguid, /*ismove*/1);
+
+		snmp_increment(COPY_COUNT, 1);
 	    } else goto badcmd;
 	    break;
 
@@ -1988,8 +2006,11 @@ void cmdloop(void)
 		else if (!strcmp(arg1.s, "copy")) {
 		    goto copy;
 		}
+		else if (!strcmp(arg1.s, "move")) {
+		    goto move;
+		}
 		else if (!strcmp(arg1.s, "xmove")) {
-		    goto xmove;
+		    goto move;
 		}
 		else if (!strcmp(arg1.s, "expunge")) {
 		    c = getword(imapd_in, &arg1);
@@ -2101,18 +2122,7 @@ void cmdloop(void)
 		if (!imapd_index && !backend_current) goto nomailbox;
 		usinguid = 0;
 		if (c != ' ') goto missingargs;
-	    xmove:
-		c = getword(imapd_in, &arg1);
-		if (c == '\r') goto missingargs;
-		if (c != ' ' || !imparse_issequence(arg1.s)) goto badsequence;
-		c = getastring(imapd_in, imapd_out, &arg2);
-		if (c == EOF) goto missingargs;
-		if (c == '\r') c = prot_getc(imapd_in);
-		if (c != '\n') goto extraargs;
-
-		cmd_copy(tag.s, arg1.s, arg2.s, usinguid, /*ismove*/1);
-
-		snmp_increment(COPY_COUNT, 1);
+		goto move;
 	    }
 	    else if (!strcmp(cmd.s, "Xrunannotator")) {
 		if (!imapd_index && !backend_current) goto nomailbox;
