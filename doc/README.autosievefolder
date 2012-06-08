@@ -1,0 +1,46 @@
+Original documentation for the merged autosieve patch below.
+It would be great to tidy this up.
+
+Cyrus IMAP autosievefolder patch
+----------------------------------
+
+NOTE : This patch has been created at the University of Athens. For more info, as well 
+as more patches on Cyrus IMAPD server, please visit http://email.uoa.gr 
+
+NOTE : Patch updated to Cyrus IMAPD 2.4.x by Martin Matuska <mm@FreeBSD.org>
+
+  When the lmtpd daemon receives an email message prior to delivering it to the 
+INBOX folder of the user, checks if the user has specified sieve filters. If the
+user has specified sieve filters the filters are evaluated. If the message matches
+any of the filters the action that is specified in the filter is executed. If the action 
+is FileInto it is stored in the subfolder specified in the filter. If the 
+subfolder doesn't exist then the message is sent to the INBOX folder of the user.
+
+  With this patch if the folder doesn't exist AND the name of the subfolder is 
+specified in the autosievefolders option, OR the anysievefolder is set to 
+yes in the cyrus-imap configuration file then the subfolder is created and the mail 
+is stored there.
+
+
+Check the following options of the imapd.conf file
+==================================================
+
+* anysievefolder : It must be "yes" in order to permit the autocreation of any 
+INBOX subfolder requested by a sieve filter, through the "fileinto" action. (default = no)
+* autosievefolders : It is a "|" separated list of subfolders of INBOX that will be 
+automatically created, if requested by a sieve filter, through the "fileinto" 
+action. (default = null)
+	i.e. autosievefolders: Junk | Spam
+
+WARNING: anysievefolder, takes precedence over autosievefolders . Which means that if 
+anysievefolder is set to "yes", cyrus will create any INBOX subfolder requested, no-matter what the value of autosievefolders is.
+
+
+Things to be done
+=================
+
+1. Support cyrus wildcards in the autosievefolders option. 
+
+
+For more information and updates please visit http://email.uoa.gr/projects/cyrus/autosievefolder
+

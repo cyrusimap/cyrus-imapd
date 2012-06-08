@@ -1,0 +1,216 @@
+Original documentation for the merged autocomplete patch below.
+It would be great to tidy this up.
+
+Cyrus IMAP autocreate Inbox patch
+----------------------------------
+
+NOTE : This patch has been created at the University of Athens. For more info, as well 
+as more patches on Cyrus IMAPD server, please visit http://email.uoa.gr/ 
+
+NOTE : Patch updated for Cyrus IMAP 2.4.x by Martin Matuska <mm@FreeBSD.org>
+
+The design of Cyrus IMAP server does not predict the automatic creation of users'
+INBOX folders. The creation of a user's INBOX is considered to be an external task,
+that has to be completed as part of the user email account creation procedure. 
+Hence, to create a new email account the site administrator has to:
+
+  a) Include the new account in the user database for the authentication procedure
+     (e.g. sasldb, shadow, mysql, ldap).
+  b) Create the corresponding INBOX folder. 
+
+Alternatively, the user, if succesfully authenticated, may create his own INBOX folder,
+as long as the configuration of the site allows it (see "autocreatequota" in imapd.conf).
+Unlike what not careful readers may think, enabling the "autocreatequota" option, doesn't 
+lead to the automatic INBOX folder creation by Cyrus IMAP server.
+In fact, "autocreate" means that the IMAP clients are allowed to automatically create 
+the user INBOX. 
+
+This patch adds the functionality of automatic creation of the users' INBOX folders into
+the Cyrus IMAP server. It is implemented as two features, namely the  "create on login"
+and "create on post".
+ 
+
+
+Create on login
+===============
+This feauture provides automatic creation of a user's INBOX folder when all of the 
+following requirements are met:
+
+i)  The user has succesfully passed the authentication procedure.
+
+ii) The user's authorisation ID (typically the same as the user's
+authentication ID)  doesn't belong to the imap_admins or admins
+accounts (see imapd.conf).
+
+iii) The "autocreatequota" option in the imap configuration file 
+has been set to a non zero value. 
+
+iv) The corresponding to the user's authorisation ID INBOX folder
+does not exist.
+
+The user's first login is the most typical case when all four requirements are met. 
+Note that if the authenticated ID is allowed to proxy to another account for which 
+all of the above requirements are met, the corresponding INBOX folder for that account 
+will be created.
+
+
+
+Create on post
+==============
+This feauture provides automatic creation of a user's INBOX folder when all of the 
+following requirements are met. 
+
+i) An email message addressed to the user has been received.  
+
+ii) The recipient is not any of the imap_admins or admins accounts. 
+Note that passing emails to admins or imap_admins accounts from 
+the MTA to LMTP should be avoided in any case.
+
+iii) The recipient's INBOX does not exist.
+
+iv) The "autocreatequota" option in the imap configuration file 
+has been set to a non zero value. 
+
+v) The "createonpost" option in the imap configuration file 
+has been switched on. 
+
+
+Besides the automatic creation of INBOX folder, additional functionalities are
+provided:
+
+  (A) Automatic creation of INBOX subfolders controlled by "autocreateinboxfolders"
+configuration option. eg 
+
+autocreateinboxfolders: sent|drafts|spam|templates
+
+  (B) Automatic subscription of INBOX subfolders controlled by "autosubscribeinboxfolders"
+configuration option. eg
+
+autosubscribeinboxfolders: sent|spam
+
+Obviously, only subscription to subfolders included in the "autocreateinboxfolder"
+list is meaningful. 
+
+  (C) Automatic subscription to shared folders (bulletin boards). The user gets
+automatically subscribed to the shared folders declared in the "autosubscribesharedfolders"
+configuration option in imapd.conf.
+eg autosubscribesharedfolders: public_folder | public_folder.subfolder
+
+In order the above action to succeed, the shared folder has to pre-exist the INBOX creation
+and the user must have the appropriate permissions in order to be able to subscribe to the
+shared folder.
+
+* A new config option has been added. 'autosubscribe_all_sharedfolders' is a yes/no
+option. When set to yes, the user is automatically subscribed to all shared folders one 
+has permission to subscribe to. Please, note that when this option is set to yes, then
+'autosubscribesharedfolders' option is overriden.
+
+  (D) Automatic creation of a predefined default sieve script.
+
+This is very useful when a default sieve script is used for every user. Usually, a
+default anti-spam script may me be written in a file and copied to each user
+sieve scripts upon the INBOX creation. The imapd.conf options that have been added
+are 'autocreate_sieve_script', 'autocreate_sieve_compiledscript' and 
+'generate_compiled_sieve_script'. 
+
+autocreate_sieve_script configuration option refers to the full path of the file 
+that contains the sieve script. The default value is null and if no file is defined,
+then no default script is created upon INBOX creation. (The feature is disabled)
+eg autocreate_sieve_script: /etc/default_sieve_script
+
+autocreate_sieve_compiledscript configuration option refers to the full path of the
+file that contains the bytecode compiled sieve script. If this filename is defined
+in imapd.conf and the file exists, then it is automatically copied in the user's sieve
+directory. If it is not defined, then a bytecode sieve script gets on the fly compiled
+by the daemon. 
+eg autocreate_sieve_compiledscript: /etc/default_sieve_script.bc
+
+generate_compiled_sieve_script is a boolean option that triggers the compilation of the 
+source sieve script to bytecode sieve script. The file that the bytecode script will
+be saved is pointed by autocreate_sieve_compiledscript.
+
+Ways of compiling a sieve script : 
+1. Compile a sieve script using the standard sievec utility, distributed by CMU
+2. Compile a sieve script using the compile_sieve utility, released by UoA. This 
+   tool is almost identical to the sievec utility, with the difference that it 
+   reads the input and output file from autocreate_sieve_script and 
+   autocreate_sieve_compiledscript options in imapd.conf
+3. Let cyrus create a compiled sieve script using a source script. Cyrus can be
+   instructed to save the compiled script any time a compiled script does not exist.
+
+NOTES : 
+1. In order this functionality to work, the following requirements must have been met:
+   - 'sieveusehomedir' option must be 'no' in the configuration (default).
+   - 'sievedir' option must have a valid value.
+2. Currently, this patch checks the validity of the source script while generating a 
+   bytecode compiled script, but not the validity of the bytecode sieve script file.
+   The administrator should make sure that the provided files contain a valid sieve
+   script as well as the compiled script is updated every time the source script changes.
+
+
+  (E) The administrator may control for which users and/or groups may the INBOXes 
+automatically be created. The autocreate_users option restricts the groups
+for which the patch will create the mailboxes. 
+
+The default value of autocreate_users is anyone. So, if not set at all, the patch will 
+work for all users. However, one may set:
+
+autocreate_users: user1 user2 group:group1 group:group2
+
+In that case, the INBOX will be created only for user1, user2 and the users that belong 
+to group1 and group2. 
+
+More refined control per service is provided by the options imap_autocreate_users,
+pop3_autocreate_users and lmtp_autocreate_users. These options override the 
+autocreate_users option and offer per service control.
+
+Example: 
+One may want to restrict the create on post functionality only for a specific group
+of users. To achieve this, the following lines must be added in the imapd.conf file:
+
+createonpost: yes
+lmtp_autocreate_users: group:groupname
+
+
+
+Issues to be considered 
+=======================
+
+I) In order to use the create on post feauture one should be absolutely sure that: 
+a) The MTA checks the validity of the email recipient before sending the email to
+LMTP. This is an RFC821 requirement. This usually expands to "the mta should be 
+able to use the account database as user mailbox database". 
+b) Only authorised accounts/services can talk to LMTP.
+
+II) Especially in the case of imap logins, the current patch implementation checks
+for the INBOX folder existence upon login, causing an extra mailbox lookup in most 
+of the cases. 
+A better approach would be to chase the "IMAP_MAILBOX_NONEXISTENT" error code and
+check if the error is associated with an INBOX folder. However, this would mess up
+Cyrus code. The way it was implemented may not have been the most performance
+optimised, but it produces a much cleaner and simple patch.
+
+
+
+Virtual Domains Support
+=======================
+
+Virtual domains are supported by all versions of the patch for cyrus-imapd-2.2.1-BETA and 
+later. However, it is not possible to declare different INBOX subfolders to be created or 
+shared folders to be subscribed to for every domain.
+
+
+
+Things to be done
+=================
+
+1. Support MUPDATE
+
+It is within the developers' intentions to support the mupdate protocol, but serious 
+design issues on future cyrus releases have to resolved first.
+
+2. Select different attributes (quota, partition, sieve filter, etc) depending on the group
+a user belongs to. 
+
+For more information and updates please visit http://email.uoa.gr/projects/cyrus/autocreate
+
