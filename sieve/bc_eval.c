@@ -58,7 +58,6 @@
 #include "hash.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
-#include "xstrlcat.h"
 #include "util.h"
 #include "times.h"
 

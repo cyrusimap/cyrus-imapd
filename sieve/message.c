@@ -61,8 +61,6 @@
 #include "interp.h"
 #include "message.h"
 #include "xmalloc.h"
-#include "xstrlcpy.h"
-#include "xstrlcat.h"
 #include "util.h"
 
 /* reject message m with message msg
