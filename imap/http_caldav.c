@@ -1709,14 +1709,14 @@ static int propfind_by_collection(char *mboxname, int matchlen,
 	    memset(&cdata, 0, sizeof(struct caldav_data));
 	    cdata.mailbox = mboxname;
 	    cdata.resource = fctx->req_tgt->resource;
-	    caldav_read(auth_caldavdb, &cdata);
+	    caldav_read(fctx->caldavdb, &cdata);
 	    /* XXX  Check errors */
 
 	    r = fctx->proc_by_resource(rock, &cdata);
 	}
 	else {
 	    /* Add responses for all contained resources */
-	    caldav_foreach(auth_caldavdb, mboxname, fctx->proc_by_resource, rock);
+	    caldav_foreach(fctx->caldavdb, mboxname, fctx->proc_by_resource, rock);
 
 	    /* Started with NULL resource, end with NULL resource */
 	    fctx->req_tgt->resource = NULL;
@@ -1868,6 +1868,7 @@ int meth_propfind(struct transaction_t *txn)
     fctx.userid = httpd_userid;
     fctx.userisadmin = httpd_userisadmin;
     fctx.authstate = httpd_authstate;
+    fctx.caldavdb = auth_caldavdb;
     fctx.mailbox = NULL;
     fctx.record = NULL;
     fctx.reqd_privs = DACL_READ;
@@ -3181,6 +3182,7 @@ static int meth_report(struct transaction_t *txn)
     fctx.userid = httpd_userid;
     fctx.userisadmin = httpd_userisadmin;
     fctx.authstate = httpd_authstate;
+    fctx.caldavdb = auth_caldavdb;
     fctx.mailbox = NULL;
     fctx.record = NULL;
     fctx.reqd_privs = report->reqd_privs;
@@ -3787,6 +3789,7 @@ int busytime_query(struct transaction_t *txn, icalcomponent *comp)
 	snprintf(mailboxname, sizeof(mailboxname),
 		 "user.%s.%s", userid, calendarprefix);
 
+	fctx.caldavdb = caldav_open(userid, CALDAV_CREATE);
 	fctx.req_tgt->collection = NULL;
 	fctx.busytime.len = 0;
 	busy = busytime(txn, &fctx, mailboxname,
@@ -3807,6 +3810,8 @@ int busytime_query(struct transaction_t *txn, icalcomponent *comp)
 	    xmlNewChild(resp, NULL, BAD_CAST "request-status",
 			BAD_CAST "3.7;Invalid calendar user");
 	}
+
+	caldav_close(fctx.caldavdb);
     }
 
     /* Output the XML response */
