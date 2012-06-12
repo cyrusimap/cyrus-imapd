@@ -3260,8 +3260,7 @@ index_fetchcacheheader(struct index_state *state, struct index_record *record,
 		       const strarray_t *headers, unsigned start_octet,
 		       unsigned octet_count)
 {
-    static char *buf;
-    static unsigned bufsize;
+    static struct buf buf = BUF_INITIALIZER;
     unsigned size;
     unsigned crlf_start = 0;
     unsigned crlf_size = 2;
@@ -3273,17 +3272,12 @@ index_fetchcacheheader(struct index_state *state, struct index_record *record,
 	return;
     }
 
-    size = cacheitem_size(record, CACHE_HEADERS);
-    if (bufsize < size+2) {
-	bufsize = size+100;
-	buf = xrealloc(buf, bufsize);
-    }
+    buf_setmap(&buf, cacheitem_base(record, CACHE_HEADERS),
+		     cacheitem_size(record, CACHE_HEADERS));
+    buf_cstring(&buf);
 
-    memcpy(buf, cacheitem_base(record, CACHE_HEADERS), size);
-    buf[size] = '\0';
-
-    message_pruneheader(buf, headers, 0);
-    size = strlen(buf);
+    message_pruneheader(buf.s, headers, 0);
+    size = buf.len;
 
     /* partial fetch: adjust 'size' */
     if (octet_count) {
@@ -3315,7 +3309,7 @@ index_fetchcacheheader(struct index_state *state, struct index_record *record,
     }
     else {
 	prot_printf(state->out, "{%u}\r\n", size + crlf_size);
-	prot_write(state->out, buf + start_octet, size);
+	prot_write(state->out, buf.s + start_octet, size);
 	prot_write(state->out, "\r\n" + crlf_start, crlf_size);
     }
 }
