@@ -4681,7 +4681,7 @@ static int searchmsg_cb(int partno, int charset, int encoding,
 
 
 static int index_searchmsg(struct index_record *record,
-			   const struct buf *msgfile,
+			   const struct buf *buf,
 			   const char *substr,
 			   comp_pat *pat,
 			   int skipheader)
@@ -4691,7 +4691,7 @@ static int index_searchmsg(struct index_record *record,
     sr.substr = substr;
     sr.pat = pat;
     sr.skipheader = skipheader;
-    return message_foreach_part(record, msgfile, searchmsg_cb, &sr);
+    return message_foreach_part(record, buf, searchmsg_cb, &sr);
 }
 
 /*
@@ -4761,78 +4761,66 @@ static int index_searchcacheheader(struct index_state *state, uint32_t msgno,
 }
 
 
-/* This code was cribbed from index_searchmsg. Instead of checking for matches,
-   we call charset_extractfile to send the entire text out to 'receiver'.
-   Keep this in sync with index_searchmsg! */
-static void index_getsearchtextmsg(struct index_state *state,
+struct getsearchtext_rock
+{
+    index_search_text_receiver_t receiver;
+    void *rock;
+    int partcount;
+    unsigned int uid;
+};
+
+static int getsearchtext_cb(int partno, int charset, int encoding,
+			    struct buf *data, void *rock)
+{
+    struct getsearchtext_rock *str = (struct getsearchtext_rock *)rock;
+    char *q;
+
+    if (!partno) {
+	/* header-like */
+	q = charset_decode_mimeheader(buf_cstring(data), charset_flags);
+	if (str->partcount == 1) {
+	    str->receiver(str->uid, SEARCHINDEX_PART_HEADERS,
+			  SEARCHINDEX_CMD_STUFFPART, q, strlen(q), rock);
+	    str->receiver(str->uid, SEARCHINDEX_PART_BODY,
+			  SEARCHINDEX_CMD_BEGINPART, NULL, 0, rock);
+	} else {
+	    str->receiver(str->uid, SEARCHINDEX_PART_BODY,
+			  SEARCHINDEX_CMD_APPENDPART, q, strlen(q), rock);
+	}
+	free(q);
+    }
+    else {
+	/* body-like */
+	charset_extractfile(str->receiver, str->rock, str->uid,
+			    data->s, data->len,
+			    charset, encoding, charset_flags);
+    }
+    return 0;
+}
+
+static void index_getsearchtextmsg(struct mailbox *mailbox,
 				   struct index_record *record,
 				   index_search_text_receiver_t receiver,
-				   void *rock,
-				   char const *cachestr)
+				   void *rock)
 {
     struct buf buf = BUF_INITIALIZER;
-    int partsleft = 1;
-    int subparts;
-    unsigned long start;
-    int len, charset, encoding;
-    int partcount = 0;
-    char *p, *q;
-    struct mailbox *mailbox = state->mailbox;
+    struct getsearchtext_rock str;
 
-    if (mailbox_map_record(mailbox, record, &buf))
+    if (mailbox_map_message(mailbox, record->uid, &buf))
 	return;
 
     /* Won't find anything in a truncated file */
-    if (buf.len > 0) {
-	while (partsleft--) {
-	    subparts = CACHE_ITEM_BIT32(cachestr);
-	    cachestr += 4;
-	    if (subparts) {
-		partsleft += subparts-1;
+    if (buf.len == 0)
+	return;
 
-		partcount++;
+    str.receiver = receiver;
+    str.rock = rock;
+    str.partcount = 0;
+    str.uid = record->uid;
+    message_foreach_part(record, &msgfile, getsearchtext_cb, &str);
 
-		len = CACHE_ITEM_BIT32(cachestr+4);
-		if (len > 0) {
-		    p = index_readheader(buf.s, buf.len,
-					 CACHE_ITEM_BIT32(cachestr),
-					 len);
-		    if (p) {
-			/* push search normalised here */
-			q = charset_decode_mimeheader(p, charset_flags);
-			if (partcount == 1) {
-			    receiver(record->uid, SEARCHINDEX_PART_HEADERS,
-				     SEARCHINDEX_CMD_STUFFPART, q, strlen(q), rock);
-			    receiver(record->uid, SEARCHINDEX_PART_BODY,
-				     SEARCHINDEX_CMD_BEGINPART, NULL, 0, rock);
-			} else {
-			    receiver(record->uid, SEARCHINDEX_PART_BODY,
-				 SEARCHINDEX_CMD_APPENDPART, q, strlen(q), rock);
-			}
-			free(q);
-		    }
-		}
-		cachestr += 5*4;
-
-		while (--subparts) {
-		    start = CACHE_ITEM_BIT32(cachestr+2*4);
-		    len = CACHE_ITEM_BIT32(cachestr+3*4);
-		    charset = CACHE_ITEM_BIT32(cachestr+4*4) >> 16;
-		    encoding = CACHE_ITEM_BIT32(cachestr+4*4) & 0xff;
-
-		    if (start < buf.len && len > 0) {
-		      charset_extractfile(receiver, rock, record->uid,
-					  buf.s + start,
-					  len, charset, encoding, charset_flags);
-		    }
-		    cachestr += 5*4;
-		}
-	    }
-	}
-
-	receiver(record->uid, SEARCHINDEX_PART_BODY,
-		 SEARCHINDEX_CMD_ENDPART, NULL, 0, rock);
-    }
+    receiver(record->uid, SEARCHINDEX_PART_BODY,
+	     SEARCHINDEX_CMD_ENDPART, NULL, 0, rock);
 
     buf_free(&buf);
 }
@@ -4853,8 +4841,12 @@ EXPORTED void index_getsearchtext_single(struct index_state *state, uint32_t msg
     if (mailbox_cacherecord(mailbox, &record))
 	return;
 
+<<<<<<< HEAD
     index_getsearchtextmsg(state, &record, receiver, rock,
 			   cacheitem_base(&record, CACHE_SECTION));
+=======
+    index_getsearchtextmsg(state->mailbox, &record, receiver, rock);
+>>>>>>> index_getsearchtextmsg() uses message_foreach_part
 
     charset_extractitem(receiver, rock, record.uid,
 			cacheitem_base(&record, CACHE_FROM),

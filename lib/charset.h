@@ -117,7 +117,7 @@ extern char *charset_encode_mimeheader(const char *header, size_t len);
    can only participate in one BEGIN ... APPEND ... END sequence, and
    the sequences for different parts cannot be interleaved.
 */
-typedef void index_search_text_receiver_t(int UID, int part, int cmds,
+typedef void (*index_search_text_receiver_t)(int UID, int part, int cmds,
   char const* text, int text_len, void* rock);
 
 /* Extract the body text for the message denoted by 'uid', convert its
