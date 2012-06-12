@@ -3213,3 +3213,108 @@ out:
     return r;
 }
 
+
+/*
+
+  Format of the CACHE_SECTION cache item is a binary encoding
+  tree of MIME sections.  In something like rpcgen notation
+  (see RFC 4506):
+
+    struct part {
+	uint32_t header_offset;
+	uint32_t header_size;
+	uint32_t content_offset;
+	uint32_t content_size;
+	uint16_t charset;
+	uint16_t encoding;
+    };
+
+    struct section {
+	unsigned int numparts;
+	struct part parts[numparts];
+	struct section[numparts-1];
+    };
+
+*/
+
+/*
+ * Iterate 'proc' over all the MIME parts of the message defined
+ * by `record' and 'msg'.  Uses the SECTION information from the
+ * cyrus.cache, so 'record' needs to have had mailbox_cacherecord()
+ * called on it beforehand.
+ *
+ * Parameters passed to 'proc' are:
+ *
+ *    partno - part number within the innermost MIME space being
+ *             iterated.  Most useful for telling whether we are
+ *             being given a header (partno=0) or a body part (>0).
+ *    charset - a charset number, as returned from charse_lookupname()
+ *    encoding - one of the ENCODING_* constants e.g. ENCODING_QP.
+ *    data - read-only struct buf pointing to the mapped raw (i.e.
+ *           not decoded) section data.
+ *    rock - the 'rock' parameter passed in.
+ *
+ * If 'proc' returns non-zero, the iteration finishes early and the
+ * return value of 'proc' is returned.  Otherwise returns 0.
+ */
+int message_foreach_part(struct index_record *record,
+			 const struct buf *msg,
+			 int (*proc)(int partno, int charset, int encoding,
+				     struct buf *data, void *rock),
+			 void *rock)
+{
+    int partsleft = 1;
+    int subparts;
+    unsigned long start;
+    int partno, encoding, charset;
+    int len;
+    int r;
+    const char *cachestr = cacheitem_base(record, CACHE_SECTION);
+    struct buf data = BUF_INITIALIZER;
+
+    /* Won't find anything in a truncated file */
+    if (!msg || !msg->s || !msg->len) return 0;
+
+    while (partsleft--) {
+	subparts = CACHE_ITEM_BIT32(cachestr);
+	cachestr += 4;
+	if (subparts) {
+	    partsleft += subparts-1;
+
+	    for (partno = 0 ; partno < subparts ; partno++) {
+		if (!partno) {
+		    start = CACHE_ITEM_BIT32(cachestr+0*4);
+		    len = CACHE_ITEM_BIT32(cachestr+1*4);
+		}
+		else {
+		    start = CACHE_ITEM_BIT32(cachestr+2*4);
+		    len = CACHE_ITEM_BIT32(cachestr+3*4);
+		}
+		charset = CACHE_ITEM_BIT32(cachestr+4*4) >> 16;
+		encoding = CACHE_ITEM_BIT32(cachestr+4*4) & 0xff;
+		cachestr += 5*4;
+
+		if (len <= 0)
+		    continue;	    /* may be a validly nonexistant section */
+
+		/* trim the range [start,start+len) */
+		if (start > msg->len) {
+		    start = msg->len;
+		    len = 0;
+		}
+		else if (start + len > msg->len) {
+		    len = msg->len - start;
+		}
+		if (len == 0)
+		    continue;	    /* probably corrupt data */
+
+		buf_init_ro(&data, msg->s + start, len);
+		r = proc(partno, charset, encoding, &data, rock);
+		buf_free(&data);
+		if (r) return r;
+	    }
+	}
+    }
+
+    return 0;
+}

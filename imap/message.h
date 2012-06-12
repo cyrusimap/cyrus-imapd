@@ -179,4 +179,10 @@ extern void message_read_bodystructure(struct index_record *record,
 
 extern int message_update_conversations(struct conversations_state *, struct index_record *, conversation_t **);
 
+int message_foreach_part(struct index_record *record,
+			 const struct buf *msg,
+			 int (*proc)(int partno, int charset, int encoding,
+				     struct buf *data, void *rock),
+			 void *rock);
+
 #endif /* INCLUDED_MESSAGE_H */
