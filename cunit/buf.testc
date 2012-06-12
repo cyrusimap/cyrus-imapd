@@ -969,6 +969,40 @@ static void test_cow(void)
     buf_free(&b);
 }
 
+static void test_cow2(void)
+{
+    static const char DATA0[] = "cardigan umami";
+    struct buf b = BUF_INITIALIZER;
+    const char *s;
+
+    CU_ASSERT_EQUAL(b.len, 0);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT_PTR_NULL(b.s);
+
+    buf_init_ro_cstr(&b, DATA0);
+    CU_ASSERT_EQUAL(b.len, sizeof(DATA0)-1);
+    CU_ASSERT_EQUAL(b.alloc, 0);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT_PTR_EQUAL(b.s, (char *)DATA0);
+
+    s = buf_cstring(&b);
+    CU_ASSERT_PTR_NOT_NULL(s);
+    CU_ASSERT_PTR_EQUAL(s, (char *)DATA0);
+    CU_ASSERT_EQUAL(b.len, sizeof(DATA0)-1);
+    CU_ASSERT_EQUAL(b.alloc, 0);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT_PTR_EQUAL(b.s, (char *)DATA0);
+
+    buf_putc(&b, 'X');
+    CU_ASSERT_EQUAL(b.len, sizeof(DATA0)-1+1);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT_PTR_NOT_EQUAL(b.s, (char *)DATA0);
+
+    buf_free(&b);
+}
+
 static void test_bufprint(void)
 {
     struct buf b = BUF_INITIALIZER;
