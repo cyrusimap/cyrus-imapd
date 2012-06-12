@@ -169,3 +169,14 @@
     fun:tls_init_serverengine
     ...
 }
+{
+    # This function is part of the unit tests and deliberately
+    # passes bogus mappings to msync() in the expectation of
+    # generating an error from the kernel.
+    is_valid_mapping
+    Memcheck:Param
+    msync(start)
+    fun:__msync_nocancel
+    fun:is_valid_mapping
+    ...
+}

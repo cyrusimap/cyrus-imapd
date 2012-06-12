@@ -762,6 +762,12 @@ EXPORTED void buf_ensure(struct buf *buf, size_t n)
 	char *s = xmalloc(newlen);
 	if (buf->len) /* copy on write */
 	    memcpy(s, buf->s, buf->len);
+	if (buf->flags & BUF_MMAP) {
+	    const char *base = buf->s;
+	    size_t len = buf->len;
+	    map_free(&base, &len);
+	    buf->flags &= ~BUF_MMAP;
+	}
 	buf->s = s;
     }
 
@@ -1103,10 +1109,33 @@ EXPORTED void buf_init_ro_cstr(struct buf *buf, const char *str)
     buf->s = (char *)str;
 }
 
-EXPORTED void buf_free(struct buf *buf)
+/*
+ * Initialise a struct buf to point to a read-only mmap()ing.
+ * This buf is CoW, and if written to the data will be freed
+ * using map_free().
+ */
+EXPORTED void buf_init_mmap(struct buf *buf, const char *base, int len)
+{
+    buf->alloc = 0;
+    buf->len = len;
+    buf->flags = BUF_MMAP;
+    buf->s = (char *)base;
+}
+
+static void _buf_free_data(struct buf *buf)
 {
     if (buf->alloc)
 	free(buf->s);
+    else if (buf->flags & BUF_MMAP) {
+	const char *base = buf->s;
+	size_t len = buf->len;
+	map_free(&base, &len);
+    }
+}
+
+EXPORTED void buf_free(struct buf *buf)
+{
+    _buf_free_data(buf);
     buf->alloc = 0;
     buf->s = NULL;
     buf->len = 0;
@@ -1115,8 +1144,7 @@ EXPORTED void buf_free(struct buf *buf)
 
 EXPORTED void buf_move(struct buf *dst, struct buf *src)
 {
-    if (dst->alloc)
-	free(dst->s);
+    _buf_free_data(dst);
     *dst = *src;
     buf_init(src);
 }

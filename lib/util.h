@@ -204,7 +204,8 @@ extern double timesub(const struct timeval *start, const struct timeval *end);
 
 extern clock_t sclock(void);
 
-#define BUF_CSTRING 1
+#define BUF_CSTRING (1<<0)
+#define BUF_MMAP    (1<<1)
 
 struct buf {
     char *s;
@@ -244,6 +245,7 @@ int buf_cmp(const struct buf *, const struct buf *);
 void buf_init(struct buf *buf);
 void buf_init_ro(struct buf *buf, const char *base, size_t len);
 void buf_init_ro_cstr(struct buf *buf, const char *str);
+void buf_init_mmap(struct buf *buf, const char *base, int len);
 void buf_free(struct buf *buf);
 void buf_move(struct buf *dst, struct buf *src);
 

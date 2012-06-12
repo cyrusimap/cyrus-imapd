@@ -3,6 +3,9 @@
 #include "prot.h"
 #include "xmalloc.h"
 #include "util.h"
+#include "retry.h"
+#include "map.h"
+#include <sys/mman.h>
 
 static void test_simple(void)
 {
@@ -1001,6 +1004,113 @@ static void test_cow2(void)
     CU_ASSERT_PTR_NOT_EQUAL(b.s, (char *)DATA0);
 
     buf_free(&b);
+}
+
+static int is_valid_mapping(const char *p, size_t len)
+{
+    /* To test the validity of an address mapping in a portable
+     * way, we're using a system call which will fail gracefully
+     * if the address is invalid.  On Linux, the mremap() call
+     * would be the best way to do this, but we're only assuming
+     * POSIX systems so we use msync() */
+    int r;
+    unsigned long page_size = sysconf(_SC_PAGESIZE);
+
+    /* round up to a page size */
+    len = ((len + page_size-1) / page_size) * page_size;
+
+    r = msync((void *)p, len, 0);
+
+    if (r == 0)
+	return 1;		/* valid mapping */
+
+    if (r < 0 &&
+	(errno == EFAULT || errno == ENOMEM))
+	return 0;		/* not a valid mapping */
+
+    fprintf(stderr, "is_valid_mapping: unexpected error %d (%s)\n",
+	    errno, error_message(errno));
+    return -1;
+}
+
+static void test_mmap(void)
+{
+    struct buf b = BUF_INITIALIZER;
+    char *fname = xstrdup("/tmp/cyrus-cunit-mmapXXXXXX");
+    int fd = mkstemp(fname);
+    const char *base = NULL;
+    size_t len = 0;
+    static const char DATA0[] = "Brooklyn keffiyeh tattooed, "
+				"letterpress cosby sweater ennui "
+				"Austin.";
+
+    /* write out a trailing NUL too so we don't walk past
+     * the end of the mmap'ed region when comparing - just
+     * in case Valgrind is smart enough to detect that */
+    retry_write(fd, DATA0, sizeof(DATA0));
+
+    map_refresh(fd, /*onceonly*/1, &base, &len, sizeof(DATA0), fname, NULL);
+
+    CU_ASSERT(is_valid_mapping(base, len));
+
+    buf_init_mmap(&b, base, len);
+    CU_ASSERT_EQUAL(b.len, sizeof(DATA0));
+    CU_ASSERT_EQUAL(b.alloc, 0);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    CU_ASSERT_STRING_EQUAL(b.s, DATA0);
+
+    CU_ASSERT(is_valid_mapping(base, len));
+    buf_free(&b);
+    CU_ASSERT(!is_valid_mapping(base, len));
+
+    unlink(fname);
+    free(fname);
+    close(fd);
+}
+
+static void test_mmap_cow(void)
+{
+    struct buf b = BUF_INITIALIZER;
+    char *fname = xstrdup("/tmp/cyrus-cunit-mmapXXXXXX");
+    int fd = mkstemp(fname);
+    const char *base = NULL;
+    size_t len = 0;
+    static const char DATA0[] = "Seitan mcsweeney's letterpress "
+				"bespoke, bushwick iphone banh mi";
+
+    /* write out a trailing NUL too so we don't walk past
+     * the end of the mmap'ed region when comparing - just
+     * in case Valgrind is smart enough to detect that */
+    retry_write(fd, DATA0, sizeof(DATA0));
+
+    map_refresh(fd, /*onceonly*/1, &base, &len, sizeof(DATA0), fname, NULL);
+
+    CU_ASSERT(is_valid_mapping(base, len));
+
+    buf_init_mmap(&b, base, len);
+    CU_ASSERT_EQUAL(b.len, sizeof(DATA0));
+    CU_ASSERT_EQUAL(b.alloc, 0);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    CU_ASSERT_STRING_EQUAL(b.s, DATA0);
+    CU_ASSERT(is_valid_mapping(base, len));
+
+    /* writing to the buf does a CoW, which munmap()s the data */
+    buf_putc(&b, 'X');
+    CU_ASSERT_EQUAL(b.len, sizeof(DATA0)+1);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    CU_ASSERT_PTR_NOT_EQUAL(b.s, base);
+    CU_ASSERT_STRING_EQUAL(b.s, DATA0);
+    CU_ASSERT(b.s[sizeof(DATA0)] == 'X');
+    CU_ASSERT(!is_valid_mapping(base, len));
+
+    buf_free(&b);
+    unlink(fname);
+    free(fname);
+    close(fd);
 }
 
 static void test_bufprint(void)
