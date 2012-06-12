@@ -101,7 +101,7 @@ struct index_modified_flags {
 
 static int index_writeseen(struct index_state *state);
 static void index_fetchmsg(struct index_state *state,
-		    const char *msg_base, unsigned long msg_size,
+		    const struct buf *msg,
 		    unsigned offset, unsigned size,
 		    unsigned start_octet, unsigned octet_count);
 static int index_fetchsection(struct index_state *state, const char *resp,
@@ -2717,7 +2717,7 @@ static int index_appendremote(struct index_state *state, uint32_t msgno,
     prot_printf(pout, ") \"%s\" ", datebuf);
 
     /* message literal */
-    index_fetchmsg(state, buf.s, buf.len, 0, record.size, 0, 0);
+    index_fetchmsg(state, &buf, 0, record.size, 0, 0);
 
     /* close the message file */
     buf_free(&buf);
@@ -2804,8 +2804,8 @@ static int data_domain(const char *p, size_t n)
  * further constrained by 'start_octet' and 'octet_count' as per the
  * IMAP command PARTIAL.
  */
-void index_fetchmsg(struct index_state *state, const char *msg_base,
-		    unsigned long msg_size, unsigned offset,
+void index_fetchmsg(struct index_state *state, const struct buf *msg,
+		    unsigned offset,
 		    unsigned size,     /* this is the correct size for a news message after
 					  having LF translated to CRLF */
 		    unsigned start_octet, unsigned octet_count)
@@ -2813,7 +2813,7 @@ void index_fetchmsg(struct index_state *state, const char *msg_base,
     unsigned n, domain;
 
     /* If no data, output NIL */
-    if (!msg_base) {
+    if (!msg || !msg->s) {
 	prot_printf(state->out, "NIL");
 	return;
     }
@@ -2838,9 +2838,9 @@ void index_fetchmsg(struct index_state *state, const char *msg_base,
     /* Seek over PARTIAL constraint */
     offset += start_octet;
     n = size;
-    if (offset + size > msg_size) {
-	if (msg_size > offset) {
-	    n = msg_size - offset;
+    if (offset + size > msg->len) {
+	if (msg->len > offset) {
+	    n = msg->len - offset;
 	}
 	else {
 	    prot_printf(state->out, "\"\"");
@@ -2849,7 +2849,7 @@ void index_fetchmsg(struct index_state *state, const char *msg_base,
     }
 
     /* Get domain of the data */
-    domain = data_domain(msg_base + offset, n);
+    domain = data_domain(msg->s + offset, n);
 
     if (domain == DOMAIN_BINARY) {
 	/* Write size of literal8 */
@@ -2862,7 +2862,7 @@ void index_fetchmsg(struct index_state *state, const char *msg_base,
     /* Non-text literal -- tell the protstream about it */
     if (domain != DOMAIN_7BIT) prot_data_boundary(state->out);
 
-    prot_write(state->out, msg_base + offset, n);
+    prot_write(state->out, msg->s + offset, n);
     while (n++ < size) {
 	/* File too short, resynch client.
 	 *
@@ -2880,7 +2880,7 @@ void index_fetchmsg(struct index_state *state, const char *msg_base,
  * Helper function to fetch a body section
  */
 static int index_fetchsection(struct index_state *state, const char *resp,
-			      const struct buf *msg,
+			      const struct buf *inmsg,
 			      char *section, const char *cachestr, unsigned size,
 			      unsigned start_octet, unsigned octet_count)
 {
@@ -2889,8 +2889,9 @@ static int index_fetchsection(struct index_state *state, const char *resp,
     int fetchmime = 0;
     unsigned offset = 0;
     char *decbuf = NULL;
-    const char *msg_base = msg->s;
-    size_t msg_size = msg->len;
+    struct buf msg = BUF_INITIALIZER;
+
+    buf_init_ro(&msg, inmsg->s, inmsg->len);
 
     p = section;
 
@@ -2900,7 +2901,7 @@ static int index_fetchsection(struct index_state *state, const char *resp,
 	    prot_printf(state->out, "%s%u", resp, size);
 	} else {
 	    prot_printf(state->out, "%s", resp);
-	    index_fetchmsg(state, msg->s, msg->len, 0, size,
+	    index_fetchmsg(state, &msg, 0, size,
 			   start_octet, octet_count);
 	}
 	return 0;
@@ -2967,7 +2968,7 @@ static int index_fetchsection(struct index_state *state, const char *resp,
     offset = CACHE_ITEM_BIT32(cachestr);
     size = CACHE_ITEM_BIT32(cachestr + CACHE_ITEM_SIZE_SKIP);
 
-    if (msg->s && (p = strstr(resp, "BINARY"))) {
+    if (msg.s && (p = strstr(resp, "BINARY"))) {
 	/* BINARY or BINARY.SIZE */
 	int encoding = CACHE_ITEM_BIT32(cachestr + 2 * 4) & 0xff;
 	size_t newsize;
@@ -2978,10 +2979,10 @@ static int index_fetchsection(struct index_state *state, const char *resp,
 	    return IMAP_IOERROR;
 	}
 
-	msg_base = charset_decode_mimebody(msg->s + offset, size, encoding,
-					   &decbuf, &newsize);
+	msg.s = (char *)charset_decode_mimebody(msg.s + offset, size, encoding,
+						&decbuf, &newsize);
 
-	if (!msg_base) {
+	if (!msg.s) {
 	    /* failed to decode */
 	    if (decbuf) free(decbuf);
 	    return IMAP_NO_UNKNOWN_CTE;
@@ -2996,13 +2997,13 @@ static int index_fetchsection(struct index_state *state, const char *resp,
 	    /* BINARY */
 	    offset = 0;
 	    size = newsize;
-	    msg_size = newsize;
+	    msg.len = newsize;
 	}
     }
 
     /* Output body part */
     prot_printf(state->out, "%s", resp);
-    index_fetchmsg(state, msg_base, msg_size, offset, size,
+    index_fetchmsg(state, &msg, offset, size,
 		   start_octet, octet_count);
 
     if (decbuf) free(decbuf);
@@ -3779,7 +3780,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
     if (fetchitems & FETCH_HEADER) {
 	prot_printf(state->out, "%cRFC822.HEADER ", sepchar);
 	sepchar = ' ';
-	index_fetchmsg(state, buf.s, buf.len, 0,
+	index_fetchmsg(state, &buf, 0,
 		       record.header_size,
 		       (fetchitems & FETCH_IS_PARTIAL) ?
 		         fetchargs->start_octet : 0,
@@ -3801,7 +3802,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
     if (fetchitems & FETCH_TEXT) {
 	prot_printf(state->out, "%cRFC822.TEXT ", sepchar);
 	sepchar = ' ';
-	index_fetchmsg(state, buf.s, buf.len,
+	index_fetchmsg(state, &buf,
 		       record.header_size, record.size - record.header_size,
 		       (fetchitems & FETCH_IS_PARTIAL) ?
 		         fetchargs->start_octet : 0,
@@ -3811,7 +3812,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
     if (fetchitems & FETCH_RFC822) {
 	prot_printf(state->out, "%cRFC822 ", sepchar);
 	sepchar = ' ';
-	index_fetchmsg(state, buf.s, buf.len, 0, record.size,
+	index_fetchmsg(state, &buf, 0, record.size,
 		       (fetchitems & FETCH_IS_PARTIAL) ?
 		         fetchargs->start_octet : 0,
 		       (fetchitems & FETCH_IS_PARTIAL) ?
