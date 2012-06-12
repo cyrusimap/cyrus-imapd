@@ -130,7 +130,7 @@ static int index_search_evaluate(struct index_state *state,
 				 const struct searchargs *searchargs,
 				 uint32_t msgno, struct buf *buf);
 static int index_searchmsg(char *substr, comp_pat *pat,
-			   struct buf *buf,
+			   const struct buf *buf,
 			   int skipheader, const char *cachestr);
 static int index_searchheader(char *name, char *substr, comp_pat *pat,
 			      struct buf *buf,
@@ -4592,12 +4592,10 @@ static int index_search_evaluate(struct index_state *state,
 	    goto zero;
 
 	for (l = searchargs->body; l; l = l->next) {
-	    if (!index_searchmsg(l->s, l->p, buf, 1,
-				 cacheitem_base(&record, CACHE_SECTION))) goto zero;
+	    if (!index_searchmsg(&record, buf, l->s, l->p, 1)) goto zero;
 	}
 	for (l = searchargs->text; l; l = l->next) {
-	    if (!index_searchmsg(l->s, l->p, buf, 0,
-				 cacheitem_base(&record, CACHE_SECTION))) goto zero;
+	    if (!index_searchmsg(&record, buf, l->s, l->p, 0)) goto zero;
 	}
     }
     else if (searchargs->header_name) {
@@ -4649,66 +4647,53 @@ zero:
 
 /*
  * Search part of a message for a substring.
- * Keep this in sync with index_getsearchtextmsg!
  */
-static int index_searchmsg(char *substr,
-			   comp_pat *pat,
-			   struct buf *buf,
-			   int skipheader,
-			   const char *cachestr)
+struct searchmsg_rock
 {
-    int partsleft = 1;
-    int subparts;
-    unsigned long start;
-    int len, charset, encoding;
-    char *p;
+    const char *substr;
+    comp_pat *pat;
+    int skipheader;
+};
 
-    /* Won't find anything in a truncated file */
-    if (buf->len == 0) return 0;
+static int searchmsg_cb(int partno, int charset, int encoding,
+			struct buf *data, void *rock)
+{
+    struct searchmsg_rock *sr = (struct searchmsg_rock *)rock;
 
-    while (partsleft--) {
-	subparts = CACHE_ITEM_BIT32(cachestr);
-	cachestr += 4;
-	if (subparts) {
-	    partsleft += subparts-1;
-
-	    if (skipheader) {
-		skipheader = 0; /* Only skip top-level message header */
-	    }
-	    else {
-		len = CACHE_ITEM_BIT32(cachestr + CACHE_ITEM_SIZE_SKIP);
-		if (len > 0) {
-		    p = index_readheader(buf->s, buf->len,
-					 CACHE_ITEM_BIT32(cachestr),
-					 len);
-		    if (p) {
-			if (charset_search_mimeheader(substr, pat, p, charset_flags))
-			    return 1;
-		    }
-		}
-	    }
-	    cachestr += 5*4;
-
-	    while (--subparts) {
-		start = CACHE_ITEM_BIT32(cachestr+2*4);
-		len = CACHE_ITEM_BIT32(cachestr+3*4);
-		charset = CACHE_ITEM_BIT32(cachestr+4*4) >> 16;
-		encoding = CACHE_ITEM_BIT32(cachestr+4*4) & 0xff;
-
-		if (start < buf->len && len > 0 &&
-		    charset >= 0 && charset < 0xffff) {
-		    if (charset_searchfile(substr, pat,
-					   buf->s + start,
-					   len, charset, encoding, charset_flags)) return 1;
-		}
-		cachestr += 5*4;
-	    }
+    if (!partno) {
+	/* header-like */
+	if (sr->skipheader) {
+	    sr->skipheader = 0; /* Only skip top-level message header */
+	    return 0;
 	}
+	return charset_search_mimeheader(sr->substr, sr->pat,
+					 buf_cstring(data), charset_flags);
     }
-
-    return 0;
+    else {
+	/* body-like */
+	if (charset < 0 || charset == 0xffff)
+		return 0;
+	return charset_searchfile(sr->substr, sr->pat,
+				  data->s, data->len,
+				  charset, encoding, charset_flags);
+    }
 }
-    
+
+
+static int index_searchmsg(struct index_record *record,
+			   const struct buf *msgfile,
+			   const char *substr,
+			   comp_pat *pat,
+			   int skipheader)
+{
+    struct searchmsg_rock sr;
+
+    sr.substr = substr;
+    sr.pat = pat;
+    sr.skipheader = skipheader;
+    return message_foreach_part(record, msgfile, searchmsg_cb, &sr);
+}
+
 /*
  * Search named header of a message for a substring
  */
