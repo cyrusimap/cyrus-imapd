@@ -494,7 +494,8 @@ cunit_TESTS = \
 	cunit/parse.testc \
 	cunit/prot.testc \
 	cunit/ptrarray.testc \
-	cunit/quota.testc
+	cunit/quota.testc \
+	cunit/rfc822tok.testc
 if SIEVE
 cunit_TESTS += cunit/sieve.testc
 endif
@@ -578,6 +579,7 @@ include_HEADERS = \
 	lib/parseaddr.h \
 	lib/retry.h \
 	lib/rfc822date.h \
+	lib/rfc822tok.h \
 	lib/signals.h \
 	lib/strarray.h \
 	lib/strhash.h \
@@ -924,6 +926,7 @@ lib_libcyrus_la_SOURCES = \
 	lib/parseaddr.c \
 	lib/prot.c \
 	lib/ptrarray.c \
+	lib/rfc822tok.c \
 	lib/signals.c \
 	lib/stristr.c \
 	lib/times.c \
