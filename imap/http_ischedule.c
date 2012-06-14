@@ -238,7 +238,7 @@ static int meth_post(struct transaction_t *txn)
 	    dkim_free(dkim);
 	}
 #else
-	syslog(LOG_WARN, "DKIM-Signature provided, but DKIM isn't supported");
+	syslog(LOG_WARNING, "DKIM-Signature provided, but DKIM isn't supported");
 #endif /* WITH_DKIM */
     }
 
