@@ -52,16 +52,36 @@
 #include "httpd.h"
 #include "http_err.h"
 #include "http_proxy.h"
+#include "map.h"
 #include "util.h"
+#include "xmalloc.h"
+
+#ifdef WITH_DKIM
+#include <dkim.h>
+
+#define TEST
+
+static DKIM_LIB *dkim_lib = NULL;
+static struct buf privkey = BUF_INITIALIZER;
+static struct buf hdrfield = BUF_INITIALIZER;
+
+static void isched_init(struct buf *serverinfo);
+static void isched_shutdown(void);
+static void dkim_cachehdr(const char *name, const char *contents, void *rock);
+#endif /* WITH_DKIM */
 
 extern int busytime_query(struct transaction_t *txn, icalcomponent *comp);
 static int meth_get(struct transaction_t *txn);
 static int meth_post(struct transaction_t *txn);
 
 const struct namespace_t namespace_ischedule = {
-  URL_NS_ISCHEDULE, "/ischedule", "/.well-known/ischedule", 1 /* auth */,
+  URL_NS_ISCHEDULE, "/ischedule", "/.well-known/ischedule", 0 /* auth */,
     (ALLOW_READ | ALLOW_POST), HTTP_ISCHEDULE,
+#ifdef WITH_DKIM
+    isched_init, NULL, NULL, isched_shutdown,
+#else
     NULL, NULL, NULL, NULL,
+#endif
     {
 	NULL,			/* ACL		*/
 	NULL,			/* COPY		*/
@@ -153,9 +173,9 @@ static int meth_get(struct transaction_t *txn)
 
 static int meth_post(struct transaction_t *txn)
 {
-    int ret = 0, r;
+    int ret = 0, r, authd = 0;
     const char **hdr;
-    icalcomponent *ical, *comp;
+    icalcomponent *ical = NULL, *comp;
     icalcomponent_kind kind = 0;
     icalproperty_method meth = 0;
     icalproperty *prop = NULL;
@@ -184,6 +204,49 @@ static int meth_post(struct transaction_t *txn)
 	return HTTP_BAD_REQUEST;
     }
 
+    /* Check authorization */
+    if (httpd_userid) authd = httpd_userisadmin;
+    else if (spool_getheader(txn->req_hdrs, "DKIM-Signature")) {
+#ifdef WITH_DKIM
+	DKIM *dkim = NULL;
+	DKIM_STAT stat;
+
+	if (dkim_lib &&
+	    (dkim = dkim_verify(dkim_lib, NULL /* id */, NULL, &stat))) {
+#ifdef TEST
+	    /* XXX  Hack for local testing */
+	    dkim_query_t qtype = DKIM_QUERY_FILE;
+	    struct buf keyfile = BUF_INITIALIZER;
+
+	    stat = dkim_options(dkim_lib, DKIM_OP_SETOPT, DKIM_OPTS_QUERYMETHOD,
+				&qtype, sizeof(qtype));
+
+	    buf_printf(&keyfile, "%s/dkim.public", config_dir);
+	    stat = dkim_options(dkim_lib, DKIM_OP_SETOPT, DKIM_OPTS_QUERYINFO,
+				(void *) buf_cstring(&keyfile),
+				buf_len(&keyfile));
+#endif
+	    spool_enum_hdrcache(txn->req_hdrs, &dkim_cachehdr, dkim);
+	    stat = dkim_eoh(dkim);
+	    if (stat == DKIM_STAT_OK) {
+		stat = dkim_body(dkim, (u_char *) buf_cstring(&txn->req_body),
+				 buf_len(&txn->req_body));
+		stat = dkim_eom(dkim, NULL);
+		if (stat == DKIM_STAT_OK) authd = 1;
+	    }
+
+	    dkim_free(dkim);
+	}
+#else
+	syslog(LOG_WARN, "DKIM-Signature provided, but DKIM isn't supported");
+#endif /* WITH_DKIM */
+    }
+
+    if (!authd) {
+	ret = HTTP_FORBIDDEN;
+	goto done;
+    }
+
     /* Parse the iCal data for important properties */
     ical = icalparser_parse_string(buf_cstring(&txn->req_body));
     if (!ical || !icalrestriction_check(ical)) {
@@ -202,7 +265,8 @@ static int meth_post(struct transaction_t *txn)
     /* Check method preconditions */
     if (!meth || meth != ICAL_METHOD_REQUEST || !uid || !prop) {
 	txn->error.precond = CALDAV_VALID_SCHED;
-	return HTTP_BAD_REQUEST;
+	ret = HTTP_BAD_REQUEST;
+	goto done;
     }
 
     switch (meth) {
@@ -214,16 +278,96 @@ static int meth_post(struct transaction_t *txn)
 
 	default:
 	    txn->error.precond = CALDAV_VALID_SCHED;
-	    return HTTP_BAD_REQUEST;
+	    ret = HTTP_BAD_REQUEST;
 	}
 	break;
 
     default:
 	txn->error.precond = CALDAV_VALID_SCHED;
-	return HTTP_BAD_REQUEST;
+	ret = HTTP_BAD_REQUEST;
     }
 
-    icalcomponent_free(ical);
+  done:
+    if (ical) icalcomponent_free(ical);
 
     return ret;
 }
+
+
+#ifdef WITH_DKIM
+static void isched_init(struct buf *serverinfo)
+{
+    int fd;
+    struct buf keypath = BUF_INITIALIZER;
+    const char *requiredhdrs[] = { "Content-Type", "Host",
+				   "Originator", "Recipient", NULL };
+    const char *skiphdrs[] = { "Connection", "Keep-Alive",
+			       "Proxy-Authenticate", "Proxy-Authorization",
+			       "TE", "Trailer", "Transfer-Encoding",
+			       "Upgrade", NULL };
+    const char *senderhdrs[] = { "Originator", NULL };
+    const char *oversignhdrs[] = { "Recipient", NULL };
+    uint32_t ver = dkim_libversion();
+
+    /* Add OpenDKIM version to serverinfo string */
+    buf_printf(serverinfo, " OpenDKIM/%u.%u.%u",
+	       (ver >> 24) & 0xff, (ver >> 16) & 0xff, (ver >> 8) & 0xff);
+    if (ver & 0xff) buf_printf(serverinfo, ".%u", ver & 0xff);
+
+    /* Initialize DKIM library */
+    if (!(dkim_lib = dkim_init(NULL, NULL))) {
+	syslog(LOG_ERR, "unable to initialize libopendkim");
+	return;
+    }
+
+    /* Setup iSchedule DKIM options */
+    dkim_options(dkim_lib, DKIM_OP_SETOPT, DKIM_OPTS_REQUIREDHDRS,
+		 requiredhdrs, sizeof(const char **));
+    dkim_options(dkim_lib, DKIM_OP_SETOPT, DKIM_OPTS_SIGNHDRS,
+		 requiredhdrs, sizeof(const char **));
+    dkim_options(dkim_lib, DKIM_OP_SETOPT, DKIM_OPTS_SKIPHDRS,
+		 skiphdrs, sizeof(const char **));
+    dkim_options(dkim_lib, DKIM_OP_SETOPT, DKIM_OPTS_SENDERHDRS,
+		 senderhdrs, sizeof(const char **));
+    if (dkim_libfeature(dkim_lib, DKIM_FEATURE_OVERSIGN))
+	dkim_options(dkim_lib, DKIM_OP_SETOPT, DKIM_OPTS_OVERSIGNHDRS,
+		     oversignhdrs, sizeof(const char **));
+    else syslog(LOG_WARNING, "no oversign support in libopendkim");
+
+    /* Fetch DKIM private key for signing */
+    buf_printf(&keypath, "%s/dkim.private", config_dir);
+    if ((fd = open(buf_cstring(&keypath), O_RDONLY)) != -1) {
+	const char *base = NULL;
+	unsigned long len = 0;
+
+	map_refresh(fd, 1, &base, &len,
+		    MAP_UNKNOWN_LEN, buf_cstring(&keypath), NULL);
+	buf_setmap(&privkey, base, len);
+	map_free(&base, &len);
+	close(fd);
+    }
+    else {
+	syslog(LOG_ERR, "unable to open private key file %s",
+	       buf_cstring(&keypath));
+    }
+    buf_free(&keypath);
+}
+
+
+static void isched_shutdown(void)
+{
+    buf_free(&privkey);
+    buf_free(&hdrfield);
+    if (dkim_lib) dkim_close(dkim_lib);
+}
+
+
+static void dkim_cachehdr(const char *name, const char *contents, void *rock)
+{
+    buf_reset(&hdrfield);
+    buf_printf(&hdrfield, "%s:%s", name, contents);
+
+    dkim_header((DKIM *) rock,
+		(u_char *) buf_cstring(&hdrfield), buf_len(&hdrfield));
+}
+#endif /* WITH_DKIM */

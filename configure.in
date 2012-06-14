@@ -1040,6 +1040,11 @@ if test "$ENABLE_RSS" != no -o "$ENABLE_CALDAV" != no; then
       if test "$ENABLE_CALDAV_SCHED" != no; then
       	 AC_DEFINE(WITH_CALDAV_SCHED,[],[Build CalDAV Scheduling support into httpd?])
          HTTP_OBJS="$HTTP_OBJS \$(ISCHED_OBJS)"
+
+	 PKG_CHECK_MODULES([DKIM], [opendkim],
+	   [ AC_DEFINE(WITH_DKIM,[],[Build DKIM support into iSchedule?]) ], )
+   	 AC_SUBST(DKIM_CFLAGS)
+	 AC_SUBST(DKIM_LIBS)
       fi
    fi
 fi
