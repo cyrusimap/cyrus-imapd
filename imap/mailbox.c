@@ -4340,10 +4340,15 @@ int mailbox_get_annotate_state(struct mailbox *mailbox,
 {
     int r = 0;
 
+    if (statep) *statep = NULL;
+
     if (!mailbox->annot_state)
 	mailbox->annot_state = annotate_state_new();
 
     r = annotate_state_set_message(mailbox->annot_state, mailbox, uid);
-    *statep = (r ? NULL : mailbox->annot_state);
-    return r;
+    if (r) return r;
+
+    if (statep) *statep = mailbox->annot_state;
+
+    return 0;
 }
