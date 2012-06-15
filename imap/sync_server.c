@@ -1366,6 +1366,8 @@ static int do_mailbox(struct dlist *kin)
     struct dlist *ka = NULL;
     int r;
 
+    annotate_state_t *astate = NULL;
+
     if (!dlist_getatom(kin, "UNIQUEID", &uniqueid))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
     if (!dlist_getatom(kin, "PARTITION", &partition))
@@ -1418,6 +1420,11 @@ static int do_mailbox(struct dlist *kin)
 	syslog(LOG_ERR, "Failed to open mailbox %s to update", mboxname);
 	goto done;
     }
+
+    /* hold the annotate state open */
+    mailbox_get_annotate_state(mailbox, /*synthetic*/UINT32_MAX, &astate);
+    /* and make it hold a transaction open */
+    annotate_state_begin(astate);
 
     if (strcmp(mailbox->uniqueid, uniqueid)) {
 	syslog(LOG_ERR, "Mailbox uniqueid changed %s - retry", mboxname);
@@ -1599,6 +1606,7 @@ static int mailbox_cb(char *name,
     struct sync_name_list *qrl = (struct sync_name_list *)rock;
     struct mailbox *mailbox = NULL;
     struct dlist *kl = dlist_newkvlist(NULL, "MAILBOX");
+    annotate_state_t *astate = NULL;
     int r;
 
     r = mailbox_open_irl(name, &mailbox);
@@ -1609,6 +1617,11 @@ static int mailbox_cb(char *name,
 	goto out;
     }
     if (r) goto out;
+
+    /* hold the annotate state open */
+    mailbox_get_annotate_state(mailbox, /*synthetic*/UINT32_MAX, &astate);
+    /* and make it hold a transaction open */
+    annotate_state_begin(astate);
 
     if (qrl && mailbox->quotaroot &&
 	 !sync_name_lookup(qrl, mailbox->quotaroot))

@@ -1080,6 +1080,11 @@ static void annotate_state_free(annotate_state_t **statep)
     *statep = NULL;
 }
 
+void annotate_state_begin(annotate_state_t *state)
+{
+    annotate_begin(state->d);
+}
+
 void annotate_state_abort(annotate_state_t **statep)
 {
     if (*statep)
