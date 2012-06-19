@@ -67,7 +67,6 @@ MAINTAINERCLEANFILES = \
 SUBDIRS = .
 DIST_SUBDIRS = .
 dist_sysconf_DATA =
-check_LIBRARIES =
 lib_LTLIBRARIES = lib/libcyrus_min.la lib/libcyrus.la
 EXTRA_PROGRAMS = doc/text/htmlstrip
 check_PROGRAMS =
