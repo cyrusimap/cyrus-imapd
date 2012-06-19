@@ -178,14 +178,41 @@ static const char index_64[256] = {
 };
 #define CHAR64(c)  (index_64[(unsigned char)(c)])
 
+EXPORTED int encoding_lookupname(const char *s)
+{
+    switch (s[0]) {
+    case '7':
+	if (!strcasecmp(s, "7BIT"))
+	    return ENCODING_NONE;
+	break;
+    case '8':
+	if (!strcasecmp(s, "8BIT"))
+	    return ENCODING_NONE;
+	break;
+    case 'B':
+    case 'b':
+	if (!strcasecmp(s, "BASE64"))
+	    return ENCODING_BASE64;
+	if (!strcasecmp(s, "BINARY"))
+	    return ENCODING_NONE;
+	break;
+    case 'Q':
+    case 'q':
+	if (!strcasecmp(s, "QUOTED-PRINTABLE"))
+	    return ENCODING_QP;
+	break;
+    }
+    return ENCODING_UNKNOWN;
+}
+
 EXPORTED const char *encoding_name(int encoding)
 {
     switch (encoding) {
-    case ENCODING_NONE: return "none";
-    case ENCODING_QP: return "quoted-printable";
-    case ENCODING_BASE64: return "base64";
-    case ENCODING_UNKNOWN: return "unknown";
-    default: return "wtf";
+    case ENCODING_NONE: return "NONE";
+    case ENCODING_QP: return "QUOTED-PRINTABLE";
+    case ENCODING_BASE64: return "BASE64";
+    case ENCODING_UNKNOWN: return "UNKNOWN";
+    default: return "WTF";
     }
 }
 

@@ -65,6 +65,8 @@
  */
 #define LOAD_IDS	256
 
+struct message;
+
 struct vanished_params {
     unsigned long uidvalidity;
     modseq_t modseq;
@@ -263,6 +265,7 @@ extern int index_urlfetch(struct index_state *state, uint32_t msgno,
 			  unsigned long start_octet, unsigned long octet_count,
 			  struct protstream *pout, unsigned long *size);
 extern char *index_get_msgid(struct index_state *state, uint32_t msgno);
+extern struct message *index_get_message(struct index_state *state, uint32_t msgno);
 extern struct nntp_overview *index_overview(struct index_state *state,
 					    uint32_t msgno);
 extern char *index_getheader(struct index_state *state, uint32_t msgno,

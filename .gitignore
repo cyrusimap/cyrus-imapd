@@ -74,6 +74,7 @@ imap/lmtpstats.h
 imap/mbexamine
 imap/mbpath
 imap/mbtool
+imap/message_test
 imap/mupdate_err.c
 imap/mupdate_err.h
 imap/mupdate

@@ -185,4 +185,111 @@ int message_foreach_part(struct index_record *record,
 				     struct buf *data, void *rock),
 			 void *rock);
 
+/*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
+/* New message API */
+
+typedef struct message message_t;
+typedef struct part part_t;
+struct mailbox;
+
+/* Flags for use as the 'format' argument to
+ * message_get_field() and part_get_field(). */
+enum message_format
+{
+    /* Original raw octets from the on-the-wire RFC5322 format,
+     * including folding and RFC2047 encoding of non-ASCII characters.
+     * The result may point into a mapping and not be NUL-terminated,
+     * use buf_cstring() if necessary.  */
+    MESSAGE_RAW=	1,
+    /* Unfolded and RFC2047 decoded */
+    MESSAGE_DECODED,
+    /* Unfolded, RFC2047 decoded, and search-normalised */
+    MESSAGE_SEARCH,
+
+#define _MESSAGE_FORMAT_MASK	(0x3)
+
+    /* This flag can be OR'd into the format argument to request that
+     * the field name and a colon ':' are left in the result.  Normally
+     * only the field value is returned.  This is useful when calling
+     * multiple times with MESSAGE_APPEND, to accumulate multiple headers
+     * in the buffer. */
+    MESSAGE_FIELDNAME=		(1<<5),
+
+    /* This flag can be OR'd into the format argument to request that
+     * all the fields of the given name are returned.  Normally only
+     * the first is returned, which is faster. */
+    MESSAGE_MULTIPLE=		(1<<6),
+
+    /* This flag can be OR'd into the format argument to request that
+     * results be appended to the buffer; normally the buffer is reset
+     * first. */
+    MESSAGE_APPEND=		(1<<7)
+};
+
+enum message_indexflags
+{
+    MESSAGE_SEEN=		(1<<0),
+    MESSAGE_RECENT=		(1<<1),
+};
+
+extern message_t *message_new(void);
+extern message_t *message_new_from_data(const char *base, size_t len);
+extern message_t *message_new_from_mailbox(struct mailbox *mailbox,
+					   unsigned int recno);
+extern message_t *message_new_from_record(struct mailbox *,
+				          const struct index_record *);
+extern message_t *message_new_from_index(struct mailbox *,
+					 const struct index_record *,
+					 uint32_t msgno,
+					 uint32_t indexflags);
+extern message_t *message_new_from_filename(const char *filename);
+
+extern message_t *message_ref(message_t *m);
+extern void message_unref(message_t **m);
+
+extern int part_get_field(part_t *part, const char *name,
+		   int format, struct buf *buf);
+extern int part_get_header(part_t *part, int format, struct buf *buf);
+extern int part_get_body(part_t *part, int format, struct buf *buf);
+extern int part_get_type(part_t *part, const char **strp);
+extern int part_get_subtype(part_t *part, const char **strp);
+extern int part_get_charset(part_t *part, int *csp);
+extern int part_get_encoding(part_t *part, int *encp);
+extern int part_get_num_parts(part_t *part, unsigned int *np);
+extern int part_get_part(part_t *part, unsigned int id, part_t **childp);
+
+extern int message_get_field(message_t *m, const char *name,
+			     int format, struct buf *buf);
+extern int message_get_header(message_t *m, int format, struct buf *buf);
+extern int message_get_body(message_t *m, int format, struct buf *buf);
+extern int message_get_type(message_t *m, const char **strp);
+extern int message_get_subtype(message_t *m, const char **strp);
+extern int message_get_charset(message_t *m, int *csp);
+extern int message_get_encoding(message_t *m, int *encp);
+extern int message_get_num_parts(message_t *m, unsigned int *np);
+extern int message_get_part(message_t *m, unsigned int id, part_t **partp);
+extern int message_get_root_part(message_t *m, part_t **partp);
+extern int message_get_messageid(message_t *m, struct buf *buf);
+extern int message_get_inreplyto(message_t *m, struct buf *buf);
+extern int message_get_references(message_t *m, struct buf *buf);
+extern int message_get_subject(message_t *m, struct buf *buf);
+extern int message_get_date(message_t *m, time_t *tp);
+extern int message_get_mailbox(message_t *m, struct mailbox **);
+extern int message_get_uid(message_t *m, uint32_t *uidp);
+extern int message_get_cid(message_t *m, conversation_id_t *cidp);
+extern int message_get_internaldate(message_t *m, time_t *);
+extern int message_get_sentdate(message_t *m, time_t *);
+extern int message_get_modseq(message_t *m, modseq_t *modseqp);
+extern int message_get_systemflags(message_t *m, uint32_t *);
+extern int message_get_userflags(message_t *m, uint32_t *flagsp);
+extern int message_get_indexflags(message_t *m, uint32_t *);
+extern int message_get_size(message_t *m, uint32_t *sizep);
+extern int message_get_msgno(message_t *m, uint32_t *msgnop);
+extern int message_foreach_text_section(message_t *m,
+		   int (*proc)(int partno, int charset, int encoding,
+			       struct buf *data, void *rock),
+		   void *rock);
+
+/*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
+
 #endif /* INCLUDED_MESSAGE_H */

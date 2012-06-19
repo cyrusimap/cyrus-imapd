@@ -56,6 +56,7 @@
 typedef int comp_pat;
 typedef int charset_index;
 
+extern int encoding_lookupname(const char *name);
 extern const char *encoding_name(int);
 
 /* ensure up to MAXTRANSLATION times expansion into buf */
