@@ -53,7 +53,8 @@ WriteMakefile(
     'NAME'	=> 'Cyrus::SIEVE::managesieve',
     'ABSTRACT'  => 'Cyrus Sieve management interface',
     'VERSION_FROM' => "@top_srcdir@/perl/sieve/managesieve/managesieve.pm", # finds $VERSION
-    'MYEXTLIB'  => '../lib/libisieve.a @top_builddir@/lib/libcyrus.a @top_builddir@/lib/libcyrus_min.a',
+    'MYEXTLIB'  => '../lib/libisieve.a ',
+    'LDFROM'	=> "\$(OBJECT) @top_builddir@/perl/.libs/libcyrus.a @top_builddir@/perl/.libs/libcyrus_min.a",
     'LIBS'	=> ["@BDB_LIB@ $LIB_SASL @SSL_LIBS@ @LIB_RT@ @LIB_UUID@ @ZLIB@"],
     'CCFLAGS'	=> '@COV_CFLAGS@',
     'DEFINE'	=> '-DPERL_POLLUTE',     # e.g., '-DHAVE_SOMETHING' 

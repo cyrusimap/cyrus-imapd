@@ -68,7 +68,6 @@ const char **testspecs;
 enum { RUN, LIST } mode = RUN;
 int xml_flag = 0;
 int timeouts_flag = 1;
-const int config_need_data = 0;
 
 #if HAVE_VALGRIND_VALGRIND_H
 #define log1(fmt, a1) \

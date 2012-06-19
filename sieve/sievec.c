@@ -64,9 +64,6 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-/* config.c stuff */
-const int config_need_data = 0;
-
 int is_script_parsable(FILE *stream, char **errstr, sieve_script_t **ret);
 
 #define TIMSIEVE_FAIL -1
@@ -104,7 +101,7 @@ int main(int argc, char **argv)
     }
     
     /* Load configuration file. */
-    config_read(alt_config);
+    config_read(alt_config, 0);
 
     if(is_script_parsable(instream, &err, &s) == TIMSIEVE_FAIL) {
 	if(err) {

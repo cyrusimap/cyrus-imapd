@@ -68,8 +68,7 @@ SUBDIRS = .
 DIST_SUBDIRS = .
 dist_sysconf_DATA =
 check_LIBRARIES =
-noinst_LIBRARIES =
-lib_LIBRARIES = lib/libcyrus.a lib/libcyrus_min.a
+lib_LTLIBRARIES = lib/libcyrus_min.la lib/libcyrus.la
 EXTRA_PROGRAMS = doc/text/htmlstrip
 check_PROGRAMS =
 service_PROGRAMS =
@@ -77,9 +76,9 @@ CLEANFILES =
 
 if COM_ERR
 COMPILE_ET_DEP = com_err/et/compile_et
-COM_ERR_LIBS += com_err/et/libcom_err.a
+COM_ERR_LIBS += com_err/et/libcyrus_com_err.la
 BUILT_SOURCES += com_err/et/compile_et
-noinst_LIBRARIES += com_err/et/libcom_err.a
+lib_LTLIBRARIES += com_err/et/libcyrus_com_err.la
 endif
 
 bin_PROGRAMS = imtest/imtest
@@ -87,7 +86,7 @@ if SERVER
 BUILT_SOURCES += imap/imap_err.c imap/mupdate_err.c imap/nntp_err.c \
 	imap/lmtpstats.c imap/pushstats.c imap/rfc822_header.c \
 	imap/rfc822_header.h
-noinst_LIBRARIES += imap/libimap.a
+lib_LTLIBRARIES += imap/libcyrus_imap.la
 service_PROGRAMS += imap/arbitron imap/chk_cyrus imap/ctl_cyrusdb \
 	imap/ctl_deliver imap/ctl_mboxlist imap/cvt_cyrusdb imap/cyr_df \
 	imap/cyrdump imap/cyr_dbtool imap/cyr_expire imap/cyr_info \
@@ -133,14 +132,15 @@ service_PROGRAMS += ptclient/ptdump ptclient/ptexpire ptclient/ptloader
 endif
 if PERL
 SUBDIRS += perl/annotator perl/imap
+noinst_LTLIBRARIES = perl/libcyrus.la perl/libcyrus_min.la
 endif
 if SIEVE
 if PERL
 SUBDIRS += perl/sieve/managesieve
-noinst_LIBRARIES += perl/sieve/lib/libisieve.a
+noinst_LIBRARIES = perl/sieve/lib/libisieve.a
 endif
 BUILT_SOURCES += sieve/addr.c sieve/sieve.c sieve/sieve_err.c
-noinst_LIBRARIES += sieve/libsieve.a
+lib_LTLIBRARIES += sieve/libcyrus_sieve.la
 check_PROGRAMS += sieve/test
 service_PROGRAMS += sieve/sievec sieve/sieved
 if SERVER
@@ -193,7 +193,7 @@ EXTRA_SCRIPTS = com_err/et/compile_et.sh com_err/et/config_script \
 noinst_MAN = com_err/et/com_err.3 com_err/et/compile_et.1
 noinst_TEXINFOS = com_err/et/com_err.texinfo
 
-com_err_et_libcom_err_a_SOURCES = com_err/et/com_err.c com_err/et/com_err.h \
+com_err_et_libcyrus_com_err_la_SOURCES = com_err/et/com_err.c com_err/et/com_err.h \
 	com_err/et/error_message.c com_err/et/error_table.h \
 	com_err/et/et_name.c com_err/et/init_et.c com_err/et/internal.h \
 	com_err/et/mit-sipb-copyright.h
@@ -211,12 +211,12 @@ com_err/et/compile_et: com_err/et/compile_et.sh com_err/et/config_script \
 # Note that several places in the code use -lcrypto, e.g. for SHA1 or
 # MD5 algorithms, without needing SSL.  Currently we have no way of
 # minimally linking such code.
-LD_BASIC_ADD = lib/libcyrus.a lib/libcyrus_min.a $(LIB_RT) ${LIB_SASL} $(SSL_LIBS) ${LIBS}
+LD_BASIC_ADD = lib/libcyrus.la lib/libcyrus_min.la ${LIBS}
 
 # UTILITY is the libraries that utility programs which use Cyrus'
 # mailbox and message handling code need to link with.
 
-LD_UTILITY_ADD = imap/libimap.a $(LD_BASIC_ADD) $(COM_ERR_LIBS) $(LIB_UUID)
+LD_UTILITY_ADD = imap/libcyrus_imap.la $(LD_BASIC_ADD)
 
 # SERVER is the libraries that network-facing servers need to link with
 #
@@ -224,11 +224,6 @@ LD_UTILITY_ADD = imap/libimap.a $(LD_BASIC_ADD) $(COM_ERR_LIBS) $(LIB_UUID)
 # so that even utilities which never open a socket need to link against
 # the SASL library.
 LD_SERVER_ADD = $(LD_UTILITY_ADD) $(LIB_WRAP)
-
-#if SIEVE
-# sieve/libsieve.a must be added to LDADD before lib/libcyrus.a (#3677)
-LD_SIEVE = sieve/libsieve.a
-#endif
 
 # ----
 
@@ -283,7 +278,7 @@ cunit_unit_SOURCES = $(cunit_FRAMEWORK) $(cunit_TESTS) \
 		imap/mutex_fake.c imap/spool.c
 cunit_unit_LDADD =
 if SIEVE
-cunit_unit_LDADD += $(LD_SIEVE)
+cunit_unit_LDADD += sieve/libcyrus_sieve.la
 endif
 cunit_unit_LDADD += $(LD_UTILITY_ADD) -lcunit
 
@@ -391,15 +386,15 @@ imap_imapd_SOURCES = imap/imap_proxy.c imap/imap_proxy.h imap/imapd.c imap/imapd
 		     imap/autocreate.h imap/autocreate.c
 imap_imapd_LDADD = 
 if SIEVE
-imap_imapd_LDADD += $(LD_SIEVE)
+imap_imapd_LDADD += sieve/libcyrus_sieve.la
 endif
 imap_imapd_LDADD += $(LD_SERVER_ADD)
 
 imap_ipurge_SOURCES = imap/cli_fatal.c imap/ipurge.c imap/mutex_fake.c
 imap_ipurge_LDADD = $(LD_UTILITY_ADD)
 
-nodist_imap_libimap_a_SOURCES = imap/imap_err.c imap/mupdate_err.c imap/mupdate_err.h 
-imap_libimap_a_SOURCES = imap/annotate.c imap/annotate.h imap/append.c \
+nodist_imap_libcyrus_imap_la_SOURCES = imap/imap_err.c imap/mupdate_err.c imap/mupdate_err.h
+imap_libcyrus_imap_la_SOURCES = imap/annotate.c imap/annotate.h imap/append.c \
 	imap/append.h imap/backend.c imap/backend.h imap/convert_code.c \
 	imap/convert_code.h imap/dlist.c imap/dlist.h imap/duplicate.c \
 	imap/duplicate.h imap/global.c imap/global.h imap/idle.c imap/idle.h \
@@ -420,6 +415,7 @@ imap_libimap_a_SOURCES = imap/annotate.c imap/annotate.h imap/append.c \
 	imap/tls.h imap/upgrade_index.c imap/upgrade_index.h imap/user.c \
 	imap/user.h imap/userdeny_db.c imap/userdeny.h imap/version.c \
 	imap/version.h
+imap_libcyrus_imap_la_LIBADD = $(COM_ERR_LIBS) $(LIB_UUID)
 
 imap_lmtpd_SOURCES = imap/lmtpd.c imap/lmtpd.h imap/lmtpengine.c \
 	imap/lmtpengine.h imap/lmtpstats.c imap/lmtpstats.h \
@@ -428,7 +424,7 @@ imap_lmtpd_SOURCES = imap/lmtpd.c imap/lmtpd.h imap/lmtpengine.c \
 imap_lmtpd_LDADD =
 if SIEVE
 imap_lmtpd_SOURCES += imap/lmtp_sieve.c imap/smtpclient.c
-imap_lmtpd_LDADD += $(LD_SIEVE)
+imap_lmtpd_LDADD += sieve/libcyrus_sieve.la
 endif
 imap_lmtpd_LDADD += $(LD_SERVER_ADD)
 
@@ -460,7 +456,7 @@ imap_pop3d_SOURCES = imap/mutex_fake.c imap/pop3d.c imap/proxy.c master/service.
 		     imap/autocreate.h imap/autocreate.c
 imap_pop3d_LDADD =
 if SIEVE
-imap_pop3d_LDADD += sieve/libsieve.a
+imap_pop3d_LDADD += sieve/libcyrus_sieve.la
 endif
 imap_pop3d_LDADD += $(LD_SERVER_ADD)
 
@@ -511,62 +507,62 @@ endif
 imtest_imtest_SOURCES = imtest/imtest.c
 imtest_imtest_LDADD = $(LD_BASIC_ADD)
 
-nodist_lib_libcyrus_a_SOURCES = lib/chartable.c
-lib_libcyrus_a_SOURCES = lib/acl.c lib/acl_afs.c lib/auth.c lib/auth_krb.c \
+nodist_lib_libcyrus_la_SOURCES = lib/chartable.c
+lib_libcyrus_la_SOURCES = lib/acl.c lib/acl_afs.c lib/auth.c lib/auth_krb.c \
 	lib/auth_krb5.c lib/auth_pts.c lib/auth_unix.c lib/bsearch.c \
 	lib/byteorder64.c lib/charset.c lib/crc32.c lib/cyrusdb.c
 if USE_BERKELEY
-lib_libcyrus_a_SOURCES += lib/cyrusdb_berkeley.c
+lib_libcyrus_la_SOURCES += lib/cyrusdb_berkeley.c
 endif
-lib_libcyrus_a_SOURCES += lib/cyrusdb_flat.c lib/cyrusdb_quotalegacy.c \
+lib_libcyrus_la_SOURCES += lib/cyrusdb_flat.c lib/cyrusdb_quotalegacy.c \
 	lib/cyrusdb_skiplist.c
 if USE_SQL
-lib_libcyrus_a_SOURCES += lib/cyrusdb_sql.c
+lib_libcyrus_la_SOURCES += lib/cyrusdb_sql.c
 endif
-lib_libcyrus_a_SOURCES += lib/cyrusdb_twoskip.c lib/glob.c
+lib_libcyrus_la_SOURCES += lib/cyrusdb_twoskip.c lib/glob.c
 if GMTOFF_TM
-lib_libcyrus_a_SOURCES += lib/gmtoff_tm.c
+lib_libcyrus_la_SOURCES += lib/gmtoff_tm.c
 else
-lib_libcyrus_a_SOURCES += lib/gmtoff_gmtime.c
+lib_libcyrus_la_SOURCES += lib/gmtoff_gmtime.c
 endif
-lib_libcyrus_a_SOURCES += lib/imapurl.c lib/imclient.c lib/imparse.c \
+lib_libcyrus_la_SOURCES += lib/imapurl.c lib/imclient.c lib/imparse.c \
 	lib/iostat.c lib/iptostring.c lib/libcyr_cfg.c lib/lsort.c \
 	lib/mkgmtime.c
 if NONBLOCK_FCNTL
-lib_libcyrus_a_SOURCES += lib/nonblock_fcntl.c
+lib_libcyrus_la_SOURCES += lib/nonblock_fcntl.c
 else
-lib_libcyrus_a_SOURCES += lib/nonblock_ioctl.c
+lib_libcyrus_la_SOURCES += lib/nonblock_ioctl.c
 endif
-lib_libcyrus_a_SOURCES += lib/parseaddr.c lib/prot.c lib/ptrarray.c \
+lib_libcyrus_la_SOURCES += lib/parseaddr.c lib/prot.c lib/ptrarray.c \
 	lib/signals.c lib/stristr.c lib/times.c lib/tok.c lib/wildmat.c
+lib_libcyrus_la_LIBADD = $(LIB_RT) ${LIB_SASL} $(SSL_LIBS)
 
-lib_libcyrus_min_a_SOURCES = lib/assert.c
+lib_libcyrus_min_la_SOURCES = lib/assert.c
 if IPV6_noGETADDRINFO
-lib_libcyrus_min_a_SOURCES += lib/getaddrinfo.c
+lib_libcyrus_min_la_SOURCES += lib/getaddrinfo.c
 endif
 if IPV6_noGETNAMEINFO
-lib_libcyrus_min_a_SOURCES += lib/getnameinfo.c
+lib_libcyrus_min_la_SOURCES += lib/getnameinfo.c
 endif
-lib_libcyrus_min_a_SOURCES += lib/hash.c lib/imapopts.c lib/libconfig.c
+lib_libcyrus_min_la_SOURCES += lib/hash.c lib/imapopts.c lib/libconfig.c
 if LOCK_FCNTL
-lib_libcyrus_min_a_SOURCES += lib/lock_fcntl.c
+lib_libcyrus_min_la_SOURCES += lib/lock_fcntl.c
 else
-lib_libcyrus_min_a_SOURCES += lib/lock_flock.c
+lib_libcyrus_min_la_SOURCES += lib/lock_flock.c
 endif
-lib_libcyrus_min_a_SOURCES += lib/mappedfile.c
+lib_libcyrus_min_la_SOURCES += lib/mappedfile.c
 if MAP_SHARED
-lib_libcyrus_min_a_SOURCES += lib/map_shared.c
+lib_libcyrus_min_la_SOURCES += lib/map_shared.c
 else
 if MAP_STUPIDSHARED
-lib_libcyrus_min_a_SOURCES += lib/map_stupidshared.c
+lib_libcyrus_min_la_SOURCES += lib/map_stupidshared.c
 else
-lib_libcyrus_min_a_SOURCES += lib/map_nommap.c
+lib_libcyrus_min_la_SOURCES += lib/map_nommap.c
 endif
 endif
-lib_libcyrus_min_a_SOURCES += lib/mpool.c lib/retry.c lib/strarray.c \
+lib_libcyrus_min_la_SOURCES += lib/mpool.c lib/retry.c lib/strarray.c \
 	lib/strhash.c lib/util.c lib/xmalloc.c lib/xstrlcat.c lib/xstrlcpy.c
-lib_libcyrus_min_a_LIBADD = $(LIBOBJS)
-
+lib_libcyrus_min_la_LIBADD = $(LTLIBOBJS)
 
 lib/chartable.c: lib/mkchartable.pl lib/charset/unifix.txt \
 	$(top_srcdir)/lib/charset/*.t lib/charset/UnicodeData.txt \
@@ -580,7 +576,7 @@ lib/imapopts.c: lib/imapoptions tools/config2header
 
 #this is from lib/test/Makefile.in, however testglob.c does not exist in
 #/lib/test, instead testglob2.c is there.
-#lib_test_testglob_LIRBARIES = lib/libcyrus.a lib/libcyrus_min.a -ldb-4.0
+#lib_test_testglob_LIRBARIES = lib/libcyrus.la lib/libcyrus_min.la -ldb-4.0
 
 
 @SET_MAKE@
@@ -603,7 +599,7 @@ dist_man_MANS = man/imtest.1 man/installsieve.1 man/lmtptest.1 \
 master_master_SOURCES = master/cyrusMasterMIB.c master/cyrusMasterMIB.h \
 	master/master.c master/master.h master/masterconf.c \
 	master/masterconf.h master/service.h
-master_master_LDADD = lib/libcyrus_min.a $(LIB_UCDSNMP) $(LIBS) -lm
+master_master_LDADD = lib/libcyrus_min.la $(LIB_UCDSNMP) $(LIBS) -lm
 
 
 netnews_remotepurge_SOURCES = netnews/macros.h netnews/readconfig.c netnews/readconfig.h netnews/remotepurge.c
@@ -622,6 +618,11 @@ notifyd_notifyd_LDADD = $(LD_SERVER_ADD) $(ZEPHYR_LIBS)
 
 notifyd_notifytest_SOURCES = notifyd/notifytest.c imap/mutex_fake.c
 notifyd_notifytest_LDADD = $(LD_BASIC_ADD)
+
+perl_libcyrus_la_SOURCES = $(lib_libcyrus_la_SOURCES)
+perl_libcyrus_la_LIBADD = $(lib_libcyrus_la_LIBADD)
+perl_libcyrus_min_la_SOURCES = $(lib_libcyrus_min_la_SOURCES)
+perl_libcyrus_min_la_LIBADD = $(lib_libcyrus_min_la_LIBADD)
 
 perl_sieve_lib_libisieve_a_SOURCES = perl/sieve/lib/isieve.c perl/sieve/lib/lex.c perl/sieve/lib/mystring.c perl/sieve/lib/request.c
 
@@ -649,14 +650,15 @@ ptclient_ptloader_LDADD += $(AFS_LIBS)
 ptclient_ptloader_LDFLAGS += $(AFS_LDFLAGS)
 endif
 
-nodist_sieve_libsieve_a_SOURCES = sieve/sieve_err.c sieve/sieve_err.h
-sieve_libsieve_a_SOURCES = sieve/bytecode.h sieve/addr.y sieve/addr-lex.l \
+nodist_sieve_libcyrus_sieve_la_SOURCES = sieve/sieve_err.c sieve/sieve_err.h
+sieve_libcyrus_sieve_la_SOURCES = sieve/bytecode.h sieve/addr.y sieve/addr-lex.l \
 	sieve/bc_dump.c sieve/bc_emit.c sieve/bc_eval.c sieve/bc_generate.c \
 	sieve/comparator.c sieve/comparator.h sieve/interp.c sieve/interp.h \
 	sieve/message.c sieve/message.h sieve/script.c sieve/script.h \
 	sieve/sieve-lex.l sieve/sieve.y sieve/sieve_interface.h sieve/tree.c sieve/tree.h
+sieve_libcyrus_sieve_la_LIBADD = $(COM_ERR_LIBS)
 
-LD_SIEVE_ADD = sieve/libsieve.a $(LD_BASIC_ADD) $(COM_ERR_LIBS)
+LD_SIEVE_ADD = sieve/libcyrus_sieve.la $(LD_BASIC_ADD)
 
 sieve_sievec_LDADD = $(LD_SIEVE_ADD)
 sieve_sieved_LDADD = $(LD_SIEVE_ADD)
@@ -665,7 +667,7 @@ sieve/sieve_err.h sieve/sieve_err.c: sieve/sieve_err.et $(COMPILE_ET_DEP)
 	cd sieve && $(COMPILE_ET) ../$(top_srcdir)/sieve/sieve_err.et
 
 sieve_test_SOURCES = sieve/test.c imap/mutex_fake.c
-sieve_test_LDADD = sieve/libsieve.a $(LD_UTILITY_ADD)
+sieve_test_LDADD = sieve/libcyrus_sieve.la $(LD_UTILITY_ADD)
 
 timsieved_timsieved_SOURCES = imap/mutex_fake.c imap/proxy.c master/service.c \
 	timsieved/actions.c timsieved/actions.h timsieved/codes.h \
@@ -673,7 +675,7 @@ timsieved_timsieved_SOURCES = imap/mutex_fake.c imap/proxy.c master/service.c \
 	timsieved/mystring.c timsieved/mystring.h timsieved/parser.c \
 	timsieved/parser.h timsieved/scripttest.c timsieved/scripttest.h \
 	timsieved/timsieved.c
-timsieved_timsieved_LDADD = sieve/libsieve.a $(LD_SERVER_ADD)
+timsieved_timsieved_LDADD = sieve/libcyrus_sieve.la $(LD_SERVER_ADD)
 
 GIT_VERSION = $(PACKAGE_VERSION).git$(shell date +'%Y%m%d%H%M')
 
@@ -813,3 +815,6 @@ tags cscope:
 	find $(DIST_SUBDIRS) -type f -name '*.[ch]' > cs.files
 	cscope -b -k -i cs.files
 	$(RM) cs.files
+
+libtool: $(LIBTOOL_DEPS)
+	$(SHELL) ./config.status libtool

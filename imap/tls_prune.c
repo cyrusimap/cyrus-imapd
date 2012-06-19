@@ -53,9 +53,6 @@
 #include "util.h"
 #include "xmalloc.h"
 
-/* global state */
-const int config_need_data = 0;
-
 void usage(void)
 {
     fprintf(stderr, "tls_prune [-C <altconfig>]\n");
@@ -84,7 +81,7 @@ int main(int argc, char *argv[])
 	}
     }
 
-    cyrus_init(alt_config, "tls_prune", 0);
+    cyrus_init(alt_config, "tls_prune", 0, 0);
 
     r = tls_prune_sessions();
 

@@ -1,6 +1,6 @@
 /*NEW
   
- * test.c -- tester for libsieve
+ * test.c -- tester for libcyrus_sieve
  * Larry Greenfield
  *
  * usage: "test message script"
@@ -500,8 +500,6 @@ sieve_vacation_t vacation = {
     &autorespond,		/* autorespond() */
     &send_response		/* send_response() */
 };
-
-int config_need_data = 0;
 
 static int usage(const char *argv0) __attribute__((noreturn));
 static int usage(const char *argv0)

@@ -143,7 +143,7 @@ make[1]: Entering directory `/home/gnb/software/cyrus/imapd/cunit'   <span class
 gcc -c [...] -g -O2 .cunit-mboxname.c
 ...
 gcc [...] -o unit unit.o [...] .cunit-mboxname.o [...] \  <span class="note">(d)</span>
-    ../imap/libimap.a ../lib/libcyrus.a [...]
+    ../imap/libcyrus_imap.la ../lib/libcyrus.la [...]
 ./unit -v   <span class="note">(e)</span>
 
 
@@ -390,8 +390,8 @@ of the <tt>TESTSOURCES</tt> variable.</p>
 TESTSOURCES = times.c glob.c md5.c parseaddr.c message.c \
             strconcat.c conversations.c msgid.c mboxname.c <b>\</b>
 	    <b>crc32.c</b>
-TESTLIBS = @top_srcdir@/imap/mutex_fake.o @top_srcdir@/imap/libimap.a \
-        @top_srcdir@/lib/libcyrus.a @top_srcdir@/lib/libcyrus_min.a
+TESTLIBS = @top_srcdir@/imap/mutex_fake.o @top_srcdir@/imap/libcyrus_imap.la \
+        @top_srcdir@/lib/libcyrus.la @top_srcdir@/lib/libcyrus_min.la
 
 </blockquote>
 

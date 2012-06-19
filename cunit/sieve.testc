@@ -1,7 +1,7 @@
 /* Unit test for sieve */
 /* Heavily based on the old sieve/test.c which bore this message:
  *
- * - * test.c -- tester for libsieve
+ * - * test.c -- tester for libcyrus_sieve
  * - * Larry Greenfield
  *
  */
@@ -486,7 +486,7 @@ static void config_read_string(const char *s)
     int fd = mkstemp(fname);
     retry_write(fd, s, strlen(s));
     config_reset();
-    config_read(fname);
+    config_read(fname, 0);
     unlink(fname);
     free(fname);
     close(fd);

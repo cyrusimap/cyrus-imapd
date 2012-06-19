@@ -62,6 +62,23 @@
 #define MAX_OPT 10
 #define MAXSIZE 8192
 
+
+/* generic fatal() routine for command line utilities
+   it is here, because libcyrus requires a global function fatal */
+void fatal(const char *message, int code)
+{
+  static int recurse_code = 0;
+
+  if (recurse_code) {
+    exit(code);
+  }
+
+  recurse_code = code;
+  fprintf(stderr, "fatal error: %s\n", message);
+  exit(code);
+}
+
+
 static int add_arg(char *buf, int max_size, const char *arg, int *buflen)
 {
     const char *myarg = (arg ? arg : "");

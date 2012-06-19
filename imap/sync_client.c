@@ -93,9 +93,6 @@
 #include "signals.h"
 #include "cyrusdb.h"
 
-/* signal to config.c */
-const int config_need_data = CONFIG_NEED_PARTITION_DATA;
-
 /* ====================================================================== */
 
 /* Static global variables and support routines for sync_client */
@@ -3162,7 +3159,8 @@ int main(int argc, char **argv)
     }
 
     cyrus_init(alt_config, "sync_client",
-	       (verbose > 1 ? CYRUSINIT_PERROR : 0));
+	       (verbose > 1 ? CYRUSINIT_PERROR : 0),
+	       CONFIG_NEED_PARTITION_DATA);
 
     /* get the server name if not specified */
     if (!servername)

@@ -100,9 +100,6 @@
 #include "index.h"
 #include "util.h"
 
-/* global state */
-const int config_need_data = CONFIG_NEED_PARTITION_DATA;
-
 extern char *optarg;
 extern int optind;
 
@@ -705,7 +702,7 @@ int main(int argc, char **argv)
 	}
     }
 
-    cyrus_init(alt_config, "squatter", 0);
+    cyrus_init(alt_config, "squatter", 0, CONFIG_NEED_PARTITION_DATA);
 
     syslog(LOG_NOTICE, "indexing mailboxes");
 

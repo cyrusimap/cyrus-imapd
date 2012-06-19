@@ -67,9 +67,6 @@
 #include "xstrlcat.h"
 
 
-/* config.c stuff */
-const int config_need_data = CONFIG_NEED_PARTITION_DATA;
-
 int verbose = 0;
 
 static int dump_me(char *name, int matchlen, int maycreate, void *rock);
@@ -116,7 +113,7 @@ int main(int argc, char *argv[])
 	usage(argv[0]);
     }
 
-    cyrus_init(alt_config, "dump", 0);
+    cyrus_init(alt_config, "dump", 0, CONFIG_NEED_PARTITION_DATA);
     mboxlist_init(0);
     mboxlist_open(NULL);
 

@@ -67,7 +67,6 @@
 #include "xmalloc.h"
 
 /* config.c stuff */
-const int config_need_data = 0;
 static int do_remove = 0;
 
 void usage(void)
@@ -127,7 +126,7 @@ int main(int argc, char *argv[])
 	}
     }
 
-    cyrus_init(alt_config, "cyr_userseen", 0);
+    cyrus_init(alt_config, "cyr_userseen", 0, 0);
 
     mboxlist_init(0);
     mboxlist_open(NULL);

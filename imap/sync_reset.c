@@ -83,9 +83,6 @@
 #include "sync_support.h"
 /*#include "cdb.h"*/
 
-/* global state */
-const int config_need_data = CONFIG_NEED_PARTITION_DATA;
-
 /* Static global variables and support routines for sync_reset */
 
 extern char *optarg;
@@ -236,7 +233,7 @@ main(int argc, char **argv)
 
     /* Set up default bounds if no command line options provided */
 
-    cyrus_init(alt_config, "sync_reset", 0);
+    cyrus_init(alt_config, "sync_reset", 0, CONFIG_NEED_PARTITION_DATA);
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(sync_namespacep, 1)) != 0) {

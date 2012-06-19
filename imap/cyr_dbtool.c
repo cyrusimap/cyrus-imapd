@@ -76,9 +76,6 @@
 #define STACKSIZE 64000
 char stack[STACKSIZE+1];
 
-/* config.c stuff */
-const int config_need_data = 0;
-
 struct db *db = NULL;
 
 int read_key_value(char **keyptr, size_t *keylen, char **valptr, size_t *vallen) {
@@ -194,7 +191,7 @@ int main(int argc, char *argv[])
 	exit(EC_OSERR);
     }
 
-    cyrus_init(alt_config, "cyr_dbtool", 0);
+    cyrus_init(alt_config, "cyr_dbtool", 0, 0);
 
     r = cyrusdb_open(argv[optind+1], fname, db_flags, &db);
     if(r != CYRUSDB_OK)

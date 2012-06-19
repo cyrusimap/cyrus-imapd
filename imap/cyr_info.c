@@ -65,7 +65,6 @@
 #include "xmalloc.h"
 
 /* config.c stuff */
-const int config_need_data = 0;
 const char *MASTER_CONFIG_FILENAME = DEFAULT_MASTER_CONFIG_FILENAME;
 
 struct service_item {
@@ -307,7 +306,7 @@ int main(int argc, char *argv[])
 	}
     }
 
-    cyrus_init(alt_config, srvname, 0);
+    cyrus_init(alt_config, srvname, 0, 0);
 
     if (optind >= argc)
 	usage();

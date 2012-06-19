@@ -76,9 +76,6 @@
 #include "xstrlcat.h"
 #include "sync_log.h"
 
-/* global state */
-const int config_need_data = 0;
-
 /* current namespace */
 static struct namespace unex_namespace;
 
@@ -339,7 +336,8 @@ int main(int argc, char *argv[])
     if (mode == MODE_UNKNOWN ||
 	(optind + (mode == MODE_UID ? 1 : 0)) >= argc) usage();
 
-    cyrus_init(alt_config, "unexpunge", 0);
+
+    cyrus_init(alt_config, "unexpunge", 0, 0);
 
     mboxlist_init(0);
     mboxlist_open(NULL);
