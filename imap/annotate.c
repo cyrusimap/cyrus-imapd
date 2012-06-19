@@ -631,7 +631,7 @@ static int _annotate_getdb(const char *mboxname,
     syslog(LOG_ERR, "Opening annotations db %s\n", fname);
 #endif
 
-    r = cyrusdb_open(DB, fname, dbflags, &db);
+    r = cyrusdb_open(DB, fname, dbflags | CYRUSDB_CONVERT, &db);
     if (r != 0) {
 	if (!(dbflags & CYRUSDB_CREATE) && r == CYRUSDB_NOTFOUND)
 	    goto error;
