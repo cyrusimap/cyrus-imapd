@@ -1511,6 +1511,7 @@ static int myforeach(struct dbengine *db,
     int need_unlock = 0;
     const char *val;
     size_t vallen;
+    struct buf keybuf = BUF_INITIALIZER;
 
     assert(db);
     assert(cb);
@@ -1563,6 +1564,10 @@ static int myforeach(struct dbengine *db,
 		need_unlock = 0;
 	    }
 
+	    /* take a copy of they key - just in case cb does actions on this database
+	     * and clobbers loc */
+	    buf_copy(&keybuf, &db->loc.keybuf);
+
 	    /* make callback */
 	    cb_r = cb(rock, db->loc.keybuf.s, db->loc.keybuf.len,
 			    val, vallen);
@@ -1573,7 +1578,13 @@ static int myforeach(struct dbengine *db,
 		r = read_lock(db);
 		if (r) goto done;
 		need_unlock = 1;
+		/* reposition, something might have fiddled things meanwhile */
+		if (r) goto done;
 	    }
+
+	    /* should be cheap if we're already here */
+	    r = find_loc(db, keybuf.s, keybuf.len);
+	    if (r) goto done;
 	}
 
 	/* move to the next one */
@@ -1582,6 +1593,8 @@ static int myforeach(struct dbengine *db,
     }
 
  done:
+
+    buf_free(&keybuf);
 
     if (need_unlock) {
 	/* release read lock */
