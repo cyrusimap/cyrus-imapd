@@ -901,6 +901,179 @@ static void test_foreach(void)
     CU_ASSERT_EQUAL(r, CYRUSDB_OK);
 }
 
+struct ffrock {
+    struct db *db;
+    struct txn **tid;
+    int state;
+};
+
+#define K0 "affect"
+#define K0U "bother"
+#define K1 "carib"
+#define K2 "cubist"
+#define K3 "eulogy"
+#define K4 "kidding"
+#define K4A "notice"
+#define K5 "penguin"
+#define K6 "zebra"
+
+static int ffstatemachine(void *rockp,
+			  const char *key, size_t keylen,
+			  const char *data, size_t datalen)
+{
+    struct ffrock *fr = (struct ffrock *)rockp;
+    char *kcopy = xstrndup(key, keylen);
+    int r;
+
+    /* oh yeah, state machine time */
+    switch (fr->state) {
+    case 0:
+	CU_ASSERT_STRING_EQUAL(kcopy, K1);
+	fr->state = 1;
+	break;
+    case 1:
+	CU_ASSERT_STRING_EQUAL(kcopy, K2);
+	/* test prior-location store */
+	r = cyrusdb_store(fr->db, K0, strlen(K0), "", 0, fr->tid);
+	CU_ASSERT_EQUAL(r, 0);
+	fr->state = 2;
+	break;
+    case 2:
+	CU_ASSERT_STRING_EQUAL(kcopy, K3);
+	/* test prior non-existent fetch - can cause infinite loops if buggy */
+	r = cyrusdb_fetch(fr->db, K0U, strlen(K0U), NULL, NULL, fr->tid);
+	CU_ASSERT_EQUAL(r, CYRUSDB_NOTFOUND);
+	fr->state = 3;
+	break;
+    case 3:
+	CU_ASSERT_STRING_EQUAL(kcopy, K4);
+	r = cyrusdb_store(fr->db, K4A, strlen(K4A), "", 0, fr->tid);
+	CU_ASSERT_EQUAL(r, 0);
+	fr->state = 4;
+	break;
+    case 4:
+	/* we found the after-added record correctly */
+	CU_ASSERT_STRING_EQUAL(kcopy, K4A);
+	r = cyrusdb_store(fr->db, K4A, strlen(K4A), "another", 7, fr->tid);
+	CU_ASSERT_EQUAL(r, 0);
+	fr->state = 5;
+	break;
+    case 5:
+	/* didn't repeat after replacing */
+	CU_ASSERT_STRING_EQUAL(kcopy, K5);
+	r = cyrusdb_delete(fr->db, K5, strlen(K5), fr->tid, /*force*/1);
+	fr->state = 6;
+	break;
+    case 6:
+	/* moved on after deleting */
+	CU_ASSERT_STRING_EQUAL(kcopy, K6);
+	fr->state = 7;
+	break;
+    default:
+	CU_ASSERT(0); /* bogus state found */
+	break;
+    }
+
+    free(kcopy);
+
+    return 0;
+}
+
+static void test_foreach_changes(void)
+{
+    struct db *db = NULL;
+    struct txn *txn = NULL;
+    struct ffrock rock;
+
+    /* random word generator to the rescue! */
+    static const char KEY1[] = K1;
+    static const char DATA1[] = "delays maj bullish packard ronald";
+    static const char KEY2[] = K2;
+    static const char DATA2[] = "bobby tswana cu albumin created";
+    static const char KEY3[] = K3;
+    static const char DATA3[] = "aleut stoic muscovy adonis moe docent";
+    static const char KEY4[] = K4;
+    static const char DATA4[] = "curry deterrent drove raising hiring";
+    static const char KEY5[] = K5;
+    static const char DATA5[] = "joining keeper angle burden buffer";
+    static const char KEY6[] = K6;
+    static const char DATA6[] = "annoying push security plenty ending";
+    int r;
+
+    if (!strcmp(backend, "flat")) return; /* flat concurency is bogus */
+
+    r = cyrusdb_open(backend, filename, CYRUSDB_CREATE, &db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    CU_ASSERT_PTR_NOT_NULL(db);
+
+    /* store() some records */
+    CANSTORE(KEY1, strlen(KEY1), DATA1, strlen(DATA1));
+    CANSTORE(KEY2, strlen(KEY2), DATA2, strlen(DATA2));
+    CANSTORE(KEY3, strlen(KEY3), DATA3, strlen(DATA3));
+    CANSTORE(KEY4, strlen(KEY4), DATA4, strlen(DATA4));
+    CANSTORE(KEY5, strlen(KEY5), DATA5, strlen(DATA5));
+    CANSTORE(KEY6, strlen(KEY6), DATA6, strlen(DATA6));
+
+    /* commit succeeds */
+    CANCOMMIT();
+
+    rock.db = db;
+    rock.state = 0;
+    rock.tid = &txn;
+
+    /* foreach succeeds */
+    r = cyrusdb_foreach(db, NULL, 0, NULL, ffstatemachine, &rock, rock.tid);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    CU_ASSERT_EQUAL(rock.state, 7);
+
+    /* close the txn - it doesn't matter here if we commit or abort */
+    CANCOMMIT();
+
+    /* closing succeeds */
+    r = cyrusdb_close(db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+
+    /* check again without TXN */
+
+    db = NULL;
+    r = cyrusdb_open(backend, filename2, CYRUSDB_CREATE, &db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    CU_ASSERT_PTR_NOT_NULL(db);
+
+    /* store() some records */
+    CANSTORE(KEY1, strlen(KEY1), DATA1, strlen(DATA1));
+    CANSTORE(KEY2, strlen(KEY2), DATA2, strlen(DATA2));
+    CANSTORE(KEY3, strlen(KEY3), DATA3, strlen(DATA3));
+    CANSTORE(KEY4, strlen(KEY4), DATA4, strlen(DATA4));
+    CANSTORE(KEY5, strlen(KEY5), DATA5, strlen(DATA5));
+    CANSTORE(KEY6, strlen(KEY6), DATA6, strlen(DATA6));
+
+    /* commit succeeds */
+    CANCOMMIT();
+
+    rock.db = db;
+    rock.state = 0;
+    rock.tid = NULL;
+
+    /* foreach succeeds without txn */
+    r = cyrusdb_foreach(db, NULL, 0, NULL, ffstatemachine, &rock, rock.tid);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+    CU_ASSERT_EQUAL(rock.state, 7);
+
+    /* closing succeeds */
+    r = cyrusdb_close(db);
+    CU_ASSERT_EQUAL(r, CYRUSDB_OK);
+}
+#undef K0
+#undef K0U
+#undef K1
+#undef K2
+#undef K3
+#undef K4
+#undef K4A
+#undef K5
+#undef K6
+
 static void test_binary_keys(void)
 {
     struct db *db = NULL;
