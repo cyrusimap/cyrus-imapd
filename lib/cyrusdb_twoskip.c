@@ -1502,10 +1502,10 @@ done:
    if there is a txn, 'cb' must make use of it.
 */
 static int myforeach(struct dbengine *db,
-	      const char *prefix, size_t prefixlen,
-	      foreach_p *goodp,
-	      foreach_cb *cb, void *rock,
-	      struct txn **tidptr)
+		     const char *prefix, size_t prefixlen,
+		     foreach_p *goodp,
+		     foreach_cb *cb, void *rock,
+		     struct txn **tidptr)
 {
     int r = 0, cb_r = 0;
     int need_unlock = 0;

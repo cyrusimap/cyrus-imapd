@@ -1023,7 +1023,7 @@ int annotatemore_findall(const char *mboxname,	/* internal */
     keylen = p - key;
 
     r = cyrusdb_foreach(frock.d->db, key, keylen, &find_p, &find_cb,
-		    &frock, tid(frock.d));
+			&frock, tid(frock.d));
 
 out:
     glob_free(&frock.mglob);
