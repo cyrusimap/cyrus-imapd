@@ -1345,7 +1345,7 @@ static int mailbox_full_update(const char *mboxname)
     mailbox_close(&mailbox);
 
     /* only send expunge if we have some UIDs to expunge */
-    if (kuids->head) {
+    if (kuids && kuids->head) {
 	int r2;
 	sync_send_apply(kexpunge, sync_out);
 	r2 = sync_parse_response("EXPUNGE", sync_in, NULL);
@@ -1363,6 +1363,8 @@ done:
     dlist_free(&kin);
     dlist_free(&kaction);
     dlist_free(&kexpunge);
+    dlist_free(&kuids);
+
     return r;
 }
 
