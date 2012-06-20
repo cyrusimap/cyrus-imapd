@@ -1,0 +1,11 @@
+prefix = @prefix@
+includedir = ${prefix}/include
+libdir = @libdir@
+
+Name: Cyrus Imapd libcyrus_min
+Description: libcyrus_min library of Cyrus Imapd
+URL: http://www.cyrusimap.org/
+Cflags: -I${includedir}/cyrus
+Version: @PACKAGE_VERSION@
+Libs: -L${libdir} -lcyrus_min
+Libs.private: @LIBS@

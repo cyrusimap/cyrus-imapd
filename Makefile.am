@@ -192,6 +192,9 @@ EXTRA_SCRIPTS = com_err/et/compile_et.sh com_err/et/config_script \
 noinst_MAN = com_err/et/com_err.3 com_err/et/compile_et.1
 noinst_TEXINFOS = com_err/et/com_err.texinfo
 
+pkgconfigdir = $(libdir)/pkgconfig
+pkgconfig_DATA = libcyrus_min.pc libcyrus.pc
+
 com_err_et_libcyrus_com_err_la_SOURCES = com_err/et/com_err.c com_err/et/com_err.h \
 	com_err/et/error_message.c com_err/et/error_table.h \
 	com_err/et/et_name.c com_err/et/init_et.c com_err/et/internal.h \
