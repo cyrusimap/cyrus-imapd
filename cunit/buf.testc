@@ -1002,6 +1002,71 @@ static void test_insert(void)
 #undef TESTCASE
 
 
+#define TESTCASE(in, off, xlen, exp) \
+    { \
+	static const char _in[] = in; \
+	int _off = off; \
+	int _len = xlen; \
+	static const char _exp[] = exp; \
+	struct buf b = BUF_INITIALIZER; \
+ \
+	buf_appendcstr(&b, _in); \
+	buf_cstring(&b); \
+	CU_ASSERT_EQUAL(b.len, sizeof(_in)-1); \
+	CU_ASSERT_PTR_NOT_NULL(b.s); \
+	CU_ASSERT_STRING_EQUAL(b.s, _in); \
+ \
+	buf_remove(&b, _off, _len); \
+	CU_ASSERT_EQUAL(b.len, sizeof(_exp)-1); \
+	CU_ASSERT(b.alloc >= b.len); \
+	buf_cstring(&b); \
+	CU_ASSERT_PTR_NOT_NULL(b.s); \
+	CU_ASSERT_STRING_EQUAL(b.s, _exp); \
+	buf_free(&b); \
+    }
+
+static void test_remove(void)
+{
+    /* data thanks to hipsteripsum.me */
+#define WORD0	"fingerstache"
+#define WORD1	"scenester"
+#define WORD2	"ennui"
+
+    TESTCASE(WORD0" "WORD1"\t"WORD2,
+	     0, sizeof(WORD0),
+	     WORD1"\t"WORD2);
+
+    TESTCASE(WORD0" "WORD1"\t"WORD2,
+	     0, 0,
+	     WORD0" "WORD1"\t"WORD2);
+
+    TESTCASE(WORD0" "WORD1"\t"WORD2,
+	     sizeof(WORD0), sizeof(WORD1),
+	     WORD0" "WORD2);
+
+    TESTCASE(WORD0" "WORD1"\t"WORD2,
+	     sizeof(WORD0)+sizeof(WORD1), sizeof(WORD2)-1,
+	     WORD0" "WORD1"\t");
+
+    TESTCASE(WORD0" "WORD1"\t"WORD2,
+	     sizeof(WORD0)+sizeof(WORD1), sizeof(WORD2)-1+20,
+	     WORD0" "WORD1"\t");
+
+    TESTCASE(WORD0" "WORD1"\t"WORD2,
+	     0, sizeof(WORD0" "WORD1"\t"WORD2)-1,
+	     "");
+
+    TESTCASE("",
+	     0, 1,
+	     "");
+
+#undef WORD0
+#undef WORD1
+#undef WORD2
+}
+#undef TESTCASE
+
+
 static void test_truncate(void)
 {
 #define WORD0	"lorem"

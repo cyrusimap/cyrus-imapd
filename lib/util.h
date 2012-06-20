@@ -244,6 +244,7 @@ int buf_replace_all_re(struct buf *buf, const regex_t *,
 int buf_replace_one_re(struct buf *buf, const regex_t *,
 		       const char *replace);
 #endif
+void buf_remove(struct buf *buf, unsigned int off, unsigned int len);
 int buf_cmp(const struct buf *, const struct buf *);
 void buf_init(struct buf *buf);
 void buf_init_ro(struct buf *buf, const char *base, size_t len);

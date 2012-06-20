@@ -1076,6 +1076,11 @@ EXPORTED void buf_insertmap(struct buf *dst, unsigned int off,
     buf_replace_buf(dst, off, 0, &map_buf);
 }
 
+EXPORTED void buf_remove(struct buf *dst, unsigned int off, unsigned int len)
+{
+    struct buf empty_buf = BUF_INITIALIZER;
+    buf_replace_buf(dst, off, len, &empty_buf);
+}
 
 /*
  * Compare two struct bufs bytewise.  Returns a number
