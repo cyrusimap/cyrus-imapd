@@ -135,7 +135,7 @@ int seen_open(const char *user,
     /* open the seendb corresponding to user */
     fname = seen_getpath(user);
     if (flags & SEEN_CREATE) cyrus_mkdir(fname, 0755);
-    r = cyrusdb_open(DB, fname, dbflags, &seendb->db);
+    r = cyrusdb_open(DB, fname, dbflags | CYRUSDB_CONVERT, &seendb->db);
     if (r) {
 	if (!(flags & SEEN_SILENT)) {
 	    int level = (flags & SEEN_CREATE) ? LOG_ERR : LOG_DEBUG;
