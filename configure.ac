@@ -118,7 +118,8 @@ fi
 AC_C_INLINE
 
 LT_PREREQ([2.2.6])
-LT_INIT([disable-static])
+AC_PROG_LIBTOOL
+AC_DISABLE_STATIC
 AC_SUBST([LIBTOOL_DEPS])
 
 dnl Check the size of various types
