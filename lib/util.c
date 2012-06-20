@@ -945,7 +945,11 @@ static void buf_replace_buf(struct buf *buf,
 			    size_t length,
 			    const struct buf *replace)
 {
-    /* we need buf to be a nul terminated string now please */
+    if (offset > buf->len) return;
+    if (offset + length > buf->len)
+	length = buf->len - offset;
+
+    /* we need buf to be a writable string now please */
     buf_cstring(buf);
 
     if (replace->len > length) {
@@ -958,7 +962,7 @@ static void buf_replace_buf(struct buf *buf,
 		buf->len - offset - length + replace->len + 1);
 	buf->len += (replace->len - length);
     }
-    if (replace)
+    if (replace->len)
 	memcpy(buf->s + offset, replace->s, replace->len);
 }
 
@@ -977,8 +981,7 @@ EXPORTED int buf_replace_all(struct buf *buf, const char *match,
     size_t off;
     char *p;
 
-    if (replace)
-	buf_init_ro_cstr(&replace_buf, replace);
+    buf_init_ro_cstr(&replace_buf, replace);
 
     /* we need buf to be a nul terminated string now please */
     buf_cstring(buf);
@@ -1008,8 +1011,7 @@ EXPORTED int buf_replace_one_re(struct buf *buf, const regex_t *preg,
     struct buf replace_buf = BUF_INITIALIZER;
     regmatch_t rm;
 
-    if (replace)
-	buf_init_ro_cstr(&replace_buf, replace);
+    buf_init_ro_cstr(&replace_buf, replace);
 
     /* we need buf to be a nul terminated string now please */
     buf_cstring(buf);
@@ -1037,8 +1039,7 @@ EXPORTED int buf_replace_all_re(struct buf *buf, const regex_t *preg,
     regmatch_t rm;
     size_t off;
 
-    if (replace)
-	buf_init_ro_cstr(&replace_buf, replace);
+    buf_init_ro_cstr(&replace_buf, replace);
 
     /* we need buf to be a nul terminated string now please */
     buf_cstring(buf);
@@ -1053,6 +1054,26 @@ EXPORTED int buf_replace_all_re(struct buf *buf, const regex_t *preg,
     return n;
 }
 #endif
+
+EXPORTED void buf_insert(struct buf *dst, unsigned int off, const struct buf *src)
+{
+    buf_replace_buf(dst, off, 0, src);
+}
+
+EXPORTED void buf_insertcstr(struct buf *dst, unsigned int off, const char *str)
+{
+    struct buf str_buf = BUF_INITIALIZER;
+    buf_init_ro_cstr(&str_buf, str);
+    buf_replace_buf(dst, off, 0, &str_buf);
+}
+
+EXPORTED void buf_insertmap(struct buf *dst, unsigned int off,
+			    const char *base, int len)
+{
+    struct buf map_buf = BUF_INITIALIZER;
+    buf_init_ro(&map_buf, base, len);
+    buf_replace_buf(dst, off, 0, &map_buf);
+}
 
 
 /*
