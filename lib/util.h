@@ -230,6 +230,8 @@ void buf_append(struct buf *dst, const struct buf *src);
 void buf_appendcstr(struct buf *buf, const char *str);
 void buf_appendbit32(struct buf *buf, bit32 num);
 void buf_appendmap(struct buf *buf, const char *base, size_t len);
+void buf_cowappendmap(struct buf *buf, const char *base, unsigned int len);
+void buf_cowappendfree(struct buf *buf, char *base, unsigned int len);
 void buf_insert(struct buf *dst, unsigned int off, const struct buf *src);
 void buf_insertcstr(struct buf *buf, unsigned int off, const char *str);
 void buf_insertmap(struct buf *buf, unsigned int off, const char *base, int len);

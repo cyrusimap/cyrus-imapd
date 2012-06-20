@@ -1421,6 +1421,57 @@ static void test_findchar(void)
     buf_free(&b);
 }
 
+static void test_cowappendmap(void)
+{
+    /* data thanks to hipsteripsum.me */
+#define WORD0	"beard"
+#define WORD1	"narwhal"
+    struct buf b = BUF_INITIALIZER;
+
+    buf_cowappendmap(&b, WORD0, sizeof(WORD0)-1);
+    CU_ASSERT_EQUAL(b.len, sizeof(WORD0)-1);
+    CU_ASSERT(b.alloc == 0);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    CU_ASSERT(!memcmp(b.s, WORD0, sizeof(WORD0)-1));
+
+    buf_cowappendmap(&b, WORD1, sizeof(WORD1)-1);
+    CU_ASSERT_EQUAL(b.len, sizeof(WORD0)-1+sizeof(WORD1)-1);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    CU_ASSERT(!memcmp(b.s, WORD0""WORD1, sizeof(WORD0)-1+sizeof(WORD1)-1));
+
+    buf_free(&b);
+#undef WORD0
+#undef WORD1
+}
+
+static void test_cowappendfree(void)
+{
+    /* data thanks to hipsteripsum.me */
+#define WORD0	"beard"
+#define WORD1	"narwhal"
+    struct buf b = BUF_INITIALIZER;
+    char *s;
+
+    s = xstrdup(WORD0);
+    buf_cowappendfree(&b, s, strlen(s));
+    CU_ASSERT_EQUAL(b.len, sizeof(WORD0)-1);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    CU_ASSERT(!memcmp(b.s, WORD0, sizeof(WORD0)-1));
+
+    s = xstrdup(WORD1);
+    buf_cowappendfree(&b, s, strlen(s));
+    CU_ASSERT_EQUAL(b.len, sizeof(WORD0)-1+sizeof(WORD1)-1);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    CU_ASSERT(!memcmp(b.s, WORD0""WORD1, sizeof(WORD0)-1+sizeof(WORD1)-1));
+
+    /* we don't free s, buf_free() should do that */
+    buf_free(&b);
+#undef WORD0
+#undef WORD1
+}
 
 static void test_bufprint(void)
 {

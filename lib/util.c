@@ -903,6 +903,29 @@ EXPORTED void buf_appendmap(struct buf *buf, const char *base, size_t len)
     }
 }
 
+/* This is like buf_appendmap() but attempts an optimisation where the
+ * first append to an empty buf results in a read-only pointer to the
+ * data at 'base' instead of a writable copy. */
+EXPORTED void buf_cowappendmap(struct buf *buf, const char *base, unsigned int len)
+{
+    if (!buf->s)
+	buf_init_ro(buf, base, len);
+    else
+	buf_appendmap(buf, base, len);
+}
+
+/* This is like buf_cowappendmap() but takes over the given map 'base',
+ * which is a malloc()ed C string buffer of at least 'len' bytes. */
+EXPORTED void buf_cowappendfree(struct buf *buf, char *base, unsigned int len)
+{
+    if (!buf->s)
+	buf_initm(buf, base, len);
+    else {
+	buf_appendmap(buf, base, len);
+	free(base);
+    }
+}
+
 EXPORTED void buf_putc(struct buf *buf, char c)
 {
     buf_ensure(buf, 1);
