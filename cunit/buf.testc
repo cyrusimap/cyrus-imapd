@@ -79,6 +79,24 @@ static void test_map(void)
 #undef WORD1
 }
 
+static void test_initm(void)
+{
+    struct buf b = BUF_INITIALIZER;
+    /* data thanks to hipsteripsum.me */
+    static const char WORD0[] = "terry richardson fanny pack";
+    char *s = xstrdup(WORD0);
+
+    buf_initm(&b, s, sizeof(WORD0)-1);
+    CU_ASSERT_EQUAL(b.len, sizeof(WORD0)-1);
+    CU_ASSERT_EQUAL(buf_len(&b), b.len);
+    CU_ASSERT(b.alloc >= b.len);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    CU_ASSERT(!memcmp(b.s, WORD0, sizeof(WORD0)-1));
+
+    /* we don't free(s) - the buf_free() should do that */
+    buf_free(&b);
+}
+
 static void test_long(void)
 {
     struct buf b = BUF_INITIALIZER;

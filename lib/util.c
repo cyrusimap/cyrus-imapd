@@ -1099,6 +1099,18 @@ EXPORTED void buf_init_ro(struct buf *buf, const char *base, size_t len)
 }
 
 /*
+ * Initialise a struct buf to point to writable data at 'base', which
+ * must be a malloc()ed allocation at least 'len' bytes long and is
+ * taken over by the struct buf.
+ */
+EXPORTED void buf_initm(struct buf *buf, char *base, int len)
+{
+    buf->alloc = buf->len = len;
+    buf->flags = 0;
+    buf->s = base;
+}
+
+/*
  * Initialise a struct buf to point to a read-only C string.
  */
 EXPORTED void buf_init_ro_cstr(struct buf *buf, const char *str)
