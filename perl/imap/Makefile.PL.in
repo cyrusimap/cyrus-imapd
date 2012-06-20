@@ -70,7 +70,7 @@ WriteMakefile(
 		},
     'clean'	=> {'FILES' => 'libcyrperl.a cyradm'},
     'OBJECT'    => 'IMAP.o',
-    'LDFROM'	=> "\$(OBJECT) @top_builddir@/perl/.libs/libcyrus.a @top_builddir@/perl/.libs/libcyrus_min.a",
+    'MYEXTLIB'  => '@top_builddir@/perl/.libs/libcyrus.a @top_builddir@/perl/.libs/libcyrus_min.a',
     'LIBS'	=> [ "@BDB_LIB@ $LIB_SASL @SSL_LIBS@ @LIB_RT@ @LIB_UUID@ @ZLIB@"],
     'DEFINE'	=> '-DPERL_POLLUTE',    # e.g., '-DHAVE_SOMETHING' 
     'INC'	=> "@BDB_INC@ -I@top_srcdir@ -I@top_srcdir@/com_err/et @SASLFLAGS@ @SSL_CPPFLAGS@ -I@top_srcdir@/perl/imap", 
