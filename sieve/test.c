@@ -72,7 +72,6 @@
 #include "xmalloc.h"
 #include "xstrlcat.h"
 #include "xstrlcpy.h"
-#include "strarray.h"
 #include "hash.h"
 #include "times.h"
 
