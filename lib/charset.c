@@ -153,6 +153,17 @@ static const char index_64[256] = {
 };
 #define CHAR64(c)  (index_64[(unsigned char)(c)])
 
+EXPORTED const char *encoding_name(int encoding)
+{
+    switch (encoding) {
+    case ENCODING_NONE: return "none";
+    case ENCODING_QP: return "quoted-printable";
+    case ENCODING_BASE64: return "base64";
+    case ENCODING_UNKNOWN: return "unknown";
+    default: return "wtf";
+    }
+}
+
 static inline void convert_putc(struct convert_rock *rock, int c)
 {
     rock->f(rock, c);
@@ -715,6 +726,16 @@ static struct convert_rock *buffer_init(void)
 }
 
 /* API */
+
+/*
+ * Return the name of the given character set number, or NULL if
+ * not known.
+ */
+EXPORTED const char *charset_name(charset_index i)
+{
+    return (i >= 0 && i < chartables_num_charsets ?
+	    chartables_charset_table[i].name : "unknown");
+}
 
 /*
  * Lookup the character set 'name'.  Returns the character set number

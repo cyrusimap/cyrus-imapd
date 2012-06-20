@@ -58,12 +58,15 @@
 typedef int comp_pat;
 typedef int charset_index;
 
+extern const char *encoding_name(int);
+
 /* ensure up to MAXTRANSLATION times expansion into buf */
 extern char *charset_convert(const char *s, charset_index charset, int flags);
 extern char *charset_decode_mimeheader(const char *s, int flags);
 extern char *charset_parse_mimeheader(const char *s);
 extern char *charset_utf8_to_searchform(const char *s, int flags);
 
+extern const char *charset_name(charset_index);
 extern charset_index charset_lookupname(const char *name);
 extern comp_pat *charset_compilepat(const char *s);
 extern void charset_freepat(comp_pat *pat);
