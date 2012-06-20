@@ -1188,6 +1188,15 @@ EXPORTED void buf_move(struct buf *dst, struct buf *src)
     buf_init(src);
 }
 
+EXPORTED int buf_findchar(const struct buf *buf, unsigned int off, int c)
+{
+    const char *p;
+
+    if (off < buf->len && (p = memchr(buf->s + off, c, buf->len - off)))
+	return (p - buf->s);
+    return -1;
+}
+
 EXPORTED char *strconcat(const char *s1, ...)
 {
     int sz = 1;	/* 1 byte for the trailing NUL */

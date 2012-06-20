@@ -1373,6 +1373,55 @@ static void test_mmap_cow(void)
     close(fd);
 }
 
+static void test_findchar(void)
+{
+    struct buf b = BUF_INITIALIZER;
+    int i;
+
+    buf_appendcstr(&b, "ABCDEF");
+    /* Note: buf is NOT a C-string so should get a Valgrind
+     * error if findchar() runs off the end */
+
+    i = buf_findchar(&b, 0, 'A');
+    CU_ASSERT_EQUAL(i, 0);
+
+    i = buf_findchar(&b, 0, 'C');
+    CU_ASSERT_EQUAL(i, 2);
+
+    i = buf_findchar(&b, 0, 'F');
+    CU_ASSERT_EQUAL(i, 5);
+
+    i = buf_findchar(&b, 0, 'X');
+    CU_ASSERT_EQUAL(i, -1);
+
+    i = buf_findchar(&b, 0, -1);
+    CU_ASSERT_EQUAL(i, -1);
+
+    i = buf_findchar(&b, 2, 'A');
+    CU_ASSERT_EQUAL(i, -1);
+
+    i = buf_findchar(&b, 2, 'C');
+    CU_ASSERT_EQUAL(i, 2);
+
+    i = buf_findchar(&b, 2, 'F');
+    CU_ASSERT_EQUAL(i, 5);
+
+    i = buf_findchar(&b, 2, 'X');
+    CU_ASSERT_EQUAL(i, -1);
+
+    i = buf_findchar(&b, 2, -1);
+    CU_ASSERT_EQUAL(i, -1);
+
+    i = buf_findchar(&b, 6, 'F');
+    CU_ASSERT_EQUAL(i, -1);
+
+    i = buf_findchar(&b, 6, 'X');
+    CU_ASSERT_EQUAL(i, -1);
+
+    buf_free(&b);
+}
+
+
 static void test_bufprint(void)
 {
     struct buf b = BUF_INITIALIZER;
