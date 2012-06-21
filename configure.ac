@@ -1114,6 +1114,12 @@ dnl     CMU_ADD_LIBPATH_TO(${with_com_err}/lib, COM_ERR_LDFLAGS)
      COMPILE_ET="${with_com_err}/bin/compile_et"
 esac
 AM_CONDITIONAL([COM_ERR], [test "$with_com_err" = "yes"])
+if test "$with_com_err" = "yes"; then
+  PKG_CONFIG_COM_ERR_LIB="-lcyrus_com_err"
+else
+  PKG_CONFIG_COM_ERR_LIB="-lcom_err"
+fi
+AC_SUBST(PKG_CONFIG_COM_ERR_LIB)
 AC_SUBST(COMPILE_ET)
 AC_SUBST(COM_ERR_LIBS)
 AC_SUBST(COM_ERR_CPPFLAGS)
@@ -1497,6 +1503,7 @@ dnl make sure that Makefile is the last thing output
 AC_CONFIG_FILES([
     libcyrus_min.pc
     libcyrus.pc
+    libcyrus_sieve.pc
     Makefile
 ])
 

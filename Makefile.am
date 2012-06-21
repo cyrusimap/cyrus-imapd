@@ -193,7 +193,7 @@ noinst_MAN = com_err/et/com_err.3 com_err/et/compile_et.1
 noinst_TEXINFOS = com_err/et/com_err.texinfo
 
 pkgconfigdir = $(libdir)/pkgconfig
-pkgconfig_DATA = libcyrus_min.pc libcyrus.pc
+pkgconfig_DATA = libcyrus_min.pc libcyrus.pc libcyrus_sieve.pc
 
 com_err_et_libcyrus_com_err_la_SOURCES = com_err/et/com_err.c com_err/et/com_err.h \
 	com_err/et/error_message.c com_err/et/error_table.h \
@@ -320,7 +320,7 @@ include_HEADERS = lib/acl.h lib/assert.h lib/auth.h lib/auth_pts.h \
 	lib/map.h lib/mappedfile.h lib/mkgmtime.h lib/mpool.h lib/nonblock.h \
 	lib/parseaddr.h lib/retry.h lib/rfc822date.h lib/signals.h \
 	lib/strarray.h lib/strhash.h lib/stristr.h lib/sysexits.h lib/times.h \
-	lib/tok.h lib/wildmat.h lib/xmalloc.h
+	lib/tok.h lib/wildmat.h lib/xmalloc.h sieve/sieve_interface.h
 
 noinst_HEADERS = lib/byteorder64.h lib/gai.h lib/libconfig.h lib/md5.h \
 	lib/prot.h lib/ptrarray.h lib/util.h lib/xstrlcat.h lib/xstrlcpy.h
@@ -656,7 +656,7 @@ sieve_libcyrus_sieve_la_SOURCES = sieve/bytecode.h sieve/addr.y sieve/addr-lex.l
 	sieve/bc_dump.c sieve/bc_emit.c sieve/bc_eval.c sieve/bc_generate.c \
 	sieve/comparator.c sieve/comparator.h sieve/interp.c sieve/interp.h \
 	sieve/message.c sieve/message.h sieve/script.c sieve/script.h \
-	sieve/sieve-lex.l sieve/sieve.y sieve/sieve_interface.h sieve/tree.c sieve/tree.h
+	sieve/sieve-lex.l sieve/sieve.y sieve/tree.c sieve/tree.h
 sieve_libcyrus_sieve_la_LIBADD = $(COM_ERR_LIBS)
 
 LD_SIEVE_ADD = sieve/libcyrus_sieve.la $(LD_BASIC_ADD)
