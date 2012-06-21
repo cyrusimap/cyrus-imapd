@@ -46,7 +46,7 @@
 #ifndef __CYRUS_STRARRAY_H__
 #define __CYRUS_STRARRAY_H__
 
-#include <config.h>
+#include <string.h>
 #include <sys/types.h>
 
 typedef struct

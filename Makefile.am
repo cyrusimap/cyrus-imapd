@@ -319,12 +319,11 @@ include_HEADERS = lib/acl.h lib/assert.h lib/auth.h lib/auth_pts.h \
 	lib/iostat.h lib/iptostring.h lib/libcyr_cfg.h lib/lsort.h \
 	lib/map.h lib/mappedfile.h lib/mkgmtime.h lib/mpool.h lib/nonblock.h \
 	lib/parseaddr.h lib/retry.h lib/rfc822date.h lib/signals.h \
-	lib/strhash.h lib/stristr.h lib/sysexits.h lib/times.h lib/tok.h \
-	lib/wildmat.h lib/xmalloc.h
+	lib/strarray.h lib/strhash.h lib/stristr.h lib/sysexits.h lib/times.h \
+	lib/tok.h lib/wildmat.h lib/xmalloc.h
 
 noinst_HEADERS = lib/byteorder64.h lib/gai.h lib/libconfig.h lib/md5.h \
-	lib/prot.h lib/ptrarray.h lib/strarray.h lib/util.h lib/xstrlcat.h \
-	lib/xstrlcpy.h
+	lib/prot.h lib/ptrarray.h lib/util.h lib/xstrlcat.h lib/xstrlcpy.h
 
 imap_arbitron_SOURCES = imap/arbitron.c imap/cli_fatal.c imap/mutex_fake.c
 imap_arbitron_LDADD = $(LD_UTILITY_ADD)
