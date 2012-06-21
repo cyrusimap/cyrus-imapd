@@ -131,9 +131,23 @@ static icalcomponent *busytime(struct transaction_t *txn,
 			       const char *organizer,
 			       const char *attendee);
 #ifdef WITH_CALDAV_SCHED
-static char *caladdress_to_userid(const char *addr);
+/* Scheduling protocol flags */
+#define SCHEDTYPE_REMOTE	(1<<0)
+#define SCHEDTYPE_ISCHEDULE	(1<<1)
+#define SCHEDTYPE_SSL		(1<<2)
+
+/* Each calendar user address has the following scheduling protocol params */
+struct sched_param {
+    char *userid;	/* Userid corresponding to calendar address */ 
+    char *server;	/* Remote server user lives on */
+    unsigned port;	/* Remote server port, default = 80 */
+    unsigned flags;	/* Flags dictating protocol to use for scheduling */
+};
+
+static int caladdress_lookup(const char *addr, struct sched_param *param);
 static int sched_busytime(struct transaction_t *txn);
-static int sched_request(icalcomponent *oldical, icalcomponent *newical);
+static int sched_request(const char *organizer,
+			 icalcomponent *oldical, icalcomponent *newical);
 static int sched_reply(icalcomponent *oldical, icalcomponent *newical,
 		       const char *userid);
 #endif /* WITH_CALDAV_SCHED */
@@ -996,6 +1010,7 @@ static int meth_delete(struct transaction_t *txn)
 	unsigned long msg_size = 0;
 	icalcomponent *ical, *comp;
 	icalproperty *prop;
+	struct sched_param sparam;
 
 	/* Check ACL of auth'd user on userid's Scheduling Outbox */
 	caldav_mboxname(SCHED_OUTBOX, userid, outboxname);
@@ -1038,9 +1053,19 @@ static int meth_delete(struct transaction_t *txn)
 	prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
 	organizer = icalproperty_get_organizer(prop);
 
-	if (!strcmp(caladdress_to_userid(organizer), userid)) {
+	if (caladdress_lookup(organizer, &sparam)) {
+	    syslog(LOG_ERR,
+		   "meth_delete: failed to process scheduling message in %s"
+		   " (org=%s, att=%s)",
+		   mailboxname, organizer, userid);
+	    txn->error.desc = "Failed to lookup organizer address";
+	    ret = HTTP_SERVER_ERROR;
+	    goto done;
+	}
+
+	if (!strcmp(sparam.userid, userid)) {
 	    /* Organizer scheduling object resource */
-	    r = sched_request(ical, NULL);
+	    r = sched_request(organizer, ical, NULL);
 	}
 	else {
 	    /* Attendee scheduling object resource */
@@ -2346,6 +2371,7 @@ static int meth_put(struct transaction_t *txn)
 	struct mboxlist_entry mbentry;
 	char outboxname[MAX_MAILBOX_BUFFER];
 	static struct buf href = BUF_INITIALIZER;
+	struct sched_param sparam;
 
 	/* Check ACL of auth'd user on userid's Scheduling Outbox */
 	caldav_mboxname(SCHED_OUTBOX, userid, outboxname);
@@ -2389,9 +2415,19 @@ static int meth_put(struct transaction_t *txn)
 	    goto done;
 	}
 
-	if (!strcmp(caladdress_to_userid(organizer), userid)) {
+	if (caladdress_lookup(organizer, &sparam)) {
+	    syslog(LOG_ERR,
+		   "meth_delete: failed to process scheduling message in %s"
+		   " (org=%s, att=%s)",
+		   mailboxname, organizer, userid);
+	    txn->error.desc = "Failed to lookup organizer address";
+	    ret = HTTP_SERVER_ERROR;
+	    goto done;
+	}
+
+	if (!strcmp(sparam.userid, userid)) {
 	    /* Organizer scheduling object resource */
-	    r = sched_request(NULL, ical);
+	    r = sched_request(organizer, NULL, ical);
 	}
 	else {
 	    /* Attendee scheduling object resource */
@@ -3665,20 +3701,72 @@ static unsigned get_preferences(hdrcache_t hdrcache)
 }
 
 #ifdef WITH_CALDAV_SCHED
-/* XXX  This needs to be done via an LDAP/DB lookup */
-static char *caladdress_to_userid(const char *addr)
+static int caladdress_lookup(const char *addr, struct sched_param *param)
 {
-    static char userid[MAX_MAILBOX_BUFFER];
     char *p;
+    int islocal = 1, found = 1;
 
-    if (!addr) return NULL;
+    memset(param, 0, sizeof(struct sched_param));
+
+    if (!addr) return HTTP_NOT_FOUND;
 
     p = (char *) addr;
     if (!strncmp(addr, "mailto:", 7)) p += 7;
-    strlcpy(userid, p, sizeof(userid));
-    if ((p = strchr(userid, '@'))) *p = '\0';
 
-    return userid;
+    /* XXX  Do LDAP/DB/socket lookup to see if user is local */
+
+    if (islocal) {
+	/* User is in a local domain */
+	int r;
+	static const char *calendarprefix = NULL;
+	char mailboxname[MAX_MAILBOX_BUFFER];
+
+	if (!found) return HTTP_NOT_FOUND;
+	else {
+	    /* XXX  Hack until real lookup stuff is written */
+	    static char userid[MAX_MAILBOX_BUFFER];
+
+	    strlcpy(userid, p, sizeof(userid));
+	    if ((p = strchr(userid, '@'))) *p = '\0';
+
+	    param->userid = userid;
+	}
+
+	/* Lookup user's cal-home-set to see if its on this server */
+	if (!calendarprefix) {
+	    calendarprefix = config_getstring(IMAPOPT_CALENDARPREFIX);
+	}
+
+	snprintf(mailboxname, sizeof(mailboxname),
+		 "user.%s.%s", param->userid, calendarprefix);
+
+	if ((r = http_mlookup(mailboxname, &param->server, NULL, NULL))) {
+	    syslog(LOG_ERR, "mlookup(%s) failed: %s",
+		   mailboxname, error_message(r));
+
+	    switch (r) {
+	    case IMAP_PERMISSION_DENIED: return HTTP_FORBIDDEN;
+	    case IMAP_MAILBOX_NONEXISTENT: return HTTP_NOT_FOUND;
+	    default: return HTTP_SERVER_ERROR;
+	    }
+	}
+
+	if (param->server) param->flags |= SCHEDTYPE_ISCHEDULE;
+    }
+    else {
+	/* User is outside of our domain(s) -
+	   Do remote scheduling (default = iMIP) */
+	param->flags |= SCHEDTYPE_REMOTE;
+
+#ifdef WITH_DKIM
+	/* Do iSchedule DNS SRV lookup */
+
+	/* XXX  If success, set server, port,
+	   and flags |= SCHEDTYPE_ISCHEDULE [ | SCHEDTYPE_SSL ] */
+#endif
+    }
+
+    return 0;
 }
 
 
@@ -3690,6 +3778,7 @@ int busytime_query(struct transaction_t *txn, icalcomponent *comp)
     char mailboxname[MAX_MAILBOX_BUFFER];
     icalproperty *prop = NULL;
     const char *uid = NULL, *organizer = NULL;
+    struct sched_param sparam;
     struct auth_state *org_authstate = NULL;
     xmlDocPtr doc = NULL;
     xmlNodePtr root = NULL;
@@ -3705,7 +3794,13 @@ int busytime_query(struct transaction_t *txn, icalcomponent *comp)
 
     prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
     organizer = icalproperty_get_organizer(prop);
-    org_authstate = auth_newstate(caladdress_to_userid(organizer));
+
+    /* XXX  Do we need to do more checks here? */
+    if (caladdress_lookup(organizer, &sparam) ||
+	(sparam.flags & SCHEDTYPE_REMOTE))
+	org_authstate = auth_newstate("anonymous");
+    else
+	org_authstate = auth_newstate(sparam.userid);
 
     /* Start construction of our schedule-response */
     if ((doc = xmlNewDoc(BAD_CAST "1.0")) &&
@@ -3747,7 +3842,7 @@ int busytime_query(struct transaction_t *txn, icalcomponent *comp)
     for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
 	 prop;
 	 prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
-	const char *attendee, *userid;
+      const char *attendee, *userid;
 	xmlNodePtr resp, recip, cdata;
 	struct mboxlist_entry mbentry;
 	icalcomponent *busy;
@@ -3764,7 +3859,13 @@ int busytime_query(struct transaction_t *txn, icalcomponent *comp)
 	    xmlNewChild(recip, davns, BAD_CAST "href", BAD_CAST attendee);
 	}
 
-	userid = caladdress_to_userid(attendee);
+	if (caladdress_lookup(attendee, &sparam)) {
+	    xmlNewChild(resp, NULL, BAD_CAST "request-status",
+			BAD_CAST "3.7;Invalid calendar user");
+	    continue;
+	}
+
+	userid = sparam.userid;
 
 	/* Check ACL of ORGANIZER on attendee's Scheduling Inbox */
 	snprintf(mailboxname, sizeof(mailboxname),
@@ -3774,7 +3875,7 @@ int busytime_query(struct transaction_t *txn, icalcomponent *comp)
 	    syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
 		   mailboxname, error_message(r));
 	    xmlNewChild(resp, NULL, BAD_CAST "request-status",
-			BAD_CAST "3.7;Invalid calendar user");
+			BAD_CAST "5.3;No scheduling support for user");
 	    continue;
 	}
 
@@ -3838,6 +3939,7 @@ static int sched_busytime(struct transaction_t *txn)
     icalproperty_method meth = 0;
     icalproperty *prop = NULL;
     const char *uid = NULL, *organizer = NULL, *orgid = NULL;
+    struct sched_param sparam;
 
     /* Check Content-Type */
     if (!(hdr = spool_getheader(txn->req_hdrs, "Content-Type")) ||
@@ -3911,7 +4013,11 @@ static int sched_busytime(struct transaction_t *txn)
     }
 
     organizer = icalproperty_get_organizer(prop);
-    if (organizer) orgid = caladdress_to_userid(organizer);
+    if (organizer) {
+	if (!caladdress_lookup(organizer, &sparam) &&
+	    !(sparam.flags & SCHEDTYPE_REMOTE))
+	    orgid = sparam.userid;
+    }
 
     if (!orgid || strncmp(orgid, txn->req_tgt.user, txn->req_tgt.userlen)) {
 	txn->error.precond = CALDAV_VALID_ORGANIZER;
@@ -3992,6 +4098,7 @@ static void sched_deliver(char *recipient, void *data, void *rock)
     struct sched_data *sched_data = (struct sched_data *) data;
     struct auth_state *authstate = (struct auth_state *) rock;
     int r = 0, rights;
+    struct sched_param sparam;
     const char *userid, *mboxname = NULL;
     static struct buf resource = BUF_INITIALIZER;
     static unsigned sched_count = 0;
@@ -4004,11 +4111,12 @@ static void sched_deliver(char *recipient, void *data, void *rock)
     icalproperty *prop;
     struct transaction_t txn;
 
-    userid = caladdress_to_userid(recipient);
-    if (!userid) {
+    if (caladdress_lookup(recipient, &sparam)) {
 	sched_data->status = SCHEDSTAT_NOUSER;
 	goto done;
     }
+    else userid = sparam.userid;
+    /* XXX  Check sparam.flags for remote recipients */
 
     /* Check SCHEDULE-FORCE-SEND value */
     if (sched_data->force_send) {
@@ -4245,18 +4353,19 @@ static void free_sched_data(void *data) {
     }
 }
 
-static int sched_request(icalcomponent *oldical, icalcomponent *newical)
+static int sched_request(const char *organizer,
+			 icalcomponent *oldical, icalcomponent *newical)
 {
     int ret = 0;
     icalcomponent *ical;
     icalproperty_method method;
 //    icaltimezone *utc = icaltimezone_get_utc_timezone();
     static struct buf prodid = BUF_INITIALIZER;
+    struct sched_param sparam;
     struct auth_state *authstate;
     icalcomponent *req, *copy, *comp;
     icalproperty *prop;
     icalcomponent_kind kind;
-    const char *organizer;
     struct hash_table att_table;
     unsigned ncomp;
 
@@ -4308,9 +4417,12 @@ static int sched_request(icalcomponent *oldical, icalcomponent *newical)
     comp = icalcomponent_get_first_real_component(copy);
     kind = icalcomponent_isa(comp);
 
-    prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
-    organizer = icalproperty_get_organizer(prop);
-    authstate = auth_newstate(caladdress_to_userid(organizer));
+    /* XXX  Do we need to do more checks here? */
+    if (caladdress_lookup(organizer, &sparam) ||
+	(sparam.flags & SCHEDTYPE_REMOTE))
+	authstate = auth_newstate("anonymous");
+    else
+	authstate = auth_newstate(sparam.userid);
 
     /* Process each component */
     ncomp = 0;
@@ -4525,11 +4637,14 @@ static int sched_reply(icalcomponent *oldical, icalcomponent *newical,
 	     prop;
 	     prop = nextprop) {
 	    const char *attendee = icalproperty_get_attendee(prop);
+	    struct sched_param sparam;
 
 	    nextprop = icalcomponent_get_next_property(comp,
 						   ICAL_ATTENDEE_PROPERTY);
 
-	    if (!strcmp(caladdress_to_userid(attendee), userid)) {
+	    if (!caladdress_lookup(attendee, &sparam) &&
+		!(sparam.flags & SCHEDTYPE_REMOTE) &&
+		!strcmp(sparam.userid, userid)) {
 		/* Found it */
 		myattendee = prop;
 	    }
