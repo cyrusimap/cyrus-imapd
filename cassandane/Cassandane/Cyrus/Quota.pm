@@ -459,9 +459,18 @@ sub test_exceeding_message
 
     xlog "add a message that exceeds the limit";
     my $overmsg = eval { $self->make_message("Message 11") };
-
-    $self->assert_str_equals('no', $talk->get_last_completion_response());
-    $self->assert($talk->get_last_error() =~ m/over quota/i);
+    # As opposed to storage checking, which is currently done after receiving t
+    # (LITERAL) mail, message count checking is performed right away. This earl
+    # NO response while writing the LITERAL triggered a die in early versions
+    # of IMAPTalk, leaving the completion response undefined.
+    my $ex = $@;
+    if ($ex) {
+	$self->assert($ex =~ m/Got - \d+ NO Over quota/);
+    }
+    else {
+	$self->assert_str_equals('no', $talk->get_last_completion_response());
+	$self->assert($talk->get_last_error() =~ m/over quota/i);
+    }
 
     xlog "check that the exceeding message is not in the mailbox";
     $self->_check_usages(message => 10);
