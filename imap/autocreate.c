@@ -68,7 +68,7 @@
 #include "xstrlcat.h"
 #include "mailbox.h"
 #include "mboxlist.h"
-#include "imap_err.h"
+#include "imap/imap_err.h"
 
 #ifdef USE_SIEVE
 
