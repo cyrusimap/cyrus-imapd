@@ -95,6 +95,7 @@
 #include "map.h"
 #include "squat.h"
 #include "index.h"
+#include "message.h"
 #include "util.h"
 
 extern char *optarg;
@@ -386,6 +387,7 @@ static int squat_single(struct index_state *state, int incremental)
     uint32_t msgno;
     int new_index_fd = -1;
     int old_index_fd = -1;
+    message_t *msg;
     int r = 0;			/* Using IMAP_* not SQUAT_* return codes here */
 
     uid_info_init(&uid_info, state->exists);
@@ -472,8 +474,9 @@ static int squat_single(struct index_state *state, int incremental)
 	    continue;
 
 	/* This UID didn't appear in the old index file */
-	index_getsearchtext_single(state, msgno, search_text_receiver,
-				   &data);
+	msg = index_get_message(state, msgno);
+	index_getsearchtext_single(msg, search_text_receiver, &data);
+	message_unref(&msg);
 	uid_item->flagged = 1;
     }
 
