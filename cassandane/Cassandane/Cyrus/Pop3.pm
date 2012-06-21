@@ -134,4 +134,61 @@ sub test_top_args
     $self->assert_matches(qr/Unexpected extra argument/, $client->message());
 }
 
+sub config_subfolder_login
+{
+    my ($self, $conf) = @_;
+    $conf->set(popsubfolders => 1);
+}
+
+sub test_subfolder_login
+{
+    my ($self) = @_;
+
+    xlog "Testing whether + address login gets subfolder";
+
+    my $imapclient = $self->{store}->get_client();
+
+    xlog "Ensure a messages exist";
+    my %exp;
+    $exp{A} = $self->make_message('Message A');
+
+    $imapclient->create('INBOX.sub');
+    $self->{store}->set_folder('INBOX.sub');
+
+    my %subexp;
+    $subexp{B} = $self->make_message('Message B');
+
+    my $popclient = $self->{pop_store}->get_client();
+
+    xlog "Test regular TOP gets the right message";
+    my $r = $popclient->command('TOP', 1, 2)->response();
+    $self->assert_equals($r, Net::Cmd::CMD_OK);
+    $self->assert_equals($popclient->code(), 200);
+    my $lines = $popclient->read_until_dot();
+    my %actual;
+    $actual{'Message A'} = Cassandane::Message->new(lines => $lines,
+						    attrs => { uid => 1 });
+    $self->check_messages(\%exp, actual => \%actual);
+
+    my $svc = $self->{instance}->get_service('pop3');
+    my $substore = $svc->create_store(folder => 'INBOX.sub');
+
+    # create a new client
+    my $subclient = $substore->get_client();
+
+
+    xlog "Test subfolder TOP gets the right message";
+    my $subr = $subclient->command('TOP', 1, 2)->response();
+    $self->assert_equals($subr, Net::Cmd::CMD_OK);
+    $self->assert_equals($subclient->code(), 200);
+    my $sublines = $subclient->read_until_dot();
+    my %subactual;
+    # note: "uid 2" is totally bogus here, because the "generator" doesn't
+    # notice the folder change and hence the new UID space...
+    $subactual{'Message B'} = Cassandane::Message->new(lines => $sublines,
+						       attrs => { uid => 2 });
+    $self->check_messages(\%subexp, actual => \%subactual);
+}
+
 1;
+
