@@ -137,7 +137,7 @@ git status
 
 # do the whole autotools dance
 [ -f Makefile ] && make maintainer-clean
-autoreconf -i -f -v -Icmulocal || fatal "Can't run autoreconf"
+autoreconf -i -f -v || fatal "Can't run autoreconf"
 [ -f configure ] || fatal "autoconf did not produce a configure script"
 ./configure $CONFIGURE_ARGS || fatal "Cannot run configure"
 [ -f config.status ] || fatal "configure did not produce a config.status script"
