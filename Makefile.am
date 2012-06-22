@@ -418,7 +418,7 @@ imap_libcyrus_imap_la_SOURCES = imap/annotate.c imap/annotate.h imap/append.c \
 	imap/tls.h imap/upgrade_index.c imap/upgrade_index.h imap/user.c \
 	imap/user.h imap/userdeny_db.c imap/userdeny.h imap/version.c \
 	imap/version.h
-imap_libcyrus_imap_la_LIBADD = $(COM_ERR_LIBS) $(LIB_UUID)
+imap_libcyrus_imap_la_LIBADD = $(COM_ERR_LIBS) $(LIB_UUID) lib/libcyrus_min.la lib/libcyrus.la
 
 imap_lmtpd_SOURCES = imap/lmtpd.c imap/lmtpd.h imap/lmtpengine.c \
 	imap/lmtpengine.h imap/lmtpstats.c imap/lmtpstats.h \
