@@ -241,7 +241,7 @@ AC_DEFUN([CYRUS_BERKELEY_DB_CHK_LIB],
 	    LIBS="$saved_LIBS -ldb"
 	    AC_TRY_LINK([#include <stdio.h>
 #include <db.h>],
-	    [db_open(NULL, 0, 0, 0, NULL, NULL, NULL);],
+	    [db_create(NULL, NULL, 0);],
 	    BDB_LIBADD="$BDB_LIBADD -ldb"; dblib="berkeley"; dbname=db,
             dblib="no")
         fi
