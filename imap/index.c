@@ -4767,119 +4767,77 @@ static int index_searchcacheheader(struct index_state *state, uint32_t msgno,
 
 struct getsearchtext_rock
 {
-    index_search_text_receiver_t receiver;
-    void *rock;
+    search_text_receiver_t *receiver;
     int partcount;
-    uint32_t uid;
 };
+
+static void stuff_part(search_text_receiver_t *receiver,
+		       int part, const struct buf *buf)
+{
+    receiver->begin_part(receiver, part);
+    receiver->append_text(receiver, buf);
+    receiver->end_part(receiver, part);
+}
 
 static int getsearchtext_cb(int partno, int charset, int encoding,
 			    struct buf *data, void *rock)
 {
     struct getsearchtext_rock *str = (struct getsearchtext_rock *)rock;
     char *q;
+    struct buf text = BUF_INITIALIZER;
 
     if (!partno) {
 	/* header-like */
 	q = charset_decode_mimeheader(buf_cstring(data), charset_flags);
-	if (str->partcount == 1) {
-	    str->receiver(str->uid, SEARCHINDEX_PART_HEADERS,
-			  SEARCHINDEX_CMD_STUFFPART, q, strlen(q), rock);
-	    str->receiver(str->uid, SEARCHINDEX_PART_BODY,
-			  SEARCHINDEX_CMD_BEGINPART, NULL, 0, rock);
+	buf_init_ro_cstr(&text, q);
+	if (++str->partcount == 1) {
+	    stuff_part(str->receiver, SEARCH_PART_HEADERS, &text);
+	    str->receiver->begin_part(str->receiver, SEARCH_PART_BODY);
 	} else {
-	    str->receiver(str->uid, SEARCHINDEX_PART_BODY,
-			  SEARCHINDEX_CMD_APPENDPART, q, strlen(q), rock);
+	    str->receiver->append_text(str->receiver, &text);
 	}
 	free(q);
+	buf_free(&text);
     }
     else {
 	/* body-like */
-	charset_extractfile(str->receiver, str->rock, str->uid,
-			    data->s, data->len,
-			    charset, encoding, charset_flags);
+	charset_extract(str->receiver, data, charset, encoding, charset_flags);
     }
 
-    str->partcount++;
     return 0;
 }
 
 EXPORTED void index_getsearchtext(message_t *msg,
-				  index_search_text_receiver_t receiver,
-				  void *rock)
+			 search_text_receiver_t *receiver)
 {
     struct getsearchtext_rock str;
-    int utf8 = charset_lookupname("utf-8");
     struct buf buf = BUF_INITIALIZER;
     uint32_t uid = 0;
 
-    assert(utf8 >= 0);
     message_get_uid(msg, &uid);
+    receiver->begin_message(receiver, uid);
 
     str.receiver = receiver;
-    str.rock = rock;
     str.partcount = 0;
-    str.uid = uid;
     message_foreach_text_section(msg, getsearchtext_cb, &str);
+    receiver->end_part(receiver, SEARCH_PART_BODY);
 
-    receiver(uid, SEARCHINDEX_PART_BODY,
-	     SEARCHINDEX_CMD_ENDPART, NULL, 0, rock);
-}
+    if (!message_get_field(msg, "From", MESSAGE_SEARCH, &buf))
+	stuff_part(receiver, SEARCH_PART_FROM, &buf);
 
-EXPORTED void index_getsearchtext_single(struct index_state *state, uint32_t msgno,
-				index_search_text_receiver_t receiver,
-				void *rock)
-{
-    struct buf buf = BUF_INITIALIZER;
-    struct mailbox *mailbox = state->mailbox;
-    int utf8 = charset_lookupname("utf-8");
-    struct index_record record;
+    if (!message_get_field(msg, "To", MESSAGE_SEARCH, &buf))
+	stuff_part(receiver, SEARCH_PART_TO, &buf);
 
-    assert(utf8 >= 0);
+    if (!message_get_field(msg, "Cc", MESSAGE_SEARCH, &buf))
+	stuff_part(receiver, SEARCH_PART_CC, &buf);
 
-    if (index_reload_record(state, msgno, &record))
-	return;
+    if (!message_get_field(msg, "Bcc", MESSAGE_SEARCH, &buf))
+	stuff_part(receiver, SEARCH_PART_BCC, &buf);
 
-    if (mailbox_cacherecord(mailbox, &record))
-	return;
+    if (!message_get_field(msg, "Subject", MESSAGE_SEARCH, &buf))
+	stuff_part(receiver, SEARCH_PART_SUBJECT, &buf);
 
-    index_getsearchtextmsg(state->mailbox, &record, receiver, rock);
-
-    if (message_get_field(msg, "From", MESSAGE_DECODED, &buf))
-	charset_extractitem(receiver, rock, uid,
-			    buf.s, buf.len,
-			    utf8, ENCODING_NONE, charset_flags,
-			    SEARCHINDEX_PART_FROM,
-			    SEARCHINDEX_CMD_STUFFPART);
-
-    if (message_get_field(msg, "To", MESSAGE_DECODED, &buf))
-	charset_extractitem(receiver, rock, uid,
-			    buf.s, buf.len,
-			    utf8, ENCODING_NONE, charset_flags,
-			    SEARCHINDEX_PART_TO,
-			    SEARCHINDEX_CMD_STUFFPART);
-
-    if (message_get_field(msg, "Cc", MESSAGE_DECODED, &buf))
-	charset_extractitem(receiver, rock, uid,
-			    buf.s, buf.len,
-			    utf8, ENCODING_NONE, charset_flags,
-			    SEARCHINDEX_PART_CC,
-			    SEARCHINDEX_CMD_STUFFPART);
-
-    if (message_get_field(msg, "Bcc", MESSAGE_DECODED, &buf))
-	charset_extractitem(receiver, rock, uid,
-			    buf.s, buf.len,
-			    utf8, ENCODING_NONE, charset_flags,
-			    SEARCHINDEX_PART_BCC,
-			    SEARCHINDEX_CMD_STUFFPART);
-
-    if (message_get_field(msg, "Subject", MESSAGE_DECODED, &buf))
-	charset_extractitem(receiver, rock, uid,
-			    buf.s, buf.len,
-			    utf8, ENCODING_NONE, charset_flags,
-			    SEARCHINDEX_PART_SUBJECT,
-			    SEARCHINDEX_CMD_STUFFPART);
-
+    receiver->end_message(receiver, uid);
     buf_free(&buf);
 }
 

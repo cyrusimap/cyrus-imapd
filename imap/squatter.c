@@ -269,82 +269,122 @@ static int doc_check(void *closure, const SquatListDoc *doc)
 
 
 typedef struct {
+    search_text_receiver_t super;
     SquatStats *mailbox_stats;
     SquatIndex *index;
     struct mailbox *mailbox;
+    /* used to keep track of state between invocations from common code */
+    uint32_t uid;
+    int doc_is_open;
+    char doc_name[100];
+    struct buf pending_text;
 } SquatReceiverData;
 
 /* Cyrus passes the text to index in here, after it has canonicalized
    the text. We figure out what source document the text belongs to,
    and update the index. */
-static void search_text_receiver(int uid, int part, int cmd,
-				 char const *text, int text_len,
-				 void *rock)
+static void squat_rx_begin_message(search_text_receiver_t *rx, uint32_t uid)
 {
-    SquatReceiverData *d = (SquatReceiverData *) rock;
+    SquatReceiverData *d = (SquatReceiverData *) rx;
 
-    if ((cmd & SEARCHINDEX_CMD_BEGINPART) != 0) {
-	char buf[100];
-	char part_char = 0;
+    d->uid = uid;
+    d->doc_is_open = 0;
+    d->doc_name[0] = '\0';
+    buf_init(&d->pending_text);
 
-	/* Figure out what the name of the source document is going to be. */
-	switch (part) {
-	case SEARCHINDEX_PART_FROM: part_char = 'f'; break;
-	case SEARCHINDEX_PART_TO: part_char = 't'; break;
-	case SEARCHINDEX_PART_CC: part_char = 'c'; break;
-	case SEARCHINDEX_PART_BCC: part_char = 'b'; break;
-	case SEARCHINDEX_PART_SUBJECT: part_char = 's'; break;
-	case SEARCHINDEX_PART_HEADERS: part_char = 'h'; break;
-	case SEARCHINDEX_PART_BODY:
-	    part_char = 'm';
-	    d->mailbox_stats->indexed_messages++;
-	    total_stats.indexed_messages++;
-	    break;
-	default:
-	    fatal("Unknown search_text part", EC_SOFTWARE);
-	}
+    d->mailbox_stats->indexed_messages++;
+    total_stats.indexed_messages++;
+}
 
-	snprintf(buf, sizeof(buf), "%c%d", part_char, uid);
+static void squat_rx_begin_part(search_text_receiver_t *rx, int part)
+{
+    SquatReceiverData *d = (SquatReceiverData *) rx;
+    char part_char = 0;
 
-	/* don't index document parts that are going to be empty (or too
-	   short to search) */
-	if ((cmd & SEARCHINDEX_CMD_ENDPART) != 0
-	    && ((cmd & SEARCHINDEX_CMD_APPENDPART) == 0
-		|| text_len < SQUAT_WORD_SIZE)) {
-	    if (verbose > 2) {
-		printf("Skipping tiny document part '%s' (size %d)\n", buf,
-		       (cmd & SEARCHINDEX_CMD_APPENDPART) ==
-		       0 ? 0 : text_len);
-	    }
+    /* Figure out what the name of the source document is going to be. */
+    switch (part) {
+    case SEARCH_PART_FROM: part_char = 'f'; break;
+    case SEARCH_PART_TO: part_char = 't'; break;
+    case SEARCH_PART_CC: part_char = 'c'; break;
+    case SEARCH_PART_BCC: part_char = 'b'; break;
+    case SEARCH_PART_SUBJECT: part_char = 's'; break;
+    case SEARCH_PART_HEADERS: part_char = 'h'; break;
+    case SEARCH_PART_BODY:
+	part_char = 'm';
+	break;
+    default:
+	fatal("Unknown search_text part", EC_SOFTWARE);
+    }
+
+    snprintf(d->doc_name, sizeof(d->doc_name), "%c%d", part_char, d->uid);
+    d->doc_is_open = 0;
+    buf_reset(&d->pending_text);
+
+    /* The document will be opened lazily later, once we have
+     * accumulated more than the minimum amount of text */
+}
+
+static void append_text(SquatReceiverData *d, const struct buf *text)
+{
+    if (verbose > 3) {
+	printf("Writing %d bytes into message %d\n", text->len, d->uid);
+    }
+
+    if (squat_index_append_document(d->index, text->s, text->len) != SQUAT_OK) {
+	fatal_squat_error("Writing index data");
+    }
+    d->mailbox_stats->indexed_bytes += text->len;
+    total_stats.indexed_bytes += text->len;
+}
+
+static void squat_rx_append_text(search_text_receiver_t *rx, const struct buf *text)
+{
+    SquatReceiverData *d = (SquatReceiverData *) rx;
+
+    if (!d->doc_is_open) {
+	if (text->len + d->pending_text.len < SQUAT_WORD_SIZE) {
+	    /* not enough text yet */
+	    buf_append(&d->pending_text, text);
 	    return;
 	}
 
+	/* just went over the threshold */
 	if (verbose > 2) {
-	    printf("Opening document part '%s'\n", buf);
+	    printf("Opening document part '%s'\n", d->doc_name);
 	}
 
-	if (squat_index_open_document(d->index, buf) != SQUAT_OK) {
+	if (squat_index_open_document(d->index, d->doc_name) != SQUAT_OK) {
 	    fatal_squat_error("Writing index");
 	}
+	d->doc_is_open = 1;
+
+	/* flush any pending text */
+	if (d->pending_text.len)
+	    append_text(d, &d->pending_text);
+	buf_reset(&d->pending_text);
     }
 
-    if ((cmd & SEARCHINDEX_CMD_APPENDPART) != 0) {
-	if (verbose > 3) {
-	    printf("Writing %d bytes into message %d\n", text_len, uid);
-	}
+    append_text(d, text);
+}
 
-	if (squat_index_append_document(d->index, text, text_len) != SQUAT_OK) {
-	    fatal_squat_error("Writing index data");
-	}
-	d->mailbox_stats->indexed_bytes += text_len;
-	total_stats.indexed_bytes += text_len;
-    }
+static void squat_rx_end_part(search_text_receiver_t *rx,
+			      int part __attribute__((unused)))
+{
+    SquatReceiverData *d = (SquatReceiverData *) rx;
 
-    if ((cmd & SEARCHINDEX_CMD_ENDPART) != 0) {
-	if (squat_index_close_document(d->index) != SQUAT_OK) {
-	    fatal_squat_error("Writing index update");
-	}
+    if (d->doc_is_open && squat_index_close_document(d->index) != SQUAT_OK) {
+	fatal_squat_error("Writing index update");
     }
+    d->doc_is_open = 0;
+    buf_reset(&d->pending_text);
+}
+
+static void squat_rx_end_message(search_text_receiver_t *rx,
+				 uint32_t uid __attribute__((unused)))
+{
+    SquatReceiverData *d = (SquatReceiverData *) rx;
+
+    d->uid = 0;
 }
 
 /* Let SQUAT tell us what's going on in the expensive
@@ -395,6 +435,13 @@ static int squat_single(struct index_state *state, int incremental)
     newfname = mailbox_meta_newfname(mailbox, META_SQUAT);
     if ((new_index_fd = open(newfname, O_CREAT | O_TRUNC | O_WRONLY, 0666)) < 0)
 	fatal_syserror("Unable to create temporary index file");
+
+    memset(&data, 0, sizeof(data));
+    data.super.begin_message = squat_rx_begin_message;
+    data.super.begin_part = squat_rx_begin_part;
+    data.super.append_text = squat_rx_append_text;
+    data.super.end_part = squat_rx_end_part;
+    data.super.end_message = squat_rx_end_message;
 
     options.option_mask = SQUAT_OPTION_TMP_PATH | SQUAT_OPTION_STATISTICS;
     options.tmp_path = mailbox_datapath(mailbox);
@@ -475,7 +522,7 @@ static int squat_single(struct index_state *state, int incremental)
 
 	/* This UID didn't appear in the old index file */
 	msg = index_get_message(state, msgno);
-	index_getsearchtext(msg, search_text_receiver, &data);
+	index_getsearchtext(msg, &data.super);
 	message_unref(&msg);
 	uid_item->flagged = 1;
     }
