@@ -248,7 +248,6 @@ if test "$gssapi" != "no"; then
   fi
 fi
 
-GSSAPI_LIBS=""
 AC_MSG_CHECKING([GSSAPI])
 if test "$gssapi" != no; then
   AC_MSG_RESULT([with implementation ${gss_impl}])
@@ -264,7 +263,6 @@ if test "$gssapi" != no; then
 else
   AC_MSG_RESULT([disabled])
 fi
-AC_SUBST(GSSAPI_LIBS)
 AC_SUBST(GSSAPIBASE_LIBS)
 ])# SASL_GSSAPI_CHK
 
