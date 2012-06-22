@@ -287,7 +287,7 @@ extern int message_get_size(message_t *m, uint32_t *sizep);
 extern int message_get_msgno(message_t *m, uint32_t *msgnop);
 extern int message_foreach_text_section(message_t *m,
 		   int (*proc)(int partno, int charset, int encoding,
-			       struct buf *data, void *rock),
+			       const char *subtype, struct buf *data, void *rock),
 		   void *rock);
 
 /*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/

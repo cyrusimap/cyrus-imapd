@@ -5348,8 +5348,8 @@ EXPORTED int part_get_part(part_t *part, unsigned int id, part_t **childp)
 
 static int part_foreach_text_section(part_t *part,
 				     int (*proc)(int partno, int charset,
-						 int encoding, struct buf *data,
-						 void *rock),
+						 int encoding, const char *subtype,
+						 struct buf *data, void *rock),
 				     void *rock)
 {
     segment_t *header;
@@ -5364,7 +5364,7 @@ static int part_foreach_text_section(part_t *part,
     header = segment_find_child(to_segment(part), ID_HEADER);
     if (header) {
 	buf_init_ro(&data, part->message->map.s + header->offset, header->length);
-	r = proc(0, 0, ENCODING_NONE, &data, rock);
+	r = proc(0, 0, ENCODING_NONE, NULL, &data, rock);
 	buf_free(&data);
 	if (r) return r;
     }
@@ -5377,7 +5377,7 @@ static int part_foreach_text_section(part_t *part,
 	if (!strcmpsafe(part->type, "TEXT")) {
 	    buf_init_ro(&data, part->message->map.s + body->offset, body->length);
 	    r = proc(part->super.id & ID_MASK,
-		     part->charset, part->encoding,
+		     part->charset, part->encoding, part->subtype,
 		     &data, rock);
 	    buf_free(&data);
 	    if (r) return r;
@@ -5622,7 +5622,8 @@ EXPORTED int message_get_msgno(message_t *m, uint32_t *msgnop)
  * and the return value of 'proc' is returned.  Otherwise returns 0.
  */
 EXPORTED int message_foreach_text_section(message_t *m,
-			 int (*proc)(int partno, int charset, int encoding,
+			 int (*proc)(int partno, int charset,
+				     int encoding, const char *subtype,
 				     struct buf *data, void *rock),
 			 void *rock)
 {

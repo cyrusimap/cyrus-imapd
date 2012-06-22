@@ -128,6 +128,7 @@ struct search_text_receiver {
    called by index_getsearchtext to extract the MIME body parts. */
 extern int charset_extract(search_text_receiver_t *receiver,
 			   const struct buf *data,
-			   charset_index charset, int encoding, int flags);
+			   charset_index charset, int encoding,
+			   const char *subtype, int flags);
 
 #endif /* INCLUDED_CHARSET_H */

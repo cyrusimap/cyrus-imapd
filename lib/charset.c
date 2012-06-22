@@ -1203,7 +1203,8 @@ EXPORTED int charset_searchfile(const char *substr, comp_pat *pat,
 /* This is based on charset_searchfile above. */
 EXPORTED int charset_extract(search_text_receiver_t *receiver,
 			     const struct buf *data,
-			     int charset, int encoding, int flags)
+			     int charset, int encoding,
+			     const char *subtype, int flags)
 {
     struct convert_rock *input, *tobuffer;
     struct buf *out;

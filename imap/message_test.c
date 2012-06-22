@@ -203,12 +203,12 @@ static void dump_octets(FILE *fp, const char *base, unsigned int len)
 }
 
 static int dump_one_section(int partno, int charset, int encoding,
-			    struct buf *data,
+			    const char *subtype, struct buf *data,
 			    void *rock __attribute__((unused)))
 {
 #define MAX_TEXT    512
-    printf("SECTION partno=%d length=%u charset=%s encoding=%s\n",
-	    partno, data->len, charset_name(charset), encoding_name(encoding));
+    printf("SECTION partno=%d length=%u subtype=%s charset=%s encoding=%s\n",
+	    partno, data->len, subtype, charset_name(charset), encoding_name(encoding));
     if (data->len <= MAX_TEXT) {
 	dump_octets(stdout, data->s, data->len);
     }
