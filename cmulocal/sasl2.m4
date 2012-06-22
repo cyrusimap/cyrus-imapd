@@ -335,6 +335,7 @@ if test ${with_staticsasl} != "no"; then
                                         LIB_SASL="$LIB_SASL ${with_staticsasl}/$i42/libsasl2.a"
                                       fi
                                     done
+                                    AC_CHECK_FUNC(dlopen,,[AC_CHECK_LIB(dl, dlopen, [LIB_SASL+="$LIB_SASL -ldl"])])
                                     if test ! "$ac_cv_found_sasl" = "yes"; then
                                       AC_MSG_CHECKING([for static libsasl])
                                       AC_MSG_ERROR([Could not find ${with_staticsasl}/lib*/libsasl2.a])

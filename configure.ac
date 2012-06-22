@@ -1170,7 +1170,6 @@ AC_ARG_ENABLE(netscapehack,
 		AC_DEFINE(ENABLE_X_NETSCAPE_HACK,[],[Enable Netscape Menu Option Hack?])
 	fi)
 
-AC_CHECK_FUNC(dlopen,,[AC_CHECK_LIB(dl, dlopen)])
 CMU_SASL2_REQUIRE_VER(2,1,7)
 CMU_SASL2_CHECKAPOP_REQUIRED
 
