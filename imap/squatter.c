@@ -475,7 +475,7 @@ static int squat_single(struct index_state *state, int incremental)
 
 	/* This UID didn't appear in the old index file */
 	msg = index_get_message(state, msgno);
-	index_getsearchtext_single(msg, search_text_receiver, &data);
+	index_getsearchtext(msg, search_text_receiver, &data);
 	message_unref(&msg);
 	uid_item->flagged = 1;
     }
