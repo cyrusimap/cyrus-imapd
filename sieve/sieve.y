@@ -117,7 +117,6 @@ struct dtags {
     int priority;
 };
 
-static commandlist_t *ret;
 static char *check_reqs(sieve_script_t *script, strarray_t *sl);
 static test_t *build_address(int t, struct aetags *ae,
 			     strarray_t *sl, strarray_t *pl);
@@ -225,8 +224,8 @@ extern void sieverestart(FILE *f);
 %lex-param{sieve_script_t *parse_script}
 %%
 
-start: reqs			{ ret = NULL; }
-	| reqs commands		{ ret = $2; }
+start: reqs			{ parse_script->cmds = NULL; }
+	| reqs commands		{ parse_script->cmds = $2; }
 	;
 
 reqs: /* empty */
@@ -720,19 +719,13 @@ tests: test                      { $$ = new_testlist($1, NULL); }
 	;
 
 %%
-commandlist_t *sieve_parse(sieve_script_t *parse_script, FILE *f)
+void sieve_parse(sieve_script_t *parse_script, FILE *f)
 {
-    commandlist_t *t;
-
     sieverestart(f);
     if (yyparse(parse_script)) {
-	t = NULL;
-	free_tree(ret);
-    } else {
-	t = ret;
+	free_tree(parse_script->cmds);
+	parse_script->cmds = NULL;
     }
-    ret = NULL;
-    return t;
 }
 
 int yyerror(sieve_script_t *parse_script, const char *msg)

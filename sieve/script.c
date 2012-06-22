@@ -206,7 +206,7 @@ int sieve_script_parse(sieve_interp_t *interp, FILE *script,
     s->err = 0;
 
     sievelineno = 1;		/* reset line number */
-    s->cmds = sieve_parse(s, script);
+    sieve_parse(s, script);
     if (s->err > 0) {
 	sieve_script_free(&s);
 	res = SIEVE_PARSE_ERROR;
