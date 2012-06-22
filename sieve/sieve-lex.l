@@ -53,14 +53,16 @@
 
 #include "sieve/tree.h"
 #include "sieve/sieve.h"
+#include "sieve/sieve_interface.h"
 
 #define YY_NO_INPUT
+#define YY_DECL int yylex(sieve_script_t *parse_script)
 
 static int tonum(char *c);
 static char *chkstr(char *);
 static char *mlbuf;
 static int mlbufsz, mlcur;
-extern int sieveerror(char *);
+extern int sieveerror(sieve_script_t *, char *);
 %}
 
 %option yylineno
@@ -83,7 +85,7 @@ CRLF		(\r\n|\r|\n)
 <MULTILINE>(.|\n) { if (mlcur == mlbufsz)
 			mlbuf = xrealloc(mlbuf, 1 + (mlbufsz+=1024));
 		    mlbuf[mlcur++] = yytext[0]; }
-<MULTILINE><<EOF>> { sieveerror("unexpected end of file in string");
+<MULTILINE><<EOF>> { sieveerror(parse_script, "unexpected end of file in string");
 		     yyterminate(); }
 <QSTRING>\"        { BEGIN INITIAL;
                      if (mlbuf) mlbuf[mlcur] = '\0';
@@ -94,7 +96,7 @@ CRLF		(\r\n|\r|\n)
 <QSTRING>(.|\n)   { if (mlcur == mlbufsz)
 			mlbuf = xrealloc(mlbuf, 1 + (mlbufsz+=1024));
 		    mlbuf[mlcur++] = yytext[0]; }
-<QSTRING><<EOF>>  { sieveerror("unexpected end of file in string");
+<QSTRING><<EOF>>  { sieveerror(parse_script, "unexpected end of file in string");
 		    BEGIN INITIAL;
 		    yyterminate(); }
 <INITIAL>text:{ws}?(#.*)?{CRLF}	{ BEGIN MULTILINE;
