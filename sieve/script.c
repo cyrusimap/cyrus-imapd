@@ -190,7 +190,6 @@ int sieve_script_parse(sieve_interp_t *interp, FILE *script,
 {
     sieve_script_t *s;
     int res = SIEVE_OK;
-    extern int sievelineno;
 
     res = interp_verify(interp);
     if (res != SIEVE_OK) {
@@ -205,7 +204,6 @@ int sieve_script_parse(sieve_interp_t *interp, FILE *script,
 
     s->err = 0;
 
-    sievelineno = 1;		/* reset line number */
     sieve_parse(s, script);
     if (s->err > 0) {
 	sieve_script_free(&s);
