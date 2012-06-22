@@ -320,7 +320,9 @@ include_HEADERS = lib/acl.h lib/assert.h lib/auth.h lib/auth_pts.h \
 	lib/map.h lib/mappedfile.h lib/mkgmtime.h lib/mpool.h lib/nonblock.h \
 	lib/parseaddr.h lib/retry.h lib/rfc822date.h lib/signals.h \
 	lib/strarray.h lib/strhash.h lib/stristr.h lib/sysexits.h lib/times.h \
-	lib/tok.h lib/wildmat.h lib/xmalloc.h sieve/sieve_interface.h
+	lib/tok.h lib/wildmat.h lib/xmalloc.h
+nobase_include_HEADERS = sieve/sieve_interface.h
+nobase_nodist_include_HEADERS = sieve/sieve_err.h
 
 noinst_HEADERS = lib/byteorder64.h lib/gai.h lib/libconfig.h lib/md5.h \
 	lib/prot.h lib/ptrarray.h lib/util.h lib/xstrlcat.h lib/xstrlcpy.h
@@ -657,7 +659,7 @@ sieve_libcyrus_sieve_la_SOURCES = sieve/bytecode.h sieve/addr.y sieve/addr-lex.l
 	sieve/comparator.c sieve/comparator.h sieve/interp.c sieve/interp.h \
 	sieve/message.c sieve/message.h sieve/script.c sieve/script.h \
 	sieve/sieve-lex.l sieve/sieve.y sieve/tree.c sieve/tree.h
-sieve_libcyrus_sieve_la_LIBADD = $(COM_ERR_LIBS)
+sieve_libcyrus_sieve_la_LIBADD = $(COM_ERR_LIBS) lib/libcyrus_min.la lib/libcyrus.la
 
 LD_SIEVE_ADD = sieve/libcyrus_sieve.la $(LD_BASIC_ADD)
 

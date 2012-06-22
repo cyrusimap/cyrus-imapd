@@ -6,6 +6,7 @@ Name: Cyrus Imapd libcyrus_sieve
 Description: Sieve library of Cyrus Imapd
 URL: http://www.cyrusimap.org/
 Version: @PACKAGE_VERSION@
-Cflags : ${includedir}/cyrus
+Cflags: -I${includedir}/cyrus
+Requires.private: libcyrus_min = @PACKAGE_VERSION@, libcyrus = @PACKAGE_VERSION@
 Libs: -L${libdir} -lcyrus_sieve
 Libs.private: @PKG_CONFIG_COM_ERR_LIB@
