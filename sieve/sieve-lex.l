@@ -80,21 +80,21 @@ CRLF		(\r\n|\r|\n)
                           if (mlbuf) mlbuf[mlcur] = '\0';
                           sievelval.sval = chkstr(mlbuf); return STRING; }
 <MULTILINE>^\.\.  { /* dot stuffing! we want one . */ yyless(1); }
-<MULTILINE>(.|\n) { if (mlcur == mlbufsz) 
+<MULTILINE>(.|\n) { if (mlcur == mlbufsz)
 			mlbuf = xrealloc(mlbuf, 1 + (mlbufsz+=1024));
 		    mlbuf[mlcur++] = yytext[0]; }
-<MULTILINE><<EOF>> { sieveerror("unexpected end of file in string"); 
+<MULTILINE><<EOF>> { sieveerror("unexpected end of file in string");
 		     yyterminate(); }
 <QSTRING>\"        { BEGIN INITIAL;
                      if (mlbuf) mlbuf[mlcur] = '\0';
 		     sievelval.sval = chkstr(mlbuf); return STRING; }
-<QSTRING>\\.      { if (mlcur == mlbufsz) 
+<QSTRING>\\.      { if (mlcur == mlbufsz)
 			mlbuf = xrealloc(mlbuf, 1 + (mlbufsz+=1024));
 		    mlbuf[mlcur++] = yytext[1]; }
-<QSTRING>(.|\n)   { if (mlcur == mlbufsz) 
+<QSTRING>(.|\n)   { if (mlcur == mlbufsz)
 			mlbuf = xrealloc(mlbuf, 1 + (mlbufsz+=1024));
 		    mlbuf[mlcur++] = yytext[0]; }
-<QSTRING><<EOF>>  { yyerror("unexpected end of file in string");
+<QSTRING><<EOF>>  { sieveerror("unexpected end of file in string");
 		    BEGIN INITIAL;
 		    yyterminate(); }
 <INITIAL>text:{ws}?(#.*)?{CRLF}	{ BEGIN MULTILINE;
