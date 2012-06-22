@@ -72,7 +72,9 @@
 static int usage(const char *name);
 
 int verbose = 0;
-enum { PART_TREE, TEXT_SECTIONS } dump_mode = PART_TREE;
+enum { PART_TREE, TEXT_SECTIONS, TEXT_RECEIVER } dump_mode = PART_TREE;
+
+/*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
 
 static const char *indent(int depth)
 {
@@ -181,6 +183,8 @@ static int dump_part_tree(message_t *message)
     return 0;
 }
 
+/*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
+
 static void dump_octets(FILE *fp, const char *base, unsigned int len)
 {
     unsigned int i;
@@ -202,6 +206,20 @@ static void dump_octets(FILE *fp, const char *base, unsigned int len)
     }
 }
 
+static void dump_buf(FILE *fp, const struct buf *data)
+{
+#define MAX_TEXT    512
+    if (verbose || data->len <= MAX_TEXT) {
+	dump_octets(fp, data->s, data->len);
+    }
+    else {
+	dump_octets(fp, data->s, MAX_TEXT/2);
+	fputs("    ...\n", fp);
+	dump_octets(fp, data->s + data->len - MAX_TEXT/2, MAX_TEXT/2);
+    }
+#undef MAX_TEXT
+}
+
 static int dump_one_section(int partno, int charset, int encoding,
 			    const char *subtype, struct buf *data,
 			    void *rock __attribute__((unused)))
@@ -209,14 +227,7 @@ static int dump_one_section(int partno, int charset, int encoding,
 #define MAX_TEXT    512
     printf("SECTION partno=%d length=%u subtype=%s charset=%s encoding=%s\n",
 	    partno, data->len, subtype, charset_name(charset), encoding_name(encoding));
-    if (data->len <= MAX_TEXT) {
-	dump_octets(stdout, data->s, data->len);
-    }
-    else {
-	dump_octets(stdout, data->s, MAX_TEXT/2);
-	fputs("    ...\n", stdout);
-	dump_octets(stdout, data->s + data->len - MAX_TEXT/2, MAX_TEXT/2);
-    }
+    dump_buf(stdout, data);
     return 0;
 #undef MAX_TEXT
 }
@@ -226,11 +237,62 @@ static int dump_text_sections(message_t *message)
     return message_foreach_text_section(message, dump_one_section, NULL);
 }
 
+/*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
+
+static void dump_rx_begin_message(
+    search_text_receiver_t *rx __attribute__((unused)), uint32_t uid)
+{
+    printf("BEGIN_MESSAGE uid=%u\n", uid);
+}
+
+static void dump_rx_begin_part(
+    search_text_receiver_t *rx __attribute__((unused)), int part)
+{
+    printf("BEGIN_PART part=%d\n", part);
+}
+
+static void dump_rx_append_text(
+    search_text_receiver_t *rx __attribute__((unused)),
+    const struct buf *text)
+{
+    printf("APPEND_TEXT length=%u\n", text->len);
+    dump_buf(stdout, text);
+}
+
+static void dump_rx_end_part(
+    search_text_receiver_t *rx __attribute__((unused)), int part)
+{
+    printf("END_PART part=%d\n", part);
+}
+
+static void dump_rx_end_message(
+    search_text_receiver_t *rx __attribute__((unused)), uint32_t uid)
+{
+    printf("END_MESSAGE uid=%u\n", uid);
+}
+
+static int dump_text_receiver(message_t *message)
+{
+    search_text_receiver_t rx;
+
+    rx.begin_message = dump_rx_begin_message;
+    rx.begin_part = dump_rx_begin_part;
+    rx.append_text = dump_rx_append_text;
+    rx.end_part = dump_rx_end_part;
+    rx.end_message = dump_rx_end_message;
+
+    index_getsearchtext(message, &rx);
+    return 0;
+}
+
+/*-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-*/
+
 static int dump_message(message_t *message)
 {
     switch (dump_mode) {
     case PART_TREE: return dump_part_tree(message);
     case TEXT_SECTIONS: return dump_text_sections(message);
+    case TEXT_RECEIVER: return dump_text_receiver(message);
     }
     return 0;
 }
@@ -249,7 +311,7 @@ int main(int argc, char **argv)
 	fatal("must run as the Cyrus user", EC_USAGE);
     }
 
-    while ((c = getopt(argc, argv, "Rf:m:pr:svC:")) != EOF) {
+    while ((c = getopt(argc, argv, "Rf:m:pr:stvC:")) != EOF) {
 	switch (c) {
 
 	case 'f':
@@ -272,6 +334,10 @@ int main(int argc, char **argv)
 
 	case 's':
 	    dump_mode = TEXT_SECTIONS;
+	    break;
+
+	case 't':
+	    dump_mode = TEXT_RECEIVER;
 	    break;
 
 	case 'v':
@@ -402,6 +468,7 @@ static int usage(const char *name)
     fprintf(stderr, "format-options :=\n");
     fprintf(stderr, "-p		dump message part tree\n");
     fprintf(stderr, "-s		dump text sections\n");
+    fprintf(stderr, "-t		dump output from search text receiver\n");
     exit(EC_USAGE);
 }
 
