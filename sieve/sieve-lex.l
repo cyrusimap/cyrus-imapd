@@ -93,6 +93,9 @@ CRLF		(\r\n|\r|\n)
 <QSTRING>(.|\n)   { if (mlcur == mlbufsz) 
 			mlbuf = xrealloc(mlbuf, 1 + (mlbufsz+=1024));
 		    mlbuf[mlcur++] = yytext[0]; }
+<QSTRING><<EOF>>  { yyerror("unexpected end of file in string");
+			BEGIN INITIAL;
+			yyterminate(); }
 <INITIAL>text:{ws}?(#.*)?{CRLF}	{ BEGIN MULTILINE;
 			  mlcur = 0; mlbufsz = 0; mlbuf = NULL; }
 <INITIAL>\"        { BEGIN QSTRING;
