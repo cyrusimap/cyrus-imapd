@@ -102,6 +102,9 @@ my $unknown;
 my $next_unknown = -1;
 my $next_known = 0;
 my @entries;
+my $nliterals = 0;
+my $nenums = 0;
+my $type;
 
 #
 # Slurp the .st stringtab file into variables.
@@ -133,13 +136,21 @@ while (<ST>)
     elsif ($a[0] eq "ent")
     {
 	my $enum;
+	my $literal;
 	my $string;
 	my $value;
 
-	($enum) = m/^\s*ent\s+([A-Za-z_][A-Za-z_0-9]*)\s*$/;
+	($enum) = ($a[1] =~ m/^([A-Za-z_][A-Za-z_0-9]*)$/);
 	if (!defined $enum)
 	{
-	    ($enum, $string) = m/^\s*ent\s+([A-Za-z_][A-Za-z_0-9]*)\s+"([^"]+)"\s*$/;
+	    ($literal) = ($a[1] =~ m/^([0-9]+|0x[0-9a-fA-F]+)$/);
+	}
+	die "Bad syntax for \"ent\" at or near \"$_\""
+	    unless (defined $enum || defined $literal);
+
+	if (defined $a[2])
+	{
+	    ($string) = m/^\s*ent\s+\S+\s+"([^"]+)"\s*$/;
 	    die "Bad syntax for \"ent\" at or near \"$_\""
 		unless defined $string;
 	}
@@ -157,7 +168,14 @@ while (<ST>)
 	    $next_known++;
 	}
 
-	push(@entries, { enum => $enum, value => $value, string => $string });
+	push(@entries, {
+	    enum => $enum,
+	    literal => $literal,
+	    value => $value,
+	    string => $string
+	});
+	$nenums++ if defined $enum;
+	$nliterals++ if defined $literal;
     }
     else
     {
@@ -172,6 +190,7 @@ die "No string entries defined"
     unless scalar(@entries) > 0;
 $unknown = "-1"
     unless defined $unknown;
+$type = ($nenums ? "enum $name" : "int");
 
 # Emit the C header file is requested
 if ($h_flag)
@@ -183,19 +202,26 @@ if ($h_flag)
     printf "#include <string.h>\n";
     printf "\n";
 
-    printf "enum %s {\n", $name;
-    foreach my $e (@entries)
+    if ($nenums)
     {
-	printf "    %s", $e->{enum};
-	printf "=%d", $e->{value}
-	    if defined $e->{value};
-	printf ",\n"
+	printf "enum %s {\n", $name;
+	foreach my $e (@entries)
+	{
+	    next if !defined $e->{enum};
+	    printf "    %s", $e->{enum};
+	    printf "=%d", $e->{value}
+		if defined $e->{value};
+	    printf ",\n"
+	}
+	printf "};\n";
     }
-    printf "};\n";
 
-    printf "extern enum %s %s_from_string(const char *s);\n", $name, $name;
-    printf "extern enum %s %s_from_string_len(const char *s, size_t len);\n", $name, $name;
-    printf "extern const char *%s_to_string(enum %s v);\n", $name, $name;
+    printf "extern %s %s_from_string(const char *s);\n", $type, $name;
+    printf "extern %s %s_from_string_len(const char *s, size_t len);\n", $type, $name;
+    if (!$nliterals)
+    {
+	printf "extern const char *%s_to_string(%s v);\n", $name, $type;
+    }
 
     printf "\n";
     printf "#endif /* __STRING_TABLE_%s_H_ */\n", $name;
@@ -217,40 +243,50 @@ if ($c_flag)
     printf $fh "#include \"%s.h\"\n", $name;
     printf $fh "%%}\n";
 
-    printf $fh "struct %s_desc { const char *name; enum %s value; };\n", $name, $name;
+    printf $fh "struct %s_desc { const char *name; %s value; };\n", $name, $type;
     printf $fh "%%%%\n";
 
     foreach my $e (@entries)
     {
 	next unless defined $e->{string};
-	printf $fh "%s, %s\n", $e->{string}, $e->{enum};
+	if (defined $e->{enum})
+	{
+	    printf $fh "%s, %s\n", $e->{string}, $e->{enum};
+	}
+	elsif (defined $e->{literal})
+	{
+	    printf $fh "%s, %s\n", $e->{string}, $e->{literal};
+	}
     }
 
     printf $fh "%%%%\n";
 
-    printf $fh "enum %s %s_from_string(const char *s)\n", $name, $name;
+    printf $fh "%s %s_from_string(const char *s)\n", $type, $name;
     printf $fh "{\n";
     printf $fh "    const struct %s_desc *d = __%s_lookup(s, strlen(s));\n", $name, $name;
     printf $fh "    return (d == NULL ? %s : d->value);\n", $unknown;
     printf $fh "}\n";
     printf $fh "\n";
-    printf $fh "enum %s %s_from_string_len(const char *s, size_t len)\n", $name, $name;
+    printf $fh "%s %s_from_string_len(const char *s, size_t len)\n", $type, $name;
     printf $fh "{\n";
     printf $fh "    const struct %s_desc *d = __%s_lookup(s, len);\n", $name, $name;
     printf $fh "    return (d == NULL ? %s : d->value);\n", $unknown;
     printf $fh "}\n";
     printf $fh "\n";
-    printf $fh "const char *%s_to_string(enum %s v)\n", $name, $name;
-    printf $fh "{\n";
-    printf $fh "    static const char * const strs[] = {\n";
-    foreach my $e (@entries)
+    if (!$nliterals)
     {
-	next unless defined $e->{string};
-	printf $fh "\t\"%s\", /* %s */\n", $e->{string}, $e->{enum};
+	printf $fh "const char *%s_to_string(%s v)\n", $name, $type;
+	printf $fh "{\n";
+	printf $fh "    static const char * const strs[] = {\n";
+	foreach my $e (@entries)
+	{
+	    next unless defined $e->{string};
+	    printf $fh "\t\"%s\", /* %s */\n", $e->{string}, $e->{enum};
+	}
+	printf $fh "    };\n";
+	printf $fh "    return (v >= 0 && v < (int)(sizeof(strs)/sizeof(strs[0])) ? strs[v] : NULL);\n";
+	printf $fh "}\n";
     }
-    printf $fh "    };\n";
-    printf $fh "    return (v >= 0 && v < (int)(sizeof(strs)/sizeof(strs[0])) ? strs[v] : NULL);\n";
-    printf $fh "}\n";
 
     close $fh;
 

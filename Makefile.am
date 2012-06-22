@@ -128,6 +128,8 @@ BUILT_SOURCES += \
 	imap/nntp_err.c \
 	imap/lmtpstats.c \
 	imap/pushstats.c \
+	lib/htmlchar.c \
+	lib/htmlchar.h \
 	imap/rfc822_header.c \
 	imap/rfc822_header.h
 
@@ -355,6 +357,7 @@ EXTRA_DIST += \
 	lib/charset/windows-1252.t \
 	lib/charset/windows-1255.t \
 	lib/charset/windows-1256.t \
+	lib/htmlchar.st \
 	lib/imapoptions \
 	lib/test/cyrusdb.c \
 	lib/test/cyrusdb.INPUT \
@@ -1171,6 +1174,12 @@ imap/rfc822_header.c: imap/rfc822_header.st
 
 imap/rfc822_header.h: imap/rfc822_header.st
 	${top_srcdir}/tools/compile_st.pl -h $< > $@.NEW && mv $@.NEW $@
+
+lib/htmlchar.c: lib/htmlchar.st
+	${top_srcdir}/tools/compile_st.pl -c $< > $@.NEW && mv $@.NEW $@
+
+lib/htmlchar.h: lib/htmlchar.st
+	${top_srcdir}/tools/compile_st.pl -h $< > $@.NEW && mv $@.NEW $@
 endif
 
 imtest_imtest_SOURCES = imtest/imtest.c
@@ -1198,6 +1207,8 @@ lib_libcyrus_la_SOURCES = \
 	lib/cyrusdb_skiplist.c \
 	lib/cyrusdb_twoskip.c \
 	lib/glob.c \
+	lib/htmlchar.c \
+	lib/htmlchar.h \
 	lib/imapurl.c \
 	lib/imclient.c \
 	lib/imparse.c \
@@ -1332,17 +1343,13 @@ dist_man_MANS = \
 	man/reconstruct.8 \
 	man/rmnews.8 \
 	man/smmapd.8 \
-<<<<<<< HEAD
-	man/squatter.8 \
-=======
-	man/syncnews.8 \
->>>>>>> Add --disable-squat to configure
 	man/sync_client.8 \
 	man/sync_reset.8 \
 	man/sync_server.8 \
 	man/timsieved.8 \
 	man/tls_prune.8 \
 	man/unexpunge.8
+
 if USE_SQUAT
 dist_man_MANS += \
 	man/squatter.8
