@@ -71,6 +71,8 @@ char errbuf[ERR_BUF_SIZE];
     /* definitions */
     extern int addrparse(void);
 
+extern int sievelineno;
+
 struct vtags {
     int seconds;
     strarray_t *addresses;
@@ -721,8 +723,8 @@ tests: test                      { $$ = new_testlist($1, NULL); }
 %%
 void sieve_parse(sieve_script_t *parse_script, FILE *f)
 {
-    extern int sievelineno;
     sieverestart(f);
+    parse_script->cmds = NULL;
     sievelineno = 1;		/* reset line number */
     if (yyparse(parse_script)) {
 	free_tree(parse_script->cmds);
@@ -732,8 +734,6 @@ void sieve_parse(sieve_script_t *parse_script, FILE *f)
 
 int yyerror(sieve_script_t *parse_script, const char *msg)
 {
-    extern int sievelineno;
-
     parse_script->err++;
     if (parse_script->interp.err) {
 	parse_script->interp.err(sievelineno, msg, 

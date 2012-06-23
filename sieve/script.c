@@ -217,7 +217,8 @@ int sieve_script_parse(sieve_interp_t *interp, FILE *script,
 void sieve_script_free(sieve_script_t **s)
 {
     if (*s) {
-	free_tree((*s)->cmds);
+	if ((*s)->cmds)
+	    free_tree((*s)->cmds);
 	free(*s);
 	*s = NULL;
     }
