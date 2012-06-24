@@ -68,8 +68,10 @@
 
 char errbuf[ERR_BUF_SIZE];
 
-    /* definitions */
-    extern int addrparse(void);
+/* definitions */
+extern int addrparse(void);
+typedef struct yy_buffer_state *YY_BUFFER_STATE;
+extern YY_BUFFER_STATE addr_scan_string(const char*);
 
 extern int sievelineno;
 
@@ -1097,19 +1099,20 @@ static int verify_stringlist(sieve_script_t *parse_script, strarray_t *sa, int (
     return 1;
 }
 
-char *addrptr;		/* pointer to address string for address lexer */
 char addrerr[500];	/* buffer for address parser error messages */
 
 static int verify_address(sieve_script_t *parse_script, char *s)
 {
-    addrptr = s;
     addrerr[0] = '\0';	/* paranoia */
+    YY_BUFFER_STATE buffer = addr_scan_string(s);
     if (addrparse()) {
 	snprintf(errbuf, ERR_BUF_SIZE, 
 		 "address '%s': %s", s, addrerr);
 	yyerror(parse_script, errbuf);
+	addr_delete_buffer(buffer);
 	return 0;
     }
+    addr_delete_buffer(buffer);
     return 1;
 }
 

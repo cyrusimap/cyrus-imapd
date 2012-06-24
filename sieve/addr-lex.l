@@ -49,10 +49,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#undef YY_INPUT
-#define YY_INPUT(b, r, ms) (r = addrinput(b, ms))
-
-int addrinput(char *buf, size_t max_size);
 void addrerror(const char *);
 
 static int ncom;	/* number of open comments */
@@ -95,17 +91,3 @@ static int ncom;	/* number of open comments */
 				  yyterminate(); }
 
 %%
-
-/* take input from address string provided by sieve parser */
-int addrinput(char *buf, size_t max_size)
-{
-    extern char *addrptr;	/* current position in address string */
-    size_t n;			/* number of characters to read from string */
-
-    n = strlen(addrptr) < max_size ? strlen(addrptr) : max_size;
-    if (n > 0) {
-	memcpy(buf, addrptr, n);
-	addrptr += n;
-    }
-    return n;
-}
