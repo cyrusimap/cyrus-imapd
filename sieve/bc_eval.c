@@ -64,9 +64,6 @@
 #include <string.h>
 #include <ctype.h>
 
-#define SCOUNT_SIZE 20
-char scount[SCOUNT_SIZE];
-
 /**************************************************************************/
 /**************************************************************************/
 /**************************************************************************/
@@ -372,7 +369,9 @@ static int eval_bc_test(sieve_interp_t *interp, void* m,
     comparator_t * comp=NULL;
     void * comprock=NULL;
     int op= ntohl(bc[i].op);
-    
+    #define SCOUNT_SIZE 20
+    char scount[SCOUNT_SIZE];
+
     switch(op)
     {
     case BC_FALSE:
