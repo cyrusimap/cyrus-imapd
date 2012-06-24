@@ -83,6 +83,8 @@ CRLF		(\r\n|\r|\n)
 			mlbuf = xrealloc(mlbuf, 1 + (mlbufsz+=1024));
 		    mlbuf[mlcur++] = yytext[0]; }
 <MULTILINE><<EOF>> { yyerror("unexpected end of file in string"); 
+		     BEGIN INITIAL;
+		     if (mlbuf) free(mlbuf);
 		     yyterminate(); }
 <QSTRING>\"        { BEGIN INITIAL;
                      if (mlbuf) mlbuf[mlcur] = '\0';
@@ -94,8 +96,9 @@ CRLF		(\r\n|\r|\n)
 			mlbuf = xrealloc(mlbuf, 1 + (mlbufsz+=1024));
 		    mlbuf[mlcur++] = yytext[0]; }
 <QSTRING><<EOF>>  { yyerror("unexpected end of file in string");
-			BEGIN INITIAL;
-			yyterminate(); }
+		    BEGIN INITIAL;
+		    if (mlbuf) free(mlbuf);
+		    yyterminate(); }
 <INITIAL>text:{ws}?(#.*)?{CRLF}	{ BEGIN MULTILINE;
 			  mlcur = 0; mlbufsz = 0; mlbuf = NULL; }
 <INITIAL>\"        { BEGIN QSTRING;
