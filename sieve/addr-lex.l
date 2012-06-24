@@ -81,14 +81,23 @@ static int ncom;	/* number of open comments */
 
 <QSTRING>([^\n\r"\\]|\\.)*	return QTEXT;
 <QSTRING>\"			{ BEGIN INITIAL; return yytext[0]; }
+<QSTRING><<EOF>>		{ BEGIN INITIAL;
+				  addrerror("address parse error, expecting `'\"'' (unterminated string)");
+				  yyterminate(); }
 
 <DOMAINLIT>([^\[\]\n\r\\]|\\.)*	return DTEXT;
 <DOMAINLIT>\]			{ BEGIN INITIAL; return yytext[0]; }
+<DOMAINLIT><<EOF>>		{ BEGIN INITIAL;
+				  addrerror("address parse error, expecting `']'' (unterminated domain literal)");
+				  yyterminate(); }
+
+
 
 <COMMENT>([^\(\)\n\0\\]|\\.)*	/* ignore comments */
 <COMMENT>\(			ncom++;
 <COMMENT>\)			{ ncom--; if (ncom == 0) BEGIN INITIAL; }
-<COMMENT><<EOF>>		{ addrerror("address parse error, "
+<COMMENT><<EOF>>		{ BEGIN INITIAL;
+				  addrerror("address parse error, "
 					  "expecting `')'' "
 					  "(unterminated comment)");
 				  yyterminate(); }
