@@ -228,9 +228,6 @@ static int popd_canon_user(sasl_conn_t *conn, void *context,
     size_t n;
     int r;
 
-    if (popd_subfolder) free(popd_subfolder);
-    popd_subfolder = NULL;
-
     if (!ulen) ulen = strlen(user);
 
     if (config_getswitch(IMAPOPT_POPSUBFOLDERS)) {
@@ -248,10 +245,10 @@ static int popd_canon_user(sasl_conn_t *conn, void *context,
 	if ((p = strchr(userbuf, '+'))) {
 	    n = config_virtdomains ? strcspn(p, "@") : strlen(p);
 
-	    if (flags & SASL_CU_AUTHZID) {
-		/* make a copy of the subfolder */
-		popd_subfolder = xstrndup(p, n);
-	    }
+	    /* make a copy of the subfolder */
+	    if (popd_subfolder) free(popd_subfolder);
+	    popd_subfolder = NULL;
+	    popd_subfolder = xstrndup(p, n);
 
 	    /* strip the subfolder from the auth[z]id */
 	    memmove(p, p+n, strlen(p+n)+1);
@@ -1734,7 +1731,7 @@ int openinbox(void)
 
     if (popd_subfolder) {
 	/* we need to convert to internal namespace dammit */
-	char *internal_subfolder = xstrdup(popd_subfolder);
+	char *internal_subfolder = xstrdup(popd_subfolder+1); /* remove + */
 	mboxname_hiersep_tointernal(&popd_namespace, internal_subfolder, 0);
 	inboxname = mboxname_user_mbox(popd_userid, internal_subfolder);
 	free(internal_subfolder);
