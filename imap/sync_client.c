@@ -218,7 +218,11 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
 
     /* Find messages we want to upload that are available on server */
     for (mbox = mboxname_list->head; mbox; mbox = mbox->next) {
-	r = mailbox_open_irl(mbox->name, &mailbox);
+	/* XXX - now this kinda sucks - we use a write lock here
+	 * purely for conversations modseq - but we never actually
+	 * USE the value... the whole "add to master folders" actually
+	 * looks a bit pointless... */
+	r = mailbox_open_iwl(mbox->name, &mailbox);
 
 	/* Quietly skip over folders which have been deleted since we
 	   started working (but record fact in case caller cares) */
@@ -1395,7 +1399,9 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
     }
 
     r = sync_crc_calc(mailbox, sync_crc, sizeof(sync_crc));
-    if (!r && strcmp(remote->sync_crc, sync_crc)) return 0;
+    if (r) return 0;
+
+    if (strcmp(remote->sync_crc, sync_crc)) return 0;
 
     /* otherwise it's unchanged! */
     return 1;
@@ -1413,7 +1419,7 @@ static int update_mailbox_once(struct sync_folder *local,
     struct dlist *kupload = dlist_newlist(NULL, "MESSAGE");
     annotate_state_t *astate = NULL;
 
-    r = mailbox_open_irl(local->name, &mailbox);
+    r = mailbox_open_iwl(local->name, &mailbox);
     if (r == IMAP_MAILBOX_NONEXISTENT) {
 	/* been deleted in the meanwhile... it will get picked up by the
 	 * delete call later */
