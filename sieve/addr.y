@@ -118,8 +118,6 @@ qstring: '"' QTEXT '"'
 /* copy address error message into buffer provided by sieve parser */
 int yyerror(sieve_script_t* parse_script, void* addrlexer, const char *s)
 {
-    extern char addrerr[ADDRERR_SIZE];
-    
-    strlcpy(addrerr, s, ADDRERR_SIZE);
+    strlcpy(parse_script->addrerr, s, ADDRERR_SIZE);
     return 0;
 }

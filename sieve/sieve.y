@@ -1101,15 +1101,13 @@ static int verify_stringlist(sieve_script_t *parse_script, strarray_t *sa, int (
     return 1;
 }
 
-char addrerr[500];	/* buffer for address parser error messages */
-
 static int verify_address(sieve_script_t *parse_script, char *s)
 {
-    addrerr[0] = '\0';	/* paranoia */
+    parse_script->addrerr[0] = '\0';	/* paranoia */
     YY_BUFFER_STATE buffer = addr_scan_string(s, parse_script->addrlexer);
     if (addrparse(parse_script, parse_script->addrlexer)) {
 	snprintf(errbuf, ERR_BUF_SIZE, 
-		 "address '%s': %s", s, addrerr);
+		 "address '%s': %s", s, parse_script->addrerr);
 	yyerror(parse_script, errbuf);
 	addr_delete_buffer(buffer, parse_script->addrlexer);
 	return 0;
