@@ -66,8 +66,6 @@
 
 #define ERR_BUF_SIZE 1024
 
-char errbuf[ERR_BUF_SIZE];
-
 /* definitions */
 extern int addrparse(sieve_script_t*, void*);
 typedef struct yy_buffer_state *YY_BUFFER_STATE;
@@ -1106,9 +1104,9 @@ static int verify_address(sieve_script_t *parse_script, char *s)
     parse_script->addrerr[0] = '\0';	/* paranoia */
     YY_BUFFER_STATE buffer = addr_scan_string(s, parse_script->addrlexer);
     if (addrparse(parse_script, parse_script->addrlexer)) {
-	snprintf(errbuf, ERR_BUF_SIZE, 
+	snprintf(parse_script->sieveerr, ERR_BUF_SIZE,
 		 "address '%s': %s", s, parse_script->addrerr);
-	yyerror(parse_script, errbuf);
+	yyerror(parse_script, parse_script->sieveerr);
 	addr_delete_buffer(buffer, parse_script->addrlexer);
 	return 0;
     }
@@ -1135,9 +1133,9 @@ static int verify_header(sieve_script_t *parse_script, char *hdr)
 	   ;  controls, SP, and
 	   ;  ":". */
 	if (!((*h >= 33 && *h <= 57) || (*h >= 59 && *h <= 126))) {
-	    snprintf(errbuf, ERR_BUF_SIZE,
+	    snprintf(parse_script->sieveerr, ERR_BUF_SIZE,
 		     "header '%s': not a valid header", hdr);
-	    yyerror(parse_script, errbuf);
+	    yyerror(parse_script, parse_script->sieveerr);
 	    return 0;
 	}
 	h++;
@@ -1166,9 +1164,9 @@ static int verify_addrheader(sieve_script_t *parse_script, char *hdr)
 	if (!strcmp(*h, hdr)) return 1;
     }
 
-    snprintf(errbuf, ERR_BUF_SIZE,
+    snprintf(parse_script->sieveerr, ERR_BUF_SIZE,
 	     "header '%s': not a valid header for an address test", hdr);
-    yyerror(parse_script, errbuf);
+    yyerror(parse_script, parse_script->sieveerr);
     return 0;
 }
  
@@ -1180,9 +1178,9 @@ static int verify_envelope(sieve_script_t *parse_script, char *env)
 	return 1;
     }
 
-    snprintf(errbuf, ERR_BUF_SIZE,
+    snprintf(parse_script->sieveerr, ERR_BUF_SIZE,
 	     "env-part '%s': not a valid part for an envelope test", env);
-    yyerror(parse_script, errbuf);
+    yyerror(parse_script, parse_script->sieveerr);
     return 0;
 }
  
@@ -1196,9 +1194,9 @@ static int verify_relat(sieve_script_t *parse_script, char *r)
 	else if (!strcmp(r, "ne")) {return NE;}
 	else if (!strcmp(r, "eq")) {return EQ;}
 	else{
-	  snprintf(errbuf, ERR_BUF_SIZE,
+	  snprintf(parse_script->sieveerr, ERR_BUF_SIZE,
 		   "flag '%s': not a valid relational operation", r);
-	  yyerror(parse_script, errbuf);
+	  yyerror(parse_script, parse_script->sieveerr);
 	  return -1;
 	}
 	
@@ -1214,17 +1212,17 @@ static int verify_flag(sieve_script_t *parse_script, char *f)
 	if (strcmp(f, "\\seen") && strcmp(f, "\\answered") &&
 	    strcmp(f, "\\flagged") && strcmp(f, "\\draft") &&
 	    strcmp(f, "\\deleted")) {
-	    snprintf(errbuf, ERR_BUF_SIZE,
+	    snprintf(parse_script->sieveerr, ERR_BUF_SIZE,
 		     "flag '%s': not a system flag", f);
-	    yyerror(parse_script, errbuf);
+	    yyerror(parse_script, parse_script->sieveerr);
 	    return 0;
 	}
 	return 1;
     }
     if (!imparse_isatom(f)) {
-	snprintf(errbuf, ERR_BUF_SIZE,
+	snprintf(parse_script->sieveerr, ERR_BUF_SIZE,
 		 "flag '%s': not a valid keyword", f);
-	yyerror(parse_script, errbuf);
+	yyerror(parse_script, parse_script->sieveerr);
 	return 0;
     }
     return 1;
@@ -1242,8 +1240,8 @@ static int verify_regex(sieve_script_t *parse_script, char *s, int cflags)
 #endif
 
     if ((ret = regcomp(reg, s, cflags)) != 0) {
-	(void) regerror(ret, reg, errbuf, ERR_BUF_SIZE);
-	yyerror(parse_script, errbuf);
+	(void) regerror(ret, reg, parse_script->sieveerr, ERR_BUF_SIZE);
+	yyerror(parse_script, parse_script->sieveerr);
 	free(reg);
 	return 0;
     }
@@ -1351,9 +1349,9 @@ static int verify_utf8(sieve_script_t *parse_script, char *s)
     }
 
     if ((buf != endbuf) || trailing) {
-	snprintf(errbuf, ERR_BUF_SIZE,
+	snprintf(parse_script->sieveerr, ERR_BUF_SIZE,
 		 "string '%s': not valid utf8", s);
-	yyerror(parse_script, errbuf);
+	yyerror(parse_script, parse_script->sieveerr);
 	return 0;
     }
 

@@ -81,6 +81,7 @@ struct sieve_script {
     /* addr and sieve lexer states */
     yyscan_t addrlexer;
     char addrerr[500]; /* buffer for address parser error messages */
+    char sieveerr[1024];
 };
 
 typedef struct sieve_bytecode sieve_bytecode_t;
