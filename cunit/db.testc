@@ -718,7 +718,6 @@ static void test_mboxlist(void)
 {
     struct db *db = NULL;
     struct txn *txn = NULL;
-    struct deleteit deldata;
     struct binary_result *results = NULL;
     /* random word generator to the rescue! */
     static const char KEY1[] = "INBOX.a";

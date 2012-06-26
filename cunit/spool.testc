@@ -205,7 +205,6 @@ static void test_fill_null(void)
 "Hello, World\r\n";
 
     hdrcache_t cache;
-    const char **val;
     int fd;
     char tempfile[32];
     int r;

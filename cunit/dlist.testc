@@ -12,7 +12,6 @@ static void test_nil(void)
     struct buf b = BUF_INITIALIZER;
     struct dlist *dl = dlist_newlist(NULL, NULL);
     struct dlist *item;
-    const char *s;
     int r;
 
     dlist_setatom(dl, "STRING", "NIL");

@@ -522,6 +522,7 @@ static void test_delete(void)
     CU_ASSERT_EQUAL(r, IMAP_QUOTAROOT_NONEXISTENT);
 }
 
+#if 0
 static void count_cb(const char *key __attribute__((unused)),
 		     void *data __attribute__((unused)),
 		     void *rock)
@@ -689,6 +690,7 @@ static void notest_foreach(void)
     free(expected);
 #undef MAXN
 }
+#endif
 
 /*
  * TODO: should test for quota_foreach() iteration order,
