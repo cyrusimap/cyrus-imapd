@@ -62,7 +62,7 @@ static int tonum(char *c);
 static char *chkstr(char *);
 static char *mlbuf;
 static int mlbufsz, mlcur;
-extern int sieveerror(sieve_script_t *, char *);
+extern void sieveerror(sieve_script_t *, char *);
 %}
 
 %option yylineno

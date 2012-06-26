@@ -59,7 +59,7 @@
 
 #define ADDRERR_SIZE 500
     
-int yyerror(sieve_script_t*, void*, const char *);
+void yyerror(sieve_script_t*, void*, const char *);
 extern int yylex(sieve_script_t*, void*);
 
 #define YYERROR_VERBOSE /* i want better error messages! */
@@ -116,8 +116,7 @@ qstring: '"' QTEXT '"'
 %%
 
 /* copy address error message into buffer provided by sieve parser */
-int yyerror(sieve_script_t* parse_script, void* addrlexer, const char *s)
+void yyerror(sieve_script_t* parse_script, void* addrlexer, const char *s)
 {
     strlcpy(parse_script->addrerr, s, ADDRERR_SIZE);
-    return 0;
 }

@@ -163,7 +163,7 @@ static int verify_regexs(sieve_script_t*,const strarray_t *sl, char *comp);
 #endif
 static int verify_utf8(sieve_script_t*, char *s);
 
-int yyerror(sieve_script_t*, const char *msg);
+void yyerror(sieve_script_t*, const char *msg);
 extern int yylex(sieve_script_t*);
 extern void sieverestart(FILE *f);
 
@@ -734,7 +734,7 @@ void sieve_parse(sieve_script_t *parse_script, FILE *f)
     addrlex_destroy(parse_script->addrlexer);
 }
 
-int yyerror(sieve_script_t *parse_script, const char *msg)
+void yyerror(sieve_script_t *parse_script, const char *msg)
 {
     parse_script->err++;
     if (parse_script->interp.err) {
@@ -742,8 +742,6 @@ int yyerror(sieve_script_t *parse_script, const char *msg)
 				 parse_script->interp.interp_context,
 				 parse_script->script_context);
     }
-
-    return 0;
 }
 
 static char *check_reqs(sieve_script_t *parse_script, strarray_t *sa)
