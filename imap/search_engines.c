@@ -83,32 +83,37 @@ static const struct search_engine default_search_engine = {
     default_search
 };
 
-static const struct search_engine *search_engines[] = {
+static const struct search_engine *engine(void)
+{
+    switch (config_getenum(IMAPOPT_SEARCH_ENGINE)) {
 #ifdef USE_SPHINX
-    &sphinx_search_engine,
+    case IMAP_ENUM_SEARCH_ENGINE_SPHINX:
+	return &sphinx_search_engine;
 #endif
 #ifdef USE_SQUAT
-    &squat_search_engine,
+    case IMAP_ENUM_SEARCH_ENGINE_SQUAT:
+	return &squat_search_engine;
 #endif
-    &default_search_engine,
-    NULL
-};
+    default:
+	return &default_search_engine;
+    }
+}
 
 HIDDEN int search_prefilter_messages(unsigned *msgno_list,
 				     struct index_state *state,
 				     const struct searchargs *searchargs)
 {
-    const struct search_engine **se;
+    const struct search_engine *se;
     int count;
 
-    for (se = search_engines ; *se ; se++) {
-	count = (*se)->search(msgno_list, state, searchargs);
+    for (se = engine() ; ; se = &default_search_engine) {
+	count = se->search(msgno_list, state, searchargs);
 	if (count >= 0) {
-	    syslog(LOG_DEBUG, "%s returned %d messages", (*se)->name, count);
+	    syslog(LOG_DEBUG, "%s returned %d messages", se->name, count);
 	    return count;
 	} else {
 	    /* otherwise, we failed for some reason, so do the default */
-	    syslog(LOG_DEBUG, "%s failed", (*se)->name);
+	    syslog(LOG_DEBUG, "%s failed", se->name);
 	}
     }
     /* NOTREACHED */
