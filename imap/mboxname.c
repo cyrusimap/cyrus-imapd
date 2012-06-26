@@ -921,8 +921,7 @@ char *mboxname_user_mbox(const char *userid, const char *subfolder)
 
 /*
  * Check whether two parts have the same userid.
- * Returns: 1 if the userids are the same, 0 if not,
- *	    or negative error.
+ * Returns: 1 if the userids are the same, 0 if not.
  */
 int mboxname_parts_same_userid(struct mboxname_parts *a,
 			       struct mboxname_parts *b)
