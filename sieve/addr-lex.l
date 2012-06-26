@@ -49,15 +49,17 @@
 #include <stdlib.h>
 #include <string.h>
 
-void addrerror(const char *);
-
-static int ncom;	/* number of open comments */
+void addrerror(void*, yyscan_t, const char *);
+/* number of open comments */
+#define YY_EXTRA_TYPE int
+#define YY_DECL int addrlex(void* parse_script, yyscan_t yyscanner)
 %}
 
 %option noyywrap
 %option nounput
 %option noinput
 %option prefix="addr" outfile="lex.yy.c"
+%option reentrant
 
 %x QSTRING DOMAINLIT COMMENT
 
@@ -65,8 +67,8 @@ static int ncom;	/* number of open comments */
 
 \"				{ BEGIN QSTRING; return yytext[0]; }
 \[				{ BEGIN DOMAINLIT; return yytext[0]; }
-\(				{ ncom = 1; BEGIN COMMENT; }
-\)				{ addrerror("address parse error, "
+\(				{ yyextra = 1; BEGIN COMMENT; }
+\)				{ addrerror(parse_script, yyscanner, "address parse error, "
 					  "unexpected `')'' "
 					  "(unbalanced comment)");
 				  yyterminate(); }
@@ -79,22 +81,22 @@ static int ncom;	/* number of open comments */
 <QSTRING>([^\n\r"\\]|\\.)*	return QTEXT;
 <QSTRING>\"			{ BEGIN INITIAL; return yytext[0]; }
 <QSTRING><<EOF>>		{ BEGIN INITIAL;
-				  addrerror("address parse error, expecting `'\"'' (unterminated string)");
+				  addrerror(parse_script, yyscanner, "address parse error, expecting `'\"'' (unterminated string)");
 				  yyterminate(); }
 
 <DOMAINLIT>([^\[\]\n\r\\]|\\.)*	return DTEXT;
 <DOMAINLIT>\]			{ BEGIN INITIAL; return yytext[0]; }
 <DOMAINLIT><<EOF>>		{ BEGIN INITIAL;
-				  addrerror("address parse error, expecting `']'' (unterminated domain literal)");
+				  addrerror(parse_script, yyscanner, "address parse error, expecting `']'' (unterminated domain literal)");
 				  yyterminate(); }
 
 
 
 <COMMENT>([^\(\)\n\0\\]|\\.)*	/* ignore comments */
-<COMMENT>\(			ncom++;
-<COMMENT>\)			{ ncom--; if (ncom == 0) BEGIN INITIAL; }
+<COMMENT>\(			yyextra++;
+<COMMENT>\)			{ yyextra--; if (yyextra == 0) BEGIN INITIAL; }
 <COMMENT><<EOF>>		{ BEGIN INITIAL;
-				  addrerror("address parse error, "
+				  addrerror(parse_script, yyscanner, "address parse error, "
 					  "expecting `')'' "
 					  "(unterminated comment)");
 				  yyterminate(); }
