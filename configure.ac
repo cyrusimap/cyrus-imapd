@@ -1286,7 +1286,7 @@ AM_CONDITIONAL([CUNIT], [test "$enable_unit_tests" = "yes"])
 
 AH_TOP([
 /*
- * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
+ * Copyright (c) 1994-2012 Carnegie Mellon University.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -1324,8 +1324,6 @@ AH_TOP([
  * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
  * AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING
  * OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- *
- * $Id: configure.ac,v 1.316 2010/01/06 17:01:26 murch Exp $
  */
 
 #ifndef _CYRUS_IMAPD_CONFIG_H_
