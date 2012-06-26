@@ -750,6 +750,7 @@ static int callout_run(const char *fname,
 out:
     buf_free(&args);
     dlist_free(&results);
+
     return r;
 }
 
@@ -1175,7 +1176,7 @@ int append_copy(struct mailbox *mailbox,
 {
     int msg;
     struct index_record record;
-    char *srcfname, *destfname;
+    char *srcfname, *destfname = NULL;
     int r = 0;
     int flag, userflag;
     annotate_state_t *astate = NULL;
@@ -1219,11 +1220,11 @@ int append_copy(struct mailbox *mailbox,
 	}
 
 	/* Link/copy message file */
+	free(destfname);
 	srcfname = xstrdup(mailbox_message_fname(mailbox, copymsg[msg].uid));
 	destfname = xstrdup(mailbox_message_fname(as->mailbox, record.uid));
 	r = mailbox_copyfile(srcfname, destfname, nolink);
 	free(srcfname);
-	free(destfname);
 	if (r) goto out;
 
 	/* Write out cache info, copy other info */
@@ -1253,6 +1254,7 @@ int append_copy(struct mailbox *mailbox,
     }
 
 out:
+    free(destfname);
     if (r) append_abort(as);
 
     return r;
