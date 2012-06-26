@@ -60,6 +60,11 @@ void addrerror(void*, yyscan_t, const char *);
 %option noinput
 %option prefix="addr" outfile="lex.yy.c"
 %option reentrant
+%option noyy_push_state noyy_pop_state noyy_top_state
+%option noyyget_extra noyyget_leng noyyget_text
+%option noyyget_lineno noyyset_lineno noyyget_in noyyset_in
+%option noyyget_out noyyset_out noyyget_lval noyyset_lval
+%option noyyget_lloc noyyset_lloc noyyget_debug noyyset_debug
 
 %x QSTRING DOMAINLIT COMMENT
 
