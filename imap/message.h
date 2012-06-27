@@ -146,8 +146,6 @@ struct bodypart {
     const char *decoded_body;
 };
 
-/* Calculate the number of entries in a vector */
-#define VECTOR_SIZE(vector) (sizeof(vector)/sizeof(vector[0]))
 
 extern void parse_cached_envelope P((char *env, char *tokens[], int tokens_size));
 

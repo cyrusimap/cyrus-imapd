@@ -108,6 +108,9 @@ extern const unsigned char convert_to_uppercase[256];
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 #endif
 
+/* Calculate the number of entries in a vector */
+#define VECTOR_SIZE(vector) (sizeof(vector)/sizeof(vector[0]))
+
 typedef struct keyvalue {
     char *key, *value;
 } keyvalue;
