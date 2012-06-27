@@ -59,8 +59,8 @@
 
 #define ADDRERR_SIZE 500
     
-void yyerror(sieve_script_t*, void*, const char *);
-extern int yylex(sieve_script_t*, void*);
+void yyerror(sieve_script_t*, const char *);
+extern int addrlex(sieve_script_t*);
 
 #define YYERROR_VERBOSE /* i want better error messages! */
 
@@ -74,8 +74,6 @@ extern int yylex(sieve_script_t*, void*);
 %defines
 %parse-param {sieve_script_t *parse_script}
 %lex-param {sieve_script_t *parse_script}
-%parse-param {void* addrlexer}
-%lex-param {void* addrlexer}
 %%
 sieve_address: addrspec			/* simple address */
 	| phrase '<' addrspec '>'	/* name & addr-spec */
@@ -116,7 +114,7 @@ qstring: '"' QTEXT '"'
 %%
 
 /* copy address error message into buffer provided by sieve parser */
-void yyerror(sieve_script_t* parse_script, void* addrlexer, const char *s)
+void yyerror(sieve_script_t *parse_script, const char *s)
 {
     strlcpy(parse_script->addrerr, s, ADDRERR_SIZE);
 }

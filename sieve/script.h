@@ -51,7 +51,6 @@
 #include "sieve_interface.h"
 #include "interp.h"
 #include "tree.h"
-typedef void* yyscan_t;
 
 struct sieve_script {
     sieve_interp_t interp;
@@ -78,8 +77,6 @@ struct sieve_script {
     commandlist_t *cmds;
 
     int err;
-    /* addr and sieve lexer states */
-    yyscan_t addrlexer;
     char addrerr[500]; /* buffer for address parser error messages */
     char sieveerr[1024];
 };

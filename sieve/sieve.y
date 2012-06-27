@@ -67,9 +67,9 @@
 #define ERR_BUF_SIZE 1024
 
 /* definitions */
-extern int addrparse(sieve_script_t*, void*);
+extern int addrparse(sieve_script_t*);
 typedef struct yy_buffer_state *YY_BUFFER_STATE;
-extern YY_BUFFER_STATE addr_scan_string(const char*, void*);
+extern YY_BUFFER_STATE addr_scan_string(const char*);
 
 extern int sievelineno;
 
@@ -726,12 +726,10 @@ void sieve_parse(sieve_script_t *parse_script, FILE *f)
     sieverestart(f);
     parse_script->cmds = NULL;
     sievelineno = 1;		/* reset line number */
-    addrlex_init(&parse_script->addrlexer);
     if (yyparse(parse_script)) {
 	free_tree(parse_script->cmds);
 	parse_script->cmds = NULL;
     }
-    addrlex_destroy(parse_script->addrlexer);
 }
 
 void yyerror(sieve_script_t *parse_script, const char *msg)
@@ -1100,15 +1098,15 @@ static int verify_stringlist(sieve_script_t *parse_script, strarray_t *sa, int (
 static int verify_address(sieve_script_t *parse_script, char *s)
 {
     parse_script->addrerr[0] = '\0';	/* paranoia */
-    YY_BUFFER_STATE buffer = addr_scan_string(s, parse_script->addrlexer);
-    if (addrparse(parse_script, parse_script->addrlexer)) {
+    YY_BUFFER_STATE buffer = addr_scan_string(s);
+    if (addrparse(parse_script)) {
 	snprintf(parse_script->sieveerr, ERR_BUF_SIZE,
 		 "address '%s': %s", s, parse_script->addrerr);
 	yyerror(parse_script, parse_script->sieveerr);
-	addr_delete_buffer(buffer, parse_script->addrlexer);
+	addr_delete_buffer(buffer);
 	return 0;
     }
-    addr_delete_buffer(buffer, parse_script->addrlexer);
+    addr_delete_buffer(buffer);
     return 1;
 }
 
