@@ -164,7 +164,7 @@ static int verify_regexs(sieve_script_t*,const strarray_t *sl, char *comp);
 static int verify_utf8(sieve_script_t*, char *s);
 
 void yyerror(sieve_script_t*, const char *msg);
-extern int yylex(sieve_script_t*);
+extern int yylex(void*, sieve_script_t*);
 extern void sieverestart(FILE *f);
 
 #define YYERROR_VERBOSE /* i want better error messages! */
@@ -224,6 +224,7 @@ extern void sieverestart(FILE *f);
 
 %parse-param{sieve_script_t *parse_script}
 %lex-param{sieve_script_t *parse_script}
+%pure_parser
 %%
 
 start: reqs			{ parse_script->cmds = NULL; }

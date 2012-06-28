@@ -56,7 +56,7 @@
 #include "sieve/sieve_interface.h"
 
 #define YY_NO_INPUT
-#define YY_DECL int yylex(sieve_script_t *parse_script)
+#define YY_DECL int yylex(YYSTYPE *yylval, sieve_script_t *parse_script)
 
 static int tonum(char *c);
 static char *chkstr(char *);
@@ -80,7 +80,7 @@ CRLF		(\r\n|\r|\n)
 %%
 <MULTILINE>^\.{CRLF}	{ BEGIN INITIAL; 
                           if (mlbuf) mlbuf[mlcur] = '\0';
-                          sievelval.sval = chkstr(mlbuf); return STRING; }
+                          yylval->sval = chkstr(mlbuf); return STRING; }
 <MULTILINE>^\.\.  { /* dot stuffing! we want one . */ yyless(1); }
 <MULTILINE>(.|\n) { if (mlcur == mlbufsz)
 			mlbuf = xrealloc(mlbuf, 1 + (mlbufsz+=1024));
@@ -91,7 +91,7 @@ CRLF		(\r\n|\r|\n)
 		     yyterminate(); }
 <QSTRING>\"        { BEGIN INITIAL;
                      if (mlbuf) mlbuf[mlcur] = '\0';
-		     sievelval.sval = chkstr(mlbuf); return STRING; }
+		     yylval->sval = chkstr(mlbuf); return STRING; }
 <QSTRING>\\.      { if (mlcur == mlbufsz)
 			mlbuf = xrealloc(mlbuf, 1 + (mlbufsz+=1024));
 		    mlbuf[mlcur++] = yytext[1]; }
@@ -106,7 +106,7 @@ CRLF		(\r\n|\r|\n)
 			  mlcur = 0; mlbufsz = 0; mlbuf = NULL; }
 <INITIAL>\"        { BEGIN QSTRING;
                     mlcur = 0; mlbufsz = 0; mlbuf = NULL; }
-<INITIAL>[0-9]+[KMGkmg]?	{ sievelval.nval = tonum(yytext); return NUMBER; }
+<INITIAL>[0-9]+[KMGkmg]?	{ yylval->nval = tonum(yytext); return NUMBER; }
 <INITIAL>if		return IF;
 <INITIAL>elsif		return ELSIF;
 <INITIAL>else		return ELSE;
