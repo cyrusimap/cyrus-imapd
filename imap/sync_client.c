@@ -1363,7 +1363,8 @@ done:
     dlist_free(&kin);
     dlist_free(&kaction);
     dlist_free(&kexpunge);
-    dlist_free(&kuids);
+    /* kuids points into the tree rooted at kexpunge
+     * so we don't need to free it explicitly here */
 
     return r;
 }
