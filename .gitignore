@@ -88,6 +88,7 @@ imap/quota
 imap/reconstruct
 imap/smmapd
 imap/squatter
+imap/squat_dump
 imap/sync_client
 imap/sync_reset
 imap/sync_server
