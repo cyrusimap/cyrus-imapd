@@ -44,6 +44,7 @@
 #define INCLUDED_SEARCH_ENGINES_H
 
 #include "index.h"
+#include "charset.h"
 
 struct search_engine {
     const char *name;
@@ -51,6 +52,8 @@ struct search_engine {
     int (*search)(unsigned* msg_list,
 		  struct index_state *state,
 		  const struct searchargs *searchargs);
+    search_text_receiver_t *(*begin_update)(int verbose);
+    int (*end_update)(search_text_receiver_t *);
 };
 
 /* Fill the msg_list with a list of message IDs which could match the
@@ -60,5 +63,8 @@ struct search_engine {
 extern int search_prefilter_messages(unsigned* msg_list,
 				     struct index_state *state,
 				     const struct searchargs *searchargs);
+
+search_text_receiver_t *search_begin_update(int verbose);
+int search_end_update(search_text_receiver_t *rx);
 
 #endif

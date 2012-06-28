@@ -80,7 +80,9 @@ static int default_search(unsigned* msg_list, struct index_state *state,
 static const struct search_engine default_search_engine = {
     "default",
     0,
-    default_search
+    default_search,
+    NULL,
+    NULL
 };
 
 static const struct search_engine *engine(void)
@@ -119,3 +121,20 @@ HIDDEN int search_prefilter_messages(unsigned *msgno_list,
     /* NOTREACHED */
     return -1;
 }
+
+EXPORTED search_text_receiver_t *search_begin_update(int verbose)
+{
+    const struct search_engine *se = engine();
+    /* We don't fallback to the default search engine here
+     * because the default behaviour is not to index anything */
+    return (se->begin_update ? se->begin_update(verbose) : NULL);
+}
+
+EXPORTED int search_end_update(search_text_receiver_t *rx)
+{
+    const struct search_engine *se = engine();
+    /* We don't fallback to the default search engine here
+     * because the default behaviour is not to index anything */
+    return (se->end_update ? se->end_update(rx) : 0);
+}
+

@@ -173,7 +173,11 @@ user_PROGRAMS += imap/cyr_virusscan
 endif # HAVE_CLAMAV
 
 if USE_SQUAT
-service_PROGRAMS += imap/squatter imap/squat_dump
+service_PROGRAMS += imap/squat_dump
+endif
+if SQUATTER
+# Despite the name, the squatter program handles any search engine
+service_PROGRAMS += imap/squatter
 endif
 
 if NNTPD
@@ -940,6 +944,7 @@ imap_libcyrus_imap_la_SOURCES += \
 	imap/search_squat.c \
 	imap/squat.c \
 	imap/squat.h \
+	imap/squat_build.c \
 	imap/squat_internal.c \
 	imap/squat_internal.h
 endif
@@ -1134,7 +1139,7 @@ imap_dav_reconstruct_LDADD = $(LD_UTILITY_ADD)
 imap_smmapd_SOURCES = imap/mutex_fake.c imap/proxy.c imap/smmapd.c master/service.c
 imap_smmapd_LDADD = $(LD_SERVER_ADD)
 
-imap_squatter_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/squatter.c imap/squat_build.c
+imap_squatter_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/squatter.c
 imap_squatter_LDADD = $(LD_UTILITY_ADD)
 
 imap_squat_dump_SOURCES = imap/cli_fatal.c imap/mutex_fake.c imap/squat_dump.c

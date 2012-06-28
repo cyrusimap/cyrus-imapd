@@ -406,6 +406,9 @@ if test "$enable_sphinx" = yes -a "$with_mysql" = no ; then
     enable_sphinx=no
 fi
 
+AM_CONDITIONAL([SQUATTER],
+    [test "${enable_squat}" != "no" -o "${enable_sphinx}" != "no" ])
+
 AC_ARG_ENABLE(sieve,
         [AS_HELP_STRING([--disable-sieve], [disable Sieve support])],,[enable_sieve="yes";])
 AC_ARG_ENABLE(pcre,

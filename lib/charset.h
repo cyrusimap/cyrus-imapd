@@ -114,13 +114,19 @@ extern char *charset_encode_mimeheader(const char *header, size_t len);
    sequence, and the sequences for different parts cannot be interleaved.
 */
 struct buf;
+struct mailbox;
 typedef struct search_text_receiver search_text_receiver_t;
 struct search_text_receiver {
+    int (*begin_mailbox)(search_text_receiver_t *,
+			 struct mailbox *, int incremental);
+    int (*is_indexed)(search_text_receiver_t *, uint32_t uid);
     void (*begin_message)(search_text_receiver_t *, uint32_t uid);
     void (*begin_part)(search_text_receiver_t *, int part);
     void (*append_text)(search_text_receiver_t *, const struct buf *);
     void (*end_part)(search_text_receiver_t *, int part);
     void (*end_message)(search_text_receiver_t *, uint32_t uid);
+    int (*end_mailbox)(search_text_receiver_t *,
+		       struct mailbox *);
 };
 
 /* Extract the body text for the message denoted by 'uid', convert its

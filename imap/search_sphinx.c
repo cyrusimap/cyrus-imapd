@@ -207,6 +207,8 @@ out:
 const struct search_engine sphinx_search_engine = {
     "Sphinx",
     0,
-    search_sphinx
+    search_sphinx,
+    NULL,
+    NULL
 };
 
