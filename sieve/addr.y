@@ -60,7 +60,7 @@
 #define ADDRERR_SIZE 500
     
 void yyerror(sieve_script_t*, const char *);
-extern int addrlex(sieve_script_t*);
+extern int addrlex(YYSTYPE*, sieve_script_t*);
 
 #define YYERROR_VERBOSE /* i want better error messages! */
 
@@ -74,6 +74,7 @@ extern int addrlex(sieve_script_t*);
 %defines
 %parse-param {sieve_script_t *parse_script}
 %lex-param {sieve_script_t *parse_script}
+%pure_parser
 %%
 sieve_address: addrspec			/* simple address */
 	| phrase '<' addrspec '>'	/* name & addr-spec */

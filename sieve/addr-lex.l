@@ -52,7 +52,7 @@
 void addrerror(void*, const char *);
 
 static int ncom;	/* number of open comments */
-#define YY_DECL int addrlex(void* parse_script)
+#define YY_DECL int addrlex(YYSTYPE* addrlval, void* parse_script)
 %}
 
 %option noyywrap
