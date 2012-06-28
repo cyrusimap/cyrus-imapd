@@ -1402,7 +1402,8 @@ static void index_unlock(struct index_state *state)
 	index_status(state, &sdata);
 	/* RECENT is zero for everyone else because we wrote a new
 	 * recentuid! */
-	sdata.recent = 0;
+	if (!state->examining)
+	    sdata.recent = 0;
 	mailbox_unlock_index(state->mailbox, &sdata);
     }
     else
