@@ -1369,6 +1369,9 @@ static int do_mailbox(struct dlist *kin)
     struct dlist *ka = NULL;
     int r;
 
+    struct sync_annot_list *mannots = NULL;
+    struct sync_annot_list *rannots = NULL;
+
     annotate_state_t *astate = NULL;
 
     if (!dlist_getatom(kin, "UNIQUEID", &uniqueid))
@@ -1471,24 +1474,18 @@ static int do_mailbox(struct dlist *kin)
     r = mailbox_compare_update(mailbox, kr, 0);
     if (r) goto done;
 
-    /* now we're committed to writing something no matter what happens! */
-    if (ka) {
-	struct sync_annot_list *mannots = NULL;
-	struct sync_annot_list *rannots = NULL;
-
+    /* take all mailbox (not message) annotations - aka metadata,
+     * they're not versioned either */
+    if (ka)
 	decode_annotations(ka, &mannots);
 
-	r = read_annotations(mailbox, NULL, &rannots);
-	if (!r) r = apply_annotations(mailbox, NULL, rannots, mannots, 0);
+    r = read_annotations(mailbox, NULL, &rannots);
+    if (!r) r = apply_annotations(mailbox, NULL, rannots, mannots, 0);
 
-	sync_annot_list_free(&mannots);
-	sync_annot_list_free(&rannots);
-
-	if (r) {
-	    syslog(LOG_ERR, "syncerror: annotations failed to apply to %s",
-		   mailbox->name);
-	    goto done;
-	}
+    if (r) {
+	syslog(LOG_ERR, "syncerror: annotations failed to apply to %s",
+	       mailbox->name);
+	goto done;
     }
 
     r = mailbox_compare_update(mailbox, kr, 1);
@@ -1538,6 +1535,9 @@ static int do_mailbox(struct dlist *kin)
     }
 
 done:
+    sync_annot_list_free(&mannots);
+    sync_annot_list_free(&rannots);
+
     mailbox_close(&mailbox);
 
     /* check return value */
