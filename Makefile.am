@@ -218,7 +218,7 @@ LD_BASIC_ADD = lib/libcyrus.la lib/libcyrus_min.la ${LIBS}
 # UTILITY is the libraries that utility programs which use Cyrus'
 # mailbox and message handling code need to link with.
 
-LD_UTILITY_ADD = imap/libcyrus_imap.la $(LD_BASIC_ADD)
+LD_UTILITY_ADD = imap/libcyrus_imap.la $(LD_BASIC_ADD) $(COM_ERR_LIBS)
 
 # SERVER is the libraries that network-facing servers need to link with
 #
@@ -418,7 +418,7 @@ imap_libcyrus_imap_la_SOURCES = imap/annotate.c imap/annotate.h imap/append.c \
 	imap/tls.h imap/upgrade_index.c imap/upgrade_index.h imap/user.c \
 	imap/user.h imap/userdeny_db.c imap/userdeny.h imap/version.c \
 	imap/version.h
-imap_libcyrus_imap_la_LIBADD = $(COM_ERR_LIBS) $(LIB_UUID) lib/libcyrus_min.la lib/libcyrus.la
+imap_libcyrus_imap_la_LIBADD = $(LIB_UUID) lib/libcyrus_min.la lib/libcyrus.la
 
 imap_lmtpd_SOURCES = imap/lmtpd.c imap/lmtpd.h imap/lmtpengine.c \
 	imap/lmtpengine.h imap/lmtpstats.c imap/lmtpstats.h \
@@ -660,9 +660,9 @@ sieve_libcyrus_sieve_la_SOURCES = sieve/bytecode.h sieve/addr.y sieve/addr-lex.l
 	sieve/comparator.c sieve/comparator.h sieve/interp.c sieve/interp.h \
 	sieve/message.c sieve/message.h sieve/script.c sieve/script.h \
 	sieve/sieve-lex.l sieve/sieve.y sieve/tree.c sieve/tree.h
-sieve_libcyrus_sieve_la_LIBADD = $(COM_ERR_LIBS) lib/libcyrus_min.la lib/libcyrus.la
+sieve_libcyrus_sieve_la_LIBADD = lib/libcyrus_min.la lib/libcyrus.la
 
-LD_SIEVE_ADD = sieve/libcyrus_sieve.la $(LD_BASIC_ADD)
+LD_SIEVE_ADD = sieve/libcyrus_sieve.la $(COM_ERR_LIBS) $(LD_BASIC_ADD)
 
 sieve_sievec_LDADD = $(LD_SIEVE_ADD)
 sieve_sieved_LDADD = $(LD_SIEVE_ADD)

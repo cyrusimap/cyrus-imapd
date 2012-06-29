@@ -1104,7 +1104,7 @@ case "$with_com_err" in
       ;;
   *) # use whatever they told us, or whatever we found
      COMPILE_ET="${with_com_err}/bin/compile_et"
-     COM_ERR_LIBS="${with_com_err}/lib/libcom_err.a"
+     COM_ERR_LIBS="-L${with_com_err}/lib -lcom_err"
      COM_ERR_CPPFLAGS="-I${with_com_err}/include"
      # Ever get the feeling people hide this stuff on purpose?
      if test -d "${with_com_err}/include/et" ; then
