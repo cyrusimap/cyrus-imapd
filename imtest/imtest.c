@@ -137,9 +137,9 @@ static strarray_t stashed_strings = STRARRAY_INITIALIZER;
 /* callbacks we support */
 static sasl_callback_t callbacks[] = {
     {
-	SASL_CB_ECHOPROMPT, NULL, NULL    
+	SASL_CB_ECHOPROMPT, NULL, NULL
     }, {
-	SASL_CB_NOECHOPROMPT, NULL, NULL    
+	SASL_CB_NOECHOPROMPT, NULL, NULL
     }, {
 #ifdef SASL_CB_GETREALM
 	SASL_CB_GETREALM, NULL, NULL
@@ -151,7 +151,7 @@ static sasl_callback_t callbacks[] = {
     }, {
 	SASL_CB_PASS, NULL, NULL    
     }, {
-	SASL_CB_GETOPT, &mysasl_config, NULL    
+      SASL_CB_GETOPT, (int (*)(void))&mysasl_config, NULL
     }, {
 	SASL_CB_LIST_END, NULL, NULL
     }
