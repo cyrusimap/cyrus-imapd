@@ -722,17 +722,6 @@ tests: test                      { $$ = new_testlist($1, NULL); }
 	;
 
 %%
-void sieve_parse(sieve_script_t *parse_script, FILE *f)
-{
-    sieverestart(f);
-    parse_script->cmds = NULL;
-    sievelineno = 1;		/* reset line number */
-    if (yyparse(parse_script)) {
-	free_tree(parse_script->cmds);
-	parse_script->cmds = NULL;
-    }
-}
-
 void yyerror(sieve_script_t *parse_script, const char *msg)
 {
     parse_script->err++;
