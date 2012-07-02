@@ -251,45 +251,50 @@ dnl SQL DB Detection
 HAVE_SQL=0
 
 dnl MySQL Detection
+
+dnl legacy options --with-mysql-libdir and --with-mysql-incdir
+CYRUS_MYSQL_OPTS
+if test "$with_mysql_lib" != none ; then
+    AC_MSG_NOTICE([Legacy option --with-mysql-libdir=DIR detected.]
+		  [You may wish to change to --with-mysql which works now.])
+    withval="$with_mysql_lib/.."
+else
+    withval="no"
+fi
+
+AC_MSG_CHECKING([whether to use MySQL])
 AC_ARG_WITH(mysql,
-	[AS_HELP_STRING([--with-mysql=DIR], [use MySQL (in DIR) [no]])],
-	with_mysql=$withval, with_mysql="no")
+	[AS_HELP_STRING([--with-mysql=DIR], [use MySQL (in DIR) [no]])])
+with_mysql=$withval
 
 case "$with_mysql" in
   no)
-	use_mysql="no"
+	# Explicitly disable MySQL
 	;;
   yes)
-	use_mysql="yes"
-	with_mysql_lib=none
-	with_mysql_inc=none
+	# Find mysql_config in $PATH
+	mysql_config=mysql_config
 	;;
   *)
-	use_mysql="yes"
-	with_mysql_lib="$with_mysql/lib"
-	with_mysql_inc="$with_mysql/include"
+	# Find mysql_config in the specified directory
+	mysql_config="$with_mysql/bin/mysql_config"
+	if test ! -x "$mysql_config" ; then
+	    AC_MSG_ERROR([The mysql_config program was not found]
+			 [in $with_mysql/bin, disabling MySQL support])
+	    with_mysql="no"
+	fi
 	;;
 esac
 
-if test "$use_mysql" != "no"; then
-  CYRUS_MYSQL_CHK()
-
-  if test "$mysqllib" = "no"; then
-    AC_MSG_ERROR([MySQL was not found.  You may need to supply the
-    --with-mysql-libdir or --with-mysql-incdir configure options.])
-  else
+if test "$with_mysql" != "no"; then
+    MYSQL_LIBADD=`$mysql_config --libs`
+    MYSQL_INCADD=`$mysql_config --cflags`
     HAVE_SQL=1
-  fi
-
-  if test "$with_mysql_lib" != "none"; then
-    CMU_ADD_LIBPATH($with_mysql_lib)
-  fi
-
-  LIBS="${LIBS} ${MYSQL_LIBADD}"
-  CPPFLAGS="${MYSQL_INCADD} ${CPPFLAGS}"
-
-  AC_DEFINE(HAVE_MYSQL,[],[Build in MySQL support?])
+    LIBS="${LIBS} ${MYSQL_LIBADD}"
+    CPPFLAGS="${MYSQL_INCADD} ${CPPFLAGS}"
+    AC_DEFINE(HAVE_MYSQL,[],[Build in MySQL support?])
 fi
+AC_MSG_RESULT($with_mysql)
 
 dnl End MySQL Detection
 
