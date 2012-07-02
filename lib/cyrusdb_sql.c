@@ -880,7 +880,8 @@ static int abort_txn(struct dbengine *db, struct txn *tid)
 
 /* SQL databases have all sorts of evil collations - we can't
  * make any assumptions though, so just assume raw */
-static int mycompar(struct dbengine *db, const char *a, int alen,
+static int mycompar(struct dbengine *db __attribute__((unused)),
+		    const char *a, int alen,
 		    const char *b, int blen)
 {
     (void)db;
