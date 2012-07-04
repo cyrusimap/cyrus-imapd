@@ -431,7 +431,7 @@ static comparator_t *lookup_rel(int relation)
     return ret;
 }
 
-comparator_t *lookup_comp(int comp, int mode, int relation,
+EXPORTED comparator_t *lookup_comp(int comp, int mode, int relation,
 			  void **comprock)
 {
     comparator_t *ret;
