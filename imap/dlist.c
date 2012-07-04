@@ -87,7 +87,7 @@
 
 /* Parse routines */
 
-const char *lastkey = NULL;
+static const char *lastkey = NULL;
 
 static void printfile(struct protstream *out, const struct dlist *dl)
 {

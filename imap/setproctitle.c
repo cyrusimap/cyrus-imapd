@@ -91,9 +91,9 @@
 
 extern char **environ;
 #ifdef USE_SETPROCTITLE
-int setproctitle_enable = 1;
+static int setproctitle_enable = 1;
 #else
-int setproctitle_enable = 0;
+static int setproctitle_enable = 0;
 #endif
 
 static char		**Argv = NULL;		/* pointer to argument vector */

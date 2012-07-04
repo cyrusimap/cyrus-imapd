@@ -75,7 +75,7 @@
 
 #define DB config_statuscache_db
 
-struct db *statuscachedb;
+static struct db *statuscachedb;
 static int statuscache_dbopen = 0;
 
 void statuscache_open(const char *fname)
