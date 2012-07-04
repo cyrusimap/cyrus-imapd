@@ -311,8 +311,8 @@ static int search_squat(unsigned* msg_list, struct index_state *state,
     return result;
 }
 
-int search_prefilter_messages(unsigned *msgno_list, struct index_state *state,
-                              struct searchargs *searchargs) 
+HIDDEN int search_prefilter_messages(unsigned *msgno_list,
+		struct index_state *state, struct searchargs *searchargs)
 {
     unsigned i;
     int count;
