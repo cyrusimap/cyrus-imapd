@@ -21,11 +21,13 @@ aclocal.m4
 autom4te.cache/
 cmulocal/
 compile
+config.guess
 config.h
 config.h.in
 config.log
 config.status
 config.status.lineno
+config.sub
 configure
 com_err/et/compile_et
 coverage.xml
@@ -79,6 +81,7 @@ imap/sync_server
 imap/tls_prune
 imap/unexpunge
 imtest/imtest
+install-sh
 lib/chartable.c
 lib/imapopts.c
 lib/imapopts.h
