@@ -780,7 +780,7 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 }
 
 /* spew the bytecode to disk */
-int sieve_emit_bytecode(int fd, bytecode_info_t *bc)  
+EXPORTED int sieve_emit_bytecode(int fd, bytecode_info_t *bc)
 {
     /* First output version number (4 bytes) */
     int data = BYTECODE_VERSION;

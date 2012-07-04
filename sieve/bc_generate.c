@@ -802,7 +802,7 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
 
 
 /* Entry point to the bytecode emitter module */	
-int sieve_generate_bytecode(bytecode_info_t **retval, sieve_script_t *s) 
+EXPORTED int sieve_generate_bytecode(bytecode_info_t **retval, sieve_script_t *s)
 {
     commandlist_t *c;
 
@@ -823,7 +823,7 @@ int sieve_generate_bytecode(bytecode_info_t **retval, sieve_script_t *s)
 }
 
 
-void sieve_free_bytecode(bytecode_info_t **p) 
+EXPORTED void sieve_free_bytecode(bytecode_info_t **p)
 {
     if(!p || !*p) return;
     if((*p)->data) free((*p)->data);

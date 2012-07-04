@@ -661,6 +661,7 @@ sieve_libcyrus_sieve_la_SOURCES = sieve/bytecode.h sieve/addr.y sieve/addr-lex.l
 	sieve/message.c sieve/message.h sieve/script.c sieve/script.h \
 	sieve/sieve-lex.l sieve/sieve.y sieve/tree.c sieve/tree.h
 sieve_libcyrus_sieve_la_LIBADD = lib/libcyrus_min.la lib/libcyrus.la
+sieve_libcyrus_sieve_la_CFLAGS = $(AM_FLAGS) $(CFLAG_VISIBILITY)
 
 LD_SIEVE_ADD = sieve/libcyrus_sieve.la $(COM_ERR_LIBS) $(LD_BASIC_ADD)
 

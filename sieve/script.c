@@ -189,7 +189,7 @@ int script_require(sieve_script_t *s, char *req)
 }
 
 /* given an interpretor and a script, produce an executable script */
-int sieve_script_parse(sieve_interp_t *interp, FILE *script,
+EXPORTED int sieve_script_parse(sieve_interp_t *interp, FILE *script,
 		       void *script_context, sieve_script_t **ret)
 {
     sieve_script_t *s;
@@ -225,7 +225,7 @@ int sieve_script_parse(sieve_interp_t *interp, FILE *script,
     return res;
 }
 
-void sieve_script_free(sieve_script_t **s)
+EXPORTED void sieve_script_free(sieve_script_t **s)
 {
     if (*s) {
 	if ((*s)->cmds)
@@ -439,7 +439,7 @@ static char *sieve_errstr(int code)
  *****************************************************************************/
 
 /* Load a compiled script */
-int sieve_script_load(const char *fname, sieve_execute_t **ret) 
+EXPORTED int sieve_script_load(const char *fname, sieve_execute_t **ret) 
 {
     struct stat sbuf;
     sieve_execute_t *ex;
@@ -506,7 +506,7 @@ int sieve_script_load(const char *fname, sieve_execute_t **ret)
 
 
 
-int sieve_script_unload(sieve_execute_t **s) 
+EXPORTED int sieve_script_unload(sieve_execute_t **s)
 {
     if(s && *s) {
 	sieve_bytecode_t *bc = (*s)->bc_list;
@@ -855,7 +855,7 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 		  const strarray_t * , action_list_t *actions,
 		  notify_list_t *notify_list, const char **errmsg);
 
-int sieve_execute_bytecode(sieve_execute_t *exe, sieve_interp_t *interp,
+EXPORTED int sieve_execute_bytecode(sieve_execute_t *exe, sieve_interp_t *interp,
 			   void *script_context, void *message_context) 
 {
     action_list_t *actions = NULL;

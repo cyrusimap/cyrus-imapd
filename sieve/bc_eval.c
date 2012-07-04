@@ -76,7 +76,7 @@
 /* Given a bytecode_input_t at the beginning of a string (the len block),
  * return the string, the length, and the bytecode index of the NEXT
  * item */
-int unwrap_string(bytecode_input_t *bc, int pos, const char **str, int *len) 
+EXPORTED int unwrap_string(bytecode_input_t *bc, int pos, const char **str, int *len) 
 {
     int local_len = ntohl(bc[pos].value);
 
