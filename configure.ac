@@ -117,6 +117,15 @@ if test $ac_cv_sys_long_file_names = no; then
 fi
 AC_C_INLINE
 
+gl_VISIBILITY
+AH_BOTTOM([#if HAVE_VISIBILITY
+#define EXPORTED __attribute__((__visibility__("default")))
+#define HIDDEN   __attribute__((__visibility__("hidden")))
+#else
+#define EXPORTED
+#define HIDDEN
+#endif])
+
 LT_PREREQ([2.2.6])
 LT_INIT([disable-static])
 AC_SUBST([LIBTOOL_DEPS])
