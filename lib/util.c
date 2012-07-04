@@ -195,7 +195,7 @@ char *ucase(char* str)
  *  returns pointer to end of dst string.
  *  dst must have twice the length of source
  */
-char *beautify_copy(char* dst, const char* src)
+static char *beautify_copy(char* dst, const char* src)
 {
     unsigned char c;
 

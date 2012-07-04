@@ -121,12 +121,6 @@ extern char *lcase (char *str);
 extern char *ucase (char *str);
 
 /* clean up control characters in a string while copying it
- *  returns pointer to end of dst string.
- *  dst must have twice the length of source
- */
-extern char *beautify_copy (char *dst, const char *src);
-
-/* clean up control characters in a string while copying it
  *  returns pointer to a static buffer containing the cleaned-up version
  */
 extern char *beautify_string (const char *src);
