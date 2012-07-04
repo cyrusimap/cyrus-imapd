@@ -95,6 +95,7 @@ extern char *charset_encode_mimeheader(const char *header, size_t len);
 #define SEARCH_PART_SUBJECT 5
 #define SEARCH_PART_HEADERS 6 /* headers OTHER than the above headers */
 #define SEARCH_PART_BODY    7
+#define SEARCH_NUM_PARTS    8
 
 
 /* The functions in search_text_receiver_t get called at least once for each part of every message.
