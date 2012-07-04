@@ -225,10 +225,10 @@ struct annotate_recalc_state
 static annotate_db_t *all_dbs_head = NULL;
 static annotate_db_t *all_dbs_tail = NULL;
 #define tid(d)	((d)->in_txn ? &(d)->txn : NULL)
-int (*proxy_fetch_func)(const char *server, const char *mbox_pat,
+static int (*proxy_fetch_func)(const char *server, const char *mbox_pat,
 			const strarray_t *entry_pat,
 			const strarray_t *attribute_pat) = NULL;
-int (*proxy_store_func)(const char *server, const char *mbox_pat,
+static int (*proxy_store_func)(const char *server, const char *mbox_pat,
 			struct entryattlist *entryatts) = NULL;
 static ptrarray_t message_entries = PTRARRAY_INITIALIZER;
 static ptrarray_t mailbox_entries = PTRARRAY_INITIALIZER;

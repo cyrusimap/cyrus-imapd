@@ -63,7 +63,7 @@
 
 #define DENYDB config_userdeny_db
 
-struct db *denydb;
+static struct db *denydb;
 
 static int deny_dbopen = 0;
 
