@@ -427,7 +427,7 @@ enum {
 union skipwritebuf {
     uint64_t align;
     char s[MAXRECORDHEAD];
-} scratchspace;
+} static scratchspace;
 
 static struct db_list *open_twoskip = NULL;
 

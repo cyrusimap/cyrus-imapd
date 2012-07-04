@@ -108,11 +108,11 @@ const char *config_statuscache_db;
 const char *config_userdeny_db;
 int charset_flags;
 
-char session_id_buf[MAX_SESSIONID_SIZE];
-int session_id_time = 0;
-int session_id_count = 0;
+static char session_id_buf[MAX_SESSIONID_SIZE];
+static int session_id_time = 0;
+static int session_id_count = 0;
 
-strarray_t *suppressed_capabilities = NULL;
+static strarray_t *suppressed_capabilities = NULL;
 
 /* Called before a cyrus application starts (but after command line parameters
  * are read) */

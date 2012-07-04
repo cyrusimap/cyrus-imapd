@@ -74,7 +74,7 @@ struct db *qdb;
 
 /* skanky reuse of mboxname locks.  Ideally we would rename
  * them to something more general and use them elsewhere */
-struct mboxlock *qchangelock;
+static struct mboxlock *qchangelock;
 
 static int quota_dbopen = 0;
 
