@@ -46,22 +46,22 @@
 
 #include <sasl/sasl.h>
 
-void *cyrus_mutex_alloc(void) 
+EXPORTED void *cyrus_mutex_alloc(void)
 {
     return (void *)0x1;
 }
 
-int cyrus_mutex_lock(void *mutex __attribute__((unused)))
+EXPORTED int cyrus_mutex_lock(void *mutex __attribute__((unused)))
 {
     return SASL_OK;
 }
 
-int cyrus_mutex_unlock(void *mutex __attribute__((unused)))
+EXPORTED int cyrus_mutex_unlock(void *mutex __attribute__((unused)))
 {
     return SASL_OK;
 }
   
-void cyrus_mutex_free(void *mutex __attribute__((unused)))
+EXPORTED void cyrus_mutex_free(void *mutex __attribute__((unused)))
 {
     return;
 }

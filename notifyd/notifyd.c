@@ -79,7 +79,7 @@ static notifymethod_t *default_method;	/* default method daemon is using */
 
 /* Cleanly shut down and exit */
 void shut_down(int code) __attribute__ ((noreturn));
-void shut_down(int code)
+EXPORTED void shut_down(int code)
 {
     in_shutdown = 1;
 
@@ -89,7 +89,7 @@ void shut_down(int code)
     exit(code);
 }
 
-char *fetch_arg(char *head, char* tail)
+static char *fetch_arg(char *head, char* tail)
 {
     char *cp;
 
@@ -190,7 +190,7 @@ static int do_notify(void)
 }
 
 
-void fatal(const char *s, int code)
+EXPORTED void fatal(const char *s, int code)
 {
     static int recurse_code = 0;
 
@@ -211,7 +211,7 @@ static void usage(void)
     exit(EC_USAGE);
 }
 
-int service_init(int argc, char **argv, char **envp __attribute__((unused)))
+EXPORTED int service_init(int argc, char **argv, char **envp __attribute__((unused)))
 {
     int opt;
     char *method = "null";
@@ -242,12 +242,12 @@ int service_init(int argc, char **argv, char **envp __attribute__((unused)))
 }
 
 /* Called by service API to shut down the service */
-void service_abort(int error)
+EXPORTED void service_abort(int error)
 {
     shut_down(error);
 }
 
-int service_main(int argc __attribute__((unused)),
+EXPORTED int service_main(int argc __attribute__((unused)),
 		 char **argv __attribute__((unused)),
 		 char **envp __attribute__((unused)))
 {

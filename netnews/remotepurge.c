@@ -112,22 +112,22 @@ int size = -1;
 int exact = -1;
 int pattern = -1;
 
-int current_mbox_exists = 0;
+static int current_mbox_exists = 0;
 
-int verbose = 0;
+static int verbose = 0;
 static int noop = 0;
-char *username = NULL;
-char *authname = NULL;
-char *realm = NULL;
+static char *username = NULL;
+//char *authname = NULL;
+static char *realm = NULL;
 
-struct imclient *imclient_conn;
+static struct imclient *imclient_conn;
 
 static int cmd_done;
 static char *cmd_resp = NULL;
 
-FILE *configstream;
+static FILE *configstream;
 
-void spew(int level, const char *fmt, ...)
+static void spew(int level, const char *fmt, ...)
 {
     va_list ap;
     char buf[1024];
@@ -271,7 +271,7 @@ callback_list(struct imclient *imclient,
 	      void *rock,
 	      struct imclient_reply *reply);
 
-
+/*
 void print_stats(mbox_stats_t *stats)
 {
     syslog(LOG_INFO, "total messages considered %d deleted %d",
@@ -280,6 +280,7 @@ void print_stats(mbox_stats_t *stats)
     printf("deleted messages  \t\t %d\n",stats->deleted);
     printf("remaining messages\t\t %d\n\n",stats->total - stats->deleted);
 }
+*/
 
 static void
 callback_exists(struct imclient *imclient,
@@ -337,7 +338,7 @@ static int send_delete(const char *mbox, const char *uidlist)
     else fatal("marking message deleted", EC_TEMPFAIL);
 }
 
-void mark_all_deleted(const char *mbox, uid_list_t *list, mbox_stats_t *stats)
+static void mark_all_deleted(const char *mbox, uid_list_t *list, mbox_stats_t *stats)
 {
     int i;
     char buf[1024];
@@ -416,7 +417,7 @@ static char *month_string(int mon)
 }
 
 /* we don't check what comes in on matchlen and maycreate, should we? */
-int purge_me(char *name, time_t when)
+static int purge_me(char *name, time_t when)
 {
     mbox_stats_t   stats;
     char search_string[200];
@@ -522,7 +523,7 @@ int purge_me(char *name, time_t when)
 
 
 
-int purge_all(void)
+static int purge_all(void)
 {
     int num = 0;
     int ret = 0;
@@ -539,7 +540,7 @@ int purge_all(void)
     return 0;
 }
 
-void do_list(char *matchstr)
+static void do_list(char *matchstr)
 {
     imclient_send(imclient_conn, callback_finish, (void *)imclient_conn,
 		  "%a %s %s", "LIST", "*",
@@ -576,7 +577,7 @@ static char *parseconfigpath(char *str)
     return str;
 }
 
-void remote_purge(char *configpath, char **matches)
+static void remote_purge(char *configpath, char **matches)
 {
     char *name;
 
@@ -617,7 +618,7 @@ void remote_purge(char *configpath, char **matches)
 }
 
 /* didn't give correct parameters; let's exit */
-void usage(void)
+static void usage(void)
 {
   printf("Usage: remotepurge [options] hostname [[match1] ... ]\n");
   printf("  -p port  : port to use\n");

@@ -208,7 +208,7 @@ static void cmdloop(void)
     shut_down(0);
 }
 
-void fatal(const char *s, int code)
+EXPORTED void fatal(const char *s, int code)
 {
     static int recurse_code = 0;
 
@@ -231,7 +231,7 @@ static struct sasl_callback mysasl_cb[] = {
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
-int service_init(int argc __attribute__((unused)),
+EXPORTED int service_init(int argc __attribute__((unused)),
 		 char **argv __attribute__((unused)),
 		 char **envp __attribute__((unused)))
 {
@@ -247,12 +247,12 @@ int service_init(int argc __attribute__((unused)),
 }
 
 /* Called by service API to shut down the service */
-void service_abort(int error)
+EXPORTED void service_abort(int error)
 {
     shut_down(error);
 }
 
-int service_main(int argc __attribute__((unused)),
+EXPORTED int service_main(int argc __attribute__((unused)),
 		 char **argv __attribute__((unused)),
 		 char **envp __attribute__((unused)))
 {

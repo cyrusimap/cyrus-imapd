@@ -49,7 +49,7 @@
 
 #include "xmalloc.h"
 
-void *cyrus_mutex_alloc(void) 
+EXPORTED void *cyrus_mutex_alloc(void)
 {
     pthread_mutex_t *ret = (pthread_mutex_t *)xmalloc(sizeof(pthread_mutex_t));
 
@@ -58,17 +58,17 @@ void *cyrus_mutex_alloc(void)
     return ret;
 }
 
-int cyrus_mutex_lock(void *mutex)
+EXPORTED int cyrus_mutex_lock(void *mutex)
 {
     return pthread_mutex_lock(mutex);
 }
 
-int cyrus_mutex_unlock(void *mutex)
+EXPORTED int cyrus_mutex_unlock(void *mutex)
 {
     return pthread_mutex_unlock(mutex);
 }
   
-void cyrus_mutex_free(void *mutex)
+EXPORTED void cyrus_mutex_free(void *mutex)
 {
     if(!mutex) return;
     

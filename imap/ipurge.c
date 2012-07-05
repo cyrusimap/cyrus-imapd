@@ -100,11 +100,11 @@ int verbose = 1;
 int forceall = 0;
 
 static int purge_me(char *, int, int, void *);
-unsigned purge_check(struct mailbox *mailbox,
+static unsigned purge_check(struct mailbox *mailbox,
 		     struct index_record *record,
 		     void *rock);
 static int usage(const char *name);
-void print_stats(mbox_stats_t *stats);
+static void print_stats(mbox_stats_t *stats);
 
 int main (int argc, char *argv[]) {
   int option;		/* getopt() returns an int */
@@ -273,7 +273,7 @@ static int purge_me(char *name, int matchlen __attribute__((unused)),
   return 0;
 }
 
-void deleteit(bit32 msgsize, mbox_stats_t *stats)
+static void deleteit(bit32 msgsize, mbox_stats_t *stats)
 {
     stats->deleted++;
     stats->deleted_bytes += msgsize;
@@ -281,7 +281,7 @@ void deleteit(bit32 msgsize, mbox_stats_t *stats)
 
 /* thumbs up routine, checks date & size and returns yes or no for deletion */
 /* 0 = no, 1 = yes */
-unsigned purge_check(struct mailbox *mailbox __attribute__((unused)),
+static unsigned purge_check(struct mailbox *mailbox __attribute__((unused)),
 		     struct index_record *record,
 		     void *deciderock)
 {
@@ -354,7 +354,7 @@ unsigned purge_check(struct mailbox *mailbox __attribute__((unused)),
   }
 }
 
-void print_stats(mbox_stats_t *stats)
+static void print_stats(mbox_stats_t *stats)
 {
     printf("total messages    \t\t %d\n",stats->total);
     printf("total bytes       \t\t %d\n",stats->total_bytes);

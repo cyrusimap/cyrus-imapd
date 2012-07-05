@@ -173,7 +173,7 @@ static sasl_conn_t *imapd_saslconn; /* the sasl connection context */
 static int imapd_starttls_done = 0; /* have we done a successful starttls? */
 static void *imapd_tls_comp = NULL; /* TLS compression method, if any */
 static int imapd_compress_done = 0; /* have we done a successful compress? */
-const char *plaintextloginalert = NULL;
+static const char *plaintextloginalert = NULL;
 
 #ifdef HAVE_SSL
 /* our tls connection, if any */
