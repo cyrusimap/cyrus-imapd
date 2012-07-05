@@ -125,7 +125,6 @@ perl/sieve/scripts/sieveshell
 ptclient/ptexpire
 ptclient/ptdump
 ptclient/ptloader
-sieve/Makefile
 sieve/addr-lex.c
 sieve/addr.c
 sieve/addr.h
