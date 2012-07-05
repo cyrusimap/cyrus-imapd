@@ -218,7 +218,7 @@ LD_BASIC_ADD = lib/libcyrus.la lib/libcyrus_min.la ${LIBS}
 # UTILITY is the libraries that utility programs which use Cyrus'
 # mailbox and message handling code need to link with.
 
-LD_UTILITY_ADD = imap/libcyrus_imap.la $(LD_BASIC_ADD) $(COM_ERR_LIBS)
+LD_UTILITY_ADD = imap/libcyrus_imap.la ${LIBS} $(COM_ERR_LIBS)
 
 # SERVER is the libraries that network-facing servers need to link with
 #
