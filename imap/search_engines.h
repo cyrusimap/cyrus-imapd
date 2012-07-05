@@ -54,6 +54,8 @@ struct search_engine {
 		  const struct searchargs *searchargs);
     search_text_receiver_t *(*begin_update)(int verbose);
     int (*end_update)(search_text_receiver_t *);
+    int (*start_daemon)(int verbose, const char *mboxname);
+    int (*stop_daemon)(int verbose, const char *mboxname);
 };
 
 /* Fill the msg_list with a list of message IDs which could match the
@@ -66,5 +68,7 @@ extern int search_prefilter_messages(unsigned* msg_list,
 
 search_text_receiver_t *search_begin_update(int verbose);
 int search_end_update(search_text_receiver_t *rx);
+int search_start_daemon(int verbose, const char *mboxname);
+int search_stop_daemon(int verbose, const char *mboxname);
 
 #endif

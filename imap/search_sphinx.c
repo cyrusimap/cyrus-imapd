@@ -55,15 +55,21 @@
 #include "index.h"
 #include "imap_err.h"
 #include "global.h"
+#include "retry.h"
+#include "command.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 #include "bitvector.h"
+#include "mboxlist.h"
 #include "search_engines.h"
 
 #include <mysql/mysql.h>
 
-#define SOCKET_PATH	    "/sphinx/searchd.sock"
+/* Various locations, relative to the Cyrus config directory */
+#define SPHINX_CONFIG	    "/sphinx.conf"
+
+#define SEARCHD		    "/usr/bin/searchd"
 
 /* Name of columns */
 #define COL_CYRUSID	"cyrusid"
@@ -76,14 +82,99 @@
 #define COL_BODY	"body"
 #define COL_ORDER	COL_CYRUSID
 
-static MYSQL *get_connection(void)
+/* Returns in *basedir and *sockname, two new strings which must be free()d */
+static int sphinx_paths_from_mboxname(const char *mboxname,
+				      char **basedirp,
+				      char **socknamep)
+{
+    char *confkey = NULL;
+    const char *root;
+    struct mboxlist_entry *mbentry = NULL;
+    char *basedir = NULL;
+    struct mboxname_parts parts;
+    char *sockname = NULL;
+    char c[2], d[2];
+    int r;
+
+    mboxname_init_parts(&parts);
+
+    r = mboxlist_lookup(mboxname, &mbentry, /*tid*/NULL);
+    if (r) goto out;
+    if (mbentry->mbtype & MBTYPE_REMOTE) {
+	r = IMAP_PARTITION_UNKNOWN;
+	goto out;
+    }
+
+    confkey = strconcat("sphinxpartition-", mbentry->partition, NULL);
+    root = config_getoverflowstring(confkey, NULL);
+    if (!root) {
+	r = IMAP_PARTITION_UNKNOWN;
+	goto out;
+    }
+
+    r = mboxname_to_parts(mboxname, &parts);
+    if (r) goto out;
+    if (!parts.userid) {
+	r = IMAP_PARTITION_UNKNOWN;
+	goto out;
+    }
+
+    if (parts.domain)
+	basedir = strconcat(root,
+			    FNAME_DOMAINDIR,
+			    dir_hash_b(parts.domain, config_fulldirhash, d),
+			    "/", parts.domain,
+			    FNAME_USERDIR,
+			    dir_hash_b(parts.userid, config_fulldirhash, c),
+			    "/", parts.userid,
+			    (char *)NULL);
+    else
+	basedir = strconcat(root,
+			    FNAME_USERDIR,
+			    dir_hash_b(parts.userid, config_fulldirhash, c),
+			    "/", parts.userid,
+			    (char *)NULL);
+
+    if (parts.domain)
+	sockname = strconcat(config_dir,
+			     "/socket/sphinx.",
+			     parts.userid,
+			     "@",
+			     parts.domain,
+			     (char *)NULL);
+    else
+	sockname = strconcat(config_dir,
+			     "/socket/sphinx.",
+			     parts.userid,
+			     (char *)NULL);
+    r = 0;
+
+out:
+    if (r) {
+	free(basedir);
+	free(sockname);
+    }
+    else {
+	*basedirp = basedir;
+	*socknamep = sockname;
+    }
+    free(confkey);
+    mboxname_free_parts(&parts);
+    mboxlist_entry_free(&mbentry);
+    return r;
+}
+
+static MYSQL *get_connection(const char *mboxname)
 {
     MYSQL *c;
+    char *basedir = NULL;
     char *socket_path = NULL;
+    int r;
+
+    r = sphinx_paths_from_mboxname(mboxname, &basedir, &socket_path);
+    if (r) return NULL;
 
     c = mysql_init(NULL);
-
-    socket_path = strconcat(config_dir, SOCKET_PATH, (char *)NULL);
 
     if (!mysql_real_connect(c,
 			   /*host*/NULL,
@@ -98,6 +189,7 @@ static MYSQL *get_connection(void)
 	c = NULL;
     }
 
+    free(basedir);
     free(socket_path);
     return c;
 }
@@ -201,7 +293,7 @@ static int search_sphinx(unsigned* msg_list, struct index_state *state,
     int n = 0;
     int r = 0;
 
-    conn = get_connection();
+    conn = get_connection(state->mailbox->name);
     if (!conn) return IMAP_IOERROR;
 
     buf_appendcstr(&query, "SELECT "COL_CYRUSID" FROM rt WHERE MATCH('");
@@ -644,9 +736,17 @@ static int begin_mailbox(search_text_receiver_t *rx,
 			 int incremental __attribute__((unused)))
 {
     sphinx_receiver_t *tr = (sphinx_receiver_t *)rx;
+    MYSQL *c;
     int r;
 
+    c = get_connection(mailbox->name);
+    if (!c) return IMAP_IOERROR;
+    tr->conn = c;
+
     tr->mailbox = mailbox;
+
+    r = read_lastid(tr);
+    if (r) return r;
 
     r = read_latest(tr);
     if (r) return r;
@@ -666,20 +766,22 @@ static int end_mailbox(search_text_receiver_t *rx,
 			    __attribute__((unused)))
 {
     sphinx_receiver_t *tr = (sphinx_receiver_t *)rx;
-    int r;
+    int r = 0;
 
-    r = flush(tr, /*force*/1);
+    if (tr->conn) {
+	r = flush(tr, /*force*/1);
+	close_connection(tr->conn);
+	tr->conn = NULL;
+    }
+
     tr->mailbox = NULL;
+
     return r;
 }
 
 static search_text_receiver_t *begin_update(int verbose)
 {
     sphinx_receiver_t *tr;
-    MYSQL *c;
-
-    c = get_connection();
-    if (!c) return NULL;
 
     tr = xzmalloc(sizeof(sphinx_receiver_t));
     tr->super.begin_mailbox = begin_mailbox;
@@ -691,10 +793,7 @@ static search_text_receiver_t *begin_update(int verbose)
     tr->super.end_message = end_message;
     tr->super.end_mailbox = end_mailbox;
 
-    tr->conn = c;
     tr->verbose = verbose;
-
-    read_lastid(tr);
 
     return &tr->super;
 }
@@ -703,16 +802,207 @@ static int end_update(search_text_receiver_t *rx)
 {
     sphinx_receiver_t *tr = (sphinx_receiver_t *)rx;
     int i;
-    int r;
-
-    r = flush(tr, /*force*/1);
+    int r = 0;
 
     for (i = 0 ; i < SEARCH_NUM_PARTS ; i++)
 	buf_free(&tr->parts[i]);
     buf_free(&tr->query);
-    close_connection(tr->conn);
     free(tr);
 
+    return r;
+}
+
+static int setup_sphinx_tree(const char *basedir)
+{
+    static const char * const tobuild[] = {
+	"",
+	"/binlog",
+	NULL
+    };
+    const char * const *dp;
+    char *path = NULL;
+    int r;
+
+    for (dp = tobuild ; *dp ; dp++) {
+	free(path);
+	path = strconcat(basedir, *dp, "/filename",  (char *)NULL);
+	r = cyrus_mkdir(path, 0700);
+	if (r < 0 && errno != EEXIST) {
+	    syslog(LOG_ERR, "IOERROR: unable to mkdir %s: %m", path);
+	    r = IMAP_IOERROR;
+	    goto out;
+	}
+    }
+    r = 0;
+
+out:
+    free(path);
+    return r;
+}
+
+static int setup_sphinx_config(int verbose, const char *basedir,
+			       const char *sockname)
+{
+    static const char config[] =
+	"index rt\n"
+	"{\n"
+	"    type = rt\n"
+	"    path = $sphinxdir/rt\n"
+	"    morphology = stem_en\n"
+	"    charset_type = utf-8\n"
+	"\n"
+	"    rt_attr_string = cyrusid\n"
+	"    rt_field = header_from\n"
+	"    rt_field = header_to\n"
+	"    rt_field = header_cc\n"
+	"    rt_field = header_bcc\n"
+	"    rt_field = header_subject\n"
+	"    rt_field = headers\n"
+	"    rt_field = body\n"
+	"}\n"
+	"\n"
+	"index latest\n"
+	"{\n"
+	"    type = rt\n"
+	"    path = $sphinxdir/latest\n"
+	"    rt_attr_string = mboxname\n"
+	"    rt_attr_uint = uidvalidity\n"
+	"    rt_attr_uint = uid\n"
+	"    rt_field = dummy\n"
+	"}\n"
+	"\n"
+	"searchd\n"
+	"{\n"
+	"    listen = $sphinxsock:mysql41\n"
+	"    log = syslog\n"
+	"    pid_file = $sphinxdir/searchd.pid\n"
+	"    binlog_path = $sphinxdir/binlog\n"
+	"    compat_sphinxql_magics = 0\n"
+	"    workers = threads\n"
+	"}\n";
+    char *sphinx_config = NULL;
+    int fd = -1;
+    struct buf buf = BUF_INITIALIZER;
+    int r;
+
+    sphinx_config = strconcat(basedir, SPHINX_CONFIG, (char *)NULL);
+
+/* the searchd.log entry changed, so force a rewrite of the config file */
+#if 0
+    struct stat sb;
+    if (stat(sphinx_config, &sb) == 0 &&
+	S_ISREG(sb.st_mode) &&
+	sb.st_size > 0) {
+	r = 0;
+	goto out;	/* a non-zero file already exists */
+    }
+#endif
+
+    if (verbose)
+	syslog(LOG_NOTICE, "Sphinx writing config file %s", sphinx_config);
+
+    fd = open(sphinx_config, O_WRONLY|O_CREAT|O_TRUNC, 0600);
+    if (fd < 0) {
+	syslog(LOG_ERR, "IOERROR: unable to open %s for writing: %m",
+	       sphinx_config);
+	r = IMAP_IOERROR;
+	goto out;
+    }
+
+    buf_init_ro_cstr(&buf, config);
+    buf_replace_all(&buf, "$sphinxsock", sockname);
+    buf_replace_all(&buf, "$sphinxdir", basedir);
+
+    r = retry_write(fd, buf.s, buf.len);
+    if (r < 0) {
+	syslog(LOG_ERR, "IOERROR: error writing %s: %m", sphinx_config);
+	r = IMAP_IOERROR;
+	goto out;
+    }
+    r = 0;
+
+out:
+    if (fd >= 0) close(fd);
+    free(sphinx_config);
+    buf_free(&buf);
+    return r;
+}
+
+
+static int start_daemon(int verbose, const char *mboxname)
+{
+    char *config_file = NULL;
+    char *basedir = NULL;
+    char *sockname = NULL;
+    const char *syslog_prefix;
+    int r;
+
+    r = sphinx_paths_from_mboxname(mboxname, &basedir, &sockname);
+    if (r) goto out;
+
+    r = setup_sphinx_tree(basedir);
+    if (r) goto out;
+
+    r = setup_sphinx_config(verbose, basedir, sockname);
+    if (r) goto out;
+
+    syslog_prefix = config_getstring(IMAPOPT_SYSLOG_PREFIX);
+    if (!syslog_prefix)
+	syslog_prefix = "cyrus";
+
+    if (verbose)
+	syslog(LOG_NOTICE, "Sphinx starting searchd, "
+			   "base directory %s socket %s",
+			   basedir, sockname);
+
+    config_file = strconcat(basedir, SPHINX_CONFIG, (char *)NULL);
+    r = run_command(SEARCHD, "--config", config_file,
+		    "--syslog-prefix", syslog_prefix, (char *)NULL);
+    if (r) goto out;
+
+    r = 0;
+
+out:
+    free(basedir);
+    free(sockname);
+    free(config_file);
+    return r;
+}
+
+static int stop_daemon(int verbose, const char *mboxname)
+{
+    char *config_file = NULL;
+    char *basedir = NULL;
+    char *sockname = NULL;
+    const char *syslog_prefix;
+    int r;
+
+    r = sphinx_paths_from_mboxname(mboxname, &basedir, &sockname);
+    if (r) goto out;
+
+    syslog_prefix = config_getstring(IMAPOPT_SYSLOG_PREFIX);
+    if (!syslog_prefix)
+	syslog_prefix = "cyrus";
+
+    if (verbose)
+	syslog(LOG_NOTICE, "Sphinx stopping searchd, "
+			   "base directory %s socket %s",
+			   basedir, sockname);
+
+    config_file = strconcat(basedir, SPHINX_CONFIG, (char *)NULL);
+    r = run_command(SEARCHD, "--config", config_file,
+		    "--syslog-prefix", syslog_prefix,
+		    "--stop", (char *)NULL);
+    if (r) goto out;
+
+    unlink(sockname);
+
+    r = 0;
+
+out:
+    free(basedir);
+    free(sockname);
+    free(config_file);
     return r;
 }
 
@@ -721,6 +1011,8 @@ const struct search_engine sphinx_search_engine = {
     0,
     search_sphinx,
     begin_update,
-    end_update
+    end_update,
+    start_daemon,
+    stop_daemon
 };
 

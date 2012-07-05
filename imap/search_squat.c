@@ -817,5 +817,7 @@ const struct search_engine squat_search_engine = {
     search_squat,
     begin_update,
     end_update,
+    /* start_daemon */NULL,
+    /* stop_daemon */NULL
 };
 

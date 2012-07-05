@@ -82,6 +82,8 @@ static const struct search_engine default_search_engine = {
     0,
     default_search,
     NULL,
+    NULL,
+    NULL,
     NULL
 };
 
@@ -138,3 +140,14 @@ EXPORTED int search_end_update(search_text_receiver_t *rx)
     return (se->end_update ? se->end_update(rx) : 0);
 }
 
+EXPORTED int search_start_daemon(int verbose, const char *mboxname)
+{
+    const struct search_engine *se = engine();
+    return (se->start_daemon ? se->start_daemon(verbose, mboxname) : 0);
+}
+
+EXPORTED int search_stop_daemon(int verbose, const char *mboxname)
+{
+    const struct search_engine *se = engine();
+    return (se->stop_daemon ? se->stop_daemon(verbose, mboxname) : 0);
+}
