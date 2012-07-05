@@ -54,7 +54,7 @@ AM_LDFLAGS = $(COV_LDFLAGS)
 BUILT_SOURCES = xversion.h lib/imapopts.c
 DISTCLEANFILES = imap/imap_err.c imap/imap_err.h imap/mupdate_err.c imap/mupdate_err.h imap/nntp_err.c imap/nntp_err.h \
 	com_err/et/compile_et \
-	perl/annotator/Makefile perl/imap/Makefile perl/sieve/managesieve/Makefile \
+	perl/annotator/Makefile perl/annotator/Makefile.PL perl/imap/Makefile perl/imap/Makefile.PL perl/sieve/managesieve/Makefile perl/sieve/managesieve/Makefile.PL perl/sieve/scripts/installsieve perl/sieve/scripts/sieveshell \
 	sieve/sieve_err.c sieve/sieve_err.h
 
 MAINTAINERCLEANFILES = \
