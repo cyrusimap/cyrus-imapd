@@ -384,7 +384,7 @@ int installafile(int version,struct protstream *pout, struct protstream *pin,
 }
 
 
-
+/*
 int showlist(int version, struct protstream *pout, struct protstream *pin,
 	     char **refer_to)
 {
@@ -414,7 +414,7 @@ int showlist(int version, struct protstream *pout, struct protstream *pin,
 	  printf("  %s  <- Active Sieve Script\n",str);	  
       } else {
 
-	  /* in old version we had that '*' means active script thing */
+	  // in old version we had that '*' means active script thing
 	  if (version == OLD_VERSION) {
 
 	      if (str[strlen(str)-1]=='*') {
@@ -424,8 +424,8 @@ int showlist(int version, struct protstream *pout, struct protstream *pin,
 		  printf("  %s\n",str);	  	  
 	      }
 
-	  } else { /* NEW_VERSION */
-	      /* assume it's a EOL */
+	  } else { // NEW_VERSION
+	      // assume it's a EOL
 	      printf("  %s\n",str);	  	  
 	  }
       }
@@ -436,13 +436,11 @@ int showlist(int version, struct protstream *pout, struct protstream *pin,
 	
 	end=1;
     }
-
-
-    
   } while (end==0);
 
   return ret;
 }
+*/
 
 int list_wcb(int version, struct protstream *pout, 
 	     struct protstream *pin,isieve_listcb_t *cb ,void *rock,
@@ -565,6 +563,7 @@ static int writefile(mystring_t *data, char *name, char **errstrp)
   return 0;
 }
 
+/*
 int getscript(int version, struct protstream *pout, 
 	      struct protstream *pin,char *name, int save,
 	      char **refer_to, char **errstrp)
@@ -595,7 +594,7 @@ int getscript(int version, struct protstream *pout,
 
   ret = handle_response(res, version, pin, refer_to, &errstr);
 
-  /* if command failed */
+  // if command failed
   if(ret == -2 && *refer_to) {
       return -2;
   } else if (ret!=0) {
@@ -604,7 +603,7 @@ int getscript(int version, struct protstream *pout,
 
   return ret;
 }
-
+*/
 
 int getscriptvalue(int version, struct protstream *pout, 
 		   struct protstream *pin,char *name, mystring_t **data, 

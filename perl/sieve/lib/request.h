@@ -69,8 +69,8 @@ int installdata(int version,struct protstream *pout, struct protstream *pin,
 		char *scriptname, char *data, int len, 
 		char **refer_to, char **errstr);
 
-int showlist(int version, struct protstream *pout, struct protstream *pin,
-	     char **refer_to);
+//int showlist(int version, struct protstream *pout, struct protstream *pin,
+//	     char **refer_to);
 
 int list_wcb(int version, struct protstream *pout, struct protstream *pin,
 	     isieve_listcb_t *cb , void *rock, char **refer_to);
@@ -83,8 +83,8 @@ int setscriptactive(int version, struct protstream *pout,
  * Getscript. Save {0,1} wheather to save to disk or display on screen
  */
 
-int getscript(int version, struct protstream *pout, struct protstream *pin,
-	      char *name, int save, char **refer_to, char **errstr);
+//int getscript(int version, struct protstream *pout, struct protstream *pin,
+//	      char *name, int save, char **refer_to, char **errstr);
 
 int getscriptvalue(int version,struct protstream *pout, struct protstream *pin,
 		   char *name, mystring_t **data, char **refer_to, 

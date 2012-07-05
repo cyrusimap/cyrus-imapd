@@ -541,7 +541,7 @@ static int refer_simple_cb(void *context, int id, const char **result,
     return SASL_OK;
 }
 
-int do_referral(isieve_t *obj, char *refer_to) 
+static int do_referral(isieve_t *obj, char *refer_to)
 {
     int ret;
     struct servent *serv;
