@@ -54,6 +54,22 @@
 
 #define SETGROWSIZE 30
 
+/*
+ * Allocate and return a new seqset object.
+ *
+ * `maxval' is the maximum insertable value, currently used only to
+ * expand the `*' syntax when parsing sequences from a string.
+ *
+ * `flags' is either
+ *
+ *   SEQ_SPARSE - the behaviour you expected
+ *
+ *   SEQ_MERGE - assumes that seqset_add() is going to be called
+ *		 with monotonically increasing numbers, and treats
+ *		 interior ranges of numbers which were not explicitly
+ *		 excluded (with ismember=0) as if they had been
+ *		 included.  Used to reduce fragmentation in SEEN lists.
+ */
 EXPORTED struct seqset *seqset_init(unsigned maxval, int flags)
 {
     struct seqset *seq = xzmalloc(sizeof(struct seqset));
@@ -68,6 +84,12 @@ EXPORTED struct seqset *seqset_init(unsigned maxval, int flags)
     return seq;
 }
 
+/*
+ * Add a number `num' to the sequence set `seq'.  The `ismember'
+ * argument is normally 1, but affects the result for SEQ_MERGE
+ * sequences.  Currently assumes that it will be called in
+ * monotonically increasing order of `num's.
+ */
 EXPORTED void seqset_add(struct seqset *seq, unsigned num, int ismember)
 {
     if (!seq) return;
@@ -308,16 +330,31 @@ EXPORTED int seqset_ismember(struct seqset *seq, unsigned num)
     return 0;
 }
 
+/*
+ * Return the first number in the sequence, or 0
+ * if the sequence is empty.
+ */
 HIDDEN unsigned seqset_first(const struct seqset *seq)
 {
     return (seq->len ? seq->set[0].low : 0);
 }
 
+/*
+ * Return the last number in the sequence, or 0
+ * if the sequence is empty.
+ */
 HIDDEN unsigned seqset_last(const struct seqset *seq)
 {
     return (seq->len ? seq->set[seq->len-1].high : 0);
 }
 
+/*
+ * Iteration interface for sequences.  Returns the next number
+ * in the sequence, or 0 if the end of the sequence has been
+ * reached.
+ * Interferes with the state used for seqset_add() so don't mix
+ * adding and iterating.
+ */
 EXPORTED unsigned seqset_getnext(struct seqset *seq)
 {
     unsigned num;
@@ -345,6 +382,9 @@ EXPORTED unsigned seqset_getnext(struct seqset *seq)
     return 0;
 }
 
+/*
+ * Merge the numbers in seqset `b' into seqset `a'.
+ */
 /* NOTE - not sort safe! */
 EXPORTED void seqset_join(struct seqset *a, struct seqset *b)
 {
@@ -361,6 +401,10 @@ EXPORTED void seqset_join(struct seqset *a, struct seqset *b)
     seqset_simplify(a);
 }
 
+/*
+ * Parse a seqset from the given string and append it to the chain
+ * of seqsets at `*l'.
+ */
 HIDDEN void seqset_append(struct seqset **l, char *sequence, unsigned maxval)
 {
     struct seqset **tail = l;
@@ -375,6 +419,10 @@ HIDDEN void seqset_append(struct seqset **l, char *sequence, unsigned maxval)
 
 #define SEQGROW 300
 
+/*
+ * Format the seqset `seq' as a string.  Returns a newly allocated
+ * string which must be free()d by the caller.
+ */
 EXPORTED char *seqset_cstring(const struct seqset *seq)
 {
     unsigned alloc = 0;
@@ -414,6 +462,9 @@ EXPORTED char *seqset_cstring(const struct seqset *seq)
     return base;
 }
 
+/*
+ * Free the given seqset (and any others chained to it)
+ */
 EXPORTED void seqset_free(struct seqset *l)
 {
     struct seqset *n;
