@@ -44,19 +44,6 @@
 
 #ifndef _STRHASH_H_
 
-#ifdef HAVE_UNISTD_H
-#include <unistd.h>
-#endif
-
-#include <stdio.h>
-#include <string.h>
-#include <ctype.h>
-#include <signal.h>
-#include <stdlib.h>
-#include <assert.h>
-#include <syslog.h>
-#include <errno.h>
-
 unsigned strhash(const char *string);
 
 #endif /* _STRHASH_H_ */
