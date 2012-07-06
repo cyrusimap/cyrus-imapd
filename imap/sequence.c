@@ -310,12 +310,12 @@ EXPORTED int seqset_ismember(struct seqset *seq, unsigned num)
 
 HIDDEN unsigned seqset_first(struct seqset *seq)
 {
-    return seq->set[0].low;
+    return (seq->len ? seq->set[0].low : 0);
 }
 
 HIDDEN unsigned seqset_last(struct seqset *seq)
 {
-    return seq->set[seq->len-1].high;
+    return (seq->len ? seq->set[seq->len-1].high : 0);
 }
 
 EXPORTED unsigned seqset_getnext(struct seqset *seq)
