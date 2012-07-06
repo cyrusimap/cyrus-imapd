@@ -80,9 +80,9 @@ extern void seqset_join(struct seqset *a, struct seqset *b);
 extern void seqset_append(struct seqset **l, char *sequence, unsigned maxval);
 extern int seqset_ismember(struct seqset *set, unsigned num);
 extern unsigned seqset_getnext(struct seqset *set);
-extern unsigned seqset_first(struct seqset *set);
-extern unsigned seqset_last(struct seqset *set);
-extern char *seqset_cstring(struct seqset *set);
+extern unsigned seqset_first(const struct seqset *set);
+extern unsigned seqset_last(const struct seqset *set);
+extern char *seqset_cstring(const struct seqset *set);
 extern void seqset_free(struct seqset *l);
 
 #endif /* SEQUENCE_H */

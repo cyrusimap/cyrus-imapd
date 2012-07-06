@@ -308,12 +308,12 @@ EXPORTED int seqset_ismember(struct seqset *seq, unsigned num)
     return 0;
 }
 
-HIDDEN unsigned seqset_first(struct seqset *seq)
+HIDDEN unsigned seqset_first(const struct seqset *seq)
 {
     return (seq->len ? seq->set[0].low : 0);
 }
 
-HIDDEN unsigned seqset_last(struct seqset *seq)
+HIDDEN unsigned seqset_last(const struct seqset *seq)
 {
     return (seq->len ? seq->set[seq->len-1].high : 0);
 }
@@ -375,7 +375,7 @@ HIDDEN void seqset_append(struct seqset **l, char *sequence, unsigned maxval)
 
 #define SEQGROW 300
 
-EXPORTED char *seqset_cstring(struct seqset *seq)
+EXPORTED char *seqset_cstring(const struct seqset *seq)
 {
     unsigned alloc = 0;
     unsigned offset = 0;
