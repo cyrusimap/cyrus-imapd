@@ -530,7 +530,7 @@ lib_libcyrus_la_SOURCES += lib/gmtoff_gmtime.c
 endif
 lib_libcyrus_la_SOURCES += lib/imapurl.c lib/imclient.c lib/imparse.c \
 	lib/iostat.c lib/iptostring.c lib/libcyr_cfg.c lib/lsort.c \
-	lib/mkgmtime.c
+	lib/mappedfile.c lib/mkgmtime.c
 if NONBLOCK_FCNTL
 lib_libcyrus_la_SOURCES += lib/nonblock_fcntl.c
 else
@@ -553,7 +553,6 @@ lib_libcyrus_min_la_SOURCES += lib/lock_fcntl.c
 else
 lib_libcyrus_min_la_SOURCES += lib/lock_flock.c
 endif
-lib_libcyrus_min_la_SOURCES += lib/mappedfile.c
 if MAP_SHARED
 lib_libcyrus_min_la_SOURCES += lib/map_shared.c
 else
