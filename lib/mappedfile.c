@@ -114,7 +114,7 @@ static void _ensure_mapped(struct mappedfile *mf, size_t offset)
 
 /* NOTE - we don't provide any guarantees that the file isn't open multiple
  * times.  So don't do that.  It will mess with your locking no end */
-int mappedfile_open(struct mappedfile **mfp,
+HIDDEN int mappedfile_open(struct mappedfile **mfp,
 		    const char *fname, int create)
 {
     struct mappedfile *mf;
@@ -169,7 +169,7 @@ err:
     return r;
 }
 
-int mappedfile_close(struct mappedfile **mfp)
+HIDDEN int mappedfile_close(struct mappedfile **mfp)
 {
     struct mappedfile *mf = *mfp;
     int r = 0;
@@ -192,7 +192,7 @@ int mappedfile_close(struct mappedfile **mfp)
     return r;
 }
 
-int mappedfile_readlock(struct mappedfile *mf)
+HIDDEN int mappedfile_readlock(struct mappedfile *mf)
 {
     struct stat sbuf, sbuffile;
     int newfd = -1;
@@ -246,7 +246,7 @@ int mappedfile_readlock(struct mappedfile *mf)
     return 0;
 }
 
-int mappedfile_writelock(struct mappedfile *mf)
+HIDDEN int mappedfile_writelock(struct mappedfile *mf)
 {
     int r;
     struct stat sbuf;
@@ -277,7 +277,7 @@ int mappedfile_writelock(struct mappedfile *mf)
     return 0;
 }
 
-int mappedfile_unlock(struct mappedfile *mf)
+HIDDEN int mappedfile_unlock(struct mappedfile *mf)
 {
     int r;
 
@@ -299,7 +299,7 @@ int mappedfile_unlock(struct mappedfile *mf)
     return 0;
 }
 
-int mappedfile_commit(struct mappedfile *mf)
+HIDDEN int mappedfile_commit(struct mappedfile *mf)
 {
     assert(mf);
     assert(mf->lock_status == MF_WRITELOCKED);
@@ -327,7 +327,7 @@ int mappedfile_commit(struct mappedfile *mf)
     return 0;
 }
 
-ssize_t mappedfile_pwrite(struct mappedfile *mf,
+HIDDEN ssize_t mappedfile_pwrite(struct mappedfile *mf,
 			  const char *base, size_t len,
 			  off_t offset)
 {
@@ -367,7 +367,7 @@ ssize_t mappedfile_pwrite(struct mappedfile *mf,
     return written;
 }
 
-ssize_t mappedfile_pwritev(struct mappedfile *mf,
+HIDDEN ssize_t mappedfile_pwritev(struct mappedfile *mf,
 			   const struct iovec *iov, int nio,
 			   off_t offset)
 {
@@ -412,7 +412,7 @@ ssize_t mappedfile_pwritev(struct mappedfile *mf,
     return written;
 }
 
-int mappedfile_truncate(struct mappedfile *mf, off_t offset)
+HIDDEN int mappedfile_truncate(struct mappedfile *mf, off_t offset)
 {
     int r;
 
@@ -437,7 +437,7 @@ int mappedfile_truncate(struct mappedfile *mf, off_t offset)
     return 0;
 }
 
-int mappedfile_rename(struct mappedfile *mf, const char *newname)
+HIDDEN int mappedfile_rename(struct mappedfile *mf, const char *newname)
 {
     int r;
 
@@ -454,28 +454,29 @@ int mappedfile_rename(struct mappedfile *mf, const char *newname)
 }
 
 
-int mappedfile_islocked(const struct mappedfile *mf)
+HIDDEN int mappedfile_islocked(const struct mappedfile *mf)
 {
     assert(mf);
 
     return (mf->lock_status != MF_UNLOCKED);
 }
 
-int mappedfile_isreadlocked(const struct mappedfile *mf)
+//FIXME this function is nowhere used
+HIDDEN int mappedfile_isreadlocked(const struct mappedfile *mf)
 {
     assert(mf);
 
     return (mf->lock_status == MF_READLOCKED);
 }
 
-int mappedfile_iswritelocked(const struct mappedfile *mf)
+HIDDEN int mappedfile_iswritelocked(const struct mappedfile *mf)
 {
     assert(mf);
 
     return (mf->lock_status == MF_WRITELOCKED);
 }
 
-const char *mappedfile_base(const struct mappedfile *mf)
+HIDDEN const char *mappedfile_base(const struct mappedfile *mf)
 {
     assert(mf);
 
@@ -483,14 +484,14 @@ const char *mappedfile_base(const struct mappedfile *mf)
     return mf->map_base;
 }
 
-size_t mappedfile_size(const struct mappedfile *mf)
+HIDDEN size_t mappedfile_size(const struct mappedfile *mf)
 {
     assert(mf);
 
     return mf->map_size;
 }
 
-const char *mappedfile_fname(const struct mappedfile *mf)
+HIDDEN const char *mappedfile_fname(const struct mappedfile *mf)
 {
     assert(mf);
 
