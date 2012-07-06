@@ -39,7 +39,7 @@
 ** of the table to 0.
 */
 
-hash_table *construct_hash_table(hash_table *table, size_t size, int use_mpool)
+EXPORTED hash_table *construct_hash_table(hash_table *table, size_t size, int use_mpool)
 {
       assert(table);
       assert(size);
@@ -71,7 +71,7 @@ hash_table *construct_hash_table(hash_table *table, size_t size, int use_mpool)
 ** or, if there was already an entry for @key, the old data pointer.
 */
 
-void *hash_insert(const char *key, void *data, hash_table *table)
+EXPORTED void *hash_insert(const char *key, void *data, hash_table *table)
 {
       unsigned val = strhash(key) % table->size;
       bucket *ptr, *newptr;
@@ -152,7 +152,7 @@ void *hash_insert(const char *key, void *data, hash_table *table)
 ** the key is not in the table.
 */
 
-void *hash_lookup(const char *key, hash_table *table)
+EXPORTED void *hash_lookup(const char *key, hash_table *table)
 {
       unsigned val = strhash(key) % table->size;
       bucket *ptr;
@@ -177,7 +177,7 @@ void *hash_lookup(const char *key, hash_table *table)
 */
 /* Warning: use this function judiciously if you are using memory pools,
  * since it will leak memory until you get rid of the entire hash table */
-void *hash_del(const char *key, hash_table *table)
+EXPORTED void *hash_del(const char *key, hash_table *table)
 {
       unsigned val = strhash(key) % table->size;
       void *data;
@@ -251,7 +251,7 @@ void *hash_del(const char *key, hash_table *table)
 ** it.
 */
 
-void free_hash_table(hash_table *table, void (*func)(void *))
+EXPORTED void free_hash_table(hash_table *table, void (*func)(void *))
 {
       unsigned i;
       bucket *ptr, *temp;
@@ -293,7 +293,7 @@ void free_hash_table(hash_table *table, void (*func)(void *))
 ** node in the table, passing it the key, the associated data and 'rock'.
 */
 
-void hash_enumerate(hash_table *table, void (*func)(const char *, void *, void *),
+EXPORTED void hash_enumerate(hash_table *table, void (*func)(const char *, void *, void *),
 		    void *rock)
 {
       unsigned i;

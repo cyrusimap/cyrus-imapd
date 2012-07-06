@@ -165,7 +165,7 @@ const unsigned char convert_to_uppercase[256] = {
 
 /* convert string to all lower case
  */
-char *lcase(char* str)
+EXPORTED char *lcase(char* str)
 {
     char *scan = str;
     
@@ -179,7 +179,7 @@ char *lcase(char* str)
 
 /* convert string to all upper case
  */
-char *ucase(char* str)
+EXPORTED char *ucase(char* str)
 {
     char *scan = str;
     
@@ -220,7 +220,7 @@ static char *beautify_copy(char* dst, const char* src)
 /* clean up control characters in a string while copying it
  *  returns pointer to a static buffer containing the cleaned-up version
  */
-char *beautify_string(const char* src)
+EXPORTED char *beautify_string(const char* src)
 {
     static char *beautybuf = NULL;
     static int beautysize = 0;
@@ -283,7 +283,7 @@ keyvalue *kv_bsearch(const char* key, keyvalue* kv, int nelem,
  *  directory.  Stop before the first dot.  Caller is responsible
  *  for skipping any prefix of the name.
  */
-int dir_hash_c(const char *name, int full)
+EXPORTED int dir_hash_c(const char *name, int full)
 {
     int c;
 
@@ -314,20 +314,20 @@ int dir_hash_c(const char *name, int full)
     return c;
 }
 
-char *dir_hash_b(const char *name, int full, char buf[2])
+EXPORTED char *dir_hash_b(const char *name, int full, char buf[2])
 {
     buf[0] = (char)dir_hash_c(name, full);
     buf[1] = '\0';
     return buf;
 }
 
-int cyrus_close_sock(int fd) 
+EXPORTED int cyrus_close_sock(int fd)
 {
     shutdown(fd, SHUT_RD);
     return close(fd);
 }
 
-void cyrus_reset_stdio(void)
+EXPORTED void cyrus_reset_stdio(void)
 {
     int devnull = open("/dev/null", O_RDWR, 0);
     
@@ -357,7 +357,7 @@ void cyrus_reset_stdio(void)
  * directory listing (but you won't have to worry about cleaning up
  * after it)
  */
-int create_tempfile(const char *path)
+EXPORTED int create_tempfile(const char *path)
 {
     int fd;
     char *pattern;
@@ -377,7 +377,7 @@ int create_tempfile(const char *path)
 /* Create all parent directories for the given path,
  * up to but not including the basename.
  */
-int cyrus_mkdir(const char *pathname, mode_t mode __attribute__((unused)))
+EXPORTED int cyrus_mkdir(const char *pathname, mode_t mode __attribute__((unused)))
 {
     char *path = xstrdup(pathname);    /* make a copy to write into */
     char *p = path;
@@ -466,7 +466,7 @@ done:
     return r;
 }
 
-int cyrus_copyfile(const char *from, const char *to, int flags)
+EXPORTED int cyrus_copyfile(const char *from, const char *to, int flags)
 {
     int r;
 
@@ -490,7 +490,7 @@ int cyrus_copyfile(const char *from, const char *to, int flags)
     return r;
 }
 
-int become_cyrus(void)
+EXPORTED int become_cyrus(void)
 {
     struct passwd *p;
     int newuid, newgid;
@@ -547,7 +547,7 @@ double timeval_get_double(const struct timeval *tv)
     return (double)tv->tv_sec + (double)tv->tv_usec/1000000.0;
 }
 
-void timeval_set_double(struct timeval *tv, double d)
+EXPORTED void timeval_set_double(struct timeval *tv, double d)
 {
     double sec;
     double subsec = modf(d, &sec);
@@ -556,23 +556,23 @@ void timeval_set_double(struct timeval *tv, double d)
     tv->tv_usec = 1000000.0*subsec;
 }
 
-void timeval_add_double(struct timeval *tv, double delta)
+EXPORTED void timeval_add_double(struct timeval *tv, double delta)
 {
     timeval_set_double(tv, timeval_get_double(tv) + delta);
 }
 
-double timesub(const struct timeval *start, const struct timeval *end)
+EXPORTED double timesub(const struct timeval *start, const struct timeval *end)
 {
     return (double)(end->tv_sec - start->tv_sec) +
 	   (double)(end->tv_usec - start->tv_usec)/1000000.0;
 }
 
-void cmdtime_settimer(int enable)
+EXPORTED void cmdtime_settimer(int enable)
 {
     cmdtime_enabled = enable;
 }
 
-void cmdtime_starttimer(void)
+EXPORTED void cmdtime_starttimer(void)
 {
     if (!cmdtime_enabled)
 	return;
@@ -580,7 +580,7 @@ void cmdtime_starttimer(void)
     totaltime = cmdtime = nettime = 0.0;
 }
 
-void cmdtime_endtimer(double *pcmdtime, double *pnettime)
+EXPORTED void cmdtime_endtimer(double *pcmdtime, double *pnettime)
 {
     if (!cmdtime_enabled)
 	return;
@@ -591,14 +591,14 @@ void cmdtime_endtimer(double *pcmdtime, double *pnettime)
     *pnettime = nettime;
 }
 
-void cmdtime_netstart(void)
+EXPORTED void cmdtime_netstart(void)
 {
     if (!cmdtime_enabled)
 	return;
     gettimeofday(&nettime_start, 0);
 }
 
-void cmdtime_netend(void)
+EXPORTED void cmdtime_netend(void)
 {
     if (!cmdtime_enabled)
 	return;
@@ -621,7 +621,7 @@ clock_t sclock(void)
            (now.tv_usec * CLOCKS_PER_SEC) / 1000000;
 }
 
-int parseint32(const char *p, const char **ptr, int32_t *res)
+EXPORTED int parseint32(const char *p, const char **ptr, int32_t *res)
 {
     int32_t result = 0;
     int gotchar = 0;
@@ -644,7 +644,7 @@ int parseint32(const char *p, const char **ptr, int32_t *res)
     return 0;
 }
 
-int parseuint32(const char *p, const char **ptr, uint32_t *res)
+EXPORTED int parseuint32(const char *p, const char **ptr, uint32_t *res)
 {
     uint32_t result = 0;
     int gotchar = 0;
@@ -667,7 +667,7 @@ int parseuint32(const char *p, const char **ptr, uint32_t *res)
     return 0;
 }
 
-int parsenum(const char *p, const char **ptr, int maxlen, bit64 *res)
+EXPORTED int parsenum(const char *p, const char **ptr, int maxlen, bit64 *res)
 {
     bit64 result = 0;
     int n;
@@ -694,7 +694,7 @@ int parsenum(const char *p, const char **ptr, int maxlen, bit64 *res)
     return 0;
 }
 
-int parsehex(const char *p, const char **ptr, int maxlen, bit64 *res)
+EXPORTED int parsehex(const char *p, const char **ptr, int maxlen, bit64 *res)
 {
     bit64 result = 0;
     int n;
@@ -723,7 +723,7 @@ int parsehex(const char *p, const char **ptr, int maxlen, bit64 *res)
 /* buffer handling functions */
 
 #define BUF_GROW 1024
-void buf_ensure(struct buf *buf, int n)
+EXPORTED void buf_ensure(struct buf *buf, int n)
 {
     int newlen = (buf->len + n + BUF_GROW);  /* XXX - size mod logic? */
 
@@ -743,7 +743,7 @@ void buf_ensure(struct buf *buf, int n)
     buf->alloc = newlen;
 }
 
-const char *buf_cstring(struct buf *buf)
+EXPORTED const char *buf_cstring(struct buf *buf)
 {
     if (!(buf->flags & BUF_CSTRING)) {
 	buf_ensure(buf, 1);
@@ -754,7 +754,7 @@ const char *buf_cstring(struct buf *buf)
     return buf->s;
 }
 
-char *buf_release(struct buf *buf)
+EXPORTED char *buf_release(struct buf *buf)
 {
     char *ret;
 
@@ -803,18 +803,18 @@ int buf_getline(struct buf *buf, FILE *fp)
     return (!(buf->len == 0 && c == EOF));
 }
 
-unsigned buf_len(const struct buf *buf)
+EXPORTED unsigned buf_len(const struct buf *buf)
 {
     return buf->len;
 }
 
-void buf_reset(struct buf *buf)
+EXPORTED void buf_reset(struct buf *buf)
 {
     buf->len = 0;
     buf->flags &= ~BUF_CSTRING;
 }
 
-void buf_truncate(struct buf *buf, unsigned int len)
+EXPORTED void buf_truncate(struct buf *buf, unsigned int len)
 {
     if (len > buf->alloc) {
 	/* grow the buffer and zero-fill the new bytes */
@@ -826,12 +826,12 @@ void buf_truncate(struct buf *buf, unsigned int len)
     buf->flags &= ~BUF_CSTRING;
 }
 
-void buf_setcstr(struct buf *buf, const char *str)
+EXPORTED void buf_setcstr(struct buf *buf, const char *str)
 {
     buf_setmap(buf, str, strlen(str));
 }
 
-void buf_setmap(struct buf *buf, const char *base, int len)
+EXPORTED void buf_setmap(struct buf *buf, const char *base, int len)
 {
     buf_reset(buf);
     if (len) {
@@ -841,28 +841,28 @@ void buf_setmap(struct buf *buf, const char *base, int len)
     }
 }
 
-void buf_copy(struct buf *dst, const struct buf *src)
+EXPORTED void buf_copy(struct buf *dst, const struct buf *src)
 {
     buf_setmap(dst, src->s, src->len);
 }
 
-void buf_append(struct buf *dst, const struct buf *src)
+EXPORTED void buf_append(struct buf *dst, const struct buf *src)
 {
     buf_appendmap(dst, src->s, src->len);
 }
 
-void buf_appendcstr(struct buf *buf, const char *str)
+EXPORTED void buf_appendcstr(struct buf *buf, const char *str)
 {
     buf_appendmap(buf, str, strlen(str));
 }
 
-void buf_appendbit32(struct buf *buf, bit32 num)
+EXPORTED void buf_appendbit32(struct buf *buf, bit32 num)
 {
     bit32 item = htonl(num);
     buf_appendmap(buf, (char *)&item, 4);
 }
 
-void buf_appendmap(struct buf *buf, const char *base, int len)
+EXPORTED void buf_appendmap(struct buf *buf, const char *base, int len)
 {
     if (len) {
 	buf_ensure(buf, len);
@@ -872,14 +872,14 @@ void buf_appendmap(struct buf *buf, const char *base, int len)
     }
 }
 
-void buf_putc(struct buf *buf, char c)
+EXPORTED void buf_putc(struct buf *buf, char c)
 {
     buf_ensure(buf, 1);
     buf->s[buf->len++] = c;
     buf->flags &= ~BUF_CSTRING;
 }
 
-void buf_printf(struct buf *buf, const char *fmt, ...)
+EXPORTED void buf_printf(struct buf *buf, const char *fmt, ...)
 {
     va_list args;
     int room;
@@ -937,7 +937,7 @@ static void buf_replace_buf(struct buf *buf,
  * instances of @match.
  * Returns: the number of substitutions made.
  */
-unsigned int buf_replace_all(struct buf *buf, const char *match,
+EXPORTED unsigned int buf_replace_all(struct buf *buf, const char *match,
 			     const char *replace)
 {
     unsigned int n = 0;
@@ -1028,7 +1028,7 @@ unsigned int buf_replace_all_re(struct buf *buf, const regex_t *preg,
  * Compare two struct bufs bytewise.  Returns a number
  * like strcmp(), suitable for sorting e.g. with qsort(),
  */
-int buf_cmp(const struct buf *a, const struct buf *b)
+EXPORTED int buf_cmp(const struct buf *a, const struct buf *b)
 {
     unsigned len = MIN(a->len, b->len);
     int r = 0;
@@ -1046,7 +1046,7 @@ int buf_cmp(const struct buf *a, const struct buf *b)
     return r;
 }
 
-void buf_init(struct buf *buf)
+EXPORTED void buf_init(struct buf *buf)
 {
     buf->alloc = 0;
     buf->len = 0;
@@ -1059,7 +1059,7 @@ void buf_init(struct buf *buf)
  * setting buf->alloc=0 which indicates CoW is in effect, i.e. the data
  * pointed to needs to be copied should it ever be modified.
  */
-void buf_init_ro(struct buf *buf, const char *base, int len)
+EXPORTED void buf_init_ro(struct buf *buf, const char *base, int len)
 {
     buf->alloc = 0;
     buf->len = len;
@@ -1067,7 +1067,7 @@ void buf_init_ro(struct buf *buf, const char *base, int len)
     buf->s = (char *)base;
 }
 
-void buf_free(struct buf *buf)
+EXPORTED void buf_free(struct buf *buf)
 {
     if (buf->alloc)
 	free(buf->s);
@@ -1077,7 +1077,7 @@ void buf_free(struct buf *buf)
     buf->flags = 0;
 }
 
-void buf_move(struct buf *dst, struct buf *src)
+EXPORTED void buf_move(struct buf *dst, struct buf *src)
 {
     if (dst->alloc)
 	free(dst->s);
@@ -1085,7 +1085,7 @@ void buf_move(struct buf *dst, struct buf *src)
     buf_init(src);
 }
 
-char *strconcat(const char *s1, ...)
+EXPORTED char *strconcat(const char *s1, ...)
 {
     int sz = 1;	/* 1 byte for the trailing NUL */
     const char *s;
@@ -1119,7 +1119,7 @@ char *strconcat(const char *s1, ...)
     return buf;
 }
 
-int bin_to_hex(const void *bin, size_t binlen, char *hex, int flags)
+EXPORTED int bin_to_hex(const void *bin, size_t binlen, char *hex, int flags)
 {
     const unsigned char *v = bin;
     char *p = hex;
@@ -1138,7 +1138,7 @@ int bin_to_hex(const void *bin, size_t binlen, char *hex, int flags)
     return p-hex;
 }
 
-int hex_to_bin(const char *hex, size_t hexlen, void *bin)
+EXPORTED int hex_to_bin(const char *hex, size_t hexlen, void *bin)
 {
     unsigned char *v = bin, msn, lsn;
     const char *p = hex;

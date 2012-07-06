@@ -58,7 +58,7 @@ const char *map_method_desc = "stupidshared";
  * Create/refresh mapping of file
  */
 void
-map_refresh(fd, onceonly, base, len, newlen, name, mboxname)
+EXPORTED map_refresh(fd, onceonly, base, len, newlen, name, mboxname)
 int fd;
 int onceonly;
 const char **base;
@@ -106,7 +106,7 @@ const char *mboxname;
  * Destroy mapping of file
  */
 void
-map_free(base, len)
+EXPORTED map_free(base, len)
 const char **base;
 size_t *len;
 {

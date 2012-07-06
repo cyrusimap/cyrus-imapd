@@ -50,7 +50,7 @@
 
 #include "exitcodes.h"
 
-void* xmalloc(unsigned size)
+EXPORTED void* xmalloc(unsigned size)
 {
     void *ret;
 
@@ -61,7 +61,7 @@ void* xmalloc(unsigned size)
     return 0; /*NOTREACHED*/
 }
 
-void* xzmalloc(unsigned size)
+EXPORTED void* xzmalloc(unsigned size)
 {
     void *ret;
 
@@ -75,12 +75,12 @@ void* xzmalloc(unsigned size)
     return 0; /*NOTREACHED*/
 }
 
-void *xcalloc(unsigned nmemb, unsigned size)
+EXPORTED void *xcalloc(unsigned nmemb, unsigned size)
 {
     return xzmalloc(nmemb * size);
 }
 
-void *xrealloc (void* ptr, unsigned size)
+EXPORTED void *xrealloc (void* ptr, unsigned size)
 {
     void *ret;
 
@@ -92,7 +92,7 @@ void *xrealloc (void* ptr, unsigned size)
     return 0; /*NOTREACHED*/
 }
 
-char *xstrdup(const char* str)
+EXPORTED char *xstrdup(const char* str)
 {
     char *p = xmalloc(strlen(str)+1);
     strcpy(p, str);
@@ -106,12 +106,12 @@ char *xstrdupsafe(const char *str)
 }
 
 /* return NULL if NULL is passed */
-char *xstrdupnull(const char *str)
+EXPORTED char *xstrdupnull(const char *str)
 {
     return str ? xstrdup(str) : NULL;
 }
 
-char *xstrndup(const char* str, unsigned len)
+EXPORTED char *xstrndup(const char* str, unsigned len)
 {
     char *p = xmalloc(len+1);
     if (len) strncpy(p, str, len);
@@ -119,7 +119,7 @@ char *xstrndup(const char* str, unsigned len)
     return p;
 }
 
-void *xmemdup(const void *ptr, unsigned size)
+EXPORTED void *xmemdup(const void *ptr, unsigned size)
 {
     void *p = xmalloc(size);
     memcpy(p, ptr, size);

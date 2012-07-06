@@ -56,8 +56,9 @@
 
 #include "assert.h"
 #include "strhash.h"
+#include "config.h"
 
-unsigned strhash(const char *string)
+EXPORTED unsigned strhash(const char *string)
 {
       unsigned ret_val = 0;
       int i;

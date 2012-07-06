@@ -69,7 +69,7 @@ const char *lock_method_desc = "flock";
  * string naming the action that failed.
  *
  */
-int lock_reopen(fd, filename, sbuf, failaction)
+EXPORTED int lock_reopen(fd, filename, sbuf, failaction)
 int fd;
 const char *filename;
 struct stat *sbuf;
@@ -115,7 +115,7 @@ const char **failaction;
  * Returns 0 for success, -1 for failure, with errno set to an
  * appropriate error code.
  */
-int lock_blocking(fd)
+EXPORTED int lock_blocking(fd)
 int fd;
 {
     int r;
@@ -133,7 +133,7 @@ int fd;
  * Returns 0 for success, -1 for failure, with errno set to an
  * appropriate error code.
  */
-int lock_shared(fd)
+EXPORTED int lock_shared(fd)
 int fd;
 {
     int r;
@@ -151,7 +151,7 @@ int fd;
  * Returns 0 for success, -1 for failure, with errno set to an
  * appropriate error code.
  */
-int lock_nonblocking(fd)
+EXPORTED int lock_nonblocking(fd)
 int fd;
 {
     int r;
@@ -167,7 +167,7 @@ int fd;
 /*
  * Release any lock on 'fd'.  Always returns success.
  */
-int lock_unlock(int fd)
+EXPORTED int lock_unlock(int fd)
 {
     int r;
 

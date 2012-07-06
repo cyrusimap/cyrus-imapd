@@ -49,7 +49,7 @@
 #include "exitcodes.h"
 #include "assert.h"
 
-void
+EXPORTED void
 assertionfailed(const char *file, int line, const char *expr)
 {
     char buf[1024];

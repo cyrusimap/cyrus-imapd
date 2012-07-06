@@ -68,31 +68,31 @@
 static struct hash_table confighash, includehash;
 
 /* cached configuration variables accessible to the external world */
-const char *config_filename= NULL;       /* filename of configuration file */
-const char *config_dir = NULL;		 /* ie /var/imap */
-const char *config_defpartition = NULL;  /* /var/spool/imap */
-const char *config_servername= NULL;	 /* gethostname() */
-enum enum_value config_serverinfo;	 /* on */
-const char *config_mupdate_server = NULL;/* NULL */
-const char *config_defdomain = NULL;     /* NULL */
-const char *config_ident = NULL;         /* the service name */
-int config_hashimapspool;	  /* f */
-enum enum_value config_virtdomains;	          /* f */
-enum enum_value config_mupdate_config;	/* IMAP_ENUM_MUPDATE_CONFIG_STANDARD */
-int config_auditlog;
-int config_iolog;
-unsigned config_maxword;
-unsigned config_maxquoted;
-int config_qosmarking;
-int config_debug;
+EXPORTED const char *config_filename= NULL;       /* filename of configuration file */
+EXPORTED const char *config_dir = NULL;		 /* ie /var/imap */
+EXPORTED const char *config_defpartition = NULL;  /* /var/spool/imap */
+EXPORTED const char *config_servername= NULL;	 /* gethostname() */
+EXPORTED enum enum_value config_serverinfo;	 /* on */
+EXPORTED const char *config_mupdate_server = NULL;/* NULL */
+EXPORTED const char *config_defdomain = NULL;     /* NULL */
+EXPORTED const char *config_ident = NULL;         /* the service name */
+EXPORTED int config_hashimapspool;	  /* f */
+EXPORTED enum enum_value config_virtdomains;	          /* f */
+EXPORTED enum enum_value config_mupdate_config;	/* IMAP_ENUM_MUPDATE_CONFIG_STANDARD */
+EXPORTED int config_auditlog;
+EXPORTED int config_iolog;
+EXPORTED unsigned config_maxword;
+EXPORTED unsigned config_maxquoted;
+EXPORTED int config_qosmarking;
+EXPORTED int config_debug;
 
 extern void fatal(const char *fatal_message, int fatal_code)
    __attribute__ ((noreturn));
 
 /* prototype to allow for sane function ordering */
-void config_read_file(const char *filename);
+static void config_read_file(const char *filename);
 
-const char *config_getstring(enum imapopt opt)
+EXPORTED const char *config_getstring(enum imapopt opt)
 {
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
     assert((imapopts[opt].t == OPT_STRING) ||
@@ -101,7 +101,7 @@ const char *config_getstring(enum imapopt opt)
     return imapopts[opt].val.s;
 }
 
-int config_getint(enum imapopt opt)
+EXPORTED int config_getint(enum imapopt opt)
 {
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
     assert(imapopts[opt].t == OPT_INT);
@@ -129,7 +129,7 @@ int config_getswitch(enum imapopt opt)
     return imapopts[opt].val.b;
 }
 
-enum enum_value config_getenum(enum imapopt opt)
+EXPORTED enum enum_value config_getenum(enum imapopt opt)
 {
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
     assert(imapopts[opt].t == OPT_ENUM);
@@ -137,7 +137,7 @@ enum enum_value config_getenum(enum imapopt opt)
     return imapopts[opt].val.e;
 }
 
-unsigned long config_getbitfield(enum imapopt opt)
+EXPORTED unsigned long config_getbitfield(enum imapopt opt)
 {
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
     assert(imapopts[opt].t == OPT_BITFIELD);
@@ -145,7 +145,7 @@ unsigned long config_getbitfield(enum imapopt opt)
     return imapopts[opt].val.x;
 }
 
-const char *config_getoverflowstring(const char *key, const char *def)
+EXPORTED const char *config_getoverflowstring(const char *key, const char *def)
 {
     char buf[256];
     char *ret = NULL;
@@ -171,7 +171,7 @@ const char *config_getoverflowstring(const char *key, const char *def)
     return ret ? ret : def;
 }
 
-void config_foreachoverflowstring(void (*func)(const char *, const char *, void *),
+EXPORTED void config_foreachoverflowstring(void (*func)(const char *, const char *, void *),
 				  void *rock)
 {
     if (!config_filename) return;
@@ -179,7 +179,7 @@ void config_foreachoverflowstring(void (*func)(const char *, const char *, void 
     hash_enumerate(&confighash, (void (*)(const char *, void *, void *)) func, rock);
 }
 
-const char *config_partitiondir(const char *partition)
+EXPORTED const char *config_partitiondir(const char *partition)
 {
     char buf[80];
 
@@ -191,7 +191,7 @@ const char *config_partitiondir(const char *partition)
     return config_getoverflowstring(buf, NULL);
 }
 
-const char *config_metapartitiondir(const char *partition)
+EXPORTED const char *config_metapartitiondir(const char *partition)
 {
     char buf[80];
 
@@ -216,7 +216,7 @@ static void config_ispartition(const char *key,
  * Reset the global configuration to a virginal state.  This is
  * only useful for unit tests.
  */
-void config_reset(void)
+EXPORTED void config_reset(void)
 {
     enum imapopt opt;
 
@@ -269,7 +269,7 @@ static const unsigned char qos[] = {
 };
 
 
-void config_read(const char *alt_config, const int config_need_data)
+EXPORTED void config_read(const char *alt_config, const int config_need_data)
 {
     enum imapopt opt = IMAPOPT_ZERO;
     char buf[4096];
@@ -417,7 +417,7 @@ void config_read(const char *alt_config, const int config_need_data)
 
 #define GROWSIZE 4096
 
-void config_read_file(const char *filename)
+static void config_read_file(const char *filename)
 {
     FILE *infile = NULL;
     enum imapopt opt = IMAPOPT_ZERO;

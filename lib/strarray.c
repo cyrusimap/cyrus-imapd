@@ -49,12 +49,12 @@
 #include "util.h"
 #include "xmalloc.h"
 
-strarray_t *strarray_new(void)
+EXPORTED strarray_t *strarray_new(void)
 {
     return xzmalloc(sizeof(strarray_t));
 }
 
-void strarray_fini(strarray_t *sa)
+EXPORTED void strarray_fini(strarray_t *sa)
 {
     int i;
 
@@ -70,7 +70,7 @@ void strarray_fini(strarray_t *sa)
     sa->alloc = 0;
 }
 
-void strarray_free(strarray_t *sa)
+EXPORTED void strarray_free(strarray_t *sa)
 {
     if (!sa)
 	return;
@@ -142,7 +142,7 @@ static inline int adjust_index_rw(strarray_t *sa, int idx, int grow)
     return idx;
 }
 
-strarray_t *strarray_dup(const strarray_t *sa)
+EXPORTED strarray_t *strarray_dup(const strarray_t *sa)
 {
     strarray_t *new = strarray_new();
     int i;
@@ -153,26 +153,26 @@ strarray_t *strarray_dup(const strarray_t *sa)
     return new;
 }
 
-int strarray_append(strarray_t *sa, const char *s)
+EXPORTED int strarray_append(strarray_t *sa, const char *s)
 {
     return strarray_appendm(sa, xstrdup(s));
 }
 
-int strarray_add(strarray_t *sa, const char *s)
+EXPORTED int strarray_add(strarray_t *sa, const char *s)
 {
     int pos = strarray_find(sa, s, 0);
     if (pos < 0) pos = strarray_append(sa, s);
     return pos;
 }
 
-int strarray_add_case(strarray_t *sa, const char *s)
+EXPORTED int strarray_add_case(strarray_t *sa, const char *s)
 {
     int pos = strarray_find_case(sa, s, 0);
     if (pos < 0) pos = strarray_append(sa, s);
     return pos;
 }
 
-int strarray_appendm(strarray_t *sa, char *s)
+EXPORTED int strarray_appendm(strarray_t *sa, char *s)
 {
     int pos = sa->count++;
     ensure_alloc(sa, sa->count);
@@ -189,14 +189,14 @@ static void _strarray_set(strarray_t *sa, int idx, char *s)
 	sa->count = idx+1;
 }
 
-void strarray_set(strarray_t *sa, int idx, const char *s)
+EXPORTED void strarray_set(strarray_t *sa, int idx, const char *s)
 {
     if ((idx = adjust_index_rw(sa, idx, 0)) < 0)
 	return;
     _strarray_set(sa, idx, xstrdup(s));
 }
 
-void strarray_setm(strarray_t *sa, int idx, char *s)
+EXPORTED void strarray_setm(strarray_t *sa, int idx, char *s)
 {
     if ((idx = adjust_index_rw(sa, idx, 0)) < 0)
 	return;
@@ -226,7 +226,7 @@ void strarray_insertm(strarray_t *sa, int idx, char *s)
     _strarray_insert(sa, idx, s);
 }
 
-char *strarray_remove(strarray_t *sa, int idx)
+EXPORTED char *strarray_remove(strarray_t *sa, int idx)
 {
     char *s;
     if ((idx = adjust_index_ro(sa, idx)) < 0)
@@ -251,7 +251,7 @@ void strarray_remove_all(strarray_t *sa, const char *s)
     }
 }
 
-void strarray_remove_all_case(strarray_t *sa, const char *s)
+EXPORTED void strarray_remove_all_case(strarray_t *sa, const char *s)
 {
     int i = 0;
 
@@ -263,7 +263,7 @@ void strarray_remove_all_case(strarray_t *sa, const char *s)
     }
 }
 
-void strarray_truncate(strarray_t *sa, int newlen)
+EXPORTED void strarray_truncate(strarray_t *sa, int newlen)
 {
     int i;
 
@@ -281,14 +281,14 @@ void strarray_truncate(strarray_t *sa, int newlen)
     sa->count = newlen;
 }
 
-const char *strarray_nth(const strarray_t *sa, int idx)
+EXPORTED const char *strarray_nth(const strarray_t *sa, int idx)
 {
     if ((idx = adjust_index_ro(sa, idx)) < 0)
 	return NULL;
     return sa->data[idx];
 }
 
-char *strarray_join(const strarray_t *sa, const char *sep)
+EXPORTED char *strarray_join(const strarray_t *sa, const char *sep)
 {
     int seplen = (sep ? strlen(sep) : 0);
     int len = 0;
@@ -321,7 +321,7 @@ char *strarray_join(const strarray_t *sa, const char *sep)
     return buf;
 }
 
-strarray_t *strarray_splitm(char *buf, const char *sep, int flags)
+EXPORTED strarray_t *strarray_splitm(char *buf, const char *sep, int flags)
 {
     strarray_t *sa = strarray_new();
     char *p, *q;
@@ -345,14 +345,14 @@ strarray_t *strarray_splitm(char *buf, const char *sep, int flags)
     return sa;
 }
 
-strarray_t *strarray_split(const char *line, const char *sep, int flags)
+EXPORTED strarray_t *strarray_split(const char *line, const char *sep, int flags)
 {
     if (!line)
 	return strarray_new();
     return strarray_splitm(xstrdup(line), sep, flags);
 }
 
-strarray_t *strarray_nsplit(const char *buf, size_t len, const char *sep, int flags)
+EXPORTED strarray_t *strarray_nsplit(const char *buf, size_t len, const char *sep, int flags)
 {
     if (!len)
 	return strarray_new();
@@ -368,7 +368,7 @@ char **strarray_takevf(strarray_t *sa)
     return d;
 }
 
-void strarray_sort(strarray_t *sa, compar_t *cmp)
+EXPORTED void strarray_sort(strarray_t *sa, compar_t *cmp)
 {
     qsort(sa->data, sa->count, sizeof(char *), cmp);
 }
@@ -396,12 +396,12 @@ static int strarray_findg(const strarray_t *sa, const char *match, int starting,
     return -1;
 }
 
-int strarray_find(const strarray_t *sa, const char *match, int starting)
+EXPORTED int strarray_find(const strarray_t *sa, const char *match, int starting)
 {
     return strarray_findg(sa, match, starting, strcmpsafe);
 }
 
-int strarray_find_case(const strarray_t *sa, const char *match, int starting)
+EXPORTED int strarray_find_case(const strarray_t *sa, const char *match, int starting)
 {
     return strarray_findg(sa, match, starting, strcasecmpsafe);
 }

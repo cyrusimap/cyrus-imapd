@@ -51,7 +51,7 @@
  *
  * i believe/hope this is compatible with the BSD strlcpy(). 
  */
-size_t strlcpy(char *dst, const char *src, size_t len)
+EXPORTED size_t strlcpy(char *dst, const char *src, size_t len)
 {
     size_t n;
 
