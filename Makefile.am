@@ -509,6 +509,7 @@ endif
 
 imtest_imtest_SOURCES = imtest/imtest.c
 imtest_imtest_LDADD = $(LD_BASIC_ADD)
+imtest_imtest_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
 nodist_lib_libcyrus_la_SOURCES = lib/chartable.c
 lib_libcyrus_la_SOURCES = lib/acl.c lib/acl_afs.c lib/auth.c lib/auth_krb.c \

@@ -108,12 +108,12 @@ typedef enum {
 } imt_stat;
 
 /* global vars */
-sasl_conn_t *conn;
-int sock; /* socket descriptor */
+static sasl_conn_t *conn;
+static int sock; /* socket descriptor */
 
-int verbose=0;
+static int verbose=0;
 
-struct protstream *pout, *pin;
+static struct protstream *pout, *pin;
 
 static char *authname = NULL;
 static char *username = NULL;
@@ -127,7 +127,7 @@ static ino_t output_socket_ino = 0;
 #define CONFIGHASHSIZE 30 /* relatively small */
 
 static struct hash_table confighash;
-int mysasl_config(void*, const char*, const char*, const char**, unsigned*);
+static int mysasl_config(void*, const char*, const char*, const char**, unsigned*);
 
 extern int _sasl_debug;
 extern char *optarg;
@@ -245,8 +245,8 @@ struct protocol_t {
 };
 
 
-void imtest_fatal(const char *msg, ...) __attribute__((noreturn));
-void imtest_fatal(const char *msg, ...)
+static void imtest_fatal(const char *msg, ...) __attribute__((noreturn));
+static void imtest_fatal(const char *msg, ...)
 {
     struct stat sbuf;
     if (output_socket && output_socket_opened &&
@@ -266,7 +266,7 @@ void imtest_fatal(const char *msg, ...)
 }
 
 /* libcyrus makes us define this */
-void fatal(const char *msg, int code __attribute__((unused)))
+EXPORTED void fatal(const char *msg, int code __attribute__((unused)))
 {
     imtest_fatal(msg);
 }
@@ -312,13 +312,13 @@ static int do_dump = 0;
 static char peer_CN[CCERT_BUFSIZ];
 static char issuer_CN[CCERT_BUFSIZ];
 
-char   *tls_peer_CN = NULL;
-char   *tls_issuer_CN = NULL;
+static char   *tls_peer_CN = NULL;
+static char   *tls_issuer_CN = NULL;
 
-const char *tls_protocol = NULL;
-const char *tls_cipher_name = NULL;
-int	tls_cipher_usebits = 0;
-int	tls_cipher_algbits = 0;
+static const char *tls_protocol = NULL;
+static const char *tls_cipher_name = NULL;
+static int	tls_cipher_usebits = 0;
+static int	tls_cipher_algbits = 0;
 
 /*
  * Set up the cert things on the server side. We do need both the
@@ -641,7 +641,7 @@ static long bio_dump_cb(BIO * bio, int cmd, const char *argp, int argi,
     return (ret);
 }
 
-int tls_start_clienttls(unsigned *layer, char **authid)
+static int tls_start_clienttls(unsigned *layer, char **authid)
 {
     int     sts;
     const SSL_CIPHER *cipher;
@@ -733,7 +733,7 @@ int tls_start_clienttls(unsigned *layer, char **authid)
     return IMTEST_OK;
 }
 
-void do_starttls(int ssl, char *keyfile, unsigned *ssf)
+static void do_starttls(int ssl, char *keyfile, unsigned *ssf)
 {
     int result;
     char *auth_id;
@@ -844,7 +844,7 @@ static int init_sasl(char *service, char *serverFQDN, int minssf, int maxssf,
 
 #define BUFSIZE 16384
 
-imt_stat getauthline(struct sasl_cmd_t *sasl_cmd, char **line, int *linelen)
+static imt_stat getauthline(struct sasl_cmd_t *sasl_cmd, char **line, int *linelen)
 {
     char buf[BUFSIZE];
     int saslresult;
@@ -917,7 +917,7 @@ imt_stat getauthline(struct sasl_cmd_t *sasl_cmd, char **line, int *linelen)
     return ret;
 }
 
-void interaction (int id, const char *challenge, const char *prompt,
+static void interaction (int id, const char *challenge, const char *prompt,
 		  char **tresult, unsigned int *tlen)
 {
     char *s;
@@ -973,7 +973,7 @@ void interaction (int id, const char *challenge, const char *prompt,
     *tresult = s;
 }
 
-void fillin_interactions(sasl_interact_t *tlist)
+static void fillin_interactions(sasl_interact_t *tlist)
 {
     while (tlist->id!=SASL_CB_LIST_END)
 	{
@@ -1000,7 +1000,7 @@ static char *waitfor(char *tag, char *tag2, int echo)
     return str;
 }
 
-int auth_sasl(struct sasl_cmd_t *sasl_cmd, char *mechlist)
+static int auth_sasl(struct sasl_cmd_t *sasl_cmd, char *mechlist)
 {
     sasl_interact_t *client_interact = NULL;
     int saslresult;
@@ -2210,7 +2210,7 @@ static char *sieve_parse_success(char *str)
 /*****************************************************************************/
 
 /* didn't give correct parameters; let's exit */
-void usage(char *prog, char *prot)
+static void usage(char *prog, char *prot)
 {
     printf("Usage: %s [options] hostname\n", prog);
     printf("  -p port  : port to use (default=standard port for protocol)\n");
