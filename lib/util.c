@@ -242,13 +242,13 @@ EXPORTED char *beautify_string(const char* src)
     return beautybuf;
 }
 
-int strcmpsafe(const char *a, const char *b)
+EXPORTED int strcmpsafe(const char *a, const char *b)
 {
     return strcmp((a == NULL ? "" : a),
 	          (b == NULL ? "" : b));
 }
 
-int strcasecmpsafe(const char *a, const char *b)
+HIDDEN int strcasecmpsafe(const char *a, const char *b)
 {
     return strcasecmp((a == NULL ? "" : a),
 	              (b == NULL ? "" : b));
@@ -773,7 +773,7 @@ EXPORTED char *buf_release(struct buf *buf)
     return ret;
 }
 
-void buf_getmap(struct buf *buf, const char **base, int *len)
+EXPORTED void buf_getmap(struct buf *buf, const char **base, int *len)
 {
     *base = buf->s;
     *len = buf->len;
@@ -971,7 +971,7 @@ EXPORTED unsigned int buf_replace_all(struct buf *buf, const char *match,
  * in the replace text.
  * Returns: the number of substitutions made (0 or 1)
  */
-unsigned int buf_replace_one_re(struct buf *buf, const regex_t *preg,
+EXPORTED unsigned int buf_replace_one_re(struct buf *buf, const regex_t *preg,
 				const char *replace)
 {
     struct buf replace_buf = BUF_INITIALIZER;
@@ -998,7 +998,7 @@ unsigned int buf_replace_one_re(struct buf *buf, const regex_t *preg,
  * in the replace text.
  * Returns: the number of substitutions made.
  */
-unsigned int buf_replace_all_re(struct buf *buf, const regex_t *preg,
+EXPORTED unsigned int buf_replace_all_re(struct buf *buf, const regex_t *preg,
 				const char *replace)
 {
     unsigned int n = 0;
@@ -1180,7 +1180,7 @@ static void zfree(voidpf opaque __attribute__((unused)),
     free(address);
 }
 
-int buf_inflate(struct buf *src)
+EXPORTED int buf_inflate(struct buf *src)
 {
     struct buf localbuf = BUF_INITIALIZER;
     int zr = Z_OK;
@@ -1224,7 +1224,7 @@ int buf_inflate(struct buf *src)
     return -1;
 }
 
-int buf_deflate(struct buf *src)
+EXPORTED int buf_deflate(struct buf *src)
 {
     struct buf localbuf = BUF_INITIALIZER;
     int zr = Z_OK;

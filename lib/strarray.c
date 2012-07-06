@@ -212,14 +212,14 @@ static inline void _strarray_insert(strarray_t *sa, int idx, char *s)
     sa->count++;
 }
 
-void strarray_insert(strarray_t *sa, int idx, const char *s)
+EXPORTED void strarray_insert(strarray_t *sa, int idx, const char *s)
 {
     if ((idx = adjust_index_rw(sa, idx, 1)) < 0)
 	return;
     _strarray_insert(sa, idx, xstrdup(s));
 }
 
-void strarray_insertm(strarray_t *sa, int idx, char *s)
+EXPORTED void strarray_insertm(strarray_t *sa, int idx, char *s)
 {
     if ((idx = adjust_index_rw(sa, idx, 1)) < 0)
 	return;
@@ -239,7 +239,7 @@ EXPORTED char *strarray_remove(strarray_t *sa, int idx)
     return s;
 }
 
-void strarray_remove_all(strarray_t *sa, const char *s)
+EXPORTED void strarray_remove_all(strarray_t *sa, const char *s)
 {
     int i = 0;
 
@@ -359,7 +359,7 @@ EXPORTED strarray_t *strarray_nsplit(const char *buf, size_t len, const char *se
     return strarray_splitm(xstrndup(buf, len), sep, flags);
 }
 
-char **strarray_takevf(strarray_t *sa)
+EXPORTED char **strarray_takevf(strarray_t *sa)
 {
     char **d = sa->data;
     sa->data = NULL;
@@ -374,7 +374,7 @@ EXPORTED void strarray_sort(strarray_t *sa, compar_t *cmp)
 }
 
 
-void strarray_uniq(strarray_t *sa)
+EXPORTED void strarray_uniq(strarray_t *sa)
 {
     int i;
 
