@@ -52,7 +52,7 @@
 #include "map.h"
 #include "exitcodes.h"
 
-const char *map_method_desc = "stupidshared";
+EXPORTED const char *map_method_desc = "stupidshared";
 
 /*
  * Create/refresh mapping of file

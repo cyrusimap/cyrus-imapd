@@ -55,7 +55,7 @@
 
 #define SLOP (4*1024)
 
-const char *map_method_desc = "nommap";
+EXPORTED const char *map_method_desc = "nommap";
 
 /*
  * Create/refresh mapping of file

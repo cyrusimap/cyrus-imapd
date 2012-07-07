@@ -127,7 +127,7 @@ print CFILE <<EOF
 #include <string.h>
 #include "imapopts.h"
 
-struct imapopt_s imapopts[] =
+EXPORTED struct imapopt_s imapopts[] =
 {
   { IMAPOPT_ZERO, "", 0, OPT_NOTOPT, { NULL }, { NULL }, { { NULL, IMAP_ENUM_ZERO } } },
 EOF

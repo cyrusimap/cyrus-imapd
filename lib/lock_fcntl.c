@@ -51,7 +51,7 @@
 
 #include "cyr_lock.h"
 
-const char *lock_method_desc = "fcntl";
+EXPORTED const char *lock_method_desc = "fcntl";
 
 /*
  * Block until we obtain an exclusive lock on the file descriptor 'fd',

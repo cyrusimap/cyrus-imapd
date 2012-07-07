@@ -56,7 +56,7 @@
  * Keep calling the read() system call with 'fd', 'buf', and 'nbyte'
  * until all the data is read in or an error occurs.
  */
-ssize_t retry_read(int fd, void *vbuf, size_t nbyte)
+EXPORTED ssize_t retry_read(int fd, void *vbuf, size_t nbyte)
 {
     size_t nread;
     char *buf = vbuf;
@@ -83,7 +83,7 @@ ssize_t retry_read(int fd, void *vbuf, size_t nbyte)
  * Keep calling the write() system call with 'fd', 'buf', and 'nbyte'
  * until all the data is written out or an error occurs.
  */
-ssize_t retry_write(int fd, const void *vbuf, size_t nbyte)
+EXPORTED ssize_t retry_write(int fd, const void *vbuf, size_t nbyte)
 {
     const char *buf = vbuf;
     size_t written = 0;
@@ -110,7 +110,7 @@ ssize_t retry_write(int fd, const void *vbuf, size_t nbyte)
  *
  * Now no longer destructive of parameters!
  */
-ssize_t retry_writev(int fd, const struct iovec *srciov, int iovcnt)
+EXPORTED ssize_t retry_writev(int fd, const struct iovec *srciov, int iovcnt)
 {
     int i;
     ssize_t n;

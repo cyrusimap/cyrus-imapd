@@ -567,6 +567,7 @@ lib_libcyrus_min_la_SOURCES += lib/mpool.c lib/retry.c lib/strarray.c \
 	lib/strhash.c lib/util.c lib/xmalloc.c lib/xstrlcat.c lib/xstrlcpy.c \
 	lib/hashu64.c
 lib_libcyrus_min_la_LIBADD = $(LTLIBOBJS)
+lib_libcyrus_min_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
 lib/chartable.c: lib/mkchartable.pl lib/charset/unifix.txt \
 	$(top_srcdir)/lib/charset/*.t lib/charset/UnicodeData.txt \

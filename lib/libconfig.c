@@ -115,7 +115,7 @@ EXPORTED int config_getint(enum imapopt opt)
     return imapopts[opt].val.i;
 }
 
-int config_getswitch(enum imapopt opt)
+EXPORTED int config_getswitch(enum imapopt opt)
 {
     assert(opt > IMAPOPT_ZERO && opt < IMAPOPT_LAST);
     assert(imapopts[opt].t == OPT_SWITCH);

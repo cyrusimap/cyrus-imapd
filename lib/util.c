@@ -93,7 +93,7 @@ const unsigned char unxdigit[128] = {
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
 };
 
-const unsigned char convert_to_lowercase[256] = {
+EXPORTED const unsigned char convert_to_lowercase[256] = {
     0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
     0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
     0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
@@ -613,7 +613,7 @@ EXPORTED void cmdtime_netend(void)
  * time using clock_gettime(CLOCK_MONOTONIC) but that
  * would require linking with -lrt.
  */
-clock_t sclock(void)
+EXPORTED clock_t sclock(void)
 {
     struct timeval now;
     gettimeofday(&now, NULL);
@@ -786,7 +786,7 @@ EXPORTED void buf_getmap(struct buf *buf, const char **base, int *len)
  * so a file A\nB will return two true responses with bufs
  * containing "A" and "B" respectively before returning a
  * false to the third call */
-int buf_getline(struct buf *buf, FILE *fp)
+EXPORTED int buf_getline(struct buf *buf, FILE *fp)
 {
     int c;
 

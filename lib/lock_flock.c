@@ -53,7 +53,7 @@
 
 #include "cyr_lock.h"
 
-const char *lock_method_desc = "flock";
+EXPORTED const char *lock_method_desc = "flock";
 
 /*
  * Block until we obtain an exclusive lock on the file descriptor 'fd',
