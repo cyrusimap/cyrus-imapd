@@ -62,7 +62,7 @@
 #include "error_table.h"
 #include "internal.h"
 
-struct et_list * _et_list = (struct et_list *) NULL;
+EXPORTED struct et_list * _et_list = (struct et_list *) NULL;
 
 #ifdef notdef
 /*
@@ -141,12 +141,12 @@ void com_err_va (whoami, code, fmt, args)
 }
 
 #ifndef VARARGS
-void INTERFACE_C com_err (const char *whoami,
+EXPORTED void INTERFACE_C com_err (const char *whoami,
 	      long code,
 	      const char *fmt, ...)
 {
 #else
-void INTERFACE_C com_err (va_alist)
+EXPORTED void INTERFACE_C com_err (va_alist)
     va_dcl
 {
     const char *whoami, *fmt;
