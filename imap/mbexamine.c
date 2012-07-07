@@ -78,7 +78,6 @@
 
 #include "acl.h"
 #include "assert.h"
-#include "convert_code.h"
 #include "exitcodes.h"
 #include "index.h"
 #include "global.h"

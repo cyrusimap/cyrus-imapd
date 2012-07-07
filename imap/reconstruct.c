@@ -101,7 +101,6 @@
 #include "quota.h"
 #include "seen.h"
 #include "retry.h"
-#include "convert_code.h"
 #include "util.h"
 #include "sync_log.h"
 #include "cyr_lock.h"

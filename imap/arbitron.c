@@ -66,7 +66,6 @@
 #include "mailbox.h"
 #include "mpool.h"
 #include "mboxlist.h"
-#include "convert_code.h"
 #include "seen.h"
 #include "util.h"
 #include "xmalloc.h"
