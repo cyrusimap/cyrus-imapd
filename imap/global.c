@@ -100,12 +100,12 @@ const char *config_quota_db;
 const char *config_subscription_db;
 const char *config_annotation_db;
 const char *config_seenstate_db;
-const char *config_mboxkey_db;
+HIDDEN const char *config_mboxkey_db;
 const char *config_duplicate_db;
 const char *config_tlscache_db;
 const char *config_ptscache_db;
 const char *config_statuscache_db;
-const char *config_userdeny_db;
+HIDDEN const char *config_userdeny_db;
 int charset_flags;
 
 static char session_id_buf[MAX_SESSIONID_SIZE];

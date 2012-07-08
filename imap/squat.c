@@ -471,7 +471,7 @@ static void destroy_docset(SquatDocSet* set) {
    of documents, to save memory and the cost of traversing that list
    several times.
 */
-int squat_search_execute(SquatSearchIndex* index, char const* data,
+HIDDEN int squat_search_execute(SquatSearchIndex* index, char const* data,
   int data_len, SquatSearchResultCallback handler, void* closure) {
   int i;
   int min_doc_count_word; /* The subword of 'data' that appears in

@@ -43,6 +43,7 @@
  * $Id: squat_internal.c,v 1.5 2010/01/06 17:01:41 murch Exp $
  */
 
+#include "config.h"
 #include "assert.h"
 #include "squat_internal.h"
 
@@ -113,7 +114,7 @@ SquatInt64 squat_decode_I(char const** s)
     return r;
 }
 
-char const *squat_decode_skip_I(char const* s, int num_to_skip)
+HIDDEN char const *squat_decode_skip_I(char const* s, int num_to_skip)
 {
     while (num_to_skip > 0) {
 	while ((*s & 0x80) != 0) {

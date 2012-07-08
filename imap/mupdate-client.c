@@ -213,7 +213,7 @@ int mupdate_activate(mupdate_handle *handle,
     }
 }
 
-int mupdate_reserve(mupdate_handle *handle,
+HIDDEN int mupdate_reserve(mupdate_handle *handle,
 		    const char *mailbox, const char *server)
 {
     int ret;

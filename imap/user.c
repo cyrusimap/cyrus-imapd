@@ -500,7 +500,7 @@ static char *user_hash_meta(const char *userid, const char *suffix)
     return result;
 }
 
-char *user_hash_subs(const char *userid)
+HIDDEN char *user_hash_subs(const char *userid)
 {
     return user_hash_meta(userid, FNAME_SUBSSUFFIX);
 }

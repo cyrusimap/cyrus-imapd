@@ -119,7 +119,7 @@ void statuscache_close(void)
     }
 }
 
-void statuscache_fill(struct statusdata *sdata, const char *userid,
+HIDDEN void statuscache_fill(struct statusdata *sdata, const char *userid,
 		      struct mailbox *mailbox, unsigned statusitems,
 		      unsigned numrecent, unsigned numunseen)
 {
@@ -387,7 +387,7 @@ static int delete_cb(void *rockp,
     return 0;
 }
 
-int statuscache_invalidate(const char *mboxname, struct statusdata *sdata)
+HIDDEN int statuscache_invalidate(const char *mboxname, struct statusdata *sdata)
 {
     size_t keylen;
     char *key;

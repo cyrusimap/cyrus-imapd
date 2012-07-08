@@ -170,7 +170,7 @@ void remove_lockitem(struct mboxlocklist *remitem)
 
 /* name locking support */
 
-int mboxname_lock(const char *mboxname, struct mboxlock **mboxlockptr,
+HIDDEN int mboxname_lock(const char *mboxname, struct mboxlock **mboxlockptr,
 		  int locktype)
 {
     const char *fname;
@@ -238,7 +238,7 @@ done:
     return r;
 }
 
-void mboxname_release(struct mboxlock **mboxlockptr)
+HIDDEN void mboxname_release(struct mboxlock **mboxlockptr)
 {
     struct mboxlocklist *lockitem;
     struct mboxlock *lock = *mboxlockptr;
@@ -704,7 +704,7 @@ int mboxname_init_namespace(struct namespace *namespace, int isadmin)
     return 0;
 }
 
-struct namespace *mboxname_get_adminnamespace()
+HIDDEN struct namespace *mboxname_get_adminnamespace()
 {
     static struct namespace ns;
     if (!admin_namespace) {
@@ -1030,7 +1030,7 @@ int mboxname_userid_to_parts(const char *userid, struct mboxname_parts *parts)
     return 0;
 }
 
-void mboxname_init_parts(struct mboxname_parts *parts)
+HIDDEN void mboxname_init_parts(struct mboxname_parts *parts)
 {
     memset(parts, 0, sizeof(*parts));
 }
@@ -1085,7 +1085,7 @@ int mboxname_netnewscheck(const char *name)
  * Restrictions are hardwired for now.
  */
 #define GOODCHARS " #$'+,-.0123456789:=@ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz~"
-int mboxname_policycheck(const char *name)
+HIDDEN int mboxname_policycheck(const char *name)
 {
     const char *p;
     unsigned i;
@@ -1469,7 +1469,7 @@ int mboxname_make_parent(char *name)
 
 /* NOTE: caller must free, which is different from almost every
  * other interface in the whole codebase.  Grr */
-char *mboxname_conf_getpath(struct mboxname_parts *parts, const char *suffix)
+HIDDEN char *mboxname_conf_getpath(struct mboxname_parts *parts, const char *suffix)
 {
     char *fname = NULL;
     char c[2], d[2];

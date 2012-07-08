@@ -308,12 +308,12 @@ int seqset_ismember(struct seqset *seq, unsigned num)
     return 0;
 }
 
-unsigned seqset_first(struct seqset *seq)
+HIDDEN unsigned seqset_first(struct seqset *seq)
 {
     return seq->set[0].low;
 }
 
-unsigned seqset_last(struct seqset *seq)
+HIDDEN unsigned seqset_last(struct seqset *seq)
 {
     return seq->set[seq->len-1].high;
 }
@@ -361,7 +361,7 @@ void seqset_join(struct seqset *a, struct seqset *b)
     seqset_simplify(a);
 }
 
-void seqset_append(struct seqset **l, char *sequence, unsigned maxval)
+HIDDEN void seqset_append(struct seqset **l, char *sequence, unsigned maxval)
 {
     struct seqset **tail = l;
 

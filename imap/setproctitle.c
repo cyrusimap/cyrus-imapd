@@ -210,7 +210,7 @@ typedef unsigned int	*pt_entry_t;
 #if SPT_TYPE != SPT_BUILTIN
 
 /*VARARGS1*/
-void
+HIDDEN void
 setproctitle(const char *fmt, ...)
 {
 # if SPT_TYPE != SPT_NONE

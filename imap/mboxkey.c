@@ -99,7 +99,7 @@ static void abortcurrent(struct mboxkey *s)
     }
 }
 
-char *mboxkey_getpath(const char *userid)
+HIDDEN char *mboxkey_getpath(const char *userid)
 {
     char *fname = xmalloc(strlen(config_dir) + sizeof(FNAME_DOMAINDIR) +
 			  sizeof(FNAME_USERDIR) + strlen(userid) +
@@ -467,7 +467,7 @@ static int mboxkey_merge_cb(void *rockp,
 		     &(rockdata->tid));
 }
 
-int mboxkey_merge(const char *tmpfile, const char *tgtfile) 
+HIDDEN int mboxkey_merge(const char *tmpfile, const char *tgtfile)
 {
     int r = 0;
     struct db *tmp = NULL, *tgt = NULL;

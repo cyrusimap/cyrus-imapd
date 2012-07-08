@@ -353,7 +353,7 @@ unsigned mailbox_cached_header(const char *s)
 /* Same as mailbox_cached_header, but for use on a header
  * as it appears in the message (i.e. :-terminated, not NUL-terminated)
  */
-unsigned mailbox_cached_header_inline(const char *text)
+HIDDEN unsigned mailbox_cached_header_inline(const char *text)
 {
     char buf[MAX_CACHED_HEADER_SIZE];
     int i;
@@ -465,7 +465,7 @@ int cache_parserecord(struct buf *cachebase, unsigned cache_offset,
     return 0;
 }
 
-int mailbox_ensure_cache(struct mailbox *mailbox, unsigned offset)
+HIDDEN int mailbox_ensure_cache(struct mailbox *mailbox, unsigned offset)
 {
     struct stat sbuf;
     unsigned generation;
@@ -716,7 +716,7 @@ static mailbox_notifyproc_t *updatenotifier = NULL;
 /*
  * Set the updatenotifier function
  */
-void mailbox_set_updatenotifier(mailbox_notifyproc_t *notifyproc)
+HIDDEN void mailbox_set_updatenotifier(mailbox_notifyproc_t *notifyproc)
 {
     updatenotifier = notifyproc;
 }
@@ -1004,7 +1004,7 @@ struct mailbox *mailbox_findopen(const char *name)
     return NULL;
 }
 
-int mailbox_open_exclusive(const char *name, struct mailbox **mailboxptr)
+HIDDEN int mailbox_open_exclusive(const char *name, struct mailbox **mailboxptr)
 {
     return mailbox_open_advanced(name, LOCK_EXCLUSIVE, LOCK_EXCLUSIVE,
 				 mailboxptr);
@@ -1029,7 +1029,7 @@ void mailbox_modseq_dirty(struct mailbox *mailbox)
     mailbox_index_dirty(mailbox);
 }
 
-void mailbox_ref(struct mailbox *mailbox)
+HIDDEN void mailbox_ref(struct mailbox *mailbox)
 {
     struct mailboxlist *listitem;
 
@@ -1142,7 +1142,7 @@ void mailbox_close(struct mailbox **mailboxptr)
  * userflag1 SPACE userflag2 SPACE userflag3 [...] (with no trailing space)
  * user1 TAB user1acl TAB user2 TAB user2acl TAB (with trailing tab!)
  */
-int mailbox_read_header(struct mailbox *mailbox, char **aclptr)
+HIDDEN int mailbox_read_header(struct mailbox *mailbox, char **aclptr)
 {
     int r = 0;
     int flag;
@@ -1315,7 +1315,7 @@ int mailbox_set_quotaroot(struct mailbox *mailbox, const char *quotaroot)
 }
 
 /* set a new XLISTFLAG - only dirty if changed */
-int mailbox_set_specialuse(struct mailbox *mailbox, const char *specialuse)
+HIDDEN int mailbox_set_specialuse(struct mailbox *mailbox, const char *specialuse)
 {
     if (mailbox->specialuse) {
 	if (specialuse && !strcmp(mailbox->specialuse, specialuse))
@@ -1406,7 +1406,7 @@ int mailbox_record_hasflag(struct mailbox *mailbox,
     return ((record->user_flags[userflag/32] & (1<<(userflag&31))) ? 1 : 0);
 }
 
-int mailbox_buf_to_index_header(const char *buf, struct index_header *i)
+HIDDEN int mailbox_buf_to_index_header(const char *buf, struct index_header *i)
 {
     uint32_t crc;
     bit32 qannot;
@@ -1521,7 +1521,7 @@ static int mailbox_read_index_header(struct mailbox *mailbox)
 /*
  * Read an index record from a mapped index file
  */
-int mailbox_buf_to_index_record(const char *buf,
+HIDDEN int mailbox_buf_to_index_record(const char *buf,
 				struct index_record *record)
 {
     uint32_t crc;
@@ -1973,7 +1973,7 @@ bit32 mailbox_index_header_to_buf(struct index_header *i, unsigned char *buf)
     return crc;
 }
 
-int mailbox_commit_quota(struct mailbox *mailbox)
+HIDDEN int mailbox_commit_quota(struct mailbox *mailbox)
 {
     int res;
     int changed = 0;
@@ -2490,7 +2490,7 @@ static int mailbox_index_unlink(struct mailbox *mailbox)
     return 0;
 }
 
-int mailbox_repack_setup(struct mailbox *mailbox,
+HIDDEN int mailbox_repack_setup(struct mailbox *mailbox,
 			 struct mailbox_repack **repackptr)
 {
     struct mailbox_repack *repack = xzmalloc(sizeof(struct mailbox_repack));
@@ -2546,7 +2546,7 @@ int mailbox_repack_setup(struct mailbox *mailbox,
     return IMAP_IOERROR;
 }
 
-int mailbox_repack_add(struct mailbox_repack *repack,
+HIDDEN int mailbox_repack_add(struct mailbox_repack *repack,
 		       struct index_record *record)
 {
     int r;
@@ -2575,7 +2575,7 @@ int mailbox_repack_add(struct mailbox_repack *repack,
 }
 
 /* clean up memory structures and abort repack */
-void mailbox_repack_abort(struct mailbox_repack **repackptr)
+HIDDEN void mailbox_repack_abort(struct mailbox_repack **repackptr)
 {
     struct mailbox_repack *repack = *repackptr;
     if (!repack) return; /* safe against double-free */
@@ -2587,7 +2587,7 @@ void mailbox_repack_abort(struct mailbox_repack **repackptr)
     *repackptr = NULL;
 }
 
-int mailbox_repack_commit(struct mailbox_repack **repackptr)
+HIDDEN int mailbox_repack_commit(struct mailbox_repack **repackptr)
 {
     indexbuffer_t ibuf;
     unsigned char *buf = ibuf.buf;
@@ -3128,7 +3128,7 @@ int mailbox_delete(struct mailbox **mailboxptr)
  * try to create a mailbox while the delete is underway.
  * VERY tight race condition exists right now... */
 /* we need an exclusive namelock for this */
-int mailbox_delete_cleanup(const char *part, const char *name)
+HIDDEN int mailbox_delete_cleanup(const char *part, const char *name)
 {
     char nbuf[MAX_MAILBOX_BUFFER];
     char pbuf[MAX_MAILBOX_PATH+1], mbuf[MAX_MAILBOX_PATH+1];
@@ -3271,7 +3271,7 @@ int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
    'user.foo'.*/
 /* requires a write-locked oldmailbox pointer, since we delete it 
    immediately afterwards */
-int mailbox_rename_copy(struct mailbox *oldmailbox, 
+HIDDEN int mailbox_rename_copy(struct mailbox *oldmailbox,
 			const char *newname,
 			const char *newpartition,
 			unsigned uidvalidity,
@@ -4329,7 +4329,7 @@ void mailbox_get_usage(struct mailbox *mailbox,
     /* else: mailbox is being deleted, thus its new usage is 0 */
 }
 
-void mailbox_use_annot_quota(struct mailbox *mailbox, quota_t diff)
+HIDDEN void mailbox_use_annot_quota(struct mailbox *mailbox, quota_t diff)
 {
     /* we are dirtying both index and quota */
     mailbox_index_dirty(mailbox);

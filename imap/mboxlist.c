@@ -333,7 +333,7 @@ int mboxlist_lookup_allow_reserved(const char *name,
 
 /* given a mailbox name, find the staging directory.  XXX - this should
  * require more locking, and staging directories should be by pid */
-int mboxlist_findstage(const char *name, char *stagedir, size_t sd_len) 
+HIDDEN int mboxlist_findstage(const char *name, char *stagedir, size_t sd_len)
 {
     const char *root;
     struct mboxlist_entry *mbentry = NULL;
@@ -2245,7 +2245,7 @@ int mboxlist_findall(struct namespace *namespace,
     return r;
 }
 
-int mboxlist_findall_alt(struct namespace *namespace,
+HIDDEN int mboxlist_findall_alt(struct namespace *namespace,
 			 const char *pattern, int isadmin, const char *userid,
 			 struct auth_state *auth_state, int (*proc)(),
 			 void *rock)
@@ -3029,7 +3029,7 @@ int mboxlist_allsubs(const char *userid, foreach_cb *proc, void *rock)
     return r;
 }
 
-int mboxlist_findsub_alt(struct namespace *namespace,
+HIDDEN int mboxlist_findsub_alt(struct namespace *namespace,
 			 const char *pattern, int isadmin __attribute__((unused)),
 			 const char *userid, struct auth_state *auth_state, 
 			 int (*proc)(), void *rock, int force)

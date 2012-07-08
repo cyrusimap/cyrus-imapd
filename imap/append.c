@@ -162,7 +162,7 @@ int append_setup(struct appendstate *as, const char *name,
 			     aclcheck, quotacheck, namespace, isadmin);
 }
 
-int append_setup_mbox(struct appendstate *as, struct mailbox *mailbox,
+HIDDEN int append_setup_mbox(struct appendstate *as, struct mailbox *mailbox,
 		 const char *userid, struct auth_state *auth_state,
 		 long aclcheck, const quota_t quotacheck[QUOTA_NUMRESOURCES],
 		 struct namespace *namespace, int isadmin)
@@ -1085,7 +1085,7 @@ static int load_annot_cb(const char *mailbox __attribute__((unused)),
     return 0;
 }
 
-int append_run_annotator(struct appendstate *as,
+HIDDEN int append_run_annotator(struct appendstate *as,
 			 struct index_record *record)
 {
     FILE *f = NULL;

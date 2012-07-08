@@ -89,7 +89,7 @@ struct seen {
 
 #define DB (config_seenstate_db)
 
-char *seen_getpath(const char *userid)
+HIDDEN char *seen_getpath(const char *userid)
 {
     char *fname = xmalloc(strlen(config_dir) + sizeof(FNAME_DOMAINDIR) +
 			  sizeof(FNAME_USERDIR) + strlen(userid) +
@@ -275,7 +275,7 @@ int seen_read(struct seen *seendb, const char *uniqueid, struct seendata *sd)
     return seen_readit(seendb, uniqueid, sd, 0);
 }
 
-int seen_lockread(struct seen *seendb, const char *uniqueid, struct seendata *sd)
+HIDDEN int seen_lockread(struct seen *seendb, const char *uniqueid, struct seendata *sd)
 {
     if (SEEN_DEBUG) {
 	syslog(LOG_DEBUG, "seen_db: seen_lockread %s (%s)", 
@@ -363,7 +363,7 @@ int seen_close(struct seen **seendbptr)
     return 0;
 }
 
-int seen_create_mailbox(const char *userid, struct mailbox *mailbox)
+HIDDEN int seen_create_mailbox(const char *userid, struct mailbox *mailbox)
 {
     if (SEEN_DEBUG) {
 	syslog(LOG_DEBUG, "seen_db: seen_create_mailbox(%s, %s)", 
@@ -408,7 +408,7 @@ int seen_create_user(const char *user)
     return 0;
 }
 
-int seen_delete_user(const char *user)
+HIDDEN int seen_delete_user(const char *user)
 {
     char *fname = seen_getpath(user);
     int r = 0;
@@ -427,7 +427,7 @@ int seen_delete_user(const char *user)
     return r;
 }
 
-int seen_rename_user(const char *olduser, const char *newuser)
+HIDDEN int seen_rename_user(const char *olduser, const char *newuser)
 {
     char *oldfname = seen_getpath(olduser);
     char *newfname = seen_getpath(newuser);
@@ -450,7 +450,7 @@ int seen_rename_user(const char *olduser, const char *newuser)
     return r;
 }
 
-int seen_copy(const char *userid, struct mailbox *oldmailbox,
+HIDDEN int seen_copy(const char *userid, struct mailbox *oldmailbox,
 	      struct mailbox *newmailbox)
 {
     if (SEEN_DEBUG) {
@@ -534,7 +534,7 @@ static int seen_merge_cb(void *rockp,
  * the already existing "currentfile", but only
  * if the record in newfile is actually newer
  * (or doesn't exist in currentfile yet)  */
-int seen_merge(struct seen *seendb, const char *newfile)
+HIDDEN int seen_merge(struct seen *seendb, const char *newfile)
 {
     int r = 0;
     struct db *newdb = NULL;

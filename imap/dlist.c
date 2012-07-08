@@ -795,7 +795,7 @@ int dlist_parsemap(struct dlist **dlp, int parsekey,
     return 0;
 }
 
-struct dlist *dlist_getchild(struct dlist *dl, const char *name)
+HIDDEN struct dlist *dlist_getchild(struct dlist *dl, const char *name)
 {
     struct dlist *i;
 
@@ -856,7 +856,7 @@ int dlist_toatom(struct dlist *dl, const char **valp)
     return 1;
 }
 
-int dlist_tomap(struct dlist *dl, const char **valp, size_t *lenp)
+HIDDEN int dlist_tomap(struct dlist *dl, const char **valp, size_t *lenp)
 {
     char tmp[30];
 
@@ -1096,7 +1096,7 @@ bit64 dlist_num(struct dlist *dl)
 }
 
 /* XXX - this stuff is all shitty, rationalise later */
-const char *dlist_cstring(struct dlist *dl)
+HIDDEN const char *dlist_cstring(struct dlist *dl)
 {
     static char zerochar = '\0';
 

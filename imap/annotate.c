@@ -658,7 +658,7 @@ error:
     return r;
 }
 
-int annotate_getdb(const char *mboxname, annotate_db_t **dbp)
+HIDDEN int annotate_getdb(const char *mboxname, annotate_db_t **dbp)
 {
     if (!mboxname || !*mboxname) {
 	syslog(LOG_ERR, "IOERROR: annotate_getdb called with no mboxname");
@@ -695,7 +695,7 @@ static void annotate_closedb(annotate_db_t *d)
     free(d);
 }
 
-void annotate_putdb(annotate_db_t **dbp)
+HIDDEN void annotate_putdb(annotate_db_t **dbp)
 {
     annotate_db_t *d;
 
@@ -1151,7 +1151,7 @@ int annotate_state_set_mailbox_mbe(annotate_state_t *state,
     return annotate_state_set_scope(state, mbentry, NULL, 0);
 }
 
-int annotate_state_set_message(annotate_state_t *state,
+HIDDEN int annotate_state_set_message(annotate_state_t *state,
 			       struct mailbox *mailbox,
 			       unsigned int uid)
 {
@@ -3075,7 +3075,7 @@ int annotate_msg_copy(struct mailbox *oldmailbox, uint32_t olduid,
     return r;
 }
 
-int annotate_msg_expunge(annotate_state_t *state)
+HIDDEN int annotate_msg_expunge(annotate_state_t *state)
 {
     if (state->which != ANNOTATION_SCOPE_MESSAGE) return IMAP_INTERNAL;
 
@@ -3118,7 +3118,7 @@ static int calc_usage_cb(const char *mailbox __attribute__((unused)),
  * per-mailbox annotations for this mailbox, to calculate
  * mailbox->i.quota_annot_used.
  */
-int annotate_recalc_begin(struct mailbox *mailbox,
+HIDDEN int annotate_recalc_begin(struct mailbox *mailbox,
 			  annotate_recalc_state_t **arsp,
 			  int reconstruct)
 {
@@ -3176,7 +3176,7 @@ static void annotate_recalc_end(annotate_recalc_state_t *ars)
 }
 
 
-void annotate_recalc_add(annotate_recalc_state_t *ars,
+HIDDEN void annotate_recalc_add(annotate_recalc_state_t *ars,
 			 uint32_t uid)
 {
     uint32_t *cp;
@@ -3244,7 +3244,7 @@ static int recalc_prune_cb(void *rock, const char *key, size_t keylen,
     return r;
 }
 
-int annotate_recalc_commit(annotate_recalc_state_t *ars)
+HIDDEN int annotate_recalc_commit(annotate_recalc_state_t *ars)
 {
     int r = 0;
 
@@ -3285,7 +3285,7 @@ out:
     return r;
 }
 
-void annotate_recalc_abort(annotate_recalc_state_t *ars)
+HIDDEN void annotate_recalc_abort(annotate_recalc_state_t *ars)
 {
     if (ars)
 	annotate_recalc_end(ars);

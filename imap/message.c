@@ -493,7 +493,7 @@ void message_fetch_part(struct message_content *msg,
  * and fills in appropriate information in the index record pointed to
  * by 'record'.
  */
-int message_create_record(struct index_record *record,
+HIDDEN int message_create_record(struct index_record *record,
 			  const struct body *body)
 {
     if (!record->internaldate) {
@@ -1785,7 +1785,7 @@ static void message_write_envelope(struct buf *buf, const struct body *body)
  * Write the BODY (if 'newformat' is zero) or BODYSTRUCTURE
  * (if 'newformat' is nonzero) for 'body' to 'buf'.
  */
-void message_write_body(struct buf *buf, const struct body *body,
+HIDDEN void message_write_body(struct buf *buf, const struct body *body,
 		        int newformat)
 {
     struct param *param;
@@ -2322,7 +2322,7 @@ void message_free_body(struct body *body)
  * When inside a list (ncom > 0), we parse the individual tokens but don't
  * isolate them -- we return the entire list as a single token.
  */
-void parse_cached_envelope(char *env, char *tokens[], int tokens_size)
+HIDDEN void parse_cached_envelope(char *env, char *tokens[], int tokens_size)
 {
     char *c;
     int i = 0, ncom = 0, len;
@@ -2436,7 +2436,7 @@ char *parse_nstring(char **str)
     return val;
 }
 
-void message_parse_env_address(char *str, struct address *addr)
+HIDDEN void message_parse_env_address(char *str, struct address *addr)
 {
     if (*str == '(') str++; /* skip ( */
     addr->name = parse_nstring(&str);

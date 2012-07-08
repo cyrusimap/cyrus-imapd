@@ -84,7 +84,7 @@ int idle_make_server_address(struct sockaddr_un *mysun)
     return 1;
 }
 
-int idle_make_client_address(struct sockaddr_un *mysun)
+HIDDEN int idle_make_client_address(struct sockaddr_un *mysun)
 {
     memset(mysun, 0, sizeof(*mysun));
     mysun->sun_family = AF_UNIX;

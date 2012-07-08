@@ -70,7 +70,7 @@
 
 #define QDB config_quota_db
 
-struct db *qdb;
+HIDDEN struct db *qdb;
 
 /* skanky reuse of mboxname locks.  Ideally we would rename
  * them to something more general and use them elsewhere */
@@ -486,7 +486,7 @@ out:
     return r;
 }
 
-int quota_check_useds(const char *quotaroot,
+HIDDEN int quota_check_useds(const char *quotaroot,
 		      const quota_t diff[QUOTA_NUMRESOURCES])
 {
     int r = 0;

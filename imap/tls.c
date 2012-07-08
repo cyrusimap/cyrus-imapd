@@ -1168,7 +1168,7 @@ int tls_get_info(SSL *conn, char *buf, size_t len)
     return (strlen(buf));
 }
 
-int tls_init_clientengine(int verifydepth,
+HIDDEN int tls_init_clientengine(int verifydepth,
 			  char *var_tls_cert_file,
 			  char *var_tls_key_file)
 {
@@ -1234,7 +1234,7 @@ int tls_init_clientengine(int verifydepth,
     return (0);
 }
 
-int tls_start_clienttls(int readfd, int writefd,
+HIDDEN int tls_start_clienttls(int readfd, int writefd,
 			int *layerbits, char **authid, SSL **ret,
 			SSL_SESSION **sess)
 {

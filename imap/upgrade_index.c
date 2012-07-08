@@ -152,7 +152,7 @@ static void upgrade_index_record(struct mailbox *mailbox,
 /*
  * Upgrade an index/expunge file for 'mailbox'
  */
-int upgrade_index(struct mailbox *mailbox)
+HIDDEN int upgrade_index(struct mailbox *mailbox)
 {
     uint32_t recno, erecno;
     uint32_t uid, euid;
