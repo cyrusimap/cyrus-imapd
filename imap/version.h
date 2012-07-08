@@ -45,6 +45,7 @@
 #ifndef _CYRUS_VERSION_H
 #define _CYRUS_VERSION_H
 
+#include "prot.h"
 /* Values for ID processing */
 enum {
     MAXIDFAILED	= 3,
@@ -56,5 +57,7 @@ enum {
 };
 
 const char *cyrus_version(void);
+extern void id_getcmdline(int argc, char **argv);
+extern void id_response(struct protstream *pout);
 
 #endif /* _CYRUS_VERSION_H */

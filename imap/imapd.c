@@ -384,8 +384,6 @@ void cmd_status(char *tag, char *name);
 void cmd_namespace(char* tag);
 void cmd_mupdatepush(char *tag, char *name);
 void cmd_id(char* tag);
-extern void id_getcmdline(int argc, char **argv);
-extern void id_response(struct protstream *pout);
 
 void cmd_idle(char* tag);
 
