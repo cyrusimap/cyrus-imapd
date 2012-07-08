@@ -574,7 +574,7 @@ fail:
     return 0;
 }
 
-int mailbox_index_islocked(struct mailbox *mailbox, int write)
+static int mailbox_index_islocked(struct mailbox *mailbox, int write)
 {
     if (mailbox->index_locktype == LOCK_EXCLUSIVE) return 1;
     if (mailbox->index_locktype == LOCK_SHARED && !write) return 1;
@@ -693,7 +693,7 @@ int cache_append_record(int fd, struct index_record *record)
     return 0;
 }
 
-int mailbox_commit_cache(struct mailbox *mailbox)
+static int mailbox_commit_cache(struct mailbox *mailbox)
 {
     if (!mailbox->cache_dirty)
 	return 0;
@@ -842,7 +842,7 @@ static void mailbox_release_resources(struct mailbox *mailbox)
 /*
  * Open the index file for 'mailbox'
  */
-int mailbox_open_index(struct mailbox *mailbox)
+static int mailbox_open_index(struct mailbox *mailbox)
 {
     struct stat sbuf;
     char *fname;
@@ -873,7 +873,7 @@ int mailbox_open_index(struct mailbox *mailbox)
     return 0;
 }
 
-int mailbox_mboxlock_reopen(struct mailboxlist *listitem, int locktype)
+static int mailbox_mboxlock_reopen(struct mailboxlist *listitem, int locktype)
 {
     struct mailbox *mailbox = &listitem->m;
     int r;
@@ -1838,7 +1838,7 @@ void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *sdata)
 /*
  * Write the header file for 'mailbox'
  */
-int mailbox_commit_header(struct mailbox *mailbox)
+static int mailbox_commit_header(struct mailbox *mailbox)
 {
     int flag;
     int fd;
@@ -1926,7 +1926,7 @@ int mailbox_commit_header(struct mailbox *mailbox)
     return 0;
 }
 
-bit32 mailbox_index_header_to_buf(struct index_header *i, unsigned char *buf)
+static bit32 mailbox_index_header_to_buf(struct index_header *i, unsigned char *buf)
 {
     bit32 crc;
     bit32 options = i->options & MAILBOX_OPT_VALID;
@@ -2062,7 +2062,7 @@ int mailbox_commit(struct mailbox *mailbox)
 /*
  * Put an index record into a buffer suitable for writing to a file.
  */
-bit32 mailbox_index_record_to_buf(struct index_record *record,
+static bit32 mailbox_index_record_to_buf(struct index_record *record,
 				  unsigned char *buf)
 {
     int n;

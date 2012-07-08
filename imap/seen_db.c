@@ -190,7 +190,7 @@ static void parse_data(const char *data, int datalen, struct seendata *sd)
     sd->seenuids[uidlen] = '\0';
 }
 
-int foreach_proc(void *rock,
+static int foreach_proc(void *rock,
 		 const char *key,
 		 size_t keylen,
 		 const char *data,

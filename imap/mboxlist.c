@@ -656,7 +656,7 @@ int mboxlist_createmailboxcheck(const char *name, int mbtype __attribute__((unus
  *
  */
 
-int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
+static int mboxlist_createmailbox_full(const char *mboxname, int mbtype,
 				const char *partition,
 				int isadmin, const char *userid,
 				struct auth_state *auth_state,

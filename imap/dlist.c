@@ -499,7 +499,7 @@ struct dlist *dlist_setfile(struct dlist *parent, const char *name,
     return dl;
 }
 
-struct dlist *dlist_updatechild(struct dlist *parent, const char *name)
+static struct dlist *dlist_updatechild(struct dlist *parent, const char *name)
 {
     struct dlist *dl = dlist_getchild(parent, name);
     if (!dl) dl = dlist_child(parent, name);
@@ -894,7 +894,7 @@ HIDDEN int dlist_tomap(struct dlist *dl, const char **valp, size_t *lenp)
 }
 
 /* ensure value is exactly one number */
-int dlist_tonum64(struct dlist *dl, bit64 *valp)
+static int dlist_tonum64(struct dlist *dl, bit64 *valp)
 {
     const char *end;
     bit64 newval;

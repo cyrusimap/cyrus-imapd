@@ -110,7 +110,7 @@ static void message_parse_charset(const struct body *body,
 static void message_parse_string(const char *hdr, char **hdrp);
 static void message_parse_header(const char *hdr, struct buf *buf);
 static void message_parse_type(const char *hdr, struct body *body);
-/* static */ void message_parse_disposition(const char *hdr, struct body *body);
+static void message_parse_disposition(const char *hdr, struct body *body);
 static void message_parse_params(const char *hdr, struct param **paramp);
 static void message_fold_params(struct param **paramp);
 static void message_parse_language(const char *hdr, struct param **paramp);
@@ -1014,7 +1014,7 @@ static void message_parse_type(const char *hdr, struct body *body)
 /*
  * Parse a Content-Disposition from a header.
  */
-/* static */ void message_parse_disposition(const char *hdr, struct body *body)
+static void message_parse_disposition(const char *hdr, struct body *body)
 {
     const char *disposition;
     int dispositionlen;

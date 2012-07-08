@@ -94,8 +94,8 @@ static void index_unlock(struct index_state *state);
 
 static void index_checkflags(struct index_state *state, int dirty);
 
-int index_writeseen(struct index_state *state);
-void index_fetchmsg(struct index_state *state,
+static int index_writeseen(struct index_state *state);
+static void index_fetchmsg(struct index_state *state,
 		    const char *msg_base, unsigned long msg_size,
 		    unsigned offset, unsigned size,
 		    unsigned start_octet, unsigned octet_count);
@@ -323,7 +323,7 @@ int index_expunge(struct index_state *state, char *sequence,
     return r;
 }
 
-char *index_buildseen(struct index_state *state, const char *oldseenuids)
+static char *index_buildseen(struct index_state *state, const char *oldseenuids)
 {
     struct seqset *outlist;
     uint32_t msgno;
@@ -358,7 +358,7 @@ char *index_buildseen(struct index_state *state, const char *oldseenuids)
     return out;
 }
 
-int index_writeseen(struct index_state *state)
+static int index_writeseen(struct index_state *state)
 {
     int r;
     struct seen *seendb = NULL;
@@ -3269,7 +3269,7 @@ out:
 }
 
 
-int _search_searchbuf(char *s, comp_pat *p, struct buf *b)
+static int _search_searchbuf(char *s, comp_pat *p, struct buf *b)
 {
     if (!b->len)
 	return 0;

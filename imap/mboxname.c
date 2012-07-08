@@ -133,7 +133,7 @@ static struct mboxlocklist *create_lockitem(const char *name)
     return item;
 }
 
-struct mboxlocklist *find_lockitem(const char *name)
+static struct mboxlocklist *find_lockitem(const char *name)
 {
     struct mboxlocklist *item;
 
@@ -145,7 +145,7 @@ struct mboxlocklist *find_lockitem(const char *name)
     return NULL;
 }
 
-void remove_lockitem(struct mboxlocklist *remitem)
+static void remove_lockitem(struct mboxlocklist *remitem)
 {
     struct mboxlocklist *item;
     struct mboxlocklist *previtem = NULL;

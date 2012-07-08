@@ -92,7 +92,7 @@ static int idle_send_msg(int which, const char *mboxname)
 /*
  * Notify idled of a mailbox change
  */
-void idle_notify(const char *mboxname)
+static void idle_notify(const char *mboxname)
 {
     /* We should try to determine if we need to send this
      * (ie, is an imapd is IDLE on 'mailbox'?).
