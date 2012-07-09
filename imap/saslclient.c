@@ -180,7 +180,7 @@ void free_callbacks(sasl_callback_t *in)
 #define BASE64_BUF_SIZE	21848	/* per RFC 2222bis: ((16K / 3) + 1) * 4  */
 #define AUTH_BUF_SIZE	BASE64_BUF_SIZE+50	/* data + response overhead */
 
-int saslclient(sasl_conn_t *conn, struct sasl_cmd_t *sasl_cmd,
+HIDDEN int saslclient(sasl_conn_t *conn, struct sasl_cmd_t *sasl_cmd,
 	       const char *mechlist,
                struct protstream *pin, struct protstream *pout,
 	       int *sasl_result, const char **status)

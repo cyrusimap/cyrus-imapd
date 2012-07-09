@@ -779,7 +779,7 @@ static void get_part_stats(const char *key, const char *val, void *rock)
  * Optionally returns the total amount of available space on the server
  * (all partitions) in 1k blocks.
  */
-char *find_free_partition(unsigned long *tavail)
+HIDDEN char *find_free_partition(unsigned long *tavail)
 {
     static struct part_stats stats;
 
