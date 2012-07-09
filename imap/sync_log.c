@@ -75,7 +75,7 @@ static const char *suppressed_channel = NULL;
 static char *channel_base;
 static char *channel_end;
 
-void sync_log_init(void)
+EXPORTED void sync_log_init(void)
 {
     char *p;
 
@@ -93,7 +93,7 @@ void sync_log_init(void)
     }
 }
 
-void sync_log_suppress(void)
+EXPORTED void sync_log_suppress(void)
 {
     sync_log_enabled = 0;
 }
@@ -110,13 +110,13 @@ void sync_log_suppress_channel(const char *channelname)
     }
 }
 
-void sync_log_done(void)
+EXPORTED void sync_log_done(void)
 {
     free(channel_base);
     channel_base = NULL;
 }
 
-char *sync_log_fname(const char *channel)
+EXPORTED char *sync_log_fname(const char *channel)
 {
     static char buf[MAX_MAILBOX_PATH];
 
@@ -289,7 +289,7 @@ void sync_log_channel(const char *channel, const char *fmt, ...)
     sync_log_base(channel, val);
 }
 
-void sync_log(const char *fmt, ...)
+EXPORTED void sync_log(const char *fmt, ...)
 {
     va_list ap;
     const char *val;

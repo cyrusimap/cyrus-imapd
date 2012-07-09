@@ -268,7 +268,7 @@ static int annotate_commit(annotate_db_t *d);
 /*
  * Append 's' to the strlist 'l'.
  */
-void appendstrlist(struct strlist **l, char *s)
+EXPORTED void appendstrlist(struct strlist **l, char *s)
 {
     struct strlist **tail = l;
 
@@ -284,7 +284,7 @@ void appendstrlist(struct strlist **l, char *s)
  * Append 's' to the strlist 'l', compiling it as a pattern.
  * Caller must pass in memory that is freed when the strlist is freed.
  */
-void appendstrlistpat(struct strlist **l, char *s)
+EXPORTED void appendstrlistpat(struct strlist **l, char *s)
 {
     struct strlist **tail = l;
 
@@ -299,7 +299,7 @@ void appendstrlistpat(struct strlist **l, char *s)
 /*
  * Free the strlist 'l'
  */
-void freestrlist(struct strlist *l)
+EXPORTED void freestrlist(struct strlist *l)
 {
     struct strlist *n;
 
@@ -317,7 +317,7 @@ void freestrlist(struct strlist *l)
 /*
  * Append the 'attrib'/'value' pair to the attvaluelist 'l'.
  */
-void appendattvalue(struct attvaluelist **l,
+EXPORTED void appendattvalue(struct attvaluelist **l,
 		    const char *attrib,
 		    const struct buf *value)
 {
@@ -343,7 +343,7 @@ void dupattvalues(struct attvaluelist **dst,
 /*
  * Free the attvaluelist 'l'
  */
-void freeattvalues(struct attvaluelist *l)
+EXPORTED void freeattvalues(struct attvaluelist *l)
 {
     struct attvaluelist *n;
 
@@ -359,7 +359,7 @@ void freeattvalues(struct attvaluelist *l)
 /*
  * Append the 'entry'/'attvalues' pair to the entryattlist 'l'.
  */
-void appendentryatt(struct entryattlist **l, const char *entry,
+EXPORTED void appendentryatt(struct entryattlist **l, const char *entry,
 		    struct attvaluelist *attvalues)
 {
     struct entryattlist **tail = l;
@@ -372,7 +372,7 @@ void appendentryatt(struct entryattlist **l, const char *entry,
     (*tail)->next = NULL;
 }
 
-void setentryatt(struct entryattlist **l, const char *entry,
+EXPORTED void setentryatt(struct entryattlist **l, const char *entry,
 		 const char *attrib, const struct buf *value)
 {
     struct entryattlist *ee;
@@ -400,7 +400,7 @@ void setentryatt(struct entryattlist **l, const char *entry,
     }
 }
 
-void clearentryatt(struct entryattlist **l, const char *entry,
+EXPORTED void clearentryatt(struct entryattlist **l, const char *entry,
 		   const char *attrib)
 {
     struct entryattlist *ea, **pea;
@@ -452,7 +452,7 @@ void dupentryatt(struct entryattlist **dst,
 /*
  * Count the storage used by entryattlist 'l'
  */
-size_t sizeentryatts(const struct entryattlist *l)
+EXPORTED size_t sizeentryatts(const struct entryattlist *l)
 {
     size_t sz = 0;
     struct attvaluelist *av;
@@ -466,7 +466,7 @@ size_t sizeentryatts(const struct entryattlist *l)
 /*
  * Free the entryattlist 'l'
  */
-void freeentryatts(struct entryattlist *l)
+EXPORTED void freeentryatts(struct entryattlist *l)
 {
     struct entryattlist *n;
 
@@ -480,7 +480,7 @@ void freeentryatts(struct entryattlist *l)
 }
 
 /* must be called after cyrus_init */
-void annotate_init(int (*fetch_func)(const char *, const char *,
+EXPORTED void annotate_init(int (*fetch_func)(const char *, const char *,
 				     const strarray_t *, const strarray_t *),
 		   int (*store_func)(const char *, const char *,
 				     struct entryattlist *))
@@ -716,7 +716,7 @@ HIDDEN void annotate_putdb(annotate_db_t **dbp)
     *dbp = NULL;
 }
 
-void annotatemore_open(void)
+EXPORTED void annotatemore_open(void)
 {
     int r;
     annotate_db_t *d = NULL;
@@ -727,7 +727,7 @@ void annotatemore_open(void)
 	fatal("can't open global annotations database", EC_TEMPFAIL);
 }
 
-void annotatemore_close(void)
+EXPORTED void annotatemore_close(void)
 {
     /* close all the open databases */
     while (all_dbs_head)
@@ -778,7 +778,7 @@ static int annotate_commit(annotate_db_t *d)
     return r;
 }
 
-void annotate_done(void)
+EXPORTED void annotate_done(void)
 {
     /* DB->done() handled by cyrus_done() */
 }
@@ -987,7 +987,7 @@ static int find_cb(void *rock, const char *key, size_t keylen,
     return r;
 }
 
-int annotatemore_findall(const char *mboxname,	/* internal */
+EXPORTED int annotatemore_findall(const char *mboxname,	/* internal */
 			 unsigned int uid,
 			 const char *entry,
 			 annotatemore_find_proc_t proc,
@@ -1035,7 +1035,7 @@ out:
 
 /***************************  Annotate State Management  ***************************/
 
-annotate_state_t *annotate_state_new(void)
+EXPORTED annotate_state_t *annotate_state_new(void)
 {
     annotate_state_t *state;
 
@@ -1082,12 +1082,12 @@ static void annotate_state_free(annotate_state_t **statep)
     *statep = NULL;
 }
 
-void annotate_state_begin(annotate_state_t *state)
+EXPORTED void annotate_state_begin(annotate_state_t *state)
 {
     annotate_begin(state->d);
 }
 
-void annotate_state_abort(annotate_state_t **statep)
+EXPORTED void annotate_state_abort(annotate_state_t **statep)
 {
     if (*statep)
 	annotate_abort((*statep)->d);
@@ -1095,7 +1095,7 @@ void annotate_state_abort(annotate_state_t **statep)
     annotate_state_free(statep);
 }
 
-int annotate_state_commit(annotate_state_t **statep)
+EXPORTED int annotate_state_commit(annotate_state_t **statep)
 {
     int r = 0;
     if (*statep)
@@ -1123,7 +1123,7 @@ _annotate_state_add_entry(annotate_state_t *state,
     return ee;
 }
 
-void annotate_state_set_auth(annotate_state_t *state,
+EXPORTED void annotate_state_set_auth(annotate_state_t *state,
 		             int isadmin, const char *userid,
 		             struct auth_state *auth_state)
 {
@@ -1134,18 +1134,18 @@ void annotate_state_set_auth(annotate_state_t *state,
     state->auth_state = auth_state;
 }
 
-int annotate_state_set_server(annotate_state_t *state)
+EXPORTED int annotate_state_set_server(annotate_state_t *state)
 {
     return annotate_state_set_scope(state, NULL, NULL, 0);
 }
 
-int annotate_state_set_mailbox(annotate_state_t *state,
+EXPORTED int annotate_state_set_mailbox(annotate_state_t *state,
 				struct mailbox *mailbox)
 {
     return annotate_state_set_scope(state, NULL, mailbox, 0);
 }
 
-int annotate_state_set_mailbox_mbe(annotate_state_t *state,
+EXPORTED int annotate_state_set_mailbox_mbe(annotate_state_t *state,
 				   struct mboxlist_entry *mbentry)
 {
     return annotate_state_set_scope(state, mbentry, NULL, 0);
@@ -2064,7 +2064,7 @@ static void _annotate_fetch_entries(annotate_state_t *state,
     }
 }
 
-int annotate_state_fetch(annotate_state_t *state,
+EXPORTED int annotate_state_fetch(annotate_state_t *state,
 		         const strarray_t *entries, const strarray_t *attribs,
 		         annotate_fetch_cb_t callback, void *rock,
 		         int *maxsizeptr)
@@ -2229,13 +2229,13 @@ out:
 
 /**************************  Annotation Storing  *****************************/
 
-int annotatemore_lookup(const char *mboxname, const char *entry,
+EXPORTED int annotatemore_lookup(const char *mboxname, const char *entry,
 			const char *userid, struct buf *value)
 {
     return annotatemore_msg_lookup(mboxname, /*uid*/0, entry, userid, value);
 }
 
-int annotatemore_msg_lookup(const char *mboxname, uint32_t uid, const char *entry,
+EXPORTED int annotatemore_msg_lookup(const char *mboxname, uint32_t uid, const char *entry,
 			    const char *userid, struct buf *value)
 {
     char key[MAX_MAILBOX_PATH+1];
@@ -2392,7 +2392,7 @@ out:
     return r;
 }
 
-int annotate_state_write(annotate_state_t *state,
+EXPORTED int annotate_state_write(annotate_state_t *state,
 			 const char *entry,
 			 const char *userid,
 			 const struct buf *value)
@@ -2778,7 +2778,7 @@ static int find_desc_store(int scope,
     return 0;
 }
 
-int annotate_state_store(annotate_state_t *state, struct entryattlist *l)
+EXPORTED int annotate_state_store(annotate_state_t *state, struct entryattlist *l)
 {
     int r = 0;
     struct entryattlist *e = l;
@@ -2939,7 +2939,7 @@ static int rename_cb(const char *mboxname __attribute__((unused)),
     return r;
 }
 
-int annotate_rename_mailbox(struct mailbox *oldmailbox,
+EXPORTED int annotate_rename_mailbox(struct mailbox *oldmailbox,
 			    struct mailbox *newmailbox)
 {
     /* rename one mailbox */
@@ -3007,7 +3007,7 @@ static int _annotate_rewrite(struct mailbox *oldmailbox,
     return annotatemore_findall(oldmailbox->name, olduid, "*", &rename_cb, &rrock);
 }
 
-int annotate_delete_mailbox(struct mailbox *mailbox)
+EXPORTED int annotate_delete_mailbox(struct mailbox *mailbox)
 {
     int r = 0;
     char *fname = NULL;
@@ -3050,7 +3050,7 @@ out:
     return r;
 }
 
-int annotate_msg_copy(struct mailbox *oldmailbox, uint32_t olduid,
+EXPORTED int annotate_msg_copy(struct mailbox *oldmailbox, uint32_t olduid,
 		      struct mailbox *newmailbox, uint32_t newuid,
 		      const char *userid)
 {

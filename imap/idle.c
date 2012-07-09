@@ -103,7 +103,7 @@ static void idle_notify(const char *mboxname)
 /*
  * Create connection to idled for sending notifications
  */
-void idle_init(void)
+EXPORTED void idle_init(void)
 {
     struct sockaddr_un local;
     int fdflags;
@@ -136,7 +136,7 @@ void idle_init(void)
     idle_method_desc = "idled";
 }
 
-int idle_enabled(void)
+EXPORTED int idle_enabled(void)
 {
     int idle_period = config_getint(IMAPOPT_IMAPIDLEPOLL);
 
@@ -144,7 +144,7 @@ int idle_enabled(void)
     return (idle_period > 0);
 }
 
-void idle_start(const char *mboxname)
+EXPORTED void idle_start(const char *mboxname)
 {
     if (!idle_enabled()) return;
 
@@ -154,7 +154,7 @@ void idle_start(const char *mboxname)
 	idle_started = 1;
 }
 
-int idle_wait(int otherfd)
+EXPORTED int idle_wait(int otherfd)
 {
     fd_set rfds;
     int maxfd = -1;
@@ -230,7 +230,7 @@ int idle_wait(int otherfd)
     return flags;
 }
 
-void idle_stop(const char *mboxname)
+EXPORTED void idle_stop(const char *mboxname)
 {
     if (!idle_started) return;
 
@@ -240,7 +240,7 @@ void idle_stop(const char *mboxname)
     idle_started = 0;
 }
 
-void idle_done(void)
+EXPORTED void idle_done(void)
 {
     /* close the local socket */
     idle_done_sock();

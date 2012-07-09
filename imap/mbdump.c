@@ -79,7 +79,6 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
-#include "upgrade_index.h"
 #include "user.h"
 #include "util.h"
 #include "index.h"
@@ -471,7 +470,7 @@ static struct data_file data_files[] = {
 enum { SEEN_DB = 0, SUBS_DB = 1, MBOXKEY_DB = 2 };
 static int NUM_USER_DATA_FILES = 3;
 
-int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid_start,
+EXPORTED int dump_mailbox(const char *tag, struct mailbox *mailbox, uint32_t uid_start,
 		 int oldversion,
 		 struct protstream *pin, struct protstream *pout,
 		 struct auth_state *auth_state __attribute((unused)))
@@ -803,7 +802,7 @@ static int cleanup_seen_subfolders(const char *mbname)
     return 0;
 }
 
-int undump_mailbox(const char *mbname, 
+EXPORTED int undump_mailbox(const char *mbname,
 		   struct protstream *pin, struct protstream *pout,
 		   struct auth_state *auth_state __attribute((unused)))
 {

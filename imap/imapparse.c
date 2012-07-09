@@ -57,7 +57,7 @@
  * Parse a word
  * (token not containing whitespace, parens, or double quotes)
  */
-int getword(struct protstream *in, struct buf *buf)
+EXPORTED int getword(struct protstream *in, struct buf *buf)
 {
     int c;
 
@@ -79,7 +79,7 @@ int getword(struct protstream *in, struct buf *buf)
  * Parse an xstring
  * (astring, nstring or string based on type)
  */
-int getxstring(struct protstream *pin, struct protstream *pout,
+EXPORTED int getxstring(struct protstream *pin, struct protstream *pout,
 	       struct buf *buf, enum getxstring_flags flags)
 {
     int c;
@@ -226,7 +226,7 @@ fail:
     return EOF;
 }
 
-int getint32(struct protstream *pin, int32_t *num)
+EXPORTED int getint32(struct protstream *pin, int32_t *num)
 {
     int32_t result = 0;
     char c;
@@ -250,7 +250,7 @@ int getint32(struct protstream *pin, int32_t *num)
 
 /* Like getint32() but explicitly signed, i.e. negative numbers
  * are accepted */
-int getsint32(struct protstream *pin, int32_t *num)
+EXPORTED int getsint32(struct protstream *pin, int32_t *num)
 {
     int c;
     int sgn = 1;
@@ -277,7 +277,7 @@ int getsint32(struct protstream *pin, int32_t *num)
 }
 
 /* can't flag with -1 if there is no number here, so return EOF */
-int getuint32(struct protstream *pin, uint32_t *num)
+EXPORTED int getuint32(struct protstream *pin, uint32_t *num)
 {
     uint32_t result = 0;
     char c;
@@ -301,7 +301,7 @@ int getuint32(struct protstream *pin, uint32_t *num)
 
 /* This would be called getuint64() if
  * all were right with the world */
-int getmodseq(struct protstream *pin, modseq_t *num)
+EXPORTED int getmodseq(struct protstream *pin, modseq_t *num)
 {
     int c;
     unsigned int i = 0;
@@ -328,7 +328,7 @@ int getmodseq(struct protstream *pin, modseq_t *num)
  * Eat characters up to and including the next newline
  * Also look for and eat non-synchronizing literals.
  */
-void eatline(struct protstream *pin, int c)
+EXPORTED void eatline(struct protstream *pin, int c)
 {
     int state = 0;
     char *statediagram = " {+}\r";

@@ -172,7 +172,7 @@ static void remove_listitem(struct mailboxlist *remitem)
     fatal("didn't find item in list", EC_SOFTWARE);
 }
 
-char *mailbox_meta_fname(struct mailbox *mailbox, int metafile)
+EXPORTED char *mailbox_meta_fname(struct mailbox *mailbox, int metafile)
 {
     static char fnamebuf[MAX_MAILBOX_PATH];
     const char *src;
@@ -184,7 +184,7 @@ char *mailbox_meta_fname(struct mailbox *mailbox, int metafile)
     return fnamebuf;
 }
 
-char *mailbox_meta_newfname(struct mailbox *mailbox, int metafile)
+EXPORTED char *mailbox_meta_newfname(struct mailbox *mailbox, int metafile)
 {
     static char fnamebuf[MAX_MAILBOX_PATH];
     const char *src;
@@ -196,7 +196,7 @@ char *mailbox_meta_newfname(struct mailbox *mailbox, int metafile)
     return fnamebuf;
 }
 
-int mailbox_meta_rename(struct mailbox *mailbox, int metafile)
+EXPORTED int mailbox_meta_rename(struct mailbox *mailbox, int metafile)
 {
     char *fname = mailbox_meta_fname(mailbox, metafile);
     char *newfname = mailbox_meta_newfname(mailbox, metafile);
@@ -207,7 +207,7 @@ int mailbox_meta_rename(struct mailbox *mailbox, int metafile)
     return 0;
 }
 
-char *mailbox_message_fname(struct mailbox *mailbox, unsigned long uid)
+EXPORTED char *mailbox_message_fname(struct mailbox *mailbox, unsigned long uid)
 {
     static char localbuf[MAX_MAILBOX_PATH];
     const char *src;
@@ -219,7 +219,7 @@ char *mailbox_message_fname(struct mailbox *mailbox, unsigned long uid)
     return localbuf;
 }
 
-char *mailbox_datapath(struct mailbox *mailbox)
+EXPORTED char *mailbox_datapath(struct mailbox *mailbox)
 {
     static char localbuf[MAX_MAILBOX_PATH];
     const char *src;
@@ -333,7 +333,7 @@ static inline unsigned is_cached_header(const char *hdr)
  *   Returns minimum version required for lookup to succeed
  *   or BIT32_MAX if header not cached
  */
-unsigned mailbox_cached_header(const char *s) 
+EXPORTED unsigned mailbox_cached_header(const char *s)
 {
     char hdr[MAX_CACHED_HEADER_SIZE];
     int i;
@@ -395,18 +395,18 @@ struct buf *cache_buf(struct index_record *record)
     return &staticbuf;
 }
 
-const char *cacheitem_base(struct index_record *record, int field)
+EXPORTED const char *cacheitem_base(struct index_record *record, int field)
 {
     const char *base = record->crec.base->s;
     return base + record->crec.item[field].offset;
 }
 
-unsigned cacheitem_size(struct index_record *record, int field)
+EXPORTED unsigned cacheitem_size(struct index_record *record, int field)
 {
     return record->crec.item[field].len;
 }
 
-struct buf *cacheitem_buf(struct index_record *record, int field)
+EXPORTED struct buf *cacheitem_buf(struct index_record *record, int field)
 {
     static struct buf staticbuf;
 
@@ -630,7 +630,7 @@ int mailbox_append_cache(struct mailbox *mailbox,
     return 0;
 }
 
-int mailbox_cacherecord(struct mailbox *mailbox,
+EXPORTED int mailbox_cacherecord(struct mailbox *mailbox,
 			struct index_record *record)
 {
     uint32_t crc;
@@ -776,7 +776,7 @@ static void mailbox_make_uniqueid(struct mailbox *mailbox)
  * Maps in the content for the message with UID 'uid' in 'mailbox'.
  * Returns map in 'basep' and 'lenp'
  */
-int mailbox_map_message(struct mailbox *mailbox, unsigned long uid,
+EXPORTED int mailbox_map_message(struct mailbox *mailbox, unsigned long uid,
 			const char **basep, size_t *lenp)
 {
     int msgfd;
@@ -803,7 +803,7 @@ int mailbox_map_message(struct mailbox *mailbox, unsigned long uid,
 /*
  * Releases the buffer obtained from mailbox_map_message()
  */
-void mailbox_unmap_message(struct mailbox *mailbox __attribute__((unused)),
+EXPORTED void mailbox_unmap_message(struct mailbox *mailbox __attribute__((unused)),
 			   unsigned long uid __attribute__((unused)),
 			   const char **basep, size_t *lenp)
 {
@@ -977,13 +977,13 @@ done:
     return r;
 }
 
-int mailbox_open_irl(const char *name, struct mailbox **mailboxptr)
+EXPORTED int mailbox_open_irl(const char *name, struct mailbox **mailboxptr)
 {
     return mailbox_open_advanced(name, LOCK_SHARED, LOCK_SHARED,
 				 mailboxptr);
 }
 
-int mailbox_open_iwl(const char *name, struct mailbox **mailboxptr)
+EXPORTED int mailbox_open_iwl(const char *name, struct mailbox **mailboxptr)
 {
     return mailbox_open_advanced(name, LOCK_SHARED, LOCK_EXCLUSIVE,
 				 mailboxptr);
@@ -1010,13 +1010,13 @@ HIDDEN int mailbox_open_exclusive(const char *name, struct mailbox **mailboxptr)
 				 mailboxptr);
 }
 
-void mailbox_index_dirty(struct mailbox *mailbox)
+EXPORTED void mailbox_index_dirty(struct mailbox *mailbox)
 {
     assert(mailbox_index_islocked(mailbox, 1));
     mailbox->i.dirty = 1;
 }
 
-void mailbox_modseq_dirty(struct mailbox *mailbox)
+EXPORTED void mailbox_modseq_dirty(struct mailbox *mailbox)
 {
     assert(mailbox_index_islocked(mailbox, 1));
 
@@ -1043,7 +1043,7 @@ HIDDEN void mailbox_ref(struct mailbox *mailbox)
 /*
  * Close the mailbox 'mailbox', freeing all associated resources.
  */
-void mailbox_close(struct mailbox **mailboxptr)
+EXPORTED void mailbox_close(struct mailbox **mailboxptr)
 {
     int flag;
     struct mailbox *mailbox = *mailboxptr;
@@ -1276,7 +1276,7 @@ done:
 }
 
 /* set a new ACL - only dirty if changed */
-int mailbox_set_acl(struct mailbox *mailbox, const char *acl,
+EXPORTED int mailbox_set_acl(struct mailbox *mailbox, const char *acl,
 		    int dirty_modseq)
 {
     if (mailbox->acl) {
@@ -1292,7 +1292,7 @@ int mailbox_set_acl(struct mailbox *mailbox, const char *acl,
 }
 
 /* set a new QUOTAROOT - only dirty if changed */
-int mailbox_set_quotaroot(struct mailbox *mailbox, const char *quotaroot)
+EXPORTED int mailbox_set_quotaroot(struct mailbox *mailbox, const char *quotaroot)
 {
     if (mailbox->quotaroot) {
 	if (quotaroot && !strcmp(mailbox->quotaroot, quotaroot))
@@ -1330,7 +1330,7 @@ HIDDEN int mailbox_set_specialuse(struct mailbox *mailbox, const char *specialus
 }
 
 /* find or create a user flag - dirty header if change needed */
-int mailbox_user_flag(struct mailbox *mailbox, const char *flag,
+EXPORTED int mailbox_user_flag(struct mailbox *mailbox, const char *flag,
 		      int *flagnum, int create)
 {
     int userflag;
@@ -1562,7 +1562,7 @@ HIDDEN int mailbox_buf_to_index_record(const char *buf,
 /*
  * Read an index record from a mailbox
  */
-int mailbox_read_index_record(struct mailbox *mailbox,
+EXPORTED int mailbox_read_index_record(struct mailbox *mailbox,
 			      uint32_t recno,
 			      struct index_record *record)
 {
@@ -1775,7 +1775,7 @@ restart:
     return 0;
 }
 
-int mailbox_lock_index(struct mailbox *mailbox, int locktype)
+EXPORTED mailbox_lock_index(struct mailbox *mailbox, int locktype)
 {
     int r = mailbox_lock_index_internal(mailbox, locktype);
     if (r) return r;
@@ -1795,7 +1795,7 @@ int mailbox_lock_index(struct mailbox *mailbox, int locktype)
 /*
  * Release lock on the index file for 'mailbox'
  */
-void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *sdata)
+EXPORTED void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *sdata)
 {
     struct timeval endtime;
     double timediff;
@@ -2011,7 +2011,7 @@ HIDDEN int mailbox_commit_quota(struct mailbox *mailbox)
 /*
  * Write the index header for 'mailbox'
  */
-int mailbox_commit(struct mailbox *mailbox)
+EXPORTED int mailbox_commit(struct mailbox *mailbox)
 {
     /* XXX - ibuf for alignment? */
     static unsigned char buf[INDEX_HEADER_SIZE];
@@ -2190,7 +2190,7 @@ out:
  * Rewrite an index record in a mailbox - updates all
  * necessary tracking fields automatically.
  */
-int mailbox_rewrite_index_record(struct mailbox *mailbox,
+EXPORTED int mailbox_rewrite_index_record(struct mailbox *mailbox,
 				 struct index_record *record)
 {
     int n;
@@ -2304,7 +2304,7 @@ int mailbox_rewrite_index_record(struct mailbox *mailbox,
 /* append a single message to a mailbox - also updates everything
  * automatically.  These two functions are the ONLY way to modify
  * the contents or tracking fields of a message */
-int mailbox_append_index_record(struct mailbox *mailbox,
+EXPORTED int mailbox_append_index_record(struct mailbox *mailbox,
 				struct index_record *record)
 {
     indexbuffer_t ibuf;
@@ -2718,7 +2718,7 @@ static unsigned expungedeleted(struct mailbox *mailbox __attribute__((unused)),
  * determine which messages to expunge.  If 'decideproc' is a null pointer,
  * then messages with the \Deleted flag are expunged.
  */
-int mailbox_expunge(struct mailbox *mailbox,
+EXPORTED int mailbox_expunge(struct mailbox *mailbox,
 		    mailbox_decideproc_t *decideproc, void *deciderock,
 		    unsigned *nexpunged)
 {
@@ -2766,7 +2766,7 @@ int mailbox_expunge(struct mailbox *mailbox,
     return 0;
 }
 
-int mailbox_expunge_cleanup(struct mailbox *mailbox, time_t expunge_mark,
+EXPORTED int mailbox_expunge_cleanup(struct mailbox *mailbox, time_t expunge_mark,
 			    unsigned *ndeleted)
 {
     uint32_t recno;
@@ -2823,7 +2823,7 @@ int mailbox_expunge_cleanup(struct mailbox *mailbox, time_t expunge_mark,
     return r;
 }
 
-int mailbox_internal_seen(struct mailbox *mailbox, const char *userid)
+EXPORTED int mailbox_internal_seen(struct mailbox *mailbox, const char *userid)
 {
     /* shared seen - everyone's state is internal */
     if (mailbox->i.options & OPT_IMAP_SHAREDSEEN)
@@ -2839,7 +2839,7 @@ int mailbox_internal_seen(struct mailbox *mailbox, const char *userid)
 
 /* returns a mailbox locked in MAILBOX EXCLUSIVE mode, so you
  * don't need to lock the index file to work with it :) */
-int mailbox_create(const char *name,
+EXPORTED int mailbox_create(const char *name,
 		   const char *part,
 		   const char *acl,
 		   const char *uniqueid,
@@ -3081,7 +3081,7 @@ static int chkchildren(char *name,
  * Delete and close the mailbox 'mailbox'.  Closes 'mailbox' whether
  * or not the deletion was successful.  Requires a locked mailbox.
  */
-int mailbox_delete(struct mailbox **mailboxptr)
+EXPORTED int mailbox_delete(struct mailbox **mailboxptr)
 {
     int r = 0;
     struct mailbox *mailbox = *mailboxptr;
@@ -3221,7 +3221,7 @@ static struct meta_file meta_files[] = {
     { 0, 0, 0 }
 };
 
-int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
+EXPORTED int mailbox_copy_files(struct mailbox *mailbox, const char *newpart,
 		       const char *newname)
 {
     char oldbuf[MAX_MAILBOX_PATH], newbuf[MAX_MAILBOX_PATH];
@@ -3367,7 +3367,7 @@ fail:
     return r;
 }
 
-int mailbox_rename_cleanup(struct mailbox **mailboxptr, int isinbox) 
+EXPORTED int mailbox_rename_cleanup(struct mailbox **mailboxptr, int isinbox)
 {
     int r = 0;
     struct mailbox *oldmailbox = *mailboxptr;
@@ -3396,7 +3396,7 @@ int mailbox_rename_cleanup(struct mailbox **mailboxptr, int isinbox)
 /*
  * Copy (or link) the file 'from' to the file 'to'
  */
-int mailbox_copyfile(const char *from, const char *to, int nolink)
+EXPORTED int mailbox_copyfile(const char *from, const char *to, int nolink)
 {
     int flags = COPYFILE_MKDIR;
     if (nolink) flags |= COPYFILE_NOLINK;
@@ -4118,7 +4118,7 @@ static int mailbox_wipe_index_record(struct mailbox *mailbox,
 /*
  * Reconstruct the single mailbox named 'name'
  */
-int mailbox_reconstruct(const char *name, int flags)
+EXPORTED int mailbox_reconstruct(const char *name, int flags)
 {
     /* settings */
     int make_changes = (flags & RECONSTRUCT_MAKE_CHANGES);
@@ -4312,7 +4312,7 @@ close:
 /*
  * Gets messages usage.
  */
-void mailbox_get_usage(struct mailbox *mailbox,
+EXPORTED void mailbox_get_usage(struct mailbox *mailbox,
 			quota_t usage[QUOTA_NUMRESOURCES])
 {
     int res;
@@ -4337,7 +4337,7 @@ HIDDEN void mailbox_use_annot_quota(struct mailbox *mailbox, quota_t diff)
     mailbox->i.quota_annot_used += diff;
 }
 
-int mailbox_get_annotate_state(struct mailbox *mailbox,
+EXPORTED int mailbox_get_annotate_state(struct mailbox *mailbox,
 			       unsigned int uid,
 			       annotate_state_t **statep)
 {

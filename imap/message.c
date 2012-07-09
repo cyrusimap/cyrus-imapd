@@ -161,7 +161,7 @@ static char *message_ucase(char *s)
  * Caller must have initialized config_* routines (with cyrus_init) to read
  * imapd.conf before calling.
  */
-int message_copy_strict(struct protstream *from, FILE *to,
+EXPORTED int message_copy_strict(struct protstream *from, FILE *to,
 		        unsigned size, int allow_null)
 {
     char buf[4096+1];
@@ -263,7 +263,7 @@ int message_copy_strict(struct protstream *from, FILE *to,
     }
 }
 
-int message_parse2(const char *fname, struct index_record *record,
+EXPORTED int message_parse2(const char *fname, struct index_record *record,
 		   struct body **bodyp)
 {
     struct body *body = NULL;
@@ -299,7 +299,7 @@ int message_parse2(const char *fname, struct index_record *record,
  * If msg_base/msg_len are non-NULL, the file will remain memory-mapped
  * and returned to the caller.  The caller MUST unmap the file.
  */
-int message_parse_file(FILE *infile,
+EXPORTED int message_parse_file(FILE *infile,
 		       const char **msg_base, size_t *msg_len,
 		       struct body **body)
 {
@@ -348,7 +348,7 @@ int message_parse_file(FILE *infile,
  *
  * XXX can we do this with mmap()?
  */
-int message_parse_binary_file(FILE *infile, struct body **body)
+EXPORTED int message_parse_binary_file(FILE *infile, struct body **body)
 {
     int fd = fileno(infile);
     struct stat sbuf;
@@ -393,7 +393,7 @@ int message_parse_binary_file(FILE *infile, struct body **body)
 /*
  * Parse the message at 'msg_base' of length 'msg_len'.
  */
-int message_parse_mapped(const char *msg_base, unsigned long msg_len,
+EXPORTED int message_parse_mapped(const char *msg_base, unsigned long msg_len,
 			 struct body *body)
 {
     struct msg msg;
@@ -477,7 +477,7 @@ static void message_find_part(struct body *body, const char *section,
  *
  * The caller MUST free the array of allocated bodypart(s).
  */
-void message_fetch_part(struct message_content *msg,
+EXPORTED void message_fetch_part(struct message_content *msg,
 		        const char **content_types,
 		        struct bodypart ***parts)
 {
@@ -2001,12 +2001,12 @@ static void message_write_address(struct buf *buf,
 /*
  * Write the nil-or-string 's' to 'buf'
  */
-void message_write_nstring(struct buf *buf, const char *s)
+EXPORTED void message_write_nstring(struct buf *buf, const char *s)
 {
     message_write_nstring_map(buf, s, (s ? strlen(s) : 0));
 }
 
-void message_write_nstring_map(struct buf *buf,
+EXPORTED void message_write_nstring_map(struct buf *buf,
 			       const char *s,
 			       unsigned int len)
 {
@@ -2052,7 +2052,7 @@ void message_write_nstring_map(struct buf *buf,
  * Append the string @s to the buffer @buf in a binary
  * format almost exactly
  */
-void message_write_xdrstring(struct buf *buf, const struct buf *s)
+EXPORTED void message_write_xdrstring(struct buf *buf, const struct buf *s)
 {
     unsigned padlen;
 
@@ -2252,7 +2252,7 @@ static void message_write_searchaddr(struct buf *buf,
 /*
  * Free the parsed body-part 'body'
  */
-void message_free_body(struct body *body)
+EXPORTED void message_free_body(struct body *body)
 {
     struct param *param, *nextparam;
     int part;
@@ -2402,7 +2402,7 @@ HIDDEN void parse_cached_envelope(char *env, char *tokens[], int tokens_size)
     }
 }
 
-char *parse_nstring(char **str)
+EXPORTED char *parse_nstring(char **str)
 {
     char *cp = *str, *val;
 

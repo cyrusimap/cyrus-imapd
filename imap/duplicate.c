@@ -88,7 +88,7 @@ static struct db *dupdb = NULL;
 static int duplicate_dbopen = 0;
 
 /* must be called after cyrus_init */
-int duplicate_init(const char *fname)
+EXPORTED int duplicate_init(const char *fname)
 {
     int r = 0;
     char *tofree = NULL;
@@ -161,7 +161,7 @@ static int split_key(const char *key, int keylen, duplicate_key_t *dkey)
 #undef MAXFIELDS
 }
 
-time_t duplicate_check(const duplicate_key_t *dkey)
+EXPORTED time_t duplicate_check(const duplicate_key_t *dkey)
 {
     struct buf key = BUF_INITIALIZER;
     int r;
@@ -203,7 +203,7 @@ time_t duplicate_check(const duplicate_key_t *dkey)
     return mark;
 }
 
-void duplicate_log(const duplicate_key_t *dkey, const char *action)
+EXPORTED void duplicate_log(const duplicate_key_t *dkey, const char *action)
 {
     assert(dkey->date != NULL);
     syslog(LOG_INFO, "dupelim: eliminated duplicate message to %s id %s date %s (%s)",
@@ -213,7 +213,7 @@ void duplicate_log(const duplicate_key_t *dkey, const char *action)
 	       session_id(), action, dkey->id, dkey->to, dkey->date);
 }
 
-void duplicate_mark(const duplicate_key_t *dkey, time_t mark, unsigned long uid)
+EXPORTED void duplicate_mark(const duplicate_key_t *dkey, time_t mark, unsigned long uid)
 {
     struct buf key = BUF_INITIALIZER;
     char data[100];
@@ -269,7 +269,7 @@ static int find_cb(void *rock, const char *key, size_t keylen,
     return r;
 }
 
-int duplicate_find(const char *msgid,
+EXPORTED int duplicate_find(const char *msgid,
 		   duplicate_find_proc_t proc,
 		   void *rock)
 {
@@ -337,7 +337,7 @@ static int prune_cb(void *rock, const char *id, size_t idlen,
     return 0;
 }
 
-int duplicate_prune(int seconds, struct hash_table *expire_table)
+EXPORTED int duplicate_prune(int seconds, struct hash_table *expire_table)
 {
     struct prunerock prock;
 
@@ -409,7 +409,7 @@ out:
     return 0;
 }
 
-int duplicate_dump(FILE *f)
+EXPORTED int duplicate_dump(FILE *f)
 {
     struct dumprock drock;
 
@@ -422,7 +422,7 @@ int duplicate_dump(FILE *f)
     return drock.count;
 }
 
-int duplicate_done(void)
+EXPORTED int duplicate_done(void)
 {
     int r = 0;
 

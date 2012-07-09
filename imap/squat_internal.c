@@ -49,26 +49,26 @@
 
 static int last_err = SQUAT_ERR_OK;
 
-char const squat_index_file_header[8] = "SQUAT 1\n";
+EXPORTED char const squat_index_file_header[8] = "SQUAT 1\n";
 
-void squat_set_last_error(int err)
+EXPORTED void squat_set_last_error(int err)
 {
     last_err = err;
 }
 
-int squat_get_last_error(void)
+EXPORTED int squat_get_last_error(void)
 {
     return last_err;
 }
 
-SquatInt32 squat_decode_32(char const* s)
+EXPORTED SquatInt32 squat_decode_32(char const* s)
 {
     unsigned char* v = (unsigned char*)s;
     return ((SquatInt32)v[0] << 24) | ((SquatInt32)v[1] << 16) |
 	   ((SquatInt32)v[2] << 8) | (SquatInt32)v[3];
 }
 
-char *squat_encode_32(char* s, SquatInt32 v)
+EXPORTED char *squat_encode_32(char* s, SquatInt32 v)
 {
     s[0] = (unsigned char)(v >> 24);
     s[1] = (unsigned char)(v >> 16);
@@ -77,7 +77,7 @@ char *squat_encode_32(char* s, SquatInt32 v)
     return s + 4;
 }
 
-SquatInt64 squat_decode_64(char const *s)
+EXPORTED SquatInt64 squat_decode_64(char const *s)
 {
     unsigned char* v = (unsigned char*)s;
     return ((SquatInt64)v[0] << 56) | ((SquatInt64)v[1] << 48) |
@@ -86,7 +86,7 @@ SquatInt64 squat_decode_64(char const *s)
 	   ((SquatInt64)v[6] << 8) | (SquatInt64)v[7];
 }
 
-char *squat_encode_64(char* s, SquatInt64 v)
+EXPORTED char *squat_encode_64(char* s, SquatInt64 v)
 {
     s[0] = (unsigned char)(v >> 56);
     s[1] = (unsigned char)(v >> 48);
@@ -99,7 +99,7 @@ char *squat_encode_64(char* s, SquatInt64 v)
     return s + 8;
 }
 
-SquatInt64 squat_decode_I(char const** s)
+EXPORTED SquatInt64 squat_decode_I(char const** s)
 {
     int ch;
     SquatInt64 r;
@@ -127,7 +127,7 @@ HIDDEN char const *squat_decode_skip_I(char const* s, int num_to_skip)
     return s;
 }
 
-int squat_count_encode_I(SquatInt64 v64)
+EXPORTED int squat_count_encode_I(SquatInt64 v64)
 {
     int v = (int)v64;
     int shift = 56;
@@ -160,7 +160,7 @@ int squat_count_encode_I(SquatInt64 v64)
     return result;
 }
 
-char *squat_encode_I(char* s, SquatInt64 v64)
+EXPORTED char *squat_encode_I(char* s, SquatInt64 v64)
 {
     int v = (int)v64;
     int shift = 56;

@@ -147,7 +147,7 @@ static void printfile(struct protstream *out, const struct dlist *dl)
 
 /* XXX - these two functions should be out in append.c or reserve.c
  * or something more general */
-const char *dlist_reserve_path(const char *part, struct message_guid *guid)
+EXPORTED const char *dlist_reserve_path(const char *part, struct message_guid *guid)
 {
     static char buf[MAX_MAILBOX_PATH];
     snprintf(buf, MAX_MAILBOX_PATH, "%s/sync./%lu/%s",
@@ -223,7 +223,7 @@ error:
 
 /* DLIST STUFF */
 
-void dlist_stitch(struct dlist *parent, struct dlist *child)
+EXPORTED void dlist_stitch(struct dlist *parent, struct dlist *child)
 {
     assert(!child->next);
 
@@ -410,14 +410,14 @@ void dlist_makemap(struct dlist *dl, const char *val, size_t len)
 	dl->type = DL_NIL;
 }
 
-struct dlist *dlist_newkvlist(struct dlist *parent, const char *name)
+EXPORTED struct dlist *dlist_newkvlist(struct dlist *parent, const char *name)
 {
     struct dlist *dl = dlist_child(parent, name);
     dl->type = DL_KVLIST;
     return dl;
 }
 
-struct dlist *dlist_newlist(struct dlist *parent, const char *name)
+EXPORTED struct dlist *dlist_newlist(struct dlist *parent, const char *name)
 {
     struct dlist *dl = dlist_child(parent, name);
     dl->type = DL_ATOMLIST;
@@ -432,35 +432,35 @@ struct dlist *dlist_newpklist(struct dlist *parent, const char *name)
     return dl;
 }
 
-struct dlist *dlist_setatom(struct dlist *parent, const char *name, const char *val)
+EXPORTED struct dlist *dlist_setatom(struct dlist *parent, const char *name, const char *val)
 {
     struct dlist *dl = dlist_child(parent, name);
     dlist_makeatom(dl, val);
     return dl;
 }
 
-struct dlist *dlist_setflag(struct dlist *parent, const char *name, const char *val)
+EXPORTED struct dlist *dlist_setflag(struct dlist *parent, const char *name, const char *val)
 {
     struct dlist *dl = dlist_child(parent, name);
     dlist_makeflag(dl, val);
     return dl;
 }
 
-struct dlist *dlist_setnum64(struct dlist *parent, const char *name, bit64 val)
+EXPORTED struct dlist *dlist_setnum64(struct dlist *parent, const char *name, bit64 val)
 {
     struct dlist *dl = dlist_child(parent, name);
     dlist_makenum64(dl, val);
     return dl;
 }
 
-struct dlist *dlist_setnum32(struct dlist *parent, const char *name, uint32_t val)
+EXPORTED struct dlist *dlist_setnum32(struct dlist *parent, const char *name, uint32_t val)
 {
     struct dlist *dl = dlist_child(parent, name);
     dlist_makenum32(dl, val);
     return dl;
 }
 
-struct dlist *dlist_setdate(struct dlist *parent, const char *name, time_t val)
+EXPORTED struct dlist *dlist_setdate(struct dlist *parent, const char *name, time_t val)
 {
     struct dlist *dl = dlist_child(parent, name);
     dlist_makedate(dl, val);
@@ -474,7 +474,7 @@ struct dlist *dlist_sethex64(struct dlist *parent, const char *name, bit64 val)
     return dl;
 }
 
-struct dlist *dlist_setmap(struct dlist *parent, const char *name,
+EXPORTED struct dlist *dlist_setmap(struct dlist *parent, const char *name,
 			   const char *val, size_t len)
 {
     struct dlist *dl = dlist_child(parent, name);
@@ -482,7 +482,7 @@ struct dlist *dlist_setmap(struct dlist *parent, const char *name,
     return dl;
 }
 
-struct dlist *dlist_setguid(struct dlist *parent, const char *name,
+EXPORTED struct dlist *dlist_setguid(struct dlist *parent, const char *name,
 			    struct message_guid *guid)
 {
     struct dlist *dl = dlist_child(parent, name);
@@ -490,7 +490,7 @@ struct dlist *dlist_setguid(struct dlist *parent, const char *name,
     return dl;
 }
 
-struct dlist *dlist_setfile(struct dlist *parent, const char *name,
+EXPORTED struct dlist *dlist_setfile(struct dlist *parent, const char *name,
 			    const char *part, struct message_guid *guid,
 			    size_t size, const char *fname)
 {
@@ -573,7 +573,7 @@ struct dlist *dlist_updatefile(struct dlist *parent, const char *name,
     return dl;
 }
 
-void dlist_print(const struct dlist *dl, int printkeys,
+EXPORTED void dlist_print(const struct dlist *dl, int printkeys,
 		 struct protstream *out)
 {
     struct dlist *di;
@@ -633,7 +633,7 @@ void dlist_print(const struct dlist *dl, int printkeys,
     }
 }
 
-void dlist_printbuf(const struct dlist *dl, int printkeys, struct buf *outbuf)
+EXPORTED void dlist_printbuf(const struct dlist *dl, int printkeys, struct buf *outbuf)
 {
     struct protstream *outstream;
 
@@ -643,7 +643,7 @@ void dlist_printbuf(const struct dlist *dl, int printkeys, struct buf *outbuf)
     prot_free(outstream);
 }
 
-void dlist_free(struct dlist **dlp)
+EXPORTED void dlist_free(struct dlist **dlp)
 {
     if (!*dlp) return;
     _dlist_clean(*dlp);
@@ -658,7 +658,7 @@ static char next_nonspace(struct protstream *in, char c)
     return c;
 }
 
-char dlist_parse(struct dlist **dlp, int parsekey, struct protstream *in)
+EXPORTED char dlist_parse(struct dlist **dlp, int parsekey, struct protstream *in)
 {
     struct dlist *dl = NULL;
     static struct buf kbuf;
@@ -773,7 +773,7 @@ char dlist_parse_asatomlist(struct dlist **dlp, int parsekey,
     return c;
 }
 
-int dlist_parsemap(struct dlist **dlp, int parsekey,
+EXPORTED int dlist_parsemap(struct dlist **dlp, int parsekey,
 		   const char *base, unsigned len)
 {
     struct protstream *stream;
@@ -809,7 +809,7 @@ HIDDEN struct dlist *dlist_getchild(struct dlist *dl, const char *name)
     return NULL;
 }
 
-struct dlist *dlist_getchildn(struct dlist *dl, int num)
+EXPORTED struct dlist *dlist_getchildn(struct dlist *dl, int num)
 {
     struct dlist *i;
 
@@ -984,7 +984,7 @@ int dlist_tohex64(struct dlist *dl, bit64 *valp)
     return 1;
 }
 
-int dlist_toguid(struct dlist *dl, struct message_guid **valp)
+EXPORTED int dlist_toguid(struct dlist *dl, struct message_guid **valp)
 {
     struct message_guid tmpguid;
 
@@ -1013,7 +1013,7 @@ int dlist_toguid(struct dlist *dl, struct message_guid **valp)
     return 1;
 }
 
-int dlist_tofile(struct dlist *dl,
+EXPORTED int dlist_tofile(struct dlist *dl,
 		 const char **partp, struct message_guid **guidp,
 		 unsigned long *sizep, const char **fnamep)
 {
@@ -1083,7 +1083,7 @@ int dlist_isguid(struct dlist *dl)
 }
 
 /* XXX - this stuff is all shitty, rationalise later */
-bit64 dlist_num(struct dlist *dl)
+EXPORTED bit64 dlist_num(struct dlist *dl)
 {
     bit64 v;
 
@@ -1109,25 +1109,25 @@ HIDDEN const char *dlist_cstring(struct dlist *dl)
     return &zerochar;
 }
 
-int dlist_getatom(struct dlist *parent, const char *name, const char **valp)
+EXPORTED int dlist_getatom(struct dlist *parent, const char *name, const char **valp)
 {
     struct dlist *child = dlist_getchild(parent, name);
     return dlist_toatom(child, valp);
 }
 
-int dlist_getnum32(struct dlist *parent, const char *name, uint32_t *valp)
+EXPORTED int dlist_getnum32(struct dlist *parent, const char *name, uint32_t *valp)
 {
     struct dlist *child = dlist_getchild(parent, name);
     return dlist_tonum32(child, valp);
 }
 
-int dlist_getnum64(struct dlist *parent, const char *name, bit64 *valp)
+EXPORTED int dlist_getnum64(struct dlist *parent, const char *name, bit64 *valp)
 {
     struct dlist *child = dlist_getchild(parent, name);
     return dlist_tonum64(child, valp);
 }
 
-int dlist_getdate(struct dlist *parent, const char *name, time_t *valp)
+EXPORTED int dlist_getdate(struct dlist *parent, const char *name, time_t *valp)
 {
     struct dlist *child = dlist_getchild(parent, name);
     return dlist_todate(child, valp);
@@ -1139,14 +1139,14 @@ int dlist_gethex64(struct dlist *parent, const char *name, bit64 *valp)
     return dlist_tohex64(child, valp);
 }
 
-int dlist_getguid(struct dlist *parent, const char *name,
+EXPORTED int dlist_getguid(struct dlist *parent, const char *name,
 		  struct message_guid **valp)
 {
     struct dlist *child = dlist_getchild(parent, name);
     return dlist_toguid(child, valp);
 }
 
-int dlist_getmap(struct dlist *parent, const char *name,
+EXPORTED int dlist_getmap(struct dlist *parent, const char *name,
 		 const char **valp, size_t *lenp)
 {
     struct dlist *child = dlist_getchild(parent, name);
@@ -1163,7 +1163,7 @@ int dlist_getfile(struct dlist *parent, const char *name,
     return dlist_tofile(child, partp, guidp, sizep, fnamep);
 }
 
-int dlist_getlist(struct dlist *dl, const char *name, struct dlist **valp)
+EXPORTED int dlist_getlist(struct dlist *dl, const char *name, struct dlist **valp)
 {
     struct dlist *i = dlist_getchild(dl, name);
     if (!i) return 0;
@@ -1171,7 +1171,7 @@ int dlist_getlist(struct dlist *dl, const char *name, struct dlist **valp)
     return 1;
 }
 
-const char *dlist_lastkey(void)
+EXPORTED const char *dlist_lastkey(void)
 {
     return lastkey;
 }

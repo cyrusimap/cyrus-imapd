@@ -54,7 +54,7 @@
 
 #define SETGROWSIZE 30
 
-struct seqset *seqset_init(unsigned maxval, int flags)
+EXPORTED struct seqset *seqset_init(unsigned maxval, int flags)
 {
     struct seqset *seq = xzmalloc(sizeof(struct seqset));
 
@@ -68,7 +68,7 @@ struct seqset *seqset_init(unsigned maxval, int flags)
     return seq;
 }
 
-void seqset_add(struct seqset *seq, unsigned num, int ismember)
+EXPORTED void seqset_add(struct seqset *seq, unsigned num, int ismember)
 {
     if (!seq) return;
 
@@ -103,7 +103,7 @@ void seqset_add(struct seqset *seq, unsigned num, int ismember)
 /* read the final number from a sequence string and return it.
  * if given "numstart", return a pointer to the start of
  * that number in the string */
-unsigned int seq_lastnum(const char *list, const char **numstart)
+EXPORTED unsigned int seq_lastnum(const char *list, const char **numstart)
 {
     const char *tail;
     uint32_t retval = 0;
@@ -208,7 +208,7 @@ static int read_num(const char **input, unsigned maxval, unsigned *res)
 /*
  * Parse a sequence into an array of sorted & merged ranges.
  */
-struct seqset *seqset_parse(const char *sequence,
+EXPORTED struct seqset *seqset_parse(const char *sequence,
 			    struct seqset *set,
 			    unsigned maxval)
 {
@@ -267,7 +267,7 @@ static int comp_subset(const void *v1, const void *v2)
 /*
  * Return nonzero iff 'num' is included in 'sequence'
  */
-int seqset_ismember(struct seqset *seq, unsigned num)
+EXPORTED int seqset_ismember(struct seqset *seq, unsigned num)
 {
     struct seq_range key = {num, num};
     struct seq_range *found;
@@ -318,7 +318,7 @@ HIDDEN unsigned seqset_last(struct seqset *seq)
     return seq->set[seq->len-1].high;
 }
 
-unsigned seqset_getnext(struct seqset *seq)
+EXPORTED unsigned seqset_getnext(struct seqset *seq)
 {
     unsigned num;
     unsigned i;
@@ -346,7 +346,7 @@ unsigned seqset_getnext(struct seqset *seq)
 }
 
 /* NOTE - not sort safe! */
-void seqset_join(struct seqset *a, struct seqset *b)
+EXPORTED void seqset_join(struct seqset *a, struct seqset *b)
 {
     if (a->len + b->len > a->alloc) {
 	a->alloc = a->len + b->len;
@@ -375,7 +375,7 @@ HIDDEN void seqset_append(struct seqset **l, char *sequence, unsigned maxval)
 
 #define SEQGROW 300
 
-char *seqset_cstring(struct seqset *seq) 
+EXPORTED char *seqset_cstring(struct seqset *seq)
 {
     unsigned alloc = 0;
     unsigned offset = 0;
@@ -414,7 +414,7 @@ char *seqset_cstring(struct seqset *seq)
     return base;
 }
 
-void seqset_free(struct seqset *l)
+EXPORTED void seqset_free(struct seqset *l)
 {
     struct seqset *n;
 

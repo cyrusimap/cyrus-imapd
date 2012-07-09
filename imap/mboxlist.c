@@ -89,7 +89,7 @@
 
 cyrus_acl_canonproc_t mboxlist_ensureOwnerRights;
 
-struct db *mbdb;
+EXPORTED struct db *mbdb;
 
 static int mboxlist_dbopen = 0;
 
@@ -102,14 +102,14 @@ static int mboxlist_changequota(const char *name, int matchlen, int maycreate,
 				void *rock);
 static int mboxlist_count_inferiors(const char *mboxname);
 
-struct mboxlist_entry *mboxlist_entry_create(void)
+EXPORTED struct mboxlist_entry *mboxlist_entry_create(void)
 {
     struct mboxlist_entry *ret = xzmalloc(sizeof(struct mboxlist_entry));
     /* xxx - initialiser functions here? */
     return ret;
 }
 
-void mboxlist_entry_free(struct mboxlist_entry **mbentryptr)
+EXPORTED void mboxlist_entry_free(struct mboxlist_entry **mbentryptr)
 {
     struct mboxlist_entry *mbentry = *mbentryptr;
 
@@ -125,7 +125,7 @@ void mboxlist_entry_free(struct mboxlist_entry **mbentryptr)
     *mbentryptr = NULL;
 }
 
-char *mboxlist_entry_cstring(struct mboxlist_entry *mbentry)
+EXPORTED char *mboxlist_entry_cstring(struct mboxlist_entry *mbentry)
 {
     struct buf ebuf;
     char sep = '(';
@@ -302,7 +302,7 @@ static int mboxlist_mylookup(const char *name,
 /*
  * Lookup 'name' in the mailbox list, ignoring reserved records
  */
-int mboxlist_lookup(const char *name, struct mboxlist_entry **entryptr,
+EXPORTED int mboxlist_lookup(const char *name, struct mboxlist_entry **entryptr,
 		    struct txn **tid)
 {
     struct mboxlist_entry *entry = NULL;
@@ -324,7 +324,7 @@ int mboxlist_lookup(const char *name, struct mboxlist_entry **entryptr,
 }
 
 /* now this is just silly, but hey */
-int mboxlist_lookup_allow_reserved(const char *name,
+EXPORTED int mboxlist_lookup_allow_reserved(const char *name,
 				   struct mboxlist_entry **entryptr,
 				   struct txn **tid)
 {
@@ -355,7 +355,7 @@ HIDDEN int mboxlist_findstage(const char *name, char *stagedir, size_t sd_len)
     return 0;
 }
 
-int mboxlist_update(struct mboxlist_entry *mbentry, int localonly)
+EXPORTED int mboxlist_update(struct mboxlist_entry *mbentry, int localonly)
 {
     int r = 0, r2 = 0;
     char *mboxent = NULL;
@@ -610,7 +610,7 @@ static int mboxlist_create_acl(const char *mboxname, char **out)
 }
 
 /* and this API just plain sucks */
-int mboxlist_createmailboxcheck(const char *name, int mbtype __attribute__((unused)),
+EXPORTED int mboxlist_createmailboxcheck(const char *name, int mbtype __attribute__((unused)),
 				const char *partition, 
 				int isadmin, const char *userid, 
 				struct auth_state *auth_state, 
@@ -751,7 +751,7 @@ done:
     return r;
 }
 
-int mboxlist_createmailbox(const char *name, int mbtype,
+EXPORTED int mboxlist_createmailbox(const char *name, int mbtype,
 			   const char *partition, 
 			   int isadmin, const char *userid, 
 			   struct auth_state *auth_state,
@@ -766,7 +766,7 @@ int mboxlist_createmailbox(const char *name, int mbtype,
 				       forceuser, dbonly, NULL, extargs);
 }
 
-int mboxlist_createsync(const char *name, int mbtype,
+EXPORTED int mboxlist_createsync(const char *name, int mbtype,
 			const char *partition,
 			const char *userid, struct auth_state *auth_state,
 			int options, unsigned uidvalidity,
@@ -780,7 +780,7 @@ int mboxlist_createsync(const char *name, int mbtype,
 }
 
 /* insert an entry for the proxy */
-int mboxlist_insertremote(struct mboxlist_entry *mbentry,
+EXPORTED int mboxlist_insertremote(struct mboxlist_entry *mbentry,
 			  struct txn **tid)
 {
     char *mboxent;
@@ -822,7 +822,7 @@ int mboxlist_insertremote(struct mboxlist_entry *mbentry,
 /* Special function to delete a remote mailbox.
  * Only affects mboxlist.
  * Assumes admin powers. */
-int mboxlist_deleteremote(const char *name, struct txn **in_tid) 
+EXPORTED int mboxlist_deleteremote(const char *name, struct txn **in_tid)
 {
     int r;
     struct txn **tid;
@@ -893,7 +893,7 @@ int mboxlist_deleteremote(const char *name, struct txn **in_tid)
 /*
  * Delayed Delete a mailbox: translate delete into rename
  */
-int
+EXPORTED int
 mboxlist_delayed_deletemailbox(const char *name, int isadmin,
 			       const char *userid,
 			       struct auth_state *auth_state, int checkacl,
@@ -974,7 +974,7 @@ mboxlist_delayed_deletemailbox(const char *name, int isadmin,
  * 7. delete from mupdate
  *
  */
-int mboxlist_deletemailbox(const char *name, int isadmin,
+EXPORTED int mboxlist_deletemailbox(const char *name, int isadmin,
 			   const char *userid,
 			   struct auth_state *auth_state, int checkacl,
 			   int local_only, int force)
@@ -1082,7 +1082,7 @@ int mboxlist_deletemailbox(const char *name, int isadmin,
  * higher level).  This only supports local mailboxes.  Remote
  * mailboxes are handled up in imapd.c
  */
-int mboxlist_renamemailbox(const char *oldname, const char *newname, 
+EXPORTED int mboxlist_renamemailbox(const char *oldname, const char *newname,
 			   const char *partition, unsigned uidvalidity,
 			   int isadmin, const char *userid,
 			   struct auth_state *auth_state,
@@ -1375,7 +1375,7 @@ static int mboxlist_have_admin_rights(const char* rights) {
  * 6. Change mupdate entry 
  *
  */
-int mboxlist_setacl(const char *name, const char *identifier,
+EXPORTED int mboxlist_setacl(const char *name, const char *identifier,
 		    const char *rights, 
 		    int isadmin, const char *userid, 
 		    struct auth_state *auth_state)
@@ -1650,7 +1650,7 @@ int mboxlist_setacl(const char *name, const char *identifier,
  * 4. Change mupdate entry 
  *
  */
-int
+EXPORTED int
 mboxlist_sync_setacls(const char *name, const char *newacl)
 {
     struct mboxlist_entry *mbentry = NULL;
@@ -1739,7 +1739,7 @@ mboxlist_sync_setacls(const char *name, const char *newacl)
 
 /* set the XLIST flag for a mailbox.  Note: no mupdate changes required
  * yet because mupdate protocol doesn't support xlist flags */
-int mboxlist_setspecialuse(struct mailbox *mailbox, const char *specialuse)
+EXPORTED int mboxlist_setspecialuse(struct mailbox *mailbox, const char *specialuse)
 {
     const char *name = mailbox->name;
     struct mboxlist_entry *mbentry = NULL;
@@ -2039,7 +2039,7 @@ static int find_cb(void *rockp,
     return r;
 }
 
-int mboxlist_allmbox(const char *prefix, foreach_cb *proc, void *rock)
+EXPORTED int mboxlist_allmbox(const char *prefix, foreach_cb *proc, void *rock)
 {
     int r;
     char *search = prefix ? (char *)prefix : "";
@@ -2059,7 +2059,7 @@ int mboxlist_allmbox(const char *prefix, foreach_cb *proc, void *rock)
  * case it wants some persistant storage or extra data.
  */
 /* Find all mailboxes that match 'pattern'. */
-int mboxlist_findall(struct namespace *namespace,
+EXPORTED int mboxlist_findall(struct namespace *namespace,
 		     const char *pattern, int isadmin, const char *userid, 
 		     struct auth_state *auth_state, int (*proc)(), void *rock)
 {
@@ -2483,7 +2483,7 @@ static int child_cb(char *name,
 /*
  * Set all the resource quotas on, or create a quota root.
  */
-int mboxlist_setquotas(const char *root,
+EXPORTED int mboxlist_setquotas(const char *root,
 		       int newquotas[QUOTA_NUMRESOURCES], int force)
 {
     char pattern[MAX_MAILBOX_PATH+1];
@@ -2590,7 +2590,7 @@ done:
 /*
  *  Remove a quota root
  */
-int mboxlist_unsetquota(const char *root)
+EXPORTED int mboxlist_unsetquota(const char *root)
 {
     char pattern[MAX_MAILBOX_PATH+1];
     struct quota q;
@@ -2642,7 +2642,7 @@ int mboxlist_unsetquota(const char *root)
  * ACL access canonicalization routine which ensures that 'owner'
  * retains lookup, administer, and create rights over a mailbox.
  */
-int mboxlist_ensureOwnerRights(void *rock, const char *identifier,
+EXPORTED int mboxlist_ensureOwnerRights(void *rock, const char *identifier,
 			       int myrights)
 {
     char *owner = (char *)rock;
@@ -2747,14 +2747,14 @@ static int mboxlist_changequota(const char *name,
 }
 
 /* must be called after cyrus_init */
-void mboxlist_init(int myflags)
+EXPORTED void mboxlist_init(int myflags)
 {
     if (myflags & MBOXLIST_SYNC) {
 	cyrusdb_sync(DB);
     }
 }
 
-void mboxlist_open(const char *fname)
+EXPORTED void mboxlist_open(const char *fname)
 {
     int ret, flags;
     char *tofree = NULL;
@@ -2787,7 +2787,7 @@ void mboxlist_open(const char *fname)
     mboxlist_dbopen = 1;
 }
 
-void mboxlist_close(void)
+EXPORTED void mboxlist_close(void)
 {
     int r;
 
@@ -2801,7 +2801,7 @@ void mboxlist_close(void)
     }
 }
 
-void mboxlist_done(void)
+EXPORTED void mboxlist_done(void)
 {
     /* DB->done() handled by cyrus_done() */
 }
@@ -2850,7 +2850,7 @@ static void mboxlist_closesubs(struct db *sub)
  * is the user's login id.  For each matching mailbox, calls
  * 'proc' with the name of the mailbox.
  */
-int mboxlist_findsub(struct namespace *namespace,
+EXPORTED int mboxlist_findsub(struct namespace *namespace,
 		     const char *pattern, int isadmin __attribute__((unused)),
 		     const char *userid, struct auth_state *auth_state, 
 		     int (*proc)(), void *rock, int force)
@@ -3013,7 +3013,7 @@ int mboxlist_findsub(struct namespace *namespace,
     return r;
 }
 
-int mboxlist_allsubs(const char *userid, foreach_cb *proc, void *rock)
+EXPORTED int mboxlist_allsubs(const char *userid, foreach_cb *proc, void *rock)
 {
     struct db *subs = NULL;
     int r;
@@ -3272,7 +3272,7 @@ HIDDEN int mboxlist_findsub_alt(struct namespace *namespace,
 }
 
 /* returns CYRUSDB_NOTFOUND if the folder doesn't exist, and 0 if it does! */
-int mboxlist_checksub(const char *name, const char *userid)
+EXPORTED int mboxlist_checksub(const char *name, const char *userid)
 {
     int r;
     struct db *subs;
@@ -3293,7 +3293,7 @@ int mboxlist_checksub(const char *name, const char *userid)
  * if 'force' is set, force the subscription through even if
  * we don't know about 'name'.
  */
-int mboxlist_changesub(const char *name, const char *userid, 
+EXPORTED int mboxlist_changesub(const char *name, const char *userid,
 		       struct auth_state *auth_state, int add, int force)
 {
     struct mboxlist_entry *mbentry = NULL;
@@ -3343,7 +3343,7 @@ int mboxlist_changesub(const char *name, const char *userid,
 }
 
 /* Transaction Handlers */
-int mboxlist_commit(struct txn *tid) 
+EXPORTED int mboxlist_commit(struct txn *tid)
 {
     assert(tid);
     
@@ -3357,7 +3357,7 @@ int mboxlist_abort(struct txn *tid)
     return cyrusdb_abort(mbdb, tid);
 }
 
-int mboxlist_delayed_delete_isenabled(void)
+EXPORTED int mboxlist_delayed_delete_isenabled(void)
 {
     enum enum_value config_delete_mode = config_getenum(IMAPOPT_DELETE_MODE);
 

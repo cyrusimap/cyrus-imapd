@@ -102,7 +102,7 @@ static char		*LastArgv = NULL;	/* end of argv */
 /*
  * Sets up a process to be able to use setproctitle()
  */
-void setproctitle_init(int argc, char **argv, char **envp)
+EXPORTED void setproctitle_init(int argc, char **argv, char **envp)
 {
     int i;
 

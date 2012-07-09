@@ -52,7 +52,7 @@
 #include "imap/imap_err.h"
 #include "exitcodes.h"
 
-int convert_code(int r)
+EXPORTED int convert_code(int r)
 {
     switch (r) {
     case 0:

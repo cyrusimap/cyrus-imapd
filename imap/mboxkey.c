@@ -123,7 +123,7 @@ HIDDEN char *mboxkey_getpath(const char *userid)
     return fname;
 }
 
-int mboxkey_open(const char *user,
+EXPORTED int mboxkey_open(const char *user,
 		 int flags,
 		 struct mboxkey **mboxkeydbptr)
 {
@@ -234,7 +234,7 @@ static int mboxkey_readit(struct mboxkey *mboxkeydb, const char *mailbox,
     return 0;
 }
 
-int mboxkey_read(struct mboxkey *mboxkeydb, const char *mailbox,
+EXPORTED int mboxkey_read(struct mboxkey *mboxkeydb, const char *mailbox,
 		 const char **mboxkey, size_t *mboxkeylen)
 {
     if (MBOXKEY_DEBUG) {
@@ -256,7 +256,7 @@ int mboxkey_lockread(struct mboxkey *mboxkeydb, const char *mailbox,
     return mboxkey_readit(mboxkeydb, mailbox, mboxkey, mboxkeylen, 1);
 }
 
-int mboxkey_write(struct mboxkey *mboxkeydb, const char *mailbox,
+EXPORTED int mboxkey_write(struct mboxkey *mboxkeydb, const char *mailbox,
 		  const char *mboxkey, size_t mboxkeylen)
 {
     int r;
@@ -303,7 +303,7 @@ int mboxkey_write(struct mboxkey *mboxkeydb, const char *mailbox,
     return r;
 }
 
-int mboxkey_close(struct mboxkey *mboxkeydb)
+EXPORTED int mboxkey_close(struct mboxkey *mboxkeydb)
 {
     int r;
 
@@ -344,7 +344,7 @@ int mboxkey_close(struct mboxkey *mboxkeydb)
     return 0;
 }
 
-int mboxkey_delete_user(const char *user)
+EXPORTED int mboxkey_delete_user(const char *user)
 {
     char *fname = mboxkey_getpath(user);
     int r = 0;
@@ -400,7 +400,7 @@ int mboxkey_unlock(struct mboxkey *mboxkeydb)
     return 0;
 }
 
-int mboxkey_done(void)
+EXPORTED int mboxkey_done(void)
 {
     int r = 0;
 

@@ -83,7 +83,7 @@ static int memconst(char const* s, int len, char v) {
   return len == 0;
 }
 
-SquatSearchIndex* squat_search_open(int fd) {
+EXPORTED SquatSearchIndex* squat_search_open(int fd) {
   struct stat buf;
   SquatSearchIndex* index;
   SquatDiskHeader const* header;
@@ -153,7 +153,7 @@ cleanup_index:
   return NULL;
 }
 
-int squat_search_list_docs(SquatSearchIndex* index,
+EXPORTED int squat_search_list_docs(SquatSearchIndex* index,
   SquatListDocCallback handler, void* closure) {
   char const* s = index->doc_list;
 
@@ -597,7 +597,7 @@ cleanup_run_starts:
   return SQUAT_ERR;
 }
 
-int squat_search_close(SquatSearchIndex* index) {
+EXPORTED int squat_search_close(SquatSearchIndex* index) {
   int r = SQUAT_OK;
 
   squat_set_last_error(SQUAT_ERR_OK);
@@ -854,7 +854,7 @@ static int squat_find_branch(char const** result, char const** prev,
   return(SQUAT_OK);
 }
 
-int squat_scan(SquatSearchIndex* index, char first_char,
+EXPORTED int squat_scan(SquatSearchIndex* index, char first_char,
                SquatScanCallback handler, void* closure)
 {
   char buf[SQUAT_WORD_SIZE+1];
@@ -926,7 +926,7 @@ squat_preload_data(char const* t, char const* s)
   }
 }
                           
-int squat_count_docs(SquatSearchIndex* index, char first_char, int *counter)
+EXPORTED int squat_count_docs(SquatSearchIndex* index, char first_char, int *counter)
 {
   char buf[SQUAT_WORD_SIZE+1];
   const char *s, *t;

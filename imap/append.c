@@ -104,7 +104,7 @@ static void append_setseen(struct appendstate *as, struct index_record *record);
  *		     (-1 means don't care about quota)
  *
  */
-int append_check(const char *name,
+EXPORTED int append_check(const char *name,
 		 struct auth_state *auth_state,
 		 long aclcheck,
 		 const quota_t quotacheck[QUOTA_NUMRESOURCES])
@@ -147,7 +147,7 @@ done:
  * On success, the struct pointed to by 'as' is set up.
  *
  */
-int append_setup(struct appendstate *as, const char *name,
+EXPORTED int append_setup(struct appendstate *as, const char *name,
 		 const char *userid, struct auth_state *auth_state,
 		 long aclcheck, const quota_t quotacheck[QUOTA_NUMRESOURCES],
 		 struct namespace *namespace, int isadmin)
@@ -221,7 +221,7 @@ HIDDEN int append_setup_mbox(struct appendstate *as, struct mailbox *mailbox,
 
 /* may return non-zero, indicating that the entire append has failed
  and the mailbox is probably in an inconsistent state. */
-int append_commit(struct appendstate *as, 
+EXPORTED int append_commit(struct appendstate *as,
 		  struct mailbox **mailboxptr)
 {
     int r = 0;
@@ -264,7 +264,7 @@ int append_commit(struct appendstate *as,
 }
 
 /* may return non-zero, indicating an internal error of some sort. */
-int append_abort(struct appendstate *as)
+EXPORTED int append_abort(struct appendstate *as)
 {
     int r = 0;
 
@@ -286,7 +286,7 @@ int append_abort(struct appendstate *as)
  * with the file for the given mailboxname and returns the open file
  * so it can double as the spool file
  */
-FILE *append_newstage(const char *mailboxname, time_t internaldate,
+EXPORTED FILE *append_newstage(const char *mailboxname, time_t internaldate,
 		      int msgnum, struct stagemsg **stagep)
 {
     struct stagemsg *stage;
@@ -836,7 +836,7 @@ static void append_make_flags(struct appendstate *as,
  * Note: @user_annots needs to be freed by the caller but
  * may be modified during processing of callout responses.
  */
-int append_fromstage(struct appendstate *as, struct body **body,
+EXPORTED int append_fromstage(struct appendstate *as, struct body **body,
 		     struct stagemsg *stage, time_t internaldate,
 		     const strarray_t *flags, int nolink,
 		     struct entryattlist *user_annots)
@@ -981,7 +981,7 @@ out:
     return 0;
 }
 
-int append_removestage(struct stagemsg *stage)
+EXPORTED int append_removestage(struct stagemsg *stage)
 {
     char *p;
 
@@ -1014,7 +1014,7 @@ int append_removestage(struct stagemsg *stage)
  * unlocked) until append_commit() is called.  multiple
  * append_onefromstream()s can be aborted by calling append_abort().
  */
-int append_fromstream(struct appendstate *as, struct body **body,
+EXPORTED int append_fromstream(struct appendstate *as, struct body **body,
 		      struct protstream *messagefile,
 		      unsigned long size,
 		      time_t internaldate,
@@ -1168,7 +1168,7 @@ out:
  * flag is to be set anywhere then 'userid' passed to append_setup()
  * contains the name of the user whose \Seen flag gets set.  
  */
-int append_copy(struct mailbox *mailbox, 
+EXPORTED int append_copy(struct mailbox *mailbox,
 		struct appendstate *as,
 		int nummsg, 
 		struct copymsg *copymsg,

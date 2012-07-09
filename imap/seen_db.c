@@ -113,7 +113,7 @@ HIDDEN char *seen_getpath(const char *userid)
     return fname;
 }
 
-int seen_open(const char *user, 
+EXPORTED int seen_open(const char *user,
 	      int flags,
 	      struct seen **seendbptr)
 {
@@ -162,7 +162,7 @@ struct seendata_rock {
     void *rock;
 };
 
-void seen_freedata(struct seendata *sd)
+EXPORTED void seen_freedata(struct seendata *sd)
 {
     free (sd->seenuids);
 }
@@ -211,7 +211,7 @@ static int foreach_proc(void *rock,
     return r;
 }
 
-int seen_foreach(struct seen *seendb, seenproc_t *f, void *rock)
+EXPORTED int seen_foreach(struct seen *seendb, seenproc_t *f, void *rock)
 {
     struct seendata_rock sdrock;
     sdrock.f = f;
@@ -265,7 +265,7 @@ static int seen_readit(struct seen *seendb, const char *uniqueid,
     return 0;
 }
 
-int seen_read(struct seen *seendb, const char *uniqueid, struct seendata *sd)
+EXPORTED int seen_read(struct seen *seendb, const char *uniqueid, struct seendata *sd)
 {
     if (SEEN_DEBUG) {
 	syslog(LOG_DEBUG, "seen_db: seen_read %s (%s)", 
@@ -285,7 +285,7 @@ HIDDEN int seen_lockread(struct seen *seendb, const char *uniqueid, struct seend
     return seen_readit(seendb, uniqueid, sd, 1);
 }
 
-int seen_write(struct seen *seendb, const char *uniqueid, struct seendata *sd)
+EXPORTED int seen_write(struct seen *seendb, const char *uniqueid, struct seendata *sd)
 {
     int sz = strlen(sd->seenuids) + 50;
     char *data = xmalloc(sz);
@@ -326,7 +326,7 @@ int seen_write(struct seen *seendb, const char *uniqueid, struct seendata *sd)
     return r;
 }
 
-int seen_close(struct seen **seendbptr)
+EXPORTED int seen_close(struct seen **seendbptr)
 {
     struct seen *seendb = *seendbptr;
     int r;
@@ -374,7 +374,7 @@ HIDDEN int seen_create_mailbox(const char *userid, struct mailbox *mailbox)
     return 0;
 }
 
-int seen_delete_mailbox(const char *userid, struct mailbox *mailbox)
+EXPORTED int seen_delete_mailbox(const char *userid, struct mailbox *mailbox)
 {
     int r;
     struct seen *seendb = NULL;
@@ -477,7 +477,7 @@ HIDDEN int seen_copy(const char *userid, struct mailbox *oldmailbox,
     return 0;
 }
 
-int seen_done(void)
+EXPORTED int seen_done(void)
 {
     if (SEEN_DEBUG) {
 	syslog(LOG_DEBUG, "seen_db: seen_done()");
@@ -486,7 +486,7 @@ int seen_done(void)
     return 0;
 }
 
-int seen_compare(struct seendata *a, struct seendata *b)
+EXPORTED int seen_compare(struct seendata *a, struct seendata *b)
 {
     if (a->lastuid == b->lastuid &&
 	a->lastread == b->lastread &&

@@ -192,7 +192,7 @@ static const struct thread_algorithm thread_algs[] = {
 /*
  * A mailbox is about to be closed.
  */
-void index_close(struct index_state **stateptr)
+EXPORTED void index_close(struct index_state **stateptr)
 {
     unsigned i;
     struct index_state *state = *stateptr;
@@ -213,7 +213,7 @@ void index_close(struct index_state **stateptr)
  * A new mailbox has been selected, map it into memory and do the
  * initial CHECK.
  */
-int index_open(const char *name, struct index_init *init,
+EXPORTED int index_open(const char *name, struct index_init *init,
 	       struct index_state **stateptr)
 {
     int r;
@@ -268,7 +268,7 @@ fail:
     return r;
 }
 
-int index_expunge(struct index_state *state, char *sequence,
+EXPORTED int index_expunge(struct index_state *state, char *sequence,
 		  int need_deleted)
 {
     int r;
@@ -584,14 +584,14 @@ void index_refresh(struct index_state *state)
     state->numrecent = numrecent;
 }
 
-modseq_t index_highestmodseq(struct index_state *state)
+EXPORTED modseq_t index_highestmodseq(struct index_state *state)
 {
     if (state->delayed_modseq)
 	return state->delayed_modseq;
     return state->highestmodseq;
 }
 
-void index_select(struct index_state *state, struct index_init *init)
+EXPORTED void index_select(struct index_state *state, struct index_init *init)
 {
     index_tellexists(state);
 
@@ -649,7 +649,7 @@ void index_select(struct index_state *state, struct index_init *init)
 /*
  * Check for and report updates
  */
-int index_check(struct index_state *state, int usinguid, int printuid)
+EXPORTED int index_check(struct index_state *state, int usinguid, int printuid)
 {
     struct mailbox *mailbox = state->mailbox;
     int r;
@@ -905,7 +905,7 @@ void index_fetchresponses(struct index_state *state,
  * fetched.  (A fetch command that fetches nothing is not a valid fetch
  * command.)
  */
-int index_fetch(struct index_state *state,
+EXPORTED int index_fetch(struct index_state *state,
 		const char *sequence,
 		int usinguid,
 		const struct fetchargs *fetchargs,
@@ -969,7 +969,7 @@ int index_fetch(struct index_state *state,
 /*
  * Perform a STORE command on a sequence
  */
-int index_store(struct index_state *state, char *sequence,
+EXPORTED int index_store(struct index_state *state, char *sequence,
 		struct storeargs *storeargs)
 {
     struct mailbox *mailbox = state->mailbox;
@@ -1093,7 +1093,7 @@ static void prefetch_messages(struct index_state *state,
  * Perform the XRUNANNOTATOR command which runs the
  * annotator callout for each message in the given sequence.
  */
-int index_run_annotator(struct index_state *state,
+EXPORTED int index_run_annotator(struct index_state *state,
 			const char *sequence, int usinguid,
 			struct namespace *namespace, int isadmin)
 {
@@ -1183,7 +1183,7 @@ static int index_scan_work(const char *s, unsigned long len,
  *
  * Returns 1 if we get a hit, otherwise returns 0.
  */
-int index_scan(struct index_state *state, const char *contents)
+EXPORTED int index_scan(struct index_state *state, const char *contents)
 {
     unsigned *msgno_list;
     uint32_t msgno;
@@ -1339,13 +1339,13 @@ static int _index_search(unsigned **msgno_list, struct index_state *state,
     return n;
 }
 
-unsigned index_getuid(struct index_state *state, uint32_t msgno) {
+EXPORTED unsigned index_getuid(struct index_state *state, uint32_t msgno) {
   return state->map[msgno-1].record.uid;
 }
 
 /* 'uid_list' is malloc'd string representing the hits from searchargs;
    returns number of hits */
-int index_getuidsequence(struct index_state *state,
+EXPORTED int index_getuidsequence(struct index_state *state,
 			 struct searchargs *searchargs,
 			 unsigned **uid_list)
 {
@@ -1379,7 +1379,7 @@ static int index_lock(struct index_state *state)
     return 0;
 }
 
-int index_status(struct index_state *state, struct statusdata *sdata)
+EXPORTED int index_status(struct index_state *state, struct statusdata *sdata)
 {
     int items = STATUS_MESSAGES | STATUS_UIDNEXT | STATUS_UIDVALIDITY |
 		STATUS_HIGHESTMODSEQ | STATUS_RECENT | STATUS_UNSEEN;
@@ -1414,7 +1414,7 @@ static void index_unlock(struct index_state *state)
  * Performs a SEARCH command.
  * This is a wrapper around _index_search() which simply prints the results.
  */
-int index_search(struct index_state *state, struct searchargs *searchargs,
+EXPORTED int index_search(struct index_state *state, struct searchargs *searchargs,
 		 int usinguid)
 {
     unsigned *list = NULL;
@@ -1489,7 +1489,7 @@ int index_search(struct index_state *state, struct searchargs *searchargs,
 /*
  * Performs a SORT command
  */
-int index_sort(struct index_state *state, struct sortcrit *sortcrit,
+EXPORTED int index_sort(struct index_state *state, struct sortcrit *sortcrit,
 	       struct searchargs *searchargs, int usinguid)
 {
     unsigned *msgno_list;
@@ -1557,7 +1557,7 @@ int index_sort(struct index_state *state, struct sortcrit *sortcrit,
 /*
  * Performs a THREAD command
  */
-int index_thread(struct index_state *state, int algorithm,
+EXPORTED int index_thread(struct index_state *state, int algorithm,
 		 struct searchargs *searchargs, int usinguid)
 {
     unsigned *msgno_list;
@@ -1605,7 +1605,7 @@ int index_thread(struct index_state *state, int algorithm,
 /*
  * Performs a COPY command
  */
-int
+EXPORTED int
 index_copy(struct index_state *state,
 	   char *sequence, 
 	   int usinguid,
@@ -1786,7 +1786,7 @@ static int index_appendremote(struct index_state *state, uint32_t msgno,
 /*
  * Performs a COPY command from a local mailbox to a remote mailbox
  */
-int index_copy_remote(struct index_state *state, char *sequence, 
+EXPORTED int index_copy_remote(struct index_state *state, char *sequence,
 		      int usinguid, struct protstream *pout)
 {
     uint32_t msgno, checkval;
@@ -1817,7 +1817,7 @@ int index_copy_remote(struct index_state *state, char *sequence,
  * If no message with UID 'uid', returns the message with
  * the higest UID not greater than 'uid'.
  */
-unsigned index_finduid(struct index_state *state, unsigned uid)
+EXPORTED unsigned index_finduid(struct index_state *state, unsigned uid)
 {
     unsigned low = 1;
     unsigned high = state->exists;
@@ -2507,7 +2507,7 @@ static void index_tellexists(struct index_state *state)
     state->oldexists = state->exists;
 }
 
-void index_tellchanges(struct index_state *state, int canexpunge,
+EXPORTED void index_tellchanges(struct index_state *state, int canexpunge,
 		       int printuid, int printmodseq)
 {
     uint32_t msgno;
@@ -2930,7 +2930,7 @@ static int index_fetchreply(struct index_state *state, uint32_t msgno,
  * This is an amalgamation of index_fetchreply(), index_fetchsection()
  * and index_fetchmsg().
  */
-int index_urlfetch(struct index_state *state, uint32_t msgno,
+EXPORTED int index_urlfetch(struct index_state *state, uint32_t msgno,
 		   unsigned params, const char *section,
 		   unsigned long start_octet, unsigned long octet_count,
 		   struct protstream *pout, unsigned long *outsize)
@@ -3762,7 +3762,7 @@ static void index_getsearchtextmsg(struct index_state *state,
     mailbox_unmap_message(mailbox, uid, &msgfile.base, &msgfile.size);
 }
 
-void index_getsearchtext_single(struct index_state *state, uint32_t msgno,
+EXPORTED void index_getsearchtext_single(struct index_state *state, uint32_t msgno,
 				index_search_text_receiver_t receiver,
 				void *rock) {
     struct mailbox *mailbox = state->mailbox;
@@ -4618,7 +4618,7 @@ static void index_thread_print(struct index_state *state,
  * Find threading algorithm for given arg.
  * Returns index into thread_algs[], or -1 if not found.
  */
-int find_thread_algorithm(char *arg)
+EXPORTED int find_thread_algorithm(char *arg)
 {
     int alg;
 
@@ -5233,7 +5233,7 @@ static void index_thread_ref(struct index_state *state, unsigned *msgno_list, in
 /*
  * NNTP specific stuff.
  */
-char *index_get_msgid(struct index_state *state,
+EXPORTED char *index_get_msgid(struct index_state *state,
 		      uint32_t msgno)
 {
     char *env;
@@ -5296,7 +5296,7 @@ static void massage_header(char *hdr)
     hdr[n] = '\0';
 }
 
-extern struct nntp_overview *index_overview(struct index_state *state,
+EXPORTED extern struct nntp_overview *index_overview(struct index_state *state,
 					    uint32_t msgno)
 {
     static struct nntp_overview over;
@@ -5381,7 +5381,7 @@ extern struct nntp_overview *index_overview(struct index_state *state,
     return &over;
 }
 
-extern char *index_getheader(struct index_state *state, uint32_t msgno,
+EXPORTED extern char *index_getheader(struct index_state *state, uint32_t msgno,
 			     char *hdr)
 {
     static const char *msg_base = 0;
@@ -5435,14 +5435,14 @@ extern char *index_getheader(struct index_state *state, uint32_t msgno,
     return buf;
 }
 
-extern unsigned long index_getsize(struct index_state *state,
+EXPORTED extern unsigned long index_getsize(struct index_state *state,
 				   uint32_t msgno)
 {
     struct index_map *im = &state->map[msgno-1];
     return im->record.size;
 }
 
-extern unsigned long index_getlines(struct index_state *state, uint32_t msgno)
+EXPORTED extern unsigned long index_getlines(struct index_state *state, uint32_t msgno)
 {
     struct index_map *im = &state->map[msgno-1];
     return im->record.content_lines;
@@ -5458,7 +5458,7 @@ static struct seqset *_parse_sequence(struct index_state *state,
     return seqset_parse(sequence, NULL, maxval);
 }
 
-void appendsequencelist(struct index_state *state,
+EXPORTED void appendsequencelist(struct index_state *state,
 			struct seqset **l,
 			char *sequence, int usinguid)
 {
@@ -5466,7 +5466,7 @@ void appendsequencelist(struct index_state *state,
     seqset_append(l, sequence, maxval);
 }
 
-void freesequencelist(struct seqset *l)
+EXPORTED void freesequencelist(struct seqset *l)
 {
     seqset_free(l);
 }

@@ -66,7 +66,7 @@
 static int idle_sock = -1;
 static struct sockaddr_un idle_local;
 
-int idle_make_server_address(struct sockaddr_un *mysun)
+EXPORTED int idle_make_server_address(struct sockaddr_un *mysun)
 {
     const char *idle_sock;
 
@@ -97,7 +97,7 @@ HIDDEN int idle_make_client_address(struct sockaddr_un *mysun)
 /* Extract an identifying string from the remote AF_UNIX address,
  * suitable for logging debug messages.  Returns a string into an
  * internal buffer */
-const char *idle_id_from_addr(const struct sockaddr_un *mysun)
+EXPORTED const char *idle_id_from_addr(const struct sockaddr_un *mysun)
 {
     const char *tail = strrchr(mysun->sun_path, '/');
     const char *p;
@@ -108,7 +108,7 @@ const char *idle_id_from_addr(const struct sockaddr_un *mysun)
     return (p ? p+1 : tail);
 }
 
-int idle_init_sock(const struct sockaddr_un *local)
+EXPORTED int idle_init_sock(const struct sockaddr_un *local)
 {
     int len;
     int s;
@@ -142,7 +142,7 @@ int idle_init_sock(const struct sockaddr_un *local)
     return 1;
 }
 
-void idle_done_sock(void)
+EXPORTED void idle_done_sock(void)
 {
     if (idle_sock >= 0) {
 	close(idle_sock);
@@ -153,7 +153,7 @@ void idle_done_sock(void)
     idle_sock = -1;
 }
 
-int idle_get_sock(void)
+EXPORTED int idle_get_sock(void)
 {
     return idle_sock;
 }
@@ -161,7 +161,7 @@ int idle_get_sock(void)
 /*
  * Send a message to idled
  */
-int idle_send(const struct sockaddr_un *remote,
+EXPORTED int idle_send(const struct sockaddr_un *remote,
 	      const idle_message_t *msg)
 {
     if (idle_sock < 0)
@@ -178,7 +178,7 @@ int idle_send(const struct sockaddr_un *remote,
     return 1;
 }
 
-int idle_recv(struct sockaddr_un *remote, idle_message_t *msg)
+EXPORTED int idle_recv(struct sockaddr_un *remote, idle_message_t *msg)
 {
     socklen_t remote_len = sizeof(*remote);
     int n;

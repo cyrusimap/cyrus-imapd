@@ -152,7 +152,7 @@ static int tls_clientengine = 0; /* client engine initialized? */
 static int do_dump = 0;		/* actively dumping protocol? */
 
 
-int tls_enabled(void)
+EXPORTED int tls_enabled(void)
 {
     const char *val;
 
@@ -611,7 +611,7 @@ static int tls_rand_init(void)
   */
 
 /* must be called after cyrus_init */
-int     tls_init_serverengine(const char *ident,
+EXPORTED int     tls_init_serverengine(const char *ident,
 			      int verifydepth,
 			      int askcert,
 			      int tlsonly)
@@ -801,7 +801,7 @@ static long bio_dump_cb(BIO * bio, int cmd, const char *argp, int argi,
   * filled in if the client authenticated. 'ret' is the SSL connection
   * on success.
   */
-int tls_start_servertls(int readfd, int writefd, int timeout,
+EXPORTED int tls_start_servertls(int readfd, int writefd, int timeout,
 			int *layerbits, char **authid, SSL **ret)
 {
     int     sts;
@@ -1015,7 +1015,7 @@ int tls_start_servertls(int readfd, int writefd, int timeout,
     return r;
 }
 
-int tls_reset_servertls(SSL **conn)
+EXPORTED int tls_reset_servertls(SSL **conn)
 {
     int r = 0;
 
@@ -1042,7 +1042,7 @@ int tls_reset_servertls(SSL **conn)
     return r;
 }
 
-int tls_shutdown_serverengine(void)
+EXPORTED int tls_shutdown_serverengine(void)
 {
     int r;
 
@@ -1114,7 +1114,7 @@ static int prune_cb(void *rock, const char *id, size_t idlen,
 }
 
 /* must be called after cyrus_init */
-int tls_prune_sessions(void)
+EXPORTED int tls_prune_sessions(void)
 {
     const char *fname = NULL;
     char *tofree = NULL;
@@ -1154,7 +1154,7 @@ int tls_prune_sessions(void)
 }
 
 /* fill string buffer with info about tls connection */
-int tls_get_info(SSL *conn, char *buf, size_t len)
+EXPORTED int tls_get_info(SSL *conn, char *buf, size_t len)
 {
     int usebits = 0;
     int algbits = 0;

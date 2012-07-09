@@ -81,7 +81,7 @@ static int add_arg(char *buf, int max_size, const char *arg, int *buflen)
     return 0;
 }
 
-void notify(const char *method,
+EXPORTED void notify(const char *method,
 	    const char *class, const char *priority,
 	    const char *user, const char *mailbox,
 	    int nopt, const char **options,

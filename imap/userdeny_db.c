@@ -72,7 +72,7 @@ static int deny_dbopen = 0;
  * userdeny() checks to see if 'user' is denied access to 'service'
  * Returns 1 if a matching deny entry exists in DB, otherwise returns 0.
  */
-int userdeny(const char *user, const char *service, char *msgbuf, size_t bufsiz)
+EXPORTED int userdeny(const char *user, const char *service, char *msgbuf, size_t bufsiz)
 {
     int r, ret = 0; /* allow access by default */
     const char *data = NULL;
@@ -162,14 +162,14 @@ int userdeny(const char *user, const char *service, char *msgbuf, size_t bufsiz)
 }
 
 /* must be called after cyrus_init */
-void denydb_init(int myflags)
+EXPORTED void denydb_init(int myflags)
 {
     if (myflags & DENYDB_SYNC) {
 	cyrusdb_sync(DENYDB);
     }
 }
 
-void denydb_open(const char *fname)
+EXPORTED void denydb_open(const char *fname)
 {
     int ret;
     char *tofree = NULL;
@@ -195,7 +195,7 @@ void denydb_open(const char *fname)
     free(tofree);
 }
 
-void denydb_close(void)
+EXPORTED void denydb_close(void)
 {
     int r;
 
@@ -209,7 +209,7 @@ void denydb_close(void)
     }
 }
 
-void denydb_done(void)
+EXPORTED void denydb_done(void)
 {
     /* DB->done() handled by cyrus_done() */
 }

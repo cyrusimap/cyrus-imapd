@@ -126,7 +126,7 @@ static int user_deleteacl(char *name, int matchlen, int maycreate, void* rock)
 }
 #endif
 
-const char *user_sieve_path(const char *user)
+EXPORTED const char *user_sieve_path(const char *user)
 {
     static char sieve_path[2048];
     char hash, *domain;
@@ -184,7 +184,7 @@ static int user_deletesieve(const char *user)
     return 0;
 }
 
-int user_deletedata(const char *userid, int wipe_user)
+EXPORTED int user_deletedata(const char *userid, int wipe_user)
 {
     char *fname;
 
@@ -312,7 +312,7 @@ static int user_renamesieve(char *olduser, char *newuser)
     return r;
 }
 
-int user_renamedata(char *olduser, char *newuser,
+EXPORTED int user_renamedata(char *olduser, char *newuser,
 		    char *userid __attribute__((unused)),
 		    struct auth_state *authstate)
 {
@@ -370,7 +370,7 @@ int user_renamedata(char *olduser, char *newuser,
     return r;
 }
 
-int user_renameacl(char *name, char *olduser, char *newuser)
+EXPORTED int user_renameacl(char *name, char *olduser, char *newuser)
 {
     int r = 0;
     char *acl;
@@ -410,7 +410,7 @@ int user_renameacl(char *name, char *olduser, char *newuser)
     return r;
 }
 
-int user_copyquotaroot(char *oldname, char *newname)
+EXPORTED int user_copyquotaroot(char *oldname, char *newname)
 {
     int r = 0;
     struct quota q;

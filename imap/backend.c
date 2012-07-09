@@ -414,7 +414,7 @@ static int ask_capability(struct backend *s, int dobanner, int automatic)
  * capability was not reported by the server, or was reported with no
  * parameters, NULL is returned.
  */
-char *backend_get_cap_params(const struct backend *s, unsigned long capa)
+EXPORTED char *backend_get_cap_params(const struct backend *s, unsigned long capa)
 {
     int i;
 
@@ -682,7 +682,7 @@ static void timed_out(int sig)
     }
 }
 
-struct backend *backend_connect(struct backend *ret_backend, const char *server,
+EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char *server,
 				struct protocol_t *prot, const char *userid,
 				sasl_callback_t *cb, const char **auth_status)
 {
@@ -919,7 +919,7 @@ error:
     return NULL;
 }
 
-int backend_ping(struct backend *s)
+EXPORTED int backend_ping(struct backend *s)
 {
     char buf[1024];
 
@@ -946,7 +946,7 @@ int backend_ping(struct backend *s)
     }
 }
 
-void backend_disconnect(struct backend *s)
+EXPORTED void backend_disconnect(struct backend *s)
 {
     char buf[1024];
 

@@ -83,7 +83,7 @@ static char id_resp_arguments[MAXIDVALUELEN] = "";
 #define CYRUS_VERSION _CYRUS_VERSION
 #endif
 
-const char *cyrus_version(void)
+EXPORTED const char *cyrus_version(void)
 {
     return CYRUS_VERSION;
 }
@@ -91,7 +91,7 @@ const char *cyrus_version(void)
 /*
  * Grab the command line args for the ID response.
  */
-void id_getcmdline(int argc, char **argv)
+EXPORTED void id_getcmdline(int argc, char **argv)
 {
     snprintf(id_resp_command, MAXIDVALUELEN, "%s", *argv);
     while (--argc > 0) {
@@ -105,7 +105,7 @@ void id_getcmdline(int argc, char **argv)
  * Output the ID response.
  * We do NOT close the parameter list so other stuff can be added later.
  */
-void id_response(struct protstream *pout)
+EXPORTED void id_response(struct protstream *pout)
 {
     struct utsname os;
     const char *sasl_imp;

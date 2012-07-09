@@ -90,23 +90,23 @@ static enum {
 
 static int cyrus_init_nodb = 0;
 
-int in_shutdown = 0;
+EXPORTED int in_shutdown = 0;
 
-int config_fulldirhash;				/* 0 */
-int config_implicitrights;			/* "lkxa" */
-unsigned long config_metapartition_files;	/* 0 */
-const char *config_mboxlist_db;
-const char *config_quota_db;
-const char *config_subscription_db;
-const char *config_annotation_db;
-const char *config_seenstate_db;
+EXPORTED int config_fulldirhash;				/* 0 */
+EXPORTED int config_implicitrights;			/* "lkxa" */
+EXPORTED unsigned long config_metapartition_files;	/* 0 */
+EXPORTED const char *config_mboxlist_db;
+EXPORTED const char *config_quota_db;
+EXPORTED const char *config_subscription_db;
+EXPORTED const char *config_annotation_db;
+EXPORTED const char *config_seenstate_db;
 HIDDEN const char *config_mboxkey_db;
-const char *config_duplicate_db;
-const char *config_tlscache_db;
-const char *config_ptscache_db;
-const char *config_statuscache_db;
+EXPORTED const char *config_duplicate_db;
+EXPORTED const char *config_tlscache_db;
+EXPORTED const char *config_ptscache_db;
+EXPORTED const char *config_statuscache_db;
 HIDDEN const char *config_userdeny_db;
-int charset_flags;
+EXPORTED int charset_flags;
 
 static char session_id_buf[MAX_SESSIONID_SIZE];
 static int session_id_time = 0;
@@ -116,7 +116,7 @@ static strarray_t *suppressed_capabilities = NULL;
 
 /* Called before a cyrus application starts (but after command line parameters
  * are read) */
-int cyrus_init(const char *alt_config, const char *ident, unsigned flags, int config_need_data)
+EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flags, int config_need_data)
 {
     char *p;
     const char *val;
@@ -282,7 +282,7 @@ int cyrus_init(const char *alt_config, const char *ident, unsigned flags, int co
     return 0;
 }
 
-void global_sasl_init(int client, int server, const sasl_callback_t *callbacks)
+EXPORTED void global_sasl_init(int client, int server, const sasl_callback_t *callbacks)
 {
     static int called_already = 0;
     
@@ -313,7 +313,7 @@ void global_sasl_init(int client, int server, const sasl_callback_t *callbacks)
 }
 
 /* this is a wrapper to call the cyrus configuration from SASL */
-int mysasl_config(void *context __attribute__((unused)), 
+EXPORTED int mysasl_config(void *context __attribute__((unused)),
 		  const char *plugin_name,
 		  const char *option,
 		  const char **result,
@@ -355,7 +355,7 @@ int mysasl_config(void *context __attribute__((unused)),
 /* This creates a structure that defines the allowable
  *   security properties 
  */
-sasl_security_properties_t *mysasl_secprops(int flags)
+EXPORTED sasl_security_properties_t *mysasl_secprops(int flags)
 {
     static sasl_security_properties_t ret;
 
@@ -379,7 +379,7 @@ sasl_security_properties_t *mysasl_secprops(int flags)
 }
 
 /* true if 'authstate' is in 'opt' */
-int global_authisa(struct auth_state *authstate, enum imapopt opt)
+EXPORTED int global_authisa(struct auth_state *authstate, enum imapopt opt)
 {
     char buf[1024];
     const char *val = config_getstring(opt);
@@ -410,7 +410,7 @@ int global_authisa(struct auth_state *authstate, enum imapopt opt)
 
 /* Note: This function is not idempotent! Only call it once for a given ID
  * or you will be unhappy (think IP hosting). */
-const char *canonify_userid(char *user, const char *loginid,
+EXPORTED const char *canonify_userid(char *user, const char *loginid,
 			    int *domain_from_ip)
 {
     char *domain = NULL;
@@ -471,7 +471,7 @@ const char *canonify_userid(char *user, const char *loginid,
     return auth_canonifyid(user, 0);
 }
 
-int mysasl_canon_user(sasl_conn_t *conn,
+EXPORTED int mysasl_canon_user(sasl_conn_t *conn,
 		      void *context,
 		      const char *user, unsigned ulen,
 		      unsigned flags __attribute__((unused)),
@@ -510,7 +510,7 @@ int mysasl_canon_user(sasl_conn_t *conn,
     return SASL_OK;
 }
 
-int is_userid_anonymous(const char *user) 
+EXPORTED int is_userid_anonymous(const char *user)
 {
     int len = strlen(user);
     const char *domain;
@@ -573,7 +573,7 @@ static int acl_ok(const char *user, struct auth_state *authstate)
 
 /* should we allow users to proxy?  return SASL_OK if yes,
    SASL_BADAUTH otherwise */
-int mysasl_proxy_policy(sasl_conn_t *conn,
+EXPORTED int mysasl_proxy_policy(sasl_conn_t *conn,
 			void *context,
 			const char *requested_user, unsigned rlen,
 			const char *auth_identity, unsigned alen,
@@ -679,7 +679,7 @@ int mysasl_proxy_policy(sasl_conn_t *conn,
 
 
 /* call before a cyrus application exits */
-void cyrus_done(void)
+EXPORTED void cyrus_done(void)
 {
     if (cyrus_init_run != RUNNING)
 	return;
@@ -693,7 +693,7 @@ void cyrus_done(void)
  * Returns 1 if we have a shutdown file, with the first line in buf.
  * Otherwise returns 0, and the contents of buf is undefined.
  */
-int shutdown_file(char *buf, int size)
+EXPORTED int shutdown_file(char *buf, int size)
 {
     FILE *f;
     static char shutdownfilename[1024] = "";
@@ -791,7 +791,7 @@ HIDDEN char *find_free_partition(unsigned long *tavail)
 }
 
 /* Set up the Session ID Buffer */
-void session_new_id(void)
+EXPORTED void session_new_id(void)
 {
     const char *base;
     int now = time(NULL);
@@ -807,7 +807,7 @@ void session_new_id(void)
 }
 
 /* Return the session id */
-const char *session_id(void)
+EXPORTED const char *session_id(void)
 {
     if (!session_id_count) 
         session_new_id();
@@ -815,7 +815,7 @@ const char *session_id(void)
 }
 
 /* parse sessionid out of protocol answers */
-void parse_sessionid(const char *str, char *sessionid)
+EXPORTED void parse_sessionid(const char *str, char *sessionid)
 {
     char *sp, *ep;
     int len;
@@ -837,7 +837,7 @@ void parse_sessionid(const char *str, char *sessionid)
 	strcpy(sessionid, "unknown");
 }
 
-int capa_is_disabled(const char *str)
+EXPORTED int capa_is_disabled(const char *str)
 {
     if (!suppressed_capabilities) return 0;
 
@@ -854,7 +854,7 @@ int capa_is_disabled(const char *str)
  */
 #define MSGID_SPECIALS "<> @\\"
 
-char *find_msgid(char *str, char **rem)
+EXPORTED char *find_msgid(char *str, char **rem)
 {
     char *msgid, *src, *dst, *cp;
 
@@ -946,7 +946,7 @@ char *find_msgid(char *str, char **rem)
  * Get name of client host on socket 's'.
  * Also returns local IP port and remote IP port on inet connections.
  */
-const char *get_clienthost(int s, const char **localip, const char **remoteip)
+EXPORTED const char *get_clienthost(int s, const char **localip, const char **remoteip)
 {
 #define IPBUF_SIZE (NI_MAXHOST+NI_MAXSERV+2)
     socklen_t salen;

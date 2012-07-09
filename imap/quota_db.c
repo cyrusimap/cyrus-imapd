@@ -86,19 +86,19 @@ static const char * const quota_db_names[QUOTA_NUMRESOURCES] = {
 };
 
 /* IMAP atoms for various quota resources */
-const char * const quota_names[QUOTA_NUMRESOURCES] = {
+EXPORTED const char * const quota_names[QUOTA_NUMRESOURCES] = {
     "STORAGE",			/* QUOTA_STORAGE -- RFC2087 */
     "MESSAGE",			/* QUOTA_MESSAGE -- RFC2087 */
     "X-ANNOTATION-STORAGE"	/* QUOTA_ANNOTSTORAGE */
 };
 
-const int quota_units[QUOTA_NUMRESOURCES] = {
+EXPORTED const int quota_units[QUOTA_NUMRESOURCES] = {
     1024,		/* QUOTA_STORAGE -- RFC2087 */
     1,			/* QUOTA_MESSAGE -- RFC2087 */
     1024		/* QUOTA_ANNOTSTORAGE */
 };
 
-int quota_name_to_resource(const char *str)
+EXPORTED int quota_name_to_resource(const char *str)
 {
     int res;
 
@@ -109,12 +109,12 @@ int quota_name_to_resource(const char *str)
     return -1;
 }
 
-int quota_changelock(void)
+EXPORTED int quota_changelock(void)
 {
     return mboxname_lock("$QUOTACHANGE", &qchangelock, LOCK_EXCLUSIVE);
 }
 
-void quota_changelockrelease()
+EXPORTED void quota_changelockrelease()
 {
     mboxname_release(&qchangelock);
 }
@@ -123,7 +123,7 @@ void quota_changelockrelease()
  * Initialise a struct quota and set the root field.  Quota must be initialised
  * before use.
  */
-void quota_init(struct quota *q, const char *root)
+EXPORTED void quota_init(struct quota *q, const char *root)
 {
     int res;
 
@@ -135,7 +135,7 @@ void quota_init(struct quota *q, const char *root)
 }
 
 /* release all the memory allocated in a struct quota */
-void quota_free(struct quota *q)
+EXPORTED void quota_free(struct quota *q)
 {
     free(q->scanmbox);
     free(q->root);
@@ -226,7 +226,7 @@ out:
 /*
  * Read the quota entry 'quota'
  */
-int quota_read(struct quota *quota, struct txn **tid, int wrlock)
+EXPORTED int quota_read(struct quota *quota, struct txn **tid, int wrlock)
 {
     int r;
     size_t qrlen;
@@ -272,7 +272,7 @@ int quota_read(struct quota *quota, struct txn **tid, int wrlock)
     return 0;
 }
 
-int quota_check(const struct quota *q,
+EXPORTED int quota_check(const struct quota *q,
 		enum quota_resource res, quota_t delta)
 {
     quota_t lim;
@@ -294,7 +294,7 @@ int quota_check(const struct quota *q,
     return 0;
 }
 
-void quota_use(struct quota *q,
+EXPORTED void quota_use(struct quota *q,
 	       enum quota_resource res, quota_t delta)
 {
     /* prevent underflow */
@@ -338,7 +338,7 @@ static int do_onequota(void *rock,
     return r;
 }
 
-int quota_foreach(const char *prefix, quotaproc_t *proc,
+EXPORTED int quota_foreach(const char *prefix, quotaproc_t *proc,
 		  void *rock, struct txn **tid)
 {
     int r;
@@ -358,7 +358,7 @@ int quota_foreach(const char *prefix, quotaproc_t *proc,
 /*
  * Commit the outstanding quota transaction
  */
-void quota_commit(struct txn **tid)
+EXPORTED void quota_commit(struct txn **tid)
 {
     if (tid && *tid) {
 	if (cyrusdb_commit(qdb, *tid)) {
@@ -371,7 +371,7 @@ void quota_commit(struct txn **tid)
 /*
  * Abort the outstanding quota transaction
  */
-void quota_abort(struct txn **tid)
+EXPORTED void quota_abort(struct txn **tid)
 {
     if (tid && *tid) {
 	if (cyrusdb_abort(qdb, *tid)) {
@@ -384,7 +384,7 @@ void quota_abort(struct txn **tid)
 /*
  * Write out the quota entry 'quota'
  */
-int quota_write(struct quota *quota, struct txn **tid)
+EXPORTED int quota_write(struct quota *quota, struct txn **tid)
 {
     int r;
     int qrlen;
@@ -438,7 +438,7 @@ int quota_write(struct quota *quota, struct txn **tid)
     return r;
 }
 
-int quota_update_useds(const char *quotaroot,
+EXPORTED int quota_update_useds(const char *quotaroot,
 		       const quota_t diff[QUOTA_NUMRESOURCES],
 		       const char *mboxname)
 {
@@ -527,7 +527,7 @@ done:
 /*
  * Remove the quota root 'quota'
  */
-int quota_deleteroot(const char *quotaroot)
+EXPORTED int quota_deleteroot(const char *quotaroot)
 {
     int r;
 
@@ -553,7 +553,7 @@ int quota_deleteroot(const char *quotaroot)
 
 static const char scanset_key[] = "..SCANSET";
 
-int quota_clear_scanset(struct txn **tid)
+EXPORTED int quota_clear_scanset(struct txn **tid)
 {
     int r;
 
@@ -573,7 +573,7 @@ int quota_clear_scanset(struct txn **tid)
     }
 }
 
-int quota_update_scanset(const char *mboxname, struct txn **tid)
+EXPORTED int quota_update_scanset(const char *mboxname, struct txn **tid)
 {
     struct buf buf = BUF_INITIALIZER;
     const char *data = NULL;
@@ -634,7 +634,7 @@ int quota_update_scanset(const char *mboxname, struct txn **tid)
     return r;
 }
 
-int quota_is_in_scanset(const char *mboxname, struct txn **tid)
+EXPORTED int quota_is_in_scanset(const char *mboxname, struct txn **tid)
 {
     const char *data = NULL;
     size_t datalen = 0;
@@ -686,7 +686,7 @@ int quota_is_in_scanset(const char *mboxname, struct txn **tid)
  *
  * returns true if a quotaroot is found, 0 otherwise. 
 */
-int quota_findroot(char *ret, size_t retlen, const char *name)
+EXPORTED int quota_findroot(char *ret, size_t retlen, const char *name)
 {
     char *tail, *p, *mbox;
 
@@ -710,14 +710,14 @@ int quota_findroot(char *ret, size_t retlen, const char *name)
 }
 
 /* must be called after cyrus_init */
-void quotadb_init(int myflags)
+EXPORTED void quotadb_init(int myflags)
 {
     if (myflags & QUOTADB_SYNC) {
 	cyrusdb_sync(QDB);
     }
 }
 
-void quotadb_open(const char *fname)
+EXPORTED void quotadb_open(const char *fname)
 {
     int ret;
     char *tofree = NULL;
@@ -749,7 +749,7 @@ void quotadb_open(const char *fname)
     quota_dbopen = 1;
 }
 
-void quotadb_close(void)
+EXPORTED void quotadb_close(void)
 {
     int r;
 
@@ -763,7 +763,7 @@ void quotadb_close(void)
     }
 }
 
-void quotadb_done(void)
+EXPORTED void quotadb_done(void)
 {
     /* DB->done() handled by cyrus_done() */
 }

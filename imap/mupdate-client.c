@@ -96,7 +96,7 @@ static struct protocol_t mupdate_protocol =
   { "Q01 LOGOUT", NULL, "Q01 " }
 };
 
-int mupdate_connect(const char *server,
+EXPORTED int mupdate_connect(const char *server,
 		    const char *port __attribute__((unused)),
 		    mupdate_handle **handle,
 		    sasl_callback_t *cbs)
@@ -144,7 +144,7 @@ int mupdate_connect(const char *server,
     return 0;
 }
 
-void mupdate_disconnect(mupdate_handle **hp)
+EXPORTED void mupdate_disconnect(mupdate_handle **hp)
 {
     mupdate_handle *h;
 
@@ -177,7 +177,7 @@ static int mupdate_scarf_one(struct mupdate_mailboxdata *mdata __attribute__((un
     return -1;
 }
 
-int mupdate_activate(mupdate_handle *handle, 
+EXPORTED int mupdate_activate(mupdate_handle *handle,
 		     const char *mailbox, const char *server,
 		     const char *acl)
 {
@@ -247,7 +247,7 @@ HIDDEN int mupdate_reserve(mupdate_handle *handle,
     }
 }
 
-int mupdate_deactivate(mupdate_handle *handle,
+EXPORTED int mupdate_deactivate(mupdate_handle *handle,
 		       const char *mailbox, const char *server)
 {
     int ret;
@@ -281,7 +281,7 @@ int mupdate_deactivate(mupdate_handle *handle,
     }
 }
 
-int mupdate_delete(mupdate_handle *handle,
+EXPORTED int mupdate_delete(mupdate_handle *handle,
 		   const char *mailbox)
 {
     int ret;
@@ -339,7 +339,7 @@ static int mupdate_find_cb(struct mupdate_mailboxdata *mdata,
     return 0;
 }
 
-int mupdate_find(mupdate_handle *handle, const char *mailbox,
+EXPORTED int mupdate_find(mupdate_handle *handle, const char *mailbox,
 		 struct mupdate_mailboxdata **target) 
 {
     int ret;
@@ -371,7 +371,7 @@ int mupdate_find(mupdate_handle *handle, const char *mailbox,
     }
 }
 
-int mupdate_list(mupdate_handle *handle, mupdate_callback callback,
+EXPORTED int mupdate_list(mupdate_handle *handle, mupdate_callback callback,
 		 const char *prefix, void *context) 
 {
     int ret;
@@ -400,7 +400,7 @@ int mupdate_list(mupdate_handle *handle, mupdate_callback callback,
 }
 
 
-int mupdate_noop(mupdate_handle *handle, mupdate_callback callback,
+EXPORTED int mupdate_noop(mupdate_handle *handle, mupdate_callback callback,
 		 void *context)
 {
     int ret;
@@ -427,7 +427,7 @@ int mupdate_noop(mupdate_handle *handle, mupdate_callback callback,
                                  goto done; }} while(0)
 
 /* Scarf up the incoming data and perform the requested operations */
-int mupdate_scarf(mupdate_handle *handle, 
+EXPORTED int mupdate_scarf(mupdate_handle *handle,
 		  mupdate_callback callback,
 		  void *context, 
 		  int wait_for_ok, 
@@ -642,7 +642,7 @@ int mupdate_scarf(mupdate_handle *handle,
     return r;
 }
 
-void kick_mupdate(void)
+EXPORTED void kick_mupdate(void)
 {
     char buf[2048];
     struct sockaddr_un srvaddr;

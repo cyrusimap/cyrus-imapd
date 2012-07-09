@@ -78,7 +78,7 @@
 static struct db *statuscachedb;
 static int statuscache_dbopen = 0;
 
-void statuscache_open(const char *fname)
+EXPORTED void statuscache_open(const char *fname)
 {
     int ret;
     char *tofree = NULL;
@@ -105,7 +105,7 @@ void statuscache_open(const char *fname)
     statuscache_dbopen = 1;
 }
 
-void statuscache_close(void)
+EXPORTED void statuscache_close(void)
 {
     int r;
 
@@ -137,7 +137,7 @@ HIDDEN void statuscache_fill(struct statusdata *sdata, const char *userid,
     sdata->highestmodseq = mailbox->i.highestmodseq;
 }
 
-void statuscache_done(void)
+EXPORTED void statuscache_done(void)
 {
     /* DB->done() handled by cyrus_done() */
 }
@@ -162,7 +162,7 @@ static char *statuscache_buildkey(const char *mailboxname, const char *userid,
 /*
  * Performs a STATUS command - note: state MAY be NULL here.
  */
-int status_lookup(const char *mboxname, const char *userid,
+EXPORTED int status_lookup(const char *mboxname, const char *userid,
 		  unsigned statusitems, struct statusdata *sdata)
 {
     struct mailbox *mailbox = NULL;
@@ -261,7 +261,7 @@ int status_lookup(const char *mboxname, const char *userid,
     return r;
 }
 
-int statuscache_lookup(const char *mboxname, const char *userid,
+EXPORTED int statuscache_lookup(const char *mboxname, const char *userid,
 		       unsigned statusitems, struct statusdata *sdata)
 {
     size_t keylen, datalen;

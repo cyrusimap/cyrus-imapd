@@ -111,7 +111,7 @@ static int mysasl_getsecret_cb(sasl_conn_t *conn,
     return SASL_OK;
 }
 
-sasl_callback_t *mysasl_callbacks(const char *username,
+EXPORTED sasl_callback_t *mysasl_callbacks(const char *username,
 				  const char *authname,
 				  const char *realm,
 				  const char *password)
@@ -165,7 +165,7 @@ sasl_callback_t *mysasl_callbacks(const char *username,
     return ret;
 }
 
-void free_callbacks(sasl_callback_t *in) 
+EXPORTED void free_callbacks(sasl_callback_t *in)
 {
     int i;
     if(!in) return;

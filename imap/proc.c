@@ -92,7 +92,7 @@ static char *proc_getpath(unsigned pid) {
     return path;
 }
 
-int proc_register(const char *progname, const char *clienthost,
+EXPORTED int proc_register(const char *progname, const char *clienthost,
 		  const char *userid, const char *mailbox)
 {
     unsigned pid;
@@ -142,7 +142,7 @@ int proc_register(const char *progname, const char *clienthost,
     return 0;
 }
 
-void proc_cleanup(void)
+EXPORTED void proc_cleanup(void)
 {
     if (procfname) {
 	fclose(procfile);
@@ -207,7 +207,7 @@ done:
     return r;
 }
 
-int proc_foreach(procdata_t *func, void *rock)
+EXPORTED int proc_foreach(procdata_t *func, void *rock)
 {
     DIR *dirp;
     struct dirent *dirent;
@@ -253,7 +253,7 @@ static int count_procusage(int pid __attribute__((unused)),
     return 0;
 }
 
-int proc_checklimits(struct proc_limits *limitsp)
+EXPORTED int proc_checklimits(struct proc_limits *limitsp)
 {
     limitsp->maxhost = config_getint(IMAPOPT_MAXLOGINS_PER_HOST);
     limitsp->maxuser = config_getint(IMAPOPT_MAXLOGINS_PER_USER);

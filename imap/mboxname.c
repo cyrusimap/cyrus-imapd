@@ -644,7 +644,7 @@ static int mboxname_toexternal_alt(struct namespace *namespace, const char *name
 /*
  * Create namespace based on config options.
  */
-int mboxname_init_namespace(struct namespace *namespace, int isadmin)
+EXPORTED int mboxname_init_namespace(struct namespace *namespace, int isadmin)
 {
     const char *prefix;
 
@@ -719,7 +719,7 @@ HIDDEN struct namespace *mboxname_get_adminnamespace()
  * representation to its internal representation '.'.
  * If using the unixhierarchysep '/', all '.'s get translated to DOTCHAR.
  */
-char *mboxname_hiersep_tointernal(struct namespace *namespace, char *name,
+EXPORTED char *mboxname_hiersep_tointernal(struct namespace *namespace, char *name,
 				  int length)
 {
     char *p;
@@ -745,7 +745,7 @@ char *mboxname_hiersep_tointernal(struct namespace *namespace, char *name,
  * representation '.' to its external representation.
  * If using the unixhierarchysep '/', all DOTCHAR get translated to '.'.
  */
-char *mboxname_hiersep_toexternal(struct namespace *namespace, char *name,
+EXPORTED char *mboxname_hiersep_toexternal(struct namespace *namespace, char *name,
                                   int length)
 {
     char *p;
@@ -769,7 +769,7 @@ char *mboxname_hiersep_toexternal(struct namespace *namespace, char *name,
 /*
  * Return nonzero if 'userid' owns the (internal) mailbox 'name'.
  */
-int mboxname_userownsmailbox(const char *userid, const char *name)
+EXPORTED int mboxname_userownsmailbox(const char *userid, const char *name)
 {
     struct namespace internal = NAMESPACE_INITIALIZER;
     char inboxname[MAX_MAILBOX_BUFFER];
@@ -786,7 +786,7 @@ int mboxname_userownsmailbox(const char *userid, const char *name)
  * If (internal) mailbox 'name' is a user's mailbox (optionally INBOX),
  * returns a pointer to the userid, otherwise returns NULL.
  */
-char *mboxname_isusermailbox(const char *name, int isinbox)
+EXPORTED char *mboxname_isusermailbox(const char *name, int isinbox)
 {
     const char *p;
     const char *start = name;
@@ -836,7 +836,7 @@ static int mboxname_strip_deletedprefix(char *name, char **ptr)
  * If (internal) mailbox 'name' is a DELETED mailbox
  * returns boolean
  */
-int mboxname_isdeletedmailbox(const char *name, time_t *timestampp)
+EXPORTED int mboxname_isdeletedmailbox(const char *name, time_t *timestampp)
 {
     int domainlen = 0;
     char *rest = NULL;
@@ -871,7 +871,7 @@ int mboxname_isdeletedmailbox(const char *name, time_t *timestampp)
 /*
  * Translate (internal) inboxname into corresponding userid.
  */
-const char *mboxname_to_userid(const char *mboxname)
+EXPORTED const char *mboxname_to_userid(const char *mboxname)
 {
     static char userid[MAX_MAILBOX_BUFFER];
     char *ret;
@@ -894,7 +894,7 @@ const char *mboxname_to_userid(const char *mboxname)
     return ret;
 }
 
-char *mboxname_user_mbox(const char *userid, const char *subfolder)
+EXPORTED char *mboxname_user_mbox(const char *userid, const char *subfolder)
 {
     struct buf mbox = BUF_INITIALIZER;
 
@@ -923,7 +923,7 @@ char *mboxname_user_mbox(const char *userid, const char *subfolder)
  * Check whether two parts have the same userid.
  * Returns: 1 if the userids are the same, 0 if not.
  */
-int mboxname_parts_same_userid(struct mboxname_parts *a,
+EXPORTED int mboxname_parts_same_userid(struct mboxname_parts *a,
 			       struct mboxname_parts *b)
 {
     int r;
@@ -940,7 +940,7 @@ int mboxname_parts_same_userid(struct mboxname_parts *a,
  * Returns: 1 if the userids are the same, 0 if not,
  *	    or negative error.
  */
-int mboxname_same_userid(const char *name1, const char *name2)
+EXPORTED int mboxname_same_userid(const char *name1, const char *name2)
 {
     struct mboxname_parts parts1, parts2;
     int r;
@@ -967,7 +967,7 @@ int mboxname_same_userid(const char *name1, const char *name2)
  * calling mboxname_free_parts().
  * Returns 0 on success, -ve error otherwise.
  */
-int mboxname_to_parts(const char *mboxname, struct mboxname_parts *parts)
+EXPORTED int mboxname_to_parts(const char *mboxname, struct mboxname_parts *parts)
 {
     char *b, *e;    /* beginning and end of string parts */
 
@@ -1035,7 +1035,7 @@ HIDDEN void mboxname_init_parts(struct mboxname_parts *parts)
     memset(parts, 0, sizeof(*parts));
 }
 
-void mboxname_free_parts(struct mboxname_parts *parts)
+EXPORTED void mboxname_free_parts(struct mboxname_parts *parts)
 {
     if (parts->freeme) {
 	free(parts->freeme);
@@ -1216,7 +1216,7 @@ HIDDEN int mboxname_policycheck(const char *name)
     return 0;
 }
 
-int mboxname_is_prefix(const char *longstr, const char *shortstr)
+EXPORTED int mboxname_is_prefix(const char *longstr, const char *shortstr)
 {
     int longlen = strlen(longstr);
     int shortlen = strlen(shortstr);
@@ -1286,7 +1286,7 @@ void mboxname_hash(char *buf, size_t buf_len,
 }
 
 /* note: mboxname must be internal */
-char *mboxname_datapath(const char *partition, const char *mboxname, unsigned long uid)
+EXPORTED char *mboxname_datapath(const char *partition, const char *mboxname, unsigned long uid)
 {
     static char pathresult[MAX_MAILBOX_PATH+1];
     const char *root;
@@ -1339,7 +1339,7 @@ char *mboxname_lockpath(const char *mboxname)
     return lockresult;
 }
 
-char *mboxname_metapath(const char *partition, const char *mboxname,
+EXPORTED char *mboxname_metapath(const char *partition, const char *mboxname,
 			int metafile, int isnew)
 {
     static char metaresult[MAX_MAILBOX_PATH];
@@ -1422,7 +1422,7 @@ char *mboxname_metapath(const char *partition, const char *mboxname,
     return metaresult;
 }
 
-void mboxname_todeleted(const char *name, char *result, int withtime)
+EXPORTED void mboxname_todeleted(const char *name, char *result, int withtime)
 {
     int domainlen = 0;
     char *p;
@@ -1444,7 +1444,7 @@ void mboxname_todeleted(const char *name, char *result, int withtime)
     }
 }
 
-int mboxname_make_parent(char *name)
+EXPORTED int mboxname_make_parent(char *name)
 {
     int domainlen = 0;
     char *p;
