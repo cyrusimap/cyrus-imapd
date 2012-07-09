@@ -61,26 +61,10 @@ extern const struct search_engine squat_search_engine;
 extern const struct search_engine sphinx_search_engine;
 #endif
 
-static int default_search(unsigned* msg_list, struct index_state *state,
-			 const struct searchargs *searchargs
-				__attribute__((unused)) )
-{
-    unsigned i;
-
-    /* Just put in all possible messages. This falls back to Cyrus' default
-     * search. */
-
-    for (i = 0; i < state->exists; i++) {
-	msg_list[i] = i + 1;
-    }
-
-    return state->exists;
-}
-
 static const struct search_engine default_search_engine = {
     "default",
     0,
-    default_search,
+    NULL,
     NULL,
     NULL,
     NULL,
@@ -107,21 +91,8 @@ HIDDEN int search_prefilter_messages(unsigned *msgno_list,
 				     struct index_state *state,
 				     const struct searchargs *searchargs)
 {
-    const struct search_engine *se;
-    int count;
-
-    for (se = engine() ; ; se = &default_search_engine) {
-	count = se->search(msgno_list, state, searchargs);
-	if (count >= 0) {
-	    syslog(LOG_DEBUG, "%s returned %d messages", se->name, count);
-	    return count;
-	} else {
-	    /* otherwise, we failed for some reason, so do the default */
-	    syslog(LOG_DEBUG, "%s failed", se->name);
-	}
-    }
-    /* NOTREACHED */
-    return -1;
+    const struct search_engine *se = engine();
+    return (se->search ? se->search(msgno_list, state, searchargs) : -1);
 }
 
 EXPORTED search_text_receiver_t *search_begin_update(int verbose)

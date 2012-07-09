@@ -1455,6 +1455,26 @@ out:
     return r;
 }
 
+static int index_prefilter_messages(unsigned* msg_list,
+				    struct index_state *state,
+				    const struct searchargs *searchargs)
+{
+    int r;
+    unsigned int i;
+
+    r = search_prefilter_messages(msg_list, state, searchargs);
+    if (r < 0) {
+	/* Just put in all possible messages. This falls back to Cyrus' default
+	 * search. */
+
+	for (i = 0; i < state->exists; i++)
+	    msg_list[i] = i + 1;
+	r = state->exists;
+    }
+
+    return r;
+}
+
 static int index_scan_work(const char *s, unsigned long len,
 			   const char *match, unsigned long min)
 {
@@ -1503,7 +1523,7 @@ EXPORTED int index_scan(struct index_state *state, const char *contents)
 
     msgno_list = (unsigned *) xmalloc(state->exists * sizeof(unsigned));
 
-    listcount = search_prefilter_messages(msgno_list, state, &searchargs);
+    listcount = index_prefilter_messages(msgno_list, state, &searchargs);
 
     for (listindex = 0; !n && listindex < listcount; listindex++) {
 	struct buf buf = BUF_INITIALIZER;
@@ -1563,7 +1583,7 @@ static int _index_search(unsigned **msgno_list, struct index_state *state,
        scan through the list and store matching message IDs back into the
        list. This is OK because we only overwrite message IDs that we've
        already looked at. */
-    listcount = search_prefilter_messages(*msgno_list, state, searchargs);
+    listcount = index_prefilter_messages(*msgno_list, state, searchargs);
 
     if (searchargs->returnopts == SEARCH_RETURN_MAX) {
 	/* If we only want MAX, then skip forward search,
