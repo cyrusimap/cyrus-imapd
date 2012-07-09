@@ -71,6 +71,7 @@
 #include "map.h"
 #include "retry.h"
 #include "util.h"
+#include "assert.h"
 #include "xmalloc.h"
 #ifdef HAVE_ZLIB
 #include "zlib.h"
@@ -963,6 +964,18 @@ EXPORTED void buf_printf(struct buf *buf, const char *fmt, ...)
     buf->flags |= BUF_CSTRING;
 }
 
+static void buf_writable_cstring(struct buf *buf)
+{
+    if ((buf->flags & BUF_CSTRING) && !buf->alloc) {
+	/* has a \0 terminator but not writable: force
+	 * re-allocation of the data and initialisation
+	 * of the terminator */
+	buf->flags &= ~BUF_CSTRING;
+    }
+    buf_cstring(buf);
+    assert(buf->alloc > 0);
+}
+
 static void buf_replace_buf(struct buf *buf,
 			    size_t offset,
 			    size_t length,
@@ -972,8 +985,8 @@ static void buf_replace_buf(struct buf *buf,
     if (offset + length > buf->len)
 	length = buf->len - offset;
 
-    /* we need buf to be a writable string now please */
-    buf_cstring(buf);
+    /* we need buf to be a writable C string now please */
+    buf_writable_cstring(buf);
 
     if (replace->len > length) {
 	/* string will need to expand */

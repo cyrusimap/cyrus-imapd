@@ -1515,6 +1515,45 @@ static void test_compress(void)
 }
 #endif
 
+static void test_replace_shorten(void)
+{
+    struct buf b = BUF_INITIALIZER;
+
+    buf_appendcstr(&b, "dreamcatcher skateboard");
+
+    /* Test that buf_replace_all() does not wander off the end of the
+     * buffer if a replacement operation at the end of the string
+     * shortens the string - this would show up in Valgrind. */
+
+    buf_replace_all(&b, "skateboard", "truck");
+    CU_ASSERT_STRING_EQUAL(b.s, "dreamcatcher truck");
+
+    buf_free(&b);
+}
+
+static void test_replace_cow_cstr(void)
+{
+    struct buf b = BUF_INITIALIZER;
+    static const char DATA0[] = "food truck vegan";
+
+    buf_init_ro_cstr(&b, DATA0);
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    CU_ASSERT_PTR_EQUAL(b.s, DATA0);
+    CU_ASSERT_STRING_EQUAL(b.s, "food truck vegan");
+
+    /* There was a bug where buf_replace_all() was enforcing that
+     * the buffer was a C string but not that it was writable, which
+     * is often the same but isn't after a buf_init_ro_cstr().  With
+     * the bug, buf_replace_all() would SEGV */
+
+    buf_replace_all(&b, "truck", "vinyl");
+    CU_ASSERT_PTR_NOT_NULL(b.s);
+    CU_ASSERT_PTR_NOT_EQUAL(b.s, DATA0);
+    CU_ASSERT_STRING_EQUAL(b.s, "food vinyl vegan");
+
+    buf_free(&b);
+}
+
 /* TODO: test the Copy-On-Write feature of buf_ensure()...if anyone
  * actually uses it */
 /* vim: set ft=c: */
