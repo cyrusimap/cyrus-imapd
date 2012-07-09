@@ -82,7 +82,7 @@ int idle_get_sock(void);
 int idle_send(const struct sockaddr_un *remote,
 	      const idle_message_t *msg);
 int idle_recv(struct sockaddr_un *remote, idle_message_t *msg);
-const char *idle_msg_string(unsigned long which);
+static const char *idle_msg_string(unsigned long which);
 
 
 #endif

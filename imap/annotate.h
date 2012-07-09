@@ -107,7 +107,7 @@ void freestrlist(struct strlist *l);
 /* Attribute Management (also used by ID) */
 void appendattvalue(struct attvaluelist **l, const char *attrib,
 		    const struct buf *value);
-void dupattvalues(struct attvaluelist **dst,
+static void dupattvalues(struct attvaluelist **dst,
 		  const struct attvaluelist *src);
 void freeattvalues(struct attvaluelist *l);
 
@@ -118,7 +118,7 @@ void setentryatt(struct entryattlist **l, const char *entry,
 		 const char *attrib, const struct buf *value);
 void clearentryatt(struct entryattlist **l, const char *entry,
 		   const char *attrib);
-void dupentryatt(struct entryattlist **l,
+static void dupentryatt(struct entryattlist **l,
 		 const struct entryattlist *);
 size_t sizeentryatts(const struct entryattlist *);
 void freeentryatts(struct entryattlist *l);

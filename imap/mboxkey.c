@@ -245,7 +245,7 @@ EXPORTED int mboxkey_read(struct mboxkey *mboxkeydb, const char *mailbox,
     return mboxkey_readit(mboxkeydb, mailbox, mboxkey, mboxkeylen, 0);
 }
 
-int mboxkey_lockread(struct mboxkey *mboxkeydb, const char *mailbox,
+static int mboxkey_lockread(struct mboxkey *mboxkeydb, const char *mailbox,
 		     const char **mboxkey, size_t *mboxkeylen)
 {
     if (MBOXKEY_DEBUG) {
@@ -378,7 +378,7 @@ EXPORTED int mboxkey_delete_user(const char *user)
 }
 
 /* database better have been locked before this ! */
-int mboxkey_unlock(struct mboxkey *mboxkeydb)
+static int mboxkey_unlock(struct mboxkey *mboxkeydb)
 {
     int r;
 

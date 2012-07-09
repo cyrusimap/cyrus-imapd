@@ -69,7 +69,7 @@ extern int statuscache_lookup(const char *mboxname, const char *userid,
 			      unsigned statusitems, struct statusdata *sdata);
 
 /* update a statuscache entry */
-extern int statuscache_update(const char *mboxname,
+static int statuscache_update(const char *mboxname,
 			      struct statusdata *sdata);
 
 /* invalidate (delete) statuscache entry for the mailbox,

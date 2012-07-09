@@ -842,7 +842,7 @@ static int _fetch_setseen(struct index_state *state, uint32_t msgno)
 }
 
 /* seq can be NULL - means "ALL" */
-void index_fetchresponses(struct index_state *state,
+static void index_fetchresponses(struct index_state *state,
 			  struct seqset *seq,
 			  int usinguid,
 			  const struct fetchargs *fetchargs,
@@ -3813,7 +3813,7 @@ EXPORTED void index_getsearchtext_single(struct index_state *state, uint32_t msg
 			SEARCHINDEX_CMD_STUFFPART);
 }
 
-void index_getsearchtext(struct index_state *state,
+static void index_getsearchtext(struct index_state *state,
 			 index_search_text_receiver_t receiver,
 			 void *rock)
 {

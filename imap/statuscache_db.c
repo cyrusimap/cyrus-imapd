@@ -349,7 +349,7 @@ static int statuscache_update_txn(const char *mboxname,
     return r;
 }
 
-int statuscache_update(const char *mboxname, struct statusdata *sdata)
+static int statuscache_update(const char *mboxname, struct statusdata *sdata)
 {
     statuscache_update_txn(mboxname, sdata, NULL);
     return 0; 

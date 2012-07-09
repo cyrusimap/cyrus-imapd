@@ -1009,7 +1009,7 @@ EXPORTED int mboxname_to_parts(const char *mboxname, struct mboxname_parts *part
     return 0;
 }
 
-int mboxname_userid_to_parts(const char *userid, struct mboxname_parts *parts)
+static int mboxname_userid_to_parts(const char *userid, struct mboxname_parts *parts)
 {
     char *b, *e;    /* beginning and end of string parts */
 
@@ -1047,7 +1047,7 @@ EXPORTED void mboxname_free_parts(struct mboxname_parts *parts)
  * Apply additional restrictions on netnews mailbox names.
  * Cannot have all-numeric name components.
  */
-int mboxname_netnewscheck(const char *name)
+static int mboxname_netnewscheck(const char *name)
 {
     int c;
     int sawnonnumeric = 0;
@@ -1238,7 +1238,7 @@ EXPORTED int mboxname_is_prefix(const char *longstr, const char *shortstr)
 }
 
 
-void mboxname_hash(char *buf, size_t buf_len,
+static void mboxname_hash(char *buf, size_t buf_len,
 		   const char *root,
 		   const char *name)
 {
@@ -1315,7 +1315,7 @@ EXPORTED char *mboxname_datapath(const char *partition, const char *mboxname, un
     return pathresult;
 }
 
-char *mboxname_lockpath(const char *mboxname)
+static char *mboxname_lockpath(const char *mboxname)
 {
     static char lockresult[MAX_MAILBOX_PATH+1];
     char basepath[MAX_MAILBOX_PATH+1];

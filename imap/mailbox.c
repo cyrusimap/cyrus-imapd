@@ -311,7 +311,7 @@ const int MAILBOX_NUM_CACHE_HEADERS =
  *  Assume cache entry version 1, unless other data is found
  *  in the table.
  */
-static inline unsigned is_cached_header(const char *hdr) 
+static inline unsigned is_cached_header(const char *hdr)
 {
     int i;
 
@@ -373,18 +373,18 @@ HIDDEN unsigned mailbox_cached_header_inline(const char *text)
     return BIT32_MAX;
 }
 
-const char *cache_base(struct index_record *record)
+static const char *cache_base(struct index_record *record)
 {
     const char *base = record->crec.base->s;
     return base + record->crec.offset;
 }
 
-unsigned cache_size(struct index_record *record)
+static unsigned cache_size(struct index_record *record)
 {
     return record->crec.len;
 }
 
-struct buf *cache_buf(struct index_record *record)
+static struct buf *cache_buf(struct index_record *record)
 {
     static struct buf staticbuf;
 
@@ -421,7 +421,7 @@ EXPORTED struct buf *cacheitem_buf(struct index_record *record, int field)
 /* parse a single cache record from the mapped file - creates buf
  * records which point into the map, so you can't free it while
  * you still have them around! */
-int cache_parserecord(struct buf *cachebase, unsigned cache_offset,
+static int cache_parserecord(struct buf *cachebase, unsigned cache_offset,
 		      struct cacherecord *crec)
 {
     unsigned cache_ent;
@@ -582,7 +582,7 @@ static int mailbox_index_islocked(struct mailbox *mailbox, int write)
 }
 
 /* return the offset for the start of the record! */
-int mailbox_append_cache(struct mailbox *mailbox,
+static int mailbox_append_cache(struct mailbox *mailbox,
 			 struct index_record *record)
 {
     int r;
@@ -664,7 +664,7 @@ done:
     return r;
 }
 
-int cache_append_record(int fd, struct index_record *record)
+static int cache_append_record(int fd, struct index_record *record)
 {
     unsigned offset;
     unsigned size = cache_size(record);
@@ -724,7 +724,7 @@ HIDDEN void mailbox_set_updatenotifier(mailbox_notifyproc_t *notifyproc)
 /*
  * Get the updatenotifier function
  */
-mailbox_notifyproc_t *mailbox_get_updatenotifier(void)
+static mailbox_notifyproc_t *mailbox_get_updatenotifier(void)
 {
     return updatenotifier;
 }
@@ -989,7 +989,7 @@ EXPORTED int mailbox_open_iwl(const char *name, struct mailbox **mailboxptr)
 				 mailboxptr);
 }
 
-struct mailbox *mailbox_findopen(const char *name)
+static struct mailbox *mailbox_findopen(const char *name)
 {
     struct mailboxlist *listitem = find_listitem(name);
 
@@ -1371,7 +1371,7 @@ EXPORTED int mailbox_user_flag(struct mailbox *mailbox, const char *flag,
     return 0;
 }
 
-int mailbox_record_hasflag(struct mailbox *mailbox,
+static int mailbox_record_hasflag(struct mailbox *mailbox,
 			   struct index_record *record,
 			   const char *flag)
 {
@@ -1606,7 +1606,7 @@ static int rec_compar(const void *key, const void *mem)
 /*
  * Find the index record in mailbox corresponding to UID
  */
-int mailbox_find_index_record(struct mailbox *mailbox, uint32_t uid,
+static int mailbox_find_index_record(struct mailbox *mailbox, uint32_t uid,
 			      struct index_record *record)
 {
     const char *mem, *base = mailbox->index_base + mailbox->i.start_offset;

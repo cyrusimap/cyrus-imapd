@@ -205,7 +205,7 @@ EXPORTED int idle_recv(struct sockaddr_un *remote, idle_message_t *msg)
     return 1;
 }
 
-const char *idle_msg_string(unsigned long which)
+static const char *idle_msg_string(unsigned long which)
 {
     const char *msg = "unknown";
 

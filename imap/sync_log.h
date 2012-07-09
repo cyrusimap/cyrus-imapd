@@ -87,8 +87,8 @@ void sync_log(const char *fmt, ...);
     sync_log("SUB %s %s\n", user, name)
 
 char *sync_log_fname(const char *channel);
-void sync_log_suppress_channel(const char *channel);
-void sync_log_channel(const char *channel, const char *fmt, ...);
+static void sync_log_suppress_channel(const char *channel);
+static void sync_log_channel(const char *channel, const char *fmt, ...);
 
 #define sync_log_user_channel(channel, user) \
     sync_log_channel(channel, "USER %s\n", user)

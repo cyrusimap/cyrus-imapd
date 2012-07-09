@@ -94,7 +94,7 @@ int seen_delete_mailbox(const char *userid, struct mailbox *mailbox);
 int seen_copy(const char *userid, struct mailbox *oldmailbox, struct mailbox *newmailbox);
 
 /* called on user operations */
-int seen_create_user(const char *user);
+static int seen_create_user(const char *user);
 int seen_delete_user(const char *user);
 int seen_rename_user(const char *olduser, const char *newuser);
 

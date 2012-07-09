@@ -70,7 +70,7 @@ int user_renameacl(char *name, char *olduser, char *newuser);
 int user_copyquotaroot(char *oldname, char *newname);
 
 /* Delete all quotaroots for 'user' */
-int user_deletequotaroots(const char *user);
+static int user_deletequotaroots(const char *user);
 
 /* find the subscriptions file for user */
 char *user_hash_subs(const char *user);
