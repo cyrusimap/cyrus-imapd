@@ -2017,7 +2017,7 @@ struct annotate_attrib
     int entry;
 };
 
-const struct annotate_attrib annotation_attributes[] =
+static const struct annotate_attrib annotation_attributes[] =
 {
     { "value", ATTRIB_VALUE_SHARED | ATTRIB_VALUE_PRIV },
     { "value.shared", ATTRIB_VALUE_SHARED },
@@ -3296,7 +3296,7 @@ HIDDEN void annotate_recalc_abort(annotate_recalc_state_t *ars)
 /* The following code is courtesy of Thomas Viehmann <tv@beamnet.de> */
 
 
-const struct annotate_attrib annotation_scope_names[] =
+static const struct annotate_attrib annotation_scope_names[] =
 {
     { "server", ANNOTATION_SCOPE_SERVER },
     { "mailbox", ANNOTATION_SCOPE_MAILBOX },
@@ -3304,7 +3304,7 @@ const struct annotate_attrib annotation_scope_names[] =
     { NULL, 0 }
 };
 
-const struct annotate_attrib annotation_proxy_type_names[] =
+static const struct annotate_attrib annotation_proxy_type_names[] =
 {
     { "proxy", PROXY_ONLY },
     { "backend", BACKEND_ONLY },
@@ -3312,7 +3312,7 @@ const struct annotate_attrib annotation_proxy_type_names[] =
     { NULL, 0 }
 };
 
-const struct annotate_attrib attribute_type_names[] = 
+static const struct annotate_attrib attribute_type_names[] =
 {
     /*
      * The "content-type" type was only used for protocol features which

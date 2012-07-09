@@ -62,7 +62,7 @@
 #include "idlemsg.h"
 #include "global.h"
 
-const char *idle_method_desc = "no";
+HIDDEN const char *idle_method_desc = "no";
 
 /* link to idled */
 static struct sockaddr_un idle_remote;

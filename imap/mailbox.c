@@ -244,7 +244,7 @@ EXPORTED char *mailbox_datapath(struct mailbox *mailbox)
  * (see is_cached_header())
  *
  */
-const struct mailbox_header_cache mailbox_cache_headers[] = {
+static const struct mailbox_header_cache mailbox_cache_headers[] = {
     /* things we have always cached */
     { "priority", 0 },
     { "references", 0 },
