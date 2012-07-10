@@ -76,7 +76,6 @@
 #include "seen.h"
 #include "statuscache.h"
 #include "strhash.h"
-#include "stristr.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
