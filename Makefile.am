@@ -542,6 +542,7 @@ endif
 lib_libcyrus_la_SOURCES += lib/parseaddr.c lib/prot.c lib/ptrarray.c \
 	lib/signals.c lib/stristr.c lib/times.c lib/tok.c lib/wildmat.c
 lib_libcyrus_la_LIBADD = $(LIB_RT) ${LIB_SASL} $(SSL_LIBS)
+lib_libcyrus_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
 lib_libcyrus_min_la_SOURCES = lib/assert.c
 if IPV6_noGETADDRINFO
