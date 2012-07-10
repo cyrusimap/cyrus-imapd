@@ -2345,7 +2345,7 @@ static int mycompar(struct dbengine *db, const char *a, int alen,
     return db->compar(a, alen, b, blen);
 }
 
-struct cyrusdb_backend cyrusdb_twoskip =
+HIDDEN struct cyrusdb_backend cyrusdb_twoskip =
 {
     "twoskip",			/* name */
 

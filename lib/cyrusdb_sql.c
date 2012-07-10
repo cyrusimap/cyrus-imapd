@@ -894,7 +894,7 @@ static int mycompar(struct dbengine *db, const char *a, int alen,
     return bsearch_ncompare_raw(a, alen, b, blen);
 }
 
-struct cyrusdb_backend cyrusdb_sql = 
+HIDDEN struct cyrusdb_backend cyrusdb_sql =
 {
     "sql",			/* name */
 

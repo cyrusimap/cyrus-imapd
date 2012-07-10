@@ -520,7 +520,7 @@ static void myfreestate(struct auth_state *auth_state)
     free(auth_state);
 }
 
-struct auth_mech auth_pts = 
+HIDDEN struct auth_mech auth_pts =
 {
     "pts",		/* name */
 

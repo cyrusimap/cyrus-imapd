@@ -866,7 +866,7 @@ static int mycompar(struct dbengine *db, const char *a, int alen,
 }
 
 
-struct cyrusdb_backend cyrusdb_quotalegacy = 
+HIDDEN struct cyrusdb_backend cyrusdb_quotalegacy =
 {
     "quotalegacy",			/* name */
 

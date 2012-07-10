@@ -161,7 +161,7 @@ static struct cyrusopt_s cyrus_options[] = {
     { CYRUSOPT_LAST, { NULL }, CYRUS_OPT_NOTOPT }
 };
 
-const char *libcyrus_config_getstring(enum cyrus_opt opt)
+HIDDEN const char *libcyrus_config_getstring(enum cyrus_opt opt)
 {
     assert(opt > CYRUSOPT_ZERO && opt < CYRUSOPT_LAST);
     assert(cyrus_options[opt].opt == opt);
@@ -170,7 +170,7 @@ const char *libcyrus_config_getstring(enum cyrus_opt opt)
     return cyrus_options[opt].val.s;
 }
 
-int libcyrus_config_getint(enum cyrus_opt opt)
+HIDDEN int libcyrus_config_getint(enum cyrus_opt opt)
 {
     assert(opt > CYRUSOPT_ZERO && opt < CYRUSOPT_LAST);
     assert(cyrus_options[opt].opt == opt);

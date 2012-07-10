@@ -184,7 +184,7 @@ sub mungemap {
 
     print OUTPUT <<EOF;
 /* Table of translations */
-const int chartables_translation_multichar[] = {
+HIDDEN const int chartables_translation_multichar[] = {
   0, /* the index of 0 is reserved to mean "no translation" */
 EOF
 
@@ -242,7 +242,7 @@ sub printmap {
  * -ve number: offset into the chartables_translation_multichar
  *             table.  Read chars until 0 encountered.
  */
-const unsigned char chartables_translation_block16[256] = {
+HIDDEN const unsigned char chartables_translation_block16[256] = {
 EOF
 
     my $n16 = 0;
@@ -258,7 +258,7 @@ EOF
     print OUTPUT <<EOF;
 };
 
-const unsigned char chartables_translation_block8[$n16][256] = {
+HIDDEN const unsigned char chartables_translation_block8[$n16][256] = {
 EOF
     my $n8 = 0;
     foreach my $block16 (0..255) {
@@ -285,7 +285,7 @@ EOF
  * character to the "canonical form", possibly multiple
  * characters.
  */
-const int chartables_translation[$n8][256] = {
+HIDDEN const int chartables_translation[$n8][256] = {
 EOF
 
     foreach my $block16 (0..255) {
@@ -483,6 +483,7 @@ EOF
  */
 
 #include "chartable.h"
+#include "config.h"
 
 EOF
 }
@@ -496,7 +497,7 @@ sub printlookup {
  * Mapping of character sets to tables
  */
 
-const struct charset chartables_charset_table[] = {
+HIDDEN const struct charset chartables_charset_table[] = {
     { "us-ascii", chartables_us_ascii },	/* US-ASCII must be charset number 0 */
     { "utf-8", 0 }, /* handled directly */
     { "utf-7", 0 }, /* handled directly */
@@ -534,7 +535,7 @@ const struct charset chartables_charset_table[] = {
      * cache files stay with valid information */
 };
 
-const struct charset_alias charset_aliases[] = {
+HIDDEN const struct charset_alias charset_aliases[] = {
 EOF
 
     my %aliases;
@@ -556,7 +557,7 @@ EOF
     { 0, 0 }
 };
 
-const int chartables_num_charsets = (sizeof(chartables_charset_table)/sizeof(*chartables_charset_table));
+HIDDEN const int chartables_num_charsets = (sizeof(chartables_charset_table)/sizeof(*chartables_charset_table));
 EOF
 }
 

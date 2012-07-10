@@ -99,7 +99,7 @@ static unsigned char convert_to_compare[256] = {
  * be inserted is returned and zero is put in the unsigned long pointed to
  * by 'linelenp'.
  */
-int bsearch_mem_mbox(const char *word,
+HIDDEN int bsearch_mem_mbox(const char *word,
 		     const char *base,
 		     unsigned long len,
 		     unsigned long hint,
@@ -198,7 +198,7 @@ int bsearch_compare_mbox(const char *s1, const char *s2)
     }
 }
 
-int bsearch_ncompare_mbox(const char *s1, int l1, const char *s2, int l2)
+HIDDEN int bsearch_ncompare_mbox(const char *s1, int l1, const char *s2, int l2)
 {
     int min = l1 < l2 ? l1 : l2;
     int cmp = 0;
@@ -241,7 +241,7 @@ int cmpstringp_mbox(const void *p1, const void *p2)
 }
 
 
-int bsearch_ncompare_raw(const char *s1, int l1, const char *s2, int l2)
+HIDDEN int bsearch_ncompare_raw(const char *s1, int l1, const char *s2, int l2)
 {
     int min = l1 < l2 ? l1 : l2;
     int r = memcmp(s1, s2, min);

@@ -365,7 +365,7 @@ static void myfreestate(
 
 #endif
 
-struct auth_mech auth_krb = 
+HIDDEN struct auth_mech auth_krb =
 {
     "krb",		/* name */
 

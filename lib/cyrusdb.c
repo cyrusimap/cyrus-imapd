@@ -312,7 +312,7 @@ void cyrusdb_done(void)
     }
 }
 
-int cyrusdb_copyfile(const char *srcname, const char *dstname)
+HIDDEN int cyrusdb_copyfile(const char *srcname, const char *dstname)
 {
     return cyrus_copyfile(srcname, dstname, COPYFILE_NOLINK);
 }
@@ -552,23 +552,23 @@ strarray_t *cyrusdb_backends(void)
 
 /* generic backend implementations */
 
-int cyrusdb_generic_init(const char *dbdir __attribute__((unused)),
+HIDDEN int cyrusdb_generic_init(const char *dbdir __attribute__((unused)),
 			 int myflags __attribute__((unused)))
 {
     return 0;
 }
 
-int cyrusdb_generic_done(void)
+HIDDEN int cyrusdb_generic_done(void)
 {
     return 0;
 }
 
-int cyrusdb_generic_sync(void)
+HIDDEN int cyrusdb_generic_sync(void)
 {
     return 0;
 }
 
-int cyrusdb_generic_archive(const strarray_t *fnames,
+HIDDEN int cyrusdb_generic_archive(const strarray_t *fnames,
 			    const char *dirname)
 {
     char dstname[1024], *dp;
@@ -597,7 +597,7 @@ int cyrusdb_generic_archive(const strarray_t *fnames,
     return 0;
 }
 
-int cyrusdb_generic_noarchive(const strarray_t *fnames __attribute__((unused)),
+HIDDEN int cyrusdb_generic_noarchive(const strarray_t *fnames __attribute__((unused)),
 			      const char *dirname __attribute__((unused)))
 {
     return 0;

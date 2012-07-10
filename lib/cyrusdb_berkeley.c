@@ -1017,7 +1017,7 @@ static int mycompar(struct dbengine *mydb
 }
 
 
-struct cyrusdb_backend cyrusdb_berkeley = 
+HIDDEN struct cyrusdb_backend cyrusdb_berkeley =
 {
     "berkeley",			/* name */
 
@@ -1046,7 +1046,7 @@ struct cyrusdb_backend cyrusdb_berkeley =
     &mycompar
 };
 
-struct cyrusdb_backend cyrusdb_berkeley_nosync = 
+HIDDEN struct cyrusdb_backend cyrusdb_berkeley_nosync =
 {
     "berkeley-nosync",		/* name */
 
@@ -1075,7 +1075,7 @@ struct cyrusdb_backend cyrusdb_berkeley_nosync =
     &mycompar
 };
 
-struct cyrusdb_backend cyrusdb_berkeley_hash = 
+HIDDEN struct cyrusdb_backend cyrusdb_berkeley_hash =
 {
     "berkeley-hash",		/* name */
 
@@ -1104,7 +1104,7 @@ struct cyrusdb_backend cyrusdb_berkeley_hash =
     &mycompar
 };
 
-struct cyrusdb_backend cyrusdb_berkeley_hash_nosync = 
+HIDDEN struct cyrusdb_backend cyrusdb_berkeley_hash_nosync =
 {
     "berkeley-hash-nosync",	/* name */
 

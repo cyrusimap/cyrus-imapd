@@ -283,7 +283,7 @@ static void myfreestate(struct auth_state *auth_state)
 }
 
 
-struct auth_mech auth_unix = 
+HIDDEN struct auth_mech auth_unix =
 {
     "unix",		/* name */
 
