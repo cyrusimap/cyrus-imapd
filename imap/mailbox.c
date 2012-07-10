@@ -302,7 +302,7 @@ static const struct mailbox_header_cache mailbox_cache_headers[] = {
      * threading so we can avoid parsing the envelope] */
     /* { "message-id", BIT32_MAX }, */
 };
-const int MAILBOX_NUM_CACHE_HEADERS =
+static const int MAILBOX_NUM_CACHE_HEADERS =
   sizeof(mailbox_cache_headers)/sizeof(struct mailbox_header_cache);
 
 /*

@@ -96,7 +96,7 @@ typedef unsigned long long int modseq_t;
 #define Uisxdigit(c) isxdigit((int)((unsigned char)(c)))
 
 extern const unsigned char convert_to_lowercase[256];
-extern const unsigned char convert_to_uppercase[256];
+static const unsigned char convert_to_uppercase[256];
 
 #define TOUPPER(c) (convert_to_uppercase[(unsigned char)(c)])
 #define TOLOWER(c) (convert_to_lowercase[(unsigned char)(c)])

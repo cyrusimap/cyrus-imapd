@@ -346,7 +346,7 @@ struct mailbox_header_cache {
 
 #define MAX_CACHED_HEADER_SIZE 32 /* Max size of a cached header name */
 static const struct mailbox_header_cache mailbox_cache_headers[];
-extern const int MAILBOX_NUM_CACHE_HEADERS;
+static const int MAILBOX_NUM_CACHE_HEADERS;
 
 /* Aligned buffer for manipulating index header/record fields */
 typedef union {
