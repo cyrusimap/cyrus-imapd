@@ -179,7 +179,7 @@ HIDDEN int bsearch_mem_mbox(const char *word,
     return p - base + 1;
 }
 
-int bsearch_compare_mbox(const char *s1, const char *s2)
+EXPORTED int bsearch_compare_mbox(const char *s1, const char *s2)
 {
     int cmp;
     char c2;
@@ -217,7 +217,7 @@ HIDDEN int bsearch_ncompare_mbox(const char *s1, int l1, const char *s2, int l2)
 }
 
 /* direct from the qsort manpage */
-int cmpstringp_raw(const void *p1, const void *p2)
+EXPORTED int cmpstringp_raw(const void *p1, const void *p2)
 {
     /* The actual arguments to this function are "pointers to
     pointers to char", but strcmp(3) arguments are "pointers
@@ -226,7 +226,7 @@ int cmpstringp_raw(const void *p1, const void *p2)
    return strcmpsafe(* (char * const *) p1, * (char * const *) p2);
 }
 
-int cmpstringp_mbox(const void *p1, const void *p2)
+EXPORTED int cmpstringp_mbox(const void *p1, const void *p2)
 {
     const char *s1 = *((const char **)p1);
     const char *s2 = *((const char **)p2);

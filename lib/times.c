@@ -78,7 +78,7 @@ static int monthdays(int year/*since 1900*/, int month/*0-based*/)
 
 
 /* 'buf' must be at least 80 characters */
-int time_to_rfc822(time_t t, char *buf, size_t len)
+EXPORTED int time_to_rfc822(time_t t, char *buf, size_t len)
 {
     struct tm *tm;
     long gmtoff;
@@ -365,7 +365,7 @@ static int parse_rfc822(const char *s, time_t *tp, int dayonly)
  *
  * Returns: number of characters consumed from @s or -1 on error.
  */
-int time_from_rfc822(const char *s, time_t *tp)
+EXPORTED int time_from_rfc822(const char *s, time_t *tp)
 {
     return parse_rfc822(s, tp, 0);
 }
@@ -380,7 +380,7 @@ int time_from_rfc822(const char *s, time_t *tp)
  *
  * Returns: number of characters consumed from @s or -1 on error.
  */
-int day_from_rfc822(const char *s, time_t *tp)
+EXPORTED int day_from_rfc822(const char *s, time_t *tp)
 {
     return parse_rfc822(s, tp, 1);
 }
@@ -389,7 +389,7 @@ int day_from_rfc822(const char *s, time_t *tp)
  * Parse an RFC 3339 = ISO 8601 format date-time string.
  * Returns: number of characters in @s consumed, or -1 on error.
  */
-int time_from_iso8601(const char *s, time_t *tp)
+EXPORTED int time_from_iso8601(const char *s, time_t *tp)
 {
     const char *origs = s;
     struct tm exp;
@@ -449,7 +449,7 @@ int time_from_iso8601(const char *s, time_t *tp)
  *
  * Returns: number of characters in @buf generated, or -1 on error.
  */
-int time_to_iso8601(time_t t, char *buf, size_t len)
+EXPORTED int time_to_iso8601(time_t t, char *buf, size_t len)
 {
     struct tm *exp = (struct tm *) gmtime(&t);
     return strftime(buf, len, "%Y-%m-%dT%H:%M:%SZ", exp);
@@ -462,7 +462,7 @@ int time_to_iso8601(time_t t, char *buf, size_t len)
  *
  * Returns: number of characters in @buf generated, or -1 on error.
  */
-int time_to_rfc3501(time_t date, char *buf, size_t len)
+EXPORTED int time_to_rfc3501(time_t date, char *buf, size_t len)
 {
     struct tm *tm = localtime(&date);
     long gmtoff = gmtoff_of(tm, date);
@@ -554,7 +554,7 @@ int time_to_rfc3501(time_t date, char *buf, size_t len)
  * Returns: Number of characters consumed from @s on success,
  *	    or -1 on error.
  */
-int time_from_rfc3501(const char *s, time_t *date)
+EXPORTED int time_from_rfc3501(const char *s, time_t *date)
 {
     const char *origs = s;
     int c;

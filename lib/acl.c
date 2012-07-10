@@ -54,7 +54,7 @@
 
 /* convert a string to an acl bit vector
  */
-int cyrus_acl_strtomask(const char *str)
+EXPORTED int cyrus_acl_strtomask(const char *str)
 {
     const char *deleteright = libcyrus_config_getstring(CYRUSOPT_DELETERIGHT);
     long legacy_create = 0;
@@ -114,7 +114,7 @@ int cyrus_acl_strtomask(const char *str)
 
 /* convert an acl bit vector to a string
  */
-char *cyrus_acl_masktostr(int acl, char *str)
+EXPORTED char *cyrus_acl_masktostr(int acl, char *str)
 {
     char *pos = str;
     const char *deleteright = libcyrus_config_getstring(CYRUSOPT_DELETERIGHT);

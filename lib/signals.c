@@ -68,7 +68,7 @@ static void sighandler(int sig)
 
 static const int catch[] = { SIGHUP, 0 };
 
-void signals_add_handlers(int alarm)
+EXPORTED void signals_add_handlers(int alarm)
 {
     struct sigaction action;
     int i;
@@ -112,12 +112,12 @@ void signals_add_handlers(int alarm)
 
 static shutdownfn *shutdown_cb = NULL;
 
-void signals_set_shutdown(shutdownfn *s)
+EXPORTED void signals_set_shutdown(shutdownfn *s)
 {
     shutdown_cb = s;
 }
 
-int signals_poll(void)
+EXPORTED int signals_poll(void)
 {
     int sig;
 

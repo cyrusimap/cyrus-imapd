@@ -47,12 +47,12 @@
 #include "tok.h"
 #include "xmalloc.h"
 
-void tok_init(tok_t *t, const char *str, const char *sep, int flags)
+EXPORTED void tok_init(tok_t *t, const char *str, const char *sep, int flags)
 {
     tok_initm(t, str ? xstrdup(str) : NULL, sep, flags|TOK_FREEBUFFER);
 }
 
-void tok_initm(tok_t *t, char *str, const char *sep, int flags)
+EXPORTED void tok_initm(tok_t *t, char *str, const char *sep, int flags)
 {
     memset(t, 0, sizeof(*t));
     t->buf = str;
@@ -60,14 +60,14 @@ void tok_initm(tok_t *t, char *str, const char *sep, int flags)
     t->flags = flags | _TOK_FIRST;
 }
 
-void tok_fini(tok_t *t)
+EXPORTED void tok_fini(tok_t *t)
 {
     if ((t->flags & TOK_FREEBUFFER))
 	free(t->buf);
     memset(t, 0, sizeof(*t));
 }
 
-char *tok_next(tok_t *t)
+EXPORTED char *tok_next(tok_t *t)
 {
     const char *sep;
     char *token;
@@ -122,7 +122,7 @@ char *tok_next(tok_t *t)
     return token;
 }
 
-unsigned int tok_offset(const tok_t *t)
+EXPORTED unsigned int tok_offset(const tok_t *t)
 {
     if (!t->buf || !t->curr)
 	return 0;

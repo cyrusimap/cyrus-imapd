@@ -47,12 +47,12 @@
 #include <memory.h>
 #include "xmalloc.h"
 
-ptrarray_t *ptrarray_new(void)
+EXPORTED ptrarray_t *ptrarray_new(void)
 {
     return xzmalloc(sizeof(ptrarray_t));
 }
 
-void ptrarray_fini(ptrarray_t *pa)
+EXPORTED void ptrarray_fini(ptrarray_t *pa)
 {
     if (!pa)
 	return;
@@ -63,7 +63,7 @@ void ptrarray_fini(ptrarray_t *pa)
     pa->alloc = 0;
 }
 
-void ptrarray_free(ptrarray_t *pa)
+EXPORTED void ptrarray_free(ptrarray_t *pa)
 {
     if (!pa)
 	return;
@@ -114,19 +114,19 @@ static inline int adjust_index_rw(ptrarray_t *pa, int idx, int len)
     return idx;
 }
 
-void ptrarray_add(ptrarray_t *pa, void *p)
+EXPORTED void ptrarray_add(ptrarray_t *pa, void *p)
 {
     if (ptrarray_find(pa, p, 0) < 0)
 	ptrarray_append(pa, p);
 }
 
-void ptrarray_append(ptrarray_t *pa, void *p)
+EXPORTED void ptrarray_append(ptrarray_t *pa, void *p)
 {
     ensure_alloc(pa, pa->count+1);
     pa->data[pa->count++] = p;
 }
 
-void ptrarray_set(ptrarray_t *pa, int idx, void *p)
+EXPORTED void ptrarray_set(ptrarray_t *pa, int idx, void *p)
 {
     if ((idx = adjust_index_rw(pa, idx, 0)) < 0)
 	return;
@@ -142,14 +142,14 @@ static inline void _ptrarray_insert(ptrarray_t *pa, int idx, void *p)
     pa->count++;
 }
 
-void ptrarray_insert(ptrarray_t *pa, int idx, void *p)
+EXPORTED void ptrarray_insert(ptrarray_t *pa, int idx, void *p)
 {
     if ((idx = adjust_index_rw(pa, idx, 1)) < 0)
 	return;
     _ptrarray_insert(pa, idx, p);
 }
 
-void *ptrarray_remove(ptrarray_t *pa, int idx)
+EXPORTED void *ptrarray_remove(ptrarray_t *pa, int idx)
 {
     void *p;
     if ((idx = adjust_index_ro(pa, idx)) < 0)
@@ -162,7 +162,7 @@ void *ptrarray_remove(ptrarray_t *pa, int idx)
     return p;
 }
 
-void ptrarray_truncate(ptrarray_t *pa, int newlen)
+EXPORTED void ptrarray_truncate(ptrarray_t *pa, int newlen)
 {
     int i;
 
@@ -179,14 +179,14 @@ void ptrarray_truncate(ptrarray_t *pa, int newlen)
     pa->count = newlen;
 }
 
-void *ptrarray_nth(const ptrarray_t *pa, int idx)
+EXPORTED void *ptrarray_nth(const ptrarray_t *pa, int idx)
 {
     if ((idx = adjust_index_ro(pa, idx)) < 0)
 	return NULL;
     return pa->data[idx];
 }
 
-void **ptrarray_takevf(ptrarray_t *pa)
+EXPORTED void **ptrarray_takevf(ptrarray_t *pa)
 {
     void **d = pa->data;
     pa->data = NULL;
@@ -195,7 +195,7 @@ void **ptrarray_takevf(ptrarray_t *pa)
     return d;
 }
 
-int ptrarray_find(const ptrarray_t *pa, void *match, int starting)
+EXPORTED int ptrarray_find(const ptrarray_t *pa, void *match, int starting)
 {
     int i;
 

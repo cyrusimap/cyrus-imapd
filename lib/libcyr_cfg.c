@@ -183,7 +183,7 @@ HIDDEN int libcyrus_config_getint(enum cyrus_opt opt)
     return cyrus_options[opt].val.i;
 }
 
-int libcyrus_config_getswitch(enum cyrus_opt opt)
+EXPORTED int libcyrus_config_getswitch(enum cyrus_opt opt)
 {
     assert(opt > CYRUSOPT_ZERO && opt < CYRUSOPT_LAST);
     assert(cyrus_options[opt].opt == opt);
@@ -196,7 +196,7 @@ int libcyrus_config_getswitch(enum cyrus_opt opt)
     return cyrus_options[opt].val.b;
 }
 
-void libcyrus_config_setstring(enum cyrus_opt  opt, const char *val) 
+EXPORTED void libcyrus_config_setstring(enum cyrus_opt  opt, const char *val)
 {
     assert(opt > CYRUSOPT_ZERO && opt < CYRUSOPT_LAST);
     assert(cyrus_options[opt].opt == opt);
@@ -205,7 +205,7 @@ void libcyrus_config_setstring(enum cyrus_opt  opt, const char *val)
     cyrus_options[opt].val.s = val;
 }
 
-void libcyrus_config_setint(enum cyrus_opt opt, int val)
+EXPORTED void libcyrus_config_setint(enum cyrus_opt opt, int val)
 {
     assert(opt > CYRUSOPT_ZERO && opt < CYRUSOPT_LAST);
     assert(cyrus_options[opt].opt == opt);
@@ -214,7 +214,7 @@ void libcyrus_config_setint(enum cyrus_opt opt, int val)
     cyrus_options[opt].val.i = val;
 }
 
-void libcyrus_config_setswitch(enum cyrus_opt opt, int val) 
+EXPORTED void libcyrus_config_setswitch(enum cyrus_opt opt, int val)
 {
     assert(opt > CYRUSOPT_ZERO && opt < CYRUSOPT_LAST);
     assert(cyrus_options[opt].opt == opt);
@@ -223,12 +223,12 @@ void libcyrus_config_setswitch(enum cyrus_opt opt, int val)
     cyrus_options[opt].val.b = val;
 }
 
-void libcyrus_init(void)
+EXPORTED void libcyrus_init(void)
 {
     cyrusdb_init();
 }
 
-void libcyrus_done(void)
+EXPORTED void libcyrus_done(void)
 {
     cyrusdb_done();
 }

@@ -826,7 +826,7 @@ static int mycompar(struct dbengine *db __attribute__((unused)),
     return bsearch_ncompare_mbox(a, alen, b, blen);
 }
 
-struct cyrusdb_backend cyrusdb_flat = 
+EXPORTED struct cyrusdb_backend cyrusdb_flat =
 {
     "flat",			/* name */
 

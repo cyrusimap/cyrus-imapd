@@ -52,7 +52,7 @@
 #include <errno.h>
 #include "iptostring.h"
 
-int iptostring(const struct sockaddr *addr, socklen_t addrlen,
+EXPORTED int iptostring(const struct sockaddr *addr, socklen_t addrlen,
 	       char *out, unsigned outlen) {
     char hbuf[NI_MAXHOST], pbuf[NI_MAXSERV];
     int niflags;

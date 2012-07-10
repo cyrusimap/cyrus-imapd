@@ -85,28 +85,28 @@ static struct auth_mech *auth_fromname(void)
     return auth;
 }
 
-int auth_memberof(struct auth_state *auth_state, const char *identifier)
+EXPORTED int auth_memberof(struct auth_state *auth_state, const char *identifier)
 {
     struct auth_mech *auth = auth_fromname();
 
     return auth->memberof(auth_state, identifier);
 }
 
-const char *auth_canonifyid(const char *identifier, size_t len)
+EXPORTED const char *auth_canonifyid(const char *identifier, size_t len)
 {
     struct auth_mech *auth = auth_fromname();
 
     return auth->canonifyid(identifier, len);
 }
 
-struct auth_state *auth_newstate(const char *identifier)
+EXPORTED struct auth_state *auth_newstate(const char *identifier)
 {
     struct auth_mech *auth = auth_fromname();
 
     return auth->newstate(identifier);
 }
 
-void auth_freestate(struct auth_state *auth_state)
+EXPORTED void auth_freestate(struct auth_state *auth_state)
 {
     struct auth_mech *auth = auth_fromname();
 

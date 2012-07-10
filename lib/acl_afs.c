@@ -63,7 +63,7 @@
  * Calculate the set of rights the user in 'auth_state' has in the ACL 'acl'.
  * 'acl' must be writable, but is restored to its original condition.
  */
-int cyrus_acl_myrights(struct auth_state *auth_state, const char *origacl)
+EXPORTED int cyrus_acl_myrights(struct auth_state *auth_state, const char *origacl)
 {
     char *acl = xstrdup(origacl);
     char *thisid, *rights, *nextid;
@@ -104,7 +104,7 @@ int cyrus_acl_myrights(struct auth_state *auth_state, const char *origacl)
  * 'identifier' the set specified in the mask 'access'.  The pointer
  * pointed to by 'acl' must have been obtained from malloc().
  */
-int cyrus_acl_set(char **acl, const char *identifier,
+EXPORTED int cyrus_acl_set(char **acl, const char *identifier,
 		  int mode, int access,
 		  cyrus_acl_canonproc_t *canonproc,
 		  void *canonrock)
@@ -207,7 +207,7 @@ int cyrus_acl_set(char **acl, const char *identifier,
  * Remove any entry for 'identifier' in the ACL pointed to by 'acl'.
  * The pointer pointed to by 'acl' must have been obtained from malloc().
  */
-int cyrus_acl_remove(char **acl, const char *identifier, 
+EXPORTED int cyrus_acl_remove(char **acl, const char *identifier,
 	       cyrus_acl_canonproc_t canonproc, void *canonrock)
 {
     return cyrus_acl_set(acl, identifier, ACL_MODE_SET, 0, canonproc, canonrock);

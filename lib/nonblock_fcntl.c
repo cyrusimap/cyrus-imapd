@@ -61,14 +61,14 @@
 #define NON_BLOCKING_MODE FNDELAY
 #endif
 
-const char *nonblock_method_desc = "fcntl";
+EXPORTED const char *nonblock_method_desc = "fcntl";
 
 /*
  * Modifies the non-blocking mode on the file descriptor 'fd'.  If
  * 'mode' is nonzero, sets non-blocking mode, if 'mode' is zero
  * clears non-blocking mode.
  */
-void nonblock(int fd, int mode)
+EXPORTED void nonblock(int fd, int mode)
 {
     int flags;
 

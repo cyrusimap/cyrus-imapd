@@ -9,6 +9,7 @@
 /* $Id: lsort.c,v 1.2 2002/05/25 19:57:47 leg Exp $ */
 
 #include "lsort.h"
+#include "config.h"
 #include <stdlib.h>
 
 /* merge two sorted lists */
@@ -50,7 +51,7 @@ static void *lmerge(void *p, void *q,
     return m;
 }
 
-void *lsort(void *p,
+EXPORTED void *lsort(void *p,
 	    void *(*getnext)(void *),
 	    void (*setnext)(void *, void *), 
 	    int (*compar)(void *, void *, void *),

@@ -2463,7 +2463,7 @@ static int mycompar(struct dbengine *db, const char *a, int alen,
 }
 
 
-struct cyrusdb_backend cyrusdb_skiplist = 
+EXPORTED struct cyrusdb_backend cyrusdb_skiplist =
 {
     "skiplist",			/* name */
 

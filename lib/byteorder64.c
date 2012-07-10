@@ -61,7 +61,7 @@ union byteswap_64_u {
  * The macro htonll() is defined in byteorder64.h,
  * and if needed refers to _htonll() here.
  */
-unsigned long long _htonll(unsigned long long x)
+EXPORTED unsigned long long _htonll(unsigned long long x)
 {
     union byteswap_64_u u1;
     union byteswap_64_u u2;
@@ -81,7 +81,7 @@ unsigned long long _htonll(unsigned long long x)
  * The macro ntohll() is defined in byteorder64.h, and if needed,
  * refers to _ntohll() here.
  */
-unsigned long long _ntohll(unsigned long long x)
+EXPORTED unsigned long long _ntohll(unsigned long long x)
 {
     union byteswap_64_u u1;
     union byteswap_64_u u2;
@@ -98,13 +98,13 @@ unsigned long long _ntohll(unsigned long long x)
 
 #include <string.h>
 
-void *align_htonll(void *dst, unsigned long long src)
+EXPORTED void *align_htonll(void *dst, unsigned long long src)
 {
     unsigned long long tmp = htonll(src);
     return memcpy(dst, (void *) &tmp, sizeof(unsigned long long));
 }
 
-unsigned long long align_ntohll(const void *src)
+EXPORTED unsigned long long align_ntohll(const void *src)
 {
     unsigned long long dst;
 

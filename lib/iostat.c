@@ -1,10 +1,11 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <syslog.h>
+#include "config.h"
 #include "libconfig.h"
 #include "iostat.h"
 
-void read_io_count(struct io_count *iocount) {
+EXPORTED void read_io_count(struct io_count *iocount) {
     FILE *file = NULL;
     char buf[64] = "";
 

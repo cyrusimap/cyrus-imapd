@@ -10,14 +10,14 @@
 
 #include <zlib.h>
 
-uint32_t crc32_map(const char *base, unsigned len)
+EXPORTED uint32_t crc32_map(const char *base, unsigned len)
 {
     uint32_t crc = crc32(0L, Z_NULL, 0);
     crc = crc32(crc, (const unsigned char *)base, len);
     return crc;
 }
 
-uint32_t crc32_iovec(struct iovec *iov, int iovcnt)
+EXPORTED uint32_t crc32_iovec(struct iovec *iov, int iovcnt)
 {
     int n;
     uint32_t crc = crc32(0L, Z_NULL, 0);
@@ -144,7 +144,7 @@ static uint32_t crc32_tab[] = {
  */
 
 
-uint32_t crc32_map(const char *base, unsigned len)
+EXPORTED uint32_t crc32_map(const char *base, unsigned len)
 {
     uint32_t crc = ~0U;
     const uint8_t *p = (const uint8_t *)base;
@@ -155,7 +155,7 @@ uint32_t crc32_map(const char *base, unsigned len)
     return crc ^ ~0U;
 }
 
-uint32_t crc32_iovec(struct iovec *iov, int iovcnt)
+EXPORTED uint32_t crc32_iovec(struct iovec *iov, int iovcnt)
 {
     uint32_t crc = ~0U;
     int n;
@@ -173,12 +173,12 @@ uint32_t crc32_iovec(struct iovec *iov, int iovcnt)
 
 #endif
 
-uint32_t crc32_buf(struct buf *buf)
+EXPORTED uint32_t crc32_buf(struct buf *buf)
 {
     return crc32_map(buf->s, buf->len);
 }
 
-uint32_t crc32_cstring(const char *buf)
+EXPORTED uint32_t crc32_cstring(const char *buf)
 {
     return crc32_map(buf, strlen(buf));
 }

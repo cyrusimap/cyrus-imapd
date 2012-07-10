@@ -96,7 +96,7 @@
 
 #if HAVE_TIMEGM
 
-time_t mkgmtime(struct tm * const tmp)
+EXPORTED time_t mkgmtime(struct tm * const tmp)
 {
     return timegm(tmp);
 }

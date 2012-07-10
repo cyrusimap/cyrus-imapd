@@ -82,6 +82,7 @@
 #include <stdio.h>
 #include <sys/types.h>
 
+#include "config.h"
 
 
 #define TRUE			1
@@ -163,7 +164,7 @@ static int DoMatch(const char *text, const char *p)
 /*
 **  User-level routine.  Returns TRUE or FALSE.
 */
-int wildmat(const char *text, const char *p)
+EXPORTED int wildmat(const char *text, const char *p)
 {
 #ifdef	OPTIMIZE_JUST_STAR
     if (p[0] == '*' && p[1] == '\0')

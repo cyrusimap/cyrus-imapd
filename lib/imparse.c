@@ -55,7 +55,7 @@
  * returns the character following the word, and modifies the pointer at
  * 's' to point after the returned character.  Modifies the input buffer.
  */
-int imparse_word(char **s, char **retval)
+EXPORTED int imparse_word(char **s, char **retval)
 {
     int c;
 
@@ -78,7 +78,7 @@ int imparse_word(char **s, char **retval)
  * at the empty string, and modifies 's' to point around the syntax error.
  * Modifies the input buffer.
  */
-int imparse_astring(char **s, char **retval)
+EXPORTED int imparse_astring(char **s, char **retval)
 {
     int c;
     char *d;
@@ -147,7 +147,7 @@ int imparse_astring(char **s, char **retval)
 /*
  * Return nonzero if 's' matches the grammar for an atom
  */
-int imparse_isatom(const char *s)
+EXPORTED int imparse_isatom(const char *s)
 {
     int len = 0;
 
@@ -165,7 +165,7 @@ int imparse_isatom(const char *s)
 /*
  * Return nonzero if 's' matches the grammar for a sequence
  */
-int imparse_issequence(const char* s)
+EXPORTED int imparse_issequence(const char* s)
 {
     int c;
     int len = 0;
@@ -200,7 +200,7 @@ int imparse_issequence(const char* s)
 /*
  * Return nonzero if 's' matches the grammar for a number
  */
-int imparse_isnumber(const char *s)
+EXPORTED int imparse_isnumber(const char *s)
 {
     if (!*s) return 0;
     for (; *s; s++) {

@@ -51,14 +51,14 @@
 #include "xmalloc.h"
 #include "exitcodes.h"
 
-const char *nonblock_method_desc = "ioctl";
+EXPORTED const char *nonblock_method_desc = "ioctl";
 
 /*
  * Modifies the non-blocking mode on the file descriptor 'fd'.  If
  * 'mode' is nonzero, sets non-blocking mode, if 'mode' is zero
  * clears non-blocking mode.
  */
-void
+EXPORTED void
 nonblock(fd, mode)
 int fd;
 int mode;

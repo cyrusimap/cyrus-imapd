@@ -119,7 +119,7 @@ static struct cyrusdb_backend *cyrusdb_fromname(const char *name)
     return db;
 }
 
-int cyrusdb_open(const char *backend, const char *fname,
+EXPORTED int cyrusdb_open(const char *backend, const char *fname,
 		 int flags, struct db **ret)
 {
     const char *realname;
@@ -184,7 +184,7 @@ done:
     return r;
 }
 
-int cyrusdb_close(struct db *db)
+EXPORTED int cyrusdb_close(struct db *db)
 {
     int r = db->backend->close(db->engine);
 
@@ -193,7 +193,7 @@ int cyrusdb_close(struct db *db)
     return r;
 }
 
-int cyrusdb_fetch(struct db *db,
+EXPORTED int cyrusdb_fetch(struct db *db,
 	     const char *key, size_t keylen,
 	     const char **data, size_t *datalen,
 	     struct txn **mytid)
@@ -202,7 +202,7 @@ int cyrusdb_fetch(struct db *db,
 			      data, datalen, mytid);
 }
 
-int cyrusdb_fetchlock(struct db *db,
+EXPORTED int cyrusdb_fetchlock(struct db *db,
 		 const char *key, size_t keylen,
 		 const char **data, size_t *datalen,
 		 struct txn **mytid)
@@ -211,7 +211,7 @@ int cyrusdb_fetchlock(struct db *db,
 				  data, datalen, mytid);
 }
 
-int cyrusdb_fetchnext(struct db *db,
+EXPORTED int cyrusdb_fetchnext(struct db *db,
 		 const char *key, size_t keylen,
 		 const char **found, size_t *foundlen,
 		 const char **data, size_t *datalen,
@@ -222,7 +222,7 @@ int cyrusdb_fetchnext(struct db *db,
 				  data, datalen, mytid);
 }
 
-int cyrusdb_foreach(struct db *db,
+EXPORTED int cyrusdb_foreach(struct db *db,
 	       const char *prefix, size_t prefixlen,
 	       foreach_p *p,
 	       foreach_cb *cb, void *rock,
@@ -240,7 +240,7 @@ static int cyrusdb_create(struct db *db,
     return db->backend->create(db->engine, key, keylen, data, datalen, tid);
 }
 
-int cyrusdb_store(struct db *db,
+EXPORTED int cyrusdb_store(struct db *db,
 	     const char *key, size_t keylen,
 	     const char *data, size_t datalen,
 	     struct txn **tid)
@@ -248,34 +248,34 @@ int cyrusdb_store(struct db *db,
     return db->backend->store(db->engine, key, keylen, data, datalen, tid);
 }
 
-int cyrusdb_delete(struct db *db,
+EXPORTED int cyrusdb_delete(struct db *db,
 	      const char *key, size_t keylen,
 	      struct txn **tid, int force)
 {
     return db->backend->delete(db->engine, key, keylen, tid, force);
 }
 
-int cyrusdb_commit(struct db *db, struct txn *tid)
+EXPORTED int cyrusdb_commit(struct db *db, struct txn *tid)
 {
     return db->backend->commit(db->engine, tid);
 }
 
-int cyrusdb_abort(struct db *db, struct txn *tid)
+EXPORTED int cyrusdb_abort(struct db *db, struct txn *tid)
 {
     return db->backend->abort(db->engine, tid);
 }
 
-int cyrusdb_dump(struct db *db, int detail)
+EXPORTED int cyrusdb_dump(struct db *db, int detail)
 {
     return db->backend->dump(db->engine, detail);
 }
 
-int cyrusdb_consistent(struct db *db)
+EXPORTED int cyrusdb_consistent(struct db *db)
 {
     return db->backend->consistent(db->engine);
 }
 
-int cyrusdb_compar(struct db *db,
+EXPORTED int cyrusdb_compar(struct db *db,
 		   const char *a, int alen,
 		   const char *b, int blen)
 {
@@ -284,7 +284,7 @@ int cyrusdb_compar(struct db *db,
 
 /**********************************************/
 
-void cyrusdb_init(void)
+EXPORTED void cyrusdb_init(void)
 {
     int i, r;
     char dbdir[1024];
@@ -303,7 +303,7 @@ void cyrusdb_init(void)
     }
 }
 
-void cyrusdb_done(void)
+EXPORTED void cyrusdb_done(void)
 {
     int i;
     
@@ -412,7 +412,7 @@ static int converter_cb(void *rock,
 /* convert (just copy every record) from one database to another in possibly
    a different format.  It's up to the surrounding code to copy the
    new database over the original if it wants to */
-int cyrusdb_convert(const char *fromfname, const char *tofname,
+EXPORTED int cyrusdb_convert(const char *fromfname, const char *tofname,
 		    const char *frombackend, const char *tobackend)
 {
     char *newfname = NULL;
@@ -483,7 +483,7 @@ err:
     return r;
 }
 
-const char *cyrusdb_detect(const char *fname)
+EXPORTED const char *cyrusdb_detect(const char *fname)
 {
     FILE *f;
     char buf[16];
@@ -518,26 +518,26 @@ const char *cyrusdb_detect(const char *fname)
     return NULL;
 }
 
-int cyrusdb_sync(const char *backend)
+EXPORTED int cyrusdb_sync(const char *backend)
 {
     struct cyrusdb_backend *db = cyrusdb_fromname(backend);
     return db->sync();
 }
 
-cyrusdb_archiver *cyrusdb_getarchiver(const char *backend)
+EXPORTED cyrusdb_archiver *cyrusdb_getarchiver(const char *backend)
 {
     struct cyrusdb_backend *db = cyrusdb_fromname(backend);
     return db->archive; /* the function used for archiving */
 }
 
-int cyrusdb_canfetchnext(const char *backend)
+EXPORTED int cyrusdb_canfetchnext(const char *backend)
 {
     struct cyrusdb_backend *db = cyrusdb_fromname(backend);
     return db->fetchnext ? 1 : 0;
 }
 
 /* caller is responsible for calling strarray_free() */
-strarray_t *cyrusdb_backends(void)
+EXPORTED strarray_t *cyrusdb_backends(void)
 {
     strarray_t *ret = strarray_new();
     int i;

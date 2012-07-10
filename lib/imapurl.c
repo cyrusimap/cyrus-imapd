@@ -171,7 +171,7 @@ static void MailboxToURL(char *dst, const char *src)
  *  dst should be about twice the length of src to deal with non-hex
  *  coded URLs
  */
-int URLtoMailbox(char *dst, const char *src)
+EXPORTED int URLtoMailbox(char *dst, const char *src)
 {
     unsigned char c;
     unsigned int utf8pos = 0, utf8total, utf7mode, bitstogo, utf16flag;
@@ -321,7 +321,7 @@ static int decode_url(char *dst, char *src)
     return 0;
 }
 
-int imapurl_fromURL(struct imapurl *url, const char *s)
+EXPORTED int imapurl_fromURL(struct imapurl *url, const char *s)
 {
     char *src;
     int step = 0;  /* used to force correct ordering of url parts */
@@ -452,7 +452,7 @@ int imapurl_fromURL(struct imapurl *url, const char *s)
     return 0;
 }
 
-void imapurl_toURL(char *dst, struct imapurl *url)
+EXPORTED void imapurl_toURL(char *dst, struct imapurl *url)
 {
     if (url->mailbox) {
 	if (url->server) {

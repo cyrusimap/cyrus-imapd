@@ -209,7 +209,7 @@ static const sasl_callback_t callbacks[] = {
  * was not found, or -2 if the service name was not found.
  * use sasl callbacks 'cbs'
  */
-int imclient_connect(struct imclient **imclient, 
+EXPORTED int imclient_connect(struct imclient **imclient,
 		     const char *host, 
 		     const char *port, 
 		     sasl_callback_t *cbs)
@@ -289,7 +289,7 @@ int imclient_connect(struct imclient **imclient,
  * Close and free the connection 'imclient'
  */
 void
-imclient_close(struct imclient *imclient)
+EXPORTED imclient_close(struct imclient *imclient)
 {
     int i;
 
@@ -311,19 +311,19 @@ imclient_close(struct imclient *imclient)
     free(imclient);
 }
 
-void imclient_setflags(struct imclient *imclient, int flags)
+EXPORTED void imclient_setflags(struct imclient *imclient, int flags)
 {
     assert(imclient);
     imclient->flags |= flags;
 }
 
-void imclient_clearflags(struct imclient *imclient, int flags)
+EXPORTED void imclient_clearflags(struct imclient *imclient, int flags)
 {
     assert(imclient);
     imclient->flags &= ~flags;
 }
 
-char *
+EXPORTED char *
 imclient_servername(struct imclient *imclient)
 {
     assert(imclient);
@@ -350,7 +350,7 @@ imclient_servername(struct imclient *imclient)
  * may scribble on the text of the untagged data.
  * 
  */
-void imclient_addcallback(struct imclient *imclient, ...)
+EXPORTED void imclient_addcallback(struct imclient *imclient, ...)
 {
     va_list pvar;
     char *keyword;
@@ -417,7 +417,7 @@ void imclient_addcallback(struct imclient *imclient, ...)
  *         which are written as space separated astrings)
  *   %B -- (internal use only) base64-encoded data at end of command line
  */ 
-void
+EXPORTED void
 imclient_send(struct imclient *imclient, imclient_proc_t *finishproc,
 	      void *finishrock, const char *fmt, ...)
 {
@@ -928,7 +928,7 @@ static void imclient_eof(struct imclient *imclient)
  * 'wanttowrite' is filled in with nonzero value iff should
  * select() for write as well.
  */
-void imclient_getselectinfo(struct imclient *imclient, int *fd,
+EXPORTED void imclient_getselectinfo(struct imclient *imclient, int *fd,
 			    int *wanttowrite)
 {
     assert(imclient);
@@ -942,7 +942,7 @@ void imclient_getselectinfo(struct imclient *imclient, int *fd,
 /*
  * Process one input or output event on the connection 'imclient'.
  */
-void imclient_processoneevent(struct imclient *imclient)
+EXPORTED void imclient_processoneevent(struct imclient *imclient)
 {
     char buf[IMCLIENT_BUFSIZE];
     int n;
@@ -1134,7 +1134,7 @@ static void interaction(struct imclient *context, sasl_interact_t *t, char *user
     strarray_appendm(&context->interact_results, str);
 }
 
-void fillin_interactions(struct imclient *context,
+EXPORTED void fillin_interactions(struct imclient *context,
 			 sasl_interact_t *tlist, char *user)
 {
     assert(context);
@@ -1297,7 +1297,7 @@ static int imclient_authenticate_sub(struct imclient *imclient,
 }
 
 /* xxx service is not needed here */
-int imclient_authenticate(struct imclient *imclient, 
+EXPORTED int imclient_authenticate(struct imclient *imclient,
 			  char *mechlist, 
 			  char *service __attribute__((unused)),
 			  char *user,
@@ -1817,7 +1817,7 @@ static void apps_ssl_info_callback(SSL * s, int where, int ret)
 }
 #endif
 
-int tls_start_clienttls(struct imclient *imclient,
+EXPORTED int tls_start_clienttls(struct imclient *imclient,
 			unsigned *layer, char **authid, int fd)
 {
     int sts;
@@ -1896,7 +1896,7 @@ int tls_start_clienttls(struct imclient *imclient,
 }
 #endif /* HAVE_SSL */
 
-int imclient_havetls(void)
+EXPORTED int imclient_havetls(void)
 {
 #ifdef HAVE_SSL
     return 1;
@@ -1905,7 +1905,7 @@ int imclient_havetls(void)
 #endif
 }
 
-int imclient_starttls(struct imclient *imclient,
+EXPORTED int imclient_starttls(struct imclient *imclient,
 			     char *cert_file,
 			     char *key_file,
                              char *CAfile,

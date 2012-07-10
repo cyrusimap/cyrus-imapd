@@ -67,7 +67,7 @@ static char inbox[] = "INBOX";
  *   4) '*' eats all '*'s and '%'s connected by any wildcard
  *   5) '%' eats all adjacent '%'s
  */
-glob *glob_init_suppress(const char *str, int flags,
+EXPORTED glob *glob_init_suppress(const char *str, int flags,
 			 const char *suppress)
 {
     glob *g;
@@ -185,7 +185,7 @@ glob *glob_init_suppress(const char *str, int flags,
 
 /* free a glob structure
  */
-void glob_free(glob **g)
+EXPORTED void glob_free(glob **g)
 {
     if (*g) free((void *) *g);
     *g = NULL;
@@ -199,7 +199,7 @@ void glob_free(glob **g)
  *            set to return value + 1 on partial match, otherwise -1
  *            if NULL, partial matches not allowed
  */
-int glob_test(glob* g, const char* ptr,
+EXPORTED int glob_test(glob* g, const char* ptr,
 	      long int len, long int *min)
 {
     const char *gptr, *pend;	/* glob pointer, end of ptr string */

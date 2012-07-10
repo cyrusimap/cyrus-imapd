@@ -66,7 +66,7 @@ static int parseaddr_route (char **inp, char **routep);
  * Parse an address list in 's', appending address structures to
  * the list pointed to by 'addrp'.
  */
-void parseaddr_list(const char *str, struct address **addrp)
+EXPORTED void parseaddr_list(const char *str, struct address **addrp)
 {
     char *s;
     int ingroup = 0;
@@ -148,7 +148,7 @@ void parseaddr_list(const char *str, struct address **addrp)
 /*
  * Free the address list 'addr'
  */
-void parseaddr_free(struct address *addr)
+EXPORTED void parseaddr_free(struct address *addr)
 {
     struct address *next;
 
@@ -374,7 +374,7 @@ static int parseaddr_route(char **inp, char **routep)
     }
 }
 
-char *address_get_all(const struct address *a, int canon_domain)
+EXPORTED char *address_get_all(const struct address *a, int canon_domain)
 {
     char *s = NULL;
 
@@ -389,12 +389,12 @@ char *address_get_all(const struct address *a, int canon_domain)
     return s;
 }
 
-char *address_get_localpart(const struct address *a)
+EXPORTED char *address_get_localpart(const struct address *a)
 {
     return xstrdupnull(a->mailbox);
 }
 
-char *address_get_domain(const struct address *a, int canon_domain)
+EXPORTED char *address_get_domain(const struct address *a, int canon_domain)
 {
     char *s = NULL;
 
@@ -407,7 +407,7 @@ char *address_get_domain(const struct address *a, int canon_domain)
     return s;
 }
 
-char *address_get_user(const struct address *a)
+EXPORTED char *address_get_user(const struct address *a)
 {
     char *s = NULL;
 
@@ -420,7 +420,7 @@ char *address_get_user(const struct address *a)
     return s;
 }
 
-char *address_get_detail(const struct address *a)
+EXPORTED char *address_get_detail(const struct address *a)
 {
     char *s = NULL;
 
@@ -436,14 +436,14 @@ char *address_get_detail(const struct address *a)
  * Address iterator interface
  */
 
-void address_itr_init(struct address_itr *ai, const char *str)
+EXPORTED void address_itr_init(struct address_itr *ai, const char *str)
 {
     memset(ai, 0, sizeof(*ai));
     parseaddr_list(str, &ai->addrlist);
     ai->anext = ai->addrlist;
 }
 
-const struct address *address_itr_next(struct address_itr *ai)
+EXPORTED const struct address *address_itr_next(struct address_itr *ai)
 {
     struct address *a;
     if (ai->anext == NULL)
@@ -453,7 +453,7 @@ const struct address *address_itr_next(struct address_itr *ai)
     return a;
 }
 
-void address_itr_fini(struct address_itr *ai)
+EXPORTED void address_itr_fini(struct address_itr *ai)
 {
     parseaddr_free(ai->addrlist);
     memset(ai, 0, sizeof(*ai));
@@ -463,7 +463,7 @@ void address_itr_fini(struct address_itr *ai)
 /*
  * Convenience function to return a single canonicalised address.
  */
-char *address_canonicalise(const char *str)
+EXPORTED char *address_canonicalise(const char *str)
 {
     struct address *addrlist = NULL;
     char *s = NULL;

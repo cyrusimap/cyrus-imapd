@@ -720,7 +720,7 @@ static struct convert_rock *buffer_init(void)
  * Lookup the character set 'name'.  Returns the character set number
  * or -1 if there is no matching character set.
  */
-int charset_lookupname(const char *name)
+EXPORTED int charset_lookupname(const char *name)
 {
     int i;
 
@@ -754,7 +754,7 @@ static int lookup_buf(const char *buf, int len)
  * into canonical searching form.  Returns a newly allocated string
  * which must be free()d by the caller.
  */
-char *charset_convert(const char *s, int charset, int flags)
+EXPORTED char *charset_convert(const char *s, int charset, int flags)
 {
     struct convert_rock *input, *tobuffer;
     char *res;
@@ -782,14 +782,14 @@ char *charset_convert(const char *s, int charset, int flags)
     return res;
 }
 
-char *charset_utf8_to_searchform(const char *s, int flags)
+EXPORTED char *charset_utf8_to_searchform(const char *s, int flags)
 {
     int charset = charset_lookupname("utf-8");
     return charset_convert(s, charset, flags);
 }
 
 /* Convert from a given charset and encoding into utf8 */
-char *charset_to_utf8(const char *msg_base, size_t len, int charset, int encoding)
+EXPORTED char *charset_to_utf8(const char *msg_base, size_t len, int charset, int encoding)
 {
     struct convert_rock *input, *tobuffer;
     char *res;
@@ -932,7 +932,7 @@ static void mimeheader_cat(struct convert_rock *target, const char *s)
  * string, contining 's' in canonical searching form, which must be
  * free()d by the caller.
  */
-char *charset_decode_mimeheader(const char *s, int flags)
+EXPORTED char *charset_decode_mimeheader(const char *s, int flags)
 {
     struct convert_rock *tobuffer, *input;
     char *res;
@@ -957,7 +957,7 @@ char *charset_decode_mimeheader(const char *s, int flags)
  * string, containing the decoded string, which must be free()d by the
  * caller.
  */
-char *charset_parse_mimeheader(const char *s)
+EXPORTED char *charset_parse_mimeheader(const char *s)
 {
     struct convert_rock *tobuffer, *input;
     char *res;
@@ -976,7 +976,7 @@ char *charset_parse_mimeheader(const char *s)
     return res;
 }
 
-int charset_search_mimeheader(const char *substr, comp_pat *pat,
+EXPORTED int charset_search_mimeheader(const char *substr, comp_pat *pat,
 			      const char *s, int flags)
 {
     struct convert_rock *input, *tosearch;
@@ -1001,7 +1001,7 @@ int charset_search_mimeheader(const char *substr, comp_pat *pat,
  * deeper analysis of the possible paths through the string, but
  * this is a good absolute maximum, and it just means a few more
  * bytes get allocated... */
-comp_pat *charset_compilepat(const char *s)
+EXPORTED comp_pat *charset_compilepat(const char *s)
 {
     struct comp_pat_s *pat = xzmalloc(sizeof(struct comp_pat_s));
     const char *p = s;
@@ -1017,7 +1017,7 @@ comp_pat *charset_compilepat(const char *s)
 /*
  * Free the compiled pattern 'pat'
  */
-void charset_freepat(comp_pat *pat)
+EXPORTED void charset_freepat(comp_pat *pat)
 {
     free((struct comp_pat_s *)pat);
 }
@@ -1029,7 +1029,7 @@ void charset_freepat(comp_pat *pat)
  * Uses the to_search target directly.  Assumes 's' is already
  * in search normal form (i.e. from a cache file)
  */
-int charset_searchstring(const char *substr, comp_pat *pat,
+EXPORTED int charset_searchstring(const char *substr, comp_pat *pat,
 			 const char *s, size_t len, int flags)
 {
     struct convert_rock *tosearch;
@@ -1070,7 +1070,7 @@ int charset_searchstring(const char *substr, comp_pat *pat,
  * content transfer encoding of the data, respectively.
  * Returns nonzero iff the string was found.
  */
-int charset_searchfile(const char *substr, comp_pat *pat,
+EXPORTED int charset_searchfile(const char *substr, comp_pat *pat,
 		       const char *msg_base, size_t len,
 		       int charset, int encoding, int flags)
 {
@@ -1128,7 +1128,7 @@ int charset_searchfile(const char *substr, comp_pat *pat,
 }
 
 /* This is based on charset_searchfile above. */
-int charset_extractitem(index_search_text_receiver_t receiver,
+EXPORTED int charset_extractitem(index_search_text_receiver_t receiver,
 			void *rock, int uid,
 			const char *msg_base, size_t len,
 			int charset, int encoding, int flags,
@@ -1190,7 +1190,7 @@ int charset_extractitem(index_search_text_receiver_t receiver,
     return 1;
 }
 
-int charset_extractfile(index_search_text_receiver_t receiver, void *rock,
+EXPORTED int charset_extractfile(index_search_text_receiver_t receiver, void *rock,
 			int uid, const char *msg_base, size_t len, 
 			int charset, int encoding, int flags)
 {
@@ -1210,7 +1210,7 @@ int charset_extractfile(index_search_text_receiver_t receiver, void *rock,
  * @decbuf, so @decbuf should not be free()d until the return value has
  * been used.
  */
-const char *charset_decode_mimebody(const char *msg_base, size_t len, int encoding,
+EXPORTED const char *charset_decode_mimebody(const char *msg_base, size_t len, int encoding,
 				    char **decbuf, size_t *outlen)
 {
     struct convert_rock *input, *tobuffer;
@@ -1272,7 +1272,7 @@ const char *charset_decode_mimebody(const char *msg_base, size_t len, int encodi
 static char base_64[] =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-char *charset_encode_mimebody(const char *msg_base, size_t len,
+EXPORTED char *charset_encode_mimebody(const char *msg_base, size_t len,
     char *retval, size_t *outlen, int *outlines)
 {
     const unsigned char *s;
