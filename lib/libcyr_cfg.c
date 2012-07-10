@@ -59,7 +59,7 @@
 #define CFGVAL(t,v)	{(void *)(v)}
 #endif
 
-struct cyrusopt_s cyrus_options[] = {
+static struct cyrusopt_s cyrus_options[] = {
     { CYRUSOPT_ZERO, { NULL }, CYRUS_OPT_NOTOPT },
 
     { CYRUSOPT_AUTH_UNIX_GROUP_ENABLE,

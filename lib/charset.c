@@ -158,7 +158,7 @@ static inline void convert_putc(struct convert_rock *rock, int c)
     rock->f(rock, c);
 }
 
-void convert_cat(struct convert_rock *rock, const char *s)
+static void convert_cat(struct convert_rock *rock, const char *s)
 {
     while (*s) {
 	convert_putc(rock, (unsigned char)*s);
@@ -166,7 +166,7 @@ void convert_cat(struct convert_rock *rock, const char *s)
     }
 }
 
-void convert_catn(struct convert_rock *rock, const char *s, size_t len)
+static void convert_catn(struct convert_rock *rock, const char *s, size_t len)
 {
     while (len-- > 0) {
 	convert_putc(rock, (unsigned char)*s);
@@ -176,7 +176,7 @@ void convert_catn(struct convert_rock *rock, const char *s, size_t len)
 
 /* convertproc_t conversion functions */
 
-void qp2byte(struct convert_rock *rock, int c) 
+static void qp2byte(struct convert_rock *rock, int c)
 {
     struct qp_state *s = (struct qp_state *)rock->state;
     int val;
@@ -216,7 +216,7 @@ void qp2byte(struct convert_rock *rock, int c)
     convert_putc(rock->next, c);
 }
 
-void b64_2byte(struct convert_rock *rock, int c) 
+static void b64_2byte(struct convert_rock *rock, int c)
 {
     struct b64_state *s = (struct b64_state *)rock->state;
     char b = CHAR64(c);
@@ -246,13 +246,13 @@ void b64_2byte(struct convert_rock *rock, int c)
     }
 }
 
-void stripnl2uni(struct convert_rock *rock, int c)
+static void stripnl2uni(struct convert_rock *rock, int c)
 {
     if (c != '\r' && c != '\n')
 	convert_putc(rock->next, c);
 }
 
-void table2uni(struct convert_rock *rock, int c)
+static void table2uni(struct convert_rock *rock, int c)
 {
     struct table_state *s = (struct table_state *)rock->state;
     struct charmap *map = (struct charmap *)&s->curtable[0][c & 0xff];
@@ -269,7 +269,7 @@ void table2uni(struct convert_rock *rock, int c)
     s->curtable = s->initialtable + map->next;
 }
 
-void utf8_2uni(struct convert_rock *rock, int c)
+static void utf8_2uni(struct convert_rock *rock, int c)
 {
     struct table_state *s = (struct table_state *)rock->state;
 
@@ -312,7 +312,7 @@ void utf8_2uni(struct convert_rock *rock, int c)
     }
 }
 
-void utf7_2uni (struct convert_rock *rock, int c)
+static void utf7_2uni (struct convert_rock *rock, int c)
 {
     struct table_state *s = (struct table_state *)rock->state;
 
@@ -380,7 +380,7 @@ void utf7_2uni (struct convert_rock *rock, int c)
     }
 }
 
-void uni2searchform(struct convert_rock *rock, int c)
+static void uni2searchform(struct convert_rock *rock, int c)
 {
     struct canon_state *s = (struct canon_state *)rock->state;
     int i;
@@ -453,7 +453,7 @@ void uni2searchform(struct convert_rock *rock, int c)
     }
 }
 
-void uni2utf8(struct convert_rock *rock, int c)
+static void uni2utf8(struct convert_rock *rock, int c)
 {
     if (c > 0xffff) {
 	convert_putc(rock->next, 0xF0 + ((c >> 18) & 0x07));
@@ -475,7 +475,7 @@ void uni2utf8(struct convert_rock *rock, int c)
     }
 }
 
-void byte2search(struct convert_rock *rock, int c)
+static void byte2search(struct convert_rock *rock, int c)
 {
     struct search_state *s = (struct search_state *)rock->state;
     int i, cur;
@@ -522,7 +522,7 @@ void byte2search(struct convert_rock *rock, int c)
     s->offset++;
 }
 
-void byte2buffer(struct convert_rock *rock, int c)
+static void byte2buffer(struct convert_rock *rock, int c)
 {
     struct buf *buf = (struct buf *)rock->state;
 
@@ -531,7 +531,7 @@ void byte2buffer(struct convert_rock *rock, int c)
 
 /* convert_rock manipulation routines */
 
-void table_switch(struct convert_rock *rock, int charset_num)
+static void table_switch(struct convert_rock *rock, int charset_num)
 {
     struct table_state *state = (struct table_state *)rock->state;
 
@@ -581,7 +581,7 @@ static inline int search_havematch(struct convert_rock *rock)
 
 /* conversion cleanup routines */
 
-void basic_free(struct convert_rock *rock) 
+static void basic_free(struct convert_rock *rock)
 {
     if (rock) {
 	if (rock->state) free(rock->state);
@@ -589,7 +589,7 @@ void basic_free(struct convert_rock *rock)
     }
 }
 
-void search_free(struct convert_rock *rock)
+static void search_free(struct convert_rock *rock)
 {
     if (rock && rock->state) {
 	struct search_state *s = (struct search_state *)rock->state;
@@ -607,7 +607,7 @@ static void buffer_free(struct convert_rock *rock)
     basic_free(rock);
 }
 
-void convert_free(struct convert_rock *rock) {
+static void convert_free(struct convert_rock *rock) {
     struct convert_rock *next;
     while (rock) {
 	next = rock->next;
@@ -621,7 +621,7 @@ void convert_free(struct convert_rock *rock) {
 
 /* converter initialisation routines */
 
-struct convert_rock *qp_init(int isheader, struct convert_rock *next) 
+static struct convert_rock *qp_init(int isheader, struct convert_rock *next)
 {
     struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
     struct qp_state *s = xzmalloc(sizeof(struct qp_state));
@@ -632,7 +632,7 @@ struct convert_rock *qp_init(int isheader, struct convert_rock *next)
     return rock;
 }
 
-struct convert_rock *b64_init(struct convert_rock *next) 
+static struct convert_rock *b64_init(struct convert_rock *next)
 {
     struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
     rock->state = xzmalloc(sizeof(struct b64_state));
@@ -641,7 +641,7 @@ struct convert_rock *b64_init(struct convert_rock *next)
     return rock;
 }
 
-struct convert_rock *stripnl_init(struct convert_rock *next)
+static struct convert_rock *stripnl_init(struct convert_rock *next)
 {
     struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
     rock->f = stripnl2uni;
@@ -649,7 +649,7 @@ struct convert_rock *stripnl_init(struct convert_rock *next)
     return rock;
 }
 
-struct convert_rock *canon_init(int flags, struct convert_rock *next)
+static struct convert_rock *canon_init(int flags, struct convert_rock *next)
 {
     struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
     struct canon_state *s = xzmalloc(sizeof(struct canon_state));
@@ -660,7 +660,7 @@ struct convert_rock *canon_init(int flags, struct convert_rock *next)
     return rock;
 }
 
-struct convert_rock *uni_init(struct convert_rock *next) 
+static struct convert_rock *uni_init(struct convert_rock *next)
 {
     struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
     rock->f = uni2utf8;
@@ -668,7 +668,7 @@ struct convert_rock *uni_init(struct convert_rock *next)
     return rock;
 }
 
-struct convert_rock *table_init(int charset_num, struct convert_rock *next)
+static struct convert_rock *table_init(int charset_num, struct convert_rock *next)
 {
     struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
     rock->state = xzmalloc(sizeof(struct table_state));
@@ -677,7 +677,7 @@ struct convert_rock *table_init(int charset_num, struct convert_rock *next)
     return rock;
 }
 
-struct convert_rock *search_init(const char *substr, comp_pat *pat) {
+static struct convert_rock *search_init(const char *substr, comp_pat *pat) {
     struct convert_rock *rock = xzmalloc(sizeof(struct convert_rock));
     struct search_state *s = xzmalloc(sizeof(struct search_state));
     struct comp_pat_s *p = (struct comp_pat_s *)pat;
@@ -836,7 +836,7 @@ char *charset_to_utf8(const char *msg_base, size_t len, int charset, int encodin
     return res;
 }
 
-void mimeheader_cat(struct convert_rock *target, const char *s)
+static void mimeheader_cat(struct convert_rock *target, const char *s)
 {
     struct convert_rock *input, *stripnl;
     int eatspace = 0;

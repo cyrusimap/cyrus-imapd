@@ -206,7 +206,7 @@ int prot_settls(struct protstream *s, SSL *tlsconn)
 /*
  * Decode data sent via a SASL security layer. Returns EOF on error.
  */
-int prot_sasldecode(struct protstream *s, int n)
+static int prot_sasldecode(struct protstream *s, int n)
 {
     int result;
     const char *out;

@@ -1107,7 +1107,7 @@ static sasl_security_properties_t *make_secprops(int min,int max)
   return ret;
 }
 
-void interaction(struct imclient *context, sasl_interact_t *t, char *user)
+static void interaction(struct imclient *context, sasl_interact_t *t, char *user)
 {
     char result[1024];
     char *str = NULL;

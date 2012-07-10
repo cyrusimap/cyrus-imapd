@@ -440,7 +440,7 @@ sub printtable {
     $name =~ s{\..*}{}; # after a dot
     $name =~ s{-}{_}g; # underscores
 
-    print OUTPUT "const struct charmap chartables_$name\[$num][256] = {\n";
+    print OUTPUT "static const struct charmap chartables_$name\[$num][256] = {\n";
 
     foreach my $table (@$tables) {
 	my $chars = $table->{chars};
