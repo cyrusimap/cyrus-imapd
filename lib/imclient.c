@@ -185,8 +185,6 @@ static const char charclass[256] = {
 static struct imclient_cmdcallback *cmdcallback_freelist;
 
 /* Forward declarations */
-void imclient_write(struct imclient *imclient,
-		    const char *s, size_t len);
 static int imclient_writeastring P((struct imclient *imclient,
 				     const char *str));
 static void imclient_writebase64 P((struct imclient *imclient,
@@ -576,7 +574,7 @@ static int imclient_writeastring(struct imclient *imclient, const char *str)
 /*
  * Write to the connection 'imclient' the data 's', of length 'len'
  */
-void imclient_write(struct imclient *imclient, const char *s, size_t len)
+static void imclient_write(struct imclient *imclient, const char *s, size_t len)
 {
     assert(imclient);
     assert(s);

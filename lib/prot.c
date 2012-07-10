@@ -473,7 +473,7 @@ int prot_setflushonread(struct protstream *s, struct protstream *flushs)
  * Set on stream 's' the callback 'proc' and 'rock'
  * to make the next time we have to wait for input.
  */
-int prot_setreadcallback(struct protstream *s, 
+static int prot_setreadcallback(struct protstream *s,
 			 prot_readcallback_t *proc, void *rock)
 {
     assert(!s->write);
@@ -939,7 +939,7 @@ static int prot_flush_writebuffer(struct protstream *s,
     return n;
 }
 
-int prot_flush_internal(struct protstream *s, int force)
+static int prot_flush_internal(struct protstream *s, int force)
 {
     int n;
     int save_dontblock = s->dontblock;
@@ -1655,7 +1655,7 @@ struct protgroup *protgroup_new(size_t size)
     return ret;
 }
 
-struct protgroup *protgroup_copy(struct protgroup *src)
+static struct protgroup *protgroup_copy(struct protgroup *src)
 {
     struct protgroup *dest;
     assert(src);

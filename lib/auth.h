@@ -57,7 +57,7 @@ struct auth_mech {
     void (*freestate)(struct auth_state *auth_state);
 };
 
-extern struct auth_mech *auth_mechs[];
+static struct auth_mech *auth_mechs[];
 
 /* Note that some of these may be undefined symbols
  * if libcyrus was not built with support for them */
