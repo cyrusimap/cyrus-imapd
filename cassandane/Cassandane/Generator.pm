@@ -295,6 +295,8 @@ sub generate
 	if defined $params->{references};
     $msg->add_header("Date", $datestr);
     $msg->add_header("To", $to);
+    $msg->add_header("Cc", $params->{cc}) if defined $params->{cc};
+    $msg->add_header("Bcc", $params->{bcc}) if defined $params->{bcc};
     if (defined($params->{extra_headers})) {
 	foreach my $extra_header (@{$params->{extra_headers}}) {
 	    $msg->add_header(@{$extra_header});
