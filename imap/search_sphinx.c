@@ -73,14 +73,16 @@
 
 /* Name of columns */
 #define COL_CYRUSID	"cyrusid"
-#define COL_FROM	"header_from"
-#define COL_TO		"header_to"
-#define COL_CC	    	"header_cc"
-#define COL_BCC	    	"header_bcc"
-#define COL_SUBJECT	"header_subject"
-#define COL_HEADERS	"headers"
-#define COL_BODY	"body"
-#define COL_ORDER	COL_CYRUSID
+static const char * const column_by_part[SEARCH_NUM_PARTS] = {
+    NULL,
+    "header_from",
+    "header_to",
+    "header_cc",
+    "header_bcc",
+    "header_subject",
+    "headers",
+    "body"
+};
 
 /* Returns in *basedir and *sockname, two new strings which must be free()d */
 static int sphinx_paths_from_mboxname(const char *mboxname,
@@ -260,97 +262,188 @@ static void append_escaped_cstr(MYSQL *conn, struct buf *to, const char *str)
 	append_escaped_map(conn, to, str, strlen(str));
 }
 
-static void add_match(MYSQL *conn, struct buf *query, int *np,
-		      const struct strlist *strs, const char *field)
+struct opstack {
+    int idx;	/* index of next child in parent node */
+    int op;	/* op of the parent node */
+};
+
+typedef struct sphinx_builder sphinx_builder_t;
+struct sphinx_builder {
+    search_builder_t super;
+    struct index_state *state;
+    int verbose;
+    unsigned int *msgno_list;
+    MYSQL *conn;
+    struct buf query;
+    int depth;
+    int alloc;
+    struct opstack *stack;
+};
+
+static struct opstack *opstack_top(sphinx_builder_t *bb)
 {
-    static struct buf f = BUF_INITIALIZER;
-    static struct buf e1 = BUF_INITIALIZER;
-    static struct buf e2 = BUF_INITIALIZER;
+    return (bb->depth ? &bb->stack[bb->depth-1] : NULL);
+}
 
-    for ( ; strs ; strs = strs->next) {
-	buf_init_ro_cstr(&f, strs->s);
-	buf_reset(&e1);
-	append_escaped(conn, &e1, &f);
-	buf_reset(&e2);
-	append_escaped(conn, &e2, &e1);
+static void begin_child(sphinx_builder_t *bb)
+{
+    struct opstack *top = opstack_top(bb);
 
-	if (*np)
-	    buf_appendcstr(query, " ");
-	if (field)
-	    buf_printf(query, "@%s:", field);
-	buf_append(query, &e2);
-	(*np)++;
+    if (top) {
+	/* operator precedence in the Sphinx text searching language
+	 * is not what we would expect, so over-compensate by always
+	 * using parentheses */
+	if (!top->idx)
+	    buf_appendcstr(&bb->query, "(");
+	else if (top->op == SEARCH_OP_AND)
+	    buf_appendcstr(&bb->query, " ");
+	else
+	    buf_appendcstr(&bb->query, "|");
+	top->idx++;
     }
 }
 
-static int search_sphinx(unsigned* msg_list, struct index_state *state,
-			 const struct searchargs *args)
+static void begin_boolean(search_builder_t *bx, int op)
 {
-    MYSQL *conn;
-    MYSQL_RES *res;
-    MYSQL_ROW row;
-    struct buf query = BUF_INITIALIZER;
-    int n = 0;
-    int r = 0;
+    sphinx_builder_t *bb = (sphinx_builder_t *)bx;
+    struct opstack *top;
+
+//     if (bb->verbose)
+// 	syslog(LOG_NOTICE, "begin_boolean(%s)", search_op_as_string(op));
+
+    begin_child(bb);
+
+    if (op == SEARCH_OP_NOT)
+	buf_appendcstr(&bb->query, "!");
+
+    /* push a new op on the stack */
+    if (bb->depth+1 > bb->alloc) {
+	bb->alloc += 16;
+	bb->stack = xrealloc(bb->stack, bb->alloc * sizeof(struct opstack));
+    }
+
+    top = &bb->stack[bb->depth++];
+    top->op = op;
+    top->idx = 0;
+}
+
+static void end_boolean(search_builder_t *bx, int op __attribute__((unused)))
+{
+    sphinx_builder_t *bb = (sphinx_builder_t *)bx;
+    struct opstack *top = opstack_top(bb);
+
+//     if (bb->verbose)
+// 	syslog(LOG_NOTICE, "end_boolean(%s)", search_op_as_string(op));
+
+    if (top->idx)
+	buf_appendcstr(&bb->query, ")");
+
+    /* op the last operator off the stack */
+    bb->depth--;
+}
+
+static void match(search_builder_t *bx, int part, const char *str)
+{
+    sphinx_builder_t *bb = (sphinx_builder_t *)bx;
+    static struct buf f = BUF_INITIALIZER;
+    static struct buf e1 = BUF_INITIALIZER;
+
+    begin_child(bb);
+
+    if (column_by_part[part]) {
+	buf_appendcstr(&bb->query, "@");
+	buf_appendcstr(&bb->query, column_by_part[part]);
+	buf_appendcstr(&bb->query, " ");
+    }
+
+    buf_init_ro_cstr(&f, str);
+    buf_reset(&e1);
+    append_escaped(bb->conn, &e1, &f);
+    append_escaped(bb->conn, &bb->query, &e1);
+}
+
+static search_builder_t *begin_search1(struct index_state *state,
+				       unsigned int *msgno_list,
+				       int verbose)
+{
+    sphinx_builder_t *bb;
+    MYSQL *conn = NULL;
 
     conn = get_connection(state->mailbox->name);
-    if (!conn) return IMAP_IOERROR;
+    if (!conn) return NULL;
 
-    buf_appendcstr(&query, "SELECT "COL_CYRUSID" FROM rt WHERE MATCH('");
-    add_match(conn, &query, &n, args->to, COL_TO);
-    add_match(conn, &query, &n, args->from, COL_FROM);
-    add_match(conn, &query, &n, args->cc, COL_CC);
-    add_match(conn, &query, &n, args->subject, COL_SUBJECT);
-    add_match(conn, &query, &n, args->header_name, COL_HEADERS);
-    add_match(conn, &query, &n, args->header, COL_HEADERS);
-    add_match(conn, &query, &n, args->body, COL_BODY);
-    add_match(conn, &query, &n, args->text, NULL);
-    buf_appendcstr(&query, "')");
+    bb = xzmalloc(sizeof(sphinx_builder_t));
+    bb->super.begin_boolean = begin_boolean;
+    bb->super.end_boolean = end_boolean;
+    bb->super.match = match;
+
+    bb->verbose = verbose;
+    bb->state = state;
+    bb->msgno_list = msgno_list;
+    bb->conn = conn;
+    buf_init_ro_cstr(&bb->query, "SELECT "COL_CYRUSID" FROM rt WHERE MATCH('");
+
+    return &bb->super;
+}
+
+static int end_search1(search_builder_t *bx)
+{
+    sphinx_builder_t *bb = (sphinx_builder_t *)bx;
+    MYSQL_RES *res;
+    MYSQL_ROW row;
+    int msgno;
+    int n;
+    int r = 0;
+
+    buf_appendcstr(&bb->query, "')");
     // get sphinx to sort by most recent date first
-    buf_appendcstr(&query, " ORDER BY "COL_ORDER" DESC");
+    buf_appendcstr(&bb->query, " ORDER BY "COL_CYRUSID" DESC");
+    buf_cstring(&bb->query);
     // TODO: Sphinx has an implicit default limit of 20 results
     //       we need to defeat that with a LIMIT clause here
 
-    if (!n) {
-	/* None of the fields which are indexed were in the search, so
-	 * give up and let the next search engine try. */
-	r = IMAP_NOTFOUND;
-	goto out;
-    }
+    if (bb->verbose)
+	syslog(LOG_NOTICE, "Sphinx query %s", bb->query.s);
 
-    r = mysql_real_query(conn, query.s, query.len);
+    r = mysql_real_query(bb->conn, bb->query.s, bb->query.len);
     if (r) {
 	syslog(LOG_ERR, "IOERROR: Sphinx query %s failed: %s",
-	       query.s, mysql_error(conn));
+	       bb->query.s, mysql_error(bb->conn));
 	r = IMAP_IOERROR;
 	goto out;
     }
 
     n = 0;
-    res = mysql_use_result(conn);
+    res = mysql_use_result(bb->conn);
     while ((row = mysql_fetch_row(res))) {
 	const char *mboxname;
 	unsigned int uidvalidity;
 	unsigned int uid;
+	if (bb->verbose > 1)
+	    syslog(LOG_NOTICE, "Sphinx row cyrusid=%s", row[0]);
 	if (!parse_cyrusid(row[0], &mboxname, &uidvalidity, &uid))
 	    // TODO: whine
 	    continue;
-	if (strcmp(mboxname, state->mailbox->name))
+	if (strcmp(mboxname, bb->state->mailbox->name))
 	    continue;
-	if (uidvalidity != state->mailbox->i.uidvalidity)
+	if (uidvalidity != bb->state->mailbox->i.uidvalidity)
 	    continue;
-	msg_list[n++] = uid;
+	msgno = index_finduid(bb->state, uid);
+	if (msgno >= 0 && index_getuid(bb->state, msgno) != uid)
+	    continue;
+	bb->msgno_list[n++] = msgno;
     }
     mysql_free_result(res);
     r = n;
-
 
     /* TODO: currently we neither track nor care about unindexed
      * messages, that should be handled by a layer above here. */
 
 out:
-    buf_free(&query);
-    close_connection(conn);
+    if (bb->conn) close_connection(bb->conn);
+    free(bb->stack);
+    buf_free(&bb->query);
+    free(bx);
     return r;
 }
 
@@ -672,50 +765,33 @@ static void end_part(search_text_receiver_t *rx,
     tr->part = 0;
 }
 
-static void add_column(sphinx_receiver_t *tr, int part, const char *col)
-{
-    if (tr->parts[part].len) {
-	buf_appendcstr(&tr->query, ",");
-	buf_appendcstr(&tr->query, col);
-    }
-}
-
-static void add_value(sphinx_receiver_t *tr, int part)
-{
-    if (tr->parts[part].len) {
-	buf_appendcstr(&tr->query, ",'");
-	append_escaped(tr->conn, &tr->query, &tr->parts[part]);
-	buf_appendcstr(&tr->query, "'");
-    }
-    /* apparently Sphinx doesn't let you explicitly INSERT a NULL */
-}
-
 static void end_message(search_text_receiver_t *rx,
 			uint32_t uid __attribute__((unused)))
 {
     sphinx_receiver_t *tr = (sphinx_receiver_t *)rx;
+    int i;
     int r;
 
     buf_reset(&tr->query);
     buf_appendcstr(&tr->query, "INSERT INTO rt (id,"COL_CYRUSID);
-    add_column(tr, SEARCH_PART_FROM, COL_FROM);
-    add_column(tr, SEARCH_PART_TO, COL_TO);
-    add_column(tr, SEARCH_PART_CC, COL_CC);
-    add_column(tr, SEARCH_PART_BCC, COL_BCC);
-    add_column(tr, SEARCH_PART_SUBJECT, COL_SUBJECT);
-    add_column(tr, SEARCH_PART_HEADERS, COL_HEADERS);
-    add_column(tr, SEARCH_PART_BODY, COL_BODY);
+    for (i = 0 ; i < SEARCH_NUM_PARTS ; i++) {
+	if (tr->parts[i].len) {
+	    buf_appendcstr(&tr->query, ",");
+	    buf_appendcstr(&tr->query, column_by_part[i]);
+	}
+    }
     buf_appendcstr(&tr->query, ") VALUES (");
     buf_printf(&tr->query, "%u,'", ++tr->lastid);
     append_escaped(tr->conn, &tr->query, make_cyrusid(tr->mailbox, tr->uid));
     buf_appendcstr(&tr->query, "'");
-    add_value(tr, SEARCH_PART_FROM);
-    add_value(tr, SEARCH_PART_TO);
-    add_value(tr, SEARCH_PART_CC);
-    add_value(tr, SEARCH_PART_BCC);
-    add_value(tr, SEARCH_PART_SUBJECT);
-    add_value(tr, SEARCH_PART_HEADERS);
-    add_value(tr, SEARCH_PART_BODY);
+    for (i = 0 ; i < SEARCH_NUM_PARTS ; i++) {
+	if (tr->parts[i].len) {
+	    buf_appendcstr(&tr->query, ",'");
+	    append_escaped(tr->conn, &tr->query, &tr->parts[i]);
+	    buf_appendcstr(&tr->query, "'");
+	}
+    }
+    /* apparently Sphinx doesn't let you explicitly INSERT a NULL */
     buf_appendcstr(&tr->query, ")");
 
     r = doquery(tr, &tr->query);
@@ -1009,7 +1085,8 @@ out:
 const struct search_engine sphinx_search_engine = {
     "Sphinx",
     0,
-    search_sphinx,
+    begin_search1,
+    end_search1,
     begin_update,
     end_update,
     start_daemon,

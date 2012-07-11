@@ -88,6 +88,7 @@ extern char *charset_encode_mimeheader(const char *header, size_t len);
 
 /* These constants are passed into the search_text_receiver_t.begin_part callback to
    tell it which part of the message is being sent down */
+#define SEARCH_PART_ANY	    0
 #define SEARCH_PART_FROM    1
 #define SEARCH_PART_TO      2
 #define SEARCH_PART_CC      3

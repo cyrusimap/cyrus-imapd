@@ -68,6 +68,7 @@ static const struct search_engine default_search_engine = {
     NULL,
     NULL,
     NULL,
+    NULL,
     NULL
 };
 
@@ -87,12 +88,19 @@ static const struct search_engine *engine(void)
     }
 }
 
-HIDDEN int search_prefilter_messages(unsigned *msgno_list,
-				     struct index_state *state,
-				     const struct searchargs *searchargs)
+EXPORTED search_builder_t *search_begin_search1(struct index_state *state,
+						unsigned *msgno_list,
+						int verbose)
 {
     const struct search_engine *se = engine();
-    return (se->search ? se->search(msgno_list, state, searchargs) : -1);
+    return (se->begin_search1 ?
+	    se->begin_search1(state, msgno_list, verbose) : NULL);
+}
+
+EXPORTED int search_end_search1(search_builder_t *bx)
+{
+    const struct search_engine *se = engine();
+    return (se->end_search1 ? se->end_search1(bx) : -1);
 }
 
 EXPORTED search_text_receiver_t *search_begin_update(int verbose)
@@ -121,4 +129,18 @@ EXPORTED int search_stop_daemon(int verbose, const char *mboxname)
 {
     const struct search_engine *se = engine();
     return (se->stop_daemon ? se->stop_daemon(verbose, mboxname) : 0);
+}
+
+const char *search_op_as_string(int op)
+{
+    static char buf[33];
+
+    switch (op) {
+    case SEARCH_OP_AND: return "AND";
+    case SEARCH_OP_OR: return "OR";
+    case SEARCH_OP_NOT: return "NOT";
+    default:
+	snprintf(buf, sizeof(buf), "(%d)", op);
+	return buf;
+    }
 }

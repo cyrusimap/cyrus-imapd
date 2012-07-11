@@ -1455,14 +1455,70 @@ out:
     return r;
 }
 
+static void build_query(search_builder_t *bx,
+			const struct searchargs *searchargs)
+{
+    struct strlist *s;
+    struct searchsub* sub;
+
+    bx->begin_boolean(bx, SEARCH_OP_AND);
+
+    for (s = searchargs->from ; s ; s = s->next)
+	bx->match(bx, SEARCH_PART_FROM, s->s);
+    for (s = searchargs->to ; s ; s = s->next)
+	bx->match(bx, SEARCH_PART_TO, s->s);
+    for (s = searchargs->cc ; s ; s = s->next)
+	bx->match(bx, SEARCH_PART_CC, s->s);
+    for (s = searchargs->bcc ; s ; s = s->next)
+	bx->match(bx, SEARCH_PART_BCC, s->s);
+    for (s = searchargs->subject ; s ; s = s->next)
+	bx->match(bx, SEARCH_PART_SUBJECT, s->s);
+    for (s = searchargs->header_name ; s ; s = s->next)
+	bx->match(bx, SEARCH_PART_HEADERS, s->s);
+    for (s = searchargs->header ; s ; s = s->next)
+	bx->match(bx, SEARCH_PART_HEADERS, s->s);
+    for (s = searchargs->body ; s ; s = s->next)
+	bx->match(bx, SEARCH_PART_BODY, s->s);
+    for (s = searchargs->text ; s ; s = s->next)
+	bx->match(bx, SEARCH_PART_ANY, s->s);
+
+    for (sub = searchargs->sublist ; sub ; sub = sub->next) {
+	if (sub->sub2 == NULL) {
+	    /* do nothing; because our search is conservative (may include false
+	       positives) we can't compute the NOT (since the result might include
+	       false negatives, which we do not allow) */
+	    /* Note that it's OK to do nothing. We'll just be returning more
+	       false positives. */
+	} else {
+	    bx->begin_boolean(bx, SEARCH_OP_OR);
+	    build_query(bx, sub->sub1);
+	    build_query(bx, sub->sub2);
+	    bx->end_boolean(bx, SEARCH_OP_OR);
+	}
+    }
+
+    bx->end_boolean(bx, SEARCH_OP_AND);
+}
+
 static int index_prefilter_messages(unsigned* msg_list,
 				    struct index_state *state,
 				    const struct searchargs *searchargs)
 {
     int r;
     unsigned int i;
+    search_builder_t *bx;
 
-    r = search_prefilter_messages(msg_list, state, searchargs);
+    bx = search_begin_search1(state, msg_list, /*verbose*/0);
+    if (!bx) {
+	r = -1;
+	goto out;
+    }
+
+    build_query(bx, searchargs);
+
+    r = search_end_search1(bx);
+
+out:
     if (r < 0) {
 	/* Just put in all possible messages. This falls back to Cyrus' default
 	 * search. */

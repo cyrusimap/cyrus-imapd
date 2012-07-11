@@ -46,12 +46,23 @@
 #include "index.h"
 #include "charset.h"
 
+typedef struct search_builder search_builder_t;
+struct search_builder {
+#define SEARCH_OP_AND	    1
+#define SEARCH_OP_OR	    2
+#define SEARCH_OP_NOT	    3
+    void (*begin_boolean)(search_builder_t *, int op);
+    void (*end_boolean)(search_builder_t *, int op);
+    void (*match)(search_builder_t *, int part, const char *str);
+};
+
 struct search_engine {
     const char *name;
     unsigned int flags;
-    int (*search)(unsigned* msg_list,
-		  struct index_state *state,
-		  const struct searchargs *searchargs);
+    search_builder_t *(*begin_search1)(struct index_state *,
+				      unsigned *msg_list,
+				      int verbose);
+    int (*end_search1)(search_builder_t *);
     search_text_receiver_t *(*begin_update)(int verbose);
     int (*end_update)(search_text_receiver_t *);
     int (*start_daemon)(int verbose, const char *mboxname);
@@ -59,16 +70,20 @@ struct search_engine {
 };
 
 /* Fill the msg_list with a list of message IDs which could match the
- * searchargs.
+ * query built with the search_builder_t.
  * Return the number of message IDs inserted.
  */
-extern int search_prefilter_messages(unsigned* msg_list,
-				     struct index_state *state,
-				     const struct searchargs *searchargs);
+extern search_builder_t *search_begin_search1(struct index_state *,
+					      unsigned *msg_list,
+					      int verbose);
+extern int search_end_search1(search_builder_t *);
 
 search_text_receiver_t *search_begin_update(int verbose);
 int search_end_update(search_text_receiver_t *rx);
 int search_start_daemon(int verbose, const char *mboxname);
 int search_stop_daemon(int verbose, const char *mboxname);
+
+/* for debugging */
+extern const char *search_op_as_string(int op);
 
 #endif

@@ -63,12 +63,40 @@
 #include "search_engines.h"
 #include "squat.h"
 
+#define DEBUG 0
+
+struct opstack {
+    int op;
+    int valid;
+    bitvector_t msg_vector;
+};
+
 typedef struct {
-    bitvector_t		*vector;
-    struct index_state	*state;
-    const char		*part_types;
-    int			found_validity;
-} SquatSearchResult;
+    search_builder_t super;
+    struct index_state *state;
+    unsigned int *msgno_list;
+    int verbose;
+    SquatSearchIndex *index;
+    int fd;
+    const char *part_types;
+    int found_validity;
+    int depth;
+    int alloc;
+    struct opstack *stack;
+} SquatBuilderData;
+
+static const char *squat_strerror(int err);
+
+static const char * const doctypes_by_part[SEARCH_NUM_PARTS] = {
+    "mh",
+    "f",
+    "t",
+    "c",
+    "b",
+    "s",
+    "h",
+    "m"
+};
 
 /* The document name is of the form
 
@@ -82,15 +110,15 @@ typedef struct {
    UID only if the name has the right part type and it corresponds
    to a real message UID.
 */
-static int parse_doc_name(SquatSearchResult *r, const char *doc_name)
+static int parse_doc_name(SquatBuilderData *bb, const char *doc_name)
 {
     int ch = doc_name[0];
-    const char *t = r->part_types;
+    const char *t = bb->part_types;
     int doc_UID, index;
 
     if (ch == 'v' && strncmp(doc_name, "validity.", 9) == 0) {
-	if ((unsigned) atoi(doc_name + 9) == r->state->mailbox->i.uidvalidity) {
-	    r->found_validity = 1;
+	if ((unsigned) atoi(doc_name + 9) == bb->state->mailbox->i.uidvalidity) {
+	    bb->found_validity = 1;
 	}
 	return -1;
     }
@@ -112,180 +140,303 @@ static int parse_doc_name(SquatSearchResult *r, const char *doc_name)
 	return -1;
     }
 
-    index = index_finduid(r->state, doc_UID);
-    if (index >= 0 && index_getuid(r->state, index) != (unsigned)doc_UID)
+    index = index_finduid(bb->state, doc_UID);
+    if (index >= 0 && index_getuid(bb->state, index) != (unsigned)doc_UID)
 	index = -1;
 
     return index;
 }
 
+#if DEBUG
+static void opstack_dump(SquatBuilderData *bb, const char *where)
+{
+    int i;
+    char *desc;
+    struct buf line = BUF_INITIALIZER;
+
+    syslog(LOG_NOTICE, "Squat opstack %s {", where);
+    for (i = 0 ; i < bb->depth ; i++) {
+	struct opstack *o = bb->stack+i;
+
+	buf_reset(&line);
+	buf_printf(&line, "op=%s", search_op_as_string(o->op));
+
+	buf_printf(&line, " valid=%d", o->valid);
+
+	desc = bv_cstring(&o->msg_vector);
+	buf_printf(&line, " msg_vector=%s", desc);
+	free(desc);
+
+	syslog(LOG_NOTICE, "Squat    %s", buf_cstring(&line));
+    }
+    syslog(LOG_NOTICE, "Squat }");
+    buf_free(&line);
+}
+#endif
+
+static struct opstack *opstack_top(SquatBuilderData *bb)
+{
+    return (bb->depth ? &bb->stack[bb->depth-1] : NULL);
+}
+
+static struct opstack *opstack_push(SquatBuilderData *bb, int op)
+{
+    struct opstack *top;
+
+#if DEBUG
+    if (bb->verbose > 1)
+	syslog(LOG_NOTICE, "Squat opstack_push(op=%s)\n", search_op_as_string(op));
+#endif
+
+    /* push a new op on the stack */
+    if (bb->depth+1 > bb->alloc) {
+	bb->alloc += 16;
+	bb->stack = xrealloc(bb->stack, bb->alloc * sizeof(struct opstack));
+    }
+
+    top = &bb->stack[bb->depth++];
+    top->op = op;
+    top->valid = 0;
+    bv_init(&top->msg_vector);
+    bv_setsize(&top->msg_vector, bb->state->exists);
+
+#if DEBUG
+    if (bb->verbose > 1)
+	opstack_dump(bb, "after push");
+#endif
+
+    return top;
+}
+
+static void opstack_pop(SquatBuilderData *bb)
+{
+    struct opstack *child;
+    struct opstack *parent;
+
+#if DEBUG
+    if (bb->verbose > 1)
+	syslog(LOG_NOTICE, "Squat opstack_pop()");
+#endif
+
+    /* pop the last operator off the stack */
+    assert(bb->depth);
+    child = opstack_top(bb);
+    bb->depth--;
+    parent = opstack_top(bb);
+
+    if (parent && child->valid) {
+	/* merge the result with the parent node */
+	if (!parent->valid)
+	    bv_copy(&parent->msg_vector, &child->msg_vector);
+	else if (parent->op == SEARCH_OP_OR)
+	    bv_oreq(&parent->msg_vector, &child->msg_vector);
+	else if (parent->op == SEARCH_OP_AND)
+	    bv_andeq(&parent->msg_vector, &child->msg_vector);
+	parent->valid = 1;
+    }
+
+    bv_free(&child->msg_vector);
+
+#if DEBUG
+    if (bb->verbose > 1)
+	opstack_dump(bb, "after pop");
+#endif
+}
+
 static int drop_indexed_docs(void* closure, const SquatListDoc *doc)
 {
-    SquatSearchResult* r = (SquatSearchResult*)closure;
-    int doc_uid = parse_doc_name(r, doc->doc_name);
+    SquatBuilderData* bb = (SquatBuilderData*)closure;
+    int msgno = parse_doc_name(bb, doc->doc_name);
 
-    if (doc_uid >= 0)
-	bv_clear(r->vector, doc_uid);
+    if (msgno >= 0)
+	bv_clear(&opstack_top(bb)->msg_vector, msgno);
     return SQUAT_CALLBACK_CONTINUE;
 }
 
 static int fill_with_hits(void* closure, char const* doc)
 {
-    SquatSearchResult* r = (SquatSearchResult*)closure;
-    int doc_uid = parse_doc_name(r, doc);
+    SquatBuilderData* bb = (SquatBuilderData*)closure;
+    int msgno = parse_doc_name(bb, doc);
 
-    if (doc_uid >= 0)
-	bv_set(r->vector, doc_uid);
+    if (msgno >= 0)
+	bv_set(&opstack_top(bb)->msg_vector, msgno);
     return SQUAT_CALLBACK_CONTINUE;
 }
 
-static int search_strlist(SquatSearchIndex* index, struct index_state *state,
-			  bitvector_t *output, bitvector_t *tmp,
-			  struct strlist* strs, char const* part_types)
+static void begin_boolean(search_builder_t *bx, int op)
 {
-    SquatSearchResult r;
+    SquatBuilderData *bb = (SquatBuilderData *)bx;
 
-    r.part_types = part_types;
-    r.vector = tmp;
-    r.state = state;
-    while (strs != NULL) {
-	char const* s = strs->s;
+#if DEBUG
+    if (bb->verbose > 1)
+	syslog(LOG_NOTICE, "Squat begin_boolean(op=%s)", search_op_as_string(op));
+#endif
 
-	bv_clearall(tmp);
-	if (squat_search_execute(index, s, strlen(s), fill_with_hits, &r)
-	    != SQUAT_OK) {
-	    if (squat_get_last_error() == SQUAT_ERR_SEARCH_STRING_TOO_SHORT)
-		return 1; /* The rest of the search is still viable */
-	    syslog(LOG_DEBUG, "SQUAT string list search failed on string %s "
-			      "with part types %s", s, part_types);
-	    return 0;
-	}
-	bv_andeq(output, tmp);
-
-	strs = strs->next;
-    }
-    return 1;
+    opstack_push(bb, op);
 }
 
-static int search_squat_do_query(SquatSearchIndex* index,
-				 struct index_state *state,
-				 const struct searchargs* args,
-				 bitvector_t *vect)
+static void end_boolean(search_builder_t *bx, int op __attribute__((unused)))
 {
-    bitvector_t t_vect = BV_INITIALIZER;
-    bitvector_t sub1_vect = BV_INITIALIZER;
-    bitvector_t sub2_vect = BV_INITIALIZER;
-    struct searchsub* sub;
-    int found_something = 1;
+    SquatBuilderData *bb = (SquatBuilderData *)bx;
 
-    bv_setsize(vect, state->exists);
-    bv_setall(vect);
-    bv_setsize(&t_vect, state->exists);
-
-    if (!(search_strlist(index, state, vect, &t_vect, args->to, "t")
-	&& search_strlist(index, state, vect, &t_vect, args->from, "f")
-	&& search_strlist(index, state, vect, &t_vect, args->cc, "c")
-	&& search_strlist(index, state, vect, &t_vect, args->bcc, "b")
-	&& search_strlist(index, state, vect, &t_vect, args->subject, "s")
-	&& search_strlist(index, state, vect, &t_vect, args->header_name, "h")
-	&& search_strlist(index, state, vect, &t_vect, args->header, "h")
-	&& search_strlist(index, state, vect, &t_vect, args->body, "m")
-	&& search_strlist(index, state, vect, &t_vect, args->text, "mh"))) {
-	found_something = 0;
-	goto cleanup;
-    }
-
-    sub = args->sublist;
-    while (sub != NULL) {
-	if (args->sublist->sub2 == NULL) {
-	    /* do nothing; because our search is conservative (may include false
-	       positives) we can't compute the NOT (since the result might include
-	       false negatives, which we do not allow) */
-	    /* Note that it's OK to do nothing. We'll just be returning more
-	       false positives. */
-	} else {
-	    if (!search_squat_do_query(index, state,
-				       args->sublist->sub1, &sub1_vect)) {
-		found_something = 0;
-		goto cleanup;
-	    }
-
-	    if (!search_squat_do_query(index, state,
-				       args->sublist->sub2, &sub2_vect)) {
-		found_something = 0;
-		goto cleanup;
-	    }
-
-	    bv_oreq(&sub1_vect, &sub2_vect);
-	    bv_oreq(vect, &sub1_vect);
-	}
-
-	sub = sub->next;
-    }
-
-cleanup:
-    bv_free(&t_vect);
-    bv_free(&sub1_vect);
-    bv_free(&sub2_vect);
-    return found_something;
+#if DEBUG
+    if (bb->verbose > 1)
+	syslog(LOG_NOTICE, "Squat end_boolean()");
+#endif
+    opstack_pop(bb);
 }
 
-static int search_squat(unsigned* msg_list, struct index_state *state,
-			const struct searchargs *searchargs)
+static void match(search_builder_t *bx, int part, const char *str)
 {
+    SquatBuilderData *bb = (SquatBuilderData *)bx;
+    struct opstack *parent = opstack_top(bb);
+    struct opstack *top;
+    int r;
+
+#if DEBUG
+    if (bb->verbose > 1)
+	syslog(LOG_NOTICE, "Squat match(part=%d str=\"%s\")", part, str);
+#endif
+
+    if (!doctypes_by_part[part])
+	return;
+    if (parent && parent->op == SEARCH_OP_NOT)
+	return;
+
+    top = opstack_push(bb, /*doesn't matter*/0);
+    bb->part_types = doctypes_by_part[part];
+
+    r = squat_search_execute(bb->index, str, strlen(str),
+			     fill_with_hits, bb);
+    if (r != SQUAT_OK) {
+	if (squat_get_last_error() == SQUAT_ERR_SEARCH_STRING_TOO_SHORT)
+	    goto out; /* The rest of the search is still viable */
+	syslog(LOG_ERR, "SQUAT string list search failed on string %s "
+			  "with part types %s: %s",
+			  str, bb->part_types, squat_strerror(r));
+	goto out;
+    }
+    top->valid = 1;
+
+#if DEBUG
+    if (bb->verbose > 1)
+	opstack_dump(bb, "after match");
+#endif
+
+out:
+    opstack_pop(bb);
+}
+
+static search_builder_t *begin_search1(struct index_state *state,
+				       unsigned int *msgno_list,
+				       int verbose)
+{
+    SquatBuilderData *bb;
+    SquatSearchIndex* index;
     char *fname;
     int fd;
-    SquatSearchIndex* index;
-    bitvector_t msg_vector = BV_INITIALIZER;
-    int result;
 
     fname = mailbox_meta_fname(state->mailbox, META_SQUAT);
     if ((fd = open(fname, O_RDONLY)) < 0) {
-	syslog(LOG_DEBUG, "SQUAT failed to open index file");
-	return -1;   /* probably not found. Just bail */
+	if (errno != ENOENT)
+	    syslog(LOG_ERR, "SQUAT failed to open index file %s: %s",
+		   fname, squat_strerror(squat_get_last_error()));
+	return NULL;   /* probably not found. Just bail */
     }
     if ((index = squat_search_open(fd)) == NULL) {
-	syslog(LOG_DEBUG, "SQUAT failed to open index");
+	syslog(LOG_ERR, "SQUAT failed to open index %s: %s",
+	       fname, squat_strerror(squat_get_last_error()));
 	close(fd);
-	return -1;
+	return NULL;
     }
-    if (!search_squat_do_query(index, state, searchargs, &msg_vector)) {
-	result = -1;
-    } else {
-	unsigned i;
-	bitvector_t unindexed_vector = BV_INITIALIZER;
-	SquatSearchResult r;
 
-	bv_setsize(&unindexed_vector, state->exists);
-	bv_setall(&unindexed_vector);
-	r.vector = &unindexed_vector;
-	r.state = state;
-	r.part_types = "tfcbsmh";
-	r.found_validity = 0;
-	if (squat_search_list_docs(index, drop_indexed_docs, &r) != SQUAT_OK) {
-	    syslog(LOG_DEBUG, "SQUAT failed to get list of indexed documents");
-	    result = -1;
-	} else if (!r.found_validity) {
-	    syslog(LOG_DEBUG, "SQUAT didn't find validity record");
-	    result = -1;
-	} else {
-	    /* Add in any unindexed messages. They must be searched manually. */
-	    bv_oreq(&msg_vector, &unindexed_vector);
+    bb = xzmalloc(sizeof(SquatBuilderData));
+    bb->super.begin_boolean = begin_boolean;
+    bb->super.end_boolean = end_boolean;
+    bb->super.match = match;
 
-	    result = 0;
-	    for (i = 1; i <= state->exists; i++) {
-		if (bv_isset(&msg_vector, i)) {
-		    msg_list[result] = i;
-		    result++;
-		}
-	    }
-	}
-	bv_free(&unindexed_vector);
+    bb->state = state;
+    bb->msgno_list = msgno_list;
+    bb->verbose = verbose;
+    bb->index = index;
+    bb->fd = fd;
+
+    /* Push a boolean node on the stack -- this will be used
+     * at the end of the search to OR in any unindexed messages */
+    opstack_push(bb, SEARCH_OP_OR);
+
+    return &bb->super;
+}
+
+static int add_unindexed(SquatBuilderData *bb)
+{
+    struct opstack *top = opstack_top(bb);
+    int r = 0;
+
+    top = opstack_push(bb, /*doesn't matter*/0);
+    bv_setall(&top->msg_vector);
+    bv_clear(&top->msg_vector, 0);  /* UID 0 is not valid */
+    bb->part_types = "tfcbsmh";
+    bb->found_validity = 0;
+
+    r = squat_search_list_docs(bb->index, drop_indexed_docs, bb);
+    if (r != SQUAT_OK) {
+	syslog(LOG_ERR, "SQUAT failed to get list of indexed documents: %s",
+	       squat_strerror(r));
+	r = IMAP_IOERROR;
+	goto out;
     }
-    bv_free(&msg_vector);
-    squat_search_close(index);
-    close(fd);
-    return result;
+    if (!bb->found_validity) {
+	syslog(LOG_ERR, "SQUAT didn't find validity record");
+	r = IMAP_IOERROR;
+	goto out;
+    }
+    top->valid = 1;
+    r = 0;
+
+#if DEBUG
+    if (bb->verbose > 1)
+	opstack_dump(bb, "after adding unindexed");
+#endif
+
+out:
+    opstack_pop(bb);
+    return r;
+}
+
+static int end_search1(search_builder_t *bx)
+{
+    SquatBuilderData *bb = (SquatBuilderData *)bx;
+    int n = 0;
+    unsigned int msgno;
+    int r = 0;
+
+#if DEBUG
+    if (bb->verbose > 1)
+	syslog(LOG_NOTICE, "Squat end_search1()");
+#endif
+
+    /* check we had balanced ->begin_boolean and ->end_boolean calls */
+    if (bb->depth != 1)
+	goto out;
+
+    r = add_unindexed(bb);
+    if (r) goto out;
+
+    /* Flatten out the final bit vector into a sequence */
+    for (msgno = 1 ; msgno <= bb->state->exists; msgno++) {
+	if (bv_isset(&bb->stack[0].msg_vector, msgno))
+	    bb->msgno_list[n++] = msgno;
+    }
+    r = n;
+
+out:
+    opstack_pop(bb);
+    free(bb->stack);
+    squat_search_close(bb->index);
+    close(bb->fd);
+    free(bx);
+    return r;
 }
 
 
@@ -816,7 +967,8 @@ static int end_update(search_text_receiver_t *rx)
 const struct search_engine squat_search_engine = {
     "SQUAT",
     0,
-    search_squat,
+    begin_search1,
+    end_search1,
     begin_update,
     end_update,
     /* start_daemon */NULL,
