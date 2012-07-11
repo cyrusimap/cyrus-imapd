@@ -129,7 +129,6 @@ struct namespace sync_namespace;
 struct namespace *sync_namespacep = &sync_namespace;
 struct auth_state *sync_authstate = 0;
 int sync_userisadmin = 0;
-struct sockaddr_storage sync_localaddr, sync_remoteaddr;
 const char *sync_clienthost = "[local]";
 struct protstream *sync_out = NULL;
 struct protstream *sync_in = NULL;
