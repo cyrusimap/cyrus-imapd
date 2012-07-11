@@ -66,9 +66,11 @@
 #define DEBUG 0
 
 struct opstack {
-    int op;
-    int valid;
+    int op;	    /* boolean operator to apply */
+    int valid;	    /* whether msg_vector is valid yet */
     bitvector_t msg_vector;
+		    /* merged search results, indexed by msgno (so
+		     * that bit 0 is not meaningful) */
 };
 
 typedef struct {
@@ -106,21 +108,22 @@ static const char * const doctypes_by_part[SEARCH_NUM_PARTS] = {
    is represented by the document), nnn is the UID of the message, and vvv
    is the UID validity value.
 
-   This function parses the document name and returns the message
-   UID only if the name has the right part type and it corresponds
+   This function parses the document name and returns the message sequence
+   number only if the name has the right part type and it corresponds
    to a real message UID.
+   Returns a msgno (>=1) or zero on error.
 */
-static int parse_doc_name(SquatBuilderData *bb, const char *doc_name)
+static unsigned int parse_doc_name(SquatBuilderData *bb, const char *doc_name)
 {
     int ch = doc_name[0];
     const char *t = bb->part_types;
-    int doc_UID, index;
+    int doc_UID, msgno;
 
     if (ch == 'v' && strncmp(doc_name, "validity.", 9) == 0) {
 	if ((unsigned) atoi(doc_name + 9) == bb->state->mailbox->i.uidvalidity) {
 	    bb->found_validity = 1;
 	}
-	return -1;
+	return 0;
     }
 
     /* make sure that the document part type is one of the ones we're
@@ -129,7 +132,7 @@ static int parse_doc_name(SquatBuilderData *bb, const char *doc_name)
 	t++;
     }
     if (*t == 0) {
-	return -1;
+	return 0;
     }
 
     doc_UID = atoi(++doc_name);
@@ -137,14 +140,14 @@ static int parse_doc_name(SquatBuilderData *bb, const char *doc_name)
 	++doc_name;
     }
     if (*doc_name != 0) {
-	return -1;
+	return 0;
     }
 
-    index = index_finduid(bb->state, doc_UID);
-    if (index >= 0 && index_getuid(bb->state, index) != (unsigned)doc_UID)
-	index = -1;
+    msgno = index_finduid(bb->state, doc_UID);
+    if (msgno > 0 && index_getuid(bb->state, msgno) != (unsigned)doc_UID)
+	return 0;
 
-    return index;
+    return msgno;
 }
 
 #if DEBUG
@@ -198,7 +201,7 @@ static struct opstack *opstack_push(SquatBuilderData *bb, int op)
     top->op = op;
     top->valid = 0;
     bv_init(&top->msg_vector);
-    bv_setsize(&top->msg_vector, bb->state->exists);
+    bv_setsize(&top->msg_vector, bb->state->exists+1);
 
 #if DEBUG
     if (bb->verbose > 1)
@@ -248,7 +251,7 @@ static int drop_indexed_docs(void* closure, const SquatListDoc *doc)
     SquatBuilderData* bb = (SquatBuilderData*)closure;
     int msgno = parse_doc_name(bb, doc->doc_name);
 
-    if (msgno >= 0)
+    if (msgno)
 	bv_clear(&opstack_top(bb)->msg_vector, msgno);
     return SQUAT_CALLBACK_CONTINUE;
 }
@@ -258,7 +261,7 @@ static int fill_with_hits(void* closure, char const* doc)
     SquatBuilderData* bb = (SquatBuilderData*)closure;
     int msgno = parse_doc_name(bb, doc);
 
-    if (msgno >= 0)
+    if (msgno)
 	bv_set(&opstack_top(bb)->msg_vector, msgno);
     return SQUAT_CALLBACK_CONTINUE;
 }
