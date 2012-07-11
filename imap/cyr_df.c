@@ -62,8 +62,8 @@ extern int optind;
 extern char *optarg;
 
 /* forward declarations */
-void usage(void);
-void get_part_stats(const char *key, const char *val, void *rock);
+static void usage(void);
+static void get_part_stats(const char *key, const char *val, void *rock);
 
 int main(int argc, char *argv[])
 {
@@ -103,7 +103,7 @@ int main(int argc, char *argv[])
 }
 
 
-void usage(void)
+static void usage(void)
 {
     fprintf(stderr,
 	    "usage: cyr_df [-C <alt_config>] [-m]\n");
@@ -115,7 +115,7 @@ void usage(void)
  * config_foreachoverflowstring() callback function to find partition-
  * options and print filesystem stats
  */
-void get_part_stats(const char *key, const char *val, void *rock)
+static void get_part_stats(const char *key, const char *val, void *rock)
 {
     int meta = *((int*) rock);
     const char *part, *path;
