@@ -91,6 +91,6 @@ extern int deliver_mailbox(FILE *f,
 			   int quotaoverride,
 			   int acloverride);
 
-extern int fuzzy_match(char *mboxname);
+static int fuzzy_match(char *mboxname);
 
 #endif /* LMTPD_H */

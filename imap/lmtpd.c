@@ -128,7 +128,7 @@ static int autocreate_inbox(const char *user, const char *domain);
 /* current namespace */
 static struct namespace lmtpd_namespace;
 
-struct lmtp_func mylmtp = { &deliver, &verify_user, &shut_down,
+static struct lmtp_func mylmtp = { &deliver, &verify_user, &shut_down,
 			    &spoolfile, &removespool, &lmtpd_namespace,
 			    0, 1, 0 };
 
@@ -143,14 +143,14 @@ static int dupelim = 1;		/* eliminate duplicate messages with
 				   same message-id */
 static int singleinstance = 1;	/* attempt single instance store */
 
-struct stagemsg *stage = NULL;
+static struct stagemsg *stage = NULL;
 
 /* per-user/session state */
 static struct protstream *deliver_out, *deliver_in;
 int deliver_logfd = -1; /* used in lmtpengine.c */
 
 /* our cached connections */
-mupdate_handle *mhandle = NULL;
+static mupdate_handle *mhandle = NULL;
 struct backend **backend_cached = NULL;
 
 static struct protocol_t lmtp_protocol =
@@ -406,7 +406,7 @@ static int fuzzy_match_cb(char *name,
     return 0;
 }
 
-int fuzzy_match(char *mboxname)
+static int fuzzy_match(char *mboxname)
 {
     char name[MAX_MAILBOX_BUFFER], prefix[MAX_MAILBOX_BUFFER], *p = NULL;
     size_t prefixlen;
@@ -631,7 +631,7 @@ enum rcpt_status {
     s_done,			/* sieve script successfully run */
 };
 
-void deliver_remote(message_data_t *msgdata,
+static void deliver_remote(message_data_t *msgdata,
 		    struct dest *dlist, enum rcpt_status *status)
 {
     struct dest *d;
@@ -1156,7 +1156,7 @@ static int verify_user(const char *user, const char *domain, char *mailbox,
     return r;
 }
 
-const char *notifyheaders[] = { "From", "Subject", "To", 0 };
+static const char *notifyheaders[] = { "From", "Subject", "To", 0 };
 /* returns a malloc'd string that should be sent to users for successful
    delivery of 'm'. */
 char *generate_notify(message_data_t *m)
