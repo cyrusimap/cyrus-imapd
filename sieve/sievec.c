@@ -64,7 +64,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-int is_script_parsable(FILE *stream, char **errstr, sieve_script_t **ret);
+static int is_script_parsable(FILE *stream, char **errstr, sieve_script_t **ret);
 
 #define TIMSIEVE_FAIL -1
 #define TIMSIEVE_OK 0
@@ -145,7 +145,7 @@ static void foo(void)
 {
     fatal("stub function called", 0);
 }
-sieve_vacation_t vacation = {
+static sieve_vacation_t vacation = {
     0,				/* min response */
     0,				/* max response */
     (sieve_callback *) &foo,	/* autorespond() */
@@ -179,7 +179,7 @@ void fatal(const char *s, int code)
 /* end the boilerplate */
 
 /* returns TRUE or FALSE */
-int is_script_parsable(FILE *stream, char **errstr, sieve_script_t **ret)
+static int is_script_parsable(FILE *stream, char **errstr, sieve_script_t **ret)
 {
     sieve_interp_t *i;
     sieve_script_t *s;
