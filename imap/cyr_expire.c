@@ -77,7 +77,7 @@
 static volatile sig_atomic_t sigquit = 0;
 static int verbose = 0;
 
-void usage(void)
+static void usage(void)
 {
     fprintf(stderr,
 	    "cyr_expire [-C <altconfig>] [-E <expire-duration>] [-D <delete-duration] [-X <expunge-duration>] [-p prefix] [-a] [-v] [-x]\n");
