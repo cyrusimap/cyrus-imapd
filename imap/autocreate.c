@@ -90,7 +90,7 @@ static int mysieve_error(int lineno, const char *msg,
 static int is_script_parsable(FILE *stream, char **errstr, sieve_script_t **ret);
 
 
-sieve_vacation_t vacation2 = {
+static sieve_vacation_t vacation2 = {
     0,                          /* min response */
     0,                          /* max response */
     (sieve_callback *) &foo,    /* autorespond() */
