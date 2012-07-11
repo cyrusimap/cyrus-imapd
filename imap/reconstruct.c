@@ -114,23 +114,23 @@ struct uniqmailid {
     struct uniqmailid *uniqnext;
 };
 
-struct uniqmailid *uniqmid_head;
+static struct uniqmailid *uniqmid_head;
 
 /* current namespace */
 static struct namespace recon_namespace;
 
 /* forward declarations */
-void do_mboxlist(void);
+static void do_mboxlist(void);
 static int do_reconstruct(char *name, int matchlen, int maycreate, void *rock);
 int reconstruct(char *name, const strarray_t *);
-void usage(void);
-char * getmailname (char * mailboxname);
-struct uniqmailid * add_uniqid (char * mailboxname, char * mailboxid);
-struct uniqmailid * find_uniqid (char * mailboxname, char * mailboxid);
+static void usage(void);
+static char * getmailname (char * mailboxname);
+static struct uniqmailid * add_uniqid (char * mailboxname, char * mailboxid);
+static struct uniqmailid * find_uniqid (char * mailboxname, char * mailboxid);
 
 extern cyrus_acl_canonproc_t mboxlist_ensureOwnerRights;
 
-int reconstruct_flags = RECONSTRUCT_MAKE_CHANGES | RECONSTRUCT_DO_STAT;
+static int reconstruct_flags = RECONSTRUCT_MAKE_CHANGES | RECONSTRUCT_DO_STAT;
 
 int main(int argc, char **argv)
 {
@@ -388,7 +388,7 @@ int main(int argc, char **argv)
     return 0;
 }
 
-void usage(void)
+static void usage(void)
 {
     fprintf(stderr,
 	    "usage: reconstruct [-C <alt_config>] [-p partition] [-ksrfx] mailbox...\n");
@@ -504,7 +504,7 @@ static int do_reconstruct(char *name,
     return 0;
 }
 
-char *getmailname(char *mailboxname) 
+static char *getmailname(char *mailboxname) 
 {
     static char namebuf[MAX_MAILBOX_PATH + 1];
 
@@ -520,7 +520,7 @@ char *getmailname(char *mailboxname)
     return (namebuf);
 }
 
-struct uniqmailid * 
+static struct uniqmailid * 
 find_uniqid ( char * mailboxname, char * mailboxid) 
 {
     struct uniqmailid *puniq;
@@ -538,7 +538,7 @@ find_uniqid ( char * mailboxname, char * mailboxid)
     return NULL;
 }
 
-struct uniqmailid * 
+static struct uniqmailid * 
 add_uniqid ( char * mailboxname, char * mailboxid)
 {
     struct uniqmailid *puniq;
@@ -559,7 +559,7 @@ add_uniqid ( char * mailboxname, char * mailboxid)
 /*
  * Reconstruct the mailboxes list.
  */
-void do_mboxlist(void)
+static void do_mboxlist(void)
 {
     fprintf(stderr, "reconstructing mailboxes.db currently not supported\n");
     exit(EC_USAGE);
