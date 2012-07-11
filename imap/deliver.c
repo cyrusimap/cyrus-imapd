@@ -275,7 +275,7 @@ int main(int argc, char **argv)
     return r;
 }
 
-void just_exit(const char *msg)
+static void just_exit(const char *msg)
 {
     com_err(msg, 0, "%s", error_message(errno));
 
