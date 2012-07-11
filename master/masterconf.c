@@ -54,7 +54,9 @@
 #include <sys/stat.h>
 #include <sysexits.h>
 
-#include "libconfig.c"
+#include "util.h"
+#include "libconfig.h"
+#include "xmalloc.h"
 
 #if HAVE_UNISTD_H
 # include <unistd.h>
