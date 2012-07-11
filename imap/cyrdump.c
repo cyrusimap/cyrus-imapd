@@ -67,12 +67,12 @@
 #include "xstrlcat.h"
 
 
-int verbose = 0;
+static int verbose = 0;
 
 static int dump_me(char *name, int matchlen, int maycreate, void *rock);
 static void print_seq(const char *tag, const char *attrib, 
 		      unsigned *seq, int n);
-int usage(const char *name);
+static int usage(const char *name);
 
 /* current namespace */
 static struct namespace dump_namespace;
@@ -142,7 +142,7 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-int usage(const char *name)
+static int usage(const char *name)
 {
     fprintf(stderr, "usage: %s [-v] [mboxpattern ...]\n", name);
 
