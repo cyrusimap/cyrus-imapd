@@ -104,8 +104,8 @@ struct quotaentry {
 };
 
 /* forward declarations */
-void usage(void);
-void reportquota(void);
+static void usage(void);
+static void reportquota(void);
 static int buildquotalist(char *domain, char **roots, int nroots);
 static int fixquotas(char *domain, char **roots, int nroots);
 static int fixquota_dopass(char *domain, char **roots, int nroots,
@@ -118,11 +118,11 @@ static int (*compar)(const char *s1, const char *s2);
 
 #define QUOTAGROW 300
 
-struct quotaentry *quotaroots;
-int quota_num = 0, quota_alloc = 0;
-int quota_todo = 0;
+static struct quotaentry *quotaroots;
+static int quota_num = 0, quota_alloc = 0;
+static int quota_todo = 0;
 
-int test_sync_mode = 0;
+static int test_sync_mode = 0;
 
 int main(int argc,char **argv)
 {
@@ -221,14 +221,14 @@ int main(int argc,char **argv)
     return code;
 }
 
-void usage(void)
+static void usage(void)
 {
     fprintf(stderr,
 	    "usage: quota [-C <alt_config>] [-d <domain>] [-f] [-q] [prefix]...\n");
     exit(EC_USAGE);
 }
 
-void errmsg(const char *fmt, const char *arg, int err)
+static void errmsg(const char *fmt, const char *arg, int err)
 {
     char buf[1024];
     size_t len;
@@ -698,7 +698,7 @@ static void reportquota_resource(struct quota * quota, const char *root, int res
 /*
  * Print out the quota report
  */
-void reportquota(void)
+static void reportquota(void)
 {
     int i;
     int res;
