@@ -101,11 +101,11 @@
 #include "xstrlcat.h"
 
 const char *BB;
-int forcedowncase;
+static int forcedowncase;
 
 extern int optind;
 
-struct protstream *map_in, *map_out;
+static struct protstream *map_in, *map_out;
 
 /* current namespace */
 static struct namespace map_namespace;
@@ -114,9 +114,9 @@ static struct namespace map_namespace;
 const int config_need_data = 0;
 
 /* forward decls */
-int begin_handling(void);
+static int begin_handling(void);
 
-void smmapd_reset(void)
+static void smmapd_reset(void)
 {
     if (map_in) {
 	/* Flush the incoming buffer */
@@ -225,7 +225,7 @@ int service_main(int argc __attribute__((unused)),
     return 0;
 }
 
-int verify_user(const char *key,
+static int verify_user(const char *key,
 		struct auth_state *authstate)
 {
     char rcpt[MAX_MAILBOX_BUFFER], namebuf[MAX_MAILBOX_BUFFER] = "";
@@ -397,7 +397,7 @@ int verify_user(const char *key,
  */
 #define MAXREQUEST 1024		/* XXX  is this reasonable? */
 
-int begin_handling(void)
+static int begin_handling(void)
 {
     int c;
 
