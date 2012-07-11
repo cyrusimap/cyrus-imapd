@@ -278,14 +278,14 @@ index 1a11599..ae5722f 100644
  
  #ifdef HAVE_SSL
  static SSL *tls_conn;
-@@ -120,6 +124,7 @@ int popd_timeout;
- char *popd_userid = 0, *popd_subfolder = 0;
- struct mailbox *popd_mailbox = NULL;
- struct auth_state *popd_authstate = 0;
+@@ -120,6 +124,7 @@ static int popd_timeout;
+ static char *popd_userid = 0, *popd_subfolder = 0;
+ static struct mailbox *popd_mailbox = NULL;
+ static struct auth_state *popd_authstate = 0;
 +static int popd_userisproxyadmin = 0;
- int config_popuseacl, config_popuseimapflags;
+ static int config_popuseacl, config_popuseimapflags;
  struct sockaddr_storage popd_localaddr, popd_remoteaddr;
- int popd_haveaddr = 0;
+ static int popd_haveaddr = 0;
 @@ -150,7 +155,7 @@ static mailbox_decideproc_t expungedeleted;
  
  /* the sasl proxy policy context */

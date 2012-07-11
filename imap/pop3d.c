@@ -117,24 +117,24 @@ extern int opterr;
 static SSL *tls_conn;
 #endif /* HAVE_SSL */
 
-sasl_conn_t *popd_saslconn; /* the sasl connection context */
+static sasl_conn_t *popd_saslconn; /* the sasl connection context */
 
-int popd_timeout;
-char *popd_userid = 0, *popd_subfolder = 0;
-struct mailbox *popd_mailbox = NULL;
-struct auth_state *popd_authstate = 0;
-int config_popuseacl, config_popuseimapflags;
-int popd_haveaddr = 0;
-const char *popd_clienthost = "[local]";
-struct protstream *popd_out = NULL;
-struct protstream *popd_in = NULL;
+static int popd_timeout;
+static char *popd_userid = 0, *popd_subfolder = 0;
+static struct mailbox *popd_mailbox = NULL;
+static struct auth_state *popd_authstate = 0;
+static int config_popuseacl, config_popuseimapflags;
+static int popd_haveaddr = 0;
+static const char *popd_clienthost = "[local]";
+static struct protstream *popd_out = NULL;
+static struct protstream *popd_in = NULL;
 static int popd_logfd = -1;
-unsigned popd_exists = 0;
-time_t popd_login_time;
-int count_retr = 0;
-int count_top = 0;
-int count_dele = 0;
-struct msg {
+static unsigned popd_exists = 0;
+static time_t popd_login_time;
+static int count_retr = 0;
+static int count_top = 0;
+static int count_dele = 0;
+static struct msg {
     unsigned uid;
     uint32_t recno;
     unsigned size;
@@ -142,12 +142,12 @@ struct msg {
     int seen;
 } *popd_msg = NULL;
 
-struct io_count *io_count_start;
-struct io_count *io_count_stop;
+static struct io_count *io_count_start;
+static struct io_count *io_count_stop;
 
 static sasl_ssf_t extprops_ssf = 0;
 static int pop3s = 0;
-int popd_starttls_done = 0;
+static int popd_starttls_done = 0;
 
 static int popd_myrights;
 
@@ -199,7 +199,7 @@ static unsigned parse_msgno(char **ptr);
 static void uidl_msg(uint32_t msgno);
 static int msg_exists_or_err(uint32_t msgno);
 static int update_seen(void);
-void usage(void);
+static void usage(void);
 void shut_down(int code) __attribute__ ((noreturn));
 
 extern int saslserver(sasl_conn_t *conn, const char *mech,
@@ -606,7 +606,7 @@ void service_abort(int error)
     shut_down(error);
 }
 
-void usage(void)
+static void usage(void)
 {
     prot_printf(popd_out, "-ERR usage: pop3d [-C <alt_config>] [-k] [-s]\r\n");
     prot_flush(popd_out);
@@ -1367,7 +1367,7 @@ static void cmd_apop(char *response)
     openinbox();
 }
 
-void cmd_user(char *user)
+static void cmd_user(char *user)
 {
     char userbuf[MAX_MAILBOX_BUFFER], *dot, *domain;
     unsigned userlen;
@@ -1405,7 +1405,7 @@ void cmd_user(char *user)
 
 }
 
-void cmd_pass(char *pass)
+static void cmd_pass(char *pass)
 {
     int failedloginpause;
 
@@ -1515,7 +1515,7 @@ void cmd_pass(char *pass)
 
 /* Handle the POP3 Extension extension.
  */
-void cmd_capa(void)
+static void cmd_capa(void)
 {
     int minpoll = config_getint(IMAPOPT_POPMINPOLL) * 60;
     int expire = config_getint(IMAPOPT_POPEXPIRETIME);
@@ -1567,7 +1567,7 @@ void cmd_capa(void)
 }
 
 
-void cmd_auth(char *arg)
+static void cmd_auth(char *arg)
 {
     int r, sasl_result;
     char *authtype;
