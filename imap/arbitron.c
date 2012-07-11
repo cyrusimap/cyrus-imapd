@@ -92,14 +92,13 @@ struct arb_mailbox_data {
     struct user_list *subscribers;
 };
 
-struct mpool *arb_pool;
-hash_table mailbox_table, mboxname_table;
+static struct mpool *arb_pool;
+static hash_table mailbox_table, mboxname_table;
 
-time_t report_start_time = -1, report_end_time, prune_time = 0;
-int code = 0;
-int dosubs = 1;
-int dousers = 0;
-int long_report = 0;
+static time_t report_start_time = -1, report_end_time, prune_time = 0;
+static int dosubs = 1;
+static int dousers = 0;
+static int long_report = 0;
 
 /* current namespace */
 static struct namespace arb_namespace;
@@ -244,7 +243,7 @@ int main(int argc,char **argv)
 
     cyrus_done();
 
-    return code;
+    return 0;
 }
 
 static void usage(void)
@@ -482,7 +481,7 @@ static void process_subs(const char *path, const char *user)
     if(tmp) cyrusdb_close(tmp);
 }
 
-void report_users(struct user_list *u)
+static void report_users(struct user_list *u)
 {
     char sep = ':';
 
@@ -493,7 +492,7 @@ void report_users(struct user_list *u)
     }
 }
 
-void long_report_users(struct user_list *u, const char *mbox, char type)
+static void long_report_users(struct user_list *u, const char *mbox, char type)
 {
     char buf[100];
     struct tm *tm;
