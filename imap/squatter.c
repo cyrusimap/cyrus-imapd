@@ -71,6 +71,8 @@
 #include "xmalloc.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
+#include "tok.h"
+#include "acl.h"
 #include "seen.h"
 #include "mboxname.h"
 #include "index.h"
@@ -101,7 +103,7 @@ static int usage(const char *name)
 	    "       %s [-C <alt_config>] [-v] [-s] [-a] -r mailbox [...]\n",
 	    name);
     fprintf(stderr,
-	    "       %s [-C <alt_config>] [-v] [-r] -e term mailbox [...]\n",
+	    "       %s [-C <alt_config>] [-v] [-r] -e query mailbox [...]\n",
 	    name);
     fprintf(stderr,
 	    "       %s [-C <alt_config>] [-v] -c (start|stop) mailbox\n",
@@ -301,7 +303,81 @@ static void do_indexer(const strarray_t *sa)
     search_end_update(rx);
 }
 
-static void do_search(const strarray_t *terms, const strarray_t *mboxnames)
+static int squatter_build_query(search_builder_t *bx, const char *query)
+{
+    tok_t tok = TOK_INITIALIZER(query, NULL, 0);
+    char *p;
+    char *q;
+    int r = 0;
+    int part;
+
+    while ((p = tok_next(&tok))) {
+	if (!strncasecmp(p, "__begin:", 8)) {
+	    q = p + 8;
+	    if (!strcasecmp(q, "and"))
+		bx->begin_boolean(bx, SEARCH_OP_AND);
+	    else if (!strcasecmp(q, "or"))
+		bx->begin_boolean(bx, SEARCH_OP_OR);
+	    else if (!strcasecmp(q, "not"))
+		bx->begin_boolean(bx, SEARCH_OP_NOT);
+	    else
+		goto error;
+	    continue;
+	}
+	if (!strncasecmp(p, "__end:", 6)) {
+	    q = p + 6;
+	    if (!strcasecmp(q, "and"))
+		bx->end_boolean(bx, SEARCH_OP_AND);
+	    else if (!strcasecmp(q, "or"))
+		bx->end_boolean(bx, SEARCH_OP_OR);
+	    else if (!strcasecmp(q, "not"))
+		bx->end_boolean(bx, SEARCH_OP_NOT);
+	    else
+		goto error;
+	    continue;
+	}
+
+	/* everything else is a ->match() of some kind */
+	q = strchr(p, ':');
+	if (q) q++;
+	if (!q) {
+	    part = SEARCH_PART_ANY;
+	    q = p;
+	}
+	else if (!strncasecmp(p, "to:", 3))
+	    part = SEARCH_PART_TO;
+	else if (!strncasecmp(p, "from:", 5))
+	    part = SEARCH_PART_FROM;
+	else if (!strncasecmp(p, "cc:", 3))
+	    part = SEARCH_PART_CC;
+	else if (!strncasecmp(p, "bcc:", 4))
+	    part = SEARCH_PART_BCC;
+	else if (!strncasecmp(p, "subject:", 8))
+	    part = SEARCH_PART_SUBJECT;
+	else if (!strncasecmp(p, "header:", 7))
+	    part = SEARCH_PART_HEADERS;
+	else if (!strncasecmp(p, "body:", 5))
+	    part = SEARCH_PART_BODY;
+	else
+	    goto error;
+
+	q = charset_convert(q, /*US-ASCII*/0, charset_flags);
+	bx->match(bx, part, q);
+	free(q);
+    }
+    r = 0;
+
+out:
+    tok_fini(&tok);
+    return r;
+
+error:
+    syslog(LOG_ERR, "bad query expression at \"%s\"", p);
+    r = IMAP_PROTOCOL_ERROR;
+    goto out;
+}
+
+static void do_search(const char *query, const strarray_t *mboxnames)
 {
     struct index_state *state = NULL;
     int i;
@@ -329,13 +405,10 @@ static void do_search(const strarray_t *terms, const strarray_t *mboxnames)
 	bx = search_begin_search1(state, msgno_list, verbose);
 	if (!bx) goto next;
 
-	bx->begin_boolean(bx, SEARCH_OP_AND);
-	for (j = 0 ; j < terms->count ; j++)
-	    bx->match(bx, SEARCH_PART_ANY, terms->data[j]);
-	bx->end_boolean(bx, SEARCH_OP_AND);
+	r = squatter_build_query(bx, query);
 
 	count = search_end_search1(bx);
-	if (r < 0) goto next;
+	if (r < 0 || count < 0) goto next;
 
 	for (j = 0 ; j < count ; j++)
 	    printf("uid %u\n", state->map[msgno_list[j]-1].record.uid);
@@ -351,7 +424,7 @@ int main(int argc, char **argv)
     char *alt_config = NULL;
     int r;
     strarray_t mboxnames = STRARRAY_INITIALIZER;
-    strarray_t terms = STRARRAY_INITIALIZER;
+    const char *query = NULL;
     enum { UNKNOWN, INDEXER, SEARCH, START_DAEMON, STOP_DAEMON } mode = UNKNOWN;
 
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
@@ -378,8 +451,7 @@ int main(int argc, char **argv)
 
 	case 'e':		/* add a search term */
 	    if (mode != UNKNOWN && mode != SEARCH) usage(argv[0]);
-	    strarray_appendm(&terms, charset_convert(optarg,
-			     /*US-ASCII*/0, charset_flags));
+	    query = optarg;
 	    mode = SEARCH;
 	    break;
 
@@ -419,7 +491,9 @@ int main(int argc, char **argv)
     if (mode == UNKNOWN)
 	mode = INDEXER;
 
-    cyrus_init(alt_config, "squatter", 0, CONFIG_NEED_PARTITION_DATA);
+    cyrus_init(alt_config, "squatter",
+	       (isatty(2) ? CYRUSINIT_PERROR : 0),
+	       CONFIG_NEED_PARTITION_DATA);
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&squat_namespace, 1)) != 0) {
@@ -446,7 +520,7 @@ int main(int argc, char **argv)
     case SEARCH:
 	if (recursive_flag && optind == argc) usage(argv[0]);
 	expand_mboxnames(&mboxnames, argc-optind, (const char **)argv+optind);
-	do_search(&terms, &mboxnames);
+	do_search(query, &mboxnames);
 	break;
     case START_DAEMON:
 	/* daemon control requires exactly one mailbox */
@@ -465,7 +539,6 @@ int main(int argc, char **argv)
     }
 
     strarray_fini(&mboxnames);
-    strarray_fini(&terms);
     seen_done();
     mboxlist_close();
     mboxlist_done();
