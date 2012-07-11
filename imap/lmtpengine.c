@@ -270,7 +270,7 @@ static void send_lmtp_error(struct protstream *pout, int r)
    ----- access functions and the like, etc. */
 
 /* returns non-zero on failure */
-int msg_new(message_data_t **m)
+static int msg_new(message_data_t **m)
 {
     message_data_t *ret = (message_data_t *) xmalloc(sizeof(message_data_t));
 
@@ -294,7 +294,7 @@ int msg_new(message_data_t **m)
     return 0;
 }
 
-void msg_free(message_data_t *m)
+static void msg_free(message_data_t *m)
 {
     int i;
 
@@ -379,12 +379,12 @@ void msg_setrcpt_status(message_data_t *m, int rcpt_num, int r)
     m->rcpt[rcpt_num]->status = r;
 }
 
-void *msg_getrock(message_data_t *m)
+static void *msg_getrock(message_data_t *m)
 {
     return m->rock;
 }
 
-void msg_setrock(message_data_t *m, void *rock)
+static void msg_setrock(message_data_t *m, void *rock)
 {
     m->rock = rock;
 }
@@ -541,7 +541,7 @@ static char *parseaddr(char *s)
 }
 
 /* clean off the <> from the return path */
-void clean_retpath(char *rpath)
+static void clean_retpath(char *rpath)
 {
     int sl;
 
@@ -562,7 +562,7 @@ void clean_retpath(char *rpath)
  * from string pointed to by 'buf'.  Does not handle continuation header
  * lines.
  */
-void
+static void
 clean822space(char *buf)
 {
     char *from=buf, *to=buf;

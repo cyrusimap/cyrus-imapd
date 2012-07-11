@@ -99,8 +99,8 @@ int msg_getrcpt_ignorequota(message_data_t *m, int rcpt_num);
    translated into an LMTP status code */
 void msg_setrcpt_status(message_data_t *m, int rcpt_num, int r);
 
-void *msg_getrock(message_data_t *m);
-void msg_setrock(message_data_t *m, void *rock);
+static void *msg_getrock(message_data_t *m);
+static void msg_setrock(message_data_t *m, void *rock);
 
 struct addheader {
     const char *name;
