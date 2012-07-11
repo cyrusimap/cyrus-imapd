@@ -81,7 +81,7 @@ int group_alloc = 0;
 /* Forward declarations */
 void readactive(char *active);
 
-void usage(void)
+static void usage(void)
 {
     fprintf(stderr, "usage: syncnews [-C <alt_config>] active\n");
     exit(EC_USAGE);
