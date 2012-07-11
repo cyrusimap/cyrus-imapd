@@ -187,7 +187,7 @@ static int listener_lock = 0;
  * must lock listener first.  You must have both listener_mutex and
  * idle_connlist_mutex locked to remove anything from the idle_connlist */
 static pthread_mutex_t idle_connlist_mutex = PTHREAD_MUTEX_INITIALIZER;
-struct conn *idle_connlist = NULL; /* protected by listener_mutex */
+static struct conn *idle_connlist = NULL; /* protected by listener_mutex */
 static pthread_mutex_t connection_count_mutex = PTHREAD_MUTEX_INITIALIZER;
 static int connection_count = 0;
 static pthread_mutex_t idle_worker_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -195,36 +195,36 @@ static int idle_worker_count = 0;
 static pthread_mutex_t worker_count_mutex = PTHREAD_MUTEX_INITIALIZER;
 static int worker_count = 0;
 
-pthread_mutex_t connlist_mutex = PTHREAD_MUTEX_INITIALIZER;
-struct conn *connlist = NULL;
+static pthread_mutex_t connlist_mutex = PTHREAD_MUTEX_INITIALIZER;
+static struct conn *connlist = NULL;
 
 /* ---- connection signaling pipe */
 static int conn_pipe[2];
 
 /* ---- database access ---- */
-pthread_mutex_t mailboxes_mutex = PTHREAD_MUTEX_INITIALIZER;
-struct conn *updatelist = NULL;
+static pthread_mutex_t mailboxes_mutex = PTHREAD_MUTEX_INITIALIZER;
+static struct conn *updatelist = NULL;
 
 /* --- prototypes --- */
 static void conn_free(struct conn *C);
-mupdate_docmd_result_t docmd(struct conn *c);
-void cmd_authenticate(struct conn *C,
+static mupdate_docmd_result_t docmd(struct conn *c);
+static void cmd_authenticate(struct conn *C,
 		      const char *tag, const char *mech,
 		      const char *clientstart);
-void cmd_set(struct conn *C, 
+static void cmd_set(struct conn *C,
 	     const char *tag, const char *mailbox,
 	     const char *server, const char *acl, enum settype t);
-void cmd_find(struct conn *C, const char *tag, const char *mailbox,
+static void cmd_find(struct conn *C, const char *tag, const char *mailbox,
 	      int send_ok, int send_delete);
-void cmd_list(struct conn *C, const char *tag, const char *host_prefix);
-void cmd_startupdate(struct conn *C, const char *tag,
+static void cmd_list(struct conn *C, const char *tag, const char *host_prefix);
+static void cmd_startupdate(struct conn *C, const char *tag,
 		     strarray_t *partial);
-void cmd_starttls(struct conn *C, const char *tag);
-void cmd_compress(struct conn *C, const char *tag, const char *alg);
+static void cmd_starttls(struct conn *C, const char *tag);
+static void cmd_compress(struct conn *C, const char *tag, const char *alg);
 void shut_down(int code);
 static int reset_saslconn(struct conn *c);
 static void database_init(void);
-void sendupdates(struct conn *C, int flushnow);
+static void sendupdates(struct conn *C, int flushnow);
 
 extern int saslserver(sasl_conn_t *conn, const char *mech,
 		      const char *init_resp, const char *resp_prefix,
@@ -622,7 +622,7 @@ void fatal(const char *s, int code)
 #define CHECKNEWLINE(c, ch) do { if ((ch) == '\r') (ch)=prot_getc((c)->pin); \
                        		 if ((ch) != '\n') goto extraargs; } while (0)
 
-mupdate_docmd_result_t docmd(struct conn *c)
+static mupdate_docmd_result_t docmd(struct conn *c)
 {
     mupdate_docmd_result_t ret = DOCMD_OK;
     int ch;
@@ -1377,7 +1377,7 @@ static void database_init(void)
 }
 
 /* log change to database. database must be locked. */
-void database_log(const struct mbent *mb, struct txn **mytid)
+static void database_log(const struct mbent *mb, struct txn **mytid)
 {
     struct mboxlist_entry *mbentry = NULL;
 
@@ -1414,7 +1414,7 @@ void database_log(const struct mbent *mb, struct txn **mytid)
 /* This could probabally be more efficient and avoid some copies */
 /* passing in a NULL pool implies that we should use regular xmalloc,
  * a non-null pool implies we should use the mpool functionality */
-struct mbent *database_lookup(const char *name, struct mpool *pool) 
+static struct mbent *database_lookup(const char *name, struct mpool *pool)
 {
     struct mboxlist_entry *mbentry = NULL;
     struct mbent *out;
@@ -1447,7 +1447,7 @@ struct mbent *database_lookup(const char *name, struct mpool *pool)
     return out;
 }
 
-void cmd_authenticate(struct conn *C,
+static void cmd_authenticate(struct conn *C,
 		      const char *tag, const char *mech,
 		      const char *clientstart)
 {
@@ -1518,7 +1518,7 @@ void cmd_authenticate(struct conn *C,
 /* INVARIANT: caller MUST hold mailboxes_mutex */
 /* oldserver is the previous value of the server in this update,
    thisserver is the current value of the mailbox's server */
-void log_update(const char *mailbox,
+static void log_update(const char *mailbox,
 		const char *oldserver,
 		const char *thisserver) 
 {
@@ -1553,7 +1553,7 @@ void log_update(const char *mailbox,
     }
 }
 
-void cmd_set(struct conn *C, 
+static void cmd_set(struct conn *C,
 	     const char *tag, const char *mailbox,
 	     const char *server, const char *acl, enum settype t)
 {
@@ -1683,7 +1683,7 @@ void cmd_set(struct conn *C,
     }    
 }
 
-void cmd_find(struct conn *C, const char *tag, const char *mailbox,
+static void cmd_find(struct conn *C, const char *tag, const char *mailbox,
 	      int send_ok, int send_delete)
 {
     struct mbent *m;
@@ -1784,7 +1784,7 @@ static int sendupdate(char *name,
     return 0;
 }
 
-void cmd_list(struct conn *C, const char *tag, const char *host_prefix) 
+static void cmd_list(struct conn *C, const char *tag, const char *host_prefix)
 {
     char pattern[2] = {'*','\0'};
 
@@ -1819,7 +1819,7 @@ void cmd_list(struct conn *C, const char *tag, const char *host_prefix)
  * we've registered this connection for streaming, and every X seconds
  * this will be invoked.  note that we always send out updates as soon
  * as we get a noop: that resets this counter back */
-struct prot_waitevent *sendupdates_evt(struct protstream *s __attribute__((unused)), 
+static struct prot_waitevent *sendupdates_evt(struct protstream *s __attribute__((unused)),
 				       struct prot_waitevent *ev,
 				       void *rock)
 {
@@ -1831,7 +1831,7 @@ struct prot_waitevent *sendupdates_evt(struct protstream *s __attribute__((unuse
     return ev;
 }
 
-void cmd_startupdate(struct conn *C, const char *tag,
+static void cmd_startupdate(struct conn *C, const char *tag,
 		     strarray_t *partial)
 {
     char pattern[2] = {'*','\0'};
@@ -1868,7 +1868,7 @@ void cmd_startupdate(struct conn *C, const char *tag,
 
 /* send out any pending updates.
    if 'flushnow' is set, flush the output buffer */
-void sendupdates(struct conn *C, int flushnow)
+static void sendupdates(struct conn *C, int flushnow)
 {
     struct pending *p, *q;
 
@@ -1901,7 +1901,7 @@ void sendupdates(struct conn *C, int flushnow)
 }
 
 #ifdef HAVE_SSL
-void cmd_starttls(struct conn *C, const char *tag)
+static void cmd_starttls(struct conn *C, const char *tag)
 {
     int result;
     int *layerp;
@@ -1984,7 +1984,7 @@ void cmd_starttls(struct conn *C, const char *tag)
 #endif /* HAVE_SSL */
 
 #ifdef HAVE_ZLIB
-void cmd_compress(struct conn *C, const char *tag, const char *alg)
+static void cmd_compress(struct conn *C, const char *tag, const char *alg)
 {
     if (C->compress_done) {
 	prot_printf(C->pout,
@@ -2205,7 +2205,7 @@ struct sync_rock
 
 /* Read a series of MAILBOX and RESERVE commands and tack them onto a
  * queue */
-int cmd_resync(struct mupdate_mailboxdata *mdata,
+static int cmd_resync(struct mupdate_mailboxdata *mdata,
 	       const char *rock, void *context)
 {
     struct sync_rock *r = (struct sync_rock *)context;
@@ -2487,7 +2487,7 @@ void mupdate_unready(void)
 }
 
 /* Used to free malloc'd mbent's (not for mpool'd mbents) */
-void free_mbent(struct mbent *p) 
+static void free_mbent(struct mbent *p)
 {
     if(!p) return;
     free(p->server);
