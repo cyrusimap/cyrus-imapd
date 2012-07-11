@@ -1719,7 +1719,7 @@ static void renamelist_remove(struct sync_rename_list *list, const char *prefix)
     }
 }
 
-int do_folders(struct sync_name_list *mboxname_list,
+static int do_folders(struct sync_name_list *mboxname_list,
 	       struct sync_folder_list *replica_folders, int delete_remote)
 {
     int r;
@@ -2015,7 +2015,7 @@ static int do_user_main(const char *user,
     return r;
 }
 
-int do_user_sub(const char *userid, struct sync_name_list *replica_subs)
+static int do_user_sub(const char *userid, struct sync_name_list *replica_subs)
 {
     struct sync_name_list *master_subs = sync_name_list_create();
     struct sync_name *msubs, *rsubs;
@@ -2681,7 +2681,7 @@ enum {
     RESTART_RECONNECT
 };
 
-int do_daemon_work(const char *sync_log_file, const char *sync_shutdown_file,
+static int do_daemon_work(const char *sync_log_file, const char *sync_shutdown_file,
 		   unsigned long timeout, unsigned long min_delta,
 		   int *restartp)
 {
@@ -2836,7 +2836,7 @@ static const char *get_config(const char *channel, const char *val)
     return response;
 }
 
-void replica_connect(const char *channel)
+static void replica_connect(const char *channel)
 {
     int wait;
     struct protoent *proto;
@@ -3002,7 +3002,7 @@ static void replica_disconnect(void)
     backend_disconnect(sync_backend);
 }
 
-void do_daemon(const char *sync_log_file, const char *sync_shutdown_file,
+static void do_daemon(const char *sync_log_file, const char *sync_shutdown_file,
 	       const char *channel, unsigned long timeout, unsigned long min_delta)
 {
     int r = 0;
