@@ -74,14 +74,13 @@ extern int  opterr;
 extern int  optopt;
 
 /* globals for callback functions */
-int days = -1;
-int size = -1;
-int exact = -1;
-int pattern = -1;
-int skipflagged = 0;
-int onlydeleted = 0;
-int use_sentdate = 1;
-int invertmatch = 0;
+static int days = -1;
+static int size = -1;
+static int exact = -1;
+static int skipflagged = 0;
+static int onlydeleted = 0;
+static int use_sentdate = 1;
+static int invertmatch = 0;
 
 /* for statistical purposes */
 typedef struct mbox_stats_s {
@@ -96,8 +95,8 @@ typedef struct mbox_stats_s {
 /* current namespace */
 static struct namespace purge_namespace;
 
-int verbose = 1;
-int forceall = 0;
+static int verbose = 1;
+static int forceall = 0;
 
 static int purge_me(char *, int, int, void *);
 static unsigned purge_check(struct mailbox *mailbox,
