@@ -82,7 +82,7 @@ extern int sieved_userisadmin;
 /* xxx these are both leaked, but we only handle one connection at a
  * time... */
 extern sasl_conn_t *sieved_saslconn; /* the sasl connection context */
-const char *referral_host = NULL;
+static const char *referral_host = NULL;
 
 int authenticated = 0;
 int verify_only = 0;

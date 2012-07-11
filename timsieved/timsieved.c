@@ -108,10 +108,7 @@ static struct
 
 sasl_conn_t *sieved_saslconn; /* the sasl connection context */
 
-struct auth_state *sieved_authstate = 0;
-
-struct sockaddr_storage sieved_localaddr;
-struct sockaddr_storage sieved_remoteaddr;
+static struct auth_state *sieved_authstate = 0;
 
 int sieved_timeout;
 struct protstream *sieved_out;
