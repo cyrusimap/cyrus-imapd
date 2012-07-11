@@ -132,26 +132,26 @@ struct backend **backend_cached = NULL;
 static SSL *tls_conn;
 #endif /* HAVE_SSL */
 
-sasl_conn_t *nntp_saslconn; /* the sasl connection context */
+static sasl_conn_t *nntp_saslconn; /* the sasl connection context */
 
-int nntp_timeout;
-char newsprefix[100] = "";
-struct wildmat *newsgroups = NULL;
-char *nntp_userid = 0, *newsmaster;
-struct auth_state *nntp_authstate = 0, *newsmaster_authstate;
-struct index_state *group_state;
-const char *nntp_clienthost = "[local]";
-struct protstream *nntp_out = NULL;
-struct protstream *nntp_in = NULL;
+static int nntp_timeout;
+static char newsprefix[100] = "";
+static struct wildmat *newsgroups = NULL;
+static char *nntp_userid = 0, *newsmaster;
+static struct auth_state *nntp_authstate = 0, *newsmaster_authstate;
+static struct index_state *group_state;
+static const char *nntp_clienthost = "[local]";
+static struct protstream *nntp_out = NULL;
+static struct protstream *nntp_in = NULL;
 static struct protgroup *protin = NULL;
 static int nntp_logfd = -1;
-unsigned nntp_exists = 0;
-unsigned nntp_current = 0;
-unsigned did_capabilities = 0;
-int allowanonymous = 0;
-int singleinstance = 1;	/* attempt single instance store */
+static unsigned nntp_exists = 0;
+static unsigned nntp_current = 0;
+static unsigned did_capabilities = 0;
+static int allowanonymous = 0;
+static int singleinstance = 1;	/* attempt single instance store */
 
-struct stagemsg *stage = NULL;
+static struct stagemsg *stage = NULL;
 
 /* Bitmasks for NNTP modes */
 enum {
@@ -163,7 +163,7 @@ static unsigned nntp_capa = MODE_READ | MODE_FEED; /* general-purpose */
 
 static sasl_ssf_t extprops_ssf = 0;
 static int nntps = 0;
-int nntp_starttls_done = 0;
+static int nntp_starttls_done = 0;
 
 /* the sasl proxy policy context */
 static struct proxy_context nntp_proxyctx = {
@@ -193,7 +193,7 @@ enum {
 };
 
 /* response codes for each stage of posting */
-struct {
+static struct {
     int ok, cont, no, fail;
 } post_codes[] = { { 240, 340, 440, 441 },
 		   { 235, 335, 435, 436 },
@@ -230,7 +230,7 @@ static void cmd_newnews(char *wild, time_t tstamp);
 static void cmd_over(char *msgid, unsigned long uid, unsigned long last);
 static void cmd_post(char *msgid, int mode);
 static void cmd_starttls(int nntps);
-void usage(void);
+static void usage(void);
 void shut_down(int code) __attribute__ ((noreturn));
 
 extern int saslserver(sasl_conn_t *conn, const char *mech,
@@ -618,7 +618,7 @@ void service_abort(int error)
     shut_down(error);
 }
 
-void usage(void)
+static void usage(void)
 {
     prot_printf(nntp_out, "503 usage: nntpd [-C <alt_config>] [-s]\r\n");
     prot_flush(nntp_out);
@@ -2493,7 +2493,7 @@ struct enum_rock {
 /*
  * hash_enumerate() callback function to LIST (proxy)
  */
-void list_proxy(const char *server, void *data __attribute__((unused)), void *rock)
+static void list_proxy(const char *server, void *data __attribute__((unused)), void *rock)
 {
     struct enum_rock *erock = (struct enum_rock *) rock;
     struct backend *be;
@@ -2585,7 +2585,7 @@ static int do_newsgroups(char *name, void *rock)
 /*
  * annotatemore_findall() callback function to LIST NEWSGROUPS
  */
-int newsgroups_cb(const char *mailbox,
+static int newsgroups_cb(const char *mailbox,
 		  uint32_t uid __attribute__((unused)),
 		  const char *entry __attribute__((unused)),
 		  const char *userid,
@@ -2910,7 +2910,7 @@ struct message_data {
 };
 
 /* returns non-zero on failure */
-int msg_new(message_data_t **m)
+static int msg_new(message_data_t **m)
 {
     message_data_t *ret = (message_data_t *) xmalloc(sizeof(message_data_t));
 
@@ -2929,7 +2929,7 @@ int msg_new(message_data_t **m)
     return 0;
 }
 
-void msg_free(message_data_t *m)
+static void msg_free(message_data_t *m)
 {
     if (m->data)
 	prot_free(m->data);
