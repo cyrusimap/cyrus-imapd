@@ -70,13 +70,13 @@
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 
-void usage(void)
+static void usage(void)
 {
     fprintf(stderr, "chk_cyrus [-C <altconfig>] partition\n");
     exit(-1);
 }
 
-const char *check_part = NULL; /* partition we are checking */
+static const char *check_part = NULL; /* partition we are checking */
 
 static int chkmbox(char *name,
 		   int matchlen __attribute__((unused)),
