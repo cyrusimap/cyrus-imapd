@@ -104,13 +104,11 @@ static struct namespace recon_namespace;
 /* forward declarations */
 static int do_examine(char *name, int matchlen, int maycreate, void *rock);
 static int do_quota(char *name, int matchlen, int maycreate, void *rock);
-void usage(void);
+static void usage(void);
 void shut_down(int code);
 
-int code = 0;
-
-unsigned wantuid = 0;
-unsigned wantvalue = 0;
+static unsigned wantuid = 0;
+static unsigned wantvalue = 0;
 
 int main(int argc, char **argv)
 {
@@ -186,10 +184,10 @@ int main(int argc, char **argv)
     mboxlist_close();
     mboxlist_done();
 
-    exit(code);
+    exit(0);
 }
 
-void usage(void)
+static void usage(void)
 {
     fprintf(stderr,
 	    "usage: mbexamine [-C <alt_config>] [-s seqnum] mailbox...\n"
@@ -198,7 +196,7 @@ void usage(void)
     exit(EC_USAGE);
 }
 
-void print_rec(const char *name, const struct buf *citem)
+static void print_rec(const char *name, const struct buf *citem)
 {
     printf(" %s>{%d}%.*s\n", name, citem->len, citem->len, citem->s); 
 }
