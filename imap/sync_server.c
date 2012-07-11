@@ -122,16 +122,16 @@ static sasl_ssf_t extprops_ssf = 0;
 static SSL *tls_conn;
 #endif /* HAVE_SSL */
 
-sasl_conn_t *sync_saslconn = NULL; /* the sasl connection context */
+static sasl_conn_t *sync_saslconn = NULL; /* the sasl connection context */
 
-char *sync_userid = 0;
-struct namespace sync_namespace;
-struct namespace *sync_namespacep = &sync_namespace;
-struct auth_state *sync_authstate = 0;
-int sync_userisadmin = 0;
-const char *sync_clienthost = "[local]";
-struct protstream *sync_out = NULL;
-struct protstream *sync_in = NULL;
+static char *sync_userid = 0;
+static struct namespace sync_namespace;
+static struct namespace *sync_namespacep = &sync_namespace;
+static struct auth_state *sync_authstate = 0;
+static int sync_userisadmin = 0;
+static const char *sync_clienthost = "[local]";
+static struct protstream *sync_out = NULL;
+static struct protstream *sync_in = NULL;
 static int sync_logfd = -1;
 static int sync_starttls_done = 0;
 static int sync_compress_done = 0;
@@ -150,7 +150,7 @@ static void cmd_set(const struct dlist *kl);
 static void cmd_apply(struct dlist *kl,
 		      struct sync_reserve_list *reserve_list);
 
-void usage(void);
+static void usage(void);
 void shut_down(int code) __attribute__ ((noreturn));
 
 extern int saslserver(sasl_conn_t *conn, const char *mech,
@@ -435,7 +435,7 @@ void service_abort(int error)
     shut_down(error);
 }
 
-void usage(void)
+static void usage(void)
 {
     prot_printf(sync_out, "* usage: sync_server [-C <alt_config>]\r\n");
     prot_flush(sync_out);
@@ -1036,7 +1036,7 @@ static void cmd_restart(struct sync_reserve_list **reserve_listp, int re_alloc)
 
 /* ====================================================================== */
 
-void reserve_folder(const char *part, const char *mboxname,
+static void reserve_folder(const char *part, const char *mboxname,
 		    struct sync_msgid_list *part_list)
 {
     struct mailbox *mailbox = NULL;
