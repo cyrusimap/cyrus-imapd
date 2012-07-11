@@ -88,7 +88,7 @@
 
 #define N(a) (sizeof(a) / sizeof(a[0]))
 
-struct cyrusdb {
+static struct cyrusdb {
     const char *name;
     const char **configptr;
     cyrusdb_archiver *archiver;
@@ -113,7 +113,7 @@ static int compdb(const void *v1, const void *v2)
     return ((char *)db1->archiver - (char *)db2->archiver);
 }
 
-void usage(void)
+static void usage(void)
 {
     fprintf(stderr, "ctl_cyrusdb [-C <altconfig>] -c\n");
     fprintf(stderr, "ctl_cyrusdb [-C <altconfig>] -r [-x]\n");
