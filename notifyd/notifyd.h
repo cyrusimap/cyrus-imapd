@@ -60,7 +60,7 @@ typedef struct {
 } notifymethod_t;
 
 /* array of supported notification methods */
-notifymethod_t methods[] = {
+static notifymethod_t methods[] = {
     { "null",	notify_null },		/* do nothing */
     { "log",	notify_log },		/* use syslog (for testing) */
     { "mailto",	notify_mailto },	/* send an email */
