@@ -422,7 +422,7 @@ static int yes(void)
  *    mupdate.
  */
 
-void do_dump(enum mboxop op, const char *part, int purge)
+static void do_dump(enum mboxop op, const char *part, int purge)
 {
     struct dumprock d;
     int ret;
@@ -562,7 +562,7 @@ void do_dump(enum mboxop op, const char *part, int purge)
     return;
 }
 
-void do_undump(void)
+static void do_undump(void)
 {
     int r = 0;
     char buf[16384];
@@ -701,7 +701,7 @@ struct found_list {
     struct found_data *data;
 };
 
-void add_path(struct found_list *found, int type,
+static void add_path(struct found_list *found, int type,
 	      const char *name, const char *part, const char *path)
 {
     struct found_data *new;
@@ -721,7 +721,7 @@ void add_path(struct found_list *found, int type,
     strcpy(new->path, path);
 }
 
-void add_part(struct found_list *found,
+static void add_part(struct found_list *found,
 	      const char *part, const char *path, int override)
 {
     int i;
@@ -744,7 +744,7 @@ void add_part(struct found_list *found,
     add_path(found, ROOT, "", part, path);
 }
 
-void get_partitions(const char *key, const char *value, void *rock)
+static void get_partitions(const char *key, const char *value, void *rock)
 {
     static int check_meta = -1;
     struct found_list *found = (struct found_list *) rock;
@@ -764,7 +764,7 @@ void get_partitions(const char *key, const char *value, void *rock)
     /* skip any other overflow strings */
 }
 
-int compar_mbox(const void *v1, const void *v2)
+static int compar_mbox(const void *v1, const void *v2)
 {
     struct found_data *d1 = (struct found_data *) v1;
     struct found_data *d2 = (struct found_data *) v2;
@@ -833,7 +833,7 @@ static int verify_cb(void *rockp,
     return 0;
 }
 
-void do_verify(void)
+static void do_verify(void)
 {
     struct found_list found;
     int i;
@@ -937,7 +937,7 @@ void do_verify(void)
     cyrusdb_foreach(mbdb, "", 0, NULL, &verify_cb, &found, NULL);
 }
 
-void usage(void)
+static void usage(void)
 {
     fprintf(stderr, "DUMP:\n");
     fprintf(stderr, "  ctl_mboxlist [-C <alt_config>] -d [-x] [-p partition] [-f filename]\n");
