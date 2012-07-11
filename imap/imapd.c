@@ -157,7 +157,7 @@ static int supports_referrals;
 /* end PROXY STUFF */
 
 /* per-user/session state */
-int imapd_timeout;
+static int imapd_timeout;
 struct protstream *imapd_out = NULL;
 struct protstream *imapd_in = NULL;
 static struct protgroup *protin = NULL;
