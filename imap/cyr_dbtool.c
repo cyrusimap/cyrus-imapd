@@ -74,11 +74,11 @@
 #include "xmalloc.h"
 
 #define STACKSIZE 64000
-char stack[STACKSIZE+1];
+static char stack[STACKSIZE+1];
 
-struct db *db = NULL;
+static struct db *db = NULL;
 
-int read_key_value(char **keyptr, size_t *keylen, char **valptr, size_t *vallen) {
+static int read_key_value(char **keyptr, size_t *keylen, char **valptr, size_t *vallen) {
   int c,res,inkey;
   res = 0;
   inkey = 1;
@@ -112,7 +112,7 @@ int read_key_value(char **keyptr, size_t *keylen, char **valptr, size_t *vallen)
   return res;
 }
 
-int printer_cb(void *rock __attribute__((unused)),
+static int printer_cb(void *rock __attribute__((unused)),
     const char *key, size_t keylen,
     const char *data, size_t datalen)
 {
