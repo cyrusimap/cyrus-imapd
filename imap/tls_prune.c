@@ -53,7 +53,7 @@
 #include "util.h"
 #include "xmalloc.h"
 
-void usage(void)
+static void usage(void)
 {
     fprintf(stderr, "tls_prune [-C <altconfig>]\n");
     exit(-1);
