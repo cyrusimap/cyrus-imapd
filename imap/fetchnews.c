@@ -76,7 +76,7 @@ static struct db *newsrc_db = NULL;
 static int newsrc_dbopen = 0;
 
 /* must be called after cyrus_init */
-int newsrc_init(const char *fname, int myflags __attribute__((unused)))
+static int newsrc_init(const char *fname, int myflags __attribute__((unused)))
 {
     char buf[1024];
     int r = 0;
@@ -109,7 +109,7 @@ int newsrc_init(const char *fname, int myflags __attribute__((unused)))
     return r;
 }
 
-int newsrc_done(void)
+static int newsrc_done(void)
 {
     int r = 0;
 
@@ -125,7 +125,7 @@ int newsrc_done(void)
     return r;
 }
 
-void usage(void)
+static void usage(void)
 {
     fprintf(stderr,
 	    "fetchnews [-C <altconfig>] [-s <server>] [-n] [-y] [-w <wildmat>] [-f <tstamp file>]\n"
@@ -170,7 +170,7 @@ int init_net(const char *host, char *port,
     return sock;
 }
 
-int fetch(char *msgid, int bymsgid,
+static int fetch(char *msgid, int bymsgid,
 	  struct protstream *pin, struct protstream *pout,
 	  struct protstream *sin, struct protstream *sout,
 	  int *rejected, int *accepted, int *failed)
