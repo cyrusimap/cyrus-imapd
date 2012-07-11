@@ -721,7 +721,7 @@ static int send_response(void *ac,
 }
 
 /* vacation support */
-sieve_vacation_t vacation = {
+static sieve_vacation_t vacation = {
     1 * DAY2SEC,		/* min response */
     31 * DAY2SEC,		/* max response */
     &autorespond,		/* autorespond() */
