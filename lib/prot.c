@@ -1277,6 +1277,9 @@ int prot_printf(struct protstream *s, const char *fmt, ...)
 	    prot_write(s, buf, strlen(buf));
 	    break;
 
+	/* according to linux 'man 3 printf' this is supposed to be
+	 * of type "ptrdiff_t", not "size_t" - but don't want to break
+	 * running code! */
 	case 't': {
 	    size_t tu;
 	    ssize_t td;
@@ -1309,6 +1312,29 @@ int prot_printf(struct protstream *s, const char *fmt, ...)
 	    i = va_arg(pvar, int);
 	    (void)prot_putc(i, s);
 	    break;
+
+	case 'z': {
+	    size_t zu;
+	    ssize_t zd;
+
+	    switch (*++percent) {
+	    case 'u':
+		zu = va_arg(pvar, size_t);
+		snprintf(buf, sizeof(buf), "%zu", zu);
+		prot_write(s, buf, strlen(buf));
+		break;
+
+	    case 'd':
+		zd = va_arg(pvar, ssize_t);
+		snprintf(buf, sizeof(buf), "%zd", zd);
+		prot_write(s, buf, strlen(buf));
+		break;
+
+	    default:
+		abort();
+	    }
+	    break;
+	}
 
 	default:
 	    abort();
