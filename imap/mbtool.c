@@ -105,7 +105,7 @@ static struct namespace recon_namespace;
 /* forward declarations */
 static int do_cmd(char *name, int matchlen, int maycreate, void *rock);
 
-void usage(void);
+static void usage(void);
 void shut_down(int code);
 
 enum {
@@ -174,7 +174,7 @@ int main(int argc, char **argv)
     exit(0);
 }
 
-void usage(void)
+static void usage(void)
 {
     fprintf(stderr,
 	    "usage: mbtool [-C <alt_config>] mailbox...\n");
