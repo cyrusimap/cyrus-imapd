@@ -79,10 +79,10 @@
 /* current namespace */
 static struct namespace unex_namespace;
 
-int verbose = 0;
-int unsetdeleted = 0;
+static int verbose = 0;
+static int unsetdeleted = 0;
 
-void usage(void)
+static void usage(void)
 {
     fprintf(stderr,
 	    "unexpunge [-C <altconfig>] -l <mailbox>\n"
@@ -92,7 +92,7 @@ void usage(void)
     exit(-1);
 }
 
-int compare_uid(const void *a, const void *b)
+static int compare_uid(const void *a, const void *b)
 {
     return *((unsigned long *) a) - *((unsigned long *) b);
 }
@@ -105,7 +105,7 @@ enum {
     MODE_UID
 };
 
-void list_expunged(const char *mboxname)
+static void list_expunged(const char *mboxname)
 {
     struct mailbox *mailbox = NULL;
     struct index_record *records = NULL;
@@ -178,7 +178,7 @@ void list_expunged(const char *mboxname)
     mailbox_close(&mailbox);
 }
 
-int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *uids,
+static int restore_expunged(struct mailbox *mailbox, int mode, unsigned long *uids,
 		     unsigned nuids, time_t time_since, unsigned *numrestored,
 		     const char *mboxname)
 {
