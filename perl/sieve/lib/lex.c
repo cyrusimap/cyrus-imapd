@@ -60,7 +60,7 @@
 #include "codes.h"
 
 /* current state the lexer is in */
-int lexer_state = LEXER_STATE_NORMAL;
+static int lexer_state = LEXER_STATE_NORMAL;
 
 #define ACAP_MAX_QSTR_LEN 4096
 
