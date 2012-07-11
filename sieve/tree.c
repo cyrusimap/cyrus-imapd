@@ -103,7 +103,7 @@ commandlist_t *new_if(test_t *t, commandlist_t *y, commandlist_t *n)
     return p;
 }
 
-void free_test(test_t *t);
+static void free_test(test_t *t);
 
 static void free_tl(testlist_t *tl)
 {
@@ -119,7 +119,7 @@ static void free_tl(testlist_t *tl)
     }
 }
 
-void free_test(test_t *t)
+static void free_test(test_t *t)
 {
     if (t == NULL) return;
 
