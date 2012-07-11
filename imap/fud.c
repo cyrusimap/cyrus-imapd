@@ -91,21 +91,19 @@ static struct namespace fud_namespace;
  * only if we're not on a frontend, so we won't flat-out require it here */
 const int config_need_data = 0;
 
-int handle_request(const char *who, const char *name, 
+static int handle_request(const char *who, const char *name,
 		   struct sockaddr_storage sfrom, socklen_t sfromsiz);
 
-void send_reply(struct sockaddr_storage sfrom, socklen_t sfromsiz, int status,
+static void send_reply(struct sockaddr_storage sfrom, socklen_t sfromsiz, int status,
 		const char *user, const char *mbox,
 		int numrecent, time_t lastread, time_t lastarrived);
 
-int soc = 0; /* inetd (master) has handed us the port as stdin */
-
-char who[16];
+static int soc = 0; /* inetd (master) has handed us the port as stdin */
 
 #define MAXLOGNAME 16		/* should find out for real */
 #define MAXDOMNAME 20		/* should find out for real */
 
-int begin_handling(void)
+static int begin_handling(void)
 {
         struct sockaddr_storage sfrom;
         socklen_t sfromsiz = sizeof(sfrom);
@@ -239,7 +237,7 @@ static int setsigalrm(int enable)
 
 
 /* Send a proxy request to the backend, send their reply to sfrom */
-int do_proxy_request(const char *who, const char *name,
+static int do_proxy_request(const char *who, const char *name,
 		     const char *backend_host,
 		     struct sockaddr_storage sfrom, socklen_t sfromsiz) 
 {
@@ -345,7 +343,7 @@ int do_proxy_request(const char *who, const char *name,
     return rc;
 }
 
-int handle_request(const char *who, const char *name,
+static int handle_request(const char *who, const char *name,
 		   struct sockaddr_storage sfrom, socklen_t sfromsiz)
 {
     int r;
@@ -458,7 +456,7 @@ int handle_request(const char *who, const char *name,
     return 0;
 }
 
-void
+static void
 send_reply(struct sockaddr_storage sfrom, socklen_t sfromsiz,
 	   int status, const char *user, const char *mbox,
 	   int numrecent, time_t lastread, time_t lastarrived)
