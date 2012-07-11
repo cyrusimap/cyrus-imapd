@@ -65,7 +65,7 @@
 #include "util.h"
 #include "xmalloc.h"
 
-void usage(void)
+static void usage(void)
 {
     fprintf(stderr,
 	    "ctl_deliver [-C <altconfig>] -d [-f <dbfile>]\n");
