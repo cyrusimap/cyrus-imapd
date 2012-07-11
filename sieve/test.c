@@ -75,7 +75,7 @@
 #include "hash.h"
 #include "times.h"
 
-char vacation_answer;
+static char vacation_answer;
 
 typedef struct {
     char *name;
@@ -493,7 +493,7 @@ static int send_response(void *ac, void *ic, void *sc __attribute__((unused)),
     return (*force_fail ? SIEVE_FAIL : SIEVE_OK);
 }
 
-sieve_vacation_t vacation = {
+static sieve_vacation_t vacation = {
     0,				/* min response */
     0,				/* max response */
     &autorespond,		/* autorespond() */
