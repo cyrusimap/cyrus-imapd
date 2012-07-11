@@ -130,29 +130,39 @@ sub set_next_uid
     $self->{next_uid} = 0+$uid;
 }
 
-sub _make_random_address
+sub make_random_address
 {
-    my ($self) = @_;
+    my (%params) = @_;
 
     my $i = int(rand(scalar(@girls_forenames)));
-    my $forename = $girls_forenames[$i];
+    my $forename = delete $params{forename};
+    $forename = $girls_forenames[$i] if !defined $forename;
 
     $i = int(rand(scalar(@surnames)));
-    my $surname = $surnames[$i];
+    my $surname = delete $params{surname};
+    $surname = $surnames[$i] if !defined $surname;
 
     my $digest = md5_hex("$forename $surname");
 
     $i = oct("0x" . substr($digest,0,4)) % scalar(@domains);
-    my $domain = $domains[$i];
+    my $domain = delete $params{domain};
+    $domain = $domains[$i] if !defined $domain;
 
     $i = oct("0x" . substr($digest,4,4)) % 26;
-    my $initial = substr("ABCDEFGHIJKLMNOPQRSTUVWXYZ", $i, 1);
+    my $initial = delete $params{initial};
+    $initial = substr("ABCDEFGHIJKLMNOPQRSTUVWXYZ", $i, 1)
+	if !defined $initial;
 
     $i = oct("0x" . substr($digest,8,4)) % scalar(@localpart_styles);
-    my $localpart = $localpart_styles[$i]->($forename, $initial, $surname);
+    my $localpart = delete $params{localpart};
+    $localpart = $localpart_styles[$i]->($forename, $initial, $surname)
+	if !defined $localpart;
+
+    my $extra = delete $params{extra};
+    $extra = '' if !defined $extra;
 
     return Cassandane::Address->new(
-	name => "$forename $initial. $surname",
+	name => "$forename $initial. $surname$extra",
 	localpart => $localpart,
 	domain => $domain
     );
@@ -161,7 +171,7 @@ sub _make_random_address
 sub _generate_from
 {
     my ($self, $params) = @_;
-    return $self->_make_random_address();
+    return make_random_address();
 }
 
 sub _generate_to
