@@ -160,15 +160,15 @@ static int supports_referrals;
 int imapd_timeout;
 struct protstream *imapd_out = NULL;
 struct protstream *imapd_in = NULL;
-struct protgroup *protin = NULL;
+static struct protgroup *protin = NULL;
 static const char *imapd_clienthost = "[local]";
 static int imapd_logfd = -1;
 char *imapd_userid = NULL, *proxy_userid = NULL;
 static char *imapd_magicplus = NULL;
-struct auth_state *imapd_authstate = 0;
+static struct auth_state *imapd_authstate = 0;
 static int imapd_userisadmin = 0;
 static int imapd_userisproxyadmin = 0;
-unsigned imapd_client_capa = 0;
+static unsigned imapd_client_capa = 0;
 static sasl_conn_t *imapd_saslconn; /* the sasl connection context */
 static int imapd_starttls_done = 0; /* have we done a successful starttls? */
 static void *imapd_tls_comp = NULL; /* TLS compression method, if any */
@@ -197,7 +197,7 @@ static struct proxy_context imapd_proxyctx = {
 };
 
 /* current sub-user state */
-struct index_state *imapd_index;
+static struct index_state *imapd_index;
 
 /* current namespace */
 struct namespace imapd_namespace;
@@ -279,7 +279,7 @@ struct capa_struct {
     int mask;
 };
 
-struct capa_struct base_capabilities[] = {
+static struct capa_struct base_capabilities[] = {
 /* pre-auth capabilities */
     { "IMAP4rev1",             3 },
     { "LITERAL+",              3 },
@@ -342,61 +342,61 @@ static void motd_file(void);
 void shut_down(int code);
 void fatal(const char *s, int code);
 
-void cmdloop(void);
-void cmd_login(char *tag, char *user);
-void cmd_authenticate(char *tag, char *authtype, char *resp);
-void cmd_noop(char *tag, char *cmd);
-void capa_response(int flags);
-void cmd_capability(char *tag);
-void cmd_append(char *tag, char *name, const char *cur_name);
-void cmd_select(char *tag, char *cmd, char *name);
-void cmd_close(char *tag, char *cmd);
+static void cmdloop(void);
+static void cmd_login(char *tag, char *user);
+static void cmd_authenticate(char *tag, char *authtype, char *resp);
+static void cmd_noop(char *tag, char *cmd);
+static void capa_response(int flags);
+static void cmd_capability(char *tag);
+static void cmd_append(char *tag, char *name, const char *cur_name);
+static void cmd_select(char *tag, char *cmd, char *name);
+static void cmd_close(char *tag, char *cmd);
 static int parse_fetch_args(const char *tag, const char *cmd,
 			    int allow_vanished,
 			    struct fetchargs *fa);
-void cmd_fetch(char *tag, char *sequence, int usinguid);
-void cmd_store(char *tag, char *sequence, int usinguid);
-void cmd_search(char *tag, int usinguid);
-void cmd_sort(char *tag, int usinguid);
-void cmd_thread(char *tag, int usinguid);
-void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int ismove);
-void cmd_expunge(char *tag, char *sequence);
-void cmd_create(char *tag, char *name, struct dlist *extargs, int localonly);
-void cmd_delete(char *tag, char *name, int localonly, int force);
-void cmd_dump(char *tag, char *name, int uid_start);
-void cmd_undump(char *tag, char *name);
-void cmd_xfer(const char *tag, const char *name, 
+static void cmd_fetch(char *tag, char *sequence, int usinguid);
+static void cmd_store(char *tag, char *sequence, int usinguid);
+static void cmd_search(char *tag, int usinguid);
+static void cmd_sort(char *tag, int usinguid);
+static void cmd_thread(char *tag, int usinguid);
+static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int ismove);
+static void cmd_expunge(char *tag, char *sequence);
+static void cmd_create(char *tag, char *name, struct dlist *extargs, int localonly);
+static void cmd_delete(char *tag, char *name, int localonly, int force);
+static void cmd_dump(char *tag, char *name, int uid_start);
+static void cmd_undump(char *tag, char *name);
+static void cmd_xfer(const char *tag, const char *name,
 	      const char *toserver, const char *topart);
-void cmd_rename(char *tag, char *oldname, char *newname, char *partition);
-void cmd_reconstruct(const char *tag, const char *name, int recursive);
-void getlistargs(char *tag, struct listargs *listargs);
-void cmd_list(char *tag, struct listargs *listargs);
-void cmd_changesub(char *tag, char *namespace, char *name, int add);
-void cmd_getacl(const char *tag, const char *name);
-void cmd_listrights(char *tag, char *name, char *identifier);
-void cmd_myrights(const char *tag, const char *name);
-void cmd_setacl(char *tag, const char *name,
+static void cmd_rename(char *tag, char *oldname, char *newname, char *partition);
+static void cmd_reconstruct(const char *tag, const char *name, int recursive);
+static void getlistargs(char *tag, struct listargs *listargs);
+static void cmd_list(char *tag, struct listargs *listargs);
+static void cmd_changesub(char *tag, char *namespace, char *name, int add);
+static void cmd_getacl(const char *tag, const char *name);
+static void cmd_listrights(char *tag, char *name, char *identifier);
+static void cmd_myrights(const char *tag, const char *name);
+static void cmd_setacl(char *tag, const char *name,
 		const char *identifier, const char *rights);
-void cmd_getquota(const char *tag, const char *name);
-void cmd_getquotaroot(const char *tag, const char *name);
-void cmd_setquota(const char *tag, const char *quotaroot);
-void cmd_status(char *tag, char *name);
-void cmd_namespace(char* tag);
-void cmd_mupdatepush(char *tag, char *name);
-void cmd_id(char* tag);
+static void cmd_getquota(const char *tag, const char *name);
+static void cmd_getquotaroot(const char *tag, const char *name);
+static void cmd_setquota(const char *tag, const char *quotaroot);
+static void cmd_status(char *tag, char *name);
+static void cmd_namespace(char* tag);
+static void cmd_mupdatepush(char *tag, char *name);
+static void cmd_id(char* tag);
 
-void cmd_idle(char* tag);
+static void cmd_idle(char* tag);
 
-void cmd_starttls(char *tag, int imaps);
+static void cmd_starttls(char *tag, int imaps);
 
 #ifdef HAVE_SSL
-void cmd_urlfetch(char *tag);
-void cmd_genurlauth(char *tag);
-void cmd_resetkey(char *tag, char *mailbox, char *mechanism);
+static void cmd_urlfetch(char *tag);
+static void cmd_genurlauth(char *tag);
+static void cmd_resetkey(char *tag, char *mailbox, char *mechanism);
 #endif
 
 #ifdef HAVE_ZLIB
-void cmd_compress(char *tag, char *alg);
+static void cmd_compress(char *tag, char *alg);
 #endif
 
 #ifdef ENABLE_X_NETSCAPE_HACK
@@ -410,9 +410,9 @@ static void cmd_setmetadata(const char* tag, char *mboxpat);
 static void cmd_xrunannotator(const char *tag, const char *sequence,
 			      int usinguid);
 
-void cmd_enable(char* tag);
+static void cmd_enable(char* tag);
 
-int parsecreateargs(struct dlist **extargs);
+static int parsecreateargs(struct dlist **extargs);
 
 static int parse_annotate_fetch_data(const char *tag,
 				     int permessage_flag,
@@ -427,27 +427,27 @@ static int parse_annotate_store_data(const char *tag,
 static int parse_metadata_store_data(const char *tag,
 				     struct entryattlist **entryatts);
 
-int getlistselopts(char *tag, struct listargs *args);
-int getlistretopts(char *tag, struct listargs *args);
+static int getlistselopts(char *tag, struct listargs *args);
+static int getlistretopts(char *tag, struct listargs *args);
 
-int getsearchreturnopts(char *tag, struct searchargs *searchargs);
-int getsearchprogram(char *tag, struct searchargs *searchargs,
+static int getsearchreturnopts(char *tag, struct searchargs *searchargs);
+static int getsearchprogram(char *tag, struct searchargs *searchargs,
 			int *charsetp, int is_search_cmd);
-int getsearchcriteria(char *tag, struct searchargs *searchargs,
+static int getsearchcriteria(char *tag, struct searchargs *searchargs,
 			 int *charsetp, int *searchstatep);
-int getsearchdate(time_t *start, time_t *end);
-int getsortcriteria(char *tag, struct sortcrit **sortcrit);
+static int getsearchdate(time_t *start, time_t *end);
+static int getsortcriteria(char *tag, struct sortcrit **sortcrit);
 static char *sortcrit_as_string(const struct sortcrit *sortcrit);
-int getdatetime(time_t *date);
+static int getdatetime(time_t *date);
 
-void appendfieldlist(struct fieldlist **l, char *section,
+static void appendfieldlist(struct fieldlist **l, char *section,
 		     strarray_t *fields, char *trail,
 		     void *d, size_t size);
-void freefieldlist(struct fieldlist *l);
+static void freefieldlist(struct fieldlist *l);
 void freestrlist(struct strlist *l);
-void appendsearchargs(struct searchargs *s, struct searchargs *s1,
+static void appendsearchargs(struct searchargs *s, struct searchargs *s1,
 			 struct searchargs *s2);
-void freesearchargs(struct searchargs *s);
+static void freesearchargs(struct searchargs *s);
 static void freesortcrit(struct sortcrit *s);
 
 static int set_haschildren(char *name, int matchlen, int maycreate,
@@ -615,7 +615,7 @@ static void imapd_refer(const char *tag,
  * returns IMAP_MAILBOX_MOVED if we referred the client */
 /* ext_name is the external name of the mailbox */
 /* you can avoid referring the client by setting tag or ext_name to NULL. */
-int mlookup(const char *tag, const char *ext_name,
+static int mlookup(const char *tag, const char *ext_name,
 	    const char *name, struct mboxlist_entry **mbentryptr)
 {
     int r;
@@ -1125,7 +1125,7 @@ static void imapd_check(struct backend *be, int usinguid)
 /*
  * Top-level command loop parsing
  */
-void cmdloop(void)
+static void cmdloop(void)
 {
     int c;
     int usinguid, havepartition, havenamespace, recursive;
@@ -2270,7 +2270,7 @@ static int checklimits(const char *tag)
 /*
  * Perform a LOGIN command
  */
-void cmd_login(char *tag, char *user)
+static void cmd_login(char *tag, char *user)
 {
     char userbuf[MAX_MAILBOX_BUFFER];
     char replybuf[MAX_MAILBOX_BUFFER];
@@ -2440,7 +2440,7 @@ void cmd_login(char *tag, char *user)
 /*
  * Perform an AUTHENTICATE command
  */
-void cmd_authenticate(char *tag, char *authtype, char *resp)
+static void cmd_authenticate(char *tag, char *authtype, char *resp)
 {
     int sasl_result;
 
@@ -2592,7 +2592,7 @@ void cmd_authenticate(char *tag, char *authtype, char *resp)
 /*
  * Perform a NOOP command
  */
-void cmd_noop(char *tag, char *cmd)
+static void cmd_noop(char *tag, char *cmd)
 {
     if (backend_current) {
 	/* remote mailbox */
@@ -2618,7 +2618,7 @@ void cmd_noop(char *tag, char *cmd)
  * we only allow MAXIDFAILED consecutive failed IDs from a given client.
  * we only record MAXIDLOG ID responses from a given client.
  */
-void cmd_id(char *tag)
+static void cmd_id(char *tag)
 {
     static int did_id = 0;
     static int failed_id = 0;
@@ -2779,7 +2779,7 @@ void cmd_id(char *tag)
 /*
  * Perform an IDLE command
  */
-void cmd_idle(char *tag)
+static void cmd_idle(char *tag)
 {
     int c = EOF;
     int flags;
@@ -2921,7 +2921,7 @@ void cmd_idle(char *tag)
 }
 
 
-void capa_response(int flags)
+static void capa_response(int flags)
 {
     const char *sasllist; /* the list of SASL mechanisms */
     int mechcount;
@@ -2988,7 +2988,7 @@ void capa_response(int flags)
 /*
  * Perform a CAPABILITY command
  */
-void cmd_capability(char *tag)
+static void cmd_capability(char *tag)
 {
     imapd_check(NULL, 0);
 
@@ -3313,7 +3313,7 @@ static int append_catenate(FILE *f, const char *cur_name, unsigned *totalsize,
  * in case we have to resolve relative URLs
  */
 #define FLAGGROW 10
-void cmd_append(char *tag, char *name, const char *cur_name)
+static void cmd_append(char *tag, char *name, const char *cur_name)
 {
     int c;
     static struct buf arg;
@@ -3709,7 +3709,7 @@ static void warn_about_quota(const char *quotaroot)
 /*
  * Perform a SELECT/EXAMINE/BBOARD command
  */
-void cmd_select(char *tag, char *cmd, char *name)
+static void cmd_select(char *tag, char *cmd, char *name)
 {
     int c;
     char mailboxname[MAX_MAILBOX_BUFFER];
@@ -3995,7 +3995,7 @@ void cmd_select(char *tag, char *cmd, char *name)
 /*
  * Perform a CLOSE/UNSELECT command
  */
-void cmd_close(char *tag, char *cmd)
+static void cmd_close(char *tag, char *cmd)
 {
     /* unregister the selected mailbox */
     proc_register("imapd", imapd_clienthost, imapd_userid, NULL);
@@ -4047,7 +4047,7 @@ static void section_list_append(struct section **l,
     (*tail)->next = NULL;
 }
 
-void section_list_free(struct section *l)
+static void section_list_free(struct section *l)
 {
     struct section *n;
 
@@ -4566,7 +4566,7 @@ static void fetchargs_fini (struct fetchargs *fa)
  * The command has been parsed up to and including
  * the sequence
  */
-void cmd_fetch(char *tag, char *sequence, int usinguid)
+static void cmd_fetch(char *tag, char *sequence, int usinguid)
 {
     const char *cmd = usinguid ? "UID Fetch" : "Fetch";
     struct fetchargs fetchargs;
@@ -4624,7 +4624,7 @@ void cmd_fetch(char *tag, char *sequence, int usinguid)
  * The command has been parsed up to and including
  * the sequence
  */
-void cmd_store(char *tag, char *sequence, int usinguid)
+static void cmd_store(char *tag, char *sequence, int usinguid)
 {
     const char *cmd = usinguid ? "UID Store" : "Store";
     struct storeargs storeargs;
@@ -4852,7 +4852,7 @@ notflagsdammit:
     free(modified);
 }
 
-void cmd_search(char *tag, int usinguid)
+static void cmd_search(char *tag, int usinguid)
 {
     int c;
     int charset = 0;
@@ -4908,7 +4908,7 @@ void cmd_search(char *tag, int usinguid)
 /*
  * Perform a SORT/UID SORT command
  */    
-void cmd_sort(char *tag, int usinguid)
+static void cmd_sort(char *tag, int usinguid)
 {
     int c;
     struct sortcrit *sortcrit = NULL;
@@ -4993,7 +4993,7 @@ error:
 /*
  * Perform a THREAD/UID THREAD command
  */    
-void cmd_thread(char *tag, int usinguid)
+static void cmd_thread(char *tag, int usinguid)
 {
     static struct buf arg;
     int c;
@@ -5080,7 +5080,7 @@ void cmd_thread(char *tag, int usinguid)
 /*
  * Perform a COPY/UID COPY command
  */    
-void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int ismove)
+static void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int ismove)
 {
     int r, myrights;
     char mailboxname[MAX_MAILBOX_BUFFER];
@@ -5241,7 +5241,7 @@ void cmd_copy(char *tag, char *sequence, char *name, int usinguid, int ismove)
  * Perform an EXPUNGE command
  * sequence == NULL if this isn't a UID EXPUNGE
  */
-void cmd_expunge(char *tag, char *sequence)
+static void cmd_expunge(char *tag, char *sequence)
 {
     modseq_t old;
     modseq_t new;
@@ -5286,7 +5286,7 @@ void cmd_expunge(char *tag, char *sequence)
 /*
  * Perform a CREATE command
  */
-void cmd_create(char *tag, char *name, struct dlist *extargs, int localonly)
+static void cmd_create(char *tag, char *name, struct dlist *extargs, int localonly)
 {
     int r = 0;
     char mailboxname[MAX_MAILBOX_BUFFER];
@@ -5501,7 +5501,7 @@ static int delmbox(char *name,
 /*
  * Perform a DELETE command
  */
-void cmd_delete(char *tag, char *name, int localonly, int force)
+static void cmd_delete(char *tag, char *name, int localonly, int force)
 {
     int r;
     char mailboxname[MAX_MAILBOX_BUFFER];
@@ -5714,7 +5714,7 @@ static int renmbox(char *name,
 /*
  * Perform a RENAME command
  */
-void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
+static void cmd_rename(char *tag, char *oldname, char *newname, char *partition)
 {
     int r = 0;
     char oldmailboxname[MAX_MAILBOX_BUFFER];
@@ -6065,7 +6065,7 @@ done:
 /*
  * Perform a RECONSTRUCT command
  */
-void cmd_reconstruct(const char *tag, const char *name, int recursive)
+static void cmd_reconstruct(const char *tag, const char *name, int recursive)
 {
     int r = 0;
     char mailboxname[MAX_MAILBOX_BUFFER];
@@ -6216,7 +6216,7 @@ static int list_callback_calls;
 /*
  * Parse LIST command arguments.
  */
-void getlistargs(char *tag, struct listargs *listargs)
+static void getlistargs(char *tag, struct listargs *listargs)
 {
     static struct buf reference, buf;
     int c;
@@ -6319,7 +6319,7 @@ void getlistargs(char *tag, struct listargs *listargs)
 /*
  * Perform a LIST, LSUB, RLIST or RLSUB command
  */
-void cmd_list(char *tag, struct listargs *listargs)
+static void cmd_list(char *tag, struct listargs *listargs)
 {
     clock_t start = clock();
     char mytime[100];
@@ -6369,7 +6369,7 @@ void cmd_list(char *tag, struct listargs *listargs)
  * Perform a SUBSCRIBE (add is nonzero) or
  * UNSUBSCRIBE (add is zero) command
  */
-void cmd_changesub(char *tag, char *namespace, char *name, int add)
+static void cmd_changesub(char *tag, char *namespace, char *name, int add)
 {
     const char *cmd = add ? "Subscribe" : "Unsubscribe";
     int r = 0;
@@ -6453,7 +6453,7 @@ void cmd_changesub(char *tag, char *namespace, char *name, int add)
 /*
  * Perform a GETACL command
  */
-void cmd_getacl(const char *tag, const char *name)
+static void cmd_getacl(const char *tag, const char *name)
 {
     char mailboxname[MAX_MAILBOX_BUFFER];
     int r, access;
@@ -6520,7 +6520,7 @@ void cmd_getacl(const char *tag, const char *name)
 /*
  * Perform a LISTRIGHTS command
  */
-void cmd_listrights(char *tag, char *name, char *identifier)
+static void cmd_listrights(char *tag, char *name, char *identifier)
 {
     char mailboxname[MAX_MAILBOX_BUFFER];
     int r, rights;
@@ -6614,7 +6614,7 @@ void cmd_listrights(char *tag, char *name, char *identifier)
 /*
  * Perform a MYRIGHTS command
  */
-void cmd_myrights(const char *tag, const char *name)
+static void cmd_myrights(const char *tag, const char *name)
 {
     char mailboxname[MAX_MAILBOX_BUFFER];
     int r, rights = 0;
@@ -6665,7 +6665,7 @@ void cmd_myrights(const char *tag, const char *name)
 /*
  * Perform a SETACL command
  */
-void cmd_setacl(char *tag, const char *name,
+static void cmd_setacl(char *tag, const char *name,
 		const char *identifier, const char *rights)
 {
     int r;
@@ -6825,7 +6825,7 @@ static int quota_cb(char *name, int matchlen __attribute__((unused)),
 /*
  * Perform a GETQUOTA command
  */
-void cmd_getquota(const char *tag, const char *name)
+static void cmd_getquota(const char *tag, const char *name)
 {
     int r;
     char quotarootbuf[MAX_MAILBOX_BUFFER];
@@ -6906,7 +6906,7 @@ void cmd_getquota(const char *tag, const char *name)
 /*
  * Perform a GETQUOTAROOT command
  */
-void cmd_getquotaroot(const char *tag, const char *name)
+static void cmd_getquotaroot(const char *tag, const char *name)
 {
     char mailboxname[MAX_MAILBOX_BUFFER];
     struct mboxlist_entry *mbentry = NULL;
@@ -7140,7 +7140,7 @@ out:
  * be fixed.
  */
 /* imaps - whether this is an imaps transaction or not */
-void cmd_starttls(char *tag, int imaps)
+static void cmd_starttls(char *tag, int imaps)
 {
     int result;
     int *layerp;
@@ -7349,7 +7349,7 @@ static int imapd_statusdata(const char *mailboxname, unsigned statusitems,
  * Parse and perform a STATUS command
  * The command has been parsed up to the attribute list
  */
-void cmd_status(char *tag, char *name)
+static void cmd_status(char *tag, char *name)
 {
     int c;
     unsigned statusitems = 0;
@@ -7506,7 +7506,7 @@ static int namespacedata(char *name,
  * Print out a response to the NAMESPACE command defined by
  * RFC 2342.
  */
-void cmd_namespace(char* tag)
+static void cmd_namespace(char* tag)
 {
     int sawone[3] = {0, 0, 0};
     char* pattern;
@@ -7564,7 +7564,7 @@ void cmd_namespace(char* tag)
 		error_message(IMAP_OK_COMPLETED));
 }
 
-int parsecreateargs(struct dlist **extargs)
+static int parsecreateargs(struct dlist **extargs)
 {
     int c;
     static struct buf arg, val;
@@ -8846,7 +8846,7 @@ int getsearchreturnopts(char *tag, struct searchargs *searchargs)
 /*
  * Parse a search program
  */
-int getsearchprogram(char *tag, struct searchargs *searchargs,
+static int getsearchprogram(char *tag, struct searchargs *searchargs,
 		     int *charsetp, int is_search_cmd)
 {
     int c;
@@ -8864,7 +8864,7 @@ int getsearchprogram(char *tag, struct searchargs *searchargs,
 /*
  * Parse a search criteria
  */
-int getsearchcriteria(char *tag, struct searchargs *searchargs,
+static int getsearchcriteria(char *tag, struct searchargs *searchargs,
 		      int *charsetp, int *searchstatep)
 {
     static struct buf criteria, arg;
@@ -9342,7 +9342,7 @@ int getsearchcriteria(char *tag, struct searchargs *searchargs,
     return EOF;
 }
 
-void cmd_dump(char *tag, char *name, int uid_start) 
+static void cmd_dump(char *tag, char *name, int uid_start)
 {
     int r = 0;
     char mailboxname[MAX_MAILBOX_BUFFER];
@@ -9370,7 +9370,7 @@ void cmd_dump(char *tag, char *name, int uid_start)
     if (mailbox) mailbox_close(&mailbox);
 }
 
-void cmd_undump(char *tag, char *name) 
+static void cmd_undump(char *tag, char *name)
 {
     int r = 0;
     char mailboxname[MAX_MAILBOX_BUFFER];
@@ -10151,7 +10151,7 @@ static int xfer_addsubmailboxes(struct xfer_header *xfer, const char *mboxname)
 }
 
 
-void cmd_xfer(const char *tag, const char *name,
+static void cmd_xfer(const char *tag, const char *name,
 	      const char *toserver, const char *topart)
 {
     int r = 0;
@@ -10279,7 +10279,7 @@ done:
  * The time_t's pointed to by 'start' and 'end' are set to the
  * times of the start and end of the parsed date.
  */
-int getsearchdate(time_t *start, time_t *end)
+static int getsearchdate(time_t *start, time_t *end)
 {
     int c;
     struct tm tm;
@@ -10368,7 +10368,7 @@ int getsearchdate(time_t *start, time_t *end)
 /*
  * Parse sort criteria
  */
-int getsortcriteria(char *tag, struct sortcrit **sortcrit)
+static int getsortcriteria(char *tag, struct sortcrit **sortcrit)
 {
     int c;
     static struct buf criteria;
@@ -10523,7 +10523,7 @@ static char *sortcrit_as_string(const struct sortcrit *sortcrit)
  * Parse LIST selection options.
  * The command has been parsed up to and including the opening '('.
  */
-int getlistselopts(char *tag, struct listargs *args)
+static int getlistselopts(char *tag, struct listargs *args)
 {
     int c;
     static struct buf buf;
@@ -10584,7 +10584,7 @@ int getlistselopts(char *tag, struct listargs *args)
  * Parse LIST return options.
  * The command has been parsed up to and including the ' ' before RETURN.
  */
-int getlistretopts(char *tag, struct listargs *args)
+static int getlistretopts(char *tag, struct listargs *args)
 {
     static struct buf buf;
     int c;
@@ -10667,7 +10667,7 @@ int getlistretopts(char *tag, struct listargs *args)
  * Returns: the next character read from imapd_in, or
  *	    or EOF on error.
  */
-int getdatetime(time_t *date)
+static int getdatetime(time_t *date)
 {
     int c;
     int r;
@@ -10699,7 +10699,7 @@ int getdatetime(time_t *date)
 /*
  * Append 'section', 'fields', 'trail' to the fieldlist 'l'.
  */
-void appendfieldlist(struct fieldlist **l, char *section,
+static void appendfieldlist(struct fieldlist **l, char *section,
 		     strarray_t *fields, char *trail,
 		     void *d, size_t size)
 {
@@ -10724,7 +10724,7 @@ void appendfieldlist(struct fieldlist **l, char *section,
 /*
  * Free the fieldlist 'l'
  */
-void freefieldlist(struct fieldlist *l)
+static void freefieldlist(struct fieldlist *l)
 {
     struct fieldlist *n;
 
@@ -10742,7 +10742,7 @@ void freefieldlist(struct fieldlist *l)
 /*
  * Append the searchargs 's1' and 's2' to the sublist of 's'
  */
-void appendsearchargs(struct searchargs *s,
+static void appendsearchargs(struct searchargs *s,
 		      struct searchargs *s1,
 		      struct searchargs *s2)
 {
@@ -10760,7 +10760,7 @@ void appendsearchargs(struct searchargs *s,
 /*
  * Free the searchargs 's'
  */
-void freesearchargs(struct searchargs *s)
+static void freesearchargs(struct searchargs *s)
 {
     struct searchsub *sub, *n;
     struct searchannot *sa;
@@ -11289,7 +11289,7 @@ static int recursivematch_cb(char *name, int matchlen, int maycreate,
 }
 
 /* callback for hash_enumerate */
-void copy_to_array(const char *key, void *data, void *void_rock)
+static void copy_to_array(const char *key, void *data, void *void_rock)
 {
     int *attributes = (int *)data;
     struct list_rock_recursivematch *rock =
@@ -11300,7 +11300,7 @@ void copy_to_array(const char *key, void *data, void *void_rock)
 }
 
 /* Comparator for reverse-sorting an array of struct list_entry by mboxname. */
-int list_entry_comparator(const void *p1, const void *p2) {
+static int list_entry_comparator(const void *p1, const void *p2) {
     const struct list_entry *e1 = (struct list_entry *)p1;
     const struct list_entry *e2 = (struct list_entry *)p2;
 
@@ -11521,7 +11521,7 @@ static int reset_saslconn(sasl_conn_t **conn)
     return SASL_OK;
 }
 
-void cmd_mupdatepush(char *tag, char *name)
+static void cmd_mupdatepush(char *tag, char *name)
 {
     int r = 0;
     char mailboxname[MAX_MAILBOX_BUFFER];
@@ -11577,7 +11577,7 @@ enum {
     URLAUTH_ALG_HMAC_SHA1 =	0 /* HMAC-SHA1 */
 };
 
-void cmd_urlfetch(char *tag)
+static void cmd_urlfetch(char *tag)
 {
     struct mboxkey *mboxkey_db;
     int c, r, doclose;
@@ -11810,7 +11810,7 @@ void cmd_urlfetch(char *tag)
 
 #define MBOX_KEY_LEN 16		  /* 128 bits */
 
-void cmd_genurlauth(char *tag)
+static void cmd_genurlauth(char *tag)
 {
     struct mboxkey *mboxkey_db;
     int first = 1;
@@ -11960,7 +11960,7 @@ void cmd_genurlauth(char *tag)
     mboxkey_close(mboxkey_db);
 }
 
-void cmd_resetkey(char *tag, char *mailbox,
+static void cmd_resetkey(char *tag, char *mailbox,
 		  char *mechanism __attribute__((unused)))
 /* XXX we don't support any external mechanisms, so we ignore it */
 {
@@ -12021,7 +12021,7 @@ void cmd_resetkey(char *tag, char *mailbox,
 #endif /* HAVE_SSL */
 
 #ifdef HAVE_ZLIB
-void cmd_compress(char *tag, char *alg)
+static void cmd_compress(char *tag, char *alg)
 {
     if (imapd_compress_done) {
 	prot_printf(imapd_out,
@@ -12057,7 +12057,7 @@ void cmd_compress(char *tag, char *alg)
 }
 #endif /* HAVE_ZLIB */
 
-void cmd_enable(char *tag)
+static void cmd_enable(char *tag)
 {
     static struct buf arg;
     int c;

@@ -137,7 +137,7 @@ index d979f3b..e9f51d1 100644
 +#endif /* DRAC_AUTH */
 +
  /* current sub-user state */
- struct index_state *imapd_index;
+ static struct index_state *imapd_index;
  
 @@ -738,6 +750,23 @@ int service_init(int argc, char **argv, char **envp)
      /* setup for sending IMAP IDLE notifications */
@@ -239,7 +239,7 @@ index d979f3b..e9f51d1 100644
  /*
   * Top-level command loop parsing
   */
-@@ -2239,6 +2316,11 @@ void cmd_login(char *tag, char *user)
+@@ -2239,6 +2316,11 @@ static void cmd_login(char *tag, char *user)
      capa_response(CAPA_PREAUTH|CAPA_POSTAUTH);
      prot_printf(imapd_out, "] %s\r\n", reply);
  
