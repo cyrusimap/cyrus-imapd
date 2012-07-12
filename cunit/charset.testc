@@ -217,6 +217,75 @@ static void test_mimeheader_badcharset(void)
     free(s);
 }
 
+static void test_mime_unfold(void)
+{
+    char *s;
+
+    /* Test unfolding and the 'keep' space option.  Note that 'keep' is
+     * a bit of a misnomer, it actually converts whitespace characters
+     * to SP before keeping the same *number* of chars, which is
+     * actually quite unhelpful.
+     */
+    s = charset_decode_mimeheader(
+"From: foo@bar\r\n"
+"To: baz@quux\r\n"
+"Subject: this\r\n"
+"\tline is continued\r\n"
+"Keywords: and\r\n"
+"\tso is\r\n"
+" this one\r\n"
+"\r\n",
+    CHARSET_SKIPDIACRIT);
+    CU_ASSERT_STRING_EQUAL(s,
+"FROM: FOO@BAR  "
+"TO: BAZ@QUUX  "
+"SUBJECT: THIS LINE IS CONTINUED  "
+"KEYWORDS: AND SO IS THIS ONE  "
+"  "
+    );
+    free(s);
+
+    /* test unfolding and the 'merge' space option which merges any
+     * amount of whitespace down to a single SP character */
+    s = charset_decode_mimeheader(
+"From: foo@bar\r\n"
+"To: baz@quux\r\n"
+"Subject: this\r\n"
+"\tline is continued\r\n"
+"Keywords: and\r\n"
+"\tso is\r\n"
+" this one\r\n"
+"\r\n",
+    CHARSET_SKIPDIACRIT|CHARSET_MERGESPACE);
+    CU_ASSERT_STRING_EQUAL(s,
+"FROM: FOO@BAR "
+"TO: BAZ@QUUX "
+"SUBJECT: THIS LINE IS CONTINUED "
+"KEYWORDS: AND SO IS THIS ONE "
+    );
+    free(s);
+
+    /* test unfolding and the 'skip' space option which elides
+     * all whitespace. */
+    s = charset_decode_mimeheader(
+"From: foo@bar\r\n"
+"To: baz@quux\r\n"
+"Subject: this\r\n"
+"\tline is continued\r\n"
+"Keywords: and\r\n"
+"\tso is\r\n"
+" this one\r\n"
+"\r\n",
+    CHARSET_SKIPDIACRIT|CHARSET_SKIPSPACE);
+    CU_ASSERT_STRING_EQUAL(s,
+"FROM:FOO@BAR"
+"TO:BAZ@QUUX"
+"SUBJECT:THISLINEISCONTINUED"
+"KEYWORDS:ANDSOISTHISONE"
+    );
+    free(s);
+}
+
 static void test_search_mimeheader(void)
 {
     char *s;
