@@ -70,7 +70,7 @@ static int dump2_test(bytecode_input_t * d, int i);
 int unwrap_string(bytecode_input_t *bc, int pos, const char **str, int *len);
 
 /*this is called by xmalloc*/
-void fatal(const char *s, int code)
+EXPORTED void fatal(const char *s, int code)
 {  
     fprintf(stderr, "Fatal error: %s (%d)\r\n", s, code);
                            

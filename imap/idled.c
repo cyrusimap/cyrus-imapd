@@ -79,7 +79,7 @@ struct ientry {
 };
 static struct hash_table itable;
 
-void fatal(const char *msg, int err)
+EXPORTED void fatal(const char *msg, int err)
 {
     if (debugmode) fprintf(stderr, "dying with %s %d\n",msg,err);
     syslog(LOG_CRIT, "%s", msg);

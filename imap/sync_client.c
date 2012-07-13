@@ -160,7 +160,7 @@ static int usage(const char *name)
     exit(EC_USAGE);
 }
 
-void fatal(const char *s, int code)
+EXPORTED void fatal(const char *s, int code)
 {
     fprintf(stderr, "Fatal error: %s\n", s);
     syslog(LOG_ERR, "Fatal error: %s", s);

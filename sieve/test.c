@@ -703,7 +703,7 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-void fatal(const char* message, int rc)
+EXPORTED void fatal(const char* message, int rc)
 {
     fprintf(stderr, "fatal error: %s\n", message);
     exit(rc);

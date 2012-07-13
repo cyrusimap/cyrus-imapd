@@ -51,7 +51,7 @@
 #include "xmalloc.h"
 
 /* generic fatal() routine for command line utilities */
-void fatal(const char *message, int code)
+EXPORTED void fatal(const char *message, int code)
 {
     static int recurse_code = 0;
 

@@ -81,7 +81,7 @@ int timeouts_flag = 1;
     fprintf(stderr, "\nunit: "fmt"\n", (a1), (a2))
 #endif
 
-void fatal(const char *s, int code __attribute__((unused)))
+EXPORTED void fatal(const char *s, int code __attribute__((unused)))
 {
     log1("fatal(%s)", s);
     exit(1);

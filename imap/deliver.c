@@ -121,7 +121,7 @@ static void usage(void)
     exit(EC_USAGE);
 }
 
-void fatal(const char* s, int code)
+EXPORTED void fatal(const char* s, int code)
 {
     static int recurse_code = 0;
     

@@ -480,7 +480,7 @@ send_reply(struct sockaddr_storage sfrom, socklen_t sfromsiz,
     } 
 }
 
-void fatal(const char* s, int code)
+EXPORTED void fatal(const char* s, int code)
 {
     static int recurse_code = 0;
     if (recurse_code) {

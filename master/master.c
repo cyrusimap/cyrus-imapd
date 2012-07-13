@@ -207,7 +207,7 @@ static int myselect(int nfds, fd_set *rfds, fd_set *wfds,
 #endif
 }
 
-void fatal(const char *msg, int code)
+EXPORTED void fatal(const char *msg, int code)
 {
     syslog(LOG_CRIT, "%s", msg);
     syslog(LOG_NOTICE, "exiting");

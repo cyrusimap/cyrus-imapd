@@ -144,7 +144,7 @@ static void spew(int level, const char *fmt, ...)
 }
 
 /* libcyrus makes us define this */
-void fatal(const char *s, int code)
+EXPORTED void fatal(const char *s, int code)
 {
     if (cmd_resp) {
 	syslog(LOG_ERR, "fatal error: %s (%s)", s, cmd_resp);
