@@ -107,10 +107,9 @@ typedef struct uid_list_s {
 } uid_list_t;
 
 /* globals for callback functions */
-int days = -1;
+static int days = -1;
 int size = -1;
-int exact = -1;
-int pattern = -1;
+static int exact = -1;
 
 static int current_mbox_exists = 0;
 
