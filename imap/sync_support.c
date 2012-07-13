@@ -1949,9 +1949,9 @@ static void sync_crc32_addrecord_plus(const struct mailbox *mailbox,
 	*crcp += crc32_cstring(rep);
 }
 
-static void sync_md5_addrecord_xor(const struct mailbox *mailbox,
-				   const struct index_record *record,
-				   int cflags, bit32 *crcp)
+static void sync_md5_addrecord(const struct mailbox *mailbox,
+			       const struct index_record *record,
+			       int cflags, bit32 *crcp)
 {
     MD5_CTX ctx;
     unsigned char result[16];
@@ -1975,7 +1975,7 @@ static const char *sync_annot_representation(const struct sync_annot *annot)
     return buf_cstring(&sync_crc32_buf);
 }
 
-static void sync_md5_addannot_xor(const struct sync_annot *annot, bit32 *crcp)
+static void sync_md5_addannot(const struct sync_annot *annot, bit32 *crcp)
 {
     MD5_CTX ctx;
     unsigned char result[16];
@@ -2017,8 +2017,8 @@ static const struct sync_crc_algorithm sync_crc_algorithms[] = {
 	sync_crc32_addannot_plus },
     { "MD5",  /* XOR the first 16 bytes of md5s instead */
 	3,
-	sync_md5_addrecord_xor,
-	sync_md5_addannot_xor },
+	sync_md5_addrecord,
+	sync_md5_addannot },
     { NULL, 0, NULL, NULL }
 };
 
