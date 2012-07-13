@@ -42,7 +42,7 @@
 #
 
 ACLOCAL_AMFLAGS = -I cmulocal
-AM_CFLAGS = @PERL_CCCDLFLAGS@ $(COV_CFLAGS)
+AM_CFLAGS = @PERL_CCCDLFLAGS@ $(COV_CFLAGS) $(CFLAG_VISIBILITY)
 AM_CPPFLAGS = $(COM_ERR_CPPFLAGS) \
 	-I${top_builddir} -I${top_builddir}/lib \
 	-I${top_srcdir} -I${top_srcdir}/lib \
@@ -199,7 +199,6 @@ com_err_et_libcyrus_com_err_la_SOURCES = com_err/et/com_err.c com_err/et/com_err
 	com_err/et/error_message.c com_err/et/error_table.h \
 	com_err/et/et_name.c com_err/et/init_et.c com_err/et/internal.h \
 	com_err/et/mit-sipb-copyright.h
-com_err_et_libcyrus_com_err_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
 com_err/et/compile_et: com_err/et/compile_et.sh com_err/et/config_script \
 	config.h
@@ -420,7 +419,6 @@ imap_libcyrus_imap_la_SOURCES = imap/annotate.c imap/annotate.h imap/append.c \
 	imap/user.h imap/userdeny_db.c imap/userdeny.h imap/version.c \
 	imap/version.h
 imap_libcyrus_imap_la_LIBADD = $(COM_ERR_LIBS) $(LIB_UUID) lib/libcyrus_min.la lib/libcyrus.la
-imap_libcyrus_imap_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
 imap_lmtpd_SOURCES = imap/lmtpd.c imap/lmtpd.h imap/lmtpengine.c \
 	imap/lmtpengine.h imap/lmtpstats.c imap/lmtpstats.h \
@@ -511,7 +509,6 @@ endif
 
 imtest_imtest_SOURCES = imtest/imtest.c
 imtest_imtest_LDADD = $(LD_BASIC_ADD)
-imtest_imtest_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
 nodist_lib_libcyrus_la_SOURCES = lib/chartable.c
 lib_libcyrus_la_SOURCES = lib/acl.c lib/acl_afs.c lib/auth.c lib/auth_krb.c \
@@ -542,7 +539,6 @@ endif
 lib_libcyrus_la_SOURCES += lib/parseaddr.c lib/prot.c lib/ptrarray.c \
 	lib/signals.c lib/stristr.c lib/times.c lib/tok.c lib/wildmat.c
 lib_libcyrus_la_LIBADD = $(LIB_RT) ${LIB_SASL} $(SSL_LIBS)
-lib_libcyrus_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
 lib_libcyrus_min_la_SOURCES = lib/assert.c
 if IPV6_noGETADDRINFO
@@ -570,7 +566,6 @@ lib_libcyrus_min_la_SOURCES += lib/mpool.c lib/retry.c lib/strarray.c \
 	lib/strhash.c lib/util.c lib/xmalloc.c lib/xstrlcat.c lib/xstrlcpy.c \
 	lib/hashu64.c
 lib_libcyrus_min_la_LIBADD = $(LTLIBOBJS)
-lib_libcyrus_min_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
 lib/chartable.c: lib/mkchartable.pl lib/charset/unifix.txt \
 	$(top_srcdir)/lib/charset/*.t lib/charset/UnicodeData.txt \
@@ -665,7 +660,6 @@ sieve_libcyrus_sieve_la_SOURCES = sieve/bytecode.h sieve/addr.y sieve/addr-lex.l
 	sieve/message.c sieve/message.h sieve/script.c sieve/script.h \
 	sieve/sieve-lex.l sieve/sieve.y sieve/tree.c sieve/tree.h
 sieve_libcyrus_sieve_la_LIBADD = $(COM_ERR_LIBS) lib/libcyrus_min.la lib/libcyrus.la
-sieve_libcyrus_sieve_la_CFLAGS = $(AM_CFLAGS) $(CFLAG_VISIBILITY)
 
 LD_SIEVE_ADD = sieve/libcyrus_sieve.la $(LD_BASIC_ADD)
 
