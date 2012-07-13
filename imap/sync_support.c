@@ -1952,15 +1952,18 @@ static void sync_crc32_addrecord_plus(const struct mailbox *mailbox,
 static void sync_md5_add(const char *rep, bit32 *crcp)
 {
     MD5_CTX ctx;
-    unsigned char result[16];
+    union {
+	bit32 b32;
+	unsigned char md5[16];
+    } result;
 
     if (!rep) return;
 
     MD5Init(&ctx);
     MD5Update(&ctx, rep, strlen(rep));
-    MD5Final(result, &ctx);
+    MD5Final(result.md5, &ctx);
 
-    *crcp ^= ntohl(*((bit32 *)result));
+    *crcp ^= ntohl(result.b32);
 }
 
 static void sync_md5_addrecord(const struct mailbox *mailbox,
