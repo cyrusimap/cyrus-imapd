@@ -1949,13 +1949,10 @@ static void sync_crc32_addrecord_plus(const struct mailbox *mailbox,
 	*crcp += crc32_cstring(rep);
 }
 
-static void sync_md5_addrecord(const struct mailbox *mailbox,
-			       const struct index_record *record,
-			       int cflags, bit32 *crcp)
+static void sync_md5_add(const char *rep, bit32 *crcp)
 {
     MD5_CTX ctx;
     unsigned char result[16];
-    const char *rep = sync_record_representation(mailbox, record, cflags);
 
     if (!rep) return;
 
@@ -1964,6 +1961,13 @@ static void sync_md5_addrecord(const struct mailbox *mailbox,
     MD5Final(result, &ctx);
 
     *crcp ^= ntohl(*((bit32 *)result));
+}
+
+static void sync_md5_addrecord(const struct mailbox *mailbox,
+			       const struct index_record *record,
+			       int cflags, bit32 *crcp)
+{
+    sync_md5_add(sync_record_representation(mailbox, record, cflags), crcp);
 }
 
 static const char *sync_annot_representation(const struct sync_annot *annot)
@@ -1977,17 +1981,7 @@ static const char *sync_annot_representation(const struct sync_annot *annot)
 
 static void sync_md5_addannot(const struct sync_annot *annot, bit32 *crcp)
 {
-    MD5_CTX ctx;
-    unsigned char result[16];
-    const char *rep = sync_annot_representation(annot);
-
-    if (!rep) return;
-
-    MD5Init(&ctx);
-    MD5Update(&ctx, rep, strlen(rep));
-    MD5Final(result, &ctx);
-
-    *crcp ^= ntohl(*((bit32 *)result));
+    sync_md5_add(sync_annot_representation(annot), crcp);
 }
 
 static void sync_crc32_addannot_xor(const struct sync_annot *annot, bit32 *crcp)
