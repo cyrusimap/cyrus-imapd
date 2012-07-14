@@ -333,7 +333,7 @@ EXPORTED void appendattvalue(struct attvaluelist **l,
 /*
  * Duplicate the attvaluelist @src to @dst.
  */
-static void dupattvalues(struct attvaluelist **dst,
+void dupattvalues(struct attvaluelist **dst,
 		  const struct attvaluelist *src)
 {
     for ( ; src ; src = src->next)
@@ -439,7 +439,7 @@ EXPORTED void clearentryatt(struct entryattlist **l, const char *entry,
 /*
  * Duplicate the entryattlist @src to @dst.
  */
-static void dupentryatt(struct entryattlist **dst,
+void dupentryatt(struct entryattlist **dst,
 		 const struct entryattlist *src)
 {
     for ( ; src ; src = src->next) {

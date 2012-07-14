@@ -153,7 +153,7 @@ struct prot_waitevent {
 };
 
 /* Not for use by applications directly, but needed by the macros. */
-static int prot_flush_internal(struct protstream *s, int force);
+int prot_flush_internal(struct protstream *s, int force);
 
 #define PROT_EOF_STRING "end of file reached"
 #define PROTGROUP_SIZE_DEFAULT 32
@@ -234,7 +234,7 @@ extern int prot_setflushonread(struct protstream *s,
 			       struct protstream *flushs);
 
 
-static int prot_setreadcallback(struct protstream *s,
+int prot_setreadcallback(struct protstream *s,
 				prot_readcallback_t *proc, void *rock);
 extern struct prot_waitevent *prot_addwaitevent(struct protstream *s,
 						time_t mark,
@@ -278,7 +278,7 @@ extern int prot_select(struct protgroup *readstreams, int extra_read_fd,
 /* Create a new protgroup of a certain size or as a copy of another
  * protgroup */
 struct protgroup *protgroup_new(size_t size);
-static struct protgroup *protgroup_copy(struct protgroup *src);
+struct protgroup *protgroup_copy(struct protgroup *src);
 
 /* Cleanup a protgroup but don't release the allocated memory (so it can
  * be reused) */

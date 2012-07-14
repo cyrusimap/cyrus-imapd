@@ -56,10 +56,10 @@
 extern char *imapd_userid;
 
 /* Authorization state for logged in userid */
-static struct auth_state *imapd_authstate;
+struct auth_state *imapd_authstate;
 
 /* Client capabilities (via ENABLE) */
-static unsigned imapd_client_capa;
+unsigned imapd_client_capa;
 
 struct octetinfo
 {

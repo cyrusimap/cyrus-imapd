@@ -2487,7 +2487,7 @@ void mupdate_unready(void)
 }
 
 /* Used to free malloc'd mbent's (not for mpool'd mbents) */
-static void free_mbent(struct mbent *p)
+void free_mbent(struct mbent *p)
 {
     if(!p) return;
     free(p->server);

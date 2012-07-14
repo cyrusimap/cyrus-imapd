@@ -165,10 +165,10 @@ static const char *imapd_clienthost = "[local]";
 static int imapd_logfd = -1;
 char *imapd_userid = NULL, *proxy_userid = NULL;
 static char *imapd_magicplus = NULL;
-static struct auth_state *imapd_authstate = 0;
+struct auth_state *imapd_authstate = 0;
 static int imapd_userisadmin = 0;
 static int imapd_userisproxyadmin = 0;
-static unsigned imapd_client_capa = 0;
+unsigned imapd_client_capa = 0;
 static sasl_conn_t *imapd_saslconn; /* the sasl connection context */
 static int imapd_starttls_done = 0; /* have we done a successful starttls? */
 static void *imapd_tls_comp = NULL; /* TLS compression method, if any */

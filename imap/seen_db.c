@@ -397,7 +397,7 @@ EXPORTED int seen_delete_mailbox(const char *userid, struct mailbox *mailbox)
     return r;
 }
 
-static int seen_create_user(const char *user)
+int seen_create_user(const char *user)
 {
     if (SEEN_DEBUG) {
 	syslog(LOG_DEBUG, "seen_db: seen_create_user(%s)", 

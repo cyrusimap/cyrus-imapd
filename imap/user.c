@@ -451,7 +451,7 @@ static int find_cb(void *rockp __attribute__((unused)),
     return r;
 }
 
-static int user_deletequotaroots(const char *user)
+int user_deletequotaroots(const char *user)
 {
     struct namespace namespace;
     char buf[MAX_MAILBOX_BUFFER], *inboxname = buf;

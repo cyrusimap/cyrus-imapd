@@ -96,7 +96,7 @@ extern int imclient_starttls(struct imclient *imclient,
                              char *CAfile,
                              char *CApath);
 
-static void imclient_write (struct imclient *imclient,
+void imclient_write (struct imclient *imclient,
 			    const char *s, size_t len);
 
 #endif /* INCLUDED_IMCLIENT_H */

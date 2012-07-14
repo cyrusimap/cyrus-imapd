@@ -574,7 +574,7 @@ static int imclient_writeastring(struct imclient *imclient, const char *str)
 /*
  * Write to the connection 'imclient' the data 's', of length 'len'
  */
-static void imclient_write(struct imclient *imclient, const char *s, size_t len)
+void imclient_write(struct imclient *imclient, const char *s, size_t len)
 {
     assert(imclient);
     assert(s);

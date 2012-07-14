@@ -225,7 +225,7 @@ void mboxlist_done(void);
 
 /* for transactions */
 int mboxlist_commit(struct txn *tid);
-static int mboxlist_abort(struct txn *tid);
+int mboxlist_abort(struct txn *tid);
 
 int mboxlist_delayed_delete_isenabled(void);
 

@@ -218,13 +218,13 @@ extern int cyrusdb_copyfile(const char *srcname, const char *dstname);
 extern int cyrusdb_convert(const char *fromfname, const char *tofname,
 			   const char *frombackend, const char *tobackend);
 
-static int cyrusdb_dumpfile(struct db *db,
+int cyrusdb_dumpfile(struct db *db,
 		     const char *prefix, size_t prefixlen,
 		     FILE *f,
 		     struct txn **tid);
-static int cyrusdb_truncate(struct db *db,
+int cyrusdb_truncate(struct db *db,
 		     struct txn **tid);
-static int cyrusdb_undumpfile(struct db *db,
+int cyrusdb_undumpfile(struct db *db,
 		       FILE *f,
 		       struct txn **tid);
 
@@ -257,7 +257,7 @@ extern int cyrusdb_foreach(struct db *db,
 			   foreach_p *p,
 			   foreach_cb *cb, void *rock,
 			   struct txn **tid);
-static int cyrusdb_create(struct db *db,
+int cyrusdb_create(struct db *db,
 			  const char *key, size_t keylen,
 			  const char *data, size_t datalen,
 			  struct txn **tid);

@@ -345,8 +345,8 @@ struct mailbox_header_cache {
 };
 
 #define MAX_CACHED_HEADER_SIZE 32 /* Max size of a cached header name */
-static const struct mailbox_header_cache mailbox_cache_headers[];
-static const int MAILBOX_NUM_CACHE_HEADERS;
+extern const struct mailbox_header_cache mailbox_cache_headers[];
+extern const int MAILBOX_NUM_CACHE_HEADERS;
 
 /* Aligned buffer for manipulating index header/record fields */
 typedef union {
@@ -406,7 +406,7 @@ typedef unsigned mailbox_decideproc_t(struct mailbox *mailbox,
 typedef void mailbox_notifyproc_t(const char *mboxname);
 
 extern void mailbox_set_updatenotifier(mailbox_notifyproc_t *notifyproc);
-static mailbox_notifyproc_t *mailbox_get_updatenotifier(void);
+extern mailbox_notifyproc_t *mailbox_get_updatenotifier(void);
 
 /* file names on disk */
 #define META_FNAME_NEW 1
@@ -427,26 +427,26 @@ extern void mailbox_unmap_message(struct mailbox *mailbox,
 
 /* cache record API */
 int mailbox_ensure_cache(struct mailbox *mailbox, unsigned offset);
-static int cache_parserecord(struct buf *cachebase,
+int cache_parserecord(struct buf *cachebase,
 		      unsigned cache_offset, struct cacherecord *crec);
 int mailbox_cacherecord(struct mailbox *mailbox,
 			struct index_record *record);
-static int cache_append_record(int fd, struct index_record *record);
-static int mailbox_append_cache(struct mailbox *mailbox,
+int cache_append_record(int fd, struct index_record *record);
+int mailbox_append_cache(struct mailbox *mailbox,
 			 struct index_record *record);
 const char *cacheitem_base(struct index_record *record, int field);
 unsigned cacheitem_size(struct index_record *record, int field);
 struct buf *cacheitem_buf(struct index_record *record, int field);
-static const char *cache_base(struct index_record *record);
-static unsigned cache_size(struct index_record *record);
-static struct buf *cache_buf(struct index_record *record);
+const char *cache_base(struct index_record *record);
+unsigned cache_size(struct index_record *record);
+struct buf *cache_buf(struct index_record *record);
 /* opening and closing */
 extern int mailbox_open_iwl(const char *name,
 			    struct mailbox **mailboxptr);
 /* This is a filthy hack - it also asserts iwl, it's for
    doing things on the current mailbox when you're deep
    enough in layers that you don't have a ref any more */
-static struct mailbox *mailbox_findopen(const char *name);
+struct mailbox *mailbox_findopen(const char *name);
 extern int mailbox_open_irl(const char *name,
 			    struct mailbox **mailboxptr);
 extern int mailbox_open_exclusive(const char *name,
@@ -468,7 +468,7 @@ extern int mailbox_rewrite_index_record(struct mailbox *mailbox,
 				        struct index_record *record);
 extern int mailbox_append_index_record(struct mailbox *mailbox,
 				       struct index_record *record);
-static int mailbox_find_index_record(struct mailbox *mailbox, uint32_t uid,
+extern int mailbox_find_index_record(struct mailbox *mailbox, uint32_t uid,
 				     struct index_record *record);
 
 extern int mailbox_set_acl(struct mailbox *mailbox, const char *acl,
@@ -477,7 +477,7 @@ extern int mailbox_set_quotaroot(struct mailbox *mailbox, const char *quotaroot)
 extern int mailbox_set_specialuse(struct mailbox *mailbox, const char *specialuse);
 extern int mailbox_user_flag(struct mailbox *mailbox, const char *flag,
 			     int *flagnum, int create);
-static int mailbox_record_hasflag(struct mailbox *mailbox,
+int mailbox_record_hasflag(struct mailbox *mailbox,
 				  struct index_record *record,
 				  const char *flag);
 extern int mailbox_commit(struct mailbox *mailbox);

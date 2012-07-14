@@ -98,7 +98,7 @@ EXPORTED void sync_log_suppress(void)
     sync_log_enabled = 0;
 }
 
-static void sync_log_suppress_channel(const char *channelname)
+void sync_log_suppress_channel(const char *channelname)
 {
     if (channelname) {
 	/* there can only be one */
@@ -277,7 +277,7 @@ static char *va_format(const char *fmt, va_list ap)
     return buf;
 }
 
-static void sync_log_channel(const char *channel, const char *fmt, ...)
+void sync_log_channel(const char *channel, const char *fmt, ...)
 {
     va_list ap;
     const char *val;

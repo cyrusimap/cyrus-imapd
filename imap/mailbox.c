@@ -244,7 +244,7 @@ EXPORTED char *mailbox_datapath(struct mailbox *mailbox)
  * (see is_cached_header())
  *
  */
-static const struct mailbox_header_cache mailbox_cache_headers[] = {
+const struct mailbox_header_cache mailbox_cache_headers[] = {
     /* things we have always cached */
     { "priority", 0 },
     { "references", 0 },
@@ -302,7 +302,7 @@ static const struct mailbox_header_cache mailbox_cache_headers[] = {
      * threading so we can avoid parsing the envelope] */
     /* { "message-id", BIT32_MAX }, */
 };
-static const int MAILBOX_NUM_CACHE_HEADERS =
+const int MAILBOX_NUM_CACHE_HEADERS =
   sizeof(mailbox_cache_headers)/sizeof(struct mailbox_header_cache);
 
 /*
@@ -373,18 +373,18 @@ HIDDEN unsigned mailbox_cached_header_inline(const char *text)
     return BIT32_MAX;
 }
 
-static const char *cache_base(struct index_record *record)
+const char *cache_base(struct index_record *record)
 {
     const char *base = record->crec.base->s;
     return base + record->crec.offset;
 }
 
-static unsigned cache_size(struct index_record *record)
+unsigned cache_size(struct index_record *record)
 {
     return record->crec.len;
 }
 
-static struct buf *cache_buf(struct index_record *record)
+struct buf *cache_buf(struct index_record *record)
 {
     static struct buf staticbuf;
 
@@ -421,7 +421,7 @@ EXPORTED struct buf *cacheitem_buf(struct index_record *record, int field)
 /* parse a single cache record from the mapped file - creates buf
  * records which point into the map, so you can't free it while
  * you still have them around! */
-static int cache_parserecord(struct buf *cachebase, unsigned cache_offset,
+int cache_parserecord(struct buf *cachebase, unsigned cache_offset,
 		      struct cacherecord *crec)
 {
     unsigned cache_ent;
@@ -582,7 +582,7 @@ static int mailbox_index_islocked(struct mailbox *mailbox, int write)
 }
 
 /* return the offset for the start of the record! */
-static int mailbox_append_cache(struct mailbox *mailbox,
+int mailbox_append_cache(struct mailbox *mailbox,
 			 struct index_record *record)
 {
     int r;
@@ -664,7 +664,7 @@ done:
     return r;
 }
 
-static int cache_append_record(int fd, struct index_record *record)
+int cache_append_record(int fd, struct index_record *record)
 {
     unsigned offset;
     unsigned size = cache_size(record);
@@ -724,7 +724,7 @@ HIDDEN void mailbox_set_updatenotifier(mailbox_notifyproc_t *notifyproc)
 /*
  * Get the updatenotifier function
  */
-static mailbox_notifyproc_t *mailbox_get_updatenotifier(void)
+mailbox_notifyproc_t *mailbox_get_updatenotifier(void)
 {
     return updatenotifier;
 }
@@ -989,7 +989,7 @@ EXPORTED int mailbox_open_iwl(const char *name, struct mailbox **mailboxptr)
 				 mailboxptr);
 }
 
-static struct mailbox *mailbox_findopen(const char *name)
+struct mailbox *mailbox_findopen(const char *name)
 {
     struct mailboxlist *listitem = find_listitem(name);
 
@@ -1371,7 +1371,7 @@ EXPORTED int mailbox_user_flag(struct mailbox *mailbox, const char *flag,
     return 0;
 }
 
-static int mailbox_record_hasflag(struct mailbox *mailbox,
+int mailbox_record_hasflag(struct mailbox *mailbox,
 			   struct index_record *record,
 			   const char *flag)
 {
@@ -1606,7 +1606,7 @@ static int rec_compar(const void *key, const void *mem)
 /*
  * Find the index record in mailbox corresponding to UID
  */
-static int mailbox_find_index_record(struct mailbox *mailbox, uint32_t uid,
+int mailbox_find_index_record(struct mailbox *mailbox, uint32_t uid,
 			      struct index_record *record)
 {
     const char *mem, *base = mailbox->index_base + mailbox->i.start_offset;

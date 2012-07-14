@@ -1695,7 +1695,7 @@ static int message_pendingboundary(const char *s, int slen,
  * Write the cache information for the message parsed to 'body'
  * to 'outfile'.
  */
-static int message_write_cache(struct index_record *record, const struct body *body)
+int message_write_cache(struct index_record *record, const struct body *body)
 {
     static struct buf cacheitem_buffer;
     struct buf ib[NUM_CACHE_FIELDS];

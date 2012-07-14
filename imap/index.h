@@ -189,7 +189,7 @@ struct nntp_overview {
 
 /* non-locking, non-updating - just do a fetch on the state
  * we already have */
-static void index_fetchresponses(struct index_state *state,
+void index_fetchresponses(struct index_state *state,
 				 struct seqset *seq,
 				 int usinguid,
 				 const struct fetchargs *fetchargs,
@@ -261,7 +261,7 @@ extern void index_getsearchtext_single(struct index_state *state, uint32_t msgno
                                        index_search_text_receiver_t receiver,
                                        void* rock);
 
-static void index_getsearchtext(struct index_state *state,
+extern void index_getsearchtext(struct index_state *state,
                                 index_search_text_receiver_t receiver,
                                 void* rock);
 

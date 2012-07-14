@@ -232,7 +232,7 @@ EXPORTED int cyrusdb_foreach(struct db *db,
 				p, cb, rock, tid);
 }
 
-static int cyrusdb_create(struct db *db,
+int cyrusdb_create(struct db *db,
 	      const char *key, size_t keylen,
 	      const char *data, size_t datalen,
 	      struct txn **tid)
@@ -344,7 +344,7 @@ static int print_cb(void *rock,
 }
 
 
-static int cyrusdb_dumpfile(struct db *db,
+int cyrusdb_dumpfile(struct db *db,
 		     const char *prefix, size_t prefixlen,
 		     FILE *f,
 		     struct txn **tid)
@@ -352,7 +352,7 @@ static int cyrusdb_dumpfile(struct db *db,
     return cyrusdb_foreach(db, prefix, prefixlen, NULL, print_cb, f, tid);
 }
 
-static int cyrusdb_truncate(struct db *db,
+int cyrusdb_truncate(struct db *db,
 		     struct txn **tid)
 {
     struct db_rock tr;
@@ -363,7 +363,7 @@ static int cyrusdb_truncate(struct db *db,
     return cyrusdb_foreach(db, "", 0, NULL, delete_cb, &tr, tid);
 }
 
-static int cyrusdb_undumpfile(struct db *db,
+int cyrusdb_undumpfile(struct db *db,
 		       FILE *f,
 		       struct txn **tid)
 {

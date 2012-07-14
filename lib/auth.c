@@ -50,7 +50,7 @@
 #include "libcyr_cfg.h"
 #include "xmalloc.h"
 
-static struct auth_mech *auth_mechs[] = {
+struct auth_mech *auth_mechs[] = {
     &auth_unix,
     &auth_pts,
 #ifdef HAVE_KRB

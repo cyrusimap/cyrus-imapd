@@ -60,7 +60,7 @@ int mboxkey_read(struct mboxkey *mboxkeydb, const char *mailbox,
 
 /* read an entry from 'mboxkeydb' and leave that record (or some superset
    of it) locked for update */
-static int mboxkey_lockread(struct mboxkey *mboxkeydb, const char *mailbox,
+int mboxkey_lockread(struct mboxkey *mboxkeydb, const char *mailbox,
 		     const char **mboxkey, size_t *mboxkeylen);
 
 /* write an entry to 'mboxkeydb' */
@@ -71,7 +71,7 @@ int mboxkey_write(struct mboxkey *mboxkeydb, const char *mailbox,
 int mboxkey_close(struct mboxkey *mboxkeydb);
 
 /* discard lock on handle */
-static int mboxkey_unlock(struct mboxkey *mboxkeydb);
+int mboxkey_unlock(struct mboxkey *mboxkeydb);
 
 /* called on user operations */
 int mboxkey_delete_user(const char *user);

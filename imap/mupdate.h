@@ -103,7 +103,7 @@ struct mbent_queue
 };
 
 /* Used to free malloc'd mbent's */
-static void free_mbent(struct mbent *p);
+void free_mbent(struct mbent *p);
 
 /* Used by the slave listener thread to update the local database */
 int cmd_change(struct mupdate_mailboxdata *mdata,

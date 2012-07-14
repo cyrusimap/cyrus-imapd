@@ -3350,7 +3350,7 @@ EXPORTED int mboxlist_commit(struct txn *tid)
     return cyrusdb_commit(mbdb, tid);
 }
 
-static int mboxlist_abort(struct txn *tid)
+int mboxlist_abort(struct txn *tid)
 {
     assert(tid);
 

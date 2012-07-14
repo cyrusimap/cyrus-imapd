@@ -165,7 +165,7 @@ extern void message_write_nstring_map(struct buf *buf, const char *s, unsigned i
 extern void message_write_body(struct buf *buf, const struct body *body,
 				  int newformat);
 extern void message_write_xdrstring(struct buf *buf, const struct buf *s);
-static int message_write_cache P((struct index_record *record, const struct body *body));
+extern int message_write_cache P((struct index_record *record, const struct body *body));
 
 extern int message_create_record P((struct index_record *message_index,
 				    const struct body *body));

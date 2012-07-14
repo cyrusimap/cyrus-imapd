@@ -379,12 +379,12 @@ void msg_setrcpt_status(message_data_t *m, int rcpt_num, int r)
     m->rcpt[rcpt_num]->status = r;
 }
 
-static void *msg_getrock(message_data_t *m)
+void *msg_getrock(message_data_t *m)
 {
     return m->rock;
 }
 
-static void msg_setrock(message_data_t *m, void *rock)
+void msg_setrock(message_data_t *m, void *rock)
 {
     m->rock = rock;
 }

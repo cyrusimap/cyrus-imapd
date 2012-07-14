@@ -168,7 +168,7 @@ testlist_t *new_testlist(test_t *t, testlist_t *n);
 commandlist_t *new_command(int type);
 commandlist_t *new_if(test_t *t, commandlist_t *y, commandlist_t *n);
 
-static void free_test(test_t *t);
+void free_test(test_t *t);
 void free_tree(commandlist_t *cl);
 
 #endif

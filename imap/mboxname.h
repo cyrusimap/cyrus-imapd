@@ -148,7 +148,7 @@ int mboxname_isdeletedmailbox(const char *name, time_t *timestampp);
  * also: userid
  */
 int mboxname_to_parts(const char *mboxname, struct mboxname_parts *parts);
-static int mboxname_userid_to_parts(const char *userid, struct mboxname_parts *parts);
+int mboxname_userid_to_parts(const char *userid, struct mboxname_parts *parts);
 /*
  * Cleanup up a mboxname_parts structure.
  */
@@ -179,7 +179,7 @@ int mboxname_same_userid(const char *mboxname1, const char *mboxname2);
  * Access files (or directories by leaving last parameter
  * zero) for a particular mailbox on partition.
  */
-static void mboxname_hash(char *buf, size_t buf_len,
+void mboxname_hash(char *buf, size_t buf_len,
 		   const char *root,
 		   const char *name);
 
@@ -191,7 +191,7 @@ char *mboxname_metapath(const char *partition,
 			const char *mboxname,
 			int metafile, int isnew);
 
-static char *mboxname_lockpath(const char *mboxname);
+char *mboxname_lockpath(const char *mboxname);
 
 /*
  * Return nonzero if (internal) mailbox 'name' consists of legal characters.
@@ -199,7 +199,7 @@ static char *mboxname_lockpath(const char *mboxname);
  */
 int mboxname_policycheck(const char *name);
 
-static int mboxname_netnewscheck(const char *name);
+int mboxname_netnewscheck(const char *name);
 
 void mboxname_todeleted(const char *name, char *result, int withtime);
 
