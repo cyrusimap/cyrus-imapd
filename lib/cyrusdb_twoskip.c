@@ -845,6 +845,7 @@ static int relocate(struct dbengine *db)
     struct skiploc *loc = &db->loc;
     struct skiprecord newrecord;
     size_t offset;
+    size_t oldoffset = 0;
     uint8_t level;
     uint8_t i;
     int cmp = -1; /* never found a thing! */
@@ -879,20 +880,23 @@ static int relocate(struct dbengine *db)
 	loc->backloc[level-1] = loc->record.offset;
 	loc->forwardloc[level-1] = offset;
 
-	r = read_skipdelete(db, offset, &newrecord);
-	if (r) return r;
+	if (offset != oldoffset) {
+	    oldoffset = offset;
+	    r = read_skipdelete(db, offset, &newrecord);
+	    if (r) return r;
 
-	if (newrecord.offset) {
-	    assert(newrecord.level >= level);
+	    if (newrecord.offset) {
+		assert(newrecord.level >= level);
 
-	    cmp = db->compar(KEY(db, &newrecord), newrecord.keylen,
-			     loc->keybuf.s, loc->keybuf.len);
+		cmp = db->compar(KEY(db, &newrecord), newrecord.keylen,
+				 loc->keybuf.s, loc->keybuf.len);
 
-	    /* not there?  stay at this level */
-	    if (cmp < 0) {
-		/* move the offset range along */
-		loc->record = newrecord;
-		continue;
+		/* not there?  stay at this level */
+		if (cmp < 0) {
+		    /* move the offset range along */
+		    loc->record = newrecord;
+		    continue;
+		}
 	    }
 	}
 
