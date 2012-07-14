@@ -259,7 +259,7 @@ int service_main_fd(int c, int argc __attribute__((unused)),
 /* we need to have this function here 'cause libcyrus.la
  * makes calls to this function. 
  */
-void fatal(const char *msg, int exitcode)
+EXPORTED void fatal(const char *msg, int exitcode)
 {
     syslog(LOG_ERR, "%s", msg);
     exit(exitcode);

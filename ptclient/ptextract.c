@@ -47,6 +47,7 @@
 
 #include "auth.h"
 #include "auth_krb_pts.h"
+#include "config.h"
 
 /* from auth_krb_pts.c */
 struct auth_state {
@@ -86,7 +87,7 @@ int main(int argc, char* argv[]) {
     }
 }
 
-void fatal(char* message, int rc) {
+EXPORTED void fatal(char* message, int rc) {
     fprintf(stderr, "fatal error: %s\n", message);
     exit(rc);
 }
