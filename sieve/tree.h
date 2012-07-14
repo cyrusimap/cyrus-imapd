@@ -123,6 +123,8 @@ struct Commandlist {
 	} i;
 	struct { /* it's an include action */
 	    int location;
+	    int once;
+	    int optional;
 	    char *script;
 	} inc;
 	struct { /* it's a fileinto action */

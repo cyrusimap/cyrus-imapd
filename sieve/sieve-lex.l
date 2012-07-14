@@ -170,6 +170,8 @@ CRLF		(\r\n|\r|\n)
 <INITIAL>include	return INCLUDE;
 <INITIAL>:personal	return PERSONAL;
 <INITIAL>:global	return GLOBAL;
+<INITIAL>:optional	return OPTIONAL;
+<INITIAL>:once		return ONCE;
 <INITIAL>return		return RETURN;
 <INITIAL>:copy		return COPY;
 <INITIAL>[ \t\n\r] ;	/* ignore whitespace */

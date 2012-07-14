@@ -120,6 +120,12 @@ struct dtags {
     int priority;
 };
 
+struct itags {
+  int location;
+  int once;
+  int optional;
+};
+
 static char *check_reqs(sieve_script_t *script, strarray_t *sl);
 static test_t *build_address(int t, struct aetags *ae,
 			     strarray_t *sl, strarray_t *pl);
@@ -131,6 +137,7 @@ static commandlist_t *build_notify(int t, struct ntags *n);
 static commandlist_t *build_denotify(int t, struct dtags *n);
 static commandlist_t *build_fileinto(int t, int c, char *f);
 static commandlist_t *build_redirect(int t, int c, char *a);
+static commandlist_t *build_include(int, struct itags *, char*);
 static struct aetags *new_aetags(void);
 static struct aetags *canon_aetags(struct aetags *ae);
 static void free_aetags(struct aetags *ae);
@@ -149,6 +156,7 @@ static void free_ntags(struct ntags *n);
 static struct dtags *new_dtags(void);
 static struct dtags *canon_dtags(struct dtags *d);
 static void free_dtags(struct dtags *d);
+static struct itags *new_itags(void);
 
 static int verify_stringlist(sieve_script_t*, strarray_t *sl, int (*verify)(sieve_script_t*, char *));
 static int verify_mailbox(sieve_script_t*, char *s);
@@ -188,6 +196,7 @@ extern void sieverestart(FILE *f);
     struct btags *btag;
     struct ntags *ntag;
     struct dtags *dtag;
+    struct itags *itag;
 }
 
 %token <nval> NUMBER
@@ -203,13 +212,13 @@ extern void sieverestart(FILE *f);
 %token RAW TEXT CONTENT
 %token DAYS ADDRESSES SUBJECT FROM HANDLE MIME SECONDS
 %token METHOD ID OPTIONS LOW NORMAL HIGH ANY MESSAGE
-%token INCLUDE PERSONAL GLOBAL RETURN
+%token INCLUDE PERSONAL GLOBAL RETURN OPTIONAL ONCE
 %token COPY
 
 %type <cl> commands command action elsif block
 %type <sl> stringlist strings
 %type <test> test
-%type <nval> comptag relcomp sizetag addrparttag addrorenv location copy
+%type <nval> comptag relcomp sizetag addrparttag addrorenv copy
 %type <testl> testlist tests
 %type <htag> htags
 %type <aetag> aetags
@@ -217,6 +226,7 @@ extern void sieverestart(FILE *f);
 %type <vtag> vtags
 %type <ntag> ntags
 %type <dtag> dtags
+%type <itag> itags
 %type <nval> priority
 
 %name-prefix="sieve"
@@ -347,13 +357,19 @@ action: REJCT STRING             { if (!parse_script->support.reject) {
 			yyerror(parse_script, "unable to find a compatible comparator");
 			YYERROR; } } }
 
-	 | INCLUDE location STRING { if (!parse_script->support.include) {
+	 | INCLUDE itags STRING  { if (!parse_script->support.include) {
 				     yyerror(parse_script, "include MUST be enabled with \"require\"");
 	                             YYERROR;
                                    }
-	                           $$ = new_command(INCLUDE);
-				   $$->u.inc.location = $2;
-				   $$->u.inc.script = $3; }
+				   int i;
+				   for (i = 0; $3[i] != '\0'; i++) {
+				     if ($3[i] == '/') {
+				       yyerror(parse_script, "included script name must not contain slash"); YYERROR;
+				       break;
+				     }
+				   }
+				   $$ = build_include(INCLUDE, $2, $3);
+				 }
          | RETURN		 { if (!parse_script->support.include) {
                                     yyerror(parse_script, "include MUST be enabled with \"require\"");
                                     YYERROR;
@@ -361,9 +377,19 @@ action: REJCT STRING             { if (!parse_script->support.reject) {
                                    $$ = new_command(RETURN); }
 	;
 
-location: /* empty */		 { $$ = PERSONAL; }
-	| PERSONAL		 { $$ = PERSONAL; }
-	| GLOBAL		 { $$ = GLOBAL; }
+itags: /* empty */		 { $$ = new_itags(); }
+	| itags PERSONAL	 { if ($$->location != -1) {
+				     yyerror(parse_script, "duplicate location (:personal or :global)"); YYERROR; }
+				   else { $$->location = PERSONAL; }}
+	| itags GLOBAL	 { if ($$->location != -1) {
+				     yyerror(parse_script, "duplicate location (:personal or :global)"); YYERROR; }
+				   else { $$->location = GLOBAL; }}
+	| itags ONCE		 { if ($$->once != -1) {
+				     yyerror(parse_script, "duplicate :once"); YYERROR; }
+				   else { $$->once = 1; }}
+	| itags OPTIONAL	{ if ($$->optional != -1) {
+				     yyerror(parse_script, "duplicate :optional"); YYERROR; }
+				   else { $$->optional = 1; }}
 	;
 
 ntags: /* empty */		 { $$ = new_ntags(); }
@@ -900,6 +926,26 @@ static commandlist_t *build_redirect(int t, int copy, char *address)
     return ret;
 }
 
+static commandlist_t *build_include(int t, struct itags *i, char* script)
+{
+    commandlist_t *ret = new_command(t);
+
+    assert(t == INCLUDE);
+
+    if (i->location == -1) i->location = PERSONAL;
+    if (i->once == -1) i->once = 0;
+    if (i->optional == -1) i->optional = 0;
+
+    if (ret) {
+	ret->u.inc.location = i->location;
+	ret->u.inc.once = i->once;
+	ret->u.inc.optional = i->optional;
+	ret->u.inc.script = script;
+	free(i);
+    }
+    return ret;
+}
+
 static struct aetags *new_aetags(void)
 {
     struct aetags *r = (struct aetags *) xmalloc(sizeof(struct aetags));
@@ -1022,6 +1068,16 @@ static void free_vtags(struct vtags *v)
     if (v->from) { free(v->from); }
     if (v->handle) { free(v->handle); }
     free(v);
+}
+
+static struct itags *new_itags() {
+    struct itags *r = (struct itags *) xmalloc(sizeof(struct itags));
+
+    r->once = -1;
+    r->location = -1;
+    r->optional = -1;
+
+    return r;
 }
 
 static struct ntags *new_ntags(void)

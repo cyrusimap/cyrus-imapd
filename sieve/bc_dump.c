@@ -328,7 +328,7 @@ void dump(bytecode_info_t *d, int level)
 	    break;
 
 	case B_INCLUDE:
-	    printf("%d: INCLUDE LOCATION:%d {%d}%s\n",i,
+	    printf("%d: INCLUDE ONCE:0 OPTIONAL:0 LOCATION:%d {%d}%s\n",i,
 		   d->data[i+1].value,d->data[i+2].len,d->data[i+3].str);
 	    i+=3;
 	    break;
