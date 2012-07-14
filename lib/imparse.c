@@ -147,19 +147,25 @@ EXPORTED int imparse_astring(char **s, char **retval)
 /*
  * Return nonzero if 's' matches the grammar for an atom
  */
-EXPORTED int imparse_isatom(const char *s)
+EXPORTED int imparse_isnatom(const char *s, int maxlen)
 {
     int len = 0;
 
     if (!*s) return 0;
     for (; *s; s++) {
 	len++;
+	if (maxlen && len > maxlen) break;
 	if (*s & 0x80 || *s < 0x1f || *s == 0x7f ||
 	    *s == ' ' || *s == '{' || *s == '(' || *s == ')' ||
 	    *s == '\"' || *s == '%' || *s == '*' || *s == '\\') return 0;
     }
     if (len >= 1024) return 0;
     return 1;
+}
+
+EXPORTED int imparse_isatom(const char *s)
+{
+    return imparse_isnatom(s, 0);
 }
 
 /*

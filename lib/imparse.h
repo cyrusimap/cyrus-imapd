@@ -47,6 +47,7 @@
 
 extern int imparse_word (char **s, char **retval);
 extern int imparse_astring (char **s, char **retval);
+extern int imparse_isnatom (const char *s, int len);
 extern int imparse_isatom (const char *s);
 extern int imparse_issequence (const char *s);
 extern int imparse_isnumber (const char *s);

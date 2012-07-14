@@ -1437,6 +1437,38 @@ EXPORTED int prot_printmap(struct protstream *out, const char *s, size_t n)
 }
 
 /*
+ * Print the @n bytes at @s as an atom, quoted-string or literal.
+ * Handles embedded NULs.
+ */
+EXPORTED int prot_printamap(struct protstream *out, const char *s, size_t n)
+{
+    const char *p;
+    int r;
+
+    if (!s) return prot_printf(out, "NIL");
+
+    if (imparse_isnatom(s, n) && (n != 3 || memcmp(s, "NIL", 3)))
+	return prot_write(out, s, n);
+
+    /* if it's too long, literal it */
+    if (n >= MAXQSTRING)
+	return prot_printliteral(out, s, n);
+
+    /* Look for NULs or any non-QCHAR characters */
+    for (p = s; (size_t)(p-s) < n; p++) {
+	if (!*p || !isQCHAR(*p))
+	    return prot_printliteral(out, s, n);
+    }
+
+    prot_putc('"', out);
+    r = prot_write(out, s, n);
+    if (r < 0)
+	return r;
+    prot_putc('"', out);
+    return r+2;
+}
+
+/*
  * Print 's' as an atom, quoted-string, or literal
  */
 EXPORTED int prot_printastring(struct protstream *out, const char *s)
