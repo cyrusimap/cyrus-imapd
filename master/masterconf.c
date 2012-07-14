@@ -57,6 +57,8 @@
 #include "util.h"
 #include "libconfig.h"
 #include "xmalloc.h"
+#include "xstrlcat.h"
+#include "xstrlcpy.h"
 
 #if HAVE_UNISTD_H
 # include <unistd.h>

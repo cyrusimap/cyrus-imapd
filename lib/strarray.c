@@ -48,6 +48,7 @@
 #include "bsearch.h"
 #include "util.h"
 #include "xmalloc.h"
+#include <ctype.h>
 
 EXPORTED strarray_t *strarray_new(void)
 {

@@ -70,6 +70,7 @@
 extern int addrparse(sieve_script_t*);
 typedef struct yy_buffer_state *YY_BUFFER_STATE;
 extern YY_BUFFER_STATE addr_scan_string(const char*);
+extern void addr_delete_buffer(YY_BUFFER_STATE);
 
 extern int sievelineno;
 
