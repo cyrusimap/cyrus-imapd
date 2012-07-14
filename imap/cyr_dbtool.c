@@ -120,6 +120,111 @@ static int printer_cb(void *rock __attribute__((unused)),
     return 0;
 }
 
+/* use IMAP literals for all communications */
+static int aprinter_cb(void *rock,
+		       const char *key, size_t keylen,
+		       const char *data, size_t datalen)
+{
+    struct protstream *out = (struct protstream *)rock;
+
+    prot_printamap(out, key, keylen);
+    prot_putc(' ', out);
+    prot_printamap(out, data, datalen);
+    prot_putc('\n', out);
+
+    return 0;
+}
+
+static void batch_commands(struct db *db)
+{
+    struct buf cmd = BUF_INITIALIZER;
+    struct buf key = BUF_INITIALIZER;
+    struct buf val = BUF_INITIALIZER;
+    struct txn *tid = NULL;
+    struct txn **tidp = NULL;
+    struct protstream *in = prot_new(0, 0); // stdin
+    struct protstream *out = prot_new(1, 1); // stdout
+    int line = 0;
+    char c = '-';
+    int r = 0;
+
+    while (c != EOF) {
+	buf_reset(&cmd);
+	buf_reset(&key);
+	buf_reset(&val);
+	line++;
+	c = getword(in, &cmd);
+	if (c == ' ')
+	    c = getastring(in, NULL, &key);
+	if (c == ' ')
+	    c = getastring(in, NULL, &val);
+	if (c == '\r') c = prot_getc(in);
+	if (cmd.len) {
+	    /* got a command! */
+	    if (!strcmp(cmd.s, "BEGIN")) {
+		if (tidp) {
+		    r = IMAP_MAILBOX_LOCKED;
+		    goto done;
+		}
+		tidp = &tid;
+	    }
+	    else if (!strcmp(cmd.s, "SHOW")) {
+		r = cyrusdb_foreach(db, key.s, key.len, NULL, aprinter_cb, out, tidp);
+		if (r) goto done;
+		prot_flush(out);
+	    }
+	    else if (!strcmp(cmd.s, "SET")) {
+		r = cyrusdb_store(db, key.s, key.len, val.s, val.len, tidp);
+		if (r) goto done;
+	    }
+	    else if (!strcmp(cmd.s, "GET")) {
+		const char *res;
+		size_t reslen;
+		r = cyrusdb_fetch(db, key.s, key.len, &res, &reslen, tidp);
+		if (r) goto done;
+		aprinter_cb(out, key.s, key.len, res, reslen);
+		prot_flush(out);
+	    }
+	    else if (!strcmp(cmd.s, "DELETE")) {
+		r = cyrusdb_delete(db, key.s, key.len, tidp, 1);
+		if (r) goto done;
+	    }
+	    else if (!strcmp(cmd.s, "COMMIT")) {
+		if (!tidp) {
+		    r = IMAP_NOTFOUND;
+		    goto done;
+		}
+		r = cyrusdb_commit(db, tid);
+		if (r) goto done;
+		tid = NULL;
+		tidp = NULL;
+	    }
+	    else if (!strcmp(cmd.s, "ABORT")) {
+		if (!tidp) {
+		    r = IMAP_NOTFOUND;
+		    goto done;
+		}
+		r = cyrusdb_abort(db, tid);
+		if (r) goto done;
+		tid = NULL;
+		tidp = NULL;
+	    }
+	    else {
+		r = IMAP_MAILBOX_NONEXISTENT;
+		goto done;
+	    }
+	}
+	if (c != '\n') break;
+    }
+    
+done:
+    if (r) {
+	if (tid) cyrusdb_abort(db, tid);
+	fprintf(stderr, "FAILED: line %d at cmd %.*s with error %s\n",
+	        line, cmd.len, cmd.s, error_message(r));
+    }
+}
+
 int main(int argc, char *argv[])
 {
     const char *fname;
@@ -175,6 +280,7 @@ int main(int argc, char *argv[])
 	fprintf(stderr, "* dump - internal format dump\n");
 	fprintf(stderr, "* consistent - check consistency\n");
 	fprintf(stderr, "* damage - start a commit then die during\n");
+	fprintf(stderr, "* batch - read from stdin and execute commands\n");
 	fprintf(stderr, "You may omit key or key/value and specify one per line on stdin\n");
 	fprintf(stderr, "keys are terminated by tab or newline, values are terminated by newline\n");
 	exit(-1);
@@ -226,6 +332,8 @@ int main(int argc, char *argv[])
             loop = read_key_value( &key, &keylen, &value, &vallen );
           }
         }
+    } else if (!strcmp(action, "batch")) {
+	batch_commands(db);
     } else if (!strcmp(action, "show")) {
         if ((argc - optind) < 4) {
             cyrusdb_foreach(db, "", 0, NULL, printer_cb, NULL, tidp);
