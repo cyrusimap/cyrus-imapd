@@ -197,7 +197,6 @@ HIDDEN int mappedfile_readlock(struct mappedfile *mf)
     struct stat sbuf, sbuffile;
     int newfd = -1;
 
-    assert(mf);
     assert(mf->lock_status == MF_UNLOCKED);
     assert(mf->fd != -1);
     assert(!mf->dirty);
@@ -252,7 +251,6 @@ HIDDEN int mappedfile_writelock(struct mappedfile *mf)
     struct stat sbuf;
     const char *lockfailaction;
 
-    assert(mf);
     assert(mf->lock_status == MF_UNLOCKED);
     assert(mf->fd != -1);
     assert(!mf->dirty);
@@ -301,7 +299,6 @@ HIDDEN int mappedfile_unlock(struct mappedfile *mf)
 
 HIDDEN int mappedfile_commit(struct mappedfile *mf)
 {
-    assert(mf);
     assert(mf->lock_status == MF_WRITELOCKED);
     assert(mf->fd != -1);
 
@@ -334,7 +331,6 @@ HIDDEN ssize_t mappedfile_pwrite(struct mappedfile *mf,
     ssize_t written;
     off_t pos;
 
-    assert(mf);
     assert(mf->lock_status == MF_WRITELOCKED);
     assert(mf->fd != -1);
     assert(base);
@@ -374,7 +370,6 @@ HIDDEN ssize_t mappedfile_pwritev(struct mappedfile *mf,
     ssize_t written;
     off_t pos;
 
-    assert(mf);
     assert(mf->lock_status == MF_WRITELOCKED);
     assert(mf->fd != -1);
     assert(iov);
@@ -416,7 +411,6 @@ HIDDEN int mappedfile_truncate(struct mappedfile *mf, off_t offset)
 {
     int r;
 
-    assert(mf);
     assert(mf->lock_status == MF_WRITELOCKED);
     assert(mf->fd != -1);
 
@@ -456,44 +450,32 @@ HIDDEN int mappedfile_rename(struct mappedfile *mf, const char *newname)
 
 HIDDEN int mappedfile_islocked(const struct mappedfile *mf)
 {
-    assert(mf);
-
     return (mf->lock_status != MF_UNLOCKED);
 }
 
 //FIXME this function is nowhere used
 HIDDEN int mappedfile_isreadlocked(const struct mappedfile *mf)
 {
-    assert(mf);
-
     return (mf->lock_status == MF_READLOCKED);
 }
 
 HIDDEN int mappedfile_iswritelocked(const struct mappedfile *mf)
 {
-    assert(mf);
-
     return (mf->lock_status == MF_WRITELOCKED);
 }
 
 HIDDEN const char *mappedfile_base(const struct mappedfile *mf)
 {
-    assert(mf);
-
     /* XXX - require locked? */
     return mf->map_base;
 }
 
 HIDDEN size_t mappedfile_size(const struct mappedfile *mf)
 {
-    assert(mf);
-
     return mf->map_size;
 }
 
 HIDDEN const char *mappedfile_fname(const struct mappedfile *mf)
 {
-    assert(mf);
-
     return mf->fname;
 }
