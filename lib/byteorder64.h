@@ -47,19 +47,38 @@
 
 #include <config.h>
 
-/* 64-bit host/network byte-order swap macros */
-#ifdef WORDS_BIGENDIAN
-#define htonll(x) (x)
-#define ntohll(x) (x)
-#else
-#define htonll(x) _htonll(x)
-#define ntohll(x) _ntohll(x)
+/* http://stackoverflow.com/a/4410728/94253 */
 
+#if defined(__linux__)
+#  include <endian.h>
+#elif defined(__FreeBSD__) || defined(__NetBSD__)
+#  include <sys/endian.h>
+#elif defined(__OpenBSD__)
+#  include <sys/types.h>
+#  define be16toh(x) betoh16(x)
+#  define be32toh(x) betoh32(x)
+#  define be64toh(x) betoh64(x)
+#elif defined(WORDS_BIGENDIAN)
+#define CYRUS_BYTESWAP
+#endif
+
+/* 64-bit host/network byte-order swap macros */
+
+#ifdef be64toh
+#define htonll(x) htobe64(x)
+#define ntohll(x) be64toh(x)
+#elif defined (CYRUS_BYTESWAP)
 /* little-endian 64-bit host/network byte-order swap functions */
 extern unsigned long long _htonll(unsigned long long);
 extern unsigned long long _ntohll(unsigned long long);
+#define htonll(x) _htonll(x)
+#define ntohll(x) _ntohll(x)
+#else
+#define htonll(x) (x)
+#define ntohll(x) (x)
+#endif
 
-#endif /* WORDS_BIGENDIAN */
+
 
 /* 64-bit host/network byte-order swap functions to/from non-aligned buffers */
 extern void *align_htonll(void *dst, unsigned long long src);

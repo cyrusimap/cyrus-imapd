@@ -45,7 +45,7 @@
 #include <config.h>
 #include "byteorder64.h"
 
-#if !defined(WORDS_BIGENDIAN)
+#ifdef CYRUS_BYTESWAP
 
 #include <netinet/in.h>
 
@@ -94,7 +94,7 @@ EXPORTED unsigned long long _ntohll(unsigned long long x)
     return u2.a;
 }
 
-#endif /* !defined(WORDS_BIGENDIAN) */
+#endif /* CYRUS_BYTESWAP */
 
 #include <string.h>
 
