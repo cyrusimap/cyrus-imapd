@@ -1,0 +1,21 @@
+#include "cunit/cunit.h"
+#include "byteorder64.h"
+
+static void test_byteorder(void)
+{
+    const char b64[8] = { 0, 0, 0, 0, 0, 0, 0, 1 };
+    const char b32[4] = { 0, 0, 0, 1 };
+    char i64[8];
+    char i32[4];
+
+    /* test 64 bit */
+    CU_ASSERT_EQUAL(ntohll(*((uint64_t *)(b64))), 1);
+    *((uint64_t *)i64) = htonll(1);
+    CU_ASSERT_EQUAL(memcmp((char *)i64, b64, 8), 0);
+
+    /* test 32 bit */
+    CU_ASSERT_EQUAL(ntohl(*((uint32_t *)(b32))), 1);
+    *((uint32_t *)i32) = htonl(1);
+    CU_ASSERT_EQUAL(memcmp((char *)i32, b32, 4), 0);
+}
+

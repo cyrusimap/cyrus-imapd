@@ -247,6 +247,7 @@ cunit_TESTS = \
 	cunit/backend.testc \
 	cunit/binhex.testc \
 	cunit/buf.testc \
+	cunit/byteorder64.testc \
 	cunit/charset.testc \
 	cunit/crc32.testc \
 	cunit/db.testc \
