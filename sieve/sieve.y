@@ -344,6 +344,12 @@ action: REJCT STRING             { if (!parse_script->support.reject) {
                                    }
 	                           $$ = new_command(INCLUDE);
 				   $$->u.inc.location = $2;
+				   int i;
+				   for (i=0; $3[i] != '\0'; i++)
+				     if ($3[i] == '/') {
+				       yyerror("included script name must not contain slash"); YYERROR;
+				       break;
+				     }
 				   $$->u.inc.script = $3; }
          | RETURN		 { if (!parse_script->support.include) {
                                     yyerror("include MUST be enabled with \"require\"");
