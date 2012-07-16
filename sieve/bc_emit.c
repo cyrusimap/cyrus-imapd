@@ -60,7 +60,7 @@
 
 
 #if DUMPCODE
-void dump(bytecode_info_t *d);
+void dump(bytecode_info_t *d, int level);
 #endif
 
 static inline int write_int (int fd, int x)
@@ -792,7 +792,7 @@ EXPORTED int sieve_emit_bytecode(int fd, bytecode_info_t *bc)
     if(write_int(fd, data) == -1) return -1;
 
 #if DUMPCODE
-    dump(bc);
+    dump(bc, 0);
 #endif
 
     /*the sizeof(int) is to account for the version # at the begining*/

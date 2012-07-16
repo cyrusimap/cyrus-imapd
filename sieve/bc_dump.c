@@ -211,7 +211,7 @@ void dump(bytecode_info_t *d, int level)
     printf("Dumping almost flattened bytecode\n\n");
     
     if(!d) return;
-    
+
     for(i=0; i<d->scriptend; i++) {
 	print_spaces(level);
 	switch(d->data[i].op) {
@@ -314,7 +314,7 @@ void dump(bytecode_info_t *d, int level)
 		   " FROM({%d}%s) HANDLE({%d}%s)\n",
 		   d->data[i+1].len, (d->data[i+1].len == -1 ? "[nil]" : d->data[i+2].str),
 		   d->data[i+3].len, (d->data[i+3].len == -1 ? "[nil]" : d->data[i+4].str),
-		   d->data[i+5].value * (d->data[i].op == B_VACATION ? 1 : 24 * 60 * 60 /* 1 day */), d->data[i+6].value),
+		   d->data[i+5].value * (d->data[i].op == B_VACATION ? 1 : (24 * 60 * 60 /* 1 day */)), d->data[i+6].value,
 		   d->data[i+7].len, (d->data[i+7].len == -1 ? "[nil]" : d->data[i+8].str),
 		   d->data[i+9].len, (d->data[i+9].len == -1 ? "[nil]" : d->data[i+10].str));
 	    i+=10;
