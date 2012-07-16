@@ -1367,29 +1367,41 @@ int sieve_eval_bc(sieve_execute_t *exe, int is_incl, sieve_interp_t *i,
 	case B_JUMP:/*16*/
 	    ip= ntohl(bc[ip+1].jump);
 	    break;
-	    
+
 	case B_INCLUDE:/*17*/
 	{
-	    int isglobal = (ntohl(bc[ip+1].value) == B_GLOBAL);
+	    int isglobal = (ntohl(bc[ip+1].value) & 63) == B_GLOBAL;
+	    int once = ntohl(bc[ip+1].value) & 64 ? 1 : 0;
+	    int isoptional = ntohl(bc[ip+1].value) & 128 ? 1 : 0;
 	    char fpath[4096];
 
 	    ip = unwrap_string(bc, ip+2, &data, NULL);
 
 	    res = i->getinclude(sc, data, isglobal, fpath, sizeof(fpath));
-	    if (res != SIEVE_OK)
-		*errmsg = "Include can not find script";
-
-	    if (!res) {
-		res = sieve_script_load(fpath, &exe);
-		if (res != SIEVE_OK)
-		*errmsg = "Include can not load script";
+	    if (res != SIEVE_OK) {
+		if (isoptional == 0)
+		    *errmsg = "Include can not find script";
+		else
+		    res = SIEVE_OK;
+	        break;
+	    }
+	    res = sieve_script_load(fpath, &exe);
+	    if (res == SIEVE_SCRIPT_RELOADED) {
+		if (once == 1) {
+		    res = SIEVE_OK;
+		    break;
+		}
+	    } else if (res != SIEVE_OK) { /* SIEVE_FAIL */
+		if (isoptional == 0)
+		    *errmsg = "Include can not load script";
+		else
+		    res = SIEVE_OK;
+		break;
 	    }
 
-	    if (!res)
-		res = sieve_eval_bc(exe, 1, i,
-				    sc, m, imapflags, actions,
-				    notify_list, errmsg);
-
+	    res = sieve_eval_bc(exe, 1, i,
+				sc, m, imapflags, actions,
+				notify_list, errmsg);
 	    break;
 	}
 

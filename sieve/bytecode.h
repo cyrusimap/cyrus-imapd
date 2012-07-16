@@ -104,8 +104,9 @@ typedef union
  * version 0x04 scripts implemented BODY, INCLUDE and COPY extensions
  * version 0x05 scripts implemented updated VACATION (:from and :handle)
  * version 0x06 scripts implemented updated VACATION (:seconds)
+ * version 0x07 scripts implemented updated INCLUDE (:once and :optional)
  */
-#define BYTECODE_VERSION 0x06
+#define BYTECODE_VERSION 0x07
 #define BYTECODE_MIN_VERSION 0x03 /* minimum supported version */
 #define BYTECODE_MAGIC "CyrSBytecode"
 #define BYTECODE_MAGIC_LEN 12 /* Should be multiple of 4 */

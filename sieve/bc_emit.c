@@ -739,9 +739,9 @@ static int bc_action_emit(int fd, int codep, int stopcodep,
 	    
 	    break;
 	case B_INCLUDE:
-	    /* Location (word), Filename String */ 
+	    /* Location + (Once<<6) + (Optional<<7) (word), Filename String */
 
-	    /* Location */
+	    /* Location + (Once<<6) + (Optional<<7) */
 	    if(write_int(fd, bc->data[codep].value) == -1)
 		return -1;
 	    filelen += sizeof(int);

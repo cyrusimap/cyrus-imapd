@@ -497,11 +497,16 @@ EXPORTED int sieve_script_load(const char *fname, sieve_execute_t **ret)
 	/* add buffer to list */
 	bc->next = ex->bc_list;
 	ex->bc_list = bc;
-    }
 
-    ex->bc_cur = bc;
-    *ret = ex;
-    return SIEVE_OK;
+	ex->bc_cur = bc;
+	*ret = ex;
+	return SIEVE_OK;
+    } else {
+	// script was loaded in the past
+	ex->bc_cur = bc;
+	*ret = ex;
+	return SIEVE_SCRIPT_RELOADED;
+    }
 }
 
 

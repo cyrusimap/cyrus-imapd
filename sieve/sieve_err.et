@@ -64,6 +64,6 @@ ec SIEVE_NOMEM,
 ec SIEVE_DONE,
    "Sieve action already taken"
 
+ec SIEVE_SCRIPT_RELOADED,
+   "Sieve script was loaded in the past"
 end
-
-

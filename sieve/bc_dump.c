@@ -328,8 +328,11 @@ void dump(bytecode_info_t *d, int level)
 	    break;
 
 	case B_INCLUDE:
-	    printf("%d: INCLUDE ONCE:0 OPTIONAL:0 LOCATION:%d {%d}%s\n",i,
-		   d->data[i+1].value,d->data[i+2].len,d->data[i+3].str);
+	    printf("%d: INCLUDE ONCE:%s OPTIONAL:%s LOCATION:%s {%d}%s\n",i,
+		   d->data[i+1].value & 64 ? "yes" : "no",
+		   d->data[i+1].value & 128 ? "yes" : "no",
+		   (d->data[i+1].value & 63) == B_GLOBAL ? "global" : "local",
+		   d->data[i+2].len,d->data[i+3].str);
 	    i+=3;
 	    break;
 

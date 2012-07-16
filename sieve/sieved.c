@@ -121,7 +121,7 @@ int main(int argc, char * argv[])
     
     len=load(script_fd,&bc);
     close(script_fd);
-    
+
     if (bc) {
 	dump2(bc, len );
 	exit(0);
@@ -496,10 +496,13 @@ static void dump2(bytecode_input_t *d, int bc_len)
 
 	case B_INCLUDE:/*17*/
 	    printf("INCLUDE ");
-	    switch (ntohl(d[i].value)) {
+	    switch (ntohl(d[i].value) & 63) {
 	    case B_PERSONAL: printf("Personal"); break;
 	    case B_GLOBAL: printf("Global"); break;
 	    }
+	    printf(" once:%s optional:%s",
+		ntohl(d[i].value) & 64 ? "yes" : "no",
+		ntohl(d[i].value) & 128 ? "yes" : "no");
 	    i = unwrap_string(d, i+1, &data, &len);
 	    printf(" {%d}%s\n", len, data);
 	    break;

@@ -704,22 +704,24 @@ static int bc_action_generate(int codep, bytecode_info_t *retval,
 
 	    case INCLUDE:
 		/* INCLUDE
-		   VALUE location
+		   VALUE location + (once << 6) + (optional << 7)
 		   STRING filename */
 		if (!atleast(retval, codep+4)) return -1;
 		retval->data[codep++].op = B_INCLUDE;
 
 		switch(c->u.inc.location) {
 		case PERSONAL:
-		    retval->data[codep++].value = B_PERSONAL;
+		    retval->data[codep].value = B_PERSONAL;
 		    break;
 		case GLOBAL:
-		    retval->data[codep++].value = B_GLOBAL;
+		    retval->data[codep].value = B_GLOBAL;
 		    break;
 		default:
 		    return -1;
 		}
-		
+
+		retval->data[codep++].value |= (c->u.inc.once << 6)
+					    | (c->u.inc.optional << 7);
 		retval->data[codep++].len = strlen(c->u.inc.script);
 		retval->data[codep++].str = c->u.inc.script;
 		break;
