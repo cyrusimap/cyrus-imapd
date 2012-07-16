@@ -1943,18 +1943,25 @@ static void sync_md5_record(const struct mailbox *mailbox,
     sync_md5(sync_record_representation(mailbox, record), crcp);
 }
 
-static const char *sync_annot_representation(const struct sync_annot *annot)
-{
-    buf_reset(&sync_crc32_buf);
-    buf_printf(&sync_crc32_buf, "%s %s ", annot->entry, annot->userid);
-    buf_append(&sync_crc32_buf, &annot->value);
-
-    return buf_cstring(&sync_crc32_buf);
-}
-
 static void sync_md5_annot(const struct sync_annot *annot, bit32 *crcp)
 {
-    sync_md5(sync_annot_representation(annot), crcp);
+    MD5_CTX ctx;
+    union {
+	bit32 b32;
+	unsigned char md5[16];
+    } result;
+
+    MD5Init(&ctx);
+
+    MD5Update(&ctx, annot->entry, strlen(annot->entry));
+    MD5Update(&ctx, " ", 1);
+    MD5Update(&ctx, annot->userid, strlen(annot->userid));
+    MD5Update(&ctx, " ", 1);
+    MD5Update(&ctx, annot->value.s, annot->value.len);
+
+    MD5Final(result.md5, &ctx);
+
+    *crcp = ntohl(result.b32);
 }
 
 static const struct sync_crc_algorithm sync_crc_algorithms[] = {
