@@ -1354,8 +1354,8 @@ static int do_mailbox(struct dlist *kin)
     const char *acl;
     const char *options_str;
     struct {
-	const char *mvalue;	/* master's value, points into dlist */
-	char rvalue[128];	/* replica's value */
+	uint32_t mvalue;	/* master's value */
+	uint32_t rvalue;	/* replica's value */
     } sync_crc;
 
     uint32_t options;
@@ -1401,7 +1401,7 @@ static int do_mailbox(struct dlist *kin)
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
 
     /* Get the CRC */
-    if (!dlist_getatom(kin, "SYNC_CRC", &sync_crc.mvalue))
+    if (!dlist_getnum32(kin, "SYNC_CRC", &sync_crc.mvalue))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
 
     /* optional */
@@ -1520,7 +1520,7 @@ static int do_mailbox(struct dlist *kin)
     /* TODO: we might be able to do this in a single pass above.
        Need to check whether the above code ensures that we traverse
        all the replica records in the correct order */
-    r = sync_crc_calc(mailbox, sync_crc.rvalue, sizeof(sync_crc.rvalue));
+    r = sync_crc_calc(mailbox, &sync_crc.rvalue);
     if (r) goto done;
 
     /* this is an ugly construct that's an artifact of the
@@ -1541,7 +1541,7 @@ done:
 
     /* check return value */
     if (r) return r;
-    if (strcmp(sync_crc.rvalue, sync_crc.mvalue))
+    if (sync_crc.rvalue != sync_crc.mvalue)
 	return IMAP_SYNC_CHECKSUM;
     return 0;
 }

@@ -438,7 +438,7 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
 					 uint32_t uidvalidity,
 					 uint32_t last_uid,
 					 modseq_t highestmodseq,
-					 const char *crc,
+					 uint32_t crc,
 					 uint32_t recentuid,
 					 time_t recenttime,
 					 time_t pop3_last_login,
@@ -464,7 +464,7 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
     result->last_uid = last_uid;
     result->highestmodseq = highestmodseq;
     result->options = options;
-    result->sync_crc = xstrdupnull(crc);
+    result->sync_crc = crc;
     result->recentuid = recentuid;
     result->recenttime = recenttime;
     result->pop3_last_login = pop3_last_login;
@@ -504,7 +504,6 @@ void sync_folder_list_free(struct sync_folder_list **lp)
 	free(current->part);
 	free(current->acl);
 	free(current->specialuse);
-	free(current->sync_crc);
 	free(current);
 	current = next;
     }
@@ -1373,9 +1372,9 @@ int sync_mailbox(struct mailbox *mailbox,
 		 int printrecords)
 {
     int r = 0;
-    char sync_crc[128];
+    uint32_t sync_crc;
 
-    r = sync_crc_calc(mailbox, sync_crc, sizeof(sync_crc));
+    r = sync_crc_calc(mailbox, &sync_crc);
     if (r) goto done;
 
     dlist_setatom(kl, "UNIQUEID", mailbox->uniqueid);
@@ -1391,8 +1390,8 @@ int sync_mailbox(struct mailbox *mailbox,
     dlist_setatom(kl, "PARTITION", mailbox->part);
     dlist_setatom(kl, "ACL", mailbox->acl);
     dlist_setatom(kl, "OPTIONS", sync_encode_options(mailbox->i.options));
-    dlist_setatom(kl, "SYNC_CRC", sync_crc);
-    if (mailbox->quotaroot)
+    dlist_setnum32(kl, "SYNC_CRC", sync_crc);
+    if (mailbox->quotaroot) 
 	dlist_setatom(kl, "QUOTAROOT", mailbox->quotaroot);
     if (mailbox->specialuse)
 	dlist_setatom(kl, "SPECIALUSE", mailbox->specialuse);
@@ -2039,7 +2038,7 @@ static void calc_annots(struct mailbox *mailbox,
  * IMAP atom) in @buf.
  * Returns: 0 on success, -ve on error.
  */
-int sync_crc_calc(struct mailbox *mailbox, char *buf, int maxlen)
+int sync_crc_calc(struct mailbox *mailbox, uint32_t *crcp)
 {
     struct index_record record;
     uint32_t recno;
@@ -2062,7 +2061,7 @@ int sync_crc_calc(struct mailbox *mailbox, char *buf, int maxlen)
     if (sync_crc_algorithm->addannot)
 	calc_annots(mailbox, NULL, &crc);
 
-    snprintf(buf, maxlen, "%u", crc);
+    *crcp = crc;
     return 0;
 }
 

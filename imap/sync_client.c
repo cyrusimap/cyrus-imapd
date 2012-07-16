@@ -242,7 +242,7 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
 	sync_folder_list_add(master_folders, mailbox->uniqueid, mailbox->name,
 			     mailbox->part, mailbox->acl, mailbox->i.options,
 			     mailbox->i.uidvalidity, mailbox->i.last_uid,
-			     mailbox->i.highestmodseq, NULL,
+			     mailbox->i.highestmodseq, 0,
 			     mailbox->i.recentuid, mailbox->i.recenttime,
 			     mailbox->i.pop3_last_login, mailbox->specialuse,
 			     mailbox->i.pop3_show_after);
@@ -447,7 +447,7 @@ static int response_parse(const char *cmd,
 	    modseq_t highestmodseq = 0;
 	    uint32_t uidvalidity = 0;
 	    uint32_t last_uid = 0;
-	    const char *sync_crc = NULL;
+	    uint32_t sync_crc = 0;
 	    uint32_t recentuid = 0;
 	    time_t recenttime = 0;
 	    time_t pop3_last_login = 0;
@@ -462,7 +462,7 @@ static int response_parse(const char *cmd,
 	    if (!dlist_getnum64(kl, "HIGHESTMODSEQ", &highestmodseq)) goto parse_err;
 	    if (!dlist_getnum32(kl, "UIDVALIDITY", &uidvalidity)) goto parse_err;
 	    if (!dlist_getnum32(kl, "LAST_UID", &last_uid)) goto parse_err;
-	    if (!dlist_getatom(kl, "SYNC_CRC", &sync_crc)) goto parse_err;
+	    if (!dlist_getnum32(kl, "SYNC_CRC", &sync_crc)) goto parse_err;
 	    if (!dlist_getnum32(kl, "RECENTUID", &recentuid)) goto parse_err;
 	    if (!dlist_getdate(kl, "RECENTTIME", &recenttime)) goto parse_err;
 	    if (!dlist_getdate(kl, "POP3_LAST_LOGIN", &pop3_last_login)) goto parse_err;
@@ -1394,7 +1394,7 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
     /* look for any mismatches */
     unsigned options = mailbox->i.options & MAILBOX_OPTIONS_MASK;
     int r;
-    char sync_crc[128];
+    uint32_t sync_crc;
 
     if (!remote) return 0;
     if (remote->last_uid != mailbox->i.last_uid) return 0;
@@ -1414,10 +1414,10 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
 	 if (remote->specialuse) return 0;
     }
 
-    r = sync_crc_calc(mailbox, sync_crc, sizeof(sync_crc));
+    r = sync_crc_calc(mailbox, &sync_crc);
     if (r) return 0;
 
-    if (strcmp(remote->sync_crc, sync_crc)) return 0;
+    if (remote->sync_crc != sync_crc) return 0;
 
     /* otherwise it's unchanged! */
     return 1;
