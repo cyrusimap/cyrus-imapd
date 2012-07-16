@@ -322,10 +322,8 @@ static void dobanner(void)
     }
 
     /* Tell the client about how we're willing to do SYNC_CRCs */
-    prot_printf(sync_out, "* SYNC_CRC_ALGORITHM %s\r\n",
-			  sync_crc_list_algorithms());
-    prot_printf(sync_out, "* SYNC_CRC_COVERS %s\r\n",
-			  sync_crc_list_covers());
+    prot_printf(sync_out, "* CRC_VERSIONS %u-%u\r\n",
+		CRC_MIN_VERSION, CRC_MAX_VERSION);
 
     prot_printf(sync_out,
 		"* OK %s Cyrus sync server %s\r\n",
@@ -416,7 +414,8 @@ int service_main(int argc __attribute__((unused)),
     if (!config_getswitch(IMAPOPT_SYNC_LOG_CHAIN))
 	sync_log_suppress();
 
-    sync_crc_setup(NULL, NULL, /*strict*/1);	/* initialise with defaults */
+    /* initialise with defaults */
+    sync_crc_setup(CRC_MIN_VERSION, CRC_MIN_VERSION, /*strict*/1);
 
     dobanner();
 
@@ -2373,21 +2372,19 @@ static int do_set_options(const struct dlist *kin)
 {
     int r = 0;
     struct dlist *child;
-    const char *algorithm = NULL;
-    const char *covers = NULL;
+    uint32_t crc_version = CRC_MIN_VERSION;
 
     for (child = kin->head ; child ; child = child->next) {
-	if (!strcmp(child->name, "SYNC_CRC_ALGORITHM"))
-	    algorithm = child->sval;
-	else if (!strcmp(child->name, "SYNC_CRC_COVERS"))
-	    covers = child->sval;
+	if (!strcmp(child->name, "CRC_VERSION")) {
+	    dlist_tonum32(child, &crc_version);
+	    r = sync_crc_setup(crc_version, crc_version, /*strict*/1);
+	    if (r < 0) return r;
+	    r = 0;
+	}
 	else {
 	    return IMAP_PROTOCOL_ERROR;
 	}
     }
-
-    if (algorithm || covers)
-	r = sync_crc_setup(algorithm, covers, /*strict*/1);
 
     return r;
 }

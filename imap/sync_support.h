@@ -432,11 +432,10 @@ int diff_annotations(const struct sync_annot_list *local_annots,
 
 /* ====================================================================== */
 
-const char *sync_crc_get_algorithm(void);
-const char *sync_crc_list_algorithms(void);
-const char *sync_crc_get_covers(void);
-const char *sync_crc_list_covers(void);
-int sync_crc_setup(const char *, const char *, int);
+#define CRC_MIN_VERSION		1
+#define CRC_MAX_VERSION		2
+
+int sync_crc_setup(unsigned minv, unsigned maxv, int strict);
 int sync_crc_calc(struct mailbox *, char *, int);
 
 /* ====================================================================== */

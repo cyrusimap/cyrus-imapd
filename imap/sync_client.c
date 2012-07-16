@@ -113,8 +113,7 @@ static int connect_once    = 0;
 static int background      = 0;
 static int do_compress     = 0;
 
-#define CAPA_SYNC_CRC_ALGORITHM	    (CAPA_COMPRESS<<1)
-#define CAPA_SYNC_CRC_COVERS	    (CAPA_COMPRESS<<2)
+#define CAPA_CRC_VERSIONS	    (CAPA_COMPRESS<<1)
 
 static struct protocol_t csync_protocol =
 { "csync", "csync",
@@ -124,8 +123,7 @@ static struct protocol_t csync_protocol =
     { { "SASL", CAPA_AUTH },
       { "STARTTLS", CAPA_STARTTLS },
       { "COMPRESS=DEFLATE", CAPA_COMPRESS },
-      { "SYNC_CRC_ALGORITHM", CAPA_SYNC_CRC_ALGORITHM },
-      { "SYNC_CRC_COVERS", CAPA_SYNC_CRC_COVERS },
+      { "CRC_VERSIONS", CAPA_CRC_VERSIONS },
       { NULL, 0 } } },
   { "STARTTLS", "OK", "NO", 1 },
   { "AUTHENTICATE", USHRT_MAX, 0, "OK", "NO", "+ ", "*", NULL, 0 },
@@ -2980,40 +2978,45 @@ static void replica_connect(const char *channel)
     if (timeout < 3) timeout = 3;
     prot_settimeout(sync_in, timeout);
 
-    /* SYNC_CRC parameter negotiation.  We look for the server's
+    /* SYNC_CRC version negotiation.  We look for the server's
      * capabilities, and if they're provided then try to use them
      * to initialise ourself.  If that fails (e.g. the server
-     * uses only algorithms unknown to us), fail miserably. */
+     * uses only versions unknown to us), fail miserably. */
     {
-	char *algorithm = backend_get_cap_params(sync_backend, CAPA_SYNC_CRC_ALGORITHM);
-	char *covers = backend_get_cap_params(sync_backend, CAPA_SYNC_CRC_COVERS);
+	char *vers_str = backend_get_cap_params(sync_backend, CAPA_CRC_VERSIONS);
+	unsigned min_vers = 0, max_vers = 0;
 	struct dlist *kl;
 	int r;
 
-	if (sync_crc_setup(algorithm, covers, /*strict*/0) < 0) {
-negfailed:
-	    fprintf(stderr, "Can not negotiate SYNC_CRC params with server '%s'\n",
-		    servername);
-	    syslog(LOG_ERR, "Can not negotiate SYNC_CRC params with server '%s'\n",
-		    servername);
-	    _exit(1);
-	}
+	if (vers_str &&
+	    sscanf(vers_str, "%u-%u", &min_vers, &max_vers) == 2) {
 
-	if (algorithm && covers) {
+	    r = sync_crc_setup(min_vers, max_vers, /*strict*/0);
+	    if (r < 0) {
+negfailed:
+		fprintf(stderr, "Can not negotiate SYNC_CRC version with server '%s'\n",
+			servername);
+		syslog(LOG_ERR, "Can not negotiate SYNC_CRC version with server '%s'\n",
+			servername);
+		_exit(1);
+	    }
+	    max_vers = min_vers = (unsigned)r;
+
 	    /* server advertised the caps, presumably it knows
 	     * how to handle a SET */
 	    kl = dlist_newkvlist(NULL, "OPTIONS");
-	    dlist_setatom(kl, "SYNC_CRC_ALGORITHM", sync_crc_get_algorithm());
-	    dlist_setatom(kl, "SYNC_CRC_COVERS", sync_crc_get_covers());
+	    dlist_setnum32(kl, "CRC_VERSION", min_vers);
 	    sync_send_set(kl, sync_out);
 	    dlist_free(&kl);
 
 	    r = sync_parse_response("SET", sync_in, NULL);
 	    if (r) goto negfailed;
 	}
+	else {
+	    sync_crc_setup(CRC_MIN_VERSION, CRC_MIN_VERSION, /*strict*/0);
+	}
 
-	free(algorithm);
-	free(covers);
+	free(vers_str);
     }
 
     /* Force use of LITERAL+ so we don't need two way communications */

@@ -1813,14 +1813,9 @@ out:
 
 /* ====================================================================== */
 
-#define SYNC_CRC_BASIC		(1<<0)
-#define SYNC_CRC_ANNOTATIONS	(1<<1)
-
 struct sync_crc_algorithm {
-    const char *name;
-    int preference;
-    void (*addrecord)(const struct mailbox *, const struct index_record *,
-		      int, bit32 *);
+    unsigned version;
+    void (*addrecord)(const struct mailbox *, const struct index_record *, bit32 *);
     void (*addannot)(const struct sync_annot *, bit32 *);
 };
 
@@ -1872,8 +1867,7 @@ static const char *basic_representation(
 
 static const char *sync_record_representation(
 	const struct mailbox *mailbox,
-	const struct index_record *record,
-	int cflags)
+	const struct index_record *record)
 {
     strarray_t lcflags = STRARRAY_INITIALIZER;
     char *flags;
@@ -1882,10 +1876,6 @@ static const char *sync_record_representation(
     /* expunged flags have no sync CRC */
     if (record->system_flags & FLAG_EXPUNGED)
 	return NULL;
-
-    /* oldschool backwards compatible */
-    if (!cflags)
-	return basic_representation(mailbox, record);
 
     /* system flags */
     if (record->system_flags & FLAG_ANSWERED)
@@ -1931,22 +1921,12 @@ static const char *sync_record_representation(
 
 static void sync_crc32_addrecord_xor(const struct mailbox *mailbox,
 				     const struct index_record *record,
-				     int cflags, bit32 *crcp)
+				     bit32 *crcp)
 {
-    const char *rep = sync_record_representation(mailbox, record, cflags);
+    const char *rep = basic_representation(mailbox, record);
 
     if (rep)
 	*crcp ^= crc32_cstring(rep);
-}
-
-static void sync_crc32_addrecord_plus(const struct mailbox *mailbox,
-				      const struct index_record *record,
-				      int cflags, bit32 *crcp)
-{
-    const char *rep = sync_record_representation(mailbox, record, cflags);
-
-    if (rep)
-	*crcp += crc32_cstring(rep);
 }
 
 static void sync_md5_add(const char *rep, bit32 *crcp)
@@ -1968,9 +1948,9 @@ static void sync_md5_add(const char *rep, bit32 *crcp)
 
 static void sync_md5_addrecord(const struct mailbox *mailbox,
 			       const struct index_record *record,
-			       int cflags, bit32 *crcp)
+			       bit32 *crcp)
 {
-    sync_md5_add(sync_record_representation(mailbox, record, cflags), crcp);
+    sync_md5_add(sync_record_representation(mailbox, record), crcp);
 }
 
 static const char *sync_annot_representation(const struct sync_annot *annot)
@@ -1987,170 +1967,53 @@ static void sync_md5_addannot(const struct sync_annot *annot, bit32 *crcp)
     sync_md5_add(sync_annot_representation(annot), crcp);
 }
 
-static void sync_crc32_addannot_xor(const struct sync_annot *annot, bit32 *crcp)
-{
-    const char *rep = sync_annot_representation(annot);
-
-    if (rep)
-	*crcp ^= crc32_cstring(rep);
-}
-
-static void sync_crc32_addannot_plus(const struct sync_annot *annot, bit32 *crcp)
-{
-    const char *rep = sync_annot_representation(annot);
-
-    if (rep)
-	*crcp += crc32_cstring(rep);
-}
-
 static const struct sync_crc_algorithm sync_crc_algorithms[] = {
-    { "CRC32",
-	1,
+    {
+	1,		    /* historical 2.4.x CRC algorithm */
 	sync_crc32_addrecord_xor,
-	sync_crc32_addannot_xor },
-    { "CRC32M", /* modulo arithmetic */
-	2,
-	sync_crc32_addrecord_plus,
-	sync_crc32_addannot_plus },
-    { "MD5",  /* XOR the first 16 bytes of md5s instead */
-	3,
+	NULL },
+    {
+	2,		    /* XOR the first 16 bytes of md5s instead */
 	sync_md5_addrecord,
 	sync_md5_addannot },
-    { NULL, 0, NULL, NULL }
+    { 0, NULL, NULL }
 };
 
-static const struct sync_crc_algorithm *find_algorithm(const char *string)
+static const struct sync_crc_algorithm *find_algorithm(unsigned minvers,
+						       unsigned maxvers)
 {
-    char *b;	    /* temporary writable copy, for tokenising */
-    char *word;
     const struct sync_crc_algorithm *alg;
-    const struct sync_crc_algorithm *ret = NULL;
-    static const char sep[] = " \t,";
+    const struct sync_crc_algorithm *best = NULL;
 
-    b = xstrdup(string);
-    for (word = strtok(b, sep) ; word != NULL ; word = strtok(NULL, sep)) {
-	for (alg = sync_crc_algorithms ; alg->name ; alg++) {
-	    if (ret && ret->preference >= alg->preference)
-		continue; /* already got one as good */
-	    if (!strcasecmp(alg->name, word))
-		ret = alg;
-	}
+    for (alg = sync_crc_algorithms ; alg->version ; alg++) {
+	if (alg->version < minvers)
+	    continue;
+	if (alg->version > maxvers)
+	    continue;
+	if (best && best->version > alg->version)
+	    continue;
+	best = alg;
     }
-
-    free(b);
-    return ret;
-}
-
-const char *sync_crc_list_algorithms(void)
-{
-    static char *buf;
-
-    if (!buf) {
-	const struct sync_crc_algorithm *alg;
-	strarray_t algos = STRARRAY_INITIALIZER;
-
-	for (alg = sync_crc_algorithms ; alg->name ; alg++)
-	    strarray_append(&algos, alg->name);
-
-	buf = strarray_join(&algos, " ");
-	strarray_fini(&algos);
-    }
-
-    return buf;
-}
-
-static int covers_from_string(const char *str, int strict)
-{
-    int flags = 0;
-    char *b;	    /* temporary writable copy, for tokenising */
-    const char *p;
-    static const char sep[] = " \t,";
-
-    b = xstrdup(str);
-    for (p = strtok(b, sep) ; p ; p = strtok(NULL, sep)) {
-	if (!strcasecmp(p, "BASIC"))
-	    flags |= SYNC_CRC_BASIC;
-	else if (!strcasecmp(p, "ANNOTATIONS"))
-	    flags |= SYNC_CRC_ANNOTATIONS;
-	else if (strict) {
-	    flags = IMAP_INVALID_IDENTIFIER;
-	    goto done;
-	}
-    }
-done:
-    free(b);
-    return flags;
-}
-
-static const char *covers_to_string(int flags)
-{
-    static char buf[128];
-
-    /* TODO: we really need an expanding string class */
-    buf[0] = '\0';
-    if ((flags & SYNC_CRC_BASIC))
-	strcat(buf, " BASIC");
-    if ((flags & SYNC_CRC_ANNOTATIONS))
-	strcat(buf, " ANNOTATIONS");
-    return (buf[0] ? buf+1 : NULL);
-}
-
-const char *sync_crc_list_covers(void)
-{
-    int cflags = SYNC_CRC_BASIC | SYNC_CRC_ANNOTATIONS;
-    return covers_to_string(cflags);
+    return best;
 }
 
 static const struct sync_crc_algorithm *sync_crc_algorithm;
-static int sync_crc_covers;
 
-int sync_crc_setup(const char *algorithm, const char *covers,
-		   int strict_covers)
+int sync_crc_setup(unsigned minvers, unsigned maxvers, int strict)
 {
     const struct sync_crc_algorithm *alg;
-    int cflags;
 
-    if (!algorithm || !*algorithm) {
-	/* default is first one */
+    alg = find_algorithm(minvers, maxvers);
+
+    if (!alg) {
+	if (strict)
+	    return IMAP_PROTOCOL_ERROR;
+	/* otherwise, choose the oldest one */
 	alg = &sync_crc_algorithms[0];
-    } else {
-	alg = find_algorithm(algorithm);
-	if (!alg) {
-	    syslog(LOG_NOTICE, "unknown sync algorithm %s, using default",
-		   algorithm);
-	    alg = &sync_crc_algorithms[0];
-	}
     }
-
-    if (!covers || !*covers) {
-	/* default is zero, which means use the original CRC32
-	 * algorithm shipped with 2.4.0 */
-	cflags = 0;
-    } else {
-	cflags = covers_from_string(covers, strict_covers);
-	if (cflags < 0) {
-	    syslog(LOG_NOTICE, "unknown sync covers %s, using default",
-		   covers);
-	    cflags = 0;
-	}
-    }
-
-    if (!(cflags & SYNC_CRC_BASIC))
-	return IMAP_INVALID_IDENTIFIER;
 
     sync_crc_algorithm = alg;
-    sync_crc_covers = cflags;
-    return 0;
-}
-
-const char *sync_crc_get_algorithm(void)
-{
-    return (sync_crc_algorithm ? sync_crc_algorithm->name : "");
-}
-
-const char *sync_crc_get_covers(void)
-{
-    return covers_to_string(sync_crc_covers);
+    return alg->version;
 }
 
 static void calc_annots(struct mailbox *mailbox,
@@ -2191,12 +2054,12 @@ int sync_crc_calc(struct mailbox *mailbox, char *buf, int maxlen)
 	if (record.system_flags & FLAG_EXPUNGED)
 	    continue;
 
-	sync_crc_algorithm->addrecord(mailbox, &record, sync_crc_covers, &crc);
-	if (sync_crc_covers & SYNC_CRC_ANNOTATIONS)
+	sync_crc_algorithm->addrecord(mailbox, &record, &crc);
+	if (sync_crc_algorithm->addannot)
 	    calc_annots(mailbox, &record, &crc);
     }
 
-    if (sync_crc_covers & SYNC_CRC_ANNOTATIONS)
+    if (sync_crc_algorithm->addannot)
 	calc_annots(mailbox, NULL, &crc);
 
     snprintf(buf, maxlen, "%u", crc);
