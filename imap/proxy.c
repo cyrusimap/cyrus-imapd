@@ -176,7 +176,7 @@ proxy_findserver(const char *server,		/* hostname of backend */
 
     if (!ret || (ret->sock == -1)) {
 	/* need to (re)establish connection to server or create one */
-	ret = backend_connect(ret, server, prot, userid, NULL, NULL);
+	ret = backend_connect(ret, server, prot, userid, NULL, NULL, -1);
 	if (!ret) return NULL;
 
 	if (clientin) {

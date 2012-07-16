@@ -684,7 +684,8 @@ static void timed_out(int sig)
 
 EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char *server,
 				struct protocol_t *prot, const char *userid,
-				sasl_callback_t *cb, const char **auth_status)
+				sasl_callback_t *cb, const char **auth_status,
+				int logfd)
 {
     /* need to (re)establish connection to server or create one */
     int sock = -1;
@@ -785,7 +786,12 @@ EXPORTED struct backend *backend_connect(struct backend *ret_backend, const char
     /* use literal+ to send literals */
     prot_setisclient(ret->in, 1);
     prot_setisclient(ret->out, 1);
-    
+
+    if (logfd >= 0) {
+	prot_setlog(ret->in, logfd);
+	prot_setlog(ret->out, logfd);
+    }
+
     if (prot->banner.auto_capa) {
 	/* try to get the capabilities from the banner */
 	r = ask_capability(ret, /*dobanner*/1, AUTO_CAPA_BANNER);

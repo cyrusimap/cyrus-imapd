@@ -9817,7 +9817,7 @@ static int xfer_init(const char *toserver, const char *topart,
 
     /* Get a connection to the remote backend */
     xfer->be = backend_connect(NULL, toserver, &imap_protocol,
-			       "", NULL, NULL);
+			       "", NULL, NULL, -1);
     if (!xfer->be) {
 	r = IMAP_SERVER_UNAVAILABLE;
 	goto fail;

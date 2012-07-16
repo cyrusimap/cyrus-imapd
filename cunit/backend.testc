@@ -155,7 +155,7 @@ static void test_badhost(void)
     default_conditions();
 
     be = backend_connect(NULL, "nonexistanthost", &test_prot,
-			 USERID, callbacks, &auth_status);
+			 USERID, callbacks, &auth_status, /*fd*/-1);
     CU_ASSERT_PTR_NULL(be);
     CU_ASSERT_EQUAL(server_state->is_connected, 0);
 }
@@ -172,7 +172,7 @@ static void test_badservice(void)
     test_prot.service = "nonexistantservice";
 
     be = backend_connect(NULL, HOST, &test_prot,
-			 USERID, callbacks, &auth_status);
+			 USERID, callbacks, &auth_status, /*fd*/-1);
     CU_ASSERT_PTR_NULL(be);
     CU_ASSERT_EQUAL(server_state->is_connected, 0);
 }
@@ -191,7 +191,7 @@ static void test_sasl_plain(void)
     server_state->config.sasl_plain = 1;
 
     be = backend_connect(NULL, HOST, &test_prot,
-			 USERID, callbacks, &auth_status);
+			 USERID, callbacks, &auth_status, /*fd*/-1);
     CU_ASSERT_PTR_NOT_NULL_FATAL(be);
     CU_ASSERT_EQUAL(server_state->is_connected, 1);
     CU_ASSERT_EQUAL(server_state->is_authenticated, 1);
@@ -225,7 +225,7 @@ static void not_test_sasl_login(void)
     server_state->config.sasl_login = 1;
 
     be = backend_connect(NULL, HOST, &test_prot,
-			 USERID, callbacks, &auth_status);
+			 USERID, callbacks, &auth_status, /*fd*/-1);
     CU_ASSERT_PTR_NOT_NULL_FATAL(be);
     CU_ASSERT_EQUAL(server_state->is_connected, 1);
     CU_ASSERT_EQUAL(server_state->is_authenticated, 1);
@@ -258,7 +258,7 @@ static void test_sasl_digestmd5(void)
     server_state->config.sasl_digestmd5 = 1;
 
     be = backend_connect(NULL, HOST, &test_prot,
-			 USERID, callbacks, &auth_status);
+			 USERID, callbacks, &auth_status, /*fd*/-1);
     CU_ASSERT_PTR_NOT_NULL_FATAL(be);
     CU_ASSERT_EQUAL(server_state->is_connected, 1);
     CU_ASSERT_EQUAL(server_state->is_authenticated, 1);
@@ -307,7 +307,7 @@ static void caps_common(void)
     memcpy(&test_prot.capa_cmd.capa[n], extra_capa, sizeof(extra_capa));
 
     be = backend_connect(NULL, HOST, &test_prot,
-			 USERID, callbacks, &auth_status);
+			 USERID, callbacks, &auth_status, /*fd*/-1);
     CU_ASSERT_PTR_NOT_NULL_FATAL(be);
     CU_ASSERT_EQUAL(server_state->is_connected, 1);
     CU_ASSERT_EQUAL(server_state->is_authenticated, 1);
@@ -401,7 +401,7 @@ static void test_starttls(void)
     server_state->config.starttls = 1;
 
     be = backend_connect(NULL, HOST, &test_prot,
-			 USERID, callbacks, &auth_status);
+			 USERID, callbacks, &auth_status, /*fd*/-1);
     CU_ASSERT_PTR_NOT_NULL_FATAL(be);
     CU_ASSERT_EQUAL(server_state->is_connected, 1);
     CU_ASSERT_EQUAL(server_state->is_authenticated, 1);

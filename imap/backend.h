@@ -94,7 +94,8 @@ struct backend {
  * cache on success (and returns NULL on failure, but leaves cache alone) */
 struct backend *backend_connect(struct backend *cache, const char *server,
 				struct protocol_t *prot, const char *userid,
-				sasl_callback_t *cb, const char **auth_status);
+				sasl_callback_t *cb, const char **auth_status,
+				int logfd);
 int backend_ping(struct backend *s);
 void backend_disconnect(struct backend *s);
 char *backend_get_cap_params(const struct backend *, unsigned long capa);

@@ -330,7 +330,7 @@ static int deliver_msg(char *return_path, char *authuser, int ignorequota,
 
     /* connect */
     conn = backend_connect(NULL, sockaddr, &lmtp_protocol,
-			   "", NULL, NULL);
+			   "", NULL, NULL, -1);
     if (!conn) {
 	just_exit("couldn't connect to lmtpd");
     }

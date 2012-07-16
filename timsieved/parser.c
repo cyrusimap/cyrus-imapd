@@ -820,7 +820,7 @@ static int cmd_authenticate(struct protstream *sieved_out,
 	      const char *statusline = NULL;
 
 	      backend = backend_connect(NULL, mbentry->server, &sieve_protocol,
-					username, NULL, &statusline);
+					username, NULL, &statusline, -1);
 
 	      if (!backend) {
 		  syslog(LOG_ERR, "couldn't authenticate to backend server");

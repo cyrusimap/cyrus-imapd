@@ -1786,7 +1786,7 @@ int openinbox(void)
 	}
 
 	backend = backend_connect(NULL, mbentry->server, &pop3_protocol,
-				  userid, NULL, &statusline);
+				  userid, NULL, &statusline, -1);
 
 	if (!backend) {
 	    syslog(LOG_ERR, "couldn't authenticate to backend server");

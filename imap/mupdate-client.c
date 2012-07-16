@@ -128,7 +128,7 @@ EXPORTED int mupdate_connect(const char *server,
     }
 
     h->conn = backend_connect(NULL, server, &mupdate_protocol,
-			      "", cbs, &status);
+			      "", cbs, &status, -1);
 
     /* xxx unclear that this is correct, but it prevents a memory leak */
     if (local_cbs) free_callbacks(cbs);
