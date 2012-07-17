@@ -1815,7 +1815,8 @@ out:
 struct sync_crc_algorithm {
     unsigned version;
     void (*record)(const struct mailbox *, const struct index_record *, bit32 *);
-    void (*annot)(const struct sync_annot *, bit32 *);
+    void (*annot)(const char *entry, const char *userid,
+		  const struct buf *value, bit32 *);
 };
 
 
@@ -1966,7 +1967,8 @@ static void sync_md5_record(const struct mailbox *mailbox,
     *crcp = ntohl(result.b32);
 }
 
-static void sync_md5_annot(const struct sync_annot *annot, bit32 *crcp)
+static void sync_md5_annot(const char *entry, const char *userid,
+			   const struct buf *value, bit32 *crcp)
 {
     MD5_CTX ctx;
     union {
@@ -1976,11 +1978,11 @@ static void sync_md5_annot(const struct sync_annot *annot, bit32 *crcp)
 
     MD5Init(&ctx);
 
-    MD5Update(&ctx, annot->entry, strlen(annot->entry));
+    MD5Update(&ctx, entry, strlen(entry));
     MD5Update(&ctx, " ", 1);
-    MD5Update(&ctx, annot->userid, strlen(annot->userid));
+    MD5Update(&ctx, userid, strlen(userid));
     MD5Update(&ctx, " ", 1);
-    MD5Update(&ctx, annot->value.s, annot->value.len);
+    MD5Update(&ctx, value->s, value->len);
 
     MD5Final(result.md5, &ctx);
 
@@ -2050,7 +2052,7 @@ static void calc_annots(struct mailbox *mailbox,
     if (!annots) return;
 
     for (annot = annots->head; annot; annot = annot->next) {
-	sync_crc_algorithm->annot(annot, &crc);
+	sync_crc_algorithm->annot(annot->entry, annot->userid, &annot->value, &crc);
 	*crcp ^= crc;
     }
 
