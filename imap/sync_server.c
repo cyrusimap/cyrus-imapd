@@ -323,7 +323,7 @@ static void dobanner(void)
 
     /* Tell the client about how we're willing to do SYNC_CRCs */
     prot_printf(sync_out, "* CRC_VERSIONS %u-%u\r\n",
-		CRC_MIN_VERSION, CRC_MAX_VERSION);
+		MAILBOX_CRC_VERSION_MIN, MAILBOX_CRC_VERSION_MAX);
 
     prot_printf(sync_out,
 		"* OK %s Cyrus sync server %s\r\n",
@@ -415,7 +415,7 @@ int service_main(int argc __attribute__((unused)),
 	sync_log_suppress();
 
     /* initialise with defaults */
-    sync_crc_setup(CRC_MIN_VERSION, CRC_MIN_VERSION, /*strict*/1);
+    sync_crc_setup(MAILBOX_CRC_VERSION_MIN, MAILBOX_CRC_VERSION_MIN, /*strict*/1);
 
     dobanner();
 
@@ -2372,7 +2372,7 @@ static int do_set_options(const struct dlist *kin)
 {
     int r = 0;
     struct dlist *child;
-    uint32_t crc_version = CRC_MIN_VERSION;
+    uint32_t crc_version = MAILBOX_CRC_VERSION_MIN;
 
     for (child = kin->head ; child ; child = child->next) {
 	if (!strcmp(child->name, "CRC_VERSION")) {

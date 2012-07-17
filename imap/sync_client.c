@@ -3014,7 +3014,7 @@ negfailed:
 	    if (r) goto negfailed;
 	}
 	else {
-	    sync_crc_setup(CRC_MIN_VERSION, CRC_MIN_VERSION, /*strict*/0);
+	    sync_crc_setup(MAILBOX_CRC_VERSION_MIN, MAILBOX_CRC_VERSION_MIN, /*strict*/0);
 	}
 
 	free(vers_str);

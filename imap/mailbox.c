@@ -84,6 +84,7 @@
 #include "annotate.h"
 #include "assert.h"
 #include "crc32.h"
+#include "md5.h"
 #include "exitcodes.h"
 #include "global.h"
 #include "imap/imap_err.h"
@@ -4375,4 +4376,193 @@ EXPORTED int mailbox_get_annotate_state(struct mailbox *mailbox,
     if (statep) *statep = mailbox->annot_state;
 
     return 0;
+}
+
+/* Sync CRC algorithms */
+static bit32 crc32_record(const struct mailbox *mailbox,
+			  const struct index_record *record)
+{
+    char buf[4096];
+    bit32 flagcrc = 0;
+    int flag;
+
+    /* calculate an XORed CRC32 over all the flags on the message, so no
+     * matter what order they are store in the header, the final value 
+     * is the same */
+    if (record->system_flags & FLAG_DELETED)
+	flagcrc ^= crc32_cstring("\\deleted");
+    if (record->system_flags & FLAG_ANSWERED)
+	flagcrc ^= crc32_cstring("\\answered");
+    if (record->system_flags & FLAG_FLAGGED)
+	flagcrc ^= crc32_cstring("\\flagged");
+    if (record->system_flags & FLAG_DRAFT)
+	flagcrc ^= crc32_cstring("\\draft");
+    if (record->system_flags & FLAG_SEEN)
+	flagcrc ^= crc32_cstring("\\seen");
+
+    for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
+	if (!mailbox->flagname[flag])
+	    continue;
+	if (!(record->user_flags[flag/32] & (1<<(flag&31))))
+	    continue;
+	/* need to compare without case being significant */
+	strlcpy(buf, mailbox->flagname[flag], 4096);
+	lcase(buf);
+	flagcrc ^= crc32_cstring(buf);
+    }
+
+    snprintf(buf, sizeof(buf), "%u " MODSEQ_FMT " %lu (%u) %lu %s",
+	    record->uid, record->modseq, record->last_updated,
+	    flagcrc,
+	    record->internaldate,
+	    message_guid_encode(&record->guid));
+
+    return crc32_cstring(buf);
+}
+
+static int cmpcase(const void *a, const void *b)
+{
+    return strcasecmp(*(const char **)a, *(const char **)b);
+}
+
+static bit32 md5_record(const struct mailbox *mailbox,
+			const struct index_record *record)
+{
+    MD5_CTX ctx;
+    union {
+	bit32 b32;
+	unsigned char md5[16];
+    } result;
+    unsigned int i;
+    unsigned int nflags = 0;
+    int n;
+    const char *flags[MAX_USER_FLAGS + /*system flags*/5];
+    char buf[256];
+    static struct buf flagbuf = BUF_INITIALIZER;
+
+    MD5Init(&ctx);
+
+    /* system flags - already sorted lexically */
+    if (record->system_flags & FLAG_ANSWERED)
+	flags[nflags++] = "\\answered";
+    if (record->system_flags & FLAG_DELETED)
+	flags[nflags++] = "\\deleted";
+    if (record->system_flags & FLAG_DRAFT)
+	flags[nflags++] = "\\draft";
+    if (record->system_flags & FLAG_FLAGGED)
+	flags[nflags++] = "\\flagged";
+    if (record->system_flags & FLAG_SEEN)
+	flags[nflags++] = "\\seen";
+
+    /* user flags */
+    for (i = 0; i < MAX_USER_FLAGS; i++) {
+	if (!mailbox->flagname[i])
+	    continue;
+	if (!(record->user_flags[i/32] & (1<<(i&31))))
+	    continue;
+	flags[nflags++] = mailbox->flagname[i];
+    }
+
+    /*
+     * There is a potential optimisation here: we only need to sort if
+     * there were any user flags because the system flags are added
+     * pre-sorted.  However, we expect never to achieve that in
+     * production, so we don't code it.
+     */
+    qsort(flags, nflags, sizeof(char *), cmpcase);
+
+    n = snprintf(buf, sizeof(buf), "%u", record->uid);
+    MD5Update(&ctx, buf, n);
+
+    MD5Update(&ctx, " ", 1);
+
+    n = snprintf(buf, sizeof(buf), "%llu", record->modseq);
+    MD5Update(&ctx, buf, n);
+
+    MD5Update(&ctx, " ", 1);
+
+    n = snprintf(buf, sizeof(buf), "%lu", record->last_updated);
+    MD5Update(&ctx, buf, n);
+
+    MD5Update(&ctx, " (", 2);
+
+    for (i = 0 ; i < nflags ; i++) {
+	if (i)
+	    MD5Update(&ctx, " ", 1);
+
+	buf_reset(&flagbuf);
+	buf_appendcstr(&flagbuf, flags[i]);
+	buf_cstring(&flagbuf);
+	lcase(flagbuf.s);
+	MD5Update(&ctx, flagbuf.s, flagbuf.len);
+    }
+
+    MD5Update(&ctx, ") ", 2);
+
+    n = snprintf(buf, sizeof(buf), "%lu", record->internaldate);
+    MD5Update(&ctx, buf, n);
+
+    MD5Update(&ctx, " ", 1);
+
+    MD5Update(&ctx, message_guid_encode(&record->guid), 2*MESSAGE_GUID_SIZE);
+
+    MD5Update(&ctx, " ", 1);
+
+    n = snprintf(buf, sizeof(buf), "%llu", record->cid);
+    MD5Update(&ctx, buf, n);
+
+    MD5Final(result.md5, &ctx);
+
+    return ntohl(result.b32);
+}
+
+static bit32 md5_annot(const char *entry, const char *userid,
+		       const struct buf *value)
+{
+    MD5_CTX ctx;
+    union {
+	bit32 b32;
+	unsigned char md5[16];
+    } result;
+
+    MD5Init(&ctx);
+
+    MD5Update(&ctx, entry, strlen(entry));
+    MD5Update(&ctx, " ", 1);
+    MD5Update(&ctx, userid, strlen(userid));
+    MD5Update(&ctx, " ", 1);
+    MD5Update(&ctx, value->s, value->len);
+
+    MD5Final(result.md5, &ctx);
+
+    return ntohl(result.b32);
+}
+
+static const mailbox_crcalgo_t crcalgos[] = {
+    {
+	1,		    /* historical 2.4.x CRC algorithm */
+	crc32_record,
+	NULL },
+    {
+	2,		    /* XOR the first 16 bytes of md5s instead */
+	md5_record,
+	md5_annot },
+    { 0, NULL, NULL }
+};
+
+const mailbox_crcalgo_t *mailbox_find_crcalgo(unsigned minvers, unsigned maxvers)
+{
+    const mailbox_crcalgo_t *alg;
+    const mailbox_crcalgo_t *best = NULL;
+
+    for (alg = crcalgos ; alg->version ; alg++) {
+	if (alg->version < minvers)
+	    continue;
+	if (alg->version > maxvers)
+	    continue;
+	if (best && best->version > alg->version)
+	    continue;
+	best = alg;
+    }
+    return best;
 }

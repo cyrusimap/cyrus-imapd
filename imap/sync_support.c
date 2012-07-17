@@ -68,7 +68,6 @@
 #include "exitcodes.h"
 #include "imap/imap_err.h"
 #include "mailbox.h"
-#include "md5.h"
 #include "quota.h"
 #include "xmalloc.h"
 #include "xstrlcat.h"
@@ -86,7 +85,6 @@
 #include "cyr_lock.h"
 #include "prot.h"
 #include "dlist.h"
-#include "crc32.h"
 
 #include "message_guid.h"
 #include "sync_support.h"
@@ -1812,216 +1810,23 @@ out:
 
 /* ====================================================================== */
 
-struct sync_crc_algorithm {
-    unsigned version;
-    bit32 (*record)(const struct mailbox *, const struct index_record *);
-    bit32 (*annot)(const char *entry, const char *userid, const struct buf *value);
-};
-
-
-static bit32 sync_crc32_record(const struct mailbox *mailbox,
-			      const struct index_record *record)
-{
-    char buf[4096];
-    bit32 flagcrc = 0;
-    int flag;
-
-    /* calculate an XORed CRC32 over all the flags on the message, so no
-     * matter what order they are store in the header, the final value
-     * is the same */
-    if (record->system_flags & FLAG_DELETED)
-	flagcrc ^= crc32_cstring("\\deleted");
-    if (record->system_flags & FLAG_ANSWERED)
-	flagcrc ^= crc32_cstring("\\answered");
-    if (record->system_flags & FLAG_FLAGGED)
-	flagcrc ^= crc32_cstring("\\flagged");
-    if (record->system_flags & FLAG_DRAFT)
-	flagcrc ^= crc32_cstring("\\draft");
-    if (record->system_flags & FLAG_SEEN)
-	flagcrc ^= crc32_cstring("\\seen");
-
-    for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
-	if (!mailbox->flagname[flag])
-	    continue;
-	if (!(record->user_flags[flag/32] & (1<<(flag&31))))
-	    continue;
-	/* need to compare without case being significant */
-	strlcpy(buf, mailbox->flagname[flag], 4096);
-	lcase(buf);
-	flagcrc ^= crc32_cstring(buf);
-    }
-
-    snprintf(buf, sizeof(buf), "%u " MODSEQ_FMT " %lu (%u) %lu %s",
-	    record->uid, record->modseq, record->last_updated,
-	    flagcrc,
-	    record->internaldate,
-	    message_guid_encode(&record->guid));
-
-    return crc32_cstring(buf);
-}
-
-static int cmpcase(const void *a, const void *b)
-{
-    return strcasecmp(*(const char **)a, *(const char **)b);
-}
-
-static bit32 sync_md5_record(const struct mailbox *mailbox,
-			    const struct index_record *record)
-{
-    MD5_CTX ctx;
-    union {
-	bit32 b32;
-	unsigned char md5[16];
-    } result;
-    unsigned int i;
-    unsigned int nflags = 0;
-    int n;
-    const char *flags[MAX_USER_FLAGS + /*system flags*/5];
-    char buf[256];
-    static struct buf flagbuf = BUF_INITIALIZER;
-
-    MD5Init(&ctx);
-
-    /* system flags - already sorted lexically */
-    if (record->system_flags & FLAG_ANSWERED)
-	flags[nflags++] = "\\answered";
-    if (record->system_flags & FLAG_DELETED)
-	flags[nflags++] = "\\deleted";
-    if (record->system_flags & FLAG_DRAFT)
-	flags[nflags++] = "\\draft";
-    if (record->system_flags & FLAG_FLAGGED)
-	flags[nflags++] = "\\flagged";
-    if (record->system_flags & FLAG_SEEN)
-	flags[nflags++] = "\\seen";
-
-    /* user flags */
-    for (i = 0; i < MAX_USER_FLAGS; i++) {
-	if (!mailbox->flagname[i])
-	    continue;
-	if (!(record->user_flags[i/32] & (1<<(i&31))))
-	    continue;
-	flags[nflags++] = mailbox->flagname[i];
-    }
-
-    /*
-     * There is a potential optimisation here: we only need to sort if
-     * there were any user flags because the system flags are added
-     * pre-sorted.  However, we expect never to achieve that in
-     * production, so we don't code it.
-     */
-    qsort(flags, nflags, sizeof(char *), cmpcase);
-
-    n = snprintf(buf, sizeof(buf), "%u", record->uid);
-    MD5Update(&ctx, buf, n);
-
-
-    MD5Update(&ctx, " ", 1);
-
-    n = snprintf(buf, sizeof(buf), "%lu", record->last_updated);
-    MD5Update(&ctx, buf, n);
-
-    MD5Update(&ctx, " (", 2);
-
-    for (i = 0 ; i < nflags ; i++) {
-	if (i)
-	    MD5Update(&ctx, " ", 1);
-
-	buf_reset(&flagbuf);
-	buf_appendcstr(&flagbuf, flags[i]);
-	buf_cstring(&flagbuf);
-	lcase(flagbuf.s);
-	MD5Update(&ctx, flagbuf.s, flagbuf.len);
-    }
-
-    MD5Update(&ctx, ") ", 2);
-
-    free(flags);
-
-    n = snprintf(buf, sizeof(buf), "%lu", record->internaldate);
-    MD5Update(&ctx, buf, n);
-
-    MD5Update(&ctx, " ", 1);
-
-    MD5Update(&ctx, message_guid_encode(&record->guid), 2*MESSAGE_GUID_SIZE);
-
-    MD5Update(&ctx, " ", 1);
-
-    n = snprintf(buf, sizeof(buf), "%llu", record->cid);
-    MD5Update(&ctx, buf, n);
-
-    MD5Final(result.md5, &ctx);
-
-    return ntohl(result.b32);
-}
-
-static bit32 sync_md5_annot(const char *entry, const char *userid,
-			    const struct buf *value)
-{
-    MD5_CTX ctx;
-    union {
-	bit32 b32;
-	unsigned char md5[16];
-    } result;
-
-    MD5Init(&ctx);
-
-    MD5Update(&ctx, entry, strlen(entry));
-    MD5Update(&ctx, " ", 1);
-    MD5Update(&ctx, userid, strlen(userid));
-    MD5Update(&ctx, " ", 1);
-    MD5Update(&ctx, value->s, value->len);
-
-    MD5Final(result.md5, &ctx);
-
-    return ntohl(result.b32);
-}
-
-static const struct sync_crc_algorithm sync_crc_algorithms[] = {
-    {
-	1,		    /* historical 2.4.x CRC algorithm */
-	sync_crc32_record,
-	NULL },
-    {
-	2,		    /* XOR the first 16 bytes of md5s instead */
-	sync_md5_record,
-	sync_md5_annot },
-    { 0, NULL, NULL }
-};
-
-static const struct sync_crc_algorithm *find_algorithm(unsigned minvers,
-						       unsigned maxvers)
-{
-    const struct sync_crc_algorithm *alg;
-    const struct sync_crc_algorithm *best = NULL;
-
-    for (alg = sync_crc_algorithms ; alg->version ; alg++) {
-	if (alg->version < minvers)
-	    continue;
-	if (alg->version > maxvers)
-	    continue;
-	if (best && best->version > alg->version)
-	    continue;
-	best = alg;
-    }
-    return best;
-}
-
-static const struct sync_crc_algorithm *sync_crc_algorithm;
+static const mailbox_crcalgo_t *sync_crcalgo;
 
 int sync_crc_setup(unsigned minvers, unsigned maxvers, int strict)
 {
-    const struct sync_crc_algorithm *alg;
+    const mailbox_crcalgo_t *alg;
 
-    alg = find_algorithm(minvers, maxvers);
+    alg = mailbox_find_crcalgo(minvers, maxvers);
 
     if (!alg) {
 	if (strict)
 	    return IMAP_PROTOCOL_ERROR;
 	/* otherwise, choose the oldest one */
-	alg = &sync_crc_algorithms[0];
+	alg = mailbox_find_crcalgo(MAILBOX_CRC_VERSION_MIN,
+				   MAILBOX_CRC_VERSION_MIN);
     }
 
-    sync_crc_algorithm = alg;
+    sync_crcalgo = alg;
     return alg->version;
 }
 
@@ -2038,7 +1843,7 @@ static void calc_annots(struct mailbox *mailbox,
     if (!annots) return;
 
     for (annot = annots->head; annot; annot = annot->next)
-	*crcp ^= sync_crc_algorithm->annot(annot->entry, annot->userid, &annot->value);
+	*crcp ^= sync_crcalgo->annot(annot->entry, annot->userid, &annot->value);
 
     sync_annot_list_free(&annots);
 }
@@ -2064,13 +1869,13 @@ int sync_crc_calc(struct mailbox *mailbox, uint32_t *crcp)
 	if (record.system_flags & FLAG_EXPUNGED)
 	    continue;
 
-	crc ^= sync_crc_algorithm->record(mailbox, &record);
+	crc ^= sync_crcalgo->record(mailbox, &record);
 
-	if (sync_crc_algorithm->annot)
+	if (sync_crcalgo->annot)
 	    calc_annots(mailbox, &record, &crc);
     }
 
-    if (sync_crc_algorithm->annot)
+    if (sync_crcalgo->annot)
 	calc_annots(mailbox, NULL, &crc);
 
     *crcp = crc;
