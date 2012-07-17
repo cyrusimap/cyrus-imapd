@@ -135,12 +135,12 @@ static int count_retr = 0;
 static int count_top = 0;
 static int count_dele = 0;
 static struct msg {
-    unsigned uid;
+    uint32_t uid;
     uint32_t recno;
-    unsigned size;
-    int deleted;
-    int seen;
-} *popd_msg = NULL;
+    uint32_t size;
+    int deleted:1;
+    int seen:1;
+} *popd_map = NULL;
 
 static struct io_count *io_count_start;
 static struct io_count *io_count_stop;
@@ -629,8 +629,8 @@ void shut_down(int code)
     if (popd_mailbox)
 	mailbox_close(&popd_mailbox);
 
-    if (popd_msg) {
-	free(popd_msg);
+    if (popd_map) {
+	free(popd_map);
     }
 
     /* close backend connection */
@@ -824,11 +824,11 @@ static int expunge_deleted(void)
     /* loop over all known messages looking for deletes */
     for (msgno = 1; msgno <= popd_exists; msgno++) {
 	/* not deleted? skip */
-	if (!popd_msg[msgno].deleted)
+	if (!popd_map[msgno-1].deleted)
 	    continue;
 
 	/* error reading? abort */
-	r = mailbox_read_index_record(popd_mailbox, popd_msg[msgno].recno, &record);
+	r = mailbox_read_index_record(popd_mailbox, popd_map[msgno-1].recno, &record);
 	if (r) break;
 
 	/* already expunged? skip */
@@ -846,7 +846,7 @@ static int expunge_deleted(void)
 
     if (r) {
 	syslog(LOG_ERR, "IOERROR: %s failed to expunge record %u uid %u, aborting",
-	       popd_mailbox->name, msgno, popd_msg[msgno].uid);
+	       popd_mailbox->name, msgno, popd_map[msgno-1].uid);
     }
 
     if (!r && (numexpunged > 0)) {
@@ -1031,9 +1031,9 @@ done:
 	    }
 	    else {
 		for (msgno = 1; msgno <= popd_exists; msgno++) {
-		    if (!popd_msg[msgno].deleted) {
+		    if (!popd_map[msgno-1].deleted) {
 			nmsgs++;
-			totsize += popd_msg[msgno].size;
+			totsize += popd_map[msgno-1].size;
 		    }
 		}
 		prot_printf(popd_out, "+OK %u %u\r\n", nmsgs, totsize);
@@ -1043,14 +1043,16 @@ done:
 	    if (arg) {
 		msgno = parse_msgno(&arg);
 		if (msgno) {
-		    prot_printf(popd_out, "+OK %u %u\r\n", msgno, popd_msg[msgno].size);
+		    prot_printf(popd_out, "+OK %u %u\r\n",
+				msgno, popd_map[msgno-1].size);
 		}
 	    }
 	    else {
 		prot_printf(popd_out, "+OK scan listing follows\r\n");
 		for (msgno = 1; msgno <= popd_exists; msgno++) {
-		    if (!popd_msg[msgno].deleted)
-			prot_printf(popd_out, "%u %u\r\n", msgno, popd_msg[msgno].size);
+		    if (!popd_map[msgno-1].deleted)
+			prot_printf(popd_out, "%u %u\r\n",
+			msgno, popd_map[msgno-1].size);
 		}
 		prot_printf(popd_out, ".\r\n");
 	    }
@@ -1061,7 +1063,7 @@ done:
 		msgno = parse_msgno(&arg);
 		if (msgno) {
 		    blat(msgno, -1);
-		    popd_msg[msgno].seen = 1;
+		    popd_map[msgno-1].seen = 1;
 		    count_retr++;
 		}
 	    }
@@ -1075,7 +1077,7 @@ done:
 	    else {
 		msgno = parse_msgno(&arg);
 		if (msgno) {
-		    popd_msg[msgno].deleted = 1;
+		    popd_map[msgno-1].deleted = 1;
 		    prot_printf(popd_out, "+OK message deleted\r\n");
 		    count_dele++;
 		}
@@ -1092,8 +1094,8 @@ done:
 		prot_printf(popd_out, "-ERR Unexpected extra argument\r\n");
 	    else {
 		for (msgno = 1; msgno <= popd_exists; msgno++) {
-		    popd_msg[msgno].deleted = 0;
-		    popd_msg[msgno].seen = 0;
+		    popd_map[msgno-1].deleted = 0;
+		    popd_map[msgno-1].seen = 0;
 		}
 		prot_printf(popd_out, "+OK\r\n");
 	    }
@@ -1144,7 +1146,7 @@ done:
 	    else {
 		prot_printf(popd_out, "+OK unique-id listing follows\r\n");
 		for (msgno = 1; msgno <= popd_exists; msgno++) {
-		    if (!popd_msg[msgno].deleted)
+		    if (!popd_map[msgno-1].deleted)
 			uidl_msg(msgno);
 		}
 		prot_printf(popd_out, ".\r\n");
@@ -1188,7 +1190,7 @@ unsigned parse_msgno(char **ptr)
 int msg_exists_or_err(uint32_t msgno)
 {
     if (msgno < 1 || msgno > popd_exists ||
-	     popd_msg[msgno].deleted) {
+	     popd_map[msgno-1].deleted) {
 	prot_printf(popd_out, "-ERR No such message\r\n");
 	return 0;
     }
@@ -1200,10 +1202,10 @@ void uidl_msg(uint32_t msgno)
     if (popd_mailbox->i.options & OPT_POP3_NEW_UIDL) {
 	prot_printf(popd_out, "%u %u.%u\r\n", msgno, 
 		    popd_mailbox->i.uidvalidity,
-		    popd_msg[msgno].uid);
+		    popd_map[msgno-1].uid);
     } else {
 	prot_printf(popd_out, "%u %u\r\n", msgno,
-		    popd_msg[msgno].uid);
+		    popd_map[msgno-1].uid);
     }
 }
 
@@ -1804,7 +1806,7 @@ int openinbox(void)
     }
     else {
 	/* local mailbox */
-	uint32_t recno, msgno;
+	uint32_t recno, exists;
 	struct index_record record;
 	int minpoll;
 
@@ -1846,10 +1848,11 @@ int openinbox(void)
 	    goto fail;
 	}
 
-	popd_msg = (struct msg *) xrealloc(popd_msg, (popd_mailbox->i.exists+1) *
-					   sizeof(struct msg));
+	free(popd_map);
+	popd_map = (struct msg *)xmalloc(popd_mailbox->i.exists *
+					 sizeof(struct msg));
 	config_popuseimapflags = config_getswitch(IMAPOPT_POPUSEIMAPFLAGS);
-	msgno = 0;
+	exists = 0;
 	for (recno = 1; recno <= popd_mailbox->i.num_records; recno++) {
 	    if (mailbox_read_index_record(popd_mailbox, recno, &record))
 		break;
@@ -1869,17 +1872,17 @@ int openinbox(void)
 		continue;
 	    }
 
-	    msgno++;
-	    popd_msg[msgno].recno = recno;
-	    popd_msg[msgno].uid = record.uid;
-	    popd_msg[msgno].size = record.size;
-	    popd_msg[msgno].deleted = 0;
-	    popd_msg[msgno].seen = 0;
+	    popd_map[exists].recno = recno;
+	    popd_map[exists].uid = record.uid;
+	    popd_map[exists].size = record.size;
+	    popd_map[exists].deleted = 0;
+	    popd_map[exists].seen = 0;
+	    exists++;
 
-	    if (msgno >= popd_mailbox->i.exists)
+	    if (exists >= popd_mailbox->i.exists)
 		break; /* we're full! */
 	}
-	popd_exists = msgno;
+	popd_exists = exists;
 
 	/* finished our initial read */
 	mailbox_unlock_index(popd_mailbox, NULL);
@@ -1918,7 +1921,8 @@ int openinbox(void)
     if (statusline)
 	prot_printf(popd_out, "+OK%s", statusline);
     else
-	prot_printf(popd_out, "+OK Mailbox locked and ready SESSIONID=<%s>\r\n", session_id());
+	prot_printf(popd_out, "+OK Mailbox locked and ready SESSIONID=<%s>\r\n",
+		    session_id());
     prot_flush(popd_out);
 
     return 0;
@@ -1944,7 +1948,7 @@ static int blat(int msgno, int lines)
     char *fname;
     int thisline = -2;
 
-    fname = mailbox_message_fname(popd_mailbox, popd_msg[msgno].uid);
+    fname = mailbox_message_fname(popd_mailbox, popd_map[msgno-1].uid);
     msgfile = fopen(fname, "r");
     if (!msgfile) {
 	prot_printf(popd_out, "-ERR [SYS/PERM] Could not read message file\r\n");
@@ -2067,7 +2071,7 @@ static void bitpipe(void)
 /* Merge our read messages with the existing \Seen database */
 static int update_seen(void)
 {
-    unsigned i;
+    unsigned msgno;
     struct index_record record;
     int r = 0;
 
@@ -2079,10 +2083,11 @@ static int update_seen(void)
 
     /* we know this mailbox must be owned by the user, because 
      * all POP mailboxes are */
-    for (i = 0; i < popd_exists; i++) {
-	if (!popd_msg[i].seen)
+    for (msgno = 1; msgno <= popd_exists; msgno++) {
+	if (!popd_map[msgno-1].seen)
 	    continue; /* don't even need to check */
-	if (mailbox_read_index_record(popd_mailbox, popd_msg[i].recno, &record))
+	if (mailbox_read_index_record(popd_mailbox, popd_map[msgno-1].recno,
+				      &record))
 	    continue;
 	if (record.system_flags & FLAG_EXPUNGED)
 	    continue; /* already expunged */
