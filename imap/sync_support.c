@@ -1814,17 +1814,15 @@ out:
 
 struct sync_crc_algorithm {
     unsigned version;
-    void (*record)(const struct mailbox *, const struct index_record *, bit32 *);
-    void (*annot)(const char *entry, const char *userid,
-		  const struct buf *value, bit32 *);
+    bit32 (*record)(const struct mailbox *, const struct index_record *);
+    bit32 (*annot)(const char *entry, const char *userid, const struct buf *value);
 };
 
 
 static struct buf sync_crc32_buf;
 
-static void sync_crc32_record(const struct mailbox *mailbox,
-			      const struct index_record *record,
-			      bit32 *crcp)
+static bit32 sync_crc32_record(const struct mailbox *mailbox,
+			      const struct index_record *record)
 {
     char buf[4096];
     bit32 flagcrc = 0;
@@ -1862,7 +1860,7 @@ static void sync_crc32_record(const struct mailbox *mailbox,
 	    record->internaldate,
 	    message_guid_encode(&record->guid));
 
-    *crcp = crc32_cstring(buf_cstring(&sync_crc32_buf));
+    return crc32_cstring(buf_cstring(&sync_crc32_buf));
 }
 
 static int cmpcase(const void *a, const void *b)
@@ -1870,9 +1868,8 @@ static int cmpcase(const void *a, const void *b)
     return strcasecmp(*(const char **)a, *(const char **)b);
 }
 
-static void sync_md5_record(const struct mailbox *mailbox,
-			    const struct index_record *record,
-			    bit32 *crcp)
+static bit32 sync_md5_record(const struct mailbox *mailbox,
+			    const struct index_record *record)
 {
     MD5_CTX ctx;
     union {
@@ -1957,11 +1954,11 @@ static void sync_md5_record(const struct mailbox *mailbox,
 
     MD5Final(result.md5, &ctx);
 
-    *crcp = ntohl(result.b32);
+    return ntohl(result.b32);
 }
 
-static void sync_md5_annot(const char *entry, const char *userid,
-			   const struct buf *value, bit32 *crcp)
+static bit32 sync_md5_annot(const char *entry, const char *userid,
+			    const struct buf *value)
 {
     MD5_CTX ctx;
     union {
@@ -1979,7 +1976,7 @@ static void sync_md5_annot(const char *entry, const char *userid,
 
     MD5Final(result.md5, &ctx);
 
-    *crcp = ntohl(result.b32);
+    return ntohl(result.b32);
 }
 
 static const struct sync_crc_algorithm sync_crc_algorithms[] = {
@@ -2038,16 +2035,13 @@ static void calc_annots(struct mailbox *mailbox,
     struct sync_annot_list *annots = NULL;
     struct sync_annot *annot;
     int r;
-    uint32_t crc = 0;
 
     r = read_annotations(mailbox, record, &annots);
     if (r) return;
     if (!annots) return;
 
-    for (annot = annots->head; annot; annot = annot->next) {
-	sync_crc_algorithm->annot(annot->entry, annot->userid, &annot->value, &crc);
-	*crcp ^= crc;
-    }
+    for (annot = annots->head; annot; annot = annot->next)
+	*crcp ^= sync_crc_algorithm->annot(annot->entry, annot->userid, &annot->value);
 
     sync_annot_list_free(&annots);
 }
@@ -2062,7 +2056,6 @@ int sync_crc_calc(struct mailbox *mailbox, uint32_t *crcp)
 {
     struct index_record record;
     uint32_t recno;
-    bit32 tmpcrc;
     bit32 crc = 0;
 
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
@@ -2074,9 +2067,7 @@ int sync_crc_calc(struct mailbox *mailbox, uint32_t *crcp)
 	if (record.system_flags & FLAG_EXPUNGED)
 	    continue;
 
-	tmpcrc = 0;
-	sync_crc_algorithm->record(mailbox, &record, &tmpcrc);
-	crc ^= tmpcrc;
+	crc ^= sync_crc_algorithm->record(mailbox, &record);
 
 	if (sync_crc_algorithm->annot)
 	    calc_annots(mailbox, &record, &crc);
