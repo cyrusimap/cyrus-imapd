@@ -1822,9 +1822,9 @@ struct sync_crc_algorithm {
 
 static struct buf sync_crc32_buf;
 
-static const char *basic_representation(
-	const struct mailbox *mailbox,
-	const struct index_record *record)
+static void sync_crc32_record(const struct mailbox *mailbox,
+			      const struct index_record *record,
+			      bit32 *crcp)
 {
     char buf[4096];
     bit32 flagcrc = 0;
@@ -1862,14 +1862,7 @@ static const char *basic_representation(
 	    record->internaldate,
 	    message_guid_encode(&record->guid));
 
-    return buf_cstring(&sync_crc32_buf);
-}
-
-static void sync_crc32_record(const struct mailbox *mailbox,
-			      const struct index_record *record,
-			      bit32 *crcp)
-{
-    *crcp = crc32_cstring(basic_representation(mailbox, record));
+    *crcp = crc32_cstring(buf_cstring(&sync_crc32_buf));
 }
 
 static int cmpcase(const void *a, const void *b)
