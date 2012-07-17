@@ -1819,8 +1819,6 @@ struct sync_crc_algorithm {
 };
 
 
-static struct buf sync_crc32_buf;
-
 static bit32 sync_crc32_record(const struct mailbox *mailbox,
 			      const struct index_record *record)
 {
@@ -1853,14 +1851,13 @@ static bit32 sync_crc32_record(const struct mailbox *mailbox,
 	flagcrc ^= crc32_cstring(buf);
     }
 
-    buf_reset(&sync_crc32_buf);
-    buf_printf(&sync_crc32_buf, "%u " MODSEQ_FMT " %lu (%u) %lu %s",
+    snprintf(buf, sizeof(buf), "%u " MODSEQ_FMT " %lu (%u) %lu %s",
 	    record->uid, record->modseq, record->last_updated,
 	    flagcrc,
 	    record->internaldate,
 	    message_guid_encode(&record->guid));
 
-    return crc32_cstring(buf_cstring(&sync_crc32_buf));
+    return crc32_cstring(buf);
 }
 
 static int cmpcase(const void *a, const void *b)
