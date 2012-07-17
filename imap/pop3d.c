@@ -2060,7 +2060,7 @@ static int update_seen(void)
 
     /* we know this mailbox must be owned by the user, because 
      * all POP mailboxes are */
-    for (i = 0; i < popd_exists; i++) {
+    for (i = 1; i <= popd_exists; i++) {
 	if (!popd_msg[i].seen)
 	    continue; /* don't even need to check */
 	if (mailbox_read_index_record(popd_mailbox, popd_msg[i].recno, &record))
