@@ -1860,6 +1860,13 @@ int sync_crc_calc(struct mailbox *mailbox, uint32_t *crcp)
     uint32_t recno;
     bit32 crc = 0;
 
+    /* check if we can use the persistent incremental CRC */
+    if (sync_crcalgo->version == mailbox->i.sync_crc_vers) {
+	*crcp = mailbox->i.sync_crc;
+	return 0;
+    }
+    /* otherwise, we're on the slow path */
+
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	/* we can't send bogus records, just skip them! */
 	if (mailbox_read_index_record(mailbox, recno, &record))

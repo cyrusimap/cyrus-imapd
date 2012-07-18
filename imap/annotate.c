@@ -218,6 +218,14 @@ struct annotate_recalc_state
     annotate_db_t *d;		    /* reference to per-mailbox db */
     unsigned int num_uids;
     hash_table counts_by_uid;
+    const mailbox_crcalgo_t *crcalgo;
+};
+
+typedef struct annotate_recalc_peruid annotate_recalc_peruid_t;
+struct annotate_recalc_peruid
+{
+    uint32_t usage;	/* bytes of storage used */
+    uint32_t sync_crc;	/* incremental sync CRC */
 };
 
 #define DB config_annotation_db
@@ -2268,16 +2276,14 @@ EXPORTED int annotatemore_msg_lookup(const char *mboxname, uint32_t uid, const c
     return r;
 }
 
-static int count_old_storage(annotate_db_t *d,
-			     const char *key, int keylen,
-			     quota_t *oldlenp)
+static int read_old_value(annotate_db_t *d,
+			  const char *key, int keylen,
+			  struct buf *valp)
 {
     int r;
     size_t datalen;
     const char *data;
-    struct buf val = BUF_INITIALIZER;
 
-    *oldlenp = 0;
     do {
 	r = cyrusdb_fetch(d->db, key, keylen, &data, &datalen, tid(d));
     } while (r == CYRUSDB_AGAIN);
@@ -2289,13 +2295,9 @@ static int count_old_storage(annotate_db_t *d,
     if (r || !data)
 	goto out;
 
-    r = split_attribs(data, datalen, &val);
-    if (r)
-	goto out;
-    *oldlenp = val.len;
+    r = split_attribs(data, datalen, valp);
 
 out:
-    buf_free(&val);
     return r;
 }
 
@@ -2309,7 +2311,7 @@ static int write_entry(struct mailbox *mailbox,
     char key[MAX_MAILBOX_PATH+1];
     int keylen, r;
     annotate_db_t *d = NULL;
-    quota_t oldlen = 0;
+    struct buf oldval = BUF_INITIALIZER;
     const char *mboxname = mailbox ? mailbox->name : "";
 
     r = _annotate_getdb(mboxname, uid, CYRUSDB_CREATE, &d);
@@ -2322,7 +2324,7 @@ static int write_entry(struct mailbox *mailbox,
     keylen = make_key(mboxname, uid, entry, userid, key, sizeof(key));
 
     if (mailbox) {
-	r = count_old_storage(d, key, keylen, &oldlen);
+	r = read_old_value(d, key, keylen, &oldval);
 	if (r)
 	    goto out;
     }
@@ -2330,7 +2332,7 @@ static int write_entry(struct mailbox *mailbox,
     if (!ignorequota && mailbox) {
 	quota_t qdiffs[QUOTA_NUMRESOURCES] =
 		QUOTA_DIFFS_DONTCARE_INITIALIZER;
-	qdiffs[QUOTA_ANNOTSTORAGE] = value->len - oldlen;
+	qdiffs[QUOTA_ANNOTSTORAGE] = value->len - oldval.len;
 	r = mailbox_quota_check(mailbox, qdiffs);
 	if (r)
 	    goto out;
@@ -2381,13 +2383,21 @@ static int write_entry(struct mailbox *mailbox,
 	buf_free(&data);
     }
 
-    if (mailbox)
-	mailbox_use_annot_quota(mailbox, value->len - oldlen);
+    if (mailbox) {
+	const mailbox_crcalgo_t *alg = mailbox_get_crcalgo(mailbox);
+	if (alg) {
+	    mailbox->i.sync_crc ^= alg->annot(entry, userid, &oldval);
+	    mailbox->i.sync_crc ^= alg->annot(entry, userid, value);
+	}
+
+	mailbox_use_annot_quota(mailbox, value->len - oldval.len);
+    }
     else
 	sync_log_annotation("");
 
 out:
     annotate_putdb(&d);
+    buf_free(&oldval);
 
     return r;
 }
@@ -3089,26 +3099,27 @@ HIDDEN int annotate_msg_expunge(annotate_state_t *state)
 
 /*************************  Annotation Recalc  ************************/
 
-
 static int calc_usage_cb(const char *mailbox __attribute__((unused)),
 			 uint32_t uid,
-			 const char *entry __attribute__((unused)),
-			 const char *userid __attribute__((unused)),
+			 const char *entry,
+			 const char *userid,
 			 const struct buf *value,
 			 void *rock)
 {
     annotate_recalc_state_t *ars = (annotate_recalc_state_t *)rock;
-    uint32_t *cp;
+    annotate_recalc_peruid_t *cp;
     char uidkey[32];
 
     snprintf(uidkey, sizeof(uidkey), "%u", uid);
     cp = hash_lookup(uidkey, &ars->counts_by_uid);
     if (!cp) {
-	cp = xzmalloc(sizeof(uint32_t));
+	cp = xzmalloc(sizeof(annotate_recalc_peruid_t));
 	hash_insert(uidkey, cp, &ars->counts_by_uid);
 	ars->num_uids++;
     }
-    *cp += value->len;
+    cp->usage += value->len;
+    if (ars->crcalgo)
+	cp->sync_crc ^= ars->crcalgo->annot(entry, userid, value);
 
     return 0;
 }
@@ -3130,6 +3141,10 @@ HIDDEN int annotate_recalc_begin(struct mailbox *mailbox,
     ars->mailbox = mailbox;
     ars->reconstruct = reconstruct;
     construct_hash_table(&ars->counts_by_uid, 1024, 0);
+    ars->crcalgo = mailbox_get_crcalgo(mailbox);
+    /* if the CRCer cannot do annotations, ignore it */
+    if (ars->crcalgo && !ars->crcalgo->annot)
+	ars->crcalgo = NULL;
 
     /* scan for per-mailbox annotations */
     r = annotatemore_findall(mailbox->name, 0, "*",
@@ -3179,7 +3194,7 @@ static void annotate_recalc_end(annotate_recalc_state_t *ars)
 HIDDEN void annotate_recalc_add(annotate_recalc_state_t *ars,
 			 uint32_t uid)
 {
-    uint32_t *cp;
+    annotate_recalc_peruid_t *cp;
     char uidkey[32];
 
     if (!ars)
@@ -3190,7 +3205,9 @@ HIDDEN void annotate_recalc_add(annotate_recalc_state_t *ars,
     snprintf(uidkey, sizeof(uidkey), "%u", uid);
     cp = hash_del(uidkey, &ars->counts_by_uid);
     if (cp) {
-	mailbox_use_annot_quota(ars->mailbox, *cp);
+	mailbox_use_annot_quota(ars->mailbox, cp->usage);
+	if (ars->crcalgo)
+	    ars->mailbox->i.sync_crc ^= cp->sync_crc;
 	ars->num_uids--;
 	free(cp);
     }

@@ -175,6 +175,8 @@ struct index_header {
     time_t last_repack_time;
 
     bit32 header_file_crc;
+    bit32 sync_crc;
+    bit32 sync_crc_vers;
 
     uint32_t recentuid;
     time_t recenttime;
@@ -270,7 +272,7 @@ struct mailbox {
 				     * annotations for this mailbox */
 			  /* Spares - only use these if the index */
 			  /*  record size remains the same */
-#define OFFSET_SPARE2 120 /*  (see note above about spares) */
+#define OFFSET_SYNC_CRC_VERS 120 /* version of algorithm used for SYNC_CRC field */
 #define OFFSET_HEADER_CRC 124 /* includes all zero for the spares! */
 
 /* Offsets of index_record fields in index/expunge file
@@ -559,6 +561,7 @@ extern int mailbox_get_annotate_state(struct mailbox *mailbox,
 				      unsigned int uid,
 				      struct annotate_state **statep);
 
+const mailbox_crcalgo_t *mailbox_get_crcalgo(struct mailbox *);
 const mailbox_crcalgo_t *mailbox_find_crcalgo(unsigned minvers, unsigned maxvers);
 
 #endif /* INCLUDED_MAILBOX_H */

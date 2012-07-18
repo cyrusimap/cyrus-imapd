@@ -1457,7 +1457,7 @@ HIDDEN int mailbox_buf_to_index_header(const char *buf, struct index_header *i)
     i->first_expunged = ntohl(*((bit32 *)(buf+OFFSET_FIRST_EXPUNGED)));
     i->last_repack_time = ntohl(*((bit32 *)(buf+OFFSET_LAST_REPACK_TIME)));
     i->header_file_crc = ntohl(*((bit32 *)(buf+OFFSET_HEADER_FILE_CRC)));
-    /* sync_crc was here */
+    i->sync_crc = ntohl(*((bit32 *)(buf+OFFSET_SYNC_CRC)));
     i->recentuid = ntohl(*((bit32 *)(buf+OFFSET_RECENTUID)));
     i->recenttime = ntohl(*((bit32 *)(buf+OFFSET_RECENTTIME)));
     i->header_crc = ntohl(*((bit32 *)(buf+OFFSET_HEADER_CRC)));
@@ -1466,6 +1466,7 @@ HIDDEN int mailbox_buf_to_index_header(const char *buf, struct index_header *i)
     /* this field is stored as a 32b unsigned on disk but 64b signed
      * in memory, so we need to be careful about sign extension */
     i->quota_annot_used = (quota_t)((unsigned long long)qannot);
+    i->sync_crc_vers = ntohl(*((bit32 *)(buf+OFFSET_SYNC_CRC_VERS)));
 
     if (!i->exists)
 	i->options |= OPT_POP3_NEW_UIDL;
@@ -1978,7 +1979,7 @@ static bit32 mailbox_index_header_to_buf(struct index_header *i, unsigned char *
     *((bit32 *)(buf+OFFSET_FIRST_EXPUNGED)) = htonl(i->first_expunged);
     *((bit32 *)(buf+OFFSET_LAST_REPACK_TIME)) = htonl(i->last_repack_time);
     *((bit32 *)(buf+OFFSET_HEADER_FILE_CRC)) = htonl(i->header_file_crc);
-    *((bit32 *)(buf+OFFSET_SYNC_CRC)) = 0;	/* sync_crc was here */
+    *((bit32 *)(buf+OFFSET_SYNC_CRC)) = htonl(i->sync_crc);
     *((bit32 *)(buf+OFFSET_RECENTUID)) = htonl(i->recentuid);
     *((bit32 *)(buf+OFFSET_RECENTTIME)) = htonl(i->recenttime);
     *((bit32 *)(buf+OFFSET_POP3_SHOW_AFTER)) = htonl(i->pop3_show_after);
@@ -1986,7 +1987,7 @@ static bit32 mailbox_index_header_to_buf(struct index_header *i, unsigned char *
      * bytes stored in dbs and the dbs are 32b anyway there should
      * be no problem */
     *((bit32 *)(buf+OFFSET_QUOTA_ANNOT_USED)) = htonl((bit32)i->quota_annot_used);
-    *((bit32 *)(buf+OFFSET_SPARE2)) = htonl(0); /* RESERVED */
+    *((bit32 *)(buf+OFFSET_SYNC_CRC_VERS)) = htonl(i->sync_crc_vers);
 
     /* Update checksum */
     crc = htonl(crc32_map((char *)buf, OFFSET_HEADER_CRC));
@@ -2161,13 +2162,35 @@ static void header_update_counts(struct index_header *i,
     }
 }
 
+const mailbox_crcalgo_t *mailbox_get_crcalgo(struct mailbox *mailbox)
+{
+    const mailbox_crcalgo_t *alg = NULL;
+
+    if (mailbox->i.sync_crc_vers) {
+	alg = mailbox_find_crcalgo(mailbox->i.sync_crc_vers,
+				   mailbox->i.sync_crc_vers);
+	if (!alg && mailbox_index_islocked(mailbox, /*write*/1)) {
+	    mailbox->i.sync_crc_vers = 0;	/* invalidate the CRC version */
+	    mailbox_index_dirty(mailbox);
+	}
+    }
+
+    return alg;
+}
+
 static void mailbox_index_update_counts(struct mailbox *mailbox,
 					struct index_record *record,
 					int is_add)
 {
+    const mailbox_crcalgo_t *alg;
+
     mailbox_quota_dirty(mailbox);
     mailbox_index_dirty(mailbox);
     header_update_counts(&mailbox->i, record, is_add);
+
+    alg = mailbox_get_crcalgo(mailbox);
+    if (alg)
+	mailbox->i.sync_crc ^= alg->record(mailbox, record);
 }
 
 static int mailbox_index_recalc(struct mailbox *mailbox)
@@ -2189,6 +2212,9 @@ static int mailbox_index_recalc(struct mailbox *mailbox)
     mailbox->i.exists = 0;
     mailbox->i.quota_mailbox_used = 0;
     mailbox->i.quota_annot_used = 0;
+    /* upgrade to the best CRC version */
+    mailbox->i.sync_crc = 0;
+    mailbox->i.sync_crc_vers = MAILBOX_CRC_VERSION_MAX;
 
     annotate_recalc_begin(mailbox, &ars, 1);
 
@@ -2543,6 +2569,12 @@ HIDDEN int mailbox_repack_setup(struct mailbox *mailbox,
     repack->i.num_records = 0;
     repack->i.quota_mailbox_used = 0;
     repack->i.num_records = 0;
+    /*
+     * Note, we don't recalculate the mailbox' sync CRC on repack, because
+     * the sync CRC may depend on annotation values which we don't want to
+     * go looking up at this time.  A call to mailbox_index_recalc() will
+     * however recalculate the sync CRC from scratch.
+     */
     repack->i.answered = 0;
     repack->i.deleted = 0;
     repack->i.flagged = 0;
@@ -2619,6 +2651,9 @@ HIDDEN int mailbox_repack_commit(struct mailbox_repack **repackptr)
     assert(repack);
 
     repack->i.last_repack_time = time(0);
+
+    assert(repack->i.sync_crc_vers == repack->mailbox->i.sync_crc_vers);
+    assert(repack->i.sync_crc == repack->mailbox->i.sync_crc);
 
     /* rewrite the header with updated details */
     mailbox_index_header_to_buf(&repack->i, buf);
@@ -2974,6 +3009,7 @@ EXPORTED int mailbox_create(const char *name,
     mailbox->i.uidvalidity = uidvalidity;
     mailbox->i.options = options;
     mailbox->i.highestmodseq = 1;
+    mailbox->i.sync_crc_vers = MAILBOX_CRC_VERSION_MAX;
 
     /* initialise header size field so appends calculate the
      * correct map size */
@@ -4094,6 +4130,21 @@ static void reconstruct_compare_headers(struct mailbox *mailbox,
 	printf("%s: updating exists %u => %u\n",
 	       mailbox->name, old->exists, new->exists);
     }
+
+    if (old->sync_crc_vers != new->sync_crc_vers) {
+	syslog(LOG_ERR, "%s: updating sync_crc_vers %u => %u",
+	       mailbox->name, old->sync_crc_vers, new->sync_crc_vers);
+	printf("%s: updating sync_crc_vers %u => %u\n",
+	       mailbox->name, old->sync_crc_vers, new->sync_crc_vers);
+    }
+    else if (old->sync_crc != new->sync_crc) {
+	/* note that the sync_crc can't be compared if the
+	 * algorithm versions are different */
+	syslog(LOG_ERR, "%s: updating sync_crc %u => %u",
+	       mailbox->name, old->sync_crc, new->sync_crc);
+	printf("%s: updating sync_crc %u => %u\n",
+	       mailbox->name, old->sync_crc, new->sync_crc);
+    }
 }
 
 static int mailbox_wipe_index_record(struct mailbox *mailbox,
@@ -4386,6 +4437,10 @@ static bit32 crc32_record(const struct mailbox *mailbox,
     bit32 flagcrc = 0;
     int flag;
 
+    /* expunged flags have no sync CRC */
+    if (record->system_flags & FLAG_EXPUNGED)
+	return 0;
+
     /* calculate an XORed CRC32 over all the flags on the message, so no
      * matter what order they are store in the header, the final value 
      * is the same */
@@ -4439,6 +4494,10 @@ static bit32 md5_record(const struct mailbox *mailbox,
     const char *flags[MAX_USER_FLAGS + /*system flags*/5];
     char buf[256];
     static struct buf flagbuf = BUF_INITIALIZER;
+
+    /* expunged flags have no sync CRC */
+    if (record->system_flags & FLAG_EXPUNGED)
+	return 0;
 
     MD5Init(&ctx);
 
