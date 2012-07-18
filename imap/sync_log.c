@@ -69,7 +69,6 @@
 #include "xstrlcpy.h"
 
 static int sync_log_enabled = 0;
-static const char *suppressed_channel = NULL;
 static strarray_t *channels = NULL;
 
 EXPORTED void sync_log_init(void)
@@ -101,18 +100,6 @@ EXPORTED void sync_log_suppress(void)
     sync_log_enabled = 0;
 }
 
-void sync_log_suppress_channel(const char *channelname)
-{
-    if (channelname) {
-	/* there can only be one */
-	assert (!suppressed_channel);
-	suppressed_channel = channelname;
-    }
-    else {
-	suppressed_channel = NULL;
-    }
-}
-
 EXPORTED void sync_log_done(void)
 {
     strarray_free(channels);
@@ -142,8 +129,6 @@ static void sync_log_base(const char *channel, const char *string)
 
     /* are we being supressed? */
     if (!sync_log_enabled) return;
-    if (channel && suppressed_channel && !strcmp(channel, suppressed_channel))
-	return;
 
     fname = sync_log_fname(channel);
 
@@ -278,18 +263,6 @@ static char *va_format(const char *fmt, va_list ap)
     buf[len] = '\0';
 
     return buf;
-}
-
-void sync_log_channel(const char *channel, const char *fmt, ...)
-{
-    va_list ap;
-    const char *val;
-
-    va_start(ap, fmt);
-    val = va_format(fmt, ap);
-    va_end(ap);
-
-    sync_log_base(channel, val);
 }
 
 EXPORTED void sync_log(const char *fmt, ...)
