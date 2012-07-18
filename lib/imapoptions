@@ -1446,7 +1446,8 @@ product version in the capabilities */
    specified by each "channel".  To run these log files, you need to pass
    the -n option to sync_client -r with the channel name.  Use this for
    a mesh style replication layout - every machine replicating to every
-   other machine. */
+   other machine. You can use "" (the two-character string U+22 U+22)
+   to mean the default sync channel. */
 
 { "sync_password", NULL, STRING }
 /* The default password to use when authenticating to a sync server.

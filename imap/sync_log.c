@@ -70,25 +70,30 @@
 
 static int sync_log_enabled = 0;
 static const char *suppressed_channel = NULL;
-static char *channel_base;
-static char *channel_end;
+static strarray_t *channels = NULL;
 
 EXPORTED void sync_log_init(void)
 {
-    char *p;
+    const char *conf;
+    int i;
 
     sync_log_enabled = config_getswitch(IMAPOPT_SYNC_LOG);
-    channel_base = NULL;
-    channel_end = NULL;
-    if (config_getstring(IMAPOPT_SYNC_LOG_CHANNELS)) {
-	channel_base = xstrdup(config_getstring(IMAPOPT_SYNC_LOG_CHANNELS));
-	channel_end = channel_base + strlen(channel_base);
-	p = channel_base;
-	while (*p) {
-	    if (*p == ' ') *p = '\0';
-	    p++;
-	}
-    }
+
+    /* sync_log_init() may be called more than once */
+    if (channels) strarray_free(channels);
+
+    conf = config_getstring(IMAPOPT_SYNC_LOG_CHANNELS);
+    if (!conf) conf = "\"\"";
+    channels = strarray_split(conf, " ", 0);
+    /*
+     * The sysadmin can specify "" in the value of sync_log_channels to
+     * mean the default channel name - this will be useful for sysadmins
+     * who want to start using a sync log channel for squatter but who
+     * have been using the default sync log channel for sync_client.
+     */
+    i = strarray_find(channels, "\"\"", 0);
+    if (i >= 0)
+	strarray_set(channels, i, NULL);
 }
 
 EXPORTED void sync_log_suppress(void)
@@ -110,8 +115,8 @@ void sync_log_suppress_channel(const char *channelname)
 
 EXPORTED void sync_log_done(void)
 {
-    free(channel_base);
-    channel_base = NULL;
+    strarray_free(channels);
+    channels = NULL;
 }
 
 EXPORTED char *sync_log_fname(const char *channel)
@@ -291,20 +296,13 @@ EXPORTED void sync_log(const char *fmt, ...)
 {
     va_list ap;
     const char *val;
-    const char *ch;
+    int i;
 
     va_start(ap, fmt);
     val = va_format(fmt, ap);
     va_end(ap);
 
-    if (channel_base) {
-	for (ch = channel_base; ch < channel_end; ch += strlen(ch) + 1) {
-	    sync_log_base(ch, val);
-	}
-    }
-    else {
-	/* just the regular log path */
-	sync_log_base(NULL, val);
-    }
+    for (i = 0 ; i < channels->count ; i++)
+	sync_log_base(channels->data[i], val);
 }
 
