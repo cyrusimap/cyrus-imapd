@@ -4625,3 +4625,78 @@ const mailbox_crcalgo_t *mailbox_find_crcalgo(unsigned minvers, unsigned maxvers
     }
     return best;
 }
+
+struct crc_rock
+{
+    const mailbox_crcalgo_t *algo;
+    bit32 crc;
+};
+
+static int crc_one_annot(const char *mailbox __attribute__((unused)),
+			 uint32_t uid __attribute__((unused)),
+			 const char *entry,
+			 const char *userid,
+			 const struct buf *value,
+			 void *rock)
+{
+    struct crc_rock *cr = (struct crc_rock *)rock;
+    cr->crc ^= cr->algo->annot(entry, userid, value);
+    return 0;
+}
+
+/*
+ * Calculate a sync CRC for the entire @mailbox using CRC algorithm
+ * version @vers, and store the result in *@crcp.
+ * Returns: 0 on success, -ve on error.
+ */
+int mailbox_calc_sync_crc(struct mailbox *mailbox, unsigned vers, uint32_t *crcp)
+{
+    struct index_record record;
+    uint32_t recno;
+    struct crc_rock cr = { NULL, 0 };
+
+    /* check if we can use the persistent incremental CRC */
+    if (vers == mailbox->i.sync_crc_vers) {
+	*crcp = mailbox->i.sync_crc;
+	return 0;
+    }
+    /* otherwise, we're on the slow path */
+
+    cr.algo = mailbox_find_crcalgo(vers, vers);
+    if (!cr.algo)
+	return IMAP_NOTFOUND;
+
+    for (recno = 1; recno <= mailbox->i.num_records; recno++) {
+	/* we can't send bogus records, just skip them! */
+	if (mailbox_read_index_record(mailbox, recno, &record))
+	    continue;
+
+	/* always skip EXPUNGED flags, so we don't count the annots */
+	if (record.system_flags & FLAG_EXPUNGED)
+	    continue;
+
+	cr.crc ^= cr.algo->record(mailbox, &record);
+
+	if (cr.algo->annot)
+	    annotatemore_findall(mailbox->name, record.uid, /* all entries*/"*",
+				 crc_one_annot, &cr);
+    }
+
+    /* include per-mailbox annotations */
+    if (cr.algo->annot)
+	annotatemore_findall(mailbox->name, 0, /* all entries*/"*",
+			     crc_one_annot, &cr);
+
+    /* possibly upgrade the persistent CRC version */
+    if (vers > mailbox->i.sync_crc_vers &&
+	mailbox_index_islocked(mailbox, /*write*/1)) {
+	mailbox->i.sync_crc = cr.crc;
+	mailbox->i.sync_crc_vers = vers;
+	mailbox_index_dirty(mailbox);
+    }
+
+    /* return the newly calculated CRC */
+    *crcp = cr.crc;
+
+    return 0;
+}

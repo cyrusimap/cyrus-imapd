@@ -1810,7 +1810,7 @@ out:
 
 /* ====================================================================== */
 
-static const mailbox_crcalgo_t *sync_crcalgo;
+static unsigned sync_crc_vers;
 
 int sync_crc_setup(unsigned minvers, unsigned maxvers, int strict)
 {
@@ -1826,67 +1826,12 @@ int sync_crc_setup(unsigned minvers, unsigned maxvers, int strict)
 				   MAILBOX_CRC_VERSION_MIN);
     }
 
-    sync_crcalgo = alg;
-    return alg->version;
+    return sync_crc_vers = alg->version;
 }
 
-static void calc_annots(struct mailbox *mailbox,
-			struct index_record *record,
-			bit32 *crcp)
-{
-    struct sync_annot_list *annots = NULL;
-    struct sync_annot *annot;
-    int r;
-
-    r = read_annotations(mailbox, record, &annots);
-    if (r) return;
-    if (!annots) return;
-
-    for (annot = annots->head; annot; annot = annot->next)
-	*crcp ^= sync_crcalgo->annot(annot->entry, annot->userid, &annot->value);
-
-    sync_annot_list_free(&annots);
-}
-
-/*
- * Calculate a sync CRC for the entire mailbox, and store the result
- * formatted as a nul-terminated ASCII string (suitable for use as an
- * IMAP atom) in @buf.
- * Returns: 0 on success, -ve on error.
- */
 int sync_crc_calc(struct mailbox *mailbox, uint32_t *crcp)
 {
-    struct index_record record;
-    uint32_t recno;
-    bit32 crc = 0;
-
-    /* check if we can use the persistent incremental CRC */
-    if (sync_crcalgo->version == mailbox->i.sync_crc_vers) {
-	*crcp = mailbox->i.sync_crc;
-	return 0;
-    }
-    /* otherwise, we're on the slow path */
-
-    for (recno = 1; recno <= mailbox->i.num_records; recno++) {
-	/* we can't send bogus records, just skip them! */
-	if (mailbox_read_index_record(mailbox, recno, &record))
-	    continue;
-
-	/* always skip EXPUNGED flags, so we don't count the annots */
-	if (record.system_flags & FLAG_EXPUNGED)
-	    continue;
-
-	crc ^= sync_crcalgo->record(mailbox, &record);
-
-	if (sync_crcalgo->annot)
-	    calc_annots(mailbox, &record, &crc);
-    }
-
-    if (sync_crcalgo->annot)
-	calc_annots(mailbox, NULL, &crc);
-
-    *crcp = crc;
-    return 0;
+    return mailbox_calc_sync_crc(mailbox, sync_crc_vers, crcp);
 }
 
 /* ====================================================================== */
