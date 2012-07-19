@@ -4575,17 +4575,21 @@ static bit32 md5_record(const struct mailbox *mailbox,
     return ntohl(result.b32);
 }
 
-static bit32 md5_annot(const char *entry, const char *userid,
-		       const struct buf *value)
+static bit32 md5_annot(unsigned int uid, const char *entry,
+		       const char *userid, const struct buf *value)
 {
     MD5_CTX ctx;
     union {
 	bit32 b32;
 	unsigned char md5[16];
     } result;
+    char buf[32];
 
     MD5Init(&ctx);
 
+    snprintf(buf, sizeof(buf), "%u", uid);
+    MD5Update(&ctx, buf, strlen(buf));
+    MD5Update(&ctx, " ", 1);
     MD5Update(&ctx, entry, strlen(entry));
     MD5Update(&ctx, " ", 1);
     MD5Update(&ctx, userid, strlen(userid));
@@ -4633,14 +4637,14 @@ struct crc_rock
 };
 
 static int crc_one_annot(const char *mailbox __attribute__((unused)),
-			 uint32_t uid __attribute__((unused)),
+			 uint32_t uid,
 			 const char *entry,
 			 const char *userid,
 			 const struct buf *value,
 			 void *rock)
 {
     struct crc_rock *cr = (struct crc_rock *)rock;
-    cr->crc ^= cr->algo->annot(entry, userid, value);
+    cr->crc ^= cr->algo->annot(uid, entry, userid, value);
     return 0;
 }
 

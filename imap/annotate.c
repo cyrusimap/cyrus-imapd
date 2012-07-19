@@ -2386,8 +2386,8 @@ static int write_entry(struct mailbox *mailbox,
     if (mailbox) {
 	const mailbox_crcalgo_t *alg = mailbox_get_crcalgo(mailbox);
 	if (alg) {
-	    mailbox->i.sync_crc ^= alg->annot(entry, userid, &oldval);
-	    mailbox->i.sync_crc ^= alg->annot(entry, userid, value);
+	    mailbox->i.sync_crc ^= alg->annot(uid, entry, userid, &oldval);
+	    mailbox->i.sync_crc ^= alg->annot(uid, entry, userid, value);
 	}
 
 	mailbox_use_annot_quota(mailbox, value->len - oldval.len);
@@ -3119,7 +3119,7 @@ static int calc_usage_cb(const char *mailbox __attribute__((unused)),
     }
     cp->usage += value->len;
     if (ars->crcalgo)
-	cp->sync_crc ^= ars->crcalgo->annot(entry, userid, value);
+	cp->sync_crc ^= ars->crcalgo->annot(uid, entry, userid, value);
 
     return 0;
 }

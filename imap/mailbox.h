@@ -541,7 +541,8 @@ typedef struct mailbox_crcalgo mailbox_crcalgo_t;
 struct mailbox_crcalgo {
     unsigned version;
     bit32 (*record)(const struct mailbox *, const struct index_record *);
-    bit32 (*annot)(const char *entry, const char *userid, const struct buf *value);
+    bit32 (*annot)(unsigned int uid, const char *entry,
+		   const char *userid, const struct buf *value);
 };
 
 extern int mailbox_repack_setup(struct mailbox *mailbox,
