@@ -1,21 +1,33 @@
 #include "cunit/cunit.h"
 #include "byteorder64.h"
 
+union align64 {
+    uint64_t i64;
+    char buf[8];
+};
+
 static void test_byteorder(void)
 {
-    const char b64[8] = { 0, 0, 0, 0, 0, 0, 0, 1 };
-    const char b32[4] = { 0, 0, 0, 1 };
-    char i64[8];
-    char i32[4];
+    union align64 source;
+    union align64 result;
+
+    source.buf[0] = 0;
+    source.buf[1] = 0;
+    source.buf[2] = 0;
+    source.buf[3] = 0;
+    source.buf[4] = 0;
+    source.buf[5] = 0;
+    source.buf[6] = 0;
+    source.buf[7] = 1;
 
     /* test 64 bit */
-    CU_ASSERT_EQUAL(ntohll(*((uint64_t *)(b64))), 1);
-    *((uint64_t *)i64) = htonll(1);
-    CU_ASSERT_EQUAL(memcmp((char *)i64, b64, 8), 0);
+    CU_ASSERT_EQUAL(ntohll(*((uint64_t *)(source.buf))), 1);
+    *((uint64_t *)result.buf) = htonll(1);
+    CU_ASSERT_EQUAL(memcmp(result.buf, source.buf, 8), 0);
 
     /* test 32 bit */
-    CU_ASSERT_EQUAL(ntohl(*((uint32_t *)(b32))), 1);
-    *((uint32_t *)i32) = htonl(1);
-    CU_ASSERT_EQUAL(memcmp((char *)i32, b32, 4), 0);
+    CU_ASSERT_EQUAL(ntohl(*((uint32_t *)(source.buf+4))), 1);
+    *((uint32_t *)(result.buf)) = htonl(1);
+    CU_ASSERT_EQUAL(memcmp(result.buf, source.buf+4, 4), 0);
 }
 
