@@ -58,24 +58,25 @@
 #  define be16toh(x) betoh16(x)
 #  define be32toh(x) betoh32(x)
 #  define be64toh(x) betoh64(x)
-#elif defined(WORDS_BIGENDIAN)
-#define CYRUS_BYTESWAP
 #endif
 
 /* 64-bit host/network byte-order swap macros */
 
-#ifdef be64toh
-#define htonll(x) htobe64(x)
-#define ntohll(x) be64toh(x)
-#elif defined (CYRUS_BYTESWAP)
+#if defined (WORDS_BIGENDIAN)
+#  define htonll(x) (x)
+#  define ntohll(x) (x)
+#else
+#  if defined (be64toh) && defined(htobe64)
+#    define htonll(x) htobe64(x)
+#    define ntohll(x) be64toh(x)
+#  else
 /* little-endian 64-bit host/network byte-order swap functions */
+#    define CYRUS_BYTESWAP
 extern unsigned long long _htonll(unsigned long long);
 extern unsigned long long _ntohll(unsigned long long);
-#define htonll(x) _htonll(x)
-#define ntohll(x) _ntohll(x)
-#else
-#define htonll(x) (x)
-#define ntohll(x) (x)
+#    define htonll(x) _htonll(x)
+#    define ntohll(x) _ntohll(x)
+#  endif
 #endif
 
 
