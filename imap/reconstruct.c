@@ -251,7 +251,7 @@ int main(int argc, char **argv)
 	for (i = optind; i < argc; i++) {
 	    struct stat sbuf;
 
-	    if(strchr(argv[i],'%') || strchr(argv[i],'*')) {
+	    if (strchr(argv[i],'%') || strchr(argv[i],'*')) {
 		fprintf(stderr, "Using wildcards with -p is not supported.\n");
 		exit(EC_USAGE);
 	    }
@@ -290,7 +290,7 @@ int main(int argc, char **argv)
 
 	    r = mboxlist_createmailbox(buf, 0, start_part, 1,
 				       "cyrus", NULL, 0, 0, !xflag, NULL);
-	    if(r) {
+	    if (r) {
 		fprintf(stderr, "could not create %s\n", argv[i]);
 	    }
 	}
@@ -405,7 +405,7 @@ static int do_reconstruct(char *name,
     if (matchlen == (int) strlen(lastname) &&
 	!strncmp(name, lastname, matchlen)) return 0;
 
-    if(matchlen >= (int) sizeof(lastname))
+    if (matchlen >= (int) sizeof(lastname))
 	matchlen = sizeof(lastname) - 1;
 
     strncpy(lastname, name, matchlen);
