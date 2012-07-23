@@ -1,4 +1,4 @@
-/* reconstruct.c -- program to reconstruct a mailbox 
+/* reconstruct.c -- program to reconstruct a mailbox
  *
  * Copyright (c) 1994-2008 Carnegie Mellon University.  All rights reserved.
  *
@@ -293,7 +293,7 @@ int main(int argc, char **argv)
 		exit(EC_USAGE);
 	    }
 	}
-	
+
 	/* None of them exist.  Create them. */
 	for (i = optind; i < argc; i++) {
 	    /* Translate mailboxname */
@@ -394,15 +394,15 @@ static void usage(void)
 	    "usage: reconstruct [-C <alt_config>] [-p partition] [-ksrfx] mailbox...\n");
     fprintf(stderr, "       reconstruct [-C <alt_config>] -m\n");
     exit(EC_USAGE);
-}    
+}
 
 /*
  * mboxlist_findall() callback function to reconstruct a mailbox
  */
 static int do_reconstruct(char *name,
-		          int matchlen,
-		          int maycreate __attribute__((unused)),
-		          void *rock)
+			  int matchlen,
+			  int maycreate __attribute__((unused)),
+			  void *rock)
 {
     strarray_t *discovered = (strarray_t *)rock;
     int r;
@@ -419,7 +419,7 @@ static int do_reconstruct(char *name,
 
     if(matchlen >= (int) sizeof(lastname))
 	matchlen = sizeof(lastname) - 1;
-    
+
     strncpy(lastname, name, matchlen);
     lastname[matchlen] = '\0';
 
@@ -476,13 +476,13 @@ static int do_reconstruct(char *name,
 	    if (!S_ISDIR(sbuf.st_mode)) continue;
 
 	    /* ok, we found a directory that doesn't have a dot in it;
-               is there a cyrus.header file? */
+	       is there a cyrus.header file? */
 	    snprintf(fnamebuf, MAX_MAILBOX_PATH, "%s%s",
 		     dirent->d_name, FNAME_HEADER);
 	    if (stat(fnamebuf, &sbuf) < 0) continue;
 
 	    /* ok, we have a real mailbox directory */
-	    snprintf(buf, MAX_MAILBOX_NAME, "%s.%s", 
+	    snprintf(buf, MAX_MAILBOX_NAME, "%s.%s",
 		     name, dirent->d_name);
 
 	    /* does fnamebuf exist as a mailbox in mboxlist? */
@@ -490,7 +490,7 @@ static int do_reconstruct(char *name,
 		r = mboxlist_lookup(buf, NULL, NULL);
 	    } while (r == IMAP_AGAIN);
 	    if (!r) continue; /* mailbox exists; it'll be reconstructed
-			         with a -r */
+				 with a -r */
 
 	    if (r != IMAP_MAILBOX_NONEXISTENT) break; /* erg? */
 	    else r = 0; /* reset error condition */
@@ -504,7 +504,7 @@ static int do_reconstruct(char *name,
     return 0;
 }
 
-static char *getmailname(char *mailboxname) 
+static char *getmailname(char *mailboxname)
 {
     static char namebuf[MAX_MAILBOX_PATH + 1];
 
@@ -520,12 +520,12 @@ static char *getmailname(char *mailboxname)
     return (namebuf);
 }
 
-static struct uniqmailid * 
-find_uniqid ( char * mailboxname, char * mailboxid) 
+static struct uniqmailid *
+find_uniqid ( char * mailboxname, char * mailboxid)
 {
     struct uniqmailid *puniq;
     char * nameptr;
-    
+
     nameptr = getmailname (mailboxname);
     for (puniq = uniqmid_head; puniq != NULL; puniq = puniq->uniqnext) {
 	if  (strcmp (puniq->uniqmbxid, mailboxid) == 0) {
@@ -538,7 +538,7 @@ find_uniqid ( char * mailboxname, char * mailboxid)
     return NULL;
 }
 
-static struct uniqmailid * 
+static struct uniqmailid *
 add_uniqid ( char * mailboxname, char * mailboxid)
 {
     struct uniqmailid *puniq;
@@ -549,7 +549,7 @@ add_uniqid ( char * mailboxname, char * mailboxid)
     puniq = xmalloc (sizeof (struct uniqmailid));
     puniq->uniqmbxid = xstrdup(mailboxid);
     puniq->uniqname = xstrdup(pboxname);
-    
+
     puniq->uniqnext = uniqmid_head;
     uniqmid_head = puniq;
 
