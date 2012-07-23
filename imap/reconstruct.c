@@ -108,25 +108,13 @@
 extern int optind;
 extern char *optarg;
 
-struct uniqmailid {
-    char * uniqmbxid;
-    char *uniqname;
-    struct uniqmailid *uniqnext;
-};
-
-static struct uniqmailid *uniqmid_head;
-
 /* current namespace */
 static struct namespace recon_namespace;
 
 /* forward declarations */
 static void do_mboxlist(void);
 static int do_reconstruct(char *name, int matchlen, int maycreate, void *rock);
-int reconstruct(char *name, const strarray_t *);
 static void usage(void);
-static char * getmailname (char * mailboxname);
-static struct uniqmailid * add_uniqid (char * mailboxname, char * mailboxid);
-static struct uniqmailid * find_uniqid (char * mailboxname, char * mailboxid);
 
 extern cyrus_acl_canonproc_t mboxlist_ensureOwnerRights;
 
@@ -436,11 +424,6 @@ static int do_reconstruct(char *name,
 	return 0;
     }
 
-    if (!add_uniqid(lastname, mailbox->uniqueid)) {
-	syslog (LOG_ERR, "Failed adding mailbox: %s unique id: %s\n",
-		mailbox->name, mailbox->uniqueid );
-    }
-
     /* Convert internal name to external */
     (*recon_namespace.mboxname_toexternal)(&recon_namespace, lastname,
 					   NULL, buf);
@@ -502,58 +485,6 @@ static int do_reconstruct(char *name,
     }
 
     return 0;
-}
-
-static char *getmailname(char *mailboxname)
-{
-    static char namebuf[MAX_MAILBOX_PATH + 1];
-
-    char * pname;
-
-    strlcpy (namebuf, mailboxname, sizeof (namebuf));
-    pname = strchr (namebuf, '.');
-    if (pname) {
-	pname = strchr(pname + 1, '.');
-	if (pname)
-	    *pname = '\0';
-    }
-    return (namebuf);
-}
-
-static struct uniqmailid *
-find_uniqid ( char * mailboxname, char * mailboxid)
-{
-    struct uniqmailid *puniq;
-    char * nameptr;
-
-    nameptr = getmailname (mailboxname);
-    for (puniq = uniqmid_head; puniq != NULL; puniq = puniq->uniqnext) {
-	if  (strcmp (puniq->uniqmbxid, mailboxid) == 0) {
-	    if (strcmp (puniq->uniqname, nameptr) == 0) {
-		return (puniq);
-	    }
-	}
-    }
-
-    return NULL;
-}
-
-static struct uniqmailid *
-add_uniqid ( char * mailboxname, char * mailboxid)
-{
-    struct uniqmailid *puniq;
-    char *pboxname;
-
-    pboxname = getmailname (mailboxname);
-
-    puniq = xmalloc (sizeof (struct uniqmailid));
-    puniq->uniqmbxid = xstrdup(mailboxid);
-    puniq->uniqname = xstrdup(pboxname);
-
-    puniq->uniqnext = uniqmid_head;
-    uniqmid_head = puniq;
-
-    return (puniq);
 }
 
 /*
