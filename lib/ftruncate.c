@@ -46,8 +46,7 @@
 #include <config.h>
 #include <errno.h>
 
-int
-ftruncate(int fd, int length)
+int ftruncate(int fd, int length)
 {
     errno = EINVAL;
     return -1;
