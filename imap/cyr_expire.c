@@ -93,6 +93,9 @@ struct expire_rock {
     unsigned long messages_expired;
     unsigned long messages_expunged;
     int skip_annotate;
+    bit32 userflags[MAX_USER_FLAGS/32];
+    int do_userflags;
+    unsigned long userflags_expunged;
 };
 
 struct delete_rock {
@@ -147,6 +150,25 @@ static int parse_duration(const char *s, int *secondsp)
     return 1;
 }
 
+static int expunge_userflags(struct mailbox *mailbox, struct expire_rock *erock)
+{
+    unsigned int i;
+    int r;
+
+    for (i = 0; i < MAX_USER_FLAGS; i++) {
+	if (erock->userflags[i/32] & 1<<(i&31))
+	    continue;
+	if (verbose)
+	    fprintf(stderr, "Expunging userflag %u (%s) from %s\n",
+		    i, mailbox->flagname[i], mailbox->name);
+	r = mailbox_remove_user_flag(mailbox, i);
+	if (r) return r;
+	erock->userflags_expunged++;
+    }
+
+    return 0;
+}
+
 /*
  * mailbox_expunge() callback to expunge expired articles.
  */
@@ -155,6 +177,7 @@ static unsigned expire_cb(struct mailbox *mailbox __attribute__((unused)),
 			  void *rock)
 {
     struct expire_rock *erock = (struct expire_rock *) rock;
+    unsigned int i;
 
     /* otherwise, we're expiring messages by sent date */
     if (record->gmtime < erock->expire_mark) {
@@ -162,7 +185,28 @@ static unsigned expire_cb(struct mailbox *mailbox __attribute__((unused)),
 	return 1;
     }
 
+    /* record which user flags are set */
+    for (i = 0; i < (MAX_USER_FLAGS/32); i++)
+	erock->userflags[i] |= record->user_flags[i];
+
     return 0;
+}
+
+/*
+ * mailbox_expunge() callback to *only* count userflags.
+ */
+static unsigned userflag_cb(struct mailbox *mailbox __attribute__((unused)),
+			    struct index_record *record,
+			    void *rock)
+{
+    struct expire_rock *erock = (struct expire_rock *) rock;
+    unsigned int i;
+
+    /* record which user flags are set */
+    for (i = 0; i < (MAX_USER_FLAGS/32); i++)
+	erock->userflags[i] |= record->user_flags[i];
+
+    return 0;	/* always keep the message */
 }
 
 
@@ -183,6 +227,7 @@ static int expire(char *name, int matchlen __attribute__((unused)),
     struct mailbox *mailbox = NULL;
     unsigned numexpunged = 0;
     int expire_seconds = 0;
+    int did_expunge = 0;
 
     if (sigquit) {
 	return 1;
@@ -222,6 +267,8 @@ static int expire(char *name, int matchlen __attribute__((unused)),
     }
     free(buf);
 
+    memset(erock->userflags, 0, sizeof(erock->userflags));
+
     r = mailbox_open_iwl(name, &mailbox);
     if (r) {
 	/* mailbox corrupt/nonexistent -- skip it */
@@ -248,11 +295,22 @@ static int expire(char *name, int matchlen __attribute__((unused)),
 	    r = mailbox_expunge(mailbox, expire_cb, erock, NULL);
 	    if (r)
 		syslog(LOG_ERR, "failed to expire old messages: %s", mailbox->name);
+	    did_expunge = 1;
 	}
     }
     buf_free(&attrib);
 
+    if (!did_expunge && erock->do_userflags) {
+	r = mailbox_expunge(mailbox, userflag_cb, erock, NULL);
+	if (r)
+	    syslog(LOG_ERR, "failed to scan user flags for %s: %s",
+		    mailbox->name, error_message(r));
+    }
+
     erock->messages_seen += mailbox->i.num_records;
+
+    if (erock->do_userflags)
+	expunge_userflags(mailbox, erock);
 
     r = mailbox_expunge_cleanup(mailbox, erock->expunge_mark, &numexpunged);
 
@@ -342,7 +400,7 @@ int main(int argc, char *argv[])
     memset(&drock, 0, sizeof(drock));
     strarray_init(&drock.to_delete);
 
-    while ((opt = getopt(argc, argv, "C:D:E:X:p:vax")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:D:E:X:p:vaxt")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
@@ -363,11 +421,6 @@ int main(int argc, char *argv[])
 	    if (!parse_duration(optarg, &expunge_seconds)) usage();
 	    break;
 
-	case 'x':
-	    if (!do_expunge) usage();
-	    do_expunge = 0;
-	    break;
-
 	case 'p':
 	    find_prefix = optarg;
 	    break;
@@ -380,13 +433,26 @@ int main(int argc, char *argv[])
 	    erock.skip_annotate = 1;
 	    break;
 
+	case 'x':
+	    if (!do_expunge) usage();
+	    do_expunge = 0;
+	    break;
+
+	case 't':
+	    erock.do_userflags = 1;
+	    break;
+
 	default:
 	    usage();
 	    break;
 	}
     }
 
-    if (!expire_seconds && delete_seconds == -1 && expunge_seconds == -1) usage();
+    if (!expire_seconds &&
+	delete_seconds == -1 &&
+	expunge_seconds == -1 &&
+	!erock.do_userflags)
+	usage();
 
     sigemptyset(&action.sa_mask);
     action.sa_flags = 0;
@@ -417,7 +483,7 @@ int main(int argc, char *argv[])
 	exit(1);
     }
 
-    if (do_expunge && (expunge_seconds >= 0 || expire_seconds)) {
+    if (do_expunge && (expunge_seconds >= 0 || expire_seconds || erock.do_userflags)) {
 	/* xxx better way to determine a size for this table? */
 
 	/* expire messages from mailboxes,
@@ -444,6 +510,9 @@ int main(int argc, char *argv[])
 			   erock.messages_expunged,
 			   erock.messages_seen,
 			   erock.mailboxes_seen);
+	if (erock.do_userflags)
+	    syslog(LOG_NOTICE, "Expunged %lu user flags",
+			   erock.userflags_expunged);
 	if (verbose) {
 	    fprintf(stderr, "\nExpired %lu and expunged %lu out of %lu "
 			    "messages from %lu mailboxes\n",
@@ -451,6 +520,9 @@ int main(int argc, char *argv[])
 			   erock.messages_expunged,
 			   erock.messages_seen,
 			   erock.mailboxes_seen);
+	    if (erock.do_userflags)
+		fprintf(stderr, "Expunged %lu user flags\n",
+			       erock.userflags_expunged);
 	}
     }
     if (sigquit) {

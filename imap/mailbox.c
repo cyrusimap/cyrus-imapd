@@ -1371,6 +1371,27 @@ EXPORTED int mailbox_user_flag(struct mailbox *mailbox, const char *flag,
     return 0;
 }
 
+/* Remove a user flag from the mailbox, so that the slot can
+ * be reused.  Called from cyr_expire when we've made certain
+ * that no record uses the flag anymore. */
+EXPORTED int mailbox_remove_user_flag(struct mailbox *mailbox, int flagnum)
+{
+    if (flagnum < 0 || flagnum >= MAX_USER_FLAGS)
+	return IMAP_INTERNAL;	/* invalid flag number */
+
+    if (!mailbox->flagname[flagnum])
+	return 0;		/* already gone */
+
+    /* need to be index locked to make flag changes */
+    if (!mailbox_index_islocked(mailbox, 1))
+	return IMAP_MAILBOX_LOCKED;
+
+    free(mailbox->flagname[flagnum]);
+    mailbox->flagname[flagnum] = NULL;
+    mailbox->header_dirty = 1;
+    return 0;
+}
+
 int mailbox_record_hasflag(struct mailbox *mailbox,
 			   struct index_record *record,
 			   const char *flag)

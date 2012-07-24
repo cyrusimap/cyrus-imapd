@@ -477,7 +477,8 @@ extern int mailbox_set_quotaroot(struct mailbox *mailbox, const char *quotaroot)
 extern int mailbox_set_specialuse(struct mailbox *mailbox, const char *specialuse);
 extern int mailbox_user_flag(struct mailbox *mailbox, const char *flag,
 			     int *flagnum, int create);
-int mailbox_record_hasflag(struct mailbox *mailbox,
+extern int mailbox_remove_user_flag(struct mailbox *mailbox, int flagnum);
+extern int mailbox_record_hasflag(struct mailbox *mailbox,
 				  struct index_record *record,
 				  const char *flag);
 extern int mailbox_commit(struct mailbox *mailbox);

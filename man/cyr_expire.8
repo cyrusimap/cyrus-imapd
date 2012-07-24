@@ -62,6 +62,9 @@ cyr_expire \- expire messages and duplicate delivery database entries
 .BI \-p " mailbox-prefix"
 ]
 [
+.B \-t
+]
+[
 .B \-v
 ]
 .SH DESCRIPTION
@@ -104,7 +107,8 @@ expired using the value given to the \fB-E\fR option.
 \fBCyr_expire\fR reads its configuration options out of the \fIimapd.conf\fR(5)
 file unless specified otherwise by \fB-C\fR.
 .PP
-\fBCyr_expire\fR requires at least one of \fB-D -E\fR or \fB-X\fR to be supplied.
+\fBCyr_expire\fR requires at least one of \fB-D -E\fR \fB-X\fR or
+\fB-t\fR to be supplied.
 .SH OPTIONS
 .TP
 \fB\-C\fI config-file\fR
@@ -137,6 +141,9 @@ up the duplicate database without overloading the machine.
 \fB\-p \fImailbox-prefix\fR
 Only find mailboxes starting with this prefix,  e.g.
 "user.justgotspammedlots".
+.TP
+\fB\-t\fR
+Remove any user flags which are not used by remaining (not expunged) messages.
 .TP
 .B \-v
 Enable verbose output.
