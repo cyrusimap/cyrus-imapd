@@ -451,7 +451,7 @@ int service_init(int argc __attribute__((unused)),
 
     if (config_getswitch(IMAPOPT_STATUSCACHE)) {
 	/* open statuscache db to optimize handling an empty maildrop */
-	statuscache_open(NULL);
+	statuscache_open();
     }
 
     /* setup for sending IMAP IDLE notifications */

@@ -288,7 +288,7 @@ int service_init(int argc __attribute__((unused)),
 
     /* Open the statuscache so we can invalidate seen states */
     if (config_getswitch(IMAPOPT_STATUSCACHE)) {
-	statuscache_open(NULL);
+	statuscache_open();
     }
 
     return 0;

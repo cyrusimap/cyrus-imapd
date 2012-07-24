@@ -238,7 +238,7 @@ int service_init(int argc __attribute__((unused)),
 	annotatemore_open();
 
 	/* setup for statuscache invalidation */
-	statuscache_open(NULL);
+	statuscache_open();
 
 	/* setup for sending IMAP IDLE notifications */
 	idle_init();

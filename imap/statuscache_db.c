@@ -78,8 +78,9 @@
 static struct db *statuscachedb;
 static int statuscache_dbopen = 0;
 
-EXPORTED void statuscache_open(const char *fname)
+EXPORTED void statuscache_open(void)
 {
+    const char *fname = NULL;
     int ret;
     char *tofree = NULL;
 
@@ -401,7 +402,7 @@ HIDDEN int statuscache_invalidate(const char *mboxname, struct statusdata *sdata
 
     /* Open DB if it hasn't been opened */
     if (!statuscache_dbopen) {
-	statuscache_open(NULL);
+	statuscache_open();
 	doclose = 1;
     }
 

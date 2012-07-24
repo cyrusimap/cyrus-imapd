@@ -836,7 +836,7 @@ int service_init(int argc, char **argv, char **envp)
     annotatemore_open();
 
     if (config_getswitch(IMAPOPT_STATUSCACHE)) {
-	statuscache_open(NULL);
+	statuscache_open();
     }
 
     /* Create a protgroup for input from the client and selected backend */
