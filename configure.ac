@@ -153,7 +153,7 @@ dnl check for -R, etc. switch
 CMU_GUESS_RUNPATH_SWITCH
 
 AC_CHECK_HEADERS(unistd.h sys/select.h sys/param.h stdarg.h)
-AC_REPLACE_FUNCS(memmove strcasecmp ftruncate strerror)
+AC_REPLACE_FUNCS(memmove strcasecmp ftruncate strerror posix_fadvise)
 AC_CHECK_FUNCS(strlcat strlcpy getgrouplist fmemopen pselect)
 AC_HEADER_DIRENT
 
@@ -1465,6 +1465,11 @@ struct sockaddr_storage {
 #define strtoofft(nptr, endptr, base) strtoll(nptr, endptr, base)
 #else
 #error dont know what to use for OFF_T_FMT
+#endif
+
+#ifndef HAVE_POSIX_FADVISE
+#define POSIX_FADV_WILLNEED 0
+extern int posix_fadvise(int fd, off_t offset, off_t len, int advice);
 #endif
 
 /* compile time options; think carefully before modifying */
