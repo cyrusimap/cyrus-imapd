@@ -155,8 +155,8 @@ static void shut_down(int code)
 static int usage(const char *name)
 {
     fprintf(stderr,
-            "usage: %s -S <servername> [-C <alt_config>] [-r] [-v] mailbox...\n", name);
- 
+	    "usage: %s -S <servername> [-C <alt_config>] [-r] [-v] mailbox...\n", name);
+
     exit(EC_USAGE);
 }
 
@@ -201,7 +201,7 @@ static int find_reserve_messages(struct mailbox *mailbox,
 
 	sync_msgid_insert(part_list, &record.guid);
     }
-    
+
     return(0);
 }
 
@@ -241,7 +241,7 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
 
 	part_list = sync_reserve_partlist(reserve_guids, mailbox->part);
 
-	sync_folder_list_add(master_folders, mailbox->uniqueid, mailbox->name, 
+	sync_folder_list_add(master_folders, mailbox->uniqueid, mailbox->name,
 			     mailbox->part, mailbox->acl, mailbox->i.options,
 			     mailbox->i.uidvalidity, mailbox->i.last_uid,
 			     mailbox->i.highestmodseq, NULL,
@@ -286,7 +286,7 @@ static int mark_missing (struct dlist *kin,
 	    syslog(LOG_ERR, "SYNCERROR: reserve: failed to parse GUID %s",
 		   ki->sval);
 	    return IMAP_PROTOCOL_BAD_PARAMETERS;
-        }
+	}
 
 	/* afraid we will need this after all */
 	msgid = sync_msgid_lookup(part_list, &tmp_guid);
@@ -353,7 +353,7 @@ static int reserve_messages(struct sync_name_list *mboxname_list,
     struct sync_reserve *reserve;
     int r;
 
-    r = find_reserve_all(mboxname_list, master_folders, 
+    r = find_reserve_all(mboxname_list, master_folders,
 			 replica_folders, reserve_guids);
     if (r) return r;
 
@@ -382,7 +382,7 @@ static int response_parse(const char *cmd,
 
     /* Unpleasant: translate remote access error into "please reset me" */
     if (r == IMAP_MAILBOX_NONEXISTENT)
-        return 0;
+	return 0;
 
     if (r) return r;
 
@@ -475,7 +475,7 @@ static int response_parse(const char *cmd,
 	    sync_folder_list_add(folder_list, uniqueid,
 				 mboxname, part, acl,
 				 sync_parse_options(options),
-				 uidvalidity, last_uid, 
+				 uidvalidity, last_uid,
 				 highestmodseq, sync_crc,
 				 recentuid, recenttime,
 				 pop3_last_login, specialuse,
@@ -563,11 +563,11 @@ static int set_sub(const char *userid, const char *mboxname, int add)
     const char *cmd = add ? "SUB" : "UNSUB";
     struct dlist *kl;
 
-    if (verbose) 
-        printf("%s %s %s\n", cmd, userid, mboxname);
+    if (verbose)
+	printf("%s %s %s\n", cmd, userid, mboxname);
 
     if (verbose_logging)
-        syslog(LOG_INFO, "%s %s %s", cmd, userid, mboxname);
+	syslog(LOG_INFO, "%s %s %s", cmd, userid, mboxname);
 
     kl = dlist_newkvlist(NULL, cmd);
     dlist_setatom(kl, "USERID", userid);
@@ -703,12 +703,12 @@ static int update_quota_work(struct quota *client,
 
     /* disappeared?  Delete it*/
     if (r == IMAP_QUOTAROOT_NONEXISTENT)
-        return delete_quota(client->root);
+	return delete_quota(client->root);
 
     if (r) {
-        syslog(LOG_INFO, "Warning: failed to read quotaroot %s: %s",
-               client->root, error_message(r));
-        return r;
+	syslog(LOG_INFO, "Warning: failed to read quotaroot %s: %s",
+	       client->root, error_message(r));
+	return r;
     }
 
     if (server) {
@@ -941,29 +941,29 @@ static const char *make_flags(struct mailbox *mailbox, struct index_record *reco
 
     if (record->system_flags & FLAG_DELETED) {
 	snprintf(buf, 4096, "%s\\Deleted", sep);
-        sep = " ";
+	sep = " ";
     }
     if (record->system_flags & FLAG_ANSWERED) {
 	snprintf(buf, 4096, "%s\\Answered", sep);
-        sep = " ";
+	sep = " ";
     }
     if (record->system_flags & FLAG_FLAGGED) {
 	snprintf(buf, 4096, "%s\\Flagged", sep);
-        sep = " ";
+	sep = " ";
     }
     if (record->system_flags & FLAG_DRAFT) {
 	snprintf(buf, 4096, "%s\\Draft", sep);
-        sep = " ";
+	sep = " ";
     }
     if (record->system_flags & FLAG_EXPUNGED) {
 	snprintf(buf, 4096, "%s\\Expunged", sep);
-        sep = " ";
+	sep = " ";
     }
     if (record->system_flags & FLAG_SEEN) {
 	snprintf(buf, 4096, "%s\\Seen", sep);
-        sep = " ";
+	sep = " ";
     }
-        
+
     /* print user flags in mailbox order */
     for (flag = 0; flag < MAX_USER_FLAGS; flag++) {
 	if (!mailbox->flagname[flag])
@@ -971,7 +971,7 @@ static const char *make_flags(struct mailbox *mailbox, struct index_record *reco
 	if (!(record->user_flags[flag/32] & (1<<(flag&31))))
 	    continue;
 	snprintf(buf, 4096, "%s%s", sep, mailbox->flagname[flag]);
-        sep = " ";
+	sep = " ";
     }
 
     return buf;
@@ -1074,7 +1074,7 @@ static int compare_one_record(struct mailbox *mailbox,
 		rp->last_updated >= mp->last_updated) {
 		/* then copy all the flag data over from the replica */
 		mp->system_flags = rp->system_flags;
-		for (i = 0; i < MAX_USER_FLAGS/32; i++) 
+		for (i = 0; i < MAX_USER_FLAGS/32; i++)
 		    mp->user_flags[i] = rp->user_flags[i];
 
 		log_mismatch("more recent on replica", mailbox, mp, rp);
@@ -1319,7 +1319,7 @@ static int mailbox_full_update(const char *mboxname)
     /* if replica still has a higher last_uid, bump our local
      * number to match so future records don't clash */
     if (mailbox->i.last_uid < last_uid)
-        mailbox->i.last_uid = last_uid;
+	mailbox->i.last_uid = last_uid;
 
     /* blatant reuse 'r' us */
     kexpunge = dlist_newkvlist(NULL, "EXPUNGE");
@@ -1445,7 +1445,7 @@ static int update_mailbox_once(struct sync_folder *local,
     if (remote && !is_repeat) {
 	if (mailbox->i.deletedmodseq > remote->highestmodseq) {
 	    syslog(LOG_NOTICE, "inefficient replication ("
-		   MODSEQ_FMT " > " MODSEQ_FMT ") %s", 
+		   MODSEQ_FMT " > " MODSEQ_FMT ") %s",
 		   mailbox->i.deletedmodseq, remote->highestmodseq,
 		   local->name);
 	    r = IMAP_AGAIN;
@@ -1470,7 +1470,7 @@ static int update_mailbox_once(struct sync_folder *local,
     /* upload any messages required */
     if (kupload->head) {
 	/* keep the mailbox locked for shorter time! Unlock the index now
-	 * but don't close it, because we need to guarantee that message 
+	 * but don't close it, because we need to guarantee that message
 	 * files don't get deleted until we're finished with them... */
 	mailbox_unlock_index(mailbox, NULL);
 	sync_send_apply(kupload, sync_out);
@@ -1542,11 +1542,11 @@ static int do_seen(char *user, char *uniqueid)
     struct seen *seendb = NULL;
     struct seendata sd = SEENDATA_INITIALIZER;
 
-    if (verbose) 
-        printf("SEEN %s %s\n", user, uniqueid);
+    if (verbose)
+	printf("SEEN %s %s\n", user, uniqueid);
 
     if (verbose_logging)
-        syslog(LOG_INFO, "SEEN %s %s", user, uniqueid);
+	syslog(LOG_INFO, "SEEN %s %s", user, uniqueid);
 
     /* ignore read failures */
     r = seen_open(user, SEEN_SILENT, &seendb);
@@ -1569,11 +1569,11 @@ static int do_quota(const char *root)
     int r = 0;
     struct quota q;
 
-    if (verbose) 
-        printf("SETQUOTA %s\n", root);
+    if (verbose)
+	printf("SETQUOTA %s\n", root);
 
     if (verbose_logging)
-        syslog(LOG_INFO, "SETQUOTA: %s", root);
+	syslog(LOG_INFO, "SETQUOTA: %s", root);
 
     quota_init(&q, root);
     r = update_quota_work(&q, NULL);
@@ -1750,7 +1750,7 @@ static int do_folders(struct sync_name_list *mboxname_list,
 
 	/* does it need a rename? */
 	if (strcmp(mfolder->name, rfolder->name)) {
-	    sync_rename_list_add(rename_folders, mfolder->uniqueid, rfolder->name, 
+	    sync_rename_list_add(rename_folders, mfolder->uniqueid, rfolder->name,
 				 mfolder->name, mfolder->part, mfolder->uidvalidity);
 	    if (mboxname_isusermailbox(mfolder->name, 1) &&
 		mboxname_isusermailbox(rfolder->name, 1)) {
@@ -1764,7 +1764,7 @@ static int do_folders(struct sync_name_list *mboxname_list,
 
 	/* partition change is a rename too */
 	else if (strcmp(mfolder->part, rfolder->part)) {
-	    sync_rename_list_add(rename_folders, mfolder->uniqueid, rfolder->name, 
+	    sync_rename_list_add(rename_folders, mfolder->uniqueid, rfolder->name,
 				 mfolder->name, mfolder->part, mfolder->uidvalidity);
 	}
     }
@@ -1775,7 +1775,7 @@ static int do_folders(struct sync_name_list *mboxname_list,
 	    if (rfolder->mark) continue;
 	    r = folder_delete(rfolder->name);
 	    if (r) {
-		syslog(LOG_ERR, "folder_delete(): failed: %s '%s'", 
+		syslog(LOG_ERR, "folder_delete(): failed: %s '%s'",
 		       rfolder->name, error_message(r));
 		goto bail;
 	    }
@@ -1831,7 +1831,7 @@ static int do_folders(struct sync_name_list *mboxname_list,
 	rfolder = sync_folder_lookup(replica_folders, mfolder->uniqueid);
 	r = update_mailbox(mfolder, rfolder, reserve_guids);
 	if (r) {
-	    syslog(LOG_ERR, "do_folders(): update failed: %s '%s'", 
+	    syslog(LOG_ERR, "do_folders(): update failed: %s '%s'",
 		   mfolder->name, error_message(r));
 	    goto bail;
 	}
@@ -1967,7 +1967,7 @@ static int do_user_quota(struct sync_name_list *master_quotaroots,
 
 static int do_user_main(const char *user,
 			struct sync_folder_list *replica_folders,
-		        struct sync_quota_list *replica_quota)
+			struct sync_quota_list *replica_quota)
 {
     char buf[MAX_MAILBOX_BUFFER];
     int r = 0;
@@ -1996,7 +1996,7 @@ static int do_user_main(const char *user,
     /* subfolders */
     if (!r) {
 	strlcat(buf, ".*", sizeof(buf));
-        r = (sync_namespace.mboxlist_findall)(&sync_namespace, buf, 1,
+	r = (sync_namespace.mboxlist_findall)(&sync_namespace, buf, 1,
 					      user, NULL, do_mailbox_info,
 					      &info);
     }
@@ -2103,13 +2103,13 @@ static int do_user_sieve(const char *userid, struct sync_sieve_list *replica_sie
 
     master_sieve = sync_sieve_list_generate(userid);
     if (!master_sieve) {
-        syslog(LOG_ERR, "Unable to list sieve scripts for %s", userid);
-        return IMAP_IOERROR;
+	syslog(LOG_ERR, "Unable to list sieve scripts for %s", userid);
+	return IMAP_IOERROR;
     }
 
     /* Upload missing and out of date or mismatching scripts */
     for (mitem = master_sieve->head; mitem; mitem = mitem->next) {
-        ritem = sync_sieve_lookup(replica_sieve, mitem->name);
+	ritem = sync_sieve_lookup(replica_sieve, mitem->name);
 	if (ritem) {
 	    ritem->mark = 1;
 	    /* compare the GUID if known */
@@ -2178,10 +2178,10 @@ static int do_user(const char *userid)
     struct mailbox *mailbox = NULL;
 
     if (verbose)
-        printf("USER %s\n", userid);
+	printf("USER %s\n", userid);
 
     if (verbose_logging)
-        syslog(LOG_INFO, "USER %s", userid);
+	syslog(LOG_INFO, "USER %s", userid);
 
     /* check local mailbox first */
     (sync_namespace.mboxname_tointernal)(&sync_namespace, "INBOX",
@@ -2280,8 +2280,8 @@ static void remove_folder(char *name, struct sync_action_list *list,
 	if (!strncmp(name, action->name, len) &&
 	    ((action->name[len] == '\0') ||
 	     (chk_child && (action->name[len] == '.')))) {
-            action->active = 0;
-        }
+	    action->active = 0;
+	}
     }
 }
 
@@ -2395,7 +2395,7 @@ static int do_sync(const char *filename)
 
 	} else 
 	    arg2s = NULL;
-	
+
 	if (c == '\r') c = prot_getc(input);
 	if (c != '\n') {
 	    syslog(LOG_ERR, "Garbage at end of input line");
@@ -2443,7 +2443,7 @@ static int do_sync(const char *filename)
 	char inboxname[MAX_MAILBOX_BUFFER];
 	char deletedname[MAX_MAILBOX_BUFFER];
 
-	/* USER action overrides any MAILBOX action on any of the 
+	/* USER action overrides any MAILBOX action on any of the
 	 * user's mailboxes or any META, SEEN or SUB/UNSUB
 	 * action for same user */
 	(sync_namespace.mboxname_tointernal)(&sync_namespace, "INBOX",
@@ -2472,7 +2472,7 @@ static int do_sync(const char *filename)
 	char inboxname[MAX_MAILBOX_BUFFER];
 	char deletedname[MAX_MAILBOX_BUFFER];
 
-	/* USER action overrides any MAILBOX action on any of the 
+	/* USER action overrides any MAILBOX action on any of the
 	 * user's mailboxes or any META, SEEN or SUB/UNSUB
 	 * action for same user */
 	(sync_namespace.mboxname_tointernal)(&sync_namespace, "INBOX",
@@ -2491,7 +2491,7 @@ static int do_sync(const char *filename)
 	remove_meta(action->user, meta_list);
 	remove_meta(action->user, seen_list);
 	remove_meta(action->user, sub_list);
-	remove_meta(action->user, user_list); 
+	remove_meta(action->user, user_list);
 
 	/* add back in inbox, because it may have a rename to detect, woot */
 	sync_action_list_add(mailbox_list, inboxname, NULL);
@@ -2548,7 +2548,7 @@ static int do_sync(const char *filename)
 	if (!action->active)
 	    continue;
 
-        if (do_seen(action->user, action->name)) {
+	if (do_seen(action->user, action->name)) {
 	    char *userid = mboxname_isusermailbox(action->name, 1);
 	    if (userid && !strcmp(userid, action->user)) {
 		sync_action_list_add(user_list, NULL, action->user);
@@ -2578,17 +2578,17 @@ static int do_sync(const char *filename)
 	if (!action->active)
 	    continue;
 
-        if (user_sub(action->user, action->name)) {
-            sync_action_list_add(meta_list, NULL, action->user);
-            if (verbose) {
-                printf("  Promoting: SUB %s %s -> META %s\n",
-                       action->user, action->name, action->user);
-            }
-            if (verbose_logging) {
-                syslog(LOG_INFO, "  Promoting: SUB %s %s -> META %s",
-                       action->user, action->name, action->name);
-            }
-        }
+	if (user_sub(action->user, action->name)) {
+	    sync_action_list_add(meta_list, NULL, action->user);
+	    if (verbose) {
+		printf("  Promoting: SUB %s %s -> META %s\n",
+		       action->user, action->name, action->user);
+	    }
+	    if (verbose_logging) {
+		syslog(LOG_INFO, "  Promoting: SUB %s %s -> META %s",
+		       action->user, action->name, action->name);
+	    }
+	}
     }
 
     for (action = mailbox_list->head; action; action = action->next) {
@@ -2698,29 +2698,29 @@ static int do_daemon_work(const char *sync_log_file, const char *sync_shutdown_f
      * try to reprocess it if the sync fails */
     work_file_name = xmalloc(strlen(sync_log_file)+20);
     snprintf(work_file_name, strlen(sync_log_file)+20,
-             "%s-%d", sync_log_file, getpid());
+	     "%s-%d", sync_log_file, getpid());
 
     session_start = time(NULL);
 
     while (1) {
-        single_start = time(NULL);
+	single_start = time(NULL);
 
-        signals_poll();
+	signals_poll();
 
 	/* Check for shutdown file */
-        if (sync_shutdown_file && !stat(sync_shutdown_file, &sbuf)) {
-            unlink(sync_shutdown_file);
-            break;
-        }
+	if (sync_shutdown_file && !stat(sync_shutdown_file, &sbuf)) {
+	    unlink(sync_shutdown_file);
+	    break;
+	}
 
 	/* See if its time to RESTART */
-        if ((timeout > 0) &&
+	if ((timeout > 0) &&
 	    ((single_start - session_start) > (time_t) timeout)) {
-            *restartp = RESTART_NORMAL;
-            break;
-        }
+	    *restartp = RESTART_NORMAL;
+	    break;
+	}
 
-        if (stat(work_file_name, &sbuf) == 0) {
+	if (stat(work_file_name, &sbuf) == 0) {
 	    /* Existing work log file from our parent < 1 hour old */
 	    /* XXX  Is 60 minutes a resonable timeframe? */
 	    syslog(LOG_NOTICE,
@@ -2747,7 +2747,7 @@ static int do_daemon_work(const char *sync_log_file, const char *sync_shutdown_f
 	}
 
 	/* Process the work log */
-        if ((r=do_sync(work_file_name))) {
+	if ((r=do_sync(work_file_name))) {
 	    syslog(LOG_ERR,
 		   "Processing sync log file %s failed: %s",
 		   work_file_name, error_message(r));
@@ -2755,20 +2755,20 @@ static int do_daemon_work(const char *sync_log_file, const char *sync_shutdown_f
 	}
 
 	/* Remove the work log */
-        if (unlink(work_file_name) < 0) {
-            syslog(LOG_ERR, "Unlink %s failed: %m", work_file_name);
+	if (unlink(work_file_name) < 0) {
+	    syslog(LOG_ERR, "Unlink %s failed: %m", work_file_name);
 	    r = IMAP_IOERROR;
 	    break;
-        }
-        delta = time(NULL) - single_start;
+	}
+	delta = time(NULL) - single_start;
 
-        if (((unsigned) delta < min_delta) && ((min_delta-delta) > 0))
-            sleep(min_delta-delta);
+	if (((unsigned) delta < min_delta) && ((min_delta-delta) > 0))
+	    sleep(min_delta-delta);
     }
     free(work_file_name);
 
     if (*restartp == RESTART_NORMAL) {
-	prot_printf(sync_out, "RESTART\r\n"); 
+	prot_printf(sync_out, "RESTART\r\n");
 	prot_flush(sync_out);
 
 	r = sync_parse_response("RESTART", sync_in, NULL);
@@ -2875,7 +2875,7 @@ static void replica_connect(const char *channel)
     /* Disable Nagle's Algorithm => increase throughput
      *
      * http://en.wikipedia.org/wiki/Nagle's_algorithm
-     */ 
+     */
     if (servername[0] != '/') {
 	if (sync_backend->sock >= 0 && (proto = getprotobyname("tcp")) != NULL) {
 	    int on = 1;
@@ -3069,79 +3069,79 @@ int main(int argc, char **argv)
     setbuf(stdout, NULL);
 
     while ((opt = getopt(argc, argv, "C:vlS:F:f:w:t:d:n:rRumsoz")) != EOF) {
-        switch (opt) {
-        case 'C': /* alt config file */
-            alt_config = optarg;
-            break;
+	switch (opt) {
+	case 'C': /* alt config file */
+	    alt_config = optarg;
+	    break;
 
-        case 'o': /* only try to connect once */
-            connect_once = 1;
-            break;
+	case 'o': /* only try to connect once */
+	    connect_once = 1;
+	    break;
 
-        case 'v': /* verbose */
-            verbose++;
-            break;
+	case 'v': /* verbose */
+	    verbose++;
+	    break;
 
-        case 'l': /* verbose Logging */
-            verbose_logging++;
-            break;
+	case 'l': /* verbose Logging */
+	    verbose_logging++;
+	    break;
 
 	case 'S': /* Socket descriptor for server */
 	    servername = optarg;
 	    break;
 
-        case 'F': /* Shutdown file */
-            sync_shutdown_file = optarg;
-            break;
+	case 'F': /* Shutdown file */
+	    sync_shutdown_file = optarg;
+	    break;
 
-        case 'f': /* input_filename used by user and mailbox modes; OR
+	case 'f': /* input_filename used by user and mailbox modes; OR
 		     alternate sync_log_file used by single-run repeat mode */
-            input_filename = optarg;
-            break;
+	    input_filename = optarg;
+	    break;
 
-        case 'n':
+	case 'n':
 	    channel = optarg;
 	    break;
 
-        case 'w':
-            wait = atoi(optarg);
-            break;
+	case 'w':
+	    wait = atoi(optarg);
+	    break;
 
-        case 't':
-            timeout = atoi(optarg);
-            break;
+	case 't':
+	    timeout = atoi(optarg);
+	    break;
 
-        case 'd':
-            min_delta = atoi(optarg);
-            break;
+	case 'd':
+	    min_delta = atoi(optarg);
+	    break;
 
-        case 'r':
+	case 'r':
 	    background = 1;
 	    /* fallthrough */
 
-        case 'R':
+	case 'R':
 	    if (mode != MODE_UNKNOWN)
 		fatal("Mutually exclusive options defined", EC_USAGE);
-            mode = MODE_REPEAT;
-            break;
+	    mode = MODE_REPEAT;
+	    break;
 
-        case 'u':
+	case 'u':
 	    if (mode != MODE_UNKNOWN)
 		fatal("Mutually exclusive options defined", EC_USAGE);
-            mode = MODE_USER;
-            break;
+	    mode = MODE_USER;
+	    break;
 
-        case 'm':
+	case 'm':
 	    if (mode != MODE_UNKNOWN)
 		fatal("Mutually exclusive options defined", EC_USAGE);
-            mode = MODE_MAILBOX;
-            break;
+	    mode = MODE_MAILBOX;
+	    break;
 
-        case 's':
+	case 's':
 	    if (mode != MODE_UNKNOWN)
 		fatal("Mutually exclusive options defined", EC_USAGE);
-            mode = MODE_META;
-            break;
+	    mode = MODE_META;
+	    break;
 
 	case 'z':
 #ifdef HAVE_ZLIB
@@ -3151,13 +3151,13 @@ int main(int argc, char **argv)
 #endif
 	    break;
 
-        default:
-            usage("sync_client");
-        }
+	default:
+	    usage("sync_client");
+	}
     }
 
     if (mode == MODE_UNKNOWN)
-        fatal("No replication mode specified", EC_USAGE);
+	fatal("No replication mode specified", EC_USAGE);
 
     /* fork if required */
     if (background && !input_filename) {
@@ -3182,18 +3182,18 @@ int main(int argc, char **argv)
 	servername = get_config(channel, "sync_host");
 
     if (!servername)
-        fatal("sync_host not defined", EC_SOFTWARE);
+	fatal("sync_host not defined", EC_SOFTWARE);
 
     /* Just to help with debugging, so we have time to attach debugger */
     if (wait > 0) {
-        fprintf(stderr, "Waiting for %d seconds for gdb attach...\n", wait);
-        sleep(wait);
+	fprintf(stderr, "Waiting for %d seconds for gdb attach...\n", wait);
+	sleep(wait);
     }
 
     /* Set namespace -- force standard (internal) */
     config_virtdomains = config_getenum(IMAPOPT_VIRTDOMAINS);
     if ((r = mboxname_init_namespace(&sync_namespace, 1)) != 0) {
-        fatal(error_message(r), EC_CONFIG);
+	fatal(error_message(r), EC_CONFIG);
     }
 
     /* open the mboxlist, we'll need it for real work */
@@ -3310,7 +3310,7 @@ int main(int argc, char **argv)
 	/* Open up connection to server */
 	replica_connect(channel);
 
-        for (i = optind; i < argc; i++) {
+	for (i = optind; i < argc; i++) {
 	    mboxname_hiersep_tointernal(&sync_namespace, argv[i],
 					config_virtdomains ?
 					strcspn(argv[i], "@") : 0);
