@@ -344,6 +344,7 @@ int service_main(int argc __attribute__((unused)),
     struct protoent *proto;
     const char *localip, *remoteip;
     sasl_security_properties_t *secprops = NULL;
+    int timeout;
 
     signals_poll();
 
@@ -403,12 +404,12 @@ int service_main(int argc __attribute__((unused)),
     }
 
     proc_register("sync_server", sync_clienthost, NULL, NULL);
-#if 0
+
     /* Set inactivity timer */
-    timeout = config_getint(IMAPOPT_TIMEOUT);
+    timeout = config_getint(IMAPOPT_SYNC_TIMEOUT);
     if (timeout < 3) timeout = 3;
-    prot_settimeout(sync_in, timeout*60);
-#endif
+    prot_settimeout(sync_in, timeout);
+
     prot_setflushonread(sync_in, sync_out);
 
     sync_log_init();

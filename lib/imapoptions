@@ -1451,6 +1451,10 @@ product version in the capabilities */
    next opportunity. Safer than sending signals to running processes.
    Prefix with a channel name to only apply for that channel */
 
+{ "sync_timeout", 1800, INT }
+/* Number of seconds to wait for a response before returning a timeout
+   failure when talking to a replication peer (client or server). */
+
 { "syslog_prefix", NULL, STRING }
 /* String to be prepended to the process name in syslog entries. */
 

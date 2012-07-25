@@ -2841,6 +2841,7 @@ static void replica_connect(const char *channel)
     int wait;
     struct protoent *proto;
     sasl_callback_t *cb;
+    int timeout;
 
     cb = mysasl_callbacks(NULL,
 			  get_config(channel, "sync_authname"),
@@ -2955,6 +2956,11 @@ static void replica_connect(const char *channel)
 	prot_setlog(sync_in, fileno(stderr));
 	prot_setlog(sync_out, fileno(stderr));
     }
+
+    /* Set inactivity timer */
+    timeout = config_getint(IMAPOPT_SYNC_TIMEOUT);
+    if (timeout < 3) timeout = 3;
+    prot_settimeout(sync_in, timeout);
 
     /* SYNC_CRC parameter negotiation.  We look for the server's
      * capabilities, and if they're provided then try to use them
