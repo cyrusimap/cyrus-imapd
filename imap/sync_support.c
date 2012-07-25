@@ -136,7 +136,7 @@ int sync_parse_options(const char *options)
 }
 
 /* Get a simple line (typically error text) */
-int sync_getline(struct protstream *in, struct buf *buf)
+static int sync_getline(struct protstream *in, struct buf *buf)
 {
     int c;
 
