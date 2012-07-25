@@ -185,7 +185,7 @@ static void sync_reset(void)
     if (sync_in) {
 	prot_NONBLOCK(sync_in);
 	prot_fill(sync_in);
-	
+
 	prot_free(sync_in);
     }
 
@@ -193,7 +193,7 @@ static void sync_reset(void)
 	prot_flush(sync_out);
 	prot_free(sync_out);
     }
-    
+
     sync_in = sync_out = NULL;
 
 #ifdef HAVE_SSL
@@ -271,7 +271,7 @@ int service_init(int argc __attribute__((unused)),
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(sync_namespacep, 1)) != 0) {
-        fatal(error_message(r), EC_CONFIG);
+	fatal(error_message(r), EC_CONFIG);
     }
 
     /* open the mboxlist, we'll need it for real work */
@@ -365,7 +365,7 @@ int service_main(int argc __attribute__((unused)),
 	/* other params should be filled in */
 	if (sasl_server_new("csync", config_servername, NULL, NULL, NULL,
 			    NULL, 0, &sync_saslconn) != SASL_OK)
-	    fatal("SASL failed initializing: sasl_server_new()",EC_TEMPFAIL); 
+	    fatal("SASL failed initializing: sasl_server_new()",EC_TEMPFAIL);
 
 	/* will always return something valid */
 	secprops = mysasl_secprops(SASL_SEC_NOANONYMOUS);
@@ -374,12 +374,12 @@ int service_main(int argc __attribute__((unused)),
 
 	if (sasl_setprop(sync_saslconn, SASL_SSF_EXTERNAL, &extprops_ssf) != SASL_OK)
 	    fatal("Failed to set SASL property", EC_TEMPFAIL);
-    
+
 	if (localip) {
 	    sasl_setprop(sync_saslconn, SASL_IPLOCALPORT, localip);
 	    saslprops.iplocalport = xstrdup(localip);
 	}
-    
+
 	if (remoteip) {
 	    if (sasl_setprop(sync_saslconn, SASL_IPREMOTEPORT, remoteip) != SASL_OK)
 		fatal("failed to set sasl property", EC_TEMPFAIL);
@@ -505,7 +505,7 @@ EXPORTED void fatal(const char* s, int code)
 }
 
 /* Reset the given sasl_conn_t to a sane state */
-static int reset_saslconn(sasl_conn_t **conn) 
+static int reset_saslconn(sasl_conn_t **conn)
 {
     int ret;
     sasl_security_properties_t *secprops = NULL;
@@ -513,13 +513,13 @@ static int reset_saslconn(sasl_conn_t **conn)
     sasl_dispose(conn);
     /* do initialization typical of service_main */
     ret = sasl_server_new("csync", config_servername,
-                         NULL, NULL, NULL,
-                         NULL, 0, conn);
+			 NULL, NULL, NULL,
+			 NULL, 0, conn);
     if (ret != SASL_OK) return ret;
 
     if (saslprops.ipremoteport)
        ret = sasl_setprop(*conn, SASL_IPREMOTEPORT,
-                          saslprops.ipremoteport);
+			  saslprops.ipremoteport);
     if (ret != SASL_OK) return ret;
 
     if (saslprops.iplocalport)
@@ -563,11 +563,11 @@ static void cmdloop(void)
     reserve_list = sync_reserve_list_create(SYNC_MESSAGE_LIST_HASH_SIZE);
 
     for (;;) {
-        prot_flush(sync_out);
+	prot_flush(sync_out);
 
 	/* Parse command name */
 	if ((c = getword(sync_in, &cmd)) == EOF)
-            break;
+	    break;
 
 	if (!cmd.s[0]) {
 	    prot_printf(sync_out, "BAD Null command\r\n");
@@ -602,7 +602,7 @@ static void cmdloop(void)
 		}
 		if (c == '\r') c = prot_getc(sync_in);
 		if (c != '\n') goto extraargs;
-		
+
 		if (sync_userid) {
 		    prot_printf(sync_out, "BAD Already authenticated\r\n");
 		    continue;
@@ -632,7 +632,7 @@ static void cmdloop(void)
 		cmd_compress(arg1.s);
 		continue;
 	    }
-            break;
+	    break;
 
 	case 'G':
 	    if (!sync_userid) goto nologin;
@@ -667,7 +667,7 @@ static void cmdloop(void)
 	    }
 	    break;
 
-        case 'R':
+	case 'R':
 	    if (!strcmp(cmd.s, "Restart")) {
 		if (c == '\r') c = prot_getc(sync_in);
 		if (c != '\n') goto extraargs;
@@ -679,7 +679,7 @@ static void cmdloop(void)
 	    else if (!sync_userid) goto nologin;
 	    break;
 
-        case 'S':
+	case 'S':
 	    if (!strcmp(cmd.s, "Starttls") && tls_enabled()) {
 		if (c == '\r') c = prot_getc(sync_in);
 		if (c != '\n') goto extraargs;
@@ -689,13 +689,13 @@ static void cmdloop(void)
 
 		/* if we've already done SASL fail */
 		if (sync_userid != NULL) {
-		    prot_printf(sync_out, 
+		    prot_printf(sync_out,
 				"BAD Can't Starttls after authentication\r\n");
 		    continue;
 		}
 		/* check if already did a successful tls */
 		if (sync_starttls_done == 1) {
-		    prot_printf(sync_out, 
+		    prot_printf(sync_out,
 				"BAD Already did a successful Starttls\r\n");
 		    continue;
 		}
@@ -714,7 +714,7 @@ static void cmdloop(void)
 	    }
 	    break;
 
-        }
+	}
 
 	prot_printf(sync_out, "BAD IMAP_PROTOCOL_ERROR Unrecognized command\r\n");
 	eatline(sync_in, c);
@@ -777,7 +777,7 @@ static void cmd_authenticate(char *mech, char *resp)
 			"NO Error reading client response: %s\r\n",
 			errorstring ? errorstring : "");
 	    break;
-	default: 
+	default:
 	    /* failed authentication */
 	    errorstring = sasl_errstring(sasl_result, NULL, NULL);
 
@@ -786,7 +786,7 @@ static void cmd_authenticate(char *mech, char *resp)
 
 	    failedloginpause = config_getint(IMAPOPT_FAILEDLOGINPAUSE);
 	    if (failedloginpause != 0) {
-	        sleep(failedloginpause);
+		sleep(failedloginpause);
 	    }
 
 	    if (errorstring) {
@@ -807,9 +807,9 @@ static void cmd_authenticate(char *mech, char *resp)
      */
     sasl_result = sasl_getprop(sync_saslconn, SASL_USERNAME, &val);
     if (sasl_result != SASL_OK) {
-	prot_printf(sync_out, "NO weird SASL error %d SASL_USERNAME\r\n", 
+	prot_printf(sync_out, "NO weird SASL error %d SASL_USERNAME\r\n",
 		    sasl_result);
-	syslog(LOG_ERR, "weird SASL error %d getting SASL_USERNAME", 
+	syslog(LOG_ERR, "weird SASL error %d getting SASL_USERNAME",
 	       sasl_result);
 	reset_saslconn(&sync_saslconn);
 	return;
@@ -858,7 +858,7 @@ static void cmd_starttls(void)
     char *auth_id;
 
     if (sync_starttls_done == 1) {
-	prot_printf(sync_out, "NO %s\r\n", 
+	prot_printf(sync_out, "NO %s\r\n",
 		    "Already successfully executed STARTTLS");
 	return;
     }
@@ -880,7 +880,7 @@ static void cmd_starttls(void)
     prot_printf(sync_out, "OK %s\r\n", "Begin TLS negotiation now");
     /* must flush our buffers before starting tls */
     prot_flush(sync_out);
-  
+
     result=tls_start_servertls(0, /* read */
 			       1, /* write */
 			       180, /* 3 minutes */
@@ -904,7 +904,7 @@ static void cmd_starttls(void)
 
     result = sasl_setprop(sync_saslconn, SASL_AUTH_EXTERNAL, auth_id);
     if (result != SASL_OK) {
-        fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
+	fatal("sasl_setprop() failed: cmd_starttls()", EC_TEMPFAIL);
     }
     if (saslprops.authid) {
 	free(saslprops.authid);
@@ -973,8 +973,8 @@ partition_list_add(char *name, struct partition_list *pl)
 
     /* Is name already on list? */
     for (p=pl; p; p = p->next) {
-        if (!strcmp(p->name, name))
-            return(pl);
+	if (!strcmp(p->name, name))
+	    return(pl);
     }
 
     /* Add entry to start of list and return new list */
@@ -989,14 +989,13 @@ static void
 partition_list_free(struct partition_list *current)
 {
     while (current) {
-        struct partition_list *next = current->next;
+	struct partition_list *next = current->next;
 
-        free(current->name);
-        free(current);
+	free(current->name);
+	free(current);
 
-        current = next;
+	current = next;
     }
-    
 }
 
 static void cmd_restart(struct sync_reserve_list **reserve_listp, int re_alloc)
@@ -1010,21 +1009,21 @@ static void cmd_restart(struct sync_reserve_list **reserve_listp, int re_alloc)
 
     for (res = l->head; res; res = res->next) {
 	for (msg = res->list->head; msg; msg = msg->next) {
-            pl = partition_list_add(res->part, pl);
+	    pl = partition_list_add(res->part, pl);
 
 	    fname = dlist_reserve_path(res->part, &msg->guid);
 	    unlink(fname);
 	}
     }
     sync_reserve_list_free(reserve_listp);
-        
+
     /* Remove all <partition>/sync./<pid> directories referred to above */
     for (p=pl; p ; p = p->next) {
-        static char buf[MAX_MAILBOX_PATH];
+	static char buf[MAX_MAILBOX_PATH];
 
-        snprintf(buf, MAX_MAILBOX_PATH, "%s/sync./%lu", 
-                 config_partitiondir(p->name), (unsigned long)getpid());
-        rmdir(buf);
+	snprintf(buf, MAX_MAILBOX_PATH, "%s/sync./%lu",
+		 config_partitiondir(p->name), (unsigned long)getpid());
+	rmdir(buf);
     }
     partition_list_free(pl);
 
@@ -1246,9 +1245,9 @@ static int mailbox_compare_update(struct mailbox *mailbox,
 	if (rrecord.uid == mrecord.uid) {
 	    /* higher modseq on the replica is an error */
 	    if (rrecord.modseq > mrecord.modseq) {
-	        syslog(LOG_ERR, "SYNCERROR: higher modseq on replica %s %u",
+		syslog(LOG_ERR, "SYNCERROR: higher modseq on replica %s %u",
 		       mailbox->name, mrecord.uid);
-	        r = IMAP_SYNC_CHECKSUM;
+		r = IMAP_SYNC_CHECKSUM;
 		goto out;
 	    }
 
@@ -1531,7 +1530,7 @@ static int do_mailbox(struct dlist *kin)
      * inversion of mboxlist and mailbox stuff that means
      * we can't be efficient in mboxlist_setspecialuse, so
      * we want to check it's needed first. */
-    if (!specialuse || !mailbox->specialuse || 
+    if (!specialuse || !mailbox->specialuse ||
 	strcmp(specialuse, mailbox->specialuse)) {
 	r = mboxlist_setspecialuse(mailbox, specialuse);
 	if (r) goto done;
@@ -1621,7 +1620,7 @@ static int mailbox_cb(char *name,
     r = mailbox_open_iwl(name, &mailbox);
     /* doesn't exist?  Probably not finished creating or removing yet */
     if (r == IMAP_MAILBOX_NONEXISTENT ||
-        r == IMAP_MAILBOX_RESERVED) {
+	r == IMAP_MAILBOX_RESERVED) {
 	r = 0;
 	goto out;
     }
@@ -1788,10 +1787,10 @@ static int do_getuser(struct dlist *kin)
 
     /* deleted namespace items if enabled */
     if (mboxlist_delayed_delete_isenabled()) {
-        char deletedname[MAX_MAILBOX_BUFFER];
-        mboxname_todeleted(buf, deletedname, 0);
-        strlcat(deletedname, ".*", sizeof(deletedname));
-        r = (sync_namespace.mboxlist_findall)(sync_namespacep, deletedname, 
+	char deletedname[MAX_MAILBOX_BUFFER];
+	mboxname_todeleted(buf, deletedname, 0);
+	strlcat(deletedname, ".*", sizeof(deletedname));
+	r = (sync_namespace.mboxlist_findall)(sync_namespacep, deletedname,
 					      sync_userisadmin,
 					      userid, sync_authstate,
 					      mailbox_cb, quotaroots);
@@ -1802,8 +1801,8 @@ static int do_getuser(struct dlist *kin)
     strlcat(buf, ".*", sizeof(buf));
     r = ((*sync_namespacep).mboxlist_findall)(sync_namespacep, buf,
 					      sync_userisadmin,
-                                              userid, sync_authstate,
-                                              mailbox_cb, quotaroots);
+					      userid, sync_authstate,
+					      mailbox_cb, quotaroots);
     if (r) goto bail;
 
     for (qr = quotaroots->head; qr; qr = qr->next) {
@@ -1851,7 +1850,7 @@ static int do_rename(struct dlist *kin)
 
     return mboxlist_renamemailbox(oldmboxname, newmboxname, partition,
 				  uidvalidity,
-                                  1, sync_userid, sync_authstate, 1, 1);
+				  1, sync_userid, sync_authstate, 1, 1);
 }
 
 static int do_changesub(struct dlist *kin)
@@ -2089,7 +2088,7 @@ static int do_unuser(struct dlist *kin)
 
     /* ignore failures here - the subs file gets deleted soon anyway */
     for (item = list->head; item; item = item->next) {
-        mboxlist_changesub(item->name, userid, sync_authstate, 0, 0);
+	mboxlist_changesub(item->name, userid, sync_authstate, 0, 0);
     }
     sync_name_list_free(&list);
 
@@ -2106,9 +2105,9 @@ static int do_unuser(struct dlist *kin)
     if (r) goto fail;
 
     for (item = list->head; item; item = item->next) {
-        r = mboxlist_deletemailbox(item->name, sync_userisadmin,
+	r = mboxlist_deletemailbox(item->name, sync_userisadmin,
 				   sync_userid, sync_authstate, 0, 0, 1);
-        if (r) goto fail;
+	if (r) goto fail;
     }
 
     /* Nuke inbox (recursive nuke possible?) */
