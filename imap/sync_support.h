@@ -56,8 +56,6 @@
 #define SYNC_MESSAGE_LIST_HASH_SIZE      (65536)
 #define SYNC_MESSAGE_LIST_MAX_OPEN_FILES (64)
 
-int sync_eatlines_unsolicited(struct protstream *pin, int c);
-
 void sync_printdate(struct protstream *out, time_t time);
 time_t sync_parsedate(const char *s);
 int sync_getflags(struct dlist *kl,

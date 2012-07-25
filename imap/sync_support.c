@@ -161,40 +161,6 @@ int sync_getline(struct protstream *in, struct buf *buf)
     return c;
 }
 
-/*
- * Eat lines up to next OK/NO/BAD response line
- *
- */
-
-int sync_eatlines_unsolicited(struct protstream *in, int c)
-{
-    static struct buf response;   /* BSS */
-    static struct buf line;       /* BSS */
-
-    if (c != '\n') {
-        sync_getline(in, &line);   /* Partial line */
-        syslog(LOG_ERR, "Discarding: %s", line.s);
-    }
-
-    do {
-        if ((c = getword(in, &response)) == EOF)
-            return(IMAP_PROTOCOL_ERROR);
-
-        sync_getline(in, &line);
-        syslog(LOG_ERR, "Discarding: %s", line.s);
-    } while (response.s[0] == '*');
-
-    if (!strcmp(response.s, "OK") ||
-        !strcmp(response.s, "NO") ||
-        !strcmp(response.s, "BAD")) {
-        syslog(LOG_ERR, "sync_eatlines_unsolicited(): resynchronised okay");
-        return(0);
-    }
-
-    syslog(LOG_ERR, "sync_eatlines_unsolicited(): failed to resynchronise!");
-    return(IMAP_PROTOCOL_ERROR);
-}
-
 /* ====================================================================== */
 
 void sync_print_flags(struct dlist *kl,
