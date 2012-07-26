@@ -263,27 +263,24 @@ static int parseheader(struct protstream *fin, FILE *fout,
 		    prot_ungetc(c, fin);
 		    goto got_header;
 		}
-		/* ignore this whitespace, but we'll copy all the rest in */
-		break;
-	    } else {
-		if (c >= 0x80) {
-		    if (reject8bit) {
-			/* We have been configured to reject all mail of this
-			   form. */
-			r = IMAP_MESSAGE_CONTAINS8BIT;
-			goto ph_error;
-		    } else if (munge8bit) {
-			/* We have been configured to munge all mail of this
-			   form. */
-			c = 'X';
-		    }
+	    }
+	    if (c >= 0x80) {
+		if (reject8bit) {
+		    /* We have been configured to reject all mail of this
+		       form. */
+		    r = IMAP_MESSAGE_CONTAINS8BIT;
+		    goto ph_error;
+		} else if (munge8bit) {
+		    /* We have been configured to munge all mail of this
+		       form. */
+		    c = 'X';
 		}
-		/* just an ordinary character */
-		body[off++] = c;
-		if (off >= bodylen - 3) {
-		    bodylen += BODYINC;
-		    body = (char *) xrealloc(body, bodylen);
-		}
+	    }
+	    /* just an ordinary character */
+	    body[off++] = c;
+	    if (off >= bodylen - 3) {
+		bodylen += BODYINC;
+		body = (char *) xrealloc(body, bodylen);
 	    }
 	}
 
