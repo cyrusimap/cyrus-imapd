@@ -157,11 +157,9 @@ EXPORTED const char *sieve_listextensions(sieve_interp_t *i)
 
 EXPORTED int sieve_interp_free(sieve_interp_t **interp)
 {
-    if ((*interp)->extensions[0] != '\0')
-      free((*interp)->extensions);
     free((*interp)->lastitem);
     free(*interp);
-    
+
     return SIEVE_OK;
 }
 
