@@ -424,10 +424,10 @@ enum {
 #define MAXRECORDHEAD ((MAXLEVEL + 5)*8)
 
 /* mount a scratch monkey */
-union skipwritebuf {
+static union skipwritebuf {
     uint64_t align;
     char s[MAXRECORDHEAD];
-} static scratchspace;
+} scratchspace;
 
 static struct db_list *open_twoskip = NULL;
 
