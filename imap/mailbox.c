@@ -1796,7 +1796,7 @@ restart:
     return 0;
 }
 
-EXPORTED mailbox_lock_index(struct mailbox *mailbox, int locktype)
+EXPORTED int mailbox_lock_index(struct mailbox *mailbox, int locktype)
 {
     int r = mailbox_lock_index_internal(mailbox, locktype);
     if (r) return r;
