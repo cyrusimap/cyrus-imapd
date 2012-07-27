@@ -172,6 +172,8 @@ struct centry {
     enum sstate service_state;	/* SERVICE_STATE_* */
     time_t janitor_deadline;	/* cleanup deadline */
     int si;			/* Services[] index */
+    char *desc;			/* human readable description for logging */
+    struct timeval spawntime;	/* when the centry was allocated */
     struct centry *next;
 };
 static struct centry *ctable[child_table_size];
@@ -255,20 +257,49 @@ static void get_statsock(int filedes[2])
 	fatalf(1, "unable to set close-on-exec: %m");
 }
 
-/* return a new 'centry', by malloc'ing it */
+/* Return a new 'centry', by malloc'ing it. */
 static struct centry *centry_alloc(void)
 {
     struct centry *t;
 
     t = xzmalloc(sizeof(*t));
     t->si = SERVICE_NONE;
+    gettimeofday(&t->spawntime, NULL);
 
     return t;
+}
+
+static void centry_set_name(struct centry *c, const char *type,
+			    const char *name, const char *path)
+{
+    free(c->desc);
+    if (name && path)
+	c->desc = strconcat("type:", type, " name:", name, " path:", path, NULL);
+    else
+	c->desc = strconcat("type:", type, NULL);
+}
+
+static char *centry_describe(const struct centry *c, pid_t pid)
+{
+    struct buf desc = BUF_INITIALIZER;
+
+    if (!c) {
+	buf_appendcstr(&desc, "unknown process");
+    }
+    else {
+	struct timeval now;
+	gettimeofday(&now, NULL);
+	buf_printf(&desc, "process %s age:%.3fs",
+		   c->desc, timesub(&c->spawntime, &now));
+    }
+    buf_printf(&desc, " pid:%d", (int)pid);
+    return buf_release(&desc);
 }
 
 /* free a centry */
 static void centry_free(struct centry *c)
 {
+    free(c->desc);
     free(c);
 }
 
@@ -569,41 +600,49 @@ static void service_create(struct service *s)
     }
 }
 
-static int decode_wait_status(pid_t pid, int status)
+static int decode_wait_status(struct centry *c, pid_t pid, int status)
 {
     int failed = 0;
+    char *desc = centry_describe(c, pid);
 
     if (WIFEXITED(status)) {
 	if (!WEXITSTATUS(status)) {
-	    syslog(LOG_DEBUG, "process %d exited normally", pid);
+	    syslog(LOG_DEBUG, "%s exited normally", desc);
 	}
 	else {
-	    syslog(LOG_ERR, "process %d exited, status %d", pid,
-		   WEXITSTATUS(status));
+	    syslog(LOG_ERR, "%s exited, status %d",
+		   desc, WEXITSTATUS(status));
 	    failed = 1;
 	}
     }
 
     if (WIFSIGNALED(status)) {
+	const char *signame = strsignal(WTERMSIG(status));
+	if (!signame)
+	    signame = "unknown signal";
 #ifdef WCOREDUMP
-	syslog(LOG_ERR, "process %d exited, signaled to death by %d%s",
-	       pid, WTERMSIG(status),
-	       WCOREDUMP(status) ? " (core dumped)" : "");
+	syslog(LOG_ERR, "%s signaled to death by signal %d (%s%s)",
+	       desc, WTERMSIG(status), signame,
+	       WCOREDUMP(status) ? ", core dumped" : "");
 	failed = WCOREDUMP(status) ? 2 : 1;
 #else
-	syslog(LOG_ERR, "process %d exited, signaled to death by %d",
-	       pid, WTERMSIG(status));
+	syslog(LOG_ERR, "%s signaled to death by %s %d",
+	       desc, signame, WTERMSIG(status));
 	failed = 1;
 #endif
     }
+    free(desc);
     return failed;
 }
 
-static void run_startup(const strarray_t *cmd)
+static void run_startup(const char *name, const strarray_t *cmd)
 {
     pid_t pid;
     int status;
+    struct centry *c;
     char path[PATH_MAX];
+
+    get_prog(path, sizeof(path), cmd);
 
     switch (pid = fork()) {
     case -1:
@@ -621,7 +660,6 @@ static void run_startup(const strarray_t *cmd)
 
 	limit_fds(256);
 
-	get_prog(path, sizeof(path), cmd);
 	syslog(LOG_DEBUG, "about to exec %s", path);
 	execv(path, cmd->data);
 	fatalf(EX_OSERR, "can't exec %s for startup: %m", path);
@@ -629,9 +667,13 @@ static void run_startup(const strarray_t *cmd)
     default: /* parent */
 	if (waitpid(pid, &status, 0) < 0) {
 	    syslog(LOG_ERR, "waitpid(): %m");
-	} else if (decode_wait_status(pid, status)) {
-	    fatal("can't run startup", 1);
+	    return;
 	}
+	c = centry_alloc();
+	centry_set_name(c, "START", name, path);
+	if (decode_wait_status(c, pid, status))
+	    fatal("can't run startup", 1);
+	centry_free(c);
 	break;
     }
 }
@@ -714,6 +756,8 @@ static void spawn_service(int si)
     if (service_is_fork_limited(s))
 	return;
 
+    get_prog(path, sizeof(path), s->exec);
+
     switch (p = fork()) {
     case -1:
 	syslog(LOG_ERR, "can't fork process to run service %s: %m", s->name);
@@ -730,7 +774,6 @@ static void spawn_service(int si)
 
 	child_sighandler_setup();
 
-	get_prog(path, sizeof(path), s->exec);
 	if (dup2(s->stat[1], STATUS_FD) < 0) {
 	    syslog(LOG_ERR, "can't duplicate status fd: %m");
 	    exit(1);
@@ -771,6 +814,7 @@ static void spawn_service(int si)
 
 	/* add to child table */
 	c = centry_alloc();
+	centry_set_name(c, "SERVICE", s->name, path);
 	c->si = si;
 	centry_set_state(c, SERVICE_STATE_READY);
 	centry_add(c, p);
@@ -829,6 +873,7 @@ static void spawn_schedule(struct timeval now)
 	/* if a->exec is NULL, we just used the event to wake up,
 	 * so we actually don't need to exec anything at the moment */
 	if(a->exec) {
+	    get_prog(path, sizeof(path), a->exec);
 	    switch (p = fork()) {
 	    case -1:
 		syslog(LOG_CRIT,
@@ -852,7 +897,6 @@ static void spawn_schedule(struct timeval now)
 		}
 		limit_fds(256);
 
-		get_prog(path, sizeof(path), a->exec);
 		syslog(LOG_DEBUG, "about to exec %s", path);
 		execv(path, a->exec->data);
 		syslog(LOG_ERR, "can't exec %s on schedule: %m", path);
@@ -864,6 +908,7 @@ static void spawn_schedule(struct timeval now)
 
 		/* add to child table */
 		c = centry_alloc();
+		centry_set_name(c, "EVENT", a->name, path);
 		centry_set_state(c, SERVICE_STATE_READY);
 		centry_add(c, p);
 		break;
@@ -917,10 +962,11 @@ static void reap_child(void)
     int failed;
 
     while ((pid = waitpid((pid_t) -1, &status, WNOHANG)) > 0) {
-	failed = decode_wait_status(pid, status);
 
 	/* account for the child */
 	c = centry_find(pid);
+
+	failed = decode_wait_status(c, pid, status);
 
 	if (c) {
 	    s = ((c->si) != SERVICE_NONE) ? &Services[c->si] : NULL;
@@ -1257,6 +1303,7 @@ static void process_msg(int si, struct notify_message *msg)
 	       SERVICENAME(s->name), msg->service_pid);
 	/* re-add child to list */
 	c = centry_alloc();
+	centry_set_name(c, "ZOMBIE", NULL, NULL);
 	c->si = si;
 	centry_set_state(c, SERVICE_STATE_DEAD);
 	centry_add(c, msg->service_pid);
@@ -1463,7 +1510,7 @@ static void add_start(const char *name, struct entry *e,
 	fatalf(EX_CONFIG, "unable to find command for %s", name);
 
     tok = strarray_split(cmd, NULL, 0);
-    run_startup(tok);
+    run_startup(name, tok);
     strarray_free(tok);
 }
 
