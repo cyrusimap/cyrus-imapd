@@ -526,13 +526,16 @@ int setscriptactive(int version, struct protstream *pout,
   return 0;
 }
 
+#if 0
 static int viewafile(mystring_t *data, char *name __attribute__((unused)))
 {
   printf("%s\r\n", string_DATAPTR(data));
 
   return 0;
 }
+#endif
 
+#if 0
 static int writefile(mystring_t *data, char *name, char **errstrp)
 {
   FILE *stream;
@@ -562,6 +565,7 @@ static int writefile(mystring_t *data, char *name, char **errstrp)
 
   return 0;
 }
+#endif
 
 /*
 int getscript(int version, struct protstream *pout, 
