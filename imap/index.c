@@ -1673,6 +1673,10 @@ index_copy(struct index_state *state,
 	r = append_commit(&appendstate, &destmailbox);
     }
 
+    /* unlock first so we don't hold the lock while expunging
+     * the source */
+    mailbox_unlock_index(destmailbox, NULL);
+
     if (!r && (docopyuid || ismove)) {
 	char *source;
 	struct seqset *seq;
