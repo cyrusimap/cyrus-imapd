@@ -45,6 +45,7 @@
 #include <config.h>
 
 #include <stdlib.h>
+#include <unistd.h>
 #include <signal.h>
 #include <syslog.h>
 #include <string.h>
@@ -53,17 +54,26 @@
 #include "signals.h"
 #include "xmalloc.h"
 #include "exitcodes.h"
+#include "util.h"
 
 #ifndef _NSIG
 #define _NSIG 65
 #endif
 static volatile sig_atomic_t gotsignal[_NSIG];
+static volatile pid_t killer_pid;
 
-static void sighandler(int sig)
+static void sighandler(int sig, siginfo_t *si,
+		       void *ucontext __attribute__((unused)))
 {
     if (sig < 1 || sig >= _NSIG)
 	sig = _NSIG-1;
     gotsignal[sig] = 1;
+
+    /* remember a process that sent us a fatal signal */
+    if ((sig == SIGINT || sig == SIGQUIT || sig == SIGTERM) &&
+	si &&
+	si->si_code == SI_USER)
+	killer_pid = si->si_pid;
 }
 
 static const int catch[] = { SIGHUP, 0 };
@@ -73,6 +83,7 @@ EXPORTED void signals_add_handlers(int alarm)
     struct sigaction action;
     int i;
 
+    memset(&action, 0, sizeof(action));
     sigemptyset(&action.sa_mask);
 
     action.sa_flags = 0;
@@ -80,7 +91,8 @@ EXPORTED void signals_add_handlers(int alarm)
     action.sa_flags |= SA_RESETHAND;
 #endif
 
-    action.sa_handler = sighandler;
+    action.sa_sigaction = sighandler;
+    action.sa_flags |= SA_SIGINFO;
 
     /* SIGALRM used as a syscall timeout, so we don't set SA_RESTART */
     if (alarm && sigaction(SIGALRM, &action, NULL) < 0) {
@@ -118,18 +130,70 @@ EXPORTED void signals_set_shutdown(shutdownfn *s)
     shutdown_cb = s;
 }
 
+/* Build a human-readable description of another process from just the
+ * process id.  On some platforms this is enough to tell us something
+ * useful about the other process. Returns a new string which must be
+ * free()d by the caller. */
+static char *describe_process(pid_t pid)
+{
+#if defined(__linux__)
+    int i;
+    int fd;
+    int n;
+    char buf[1024+32];
+    char cmdline[1024];
+
+    snprintf(buf, sizeof(buf), "/proc/%d/cmdline", (int)pid);
+    cmdline[0] = '\0';
+    fd = open(buf, O_RDONLY, 0);
+    if (fd >= 0) {
+	n = read(fd, cmdline, sizeof(cmdline)-1);
+	if (n > 0) {
+	    if (!cmdline[n-1])
+		n--;	    /* ignore trailing nul */
+	    for (i = 0 ; i < n ; i++) {
+		if (cmdline[i] == '\0')
+		    cmdline[i] = ' ';
+	    }
+	    cmdline[n] = '\0';
+	}
+	close(fd);
+    }
+    if (!cmdline[0])
+	strcpy(cmdline, "unknown");
+    snprintf(buf, sizeof(buf), "%d (%s)", (int)pid, cmdline);
+    return xstrdup(buf);
+#else
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%d", (int)pid);
+    return xstrdup(buf);
+#endif
+}
+
 static int signals_poll_mask(sigset_t *oldmaskp)
 {
     int sig;
 
-    if (gotsignal[SIGINT] || gotsignal[SIGQUIT] || gotsignal[SIGTERM]) {
+    if (!signals_in_shutdown &&
+	(gotsignal[SIGINT] || gotsignal[SIGQUIT] || gotsignal[SIGTERM])) {
+
+	if (killer_pid && killer_pid != getppid()) {
+	    /* whine in syslog if we were sent a graceful shutdown signal
+	     * by anyone other than the master process.  */
+	    char *desc = describe_process(killer_pid);
+	    syslog(LOG_NOTICE, "graceful shutdown initiated by "
+			       "unexpected process %s", desc);
+	    free(desc);
+	}
+	else {
+	    syslog(LOG_NOTICE, "graceful shutdown");
+	}
+
 	if (oldmaskp)
 	    sigprocmask(SIG_SETMASK, oldmaskp, NULL);
 	if (shutdown_cb) {
-	    if (!signals_in_shutdown) {
-		signals_in_shutdown = 1;
-		shutdown_cb(EC_TEMPFAIL);
-	    }
+	    signals_in_shutdown = 1;
+	    shutdown_cb(EC_TEMPFAIL);
 	}
 	else exit(EC_TEMPFAIL);
     }
