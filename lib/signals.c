@@ -72,7 +72,7 @@ EXPORTED void signals_add_handlers(int alarm)
 {
     struct sigaction action;
     int i;
-    
+
     sigemptyset(&action.sa_mask);
 
     action.sa_flags = 0;
@@ -98,7 +98,7 @@ EXPORTED void signals_add_handlers(int alarm)
 #ifdef SA_RESTART
     action.sa_flags |= SA_RESTART;
 #endif
-    
+
     for (i = 0; catch[i] != 0; i++) {
 	if (catch[i] != SIGALRM && sigaction(catch[i], &action, NULL) < 0) {
 	    char buf[256];
