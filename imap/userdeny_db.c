@@ -189,7 +189,7 @@ EXPORTED void denydb_open(void)
     ret = cyrusdb_open(DENYDB, fname, 0, &denydb);
     if (ret == CYRUSDB_OK) {
 	deny_dbopen = 1;
-    } else if (errno != ENOENT) {
+    } else if (ret != CYRUSDB_NOTFOUND) {
 	/* ignore non-existent DB, report all other errors */
 	syslog(LOG_WARNING, "DENYDB_ERROR: opening %s: %s", fname,
 	       cyrusdb_strerror(ret));
