@@ -70,6 +70,7 @@ static struct db *denydb;
 
 static int deny_dbopen = 0;
 
+static const char default_message[] = "Access to this service has been blocked";
 
 /*
  * userdeny() checks to see if 'user' is denied access to 'service'
@@ -118,7 +119,7 @@ EXPORTED int userdeny(const char *user, const char *service, char *msgbuf, size_
 	    syslog(LOG_WARNING,
 		   "DENYDB_ERROR: missing wildmat for entry '%s'", user);
 	} else {
-	    char *pat, *msg = "Access to this service has been blocked";
+	    char *pat, *msg = NULL;
 	    int not;
 
 	    /* check if we have a deny message */
@@ -127,6 +128,8 @@ EXPORTED int userdeny(const char *user, const char *service, char *msgbuf, size_
 		if ((msg = strchr(wild, '\t'))) *msg++ = '\0';
 		break;
 	    }
+	    if (!msg)
+		msg = (char *)default_message;
 
 	    /* scan wildmat right to left for a match against our service */
 	    syslog(LOG_DEBUG, "wild: '%s'   service: '%s'", wild, service);
