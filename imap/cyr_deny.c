@@ -53,13 +53,16 @@
 #include <sys/stat.h>
 #include <syslog.h>
 #include <errno.h>
+#include <signal.h>
 
 #include "global.h"
 #include "exitcodes.h"
 #include "libcyr_cfg.h"
+#include "proc.h"
 #include "userdeny.h"
 #include "imap/imap_err.h"
 #include "util.h"
+#include "ptrarray.h"
 #include "xmalloc.h"
 
 static void usage(void)
@@ -67,6 +70,98 @@ static void usage(void)
     fprintf(stderr, "Usage: cyr_deny [-C <altconfig>] [ -s services ] [ -m message ] user\n");
     fprintf(stderr, "       cyr_deny [-C <altconfig>] -a user\n");
     exit(EC_USAGE);
+}
+
+struct kill_rock
+{
+    const char *user;
+    ptrarray_t pids;
+};
+
+/*
+ * We use proc_foreach() to kill any existing servers which are serving
+ * the user.  There are two problems with this approach.
+ *
+ * - proc_foreach() reads a directory full of files, which is inherently racy
+ *
+ * - the proc file does not contain the service identifier of the process that
+ *   wrote it; the only mapping between those and pids is in those processes
+ *   themselves and in the master process.
+ *
+ * The first problem we can live with, the raciness is no worse than
+ * running 'cyr_info proc' and grepping the results.
+ *
+ * The second problem means that we have no way cleanly to support the
+ * existing userdeny feature of denying users access to only some services.
+ * Without a clear idea of which service a pid represents, we cannot helpfully
+ * kill the existing processes for only some of the services. Instead we have
+ * to kill all the processes for the user, and hope any others will reconnect.
+ */
+static int gather_one(int pid,
+		      const char *clienthost __attribute__((unused)),
+		      const char *userid,
+		      const char *mailbox __attribute__((unused)),
+		      void *rock)
+{
+    struct kill_rock *kr = (struct kill_rock *)rock;
+
+    if (!strcmp(userid, kr->user))
+	ptrarray_append(&kr->pids, xmemdup(&pid, sizeof(pid)));
+    return 0;
+}
+
+static void kill_existing_services(const char *user)
+{
+    struct kill_rock kr = { NULL, PTRARRAY_INITIALIZER };
+    int delay = 1;
+    int i;
+    int *pidp;
+    int sig;
+    int prejudice = 0;
+    int probing = 0;
+    int r;
+
+    kr.user = user;
+    proc_foreach(gather_one, &kr);
+
+    /*
+     * Send a graceful shutdown message to all the processes and wait
+     * for them to die.  This is a poor approximation of the correct
+     * behaviour, which can only be done in the master process (but we
+     * currently have no way to tell it to do so).
+     */
+    for (;;) {
+
+	/* send all the pids a signal */
+	for (i = 0 ; i < kr.pids.count ; i++) {
+	    pidp = (int *)kr.pids.data[i];
+	    sig = (probing ? 0 : (prejudice ? SIGKILL : SIGTERM));
+	    r = kill(*pidp, sig);
+	    if (r < 0) {
+		/* gone (yay!) or some error */
+		ptrarray_remove(&kr.pids, i);
+		free(pidp);
+		continue;
+	    }
+	}
+	if (!kr.pids.count)
+	    break;
+
+	probing = 1;
+
+	sleep(delay);
+	delay *= 2;
+	if (delay > 8) {
+	    if (prejudice++) {
+		syslog(LOG_ALERT, "cannot kill some processes even with SIGKILL");
+		break;
+	    }
+	    delay = 1;
+	    probing = 0;
+	}
+    }
+
+    ptrarray_fini(&kr.pids);
 }
 
 int main(int argc, char **argv)
@@ -137,6 +232,8 @@ int main(int argc, char **argv)
 	if (r)
 	    fprintf(stderr, "cyr_deny: failed to deny access for %s: %s\n",
 		    user, error_message(r));
+	else
+	    kill_existing_services(user);
     }
 
     denydb_close();
