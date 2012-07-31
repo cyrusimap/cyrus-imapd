@@ -90,7 +90,7 @@ EXPORTED int userdeny(const char *user, const char *service, char *msgbuf, size_
     } while (r == CYRUSDB_AGAIN);
 
     /* XXX  Should we try to reopen the DB if we get IOERROR?
-            This might be necessary when using SQL backend
+	    This might be necessary when using SQL backend
 	    and we lose the connection.
     */
 
