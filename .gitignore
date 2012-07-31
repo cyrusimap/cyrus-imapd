@@ -41,6 +41,7 @@ imap/ctl_mboxlist
 imap/cvt_cyrusdb
 imap/cyr_charset
 imap/cyr_dbtool
+imap/cyr_deny
 imap/cyr_df
 imap/cyr_expire
 imap/cyr_info

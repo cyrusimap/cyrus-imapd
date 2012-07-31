@@ -101,6 +101,7 @@ service_PROGRAMS += \
 	imap/cyr_df \
 	imap/cyrdump \
 	imap/cyr_dbtool \
+	imap/cyr_deny \
 	imap/cyr_expire \
 	imap/cyr_info \
 	imap/cyr_sequence \
@@ -628,6 +629,9 @@ imap_cyrdump_LDADD = $(LD_UTILITY_ADD)
 imap_cyr_dbtool_SOURCES = imap/cli_fatal.c imap/cyr_dbtool.c imap/mutex_fake.c
 imap_cyr_dbtool_LDADD = $(LD_UTILITY_ADD)
 
+imap_cyr_deny_SOURCES = imap/cli_fatal.c imap/cyr_deny.c imap/mutex_fake.c
+imap_cyr_deny_LDADD = $(LD_UTILITY_ADD)
+
 imap_cyr_df_SOURCES = imap/cli_fatal.c imap/cyr_df.c imap/mutex_fake.c
 imap_cyr_df_LDADD = $(LD_UTILITY_ADD)
 
@@ -1029,6 +1033,7 @@ dist_man_MANS = \
 	man/cyr_expire.8 \
 	man/cvt_cyrusdb.8 \
 	man/cyr_dbtool.8 \
+	man/cyr_deny.8 \
 	man/cyr_df.8 \
 	man/cyr_info.8 \
 	man/cyr_synclog.8 \
