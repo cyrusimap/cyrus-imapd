@@ -49,6 +49,12 @@
 
 extern int userdeny(const char *user, const char *service,
 		    char *msgbuf, size_t bufsiz);
+extern int denydb_set(const char *user, const char *service,
+		    const char *msg);
+extern int denydb_delete(const char *user);
+
+/* open the deny db for writing, creating if necessary */
+extern int denydb_openw(int create);
 
 /* open the user deny db */
 void denydb_open(void);

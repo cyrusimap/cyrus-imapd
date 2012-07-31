@@ -56,6 +56,7 @@
 #include "cyrusdb.h"
 #include "global.h"
 #include "userdeny.h"
+#include "imap/imap_err.h"
 #include "wildmat.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
@@ -167,6 +168,96 @@ EXPORTED int userdeny(const char *user, const char *service, char *msgbuf, size_
     return ret;
 }
 
+/*
+ * Add an entry to the deny DB.  Message 'msg' may be NULL, resulting
+ * in a default message being used.  Service name 'service' may be NULL,
+ * resulting in all services being blocked for the user.  The username
+ * 'user' is a required argument.  Returns an IMAP error code or 0 on
+ * success.
+ */
+EXPORTED int denydb_set(const char *user, const char *service, const char *msg)
+{
+    struct txn *txn = NULL;
+    struct buf data = BUF_INITIALIZER;
+    int r = 0;
+
+    if (!deny_dbopen) {
+	r = IMAP_INTERNAL;
+	goto out;
+    }
+
+    if (!service)
+	service = "*";
+
+    if (!user || strchr(service, '\t')) {
+	/* the service field may not contain a TAB, it's the field separator */
+	r = IMAP_INVALID_IDENTIFIER;
+	goto out;
+    }
+
+    /* compose the record */
+    buf_printf(&data, "%u\t", USERDENY_VERSION);
+    buf_appendcstr(&data, service);
+    buf_putc(&data, '\t');
+    buf_appendcstr(&data, (msg ? msg : default_message));
+
+    /* write the record */
+    do {
+	r = cyrusdb_store(denydb,
+			  user, strlen(user),
+			  data.s, data.len,
+			  &txn);
+    } while (r == CYRUSDB_AGAIN);
+
+    if (r) {
+	syslog(LOG_ERR, "IOERROR: couldn't store denydb record for %s: %s",
+			user, cyrusdb_strerror(r));
+	r = IMAP_IOERROR;
+    }
+
+out:
+    if (txn) {
+	if (r) cyrusdb_abort(denydb, txn);
+	else cyrusdb_commit(denydb, txn);
+    }
+    buf_free(&data);
+    return r;
+}
+
+/*
+ * Remove a deny DB record; this has the effect of allowing the given
+ * user access to all services.  Returns an IMAP error code or 0 on
+ * success.  It is not an error to remove an non-existant record.
+ */
+EXPORTED int denydb_delete(const char *user)
+{
+    struct txn *txn = NULL;
+    int r = 0;
+
+    if (!deny_dbopen) return 0;
+
+    if (!user) return r;
+
+    /* remove the record */
+    do {
+	r = cyrusdb_delete(denydb,
+			   user, strlen(user),
+			   &txn, /*force*/1);
+    } while (r == CYRUSDB_AGAIN);
+
+    if (r) {
+	syslog(LOG_ERR, "IOERROR: couldn't delete denydb record for %s: %s",
+			user, cyrusdb_strerror(r));
+	r = IMAP_IOERROR;
+    }
+
+    if (txn) {
+	if (r) cyrusdb_abort(denydb, txn);
+	else cyrusdb_commit(denydb, txn);
+    }
+    return r;
+}
+
 /* must be called after cyrus_init */
 EXPORTED void denydb_init(int myflags)
 {
@@ -175,7 +266,7 @@ EXPORTED void denydb_init(int myflags)
     }
 }
 
-EXPORTED void denydb_open(void)
+static int do_open(int create)
 {
     const char *fname;
     int ret;
@@ -189,16 +280,31 @@ EXPORTED void denydb_open(void)
 	fname = tofree;
     }
 
-    ret = cyrusdb_open(DENYDB, fname, 0, &denydb);
+    ret = cyrusdb_open(DENYDB, fname, (create ? CYRUSDB_CREATE : 0), &denydb);
     if (ret == CYRUSDB_OK) {
 	deny_dbopen = 1;
-    } else if (ret != CYRUSDB_NOTFOUND) {
+    } else if (ret == CYRUSDB_NOTFOUND) {
 	/* ignore non-existent DB, report all other errors */
+	ret = ENOENT;
+    }
+    else {
 	syslog(LOG_WARNING, "DENYDB_ERROR: opening %s: %s", fname,
 	       cyrusdb_strerror(ret));
+	ret = IMAP_IOERROR;
     }
 
     free(tofree);
+    return ret;
+}
+
+EXPORTED void denydb_open(void)
+{
+    do_open(/*create*/0);
+}
+
+EXPORTED int denydb_openw(int create)
+{
+    return do_open(create);
 }
 
 EXPORTED void denydb_close(void)
