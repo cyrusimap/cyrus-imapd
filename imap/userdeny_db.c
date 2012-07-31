@@ -61,6 +61,9 @@
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
 
+#define FNAME_USERDENYDB "/user_deny.db"
+#define USERDENY_VERSION 2
+
 #define DENYDB config_userdeny_db
 
 static struct db *denydb;

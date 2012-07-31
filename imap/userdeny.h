@@ -45,11 +45,7 @@
 #ifndef INCLUDED_USERDENY_H
 #define INCLUDED_USERDENY_H
 
-#include "cyrusdb.h"
 #include <config.h>
-
-#define FNAME_USERDENYDB "/user_deny.db"
-#define USERDENY_VERSION 2
 
 extern int userdeny(const char *user, const char *service,
 		    char *msgbuf, size_t bufsiz);
