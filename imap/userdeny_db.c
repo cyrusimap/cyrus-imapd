@@ -67,6 +67,8 @@
 
 #define DENYDB config_userdeny_db
 
+static int do_open(int create);
+
 static struct db *denydb;
 
 static int deny_dbopen = 0;
@@ -83,6 +85,7 @@ EXPORTED int userdeny(const char *user, const char *service, char *msgbuf, size_
     const char *data = NULL;
     size_t datalen;
 
+    if (!deny_dbopen) do_open(/*create*/0);
     if (!deny_dbopen) return 0;
 
     /* fetch entry for user */
