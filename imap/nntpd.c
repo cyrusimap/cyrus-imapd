@@ -476,7 +476,7 @@ int service_init(int argc __attribute__((unused)),
 
     /* open the user deny db */
     denydb_init(0);
-    denydb_open(NULL);
+    denydb_open();
 
     /* setup for sending IMAP IDLE notifications */
     idle_init();

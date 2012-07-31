@@ -169,17 +169,17 @@ EXPORTED void denydb_init(int myflags)
     }
 }
 
-EXPORTED void denydb_open(const char *fname)
+EXPORTED void denydb_open(void)
 {
+    const char *fname;
     int ret;
     char *tofree = NULL;
 
-    if (!fname)
-	fname = config_getstring(IMAPOPT_USERDENY_DB_PATH);
+    fname = config_getstring(IMAPOPT_USERDENY_DB_PATH);
 
     /* create db file name */
     if (!fname) {
-	tofree =strconcat(config_dir, FNAME_USERDENYDB, (char *)NULL);
+	tofree = strconcat(config_dir, FNAME_USERDENYDB, (char *)NULL);
 	fname = tofree;
     }
 

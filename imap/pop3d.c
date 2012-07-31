@@ -453,7 +453,7 @@ int service_init(int argc __attribute__((unused)),
 
     /* open the user deny db */
     denydb_init(0);
-    denydb_open(NULL);
+    denydb_open();
 
     if (config_getswitch(IMAPOPT_STATUSCACHE)) {
 	/* open statuscache db to optimize handling an empty maildrop */
