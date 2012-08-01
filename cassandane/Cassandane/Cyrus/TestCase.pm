@@ -451,7 +451,31 @@ sub _reconnect_all
 
 sub run_replication
 {
-    my ($self) = @_;
+    my ($self, %opts) = @_;
+
+    # Parse options from caller
+    my $server = $self->{replica}->get_service('sync')->store_params()->{host};
+    $server = delete $opts{server} if exists $opts{server};
+    # $server might be undef at this point
+    my $channel = delete $opts{channel};
+    my $inputfile = delete $opts{inputfile};
+
+    # mode options
+    my $nmodes = 0;
+    my $user = delete $opts{user};
+    my $rolling = delete $opts{rolling};
+    my $mailbox = delete $opts{mailbox};
+    my $meta = delete $opts{meta};
+    $nmodes++ if $user;
+    $nmodes++ if $rolling;
+    $nmodes++ if $mailbox;
+    $nmodes++ if $meta;
+
+    # historical default for Cassandane tests is user mode
+    $user = 'cassandane' if ($nmodes == 0);
+    die "Too many mode options" if ($nmodes > 1);
+
+    die "Unrecognised options: " . join(' ', keys %opts) if (scalar %opts);
 
     xlog "running replication";
 
@@ -460,18 +484,18 @@ sub run_replication
     # error which is ignored in real world scenarios.
     $self->_disconnect_all();
 
-    my $params =
-	$self->{replica}->get_service('sync')->store_params();
+    # build sync_client command line
+    my @cmd = ('sync_client', '-v', '-v');
+    push(@cmd, '-S', $server) if defined $server;
+    push(@cmd, '-n', $channel) if defined $channel;
+    push(@cmd, '-f', $inputfile) if defined $inputfile;
+    push(@cmd, '-u', $user) if defined $user;
+    push(@cmd, '-R') if defined $rolling;
+    push(@cmd, '-m') if defined $mailbox;
+    push(@cmd, '-s') if defined $meta;
+    push(@cmd, $mailbox) if defined $mailbox;
 
-    # TODO: need a timeout!!
-
-    $self->{instance}->run_command({ cyrus => 1 },
-	'sync_client',
-	'-v',			# verbose
-	'-v',			# even more verbose
-	'-S', $params->{host},	# hostname to connect to
-	'-u', 'cassandane',	# replicate the Cassandane user
-	);
+    $self->{instance}->run_command({ cyrus => 1 }, @cmd);
 
     $self->_reconnect_all();
 }
