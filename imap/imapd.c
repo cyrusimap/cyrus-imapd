@@ -583,10 +583,35 @@ static int imapd_proxy_policy(sasl_conn_t *conn,
 			       auth_identity, alen, def_realm, urlen, propctx);
 }
 
+static int imapd_sasl_log(void *context __attribute__((unused)),
+			  int level, const char *message)
+{
+    int syslog_level = LOG_INFO;
+
+    switch (level) {
+    case SASL_LOG_ERR:
+    case SASL_LOG_FAIL:
+	syslog_level = LOG_ERR;
+	break;
+    case SASL_LOG_WARN:
+	syslog_level = LOG_WARNING;
+	break;
+    case SASL_LOG_DEBUG:
+    case SASL_LOG_TRACE:
+    case SASL_LOG_PASS:
+	syslog_level = LOG_DEBUG;
+	break;
+    }
+
+    syslog(syslog_level, "%s", message);
+    return SASL_OK;
+}
+
 static const struct sasl_callback mysasl_cb[] = {
     { SASL_CB_GETOPT, (mysasl_cb_ft *) &mysasl_config, NULL },
     { SASL_CB_PROXY_POLICY, (mysasl_cb_ft *) &imapd_proxy_policy, (void*) &imapd_proxyctx },
     { SASL_CB_CANON_USER, (mysasl_cb_ft *) &imapd_canon_user, (void*) &disable_referrals },
+    { SASL_CB_LOG, (mysasl_cb_ft *) &imapd_sasl_log, NULL },
     { SASL_CB_LIST_END, NULL, NULL }
 };
 
