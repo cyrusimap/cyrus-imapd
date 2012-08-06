@@ -603,7 +603,7 @@ static int imapd_sasl_log(void *context __attribute__((unused)),
 	break;
     }
 
-    syslog(syslog_level, "%s", message);
+    syslog(syslog_level, "SASL %s", message);
     return SASL_OK;
 }
 
