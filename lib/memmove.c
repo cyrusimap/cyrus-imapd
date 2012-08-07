@@ -46,10 +46,7 @@
 /* for size_t */
 #include <sys/types.h>
 
-void *memmove(s, ct, n)
-void *s;
-const void *ct;
-size_t n;
+void *memmove(void *s, const void *ct, size_t n)
 {
     char *c_s = s;
     const char *c_ct = ct;

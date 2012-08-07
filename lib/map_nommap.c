@@ -61,14 +61,9 @@ EXPORTED const char *map_method_desc = "nommap";
  * Create/refresh mapping of file
  */
 void
-EXPORTED map_refresh(fd, onceonly, base, len, newlen, name, mboxname)
-int fd;
-int onceonly;
-const char **base;
-size_t *len;
-size_t newlen;
-const char *name;
-const char *mboxname;
+EXPORTED map_refresh(int fd, int onceonly, const char **base,
+		     size_t *len, size_t newlen, const char *name,
+		     const char *mboxname)
 {
     char *p;
     int n, left;
@@ -84,7 +79,7 @@ const char *mboxname;
 	}
 	newlen = sbuf.st_size;
     }
-	    
+
     /* Need a larger buffer */
     if (*len < newlen) {
 	if (*len) free((char *)*base);
@@ -121,9 +116,7 @@ const char *mboxname;
  * Destroy mapping of file
  */
 void
-EXPORTED map_free(base, len)
-const char **base;
-size_t *len;
+EXPORTED map_free(const char **base, size_t *len)
 {
     if (*len) free((char *)*base);
     *base = 0;

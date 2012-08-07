@@ -58,14 +58,9 @@ EXPORTED const char *map_method_desc = "stupidshared";
  * Create/refresh mapping of file
  */
 void
-EXPORTED map_refresh(fd, onceonly, base, len, newlen, name, mboxname)
-int fd;
-int onceonly;
-const char **base;
-size_t *len;
-size_t newlen;
-const char *name;
-const char *mboxname;
+EXPORTED map_refresh(int fd, int onceonly, const char **base,
+		     size_t *len, size_t newlen, const char *name,
+		     const char *mboxname)
 {
     struct stat sbuf;
     char buf[80];
@@ -79,7 +74,7 @@ const char *mboxname;
 	}
 	newlen = sbuf.st_size;
     }
-	    
+
     /* Already mapped in */
     if (*len >= newlen) return;
 
@@ -106,9 +101,7 @@ const char *mboxname;
  * Destroy mapping of file
  */
 void
-EXPORTED map_free(base, len)
-const char **base;
-size_t *len;
+EXPORTED map_free(const char **base, size_t *len)
 {
     if (*len) munmap((char *)*base, *len);
     *base = 0;

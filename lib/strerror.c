@@ -45,8 +45,7 @@
 extern int sys_nerr;
 extern char *sys_errlist;
 
-const char *strerror(errnum)
-int errnum;
+const char *strerror(int errnum)
 {
     if (errnum < 0 || errnum > sys_nerr) return 0;
     return sys_errlist[errnum];

@@ -59,9 +59,7 @@ EXPORTED const char *nonblock_method_desc = "ioctl";
  * clears non-blocking mode.
  */
 EXPORTED void
-nonblock(fd, mode)
-int fd;
-int mode;
+nonblock(int fd, int mode)
 {
     mode = mode ? 1 : 0;
 
