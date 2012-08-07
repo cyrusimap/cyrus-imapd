@@ -1,4 +1,4 @@
-/* strsep.c -- replacement strsep() routine
+/* memmem.c -- replacement memmem() routine
  *
  * Copyright (c) 1994-2012 Carnegie Mellon University.  All rights reserved.
  *
@@ -41,28 +41,32 @@
  */
 
 #include <config.h>
-#ifdef HAVE_STRINGS_H
-#include <strings.h>
-#endif
 #ifdef HAVE_STRING_H
 #include <string.h>
 #endif
 
-char *strsep(char **stringp, const char *delim)
+/*
+ * Search for a needle 'vm' of length 'mlen' in
+ * haystack 'vb' of length 'len' and return the
+ * pointer to the first occurrence or NULL.
+ * Does not handle mlen=0.
+ */
+void *memmem(const void *vb, size_t len,
+	     const void *vm, size_t mlen)
 {
-    char *p;
-    char *start;
+    /* use unsigned char* not void* so ptr arithmetic works portably */
+    const unsigned char *b = vb;
+    const unsigned char *end = b+len;
+    const unsigned char *m = vm;
+    const unsigned char *p;
 
-    if (!stringp) return NULL;
-    start = *stringp;
-    if (!start) return NULL;
-
-    p = strpbrk(start, delim);
-    if (!p) return NULL;
-
-    *p++ = '\0';
-    *stringp = p;
-
-    return start;
+    while (b < end) {
+	p = memchr(b, *m, end-b);
+	if (!p) return NULL;
+	if (p + mlen > end) return NULL;
+	if (!memcmp(p, m, mlen)) return (void *)p;
+	b = p+1;
+    }
+    return NULL;
 }
 
