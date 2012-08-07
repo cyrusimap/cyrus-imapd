@@ -122,7 +122,7 @@ dnl check for -R, etc. switch
 CMU_GUESS_RUNPATH_SWITCH
 
 AC_CHECK_HEADERS(unistd.h sys/select.h sys/param.h stdarg.h)
-AC_REPLACE_FUNCS(memmove strcasecmp ftruncate strerror)
+AC_REPLACE_FUNCS(memmove strcasecmp ftruncate strerror strsep)
 AC_CHECK_FUNCS(strlcat strlcpy getgrouplist)
 AC_HEADER_DIRENT
 
@@ -1509,6 +1509,10 @@ struct sockaddr_storage {
 #define strtoofft(nptr, endptr, base) strtoll(nptr, endptr, base)
 #else
 #error dont know what to use for OFF_T_FMT
+#endif
+
+#ifndef HAVE_STRSEP
+extern char *strsep(char **, const char *);
 #endif
 
 /* compile time options; think carefully before modifying */
