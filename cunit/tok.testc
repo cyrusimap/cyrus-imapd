@@ -354,4 +354,61 @@ static void test_initmnull(void)
     tok_fini(&tok);
 }
 
+/* Test some portability stubs */
+static void test_memmem(void)
+{
+#define TESTCASEN(haystack, haystacklen, needle, expoff) \
+    { \
+	static const char _haystack[] = (haystack); \
+	int _haystacklen = (haystacklen); \
+	static const char _needle[] = (needle); \
+	int _expoff = (expoff); \
+	void *p; \
+ \
+	p = memmem(_haystack, _haystacklen, \
+		   _needle, sizeof(_needle)-1); \
+	if (_expoff < 0) { \
+	    CU_ASSERT_PTR_NULL(p); \
+	} \
+	else { \
+	    CU_ASSERT_PTR_NOT_NULL(p); \
+	    CU_ASSERT((const char *)p >= _haystack); \
+	    CU_ASSERT((const char *)p < \
+	    _haystack+sizeof(_haystack)-1); \
+	    CU_ASSERT_PTR_EQUAL(p, _haystack+_expoff); \
+	} \
+    }
+#define TESTCASE(haystack, needle, expoff) \
+	TESTCASEN(haystack, sizeof(haystack)-1, needle, expoff)
+
+    /* needle easily found */
+    TESTCASE("quinoa etsy dreamcatcher", "etsy", 7);
+
+    /* needle not found */
+    TESTCASE("quinoa etsy dreamcatcher", "cosby", -1);
+
+    /* first character of needle not found */
+    TESTCASE("quinoa etsy dreamcatcher", "xylem", -1);
+
+    /* haystack length is obeyed */
+    TESTCASEN("quinoa etsy dreamcatcher", 6, "etsy", -1);
+
+    /* needle first character is repeated in haystack */
+    TESTCASE("eeeeeeeeeeeeeeeeeepeeeeeeee", "ep", 17);
+
+    /* needle first character is repeated in needle & haystack */
+    TESTCASE("eeeeeeeeeeeeeeeeeepeeeeeeee", "eeep", 15);
+
+    /* no false match near end of haystack */
+    TESTCASE("quinoa etsy dreamcatcher", "hermes", -1);
+
+    /* partial matches precede actual match */
+    TESTCASE("qququiquqquinquinoa", "quinoa", 13);
+
+    /* match is after embedded nul */
+    TESTCASE("locavore\0vegan", "vegan", 9);
+
+#undef TESTCASE
+}
+
 /* vim: set ft=c: */
