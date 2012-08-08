@@ -199,20 +199,34 @@ static void test_tourl(void)
     CU_ASSERT_STRING_EQUAL(buf, URL);
 }
 
-// static void test_tourl_user(void)
-// {
-//     static const char URL[] = "imap://wooster@jeeves/deverill";
-//     struct imapurl iurl;
-//     char buf[300];
-//
-//     memset(&iurl, 0, sizeof(iurl));
-//     iurl.user = "wooster";
-//     iurl.server = "jeeves";
-//     iurl.mailbox = "deverill";
-//     memset(buf, 0x45, sizeof(buf));
-//     imapurl_toURL(buf, &iurl);
-//     CU_ASSERT_STRING_EQUAL(buf, URL);
-// }
+static void test_tourl_server(void)
+{
+    static const char URL[] = "imap://jeeves";
+    struct imapurl iurl;
+    char buf[300];
+
+    memset(&iurl, 0, sizeof(iurl));
+    iurl.server = "jeeves";
+
+    memset(buf, 0x45, sizeof(buf));
+    imapurl_toURL(buf, &iurl);
+    CU_ASSERT_STRING_EQUAL(buf, URL);
+}
+
+static void test_tourl_user(void)
+{
+    static const char URL[] = "imap://wooster@jeeves/deverill";
+    struct imapurl iurl;
+    char buf[300];
+
+    memset(&iurl, 0, sizeof(iurl));
+    iurl.user = "wooster";
+    iurl.server = "jeeves";
+    iurl.mailbox = "deverill";
+    memset(buf, 0x45, sizeof(buf));
+    imapurl_toURL(buf, &iurl);
+    CU_ASSERT_STRING_EQUAL(buf, URL);
+}
 
 static void test_tourl_options(void)
 {
