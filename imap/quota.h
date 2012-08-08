@@ -141,4 +141,6 @@ void quotadb_init(int flags);
 /* done with database stuff */
 void quotadb_done(void);
 
+int quota_is_overquota(const struct quota *quota, enum quota_resource res,
+                       int newquotas[QUOTA_NUMRESOURCES]);
 #endif /* INCLUDED_QUOTA_H */

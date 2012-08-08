@@ -641,3 +641,11 @@ EXPORTED void quotadb_done(void)
 {
     /* DB->done() handled by cyrus_done() */
 }
+
+EXPORTED int quota_is_overquota(const struct quota *quota, enum quota_resource res,
+                       int newquotas[QUOTA_NUMRESOURCES])
+{
+    int limit = newquotas ? newquotas[res] : quota->limits[res];
+
+    return limit >= 0 && quota->useds[res] >= ((quota_t)limit * quota_units[res]);
+}

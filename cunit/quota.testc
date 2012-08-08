@@ -381,6 +381,40 @@ static void test_check_use(void)
     CU_ASSERT_SYSLOG(/*all*/0, 1);		/* whined */
 }
 
+static void test_check_overquota(void)
+{
+    struct quota q;
+
+    memset(&q, 0, sizeof(q));
+    q.root = QUOTAROOT;
+    q.limits[QUOTA_STORAGE] = 100;
+    q.limits[QUOTA_MESSAGE] = 2;
+    
+    /* test not overquota */
+    quota_use(&q, QUOTA_STORAGE, 10*1024);
+    quota_use(&q, QUOTA_MESSAGE, 1);
+    CU_ASSERT_EQUAL(q.useds[QUOTA_STORAGE], 10*1024);
+    CU_ASSERT_EQUAL(q.useds[QUOTA_MESSAGE], 1);
+    CU_ASSERT_EQUAL(0, quota_is_overquota(&q, QUOTA_STORAGE, NULL));
+    CU_ASSERT_EQUAL(0, quota_is_overquota(&q, QUOTA_MESSAGE, NULL));
+    
+    /* test now overquota */
+    quota_use(&q, QUOTA_STORAGE, 90*1024);
+    quota_use(&q, QUOTA_MESSAGE, 1);
+    CU_ASSERT_EQUAL(q.useds[QUOTA_STORAGE], 100*1024);
+    CU_ASSERT_EQUAL(q.useds[QUOTA_MESSAGE], 2);
+    CU_ASSERT_EQUAL(1, quota_is_overquota(&q, QUOTA_STORAGE, NULL));
+    CU_ASSERT_EQUAL(1, quota_is_overquota(&q, QUOTA_MESSAGE, NULL));
+    
+    /* test under quota */ 
+    quota_use(&q, QUOTA_STORAGE, -10*1024);
+    quota_use(&q, QUOTA_MESSAGE, -1);
+    CU_ASSERT_EQUAL(q.useds[QUOTA_STORAGE], 90*1024);
+    CU_ASSERT_EQUAL(q.useds[QUOTA_MESSAGE], 1);
+    CU_ASSERT_EQUAL(0, quota_is_overquota(&q, QUOTA_STORAGE, NULL));
+    CU_ASSERT_EQUAL(0, quota_is_overquota(&q, QUOTA_MESSAGE, NULL));
+}
+
 static void test_update_useds(void)
 {
     struct quota q;
