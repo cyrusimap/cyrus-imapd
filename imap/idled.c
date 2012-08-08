@@ -140,6 +140,7 @@ static void remove_ientry(const char *mboxname,
 static void process_message(struct sockaddr_un *remote, idle_message_t *msg)
 {
     struct ientry *t, *n;
+    int r;
 
     switch (msg->which) {
     case IDLE_MSG_INIT:
@@ -178,7 +179,13 @@ static void process_message(struct sockaddr_un *remote, idle_message_t *msg)
 		    syslog(LOG_DEBUG, "    fwd NOTIFY %s\n", idle_id_from_addr(&t->remote));
 
 		/* forward the received msg onto our clients */
-		if (!idle_send(&t->remote, msg)) {
+		r = idle_send(&t->remote, msg);
+		if (r) {
+		    syslog(LOG_ERR, "IDLE: error sending message "
+				    "NOTIFY to imapd %s for mailbox %s: %s, ",
+				    "forgetting.",
+				    idle_id_from_addr(&t->remote),
+				    msg->mboxname, error_message(r));
 		    if (verbose || debugmode)
 			syslog(LOG_DEBUG, "    forgetting %s\n", idle_id_from_addr(&t->remote));
 		    remove_ientry(msg->mboxname, &t->remote);
@@ -213,6 +220,7 @@ static void send_alert(const char *key,
     struct ientry *t = (struct ientry *) data;
     struct ientry *n;
     idle_message_t msg;
+    int r;
 
     msg.which = IDLE_MSG_ALERT;
     strncpy(msg.mboxname, ".", sizeof(msg.mboxname));
@@ -225,7 +233,13 @@ static void send_alert(const char *key,
 	if (verbose || debugmode)
 	    syslog(LOG_DEBUG, "    ALERT %s\n", idle_id_from_addr(&t->remote));
 
-	if (!idle_send(&t->remote, &msg)) {
+	r = idle_send(&t->remote, &msg);
+	if (r) {
+	    syslog(LOG_ERR, "IDLE: error sending message "
+			    "ALERT to imapd %s: %s, ",
+			    "forgetting.",
+			    idle_id_from_addr(&t->remote),
+			    msg.mboxname, error_message(r));
 	    if (verbose || debugmode)
 		syslog(LOG_DEBUG, "    forgetting %s\n", idle_id_from_addr(&t->remote));
 	    remove_ientry(key, &t->remote);
