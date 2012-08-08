@@ -425,6 +425,36 @@ Blank lines and lines beginning with ``#'' are ignored.
    as having already been delivered to the mailbox.  Records the mailbox
    and message-id/resent-message-id of all successful deliveries. */
 
+{ "event_content_inclusion_mode", "standard", ENUM("standard", "message", "header", "body", "headerbody") }
+/* The mode in which message content may be included with MessageAppend and
+   MessageNew. "standard" mode is the default behavior in which message is
+   included up to a size with the notification. In "message" mode, the message
+   is included and may be truncated to a size. In "header" mode, it includes 
+   headers truncated to a size. In "body" mode, it includes body truncated 
+   to a size. In "headerbody" mode, it includes full headers and body truncated
+   to a size */
+
+{ "event_content_size", 0, INT }
+/* Truncate the message content that may be included with MessageAppend and 
+   MessageNew. Set 0 to include the entire message itself */
+
+{ "event_exclude_flags", NULL, STRING }
+/* Don't send event notification for given IMAP flag(s) */
+
+{ "event_exclude_specialuse", "\\Junk", STRING }
+/* Don't send event notification for folder with given special-use attributes. 
+   Set ALL for any folder */
+
+{ "event_extra_params", "timestamp", BITFIELD("bodyStructure", "clientAddress", "diskUsed", "flagNames", "messageContent", "messageSize", "messages", "modseq", "service", "timestamp", "uidnext", "vnd.cmu.midset", "vnd.cmu.newMessages") }
+/* Space-separated list of extra parameters to add to any appropriated event. */ 
+
+{ "event_groups", "message mailbox", BITFIELD("message", "quota", "flags", "access", "mailbox") }
+/* Space-separated list of groups of related events to turn on notification */
+
+{ "event_notifier", NULL, STRING }
+/* Notifyd(8) method to use for "EVENT" notifications which are based on
+   the RFC 5423.  If not set, "EVENT" notifications are disabled. */
+
 { "expunge_mode", "default", ENUM("default", "immediate", "delayed") }
 /* The mode in which messages (and their corresponding cache entries)
    are expunged.  "default" mode is the default behavior in which the

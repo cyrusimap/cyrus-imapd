@@ -1016,6 +1016,7 @@ dnl enable requires the installation of jansson library
 dnl
 AC_ARG_ENABLE(event-notification,
         [AS_HELP_STRING([--disable-event-notification], [disable compiling of mailbox event notification (that needs jansson library)])])
+AM_CONDITIONAL([MBOXEVENT], [test "$enable_event_notification" != "no"])
 
 if test "$enable_event_notification" != "no"; then
     PKG_CHECK_MODULES([JANSSON], [jansson >= 2.0],
@@ -1025,6 +1026,7 @@ if test "$enable_event_notification" != "no"; then
 	  [AC_SUBST([JANSSON_CFLAGS])],
 	[check_jansson=false]
 	  [AC_MSG_ERROR([jansson 2.0 or later was not found, but is required to enable mailbox event notification])])
+    AC_DEFINE(ENABLE_MBOXEVENT,[],[Build with support of mailbox event notification])
 fi
 AM_CONDITIONAL(JANSSON, test x$check_jansson = xtrue)
 
