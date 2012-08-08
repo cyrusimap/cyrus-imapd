@@ -570,6 +570,10 @@ else
 lib_libcyrus_min_la_SOURCES += lib/map_nommap.c
 endif
 endif
+if JANSSON
+imap_libcyrus_imap_la_LIBADD += $(JANSSON_LIBS)
+imap_libcyrus_imap_la_CFLAGS += $(JANSSON_CFLAGS)
+endif
 lib_libcyrus_min_la_SOURCES += lib/mpool.c lib/retry.c lib/strarray.c \
 	lib/strhash.c lib/util.c lib/xmalloc.c lib/xstrlcat.c lib/xstrlcpy.c \
 	lib/hashu64.c
