@@ -57,6 +57,7 @@
 #include "global.h"
 #include "userdeny.h"
 #include "imap/imap_err.h"
+#include "tok.h"
 #include "wildmat.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
@@ -71,6 +72,40 @@ static struct db *denydb;
 
 static const char default_message[] = "Access to this service has been blocked";
 
+/* parse the data */
+static int parse_record(struct buf *buf,
+			char **wildp,
+			const char **msgp)
+{
+    const char *msg = default_message;
+    char *wild;
+    unsigned long version;
+
+    buf_cstring(buf); /* use a working copy */
+
+    /* check version */
+    if (((version = strtoul(buf->s, &wild, 10)) < 1) ||
+	(version > USERDENY_VERSION))
+	return IMAP_MAILBOX_BADFORMAT;
+
+    if (*wild++ != '\t')
+	return IMAP_MAILBOX_BADFORMAT;
+
+    /* check if we have a deny message */
+    if (version == USERDENY_VERSION) {
+	char *p = strchr(wild, '\t');
+	if (p) {
+	    *p++ = '\0';
+	    msg = p;
+	}
+    }
+
+    *wildp = wild;
+    *msgp = msg;
+
+    return 0;
+}
+
 /*
  * userdeny() checks to see if 'user' is denied access to 'service'
  * Returns 1 if a matching deny entry exists in DB, otherwise returns 0.
@@ -80,9 +115,17 @@ EXPORTED int userdeny(const char *user, const char *service, char *msgbuf, size_
     int r, ret = 0; /* allow access by default */
     const char *data = NULL;
     size_t datalen;
+    struct buf buf = BUF_INITIALIZER;
+    char *wild = NULL;
+    const char *msg = NULL;
+    tok_t tok;
+    char *pat;
+    int not;
 
     if (!denydb) denydb_open(/*create*/0);
     if (!denydb) return 0;
+
+    memset(&tok, 0, sizeof(tok));
 
     /* fetch entry for user */
     syslog(LOG_DEBUG, "fetching user_deny.db entry for '%s'", user);
@@ -102,69 +145,42 @@ EXPORTED int userdeny(const char *user, const char *service, char *msgbuf, size_
 		   "DENYDB_ERROR: error reading entry '%s': %s",
 		   user, cyrusdb_strerror(r));
 	}
-    } else {
+	goto out;
+    }
+    buf_init_ro(&buf, data, datalen);
+
 	/* parse the data */
-	char *buf, *wild;
-	unsigned long version;
-
-	buf = xstrndup(data, datalen);  /* use a working copy */
-
-	/* check version */
-	if (((version = strtoul(buf, &wild, 10)) < 1) ||
-	    (version > USERDENY_VERSION)) {
-	    syslog(LOG_WARNING,
-		   "DENYDB_ERROR: invalid version for entry '%s': %lu",
-		   user, version);
-	} else if (*wild++ != '\t') {
-	    syslog(LOG_WARNING,
-		   "DENYDB_ERROR: missing wildmat for entry '%s'", user);
-	} else {
-	    const char *msg = default_message;
-	    char *pat;
-	    int not;
-
-	    /* check if we have a deny message */
-	    if (version == USERDENY_VERSION) {
-		char *p = strchr(wild, '\t');
-		if (p) {
-		    *p++;
-		    msg = p;
-		}
-	    }
-
-	    /* scan wildmat right to left for a match against our service */
-	    syslog(LOG_DEBUG, "wild: '%s'   service: '%s'", wild, service);
-	    do {
-		/* isolate next pattern */
-		if ((pat = strrchr(wild, ','))) {
-		    *pat++ = '\0';
-		} else {
-		    pat = wild;
-		}
-
-		/* XXX  trim leading & trailing whitespace? */
-
-		/* is it a negated pattern? */
-		not = (*pat == '!');
-		if (not) ++pat;
-
-		syslog(LOG_DEBUG, "pat %d:'%s'", not, pat);
-
-		/* see if pattern matches our service */
-		if (wildmat(service, pat)) {
-		    /* match ==> we're done */
-		    ret = !not;
-		    if (msgbuf) strlcpy(msgbuf, msg, bufsiz);
-		    break;
-		}
-
-		/* continue until we reach head of wildmat */
-	    } while (pat != wild);
-	}
-
-	free(buf);
+    r = parse_record(&buf, &wild, &msg);
+    if (r) {
+	syslog(LOG_WARNING,
+	       "DENYDB_ERROR: invalid entry for '%s'", user);
+	goto out;
     }
 
+    /* scan wildmat right to left for a match against our service */
+    syslog(LOG_DEBUG, "wild: '%s'   service: '%s'", wild, service);
+    tok_initm(&tok, wild, ",", 0);
+    while ((pat = tok_next(&tok))) {
+	/* XXX  trim leading & trailing whitespace? */
+
+	/* is it a negated pattern? */
+	not = (*pat == '!');
+	if (not) ++pat;
+
+	syslog(LOG_DEBUG, "pat %d:'%s'", not, pat);
+
+	/* see if pattern matches our service */
+	if (wildmat(service, pat)) {
+	    /* match ==> we're done */
+	    ret = !not;
+	    if (msgbuf) strlcpy(msgbuf, msg, bufsiz);
+	    break;
+	}
+    }
+
+out:
+    tok_fini(&tok);
+    buf_free(&buf);
     return ret;
 }
 
@@ -256,6 +272,59 @@ EXPORTED int denydb_delete(const char *user)
 	else cyrusdb_commit(denydb, txn);
     }
     return r;
+}
+
+struct denydb_rock
+{
+    denydb_proc_t proc;
+    void *rock;
+};
+
+static int denydb_foreach_cb(void *rock,
+			     const char *key, size_t keylen,
+			     const char *data, size_t datalen)
+{
+    struct denydb_rock *dr = (struct denydb_rock *)rock;
+    struct buf user = BUF_INITIALIZER;
+    struct buf buf = BUF_INITIALIZER;
+    char *wild = NULL;
+    const char *msg = NULL;
+    int r;
+
+    /* ensure we have a nul-terminated user string */
+    buf_appendmap(&user, key, keylen);
+    buf_cstring(&user);
+
+    /* get fields from the record */
+    buf_init_ro(&buf, data, datalen);
+    r = parse_record(&buf, &wild, &msg);
+    if (r) {
+	syslog(LOG_WARNING,
+	       "DENYDB_ERROR: invalid entry for '%s'", user.s);
+	r = 0;	/* whatever, keep going */
+	goto out;
+    }
+
+    r = dr->proc(user.s, wild, msg, dr->rock);
+
+out:
+    buf_free(&user);
+    buf_free(&buf);
+    return r;
+}
+
+EXPORTED int denydb_foreach(denydb_proc_t proc, void *rock)
+{
+    struct denydb_rock dr;
+
+    if (!denydb) return 0;
+
+    dr.proc = proc;
+    dr.rock = rock;
+
+    return cyrusdb_foreach(denydb, "", 0,
+			   denydb_foreach_cb, NULL, &dr,
+			   /* txn */NULL);
 }
 
 /* must be called after cyrus_init */
