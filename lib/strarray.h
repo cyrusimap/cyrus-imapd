@@ -104,4 +104,6 @@ int strarray_find(const strarray_t *sa, const char *match,
 int strarray_find_case(const strarray_t *sa, const char *match,
 		       int starting);
 
+int strarray_size(const strarray_t *sa);
+
 #endif /* __CYRUS_STRARRAY_H__ */

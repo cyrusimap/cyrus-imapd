@@ -406,3 +406,8 @@ EXPORTED int strarray_find_case(const strarray_t *sa, const char *match, int sta
 {
     return strarray_findg(sa, match, starting, strcasecmpsafe);
 }
+
+EXPORTED int strarray_size(const strarray_t *sa)
+{
+    return sa->count;
+}

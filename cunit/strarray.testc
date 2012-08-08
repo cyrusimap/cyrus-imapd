@@ -17,30 +17,30 @@ static void test_auto(void)
     char *s1;
     char *s2;
 
-    CU_ASSERT_EQUAL(sa.count, 0);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 0);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, 0));
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, -1));
 
     s1 = xstrdup("lorem ipsum");
     strarray_appendm(&sa, s1);
-    CU_ASSERT_EQUAL(sa.count, 1);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 1);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_PTR_EQUAL((char *)strarray_nth(&sa, 0), s1);
     CU_ASSERT_PTR_EQUAL((char *)strarray_nth(&sa, -1), s1);
 
     s2 = xstrdup("dolor sit");
     strarray_appendm(&sa, s2);
-    CU_ASSERT_EQUAL(sa.count, 2);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 2);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_PTR_EQUAL((char *)strarray_nth(&sa, 0), s1);
     CU_ASSERT_PTR_EQUAL((char *)strarray_nth(&sa, 1), s2);
     CU_ASSERT_PTR_EQUAL((char *)strarray_nth(&sa, -1), s2);
 
     strarray_fini(&sa);
-    CU_ASSERT_EQUAL(sa.count, 0);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 0);
     CU_ASSERT_EQUAL(sa.alloc, 0);
     CU_ASSERT_PTR_NULL(sa.data);
 }
@@ -88,26 +88,26 @@ static void test_set(void)
 #define WORD3	"sit"
 #define WORD4	"amet"
 
-    CU_ASSERT_EQUAL(sa.count, 0);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 0);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, 0));
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, -1));
 
     strarray_append(&sa, WORD0);
-    CU_ASSERT_EQUAL(sa.count, 1);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 1);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
 
     strarray_set(&sa, 0, WORD0REP);
-    CU_ASSERT_EQUAL(sa.count, 1);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 1);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0REP);
 
     strarray_set(&sa, -1, WORD0REP2);
-    CU_ASSERT_EQUAL(sa.count, 1);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 1);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0REP2);
 
@@ -115,8 +115,8 @@ static void test_set(void)
     strarray_append(&sa, WORD2);
     strarray_append(&sa, WORD3);
     strarray_append(&sa, WORD4);
-    CU_ASSERT_EQUAL(sa.count, 5);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 5);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0REP2);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
@@ -125,8 +125,8 @@ static void test_set(void)
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 4), WORD4);
 
     strarray_set(&sa, 2, WORD2REP);
-    CU_ASSERT_EQUAL(sa.count, 5);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 5);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0REP2);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
@@ -157,26 +157,26 @@ static void test_setm(void)
 #define WORD3	"sit"
 #define WORD4	"amet"
 
-    CU_ASSERT_EQUAL(sa.count, 0);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 0);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, 0));
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, -1));
 
     strarray_appendm(&sa, xstrdup(WORD0));
-    CU_ASSERT_EQUAL(sa.count, 1);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 1);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
 
     strarray_setm(&sa, 0, xstrdup(WORD0REP));
-    CU_ASSERT_EQUAL(sa.count, 1);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 1);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0REP);
 
     strarray_setm(&sa, -1, xstrdup(WORD0REP2));
-    CU_ASSERT_EQUAL(sa.count, 1);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 1);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0REP2);
 
@@ -184,8 +184,8 @@ static void test_setm(void)
     strarray_appendm(&sa, xstrdup(WORD2));
     strarray_appendm(&sa, xstrdup(WORD3));
     strarray_appendm(&sa, xstrdup(WORD4));
-    CU_ASSERT_EQUAL(sa.count, 5);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 5);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0REP2);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
@@ -194,8 +194,8 @@ static void test_setm(void)
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 4), WORD4);
 
     strarray_setm(&sa, 2, xstrdup(WORD2REP));
-    CU_ASSERT_EQUAL(sa.count, 5);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 5);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0REP2);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
@@ -223,35 +223,35 @@ static void test_insert(void)
 #define WORD3	"sit"
 #define WORD4	"amet"
 
-    CU_ASSERT_EQUAL(sa.count, 0);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 0);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, 0));
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, -1));
 
     strarray_insert(&sa, 0, WORD0);
-    CU_ASSERT_EQUAL(sa.count, 1);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 1);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
 
     strarray_insert(&sa, -1, WORD1);
-    CU_ASSERT_EQUAL(sa.count, 2);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 2);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD1);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD0);
 
     strarray_insert(&sa, 0, WORD2);
-    CU_ASSERT_EQUAL(sa.count, 3);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 3);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD2);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 2), WORD0);
 
     strarray_insert(&sa, -1, WORD3);
-    CU_ASSERT_EQUAL(sa.count, 4);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 4);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD2);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
@@ -259,8 +259,8 @@ static void test_insert(void)
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 3), WORD0);
 
     strarray_insert(&sa, 2, WORD4);
-    CU_ASSERT_EQUAL(sa.count, 5);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 5);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD2);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
@@ -285,35 +285,35 @@ static void test_insertm(void)
 #define WORD3	"sit"
 #define WORD4	"amet"
 
-    CU_ASSERT_EQUAL(sa.count, 0);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 0);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, 0));
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, -1));
 
     strarray_insertm(&sa, 0, xstrdup(WORD0));
-    CU_ASSERT_EQUAL(sa.count, 1);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 1);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
 
     strarray_insertm(&sa, -1, xstrdup(WORD1));
-    CU_ASSERT_EQUAL(sa.count, 2);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 2);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD1);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD0);
 
     strarray_insertm(&sa, 0, xstrdup(WORD2));
-    CU_ASSERT_EQUAL(sa.count, 3);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 3);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD2);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 2), WORD0);
 
     strarray_insertm(&sa, -1, xstrdup(WORD3));
-    CU_ASSERT_EQUAL(sa.count, 4);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 4);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD2);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
@@ -321,8 +321,8 @@ static void test_insertm(void)
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 3), WORD0);
 
     strarray_insertm(&sa, 2, xstrdup(WORD4));
-    CU_ASSERT_EQUAL(sa.count, 5);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 5);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD2);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
@@ -349,30 +349,30 @@ static void test_bad_index(void)
 #define WORD2	"dolor"
     char *s = xstrdup(WORD0);
 
-    CU_ASSERT_EQUAL(sa.count, 0);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 0);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, 0));
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, -1));
 
     /* when the strarray is empty, -1 is a bad index */
 
     strarray_setm(&sa, -1, s);
-    CU_ASSERT_EQUAL(sa.count, 0);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 0);
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, 0));
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, -1));
 
     strarray_set(&sa, -1, WORD0);
-    CU_ASSERT_EQUAL(sa.count, 0);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 0);
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, 0));
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, -1));
 
     strarray_insertm(&sa, -1, s);
-    CU_ASSERT_EQUAL(sa.count, 0);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 0);
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, 0));
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, -1));
 
     strarray_insert(&sa, -1, WORD0);
-    CU_ASSERT_EQUAL(sa.count, 0);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 0);
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, 0));
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, -1));
 
@@ -381,22 +381,22 @@ static void test_bad_index(void)
     strarray_append(&sa, WORD2);
 
     strarray_setm(&sa, -4, s);
-    CU_ASSERT_EQUAL(sa.count, 2);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 2);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD1);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, -1), WORD2);
 
     strarray_set(&sa, -4, WORD0);
-    CU_ASSERT_EQUAL(sa.count, 2);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 2);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD1);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, -1), WORD2);
 
     strarray_insertm(&sa, -4, s);
-    CU_ASSERT_EQUAL(sa.count, 2);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 2);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD1);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, -1), WORD2);
 
     strarray_insert(&sa, -4, WORD0);
-    CU_ASSERT_EQUAL(sa.count, 2);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 2);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD1);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, -1), WORD2);
 
@@ -415,14 +415,14 @@ static void test_sparse_set(void)
 #define WORD1	"ipsum"
 #define WORD2	"dolor"
 
-    CU_ASSERT_EQUAL(sa.count, 0);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 0);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, 0));
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, -1));
 
     strarray_set(&sa, 3, WORD0);
-    CU_ASSERT_EQUAL(sa.count, 4);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 4);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, 0));
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, 1));
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, 2));
@@ -445,8 +445,8 @@ static void test_join(void)
 #define WORD3	"sit"
 #define WORD4	"amet"
 
-    CU_ASSERT_EQUAL(sa.count, 0);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 0);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, 0));
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, -1));
 
@@ -461,8 +461,8 @@ static void test_join(void)
     strarray_append(&sa, WORD2);
     strarray_append(&sa, WORD3);
     strarray_append(&sa, WORD4);
-    CU_ASSERT_EQUAL(sa.count, 5);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 5);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
@@ -483,8 +483,8 @@ static void test_join(void)
     free(s);
 
     /* check that sa is unharmed by the join */
-    CU_ASSERT_EQUAL(sa.count, 5);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 5);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
@@ -509,16 +509,16 @@ static void test_join_initial_null(void)
 #define WORD0	"lorem"
 #define WORD1	"ipsum"
 
-    CU_ASSERT_EQUAL(sa.count, 0);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 0);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, 0));
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, -1));
 
     /* [0] element is NULL */
     strarray_set(&sa, 1, WORD0);
     strarray_set(&sa, 2, WORD1);
-    CU_ASSERT_EQUAL(sa.count, 3);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 3);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, 0));
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD0);
@@ -537,8 +537,8 @@ static void test_join_initial_null(void)
     free(s);
 
     /* check that sa is unharmed by the join */
-    CU_ASSERT_EQUAL(sa.count, 3);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 3);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, 0));
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD0);
@@ -666,8 +666,8 @@ static void test_remove(void)
 #define WORD3	"sit"
 #define WORD4	"amet"
 
-    CU_ASSERT_EQUAL(sa.count, 0);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 0);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, 0));
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, -1));
 
@@ -676,8 +676,8 @@ static void test_remove(void)
     strarray_append(&sa, WORD2);
     strarray_append(&sa, WORD3);
     strarray_append(&sa, WORD4);
-    CU_ASSERT_EQUAL(sa.count, 5);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 5);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
@@ -688,8 +688,8 @@ static void test_remove(void)
     s = strarray_remove(&sa, 2);
     CU_ASSERT_STRING_EQUAL(s, WORD2);
     free(s);
-    CU_ASSERT_EQUAL(sa.count, 4);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 4);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
@@ -699,8 +699,8 @@ static void test_remove(void)
     s = strarray_remove(&sa, 0);
     CU_ASSERT_STRING_EQUAL(s, WORD0);
     free(s);
-    CU_ASSERT_EQUAL(sa.count, 3);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 3);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD1);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD3);
@@ -709,8 +709,8 @@ static void test_remove(void)
     s = strarray_remove(&sa, -1);
     CU_ASSERT_STRING_EQUAL(s, WORD4);
     free(s);
-    CU_ASSERT_EQUAL(sa.count, 2);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 2);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD1);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD3);
@@ -718,16 +718,16 @@ static void test_remove(void)
     s = strarray_remove(&sa, 1);
     CU_ASSERT_STRING_EQUAL(s, WORD3);
     free(s);
-    CU_ASSERT_EQUAL(sa.count, 1);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 1);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD1);
 
     s = strarray_remove(&sa, 0);
     CU_ASSERT_STRING_EQUAL(s, WORD1);
     free(s);
-    CU_ASSERT_EQUAL(sa.count, 0);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 0);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, 0));
 
@@ -797,8 +797,8 @@ static void test_truncate(void)
 #define WORD3	"sit"
 #define WORD4	"amet"
 
-    CU_ASSERT_EQUAL(sa.count, 0);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 0);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, 0));
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, -1));
 
@@ -807,8 +807,8 @@ static void test_truncate(void)
     strarray_append(&sa, WORD2);
     strarray_append(&sa, WORD3);
     strarray_append(&sa, WORD4);
-    CU_ASSERT_EQUAL(sa.count, 5);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 5);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
@@ -818,8 +818,8 @@ static void test_truncate(void)
 
     /* expand the array */
     strarray_truncate(&sa, 7);
-    CU_ASSERT_EQUAL(sa.count, 7);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 7);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
@@ -831,8 +831,8 @@ static void test_truncate(void)
 
     /* shrink the array */
     strarray_truncate(&sa, 4);
-    CU_ASSERT_EQUAL(sa.count, 4);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 4);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
@@ -841,8 +841,8 @@ static void test_truncate(void)
 
     /* shrink the array harder */
     strarray_truncate(&sa, 3);
-    CU_ASSERT_EQUAL(sa.count, 3);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 3);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
@@ -850,8 +850,8 @@ static void test_truncate(void)
 
     /* shrink the array to nothing */
     strarray_truncate(&sa, 0);
-    CU_ASSERT_EQUAL(sa.count, 0);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 0);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     /* whether sa.data is NULL is undefined at this time */
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, 0));
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, -1));
@@ -877,8 +877,8 @@ static void test_find(void)
 #define WORD3	"sit"
 #define WORD4	"amet"
 
-    CU_ASSERT_EQUAL(sa.count, 0);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 0);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, 0));
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, -1));
 
@@ -888,8 +888,8 @@ static void test_find(void)
     strarray_append(&sa, WORD3);
     strarray_append(&sa, WORD0);
     strarray_append(&sa, WORD4);
-    CU_ASSERT_EQUAL(sa.count, 6);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 6);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
@@ -956,8 +956,8 @@ static void test_find_case(void)
 #define WORD3	"sit"
 #define WORD4	"ameT"
 
-    CU_ASSERT_EQUAL(sa.count, 0);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 0);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, 0));
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, -1));
 
@@ -967,8 +967,8 @@ static void test_find_case(void)
     strarray_append(&sa, WORD3);
     strarray_append(&sa, WORD0);
     strarray_append(&sa, WORD4);
-    CU_ASSERT_EQUAL(sa.count, 6);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 6);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
@@ -1084,8 +1084,8 @@ static void test_dup(void)
 #define WORD3	"sit"
 #define WORD4	"amet"
 
-    CU_ASSERT_EQUAL(sa.count, 0);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 0);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
 
     /* dup an empty array */
     dup = strarray_dup(&sa);
@@ -1102,8 +1102,8 @@ static void test_dup(void)
     strarray_append(&sa, WORD3);
     strarray_append(&sa, WORD0);
     strarray_append(&sa, WORD4);
-    CU_ASSERT_EQUAL(sa.count, 6);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 6);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
@@ -1149,13 +1149,13 @@ static void test_remove_all(void)
 #define WORD3	"sit"
 #define WORD4	"amet"
 
-    CU_ASSERT_EQUAL(sa.count, 0);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 0);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
 
     /* removing from an empty array */
     strarray_remove_all(&sa, WORD0);
-    CU_ASSERT_EQUAL(sa.count, 0);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 0);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
 
     /* removing a single item from a non-empty array */
     strarray_append(&sa, WORD0);
@@ -1164,8 +1164,8 @@ static void test_remove_all(void)
     strarray_append(&sa, WORD3);
     strarray_append(&sa, WORD0);
     strarray_append(&sa, WORD4);
-    CU_ASSERT_EQUAL(sa.count, 6);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 6);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
@@ -1175,8 +1175,8 @@ static void test_remove_all(void)
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 5), WORD4);
 
     strarray_remove_all(&sa, WORD1);
-    CU_ASSERT_EQUAL(sa.count, 5);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 5);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD2);
@@ -1186,8 +1186,8 @@ static void test_remove_all(void)
 
     /* removing an item that appears more than once */
     strarray_remove_all(&sa, WORD0);
-    CU_ASSERT_EQUAL(sa.count, 3);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 3);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD2);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD3);
@@ -1211,14 +1211,14 @@ static void test_pop(void)
 #define WORD3	"sit"
 #define WORD4	"amet"
 
-    CU_ASSERT_EQUAL(sa.count, 0);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 0);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
 
     /* pop from an empty array */
     s = strarray_pop(&sa);
     CU_ASSERT_PTR_NULL(s);
-    CU_ASSERT_EQUAL(sa.count, 0);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 0);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
 
     /* popping items from a non-empty array */
     strarray_append(&sa, WORD0);
@@ -1227,8 +1227,8 @@ static void test_pop(void)
     strarray_append(&sa, WORD3);
     strarray_append(&sa, WORD0);
     strarray_append(&sa, WORD4);
-    CU_ASSERT_EQUAL(sa.count, 6);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 6);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
@@ -1239,8 +1239,8 @@ static void test_pop(void)
 
     s = strarray_pop(&sa);
     CU_ASSERT_PTR_NOT_NULL(s);
-    CU_ASSERT_EQUAL(sa.count, 5);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 5);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 2), WORD2);
@@ -1251,8 +1251,8 @@ static void test_pop(void)
 
     s = strarray_pop(&sa);
     CU_ASSERT_PTR_NOT_NULL(s);
-    CU_ASSERT_EQUAL(sa.count, 4);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 4);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 2), WORD2);
@@ -1262,8 +1262,8 @@ static void test_pop(void)
 
     s = strarray_pop(&sa);
     CU_ASSERT_PTR_NOT_NULL(s);
-    CU_ASSERT_EQUAL(sa.count, 3);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 3);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 2), WORD2);
@@ -1272,8 +1272,8 @@ static void test_pop(void)
 
     s = strarray_pop(&sa);
     CU_ASSERT_PTR_NOT_NULL(s);
-    CU_ASSERT_EQUAL(sa.count, 2);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 2);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
     CU_ASSERT_STRING_EQUAL(s, WORD2);
@@ -1281,23 +1281,23 @@ static void test_pop(void)
 
     s = strarray_pop(&sa);
     CU_ASSERT_PTR_NOT_NULL(s);
-    CU_ASSERT_EQUAL(sa.count, 1);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 1);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
     CU_ASSERT_STRING_EQUAL(s, WORD1);
     free(s);
 
     s = strarray_pop(&sa);
     CU_ASSERT_PTR_NOT_NULL(s);
-    CU_ASSERT_EQUAL(sa.count, 0);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 0);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_STRING_EQUAL(s, WORD0);
     free(s);
 
     s = strarray_pop(&sa);
     CU_ASSERT_PTR_NULL(s);
-    CU_ASSERT_EQUAL(sa.count, 0);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 0);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
 
     strarray_fini(&sa);
 #undef WORD0
@@ -1316,7 +1316,7 @@ static void test_sortuniq(void)
 #define WORD3	"INBOX.a.aaa"
 
     /* initialise */
-    CU_ASSERT_EQUAL(sa.count, 0);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 0);
     strarray_append(&sa, WORD0);
     strarray_append(&sa, WORD1);
     strarray_append(&sa, WORD2);
@@ -1326,7 +1326,7 @@ static void test_sortuniq(void)
     strarray_append(&sa, WORD2);
     strarray_append(&sa, WORD1);
 
-    CU_ASSERT_EQUAL(sa.count, 7);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 7);
 
     /* normal sort */
     strarray_sort(&sa, cmpstringp_raw);
@@ -1351,7 +1351,7 @@ static void test_sortuniq(void)
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 6), WORD1);
 
     strarray_uniq(&sa);
-    CU_ASSERT_EQUAL(sa.count, 4);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 4);
 
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD3);
@@ -1371,38 +1371,38 @@ static void test_add(void)
 #define WORD0u	"LOREM"
 #define WORD1	"ipsum"
 
-    CU_ASSERT_EQUAL(sa.count, 0);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 0);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, 0));
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, -1));
 
     /* _add() on an empty array appends */
     strarray_add(&sa, WORD0);
-    CU_ASSERT_EQUAL(sa.count, 1);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 1);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
 
     /* _add() of an item already present is a no-op */
     strarray_add(&sa, WORD0);
-    CU_ASSERT_EQUAL(sa.count, 1);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 1);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
 
     /* _add() of an item not already present (but whose case
      * analogue is present) appends */
     strarray_add(&sa, WORD0u);
-    CU_ASSERT_EQUAL(sa.count, 2);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 2);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD0u);
 
     /* _add() of an item not already present appends */
     strarray_add(&sa, WORD1);
-    CU_ASSERT_EQUAL(sa.count, 3);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 3);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD0u);
@@ -1410,24 +1410,24 @@ static void test_add(void)
 
     /* _add() of an item already present is a no-op */
     strarray_add(&sa, WORD0);
-    CU_ASSERT_EQUAL(sa.count, 3);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 3);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD0u);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 2), WORD1);
 
     strarray_add(&sa, WORD0u);
-    CU_ASSERT_EQUAL(sa.count, 3);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 3);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD0u);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 2), WORD1);
 
     strarray_add(&sa, WORD1);
-    CU_ASSERT_EQUAL(sa.count, 3);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 3);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD0u);
@@ -1446,59 +1446,59 @@ static void test_add_case(void)
 #define WORD0u	"LOREM"
 #define WORD1	"ipsum"
 
-    CU_ASSERT_EQUAL(sa.count, 0);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 0);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, 0));
     CU_ASSERT_PTR_NULL(strarray_nth(&sa, -1));
 
     /* _add_case() on an empty array appends */
     strarray_add_case(&sa, WORD0);
-    CU_ASSERT_EQUAL(sa.count, 1);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 1);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
 
     /* _add_case() of an item already present is a no-op */
     strarray_add_case(&sa, WORD0);
-    CU_ASSERT_EQUAL(sa.count, 1);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 1);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
 
     /* _add_case() of an item not already present (but whose case
      * analogue is present) is a no-op */
     strarray_add_case(&sa, WORD0u);
-    CU_ASSERT_EQUAL(sa.count, 1);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 1);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
 
     /* _add_case() of an item not already present appends */
     strarray_add_case(&sa, WORD1);
-    CU_ASSERT_EQUAL(sa.count, 2);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 2);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
 
     /* _add_case() of an item already present is a no-op */
     strarray_add_case(&sa, WORD0);
-    CU_ASSERT_EQUAL(sa.count, 2);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 2);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
 
     strarray_add_case(&sa, WORD0u);
-    CU_ASSERT_EQUAL(sa.count, 2);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 2);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
 
     strarray_add_case(&sa, WORD1);
-    CU_ASSERT_EQUAL(sa.count, 2);
-    CU_ASSERT(sa.alloc >= sa.count);
+    CU_ASSERT_EQUAL(strarray_size(&sa), 2);
+    CU_ASSERT(sa.alloc >= strarray_size(&sa));
     CU_ASSERT_PTR_NOT_NULL(sa.data);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 0), WORD0);
     CU_ASSERT_STRING_EQUAL(strarray_nth(&sa, 1), WORD1);
