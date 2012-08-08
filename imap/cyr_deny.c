@@ -69,7 +69,16 @@ static void usage(void)
 {
     fprintf(stderr, "Usage: cyr_deny [-C <altconfig>] [ -s services ] [ -m message ] user\n");
     fprintf(stderr, "       cyr_deny [-C <altconfig>] -a user\n");
+    fprintf(stderr, "       cyr_deny [-C <altconfig>] -l\n");
     exit(EC_USAGE);
+}
+
+static int list_one(const char *user, const char *services,
+		    const char *message,
+		    void *rock __attribute__((unused)))
+{
+    printf("%-30s %-20s %s\n", user, services, message);
+    return 0;
 }
 
 struct kill_rock
@@ -167,7 +176,7 @@ static void kill_existing_services(const char *user)
 int main(int argc, char **argv)
 {
     int opt;
-    int allow_flag = 0;
+    enum { DENY, ALLOW, LIST } mode = DENY;
     const char *alt_config = NULL;
     const char *user = NULL;
     const char *message = NULL;
@@ -178,14 +187,20 @@ int main(int argc, char **argv)
 	fatal("must run as the Cyrus user", EC_USAGE);
     }
 
-    while ((opt = getopt(argc, argv, "C:am:s:")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:alm:s:")) != EOF) {
 	switch (opt) {
 	case 'C': /* alt config file */
 	    alt_config = optarg;
 	    break;
 
 	case 'a':
-	    allow_flag = 1;
+	    if (mode != DENY) usage();
+	    mode = ALLOW;
+	    break;
+
+	case 'l':
+	    if (mode != DENY) usage();
+	    mode = LIST;
 	    break;
 
 	case 'm':
@@ -201,19 +216,26 @@ int main(int argc, char **argv)
 	    break;
 	}
     }
-    if (allow_flag && (message || services))
+    if (mode != DENY && (message || services))
 	usage();
-    if (optind != argc-1)
-	usage();
-    user = argv[optind];
+
+    if (mode == LIST) {
+	if (optind != argc)
+	    usage();
+    }
+    else {
+	if (optind != argc-1)
+	    usage();
+	user = argv[optind];
+    }
 
     cyrus_init(alt_config, "cyr_deny", 0, 0);
 
     denydb_init(0);
 
-    r = denydb_open(/*create*/!allow_flag);
+    r = denydb_open(/*create*/(mode == DENY));
     if (r) {
-	if (allow_flag && r == IMAP_NOTFOUND)
+	if (mode != DENY && r == IMAP_NOTFOUND)
 	    r = 0;
 	else
 	    fprintf(stderr, "cyr_deny: failed to open deny db: %s\n",
@@ -221,19 +243,28 @@ int main(int argc, char **argv)
 	goto out;
     }
 
-    if (allow_flag) {
+    switch (mode) {
+    case ALLOW:
 	r = denydb_delete(user);
 	if (r)
 	    fprintf(stderr, "cyr_deny: failed to allow access for %s: %s\n",
 		    user, error_message(r));
-    }
-    else {
+	break;
+    case DENY:
 	r = denydb_set(user, services, message);
 	if (r)
 	    fprintf(stderr, "cyr_deny: failed to deny access for %s: %s\n",
 		    user, error_message(r));
 	else
 	    kill_existing_services(user);
+	break;
+    case LIST:
+	printf("%-30s %-20s %s\n", "Username", "Service(s)", "Message");
+	r = denydb_foreach(list_one, NULL);
+	if (r)
+	    fprintf(stderr, "cyr_deny: failed to list entries: %s\n",
+		    error_message(r));
+	break;
     }
 
     denydb_close();

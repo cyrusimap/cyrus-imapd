@@ -61,25 +61,36 @@ cyr_deny \- deny users access to Cyrus services
 ]
 .B -a
 .I user
+.br
+.B cyr_deny
+[
+.B \-C
+.I config-file
+]
+.B -l
 .SH DESCRIPTION
 .I cyr_deny
 is used to deny individual users access to Cyrus services.  The first
 synopsis denies user \fIuser\fP access to Cyrus services, the second
 synopsis allows access again.  \fBcyr_deny\fP works by adding an entry to
-the Cyrus \fIdeny\fP database.
+the Cyrus deny database; the third synopsis lists the entries in
+the database.
 .SH OPTIONS
 .TP
 .BI \-C " config-file"
 Read configuration options from \fIconfig-file\fR.
 .TP
 .B \-a
-Allow access to all services (remove any entry from the \fIdeny\fP
-database).
+Allow access to all services for user \fIuser\fP (remove any entry
+from the deny database).
 .TP
 .BI \-s " services"
 Deny access only to the given \fIservices\fP, which is a comma-separated
 list of wildcard patterns.  The default is "*" which denies access to
 all services.
+.TP
+.B \-l
+List the entries in the deny database.
 .TP
 .BI \-m " message"
 Provide a message which is sent to the user to explain why access is
