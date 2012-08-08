@@ -382,6 +382,19 @@ test_gen_iso8601(void)
     CU_ASSERT_STRING_EQUAL(buf, DATETIME_UTC);
 }
 
+static void
+test_gen_iso8601_secfrac(void)
+{
+    static const char DATETIME_STR[] = "2010-11-26T14:22:02.123+11:00";
+    static const struct timeval TIMEVAL = { 1290741722, 123456 };
+    char buf[33];
+    int r;
+    
+    r = timeval_to_iso8601(&TIMEVAL, timeval_ms, buf, sizeof(buf));
+    CU_ASSERT_EQUAL(r, strlen(DATETIME_STR));
+    CU_ASSERT_STRING_EQUAL(buf, DATETIME_STR);
+}
+
 /* Test that the 29 Feb works in some actual leap years,
  * and not in some not-leap years */
 static void

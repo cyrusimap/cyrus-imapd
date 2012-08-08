@@ -396,6 +396,7 @@ EXPORTED int time_from_iso8601(const char *s, time_t *tp)
     int n, tm_off;
 
     /* parse the ISO 8601 date/time */
+    /* XXX should use strptime ? */
     memset(&exp, 0, sizeof(struct tm));
     n = sscanf(s, "%4d-%2d-%2dT%2d:%2d:%2d", 
 	       &exp.tm_year, &exp.tm_mon, &exp.tm_mday,
@@ -442,19 +443,72 @@ EXPORTED int time_from_iso8601(const char *s, time_t *tp)
     return s - origs;
 }
 
+static int breakdown_time_to_iso8601(const struct timeval *t, struct tm *tm,
+                                     enum timeval_precision tv_precision,
+                                     char *buf, size_t len)
+{
+    long gmtoff = gmtoff_of(tm, t->tv_sec);
+    int gmtnegative = 0;
+    size_t rlen;
+
+    /*assert(date > 0); - it turns out these can happen, annoyingly enough */
+    assert(tm->tm_year >= 69);
+
+    if (gmtoff < 0) {
+	gmtoff = -gmtoff;
+	gmtnegative = 1;
+    }
+    gmtoff /= 60;
+
+    rlen = strftime(buf, len, "%Y-%m-%dT%H:%M:%S", tm);
+    if (rlen > 0) {
+	switch(tv_precision) {
+	case timeval_ms:
+	    rlen += snprintf(buf+rlen, len-rlen, ".%.3lu", t->tv_usec/1000);
+	    break;
+	case timeval_us:
+	    rlen += snprintf(buf+rlen, len-rlen, ".%.6lu", t->tv_usec);
+	    break;
+	case timeval_s:
+	    break;
+	}
+
+	/* UTC can be written "Z" or "+00:00" */
+	if ((gmtoff/60 == gmtoff%60) && (gmtoff/60 == 0))
+	    rlen += snprintf(buf+rlen, len-rlen, "Z");
+	else
+	    rlen += snprintf(buf+rlen, len-rlen, "%c%.2lu:%.2lu",
+	                     gmtnegative ? '-' : '+', gmtoff/60, gmtoff%60);
+    }
+
+    return rlen;
+}
+
 /*
- * Generate an RFC 3339 = ISO 8601 format date-time string
- * in Zulu (UTC).  The format supports an encoded offset,
- * but we don't generate that here.
+ * Generate an RFC 3339 = ISO 8601 format date-time string in Zulu (UTC).
  *
  * Returns: number of characters in @buf generated, or -1 on error.
  */
 EXPORTED int time_to_iso8601(time_t t, char *buf, size_t len)
 {
-    struct tm *exp = (struct tm *) gmtime(&t);
-    return strftime(buf, len, "%Y-%m-%dT%H:%M:%SZ", exp);
+    struct tm *tm = (struct tm *) gmtime(&t);
+    struct timeval tv = { t, 0 };
+
+    return breakdown_time_to_iso8601(&tv, tm, timeval_s, buf, len);
 }
 
+/*
+ * Generate an RFC 3339 = ISO 8601 format date-time string in local time with
+ * offset from UTC and fractions of second.
+ *
+ * Returns: number of characters in @buf generated, or -1 on error.
+ */
+EXPORTED int timeval_to_iso8601(const struct timeval *tv, enum timeval_precision tv_prec,
+                       char *buf, size_t len)
+{
+    struct tm *tm = localtime(&(tv->tv_sec));
+    return breakdown_time_to_iso8601(tv, tm, tv_prec, buf, len);
+}
 
 /*
  * Convert a time_t date to an IMAP-style date

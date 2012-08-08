@@ -44,9 +44,14 @@
 #define __CYRUS__TIME_H__
 
 #include <time.h>
+#include <sys/time.h>
 
 /* Factor for converting days to seconds. */
 #define DAY2SEC (24 * 60 * 60)
+
+/* Default precision to print timeval is millisecond (timeval_ms)
+ * change to timeval_us in times.c to print microsecond. */
+enum timeval_precision { timeval_s, timeval_ms, timeval_us };
 
 /*
  * RFC822 datetime format
@@ -64,6 +69,8 @@ int time_to_rfc822(time_t t, char *buf, size_t len);
  */
 int time_from_iso8601(const char *s, time_t *);
 int time_to_iso8601(time_t t, char *buf, size_t len);
+int timeval_to_iso8601(const struct timeval *t, enum timeval_precision tv_prec,
+                       char *buf, size_t len);
 
 /*
  * RFC3501 datetime format
