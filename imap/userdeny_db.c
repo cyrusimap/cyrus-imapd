@@ -69,8 +69,6 @@
 
 static struct db *denydb;
 
-static int deny_dbopen = 0;
-
 static const char default_message[] = "Access to this service has been blocked";
 
 /*
@@ -83,8 +81,8 @@ EXPORTED int userdeny(const char *user, const char *service, char *msgbuf, size_
     const char *data = NULL;
     size_t datalen;
 
-    if (!deny_dbopen) denydb_open(/*create*/0);
-    if (!deny_dbopen) return 0;
+    if (!denydb) denydb_open(/*create*/0);
+    if (!denydb) return 0;
 
     /* fetch entry for user */
     syslog(LOG_DEBUG, "fetching user_deny.db entry for '%s'", user);
@@ -183,7 +181,7 @@ EXPORTED int denydb_set(const char *user, const char *service, const char *msg)
     struct buf data = BUF_INITIALIZER;
     int r = 0;
 
-    if (!deny_dbopen) {
+    if (!denydb) {
 	r = IMAP_INTERNAL;
 	goto out;
     }
@@ -236,7 +234,7 @@ EXPORTED int denydb_delete(const char *user)
     struct txn *txn = NULL;
     int r = 0;
 
-    if (!deny_dbopen) return 0;
+    if (!denydb) return 0;
 
     if (!user) return r;
 
@@ -288,13 +286,11 @@ EXPORTED int denydb_open(int create)
     }
 
     ret = cyrusdb_open(DENYDB, fname, (create ? CYRUSDB_CREATE : 0), &denydb);
-    if (ret == CYRUSDB_OK) {
-	deny_dbopen = 1;
-    } else if (ret == CYRUSDB_NOTFOUND) {
+    if (ret == CYRUSDB_NOTFOUND) {
 	/* ignore non-existent DB, report all other errors */
 	ret = ENOENT;
     }
-    else {
+    else if (ret != CYRUSDB_OK) {
 	syslog(LOG_WARNING, "DENYDB_ERROR: opening %s: %s", fname,
 	       cyrusdb_strerror(ret));
 	ret = IMAP_IOERROR;
@@ -308,13 +304,13 @@ EXPORTED void denydb_close(void)
 {
     int r;
 
-    if (deny_dbopen) {
+    if (denydb) {
 	r = cyrusdb_close(denydb);
 	if (r) {
 	    syslog(LOG_ERR, "DENYDB_ERROR: error closing: %s",
 		   cyrusdb_strerror(r));
 	}
-	deny_dbopen = 0;
+	denydb = NULL;
     }
 }
 
