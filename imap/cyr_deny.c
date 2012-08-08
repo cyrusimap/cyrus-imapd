@@ -211,7 +211,7 @@ int main(int argc, char **argv)
 
     denydb_init(0);
 
-    r = denydb_openw(/*create*/!allow_flag);
+    r = denydb_open(/*create*/!allow_flag);
     if (r) {
 	if (allow_flag && r == IMAP_NOTFOUND)
 	    r = 0;

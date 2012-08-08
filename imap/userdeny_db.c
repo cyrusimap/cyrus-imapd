@@ -67,8 +67,6 @@
 
 #define DENYDB config_userdeny_db
 
-static int do_open(int create);
-
 static struct db *denydb;
 
 static int deny_dbopen = 0;
@@ -85,7 +83,7 @@ EXPORTED int userdeny(const char *user, const char *service, char *msgbuf, size_
     const char *data = NULL;
     size_t datalen;
 
-    if (!deny_dbopen) do_open(/*create*/0);
+    if (!deny_dbopen) denydb_open(/*create*/0);
     if (!deny_dbopen) return 0;
 
     /* fetch entry for user */
@@ -270,7 +268,12 @@ EXPORTED void denydb_init(int myflags)
     }
 }
 
-static int do_open(int create)
+/*
+ * Open the user deny database.  If 'create' is true and the database
+ * does not exist, create it.  Returns 0 on success or an IMAP error
+ * code.
+ */
+EXPORTED int denydb_open(int create)
 {
     const char *fname;
     int ret;
@@ -299,16 +302,6 @@ static int do_open(int create)
 
     free(tofree);
     return ret;
-}
-
-EXPORTED void denydb_open(void)
-{
-    do_open(/*create*/0);
-}
-
-EXPORTED int denydb_openw(int create)
-{
-    return do_open(create);
 }
 
 EXPORTED void denydb_close(void)

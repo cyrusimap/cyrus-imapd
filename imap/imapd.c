@@ -826,7 +826,7 @@ int service_init(int argc, char **argv, char **envp)
 
     /* open the user deny db */
     denydb_init(0);
-    denydb_open();
+    denydb_open(0);
 
     /* setup for sending IMAP IDLE notifications */
     idle_init();
