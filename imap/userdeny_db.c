@@ -123,17 +123,18 @@ EXPORTED int userdeny(const char *user, const char *service, char *msgbuf, size_
 	    syslog(LOG_WARNING,
 		   "DENYDB_ERROR: missing wildmat for entry '%s'", user);
 	} else {
-	    char *pat, *msg = NULL;
+	    const char *msg = default_message;
+	    char *pat;
 	    int not;
 
 	    /* check if we have a deny message */
-	    switch (version) {
-	    case USERDENY_VERSION:
-		if ((msg = strchr(wild, '\t'))) *msg++ = '\0';
-		break;
+	    if (version == USERDENY_VERSION) {
+		char *p = strchr(wild, '\t');
+		if (p) {
+		    *p++;
+		    msg = p;
+		}
 	    }
-	    if (!msg)
-		msg = (char *)default_message;
 
 	    /* scan wildmat right to left for a match against our service */
 	    syslog(LOG_DEBUG, "wild: '%s'   service: '%s'", wild, service);
