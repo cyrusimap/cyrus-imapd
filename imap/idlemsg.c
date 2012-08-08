@@ -50,12 +50,14 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <syslog.h>
+#include <errno.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
 #include <signal.h>
 #include <string.h>
 
+#include "imap/imap_err.h"
 #include "assert.h"
 #include "xstrlcpy.h"
 #include "xstrlcat.h"
@@ -159,23 +161,22 @@ EXPORTED int idle_get_sock(void)
 }
 
 /*
- * Send a message to idled
+ * Send a message to a peer (idled or imapd).
+ * Returns 0 on success or an IMAP error code on failure.
  */
 EXPORTED int idle_send(const struct sockaddr_un *remote,
-	      const idle_message_t *msg)
+		       const idle_message_t *msg)
 {
     if (idle_sock < 0)
-	return 0;
+	return IMAP_SERVER_UNAVAILABLE;
 
     if (sendto(idle_sock, (void *) msg,
 	       IDLE_MESSAGE_BASE_SIZE+strlen(msg->mboxname)+1, /* 1 for NULL */
 	       0, (struct sockaddr *) remote, sizeof(*remote)) == -1) {
-	syslog(LOG_ERR, "IDLE: error sending message: %s (%s)",
-	       idle_msg_string(msg->which), msg->mboxname);
-	return 0;
+	return errno;
     }
 
-    return 1;
+    return 0;
 }
 
 EXPORTED int idle_recv(struct sockaddr_un *remote, idle_message_t *msg)
@@ -192,41 +193,17 @@ EXPORTED int idle_recv(struct sockaddr_un *remote, idle_message_t *msg)
     n = recvfrom(idle_sock, (void *) msg, sizeof(idle_message_t), 0,
 		 (struct sockaddr *) remote, &remote_len);
 
-    if (n < 0)
+    if (n < 0) {
+	syslog(LOG_ERR, "IDLE: recvfrom failed: %m");
 	return 0;
+    }
 
     if (n <= IDLE_MESSAGE_BASE_SIZE ||
 	msg->mboxname[n - 1 - IDLE_MESSAGE_BASE_SIZE] != '\0') {
-	syslog(LOG_ERR, "IDLE: invalid message received: size=%d, type=%s\n",
-	       n, idle_msg_string(msg->which));
+	syslog(LOG_ERR, "IDLE: invalid message received: size=%d", n);
 	return 0;
     }
 
     return 1;
-}
-
-const char *idle_msg_string(unsigned long which)
-{
-    const char *msg = "unknown";
-
-    switch(which) {
-    case IDLE_MSG_INIT:
-	msg = "init";
-	break;
-    case IDLE_MSG_DONE:
-	msg = "done";
-	break;
-    case IDLE_MSG_NOTIFY:
-	msg = "notify";
-	break;
-    case IDLE_MSG_NOOP:
-	msg = "noop";
-	break;
-    case IDLE_MSG_ALERT:
-	msg = "alert";
-	break;
-    }
-
-    return msg;
 }
 

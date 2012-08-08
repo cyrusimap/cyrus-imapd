@@ -49,7 +49,6 @@
 #include <syslog.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <syslog.h>
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -67,16 +66,15 @@ HIDDEN const char *idle_method_desc = "no";
 /* link to idled */
 static struct sockaddr_un idle_remote;
 
-/* track idle state */
+/* true if we've successfully told the idled
+ * that we want to be notified of changes */
 static int idle_started;
 
+/* Send the message 'which' about the mailbox 'mboxname' to the idled.
+ * Returns 0 on success or an IMAP error code on failure */
 static int idle_send_msg(int which, const char *mboxname)
 {
     idle_message_t msg;
-
-    /* do we have a local socket? */
-    if (!idle_get_sock())
-	return 0;
 
     /* maybe the idled came along, so we always send anyway, because
      * polled idle is too awful to contemplate */
@@ -94,10 +92,17 @@ static int idle_send_msg(int which, const char *mboxname)
  */
 static void idle_notify(const char *mboxname)
 {
+    int r;
+
     /* We should try to determine if we need to send this
      * (ie, is an imapd is IDLE on 'mailbox'?).
      */
-    idle_send_msg(IDLE_MSG_NOTIFY, mboxname);
+    r = idle_send_msg(IDLE_MSG_NOTIFY, mboxname);
+    if (r) {
+	syslog(LOG_ERR, "IDLE: error sending message "
+			"NOTIFY to idled for mailbox %s: %s.",
+			mboxname, error_message(r));
+    }
 }
 
 /*
@@ -146,12 +151,23 @@ EXPORTED int idle_enabled(void)
 
 EXPORTED void idle_start(const char *mboxname)
 {
+    int r;
+
     if (!idle_enabled()) return;
 
     /* Tell idled that we're idling.  It doesn't
      * matter if it fails, we'll still poll */
-    if (idle_send_msg(IDLE_MSG_INIT, mboxname))
-	idle_started = 1;
+    r = idle_send_msg(IDLE_MSG_INIT, mboxname);
+    if (r) {
+	int idle_timeout = config_getint(IMAPOPT_IMAPIDLEPOLL);
+	syslog(LOG_ERR, "IDLE: error sending message "
+			"INIT to idled for mailbox %s: %s. "
+			"Falling back to polling every %d seconds.",
+			mboxname, error_message(r), idle_timeout);
+	return;
+    }
+
+    idle_started = 1;
 }
 
 EXPORTED int idle_wait(int otherfd)
@@ -166,12 +182,10 @@ EXPORTED int idle_wait(int otherfd)
 
     if (!idle_enabled()) return;
 
-    /* we still listen on the socket, because we might get ALERTs,
-     * but we won't get mailbox notifications */
-    if (!idle_started) {
-	/* XXX - shorter poll interval? */
-	syslog(LOG_NOTICE, "IDLE: poll fallback - %d seconds", idle_timeout);
-    }
+    /* If idled was not contacted, we still listen on the socket,
+     * because we might get ALERTs, but we won't get mailbox
+     * notifications.  The poll timeout controls how quickly
+     * we will notice new mail arriving. */
 
     FD_ZERO(&rfds);
     s = idle_get_sock();
@@ -201,7 +215,7 @@ EXPORTED int idle_wait(int otherfd)
 		signals_poll();
 		continue;
 	    }
-	    syslog(LOG_ERR, "select: %m");
+	    syslog(LOG_ERR, "IDLE: select failed: %m");
 	    return 0;
 	}
 	if (r == 0) {
@@ -232,10 +246,17 @@ EXPORTED int idle_wait(int otherfd)
 
 EXPORTED void idle_stop(const char *mboxname)
 {
+    int r;
+
     if (!idle_started) return;
 
     /* Tell idled that we're done idling */
-    idle_send_msg(IDLE_MSG_DONE, mboxname);
+    r = idle_send_msg(IDLE_MSG_DONE, mboxname);
+    if (r) {
+	syslog(LOG_ERR, "IDLE: error sending message "
+			"DONE to idled for mailbox %s: %s.",
+			mboxname, error_message(r));
+    }
 
     idle_started = 0;
 }
