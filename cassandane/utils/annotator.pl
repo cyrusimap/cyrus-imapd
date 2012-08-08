@@ -44,6 +44,7 @@ use warnings;
 package Cassandane::AnnotatorDaemon;
 use base qw(Cyrus::Annotator::Daemon);
 use Cassandane::Util::Log;
+use Getopt::Long qw(:config no_ignore_case bundling);
 use POSIX;
 
 set_verbose(1) if $ENV{CASSANDANE_VERBOSE};
@@ -124,12 +125,19 @@ sub annotate_message
     }
 }
 
+my $pidfile = "$ENV{CASSANDANE_BASEDIR}/conf/socket/annotator.pid";
+my $port = "$ENV{CASSANDANE_BASEDIR}/conf/socket/annotator.sock|unix";
+GetOptions(
+    'pidfile|P=s' => \$pidfile,
+    'port|p=s' => \$port,
+) || die "Bad arguments";
+
 # suck ARGV dry to prevent Net::Daemon getting its hands on it
 @ARGV = ();
 
 xlog "annotator $$ starting";
 Cassandane::AnnotatorDaemon->run(
-	pid_file => "$ENV{CASSANDANE_BASEDIR}/conf/socket/annotator.pid",
-	port => "$ENV{CASSANDANE_BASEDIR}/conf/socket/annotator.sock|unix",
+	pid_file => $pidfile,
+	port => $port
     );
 xlog "annotator $$ exiting";

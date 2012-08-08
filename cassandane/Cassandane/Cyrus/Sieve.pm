@@ -217,7 +217,7 @@ sub compile_timsieved
 	    "$bindir/installsieve",
 	    "-i", "$basedir/$name.script",
 	    "-u", "cassandane",
-	    "$srv->{host}:$srv->{port}");
+	    $srv->host() . ":" . $srv->port());
 
     # Read the errors file in @errors
     my (@errors) = read_errors("$basedir/$name.errors");

@@ -56,6 +56,7 @@ use Cassandane::Util::Wait;
 use Cassandane::Config;
 use Cassandane::Service;
 use Cassandane::ServiceFactory;
+use Cassandane::Daemon;
 use Cassandane::MasterStart;
 use Cassandane::MasterEvent;
 use Cassandane::Cassini;
@@ -81,6 +82,7 @@ sub new
 	starts => [],
 	services => {},
 	events => [],
+	daemons => {},
 	re_use_dir => 0,
 	setup_mailbox => 1,
 	persistent => 0,
@@ -236,7 +238,7 @@ sub add_service
 
     my $srv = Cassandane::ServiceFactory->create(%params);
     $self->{services}->{$name} = $srv;
-    $srv->{config} = $self->{config};
+    $srv->set_config($self->{config});
     return $srv;
 }
 
@@ -264,12 +266,32 @@ sub add_event
     push(@{$self->{events}}, Cassandane::MasterEvent->new(%params));
 }
 
+sub add_daemon
+{
+    my ($self, %params) = @_;
+
+    my $name = delete $params{name};
+    die "Missing parameter 'name'"
+	unless defined $name;
+    die "Already have a daemon named \"$name\""
+	if defined $self->{daemons}->{$name};
+
+    my $daemon = Cassandane::Daemon->new(
+	    name => $name,
+	    config => $self->{config},
+	    %params
+    );
+
+    $self->{daemons}->{$name} = $daemon;
+    return $daemon;
+}
+
 sub set_config
 {
     my ($self, $conf) = @_;
 
     $self->{config} = $conf;
-    map { $_->{config} = $conf; } (values %{$self->{services}});
+    map { $_->set_config($conf); } (values %{$self->{services}}, values %{$self->{daemons}});
 }
 
 sub _binary
@@ -331,9 +353,34 @@ sub _master_conf
 
 sub _pid_file
 {
+    my ($self, $name) = @_;
+
+    $name ||= 'master';
+
+    return $self->{basedir} . "/run/$name.pid";
+}
+
+sub _list_pid_files
+{
     my ($self) = @_;
 
-    return $self->{basedir} . '/run/cyrus.pid';
+    my $rundir = $self->{basedir} . "/run";
+    opendir(RUNDIR, $rundir)
+	or die "Cannot open run directory $rundir: $!";
+
+    my @pidfiles;
+    while ($_ = readdir(RUNDIR))
+    {
+	my ($name) = m/^([^.].*)\.pid$/;
+	push(@pidfiles, $name) if defined $name;
+    }
+
+    closedir(RUNDIR);
+
+    @pidfiles = sort { $a cmp $b } @pidfiles;
+    @pidfiles = ( 'master', grep { $_ ne 'master' } @pidfiles );
+
+    return @pidfiles;
 }
 
 sub _build_skeleton
@@ -436,6 +483,8 @@ sub _generate_master_conf
 	print MASTER "}\n";
     }
 
+    # $self->{daemons} is daemons *not* managed by master
+
     close MASTER;
 }
 
@@ -454,7 +503,8 @@ sub _fix_ownership
 
 sub _read_pid_file
 {
-    my ($self, $file) = @_;
+    my ($self, $name) = @_;
+    my $file = $self->_pid_file($name);
     my $pid;
 
     return undef if ( ! -f $file );
@@ -485,7 +535,7 @@ sub _start_master
     # earlier.  Or it might indicate that someone is trying to run
     # a second set of Cassandane tests on this machine, which is
     # also going to fail miserably.  In any case we want to know.
-    foreach my $srv (values %{$self->{services}})
+    foreach my $srv (values %{$self->{services}}, values %{$self->{daemons}})
     {
 	die "Some process is already listening on " . $srv->address()
 	    if $srv->is_listening();
@@ -514,16 +564,22 @@ sub _start_master
     # wait until the pidfile exists and contains a PID
     # that we can verify is still alive.
     xlog "_start_master: waiting for PID file";
-    timed_wait(sub { $self->_read_pid_file($self->_pid_file()) },
+    timed_wait(sub { $self->_read_pid_file() },
 	        description => "the master PID file to exist");
     xlog "_start_master: PID file present and correct";
+
+    # Start any other defined daemons
+    foreach my $daemon (values %{$self->{daemons}})
+    {
+	$self->run_command({ cyrus => 0 }, $daemon->get_argv());
+    }
 
     # Wait until all the defined services are reported as listening.
     # That doesn't mean they're ready to use but it means that at least
     # a client will be able to connect(), although the first response
     # might be a bit slow.
     xlog "_start_master: PID waiting for services";
-    foreach my $srv (values %{$self->{services}})
+    foreach my $srv (values %{$self->{services}}, values %{$self->{daemons}})
     {
 	timed_wait(sub
 		{
@@ -825,11 +881,12 @@ sub stop
 
     xlog "stop";
 
-    my $pid = $self->_read_pid_file($self->_pid_file());
-    if (defined $pid)
+    foreach my $name ($self->_list_pid_files())
     {
+	my $pid = $self->_read_pid_file($name);
+	next if (!defined $pid);
 	_stop_pid($pid)
-	    or die "Cannot shut down master pid $pid";
+	    or die "Cannot shut down $name pid $pid";
     }
     # Note: no need to reap this daemon which is not our child anymore
 
@@ -857,10 +914,11 @@ sub DESTROY
 	!$self->{persistent} &&
 	!$self->{_stopped})
     {
-	my $pid = $self->_read_pid_file($self->_pid_file());
-	if (defined $pid)
+	# clean up any dangling master and daemon process
+	foreach my $name ($self->_list_pid_files())
 	{
-	    # clean up any dangling master process
+	    my $pid = $self->_read_pid_file($name);
+	    next if (!defined $pid);
 	    _stop_pid($pid);
 	}
     }
@@ -870,7 +928,7 @@ sub is_running
 {
     my ($self) = @_;
 
-    my $pid = $self->_read_pid_file($self->_pid_file());
+    my $pid = $self->_read_pid_file();
     return 0 unless defined $pid;
     return kill(0, $pid);
 }
@@ -972,14 +1030,6 @@ sub stop_command
     my ($self, $pid) = @_;
     _stop_pid($pid);
     $self->reap_command($pid);
-}
-
-sub stop_command_pidfile
-{
-    my ($self, $pidfile) = @_;
-    my $pid = $self->_read_pid_file($pidfile);
-    $self->stop_command($pid)
-	if (defined $pid);
 }
 
 my %default_command_handlers = (
@@ -1202,6 +1252,12 @@ sub describe
     {
 	printf "        ";
 	$srv->describe();
+    }
+    printf "    daemons:\n";
+    foreach my $daemon (values %{$self->{daemons}})
+    {
+	printf "        ";
+	$daemon->describe();
     }
 }
 

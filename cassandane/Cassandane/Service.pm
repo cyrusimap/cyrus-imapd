@@ -43,6 +43,7 @@ package Cassandane::Service;
 use strict;
 use warnings;
 use base qw(Cassandane::MasterEntry);
+use Cassandane::Daemon;
 use Cassandane::Util::Log;
 use Cassandane::MessageStoreFactory;
 use Cassandane::PortManager;
@@ -60,17 +61,12 @@ sub new
 
     my $self = $class->SUPER::new(%params);
 
-    $self->{host} = $host;
-    $self->{port} = $port;
+    $self->{_daemon} = Cassandane::Daemon->new(name => $params{name},
+					       host => $host,
+					       port => $port);
     $self->{type} = $type;
 
     return $self;
-}
-
-sub DESTROY
-{
-    my ($self) = @_;
-    Cassandane::PortManager::free($self->{port});
 }
 
 sub _otherparams
@@ -79,27 +75,25 @@ sub _otherparams
     return ( qw(prefork maxchild maxforkrate maxfds proto babysit) );
 }
 
+sub set_config
+{
+    my ($self, $config) = @_;
+    $self->SUPER::set_config($config);
+    $self->{_daemon}->set_config($config);
+}
+
 # Return the host
 sub host
 {
     my ($self) = @_;
-    return $self->{host};
+    return $self->{_daemon}->host();
 }
 
 # Return the port
 sub port
 {
     my ($self) = @_;
-
-    if (defined $self->{port} &&
-	defined $self->{config})
-    {
-	# expand @basedir@ et al
-	$self->{port} = $self->{config}->substitute($self->{port});
-    }
-
-    $self->{port} ||= Cassandane::PortManager::alloc();
-    return $self->{port};
+    return $self->{_daemon}->port();
 }
 
 # Return a hash of parameters suitable for passing
@@ -108,14 +102,11 @@ sub store_params
 {
     my ($self, %params) = @_;
 
-    $params{type} ||= $self->{type};
-    $params{address_family} = $self->{address_family};
-    $params{host} = $self->host();
-    $params{port} = $self->port();
-    $params{username} ||= 'cassandane';
-    $params{password} ||= 'testpw';
-    $params{verbose} ||= get_verbose();
-    return \%params;
+    my $pp = $self->{_daemon}->connection_params(%params);
+    $pp->{type} ||= $self->{type};
+    $pp->{username} ||= 'cassandane';
+    $pp->{password} ||= 'testpw';
+    return $pp;
 }
 
 sub create_store
@@ -147,149 +138,25 @@ sub master_params
 sub address
 {
     my ($self) = @_;
-    my @parts;
-
-    my $port = $self->port();
-    if (defined $self->{host} && !($port =~ m/^\//))
-    {
-	# Cyrus uses the syntax '[ipv6address]:port' to specify
-	# an IPv6 address (which will contain the : character)
-	# as the host part.
-	push(@parts, '[') if ($self->{host} =~ m/:/);
-	push(@parts, $self->{host});
-	push(@parts, ']') if ($self->{host} =~ m/:/);
-	push(@parts, ':');
-    }
-    push(@parts, $port);
-    return join('', @parts);
+    return $self->{_daemon}->address();
 }
-
-my %netstat_match = (
-    #     # netstat -ln -Ainet
-    #     Active Internet connections (only servers)
-    #     Proto Recv-Q Send-Q Local Address           Foreign Address State
-    #     tcp        0      0 0.0.0.0:56686           0.0.0.0:* LISTEN
-    inet => sub
-    {
-	my ($self, $line) = @_;
-
-	my @a = split(/\s+/, $line);
-	return 0 unless scalar(@a) == 6;
-	return 0 unless $a[0] eq 'tcp';
-	return 0 unless $a[5] eq 'LISTEN';
-	my $host = $self->{host} || '0.0.0.0';
-	return 0 unless $a[3] eq "$host:$self->{port}";
-	return 1;
-    },
-
-    #  # netstat -ln -Ainet6
-    #  Active Internet connections (only servers)
-    #  Proto Recv-Q Send-Q Local Address           Foreign Address         State
-    #  tcp6       0      0 :::22                   :::*                    LISTEN
-    inet6 => sub
-    {
-	my ($self, $line) = @_;
-
-	my @a = split(/\s+/, $line);
-	return 0 unless scalar(@a) == 6;
-	return 0 unless ($a[0] eq 'tcp' || $a[0] eq 'tcp6');
-	return 0 unless $a[5] eq 'LISTEN';
-	# Note that we don't use $self->address() because it formats
-	# the address in Cyrus format which is different to what netstat
-	# reports, in the IPv6 case.
-	my $host = $self->{host} || '::';
-	return 0 unless $a[3] eq "$host:$self->{port}";
-	return 1;
-    },
-
-    #  # netstat -ln -Aunix
-    #  Active UNIX domain sockets (only servers)
-    #  Proto RefCnt Flags       Type       State         I-Node   Path
-    #  unix  2      [ ACC ]     STREAM     LISTENING     7941     /var/run/dbus/system_bus_socket
-    unix => sub
-    {
-	my ($self, $line) = @_;
-
-	# Compress the Flags field to eliminate spaces and make split()
-	# return a predictable number of fields.
-	$line =~ s/\[[^]]*\]/[]/;
-
-	my @a = split(/\s+/, $line);
-	return 0 unless scalar(@a) == 7;
-	return 0 unless $a[0] eq 'unix';
-	return 0 unless $a[4] eq 'LISTENING';
-	return 0 unless $a[6] eq $self->{port};
-	return 1;
-    },
-);
 
 sub address_family
 {
     my ($self) = @_;
-    my $h = $self->host();
-    my $p = $self->port();
-
-    # port being a UNIX domain socket is ok
-    return 'unix' if ($p =~ m/^\//);
-
-    # otherwise, the port has to be numeric
-    die "Sorry, the port \"$p\" must be a numeric TCP port or unix path"
-	unless ($p =~ m/^\d+$/);
-
-    # undefined host is ok = inet, IPADDR_ANY
-    return 'inet' if !defined $h;
-    # IPv4 address is ok
-    return 'inet' if ($h =~ m/^\d+\.\d+\.\d+\.\d+$/);
-    # full IPv6 address is ok
-    return 'inet6' if ($h =~ m/^([[:xdigit:]]{1,4}::?)+[[:xdigit:]]{1,4}$/);
-    # IPv6 forms xxxx::x and ::x are ok
-    return 'inet6' if ($h =~ m/^[[:xdigit:]]{4}::[[:xdigit:]]{1,4}$/);
-    return 'inet6' if ($h =~ m/^::[[:xdigit:]]{1,4}$/);
-    # others, not so much
-    die "Sorry, the host argument \"$h\" must be a numeric IPv4 or IPv6 address";
+    return $self->{_daemon}->address_family();
 }
 
 sub is_listening
 {
     my ($self) = @_;
-
-    my $af = $self->address_family();
-
-    my @cmd = (
-	'netstat',
-	'-l',		# listening ports only
-	'-n',		# numeric output
-	"-A$af",
-	);
-
-    my $matcher = $netstat_match{$af};
-    my $found;
-    open NETSTAT,'-|',@cmd
-	or die "Cannot run netstat to check for service: $!";
-
-    while (<NETSTAT>)
-    {
-	chomp;
-	next unless $self->$matcher($_);
-	$found = 1;
-	last;
-    }
-    close NETSTAT;
-
-    xlog "is_listening: service $self->{name} is " .
-	 "listening on " . $self->address()
-	if ($found);
-
-    return $found;
+    return $self->{_daemon}->is_listening();
 }
 
 sub describe
 {
     my ($self) = @_;
-
-    printf "%s listening on %s\n",
-	    $self->{name},
-	    $self->address();
+    $self->{_daemon}->describe();
 }
 
 

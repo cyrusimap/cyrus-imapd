@@ -52,7 +52,7 @@ sub new
     my $class = shift;
     my $config = Cassandane::Config->default()->clone();
     $config->set(
-	annotation_callout => '@basedir@/conf/socket/annotator.sock'
+	annotation_callout => '@basedir@/conf/socket/annotator.sock',
     );
     return $class->SUPER::new({ config => $config, deliver => 1 }, @_);
 }
@@ -61,28 +61,29 @@ sub set_up
 {
     my ($self) = @_;
     $self->SUPER::set_up();
+}
 
-    my $daemon = abs_path('utils/annotator.pl');
-    my $sock = $self->{instance}->{basedir} . '/conf/socket/annotator.sock';
-    my $pidfile = $self->{instance}->{basedir} . '/conf/socket/annotator.pid';
-    # Start daemon
-    $self->{instance}->run_command($daemon);
-    timed_wait(sub { return ( -e $sock ); },
-	       description => 'annotator daemon to be ready');
-    $self->{annotator_pidfile} = $pidfile;
+sub _create_instances
+{
+    my ($self) = @_;
+
+    $self->SUPER::_create_instances();
+    $self->{instance}->add_daemon(
+	    name => 'annotator',
+	    port => $self->{instance}->{config}->get('annotation_callout'),
+	    argv => sub {
+		my ($daemon) = @_;
+		return (
+		    abs_path('utils/annotator.pl'),
+		    '--port', $daemon->port(),
+		    '--pidfile', '@basedir@/run/annotator.pid',
+		);
+	    });
 }
 
 sub tear_down
 {
     my ($self) = @_;
-
-    if (defined $self->{annotator_pidfile})
-    {
-	# Stop daemon
-	$self->{instance}->stop_command_pidfile($self->{annotator_pidfile});
-	$self->{annotator_pidfile} = undef;
-    }
-
     $self->SUPER::tear_down();
 }
 

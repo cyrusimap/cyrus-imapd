@@ -61,10 +61,13 @@ sub new
     die "No argv= parameter"
 	unless defined $argv && scalar @$argv;
 
+    my $config = delete $params{config};
+
     my $self = bless
     {
 	name => $name,
 	argv => $argv,
+	config => $config,
     }, $class;
 
     foreach my $a ($self->_otherparams())
@@ -90,6 +93,12 @@ sub master_params
 	    if defined $self->{$a};
     }
     return $params;
+}
+
+sub set_config
+{
+    my ($self, $config) = @_;
+    $self->{config} = $config;
 }
 
 1;

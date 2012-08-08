@@ -86,7 +86,7 @@ sub lemming_connect
 
     my $sock = create_client_socket(
 		    $srv->address_family(),
-		    $srv->{host}, $srv->{port})
+		    $srv->host(), $srv->port())
 	or die "Cannot connect to lemming " . $srv->address() . ": $@";
 
     # The lemming sends us his PID so we can later wait for him to die

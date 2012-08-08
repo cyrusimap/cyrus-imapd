@@ -63,8 +63,8 @@ sub set_up
     if (defined $svc)
     {
 	my $debug = get_verbose() ? 2 : 0;
-	$self->{client} = new News::NNTPClient($svc->{host},
-					       $svc->{port},
+	$self->{client} = new News::NNTPClient($svc->host(),
+					       $svc->port(),
 					       $debug);
 	$self->{client}->authinfo('cassandane', 'testpw');
     }
