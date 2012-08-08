@@ -468,6 +468,37 @@ int cache_parserecord(struct buf *cachebase, size_t cache_offset,
     return 0;
 }
 
+char *mailbox_cache_get_msgid(struct mailbox *mailbox,
+			      struct index_record *record)
+{
+    char *env;
+    char *envtokens[NUMENVTOKENS];
+    char *msgid;
+
+    if (mailbox_cacherecord(mailbox, record))
+	return NULL;
+
+    if (cacheitem_size(record, CACHE_ENVELOPE) <= 2)
+	return NULL;
+
+    /* get msgid out of the envelope
+     *
+     * get a working copy; strip outer ()'s
+     * +1 -> skip the leading paren
+     * -2 -> don't include the size of the outer parens
+     */
+    env = xstrndup(cacheitem_base(record, CACHE_ENVELOPE) + 1,
+		   cacheitem_size(record, CACHE_ENVELOPE) - 2);
+    parse_cached_envelope(env, envtokens, VECTOR_SIZE(envtokens));
+
+    msgid = envtokens[ENV_MSGID] ? xstrdup(envtokens[ENV_MSGID]) : NULL;
+
+    /* free stuff */
+    free(env);
+
+    return msgid;
+}
+
 HIDDEN int mailbox_ensure_cache(struct mailbox *mailbox, size_t len)
 {
     struct stat sbuf;
@@ -3245,6 +3276,34 @@ EXPORTED int mailbox_internal_seen(struct mailbox *mailbox, const char *userid)
 
     /* otherwise the owner's seen state is internal */
     return mboxname_userownsmailbox(userid, mailbox->name);
+}
+
+/*
+ * Return the number of message without \Seen flag in a mailbox.
+ * Suppose that authenticated user is the owner or sharedseen is enabled
+ */
+unsigned mailbox_count_unseen(struct mailbox *mailbox)
+{
+    struct index_record record;
+    uint32_t recno;
+    unsigned count = 0;
+
+    assert(mailbox_index_islocked(mailbox, 0));
+
+    for (recno = 1; recno <= mailbox->i.num_records; recno++) {
+	if (mailbox_read_index_record(mailbox, recno, &record)) {
+	    syslog(LOG_WARNING, "%s: detecting bogus index record %u", mailbox->name,
+		   recno);
+	    continue;
+	}
+	if (record.system_flags & FLAG_EXPUNGED)
+	    continue;
+
+	if (!(record.system_flags & FLAG_SEEN))
+	    count++;
+    }
+
+    return count;
 }
 
 /* returns a mailbox locked in MAILBOX EXCLUSIVE mode, so you

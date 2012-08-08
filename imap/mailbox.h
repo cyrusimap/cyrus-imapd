@@ -439,6 +439,8 @@ int mailbox_cacherecord(struct mailbox *mailbox,
 int cache_append_record(int fd, struct index_record *record);
 int mailbox_append_cache(struct mailbox *mailbox,
 			 struct index_record *record);
+char *mailbox_cache_get_msgid(struct mailbox *mailbox,
+			      struct index_record *record);
 const char *cacheitem_base(struct index_record *record, int field);
 unsigned cacheitem_size(struct index_record *record, int field);
 struct buf *cacheitem_buf(struct index_record *record, int field);
@@ -490,6 +492,8 @@ extern int mailbox_commit(struct mailbox *mailbox);
 
 /* seen state check */
 extern int mailbox_internal_seen(struct mailbox *mailbox, const char *userid);
+
+extern unsigned mailbox_count_unseen(struct mailbox *mailbox);
 
 /* index locking operations */
 extern int mailbox_lock_index(struct mailbox *mailbox, int locktype);

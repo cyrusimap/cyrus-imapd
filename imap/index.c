@@ -5229,34 +5229,9 @@ static void index_thread_ref(struct index_state *state, unsigned *msgno_list, in
 EXPORTED char *index_get_msgid(struct index_state *state,
 		      uint32_t msgno)
 {
-    char *env;
-    char *envtokens[NUMENVTOKENS];
-    char *msgid;
-    struct mailbox *mailbox = state->mailbox;
     struct index_map *im = &state->map[msgno-1];
 
-    if (mailbox_cacherecord(mailbox, &im->record))
-	return NULL;
-
-    if (cacheitem_size(&im->record, CACHE_ENVELOPE) <= 2)
-	return NULL;
-
-    /* get msgid out of the envelope
-     *
-     * get a working copy; strip outer ()'s
-     * +1 -> skip the leading paren
-     * -2 -> don't include the size of the outer parens
-     */
-    env = xstrndup(cacheitem_base(&im->record, CACHE_ENVELOPE) + 1,
-		   cacheitem_size(&im->record, CACHE_ENVELOPE) - 2);
-    parse_cached_envelope(env, envtokens, VECTOR_SIZE(envtokens));
-
-    msgid = envtokens[ENV_MSGID] ? xstrdup(envtokens[ENV_MSGID]) : NULL;
-
-    /* free stuff */
-    free(env);
-
-    return msgid;
+    return mailbox_cache_get_msgid(state->mailbox, &im->record);
 }
 
 static void massage_header(char *hdr)
