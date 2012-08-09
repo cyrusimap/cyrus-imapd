@@ -98,7 +98,11 @@ static void idle_notify(const char *mboxname)
      * (ie, is an imapd is IDLE on 'mailbox'?).
      */
     r = idle_send_msg(IDLE_MSG_NOTIFY, mboxname);
-    if (r) {
+    if (r && (r != ENOENT)) {
+	/* ENOENT can happen as result of a race between delivering
+	 * messages and restarting idled.  It indicates that the
+	 * idled's socket was unlinked, which means that idled went
+	 * through it's graceful shutdown path, so don't syslog. */
 	syslog(LOG_ERR, "IDLE: error sending message "
 			"NOTIFY to idled for mailbox %s: %s.",
 			mboxname, error_message(r));
@@ -252,7 +256,8 @@ EXPORTED void idle_stop(const char *mboxname)
 
     /* Tell idled that we're done idling */
     r = idle_send_msg(IDLE_MSG_DONE, mboxname);
-    if (r) {
+    if (r && (r != ENOENT)) {
+	/* See comment in idle_notify() about ENOENT */
 	syslog(LOG_ERR, "IDLE: error sending message "
 			"DONE to idled for mailbox %s: %s.",
 			mboxname, error_message(r));

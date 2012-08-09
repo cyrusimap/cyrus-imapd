@@ -178,11 +178,16 @@ static void process_message(struct sockaddr_un *remote, idle_message_t *msg)
 		/* forward the received msg onto our clients */
 		r = idle_send(&t->remote, msg);
 		if (r) {
-		    syslog(LOG_ERR, "IDLE: error sending message "
-				    "NOTIFY to imapd %s for mailbox %s: %s, ",
-				    "forgetting.",
-				    idle_id_from_addr(&t->remote),
-				    msg->mboxname, error_message(r));
+		    /* ENOENT can happen as result of a race between delivering
+		     * messages and shutting down imapd.  It indicates that the
+		     * imapd's socket was unlinked, which means that imapd went
+		     * through it's graceful shutdown path, so don't syslog. */
+		    if (r != ENOENT)
+			syslog(LOG_ERR, "IDLE: error sending message "
+					"NOTIFY to imapd %s for mailbox %s: %s, ",
+					"forgetting.",
+					idle_id_from_addr(&t->remote),
+					msg->mboxname, error_message(r));
 		    if (verbose || debugmode)
 			syslog(LOG_DEBUG, "    forgetting %s\n", idle_id_from_addr(&t->remote));
 		    remove_ientry(msg->mboxname, &t->remote);
@@ -232,11 +237,16 @@ static void send_alert(const char *key,
 
 	r = idle_send(&t->remote, &msg);
 	if (r) {
-	    syslog(LOG_ERR, "IDLE: error sending message "
-			    "ALERT to imapd %s: %s, ",
-			    "forgetting.",
-			    idle_id_from_addr(&t->remote),
-			    msg.mboxname, error_message(r));
+	    /* ENOENT can happen as result of a race between shutting
+	     * down idled and shutting down imapd.  It indicates that the
+	     * imapd's socket was unlinked, which means that imapd went
+	     * through it's graceful shutdown path, so don't syslog. */
+	    if (r != ENOENT)
+		syslog(LOG_ERR, "IDLE: error sending message "
+				"ALERT to imapd %s: %s, ",
+				"forgetting.",
+				idle_id_from_addr(&t->remote),
+				msg.mboxname, error_message(r));
 	    if (verbose || debugmode)
 		syslog(LOG_DEBUG, "    forgetting %s\n", idle_id_from_addr(&t->remote));
 	    remove_ientry(key, &t->remote);
