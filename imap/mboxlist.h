@@ -213,7 +213,8 @@ int mboxlist_checksub(const char *name, const char *userid);
 
 /* Change 'user's subscription status for mailbox 'name'. */
 int mboxlist_changesub(const char *name, const char *userid, 
-		       struct auth_state *auth_state, int add, int force);
+		       struct auth_state *auth_state,
+		       int add, int force, int notify);
 
 /* set or create quota root */
 int mboxlist_setquotas(const char *root,

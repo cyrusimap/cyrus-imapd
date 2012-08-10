@@ -1038,7 +1038,7 @@ static int autosieve_createfolder(const char *userid, struct auth_state *auth_st
 	r = mboxlist_createmailbox(internalname, 0, NULL,
 				   1, userid, auth_state, 0, 0, 0, NULL, 1);
 	if (!r) {
-	    mboxlist_changesub(internalname, userid, auth_state, 1, 1);
+	    mboxlist_changesub(internalname, userid, auth_state, 1, 1, 1);
 	    syslog(LOG_DEBUG, "autosievefolder: User %s, folder %s creation succeeded",
 		   userid, internalname);
 	    return 0;

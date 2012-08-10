@@ -600,7 +600,7 @@ static int autochangesub(const char *name,
     /* ignore all user mailboxes, we only want shared */
     if (mboxname_isusermailbox(name, 0)) return 0;
 
-    r = mboxlist_changesub(name, userid, auth_state, 1, 0);
+    r = mboxlist_changesub(name, userid, auth_state, 1, 0, 1);
 
     /* unless this name was explicitly chosen, ignore the failure */
     if (!was_explicit) return 0;
@@ -747,7 +747,7 @@ int autocreate_user(struct namespace *namespace,
 			       /*localonly*/0, /*forceuser*/0,
 			       /*dbonly*/0, /*extargs*/NULL, 1);
 
-    if (!r) r = mboxlist_changesub(inboxname, userid, auth_state, 1, 1);
+    if (!r) r = mboxlist_changesub(inboxname, userid, auth_state, 1, 1, 1);
     if (r) {
 	syslog(LOG_ERR, "autocreateinbox: User %s, INBOX failed. %s", 
 	       userid, error_message(r));
@@ -809,7 +809,7 @@ int autocreate_user(struct namespace *namespace,
 	if (strarray_find(subscribe, name, 0) < 0)
 	    continue;
 
-	r = mboxlist_changesub(foldername, userid, auth_state, 1, 1);
+	r = mboxlist_changesub(foldername, userid, auth_state, 1, 1, 1);
 	if (!r) {
 	    numsub++;
 	    syslog(LOG_NOTICE,"autocreateinbox: User %s, subscription to %s succeeded",

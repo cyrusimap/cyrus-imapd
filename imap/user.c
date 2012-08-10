@@ -246,7 +246,7 @@ static int user_renamesub(char *name, int matchlen __attribute__((unused)),
 	return 0;
     }
 
-    return mboxlist_changesub(name, rrock->newuser, NULL, 1, 1);
+    return mboxlist_changesub(name, rrock->newuser, NULL, 1, 1, 1);
 }
 
 static int user_renamesieve(char *olduser, char *newuser)

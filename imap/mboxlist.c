@@ -70,6 +70,9 @@
 #include "cyrusdb.h"
 #include "util.h"
 #include "mailbox.h"
+#ifdef ENABLE_MBOXEVENT
+#include "mboxevent.h"
+#endif
 #include "exitcodes.h"
 #include "imap/imap_err.h"
 #include "xmalloc.h"
@@ -3339,12 +3342,15 @@ EXPORTED int mboxlist_checksub(const char *name, const char *userid)
  * we don't know about 'name'.
  */
 EXPORTED int mboxlist_changesub(const char *name, const char *userid,
-		       struct auth_state *auth_state, int add, int force)
+				struct auth_state *auth_state, 
+				int add, int force, int notify)
 {
     struct mboxlist_entry *mbentry = NULL;
     int r;
     struct db *subs;
-    
+#ifdef ENABLE_MBOXEVENT
+    struct mboxevent *mboxevent;
+#endif 
     if ((r = mboxlist_opensubs(userid, &subs)) != 0) {
 	return r;
     }
@@ -3383,7 +3389,17 @@ EXPORTED int mboxlist_changesub(const char *name, const char *userid,
     sync_log_subscribe(userid, name);
     mboxlist_closesubs(subs);
     mboxlist_entry_free(&mbentry);
+#ifdef ENABLE_MBOXEVENT
+    /* prepare a MailboxSubscribe or MailboxUnSubscribe event notification */
+    if (notify && r == 0) {
+	mboxevent = mboxevent_new(add ? EVENT_MAILBOX_SUBSCRIBE :
+					EVENT_MAILBOX_UNSUBSCRIBE);
 
+	mboxevent_set_access(mboxevent, NULL, NULL, userid, name);
+	mboxevent_notify(mboxevent);
+	mboxevent_free(&mboxevent);
+    }
+#endif
     return r;
 }
 

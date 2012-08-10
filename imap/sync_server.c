@@ -1868,7 +1868,7 @@ static int do_changesub(struct dlist *kin)
     if (!dlist_getatom(kin, "USERID", &userid))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
 
-    return mboxlist_changesub(mboxname, userid, sync_authstate, add, add);
+    return mboxlist_changesub(mboxname, userid, sync_authstate, add, add, 0);
 }
 
 /* ====================================================================== */
@@ -2089,7 +2089,7 @@ static int do_unuser(struct dlist *kin)
 
     /* ignore failures here - the subs file gets deleted soon anyway */
     for (item = list->head; item; item = item->next) {
-	mboxlist_changesub(item->name, userid, sync_authstate, 0, 0);
+	mboxlist_changesub(item->name, userid, sync_authstate, 0, 0, 0);
     }
     sync_name_list_free(&list);
 

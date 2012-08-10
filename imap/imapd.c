@@ -6517,7 +6517,7 @@ static void cmd_changesub(char *tag, char *namespace, char *name, int add)
 						       imapd_userid, mailboxname);
 	    if (!r) {
 		r = mboxlist_changesub(mailboxname, imapd_userid, 
-				       imapd_authstate, add, force);
+				       imapd_authstate, add, force, 1);
 	    }
 	}
     }

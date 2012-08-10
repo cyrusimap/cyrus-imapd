@@ -147,7 +147,7 @@ static int reset_single(const char *userid)
 
     /* ignore failures here - the subs file gets deleted soon anyway */
     for (item = list->head; item; item = item->next) {
-        (void)mboxlist_changesub(item->name, userid, sync_authstate, 0, 0);
+        (void)mboxlist_changesub(item->name, userid, sync_authstate, 0, 0, 0);
     }
     sync_name_list_free(&list);
 
