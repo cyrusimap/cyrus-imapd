@@ -284,7 +284,11 @@ int main (int argc, char *argv[]) {
     quotadb_open(NULL);
 
     sync_log_init();
-
+#ifdef ENABLE_MBOXEVENT
+    /* setup for mailbox event notifications */
+    mboxevent_init();
+    mboxevent_setnamespace(&scan_namespace);
+#endif
     if (optind == argc) { /* do the whole partition */
 	strcpy(buf, "*");
 	(*scan_namespace.mboxlist_findall)(&scan_namespace, buf, 1, 0, 0,
@@ -503,7 +507,10 @@ void append_notifications()
 	    fflush(f);
 	    msgsize = ftell(f);
 
-	    append_setup(&as, i_mbox->owner, NULL, NULL, 0, NULL, NULL, 0);
+	    /* send MessageAppend event notification */
+	    append_setup(&as, i_mbox->owner, NULL, NULL, 0, NULL, NULL, 0,
+	                 EVENT_MESSAGE_APPEND);
+
 	    pout = prot_new(fd, 0);
 	    prot_rewind(pout);
 	    append_fromstream(&as, &body, pout, msgsize, t, NULL);

@@ -81,6 +81,7 @@
 #include "cyr_lock.h"
 #include "mailbox.h"
 #include "map.h"
+#include "mboxevent.h"
 #include "mboxlist.h"
 #include "mboxname.h"
 #include "message.h"
@@ -242,6 +243,10 @@ int service_init(int argc __attribute__((unused)),
 
 	/* setup for sending IMAP IDLE notifications */
 	idle_init();
+#ifdef ENABLE_MBOXEVENT
+	/* setup for mailbox event notifications */
+	mboxevent_init();
+#endif
     }
 
     /* Set namespace */
@@ -249,7 +254,9 @@ int service_init(int argc __attribute__((unused)),
 	syslog(LOG_ERR, "%s", error_message(r));
 	fatal(error_message(r), EC_CONFIG);
     }
-
+#ifdef ENABLE_MBOXEVENT
+    mboxevent_setnamespace(&lmtpd_namespace);
+#endif
     /* create connection to the SNMP listener, if available. */
     snmp_connect(); /* ignore return code */
     snmp_set_str(SERVER_NAME_VERSION, cyrus_version());
@@ -550,7 +557,7 @@ int deliver_mailbox(FILE *f,
 
     r = append_setup(&as, mailboxname,
 		     authuser, authstate, acloverride ? 0 : ACL_POST, 
-		     qdiffs, NULL, 0);
+		     qdiffs, NULL, 0, EVENT_MESSAGE_NEW);
     if (r) return r;
 
     /* check for duplicate message */

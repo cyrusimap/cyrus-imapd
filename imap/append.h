@@ -46,6 +46,7 @@
 #define INCLUDED_APPEND_H
 
 #include "mailbox.h"
+#include "mboxevent.h"
 #include "message.h"
 #include "prot.h"
 #include "sequence.h"
@@ -92,6 +93,10 @@ struct appendstate {
     struct namespace *namespace;
     struct auth_state *auth_state;
     int isadmin;
+
+    /* one event notification to send per appended message */
+    enum event_type event_type;
+    struct mboxevent *mboxevents;
 };
 
 /* add helper function to determine uid range appended? */
@@ -108,14 +113,14 @@ extern int append_setup(struct appendstate *as, const char *name,
 			const char *userid, struct auth_state *auth_state,
 			long aclcheck,
 			const quota_t quotacheck[QUOTA_NUMRESOURCES],
-			struct namespace *, int isadmin);
+			struct namespace *, int isadmin, enum event_type event_type);
 extern int append_setup_mbox(struct appendstate *as, struct mailbox *mailbox,
 			     const char *userid,
 			     struct auth_state *auth_state,
 			     long aclcheck,
 			     const quota_t quotacheck[QUOTA_NUMRESOURCES],
 			     struct namespace *namespace,
-			     int isadmin);
+			     int isadmin, enum event_type event_type);
 
 extern int append_commit(struct appendstate *as,
 			 struct mailbox **mailboxptr);

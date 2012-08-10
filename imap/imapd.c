@@ -3604,7 +3604,8 @@ static void cmd_append(char *tag, char *name, const char *cur_name)
 	r = append_setup(&appendstate, mailboxname, 
 			 imapd_userid, imapd_authstate, ACL_INSERT,
 			 qdiffs, &imapd_namespace,
-			 (imapd_userisadmin || imapd_userisproxyadmin));
+			 (imapd_userisadmin || imapd_userisproxyadmin),
+			 EVENT_MESSAGE_APPEND);
     }
     if (!r) {
 	struct body *body;

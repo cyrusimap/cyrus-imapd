@@ -1119,7 +1119,7 @@ EXPORTED int index_run_annotator(struct index_state *state,
     mailbox_ref(state->mailbox);
     r = append_setup_mbox(&as, state->mailbox,
 			  state->userid, state->authstate,
-			  0, NULL, namespace, isadmin);
+			  0, NULL, namespace, isadmin, 0);
     if (r) goto out;
 
     seq = _parse_sequence(state, sequence, usinguid);
@@ -1652,7 +1652,7 @@ index_copy(struct index_state *state,
 
     r = append_setup_mbox(&appendstate, destmailbox, state->userid,
 			  state->authstate, ACL_INSERT,
-			  qptr, namespace, isadmin);
+			  qptr, namespace, isadmin, EVENT_MESSAGE_COPY);
     if (r) return r;
 
     docopyuid = (appendstate.myrights & ACL_READ);
