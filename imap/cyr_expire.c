@@ -77,6 +77,9 @@
 static volatile sig_atomic_t sigquit = 0;
 static int verbose = 0;
 
+/* current namespace */
+static struct namespace expire_namespace;
+
 static void usage(void)
 {
     fprintf(stderr,
@@ -476,7 +479,18 @@ int main(int argc, char *argv[])
     /* open the quota db, we'll need it for expunge */
     quotadb_init(0);
     quotadb_open(NULL);
-
+#ifdef ENABLE_MBOXEVENT
+    /* setup for mailbox event notifications */
+    mboxevent_init();
+#endif
+    /* Set namespace -- force standard (internal) */
+    if ((r = mboxname_init_namespace(&expire_namespace, 1)) != 0) {
+	syslog(LOG_ERR, "%s", error_message(r));
+	fatal(error_message(r), EC_CONFIG);
+    }
+#ifdef ENABLE_MBOXEVENT
+    mboxevent_setnamespace(&expire_namespace);
+#endif
     if (duplicate_init(NULL) != 0) {
 	fprintf(stderr,
 		"cyr_expire: unable to init duplicate delivery database\n");
@@ -553,7 +567,7 @@ int main(int argc, char *argv[])
 	    if (verbose) {
 		fprintf(stderr, "Removing: %s\n", name);
 	    }
-	    r = mboxlist_deletemailbox(name, 1, NULL, NULL, 0, 0, 0);
+	    r = mboxlist_deletemailbox(name, 1, NULL, NULL, NULL, 0, 0, 0);
 	    count++;
 	}
 

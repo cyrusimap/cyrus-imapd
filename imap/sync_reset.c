@@ -183,7 +183,7 @@ static int reset_single(const char *userid)
 
     for (item = list->head; item; item = item->next) {
         r = mboxlist_deletemailbox(item->name, 1, sync_userid,
-				   sync_authstate, 0, 0, 1);
+				   sync_authstate, NULL, 0, 1, 0);
         if (r) goto fail;
     }
 
@@ -191,7 +191,7 @@ static int reset_single(const char *userid)
     (sync_namespacep->mboxname_tointernal)(sync_namespacep, "INBOX",
 					   userid, buf);
     r = mboxlist_deletemailbox(buf, 1, sync_userid,
-			       sync_authstate, 0, 0, 1);
+			       sync_authstate, NULL, 0, 1, 0);
     if (r && (r != IMAP_MAILBOX_NONEXISTENT)) goto fail;
 
     r = user_deletedata(userid, 1);

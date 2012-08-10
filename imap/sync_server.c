@@ -1829,7 +1829,7 @@ static int do_unmailbox(struct dlist *kin)
 
     /* Delete with admin priveleges */
     return mboxlist_deletemailbox(mboxname, sync_userisadmin, sync_userid,
-				  sync_authstate, 0, 0, 1);
+				  sync_authstate, NULL, 0, 1, 0);
 }
 
 static int do_rename(struct dlist *kin)
@@ -1851,7 +1851,7 @@ static int do_rename(struct dlist *kin)
 
     return mboxlist_renamemailbox(oldmboxname, newmboxname, partition,
 				  uidvalidity,
-				  1, sync_userid, sync_authstate, 1, 1);
+				  1, sync_userid, sync_authstate, NULL, 1, 1);
 }
 
 static int do_changesub(struct dlist *kin)
@@ -2107,7 +2107,7 @@ static int do_unuser(struct dlist *kin)
 
     for (item = list->head; item; item = item->next) {
 	r = mboxlist_deletemailbox(item->name, sync_userisadmin,
-				   sync_userid, sync_authstate, 0, 0, 1);
+				   sync_userid, sync_authstate, NULL, 0, 0, 1);
 	if (r) goto fail;
     }
 
@@ -2115,7 +2115,7 @@ static int do_unuser(struct dlist *kin)
     (sync_namespacep->mboxname_tointernal)(sync_namespacep, "INBOX",
 					   userid, buf);
     r = mboxlist_deletemailbox(buf, sync_userisadmin, sync_userid,
-			       sync_authstate, 0, 0, 1);
+			       sync_authstate, NULL, 0, 1, 0);
     if (r && (r != IMAP_MAILBOX_NONEXISTENT)) goto fail;
 
     r = user_deletedata(userid, 1);

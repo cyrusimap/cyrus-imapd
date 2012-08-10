@@ -3421,6 +3421,7 @@ static int newgroup(message_data_t *msg)
     snprintf(mailboxname, sizeof(mailboxname), "%s%.*s",
 	     newsprefix, (int) strcspn(group, " \t\r\n"), group);
 
+    /* XXX do we need to notify news mailbox creation ? */
     r = mboxlist_createmailbox(mailboxname, 0, NULL, 0,
 			       newsmaster, newsmaster_authstate, 0, 0, 0);
 
