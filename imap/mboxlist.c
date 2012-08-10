@@ -2540,7 +2540,11 @@ EXPORTED int mboxlist_setquotas(const char *root,
     int r;
     int res;
     struct txn *tid = NULL;
-
+#ifdef ENABLE_MBOXEVENT
+    struct mboxevent *mboxevents = NULL;
+    struct mboxevent *quotachange_event = NULL;
+    struct mboxevent *quotawithin_event = NULL;
+#endif
     if (!root[0] || root[0] == '.' || strchr(root, '/')
 	|| strchr(root, '*') || strchr(root, '%') || strchr(root, '?')) {
 	return IMAP_MAILBOX_BADNAME;
@@ -2551,12 +2555,34 @@ EXPORTED int mboxlist_setquotas(const char *root,
 
     if (!r) {
 	int changed = 0;
+	int underquota;
 
 	/* has it changed? */
 	for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++) {
 	    if (q.limits[res] != newquotas[res]) {
+		underquota = 0;
+#ifdef ENABLE_MBOXEVENT
+		/* prepare a QuotaChange event notification */
+		if (quotachange_event == NULL)
+		    quotachange_event = mboxevent_enqueue(EVENT_QUOTA_CHANGE,
+		                                          &mboxevents);
+
+		/* prepare a QuotaWithin event notification if now under quota */
+		if (quota_is_overquota(&q, res, NULL) &&
+		    (!quota_is_overquota(&q, res, newquotas) || newquotas[res] == -1)) {
+		    if (quotawithin_event == NULL)
+			quotawithin_event = mboxevent_enqueue(EVENT_QUOTA_WITHIN,
+			                                      &mboxevents);
+		    underquota++;
+		}
+#endif
 		q.limits[res] = newquotas[res];
 		changed++;
+#ifdef ENABLE_MBOXEVENT
+		mboxevent_extract_quota(quotachange_event, &q, res);
+		if (underquota)
+		    mboxevent_extract_quota(quotawithin_event, &q, res);
+#endif
 	    }
 	}
 	if (changed)
@@ -2613,7 +2639,14 @@ EXPORTED int mboxlist_setquotas(const char *root,
     memcpy(q.limits, newquotas, sizeof(q.limits));
     r = quota_write(&q, &tid);
     if (r) goto done;
-
+#ifdef ENABLE_MBOXEVENT
+    /* prepare a QuotaChange event notification */
+    quotachange_event = mboxevent_enqueue(EVENT_QUOTA_CHANGE, &mboxevents);
+    for (res = 0 ; res < QUOTA_NUMRESOURCES ; res++) {
+    	if (q.limits[res] != QUOTA_UNLIMITED)
+    	    mboxevent_extract_quota(quotachange_event, &q, res);
+    }
+#endif
     quota_commit(&tid);
 
     /* recurse through mailboxes, setting the quota and finding
@@ -2630,8 +2663,16 @@ EXPORTED int mboxlist_setquotas(const char *root,
 done:
     quota_free(&q);
     if (r && tid) quota_abort(&tid);
-    if (!r) sync_log_quota(root);
-
+    if (!r) {
+	sync_log_quota(root);
+#ifdef ENABLE_MBOXEVENT
+	/* send QuotaChange and QuotaWithin event notifications */
+	mboxevent_notify(mboxevents);
+#endif
+    }
+#ifdef ENABLE_MBOXEVENT
+    mboxevent_freequeue(&mboxevents);
+#endif
     return r;
 }
 
