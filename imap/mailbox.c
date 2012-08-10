@@ -93,6 +93,7 @@
 #include "mailbox.h"
 #include "message.h"
 #include "map.h"
+#include "mboxevent.h"
 #include "mboxlist.h"
 #include "proc.h"
 #include "retry.h"
@@ -3158,16 +3159,21 @@ static unsigned expungedeleted(struct mailbox *mailbox __attribute__((unused)),
  * function pointed to by 'decideproc' is called (with 'deciderock') to
  * determine which messages to expunge.  If 'decideproc' is a null pointer,
  * then messages with the \Deleted flag are expunged.
+ *
+ * 	event_type - the event among MessageExpunge, MessageExpire (zero means
+ * 		     don't send notification)
  */
 EXPORTED int mailbox_expunge(struct mailbox *mailbox,
 		    mailbox_decideproc_t *decideproc, void *deciderock,
-		    unsigned *nexpunged)
+		    unsigned *nexpunged, int event_type)
 {
     int r = 0;
     int numexpunged = 0;
     uint32_t recno;
     struct index_record record;
-
+#ifdef ENABLE_MBOXEVENT
+    struct mboxevent *mboxevent = NULL;
+#endif
     assert(mailbox_index_islocked(mailbox, 1));
 
     /* anything to do? */
@@ -3175,7 +3181,10 @@ EXPORTED int mailbox_expunge(struct mailbox *mailbox,
 	if (nexpunged) *nexpunged = 0;
 	return 0;
     }
-
+#ifdef ENABLE_MBOXEVENT
+    if (event_type)
+	mboxevent = mboxevent_new(event_type);
+#endif
     if (!decideproc) decideproc = expungedeleted;
 
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
@@ -3193,15 +3202,31 @@ EXPORTED int mailbox_expunge(struct mailbox *mailbox,
 	    record.system_flags |= FLAG_EXPUNGED;
 
 	    r = mailbox_rewrite_index_record(mailbox, &record);
-	    if (r) return IMAP_IOERROR;
+	    if (r) {
+#ifdef ENABLE_MBOXEVENT
+		mboxevent_free(&mboxevent);
+#endif
+		return IMAP_IOERROR;
+	    }
+#ifdef ENABLE_MBOXEVENT
+	    mboxevent_extract_record(mboxevent, mailbox, &record);
+#endif
 	}
     }
 
     if (numexpunged > 0) {
 	syslog(LOG_NOTICE, "Expunged %d messages from %s",
 	       numexpunged, mailbox->name);
+#ifdef ENABLE_MBOXEVENT
+	/* send the MessageExpunge or MessageExpire event notification */
+	mboxevent_extract_mailbox(mboxevent, mailbox);
+	mboxevent_set_numunseen(mboxevent, mailbox, -1);
+	mboxevent_notify(mboxevent);
+#endif
     }
-
+#ifdef ENABLE_MBOXEVENT
+    mboxevent_free(&mboxevent);
+#endif
     if (nexpunged) *nexpunged = numexpunged;
 
     return 0;
@@ -3853,7 +3878,7 @@ EXPORTED int mailbox_rename_cleanup(struct mailbox **mailboxptr, int isinbox)
 
     if (isinbox) {
 	/* Expunge old mailbox */
-	r = mailbox_expunge(oldmailbox, expungeall, (char *)0, NULL);
+	r = mailbox_expunge(oldmailbox, expungeall, (char *)0, NULL, 0);
 	if (!r) r = mailbox_commit(oldmailbox);
 	mailbox_close(mailboxptr);
     } else {

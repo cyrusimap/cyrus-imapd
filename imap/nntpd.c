@@ -3522,7 +3522,7 @@ static int cancel_cb(const duplicate_t *dkey,
 	    !(cyrus_acl_myrights(newsmaster_authstate, mailbox->acl) & ACL_DELETEMSG))
 	    r = IMAP_PERMISSION_DENIED;
 
-	if (!r) r = mailbox_expunge(mailbox, expunge_cancelled, &uid, NULL);
+	if (!r) r = mailbox_expunge(mailbox, expunge_cancelled, &uid, NULL, 0);
 	mailbox_close(&mailbox);
 
 	/* if we failed, pass the return code back in the rock */

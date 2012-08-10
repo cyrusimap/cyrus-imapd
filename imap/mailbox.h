@@ -502,7 +502,7 @@ extern int mailbox_expunge_cleanup(struct mailbox *mailbox, time_t expunge_mark,
 				   unsigned *ndeleted);
 extern int mailbox_expunge(struct mailbox *mailbox,
 			   mailbox_decideproc_t *decideproc, void *deciderock,
-			   unsigned *nexpunged);
+			   unsigned *nexpunged, int event_type);
 extern int mailbox_cleanup(struct mailbox *mailbox, int iscurrentdir,
 			   mailbox_decideproc_t *decideproc, void *deciderock);
 extern void mailbox_unlock_index(struct mailbox *mailbox, struct statusdata *sd);

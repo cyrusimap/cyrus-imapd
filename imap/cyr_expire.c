@@ -295,7 +295,8 @@ static int expire(char *name, int matchlen __attribute__((unused)),
 			name, ((double)expire_seconds/86400));
 	    }
 
-	    r = mailbox_expunge(mailbox, expire_cb, erock, NULL);
+	    r = mailbox_expunge(mailbox, expire_cb, erock, NULL,
+				EVENT_MESSAGE_EXPIRE);
 	    if (r)
 		syslog(LOG_ERR, "failed to expire old messages: %s", mailbox->name);
 	    did_expunge = 1;
@@ -304,7 +305,8 @@ static int expire(char *name, int matchlen __attribute__((unused)),
     buf_free(&attrib);
 
     if (!did_expunge && erock->do_userflags) {
-	r = mailbox_expunge(mailbox, userflag_cb, erock, NULL);
+	r = mailbox_expunge(mailbox, userflag_cb, erock, NULL,
+			    EVENT_MESSAGE_EXPIRE);
 	if (r)
 	    syslog(LOG_ERR, "failed to scan user flags for %s: %s",
 		    mailbox->name, error_message(r));

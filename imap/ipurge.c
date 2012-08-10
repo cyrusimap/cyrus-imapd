@@ -172,13 +172,18 @@ int main (int argc, char *argv[]) {
   }
 
   cyrus_init(alt_config, "ipurge", 0, CONFIG_NEED_PARTITION_DATA);
-
+#ifdef ENABLE_MBOXEVENT
+  /* setup for mailbox event notifications */
+  mboxevent_init();
+#endif
   /* Set namespace -- force standard (internal) */
   if ((r = mboxname_init_namespace(&purge_namespace, 1)) != 0) {
       syslog(LOG_ERR, "%s", error_message(r));
       fatal(error_message(r), EC_CONFIG);
   }
-
+#ifdef ENABLE_MBOXEVENT
+  mboxevent_setnamespace(&purge_namespace);
+#endif
   mboxlist_init(0);
   mboxlist_open(NULL);
 
@@ -263,7 +268,7 @@ static int purge_me(char *name, int matchlen __attribute__((unused)),
     return r;
   }
 
-  mailbox_expunge(mailbox, purge_check, &stats, NULL);
+  mailbox_expunge(mailbox, purge_check, &stats, NULL, EVENT_MESSAGE_EXPUNGE);
 
   mailbox_close(&mailbox);
 

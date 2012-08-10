@@ -275,13 +275,18 @@ EXPORTED int index_expunge(struct index_state *state, char *sequence,
     struct index_map *im;
     struct seqset *seq = NULL;
     int numexpunged = 0;
+#ifdef ENABLE_MBOXEVENT
+    struct mboxevent *mboxevent;
+#endif
 
     r = index_lock(state);
     if (r) return r;
 
     /* XXX - earlier list if the sequence names UIDs that don't exist? */
     seq = _parse_sequence(state, sequence, 1);
-
+#ifdef ENABLE_MBOXEVENT
+    mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
+#endif
     for (msgno = 1; msgno <= state->exists; msgno++) {
 	im = &state->map[msgno-1];
 
@@ -308,17 +313,31 @@ EXPORTED int index_expunge(struct index_state *state, char *sequence,
 	r = mailbox_rewrite_index_record(state->mailbox, &im->record);
 
 	if (r) break;
+#ifdef ENABLE_MBOXEVENT
+	mboxevent_extract_record(mboxevent, state->mailbox, &im->record);
+#endif
     }
 
     seqset_free(seq);
-
+#ifdef ENABLE_MBOXEVENT
+    mboxevent_extract_mailbox(mboxevent, state->mailbox);
+    mboxevent_set_numunseen(mboxevent, state->mailbox, state->numunseen);
+#endif
     /* unlock before responding */
     index_unlock(state);
 
     if (!r && (numexpunged > 0)) {
 	syslog(LOG_NOTICE, "Expunged %d messages from %s",
 	       numexpunged, state->mailbox->name);
+#ifdef ENABLE_MBOXEVENT
+	/* send the MessageExpunge event notification for "immediate", "default"
+	 * and "delayed" expunge */
+	mboxevent_notify(mboxevent);
+#endif
     }
+#ifdef ENABLE_MBOXEVENT
+    mboxevent_free(&mboxevent);
+#endif
     return r;
 }
 

@@ -836,7 +836,11 @@ static int expunge_deleted(void)
     uint32_t msgno;
     int r = 0;
     int numexpunged = 0;
+#ifdef ENABLE_MBOXEVENT
+    struct mboxevent *mboxevent;
 
+    mboxevent = mboxevent_new(EVENT_MESSAGE_EXPUNGE);
+#endif
     /* loop over all known messages looking for deletes */
     for (msgno = 1; msgno <= popd_exists; msgno++) {
 	/* not deleted? skip */
@@ -858,6 +862,9 @@ static int expunge_deleted(void)
 	/* store back to the mailbox */
 	r = mailbox_rewrite_index_record(popd_mailbox, &record);
 	if (r) break;
+#ifdef ENABLE_MBOXEVENT
+	mboxevent_extract_record(mboxevent, popd_mailbox, &record);
+#endif
     }
 
     if (r) {
@@ -869,7 +876,13 @@ static int expunge_deleted(void)
 	syslog(LOG_NOTICE, "Expunged %d messages from %s",
 	       numexpunged, popd_mailbox->name);
     }
-
+#ifdef ENABLE_MBOXEVENT
+    /* send the MessageExpunge event notification */
+    mboxevent_extract_mailbox(mboxevent, popd_mailbox);
+    mboxevent_set_numunseen(mboxevent, popd_mailbox, -1);
+    mboxevent_notify(mboxevent);
+    mboxevent_free(&mboxevent);
+#endif
     return r;
 }
 

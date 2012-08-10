@@ -389,7 +389,7 @@ int scan_me(char *name,
 	if (i_mbox) i_mbox->recno = 1;
     }
 
-    mailbox_expunge(mailbox, virus_check, i_mbox, 0, NULL);
+    mailbox_expunge(mailbox, virus_check, i_mbox, 0, NULL, EVENT_MESSAGE_EXPUNGE);
     mailbox_close(&mailbox);
 
     return 0;
@@ -509,7 +509,7 @@ void append_notifications()
 
 	    /* send MessageAppend event notification */
 	    append_setup(&as, i_mbox->owner, NULL, NULL, 0, NULL, NULL, 0,
-	                 EVENT_MESSAGE_APPEND);
+			 EVENT_MESSAGE_APPEND);
 
 	    pout = prot_new(fd, 0);
 	    prot_rewind(pout);
