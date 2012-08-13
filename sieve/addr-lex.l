@@ -45,6 +45,7 @@
  * $Id: addr-lex.l,v 1.12 2010/01/06 17:01:58 murch Exp $
  */
 
+#include "sieve/sieve_interface.h"
 #include "sieve/addr.h"
 #include <stdlib.h>
 #include <string.h>

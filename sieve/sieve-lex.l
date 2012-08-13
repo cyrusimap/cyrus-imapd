@@ -52,8 +52,8 @@
 #include "xmalloc.h"
 
 #include "sieve/tree.h"
-#include "sieve/sieve.h"
 #include "sieve/sieve_interface.h"
+#include "sieve/sieve.h"
 
 #define YY_NO_INPUT
 #define YY_DECL int yylex(YYSTYPE *yylval, sieve_script_t *parse_script)
