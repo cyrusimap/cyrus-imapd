@@ -194,7 +194,7 @@ EXPORTED void strarray_set(strarray_t *sa, int idx, const char *s)
 {
     if ((idx = adjust_index_rw(sa, idx, 0)) < 0)
 	return;
-    _strarray_set(sa, idx, xstrdup(s));
+    _strarray_set(sa, idx, xstrdupnull(s));
 }
 
 EXPORTED void strarray_setm(strarray_t *sa, int idx, char *s)
