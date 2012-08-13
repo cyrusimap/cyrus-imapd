@@ -838,7 +838,7 @@ sub _check_cores
 # or wasn't even running beforehand.
 sub _stop_pid
 {
-    my ($pid) = @_;
+    my ($pid, $reaper) = @_;
 
     # Try to be nice, but leave open the option of not being nice should
     # that be necessary.  The signals we send are:
@@ -860,7 +860,10 @@ sub _stop_pid
 	xlog "_stop_pid: sending signal $sig to $pid";
 	kill($sig, $pid) or xlog "Can't send signal $sig to pid $pid: $!";
 	eval {
-	    timed_wait(sub { kill(0, $pid) == 0 });
+	    timed_wait(sub {
+		eval { $reaper->() if (defined $reaper) };
+		return (kill(0, $pid) == 0);
+	    });
 	};
 	last unless $@;
 	# Timed out -- No More Mr Nice Guy
@@ -1028,7 +1031,7 @@ sub reap_command
 sub stop_command
 {
     my ($self, $pid) = @_;
-    _stop_pid($pid);
+    _stop_pid($pid, sub { $self->reap_command($pid); } );
     $self->reap_command($pid);
 }
 
