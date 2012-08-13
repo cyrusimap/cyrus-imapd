@@ -2357,7 +2357,7 @@ static int do_sync_mailboxes(struct sync_name_list *mboxname_list,
     return r;
 }
 
-static int do_sync(const char *filename)
+static int do_sync(sync_log_reader_t *slr)
 {
     struct sync_action_list *user_list = sync_action_list_create();
     struct sync_action_list *unuser_list = sync_action_list_create();
@@ -2369,100 +2369,38 @@ static int do_sync(const char *filename)
     struct sync_action_list *seen_list = sync_action_list_create();
     struct sync_action_list *sub_list = sync_action_list_create();
     struct sync_name_list *mboxname_list = sync_name_list_create();
-    static struct buf type, arg1, arg2;
-    char *arg1s, *arg2s;
+    const char *args[3];
     struct sync_action *action;
-    int c;
-    int fd = -1;
-    int doclose = 0;
-    struct protstream *input;
     int r = 0;
 
-    if ((filename == NULL) || !strcmp(filename, "-"))
-	fd = 0; /* STDIN */
-    else {
-	fd = open(filename, O_RDWR);
-	if (fd < 0) {
-	    syslog(LOG_ERR, "Failed to open %s: %m", filename);
-	    r = IMAP_IOERROR;
-	    goto cleanup;
-	}
-
-	doclose = 1;
-
-	if (lock_blocking(fd) < 0) {
-	    syslog(LOG_ERR, "Failed to lock %s: %m", filename);
-	    r = IMAP_IOERROR;
-	    goto cleanup;
-	}
-    }
-
-    input = prot_new(fd, 0);
-
     while (1) {
-	if ((c = getword(input, &type)) == EOF)
-	    break;
+	r = sync_log_reader_getitem(slr, args);
+	if (r == EOF) break;
 
-	/* Ignore blank lines */
-	if (c == '\r') c = prot_getc(input);
-	if (c == '\n')
-	    continue;
-
-	if (c != ' ') {
-	    syslog(LOG_ERR, "Invalid input");
-	    eatline(input, c);
-	    continue;
-	}
-
-	if ((c = getastring(input, 0, &arg1)) == EOF) break;
-	arg1s = arg1.s;
-
-	if (c == ' ') {
-	    if ((c = getastring(input, 0, &arg2)) == EOF) break;
-	    arg2s = arg2.s;
-
-	} else 
-	    arg2s = NULL;
-
-	if (c == '\r') c = prot_getc(input);
-	if (c != '\n') {
-	    syslog(LOG_ERR, "Garbage at end of input line");
-	    eatline(input, c);
-	    continue;
-	}
-
-	ucase(type.s);
-
-	if (!strcmp(type.s, "USER"))
-	    sync_action_list_add(user_list, NULL, arg1s);
-	else if (!strcmp(type.s, "UNUSER"))
-	    sync_action_list_add(unuser_list, NULL, arg1s);
-	else if (!strcmp(type.s, "META"))
-	    sync_action_list_add(meta_list, NULL, arg1s);
-	else if (!strcmp(type.s, "SIEVE"))
-	    sync_action_list_add(meta_list, NULL, arg1s);
-	else if (!strcmp(type.s, "MAILBOX"))
-	    sync_action_list_add(mailbox_list, arg1s, NULL);
-	else if (!strcmp(type.s, "UNMAILBOX"))
-	    sync_action_list_add(unmailbox_list, arg1s, NULL);
-	else if (!strcmp(type.s, "QUOTA"))
-	    sync_action_list_add(quota_list, arg1s, NULL);
-	else if (!strcmp(type.s, "ANNOTATION"))
-	    sync_action_list_add(annot_list, arg1s, NULL);
-	else if (!strcmp(type.s, "SEEN"))
-	    sync_action_list_add(seen_list, arg2s, arg1s);
-	else if (!strcmp(type.s, "SUB"))
-	    sync_action_list_add(sub_list, arg2s, arg1s);
-	else if (!strcmp(type.s, "UNSUB"))
-	    sync_action_list_add(sub_list, arg2s, arg1s);
+	if (!strcmp(args[0], "USER"))
+	    sync_action_list_add(user_list, NULL, args[1]);
+	else if (!strcmp(args[0], "UNUSER"))
+	    sync_action_list_add(unuser_list, NULL, args[1]);
+	else if (!strcmp(args[0], "META"))
+	    sync_action_list_add(meta_list, NULL, args[1]);
+	else if (!strcmp(args[0], "SIEVE"))
+	    sync_action_list_add(meta_list, NULL, args[1]);
+	else if (!strcmp(args[0], "MAILBOX"))
+	    sync_action_list_add(mailbox_list, args[1], NULL);
+	else if (!strcmp(args[0], "UNMAILBOX"))
+	    sync_action_list_add(unmailbox_list, args[1], NULL);
+	else if (!strcmp(args[0], "QUOTA"))
+	    sync_action_list_add(quota_list, args[1], NULL);
+	else if (!strcmp(args[0], "ANNOTATION"))
+	    sync_action_list_add(annot_list, args[1], NULL);
+	else if (!strcmp(args[0], "SEEN"))
+	    sync_action_list_add(seen_list, args[2], args[1]);
+	else if (!strcmp(args[0], "SUB"))
+	    sync_action_list_add(sub_list, args[2], args[1]);
+	else if (!strcmp(args[0], "UNSUB"))
+	    sync_action_list_add(sub_list, args[2], args[1]);
 	else
-	    syslog(LOG_ERR, "Unknown action type: %s", type.s);
-    }
-
-    prot_free(input);
-    if (doclose) {
-	close(fd);
-	doclose = 0;
+	    syslog(LOG_ERR, "Unknown action type: %s", args[0]);
     }
 
     /* Optimise out redundant clauses */
@@ -2679,8 +2617,6 @@ static int do_sync(const char *filename)
     }
 
   cleanup:
-    if (doclose) close(fd);
-
     if (r) {
 	if (verbose)
 	    fprintf(stderr, "Error in do_sync(): bailing out! %s\n", error_message(r));
@@ -2702,6 +2638,26 @@ static int do_sync(const char *filename)
     return r;
 }
 
+static int do_sync_filename(const char *filename)
+{
+    sync_log_reader_t *slr;
+    int r;
+
+    if ((filename == NULL) || !strcmp(filename, "-"))
+	slr = sync_log_reader_create_with_fd(0);    /* STDIN */
+    else
+	slr = sync_log_reader_create_with_filename(filename);
+
+    r = sync_log_reader_begin(slr);
+    if (!r)
+	r = do_sync(slr);
+
+    sync_log_reader_end(slr);
+    sync_log_reader_free(slr);
+    return r;
+}
+
+
 /* ====================================================================== */
 
 enum {
@@ -2710,24 +2666,19 @@ enum {
     RESTART_RECONNECT
 };
 
-static int do_daemon_work(const char *sync_log_file, const char *sync_shutdown_file,
+static int do_daemon_work(const char *channel, const char *sync_shutdown_file,
 		   unsigned long timeout, unsigned long min_delta,
 		   int *restartp)
 {
     int r = 0;
-    char *work_file_name;
     time_t session_start;
     time_t single_start;
     int    delta;
     struct stat sbuf;
+    sync_log_reader_t *slr;
 
     *restartp = RESTART_NONE;
-
-    /* Create a work log filename.  Use the PID so we can
-     * try to reprocess it if the sync fails */
-    work_file_name = xmalloc(strlen(sync_log_file)+20);
-    snprintf(work_file_name, strlen(sync_log_file)+20,
-	     "%s-%d", sync_log_file, getpid());
+    slr = sync_log_reader_create_with_channel(channel);
 
     session_start = time(NULL);
 
@@ -2749,52 +2700,34 @@ static int do_daemon_work(const char *sync_log_file, const char *sync_shutdown_f
 	    break;
 	}
 
-	if (stat(work_file_name, &sbuf) == 0) {
-	    /* Existing work log file from our parent < 1 hour old */
-	    /* XXX  Is 60 minutes a resonable timeframe? */
-	    syslog(LOG_NOTICE,
-		   "Reprocessing sync log file %s", work_file_name);
-	}
-	else {
-	    /* Check for sync_log file */
-	    if (stat(sync_log_file, &sbuf) < 0) {
-		if (min_delta > 0) {
-		    sleep(min_delta);
-		} else {
-		    usleep(100000);    /* 1/10th second */
-		}
-		continue;
+	r = sync_log_reader_begin(slr);
+	if (r) {
+	    /* including specifically r == IMAP_AGAIN */
+	    if (min_delta > 0) {
+		sleep(min_delta);
+	    } else {
+		usleep(100000);    /* 1/10th second */
 	    }
-
-	    /* Move sync_log to our work file */
-	    if (rename(sync_log_file, work_file_name) < 0) {
-		syslog(LOG_ERR, "Rename %s -> %s failed: %m",
-		       sync_log_file, work_file_name);
-		r = IMAP_IOERROR;
-		break;
-	    }
+	    continue;
 	}
 
 	/* Process the work log */
-	if ((r=do_sync(work_file_name))) {
+	if ((r=do_sync(slr))) {
 	    syslog(LOG_ERR,
 		   "Processing sync log file %s failed: %s",
-		   work_file_name, error_message(r));
+		   sync_log_reader_get_file_name(slr), error_message(r));
 	    break;
 	}
 
-	/* Remove the work log */
-	if (unlink(work_file_name) < 0) {
-	    syslog(LOG_ERR, "Unlink %s failed: %m", work_file_name);
-	    r = IMAP_IOERROR;
-	    break;
-	}
+	r = sync_log_reader_end(slr);
+	if (r) break;
+
 	delta = time(NULL) - single_start;
 
 	if (((unsigned) delta < min_delta) && ((min_delta-delta) > 0))
 	    sleep(min_delta-delta);
     }
-    free(work_file_name);
+    sync_log_reader_free(slr);
 
     if (*restartp == RESTART_NORMAL) {
 	prot_printf(sync_out, "RESTART\r\n");
@@ -3042,8 +2975,8 @@ static void replica_disconnect(void)
     backend_disconnect(sync_backend);
 }
 
-static void do_daemon(const char *sync_log_file, const char *sync_shutdown_file,
-	       const char *channel, unsigned long timeout, unsigned long min_delta)
+static void do_daemon(const char *channel, const char *sync_shutdown_file,
+		      unsigned long timeout, unsigned long min_delta)
 {
     int r = 0;
     int restart = 1;
@@ -3052,7 +2985,7 @@ static void do_daemon(const char *sync_log_file, const char *sync_shutdown_file,
 
     while (restart) {
 	replica_connect(channel);
-	r = do_daemon_work(sync_log_file, sync_shutdown_file,
+	r = do_daemon_work(channel, sync_shutdown_file,
 			   timeout, min_delta, &restart);
 	if (r) {
 	    /* See if we're still connected to the server.
@@ -3092,7 +3025,6 @@ int main(int argc, char **argv)
     int   wait     = 0;
     int   timeout  = 600;
     int   min_delta = 0;
-    const char *sync_log_file;
     const char *channel = NULL;
     const char *sync_shutdown_file = NULL;
     char buf[512];
@@ -3375,21 +3307,19 @@ int main(int argc, char **argv)
 	    /* Open up connection to server */
 	    replica_connect(channel);
 
-	    exit_rc = do_sync(input_filename);
+	    exit_rc = do_sync_filename(input_filename);
 
 	    replica_disconnect();
 	}
 	else {
 	    /* rolling replication */
-	    sync_log_file = sync_log_fname(channel);
-
 	    if (!sync_shutdown_file)
 		sync_shutdown_file = get_config(channel, "sync_shutdown_file");
 
 	    if (!min_delta)
 		min_delta = get_intconfig(channel, "sync_repeat_interval");
 
-	    do_daemon(sync_log_file, sync_shutdown_file, channel, timeout, min_delta);
+	    do_daemon(channel, sync_shutdown_file, timeout, min_delta);
 	}
 
 	break;

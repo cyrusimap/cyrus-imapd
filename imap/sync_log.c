@@ -61,6 +61,7 @@
 #include "exitcodes.h"
 #include "sync_log.h"
 #include "global.h"
+#include "imap/imap_err.h"
 #include "cyr_lock.h"
 #include "mailbox.h"
 #include "retry.h"
@@ -106,7 +107,7 @@ EXPORTED void sync_log_done(void)
     channels = NULL;
 }
 
-EXPORTED char *sync_log_fname(const char *channel)
+static char *sync_log_fname(const char *channel)
 {
     static char buf[MAX_MAILBOX_PATH];
 
@@ -279,3 +280,258 @@ EXPORTED void sync_log(const char *fmt, ...)
 	sync_log_base(channels->data[i], val);
 }
 
+/*
+ * Read-side sync log code
+ */
+struct sync_log_reader
+{
+    char *log_file;
+    char *work_file;
+    int fd;
+    int fd_is_ours;
+    struct protstream *input;
+    struct buf type;
+    struct buf arg1;
+    struct buf arg2;
+};
+
+static sync_log_reader_t *sync_log_reader_alloc(void)
+{
+    sync_log_reader_t *slr = xzmalloc(sizeof(sync_log_reader_t));
+    slr->fd = -1;
+    return slr;
+}
+
+/*
+ * Create a sync log reader object which will read from the given sync log
+ * channel 'channel'.  The channel may be NULL for the default channel.
+ * Returns a new object which must be freed with sync_log_reader_free().
+ * Does not return NULL.
+ */
+EXPORTED sync_log_reader_t *sync_log_reader_create_with_channel(const char *channel)
+{
+    sync_log_reader_t *slr = sync_log_reader_alloc();
+    struct buf buf = BUF_INITIALIZER;
+
+    slr->log_file = xstrdup(sync_log_fname(channel));
+
+    /* Create a work log filename.  Use the PID so we can
+     * try to reprocess it if the sync fails */
+    buf_printf(&buf, "%s-%d", slr->log_file, getpid());
+    slr->work_file = buf_release(&buf);
+
+    return slr;
+}
+
+/*
+ * Create a sync log reader object which will read from the given file
+ * 'filename'.  Returns a new object which must be freed with
+ * sync_log_reader_free().  Does not return NULL.
+ */
+EXPORTED sync_log_reader_t *sync_log_reader_create_with_filename(const char *filename)
+{
+    sync_log_reader_t *slr = sync_log_reader_alloc();
+    slr->work_file = xstrdup(filename);
+    /* slr->log_file remain NULL, which matters later */
+    return slr;
+}
+
+/*
+ * Create a sync log reader object which will read from the given file
+ * descriptor 'fd'.  The file descriptor must be open for reading and
+ * is not closed.  Returns a new object which must be freed with
+ * sync_log_reader_free().  Does not return NULL.
+ */
+EXPORTED sync_log_reader_t *sync_log_reader_create_with_fd(int fd)
+{
+    sync_log_reader_t *slr = sync_log_reader_alloc();
+    slr->fd = fd;
+    slr->fd_is_ours = 0;
+    /* slr->log_file remain NULL, which matters later */
+    return slr;
+}
+
+/*
+ * Free a sync log reader object.
+ */
+EXPORTED void sync_log_reader_free(sync_log_reader_t *slr)
+{
+    if (!slr) return;
+    if (slr->input) prot_free(slr->input);
+    if (slr->fd_is_ours && slr->fd >= 0) close(slr->fd);
+    free(slr->log_file);
+    free(slr->work_file);
+    buf_free(&slr->type);
+    buf_free(&slr->arg1);
+    buf_free(&slr->arg2);
+    free(slr);
+}
+
+/*
+ * Begin reading a sync log file.  If the reader is reading from a
+ * channel, rename the current log file so it will not be appended to by
+ * the write side code, and open the file. Otherwise, just open the file
+ * (note this is still necessary even when the reader is reading from a
+ * file descriptor).
+ *
+ * When sync_log_reader_begin() returns success, you should loop calling
+ * sync_log_reader_getitem() and handling the items, until it returns
+ * EOF, and then call sync_log_reader_end().
+ *
+ * Returns zero on success, IMAP_AGAIN if reading from a channel and
+ * there is no current log file, or an IMAP error code on failure.
+ */
+EXPORTED int sync_log_reader_begin(sync_log_reader_t *slr)
+{
+    struct stat sbuf;
+    int r;
+
+    if (slr->input) {
+	r = sync_log_reader_end(slr);
+	if (r) return r;
+    }
+
+    if (stat(slr->work_file, &sbuf) == 0) {
+	/* Existing work log file from our parent < 1 hour old */
+	/* XXX  Is 60 minutes a resonable timeframe? */
+	syslog(LOG_NOTICE,
+	       "Reprocessing sync log file %s", slr->work_file);
+    }
+    else if (!slr->log_file) {
+	syslog(LOG_ERR, "Failed to stat %s: %m",
+	       slr->log_file);
+	return IMAP_IOERROR;
+    }
+    else {
+	/* Check for sync_log file */
+	if (stat(slr->log_file, &sbuf) < 0) {
+	    if (errno == ENOENT)
+		return IMAP_AGAIN;  /* no problem, try again later */
+	    syslog(LOG_ERR, "Failed to stat %s: %m",
+		   slr->log_file);
+	    return IMAP_IOERROR;
+	}
+
+	/* Move sync_log to our work file */
+	if (rename(slr->log_file, slr->work_file) < 0) {
+	    syslog(LOG_ERR, "Rename %s -> %s failed: %m",
+		   slr->log_file, slr->work_file);
+	    return IMAP_IOERROR;
+	}
+    }
+
+    if (slr->fd < 0) {
+	int fd = open(slr->work_file, O_RDWR, 0);
+	if (fd < 0) {
+	    syslog(LOG_ERR, "Failed to open %s: %m", slr->work_file);
+	    return IMAP_IOERROR;
+	}
+
+	if (lock_blocking(fd) < 0) {
+	    syslog(LOG_ERR, "Failed to lock %s: %m", slr->work_file);
+	    close(fd);
+	    return IMAP_IOERROR;
+	}
+
+	slr->fd = fd;
+	slr->fd_is_ours = 1;
+    }
+
+    slr->input = prot_new(slr->fd, /*write*/0);
+
+    return 0;
+}
+
+EXPORTED const char *sync_log_reader_get_file_name(const sync_log_reader_t *slr)
+{
+    return slr->work_file;
+}
+
+/*
+ * Finish reading a sync log file.  Closes the file (and, if the reader
+ * is reading from a channel, unlinks the work file and prepares for the
+ * next file).  Returns 0 on success or an IMAP error code on failure.
+ */
+EXPORTED int sync_log_reader_end(sync_log_reader_t *slr)
+{
+    if (!slr->input)
+	return 0;
+
+    if (slr->input) {
+	prot_free(slr->input);
+	slr->input = NULL;
+    }
+
+    if (slr->fd_is_ours && slr->fd >= 0) {
+	close(slr->fd);
+	slr->fd = -1;
+    }
+
+    /* Remove the work log */
+    if (slr->log_file && unlink(slr->work_file) < 0) {
+	syslog(LOG_ERR, "Unlink %s failed: %m", slr->work_file);
+	return IMAP_IOERROR;
+    }
+
+    return 0;
+}
+
+/*
+ * Read a single log item from a sync log file.  The item will be
+ * returned as three constant strings.  The first string is the type of
+ * the item (e.g. "MAILBOX") and is always capitalised.  The second and
+ * third strings are arguments.
+ *
+ * Returns 0 on success, EOF when the end of the file is reached, or an
+ * IMAP error code on failure.
+ */
+EXPORTED int sync_log_reader_getitem(sync_log_reader_t *slr,
+				     const char *args[3])
+{
+    int c;
+    const char *arg1s = NULL;
+    const char *arg2s = NULL;
+
+    if (!slr->input)
+	return EOF;
+
+    for (;;) {
+	if ((c = getword(slr->input, &slr->type)) == EOF)
+	    return EOF;
+
+	/* Ignore blank lines */
+	if (c == '\r') c = prot_getc(slr->input);
+	if (c == '\n')
+	    continue;
+
+	if (c != ' ') {
+	    syslog(LOG_ERR, "Invalid input");
+	    eatline(slr->input, c);
+	    continue;
+	}
+
+	if ((c = getastring(slr->input, 0, &slr->arg1)) == EOF) return EOF;
+	arg1s = slr->arg1.s;
+
+	arg2s = NULL;
+	if (c == ' ') {
+	    if ((c = getastring(slr->input, 0, &slr->arg2)) == EOF) return EOF;
+	    arg2s = slr->arg2.s;
+	}
+
+	if (c == '\r') c = prot_getc(slr->input);
+	if (c != '\n') {
+	    syslog(LOG_ERR, "Garbage at end of input line");
+	    eatline(slr->input, c);
+	    continue;
+	}
+
+	break;
+    }
+
+    ucase(slr->type.s);
+    args[0] = slr->type.s;
+    args[1] = arg1s;
+    args[2] = arg2s;
+    return 0;
+}

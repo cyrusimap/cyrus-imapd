@@ -84,6 +84,16 @@ void sync_log(const char *fmt, ...);
 #define sync_log_subscribe(user, name) \
     sync_log("SUB %s %s\n", user, name)
 
-char *sync_log_fname(const char *channel);
+/* read-side sync log code */
+typedef struct sync_log_reader sync_log_reader_t;
+
+sync_log_reader_t *sync_log_reader_create_with_channel(const char *channel);
+sync_log_reader_t *sync_log_reader_create_with_filename(const char *filename);
+sync_log_reader_t *sync_log_reader_create_with_fd(int fd);
+void sync_log_reader_free(sync_log_reader_t *slr);
+int sync_log_reader_begin(sync_log_reader_t *slr);
+const char *sync_log_reader_get_file_name(const sync_log_reader_t *slr);
+int sync_log_reader_end(sync_log_reader_t *slr);
+int sync_log_reader_getitem(sync_log_reader_t *slr, const char *args[3]);
 
 #endif /* INCLUDED_SYNC_LOG_H */
