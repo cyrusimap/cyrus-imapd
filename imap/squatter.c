@@ -56,6 +56,7 @@
 #include <stdio.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/poll.h>
 #include <fcntl.h>
 #include <syslog.h>
 #include <string.h>
@@ -67,6 +68,7 @@
 #include "exitcodes.h"
 #include "imap/imap_err.h"
 #include "search_engines.h"
+#include "sync_log.h"
 #include "mailbox.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
@@ -152,7 +154,7 @@ static int squat_single(struct mailbox *mailbox, int incremental)
 }
 
 /* This is called once for each mailbox we're told to index. */
-static int index_one(const char *name)
+static int index_one(const char *name, int blocking)
 {
     mbentry_t *mbentry = NULL;
     struct mailbox *mailbox = NULL;
@@ -175,7 +177,7 @@ static int index_one(const char *name)
         syslog(LOG_INFO, "error opening looking up %s: %s\n",
                extname, error_message(r));
 
-        return 1;
+	return r;
     }
     if (mbentry->mbtype & MBTYPE_REMOTE) {
 	mboxlist_entry_free(&mbentry);
@@ -225,14 +227,18 @@ static int index_one(const char *name)
 	buf_free(&attrib);
     }
 
-    r = mailbox_open_iwl(name, &mailbox);
+    if (blocking)
+	r = mailbox_open_iwl(name, &mailbox);
+    else
+	r = mailbox_open_iwlnb(name, &mailbox);
+    if (r == IMAP_MAILBOX_LOCKED) return r;
     if (r) {
         if (verbose) {
             printf("error opening %s: %s\n", extname, error_message(r));
         }
         syslog(LOG_INFO, "error opening %s: %s\n", extname, error_message(r));
 
-        return 1;
+	return r;
     }
 
     fname = mailbox_meta_fname(mailbox, META_SQUAT);
@@ -245,7 +251,7 @@ static int index_one(const char *name)
                 printf("Skipping mailbox %s\n", extname);
             }
 	    mailbox_close(&mailbox);
-            return 0;
+	    return IMAP_AGAIN;
         }
     }
 
@@ -306,7 +312,7 @@ static void do_indexer(const strarray_t *sa)
 	return;	/* no indexer defined */
 
     for (i = 0 ; i < sa->count ; i++) {
-	index_one(sa->data[i]);
+	index_one(sa->data[i], /*blocking*/1);
 	/* Ignore errors: most will be mailboxes moving around */
     }
 
@@ -428,6 +434,204 @@ next:
     }
 }
 
+typedef struct qitem qitem_t;
+struct qitem
+{
+    qitem_t *next;
+    int delta_ms;	/* time after previous item */
+    int delay_ms;	/* how much to delay */
+    char *mboxname;
+};
+/* Initial delay is very short to make retries fast when
+ * racing against lmtpd.  */
+#define INIT_DELAY_MS    (50)	    /* 50 millisec */
+#define MAX_DELAY_MS     (3000000)  /* 5 min */
+
+static qitem_t *queue;
+
+static qitem_t *qitem_new(const char *mboxname)
+{
+    qitem_t *item = xzmalloc(sizeof(qitem_t));
+    item->delay_ms = INIT_DELAY_MS;
+    item->mboxname = xstrdup(mboxname);
+    return item;
+}
+
+static void qitem_delete(qitem_t *item)
+{
+    free(item->mboxname);
+    free(item);
+}
+
+static void queue_dump(qitem_t **headp)
+{
+    qitem_t *item;
+
+    syslog(LOG_ERR, "XXX queue {");
+    for (item = *headp ; item ; item = item->next) {
+	syslog(LOG_ERR, "XXX delta_ms=%d delay_ms=%d mboxname=%s",
+		item->delta_ms, item->delay_ms, item->mboxname);
+    }
+    syslog(LOG_ERR, "XXX } queue");
+}
+
+static qitem_t *queue_remove_by_name(qitem_t **headp, const char *mboxname)
+{
+    qitem_t **prevp;
+
+    for (prevp = headp ; *prevp ; prevp = &((*prevp)->next)) {
+	qitem_t *item = *prevp;
+	if (!strcmp(item->mboxname, mboxname)) {
+	    *prevp = item->next;
+	    item->next = NULL;
+	    return item;
+	}
+    }
+    return NULL;
+}
+
+static qitem_t *_queue_detach(qitem_t **prevp)
+{
+    qitem_t *item = *prevp;
+    if (item) {
+	*prevp = item->next;
+	item->next = NULL;
+    }
+    return item;
+}
+
+static void _queue_insert(qitem_t **prevp, qitem_t *item)
+{
+    item->next = *prevp;
+    *prevp = item;
+}
+
+static qitem_t *queue_remove_due(qitem_t **headp)
+{
+    qitem_t *item = *headp;
+    if (item && item->delta_ms <= 0)
+	return _queue_detach(headp);
+    return NULL;
+}
+
+static void queue_delay(qitem_t **headp, qitem_t *item)
+{
+    qitem_t **prevp;
+    int delta_ms;
+
+    delta_ms = item->delay_ms;
+    if (item->delay_ms < MAX_DELAY_MS)
+	item->delay_ms *= 2;    /* exponential backoff */
+syslog(LOG_ERR, "XXX queue_delay(%s, %d ms)", item->mboxname, delta_ms);
+
+    for (prevp = headp ;
+	 *prevp && delta_ms >= (*prevp)->delta_ms ;
+	 prevp = &((*prevp)->next))
+	delta_ms -= (*prevp)->delta_ms;
+
+    item->delta_ms = delta_ms;
+    _queue_insert(prevp, item);
+}
+
+static int queue_next_due(qitem_t **headp)
+{
+    return (*headp ? (*headp)->delta_ms : INT_MAX);
+}
+
+static void queue_slept(qitem_t **headp, int delay_ms)
+{
+    if (*headp)
+	(*headp)->delta_ms -= delay_ms;
+}
+
+static void read_sync_log_items(sync_log_reader_t *slr)
+{
+    const char *args[3];
+    qitem_t *item = NULL;
+
+    while (sync_log_reader_getitem(slr, args) == 0) {
+	if (!strcmp(args[0], "MAILBOX")) {
+syslog(LOG_ERR, "XXX read_sync_log_items: %s %s", args[0], args[1]);
+	    item = queue_remove_by_name(&queue, args[1]);
+	    if (!item)
+		item = qitem_new(args[1]);
+	    item->delay_ms = INIT_DELAY_MS;
+	    queue_delay(&queue, item);
+	}
+    }
+
+    /* TODO: save the queue to a file at this point */
+}
+
+static void do_rolling(const char *channel)
+{
+    sync_log_reader_t *slr;
+    qitem_t *item;
+    int poll_period_ms = 1000;
+    int delay_ms;
+    int r;
+
+syslog(LOG_ERR, "XXX do_rolling: start");
+    slr = sync_log_reader_create_with_channel(channel);
+    for (;;) {
+syslog(LOG_ERR, "XXX do_rolling: top of loop");
+	signals_poll();
+
+	if (!queue) {
+	    /* have successfully drained the queue, go see
+	     * if there's some more to be had in the sync log */
+	    r = sync_log_reader_begin(slr);
+syslog(LOG_ERR, "XXX do_rolling: sync_log_reader_begin returned %d (%s)", r, error_message(r));
+	    if (r && r != IMAP_AGAIN)
+		break;
+	    if (!r) {
+syslog(LOG_ERR, "XXX do_rolling: reading items from sync log");
+		read_sync_log_items(slr);
+	    }
+	}
+	else if (queue_next_due(&queue) <= 0) {
+	    /* have some due items in the queue, try to index them */
+queue_dump(&queue);
+	    rx = search_begin_update(verbose);
+	    while ((item = queue_remove_due(&queue))) {
+syslog(LOG_ERR, "XXX do_rolling: indexing %s", item->mboxname);
+		r = index_one(item->mboxname, /*blocking*/0);
+syslog(LOG_ERR, "XXX do_rolling: index_one returned %d (%s)", r, error_message(r));
+		if (r == IMAP_AGAIN || r == IMAP_MAILBOX_LOCKED)
+		    queue_delay(&queue, item);
+		else
+		    qitem_delete(item);
+	    }
+	    search_end_update(rx);
+	    rx = NULL;
+queue_dump(&queue);
+	}
+
+	delay_ms = MIN(poll_period_ms, queue_next_due(&queue));
+	if (delay_ms) {
+syslog(LOG_ERR, "XXX do_rolling: sleeping %d ms", delay_ms);
+	    poll(NULL, 0, delay_ms);
+	    queue_slept(&queue, delay_ms);
+	}
+    }
+syslog(LOG_ERR, "XXX do_rolling: end");
+    sync_log_reader_free(slr);
+}
+
+static void shut_down(int code) __attribute__((noreturn));
+static void shut_down(int code)
+{
+    seen_done();
+    mboxlist_close();
+    mboxlist_done();
+    annotatemore_close();
+    annotate_done();
+
+    cyrus_done();
+
+    exit(code);
+}
+
 int main(int argc, char **argv)
 {
     int opt;
@@ -435,7 +639,10 @@ int main(int argc, char **argv)
     int r;
     strarray_t mboxnames = STRARRAY_INITIALIZER;
     const char *query = NULL;
-    enum { UNKNOWN, INDEXER, SEARCH, START_DAEMON, STOP_DAEMON } mode = UNKNOWN;
+    int background = 1;
+    const char *channel = "squatter";
+    int init_flags = CYRUSINIT_PERROR;
+    enum { UNKNOWN, INDEXER, SEARCH, ROLLING, START_DAEMON, STOP_DAEMON } mode = UNKNOWN;
 
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
 	fatal("must run as the Cyrus user", EC_USAGE);
@@ -443,10 +650,15 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:c:e:rsiav")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:Rc:e:fn:rsiav")) != EOF) {
 	switch (opt) {
 	case 'C':		/* alt config file */
 	    alt_config = optarg;
+	    break;
+
+	case 'R':		/* rolling indexer */
+	    if (mode != UNKNOWN) usage(argv[0]);
+	    mode = ROLLING;
 	    break;
 
 	case 'c':		/* daemon control mode */
@@ -463,6 +675,14 @@ int main(int argc, char **argv)
 	    if (mode != UNKNOWN && mode != SEARCH) usage(argv[0]);
 	    query = optarg;
 	    mode = SEARCH;
+	    break;
+
+	case 'f':		/* foreground (with -R) */
+	    background = 0;
+	    break;
+
+	case 'n':		/* sync channel name (with -R) */
+	    channel = optarg;
 	    break;
 
 	case 'v':		/* verbose */
@@ -501,9 +721,36 @@ int main(int argc, char **argv)
     if (mode == UNKNOWN)
 	mode = INDEXER;
 
-    cyrus_init(alt_config, "squatter",
-	       (isatty(2) ? CYRUSINIT_PERROR : 0),
-	       CONFIG_NEED_PARTITION_DATA);
+    /* fork and close fds if required */
+    if (mode == ROLLING && background) {
+	pid_t pid;
+	int nfds = getdtablesize();
+	int nullfd;
+	int fd;
+
+	nullfd = open("/dev/null", O_RDWR, 0);
+	if (nullfd < 0) {
+	    perror("/dev/null");
+	    exit(1);
+	}
+	dup2(nullfd, 0);
+	dup2(nullfd, 1);
+	dup2(nullfd, 2);
+	for (fd = 3 ; fd < nfds ; fd++)
+	    close(fd);	    /* this will close nullfd too */
+	init_flags &= ~CYRUSINIT_PERROR;
+
+	pid = fork();
+	if (pid == -1) {
+	    perror("fork");
+	    exit(1);
+	}
+
+	if (pid)
+	    exit(0); /* parent */
+    }
+
+    cyrus_init(alt_config, "squatter", init_flags, CONFIG_NEED_PARTITION_DATA);
 
     /* Set namespace -- force standard (internal) */
     if ((r = mboxname_init_namespace(&squat_namespace, 1)) != 0) {
@@ -515,6 +762,11 @@ int main(int argc, char **argv)
 
     mboxlist_init(0);
     mboxlist_open(NULL);
+
+    if (mode == ROLLING) {
+	signals_set_shutdown(&shut_down);
+	signals_add_handlers(0);
+    }
 
     switch (mode) {
     case UNKNOWN:
@@ -531,6 +783,9 @@ int main(int argc, char **argv)
 	if (recursive_flag && optind == argc) usage(argv[0]);
 	expand_mboxnames(&mboxnames, argc-optind, (const char **)argv+optind);
 	do_search(query, &mboxnames);
+	break;
+    case ROLLING:
+	do_rolling(channel);
 	break;
     case START_DAEMON:
 	/* daemon control requires exactly one mailbox */
@@ -549,13 +804,5 @@ int main(int argc, char **argv)
     }
 
     strarray_fini(&mboxnames);
-    seen_done();
-    mboxlist_close();
-    mboxlist_done();
-    annotatemore_close();
-    annotate_done();
-
-    cyrus_done();
-
-    return 0;
+    shut_down(0);
 }
