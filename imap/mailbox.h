@@ -485,7 +485,8 @@ extern int mailbox_rewrite_index_record(struct mailbox *mailbox,
 extern int mailbox_append_index_record(struct mailbox *mailbox,
 				       struct index_record *record);
 extern int mailbox_find_index_record(struct mailbox *mailbox, uint32_t uid,
-				     struct index_record *record);
+				     struct index_record *record,
+				     const struct index_record *oldrecord);
 
 extern int mailbox_set_acl(struct mailbox *mailbox, const char *acl,
 			   int dirty_modseq);

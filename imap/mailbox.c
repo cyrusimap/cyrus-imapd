@@ -1659,7 +1659,7 @@ static int mailbox_lock_conversations(struct mailbox *mailbox)
 }
 
 /*
- * bsearch() function to compare two index record buffers by UID
+ * bsearch() comparison function for searching on UID.
  */
 static int rec_compar(const void *key, const void *mem)
 {
@@ -1670,18 +1670,51 @@ static int rec_compar(const void *key, const void *mem)
 }
 
 /*
- * Find the index record in mailbox corresponding to UID
+ * Perform a binary search on the mailbox index file to read the record
+ * for uid 'uid' into 'record'.  If 'oldrecord' is not NULL then it is
+ * assumed to point a correct and current index record from an earlier
+ * call, and the search is bounded by that record.  Returns 0 on success
+ * or an IMAP error code on failure.
  */
 EXPORTED int mailbox_find_index_record(struct mailbox *mailbox, uint32_t uid,
-			      struct index_record *record)
+				       struct index_record *record,
+				       const struct index_record *oldrecord)
 {
     const char *mem, *base = mailbox->index_base + mailbox->i.start_offset;
+    const char *low = base;
     size_t num_records = mailbox->i.num_records;
     size_t size = mailbox->i.record_size;
     int r;
 
-    mem = bsearch(&uid, base, num_records, size, rec_compar);
-    if (!mem) return CYRUSDB_NOTFOUND;
+    if (uid > mailbox->i.last_uid) return IMAP_NOTFOUND;
+
+    if (oldrecord) {
+	const char *oldmem = base + (oldrecord->recno-1) * size;
+	if (uid == oldrecord->uid) {
+	    /* already found it */
+	    low = oldmem;
+	    num_records = 1;
+	}
+	else if (uid == oldrecord->uid+1) {
+	    /* Optimise for the common case of moving up by one uid.
+	     * The index file is in UID order so the record we want
+	     * is either the next one or is not present. */
+	    low = oldmem + size;
+	    num_records = 1;
+	}
+	else if (uid < oldrecord->uid) {
+	    /* target is before the old record */
+	    num_records = oldrecord->recno-1;
+	}
+	else {
+	    /* target is after the old record */
+	    low = oldmem + size;
+	    num_records -= oldrecord->recno;
+	}
+    }
+
+    mem =  bsearch(&uid, low, num_records, size, rec_compar);
+    if (!mem) return IMAP_NOTFOUND;
 
     if ((r = mailbox_buf_to_index_record(mem, mailbox->i.minor_version, record)))
 	return r;
