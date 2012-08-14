@@ -858,6 +858,12 @@ out:
     return r;
 }
 
+static uint32_t first_unindexed_uid(search_text_receiver_t *rx
+				    __attribute__((unused)))
+{
+    return 1;
+}
+
 static int is_indexed(search_text_receiver_t *rx, uint32_t uid)
 {
     SquatReceiverData *d = (SquatReceiverData *)rx;
@@ -937,6 +943,7 @@ static search_text_receiver_t *begin_update(int verbose)
 
     d = xzmalloc(sizeof(SquatReceiverData));
     d->super.begin_mailbox = begin_mailbox;
+    d->super.first_unindexed_uid = first_unindexed_uid;
     d->super.is_indexed = is_indexed;
     d->super.begin_message = begin_message;
     d->super.begin_part = begin_part;

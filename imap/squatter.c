@@ -115,29 +115,39 @@ static int usage(const char *name)
 /* ====================================================================== */
 
 /* Squat a single open mailbox */
-static int squat_single(struct index_state *state, int incremental)
+static int squat_single(struct mailbox *mailbox, int incremental)
 {
-    uint32_t msgno;
+    uint32_t uid;
     message_t *msg;
     int r = 0;			/* Using IMAP_* not SQUAT_* return codes here */
+    int first = 1;
+    struct index_record record;
 
-    r = rx->begin_mailbox(rx, state->mailbox, incremental);
-    if (r) goto out;
+    r = rx->begin_mailbox(rx, mailbox, incremental);
+    if (r) return r;
 
-    for (msgno = 1; msgno <= state->exists; msgno++) {
-	uint32_t uid = index_getuid(state, msgno);
+    for (uid = rx->first_unindexed_uid(rx) ;
+	 uid <= mailbox->i.last_uid ;
+	 uid++) {
 
 	if (rx->is_indexed(rx, uid))
 	    continue;
 
 	/* This UID didn't appear in the old index file */
-	msg = index_get_message(state, msgno);
+	r = mailbox_find_index_record(mailbox, uid, &record,
+				      (first ? NULL : &record));
+	if (r == IMAP_NOTFOUND) continue;
+	if (r) break;
+	first = 0;
+	if (record.system_flags & (FLAG_EXPUNGED|FLAG_UNLINKED))
+	    continue;
+
+	msg = message_new_from_record(mailbox, &record);
 	index_getsearchtext(msg, rx);
 	message_unref(&msg);
     }
 
-    r = rx->end_mailbox(rx, state->mailbox);
-out:
+    r = rx->end_mailbox(rx, mailbox);
     return (r);
 }
 
@@ -145,7 +155,7 @@ out:
 static int index_one(const char *name)
 {
     mbentry_t *mbentry = NULL;
-    struct index_state *state = NULL;
+    struct mailbox *mailbox = NULL;
     int r;
     const char *fname;
     struct stat sbuf;
@@ -215,7 +225,7 @@ static int index_one(const char *name)
 	buf_free(&attrib);
     }
 
-    r = index_open(name, NULL, &state);
+    r = mailbox_open_iwl(name, &mailbox);
     if (r) {
         if (verbose) {
             printf("error opening %s: %s\n", extname, error_message(r));
@@ -225,16 +235,16 @@ static int index_one(const char *name)
         return 1;
     }
 
-    fname = mailbox_meta_fname(state->mailbox, META_SQUAT);
+    fname = mailbox_meta_fname(mailbox, META_SQUAT);
 
     /* process only changed mailboxes if skip option delected. */
     if (skip_unmodified && !stat(fname, &sbuf)) {
-        if (SKIP_FUZZ + state->mailbox->index_mtime < sbuf.st_mtime) {
+	if (SKIP_FUZZ + mailbox->index_mtime < sbuf.st_mtime) {
             syslog(LOG_DEBUG, "skipping mailbox %s", extname);
             if (verbose > 0) {
                 printf("Skipping mailbox %s\n", extname);
             }
-            index_close(&state);
+	    mailbox_close(&mailbox);
             return 0;
         }
     }
@@ -244,9 +254,9 @@ static int index_one(const char *name)
       printf("Indexing mailbox %s... ", extname);
     }
 
-    squat_single(state, incremental_mode);
+    squat_single(mailbox, incremental_mode);
 
-    index_close(&state);
+    mailbox_close(&mailbox);
 
     return 0;
 }

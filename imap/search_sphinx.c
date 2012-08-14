@@ -830,6 +830,13 @@ static int begin_mailbox(search_text_receiver_t *rx,
     return 0;
 }
 
+static uint32_t first_unindexed_uid(search_text_receiver_t *rx)
+{
+    sphinx_receiver_t *tr = (sphinx_receiver_t *)rx;
+
+    return tr->latest+1;
+}
+
 static int is_indexed(search_text_receiver_t *rx, uint32_t uid)
 {
     sphinx_receiver_t *tr = (sphinx_receiver_t *)rx;
@@ -861,6 +868,7 @@ static search_text_receiver_t *begin_update(int verbose)
 
     tr = xzmalloc(sizeof(sphinx_receiver_t));
     tr->super.begin_mailbox = begin_mailbox;
+    tr->super.first_unindexed_uid = first_unindexed_uid;
     tr->super.is_indexed = is_indexed;
     tr->super.begin_message = begin_message;
     tr->super.begin_part = begin_part;

@@ -121,6 +121,7 @@ typedef struct search_text_receiver search_text_receiver_t;
 struct search_text_receiver {
     int (*begin_mailbox)(search_text_receiver_t *,
 			 struct mailbox *, int incremental);
+    uint32_t (*first_unindexed_uid)(search_text_receiver_t *);
     int (*is_indexed)(search_text_receiver_t *, uint32_t uid);
     void (*begin_message)(search_text_receiver_t *, uint32_t uid);
     void (*begin_part)(search_text_receiver_t *, int part);
