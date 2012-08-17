@@ -1853,6 +1853,11 @@ EXPORTED int charset_extract(search_text_receiver_t *receiver,
     input = canon_init(flags, input);
 
     if (!strcmpsafe(subtype, "HTML")) {
+	if ((flags & CHARSET_SKIPHTML)) {
+	    /* silently pretend we indexed it, but actually ignore it */
+	    convert_free(input);
+	    return 1;
+	}
 	/* this is text/html data, so we can make ourselves useful by
 	 * stripping html tags, css and js. */
 	input = striphtml_init(input);

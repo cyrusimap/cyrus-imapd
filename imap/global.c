@@ -252,6 +252,10 @@ EXPORTED int cyrus_init(const char *alt_config, const char *ident, unsigned flag
 	    break;
     }
 
+    if (config_getswitch(IMAPOPT_SEARCH_SKIPHTML))
+	charset_flags |= CHARSET_SKIPHTML;
+
+
     if (!cyrus_init_nodb) {
 	/* lookup the database backends */
 	config_mboxlist_db = config_getstring(IMAPOPT_MBOXLIST_DB);
