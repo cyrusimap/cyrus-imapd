@@ -1727,6 +1727,15 @@ product version in the capabilities */
 /* If enabled, this option causes LIST and LSUB output to always include
    the XLIST "special-use" flags */
 
+{ "sphinxmgr_socket", "{configdirectory}/socket/sphinxmgr", STRING }
+/* Unix domain socket that the Cyrus manager for Sphinx index
+   daemons listens on. */
+
+{ "sphinxmgr_timeout", 600, INT }
+/* How long a Sphinx index daemon will be kept running after the user
+   does a search, in case the user wants to do another search
+   (default: 10 minutes). */
+
 { "sql_database", NULL, STRING }
 /* Name of the database which contains the cyrusdb table(s). */
 
