@@ -250,6 +250,13 @@ sub _params_defaults
 				      $self->{min_extra_lines}))
 	unless defined $params->{extra_lines};
 
+    $params->{mime_encoding} = '7bit'
+	unless defined $params->{mime_encoding};
+    $params->{mime_type} = 'text/plain'
+	unless defined $params->{mime_type};
+    $params->{mime_charset} = 'us-ascii'
+	unless defined $params->{mime_charset};
+
     return $params;
 }
 
@@ -286,8 +293,11 @@ sub generate
 		     "from mail." . $from->domain() . " (mail." . $from->domain() . " [192.168.0.1])\r\n" .
 		     "\tby gateway." . $to->domain() . " (gateway." . $to->domain() . " [10.0.0.1]); $datestr");
     $msg->add_header("MIME-Version", "1.0");
-    $msg->add_header("Content-Type", "text/plain; charset=\"us-ascii\"");
-    $msg->add_header("Content-Transfer-Encoding", "7bit");
+    my $mimetype = $params->{mime_type};
+    $mimetype .= "; charset=\"$params->{mime_charset}\""
+	if $params->{mime_charset} ne '';
+    $msg->add_header("Content-Type", $mimetype);
+    $msg->add_header("Content-Transfer-Encoding", $params->{mime_encoding});
     $msg->add_header("Subject", $params->{subject});
     $msg->add_header("From", $from);
     $msg->add_header("Message-ID", "<" . $params->{messageid} . ">");
