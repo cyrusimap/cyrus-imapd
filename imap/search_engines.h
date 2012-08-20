@@ -56,6 +56,7 @@ struct search_builder {
     void (*match)(search_builder_t *, int part, const char *str);
 };
 
+#define SEARCH_FLAG_CAN_BATCH	(1<<0)
 struct search_engine {
     const char *name;
     unsigned int flags;
@@ -82,6 +83,7 @@ search_text_receiver_t *search_begin_update(int verbose);
 int search_end_update(search_text_receiver_t *rx);
 int search_start_daemon(int verbose, const char *mboxname);
 int search_stop_daemon(int verbose, const char *mboxname);
+int search_batch_size(void);
 
 /* for debugging */
 extern const char *search_op_as_string(int op);

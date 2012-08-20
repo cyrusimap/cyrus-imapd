@@ -472,7 +472,9 @@ struct sphinx_receiver
 			     * INSERTing into the table */
 };
 
-#define MAX_UNCOMMITTED	    10
+/* This is carefully aligned with the default search_batchsize so that
+ * we get the minimum number of commits with default parameters */
+#define MAX_UNCOMMITTED	    20
 
 /* Maximum size of a query, determined empirically, is a little bit
  * under 8MB.  That seems like more than enough, so let's limit the
@@ -1092,7 +1094,7 @@ out:
 
 const struct search_engine sphinx_search_engine = {
     "Sphinx",
-    0,
+    SEARCH_FLAG_CAN_BATCH,
     begin_search1,
     end_search1,
     begin_update,

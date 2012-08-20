@@ -131,6 +131,13 @@ EXPORTED int search_stop_daemon(int verbose, const char *mboxname)
     return (se->stop_daemon ? se->stop_daemon(verbose, mboxname) : 0);
 }
 
+EXPORTED int search_batch_size(void)
+{
+    const struct search_engine *se = engine();
+    return (se->flags & SEARCH_FLAG_CAN_BATCH ?
+	    config_getint(IMAPOPT_SEARCH_BATCHSIZE) : INT_MAX);
+}
+
 const char *search_op_as_string(int op)
 {
     static char buf[33];

@@ -117,13 +117,18 @@ static int usage(const char *name)
 /* ====================================================================== */
 
 /* Squat a single open mailbox */
-static int squat_single(struct mailbox *mailbox, int incremental)
+static int squat_single(struct mailbox *mailbox, int incremental,
+			int *morep)
 {
     uint32_t uid;
     message_t *msg;
     int r = 0;			/* Using IMAP_* not SQUAT_* return codes here */
     int first = 1;
+    int batch_size = search_batch_size();
+    int nbatch = 0;
     struct index_record record;
+
+    *morep = 0;
 
     r = rx->begin_mailbox(rx, mailbox, incremental);
     if (r) return r;
@@ -147,10 +152,17 @@ static int squat_single(struct mailbox *mailbox, int incremental)
 	msg = message_new_from_record(mailbox, &record);
 	index_getsearchtext(msg, rx);
 	message_unref(&msg);
+
+	if (++nbatch >= batch_size) {
+	    *morep = 1;
+	    break;
+	}
     }
 
     r = rx->end_mailbox(rx, mailbox);
-    return (r);
+    if (r) return r;
+
+    return r;
 }
 
 /* This is called once for each mailbox we're told to index. */
@@ -159,8 +171,8 @@ static int index_one(const char *name, int blocking)
     mbentry_t *mbentry = NULL;
     struct mailbox *mailbox = NULL;
     int r;
-    const char *fname;
-    struct stat sbuf;
+    int more;
+    int nbatches = 0;
     char extname[MAX_MAILBOX_BUFFER];
 
     /* Convert internal name to external */
@@ -227,42 +239,52 @@ static int index_one(const char *name, int blocking)
 	buf_free(&attrib);
     }
 
-    if (blocking)
-	r = mailbox_open_iwl(name, &mailbox);
-    else
-	r = mailbox_open_iwlnb(name, &mailbox);
-    if (r == IMAP_MAILBOX_LOCKED) return r;
-    if (r) {
-        if (verbose) {
-            printf("error opening %s: %s\n", extname, error_message(r));
-        }
-        syslog(LOG_INFO, "error opening %s: %s\n", extname, error_message(r));
+    do {
+	if (blocking)
+	    r = mailbox_open_iwl(name, &mailbox);
+	else
+	    r = mailbox_open_iwlnb(name, &mailbox);
+	if (r == IMAP_MAILBOX_LOCKED) return r;
+	if (r) {
+	    if (verbose) {
+		printf("error opening %s: %s\n", extname, error_message(r));
+	    }
+	    syslog(LOG_INFO, "error opening %s: %s\n", extname, error_message(r));
 
-	return r;
-    }
+	    return r;
+	}
 
-    fname = mailbox_meta_fname(mailbox, META_SQUAT);
+	if (!nbatches++ ) {
+	    /* process only changed mailboxes if skip option delected. */
+	    if (skip_unmodified) {
+		char *fname = mailbox_meta_fname(mailbox, META_SQUAT);
+		struct stat sbuf;
+		if (!stat(fname, &sbuf) &&
+		    SKIP_FUZZ + mailbox->index_mtime < sbuf.st_mtime) {
+		    syslog(LOG_DEBUG, "skipping mailbox %s", extname);
+		    if (verbose > 0) {
+			printf("Skipping mailbox %s\n", extname);
+		    }
+		    mailbox_close(&mailbox);
+		    return IMAP_AGAIN;
+		}
+	    }
 
-    /* process only changed mailboxes if skip option delected. */
-    if (skip_unmodified && !stat(fname, &sbuf)) {
-	if (SKIP_FUZZ + mailbox->index_mtime < sbuf.st_mtime) {
-            syslog(LOG_DEBUG, "skipping mailbox %s", extname);
-            if (verbose > 0) {
-                printf("Skipping mailbox %s\n", extname);
-            }
-	    mailbox_close(&mailbox);
-	    return IMAP_AGAIN;
-        }
-    }
+	    syslog(LOG_INFO, "indexing mailbox %s... ", extname);
+	    if (verbose > 0) {
+	      printf("Indexing mailbox %s... ", extname);
+	    }
+	}
+	else {
+	    if (verbose)
+		syslog(LOG_INFO, "starting another batch for mailbox %s... ", extname);
+	}
 
-    syslog(LOG_INFO, "indexing mailbox %s... ", extname);
-    if (verbose > 0) {
-      printf("Indexing mailbox %s... ", extname);
-    }
+	r = squat_single(mailbox, incremental_mode, &more);
 
-    squat_single(mailbox, incremental_mode);
-
-    mailbox_close(&mailbox);
+	mailbox_close(&mailbox);
+	if (r) break;
+    } while (more);
 
     return 0;
 }
