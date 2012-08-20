@@ -104,10 +104,12 @@ typedef enum {
 static int parseheader(FILE *f, char **headname, char **contents)
 {
     char c;
-    char name[80], body[1024];
-    int off = 0;
+    static struct buf name = BUF_INITIALIZER;
+    static struct buf body = BUF_INITIALIZER;
     state s = HDR_NAME_START;
 
+    buf_reset(&name);
+    buf_reset(&body);
 
     /* there are two ways out of this loop, both via gotos:
        either we successfully read a character (got_header)
@@ -121,21 +123,20 @@ static int parseheader(FILE *f, char **headname, char **contents)
 	    }
 	    if (!isalpha(c))
 		goto ph_error;
-	    name[0] = TOLOWER(c);
-	    off = 1;
+	    buf_putc(&name, TOLOWER(c));
 	    s = HDR_NAME;
 	    break;
 
 	case HDR_NAME:
 	    if (c == ' ' || c == '\t' || c == ':') {
-		name[off] = '\0';
+		buf_cstring(&name);
 		s = (c == ':' ? HDR_CONTENT_START : COLON);
 		break;
 	    }
 	    if (iscntrl(c)) {
 		goto ph_error;
 	    }
-	    name[off++] = TOLOWER(c);
+	    buf_putc(&name, TOLOWER(c));
 	    break;
 
 	case COLON:
@@ -149,7 +150,7 @@ static int parseheader(FILE *f, char **headname, char **contents)
 	case HDR_CONTENT_START:
 	    if (c == ' ' || c == '\t') /* eat the whitespace */
 		break;
-	    off = 0;
+	    buf_reset(&body);
 	    s = HDR_CONTENT;
 	    /* falls through! */
 	case HDR_CONTENT:
@@ -164,7 +165,7 @@ static int parseheader(FILE *f, char **headname, char **contents)
 		}
 		if (c != ' ' && c != '\t') {
 		    /* this is the end of the header */
-		    body[off] = '\0';
+		    buf_cstring(&body);
 		    ungetc(c, f);
 		    goto got_header;
 		}
@@ -177,7 +178,7 @@ static int parseheader(FILE *f, char **headname, char **contents)
 		 */
 	    }
 	    /* just an ordinary character */
-	    body[off++] = c;
+	    buf_putc(&body, c);
 	    break;
 	}
     }
@@ -191,8 +192,8 @@ static int parseheader(FILE *f, char **headname, char **contents)
     return -1;
 
  got_header:
-    if (headname != NULL) *headname = xstrdup(name);
-    if (contents != NULL) *contents = xstrdup(body);
+    if (headname != NULL) *headname = xstrdup(name.s);
+    if (contents != NULL) *contents = xstrdup(body.s);
 
     return 0;
 }
