@@ -82,7 +82,7 @@ char QPSAFECHAR[256] = {
 struct qp_state {
     int isheader;
     int bytesleft;
-    int codepoint;
+    unsigned char lastoctet;
 };
 
 struct b64_state {
@@ -175,7 +175,7 @@ static const char *convert_name(struct convert_rock *rock);
 /*
  * Table for decoding hexadecimal in quoted-printable
  */
-static const char index_hex[256] = {
+static const unsigned char index_hex[256] = {
     XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
     XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
     XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX, XX,XX,XX,XX,
@@ -290,32 +290,54 @@ static void qp2byte(struct convert_rock *rock, int c)
     struct qp_state *s = (struct qp_state *)rock->state;
     int val;
 
+    assert(c == U_REPLACEMENT || (unsigned)c <= 0xff);
+
     if (s->bytesleft) {
 	s->bytesleft--;
-	val = HEXCHAR(c);
-	if (val == XX) {
-	    /* mark invalid regardless */
-	    s->codepoint = -1;
+
+	 /* the replacement char is not part of a valid sequence */
+	if (c == U_REPLACEMENT) {
+invalid:
+	    /* RFC2045 says "...A reasonable approach by a robust
+	     * implementation might be to include the "=" character
+	     * and the following character in the decoded data without
+	     * any transformation..." */
+	    convert_putc(rock->next, '=');
+	    if (!s->bytesleft)
+		convert_putc(rock->next, s->lastoctet);
+	    convert_putc(rock->next, c);
+	    s->bytesleft = 0;
 	    return;
 	}
-	if (s->codepoint != -1) {
-	    /* don't blat the invalid marker, but still absorb
-	     * the second char */
-	    s->codepoint = (s->codepoint << 4) + val;
+
+	/* detect and swallow soft line breaks */
+	if (s->bytesleft == 1 && c == '\r') {
+	    s->lastoctet = c;
+	    return;
 	}
+	if (s->bytesleft == 0 && s->lastoctet == '\r') {
+	    if (c == '\n')
+		return;
+	    goto invalid;
+	}
+
+	val = HEXCHAR(c);
+	if (val == XX)
+	    goto invalid;
+	/* if we got this far, we have two valid hex chars */
 	if (!s->bytesleft) {
-	    if (s->codepoint == -1)
-		convert_putc(rock->next, U_REPLACEMENT);
-	    else
-		convert_putc(rock->next, s->codepoint & 0xff);
+	    val |= (HEXCHAR(s->lastoctet) << 4);
+	    assert((unsigned)val <= 0xff);
+	    convert_putc(rock->next, val);
 	}
+	s->lastoctet = c;
 	return;
     }
 
     /* start an encoded byte */
     if (c == '=') {
 	s->bytesleft = 2;
-	s->codepoint = 0;
+	s->lastoctet = 0;
 	return;
     }
 
