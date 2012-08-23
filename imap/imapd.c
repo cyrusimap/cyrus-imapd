@@ -399,6 +399,7 @@ static void cmd_idle(char* tag);
 static void cmd_starttls(char *tag, int imaps);
 
 static void cmd_xconvsort(char *tag, int updates);
+static void cmd_xconvmultisort(char *tag);
 static void cmd_xconvmeta(const char *tag);
 static void cmd_xconvfetch(const char *tag);
 static int do_xconvfetch(struct dlist *cidlist,
@@ -2172,6 +2173,13 @@ static void cmdloop(void)
 		cmd_xconvfetch(tag.s);
 
 // 		snmp_increment(XCONVFETCH_COUNT, 1);
+	    }
+	    else if (!strcmp(cmd.s, "Xconvmultisort")) {
+		if (c != ' ') goto missingargs;
+		if (!imapd_index && !backend_current) goto nomailbox;
+		cmd_xconvmultisort(tag.s);
+
+// 		snmp_increment(XCONVMULTISORT_COUNT, 1);
 	    }
 	    else if (!strcmp(cmd.s, "Xconvsort")) {
 		if (c != ' ') goto missingargs;
@@ -5636,6 +5644,129 @@ error:
     eatline(imapd_in, (c == EOF ? ' ' : c));
     goto out;
 }
+
+/*
+ * Perform a XCONVMULTISORT command.  This is like XCONVSORT but returns
+ * search results from multiple folders.  It still requires a selected
+ * mailbox, for two reasons:
+ *
+ * a) it's a useful shorthand for choosing what the current
+ * conversations scope is, and
+ *
+ * b) the code to parse a search program currently relies on a selected
+ * mailbox.
+ *
+ * Unlike ESEARCH it doesn't take folder names for scope, instead the
+ * search scope is implicitly the current conversation scope.  This is
+ * implemented more or less by accident because both the Sphinx index
+ * and the conversations database are hardcoded to be per-user.
+ */
+static void cmd_xconvmultisort(char *tag)
+{
+    int c;
+    struct sortcrit *sortcrit = NULL;
+    static struct buf arg;
+    int charset = 0;
+    struct searchargs *searchargs = NULL;
+    struct windowargs *windowargs = NULL;
+    struct conversations_state *cstate = NULL;
+    clock_t start = clock();
+    char mytime[100];
+    int r;
+
+    if (backend_current) {
+	/* remote mailbox */
+	const char *cmd = "Xconvmultisort";
+
+	prot_printf(backend_current->out, "%s %s ", tag, cmd);
+	if (!pipe_command(backend_current, 65536)) {
+	    pipe_including_tag(backend_current, tag, 0);
+	}
+	return;
+    }
+    assert(imapd_index);
+
+    if (!config_getswitch(IMAPOPT_CONVERSATIONS)) {
+	prot_printf(imapd_out, "%s BAD Unrecognized command\r\n", tag);
+	eatline(imapd_in, ' ');
+	return;
+    }
+
+    c = getsortcriteria(tag, &sortcrit);
+    if (c == EOF) goto error;
+
+    if (c != ' ') {
+	prot_printf(imapd_out, "%s BAD Missing window args in XConvMultiSort\r\n",
+		    tag);
+	goto error;
+    }
+
+    c = parse_windowargs(tag, &arg, &windowargs, /*updates*/0);
+    if (c != ' ')
+	goto error;
+
+    /* arg contains the charset */
+    lcase(arg.s);
+    charset = charset_lookupname(arg.s);
+
+    if (charset == -1) {
+	prot_printf(imapd_out, "%s NO %s\r\n", tag,
+	       error_message(IMAP_UNRECOGNIZED_CHARSET));
+	goto error;
+    }
+
+    /* open the conversations state first - we don't care if it fails,
+     * because that probably just means it's already open */
+    conversations_open_mbox(imapd_index->mailbox->name, &cstate);
+
+    /* need index loaded to even parse searchargs! */
+    searchargs = (struct searchargs *)xzmalloc(sizeof(struct searchargs));
+
+    c = getsearchprogram(tag, searchargs, &charset, 0);
+    if (c == EOF) goto error;
+    searchargs->namespace = &imapd_namespace;
+    searchargs->userid = imapd_userid;
+    searchargs->authstate = imapd_authstate;
+
+    if (c == '\r') c = prot_getc(imapd_in);
+    if (c != '\n') {
+	prot_printf(imapd_out, 
+		    "%s BAD Unexpected extra arguments to XconvMultiSort\r\n", tag);
+	goto error;
+    }
+
+    r = index_convmultisort(imapd_index, sortcrit, searchargs, windowargs);
+
+    if (r < 0) {
+	prot_printf(imapd_out, "%s NO %s\r\n", tag,
+		    error_message(r));
+	goto error;
+    }
+
+    snprintf(mytime, sizeof(mytime), "%2.3f",
+	     (clock() - start) / (double) CLOCKS_PER_SEC);
+    if (CONFIG_TIMING_VERBOSE) {
+	char *s = sortcrit_as_string(sortcrit);
+	syslog(LOG_DEBUG, "XCONVMULTISORT (%s) processing time %s sec",
+	       s, mytime);
+	free(s);
+    }
+    prot_printf(imapd_out, "%s OK %s (in %s secs)\r\n", tag,
+		error_message(IMAP_OK_COMPLETED), mytime);
+
+out:
+    if (cstate) conversations_commit(&cstate);
+    freesortcrit(sortcrit);
+    freesearchargs(searchargs);
+    free_windowargs(windowargs);
+    return;
+
+error:
+    if (cstate) conversations_commit(&cstate);
+    eatline(imapd_in, (c == EOF ? ' ' : c));
+    goto out;
+}
+
 
 /*
  * Perform a THREAD/UID THREAD command

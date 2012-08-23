@@ -2382,6 +2382,335 @@ out:
     return r;
 }
 
+struct search_folder {
+    char *mboxname;
+    unsigned int uidvalidity;
+    int id;		    /* index used for formatting output */
+    unsigned int *msg_list;
+    unsigned int msg_count;
+    unsigned int alloc;
+    unsigned int msg_orig_count;
+    MsgData **msgdata;
+};
+
+struct search_multi_rock {
+    hash_table folders_by_name;
+    ptrarray_t folders;
+};
+
+static int index_multi_search_hit(const char *mboxname, uint32_t uidvalidity,
+				  uint32_t uid, void *rock)
+{
+    struct search_multi_rock *sr = (struct search_multi_rock *)rock;
+    struct search_folder *sf;
+
+    sf = (struct search_folder *)hash_lookup(mboxname, &sr->folders_by_name);
+    if (!sf) {
+	sf = (struct search_folder *)xzmalloc(sizeof(struct search_folder));
+	sf->mboxname = xstrdup(mboxname);
+	sf->uidvalidity = uidvalidity;
+	sf->id = -1;	/* not assigned yet */
+	ptrarray_append(&sr->folders, sf);
+	hash_insert(sf->mboxname, sf, &sr->folders_by_name);
+    }
+
+    if (uidvalidity > sf->uidvalidity) {
+	/* forget any old data seen so far */
+	sf->msg_count = 0;
+    }
+    else if (uidvalidity < sf->uidvalidity) {
+	/* do not remember any old data */
+	return 0;
+    }
+
+    if (sf->msg_count + 1 >= sf->alloc) {
+	sf->alloc += 50;
+	sf->msg_list = xrealloc(sf->msg_list, sf->alloc);
+    }
+    sf->msg_list[sf->msg_count++] = uid;
+
+    return 0;
+}
+
+/* convert UIDs to MSNs in-place */
+static void find_uids(struct index_state *state,
+		      struct search_folder *sf)
+{
+    unsigned int in, out;
+    unsigned int uid;
+    unsigned int msgno;
+
+    for (in = 0, out = 0 ; in < sf->msg_count ; in++) {
+	uid = sf->msg_list[in];
+	msgno = index_finduid(state, uid);
+	assert(msgno > 0);
+	if (index_getuid(state, msgno) == uid)
+	    sf->msg_list[out++] = msgno;
+    }
+
+    sf->msg_orig_count = sf->msg_count;
+    sf->msg_count = out;
+}
+
+/*
+ * Performs a XCONVMULTISORT command
+ */
+EXPORTED int index_convmultisort(struct index_state *state,
+				 struct sortcrit *sortcrit,
+				 struct searchargs *searchargs,
+				 const struct windowargs *windowargs)
+{
+    unsigned int mi;
+    unsigned int fi;
+    int next_folder_id = 0;
+    modseq_t xconvmodseq = 0;
+    int i;
+    hashu64_table seen_cids = HASHU64_TABLE_INITIALIZER;
+    uint32_t pos = 0;
+    uint32_t first_pos = 0;
+    unsigned int ninwindow = 0;
+    ptrarray_t results = PTRARRAY_INITIALIZER;
+    ptrarray_t merged_msgdata = PTRARRAY_INITIALIZER;
+    int total = UNPREDICTABLE;
+    int r = 0;
+    struct conversations_state *cstate = NULL;
+    search_builder_t *bx;
+    struct search_folder *sf;
+    struct search_multi_rock sr;
+    struct index_state *state2 = NULL;
+    int found_any = 0;
+    char extname[MAX_MAILBOX_BUFFER];
+
+    assert(windowargs);
+    assert(!windowargs->changedsince);
+    assert(!windowargs->upto);
+
+    /* The ANCHOR windowarg is hard to define over multiple folders,
+     * so just disable it for now. */
+    if (windowargs->anchor) {
+	syslog(LOG_ERR, "Sorry, ANCHOR keyword disabled for XCONVMULTISORT");
+	return IMAP_PROTOCOL_BAD_PARAMETERS;
+    }
+
+    /* make sure \Deleted messages are expunged.  Will also lock the
+     * mailbox state and read any new information */
+    r = index_expunge(state, NULL, 1);
+    if (r) return r;
+
+    cstate = conversations_get_mbox(state->mailbox->name);
+    if (!cstate)
+	return IMAP_INTERNAL;
+
+    /* Get all the search results from Sphinx */
+    memset(&sr, 0, sizeof(sr));
+    ptrarray_init(&sr.folders);
+    construct_hash_table(&sr.folders_by_name, 128, 0);
+    bx = search_begin_search(state->mailbox, /*single*/0,
+			     index_multi_search_hit, &sr, /*verbose*/3);
+    if (!bx) {
+	r = IMAP_INTERNAL;
+	goto out;
+    }
+
+    build_query(bx, searchargs);
+    r = search_end_search(bx);
+    if (r) goto out;
+
+#if 0
+    total = search_predict_total(state, cstate, searchargs,
+				windowargs->conversations,
+				&xconvmodseq);
+    if (!total)
+	goto out;
+#endif
+
+    construct_hashu64_table(&seen_cids, state->exists/4+4, 0);
+
+    for (fi = 0 ; fi < (unsigned)sr.folders.count ; fi++) {
+	sf = ptrarray_nth(&sr.folders, fi);
+
+	if (state2 && state2 != state)
+	    index_close(&state2);
+
+	/* open an index_state */
+	if (!strcmp(state->mailbox->name, sf->mboxname)) {
+	    state2 = state;
+	}
+	else {
+	    struct index_init init;
+
+	    memset(&init, 0, sizeof(struct index_init));
+	    init.userid = searchargs->userid;
+	    init.authstate = searchargs->authstate;
+	    init.out = state->out;
+
+	    r = index_open(sf->mboxname, &init, &state2);
+	    if (r == IMAP_MAILBOX_NONEXISTENT)
+		continue;
+	    if (r)
+		goto out;
+
+	    index_checkflags(state2, 0, 0);
+	}
+
+	if (sf->uidvalidity != state2->mailbox->i.uidvalidity) continue;
+
+	/* make sure \Deleted messages are expunged.  Will also lock the
+	 * mailbox state and read any new information */
+	r = index_expunge(state2, NULL, 1);
+	if (r) goto out;
+
+	/* convert from UIDs to MSNs */
+	find_uids(state2, sf);
+	if (!sf->msg_count) continue;
+
+	/* Create/load the msgdata array. */
+	sf->msgdata = index_msgdata_load(state2, sf->msg_list, sf->msg_count,
+					 sortcrit, /*anchor*/0, /*found_anchor*/NULL);
+
+	/* One pass through the folder's message list */
+	found_any = 0;
+	for (mi = 0 ; mi < sf->msg_count ; mi++) {
+	    MsgData *msg = sf->msgdata[mi];
+	    struct index_record *record = &state2->map[msg->msgno-1].record;
+
+	    /* can happen if we didn't "tellchanges" yet */
+	    if (record->system_flags & FLAG_EXPUNGED)
+		continue;
+
+	    /* run the search program */
+	    if (!index_search_evaluate(state2, searchargs, msg->msgno, NULL))
+		continue;
+
+	    ptrarray_append(&merged_msgdata, msg);
+	    found_any = 1;
+	}
+
+	/* Delay assigning ids to folders until we can be
+	 * certain that any results will be reported for
+	 * the folder */
+	if (found_any)
+	    sf->id = next_folder_id++;
+
+	if (state2 != state)
+	    index_close(&state2);
+    }
+
+    /* Sort the merged messages based on the given criteria */
+    the_sortcrit = sortcrit;
+    qsort(merged_msgdata.data, merged_msgdata.count,
+	  sizeof(MsgData *), index_sort_compare_qsort);
+
+    /* Another pass through the merged message list */
+    for (mi = 0 ; mi < (unsigned)merged_msgdata.count ; mi++) {
+	MsgData *msg = ptrarray_nth(&merged_msgdata, mi);
+
+	/* figure out whether this message is an exemplar */
+	if (windowargs->conversations) {
+	    /* in conversations mode => only the first message seen
+	     * with each unique CID is an exemplar */
+	    if (hashu64_lookup(msg->cid, &seen_cids))
+		continue;
+	    hashu64_insert(msg->cid, (void *)1, &seen_cids);
+	}
+	/* else not in conversations mode => all messages are exemplars */
+
+	pos++;
+
+	/* would be implementing anchor here...if it were possible */
+	if (windowargs->position) {
+	    if (pos < windowargs->position)
+		continue;
+	}
+	if (windowargs->limit &&
+	    ++ninwindow > windowargs->limit) {
+	    if (total == UNPREDICTABLE) {
+		/* the total was not predictable, so we need to keep
+		 * going over the whole list to count it */
+		continue;
+	    }
+	    break;
+	}
+
+	if (!first_pos)
+	    first_pos = pos;
+	ptrarray_push(&results, msg);
+    }
+
+    if (total == UNPREDICTABLE) {
+	/* the total was not predictable prima facie */
+	total = pos;
+    }
+
+    /* there would be more anchor logic here, if it made sense */
+
+    /* Print the resulting list */
+
+    if (results.count) {
+	/* The untagged reponse would be XCONVMULTISORT but
+	 * Mail::IMAPTalk has an undocumented hack whereby any untagged
+	 * response matching /sort/i is assumed to be a sequence of
+	 * numeric uids.  Meh. */
+	prot_printf(state->out, "* XCONVMULTI (");
+	for (fi = 0 ; fi < (unsigned)sr.folders.count ; fi++) {
+	    sf = ptrarray_nth(&sr.folders, fi);
+
+	    if (sf->id < 0) continue;
+	    searchargs->namespace->mboxname_toexternal(searchargs->namespace,
+						       sf->mboxname, searchargs->userid,
+						       extname);
+	    if (sf->id)
+		prot_printf(state->out, " ");
+	    prot_printstring(state->out, extname);
+	}
+	prot_printf(state->out, ") (");
+	for (i = 0 ; i < results.count ; i++) {
+	    MsgData *msg = results.data[i];
+	    sf = (struct search_folder *)hash_lookup(msg->folder, &sr.folders_by_name);
+	    if (i)
+		prot_printf(state->out, " ");
+	    prot_printf(state->out, "(%u %u)", sf->id, msg->uid);
+	}
+	prot_printf(state->out, ")\r\n");
+    }
+
+out:
+    if (!r) {
+	if (first_pos)
+	    prot_printf(state->out, "* OK [POSITION %u]\r\n", first_pos);
+
+	prot_printf(state->out, "* OK [HIGHESTMODSEQ " MODSEQ_FMT "]\r\n",
+		    MAX(xconvmodseq, state->mailbox->i.highestmodseq));
+#if 0
+	prot_printf(state->out, "* OK [UIDVALIDITY %u]\r\n",
+		    state->mailbox->i.uidvalidity);
+	prot_printf(state->out, "* OK [UIDNEXT %u]\r\n",
+		    state->mailbox->i.last_uid + 1);
+#endif
+	prot_printf(state->out, "* OK [TOTAL %u]\r\n",
+		    total);
+    }
+
+    /* free all our temporary data */
+    for (fi = 0 ; fi < (unsigned)sr.folders.count ; fi++) {
+	sf = ptrarray_nth(&sr.folders, fi);
+	index_msgdata_free(sf->msgdata, sf->msg_orig_count);
+	free(sf->mboxname);
+	free(sf->msg_list);
+	free(sf);
+    }
+    ptrarray_fini(&results);
+    ptrarray_fini(&merged_msgdata);
+    free_hashu64_table(&seen_cids, NULL);
+    free_hash_table(&sr.folders_by_name, NULL);
+    ptrarray_fini(&sr.folders);
+    if (state2 && state2 != state)
+	index_close(&state2);
+
+    return r;
+}
+
+
 static modseq_t get_modseq_of(struct index_record *record,
 			      struct conversations_state *cstate)
 {
@@ -5071,6 +5400,7 @@ static MsgData **index_msgdata_load(struct index_state *state,
 
 	im = &state->map[cur->msgno-1];
 	cur->uid = record.uid;
+	cur->cid = record.cid;
 	cur->folder = xstrdupnull(state_mboxname(state));
 	if (found_anchor && record.uid == anchor)
 	    *found_anchor = 1;

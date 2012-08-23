@@ -251,9 +251,12 @@ struct searchargs {
 
     bit32 cache_atleast;
 
-    /* For ESEARCH */
+    /* For ESEARCH & XCONVMULTISORT */
     const char *tag;
     int returnopts;
+    struct namespace *namespace;
+    const char *userid;
+    struct auth_state *authstate;
 };
 
 /* Sort criterion */
