@@ -159,6 +159,7 @@ typedef struct msgdata {
     uint32_t convsize;		/* total size of messages in conversation */
     bit32 hasflag;		/* hasflag values (up to 32 of them) */
     bit32 hasconvflag;		/* hasconvflag values (up to 32 of them) */
+    char *folder;		/* internal mboxname */
 } MsgData;
 
 typedef struct thread {

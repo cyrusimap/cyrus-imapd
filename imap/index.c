@@ -4601,6 +4601,10 @@ static int index_search_evaluate(struct index_state *state,
 	if (!seqset_ismember(seq, record.uid)) goto zero;
     }
 
+    for (l = searchargs->folder; l; l = l->next) {
+	if (strcmpsafe(l->s, state->mailbox->name)) goto zero;
+    }
+
     if (searchargs->from || searchargs->to || searchargs->cc ||
 	searchargs->bcc || searchargs->subject || searchargs->messageid) {
 
@@ -5055,18 +5059,21 @@ static MsgData **index_msgdata_load(struct index_state *state,
     for (i = 0 ; i < n ; i++) {
 	cur = &md[i];
 	ptrs[i] = cur;
+
 	/* set msgno */
 	cur->msgno = (msgno_list ? msgno_list[i] : (unsigned)(i+1));
-	im = &state->map[cur->msgno-1];
-	cur->uid = record.uid;
-	if (found_anchor && im->uid == anchor)
-	    *found_anchor = 1;
 
 	if (index_reload_record(state, cur->msgno, &record))
 	    continue;
 
 	/* useful for convupdates */
-	cur->modseq = im->record.modseq;
+	cur->modseq = record.modseq;
+
+	im = &state->map[cur->msgno-1];
+	cur->uid = record.uid;
+	cur->folder = xstrdupnull(state_mboxname(state));
+	if (found_anchor && record.uid == anchor)
+	    *found_anchor = 1;
 
 	did_cache = did_env = did_conv = 0;
 	tmpenv = NULL;
@@ -5563,6 +5570,9 @@ static int index_sort_compare(MsgData *md1, MsgData *md2,
 		ret = numcmp(md1->hasconvflag & (1<<i),
 			     md2->hasconvflag & (1<<i));
 	    break;
+	case SORT_FOLDER:
+	    ret = strcmpsafe(md1->folder, md2->folder);
+	    break;
 	}
     } while (!ret && sortcrit[i++].key != SORT_SEQUENCE);
 
@@ -5598,6 +5608,7 @@ static void index_msgdata_free(MsgData **msgdata, unsigned int n)
 	free(md->msgid);
 	strarray_fini(&md->ref);
 	strarray_fini(&md->annot);
+	free(md->folder);
     }
     free(msgdata);
 }

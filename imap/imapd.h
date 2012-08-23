@@ -242,6 +242,7 @@ struct searchargs {
     struct strlist *body;
     struct strlist *text;
     struct strlist *header_name, *header;
+    struct strlist *folder;
     struct searchsub *sublist;
     modseq_t modseq;
     struct searchannot *annotations;
@@ -289,7 +290,8 @@ enum {
     SORT_CONVMODSEQ,
     SORT_CONVEXISTS,
     SORT_CONVSIZE,
-    SORT_HASCONVFLAG
+    SORT_HASCONVFLAG,
+    SORT_FOLDER
     /* values > 255 are reserved for internal use */
 };
 
