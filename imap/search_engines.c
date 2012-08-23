@@ -88,19 +88,20 @@ static const struct search_engine *engine(void)
     }
 }
 
-EXPORTED search_builder_t *search_begin_search1(struct index_state *state,
-						unsigned *msgno_list,
-						int verbose)
+EXPORTED search_builder_t *search_begin_search(struct mailbox *mailbox,
+					       int single,
+					       search_hit_cb_t proc, void *rock,
+					       int verbose)
 {
     const struct search_engine *se = engine();
-    return (se->begin_search1 ?
-	    se->begin_search1(state, msgno_list, verbose) : NULL);
+    return (se->begin_search ?
+	    se->begin_search(mailbox, single, proc, rock, verbose) : NULL);
 }
 
-EXPORTED int search_end_search1(search_builder_t *bx)
+EXPORTED int search_end_search(search_builder_t *bx)
 {
     const struct search_engine *se = engine();
-    return (se->end_search1 ? se->end_search1(bx) : -1);
+    return (se->end_search ? se->end_search(bx) : -1);
 }
 
 EXPORTED search_text_receiver_t *search_begin_update(int verbose)

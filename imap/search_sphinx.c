@@ -270,9 +270,11 @@ struct opstack {
 typedef struct sphinx_builder sphinx_builder_t;
 struct sphinx_builder {
     search_builder_t super;
-    struct index_state *state;
+    struct mailbox *mailbox;
+    search_hit_cb_t proc;
+    void *rock;
+    int single;
     int verbose;
-    unsigned int *msgno_list;
     MYSQL *conn;
     struct buf query;
     int depth;
@@ -362,14 +364,15 @@ static void match(search_builder_t *bx, int part, const char *str)
     append_escaped(bb->conn, &bb->query, &e1);
 }
 
-static search_builder_t *begin_search1(struct index_state *state,
-				       unsigned int *msgno_list,
-				       int verbose)
+static search_builder_t *begin_search(struct mailbox *mailbox,
+				      int single,
+				      search_hit_cb_t proc, void *rock,
+				      int verbose)
 {
     sphinx_builder_t *bb;
     MYSQL *conn = NULL;
 
-    conn = get_connection(state->mailbox->name);
+    conn = get_connection(mailbox->name);
     if (!conn) return NULL;
 
     bb = xzmalloc(sizeof(sphinx_builder_t));
@@ -378,21 +381,21 @@ static search_builder_t *begin_search1(struct index_state *state,
     bb->super.match = match;
 
     bb->verbose = verbose;
-    bb->state = state;
-    bb->msgno_list = msgno_list;
+    bb->mailbox = mailbox;
+    bb->proc = proc;
+    bb->rock = rock;
+    bb->single = single;
     bb->conn = conn;
     buf_init_ro_cstr(&bb->query, "SELECT "COL_CYRUSID" FROM rt WHERE MATCH('");
 
     return &bb->super;
 }
 
-static int end_search1(search_builder_t *bx)
+static int end_search(search_builder_t *bx)
 {
     sphinx_builder_t *bb = (sphinx_builder_t *)bx;
-    MYSQL_RES *res;
+    MYSQL_RES *res = NULL;
     MYSQL_ROW row;
-    int msgno;
-    int n;
     int r = 0;
 
     buf_appendcstr(&bb->query, "')");
@@ -413,7 +416,6 @@ static int end_search1(search_builder_t *bx)
 	goto out;
     }
 
-    n = 0;
     res = mysql_use_result(bb->conn);
     while ((row = mysql_fetch_row(res))) {
 	const char *mboxname;
@@ -424,22 +426,22 @@ static int end_search1(search_builder_t *bx)
 	if (!parse_cyrusid(row[0], &mboxname, &uidvalidity, &uid))
 	    // TODO: whine
 	    continue;
-	if (strcmp(mboxname, bb->state->mailbox->name))
-	    continue;
-	if (uidvalidity != bb->state->mailbox->i.uidvalidity)
-	    continue;
-	msgno = index_finduid(bb->state, uid);
-	if (msgno >= 0 && index_getuid(bb->state, msgno) != uid)
-	    continue;
-	bb->msgno_list[n++] = msgno;
+	if (bb->single) {
+	    if (strcmp(mboxname, bb->mailbox->name))
+		continue;
+	    if (uidvalidity != bb->mailbox->i.uidvalidity)
+		continue;
+	}
+	r = bb->proc(mboxname, uidvalidity, uid, bb->rock);
+	if (r) goto out;
     }
-    mysql_free_result(res);
-    r = n;
+    r = 0;
 
     /* TODO: currently we neither track nor care about unindexed
      * messages, that should be handled by a layer above here. */
 
 out:
+    if (res) mysql_free_result(res);
     if (bb->conn) close_connection(bb->conn);
     free(bb->stack);
     buf_free(&bb->query);
@@ -1095,8 +1097,8 @@ out:
 const struct search_engine sphinx_search_engine = {
     "Sphinx",
     SEARCH_FLAG_CAN_BATCH,
-    begin_search1,
-    end_search1,
+    begin_search,
+    end_search,
     begin_update,
     end_update,
     start_daemon,

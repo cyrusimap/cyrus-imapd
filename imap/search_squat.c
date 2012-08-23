@@ -69,14 +69,15 @@ struct opstack {
     int op;	    /* boolean operator to apply */
     int valid;	    /* whether msg_vector is valid yet */
     bitvector_t msg_vector;
-		    /* merged search results, indexed by msgno (so
+		    /* merged search results, indexed by uid (so
 		     * that bit 0 is not meaningful) */
 };
 
 typedef struct {
     search_builder_t super;
-    struct index_state *state;
-    unsigned int *msgno_list;
+    struct mailbox *mailbox;
+    search_hit_cb_t proc;
+    void *rock;
     int verbose;
     SquatSearchIndex *index;
     int fd;
@@ -108,19 +109,19 @@ static const char * const doctypes_by_part[SEARCH_NUM_PARTS] = {
    is represented by the document), nnn is the UID of the message, and vvv
    is the UID validity value.
 
-   This function parses the document name and returns the message sequence
-   number only if the name has the right part type and it corresponds
+   This function parses the document name and returns the UID
+   only if the name has the right part type and it corresponds
    to a real message UID.
-   Returns a msgno (>=1) or zero on error.
+   Returns a UID (>=1) or zero on error.
 */
 static unsigned int parse_doc_name(SquatBuilderData *bb, const char *doc_name)
 {
     int ch = doc_name[0];
     const char *t = bb->part_types;
-    int doc_UID, msgno;
+    int doc_UID;
 
     if (ch == 'v' && strncmp(doc_name, "validity.", 9) == 0) {
-	if ((unsigned) atoi(doc_name + 9) == bb->state->mailbox->i.uidvalidity) {
+	if ((unsigned) atoi(doc_name + 9) == bb->mailbox->i.uidvalidity) {
 	    bb->found_validity = 1;
 	}
 	return 0;
@@ -143,11 +144,7 @@ static unsigned int parse_doc_name(SquatBuilderData *bb, const char *doc_name)
 	return 0;
     }
 
-    msgno = index_finduid(bb->state, doc_UID);
-    if (msgno > 0 && index_getuid(bb->state, msgno) != (unsigned)doc_UID)
-	return 0;
-
-    return msgno;
+    return doc_UID;
 }
 
 #if DEBUG
@@ -201,7 +198,7 @@ static struct opstack *opstack_push(SquatBuilderData *bb, int op)
     top->op = op;
     top->valid = 0;
     bv_init(&top->msg_vector);
-    bv_setsize(&top->msg_vector, bb->state->exists+1);
+    bv_setsize(&top->msg_vector, bb->mailbox->i.last_uid+1);
 
 #if DEBUG
     if (bb->verbose > 1)
@@ -249,20 +246,20 @@ static void opstack_pop(SquatBuilderData *bb)
 static int drop_indexed_docs(void* closure, const SquatListDoc *doc)
 {
     SquatBuilderData* bb = (SquatBuilderData*)closure;
-    int msgno = parse_doc_name(bb, doc->doc_name);
+    unsigned int uid = parse_doc_name(bb, doc->doc_name);
 
-    if (msgno)
-	bv_clear(&opstack_top(bb)->msg_vector, msgno);
+    if (uid)
+	bv_clear(&opstack_top(bb)->msg_vector, uid);
     return SQUAT_CALLBACK_CONTINUE;
 }
 
 static int fill_with_hits(void* closure, char const* doc)
 {
     SquatBuilderData* bb = (SquatBuilderData*)closure;
-    int msgno = parse_doc_name(bb, doc);
+    unsigned int uid = parse_doc_name(bb, doc);
 
-    if (msgno)
-	bv_set(&opstack_top(bb)->msg_vector, msgno);
+    if (uid)
+	bv_set(&opstack_top(bb)->msg_vector, uid);
     return SQUAT_CALLBACK_CONTINUE;
 }
 
@@ -330,16 +327,23 @@ out:
     opstack_pop(bb);
 }
 
-static search_builder_t *begin_search1(struct index_state *state,
-				       unsigned int *msgno_list,
-				       int verbose)
+static search_builder_t *begin_search(struct mailbox *mailbox,
+				      int single,
+				      search_hit_cb_t proc, void *rock,
+				      int verbose)
 {
     SquatBuilderData *bb;
     SquatSearchIndex* index;
     char *fname;
     int fd;
 
-    fname = mailbox_meta_fname(state->mailbox, META_SQUAT);
+    if (!single) {
+	syslog(LOG_ERR, "Squat does not support multiple-folder searches, sorry");
+	/* although it could with some extra work, but why bother */
+	return NULL;
+    }
+
+    fname = mailbox_meta_fname(mailbox, META_SQUAT);
     if ((fd = open(fname, O_RDONLY)) < 0) {
 	if (errno != ENOENT)
 	    syslog(LOG_ERR, "SQUAT failed to open index file %s: %s",
@@ -358,8 +362,9 @@ static search_builder_t *begin_search1(struct index_state *state,
     bb->super.end_boolean = end_boolean;
     bb->super.match = match;
 
-    bb->state = state;
-    bb->msgno_list = msgno_list;
+    bb->mailbox = mailbox;
+    bb->proc = proc;
+    bb->rock = rock;
     bb->verbose = verbose;
     bb->index = index;
     bb->fd = fd;
@@ -407,16 +412,15 @@ out:
     return r;
 }
 
-static int end_search1(search_builder_t *bx)
+static int end_search(search_builder_t *bx)
 {
     SquatBuilderData *bb = (SquatBuilderData *)bx;
-    int n = 0;
-    unsigned int msgno;
+    unsigned int uid;
     int r = 0;
 
 #if DEBUG
     if (bb->verbose > 1)
-	syslog(LOG_NOTICE, "Squat end_search1()");
+	syslog(LOG_NOTICE, "Squat end_search()");
 #endif
 
     /* check we had balanced ->begin_boolean and ->end_boolean calls */
@@ -427,11 +431,15 @@ static int end_search1(search_builder_t *bx)
     if (r) goto out;
 
     /* Flatten out the final bit vector into a sequence */
-    for (msgno = 1 ; msgno <= bb->state->exists; msgno++) {
-	if (bv_isset(&bb->stack[0].msg_vector, msgno))
-	    bb->msgno_list[n++] = msgno;
+    for (uid = 1 ; uid <= bb->mailbox->i.last_uid; uid++) {
+	if (bv_isset(&bb->stack[0].msg_vector, uid)) {
+	    r = bb->proc(bb->mailbox->name,
+			 bb->mailbox->i.uidvalidity,
+			 uid, bb->rock);
+	    if (r) goto out;
+	}
     }
-    r = n;
+    r = 0;
 
 out:
     opstack_pop(bb);
@@ -977,8 +985,8 @@ static int end_update(search_text_receiver_t *rx)
 const struct search_engine squat_search_engine = {
     "SQUAT",
     0,
-    begin_search1,
-    end_search1,
+    begin_search,
+    end_search,
     begin_update,
     end_update,
     /* start_daemon */NULL,

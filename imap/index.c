@@ -1500,6 +1500,34 @@ static void build_query(search_builder_t *bx,
     bx->end_boolean(bx, SEARCH_OP_AND);
 }
 
+struct search_rock {
+    struct index_state *state;
+    unsigned int *msg_list;
+    unsigned int msg_count;
+};
+
+static int index_search_hit(const char *mboxname __attribute__((unused)),
+			    uint32_t uidvalidity __attribute__((unused)),
+			    uint32_t uid, void *rock)
+{
+    struct search_rock *sr = (struct search_rock *)rock;
+    unsigned int msgno;
+
+    /* We know the mboxname and uidvalidity are correct, they were
+     * checked in the search code because we passed single=1. */
+
+    msgno = index_finduid(sr->state, uid);
+    assert(msgno > 0);
+
+    /* Weed out UIDs reported by the indexer which no longer exist
+     * in the index_state; index_finduid() doesn't. */
+    if (index_getuid(sr->state, msgno) != uid)
+	return 0;
+
+    sr->msg_list[sr->msg_count++] = msgno;
+    return 0;
+}
+
 static int index_prefilter_messages(unsigned* msg_list,
 				    struct index_state *state,
 				    const struct searchargs *searchargs)
@@ -1507,28 +1535,34 @@ static int index_prefilter_messages(unsigned* msg_list,
     int r;
     unsigned int i;
     search_builder_t *bx;
+    struct search_rock sr;
 
-    bx = search_begin_search1(state, msg_list, /*verbose*/0);
+    sr.state = state;
+    sr.msg_list = msg_list;
+    sr.msg_count = 0;
+
+    bx = search_begin_search(state->mailbox, /*single*/1,
+			     index_search_hit, &sr, /*verbose*/0);
     if (!bx) {
-	r = -1;
+	r = IMAP_INTERNAL;
 	goto out;
     }
 
     build_query(bx, searchargs);
 
-    r = search_end_search1(bx);
+    r = search_end_search(bx);
 
 out:
-    if (r < 0) {
+    if (r) {
 	/* Just put in all possible messages. This falls back to Cyrus' default
 	 * search. */
 
 	for (i = 0; i < state->exists; i++)
 	    msg_list[i] = i + 1;
-	r = state->exists;
+	return state->exists;
     }
 
-    return r;
+    return sr.msg_count;
 }
 
 static int index_scan_work(const char *s, unsigned long len,

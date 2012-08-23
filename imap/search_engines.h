@@ -46,6 +46,9 @@
 #include "index.h"
 #include "charset.h"
 
+typedef int (*search_hit_cb_t)(const char *mboxname, uint32_t uidvalidity,
+			       uint32_t uid, void *rock);
+
 typedef struct search_builder search_builder_t;
 struct search_builder {
 #define SEARCH_OP_AND	    1
@@ -60,24 +63,28 @@ struct search_builder {
 struct search_engine {
     const char *name;
     unsigned int flags;
-    search_builder_t *(*begin_search1)(struct index_state *,
-				      unsigned *msg_list,
+    search_builder_t *(*begin_search)(struct mailbox *,
+				      int single,
+				      search_hit_cb_t proc, void *rock,
 				      int verbose);
-    int (*end_search1)(search_builder_t *);
+    int (*end_search)(search_builder_t *);
     search_text_receiver_t *(*begin_update)(int verbose);
     int (*end_update)(search_text_receiver_t *);
     int (*start_daemon)(int verbose, const char *mboxname);
     int (*stop_daemon)(int verbose, const char *mboxname);
 };
 
-/* Fill the msg_list with a list of message IDs which could match the
- * query built with the search_builder_t.
- * Return the number of message IDs inserted.
+/*
+ * Search for messages which could match the query built with the
+ * search_builder_t.  Calls 'proc' once for each hit found.  If 'single'
+ * is true, only hits in 'mailbox' are reported; otherwise hits in any
+ * folder in the same conversation scope (i.e. the same user) as
+ * reported.
  */
-extern search_builder_t *search_begin_search1(struct index_state *,
-					      unsigned *msg_list,
-					      int verbose);
-extern int search_end_search1(search_builder_t *);
+extern search_builder_t *search_begin_search(struct mailbox *, int single,
+					     search_hit_cb_t proc, void *rock,
+					     int verbose);
+extern int search_end_search(search_builder_t *);
 
 search_text_receiver_t *search_begin_update(int verbose);
 int search_end_update(search_text_receiver_t *rx);

@@ -415,44 +415,47 @@ error:
     goto out;
 }
 
-static void do_search(const char *query, const strarray_t *mboxnames)
+static int print_search_hit(const char *mboxname, uint32_t uidvalidity,
+			    uint32_t uid, void *rock)
 {
-    struct index_state *state = NULL;
+    int single = *(int *)rock;
+
+    if (single)
+	printf("uid %u\n", uid);
+    else
+	printf("mailbox %s\nuidvalidity %u\nuid %u\n", mboxname, uidvalidity, uid);
+    return 0;
+}
+
+static void do_search(const char *query, int single, const strarray_t *mboxnames)
+{
+    struct mailbox *mailbox = NULL;
     int i;
     int r;
-    int j;
     search_builder_t *bx;
-    int count;
-    unsigned int *msgno_list;
-
-    /* At the moment we only have a single-mailbox API for searching
-     * so we have to handle multiple mailbox searches with a loop */
 
     for (i = 0 ; i < mboxnames->count ; i++) {
 	const char *mboxname = mboxnames->data[i];
 
-	r = index_open(mboxname, NULL, &state);
+	r = mailbox_open_iwl(mboxname, &mailbox);
 	if (r) {
 	    fprintf(stderr, "Cannot open mailbox %s: %s\n",
 		    mboxname, error_message(r));
 	    continue;
 	}
-	printf("mailbox %s\n", mboxname);
-	msgno_list = xmalloc(sizeof(unsigned int) * state->exists);
+	if (single)
+	    printf("mailbox %s\n", mboxname);
 
-	bx = search_begin_search1(state, msgno_list, verbose);
-	if (!bx) goto next;
+	bx = search_begin_search(mailbox, single, print_search_hit, &single, verbose);
+	if (bx) {
+	    r = squatter_build_query(bx, query);
 
-	r = squatter_build_query(bx, query);
+	    /* We have to call end_search anyway.  Should really
+	     * have an abort_search() interface */
+	    r = search_end_search(bx);
+	}
 
-	count = search_end_search1(bx);
-	if (r < 0 || count < 0) goto next;
-
-	for (j = 0 ; j < count ; j++)
-	    printf("uid %u\n", state->map[msgno_list[j]-1].record.uid);
-next:
-	free(msgno_list);
-	index_close(&state);
+	mailbox_close(&mailbox);
     }
 }
 
@@ -664,6 +667,7 @@ int main(int argc, char **argv)
     int background = 1;
     const char *channel = "squatter";
     int init_flags = CYRUSINIT_PERROR;
+    int multi_folder = 0;
     enum { UNKNOWN, INDEXER, SEARCH, ROLLING, START_DAEMON, STOP_DAEMON } mode = UNKNOWN;
 
     if ((geteuid()) == 0 && (become_cyrus(/*is_master*/0) != 0)) {
@@ -672,7 +676,7 @@ int main(int argc, char **argv)
 
     setbuf(stdout, NULL);
 
-    while ((opt = getopt(argc, argv, "C:Rc:e:fn:rsiav")) != EOF) {
+    while ((opt = getopt(argc, argv, "C:Rc:e:fmn:rsiav")) != EOF) {
 	switch (opt) {
 	case 'C':		/* alt config file */
 	    alt_config = optarg;
@@ -701,6 +705,12 @@ int main(int argc, char **argv)
 
 	case 'f':		/* foreground (with -R) */
 	    background = 0;
+	    break;
+
+	case 'm':		/* multi-folder in SEARCH mode */
+	    if (mode != UNKNOWN && mode != SEARCH) usage(argv[0]);
+	    multi_folder = 1;
+	    mode = SEARCH;
 	    break;
 
 	case 'n':		/* sync channel name (with -R) */
@@ -804,7 +814,7 @@ int main(int argc, char **argv)
     case SEARCH:
 	if (recursive_flag && optind == argc) usage(argv[0]);
 	expand_mboxnames(&mboxnames, argc-optind, (const char **)argv+optind);
-	do_search(query, &mboxnames);
+	do_search(query, !multi_folder, &mboxnames);
 	break;
     case ROLLING:
 	do_rolling(channel);
