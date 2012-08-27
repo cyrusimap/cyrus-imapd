@@ -2203,78 +2203,95 @@ static int etagcmp(const char *hdr, const char *etag) {
 
 /* Check headers for any preconditions.
  *
- * Interaction (if any) is complex and is documented in I-D HTTPbis:
- *
- * The If-Match and If-Unmodified-Since headers can be used together, and
- * the If-None-Match and If-Modified-Since headers can be used together, but
- * any other interaction is undefined.
+ * Interaction (if any) is complex and is documented in RFC 6638, RFC 4918,
+ * and Section 5 of HTTPbis, Part 4.
  */
 int check_precond(const char *meth, const char *stag, const char *etag,
 		  time_t lastmod, hdrcache_t hdrcache)
 {
-    unsigned ret = HTTP_OK;
+    long resp = HTTP_OK;
+    unsigned is_get_or_head = 0;
     const char **hdr;
     time_t since;
 
-    if ((hdr = spool_getheader(hdrcache, "If"))) {
-	/* XXX  Need to support this for sync-token and possibly lock-token */
-	syslog(LOG_WARNING, "If: %s", hdr[0]);
-    }
-
+    /* Per RFC 6638,
+       If-Schedule-Tag-Match supercedes any ETag-based precondition tests */
     if ((hdr = spool_getheader(hdrcache, "If-Schedule-Tag-Match"))) {
-	if (!etagcmp(hdr[0], stag)) {
-	    /* Precond success - ignore remaining conditional headers */
-	    return HTTP_OK;
-	}
-	else return HTTP_PRECOND_FAILED;
+	if (etagcmp(hdr[0], stag)) return HTTP_PRECOND_FAILED;
+
+	return HTTP_OK;  /* Ignore remaining conditionals */
     }
 
-    if ((hdr = spool_getheader(hdrcache, "If-Match"))) {
-	if (!etagcmp(hdr[0], etag)) {
-	    /* Precond success - fall through and check If-Unmodified-Since */
-	}
-	else return HTTP_PRECOND_FAILED;
+    /* Per RFC 4918, If supercedes If-Match */
+    if ((hdr = spool_getheader(hdrcache, "If"))) {
+	/* State tokens (sync-token, lock-token) and Etags */
+	syslog(LOG_WARNING, "If: %s", hdr[0]);
+	/* If all lists evaluate to false */ return HTTP_PRECOND_FAILED;
+
+	/* Continue to step 3 */
     }
 
-    if ((hdr = spool_getheader(hdrcache, "If-Unmodified-Since"))) {
-	if (!(since = message_parse_date((char *) hdr[0],
-					 PARSE_DATE|PARSE_TIME|PARSE_ZONE|
-					 PARSE_GMT|PARSE_NOCREATE))) {
-	    since = lastmod;
-	}
+    /* Evaluate other precondition headers per Section 5 of HTTPbis, Part 4 */
 
-	if (lastmod <= since) {
-	    /* Precond success - ignore remaining conditional headers */
-	    return HTTP_OK;
-	}
-	else return HTTP_PRECOND_FAILED;
+    /* Step 1 */
+    else if ((hdr = spool_getheader(hdrcache, "If-Match"))) {
+	if (etagcmp(hdr[0], etag)) return HTTP_PRECOND_FAILED;
+
+	/* Continue to step 3 */
     }
 
-    if ((hdr = spool_getheader(hdrcache, "If-None-Match"))) {
-	if (etagcmp(hdr[0], etag)) {
-	    /* Precond success - ignore If-Modified-Since */
-	    return HTTP_OK;
-	}
-	else if (!strchr("GH", meth[0])) return HTTP_PRECOND_FAILED;
-	else {
-	    ret = HTTP_NOT_MODIFIED;
-	    /* Fall through and check If-Modified-Since */
-	}
-    }
-
-    if ((hdr = spool_getheader(hdrcache, "If-Modified-Since"))) {
+    /* Step 2 */
+    else if ((hdr = spool_getheader(hdrcache, "If-Unmodified-Since"))) {
 	since = message_parse_date((char *) hdr[0],
 				   PARSE_DATE|PARSE_TIME|PARSE_ZONE|
 				   PARSE_GMT|PARSE_NOCREATE);
 
-	if (lastmod > since) {
-	    /* Precond success - this trumps an If-None-Match 304 response */
-	    return HTTP_OK;
-	}
-	else return HTTP_NOT_MODIFIED;
+	if (since && (lastmod > since)) return HTTP_PRECOND_FAILED;
+
+	/* Continue to step 3 */
     }
 
-    return ret;
+    /* Step 3 */
+    switch (meth[0]) {
+    case 'G':  /* GET */
+#if 0  /* We don't support range requests yet */
+	if (spool_getheader(hdrcache, "Range")) {
+	    resp = HTTP_PARTIAL;  /* Partial GET */
+
+	    if ((hdr = spool_getheader(hdrcache, "If-Range"))) {
+		since = message_parse_date((char *) hdr[0],
+					   PARSE_DATE|PARSE_TIME|PARSE_ZONE|
+					   PARSE_GMT|PARSE_NOCREATE);
+
+		if ((since && (lastmod > since)) || etagcmp(hdr[0], etag))
+		    resp = HTTP_OK;
+
+		return resp;  /* Ignore remaining conditionals */
+	    }
+	}
+#endif
+
+    case 'H':  /* HEAD */
+	is_get_or_head = 1;
+    }
+
+    /* Step 4 */
+    if ((hdr = spool_getheader(hdrcache, "If-None-Match"))) {
+	if (!etagcmp(hdr[0], etag))
+	    return (is_get_or_head ? HTTP_NOT_MODIFIED : HTTP_PRECOND_FAILED);
+    }
+
+    /* Step 5 */
+    else if (is_get_or_head &&
+	     (hdr = spool_getheader(hdrcache, "If-Modified-Since"))) {
+	since = message_parse_date((char *) hdr[0],
+				   PARSE_DATE|PARSE_TIME|PARSE_ZONE|
+				   PARSE_GMT|PARSE_NOCREATE);
+
+	if (lastmod <= since) return HTTP_NOT_MODIFIED;
+    }
+
+    return resp;
 }
 
 
