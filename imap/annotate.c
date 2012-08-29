@@ -211,23 +211,6 @@ struct annotate_db
     int in_txn;
 };
 
-struct annotate_recalc_state
-{
-    struct mailbox *mailbox;
-    int reconstruct;
-    annotate_db_t *d;		    /* reference to per-mailbox db */
-    unsigned int num_uids;
-    hash_table counts_by_uid;
-    const mailbox_crcalgo_t *crcalgo;
-};
-
-typedef struct annotate_recalc_peruid annotate_recalc_peruid_t;
-struct annotate_recalc_peruid
-{
-    uint32_t usage;	/* bytes of storage used */
-    uint32_t sync_crc;	/* incremental sync CRC */
-};
-
 #define DB config_annotation_db
 
 static annotate_db_t *all_dbs_head = NULL;
@@ -2383,15 +2366,8 @@ static int write_entry(struct mailbox *mailbox,
 	buf_free(&data);
     }
 
-    if (mailbox) {
-	const mailbox_crcalgo_t *alg = mailbox_get_crcalgo(mailbox);
-	if (alg) {
-	    mailbox->i.sync_crc ^= alg->annot(uid, entry, userid, &oldval);
-	    mailbox->i.sync_crc ^= alg->annot(uid, entry, userid, value);
-	}
-
-	mailbox_use_annot_quota(mailbox, value->len - (quota_t)oldval.len);
-    }
+    if (mailbox)
+	mailbox_annot_changed(mailbox, uid, entry, userid, &oldval, value);
     else
 	sync_log_annotation("");
 
@@ -3085,227 +3061,44 @@ EXPORTED int annotate_msg_copy(struct mailbox *oldmailbox, uint32_t olduid,
     return r;
 }
 
-HIDDEN int annotate_msg_expunge(annotate_state_t *state)
+static int cleanup_cb(void *rock,
+		      const char *key, size_t keylen,
+		      const char *data __attribute__((unused)), 
+		      size_t datalen __attribute__((unused)))
 {
-    if (state->which != ANNOTATION_SCOPE_MESSAGE) return IMAP_INTERNAL;
+    annotate_db_t *d = (annotate_db_t *)rock;
 
-    annotate_begin(state->d);
-
-    return _annotate_rewrite(state->mailbox, state->uid, /*userid*/NULL,
-			     /*newmbox*/NULL,
-			     /*newuid*/0, /*newuserid*/NULL,
-			     /*copy*/0);
+    return cyrusdb_delete(d->db, key, keylen, tid(d), /*force*/1);
 }
 
-/*************************  Annotation Recalc  ************************/
-
-static int calc_usage_cb(const char *mailbox __attribute__((unused)),
-			 uint32_t uid,
-			 const char *entry,
-			 const char *userid,
-			 const struct buf *value,
-			 void *rock)
+/* clean up WITHOUT counting usage again, we already removed that when
+ * we expunged the record */
+HIDDEN int annotate_msg_cleanup(struct mailbox *mailbox, unsigned int uid)
 {
-    annotate_recalc_state_t *ars = (annotate_recalc_state_t *)rock;
-    annotate_recalc_peruid_t *cp;
-    char uidkey[32];
-
-    snprintf(uidkey, sizeof(uidkey), "%u", uid);
-    cp = hash_lookup(uidkey, &ars->counts_by_uid);
-    if (!cp) {
-	cp = xzmalloc(sizeof(annotate_recalc_peruid_t));
-	hash_insert(uidkey, cp, &ars->counts_by_uid);
-	ars->num_uids++;
-    }
-    cp->usage += value->len;
-    if (ars->crcalgo)
-	cp->sync_crc ^= ars->crcalgo->annot(uid, entry, userid, value);
-
-    return 0;
-}
-
-/*
- * Begin scanning the annotations dbs for per-message and
- * per-mailbox annotations for this mailbox, to calculate
- * mailbox->i.quota_annot_used.
- */
-HIDDEN int annotate_recalc_begin(struct mailbox *mailbox,
-			  annotate_recalc_state_t **arsp,
-			  int reconstruct)
-{
-    int r;
-    annotate_recalc_state_t *ars;
-
-    assert(arsp);
-    ars = xzmalloc(sizeof(*ars));
-    ars->mailbox = mailbox;
-    ars->reconstruct = reconstruct;
-    construct_hash_table(&ars->counts_by_uid, 1024, 0);
-    ars->crcalgo = mailbox_get_crcalgo(mailbox);
-    /* if the CRCer cannot do annotations, ignore it */
-    if (ars->crcalgo && !ars->crcalgo->annot)
-	ars->crcalgo = NULL;
-
-    /* scan for per-mailbox annotations */
-    r = annotatemore_findall(mailbox->name, 0, "*",
-			     calc_usage_cb, ars);
-    if (r) {
-	syslog(LOG_ERR, "annotation recalc: cannot scan for "
-			"per-mailbox annotations: %s",
-			error_message(r));
-    }
-
-    /* grab a reference to the per-mailbox db, to avoid
-     * multiple closes and opens of the db */
-    r = annotate_getdb(mailbox->name, &ars->d);
-    if (r == CYRUSDB_NOTFOUND)
-	r = 0;		/* no db, not a problem, nothing to scan */
-    else if (r)
-	r = IMAP_IOERROR;
-    else {
-	/* scan for per-message annotations */
-	r = annotatemore_findall(mailbox->name, ANNOTATE_ANY_UID, "*",
-			         calc_usage_cb, ars);
-    }
-    if (r) {
-	syslog(LOG_ERR, "annotation recalc: cannot scan for "
-			"per-message annotations: %s",
-			error_message(r));
-    }
-
-    /* account for per-mailbox annotations */
-    annotate_recalc_add(ars, 0);
-
-    /* there may have been errors above but it doesn't
-     * matter for our purposes */
-    *arsp = ars;
-    return 0;
-}
-
-static void annotate_recalc_end(annotate_recalc_state_t *ars)
-{
-    assert(ars);
-    annotate_putdb(&ars->d);
-    free_hash_table(&ars->counts_by_uid, free);
-    free(ars);
-}
-
-
-HIDDEN void annotate_recalc_add(annotate_recalc_state_t *ars,
-			 uint32_t uid)
-{
-    annotate_recalc_peruid_t *cp;
-    char uidkey[32];
-
-    if (!ars)
-	return;
-
-    /* account for per-message annotations for this uid
-     * (or zero for per-mailbox annotations) */
-    snprintf(uidkey, sizeof(uidkey), "%u", uid);
-    cp = hash_del(uidkey, &ars->counts_by_uid);
-    if (cp) {
-	mailbox_use_annot_quota(ars->mailbox, cp->usage);
-	if (ars->crcalgo)
-	    ars->mailbox->i.sync_crc ^= cp->sync_crc;
-	ars->num_uids--;
-	free(cp);
-    }
-}
-
-static int recalc_prune_cb(void *rock, const char *key, size_t keylen,
-			   const char *data __attribute__((unused)),
-			   size_t datalen __attribute__((unused)))
-{
-    annotate_recalc_state_t *ars = (annotate_recalc_state_t *)rock;
-    int r;
-    const char *entry = NULL;
-    const char *userid = NULL;
-    unsigned int uid;
-
-    r = split_key(ars->d, key, keylen,
-		  /*mboxnamep*/NULL, &uid, &entry, &userid);
-    if (r) {
-	if (ars->reconstruct) {
-	    printf("%s: deleting annotation with bad key\n",
-		   ars->mailbox->name);
-	}
-	syslog(LOG_ERR, "%s: deleting annotation with bad key",
-			ars->mailbox->name);
-    }
-    else {
-	char uidkey[32];
-	snprintf(uidkey, sizeof(uidkey), "%u", uid);
-	if (!hash_lookup(uidkey, &ars->counts_by_uid))
-	    return 0;
-	/* this annotation is for a leftover uid */
-	if (!userid)
-	    userid = "";
-	if (!entry)
-	    entry = "";
-	if (ars->reconstruct) {
-	    printf("%s: deleting orphan annotation "
-		   "entry=\"%s\", uid=%u, userid=\"%s\"\n",
-		   ars->mailbox->name, entry, uid, userid);
-	}
-	syslog(LOG_ERR, "%s: deleting orphan annotation "
-			"entry=\"%s\", uid=%u, userid=\"%s\"",
-			ars->mailbox->name, entry, uid, userid);
-    }
-
-    /* delete this entry */
-    do {
-	r = cyrusdb_delete(ars->d->db, key, keylen, tid(ars->d), 0);
-    } while (r == CYRUSDB_AGAIN);
-
-    return r;
-}
-
-HIDDEN int annotate_recalc_commit(annotate_recalc_state_t *ars)
-{
+    char key[MAX_MAILBOX_PATH+1];
+    size_t keylen;
     int r = 0;
+    annotate_db_t *d = NULL;
 
-    if (!ars)
-	return 0;
+    assert(uid);
 
-    /*
-     * We got to the end of the mailbox uid scan, and have
-     * seen all the valid uids, so any leftover entries in
-     * counts_by_uid are for expunged or bogus messages, and
-     * need to be removed from the annotations db.
-     */
-    if (!ars->num_uids)
-	goto out;	    /* easy case: no leftovers */
+    r = _annotate_getdb(mailbox->name, uid, 0, &d);
+    if (r) return r;
 
-    /*
-     * Start a transaction, and make a pass through the
-     * database deleting any annotations for leftover uids.
-     */
-    annotate_begin(ars->d);
+    /* must be in a transaction to modify the db */
+    annotate_begin(d);
 
-    r = cyrusdb_foreach(ars->d->db, NULL, 0, NULL,
-		    recalc_prune_cb, ars, tid(ars->d));
+    /* If these are not true, nobody will ever commit the data we're
+     * about to copy, and that would be sad */
+    assert(mailbox->annot_state != NULL);
+    assert(mailbox->annot_state->d == d);
 
-    if (!r)
-	r = annotate_commit(ars->d);
-    else
-	annotate_abort(ars->d);
+    keylen = make_key(mailbox->name, uid, "", NULL, key, sizeof(key));
 
-    if (r) {
-	syslog(LOG_ERR, "annotation recalc: could not prune "
-			"orphan annotations: %s",
-			error_message(r));
-    }
+    r = cyrusdb_foreach(d->db, key, keylen, NULL, &cleanup_cb, d, tid(d));
 
-out:
-    annotate_recalc_end(ars);
+    annotate_putdb(&d);
     return r;
-}
-
-HIDDEN void annotate_recalc_abort(annotate_recalc_state_t *ars)
-{
-    if (ars)
-	annotate_recalc_end(ars);
 }
 
 /*************************  Annotation Initialization  ************************/

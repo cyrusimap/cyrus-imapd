@@ -1353,10 +1353,7 @@ static int do_mailbox(struct dlist *kin)
     uint32_t uidvalidity;
     const char *acl;
     const char *options_str;
-    struct {
-	uint32_t mvalue;	/* master's value */
-	uint32_t rvalue;	/* replica's value */
-    } sync_crc;
+    uint32_t sync_crc;
 
     uint32_t options;
 
@@ -1401,7 +1398,7 @@ static int do_mailbox(struct dlist *kin)
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
 
     /* Get the CRC */
-    if (!dlist_getnum32(kin, "SYNC_CRC", &sync_crc.mvalue))
+    if (!dlist_getnum32(kin, "SYNC_CRC", &sync_crc))
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
 
     /* optional */
@@ -1517,12 +1514,6 @@ static int do_mailbox(struct dlist *kin)
 	mailbox->i.uidvalidity = uidvalidity;
     }
 
-    /* TODO: we might be able to do this in a single pass above.
-       Need to check whether the above code ensures that we traverse
-       all the replica records in the correct order */
-    r = sync_crc_calc(mailbox, &sync_crc.rvalue);
-    if (r) goto done;
-
     /* this is an ugly construct that's an artifact of the
      * inversion of mboxlist and mailbox stuff that means
      * we can't be efficient in mboxlist_setspecialuse, so
@@ -1537,13 +1528,16 @@ done:
     sync_annot_list_free(&mannots);
     sync_annot_list_free(&rannots);
 
+    /* check the CRC too */
+    if (!r && sync_crc != sync_crc_calc(mailbox, 0)) {
+	/* try forcing a recalculation */
+	if (sync_crc != sync_crc_calc(mailbox, 1))
+	    r = IMAP_SYNC_CHECKSUM;
+    }
+
     mailbox_close(&mailbox);
 
-    /* check return value */
-    if (r) return r;
-    if (sync_crc.rvalue != sync_crc.mvalue)
-	return IMAP_SYNC_CHECKSUM;
-    return 0;
+    return r;
 }
 
 /* ====================================================================== */

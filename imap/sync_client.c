@@ -1359,7 +1359,6 @@ static int mailbox_full_update(const char *mboxname)
     sync_annot_list_free(&mannots);
     sync_annot_list_free(&rannots);
 
-
     /* close the mailbox before sending any expunges
      * to avoid deadlocks */
     mailbox_close(&mailbox);
@@ -1414,8 +1413,7 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
 	 if (remote->specialuse) return 0;
     }
 
-    r = sync_crc_calc(mailbox, &sync_crc);
-    if (r) return 0;
+    sync_crc = sync_crc_calc(mailbox, /*force*/0);
 
     if (remote->sync_crc != sync_crc) return 0;
 
@@ -1473,6 +1471,12 @@ static int update_mailbox_once(struct sync_folder *local,
 	    r = IMAP_AGAIN;
 	    goto done;
 	}
+    }
+
+    /* make sure CRC is updated if we're retrying */
+    if (is_repeat) {
+	r = mailbox_index_recalc(mailbox);
+	if (r) goto done;
     }
 
     /* nothing changed - nothing to send */
@@ -2985,15 +2989,15 @@ static void replica_connect(const char *channel)
      * uses only versions unknown to us), fail miserably. */
     {
 	char *vers_str = backend_get_cap_params(sync_backend, CAPA_CRC_VERSIONS);
-	unsigned min_vers = 0, max_vers = 0;
+	unsigned min_vers = 0, max_vers = 0, version = 0;
 	struct dlist *kl;
-	int r;
+	int r = 0;
 
 	if (vers_str &&
 	    sscanf(vers_str, "%u-%u", &min_vers, &max_vers) == 2) {
 
-	    r = sync_crc_setup(min_vers, max_vers, /*strict*/0);
-	    if (r < 0) {
+	    version = sync_crc_setup(min_vers, max_vers, /*strict*/0);
+	    if (!version) {
 negfailed:
 		fprintf(stderr, "Can not negotiate SYNC_CRC version with server '%s'\n",
 			servername);
@@ -3001,12 +3005,11 @@ negfailed:
 			servername);
 		_exit(1);
 	    }
-	    max_vers = min_vers = (unsigned)r;
 
 	    /* server advertised the caps, presumably it knows
 	     * how to handle a SET */
 	    kl = dlist_newkvlist(NULL, "OPTIONS");
-	    dlist_setnum32(kl, "CRC_VERSION", min_vers);
+	    dlist_setnum32(kl, "CRC_VERSION", version);
 	    sync_send_set(kl, sync_out);
 	    dlist_free(&kl);
 

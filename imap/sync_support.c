@@ -1370,10 +1370,7 @@ int sync_mailbox(struct mailbox *mailbox,
 		 int printrecords)
 {
     int r = 0;
-    uint32_t sync_crc;
-
-    r = sync_crc_calc(mailbox, &sync_crc);
-    if (r) goto done;
+    modseq_t xconvmodseq = 0;
 
     dlist_setatom(kl, "UNIQUEID", mailbox->uniqueid);
     dlist_setatom(kl, "MBOXNAME", mailbox->name);
@@ -1388,7 +1385,7 @@ int sync_mailbox(struct mailbox *mailbox,
     dlist_setatom(kl, "PARTITION", mailbox->part);
     dlist_setatom(kl, "ACL", mailbox->acl);
     dlist_setatom(kl, "OPTIONS", sync_encode_options(mailbox->i.options));
-    dlist_setnum32(kl, "SYNC_CRC", sync_crc);
+    dlist_setnum32(kl, "SYNC_CRC", sync_crc_calc(mailbox, /*force*/0));
     if (mailbox->quotaroot) 
 	dlist_setatom(kl, "QUOTAROOT", mailbox->quotaroot);
     if (mailbox->specialuse)
@@ -1814,24 +1811,18 @@ static unsigned sync_crc_vers;
 
 int sync_crc_setup(unsigned minvers, unsigned maxvers, int strict)
 {
-    const mailbox_crcalgo_t *alg;
-
-    alg = mailbox_find_crcalgo(minvers, maxvers);
-
-    if (!alg) {
-	if (strict)
+    sync_crc_vers = mailbox_best_crcvers(minvers, maxvers);
+    if (strict) {
+	if (sync_crc_vers < minvers || sync_crc_vers > maxvers)
 	    return IMAP_PROTOCOL_ERROR;
-	/* otherwise, choose the oldest one */
-	alg = mailbox_find_crcalgo(MAILBOX_CRC_VERSION_MIN,
-				   MAILBOX_CRC_VERSION_MIN);
     }
 
-    return sync_crc_vers = alg->version;
+    return sync_crc_vers;
 }
 
-int sync_crc_calc(struct mailbox *mailbox, uint32_t *crcp)
+uint32_t sync_crc_calc(struct mailbox *mailbox, int force)
 {
-    return mailbox_calc_sync_crc(mailbox, sync_crc_vers, crcp);
+    return mailbox_sync_crc(mailbox, sync_crc_vers, force);
 }
 
 /* ====================================================================== */

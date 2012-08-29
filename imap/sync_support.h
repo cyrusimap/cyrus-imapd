@@ -433,7 +433,7 @@ int diff_annotations(const struct sync_annot_list *local_annots,
 /* ====================================================================== */
 
 int sync_crc_setup(unsigned minv, unsigned maxv, int strict);
-int sync_crc_calc(struct mailbox *, uint32_t *);
+uint32_t sync_crc_calc(struct mailbox *mailbox, int force);
 
 /* ====================================================================== */
 

@@ -537,13 +537,6 @@ struct mailbox_repack {
 
 #define MAILBOX_CRC_VERSION_MIN		1
 #define MAILBOX_CRC_VERSION_MAX		2
-typedef struct mailbox_crcalgo mailbox_crcalgo_t;
-struct mailbox_crcalgo {
-    unsigned version;
-    bit32 (*record)(const struct mailbox *, const struct index_record *);
-    bit32 (*annot)(unsigned int uid, const char *entry,
-		   const char *userid, const struct buf *value);
-};
 
 extern int mailbox_repack_setup(struct mailbox *mailbox,
 			        struct mailbox_repack **repackptr);
@@ -551,19 +544,24 @@ extern int mailbox_repack_add(struct mailbox_repack *repack,
 			      struct index_record *record);
 extern void mailbox_repack_abort(struct mailbox_repack **repackptr);
 extern int mailbox_repack_commit(struct mailbox_repack **repackptr);
+extern int mailbox_index_recalc(struct mailbox *mailbox);
 
 #define mailbox_quota_check(mailbox, delta) \
 	(mailbox->quotaroot ? quota_check_useds((mailbox)->quotaroot, delta) : 0)
 void mailbox_get_usage(struct mailbox *mailbox,
 			quota_t usage[QUOTA_NUMRESOURCES]);
-void mailbox_use_annot_quota(struct mailbox *mailbox, quota_t diff);
+void mailbox_annot_changed(struct mailbox *mailbox,
+			   unsigned int uid,
+			   const char *entry,
+			   const char *userid,
+			   const struct buf *oldval,
+			   const struct buf *newval);
 
 extern int mailbox_get_annotate_state(struct mailbox *mailbox,
 				      unsigned int uid,
 				      struct annotate_state **statep);
 
-const mailbox_crcalgo_t *mailbox_get_crcalgo(struct mailbox *);
-const mailbox_crcalgo_t *mailbox_find_crcalgo(unsigned minvers, unsigned maxvers);
-int mailbox_calc_sync_crc(struct mailbox *mailbox, unsigned vers, uint32_t *crcp);
+uint32_t mailbox_sync_crc(struct mailbox *mailbox, unsigned vers, int recalc);
+unsigned mailbox_best_crcvers(unsigned minvers, unsigned maxvers);
 
 #endif /* INCLUDED_MAILBOX_H */

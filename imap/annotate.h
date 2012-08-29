@@ -183,7 +183,7 @@ int annotate_msg_copy(struct mailbox *oldmailbox, uint32_t olduid,
 		      struct mailbox *newmailbox, uint32_t newuid,
 		      const char *userid);
 /* delete the annotations for the given message */
-int annotate_msg_expunge(annotate_state_t *);
+int annotate_msg_cleanup(struct mailbox *mailbox, uint32_t uid);
 
 /* delete the annotations for 'mailbox'
  * Uses its own transaction. */

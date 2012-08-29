@@ -175,9 +175,6 @@ HIDDEN int upgrade_index(struct mailbox *mailbox)
     bit32 eversion = 0, eoffset = 0, expungerecord_size = 0;
     struct expunge_data *expunge_data = NULL;
     struct mailbox_repack *repack = NULL;
-    int upgrade_usage = 0;
-    quota_t usage[QUOTA_NUMRESOURCES];
-    annotate_recalc_state_t *ars = NULL;
     int r;
 
     if (mailbox->index_size < OFFSET_NUM_RECORDS)
@@ -346,19 +343,6 @@ HIDDEN int upgrade_index(struct mailbox *mailbox)
     }
 no_expunge:
 
-    if (oldminor_version < 13) {
-	/* update quota resources usage */
-	if (mailbox->quotaroot && *mailbox->quotaroot) {
-	    /* Note: we cannot use mailbox_quota_dirty and mailbox_commit_quota
-	     * because it relies on index data and for at least MESSAGE resource
-	     * we already have the right value while not yet in the quota db
-	     */
-	    upgrade_usage = 1;
-	    mailbox->i.quota_annot_used = 0;
-	    annotate_recalc_begin(mailbox, &ars, 0);
-	}
-    }
-
     mailbox_repack_setup(mailbox, &repack);
 
     /* Write the rest of new index */
@@ -405,19 +389,13 @@ no_expunge:
 
 	r = mailbox_repack_add(repack, &record);
 	if (r) goto fail;
-
-	if (upgrade_usage && !(record.system_flags & FLAG_UNLINKED))
-	    annotate_recalc_add(ars, record.uid);
     }
 
-    /* update quota usage */
-    if (upgrade_usage) {
-	mailbox_get_usage(mailbox, usage);
-	/* storage usage is already taken into account */
-	usage[QUOTA_STORAGE] = 0;
-
-	quota_update_useds(mailbox->quotaroot, usage, mailbox->name);
-	mailbox->quota_dirty = 0;
+    /* older than 13 didn't count MESSAGE usage for quota */
+    if (oldminor_version < 13 && mailbox->quotaroot) {
+	quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_INITIALIZER;
+	qdiffs[QUOTA_MESSAGE] = repack->i.exists;
+	quota_update_useds(mailbox->quotaroot, qdiffs, mailbox->name);
     }
 
     r = mailbox_repack_commit(&repack);
@@ -438,8 +416,6 @@ done:
     seqset_free(seq);
     free(expunge_data);
 
-    annotate_recalc_commit(ars);
-
     return 0;
 
 fail:
@@ -449,7 +425,6 @@ fail:
     free(expunge_data);
 
     mailbox_repack_abort(&repack);
-    annotate_recalc_abort(ars);
 
     syslog(LOG_ERR, "Index upgrade failed: %s", mailbox->name);
 
