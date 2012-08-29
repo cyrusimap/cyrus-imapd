@@ -519,14 +519,15 @@ sub test_using_annotstorage_msg
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $talk->expunge();
 
-    xlog "Unlike STORAGE, X-ANNOTATION-STORAGE quota is not updated until actual expunge";
+    $expected -= delete($expecteds{"INBOX.sub2"});
+
+    xlog "Unlike STORAGE, X-ANNOTATION-STORAGE quota is reduced immediately";
     $self->_check_usages('x-annotation-storage' => int($expected/1024));
 
     $self->run_delayed_expunge();
     $talk = $self->{store}->get_client();
 
-    xlog "X-ANNOTATION-STORAGE quota should have gone down";
-    $expected -= delete($expecteds{"INBOX.sub2"});
+    xlog "X-ANNOTATION-STORAGE quota should not have changed during delayed expunge";
     $self->_check_usages('x-annotation-storage' => int($expected/1024));
 
     xlog "delete annotations on INBOX";
@@ -589,14 +590,14 @@ sub test_using_annotstorage_msg_late
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
     $talk->expunge();
 
-    xlog "Unlike STORAGE, X-ANNOTATION-STORAGE quota is not updated until actual expunge";
+    xlog "X-ANNOTATION-STORAGE quota goes down immediately";
+    $expected -= delete($expecteds{"INBOX.sub2"});
     $self->_check_usages('x-annotation-storage' => int($expected/1024));
 
     $self->run_delayed_expunge();
     $talk = $self->{store}->get_client();
 
-    xlog "X-ANNOTATION-STORAGE quota should have gone down";
-    $expected -= delete($expecteds{"INBOX.sub2"});
+    xlog "X-ANNOTATION-STORAGE quota should have been unchanged by expunge";
     $self->_check_usages('x-annotation-storage' => int($expected/1024));
 
     xlog "delete annotations on INBOX";
@@ -1758,12 +1759,12 @@ sub test_using_annotstorage_msg_copy_exdel
     $store->_select();
     $self->check_messages(\%exp);
 
-    xlog "Check the quota usage is still doubled";
-    $self->_check_usages('x-annotation-storage' => int(2*$expected/1024));
+    xlog "Check the quota usage has reduced again";
+    $self->_check_usages('x-annotation-storage' => int($expected/1024));
 
     $self->run_delayed_expunge();
 
-    xlog "Check the quota usage is back to single";
+    xlog "Check the quota usage is still the same";
     $self->_check_usages('x-annotation-storage' => int($expected/1024));
 }
 
