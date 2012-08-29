@@ -4593,7 +4593,7 @@ static int reconstruct_delannots(struct mailbox *mailbox,
     while (delannots->pos < delannots->nused) {
 	unsigned uid = delannots->uids[delannots->pos];
 	syslog(LOG_NOTICE, "removing stale annotations for %u", uid);
-	printf("removing stale annotations for %u", uid);
+	printf("removing stale annotations for %u\n", uid);
 	if (make_changes) {
 	    r = annotate_msg_cleanup(mailbox, uid);
 	    if (r) goto out;
