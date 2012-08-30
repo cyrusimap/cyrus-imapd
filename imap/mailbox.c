@@ -4905,6 +4905,10 @@ EXPORTED int mailbox_get_annotate_state(struct mailbox *mailbox,
     r = annotate_state_set_message(mailbox->annot_state, mailbox, uid);
     if (r) return r;
 
+    /* lock immediately if we have a write lock */
+    if (mailbox_index_islocked(mailbox, /*write*/1))
+	annotate_state_begin(mailbox->annot_state);
+
     if (statep) *statep = mailbox->annot_state;
 
     return 0;
