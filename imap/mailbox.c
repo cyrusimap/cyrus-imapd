@@ -2520,8 +2520,7 @@ EXPORTED uint32_t mailbox_sync_crc(struct mailbox *mailbox, unsigned vers, int f
     }
 
     /* possibly upgrade the persistent CRC version */
-    if (vers >= mailbox->i.sync_crc_vers &&
-	mailbox_index_islocked(mailbox, /*write*/1)) {
+    if (mailbox_index_islocked(mailbox, /*write*/1)) {
 	mailbox->i.sync_crc = crc;
 	mailbox->i.sync_crc_vers = vers;
 	mailbox_index_dirty(mailbox);
