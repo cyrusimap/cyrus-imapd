@@ -2321,6 +2321,10 @@ static int write_entry(struct mailbox *mailbox,
 	    goto out;
     }
 
+    /* do the annot-changed here before altering the DB */
+    if (mailbox)
+	mailbox_annot_changed(mailbox, uid, entry, userid, &oldval, value);
+
     if (value->s == NULL) {
 
 #if DEBUG
@@ -2366,9 +2370,7 @@ static int write_entry(struct mailbox *mailbox,
 	buf_free(&data);
     }
 
-    if (mailbox)
-	mailbox_annot_changed(mailbox, uid, entry, userid, &oldval, value);
-    else
+    if (!mailbox)
 	sync_log_annotation("");
 
 out:
