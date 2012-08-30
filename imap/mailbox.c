@@ -4709,12 +4709,8 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags)
     r = find_files(mailbox, &files, flags);
     if (r) goto close;
 
-    syslog(LOG_NOTICE, "finding annots %s", name);
-
     r = find_annots(mailbox, &annots);
     if (r) goto close;
-
-    syslog(LOG_NOTICE, "reading all records %s", name);
 
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	r = mailbox_read_index_record(mailbox, recno, &record);
@@ -4771,8 +4767,6 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags)
 	files.pos++;
     }
 
-    syslog(LOG_NOTICE, "appending updates %s", name);
-
     /* messages AFTER last_uid can keep the same UID (see also, restore
      * from lost .index file) - so don't bother moving those */
     while (files.pos < files.nused) {
@@ -4808,8 +4802,6 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags)
 	discovered.pos++;
     }
 
-    syslog(LOG_NOTICE, "deleting annots %s", name);
-
     if (delannots.nused) {
 	r = reconstruct_delannots(mailbox, &delannots, flags);
 	if (r) goto close;
@@ -4820,13 +4812,9 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags)
 
     old_header = mailbox->i;
 
-    syslog(LOG_NOTICE, "recalculating %s", name);
-
     /* re-calculate derived fields */
     r = mailbox_index_recalc(mailbox);
     if (r) goto close;
-
-    syslog(LOG_NOTICE, "comparing %s", name);
 
     /* inform users of any changed header fields */
     reconstruct_compare_headers(mailbox, &old_header, &mailbox->i);
@@ -4846,8 +4834,6 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags)
 	}
 	syslog(LOG_ERR, "%s:  zero highestmodseq", mailbox->name);
     }
-
-    syslog(LOG_NOTICE, "committing %s", name);
 
     if (make_changes) {
 	r = mailbox_commit(mailbox);
