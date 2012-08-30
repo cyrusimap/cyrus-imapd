@@ -2484,9 +2484,10 @@ static void mailbox_annot_update_counts(struct mailbox *mailbox,
  */
 EXPORTED uint32_t mailbox_sync_crc(struct mailbox *mailbox, unsigned vers, int force)
 {
+    annotate_state_t *astate = NULL;
+    const mailbox_crcalgo_t *alg;
     struct index_record record;
     uint32_t recno;
-    const mailbox_crcalgo_t *alg;
     uint32_t crc = 0;
 
     /* check if we can use the persistent incremental CRC */
@@ -2498,6 +2499,15 @@ EXPORTED uint32_t mailbox_sync_crc(struct mailbox *mailbox, unsigned vers, int f
     /* find the algorithm */
     alg = mailbox_find_crcalgo(vers, vers);
     if (!alg) return 0;
+
+    if (alg->annot) {
+	/* hold annotations DB open - failure to load is an error */
+	if (mailbox_get_annotate_state(mailbox, ANNOTATE_ANY_UID, &astate))
+	    return 0;
+
+	/* and make sure it stays locked for the whole process */
+	annotate_state_begin(astate);
+    }
 
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	/* we can't send bogus records, just skip them! */
@@ -2547,9 +2557,10 @@ static void mailbox_index_update_counts(struct mailbox *mailbox,
 
 EXPORTED int mailbox_index_recalc(struct mailbox *mailbox)
 {
+    annotate_state_t *astate = NULL;
     struct index_record record;
-    int r = 0;
     uint32_t recno;
+    int r = 0;
 
     assert(mailbox_index_islocked(mailbox, 1));
 
@@ -2567,6 +2578,13 @@ EXPORTED int mailbox_index_recalc(struct mailbox *mailbox)
 
     /* mailbox level annotations */
     mailbox_annot_update_counts(mailbox, NULL, 1);
+
+    /* hold annotations DB open */
+    r = mailbox_get_annotate_state(mailbox, ANNOTATE_ANY_UID, &astate);
+    if (r) goto out;
+
+    /* and make sure it stays locked for the whole process */
+    annotate_state_begin(astate);
 
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	r = mailbox_read_index_record(mailbox, recno, &record);
@@ -4691,8 +4709,12 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags)
     r = find_files(mailbox, &files, flags);
     if (r) goto close;
 
+    syslog(LOG_NOTICE, "finding annots %s", name);
+
     r = find_annots(mailbox, &annots);
     if (r) goto close;
+
+    syslog(LOG_NOTICE, "reading all records %s", name);
 
     for (recno = 1; recno <= mailbox->i.num_records; recno++) {
 	r = mailbox_read_index_record(mailbox, recno, &record);
@@ -4749,6 +4771,8 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags)
 	files.pos++;
     }
 
+    syslog(LOG_NOTICE, "appending updates %s", name);
+
     /* messages AFTER last_uid can keep the same UID (see also, restore
      * from lost .index file) - so don't bother moving those */
     while (files.pos < files.nused) {
@@ -4784,6 +4808,8 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags)
 	discovered.pos++;
     }
 
+    syslog(LOG_NOTICE, "deleting annots %s", name);
+
     if (delannots.nused) {
 	r = reconstruct_delannots(mailbox, &delannots, flags);
 	if (r) goto close;
@@ -4794,9 +4820,13 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags)
 
     old_header = mailbox->i;
 
+    syslog(LOG_NOTICE, "recalculating %s", name);
+
     /* re-calculate derived fields */
     r = mailbox_index_recalc(mailbox);
     if (r) goto close;
+
+    syslog(LOG_NOTICE, "comparing %s", name);
 
     /* inform users of any changed header fields */
     reconstruct_compare_headers(mailbox, &old_header, &mailbox->i);
@@ -4816,6 +4846,8 @@ EXPORTED int mailbox_reconstruct(const char *name, int flags)
 	}
 	syslog(LOG_ERR, "%s:  zero highestmodseq", mailbox->name);
     }
+
+    syslog(LOG_NOTICE, "committing %s", name);
 
     if (make_changes) {
 	r = mailbox_commit(mailbox);
