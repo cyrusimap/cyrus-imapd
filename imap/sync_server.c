@@ -1425,7 +1425,7 @@ static int do_mailbox(struct dlist *kin)
     }
 
     /* hold the annotate state open */
-    mailbox_get_annotate_state(mailbox, /*synthetic*/UINT32_MAX, &astate);
+    mailbox_get_annotate_state(mailbox, ANNOTATE_ANY_UID, &astate);
     /* and make it hold a transaction open */
     annotate_state_begin(astate);
 
@@ -1621,7 +1621,7 @@ static int mailbox_cb(char *name,
     if (r) goto out;
 
     /* hold the annotate state open */
-    mailbox_get_annotate_state(mailbox, /*synthetic*/UINT32_MAX, &astate);
+    mailbox_get_annotate_state(mailbox, ANNOTATE_ANY_UID, &astate);
     /* and make it hold a transaction open */
     annotate_state_begin(astate);
 

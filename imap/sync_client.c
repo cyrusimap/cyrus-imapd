@@ -1444,7 +1444,7 @@ static int update_mailbox_once(struct sync_folder *local,
 	goto done;
 
     /* hold the annotate state open */
-    mailbox_get_annotate_state(mailbox, /*synthetic*/UINT32_MAX, &astate);
+    mailbox_get_annotate_state(mailbox, ANNOTATE_ANY_UID, &astate);
     /* and force it to hold a transaction while it does stuff */
     annotate_state_begin(astate);
 
