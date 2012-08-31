@@ -1477,8 +1477,10 @@ int sync_parse_response(const char *cmd, struct protstream *in,
     struct dlist *kl = NULL;
     int c;
 
-    if ((c = getword(in, &response)) == EOF)
-        return IMAP_PROTOCOL_ERROR;
+    if ((c = getword(in, &response)) == EOF) {
+	syslog(LOG_ERR, "IOERROR: zero length response to %s", cmd);
+	return IMAP_PROTOCOL_ERROR;
+    }
 
     if (c != ' ') goto parse_err;
 
@@ -1539,8 +1541,8 @@ int sync_parse_response(const char *cmd, struct protstream *in,
  parse_err:
     dlist_free(&kl);
     sync_getline(in, &errmsg);
-    syslog(LOG_ERR, "%s received %s response: %s",
-           cmd, response.s, errmsg.s);
+    syslog(LOG_ERR, "IOERROR: %s received %s response: %s",
+	   cmd, response.s, errmsg.s);
     return IMAP_PROTOCOL_ERROR;
 }
 
