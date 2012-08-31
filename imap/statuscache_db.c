@@ -315,9 +315,9 @@ EXPORTED int statuscache_lookup(const char *mboxname, const char *userid,
     return 0;
 }
 
-static int statuscache_update_txn(const char *mboxname,
-				  struct statusdata *sdata,
-				  struct txn **tidptr)
+static int statuscache_store(const char *mboxname,
+			     struct statusdata *sdata,
+			     struct txn **tidptr)
 {
     char data[250];  /* enough room for 11*(UULONG + SP) */
     size_t keylen, datalen;
@@ -348,12 +348,6 @@ static int statuscache_update_txn(const char *mboxname,
     }
 
     return r;
-}
-
-int statuscache_update(const char *mboxname, struct statusdata *sdata)
-{
-    statuscache_update_txn(mboxname, sdata, NULL);
-    return 0; 
 }
 
 struct statuscache_deleterock {
@@ -412,7 +406,7 @@ HIDDEN int statuscache_invalidate(const char *mboxname, struct statusdata *sdata
     key = statuscache_buildkey(mboxname, "", &keylen);
 
     /* strip off the second NULL that buildkey added, so we match 
-     * the entires for all users */
+     * the entries for all users */
     r = cyrusdb_foreach(drock.db, key, keylen - 1, NULL, delete_cb,
 		    &drock, &drock.tid);
     if (r != CYRUSDB_OK) {
@@ -421,7 +415,7 @@ HIDDEN int statuscache_invalidate(const char *mboxname, struct statusdata *sdata
     }
 
     if (!r && sdata) {
-	r = statuscache_update_txn(mboxname, sdata, &drock.tid);
+	r = statuscache_store(mboxname, sdata, &drock.tid);
     }
 
     if (r == CYRUSDB_OK) {
