@@ -1062,6 +1062,13 @@ sub test_quota_f_prefix
 
     my $admintalk = $self->{adminstore}->get_client();
 
+    # surround with other users too
+    $self->{instance}->create_user("aabefore",
+				   subdirs => [ qw(subdir subdir2) ]);
+
+    $self->{instance}->create_user("zzafter",
+				   subdirs => [ qw(subdir subdir2) ]);
+
     $self->{instance}->create_user("base",
 				   subdirs => [ qw(subdir subdir2) ]);
     $self->_set_limits(quotaroot => 'user.base', storage => 1000000);
