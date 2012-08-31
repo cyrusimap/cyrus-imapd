@@ -459,7 +459,7 @@ static int fixquota_dombox(void *rock,
 	const char *root = quotaroots[quota_todo].name;
 
 	/* in the future, definitely don't close yet */
-	if (compar(mboxname, root) > 0)
+	if (compar(mboxname, root) < 0)
 	    break;
 
 	/* inside the first root, don't close yet */
