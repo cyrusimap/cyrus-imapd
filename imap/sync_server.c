@@ -2337,8 +2337,10 @@ static void cmd_apply(struct dlist *kin, struct sync_reserve_list *reserve_list)
     else if (!strcmp(kin->name, "UNUSER"))
 	r = do_unuser(kin);
 
-    else
+    else {
+	syslog(LOG_ERR, "SYNCERROR: unknown command %s", kin->name);
 	r = IMAP_PROTOCOL_ERROR;
+    }
 
     print_response(r);
 }
