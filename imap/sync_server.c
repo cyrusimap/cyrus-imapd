@@ -617,8 +617,10 @@ static void cmdloop(void)
 		    cmd_apply(kl, reserve_list);
 		    dlist_free(&kl);
 		}
-		else
+		else {
+		    syslog(LOG_ERR, "IOERROR: received bad APPLY command");
 		    prot_printf(sync_out, "BAD IMAP_PROTOCOL_ERROR Failed to parse APPLY line\r\n");
+		}
 		continue;
 	    }
 	    break;
@@ -642,8 +644,10 @@ static void cmdloop(void)
 		    cmd_get(kl);
 		    dlist_free(&kl);
 		}
-		else
+		else {
+		    syslog(LOG_ERR, "IOERROR: received bad GET command");
 		    prot_printf(sync_out, "BAD IMAP_PROTOCOL_ERROR Failed to parse GET line\r\n");
+		}
 		continue;
 	    }
 	    break;
@@ -708,14 +712,17 @@ static void cmdloop(void)
 		    cmd_set(kl);
 		    dlist_free(&kl);
 		}
-		else
+		else {
+		    syslog(LOG_ERR, "IOERROR: received bad SET command");
 		    prot_printf(sync_out, "BAD IMAP_PROTOCOL_ERROR Failed to parse SET line\r\n");
+		}
 		continue;
 	    }
 	    break;
 
 	}
 
+	syslog(LOG_ERR, "IOERROR: received bad command: %s", cmd.s);
 	prot_printf(sync_out, "BAD IMAP_PROTOCOL_ERROR Unrecognized command\r\n");
 	eatline(sync_in, c);
 	continue;

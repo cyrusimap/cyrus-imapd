@@ -1478,8 +1478,10 @@ int sync_parse_response(const char *cmd, struct protstream *in,
     struct dlist *kl = NULL;
     int c;
 
-    if ((c = getword(in, &response)) == EOF)
+    if ((c = getword(in, &response)) == EOF) {
+	syslog(LOG_ERR, "IOERROR: zero length response to %s", cmd);
 	return IMAP_PROTOCOL_ERROR;
+    }
 
     if (c != ' ') goto parse_err;
 
@@ -1528,7 +1530,7 @@ int sync_parse_response(const char *cmd, struct protstream *in,
  parse_err:
     dlist_free(&kl);
     sync_getline(in, &errmsg);
-    syslog(LOG_ERR, "%s received %s response: %s",
+    syslog(LOG_ERR, "IOERROR: %s received %s response: %s",
 	   cmd, response.s, errmsg.s);
     return IMAP_PROTOCOL_ERROR;
 }
@@ -1813,8 +1815,11 @@ int sync_crc_setup(unsigned minvers, unsigned maxvers, int strict)
 {
     sync_crc_vers = mailbox_best_crcvers(minvers, maxvers);
     if (strict) {
-	if (sync_crc_vers < minvers || sync_crc_vers > maxvers)
+	if (sync_crc_vers < minvers || sync_crc_vers > maxvers) {
+	    syslog(LOG_ERR, "IOERROR: failed to negotiate CRC: %u (%u %u)",
+		   sync_crc_vers, minvers, maxvers);
 	    return IMAP_PROTOCOL_ERROR;
+	}
     }
 
     return sync_crc_vers;
