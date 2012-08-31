@@ -821,6 +821,38 @@ EXPORTED struct dlist *dlist_getchildn(struct dlist *dl, int num)
     return i;
 }
 
+/* duplicate the parent list as a new list, and then move @num
+ * of the children from the parent onto the new list */
+EXPORTED struct dlist *dlist_splice(struct dlist *dl, int num)
+{
+    struct dlist *ret = dlist_newlist(NULL, dl->name);
+
+    /* clone exact type */
+    ret->type = dl->type;
+    ret->nval = dl->nval;
+
+    if (num > 0) {
+	struct dlist *end = dlist_getchildn(dl, num - 1);
+
+	/* take the start of the list */
+	ret->head = dl->head;
+
+	/* leave the end (if any) */
+	if (end) {
+	    ret->tail = end;
+	    dl->head = end->next;
+	    end->next = NULL;
+	}
+	else {
+	    ret->tail = dl->tail;
+	    dl->head = NULL;
+	    dl->tail = NULL;
+	}
+    }
+
+    return ret;
+}
+
 struct dlist *dlist_getkvchild_bykey(struct dlist *dl,
 				     const char *key, const char *val)
 {
