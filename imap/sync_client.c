@@ -1487,14 +1487,17 @@ static int update_mailbox_once(struct sync_folder *local,
     r = sync_mailbox(mailbox, remote, part_list, kl, kupload, 1);
     if (r) goto done;
 
-    /* upload any messages required */
-    if (kupload->head) {
-	/* keep the mailbox locked for shorter time! Unlock the index now
-	 * but don't close it, because we need to guarantee that message
-	 * files don't get deleted until we're finished with them... */
-	mailbox_unlock_index(mailbox, NULL);
-	sync_send_apply(kupload, sync_out);
+    /* keep the mailbox locked for shorter time! Unlock the index now
+     * but don't close it, because we need to guarantee that message
+     * files don't get deleted until we're finished with them... */
+    mailbox_unlock_index(mailbox, NULL);
+
+    /* upload in small(ish) blocks to avoid timeouts */
+    while (kupload->head) {
+	struct dlist *kul1 = dlist_splice(kupload, 1024);
+	sync_send_apply(kul1, sync_out);
 	r = sync_parse_response("MESSAGE", sync_in, NULL);
+	dlist_free(&kul1);
 	if (r) goto done; /* abort earlier */
     }
 
