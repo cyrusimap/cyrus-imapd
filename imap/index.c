@@ -1396,17 +1396,7 @@ static void index_unlock(struct index_state *state)
     /* grab the latest modseq */
     state->highestmodseq = state->mailbox->i.highestmodseq;
 
-    if (config_getswitch(IMAPOPT_STATUSCACHE)) {
-	struct statusdata sdata;
-	index_status(state, &sdata);
-	/* RECENT is zero for everyone else because we wrote a new
-	 * recentuid! */
-	if (!state->examining)
-	    sdata.recent = 0;
-	mailbox_unlock_index(state->mailbox, &sdata);
-    }
-    else
-	mailbox_unlock_index(state->mailbox, NULL);
+    mailbox_unlock_index(state->mailbox, NULL);
 }
 
 /*
