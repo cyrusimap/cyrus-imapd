@@ -39,4 +39,178 @@ static void test_nil(void)
     buf_free(&b);
 }
 
+static void test_splice_middle(void)
+{
+    struct dlist *dl = dlist_newlist(NULL, "NAME");
+    struct dlist *dl2 = NULL;
+    struct buf b = BUF_INITIALIZER;
+    struct buf b2 = BUF_INITIALIZER;
+    int i;
+
+    for (i = 1; i <= 10; i++) {
+	dlist_setnum32(dl, "NUM", i);
+    }
+
+    dl2 = dlist_splice(dl, 5);
+
+    dlist_printbuf(dl, 0, &b);
+    dlist_printbuf(dl2, 0, &b2);
+
+    CU_ASSERT_STRING_EQUAL(dl->name, "NAME");
+    CU_ASSERT_STRING_EQUAL(dl2->name, "NAME");
+
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&b), "(6 7 8 9 10)");
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&b2), "(1 2 3 4 5)");
+
+    dlist_free(&dl);
+    dlist_free(&dl2);
+    buf_free(&b);
+    buf_free(&b2);
+}
+
+static void test_splice_none(void)
+{
+    struct dlist *dl = dlist_newlist(NULL, "NAME");
+    struct dlist *dl2 = NULL;
+    struct buf b = BUF_INITIALIZER;
+    struct buf b2 = BUF_INITIALIZER;
+    int i;
+
+    for (i = 1; i <= 10; i++) {
+	dlist_setnum32(dl, "NUM", i);
+    }
+
+    dl2 = dlist_splice(dl, 0);
+
+    dlist_printbuf(dl, 0, &b);
+    dlist_printbuf(dl2, 0, &b2);
+
+    CU_ASSERT_STRING_EQUAL(dl->name, "NAME");
+    CU_ASSERT_STRING_EQUAL(dl2->name, "NAME");
+
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&b), "(1 2 3 4 5 6 7 8 9 10)");
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&b2), "()");
+
+    dlist_free(&dl);
+    dlist_free(&dl2);
+    buf_free(&b);
+    buf_free(&b2);
+}
+
+static void test_splice_one(void)
+{
+    struct dlist *dl = dlist_newlist(NULL, "NAME");
+    struct dlist *dl2 = NULL;
+    struct buf b = BUF_INITIALIZER;
+    struct buf b2 = BUF_INITIALIZER;
+    int i;
+
+    for (i = 1; i <= 10; i++) {
+	dlist_setnum32(dl, "NUM", i);
+    }
+
+    dl2 = dlist_splice(dl, 1);
+
+    dlist_printbuf(dl, 0, &b);
+    dlist_printbuf(dl2, 0, &b2);
+
+    CU_ASSERT_STRING_EQUAL(dl->name, "NAME");
+    CU_ASSERT_STRING_EQUAL(dl2->name, "NAME");
+
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&b), "(2 3 4 5 6 7 8 9 10)");
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&b2), "(1)");
+
+    dlist_free(&dl);
+    dlist_free(&dl2);
+    buf_free(&b);
+    buf_free(&b2);
+}
+
+static void test_splice_allbut(void)
+{
+    struct dlist *dl = dlist_newlist(NULL, "NAME");
+    struct dlist *dl2 = NULL;
+    struct buf b = BUF_INITIALIZER;
+    struct buf b2 = BUF_INITIALIZER;
+    int i;
+
+    for (i = 1; i <= 10; i++) {
+	dlist_setnum32(dl, "NUM", i);
+    }
+
+    dl2 = dlist_splice(dl, 9);
+
+    dlist_printbuf(dl, 0, &b);
+    dlist_printbuf(dl2, 0, &b2);
+
+    CU_ASSERT_STRING_EQUAL(dl->name, "NAME");
+    CU_ASSERT_STRING_EQUAL(dl2->name, "NAME");
+
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&b), "(10)");
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&b2), "(1 2 3 4 5 6 7 8 9)");
+
+    dlist_free(&dl);
+    dlist_free(&dl2);
+    buf_free(&b);
+    buf_free(&b2);
+}
+
+static void test_splice_all(void)
+{
+    struct dlist *dl = dlist_newlist(NULL, "NAME");
+    struct dlist *dl2 = NULL;
+    struct buf b = BUF_INITIALIZER;
+    struct buf b2 = BUF_INITIALIZER;
+    int i;
+
+    for (i = 1; i <= 10; i++) {
+	dlist_setnum32(dl, "NUM", i);
+    }
+
+    dl2 = dlist_splice(dl, 10);
+
+    dlist_printbuf(dl, 0, &b);
+    dlist_printbuf(dl2, 0, &b2);
+
+    CU_ASSERT_STRING_EQUAL(dl->name, "NAME");
+    CU_ASSERT_STRING_EQUAL(dl2->name, "NAME");
+
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&b), "()");
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&b2), "(1 2 3 4 5 6 7 8 9 10)");
+
+    dlist_free(&dl);
+    dlist_free(&dl2);
+    buf_free(&b);
+    buf_free(&b2);
+}
+
+static void test_splice_over(void)
+{
+    struct dlist *dl = dlist_newlist(NULL, "NAME");
+    struct dlist *dl2 = NULL;
+    struct buf b = BUF_INITIALIZER;
+    struct buf b2 = BUF_INITIALIZER;
+    int i;
+
+    for (i = 1; i <= 10; i++) {
+	dlist_setnum32(dl, "NUM", i);
+    }
+
+    dl2 = dlist_splice(dl, 11);
+
+    dlist_printbuf(dl, 0, &b);
+    dlist_printbuf(dl2, 0, &b2);
+
+    CU_ASSERT_STRING_EQUAL(dl->name, "NAME");
+    CU_ASSERT_STRING_EQUAL(dl2->name, "NAME");
+
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&b), "()");
+    CU_ASSERT_STRING_EQUAL(buf_cstring(&b2), "(1 2 3 4 5 6 7 8 9 10)");
+
+    dlist_free(&dl);
+    dlist_free(&dl2);
+    buf_free(&b);
+    buf_free(&b2);
+}
+
 /* vim: set ft=c: */
