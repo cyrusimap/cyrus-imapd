@@ -143,6 +143,8 @@ void shut_down(int code)
 
     smmapd_reset();
 
+    sync_log_done();
+
     mboxlist_close();
     mboxlist_done();
 
@@ -192,6 +194,9 @@ int service_init(int argc, char **argv, char **envp)
     /* so we can check the quotas */
     quotadb_init(0);
     quotadb_open(NULL);
+
+    /* so we can log sync information on closing mailboxes */
+    sync_log_init();
 
     /* Set namespace */
     if ((r = mboxname_init_namespace(&map_namespace, 1)) != 0) {
