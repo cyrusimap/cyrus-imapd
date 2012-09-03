@@ -94,6 +94,7 @@
 #include "message.h"
 #include "map.h"
 #include "mboxlist.h"
+#include "proc.h"
 #include "retry.h"
 #include "seen.h"
 #include "upgrade_index.h"
@@ -3521,6 +3522,8 @@ EXPORTED int mailbox_delete(struct mailbox **mailboxptr)
 			   "mailbox=<%s> uniqueid=<%s>",
 			   session_id(), 
 			   mailbox->name, mailbox->uniqueid);
+
+    proc_killmbox(mailbox->name);
 
     mailbox_close(mailboxptr);
 

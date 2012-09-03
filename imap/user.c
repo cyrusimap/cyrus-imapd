@@ -78,6 +78,7 @@
 #include "mboxkey.h"
 #include "mboxlist.h"
 #include "mboxname.h"
+#include "proc.h"
 #include "quota.h"
 #include "seen.h"
 #include "user.h"
@@ -205,6 +206,8 @@ EXPORTED int user_deletedata(const char *userid, int wipe_user)
 
     /* delete sieve scripts */
     user_deletesieve(userid);
+
+    proc_killuser(userid);
 
     return 0;
 }
