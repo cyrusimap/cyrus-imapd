@@ -92,7 +92,7 @@ static char *proc_getpath(unsigned pid) {
     return path;
 }
 
-EXPORTED int proc_register(const char *progname, const char *clienthost,
+EXPORTED int proc_register(const char *servicename, const char *clienthost,
 		  const char *userid, const char *mailbox)
 {
     unsigned pid;
@@ -119,7 +119,7 @@ EXPORTED int proc_register(const char *progname, const char *clienthost,
     }
 
     rewind(procfile);
-    fprintf(procfile, "%s", clienthost);
+    fprintf(procfile, "%s\t%s", servicename, clienthost);
     if (userid) {
 	fprintf(procfile, "\t%s", userid);
 	if (mailbox) {
@@ -135,7 +135,7 @@ EXPORTED int proc_register(const char *progname, const char *clienthost,
     }
 	
 
-    setproctitle("%s: %s %s %s", progname, clienthost, 
+    setproctitle("%s: %s %s %s", servicename, clienthost, 
 		 userid ? userid : "",
 		 mailbox ? mailbox : "");
 
@@ -167,6 +167,7 @@ static int proc_foreach_helper(unsigned pid, procdata_t *func, void *rock)
 	int n;
 	struct stat sbuf;
 	char *p;
+	char *service = NULL;
 	char *host = NULL;
 	char *user = NULL;
 	char *mailbox = NULL;
@@ -190,7 +191,9 @@ static int proc_foreach_helper(unsigned pid, procdata_t *func, void *rock)
 	if (p) *p = '\0';
 
 	/* parse the fields */
-	host = buf;
+	service = buf;
+	host = strchr(service, '\t');
+	*host++ = '\0';
 	user = strchr(host, '\t');
 	if (user) {
 	    *user++ = '\0';
@@ -198,7 +201,7 @@ static int proc_foreach_helper(unsigned pid, procdata_t *func, void *rock)
 	    if (mailbox) *mailbox++ = '\0';
 	}
 
-	(*func)(pid, host, user, mailbox, rock);
+	(*func)(pid, service, host, user, mailbox, rock);
     }
 
 done:
@@ -235,6 +238,7 @@ EXPORTED int proc_foreach(procdata_t *func, void *rock)
 }
 
 static int count_procusage(int pid __attribute__((unused)),
+			   const char *servicename __attribute__((unused)),
 			   const char *clienthost,
 			   const char *userid,
 			   const char *mboxname __attribute__((unused)),

@@ -55,14 +55,15 @@ struct proc_limits {
     int maxhost;
 };
 
-typedef int procdata_t(int pid, const char *clienthost,
+typedef int procdata_t(int pid,
+		       const char *servicename, const char *clienthost,
 		       const char *userid, const char *mailbox,
 		       void *rock);
 
 extern void setproctitle_init(int argc, char **argv, char **envp);
 extern void setproctitle(const char *fmt, ...);
 
-extern int proc_register(const char *progname, const char *clienthost,
+extern int proc_register(const char *servicename, const char *clienthost,
 		         const char *userid, const char *mailbox);
 
 extern void proc_cleanup(void);
