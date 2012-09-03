@@ -926,7 +926,7 @@ static int dlist_tonum64(struct dlist *dl, bit64 *valp)
     return 1;
 }
 
-int dlist_tonum32(struct dlist *dl, uint32_t *valp)
+EXPORTED int dlist_tonum32(struct dlist *dl, uint32_t *valp)
 {
     bit64 v;
 
