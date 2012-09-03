@@ -49,10 +49,12 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#include <signal.h>
 #include <syslog.h>
 #include <string.h>
 #include <sys/stat.h>
 
+#include "assert.h"
 #include "exitcodes.h"
 #include "global.h"
 #include "proc.h"
@@ -82,11 +84,11 @@
 static char *procfname = 0;
 static FILE *procfile = 0;
 
-static char *proc_getpath(unsigned pid) {
+static char *proc_getpath(pid_t pid) {
     char *path;
     path = xmalloc(strlen(config_dir)+sizeof(FNAME_PROCDIR)+11);
     if (pid)
-	sprintf(path, "%s%s/%u", config_dir, FNAME_PROCDIR, pid);
+	sprintf(path, "%s%s/%u", config_dir, FNAME_PROCDIR, (unsigned)pid);
     else 
 	sprintf(path, "%s%s", config_dir, FNAME_PROCDIR);
     return path;
@@ -95,7 +97,7 @@ static char *proc_getpath(unsigned pid) {
 EXPORTED int proc_register(const char *servicename, const char *clienthost,
 		  const char *userid, const char *mailbox)
 {
-    unsigned pid;
+    pid_t pid;
     int pos;
 
     if (!procfname) {
@@ -152,7 +154,7 @@ EXPORTED void proc_cleanup(void)
     }
 }
 
-static int proc_foreach_helper(unsigned pid, procdata_t *func, void *rock)
+static int proc_foreach_helper(pid_t pid, procdata_t *func, void *rock)
 {
     int r = 0;
     char *buf = NULL;
@@ -216,7 +218,7 @@ EXPORTED int proc_foreach(procdata_t *func, void *rock)
     struct dirent *dirent;
     char *path;
     const char *p;
-    unsigned pid;
+    pid_t pid;
     int r = 0;
 
     path = proc_getpath(0);
@@ -237,12 +239,12 @@ EXPORTED int proc_foreach(procdata_t *func, void *rock)
     return r;
 }
 
-static int count_procusage(int pid __attribute__((unused)),
-			   const char *servicename __attribute__((unused)),
-			   const char *clienthost,
-			   const char *userid,
-			   const char *mboxname __attribute__((unused)),
-			   void *rock)
+static int procusage_cb(pid_t pid __attribute__((unused)),
+			const char *servicename __attribute__((unused)),
+			const char *clienthost,
+			const char *userid,
+			const char *mboxname __attribute__((unused)),
+			void *rock)
 {
     struct proc_limits *limitsp = (struct proc_limits *)rock;
 
@@ -267,10 +269,66 @@ EXPORTED int proc_checklimits(struct proc_limits *limitsp)
 
     limitsp->host = 0;
     limitsp->user = 0;
-    proc_foreach(count_procusage, limitsp);
+    proc_foreach(procusage_cb, limitsp);
 
     if (limitsp->maxhost && limitsp->host >= limitsp->maxhost) return 1;
     if (limitsp->maxuser && limitsp->user >= limitsp->maxuser) return 1;
 
     return 0;
+}
+
+static int killuser_cb(pid_t pid,
+		       const char *servicename __attribute__((unused)),
+		       const char *clienthost  __attribute__((unused)),
+		       const char *userid,
+		       const char *mboxname __attribute__((unused)),
+		       void *rock)
+{
+    pid_t mypid = getpid();
+    const char *test = (const char *)rock;    
+
+    /* don't kill myself */
+    if (mypid == pid)
+	return 0;
+
+    if (!strcmpsafe(userid, test))
+	kill(pid, SIGTERM);
+
+    return 0;
+}
+
+static int killmbox_cb(pid_t pid,
+		       const char *servicename __attribute__((unused)),
+		       const char *clienthost  __attribute__((unused)),
+		       const char *userid __attribute__((unused)),
+		       const char *mboxname,
+		       void *rock)
+{
+    pid_t mypid = getpid();
+    const char *test = (const char *)rock;    
+
+    /* don't kill myself */
+    if (mypid == pid)
+	return 0;
+
+    if (!strcmpsafe(mboxname, test))
+	kill(pid, SIGTERM);
+
+    return 0;
+}
+
+EXPORTED void proc_killuser(const char *userid)
+{
+    /* can't kill all non-connected, that's evil */
+    assert(userid && userid[0]);
+
+    proc_foreach(killuser_cb, userid);
+}
+
+EXPORTED void proc_killmbox(const char *mboxname)
+{
+    /* can't kill all non-selected, that's evil */;
+    assert(mboxname && mboxname[0]);
+
+    proc_foreach(killmbox_cb, mboxname);
 }

@@ -55,7 +55,7 @@ struct proc_limits {
     int maxhost;
 };
 
-typedef int procdata_t(int pid,
+typedef int procdata_t(pid_t pid,
 		       const char *servicename, const char *clienthost,
 		       const char *userid, const char *mailbox,
 		       void *rock);
@@ -71,5 +71,8 @@ extern void proc_cleanup(void);
 extern int proc_foreach(procdata_t *func, void *rock);
 
 extern int proc_checklimits(struct proc_limits *limitsp);
+
+extern void proc_killuser(const char *userid);
+extern void proc_killmbox(const char *mboxname);
 
 #endif /* _PROC_H */
