@@ -88,9 +88,6 @@ struct quota {
 
 /* special value to indicate no limit applies */
 #define QUOTA_UNLIMITED	    (-1)
-/* Special value to indicate no usedB[] value.  Note that usedB[]
- * can validly go negative, so we can't just use ~0. */
-#define QUOTA_INVALID	    ((quota_t)((~0ULL)>>1))
 
 extern const char * const quota_names[QUOTA_NUMRESOURCES];
 extern const int quota_units[QUOTA_NUMRESOURCES];
