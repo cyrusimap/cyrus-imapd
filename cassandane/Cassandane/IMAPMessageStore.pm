@@ -86,9 +86,7 @@ sub connect
 	    ($self->{client}->state() == Mail::IMAPTalk::Authenticated ||
 	     $self->{client}->state() == Mail::IMAPTalk::Selected));
 
-    $self->{client}->logout()
-	if defined $self->{client};
-    $self->{client} = undef;
+    $self->disconnect();
 
     my $sock = create_client_socket(
 		    $self->{address_family},
