@@ -1728,13 +1728,11 @@ restart:
 
 	    prev_locktype = listitem->l->locktype;
 
-	    if (prev_locktype != LOCK_EXCLUSIVE) {
-		/* we need to switch to an exclusive lock while upgrading */
-		r = mailbox_mboxlock_reopen(listitem, LOCK_EXCLUSIVE);
-		if (r) return r;
-		r = mailbox_open_index(mailbox);
-		if (r) return r;
-	    }
+	    /* we need to switch to an exclusive lock while upgrading */
+	    r = mailbox_mboxlock_reopen(listitem, LOCK_EXCLUSIVE);
+	    if (r) return r;
+	    r = mailbox_open_index(mailbox);
+	    if (r) return r;
 
 	    /* lie about our index lock status - the exclusive namelock
 	     * provides equivalent properties - and we know it won't
@@ -1746,6 +1744,8 @@ restart:
 	    /* recalculate all counts */
 	    r = mailbox_open_index(mailbox);
 	    if (r) return r;
+	    r = mailbox_read_index_header(mailbox);
+	    if (r) return r;
 	    r = mailbox_index_recalc(mailbox);
 	    if (r) return r;
 	    r = mailbox_commit(mailbox);
@@ -1753,12 +1753,10 @@ restart:
 
 	    /* we have to downgrade again afterwards so a "SELECT" won't
 	     * hold an exclusive lock forever */
-	    if (prev_locktype != LOCK_EXCLUSIVE) {
-		r = mailbox_mboxlock_reopen(listitem, prev_locktype);
-		if (r) return r;
-		r = mailbox_open_index(mailbox);
-		if (r) return r;
-	    }
+	    r = mailbox_mboxlock_reopen(listitem, prev_locktype);
+	    if (r) return r;
+	    r = mailbox_open_index(mailbox);
+	    if (r) return r;
 
 	    goto restart;
 	}
