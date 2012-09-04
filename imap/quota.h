@@ -127,12 +127,6 @@ extern int quota_findroot(char *ret, size_t retlen, const char *name);
 extern int quota_foreach(const char *prefix, quotaproc_t *proc,
 			 void *rock, struct txn **);
 
-/* for quota -f */
-extern int quota_clear_scanset(struct txn **tid);
-extern int quota_update_scanset(const char *mboxname, struct txn **tid);
-/* this is only extern for unit testing */
-extern int quota_is_in_scanset(const char *mboxname, struct txn **tid);
-
 /* open the quotas db */
 void quotadb_open(const char *fname);
 
