@@ -100,7 +100,6 @@ static int mboxlist_rmquota(const char *name, int matchlen, int maycreate,
 			    void *rock);
 static int mboxlist_changequota(const char *name, int matchlen, int maycreate,
 				void *rock);
-static int mboxlist_count_inferiors(const char *mboxname);
 
 EXPORTED struct mboxlist_entry *mboxlist_entry_create(void)
 {
@@ -480,34 +479,19 @@ static int mboxlist_create_namecheck(const char *mboxname,
 				     struct auth_state *auth_state,
 				     int isadmin, int force_subdirs)
 {
-    int user_folder_limit = config_getint(IMAPOPT_USER_FOLDER_LIMIT);
-    const char *p;
     struct mboxlist_entry *mbentry = NULL;
+    const char *p;
     int r = 0;
 
     /* policy first */
     r = mboxname_policycheck(mboxname);
-    if (r) return r;
+    if (r) goto done;
 
     /* is this the user's INBOX namespace? */
     if (!isadmin && mboxname_userownsmailbox(userid, mboxname)) {
 	/* User has admin rights over their own mailbox namespace */
 	if (config_implicitrights & ACL_ADMIN) 
 	    isadmin = 1;
-
-	/* check the folder limit */
-	if (user_folder_limit) {
-	    char *inbox = mboxname_user_mbox(userid, NULL);
-	    int num = mboxlist_count_inferiors(inbox);
-	    free(inbox);
-
-	    if (num + 1 > user_folder_limit) {
-		syslog(LOG_NOTICE, "LIMIT: refused to create "
-		       "%s for %s because of limit %d",
-		       mboxname, userid, user_folder_limit);
-		return IMAP_PERMISSION_DENIED;
-	    }
-	}
     }
 
     /* Check to see if mailbox already exists */
@@ -523,42 +507,55 @@ static int mboxlist_create_namecheck(const char *mboxname,
 	    }
 	}
 
-	mboxlist_entry_free(&mbentry);
-	return r;
+	goto done;
     }
 
     /* look for a parent mailbox */
     r = mboxlist_findparent(mboxname, &mbentry);
     if (r == 0) {
 	/* found a parent */
+	char root[MAX_MAILBOX_NAME+1];
+
 	/* check acl */
 	if (!isadmin &&
 	    !(cyrus_acl_myrights(auth_state, mbentry->acl) & ACL_CREATE)) {
-	    mboxlist_entry_free(&mbentry);
-	    return IMAP_PERMISSION_DENIED;
+	    r = IMAP_PERMISSION_DENIED;
+	    goto done;
+	}
+
+	/* check quota */
+	if (quota_findroot(root, sizeof(root), mboxname)) {
+	    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
+	    qdiffs[QUOTA_NUMFOLDERS] = 1;
+	    r = quota_check_useds(root, qdiffs);
+	    if (r) goto done;
 	}
     }
     else if (r == IMAP_MAILBOX_NONEXISTENT) {
 	/* no parent mailbox */
-	if (!isadmin)
-	    return IMAP_PERMISSION_DENIED;
+	if (!isadmin) {
+	    r = IMAP_PERMISSION_DENIED;
+	    goto done;
+	}
 	
 	p = mboxname_isusermailbox(mboxname, 0);
 	if (p) {
 	    char *firstdot = strchr(p, '.');
 	    if (!force_subdirs && firstdot) {
 		/* Disallow creating user.X.* when no user.X */
-		return IMAP_PERMISSION_DENIED;
+		r = IMAP_PERMISSION_DENIED;
+		goto done;
 	    }
 	}
-    }
-    else {
-	return r;
+
+	/* otherwise no parent is OK */
+	r = 0;
     }
 
+done:
     mboxlist_entry_free(&mbentry);
 
-    return 0;
+    return r;
 }
 
 static int mboxlist_create_acl(const char *mboxname, char **out)
@@ -3366,31 +3363,4 @@ EXPORTED int mboxlist_delayed_delete_isenabled(void)
     enum enum_value config_delete_mode = config_getenum(IMAPOPT_DELETE_MODE);
 
     return(config_delete_mode == IMAP_ENUM_DELETE_MODE_DELAYED);
-}
-
-/* Callback used by mboxlist_count_inferiors below */
-static int _countmbox(void *rock,
-		      const char *key __attribute__((unused)),
-		      size_t keylen __attribute__((unused)),
-		      const char *val __attribute__((unused)),
-		      size_t vallen __attribute__((unused)))
-{
-    int *count = (int *)rock;
-
-    (*count)++;
-
-    return 0;
-}
-
-/* Count how many children a mailbox has */
-static int mboxlist_count_inferiors(const char *mboxname)
-{
-    int count = 0;
-    char *prefix = strconcat(mboxname, ".", (char *)NULL);
-
-    mboxlist_allmbox(prefix, _countmbox, &count);
-
-    free(prefix);
-
-    return(count);
 }
