@@ -486,7 +486,7 @@ out:
     return r;
 }
 
-HIDDEN int quota_check_useds(const char *quotaroot,
+EXPORTED int quota_check_useds(const char *quotaroot,
 		      const quota_t diff[QUOTA_NUMRESOURCES])
 {
     int r = 0;

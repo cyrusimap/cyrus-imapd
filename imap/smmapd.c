@@ -95,6 +95,8 @@
 #include "mboxlist.h"
 #include "mupdate-client.h"
 #include "proc.h"
+#include "quota.h"
+#include "sync_log.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcpy.h"
@@ -230,11 +232,26 @@ int service_main(int argc __attribute__((unused)),
     return 0;
 }
 
-static int verify_user(const char *key,
-		struct auth_state *authstate)
+static int check_quotas(const char *name)
+{
+    quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_DONTCARE_INITIALIZER;
+    char root[MAX_MAILBOX_NAME+1];
+    
+    /* just check the quotas we care about */
+    qdiffs[QUOTA_STORAGE] = 0;
+    qdiffs[QUOTA_MESSAGE] = 1;
+
+    if (!quota_findroot(root, sizeof(root), name))
+	return 0; /* no root, fine */
+
+    return quota_check_useds(root, qdiffs);
+}
+
+static int verify_user(const char *key, struct auth_state *authstate)
 {
     char rcpt[MAX_MAILBOX_BUFFER], namebuf[MAX_MAILBOX_BUFFER] = "";
     char *user = rcpt, *domain = NULL, *mailbox = NULL;
+    struct mboxlist_entry *mbentry = NULL;
     int r = 0;
 
     /* make a working copy of the key and split it into user/domain/mailbox */
@@ -288,108 +305,103 @@ static int verify_user(const char *key,
 	    }
 	}
     }
+    if (r) goto done;
 
-    if (!r) {
-	long aclcheck = !user ? ACL_POST : 0;
-        struct mboxlist_entry *mbentry = NULL;
-        struct hostent *hp;
-        struct sockaddr_in sin,sfrom;
-        char buf[512];
-        int soc, rc;
-	socklen_t x;
-
-	/*
-	 * check to see if mailbox exists and we can append to it:
-	 *
-	 * - must have posting privileges on shared folders
-	 * - don't care about ACL on INBOX (always allow post)
-	 * - must not be overquota
-	 */
+    /*
+     * check to see if mailbox exists and we can append to it:
+     *
+     * - must have posting privileges on shared folders
+     * - don't care about ACL on INBOX (always allow post)
+     * - must not be overquota
+     */
+    r = mboxlist_lookup(namebuf, &mbentry, NULL);
+    if (r == IMAP_MAILBOX_NONEXISTENT && config_mupdate_server) {
+	kick_mupdate();
+	mboxlist_entry_free(&mbentry);
 	r = mboxlist_lookup(namebuf, &mbentry, NULL);
-	if (r == IMAP_MAILBOX_NONEXISTENT && config_mupdate_server) {
-	    kick_mupdate();
+    }
+    if (r) goto done;
+
+    if (!user) {
+	long aclcheck = ACL_POST;
+	int access = cyrus_acl_myrights(authstate, mbentry->acl);
+
+	if ((access & aclcheck) != aclcheck) {
+	    r = (access & ACL_LOOKUP) ?
+		IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
+	    goto done;
+	}
+    }
+
+    if ((mbentry->mbtype & MBTYPE_REMOTE)) {
+	struct hostent *hp;
+	struct sockaddr_in sin,sfrom;
+	char buf[512];
+	int soc, rc;
+	socklen_t x;
+	/* XXX  Perhaps we should support the VRFY command in lmtpd
+	 * and then we could do a VRFY to the correct backend which
+	 * would also do a quotacheck.
+	 */
+
+	/* proxy the request to the real backend server to 
+	 * check the quota.  if this fails, just return 0
+	 * (asuume under quota)
+	 */
+
+	syslog(LOG_ERR, "verify_user(%s) proxying to host %s",
+	       namebuf, mbentry->server);
+
+	hp = gethostbyname(mbentry->server);
+	if (hp == (struct hostent*) 0) {
+	    syslog(LOG_ERR, "verify_user(%s) failed: can't find host %s",
+		   namebuf, mbentry->server);
 	    mboxlist_entry_free(&mbentry);
-	    r = mboxlist_lookup(namebuf, &mbentry, NULL);
+	    return r;
 	}
 
-	if (!r && (mbentry->mbtype & MBTYPE_REMOTE)) {
-	    /* XXX  Perhaps we should support the VRFY command in lmtpd
-	     * and then we could do a VRFY to the correct backend which
-	     * would also do a quotacheck.
-	     */
-	    int access = cyrus_acl_myrights(authstate, mbentry->acl);
-
-	    if ((access & aclcheck) != aclcheck) {
-		r = (access & ACL_LOOKUP) ?
-		    IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
-		mboxlist_entry_free(&mbentry);
-                return r;
-	    } else {
-                r = 0;
-            }
-
-            /* proxy the request to the real backend server to 
-             * check the quota.  if this fails, just return 0
-             * (asuume under quota)
-             */
-
-            syslog(LOG_ERR, "verify_user(%s) proxying to host %s",
-                   namebuf, mbentry->server);
-
-            hp = gethostbyname(mbentry->server);
-            if (hp == (struct hostent*) 0) {
-                syslog(LOG_ERR, "verify_user(%s) failed: can't find host %s",
-                       namebuf, mbentry->server);
-		mboxlist_entry_free(&mbentry);
-                return r;
-            }
-
-            soc = socket(PF_INET, SOCK_STREAM, 0);
-	    if (soc < 0) {
-                syslog(LOG_ERR, "verify_user(%s) failed: can't connect to %s", 
-                       namebuf, mbentry->server);
-		mboxlist_entry_free(&mbentry);
-		return r;
-	    }
-            memcpy(&sin.sin_addr.s_addr,hp->h_addr,hp->h_length);
-            sin.sin_family = AF_INET;
-
-            /* XXX port should be configurable */
-            sin.sin_port = htons(12345);
-
-            if (connect(soc,(struct sockaddr *) &sin, sizeof(sin)) < 0) { 
-                syslog(LOG_ERR, "verify_user(%s) failed: can't connect to %s", 
-                       namebuf, mbentry->server);
-		mboxlist_entry_free(&mbentry);
-                return r;
-            }
-
-            sprintf(buf,SIZE_T_FMT ":cyrus %s,%c",strlen(key)+6,key,4);
-            sendto(soc,buf,strlen(buf),0,(struct sockaddr *)&sin,sizeof(sin));
-
-            x = sizeof(sfrom);
-            rc = recvfrom(soc,buf,512,0,(struct sockaddr *)&sfrom,&x);
- 
-            close(soc);
-
-            if (rc >= 0) {
-		buf[rc] = '\0';
-		prot_printf(map_out, "%s", buf);
-	    }
-
+	soc = socket(PF_INET, SOCK_STREAM, 0);
+	if (soc < 0) {
+	    syslog(LOG_ERR, "verify_user(%s) failed: can't connect to %s", 
+		   namebuf, mbentry->server);
 	    mboxlist_entry_free(&mbentry);
+	    return r;
+	}
+	memcpy(&sin.sin_addr.s_addr,hp->h_addr,hp->h_length);
+	sin.sin_family = AF_INET;
 
-            return -1;   /* tell calling function we already replied */
+	/* XXX port should be configurable */
+	sin.sin_port = htons(12345);
 
-	} else if (!r) {
-	    static const quota_t qdiffs[QUOTA_NUMRESOURCES] =
-				    QUOTA_DIFFS_INITIALIZER;
-	    r = append_check(namebuf, authstate, aclcheck, qdiffs);
+	if (connect(soc,(struct sockaddr *) &sin, sizeof(sin)) < 0) { 
+	    syslog(LOG_ERR, "verify_user(%s) failed: can't connect to %s", 
+		   namebuf, mbentry->server);
+	    mboxlist_entry_free(&mbentry);
+	    return r;
+	}
+
+	sprintf(buf,SIZE_T_FMT ":cyrus %s,%c",strlen(key)+6,key,4);
+	sendto(soc,buf,strlen(buf),0,(struct sockaddr *)&sin,sizeof(sin));
+
+	x = sizeof(sfrom);
+	rc = recvfrom(soc,buf,512,0,(struct sockaddr *)&sfrom,&x);
+
+	close(soc);
+
+	if (rc >= 0) {
+	    buf[rc] = '\0';
+	    prot_printf(map_out, "%s", buf);
 	}
 
 	mboxlist_entry_free(&mbentry);
+
+	return -1;   /* tell calling function we already replied */
     }
 
+    r = check_quotas(namebuf);
+
+done:
+    mboxlist_entry_free(&mbentry);
     if (r) syslog(LOG_DEBUG, "verify_user(%s) failed: %s", namebuf,
 		  error_message(r));
 
