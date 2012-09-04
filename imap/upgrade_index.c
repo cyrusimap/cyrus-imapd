@@ -231,23 +231,19 @@ HIDDEN int upgrade_index(struct mailbox *mailbox)
     /* ignore the result - we EXPECT a CRC32 mismatch */
     mailbox_buf_to_index_header(hbuf, &mailbox->i);
 
-    /* HIGHESTMODSEQ[_64] added with minor version 8 */
-    if (oldminor_version < 8)
-	mailbox->i.highestmodseq = 1;
-
     /* new version fields */
     mailbox->i.minor_version = MAILBOX_MINOR_VERSION;
     mailbox->i.start_offset = INDEX_HEADER_SIZE;
     mailbox->i.record_size = INDEX_RECORD_SIZE;
 
-    /* upgrade other fields as necessary
-     *
-     * minor version wasn't updated religiously in the early days,
+    /* upgrade other fields as necessary */
+    if (!mailbox->i.highestmodseq)
+	mailbox->i.highestmodseq = 1;
+    if (!mailbox->i.uidvalidity)
+	mailbox->i.uidvalidity = time(0);
+
+    /* minor version wasn't updated religiously in the early days,
      * so we need to use the old offset instead */
-    if (oldstart_offset < OFFSET_POP3_LAST_LOGIN)
-	mailbox->i.pop3_last_login = 0;
-    if (oldstart_offset < OFFSET_UIDVALIDITY)
-	mailbox->i.uidvalidity = 1;
     if (oldstart_offset < OFFSET_MAILBOX_OPTIONS)
 	mailbox->i.options = config_getint(IMAPOPT_MAILBOX_DEFAULT_OPTIONS);
 

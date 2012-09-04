@@ -1782,24 +1782,6 @@ restart:
 	return IMAP_MAILBOX_CHECKSUM;
     }
 
-    /* fix up 2.4.0 bug breakage */
-    if (mailbox->i.uidvalidity == 0) {
-	mailbox->i.uidvalidity = time(0);
-	if (locktype == LOCK_EXCLUSIVE) {
-	    mailbox_index_dirty(mailbox);
-	    mailbox_commit(mailbox);
-	    syslog(LOG_ERR, "%s: fixing zero uidvalidity", mailbox->name);
-	}
-    }
-    if (mailbox->i.highestmodseq == 0) {
-	mailbox->i.highestmodseq = 1;
-	if (locktype == LOCK_EXCLUSIVE) {
-	    mailbox_index_dirty(mailbox);
-	    mailbox_commit(mailbox);
-	    syslog(LOG_ERR, "%s: fixing zero highestmodseq", mailbox->name);
-	}
-    }
-
     return 0;
 }
 
