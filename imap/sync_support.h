@@ -149,6 +149,7 @@ struct sync_folder {
     time_t recenttime;
     time_t pop3_last_login;
     time_t pop3_show_after;
+    struct sync_annot_list *annots;
     struct quota quota;
     int   mark; 
     int   reserve;  /* Folder has been processed by reserve operation */
@@ -173,7 +174,8 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
 					 time_t recenttime,
 					 time_t pop3_last_login,
 					 const char *specialuse,
-					 time_t pop3_show_after);
+					 time_t pop3_show_after,
+					 struct sync_annot_list *annots);
 
 struct sync_folder *sync_folder_lookup(struct sync_folder_list *l,
 				       const char *uniqueid);

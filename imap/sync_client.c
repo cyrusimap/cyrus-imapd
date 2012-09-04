@@ -245,7 +245,7 @@ static int find_reserve_all(struct sync_name_list *mboxname_list,
 			     mailbox->i.highestmodseq, 0,
 			     mailbox->i.recentuid, mailbox->i.recenttime,
 			     mailbox->i.pop3_last_login, mailbox->specialuse,
-			     mailbox->i.pop3_show_after);
+			     mailbox->i.pop3_show_after, NULL);
 
 	rfolder = sync_folder_lookup(replica_folders, mailbox->uniqueid);
 	if (rfolder)
@@ -453,6 +453,8 @@ static int response_parse(const char *cmd,
 	    time_t pop3_last_login = 0;
 	    time_t pop3_show_after = 0;
 	    const char *specialuse = NULL;
+	    struct dlist *al = NULL;
+	    struct sync_annot_list *annots = NULL;
 	    if (!folder_list) goto parse_err;
 	    if (!dlist_getatom(kl, "UNIQUEID", &uniqueid)) goto parse_err;
 	    if (!dlist_getatom(kl, "MBOXNAME", &mboxname)) goto parse_err;
@@ -470,6 +472,9 @@ static int response_parse(const char *cmd,
 	    dlist_getatom(kl, "SPECIALUSE", &specialuse);
 	    dlist_getdate(kl, "POP3_SHOW_AFTER", &pop3_show_after);
 
+	    if (dlist_getlist(kl, "ANNOTATIONS", &al))
+		decode_annotations(al, &annots);
+
 	    sync_folder_list_add(folder_list, uniqueid,
 				 mboxname, part, acl,
 				 sync_parse_options(options),
@@ -477,7 +482,7 @@ static int response_parse(const char *cmd,
 				 highestmodseq, sync_crc,
 				 recentuid, recenttime,
 				 pop3_last_login, specialuse,
-				 pop3_show_after);
+				 pop3_show_after, annots);
 	}
 	else
 	    goto parse_err;
@@ -1392,8 +1397,6 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
 {
     /* look for any mismatches */
     unsigned options = mailbox->i.options & MAILBOX_OPTIONS_MASK;
-    int r;
-    uint32_t sync_crc;
 
     if (!remote) return 0;
     if (remote->last_uid != mailbox->i.last_uid) return 0;
@@ -1413,9 +1416,17 @@ static int is_unchanged(struct mailbox *mailbox, struct sync_folder *remote)
 	 if (remote->specialuse) return 0;
     }
 
-    sync_crc = sync_crc_calc(mailbox, /*force*/0);
+    if (remote->sync_crc != sync_crc_calc(mailbox, /*force*/0)) return 0;
 
-    if (remote->sync_crc != sync_crc) return 0;
+    /* compare annotations */
+    {
+	struct sync_annot_list *mannots = NULL;
+	int r = read_annotations(mailbox, NULL, &mannots);
+	if (r) return 0;
+
+	if (diff_annotations(mannots, remote->annots))
+	    return 0;
+    }
 
     /* otherwise it's unchanged! */
     return 1;

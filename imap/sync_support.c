@@ -441,7 +441,8 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
 					 time_t recenttime,
 					 time_t pop3_last_login,
 					 const char *specialuse,
-					 time_t pop3_show_after)
+					 time_t pop3_show_after,
+					 struct sync_annot_list *annots)
 {
     struct sync_folder *result = xzmalloc(sizeof(struct sync_folder));
 
@@ -468,6 +469,7 @@ struct sync_folder *sync_folder_list_add(struct sync_folder_list *l,
     result->pop3_last_login = pop3_last_login;
     result->specialuse = xstrdupnull(specialuse);
     result->pop3_show_after = pop3_show_after;
+    result->annots = annots; /* NOTE: not a copy! */
 
     result->mark     = 0;
     result->reserve  = 0;
@@ -503,6 +505,7 @@ void sync_folder_list_free(struct sync_folder_list **lp)
 	free(current->acl);
 	free(current->specialuse);
 	free(current);
+	sync_annot_list_free(&current->annots);
 	current = next;
     }
     free(l);
