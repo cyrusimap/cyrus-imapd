@@ -82,20 +82,23 @@ static int quota_dbopen = 0;
 static const char * const quota_db_names[QUOTA_NUMRESOURCES] = {
     "S",	/* QUOTA_STORAGE */
     "M",	/* QUOTA_MESSAGE */
-    "AS"	/* QUOTA_ANNOTSTORAGE */
+    "AS",	/* QUOTA_ANNOTSTORAGE */
+    "NF"	/* QUOTA_NUMFOLDERS */
 };
 
 /* IMAP atoms for various quota resources */
 EXPORTED const char * const quota_names[QUOTA_NUMRESOURCES] = {
     "STORAGE",			/* QUOTA_STORAGE -- RFC2087 */
     "MESSAGE",			/* QUOTA_MESSAGE -- RFC2087 */
-    "X-ANNOTATION-STORAGE"	/* QUOTA_ANNOTSTORAGE */
+    "X-ANNOTATION-STORAGE",	/* QUOTA_ANNOTSTORAGE */
+    "X-NUM-FOLDERS"		/* QUOTA_NUMFOLDERS */
 };
 
 EXPORTED const int quota_units[QUOTA_NUMRESOURCES] = {
     1024,		/* QUOTA_STORAGE -- RFC2087 */
     1,			/* QUOTA_MESSAGE -- RFC2087 */
-    1024		/* QUOTA_ANNOTSTORAGE */
+    1024,		/* QUOTA_ANNOTSTORAGE */
+    1			/* QUOTA_NUMFOLDERS */
 };
 
 EXPORTED int quota_name_to_resource(const char *str)

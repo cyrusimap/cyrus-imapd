@@ -3343,7 +3343,11 @@ EXPORTED int mailbox_create(const char *name,
 	goto done;
     }
         
-    if (hasquota) mailbox_set_quotaroot(mailbox, quotaroot);
+    if (hasquota) {
+	mailbox_set_quotaroot(mailbox, quotaroot);
+	memset(mailbox->quota_previously_used, 0, sizeof(mailbox->quota_previously_used));
+	mailbox->quota_dirty = 1;
+    }
 
     /* ensure a UIDVALIDITY is set */
     if (!uidvalidity)
@@ -4856,6 +4860,7 @@ EXPORTED void mailbox_get_usage(struct mailbox *mailbox,
 	usage[QUOTA_STORAGE] = mailbox->i.quota_mailbox_used;
 	usage[QUOTA_MESSAGE] = mailbox->i.exists;
 	usage[QUOTA_ANNOTSTORAGE] = mailbox->i.quota_annot_used;
+	usage[QUOTA_NUMFOLDERS] = 1;
     }
     /* else: mailbox is being deleted, thus its new usage is 0 */
 }

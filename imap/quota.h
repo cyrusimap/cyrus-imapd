@@ -66,13 +66,14 @@ enum quota_resource {
     QUOTA_STORAGE	=0,
     QUOTA_MESSAGE	=1,
     QUOTA_ANNOTSTORAGE	=2,
-#define QUOTA_NUMRESOURCES  (QUOTA_ANNOTSTORAGE+1)
+    QUOTA_NUMFOLDERS	=3,
+#define QUOTA_NUMRESOURCES  (QUOTA_NUMFOLDERS+1)
 };
 
 #define QUOTA_DIFFS_INITIALIZER \
-	{ 0, 0, 0 }
+	{ 0, 0, 0, 0 }
 #define QUOTA_DIFFS_DONTCARE_INITIALIZER \
-	{ -1, -1, -1 }
+	{ -1, -1, -1, -1 }
 
 struct quota {
     char *root;

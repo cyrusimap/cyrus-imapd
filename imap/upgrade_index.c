@@ -387,10 +387,11 @@ no_expunge:
 	if (r) goto fail;
     }
 
-    /* older than 13 didn't count MESSAGE usage for quota */
+    /* older than 13 didn't count MESSAGE or NUMFOLDERS usage for quota */
     if (oldminor_version < 13 && mailbox->quotaroot) {
 	quota_t qdiffs[QUOTA_NUMRESOURCES] = QUOTA_DIFFS_INITIALIZER;
 	qdiffs[QUOTA_MESSAGE] = repack->i.exists;
+	qdiffs[QUOTA_NUMFOLDERS] = 1;
 	quota_update_useds(mailbox->quotaroot, qdiffs, mailbox->name);
     }
 
