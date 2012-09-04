@@ -338,6 +338,20 @@ sub test_admin_inbox_imm
     $admintalk->delete($inbox);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
 
+    {
+	# shut up
+	local $SIG{__DIE__};
+	local $SIG{__WARN__} = sub { 1 };
+
+	xlog "Client was disconnected";
+	eval { $talk->select($inbox) };
+	my $Err = $@;
+	$self->assert_matches(qr/IMAP Connection closed by other end/, $Err);
+
+	# reconnect 
+	$talk = $store->get_client();
+    }
+
     xlog "Cannot select $inbox anymore";
     $talk->select($inbox);
     $self->assert_str_equals('no', $talk->get_last_completion_response());
@@ -401,6 +415,20 @@ sub test_admin_inbox_del
     xlog "admin can delete $inbox";
     $admintalk->delete($inbox);
     $self->assert_str_equals('ok', $talk->get_last_completion_response());
+
+    {
+	# shut up
+	local $SIG{__DIE__};
+	local $SIG{__WARN__} = sub { 1 };
+
+	xlog "Client was disconnected";
+	eval { $talk->select($inbox) };
+	my $Err = $@;
+	$self->assert_matches(qr/IMAP Connection closed by other end/, $Err);
+
+	# reconnect 
+	$talk = $store->get_client();
+    }
 
     xlog "Cannot select $inbox anymore";
     $talk->select($inbox);
