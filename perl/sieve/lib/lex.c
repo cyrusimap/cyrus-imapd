@@ -98,9 +98,6 @@ int yylex(lexstate_t * lvalp, void * client)
 
   int result = SIEVE_OK;
 
-  int synchronizing;  /* wheather we are in the process of reading a
-			 synchronizing string or not */
-
   struct protstream *stream=(struct protstream *) client;
   
   while (1)
@@ -166,13 +163,10 @@ int yylex(lexstate_t * lvalp, void * client)
 
 	if (newcount < count)
 	  ERR_PUSHBACK();	/* overflow */
-	/*
-	 * XXX This should be fatal if non-synchronizing.
-	 */
+
 	count = newcount;
 	break;
       }
-      synchronizing = FALSE;
 
       if (ch != '}')
 	ERR_PUSHBACK();
@@ -252,7 +246,6 @@ int yylex(lexstate_t * lvalp, void * client)
 	break;
       case '{':
 	count = 0;
-	synchronizing = TRUE;
 	lexer_state=LEXER_STATE_LITERAL;
 	break;
       case '\r':

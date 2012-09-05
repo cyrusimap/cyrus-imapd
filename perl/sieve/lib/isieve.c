@@ -351,7 +351,7 @@ static int getauthline(isieve_t *obj, char **line, unsigned int *linelen,
       ret = handle_response(res,obj->version,
 			    obj->pin, &last_send, &errstr);
       
-      if (res==TOKEN_OK) {
+      if (ret==TOKEN_OK) {
 	  /* Was there a last send from the server? */
 	  if(last_send) {
 	      /* it's base64 encoded */
