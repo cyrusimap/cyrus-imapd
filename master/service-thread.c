@@ -97,35 +97,37 @@ void notify_master(int fd, int msg)
 int allow_severity = LOG_DEBUG;
 int deny_severity = LOG_ERR;
 
-static void libwrap_init(struct request_info *r, char *service)
+static void libwrap_init(struct request_info *req, char *service)
 {
-    request_init(r, RQ_DAEMON, service, 0);
+    request_init(req, RQ_DAEMON, service, 0);
 }
 
-static int libwrap_ask(struct request_info *r, int fd)
+static int libwrap_ask(struct request_info *req, int fd)
 {
+    struct sockaddr_storage sin_storage;
+    struct sockaddr *sin = (struct sockaddr *)&sin_storage;
+    socklen_t sinlen;
     int a;
-    struct sockaddr_storage sin;
-    socklen_t len = sizeof(sin);
     
     /* XXX: old FreeBSD didn't fill sockaddr correctly against AF_UNIX */
-    sin.ss_family = AF_UNIX;
+    sin->sa_family = AF_UNIX;
 
     /* is this a connection from the local host? */
-    if (getpeername(fd, (struct sockaddr *) &sin, &len) == 0) {
-	if (sin.ss_family == AF_UNIX) {
+    sinlen = sizeof(struct sockaddr_storage);
+    if (getpeername(fd, sin, &sinlen) == 0) {
+	if (sin->sa_family == AF_UNIX) {
 	    return 1;
 	}
     }
     
     /* i hope using the sock_* functions are legal; it certainly makes
        this code very easy! */
-    request_set(r, RQ_FILE, fd, 0);
-    sock_host(r);
+    request_set(req, RQ_FILE, fd, 0);
+    sock_host(req);
 
-    a = hosts_access(r);
+    a = hosts_access(req);
     if (!a) {
-	syslog(deny_severity, "refused connection from %s", eval_client(r));
+	syslog(deny_severity, "refused connection from %s", eval_client(req));
     }
 
     return a;
