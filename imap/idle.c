@@ -184,7 +184,7 @@ EXPORTED int idle_wait(int otherfd)
     int flags = 0;
     int idle_timeout = config_getint(IMAPOPT_IMAPIDLEPOLL);
 
-    if (!idle_enabled()) return;
+    if (!idle_enabled()) return 0;
 
     /* If idled was not contacted, we still listen on the socket,
      * because we might get ALERTs, but we won't get mailbox
