@@ -338,7 +338,6 @@ static int getauthline(isieve_t *obj, char **line, unsigned int *linelen,
 {
   lexstate_t state;
   int res;
-  int ret;
   size_t len;
   mystring_t *errstr;
   char *last_send;
@@ -348,7 +347,7 @@ static int getauthline(isieve_t *obj, char **line, unsigned int *linelen,
   *line = NULL;
   if (res!=STRING)
   {
-      ret = handle_response(res,obj->version,
+      (void)handle_response(res, obj->version,
 			    obj->pin, &last_send, &errstr);
       
       if (ret==TOKEN_OK) {
