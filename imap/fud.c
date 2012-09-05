@@ -92,9 +92,9 @@ static struct namespace fud_namespace;
 const int config_need_data = 0;
 
 static int handle_request(const char *who, const char *name,
-		   struct sockaddr_storage sfrom, socklen_t sfromsiz);
+			  struct sockaddr *sfrom, socklen_t sfromsiz);
 
-static void send_reply(struct sockaddr_storage sfrom, socklen_t sfromsiz, int status,
+static void send_reply(struct sockaddr *sfrom, socklen_t sfromsiz, int status,
 		const char *user, const char *mbox,
 		int numrecent, time_t lastread, time_t lastarrived);
 
@@ -105,50 +105,36 @@ static int soc = 0; /* inetd (master) has handed us the port as stdin */
 
 static int begin_handling(void)
 {
-        struct sockaddr_storage sfrom;
-        socklen_t sfromsiz = sizeof(sfrom);
-        int r;
-        char    buf[MAXLOGNAME + MAXDOMNAME + MAX_MAILBOX_BUFFER];
-        char    username[MAXLOGNAME + MAXDOMNAME + 1];
-        char    mbox[MAX_MAILBOX_BUFFER];
-        char    *q;
-        int     off;
-	int     maxuserlen = MAXLOGNAME;
+    struct sockaddr_storage sfrom_storage;
+    struct sockaddr *sfrom = (struct sockaddr *)&sfrom_storage;
+    socklen_t sfromsiz;
+    char buf[MAXLOGNAME + MAXDOMNAME + MAX_MAILBOX_BUFFER];
+    char *mbox;
+    int r;
 
-	if (config_virtdomains) 
-	    maxuserlen += MAXDOMNAME + 1; /* @ + DOM */
+    while(1) {
+	if (signals_poll() == SIGHUP) {
+	    /* caught a SIGHUP, return */
+	    return 0;
+	}
 
-        while(1) {
-            /* For safety */
-            memset(buf, 0, sizeof(buf));
-            memset(username, 0, sizeof(username));
-            memset(mbox, 0, sizeof(mbox));
+	memset(buf, 0, sizeof(buf));
 
-	    if (signals_poll() == SIGHUP) {
-		/* caught a SIGHUP, return */
-		return 0;
-	    }
-            r = recvfrom(soc, buf, 511, 0, 
-			 (struct sockaddr *) &sfrom, &sfromsiz);
-            if (r == -1) {
-		return(errno);
-	    }
-            for(off = 0; buf[off] != '|' && off < maxuserlen; off++);
-            if(off > 0 && off < maxuserlen) {
-		strncpy(username,buf,off);
-		username[off] = '\0';
-            } else {
-		continue;
-            }
+	sfromsiz = sizeof(struct sockaddr_storage);
+	r = recvfrom(soc, buf, 511, 0, sfrom, &sfromsiz);
+	if (r < 0) return errno;
 
-	    /* Copy what is past the | to the mailbox name */
-            q = buf + off + 1;
-            strlcpy(mbox, q, sizeof(mbox));
-
-            handle_request(username,mbox,sfrom,sfromsiz);
+	mbox = strchr(buf, '|');
+	if (mbox) {
+	    *mbox++ = 0;
+        } else {
+	    continue;
         }
 
-	/* never reached */
+        handle_request(buf, mbox, sfrom, sfromsiz);
+    }
+
+    /* never reached */
 }
 
 void shut_down(int code) __attribute__((noreturn));
@@ -238,34 +224,42 @@ static int setsigalrm(int enable)
 
 /* Send a proxy request to the backend, send their reply to sfrom */
 static int do_proxy_request(const char *who, const char *name,
-		     const char *backend_host,
-		     struct sockaddr_storage sfrom, socklen_t sfromsiz) 
+			    const char *backend_host,
+			    struct sockaddr *sfrom, socklen_t sfromsiz) 
 {
     char tmpbuf[1024];
-    int rc;
+    int replysize;
+    int r = 0;
     int csoc = -1;
-    int error;
-    struct sockaddr_storage cin, cout;
-    struct addrinfo hints, *res0, *res;
+    int error = 0;
     socklen_t cinsiz, coutsiz;
+    struct sockaddr_storage cin_storage, cout_storage;
+    struct sockaddr *cin = (struct sockaddr *)&cin_storage;
+    struct sockaddr *cout = (struct sockaddr *)&cout_storage;
     static const char *backend_port = NULL; /* fud port */
+    struct addrinfo hints;
+    struct addrinfo *res, *res0;
 
     /* Open a UDP socket to the Cyrus mail server */
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = PF_UNSPEC;
     hints.ai_socktype = SOCK_DGRAM;
-    if (!backend_port) {
+
+    if (backend_port) {
+	error = getaddrinfo(backend_host, backend_port, &hints, &res0);
+    }
+    else {
 	backend_port = "fud";
 	error = getaddrinfo(backend_host, backend_port, &hints, &res0);
 	if (error == EAI_SERVICE) {
 	    backend_port = "4201"; /* default fud port */
 	    error = getaddrinfo(backend_host, backend_port, &hints, &res0);
 	}
-    } else
-	error = getaddrinfo(backend_host, backend_port, &hints, &res0);
-    if (error != 0) {
+    }
+
+    if (error) {
 	send_reply(sfrom, sfromsiz, REQ_UNK, who, name, 0, 0, 0);
-	rc = IMAP_SERVER_UNAVAILABLE;
+	r = IMAP_SERVER_UNAVAILABLE;
 	goto done;
     }
     
@@ -277,14 +271,14 @@ static int do_proxy_request(const char *who, const char *name,
      */
     csoc = -1;
     for (res = res0; res; res = res->ai_next) {
-	if (res->ai_family == sfrom.ss_family) {
+	if (res->ai_family == sfrom->sa_family) {
 	    csoc = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
 	    break;
 	}
     }
     if (csoc < 0) {
 	for (res = res0; res; res = res->ai_next) {
-	    if (res->ai_family != sfrom.ss_family &&
+	    if (res->ai_family != sfrom->sa_family &&
 		(res->ai_family == AF_INET || res->ai_family == AF_INET6)) {
 		csoc = socket(res->ai_family, res->ai_socktype,
 			      res->ai_protocol);
@@ -294,57 +288,57 @@ static int do_proxy_request(const char *who, const char *name,
     }
     if (csoc < 0) {
 	send_reply(sfrom, sfromsiz, REQ_UNK, who, name, 0, 0, 0);
-	rc = IMAP_SERVER_UNAVAILABLE;
-	freeaddrinfo(res0);	
+	r = IMAP_SERVER_UNAVAILABLE;
+	freeaddrinfo(res0);
 	goto done;
     }
 
-    memcpy(&cin, res->ai_addr, res->ai_addrlen);
     cinsiz = res->ai_addrlen;
+    memcpy(cin, res->ai_addr, cinsiz);
     freeaddrinfo(res0);
 
     /* Write a Cyrus query into *tmpbuf */
-    memset (tmpbuf, '\0', sizeof(tmpbuf));
-    snprintf (tmpbuf, sizeof(tmpbuf), "%s|%s", who, name);
+    memset(tmpbuf, '\0', sizeof(tmpbuf));
+    snprintf(tmpbuf, sizeof(tmpbuf), "%s|%s", who, name);
 
     /* Send the query and wait for a reply */
-    sendto (csoc, tmpbuf, strlen (tmpbuf), 0,
-	    (struct sockaddr *) &cin, cinsiz);
-    memset (tmpbuf, '\0', strlen (tmpbuf));
+    sendto(csoc, tmpbuf, strlen (tmpbuf), 0, cin, cinsiz);
 
     if (setsigalrm(1) < 0) {
-	rc = IMAP_SERVER_UNAVAILABLE;
+	r = IMAP_SERVER_UNAVAILABLE;
 	send_reply(sfrom, sfromsiz, REQ_UNK, who, name, 0, 0, 0);
 	goto done;
     }
 
-    rc = 0;
-    coutsiz = sizeof(cout);
-    alarm (1);
-    rc = recvfrom (csoc, tmpbuf, sizeof(tmpbuf), 0,
-		   (struct sockaddr *) &cout, &coutsiz);
-    alarm (0);
+    r = 0;
+    alarm(1);
+
+    memset(tmpbuf, '\0', strlen (tmpbuf));
+
+    coutsiz = sizeof(struct sockaddr_storage);
+    replysize = recvfrom(csoc, tmpbuf, sizeof(tmpbuf), 0, cout, &coutsiz);
+    alarm(0);
 
     setsigalrm(0);  /* Failure isn't really terrible here */
 
-    if (rc < 1) {
-	rc = IMAP_SERVER_UNAVAILABLE;
+    if (replysize < 1) {
+	r = IMAP_SERVER_UNAVAILABLE;
 	send_reply(sfrom, sfromsiz, REQ_UNK, who, name, 0, 0, 0);
 	goto done;
     }
 
     /* Send reply back */
-    /* rc is size */
-    sendto(soc, tmpbuf, rc, 0, (struct sockaddr *) &sfrom, sfromsiz);
-    rc = 0;
+    /* r is size */
+    sendto(soc, tmpbuf, replysize, 0, sfrom, sfromsiz);
+    r = 0;
 
  done:
-    if(csoc != -1) close(csoc);
-    return rc;
+    if (csoc != -1) close(csoc);
+    return r;
 }
 
 static int handle_request(const char *who, const char *name,
-		   struct sockaddr_storage sfrom, socklen_t sfromsiz)
+			  struct sockaddr *sfrom, socklen_t sfromsiz)
 {
     int r;
     struct mailbox *mailbox = NULL;
@@ -457,7 +451,7 @@ static int handle_request(const char *who, const char *name,
 }
 
 static void
-send_reply(struct sockaddr_storage sfrom, socklen_t sfromsiz,
+send_reply(struct sockaddr *sfrom, socklen_t sfromsiz,
 	   int status, const char *user, const char *mbox,
 	   int numrecent, time_t lastread, time_t lastarrived)
 {
@@ -466,16 +460,16 @@ send_reply(struct sockaddr_storage sfrom, socklen_t sfromsiz,
 
     switch(status) {
         case REQ_DENY:
-            sendto(soc,"PERMDENY",9,0,(struct sockaddr *) &sfrom, sfromsiz);       
+            sendto(soc, "PERMDENY", 9, 0, sfrom, sfromsiz);       
             break;
         case REQ_OK:
             siz = snprintf(buf, sizeof(buf), "%s|%s|%d|%u|%u",
 			   user, mbox, numrecent,
 			   (uint32_t)lastread, (uint32_t)lastarrived);
-            sendto(soc,buf,siz,0,(struct sockaddr *) &sfrom, sfromsiz);       
+            sendto(soc, buf, siz, 0, sfrom, sfromsiz);       
             break;
         case REQ_UNK:
-            sendto(soc,"UNKNOWN",8,0,(struct sockaddr *) &sfrom, sfromsiz);
+            sendto(soc,"UNKNOWN", 8, 0, sfrom, sfromsiz);
             break;
     } 
 }
