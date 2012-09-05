@@ -951,6 +951,8 @@ EXPORTED const char *get_clienthost(int s, const char **localip, const char **re
 #define IPBUF_SIZE (NI_MAXHOST+NI_MAXSERV+2)
     socklen_t salen;
     struct sockaddr_storage localaddr, remoteaddr;
+    struct sockaddr *localsock = (struct sockaddr *)&localaddr;
+    struct sockaddr *remotesock = (struct sockaddr *)&remoteaddr;
     static struct buf clientbuf = BUF_INITIALIZER;
     static char lipbuf[IPBUF_SIZE], ripbuf[IPBUF_SIZE];
     char hbuf[NI_MAXHOST];
@@ -960,35 +962,36 @@ EXPORTED const char *get_clienthost(int s, const char **localip, const char **re
     *localip = *remoteip = NULL;
 
     /* determine who we're talking to */
-    salen = sizeof(remoteaddr);
-    if (getpeername(s, (struct sockaddr *)&remoteaddr, &salen) == 0 &&
-	(remoteaddr.ss_family == AF_INET ||
-	 remoteaddr.ss_family == AF_INET6)) {
+
+    salen = sizeof(struct sockaddr_storage);
+    if (getpeername(s, remotesock, &salen) == 0 &&
+	(remotesock->sa_family == AF_INET ||
+	 remotesock->sa_family == AF_INET6)) {
 	/* connected to an internet socket */
-	if (getnameinfo((struct sockaddr *)&remoteaddr, salen,
+	if (getnameinfo(remotesock, salen,
 			hbuf, sizeof(hbuf), NULL, 0, NI_NAMEREQD) == 0) {
 	    buf_printf(&clientbuf, "%s ", hbuf);
 	}
 
 	niflags = NI_NUMERICHOST;
 #ifdef NI_WITHSCOPEID
-	if (((struct sockaddr *)&remoteaddr)->sa_family == AF_INET6)
+	if (remotesock->sa_family == AF_INET6)
 	    niflags |= NI_WITHSCOPEID;
 #endif
-	if (getnameinfo((struct sockaddr *)&remoteaddr, salen,
+	if (getnameinfo(remotesock, salen,
 			hbuf, sizeof(hbuf), NULL, 0, niflags) != 0) {
 	    strlcpy(hbuf, "unknown", sizeof(hbuf));
 	}
 	buf_printf(&clientbuf, "[%s]", hbuf);
 
-	salen = sizeof(localaddr);
-	if (getsockname(s, (struct sockaddr *)&localaddr, &salen) == 0) {
+	salen = sizeof(struct sockaddr_storage);
+	if (getsockname(s, localsock, &salen) == 0) {
 	    /* set the ip addresses here */
-	    if (iptostring((struct sockaddr *)&localaddr, salen,
+	    if (iptostring(localsock, salen,
 			  lipbuf, sizeof(lipbuf)) == 0) {
 		*localip = lipbuf;
             }
-            if (iptostring((struct sockaddr *)&remoteaddr, salen,
+            if (iptostring(remotesock, salen,
 			  ripbuf, sizeof(ripbuf)) == 0) {
 		*remoteip = ripbuf;
             }
