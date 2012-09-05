@@ -144,11 +144,8 @@ CFLAGS="-g -W -Wall -Wextra" ./configure $CONFIGURE_ARGS || fatal "Cannot run co
 # Tweak makefiles for optimisation flags
 perl -p -i.orig -e 's/^(CFLAGS\s*=\s*.*)\s+-O2/\1 '"$COPTIMISEFLAGS"'/' $mf $(find . -name Makefile)
 
-# hack to work around a makefile race condition
-# make -C sieve sieve.c sieve.h addr.c addr.h
 # Finally the actual build
-# make -j$NCPUS all || fatal "Can't make all"
-make all || fatal "Can't make all"
+make -j$NCPUS all || fatal "Can't make all"
 
 # Run CUnit based unit tests
 # [ -n "$COVERAGE" ] && find . -name '*.gcda' -exec rm '{}' \;
