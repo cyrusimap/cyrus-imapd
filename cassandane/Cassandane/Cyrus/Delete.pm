@@ -304,6 +304,9 @@ sub test_admin_inbox_imm
     xlog "Testing that an admin can delete the INBOX of a user";
     xlog "and it will delete the whole user, immediate delete version";
 
+    # can't do the magic disconnect handling on older perl
+    return if ($] < 5.010);
+
     my $store = $self->{store};
     my $talk = $store->get_client();
     my $admintalk = $self->{adminstore}->get_client();
@@ -381,6 +384,9 @@ sub test_admin_inbox_del
 
     xlog "Testing that an admin can delete the INBOX of a user";
     xlog "and it will delete the whole user, delayed delete version";
+
+    # can't do the magic disconnect handling on older perl
+    return if ($] < 5.010);
 
     my $store = $self->{store};
     my $talk = $store->get_client();
