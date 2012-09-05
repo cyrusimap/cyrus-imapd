@@ -1373,7 +1373,6 @@ int sync_mailbox(struct mailbox *mailbox,
 		 int printrecords)
 {
     int r = 0;
-    modseq_t xconvmodseq = 0;
 
     dlist_setatom(kl, "UNIQUEID", mailbox->uniqueid);
     dlist_setatom(kl, "MBOXNAME", mailbox->name);
