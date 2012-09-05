@@ -322,7 +322,7 @@ EXPORTED void proc_killuser(const char *userid)
     /* can't kill all non-connected, that's evil */
     assert(userid && userid[0]);
 
-    proc_foreach(killuser_cb, userid);
+    proc_foreach(killuser_cb, (void *)userid);
 }
 
 EXPORTED void proc_killmbox(const char *mboxname)
@@ -330,5 +330,5 @@ EXPORTED void proc_killmbox(const char *mboxname)
     /* can't kill all non-selected, that's evil */;
     assert(mboxname && mboxname[0]);
 
-    proc_foreach(killmbox_cb, mboxname);
+    proc_foreach(killmbox_cb, (void *)mboxname);
 }
