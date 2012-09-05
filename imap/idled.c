@@ -184,7 +184,7 @@ static void process_message(struct sockaddr_un *remote, idle_message_t *msg)
 		     * through it's graceful shutdown path, so don't syslog. */
 		    if (r != ENOENT)
 			syslog(LOG_ERR, "IDLE: error sending message "
-					"NOTIFY to imapd %s for mailbox %s: %s, ",
+					"NOTIFY to imapd %s for mailbox %s: %s, "
 					"forgetting.",
 					idle_id_from_addr(&t->remote),
 					msg->mboxname, error_message(r));
@@ -243,7 +243,7 @@ static void send_alert(const char *key,
 	     * through it's graceful shutdown path, so don't syslog. */
 	    if (r != ENOENT)
 		syslog(LOG_ERR, "IDLE: error sending message "
-				"ALERT to imapd %s: %s, ",
+				"ALERT to imapd %s for mailbox %s: %s, "
 				"forgetting.",
 				idle_id_from_addr(&t->remote),
 				msg.mboxname, error_message(r));
