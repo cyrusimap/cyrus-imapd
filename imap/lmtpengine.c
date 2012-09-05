@@ -1186,29 +1186,8 @@ void lmtpmode(struct lmtp_func *func,
 			  continue;
 		      }
 		      else {
-			  struct sockaddr_storage remoteaddr;
-			  socklen_t salen = sizeof(remoteaddr);
-			  char hbuf[NI_MAXHOST];
-			  int niflags = 0;
-
-			  sleep(3);
-
-			  if (remoteaddr.ss_family == AF_INET ||
-			      remoteaddr.ss_family == AF_INET6) {
-			      niflags = NI_NUMERICHOST;
-#ifdef NI_WITHSCOPEID
-			      if (remoteaddr.ss_family == AF_INET6)
-				  niflags |= NI_WITHSCOPEID;
-#endif
-			      if (getnameinfo((struct sockaddr *)&remoteaddr,
-					      salen, hbuf, sizeof(hbuf),
-					      NULL, 0, niflags) != 0)
-				  strlcpy(hbuf, "[unknown]", sizeof(hbuf));
-			  }
-			  else
-			      strlcpy(hbuf, UNIX_SOCKET, sizeof(hbuf));		  
 			  syslog(LOG_ERR, "badlogin: %s %s %s",
-				 hbuf, mech, sasl_errdetail(cd.conn));
+				 cd.clienthost, mech, sasl_errdetail(cd.conn));
 		  
 			  snmp_increment_args(AUTHENTICATION_NO, 1,
 					      VARIABLE_AUTH, hash_simple(mech), 
