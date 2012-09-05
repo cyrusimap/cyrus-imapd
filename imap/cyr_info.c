@@ -90,11 +90,12 @@ static void usage(void)
     exit(-1);
 }
 
-static int print_procinfo(int pid, const char *host, 
+static int print_procinfo(int pid, 
+			  const char *servicename, const char *host, 
 			  const char *user, const char *mailbox,
 			  void *rock __attribute__((unused)))
 {
-    printf("%d %s", pid, host);
+    printf("%d %s %s", pid, servicename, host);
     if (user) printf(" %s", user);
     if (mailbox) printf(" %s", mailbox);
     printf("\n");
