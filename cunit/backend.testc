@@ -1096,21 +1096,21 @@ static int server_checkpass(sasl_conn_t *conn __attribute__((unused)),
  * available, and so the SASL server code needs to retrieve the password
  * from an auxprop plugin.
  */
-static void server_auxprop_lookup(void *glob_context __attribute__((unused)),
-				  sasl_server_params_t *sparams,
-				  unsigned flags __attribute__((unused)),
-				  const char *user,
-				  unsigned ulen)
+static int server_auxprop_lookup(void *glob_context __attribute__((unused)),
+				 sasl_server_params_t *sparams,
+				 unsigned flags __attribute__((unused)),
+				 const char *user,
+				 unsigned ulen)
 {
     const struct propval *prop;
 
     if (ulen != strlen(USERID) ||
 	strncmp(user, USERID, ulen))
-	return;
+	return 0;
 
     prop = sparams->utils->prop_get(sparams->propctx);
     if (!prop)
-	return;
+	return 0;
     for ( ; prop->name ; prop++) {
 	if (!strcmp(prop->name, "*userPassword") ||
 	    !strcmp(prop->name, "*cmusaslsecretDIGEST-MD5")) {
@@ -1120,6 +1120,8 @@ static void server_auxprop_lookup(void *glob_context __attribute__((unused)),
 				     PASSWORD, strlen(PASSWORD));
 	}
     }
+
+    return 0;
 }
 
 /*
@@ -1180,7 +1182,7 @@ static int init_sasl(int isclient)
 	    return -1;
     } else {
 	static const struct sasl_callback server_cb[] = {
-	    { SASL_CB_SERVER_USERDB_CHECKPASS, &server_checkpass, NULL },
+	    { SASL_CB_SERVER_USERDB_CHECKPASS, (void *)&server_checkpass, NULL },
 	    { SASL_CB_LIST_END, NULL, NULL }
 	};
 

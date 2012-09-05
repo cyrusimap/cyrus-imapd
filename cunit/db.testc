@@ -229,6 +229,7 @@ static void test_openclose(void)
 static void test_multiopen(void)
 {
     struct db *db1 = NULL;
+    struct txn *txn1 = NULL;
     struct db *db = NULL;
     struct txn *txn = NULL;
     int r;
@@ -263,9 +264,10 @@ static void test_multiopen(void)
      */
 
     db1 = db;
+    txn1 = txn;
     {
-	struct db *db = NULL;
-	struct txn *txn = NULL;
+	db = NULL;
+	txn = NULL;
 
 	/* a second open() with the same filename returns
 	 * another reference to the same db */
@@ -283,6 +285,8 @@ static void test_multiopen(void)
 	CU_ASSERT_EQUAL(r, CYRUSDB_OK);
 	CU_ASSERT_EQUAL(fexists(filename), 0);
     }
+    db = db1;
+    txn = txn1;
 
     /* the 1st db ref still works */
     /* 3rd txn starts */
@@ -918,7 +922,8 @@ struct ffrock {
 
 static int ffstatemachine(void *rockp,
 			  const char *key, size_t keylen,
-			  const char *data, size_t datalen)
+			  const char *data __attribute((unused)),
+			  size_t datalen __attribute((unused)))
 {
     struct ffrock *fr = (struct ffrock *)rockp;
     char *kcopy = xstrndup(key, keylen);
@@ -1516,15 +1521,12 @@ static int set_up(void)
 
 static int tear_down(void)
 {
-    int r;
-
     cyrusdb_done();
 
     if (basedir) {
 	char buf[PATH_MAX];
 	snprintf(buf, sizeof(buf), "rm -rf \"%s\"", basedir);
-	r = system(buf);
-	/* I'm ignoring you */
+	(void)system(buf);
     }
 
     free(filename);

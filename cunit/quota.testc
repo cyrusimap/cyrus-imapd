@@ -1114,16 +1114,13 @@ static int set_up(void)
 
 static int tear_down(void)
 {
-    int r;
-
     quotadb_close();
     quotadb_done();
     cyrusdb_done();
     config_quota_db = NULL;
     config_reset();
 
-    r = system("rm -rf " DBDIR);
-    /* I'm ignoring you */
+    (void)system("rm -rf " DBDIR);
 
     return 0;
 }
