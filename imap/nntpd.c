@@ -2002,12 +2002,11 @@ static void cmd_authinfo_user(char *user)
 static void cmd_authinfo_pass(char *pass)
 {
     int failedloginpause;
-    int r;
     /* Conceal password in telemetry log */
     if (nntp_logfd != -1 && pass) {
-	r = ftruncate(nntp_logfd,
+	(void)ftruncate(nntp_logfd,
 		  lseek(nntp_logfd, -2, SEEK_CUR) - strlen(pass));
-	r = write(nntp_logfd, "...\r\n", 5);
+	(void)write(nntp_logfd, "...\r\n", 5);
     }
 
     if (nntp_authstate) {
