@@ -74,6 +74,7 @@
 #include "mboxname.h"
 #include "map.h"
 #include "imparse.h"
+#include "proc.h"
 #include "util.h"
 #include "xmalloc.h"
 #include "xstrlcat.h"
@@ -167,6 +168,12 @@ static int reset_single(const char *userid)
 	if (r) goto fail;
     }
 
+    /* XXX: adding an entry to userdeny_db here would avoid the need to
+     * protect against new logins with external proxy rules - Cyrus could
+     * maintain its own safety */
+
+    /* first, disconnect all current connections for this user */
+    proc_killuser(userid);
 
     strlcat(buf, ".*", sizeof(buf));
     r = (sync_namespacep->mboxlist_findall)(sync_namespacep, buf, 1,
