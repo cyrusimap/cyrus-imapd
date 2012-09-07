@@ -46,6 +46,7 @@ use base qw(Cassandane::MasterEntry);
 use Cassandane::Util::Log;
 use Cassandane::MessageStoreFactory;
 use Cassandane::PortManager;
+use Cassandane::Util::Socket;
 
 sub new
 {
@@ -122,6 +123,15 @@ sub create_store
     my ($self, @args) = @_;
     my $params = $self->store_params(@args);
     return Cassandane::MessageStoreFactory->create(%$params);
+}
+
+sub get_socket {
+    my ($self) = @_;
+    return create_client_socket(
+	$self->address_family(),
+	$self->host(),
+	$self->port()
+    );
 }
 
 # Return a hash of key,value pairs which need to go into the line in the
