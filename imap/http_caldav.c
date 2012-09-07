@@ -3769,9 +3769,8 @@ int busytime_query(struct transaction_t *txn, icalcomponent *ical)
     const char *uid = NULL, *organizer = NULL;
     struct sched_param sparam;
     struct auth_state *org_authstate = NULL;
-    xmlDocPtr doc = NULL;
     xmlNodePtr root = NULL;
-    xmlNsPtr ns = NULL, davns = NULL;
+    xmlNsPtr ns[NUM_NAMESPACE];
     struct propfind_ctx fctx;
     struct calquery_filter filter;
 
@@ -3793,23 +3792,14 @@ int busytime_query(struct transaction_t *txn, icalcomponent *ical)
 	org_authstate = auth_newstate(sparam.userid);
 
     /* Start construction of our schedule-response */
-    if ((doc = xmlNewDoc(BAD_CAST "1.0")) &&
-	(root = xmlNewNode(NULL, BAD_CAST "schedule-response"))) {
-	if (txn->flags & HTTP_ISCHEDULE) {
-	    ns = xmlNewNs(root, BAD_CAST XML_NS_ISCHED, NULL);
-	}
-	else  if ((davns = xmlNewNs(root, BAD_CAST XML_NS_DAV, BAD_CAST "D"))) {
-	    ns = xmlNewNs(root, BAD_CAST XML_NS_CALDAV, BAD_CAST "C");
-	}
-    }
-    if (!ns) {
+    if (!(root = init_xml_response("schedule-response",
+				   (txn->flags & HTTP_ISCHEDULE) ? NS_ISCHED :
+				   NS_CALDAV,
+				   NULL, ns))) {
 	ret = HTTP_SERVER_ERROR;
 	txn->error.desc = "Unable to create XML response";
 	goto done;
     }
-
-    xmlDocSetRootElement(doc, root);
-    xmlSetNs(root, ns);
 
     memset(&filter, 0, sizeof(struct calquery_filter));
     filter.comp = CAL_COMP_VEVENT | CAL_COMP_VFREEBUSY;
@@ -3843,7 +3833,7 @@ int busytime_query(struct transaction_t *txn, icalcomponent *ical)
 	    xmlNodeAddContent(recip, BAD_CAST attendee);
 	}
 	else {
-	    xmlNewChild(recip, davns, BAD_CAST "href", BAD_CAST attendee);
+	    xmlNewChild(recip, ns[NS_DAV], BAD_CAST "href", BAD_CAST attendee);
 	}
 
 	if (caladdress_lookup(attendee, &sparam)) {
@@ -3903,7 +3893,7 @@ int busytime_query(struct transaction_t *txn, icalcomponent *ical)
 					BAD_CAST "calendar-data", NULL);
 
 		xmlAddChild(cdata,
-			    xmlNewCDataBlock(doc,
+			    xmlNewCDataBlock(root->doc,
 					     BAD_CAST fb_str, strlen(fb_str)));
 	    }
 	    else {
@@ -3927,12 +3917,12 @@ int busytime_query(struct transaction_t *txn, icalcomponent *ical)
     }
 
     /* Output the XML response */
-    if (!ret) xml_response(HTTP_OK, txn, doc);
+    if (!ret) xml_response(HTTP_OK, txn, root->doc);
 
   done:
     if (org_authstate) auth_freestate(org_authstate);
     if (fctx.busytime.busy) free(fctx.busytime.busy);
-    if (doc) xmlFree(doc);
+    if (root) xmlFree(root->doc);
 
     return ret;
 }

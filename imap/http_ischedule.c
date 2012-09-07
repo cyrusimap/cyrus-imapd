@@ -113,11 +113,10 @@ const struct namespace_t namespace_ischedule = {
 /* iSchedule Receiver Capabilities */
 static int isched_capa(struct transaction_t *txn)
 {
-    int ret = 0, precond;
+    int precond;
     struct stat sbuf;
-    xmlDocPtr doc;
     xmlNodePtr root, capa, node, comp, meth;
-    xmlNsPtr ns;
+    xmlNsPtr ns[NUM_NAMESPACE];
 
     /* We don't handle GET on a anything other than ?query=capabilities */
     if (strcmp(txn->req_tgt.query, "query=capabilities"))
@@ -138,16 +137,10 @@ static int isched_capa(struct transaction_t *txn)
     txn->resp_body.lastmod = sbuf.st_mtime;
 
     /* Start construction of our query-result */
-    if (!(doc = xmlNewDoc(BAD_CAST "1.0")) ||
-	!(root = xmlNewNode(NULL, BAD_CAST "query-result")) ||
-	!(ns = xmlNewNs(root, BAD_CAST XML_NS_ISCHED, NULL))) {
-	ret = HTTP_SERVER_ERROR;
+    if (!(root = init_xml_response("query-result", NS_ISCHED, NULL, ns))) {
 	txn->error.desc = "Unable to create XML response";
-	goto done;
+	return HTTP_SERVER_ERROR;
     }
-
-    xmlDocSetRootElement(doc, root);
-    xmlSetNs(root, ns);
 
     capa = xmlNewChild(root, NULL, BAD_CAST "capabilities", NULL);
 
@@ -182,12 +175,11 @@ static int isched_capa(struct transaction_t *txn)
     node = xmlNewChild(node, NULL, BAD_CAST "inline", NULL);
 
     /* Output the XML response */
-    if (!ret) xml_response(HTTP_OK, txn, doc);
+    xml_response(HTTP_OK, txn, root->doc);
 
-  done:
-    if (doc) xmlFree(doc);
+    xmlFree(root->doc);
 
-    return ret;
+    return 0;
 }
 
 
