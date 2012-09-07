@@ -175,8 +175,17 @@ xmlNodePtr init_xml_response(const char *resp, int ns,
     xml_add_ns(req, respNs, root);
 
     /* Set namespace of root node */
-    if (ns == NS_CALDAV) ensure_ns(respNs, NS_CALDAV, root, XML_NS_CALDAV, "C");
-    ensure_ns(respNs, NS_DAV, root, XML_NS_DAV, "D");
+    switch (ns) {
+    case NS_ISCHED:
+	ensure_ns(respNs, NS_ISCHED, root, XML_NS_ISCHED, NULL);
+	break;
+
+    case NS_CALDAV:
+	ensure_ns(respNs, NS_CALDAV, root, XML_NS_CALDAV, "C");
+
+    default:
+	ensure_ns(respNs, NS_DAV, root, XML_NS_DAV, "D");
+    }
     xmlSetNs(root, respNs[ns]);
 
     return root;
@@ -241,7 +250,10 @@ static const struct precond_t {
     { "unique-scheduling-object-resource", NS_CALDAV },
     { "same-organizer-in-all-components", NS_CALDAV },
     { "allowed-organizer-scheduling-object-change", NS_CALDAV },
-    { "allowed-attendee-scheduling-object-change", NS_CALDAV }
+    { "allowed-attendee-scheduling-object-change", NS_CALDAV },
+
+    /* iSchedule (draft-desruisseaux-ischedule) preconditions */
+    { "verification-failed", NS_ISCHED }
 };
 
 xmlNodePtr xml_add_error(xmlNodePtr root, struct error_t *err,
@@ -252,7 +264,10 @@ xmlNodePtr xml_add_error(xmlNodePtr root, struct error_t *err,
     const struct precond_t *precond = &preconds[err->precond];
 
     if (!root) {
-	error = root = init_xml_response("error", NS_DAV, NULL, ns);
+	error = root =
+	    init_xml_response("error", 
+			      precond->ns == NS_ISCHED ? NS_ISCHED : NS_DAV,
+			      NULL, ns);
 	avail_ns = ns;
     }
     else error = xmlNewChild(root, NULL, BAD_CAST "error", NULL);
@@ -1624,7 +1639,6 @@ static int proppatch_todb(xmlNodePtr prop, unsigned set,
     xmlChar *freeme = NULL;
     const char *value = NULL;
     size_t len = 0;
-    xmlNodePtr node;
     int r;
 
     buf_reset(&pctx->buf);
@@ -1648,12 +1662,12 @@ static int proppatch_todb(xmlNodePtr prop, unsigned set,
 				       buf_cstring(&pctx->buf), /* shared */ "",
 				       value, NULL, len, 0,
 				       &pctx->tid))) {
-	node = xml_add_prop(HTTP_OK, pctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
-			    prop, NULL, 0);
+	xml_add_prop(HTTP_OK, pctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
+		     prop, NULL, 0);
     }
     else {
-	node = xml_add_prop(HTTP_SERVER_ERROR, pctx->ns[NS_DAV],
-			    &propstat[PROPSTAT_ERROR], prop, NULL, 0);
+	xml_add_prop(HTTP_SERVER_ERROR, pctx->ns[NS_DAV],
+		     &propstat[PROPSTAT_ERROR], prop, NULL, 0);
     }
 
     if (freeme) xmlFree(freeme);

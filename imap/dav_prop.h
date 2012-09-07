@@ -71,11 +71,12 @@
 enum {
     NS_DAV,
     NS_CALDAV,
+    NS_ISCHED,
     NS_CS,
     NS_CYRUS,
     NS_ICAL
 };
-#define NUM_NAMESPACE 5
+#define NUM_NAMESPACE 6
 
 /* Cyrus-specific privileges */
 #define DACL_MKCOL	ACL_CREATE	/* CY:make-collection */
@@ -175,7 +176,10 @@ enum {
     CALDAV_UNIQUE_OBJECT,
     CALDAV_SAME_ORGANIZER,
     CALDAV_ALLOWED_ORG_CHANGE,
-    CALDAV_ALLOWED_ATT_CHANGE
+    CALDAV_ALLOWED_ATT_CHANGE,
+
+    /* iSchedule (draft-desruisseaux-ischedule) preconditions */
+    ISCHED_VERIFICATION_FAILED
 };
 
 /* Structure for property status */

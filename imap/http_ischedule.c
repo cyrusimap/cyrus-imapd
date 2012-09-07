@@ -282,6 +282,7 @@ static int isched_recv(struct transaction_t *txn)
 
     if (!authd) {
 	ret = HTTP_FORBIDDEN;
+	txn->error.precond = ISCHED_VERIFICATION_FAILED;
 	goto done;
     }
 
