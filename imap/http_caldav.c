@@ -131,19 +131,6 @@ static icalcomponent *busytime(struct transaction_t *txn,
 			       const char *organizer,
 			       const char *attendee);
 #ifdef WITH_CALDAV_SCHED
-/* Scheduling protocol flags */
-#define SCHEDTYPE_REMOTE	(1<<0)
-#define SCHEDTYPE_ISCHEDULE	(1<<1)
-#define SCHEDTYPE_SSL		(1<<2)
-
-/* Each calendar user address has the following scheduling protocol params */
-struct sched_param {
-    char *userid;	/* Userid corresponding to calendar address */ 
-    char *server;	/* Remote server user lives on */
-    unsigned port;	/* Remote server port, default = 80 */
-    unsigned flags;	/* Flags dictating protocol to use for scheduling */
-};
-
 static int caladdress_lookup(const char *addr, struct sched_param *param);
 static int sched_busytime(struct transaction_t *txn);
 static int sched_request(const char *organizer,
@@ -151,6 +138,7 @@ static int sched_request(const char *organizer,
 static int sched_reply(icalcomponent *oldical, icalcomponent *newical,
 		       const char *userid);
 #endif /* WITH_CALDAV_SCHED */
+
 int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname);
 
 /* Namespace for CalDAV collections */
@@ -3771,10 +3759,11 @@ static int caladdress_lookup(const char *addr, struct sched_param *param)
 
 
 /* Perform a Busy Time query based on given VFREEBUSY component */
-int busytime_query(struct transaction_t *txn, icalcomponent *comp)
+int busytime_query(struct transaction_t *txn, icalcomponent *ical)
 {
     int ret = 0;
     static const char *calendarprefix = NULL;
+    icalcomponent *comp;
     char mailboxname[MAX_MAILBOX_BUFFER];
     icalproperty *prop = NULL;
     const char *uid = NULL, *organizer = NULL;
@@ -3790,6 +3779,7 @@ int busytime_query(struct transaction_t *txn, icalcomponent *comp)
 	calendarprefix = config_getstring(IMAPOPT_CALENDARPREFIX);
     }
 
+    comp = icalcomponent_get_first_real_component(ical);
     uid = icalcomponent_get_uid(comp);
 
     prop = icalcomponent_get_first_property(comp, ICAL_ORGANIZER_PROPERTY);
@@ -3842,11 +3832,8 @@ int busytime_query(struct transaction_t *txn, icalcomponent *comp)
     for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
 	 prop;
 	 prop = icalcomponent_get_next_property(comp, ICAL_ATTENDEE_PROPERTY)) {
-      const char *attendee, *userid;
-	xmlNodePtr resp, recip, cdata;
-	struct mboxlist_entry mbentry;
-	icalcomponent *busy;
-	int r, rights;
+	const char *attendee;
+	xmlNodePtr resp, recip;
 
 	attendee = icalproperty_get_attendee(prop);
 
@@ -3865,55 +3852,78 @@ int busytime_query(struct transaction_t *txn, icalcomponent *comp)
 	    continue;
 	}
 
-	userid = sparam.userid;
+	/* Is user remote or local? */
+	if (!sparam.flags) {
+	    /* Local attendee on this server */
+	    const char *userid = sparam.userid;
+	    struct mboxlist_entry mbentry;
+	    int r, rights;
+	    icalcomponent *busy = NULL;
 
-	/* Check ACL of ORGANIZER on attendee's Scheduling Inbox */
-	snprintf(mailboxname, sizeof(mailboxname),
-		 "user.%s.%s.Inbox", userid, calendarprefix);
+	    /* Check ACL of ORGANIZER on attendee's Scheduling Inbox */
+	    snprintf(mailboxname, sizeof(mailboxname),
+		     "user.%s.%s.Inbox", userid, calendarprefix);
 
-	if ((r = mboxlist_lookup(mailboxname, &mbentry, NULL))) {
-	    syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
-		   mailboxname, error_message(r));
-	    xmlNewChild(resp, NULL, BAD_CAST "request-status",
-			BAD_CAST "5.3;No scheduling support for user");
-	    continue;
+	    if ((r = mboxlist_lookup(mailboxname, &mbentry, NULL))) {
+		syslog(LOG_INFO, "mboxlist_lookup(%s) failed: %s",
+		       mailboxname, error_message(r));
+		xmlNewChild(resp, NULL, BAD_CAST "request-status",
+			    BAD_CAST "5.3;No scheduling support for user");
+		continue;
+	    }
+
+	    rights =
+		mbentry.acl ? cyrus_acl_myrights(org_authstate, mbentry.acl) : 0;
+	    if (!(rights & DACL_SCHED)) {
+		xmlNewChild(resp, NULL, BAD_CAST "request-status",
+			    BAD_CAST "3.8;No authority");
+		continue;
+	    }
+
+	    /* Start query at attendee's calendar-home-set */
+	    snprintf(mailboxname, sizeof(mailboxname),
+		     "user.%s.%s", userid, calendarprefix);
+
+	    fctx.caldavdb = caldav_open(userid, CALDAV_CREATE);
+	    fctx.req_tgt->collection = NULL;
+	    fctx.busytime.len = 0;
+	    busy = busytime(txn, &fctx, mailboxname,
+			    ICAL_METHOD_REPLY, uid, organizer, attendee);
+
+	    caldav_close(fctx.caldavdb);
+
+	    if (busy) {
+		xmlNodePtr cdata;
+		const char *fb_str = icalcomponent_as_ical_string(busy);
+		icalcomponent_free(busy);
+
+		xmlNewChild(resp, NULL, BAD_CAST "request-status",
+			    BAD_CAST "2.0;Success");
+		cdata = xmlNewTextChild(resp, NULL,
+					BAD_CAST "calendar-data", NULL);
+
+		xmlAddChild(cdata,
+			    xmlNewCDataBlock(doc,
+					     BAD_CAST fb_str, strlen(fb_str)));
+	    }
+	    else {
+		xmlNewChild(resp, NULL, BAD_CAST "request-status",
+			    BAD_CAST "3.7;Invalid calendar user");
+	    }
 	}
-
-	rights =
-	    mbentry.acl ? cyrus_acl_myrights(org_authstate, mbentry.acl) : 0;
-	if (!(rights & DACL_SCHED)) {
-	    xmlNewChild(resp, NULL, BAD_CAST "request-status",
-			BAD_CAST "3.8;No authority");
-	    continue;
-	}
-
-	/* Start query at attendee's calendar-home-set */
-	snprintf(mailboxname, sizeof(mailboxname),
-		 "user.%s.%s", userid, calendarprefix);
-
-	fctx.caldavdb = caldav_open(userid, CALDAV_CREATE);
-	fctx.req_tgt->collection = NULL;
-	fctx.busytime.len = 0;
-	busy = busytime(txn, &fctx, mailboxname,
-			ICAL_METHOD_REPLY, uid, organizer, attendee);
-
-	if (busy) {
-	    const char *fb_str = icalcomponent_as_ical_string(busy);
-	    icalcomponent_free(busy);
-
-	    xmlNewChild(resp, NULL, BAD_CAST "request-status",
-			BAD_CAST "2.0;Success");
-	    cdata = xmlNewTextChild(resp, NULL, BAD_CAST "calendar-data", NULL);
-
-	    xmlAddChild(cdata,
-			xmlNewCDataBlock(doc, BAD_CAST fb_str, strlen(fb_str)));
- 	}
 	else {
-	    xmlNewChild(resp, NULL, BAD_CAST "request-status",
-			BAD_CAST "3.7;Invalid calendar user");
-	}
+	    /* Remote attendee - send request elsewhere */
+	    if (sparam.flags == SCHEDTYPE_REMOTE) {
+		/* Use iMIP */
+		syslog(LOG_INFO, "Use iMIP");
+	    }
+	    else {
+		/* Use iSchedule */
+		syslog(LOG_INFO, "Use iSchedule");
 
-	caldav_close(fctx.caldavdb);
+		isched_send(&sparam, ical);
+	    }
+	}
     }
 
     /* Output the XML response */
@@ -4012,6 +4022,7 @@ static int sched_busytime(struct transaction_t *txn)
 	return HTTP_BAD_REQUEST;
     }
 
+    /* Organizer MUST be local to use CalDAV Scheduling */
     organizer = icalproperty_get_organizer(prop);
     if (organizer) {
 	if (!caladdress_lookup(organizer, &sparam) &&
@@ -4024,7 +4035,7 @@ static int sched_busytime(struct transaction_t *txn)
 	return HTTP_FORBIDDEN;
     }
 
-    ret = busytime_query(txn, comp);
+    ret = busytime_query(txn, ical);
 
     icalcomponent_free(ical);
 
