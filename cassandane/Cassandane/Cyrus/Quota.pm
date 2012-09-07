@@ -47,12 +47,13 @@ use Cwd qw(abs_path);
 use File::Path qw(mkpath);
 use DateTime;
 use Cassandane::Util::Log;
+use Cassandane::Util::NetString;
 use Data::Dumper;
 
 sub new
 {
     my $class = shift;
-    return $class->SUPER::new({ adminstore => 1 }, @_);
+    return $class->SUPER::new({ adminstore => 1, services => ['smmap', 'imap'] }, @_);
 }
 
 sub set_up
@@ -195,6 +196,18 @@ sub _check_no_quota
     $self->assert_str_equals('no', $admintalk->get_last_completion_response());
 }
 
+sub _check_smmap
+{
+    my ($self, $name, $expected) = @_;
+    my $service = $self->{instance}->get_service('smmap');
+    my $sock = $service->get_socket();
+
+    print_netstring($sock, "0 $name");
+    my $res = get_netstring($sock);
+
+    $self->assert($res =~ m/$expected/);
+}
+
 sub test_using_storage
 {
     my ($self) = @_;
@@ -232,6 +245,7 @@ sub test_using_storage
     $talk->delete("INBOX.sub") || die "Failed to delete subfolder";
     $expected -= delete($expecteds{"INBOX.sub"});
     $self->_check_usages(storage => int($expected/1024));
+    $self->_check_smmap('cassandane', 'OK');
 
     # delete messages
     $talk->select("INBOX");
@@ -275,6 +289,7 @@ sub test_using_storage_late
 
     $self->_set_limits(storage => 100000);
     $self->_check_usages(storage => int($expected/1024));
+    $self->_check_smmap('cassandane', 'OK');
 
     # delete subfolder
     $talk->delete("INBOX.sub") || die "Failed to delete subfolder";
@@ -326,6 +341,7 @@ sub test_exceeding_storage
     $self->check_messages(\%msgs);
     xlog "check that the usage is just below the limit";
     $self->_check_usages(storage => int($expected/1024));
+    $self->_check_smmap('cassandane', 'OK');
 
     xlog "add a message that exceeds the limit";
     my $nlines = int(($slack - 640) / 23) * 2;
@@ -338,8 +354,86 @@ sub test_exceeding_storage
 
     xlog "check that the exceeding message is not in the mailbox";
     $self->check_messages(\%msgs);
-    xlog "check that the quota usage is still just below the limit";
+
+    xlog "check that the quota usage is still the same";
     $self->_check_usages(storage => int($expected/1024));
+    $self->_check_smmap('cassandane', 'OK');
+}
+
+sub test_overquota
+{
+    my ($self) = @_;
+
+    xlog "test account which is over STORAGE quota limit";
+
+    my $talk = $self->{store}->get_client();
+
+    xlog "set a low limit";
+    $self->_set_quotaroot('user.cassandane');
+    $self->_set_limits(storage => 210);
+    $self->_check_usages(storage => 0);
+
+    xlog "adding messages to get just below the limit";
+    my %msgs;
+    my $slack = 200 * 1024;
+    my $n = 1;
+    my $expected = 0;
+    while ($slack > 1000)
+    {
+	my $nlines = int(($slack - 640) / 23);
+	$nlines = 1000 if ($nlines > 1000);
+
+	my $msg = $self->make_message("Message $n",
+				      extra_lines => $nlines);
+	my $len = length($msg->as_string());
+	$slack -= $len;
+	$expected += $len;
+	xlog "added $len bytes of message";
+	$msgs{$n} = $msg;
+	$n++;
+    }
+    xlog "check that the messages are all in the mailbox";
+    $self->check_messages(\%msgs);
+    xlog "check that the usage is just below the limit";
+    $self->_check_usages(storage => int($expected/1024));
+    $self->_check_smmap('cassandane', 'OK');
+
+    xlog "reduce the quota limit";
+    $self->_set_limits(storage => 100);
+
+    xlog "check that usage is unchanged";
+    $self->_check_usages(storage => int($expected/1024));
+    xlog "check that smmap reports over quota";
+    $self->_check_smmap('cassandane', 'TEMP');
+
+    xlog "try to add another message";
+    my $overmsg = eval { $self->make_message("Message $n") };
+    $self->assert_str_equals('no', $talk->get_last_completion_response());
+    $self->assert($talk->get_last_error() =~ m/over quota/i);
+
+    xlog "check that the exceeding message is not in the mailbox";
+    $self->check_messages(\%msgs);
+
+    xlog "check that the quota usage is still unchanged";
+    $self->_check_usages(storage => int($expected/1024));
+    $self->_check_smmap('cassandane', 'TEMP');
+
+    my $delmsg = delete $msgs{1};
+    my $dellen = length($delmsg->as_string());
+    xlog "delete the first message ($dellen bytes)";
+    $talk->select("INBOX");
+    $talk->store('1', '+flags', '(\\deleted)');
+    $talk->close();
+
+    xlog "check that the deleted message is no longer in the mailbox";
+    $self->check_messages(\%msgs);
+
+    xlog "check that the usage has gone down";
+    $expected -= $dellen;
+    $self->_check_usages(storage => int($expected/1024));
+
+    xlog "check that we are still over quota";
+    $self->_check_smmap('cassandane', 'TEMP');
 }
 
 sub test_using_message
@@ -465,7 +559,7 @@ sub test_exceeding_message
     # of IMAPTalk, leaving the completion response undefined.
     my $ex = $@;
     if ($ex) {
-	$self->assert($ex =~ m/Got - \d+ NO Over quota/);
+	$self->assert($ex =~ m/over quota/i);
     }
     else {
 	$self->assert_str_equals('no', $talk->get_last_completion_response());
