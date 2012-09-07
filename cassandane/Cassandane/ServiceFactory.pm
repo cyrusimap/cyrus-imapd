@@ -85,6 +85,12 @@ sub create
 				argv => ['nntpd'],
 				%params);
     }
+    elsif ($name =~ m/smmap/)
+    {
+	return Cassandane::Service->new(
+				argv => ['smmapd'],
+				%params);
+    }
     elsif ($name =~ m/pop/)
     {
 	return Cassandane::Service->new(
