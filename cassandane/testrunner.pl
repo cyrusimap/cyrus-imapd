@@ -185,7 +185,7 @@ while (my $a = shift)
     }
     elsif ($a eq '-l' || $a eq '--list')
     {
-	$do_list = 1;
+	$do_list++;
     }
     elsif ($a eq '-k' || $a eq '--keep-going')
     {
@@ -228,10 +228,11 @@ my $plan = Cassandane::Unit::TestPlan->new(
 
 if ($do_list)
 {
-    # Build a plan comprising all tests
-    $plan->schedule();
+    # Build the schedule per commandline
+    $plan->schedule(@names);
     # dump the plan to stdout
-    foreach my $nm ($plan->list())
+    my %plan = map { _listitem($_) => 1 } $plan->list();
+    foreach my $nm (sort keys %plan)
     {
 	print "$nm\n";
     }
@@ -245,3 +246,8 @@ else
     exit(! $runners{$format}->($plan));
 }
 
+sub _listitem {
+    my $item = shift;
+    $item =~ s/\..*// if ($do_list == 1);
+    return $item;
+}
