@@ -43,6 +43,7 @@ use strict;
 use warnings;
 use Cassandane::Util::Setup;
 use Cassandane::Unit::Runner;
+use Cassandane::Unit::RunnerPretty;
 use Cassandane::Unit::TestPlan;
 use Cassandane::Util::Log;
 use Cassandane::Cassini;
@@ -112,7 +113,14 @@ my %runners =
 	my $runner = Cassandane::Unit::Runner->new();
 	$runner->filter('x');
 	return $runner->do_run($plan, 0);
-    }
+    },
+    pretty => sub
+    {
+	my ($plan) = @_;
+	my $runner = Cassandane::Unit::RunnerPretty->new();
+	$runner->filter('x');
+	return $runner->do_run($plan, 0);
+    },
 );
 
 eval
@@ -140,7 +148,7 @@ become_cyrus();
 
 sub usage
 {
-    printf STDERR "Usage: testrunner.pl [ -f xml | -f tap ] [testname...]\n";
+    printf STDERR "Usage: testrunner.pl [ -f xml | -f tap | -f pretty ] [testname...]\n";
     exit(1);
 }
 
