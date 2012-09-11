@@ -256,6 +256,8 @@ sub _params_defaults
 	unless defined $params->{mime_type};
     $params->{mime_charset} = 'us-ascii'
 	unless defined $params->{mime_charset};
+    $params->{mime_boundary} = 'Apple-Mail-1-798269008'
+	unless defined $params->{mime_boundary};
 
     return $params;
 }
@@ -294,8 +296,15 @@ sub generate
 		     "\tby gateway." . $to->domain() . " (gateway." . $to->domain() . " [10.0.0.1]); $datestr");
     $msg->add_header("MIME-Version", "1.0");
     my $mimetype = $params->{mime_type};
-    $mimetype .= "; charset=\"$params->{mime_charset}\""
-	if $params->{mime_charset} ne '';
+    if ($mimetype =~ m/multipart\//i)
+    {
+	$mimetype .= "; boundary=\"$params->{mime_boundary}\""
+    }
+    else
+    {
+	$mimetype .= "; charset=\"$params->{mime_charset}\""
+	    if $params->{mime_charset} ne '';
+    }
     $msg->add_header("Content-Type", $mimetype);
     $msg->add_header("Content-Transfer-Encoding", $params->{mime_encoding});
     $msg->add_header("Subject", $params->{subject});
