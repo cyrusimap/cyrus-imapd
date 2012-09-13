@@ -408,8 +408,14 @@ sub test_overquota
 
     xlog "try to add another message";
     my $overmsg = eval { $self->make_message("Message $n") };
-    $self->assert_str_equals('no', $talk->get_last_completion_response());
-    $self->assert($talk->get_last_error() =~ m/over quota/i);
+    my $ex = $@;
+    if ($ex) {
+	$self->assert($ex =~ m/over quota/i);
+    }
+    else {
+	$self->assert_str_equals('no', $talk->get_last_completion_response());
+	$self->assert($talk->get_last_error() =~ m/over quota/i);
+    }
 
     xlog "check that the exceeding message is not in the mailbox";
     $self->check_messages(\%msgs);
