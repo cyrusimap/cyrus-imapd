@@ -1113,7 +1113,9 @@ And the notification message will be available on \fIstdin\fR.
 { "proxyservers", NULL, STRING }
 /* A list of users and groups that are allowed to proxy for other
    users, separated by spaces.  Any user listed in this will be
-   allowed to login for any other user: use with caution. */ 
+   allowed to login for any other user: use with caution.
+   In a standard murder this option should ONLY be set on backends.
+   DO NOT SET on frontends or things won't work properly. */ 
 
 { "pts_module", "afskrb", STRINGLIST("afskrb", "ldap") }
 /* The PTS module to use. */
