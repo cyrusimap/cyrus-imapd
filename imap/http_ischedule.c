@@ -347,7 +347,7 @@ int isched_send(struct sched_param *sparam, icalcomponent *ical)
     /* Create iSchedule request header */
     buf_reset(&hdrs);
     buf_printf(&hdrs, "Host: %s\r\n", sparam->server);
-    buf_printf(&hdrs, "Cache-Control: no-transform\r\n");
+    buf_printf(&hdrs, "Cache-Control: no-cache, no-transform\r\n");
     if (config_serverinfo == IMAP_ENUM_SERVERINFO_ON) {
 	buf_printf(&hdrs, "User-Agent: %s\r\n", buf_cstring(&serverinfo));
     }
