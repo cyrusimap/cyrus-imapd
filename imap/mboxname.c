@@ -66,7 +66,7 @@
 #include "mboxlist.h"
 #include "cyr_lock.h"
 
-static int mboxname_strip_deletedprefix(char *name, char **ptr);
+static int mboxname_strip_deletedprefix(const char **ptr);
 
 struct mboxlocklist {
     struct mboxlocklist *next;
@@ -537,11 +537,14 @@ static int mboxname_toexternal(struct namespace *namespace, const char *mboxname
 	    sprintf(result, "user.%s", mbparts.userid);
 	}
 
-	if (mbparts.box)
+	if (mbparts.mbox)
 	    strcat(result, ".");
     }
-    if (mbparts.box)
-	strcat(result, mbparts.box);
+    if (mbparts.mbox) {
+	char *mboxname = strarray_join(mbparts.mbox, ".");
+	strcat(result, mboxname);
+	free(mboxname);
+    }
 
     /* Translate any separators in mailboxname */
     mboxname_hiersep_toexternal(namespace, result, 0);
@@ -805,10 +808,11 @@ EXPORTED char *mboxname_isusermailbox(const char *name, int isinbox)
 }
 
 /* NOTE - name must have had domain removed already */
-static int mboxname_strip_deletedprefix(char *name, char **ptr)
+static int mboxname_strip_deletedprefix(const char **ptr)
 {
     static const char *deletedprefix = NULL;
     static int deletedprefix_len = 0;
+    const char *name = *ptr;
 
     /* cache for efficiency, this code can get called 
      * in an inner loop */
@@ -837,19 +841,19 @@ static int mboxname_strip_deletedprefix(char *name, char **ptr)
  */
 EXPORTED int mboxname_isdeletedmailbox(const char *name, time_t *timestampp)
 {
-    int domainlen = 0;
-    char *rest = NULL;
-    char *p;
+    const char *base = name;
+    const char *p;
     int i;
 
+    /* skip over domain */
     if (config_virtdomains && (p = strchr(name, '!')))
-	domainlen = p - name + 1;
+	base = p + 1;
 
-    if (mboxname_strip_deletedprefix((char *)(name + domainlen), &rest))
+    if (mboxname_strip_deletedprefix(&base))
 	return 0;
 
     /* Sanity check for 8 hex digits only at the end */
-    p = strrchr(rest, '.');
+    p = strrchr(base, '.');
     if (!p)
 	return 0;
     p++;
@@ -968,63 +972,67 @@ EXPORTED int mboxname_same_userid(const char *name1, const char *name2)
  */
 EXPORTED int mboxname_to_parts(const char *mboxname, struct mboxname_parts *parts)
 {
-    char *b, *e;    /* beginning and end of string parts */
+    const char *base;
+    const char *next;
+    struct namespace *ans = mboxname_get_adminnamespace();
 
     mboxname_init_parts(parts);
 
     if (!mboxname)
 	return 0;
 
-    b = parts->freeme = xstrdup(mboxname);
+    base = mboxname;
 
-    if (config_virtdomains && (e = strchr(b, '!'))) {
-	parts->domain = b;
-	*e++ = '\0';
-	b = e;
+    if (config_virtdomains && (next = strchr(base, '!'))) {
+	parts->domain = xstrndup(base, next-base);
+	base = next+1;
     }
 
-    if (!mboxname_strip_deletedprefix(b, &b)) {
+    if (!mboxname_strip_deletedprefix(&base))
 	parts->is_deleted = 1;
-    }
 
-    if (!strncmp(b, "user.", 5)) {
+    if (!strncmp(base, "user.", 5)) {
 	/* user mailbox */
-	b += 5;
-	parts->userid = b;
+	base += 5;
+	next = strchr(base, '.');
 	/* find end of userid */
-	e = strchr(b, '.');
-	if (e) {
-	    *e++ = '\0';
-	    b = e;
+	if (next) {
+	    parts->userid = xstrndup(base, next-base);
+	    base = next+1;
 	} else {
-	    b += strlen(b);
+	    parts->userid = xstrdup(base);
+	    base = NULL;
 	}
+	mboxname_hiersep_toexternal(ans, parts->userid, 0);
     } else {
 	/* shared mailbox - nothing to strip */
     }
 
-    if (*b) parts->box = b;
+    if (base) {
+	int i;
+	parts->mbox = strarray_split(base, ".", 0);
+	for (i = 0; i < parts->mbox->count; i++)
+	    mboxname_hiersep_toexternal(ans, parts->mbox->data[i], 0);
+    }
 
     return 0;
 }
 
 int mboxname_userid_to_parts(const char *userid, struct mboxname_parts *parts)
 {
-    char *b, *e;    /* beginning and end of string parts */
+    const char *at;
 
     mboxname_init_parts(parts);
 
     if (!userid)
 	return 0;
 
-    b = parts->freeme = xstrdup(userid);
-
-    parts->userid = b;
-
-    if (config_virtdomains && (e = strchr(b, '@'))) {
-	*e++ = '\0';
-	parts->domain = e;
+    if (config_virtdomains && (at = strchr(userid, '@'))) {
+	parts->userid = xstrndup(userid, (at - userid));
+	parts->domain = xstrdup(at+1);
     }
+    else
+	parts->userid = xstrdup(userid);
 
     return 0;
 }
@@ -1036,10 +1044,10 @@ HIDDEN void mboxname_init_parts(struct mboxname_parts *parts)
 
 EXPORTED void mboxname_free_parts(struct mboxname_parts *parts)
 {
-    if (parts->freeme) {
-	free(parts->freeme);
-	memset(parts, 0, sizeof(*parts));
-    }
+    free(parts->userid);
+    free(parts->domain);
+    strarray_free(parts->mbox);
+    mboxname_init_parts(parts);
 }
 
 /*

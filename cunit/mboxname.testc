@@ -12,6 +12,7 @@ static void test_dir_hash_c(void)
     static const char FRED[] = "fred";
     static const char FRED_DRAFTS[] = "fred.Drafts";
     static const char JANEAT_SENT[] = "bloggs.com!user.jane.Sent";
+    static const char DOTNAMEAT[] = "bloggs.com!user.jane^bloggs";
     static const char SHARED[] = "Gossip";
     static const char INTERNAL[] = "internal!Tattle";
     static const char LONGNAME[] = "thisisareallylongname";
@@ -23,6 +24,8 @@ static void test_dir_hash_c(void)
     c = dir_hash_c(FRED_DRAFTS, 0);
     CU_ASSERT_EQUAL(c, 'f');
     c = dir_hash_c(JANEAT_SENT, 0);
+    CU_ASSERT_EQUAL(c, 'b');
+    c = dir_hash_c(DOTNAMEAT, 0);
     CU_ASSERT_EQUAL(c, 'b');
     c = dir_hash_c(SHARED, 0);
     CU_ASSERT_EQUAL(c, 'g');
@@ -38,6 +41,8 @@ static void test_dir_hash_c(void)
     c = dir_hash_c(FRED_DRAFTS, 1);
     CU_ASSERT_EQUAL(c, 'E');
     c = dir_hash_c(JANEAT_SENT, 1);
+    CU_ASSERT_EQUAL(c, 'L');
+    c = dir_hash_c(DOTNAMEAT, 1);
     CU_ASSERT_EQUAL(c, 'L');
     c = dir_hash_c(SHARED, 1);
     CU_ASSERT_EQUAL(c, 'K');
@@ -62,28 +67,36 @@ static void test_to_parts(void)
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_PTR_NULL(parts.domain);
     CU_ASSERT_STRING_EQUAL(parts.userid, "fred");
-    CU_ASSERT_STRING_EQUAL(parts.box, "Drafts");
+    CU_ASSERT_PTR_NOT_NULL(parts.mbox);
+    CU_ASSERT_EQUAL(parts.mbox->count, 1);
+    CU_ASSERT_STRING_EQUAL(parts.mbox->data[0], "Drafts");
     mboxname_free_parts(&parts);
 
     r = mboxname_to_parts(JANEAT_SENT, &parts);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_STRING_EQUAL(parts.domain, "bloggs.com");
     CU_ASSERT_STRING_EQUAL(parts.userid, "jane");
-    CU_ASSERT_STRING_EQUAL(parts.box, "Sent");
+    CU_ASSERT_PTR_NOT_NULL(parts.mbox);
+    CU_ASSERT_EQUAL(parts.mbox->count, 1);
+    CU_ASSERT_STRING_EQUAL(parts.mbox->data[0], "Sent");
     mboxname_free_parts(&parts);
 
     r = mboxname_to_parts(SHARED, &parts);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_PTR_NULL(parts.domain);
     CU_ASSERT_PTR_NULL(parts.userid);
-    CU_ASSERT_STRING_EQUAL(parts.box, "shared.Gossip");
+    CU_ASSERT_EQUAL(parts.mbox->count, 2);
+    CU_ASSERT_STRING_EQUAL(parts.mbox->data[0], "shared");
+    CU_ASSERT_STRING_EQUAL(parts.mbox->data[1], "Gossip");
     mboxname_free_parts(&parts);
 
     r = mboxname_to_parts(SHAREDAT, &parts);
     CU_ASSERT_EQUAL(r, 0);
     CU_ASSERT_STRING_EQUAL(parts.domain, "foonly.com");
     CU_ASSERT_PTR_NULL(parts.userid);
-    CU_ASSERT_STRING_EQUAL(parts.box, "shared.Tattle");
+    CU_ASSERT_EQUAL(parts.mbox->count, 2);
+    CU_ASSERT_STRING_EQUAL(parts.mbox->data[0], "shared");
+    CU_ASSERT_STRING_EQUAL(parts.mbox->data[1], "Tattle");
     mboxname_free_parts(&parts);
 }
 
@@ -329,7 +342,9 @@ static void test_toexternal_unixhier(void)
     toexternal_helper("user.fred", "INBOX");
     toexternal_helper("user.fred.foo", "INBOX/foo");
     toexternal_helper("user.fred.foo.barracuda", "INBOX/foo/barracuda");
+    toexternal_helper("user.fred.foo^bar.barracuda", "INBOX/foo.bar/barracuda");
     toexternal_helper("user.jane", "user/jane");
+    toexternal_helper("user.jane^bloggs", "user/jane.bloggs");
     toexternal_helper("user.jane.baz", "user/jane/baz");
     toexternal_helper("shared.quux", "shared/quux");
 }
