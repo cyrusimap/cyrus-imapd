@@ -1565,8 +1565,19 @@ void response_header(long code, struct transaction_t *txn)
     if (txn->flags & HTTP_ISCHEDULE) {
 	prot_printf(httpd_out, "iSchedule-Version: 1.0\r\n");
     }
-    if (txn->flags & HTTP_NOCACHE) {
-	prot_printf(httpd_out, "Cache-Control: no-cache\r\n");
+    if (txn->flags & (HTTP_NOCACHE | HTTP_NOTRANSFORM)) {
+	const char *sep = "";
+
+	prot_printf(httpd_out, "Cache-Control:");
+	if (txn->flags & HTTP_NOCACHE) {
+	    prot_printf(httpd_out, "%s no-cache", sep);
+	    sep = ",";
+	}
+	if (txn->flags & HTTP_NOTRANSFORM) {
+	    prot_printf(httpd_out, "%s no-transform", sep);
+	    sep = ",";
+	}
+	prot_printf(httpd_out, "\r\n");
     }
 
 

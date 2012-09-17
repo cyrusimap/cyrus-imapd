@@ -186,8 +186,9 @@ enum {
     HTTP_GZIP =	  	(1<<2),	/* Gzip the representation */
     HTTP_CHUNKED =	(1<<3),	/* Response payload will be chunked */
     HTTP_NOCACHE =	(1<<4),	/* Response should NOT be cached */
-    HTTP_RANGES =	(1<<5),	/* Accept range requests for resource */
-    HTTP_ISCHEDULE =	(1<<6)	/* iSchedule request/response */
+    HTTP_NOTRANSFORM =	(1<<5),	/* Response should NOT be transformed */
+    HTTP_RANGES =	(1<<6),	/* Accept range requests for resource */
+    HTTP_ISCHEDULE =	(1<<7),	/* iSchedule response */
 };
 
 typedef int (*method_proc_t)(struct transaction_t *txn);
