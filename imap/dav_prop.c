@@ -1203,6 +1203,8 @@ static int propfind_caldata(xmlNodePtr prop,
 				     fctx->record->header_size,
 				     fctx->record->size -
 				     fctx->record->header_size));
+
+	fctx->fetcheddata = 1;
     }
     else {
 	xml_add_prop(HTTP_NOT_FOUND, fctx->ns[NS_DAV],

@@ -1196,6 +1196,9 @@ static int meth_get(struct transaction_t *txn)
     if (txn->meth[0] == 'G') {
 	/* Load message containing the resource */
 	mailbox_map_message(mailbox, record.uid, &msg_base, &msg_size);
+
+	/* iCalendar data in response should not be transformed */
+	txn->flags |= HTTP_NOTRANSFORM;
     }
 
     write_body(HTTP_OK, txn,
@@ -1893,6 +1896,7 @@ int meth_propfind(struct transaction_t *txn)
     fctx.ns = ns;
     fctx.errstr = &txn->error.desc;
     fctx.ret = &ret;
+    fctx.fetcheddata = 0;
 
     /* Parse the list of properties and build a list of callbacks */
     preload_proplist(cur->children, &fctx);
@@ -1939,7 +1943,12 @@ int meth_propfind(struct transaction_t *txn)
     }
 
     /* Output the XML response */
-    if (!ret) xml_response(HTTP_MULTI_STATUS, txn, outdoc);
+    if (!ret) {
+	/* iCalendar data in response should not be transformed */
+	if (fctx.fetcheddata) txn->flags |= HTTP_NOTRANSFORM;
+
+	xml_response(HTTP_MULTI_STATUS, txn, outdoc);
+    }
 
   done:
     /* Free the entry list */
@@ -2806,6 +2815,9 @@ static int report_fb_query(struct transaction_t *txn,
 
 	txn->resp_body.type = "text/calendar; charset=utf-8";
 
+	/* iCalendar data in response should not be transformed */
+	txn->flags |= HTTP_NOTRANSFORM;
+
 	write_body(HTTP_OK, txn, cal_str, strlen(cal_str));
     }
     else ret = HTTP_NOT_FOUND;
@@ -3216,6 +3228,7 @@ static int meth_report(struct transaction_t *txn)
     fctx.ns = ns;
     fctx.errstr = &txn->error.desc;
     fctx.ret = &ret;
+    fctx.fetcheddata = 0;
 
     /* Parse the list of properties and build a list of callbacks */
     if (prop) preload_proplist(prop->children, &fctx);
@@ -3224,7 +3237,12 @@ static int meth_report(struct transaction_t *txn)
     ret = (*report->proc)(txn, inroot, &fctx, mailboxname);
 
     /* Output the XML response */
-    if (!ret && outroot) xml_response(HTTP_MULTI_STATUS, txn, outroot->doc);
+    if (!ret && outroot) {
+	/* iCalendar data in response should not be transformed */
+	if (fctx.fetcheddata) txn->flags |= HTTP_NOTRANSFORM;
+
+	xml_response(HTTP_MULTI_STATUS, txn, outroot->doc);
+    }
 
   done:
     /* Free the entry list */
@@ -3638,6 +3656,9 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 			resp_body->type = "text/calendar; charset=utf-8";
 			resp_body->len = strlen(ics);
 
+			/* iCalendar data in response should not be transformed */
+			txn->flags |= HTTP_NOTRANSFORM;
+
 			write_body(ret, txn, ics, strlen(ics));
 			ret = 0;
 		    }
@@ -3818,6 +3839,7 @@ int busytime_query(struct transaction_t *txn, icalcomponent *ical)
     fctx.calfilter = &filter;
     fctx.errstr = &txn->error.desc;
     fctx.ret = &ret;
+    fctx.fetcheddata = 0;
 
     for (prop = icalcomponent_get_first_property(comp, ICAL_ATTENDEE_PROPERTY);
 	 prop;
@@ -3895,6 +3917,9 @@ int busytime_query(struct transaction_t *txn, icalcomponent *ical)
 		xmlAddChild(cdata,
 			    xmlNewCDataBlock(root->doc,
 					     BAD_CAST fb_str, strlen(fb_str)));
+
+		/* iCalendar data in response should not be transformed */
+		txn->flags |= HTTP_NOTRANSFORM;
 	    }
 	    else {
 		xmlNewChild(resp, NULL, BAD_CAST "request-status",

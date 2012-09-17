@@ -249,6 +249,7 @@ struct propfind_ctx {
     xmlNsPtr *ns;			/* Array of our supported namespaces */
     const char **errstr;		/* Error string to pass up to caller */
     int *ret;  				/* Return code to pass up to caller */
+    int fetcheddata;			/* Did we fetch iCalendar/vCard data? */
     struct buf buf;			/* Working buffer */
 };
 
