@@ -295,6 +295,10 @@ static int mlookup(const char *name, struct mboxlist_entry **mbentryptr)
 	mboxlist_entry_free(&mbentry);
 	r = mboxlist_lookup(name, &mbentry, NULL);
     }
+    if (r) return r;
+    if (mbentry->mbtype & MBTYPE_RESERVE) r = IMAP_MAILBOX_RESERVED;
+    if (mbentry->mbtype & MBTYPE_MOVING) r = IMAP_MAILBOX_MOVED;
+    if (mbentry->mbtype & MBTYPE_DELETED) r = IMAP_MAILBOX_NONEXISTENT;
 
     if (mbentryptr && !r) *mbentryptr = mbentry;
     else mboxlist_entry_free(&mbentry);

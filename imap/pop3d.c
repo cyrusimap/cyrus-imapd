@@ -1757,14 +1757,23 @@ int openinbox(void)
 	 !((myrights = cyrus_acl_myrights(popd_authstate, mbentry->acl)) & ACL_READ))) {
 	r = (myrights & ACL_LOOKUP) ?
 	    IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
-	log_level = LOG_INFO;
+    }
+    else if (!r && (mbentry->mbtype & MBTYPE_DELETED)) {
+	r = IMAP_MAILBOX_NONEXISTENT;
+    }
+    else if (!r && (mbentry->mbtype & MBTYPE_RESERVE)) {
+	r = IMAP_MAILBOX_RESERVED;
+    }
+    else if (!r && (mbentry->mbtype & MBTYPE_MOVING)) {
+	r = IMAP_MAILBOX_MOVED;
     }
     if (r) {
 	sleep(3);
-	syslog(log_level, "Unable to locate maildrop %s: %s",
+	log_level = LOG_INFO;
+	syslog(log_level, "Unable to open maildrop %s: %s",
 	       inboxname, error_message(r));
 	prot_printf(popd_out,
-		    "-ERR [SYS/PERM] Unable to locate maildrop: %s\r\n",
+		    "-ERR [SYS/TEMP] Unable to open maildrop: %s\r\n",
 		    error_message(r));
 	goto fail;
     }

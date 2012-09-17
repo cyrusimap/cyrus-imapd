@@ -470,6 +470,8 @@ static int mlookup(const char *name, struct mboxlist_entry **mbentryptr)
 	    fatal("error communicating with MUPDATE server", EC_TEMPFAIL);
 	}
 
+	if (mailboxdata->t == RESERVE) return IMAP_MAILBOX_RESERVED;
+
 	mbentry = mboxlist_entry_create();
 	mbentry->acl = mailboxdata->acl;
 	mbentry->server = mailboxdata->server;
@@ -480,6 +482,7 @@ static int mlookup(const char *name, struct mboxlist_entry **mbentryptr)
 	    *c++ = '\0';
 	    mbentry->partition = c;
 	}
+
     }
     else {
 	/* do a local lookup and kick the slave if necessary */
@@ -488,6 +491,13 @@ static int mlookup(const char *name, struct mboxlist_entry **mbentryptr)
 	    kick_mupdate();
 	    mboxlist_entry_free(&mbentry);
 	    r = mboxlist_lookup(name, &mbentry, NULL);
+	}
+	if (r) return r;
+	if (mbentry->mbtype & MBTYPE_MOVING) {
+	    r = IMAP_MAILBOX_MOVED;
+	}
+	else if (mbentry->mbtype & MBTYPE_DELETED) {
+	    r = IMAP_MAILBOX_NONEXISTENT;
 	}
     }
 
