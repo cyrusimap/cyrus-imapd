@@ -661,6 +661,9 @@ static int mlookup(const char *tag, const char *ext_name,
     if (mbentry->mbtype & MBTYPE_RESERVE) {
 	r = IMAP_MAILBOX_RESERVED;
     }
+    else if (mbentry->mbtype & MBTYPE_DELETED) {
+	r = IMAP_MAILBOX_NONEXISTENT;
+    }
     else if (mbentry->mbtype & MBTYPE_MOVING) {
 	/* do we have rights on the mailbox? */
 	if (!imapd_userisadmin &&
@@ -9657,10 +9660,18 @@ static int dumpacl(struct protstream *pin, struct protstream *pout,
     return r;
 }
 
+enum {
+    XFER_DEACTIVATED = 1,
+    XFER_REMOTE_CREATED,
+    XFER_LOCAL_MOVING,
+    XFER_UNDUMPED,
+};
+
 struct xfer_item {
     struct mboxlist_entry *mbentry;
-    int remote_created;
-    int done;
+    char extname[MAX_MAILBOX_NAME];
+    struct mailbox *mailbox;
+    int state;
     struct xfer_item *next;
 };
 
@@ -9670,6 +9681,7 @@ struct xfer_header {
     int remoteversion;
     char *toserver;
     char *topart;
+    struct seen *seendb;
     struct xfer_item *items;
 };
 
@@ -9711,45 +9723,6 @@ static void xfer_done(struct xfer_header **xferptr)
 {
     struct xfer_header *xfer = *xferptr;
     struct xfer_item *item, *next;
-    int r;
-    char extname[MAX_MAILBOX_NAME];
-
-    for (item = xfer->items; item; item = item->next) {
-	(*imapd_namespace.mboxname_toexternal)(&imapd_namespace, item->mbentry->name,
-					       imapd_userid, extname);
-	/* done! */
-	if (item->done)
-	    continue;
-	/* tell murder it's back here and active */
-	r = xfer_mupdate(xfer, 1, item->mbentry->name, item->mbentry->partition,
-			 config_servername, item->mbentry->acl);
-	if (r) {
-	    syslog(LOG_ERR,
-		   "Could not back out mupdate during move of %s (%s)",
-		   item->mbentry->name, error_message(r));
-	}
-
-	/* delete remote if created */
-	if (item->remote_created) {
-	    prot_printf(xfer->be->out, "LD1 LOCALDELETE {" SIZE_T_FMT "+}\r\n%s\r\n",
-			strlen(extname), extname);
-	    r = getresult(xfer->be->in, "LD1");
-	    if (r) {
-		syslog(LOG_ERR,
-		       "Could not back out remote mailbox during move of %s (%s)",
-		       item->mbentry->name, error_message(r));
-	    }
-	}
-
-	/* remove remote flag from local mailbox */
-	r = mboxlist_update(item->mbentry, 1);
-
-	if (r) {
-	    syslog(LOG_ERR,
-		   "Could not unset remote flag on mailbox: %s",
-		   item->mbentry->name);
-	}
-    }
 
     /* remove items */
     item = xfer->items;
@@ -9766,6 +9739,8 @@ static void xfer_done(struct xfer_header **xferptr)
     free(xfer->toserver);
     free(xfer->topart);
 
+    seen_close(&xfer->seendb);
+
     free(xfer);
 
     *xferptr = NULL;
@@ -9776,8 +9751,8 @@ static int backend_version(struct backend *be)
     const char *minor;
 
     /* master branch? */
-    if (strstr(be->banner, "git2.5.")) {
-	return 12;
+    if (strstr(be->banner, "git2.5")) {
+	return 13;
     }
 
     /* check for current version */
@@ -9836,6 +9811,7 @@ static int xfer_init(const char *toserver, const char *topart,
 
     xfer->toserver = xstrdup(toserver);
     xfer->topart = xstrdup(topart);
+    xfer->seendb = NULL;
 
     /* connect to mupdate server if configured */
     if (config_mupdate_server) {
@@ -9858,6 +9834,10 @@ static void xfer_addmbox(struct xfer_header *xfer,
     struct xfer_item *item = xzmalloc(sizeof(struct xfer_item));
 
     item->mbentry = mbentry;
+    (*imapd_namespace.mboxname_toexternal)(&imapd_namespace, mbentry->name,
+					   imapd_userid, item->extname);
+    item->mailbox = NULL;
+    item->state = 0;
 
     /* and link on to the list (reverse order) */
     item->next = xfer->items;
@@ -9868,18 +9848,15 @@ static int xfer_localcreate(struct xfer_header *xfer)
 {
     struct xfer_item *item;
     int r;
-    char extname[MAX_MAILBOX_NAME];
 
     for (item = xfer->items; item; item = item->next) {
-	(*imapd_namespace.mboxname_toexternal)(&imapd_namespace, item->mbentry->name,
-					       imapd_userid, extname);
 	if (xfer->topart) {
 	    /* need to send partition as an atom */
 	    prot_printf(xfer->be->out, "LC1 LOCALCREATE {" SIZE_T_FMT "+}\r\n%s %s\r\n",
-			strlen(extname), extname, xfer->topart);
+			strlen(item->extname), item->extname, xfer->topart);
 	} else {
 	    prot_printf(xfer->be->out, "LC1 LOCALCREATE {" SIZE_T_FMT "+}\r\n%s\r\n",
-			strlen(extname), extname);
+			strlen(item->extname), item->extname);
 	}
 	r = getresult(xfer->be->in, "LC1");
 	if (r) {
@@ -9887,7 +9864,8 @@ static int xfer_localcreate(struct xfer_header *xfer)
 		   item->mbentry->name);
 	    return r;
 	}
-	item->remote_created = 1;
+
+	item->state = XFER_REMOTE_CREATED;
     }
 
     return 0;
@@ -9896,16 +9874,12 @@ static int xfer_localcreate(struct xfer_header *xfer)
 static int xfer_backport_seen_item(struct xfer_item *item,
 				   struct seen *seendb)
 {
-    struct mailbox *mailbox = NULL;
+    struct mailbox *mailbox = item->mailbox;
     struct seqset *outlist = NULL;
     struct index_record record;
     struct seendata sd = SEENDATA_INITIALIZER;
     unsigned recno;
     int r;
-
-    /* XXX - entry version of open */
-    r = mailbox_open_irl(item->mbentry->name, &mailbox);
-    if (r) return r;
 
     outlist = seqset_init(mailbox->i.last_uid, SEQ_MERGE);
 
@@ -9929,27 +9903,6 @@ static int xfer_backport_seen_item(struct xfer_item *item,
     r = seen_write(seendb, mailbox->uniqueid, &sd);
 
     seen_freedata(&sd);
-    mailbox_close(&mailbox);
-
-    return r;
-}
-
-static int xfer_backport_seen(struct xfer_header *xfer, const char *userid)
-{
-    struct xfer_item *item;
-    struct seen *seendb = NULL;
-    int r;
-
-    r = seen_open(userid, SEEN_CREATE, &seendb);
-    if (r) return r;
-
-    /* Step 3: mupdate.DEACTIVATE(mailbox, newserver) */
-    for (item = xfer->items; item; item = item->next) {
-	r = xfer_backport_seen_item(item, seendb);
-	if (r) break;
-    }
-
-    seen_close(&seendb);
 
     return r;
 }
@@ -9969,6 +9922,8 @@ static int xfer_deactivate(struct xfer_header *xfer)
 		   item->mbentry->name);
 	    return r;
 	}
+
+	item->state = XFER_DEACTIVATED;
     }
 
     return 0;
@@ -9978,12 +9933,10 @@ static int xfer_undump(struct xfer_header *xfer)
 {
     struct xfer_item *item;
     int r;
+    struct mboxlist_entry *newentry;
     struct mailbox *mailbox = NULL;
-    char extname[MAX_MAILBOX_NAME];
 
     for (item = xfer->items; item; item = item->next) {
-	(*imapd_namespace.mboxname_toexternal)(&imapd_namespace, item->mbentry->name,
-					       imapd_userid, extname);
 	r = mailbox_open_irl(item->mbentry->name, &mailbox);
 	if (r) {
 	    syslog(LOG_ERR,
@@ -9992,21 +9945,49 @@ static int xfer_undump(struct xfer_header *xfer)
 	    return r;
 	}
 
-	/* Step 4: Dump local -> remote */
-	prot_printf(xfer->be->out, "D01 UNDUMP {" SIZE_T_FMT "+}\r\n%s ",
-		    strlen(extname), extname);
-
-	r = dump_mailbox(NULL, mailbox, 0, xfer->remoteversion,
-			 xfer->be->in, xfer->be->out, imapd_authstate);
-
-	mailbox_close(&mailbox);
+	/* Step 3.5: Set mailbox as MOVING on local server */
+	/* XXX - this code is awful... need a sane way to manage mbentries */
+	newentry = mboxlist_entry_create();
+	newentry->name = item->mbentry->name;
+	newentry->acl = item->mbentry->acl;
+	newentry->server = xfer->toserver;
+	newentry->partition = xfer->topart;
+	newentry->mbtype = item->mbentry->mbtype|MBTYPE_MOVING;
+	r = mboxlist_update(newentry, 1);
+	mboxlist_entry_free(&newentry);
 
 	if (r) {
 	    syslog(LOG_ERR,
-		   "Could not move mailbox: %s, dump_mailbox() failed %s",
+		   "Could not move mailbox: %s, mboxlist_update() failed %s",
 		   item->mbentry->name, error_message(r));
-	    return r;
 	}
+
+	if (!r && xfer->seendb) {
+	    /* Backport the user's seendb on-the-fly */
+	    item->mailbox = mailbox;
+	    r = xfer_backport_seen_item(item, xfer->seendb);
+
+	    /* Need to close seendb before dumping Inbox (last item) */
+	    if (!item->next) seen_close(&xfer->seendb);
+	}
+
+	/* Step 4: Dump local -> remote */
+	if (!r) {
+	    prot_printf(xfer->be->out, "D01 UNDUMP {" SIZE_T_FMT "+}\r\n%s ",
+			strlen(item->extname), item->extname);
+
+	    r = dump_mailbox(NULL, mailbox, 0, xfer->remoteversion,
+			     xfer->be->in, xfer->be->out, imapd_authstate);
+	    if (r) {
+		syslog(LOG_ERR,
+		       "Could not move mailbox: %s, dump_mailbox() failed %s",
+		       item->mbentry->name, error_message(r));
+	    }
+	}
+
+	mailbox_close(&mailbox);
+
+	if (r) return r;
 
 	r = getresult(xfer->be->in, "D01");
 	if (r) {
@@ -10017,7 +9998,7 @@ static int xfer_undump(struct xfer_header *xfer)
     
 	/* Step 5: Set ACL on remote */
 	r = trashacl(xfer->be->in, xfer->be->out,
-		     extname);
+		     item->extname);
 	if (r) {
 	    syslog(LOG_ERR, "Could not clear remote acl on %s",
 		   item->mbentry->name);
@@ -10025,18 +10006,30 @@ static int xfer_undump(struct xfer_header *xfer)
 	}
 
 	r = dumpacl(xfer->be->in, xfer->be->out,
-		    extname, item->mbentry->acl);
+		    item->extname, item->mbentry->acl);
 	if (r) {
 	    syslog(LOG_ERR, "Could not set remote acl on %s",
 		   item->mbentry->name);
 	    return r;
 	}
 
-	/* No need to push the MUPDATE if we're not part of a murder */
-	if (!xfer->mupdate_h) continue;
+	item->state = XFER_UNDUMPED;
+    }
 
+    return 0;
+}
+
+static int xfer_reactivate(struct xfer_header *xfer)
+{
+    struct xfer_item *item;
+    int r;
+
+    if (!xfer->mupdate_h) return 0;
+
+    /* 6.5) Kick remote server to correct mupdate entry */
+    for (item = xfer->items; item; item = item->next) {
 	prot_printf(xfer->be->out, "MP1 MUPDATEPUSH {" SIZE_T_FMT "+}\r\n%s\r\n",
-		    strlen(extname), extname);
+		    strlen(item->extname), item->extname);
 	r = getresult(xfer->be->in, "MP1");
 	if (r) {
 	    syslog(LOG_ERR, "MUPDATE: can't activate mailbox entry '%s'",
@@ -10050,49 +10043,101 @@ static int xfer_undump(struct xfer_header *xfer)
 
 static int xfer_delete(struct xfer_header *xfer)
 {
+    struct mboxlist_entry *newentry = NULL;
     struct xfer_item *item;
     int r;
 
     /* 7) local delete of mailbox
      * & remove local "remote" mailboxlist entry */
     for (item = xfer->items; item; item = item->next) {
-	if (config_mupdate_config != IMAP_ENUM_MUPDATE_CONFIG_UNIFIED) {
-	    /* Note that we do not check the ACL, and we don't update MUPDATE */
-	    /* note also that we need to remember to let proxyadmins do this */
-	    r = mboxlist_deletemailbox(item->mbentry->name,
-				       imapd_userisadmin || imapd_userisproxyadmin,
-				       imapd_userid, imapd_authstate, 0, 1, 0);
-	    if (r) {
-		syslog(LOG_ERR,
-		       "Could not delete local mailbox during move of %s",
-		       item->mbentry->name);
-		/* can't abort now! */
-	    }
-	} else {
-	    struct mailbox *mailbox = NULL;
-	    /* Delete mailbox and quota root.  Don't use the mboxlist
-	     * function because we've already got the right value for
-	     * the new server in the mboxlist */
-	    /* note: delete closes mailbox */
-	    /* XXX - really should be using the 'entry' here, not name */
-	    r = mailbox_open_iwl(item->mbentry->name, &mailbox);
-	    /* Delete mailbox annotations */
-	    if (!r) annotate_delete_mailbox(mailbox);
-	    if (!r) r = mailbox_delete(&mailbox);
-	    if (r) {
-		syslog(LOG_ERR,
-		       "Could not delete local mailbox during move of %s",
-		       item->mbentry->name);
-		/* can't abort now! */
-	    }
-	    /* XXX - quota root? */
+	/* Set mailbox as DELETED on local server
+	   (need to also reset to local partition,
+	   otherwise mailbox can not be opened for deletion) */
+	/* XXX - this code is awful... need a sane way to manage mbentries */
+	newentry = mboxlist_entry_create();
+	newentry->name = item->mbentry->name;
+	newentry->acl = item->mbentry->acl;
+	newentry->server = item->mbentry->server;
+	newentry->partition = item->mbentry->partition;
+	newentry->mbtype = item->mbentry->mbtype|MBTYPE_DELETED;
+	r = mboxlist_update(newentry, 1);
+	mboxlist_entry_free(&newentry);
+
+	if (r) {
+	    syslog(LOG_ERR,
+		   "Could not move mailbox: %s, mboxlist_update failed (%s)",
+		   item->mbentry->name, error_message(r));
 	}
 
-	/* mark this item done so the cleanup doesn't revert it! */
-	item->done = 1;
+	/* Note that we do not check the ACL, and we don't update MUPDATE */
+	/* note also that we need to remember to let proxyadmins do this */
+	/* On a unified system, the subsequent MUPDATE PUSH on the remote
+	   should repopulate the local mboxlist entry */
+	r = mboxlist_deletemailbox(item->mbentry->name,
+				   imapd_userisadmin || imapd_userisproxyadmin,
+				   imapd_userid, imapd_authstate, 0, 1, 0);
+	if (r) {
+	    syslog(LOG_ERR,
+		   "Could not delete local mailbox during move of %s",
+		   item->mbentry->name);
+	    /* can't abort now! */
+	}
     }
 
     return 0;
+}
+
+static void xfer_recover(struct xfer_header *xfer)
+{
+    struct mboxlist_entry *newentry = NULL;
+    struct xfer_item *item;
+    int r;
+
+    /* Backout any changes - we stop on first untouched mailbox */
+    for (item = xfer->items; item && item->state; item = item->next) {
+	switch (item->state) {
+	case XFER_UNDUMPED:
+	case XFER_LOCAL_MOVING:
+	    /* Unset mailbox as MOVING on local server */
+	    /* XXX - this code is awful... need a sane way to manage mbentries */
+	    newentry = mboxlist_entry_create();
+	    newentry->name = item->mbentry->name;
+	    newentry->acl = item->mbentry->acl;
+	    newentry->server = item->mbentry->server;
+	    newentry->partition = item->mbentry->partition;
+	    newentry->mbtype = item->mbentry->mbtype;
+	    r = mboxlist_update(newentry, 1);
+	    mboxlist_entry_free(&newentry);
+
+	    if (r) {
+		syslog(LOG_ERR,
+		       "Could not back out MOVING flag during move of %s (%s)",
+		       item->mbentry->name, error_message(r));
+	    }
+
+	case XFER_REMOTE_CREATED:
+	    /* Delete remote mailbox */
+	    prot_printf(xfer->be->out,
+			"LD1 LOCALDELETE {" SIZE_T_FMT "+}\r\n%s\r\n",
+			strlen(item->extname), item->extname);
+	    r = getresult(xfer->be->in, "LD1");
+	    if (r) {
+		syslog(LOG_ERR,
+		       "Could not back out remote mailbox during move of %s (%s)",
+		       item->mbentry->name, error_message(r));
+	    }
+
+	case XFER_DEACTIVATED:
+	    /* Tell murder it's back here and active */
+	    r = xfer_mupdate(xfer, 1, item->mbentry->name, item->mbentry->partition,
+			     config_servername, item->mbentry->acl);
+	    if (r) {
+		syslog(LOG_ERR,
+		       "Could not back out mupdate during move of %s (%s)",
+		       item->mbentry->name, error_message(r));
+	    }
+	}
+    }
 }
 
 static int xfer_user_cb(char *name,
@@ -10124,11 +10169,20 @@ static int do_xfer(struct xfer_header *xfer)
     r = xfer_deactivate(xfer);
     if (!r) r = xfer_localcreate(xfer);
     if (!r) r = xfer_undump(xfer);
-    /* note - we don't report errors if this one
-     * fails! */
-    if (!r) xfer_delete(xfer);
 
-    return r;
+    if (r) {
+	/* Something failed, revert back to local server */
+	xfer_recover(xfer);
+	return r;
+    }
+
+    /* Successful dump of all mailboxes to remote server.
+     * Remove them locally and activate them on remote.
+     * Note - we don't report errors if this fails! */
+    xfer_delete(xfer);
+    xfer_reactivate(xfer);
+
+    return 0;
 }
 
 static int xfer_setquotaroot(struct xfer_header *xfer, const char *mboxname)
@@ -10278,7 +10332,7 @@ static void cmd_xfer(const char *tag, const char *name,
 
 	/* backport the seen file if needed */
 	if (xfer->remoteversion < 12) {
-	    r = xfer_backport_seen(xfer, userid);
+	    r = seen_open(userid, SEEN_CREATE, &xfer->seendb);
 	    if (r) goto done;
 	}
 
