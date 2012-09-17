@@ -3605,10 +3605,12 @@ HIDDEN int mailbox_delete_cleanup(const char *part, const char *name)
 	    /* Hit top of 'user' hierarchy */
 	    break;
 	}
+
 	r = mboxlist_lookup(nbuf, &mbentry, NULL);
-	/* not the same partition, we can keep cleaning up */
+	/* if it's not being moved, and not the same partition, then it's safe to
+	 * clean up the parent directory too */
 	if (!r) {
-	    if (strcmp(mbentry->partition, part))
+	    if (!(mbentry->mbtype & MBTYPE_MOVING) && strcmp(mbentry->partition, part))
 		r = IMAP_MAILBOX_NONEXISTENT;
 	    mboxlist_entry_free(&mbentry);
 	}
