@@ -288,6 +288,10 @@ static int mlookup(const char *name, char **server, char **aclp, void *tid)
 	kick_mupdate();
 	r = mboxlist_lookup(name, &mbentry, tid);
     }
+    if (r) return r;
+    if (mbentry.mbtype & MBTYPE_RESERVE) return IMAP_MAILBOX_RESERVED;
+    if (mbentry.mbtype & MBTYPE_MOVING) return IMAP_MAILBOX_MOVED;
+    if (mbentry.mbtype & MBTYPE_DELETED) return IMAP_MAILBOX_NONEXISTENT;
 
     if (aclp) *aclp = mbentry.acl;
 

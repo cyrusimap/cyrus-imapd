@@ -1753,12 +1753,29 @@ int openinbox(void)
 	    IMAP_PERMISSION_DENIED : IMAP_MAILBOX_NONEXISTENT;
 	log_level = LOG_INFO;
     }
+    else if (!r && (mbentry.mbtype & MBTYPE_DELETED)) {
+	r = IMAP_MAILBOX_NONEXISTENT;
+	log_level = LOG_INFO;
+    }
     if (r) {
 	sleep(3);
 	syslog(log_level, "Unable to locate maildrop %s: %s",
 	       inboxname, error_message(r));
 	prot_printf(popd_out,
 		    "-ERR [SYS/PERM] Unable to locate maildrop: %s\r\n",
+		    error_message(r));
+	goto fail;
+    }
+
+    if (mbentry.mbtype & MBTYPE_RESERVE) r = IMAP_MAILBOX_RESERVED;
+    if (mbentry.mbtype & MBTYPE_MOVING) r = IMAP_MAILBOX_MOVED;
+    if (r) {
+	sleep(3);
+	log_level = LOG_INFO;
+	syslog(log_level, "Unable to open maildrop %s: %s",
+	       inboxname, error_message(r));
+	prot_printf(popd_out,
+		    "-ERR [SYS/TEMP] Unable to open maildrop: %s\r\n",
 		    error_message(r));
 	goto fail;
     }
