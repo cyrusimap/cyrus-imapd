@@ -1670,6 +1670,13 @@ static int revconvert_lmtp(const char *code)
 	else if (code[4] == '4' && code [6] == '4') {
 	    return IMAP_SERVER_UNAVAILABLE;
 	}
+	else if (code[4] == '4' && code[6] == '2') {
+	    if (code[8] == '1') {
+		return IMAP_MAILBOX_MOVED;
+	    } else {
+		return IMAP_MAILBOX_BADFORMAT;
+	    }
+	}
 	else {
 	    return IMAP_IOERROR;
 	}
