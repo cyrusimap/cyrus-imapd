@@ -941,7 +941,14 @@ static int mailbox_open_advanced(const char *name,
     r = mboxlist_lookup(name, &mbentry, NULL);
     if (r) goto done;
 
+    if (mbentry->mbtype & MBTYPE_MOVING) {
+	mboxlist_entry_free(&mbentry);
+	r = IMAP_MAILBOX_MOVED;
+	goto done;
+    }
+
     mailbox->part = xstrdup(mbentry->partition);
+
     /* Note that the header does have the ACL information, but it is only
      * a backup, and the mboxlist data is considered authoritative, so
      * we will just use what we were passed */
