@@ -1526,6 +1526,7 @@ void response_header(long code, struct transaction_t *txn)
 
     /* General Header Fields */
     switch (code) {
+	/* Construct any Connection and associated header(s) */
     case HTTP_SWITCH_PROT:
 	prot_printf(httpd_out, "Upgrade: TLS/1.0\r\n");
 	prot_printf(httpd_out, "Connection: Upgrade\r\n");
@@ -1558,6 +1559,7 @@ void response_header(long code, struct transaction_t *txn)
 	    prot_printf(httpd_out, "Keep-Alive: timeout=%d\r\n", httpd_timeout);
 	    prot_printf(httpd_out, "Connection: Keep-Alive");
 	}
+	/* Complete Connection header */
 	prot_printf(httpd_out, "%s\r\n",
 		    (code == HTTP_UPGRADE) ? ", Upgrade" : "");
     }
@@ -1566,6 +1568,7 @@ void response_header(long code, struct transaction_t *txn)
 	prot_printf(httpd_out, "iSchedule-Version: 1.0\r\n");
     }
     if (txn->flags & (HTTP_NOCACHE | HTTP_NOTRANSFORM)) {
+	/* Construct Cache-Control header */
 	const char *sep = "";
 
 	prot_printf(httpd_out, "Cache-Control:");
@@ -1593,14 +1596,22 @@ void response_header(long code, struct transaction_t *txn)
 	prot_printf(httpd_out, "Strict-Transport-Security: max-age=600\r\n");
     }
 
-    if (strchr("OGH", txn->meth[0])) {
+    switch (txn->meth[0]) {
+    case 'O':
+	if (code == HTTP_OK) {
+	    /* Force Allow header for successful OPTIONS request */
+	    code = HTTP_NOT_ALLOWED;
+	}
+
+    case 'G':
+    case 'H':
 	/* Add Accept-Ranges header for OPTIONS, GET, HEAD responses */
 	prot_printf(httpd_out, "Accept-Ranges: %s\r\n",
 		    txn->flags & HTTP_RANGES ? "bytes" : "none");
     }
 
     if (txn->req_tgt.allow & ALLOW_DAV) {
-	/* Construct DAV header based on namespace of request URL */
+	/* Construct DAV header(s) based on namespace of request URL */
 	prot_printf(httpd_out, "DAV: 1, 3");
 	if (txn->req_tgt.allow & ALLOW_WRITE) {
 	    prot_printf(httpd_out, ", access-control, extended-mkcol");
@@ -1620,36 +1631,8 @@ void response_header(long code, struct transaction_t *txn)
     }
 
     switch (code) {
-    case HTTP_OK:
-	if (txn->meth[0] != 'O') break;
-	/* Fall through as successful OPTIONS */
-
-    case HTTP_NOT_ALLOWED:
-	/* Construct Allow header for OPTIONS response and 405 response */
-	prot_printf(httpd_out, "Allow: OPTIONS");
-	if (txn->req_tgt.allow & ALLOW_READ) {
-	    prot_printf(httpd_out, ", GET, HEAD");
-	}
-	if (txn->req_tgt.allow & ALLOW_POST) {
-	    prot_printf(httpd_out, ", POST");
-	}
-	if (txn->req_tgt.allow & ALLOW_WRITE) {
-	    prot_printf(httpd_out, ", PUT, DELETE");
-	}
-	prot_printf(httpd_out, "\r\n");
-	if (txn->req_tgt.allow & ALLOW_DAV) {
-	    prot_printf(httpd_out, "Allow: REPORT, PROPFIND");
-	    if (txn->req_tgt.allow & ALLOW_WRITE) {  /* LOCK, UNLOCK */
-		prot_printf(httpd_out, ", PROPPATCH, COPY, MOVE, ACL, MKCOL");
-		if (txn->req_tgt.allow & ALLOW_CAL) {
-		    prot_printf(httpd_out, ", MKCALENDAR");
-		}
-	    }
-	    prot_printf(httpd_out, "\r\n");
-	}
-    }
-
-    if (code == HTTP_UNAUTHORIZED) {
+    case HTTP_UNAUTHORIZED:
+	/* Construct WWW-Authenticate header(s) for 401 response */
 	if (!auth_chal->scheme) {
 	    /* Require authentication by advertising all possible schemes */
 	    struct auth_scheme_t *scheme;
@@ -1675,21 +1658,51 @@ void response_header(long code, struct transaction_t *txn)
 	    /* Continue with current authentication exchange */ 
 	    WWW_Authenticate(auth_chal->scheme->name, auth_chal->param);
 	}
-    } else if (auth_chal->param) {
-	/* Authentication completed with success data */
-	if (auth_chal->scheme->send_success) {
-	    /* Special handling of success data for this scheme */
-	    auth_chal->scheme->send_success(auth_chal->scheme->name,
-					    auth_chal->param);
-	}
-	else {
-	    /* Default handling of success data */
-	    WWW_Authenticate(auth_chal->scheme->name, auth_chal->param);
-	}
-    }
 
-    if (buf_len(&txn->loc)) {
-	prot_printf(httpd_out, "Location: %s\r\n", buf_cstring(&txn->loc));
+	break;
+
+    case HTTP_NOT_ALLOWED:
+	/* Construct Allow header(s) for successful OPTIONS and 405 response */
+	prot_printf(httpd_out, "Allow: OPTIONS");
+	if (txn->req_tgt.allow & ALLOW_READ) {
+	    prot_printf(httpd_out, ", GET, HEAD");
+	}
+	if (txn->req_tgt.allow & ALLOW_POST) {
+	    prot_printf(httpd_out, ", POST");
+	}
+	if (txn->req_tgt.allow & ALLOW_WRITE) {
+	    prot_printf(httpd_out, ", PUT, DELETE");
+	}
+	prot_printf(httpd_out, "\r\n");
+	if (txn->req_tgt.allow & ALLOW_DAV) {
+	    prot_printf(httpd_out, "Allow: REPORT, PROPFIND");
+	    if (txn->req_tgt.allow & ALLOW_WRITE) {  /* LOCK, UNLOCK */
+		prot_printf(httpd_out, ", PROPPATCH, COPY, MOVE, ACL, MKCOL");
+		if (txn->req_tgt.allow & ALLOW_CAL) {
+		    prot_printf(httpd_out, ", MKCALENDAR");
+		}
+	    }
+	    prot_printf(httpd_out, "\r\n");
+	}
+	/* Fall through as possible authenticated request */
+
+    default:
+	if (auth_chal->param) {
+	    /* Authentication completed with success data */
+	    if (auth_chal->scheme->send_success) {
+		/* Special handling of success data for this scheme */
+		auth_chal->scheme->send_success(auth_chal->scheme->name,
+						auth_chal->param);
+	    }
+	    else {
+		/* Default handling of success data */
+		WWW_Authenticate(auth_chal->scheme->name, auth_chal->param);
+	    }
+	}
+
+	if (buf_len(&txn->loc)) {
+	    prot_printf(httpd_out, "Location: %s\r\n", buf_cstring(&txn->loc));
+	}
     }
 
 
@@ -1697,6 +1710,7 @@ void response_header(long code, struct transaction_t *txn)
     switch (code) {
     case HTTP_NO_CONTENT:
     case HTTP_NOT_MODIFIED:
+	/* MUST NOT include a payload */
 	break;
 
     default:
