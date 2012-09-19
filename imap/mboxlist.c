@@ -794,6 +794,10 @@ EXPORTED int mboxlist_insertremote(struct mboxlist_entry *mbentry,
 	    mbentry->mbtype &= ~MBTYPE_REMOTE;
 	    mbentry->server = NULL;
 	}
+	else {
+	    /* make sure it's a remote mailbox */
+	    mbentry->mbtype |= MBTYPE_REMOTE;
+	}
     }
 
     mboxent = mboxlist_entry_cstring(mbentry);
