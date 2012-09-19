@@ -1418,10 +1418,11 @@ static struct mbent *database_lookup(const char *name, struct mpool *pool)
 {
     struct mboxlist_entry *mbentry = NULL;
     struct mbent *out;
+    char *server = NULL;
     int r;
     
     if (!name) return NULL;
-    
+
     r = mboxlist_lookup_allow_reserved(name, &mbentry, NULL);
     if (r) return NULL;
 
@@ -1438,9 +1439,18 @@ static struct mbent *database_lookup(const char *name, struct mpool *pool)
 	strcpy(out->acl, mbentry->acl);
     }
 
+    if (mbentry->server && mbentry->partition)
+	server = strconcat(mbentry->server, "!", mbentry->partition, NULL);
+    else if (mbentry->server)
+	server = xstrdup(mbentry->server);
+    else if (mbentry->partition)
+	server = xstrdup(mbentry->partition);
+    else
+	server = xstrdup("");
+
     out->mailbox = (pool) ? mpool_strdup(pool, name) : xstrdup(name);
-    out->server = (pool) ? mpool_strdup(pool, mbentry->partition) 
-			 : xstrdup(mbentry->partition);
+    out->server = (pool) ? mpool_strdup(pool, server)
+			 : xstrdup(server);
 
     mboxlist_entry_free(&mbentry);
 
