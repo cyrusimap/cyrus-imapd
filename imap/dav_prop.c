@@ -792,27 +792,29 @@ static int propfind_supprivset(xmlNodePtr prop,
     add_suppriv(agg, "write-acl", NULL, 1, "Write ACL");
     add_suppriv(agg, "unlock", NULL, 1, "Unlock resource");
 
-    if (!strcmp(fctx->req_tgt->collection, SCHED_INBOX)) {
-	ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
-	agg = add_suppriv(all, "schedule-deliver", fctx->ns[NS_CALDAV], 0,
-			  "Deliver scheduling messages");
-	add_suppriv(agg, "schedule-deliver-invite", fctx->ns[NS_CALDAV], 1,
-			  "Deliver scheduling messages from Organizers");
-	add_suppriv(agg, "schedule-deliver-reply", fctx->ns[NS_CALDAV], 1,
-			  "Deliver scheduling messages from Attendees");
-	add_suppriv(agg, "schedule-query-freebusy", fctx->ns[NS_CALDAV], 1,
-			  "Accept freebusy requests");
-    }
-    else if (!strcmp(fctx->req_tgt->collection, SCHED_OUTBOX)) {
-	ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
-	agg = add_suppriv(all, "schedule-send", fctx->ns[NS_CALDAV], 0,
-			  "Send scheduling messages");
-	add_suppriv(agg, "schedule-send-invite", fctx->ns[NS_CALDAV], 1,
-			  "Send scheduling messages by Organizers");
-	add_suppriv(agg, "schedule-send-reply", fctx->ns[NS_CALDAV], 1,
-			  "Send scheduling messages by Attendees");
-	add_suppriv(agg, "schedule-send-freebusy", fctx->ns[NS_CALDAV], 1,
-			  "Submit freebusy requests");
+    if (fctx->req_tgt->collection) {
+	if (!strcmp(fctx->req_tgt->collection, SCHED_INBOX)) {
+	    ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
+	    agg = add_suppriv(all, "schedule-deliver", fctx->ns[NS_CALDAV], 0,
+			      "Deliver scheduling messages");
+	    add_suppriv(agg, "schedule-deliver-invite", fctx->ns[NS_CALDAV], 1,
+			"Deliver scheduling messages from Organizers");
+	    add_suppriv(agg, "schedule-deliver-reply", fctx->ns[NS_CALDAV], 1,
+			"Deliver scheduling messages from Attendees");
+	    add_suppriv(agg, "schedule-query-freebusy", fctx->ns[NS_CALDAV], 1,
+			"Accept freebusy requests");
+	}
+	else if (!strcmp(fctx->req_tgt->collection, SCHED_OUTBOX)) {
+	    ensure_ns(fctx->ns, NS_CALDAV, resp->parent, XML_NS_CALDAV, "C");
+	    agg = add_suppriv(all, "schedule-send", fctx->ns[NS_CALDAV], 0,
+			      "Send scheduling messages");
+	    add_suppriv(agg, "schedule-send-invite", fctx->ns[NS_CALDAV], 1,
+			"Send scheduling messages by Organizers");
+	    add_suppriv(agg, "schedule-send-reply", fctx->ns[NS_CALDAV], 1,
+			"Send scheduling messages by Attendees");
+	    add_suppriv(agg, "schedule-send-freebusy", fctx->ns[NS_CALDAV], 1,
+			"Submit freebusy requests");
+	}
     }
 
     return 0;
@@ -957,12 +959,14 @@ static int propfind_curprivset(xmlNodePtr prop,
 	set = xml_add_prop(HTTP_OK, fctx->ns[NS_DAV], &propstat[PROPSTAT_OK],
 			   prop, NULL, 0);
 
-	if (!strcmp(fctx->req_tgt->collection, SCHED_INBOX))
-	    flags |= PRIV_INBOX;
-	else if (!strcmp(fctx->req_tgt->collection, SCHED_OUTBOX))
-	    flags |= PRIV_OUTBOX;
+	if (fctx->req_tgt->collection) {
+	    if (!strcmp(fctx->req_tgt->collection, SCHED_INBOX))
+		flags |= PRIV_INBOX;
+	    else if (!strcmp(fctx->req_tgt->collection, SCHED_OUTBOX))
+		flags |= PRIV_OUTBOX;
 
-	add_privs(rights, flags, set, resp->parent, fctx->ns);
+	    add_privs(rights, flags, set, resp->parent, fctx->ns);
+	}
     }
 
     return 0;

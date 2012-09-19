@@ -1757,7 +1757,7 @@ int meth_propfind(struct transaction_t *txn)
     xmlDocPtr indoc = NULL, outdoc = NULL;
     xmlNodePtr root, cur = NULL;
     xmlNsPtr ns[NUM_NAMESPACE];
-    char mailboxname[MAX_MAILBOX_BUFFER];
+    char mailboxname[MAX_MAILBOX_BUFFER] = "";
     struct propfind_ctx fctx;
     struct propfind_entry_list *elist = NULL;
 
@@ -1903,18 +1903,20 @@ int meth_propfind(struct transaction_t *txn)
 
     if (!txn->req_tgt.collection &&
 	(!depth || !(fctx.prefer & PREFER_NOROOT))) {
-	/* Add response for home-set collection */
+	/* Add response for principal or home-set collection */
 	struct mailbox *mailbox = NULL;
 
-	/* Open mailbox for reading */
-	if ((r = mailbox_open_irl(mailboxname, &mailbox))) {
-	    syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
-		   mailboxname, error_message(r));
-	    txn->error.desc = error_message(r);
-	    ret = HTTP_SERVER_ERROR;
-	    goto done;
+	if (*mailboxname) {
+	    /* Open mailbox for reading */
+	    if ((r = mailbox_open_irl(mailboxname, &mailbox))) {
+		syslog(LOG_INFO, "mailbox_open_irl(%s) failed: %s",
+		       mailboxname, error_message(r));
+		txn->error.desc = error_message(r);
+		ret = HTTP_SERVER_ERROR;
+		goto done;
+	    }
+	    fctx.mailbox = mailbox;
 	}
-	fctx.mailbox = mailbox;
 
 	xml_add_response(&fctx, 0);
 
