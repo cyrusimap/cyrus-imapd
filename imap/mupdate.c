@@ -881,7 +881,7 @@ static mupdate_docmd_result_t docmd(struct conn *c)
     case 'U':
 	if (!c->userid) goto nologin;
 	else if (!strcmp(c->cmd.s, "Update")) {
-	    strarray_t *arg = strarray_new();
+	    strarray_t *arg = NULL;
 	    int counter = 30; /* limit on number of processed hosts */
 	    
 	    while(ch == ' ') {
@@ -895,6 +895,7 @@ static mupdate_docmd_result_t docmd(struct conn *c)
 		    strarray_free(arg);
 		    goto extraargs;
 		}
+		if (!arg) arg = strarray_new();
 		strarray_append(arg, c->arg1.s);
 	    }
 
