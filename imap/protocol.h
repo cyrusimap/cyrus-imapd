@@ -80,6 +80,7 @@ struct capa_t {
 #define CAPAF_ONE_PER_LINE	(1<<0)
 #define CAPAF_SKIP_FIRST_WORD	(1<<1)
 #define CAPAF_QUOTE_WORDS	(1<<2)
+#define CAPAF_DASH_STUFFING	(1<<3)
 
 struct capa_cmd_t {
     const char *cmd;		/* [OPTIONAL] capability command string */

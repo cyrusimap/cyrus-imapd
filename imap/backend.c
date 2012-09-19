@@ -216,6 +216,12 @@ static char *ws_tok(char *buf)
     return strtok(buf, " \t\r\n");
 }
 
+/* Tokenize on whitespace OR dash, for parse_capability */
+static char *dash_tok(char *buf)
+{
+    return strtok(buf, " \t\r\n-");
+}
+
 /* Tokenize on alternate "quoted-words", for parse_capability.
  * Note that we probably don't need the general case with escapes. */
 static char *quote_tok(char *buf)
@@ -277,7 +283,10 @@ static int parse_capability(struct backend *s, const char *str)
 	if ((s->prot->capa_cmd.formatflags & CAPAF_QUOTE_WORDS))
 	    tok = quote_tok;
 
-	word = tok(buf);
+	if ((s->prot->capa_cmd.formatflags & CAPAF_DASH_STUFFING))
+	    word = dash_tok(buf);
+	else
+	    word = tok(buf);
 
 	/* Ignore the first word of the line.  Used for LMTP and POP3 */
 	if (word && (s->prot->capa_cmd.formatflags & CAPAF_SKIP_FIRST_WORD))
