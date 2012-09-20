@@ -59,8 +59,6 @@
 
 #define FNAME_DAVSUFFIX ".dav" /* per-user DAV DB extension */
 
-static struct buf fname = BUF_INITIALIZER;
-
 static int dbinit = 0;
 
 int dav_init(void)
@@ -81,8 +79,6 @@ int dav_done(void)
 #if SQLITE_VERSION_NUMBER >= 3006000
 	sqlite3_shutdown();
 #endif
-
-	buf_free(&fname);
     }
 
     return 0;
@@ -90,26 +86,24 @@ int dav_done(void)
 
 
 /* Create filename corresponding to userid's DAV DB */
-static const char *dav_getpath(const char *userid)
+static void dav_getpath(struct buf *fname, const char *userid)
 {
     char c, *domain;
 
-    buf_reset(&fname);
+    buf_reset(fname);
     if (config_virtdomains && (domain = strchr(userid, '@'))) {
 	char d = (char) dir_hash_c(domain+1, config_fulldirhash);
 	*domain = '\0';  /* split user@domain */
 	c = (char) dir_hash_c(userid, config_fulldirhash);
-	buf_printf(&fname, "%s%s%c/%s%s%c/%s%s", config_dir, FNAME_DOMAINDIR, d,
+	buf_printf(fname, "%s%s%c/%s%s%c/%s%s", config_dir, FNAME_DOMAINDIR, d,
 		   domain+1, FNAME_USERDIR, c, userid, FNAME_DAVSUFFIX);
 	*domain = '@';  /* reassemble user@domain */
     }
     else {
 	c = (char) dir_hash_c(userid, config_fulldirhash);
-	buf_printf(&fname, "%s%s%c/%s%s", config_dir, FNAME_USERDIR, c, userid,
+	buf_printf(fname, "%s%s%c/%s%s", config_dir, FNAME_USERDIR, c, userid,
 		   FNAME_DAVSUFFIX);
     }
-
-    return buf_cstring(&fname);
 }
 
 
@@ -124,10 +118,11 @@ static void dav_debug(void *userid, const char *sql)
 sqlite3 *dav_open(const char *userid, const char *cmds)
 {
     int rc;
-    const char *fname = dav_getpath(userid);
+    struct buf fname = BUF_INITIALIZER;
     sqlite3 *db = NULL;
 
-    rc = sqlite3_open_v2(fname, &db,
+    dav_getpath(&fname, userid);
+    rc = sqlite3_open_v2(buf_cstring(&fname), &db,
 			 SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL);
     if (rc != SQLITE_OK) {
 	syslog(LOG_ERR, "dav_open(%s) open: %s",
@@ -150,6 +145,8 @@ sqlite3 *dav_open(const char *userid, const char *cmds)
 	sqlite3_close(db);
 	db = NULL;
     }
+
+    buf_free(&fname);
 
     return db;
 }
@@ -222,13 +219,16 @@ int dav_exec(sqlite3 *davdb, const char *cmd, struct bind_val bval[],
 
 int dav_delete(const char *userid)
 {
-    const char *fname = dav_getpath(userid);
+    struct buf fname = BUF_INITIALIZER;
     int r = 0;
 
-    if (unlink(fname) && errno != ENOENT) {
+    dav_getpath(&fname, userid);
+    if (unlink(buf_cstring(&fname)) && errno != ENOENT) {
 	syslog(LOG_ERR, "dav_db: error unlinking %s: %m", fname);
 	r = CYRUSDB_INTERNAL;
     }
+
+    buf_free(&fname);
 
     return r;
 }
