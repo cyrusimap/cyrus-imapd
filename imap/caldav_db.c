@@ -54,6 +54,7 @@
 #include "httpd.h"
 #include "libconfig.h"
 #include "mboxname.h"
+#include "util.h"
 #include "xstrlcat.h"
 #include "xmalloc.h"
 
@@ -76,6 +77,13 @@ struct caldav_db {
     sqlite3 *db;			/* DB handle */
     char sched_inbox[MAX_MAILBOX_BUFFER];/* DB owner's scheduling Inbox */
     sqlite3_stmt *stmt[NUM_STMT];	/* prepared statements */
+    struct buf mailbox;			/* buffers for copies of column text */
+    struct buf resource;
+    struct buf ical_uid;
+    struct buf organizer;
+    struct buf sched_tag;
+    struct buf dtstart;
+    struct buf dtend;
 };
 
 
@@ -150,6 +158,14 @@ int caldav_close(struct caldav_db *caldavdb)
 
     if (!caldavdb) return 0;
 
+    buf_free(&caldavdb->mailbox);
+    buf_free(&caldavdb->resource);
+    buf_free(&caldavdb->ical_uid);
+    buf_free(&caldavdb->organizer);
+    buf_free(&caldavdb->sched_tag);
+    buf_free(&caldavdb->dtstart);
+    buf_free(&caldavdb->dtend);
+
     for (i = 0; i < NUM_STMT; i++) {
 	sqlite3_stmt *stmt = caldavdb->stmt[i];
 	if (stmt) sqlite3_finalize(stmt);
@@ -164,40 +180,74 @@ int caldav_close(struct caldav_db *caldavdb)
 
 
 struct read_rock {
+    struct caldav_db *db;
     struct caldav_data *cdata;
     int (*cb)(void *rock, struct caldav_data *cdata);
     void *rock;
 };
 
+static const char *column_text_to_buf(const char *text, struct buf *buf)
+{
+    if (text) {
+	buf_setcstr(buf, text);
+	text = buf_cstring(buf);
+    }
+
+    return text;
+}
+
 static int read_cb(sqlite3_stmt *stmt, void *rock)
 {
     struct read_rock *rrock = (struct read_rock *) rock;
+    struct caldav_db *db = rrock->db;
     struct caldav_data *cdata = rrock->cdata;
     int r = 0;
 
     memset(cdata, 0, sizeof(struct caldav_data));
+
     cdata->rowid = sqlite3_column_int(stmt, 0);
-    cdata->mailbox = (const char *) sqlite3_column_text(stmt, 1);
-    cdata->resource = (const char *) sqlite3_column_text(stmt, 2);
     cdata->imap_uid = sqlite3_column_int(stmt, 3);
-    cdata->ical_uid = (const char *) sqlite3_column_text(stmt, 4);
     cdata->comp_type = sqlite3_column_int(stmt, 5);
-    cdata->organizer = (const char *) sqlite3_column_text(stmt, 6);
-    cdata->sched_tag = (const char *) sqlite3_column_text(stmt, 7);
-    cdata->dtstart = (const char *) sqlite3_column_text(stmt, 8);
-    cdata->dtend = (const char *) sqlite3_column_text(stmt, 9);
     cdata->recurring = sqlite3_column_int(stmt, 10);
     cdata->transp = sqlite3_column_int(stmt, 11);
 
-    if (rrock->cb) r = rrock->cb(rrock->rock, cdata);
-#if SQLITE_VERSION_NUMBER >= 3007000
-    /* For single row SELECTs like caldav_read(),
-     * we need to short-circuit the sqlite3_step() loop in dav_exec(),
-     * otherwise the new AUTORESET behavior in SQLite 3.6.23.2+
-     * will stomp on our cdata.
-     */
-    else r = CYRUSDB_DONE;
-#endif
+    if (rrock->cb) {
+	/* We can use the column data directly for the callback */
+	cdata->mailbox = (const char *) sqlite3_column_text(stmt, 1);
+	cdata->resource = (const char *) sqlite3_column_text(stmt, 2);
+	cdata->ical_uid = (const char *) sqlite3_column_text(stmt, 4);
+	cdata->organizer = (const char *) sqlite3_column_text(stmt, 6);
+	cdata->sched_tag = (const char *) sqlite3_column_text(stmt, 7);
+	cdata->dtstart = (const char *) sqlite3_column_text(stmt, 8);
+	cdata->dtend = (const char *) sqlite3_column_text(stmt, 9);
+	r = rrock->cb(rrock->rock, cdata);
+    }
+    else {
+	/* For single row SELECTs like caldav_read(),
+	 * we need to make a copy of the column data before
+	 * it gets flushed by sqlite3_step() or sqlite3_reset() */
+	cdata->mailbox =
+	    column_text_to_buf((const char *) sqlite3_column_text(stmt, 1),
+			       &db->mailbox);
+	cdata->resource =
+	    column_text_to_buf((const char *) sqlite3_column_text(stmt, 2),
+			       &db->resource);
+	cdata->ical_uid =
+	    column_text_to_buf((const char *) sqlite3_column_text(stmt, 4),
+			       &db->ical_uid);
+	cdata->organizer =
+	    column_text_to_buf((const char *) sqlite3_column_text(stmt, 6),
+			       &db->organizer);
+	cdata->sched_tag =
+	    column_text_to_buf((const char *) sqlite3_column_text(stmt, 7),
+			       &db->sched_tag);
+	cdata->dtstart =
+	    column_text_to_buf((const char *) sqlite3_column_text(stmt, 8),
+			       &db->dtstart);
+	cdata->dtend =
+	    column_text_to_buf((const char *) sqlite3_column_text(stmt, 9),
+			       &db->dtend);
+    }
 
     return r;
 }
@@ -218,7 +268,7 @@ int caldav_read(struct caldav_db *caldavdb, struct caldav_data *cdata)
 	{ ":ical_uid", SQLITE_TEXT, { .s = cdata->ical_uid	 } },
 	{ ":inbox",    SQLITE_TEXT, { .s = caldavdb->sched_inbox } },
 	{ NULL,	       SQLITE_NULL, { .s = NULL			 } } };
-    struct read_rock rrock = { cdata, NULL, NULL };
+    struct read_rock rrock = { caldavdb, cdata, NULL, NULL };
     int r;
 
     cdata->rowid = 0;
@@ -259,7 +309,7 @@ int caldav_foreach(struct caldav_db *caldavdb, const char *mailbox,
 	{ ":mailbox", SQLITE_TEXT, { .s = mailbox } },
 	{ NULL,	      SQLITE_NULL, { .s = NULL    } } };
     struct caldav_data cdata;
-    struct read_rock rrock = { &cdata, cb, rock };
+    struct read_rock rrock = { caldavdb, &cdata, cb, rock };
 
     return dav_exec(caldavdb->db, CMD_SELMBOX, bval, &read_cb, &rrock,
 		    &caldavdb->stmt[STMT_SELMBOX]);
