@@ -190,13 +190,14 @@ static int read_cb(sqlite3_stmt *stmt, void *rock)
     cdata->transp = sqlite3_column_int(stmt, 11);
 
     if (rrock->cb) r = rrock->cb(rrock->rock, cdata);
-    else {
-	/* For single row SELECTS, like caldav_read(), we need to short-circuit
-	 * the sqlite3_step() loop in dav_exec(), otherwise the new behavior
-	 * in SQLite 3.6.23.2+ will stomp on our cdata.
-	 */
-	r = CYRUSDB_DONE;
-    }
+#if SQLITE_VERSION_NUMBER >= 3007000
+    /* For single row SELECTs like caldav_read(),
+     * we need to short-circuit the sqlite3_step() loop in dav_exec(),
+     * otherwise the new AUTORESET behavior in SQLite 3.6.23.2+
+     * will stomp on our cdata.
+     */
+    else r = CYRUSDB_DONE;
+#endif
 
     return r;
 }
