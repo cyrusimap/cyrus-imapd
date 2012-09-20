@@ -504,8 +504,8 @@ void sync_folder_list_free(struct sync_folder_list **lp)
 	free(current->part);
 	free(current->acl);
 	free(current->specialuse);
-	free(current);
 	sync_annot_list_free(&current->annots);
+	free(current);
 	current = next;
     }
     free(l);
