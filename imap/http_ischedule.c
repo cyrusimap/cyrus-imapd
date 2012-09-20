@@ -121,8 +121,8 @@ static int isched_capa(struct transaction_t *txn)
     xmlNodePtr root, capa, node, comp, meth;
     xmlNsPtr ns[NUM_NAMESPACE];
 
-    /* We don't handle GET on a anything other than ?query=capabilities */
-    if (strcmp(txn->req_tgt.query, "query=capabilities"))
+    /* We don't handle GET on a anything other than ?action=capabilities */
+    if (strcmp(txn->req_tgt.query, "action=capabilities"))
 	return HTTP_NOT_FOUND;
 
     /* Get Last-Modified time of config file */
