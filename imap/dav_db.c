@@ -113,6 +113,13 @@ static const char *dav_getpath(const char *userid)
 }
 
 
+static void dav_debug(void *userid, const char *sql)
+{
+    syslog(LOG_DEBUG, "dav_exec(%s%s): %s",
+	   (const char *) userid, FNAME_DAVSUFFIX, sql);
+}
+
+
 /* Open DAV DB corresponding to userid */
 sqlite3 *dav_open(const char *userid, const char *cmds)
 {
@@ -120,16 +127,22 @@ sqlite3 *dav_open(const char *userid, const char *cmds)
     const char *fname = dav_getpath(userid);
     sqlite3 *db = NULL;
 
-    rc = sqlite3_open(fname, &db);
+    rc = sqlite3_open_v2(fname, &db,
+			 SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL);
     if (rc != SQLITE_OK) {
 	syslog(LOG_ERR, "dav_open(%s) open: %s",
 	       userid, db ? sqlite3_errmsg(db) : "failed");
     }
-    else if (cmds) {
-	rc = sqlite3_exec(db, cmds, NULL, NULL, NULL);
-	if (rc != SQLITE_OK) {
-	    syslog(LOG_ERR, "dav_open(%s) cmds: %s",
-		   userid, sqlite3_errmsg(db));
+    else {
+	sqlite3_extended_result_codes(db, 1);
+	sqlite3_trace(db, dav_debug, (void *) userid);
+
+	if (cmds) {
+	    rc = sqlite3_exec(db, cmds, NULL, NULL, NULL);
+	    if (rc != SQLITE_OK) {
+		syslog(LOG_ERR, "dav_open(%s) cmds: %s",
+		       userid, sqlite3_errmsg(db));
+	    }
 	}
     }
 
@@ -167,15 +180,12 @@ int dav_exec(sqlite3 *davdb, const char *cmd, struct bind_val bval[],
 
     if (!*stmt) {
 	/* prepare new statement */
-	rc = sqlite3_prepare(davdb, cmd, -1, stmt, NULL);
+	rc = sqlite3_prepare_v2(davdb, cmd, -1, stmt, NULL);
 	if (rc != SQLITE_OK) {
 	    syslog(LOG_ERR, "dav_exec() prepare: %s", sqlite3_errmsg(davdb));
 	    return CYRUSDB_INTERNAL;
 	}
     }
-
-    /* reset statement */
-    sqlite3_reset(*stmt);
 
     /* bind values */
     for (; bval && bval->name; bval++) {
@@ -194,10 +204,14 @@ int dav_exec(sqlite3 *davdb, const char *cmd, struct bind_val bval[],
 
     /* execute and process the results */
     while ((rc = sqlite3_step(*stmt)) == SQLITE_ROW) {
-	if (cb && (r = cb(*stmt, rock))) return r;
+	if (cb && (r = cb(*stmt, rock))) break;
     }
 
-    if (rc != SQLITE_DONE) {
+    /* reset statement and clear all bindings */
+    sqlite3_reset(*stmt);
+    sqlite3_clear_bindings(*stmt);
+
+    if (!r && rc != SQLITE_DONE) {
 	syslog(LOG_ERR, "dav_exec() step: %s", sqlite3_errmsg(davdb));
 	r = CYRUSDB_INTERNAL;
     }
