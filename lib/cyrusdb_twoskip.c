@@ -731,6 +731,7 @@ static int write_record(struct dbengine *db, struct skiprecord *record,
 {
     char zeros[8] = {0, 0, 0, 0, 0, 0, 0, 0};
     uint64_t len;
+    size_t iolen = 0;
     struct iovec io[4];
     int n;
 
@@ -755,7 +756,9 @@ static int write_record(struct dbengine *db, struct skiprecord *record,
     record->crc32_tail = crc32_iovec(io+1, 3);
 
     /* prepare the record once we know the crc32 of the tail */
-    prepare_record(record, io[0].iov_base, &io[0].iov_len);
+    prepare_record(record, scratchspace.s, &iolen);
+    io[0].iov_base = scratchspace.s;
+    io[0].iov_len = iolen;
 
     /* write to the mapped file, getting the offset updated */
     n = mappedfile_pwritev(db->mf, io, 4, db->end);
