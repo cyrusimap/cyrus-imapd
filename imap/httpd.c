@@ -880,8 +880,8 @@ static int reset_saslconn(sasl_conn_t **conn)
 static void cmdloop(void)
 {
     int c, ret, r, i, gzip_enabled = 0;
-    static struct buf meth, uri, ver;
-    char buf[1024];
+    tok_t tok;
+    char buf[1024], *p, *meth, *uri, *ver;
     const char **hdr;
     struct transaction_t txn;
     const struct namespace_t *namespace;
@@ -902,6 +902,8 @@ static void cmdloop(void)
     for (;;) {
 	/* Reset state */
 	ret = 0;
+	meth = uri = ver = NULL;
+	memset(&tok, 0, sizeof(tok));
 	txn.meth = METH_UNKNOWN;
 	txn.flags = !httpd_timeout ? HTTP_CLOSE : 0;
 	txn.auth_chal.param = NULL;
@@ -936,16 +938,9 @@ static void cmdloop(void)
 	    continue;
 	}
 
-	/* Read Request-Line = Method SP request-target SP HTTP-Version CRLF */
-	c = getword(httpd_in, &meth);
-	if (c == ' ') {
-	    c = getword(httpd_in, &uri);
-	    if (c == ' ') {
-		c = getword(httpd_in, &ver);
-		if (c == '\r') c = prot_getc(httpd_in);
-	    }
-	}
-	if (c == EOF) {
+	/* Read request-line */
+	syslog(LOG_DEBUG, "read & parse request-line");
+	if (!prot_fgets(txn.reqline, sizeof(txn.reqline), httpd_in)) {
 	    txn.error.desc = prot_error(httpd_in);
 	    if (txn.error.desc && strcmp(txn.error.desc, PROT_EOF_STRING)) {
 		syslog(LOG_WARNING, "%s, closing connection", txn.error.desc);
@@ -954,37 +949,62 @@ static void cmdloop(void)
 	    txn.flags |= HTTP_CLOSE;
 	    goto done;
 	}
-	if (!buf_len(&meth) || !buf_len(&uri) || !buf_len(&ver)) {
-	    ret = HTTP_BAD_REQUEST;
-	    txn.error.desc = "Missing arguments in Request-Line";
-	}
-	else if (c != '\n') {
-	    ret = HTTP_BAD_REQUEST;
-	    txn.error.desc = "Unexpected extra arguments in Request-Line";
-	}
-	if (ret) eatline(httpd_in, c);
+	p = txn.reqline + strlen(txn.reqline);
 
-	/* Check Method against our list of known methods */
-	if (!ret) {
-	    for (txn.meth = 0; (txn.meth < METH_UNKNOWN) &&
-		     strcmp(http_methods[txn.meth], buf_cstring(&meth));
-		 txn.meth++);
-
-	    if (txn.meth == METH_UNKNOWN) ret = HTTP_NOT_IMPLEMENTED;
+	/* Parse request-line = method SP request-target SP HTTP-version CRLF */
+	tok_init(&tok, txn.reqline, " \r\n", 0);
+	if (!(meth = tok_next(&tok))) {
+	    ret = HTTP_BAD_REQUEST;
+	    txn.error.desc = "Missing method in request-line";
 	}
+	else if (!(uri = tok_next(&tok))) {
+	    ret = HTTP_BAD_REQUEST;
+	    txn.error.desc = "Missing request-target in request-line";
+	}
+	else if ((!(ver = tok_next(&tok))
+		  || (strlen(ver) <= strlen(HTTP_VERSION)))
+		 && (p[-1] != '\n')) {
+	    /* request-line overran the size of our buffer */
+	    eatline(httpd_in, p[-1]);
+	    ret = HTTP_TOO_LONG;
+	    snprintf(buf, sizeof(buf),
+		     "Length of request-line MUST be less than than %u octets",
+		     sizeof(txn.reqline));
+	    txn.error.desc = buf;
+	}
+	else if (!ver) {
+	    ret = HTTP_BAD_REQUEST;
+	    txn.error.desc = "Missing HTTP-version in request-line";
+	}
+	else if (txn.reqline[tok_offset(&tok) + strlen(ver)] == ' ') {
+	    ret = HTTP_BAD_REQUEST;
+	    txn.error.desc = "Unexpected extra argument(s) in request-line";
+	}
+
+	/* Trim CRLF from request line */
+	if (p[-1] == '\n') *--p = '\0';
+	if (p[-1] == '\r') *--p = '\0';
 
 	/* Check HTTP-Version */
-	if (!ret && strcmp(buf_cstring(&ver), HTTP_VERSION)) {
+	if (!ret && strcmp(ver, HTTP_VERSION)) {
 	    ret = HTTP_BAD_VERSION;
 	    snprintf(buf, sizeof(buf),
 		     "This server only speaks %s", HTTP_VERSION);
 	    txn.error.desc = buf;
 	}
 
+	/* Check Method against our list of known methods */
+	if (!ret) {
+	    for (txn.meth = 0; (txn.meth < METH_UNKNOWN) &&
+		     strcmp(http_methods[txn.meth], meth);
+		 txn.meth++);
+
+	    if (txn.meth == METH_UNKNOWN) ret = HTTP_NOT_IMPLEMENTED;
+	}
+
 	/* Parse request-target URI */
 	if (!ret &&
-	    (r = parse_uri(txn.meth, buf_cstring(&uri),
-			   &txn.req_tgt, &txn.error.desc))) {
+	    (r = parse_uri(txn.meth, uri, &txn.req_tgt, &txn.error.desc))) {
 	    ret = r;
 	}
 
@@ -1104,7 +1124,7 @@ static void cmdloop(void)
 		    goto done;
 		}
 		sasl_http_req.method = http_methods[txn.meth];
-		sasl_http_req.uri = buf_cstring(&uri);
+		sasl_http_req.uri = uri;
 		sasl_http_req.entity = (u_char *) buf_cstring(&txn.req_body);
 		sasl_http_req.elen = buf_len(&txn.req_body);
 		sasl_http_req.non_persist = (txn.flags & HTTP_CLOSE);
@@ -1228,6 +1248,7 @@ static void cmdloop(void)
 
 	/* Memory cleanup */
 	if (txn.req_hdrs) spool_free_hdrcache(txn.req_hdrs);
+	tok_fini(&tok);
 
 	if (txn.flags & HTTP_CLOSE) {
 	    buf_free(&txn.req_body);
@@ -1508,13 +1529,7 @@ void response_header(long code, struct transaction_t *txn)
 	if ((hdr = spool_getheader(txn->req_hdrs, "User-Agent"))) {
 	    buf_printf(&log, " with \"%s\"", hdr[0]);
 	}
-	if (txn->req_tgt.tail) *txn->req_tgt.tail = '\0';
-	buf_printf(&log, "; \"%s %s",
-		   http_methods[txn->meth], txn->req_tgt.path);
-	if (*txn->req_tgt.query) {
-	    buf_printf(&log, "?%s", txn->req_tgt.query);
-	}
-	buf_printf(&log, " %s\"", HTTP_VERSION);
+	buf_printf(&log, "; \"%s\"", txn->reqline);
 	if ((hdr = spool_getheader(txn->req_hdrs, "Destination"))) {
 	    buf_printf(&log, " (%s)", hdr[0]);
 	}

@@ -54,6 +54,8 @@
 #include "mailbox.h"
 #include "spool.h"
 
+#define MAX_REQ_LINE	8000  /* minimum size per HTTPbis */
+
 /* Supported HTTP version */
 #define HTTP_VERSION	"HTTP/1.1"
 #define HTTPS_VERSION	"HTTPS/1.1"
@@ -191,7 +193,8 @@ struct resp_body_t {
 
 /* Transaction context */
 struct transaction_t {
-    unsigned meth;			/* Method to be performed */
+    char reqline[MAX_REQ_LINE+1];	/* Request Line */
+    unsigned meth;			/* Index of Method to be performed */
     unsigned flags;			/* Flags for this txn */
     struct request_target_t req_tgt;	/* Parsed target URL */
     hdrcache_t req_hdrs;    		/* Cached HTTP headers */
