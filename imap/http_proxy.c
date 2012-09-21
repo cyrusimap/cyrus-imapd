@@ -74,7 +74,7 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 static int ping(struct backend *s);
 static int logout(struct backend *s __attribute__((unused)));
 static int starttls(struct backend *s);
-static int read_response(struct backend *be, const char *meth,
+static int read_response(struct backend *be, unsigned meth,
 			 unsigned *code, const char **statline,
 			 hdrcache_t *resp_hdrs, struct buf *resp_body,
 			 const char **errstr);
@@ -237,7 +237,7 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 	serverinlen = clientoutlen = 0;
 
       response:
-	r = read_response(s, "OPTIONS", &code, NULL, &hdrs, NULL, &errstr);
+	r = read_response(s, METH_OPTIONS, &code, NULL, &hdrs, NULL, &errstr);
 	if (r) {
 	    if (status) *status = errstr;
 	    goto cleanup;
@@ -444,7 +444,7 @@ static int ping(struct backend *s)
     prot_flush(s->out);
 
     do {
-	r = read_response(s, "OPTIONS", &code, NULL, &hdrs, NULL, &errstr);
+	r = read_response(s, METH_OPTIONS, &code, NULL, &hdrs, NULL, &errstr);
 
 	/* Check if this is a non-persistent connection */
 	if (!r && (hdr = spool_getheader(hdrs, "Connection")) &&
@@ -571,7 +571,7 @@ static void write_cachehdr(const char *name, const char *contents, void *rock)
 
 
 /* Read a response from backend */
-static int read_response(struct backend *be, const char *meth,
+static int read_response(struct backend *be, unsigned meth,
 			 unsigned *code, const char **statline,
 			 hdrcache_t *resp_hdrs, struct buf *resp_body,
 			 const char **errstr)
@@ -607,7 +607,7 @@ static int read_response(struct backend *be, const char *meth,
 	return 0;
 
     default:
-	if (meth[0] == 'H') return 0;
+	if (meth == METH_HEAD) return 0;
     }
 
     if (read_body(be->in, *resp_hdrs, resp_body, errstr)) {
@@ -692,7 +692,7 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
      * - Body will be sent using "chunked" TE
      */
     uri = xmlURIEscapeStr(BAD_CAST txn->req_tgt.path, BAD_CAST "/");
-    prot_printf(be->out, "%s %s", txn->meth, uri);
+    prot_printf(be->out, "%s %s", http_methods[txn->meth], uri);
     free(uri);
     if (*txn->req_tgt.query) {
 	prot_printf(be->out, "?%s", txn->req_tgt.query);
@@ -790,7 +790,7 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
     prot_flush(src_be->out);
 
     /* Read response from source backend */
-    r = read_response(src_be, "HEAD", &code, &statline, &resp_hdrs, NULL,
+    r = read_response(src_be, METH_HEAD, &code, &statline, &resp_hdrs, NULL,
 		      &txn->error.desc);
     if (r) goto cleanup;
 
@@ -826,7 +826,7 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 	prot_flush(dest_be->out);
 
 	/* Read response from dest backend */
-	r = read_response(dest_be, "PUT", &code, &statline, &resp_hdrs,
+	r = read_response(dest_be, METH_PUT, &code, &statline, &resp_hdrs,
 			  &resp_body, &txn->error.desc);
 	if (r) goto cleanup;
 
@@ -848,7 +848,7 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 	    prot_flush(src_be->out);
 
 	    /* Read response from source backend */
-	    r = read_response(src_be, "GET", &code, &statline, &resp_hdrs,
+	    r = read_response(src_be, METH_GET, &code, &statline, &resp_hdrs,
 			      &resp_body, &txn->error.desc);
 	    if (r) goto cleanup;
 
@@ -860,7 +860,7 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 		prot_flush(dest_be->out);
 
 		/* Read final response from dest backend */
-		r = read_response(dest_be, "PUT", &code, &statline, &resp_hdrs,
+		r = read_response(dest_be, METH_PUT, &code, &statline, &resp_hdrs,
 				  &resp_body, &txn->error.desc);
 		if (r) goto cleanup;
 	    }
@@ -874,7 +874,7 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
     /* Send response to client */
     send_response(httpd_out, statline, resp_hdrs, &resp_body, txn->flags);
 
-    if ((txn->meth[0] == 'M') && (code < 300)) {
+    if ((txn->meth == METH_MOVE) && (code < 300)) {
 	/*
 	 * Send a DELETE request to source backend:
 	 *
@@ -895,7 +895,7 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 	prot_flush(src_be->out);
 
 	/* Read response from source backend */
-	read_response(src_be, "DELETE", &code, &statline, &resp_hdrs,
+	read_response(src_be, METH_DELETE, &code, &statline, &resp_hdrs,
 		      &resp_body, &txn->error.desc);
     }
 

@@ -73,6 +73,32 @@
 #endif /* SASL_NEED_HTTP */
 
 
+/* Array of HTTP methods known by our server. */
+extern const char *http_methods[];
+
+/* Index into known HTTP methods - needs to stay in sync with array */
+enum {
+    METH_ACL = 0,
+    METH_COPY,
+    METH_DELETE,
+    METH_GET,
+    METH_HEAD,
+    METH_LOCK,
+    METH_MKCALENDAR,
+    METH_MKCOL,
+    METH_MOVE,
+    METH_OPTIONS,
+    METH_POST,
+    METH_PROPFIND,
+    METH_PROPPATCH,
+    METH_PUT,
+    METH_REPORT,
+    METH_UNLOCK,
+
+    METH_UNKNOWN,  /* MUST be last */
+};
+
+
 /* Path namespaces */
 enum {
     URL_NS_DEFAULT = 0,
@@ -165,7 +191,7 @@ struct resp_body_t {
 
 /* Transaction context */
 struct transaction_t {
-    const char *meth;			/* Method to be performed */
+    unsigned meth;			/* Method to be performed */
     unsigned flags;			/* Flags for this txn */
     struct request_target_t req_tgt;	/* Parsed target URL */
     hdrcache_t req_hdrs;    		/* Cached HTTP headers */
@@ -248,7 +274,7 @@ extern char *httpd_userid;
 extern struct auth_state *httpd_authstate;
 extern struct namespace httpd_namespace;
 
-extern int parse_uri(const char *meth, const char *uri,
+extern int parse_uri(unsigned meth, const char *uri,
 		     struct request_target_t *tgt, const char **errstr);
 extern int is_mediatype(const char *hdr, const char *type);
 extern int target_to_mboxname(struct request_target_t *req_tgt, char *mboxname);
@@ -264,7 +290,7 @@ extern void write_body(long code, struct transaction_t *txn,
 extern int meth_options(struct transaction_t *txn);
 extern int get_doc(struct transaction_t *txn, filter_proc_t filter);
 extern int meth_propfind(struct transaction_t *txn);
-extern int check_precond(const char *meth, const char *stag, const char *etag,
+extern int check_precond(unsigned meth, const char *stag, const char *etag,
 			 time_t lastmod, hdrcache_t hdrcache);
 extern int read_body(struct protstream *pin,
 		     hdrcache_t hdrs, struct buf *body, const char **errstr);

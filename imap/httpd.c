@@ -902,7 +902,7 @@ static void cmdloop(void)
     for (;;) {
 	/* Reset state */
 	ret = 0;
-	txn.meth = NULL;
+	txn.meth = METH_UNKNOWN;
 	txn.flags = !httpd_timeout ? HTTP_CLOSE : 0;
 	txn.auth_chal.param = NULL;
 	buf_reset(&txn.loc);
@@ -938,7 +938,6 @@ static void cmdloop(void)
 
 	/* Read Request-Line = Method SP request-target SP HTTP-Version CRLF */
 	c = getword(httpd_in, &meth);
-	txn.meth = buf_cstring(&meth);
 	if (c == ' ') {
 	    c = getword(httpd_in, &uri);
 	    if (c == ' ') {
@@ -965,6 +964,15 @@ static void cmdloop(void)
 	}
 	if (ret) eatline(httpd_in, c);
 
+	/* Check Method against our list of known methods */
+	if (!ret) {
+	    for (txn.meth = 0; (txn.meth < METH_UNKNOWN) &&
+		     strcmp(http_methods[txn.meth], buf_cstring(&meth));
+		 txn.meth++);
+
+	    if (txn.meth == METH_UNKNOWN) ret = HTTP_NOT_IMPLEMENTED;
+	}
+
 	/* Check HTTP-Version */
 	if (!ret && strcmp(buf_cstring(&ver), HTTP_VERSION)) {
 	    ret = HTTP_BAD_VERSION;
@@ -975,7 +983,7 @@ static void cmdloop(void)
 
 	/* Parse request-target URI */
 	if (!ret &&
-	    (r = parse_uri(buf_cstring(&meth), buf_cstring(&uri),
+	    (r = parse_uri(txn.meth, buf_cstring(&uri),
 			   &txn.req_tgt, &txn.error.desc))) {
 	    ret = r;
 	}
@@ -1069,12 +1077,8 @@ static void cmdloop(void)
 	}
 
 	/* Check Method against list of supported methods in the namespace */
-	if (!ret) {
-	    for (i = 0;
-		 http_methods[i] && strcmp(http_methods[i], txn.meth); i++);
-
-	    if (!http_methods[i]) ret = HTTP_NOT_IMPLEMENTED;
-	    else if (!(meth_proc = namespace->proc[i])) ret = HTTP_NOT_ALLOWED;
+	if (!ret && !(meth_proc = namespace->proc[txn.meth])) {
+	    ret = HTTP_NOT_ALLOWED;
 	}
 
 	if (ret) goto done;
@@ -1099,7 +1103,7 @@ static void cmdloop(void)
 		    ret = r;
 		    goto done;
 		}
-		sasl_http_req.method = txn.meth;
+		sasl_http_req.method = http_methods[txn.meth];
 		sasl_http_req.uri = buf_cstring(&uri);
 		sasl_http_req.entity = (u_char *) buf_cstring(&txn.req_body);
 		sasl_http_req.elen = buf_len(&txn.req_body);
@@ -1122,7 +1126,8 @@ static void cmdloop(void)
 		    FILE *logf = fdopen(httpd_logfd, "a");
 		    fprintf(logf, "<%ld<", time(NULL));
 		    /* request-line */
-		    fprintf(logf, "%s %s", txn.meth, txn.req_tgt.path);
+		    fprintf(logf, "%s %s",
+			    http_methods[txn.meth], txn.req_tgt.path);
 		    if (*txn.req_tgt.query)
 			fprintf(logf, "?%s", txn.req_tgt.query);
 		    fprintf(logf, " %s\r\n", HTTP_VERSION);
@@ -1239,7 +1244,7 @@ static void cmdloop(void)
 /****************************  Parsing Routines  ******************************/
 
 /* Parse URI, returning the path */
-int parse_uri(const char *meth, const char *uri,
+int parse_uri(unsigned meth, const char *uri,
 	      struct request_target_t *tgt, const char **errstr)
 {
     xmlURIPtr p_uri;  /* parsed URI */
@@ -1279,7 +1284,7 @@ int parse_uri(const char *meth, const char *uri,
     }
 
     if ((p_uri->path[0] != '/') &&
-	(strcmp(p_uri->path, "*") || !meth || (meth[0] != 'O'))) {
+	(strcmp(p_uri->path, "*") || (meth != METH_OPTIONS))) {
 	*errstr = "Illegal request target URI";
 	return HTTP_BAD_REQUEST;
     }
@@ -1504,7 +1509,8 @@ void response_header(long code, struct transaction_t *txn)
 	    buf_printf(&log, " with \"%s\"", hdr[0]);
 	}
 	if (txn->req_tgt.tail) *txn->req_tgt.tail = '\0';
-	buf_printf(&log, "; \"%s %s", txn->meth, txn->req_tgt.path);
+	buf_printf(&log, "; \"%s %s",
+		   http_methods[txn->meth], txn->req_tgt.path);
 	if (*txn->req_tgt.query) {
 	    buf_printf(&log, "?%s", txn->req_tgt.query);
 	}
@@ -1596,15 +1602,15 @@ void response_header(long code, struct transaction_t *txn)
 	prot_printf(httpd_out, "Strict-Transport-Security: max-age=600\r\n");
     }
 
-    switch (txn->meth[0]) {
-    case 'O':
+    switch (txn->meth) {
+    case METH_OPTIONS:
 	if (code == HTTP_OK) {
 	    /* Force Allow header for successful OPTIONS request */
 	    code = HTTP_NOT_ALLOWED;
 	}
 
-    case 'G':
-    case 'H':
+    case METH_GET:
+    case METH_HEAD:
 	/* Add Accept-Ranges header for OPTIONS, GET, HEAD responses */
 	prot_printf(httpd_out, "Accept-Ranges: %s\r\n",
 		    txn->flags & HTTP_RANGES ? "bytes" : "none");
@@ -1815,7 +1821,7 @@ void write_body(long code, struct transaction_t *txn,
 	return;
 
     default:
-	if (txn->meth[0] == 'H') return;
+	if (txn->meth == METH_HEAD) return;
     }
 
 #ifdef HAVE_ZLIB
@@ -2231,7 +2237,7 @@ static int etagcmp(const char *hdr, const char *etag) {
  * Interaction (if any) is complex and is documented in RFC 6638, RFC 4918,
  * and Section 5 of HTTPbis, Part 4.
  */
-int check_precond(const char *meth, const char *stag, const char *etag,
+int check_precond(unsigned meth, const char *stag, const char *etag,
 		  time_t lastmod, hdrcache_t hdrcache)
 {
     long resp = HTTP_OK;
@@ -2277,8 +2283,8 @@ int check_precond(const char *meth, const char *stag, const char *etag,
     }
 
     /* Step 3 */
-    switch (meth[0]) {
-    case 'G':  /* GET */
+    switch (meth) {
+    case METH_GET:
 #if 0  /* We don't support range requests yet */
 	if (spool_getheader(hdrcache, "Range")) {
 	    resp = HTTP_PARTIAL;  /* Partial GET */
@@ -2296,7 +2302,7 @@ int check_precond(const char *meth, const char *stag, const char *etag,
 	}
 #endif
 
-    case 'H':  /* HEAD */
+    case METH_HEAD:
 	is_get_or_head = 1;
     }
 

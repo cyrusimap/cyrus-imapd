@@ -257,7 +257,7 @@ struct propfind_ctx {
 /* Context for patching (writing) properties */
 struct proppatch_ctx {
     struct request_target_t *req_tgt;	/* parsed request target URL */
-    const char *meth;	    		/* requested Method */
+    unsigned meth;	    		/* requested Method */
     const char *mailboxname;		/* mailbox correspondng to collection */
     xmlNodePtr root;			/* root node to add to XML tree */
     xmlNsPtr *ns;			/* Array of our supported namespaces */

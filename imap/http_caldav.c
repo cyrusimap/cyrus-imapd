@@ -415,7 +415,7 @@ static int meth_acl(struct transaction_t *txn)
 		struct request_target_t uri;
 		const char *errstr = NULL;
 
-		r = parse_uri(NULL, (const char *) href, &uri, &errstr);
+		r = parse_uri(METH_UNKNOWN, (const char *) href, &uri, &errstr);
 		if (!r &&
 		    !strncmp("/principals/", uri.path, strlen("/principals/"))) {
 		    uri.namespace = URL_NS_PRINCIPAL;
@@ -635,7 +635,7 @@ static int meth_copy(struct transaction_t *txn)
     }
 
     /* Parse destination URI */
-    if ((r = parse_uri(NULL, hdr[0], &dest, &txn->error.desc))) return r;
+    if ((r = parse_uri(METH_UNKNOWN, hdr[0], &dest, &txn->error.desc))) return r;
 
     /* Check namespace of destination */
     plen = strlen(namespace_calendar.prefix);
@@ -675,7 +675,7 @@ static int meth_copy(struct transaction_t *txn)
     /* Check ACL for current user on source mailbox */
     rights = acl ? cyrus_acl_myrights(httpd_authstate, acl) : 0;
     if (((rights & DACL_READ) != DACL_READ) ||
-	((txn->meth[0] == 'M') && !(rights & DACL_RMRSRC))) {
+	((txn->meth == METH_MOVE) && !(rights & DACL_RMRSRC))) {
 	/* DAV:need-privileges */
 	txn->error.precond = DAV_NEED_PRIVS;
 	txn->error.resource = txn->req_tgt.path;
@@ -825,7 +825,7 @@ static int meth_copy(struct transaction_t *txn)
 			 overwrite, NEW_STAG);
 
     /* For MOVE, we need to delete the source resource */
-    if ((txn->meth[0] == 'M') &&
+    if ((txn->meth == METH_MOVE) &&
 	(ret == HTTP_CREATED || ret == HTTP_NO_CONTENT)) {
 	/* Lock source mailbox */
 	mailbox_lock_index(src_mbox, LOCK_EXCLUSIVE);
@@ -1193,7 +1193,7 @@ static int meth_get(struct transaction_t *txn)
     resp_body->lastmod = lastmod;
     resp_body->type = "text/calendar; charset=utf-8";
 
-    if (txn->meth[0] == 'G') {
+    if (txn->meth == METH_GET) {
 	/* Load message containing the resource */
 	mailbox_map_message(mailbox, record.uid, &msg_base, &msg_size);
 
@@ -1305,13 +1305,13 @@ static int meth_mkcol(struct transaction_t *txn)
     if (root) {
 	indoc = root->doc;
 
-	if ((txn->meth[3] == 'O') &&
+	if ((txn->meth == METH_MKCOL) &&
 	    /* Make sure its a mkcol element */
 	    xmlStrcmp(root->name, BAD_CAST "mkcol")) {
 	    txn->error.desc = "Missing mkcol element in MKCOL request";
 	    return HTTP_BAD_MEDIATYPE;
 	}
-	else if ((txn->meth[3] == 'A') &&
+	else if ((txn->meth == METH_MKCALENDAR) &&
 		 /* Make sure its a mkcalendar element */
 		 xmlStrcmp(root->name, BAD_CAST "mkcalendar")) {
 	    txn->error.desc = "Missing mkcalendar element in MKCALENDAR request";
@@ -1323,7 +1323,7 @@ static int meth_mkcol(struct transaction_t *txn)
 
     if (instr) {
 	/* Start construction of our mkcol/mkcalendar response */
-	if (txn->meth[3] == 'A')
+	if (txn->meth == METH_MKCALENDAR)
 	    root = init_xml_response("mkcalendar-response", NS_CALDAV,
 				     root, ns);
 	else

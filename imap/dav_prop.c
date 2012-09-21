@@ -568,7 +568,7 @@ static int proppatch_restype(xmlNodePtr prop, unsigned set,
 {
     unsigned precond = 0;
 
-    if (set && pctx->meth[0] == 'M') {
+    if (set && (pctx->meth == METH_MKCOL || pctx->meth == METH_MKCALENDAR)) {
 	/* "Writeable" for MKCOL/MKCALENDAR only */
 	xmlNodePtr cur;
 
@@ -1321,7 +1321,7 @@ static int proppatch_calcompset(xmlNodePtr prop, unsigned set,
     unsigned precond = 0;
 
     if ((pctx->req_tgt->namespace == URL_NS_CALENDAR) &&
-	set && pctx->meth[0] == 'M') {
+	set && (pctx->meth == METH_MKCOL || pctx->meth == METH_MKCALENDAR)) {
 	/* "Writeable" for MKCOL/MKCALENDAR only */
 	xmlNodePtr cur;
 	unsigned long types = 0;
@@ -1839,7 +1839,7 @@ int do_proppatch(struct proppatch_ctx *pctx, xmlNodePtr instr)
 	    unsigned set = 0;
 
 	    if (!xmlStrcmp(instr->name, BAD_CAST "set")) set = 1;
-	    else if ((pctx->meth[0] == 'P') &&
+	    else if ((pctx->meth == METH_PROPPATCH) &&
 		     !xmlStrcmp(instr->name, BAD_CAST "remove")) set = 0;
 	    else {
 		syslog(LOG_INFO, "Unknown PROPPATCH instruction");

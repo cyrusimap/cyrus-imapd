@@ -464,7 +464,7 @@ static int list_feeds(struct transaction_t *txn,
     /* XXX  Can we get an ETag or Last-Modified from mailboxes.db? */
 
     /* Short-circuit for HEAD request */
-    if (txn->meth[0] == 'H') {
+    if (txn->meth == METH_HEAD) {
 	response_header(HTTP_OK, txn);
 	return 0;
     }
@@ -608,7 +608,7 @@ static int list_messages(struct transaction_t *txn, struct mailbox *mailbox)
     txn->resp_body.type = "application/xml; charset=utf-8";
 
     /* Short-circuit for HEAD request */
-    if (txn->meth[0] == 'H') {
+    if (txn->meth == METH_HEAD) {
 	response_header(HTTP_OK, txn);
 	return 0;
     }
@@ -1023,7 +1023,7 @@ static void display_message(struct transaction_t *txn,
     txn->resp_body.type = "text/html; charset=utf-8";
 
     /* Short-circuit for HEAD request */
-    if (txn->meth[0] == 'H') {
+    if (txn->meth == METH_HEAD) {
 	response_header(HTTP_OK, txn);
 	return;
     }
