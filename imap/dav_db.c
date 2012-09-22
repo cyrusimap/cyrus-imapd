@@ -224,7 +224,7 @@ int dav_delete(const char *userid)
 
     dav_getpath(&fname, userid);
     if (unlink(buf_cstring(&fname)) && errno != ENOENT) {
-	syslog(LOG_ERR, "dav_db: error unlinking %s: %m", fname);
+	syslog(LOG_ERR, "dav_db: error unlinking %s: %m", buf_cstring(&fname));
 	r = CYRUSDB_INTERNAL;
     }
 
