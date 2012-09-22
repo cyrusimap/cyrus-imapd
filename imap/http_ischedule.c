@@ -249,7 +249,8 @@ static int isched_recv(struct transaction_t *txn)
 	    /* Base64-encode the HTTP request line
 	       and set as the user context (for prescreening sigs) */
 	    buf_reset(reqline);
-	    buf_printf(reqline, "%s:%s", txn->meth, txn->req_tgt.path);
+	    buf_printf(reqline, "%s:%s",
+		       http_methods[txn->meth], txn->req_tgt.path);
 	    if (*txn->req_tgt.query) {
 		buf_printf(reqline, "?%s", txn->req_tgt.query);
 	    }
