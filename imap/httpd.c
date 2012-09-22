@@ -955,11 +955,11 @@ static void cmdloop(void)
 	tok_init(&tok, txn.reqline, " \r\n", 0);
 	if (!(meth = tok_next(&tok))) {
 	    ret = HTTP_BAD_REQUEST;
-	    txn.error.desc = "Missing method in request-line";
+	    txn.error.desc = "Missing method in request-line\r\n";
 	}
 	else if (!(uri = tok_next(&tok))) {
 	    ret = HTTP_BAD_REQUEST;
-	    txn.error.desc = "Missing request-target in request-line";
+	    txn.error.desc = "Missing request-target in request-line\r\n";
 	}
 	else if ((!(ver = tok_next(&tok))
 		  || (strlen(ver) <= strlen(HTTP_VERSION)))
@@ -968,17 +968,17 @@ static void cmdloop(void)
 	    eatline(httpd_in, p[-1]);
 	    ret = HTTP_TOO_LONG;
 	    snprintf(buf, sizeof(buf),
-		     "Length of request-line MUST be less than than %u octets",
+		     "Length of request-line MUST be less than than %u octets\r\n",
 		     sizeof(txn.reqline));
 	    txn.error.desc = buf;
 	}
 	else if (!ver) {
 	    ret = HTTP_BAD_REQUEST;
-	    txn.error.desc = "Missing HTTP-version in request-line";
+	    txn.error.desc = "Missing HTTP-version in request-line\r\n";
 	}
 	else if (txn.reqline[tok_offset(&tok) + strlen(ver)] == ' ') {
 	    ret = HTTP_BAD_REQUEST;
-	    txn.error.desc = "Unexpected extra argument(s) in request-line";
+	    txn.error.desc = "Unexpected extra argument(s) in request-line\r\n";
 	}
 
 	/* Trim CRLF from request line */
@@ -989,7 +989,7 @@ static void cmdloop(void)
 	if (!ret && strcmp(ver, HTTP_VERSION)) {
 	    ret = HTTP_BAD_VERSION;
 	    snprintf(buf, sizeof(buf),
-		     "This server only speaks %s", HTTP_VERSION);
+		     "This server only speaks %s\r\n", HTTP_VERSION);
 	    txn.error.desc = buf;
 	}
 
@@ -1013,12 +1013,12 @@ static void cmdloop(void)
 	if (!(txn.req_hdrs = spool_new_hdrcache())) {
 	    ret = HTTP_SERVER_ERROR;
 	    txn.flags |= HTTP_CLOSE;
-	    txn.error.desc = "Unable to create header cache";
+	    txn.error.desc = "Unable to create header cache\r\n";
 	    goto done;
 	}
 	if ((r = spool_fill_hdrcache(httpd_in, NULL, txn.req_hdrs, NULL))) {
 	    ret = HTTP_BAD_REQUEST;
-	    txn.error.desc = "Request contains invalid header";
+	    txn.error.desc = "Request contains invalid header\r\n";
 	}
 
 	/* Read CRLF separating headers and body */
@@ -1027,14 +1027,14 @@ static void cmdloop(void)
 	if (c != '\n') {
 	    ret = HTTP_BAD_REQUEST;
 	    txn.flags |= HTTP_CLOSE;
-	    txn.error.desc = "Missing separator between headers and body";
+	    txn.error.desc = "Missing separator between headers and body\r\n";
 	    goto done;
 	}
 
 	/* Check for mandatory Host header */
 	if (!ret && !(hdr = spool_getheader(txn.req_hdrs, "Host"))) {
 	    ret = HTTP_BAD_REQUEST;
-	    txn.error.desc = "Missing Host header";
+	    txn.error.desc = "Missing Host header\r\n";
 	}
 
 	/* Check for connection directives */
@@ -1206,8 +1206,9 @@ static void cmdloop(void)
 	    else {
 		/* Tell client to authenticate */
 		ret = HTTP_UNAUTHORIZED;
-		if (r) txn.error.desc = "Authentication failed";
-		else txn.error.desc = "Must authenticate to access the specified target";
+		if (r) txn.error.desc = "Authentication failed\r\n";
+		else txn.error.desc =
+			 "Must authenticate to access the specified target\r\n";
 	    }
 	}
 
@@ -1274,7 +1275,7 @@ int parse_uri(unsigned meth, const char *uri,
 
     /* Parse entire URI */
     if ((p_uri = xmlParseURI(uri)) == NULL) {
-	*errstr = "Illegal request target URI";
+	*errstr = "Illegal request target URI\r\n";
 	return HTTP_BAD_REQUEST;
     }
 
@@ -1284,7 +1285,7 @@ int parse_uri(unsigned meth, const char *uri,
 	if (strcasecmp(p_uri->scheme, "http") &&
 	    strcasecmp(p_uri->scheme, "https")) {
 	    xmlFreeURI(p_uri);
-	    *errstr = "Unsupported URI scheme";
+	    *errstr = "Unsupported URI scheme\r\n";
 	    return HTTP_BAD_REQUEST;
 	}
     }
@@ -1294,7 +1295,7 @@ int parse_uri(unsigned meth, const char *uri,
     /* Check sanity of path */
     if (!p_uri->path || !*p_uri->path) {
 	xmlFreeURI(p_uri);
-	*errstr = "Empty path in target URI";
+	*errstr = "Empty path in target URI\r\n";
 	return HTTP_BAD_REQUEST;
     }
 
@@ -1306,7 +1307,7 @@ int parse_uri(unsigned meth, const char *uri,
 
     if ((p_uri->path[0] != '/') &&
 	(strcmp(p_uri->path, "*") || (meth != METH_OPTIONS))) {
-	*errstr = "Illegal request target URI";
+	*errstr = "Illegal request target URI\r\n";
 	return HTTP_BAD_REQUEST;
     }
 
@@ -1347,7 +1348,7 @@ int read_body(struct protstream *pin,
 	if (!strcasecmp(hdr[0], "100-continue"))
 	    need_cont = 1;
 	else {
-	    *errstr = "Unsupported Expect";
+	    *errstr = "Unsupported Expect\r\n";
 	    return HTTP_EXPECT_FAILED;
 	}
     }
@@ -1366,7 +1367,7 @@ int read_body(struct protstream *pin,
 	}
 	/* XXX  Should we handle compress/deflate/gzip? */
 	else {
-	    *errstr = "Specified Transfer-Encoding not implemented";
+	    *errstr = "Specified Transfer-Encoding not implemented\r\n";
 	    return HTTP_NOT_IMPLEMENTED;
 	}
     }
@@ -1399,7 +1400,7 @@ int read_body(struct protstream *pin,
 	    /* Read chunk-size and any chunk-ext */
 	    prot_fgets(buf, PROT_BUFSIZE-2, pin);
 	    if (sscanf(buf, "%lx", &chunk) != 1) {
-		*errstr = "Unable to read chunk size";
+		*errstr = "Unable to read chunk size\r\n";
 		return HTTP_BAD_REQUEST;
 	    }
 	    len = chunk;
@@ -1410,7 +1411,7 @@ int read_body(struct protstream *pin,
 	    if (!(n = prot_read(pin, buf,
 				len > PROT_BUFSIZE ? PROT_BUFSIZE : len))) {
 		syslog(LOG_ERR, "prot_read() error");
-		*errstr = "Unable to read body data";
+		*errstr = "Unable to read body data\r\n";
 		return HTTP_BAD_REQUEST;
 	    }
 
@@ -1428,7 +1429,7 @@ int read_body(struct protstream *pin,
 	    *buf = prot_getc(pin);
 	    if (*buf == '\r') *buf = prot_getc(pin);
 	    if (*buf != '\n') {
-		*errstr = "Missing CRLF in body";
+		*errstr = "Missing CRLF in body\r\n";
 		return HTTP_BAD_REQUEST;
 	    }
 	}
@@ -1905,7 +1906,7 @@ void html_response(long code, struct transaction_t *txn, xmlDocPtr html)
     }
     else {
 	txn->error.precond = 0;
-	txn->error.desc = "Error dumping HTML tree";
+	txn->error.desc = "Error dumping HTML tree\r\n";
 	error_response(HTTP_SERVER_ERROR, txn);
     }
 }
@@ -1931,7 +1932,7 @@ void xml_response(long code, struct transaction_t *txn, xmlDocPtr xml)
     }
     else {
 	txn->error.precond = 0;
-	txn->error.desc = "Error dumping XML tree";
+	txn->error.desc = "Error dumping XML tree\r\n";
 	error_response(HTTP_SERVER_ERROR, txn);
     }
 }

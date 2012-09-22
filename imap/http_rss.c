@@ -198,7 +198,7 @@ static int meth_get(struct transaction_t *txn)
     /* If no UID specified, list messages as an RSS feed */
     if (!uid) ret = list_messages(txn, mailbox);
     else if (uid > mailbox->i.last_uid) {
-	txn->error.desc = "Message does not exist";
+	txn->error.desc = "Message does not exist\r\n";
 	ret = HTTP_NOT_FOUND;
     }
     else {
@@ -516,7 +516,7 @@ static int fetch_message(struct transaction_t *txn, struct mailbox *mailbox,
     else r = mailbox_read_index_record(mailbox, recno, record);
     if ((r == CYRUSDB_NOTFOUND) ||
 	(record->system_flags & (FLAG_DELETED|FLAG_EXPUNGED))) {
-	txn->error.desc = "Message has been removed";
+	txn->error.desc = "Message has been removed\r\n";
 	return HTTP_GONE;
     }
     else if (r) {
@@ -1097,7 +1097,7 @@ static void fetch_part(struct transaction_t *txn, struct body *body,
 					 &body->decoded_body, 0, &outsize);
 
 	if (!outbuf) {
-	    txn->error.desc = "Unknown MIME encoding";
+	    txn->error.desc = "Unknown MIME encoding\r\n";
 	    response_header(HTTP_SERVER_ERROR, txn);
 	    return;
 

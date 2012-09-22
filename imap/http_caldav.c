@@ -267,7 +267,7 @@ static int meth_acl(struct transaction_t *txn)
 
     /* Make sure its a calendar collection */
     if (!txn->req_tgt.collection || txn->req_tgt.resource) {
-	txn->error.desc = "ACLs can only be set on calendar collections";
+	txn->error.desc = "ACLs can only be set on calendar collections\r\n";
 	syslog(LOG_DEBUG, "Tried to set ACL on non-calendar collection");
 	return HTTP_NOT_ALLOWED;
     }
@@ -326,7 +326,7 @@ static int meth_acl(struct transaction_t *txn)
     /* Parse the ACL body */
     ret = parse_xml_body(txn, &root);
     if (!root) {
-	txn->error.desc = "Missing request body";
+	txn->error.desc = "Missing request body\r\n";
 	ret = HTTP_BAD_REQUEST;
     }
     if (ret) goto done;
@@ -335,7 +335,7 @@ static int meth_acl(struct transaction_t *txn)
 
     /* Make sure its an DAV:acl element */
     if (xmlStrcmp(root->name, BAD_CAST "acl")) {
-	txn->error.desc = "Missing acl element in ACL request";
+	txn->error.desc = "Missing acl element in ACL request\r\n";
 	ret = HTTP_BAD_REQUEST;
 	goto done;
     }
@@ -356,7 +356,7 @@ static int meth_acl(struct transaction_t *txn)
 		if (child->type == XML_ELEMENT_NODE) {
 		    if (!xmlStrcmp(child->name, BAD_CAST "principal")) {
 			if (prin) {
-			    txn->error.desc = "Multiple principals in ACE";
+			    txn->error.desc = "Multiple principals in ACE\r\n";
 			    ret = HTTP_BAD_REQUEST;
 			    goto done;
 			}
@@ -366,7 +366,7 @@ static int meth_acl(struct transaction_t *txn)
 		    }
 		    else if (!xmlStrcmp(child->name, BAD_CAST "grant")) {
 			if (privs) {
-			    txn->error.desc = "Multiple grant|deny in ACE";
+			    txn->error.desc = "Multiple grant|deny in ACE\r\n";
 			    ret = HTTP_BAD_REQUEST;
 			    goto done;
 			}
@@ -376,7 +376,7 @@ static int meth_acl(struct transaction_t *txn)
 		    }
 		    else if (!xmlStrcmp(child->name, BAD_CAST "deny")) {
 			if (privs) {
-			    txn->error.desc = "Multiple grant|deny in ACE";
+			    txn->error.desc = "Multiple grant|deny in ACE\r\n";
 			    ret = HTTP_BAD_REQUEST;
 			    goto done;
 			}
@@ -392,7 +392,7 @@ static int meth_acl(struct transaction_t *txn)
 			goto done;
 		    }
 		    else {
-			txn->error.desc = "Unknown element in ACE";
+			txn->error.desc = "Unknown element in ACE\r\n";
 			ret = HTTP_BAD_REQUEST;
 			goto done;
 		    }
@@ -630,7 +630,7 @@ static int meth_copy(struct transaction_t *txn)
 
     /* Check for mandatory Destination header */
     if (!(hdr = spool_getheader(txn->req_hdrs, "Destination"))) {
-	txn->error.desc = "Missing Destination header";
+	txn->error.desc = "Missing Destination header\r\n";
 	return HTTP_BAD_REQUEST;
     }
 
@@ -652,7 +652,7 @@ static int meth_copy(struct transaction_t *txn)
 
     /* Make sure source and dest resources are NOT the same */
     if (!strcmp(txn->req_tgt.path, dest.path)) {
-	txn->error.desc = "Source and destination resources are the same";
+	txn->error.desc = "Source and destination resources are the same\r\n";
 	return HTTP_FORBIDDEN;
     }
 
@@ -1046,7 +1046,7 @@ static int meth_delete(struct transaction_t *txn)
 		   "meth_delete: failed to process scheduling message in %s"
 		   " (org=%s, att=%s)",
 		   mailboxname, organizer, userid);
-	    txn->error.desc = "Failed to lookup organizer address";
+	    txn->error.desc = "Failed to lookup organizer address\r\n";
 	    ret = HTTP_SERVER_ERROR;
 	    goto done;
 	}
@@ -1067,7 +1067,7 @@ static int meth_delete(struct transaction_t *txn)
 		   "meth_delete: failed to process scheduling message in %s"
 		   " (org=%s, att=%s)",
 		   mailboxname, organizer, userid);
-	    txn->error.desc = "Failed to process scheduling message";
+	    txn->error.desc = "Failed to process scheduling message\r\n";
 	    ret = HTTP_SERVER_ERROR;
 	    goto done;
 	}
@@ -1308,13 +1308,14 @@ static int meth_mkcol(struct transaction_t *txn)
 	if ((txn->meth == METH_MKCOL) &&
 	    /* Make sure its a mkcol element */
 	    xmlStrcmp(root->name, BAD_CAST "mkcol")) {
-	    txn->error.desc = "Missing mkcol element in MKCOL request";
+	    txn->error.desc = "Missing mkcol element in MKCOL request\r\n";
 	    return HTTP_BAD_MEDIATYPE;
 	}
 	else if ((txn->meth == METH_MKCALENDAR) &&
 		 /* Make sure its a mkcalendar element */
 		 xmlStrcmp(root->name, BAD_CAST "mkcalendar")) {
-	    txn->error.desc = "Missing mkcalendar element in MKCALENDAR request";
+	    txn->error.desc =
+		"Missing mkcalendar element in MKCALENDAR request\r\n";
 	    return HTTP_BAD_MEDIATYPE;
 	}
 
@@ -1331,7 +1332,7 @@ static int meth_mkcol(struct transaction_t *txn)
 				     root, ns);
 	if (!root) {
 	    ret = HTTP_SERVER_ERROR;
-	    txn->error.desc = "Unable to create XML response";
+	    txn->error.desc = "Unable to create XML response\r\n";
 	    goto done;
 	}
 
@@ -1781,7 +1782,7 @@ int meth_propfind(struct transaction_t *txn)
 	depth = 2;
     }
     else if (hdr && ((sscanf(hdr[0], "%u", &depth) != 1) || (depth > 1))) {
-	txn->error.desc = "Illegal Depth value";
+	txn->error.desc = "Illegal Depth value\r\n";
 	return HTTP_BAD_REQUEST;
     }
 
@@ -1852,7 +1853,7 @@ int meth_propfind(struct transaction_t *txn)
 
 	/* Make sure its a propfind element */
 	if (xmlStrcmp(root->name, BAD_CAST "propfind")) {
-	    txn->error.desc = "Missing propfind element in PROFIND request";
+	    txn->error.desc = "Missing propfind element in PROFIND request\r\n";
 	    ret = HTTP_BAD_REQUEST;
 	    goto done;
 	}
@@ -1872,7 +1873,7 @@ int meth_propfind(struct transaction_t *txn)
     /* Start construction of our multistatus response */
     if (!(root = init_xml_response("multistatus", NS_DAV, root, ns))) {
 	ret = HTTP_SERVER_ERROR;
-	txn->error.desc = "Unable to create XML response";
+	txn->error.desc = "Unable to create XML response\r\n";
 	goto done;
     }
 
@@ -1997,7 +1998,7 @@ static int meth_proppatch(struct transaction_t *txn)
     /* Make sure its a collection */
     if ((txn->req_tgt.namespace != URL_NS_CALENDAR) || txn->req_tgt.resource) {
 	txn->error.desc =
-	    "Properties can only be updated on collections";
+	    "Properties can only be updated on collections\r\n";
 	return HTTP_FORBIDDEN;
     }
 
@@ -2046,7 +2047,7 @@ static int meth_proppatch(struct transaction_t *txn)
     /* Parse the PROPPATCH body */
     ret = parse_xml_body(txn, &root);
     if (!root) {
-	txn->error.desc = "Missing request body";
+	txn->error.desc = "Missing request body\r\n";
 	return HTTP_BAD_REQUEST;
     }
     if (ret) goto done;
@@ -2055,7 +2056,8 @@ static int meth_proppatch(struct transaction_t *txn)
 
     /* Make sure its a propertyupdate element */
     if (xmlStrcmp(root->name, BAD_CAST "propertyupdate")) {
-	txn->error.desc = "Missing propertyupdate element in PROPPATCH request";
+	txn->error.desc =
+	    "Missing propertyupdate element in PROPPATCH request\r\n";
 	return HTTP_BAD_REQUEST;
     }
     instr = root->children;
@@ -2063,7 +2065,7 @@ static int meth_proppatch(struct transaction_t *txn)
     /* Start construction of our multistatus response */
     if (!(root = init_xml_response("multistatus", NS_DAV, root, ns))) {
 	ret = HTTP_SERVER_ERROR;
-	txn->error.desc = "Unable to create XML response";
+	txn->error.desc = "Unable to create XML response\r\n";
 	goto done;
     }
 
@@ -2309,7 +2311,7 @@ static int meth_put(struct transaction_t *txn)
     /* Make sure we have a body */
     size = buf_len(&txn->req_body);
     if (!size) {
-	txn->error.desc = "Missing request body";
+	txn->error.desc = "Missing request body\r\n";
 	ret = HTTP_BAD_REQUEST;
 	goto done;
     }
@@ -2419,7 +2421,7 @@ static int meth_put(struct transaction_t *txn)
 		   "meth_delete: failed to process scheduling message in %s"
 		   " (org=%s, att=%s)",
 		   mailboxname, organizer, userid);
-	    txn->error.desc = "Failed to lookup organizer address";
+	    txn->error.desc = "Failed to lookup organizer address\r\n";
 	    ret = HTTP_SERVER_ERROR;
 	    goto done;
 	}
@@ -2438,7 +2440,7 @@ static int meth_put(struct transaction_t *txn)
 		   "meth_put: failed to process scheduling message in %s"
 		   " (org=%s, att=%s)",
 		   mailboxname, organizer, userid);
-	    txn->error.desc = "Failed to process scheduling message";
+	    txn->error.desc = "Failed to process scheduling message\r\n";
 	    ret = HTTP_SERVER_ERROR;
 	    goto done;
 	}
@@ -3096,7 +3098,7 @@ static int meth_report(struct transaction_t *txn)
 	    depth = 2;
 	}
 	else if ((sscanf(hdr[0], "%u", &depth) != 1) || (depth > 1)) {
-	    txn->error.desc = "Illegal Depth value";
+	    txn->error.desc = "Illegal Depth value\r\n";
 	    return HTTP_BAD_REQUEST;
 	}
     }
@@ -3110,7 +3112,7 @@ static int meth_report(struct transaction_t *txn)
     /* Parse the REPORT body */
     ret = parse_xml_body(txn, &inroot);
     if (!inroot) {
-	txn->error.desc = "Missing request body";
+	txn->error.desc = "Missing request body\r\n";
 	return HTTP_BAD_REQUEST;
     }
     if (ret) goto done;
@@ -3183,13 +3185,13 @@ static int meth_report(struct transaction_t *txn)
 	if (cur->type == XML_ELEMENT_NODE) {
 	    if (!xmlStrcmp(cur->name, BAD_CAST "allprop")) {
 		syslog(LOG_WARNING, "REPORT %s w/allprop", report->name);
-		txn->error.desc = "Unsupported REPORT option <allprop>";
+		txn->error.desc = "Unsupported REPORT option <allprop>\r\n";
 		ret = HTTP_NOT_IMPLEMENTED;
 		goto done;
 	    }
 	    else if (!xmlStrcmp(cur->name, BAD_CAST "propname")) {
 		syslog(LOG_WARNING, "REPORT %s w/propname", report->name);
-		txn->error.desc = "Unsupported REPORT option <propname>";
+		txn->error.desc = "Unsupported REPORT option <propname>\r\n";
 		ret = HTTP_NOT_IMPLEMENTED;
 		goto done;
 	    }
@@ -3201,7 +3203,7 @@ static int meth_report(struct transaction_t *txn)
     }
 
     if (!prop && (report->flags & REPORT_NEED_PROPS)) {
-	txn->error.desc = "Missing <prop> element in REPORT";
+	txn->error.desc = "Missing <prop> element in REPORT\r\n";
 	ret = HTTP_BAD_REQUEST;
 	goto done;
     }
@@ -3209,7 +3211,7 @@ static int meth_report(struct transaction_t *txn)
     /* Start construction of our multistatus response */
     if ((report->flags & REPORT_MULTISTATUS) &&
 	!(outroot = init_xml_response("multistatus", NS_DAV, inroot, ns))) {
-	txn->error.desc = "Unable to create XML response";
+	txn->error.desc = "Unable to create XML response\r\n";
 	ret = HTTP_SERVER_ERROR;
 	goto done;
     }
@@ -3356,7 +3358,7 @@ static int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root)
     if (!(hdr = spool_getheader(txn->req_hdrs, "Content-Type")) ||
 	(!is_mediatype(hdr[0], "text/xml") &&
 	 !is_mediatype(hdr[0], "application/xml"))) {
-	txn->error.desc = "This method requires an XML body";
+	txn->error.desc = "This method requires an XML body\r\n";
 	return HTTP_BAD_MEDIATYPE;
     }
 
@@ -3369,13 +3371,13 @@ static int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root)
 	xmlFreeParserCtxt(ctxt);
     }
     if (!doc) {
-	txn->error.desc = "Unable to parse XML body";
+	txn->error.desc = "Unable to parse XML body\r\n";
 	return HTTP_BAD_REQUEST;
     }
 
     /* Get the root element of the XML request */
     if (!(*root = xmlDocGetRootElement(doc))) {
-	txn->error.desc = "Missing root element in request";
+	txn->error.desc = "Missing root element in request\r\n";
 	return HTTP_BAD_REQUEST;
     }
 
@@ -3492,7 +3494,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     /* Prepare to stage the message */
     if (!(f = append_newstage(mailbox->name, now, 0, &stage))) {
 	syslog(LOG_ERR, "append_newstage(%s) failed", mailbox->name);
-	txn->error.desc = "append_newstage() failed";
+	txn->error.desc = "append_newstage() failed\r\n";
 	return HTTP_SERVER_ERROR;
     }
 
@@ -3543,7 +3545,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 	syslog(LOG_ERR, "append_setup(%s) failed: %s",
 	       mailbox->name, error_message(r));
 	ret = HTTP_SERVER_ERROR;
-	txn->error.desc = "append_setup() failed";
+	txn->error.desc = "append_setup() failed\r\n";
     }
     else {
 	struct body *body = NULL;
@@ -3552,7 +3554,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 	if ((r = append_fromstage(&as, &body, stage, now, NULL, 0, 0))) {
 	    syslog(LOG_ERR, "append_fromstage() failed");
 	    ret = HTTP_SERVER_ERROR;
-	    txn->error.desc = "append_fromstage() failed";
+	    txn->error.desc = "append_fromstage() failed\r\n";
 	}
 	if (body) message_free_body(body);
 
@@ -3562,7 +3564,7 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 	    if ((r = append_commit(&as, size, NULL, NULL, NULL, &mailbox))) {
 		syslog(LOG_ERR, "append_commit() failed");
 		ret = HTTP_SERVER_ERROR;
-		txn->error.desc = "append_commit() failed";
+		txn->error.desc = "append_commit() failed\r\n";
 	    }
 	    else {
 		/* append_commit() returns a write-locked index */
@@ -3820,7 +3822,7 @@ int busytime_query(struct transaction_t *txn, icalcomponent *ical)
 				   NS_CALDAV,
 				   NULL, ns))) {
 	ret = HTTP_SERVER_ERROR;
-	txn->error.desc = "Unable to create XML response";
+	txn->error.desc = "Unable to create XML response\r\n";
 	goto done;
     }
 
@@ -4013,7 +4015,7 @@ static int sched_busytime(struct transaction_t *txn)
 
     /* Make sure we have a body */
     if (!buf_len(&txn->req_body)) {
-	txn->error.desc = "Missing request body";
+	txn->error.desc = "Missing request body\r\n";
 	return HTTP_BAD_REQUEST;
     }
 

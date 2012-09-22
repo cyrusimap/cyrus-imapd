@@ -141,7 +141,7 @@ static int isched_capa(struct transaction_t *txn)
 
     /* Start construction of our query-result */
     if (!(root = init_xml_response("query-result", NS_ISCHED, NULL, ns))) {
-	txn->error.desc = "Unable to create XML response";
+	txn->error.desc = "Unable to create XML response\r\n";
 	return HTTP_SERVER_ERROR;
     }
 
@@ -219,7 +219,7 @@ static int isched_recv(struct transaction_t *txn)
 
     /* Make sure we have a body */
     if (!buf_len(&txn->req_body)) {
-	txn->error.desc = "Missing request body";
+	txn->error.desc = "Missing request body\r\n";
 	return HTTP_BAD_REQUEST;
     }
 
