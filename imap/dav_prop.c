@@ -303,6 +303,11 @@ xmlNodePtr xml_add_error(xmlNodePtr root, struct error_t *err,
 	break;
     }
 
+    if (err->desc) {
+	xmlNewTextChild(error, NULL, BAD_CAST "responsedescription",
+			BAD_CAST err->desc);
+    }
+
     return root;
 }
 
