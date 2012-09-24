@@ -861,7 +861,7 @@ static int meth_copy(struct transaction_t *txn)
     if (ret == HTTP_CREATED) {
 	/* Tell client where to find the new resource */
 	hdr = spool_getheader(txn->req_hdrs, "Destination");
-	buf_setcstr(&txn->loc, hdr[0]);
+	txn->location = hdr[0];
     }
     else {
 	/* Don't confuse client by providing ETag of Destination resource */
@@ -993,7 +993,6 @@ static int meth_delete(struct transaction_t *txn)
 	/* Scheduling object resource */
 	struct mboxlist_entry mbentry;
 	char outboxname[MAX_MAILBOX_BUFFER];
-	static struct buf href = BUF_INITIALIZER;
 	const char *msg_base = NULL, *organizer;
 	unsigned long msg_size = 0;
 	icalcomponent *ical, *comp;
@@ -1016,9 +1015,8 @@ static int meth_delete(struct transaction_t *txn)
 	    txn->error.precond = DAV_NEED_PRIVS;
 	    txn->error.rights = DACL_SCHED;
 
-	    buf_reset(&href);
-	    buf_printf(&href, "/calendars/user/%s/%s", userid, SCHED_OUTBOX);
-	    txn->error.resource = buf_cstring(&href);
+	    buf_printf(&txn->buf, "/calendars/user/%s/%s", userid, SCHED_OUTBOX);
+	    txn->error.resource = buf_cstring(&txn->buf);
 	    ret = HTTP_FORBIDDEN;
 	    goto done;
 	}
@@ -2155,11 +2153,12 @@ static int meth_post(struct transaction_t *txn)
 	     strhash(txn->req_tgt.path), getpid(), time(0), post_count++);
 
     /* Tell client where to find the new resource */
-    buf_setcstr(&txn->loc, txn->req_tgt.path);
+    txn->location = txn->req_tgt.path;
+    
 
     ret = meth_put(txn);
 
-    if (ret != HTTP_CREATED) buf_reset(&txn->loc);
+    if (ret != HTTP_CREATED) txn->location = NULL;
 
     return ret;
 }
@@ -2371,7 +2370,6 @@ static int meth_put(struct transaction_t *txn)
 	/* Scheduling object resource */
 	struct mboxlist_entry mbentry;
 	char outboxname[MAX_MAILBOX_BUFFER];
-	static struct buf href = BUF_INITIALIZER;
 	struct sched_param sparam;
 
 	/* Check ACL of auth'd user on userid's Scheduling Outbox */
@@ -2390,9 +2388,8 @@ static int meth_put(struct transaction_t *txn)
 	    txn->error.precond = DAV_NEED_PRIVS;
 	    txn->error.rights = DACL_SCHED;
 
-	    buf_reset(&href);
-	    buf_printf(&href, "/calendars/user/%s/%s", userid, SCHED_OUTBOX);
-	    txn->error.resource = buf_cstring(&href);
+	    buf_printf(&txn->buf, "/calendars/user/%s/%s", userid, SCHED_OUTBOX);
+	    txn->error.resource = buf_cstring(&txn->buf);
 	    ret = HTTP_FORBIDDEN;
 	    goto done;
 	}
@@ -2408,10 +2405,9 @@ static int meth_put(struct transaction_t *txn)
 	    /* CALDAV:unique-scheduling-object-resource */
 
 	    txn->error.precond = CALDAV_UNIQUE_OBJECT;
-	    buf_reset(&href);
-	    buf_printf(&href, "/calendars/user/%s/%s/%s",
+	    buf_printf(&txn->buf, "/calendars/user/%s/%s/%s",
 		       userid, strrchr(cdata.mailbox, '.')+1, cdata.resource);
-	    txn->error.resource = buf_cstring(&href);
+	    txn->error.resource = buf_cstring(&txn->buf);
 	    ret = HTTP_FORBIDDEN;
 	    goto done;
 	}
@@ -3480,14 +3476,11 @@ static int store_resource(struct transaction_t *txn, icalcomponent *ical,
     if (cdata.mailbox && !strcmp(cdata.mailbox, mailbox->name) &&
 	strcmp(cdata.resource, resource)) {
 	/* CALDAV:no-uid-conflict */
-	static struct buf href = BUF_INITIALIZER;
-
 	txn->error.precond = CALDAV_UID_CONFLICT;
-	buf_reset(&href);
-	buf_printf(&href, "/calendars/user/%s/%s/%s",
+	buf_printf(&txn->buf, "/calendars/user/%s/%s/%s",
 		   mboxname_to_userid(cdata.mailbox),
 		   strrchr(cdata.mailbox, '.')+1, cdata.resource);
-	txn->error.resource = buf_cstring(&href);
+	txn->error.resource = buf_cstring(&txn->buf);
 	return HTTP_FORBIDDEN;
     }
 

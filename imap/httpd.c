@@ -907,10 +907,11 @@ static void cmdloop(void)
 	txn.meth = METH_UNKNOWN;
 	txn.flags = !httpd_timeout ? HTTP_CLOSE : 0;
 	txn.auth_chal.param = NULL;
-	buf_reset(&txn.loc);
 	txn.req_hdrs = NULL;
+	txn.location = NULL;
 	memset(&txn.error, 0, sizeof(struct error_t));
 	memset(&txn.resp_body, 0, sizeof(struct resp_body_t));
+	buf_reset(&txn.buf);
 #ifdef HAVE_ZLIB
 	deflateReset(&txn.zstrm);
 #endif
@@ -967,10 +968,10 @@ static void cmdloop(void)
 	    /* request-line overran the size of our buffer */
 	    eatline(httpd_in, p[-1]);
 	    ret = HTTP_TOO_LONG;
-	    snprintf(buf, sizeof(buf),
-		     "Length of request-line MUST be less than than %u octets\r\n",
-		     sizeof(txn.reqline));
-	    txn.error.desc = buf;
+	    buf_printf(&txn.buf,
+		       "Length of request-line MUST be less than than %u octets\r\n",
+		       sizeof(txn.reqline));
+	    txn.error.desc = buf_cstring(&txn.buf);
 	}
 	else if (!ver) {
 	    ret = HTTP_BAD_REQUEST;
@@ -988,9 +989,9 @@ static void cmdloop(void)
 	/* Check HTTP-Version */
 	if (!ret && strcmp(ver, HTTP_VERSION)) {
 	    ret = HTTP_BAD_VERSION;
-	    snprintf(buf, sizeof(buf),
+	    buf_printf(&txn.buf,
 		     "This server only speaks %s\r\n", HTTP_VERSION);
-	    txn.error.desc = buf;
+	    txn.error.desc = buf_cstring(&txn.buf);
 	}
 
 	/* Check Method against our list of known methods */
@@ -1072,9 +1073,10 @@ static void cmdloop(void)
 			ret = HTTP_MOVED;
 		    
 			hdr = spool_getheader(txn.req_hdrs, "Host");
-			buf_printf(&txn.loc, "%s://%s%s/",
+			buf_printf(&txn.buf, "%s://%s%s/",
 				   https ? "https" : "http", hdr[0],
 				   namespaces[i]->prefix);
+			txn.location = buf_cstring(&txn.buf);
 			break;
 		    }
 		}
@@ -1179,11 +1181,12 @@ static void cmdloop(void)
 
 		/* Create https URL */
 		hdr = spool_getheader(txn.req_hdrs, "Host");
-		buf_printf(&txn.loc, "https://%s%s", hdr[0], txn.req_tgt.path);
+		buf_printf(&txn.buf, "https://%s%s", hdr[0], txn.req_tgt.path);
+		txn.location = buf_cstring(&txn.buf);
 
 		/* Create HTML body */
 		buf_printf(&html, tls_message,
-			   buf_cstring(&txn.loc), buf_cstring(&txn.loc));
+			   buf_cstring(&txn.buf), buf_cstring(&txn.buf));
 
 		/* Check which response is required */
 		if ((hdr = spool_getheader(txn.req_hdrs, "Upgrade")) &&
@@ -1535,8 +1538,8 @@ void response_header(long code, struct transaction_t *txn)
 	    buf_printf(&log, " (%s)", hdr[0]);
 	}
 	buf_printf(&log, " => \"%s\"", error_message(code));
-	if (buf_len(&txn->loc)) {
-	    buf_printf(&log, " (%s)", buf_cstring(&txn->loc));
+	if (txn->location) {
+	    buf_printf(&log, " (%s)", txn->location);
 	}
 	syslog(LOG_INFO, "%s", buf_cstring(&log));
     }
@@ -1722,8 +1725,8 @@ void response_header(long code, struct transaction_t *txn)
 	    }
 	}
 
-	if (buf_len(&txn->loc)) {
-	    prot_printf(httpd_out, "Location: %s\r\n", buf_cstring(&txn->loc));
+	if (txn->location) {
+	    prot_printf(httpd_out, "Location: %s\r\n", txn->location);
 	}
     }
 
