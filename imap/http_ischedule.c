@@ -57,6 +57,7 @@
 #include "http_err.h"
 #include "http_proxy.h"
 #include "map.h"
+#include "tok.h"
 #include "util.h"
 #include "xmalloc.h"
 #include <sasl/saslutil.h>
@@ -66,7 +67,7 @@
 #ifdef WITH_DKIM
 #include <dkim.h>
 
-#define TEST
+//#define TEST
 
 #define BASE64_LEN(inlen) ((((inlen) + 2) / 3) * 4)
 
@@ -225,7 +226,10 @@ static int isched_recv(struct transaction_t *txn)
 
     /* Check authorization */
     if (httpd_userid) authd = httpd_userisadmin;
-    else if (spool_getheader(txn->req_hdrs, "DKIM-Signature")) {
+    else if (!spool_getheader(txn->req_hdrs, "DKIM-Signature")) {
+	txn->error.desc = "No signature";
+    }
+    else {
 #ifdef WITH_DKIM
 	DKIM *dkim = NULL;
 	DKIM_STAT stat;
@@ -266,8 +270,9 @@ static int isched_recv(struct transaction_t *txn)
 		stat = dkim_body(dkim, (u_char *) buf_cstring(&txn->req_body),
 				 buf_len(&txn->req_body));
 		stat = dkim_eom(dkim, NULL);
-		if (stat == DKIM_STAT_OK) authd = 1;
 	    }
+	    if (stat == DKIM_STAT_OK) authd = 1;
+	    else txn->error.desc = dkim_getresultstr(stat);
 
 	    dkim_free(dkim);
 	}
@@ -399,6 +404,11 @@ int isched_send(struct sched_param *sparam, icalcomponent *ical)
 			      DKIM_SIGN_RSASHA256, -1 /* entire body */,
 			      &stat))) {
 
+	    /* Add our query method list */
+	    stat = dkim_add_querymethod(dkim, "private-exchange", NULL);
+	    stat = dkim_add_querymethod(dkim, "http", "well-known");
+	    stat = dkim_add_querymethod(dkim, "dns", "txt");
+
 	    /* Base64 encode the HTTP request line and add as an "http" tag */
 	    buf_reset(reqline);
 	    buf_printf(reqline, "POST:%s", uri);
@@ -457,43 +467,64 @@ static DKIM_CBSTAT isched_prescreen(DKIM *dkim, DKIM_SIGINFO **sigs, int nsigs)
 }
 
 
-extern DKIM_STAT dkim_get_key_dns(DKIM *, DKIM_SIGINFO *, u_char *, size_t);
-
 static DKIM_CBSTAT isched_get_key(DKIM *dkim, DKIM_SIGINFO *sig,
 				  u_char *buf, size_t buflen)
 {
-    const char *domain, *selector, *prefix, *path;
-    static struct buf pathbuf = BUF_INITIALIZER;
-    FILE *f;
+    DKIM_CBSTAT stat = DKIM_STAT_KEYFAIL;
+    const char *domain, *selector, *query;
+    tok_t tok;
+    char *type, *opts;
 
     assert(dkim != NULL);
     assert(sig != NULL);
-#ifdef TEST
+
     domain = (const char *) dkim_sig_getdomain(sig);
     selector = (const char *) dkim_sig_getselector(sig);
-    prefix = config_getstring(IMAPOPT_HTTPDOCROOT);
+    if (!domain || !selector) return DKIM_STAT_KEYFAIL;
 
-    if (!domain || !selector || !prefix) return DKIM_STAT_NORESOURCE;
+    query = (const char *) dkim_sig_gettagvalue(sig, 0, (u_char *) "q");
+    if (!query) query = "dns/txt";  /* implicit default */
 
-    buf_setcstr(&pathbuf, prefix);
-    buf_printf(&pathbuf, "/domainkey/%s", selector);
-    path = buf_cstring(&pathbuf);
+    /* Parse the q= tag */
+    tok_init(&tok, query, ":", 0);
+    while ((type = tok_next(&tok)) && stat != DKIM_STAT_OK) {
+	/* Split type/options */
+	if ((opts = strchr(type, '/'))) *opts++ = '\0';
 
-    f = fopen(path, "r");
-    if (f == NULL) {
-	syslog(LOG_ERR, "%s: fopen(): %s", path, strerror(errno));
-	return DKIM_STAT_KEYFAIL;
+	if (!strcmp(type, "private-exchange")) {
+	    const char *prefix = config_getstring(IMAPOPT_HTTPDOCROOT);
+	    struct buf path = BUF_INITIALIZER;
+	    FILE *f;
+
+	    if (!prefix) continue;
+
+	    buf_setcstr(&path, prefix);
+	    buf_printf(&path, "/domainkey/%s/%s", domain, selector);
+
+	    if (!(f = fopen(buf_cstring(&path), "r"))) {
+		syslog(LOG_NOTICE, "%s: fopen(): %s",
+		       buf_cstring(&path), strerror(errno));
+	    }
+	    buf_free(&path);
+	    if (!f) continue;
+
+	    memset(buf, '\0', buflen);
+	    fgets((char *) buf, buflen, f);
+	    fclose(f);
+
+	    if (buf[0] == '\0') stat = DKIM_STAT_NOKEY;
+	    else stat = DKIM_STAT_OK;
+	}
+	else if (!strcmp(type, "http") && !strcmp(opts, "well-known")) {
+	}
+	else if (!strcmp(type, "dns") && !strcmp(opts, "txt")) {
+//	    stat = dkim_get_key_dns(dkim, sig, buf, buflen);
+	}
     }
 
-    memset(buf, '\0', buflen);
-    fgets((char *) buf, buflen, f);
-    fclose(f);
+    tok_fini(&tok);
 
-    if (buf[0] == '\0') return DKIM_STAT_NOKEY;
-    else return DKIM_STAT_OK;
-#else
-    return dkim_get_key_dns(dkim, siginfo, buf, buflen);
-#endif
+    return stat;
 }
 
 
