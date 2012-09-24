@@ -272,7 +272,26 @@ static int isched_recv(struct transaction_t *txn)
 		stat = dkim_eom(dkim, NULL);
 	    }
 	    if (stat == DKIM_STAT_OK) authd = 1;
-	    else txn->error.desc = dkim_getresultstr(stat);
+	    else {
+		DKIM_SIGINFO *sig = dkim_getsignature(dkim);
+
+		if (sig) {
+		    const char *sigerr;
+
+		    if (dkim_sig_getbh(sig) == DKIM_SIGBH_MISMATCH)
+			sigerr = "body hash mismatch";
+		    else {
+			DKIM_SIGERROR err = dkim_sig_geterror(sig);
+
+			sigerr = dkim_sig_geterrorstr(err);
+		    }
+
+		    buf_printf(&txn->buf, "%s: %s",
+			       dkim_getresultstr(stat), sigerr);
+		    txn->error.desc = buf_cstring(&txn->buf);
+		}
+		else txn->error.desc = dkim_getresultstr(stat);
+	    }
 
 	    dkim_free(dkim);
 	}
@@ -470,7 +489,7 @@ static DKIM_CBSTAT isched_prescreen(DKIM *dkim, DKIM_SIGINFO **sigs, int nsigs)
 static DKIM_CBSTAT isched_get_key(DKIM *dkim, DKIM_SIGINFO *sig,
 				  u_char *buf, size_t buflen)
 {
-    DKIM_CBSTAT stat = DKIM_STAT_KEYFAIL;
+    DKIM_CBSTAT stat = DKIM_CBSTAT_NOTFOUND;
     const char *domain, *selector, *query;
     tok_t tok;
     char *type, *opts;
@@ -480,14 +499,14 @@ static DKIM_CBSTAT isched_get_key(DKIM *dkim, DKIM_SIGINFO *sig,
 
     domain = (const char *) dkim_sig_getdomain(sig);
     selector = (const char *) dkim_sig_getselector(sig);
-    if (!domain || !selector) return DKIM_STAT_KEYFAIL;
+    if (!domain || !selector) return DKIM_CBSTAT_ERROR;
 
     query = (const char *) dkim_sig_gettagvalue(sig, 0, (u_char *) "q");
     if (!query) query = "dns/txt";  /* implicit default */
 
     /* Parse the q= tag */
     tok_init(&tok, query, ":", 0);
-    while ((type = tok_next(&tok)) && stat != DKIM_STAT_OK) {
+    while ((type = tok_next(&tok)) && stat != DKIM_CBSTAT_CONTINUE) {
 	/* Split type/options */
 	if ((opts = strchr(type, '/'))) *opts++ = '\0';
 
@@ -512,8 +531,7 @@ static DKIM_CBSTAT isched_get_key(DKIM *dkim, DKIM_SIGINFO *sig,
 	    fgets((char *) buf, buflen, f);
 	    fclose(f);
 
-	    if (buf[0] == '\0') stat = DKIM_STAT_NOKEY;
-	    else stat = DKIM_STAT_OK;
+	    if (buf[0] != '\0') stat = DKIM_CBSTAT_CONTINUE;
 	}
 	else if (!strcmp(type, "http") && !strcmp(opts, "well-known")) {
 	}
@@ -532,7 +550,7 @@ static void isched_init(struct buf *serverinfo)
 {
     int fd;
     struct buf keypath = BUF_INITIALIZER;
-    unsigned flags = 0;
+    unsigned flags = DKIM_LIBFLAGS_BADSIGHANDLES;
     const char *requiredhdrs[] = { "Content-Type", "Host", "iSchedule-Version",
 				   "Originator", "Recipient", NULL };
     const char *signhdrs[] = { "iSchedule-Message-ID", "User-Agent", NULL };
