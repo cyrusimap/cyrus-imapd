@@ -2154,7 +2154,6 @@ static int meth_post(struct transaction_t *txn)
 
     /* Tell client where to find the new resource */
     txn->location = txn->req_tgt.path;
-    
 
     ret = meth_put(txn);
 
