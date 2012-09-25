@@ -59,6 +59,9 @@
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
 #endif
+#ifdef HAVE_STDINT_H
+#include <stdint.h>
+#endif
 
 #include <sys/socket.h>
 #include <errno.h>
