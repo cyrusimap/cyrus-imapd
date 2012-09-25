@@ -527,7 +527,7 @@ static DKIM_CBSTAT isched_get_key(DKIM *dkim, DKIM_SIGINFO *sig,
 
     /* Parse the q= tag */
     tok_init(&tok, query, ":", 0);
-    while ((type = tok_next(&tok)) && stat != DKIM_CBSTAT_CONTINUE) {
+    while ((type = tok_next(&tok))) {
 	/* Split type/options */
 	if ((opts = strchr(type, '/'))) *opts++ = '\0';
 
@@ -552,12 +552,16 @@ static DKIM_CBSTAT isched_get_key(DKIM *dkim, DKIM_SIGINFO *sig,
 	    fgets((char *) buf, buflen, f);
 	    fclose(f);
 
-	    if (buf[0] != '\0') stat = DKIM_CBSTAT_CONTINUE;
+	    if (buf[0] != '\0') {
+		stat = DKIM_CBSTAT_CONTINUE;
+		break;
+	    }
 	}
 	else if (!strcmp(type, "http") && !strcmp(opts, "well-known")) {
 	}
 	else if (!strcmp(type, "dns") && !strcmp(opts, "txt")) {
-//	    stat = dkim_get_key_dns(dkim, sig, buf, buflen);
+	    stat = DKIM_CBSTAT_DEFAULT;
+	    break;
 	}
     }
 
