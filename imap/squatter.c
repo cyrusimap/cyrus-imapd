@@ -488,17 +488,19 @@ static void qitem_delete(qitem_t *item)
     free(item);
 }
 
+#if 0
 static void queue_dump(qitem_t **headp)
 {
     qitem_t *item;
 
-    syslog(LOG_ERR, "XXX queue {");
+    syslog(LOG_INFO, "queue {");
     for (item = *headp ; item ; item = item->next) {
-	syslog(LOG_ERR, "XXX delta_ms=%d delay_ms=%d mboxname=%s",
+	syslog(LOG_INFO, "    delta_ms=%d delay_ms=%d mboxname=%s",
 		item->delta_ms, item->delay_ms, item->mboxname);
     }
-    syslog(LOG_ERR, "XXX } queue");
+    syslog(LOG_INFO, "} queue");
 }
+#endif
 
 static qitem_t *queue_remove_by_name(qitem_t **headp, const char *mboxname)
 {
@@ -547,7 +549,9 @@ static void queue_delay(qitem_t **headp, qitem_t *item)
     delta_ms = item->delay_ms;
     if (item->delay_ms < MAX_DELAY_MS)
 	item->delay_ms *= 2;    /* exponential backoff */
-syslog(LOG_ERR, "XXX queue_delay(%s, %d ms)", item->mboxname, delta_ms);
+
+    if (verbose > 1)
+	syslog(LOG_INFO, "queue_delay(%s, %d ms)", item->mboxname, delta_ms);
 
     for (prevp = headp ;
 	 *prevp && delta_ms >= (*prevp)->delta_ms ;
@@ -576,7 +580,6 @@ static void read_sync_log_items(sync_log_reader_t *slr)
 
     while (sync_log_reader_getitem(slr, args) == 0) {
 	if (!strcmp(args[0], "MAILBOX")) {
-syslog(LOG_ERR, "XXX read_sync_log_items: %s %s", args[0], args[1]);
 	    item = queue_remove_by_name(&queue, args[1]);
 	    if (!item)
 		item = qitem_new(args[1]);
@@ -596,32 +599,27 @@ static void do_rolling(const char *channel)
     int delay_ms;
     int r;
 
-syslog(LOG_ERR, "XXX do_rolling: start");
     slr = sync_log_reader_create_with_channel(channel);
     for (;;) {
-syslog(LOG_ERR, "XXX do_rolling: top of loop");
 	signals_poll();
 
 	if (!queue) {
 	    /* have successfully drained the queue, go see
 	     * if there's some more to be had in the sync log */
 	    r = sync_log_reader_begin(slr);
-syslog(LOG_ERR, "XXX do_rolling: sync_log_reader_begin returned %d (%s)", r, error_message(r));
 	    if (r && r != IMAP_AGAIN)
 		break;
 	    if (!r) {
-syslog(LOG_ERR, "XXX do_rolling: reading items from sync log");
 		read_sync_log_items(slr);
 	    }
 	}
 	else if (queue_next_due(&queue) <= 0) {
 	    /* have some due items in the queue, try to index them */
-queue_dump(&queue);
 	    rx = search_begin_update(verbose);
 	    while ((item = queue_remove_due(&queue))) {
-syslog(LOG_ERR, "XXX do_rolling: indexing %s", item->mboxname);
+		if (verbose > 1)
+		    syslog(LOG_INFO, "do_rolling: indexing %s", item->mboxname);
 		r = index_one(item->mboxname, /*blocking*/0);
-syslog(LOG_ERR, "XXX do_rolling: index_one returned %d (%s)", r, error_message(r));
 		if (r == IMAP_AGAIN || r == IMAP_MAILBOX_LOCKED)
 		    queue_delay(&queue, item);
 		else
@@ -629,17 +627,14 @@ syslog(LOG_ERR, "XXX do_rolling: index_one returned %d (%s)", r, error_message(r
 	    }
 	    search_end_update(rx);
 	    rx = NULL;
-queue_dump(&queue);
 	}
 
 	delay_ms = MIN(poll_period_ms, queue_next_due(&queue));
 	if (delay_ms) {
-syslog(LOG_ERR, "XXX do_rolling: sleeping %d ms", delay_ms);
 	    poll(NULL, 0, delay_ms);
 	    queue_slept(&queue, delay_ms);
 	}
     }
-syslog(LOG_ERR, "XXX do_rolling: end");
     sync_log_reader_free(slr);
 }
 
