@@ -74,10 +74,6 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 static int ping(struct backend *s);
 static int logout(struct backend *s __attribute__((unused)));
 static int starttls(struct backend *s);
-static int read_response(struct backend *be, unsigned meth,
-			 unsigned *code, const char **statline,
-			 hdrcache_t *resp_hdrs, struct buf *resp_body,
-			 const char **errstr);
 
 
 struct protocol_t http_protocol =
@@ -237,7 +233,8 @@ static int login(struct backend *s, const char *server __attribute__((unused)),
 	serverinlen = clientoutlen = 0;
 
       response:
-	r = read_response(s, METH_OPTIONS, &code, NULL, &hdrs, NULL, &errstr);
+	r = http_read_response(s, METH_OPTIONS, &code, NULL,
+			       &hdrs, NULL, &errstr);
 	if (r) {
 	    if (status) *status = errstr;
 	    goto cleanup;
@@ -444,7 +441,8 @@ static int ping(struct backend *s)
     prot_flush(s->out);
 
     do {
-	r = read_response(s, METH_OPTIONS, &code, NULL, &hdrs, NULL, &errstr);
+	r = http_read_response(s, METH_OPTIONS, &code, NULL,
+			       &hdrs, NULL, &errstr);
 
 	/* Check if this is a non-persistent connection */
 	if (!r && (hdr = spool_getheader(hdrs, "Connection")) &&
@@ -571,10 +569,10 @@ static void write_cachehdr(const char *name, const char *contents, void *rock)
 
 
 /* Read a response from backend */
-static int read_response(struct backend *be, unsigned meth,
-			 unsigned *code, const char **statline,
-			 hdrcache_t *resp_hdrs, struct buf *resp_body,
-			 const char **errstr)
+int http_read_response(struct backend *be, unsigned meth,
+		       unsigned *code, const char **statline,
+		       hdrcache_t *resp_hdrs, struct buf *resp_body,
+		       const char **errstr)
 {
     static char statbuf[2048];
     int c = EOF;
@@ -707,7 +705,7 @@ int http_pipe_req_resp(struct backend *be, struct transaction_t *txn)
 
     do {
 	/* Read response from backend */
-	r = read_response(be, txn->meth, &code, &statline,
+	r = http_read_response(be, txn->meth, &code, &statline,
 			  &resp_hdrs, &resp_body, &txn->error.desc);
 
 	if (!r && (code == 100)) { /* Continue */
@@ -790,8 +788,8 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
     prot_flush(src_be->out);
 
     /* Read response from source backend */
-    r = read_response(src_be, METH_HEAD, &code, &statline, &resp_hdrs, NULL,
-		      &txn->error.desc);
+    r = http_read_response(src_be, METH_HEAD, &code, &statline,
+			   &resp_hdrs, NULL, &txn->error.desc);
     if (r) goto cleanup;
 
     if (code == 200) {  /* OK */
@@ -826,8 +824,8 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 	prot_flush(dest_be->out);
 
 	/* Read response from dest backend */
-	r = read_response(dest_be, METH_PUT, &code, &statline, &resp_hdrs,
-			  &resp_body, &txn->error.desc);
+	r = http_read_response(dest_be, METH_PUT, &code, &statline,
+			       &resp_hdrs, &resp_body, &txn->error.desc);
 	if (r) goto cleanup;
 
 	if (code == 100) {  /* Continue */
@@ -848,8 +846,8 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 	    prot_flush(src_be->out);
 
 	    /* Read response from source backend */
-	    r = read_response(src_be, METH_GET, &code, &statline, &resp_hdrs,
-			      &resp_body, &txn->error.desc);
+	    r = http_read_response(src_be, METH_GET, &code, &statline,
+				   &resp_hdrs, &resp_body, &txn->error.desc);
 	    if (r) goto cleanup;
 
 	    if (code == 200) {  /* OK */
@@ -860,8 +858,8 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 		prot_flush(dest_be->out);
 
 		/* Read final response from dest backend */
-		r = read_response(dest_be, METH_PUT, &code, &statline, &resp_hdrs,
-				  &resp_body, &txn->error.desc);
+		r = http_read_response(dest_be, METH_PUT, &code, &statline,
+				       &resp_hdrs, &resp_body, &txn->error.desc);
 		if (r) goto cleanup;
 	    }
 	    else {
@@ -895,8 +893,8 @@ int http_proxy_copy(struct backend *src_be, struct backend *dest_be,
 	prot_flush(src_be->out);
 
 	/* Read response from source backend */
-	read_response(src_be, METH_DELETE, &code, &statline, &resp_hdrs,
-		      &resp_body, &txn->error.desc);
+	http_read_response(src_be, METH_DELETE, &code, &statline,
+			   &resp_hdrs, &resp_body, &txn->error.desc);
     }
 
   cleanup:
