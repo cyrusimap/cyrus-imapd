@@ -272,6 +272,8 @@ EXPORTED void sync_log(const char *fmt, ...)
     const char *val;
     int i;
 
+    if (!channels) return;
+
     va_start(ap, fmt);
     val = va_format(fmt, ap);
     va_end(ap);
