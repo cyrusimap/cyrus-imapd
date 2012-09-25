@@ -298,11 +298,13 @@ extern int check_precond(unsigned meth, const char *stag, const char *etag,
 			 time_t lastmod, hdrcache_t hdrcache);
 extern int read_body(struct protstream *pin,
 		     hdrcache_t hdrs, struct buf *body, const char **errstr);
+extern int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root);
 
 #ifdef WITH_CALDAV_SCHED
 #include <libical/ical.h>
 
-extern int isched_send(struct sched_param *sparam, icalcomponent *ical);
+extern int isched_send(struct sched_param *sparam, icalcomponent *ical,
+		       xmlNodePtr *xml);
 
 #ifdef WITH_DKIM
 #include <dkim.h>

@@ -118,7 +118,6 @@ static int meth_put(struct transaction_t *txn);
 static int meth_report(struct transaction_t *txn);
 static int parse_path(struct request_target_t *tgt, const char **errstr);
 static unsigned get_preferences(hdrcache_t hdrcache);
-static int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root);
 static int store_resource(struct transaction_t *txn, icalcomponent *ical,
 			  struct mailbox *mailbox, const char *resource,
 			  struct caldav_db *caldavdb, int overwrite,
@@ -3328,7 +3327,7 @@ static int parse_path(struct request_target_t *tgt, const char **errstr)
 
 
 /* Parse an XML body into a tree */
-static int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root)
+int parse_xml_body(struct transaction_t *txn, xmlNodePtr *root)
 {
     const char **hdr;
     xmlParserCtxtPtr ctxt;
@@ -3930,9 +3929,61 @@ int busytime_query(struct transaction_t *txn, icalcomponent *ical)
 	    }
 	    else {
 		/* Use iSchedule */
-		syslog(LOG_INFO, "Use iSchedule");
+		int r;
+		icalcomponent *copy;
+		xmlNodePtr xml;
 
-		isched_send(&sparam, ical);
+		/* Clone a working copy of the iCal object */
+		copy = icalcomponent_new_clone(ical);
+
+		r = isched_send(&sparam, copy, &xml);
+		if (!r) {
+		    xmlNodePtr cur, node;
+		    xmlChar *content;
+
+		    /* Process each response element */
+		    for (cur = xmlFirstElementChild(xml); cur;
+			 cur = xmlNextElementSibling(cur)) {
+			int match;
+
+			node = xmlFirstElementChild(cur);   /* recipient */
+			content = xmlNodeGetContent(node);
+			match = !xmlStrcmp(content, BAD_CAST attendee);
+			xmlFree(content);
+			if (!match) continue;
+
+			node = xmlNextElementSibling(node); /* request-status */
+			content = xmlNodeGetContent(node);
+			xmlNewChild(resp, NULL, BAD_CAST "request-status",
+				    content);
+			xmlFree(content);
+
+			node = xmlNextElementSibling(node); /* calendar-data? */
+			if (node &&
+			    !xmlStrcmp(node->name, BAD_CAST "calendar-data")) {
+			    xmlNodePtr cdata =
+				xmlNewTextChild(resp, NULL,
+						BAD_CAST "calendar-data", NULL);
+			    content = xmlNodeGetContent(node);
+			    xmlAddChild(cdata,
+					xmlNewCDataBlock(root->doc,
+							 content,
+							 xmlStrlen(content)));
+			    xmlFree(content);
+
+			    /* iCal data in resp SHOULD NOT be transformed */
+			    txn->flags |= HTTP_NOTRANSFORM;
+			}
+		    }
+
+		    xmlFreeDoc(xml->doc);
+		}
+		else if (r == HTTP_UNAVAILABLE) {
+		    xmlNewChild(resp, NULL, BAD_CAST "request-status",
+				BAD_CAST "5.1;Service unavailable");
+		}
+
+		icalcomponent_free(copy);
 	    }
 	}
     }

@@ -57,6 +57,7 @@
 #include "http_err.h"
 #include "http_proxy.h"
 #include "map.h"
+#include "proxy.h"
 #include "tok.h"
 #include "util.h"
 #include "xmalloc.h"
@@ -353,20 +354,30 @@ static int isched_recv(struct transaction_t *txn)
 }
 
 
-int isched_send(struct sched_param *sparam, icalcomponent *ical)
+int isched_send(struct sched_param *sparam, icalcomponent *ical,
+		xmlNodePtr *xml)
 {
-    struct backend R;
+    int r = 0;
+    struct backend *be;
     static unsigned send_count = 0;
     static struct buf hdrs = BUF_INITIALIZER;
-    const char *body, *uri = ISCHED_WELLKNOWN_URI;
+    const char *body, *uri;
     size_t bodylen;
     icalcomponent *comp;
     icalcomponent_kind kind;
     icalproperty *prop;
+    unsigned code;
+    struct transaction_t txn;
 
-    /* XXX  Open connection to iSchedule receiver */
-    memset(&R, 0, sizeof(struct backend));
-    R.out = httpd_out;
+    *xml = NULL;
+
+    if (sparam->flags & SCHEDTYPE_REMOTE) uri = ISCHED_WELLKNOWN_URI;
+    else uri = namespace_ischedule.prefix;
+
+    /* Open connection to iSchedule receiver */
+    be = proxy_findserver(sparam->server, &http_protocol, NULL,
+			  &backend_cached, NULL, NULL, httpd_in);
+    if (!be) return HTTP_UNAVAILABLE;
 
     /* Create iSchedule request body */
     body = icalcomponent_as_ical_string(ical);
@@ -403,7 +414,7 @@ int isched_send(struct sched_param *sparam, icalcomponent *ical)
     buf_printf(&hdrs, "\r\n");
 
     /* Send request line */
-    prot_printf(R.out, "POST %s %s\r\n", uri, HTTP_VERSION);
+    prot_printf(be->out, "POST %s %s\r\n", uri, HTTP_VERSION);
 
     if (sparam->flags & SCHEDTYPE_REMOTE) {
 #ifdef WITH_DKIM
@@ -448,7 +459,7 @@ int isched_send(struct sched_param *sparam, icalcomponent *ical)
 				    &sig, &siglen);
 
 	    /* Prepend a DKIM-Signature header */
-	    prot_printf(R.out, "%s: %s\r\n", DKIM_SIGNHEADER, sig);
+	    prot_printf(be->out, "%s: %s\r\n", DKIM_SIGNHEADER, sig);
 
 	    dkim_free(dkim);
 	}
@@ -458,12 +469,22 @@ int isched_send(struct sched_param *sparam, icalcomponent *ical)
     }
 
     /* Send request headers and body */
-    prot_putbuf(R.out, &hdrs);
-    prot_write(R.out, body, bodylen);
+    prot_putbuf(be->out, &hdrs);
+    prot_write(be->out, body, bodylen);
 
-    /* XXX  Parse response */
+    /* Read response (req_hdr and req_body are actually the response) */
+    memset(&txn, 0, sizeof(struct transaction_t));
+    r = http_read_response(be, METH_POST, &code, NULL,
+			   &txn.req_hdrs, &txn.req_body, &txn.error.desc);
+    if (!r && code == 200) {
+	txn.flags |= HTTP_READBODY;
+	r = parse_xml_body(&txn, xml);
+    }
 
-    return 0;
+    if (txn.req_hdrs) spool_free_hdrcache(txn.req_hdrs);
+    buf_free(&txn.req_body);
+
+    return r;
 }
 
 
