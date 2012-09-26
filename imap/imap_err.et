@@ -236,6 +236,11 @@ ec IMAP_CONVERSATIONS_NOT_OPEN,
 ec IMAP_ANCHOR_NOT_FOUND,
    "Anchor not found"
 
+# Used for search engine integration
+
+ec IMAP_TRIVIAL_SEARCH,
+    "The search expression trivially matches all messages"
+
 # Following used for internationalization of untagged BYE response
 
 ec IMAP_BYE_LOGOUT,

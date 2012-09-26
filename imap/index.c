@@ -1544,13 +1544,14 @@ static int index_prefilter_messages(unsigned* msg_list,
     bx = search_begin_search(state->mailbox, /*single*/1,
 			     index_search_hit, &sr, /*verbose*/0);
     if (!bx) {
-	r = IMAP_INTERNAL;
+	r = IMAP_TRIVIAL_SEARCH;
 	goto out;
     }
 
     build_query(bx, searchargs);
 
     r = search_end_search(bx);
+    /* Note: do not complain if r == IMAP_TRIVIAL_SEARCH */
 
 out:
     if (r) {
@@ -2398,37 +2399,48 @@ struct search_multi_rock {
     ptrarray_t folders;
 };
 
-static int index_multi_search_hit(const char *mboxname, uint32_t uidvalidity,
-				  uint32_t uid, void *rock)
+static struct search_folder *search_folder_get(struct search_multi_rock *sr,
+					       const char *mboxname)
 {
-    struct search_multi_rock *sr = (struct search_multi_rock *)rock;
     struct search_folder *sf;
 
     sf = (struct search_folder *)hash_lookup(mboxname, &sr->folders_by_name);
     if (!sf) {
 	sf = (struct search_folder *)xzmalloc(sizeof(struct search_folder));
 	sf->mboxname = xstrdup(mboxname);
-	sf->uidvalidity = uidvalidity;
 	sf->id = -1;	/* not assigned yet */
 	ptrarray_append(&sr->folders, sf);
 	hash_insert(sf->mboxname, sf, &sr->folders_by_name);
     }
 
-    if (uidvalidity > sf->uidvalidity) {
-	/* forget any old data seen so far */
-	sf->msg_count = 0;
-    }
-    else if (uidvalidity < sf->uidvalidity) {
-	/* do not remember any old data */
-	return 0;
-    }
+    return sf;
+}
 
+static void search_folder_add_uid(struct search_folder *sf, uint32_t uid)
+{
     if (sf->msg_count + 1 >= sf->alloc) {
 	sf->alloc += 50;
 	sf->msg_list = xrealloc(sf->msg_list, sf->alloc);
     }
     sf->msg_list[sf->msg_count++] = uid;
+}
 
+static int index_multi_search_hit(const char *mboxname, uint32_t uidvalidity,
+				  uint32_t uid, void *rock)
+{
+    struct search_multi_rock *sr = (struct search_multi_rock *)rock;
+    struct search_folder *sf = search_folder_get(sr, mboxname);
+
+    if (uidvalidity > sf->uidvalidity) {
+	/* forget any old data seen so far */
+	sf->msg_count = 0;
+	sf->uidvalidity = uidvalidity;
+    }
+    else if (uidvalidity < sf->uidvalidity) {
+	/* do not remember any old data */
+	return 0;
+    }
+    search_folder_add_uid(sf, uid);
     return 0;
 }
 
@@ -2440,6 +2452,15 @@ static void find_uids(struct index_state *state,
     unsigned int uid;
     unsigned int msgno;
 
+    if (!sf->uidvalidity) {
+	/* list all messages in the folder */
+	for (msgno = 1; msgno <= state->exists; msgno++)
+	    search_folder_add_uid(sf, msgno);
+	sf->msg_orig_count = sf->msg_count;
+	sf->uidvalidity = state->mailbox->i.uidvalidity;
+	return;
+    }
+
     for (in = 0, out = 0 ; in < sf->msg_count ; in++) {
 	uid = sf->msg_list[in];
 	msgno = index_finduid(state, uid);
@@ -2450,6 +2471,16 @@ static void find_uids(struct index_state *state,
 
     sf->msg_orig_count = sf->msg_count;
     sf->msg_count = out;
+}
+
+static int add_default_search_folder(char *match,
+				     int matchlen __attribute__((unused)),
+				     int maycreate __attribute__((unused)),
+				     void *rock)
+{
+    struct search_multi_rock *sr = (struct search_multi_rock *)rock;
+    search_folder_get(sr, match);
+    return 0;
 }
 
 /*
@@ -2514,6 +2545,17 @@ EXPORTED int index_convmultisort(struct index_state *state,
 
     build_query(bx, searchargs);
     r = search_end_search(bx);
+    if (r == IMAP_TRIVIAL_SEARCH) {
+	char *usermbox = mboxname_user_mbox(mboxname_to_userid(state->mailbox->name), NULL);
+	char *pattern = strconcat(usermbox, ".*", NULL);
+	mboxlist_findall(searchargs->namespace, pattern,
+			 searchargs->namespace->isadmin,
+			 searchargs->userid, searchargs->authstate,
+			 add_default_search_folder, &sr);
+	free(usermbox);
+	free(pattern);
+	r = 0;
+    }
     if (r) goto out;
 
 #if 0
@@ -2553,7 +2595,7 @@ EXPORTED int index_convmultisort(struct index_state *state,
 	    index_checkflags(state2, 0, 0);
 	}
 
-	if (sf->uidvalidity != state2->mailbox->i.uidvalidity) continue;
+	if (sf->uidvalidity && sf->uidvalidity != state2->mailbox->i.uidvalidity) continue;
 
 	/* make sure \Deleted messages are expunged.  Will also lock the
 	 * mailbox state and read any new information */
