@@ -2420,7 +2420,7 @@ static void search_folder_add_uid(struct search_folder *sf, uint32_t uid)
 {
     if (sf->msg_count + 1 >= sf->alloc) {
 	sf->alloc += 50;
-	sf->msg_list = xrealloc(sf->msg_list, sf->alloc);
+	sf->msg_list = xrealloc(sf->msg_list, sizeof(uint32_t)*sf->alloc);
     }
     sf->msg_list[sf->msg_count++] = uid;
 }
