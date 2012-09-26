@@ -273,6 +273,10 @@ static int isched_recv(struct transaction_t *txn)
 		stat = dkim_eom(dkim, NULL);
 	    }
 	    if (stat == DKIM_STAT_OK) authd = 1;
+	    else if (stat == DKIM_STAT_CBREJECT) {
+		txn->error.desc =
+		    "Unable to verify: HTTP request-line mismatch";
+	    }
 	    else {
 		DKIM_SIGINFO *sig = dkim_getsignature(dkim);
 
@@ -590,7 +594,9 @@ static void isched_init(struct buf *serverinfo)
 {
     int fd;
     struct buf keypath = BUF_INITIALIZER;
-    unsigned flags = DKIM_LIBFLAGS_BADSIGHANDLES;
+    unsigned flags = DKIM_LIBFLAGS_BADSIGHANDLES | DKIM_LIBFLAGS_CACHE |
+	DKIM_LIBFLAGS_VERIFYONE;
+    uint64_t ttl = 3600;  /* 1 hour */
     const char *requiredhdrs[] = { "Content-Type", "Host", "iSchedule-Version",
 				   "Originator", "Recipient", NULL };
     const char *signhdrs[] = { "iSchedule-Message-ID", "User-Agent", NULL };
@@ -625,7 +631,11 @@ static void isched_init(struct buf *serverinfo)
 #endif
     dkim_options(dkim_lib, DKIM_OP_SETOPT, DKIM_OPTS_FLAGS,
 		 &flags, sizeof(flags));
+    dkim_options(dkim_lib, DKIM_OP_SETOPT, DKIM_OPTS_SIGNATURETTL,
+		 &ttl, sizeof(ttl));
     dkim_options(dkim_lib, DKIM_OP_SETOPT, DKIM_OPTS_REQUIREDHDRS,
+		 requiredhdrs, sizeof(const char **));
+    dkim_options(dkim_lib, DKIM_OP_SETOPT, DKIM_OPTS_MUSTBESIGNED,
 		 requiredhdrs, sizeof(const char **));
     dkim_options(dkim_lib, DKIM_OP_SETOPT, DKIM_OPTS_SIGNHDRS,
 		 signhdrs, sizeof(const char **));
