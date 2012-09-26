@@ -2876,6 +2876,7 @@ EXPORTED int mailbox_update_conversations(struct mailbox *mailbox,
     r = conversation_save(cstate, record->cid, conv);
 
     conversation_free(conv);
+    free(delta_counts);
     return r;
 }
 
