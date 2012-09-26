@@ -370,6 +370,7 @@ int isched_send(struct sched_param *sparam, icalcomponent *ical,
     struct transaction_t txn;
 
     *xml = NULL;
+    memset(&txn, 0, sizeof(struct transaction_t));
 
     if (sparam->flags & SCHEDTYPE_REMOTE) uri = ISCHED_WELLKNOWN_URI;
     else uri = namespace_ischedule.prefix;
@@ -413,6 +414,7 @@ int isched_send(struct sched_param *sparam, icalcomponent *ical,
 
     buf_printf(&hdrs, "\r\n");
 
+  redirect:
     /* Send request line */
     prot_printf(be->out, "POST %s %s\r\n", uri, HTTP_VERSION);
 
@@ -473,12 +475,25 @@ int isched_send(struct sched_param *sparam, icalcomponent *ical,
     prot_write(be->out, body, bodylen);
 
     /* Read response (req_hdr and req_body are actually the response) */
-    memset(&txn, 0, sizeof(struct transaction_t));
     r = http_read_response(be, METH_POST, &code, NULL,
 			   &txn.req_hdrs, &txn.req_body, &txn.error.desc);
-    if (!r && code == 200) {
-	txn.flags |= HTTP_READBODY;
-	r = parse_xml_body(&txn, xml);
+    if (!r) {
+	switch (code) {
+	case 200:  /* Successful */
+	    txn.flags |= HTTP_READBODY;
+	    r = parse_xml_body(&txn, xml);
+	    break;
+
+	case 301:
+	case 302:
+	case 307:
+	case 308:  /* Redirection */
+	    uri = spool_getheader(txn.req_hdrs, "Location")[0];
+	    goto redirect;
+
+	default:
+	    r = HTTP_UNAVAILABLE;
+	}
     }
 
     if (txn.req_hdrs) spool_free_hdrcache(txn.req_hdrs);
