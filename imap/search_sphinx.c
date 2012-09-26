@@ -72,6 +72,7 @@ struct connection
     MYSQL *mysql;
     char *socket_path;
 };
+#define CONNECTION_INITIALIZER	{ 0, 0 }
 
 /* Name of columns */
 #define COL_CYRUSID	"cyrusid"
@@ -236,7 +237,6 @@ struct sphinx_builder {
     void *rock;
     int single;
     int verbose;
-    struct connection conn;
     struct buf query;
     int depth;
     int alloc;
@@ -332,13 +332,7 @@ static search_builder_t *begin_search(struct mailbox *mailbox,
 				      search_hit_cb_t proc, void *rock,
 				      int verbose)
 {
-    struct connection conn;
     sphinx_builder_t *bb;
-    int r;
-
-    memset(&conn, 0, sizeof(conn));
-    r = get_connection(mailbox->name, &conn);
-    if (r) return NULL;
 
     bb = xzmalloc(sizeof(sphinx_builder_t));
     bb->super.begin_boolean = begin_boolean;
@@ -350,7 +344,6 @@ static search_builder_t *begin_search(struct mailbox *mailbox,
     bb->proc = proc;
     bb->rock = rock;
     bb->single = single;
-    bb->conn = conn;
     buf_init_ro_cstr(&bb->query, "SELECT "COL_CYRUSID" FROM rt WHERE MATCH('");
 
     return &bb->super;
@@ -359,6 +352,7 @@ static search_builder_t *begin_search(struct mailbox *mailbox,
 static int end_search(search_builder_t *bx)
 {
     sphinx_builder_t *bb = (sphinx_builder_t *)bx;
+    struct connection conn = CONNECTION_INITIALIZER;
     MYSQL_RES *res = NULL;
     MYSQL_ROW row;
     int r = 0;
@@ -375,6 +369,9 @@ static int end_search(search_builder_t *bx)
 	goto out;
     }
 
+    r = get_connection(bb->mailbox->name, &conn);
+    if (r) goto out;
+
     buf_appendcstr(&bb->query, "')");
     // get sphinx to sort by most recent date first
     buf_appendcstr(&bb->query, " ORDER BY "COL_CYRUSID" DESC");
@@ -385,15 +382,15 @@ static int end_search(search_builder_t *bx)
     if (bb->verbose)
 	syslog(LOG_NOTICE, "Sphinx query %s", bb->query.s);
 
-    r = mysql_real_query(bb->conn.mysql, bb->query.s, bb->query.len);
+    r = mysql_real_query(conn.mysql, bb->query.s, bb->query.len);
     if (r) {
 	syslog(LOG_ERR, "IOERROR: Sphinx query %s failed: %s",
-	       bb->query.s, mysql_error(bb->conn.mysql));
+	       bb->query.s, mysql_error(conn.mysql));
 	r = IMAP_IOERROR;
 	goto out;
     }
 
-    res = mysql_use_result(bb->conn.mysql);
+    res = mysql_use_result(conn.mysql);
     while ((row = mysql_fetch_row(res))) {
 	const char *mboxname;
 	unsigned int uidvalidity;
@@ -419,7 +416,7 @@ static int end_search(search_builder_t *bx)
 
 out:
     if (res) mysql_free_result(res);
-    close_connection(&bb->conn);
+    close_connection(&conn);
     free(bb->stack);
     buf_free(&bb->query);
     free(bx);
