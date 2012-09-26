@@ -187,23 +187,40 @@ static const struct buf *make_cyrusid(struct mailbox *mailbox, uint32_t uid)
     return &buf;
 }
 
-static void append_escaped_map(MYSQL *conn, struct buf *buf,
+/*
+ * Escape a string for MySQL.  Note that mysql_real_escape_string
+ * requires a live connection, and we now want to be able to build a
+ * query string before we have a connection.  From the MySQL
+ * documentation:
+ *
+ *	Strictly speaking, MySQL requires only that backslash and
+ *	the quote character used to quote the string in the query
+ *	be escaped. mysql_real_escape_string() quotes the other
+ *	characters to make them easier to read in log files.
+ */
+static void append_escaped_map(struct buf *buf,
 			       const char *base, unsigned int len)
 {
-    buf_ensure(buf, 2*len+1);
-    buf->len += mysql_real_escape_string(conn, buf->s + buf->len, base, len);
-    buf->flags |= BUF_CSTRING;
+    buf_ensure(buf, len+1);
+
+    for ( ; len ; len--, base++) {
+	int c = *(unsigned char *)base;
+	if (c == '\\' || c == '\'' || c == '"')
+	    buf_putc(buf, '\\');
+	buf_putc(buf, c);
+    }
+    buf_cstring(buf);
 }
 
-static void append_escaped(MYSQL *conn, struct buf *to, const struct buf *from)
+static void append_escaped(struct buf *to, const struct buf *from)
 {
-    append_escaped_map(conn, to, from->s, from->len);
+    append_escaped_map(to, from->s, from->len);
 }
 
-static void append_escaped_cstr(MYSQL *conn, struct buf *to, const char *str)
+static void append_escaped_cstr(struct buf *to, const char *str)
 {
     if (str)
-	append_escaped_map(conn, to, str, strlen(str));
+	append_escaped_map(to, str, strlen(str));
 }
 
 struct opstack {
@@ -306,8 +323,8 @@ static void match(search_builder_t *bx, int part, const char *str)
 
     buf_init_ro_cstr(&f, str);
     buf_reset(&e1);
-    append_escaped(bb->conn.mysql, &e1, &f);
-    append_escaped(bb->conn.mysql, &bb->query, &e1);
+    append_escaped(&e1, &f);
+    append_escaped(&bb->query, &e1);
 }
 
 static search_builder_t *begin_search(struct mailbox *mailbox,
@@ -443,7 +460,7 @@ struct sphinx_receiver
  * total amount of parts text to 4 MB. */
 #define MAX_PARTS_SIZE	    (4*1024*1024)
 
-static const char *describe_query(MYSQL *c, struct buf *desc,
+static const char *describe_query(struct buf *desc,
 				  const struct buf *query,
 				  unsigned maxlen)
 {
@@ -454,7 +471,7 @@ static const char *describe_query(MYSQL *c, struct buf *desc,
 	buf_appendcstr(desc, "...");
     }
     else {
-	append_escaped(c, desc, query);
+	append_escaped(desc, query);
     }
     buf_appendcstr(desc, "\"");
     return buf_cstring(desc);
@@ -467,12 +484,12 @@ static int doquery(sphinx_receiver_t *tr, const struct buf *query)
     unsigned int maxlen = tr->verbose > 2 ? /*unlimited*/0 : 128;
 
     if (tr->verbose > 1)
-	syslog(LOG_NOTICE, "%s", describe_query(tr->conn.mysql, &desc, query, maxlen));
+	syslog(LOG_NOTICE, "%s", describe_query(&desc, query, maxlen));
 
     r = mysql_real_query(tr->conn.mysql, query->s, query->len);
     if (r) {
 	syslog(LOG_ERR, "IOERROR: %s failed: %s",
-			describe_query(tr->conn.mysql, &desc, query, maxlen),
+			describe_query(&desc, query, maxlen),
 			mysql_error(tr->conn.mysql));
 	r = IMAP_IOERROR;
     }
@@ -590,7 +607,7 @@ static int write_latest(sphinx_receiver_t *tr)
 			       "(id,mboxname,uidvalidity,uid) "
 			       "VALUES (");
 	buf_printf(&query, "%u,'", id);
-	append_escaped_cstr(tr->conn.mysql, &query, tr->mailbox->name);
+	append_escaped_cstr(&query, tr->mailbox->name);
 	buf_printf(&query, "',%u,%u)",
 		   tr->mailbox->i.uidvalidity, tr->latest);
     }
@@ -748,12 +765,12 @@ static void end_message(search_text_receiver_t *rx,
     }
     buf_appendcstr(&tr->query, ") VALUES (");
     buf_printf(&tr->query, "%u,'", ++tr->lastid);
-    append_escaped(tr->conn.mysql, &tr->query, make_cyrusid(tr->mailbox, tr->uid));
+    append_escaped(&tr->query, make_cyrusid(tr->mailbox, tr->uid));
     buf_appendcstr(&tr->query, "'");
     for (i = 0 ; i < SEARCH_NUM_PARTS ; i++) {
 	if (tr->parts[i].len) {
 	    buf_appendcstr(&tr->query, ",'");
-	    append_escaped(tr->conn.mysql, &tr->query, &tr->parts[i]);
+	    append_escaped(&tr->query, &tr->parts[i]);
 	    buf_appendcstr(&tr->query, "'");
 	}
     }
