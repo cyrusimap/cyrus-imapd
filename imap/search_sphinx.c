@@ -74,6 +74,8 @@ struct connection
 };
 #define CONNECTION_INITIALIZER	{ 0, 0 }
 
+static int doquery(struct connection *, int, const struct buf *);
+
 /* Name of columns */
 #define COL_CYRUSID	"cyrusid"
 static const char * const column_by_part[SEARCH_NUM_PARTS] = {
@@ -349,12 +351,47 @@ static search_builder_t *begin_search(struct mailbox *mailbox,
     return &bb->super;
 }
 
+/* Yes, we read the latest uid in two separate functions.  Meh */
+static int read_latest_search(sphinx_builder_t *bb,
+			      struct connection *conn,
+			      uint32_t *latestp)
+{
+    struct buf query = BUF_INITIALIZER;
+    MYSQL_RES *res = NULL;
+    MYSQL_ROW row;
+    int r = 0;
+
+    buf_printf(&query, "SELECT mboxname,uid "
+		       "FROM latest "
+		       "WHERE uidvalidity=%u "
+		       "LIMIT 10000",
+		       bb->mailbox->i.uidvalidity);
+
+    r = doquery(conn, bb->verbose, &query);
+    if (r) goto out;
+
+    res = mysql_store_result(conn->mysql);
+    while ((row = mysql_fetch_row(res))) {
+	if (!strcmp(bb->mailbox->name, row[0])) {
+	    *latestp = strtoul(row[1], NULL, 10);
+	    break;
+	}
+    }
+
+out:
+    if (res) mysql_free_result(res);
+    buf_free(&query);
+    return r;
+}
+
 static int end_search(search_builder_t *bx)
 {
     sphinx_builder_t *bb = (sphinx_builder_t *)bx;
     struct connection conn = CONNECTION_INITIALIZER;
     MYSQL_RES *res = NULL;
     MYSQL_ROW row;
+    uint32_t uid;
+    uint32_t latest = 0;
     int r = 0;
 
     if (!bb->nmatches) {
@@ -371,6 +408,15 @@ static int end_search(search_builder_t *bx)
 
     r = get_connection(bb->mailbox->name, &conn);
     if (r) goto out;
+
+    if (bb->single) {
+	/* To avoid races, we want the 'latest' uid we use to be
+	 * an underestimate, because the caller can handle false
+	 * positives but not false negatives.  So we fetch it
+	 * first before the main query. */
+	r = read_latest_search(bb, &conn, &latest);
+	if (r) goto out;
+    }
 
     buf_appendcstr(&bb->query, "')");
     // get sphinx to sort by most recent date first
@@ -411,8 +457,13 @@ static int end_search(search_builder_t *bx)
     }
     r = 0;
 
-    /* TODO: currently we neither track nor care about unindexed
-     * messages, that should be handled by a layer above here. */
+    if (bb->single) {
+	/* add in the unindexed uids as false positives */
+	for (uid = latest+1 ; uid <= bb->mailbox->i.last_uid ; uid++) {
+	    r = bb->proc(bb->mailbox->name, bb->mailbox->i.uidvalidity, uid, bb->rock);
+	    if (r) goto out;
+	}
+    }
 
 out:
     if (res) mysql_free_result(res);
@@ -474,20 +525,20 @@ static const char *describe_query(struct buf *desc,
     return buf_cstring(desc);
 }
 
-static int doquery(sphinx_receiver_t *tr, const struct buf *query)
+static int doquery(struct connection *conn, int verbose, const struct buf *query)
 {
     int r;
     struct buf desc = BUF_INITIALIZER;
-    unsigned int maxlen = tr->verbose > 2 ? /*unlimited*/0 : 128;
+    unsigned int maxlen = verbose > 2 ? /*unlimited*/0 : 128;
 
-    if (tr->verbose > 1)
+    if (verbose > 1)
 	syslog(LOG_NOTICE, "%s", describe_query(&desc, query, maxlen));
 
-    r = mysql_real_query(tr->conn.mysql, query->s, query->len);
+    r = mysql_real_query(conn->mysql, query->s, query->len);
     if (r) {
 	syslog(LOG_ERR, "IOERROR: %s failed: %s",
 			describe_query(&desc, query, maxlen),
-			mysql_error(tr->conn.mysql));
+			mysql_error(conn->mysql));
 	r = IMAP_IOERROR;
     }
 
@@ -551,7 +602,7 @@ static int read_latest(sphinx_receiver_t *tr)
 		       "LIMIT 10000",
 		       tr->mailbox->i.uidvalidity);
 
-    r = doquery(tr, &query);
+    r = doquery(&tr->conn, tr->verbose, &query);
     if (r) goto out;
 
     res = mysql_store_result(tr->conn.mysql);
@@ -571,7 +622,7 @@ static int read_latest(sphinx_receiver_t *tr)
      * rows with all N valid ids..., rather than one row with the max */
     buf_appendcstr(&query, "SELECT max(id) FROM latest ORDER BY id DESC LIMIT 1;");
 
-    r = doquery(tr, &query);
+    r = doquery(&tr->conn, tr->verbose, &query);
     if (r) goto out;
 
     res = mysql_store_result(tr->conn.mysql);
@@ -609,7 +660,7 @@ static int write_latest(sphinx_receiver_t *tr)
 		   tr->mailbox->i.uidvalidity, tr->latest);
     }
 
-    r = doquery(tr, &query);
+    r = doquery(&tr->conn, tr->verbose, &query);
     if (r) goto out;
 
     tr->latest_id = id;
@@ -641,7 +692,7 @@ static int read_lastid(sphinx_receiver_t *tr)
 
     buf_appendcstr(&query, "SELECT max(id) FROM rt ORDER BY id DESC LIMIT 1;");
 
-    r = doquery(tr, &query);
+    r = doquery(&tr->conn, tr->verbose, &query);
     if (r) goto out;
 
     res = mysql_store_result(tr->conn.mysql);
@@ -774,7 +825,7 @@ static void end_message(search_text_receiver_t *rx,
     /* apparently Sphinx doesn't let you explicitly INSERT a NULL */
     buf_appendcstr(&tr->query, ")");
 
-    r = doquery(tr, &tr->query);
+    r = doquery(&tr->conn, tr->verbose, &tr->query);
     if (r) goto out; /* TODO: propagate error to the user */
 
     ++tr->uncommitted;
