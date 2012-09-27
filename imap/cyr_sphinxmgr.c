@@ -487,6 +487,7 @@ static void process_command(int ss)
 {
     int s;
     int r;
+    int i;
     char *cmd;
     char *arg;
     int (*handler)(char *arg, char *reply, size_t maxreply) = NULL;
@@ -510,13 +511,23 @@ static void process_command(int ss)
     }
     buf[r] = '\0';
 
-    cmd = strtok(buf, sep);
-    if (!cmd) {
+    /* trim trailing CR or LF from the line */
+    while (r > 0 && (buf[r-1] == '\r' || buf[r-1] == '\n'))
+	buf[--r] = '\0';
+
+    /* split into command and argument, preserving whitespace
+     * inside the argument */
+    cmd = buf;
+    i = strcspn(buf, sep);
+    if (i <= 0 || i >= r) {
 	syslog(LOG_ERR, "Malformed command received, ignoring");
 	goto out;
     }
+    while (i < r && isspace(buf[i]))
+	buf[i++] = '\0';
+
     ucase(cmd);
-    arg = strtok(NULL, sep);
+    arg = buf+i;
 
     if (verbose > 1)
 	syslog(LOG_INFO, "parsed command, cmd=\"%s\" arg=\"%s\"", cmd, arg);
