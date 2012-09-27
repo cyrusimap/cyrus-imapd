@@ -1758,10 +1758,7 @@ int meth_propfind(struct transaction_t *txn)
     memset(&fctx, 0, sizeof(struct propfind_ctx));
 
     /* Make sure its a DAV resource */
-    if (!(txn->req_tgt.allow & ALLOW_DAV) && 
-	strcmp(txn->req_tgt.path, "/")) {  /* Apple iCal checks "/" */
-	return HTTP_NOT_ALLOWED;
-    }
+    if (!(txn->req_tgt.allow & ALLOW_DAV)) return HTTP_NOT_ALLOWED;
 
     /* In case namespace didn't enforce auth - Needed for Evolution */
     if (!httpd_userid) return HTTP_UNAUTHORIZED;

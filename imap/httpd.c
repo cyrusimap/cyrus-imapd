@@ -207,6 +207,7 @@ static void log_cachehdr(const char *name, const char *contents, void *rock);
 static void keep_alive(int sig);
 
 static int meth_get(struct transaction_t *txn);
+static int meth_propfind_root(struct transaction_t *txn);
 
 
 static struct {
@@ -263,11 +264,7 @@ const struct namespace_t namespace_default = {
 	{ NULL,			0		},	/* MOVE		*/
 	{ &meth_options,	METH_NOBODY	},	/* OPTIONS	*/
 	{ NULL,			0		},	/* POST		*/
-#ifdef WITH_CALDAV
-	{ &meth_propfind,	0		},	/* PROPFIND	*/
-#else
-	{ NULL,			0		},	/* PROPFIND	*/
-#endif
+	{ &meth_propfind_root,	0		},	/* PROPFIND	*/
 	{ NULL,			0		},	/* PROPPATCH	*/
 	{ NULL,			0		},	/* PUT		*/
 	{ NULL,			0		}	/* REPORT	*/
@@ -2465,4 +2462,18 @@ int meth_options(struct transaction_t *txn)
 
     response_header(HTTP_OK, txn);
     return 0;
+}
+
+
+/* Perform an PROPFIND request on "/" iff we support CalDAV */
+int meth_propfind_root(struct transaction_t *txn)
+{
+#ifdef WITH_CALDAV
+    /* Apple iCal checks "/" */
+    if (!strcmp(txn->req_tgt.path, "/")) {
+	txn->req_tgt.allow |= ALLOW_DAV;
+	return meth_propfind(txn);
+    }
+#endif
+    return HTTP_NOT_ALLOWED;
 }
