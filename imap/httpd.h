@@ -85,7 +85,6 @@ enum {
     METH_DELETE,
     METH_GET,
     METH_HEAD,
-    METH_LOCK,
     METH_MKCALENDAR,
     METH_MKCOL,
     METH_MOVE,
@@ -95,7 +94,6 @@ enum {
     METH_PROPPATCH,
     METH_PUT,
     METH_REPORT,
-    METH_UNLOCK,
 
     METH_UNKNOWN,  /* MUST be last */
 };
@@ -225,6 +223,16 @@ typedef int (*method_proc_t)(struct transaction_t *txn);
 typedef int (*filter_proc_t)(struct transaction_t *txn,
 			     const char *base, unsigned long len);
 
+struct method_t {
+    method_proc_t proc;		/* Function to perform the method */
+    unsigned flags;		/* Method-specific flags */
+};
+
+/* Method flags */
+enum {
+    METH_NOBODY =	(1<<0),	/* Method does not expect a body */
+};
+
 struct namespace_t {
     unsigned id;		/* Namespace identifier */
     const char *prefix;		/* Prefix of URL path denoting namespace */
@@ -236,11 +244,12 @@ struct namespace_t {
     void (*auth)(const char *userid);
     void (*reset)(void);
     void (*shutdown)(void);
-    method_proc_t proc[];	/* Functions to perform HTTP methods.
-				 * MUST be a function pointer for EACH method
-				 * (or NULL if method not supported)
-				 * listed in, and in the SAME ORDER in which
-				 * they appear in, the http_methods[] array.
+    struct method_t methods[];	/* Array of functions to perform HTTP methods.
+				 * MUST be an entry for EACH method listed,
+				 * and in the SAME ORDER, in which they appear
+				 * in the http_methods[] array.
+				 * If the method is not supported,
+				 * the function pointer MUST be NULL.
 				 */
 };
 

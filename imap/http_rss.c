@@ -108,22 +108,20 @@ const struct namespace_t namespace_rss = {
     URL_NS_RSS, "/rss", NULL, 1 /* auth */, ALLOW_READ, 0,
     NULL, NULL, NULL, NULL,
     {
-	NULL,			/* ACL		*/
-	NULL,			/* COPY		*/
-	NULL,			/* DELETE	*/
-	&meth_get,		/* GET		*/
-	&meth_get,		/* HEAD		*/
-	NULL,			/* LOCK		*/
-	NULL,			/* MKCALENDAR	*/
-	NULL,			/* MKCOL	*/
-	NULL,			/* MOVE		*/
-	&meth_options,		/* OPTIONS	*/
-	NULL,			/* POST		*/
-	NULL,			/* PROPFIND	*/
-	NULL,			/* PROPPATCH	*/
-	NULL,			/* PUT		*/
-	NULL,			/* REPORT	*/
-	NULL			/* UNLOCK	*/
+	{ NULL,			0		},	/* ACL		*/
+	{ NULL,			0		},	/* COPY		*/
+	{ NULL,			0		},	/* DELETE	*/
+	{ &meth_get,		METH_NOBODY	},	/* GET		*/
+	{ &meth_get,		METH_NOBODY	},	/* HEAD		*/
+	{ NULL,			0		},	/* MKCALENDAR	*/
+	{ NULL,			0		},	/* MKCOL	*/
+	{ NULL,			0		},	/* MOVE		*/
+	{ &meth_options,	METH_NOBODY	},	/* OPTIONS	*/
+	{ NULL,			0		},	/* POST		*/
+	{ NULL,			0		},	/* PROPFIND	*/
+	{ NULL,			0		},	/* PROPPATCH	*/
+	{ NULL,			0		},	/* PUT		*/
+	{ NULL,			0		}	/* REPORT	*/
     }
 };
 

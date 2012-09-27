@@ -236,7 +236,6 @@ const char *http_methods[] = {
     "DELETE",
     "GET",
     "HEAD",
-    "LOCK",
     "MKCALENDAR",
     "MKCOL",
     "MOVE",
@@ -246,7 +245,6 @@ const char *http_methods[] = {
     "PROPPATCH",
     "PUT",
     "REPORT",
-    "UNLOCK",
     NULL
 };
 
@@ -255,26 +253,24 @@ const struct namespace_t namespace_default = {
     URL_NS_DEFAULT, "", NULL, 0 /* no auth */, ALLOW_READ, 0,
     NULL, NULL, NULL, NULL,
     {
-	NULL,			/* ACL		*/
-	NULL,			/* COPY		*/
-	NULL,			/* DELETE	*/
-	&meth_get,		/* GET		*/
-	&meth_get,		/* HEAD		*/
-	NULL,			/* LOCK		*/
-	NULL,			/* MKCALENDAR	*/
-	NULL,			/* MKCOL	*/
-	NULL,			/* MOVE		*/
-	&meth_options,		/* OPTIONS	*/
-	NULL,			/* POST		*/
+	{ NULL,			0		},	/* ACL		*/
+	{ NULL,			0		},	/* COPY		*/
+	{ NULL,			0		},	/* DELETE	*/
+	{ &meth_get,		METH_NOBODY	},	/* GET		*/
+	{ &meth_get,		METH_NOBODY	},	/* HEAD		*/
+	{ NULL,			0		},	/* MKCALENDAR	*/
+	{ NULL,			0		},	/* MKCOL	*/
+	{ NULL,			0		},	/* MOVE		*/
+	{ &meth_options,	METH_NOBODY	},	/* OPTIONS	*/
+	{ NULL,			0		},	/* POST		*/
 #ifdef WITH_CALDAV
-	&meth_propfind,		/* PROPFIND	*/
+	{ &meth_propfind,	0		},	/* PROPFIND	*/
 #else
-	NULL,			/* PROPFIND	*/
+	{ NULL,			0		},	/* PROPFIND	*/
 #endif
-	NULL,			/* PROPPATCH	*/
-	NULL,			/* PUT		*/
-	NULL,			/* REPORT	*/
-	NULL			/* UNLOCK	*/
+	{ NULL,			0		},	/* PROPPATCH	*/
+	{ NULL,			0		},	/* PUT		*/
+	{ NULL,			0		}	/* REPORT	*/
     }
 };
 
@@ -1099,8 +1095,14 @@ static void cmdloop(void)
 	}
 
 	/* Check Method against list of supported methods in the namespace */
-	if (!ret && !(meth_proc = namespace->proc[txn.meth])) {
-	    ret = HTTP_NOT_ALLOWED;
+	if (!ret) {
+	    if (!(meth_proc = namespace->methods[txn.meth].proc))
+		ret = HTTP_NOT_ALLOWED;
+	    else if ((namespace->methods[txn.meth].flags & METH_NOBODY) &&
+		     (spool_getheader(txn.req_hdrs, "Transfer-Encoding") ||
+		      spool_getheader(txn.req_hdrs, "Content-Length") ||
+		      spool_getheader(txn.req_hdrs, "Content-Type")))
+		ret = HTTP_BAD_MEDIATYPE;
 	}
 
 	if (ret) goto done;

@@ -146,22 +146,20 @@ const struct namespace_t namespace_calendar = {
     (ALLOW_READ | ALLOW_POST | ALLOW_WRITE | ALLOW_DAV | ALLOW_CAL), 0,
     &my_caldav_init, &my_caldav_auth, my_caldav_reset, &my_caldav_shutdown,
     { 
-	&meth_acl,		/* ACL		*/
-	&meth_copy,		/* COPY		*/
-	&meth_delete,		/* DELETE	*/
-	&meth_get,		/* GET		*/
-	&meth_get,		/* HEAD		*/
-	NULL,			/* LOCK		*/
-	&meth_mkcol,		/* MKCALENDAR	*/
-	&meth_mkcol,		/* MKCOL	*/
-	&meth_copy,		/* MOVE		*/
-	&meth_options,		/* OPTIONS	*/
-	&meth_post,		/* POST		*/
-	&meth_propfind,		/* PROPFIND	*/
-	&meth_proppatch,	/* PROPPATCH	*/
-	&meth_put,		/* PUT		*/
-	&meth_report,		/* REPORT	*/
-	NULL			/* UNLOCK	*/
+	{ &meth_acl,		0		},	/* ACL		*/
+	{ &meth_copy,		METH_NOBODY	},	/* COPY		*/
+	{ &meth_delete,		METH_NOBODY	},	/* DELETE	*/
+	{ &meth_get,		METH_NOBODY	},	/* GET		*/
+	{ &meth_get,		METH_NOBODY	},	/* HEAD		*/
+	{ &meth_mkcol,		0		},	/* MKCALENDAR	*/
+	{ &meth_mkcol,		0		},	/* MKCOL	*/
+	{ &meth_copy,		METH_NOBODY	},	/* MOVE		*/
+	{ &meth_options,	METH_NOBODY	},	/* OPTIONS	*/
+	{ &meth_post,		0		},	/* POST		*/
+	{ &meth_propfind,	0		},	/* PROPFIND	*/
+	{ &meth_proppatch,	0		},	/* PROPPATCH	*/
+	{ &meth_put,		0		},	/* PUT		*/
+	{ &meth_report,		0		}	/* REPORT	*/
     }
 };
 
@@ -171,22 +169,20 @@ const struct namespace_t namespace_principal = {
     (ALLOW_DAV | ALLOW_CAL | ALLOW_CARD), 0,
     NULL, NULL, NULL, NULL,
     {
-	NULL,			/* ACL		*/
-	NULL,			/* COPY		*/
-	NULL,			/* DELETE	*/
-	NULL,			/* GET		*/
-	NULL,			/* HEAD		*/
-	NULL,			/* LOCK		*/
-	NULL,			/* MKCALENDAR	*/
-	NULL,			/* MKCOL	*/
-	NULL,			/* MOVE		*/
-	&meth_options,		/* OPTIONS	*/
-	NULL,			/* POST		*/
-	&meth_propfind,		/* PROPFIND	*/
-	NULL,			/* PROPPATCH	*/
-	NULL,			/* PUT		*/
-	&meth_report,		/* REPORT	*/
-	NULL			/* UNLOCK	*/
+	{ NULL,			0		},	/* ACL		*/
+	{ NULL,			0		},	/* COPY		*/
+	{ NULL,			0		},	/* DELETE	*/
+	{ &meth_get,		METH_NOBODY	},	/* GET		*/
+	{ &meth_get,		METH_NOBODY	},	/* HEAD		*/
+	{ NULL,			0		},	/* MKCALENDAR	*/
+	{ NULL,			0		},	/* MKCOL	*/
+	{ NULL,			0		},	/* MOVE		*/
+	{ &meth_options,	METH_NOBODY	},	/* OPTIONS	*/
+	{ NULL,			0		},	/* POST		*/
+	{ &meth_propfind,	0		},	/* PROPFIND	*/
+	{ NULL,			0		},	/* PROPPATCH	*/
+	{ NULL,			0		},	/* PUT		*/
+	{ &meth_report,		0		}	/* REPORT	*/
     }
 };
 
