@@ -319,6 +319,9 @@ struct windowargs {
 				 * @offset.  If specified but not found,
 				 * an error will be returned.  Mutually
 				 * exclusive with @position.*/
+    char *anchorfolder;		/* internal mboxname of a folder to
+				 * which the anchor applies; only used
+				 * for XCONVMULTISORT. */
     uint32_t offset;
     int changedsince;		/* if 1, show messages a) added since @uidnext,
 				 * b) removed since @modseq, or c) modified

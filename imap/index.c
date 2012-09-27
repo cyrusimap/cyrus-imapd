@@ -2246,6 +2246,11 @@ EXPORTED int index_convsort(struct index_state *state,
     assert(!windowargs->changedsince);
     assert(!windowargs->upto);
 
+    /* Check the client didn't specify MULTIANCHOR. */
+    if (windowargs->anchor && windowargs->anchorfolder)
+	return IMAP_PROTOCOL_BAD_PARAMETERS;
+
+
     /* make sure \Deleted messages are expunged.  Will also lock the
      * mailbox state and read any new information */
     r = index_expunge(state, NULL, 1);
@@ -2498,6 +2503,9 @@ EXPORTED int index_convmultisort(struct index_state *state,
     int i;
     hashu64_table seen_cids = HASHU64_TABLE_INITIALIZER;
     uint32_t pos = 0;
+    int found_anchor = 0;
+    uint32_t anchor;
+    uint32_t anchor_pos = 0;
     uint32_t first_pos = 0;
     unsigned int ninwindow = 0;
     ptrarray_t results = PTRARRAY_INITIALIZER;
@@ -2516,12 +2524,11 @@ EXPORTED int index_convmultisort(struct index_state *state,
     assert(!windowargs->changedsince);
     assert(!windowargs->upto);
 
-    /* The ANCHOR windowarg is hard to define over multiple folders,
-     * so just disable it for now. */
-    if (windowargs->anchor) {
-	syslog(LOG_ERR, "Sorry, ANCHOR keyword disabled for XCONVMULTISORT");
+    /* Client needs to have specified MULTIANCHOR which includes
+     * the folder name instead of just ANCHOR.  Check that here
+     * 'cos it's easier than doing so during parsing */
+    if (windowargs->anchor && !windowargs->anchorfolder)
 	return IMAP_PROTOCOL_BAD_PARAMETERS;
-    }
 
     /* make sure \Deleted messages are expunged.  Will also lock the
      * mailbox state and read any new information */
@@ -2606,9 +2613,15 @@ EXPORTED int index_convmultisort(struct index_state *state,
 	find_uids(state2, sf);
 	if (!sf->msg_count) continue;
 
+	anchor = 0;
+	if (windowargs->anchor &&
+	    !strcmp(windowargs->anchorfolder, state2->mailbox->name))
+	    anchor = windowargs->anchor;
+
 	/* Create/load the msgdata array. */
 	sf->msgdata = index_msgdata_load(state2, sf->msg_list, sf->msg_count,
-					 sortcrit, /*anchor*/0, /*found_anchor*/NULL);
+					 sortcrit,
+					 anchor, (anchor ? &found_anchor : 0));
 
 	/* One pass through the folder's message list */
 	found_any = 0;
@@ -2638,6 +2651,11 @@ EXPORTED int index_convmultisort(struct index_state *state,
 	    index_close(&state2);
     }
 
+    if (windowargs->anchor && !found_anchor) {
+	r = IMAP_ANCHOR_NOT_FOUND;
+	goto out;
+    }
+
     /* Sort the merged messages based on the given criteria */
     the_sortcrit = sortcrit;
     qsort(merged_msgdata.data, merged_msgdata.count,
@@ -2659,8 +2677,20 @@ EXPORTED int index_convmultisort(struct index_state *state,
 
 	pos++;
 
-	/* would be implementing anchor here...if it were possible */
-	if (windowargs->position) {
+	if (!anchor_pos &&
+	    windowargs->anchor == msg->uid &&
+	    !strcmp(windowargs->anchorfolder, msg->folder)) {
+	    /* we've found the anchor's position, rejoice! */
+	    anchor_pos = pos;
+	}
+
+	if (windowargs->anchor) {
+	    if (!anchor_pos)
+		continue;
+	    if (pos < anchor_pos + windowargs->offset)
+		continue;
+	}
+	else if (windowargs->position) {
 	    if (pos < windowargs->position)
 		continue;
 	}
@@ -2684,7 +2714,12 @@ EXPORTED int index_convmultisort(struct index_state *state,
 	total = pos;
     }
 
-    /* there would be more anchor logic here, if it made sense */
+    if (windowargs->anchor && !anchor_pos) {
+	/* the anchor was present but not an exemplar */
+	assert(results.count == 0);
+	r = IMAP_ANCHOR_NOT_FOUND;
+	goto out;
+    }
 
     /* Print the resulting list */
 
