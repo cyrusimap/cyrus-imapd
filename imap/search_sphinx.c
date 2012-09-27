@@ -420,10 +420,8 @@ static int end_search(search_builder_t *bx)
 
     buf_appendcstr(&bb->query, "')");
     // get sphinx to sort by most recent date first
-    buf_appendcstr(&bb->query, " ORDER BY "COL_CYRUSID" DESC");
+    buf_appendcstr(&bb->query, " ORDER BY "COL_CYRUSID" DESC LIMIT 1000000000");
     buf_cstring(&bb->query);
-    // TODO: Sphinx has an implicit default limit of 20 results
-    //       we need to defeat that with a LIMIT clause here
 
     if (bb->verbose)
 	syslog(LOG_NOTICE, "Sphinx query %s", bb->query.s);
