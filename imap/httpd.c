@@ -1099,9 +1099,7 @@ static void cmdloop(void)
 	    if (!(meth_proc = namespace->methods[txn.meth].proc))
 		ret = HTTP_NOT_ALLOWED;
 	    else if ((namespace->methods[txn.meth].flags & METH_NOBODY) &&
-		     (spool_getheader(txn.req_hdrs, "Transfer-Encoding") ||
-		      spool_getheader(txn.req_hdrs, "Content-Length") ||
-		      spool_getheader(txn.req_hdrs, "Content-Type")))
+		     spool_getheader(txn.req_hdrs, "Content-Type"))
 		ret = HTTP_BAD_MEDIATYPE;
 	}
 
